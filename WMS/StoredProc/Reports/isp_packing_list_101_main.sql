@@ -4,7 +4,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/  
-/* Stored Proc: isp_packing_list_101_ByteDance                          */  
+/* Stored Proc: isp_packing_list_101_main                               */  
 /* Creation Date: 28-FEB-2022                                           */  
 /* Copyright: LF Logistics                                              */  
 /* Written by: CHONGCS                                                  */  
@@ -13,7 +13,7 @@ GO
 /*        :                                                             */  
 /* Called By: r_dw_packing_list_101_main                                */  
 /*          :                                                           */  
-/* PVCS Version: 1.0                                                    */  
+/* PVCS Version: 1.1                                                    */  
 /*                                                                      */  
 /* Version: 1.0                                                         */  
 /*                                                                      */  
@@ -21,7 +21,8 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date        Author   Ver   Purposes                                  */  
-/* 24-FEB-2022 CSCHONG 1.0    Devops Scripts Combine                    */  
+/* 24-FEB-2022 CSCHONG  1.0   Devops Scripts Combine                    */  
+/* 14-Jul-2022 WLChooi  1.1   WMS-20244 - Cater for B2B (WL01)          */
 /************************************************************************/  
   
 CREATE OR ALTER  PROC [dbo].[isp_packing_list_101_main] (    
@@ -44,13 +45,14 @@ BEGIN
          , @c_OHUDF03         NVARCHAR(50)  
          , @c_storerkey       NVARCHAR(20)  
          , @c_rpttype         NVARCHAR(20)  
+         , @c_Channel         NVARCHAR(20) = ''   --WL01
+         , @c_OHUDF02         NVARCHAR(30) = ''   --WL01
   
    SET @n_StartTCnt = @@TRANCOUNT  
    SET @n_NoOfLine = 3  
    SET @c_Orderkey = ''  
   
-  
-  IF EXISTS (SELECT 1 FROM ORDERS WITH (NOLOCK)  
+   IF EXISTS (SELECT 1 FROM ORDERS WITH (NOLOCK)  
               WHERE Orderkey = @c_PickSlipNo)  
    BEGIN  
       SET @c_Orderkey = @c_PickSlipNo  
@@ -59,26 +61,49 @@ BEGIN
    BEGIN  
       SELECT DISTINCT @c_Orderkey = OrderKey  
       FROM PackHeader AS ph WITH (NOLOCK)  
-      WHERE ph.PickSlipNo=@c_PickSlipNo  
+      WHERE ph.PickSlipNo = @c_PickSlipNo  
    END  
   
-  
-  SELECT   @c_OHUDF03 = OH.Userdefine03  
-          ,@c_storerkey = OH.Storerkey        
-   FROM ORDERS OH WITH (NOLOCK)  
-   WHERE OH.Orderkey = @c_Orderkey  
-  
-   SELECT @c_rpttype = RTRIM(C.short)  
-   FROM Codelkup  C WITH (nolock)  
-   WHERE c.listname = 'CONVSTORE'  
-   AND C.code = @c_OHUDF03  
-   AND C.storerkey = @c_storerkey  
+   --WL01 S
+   IF ISNULL(@c_Orderkey,'') = ''
+   BEGIN
+      SELECT TOP 1 @c_Orderkey = LPD.OrderKey  
+      FROM PACKHEADER PH (NOLOCK)
+      JOIN LOADPLANDETAIL LPD (NOLOCK) ON LPD.LoadKey = PH.LoadKey
+      WHERE PH.PickSlipNo = @c_PickSlipNo 
+   END
+
+   SELECT @c_Channel = ORDERDETAIL.Channel
+   FROM ORDERDETAIL (NOLOCK)
+   WHERE ORDERDETAIL.OrderKey = @c_Orderkey
+
+   IF @c_Channel = 'B2B'
+   BEGIN
+      SET @c_rpttype = @c_Channel
+   END
+   ELSE
+   BEGIN   --WL01 E
+      SELECT  @c_OHUDF03   = OH.Userdefine03  
+             ,@c_storerkey = OH.Storerkey
+             ,@c_OHUDF02   = OH.UserDefine02   --WL03
+      FROM ORDERS OH WITH (NOLOCK)  
+      WHERE OH.Orderkey = @c_Orderkey  
+      
+      SELECT @c_rpttype = RTRIM(C.short)  
+      FROM Codelkup  C WITH (nolock)  
+      WHERE c.listname = 'CONVSTORE'  
+      AND C.code = @c_OHUDF03  
+      AND C.storerkey = @c_storerkey 
+      
+      IF @c_OHUDF02 = '1'
+      BEGIN
+         SET @c_rpttype = 'B2B'
+      END
+   END   --WL01
   
    SELECT @c_Pickslipno AS Pickslipno , @c_rpttype AS rprtype  
   
 END -- procedure  
-
 GO
 GRANT EXECUTE ON  [dbo].[isp_packing_list_101_main] TO [NSQL]
 GO
-

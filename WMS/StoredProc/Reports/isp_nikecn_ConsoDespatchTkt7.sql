@@ -84,11 +84,14 @@ BEGIN
    SET @c_showfield = 'N'                                
    SET @c_showCRD   = ''    
   
-   SELECT TOP 1 @c_Orderkey = Orderkey   
-         ,@c_Storerkey= ISNULL(RTRIM(Storerkey),'') 
-		 ,@c_caseid = caseid	--ML01
+   SELECT DISTINCT @c_Orderkey = PICKDETAIL.Orderkey   
+         ,@c_Storerkey= ISNULL(RTRIM(PICKDETAIL.Storerkey),'') 
+		 ,@c_caseid = PICKDETAIL.caseid	--ML01
    FROM PICKDETAIL (NOLOCK)  
-   WHERE Pickslipno = @c_Pickslipno  
+   JOIN PACKDETAIL (NOLOCK) ON PICKDETAIL.CASEID = PACKDETAIL.LABELNO 
+   WHERE PICKDETAIL.Pickslipno = @c_Pickslipno 
+   --AND PACKDETAIL.CARTONNO BETWEEN @n_StartCartonNo AND @n_EndCartonNo
+   AND PACKDETAIL.CARTONNO = @n_StartCartonNo	--ML01
   
   
    CREATE TABLE #RESULT (  
@@ -367,6 +370,7 @@ END
 GO
 GRANT EXECUTE ON  [dbo].[isp_nikecn_ConsoDespatchTkt7] TO [NSQL]
 GO  
+
 
 
 

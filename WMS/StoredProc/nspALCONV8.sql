@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nspALCONV8]')
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-DROP PROCEDURE [dbo].[nspALCONV8]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -33,8 +28,13 @@ GO
 /* 31-OCT-2021  NJOW     1.0  DEVOPS combine script                     */
 /* 15-DEC-2021  NJOW01   1.1  WMS-18517 Optimize allocation sequence for*/
 /*                            pickzone                                  */
+/* 12-JUL-2022  NJOW02   1.2  WMS-20189 return all inventory not based  */
+/*                            on qtylefttofulfill cater for channel.    */
+/*                            Change pickzone to loclevel and change    */
+/*                            loc optimization logic                    */
+/* 12-JUL-2022  NJOW02   1.2  DEVOPS Combine Script                     */
 /************************************************************************/
-CREATE  PROC [dbo].[nspALCONV8]
+CREATE OR ALTER PROC [dbo].[nspALCONV8]
    @c_WaveKey    NVARCHAR(10),   
    @c_Facility   NVARCHAR(5),     
    @c_StorerKey  NVARCHAR(15),     
@@ -134,9 +134,9 @@ BEGIN
          
    CREATE TABLE #TMP_LOT (LOT NVARCHAR(10) NULL,
                           QtyAvailable INT NULL DEFAULT(0))                             
-   CREATE TABLE #PICKZONEQTY (PickZone NVARCHAR(10), Qty INT)
-   CREATE TABLE #PICKZONESORT (RowID INT IDENTITY(1,1), PickZone NVARCHAR(10))
-   CREATE TABLE #NUM_OPTIMIZATION_INPUT (RowID INT IDENTITY(1,1), KeyField NVARCHAR(60), Num DECIMAL(14,6), UnitCount INT)
+   CREATE TABLE #LOCLEVQTY (LocLevel NVARCHAR(5), Qty INT)
+   CREATE TABLE #LOCLEVSORT (RowID INT IDENTITY(1,1), LocLevel NVARCHAR(5))
+   --CREATE TABLE #NUM_OPTIMIZATION_INPUT (RowID INT IDENTITY(1,1), KeyField NVARCHAR(60), Num DECIMAL(14,6), UnitCount INT)  --NJOW02 Removed
 	 CREATE TABLE #NUM_OPTIMIZATION_OUTPUT (RowID INT IDENTITY(1,1), KeyField NVARCHAR(60), Num DECIMAL(14,6), UnitCount INT)         
    
    IF ISNULL(@c_key1,'')<>'' AND ISNULL(@c_key2,'')<>''  --By Order
@@ -166,14 +166,14 @@ BEGIN
    BEGIN
       SET @c_LocationType = '''OTHER'''
       SET @c_LocationCategory = '''BULK'''
-      SET @c_SortBy = 'ORDER BY CASE WHEN PZ.RowID IS NOT NULL THEN PZ.RowID ELSE 99999 END, LA.Lottable05, LOTxLOCxID.Lot, LOC.LogicalLocation, LOC.Loc'
+      SET @c_SortBy = 'ORDER BY CASE WHEN LV.RowID IS NOT NULL THEN LV.RowID ELSE 99999 END, LA.Lottable05, LOTxLOCxID.Lot, LOC.LogicalLocation, LOC.Loc'
    END         
    
    IF @c_UOM = '7'
    BEGIN
       SET @c_LocationType = '''PICK'''
       SET @c_LocationCategory = '''OTHER'''
-      SET @c_SortBy = 'ORDER BY CASE WHEN PZ.RowID IS NOT NULL THEN PZ.RowID ELSE 99999 END, LA.Lottable05, LOTxLOCxID.Lot, LOC.LogicalLocation, LOC.Loc'
+      SET @c_SortBy = 'ORDER BY CASE WHEN LV.RowID IS NOT NULL THEN LV.RowID ELSE 99999 END, LA.Lottable05, LOTxLOCxID.Lot, LOC.LogicalLocation, LOC.Loc'
    END         
    
    --NJOW01 S
@@ -186,8 +186,8 @@ BEGIN
    AND OD.Lottable01 = CASE WHEN ISNULL(@c_Lottable01,'') <> '' THEN @c_Lottable01 ELSE OD.Lottable01 END
    
    SET @c_SQL = N'      
-      INSERT INTO #PICKZONEQTY (PickZone, Qty)      
-      SELECT LOC.PickZone,    
+      INSERT INTO #LOCLEVQTY (LocLevel, Qty)      
+      SELECT CAST(LOC.LocLevel AS NVARCHAR),    
              SUM((LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) + ISNULL(LPA.LoadQtyAllocated,0))
       FROM LOTxLOCxID (NOLOCK)  
       JOIN LOC (NOLOCK) ON (LOTxLOCxID.Loc = LOC.LOC)  
@@ -210,7 +210,7 @@ BEGIN
       AND ((LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) + ISNULL(LPA.LoadQtyAllocated,0)) > 0
       AND LOTxLOCxID.SKU = @c_SKU 
       AND LA.Lottable01 = CASE WHEN ISNULL(@c_Lottable01,'''') <> '''' THEN @c_Lottable01 ELSE LA.Lottable01 END
-      GROUP BY LOC.PickZone '     
+      GROUP BY CAST(LOC.LocLevel AS NVARCHAR) '     
       
    SET @c_SQLParm =  N'@c_Facility   NVARCHAR(5),  @c_StorerKey  NVARCHAR(15), @c_SKU NVARCHAR(20), ' +        
                       '@c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18), ' +   
@@ -220,30 +220,42 @@ BEGIN
 
    EXEC sp_ExecuteSQL @c_SQL, @c_SQLParm, @c_Facility, @c_StorerKey, @c_SKU, @c_Lottable01, @c_Lottable02, @c_Lottable03,  
                       @c_Lottable06, @c_Lottable07, @c_Lottable08,@c_Lottable09, @c_Lottable10, @c_Lottable11, @c_Lottable12, @c_key1  
-                      
+   
+   /* --NJOW02 Removed                    
    INSERT INTO #NUM_OPTIMIZATION_INPUT (KeyField, Num, UnitCount)     
-   SELECT PICKZONE, Qty, 1
-   FROM #PICKZONEQTY PZ
-   LEFT JOIN CODELKUP CL (NOLOCK) ON CL.Listname = @c_Province AND CL.Code =  PZ.PickZone AND CL.Storerkey = @c_Storerkey
-   ORDER BY CASE WHEN CL.Short IS NOT NULL THEN CL.Short ELSE 'ZZZ' END, PZ.PickZone      
-                                       
+   SELECT LocLevel, Qty, 1
+   FROM #LOCLEVQTY LV
+   LEFT JOIN CODELKUP CL (NOLOCK) ON CL.Listname = @c_Province AND CL.Code =  LV.LocLevel AND CL.Storerkey = @c_Storerkey
+   ORDER BY CASE WHEN CL.Short IS NOT NULL THEN CL.Short ELSE 'ZZZ' END, CAST(LV.LocLevel AS INT)
+                                            
    INSERT INTO #NUM_OPTIMIZATION_OUTPUT
 	 EXEC isp_Num_Optimization 
 	      @n_NumRequest = @n_LoadQty
        ,@c_OptimizeMode = '0'	          
+   */
+   
+   --NJOW02 S
+   INSERT INTO #NUM_OPTIMIZATION_OUTPUT (KeyField, Num, UnitCount)     
+   SELECT TOP 1 LV.LocLevel, LV.Qty, 1
+   FROM #LOCLEVQTY LV
+   LEFT JOIN CODELKUP CL (NOLOCK) ON CL.Listname = @c_Province AND CL.Code =  LV.LocLevel AND CL.Storerkey = @c_Storerkey
+   WHERE LV.Qty >= @n_LoadQty
+   ORDER BY CASE WHEN CL.Short IS NOT NULL THEN CL.Short ELSE 'ZZZ' END, LV.Qty, CAST(LV.LocLevel AS INT)
+   --NJOW02 E
        
-   INSERT INTO #PICKZONESORT (Pickzone)
+   INSERT INTO #LOCLEVSORT (LocLevel)
    SELECT OP.KeyField 
    FROM #NUM_OPTIMIZATION_OUTPUT OP
    ORDER BY OP.RowId
    
-   INSERT INTO #PICKZONESORT (Pickzone)
+   INSERT INTO #LOCLEVSORT (LocLevel)
    SELECT CL.Code 
    FROM CODELKUP CL (NOLOCK)
    LEFT JOIN #NUM_OPTIMIZATION_OUTPUT OP ON CL.Code = OP.KeyField  
    WHERE CL.Listname = @c_Province 
    AND CL.Storerkey = @c_Storerkey   
    AND OP.KeyField IS NULL
+   AND ISNUMERIC(CL.Code) = 1
    GROUP BY CL.Code, CL.Short
    ORDER BY CL.Short
    --NJOW01 E                   
@@ -259,7 +271,7 @@ BEGIN
       JOIN ID (NOLOCK) ON (LOTxLOCxID.Id = ID.ID AND ID.STATUS <> ''HOLD'')  
       JOIN LOT (NOLOCK) ON (LOTXLOCXID.LOT = LOT.LOT AND LOT.STATUS <> ''HOLD'')         
       JOIN LOTATTRIBUTE LA (NOLOCK) ON LOT.LOT = LA.LOT     
-      LEFT JOIN #PICKZONESORT PZ ON PZ.Pickzone = LOC.PickZone     
+      LEFT JOIN #LOCLEVSORT LV ON CAST(LV.LocLevel AS INT) = LOC.LocLevel
       WHERE LOC.LocationFlag = ''NONE''  
       AND LOC.Status <> ''HOLD''
       AND LOC.Facility = @c_Facility  
@@ -285,7 +297,7 @@ BEGIN
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable13 ,112) <> '19000101' AND @d_Lottable13 IS NOT NULL THEN ' AND LA.Lottable13 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable13, 106)) ' ELSE ' ' END +
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable14 ,112) <> '19000101' AND @d_Lottable14 IS NOT NULL THEN ' AND LA.Lottable14 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable14, 106)) ' ELSE ' ' END +
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable15 ,112) <> '19000101' AND @d_Lottable15 IS NOT NULL THEN ' AND LA.Lottable15 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable15, 106)) ' ELSE ' ' END +
-      'GROUP BY LOTxLOCxID.LOT, LOTxLOCxID.LOC, LOTxLOCxID.ID, LOC.LogicalLocation, LOC.LOC, LA.Lottable05, CASE WHEN PZ.RowID IS NOT NULL THEN PZ.RowID ELSE 99999 END ' +    
+      'GROUP BY LOTxLOCxID.LOT, LOTxLOCxID.LOC, LOTxLOCxID.ID, LOC.LogicalLocation, LOC.LOC, LA.Lottable05, CASE WHEN LV.RowID IS NOT NULL THEN LV.RowID ELSE 99999 END ' +    
       @c_SortBy
       
    SET @c_SQLParm =  N'@c_Facility   NVARCHAR(5),  @c_StorerKey  NVARCHAR(15), @c_SKU NVARCHAR(20), @n_QtyLeftToFulfill INT, ' +        
@@ -304,7 +316,8 @@ BEGIN
               
    FETCH NEXT FROM CURSOR_AVAILABLE INTO @c_LOT, @c_LOC, @c_ID, @n_QtyAvailable   
           
-   WHILE (@@FETCH_STATUS <> -1) AND (@n_QtyLeftToFulfill > 0)          
+   --WHILE (@@FETCH_STATUS <> -1) AND (@n_QtyLeftToFulfill > 0)         
+   WHILE @@FETCH_STATUS <> -1    --NJOW02
    BEGIN    
    	  IF NOT EXISTS(SELECT 1 FROM #TMP_LOT WHERE Lot = @c_Lot)
    	  BEGIN
@@ -327,14 +340,14 @@ BEGIN
             SET @n_QtyAvailable = @n_LotQtyAvailable
       END
                	                  
-      IF @n_QtyLeftToFulfill >= @n_QtyAvailable
-      BEGIN
+      --IF @n_QtyLeftToFulfill >= @n_QtyAvailable
+      --BEGIN
       		 SET @n_QtyToTake = Floor(@n_QtyAvailable / @n_UOMBase) * @n_UOMBase
-      END
-      ELSE
-      BEGIN
-      	  SET @n_QtyToTake = Floor(@n_QtyLeftToFulfill / @n_UOMBase) * @n_UOMBase
-      END      	 
+      --END
+      --ELSE
+      --BEGIN
+      --	  SET @n_QtyToTake = Floor(@n_QtyLeftToFulfill / @n_UOMBase) * @n_UOMBase
+      --END      	 
       
       IF @n_QtyToTake > 0
       BEGIN
@@ -349,7 +362,7 @@ BEGIN
            ,  @n_QtyAvailable = @n_QtyToTake
            ,  @c_OtherValue = @c_OtherValue
                	
-         SET @n_QtyLeftToFulfill = @n_QtyLeftToFulfill - @n_QtyToTake       
+         --SET @n_QtyLeftToFulfill = @n_QtyLeftToFulfill - @n_QtyToTake       
       END
             
       FETCH NEXT FROM CURSOR_AVAILABLE INTO @c_LOT, @c_LOC, @c_ID, @n_QtyAvailable  

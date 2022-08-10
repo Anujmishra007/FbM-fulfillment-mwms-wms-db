@@ -6,20 +6,15 @@ SET ANSI_NULLS OFF
 GO
 
 /************************************************************************/
-/* Store procedure: rdt_PTLCart_Confirm_PickSlip_Lottable               */
+/* Store procedure: rdt_PTLCart_Confirm_PickSlip_Lottable02             */
 /* Copyright      : LF Logistics                                        */
+/*                 PickslipPosTote_Lottable->PickslipPosTote_Lottable02 */
 /*                                                                      */
 /* Date       Rev  Author      Purposes                                 */
-/* 14-03-2018 1.0  Ung         WMS-4247 Created                         */
-/* 15-04-2019 1.1  James       WMS-8585 Add scan out pickslip (james01) */
-/* 23-07-2019 1.2  James       WMS-9823 Add EventLog (james02)          */
-/* 04-10-2019 1.3  James       WMS-10764 Add custom pickkslip           */
-/*                             retrival (james05)                       */
-/* 22-09-2020 1.4  Chermaine   WMS-15205 Insert to dropID table (cc01)  */
-/* 28-12-2021 1.5  YeeKung  WMS-18463 Add Params (yeekung01)			   */
+/* 28-12-2021 1.0  YeeKung  WMS-18463 Created (yeekung01)					*/
 /************************************************************************/
 
-CREATE OR ALTER PROC rdt.rdt_PTLCart_Confirm_PickSlip_Lottable (
+CREATE OR ALTER PROC rdt.rdt_PTLCart_Confirm_PickSlip_Lottable02 (
     @nMobile         INT
    ,@nFunc           INT
    ,@cLangCode       NVARCHAR( 3)
@@ -96,7 +91,7 @@ BEGIN
    DECLARE @cInsertDropID        NVARCHAR( 1)      --(cc01)
    DECLARE @cDropIDType          NVARCHAR( 10)      --(cc01)
    DECLARE @cPTLCartAllowReuseDropID   NVARCHAR( 1)      --(cc01)
-   DECLARE @cLot                 NVARCHAR( 20) --(YEEKUNG01)
+   DECLARE @cLOT                 NVARCHAR(20)
 
    DECLARE @curPTL CURSOR
    DECLARE @curPD  CURSOR
@@ -121,7 +116,7 @@ BEGIN
    BEGIN
       IF @cType = 'SHORTTOTE'
       BEGIN
-         SET @nErrNo = 121122
+         SET @nErrNo = 189372
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Short NotAllow
          GOTO Quit
       END      
@@ -154,7 +149,7 @@ BEGIN
             AND Status <> '9'
       */
       SET @cSQL = 
-         ' SELECT PTLKey, DevicePosition, ExpectedQTY, SourceKey ' + 
+         ' SELECT PTLKey, DevicePosition, ExpectedQTY, SourceKey,@cLottable02,@dLottable04,LOT ' + 
          ' FROM PTL.PTLTran WITH (NOLOCK) ' + 
          ' WHERE DeviceProfileLogKey = @cDPLKey ' + 
             ' AND LOC = @cLOC ' + 
@@ -165,10 +160,10 @@ BEGIN
          @cPickSlipNo, @cOrderKey, @cLoadKey, @cPickConfirmStatus, @cDPLKey, @cLOC, @cSKU, @nQTY, @cPosition, @cLottableCode, 
          @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
          @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
-         @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,  @cLot,
+         @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, @cLot,
          @curPTL OUTPUT
          
-      FETCH NEXT FROM @curPTL INTO @nPTLKey, @cPosition, @nExpectedQTY, @cPickSlipNo
+      FETCH NEXT FROM @curPTL INTO @nPTLKey, @cPosition, @nExpectedQTY, @cPickSlipNo,@cLottable02,@dLottable04,@cLOT
       WHILE @@FETCH_STATUS = 0
       BEGIN
          -- Get tote
@@ -190,7 +185,7 @@ BEGIN
          WHERE PTLKey = @nPTLKey
          IF @@ERROR <> 0
          BEGIN
-            SET @nErrNo = 121101
+            SET @nErrNo = 189351
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PTL Fail
             GOTO RollBackTran
          END
@@ -227,6 +222,7 @@ BEGIN
                SELECT @nQTY_PD = ISNULL( SUM( PD.QTY), 0)
                FROM Orders O WITH (NOLOCK) 
                   JOIN PickDetail PD WITH (NOLOCK) ON (PD.OrderKey = O.OrderKey)
+                  JOIN LOTATTRIBUTE LA (NOLOCK) ON ( LA.Lot=PD.Lot)
                WHERE O.OrderKey = @cOrderKey
                   AND PD.StorerKey = @cStorerKey
                   AND PD.SKU = @cSKU
@@ -234,14 +230,17 @@ BEGIN
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.Status <> '4'
                   AND PD.QTY > 0
+                  AND LA.Lot = @cLOT
                   AND O.Status <> 'CANC' 
                   AND O.SOStatus <> 'CANC'
+               GROUP BY PD.LOT,Lottable02,Lottable04
             
             IF @cPSType = 'CONSO'
                SELECT @nQTY_PD = ISNULL( SUM( PD.QTY), 0)
                FROM LoadPlanDetail LPD WITH (NOLOCK) 
                   JOIN Orders O WITH (NOLOCK) ON (LPD.OrderKey = O.OrderKey)
                   JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
+                  JOIN LOTATTRIBUTE LA (NOLOCK) ON ( LA.Lot=PD.Lot)
                WHERE LPD.Loadkey = @cLoadKey
                   AND PD.StorerKey = @cStorerKey
                   AND PD.SKU = @cSKU
@@ -249,14 +248,17 @@ BEGIN
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.Status <> '4'
                   AND PD.QTY > 0
+                 	AND LA.Lot = @cLOT
                   AND O.Status <> 'CANC' 
                   AND O.SOStatus <> 'CANC'
+               GROUP BY PD.LOT,Lottable02,Lottable04
    
             IF @cPSType = 'XD'
                SELECT @nQTY_PD = ISNULL( SUM( PD.QTY), 0)
                FROM Orders O WITH (NOLOCK)
                   JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
                   JOIN RefKeyLookup RKL WITH (NOLOCK) ON (RKL.PickDetailKey = PD.PickDetailKey)
+                  JOIN LOTATTRIBUTE LA (NOLOCK) ON ( LA.Lot=PD.Lot)
                WHERE RKL.PickslipNo = @cPickSlipNo
                   AND PD.StorerKey = @cStorerKey
                   AND PD.SKU = @cSKU
@@ -264,13 +266,16 @@ BEGIN
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.Status <> '4'
                   AND PD.QTY > 0
+                  AND LA.Lot = @cLOT
                   AND O.Status <> 'CANC' 
                   AND O.SOStatus <> 'CANC'
+               GROUP BY PD.LOT,Lottable02,Lottable04
 
             IF @cPSType = 'CUSTOM'
                SELECT @nQTY_PD = ISNULL( SUM( PD.QTY), 0)
                FROM Orders O WITH (NOLOCK)
                   JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
+                  JOIN LOTATTRIBUTE LA (NOLOCK) ON ( LA.Lot=PD.Lot)
                WHERE PD.PickslipNo = @cPickSlipNo
                   AND PD.StorerKey = @cStorerKey
                   AND PD.SKU = @cSKU
@@ -278,12 +283,14 @@ BEGIN
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.Status <> '4'
                   AND PD.QTY > 0
+               	AND LA.Lot = @cLOT
                   AND O.Status <> 'CANC' 
                   AND O.SOStatus <> 'CANC'
+               GROUP BY PD.LOT,Lottable02,Lottable04
 
             IF @nQTY_PD <> @nExpectedQTY
             BEGIN
-               SET @nErrNo = 121102
+               SET @nErrNo = 189352
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PKDtl changed
                GOTO RollBackTran
             END
@@ -302,6 +309,7 @@ BEGIN
                      ' AND PD.Status < @cPickConfirmStatus ' + 
                      ' AND PD.Status <> ''4''  ' + 
                      ' AND PD.QTY > 0 ' + 
+                     ' AND LA.Lot = @cLOT' +
                      ' AND O.Status <> ''CANC'' ' +  
                      ' AND O.SOStatus <> ''CANC'' '
             
@@ -319,6 +327,7 @@ BEGIN
                      ' AND PD.Status < @cPickConfirmStatus ' + 
                      ' AND PD.Status <> ''4''  ' + 
                      ' AND PD.QTY > 0 ' + 
+                   	' AND LA.Lot = @cLOT' +
                      ' AND O.Status <> ''CANC'' ' +  
                      ' AND O.SOStatus <> ''CANC'' '
    
@@ -336,6 +345,7 @@ BEGIN
                      ' AND PD.Status < @cPickConfirmStatus ' + 
                      ' AND PD.Status <> ''4''  ' + 
                      ' AND PD.QTY > 0 ' + 
+                     ' AND LA.Lot = @cLOT' +
                      ' AND O.Status <> ''CANC'' ' +  
                      ' AND O.SOStatus <> ''CANC'' '
 
@@ -352,6 +362,7 @@ BEGIN
                      ' AND PD.Status < @cPickConfirmStatus ' + 
                      ' AND PD.Status <> ''4''  ' + 
                      ' AND PD.QTY > 0 ' + 
+                     ' AND LA.Lot = @cLOT' +
                      ' AND O.Status <> ''CANC'' ' +  
                      ' AND O.SOStatus <> ''CANC'' '
 
@@ -362,7 +373,7 @@ BEGIN
                @cPickSlipNo, @cOrderKey, @cLoadKey, @cPickConfirmStatus, @cDPLKey, @cLOC, @cSKU, @nQTY, @cPosition, @cLottableCode, 
                @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
                @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
-               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,  @cLot,
+               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, @cLot,
                @curPD OUTPUT
 
             FETCH NEXT FROM @curPD INTO @cPickDetailKey
@@ -377,7 +388,7 @@ BEGIN
                WHERE PickDetailKey = @cPickDetailKey
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 121103
+                  SET @nErrNo = 189353
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
                   GOTO RollBackTran
                END
@@ -485,7 +496,7 @@ BEGIN
   
                      IF @@ERROR <> 0  
                      BEGIN  
-                        SET @nErrNo = 121124  
+                        SET @nErrNo = 189374  
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'DEL DDTL FAIL'  
                         GOTO RollBackTran  
                      END  
@@ -496,14 +507,14 @@ BEGIN
   
                      IF @@ERROR <> 0  
                      BEGIN  
-                        SET @nErrNo = 121125  
+                        SET @nErrNo = 189375  
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'DEL DID FAIL'  
                         GOTO RollBackTran  
                      END 
                   END
                   ELSE  
                   BEGIN  
-                     SET @nErrNo = 121126  
+                     SET @nErrNo = 189376  
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'INVALID DROPID'  
                      GOTO RollBackTran  
                   END  
@@ -519,7 +530,7 @@ BEGIN
                
               	IF @@ERROR <> 0  
                BEGIN  
-                  SET @nErrNo = 121127  
+                  SET @nErrNo = 189377  
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'INS DID FAIL'  
                   GOTO RollBackTran  
                END  
@@ -529,7 +540,7 @@ BEGIN
               	
                IF @@ERROR <> 0  
                BEGIN  
-                  SET @nErrNo = 121128  
+                  SET @nErrNo = 189378  
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'INS DDTL FAIL'  
                   GOTO RollBackTran  
                END  
@@ -560,7 +571,7 @@ BEGIN
          WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
             COMMIT TRAN
          
-         FETCH NEXT FROM @curPTL INTO @nPTLKey, @cPosition, @nExpectedQTY, @cPickSlipNo
+         FETCH NEXT FROM @curPTL INTO @nPTLKey, @cPosition, @nExpectedQTY, @cPickSlipNo,@cLottable02,@dLottable04,@cLOT
       END
    END
 
@@ -594,7 +605,7 @@ BEGIN
 
          -- PTLTran
          SET @cSQL = 
-            ' SELECT PTLKey, ExpectedQTY ' + 
+            ' SELECT PTLKey, ExpectedQTY,LOT ' +
             ' FROM PTL.PTLTran WITH (NOLOCK) ' + 
             ' WHERE DeviceProfileLogKey = @cDPLKey ' + 
                ' AND LOC = @cLOC ' + 
@@ -606,14 +617,13 @@ BEGIN
             @cPickSlipNo, @cOrderKey, @cLoadKey, @cPickConfirmStatus, @cDPLKey, @cLOC, @cSKU, @nQTY, @cPosition, @cLottableCode, 
             @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
             @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
-            @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,  @cLot,
+            @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,@cLOT,
             @curPTL OUTPUT
 
-         FETCH NEXT FROM @curPTL INTO @nPTLKey, @nQTY_PTL
+         FETCH NEXT FROM @curPTL INTO @nPTLKey, @nQTY_PTL,@cLOT
          WHILE @@FETCH_STATUS = 0
          BEGIN
-            IF @nExpectedQTY IS NULL
-               SET @nExpectedQTY = @nQTY_PTL
+				SET @nExpectedQTY = @nQTY_PTL
             
             -- Exact match
             IF @nQTY_PTL = @nQTY_Bal
@@ -629,12 +639,11 @@ BEGIN
                WHERE PTLKey = @nPTLKey
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 121104
+                  SET @nErrNo = 189354
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PTL Fail
                   GOTO RollBackTran
                END
-      
-               SET @nQTY_Bal = 0 -- Reduce balance
+
             END
             
             -- PTLTran have less
@@ -651,12 +660,10 @@ BEGIN
                WHERE PTLKey = @nPTLKey
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 121105
+                  SET @nErrNo = 189355
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PTL Fail
                   GOTO RollBackTran
                END
-      
-               SET @nQTY_Bal = @nQTY_Bal - @nQTY_PTL -- Reduce balance
             END
             
             -- PTLTran have more
@@ -676,7 +683,7 @@ BEGIN
                   WHERE PTLKey = @nPTLKey
                   IF @@ERROR <> 0
                   BEGIN
-                     SET @nErrNo = 121106
+                     SET @nErrNo = 189356
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PTL Fail
                      GOTO RollBackTran
                   END
@@ -702,7 +709,7 @@ BEGIN
          			WHERE PTLKey = @nPTLKey			            
                   IF @@ERROR <> 0
                   BEGIN
-         				SET @nErrNo = 121107
+         				SET @nErrNo = 189357
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- INS PTL Fail
                      GOTO RollBackTran
                   END
@@ -719,26 +726,14 @@ BEGIN
                   WHERE PTLKey = @nPTLKey
                   IF @@ERROR <> 0
                   BEGIN
-                     SET @nErrNo = 121108
+                     SET @nErrNo = 189358
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PTL Fail
                      GOTO RollBackTran
                   END
-         
-                  SET @nQTY_Bal = 0 -- Reduce balance
                END
             END
-            
-            -- Exit condition
-            IF @cType = 'CLOSETOTE' AND @nQTY_Bal = 0
-               BREAK
 
-            IF @cType = 'SHORTTOTE' AND @nQTY_Bal = 0 AND @cShortPickType = '2' -- Balance pick later
-               BREAK
-            
-            FETCH NEXT FROM @curPTL INTO @nPTLKey, @nQTY_PTL
-         END
-               
-         -- PickDetail
+                     -- PickDetail
          IF @cUpdatePickDetail = '1'
          BEGIN
             SET @cPSType = ''
@@ -774,6 +769,7 @@ BEGIN
                   AND PD.StorerKey = @cStorerKey
                   AND PD.SKU = @cSKU
                   AND PD.LOC = @cLOC
+                  AND PD.LOT = @cLOT
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.Status <> '4'
                   AND PD.QTY > 0
@@ -789,6 +785,7 @@ BEGIN
                   AND PD.StorerKey = @cStorerKey
                   AND PD.SKU = @cSKU
                   AND PD.LOC = @cLOC
+                  AND PD.LOT = @cLOT
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.Status <> '4'
                   AND PD.QTY > 0
@@ -804,6 +801,7 @@ BEGIN
                   AND PD.StorerKey = @cStorerKey
                   AND PD.SKU = @cSKU
                   AND PD.LOC = @cLOC
+                  AND PD.LOT = @cLOT
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.Status <> '4'
                   AND PD.QTY > 0
@@ -818,6 +816,7 @@ BEGIN
                   AND PD.StorerKey = @cStorerKey
                   AND PD.SKU = @cSKU
                   AND PD.LOC = @cLOC
+                  AND PD.LOT = @cLOT
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.Status <> '4'
                   AND PD.QTY > 0
@@ -826,13 +825,18 @@ BEGIN
 
             IF @nQTY_PD <> @nExpectedQTY
             BEGIN
-               SET @nErrNo = 121109
+               SET @nErrNo = 189359
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PKDtl changed
                GOTO RollBackTran
             END
             
-            -- For calculation
-            SET @nQTY_Bal = @nQTY
+            ---- For calculation
+            --SET @nQTY_Bal = @nQTY
+
+
+            IF CURSOR_STATUS( 'variable', '@curPD') IN (0, 1)
+               DEALLOCATE @curPD
+
          
             -- Get PickDetail candidate
             IF @cPSType = 'DISCRETE'
@@ -844,10 +848,12 @@ BEGIN
                   ' WHERE O.OrderKey = @cOrderKey ' +
                      ' AND PD.StorerKey = @cStorerKey ' +
                      ' AND PD.SKU = @cSKU ' +
-                     ' AND PD.LOC = @cLOC ' +
+                     ' AND PD.LOC = @cLOC ' + 
+                     ' AND PD.LOT = @cLOT ' +
                      ' AND PD.Status < @cPickConfirmStatus ' + 
                      ' AND PD.Status <> ''4''' + 
-                     ' AND PD.QTY > 0 ' +
+                     ' AND PD.QTY > 0 ' +                        
+                     ' AND PD.Lot = @cLot' +
                      ' AND O.Status <> ''CANC''  ' +
                      ' AND O.SOStatus <> ''CANC'' '
             
@@ -862,9 +868,11 @@ BEGIN
                      ' AND PD.StorerKey = @cStorerKey ' + 
                      ' AND PD.SKU = @cSKU ' + 
                      ' AND PD.LOC = @cLOC ' + 
+                     ' AND PD.LOT = @cLOT ' + 
                      ' AND PD.Status < @cPickConfirmStatus ' + 
                      ' AND PD.Status <> ''4''' + 
-                     ' AND PD.QTY > 0 ' + 
+                     ' AND PD.QTY > 0 ' +                         
+                     ' AND PD.Lot = @cLot' +
                      ' AND O.Status <> ''CANC''  ' + 
                      ' AND O.SOStatus <> ''CANC'' ' 
    
@@ -879,9 +887,11 @@ BEGIN
                      ' AND PD.StorerKey = @cStorerKey ' + 
                      ' AND PD.SKU = @cSKU ' + 
                      ' AND PD.LOC = @cLOC ' + 
+                     ' AND PD.LOT = @cLOT ' + 
                      ' AND PD.Status < @cPickConfirmStatus ' + 
                      ' AND PD.Status <> ''4''' + 
-                     ' AND PD.QTY > 0 ' + 
+                     ' AND PD.QTY > 0 ' +                         
+                     ' AND PD.Lot = @cLot' +
                      ' AND O.Status <> ''CANC'' ' +  
                      ' AND O.SOStatus <> ''CANC'' '
 
@@ -895,9 +905,11 @@ BEGIN
                      ' AND PD.StorerKey = @cStorerKey ' + 
                      ' AND PD.SKU = @cSKU ' + 
                      ' AND PD.LOC = @cLOC ' + 
+                     ' AND PD.LOT = @cLOT ' +
                      ' AND PD.Status < @cPickConfirmStatus ' + 
                      ' AND PD.Status <> ''4''' + 
-                     ' AND PD.QTY > 0 ' + 
+                     ' AND PD.QTY > 0 ' +                         
+                     ' AND PD.Lot = @cLot' +
                      ' AND O.Status <> ''CANC'' ' +  
                      ' AND O.SOStatus <> ''CANC'' '
 
@@ -905,7 +917,7 @@ BEGIN
                @cPickSlipNo, @cOrderKey, @cLoadKey, @cPickConfirmStatus, @cDPLKey, @cLOC, @cSKU, @nQTY, @cPosition, @cLottableCode, 
                @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
                @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
-               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,  @cLot,
+               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, @cLOT,
                @curPD OUTPUT
             
             FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD 
@@ -923,7 +935,7 @@ BEGIN
                   WHERE PickDetailKey = @cPickDetailKey
                   IF @@ERROR <> 0
                   BEGIN
-                     SET @nErrNo = 121110
+                     SET @nErrNo = 189360
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
                      GOTO RollBackTran
                   END
@@ -943,7 +955,7 @@ BEGIN
                   WHERE PickDetailKey = @cPickDetailKey
                   IF @@ERROR <> 0
                   BEGIN
-                     SET @nErrNo = 121111
+                     SET @nErrNo = 189361
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
                      GOTO RollBackTran
                   END
@@ -967,7 +979,7 @@ BEGIN
                      WHERE PickDetailKey = @cPickDetailKey
                      IF @@ERROR <> 0
                      BEGIN
-                        SET @nErrNo = 121112
+                        SET @nErrNo = 189362
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
                         GOTO RollBackTran
                      END
@@ -986,7 +998,7 @@ BEGIN
                         @cErrMsg           OUTPUT
                      IF @bSuccess <> 1
                      BEGIN
-                        SET @nErrNo = 121113
+                        SET @nErrNo = 189363
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- nspg_GetKey
                         GOTO RollBackTran
                      END
@@ -1014,7 +1026,7 @@ BEGIN
             			WHERE PickDetailKey = @cPickDetailKey			            
                      IF @@ERROR <> 0
                      BEGIN
-            				SET @nErrNo = 121114
+            				SET @nErrNo = 189364
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- INS PKDtl Fail
                         GOTO RollBackTran
                      END
@@ -1029,7 +1041,7 @@ BEGIN
                         WHERE PickDetailKey = @cPickDetailKey
                         IF @@ERROR <> 0
                         BEGIN
-                           SET @nErrNo = 121115
+                           SET @nErrNo = 189365
                            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- INS RefKeyFail
                            GOTO RollBackTran
                         END
@@ -1045,7 +1057,7 @@ BEGIN
                      WHERE PickDetailKey = @cPickDetailKey 
                      IF @@ERROR <> 0
                      BEGIN
-                        SET @nErrNo = 121116
+                        SET @nErrNo = 189366
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
                         GOTO RollBackTran
                      END
@@ -1058,7 +1070,7 @@ BEGIN
                      WHERE PickDetailKey = @cPickDetailKey
                      IF @@ERROR <> 0
                      BEGIN
-                        SET @nErrNo = 121117
+                        SET @nErrNo = 189367
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
                         GOTO RollBackTran
                      END
@@ -1178,7 +1190,7 @@ BEGIN
   
                      IF @@ERROR <> 0  
                      BEGIN  
-                        SET @nErrNo = 121129  
+                        SET @nErrNo = 189379  
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'DEL DDTL FAIL'  
                         GOTO RollBackTran  
                      END  
@@ -1189,14 +1201,14 @@ BEGIN
   
                      IF @@ERROR <> 0  
                      BEGIN  
-                        SET @nErrNo = 121130  
+                        SET @nErrNo = 189380  
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'DEL DID FAIL'  
                         GOTO RollBackTran  
                      END 
                   END
                   ELSE  
                   BEGIN  
-                     SET @nErrNo = 121131  
+                     SET @nErrNo = 189381  
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'INVALID DROPID'  
                      GOTO RollBackTran  
                   END  
@@ -1212,7 +1224,7 @@ BEGIN
                
               	IF @@ERROR <> 0  
                BEGIN  
-                  SET @nErrNo = 121132  
+                  SET @nErrNo = 189382  
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'INS DID FAIL'  
                   GOTO RollBackTran  
                END  
@@ -1222,7 +1234,7 @@ BEGIN
               	
                IF @@ERROR <> 0  
                BEGIN  
-                  SET @nErrNo = 121133  
+                  SET @nErrNo = 189383  
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'INS DDTL FAIL'  
                   GOTO RollBackTran  
                END  
@@ -1248,6 +1260,17 @@ BEGIN
                @cPickZone   = @cPickZone,
                @cLoadKey    = @cLoadKey,
                @nExpectedQTY= @nQTY
+            
+            -- Exit condition
+            IF @cType = 'CLOSETOTE' AND @nQTY_Bal = 0
+               BREAK
+
+            IF @cType = 'SHORTTOTE' AND @nQTY_Bal = 0 AND @cShortPickType = '2' -- Balance pick later
+               BREAK
+            
+            FETCH NEXT FROM @curPTL INTO @nPTLKey, @nQTY_PTL,@cLOT
+         END
+               
       END
       
       -- Update new tote
@@ -1262,7 +1285,7 @@ BEGIN
          WHERE RowRef = @nRowRef 
          IF @@ERROR <> 0
          BEGIN
-            SET @nErrNo = 121118
+            SET @nErrNo = 189368
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Log Fail
             GOTO RollBackTran
          END
@@ -1274,7 +1297,7 @@ BEGIN
          IF rdt.RDTGetConfig( @nFunc, 'AutoShortRemainTote', @cStorerKey) = '1' AND @cShortPickType <> '2' -- Balance pick later
          BEGIN
             SET @cSQL = 
-               ' SELECT PTLKey, DevicePosition, ExpectedQTY ' + 
+               ' SELECT PTLKey, DevicePosition, ExpectedQTY,Lot ' + 
                ' FROM PTL.PTLTran WITH (NOLOCK) ' + 
                ' WHERE DeviceProfileLogKey = @cDPLKey ' + 
                   ' AND LOC = @cLOC ' + 
@@ -1288,7 +1311,7 @@ BEGIN
                @cPickSlipNo, @cOrderKey, @cLoadKey, @cPickConfirmStatus, @cDPLKey, @cLOC, @cSKU, @nQTY, @cPosition, @cLottableCode, 
                @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
                @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
-               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,  @cLot,
+               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, @cLot,
                @curPTL OUTPUT
       
             FETCH NEXT FROM @curPTL INTO @nPTLKey, @cPosition, @nExpectedQTY
@@ -1313,7 +1336,7 @@ BEGIN
                WHERE PTLKey = @nPTLKey
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 121119
+                  SET @nErrNo = 189369
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PTL Fail
                   GOTO RollBackTran
                END
@@ -1357,6 +1380,7 @@ BEGIN
                         AND PD.Status < @cPickConfirmStatus
                         AND PD.Status <> '4'
                         AND PD.QTY > 0
+                        AND PD.Lot =@cLot
                         AND O.Status <> 'CANC' 
                         AND O.SOStatus <> 'CANC'
                   
@@ -1372,6 +1396,7 @@ BEGIN
                         AND PD.Status < @cPickConfirmStatus
                         AND PD.Status <> '4'
                         AND PD.QTY > 0
+                        AND PD.Lot =@cLot
                         AND O.Status <> 'CANC' 
                         AND O.SOStatus <> 'CANC'
          
@@ -1387,6 +1412,7 @@ BEGIN
                         AND PD.Status < @cPickConfirmStatus
                         AND PD.Status <> '4'
                         AND PD.QTY > 0
+                        AND PD.Lot =@cLot
                         AND O.Status <> 'CANC' 
                         AND O.SOStatus <> 'CANC'
 
@@ -1401,13 +1427,14 @@ BEGIN
                         AND PD.Status < @cPickConfirmStatus
                         AND PD.Status <> '4'
                         AND PD.QTY > 0
+                        AND PD.Lot =@cLot
                         AND O.Status <> 'CANC' 
                         AND O.SOStatus <> 'CANC'
 
                   -- Get PickDetail tally PTLTran
                   IF @nQTY_PD <> @nExpectedQTY
                   BEGIN
-                     SET @nErrNo = 121120
+                     SET @nErrNo = 189370
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PKDtl changed
                      GOTO RollBackTran
                   END
@@ -1426,6 +1453,7 @@ BEGIN
                            ' AND PD.Status < @cPickConfirmStatus ' + 
                            ' AND PD.Status <> ''4''' + 
                            ' AND PD.QTY > 0 ' +
+                           ' AND PD.Lot =@cLot ' +
                            ' AND O.Status <> ''CANC''  ' +
                            ' AND O.SOStatus <> ''CANC'' '
                   
@@ -1443,6 +1471,7 @@ BEGIN
                            ' AND PD.Status < @cPickConfirmStatus ' + 
                            ' AND PD.Status <> ''4''' + 
                            ' AND PD.QTY > 0 ' +
+                           ' AND PD.Lot =@cLot ' +
                            ' AND O.Status <> ''CANC''  ' +
                            ' AND O.SOStatus <> ''CANC'' '
          
@@ -1460,6 +1489,7 @@ BEGIN
                            ' AND PD.Status < @cPickConfirmStatus ' + 
                            ' AND PD.Status <> ''4''' + 
                            ' AND PD.QTY > 0 ' +
+                           ' AND PD.Lot =@cLot ' +
                            ' AND O.Status <> ''CANC'' ' +
                            ' AND O.SOStatus <> ''CANC'' '
 
@@ -1476,6 +1506,7 @@ BEGIN
                            ' AND PD.Status < @cPickConfirmStatus ' + 
                            ' AND PD.Status <> ''4''' + 
                            ' AND PD.QTY > 0 ' +
+                           ' AND PD.Lot =@cLot ' +
                            ' AND O.Status <> ''CANC'' ' +
                            ' AND O.SOStatus <> ''CANC'' '
 
@@ -1486,7 +1517,7 @@ BEGIN
                      @cPickSlipNo, @cOrderKey, @cLoadKey, @cPickConfirmStatus, @cDPLKey, @cLOC, @cSKU, @nQTY, @cPosition, @cLottableCode, 
                      @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
                      @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
-                     @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,  @cLot,
+                     @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, @cLot,
                      @curPD OUTPUT
 
                   FETCH NEXT FROM @curPD INTO @cPickDetailKey
@@ -1501,7 +1532,7 @@ BEGIN
                      WHERE PickDetailKey = @cPickDetailKey
                      IF @@ERROR <> 0
                      BEGIN
-                        SET @nErrNo = 121121
+                        SET @nErrNo = 189371
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
                         GOTO RollBackTran
                      END
@@ -1509,7 +1540,7 @@ BEGIN
                   END
                END
 
-               FETCH NEXT FROM @curPTL INTO @nPTLKey, @cPosition, @nExpectedQTY
+               FETCH NEXT FROM @curPTL INTO @nPTLKey, @cPosition, @nExpectedQTY,@cLot
             END
          END
 
@@ -1713,7 +1744,7 @@ BEGIN
 
                IF @nErrNo <> 0
                BEGIN
-                  SET @nErrNo = 121123
+                  SET @nErrNo = 189373
                   SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') --Scan Out Fail
                   GOTO ROLLBACKTRAN
                END
@@ -1739,5 +1770,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON RDT.rdt_PTLCart_Confirm_PickSlip_Lottable TO NSQL
+GRANT EXECUTE ON RDT.rdt_PTLCart_Confirm_PickSlip_Lottable02 TO NSQL
 GO

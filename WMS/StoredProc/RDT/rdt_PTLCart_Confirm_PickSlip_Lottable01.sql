@@ -1,6 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_PTLCart_Confirm_PickSlip_Lottable01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_PTLCart_Confirm_PickSlip_Lottable01]
-GO
+
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -14,9 +12,10 @@ GO
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
 /* 21-05-2021 1.0  yeekung  WMS-17002 Created                           */
+/* 28-12-2021 1.1  YeeKung  WMS-18463 Group by lot (yeekung01)			   */
 /************************************************************************/
 
-CREATE PROC rdt.rdt_PTLCart_Confirm_PickSlip_Lottable01 (
+CREATE OR ALTER PROC rdt.rdt_PTLCart_Confirm_PickSlip_Lottable01 (
     @nMobile         INT
    ,@nFunc           INT
    ,@cLangCode       NVARCHAR( 3)
@@ -93,6 +92,7 @@ BEGIN
    DECLARE @cInsertDropID        NVARCHAR( 1)      --(cc01)
    DECLARE @cDropIDType          NVARCHAR( 10)      --(cc01)
    DECLARE @cPTLCartAllowReuseDropID   NVARCHAR( 1)      --(cc01)
+   DECLARE @cLOT                 NVARCHAR(20)
 
    DECLARE @curPTL CURSOR
    DECLARE @curPD  CURSOR
@@ -150,7 +150,7 @@ BEGIN
             AND Status <> '9'
       */
       SET @cSQL = 
-         ' SELECT PTLKey, DevicePosition, ExpectedQTY, SourceKey ' + 
+         ' SELECT PTLKey, DevicePosition, ExpectedQTY, SourceKey,@cLottable02,@dLottable04,LOT ' + 
          ' FROM PTL.PTLTran WITH (NOLOCK) ' + 
          ' WHERE DeviceProfileLogKey = @cDPLKey ' + 
             ' AND LOC = @cLOC ' + 
@@ -161,10 +161,10 @@ BEGIN
          @cPickSlipNo, @cOrderKey, @cLoadKey, @cPickConfirmStatus, @cDPLKey, @cLOC, @cSKU, @nQTY, @cPosition, @cLottableCode, 
          @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
          @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
-         @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, 
+         @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, @cLot,
          @curPTL OUTPUT
          
-      FETCH NEXT FROM @curPTL INTO @nPTLKey, @cPosition, @nExpectedQTY, @cPickSlipNo
+      FETCH NEXT FROM @curPTL INTO @nPTLKey, @cPosition, @nExpectedQTY, @cPickSlipNo,@cLottable02,@dLottable04,@cLOT
       WHILE @@FETCH_STATUS = 0
       BEGIN
          -- Get tote
@@ -238,9 +238,10 @@ BEGIN
 
             -- Check PickDetail tally PTLTran
             IF @cPSType = 'DISCRETE'
-               SELECT @nQTY_PD = ISNULL( SUM( PD.QTY), 0)
+               SELECT top 1 @nQTY_PD = ISNULL( SUM( PD.QTY), 0)
                FROM Orders O WITH (NOLOCK) 
                   JOIN PickDetail PD WITH (NOLOCK) ON (PD.OrderKey = O.OrderKey)
+                  JOIN LOTATTRIBUTE LA (NOLOCK) ON ( LA.Lot=PD.Lot)
                WHERE O.OrderKey = @cOrderKey
                   AND PD.StorerKey = @cStorerKey
                   AND PD.SKU = @cSKU
@@ -249,13 +250,16 @@ BEGIN
                   AND PD.Status <> '4'
                   AND PD.QTY > 0
                   AND O.Status <> 'CANC' 
+                  AND LA.Lot = @cLOT
                   AND O.SOStatus <> 'CANC'
+               GROUP BY PD.LOT,Lottable02,Lottable04
             
             IF @cPSType = 'CONSO'
-               SELECT @nQTY_PD = ISNULL( SUM( PD.QTY), 0)
+               SELECT top 1 @nQTY_PD = ISNULL( SUM( PD.QTY), 0)
                FROM LoadPlanDetail LPD WITH (NOLOCK) 
                   JOIN Orders O WITH (NOLOCK) ON (LPD.OrderKey = O.OrderKey)
                   JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
+                  JOIN LOTATTRIBUTE LA (NOLOCK) ON ( LA.Lot=PD.Lot)
                WHERE LPD.Loadkey = @cLoadKey
                   AND PD.StorerKey = @cStorerKey
                   AND PD.SKU = @cSKU
@@ -265,12 +269,17 @@ BEGIN
                   AND PD.QTY > 0
                   AND O.Status <> 'CANC' 
                   AND O.SOStatus <> 'CANC'
+                  AND LA.Lottable02 = @cLottable02
+                  AND La.Lottable04 = @dLottable04
+                  AND LA.Lot = @cLOT
+               GROUP BY PD.LOT,Lottable02,Lottable04
    
             IF @cPSType = 'XD'
                SELECT @nQTY_PD = ISNULL( SUM( PD.QTY), 0)
                FROM Orders O WITH (NOLOCK)
                   JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
                   JOIN RefKeyLookup RKL WITH (NOLOCK) ON (RKL.PickDetailKey = PD.PickDetailKey)
+                  JOIN LOTATTRIBUTE LA (NOLOCK) ON ( LA.Lot=PD.Lot)
                WHERE RKL.PickslipNo = @cPickSlipNo
                   AND PD.StorerKey = @cStorerKey
                   AND PD.SKU = @cSKU
@@ -280,11 +289,16 @@ BEGIN
                   AND PD.QTY > 0
                   AND O.Status <> 'CANC' 
                   AND O.SOStatus <> 'CANC'
+                  AND LA.Lottable02 = @cLottable02
+                  AND La.Lottable04 = @dLottable04
+                  AND LA.Lot = @cLOT
+               GROUP BY PD.LOT,Lottable02,Lottable04
 
             IF @cPSType = 'CUSTOM'
                SELECT @nQTY_PD = ISNULL( SUM( PD.QTY), 0)
                FROM Orders O WITH (NOLOCK)
                   JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
+                  JOIN LOTATTRIBUTE LA (NOLOCK) ON ( LA.Lot=PD.Lot)
                WHERE PD.PickslipNo = @cPickSlipNo
                   AND PD.StorerKey = @cStorerKey
                   AND PD.SKU = @cSKU
@@ -294,11 +308,15 @@ BEGIN
                   AND PD.QTY > 0
                   AND O.Status <> 'CANC' 
                   AND O.SOStatus <> 'CANC'
+                  AND LA.Lottable02 = @cLottable02
+                  AND La.Lottable04 = @dLottable04
+                  AND LA.Lot = @cLOT
+               GROUP BY PD.LOT,Lottable02,Lottable04
 
             IF @nQTY_PD <> @nExpectedQTY
             BEGIN
                SET @nErrNo = 168153
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PKDtl changed
+               SET @cErrMsg = @nQTY_PD--@nExpectedQTY--rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PKDtl changed
                GOTO RollBackTran
             END
             
@@ -316,6 +334,7 @@ BEGIN
                      ' AND PD.Status < @cPickConfirmStatus ' + 
                      ' AND PD.Status <> ''4''  ' + 
                      ' AND PD.QTY > 0 ' + 
+                     ' AND LA.Lot = @cLOT' +
                      ' AND O.Status <> ''CANC'' ' +  
                      ' AND O.SOStatus <> ''CANC'' '
             
@@ -333,6 +352,7 @@ BEGIN
                      ' AND PD.Status < @cPickConfirmStatus ' + 
                      ' AND PD.Status <> ''4''  ' + 
                      ' AND PD.QTY > 0 ' + 
+                     ' AND LA.Lot = @cLOT' +
                      ' AND O.Status <> ''CANC'' ' +  
                      ' AND O.SOStatus <> ''CANC'' '
    
@@ -350,6 +370,7 @@ BEGIN
                      ' AND PD.Status < @cPickConfirmStatus ' + 
                      ' AND PD.Status <> ''4''  ' + 
                      ' AND PD.QTY > 0 ' + 
+                     ' AND LA.Lot = @cLOT' +
                      ' AND O.Status <> ''CANC'' ' +  
                      ' AND O.SOStatus <> ''CANC'' '
 
@@ -366,6 +387,7 @@ BEGIN
                      ' AND PD.Status < @cPickConfirmStatus ' + 
                      ' AND PD.Status <> ''4''  ' + 
                      ' AND PD.QTY > 0 ' + 
+                     ' AND LA.Lot = @cLOT' +
                      ' AND O.Status <> ''CANC'' ' +  
                      ' AND O.SOStatus <> ''CANC'' '
 
@@ -376,7 +398,7 @@ BEGIN
                @cPickSlipNo, @cOrderKey, @cLoadKey, @cPickConfirmStatus, @cDPLKey, @cLOC, @cSKU, @nQTY, @cPosition, @cLottableCode, 
                @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
                @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
-               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, 
+               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, @cLot,
                @curPD OUTPUT
 
             FETCH NEXT FROM @curPD INTO @cPickDetailKey
@@ -571,7 +593,7 @@ BEGIN
          WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
             COMMIT TRAN
          
-         FETCH NEXT FROM @curPTL INTO @nPTLKey, @cPosition, @nExpectedQTY, @cPickSlipNo
+         FETCH NEXT FROM @curPTL INTO @nPTLKey, @cPosition, @nExpectedQTY, @cPickSlipNo,@cLottable02,@dLottable04,@cLOT
       END
    END
 
@@ -601,11 +623,12 @@ BEGIN
          WHERE CartID = @cCartID 
             AND ToteID = @cToteID
 
+         DECLARE @cPDLOT NVARCHAR(20)
          SET @nExpectedQTY = NULL
 
          -- PTLTran
          SET @cSQL = 
-            ' SELECT PTLKey, ExpectedQTY ' + 
+            ' SELECT PTLKey, ExpectedQTY,LOT ' + 
             ' FROM PTL.PTLTran WITH (NOLOCK) ' + 
             ' WHERE DeviceProfileLogKey = @cDPLKey ' + 
                ' AND LOC = @cLOC ' + 
@@ -617,15 +640,14 @@ BEGIN
             @cPickSlipNo, @cOrderKey, @cLoadKey, @cPickConfirmStatus, @cDPLKey, @cLOC, @cSKU, @nQTY, @cPosition, @cLottableCode, 
             @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
             @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
-            @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, 
+            @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,@cLOT,
             @curPTL OUTPUT
 
-         FETCH NEXT FROM @curPTL INTO @nPTLKey, @nQTY_PTL
+         FETCH NEXT FROM @curPTL INTO @nPTLKey, @nQTY_PTL,@cLOT
          WHILE @@FETCH_STATUS = 0
          BEGIN
-            IF @nExpectedQTY IS NULL
-               SET @nExpectedQTY = @nQTY_PTL
-            
+            SET @nExpectedQTY = @nQTY_PTL
+
             -- Exact match
             IF @nQTY_PTL = @nQTY_Bal
             BEGIN
@@ -644,8 +666,6 @@ BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PTL Fail
                   GOTO RollBackTran
                END
-      
-               SET @nQTY_Bal = 0 -- Reduce balance
             END
             
             -- PTLTran have less
@@ -666,8 +686,6 @@ BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PTL Fail
                   GOTO RollBackTran
                END
-      
-               SET @nQTY_Bal = @nQTY_Bal - @nQTY_PTL -- Reduce balance
             END
             
             -- PTLTran have more
@@ -691,6 +709,7 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PTL Fail
                      GOTO RollBackTran
                   END
+
                END
                ELSE
                BEGIN -- Have balance, need to split
@@ -734,531 +753,543 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PTL Fail
                      GOTO RollBackTran
                   END
-         
-                  SET @nQTY_Bal = 0 -- Reduce balance
+
                END
             END
+
+                     -- PickDetail
+            IF @cUpdatePickDetail = '1'
+            BEGIN
+               SET @cPSType = ''
+
+               -- Get PickHeader info
+               SELECT 
+                  @cZone = Zone, 
+                  @cOrderKey = ISNULL( OrderKey, ''), 
+                  @cLoadKey = ExternOrderKey
+               FROM PickHeader WITH (NOLOCK) 
+               WHERE PickHeaderKey = @cPickSlipNo
+
+               IF @@ROWCOUNT = 0
+                  SET @cPSType = 'CUSTOM'
+
+               IF @cPSType = ''
+               BEGIN
+                  -- Get PickSlip type
+                  IF @cZone = 'XD' OR @cZone = 'LB' OR @cZone = 'LP'
+                     SET @cPSType = 'XD'
+                  ELSE IF @cOrderKey = ''
+                     SET @cPSType = 'CONSO'
+                  ELSE
+                     SET @cPSType = 'DISCRETE'
+               END
+
+               -- Check PickDetail tally PTLTran
+               IF @cPSType = 'DISCRETE'
+                  SELECT @nQTY_PD = ISNULL( SUM( PD.QTY), 0)
+                  FROM Orders O WITH (NOLOCK) 
+                     JOIN PickDetail PD WITH (NOLOCK) ON (PD.OrderKey = O.OrderKey)
+                  WHERE O.OrderKey = @cOrderKey
+                     AND PD.StorerKey = @cStorerKey
+                     AND PD.SKU = @cSKU
+                     AND PD.LOC = @cLOC
+                     AND PD.Status < @cPickConfirmStatus
+                     AND PD.Status <> '4'
+                     AND PD.Lot = @cLot
+                     AND PD.QTY > 0
+                     AND O.Status <> 'CANC' 
+                     AND O.SOStatus <> 'CANC'
             
+               IF @cPSType = 'CONSO'
+                  SELECT @nQTY_PD = ISNULL( SUM( PD.QTY), 0)
+                  FROM LoadPlanDetail LPD WITH (NOLOCK) 
+                     JOIN Orders O WITH (NOLOCK) ON (LPD.OrderKey = O.OrderKey)
+                     JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
+                  WHERE LPD.Loadkey = @cLoadKey
+                     AND PD.StorerKey = @cStorerKey
+                     AND PD.SKU = @cSKU
+                     AND PD.LOC = @cLOC
+                     AND PD.Status < @cPickConfirmStatus
+                     AND PD.Status <> '4'
+                     AND PD.QTY > 0
+                     AND PD.Lot = @cLot
+                     AND O.Status <> 'CANC' 
+                     AND O.SOStatus <> 'CANC'
+   
+               IF @cPSType = 'XD'
+                  SELECT @nQTY_PD = ISNULL( SUM( PD.QTY), 0)
+                  FROM Orders O WITH (NOLOCK)
+                     JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
+                     JOIN RefKeyLookup RKL WITH (NOLOCK) ON (RKL.PickDetailKey = PD.PickDetailKey)
+                  WHERE RKL.PickslipNo = @cPickSlipNo
+                     AND PD.StorerKey = @cStorerKey
+                     AND PD.SKU = @cSKU
+                     AND PD.LOC = @cLOC
+                     AND PD.Status < @cPickConfirmStatus
+                     AND PD.Status <> '4'
+                     AND PD.QTY > 0
+                     AND PD.Lot = @cLot
+                     AND O.Status <> 'CANC' 
+                     AND O.SOStatus <> 'CANC'
+
+               IF @cPSType = 'CUSTOM'
+                  SELECT @nQTY_PD = ISNULL( SUM( PD.QTY), 0)
+                  FROM Orders O WITH (NOLOCK)
+                     JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
+                  WHERE PD.PickslipNo = @cPickSlipNo
+                     AND PD.StorerKey = @cStorerKey
+                     AND PD.SKU = @cSKU
+                     AND PD.LOC = @cLOC
+                     AND PD.Status < @cPickConfirmStatus
+                     AND PD.Status <> '4'
+                     AND PD.QTY > 0
+                     AND PD.Lot = @cLot
+                     AND O.Status <> 'CANC' 
+                     AND O.SOStatus <> 'CANC'
+
+               IF @nQTY_PD <> @nExpectedQTY AND @nQTY_Bal<>0
+               BEGIN
+                  SET @nErrNo = 168165
+                  SET @cErrMsg = @nQTY_PD--rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PKDtl changed
+                  GOTO RollBackTran
+               END
+
+               IF CURSOR_STATUS( 'variable', '@curPD') IN (0, 1)
+                  DEALLOCATE @curPD
+                           
+               -- Get PickDetail candidate
+               IF @cPSType = 'DISCRETE'
+                  SET @cSQL = 
+                     ' SELECT PD.PickDetailKey, PD.QTY ' +
+                     ' FROM Orders O WITH (NOLOCK) ' +
+                        ' JOIN PickDetail PD WITH (NOLOCK) ON (PD.OrderKey = O.OrderKey) ' +
+                        ' JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' + 
+                     ' WHERE O.OrderKey = @cOrderKey ' +
+                        ' AND PD.StorerKey = @cStorerKey ' +
+                        ' AND PD.SKU = @cSKU ' +
+                        ' AND PD.LOC = @cLOC ' +
+                        ' AND PD.Status < @cPickConfirmStatus ' + 
+                        ' AND PD.Status <> ''4''' + 
+                        ' AND PD.QTY > 0 ' +
+                        ' AND PD.Lot = @cLot' +
+                        ' AND O.Status <> ''CANC''  ' +
+                        ' AND O.SOStatus <> ''CANC'' '
+            
+               IF @cPSType = 'CONSO'
+                  SET @cSQL = 
+                     ' SELECT PD.PickDetailKey, PD.QTY ' + 
+                     ' FROM LoadPlanDetail LPD WITH (NOLOCK) ' + 
+                        ' JOIN Orders O WITH (NOLOCK) ON (LPD.OrderKey = O.OrderKey) ' + 
+                        ' JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey) ' + 
+                        ' JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' + 
+                     ' WHERE LPD.Loadkey = @cLoadKey ' + 
+                        ' AND PD.StorerKey = @cStorerKey ' + 
+                        ' AND PD.SKU = @cSKU ' + 
+                        ' AND PD.LOC = @cLOC ' + 
+                        ' AND PD.Status < @cPickConfirmStatus ' + 
+                        ' AND PD.Status <> ''4''' + 
+                        ' AND PD.QTY > 0 ' + 
+                        ' AND PD.Lot = @cLot' +
+                        ' AND O.Status <> ''CANC''  ' + 
+                        ' AND O.SOStatus <> ''CANC'' ' 
+   
+               IF @cPSType = 'XD'
+                  SET @cSQL = 
+                     ' SELECT PD.PickDetailKey, PD.QTY ' + 
+                     ' FROM Orders O WITH (NOLOCK) ' + 
+                        ' JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey) ' + 
+                        ' JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' + 
+                        ' JOIN RefKeyLookup RKL WITH (NOLOCK) ON (RKL.PickDetailKey = PD.PickDetailKey) ' + 
+                     ' WHERE RKL.PickslipNo = @cPickSlipNo ' + 
+                        ' AND PD.StorerKey = @cStorerKey ' + 
+                        ' AND PD.SKU = @cSKU ' + 
+                        ' AND PD.LOC = @cLOC ' + 
+                        ' AND PD.Status < @cPickConfirmStatus ' + 
+                        ' AND PD.Status <> ''4''' + 
+                        ' AND PD.QTY > 0 ' +                      
+                        ' AND PD.Lot = @cLot' +
+                        ' AND O.Status <> ''CANC'' ' +  
+                        ' AND O.SOStatus <> ''CANC'' '
+
+               IF @cPSType = 'CUSTOM'
+                  SET @cSQL = 
+                     ' SELECT PD.PickDetailKey, PD.QTY ' + 
+                     ' FROM Orders O WITH (NOLOCK) ' + 
+                        ' JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey) ' + 
+                        ' JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' + 
+                     ' WHERE PD.PickslipNo = @cPickSlipNo ' + 
+                        ' AND PD.StorerKey = @cStorerKey ' + 
+                        ' AND PD.SKU = @cSKU ' + 
+                        ' AND PD.LOC = @cLOC ' + 
+                        ' AND PD.Status < @cPickConfirmStatus ' + 
+                        ' AND PD.Status <> ''4''' + 
+                        ' AND PD.QTY > 0 ' +                     
+                        ' AND PD.Lot = @cLot' +
+                        ' AND O.Status <> ''CANC'' ' +  
+                        ' AND O.SOStatus <> ''CANC'' '
+
+               EXEC rdt.rdt_PTLCart_Confirm_PickSlip_LottableCursor @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cSQL, 'LA', 
+                  @cPickSlipNo, @cOrderKey, @cLoadKey, @cPickConfirmStatus, @cDPLKey, @cLOC, @cSKU, @nQTY, @cPosition, @cLottableCode, 
+                  @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+                  @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+                  @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, @cLot,
+                  @curPD OUTPUT
+            
+               FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD 
+               WHILE @@FETCH_STATUS = 0
+               BEGIN
+
+                  select @nQTY_Bal,@nQTY_PD
+   
+                  -- Exact match
+                  IF @nQTY_PD = @nQTY_Bal
+                  BEGIN
+                     -- Confirm PickDetail
+                     UPDATE dbo.PickDetail WITH (ROWLOCK) SET 
+                        Status = @cPickConfirmStatus,
+                        DropID = @cToteID, 
+                        EditDate = GETDATE(), 
+                        EditWho  = SUSER_SNAME() 
+                     WHERE PickDetailKey = @cPickDetailKey
+                     IF @@ERROR <> 0
+                     BEGIN
+                        SET @nErrNo = 168166
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
+                        GOTO RollBackTran
+                     END
+
+                     SET @nQTY_Bal = 0 -- Reduce balance
+                  END
+               
+                  -- PickDetail have less
+         		   ELSE IF @nQTY_PD < @nQTY_Bal
+                  BEGIN
+                     -- Confirm PickDetail
+                     UPDATE dbo.PickDetail WITH (ROWLOCK) SET 
+                        Status = @cPickConfirmStatus,
+                        DropID = @cToteID, 
+                        EditDate = GETDATE(), 
+                        EditWho  = SUSER_SNAME() 
+                     WHERE PickDetailKey = @cPickDetailKey
+                     IF @@ERROR <> 0
+                     BEGIN
+                        SET @nErrNo = 168167
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
+                        GOTO RollBackTran
+                     END
+  
+                     SET @nQTY_Bal = @nQTY_Bal - @nQTY_PD -- Reduce balance
+                  END
+               
+                  -- PickDetail have more
+         		   ELSE IF @nQTY_PD > @nQTY_Bal
+                  BEGIN
+                     -- Short pick
+                     IF @cType = 'SHORTTOTE' AND @nQTY_Bal = 0 -- Don't need to split
+                     BEGIN
+                        -- Confirm PickDetail
+                        UPDATE dbo.PickDetail WITH (ROWLOCK) SET 
+                           Status = @cShortStatus,
+                           DropID = @cToteID, 
+                           EditDate = GETDATE(), 
+                           EditWho  = SUSER_SNAME(),
+                           TrafficCop = NULL
+                        WHERE PickDetailKey = @cPickDetailKey
+                        IF @@ERROR <> 0
+                        BEGIN
+                           SET @nErrNo = 168168
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
+                           GOTO RollBackTran
+                        END
+                     END
+                     ELSE
+                     BEGIN -- Have balance, need to split
+         
+                        -- Get new PickDetailkey
+                        DECLARE @cNewPickDetailKey NVARCHAR( 10)
+                        EXECUTE dbo.nspg_GetKey
+                           'PICKDETAILKEY', 
+                           10 ,
+                           @cNewPickDetailKey OUTPUT,
+                           @bSuccess          OUTPUT,
+                           @nErrNo            OUTPUT,
+                           @cErrMsg           OUTPUT
+                        IF @bSuccess <> 1
+                        BEGIN
+                           SET @nErrNo = 168169
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- nspg_GetKey
+                           GOTO RollBackTran
+                        END
+            
+                        -- Create a new PickDetail to hold the balance
+                        INSERT INTO dbo.PickDetail (
+                           CaseID, PickHeaderKey, OrderKey, OrderLineNumber, LOT, StorerKey, SKU, AltSKU, UOM, 
+                           UOMQTY, QTYMoved, Status, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, CartonType, 
+                           ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,
+                           EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes, 
+                           PickDetailKey, 
+                           QTY, 
+                           TrafficCop,
+                           OptimizeCop)
+                        SELECT 
+                           CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot, StorerKey, SKU, AltSku, UOM, 
+                           UOMQTY, QTYMoved, Status, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, 
+                           CartonType, ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,
+                           EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes, 
+                           @cNewPickDetailKey, 
+                           @nQTY_PD - @nQTY_Bal, -- QTY
+                           NULL, -- TrafficCop
+                           '1'   -- OptimizeCop
+                        FROM dbo.PickDetail WITH (NOLOCK) 
+            			   WHERE PickDetailKey = @cPickDetailKey			            
+                        IF @@ERROR <> 0
+                        BEGIN
+            				   SET @nErrNo = 168170
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- INS PKDtl Fail
+                           GOTO RollBackTran
+                        END
+
+                        -- Split RefKeyLookup
+                        IF EXISTS( SELECT 1 FROM RefKeyLookup WITH (NOLOCK) WHERE PickDetailKey = @cPickDetailKey)
+                        BEGIN
+                           -- Insert into
+                           INSERT INTO dbo.RefKeyLookup (PickDetailkey, PickSlipNo, OrderKey, OrderLineNumber, Loadkey)
+                           SELECT @cNewPickDetailKey, PickSlipNo, OrderKey, OrderLineNumber, Loadkey
+                           FROM RefKeyLookup WITH (NOLOCK) 
+                           WHERE PickDetailKey = @cPickDetailKey
+                           IF @@ERROR <> 0
+                           BEGIN
+                              SET @nErrNo = 168171
+                              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- INS RefKeyFail
+                              GOTO RollBackTran
+                           END
+                        END
+                     
+                        -- Change orginal PickDetail with exact QTY (with TrafficCop)
+                        UPDATE dbo.PickDetail WITH (ROWLOCK) SET 
+                           QTY = @nQTY_Bal, 
+                           DropID = @cToteID, 
+                           EditDate = GETDATE(), 
+                           EditWho  = SUSER_SNAME(), 
+                           Trafficcop = NULL
+                        WHERE PickDetailKey = @cPickDetailKey 
+                        IF @@ERROR <> 0
+                        BEGIN
+                           SET @nErrNo = 168172
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
+                           GOTO RollBackTran
+                        END
+            
+                        -- Confirm orginal PickDetail with exact QTY
+                        UPDATE dbo.PickDetail WITH (ROWLOCK) SET 
+                           Status = @cPickConfirmStatus,
+                           EditDate = GETDATE(), 
+                           EditWho  = SUSER_SNAME() 
+                        WHERE PickDetailKey = @cPickDetailKey
+                        IF @@ERROR <> 0
+                        BEGIN
+                           SET @nErrNo = 168173
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
+                           GOTO RollBackTran
+                        END
+
+                                 
+                        SET @nQTY_Bal = 0 -- Reduce balance
+                     END
+                  END
+         
+                  -- Exit condition
+                  IF @cType = 'CLOSETOTE' AND @nQTY_Bal = 0
+                     BREAK
+
+                  IF @cType = 'SHORTTOTE' AND @nQTY_Bal = 0 AND @cShortPickType = '2' -- Balance pick later
+                     BREAK
+         
+                  FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD 
+               END 
+            END
+         
+            --(cc01) 
+            IF @cInsertDropID = '1'
+            BEGIN
+         	   SET @cPSType = ''
+
+               -- Get PickHeader info
+               SELECT 
+                  @cZone = Zone, 
+                  @cOrderKey = ISNULL( OrderKey, ''), 
+                  @cLoadKey = ExternOrderKey
+               FROM PickHeader WITH (NOLOCK) 
+               WHERE PickHeaderKey = @cPickSlipNo
+            
+               IF @@ROWCOUNT = 0
+                  SET @cPSType = 'CUSTOM'
+            
+               IF @cPSType = ''
+               BEGIN
+                  -- Get PickSlip type
+                  IF @cZone = 'XD' OR @cZone = 'LB' OR @cZone = 'LP'
+                     SET @cPSType = 'XD'
+                  ELSE IF @cOrderKey = ''
+                     SET @cPSType = 'CONSO'
+                  ELSE
+                     SET @cPSType = 'DISCRETE'
+               END
+
+               -- Get Orderkey type
+               IF @cPSType = 'CONSO'
+                  SELECT @cOrderKey = O.OrderKey
+                  FROM LoadPlanDetail LPD WITH (NOLOCK) 
+                     JOIN Orders O WITH (NOLOCK) ON (LPD.OrderKey = O.OrderKey)
+                     JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
+                  WHERE LPD.Loadkey = @cLoadKey
+                     AND PD.StorerKey = @cStorerKey
+                     AND PD.SKU = @cSKU
+                     AND PD.LOC = @cLOC
+                     AND PD.Status = @cPickConfirmStatus
+                     AND PD.Status <> '4'
+                     AND PD.QTY > 0
+                     AND O.Status <> 'CANC' 
+                     AND O.SOStatus <> 'CANC'
+   
+               IF @cPSType = 'XD'
+                  SELECT @cOrderKey = O.OrderKey
+                  FROM Orders O WITH (NOLOCK)
+                     JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
+                     JOIN RefKeyLookup RKL WITH (NOLOCK) ON (RKL.PickDetailKey = PD.PickDetailKey)
+                  WHERE RKL.PickslipNo = @cPickSlipNo
+                     AND PD.StorerKey = @cStorerKey
+                     AND PD.SKU = @cSKU
+                     AND PD.LOC = @cLOC
+                     AND PD.Status = @cPickConfirmStatus
+                     AND PD.Status <> '4'
+                     AND PD.QTY > 0
+                     AND O.Status <> 'CANC' 
+                     AND O.SOStatus <> 'CANC'
+
+               IF @cPSType = 'CUSTOM'
+                  SELECT @cOrderKey = O.OrderKey
+                  FROM Orders O WITH (NOLOCK)
+                     JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
+                  WHERE PD.PickslipNo = @cPickSlipNo
+                     AND PD.StorerKey = @cStorerKey
+                     AND PD.SKU = @cSKU
+                     AND PD.LOC = @cLOC
+                     AND PD.Status = @cPickConfirmStatus
+                     AND PD.Status <> '4'
+                     AND PD.QTY > 0
+                     AND O.Status <> 'CANC' 
+                     AND O.SOStatus <> 'CANC'
+                  
+               IF @cOrderKey <> ''
+               BEGIN
+                  SELECT @cDropIDType =     
+                  CASE WHEN ISNULL( SUM( Qty), 0) = 1 THEN 'SINGLES'     
+                     WHEN ISNULL( SUM( Qty), 0) > 1 THEN 'MULTIS'     
+                     ELSE '' END    
+                  FROM dbo.PickDetail WITH (NOLOCK)     
+                        WHERE StorerKey = @cStorerkey    
+                        AND OrderKey = @cOrderKey    
+                     
+                  IF ISNULL(@cLoadKey,'') = ''
+                  BEGIN
+               	   SELECT @cLoadKey = LoadKey FROM orders WITH (NOLOCK) WHERE storerKey = @cStorerKey AND orderKey = @cOrderKey
+                  END
+               
+                  IF EXISTS (SELECT 1 FROM dbo.DropID WITH (NOLOCK)   
+                             WHERE DropID = @cToteID   
+                             --AND   [Status] = '0'
+                              )
+                  BEGIN
+               	   IF @cPTLCartAllowReuseDropID = '1 '
+                     BEGIN
+               	      -- Delete existing dropiddetail  
+                        DELETE FROM dbo.DropIDDetail    
+                        WHERE DropID = @cToteID   
+  
+                        IF @@ERROR <> 0  
+                        BEGIN  
+                           SET @nErrNo = 168174  
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'DEL DDTL FAIL'  
+                           GOTO RollBackTran  
+                        END  
+  
+                        -- Delete existing dropid  
+                        DELETE FROM dbo.DropID   
+                        WHERE DropID = @cToteID   
+  
+                        IF @@ERROR <> 0  
+                        BEGIN  
+                           SET @nErrNo = 168175  
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'DEL DID FAIL'  
+                           GOTO RollBackTran  
+                        END 
+                     END
+                     ELSE  
+                     BEGIN  
+                        SET @nErrNo = 168176  
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'INVALID DROPID'  
+                        GOTO RollBackTran  
+                     END  
+                  END
+               
+                  --INSERT INTO traceInfo (TraceName, Col1,Col2,col3)
+                  --VALUES ('cc8081',@cToteID,@cPickSlipNo,@cLoadKey)
+               
+              	   INSERT INTO dbo.DropID   
+                  (DropID, DropIDType, LabelPrinted, [Status], PickSlipNo, LoadKey)  
+                  VALUES   
+                  (@cToteID, @cDropIDType, '0', '5', @cPickSlipNo, @cLoadKey) 
+               
+              	   IF @@ERROR <> 0  
+                  BEGIN  
+                     SET @nErrNo = 168177  
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'INS DID FAIL'  
+                     GOTO RollBackTran  
+                  END  
+              	
+              	   INSERT INTO dbo.DropIDDetail (DropID, ChildID)  
+                  VALUES (@cToteID, @cOrderKey)
+              	
+                  IF @@ERROR <> 0  
+                  BEGIN  
+                     SET @nErrNo = 168178  
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'INS DDTL FAIL'  
+                     GOTO RollBackTran  
+                  END  
+               END
+            END
+
+            IF (@cType = 'CLOSETOTE' AND @nQTY > 0)
+               -- EventLog -- (james01) 
+               EXEC RDT.rdt_STD_EventLog  
+                  @cActionType = '3', -- Sign-in  
+                  @nMobileNo   = @nMobile,  
+                  @nFunctionID = @nFunc,  
+                  @nStep       = @nStep,
+                  @cFacility   = @cFacility,  
+                  @cStorerKey  = @cStorerkey,    
+                  @cSKU        = @cSKU,
+                  @nQty        = @nQTY,
+                  @cDropID     = @cToteID,
+                  @cLocation   = @cLoc,
+                  @cPickSlipNo = @cPickSlipNo,
+                  @cDeviceID   = @cCartID,
+                  @cDevicePosition = @cPosition,
+                  @cPickZone   = @cPickZone,
+                  @cLoadKey    = @cLoadKey,
+                  @nExpectedQTY= @nQTY
+
             -- Exit condition
             IF @cType = 'CLOSETOTE' AND @nQTY_Bal = 0
                BREAK
 
             IF @cType = 'SHORTTOTE' AND @nQTY_Bal = 0 AND @cShortPickType = '2' -- Balance pick later
                BREAK
+
             
-            FETCH NEXT FROM @curPTL INTO @nPTLKey, @nQTY_PTL
+            FETCH NEXT FROM @curPTL INTO @nPTLKey, @nQTY_PTL,@cLOT
          END
-               
-         -- PickDetail
-         IF @cUpdatePickDetail = '1'
-         BEGIN
-            SET @cPSType = ''
-
-            -- Get PickHeader info
-            SELECT 
-               @cZone = Zone, 
-               @cOrderKey = ISNULL( OrderKey, ''), 
-               @cLoadKey = ExternOrderKey
-            FROM PickHeader WITH (NOLOCK) 
-            WHERE PickHeaderKey = @cPickSlipNo
-
-            IF @@ROWCOUNT = 0
-               SET @cPSType = 'CUSTOM'
-
-            IF @cPSType = ''
-            BEGIN
-               -- Get PickSlip type
-               IF @cZone = 'XD' OR @cZone = 'LB' OR @cZone = 'LP'
-                  SET @cPSType = 'XD'
-               ELSE IF @cOrderKey = ''
-                  SET @cPSType = 'CONSO'
-               ELSE
-                  SET @cPSType = 'DISCRETE'
-            END
-
-            -- Check PickDetail tally PTLTran
-            IF @cPSType = 'DISCRETE'
-               SELECT @nQTY_PD = ISNULL( SUM( PD.QTY), 0)
-               FROM Orders O WITH (NOLOCK) 
-                  JOIN PickDetail PD WITH (NOLOCK) ON (PD.OrderKey = O.OrderKey)
-               WHERE O.OrderKey = @cOrderKey
-                  AND PD.StorerKey = @cStorerKey
-                  AND PD.SKU = @cSKU
-                  AND PD.LOC = @cLOC
-                  AND PD.Status < @cPickConfirmStatus
-                  AND PD.Status <> '4'
-                  AND PD.QTY > 0
-                  AND O.Status <> 'CANC' 
-                  AND O.SOStatus <> 'CANC'
-            
-            IF @cPSType = 'CONSO'
-               SELECT @nQTY_PD = ISNULL( SUM( PD.QTY), 0)
-               FROM LoadPlanDetail LPD WITH (NOLOCK) 
-                  JOIN Orders O WITH (NOLOCK) ON (LPD.OrderKey = O.OrderKey)
-                  JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
-               WHERE LPD.Loadkey = @cLoadKey
-                  AND PD.StorerKey = @cStorerKey
-                  AND PD.SKU = @cSKU
-                  AND PD.LOC = @cLOC
-                  AND PD.Status < @cPickConfirmStatus
-                  AND PD.Status <> '4'
-                  AND PD.QTY > 0
-                  AND O.Status <> 'CANC' 
-                  AND O.SOStatus <> 'CANC'
-   
-            IF @cPSType = 'XD'
-               SELECT @nQTY_PD = ISNULL( SUM( PD.QTY), 0)
-               FROM Orders O WITH (NOLOCK)
-                  JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
-                  JOIN RefKeyLookup RKL WITH (NOLOCK) ON (RKL.PickDetailKey = PD.PickDetailKey)
-               WHERE RKL.PickslipNo = @cPickSlipNo
-                  AND PD.StorerKey = @cStorerKey
-                  AND PD.SKU = @cSKU
-                  AND PD.LOC = @cLOC
-                  AND PD.Status < @cPickConfirmStatus
-                  AND PD.Status <> '4'
-                  AND PD.QTY > 0
-                  AND O.Status <> 'CANC' 
-                  AND O.SOStatus <> 'CANC'
-
-            IF @cPSType = 'CUSTOM'
-               SELECT @nQTY_PD = ISNULL( SUM( PD.QTY), 0)
-               FROM Orders O WITH (NOLOCK)
-                  JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
-               WHERE PD.PickslipNo = @cPickSlipNo
-                  AND PD.StorerKey = @cStorerKey
-                  AND PD.SKU = @cSKU
-                  AND PD.LOC = @cLOC
-                  AND PD.Status < @cPickConfirmStatus
-                  AND PD.Status <> '4'
-                  AND PD.QTY > 0
-                  AND O.Status <> 'CANC' 
-                  AND O.SOStatus <> 'CANC'
-
-            IF @nQTY_PD <> @nExpectedQTY
-            BEGIN
-               SET @nErrNo = 168165
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PKDtl changed
-               GOTO RollBackTran
-            END
-            
-            -- For calculation
-            SET @nQTY_Bal = @nQTY
-         
-            -- Get PickDetail candidate
-            IF @cPSType = 'DISCRETE'
-               SET @cSQL = 
-                  ' SELECT PD.PickDetailKey, PD.QTY ' +
-                  ' FROM Orders O WITH (NOLOCK) ' +
-                     ' JOIN PickDetail PD WITH (NOLOCK) ON (PD.OrderKey = O.OrderKey) ' +
-                     ' JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' + 
-                  ' WHERE O.OrderKey = @cOrderKey ' +
-                     ' AND PD.StorerKey = @cStorerKey ' +
-                     ' AND PD.SKU = @cSKU ' +
-                     ' AND PD.LOC = @cLOC ' +
-                     ' AND PD.Status < @cPickConfirmStatus ' + 
-                     ' AND PD.Status <> ''4''' + 
-                     ' AND PD.QTY > 0 ' +
-                     ' AND O.Status <> ''CANC''  ' +
-                     ' AND O.SOStatus <> ''CANC'' '
-            
-            IF @cPSType = 'CONSO'
-               SET @cSQL = 
-                  ' SELECT PD.PickDetailKey, PD.QTY ' + 
-                  ' FROM LoadPlanDetail LPD WITH (NOLOCK) ' + 
-                     ' JOIN Orders O WITH (NOLOCK) ON (LPD.OrderKey = O.OrderKey) ' + 
-                     ' JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey) ' + 
-                     ' JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' + 
-                  ' WHERE LPD.Loadkey = @cLoadKey ' + 
-                     ' AND PD.StorerKey = @cStorerKey ' + 
-                     ' AND PD.SKU = @cSKU ' + 
-                     ' AND PD.LOC = @cLOC ' + 
-                     ' AND PD.Status < @cPickConfirmStatus ' + 
-                     ' AND PD.Status <> ''4''' + 
-                     ' AND PD.QTY > 0 ' + 
-                     ' AND O.Status <> ''CANC''  ' + 
-                     ' AND O.SOStatus <> ''CANC'' ' 
-   
-            IF @cPSType = 'XD'
-               SET @cSQL = 
-                  ' SELECT PD.PickDetailKey, PD.QTY ' + 
-                  ' FROM Orders O WITH (NOLOCK) ' + 
-                     ' JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey) ' + 
-                     ' JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' + 
-                     ' JOIN RefKeyLookup RKL WITH (NOLOCK) ON (RKL.PickDetailKey = PD.PickDetailKey) ' + 
-                  ' WHERE RKL.PickslipNo = @cPickSlipNo ' + 
-                     ' AND PD.StorerKey = @cStorerKey ' + 
-                     ' AND PD.SKU = @cSKU ' + 
-                     ' AND PD.LOC = @cLOC ' + 
-                     ' AND PD.Status < @cPickConfirmStatus ' + 
-                     ' AND PD.Status <> ''4''' + 
-                     ' AND PD.QTY > 0 ' + 
-                     ' AND O.Status <> ''CANC'' ' +  
-                     ' AND O.SOStatus <> ''CANC'' '
-
-            IF @cPSType = 'CUSTOM'
-               SET @cSQL = 
-                  ' SELECT PD.PickDetailKey, PD.QTY ' + 
-                  ' FROM Orders O WITH (NOLOCK) ' + 
-                     ' JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey) ' + 
-                     ' JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' + 
-                  ' WHERE PD.PickslipNo = @cPickSlipNo ' + 
-                     ' AND PD.StorerKey = @cStorerKey ' + 
-                     ' AND PD.SKU = @cSKU ' + 
-                     ' AND PD.LOC = @cLOC ' + 
-                     ' AND PD.Status < @cPickConfirmStatus ' + 
-                     ' AND PD.Status <> ''4''' + 
-                     ' AND PD.QTY > 0 ' + 
-                     ' AND O.Status <> ''CANC'' ' +  
-                     ' AND O.SOStatus <> ''CANC'' '
-
-            EXEC rdt.rdt_PTLCart_Confirm_PickSlip_LottableCursor @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cSQL, 'LA', 
-               @cPickSlipNo, @cOrderKey, @cLoadKey, @cPickConfirmStatus, @cDPLKey, @cLOC, @cSKU, @nQTY, @cPosition, @cLottableCode, 
-               @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
-               @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
-               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, 
-               @curPD OUTPUT
-            
-            FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD 
-            WHILE @@FETCH_STATUS = 0
-            BEGIN
-               -- Exact match
-               IF @nQTY_PD = @nQTY_Bal
-               BEGIN
-                  -- Confirm PickDetail
-                  UPDATE dbo.PickDetail WITH (ROWLOCK) SET 
-                     Status = @cPickConfirmStatus,
-                     DropID = @cToteID, 
-                     EditDate = GETDATE(), 
-                     EditWho  = SUSER_SNAME() 
-                  WHERE PickDetailKey = @cPickDetailKey
-                  IF @@ERROR <> 0
-                  BEGIN
-                     SET @nErrNo = 168166
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
-                     GOTO RollBackTran
-                  END
-         
-                  SET @nQTY_Bal = 0 -- Reduce balance
-               END
-               
-               -- PickDetail have less
-         		ELSE IF @nQTY_PD < @nQTY_Bal
-               BEGIN
-                  -- Confirm PickDetail
-                  UPDATE dbo.PickDetail WITH (ROWLOCK) SET 
-                     Status = @cPickConfirmStatus,
-                     DropID = @cToteID, 
-                     EditDate = GETDATE(), 
-                     EditWho  = SUSER_SNAME() 
-                  WHERE PickDetailKey = @cPickDetailKey
-                  IF @@ERROR <> 0
-                  BEGIN
-                     SET @nErrNo = 168167
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
-                     GOTO RollBackTran
-                  END
-         
-                  SET @nQTY_Bal = @nQTY_Bal - @nQTY_PD -- Reduce balance
-               END
-               
-               -- PickDetail have more
-         		ELSE IF @nQTY_PD > @nQTY_Bal
-               BEGIN
-                  -- Short pick
-                  IF @cType = 'SHORTTOTE' AND @nQTY_Bal = 0 -- Don't need to split
-                  BEGIN
-                     -- Confirm PickDetail
-                     UPDATE dbo.PickDetail WITH (ROWLOCK) SET 
-                        Status = @cShortStatus,
-                        DropID = @cToteID, 
-                        EditDate = GETDATE(), 
-                        EditWho  = SUSER_SNAME(),
-                        TrafficCop = NULL
-                     WHERE PickDetailKey = @cPickDetailKey
-                     IF @@ERROR <> 0
-                     BEGIN
-                        SET @nErrNo = 168168
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
-                        GOTO RollBackTran
-                     END
-                  END
-                  ELSE
-                  BEGIN -- Have balance, need to split
-         
-                     -- Get new PickDetailkey
-                     DECLARE @cNewPickDetailKey NVARCHAR( 10)
-                     EXECUTE dbo.nspg_GetKey
-                        'PICKDETAILKEY', 
-                        10 ,
-                        @cNewPickDetailKey OUTPUT,
-                        @bSuccess          OUTPUT,
-                        @nErrNo            OUTPUT,
-                        @cErrMsg           OUTPUT
-                     IF @bSuccess <> 1
-                     BEGIN
-                        SET @nErrNo = 168169
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- nspg_GetKey
-                        GOTO RollBackTran
-                     END
-            
-                     -- Create a new PickDetail to hold the balance
-                     INSERT INTO dbo.PickDetail (
-                        CaseID, PickHeaderKey, OrderKey, OrderLineNumber, LOT, StorerKey, SKU, AltSKU, UOM, 
-                        UOMQTY, QTYMoved, Status, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, CartonType, 
-                        ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,
-                        EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes, 
-                        PickDetailKey, 
-                        QTY, 
-                        TrafficCop,
-                        OptimizeCop)
-                     SELECT 
-                        CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot, StorerKey, SKU, AltSku, UOM, 
-                        UOMQTY, QTYMoved, Status, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, 
-                        CartonType, ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,
-                        EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes, 
-                        @cNewPickDetailKey, 
-                        @nQTY_PD - @nQTY_Bal, -- QTY
-                        NULL, -- TrafficCop
-                        '1'   -- OptimizeCop
-                     FROM dbo.PickDetail WITH (NOLOCK) 
-            			WHERE PickDetailKey = @cPickDetailKey			            
-                     IF @@ERROR <> 0
-                     BEGIN
-            				SET @nErrNo = 168170
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- INS PKDtl Fail
-                        GOTO RollBackTran
-                     END
-                     
-                     -- Split RefKeyLookup
-                     IF EXISTS( SELECT 1 FROM RefKeyLookup WITH (NOLOCK) WHERE PickDetailKey = @cPickDetailKey)
-                     BEGIN
-                        -- Insert into
-                        INSERT INTO dbo.RefKeyLookup (PickDetailkey, PickSlipNo, OrderKey, OrderLineNumber, Loadkey)
-                        SELECT @cNewPickDetailKey, PickSlipNo, OrderKey, OrderLineNumber, Loadkey
-                        FROM RefKeyLookup WITH (NOLOCK) 
-                        WHERE PickDetailKey = @cPickDetailKey
-                        IF @@ERROR <> 0
-                        BEGIN
-                           SET @nErrNo = 168171
-                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- INS RefKeyFail
-                           GOTO RollBackTran
-                        END
-                     END
-                     
-                     -- Change orginal PickDetail with exact QTY (with TrafficCop)
-                     UPDATE dbo.PickDetail WITH (ROWLOCK) SET 
-                        QTY = @nQTY_Bal, 
-                        DropID = @cToteID, 
-                        EditDate = GETDATE(), 
-                        EditWho  = SUSER_SNAME(), 
-                        Trafficcop = NULL
-                     WHERE PickDetailKey = @cPickDetailKey 
-                     IF @@ERROR <> 0
-                     BEGIN
-                        SET @nErrNo = 168172
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
-                        GOTO RollBackTran
-                     END
-            
-                     -- Confirm orginal PickDetail with exact QTY
-                     UPDATE dbo.PickDetail WITH (ROWLOCK) SET 
-                        Status = @cPickConfirmStatus,
-                        EditDate = GETDATE(), 
-                        EditWho  = SUSER_SNAME() 
-                     WHERE PickDetailKey = @cPickDetailKey
-                     IF @@ERROR <> 0
-                     BEGIN
-                        SET @nErrNo = 168173
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
-                        GOTO RollBackTran
-                     END
-            
-                     SET @nQTY_Bal = 0 -- Reduce balance
-                  END
-               END
-         
-               -- Exit condition
-               IF @cType = 'CLOSETOTE' AND @nQTY_Bal = 0
-                  BREAK
-
-               IF @cType = 'SHORTTOTE' AND @nQTY_Bal = 0 AND @cShortPickType = '2' -- Balance pick later
-                  BREAK
-         
-               FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD 
-            END 
-         END
-         
-         --(cc01) 
-         IF @cInsertDropID = '1'
-         BEGIN
-         	SET @cPSType = ''
-
-            -- Get PickHeader info
-            SELECT 
-               @cZone = Zone, 
-               @cOrderKey = ISNULL( OrderKey, ''), 
-               @cLoadKey = ExternOrderKey
-            FROM PickHeader WITH (NOLOCK) 
-            WHERE PickHeaderKey = @cPickSlipNo
-            
-            IF @@ROWCOUNT = 0
-               SET @cPSType = 'CUSTOM'
-            
-            IF @cPSType = ''
-            BEGIN
-               -- Get PickSlip type
-               IF @cZone = 'XD' OR @cZone = 'LB' OR @cZone = 'LP'
-                  SET @cPSType = 'XD'
-               ELSE IF @cOrderKey = ''
-                  SET @cPSType = 'CONSO'
-               ELSE
-                  SET @cPSType = 'DISCRETE'
-            END
-
-            -- Get Orderkey type
-            IF @cPSType = 'CONSO'
-               SELECT @cOrderKey = O.OrderKey
-               FROM LoadPlanDetail LPD WITH (NOLOCK) 
-                  JOIN Orders O WITH (NOLOCK) ON (LPD.OrderKey = O.OrderKey)
-                  JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
-               WHERE LPD.Loadkey = @cLoadKey
-                  AND PD.StorerKey = @cStorerKey
-                  AND PD.SKU = @cSKU
-                  AND PD.LOC = @cLOC
-                  AND PD.Status = @cPickConfirmStatus
-                  AND PD.Status <> '4'
-                  AND PD.QTY > 0
-                  AND O.Status <> 'CANC' 
-                  AND O.SOStatus <> 'CANC'
-   
-            IF @cPSType = 'XD'
-               SELECT @cOrderKey = O.OrderKey
-               FROM Orders O WITH (NOLOCK)
-                  JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
-                  JOIN RefKeyLookup RKL WITH (NOLOCK) ON (RKL.PickDetailKey = PD.PickDetailKey)
-               WHERE RKL.PickslipNo = @cPickSlipNo
-                  AND PD.StorerKey = @cStorerKey
-                  AND PD.SKU = @cSKU
-                  AND PD.LOC = @cLOC
-                  AND PD.Status = @cPickConfirmStatus
-                  AND PD.Status <> '4'
-                  AND PD.QTY > 0
-                  AND O.Status <> 'CANC' 
-                  AND O.SOStatus <> 'CANC'
-
-            IF @cPSType = 'CUSTOM'
-               SELECT @cOrderKey = O.OrderKey
-               FROM Orders O WITH (NOLOCK)
-                  JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
-               WHERE PD.PickslipNo = @cPickSlipNo
-                  AND PD.StorerKey = @cStorerKey
-                  AND PD.SKU = @cSKU
-                  AND PD.LOC = @cLOC
-                  AND PD.Status = @cPickConfirmStatus
-                  AND PD.Status <> '4'
-                  AND PD.QTY > 0
-                  AND O.Status <> 'CANC' 
-                  AND O.SOStatus <> 'CANC'
-                  
-            IF @cOrderKey <> ''
-            BEGIN
-               SELECT @cDropIDType =     
-               CASE WHEN ISNULL( SUM( Qty), 0) = 1 THEN 'SINGLES'     
-                  WHEN ISNULL( SUM( Qty), 0) > 1 THEN 'MULTIS'     
-                  ELSE '' END    
-               FROM dbo.PickDetail WITH (NOLOCK)     
-                     WHERE StorerKey = @cStorerkey    
-                     AND OrderKey = @cOrderKey    
-                     
-               IF ISNULL(@cLoadKey,'') = ''
-               BEGIN
-               	SELECT @cLoadKey = LoadKey FROM orders WITH (NOLOCK) WHERE storerKey = @cStorerKey AND orderKey = @cOrderKey
-               END
-               
-               IF EXISTS (SELECT 1 FROM dbo.DropID WITH (NOLOCK)   
-                          WHERE DropID = @cToteID   
-                          --AND   [Status] = '0'
-                           )
-               BEGIN
-               	IF @cPTLCartAllowReuseDropID = '1 '
-                  BEGIN
-               	   -- Delete existing dropiddetail  
-                     DELETE FROM dbo.DropIDDetail    
-                     WHERE DropID = @cToteID   
-  
-                     IF @@ERROR <> 0  
-                     BEGIN  
-                        SET @nErrNo = 168174  
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'DEL DDTL FAIL'  
-                        GOTO RollBackTran  
-                     END  
-  
-                     -- Delete existing dropid  
-                     DELETE FROM dbo.DropID   
-                     WHERE DropID = @cToteID   
-  
-                     IF @@ERROR <> 0  
-                     BEGIN  
-                        SET @nErrNo = 168175  
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'DEL DID FAIL'  
-                        GOTO RollBackTran  
-                     END 
-                  END
-                  ELSE  
-                  BEGIN  
-                     SET @nErrNo = 168176  
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'INVALID DROPID'  
-                     GOTO RollBackTran  
-                  END  
-               END
-               
-               --INSERT INTO traceInfo (TraceName, Col1,Col2,col3)
-               --VALUES ('cc8081',@cToteID,@cPickSlipNo,@cLoadKey)
-               
-              	INSERT INTO dbo.DropID   
-               (DropID, DropIDType, LabelPrinted, [Status], PickSlipNo, LoadKey)  
-               VALUES   
-               (@cToteID, @cDropIDType, '0', '5', @cPickSlipNo, @cLoadKey) 
-               
-              	IF @@ERROR <> 0  
-               BEGIN  
-                  SET @nErrNo = 168177  
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'INS DID FAIL'  
-                  GOTO RollBackTran  
-               END  
-              	
-              	INSERT INTO dbo.DropIDDetail (DropID, ChildID)  
-               VALUES (@cToteID, @cOrderKey)
-              	
-               IF @@ERROR <> 0  
-               BEGIN  
-                  SET @nErrNo = 168178  
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'INS DDTL FAIL'  
-                  GOTO RollBackTran  
-               END  
-            END
-         END
-
-         IF (@cType = 'CLOSETOTE' AND @nQTY > 0)
-            -- EventLog -- (james01) 
-            EXEC RDT.rdt_STD_EventLog  
-               @cActionType = '3', -- Sign-in  
-               @nMobileNo   = @nMobile,  
-               @nFunctionID = @nFunc,  
-               @nStep       = @nStep,
-               @cFacility   = @cFacility,  
-               @cStorerKey  = @cStorerkey,    
-               @cSKU        = @cSKU,
-               @nQty        = @nQTY,
-               @cDropID     = @cToteID,
-               @cLocation   = @cLoc,
-               @cPickSlipNo = @cPickSlipNo,
-               @cDeviceID   = @cCartID,
-               @cDevicePosition = @cPosition,
-               @cPickZone   = @cPickZone,
-               @cLoadKey    = @cLoadKey,
-               @nExpectedQTY= @nQTY
       END
       
       -- Update new tote
@@ -1285,24 +1316,24 @@ BEGIN
          IF rdt.RDTGetConfig( @nFunc, 'AutoShortRemainTote', @cStorerKey) = '1' AND @cShortPickType <> '2' -- Balance pick later
          BEGIN
             SET @cSQL = 
-               ' SELECT PTLKey, DevicePosition, ExpectedQTY ' + 
+               ' SELECT PTLKey, DevicePosition, ExpectedQTY,Lot ' + 
                ' FROM PTL.PTLTran WITH (NOLOCK) ' + 
                ' WHERE DeviceProfileLogKey = @cDPLKey ' + 
                   ' AND LOC = @cLOC ' + 
                   ' AND SKU = @cSKU ' + 
                   ' AND Status <> ''9'' '
 
-            IF CURSOR_STATUS( 'variable', '@curPD') IN (0, 1)
+            IF CURSOR_STATUS( 'variable', '@curPTL') IN (0, 1)
                DEALLOCATE @curPTL
 
             EXEC rdt.rdt_PTLCart_Confirm_PickSlip_LottableCursor @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cSQL, 'PTLTran', 
                @cPickSlipNo, @cOrderKey, @cLoadKey, @cPickConfirmStatus, @cDPLKey, @cLOC, @cSKU, @nQTY, @cPosition, @cLottableCode, 
                @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
                @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
-               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, 
+               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,@cLot, 
                @curPTL OUTPUT
       
-            FETCH NEXT FROM @curPTL INTO @nPTLKey, @cPosition, @nExpectedQTY
+            FETCH NEXT FROM @curPTL INTO @nPTLKey, @cPosition, @nExpectedQTY,@cLot
             WHILE @@FETCH_STATUS = 0
             BEGIN
                -- Get tote info
@@ -1368,6 +1399,7 @@ BEGIN
                         AND PD.LOC = @cLOC
                         AND PD.Status < @cPickConfirmStatus
                         AND PD.Status <> '4'
+                        AND PD.Lot = @cLot
                         AND PD.QTY > 0
                         AND O.Status <> 'CANC' 
                         AND O.SOStatus <> 'CANC'
@@ -1383,6 +1415,7 @@ BEGIN
                         AND PD.LOC = @cLOC
                         AND PD.Status < @cPickConfirmStatus
                         AND PD.Status <> '4'
+                        AND PD.Lot = @cLot
                         AND PD.QTY > 0
                         AND O.Status <> 'CANC' 
                         AND O.SOStatus <> 'CANC'
@@ -1398,6 +1431,7 @@ BEGIN
                         AND PD.LOC = @cLOC
                         AND PD.Status < @cPickConfirmStatus
                         AND PD.Status <> '4'
+                        AND PD.Lot = @cLot
                         AND PD.QTY > 0
                         AND O.Status <> 'CANC' 
                         AND O.SOStatus <> 'CANC'
@@ -1412,6 +1446,7 @@ BEGIN
                         AND PD.LOC = @cLOC
                         AND PD.Status < @cPickConfirmStatus
                         AND PD.Status <> '4'
+                        AND PD.Lot = @cLot
                         AND PD.QTY > 0
                         AND O.Status <> 'CANC' 
                         AND O.SOStatus <> 'CANC'
@@ -1438,6 +1473,7 @@ BEGIN
                            ' AND PD.Status < @cPickConfirmStatus ' + 
                            ' AND PD.Status <> ''4''' + 
                            ' AND PD.QTY > 0 ' +
+                           ' AND PD.Lot = @cLot' +
                            ' AND O.Status <> ''CANC''  ' +
                            ' AND O.SOStatus <> ''CANC'' '
                   
@@ -1455,6 +1491,7 @@ BEGIN
                            ' AND PD.Status < @cPickConfirmStatus ' + 
                            ' AND PD.Status <> ''4''' + 
                            ' AND PD.QTY > 0 ' +
+                           ' AND PD.Lot = @cLot' +
                            ' AND O.Status <> ''CANC''  ' +
                            ' AND O.SOStatus <> ''CANC'' '
          
@@ -1472,6 +1509,7 @@ BEGIN
                            ' AND PD.Status < @cPickConfirmStatus ' + 
                            ' AND PD.Status <> ''4''' + 
                            ' AND PD.QTY > 0 ' +
+                           ' AND PD.Lot = @cLot' +
                            ' AND O.Status <> ''CANC'' ' +
                            ' AND O.SOStatus <> ''CANC'' '
 
@@ -1488,6 +1526,7 @@ BEGIN
                            ' AND PD.Status < @cPickConfirmStatus ' + 
                            ' AND PD.Status <> ''4''' + 
                            ' AND PD.QTY > 0 ' +
+                           ' AND PD.Lot = @cLot' +
                            ' AND O.Status <> ''CANC'' ' +
                            ' AND O.SOStatus <> ''CANC'' '
 
@@ -1498,7 +1537,7 @@ BEGIN
                      @cPickSlipNo, @cOrderKey, @cLoadKey, @cPickConfirmStatus, @cDPLKey, @cLOC, @cSKU, @nQTY, @cPosition, @cLottableCode, 
                      @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
                      @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
-                     @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, 
+                     @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, @cLot,
                      @curPD OUTPUT
 
                   FETCH NEXT FROM @curPD INTO @cPickDetailKey
@@ -1521,7 +1560,7 @@ BEGIN
                   END
                END
 
-               FETCH NEXT FROM @curPTL INTO @nPTLKey, @cPosition, @nExpectedQTY
+               FETCH NEXT FROM @curPTL INTO @nPTLKey, @cPosition, @nExpectedQTY,@cLot
             END
          END
 

@@ -167,6 +167,8 @@ GO
 /*                              to status 1 by codelkup                     */
 /* 27-Aug-2021  TLTING06  5.3   Extend ExternReceiptKey field length        */
 /* 14-Mar-2022  James     5.4   Fix RDT error no & message (james03)        */
+/* 04-Aug-2022  WLChooi   5.5   WMS-20405 - Add ReceiptType 'VFEGRN' (WL01) */
+/* 04-Aug-2022  WLChooi   5.5   DevOps Combine Script                       */
 /****************************************************************************/ 
  
 CREATE OR ALTER TRIGGER [dbo].[ntrReceiptDetailUpdate] 
@@ -1464,7 +1466,7 @@ BEGIN
             -- SOS 3333 for HK 
             -- for all return receipts (ERR, GRN types), the receipt date (Lottable05) of each sku will be defaulted to 1 day 
             -- before the oldest date in the system with the same lot01, lot02, lot03, lot04. 
-            IF @c_RecType in ('ERR','GRN','RGR') and @c_Lottable05Label = 'RCP_DATE'  --NJOW06 
+            IF @c_RecType in ('ERR','GRN','RGR','VFEGRN') and @c_Lottable05Label = 'RCP_DATE'  --NJOW06   --WL01
             BEGIN 
                IF @d_Lottable04 <= '01/01/1900' OR @d_Lottable04 IS NULL 
                BEGIN 

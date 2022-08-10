@@ -30,6 +30,7 @@ GO
 /*                              2) Show CustOrder Barcode (Wan01)       */
 /* 06-Jun-2013  TLTING    1.3   SOS#280077 - fine tune                  */
 /* 2014-Mar-21  TLTING    1.4   SQL20112 Bug                            */
+/* 28-Jan-2019  TLTING_ext 1.5  enlarge externorderkey field length      */
 /************************************************************************/
 
 CREATE PROC dbo.nsp_GetPickSlipOrders01 (@c_LoadKey NVARCHAR(10))
@@ -93,7 +94,7 @@ CREATE PROC dbo.nsp_GetPickSlipOrders01 (@c_LoadKey NVARCHAR(10))
          Lottable05       datetime NULL,
          packpallet       INT,
          packcasecnt      INT,
-         externorderkey   NVARCHAR(30) NULL,
+         externorderkey   NVARCHAR(50) NULL,   --tlting_ext 
          LogicalLoc       NVARCHAR(18) NULL,
          Areakey          NVARCHAR(10) NULL,     -- Added By YokeBeen on 05-Mar-2002 (Ticket # 3377)
          UOM              NVARCHAR(10) NULL,    -- Added By YokeBeen on 18-Mar-2002 (Ticket # 2539)
