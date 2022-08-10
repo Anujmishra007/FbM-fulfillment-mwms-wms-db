@@ -36,6 +36,9 @@ GO
 /* 26-Sep-2019  Leong     1.7 INC0871401 - Revise error message.          */
 /* 10-Jun-2020  Wan03     1.8 WMS-13117 - [CN] Sephora_WMS_ITRN_Add_UCC_CR*/
 /* 04-Jan-2021  Leong     1.9 INC1362763 - Revise error message.          */
+/* 09-Aug-2022  NJOW01    2.0 Fix channel date format compatible with     */
+/*                            format in isp_ChannelGetID                  */
+/* 09-Aug-20200 NJOW01    2.0 DEVOPS Combine Script                       */
 /**************************************************************************/
 
 CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
@@ -516,6 +519,12 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
                   , @d_ToLottable13       DATETIME
                   , @d_ToLottable14       DATETIME
                   , @d_ToLottable15       DATETIME
+                  , @c_ToLottable04       NVARCHAR(30) --NJOW01
+                  , @c_ToLottable05       NVARCHAR(30)
+                  , @c_ToLottable13       NVARCHAR(30)
+                  , @c_ToLottable14       NVARCHAR(30)
+                  , @c_ToLottable15       NVARCHAR(30)
+
 
                   , @c_ToChannelInventoryMgmt   NVARCHAR(10) = ''
 
@@ -584,13 +593,20 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
                            ,@c_C_AttributeLbl05 = cac.C_AttributeLabel05
                      FROM   ChannelAttributeConfig AS cac WITH(NOLOCK)
                      WHERE  cac.StorerKey = @c_ToStorerKey
+                     
+                     --NJOW01
+                     SET @c_ToLottable04 = @d_ToLottable04 
+                     SET @c_ToLottable05 = @d_ToLottable05 
+                     SET @c_ToLottable13 = @d_ToLottable13 
+                     SET @c_ToLottable14 = @d_ToLottable14 
+                     SET @c_ToLottable15 = @d_ToLottable15 
 
                      SET @c_C_Attribute01 = CASE @c_C_AttributeLbl01
                                              WHEN 'Lottable01' THEN @c_ToLottable01
                                              WHEN 'Lottable02' THEN @c_ToLottable02
                                              WHEN 'Lottable03' THEN @c_ToLottable03
-                                             WHEN 'Lottable04' THEN CONVERT(NVARCHAR(10), @d_ToLottable04, 121)
-                                             WHEN 'Lottable05' THEN CONVERT(NVARCHAR(10), @d_ToLottable05, 121)
+                                             WHEN 'Lottable04' THEN @c_ToLottable04 --CONVERT(NVARCHAR(10), @d_ToLottable04, 121) --NJOW01
+                                             WHEN 'Lottable05' THEN @c_ToLottable05 --CONVERT(NVARCHAR(10), @d_ToLottable05, 121)
                                              WHEN 'Lottable06' THEN @c_ToLottable06
                                              WHEN 'Lottable07' THEN @c_ToLottable07
                                              WHEN 'Lottable08' THEN @c_ToLottable08
@@ -598,9 +614,9 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
                                              WHEN 'Lottable10' THEN @c_ToLottable10
                                              WHEN 'Lottable11' THEN @c_ToLottable11
                                              WHEN 'Lottable12' THEN @c_ToLottable12
-                                             WHEN 'Lottable13' THEN CONVERT(NVARCHAR(10), @d_ToLottable13, 121)
-                                             WHEN 'Lottable14' THEN CONVERT(NVARCHAR(10), @d_ToLottable14, 121)
-                                             WHEN 'Lottable15' THEN CONVERT(NVARCHAR(10), @d_ToLottable15, 121)
+                                             WHEN 'Lottable13' THEN @c_ToLottable13 --CONVERT(NVARCHAR(10), @d_ToLottable13, 121)
+                                             WHEN 'Lottable14' THEN @c_ToLottable14 --CONVERT(NVARCHAR(10), @d_ToLottable14, 121)
+                                             WHEN 'Lottable15' THEN @c_ToLottable15 --CONVERT(NVARCHAR(10), @d_ToLottable15, 121)
                                              ELSE ''
                                              END
 
@@ -608,8 +624,8 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
                                              WHEN 'Lottable01' THEN @c_ToLottable01
                                              WHEN 'Lottable02' THEN @c_ToLottable02
                                              WHEN 'Lottable03' THEN @c_ToLottable03
-                                             WHEN 'Lottable04' THEN CONVERT(NVARCHAR(10), @d_ToLottable04, 121)
-                                             WHEN 'Lottable05' THEN CONVERT(NVARCHAR(10), @d_ToLottable05, 121)
+                                             WHEN 'Lottable04' THEN @c_ToLottable04 --CONVERT(NVARCHAR(10), @d_ToLottable04, 121)
+                                             WHEN 'Lottable05' THEN @c_ToLottable05 --CONVERT(NVARCHAR(10), @d_ToLottable05, 121)
                                              WHEN 'Lottable06' THEN @c_ToLottable06
                                              WHEN 'Lottable07' THEN @c_ToLottable07
                                              WHEN 'Lottable08' THEN @c_ToLottable08
@@ -617,9 +633,9 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
                                              WHEN 'Lottable10' THEN @c_ToLottable10
                                              WHEN 'Lottable11' THEN @c_ToLottable11
                                              WHEN 'Lottable12' THEN @c_ToLottable12
-                                             WHEN 'Lottable13' THEN CONVERT(NVARCHAR(10), @d_ToLottable13, 121)
-                                             WHEN 'Lottable14' THEN CONVERT(NVARCHAR(10), @d_ToLottable14, 121)
-                                             WHEN 'Lottable15' THEN CONVERT(NVARCHAR(10), @d_ToLottable15, 121)
+                                             WHEN 'Lottable13' THEN @c_ToLottable13 --CONVERT(NVARCHAR(10), @d_ToLottable13, 121)
+                                             WHEN 'Lottable14' THEN @c_ToLottable14 --CONVERT(NVARCHAR(10), @d_ToLottable14, 121)
+                                             WHEN 'Lottable15' THEN @c_ToLottable15 --CONVERT(NVARCHAR(10), @d_ToLottable15, 121)
                                              ELSE ''
                                              END
 
@@ -627,8 +643,8 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
                                              WHEN 'Lottable01' THEN @c_ToLottable01
                                              WHEN 'Lottable02' THEN @c_ToLottable02
                                              WHEN 'Lottable03' THEN @c_ToLottable03
-                                             WHEN 'Lottable04' THEN CONVERT(NVARCHAR(10), @d_ToLottable04, 121)
-                                             WHEN 'Lottable05' THEN CONVERT(NVARCHAR(10), @d_ToLottable05, 121)
+                                             WHEN 'Lottable04' THEN @c_ToLottable04 --CONVERT(NVARCHAR(10), @d_ToLottable04, 121)
+                                             WHEN 'Lottable05' THEN @c_ToLottable05 --CONVERT(NVARCHAR(10), @d_ToLottable05, 121)
                                              WHEN 'Lottable06' THEN @c_ToLottable06
                                              WHEN 'Lottable07' THEN @c_ToLottable07
                                              WHEN 'Lottable08' THEN @c_ToLottable08
@@ -636,9 +652,9 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
                                              WHEN 'Lottable10' THEN @c_ToLottable10
                                              WHEN 'Lottable11' THEN @c_ToLottable11
                                              WHEN 'Lottable12' THEN @c_ToLottable12
-                                             WHEN 'Lottable13' THEN CONVERT(NVARCHAR(10), @d_ToLottable13, 121)
-                                             WHEN 'Lottable14' THEN CONVERT(NVARCHAR(10), @d_ToLottable14, 121)
-                                             WHEN 'Lottable15' THEN CONVERT(NVARCHAR(10), @d_ToLottable15, 121)
+                                             WHEN 'Lottable13' THEN @c_ToLottable13 --CONVERT(NVARCHAR(10), @d_ToLottable13, 121)
+                                             WHEN 'Lottable14' THEN @c_ToLottable14 --CONVERT(NVARCHAR(10), @d_ToLottable14, 121)
+                                             WHEN 'Lottable15' THEN @c_ToLottable15 --CONVERT(NVARCHAR(10), @d_ToLottable15, 121)
                                              ELSE ''
                                              END
 
@@ -646,8 +662,8 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
                                              WHEN 'Lottable01' THEN @c_ToLottable01
                                              WHEN 'Lottable02' THEN @c_ToLottable02
                                              WHEN 'Lottable03' THEN @c_ToLottable03
-                                             WHEN 'Lottable04' THEN CONVERT(NVARCHAR(10), @d_ToLottable04, 121)
-                                             WHEN 'Lottable05' THEN CONVERT(NVARCHAR(10), @d_ToLottable05, 121)
+                                             WHEN 'Lottable04' THEN @c_ToLottable04 --CONVERT(NVARCHAR(10), @d_ToLottable04, 121)
+                                             WHEN 'Lottable05' THEN @c_ToLottable05 --CONVERT(NVARCHAR(10), @d_ToLottable05, 121)
                                              WHEN 'Lottable06' THEN @c_ToLottable06
                                              WHEN 'Lottable07' THEN @c_ToLottable07
                                              WHEN 'Lottable08' THEN @c_ToLottable08
@@ -655,9 +671,9 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
                                              WHEN 'Lottable10' THEN @c_ToLottable10
                                              WHEN 'Lottable11' THEN @c_ToLottable11
                                              WHEN 'Lottable12' THEN @c_ToLottable12
-                                             WHEN 'Lottable13' THEN CONVERT(NVARCHAR(10), @d_ToLottable13, 121)
-                                             WHEN 'Lottable14' THEN CONVERT(NVARCHAR(10), @d_ToLottable14, 121)
-                                             WHEN 'Lottable15' THEN CONVERT(NVARCHAR(10), @d_ToLottable15, 121)
+                                             WHEN 'Lottable13' THEN @c_ToLottable13 --CONVERT(NVARCHAR(10), @d_ToLottable13, 121)
+                                             WHEN 'Lottable14' THEN @c_ToLottable14 --CONVERT(NVARCHAR(10), @d_ToLottable14, 121)
+                                             WHEN 'Lottable15' THEN @c_ToLottable15 --CONVERT(NVARCHAR(10), @d_ToLottable15, 121)
                                              ELSE ''
                                              END
 
@@ -665,8 +681,8 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
                                              WHEN 'Lottable01' THEN @c_ToLottable01
                                              WHEN 'Lottable02' THEN @c_ToLottable02
                                              WHEN 'Lottable03' THEN @c_ToLottable03
-                                             WHEN 'Lottable04' THEN CONVERT(NVARCHAR(10), @d_ToLottable04, 121)
-                                             WHEN 'Lottable05' THEN CONVERT(NVARCHAR(10), @d_ToLottable05, 121)
+                                             WHEN 'Lottable04' THEN @c_ToLottable04 --CONVERT(NVARCHAR(10), @d_ToLottable04, 121)
+                                             WHEN 'Lottable05' THEN @c_ToLottable05 --CONVERT(NVARCHAR(10), @d_ToLottable05, 121)
                                              WHEN 'Lottable06' THEN @c_ToLottable06
                                              WHEN 'Lottable07' THEN @c_ToLottable07
                                              WHEN 'Lottable08' THEN @c_ToLottable08
@@ -674,12 +690,12 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
                                              WHEN 'Lottable10' THEN @c_ToLottable10
                                              WHEN 'Lottable11' THEN @c_ToLottable11
                                              WHEN 'Lottable12' THEN @c_ToLottable12
-                                             WHEN 'Lottable13' THEN CONVERT(NVARCHAR(10), @d_ToLottable13, 121)
-                                             WHEN 'Lottable14' THEN CONVERT(NVARCHAR(10), @d_ToLottable14, 121)
-                                             WHEN 'Lottable15' THEN CONVERT(NVARCHAR(10), @d_ToLottable15, 121)
+                                             WHEN 'Lottable13' THEN @c_ToLottable13 --CONVERT(NVARCHAR(10), @d_ToLottable13, 121)
+                                             WHEN 'Lottable14' THEN @c_ToLottable14 --CONVERT(NVARCHAR(10), @d_ToLottable14, 121)
+                                             WHEN 'Lottable15' THEN @c_ToLottable15 --CONVERT(NVARCHAR(10), @d_ToLottable15, 121)
                                              ELSE ''
                                              END
-
+                                             
                      SET @n_ToChannel_ID = 0
                      SELECT @n_ToChannel_ID = ci.Channel_ID
                      FROM ChannelInv AS ci WITH(NOLOCK)
