@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'rdt.rdt_840ExtUpd13') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_840ExtUpd13
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -19,9 +15,12 @@ GO
 /* 2021-07-26  1.1  James      Bug fix on calc weight (james01)         */
 /* 2021-08-23  1.2  James      WMS-17730 Add checking on trackno if it  */
 /*                             reaches end of series (james02)          */
+/* 2021-10-20  1.3  James      WMS-17435 Add serialno param (james03)   */
+/* 2022-08-03  1.4  James      WMS-20379 Add update tracking no based on*/
+/*                             certain shipperkey (james04)             */
 /************************************************************************/  
   
-CREATE PROC [RDT].[rdt_840ExtUpd13] (  
+CREATE OR ALTER PROC [RDT].[rdt_840ExtUpd13] (  
    @nMobile     INT,  
    @nFunc       INT,  
    @cLangCode   NVARCHAR( 3),  
@@ -33,6 +32,8 @@ CREATE PROC [RDT].[rdt_840ExtUpd13] (
    @cTrackNo    NVARCHAR( 20),  
    @cSKU        NVARCHAR( 20),  
    @nCartonNo   INT,  
+   @cSerialNo   NVARCHAR( 30),   
+   @nSerialQTY  INT,    
    @nErrNo      INT           OUTPUT,  
    @cErrMsg     NVARCHAR( 20) OUTPUT  
 )  
@@ -69,6 +70,8 @@ AS
    DECLARE @cType                NVARCHAR( 20)
    DECLARE @bSuccess             INT
    DECLARE @cAutoMBOLPack        NVARCHAR( 1)
+   DECLARE @cExternOrderKey      NVARCHAR( 50)
+   DECLARE @curUpdPackInfo       CURSOR
    
    SELECT @cUserName = UserName
    FROM rdt.RDTMOBREC WITH (NOLOCK)
@@ -96,7 +99,8 @@ AS
 
          SELECT @cShipperKey = ShipperKey, 
                 @cFacility = Facility,
-                @cTrackingNo = TrackingNo
+                @cTrackingNo = TrackingNo, 
+                @cExternOrderKey = ExternOrderKey
          FROM dbo.ORDERS WITH (NOLOCK)
          WHERE OrderKey = @cOrderKey
          
@@ -465,6 +469,54 @@ AS
 
             FETCH NEXT FROM @curUpdCtnWgt INTO @nTempCartonNo
          END
+         
+         -- (james04)
+         IF EXISTS ( SELECT 1 FROM dbo.CODELKUP WITH (NOLOCK)
+                     WHERE LISTNAME = 'COURIER'
+                     AND   [Description] = @cShipperKey
+                     AND   Storerkey = @cStorerkey
+                     AND   code2 = '')
+         BEGIN
+            SET @curUpdPackInfo = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+            SELECT CartonNo
+            FROM dbo.PackInfo WITH (NOLOCK)
+            WHERE PickSlipNo = @cPickSlipNo
+            ORDER BY 1
+            OPEN @curUpdPackInfo
+            FETCH NEXT FROM @curUpdPackInfo INTO @nTempCartonNo
+            WHILE @@FETCH_STATUS = 0
+            BEGIN
+            	UPDATE dbo.PackInfo SET 
+            	   TrackingNo = @cExternOrderKey,
+            	   EditWho = SUSER_SNAME(),
+            	   EditDate = GETDATE()
+            	WHERE PickSlipNo = @cPickSlipNo
+            	AND   CartonNo = @nTempCartonNo
+            	
+               IF @@ERROR <> 0
+               BEGIN
+                  SET @nErrNo = 167568
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDPackInfoErr
+                  GOTO RollBackTran
+               END
+               
+            	FETCH NEXT FROM @curUpdPackInfo INTO @nTempCartonNo
+            END
+            
+            UPDATE dbo.ORDERS SET 
+            	TrackingNo = @cExternOrderKey,
+            	EditWho = SUSER_SNAME(),
+            	EditDate = GETDATE()
+            WHERE OrderKey = @cOrderKey
+
+            IF @@ERROR <> 0
+            BEGIN
+               SET @nErrNo = 167569
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Orders Err
+               GOTO RollBackTran
+            END
+         END
+         
          /*
          UPDATE dbo.PackHeader SET 
             TotCtnWeight = @fTotalWgt
