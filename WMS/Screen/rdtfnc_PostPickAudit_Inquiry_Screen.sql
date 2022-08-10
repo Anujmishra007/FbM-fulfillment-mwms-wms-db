@@ -54,5 +54,6 @@ EXECUTE rdt.rdtAddScn 2843, 'ENG',
    ,@cLine10 = '%20d11'
    ,@cLine11 = 'PICK QTY:%05d05 %05d06'
    ,@cLine12 = 'PPA QTY :%05d12 %05d14'
+   ,@cLine13 = '%20d15' --(yeekung01)
    ,@cLine14 = '%e'
  

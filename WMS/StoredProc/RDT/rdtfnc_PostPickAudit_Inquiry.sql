@@ -1,6 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = Object_Id(N'[rdt].[rdtfnc_PostPickAudit_Inquiry]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [rdt].[rdtfnc_PostPickAudit_Inquiry]
-GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -35,9 +33,10 @@ GO
 /* 05-12-2018 1.6  James      WMS7191 - Add support filter by           */
 /*                            packdetail.labelno (james01)              */
 /* 11-08-2020 1.7  James      INC1244432 - Bug fix (james02)            */
+/* 09-08-2022 1.8  YeeKung    Add Extededinfosp (yeekung01)             */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_PostPickAudit_Inquiry] (
+CREATE OR ALTER PROC [RDT].[rdtfnc_PostPickAudit_Inquiry] (
    @nMobile    int,
    @nErrNo     int  OUTPUT,
    @cErrMsg    NVARCHAR( 20) OUTPUT
@@ -67,7 +66,9 @@ DECLARE
    @cNextSKU        NVARCHAR( 20),
    @cStyle          NVARCHAR( 20),
    @cColor          NVARCHAR( 10),
-   @cSize           NVARCHAR( 10) -- SOS359525
+   @cSize           NVARCHAR( 10), -- SOS359525
+   @cSQL            NVARCHAR(4000),
+   @cSQLParam       NVARCHAR(MAX)
 
 -- rdt.rdtMobRec variable
 DECLARE
@@ -109,6 +110,10 @@ DECLARE
    @cDispStyleColorSize            NVARCHAR(1) , 
    @cPUOM                          NVARCHAR( 10),    
    @cPPACartonIDByPackDetailLabelNo NVARCHAR( 1),
+   @cExtendedInfo                   NVARCHAR( 20), --(yeekung01)
+   @cExtendedInfoSP                 NVARCHAR( 20),  --(yeekung01)
+
+   @tExtInfo                        VARIABLETABLE, --(yeekung01)
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -161,6 +166,7 @@ SELECT
    @cDispStyleColorSize            = V_String9,
    @cPPACartonIDByPackDetailLabelNo= V_String10,
    @cPUOM       = V_String11,
+   @cExtendedInfoSP                 = V_String12, --(yeekung01)
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -201,6 +207,10 @@ BEGIN
    SET @cPPACartonIDByPickDetailCaseID = rdt.rdtGetConfig( 0, 'PPACartonIDByPickDetailCaseID', @cStorer)  -- (ChewKP01) 
    SET @cDispStyleColorSize = rdt.rdtGetConfig( @nFunc, 'DispStyleColorSize', @cStorer)  -- (ChewKP01) 
    SET @cPPACartonIDByPackDetailLabelNo = rdt.rdtGetConfig( @nFunc, 'PPACartonIDByPackDetailLabelNo', @cStorer)   -- (james01)
+
+   SET @cExtendedInfoSP = rdt.RDTGetConfig( @nFunc, 'ExtendedInfoSP', @cStorer)
+   IF @cExtendedInfoSP = '0'
+      SET @cExtendedInfoSP = ''
 
    SELECT @cPUOM = IsNULL( DefaultUOM, '6') -- If not defined, default as EA
    FROM RDT.rdtMobRec M WITH (NOLOCK)
@@ -606,6 +616,51 @@ BEGIN
          @nTotRec      OUTPUT
       SET @cCurrentSKU = @cNextSKU
       
+      -- Extended info
+      IF @cExtendedInfoSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+         BEGIN
+            INSERT INTO @tExtInfo (Variable, Value) VALUES 
+               ('@cRefNo',       @cRefNo), 
+               ('@cPickSlipNo',  @cPickSlipNo), 
+               ('@cLoadKey',     @cLoadKey), 
+               ('@cOrderKey',    @cOrderKey), 
+               ('@cDropID',      @cDropID), 
+               ('@cSKU',         @cCurrentSKU), 
+               ('@cTally',       @cTally),
+               ('@nTotSKU_Pick',  CAST( @nTotSKU_Pick AS NVARCHAR( 10))), 
+               ('@nTotQTY_Pick',  CAST( @nTotQTY_Pick AS NVARCHAR( 10))), 
+               ('@nTotSKU_PPA',   CAST( @nTotSKU_PPA AS NVARCHAR( 10))), 
+               ('@nTotQTY_PPA',   CAST( @nTotQTY_PPA AS NVARCHAR( 10))), 
+               ('@nQTY_Pick',     CAST( @nQTY_Pick AS NVARCHAR( 10))),
+               ('@cSKUInfo',      CAST( @cSKUInfo AS NVARCHAR( 20))), 
+               ('@nRec',          CAST( @nRec AS NVARCHAR( 20))), 
+               ('@nTotRec',       CAST( @nTotRec AS NVARCHAR( 20)))
+            
+            SET @cExtendedInfo = ''
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @tExtInfo, ' +
+               ' @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               ' @nMobile        INT,           ' +
+               ' @nFunc          INT,           ' +
+               ' @cLangCode      NVARCHAR( 3),  ' +
+               ' @nStep          INT,           ' +
+               ' @nInputKey      INT,           ' +
+               ' @cFacility      NVARCHAR( 5),  ' +
+               ' @cStorerKey     NVARCHAR( 15), ' +
+               ' @tExtInfo       VariableTable READONLY, ' + 
+               ' @cExtendedInfo  NVARCHAR( 20) OUTPUT, ' + 
+               ' @nErrNo         INT           OUTPUT, ' +
+               ' @cErrMsg        NVARCHAR( 20) OUTPUT  '
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorer, @tExtInfo, 
+               @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+         
+            SET @cOutField15 = @cExtendedInfo
+         END
+      END
       
       
       -- (ChewKP01) 
@@ -793,6 +848,53 @@ BEGIN
          
       SET @cCurrentSKU = @cNextSKU
 
+      -- Extended info
+      IF @cExtendedInfoSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+         BEGIN
+            INSERT INTO @tExtInfo (Variable, Value) VALUES 
+               ('@cRefNo',       @cRefNo), 
+               ('@cPickSlipNo',  @cPickSlipNo), 
+               ('@cLoadKey',     @cLoadKey), 
+               ('@cOrderKey',    @cOrderKey), 
+               ('@cDropID',      @cDropID), 
+               ('@cSKU',         @cCurrentSKU), 
+               ('@cTally',       @cTally),
+               ('@nTotSKU_Pick',  CAST( @nTotSKU_Pick AS NVARCHAR( 10))), 
+               ('@nTotQTY_Pick',  CAST( @nTotQTY_Pick AS NVARCHAR( 10))), 
+               ('@nTotSKU_PPA',   CAST( @nTotSKU_PPA AS NVARCHAR( 10))), 
+               ('@nTotQTY_PPA',   CAST( @nTotQTY_PPA AS NVARCHAR( 10))), 
+               ('@nQTY_Pick',     CAST( @nQTY_Pick AS NVARCHAR( 10))),
+               ('@cSKUInfo',      CAST( @cSKUInfo AS NVARCHAR( 20))), 
+               ('@nRec',          CAST( @nRec AS NVARCHAR( 20))), 
+               ('@nTotRec',       CAST( @nTotRec AS NVARCHAR( 20)))
+            
+            SET @cExtendedInfo = ''
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @tExtInfo, ' +
+               ' @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               ' @nMobile        INT,           ' +
+               ' @nFunc          INT,           ' +
+               ' @cLangCode      NVARCHAR( 3),  ' +
+               ' @nStep          INT,           ' +
+               ' @nInputKey      INT,           ' +
+               ' @cFacility      NVARCHAR( 5),  ' +
+               ' @cStorerKey     NVARCHAR( 15), ' +
+               ' @tExtInfo       VariableTable READONLY, ' + 
+               ' @cExtendedInfo  NVARCHAR( 20) OUTPUT, ' + 
+               ' @nErrNo         INT           OUTPUT, ' +
+               ' @cErrMsg        NVARCHAR( 20) OUTPUT  '
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorer, @tExtInfo, 
+               @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+         
+            SET @cOutField15 = @cExtendedInfo
+         END
+      END
+      
+
       SELECT    
          @cMUOM_Desc = Pack.PackUOM3,
          @cPUOM_Desc =    
@@ -921,6 +1023,7 @@ BEGIN
       V_String9 = @cDispStyleColorSize,
       V_String10= @cPPACartonIDByPackDetailLabelNo,
       V_String11= @cPUOM,
+      V_String12= @cExtendedInfoSP,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,
