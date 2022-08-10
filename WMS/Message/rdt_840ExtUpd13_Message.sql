@@ -21,4 +21,8 @@ execute rdt.rdtAddMsg 167566, 10, '167566 PS Pack Cfm',     'us_english', 840
 -- WMS17730
 execute rdt.rdtAddMsg 167567, 10, '167567RequestTrackNo',   'us_english', 840
 
+--WMS20379
+execute rdt.rdtAddMsg 167568, 10, '167568UPDPackInfoErr',   'us_english', 840
+execute rdt.rdtAddMsg 167569, 10, '167569UPD Orders Err',   'us_english', 840
+
 SELECT * FROM RDT.RDTMsg (NOLOCK) WHERE Message_ID BETWEEN 167551 AND 167600
