@@ -1,11 +1,8 @@
-if exists (select * from sys.sysobjects where id = object_id(N'[rdt].[rdtfnc_PickTaskDetail]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdtfnc_PickTaskDetail]
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /***************************************************************************/
 /* Store procedure: rdtfnc_PickTaskDetail                                  */
@@ -20,9 +17,10 @@ GO
 /* 2019-07-01   1.1  Ung      WMS-9542 Add storer group                    */
 /*                            Clean up source                              */
 /* 2019-10-14   1.2  Ung      WMS-10284 Add FPP task, Cart ID              */
+/* 2022-06-21   1.3  Ung      WMS-19992 Add event log                      */
 /***************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_PickTaskDetail](
+CREATE OR ALTER PROC [RDT].[rdtfnc_PickTaskDetail](
    @nMobile    INT,
    @nErrNo     INT          OUTPUT,
    @cErrMsg    NVARCHAR(20) OUTPUT
@@ -440,7 +438,7 @@ BEGIN
                      AND TD.TaskType = @cTaskType
                      AND TD.AreaKey = @cAreaKey
                      AND TD.Status = '0'
-                     AND ((@cPriority =  'ECOM' AND O.DocType =  'E') OR  -- ECOM cart, pick ECOM order 
+                     AND ((@cPriority =  'ECOM' AND O.DocType =  'E') OR  -- ECOM cart, pick ECOM order
                           (@cPriority <> 'ECOM' AND O.DocType <> 'E'))    -- Non ECOM cart, pick non ECOM order
                   GROUP BY O.OrderKey, O.StorerKey, O.DocType
                ) A
@@ -459,7 +457,7 @@ BEGIN
                      AND TD.TaskType = @cTaskType
                      AND TD.AreaKey = @cAreaKey
                      AND TD.Status = '0'
-                     AND ((@cPriority =  'ECOM' AND O.DocType =  'E') OR  -- ECOM cart, pick ECOM order 
+                     AND ((@cPriority =  'ECOM' AND O.DocType =  'E') OR  -- ECOM cart, pick ECOM order
                           (@cPriority <> 'ECOM' AND O.DocType <> 'E'))    -- Non ECOM cart, pick non ECOM order
                   GROUP BY O.OrderKey, O.StorerKey, O.DocType
                ) A
@@ -696,6 +694,19 @@ BEGIN
             END
          END
 
+         -- Logging
+         EXEC RDT.rdt_STD_EventLog
+            @cActionType   = '3', -- Picking
+            @nMobileNo     = @nMobile,
+            @nFunctionID   = @nFunc,
+            @cFacility     = @cFacility,
+            @cStorerKey    = @cStorerKey, 
+            @cAreaKey      = @cAreaKey, 
+            @cTaskType     = @cTaskType, 
+            @cDeviceID     = @cCartID, 
+            @cRefNo1       = @cGroupKey, 
+            @cRefNo2       = @cUserKey
+
          SET @cOutField01 = @cAreaKey
          SET @cOutField02 = @cTaskType
          SET @cOutField03 = CAST( @nOpenTask AS NVARCHAR(5))
@@ -789,10 +800,5 @@ BEGIN
    WHERE Mobile = @nMobile
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-GRANT EXECUTE ON RDT.rdtfnc_PickTaskDetail TO NSQL
+GRANT EXECUTE ON  [RDT].[rdtfnc_PickTaskDetail] TO [NSQL]
 GO
