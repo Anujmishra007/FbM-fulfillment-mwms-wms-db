@@ -1,11 +1,10 @@
 IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[ntrTransferDetailUpdate]') AND OBJECTPROPERTY(id, N'IsTrigger') = 1)
    DROP TRIGGER [dbo].[ntrTransferDetailUpdate]
 GO
-SET QUOTED_IDENTIFIER OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF 
+SET ANSI_NULLS OFF
 GO
-
 /**************************************************************************************/
 /* Trigger:   ntrTransferDetailUpdate                                                 */
 /* Modification History:                                                              */
@@ -38,7 +37,9 @@ GO
 /* 07-Feb-2016  SWT02       1.7      Channel Management                               */
 /* 23-JUL-2019  Wan03       1.8      WMS-9872 - CN_NIKESDC_Exceed_Channel             */
 /* 23-FEB-2021  Wan04       1.9      WMS-16391 - [CN] ANFQHW_WMS_Transfer Finalize_CR */
+/* 12-Aug-2022  Leong       2.0      JSM-86964 Initialize variable.                   */
 /**************************************************************************************/
+
 CREATE TRIGGER [dbo].[ntrTransferDetailUpdate]
 ON  [dbo].[TRANSFERDETAIL]
 FOR UPDATE
@@ -79,12 +80,12 @@ BEGIN
 
          , @c_FrStorerkey     NVARCHAR(15)  --(Wan02)
          , @c_IDTaskRelease   NVARCHAR(10)  --(Wan02)
-         
+
   --(Wan04) - START
          , @c_HoldChannel     NVARCHAR(10)   = ''
          , @c_HoldTRFType     CHAR(1)        = ''
-         
-  DECLARE @tSTRCFG  TABLE 
+
+  DECLARE @tSTRCFG  TABLE
          ( Facility           NVARCHAR(5)    NOT NULL DEFAULT('')
          , FromStorerkey      NVARCHAR(15)   NOT NULL DEFAULT('')
          , Configkey          NVARCHAR(30)   NOT NULL DEFAULT('')
@@ -92,18 +93,18 @@ BEGIN
          )
    --(Wan04) - END
    SELECT @n_continue = 1, @n_starttcnt = @@TRANCOUNT
-   
+
    IF UPDATE(ArchiveCop)
    BEGIN
       SELECT @n_continue = 4
    END
-      
+
    -- TLTING02
    IF EXISTS ( SELECT 1 FROM INSERTED, DELETED
                WHERE INSERTED.Transferkey = DELETED.Transferkey AND INSERTED.TransferLineNumber = DELETED.TransferLineNumber
                AND (( INSERTED.[status] < '9' OR DELETED.[status] < '9' ) OR        --(Wan01)
                     ( INSERTED.[status] = 'CANC' OR DELETED.[status] = 'CANC' ) )   --(Wan01)
-              ) 
+              )
          AND ( @n_continue = 1 OR @n_continue = 2 )
          AND NOT UPDATE(EditDate)
    BEGIN
@@ -132,7 +133,7 @@ BEGIN
    END
 
    --(Wan01) - START
-   IF EXISTS (SELECT 1 
+   IF EXISTS (SELECT 1
               FROM INSERTED WHERE Status = 'CANC'
              )
    BEGIN
@@ -177,7 +178,7 @@ BEGIN
      --(Wan02) - START
       IF @n_continue = 1 OR @n_continue = 2
       BEGIN
-            
+
          IF EXISTS ( SELECT 1 FROM INSERTED
                      JOIN DELETED ON (INSERTED.transferkey = DELETED.Transferkey)
                                   AND(INSERTED.Transferlinenumber = DELETED.Transferlinenumber)
@@ -187,7 +188,7 @@ BEGIN
          BEGIN
             SET @n_continue = 3
             SET @n_err = 91015
-            SET @c_errmsg = 'NSQL'+CONVERT(char(5),@n_err)+': ID Released Task may not be edited. (ntrTransferDetailUpdate)' 
+            SET @c_errmsg = 'NSQL'+CONVERT(char(5),@n_err)+': ID Released Task may not be edited. (ntrTransferDetailUpdate)'
          END
       END
       --(Wan02) - END
@@ -195,7 +196,7 @@ BEGIN
 
       IF @n_continue = 1 OR @n_continue = 2
       BEGIN
-         UPDATE TRANSFERDETAIL 
+         UPDATE TRANSFERDETAIL
             SET LOTTABLE01 = TRANSFERDETAIL.TOPACKKEY, TrafficCop = NULL
          FROM inserted,SKU with (NOLOCK)
          WHERE TRANSFERDETAIL.Transferkey = inserted.transferkey
@@ -270,14 +271,14 @@ BEGIN
                   @d_ToLottable14        DATETIME,
                   @d_ToLottable15        DATETIME
                ,  @c_FromChannel         NVARCHAR(20)   = '' -- SWT02
-               ,  @n_FromChannel_ID      BIGINT         = 0  -- SWT02      
+               ,  @n_FromChannel_ID      BIGINT         = 0  -- SWT02
                ,  @c_ToChannel           NVARCHAR(20)   = '' -- SWT02
-               ,  @n_ToChannel_ID        BIGINT         = 0  -- SWT02                     
-               ,  @c_FromFacility        NVARCHAR(10)   = ''                                                                           
-               ,  @c_ChannelInventoryMgmt  NVARCHAR(10) = '0' -- (SWT02)  
+               ,  @n_ToChannel_ID        BIGINT         = 0  -- SWT02
+               ,  @c_FromFacility        NVARCHAR(10)   = ''
+               ,  @c_ChannelInventoryMgmt  NVARCHAR(10) = '0' -- (SWT02)
                ,  @c_TransferKey           NVARCHAR(10) = ''
-               ,  @c_TransferLineNumber    NVARCHAR(5)  = ''   
-               
+               ,  @c_TransferLineNumber    NVARCHAR(5)  = ''
+
          DECLARE @c_Bondedflag NVARCHAR(1)
 
          IF @n_continue = 1 OR @n_continue = 2
@@ -287,9 +288,9 @@ BEGIN
             SELECT @b_Success = 0
 
             SELECT TOP 1
-                  @c_FromStorerKey = FromStorerKey,                   
-                  @c_FromFacility = l.Facility 
-            FROM INSERTED 
+                  @c_FromStorerKey = FromStorerKey,
+                  @c_FromFacility = l.Facility
+            FROM INSERTED
             JOIN LOC WITH (NOLOCK) ON LOC.LOC = INSERTED.FromLoc, LOC AS l
 
             EXECUTE nspGetRight
@@ -315,7 +316,7 @@ BEGIN
             --If @n_continue = 1 or @n_continue = 2
             --BEGIN
             --   SELECT @b_success = 0
-            --   Execute nspGetRight2    --(Wan03) 
+            --   Execute nspGetRight2    --(Wan03)
             --   @c_FromFacility,
             --   @c_FromStorerKey,           -- Storer
             --   '',                     -- Sku
@@ -328,10 +329,10 @@ BEGIN
             --   BEGIN
             --     SELECT @n_continue = 3
             --     SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 91004   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-            --     SELECT @c_errmsg = "NSQL"+CONVERT(char(5),@n_err)+": Retrieve Failed On GetRight. (ntrTransferDetailUpdate)" 
+            --     SELECT @c_errmsg = "NSQL"+CONVERT(char(5),@n_err)+": Retrieve Failed On GetRight. (ntrTransferDetailUpdate)"
             --     + " ( " + " SQLSvr MESSAGE = " + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
             --   END
-            --END 
+            --END
          If @n_continue = 1 or @n_continue = 2
          BEGIN
             IF EXISTS (
@@ -339,7 +340,7 @@ BEGIN
                         FROM INSERTED
                         JOIN TRANSFER TFH WITH (NOLOCK) ON INSERTED.Transferkey = TFH.Transferkey
                         CROSS APPLY fnc_SelectGetRight (TFH.Facility, TFH.FromStorerKey, '', 'ChannelInventoryMgmt') SC
-                        WHERE SC.Authority = '1' 
+                        WHERE SC.Authority = '1'
                         AND (INSERTED.FromChannel = '' OR INSERTED.FromChannel IS NULL)
                      )
             BEGIN
@@ -356,7 +357,7 @@ BEGIN
                         FROM INSERTED
                         JOIN TRANSFER TFH WITH (NOLOCK) ON INSERTED.Transferkey = TFH.Transferkey
                         CROSS APPLY fnc_SelectGetRight (TFH.ToFacility, TFH.ToStorerKey, '', 'ChannelInventoryMgmt') SC
-                        WHERE SC.Authority = '1' 
+                        WHERE SC.Authority = '1'
                         AND (INSERTED.ToChannel = '' OR INSERTED.ToChannel IS NULL)
                      )
             BEGIN
@@ -365,8 +366,8 @@ BEGIN
                SET @n_continue = 3
             END
          END
-         --(Wan03) - END                    
- 
+         --(Wan03) - END
+
          --(Wan04) - START
          IF @n_continue = 1 OR @n_continue = 2
          BEGIN
@@ -375,11 +376,11 @@ BEGIN
             FROM INSERTED
             JOIN [TRANSFER] TFH WITH (NOLOCK) ON INSERTED.Transferkey = TFH.Transferkey
             CROSS APPLY fnc_SelectGetRight (TFH.Facility, TFH.FromStorerKey, '', 'TRFAllocHoldChannel') SC
-            WHERE SC.Authority = '1' 
-         END 
- 
-         IF @n_continue = 1 OR @n_continue = 2 
-         BEGIN        
+            WHERE SC.Authority = '1'
+         END
+
+         IF @n_continue = 1 OR @n_continue = 2
+         BEGIN
             IF EXISTS ( SELECT 1
                         FROM INSERTED i
                         JOIN DELETED  d ON  i.Transferkey = d.Transferkey
@@ -402,19 +403,19 @@ BEGIN
                                    )
                         )
             BEGIN
-               SET @n_continue = 3  
-               SET @n_err = 91013 
-               SET @c_errmsg  = CONVERT(char(5),@n_err)+': From Channel ID is hold by Transfer Line. Reject to change From Qty. (ntrTransferDetailUpdate)'  
-            END  
-         END  
+               SET @n_continue = 3
+               SET @n_err = 91013
+               SET @c_errmsg  = CONVERT(char(5),@n_err)+': From Channel ID is hold by Transfer Line. Reject to change From Qty. (ntrTransferDetailUpdate)'
+            END
+         END
          --(Wan04) - END
-         
+
          IF @n_continue = 1 OR @n_continue = 2
-         BEGIN         
+         BEGIN
             SELECT @c_TransferPrimaryKey = ' '
             WHILE (1 = 1) AND @n_continue IN (1,2)       --(Wan04)
             BEGIN
-               SELECT TOP 1   
+               SELECT TOP 1
                         @c_TransferPrimaryKey     = TransferKey + TransferLineNumber,
                         @c_TransferKey            = TransferKey, -- (SWT02)
                         @c_TransferLineNumber     = TransferLineNumber, -- (SWT02)
@@ -474,10 +475,10 @@ BEGIN
                ORDER BY TransferKey, TransferLineNumber
 
                IF @@ROWCOUNT = 0
-               BEGIN                
+               BEGIN
                   BREAK
                END
-             
+
                -- (TLTING02) start
                IF @c_Bondedflag = '1' AND
                   EXISTS ( SELECT 1 FROM Inventoryhold WITH (NOLOCK)
@@ -492,21 +493,21 @@ BEGIN
                   SELECT @n_continue = 3
                   BREAK
                END
-            
+
                --(Wan01) - START
                --IF @c_ChannelInventoryMgmt = '1'
                --BEGIN
-               --   IF ISNULL(@c_FromChannel,'') = '' OR 
+               --   IF ISNULL(@c_FromChannel,'') = '' OR
                --      ISNULL(@c_ToChannel,'') = ''
                --   BEGIN
                --      SELECT @n_err = 91005
                --      SELECT @c_errmsg = "NSQL"+CONVERT(char(5),@n_err)+": Channel Management Turn On, Channel Not Allow Blank. (ntrTransferDetailUpdate)"
                --      SELECT @n_continue = 3
-               --      GOTO QUIT_TR                  
-               --   END    
+               --      GOTO QUIT_TR
+               --   END
                --END
                --(Wan01) - END
-            
+
                --(Wan04) - START
                ---------------------------------------------------------------------------------
                -- Release From Channel Hold that was hold at transfer allocation process (START)
@@ -514,14 +515,14 @@ BEGIN
                SELECT @c_FromFacility = t.Facility
                FROM [TRANSFER] AS t WITH (NOLOCK)
                WHERE t.TransferKey = @c_TransferKey
-            
-               IF EXISTS ( SELECT 1 FROM @tSTRCFG AS ts 
-                           WHERE ts.Facility = @c_FromFacility AND ts.FromStorerkey = ts.FromStorerkey 
+
+               IF EXISTS ( SELECT 1 FROM @tSTRCFG AS ts
+                           WHERE ts.Facility = @c_FromFacility AND ts.FromStorerkey = ts.FromStorerkey
                            AND ts.Configkey = 'TRFAllocHoldChannel' AND ts.SValue = '1'
-               )  
+               )
                BEGIN
-                  IF @n_FromChannel_ID > 0 AND 
-                     EXISTS ( SELECT 1 
+                  IF @n_FromChannel_ID > 0 AND
+                     EXISTS ( SELECT 1
                               FROM ChannelInvHold AS cih WITH (NOLOCK)
                               JOIN ChannelInvHoldDetail AS cihd WITH (NOLOCK) ON  cihd.InvHoldkey = cih.InvHoldkey
                               WHERE cih.HoldType = 'TRF'
@@ -530,41 +531,41 @@ BEGIN
                               AND CIHD.Channel_ID = @n_FromChannel_ID
                               AND cihd.Hold = '1'
                               )
-                  BEGIN 
+                  BEGIN
                      SET @c_HoldTRFType = 'F'
                      SET @c_HoldChannel = '0'
-                     EXEC isp_ChannelInvHoldWrapper  
-                          @c_HoldType     = 'TRF'         
-                        , @c_SourceKey    = @c_Transferkey    
-                        , @c_SourceLineNo = @c_TransferLineNumber                                 
-                        , @c_Facility     = ''       
-                        , @c_Storerkey    = ''       
-                        , @c_Sku          = ''       
-                        , @c_Channel      = ''       
-                        , @c_C_Attribute01= ''       
-                        , @c_C_Attribute02= ''       
-                        , @c_C_Attribute03= ''       
-                        , @c_C_Attribute04= ''       
-                        , @c_C_Attribute05= ''       
-                        , @n_Channel_ID   = 0       
-                        , @c_Hold         = @c_HoldChannel     
-                        , @c_Remarks      = ''  
-                        , @c_HoldTRFType  = @c_HoldTRFType    
+                     EXEC isp_ChannelInvHoldWrapper
+                          @c_HoldType     = 'TRF'
+                        , @c_SourceKey    = @c_Transferkey
+                        , @c_SourceLineNo = @c_TransferLineNumber
+                        , @c_Facility     = ''
+                        , @c_Storerkey    = ''
+                        , @c_Sku          = ''
+                        , @c_Channel      = ''
+                        , @c_C_Attribute01= ''
+                        , @c_C_Attribute02= ''
+                        , @c_C_Attribute03= ''
+                        , @c_C_Attribute04= ''
+                        , @c_C_Attribute05= ''
+                        , @n_Channel_ID   = 0
+                        , @c_Hold         = @c_HoldChannel
+                        , @c_Remarks      = ''
+                        , @c_HoldTRFType  = @c_HoldTRFType
                         , @n_DelQty       = 0
-                        , @n_QtyHoldToAdj = 0  
+                        , @n_QtyHoldToAdj = 0
                         , @n_ChannelTran_ID_Ref = 0
-                        , @b_Success      = @b_Success   OUTPUT  
-                        , @n_Err          = @n_Err       OUTPUT  
-                        , @c_ErrMsg       = @c_ErrMsg    OUTPUT  
-  
-                     IF @b_Success = 0  
-                     BEGIN  
-                        SET @n_continue = 3  
-                        SET @n_err = 91014 
-                        SET @c_errmsg  = CONVERT(char(5),@n_err)+': Error Executing isp_ChannelInvHoldWrapper. (ntrTransferDetailUpdate)'  
+                        , @b_Success      = @b_Success   OUTPUT
+                        , @n_Err          = @n_Err       OUTPUT
+                        , @c_ErrMsg       = @c_ErrMsg    OUTPUT
+
+                     IF @b_Success = 0
+                     BEGIN
+                        SET @n_continue = 3
+                        SET @n_err = 91014
+                        SET @c_errmsg  = CONVERT(char(5),@n_err)+': Error Executing isp_ChannelInvHoldWrapper. (ntrTransferDetailUpdate)'
                         BREAK
-                     END 
-                  END               
+                     END
+                  END
                END
                ---------------------------------------------------------------------------------
                -- Release From Channel Hold that was hold at transfer allocation process (END)
@@ -594,7 +595,7 @@ BEGIN
                         @d_Lottable13 = @d_Lottable13,
                         @d_Lottable14 = @d_Lottable14,
                         @d_Lottable15 = @d_Lottable15,
-                        @c_Channel    = @c_FromChannel, 
+                        @c_Channel    = @c_FromChannel,
                         @n_Channel_ID = @n_FromChannel_ID OUTPUT,
                         @n_casecnt    = 0,
                         @n_innerpack  = 0,
@@ -622,6 +623,7 @@ BEGIN
                   BREAK
                END
 
+               SET @n_ToChannel_ID = 0 -- JSM-86964
                EXECUTE nspItrnAddDeposit
                         @n_ItrnSysId  = NULL,
                         @c_StorerKey  = @c_ToStorerKey,
@@ -644,8 +646,8 @@ BEGIN
                         @c_Lottable12 = @c_ToLottable12,
                         @d_Lottable13 = @d_ToLottable13,
                         @d_Lottable14 = @d_ToLottable14,
-                        @d_Lottable15 = @d_ToLottable15, 
-                        @c_Channel    = @c_ToChannel, 
+                        @d_Lottable15 = @d_ToLottable15,
+                        @c_Channel    = @c_ToChannel,
                         @n_Channel_ID = @n_ToChannel_ID OUTPUT,
                         @n_casecnt    = 0,
                         @n_innerpack  = 0,
@@ -659,7 +661,7 @@ BEGIN
                         @c_SourceKey  = @c_TransferPrimaryKey,
                         @c_SourceType = 'ntrTransferDetailUpdate',
                         @c_PackKey    = @c_ToPackKey,
-                        @c_UOM  = @c_ToUOM,
+                        @c_UOM        = @c_ToUOM,
                         @b_UOMCalc    = 0,
                         @d_EffectiveDate = @d_EffectiveDate,
                         @c_ItrnKey    = '',
@@ -672,22 +674,22 @@ BEGIN
                   SELECT @n_continue = 3
                   BREAK
                END
-            
+
                IF @n_continue IN (1,2)
                BEGIN
-                  UPDATE TRANSFERDETAIL WITH (ROWLOCK) 
-                  SET FromChannel_ID = @n_FromChannel_ID, 
-                      ToChannel_ID  = @n_ToChannel_ID, 
-                      TrafficCop = NULL, 
+                  UPDATE TRANSFERDETAIL WITH (ROWLOCK)
+                  SET FromChannel_ID = @n_FromChannel_ID,
+                      ToChannel_ID  = @n_ToChannel_ID,
+                      TrafficCop = NULL,
                       EditDate = GETDATE(),
-                      EditWho = SUSER_SNAME() 
-                  WHERE TransferKey = @c_TransferKey            
-                    AND TransferLineNumber = @c_TransferLineNumber    
-                 
+                      EditWho = SUSER_SNAME()
+                  WHERE TransferKey = @c_TransferKey
+                    AND TransferLineNumber = @c_TransferLineNumber
+
                END
             END -- WHILE (1 = 1)
          END
-         
+
          IF @b_debug = 2
          BEGIN
             SELECT @profiler = 'PROFILER,700,01,9,ITRN Process                                      ,' + CONVERT(char(12), GetDate(), 114)
@@ -819,7 +821,7 @@ BEGIN
          SELECT @c_PrimaryKey = SPACE(15)
          WHILE 1=1
          BEGIN
-            
+
             SELECT TOP 1 @c_PrimaryKey = INSERTED.TransferKey + INSERTED.TransferLineNumber,
                   @c_transferkey = INSERTED.TransferKey,
                   @c_transferlinenumber = INSERTED.TransferLineNumber,
@@ -884,7 +886,7 @@ BEGIN
                         IF NOT EXISTS( SELECT 1 FROM TRANSMITLOG (NOLOCK) WHERE TableName = N'ULPTRF' AND KEY1 = @c_transferkey
                                        AND Key2 = @c_transferlinenumber
                                        AND Key3 = dbo.fnc_LTrim(@c_frlocflag) + dbo.fnc_LTrim(@c_tolocflag)) -- put in the 'location code'
-                                                  -- tlting01 , use LTRIM and RTRIM 
+                                                  -- tlting01 , use LTRIM and RTRIM
                         BEGIN
                            SELECT @b_success = 1
                            EXECUTE nspg_getkey
@@ -1200,7 +1202,7 @@ BEGIN
                END
             END -- TRANSFERDTL INTERFACE-CCOPACK turn ON
          END -- Getright OK
-         END -- while         
+         END -- while
       END -- status 9 exists
    END
    /* END Modification */
@@ -1209,25 +1211,25 @@ BEGIN
    IF @n_continue = 3  -- Error Occured - Process AND Return
    BEGIN
        -- (ChewKP01)
-       -- To support RDT - start          
-       DECLARE @n_IsRDT INT          
-       EXECUTE RDT.rdtIsRDT @n_IsRDT OUTPUT          
-          
-       IF @n_IsRDT = 1          
-       BEGIN          
-          -- RDT cannot handle rollback (blank XML will generate). So we are not going to issue a rollback here          
-          -- Instead we commit and raise an error back to parent, let the parent decide          
-          
-          -- Commit until the level we begin with          
-          WHILE @@TRANCOUNT > @n_starttcnt          
-             COMMIT TRAN          
-          
-          -- Raise error with severity = 10, instead of the default severity 16.           
-          -- RDT cannot handle error with severity > 10, which stop the processing after executed this trigger          
-          RAISERROR (@n_err, 10, 1) WITH SETERROR  
-          
-          -- The RAISERROR has to be last line, to ensure @@ERROR is not getting overwritten  
-      END     
+       -- To support RDT - start
+       DECLARE @n_IsRDT INT
+       EXECUTE RDT.rdtIsRDT @n_IsRDT OUTPUT
+
+       IF @n_IsRDT = 1
+       BEGIN
+          -- RDT cannot handle rollback (blank XML will generate). So we are not going to issue a rollback here
+          -- Instead we commit and raise an error back to parent, let the parent decide
+
+          -- Commit until the level we begin with
+          WHILE @@TRANCOUNT > @n_starttcnt
+             COMMIT TRAN
+
+          -- Raise error with severity = 10, instead of the default severity 16.
+          -- RDT cannot handle error with severity > 10, which stop the processing after executed this trigger
+          RAISERROR (@n_err, 10, 1) WITH SETERROR
+
+          -- The RAISERROR has to be last line, to ensure @@ERROR is not getting overwritten
+      END
       ELSE
       BEGIN
          IF @@TRANCOUNT = 1 AND @@TRANCOUNT > = @n_starttcnt
@@ -1242,7 +1244,7 @@ BEGIN
             END
          END
          EXECUTE nsp_logerror @n_err, @c_errmsg, 'ntrTransferDetailUpdate'
-         RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012          
+         RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
          IF @b_debug = 2
          BEGIN
             SELECT @profiler = 'PROFILER,700,00,9,ntrTransferDetailUpdate Trigger                       ,' + CONVERT(char(12), GetDate(), 114)
