@@ -3,8 +3,6 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
-
 /******************************************************************************/
 /* Store procedure: rdt_898RcvCfm09                                           */
 /* Copyright      : LFLogistics                                               */
@@ -13,6 +11,7 @@ GO
 /*                                                                            */
 /* Date       Rev  Author     Purposes                                        */
 /* 2021-12-10 1.0  Ung        WMS-18390 Created                               */
+/* 2022-08-12 1.1  YeeKung    JSM-83781 Add rollback tran (yeekung01)         */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_898RcvCfm09 (
@@ -130,7 +129,7 @@ BEGIN
          @cStorerKey    = @cStorerKey,
          @cFacility     = @cFacility,
          @cReceiptKey   = @cReceiptKey,
-         @cPOKey        = @cPOKey,
+         @cPOKey        = @cUCC_POKey,
          @cToLOC        = @cToLOC,
          @cToID         = @cTOID,
          @cSKUCode      = @cUCCSKU,
@@ -180,6 +179,14 @@ BEGIN
    -- Normal ASN
    ELSE
    BEGIN
+       -- Stamp UCC (for use in filter SP later)
+      UPDATE rdt.rdtMobRec SET
+         V_UCC = @cUCC,
+         EditDate = GETDATE()
+      WHERE Mobile = @nMobile
+      IF @@ERROR <> 0
+         GOTO RollBackTran
+
       EXEC rdt.rdt_Receive
          @nFunc         = @nFunc,
          @nMobile       = @nMobile,
@@ -189,7 +196,7 @@ BEGIN
          @cStorerKey    = @cStorerKey,
          @cFacility     = @cFacility,
          @cReceiptKey   = @cReceiptKey,
-         @cPOKey        = @cPOKey,
+         @cPOKey        = @cUCC_POKey,
          @cToLOC        = @cToLOC,
          @cToID         = @cTOID,
          @cSKUCode      = '',
@@ -206,7 +213,24 @@ BEGIN
          @dLottable05   = @dLottable05,
          @nNOPOFlag     = @nNOPOFlag,
          @cConditionCode = @cConditionCode,
-         @cSubreasonCode = @cSubreasonCode
+         @cSubreasonCode = @cSubreasonCode,
+         @cReceiptLineNumberOutput = @cReceiptLineNumber OUTPUT
+      IF @nErrNo <> 0 --(yeekung01)
+         GOTO RollBackTran
+
+      UPDATE dbo.UCC SET
+         LOT = @cLOT,
+         LOC = @cToLOC,
+         ID = @cTOID,
+         Status = '1',
+         ReceiptKey = @cReceiptKey,
+         ReceiptLineNumber = @cReceiptLineNumber,
+         EditDate = GETDATE(),
+         EditWho = SUSER_SNAME()
+      WHERE UCC_RowRef = @nUCC_RowRef
+      SELECT @nErrNo = @@ERROR, @nRowCount = @@ROWCOUNT
+      IF @nErrNo <> 0 OR @nRowCount <> 1
+         GOTO RollBackTran
 
       GOTO Quit
    END
