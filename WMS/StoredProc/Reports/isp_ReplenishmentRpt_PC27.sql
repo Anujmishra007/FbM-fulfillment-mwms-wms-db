@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_ReplenishmentRpt_PC27]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_ReplenishmentRpt_PC27]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF
@@ -33,8 +30,10 @@ GO
 /* 2020-03-23  CSCHONG  1.3   WMS-12435 revised replen logic (CS02)        */
 /* 2020-06-04  NJOW01   1.4   WMS-13603 Custom sorting by config           */
 /* 18-JAN-2021 Wan02    1.5   Follow Parameters to follow Datawindow Seq   */
+/* 31-MAR-2021 CSCHONG  1.6   WMS-16620 add new mixlottable checking(CS03) */
+/* 12-AUG-2022 CSCHONG  1.6   Devops Scripts Combine                       */
 /***************************************************************************/
-CREATE PROC [dbo].[isp_ReplenishmentRpt_PC27]
+CREATE OR ALTER PROC [dbo].[isp_ReplenishmentRpt_PC27]
                @c_zone01            NVARCHAR(10)
 ,              @c_zone02            NVARCHAR(10)
 ,              @c_zone03            NVARCHAR(10)
@@ -104,6 +103,51 @@ BEGIN
 
        --CS01 END
 
+      --CS03 START
+      DECLARE   @c_ReplLottable01     NVARCHAR(18)   = ''
+              , @c_NoMixLottable01    NVARCHAR(10)
+              , @c_ReplLottable03     NVARCHAR(18)   = ''
+              , @c_NoMixLottable03    NVARCHAR(10)
+              , @d_ReplLottable04     DATETIME   = '1900-01-01'
+              , @c_NoMixLottable04    NVARCHAR(10) 
+              , @d_ReplLottable05     DATETIME   = '1900-01-01'
+              , @c_NoMixLottable05    NVARCHAR(10) 
+              , @c_ReplLottable06     NVARCHAR(30)   = ''
+              , @c_NoMixLottable06    NVARCHAR(10)
+              , @c_ReplLottable07     NVARCHAR(30)   = ''
+              , @c_NoMixLottable07    NVARCHAR(10)
+              , @c_ReplLottable08     NVARCHAR(30)   = ''
+              , @c_NoMixLottable08    NVARCHAR(10)
+              , @c_ReplLottable09     NVARCHAR(30)   = ''
+              , @c_NoMixLottable09    NVARCHAR(10)
+              , @c_ReplLottable10     NVARCHAR(30)   = ''
+              , @c_NoMixLottable10    NVARCHAR(10)
+              , @c_ReplLottable11     NVARCHAR(30)   = ''
+              , @c_NoMixLottable11    NVARCHAR(10)
+              , @c_ReplLottable12     NVARCHAR(30)   = ''
+              , @c_NoMixLottable12    NVARCHAR(10) 
+              , @d_ReplLottable13     DATETIME   = '1900-01-01'
+              , @c_NoMixLottable13    NVARCHAR(10) 
+              , @d_ReplLottable14     DATETIME   = '1900-01-01'
+              , @c_NoMixLottable14    NVARCHAR(10) 
+              , @d_ReplLottable15     DATETIME   = '1900-01-01'
+              , @c_NoMixLottable15    NVARCHAR(10) 
+              , @c_Lottable01         NVARCHAR(18) = '' 
+              , @c_Lottable03         NVARCHAR(18) = '' 
+              , @d_Lottable04         DATETIME   = '1900-01-01' 
+              , @d_Lottable05         DATETIME   = '1900-01-01'  
+              , @c_Lottable06         NVARCHAR(30) = ''
+              , @c_Lottable07         NVARCHAR(30) = ''
+              , @c_Lottable08         NVARCHAR(30) = ''
+              , @c_Lottable09         NVARCHAR(30) = ''
+              , @c_Lottable10         NVARCHAR(30) = ''    
+              , @c_Lottable11         NVARCHAR(30) = ''
+              , @c_Lottable12         NVARCHAR(30) = ''
+              , @d_Lottable13         DATETIME   = '1900-01-01' 
+              , @d_Lottable14         DATETIME   = '1900-01-01' 
+              , @d_Lottable15         DATETIME   = '1900-01-01' 
+      --CS03 END
+
    SET @n_continue=1
    SET @b_debug = 0
    SET @c_ReplenishmentGroup = ''  
@@ -139,7 +183,21 @@ BEGIN
          ,  [Priority]              NVARCHAR(10)   NOT NULL DEFAULT('')
          ,  UOM                     NVARCHAR(10)   NOT NULL DEFAULT('')
          ,  Packkey                 NVARCHAR(10)   NOT NULL DEFAULT('')
-         ,  ReplLottable02          NVARCHAR(18)   NOT NULL DEFAULT('')                  
+         ,  ReplLottable02          NVARCHAR(18)   NOT NULL DEFAULT('')   
+         ,  ReplLottable01          NVARCHAR(18)   NOT NULL DEFAULT('')    --CS03 START           
+         ,  ReplLottable03          NVARCHAR(18)   NOT NULL DEFAULT('')  
+         ,  ReplLottable04          DATETIME       NULL
+         ,  ReplLottable05          DATETIME       NULL  
+         ,  ReplLottable06          NVARCHAR(30)   NOT NULL DEFAULT('')    
+         ,  ReplLottable07          NVARCHAR(30)   NOT NULL DEFAULT('')  
+         ,  ReplLottable08          NVARCHAR(30)   NOT NULL DEFAULT('')  
+         ,  ReplLottable09          NVARCHAR(30)   NOT NULL DEFAULT('')  
+         ,  ReplLottable10          NVARCHAR(30)   NOT NULL DEFAULT('') 
+         ,  ReplLottable11          NVARCHAR(30)   NOT NULL DEFAULT('') 
+         ,  ReplLottable12          NVARCHAR(30)   NOT NULL DEFAULT('')  
+         ,  ReplLottable13          DATETIME       NULL  
+         ,  ReplLottable14          DATETIME       NULL
+         ,  ReplLottable15          DATETIME       NULL                    --CS03 END 
       )
                       
    IF @n_continue = 1 or @n_continue = 2
@@ -352,7 +410,7 @@ BEGIN
 
                --SELECT @c_Sql
                --GOTO QUIT_SP
-    
+
       IF @@ROWCOUNT > 0  AND ISNULL(@c_ReplGrp,'') IN ('ALL','')  
       BEGIN
          EXECUTE nspg_GetKey                                                     
@@ -371,9 +429,9 @@ BEGIN
 
                IF @b_debug = 1
                BEGIN
-                  SELECT * FROM #WaveRepl
+                  SELECT 'Wavekey',* FROM #WaveRepl
                
-                  SELECT CurrentStorer = StorerKey
+                  SELECT '#TempSKUxLOC',CurrentStorer = StorerKey
                         ,CurrentSKU = SKU
                         ,CurrentLoc = LOC
                         ,CurrentSeverity        = ReplenishmentSeverity
@@ -440,7 +498,37 @@ BEGIN
          END
 
          SET @c_NoMixLottable02  = '0'
+         SET @c_NoMixLottable01  = '0'   --CS03 START
+         SET @c_NoMixLottable03  = '0'
+         SET @c_NoMixLottable04  = '0'  
+         SET @c_NoMixLottable05  = '0'
+         SET @c_NoMixLottable06  = '0'
+         SET @c_NoMixLottable07  = '0'  
+         SET @c_NoMixLottable08  = '0' 
+         SET @c_NoMixLottable09  = '0'
+         SET @c_NoMixLottable10  = '0'  
+         SET @c_NoMixLottable11  = '0'
+         SET @c_NoMixLottable12  = '0'  
+         SET @c_NoMixLottable13  = '0'
+         SET @c_NoMixLottable14  = '0'  
+         SET @c_NoMixLottable15  = '0'   --CS03 END
+
+
          SELECT @c_NoMixLottable02 = ISNULL(RTRIM(NoMixLottable02),'0')
+               ,@c_NoMixLottable01 = ISNULL(RTRIM(NoMixLottable01),'0')   --CS03 START 
+               ,@c_NoMixLottable03 = ISNULL(RTRIM(NoMixLottable03),'0')  
+               ,@c_NoMixLottable04 = ISNULL(RTRIM(NoMixLottable04),'0') 
+               ,@c_NoMixLottable05 = ISNULL(RTRIM(NoMixLottable05),'0')  
+               ,@c_NoMixLottable06 = ISNULL(RTRIM(NoMixLottable06),'0')  
+               ,@c_NoMixLottable07 = ISNULL(RTRIM(NoMixLottable07),'0')  
+               ,@c_NoMixLottable08 = ISNULL(RTRIM(NoMixLottable08),'0')
+               ,@c_NoMixLottable09 = ISNULL(RTRIM(NoMixLottable09),'0')  
+               ,@c_NoMixLottable10 = ISNULL(RTRIM(NoMixLottable10),'0')
+               ,@c_NoMixLottable11 = ISNULL(RTRIM(NoMixLottable11),'0')  
+               ,@c_NoMixLottable12 = ISNULL(RTRIM(NoMixLottable12),'0')  
+               ,@c_NoMixLottable13 = ISNULL(RTRIM(NoMixLottable13),'0')
+               ,@c_NoMixLottable14 = ISNULL(RTRIM(NoMixLottable14),'0')  
+               ,@c_NoMixLottable15 = ISNULL(RTRIM(NoMixLottable15),'0') --CS03 END 
          FROM LOC WITH (NOLOCK)
          WHERE Loc = @c_CurrentLoc
 
@@ -449,10 +537,93 @@ BEGIN
             SET @c_NoMixLottable02 = '0'
          END
 
+        --CS01 START
+         IF @c_NoMixLottable03 = ''
+         BEGIN
+            SET @c_NoMixLottable03 = '0'
+         END
+
+         IF @c_NoMixLottable04 = ''
+         BEGIN
+            SET @c_NoMixLottable04 = '0'
+         END
+ 
+         IF @c_NoMixLottable05 = ''
+         BEGIN
+            SET @c_NoMixLottable05 = '0'
+         END
+
+         IF @c_NoMixLottable06 = ''
+         BEGIN
+            SET @c_NoMixLottable06 = '0'
+         END
+
+         IF @c_NoMixLottable07 = ''
+         BEGIN
+            SET @c_NoMixLottable07 = '0'
+         END
+
+         IF @c_NoMixLottable08 = ''
+         BEGIN
+            SET @c_NoMixLottable08 = '0'
+         END 
+
+         IF @c_NoMixLottable09 = ''
+         BEGIN
+            SET @c_NoMixLottable09 = '0'
+         END
+
+         IF @c_NoMixLottable10 = ''
+         BEGIN
+            SET @c_NoMixLottable10 = '0'
+         END
+
+         IF @c_NoMixLottable11 = ''
+         BEGIN
+            SET @c_NoMixLottable11 = '0'
+         END
+      
+         IF @c_NoMixLottable12 = ''
+         BEGIN
+            SET @c_NoMixLottable12 = '0'
+         END
+
+         IF @c_NoMixLottable13 = ''
+         BEGIN
+            SET @c_NoMixLottable13 = '0'
+         END
+  
+         IF @c_NoMixLottable14 = ''
+         BEGIN
+            SET @c_NoMixLottable14 = '0'
+         END
+
+         IF @c_NoMixLottable15 = ''
+         BEGIN
+            SET @c_NoMixLottable15 = '0'
+         END
+
+        --CS01 END
+
          SET @n_InvCnt = 0
          SET @c_Lottable02 = ''
+  
          SELECT TOP 1 @n_InvCnt = 1
                , @c_Lottable02 = ISNULL(RTRIM(LA.lottable02),'')
+               , @c_Lottable01 = ISNULL(RTRIM(LA.lottable01),'')   --CS03 START
+               , @c_Lottable03 = ISNULL(RTRIM(LA.lottable03),'') 
+               , @d_Lottable04 = ISNULL(RTRIM(LA.lottable04),'1900-01-01') 
+               , @d_Lottable05 = ISNULL(RTRIM(LA.lottable05),'1900-01-01')
+               , @c_Lottable06 = ISNULL(RTRIM(LA.lottable06),'') 
+               , @c_Lottable07 = ISNULL(RTRIM(LA.lottable07),'') 
+               , @c_Lottable08 = ISNULL(RTRIM(LA.lottable08),'') 
+               , @c_Lottable09 = ISNULL(RTRIM(LA.lottable09),'') 
+               , @c_Lottable10 = ISNULL(RTRIM(LA.lottable10),'') 
+               , @c_Lottable11 = ISNULL(RTRIM(LA.lottable11),'') 
+               , @c_Lottable12 = ISNULL(RTRIM(LA.lottable12),'') 
+               , @d_Lottable13 = ISNULL(RTRIM(LA.lottable13),'1900-01-01') 
+               , @d_Lottable14 = ISNULL(RTRIM(LA.lottable14),'1900-01-01') 
+               , @d_Lottable15 = ISNULL(RTRIM(LA.lottable15),'1900-01-01')   --CS03 END
          FROM LOTxLOCxID LLI  WITH (NOLOCK)
          JOIN LOTATTRIBUTE LA WITH (NOLOCK) ON (LLI.Lot = LA.Lot)
          WHERE LLI.Storerkey = @c_CurrentStorer
@@ -500,7 +671,7 @@ BEGIN
             END
             SET @d_today = CONVERT(NVARCHAR(10), GETDATE(),120) 
          END
-
+ --PRINT 'check lot04 : ' + @d_Lottable04
          IF EXISTS(SELECT 1
                    FROM CODELKUP CL (NOLOCK)
                    WHERE CL.Listname = 'REPORTCFG'
@@ -508,7 +679,7 @@ BEGIN
                    AND CL.Long = 'r_replenishment_report_pc27'
                    AND CL.Storerkey = @c_Storerkey
                    AND ISNULL(CL.Short,'') <> 'N') --NJOW01
-         BEGIN                   	    
+         BEGIN                          
             SET @CUR_REPL = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
             SELECT LOTxLOCxID.LOT
                   ,LOTxLOCxID.Loc
@@ -517,6 +688,20 @@ BEGIN
                   ,LOTxLOCxID.QtyAllocated
                   ,LOTxLOCxID.QtyPicked
                   ,LOTATTRIBUTE.Lottable02
+                  ,LOTATTRIBUTE.Lottable01         --CS03 START
+                  ,LOTATTRIBUTE.Lottable03
+                  ,LOTATTRIBUTE.Lottable04
+                  ,LOTATTRIBUTE.Lottable05
+                  ,LOTATTRIBUTE.Lottable06
+                  ,LOTATTRIBUTE.Lottable07
+                  ,LOTATTRIBUTE.Lottable08
+                  ,LOTATTRIBUTE.Lottable09
+                  ,LOTATTRIBUTE.Lottable10        
+                  ,LOTATTRIBUTE.Lottable11
+                  ,LOTATTRIBUTE.Lottable12
+                  ,LOTATTRIBUTE.Lottable13
+                  ,LOTATTRIBUTE.Lottable14
+                  ,LOTATTRIBUTE.Lottable15        --CS03 END 
             FROM LOT          WITH (NOLOCK)
             JOIN LOTATTRIBUTE WITH (NOLOCK) ON (LOT.Lot        = LOTATTRIBUTE.LOT)
             JOIN LOTxLOCxID   WITH (NOLOCK) ON (LOT.Lot        = LOTxLOCxID.Lot)
@@ -537,11 +722,73 @@ BEGIN
             OR  @c_zone02 = 'ALL')
             AND LOT.Status= 'OK'
             AND (@c_NoMixLottable02= '0' OR 
-                (@c_NoMixLottable02= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable02= @c_Lottable02))
+                (@c_NoMixLottable02= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable02= @c_Lottable02)
+                OR  (@c_NoMixLottable02= '1' AND @n_InvCnt = 0))       --CS03
+
+            --CS03 START
+            AND (@c_NoMixLottable01= '0' OR 
+                (@c_NoMixLottable01= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable01= @c_Lottable01)
+                 OR  (@c_NoMixLottable01= '1' AND @n_InvCnt = 0))
+            AND (@c_NoMixLottable03= '0' OR 
+                (@c_NoMixLottable03= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable03= @c_Lottable03)
+                 OR  (@c_NoMixLottable03= '1' AND @n_InvCnt = 0))
+            AND (@c_NoMixLottable04= '0' OR 
+                (@c_NoMixLottable04= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable04= ISNULL(@d_Lottable04,'1900-01-01'))
+                 OR  (@c_NoMixLottable04= '1' AND @n_InvCnt = 0))
+            AND (@c_NoMixLottable05= '0' OR 
+                (@c_NoMixLottable05= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable05= ISNULL(@d_Lottable05,'1900-01-01'))
+                 OR  (@c_NoMixLottable05= '1' AND @n_InvCnt = 0))
+            AND (@c_NoMixLottable06= '0' OR 
+                (@c_NoMixLottable06= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable06= @c_Lottable06)
+                 OR  (@c_NoMixLottable06= '1' AND @n_InvCnt = 0))     
+            AND (@c_NoMixLottable07= '0' OR 
+                (@c_NoMixLottable07= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable07= @c_Lottable07)
+                 OR  (@c_NoMixLottable07= '1' AND @n_InvCnt = 0))
+            AND (@c_NoMixLottable08= '0' OR 
+                (@c_NoMixLottable08= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable08= @c_Lottable08)
+                 OR  (@c_NoMixLottable08= '1' AND @n_InvCnt = 0))
+            AND (@c_NoMixLottable09= '0' OR 
+                (@c_NoMixLottable09= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable09= @c_Lottable09)
+                 OR  (@c_NoMixLottable09= '1' AND @n_InvCnt = 0))  
+            AND (@c_NoMixLottable10= '0' OR 
+                (@c_NoMixLottable10= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable10= @c_Lottable10)
+                 OR  (@c_NoMixLottable10= '1' AND @n_InvCnt = 0)) 
+            AND (@c_NoMixLottable11= '0' OR 
+                (@c_NoMixLottable11= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable11= @c_Lottable11)
+                 OR  (@c_NoMixLottable11= '1' AND @n_InvCnt = 0)) 
+            AND (@c_NoMixLottable12= '0' OR 
+                (@c_NoMixLottable12= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable12= @c_Lottable12)
+                 OR  (@c_NoMixLottable12= '1' AND @n_InvCnt = 0))  
+            AND (@c_NoMixLottable13= '0' OR 
+                (@c_NoMixLottable13= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable13= ISNULL(@d_Lottable13,'1900-01-01'))
+                 OR  (@c_NoMixLottable13= '1' AND @n_InvCnt = 0))
+            AND (@c_NoMixLottable14= '0' OR 
+                (@c_NoMixLottable14= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable14= ISNULL(@d_Lottable14,'1900-01-01'))
+                 OR  (@c_NoMixLottable14= '1' AND @n_InvCnt = 0))
+            AND (@c_NoMixLottable15= '0' OR 
+                (@c_NoMixLottable15= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable15= ISNULL(@d_Lottable15,'1900-01-01'))
+                 OR  (@c_NoMixLottable15= '1' AND @n_InvCnt = 0)) 
+            --CS03 END
             AND (@c_ReplFreshStock = 'N' OR                                                                 
                 (@c_ReplFreshStock = 'Y' AND LOTATTRIBUTE.Lottable04 > DATEADD(d, @n_ShelfLife, @d_today))) 
             ORDER BY ISNULL(LOTATTRIBUTE.LOTTABLE04, '1900-01-01')   
-                  ,  LOTATTRIBUTE.LOTTABLE02
+                 -- ,  LOTATTRIBUTE.LOTTABLE02  --CS03 START
+                  , CASE WHEN @c_NoMixLottable01= '1' THEN LOTATTRIBUTE.LOTTABLE01 ELSE NULL END
+                  , CASE WHEN @c_NoMixLottable02= '1' THEN LOTATTRIBUTE.LOTTABLE02 ELSE NULL END 
+                  , CASE WHEN @c_NoMixLottable03= '1' THEN LOTATTRIBUTE.LOTTABLE03 ELSE NULL END
+                  , CASE WHEN @c_NoMixLottable04= '1' THEN LOTATTRIBUTE.LOTTABLE04 ELSE '1900-01-01' END 
+                  , CASE WHEN @c_NoMixLottable05= '1' THEN LOTATTRIBUTE.LOTTABLE05 ELSE '1900-01-01' END
+                  , CASE WHEN @c_NoMixLottable06= '1' THEN LOTATTRIBUTE.LOTTABLE06 ELSE NULL END 
+                  , CASE WHEN @c_NoMixLottable07= '1' THEN LOTATTRIBUTE.LOTTABLE07 ELSE NULL END
+                  , CASE WHEN @c_NoMixLottable08= '1' THEN LOTATTRIBUTE.LOTTABLE08 ELSE NULL END 
+                  , CASE WHEN @c_NoMixLottable09= '1' THEN LOTATTRIBUTE.LOTTABLE09 ELSE NULL END
+                  , CASE WHEN @c_NoMixLottable10= '1' THEN LOTATTRIBUTE.LOTTABLE10 ELSE NULL END 
+                  , CASE WHEN @c_NoMixLottable11= '1' THEN LOTATTRIBUTE.LOTTABLE11 ELSE NULL END 
+                  , CASE WHEN @c_NoMixLottable12= '1' THEN LOTATTRIBUTE.LOTTABLE12 ELSE NULL END 
+                  , CASE WHEN @c_NoMixLottable13= '1' THEN LOTATTRIBUTE.LOTTABLE13 ELSE '1900-01-01' END 
+                  , CASE WHEN @c_NoMixLottable14= '1' THEN LOTATTRIBUTE.LOTTABLE14 ELSE '1900-01-01' END 
+                  , CASE WHEN @c_NoMixLottable15= '1' THEN LOTATTRIBUTE.LOTTABLE15 ELSE '1900-01-01' END    
+                  --CS03 END  
                   ,  CASE WHEN ISNULL(LOTATTRIBUTE.LOTTABLE04, '1900-01-01') = '1900-01-01' THEN LOTATTRIBUTE.LOTTABLE05 ELSE NULL END
                   ,  CASE WHEN (LOTxLOCxID.Qty - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyReplen) < @n_Pallet 
                           THEN 1 
@@ -563,6 +810,20 @@ BEGIN
                   ,LOTxLOCxID.QtyAllocated
                   ,LOTxLOCxID.QtyPicked
                   ,LOTATTRIBUTE.Lottable02
+                  ,LOTATTRIBUTE.Lottable01         --CS03 START
+                  ,LOTATTRIBUTE.Lottable03
+                  ,LOTATTRIBUTE.Lottable04
+                  ,LOTATTRIBUTE.Lottable05
+                  ,LOTATTRIBUTE.Lottable06
+                  ,LOTATTRIBUTE.Lottable07
+                  ,LOTATTRIBUTE.Lottable08
+                  ,LOTATTRIBUTE.Lottable09
+                  ,LOTATTRIBUTE.Lottable10        
+                  ,LOTATTRIBUTE.Lottable11
+                  ,LOTATTRIBUTE.Lottable12
+                  ,LOTATTRIBUTE.Lottable13
+                  ,LOTATTRIBUTE.Lottable14
+                  ,LOTATTRIBUTE.Lottable15        --CS03 END 
             FROM LOT          WITH (NOLOCK)
             JOIN LOTATTRIBUTE WITH (NOLOCK) ON (LOT.Lot        = LOTATTRIBUTE.LOT)
             JOIN LOTxLOCxID   WITH (NOLOCK) ON (LOT.Lot        = LOTxLOCxID.Lot)
@@ -583,11 +844,74 @@ BEGIN
             OR  @c_zone02 = 'ALL')
             AND LOT.Status= 'OK'
             AND (@c_NoMixLottable02= '0' OR 
-                (@c_NoMixLottable02= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable02= @c_Lottable02))
+                (@c_NoMixLottable02= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable02= @c_Lottable02)
+                OR  (@c_NoMixLottable02= '1' AND @n_InvCnt = 0))       --CS03
+
+            --CS03 START
+            AND (@c_NoMixLottable01= '0' OR 
+                (@c_NoMixLottable01= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable01= @c_Lottable01)
+                 OR  (@c_NoMixLottable01= '1' AND @n_InvCnt = 0))
+            AND (@c_NoMixLottable03= '0' OR 
+                (@c_NoMixLottable03= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable03= @c_Lottable03)
+                 OR  (@c_NoMixLottable03= '1' AND @n_InvCnt = 0))
+            AND (@c_NoMixLottable04= '0' OR 
+                (@c_NoMixLottable04= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable04= ISNULL(@d_Lottable04,'1900-01-01'))
+                 OR  (@c_NoMixLottable04= '1' AND @n_InvCnt = 0))
+            AND (@c_NoMixLottable05= '0' OR 
+                (@c_NoMixLottable05= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable05= ISNULL(@d_Lottable05,'1900-01-01'))
+                 OR  (@c_NoMixLottable05= '1' AND @n_InvCnt = 0))
+            AND (@c_NoMixLottable06= '0' OR 
+                (@c_NoMixLottable06= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable06= @c_Lottable06)
+                 OR  (@c_NoMixLottable06= '1' AND @n_InvCnt = 0))     
+            AND (@c_NoMixLottable07= '0' OR 
+                (@c_NoMixLottable07= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable07= @c_Lottable07)
+                 OR  (@c_NoMixLottable07= '1' AND @n_InvCnt = 0))
+            AND (@c_NoMixLottable08= '0' OR 
+                (@c_NoMixLottable08= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable08= @c_Lottable08)
+                 OR  (@c_NoMixLottable08= '1' AND @n_InvCnt = 0))
+            AND (@c_NoMixLottable09= '0' OR 
+                (@c_NoMixLottable09= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable09= @c_Lottable09)
+                 OR  (@c_NoMixLottable09= '1' AND @n_InvCnt = 0))  
+            AND (@c_NoMixLottable10= '0' OR 
+                (@c_NoMixLottable10= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable10= @c_Lottable10)
+                 OR  (@c_NoMixLottable10= '1' AND @n_InvCnt = 0)) 
+            AND (@c_NoMixLottable11= '0' OR 
+                (@c_NoMixLottable11= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable11= @c_Lottable11)
+                 OR  (@c_NoMixLottable11= '1' AND @n_InvCnt = 0)) 
+            AND (@c_NoMixLottable12= '0' OR 
+                (@c_NoMixLottable12= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable12= @c_Lottable12)
+                 OR  (@c_NoMixLottable12= '1' AND @n_InvCnt = 0))  
+            AND (@c_NoMixLottable13= '0' OR 
+                (@c_NoMixLottable13= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable13= ISNULL(@d_Lottable13,'1900-01-01'))
+                 OR  (@c_NoMixLottable13= '1' AND @n_InvCnt = 0))
+            AND (@c_NoMixLottable14= '0' OR 
+                (@c_NoMixLottable14= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable14= ISNULL(@d_Lottable14,'1900-01-01'))
+                 OR  (@c_NoMixLottable14= '1' AND @n_InvCnt = 0))
+            AND (@c_NoMixLottable15= '0' OR 
+                (@c_NoMixLottable15= '1' AND @n_InvCnt > 0 AND LOTATTRIBUTE.Lottable15= ISNULL(@d_Lottable15,'1900-01-01'))
+                 OR  (@c_NoMixLottable15= '1' AND @n_InvCnt = 0)) 
+            --CS03 END
             AND (@c_ReplFreshStock = 'N' OR                                                                 
                 (@c_ReplFreshStock = 'Y' AND LOTATTRIBUTE.Lottable04 > DATEADD(d, @n_ShelfLife, @d_today))) 
-            ORDER BY ISNULL(LOTATTRIBUTE.LOTTABLE04, '1900-01-01')   
-                  ,  ISNULL(LOTATTRIBUTE.LOTTABLE05, '1900-01-01')
+            --ORDER BY ISNULL(LOTATTRIBUTE.LOTTABLE04, '1900-01-01')   
+            --      ,  ISNULL(LOTATTRIBUTE.LOTTABLE05, '1900-01-01')
+                  -- ,  LOTATTRIBUTE.LOTTABLE02  --CS03 START
+           ORDER BY CASE WHEN @c_NoMixLottable01= '1' THEN LOTATTRIBUTE.LOTTABLE01 ELSE NULL END
+                  , CASE WHEN @c_NoMixLottable02= '1' THEN LOTATTRIBUTE.LOTTABLE02 ELSE NULL END 
+                  , CASE WHEN @c_NoMixLottable03= '1' THEN LOTATTRIBUTE.LOTTABLE03 ELSE NULL END
+                  , CASE WHEN @c_NoMixLottable04= '1' THEN LOTATTRIBUTE.LOTTABLE04 ELSE '1900-01-01' END 
+                  , CASE WHEN @c_NoMixLottable05= '1' THEN LOTATTRIBUTE.LOTTABLE05 ELSE '1900-01-01' END
+                  , CASE WHEN @c_NoMixLottable06= '1' THEN LOTATTRIBUTE.LOTTABLE06 ELSE NULL END 
+                  , CASE WHEN @c_NoMixLottable07= '1' THEN LOTATTRIBUTE.LOTTABLE07 ELSE NULL END
+                  , CASE WHEN @c_NoMixLottable08= '1' THEN LOTATTRIBUTE.LOTTABLE08 ELSE NULL END 
+                  , CASE WHEN @c_NoMixLottable09= '1' THEN LOTATTRIBUTE.LOTTABLE09 ELSE NULL END
+                  , CASE WHEN @c_NoMixLottable10= '1' THEN LOTATTRIBUTE.LOTTABLE10 ELSE NULL END 
+                  , CASE WHEN @c_NoMixLottable11= '1' THEN LOTATTRIBUTE.LOTTABLE11 ELSE NULL END 
+                  , CASE WHEN @c_NoMixLottable12= '1' THEN LOTATTRIBUTE.LOTTABLE12 ELSE NULL END 
+                  , CASE WHEN @c_NoMixLottable13= '1' THEN LOTATTRIBUTE.LOTTABLE13 ELSE '1900-01-01' END 
+                  , CASE WHEN @c_NoMixLottable14= '1' THEN LOTATTRIBUTE.LOTTABLE14 ELSE '1900-01-01' END 
+                  , CASE WHEN @c_NoMixLottable15= '1' THEN LOTATTRIBUTE.LOTTABLE15 ELSE '1900-01-01' END    
+                  --CS03 END
                   ,  CASE WHEN (LOTxLOCxID.Qty - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyReplen) < @n_Pallet 
                           THEN 1 
                           ELSE 2
@@ -606,6 +930,20 @@ BEGIN
                                        ,  @n_QtyAllocated
                                        ,  @n_QtyPicked
                                        ,  @c_ReplLottable02
+                                       ,  @c_ReplLottable01   --CS03 START   
+                                       ,  @c_ReplLottable03
+                                       ,  @d_ReplLottable04
+                                       ,  @d_ReplLottable05  
+                                       ,  @c_ReplLottable06
+                                       ,  @c_ReplLottable07
+                                       ,  @c_ReplLottable08
+                                       ,  @c_ReplLottable09
+                                       ,  @c_ReplLottable10  
+                                       ,  @c_ReplLottable11
+                                       ,  @c_ReplLottable12
+                                       ,  @d_ReplLottable13 
+                                       ,  @d_ReplLottable14
+                                       ,  @d_ReplLottable15      --CS03 END
 
          WHILE @@Fetch_Status <> -1 AND @n_RemainingQty > 0
          BEGIN
@@ -623,7 +961,7 @@ BEGIN
             END
             --(Wan01) - Fixed
 
-            IF @c_NoMixLottable02 = '1' AND @n_InvCnt = 0
+            IF @c_NoMixLottable02 = '1' AND @n_InvCnt = 0  
             BEGIN
                IF EXISTS ( SELECT 1 FROM #REPLENISHMENT
                            WHERE Storerkey = @c_CurrentStorer AND Sku = @c_CurrentSku AND ToLOC = @c_CurrentLoc
@@ -634,6 +972,166 @@ BEGIN
                   GOTO NEXT_CANDIDATE
                END
             END
+            --CS03 START
+
+            IF @c_NoMixLottable01 = '1' AND @n_InvCnt = 0  
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM #REPLENISHMENT
+                           WHERE Storerkey = @c_CurrentStorer AND Sku = @c_CurrentSku AND ToLOC = @c_CurrentLoc
+                           AND ReplLottable01 <> @c_ReplLottable01
+                           GROUP BY Storerkey, Sku, ToLoc
+                           HAVING COUNT(1) > 0)
+               BEGIN
+                  GOTO NEXT_CANDIDATE
+               END
+            END 
+            IF @c_NoMixLottable03 = '1' AND @n_InvCnt = 0  
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM #REPLENISHMENT
+                           WHERE Storerkey = @c_CurrentStorer AND Sku = @c_CurrentSku AND ToLOC = @c_CurrentLoc
+                           AND ReplLottable03 <> @c_ReplLottable03
+                           GROUP BY Storerkey, Sku, ToLoc
+                           HAVING COUNT(1) > 0)
+               BEGIN
+                  GOTO NEXT_CANDIDATE
+               END
+            END
+            IF @c_NoMixLottable04 = '1' AND @n_InvCnt = 0  
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM #REPLENISHMENT
+                           WHERE Storerkey = @c_CurrentStorer AND Sku = @c_CurrentSku AND ToLOC = @c_CurrentLoc
+                           AND ReplLottable04 <> ISNULL(@d_ReplLottable04,'1900-01-01')
+                           GROUP BY Storerkey, Sku, ToLoc
+                           HAVING COUNT(1) > 0)
+               BEGIN
+                  GOTO NEXT_CANDIDATE
+               END
+            END
+            IF @c_NoMixLottable05 = '1' AND @n_InvCnt = 0  
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM #REPLENISHMENT
+                           WHERE Storerkey = @c_CurrentStorer AND Sku = @c_CurrentSku AND ToLOC = @c_CurrentLoc
+                           AND ReplLottable05 <> ISNULL(@d_ReplLottable05,'1900-01-01')
+                           GROUP BY Storerkey, Sku, ToLoc
+                           HAVING COUNT(1) > 0)
+               BEGIN
+                  GOTO NEXT_CANDIDATE
+               END
+            END
+
+            IF @c_NoMixLottable06 = '1' AND @n_InvCnt = 0  
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM #REPLENISHMENT
+                           WHERE Storerkey = @c_CurrentStorer AND Sku = @c_CurrentSku AND ToLOC = @c_CurrentLoc
+                           AND ReplLottable06 <> @c_ReplLottable06
+                           GROUP BY Storerkey, Sku, ToLoc
+                           HAVING COUNT(1) > 0)
+               BEGIN
+                  GOTO NEXT_CANDIDATE
+               END
+            END
+            IF @c_NoMixLottable07 = '1' AND @n_InvCnt = 0  
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM #REPLENISHMENT
+                           WHERE Storerkey = @c_CurrentStorer AND Sku = @c_CurrentSku AND ToLOC = @c_CurrentLoc
+                           AND ReplLottable07 <> @c_ReplLottable07
+                           GROUP BY Storerkey, Sku, ToLoc
+                           HAVING COUNT(1) > 0)
+               BEGIN
+                  GOTO NEXT_CANDIDATE
+               END
+            END
+
+            IF @c_NoMixLottable08 = '1' AND @n_InvCnt = 0  
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM #REPLENISHMENT
+                           WHERE Storerkey = @c_CurrentStorer AND Sku = @c_CurrentSku AND ToLOC = @c_CurrentLoc
+                           AND ReplLottable08 <> @c_ReplLottable08
+                           GROUP BY Storerkey, Sku, ToLoc
+                           HAVING COUNT(1) > 0)
+               BEGIN
+                  GOTO NEXT_CANDIDATE
+               END
+            END
+            IF @c_NoMixLottable09 = '1' AND @n_InvCnt = 0  
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM #REPLENISHMENT
+                           WHERE Storerkey = @c_CurrentStorer AND Sku = @c_CurrentSku AND ToLOC = @c_CurrentLoc
+                           AND ReplLottable09 <> @c_ReplLottable09
+                           GROUP BY Storerkey, Sku, ToLoc
+                           HAVING COUNT(1) > 0)
+               BEGIN
+                  GOTO NEXT_CANDIDATE
+               END
+            END   
+            IF @c_NoMixLottable10 = '1' AND @n_InvCnt = 0  
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM #REPLENISHMENT
+                           WHERE Storerkey = @c_CurrentStorer AND Sku = @c_CurrentSku AND ToLOC = @c_CurrentLoc
+                           AND ReplLottable10 <> @c_ReplLottable10
+                           GROUP BY Storerkey, Sku, ToLoc
+                           HAVING COUNT(1) > 0)
+               BEGIN
+                  GOTO NEXT_CANDIDATE
+               END
+            END
+            IF @c_NoMixLottable11 = '1' AND @n_InvCnt = 0  
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM #REPLENISHMENT
+                           WHERE Storerkey = @c_CurrentStorer AND Sku = @c_CurrentSku AND ToLOC = @c_CurrentLoc
+                           AND ReplLottable11 <> @c_ReplLottable11
+                           GROUP BY Storerkey, Sku, ToLoc
+                           HAVING COUNT(1) > 0)
+               BEGIN
+                  GOTO NEXT_CANDIDATE
+               END
+            END
+            IF @c_NoMixLottable12 = '1' AND @n_InvCnt = 0  
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM #REPLENISHMENT
+                           WHERE Storerkey = @c_CurrentStorer AND Sku = @c_CurrentSku AND ToLOC = @c_CurrentLoc
+                           AND ReplLottable12 <> @c_ReplLottable12
+                           GROUP BY Storerkey, Sku, ToLoc
+                           HAVING COUNT(1) > 0)
+               BEGIN
+                  GOTO NEXT_CANDIDATE
+               END
+            END  
+            IF @c_NoMixLottable13 = '1' AND @n_InvCnt = 0  
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM #REPLENISHMENT
+                           WHERE Storerkey = @c_CurrentStorer AND Sku = @c_CurrentSku AND ToLOC = @c_CurrentLoc
+                           AND ReplLottable13 <> ISNULL(@d_ReplLottable13,'1900-01-01')
+                           GROUP BY Storerkey, Sku, ToLoc
+                           HAVING COUNT(1) > 0)
+               BEGIN
+                  GOTO NEXT_CANDIDATE
+               END
+            END
+            IF @c_NoMixLottable14 = '1' AND @n_InvCnt = 0  
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM #REPLENISHMENT
+                           WHERE Storerkey = @c_CurrentStorer AND Sku = @c_CurrentSku AND ToLOC = @c_CurrentLoc
+                           AND ReplLottable14 <> ISNULL(@d_ReplLottable14,'1900-01-01')
+                           GROUP BY Storerkey, Sku, ToLoc
+                           HAVING COUNT(1) > 0)
+               BEGIN
+                  GOTO NEXT_CANDIDATE
+               END
+            END
+            IF @c_NoMixLottable15 = '1' AND @n_InvCnt = 0  
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM #REPLENISHMENT
+                           WHERE Storerkey = @c_CurrentStorer AND Sku = @c_CurrentSku AND ToLOC = @c_CurrentLoc
+                           AND ReplLottable15 <> ISNULL(@d_ReplLottable15,'1900-01-01')
+                           GROUP BY Storerkey, Sku, ToLoc
+                           HAVING COUNT(1) > 0)
+               BEGIN
+                  GOTO NEXT_CANDIDATE
+               END
+            END
+  
+            --CS03 END
 
             IF EXISTS(SELECT 1 FROM ID (NOLOCK) WHERE ID = @c_FromID AND STATUS = 'HOLD')
             BEGIN
@@ -685,7 +1183,7 @@ BEGIN
             ELSE IF @c_ToLocationType = 'CASE'
             BEGIN
 
-               IF @b_debug = 1 AND @c_CurrentSku = '67819998'
+               IF @b_debug = 1 AND @c_CurrentSku = '4059108'
                BEGIN
                   print    ' @n_FromQty: ' + cast(@n_FromQty as nvarchar)
                         +  ',@n_Pallet: ' + cast(@n_Pallet as nvarchar)
@@ -798,7 +1296,7 @@ BEGIN
             IF @n_FromQty > 0
             BEGIN
 
-               IF @b_debug = 1  
+               IF @b_debug = 1 AND @c_CurrentSku = '4059108' 
                BEGIN
                   print    ' @n_FromQty: ' + cast(@n_FromQty as nvarchar)
                         + ', @c_FromLot: ' + @c_FromLot
@@ -820,7 +1318,21 @@ BEGIN
                      ,  QtyMoved
                      ,  QtyInPickLOC
                      ,  ReplLottable02
-                     )
+                     ,  ReplLottable01       --CS03 START
+                     ,  ReplLottable03
+                     ,  ReplLottable04 
+                     ,  ReplLottable05
+                     ,  ReplLottable06
+                     ,  ReplLottable07
+                     ,  ReplLottable08 
+                     ,  ReplLottable09
+                     ,  ReplLottable10
+                     ,  ReplLottable11
+                     ,  ReplLottable12
+                     ,  ReplLottable13 
+                     ,  ReplLottable14
+                     ,  ReplLottable15      --CS03 END  
+                     ) 
                         VALUES
                      (
                         @c_CurrentStorer
@@ -836,18 +1348,32 @@ BEGIN
                      ,  @n_QtyAllocated
                      ,  @n_QtyPicked
                      ,  @c_ReplLottable02
+                     ,  @c_ReplLottable01         --CS03 START 
+                     ,  @c_ReplLottable03
+                     ,  @d_ReplLottable04
+                     ,  @d_ReplLottable05  
+                     ,  @c_ReplLottable06
+                     ,  @c_ReplLottable07
+                     ,  @c_ReplLottable08
+                     ,  @c_ReplLottable09
+                     ,  @c_ReplLottable10  
+                     ,  @c_ReplLottable11
+                     ,  @c_ReplLottable12
+                     ,  @d_ReplLottable13 
+                     ,  @d_ReplLottable14
+                     ,  @d_ReplLottable15      --CS03 END  
                      )
 
                SET @n_numberofrecs = @n_numberofrecs + 1
 
-               IF @b_debug = 1
+               IF @b_debug = 1 AND @c_CurrentSku = '4059108'
                BEGIN
                   SELECT 'INSERTED : ' as Title, @c_CurrentSKU ' SKU', @c_fromlot 'LOT',  @c_CurrentLoc 'LOC', @c_fromid 'ID',
                          @n_FromQty 'Qty'
                END
             END
 
-            IF @b_debug = 1
+            IF @b_debug = 1 AND @c_CurrentSku = '4059108'
             BEGIN
                select @c_CurrentSKU ' SKU', @c_CurrentLoc 'LOC', @c_CurrentPriority 'priority', @n_currentfullcase 'full case', @n_CurrentSeverity 'severity'
                select @n_RemainingQty '@n_RemainingQty', @c_CurrentLoc + ' SKU = ' + @c_CurrentSKU, @c_fromlot 'from lot', @c_fromid
@@ -861,6 +1387,20 @@ BEGIN
                                           ,  @n_QtyAllocated
                                           ,  @n_QtyPicked
                                           ,  @c_ReplLottable02
+                                          ,  @c_ReplLottable01   --CS03 START   
+                                          ,  @c_ReplLottable03
+                                          ,  @d_ReplLottable04
+                                          ,  @d_ReplLottable05  
+                                          ,  @c_ReplLottable06
+                                          ,  @c_ReplLottable07
+                                          ,  @c_ReplLottable08
+                                          ,  @c_ReplLottable09
+                                          ,  @c_ReplLottable10  
+                                          ,  @c_ReplLottable11
+                                          ,  @c_ReplLottable12
+                                          ,  @d_ReplLottable13 
+                                          ,  @d_ReplLottable14
+                                          ,  @d_ReplLottable15      --CS03 END
          END -- LOT
          CLOSE @CUR_REPL
          DEALLOCATE @CUR_REPL
