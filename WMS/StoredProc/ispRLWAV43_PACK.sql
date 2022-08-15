@@ -41,6 +41,8 @@ GO
 /*                            if mutli record for 1 unique sku cannot fix*/
 /*                            into Box                                  */
 /* 2022-04-06  Wan10    2.0   Fixed b2b Uom = 2 to get large cartontype */  
+/* 2022-07-19  Wan11    2.1   WMS-19522 - RG - Adidas SEA - Release Wave*/
+/*                            on DP Loc Sequence                        */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispRLWAV43_PACK]
    @c_Wavekey     NVARCHAR(10)    
@@ -101,6 +103,8 @@ BEGIN
          , @n_MaxWeight_B2C      FLOAT       = 0.00
          
          , @n_RemainingCube      FLOAT       = 0.00
+         
+         , @c_SkuGroupSkipOptim  NVARCHAR(30)= ''        --(Wan11)
                 
          , @c_IsCompletePack     NVARCHAR(5) = ''
          , @c_Sku_Optimize       NVARCHAR(20)= ''
@@ -336,7 +340,12 @@ BEGIN
    
    SET @c_CartonGroup_B2C = ''
    SELECT @c_CartonGroup_B2C = dbo.fnc_GetParamValueFromString('@c_CartonGroup_B2C', @c_Release_Opt5, @c_CartonGroup_B2C) 
-      
+   
+   --(Wan11) CR 2.0 - START   
+   SET @c_SkuGroupSkipOptim = '' 
+   SELECT @c_SkuGroupSkipOptim = dbo.fnc_GetParamValueFromString('@c_SkuGroupSkipOptim', @c_Release_Opt5, @c_SkuGroupSkipOptim) 
+   --(Wan11) CR 2.0 - END
+ 
    SELECT @c_CartonType_B2C  = c.CartonType
          ,@n_MaxCube_B2C     = c.[Cube]
    FROM dbo.CARTONIZATION AS c WITH (NOLOCK) 
@@ -1030,431 +1039,448 @@ BEGIN
                BREAK
             END
             
-            SET @b_MinQty1ToPack = 0
-            SELECT TOP 1 @b_MinQty1ToPack = CASE WHEN oitp.SortID = 1 AND oitp.Quantity = 1 THEN 1 ELSE 0 END
-            FROM #OptimizeItemToPack AS oitp
-            ORDER BY oitp.SortID DESC
-            
-            --SET @n_CartonSeqNo = @n_CartonSeqNo + 1             --(Wan08)
-            SET @c_CartonType_B2B_w = @c_CartonType_B2B
-            SET @n_MaxCube_B2B_w = @n_MaxCube_B2B
+            --(Wan11) - START
+            IF CHARINDEX(@c_SkuGroup, @c_SkuGroupSkipOptim, 1) > 0
+            BEGIN
+               -- Recalculate Carton that can fit in
+               SELECT TOP 1 @c_CartonType_B2B = ocg.CartonType  
+                        ,@n_MaxCube_B2B    = ocg.[Cube]  
+                        ,@n_MaxWeight_B2B  = ocg.MaxWeight  
+               FROM #OptimizeCZGroup AS ocg 
+               WHERE ocg.CartonizationGroup = @c_CartonGroup_B2B
+               AND EXISTS (SELECT 1 FROM #OptimizeItemToPack AS oitp 
+                           JOIN #PICKDETAIL_WIP AS pw ON pw.RowRef = oitp.RowRef          --CR 3.0
+                           HAVING SUM(pw.StdCube * oitp.Quantity) <= ocg.[Cube]           --CR 3.0
+                           AND    SUM(oitp.StdGrossWgt * oitp.Quantity) <= ocg.MaxWeight) --CR 3.0
+               ORDER BY ocg.RowRef ASC 
+            END    
+            ELSE
+            BEGIN
+               SET @b_MinQty1ToPack = 0
+               SELECT TOP 1 @b_MinQty1ToPack = CASE WHEN oitp.SortID = 1 AND oitp.Quantity = 1 THEN 1 ELSE 0 END
+               FROM #OptimizeItemToPack AS oitp
+               ORDER BY oitp.SortID DESC
+               
+               --SET @n_CartonSeqNo = @n_CartonSeqNo + 1             --(Wan08)
+               SET @c_CartonType_B2B_w = @c_CartonType_B2B
+               SET @n_MaxCube_B2B_w = @n_MaxCube_B2B
 
-            WHILE 1 = 1
-            BEGIN 
-               --TRUNCATE TABLE @t_OptimizeResult;    --(Wan05) Change to use variable table
-               DELETE FROM @t_OptimizeResult;         --(Wan05) Change to use variable table
-               
-               INSERT INTO @t_OptimizeResult (ContainerID, AlgorithmID, IsCompletePack, ID, SKU, Qty)  
-               EXEC isp_SubmitToCartonizeAPI  
-                    @c_CartonGroup = @c_CartonGroup_B2B   
-                  , @c_CartonType  = @c_CartonType_B2B_w    
-                  , @b_Success     = @b_Success       OUTPUT  
-                  , @n_Err         = @n_Err           OUTPUT  
-                  , @c_ErrMsg      = @c_ErrMsg        OUTPUT 
-                  , @b_Debug       = 0  
-
-               IF @b_Success = 0  
-               BEGIN  
-                  SET @n_Continue = 3  
-                  SET @n_err = 64010    
-                  SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Executing isp_SubmitToCartonizeAPI. (ispRLWAV43_PACK)'     
-                              + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '     
-                  GOTO QUIT_SP    
-               END  
-  
-               SET @c_IsCompletePack = ''  
-               SELECT @c_IsCompletePack = ore.IsCompletePack
-                     ,@c_Sku_Optimize  = ore.Sku 
-                     ,@n_Qty_Optimize  = ore.Qty
-               FROM @t_OptimizeResult AS ore 
-               
-               
-               IF @c_IsCompletePack IN('','FAIL') OR @c_CartonType_B2B_w = @c_CartonType_B2B       --(Wan08) Increse performance
-               BEGIN
-                  SET @n_ID_ToPack = 0
-                  SET @n_Qty_ToPack = 0
-                  SET @n_QtyRemain_ToPack = 0
-                  SELECT TOP 1 @n_ID_ToPack  = oitp.ID
-                              ,@c_Sku_ToPack = oitp.Sku
-                              ,@n_Qty_ToPack = oitp.Quantity
-                              ,@n_OrignalQty_ToPack  = oitp.OriginalQty
-                  FROM #OptimizeItemToPack AS oitp
-                  ORDER BY oitp.ID DESC
+               WHILE 1 = 1
+               BEGIN 
+                  --TRUNCATE TABLE @t_OptimizeResult;    --(Wan05) Change to use variable table
+                  DELETE FROM @t_OptimizeResult;         --(Wan05) Change to use variable table
                   
-                  --(Wan08) - START
-                  TRUNCATE TABLE #ItemToPackBySku;
-                  ;WITH gs AS 
-                  (  SELECT oitp.ID, oitp.RowRef, oitp.Storerkey, oitp.Sku, oitp.Quantity, oitp.OriginalQty
+                  INSERT INTO @t_OptimizeResult (ContainerID, AlgorithmID, IsCompletePack, ID, SKU, Qty)  
+                  EXEC isp_SubmitToCartonizeAPI  
+                       @c_CartonGroup = @c_CartonGroup_B2B   
+                     , @c_CartonType  = @c_CartonType_B2B_w    
+                     , @b_Success     = @b_Success       OUTPUT  
+                     , @n_Err         = @n_Err           OUTPUT  
+                     , @c_ErrMsg      = @c_ErrMsg        OUTPUT 
+                     , @b_Debug       = 0  
+
+                  IF @b_Success = 0  
+                  BEGIN  
+                     SET @n_Continue = 3  
+                     SET @n_err = 64010    
+                     SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Executing isp_SubmitToCartonizeAPI. (ispRLWAV43_PACK)'     
+                                 + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '     
+                     GOTO QUIT_SP    
+                  END  
+     
+                  SET @c_IsCompletePack = ''  
+                  SELECT @c_IsCompletePack = ore.IsCompletePack
+                        ,@c_Sku_Optimize  = ore.Sku 
+                        ,@n_Qty_Optimize  = ore.Qty
+                  FROM @t_OptimizeResult AS ore 
+                  
+                  
+                  IF @c_IsCompletePack IN('','FAIL') OR @c_CartonType_B2B_w = @c_CartonType_B2B       --(Wan08) Increse performance
+                  BEGIN
+                     SET @n_ID_ToPack = 0
+                     SET @n_Qty_ToPack = 0
+                     SET @n_QtyRemain_ToPack = 0
+                     SELECT TOP 1 @n_ID_ToPack  = oitp.ID
+                                 ,@c_Sku_ToPack = oitp.Sku
+                                 ,@n_Qty_ToPack = oitp.Quantity
+                                 ,@n_OrignalQty_ToPack  = oitp.OriginalQty
                      FROM #OptimizeItemToPack AS oitp
-                     WHERE oitp.ID = @n_ID_ToPack
-                     UNION ALL
-                     SELECT ID = gs.ID - 1, oitp.RowRef, oitp.Storerkey, oitp.Sku, oitp.Quantity, oitp.OriginalQty
+                     ORDER BY oitp.ID DESC
+                     
+                     --(Wan08) - START
+                     TRUNCATE TABLE #ItemToPackBySku;
+                     ;WITH gs AS 
+                     (  SELECT oitp.ID, oitp.RowRef, oitp.Storerkey, oitp.Sku, oitp.Quantity, oitp.OriginalQty
+                        FROM #OptimizeItemToPack AS oitp
+                        WHERE oitp.ID = @n_ID_ToPack
+                        UNION ALL
+                        SELECT ID = gs.ID - 1, oitp.RowRef, oitp.Storerkey, oitp.Sku, oitp.Quantity, oitp.OriginalQty
+                        FROM gs
+                        JOIN #OptimizeItemToPack AS oitp ON gs.ID - 1 = oitp.ID
+                        WHERE oitp.Sku = @c_Sku_ToPack
+                     )
+                     INSERT INTO #ItemToPackBySku
+                     SELECT gs.ID, gs.RowRef, gs.Storerkey, gs.Sku, gs.Quantity, gs.OriginalQty
                      FROM gs
-                     JOIN #OptimizeItemToPack AS oitp ON gs.ID - 1 = oitp.ID
-                     WHERE oitp.Sku = @c_Sku_ToPack
-                  )
-                  INSERT INTO #ItemToPackBySku
-                  SELECT gs.ID, gs.RowRef, gs.Storerkey, gs.Sku, gs.Quantity, gs.OriginalQty
-                  FROM gs
-                  ORDER BY gs.ID
+                     ORDER BY gs.ID
+                     
+                     SELECT @n_SkuQty_ToPack = SUM(itpbs.Quantity) 
+                        ,   @n_SkuOrigQty_ToPack = SUM(itpbs.OriginalQty)
+                        ,   @n_SkuItemToPackCnt = COUNT(1)
+                     FROM #ItemToPackBySku AS itpbs
+                     WHERE itpbs.SKU = @c_Sku_ToPack
+                     GROUP BY itpbs.Storerkey, itpbs.SKU
+                     --(Wan08) - END
+                  END                                                                                 --(Wan08) - Increase performance
                   
-                  SELECT @n_SkuQty_ToPack = SUM(itpbs.Quantity) 
-                     ,   @n_SkuOrigQty_ToPack = SUM(itpbs.OriginalQty)
-                     ,   @n_SkuItemToPackCnt = COUNT(1)
-                  FROM #ItemToPackBySku AS itpbs
-                  WHERE itpbs.SKU = @c_Sku_ToPack
-                  GROUP BY itpbs.Storerkey, itpbs.SKU
-                  --(Wan08) - END
-               END                                                                                 --(Wan08) - Increase performance
-               
-               
-               IF @c_IsCompletePack = 'TRUE'    
-               BEGIN
-                    --Access Qty = 2
-                  --TO_pack = 8,  remain =  4, original = 12      -- Pack to current  
-                  --TO_pack = 10, remain =  2, original = 12      -- pack to new -- know as it is fit
-                  --to_pack = 2,  remain = 10, original = 12      -- pack to new
                   
-                  SET @n_TotalToPack = 0                                                                 --(Wan08)
-                  SELECT @n_TotalToPack = SUM(pw.Qty)                                                    --(Wan08) --(Wan06) - START
-                  --FROM #OptimizeItemToPack AS oitp                                                     --(Wan08) 
-                  FROM #PICKDETAIL_WIP AS pw                                                             --(Wan08)
-                  WHERE pw.Orderkey = @c_Orderkey                                                        --(Wan08)
-                  AND pw.PackStation = 0                                                                 --(Wan08)
-                  AND pw.UOM IN ('6', '7')                                                               --(Wan08)
-                  AND pw.CartonType = ''                                                                 --(Wan08)
-                  AND pw.PickZone  = @c_PickZone                                                         --(Wan08)
-                  AND pw.SkuGroup  = @c_SkuGroup                                                         --(Wan08)
-                  AND pw.Sku = @c_Sku_ToPack                                                             --(Wan08)                                                                 
-                  AND pw.SplitToAccessQty IN (0, @n_SplitToAccessQty)   
-                  GROUP BY pw.Orderkey                                                                   --(Wan08)       
-                  
-                  SET @n_Qty_ToUpd = @n_Qty_ToPack                                                       --(Wan08)
-                  SET @n_QtyRemain_ToPack = @n_TotalToPack - @n_Qty_ToPack                               --(Wan08)
-                  
-                  IF @n_SkuQty_ToPack > @n_Qty_ToPack       --@n_TotalToPack > @n_Qty_ToPack             --(Wan08)
+                  IF @c_IsCompletePack = 'TRUE'    
                   BEGIN
-                     --SET @n_Qty_ToPack = @n_TotalToPack                                                --(Wan08)
-                     --SET @n_OrignalQty_ToPack = @n_Qty_ToPack                                          --(Wan08) 
-                     SET @n_Qty_ToUpd = @n_SkuQty_ToPack                                                 --(Wan08)
-                     SET @n_QtyRemain_ToPack = @n_TotalToPack - @n_SkuQty_ToPack                         --(Wan08) 
-                  END                                                                                             --(Wan06)  - END
-                  
-                  --SET @n_Qty_ToUpd = @n_Qty_ToPack                                                     --(Wan08)
-                  --SET @n_QtyRemain_ToPack = @n_OrignalQty_ToPack - @n_Qty_ToPack                       --(Wan08)
-                  
-                  IF @n_Qty_ToUpd <= @n_PackAccessQty
-                  BEGIN
-                     SET @n_Qty_ToUpd = 0
+                       --Access Qty = 2
+                     --TO_pack = 8,  remain =  4, original = 12      -- Pack to current  
+                     --TO_pack = 10, remain =  2, original = 12      -- pack to new -- know as it is fit
+                     --to_pack = 2,  remain = 10, original = 12      -- pack to new
+                     
+                     SET @n_TotalToPack = 0                                                                 --(Wan08)
+                     SELECT @n_TotalToPack = SUM(pw.Qty)                                                    --(Wan08) --(Wan06) - START
+                     --FROM #OptimizeItemToPack AS oitp                                                     --(Wan08) 
+                     FROM #PICKDETAIL_WIP AS pw                                                             --(Wan08)
+                     WHERE pw.Orderkey = @c_Orderkey                                                        --(Wan08)
+                     AND pw.PackStation = 0                                                                 --(Wan08)
+                     AND pw.UOM IN ('6', '7')                                                               --(Wan08)
+                     AND pw.CartonType = ''                                                                 --(Wan08)
+                     AND pw.PickZone  = @c_PickZone                                                         --(Wan08)
+                     AND pw.SkuGroup  = @c_SkuGroup                                                         --(Wan08)
+                     AND pw.Sku = @c_Sku_ToPack                                                             --(Wan08)                                                                 
+                     AND pw.SplitToAccessQty IN (0, @n_SplitToAccessQty)   
+                     GROUP BY pw.Orderkey                                                                   --(Wan08)       
+                     
+                     SET @n_Qty_ToUpd = @n_Qty_ToPack                                                       --(Wan08)
+                     SET @n_QtyRemain_ToPack = @n_TotalToPack - @n_Qty_ToPack                               --(Wan08)
+                     
+                     IF @n_SkuQty_ToPack > @n_Qty_ToPack       --@n_TotalToPack > @n_Qty_ToPack             --(Wan08)
+                     BEGIN
+                        --SET @n_Qty_ToPack = @n_TotalToPack                                                --(Wan08)
+                        --SET @n_OrignalQty_ToPack = @n_Qty_ToPack                                          --(Wan08) 
+                        SET @n_Qty_ToUpd = @n_SkuQty_ToPack                                                 --(Wan08)
+                        SET @n_QtyRemain_ToPack = @n_TotalToPack - @n_SkuQty_ToPack                         --(Wan08) 
+                     END                                                                                             --(Wan06)  - END
+                     
+                     --SET @n_Qty_ToUpd = @n_Qty_ToPack                                                     --(Wan08)
+                     --SET @n_QtyRemain_ToPack = @n_OrignalQty_ToPack - @n_Qty_ToPack                       --(Wan08)
+                     
+                     IF @n_Qty_ToUpd <= @n_PackAccessQty
+                     BEGIN
+                        SET @n_Qty_ToUpd = 0
+                     END
+                     
+                     IF @n_QtyRemain_ToPack > 0 AND @n_QtyRemain_ToPack <= @n_PackAccessQty 
+                     BEGIN
+                        SET @n_Qty_ToUpd = 0
+                     END
+                     
+                     --(Wan08) - START
+                     --Not to reduce qty if @n_Qty_ToUpd > 0,        
+                     --if @n_Qty_ToPack use to calc qty_toupd if @n_QtyRemain_ToPack <= @n_PackAccessQty
+                     IF @n_Qty_ToUpd > 0  
+                     BEGIN                  
+                        SET @n_Qty_ToPack = @n_Qty_ToUpd
+                     END
+                     --(Wan08) - START
                   END
-                  
-                  IF @n_QtyRemain_ToPack > 0 AND @n_QtyRemain_ToPack <= @n_PackAccessQty 
-                  BEGIN
-                     SET @n_Qty_ToUpd = 0
-                  END
-                  
-                  --(Wan08) - START
-                  --Not to reduce qty if @n_Qty_ToUpd > 0,        
-                  --if @n_Qty_ToPack use to calc qty_toupd if @n_QtyRemain_ToPack <= @n_PackAccessQty
-                  IF @n_Qty_ToUpd > 0  
-                  BEGIN                  
-                     SET @n_Qty_ToPack = @n_Qty_ToUpd
-                  END
-                  --(Wan08) - START
-               END
-               ELSE
-               BEGIN         
-                  IF @c_CartonType_B2B_w <> @c_CartonType_B2B -- If Not Large Carton and it is not able to fit into current cartontype, use previous fit cartontype
-                  BEGIN
-                     --SET @c_CartonType_B2B = @c_CartonType_B2B_w  --@c_CartonType_B2B_New
-                     --SET @n_MaxCube_B2B = @n_MaxCube_B2B_w     --@n_MaxCube_B2B_New
-                     BREAK
-                  END
-               
-                  --Wan02 
-                  --IF @b_MinQty1ToPack = 1 -- pack at least 1 qty to Large Carton even if 0 qty to fit to Large box
-                  --BEGIN
-                  --   BREAK
-                  --END
-                                
-                  IF @c_IsCompletePack = ''-- Sku's LxWxH > Carton's LxWxH, prompt error 
-                  OR @b_MinQty1ToPack = 1  -- Prompt Error if Qty 1 cannot fit in
-                  BEGIN
-                     SET @n_Continue = 3
-                     SET @n_Err = 64015
-                     SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Sku: ' + RTRIM(@c_Sku_ToPack)+ ' cannot fit into Carton. (ispRLWAV43_PACK)'     
-                              + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '     
-                     GOTO QUIT_SP   
-                  END
-                  
-                  --Access Qty = 2
-                  --TO_pack = 8,  remain =  4, original = 12      -- Pack to current  
-                  --TO_pack = 10, remain =  2, original = 12      -- pack to new --does not know as not send to API
-                  --to_pack = 2,  remain = 10, original = 12      -- pack to new
-                  
-                  -- Reduce By 1 if cannot fit into Large Carton
-                  --SET @n_Qty_ToUpd = @n_Qty_ToPack - 1          --(Wan08)  
-                  SET @n_QtyRemain_ToPack = 0                   
-    
-                  SET @n_Qty_ToUpd = @n_SkuQty_ToPack - 1         --(Wan08)    
-                  
-                  --Notes: @n_Qty_ToPack < @n_SkuQty_ToPack < @n_PackAccessQty
-                  IF @n_Qty_ToUpd <= @n_PackAccessQty             --Comparing Total Qty of Sku against PackAccessQty, 
-                  BEGIN
-                     SET @n_Qty_ToUpd = 0
-                  END
-                  --(Wan08) - START
                   ELSE
-                  BEGIN
-                     SET @n_Qty_ToUpd = @n_Qty_ToPack - 1         --Reducing qty for Last record of sku
-                  END
-                  --(Wan08) - END
-               END
-
-               IF @n_Qty_ToUpd = 0     --Delete current to pack to new carton, need to check able to delete before execute               
-               BEGIN
-                  --(Wan08) - START
-                  SELECT @n_ItemToPackCnt = COUNT(1) 
-                  FROM #OptimizeItemToPack AS oitp 
-
-                  SET @n_ItemToPackCnt = @n_ItemToPackCnt - @n_SkuItemToPackCnt 
-                  
-                  --(Wan09) - START
-                  --Check to Handle multi record with 1 unique sku fail to send API 
-                  SET @b_RemoveLastRecord = 0
-                  IF @n_ItemToPackCnt = 0 AND @n_Qty_ToPack < @n_SkuQty_ToPack
-                  BEGIN
-                     SET @n_ItemToPackCnt = @n_SkuItemToPackCnt - 1
-                     SET @b_RemoveLastRecord = 1
-                  END
-                  --(Wan09) - END
-
-                  IF @n_ItemToPackCnt = 0 
-                  BEGIN
-                     IF @c_IsCompletePack = 'FALSE' AND @n_PackAccessQty = 0 
+                  BEGIN         
+                     IF @c_CartonType_B2B_w <> @c_CartonType_B2B -- If Not Large Carton and it is not able to fit into current cartontype, use previous fit cartontype
                      BEGIN
-                        SET @c_CartonType_B2B = ''
+                        --SET @c_CartonType_B2B = @c_CartonType_B2B_w  --@c_CartonType_B2B_New
+                        --SET @n_MaxCube_B2B = @n_MaxCube_B2B_w     --@n_MaxCube_B2B_New
                         BREAK
-                     END 
-                     -------------------------------------------------------------------------------------------------------------------------------------
-                     --IF @c_IsCompletePack = 'FALSE' AND @n_PackAccessQty > 0 THEN Update Sku to SplitAccessQty
-                     --IF @c_IsCompletePack = 'TRUE'  AND @n_Qty_ToPack <= @n_PackAccessQty AND @n_PackAccessQty > 0 THEN Update Sku to SplitAccessQty
-                     -------------------------------------------------------------------------------------------------------------------------------------
-         
-                     -------------------------------------------------------------------------------------------------------------------------------------
-                     -- aceeesqty = 2, to_pack = 11, remain = 1, original = 12, then to_pack = 10  and split 10 and 2 with no carton type, take 10 to submit API, pack 10
-                     -- aceeesqty = 7, to_pack = 11, remain = 2, original = 13, then to_pack = 12  and split  2 with no carton type, take 12 to submit API, pack 12
-                     -------------------------------------------------------------------------------------------------------------------------------------
-                     IF @c_IsCompletePack = 'TRUE' AND @n_PackAccessQty > 0 AND @n_SkuQty_ToPack > @n_PackAccessQty
-                        AND @n_QtyRemain_ToPack > 0 AND @n_QtyRemain_ToPack <= @n_PackAccessQty 
+                     END
+                  
+                     --Wan02 
+                     --IF @b_MinQty1ToPack = 1 -- pack at least 1 qty to Large Carton even if 0 qty to fit to Large box
+                     --BEGIN
+                     --   BREAK
+                     --END
+                                   
+                     IF @c_IsCompletePack = ''-- Sku's LxWxH > Carton's LxWxH, prompt error 
+                     OR @b_MinQty1ToPack = 1  -- Prompt Error if Qty 1 cannot fit in
                      BEGIN
-                        IF @n_SkuOrigQty_ToPack - @n_PackAccessQty <= @n_PackAccessQty
+                        SET @n_Continue = 3
+                        SET @n_Err = 64015
+                        SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Sku: ' + RTRIM(@c_Sku_ToPack)+ ' cannot fit into Carton. (ispRLWAV43_PACK)'     
+                                 + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '     
+                        GOTO QUIT_SP   
+                     END
+                     
+                     --Access Qty = 2
+                     --TO_pack = 8,  remain =  4, original = 12      -- Pack to current  
+                     --TO_pack = 10, remain =  2, original = 12      -- pack to new --does not know as not send to API
+                     --to_pack = 2,  remain = 10, original = 12      -- pack to new
+                     
+                     -- Reduce By 1 if cannot fit into Large Carton
+                     --SET @n_Qty_ToUpd = @n_Qty_ToPack - 1          --(Wan08)  
+                     SET @n_QtyRemain_ToPack = 0                   
+       
+                     SET @n_Qty_ToUpd = @n_SkuQty_ToPack - 1         --(Wan08)    
+                     
+                     --Notes: @n_Qty_ToPack < @n_SkuQty_ToPack < @n_PackAccessQty
+                     IF @n_Qty_ToUpd <= @n_PackAccessQty             --Comparing Total Qty of Sku against PackAccessQty, 
+                     BEGIN
+                        SET @n_Qty_ToUpd = 0
+                     END
+                     --(Wan08) - START
+                     ELSE
+                     BEGIN
+                        SET @n_Qty_ToUpd = @n_Qty_ToPack - 1         --Reducing qty for Last record of sku
+                     END
+                     --(Wan08) - END
+                  END
+
+                  IF @n_Qty_ToUpd = 0     --Delete current to pack to new carton, need to check able to delete before execute               
+                  BEGIN
+                     --(Wan08) - START
+                     SELECT @n_ItemToPackCnt = COUNT(1) 
+                     FROM #OptimizeItemToPack AS oitp 
+
+                     SET @n_ItemToPackCnt = @n_ItemToPackCnt - @n_SkuItemToPackCnt 
+                     
+                     --(Wan09) - START
+                     --Check to Handle multi record with 1 unique sku fail to send API 
+                     SET @b_RemoveLastRecord = 0
+                     IF @n_ItemToPackCnt = 0 AND @n_Qty_ToPack < @n_SkuQty_ToPack
+                     BEGIN
+                        SET @n_ItemToPackCnt = @n_SkuItemToPackCnt - 1
+                        SET @b_RemoveLastRecord = 1
+                     END
+                     --(Wan09) - END
+
+                     IF @n_ItemToPackCnt = 0 
+                     BEGIN
+                        IF @c_IsCompletePack = 'FALSE' AND @n_PackAccessQty = 0 
                         BEGIN
-                           SET @n_Qty_ToUpd  = @n_SkuOrigQty_ToPack - @n_PackAccessQty
-                           SET @n_Qty_ToPack = @n_Qty_ToUpd
-                        END
-                        ELSE
+                           SET @c_CartonType_B2B = ''
+                           BREAK
+                        END 
+                        -------------------------------------------------------------------------------------------------------------------------------------
+                        --IF @c_IsCompletePack = 'FALSE' AND @n_PackAccessQty > 0 THEN Update Sku to SplitAccessQty
+                        --IF @c_IsCompletePack = 'TRUE'  AND @n_Qty_ToPack <= @n_PackAccessQty AND @n_PackAccessQty > 0 THEN Update Sku to SplitAccessQty
+                        -------------------------------------------------------------------------------------------------------------------------------------
+            
+                        -------------------------------------------------------------------------------------------------------------------------------------
+                        -- aceeesqty = 2, to_pack = 11, remain = 1, original = 12, then to_pack = 10  and split 10 and 2 with no carton type, take 10 to submit API, pack 10
+                        -- aceeesqty = 7, to_pack = 11, remain = 2, original = 13, then to_pack = 12  and split  2 with no carton type, take 12 to submit API, pack 12
+                        -------------------------------------------------------------------------------------------------------------------------------------
+                        IF @c_IsCompletePack = 'TRUE' AND @n_PackAccessQty > 0 AND @n_SkuQty_ToPack > @n_PackAccessQty
+                           AND @n_QtyRemain_ToPack > 0 AND @n_QtyRemain_ToPack <= @n_PackAccessQty 
                         BEGIN
-                           SET @n_Qty_ToUpd = @n_SkuOrigQty_ToPack - @n_PackAccessQty
-                           IF @n_Qty_ToPack > @n_SkuQty_ToPack - @n_Qty_ToUpd 
+                           IF @n_SkuOrigQty_ToPack - @n_PackAccessQty <= @n_PackAccessQty
                            BEGIN
-                              SET @n_Qty_ToUpd = @n_Qty_ToPack - (@n_SkuQty_ToPack - @n_Qty_ToUpd)
+                              SET @n_Qty_ToUpd  = @n_SkuOrigQty_ToPack - @n_PackAccessQty
+                              SET @n_Qty_ToPack = @n_Qty_ToUpd
                            END
                            ELSE
                            BEGIN
-                              SET @n_Qty_ToDel = @n_SkuQty_ToPack - @n_Qty_ToUpd    
-                              SET @n_ID_ToUpd = @n_ID_ToPack
-                              
-                              WHILE 1 = 1 AND @n_Qty_ToDel > 0
+                              SET @n_Qty_ToUpd = @n_SkuOrigQty_ToPack - @n_PackAccessQty
+                              IF @n_Qty_ToPack > @n_SkuQty_ToPack - @n_Qty_ToUpd 
                               BEGIN
-                                 SELECT TOP 1 @n_ID_ToUpd = oitp.ID
-                                             ,@n_Qty_ToPack = oitp.Quantity
-                                 FROM #OptimizeItemToPack AS oitp  
-                                 WHERE oitp.ID <= @n_ID_ToUpd  
-                                 ORDER BY oitp.ID DESC
-                              
-                                 IF @@ROWCOUNT = 0 
-                                 BEGIN
-                                    BREAK
-                                 END 
-
-                                 IF @n_Qty_ToPack <= @n_Qty_ToDel
-                                 BEGIN
-                                    DELETE oitp                
-                                    FROM #OptimizeItemToPack AS oitp  
-                                    WHERE oitp.ID = @n_ID_ToUpd  
-                                 END
-                                 ELSE
-                                 BEGIN
-                                    UPDATE oitp 
-                                       SET oitp.Quantity = oitp.Quantity - @n_Qty_ToDel
-                                    FROM #OptimizeItemToPack AS oitp  
-                                    WHERE oitp.ID = @n_ID_ToUpd 
-                                 END
-                                 SET @n_Qty_ToDel = @n_Qty_ToDel - @n_Qty_ToPack
+                                 SET @n_Qty_ToUpd = @n_Qty_ToPack - (@n_SkuQty_ToPack - @n_Qty_ToUpd)
                               END
-                              SET @n_Qty_ToUpd = 0
-                              SET @n_Qty_ToPack = @n_SkuQty_ToPack
-                           END
-                        END   
-                     END
-                  END
-                  
-                  IF @c_IsCompletePack = 'TRUE' AND @n_Qty_ToUpd = 0
-                  BEGIN
-                     SET @n_Qty_ToPack = @n_SkuQty_ToPack
-                  END
-                  
-                  IF @n_ItemToPackCnt > 0 OR (@n_Qty_ToPack <= @n_PackAccessQty AND @n_ItemToPackCnt = 0)
-                  BEGIN
-                     --(Wan09) - START
-                     --Check to Handle multi record with 1 unique sku fail to send API
-                     --If Mix Sku, delete all records for the sku and send API again
-                     --If 1 sku, delete last record and send API again
-                     IF @b_RemoveLastRecord = 0 -- Mix Sku. delete all sku and submit API to check 
-                     BEGIN
-                        DELETE oitp               
-                        FROM #OptimizeItemToPack AS oitp  
-                        JOIN #ItemToPackBySku AS itpbs ON itpbs.ID = oitp.ID                    
-                     END 
-                     ELSE
-                     BEGIN                      -- 1 Sku. delete last record and submit API to check 
-                        DELETE oitp               
-                        FROM #OptimizeItemToPack AS oitp  
-                        WHERE oitp.ID = @n_ID_ToPack  
-                     END
-                     --(Wan09) - END
-                  END
+                              ELSE
+                              BEGIN
+                                 SET @n_Qty_ToDel = @n_SkuQty_ToPack - @n_Qty_ToUpd    
+                                 SET @n_ID_ToUpd = @n_ID_ToPack
+                                 
+                                 WHILE 1 = 1 AND @n_Qty_ToDel > 0
+                                 BEGIN
+                                    SELECT TOP 1 @n_ID_ToUpd = oitp.ID
+                                                ,@n_Qty_ToPack = oitp.Quantity
+                                    FROM #OptimizeItemToPack AS oitp  
+                                    WHERE oitp.ID <= @n_ID_ToUpd  
+                                    ORDER BY oitp.ID DESC
+                                 
+                                    IF @@ROWCOUNT = 0 
+                                    BEGIN
+                                       BREAK
+                                    END 
 
-                  IF @n_ItemToPackCnt > 0 
-                  BEGIN 
-                     CONTINUE 
-                  END
-
-                  ----------------------------
-                  --When @n_PackAccessQty > 0
-                  ----------------------------
-                  IF @n_Qty_ToPack <= @n_PackAccessQty AND @n_ItemToPackCnt = 0
-                  BEGIN
-                     UPDATE pw                                   
-                     SET pw.SplitToAccessQty = 1                
-                     FROM #ItemToPackBySku AS itpbs 
-                     JOIN #PICKDETAIL_WIP AS pw ON pw.RowRef = itpbs.RowRef      
-                     BREAK
-                  END
-               END  -- IF @n_Qty_ToUpd = 0
-               
-               /*
-                  SET @n_ItemToPackCnt = 0
-                  SELECT @n_ItemToPackCnt = COUNT(1) 
-                  FROM #OptimizeItemToPack AS oitp
-                  
-                  IF @n_ItemToPackCnt > 1      -- The Only ItemToPack record Left by reducing Qty_ToPack
-                  BEGIN 
-                     DELETE oitp             -- delete last record and submit API to check 
-                     FROM #OptimizeItemToPack AS oitp
-                     WHERE oitp.ID = @n_ID_ToPack 
-                  
-                     CONTINUE 
-                  END
+                                    IF @n_Qty_ToPack <= @n_Qty_ToDel
+                                    BEGIN
+                                       DELETE oitp                
+                                       FROM #OptimizeItemToPack AS oitp  
+                                       WHERE oitp.ID = @n_ID_ToUpd  
+                                    END
+                                    ELSE
+                                    BEGIN
+                                       UPDATE oitp 
+                                          SET oitp.Quantity = oitp.Quantity - @n_Qty_ToDel
+                                       FROM #OptimizeItemToPack AS oitp  
+                                       WHERE oitp.ID = @n_ID_ToUpd 
+                                    END
+                                    SET @n_Qty_ToDel = @n_Qty_ToDel - @n_Qty_ToPack
+                                 END
+                                 SET @n_Qty_ToUpd = 0
+                                 SET @n_Qty_ToPack = @n_SkuQty_ToPack
+                              END
+                           END   
+                        END
+                     END
                      
-                  --Access qty  =2, TRUE
-                  -- TRUE: to_pack = 1, remain = 11, original = 12  to_Pack = 1  and split 11, repeat until 11 qty split and 1 qty pack to 1 carton
-                  -- to_pack = 11, remain = 1, original = 12, then to_pack = 10  and split 10 and 2 with no carton type, take 10 to submit API, pack 10
-                  
-                  SET @n_Qty_ToUpd = CASE WHEN @n_PackAccessQty = 0 THEN 1                                           --To Pack 1 Qty if 0 qty to fit 
-                                          WHEN @n_Qty_ToPack <= @n_PackAccessQty THEN @n_Qty_ToPack                  --To avaoid update qty more than Original Qty                  
-                                          WHEN @n_OrignalQty_ToPack <= @n_PackAccessQty THEN @n_OrignalQty_ToPack    --To avaoid update qty more than Original Qty
-                                          WHEN @n_QtyRemain_ToPack > 0 AND @n_QtyRemain_ToPack <= @n_PackAccessQty THEN @n_OrignalQty_ToPack - @n_PackAccessQty
-                                          ELSE @n_PackAccessQty 
-                                          END
-                                     
-                  IF @n_PackAccessQty = 0 AND @n_Qty_ToUpd = 1 -- Force to pack 1 Qty into a carton, continue to recalculate the cartontype after update qty to pack
-                  BEGIN
-                     SET @b_MinQty1ToPack = 1
-                  END
-                  ELSE
-                  BEGIN  
-                     IF @n_Qty_ToUpd <> @n_Qty_ToPack AND @n_Qty_ToUpd <= @n_PackAccessQty
-                     BEGIN 
-                        SET @c_CartonType_B2B = ''
-                        SET @n_CartonSeqNo = @n_CartonSeqNo - 1
-                     END
-                     --(Wan05) - START 
-                     ELSE IF @n_Qty_ToUpd <= @n_PackAccessQty AND @n_PackAccessQty > 0 
+                     IF @c_IsCompletePack = 'TRUE' AND @n_Qty_ToUpd = 0
                      BEGIN
-                        UPDATE pw                                    --(Wan06)
-                           SET pw.SplitToAccessQty = 1                
-                        FROM #OptimizeItemToPack AS oitp
-                        JOIN #PICKDETAIL_WIP AS pw ON pw.RowRef = oitp.RowRef
-                        
-                        -- delete last record and submit API to check & 
-                        DELETE oitp                
-                        FROM #OptimizeItemToPack AS oitp  
-                        WHERE oitp.ID = @n_ID_ToPack 
-                        
-                        --SET @n_PackAccessQty = 0                   --(Wan06)
-                        --SET @n_SplitToAccessQty = 1                --(Wan06)
-                        SET @n_CartonSeqNo = @n_CartonSeqNo - 1      --(Wan06)
+                        SET @n_Qty_ToPack = @n_SkuQty_ToPack
+                     END
+                     
+                     IF @n_ItemToPackCnt > 0 OR (@n_Qty_ToPack <= @n_PackAccessQty AND @n_ItemToPackCnt = 0)
+                     BEGIN
+                        --(Wan09) - START
+                        --Check to Handle multi record with 1 unique sku fail to send API
+                        --If Mix Sku, delete all records for the sku and send API again
+                        --If 1 sku, delete last record and send API again
+                        IF @b_RemoveLastRecord = 0 -- Mix Sku. delete all sku and submit API to check 
+                        BEGIN
+                           DELETE oitp               
+                           FROM #OptimizeItemToPack AS oitp  
+                           JOIN #ItemToPackBySku AS itpbs ON itpbs.ID = oitp.ID                    
+                        END 
+                        ELSE
+                        BEGIN                      -- 1 Sku. delete last record and submit API to check 
+                           DELETE oitp               
+                           FROM #OptimizeItemToPack AS oitp  
+                           WHERE oitp.ID = @n_ID_ToPack  
+                        END
+                        --(Wan09) - END
+                     END
 
+                     IF @n_ItemToPackCnt > 0 
+                     BEGIN 
+                        CONTINUE 
+                     END
+
+                     ----------------------------
+                     --When @n_PackAccessQty > 0
+                     ----------------------------
+                     IF @n_Qty_ToPack <= @n_PackAccessQty AND @n_ItemToPackCnt = 0
+                     BEGIN
+                        UPDATE pw                                   
+                        SET pw.SplitToAccessQty = 1                
+                        FROM #ItemToPackBySku AS itpbs 
+                        JOIN #PICKDETAIL_WIP AS pw ON pw.RowRef = itpbs.RowRef      
                         BREAK
                      END
-                     --(Wan05) - END
-                  END
-               END
-               */
-               --(Wan08) - END
+                  END  -- IF @n_Qty_ToUpd = 0
+                  
+                  /*
+                     SET @n_ItemToPackCnt = 0
+                     SELECT @n_ItemToPackCnt = COUNT(1) 
+                     FROM #OptimizeItemToPack AS oitp
+                     
+                     IF @n_ItemToPackCnt > 1      -- The Only ItemToPack record Left by reducing Qty_ToPack
+                     BEGIN 
+                        DELETE oitp             -- delete last record and submit API to check 
+                        FROM #OptimizeItemToPack AS oitp
+                        WHERE oitp.ID = @n_ID_ToPack 
+                     
+                        CONTINUE 
+                     END
+                        
+                     --Access qty  =2, TRUE
+                     -- TRUE: to_pack = 1, remain = 11, original = 12  to_Pack = 1  and split 11, repeat until 11 qty split and 1 qty pack to 1 carton
+                     -- to_pack = 11, remain = 1, original = 12, then to_pack = 10  and split 10 and 2 with no carton type, take 10 to submit API, pack 10
+                     
+                     SET @n_Qty_ToUpd = CASE WHEN @n_PackAccessQty = 0 THEN 1                                           --To Pack 1 Qty if 0 qty to fit 
+                                             WHEN @n_Qty_ToPack <= @n_PackAccessQty THEN @n_Qty_ToPack                  --To avaoid update qty more than Original Qty                  
+                                             WHEN @n_OrignalQty_ToPack <= @n_PackAccessQty THEN @n_OrignalQty_ToPack    --To avaoid update qty more than Original Qty
+                                             WHEN @n_QtyRemain_ToPack > 0 AND @n_QtyRemain_ToPack <= @n_PackAccessQty THEN @n_OrignalQty_ToPack - @n_PackAccessQty
+                                             ELSE @n_PackAccessQty 
+                                             END
+                                        
+                     IF @n_PackAccessQty = 0 AND @n_Qty_ToUpd = 1 -- Force to pack 1 Qty into a carton, continue to recalculate the cartontype after update qty to pack
+                     BEGIN
+                        SET @b_MinQty1ToPack = 1
+                     END
+                     ELSE
+                     BEGIN  
+                        IF @n_Qty_ToUpd <> @n_Qty_ToPack AND @n_Qty_ToUpd <= @n_PackAccessQty
+                        BEGIN 
+                           SET @c_CartonType_B2B = ''
+                           SET @n_CartonSeqNo = @n_CartonSeqNo - 1
+                        END
+                        --(Wan05) - START 
+                        ELSE IF @n_Qty_ToUpd <= @n_PackAccessQty AND @n_PackAccessQty > 0 
+                        BEGIN
+                           UPDATE pw                                    --(Wan06)
+                              SET pw.SplitToAccessQty = 1                
+                           FROM #OptimizeItemToPack AS oitp
+                           JOIN #PICKDETAIL_WIP AS pw ON pw.RowRef = oitp.RowRef
+                           
+                           -- delete last record and submit API to check & 
+                           DELETE oitp                
+                           FROM #OptimizeItemToPack AS oitp  
+                           WHERE oitp.ID = @n_ID_ToPack 
+                           
+                           --SET @n_PackAccessQty = 0                   --(Wan06)
+                           --SET @n_SplitToAccessQty = 1                --(Wan06)
+                           SET @n_CartonSeqNo = @n_CartonSeqNo - 1      --(Wan06)
 
-               IF @n_Qty_ToUpd > 0 AND @n_Qty_ToUpd <> @n_Qty_ToPack  -- Reduce Qty to send to API to check if fit or split record to be process by <= access qty
-               BEGIN
-                  UPDATE oitp
-                     SET oitp.Quantity = @n_Qty_ToUpd
-                  FROM #OptimizeItemToPack AS oitp
-                  WHERE oitp.ID = @n_ID_ToPack
-                  
-                  IF @c_CartonType_B2B = ''
-                  BEGIN
-                     BREAK
+                           BREAK
+                        END
+                        --(Wan05) - END
+                     END
                   END
-                  
-                  IF NOT (@c_IsCompletePack = 'TRUE' AND @n_Qty_ToUpd > @n_PackAccessQty AND @n_Qty_ToUpd < @n_Qty_ToPack)
-                  BEGIN
-                     CONTINUE
-                  END
-               END 
+                  */
+                  --(Wan08) - END
 
-               -----------------------------------------
-               -- Try to Get Smaller Box that can fit in
-               -----------------------------------------
-               IF @c_IsCompletePack = 'TRUE'    -- If Able to fit, Check if able to fit into smaller carton type
-               BEGIN
-                  SET @c_CartonType_B2B = @c_CartonType_B2B_w
-                  SET @n_MaxCube_B2B = @n_MaxCube_B2B_w
-                  
-                  SELECT TOP 1 
-                             @c_CartonType_B2B_w = ocg.CartonType  
-                           , @n_MaxCube_B2B_w    = ocg.[Cube]  
-                           , @n_MaxWeight_B2B_w  = ocg.MaxWeight  
-                  FROM #OptimizeCZGroup AS ocg 
-                  WHERE ocg.CartonizationGroup = @c_CartonGroup_B2B
-                  AND ocg.[Cube] < @n_MaxCube_B2B_w
-                  AND EXISTS (SELECT 1 FROM #OptimizeItemToPack AS oitp 
-                              GROUP BY oitp.Storerkey
-                              HAVING SUM(oitp.Quantity * oitp.StdGrossWgt) <= ocg.[MaxWeight]
-                             )
-                  ORDER BY ocg.RowRef DESC 
-            
-                  IF @@ROWCOUNT = 0             --If No Smaller CartonType, Use the previous fit carton type
+                  IF @n_Qty_ToUpd > 0 AND @n_Qty_ToUpd <> @n_Qty_ToPack  -- Reduce Qty to send to API to check if fit or split record to be process by <= access qty
+                  BEGIN
+                     UPDATE oitp
+                        SET oitp.Quantity = @n_Qty_ToUpd
+                     FROM #OptimizeItemToPack AS oitp
+                     WHERE oitp.ID = @n_ID_ToPack
+                     
+                     IF @c_CartonType_B2B = ''
+                     BEGIN
+                        BREAK
+                     END
+                     
+                     IF NOT (@c_IsCompletePack = 'TRUE' AND @n_Qty_ToUpd > @n_PackAccessQty AND @n_Qty_ToUpd < @n_Qty_ToPack)
+                     BEGIN
+                        CONTINUE
+                     END
+                  END 
+
+                  -----------------------------------------
+                  -- Try to Get Smaller Box that can fit in
+                  -----------------------------------------
+                  IF @c_IsCompletePack = 'TRUE'    -- If Able to fit, Check if able to fit into smaller carton type
                   BEGIN
                      SET @c_CartonType_B2B = @c_CartonType_B2B_w
                      SET @n_MaxCube_B2B = @n_MaxCube_B2B_w
-                     BREAK
+                     
+                     SELECT TOP 1 
+                                @c_CartonType_B2B_w = ocg.CartonType  
+                              , @n_MaxCube_B2B_w    = ocg.[Cube]  
+                              , @n_MaxWeight_B2B_w  = ocg.MaxWeight  
+                     FROM #OptimizeCZGroup AS ocg 
+                     WHERE ocg.CartonizationGroup = @c_CartonGroup_B2B
+                     AND ocg.[Cube] < @n_MaxCube_B2B_w
+                     AND EXISTS (SELECT 1 FROM #OptimizeItemToPack AS oitp 
+                                 GROUP BY oitp.Storerkey
+                                 HAVING SUM(oitp.Quantity * oitp.StdGrossWgt) <= ocg.[MaxWeight]
+                                )
+                     ORDER BY ocg.RowRef DESC 
+               
+                     IF @@ROWCOUNT = 0             --If No Smaller CartonType, Use the previous fit carton type
+                     BEGIN
+                        SET @c_CartonType_B2B = @c_CartonType_B2B_w
+                        SET @n_MaxCube_B2B = @n_MaxCube_B2B_w
+                        BREAK
+                     END
+           
+                     CONTINUE                      --Continue to submit to API to check if fit smaller carton type
                   END
-        
-                  CONTINUE                      --Continue to submit to API to check if fit smaller carton type
-               END
-            END   
-         
+               END   
+            END   --(Wan11) - END
             --(Wan08) - START
             IF NOT EXISTS ( SELECT 1 FROM #OptimizeItemToPack AS oitp)
             BEGIN

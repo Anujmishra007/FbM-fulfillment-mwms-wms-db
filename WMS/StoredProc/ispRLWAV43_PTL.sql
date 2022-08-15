@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispRLWAV43_PTL]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispRLWAV43_PTL]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,7 +12,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -28,9 +23,11 @@ GO
 /* 2021-07-09  Wan      1.0   Created.                                  */
 /* 2021-09-28  Wan      1.0   DevOps Combine Script.                    */
 /* 2021-10-26  Wan01    1.1   CR 2.7 Change FAILPTL flag to InvoiceNo   */
+/* 2022-04-26  Wan02    1.2   WMS-19522 - RG - Adidas SEA - Release Wave*/
+/*                            on DP Loc Sequence                        */
 /************************************************************************/
 
-CREATE PROC [dbo].[ispRLWAV43_PTL]
+CREATE OR ALTER PROC [dbo].[ispRLWAV43_PTL]
    @c_Wavekey     NVARCHAR(10)    
 ,  @b_Success     INT            = 1   OUTPUT
 ,  @n_Err         INT            = 0   OUTPUT
@@ -159,7 +156,8 @@ BEGIN
       WHERE dp.StorerKey = @c_Storerkey
       AND  l.LocationCategory = 'PTL'
       AND  l.LocationType = 'OTHER'        
-      AND  l.LocationFlag = 'HOLD'      
+      AND  l.LocationFlag = 'HOLD'  
+      AND  dp.LogicalName <> 'PACK'             --CR 4.0   
    )
 
    INSERT INTO @t_SortLocCubic (Loc, LogicalLocation, DevicePosition, LogicalName, SortStationGroup, SortStation, CubicCapacity_PR, CubicCapacity)
@@ -247,10 +245,17 @@ BEGIN
    IF @n_NoOfPTLLoc < @n_NofOfMultiOrder --@n_NoOfLargeLoc < @n_NoOfLargeVolOrd OR @n_NoOfPTLLoc < @n_NofOfMultiOrder
    BEGIN
 
-      WHILE @@TRANCOUNT > 0 
-      BEGIN
-         COMMIT TRAN
-      END
+      --(Wan02) - START - Rollback TMReleaseFlag to 'N' and save PTLFAIL
+      --WHILE @@TRANCOUNT > 0 
+      --BEGIN
+      --   COMMIT TRAN
+      --END
+      
+      IF @@TRANCOUNT > 0 
+      BEGIN 
+         ROLLBACK TRAN
+      END 
+      --(Wan02) - END
       
       ; WITH UPDORD ( OrderKey ) AS       --Wan01 
       ( SELECT TOP (@n_NoOfLargeVolOrd - @n_NoOfLargeLoc) tmo.Orderkey 
@@ -475,11 +480,17 @@ BEGIN
    -- Post PTL Assignment Check & Process - START
    -----------------------------------------------  
    IF EXISTS (SELECT 1 FROM @t_MultiOrder AS tmo WHERE tmo.PTLLoc = '')
-   BEGIN 
-      WHILE @@TRANCOUNT > 0 
+   BEGIN
+      --(Wan02) - START - Rollback TMReleaseFlag to 'N' and save PTLFAIL 
+      --WHILE @@TRANCOUNT > 0 
+      --BEGIN
+      --   COMMIT TRAN
+      --END
+      IF @@TRANCOUNT > 0 
       BEGIN
-         COMMIT TRAN
+         ROLLBACK TRAN
       END
+      --(Wan02) - END
       
       UPDATE o WITH (ROWLOCK)
       SET   InvoiceNo = 'FAILPTL'         --Wan01

@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispRLWAV43_VLDN]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispRLWAV43_VLDN]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,7 +12,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.5                                                    */
+/* PVCS Version: 1.6                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -43,9 +38,11 @@ GO
 /* 2022-02-09  Wan07    1.5   Fixed. For allocated stock from DPBULK,use*/ 
 /*                            DBBULK's PickZone to find PackStation     */
 /*                            regardless if there is Home Loc setup.    */
+/* 2022-04-26  Wan08    1.6   WMS-19522 - RG - Adidas SEA - Release Wave*/
+/*                            on DP Loc Sequence                        */
 /************************************************************************/
 
-CREATE PROC [dbo].[ispRLWAV43_VLDN]
+CREATE OR ALTER PROC [dbo].[ispRLWAV43_VLDN]
    @c_Wavekey     NVARCHAR(10)    
 ,  @b_Success     INT            = 1   OUTPUT
 ,  @n_Err         INT            = 0   OUTPUT
@@ -84,6 +81,11 @@ BEGIN
          
          , @c_UCCNo                 NVARCHAR(20) = ''       --(Wan02)
          , @c_Loc                   NVARCHAR(10) = ''       --(Wan05)
+         
+         , @n_Loadplaning           INT          = 0        --(Wan08)
+         
+         , @c_Release_Opt5          NVARCHAR(4000) = ''     --(Wan08) CR 3.0
+         , @c_SkuGroupSkipOptim     NVARCHAR(30)= ''        --(Wan08) CR 3.0
          
    DECLARE @t_SortLocCubic          TABLE
          ( RowRef                   INT            IDENTITY(1,1)           PRIMARY KEY
@@ -129,7 +131,7 @@ BEGIN
    SET @b_Success  = 1   
    SET @n_Err     = 0   
    SET @c_ErrMsg  = ''  
-
+   
    SELECT TOP 1 
       @c_SortStationGroups = ISNULL(RTRIM(w.UserDefine01),'') + ',' + ISNULL(RTRIM(w.UserDefine02),'') + ',' --CR v2.5
                            + ISNULL(RTRIM(w.UserDefine03),'') + ',' + ISNULL(RTRIM(w.UserDefine04),'') + ','
@@ -138,12 +140,23 @@ BEGIN
    ,  @c_Status_ORD  = o.[Status] 
    ,  @c_Storerkey   = o.Storerkey
    ,  @c_Facility    = o.Facility
+   ,  @n_Loadplaning = CASE WHEN lpd.LoadKey IS NULL THEN 0 ELSE 1 END
    FROM dbo.WAVE AS w WITH (NOLOCK)
    JOIN dbo.WAVEDETAIL AS w2 WITH (NOLOCK) ON w2.WaveKey = w.WaveKey
    JOIN dbo.ORDERS AS o WITH (NOLOCK) ON o.OrderKey = w2.OrderKey
+   LEFT OUTER JOIN dbo.LoadPlanDetail AS lpd WITH (NOLOCK) ON lpd.OrderKey = o.OrderKey               --(Wan08)
    WHERE w.WaveKey = @c_Wavekey
-   ORDER BY o.Status ASC
+   ORDER BY CASE WHEN lpd.LoadKey IS NULL THEN 0 ELSE 1 END ASC                                       --(Wan08)
+           ,o.Status ASC
 
+   IF @n_Loadplaning = 0                                                                              --(Wan08) - START
+   BEGIN
+      SET @n_Continue = 3
+      SET @n_Err = 61005
+      SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Loadplan has not build yet. (ispRLWAV43_VLDN)'
+      GOTO QUIT_SP   
+   END                                                                                                --(Wan08) - END
+            
    IF @c_Status_ORD = '0'
    BEGIN
       SET @n_Continue = 3
@@ -151,6 +164,25 @@ BEGIN
       SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Open Order found. (ispRLWAV43_VLDN)'
       GOTO QUIT_SP
    END
+   
+   --(Wan08) - CR 3.0 - START
+   EXEC nspGetRight          
+         @c_Facility  = @c_Facility          
+      ,  @c_StorerKey = @c_StorerKey         
+      ,  @c_sku       = NULL          
+      ,  @c_ConfigKey = 'ReleaseWave_SP'         
+      ,  @b_Success   = @b_Success        OUTPUT          
+      ,  @c_authority = ''           
+      ,  @n_err       = @n_err            OUTPUT          
+      ,  @c_errmsg    = @c_errmsg         OUTPUT   
+      ,  @c_OPtion5   = @c_Release_Opt5   OUTPUT 
+       
+   IF @b_Success = 0
+   BEGIN
+      SET @n_Continue = 3
+      GOTO QUIT_SP
+   END
+   --(Wan08) - CR 3.0 - END
    
    --Wan01 - START
    INSERT INTO @t_ORDERS ( Orderkey, Status, ADCourier )
@@ -277,14 +309,20 @@ BEGIN
       GOTO QUIT_SP  
    END
    
+   --(Wan08) CR 3.0 - START   
+   SET @c_SkuGroupSkipOptim = '' 
+   SELECT @c_SkuGroupSkipOptim = dbo.fnc_GetParamValueFromString('@c_SkuGroupSkipOptim', @c_Release_Opt5, @c_SkuGroupSkipOptim) 
+   --(Wan08) CR 3.0 - END
+   
    SET @n_Found = 0
    SET @c_Sku = ''
    SELECT TOP 1 @c_Sku = RTRIM(p.Sku)  
-               ,@n_Found =  CASE WHEN s.[Length] = 0.00 THEN 1
-                                 WHEN s.Width = 0.00 THEN 1
-                                 WHEN s.Height = 0.00 THEN 1
-                                 WHEN s.STDCUBE = 0.00 THEN 1
-                                 WHEN s.STDGROSSWGT = 0.00 THEN 1  
+               ,@n_Found =  CASE WHEN s.STDCUBE = 0.00 THEN 1
+                                 WHEN s.STDGROSSWGT = 0.00 THEN 1 
+                                 WHEN CHARINDEX(s.SkuGroup, @c_SkuGroupSkipOptim, 1) > 0 THEN 0             --(WAN08) CR 3.0
+                                 WHEN s.[Length] = 0.00 THEN 1                                              --(WAN08) CR 3.0 Move down
+                                 WHEN s.Width = 0.00 THEN 1                                                 --(WAN08) CR 3.0 Move down
+                                 WHEN s.Height = 0.00 THEN 1                                                --(WAN08) CR 3.0 Move down
                                  WHEN CONVERT(DECIMAL(12,5),s.[Length] * s.Width * s.Height) - CONVERT(DECIMAL(12,5),s.STDCUBE) NOT BETWEEN -0.00001 AND 0.00001 THEN 1                         --(Wan03)                     --(Wan03) 
                                  --WHEN ROUND(CONVERT(REAL,s.[Length] * s.Width * s.Height),5) <> ROUND(CONVERT(REAL,s.STDCUBE),5) THEN 1       --(Wan01) 
                                  --WHEN ROUND( s.[Length] * s.Width * s.Height,5) >= ROUND(s.STDCUBE,5) AND ROUND( s.[Length] * s.Width * s.Height,5) - ROUND(s.STDCUBE,5) > 0.00001 THEN 1     --(Wan02)                                       

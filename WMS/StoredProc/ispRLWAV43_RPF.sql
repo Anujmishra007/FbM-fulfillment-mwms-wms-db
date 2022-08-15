@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispRLWAV43_RPF]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[ispRLWAV43_RPF]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,7 +13,7 @@ GO
 /*        :                                                             */  
 /* Called By:                                                           */  
 /*          :                                                           */  
-/* PVCS Version: 1.2                                                    */  
+/* PVCS Version: 1.3                                                    */  
 /*                                                                      */  
 /* Version: 7.0                                                         */  
 /*                                                                      */  
@@ -33,9 +28,11 @@ GO
 /* 2022-01-05  Wan03    1.2   WMS-17299 - CR 2.9. Revise Priority Values*/
 /*                            for TM RPF Task. Additional validation to */
 /*                            prompt HomeLoc Assignment                 */
-/* 2022-07-27  CheeMun  1.3   JSM-68356 - Bug Fix&Skip UOM 2 DP checking*/
+/* 2022-04-26  Wan04    1.3   WMS-19522 - RG - Adidas SEA - Release Wave*/
+/*                            on DP Loc Sequence                        */
+/* 2022-07-27  CheeMun  1.3   JSM-68356 - Bug Fix&Skip UOM 2 DP checking*/   
 /************************************************************************/  
-CREATE PROC [dbo].[ispRLWAV43_RPF]  
+CREATE OR ALTER PROC [dbo].[ispRLWAV43_RPF]  
         @c_wavekey      NVARCHAR(10)    
        ,@b_Success      INT            OUTPUT    
        ,@n_err          INT            OUTPUT    
@@ -135,7 +132,9 @@ BEGIN
          , @c_Release_Opt5       NVARCHAR(4000) = ''           --Wan01
          , @c_SkipNormalReplTask NVARCHAR(1) = 'N'             --Wan01
          , @c_TaskPriorityDPP    NVARCHAR(10)= '5'             --Wan03
-         , @c_TaskPriority       NVARCHAR(10)= '5'             --Wan03         
+         , @c_TaskPriority       NVARCHAR(10)= '5'             --Wan03  
+                                                               --
+ 
          
    SET @n_StartTCnt = @@TRANCOUNT  
    SET @n_Continue = 1  
@@ -159,7 +158,7 @@ BEGIN
    SELECT @c_Release_Opt5 = ISNULL(fgr.Option5,'')
    FROM dbo.fnc_GetRight2( @c_Facility, @c_Storerkey, '', 'ReleaseWave_SP') AS fgr
    --(Wan01) - END
-  
+   
    DECLARE @t_UPDPICK TABLE  
    (  RowRef            INT   IDENTITY(1,1) PRIMARY KEY  
    ,  PickDetailKey     NVARCHAR(10)   NOT NULL DEFAULT ('')  
@@ -458,33 +457,33 @@ BEGIN
    END  
 
    SET @n_NoOfUCCToDP = 0  
-   --JSM-68356 (START)    
-   SELECT @n_NoOfUCCToDP = COUNT(DISTINCT PCK.NoOfUCCToDP)    
-   FROM (    
-      SELECT NoOfUCCToDP = TP.DropID    
-      FROM #TMP_PICK TP WITH (NOLOCK)    
-      WHERE TP.UOM = '6'    
-      --AND TP.ECSingleFlag = 'M'    
-      AND Doctype = 'N'    
-      AND TP.DropID <> ''    
-      GROUP BY TP.DropID    
-      UNION    
-      SELECT TP.DropID    
-      FROM #TMP_PICK TP WITH (NOLOCK)    
-      JOIN dbo.PICKDETAIL p WITH (NOLOCK) ON p.Storerkey = TP.Storerkey AND p.DropID = TP.DropID    
-      JOIN dbo.WAVEDETAIL AS w WITH (NOLOCK) ON p.Orderkey = w.OrderKey    
-      JOIN dbo.PackTask AS PT WITH (NOLOCK) ON w.orderkey = PT.orderkey    
-      JOIN DeviceProfile DP (NOLOCK) ON DP.DevicePosition = PT.DevicePosition    
-      JOIN LOC L (NOLOCK) ON L.LOC = DP.Loc    
-      WHERE TP.UOM = '6'    
-      AND TP.ECSingleFlag = 'M'    
-      AND TP.DropID <> ''    
-      AND p.[Status] < '5'    
-      AND w.WaveKey = @c_Wavekey    
-      GROUP BY TP.DropID    
-      HAVING COUNT(DISTINCT l.PickZone) > 1    
-      ) PCK    
-   --JSM-68356 (END)					
+   --JSM-68356 (START) 
+   SELECT @n_NoOfUCCToDP = COUNT(DISTINCT PCK.NoOfUCCToDP)   
+   FROM (
+      SELECT NoOfUCCToDP = TP.DropID   
+      FROM #TMP_PICK TP WITH (NOLOCK)     
+      WHERE TP.UOM  = '6'  
+      --AND   TP.ECSingleFlag = 'M'  
+      AND Doctype = 'N'
+      AND   TP.DropID <> '' 
+      GROUP BY TP.DropID
+      UNION
+      SELECT TP.DropID      
+      FROM #TMP_PICK TP WITH (NOLOCK)      
+      JOIN dbo.PICKDETAIL p WITH (NOLOCK) ON p.Storerkey = TP.Storerkey AND p.DropID = TP.DropID      
+      JOIN dbo.WAVEDETAIL AS w WITH (NOLOCK) ON p.Orderkey = w.OrderKey      
+      JOIN dbo.PackTask AS PT WITH (NOLOCK) ON w.orderkey = PT.orderkey      
+      JOIN DeviceProfile DP (NOLOCK) ON DP.DevicePosition = PT.DevicePosition      
+      JOIN LOC L (NOLOCK) ON L.LOC = DP.Loc      
+      WHERE TP.UOM = '6'      
+      AND TP.ECSingleFlag = 'M'      
+      AND TP.DropID <> ''      
+      AND p.[Status] < '5'      
+      AND w.WaveKey = @c_Wavekey  
+      GROUP BY TP.DropID
+      HAVING COUNT(DISTINCT l.PickZone) > 1
+   ) PCK
+   --JSM-68356 (END)    
    
    SET @n_TotalEmptyLoc = 0      
    SELECT @n_TotalEmptyLoc = ISNULL(SUM(DP.EmptyLoc),0)      
@@ -755,7 +754,36 @@ BEGIN
                
                      FETCH NEXT FROM CUR_DPP INTO @c_DPPPKZone  
                      WHILE @@FETCH_STATUS <> -1 AND @c_ToLoc = ''  
-                     BEGIN  
+                     BEGIN 
+                        --(Wan04) - START
+                        IF EXISTS ( SELECT 1        
+                                    FROM CODELKUP CL WITH (NOLOCK)           
+                                    WHERE CL.ListName = 'ADPHLDPLoc'          
+                                    AND   CL.Code = @c_DPPPKZone          
+                                    AND   CL.Storerkey = @c_Storerkey
+                                    AND   CL.Short = 'N'
+                                  )    
+                        BEGIN
+                           SET @c_ToLoc = ''
+                           SET @c_Logicalloc = ''
+                           SELECT TOP 1   @c_ToLoc = LOC.Loc  
+                                       ,  @c_Logicalloc = LOC.LogicalLocation                                                
+                           FROM  #TMP_LOC_DP  LOC WITH (NOLOCK)  
+                           LEFT JOIN  LOTxLOCxID LLI WITH (NOLOCK) ON (LLI.Loc = LOC.Loc AND  LLI.Storerkey = @c_Storerkey)                        
+                           WHERE LOC.LocationType = 'DYNPICKP'  
+                           AND   LOC.LocationHandling = @c_LocationHandling                    
+                           AND   LOC.LocationCategory = @c_LocationCategory
+                           AND   LOC.Facility = @c_Facility   
+                           AND   LOC.PickZone = @c_DPPPKZone  
+                           GROUP BY LOC.LogicalLocation, LOC.Loc 
+                           HAVING ISNULL(SUM((LLI.Qty - LLi.QtyPicked) + LLI.PendingMoveIN),0) = 0                          
+                           ORDER BY LOC.LogicalLocation  
+                                   ,LOC.Loc  
+                                   
+                           CONTINUE
+                        END 
+                        --(Wan04) - END
+                        
                         -- Find Last Logical location in DP that has stock  
                         IF NOT EXISTS (SELECT 1 FROM @t_DPRange WHERE PickZone = @c_DPPPKZone)  
                         BEGIN  
