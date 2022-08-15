@@ -1,4 +1,4 @@
-﻿SET ANSI_NULLS OFF
+SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -10,7 +10,8 @@ GO
 /* Modifications log:                                                         */                   
 /*                                                                            */                   
 /* Date       Rev  Author     Purposes                                        */
-/* 2022-01-25 1.0  CSCHONG    Devops Scripts Combine & Created (WMS-18816)    */                           
+/* 2022-01-25 1.0  CSCHONG    Devops Scripts Combine & Created (WMS-18816)    */     
+/* 2022-05-06 1.1  WLChooi    WMS-19589 - Add Col16, Col17 (WL01)             */
 /******************************************************************************/                  
                     
 CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_TW_711_ship_Label_02]                        
@@ -54,17 +55,17 @@ BEGIN
             
       
   DECLARE @d_Trace_StartTime   DATETIME,     
-           @d_Trace_EndTime    DATETIME,    
-           @c_Trace_ModuleName NVARCHAR(20),     
-           @d_Trace_Step1      DATETIME,     
-           @c_Trace_Step1      NVARCHAR(20),    
-           @c_UserName         NVARCHAR(20)     
+          @d_Trace_EndTime     DATETIME,    
+          @c_Trace_ModuleName  NVARCHAR(20),     
+          @d_Trace_Step1       DATETIME,     
+          @c_Trace_Step1       NVARCHAR(20),    
+          @c_UserName          NVARCHAR(20)     
              
-   DECLARE @c_ExecStatements         NVARCHAR(MAX)    
-         , @c_ExecArguments        NVARCHAR(MAX)    
-         , @c_ExecStatements2      NVARCHAR(MAX)    
-         , @c_ExecStatementsAll    NVARCHAR(MAX)      
-         , @n_continue             INT               
+   DECLARE @c_ExecStatements        NVARCHAR(MAX)    
+         , @c_ExecArguments         NVARCHAR(MAX)    
+         , @c_ExecStatements2       NVARCHAR(MAX)    
+         , @c_ExecStatementsAll     NVARCHAR(MAX)      
+         , @n_continue              INT               
     
    SET @d_Trace_StartTime = GETDATE()    
    SET @c_Trace_ModuleName = ''    
@@ -79,7 +80,7 @@ BEGIN
     SET @n_TTLQty = 0       
           
                 
-    CREATE TABLE [#Result] (               
+   CREATE TABLE [#Result] (               
       [ID]    [INT] IDENTITY(1,1) NOT NULL,                              
       [Col01] [NVARCHAR] (80) NULL,                
       [Col02] [NVARCHAR] (80) NULL,                
@@ -146,36 +147,36 @@ BEGIN
    
   --BEGIN TRAN            
 
-               INSERT INTO #Result (Col01,Col02,Col03,Col04,Col05, Col06,Col07,Col08,Col09            
-             ,Col10,Col11,Col12,Col13,Col14,Col15,Col16,Col17,Col18,Col19,Col20,Col21,Col22             
-             ,Col23,Col24,Col25,Col26,Col27,Col28,Col29,Col30,Col31,Col32,Col33,Col34
-             ,Col35,Col36,Col37,Col38,Col39,Col40,Col41,Col42,Col43,Col44
-             ,Col45,Col46,Col47,Col48,Col49,Col50,Col51,Col52,Col53,Col54             
-             ,Col55,Col56,Col57,Col58,Col59,Col60)  
- SELECT DISTINCT ISNULL(ORDIF.orderinfo03,'N'),ISNULL(c.long,''),ISNULL(o.C_Contact1,''),ISNULL(o.m_company,''), ISNULL(o.markforkey,''),      --5 
-             ISNULL(o.trackingno,''),ISNULL(c1.short,''),  SUBSTRING(ISNULL(o.trackingno,''),13,8),ISNULL(c1.udf03,''), --9
-             CONVERT(NVARCHAR(10),getdate()+ 1 + CAST(ISNULL(c1.udf03,'') as int),111) ,   --10  
-             CONVERT(NVARCHAR(10),(getdate()+ 1 + CAST(ISNULL(c1.udf03,'') as int)+ 7),111),--11  
-             ISNULL(o.orderkey,''),ISNULL(c2.description,''),ISNULL(c2.notes,''),ISNULL(c2.long,''), --15             
-             '','','','','',     --20                             
-             '','','','','','','','','','',   --30     
-             '','','','','','','','','','',   --40         
-              '','','','','','','','','','',   --50         
-              '','','','','','','','',pd.pickslipno,''    --60                         
-            FROM PackHeader AS ph WITH (NOLOCK)        
-               JOIN PackDetail AS pd WITH (NOLOCK) ON pd.PickSlipNo = ph.PickSlipNo    
-               JOIN ORDERS AS o WITH (NOLOCK) ON o.OrderKey = ph.OrderKey                      
-               JOIN SKU S WITH (NOLOCK) ON S.storerkey = PD.Storerkey AND S.sku=PD.sku 
-               LEFT JOIN ORDERINFO ORDIF WITH (NOLOCK) ON ORDIF.orderkey=O.orderkey          
-               LEFT JOIN CODELKUP C   WITH (NOLOCK) ON C.listname = '711PAY' and C.Code=ISNULL(ORDIF.orderinfo03,'N') and C.storerkey = O.storerkey 
-               LEFT JOIN CODELKUP C1   WITH (NOLOCK) ON C1.listname = 'CarrierInf' and C1.Code='711' and C1.storerkey = O.storerkey  AND c1.code2=o.OrderGroup
-               LEFT JOIN CODELKUP C2   WITH (NOLOCK) ON C2.listname = 'WebsitInfo' and C2.Code=ORDIF.StoreName and C2.storerkey = O.storerkey   
-               WHERE pd.pickslipno =@c_Sparm01 AND pd.labelno = @c_Sparm02                 
+   INSERT INTO #Result (Col01,Col02,Col03,Col04,Col05, Col06,Col07,Col08,Col09            
+                       ,Col10,Col11,Col12,Col13,Col14,Col15,Col16,Col17,Col18,Col19,Col20,Col21,Col22             
+                       ,Col23,Col24,Col25,Col26,Col27,Col28,Col29,Col30,Col31,Col32,Col33,Col34
+                       ,Col35,Col36,Col37,Col38,Col39,Col40,Col41,Col42,Col43,Col44
+                       ,Col45,Col46,Col47,Col48,Col49,Col50,Col51,Col52,Col53,Col54             
+                       ,Col55,Col56,Col57,Col58,Col59,Col60)  
+   SELECT DISTINCT ISNULL(ORDIF.orderinfo03,'N'),ISNULL(c.long,''),ISNULL(o.C_Contact1,''),ISNULL(o.m_company,''), ISNULL(o.markforkey,''),      --5 
+                   ISNULL(o.trackingno,''),ISNULL(c1.short,''),  SUBSTRING(ISNULL(o.trackingno,''),13,8),ISNULL(c1.udf03,''), --9
+                   CONVERT(NVARCHAR(10),GETDATE()+ 1 + CAST(ISNULL(c1.udf03,'') AS INT),111) ,   --10  
+                   CONVERT(NVARCHAR(10),(GETDATE()+ 1 + CAST(ISNULL(c1.udf03,'') AS INT)+ 7),111),--11  
+                   ISNULL(o.orderkey,''),ISNULL(c2.description,''),ISNULL(c2.notes,''),ISNULL(c2.long,''), --15             
+                   ISNULL(o.BuyerPO,''),ISNULL(ORDIF.EcomOrderId,''),'','','',     --20   --WL01
+                   '','','','','','','','','','',   --30     
+                   '','','','','','','','','','',   --40         
+                   '','','','','','','','','','',   --50         
+                   '','','','','','','','',pd.pickslipno,''    --60                         
+   FROM PackHeader AS ph WITH (NOLOCK)        
+   JOIN PackDetail AS pd WITH (NOLOCK) ON pd.PickSlipNo = ph.PickSlipNo    
+   JOIN ORDERS AS o WITH (NOLOCK) ON o.OrderKey = ph.OrderKey                      
+   JOIN SKU S WITH (NOLOCK) ON S.storerkey = PD.Storerkey AND S.sku = PD.sku 
+   LEFT JOIN ORDERINFO ORDIF WITH (NOLOCK) ON ORDIF.orderkey = O.orderkey          
+   LEFT JOIN CODELKUP C   WITH (NOLOCK) ON C.listname = '711PAY' AND C.Code=ISNULL(ORDIF.orderinfo03,'N') AND C.storerkey = O.storerkey 
+   LEFT JOIN CODELKUP C1   WITH (NOLOCK) ON C1.listname = 'CarrierInf' AND C1.Code='711' AND C1.storerkey = O.storerkey  AND c1.code2 = o.OrderGroup
+   LEFT JOIN CODELKUP C2   WITH (NOLOCK) ON C2.listname = 'WebsitInfo' AND C2.Code = ORDIF.StoreName AND C2.storerkey = O.storerkey   
+   WHERE pd.pickslipno = @c_Sparm01 AND pd.labelno = @c_Sparm02                 
           
-  IF @b_debug=1          
-  BEGIN                     
-   SELECT * FROM #Result (nolock)       
-  END          
+   IF @b_debug = 1          
+   BEGIN                     
+      SELECT * FROM #Result (nolock)       
+   END          
               
 EXIT_SP:      
     
