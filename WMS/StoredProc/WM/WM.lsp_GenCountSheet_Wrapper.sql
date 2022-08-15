@@ -19,7 +19,7 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.2                                                          */  
+/* Version: 1.3                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
@@ -29,6 +29,7 @@ GO
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
 /* 2021-12-02  Wan01    1.2   WMS-18332 - [TW]LOR_CycleCount_CR          */
 /*             Wan01    1.2   DevOps Combine Script                      */
+/* 2022-06-15  SPChin   1.3   JSM-70416 Revise logic                     */
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_GenCountSheet_Wrapper]  
    @c_StockTakeKey         NVARCHAR(10)
@@ -102,10 +103,15 @@ BEGIN
  
          IF @c_ProceedWithWarning = 'N' AND @n_WarningNo < 1 
          BEGIN
-            BEGIN TRY      
-               EXECUTE @n_Count = ispCheckOutstandingOrders        
+            BEGIN TRY 
+            	 TRUNCATE TABLE #TMP_CC
+               INSERT INTO #TMP_CC (DataCount)							--JSM-70416    
+               EXECUTE ispCheckOutstandingOrders						--JSM-70416       
                   @c_StockTakeKey = @c_StockTakeKey         
                ,  @c_CountNo = @c_CountNo 
+               
+               SELECT TOP 1 @n_Count = ISNULL(DataCount, 0)
+               FROM #TMP_CC WITH (NOLOCK)   								--JSM-70416
             END TRY
 
             BEGIN CATCH
@@ -135,6 +141,7 @@ BEGIN
 
       SET @n_Count = 0
       BEGIN TRY
+      	 TRUNCATE TABLE #TMP_CC	--JSM-70416
          INSERT INTO #TMP_CC (DataCount)
          EXECUTE ispCheckCCkey        
           @c_StockTakeKey = @c_StockTakeKey
