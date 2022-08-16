@@ -1,7 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdt_523ExtPA12]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdt_523ExtPA12]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -14,9 +10,10 @@ GO
 /* Date        Rev  Author   Purposes                                         */
 /* 12-04-2018  1.0  Ung      WMS-4562 Created                                 */
 /* 27-05-2019  1.1  James    WMS-9073 PA strategy enhancement (james01)       */
+/* 28-07-2022  1.2  James    WMS-20267 PA strategy enhancement (james02)      */
 /******************************************************************************/
 
-CREATE PROC [rdt].[rdt_523ExtPA12] (
+CREATE OR ALTER PROC [rdt].[rdt_523ExtPA12] (
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -53,7 +50,10 @@ BEGIN
           @cSKU = SKU
    FROM LOTAttribute WITH (NOLOCK) WHERE LOT = @cLOT
    
-   IF @cLottable02 = '145066'
+   IF EXISTS ( SELECT 1 FROM dbo.CODELKUP WITH (NOLOCK) 
+               WHERE ListName = 'LULUEPA'  
+               AND   Code = @cLottable02
+               AND   StorerKey = @cStorerKey)
    BEGIN
       -- Find a friend (same SKU, L02) with min QTY
       SELECT TOP 1 
@@ -70,7 +70,11 @@ BEGIN
          AND LLI.QTY-LLI.QTYPicked > 0
       ORDER BY LLI.QTY-LLI.QTYPicked 
    END
-   ELSE
+   
+   IF EXISTS ( SELECT 1 FROM dbo.CODELKUP WITH (NOLOCK) 
+               WHERE ListName = 'LULUPA'  
+               AND   Code = @cLottable02
+               AND   StorerKey = @cStorerKey)
    BEGIN
       SELECT @cItemClass = ItemClass
       FROM dbo.SKU WITH (NOLOCK)
