@@ -44,6 +44,8 @@ GO
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
 /* 01-DEC-2021  Mingle   1.1  DevOps Combine Script                     */
+/* 16-AUG-2022  BeeTin   1.2  JSM-87068 Excluded DISTINCT filter for    */
+/*                            display correct sumqty for same record    */
 /************************************************************************/  
 
 CREATE PROC ispGetStockTakeSheet_ph_11 
@@ -145,7 +147,7 @@ BEGIN
                , Lottable04
                , CaseCnt
                , CCLogicalloc)
-   SELECT DISTINCT CCDetail.CCKey,   
+   SELECT  CCDetail.CCKey,                    -- (JSM-87068)
          CCDetail.CCSheetNo,     
          CCDetail.Storerkey,   
          CCdetail.SKU,        
@@ -183,7 +185,7 @@ BEGIN
                               WHEN '3' THEN CCDETAIL.FinalizeFlag_Cnt3
                             END
    AND   CCDETAIL.SystemQty > 0
-  UNION
+  UNION ALL                                   -- (JSM-87068)
   SELECT CCDetail.CCKey,   
          CCDetail.CCSheetNo,     
          CCDetail.Storerkey,   
