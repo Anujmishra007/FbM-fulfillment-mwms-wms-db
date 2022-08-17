@@ -1,12 +1,7 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_Bartender_CN_SKULABEL01]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_Bartender_CN_SKULABEL01]
+SET ANSI_NULLS OFF
 GO
-
---SET ANSI_NULLS OFF
---GO
---SET QUOTED_IDENTIFIER OFF
---GO   
+SET QUOTED_IDENTIFIER OFF
+GO   
 
 
 /******************************************************************************/                 
@@ -16,10 +11,11 @@ GO
 /* Modifications log:                                                         */                 
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */                 
-/* 2019-05-31 1.0  CSCHONG    Created(WMS-9165)                               */                 
+/* 2019-05-31 1.0  CSCHONG    Created(WMS-9165)                               */       
+/* 2022-08-15 1.1  MINGLE     Created(WMS-20456)                              */
 /******************************************************************************/                
                   
-CREATE PROC [dbo].[isp_Bartender_CN_SKULABEL01]                      
+CREATE OR ALTER PROC [dbo].[isp_Bartender_CN_SKULABEL01]                      
 (  @c_Sparm01            NVARCHAR(250),              
    @c_Sparm02            NVARCHAR(250),              
    @c_Sparm03            NVARCHAR(250),              
@@ -129,8 +125,8 @@ BEGIN
               
             
   SET @c_SQLJOIN = +' SELECT TOP 1 S.sku,S.Size,substring(ISNULL(S.Notes2,'''')+''('' + ISNULL(S.Color,'''') + '')'',1,80),s.Altsku,s.itemclass,'+ CHAR(13) +     --5     
-             + ' '''','''','''','''','''', '      --10  
-             + ' '''','''','''','''','''','     --15       
+             + ' S.color,S.style,S.descr,S.productmodel,S.notes1, '      --10	--ML01
+             + ' S.notes2,'''','''','''','''','     --15 	--ML01      
              + CHAR(13) +      
              + ' '''','''','''','''','''','         --20      
              + ' '''','''','''','''','''','''','''','''','''','''','  --30  
