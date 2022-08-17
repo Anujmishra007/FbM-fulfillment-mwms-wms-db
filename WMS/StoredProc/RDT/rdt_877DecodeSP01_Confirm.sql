@@ -1,11 +1,8 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'rdt.rdt_877DecodeSP01_Confirm') AND OBJECTPROPERTY(id,N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdt_877DecodeSP01_Confirm]
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF 
-GO
 
 /************************************************************************/
 /* Store procedure: rdt_877DecodeSP01_Confirm                           */
@@ -19,9 +16,10 @@ GO
 /* 03-05-2018  1.0  Ung         WMS-4846 Created                        */
 /* 10-10-2018  1.1  Ung         WMS-6576 Add inner                      */
 /* 05-08-2019  1.2  Ung         WMS-10008 Refine check dup case ID      */
+/* 17-08-2022  1.3  YeeKung     Fix error message                       */
 /************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_877DecodeSP01_Confirm
+CREATE OR ALTER PROCEDURE [RDT].[rdt_877DecodeSP01_Confirm]
    @nMobile        INT,
    @nFunc          INT,
    @cLangCode      NVARCHAR( 3),
@@ -29,8 +27,8 @@ CREATE PROCEDURE rdt.rdt_877DecodeSP01_Confirm
    @nInputKey      INT,
    @cFacility      NVARCHAR( 5),
    @cStorerKey     NVARCHAR( 15),
-   @cPickSlipNo    NVARCHAR( 10), 
-   @cOrderKey      NVARCHAR( 10), 
+   @cPickSlipNo    NVARCHAR( 10),
+   @cOrderKey      NVARCHAR( 10),
    @nErrNo         INT            OUTPUT,
    @cErrMsg        NVARCHAR( 20)  OUTPUT
 AS
@@ -44,7 +42,7 @@ BEGIN
    SET @nTranCount = @@TRANCOUNT
    BEGIN TRAN
    SAVE TRAN rdt_877DecodeSP01_Confirm
-   
+
    DECLARE @bSuccess       INT
    DECLARE @cSKU           NVARCHAR( 20)
    DECLARE @nCaseCNT       INT
@@ -64,10 +62,10 @@ BEGIN
    DECLARE @curCase CURSOR
    SET @curCase = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
       SELECT CaseID, Lottable01, Lottable06, Barcode
-      FROM rdt.rdtCaseIDCaptureLog WITH (NOLOCK) 
+      FROM rdt.rdtCaseIDCaptureLog WITH (NOLOCK)
       WHERE Mobile = @nMobile
       ORDER BY RowRef
-   OPEN @curCase 
+   OPEN @curCase
    FETCH NEXT FROM @curCase INTO @cCaseID, @cLottable01, @cLottable06, @cBarcode
    WHILE @@FETCH_STATUS = 0
    BEGIN
@@ -94,11 +92,11 @@ BEGIN
             AND SKU.SKUGroup = 'REG'
             AND NOT EXISTS (SELECT 1 FROM CodeLkup WITH (NOLOCK) WHERE ListName = 'MHCSSCAN' AND Code = SKU.Class AND StorerKey = @cStorerKey) -- Brand don't need capture case ID
             AND NOT EXISTS (SELECT 1 FROM CodeLkup WITH (NOLOCK) WHERE ListName = 'ORIGIN' AND Code = LA.Lottable03 AND StorerKey = @cStorerKey) -- L03 = country of origin
-   
+
          -- Check SKU found to offset
          IF @cSKU = ''
          BEGIN
-            SET @nErrNo = 123951
+            SET @nErrNo = 190051
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- NoSKUForCaseID
             GOTO RollBackTran
          END
@@ -115,20 +113,20 @@ BEGIN
                AND PD.Status <> '4'
                AND LA.Lottable06 = @cLottable06)
          BEGIN
-            SET @nErrNo = 123952
+            SET @nErrNo = 190052
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Duplicate Case
             GOTO RollBackTran
          END
 
          -- Get SKU info
          SELECT @nCaseCNT = Pack.CaseCNT
-         FROM SKU WITH (NOLOCK) 
+         FROM SKU WITH (NOLOCK)
             JOIN Pack WITH (NOLOCK) ON (SKU.PackKey = Pack.PackKey)
          WHERE StorerKey = @cStorerKey
             AND SKU.SKU = @cSKU
 
          SET @nQTY_Bal = @nCaseCNT
-         
+
          -- Loop PickDetail
          SET @curPD = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
             SELECT PD.PickDetailKey, QTY
@@ -169,7 +167,7 @@ BEGIN
          -- Check SKU found to offset
          IF @cSKU = ''
          BEGIN
-            SET @nErrNo = 123953
+            SET @nErrNo = 190053
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- NoSKUForInner
             GOTO RollBackTran
          END
@@ -185,20 +183,20 @@ BEGIN
                AND PD.QTY > 0
                AND PD.Status <> '4')
          BEGIN
-            SET @nErrNo = 123954
+            SET @nErrNo = 190054
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DuplicateInner
             GOTO RollBackTran
          END
 
          -- Get SKU info
          SELECT @nInnerPack = Pack.InnerPack
-         FROM SKU WITH (NOLOCK) 
+         FROM SKU WITH (NOLOCK)
             JOIN Pack WITH (NOLOCK) ON (SKU.PackKey = Pack.PackKey)
          WHERE StorerKey = @cStorerKey
             AND SKU.SKU = @cSKU
 
          SET @nQTY_Bal = @nInnerPack
-         
+
          -- Loop PickDetail
          SET @curPD = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
             SELECT PD.PickDetailKey, QTY
@@ -215,7 +213,7 @@ BEGIN
                AND LA.Lottable01 = @cLottable01
       END
 
-      OPEN @curPD 
+      OPEN @curPD
       FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD
       WHILE @@FETCH_STATUS = 0
       BEGIN
@@ -224,19 +222,19 @@ BEGIN
          BEGIN
             -- Confirm PickDetail
             UPDATE dbo.PickDetail WITH (ROWLOCK) SET
-               DropID = @cCaseID, 
-               Notes = @cBarcode, 
+               DropID = @cCaseID,
+               Notes = @cBarcode,
                EditDate = GETDATE(),
-               EditWho  = SUSER_SNAME(), 
+               EditWho  = SUSER_SNAME(),
                TrafficCop = NULL
             WHERE PickDetailKey = @cPickDetailKey
             IF @@ERROR <> 0
             BEGIN
-               SET @nErrNo = 123955
+               SET @nErrNo = 190055
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
                GOTO RollBackTran
             END
-            
+
             SET @nQTY_Bal = 0 -- Reduce balance
          END
 
@@ -245,19 +243,19 @@ BEGIN
          BEGIN
             -- Confirm PickDetail
             UPDATE dbo.PickDetail WITH (ROWLOCK) SET
-               DropID = @cCaseID, 
-               Notes = @cBarcode, 
+               DropID = @cCaseID,
+               Notes = @cBarcode,
                EditDate = GETDATE(),
-               EditWho  = SUSER_SNAME(), 
+               EditWho  = SUSER_SNAME(),
                TrafficCop = NULL
             WHERE PickDetailKey = @cPickDetailKey
             IF @@ERROR <> 0
             BEGIN
-               SET @nErrNo = 123956
+               SET @nErrNo = 190056
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
                GOTO RollBackTran
             END
-            
+
             SET @nQTY_Bal = @nQTY_Bal - @nQTY_PD -- Reduce balance
          END
 
@@ -275,7 +273,7 @@ BEGIN
                @cErrMsg           OUTPUT
             IF @bSuccess <> 1
             BEGIN
-               SET @nErrNo = 123957
+               SET @nErrNo = 190057
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- nspg_GetKey
                GOTO RollBackTran
             END
@@ -287,7 +285,7 @@ BEGIN
                ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,
                EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes,
                PickDetailKey,
-               Status, 
+               Status,
                QTY,
                TrafficCop,
                OptimizeCop)
@@ -297,7 +295,7 @@ BEGIN
                CartonType, ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,
                EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes,
                @cNewPickDetailKey,
-               Status, 
+               Status,
                @nQTY_PD - @nQTY_Bal, -- QTY
                NULL, -- TrafficCop
                '1'   -- OptimizeCop
@@ -305,7 +303,7 @@ BEGIN
             WHERE PickDetailKey = @cPickDetailKey
             IF @@ERROR <> 0
             BEGIN
-               SET @nErrNo = 123958
+               SET @nErrNo = 190058
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- INS PKDtl Fail
                GOTO RollBackTran
             END
@@ -316,11 +314,11 @@ BEGIN
                -- Insert into
                INSERT INTO dbo.RefKeyLookup (PickDetailkey, PickSlipNo, OrderKey, OrderLineNumber, Loadkey)
                SELECT @cNewPickDetailKey, PickSlipNo, OrderKey, OrderLineNumber, Loadkey
-               FROM RefKeyLookup WITH (NOLOCK) 
+               FROM RefKeyLookup WITH (NOLOCK)
                WHERE PickDetailKey = @cPickDetailKey
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 123959
+                  SET @nErrNo = 190059
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- INS RefKeyFail
                   GOTO RollBackTran
                END
@@ -329,43 +327,43 @@ BEGIN
             -- Change orginal PickDetail with exact QTY (with TrafficCop)
             UPDATE dbo.PickDetail WITH (ROWLOCK) SET
                QTY = @nQTY_Bal,
-               DropID = @cCaseID, 
-               Notes = @cBarcode, 
+               DropID = @cCaseID,
+               Notes = @cBarcode,
                EditDate = GETDATE(),
                EditWho  = SUSER_SNAME(),
                Trafficcop = NULL
             WHERE PickDetailKey = @cPickDetailKey
             IF @@ERROR <> 0
             BEGIN
-               SET @nErrNo = 123960
+               SET @nErrNo = 190060
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
                GOTO RollBackTran
             END
 
             SET @nQTY_Bal = 0 -- Reduce balance
          END
-         
+
          IF @nQTY_Bal = 0
             BREAK
-         
+
          FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD
       END
-      
+
       -- Check current case not fully offset
       IF @nQTY_Bal <> 0
       BEGIN
-         SET @nErrNo = 123961
+         SET @nErrNo = 190061
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Offset error
       END
-      
+
       FETCH NEXT FROM @curCase INTO @cCaseID, @cLottable01, @cLottable06, @cBarcode
    END
 
    -- Clear log
-   DELETE rdt.rdtCaseIDCaptureLog 
-   WHERE Mobile = @nMobile 
+   DELETE rdt.rdtCaseIDCaptureLog
+   WHERE Mobile = @nMobile
       AND CaseID = @cCaseID
-   
+
    COMMIT TRAN rdt_877DecodeSP01_Confirm
    GOTO Quit
 
@@ -376,11 +374,5 @@ Quit:
       COMMIT TRAN
 END
 GO
-
-GRANT EXECUTE ON rdt.rdt_877DecodeSP01_Confirm TO NSQL 
-GO   
-
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS ON 
+GRANT EXECUTE ON  [RDT].[rdt_877DecodeSP01_Confirm] TO [NSQL]
 GO
