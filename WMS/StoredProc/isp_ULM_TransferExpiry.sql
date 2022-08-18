@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_ULM_TransferExpiry]')
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-DROP PROCEDURE [dbo].[isp_ULM_TransferExpiry]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,7 +13,7 @@ GO
 /*                                                                         */
 /* Called By: SQL Job                                                      */
 /*                                                                         */
-/* GitLab Version: 2.1                                                     */
+/* GitLab Version: 2.2                                                     */
 /*                                                                         */
 /* Version: 5.4                                                            */
 /*                                                                         */
@@ -30,8 +25,9 @@ GO
 /* 20/9/2021    ian     2.0   bug fixed fromid                             */   
 /* 28-Dec-2021  WLChooi 2.1   DevOps Combine Script                        */
 /* 28-Dec-2021  WLChooi 2.1   WMS-18614 & WMS-18615 - Add new column (WL01)*/
+/* 28-Jul-2022  WLChooi 2.2   WMS-20350 - Hold FromLoc after transfer(WL02)*/
 /***************************************************************************/  
-CREATE PROC [dbo].[isp_ULM_TransferExpiry]    
+CREATE OR ALTER PROC [dbo].[isp_ULM_TransferExpiry]    
 (
    @c_Facility      NVARCHAR(255)  = '',
    @c_StockStatus   NVARCHAR(20)   = 'EXPIRED',
@@ -358,6 +354,35 @@ BEGIN
                --SET @c_Body = @c_Body + '<td>' + RTRIM(CONVERT(NVARCHAR(10), @dt_ToLottable04, 103))+ '</td>'  
                --SET @c_Body = @c_Body + '<td>' + RTRIM(CONVERT(NVARCHAR(10), @dt_ToLottable05, 103))+ '</td>'  
                SET @c_Body = @c_Body + '</tr>'  
+
+               --WL02 S
+               IF EXISTS (SELECT 1
+                          FROM LOC (NOLOCK)
+                          WHERE LOC = @c_FromLoc
+                          AND LocationType = 'OTHER' 
+                          AND LocationFlag <> 'HOLD')
+               BEGIN
+                  IF EXISTS (SELECT 1
+                             FROM LOTxLOCxID LLI (NOLOCK)
+                             WHERE LOC = @c_FromLoc
+                             HAVING SUM(LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen) = 0)
+                  BEGIN 
+                     UPDATE dbo.LOC
+                     SET LocationFlag = 'HOLD'
+                     WHERE Loc = @c_FromLoc
+
+                     SET @n_Err = @@ERROR 
+                     
+                     IF @n_Err <> 0  
+                     BEGIN           
+                        SELECT @n_continue = 3
+                        SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 63209
+                        SELECT @c_errmsg = 'NSQL'+CONVERT(char(5),@n_err)+': Hold ' + TRIM(@c_FromLoc) + ' Failed for Transfer# ' + RTRIM(@c_Transferkey) + ' (isp_ULM_TransferExpiry)' + ' ( '
+                                         + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+                     END
+                  END
+               END
+               --WL02 E
                                                   
                FETCH NEXT FROM CUR_TRANSFER INTO @c_Transferkey, @c_TransferLineNumber, @c_FromStorerkey, @c_FromSku, @c_FromDescr, @c_FromLoc, @c_FromLot, @c_FromID, @n_FromQty,
                                                  @n_FromQtyInCase,   --WL01
@@ -383,7 +408,7 @@ BEGIN
                BEGIN           
                   SELECT @n_continue = 3
                   SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 63210
-         	        SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Executing sp_send_dbmail alert for Transfer# ' + RTRIM(@c_Transferkey) + ' Failed! (isp_ULM_TransferExpiry)' + ' ( '
+                  SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Executing sp_send_dbmail alert for Transfer# ' + RTRIM(@c_Transferkey) + ' Failed! (isp_ULM_TransferExpiry)' + ' ( '
                                  + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
                                  
                   UPDATE TRANSFER WITH (ROWLOCK)
@@ -396,7 +421,7 @@ BEGIN
                   BEGIN           
                      SELECT @n_continue = 3
                      SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 63220
-         	           SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update TRANSFER for Transfer# ' + RTRIM(@c_Transferkey) + ' Failed! (isp_ULM_TransferExpiry)' + ' ( '
+                     SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update TRANSFER for Transfer# ' + RTRIM(@c_Transferkey) + ' Failed! (isp_ULM_TransferExpiry)' + ' ( '
                                     + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
                   END                             
                END  
@@ -410,10 +435,10 @@ BEGIN
                   SET @n_Err = @@ERROR  
                   IF @n_Err <> 0  
                   BEGIN           
-                       SELECT @n_continue = 3
-                       SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 63230
-         	           SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update TRANSFER for Transfer# ' + RTRIM(@c_Transferkey) + ' Failed! (isp_ULM_TransferExpiry)' + ' ( '
-                                    + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+                     SELECT @n_continue = 3
+                     SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 63230
+                     SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update TRANSFER for Transfer# ' + RTRIM(@c_Transferkey) + ' Failed! (isp_ULM_TransferExpiry)' + ' ( '
+                                     + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
                   END  
                END
             END      	
@@ -431,10 +456,10 @@ BEGIN
    QUIT_SP:
 
    IF OBJECT_ID('tempdb..#TMP_Transfer') IS NOT NULL
-            DROP TABLE #TMP_Transfer
+      DROP TABLE #TMP_Transfer
 
    IF OBJECT_ID('tempdb..#TMP_Facility') IS NOT NULL
-            DROP TABLE #TMP_Facility
+      DROP TABLE #TMP_Facility
 
    IF @n_continue = 3  -- Error Occured - Process And Return
    BEGIN
