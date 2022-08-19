@@ -22,7 +22,9 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
-/* 04-APR-2022  NJOW01  1.0   DEVOPS Combine Script                        */
+/* 04-APR-2022  NJOW01  1.0   DEVOPS Combine Script                        */          
+/* 27-JUL-2022  NJOW02  1.1   WMS-20340 auto-allocate based on delivery    */
+/*                            date                                         */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_MHD_AutoAllocation]
 AS
@@ -61,12 +63,36 @@ BEGIN
            ,@c_AllocateFull_DW    NVARCHAR(50)
            ,@c_AllocatePartial_DW NVARCHAR(50)
            ,@c_UserName           NVARCHAR(128)
+           ,@d_MaxDelivery_Date   DATETIME  --NJOW02
+           ,@n_NoOfDeliveryDay    INT = 0--NJOW02
+           ,@n_DayCnt             INT = 0 --NJOW02
 
    SELECT @b_Success=1, @n_Err=0, @c_ErrMsg='', @n_Continue = 1, @n_StartTranCount=@@TRANCOUNT
    
    --IF @@TRANCOUNT = 0
    --   BEGIN TRAN
-
+  
+   IF @n_continue IN(1,2)  --NJOW02
+   BEGIN
+   	 IF EXISTS(SELECT 1 
+   	           FROM HOLIDAYHEADER H (NOLOCK)
+   	           JOIN HOLIDAYDETAIL HD (NOLOCK) ON H.Holidaykey = HD.Holidaykey
+   	           WHERE H.Userdefine01 = 'MHD_AUTOALLOCATE'
+   	           AND DATEDIFF(Day, HD.HolidayDate, GetDate()) = 0) 
+   	    --OR DATEPART(WEEKDAY, GETDATE()) IN (1,7)          	          
+   	 BEGIN
+   	 	 GOTO QUIT_SP
+   	 END   	           
+   	 
+     SELECT TOP 1 @n_NoOfDeliveryDay = CASE WHEN ISNUMERIC(H.Userdefine02) = 1 THEN CAST(H.Userdefine02 AS INT) ELSE 0 END
+   	 FROM HOLIDAYHEADER H (NOLOCK)
+   	 WHERE H.Userdefine01 = 'MHD_AUTOALLOCATE'
+   	 ORDER BY H.Holidaykey
+   	 
+   	 IF ISNULL(@n_NoOfDeliveryDay,0) = 0
+   	    SET @n_NoOfDeliveryDay = 2   	    	 
+   END
+  
    IF @n_continue IN(1,2)
    BEGIN   	
       SET @c_Storerkey = 'MHD'
@@ -82,11 +108,28 @@ BEGIN
       
       IF ISNULL(@c_pickslip_DW,'') = ''
          SET @c_pickslip_DW = 'r_dw_print_pickorder111'
-      
+                         
       CREATE TABLE #TMP_ORD (Rowid INT IDENTITY(1,1), 
                              Orderkey NVARCHAR(10),
                              Status NVARCHAR(10)
                              )      
+                             
+      --NJOW02
+      WHILE @n_NoOfDeliveryDay > 0
+      BEGIN
+         IF DATEPART(WEEKDAY, GETDATE() + @n_DayCnt) IN (2,3,4,5,6) AND 
+            NOT EXISTS (SELECT 1 
+   	                    FROM HOLIDAYHEADER H (NOLOCK)
+   	                    JOIN HOLIDAYDETAIL HD (NOLOCK) ON H.Holidaykey = HD.Holidaykey
+   	                    WHERE H.Userdefine01 = 'MHD_AUTOALLOCATE'
+   	                    AND DATEDIFF(Day, HD.HolidayDate, GetDate() + @n_DayCnt) = 0)  --workday
+   	     BEGIN
+   	     	  SET @d_MaxDelivery_Date = GETDATE() + @n_DayCnt
+   	     	  SET @n_NoOfDeliveryDay =  @n_NoOfDeliveryDay - 1
+   	     END                
+         
+         SET @n_DayCnt = @n_DayCnt + 1
+      END                                         
       
       INSERT INTO #TMP_ORD (Orderkey, Status)
       SELECT O.Orderkey, '0'
@@ -94,6 +137,13 @@ BEGIN
       WHERE Storerkey = @c_Storerkey
       AND O.Status = '0'
       AND (O.Userdefine01 = '' OR O.Userdefine01 IS NULL)
+      AND DATEDIFF(Day, O.DeliveryDate, @d_MaxDelivery_Date) >= 0 --NJOW02
+      AND DATEPART(WEEKDAY, O.DeliveryDate) IN (2,3,4,5,6) --Must be weekday NJOW02
+      AND NOT EXISTS (SELECT 1 
+   	                  FROM HOLIDAYHEADER H (NOLOCK)
+   	                  JOIN HOLIDAYDETAIL HD (NOLOCK) ON H.Holidaykey = HD.Holidaykey
+   	                  WHERE H.Userdefine01 = 'MHD_AUTOALLOCATE'
+   	                  AND DATEDIFF(Day, HD.HolidayDate, O.DeliveryDate) = 0) --Exclude public holiday NJOW02
       ORDER BY O.Priority, O.Orderkey   
       
       IF (SELECT COUNT(1) FROM #TMP_ORD) > 0
