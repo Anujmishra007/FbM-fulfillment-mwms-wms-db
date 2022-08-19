@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_WM_Get_PrintPreviewPDF]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_WM_Get_PrintPreviewPDF]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,7 +12,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 8.0                                                         */
 /*                                                                      */
@@ -27,9 +22,12 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2021-06-03  Wan      1.0   Created.                                  */ 
 /* 2021-09-24  Wan      1.0   DevOps Combine Script                     */
+/* 2022-07-13  Wan01    1.1   LFWM-3585 - UAT  PH  ALL - WMReport cannot*/
+/*                            pass in start and end value. Increase     */
+/*                            @c_JobIDs to NVARCHAR(MAX)                */
 /************************************************************************/
-CREATE PROC [WM].[lsp_WM_Get_PrintPreviewPDF]
-      @c_JobIDs      NVARCHAR(50)      --Standard with module report where by return multiple jobs ID (seperate by '|'). View Report only return 1 Jobid
+CREATE OR ALTER PROC [WM].[lsp_WM_Get_PrintPreviewPDF]
+      @c_JobIDs      NVARCHAR(MAX)  --Standard with module report where by return multiple jobs ID (seperate by '|'). View Report only return 1 Jobid
     , @c_UserName    NVARCHAR(128)  = ''
     , @b_Success     INT            = 0   OUTPUT    
     , @n_err         INT            = 0   OUTPUT
@@ -121,7 +119,7 @@ BEGIN
       SET @c_ErrMsg = ERROR_MESSAGE()
       GOTO EXIT_SP
    END CATCH
-   --(Wan01)  - END
+
 EXIT_SP:
    
    IF @n_Continue=3  -- Error Occured - Process And Return
