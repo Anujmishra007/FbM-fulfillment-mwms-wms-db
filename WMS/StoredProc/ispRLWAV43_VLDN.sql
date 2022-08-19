@@ -12,7 +12,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.6                                                    */
+/* PVCS Version: 1.7                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -40,6 +40,8 @@ GO
 /*                            regardless if there is Home Loc setup.    */
 /* 2022-04-26  Wan08    1.6   WMS-19522 - RG - Adidas SEA - Release Wave*/
 /*                            on DP Loc Sequence                        */
+/* 2022-08-19  Wan09    1.7   Config for PH to skip Loadplaning required*/
+/*                            check                                     */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispRLWAV43_VLDN]
@@ -86,6 +88,8 @@ BEGIN
          
          , @c_Release_Opt5          NVARCHAR(4000) = ''     --(Wan08) CR 3.0
          , @c_SkuGroupSkipOptim     NVARCHAR(30)= ''        --(Wan08) CR 3.0
+         
+         , @c_SkipRequiredLoad      NVARCHAR(30)= ''        --(Wan09) Fix PH Production Issue
          
    DECLARE @t_SortLocCubic          TABLE
          ( RowRef                   INT            IDENTITY(1,1)           PRIMARY KEY
@@ -149,23 +153,7 @@ BEGIN
    ORDER BY CASE WHEN lpd.LoadKey IS NULL THEN 0 ELSE 1 END ASC                                       --(Wan08)
            ,o.Status ASC
 
-   IF @n_Loadplaning = 0                                                                              --(Wan08) - START
-   BEGIN
-      SET @n_Continue = 3
-      SET @n_Err = 61005
-      SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Loadplan has not build yet. (ispRLWAV43_VLDN)'
-      GOTO QUIT_SP   
-   END                                                                                                --(Wan08) - END
-            
-   IF @c_Status_ORD = '0'
-   BEGIN
-      SET @n_Continue = 3
-      SET @n_Err = 61010
-      SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Open Order found. (ispRLWAV43_VLDN)'
-      GOTO QUIT_SP
-   END
-   
-   --(Wan08) - CR 3.0 - START
+   --(Wan08) - CR 3.0 - START                         --(Wan09) - Start. Move UP and SkipRequiredLoad
    EXEC nspGetRight          
          @c_Facility  = @c_Facility          
       ,  @c_StorerKey = @c_StorerKey         
@@ -183,6 +171,26 @@ BEGIN
       GOTO QUIT_SP
    END
    --(Wan08) - CR 3.0 - END
+   
+   SET @c_SkipRequiredLoad = 'N'       
+   SELECT @c_SkipRequiredLoad = dbo.fnc_GetParamValueFromString('@c_SkipRequiredLoad', @c_Release_Opt5, @c_SkipRequiredLoad) 
+ 
+   IF @n_Loadplaning = 0 AND @c_SkipRequiredLoad = 'N'                                                --(Wan08) - START
+   BEGIN
+      SET @n_Continue = 3
+      SET @n_Err = 61005
+      SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Loadplan has not build yet. (ispRLWAV43_VLDN)'
+      GOTO QUIT_SP   
+   END                                                                                                --(Wan08) - END
+   --(Wan09) - END                                                                                     
+            
+   IF @c_Status_ORD = '0'
+   BEGIN
+      SET @n_Continue = 3
+      SET @n_Err = 61010
+      SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Open Order found. (ispRLWAV43_VLDN)'
+      GOTO QUIT_SP
+   END
    
    --Wan01 - START
    INSERT INTO @t_ORDERS ( Orderkey, Status, ADCourier )
