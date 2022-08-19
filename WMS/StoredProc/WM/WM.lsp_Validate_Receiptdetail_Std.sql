@@ -13,7 +13,7 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.0                                                          */  
+/* Version: 1.3                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
@@ -23,6 +23,8 @@ GO
 /*                            Prompt For Entering Expired Stocks         */
 /* 2021-02-25  Wan02    1.2   Add Big Outer Try/Catch                    */  
 /*                            -Fix Error Msg and Error #                 */  
+/* 2021-04-25  Wan03    1.3   LFWM-3505 Storerconfig:                    */
+/*                            DisAllowDuplicateIdsOnWSRcpt SCE Enhancement*/
 /*************************************************************************/   
 CREATE OR ALTER PROC [WM].[lsp_Validate_ReceiptDetail_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
@@ -159,12 +161,16 @@ BEGIN
       END
 
       DECLARE 
-            @c_ReceiptKey           NVARCHAR(10) = ''
-         ,  @c_ReceiptLineNo        NVARCHAR(5)  = ''
-         ,  @c_Facility             NVARCHAR(5)  = ''
-         ,  @c_Facility_LOC         NVARCHAR(5)  = ''
-         ,  @c_Storerkey            NVARCHAR(15) = ''
-         ,  @c_ToLoc                NVARCHAR(10) = ''
+            @c_ReceiptKey                    NVARCHAR(10) = ''
+         ,  @c_ReceiptLineNo                 NVARCHAR(5)  = ''
+         ,  @c_Facility                      NVARCHAR(5)  = ''
+         ,  @c_Facility_LOC                  NVARCHAR(5)  = ''
+         ,  @c_Storerkey                     NVARCHAR(15) = ''
+         ,  @c_ToLoc                         NVARCHAR(10) = ''
+         
+         ,  @c_ToID                          NVARCHAR(18) = ''             --(Wan03)
+      
+         ,  @c_DisAllowDuplicateIdsOnWSRcpt  NVARCHAR(30) = '0'            --(Wan03)
 
       SELECT TOP 1 
             @c_ReceiptKey   = RD.ReceiptKey
@@ -187,6 +193,7 @@ BEGIN
          ,  @dt_Lottable13  = RD.Lottable13     --(Wan01)
          ,  @dt_Lottable14  = RD.Lottable14     --(Wan01)
          ,  @dt_Lottable15  = RD.Lottable15     --(Wan01)
+         ,  @c_ToID          = ISNULL(RD.ToID,'')              --(Wan03)
       FROM  #RECEIPTDETAIL RD  
 
       SELECT TOP 1 
@@ -205,7 +212,7 @@ BEGIN
          BEGIN
             SET @n_Continue = 3
             SET @n_Err = 555251
-            SET @c_errmsg = 'Invalid Loc: ' + @c_ToLoc + '. (lsp_Validate_ReceiptDetail_Std)'
+            SET @c_errmsg =  'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Invalid Loc: ' + @c_ToLoc + '. (lsp_Validate_ReceiptDetail_Std)'
                           + ' |' + @c_ToLoc 
             GOTO EXIT_SP
          END
@@ -215,7 +222,7 @@ BEGIN
          BEGIN
             SET @n_Continue = 3
             SET @n_Err = 555252
-            SET @c_errmsg = 'Loc: ' + @c_ToLoc + ' does not belong to facility: ' + @c_Facility + '. (lsp_Validate_ReceiptDetail_Std)'
+            SET @c_errmsg =  'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Loc: ' + @c_ToLoc + ' does not belong to facility: ' + @c_Facility + '. (lsp_Validate_ReceiptDetail_Std)'
                           + ' |' + @c_ToLoc + '|' + @c_Facility
             GOTO EXIT_SP
          END
@@ -299,7 +306,7 @@ BEGIN
                BEGIN
                   SET @n_Continue = 3
                   SET @n_Err = 555253
-                  SET @c_errmsg = 'Lottable' + @c_Cnt + '. Invalid Logical Warehouse Value: ' + @c_LottableValue + '. (lsp_Validate_ReceiptDetail_Std)'
+                  SET @c_errmsg =  'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Lottable' + @c_Cnt + '. Invalid Logical Warehouse Value: ' + @c_LottableValue + '. (lsp_Validate_ReceiptDetail_Std)'
                                  + '|' + @c_Cnt + '|' + @c_LottableValue
                   GOTO EXIT_SP
                END
@@ -329,7 +336,7 @@ BEGIN
                BEGIN
                   SET @n_Continue = 3
                   SET @n_Err = 555254
-                  SET @c_errmsg = 'Lottable' + @c_Cnt + '. Invalid Sub Inventory Code: ' + @c_LottableValue + '. (lsp_Validate_ReceiptDetail_Std)'
+                  SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Lottable' + @c_Cnt + '. Invalid Sub Inventory Code: ' + @c_LottableValue + '. (lsp_Validate_ReceiptDetail_Std)'
                                  + '|' + @c_Cnt + '|' + @c_LottableValue
                   GOTO EXIT_SP
                END
@@ -344,7 +351,7 @@ BEGIN
          BEGIN
             SET @n_Continue = 3
             SET @n_Err = 555255
-            SET @c_errmsg = 'Lottable' + @c_Cnt + '''s Label Not Yet Setup In SKU: ' + @c_Sku + '. Edit disallow. (lsp_Validate_ReceiptDetail_Std)'
+            SET @c_errmsg =  'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Lottable' + @c_Cnt + '''s Label Not Yet Setup In SKU: ' + @c_Sku + '. Edit disallow. (lsp_Validate_ReceiptDetail_Std)'
                            + '|' + @c_Cnt + '|' + @c_Sku
             GOTO EXIT_SP
          END
@@ -352,6 +359,35 @@ BEGIN
          SET @n_Cnt = @n_Cnt + 1
       END 
       --(Wan01) - END
+      
+      --(Wan03) - START
+      IF @c_ToID <> ''
+      BEGIN
+         SELECT @c_DisAllowDuplicateIdsOnWSRcpt = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'DisAllowDuplicateIdsOnWSRcpt')
+         IF @c_DisAllowDuplicateIdsOnWSRcpt = '1'
+         BEGIN
+            IF EXISTS ( SELECT TOP 1 1 FROM dbo.ID AS i WITH (NOLOCK) WHERE ID = @c_ToID
+                        UNION
+                        SELECT TOP 1 1 FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK) WHERE r.Toid = @c_ToID AND r.FinalizeFlag = 'N'
+                        AND r.ReceiptKey < @c_ReceiptKey
+                        AND r.Storerkey = @c_Storerkey
+                        UNION
+                        SELECT TOP 1 1 FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK) WHERE r.Toid = @c_ToID AND r.FinalizeFlag = 'N'
+                        AND r.ReceiptKey = @c_ReceiptKey AND r.ReceiptLineNumber <> @c_ReceiptLineNo
+                        UNION
+                        SELECT TOP 1 1 FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK) WHERE r.Toid = @c_ToID AND r.FinalizeFlag = 'N'
+                        AND r.ReceiptKey > @c_ReceiptKey 
+                        AND r.Storerkey = @c_Storerkey
+                      )
+            BEGIN
+               SET @n_Continue = 3
+               SET @n_Err = 555256
+               SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Disallow duplicate Movable Unit Id. (lsp_Validate_ReceiptDetail_Std)'
+               GOTO EXIT_SP
+            END
+         END
+      END
+      --(Wan03) - END
    END TRY
    BEGIN CATCH
       SET @n_Continue = 3

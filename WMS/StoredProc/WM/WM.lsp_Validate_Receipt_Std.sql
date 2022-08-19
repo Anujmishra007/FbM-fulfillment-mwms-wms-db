@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_Validate_Receipt_Std]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_Validate_Receipt_Std]
-GO
-
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -18,15 +13,17 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.0                                                          */  
+/* Version: 1.2                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */ 
-/* 2021-02-10   mingle01 1.1  Add Big Outer Begin try/Catch              */
+/* Date        Author   Ver   Purposes                                   */ 
+/* 2021-02-10  mingle01 1.1   Add Big Outer Begin try/Catch              */
+/* 2021-05-20  Wan01    1.2   LFWM-3505 Storerconfig:                    */
+/*                            DisAllowDuplicateIdsOnWSRcpt SCE Enhancement*/
 /*************************************************************************/   
-CREATE PROC [WM].[lsp_Validate_Receipt_Std] (
+CREATE OR ALTER PROC [WM].[lsp_Validate_Receipt_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
 , @c_XMLDataString      NVARCHAR(MAX) 
 , @b_Success            INT OUTPUT
@@ -135,8 +132,9 @@ BEGIN
 
       -- StorerConfig 
       DECLARE 
-            @c_RCPTRQD                 NVARCHAR(1) = '0'
-         ,  @c_OWITF                   NVARCHAR(1) = '0'
+            @c_RCPTRQD                       NVARCHAR(1) = '0'
+         ,  @c_OWITF                         NVARCHAR(1) = '0'
+         ,  @c_DisAllowDuplicateIdsOnWSRcpt  NVARCHAR(30)= '0'             --(Wan03)
             
       SELECT  
             @c_ReceiptKey = R.ReceiptKey
@@ -156,7 +154,7 @@ BEGIN
          IF ISNULL(RTRIM(@c_Facility),'') = ''
          BEGIN
             SET @n_Err = 551901
-            SET @c_ErrMsg = 'Facility Required'
+            SET @c_ErrMsg = 'Facility Required. (lsp_Validate_Receipt_Std)'
             SET @n_Continue = 3 
             GOTO EXIT_SP         
          END
@@ -214,7 +212,7 @@ BEGIN
             IF ISNULL(RTRIM(@c_WarehouseReference),'') = '' OR ISNUMERIC(@c_WarehouseReference) <> 1
             BEGIN
                SET @n_Err = 551903
-               SET @c_ErrMsg = 'Invalid Principal Doc # (Warehouse Reference)'
+               SET @c_ErrMsg = 'Invalid Principal Doc # (Warehouse Reference). (lsp_Validate_Receipt_Std)'
                SET @n_Continue = 3 
                GOTO EXIT_SP            
             END
@@ -222,7 +220,7 @@ BEGIN
             IF ISNULL(RTRIM(@c_ASNReason),'') = ''
             BEGIN
                SET @n_Err = 551904
-               SET @c_ErrMsg = 'Receipt Reason Required'
+               SET @c_ErrMsg = 'Receipt Reason Required. (lsp_Validate_Receipt_Std)'
                SET @n_Continue = 3 
                GOTO EXIT_SP                     
             END
@@ -236,7 +234,7 @@ BEGIN
             @c_Facility = '',
             @c_StorerKey = @c_StorerKey,
             @c_sku = '',
-            @c_ConfigKey = 'ASN_CarrierKey_Required',
+            @c_ConfigKey = 'ASN_CarrierKey_Required. (lsp_Validate_Receipt_Std)',
             @b_Success   = @b_Success OUTPUT,
             @c_authority = @c_ASN_CarrierKey_Required OUTPUT,
             @n_err = @n_Err,
@@ -247,14 +245,14 @@ BEGIN
             IF ISNULL(RTRIM(@c_CarrierKey),'') = ''  
             BEGIN
                SET @n_Err = 551905
-               SET @c_ErrMsg = 'Carrierkey Required'
+               SET @c_ErrMsg = 'Carrierkey Required. (lsp_Validate_Receipt_Std) '
                SET @n_Continue = 3 
                GOTO EXIT_SP            
             END
          END            
       END
     
-       IF @n_Continue IN (1,2)
+      IF @n_Continue IN (1,2)
       BEGIN   
          DECLARE @c_ASNUniqueLottableValue NVARCHAR(1) = '0',
                  @n_LottableCount          INT = 0 
@@ -282,12 +280,40 @@ BEGIN
             IF @n_LottableCount > 1       
             BEGIN
                SET @n_Err = 551906
-               SET @c_ErrMsg = 'Lottable01, Lottable02 and Lottable03 Should be Unique'
+               SET @c_ErrMsg = 'Lottable01, Lottable02 and Lottable03 Should be Unique. (lsp_Validate_Receipt_Std)'
                SET @n_Continue = 3 
                GOTO EXIT_SP            
             END
          END            
       END
+      --(Wan01) - START
+      IF @n_Continue IN ( 1, 2 )
+      BEGIN
+         SELECT @c_DisAllowDuplicateIdsOnWSRcpt = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'DisAllowDuplicateIdsOnWSRcpt')
+         IF @c_DisAllowDuplicateIdsOnWSRcpt = '1'
+         BEGIN
+            IF EXISTS ( SELECT TOP 1 1 FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK) JOIN dbo.ID AS i WITH (NOLOCK) ON i.ID = r.ToID
+                        WHERE r.ReceiptKey = @c_ReceiptKey
+                        AND r.ToID <> ''
+                        UNION
+                        SELECT TOP 1 1 FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK) 
+                        JOIN dbo.RECEIPTDETAIL AS r2 WITH (NOLOCK) ON r2.Storerkey = r.Storerkey AND r2.ToId = r.ToId
+                        WHERE r.ReceiptKey = @c_ReceiptKey
+                        AND r.ToID <> ''
+                        AND r2.FinalizeFlag = 'N'
+                        AND r2.ToID <> ''                        
+                        GROUP BY r.ToID
+                        HAVING COUNT(1) > 1
+                      )
+            BEGIN
+               SET @n_Continue = 3
+               SET @n_Err = 551907
+               SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Disallow duplicate Movable Unit Id. (lsp_Validate_Receipt_Std)'
+               GOTO EXIT_SP
+            END
+         END
+      END
+      --(Wan01) - END
    END TRY
    
    BEGIN CATCH
