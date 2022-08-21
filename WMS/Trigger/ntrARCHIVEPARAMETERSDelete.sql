@@ -10,7 +10,8 @@
 /*                                                                               */
 /* Updates:                                                                      */
 /* Date         Author        Ver.  Purposes                                     */
-/* 2022-08-18   kelvinongcy   1.0   Capture deletion                             */
+/* 2022-08-18   kelvinongcy   1.0   Capture deletion to archiveparameters_log    */
+/*                                  and not dellog due could reused same table   */
 /*********************************************************************************/
  
 CREATE OR ALTER TRIGGER [dbo].[ntrARCHIVEPARAMETERSDelete]
@@ -58,7 +59,7 @@ CREATE OR ALTER TRIGGER [dbo].[ntrARCHIVEPARAMETERSDelete]
       ELSE 
       IF @c_authority = '1'         --    End   (KHLim02)
       BEGIN
-         INSERT INTO dbo.ARCHIVEPARAMETERS_DELLOG (ArchiveKey)
+         INSERT INTO dbo.ARCHIVEPARAMETERS_LOG (ArchiveKey)
          SELECT ArchiveKey
          FROM DELETED WITH (NOLOCK)
 
