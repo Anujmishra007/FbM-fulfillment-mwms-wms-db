@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ispPARL06]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[ispPARL06]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -29,7 +25,7 @@ GO
 /* Called By: isp_ASNReleasePATask_Wrapper                              */  
 /*            Storerconfig: ASNReleasePATask_SP = 'ispPARL06'           */
 /*                                                                      */  
-/* PVCS Version: 1.0                                                    */  
+/* PVCS Version: 1.1                                                    */  
 /*                                                                      */  
 /* Version: 7.0                                                         */  
 /*                                                                      */  
@@ -37,13 +33,17 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
+/* 06-Jul-2022  WLChooi  1.1  WMS-20157 - Add optional param, call by   */
+/*                            isp_UNILEVER_AutoReleasePA (WL01)         */
+/* 06-Jul-2022  WLChooi  1.1  DevOps Combine Script                     */
 /************************************************************************/  
 
-CREATE PROC ispPARL06 
-   @c_ReceiptKey  NVARCHAR(10),
-   @b_Success     INT OUTPUT, 
-   @n_err         INT OUTPUT, 
-   @c_errmsg      NVARCHAR(250) OUTPUT 
+CREATE OR ALTER PROC [dbo].[ispPARL06]
+   @c_ReceiptKey        NVARCHAR(10),
+   @b_Success           INT OUTPUT, 
+   @n_err               INT OUTPUT, 
+   @c_errmsg            NVARCHAR(250) OUTPUT,
+   @c_ReceiptLineNumber NVARCHAR(5) = ''   --WL01
 AS
 BEGIN
    SET NOCOUNT ON       -- SQL 2005 Standard
@@ -78,7 +78,7 @@ BEGIN
    SET @c_ToLoc         = ''
    SET @c_ToLogicalLoc  = ''
    SELECT @c_UserId = SUSER_NAME()
-      	   
+            
    WHILE @@TRANCOUNT > 0
    BEGIN 
       COMMIT TRAN
@@ -104,6 +104,9 @@ BEGIN
                      AND TaskType = 'ASTPA1'
                      AND SourceType = 'ispPARL06'
                      AND Storerkey = RD.Storerkey)
+   AND RD.ReceiptLineNumber = CASE WHEN ISNULL(@c_ReceiptLineNumber,'') = '' 
+                                   THEN RD.ReceiptLineNumber 
+                                   ELSE @c_ReceiptLineNumber END   --WL01
    GROUP BY RD.Storerkey
          ,  RD.ReceiptKey
          ,  RD.ToID
@@ -116,11 +119,11 @@ BEGIN
 
    WHILE @@FETCH_STATUS <> -1               
    BEGIN
-   	  SET @c_SuggestLoc = ''
-   	  SET @n_PABookingKey = 0
+      SET @c_SuggestLoc = ''
+      SET @n_PABookingKey = 0
       SET @c_PNDLoc = ''
       SET @c_LOCAisle = ''
-   	     	  
+                
       EXEC nspRDTPASTD
            @c_userid          = @c_UserID
          , @c_storerkey       = @c_StorerKey
@@ -140,12 +143,13 @@ BEGIN
       BEGIN
          SET @n_Continue = 3
          SET @n_Err = 30110
-         SET @c_Errmsg = 'NSQL'+CONVERT(CHAR(5),@n_err)+': Unable to find PA location. (ispPARL06)' 
+         SET @c_Errmsg = 'NSQL'+CONVERT(CHAR(5),@n_err)+': Unable to find PA location for Receiptkey: '   --WL01 
+                       + TRIM(@c_SourceKey) + '. (ispPARL06)'   --WL01 
          --GOTO QUIT_SP
       END      
-   	  
+        
       IF ISNULL(@c_SuggestLoc,'') <> ''
-      BEGIN   	           
+      BEGIN                 
          SELECT @c_LOCAisle = LOCAisle FROM LOC WITH (NOLOCK) WHERE LOC = @c_SuggestLoc
          
          SELECT TOP 1 @c_PNDLoc = Code
@@ -158,15 +162,16 @@ BEGIN
          BEGIN
             SET @n_Continue = 3
             SET @n_Err = 30130
-            SET @c_Errmsg = 'NSQL'+CONVERT(CHAR(5),@n_err)+': Unable to find PND location. (ispPARL06)' 
+            SET @c_Errmsg = 'NSQL'+CONVERT(CHAR(5),@n_err)+': Unable to find PND location for Receiptkey: '   --WL01 
+                          + TRIM(@c_SourceKey) + ' LocAisle: ' + TRIM(@c_LOCAisle)  + '. (ispPARL06)'   --WL01 
             --GOTO QUIT_SP
          END              
 
          IF ISNULL(@c_PNDLoc,'') <> '' 
          BEGIN       
-         	 BEGIN TRAN
-         	 	
-           EXECUTE nspg_GetKey
+            BEGIN TRAN
+                
+            EXECUTE nspg_GetKey
                   'TaskDetailKey'
                  ,10 
                  ,@c_TaskDetailKey OUTPUT 
@@ -308,5 +313,5 @@ BEGIN
 END
 GO
 
-GRANT EXECUTE ON ispPARL06 TO NSQL
+GRANT EXECUTE ON [dbo].[ispPARL06] TO NSQL
 GO
