@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispASNFZ23]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[ispASNFZ23]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,7 +13,7 @@ GO
 /*                                                                         */
 /* Called By: ispPostFinalizeReceiptWrapper                                */
 /*                                                                         */
-/* GitLab Version: 1.0                                                     */
+/* GitLab Version: 1.1                                                     */
 /*                                                                         */
 /* Version: 5.4                                                            */
 /*                                                                         */
@@ -26,8 +21,10 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
+/* 17-Aug-2022  WLChooi 1.1   JSM-88504 - Only copy if DocType = R (WL01)  */
+/* 17-Aug-2022  WLChooi 1.1   DevOps Combine Script                        */
 /***************************************************************************/  
-CREATE PROC [dbo].[ispASNFZ23]  
+CREATE OR ALTER PROC [dbo].[ispASNFZ23]  
 (     @c_Receiptkey  NVARCHAR(10)   
   ,   @b_Success     INT           OUTPUT
   ,   @n_Err         INT           OUTPUT
@@ -50,6 +47,20 @@ BEGIN
            @n_QtyReceived        INT
 
    SELECT @b_Success = 1, @n_Err = 0, @c_ErrMsg = '', @n_Continue = 1, @n_StartTranCount = @@TRANCOUNT                                                     
+
+   --WL01 S
+   --Validation
+   IF @n_Continue IN (1,2)
+   BEGIN
+      IF NOT EXISTS (SELECT 1
+                     FROM RECEIPT R WITH (NOLOCK)
+                     WHERE R.ReceiptKey = @c_Receiptkey
+                     AND R.DOCTYPE = 'R')
+      BEGIN
+         GOTO QUIT_SP
+      END
+   END
+   --WL01 E
 
    --Main Process
    IF @n_Continue IN (1,2)
@@ -117,6 +128,5 @@ QUIT_SP:
    END 
 END
 GO
-
 GRANT EXECUTE ON [dbo].[ispASNFZ23] TO nSQL 
 GO
