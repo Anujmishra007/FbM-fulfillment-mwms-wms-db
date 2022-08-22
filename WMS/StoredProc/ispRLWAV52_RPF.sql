@@ -13,7 +13,7 @@ GO
 /*                                                                      */  
 /* Called By: ReleaseWave_SP                                            */  
 /*          :                                                           */  
-/* PVCS Version: 1.1                                                    */  
+/* PVCS Version: 1.2                                                    */  
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /*                                                                      */  
@@ -22,6 +22,8 @@ GO
 /* 2022-05-12  Wan      1.0   Created.                                  */
 /* 2022-05-12  Wan      1.0   DevOps Combine Script.                    */
 /* 2022-07-27  Wan01    1.1   Fixed. Not to get Not tally UCC for replen*/
+/* 2022-08-04  Wan02    1.2   Fixed Not get Wave.DispatchPiecePickMethod*/
+/*                            to construct SourceType                   */
 /************************************************************************/  
 CREATE OR ALTER PROC [dbo].[ispRLWAV52_RPF]  
    @c_Wavekey     NVARCHAR(10)    
@@ -432,6 +434,10 @@ BEGIN
       SET @n_MinPalletCarton = CONVERT(INT, @c_MinPalletCarton)  
    END  
  
+   SELECT @c_DispatchPiecePickMethod = w.DispatchPiecePickMethod        --(Wan02)
+   FROM dbo.WAVE AS w WITH (NOLOCK)
+   WHERE w.WaveKey = @c_Wavekey
+   
    BEGIN TRAN  
    ------------------------------------------------------------------------------------  
    -- Calculate To Loc  

@@ -12,7 +12,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -22,6 +22,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2022-05-12  Wan      1.0   Created.                                  */
 /* 2022-05-12  Wan      1.0   DevOps Combine Script.                    */
+/* 2022-08-04  Wan01    1.1   Fixed to get correct SourceType           */
 /************************************************************************/
 CREATE OR ALTER PROC ispRLWAV52_CPK
    @c_Wavekey     NVARCHAR(10)    
@@ -144,10 +145,11 @@ BEGIN
                               AND PD.Sku = SKU.Sku
    LEFT JOIN TASKDETAIL TD WITH (NOLOCK) ON  PD.DropID = TD.CaseID
                                          AND TD.TaskType  = 'RPF'
-                                         AND TD.Sourcetype IN  ( 'ispRLWAV52-INLINE', 'ispRLWAV52-DTC', 'ispRLWAV52-REPLEN' )--(Wan01)
+                                         AND TD.Sourcetype LIKE 'ispRLWAV52_RPF-%'              --(Wan01)
+                                         AND PD.DropID <> ''                                    --(Wan01)                                         
    LEFT JOIN TASKDETAIL CPK WITH (NOLOCK) ON  PD.CaseID = CPK.CaseID                
                                          AND CPK.TaskType  = 'CPK'                  
-                                         AND CPK.Sourcetype IN  ( 'ispRLWAV52-CPK' )
+                                         AND CPK.Sourcetype IN  ( 'ispRLWAV52_CPK' )            --(Wan01)
                                          AND CPK.Wavekey = PD.Wavekey               
    WHERE WD.Wavekey = @c_WaveKey
    AND   PD.UOM IN ('6', '7')
@@ -614,7 +616,7 @@ BEGIN
                FROM #PICKDETAIL_WIP PIP WITH (NOLOCK)
                JOIN TASKDETAIL TD WITH (NOLOCK) ON  PIP.DropID = TD.CaseID
                                                 AND TD.TaskType  = 'RPF'
-                                                AND TD.Sourcetype IN  ( 'ispRLWAV52-INLINE', 'ispRLWAV52-DTC', 'ispRLWAV52-REPLEN')
+                                                AND TD.Sourcetype LIKE 'ispRLWAV52_RPF-%'              --(Wan01)
                                                 AND PIP.Wavekey = TD.Wavekey
                WHERE PIP.Wavekey = @c_Wavekey
                AND   PIP.DropID <> ''
@@ -669,7 +671,7 @@ BEGIN
          ,@c_TaskStatus
          ,[Priority] = '9'
          ,TIP.Areakey
-         ,SourceType = 'ispRLWAV52-CPK'
+         ,SourceType = 'ispRLWAV52_CPK'              ---(Wan01)
          ,Sourcekey  = @c_Wavekey
          ,TIP.Wavekey
          ,TIP.Orderkey
