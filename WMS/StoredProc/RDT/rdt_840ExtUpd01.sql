@@ -24,6 +24,8 @@ GO
 /* 2020-07-13  1.5  James      WMS-13919 Display short pack msg(james03)*/
 /* 2021-04-01  1.6 YeeKung    WMS-16717 Add serialno and serialqty      */
 /*                            Params (yeekung01)                        */
+/* 2022-08-19  1.8 WyeChun    JSM-89759 Swap TrackingNo with            */  
+/*                            UserDefine04 (WC01)                       */
 /************************************************************************/
 
 CREATE PROC rdt.rdt_840ExtUpd01 (
@@ -600,7 +602,8 @@ AS
                      AND   UDF02 = 'LETTER')
          BEGIN
             UPDATE dbo.Orders SET 
-               TrackingNo = UserDefine04
+               --TrackingNo = UserDefine04  --(WC01)  
+               UserDefine04 = TrackingNo  --(WC01)  
             WHERE OrderKey = @cOrderKey
             
             IF @@ERROR <> 0
