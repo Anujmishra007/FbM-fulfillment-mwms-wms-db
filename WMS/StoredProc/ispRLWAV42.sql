@@ -1,3 +1,8 @@
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'[dbo].[ispRLWAV42]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+   DROP PROCEDURE [dbo].[ispRLWAV42]
+GO
+
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -13,7 +18,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* GitLab Version: 1.3                                                   */    
+/* GitLab Version: 1.2                                                   */    
 /*                                                                       */    
 /* Version: 5.4                                                          */    
 /*                                                                       */    
@@ -24,11 +29,9 @@ GO
 /* 2021-08-17   WLChooi  1.1  Bug Fix (WL01)                             */   
 /* 2021-09-08   WLChooi  1.2  DevOps Combine Script                      */   
 /* 2021-09-08   WLChooi  1.2  WMS-17879 - Update Pickdetail.Notes (WL02) */
-/* 2021-12-16   WLChooi  1.3  Fix for WMS-17879 (WL03)                   */
-/* 2022-08-05   WLChooi  1.4  WMS-20398 - Enhance PTS Logic (WL04)       */
 /*************************************************************************/     
 
-CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV42]        
+CREATE PROCEDURE [dbo].[ispRLWAV42]        
     @c_wavekey      NVARCHAR(10)    
    ,@b_Success      INT            OUTPUT    
    ,@n_err          INT            OUTPUT    
@@ -125,10 +128,6 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV42]
          , @c_LinkTaskToPick_SQL      NVARCHAR(4000)
          , @c_CLCode                  NVARCHAR(50)   --WL02
          , @c_CLShort                 NVARCHAR(50)   --WL02
-         , @c_Userdefine01            NVARCHAR(30)   --WL03
-         , @n_CountWaveOrder          INT   --WL04
-         , @n_SumPTSMaxOrder          INT   --WL04
-         , @n_UsePTSNum               INT   --WL04
  
    DECLARE @cur_PICKSKU CURSOR,   
            @c_SortMode NVARCHAR(10)  
@@ -146,8 +145,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV42]
                    @c_Storerkey               = ORDERS.Storerkey,
                    @c_Userdefine04            = WAVE.UserDefine04,
                    @c_UserDefine08            = WAVE.UserDefine08,
-                   @c_DocType                 = ORDERS.DocType,
-                   @c_Userdefine01            = WAVE.UserDefine01   --WL03
+                   @c_DocType                 = ORDERS.DocType
       FROM WAVE (NOLOCK)  
       JOIN WAVEDETAIL (NOLOCK) ON WAVE.Wavekey = WAVEDETAIL.WaveKey  
       JOIN ORDERS (NOLOCK) ON WAVEDETAIL.Orderkey = ORDERS.Orderkey          
@@ -295,15 +293,6 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV42]
          SET @n_continue = 3
       END          
    END
-
-   --WL04 S
-   CREATE TABLE #TMP_PTS (
-      RowID          INT NOT NULL IDENTITY(1,1) PRIMARY KEY,
-      PTSCode        NVARCHAR(100),
-      MaxOrder       INT,
-      CurOrdCnt      INT DEFAULT(0)
-   )
-   --WL04 E
 
    --Remove taskdetailkey and add wavekey from pickdetail of the wave      
    IF @n_continue = 1 OR @n_continue = 2  
@@ -696,83 +685,37 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV42]
 
    --WL02 S
    --Assign PTS Loc to Pickdetail.Notes
-   IF (@n_continue = 1 OR @n_continue = 2) AND @c_DocType = 'N' AND @c_Userdefine01 IN ('PTS','PTS-SENT')   --WL03
+   IF (@n_continue = 1 OR @n_continue = 2) AND @c_DocType = 'N'
    BEGIN
-      --WL04 S
-      IF ISNUMERIC(@c_Userdefine02) = 1
-      BEGIN
-         IF CAST(@c_Userdefine02 AS INT) > 6 OR CAST(@c_Userdefine02 AS INT) <= 0
-         BEGIN
-            SELECT @n_continue = 3  
-            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 83158   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
-            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Input value not PTS number. (ispRLWAV42)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) ' 
-            GOTO RETURN_SP
-         END
-      END 
-
-      SET @n_UsePTSNum = CAST(@c_Userdefine02 AS INT)
-
-      INSERT INTO #TMP_PTS (PTSCode, MaxOrder, CurOrdCnt)
-      SELECT TOP (@n_UsePTSNum) CL.Code, CASE WHEN ISNUMERIC(CL.Short) = 1 THEN CL.Short ELSE 0 END, 0
+      DECLARE CUR_PTS CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT CL.Code, CASE WHEN ISNUMERIC(CL.Short) = 1 THEN CL.Short ELSE 0 END
       FROM CODELKUP CL (NOLOCK)
       WHERE CL.LISTNAME = 'WSPTSCODE'
       AND CL.Storerkey = @c_Storerkey
       ORDER BY CL.Code ASC
 
-      SELECT @n_CountWaveOrder = COUNT(DISTINCT PDW.OrderKey)
-      FROM #PickDetail_WIP PDW
-      WHERE PDW.WaveKey = @c_wavekey
-
-      SELECT @n_SumPTSMaxOrder = SUM(PTS.MaxOrder)
-      FROM #TMP_PTS PTS
-
-      IF @n_SumPTSMaxOrder < @n_CountWaveOrder
-      BEGIN
-         SELECT @n_continue = 3  
-         SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 83159   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
-         SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Not enough PTS Position. (ispRLWAV42)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) ' 
-         GOTO RETURN_SP
-      END
-
-      DECLARE CUR_PTS CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT PDW.OrderKey
-      FROM #PickDetail_WIP PDW
-      WHERE PDW.WaveKey = @c_wavekey
-      GROUP BY PDW.OrderKey
-      ORDER BY SUM(Qty) DESC
-
       OPEN CUR_PTS
 
-      FETCH NEXT FROM CUR_PTS INTO @c_Orderkey
+      FETCH NEXT FROM CUR_PTS INTO @c_CLCode, @c_CLShort
 
       WHILE @@FETCH_STATUS <> -1
       BEGIN
-         SET @c_CLCode = ''
-         
-         SELECT TOP 1 @c_CLCode = TP.PTSCode
-         FROM #TMP_PTS TP
-         WHERE TP.CurOrdCnt < TP.MaxOrder
-         GROUP BY TP.PTSCode
-         ORDER BY MIN(TP.CurOrdCnt), TP.PTSCode
+         UPDATE #PickDetail_WIP
+         SET Notes = @c_CLCode
+         WHERE OrderKey IN ( SELECT DISTINCT TOP (CAST(@c_CLShort AS INT)) PD.OrderKey
+                             FROM #PickDetail_WIP PD
+                             WHERE PD.WaveKey = @c_wavekey
+                             AND PD.Notes = ''
+                             ORDER BY PD.OrderKey)
+         AND Storerkey = @c_Storerkey
 
-         IF @c_CLCode <> ''
-         BEGIN
-            UPDATE #PickDetail_WIP
-            SET Notes = @c_CLCode
-            WHERE OrderKey = @c_Orderkey
-            AND Storerkey = @c_Storerkey
-            AND Notes = ''
+         IF NOT EXISTS (SELECT 1 FROM #PickDetail_WIP PDW WHERE PDW.Notes = '')
+            BREAK;
 
-            UPDATE #TMP_PTS
-            SET CurOrdCnt = CurOrdCnt + 1
-            WHERE PTSCode = @c_CLCode
-         END
-
-         FETCH NEXT FROM CUR_PTS INTO @c_Orderkey
+         FETCH NEXT FROM CUR_PTS INTO @c_CLCode, @c_CLShort
       END
       CLOSE CUR_PTS
       DEALLOCATE CUR_PTS
-      --WL04 E
    END
    --WL02 E
 
@@ -829,7 +772,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV42]
       BEGIN  
          SELECT @n_continue = 3  
          SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 83160   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
-         SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update on wave Failed (ispRLWAV42)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
+         SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update on wave Failed (ispRLWAV33)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
       END  
    END  
 
@@ -863,13 +806,6 @@ RETURN_SP:
    BEGIN 
       DROP TABLE #TMP_WavePICKLOT
    END
-
-   --WL04 S
-   IF OBJECT_ID('#TMP_PTS') IS NOT NULL
-   BEGIN 
-      DROP TABLE #TMP_PTS
-   END
-   --WL04 E
 
    --WL02 S
    IF CURSOR_STATUS('LOCAL', 'CUR_PTS') IN (0 , 1)
