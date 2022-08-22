@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrPackDetailDelete]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-   drop trigger [dbo].[ntrPackDetailDelete]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -19,7 +15,7 @@ GO
 /*                                                                      */        
 /* Called By: When records delete from PackDetail                       */        
 /*                                                                      */        
-/* PVCS Version: 2.0                                                    */        
+/* PVCS Version: 2.3                                                    */        
 /*                                                                      */        
 /* Version: 5.4                                                         */        
 /*                                                                      */        
@@ -46,8 +42,9 @@ GO
 /* 2021-Nov-26  Wan02   2.2   WMS-18410 - [RG] Logitech Tote ID Packing */
 /*                            Change Request                            */
 /* 2021-Nov-26  Wan02   2.2   DevOps Conbine Script                     */
+/* 2022-Aug-17  WLChooi 2.3   WMS-20472 - Delete SerialNo (WL01)        */
 /************************************************************************/        
-CREATE TRIGGER [ntrPackDetailDelete] ON [PackDetail]      
+CREATE OR ALTER TRIGGER [ntrPackDetailDelete] ON [PackDetail]      
 FOR  DELETE      
 AS      
 BEGIN      
@@ -90,7 +87,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
      SELECT @n_continue = 4      
  END       
    --NJOW04  
-   IF @n_continue=1 or @n_continue=2            
+   IF @n_continue=1 OR @n_continue=2            
    BEGIN  
       IF EXISTS (SELECT 1 FROM DELETED d    
                  JOIN storerconfig s WITH (NOLOCK) ON  d.storerkey = s.storerkey      
@@ -169,10 +166,10 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                  AND PACKD.labelno = DELETED.labelno 
                  AND PACKD.labelline = DELETED.labelline 
                  AND PACKD.sku = DELETED.sku
-                JOIN PACKHEADER PH WITH (NOLOCK) on (PACKD.pickslipno = PH.pickslipno and PH.Status < '9')
-                JOIN ORDERDETAIL OD WITH (NOLOCK) on (PH.orderkey = OD.orderkey and PACKD.sku = OD.sku and OD.openqty >= PACKD.expqty)
-                JOIN PICKDETAIL PK WITH (NOLOCK) on (OD.orderkey = PK.orderkey and OD.orderlinenumber = PK.orderlinenumber and PK.Status <= '5')
-                order by OD.openqty 
+                JOIN PACKHEADER PH WITH (NOLOCK) ON (PACKD.pickslipno = PH.pickslipno AND PH.Status < '9')
+                JOIN ORDERDETAIL OD WITH (NOLOCK) ON (PH.orderkey = OD.orderkey AND PACKD.sku = OD.sku AND OD.openqty >= PACKD.expqty)
+                JOIN PICKDETAIL PK WITH (NOLOCK) ON (OD.orderkey = PK.orderkey AND OD.orderlinenumber = PK.orderlinenumber AND PK.Status <= '5')
+                ORDER BY OD.openqty 
          
              IF @c_Pickdetailkey <> ''
              BEGIN
@@ -185,15 +182,15 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                 IF @n_err <> 0
                 BEGIN
                    SELECT @n_continue = 3
-                   SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 61811  
-                   SELECT @c_errmsg="NSQL"+CONVERT(char(5), @n_err)+": Update Failed On PICKDETAIL. (ntrPackDetailDelete)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
+                   SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 61811  
+                   SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5), @n_err)+": Update Failed On PICKDETAIL. (ntrPackDetailDelete)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
                 END
              END          
              ELSE
              BEGIN
                 SELECT @n_continue = 3
-                SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 61812
-                SELECT @c_errmsg="NSQL"+CONVERT(char(5), @n_err)+": Unable To Find Pickdetail to Auto Unallocate. (ntrPackDetailDelete)" 
+                SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 61812
+                SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5), @n_err)+": Unable To Find Pickdetail to Auto Unallocate. (ntrPackDetailDelete)" 
              END
         END
       END
@@ -223,8 +220,8 @@ BEGIN
          IF @n_err <> 0      
          BEGIN      
             SELECT @n_continue = 3      
-            SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 61813
-            SELECT @c_errmsg='NSQL'+CONVERT(char(6), @n_err)+': Delete Failed On Table PackSerialNo. (ntrPackDetailDelete)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg), '') + ' ) '      
+            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 61813
+            SELECT @c_errmsg='NSQL'+CONVERT(CHAR(6), @n_err)+': Delete Failed On Table PackSerialNo. (ntrPackDetailDelete)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg), '') + ' ) '      
             BREAK
          END  
          FETCH NEXT FROM @curPSNO INTO @n_PackSerialNoKey
@@ -255,8 +252,8 @@ BEGIN
          IF @n_err <> 0      
          BEGIN      
             SELECT @n_continue = 3      
-            SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 61818
-            SELECT @c_errmsg='NSQL'+CONVERT(char(6), @n_err)+': Delete Failed On Table PackDetailInfo. (ntrPackDetailDelete)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg), '') + ' ) '      
+            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 61818
+            SELECT @c_errmsg='NSQL'+CONVERT(CHAR(6), @n_err)+': Delete Failed On Table PackDetailInfo. (ntrPackDetailDelete)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg), '') + ' ) '      
             BREAK
          END  
          FETCH NEXT FROM @curPDInfo INTO @n_PackDetailInfoKey
@@ -391,15 +388,17 @@ END
  BEGIN
      DELETE SerialNo 
      FROM SerialNo
-     JOIN PACKHEADER PH (NOLOCK) ON SerialNo.Orderkey = PH.Orderkey AND SerialNo.Storerkey = PH.Storerkey
+     JOIN PACKHEADER PH (NOLOCK) ON SerialNo.Orderkey = PH.Orderkey AND SerialNo.Storerkey = PH.Storerkey 
+                               AND (SerialNo.Pickslipno = PH.Pickslipno OR ISNULL(Serialno.Pickslipno,'')='')   --WL01
      JOIN DELETED ON PH.PickslipNo = DELETED.PickslipNo
                     AND SerialNo.Sku = DELETED.Sku 
-                    AND SerialNo.OrderLineNumber = LTRIM(CAST(DELETED.Cartonno AS NVARCHAR(5)))                    
+                    AND SerialNo.OrderLineNumber = LTRIM(CAST(DELETED.Cartonno AS NVARCHAR(5)))           
+                    AND (SerialNo.LabelLine = DELETED.LabelLine OR ISNULL(SerialNo.LabelLine,'')='')   --WL01
      JOIN SKU (NOLOCK) ON DELETED.Storerkey = SKU.Storerkey AND DELETED.Sku = SKU.Sku
      LEFT JOIN STORERCONFIG SC (NOLOCK) ON PH.Storerkey = SC.Storerkey AND SC.Configkey = 'ADAllowInsertExistingSerialNo' AND SC.Option1 = 'NotAllowInsertNewSerialNo' AND SC.Svalue = '1' --NJOW05
      WHERE SKU.Susr4 = 'AD'     
      AND SC.SValue IS NULL  --NJOW05
-           
+
     SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
     IF @n_err <> 0
     BEGIN
@@ -415,10 +414,12 @@ END
         SERIALNO.Status = '1',
         SERIALNO.Trafficcop = NULL
     FROM SERIALNO 
-    JOIN PACKHEADER PH (NOLOCK) ON SerialNo.Orderkey = PH.Orderkey AND SerialNo.Storerkey = PH.Storerkey
+    JOIN PACKHEADER PH (NOLOCK) ON SerialNo.Orderkey = PH.Orderkey AND SerialNo.Storerkey = PH.Storerkey 
+                               AND (SerialNo.Pickslipno = PH.Pickslipno OR ISNULL(Serialno.Pickslipno,'')='')   --WL01
     JOIN DELETED ON PH.PickslipNo = DELETED.PickslipNo
                     AND SerialNo.Sku = DELETED.Sku 
-                    AND SerialNo.OrderLineNumber = LTRIM(CAST(DELETED.Cartonno AS NVARCHAR(5)))                    
+                    AND SerialNo.OrderLineNumber = LTRIM(CAST(DELETED.Cartonno AS NVARCHAR(5))) 
+                    AND (SerialNo.LabelLine = DELETED.LabelLine OR ISNULL(SerialNo.LabelLine,'')='')   --WL01
     JOIN SKU (NOLOCK) ON DELETED.Storerkey = SKU.Storerkey AND DELETED.Sku = SKU.Sku
     JOIN STORERCONFIG SC (NOLOCK) ON PH.Storerkey = SC.Storerkey AND SC.Configkey = 'ADAllowInsertExistingSerialNo' AND SC.Option1 = 'NotAllowInsertNewSerialNo' AND SC.Svalue = '1' --Fix
     WHERE SKU.Susr4 = 'AD'     
