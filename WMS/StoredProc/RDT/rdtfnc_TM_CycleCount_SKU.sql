@@ -1,6 +1,3 @@
-IF (objectProperty(object_id('rdt.rdtfnc_TM_CycleCount_SKU'), 'IsProcedure') is not null)
-	DROP PROCEDURE [RDT].[rdtfnc_TM_CycleCount_SKU]
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -36,9 +33,10 @@ GO
 /*                            Skip step_1, misc bug fix                       */
 /* 2021-05-07 2.5  James      WMS-16965 Add default opt in scn 3 (james08)    */
 /* 2021-06-02 2.6  James      WMS-16634 Add update loc.lastcyclecount(james09)*/
+/* 2022-07-22 2.7  James      WMS-19597 Add ExtendedDisplayQtySP (james10)    */
 /******************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_TM_CycleCount_SKU] (
+CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CycleCount_SKU] (
    @nMobile    int,
    @nErrNo     int  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max
@@ -213,6 +211,8 @@ DECLARE
    @cTMCCSKUSkipScreen1    NVARCHAR( 1),
    @cDefaultOption         NVARCHAR( 1),
    @cSkipAlertScreen       NVARCHAR( 1),
+   @cExtendedDisplayQtySP  NVARCHAR( 20),
+   @tExtendedDisplayQty    VARIABLETABLE,
    
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -308,16 +308,17 @@ SELECT
    @cExtCfmSP           = V_String26,
 
    -- Start of Common Variable use by UCC, SKU, SingleScan CC
-   @nFromScn         = V_String30,
-   @nFromStep        = V_String31,
-   @cAreakey         = V_String32,
-   @cTTMStrategykey  = V_String33,
-   @cTTMTasktype     = V_String34,
-   @cRefKey01        = V_String35,
-   @cRefKey02        = V_String36,
-   @cRefKey03        = V_String37,
-   @cRefKey04        = V_String38,
-   @cRefKey05        = V_String39,
+   @cExtendedDisplayQtySP  = V_String29,
+   @nFromScn               = V_String30,
+   @nFromStep              = V_String31,
+   @cAreakey               = V_String32,
+   @cTTMStrategykey        = V_String33,
+   @cTTMTasktype           = V_String34,
+   @cRefKey01              = V_String35,
+   @cRefKey02              = V_String36,
+   @cRefKey03              = V_String37,
+   @cRefKey04              = V_String38,
+   @cRefKey05              = V_String39,
 
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
@@ -395,6 +396,11 @@ BEGIN
 
    SET @cSkipAlertScreen = rdt.RDTGetConfig( @nFunc, 'SkipAlertScreen', @cStorerkey)
 
+   -- (james10)
+   SET @cExtendedDisplayQtySP = rdt.RDTGetConfig( @nFunc, 'ExtendedDisplayQtySP', @cStorerKey)
+   IF @cExtendedDisplayQtySP = '0'
+      SET @cExtendedDisplayQtySP = ''
+   
    --IF @nStep = 0 GOTO Step_0   -- TM CC- SKU
    IF @nStep = 1 GOTO Step_1   -- Scn = 2940. SKU
 	IF @nStep = 2 GOTO Step_2   -- Scn = 2941. Qty -- Lottables
@@ -570,6 +576,11 @@ BEGIN
 
             SET @cCommodity = @cUPC
             SET @nActQTY = @nQTY
+            
+            -- The sku/qty screen doesn't has suggested qty
+            -- If decode return qty then default it 
+            IF @nQty > 0
+               SET @cDefaultQty = @nQty
          END
       END   -- End for DecodeSP
 
@@ -934,43 +945,96 @@ BEGIN
       SET @cFieldAttr07 = ''
       SET @cFieldAttr12 = ''
 
-      --SET @nDefaultQty = 0
-
-      -- if default qty turned on then overwrite the actual MQty (james02)
-		--SET @cDefaultQty = rdt.RDTGetConfig( @nFunc, 'TMCCDefaultQty', @cStorerkey)
-      IF RDT.rdtIsValidQTY( @cDefaultQty, 1) = 1
-         SET @nDefaultQty = CAST( @cDefaultQty AS INT)
-      ELSE
-         SET @nDefaultQty = 0
-
-      IF @nDefaultQty > 0
+      -- Extended info
+      IF @cExtendedDisplayQtySP <> ''
       BEGIN
-         SET @cFieldAttr12 = ''
-         SET @cOutField12 = ''
-         SET @cFieldAttr06 = 'O'
-         SET @cFieldAttr07 = 'O'
-
-         -- Convert to prefer UOM QTY
-         IF @cPUOM = '6' OR -- When preferred UOM = master unit
-            @nPUOM_Div = 0  -- UOM not setup
-            SET @cOutField07 = @nDefaultQty
-         ELSE
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedDisplayQtySP AND type = 'P')
          BEGIN
-            IF @nDefaultQty > @nPUOM_Div
-            BEGIN
-               SET @cOutField06 = @nDefaultQty / @nPUOM_Div  -- Calc QTY in preferred UOM
-               SET @cOutField07 = @nDefaultQty % @nPUOM_Div  -- Calc the remaining in master unit
-            END
-            ELSE
-               SET @cOutField07 = @nDefaultQty
+            SET @cExtendedInfo = ''
+
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedDisplayQtySP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cTaskDetailKey, @cCCKey, @cCCDetailKey, @cLoc, @cID, @cSKU, @nActQTY, ' +
+               ' @cBarcode, @cPUOM, @nPUOM_Div, @cPUOM_Desc OUTPUT, @cMUOM_Desc OUTPUT, ' +
+               ' @cFieldAttr06 OUTPUT, @cFieldAttr07 OUTPUT, @cOutField04 OUTPUT, @cOutField05 OUTPUT, @cOutField06 OUTPUT, @cOutField07 OUTPUT, ' +
+               ' @tExtendedDisplayQty '
+
+            SET @cSQLParam =
+               '@nMobile         INT, ' +
+               '@nFunc           INT, ' +
+               '@cLangCode       NVARCHAR( 3), ' +
+               '@nStep           INT, ' +
+               '@nInputKey       INT, ' +
+               '@cStorerKey      NVARCHAR( 15), ' +
+               '@cTaskDetailKey  NVARCHAR( 10), ' +
+               '@cCCKey          NVARCHAR( 10), ' +
+               '@cCCDetailKey    NVARCHAR( 10), ' +
+               '@cLoc            NVARCHAR( 10), ' +
+               '@cID             NVARCHAR( 18), ' +
+               '@cSKU            NVARCHAR( 20), ' +
+               '@nActQTY         INT, ' +
+               '@cBarcode        NVARCHAR( 60), ' +
+               '@cPUOM           NVARCHAR( 1), ' +
+               '@nPUOM_Div       NVARCHAR( 5), ' +
+               '@cPUOM_Desc      NVARCHAR( 5)   OUTPUT, ' +
+               '@cMUOM_Desc      NVARCHAR( 5)   OUTPUT, ' +
+               '@cFieldAttr06    NVARCHAR( 1)   OUTPUT, ' +
+               '@cFieldAttr07    NVARCHAR( 1)   OUTPUT, ' +
+               '@cOutField04     NVARCHAR( 60)  OUTPUT, ' +
+               '@cOutField05     NVARCHAR( 60)  OUTPUT, ' +
+               '@cOutField06     NVARCHAR( 60)  OUTPUT, ' +
+               '@cOutField07     NVARCHAR( 60)  OUTPUT, ' + 
+               '@tExtendedDisplayQty   VARIABLETABLE READONLY' 
+               
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cTaskDetailKey, @cCCKey, @cCCDetailKey, @cLoc, @cID, @cSKU, @nActQTY,
+               @cBarcode, @cPUOM, @nPUOM_Div, @cPUOM_Desc OUTPUT, @cMUOM_Desc OUTPUT,
+               @cFieldAttr06 OUTPUT, @cFieldAttr07 OUTPUT, @cOutField04 OUTPUT, @cOutField05 OUTPUT, @cOutField06 OUTPUT, @cOutField07 OUTPUT,
+               @tExtendedDisplayQty
          END
       END
       ELSE
       BEGIN
-         SET @cFieldAttr12 = 'O'
-         SET @cOutField12 = ''
-      END
+         -- if default qty turned on then overwrite the actual MQty (james02)
+		   --SET @cDefaultQty = rdt.RDTGetConfig( @nFunc, 'TMCCDefaultQty', @cStorerkey)
+         IF RDT.rdtIsValidQTY( @cDefaultQty, 1) = 1
+            SET @nDefaultQty = CAST( @cDefaultQty AS INT)
+         ELSE
+            SET @nDefaultQty = 0
 
+         IF @nDefaultQty > 0
+         BEGIN
+            SET @cFieldAttr12 = ''
+            SET @cOutField12 = ''
+            SET @cFieldAttr06 = 'O'
+            SET @cFieldAttr07 = 'O'
+
+            -- Convert to prefer UOM QTY
+            IF @cPUOM = '6' OR -- When preferred UOM = master unit
+               @nPUOM_Div = 0  -- UOM not setup
+               SET @cOutField07 = @nDefaultQty
+            ELSE
+            BEGIN
+               IF @nDefaultQty > @nPUOM_Div
+               BEGIN
+                  SET @cOutField06 = @nDefaultQty / @nPUOM_Div  -- Calc QTY in preferred UOM
+                  SET @cOutField07 = @nDefaultQty % @nPUOM_Div  -- Calc the remaining in master unit
+               END
+               ELSE
+                  SET @cOutField07 = @nDefaultQty
+            END
+         END
+         ELSE
+         BEGIN
+            SET @cFieldAttr12 = 'O'
+            SET @cOutField12 = ''
+         END
+
+         IF @nPQTY > 0       
+            EXEC rdt.rdtSetFocusField @nMobile, 06  
+         ELSE  
+            EXEC rdt.rdtSetFocusField @nMobile, 07  
+      END
+      
       SET @cNewSKUorLottable = ''
 
       IF NOT EXISTS ( SELECT 1 FROM dbo.CCDetail WITH (NOLOCK)
@@ -1316,12 +1380,6 @@ BEGIN
 		-- GOTO Next Screen
 		SET @nScn = @nScn + 1
 	   SET @nStep = @nStep + 1
-
-      IF @nPQTY > 0       
-         EXEC rdt.rdtSetFocusField @nMobile, 06  
-      ELSE  
-         EXEC rdt.rdtSetFocusField @nMobile, 07  
-
 
 	END  -- Inputkey = 1
 
@@ -4138,10 +4196,12 @@ BEGIN
    WHERE Mobile = @nMobile
 END
 GO
-SET QUOTED_IDENTIFIER OFF
+
+
+SET QUOTED_IDENTIFIER OFF 
 GO
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF 
 GO
 
-GRANT EXECUTE ON [RDT].[rdtfnc_TM_CycleCount_SKU] to nSQL
+GRANT EXECUTE ON rdt.rdtfnc_TM_CycleCount_SKU to nSQL
 GO
