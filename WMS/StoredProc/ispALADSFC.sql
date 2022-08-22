@@ -30,8 +30,10 @@ GO
 /* 2021-10-22  Wan01    1.1   Exclude Normal Replen UCC for UOM 2 & 6   */
 /*                            where UCC.Status = '1'                    */
 /* 2022-02-09  Wan02    1.2   CR 1.5. Exclude Lot & ID Hold Inventory   */
+/* 2022-07-13  Wan04    1.4   Fix Issue for UOM = '7' and reallocate UCC*/
+/*                            that has been allocated for UOM ='6'      */
 /************************************************************************/
-CREATE PROC dbo.[ispALADSFC]
+CREATE PROC [dbo].[ispALADSFC]
       @c_Wavekey           NVARCHAR(10)  
    ,  @c_Facility          NVARCHAR(5)     
    ,  @c_StorerKey         NVARCHAR(15)     
@@ -110,13 +112,28 @@ BEGIN
    
    IF @c_UOM IN ('7')
    BEGIN
+      --(WAN04) 2022-07-13 Fixed - Select ALL UCC that with Status = '3' and only get those UCC with UCC.qty - allocated qty > 0 below <START>--
+    SELECT @c_Storerkey '@c_Storerkey', @c_Sku '@c_Sku'
+   	SELECT p.DropID  
+               ,QtyAllocated = SUM(p.Qty) OVER(PARTITION BY p.DropID ORDER BY PickdetailKey)   
+         FROM dbo.PICKDETAIL AS p WITH (NOLOCK)   
+         WHERE p.Storerkey = @c_Storerkey  
+         AND p.DropID <> ''  
+         --AND p.UOM = '7'                               
+         AND p.[Status] < '9' AND p.ShipFlag <> 'Y'  
+         AND EXISTS (SELECT 1 FROM dbo.UCC AS u WITH (NOLOCK)   
+                     WHERE u.Storerkey = @c_Storerkey  
+                     AND u.Sku = @c_Sku  
+                     AND u.UCCNo = p.DropID  
+                     AND u.[Status] = '3'  
+                     )
       ; WITH ad AS
       (  SELECT p.DropID
                ,QtyAllocated = SUM(p.Qty) OVER(PARTITION BY p.DropID ORDER BY PickdetailKey) 
          FROM dbo.PICKDETAIL AS p WITH (NOLOCK) 
          WHERE p.Storerkey = @c_Storerkey
          AND p.DropID <> ''
-         AND p.UOM = '7'
+         --AND p.UOM = '7'
          AND p.[Status] < '9' AND p.ShipFlag <> 'Y'
          AND EXISTS (SELECT 1 FROM dbo.UCC AS u WITH (NOLOCK) 
                      WHERE u.Storerkey = @c_Storerkey
@@ -125,6 +142,7 @@ BEGIN
                      AND u.[Status] = '3'
                      )
        )
+	   --(WAN04) 2022-07-13 Fixed - Select ALL UCC that with Status = '3' and only get those UCC with UCC.qty - allocated qty > 0 below <END>--
       INSERT INTO #ALLOCATE_DROPID (DropID, QtyAllocated)
       SELECT TOP 1 WITH TIES 
             ad.DropID
@@ -282,3 +300,5 @@ END -- procedure
 GO
 GRANT EXECUTE ON [dbo].[ispALADSFC] TO nSQL 
 GO
+
+
