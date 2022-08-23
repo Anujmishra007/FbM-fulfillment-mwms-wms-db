@@ -44,7 +44,7 @@ BEGIN
 	 ,B.ConfigType
 	 ,B.Data
      FROM SKU as A WITH (NOLOCK)
-     JOIN SKUConfig as B WITH (NOLOCK)
+     LEFT JOIN SKUConfig as B WITH (NOLOCK)
      ON A.SKU = B.SKU AND A.Storerkey = B.Storerkey
      where A.Storerkey = ''', @PARAM_GENERIC_STORERKEY, '''
 	')
