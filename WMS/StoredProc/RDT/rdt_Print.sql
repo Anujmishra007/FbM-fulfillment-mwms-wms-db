@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_Print]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_Print]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -31,9 +28,10 @@ GO
 /*                             (yeekung01)                                    */          
 /* 23-08-2021 2.2  YeeKung     WMS-17797 Modified new feature                 */     
 /* 15-11-2021 2.3  YeeKung     WMS-18126 Add UPS support (yeekung03)          */              
+/* 12-07-2022 2.4  James       WMS-20111 Add ExportFileName (james03)         */
 /******************************************************************************/                
                 
-CREATE   PROC rdt.rdt_Print (                
+CREATE OR ALTER PROC rdt.rdt_Print (                
     @nMobile       INT                
    ,@nFunc         INT                
    ,@cLangCode     NVARCHAR( 3)                
@@ -50,6 +48,7 @@ CREATE   PROC rdt.rdt_Print (
    ,@cErrMsg       NVARCHAR(250) OUTPUT                
    ,@nNoOfCopy     INT = NULL                
    ,@cPrintCommand NVARCHAR(MAX) = ''                
+   ,@cExportFileName NVARCHAR( 50) = ''
 )                
 AS                
 BEGIN                
@@ -390,10 +389,10 @@ BEGIN
          -- Insert print job                
          INSERT INTO rdt.rdtPrintJob (                
             JobName, ReportID, JobStatus, Datawindow, NoOfParms, Printer, NoOfCopy, Mobile, TargetDB, PrintData, JobType, StorerKey,                 
-            Parm1, Parm2, Parm3, Parm4, Parm5, Parm6, Parm7, Parm8, Parm9, Parm10, Function_ID)                
+            Parm1, Parm2, Parm3, Parm4, Parm5, Parm6, Parm7, Parm8, Parm9, Parm10, Function_ID, ExportFileName)                
          VALUES(                
             @cSourceType, @cReportType, @cJobStatus, @cDataWindow, 0, @cPrinter, 1, @nMobile, DB_NAME(), @cPrintCommand, @cJobType, @cStorerKey,                 
-            @cValue01, @cValue02, @cValue03, @cValue04, @cValue05, @cValue06, @cValue07, @cValue08, @cValue09, @cValue10, @nFunc)                
+            @cValue01, @cValue02, @cValue03, @cValue04, @cValue05, @cValue06, @cValue07, @cValue08, @cValue09, @cValue10, @nFunc, @cExportFileName)                
          SELECT @nJobID = SCOPE_IDENTITY(), @nErrNo = @@ERROR                
          IF @nErrNo <> 0                
          BEGIN                
@@ -454,7 +453,7 @@ BEGIN
             EXEC dbo.isp_QCmd_UpdateQueueTaskStatus                
                @cTargetDB    = @cDBName,                
                @nQTaskID     = @nQueueID,                 
-  @cQStatus     = 'X',                
+               @cQStatus     = 'X',                
                @cThreadID    = '',                
                @cMsgRecvDate = '',                
                @cQErrMsg     = ''                
@@ -512,10 +511,10 @@ BEGIN
          -- Insert print job                
          INSERT INTO rdt.rdtPrintJob (                
             JobName, ReportID, JobStatus, Datawindow, NoOfParms, Printer, NoOfCopy, Mobile, TargetDB, PrintData, JobType, StorerKey,                 
-            Parm1, Parm2, Parm3, Parm4, Parm5, Parm6, Parm7, Parm8, Parm9, Parm10, Function_ID)                
+            Parm1, Parm2, Parm3, Parm4, Parm5, Parm6, Parm7, Parm8, Parm9, Parm10, Function_ID, ExportFileName)                
          VALUES(                
             @cSourceType, @cReportType, @cJobStatus, @cDataWindow, 0, @cPrinter, 1, @nMobile, DB_NAME(), @cPrintCommand, @cJobType, @cStorerKey,                 
-            @cValue01, @cValue02, @cValue03, @cValue04, @cValue05, @cValue06, @cValue07, @cValue08, @cValue09, @cValue10, @nFunc)                
+            @cValue01, @cValue02, @cValue03, @cValue04, @cValue05, @cValue06, @cValue07, @cValue08, @cValue09, @cValue10, @nFunc, @cExportFileName)                
          SELECT @nJobID = SCOPE_IDENTITY(), @nErrNo = @@ERROR                
          IF @nErrNo <> 0                
          BEGIN                
@@ -547,7 +546,7 @@ BEGIN
             WHERE JobID = @nJobID                
             IF @@ERROR <> 0                
             BEGIN                
-  SET @nErrNo = 110720                
+               SET @nErrNo = 110720                
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PrnJobFail                
             END                
                             
@@ -578,10 +577,10 @@ BEGIN
       -- Insert print job                
       INSERT INTO rdt.rdtPrintJob (                
          JobName, ReportID, JobStatus, Datawindow, NoOfParms, Printer, NoOfCopy, Mobile, TargetDB, PrintData, JobType, StorerKey,                 
-         Parm1, Parm2, Parm3, Parm4, Parm5, Parm6, Parm7, Parm8, Parm9, Parm10, Function_ID)                
+         Parm1, Parm2, Parm3, Parm4, Parm5, Parm6, Parm7, Parm8, Parm9, Parm10, Function_ID, ExportFileName)                
       VALUES(                
          @cSourceType, @cReportType, @cJobStatus, ISNULL( @cDataWindow, ''), 0, @cPrinter, @nNoOfCopy, @nMobile, DB_NAME(), @cPrintData, @cJobType, @cStorerKey,                 
-         @cValue01, @cValue02, @cValue03, @cValue04, @cValue05, @cValue06, @cValue07, @cValue08, @cValue09, @cValue10, @nFunc)                
+         @cValue01, @cValue02, @cValue03, @cValue04, @cValue05, @cValue06, @cValue07, @cValue08, @cValue09, @cValue10, @nFunc, @cExportFileName)                
                 
       SELECT @nJobID = SCOPE_IDENTITY()                
                 
@@ -607,7 +606,7 @@ BEGIN
          @cValue09,     -- parm09                
          @cValue10,     -- parm10                
          @cStorerKey,   -- StorerKey                
-     @nNoOfCopy,    -- no of copy                
+         @nNoOfCopy,    -- no of copy                
          0,             -- debug                
          'N',           -- return result                
          @nErrNo        OUTPUT,                
@@ -744,10 +743,10 @@ BEGIN
          -- Insert print job                
          INSERT INTO rdt.rdtPrintJob (                
             JobName, ReportID, JobStatus, Datawindow, NoOfParms, Printer, NoOfCopy, Mobile, TargetDB, PrintData, JobType, StorerKey,                 
-            Parm1, Parm2, Parm3, Parm4, Parm5, Parm6, Parm7, Parm8, Parm9, Parm10, Function_ID)                
+            Parm1, Parm2, Parm3, Parm4, Parm5, Parm6, Parm7, Parm8, Parm9, Parm10, Function_ID, ExportFileName)                
          VALUES(                
             @cSourceType, @cReportType, @cJobStatus, ISNULL( @cDataWindow, ''), 0, @cPrinter, 1, @nMobile, DB_NAME(), @cPrintData, @cJobType, @cStorerKey,                 
-            @cValue01, @cValue02, @cValue03, @cValue04, @cValue05, @cValue06, @cValue07, @cValue08, @cValue09, @cValue10, @nFunc)                
+            @cValue01, @cValue02, @cValue03, @cValue04, @cValue05, @cValue06, @cValue07, @cValue08, @cValue09, @cValue10, @nFunc, @cExportFileName)                
                 
          SELECT @nJobID = SCOPE_IDENTITY()                
                    IF @@ERROR <> 0                
