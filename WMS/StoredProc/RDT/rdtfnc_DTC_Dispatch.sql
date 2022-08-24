@@ -72,6 +72,7 @@ GO
 /*                         (yeekung)                                         */ 
 /*2022-06-07 1.44 James    WMS-19882 Add Std SKU decode sp (james16)         */
 /*2022-06-09 1.45 yeekung WMS-19312 Fix extendedinfo (yeekung03)             */
+/*2022-07-28 1.46 James    WMS-20110 Enhance packinfo screen (james18)       */
 /*****************************************************************************/        
 CREATE OR ALTER PROC [RDT].[rdtfnc_DTC_Dispatch](        
    @nMobile    INT,        
@@ -3662,7 +3663,10 @@ BEGIN
          BEGIN        
             SET @nErrNo = 90499        
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need Weight        
-            EXEC rdt.rdtSetFocusField @nMobile, 2        
+            SET @cOutField07 = CASE WHEN @cFieldAttr07 = '' THEN @cCartonType ELSE '' END
+            SET @cOutField02 = CASE WHEN @cFieldAttr02 = '' THEN @cCube ELSE '' END
+            SET @cOutField04 = CASE WHEN @cFieldAttr04 = '' THEN @cRefNo ELSE '' END
+            EXEC rdt.rdtSetFocusField @nMobile, 3        
             GOTO Quit        
          END        
         
@@ -3676,7 +3680,10 @@ BEGIN
          BEGIN        
             SET @nErrNo = 90500        
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid weight      
-            EXEC rdt.rdtSetFocusField @nMobile, 2        
+            SET @cOutField07 = CASE WHEN @cFieldAttr07 = '' THEN @cCartonType ELSE '' END
+            SET @cOutField02 = CASE WHEN @cFieldAttr02 = '' THEN @cCube ELSE '' END
+            SET @cOutField04 = CASE WHEN @cFieldAttr04 = '' THEN @cRefNo ELSE '' END
+            EXEC rdt.rdtSetFocusField @nMobile, 3        
             SET @cOutField02 = ''        
             GOTO QUIT        
          END        
@@ -3686,7 +3693,10 @@ BEGIN
          BEGIN  
             SET @nErrNo = 172053
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Range
-            EXEC rdt.rdtSetFocusField @nMobile, 2
+            SET @cOutField07 = CASE WHEN @cFieldAttr07 = '' THEN @cCartonType ELSE '' END
+            SET @cOutField02 = CASE WHEN @cFieldAttr02 = '' THEN @cCube ELSE '' END
+            SET @cOutField04 = CASE WHEN @cFieldAttr04 = '' THEN @cRefNo ELSE '' END
+            EXEC rdt.rdtSetFocusField @nMobile, 3
             SET @cOutField02 = ''
             GOTO QUIT
          END
@@ -3703,7 +3713,10 @@ BEGIN
          BEGIN        
             SET @nErrNo = 172051        
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need Cube        
-            EXEC rdt.rdtSetFocusField @nMobile, 3        
+            SET @cOutField07 = CASE WHEN @cFieldAttr07 = '' THEN @cCartonType ELSE '' END
+            SET @cOutField03 = CASE WHEN @cFieldAttr03 = '' THEN @cWeight ELSE '' END
+            SET @cOutField04 = CASE WHEN @cFieldAttr04 = '' THEN @cRefNo ELSE '' END
+            EXEC rdt.rdtSetFocusField @nMobile, 2        
             GOTO Quit        
          END        
         
@@ -3717,7 +3730,10 @@ BEGIN
          BEGIN        
             SET @nErrNo = 172052        
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid cube        
-            EXEC rdt.rdtSetFocusField @nMobile, 3        
+            SET @cOutField07 = CASE WHEN @cFieldAttr07 = '' THEN @cCartonType ELSE '' END
+            SET @cOutField03 = CASE WHEN @cFieldAttr03 = '' THEN @cWeight ELSE '' END
+            SET @cOutField04 = CASE WHEN @cFieldAttr04 = '' THEN @cRefNo ELSE '' END
+            EXEC rdt.rdtSetFocusField @nMobile, 2        
             SET @cOutField03 = ''        
             GOTO QUIT        
          END        
@@ -3727,7 +3743,10 @@ BEGIN
          BEGIN  
             SET @nErrNo = 172054
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Range
-            EXEC rdt.rdtSetFocusField @nMobile, 3
+            SET @cOutField07 = CASE WHEN @cFieldAttr07 = '' THEN @cCartonType ELSE '' END
+            SET @cOutField03 = CASE WHEN @cFieldAttr03 = '' THEN @cWeight ELSE '' END
+            SET @cOutField04 = CASE WHEN @cFieldAttr04 = '' THEN @cRefNo ELSE '' END
+            EXEC rdt.rdtSetFocusField @nMobile, 2
             SET @cOutField03 = ''
             GOTO QUIT
          END
@@ -3744,6 +3763,9 @@ BEGIN
          BEGIN  
             SET @nErrNo = 172055  
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format  
+            SET @cOutField07 = CASE WHEN @cFieldAttr07 = '' THEN @cCartonType ELSE '' END
+            SET @cOutField02 = CASE WHEN @cFieldAttr02 = '' THEN @cCube ELSE '' END
+            SET @cOutField03 = CASE WHEN @cFieldAttr03 = '' THEN @cWeight ELSE '' END
             EXEC rdt.rdtSetFocusField @nMobile, 4
             SET @cOutField04 = ''
             GOTO Quit  
