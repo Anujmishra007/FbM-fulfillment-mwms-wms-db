@@ -29,6 +29,7 @@ GO
 /* Updates:                                                             */      
 /* Date         Author   Ver  Purposes                                  */      
 /* 04-08-2022   CSCHONG  1.0  Devops Scripts Combine                    */ 
+/* 19-08-2022   Mingle   1.1  WMS-20532 - Modify logic(ML01)            */
 /************************************************************************/      
       
 CREATE OR ALTER  PROC [dbo].[isp_GetDmanifest_Dsum10] (      
@@ -147,7 +148,9 @@ BEGIN
          '0' AS FWQTY,      
          '0' AS APPQTY,      
          '0' AS EQQTY,      
-         CASE WHEN  bb.pick_qty=cc.pack_qty THEN Orders.C_Company ELSE '' END,      
+         --CASE WHEN  bb.pick_qty=cc.pack_qty THEN Orders.C_Company ELSE '' END,  
+			CASE WHEN  bb.pick_qty=cc.pack_qty AND ORDERS.type IN ('ZS05','ZS06') THEN Orders.M_Company
+		        WHEN  bb.pick_qty=cc.pack_qty AND ORDERS.type NOT IN ('ZS05','ZS06') THEN Orders.C_Company ELSE '' END,	--ML01
          ETA = CASE WHEN  bb.pick_qty=cc.pack_qty THEN      
               (CASE WHEN ISNULL(STORER.SUSR1,'') = 'CRD' THEN         
               (             
@@ -300,7 +303,9 @@ BEGIN
          (SELECT SUM(packdetail.qty)       
           FROM packdetail(NOLOCK),sku(NOLOCK) WHERE packdetail.Storerkey = sku.Storerkey  AND packdetail.sku = sku.sku AND sku.skugroup = 'EQUIPMENT'      
           AND packdetail.Storerkey =PackHeader.Storerkey AND packdetail.Pickslipno =PackHeader.Pickslipno  AND PACKDETAIL.RefNo = @c_Zone)   AS EQQTY,      
-         CASE WHEN  bb.pick_qty=cc.pack_qty THEN Orders.C_company ELSE ''  END ,      
+         --CASE WHEN  bb.pick_qty=cc.pack_qty THEN Orders.C_company ELSE ''  END , 
+			CASE WHEN  bb.pick_qty=cc.pack_qty AND ORDERS.type IN ('ZS05','ZS06') THEN Orders.M_Company
+		        WHEN  bb.pick_qty=cc.pack_qty AND ORDERS.type NOT IN ('ZS05','ZS06') THEN Orders.C_Company ELSE '' END,	--ML01 
          ETA = CASE WHEN  bb.pick_qty=cc.pack_qty THEN    
                (CASE WHEN ISNULL(STORER.SUSR1,'') = 'CRD' THEN      
          (      
@@ -458,7 +463,9 @@ BEGIN
          (SELECT SUM(packdetail.qty)       
           FROM packdetail(NOLOCK),sku(NOLOCK) WHERE packdetail.Storerkey = sku.Storerkey  AND packdetail.sku = sku.sku AND sku.skugroup = 'EQUIPMENT'      
           AND packdetail.Storerkey =PackHeader.Storerkey AND packdetail.Pickslipno =PackHeader.Pickslipno  AND PACKDETAIL.RefNo = @c_Zone )    AS EQQTY,      
-         CASE WHEN  bb.pick_qty=cc.pack_qty THEN MAX(Orders.C_company)  ELSE '' END ,      
+         --CASE WHEN  bb.pick_qty=cc.pack_qty THEN MAX(Orders.C_company)  ELSE '' END , 
+			CASE WHEN  bb.pick_qty=cc.pack_qty AND ORDERS.type IN ('ZS05','ZS06') THEN Orders.M_Company
+		        WHEN  bb.pick_qty=cc.pack_qty AND ORDERS.type NOT IN ('ZS05','ZS06') THEN Orders.C_Company ELSE '' END,	--ML01
          ETA = CASE WHEN  bb.pick_qty=cc.pack_qty THEN    
                (CASE WHEN ISNULL(STORER.SUSR1,'') = 'CRD' THEN     
          (      
@@ -626,7 +633,10 @@ BEGIN
                CASE WHEN ISNULL(CLR6.Short,'N') = 'Y' AND ISNUMERIC(CLC.Short) = 1 THEN CONVERT(NVARCHAR(30), DATEADD(d,CAST(CLC.Short AS INT),MBOL.AddDate), 121) ELSE NULL END,             
                CLC1.Short,           
                ORDERS.StorerKey,     
-               ORDERS.DeliveryDate   
+               ORDERS.DeliveryDate,
+					ORDERS.Type,			--ML01
+					ORDERS.C_Company,		--ML01
+					ORDERS.M_Company	   --ML01
    END      
    ELSE      
    BEGIN --zone=''     
@@ -660,13 +670,14 @@ BEGIN
          ORDERS.Capacity,       
          ORDERS.Loadkey AS OHLOAD,      
          MBOL.Facility,      
-         1 as CartonNo,      
-         '' as Pickslipno,      
-         '' as pickzone,      
-         '0' as FWQTY,      
-         '0' as APPQTY,      
-         '0' as EQQTY,      
-         Orders.C_Company,      
+         1 AS CartonNo,      
+         '' AS Pickslipno,      
+         '' AS pickzone,      
+         '0' AS FWQTY,      
+         '0' AS APPQTY,      
+         '0' AS EQQTY,      
+         --Orders.C_Company, 
+			CASE WHEN  ORDERS.type IN ('ZS05','ZS06') THEN Orders.M_Company ELSE Orders.C_Company END,	--ML01
          ETA = CASE WHEN ISNULL(STORER.SUSR1,'') = 'CRD' THEN     
          (    
                CASE WHEN (CLC1.Short IS NULL) AND ORDERS.StorerKey = 'NIKECN' THEN MBOL.EditDate   
@@ -680,7 +691,7 @@ BEGIN
                               END        
                     WHEN (CLC.Short IS NULL OR ISNUMERIC(CLC.Short) <> 1) AND ORDERS.StorerKey <> 'NIKECN' THEN MBOL.EditDate          
                     ELSE CASE WHEN Orders.Intermodalvehicle = 'ILOE'     
-                         THEN DATEADD(hour, Ceiling(Cast(CLC.Short as real)), CONVERT(datetime,convert(char(8),MBOL.EditDate,112))+1)      
+                         THEN DATEADD(HOUR, CEILING(CAST(CLC.Short AS REAL)), CONVERT(DATETIME,CONVERT(CHAR(8),MBOL.EditDate,112))+1)      
                          ELSE CASE WHEN ORDERS.Storerkey = 'NIKECN' THEN DATEADD(DAY, CEILING(CAST(CLC1.Short AS REAL)), MBOL.EditDate )          
                                                                     ELSE DATEADD(DAY, CEILING(CAST(CLC.Short AS REAL)), MBOL.EditDate ) END      
                     END    
@@ -790,7 +801,8 @@ BEGIN
          (select sum(packdetail.qty)       
           from packdetail(nolock),sku(nolock) where packdetail.Storerkey = sku.Storerkey  AND packdetail.sku = sku.sku and sku.skugroup = 'EQUIPMENT'      
           and packdetail.Storerkey =PackHeader.Storerkey and packdetail.Pickslipno =PackHeader.Pickslipno ) AS EQQTY,      
-         Orders.C_company,      
+         --Orders.C_company,      
+			CASE WHEN  ORDERS.type in ('ZS05','ZS06') THEN Orders.M_Company ELSE Orders.C_Company END,	--ML01
          ETA = CASE WHEN ISNULL(STORER.SUSR1,'') = 'CRD' THEN     
          (    
                CASE WHEN (CLC1.Short IS NULL) AND ORDERS.StorerKey = 'NIKECN' THEN MBOL.EditDate      
@@ -915,7 +927,8 @@ BEGIN
          (select sum(packdetail.qty)       
           from packdetail(nolock),sku(nolock) where packdetail.Storerkey = sku.Storerkey  AND packdetail.sku = sku.sku and sku.skugroup = 'EQUIPMENT'      
           and packdetail.Storerkey =PackHeader.Storerkey and packdetail.Pickslipno =PackHeader.Pickslipno ) AS EQQTY,      
-         MAX(Orders.C_company),      
+         --MAX(Orders.C_company),   
+			CASE WHEN  ORDERS.type in ('ZS05','ZS06') THEN MAX(Orders.M_company) ELSE MAX(Orders.C_company) END,	--ML01
          ETA = CASE WHEN ISNULL(STORER.SUSR1,'') = 'CRD' THEN       
          (    
                CASE WHEN (CLC1.Short IS NULL) AND ORDERS.StorerKey = 'NIKECN' THEN MBOL.EditDate      
@@ -1035,7 +1048,10 @@ BEGIN
                ISNULL(CLR5.Short,'N'),    
                CASE WHEN ISNULL(CLR6.Short,'N') = 'Y' AND ISNUMERIC(CLC.Short) = 1 THEN CONVERT(NVARCHAR(30), DATEADD(d,CAST(CLC.Short AS INT),MBOL.AddDate), 121) ELSE NULL END,              
                CLC1.Short,          
-               ORDERS.StorerKey           
+               ORDERS.StorerKey,
+					ORDERS.Type,			--ML01
+					ORDERS.C_Company,		--ML01
+					ORDERS.M_Company	   --ML01
    END          
 END        
 GO
