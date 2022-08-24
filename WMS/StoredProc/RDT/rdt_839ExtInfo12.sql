@@ -1,21 +1,21 @@
 
+
+
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO  
 /************************************************************************/  
-/* Store procedure: rdt_839ExtInfo10                                    */  
+/* Store procedure: rdt_839ExtInfo12                                    */  
 /* Purpose:                                                             */  
 /*                                                                      */  
 /* Modifications log:                                                   */  
 /*                                                                      */  
 /* Date       Rev  Author     Purposes                                  */  
-/* 2022-03-07 1.0  yeekung    WMS-19062 Created                         */  
-/* 2022-05-07 1.1  Yeekung    WMS-20134 fix pickzone nvarchar 1->10     */
-/*                            (yeekung01)                               */
+/* 2022-07-05  1.0  yeekung   WMS-20134 Created                         */  
 /************************************************************************/  
   
-CREATE OR ALTER PROC rdt.rdt_839ExtInfo10 (  
+CREATE OR ALTER PROC rdt.rdt_839ExtInfo12 (  
    @nMobile      INT,           
    @nFunc        INT,           
    @cLangCode    NVARCHAR( 3),  
@@ -26,7 +26,7 @@ CREATE OR ALTER PROC rdt.rdt_839ExtInfo10 (
    @cStorerKey   NVARCHAR( 15), 
    @cType        NVARCHAR( 10), 
    @cPickSlipNo  NVARCHAR( 10), 
-   @cPickZone    NVARCHAR( 10), --(yeekung01)  
+   @cPickZone    NVARCHAR( 10),  
    @cDropID      NVARCHAR( 20), 
    @cLOC         NVARCHAR( 10), 
    @cSKU         NVARCHAR( 20), 
@@ -52,7 +52,7 @@ AS
    
    SET @cExtendedInfo = ''
 
-   IF @nStep IN (1,2) 
+   IF @nStep IN (2) 
    BEGIN
       IF @nInputKey = 1
       BEGIN
@@ -60,8 +60,8 @@ AS
          FROM Pickheader (NOLOCK)
          WHERE pickheaderkey=@cPickSlipNo
 
-         SELECT @cExtendedInfo=notes
-         FROM  orders (nolock)
+         SELECT @cExtendedInfo=id
+         FROM  pickdetail (nolock)
          where orderkey=@cOrderkey
       END
    END
@@ -73,7 +73,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-GRANT EXEC ON RDT.rdt_839ExtInfo10 TO NSQL
+GRANT EXEC ON RDT.rdt_839ExtInfo12 TO NSQL
 GO
   
  

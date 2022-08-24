@@ -1,51 +1,48 @@
-IF EXISTS (SELECT * FROM sys.objects WHERE Object_ID = OBJECT_ID(N'[RDT].[rdt_839ExtInfo03]') AND OBJECTPROPERTY(object_id, N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdt_839ExtInfo03]
+SET ANSI_NULLS OFF
 GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF
-GO  
 
-/******************************************************************************/  
-/* Store procedure: rdt_839ExtInfo03                                          */  
+
+/******************************************************************************/
+/* Store procedure: rdt_839ExtInfo03                                          */
 /* Copyright      : LFLogistics                                               */
-/*                                                                            */  
-/* Date       Rev  Author     Purposes                                        */  
-/* 2019-07-02 1.0  Ung        WMS-9548 Created                                */  
-/******************************************************************************/  
-  
-CREATE PROC rdt.rdt_839ExtInfo03 (  
-   @nMobile      INT,           
-   @nFunc        INT,           
-   @cLangCode    NVARCHAR( 3),  
-   @nStep        INT,       
-   @nAfterStep   INT,    
-   @nInputKey    INT,           
-   @cFacility    NVARCHAR( 5) , 
-   @cStorerKey   NVARCHAR( 15), 
-   @cType        NVARCHAR( 10), 
-   @cPickSlipNo  NVARCHAR( 10), 
-   @cPickZone    NVARCHAR( 10),  
-   @cDropID      NVARCHAR( 20), 
-   @cLOC         NVARCHAR( 10), 
-   @cSKU         NVARCHAR( 20), 
-   @nQTY         INT,           
+/*                                                                            */
+/* Date       Rev  Author     Purposes                                        */
+/* 2019-07-02 1.0  Ung        WMS-9548 Created                                */
+/******************************************************************************/
+
+CREATE OR ALTER PROC [RDT].[rdt_839ExtInfo03] (
+   @nMobile      INT,
+   @nFunc        INT,
+   @cLangCode    NVARCHAR( 3),
+   @nStep        INT,
+   @nAfterStep   INT,
+   @nInputKey    INT,
+   @cFacility    NVARCHAR( 5) ,
+   @cStorerKey   NVARCHAR( 15),
+   @cType        NVARCHAR( 10),
+   @cPickSlipNo  NVARCHAR( 10),
+   @cPickZone    NVARCHAR( 10),
+   @cDropID      NVARCHAR( 20),
+   @cLOC         NVARCHAR( 10),
+   @cSKU         NVARCHAR( 20),
+   @nQTY         INT,
    @nActQty      INT,
    @nSuggQTY     INT,
-   @cExtendedInfo NVARCHAR(20) OUTPUT, 
-   @nErrNo       INT           OUTPUT, 
-   @cErrMsg      NVARCHAR(250) OUTPUT  
-)  
-AS  
+   @cExtendedInfo NVARCHAR(20) OUTPUT,
+   @nErrNo       INT           OUTPUT,
+   @cErrMsg      NVARCHAR(250) OUTPUT
+)
+AS
 
 SET NOCOUNT ON
 SET QUOTED_IDENTIFIER OFF
 SET ANSI_NULLS OFF
 SET CONCAT_NULL_YIELDS_NULL OFF
-  
+
 IF @nFunc = 839 -- Pick piece
-BEGIN  
+BEGIN
    IF @nAfterStep = 3 -- SKU, QTY
    BEGIN
       DECLARE @cZone          NVARCHAR( 18) = ''
@@ -143,19 +140,11 @@ BEGIN
          SET @cExtendedInfo = RIGHT( @cPickSlipNo, 4) + '-' + CAST( @nSKUSequence AS NVARCHAR(5))
       ELSE
          SET @cExtendedInfo = ''
-   END   
-END  
-  
+   END
+END
+
 Quit:
- 
-GO
 
-SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS ON
+GRANT EXECUTE ON  [RDT].[rdt_839ExtInfo03] TO [NSQL]
 GO
-
-GRANT EXEC ON RDT.rdt_839ExtInfo03 TO NSQL
-GO
-  
- 
