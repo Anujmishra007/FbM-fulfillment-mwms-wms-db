@@ -1,3 +1,7 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO  
 /************************************************************************/  
 /* Store procedure: rdt_839ExtInfo11                                    */  
 /* Purpose:                                                             */  
@@ -6,6 +10,8 @@
 /*                                                                      */  
 /* Date       Rev  Author     Purposes                                  */  
 /* 2020-08-20 1.0  yeekung    WMS-14630 Created                         */  
+/* 2022-05-07 1.1  Yeekung    WMS-20134 fix pickzone nvarchar 1->10     */
+/*                            (yeekung01)                               */
 /************************************************************************/  
   
 CREATE OR ALTER PROC rdt.rdt_839ExtInfo11 (  
@@ -19,7 +25,7 @@ CREATE OR ALTER PROC rdt.rdt_839ExtInfo11 (
    @cStorerKey   NVARCHAR( 15), 
    @cType        NVARCHAR( 10), 
    @cPickSlipNo  NVARCHAR( 10), 
-   @cPickZone    NVARCHAR( 1),  
+   @cPickZone    NVARCHAR( 10), --(yeekun01) 
    @cDropID      NVARCHAR( 20), 
    @cLOC         NVARCHAR( 10), 
    @cSKU         NVARCHAR( 20), 
@@ -141,4 +147,10 @@ AS
    END
   
 QUIT:  
- 
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+GRANT EXEC ON RDT.rdt_839ExtInfo11 TO NSQL
+GO 

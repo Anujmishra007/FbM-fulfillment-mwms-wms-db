@@ -11,6 +11,8 @@ GO
 /*                                                                      */  
 /* Date       Rev  Author     Purposes                                  */  
 /* 2021-04-19 1.0  YeeKUng    WMS-16839 created                         */
+/* 2022-05-07 1.1  Yeekung    WMS-20134 fix pickzone nvarchar 1->10     */
+/*                            (yeekung01)                               */
 /************************************************************************/  
   
 CREATE OR ALTER PROC rdt.rdt_839ExtInfo07 (  
@@ -24,7 +26,7 @@ CREATE OR ALTER PROC rdt.rdt_839ExtInfo07 (
    @cStorerKey   NVARCHAR( 15), 
    @cType        NVARCHAR( 10), 
    @cPickSlipNo  NVARCHAR( 10), 
-   @cPickZone    NVARCHAR( 1),  
+   @cPickZone    NVARCHAR( 10),  --(yeekung01)
    @cDropID      NVARCHAR( 20), 
    @cLOC         NVARCHAR( 10), 
    @cSKU         NVARCHAR( 20), 
