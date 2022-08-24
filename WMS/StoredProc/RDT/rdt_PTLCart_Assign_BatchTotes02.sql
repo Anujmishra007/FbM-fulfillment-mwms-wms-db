@@ -81,15 +81,15 @@ BEGIN
       SELECT @nTotalOrder = COUNT(1) FROM rdt.rdtPTLCartLog WITH (NOLOCK) WHERE CartID = @cCartID
       SELECT @nTotalTote = COUNT(1) FROM rdt.rdtPTLCartLog WITH (NOLOCK) WHERE CartID = @cCartID AND ToteID <> ''
 
-  -- Prepare next screen var
-  SET @cOutField01 = @cCartID
-  SET @cOutField02 = @cPickZone
-  SET @cOutField03 = @cBatchKey
-  SET @cOutField04 = '' -- OrderKey
-  SET @cOutField05 = '' -- Position
-  SET @cOutField06 = '' -- ToteID
-  SET @cOutField07 = CAST( @nTotalOrder AS NVARCHAR(5))
-  SET @cOutField08 = CAST( @nTotalTote AS NVARCHAR(5))
+      -- Prepare next screen var
+      SET @cOutField01 = @cCartID
+      SET @cOutField02 = @cPickZone
+      SET @cOutField03 = @cBatchKey
+      SET @cOutField04 = '' -- OrderKey
+      SET @cOutField05 = '' -- Position
+      SET @cOutField06 = '' -- ToteID
+      SET @cOutField07 = CAST( @nTotalOrder AS NVARCHAR(5))
+      SET @cOutField08 = CAST( @nTotalTote AS NVARCHAR(5))
 
       IF @cBatchKey = ''
       BEGIN
@@ -287,7 +287,7 @@ BEGIN
                   AND PD.Status <> '4'
                   AND PD.Status < @cPickConfirmStatus
                   AND PD.PickSlipNo = @cBatchKey
-                  AND SKU.SKUGroup <> 'POP'
+                  -- AND SKU.SKUGroup <> 'POP' -- All orders need to assign
                ORDER BY OrderKey
 
             SET @nTranCount = @@TRANCOUNT
@@ -385,7 +385,7 @@ BEGIN
                      AND PD.QTY > 0
                      AND O.Status <> 'CANC'
                      AND O.SOStatus <> 'CANC'
-                     AND SKU.SKUGroup <> 'POP'
+                     -- AND SKU.SKUGroup <> 'POP' -- All orders need to assign
                ELSE
                   SELECT @nErrNo = 0
                   FROM Orders O WITH (NOLOCK)
@@ -399,7 +399,7 @@ BEGIN
                      AND O.Status <> 'CANC'
                      AND O.SOStatus <> 'CANC'
                      AND SKU.SKUGroup <> 'POP'
-                     AND LOC.PickZone = @cPickZone
+                     -- AND LOC.PickZone = @cPickZone -- All orders need to assign
                IF @nErrNo <> 0
                BEGIN
                   SET @nErrNo = 189711
@@ -490,8 +490,8 @@ BEGIN
                      AND DeviceID = @cCartID
                      AND DevicePosition = @cPosition
 
-                  DECLARE @nPTLTranCreated INT
-                  SET @nPTLTranCreated = 0
+                  -- DECLARE @nPTLTranCreated INT
+                  -- SET @nPTLTranCreated = 0
 
                   -- Insert PTLTran
                   IF @cPickZone = ''
@@ -543,7 +543,7 @@ BEGIN
                         GOTO RollBackTran
                      END
 
-                     SET @nPTLTranCreated = 1
+                     -- SET @nPTLTranCreated = 1
                      FETCH NEXT FROM @curPD INTO @cLOC, @cSKU, @nQTY
                   END
 
@@ -571,7 +571,7 @@ BEGIN
                      END
                   END
 
-                  IF @nPTLTranCreated = 1
+                  -- IF @nPTLTranCreated = 1
                      SET @nTotalTote = @nTotalTote + 1
                END
 

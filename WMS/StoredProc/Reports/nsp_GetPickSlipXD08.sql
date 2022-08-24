@@ -23,6 +23,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author    Ver.    	Purposes                            */
+/* 25-JAN-2017  JayLim   1.1  SQL2012 compatibility modification (Jay01)*/
 /************************************************************************/
 
 CREATE PROC nsp_GetPickSlipXD08 (@c_refkey NVARCHAR(20), @c_type NVARCHAR(2)) 
@@ -499,7 +500,7 @@ BEGIN
                          @n_QtyPick       = ISNULL(#TEMPPICKDETAIL.Qty,0), 
                          @c_CartonType    = Cartonization.CartonType,
                          @n_MaxWeight     = ISNULL(Cartonization.MaxWeight,0),      
-                         @n_MaxCube       = ISNULL(Cartonization.Cube,0),          
+                         @n_MaxCube       = ISNULL(Cartonization.[Cube],0),          
                          @n_CaseCnt       = PACK.casecnt,
                          @n_Innerpack     = PACK.innerpack,
                          @c_uom           = #TEMPPICKDETAIL.uom
@@ -513,11 +514,11 @@ BEGIN
 	               Where ISNULL(#TEMPPICKDETAIL.Qty,0) > 0      
                   AND   LEN(ISNULL(#TEMPPICKDETAIL.DropID, '')) = 0       
                   AND   SKU.StdGrossWGT <= Cartonization.MaxWeight    -- Not process for wrong setup,  cartonization weight/cube is less then SKU QTY 1     
-                  AND   SKU.STDCube <=  Cartonization.Cube  
+                  AND   SKU.STDCube <=  Cartonization.[Cube]  
                   AND   (SKU.StdGrossWGT * PACK.casecnt) <= Cartonization.MaxWeight
-                  AND   (SKU.STDCube * PACK.casecnt) <= Cartonization.Cube
+                  AND   (SKU.STDCube * PACK.casecnt) <= Cartonization.[Cube]
                   AND   (SKU.StdGrossWGT * PACK.innerpack) <= Cartonization.MaxWeight
-                  AND   (SKU.STDCube * PACK.innerpack) <= Cartonization.Cube                  
+                  AND   (SKU.STDCube * PACK.innerpack) <= Cartonization.[Cube]                  
                   AND   #TEMPPICKDETAIL.Rowid > @n_rowid1
                   AND   SKU.BUSR5 = @c_BUSR5
                   AND   SKU.CLASS = @c_CLASS 
@@ -1054,7 +1055,7 @@ BEGIN
                          @n_QtyPick       = ISNULL(#TEMPPICKDETAIL.Qty,0), 
                          @c_CartonType    = Cartonization.CartonType,
                          @n_MaxWeight     = ISNULL(Cartonization.MaxWeight,0),      
-                         @n_MaxCube       = ISNULL(Cartonization.Cube,0),          
+                         @n_MaxCube       = ISNULL(Cartonization.[Cube],0),          
                          @n_CaseCnt       = PACK.casecnt,
                          @n_Innerpack     = PACK.innerpack,
                          @c_uom           = #TEMPPICKDETAIL.uom
@@ -1068,11 +1069,11 @@ BEGIN
 	               Where ISNULL(#TEMPPICKDETAIL.Qty,0) > 0      
                   AND   LEN(ISNULL(#TEMPPICKDETAIL.DropID, '')) = 0       
                   AND   SKU.StdGrossWGT <= Cartonization.MaxWeight    -- Not process for wrong setup,  cartonization weight/cube is less then SKU QTY 1     
-                  AND   SKU.STDCube <=  Cartonization.Cube  
+                  AND   SKU.STDCube <=  Cartonization.[Cube]  
                   AND   (SKU.StdGrossWGT * PACK.casecnt) <= Cartonization.MaxWeight
-                  AND   (SKU.STDCube * PACK.casecnt) <= Cartonization.Cube
+                  AND   (SKU.STDCube * PACK.casecnt) <= Cartonization.[Cube]
                   AND   (SKU.StdGrossWGT * PACK.innerpack) <= Cartonization.MaxWeight
-                  AND   (SKU.STDCube * PACK.innerpack) <= Cartonization.Cube
+                  AND   (SKU.STDCube * PACK.innerpack) <= Cartonization.[Cube]
                   AND   #TEMPPICKDETAIL.Rowid > @n_rowid1
                   AND   SKU.BUSR5 = @c_BUSR5
                   Order by #TEMPPICKDETAIL.rowid
@@ -1592,7 +1593,7 @@ BEGIN
                          @n_QtyPick       = ISNULL(#TEMPPICKDETAIL.Qty,0), 
                          @c_CartonType    = Cartonization.CartonType,
                          @n_MaxWeight     = ISNULL(Cartonization.MaxWeight,0),      
-                         @n_MaxCube       = ISNULL(Cartonization.Cube,0),
+                         @n_MaxCube       = ISNULL(Cartonization.[Cube],0),
                          @n_CaseCnt       = PACK.casecnt,
                          @n_Innerpack     = PACK.innerpack,
                          @c_uom           = #TEMPPICKDETAIL.uom
@@ -1606,11 +1607,11 @@ BEGIN
 	               Where ISNULL(#TEMPPICKDETAIL.Qty,0) > 0      
                   AND   LEN(ISNULL(#TEMPPICKDETAIL.DropID, '')) = 0       
                   AND   SKU.StdGrossWGT <= Cartonization.MaxWeight    -- Not process for wrong setup,  cartonization weight/cube is less then SKU QTY 1     
-                  AND   SKU.STDCube <=  Cartonization.Cube  
+                  AND   SKU.STDCube <=  Cartonization.[Cube]  
                   AND   (SKU.StdGrossWGT * PACK.casecnt) <= Cartonization.MaxWeight
-                  AND   (SKU.STDCube * PACK.casecnt) <= Cartonization.Cube
+                  AND   (SKU.STDCube * PACK.casecnt) <= Cartonization.[Cube]
                   AND   (SKU.StdGrossWGT * PACK.innerpack) <= Cartonization.MaxWeight
-                  AND   (SKU.STDCube * PACK.innerpack) <= Cartonization.Cube
+                  AND   (SKU.STDCube * PACK.innerpack) <= Cartonization.[Cube]
                   AND   #TEMPPICKDETAIL.Rowid > @n_rowid1
                   AND   SKU.Class = @c_CLASS
                   Order by #TEMPPICKDETAIL.rowid
@@ -2129,7 +2130,7 @@ BEGIN
                          @n_QtyPick       = ISNULL(#TEMPPICKDETAIL.Qty,0), 
                          @c_CartonType    = Cartonization.CartonType,
                          @n_MaxWeight     = ISNULL(Cartonization.MaxWeight,0),      
-                         @n_MaxCube       = ISNULL(Cartonization.Cube,0),          
+                         @n_MaxCube       = ISNULL(Cartonization.[Cube],0),          
                          @n_CaseCnt       = PACK.casecnt,
                          @n_Innerpack     = PACK.innerpack,
                          @c_uom           = #TEMPPICKDETAIL.uom
@@ -2143,11 +2144,11 @@ BEGIN
 	               Where ISNULL(#TEMPPICKDETAIL.Qty,0) > 0      
                   AND   LEN(ISNULL(#TEMPPICKDETAIL.DropID, '')) = 0       
                   AND   SKU.StdGrossWGT <= Cartonization.MaxWeight    -- Not process for wrong setup,  cartonization weight/cube is less then SKU QTY 1     
-                  AND   SKU.STDCube <=  Cartonization.Cube  
+                  AND   SKU.STDCube <=  Cartonization.[Cube]  
                   AND   (SKU.StdGrossWGT * PACK.casecnt) <= Cartonization.MaxWeight
-                  AND   (SKU.STDCube * PACK.casecnt) <= Cartonization.Cube
+                  AND   (SKU.STDCube * PACK.casecnt) <= Cartonization.[Cube]
                   AND   (SKU.StdGrossWGT * PACK.innerpack) <= Cartonization.MaxWeight
-                  AND   (SKU.STDCube * PACK.innerpack) <= Cartonization.Cube
+                  AND   (SKU.STDCube * PACK.innerpack) <= Cartonization.[Cube]
                   AND   #TEMPPICKDETAIL.Rowid > @n_rowid1
                   AND   SKU.itemclass = @c_itemclass
                   Order by #TEMPPICKDETAIL.rowid
@@ -2667,7 +2668,7 @@ BEGIN
                          @n_QtyPick       = ISNULL(#TEMPPICKDETAIL.Qty,0), 
                          @c_CartonType    = Cartonization.CartonType,
                          @n_MaxWeight     = ISNULL(Cartonization.MaxWeight,0),      
-                         @n_MaxCube       = ISNULL(Cartonization.Cube,0),          
+                         @n_MaxCube       = ISNULL(Cartonization.[Cube],0),          
                          @n_CaseCnt       = PACK.casecnt,
                          @n_Innerpack     = PACK.innerpack,
                          @c_uom           = #TEMPPICKDETAIL.uom
@@ -2681,11 +2682,11 @@ BEGIN
 	               Where ISNULL(#TEMPPICKDETAIL.Qty,0) > 0      
                   AND   LEN(ISNULL(#TEMPPICKDETAIL.DropID, '')) = 0       
                   AND   SKU.StdGrossWGT <= Cartonization.MaxWeight    -- Not process for wrong setup,  cartonization weight/cube is less then SKU QTY 1     
-                  AND   SKU.STDCube <=  Cartonization.Cube  
+                  AND   SKU.STDCube <=  Cartonization.[Cube]  
                   AND   (SKU.StdGrossWGT * PACK.casecnt) <= Cartonization.MaxWeight
-                  AND   (SKU.STDCube * PACK.casecnt) <= Cartonization.Cube
+                  AND   (SKU.STDCube * PACK.casecnt) <= Cartonization.[Cube]
                   AND   (SKU.StdGrossWGT * PACK.innerpack) <= Cartonization.MaxWeight
-                  AND   (SKU.STDCube * PACK.innerpack) <= Cartonization.Cube
+                  AND   (SKU.STDCube * PACK.innerpack) <= Cartonization.[Cube]
                   AND   #TEMPPICKDETAIL.Rowid > @n_rowid1
                   AND   SKU.SKUGROUP = @c_SKUGROUP
                   Order by #TEMPPICKDETAIL.rowid
@@ -3203,7 +3204,7 @@ BEGIN
                          @n_QtyPick       = ISNULL(#TEMPPICKDETAIL.Qty,0), 
                          @c_CartonType    = Cartonization.CartonType,
                          @n_MaxWeight     = ISNULL(Cartonization.MaxWeight,0),      
-                         @n_MaxCube       = ISNULL(Cartonization.Cube,0),          
+                         @n_MaxCube       = ISNULL(Cartonization.[Cube],0),          
                          @n_CaseCnt       = PACK.casecnt,
                          @n_Innerpack     = PACK.innerpack,
                          @c_uom           = #TEMPPICKDETAIL.uom
@@ -3217,11 +3218,11 @@ BEGIN
 	               Where ISNULL(#TEMPPICKDETAIL.Qty,0) > 0      
                   AND   LEN(ISNULL(#TEMPPICKDETAIL.DropID, '')) = 0       
                   AND   SKU.StdGrossWGT <= Cartonization.MaxWeight    -- Not process for wrong setup,  cartonization weight/cube is less then SKU QTY 1     
-                  AND   SKU.STDCube <=  Cartonization.Cube  
+                  AND   SKU.STDCube <=  Cartonization.[Cube]  
                   AND   (SKU.StdGrossWGT * PACK.casecnt) <= Cartonization.MaxWeight
-                  AND   (SKU.STDCube * PACK.casecnt) <= Cartonization.Cube
+                  AND   (SKU.STDCube * PACK.casecnt) <= Cartonization.[Cube]
                   AND   (SKU.StdGrossWGT * PACK.innerpack) <= Cartonization.MaxWeight
-                  AND   (SKU.STDCube * PACK.innerpack) <= Cartonization.Cube
+                  AND   (SKU.STDCube * PACK.innerpack) <= Cartonization.[Cube]
                   AND   #TEMPPICKDETAIL.Rowid > @n_rowid1
                   AND   SKU.Style = @c_Style 
                   Order by #TEMPPICKDETAIL.rowid
@@ -3739,7 +3740,7 @@ BEGIN
                          @n_QtyPick       = ISNULL(#TEMPPICKDETAIL.Qty,0), 
                          @c_CartonType    = Cartonization.CartonType,
                          @n_MaxWeight     = ISNULL(Cartonization.MaxWeight,0),      
-                         @n_MaxCube       = ISNULL(Cartonization.Cube,0),          
+                         @n_MaxCube       = ISNULL(Cartonization.[Cube],0),          
                          @n_CaseCnt       = PACK.casecnt,
                          @n_Innerpack     = PACK.innerpack,
                          @c_uom           = #TEMPPICKDETAIL.uom
@@ -3753,11 +3754,11 @@ BEGIN
 	               Where ISNULL(#TEMPPICKDETAIL.Qty,0) > 0      
                   AND   LEN(ISNULL(#TEMPPICKDETAIL.DropID, '')) = 0       
                   AND   SKU.StdGrossWGT <= Cartonization.MaxWeight    -- Not process for wrong setup,  cartonization weight/cube is less then SKU QTY 1     
-                  AND   SKU.STDCube <=  Cartonization.Cube  
+                  AND   SKU.STDCube <=  Cartonization.[Cube]  
                   AND   (SKU.StdGrossWGT * PACK.casecnt) <= Cartonization.MaxWeight
-                  AND   (SKU.STDCube * PACK.casecnt) <= Cartonization.Cube
+                  AND   (SKU.STDCube * PACK.casecnt) <= Cartonization.[Cube]
                   AND   (SKU.StdGrossWGT * PACK.innerpack) <= Cartonization.MaxWeight
-                  AND   (SKU.STDCube * PACK.innerpack) <= Cartonization.Cube
+                  AND   (SKU.STDCube * PACK.innerpack) <= Cartonization.[Cube]
                   AND   #TEMPPICKDETAIL.Rowid > @n_rowid1
                   AND   SKU.Color = @c_Color
                   Order by #TEMPPICKDETAIL.rowid
@@ -4275,7 +4276,7 @@ BEGIN
                          @n_QtyPick       = ISNULL(#TEMPPICKDETAIL.Qty,0), 
                          @c_CartonType    = Cartonization.CartonType,
                          @n_MaxWeight     = ISNULL(Cartonization.MaxWeight,0),      
-                         @n_MaxCube       = ISNULL(Cartonization.Cube,0),          
+                         @n_MaxCube       = ISNULL(Cartonization.[Cube],0),          
                          @n_CaseCnt       = PACK.casecnt,
                          @n_Innerpack     = PACK.innerpack,
                          @c_uom           = #TEMPPICKDETAIL.uom
@@ -4289,11 +4290,11 @@ BEGIN
 	               Where ISNULL(#TEMPPICKDETAIL.Qty,0) > 0      
                   AND   LEN(ISNULL(#TEMPPICKDETAIL.DropID, '')) = 0       
                   AND   SKU.StdGrossWGT <= Cartonization.MaxWeight    -- Not process for wrong setup,  cartonization weight/cube is less then SKU QTY 1     
-                  AND   SKU.STDCube <=  Cartonization.Cube  
+                  AND   SKU.STDCube <=  Cartonization.[Cube]  
                   AND   (SKU.StdGrossWGT * PACK.casecnt) <= Cartonization.MaxWeight
-                  AND   (SKU.STDCube * PACK.casecnt) <= Cartonization.Cube
+                  AND   (SKU.STDCube * PACK.casecnt) <= Cartonization.[Cube]
                   AND   (SKU.StdGrossWGT * PACK.innerpack) <= Cartonization.MaxWeight
-                  AND   (SKU.STDCube * PACK.innerpack) <= Cartonization.Cube
+                  AND   (SKU.STDCube * PACK.innerpack) <= Cartonization.[Cube]
                   AND   #TEMPPICKDETAIL.Rowid > @n_rowid1
                   AND   SKU.Size = @c_Size 
                   Order by #TEMPPICKDETAIL.rowid
@@ -4812,7 +4813,7 @@ BEGIN
                          @n_QtyPick       = ISNULL(#TEMPPICKDETAIL.Qty,0), 
                          @c_CartonType    = Cartonization.CartonType,
                          @n_MaxWeight     = ISNULL(Cartonization.MaxWeight,0),      
-                         @n_MaxCube       = ISNULL(Cartonization.Cube,0),          
+                         @n_MaxCube       = ISNULL(Cartonization.[Cube],0),          
                          @n_CaseCnt       = PACK.casecnt,
                          @n_Innerpack     = PACK.innerpack,
                          @c_uom           = #TEMPPICKDETAIL.uom
@@ -4826,11 +4827,11 @@ BEGIN
 	               Where ISNULL(#TEMPPICKDETAIL.Qty,0) > 0      
                   AND   LEN(ISNULL(#TEMPPICKDETAIL.DropID, '')) = 0       
                   AND   SKU.StdGrossWGT <= Cartonization.MaxWeight    -- Not process for wrong setup,  cartonization weight/cube is less then SKU QTY 1     
-                  AND   SKU.STDCube <=  Cartonization.Cube  
+                  AND   SKU.STDCube <=  Cartonization.[Cube]  
                   AND   (SKU.StdGrossWGT * PACK.casecnt) <= Cartonization.MaxWeight
-                  AND   (SKU.STDCube * PACK.casecnt) <= Cartonization.Cube
+                  AND   (SKU.STDCube * PACK.casecnt) <= Cartonization.[Cube]
                   AND   (SKU.StdGrossWGT * PACK.innerpack) <= Cartonization.MaxWeight
-                  AND   (SKU.STDCube * PACK.innerpack) <= Cartonization.Cube
+                  AND   (SKU.STDCube * PACK.innerpack) <= Cartonization.[Cube]
                   AND   #TEMPPICKDETAIL.Rowid > @n_rowid1
                   AND   SKU.Measurement = @c_Measurement
                   Order by #TEMPPICKDETAIL.rowid
@@ -5353,7 +5354,7 @@ BEGIN
                          @n_QtyPick       = ISNULL(#TEMPPICKDETAIL.Qty,0), 
                          @c_CartonType    = Cartonization.CartonType,
                          @n_MaxWeight     = ISNULL(Cartonization.MaxWeight,0),      
-                         @n_MaxCube       = ISNULL(Cartonization.Cube,0),          
+                         @n_MaxCube       = ISNULL(Cartonization.[Cube],0),          
                          @n_CaseCnt       = PACK.casecnt,
                          @n_Innerpack     = PACK.innerpack,
                          @c_uom           = #TEMPPICKDETAIL.uom
@@ -5367,11 +5368,11 @@ BEGIN
 	               Where ISNULL(#TEMPPICKDETAIL.Qty,0) > 0      
                   AND   LEN(ISNULL(#TEMPPICKDETAIL.DropID, '')) = 0       
                   AND   SKU.StdGrossWGT <= Cartonization.MaxWeight    -- Not process for wrong setup,  cartonization weight/cube is less then SKU QTY 1     
-                  AND   SKU.STDCube <=  Cartonization.Cube  
+                  AND   SKU.STDCube <=  Cartonization.[Cube]  
                   AND   (SKU.StdGrossWGT * PACK.casecnt) <= Cartonization.MaxWeight
-                  AND   (SKU.STDCube * PACK.casecnt) <= Cartonization.Cube
+                  AND   (SKU.STDCube * PACK.casecnt) <= Cartonization.[Cube]
                   AND   (SKU.StdGrossWGT * PACK.innerpack) <= Cartonization.MaxWeight
-                  AND   (SKU.STDCube * PACK.innerpack) <= Cartonization.Cube
+                  AND   (SKU.STDCube * PACK.innerpack) <= Cartonization.[Cube]
                   AND   #TEMPPICKDETAIL.Rowid > @n_rowid1
                   AND   SKU.BUSR5 = @c_BUSR5
                   AND   SKU.CLASS = @c_CLASS 
@@ -5900,7 +5901,7 @@ BEGIN
                          @n_QtyPick       = ISNULL(#TEMPPICKDETAIL.Qty,0), 
                          @c_CartonType    = Cartonization.CartonType,
                          @n_MaxWeight     = ISNULL(Cartonization.MaxWeight,0),      
-                         @n_MaxCube       = ISNULL(Cartonization.Cube,0),          
+                         @n_MaxCube       = ISNULL(Cartonization.[Cube],0),          
                          @n_CaseCnt       = PACK.casecnt,
                          @n_Innerpack     = PACK.innerpack,
                          @c_uom           = #TEMPPICKDETAIL.uom
@@ -5914,11 +5915,11 @@ BEGIN
 	               Where ISNULL(#TEMPPICKDETAIL.Qty,0) > 0      
                   AND   LEN(ISNULL(#TEMPPICKDETAIL.DropID, '')) = 0       
                   AND   SKU.StdGrossWGT <= Cartonization.MaxWeight    -- Not process for wrong setup,  cartonization weight/cube is less then SKU QTY 1     
-                  AND   SKU.STDCube <=  Cartonization.Cube  
+                  AND   SKU.STDCube <=  Cartonization.[Cube]  
                   AND   (SKU.StdGrossWGT * PACK.casecnt) <= Cartonization.MaxWeight
-                  AND   (SKU.STDCube * PACK.casecnt) <= Cartonization.Cube
+                  AND   (SKU.STDCube * PACK.casecnt) <= Cartonization.[Cube]
                   AND   (SKU.StdGrossWGT * PACK.innerpack) <= Cartonization.MaxWeight
-                  AND   (SKU.STDCube * PACK.innerpack) <= Cartonization.Cube
+                  AND   (SKU.STDCube * PACK.innerpack) <= Cartonization.[Cube]
                   AND   #TEMPPICKDETAIL.Rowid > @n_rowid1
                   AND   SKU.BUSR5 = @c_BUSR5
                   AND   SKU.CLASS = @c_CLASS 
@@ -6454,7 +6455,7 @@ BEGIN
                          @n_QtyPick       = ISNULL(#TEMPPICKDETAIL.Qty,0), 
                          @c_CartonType    = Cartonization.CartonType,
                          @n_MaxWeight     = ISNULL(Cartonization.MaxWeight,0),      
-                         @n_MaxCube       = ISNULL(Cartonization.Cube,0),          
+                         @n_MaxCube       = ISNULL(Cartonization.[Cube],0),          
                          @n_CaseCnt       = PACK.casecnt,
                          @n_Innerpack     = PACK.innerpack,
                          @c_uom           = #TEMPPICKDETAIL.uom
@@ -6468,11 +6469,11 @@ BEGIN
 	               Where ISNULL(#TEMPPICKDETAIL.Qty,0) > 0      
                   AND   LEN(ISNULL(#TEMPPICKDETAIL.DropID, '')) = 0       
                   AND   SKU.StdGrossWGT <= Cartonization.MaxWeight    -- Not process for wrong setup,  cartonization weight/cube is less then SKU QTY 1     
-                  AND   SKU.STDCube <=  Cartonization.Cube  
+                  AND   SKU.STDCube <=  Cartonization.[Cube]  
                   AND   (SKU.StdGrossWGT * PACK.casecnt) <= Cartonization.MaxWeight
-                  AND   (SKU.STDCube * PACK.casecnt) <= Cartonization.Cube
+                  AND   (SKU.STDCube * PACK.casecnt) <= Cartonization.[Cube]
                   AND   (SKU.StdGrossWGT * PACK.innerpack) <= Cartonization.MaxWeight
-                  AND   (SKU.STDCube * PACK.innerpack) <= Cartonization.Cube
+                  AND   (SKU.STDCube * PACK.innerpack) <= Cartonization.[Cube]
                   AND   #TEMPPICKDETAIL.Rowid > @n_rowid1
                   AND   SKU.BUSR5 = @c_BUSR5
                   AND   SKU.CLASS = @c_CLASS 
@@ -7009,7 +7010,7 @@ BEGIN
                          @n_QtyPick       = ISNULL(#TEMPPICKDETAIL.Qty,0), 
                          @c_CartonType    = Cartonization.CartonType,
                          @n_MaxWeight     = ISNULL(Cartonization.MaxWeight,0),      
-                         @n_MaxCube       = ISNULL(Cartonization.Cube,0),          
+                         @n_MaxCube       = ISNULL(Cartonization.[Cube],0),          
                          @n_CaseCnt       = PACK.casecnt,
                          @n_Innerpack     = PACK.innerpack,
                          @c_uom           = #TEMPPICKDETAIL.uom
@@ -7023,11 +7024,11 @@ BEGIN
 	               Where ISNULL(#TEMPPICKDETAIL.Qty,0) >= 0      
                   AND   LEN(ISNULL(#TEMPPICKDETAIL.DropID, '')) = 0       
                   AND   SKU.StdGrossWGT <= Cartonization.MaxWeight    -- Not process for wrong setup,  cartonization weight/cube is less then SKU QTY 1     
-                  AND   SKU.STDCube <=  Cartonization.Cube  
+                  AND   SKU.STDCube <=  Cartonization.[Cube]  
                   AND   (SKU.StdGrossWGT * PACK.casecnt) <= Cartonization.MaxWeight
-                  AND   (SKU.STDCube * PACK.casecnt) <= Cartonization.Cube
+                  AND   (SKU.STDCube * PACK.casecnt) <= Cartonization.[Cube]
                   AND   (SKU.StdGrossWGT * PACK.innerpack) <= Cartonization.MaxWeight
-                  AND   (SKU.STDCube * PACK.innerpack) <= Cartonization.Cube
+                  AND   (SKU.STDCube * PACK.innerpack) <= Cartonization.[Cube]
                   AND   #TEMPPICKDETAIL.Rowid >= @n_rowid1
                   AND   #TEMPPICKDETAIL.ConsigneeKey = @c_ConsigneeKey
                   Order by #TEMPPICKDETAIL.rowid
