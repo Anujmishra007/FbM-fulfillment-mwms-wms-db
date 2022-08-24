@@ -1,11 +1,8 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[RDT].[rdtfnc_Move_SKU]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [RDT].[rdtfnc_Move_SKU]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 
 
 /************************************************************************/
@@ -75,12 +72,12 @@ GO
 /* 2018-08-27 4.2  ChewKP   WMS-6052 - Standardize EventLog (ChewKP03)  */
 /* 2018-09-18 4.3  James    WMS6353-Add rdtformat @ id screen (james11) */
 /* 2018-09-28 4.4  Gan      Performance                                 */
-/* 2018-10-31 4.5  CheeMun  INC0448387- Reset @nQty variable            */ 
+/* 2018-10-31 4.5  CheeMun  INC0448387- Reset @nQty variable            */
 /* 2018-11-16 4.6  ChewKP   WMS-7029 -- Add Lot checking (ChewKP04)     */
-/* 2018-10-30 4.7  Ung      WMS-6866 Add ConfirmSP                      */  
+/* 2018-10-30 4.7  Ung      WMS-6866 Add ConfirmSP                      */
 /* 2018-10-11 4.8  Ung      WMS-6467 Add PrepackIndicator, DefaultQTY   */
 /* 2015-01-12 4.9  James    Allow 7 digits qty (james12)                */
-/* 2019-03-05 5.0  YeeKung  WMS-8196 Add loc prefix (yeekung01)         */   
+/* 2019-03-05 5.0  YeeKung  WMS-8196 Add loc prefix (yeekung01)         */
 /* 2019-04-01 5.1  PakYuen  INC0645262 - Fix unable to proceed to Step 3*/
 /* 2019-05-10 5.2  James    WMS-9013 Skip From/To ID scn if From/To     */
 /*                          LoseID = 1 when config turned on (james13)  */
@@ -89,15 +86,16 @@ GO
 /* 2019-07-11 5.5  James    WMS9712 Remove @nErrNo display from         */
 /*                          rdt_Decode (james16)                        */
 /* 2019-10-17 5.6  Pakyuen  INC0897289 Go to step fail                  */
-/* 2020-02-04 5.7  YeeKung  WMS11793 Add loc as doctype (yeekung02)     */      
-/* 2020-01-03 5.8  YeeKung  WMS-11540 support lotxlocxid.id (yeekung03) */      
+/* 2020-02-04 5.7  YeeKung  WMS11793 Add loc as doctype (yeekung02)     */
+/* 2020-01-03 5.8  YeeKung  WMS-11540 support lotxlocxid.id (yeekung03) */
 /* 2020-10-23 5.9  James    WMS-15449 Add ExtValid @ step 2 (james17)   */
 /* 2020-10-14 6.0  Chermain WMS-14688 backSKUScn without check sku (cc01)*/
 /* 2021-03-17 6.1  James    WMS-16555 Add FlowThruToIDScn (james18)     */
 /* 2021-09-01 6.2  James    WMS-17800 Add FlowThruQtyScn (james19)      */
+/* 2022-08-23 6.3  YeeKung  WMS-19594 Add ExtendedValidateSP (yeekung04)*/
 /************************************************************************/
 
-CREATE  PROCEDURE [RDT].[rdtfnc_Move_SKU] (
+CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Move_SKU] (
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR( 20) OUTPUT -- screen limitation, 20 NVARCHAR max
@@ -167,12 +165,12 @@ DECLARE
    @cDecodeSP           NVARCHAR( 20),
    @cDefaultToID        NVARCHAR( 1),
    @cSerialNoCapture    NVARCHAR( 1),
-   @cConfirmSP          NVARCHAR( 20),  
+   @cConfirmSP          NVARCHAR( 20),
    @cDefaultQTY         NVARCHAR( 1),
    @cBarcode            NVARCHAR( 60),
    @cPrePackIndicator   NVARCHAR(30),
    @nPackQtyIndicator   INT,
-	@cLOCLookupSP        NVARCHAR(20), --(yeekung01)    
+	@cLOCLookupSP        NVARCHAR(20), --(yeekung01)
    @cSkipIDScnIFLocLoseID  NVARCHAR( 1),  -- (james13)
    @cFromLocLoseID         NVARCHAR( 1),  -- (james13)
    @cMultiSKUBarcode       NVARCHAR( 1),  -- (james14)
@@ -185,7 +183,7 @@ DECLARE
    @nFlowThruToIDScn       INT,           -- (james18)
    @cDefaultSuggToLoc      NVARCHAR( 10), -- (james18)
    @nFlowThruQtyScn        INT,           -- (james19)
-   
+
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
    @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),
@@ -275,13 +273,13 @@ SELECT
    @cDecodeSP           = V_String25,
    @cDefaultToID        = V_String26,
    @cSerialNoCapture    = V_String27,
-   @cConfirmSP          = V_String28,  
+   @cConfirmSP          = V_String28,
    @cDefaultQTY         = V_String29,
    @cGoBackSKUScn       = V_String30,  --(cc01)
    @cPrePackIndicator   = V_String41,
-	 @cLOCLookupSP        = V_String42, --(yeekung01)   
-   @cDefaultSuggToLoc   = V_String43, --(james18)   
-   
+	@cLOCLookupSP        = V_String42, --(yeekung01)
+   @cDefaultSuggToLoc   = V_String43, --(james18)
+
    @nQTY_Avail          = V_Integer1,   --SOS271541
    @nPQTY_Avail         = V_Integer2,   --SOS271541
    @nMQTY_Avail         = V_Integer3,   --SOS271541
@@ -289,9 +287,9 @@ SELECT
    @nMultiStorer        = V_Integer5,
    @nPABookingKey       = V_Integer6,
    @nPackQtyIndicator   = V_Integer7,
-   @nFlowThruToIDScn    = V_Integer8, --(james18) 
+   @nFlowThruToIDScn    = V_Integer8, --(james18)
    @nFlowThruQtyScn     = V_Integer9, --(james19) 
-   
+
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,
@@ -361,9 +359,9 @@ BEGIN
       SET @nMultiStorer = 1
 
    -- Storer configure
-   SET @cConfirmSP = rdt.RDTGetConfig( @nFunc, 'ConfirmSP', @cStorerKey)  
-   IF @cConfirmSP = '0'  
-      SET @cConfirmSP = ''  
+   SET @cConfirmSP = rdt.RDTGetConfig( @nFunc, 'ConfirmSP', @cStorerKey)
+   IF @cConfirmSP = '0'
+      SET @cConfirmSP = ''
    SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerKey)
    IF @cDecodeSP = '0'
       SET @cDecodeSP = ''
@@ -386,7 +384,7 @@ BEGIN
    SET @cGoBackFromLocScn = rdt.rdtGetConfig( @nFunc, 'MoveBySKUGoBackFromLocScn', @cStorerKey)
 	--   IF @cGoBackFromLocScn = '0'
 	--      SET @cGoBackFromLocScn = ''             -- PakYuen
-   SET @cLOCLookupSP = rdt.rdtGetConfig(@nFunc,'LOCLookupSP',@cStorerKey)   --(yeekung01)   
+   SET @cLOCLookupSP = rdt.rdtGetConfig(@nFunc,'LOCLookupSP',@cStorerKey)   --(yeekung01)
    SET @cSerialNoCapture = rdt.rdtGetConfig( @nFunc, 'SerialNoCapture', @cStorerKey)
 
    SET @cSkipIDScnIFLocLoseID = rdt.RDTGetConfig( @nFunc, 'SkipIDScnIFLocLoseID', @cStorerKey)
@@ -396,7 +394,7 @@ BEGIN
    SET @cExtendedInfoSP = rdt.rdtGetConfig( @nFunc, 'ExtendedInfoSP', @cStorerKey)
    IF @cExtendedInfoSP = '0'
       SET @cExtendedInfoSP = ''
-
+      
    SET @cGoBackSKUScn = rdt.rdtGetConfig( @nFunc, 'MoveBySKUGoBackSKUScn', @cStorerKey) --(cc01)
    
    SET @nFlowThruToIDScn = rdt.rdtGetConfig( @nFunc, 'FlowThruToIDScn', @cStorerKey)
@@ -470,22 +468,22 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( 60551, @cLangCode, 'DSP') --'LOC needed'
          GOTO Step_1_Fail
       END
-      
-		-- add from loc prefix (yeekung01)        
-		IF @cLOCLookupSP = 1              
-		BEGIN              
-			EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,               
-			@cFromLOC    OUTPUT,               
-			@nErrNo     OUTPUT,               
-			@cErrMsg    OUTPUT              
-			IF @nErrNo <> 0              
-				GOTO Step_1_Fail              
-		END  
+
+		-- add from loc prefix (yeekung01)
+		IF @cLOCLookupSP = 1
+		BEGIN
+			EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+			@cFromLOC    OUTPUT,
+			@nErrNo     OUTPUT,
+			@cErrMsg    OUTPUT
+			IF @nErrNo <> 0
+				GOTO Step_1_Fail
+		END
 
       SET @cFromLocLoseID = ''
 
       -- Get LOC info
-      SELECT @cChkFacility = Facility, 
+      SELECT @cChkFacility = Facility,
              @cFromLocLoseID = LoseID
       FROM dbo.LOC (NOLOCK)
       WHERE LOC = @cFromLOC
@@ -519,7 +517,7 @@ BEGIN
          IF EXISTS( SELECT 1 FROM dbo.UCC (NOLOCK)
          WHERE Storerkey = @cStorerKey
                AND LOC = @cFromLOC
-               AND ISNULL(LOT,'') <> '' -- (ChewKP04) 
+               AND ISNULL(LOT,'') <> '' -- (ChewKP04)
                AND Status = 1) -- 1=Received
          BEGIN
             SET @nErrNo = 60554
@@ -732,7 +730,7 @@ BEGIN
 
       -- Reset (james10)
       --SET @nQTY = 0
-      
+
       SET @nFromScn = 0
       SET @nFromStep = 0
 
@@ -808,8 +806,8 @@ BEGIN
       END
 
 		--INC0448387
-  		SET @nQTY = 0 
-  		
+  		SET @nQTY = 0
+
       -- Decode
       IF @cDecodeSP <> ''
       BEGIN
@@ -926,86 +924,86 @@ BEGIN
          GOTO Step_3_Fail
       END
 
-      -- (james14)      
-      -- Validate barcode return multiple SKU      
-      IF @nSKUCnt > 1      
-      BEGIN      
-         IF @cMultiSKUBarcode IN ('1', '2')    --(yeekung03)  
-         BEGIN      
-            IF (@cFromID <>'')      
-            BEGIN      
-               EXEC rdt.rdt_MultiSKUBarcode @nMobile, @nFunc, @cLangCode,      
-                  @cInField01 OUTPUT,  @cOutField01 OUTPUT,      
-                  @cInField02 OUTPUT,  @cOutField02 OUTPUT,      
-                  @cInField03 OUTPUT,  @cOutField03 OUTPUT,      
-                  @cInField04 OUTPUT,  @cOutField04 OUTPUT,      
-                  @cInField05 OUTPUT,  @cOutField05 OUTPUT,      
-                  @cInField06 OUTPUT,  @cOutField06 OUTPUT,      
-                  @cInField07 OUTPUT,  @cOutField07 OUTPUT,      
-                  @cInField08 OUTPUT,  @cOutField08 OUTPUT,      
-                  @cInField09 OUTPUT,  @cOutField09 OUTPUT,      
-                  @cInField10 OUTPUT,  @cOutField10 OUTPUT,      
-                  @cInField11 OUTPUT,  @cOutField11 OUTPUT,      
-                  @cInField12 OUTPUT,  @cOutField12 OUTPUT,      
-                  @cInField13 OUTPUT,  @cOutField13 OUTPUT,      
-                  @cInField14 OUTPUT,  @cOutField14 OUTPUT,      
-                  @cInField15 OUTPUT,  @cOutField15 OUTPUT,      
-                  'POPULATE',      
-                  @cMultiSKUBarcode,      
-                  @cStorerKey,      
-                  @cSKU         OUTPUT,      
-                  @nErrNo       OUTPUT,      
-                  @cErrMsg      OUTPUT,      
-                  'LOTXLOCXID.ID',    -- DocType      
-                  @cFromID    
-            END      
-            ELSE      
-            BEGIN      
-               EXEC rdt.rdt_MultiSKUBarcode @nMobile, @nFunc, @cLangCode,      
-                  @cInField01 OUTPUT,  @cOutField01 OUTPUT,      
-                  @cInField02 OUTPUT,  @cOutField02 OUTPUT,      
-                  @cInField03 OUTPUT,  @cOutField03 OUTPUT,      
-                  @cInField04 OUTPUT,  @cOutField04 OUTPUT,      
-                  @cInField05 OUTPUT,  @cOutField05 OUTPUT,      
-                  @cInField06 OUTPUT,  @cOutField06 OUTPUT,      
-                  @cInField07 OUTPUT,  @cOutField07 OUTPUT,      
-                  @cInField08 OUTPUT,  @cOutField08 OUTPUT,      
-                  @cInField09 OUTPUT,  @cOutField09 OUTPUT,      
-                  @cInField10 OUTPUT,  @cOutField10 OUTPUT,      
-                  @cInField11 OUTPUT,  @cOutField11 OUTPUT,      
-                  @cInField12 OUTPUT,  @cOutField12 OUTPUT,      
-                  @cInField13 OUTPUT,  @cOutField13 OUTPUT,      
-                  @cInField14 OUTPUT,  @cOutField14 OUTPUT,      
-                  @cInField15 OUTPUT,  @cOutField15 OUTPUT,      
-                  'POPULATE',      
-                  @cMultiSKUBarcode,      
-                  @cStorerKey,      
-                  @cSKU         OUTPUT,      
-                  @nErrNo       OUTPUT,      
-                  @cErrMsg      OUTPUT,      
-                  '',    -- DocType      
-                  ''      
-            END      
-      
-            IF @nErrNo = 0 -- Populate multi SKU screen      
-            BEGIN      
-               -- Go to Multi SKU screen      
-               SET @nFromScn = @nScn      
-               SET @nFromStep = @nStep      
-               SET @nScn = 3570      
-               SET @nStep = @nStep + 7      
-               GOTO Quit      
-            END      
-            IF @nErrNo = -1 -- Found in Doc, skip multi SKU screen      
-               SET @nErrNo = 0      
-         END      
-         ELSE      
-         BEGIN      
-            SET @nErrNo = 60570      
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'SameBarCodeSKU'      
-            GOTO Step_3_Fail      
-         END      
-      END       
+      -- (james14)
+      -- Validate barcode return multiple SKU
+      IF @nSKUCnt > 1
+      BEGIN
+         IF @cMultiSKUBarcode IN ('1', '2')    --(yeekung03)
+         BEGIN
+            IF (@cFromID <>'')
+            BEGIN
+               EXEC rdt.rdt_MultiSKUBarcode @nMobile, @nFunc, @cLangCode,
+                  @cInField01 OUTPUT,  @cOutField01 OUTPUT,
+                  @cInField02 OUTPUT,  @cOutField02 OUTPUT,
+                  @cInField03 OUTPUT,  @cOutField03 OUTPUT,
+                  @cInField04 OUTPUT,  @cOutField04 OUTPUT,
+                  @cInField05 OUTPUT,  @cOutField05 OUTPUT,
+                  @cInField06 OUTPUT,  @cOutField06 OUTPUT,
+                  @cInField07 OUTPUT,  @cOutField07 OUTPUT,
+                  @cInField08 OUTPUT,  @cOutField08 OUTPUT,
+                  @cInField09 OUTPUT,  @cOutField09 OUTPUT,
+                  @cInField10 OUTPUT,  @cOutField10 OUTPUT,
+                  @cInField11 OUTPUT,  @cOutField11 OUTPUT,
+                  @cInField12 OUTPUT,  @cOutField12 OUTPUT,
+                  @cInField13 OUTPUT,  @cOutField13 OUTPUT,
+                  @cInField14 OUTPUT,  @cOutField14 OUTPUT,
+                  @cInField15 OUTPUT,  @cOutField15 OUTPUT,
+                  'POPULATE',
+                  @cMultiSKUBarcode,
+                  @cStorerKey,
+                  @cSKU         OUTPUT,
+                  @nErrNo       OUTPUT,
+                  @cErrMsg      OUTPUT,
+                  'LOTXLOCXID.ID',    -- DocType
+                  @cFromID
+            END
+            ELSE
+            BEGIN
+               EXEC rdt.rdt_MultiSKUBarcode @nMobile, @nFunc, @cLangCode,
+                  @cInField01 OUTPUT,  @cOutField01 OUTPUT,
+                  @cInField02 OUTPUT,  @cOutField02 OUTPUT,
+                  @cInField03 OUTPUT,  @cOutField03 OUTPUT,
+                  @cInField04 OUTPUT,  @cOutField04 OUTPUT,
+                  @cInField05 OUTPUT,  @cOutField05 OUTPUT,
+                  @cInField06 OUTPUT,  @cOutField06 OUTPUT,
+                  @cInField07 OUTPUT,  @cOutField07 OUTPUT,
+                  @cInField08 OUTPUT,  @cOutField08 OUTPUT,
+                  @cInField09 OUTPUT,  @cOutField09 OUTPUT,
+                  @cInField10 OUTPUT,  @cOutField10 OUTPUT,
+                  @cInField11 OUTPUT,  @cOutField11 OUTPUT,
+                  @cInField12 OUTPUT,  @cOutField12 OUTPUT,
+                  @cInField13 OUTPUT,  @cOutField13 OUTPUT,
+                  @cInField14 OUTPUT,  @cOutField14 OUTPUT,
+                  @cInField15 OUTPUT,  @cOutField15 OUTPUT,
+                  'POPULATE',
+                  @cMultiSKUBarcode,
+                  @cStorerKey,
+                  @cSKU         OUTPUT,
+                  @nErrNo       OUTPUT,
+                  @cErrMsg      OUTPUT,
+                  '',    -- DocType
+                  ''
+            END
+
+            IF @nErrNo = 0 -- Populate multi SKU screen
+            BEGIN
+               -- Go to Multi SKU screen
+               SET @nFromScn = @nScn
+               SET @nFromStep = @nStep
+               SET @nScn = 3570
+               SET @nStep = @nStep + 7
+               GOTO Quit
+            END
+            IF @nErrNo = -1 -- Found in Doc, skip multi SKU screen
+               SET @nErrNo = 0
+         END
+         ELSE
+         BEGIN
+            SET @nErrNo = 60570
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'SameBarCodeSKU'
+            GOTO Step_3_Fail
+         END
+      END
 
       -- Get SKU
       EXEC [RDT].[rdt_GETSKU]
@@ -1118,12 +1116,12 @@ BEGIN
       BEGIN
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
          BEGIN
-            INSERT INTO @tExtInfo (Variable, Value) VALUES 
-               ('@cFromLOC',     @cFromLOC), 
-               ('@cFromID',      @cFromID), 
-               ('@cSKU',         @cSKU), 
-               ('@nQTY',         CAST( @nQTY AS NVARCHAR( 10))), 
-               ('@cToID',        @cToID), 
+            INSERT INTO @tExtInfo (Variable, Value) VALUES
+               ('@cFromLOC',     @cFromLOC),
+               ('@cFromID',      @cFromID),
+               ('@cSKU',         @cSKU),
+               ('@nQTY',         CAST( @nQTY AS NVARCHAR( 10))),
+               ('@cToID',        @cToID),
                ('@cToLOC',       @cToLOC)
 
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
@@ -1136,8 +1134,8 @@ BEGIN
                '@nInputKey       INT,           ' +
                '@cStorerKey      NVARCHAR( 15), ' +
                '@cFacility       NVARCHAR(  5), ' +
-               '@tExtInfo        VariableTable READONLY, ' + 
-               '@cExtendedInfo   NVARCHAR( 20)  OUTPUT ' 
+               '@tExtInfo        VariableTable READONLY, ' +
+               '@cExtendedInfo   NVARCHAR( 20)  OUTPUT '
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @tExtInfo, @cExtendedInfo OUTPUT
@@ -1182,16 +1180,16 @@ BEGIN
       SET @cOutField09 = @cMUOM_Desc
       SET @cOutField10 = CAST( @nMQTY_Avail AS NVARCHAR( 7))
       SET @cOutField11 = CASE WHEN @cDefaultQTY <> ''  THEN @cDefaultQTY
-                              WHEN @nMQTY = 0 THEN '' 
-                              ELSE CAST( @nMQTY AS NVARCHAR( 7)) 
+                              WHEN @nMQTY = 0 THEN ''
+                              ELSE CAST( @nMQTY AS NVARCHAR( 7))
                          END
       SET @cOutField12 = CASE WHEN @cPrePackIndicator = '2' THEN CAST( @nPackQtyIndicator AS NVARCHAR( 3)) ELSE '' END
 
       -- Go to next screen
       SET @nScn = @nScn + 1
       SET @nStep = @nStep + 1
-
-      -- (james19)
+      
+            -- (james19)
       IF @nFlowThruQtyScn = 1
       BEGIN
          SET @cInField11 = @cOutField11
@@ -1233,7 +1231,7 @@ BEGIN
       IF @cFromLocLoseID = '1' AND @cSkipIDScnIFLocLoseID = '1'
          GOTO Step_2
    END
-      
+
    GOTO Quit
 
    Step_3_Fail:
@@ -1327,6 +1325,38 @@ BEGIN
          SET @nErrNo = 60562
          SET @cErrMsg = rdt.rdtgetmessage( 60562, @cLangCode, 'DSP') --'QTYAVL NotEnuf'
          GOTO Step_4_Fail
+      END
+
+      -- Extended validate
+      IF @cExtendedValidateSP <> '' --(yeekung03)
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cFromLOC, @cFromID, @cSKU, @nQTY, @cToID, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,           ' +
+               '@nInputKey       INT,           ' +
+               '@cStorerKey      NVARCHAR( 15), ' +
+               '@cFacility       NVARCHAR(  5), ' +
+               '@cFromLOC        NVARCHAR( 10), ' +
+               '@cFromID         NVARCHAR( 18), ' +
+               '@cSKU            NVARCHAR( 20), ' +
+               '@nQTY            INT,           ' +
+               '@cToID           NVARCHAR( 18), ' +
+               '@cToLOC          NVARCHAR( 10), ' +
+               '@nErrNo          INT OUTPUT,    ' +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cFromLOC, @cFromID, @cSKU, @nQTY, @cToID, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Step_4_Fail
+         END
       END
 
       -- (Vicky02) - Start
@@ -1992,7 +2022,7 @@ BEGIN
          SET @cFieldAttr07 = ''
          SET @cFieldAttr08 = ''
          SET @cFieldAttr09 = ''
-         SET @cFieldAttr10 = ''
+      	SET @cFieldAttr10 = ''
          SET @cFieldAttr11 = ''
          SET @cFieldAttr12 = ''
          SET @cFieldAttr13 = ''
@@ -2064,17 +2094,17 @@ BEGIN
          GOTO Step_6_Fail
       END
 
-		-- add loc prefix (yeekung01)        
-		IF @cLOCLookupSP = 1           
-		BEGIN              
-			EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,               
-			@cToLOC        OUTPUT,               
-			@nErrNo     OUTPUT,               
-			@cErrMsg    OUTPUT              
-			IF @nErrNo <> 0              
-				GOTO Step_6_Fail              
-		END    
-  
+		-- add loc prefix (yeekung01)
+		IF @cLOCLookupSP = 1
+		BEGIN
+			EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+			@cToLOC        OUTPUT,
+			@nErrNo     OUTPUT,
+			@cErrMsg    OUTPUT
+			IF @nErrNo <> 0
+				GOTO Step_6_Fail
+		END
+
       -- Get LOC info
       SELECT @cChkFacility = Facility
       FROM dbo.LOC (NOLOCK)
@@ -2150,39 +2180,39 @@ BEGIN
          END
       END
 
-      -- Custom move  
-      IF @cConfirmSP <> ''  
-      BEGIN  
-         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cConfirmSP AND type = 'P')  
-         BEGIN  
-            SET @cSQL = 'EXEC rdt.' + RTRIM( @cConfirmSP) +  
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cFromLOC, @cFromID, @cSKU, @nQTY, @cToID, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT'  
-            SET @cSQLParam =  
-               '@nMobile         INT,           ' +  
-               '@nFunc           INT,           ' +  
-               '@cLangCode       NVARCHAR( 3),  ' +  
-               '@nStep           INT,           ' +  
-               '@nInputKey       INT,           ' +  
-               '@cStorerKey      NVARCHAR( 15), ' +  
-               '@cFacility       NVARCHAR(  5), ' +  
-               '@cFromLOC        NVARCHAR( 10), ' +  
-               '@cFromID         NVARCHAR( 18), ' +  
-               '@cSKU            NVARCHAR( 20), ' +  
-               '@nQTY            INT,           ' +  
-               '@cToID           NVARCHAR( 18), ' +  
-               '@cToLOC          NVARCHAR( 10), ' +  
-               '@nErrNo          INT OUTPUT,    ' +  
-               '@cErrMsg         NVARCHAR( 20) OUTPUT'  
-  
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cFromLOC, @cFromID, @cSKU, @nQTY, @cToID, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT  
-  
-            IF @nErrNo <> 0  
-               GOTO Step_6_Fail  
-         END  
-      END  
-      ELSE  
-      BEGIN  
+      -- Custom move
+      IF @cConfirmSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cConfirmSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cConfirmSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cFromLOC, @cFromID, @cSKU, @nQTY, @cToID, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,           ' +
+               '@nInputKey       INT,           ' +
+               '@cStorerKey      NVARCHAR( 15), ' +
+               '@cFacility       NVARCHAR(  5), ' +
+               '@cFromLOC        NVARCHAR( 10), ' +
+               '@cFromID         NVARCHAR( 18), ' +
+               '@cSKU            NVARCHAR( 20), ' +
+               '@nQTY            INT,           ' +
+               '@cToID           NVARCHAR( 18), ' +
+               '@cToLOC          NVARCHAR( 10), ' +
+               '@nErrNo          INT OUTPUT,    ' +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cFromLOC, @cFromID, @cSKU, @nQTY, @cToID, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Step_6_Fail
+         END
+      END
+      ELSE
+      BEGIN
       IF @nMultiStorer = 0
       BEGIN
          EXECUTE rdt.rdt_Move
@@ -2199,12 +2229,12 @@ BEGIN
             @cToID       	= @cToID,       -- NULL means not changing ID. Blank consider a valid ID
             @cSKU        	= @cSKU,
             @nQTY        	= @nQTY,
-			@nFunc   		= @nFunc     
-      
-	  		--INC0897289  
-		IF @nErrNo <> 0    
-        GOTO Step_6_Fail 
-	  
+			@nFunc   		= @nFunc
+
+	  		--INC0897289
+		IF @nErrNo <> 0
+        GOTO Step_6_Fail
+
 	  END
       ELSE
       BEGIN
@@ -2226,12 +2256,12 @@ BEGIN
             @cToID       	= @cToID,       -- NULL means not changing ID. Blank consider a valid ID
             @cSKU        	= @cSKU,
             @nQTY        	= @nQTY,
-				@nFunc   		= @nFunc  
+				@nFunc   		= @nFunc
 
-		--INC0897289  
-		IF @nErrNo <> 0    
+		--INC0897289
+		IF @nErrNo <> 0
         GOTO Step_6_Fail
-		
+
       END
 
       -- Move serial no
@@ -2263,7 +2293,7 @@ BEGIN
 
       IF @nErrNo <> 0
          GOTO Step_6_Fail
-      END  
+      END
 
       -- Extended update
       IF @cExtendedUpdateSP <> ''
@@ -3206,9 +3236,9 @@ BEGIN
          @cStorerKey,
          @cSKU     OUTPUT,
          @nErrNo   OUTPUT,
-         @cErrMsg  OUTPUT,  
-         '',    -- DocType      
-         ''      
+         @cErrMsg  OUTPUT,
+         '',    -- DocType
+         ''
 
       IF @nErrNo <> 0
       BEGIN
@@ -3216,7 +3246,7 @@ BEGIN
             SET @nErrNo = 0
          GOTO Quit
       END
-      
+
       -- Extended update
       IF @cExtendedValidateSP <> ''
       BEGIN
@@ -3326,13 +3356,13 @@ BEGIN
       V_String25 = @cDecodeSP,
       V_String26 = @cDefaultToID,
       V_String27 = @cSerialNoCapture,
-      V_String28 = @cConfirmSP,  
+      V_String28 = @cConfirmSP,
       V_String29 = @cDefaultQTY,
       V_String30 = @cGoBackSKUScn, --(cc01)
       V_String41 = @cPrePackIndicator,
-		  V_String42 = @cLOCLookupSP,   --(yeekung01)  
+		V_String42 = @cLOCLookupSP,   --(yeekung01)
       V_String43 = @cDefaultSuggToLoc,
-      
+
       V_Integer1 = @nQTY_Avail,
       V_Integer2 = @nPQTY_Avail,
       V_Integer3 = @nMQTY_Avail,
@@ -3342,7 +3372,7 @@ BEGIN
       V_Integer7 = @nPackQtyIndicator,
       V_Integer8 = @nFlowThruToIDScn,
       V_Integer9 = @nFlowThruQtyScn, --(james19) 
-   
+
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,
       I_Field03 = @cInField03,  O_Field03 = @cOutField03,
@@ -3374,10 +3404,5 @@ BEGIN
 
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-GRANT EXECUTE ON [RDT].[rdtfnc_Move_SKU] TO nSQL
+GRANT EXECUTE ON  [RDT].[rdtfnc_Move_SKU] TO [NSQL]
 GO
