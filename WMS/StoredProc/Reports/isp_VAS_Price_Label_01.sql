@@ -2,7 +2,7 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-  
+
 /************************************************************************/
 /* Stored Procedure: isp_VAS_Price_Label_01                             */
 /* Creation Date: 05-Apr-2022                                           */
@@ -23,25 +23,27 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver. Purposes                                  */
 /* 05-Apr-2022  WLChooi  1.0  DevOps Combine Script                     */
+/* 24-Aug-2022  SYChua   1.1  JSM-90848 Fix multi line same sku orders  */
+/*                            printing multiples of same label (SY01)   */
 /************************************************************************/
-CREATE OR ALTER PROC [dbo].[isp_VAS_Price_Label_01] (  
+CREATE OR ALTER PROC [dbo].[isp_VAS_Price_Label_01] (
       @c_Storerkey   NVARCHAR(15)
     , @c_LabelNo     NVARCHAR(20)
     , @c_SKU         NVARCHAR(20)
     , @n_Qty         INT = 1
-)  
-AS  
-  
-BEGIN  
-   SET NOCOUNT ON     
-   SET QUOTED_IDENTIFIER OFF     
-   SET ANSI_NULLS OFF     
-   SET CONCAT_NULL_YIELDS_NULL OFF    
-     
-   DECLARE @n_StartTCnt          INT  
-         , @n_Continue           INT = 1          
-         , @b_Success            INT  
-         , @n_Err                INT  
+)
+AS
+
+BEGIN
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
+
+   DECLARE @n_StartTCnt          INT
+         , @n_Continue           INT = 1
+         , @b_Success            INT
+         , @n_Err                INT
          , @c_Errmsg             NVARCHAR(255)
          , @c_ExternLineNo       NVARCHAR(20)
          , @c_OrderLineNo        NVARCHAR(5)
@@ -74,39 +76,39 @@ BEGIN
       JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = PH.OrderKey
       JOIN ORDERDETAIL OD (NOLOCK) ON OD.OrderKey = OH.OrderKey AND OD.StorerKey = PD.StorerKey AND OD.SKU = PD.SKU
       JOIN SKU S (NOLOCK) ON PD.SKU = S.SKU AND PD.StorerKey = S.StorerKey
-      WHERE PD.LabelNo = @c_LabelNo 
-      AND PD.StorerKey = @c_Storerkey 
+      WHERE PD.LabelNo = @c_LabelNo
+      AND PD.StorerKey = @c_Storerkey
       AND S.MANUFACTURERSKU = @c_SKU
 
       --INSERT INTO #TMP_VAS(ExternLineNo, OrderLineNo, Notes, EAN)
       --SELECT '900002', '00002', 'S~G01~00002~LFLAUS|L~L04~900002~84704548|L~L06~00002~53.00|L~L08~00002~9503|L~L09~00002~1234|L~L16~00002~050', '9501101530004'
    END
-   
+
    --Main Process
    IF (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN
       DECLARE CUR_LOOP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT TV.ExternLineNo, TV.OrderLineNo, TV.Notes, TV.EAN
       FROM #TMP_VAS TV
-      
+
       OPEN CUR_LOOP
-      
+
       FETCH NEXT FROM CUR_LOOP INTO @c_ExternLineNo, @c_OrderLineNo, @c_Notes, @c_EAN
-      
+
       WHILE @@FETCH_STATUS <> -1
       BEGIN
          SET @c_L04 = ''
          SET @c_L06 = ''
          SET @c_L09 = ''
-      
+
          DECLARE CUR_SPLIT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT FDS.SeqNo, FDS.ColValue
          FROM dbo.fnc_DelimSplit('|', @c_Notes) FDS
-         
+
          OPEN CUR_SPLIT
-         
+
          FETCH NEXT FROM CUR_SPLIT INTO @n_SeqNo, @c_ColValue
-         
+
          WHILE @@FETCH_STATUS <> -1
          BEGIN
             IF @c_ColValue LIKE 'L~L04%'   --L~L04~900001~84706246
@@ -150,7 +152,22 @@ BEGIN
          END
          CLOSE CUR_SPLIT
          DEALLOCATE CUR_SPLIT
-      
+
+         --SY01 START (DONT INSERT TABLE IF ALREADY EXISTS SAME LABEL INFORMATION)
+         IF EXISTS (SELECT TOP 1 1 FROM #TMP_VAS
+                    WHERE L04 = @c_L04
+                      AND L06 = @c_L06
+                      AND L09 = @c_L09
+                      AND EAN = @c_EAN
+                      AND ExternLineNo <> @c_ExternLineNo
+                      AND OrderLineNo <> @c_OrderLineNo)
+         BEGIN
+            SET @c_L04 = ''
+            SET @c_L06 = ''
+            SET @c_L09 = ''
+         END
+         --SY01 END
+
          UPDATE #TMP_VAS
          SET L04 = @c_L04
            , L06 = @c_L06
@@ -158,21 +175,21 @@ BEGIN
          WHERE ExternLineNo = @c_ExternLineNo
          AND OrderLineNo = @c_OrderLineNo
          AND EAN = @c_EAN
-      
+
          FETCH NEXT FROM CUR_LOOP INTO @c_ExternLineNo, @c_OrderLineNo, @c_Notes, @c_EAN
       END
       CLOSE CUR_LOOP
       DEALLOCATE CUR_LOOP
-      
+
       --Loop No of Copy
       IF (@n_Continue = 1 OR @n_Continue = 2)
       BEGIN
          SET @n_Count = @n_Qty
-      
+
          WHILE (@n_Count > 1)
          BEGIN
             INSERT INTO #TMP_VAS(ExternLineNo, OrderLineNo, Notes, EAN, L04, L06, L09)
-            SELECT DISTINCT 
+            SELECT DISTINCT
                    TV.ExternLineNo
                  , TV.OrderLineNo
                  , TV.Notes
@@ -183,7 +200,7 @@ BEGIN
             FROM #TMP_VAS TV
             WHERE CONCAT(TRIM(L04), TRIM(L06), TRIM(L09)) <> ''
             ORDER BY TV.OrderLineNo
-      
+
             SET @n_Count = @n_Count - 1
          END
       END
@@ -191,7 +208,7 @@ BEGIN
 
    --Output Result back to DW
    IF (@n_Continue = 1 OR @n_Continue = 2)
-   BEGIN 
+   BEGIN
       SELECT TV.ExternLineNo
            , TV.OrderLineNo
            , TV.Notes
@@ -207,19 +224,18 @@ BEGIN
    --Clean up - Drop Temp table & Close, Deallocate Cursor
    IF OBJECT_ID('tempdb..#TMP_VAS') IS NOT NULL
       DROP TABLE #TMP_VAS
-
    IF CURSOR_STATUS('LOCAL', 'CUR_LOOP') IN (0 , 1)
    BEGIN
       CLOSE CUR_LOOP
-      DEALLOCATE CUR_LOOP   
+      DEALLOCATE CUR_LOOP
    END
 
    IF CURSOR_STATUS('LOCAL', 'CUR_SPLIT') IN (0 , 1)
    BEGIN
       CLOSE CUR_SPLIT
-      DEALLOCATE CUR_SPLIT   
+      DEALLOCATE CUR_SPLIT
    END
-END  
+END
 GO
 GRANT EXECUTE ON [dbo].[isp_VAS_Price_Label_01] TO NSQL
-GO   
+GO
