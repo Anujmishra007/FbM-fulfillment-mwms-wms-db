@@ -15,7 +15,7 @@ GO
 /*                                                                      */  
 /* Parameters:                                                          */  
 /*                                                                      */  
-/* GitLab Version: 1.0                                                  */  
+/* GitLab Version: 1.1                                                  */  
 /*                                                                      */  
 /* Version: 5.4                                                         */  
 /*                                                                      */  
@@ -24,6 +24,7 @@ GO
 /* Updates:                                                             */  
 /* Date         Author    Ver.  Purposes                                */  
 /* 23-Aug-2022  WLChooi   1.0   DevOps Combine Script                   */
+/* 25-Aug-2022  WLChooi   1.1   WMS-20599 - Add Notes2 (WL01)           */
 /************************************************************************/  
 CREATE OR ALTER PROCEDURE [dbo].[isp_Packing_List_33]  
       @c_Pickslipno       NVARCHAR(10)
@@ -75,6 +76,7 @@ BEGIN
       ,AltSKU             = ISNULL(SKU.AltSKU,'')
       ,OrderKey           = ORDERS.OrderKey 
       ,BuyerPO            = ISNULL(RTRIM(ORDERS.BuyerPO),'')
+      ,Notes2             = ISNULL(RTRIM(OD.Notes2), '')   --WL01
    FROM PACKHEADER WITH (NOLOCK)
    JOIN ORDERS     WITH (NOLOCK) ON (PACKHEADER.Orderkey = ORDERS.Orderkey)
    JOIN FACILITY   WITH (NOLOCK) ON (ORDERS.Facility = FACILITY.Facility)
@@ -82,6 +84,9 @@ BEGIN
    JOIN PACKDETAIL WITH (NOLOCK) ON (PACKHEADER.PickSlipNo = PACKDETAIL.PickSlipNo)
    JOIN SKU        WITH (NOLOCK) ON (PACKDETAIL.Storerkey = SKU.Storerkey)
                                  AND(PACKDETAIL.Sku = SKU.Sku)
+   CROSS APPLY (SELECT TOP 1 ISNULL(O.Notes2,'') AS Notes2
+                FROM ORDERDETAIL O WITH (NOLOCK)
+                WHERE O.OrderKey = ORDERS.OrderKey) AS OD   --WL01
    WHERE PACKDETAIL.PickSlipNo = @c_Pickslipno
    GROUP BY ISNULL(RTRIM(STORER.Company),'')
          ,  ISNULL(RTRIM(ORDERS.Orderkey),'')
@@ -109,6 +114,7 @@ BEGIN
          ,  ISNULL(SKU.AltSKU,'')
          ,  ORDERS.OrderKey 
          ,  ISNULL(RTRIM(ORDERS.BuyerPO),'')
+         ,  ISNULL(RTRIM(OD.Notes2), '')   --WL01
    ORDER BY ISNULL(PACKDETAIL.CartonNo,0)
          ,  ISNULL(RTRIM(PACKDETAIL.Sku),'')
 
