@@ -12,7 +12,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.2                                                    */                                                                                  
+/* PVCS Version: 1.3                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -27,6 +27,8 @@ GO
 /* 2021-12-13  Wan02    1.2   LFWM-3249 - UAT RG  Dock door booking     */
 /*                            backend + SP                              */
 /*                            DevOps Combine Order                      */
+/* 2022-08-19  Wan03    1.3   LFWM-3698 - [PH] - NIKEPH Doorbooking     */
+/*                            Testing_MBOLToTransportOrder Config       */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_WaveFinalization] 
       @c_WaveKey              NVARCHAR(10)  
@@ -137,7 +139,7 @@ BEGIN
             BEGIN
                SET @n_continue = 3
                SET @n_err = 556202
-               SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err)
+               SET @c_errmsg = 'NSQL'+ CONVERT(CHAR(6),@n_err)
                              + ': Load Plan has been finalized. (lsp_WaveFinalization)'
 
                --(Wan02) - START
@@ -164,7 +166,7 @@ BEGIN
             BEGIN
                SET @n_continue = 3
                SET @n_err = 556203
-               SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err)
+               SET @c_errmsg = 'NSQL'+ CONVERT(CHAR(6),@n_err)
                              + ': No Load Plan detail to Finalize. (lsp_WaveFinalization)'
 
                --(Wan02) - START
@@ -202,7 +204,7 @@ BEGIN
             BEGIN
                SET @n_continue = 3
                SET @n_err = 556205
-               SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err)
+               SET @c_errmsg = 'NSQL'+ CONVERT(CHAR(6),@n_err)
                              + ': MBOL has been finalized. (lsp_WaveFinalization)'
 
                --(Wan02) - START
@@ -229,7 +231,7 @@ BEGIN
             BEGIN
                SET @n_continue = 3
                SET @n_err = 556206
-               SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err)
+               SET @c_errmsg = 'NSQL'+ CONVERT(CHAR(6),@n_err)
                              + ': No Ship Ref. Unit detail to Finalize. (lsp_WaveFinalization)'
                              
                --(Wan02) - START
@@ -349,10 +351,14 @@ BEGIN
          BEGIN CATCH
             SET @n_Continue = 3
             SET @n_Err = 556207
-            --SET @c_ErrMsg = ERROR_MESSAGE()
+            SET @c_ErrMsg = ERROR_MESSAGE()              --(Wan03)
             SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing ispFinalizeMBOL. (lsp_WaveFinalization)'   
                           + '(' + @c_ErrMsg + ')' 
-                
+         END CATCH                                       --(Wan03)
+         IF @b_Success = 0 OR @n_Continue = 3            --(Wan03)
+         BEGIN
+            SET @n_Continue = 3                          --(Wan03)
+
             --(Wan02) - START
             INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
             VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_Loadkey, @c_MBOLKey, 'ERROR', 0, @n_err, @c_errmsg)             
@@ -371,7 +377,7 @@ BEGIN
             --   ,  @c_errmsg      = @c_errmsg    OUTPUT 
             -- (Wan02) - END 
             GOTO EXIT_SP                                               
-         END CATCH
+         END                                             --(Wan03)            
 
          IF @b_Success = 0 AND @b_ReturnCode = 1 -- Validate MBOL with Warning
          BEGIN
