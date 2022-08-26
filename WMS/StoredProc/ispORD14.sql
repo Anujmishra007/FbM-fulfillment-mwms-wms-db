@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: isp_OrderTrigger_Wrapper from Orders Trigger              */
 /*                                                                      */
-/* GitLab Version: 1.1                                                  */
+/* GitLab Version: 1.2                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -23,6 +23,7 @@ GO
 /* Date         Author   Ver  Purposes                                  */  
 /* 22-Oct-2021  WLChooi  1.0  DevOps Combine Script                     */
 /* 28-Feb-2022  WLChooi  1.1  Bug Fix - Update by orderkey (WL01)       */
+/* 25-Aug-2022  WLChooi  1.2  Bug Fix - Update Route (WL02)             */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[ispORD14]      
    @c_Action        NVARCHAR(10),
@@ -85,11 +86,20 @@ BEGIN
       
          IF @c_CCountry IN ('SG', 'SIN', 'SINGAPORE', 'SGP')
          BEGIN
-            SELECT @c_UDF01 = LTRIM(RTRIM(ISNULL(CLK.UDF01,'')))
-            FROM #INSERTED I 
-            JOIN CODELKUP CLK (NOLOCK) ON CLK.LISTNAME = 'CUORDROUTE' AND CLK.Storerkey = @c_Storerkey
-            WHERE I.C_Zip LIKE TRIM(CLK.Code) + '%'
-            ORDER BY LEN(CLK.Code) DESC
+            --WL02 S
+            --SELECT @c_UDF01 = LTRIM(RTRIM(ISNULL(CLK.UDF01,'')))
+            --FROM #INSERTED I 
+            --JOIN CODELKUP CLK (NOLOCK) ON CLK.LISTNAME = 'CUORDROUTE' AND CLK.Storerkey = @c_Storerkey
+            --WHERE I.C_Zip LIKE TRIM(CLK.Code) + '%'
+            --ORDER BY LEN(CLK.Code) DESC
+
+            SELECT TOP 1 @c_UDF01 = LTRIM(RTRIM(ISNULL(CLK.UDF01,'')))  
+            FROM ORDERS O (NOLOCK)
+            JOIN CODELKUP CLK (NOLOCK) ON CLK.LISTNAME = 'CUORDROUTE' AND CLK.Storerkey = @c_Storerkey  
+            WHERE O.C_Zip LIKE TRIM(CLK.Code) + '%'
+            AND O.OrderKey = @c_Orderkey
+            ORDER BY LEN(CLK.Code) DESC 
+            --WL02 E
       
             IF ISNULL(@c_UDF01,'') = '' 
             BEGIN
@@ -106,15 +116,25 @@ BEGIN
       
       IF @c_Action IN ('INSERT', 'UPDATE')
       BEGIN
-         UPDATE ORDERS
-         SET [Route]    = @c_UDF01
-           , TrafficCop = NULL
-           , ArchiveCop = NULL
-           , EditDate   = GETDATE()
-           , EditWho    = SUSER_SNAME()
-         FROM #INSERTED I 
-         JOIN ORDERS (NOLOCK) ON ORDERS.ORDERKEY = I.ORDERKEY
-         WHERE I.Orderkey = @c_Orderkey   --WL01
+         --WL02 S
+         --UPDATE ORDERS
+         --SET [Route]    = @c_UDF01
+         --  , TrafficCop = NULL
+         --  , ArchiveCop = NULL
+         --  , EditDate   = GETDATE()
+         --  , EditWho    = SUSER_SNAME()
+         --FROM #INSERTED I 
+         --JOIN ORDERS (NOLOCK) ON ORDERS.ORDERKEY = I.ORDERKEY
+         --WHERE I.Orderkey = @c_Orderkey   --WL01
+
+         UPDATE ORDERS  
+         SET [Route]    = @c_UDF01  
+           , TrafficCop = NULL  
+           , ArchiveCop = NULL  
+           , EditDate   = GETDATE()  
+           , EditWho    = SUSER_SNAME()  
+         WHERE Orderkey = @c_Orderkey
+         --WL02 E
       END    
 
       --WL01 S
