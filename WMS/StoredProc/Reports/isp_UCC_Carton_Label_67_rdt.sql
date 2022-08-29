@@ -5,6 +5,7 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /************************************************************************/
 /* Store Procedure:  isp_UCC_Carton_Label_67_rdt                        */
 /* Creation Date: 26-Jun-2020                                           */
@@ -30,6 +31,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
+/* 26-Aug-2022  Calvin   1.1  Performance Tuning (CLVN01)               */
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_UCC_Carton_Label_67_rdt] (
@@ -120,6 +122,16 @@ BEGIN
          UDF01              NVARCHAR(20) NULL,
          [Route]            NVARCHAR(10) NULL ) 
 
+    --(CLVN01) START--
+    CREATE TABLE #TMP_LCartonLABEL67b (
+         rowid              int NOT NULL identity(1,1) PRIMARY KEY,
+		 Storerkey          NVARCHAR(15) NULL,
+         Pickslipno         NVARCHAR(20) NULL,     
+         SKU                NVARCHAR(50) NULL,
+         Lottable08         NVARCHAR(20) NULL,
+         Multiple_COO       INT ) 
+    --(CLVN01) END--
+
    IF EXISTS (SELECT 1 FROM PACKDETAIL (NOLOCK) 
               WHERE PickSlipNo = @c_Storerkey
               AND LabelNo = @c_DropID)
@@ -141,6 +153,17 @@ BEGIN
       WHERE PAH.Storerkey = @c_Storerkey
       AND PADET.DropID = @c_DropID
    END
+ 
+   --(CLVN01) START--
+   INSERT INTO #TMP_LCartonLABEL67b (Storerkey, Pickslipno, SKU, Lottable08, Multiple_COO)
+   SELECT PD.StorerKey, PD.PickSlipNo, PD.SKU, Max(LA.Lottable08) Lottable08,  Count(Distinct LA.Lottable08) Multiple_COO 
+         From Pickdetail PD WITH (NOLOCK) Inner Join LotAttribute LA WITH (NOLOCK)
+                                          ON LA.StorerKey = PD.StorerKey and LA.SKU = PD.SKU and LA.Lot = PD.Lot
+         Where PD.StorerKey = @c_StorerKey
+         --AND PD.DropID = @c_DropID
+         GROUP BY PD.StorerKey, PD.PickSlipNo, PD.SKU
+         HAVING Count(Distinct LA.Lottable08) >= 1
+   --(CLVN01) END--
 
    SET @c_ExternOrderkey = ''
 
@@ -223,52 +246,96 @@ BEGIN
    FROM STORER (NOLOCK)
    WHERE STORERKEY = @c_consigneekey
    AND TYPE = '2'
+   
+   --(CLVN01) START--
+   IF ISNULL(@c_Pickslipno,'') = ''
+   BEGIN
+       INSERT INTO #TMP_LCartonLABEL67(Pickslipno,OrdExtOrdKey,cartonno,
+                                       PDLabelNo,sortcode,SKUStyle,SKUSize,PDQty,consigneekey,CADD1,CADD2,
+                                       sku,FAdd1,FAdd2,FUDF02,Fcountry,CADD3, CADD4,
+                                       CState, CCountry, CCompany, COO, IntermodalVehicle, UDF01, [Route])     
+       
+       SELECT DISTINCT PAH.Pickslipno
+                    ,  @c_ExternOrderkey
+                    ,  PADET.CartonNo
+                    ,  ISNULL(RIGHT(RTRIM(PADET.Labelno),10),'')                        
+                    ,  @c_sortcode
+                    ,  ISNULL(RTRIM(S.Style),'')
+                    ,  ISNULL(RTRIM(S.Size),'')
+                    ,  SUM(PADET.qty)
+                    ,  @c_consigneekey
+                    ,  @c_Address1
+                    ,  @c_Address2
+                    ,  PADET.SKU
+                    ,  @c_FAddress1
+                    ,  @c_FAddress2  
+                    ,  @c_FUDF02
+                    ,  @c_FCountry         
+                    ,  @c_Address3
+                    ,  @c_Address4    
+                    ,  @c_CState
+                    ,  @c_Country
+                    ,  @c_Company
+                    ,  LA.Lottable08    
+                    ,  @c_SCM
+                    ,  @c_UDF01                    
+                    ,  @c_Route                                   
+       FROM PACKHEADER PAH WITH (NOLOCK)
+       JOIN PACKDETAIL PADET WITH (NOLOCK) ON PAH.Pickslipno = PADET.Pickslipno
+       JOIN SKU S WITH (NOLOCK) ON S.Storerkey = PADET.Storerkey and S.SKU = PADET.SKU
+       JOIN #TMP_LCartonLABEL67b LA ON LA.StorerKey = PADET.StorerKey and LA.PickSlipNo = PADET.PickSlipNo and LA.SKU = PADET.SKU
+       WHERE PADET.DropID   =  @c_DropID        
+       AND   PAH.Storerkey = @c_StorerKey
+       GROUP BY PAH.Pickslipno,PADET.CartonNo,ISNULL(RIGHT(RTRIM(PADET.Labelno),10),''),
+                ISNULL(RTRIM(S.Style),''),ISNULL(RTRIM(S.Size),''),PADET.SKU, LA.Lottable08
+	   ORDER BY ISNULL(RIGHT(RTRIM(PADET.Labelno),10),''),PADET.CartonNo, LA.Lottable08
+   END
+   ELSE
+   BEGIN
+       INSERT INTO #TMP_LCartonLABEL67(Pickslipno,OrdExtOrdKey,cartonno,
+                                       PDLabelNo,sortcode,SKUStyle,SKUSize,PDQty,consigneekey,CADD1,CADD2,
+                                       sku,FAdd1,FAdd2,FUDF02,Fcountry,CADD3, CADD4,
+                                       CState, CCountry, CCompany, COO, IntermodalVehicle, UDF01, [Route])     
+       
+       SELECT DISTINCT PAH.Pickslipno
+                    ,  @c_ExternOrderkey
+                    ,  PADET.CartonNo
+                    ,  ISNULL(RIGHT(RTRIM(PADET.Labelno),10),'')                        
+                    ,  @c_sortcode
+                    ,  ISNULL(RTRIM(S.Style),'')
+                    ,  ISNULL(RTRIM(S.Size),'')
+                    ,  SUM(PADET.qty)
+                    ,  @c_consigneekey
+                    ,  @c_Address1
+                    ,  @c_Address2
+                    ,  PADET.SKU
+                    ,  @c_FAddress1
+                    ,  @c_FAddress2  
+                    ,  @c_FUDF02
+                    ,  @c_FCountry         
+                    ,  @c_Address3
+                    ,  @c_Address4    
+                    ,  @c_CState
+                    ,  @c_Country
+                    ,  @c_Company
+                    ,  LA.Lottable08    
+                    ,  @c_SCM
+                    ,  @c_UDF01                    
+                    ,  @c_Route                                   
+       FROM PACKHEADER PAH WITH (NOLOCK)
+       JOIN PACKDETAIL PADET WITH (NOLOCK) ON PAH.Pickslipno = PADET.Pickslipno
+       JOIN SKU S WITH (NOLOCK) ON S.Storerkey = PADET.Storerkey and S.SKU = PADET.SKU
+       JOIN #TMP_LCartonLABEL67b LA ON LA.StorerKey = PADET.StorerKey and LA.PickSlipNo = PADET.PickSlipNo and LA.SKU = PADET.SKU
+       WHERE PADET.LabelNo  = @c_LabelNo 
+       AND   PAH.PickSlipNo = @c_Pickslipno 
+       AND   PAH.Storerkey = @c_StorerKey
+       GROUP BY PAH.Pickslipno,PADET.CartonNo,ISNULL(RIGHT(RTRIM(PADET.Labelno),10),''),
+                ISNULL(RTRIM(S.Style),''),ISNULL(RTRIM(S.Size),''),PADET.SKU, LA.Lottable08
+	   ORDER BY ISNULL(RIGHT(RTRIM(PADET.Labelno),10),''),PADET.CartonNo, LA.Lottable08
+   END
+   --(CLVN01) START--
 
-   INSERT INTO #TMP_LCartonLABEL67(Pickslipno,OrdExtOrdKey,cartonno,
-                                   PDLabelNo,sortcode,SKUStyle,SKUSize,PDQty,consigneekey,CADD1,CADD2,
-                                   sku,FAdd1,FAdd2,FUDF02,Fcountry,CADD3, CADD4,
-                                   CState, CCountry, CCompany, COO, IntermodalVehicle, UDF01, [Route])           
-   SELECT DISTINCT PAH.Pickslipno
-                ,  @c_ExternOrderkey
-                ,  PADET.CartonNo
-                ,  ISNULL(RIGHT(RTRIM(PADET.Labelno),10),'')                        
-                ,  @c_sortcode
-                ,  ISNULL(RTRIM(S.Style),'')
-                ,  ISNULL(RTRIM(S.Size),'')
-                ,  SUM(PADET.qty)
-                ,  @c_consigneekey
-                ,  @c_Address1
-                ,  @c_Address2
-                ,  PADET.SKU
-                ,  @c_FAddress1
-                ,  @c_FAddress2  
-                ,  @c_FUDF02
-                ,  @c_FCountry         
-                ,  @c_Address3
-                ,  @c_Address4    
-                ,  @c_CState
-                ,  @c_Country
-                ,  @c_Company
-                ,  LA.Lottable08    
-                ,  @c_SCM
-                ,  @c_UDF01                    
-                ,  @c_Route                                   
-   FROM PACKHEADER PAH WITH (NOLOCK)
-   JOIN PACKDETAIL PADET WITH (NOLOCK) ON PAH.Pickslipno = PADET.Pickslipno
-   JOIN SKU S WITH (NOLOCK) ON S.Storerkey = PADET.Storerkey and S.SKU = PADET.SKU
-   JOIN (SELECT PD.StorerKey, PD.PickSlipNo, PD.SKU, Max(LA.Lottable08) Lottable08,  Count(Distinct LA.Lottable08) Multiple_COO 
-         From Pickdetail PD WITH (NOLOCK) Inner Join LotAttribute LA WITH (NOLOCK)
-                                          ON LA.StorerKey = PD.StorerKey and LA.SKU = PD.SKU and LA.Lot = PD.Lot
-         Where PD.StorerKey = @c_StorerKey
-         --AND PD.DropID = @c_DropID
-         GROUP BY PD.StorerKey, PD.PickSlipNo, PD.SKU
-         HAVING Count(Distinct LA.Lottable08) >= 1) LA ON LA.StorerKey = PADET.StorerKey and LA.PickSlipNo = PADET.PickSlipNo and LA.SKU = PADET.SKU
-   WHERE PADET.DropID   = CASE WHEN ISNULL(@c_Pickslipno,'') = '' THEN @c_DropID        ELSE PADET.DropID END
-   AND   PADET.LabelNo  = CASE WHEN ISNULL(@c_Pickslipno,'') = '' THEN PADET.LabelNo    ELSE @c_LabelNo END
-   AND   PAH.PickSlipNo = CASE WHEN ISNULL(@c_Pickslipno,'') = '' THEN PADET.PickSlipNo ELSE @c_Pickslipno END
-   AND   PAH.Storerkey = @c_StorerKey
-   GROUP BY PAH.Pickslipno,PADET.CartonNo,ISNULL(RIGHT(RTRIM(PADET.Labelno),10),''),
-            ISNULL(RTRIM(S.Style),''),ISNULL(RTRIM(S.Size),''),PADET.SKU, LA.Lottable08
+   
    /*
    UNION ALL
    
@@ -317,7 +384,6 @@ BEGIN
    GROUP BY PAH.Pickslipno,PADET.CartonNo,ISNULL(RIGHT(RTRIM(PADET.Labelno),10),''),
             ISNULL(RTRIM(S.Style),''),ISNULL(RTRIM(S.Size),''),PADET.SKU, LA.Lottable08
    */ 
-   ORDER BY ISNULL(RIGHT(RTRIM(PADET.Labelno),10),''),PADET.CartonNo, LA.Lottable08
 
    SELECT Pickslipno, OrdExtOrdKey, cartonno, PDLabelNo, sortcode, SKUStyle, SKUSize, PDQty,
           consigneekey = CCompany, CADD1, CADD2, sku, FAdd1, FAdd2, FUDF02, Fcountry, CADD3, 
@@ -336,15 +402,5 @@ GO
 
 GRANT EXECUTE ON [dbo].[isp_UCC_Carton_Label_67_rdt] TO nSQL 
 GO
-
-
-
-
-
-
-
-
-
-
 
 
