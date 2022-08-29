@@ -611,12 +611,12 @@ BEGIN
                           Storerkey, Sku, AltSku, UOM, UOMQty, Qty, QtyMoved, Status,         
                           DropID, Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,         
                           ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,         
-                          WaveKey, EffectiveDate, OptimizeCop, ShipFlag, PickSlipNo)        
+                          WaveKey, EffectiveDate, OptimizeCop, ShipFlag, PickSlipNo, WIP_Refno)        
                   SELECT @c_NewpickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot,         
                          Storerkey, Sku, AltSku, UOM, CASE WHEN UOM IN ('6','7') THEN @n_SplitQty ELSE UOMQty END , @n_SplitQty, QtyMoved, Status,         
                          DropID, Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,         
                          ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,         
-                         WaveKey, EffectiveDate, '9', ShipFlag, PickSlipNo  
+                         WaveKey, EffectiveDate, '9', ShipFlag, PickSlipNo, @c_SourceType
                   FROM PICKDETAIL (NOLOCK)  
                   WHERE PickdetailKey = @c_PickdetailKey  
                                        
