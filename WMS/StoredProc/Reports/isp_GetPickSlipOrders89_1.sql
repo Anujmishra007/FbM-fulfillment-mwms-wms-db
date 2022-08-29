@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_GetPickSlipOrders89_1]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_GetPickSlipOrders89_1]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -36,9 +31,10 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author        Purposes                                  */  
+/* 2022-08-09   mingle        WMS-20386 add new mappings(ML01)          */
 /************************************************************************/  
-  
-CREATE PROC dbo.[isp_GetPickSlipOrders89_1] (@c_loadkey NVARCHAR(10))  
+
+CREATE OR ALTER PROC dbo.[isp_GetPickSlipOrders89_1] (@c_loadkey NVARCHAR(10))  
 AS  
 BEGIN  
    SET NOCOUNT ON     
@@ -90,6 +86,25 @@ BEGIN
          , @n_MaxLineno       INT           = 10
 
          , @c_RptLogo         NVARCHAR(255) = ''
+		 --START ML01
+		 , @c_H01             NVARCHAR(255) = ''
+		 , @c_H02             NVARCHAR(255) = ''
+		 , @c_D01             NVARCHAR(255) = ''
+		 , @c_D02             NVARCHAR(255) = ''
+		 , @c_D03             NVARCHAR(255) = ''
+		 , @c_D04             NVARCHAR(255) = ''
+		 , @c_D05             NVARCHAR(255) = ''
+		 , @c_D06             NVARCHAR(255) = ''
+		 , @c_D07             NVARCHAR(255) = ''
+		 , @c_D08             NVARCHAR(255) = ''
+		 , @c_D09             NVARCHAR(255) = ''
+		 , @c_D10             NVARCHAR(255) = ''
+		 , @c_D11             NVARCHAR(255) = ''
+		 , @c_D12             NVARCHAR(255) = ''
+		 , @c_D13             NVARCHAR(255) = ''
+		 , @c_D14             NVARCHAR(255) = ''
+		 , @c_QRCODE          NVARCHAR(255) = ''
+		 --END ML01
          
     
 
@@ -97,7 +112,7 @@ BEGIN
          , @c_NextNo          NVARCHAR(10)  
   
    CREATE TABLE #temp_pick  
-   (  rowid            INT NOT NULL identity(1,1) PRIMARY KEY
+   (  rowid            INT NOT NULL IDENTITY(1,1) PRIMARY KEY
    ,  OrderKey         NVARCHAR(10)  
    ,  ExternOrderKey   NVARCHAR(50)  
    ,  PickSlipNo       NVARCHAR(10) NULL
@@ -118,7 +133,7 @@ BEGIN
  )     
  
       CREATE TABLE #temp_pick1  
-   (  rowid            INT NOT NULL identity(1,1) PRIMARY KEY
+   (  rowid            INT NOT NULL IDENTITY(1,1) PRIMARY KEY
    ,  OrderKey         NVARCHAR(10)  
    ,  ExternOrderKey   NVARCHAR(50)  
    ,  PickSlipNo       NVARCHAR(10) NULL
@@ -150,6 +165,30 @@ BEGIN
    FROM CODELKUP CL2 WITH (NOLOCK)    
    WHERE CL2.LISTNAME='RPTLogo' AND CL2.Storerkey=(SELECT TOP 1 STORERKEY FROM ORDERS (NOLOCK) WHERE LOADKEY = @c_loadkey )
    AND CL2.CODE = 'LVSPICK'  
+
+   --START ML01
+   SELECT @c_H01 = MAX(CASE WHEN CLR.CODE2 = 'H01' THEN ISNULL(CLR.NOTES,'') ELSE '' END)
+		 ,@c_H02 = MAX(CASE WHEN CLR.CODE2 = 'H02' THEN ISNULL(CLR.NOTES,'') ELSE '' END)
+		 ,@c_D01 = MAX(CASE WHEN CLR.CODE2 = 'D01' THEN ISNULL(CLR.NOTES,'') ELSE '' END)
+		 ,@c_D02 = MAX(CASE WHEN CLR.CODE2 = 'D02' THEN ISNULL(CLR.NOTES,'') ELSE '' END)
+		 ,@c_D03 = MAX(CASE WHEN CLR.CODE2 = 'D03' THEN ISNULL(CLR.NOTES,'') ELSE '' END)
+		 ,@c_D04 = MAX(CASE WHEN CLR.CODE2 = 'D04' THEN ISNULL(CLR.NOTES,'') ELSE '' END)
+		 ,@c_D05 = MAX(CASE WHEN CLR.CODE2 = 'D05' THEN ISNULL(CLR.NOTES,'') ELSE '' END)
+		 ,@c_D06 = MAX(CASE WHEN CLR.CODE2 = 'D06' THEN ISNULL(CLR.NOTES,'') ELSE '' END)
+		 ,@c_D07 = MAX(CASE WHEN CLR.CODE2 = 'D07' THEN ISNULL(CLR.NOTES,'') ELSE '' END)
+		 ,@c_D08 = MAX(CASE WHEN CLR.CODE2 = 'D08' THEN ISNULL(CLR.NOTES,'') ELSE '' END)
+		 ,@c_D09 = MAX(CASE WHEN CLR.CODE2 = 'D09' THEN ISNULL(CLR.NOTES,'') ELSE '' END)
+		 ,@c_D10 = MAX(CASE WHEN CLR.CODE2 = 'D10' THEN ISNULL(CLR.NOTES,'') ELSE '' END)
+		 ,@c_D11 = MAX(CASE WHEN CLR.CODE2 = 'D11' THEN ISNULL(CLR.NOTES,'') ELSE '' END)
+		 ,@c_D12 = MAX(CASE WHEN CLR.CODE2 = 'D12' THEN ISNULL(CLR.NOTES,'') ELSE '' END)
+		 ,@c_D13 = MAX(CASE WHEN CLR.CODE2 = 'D13' THEN ISNULL(CLR.NOTES,'') ELSE '' END)
+		 ,@c_D14 = MAX(CASE WHEN CLR.CODE2 = 'D14' THEN ISNULL(CLR.NOTES,'') ELSE '' END)
+		 ,@c_QRCODE = MAX(CASE WHEN CLR.CODE2 = 'QRCODE' THEN ISNULL(CLR.NOTES,'') ELSE '' END)
+   FROM CODELKUP CLR WITH (NOLOCK)    
+   WHERE CLR.LISTNAME='REPORTCFG' AND CLR.Storerkey=(SELECT TOP 1 STORERKEY FROM ORDERS (NOLOCK) WHERE LOADKEY = @c_loadkey )
+   AND CLR.CODE = 'ECOM' 
+   --END ML01
+
    
    IF (@c_ecomflag <> 'ECOM')
      GOTO QUIT_RESULT
@@ -418,7 +457,7 @@ BEGIN
       WHERE PICKHEADER.ExternOrderKey = #TEMP_PICK.LoadKey  
       AND   PICKHEADER.OrderKey = #TEMP_PICK.OrderKey  
       AND   PICKHEADER.Zone = '3'  
-      AND   (#TEMP_PICK.PickSlipNo IS NULL OR RTrim(#TEMP_PICK.PickSlipNo) = '')    --(Wan01)  
+      AND   (#TEMP_PICK.PickSlipNo IS NULL OR RTRIM(#TEMP_PICK.PickSlipNo) = '')    --(Wan01)  
       --AND   #TEMP_PICK.PickSlipNo IS NULL OR RTrim(#TEMP_PICK.PickSlipNo) = ''  --(Wan01)  
    END  
    GOTO SUCCESS  
@@ -534,7 +573,26 @@ BEGIN
              ,  @c_RptLogo
              ,  ShowNo   
              ,  PrintedFlag
-             ,  Loadkey                      
+             ,  Loadkey
+			 --START ML01
+			 ,  @c_H01
+			 ,  @c_H02
+			 ,  @c_D01
+			 ,  @c_D02
+			 ,  @c_D03
+			 ,  @c_D04
+			 ,  @c_D05
+			 ,  @c_D06
+			 ,  @c_D07
+			 ,  @c_D08
+			 ,  @c_D09
+			 ,  @c_D10
+			 ,  @c_D11
+			 ,  @c_D12
+			 ,  @c_D13
+			 ,  @c_D14
+			 ,  @c_QRCODE
+			 --END ML01
       FROM #TEMP_PICK1    
       ORDER BY ROWID
             ,  Orderkey  
@@ -552,5 +610,9 @@ BEGIN
 
  GRANT EXECUTE ON [dbo].[isp_GetPickSlipOrders89_1] TO nSQL 
  GO
+
+
+
+
 
 
