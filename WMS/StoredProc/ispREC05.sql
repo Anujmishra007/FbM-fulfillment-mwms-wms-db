@@ -22,6 +22,7 @@ GO
 /* Date         Author   Ver  Purposes                                  */  
 /* 04-JUL-2022  CSCHONG  1.1  WMS-16175 disable trafficcop update (CS01)*/
 /* 06-JUL-2022  CSCHONG  1.2  WMS-16175 add insert Trans2 table (CS02)  */
+/* 03-AUG-2022  CSCHONG  1.3  WMS-20358 Revised update logic (CS03)     */
 /************************************************************************/
 
 CREATE OR ALTER PROC ispREC05   
@@ -48,7 +49,8 @@ BEGIN
   DECLARE   @c_TriggerName          nvarchar(120)  
           , @c_SourceTable          nvarchar(60)  
         --  , @c_ReceiptKey           nvarchar(10)  
-          , @c_ColumnsUpdated       VARCHAR(1000)                    
+          , @c_ColumnsUpdated       VARCHAR(1000)     
+          , @c_UpdateFields         NVARCHAR(1) = 'N'        --CS03       
                                              
     SELECT @n_Continue = 1, @n_StartTCnt = @@TRANCOUNT, @n_Err = 0, @c_ErrMsg = '', @b_Success = 1
 
@@ -72,9 +74,22 @@ BEGIN
       SELECT TOP 1 @c_Receiptkey = I.Receiptkey
       FROM #INSERTED I 
 
+      --CS03 S
+      IF EXISTS (SELECT 1 FROM Receipt R WITH (NOLOCK)
+                     WHERE R.StorerKey = @c_Storerkey
+                     AND R.ReceiptKey = @c_Receiptkey
+                     AND R.DOCTYPE ='R'
+                     AND R.ASNStatus='0' 
+                     AND (R.RecType = 'RSO-F' OR R.RECType='RSO-N'))
+      BEGIN
+              SET @c_UpdateFields = 'Y'
+      END 
+
+     --CS03 E
+
       IF EXISTS (SELECT 1 FROM #INSERTED I 
                  JOIN #DELETED D ON I.Receiptkey = D.Receiptkey 
-                 WHERE I.Userdefine06 <> ISNULL(D.Userdefine06,'1900-01-01 00:00:00.000') AND I.Storerkey = @c_Storerkey)
+                 WHERE I.Userdefine06 <> ISNULL(D.Userdefine06,'1900-01-01 00:00:00.000') AND I.Storerkey = @c_Storerkey) AND @c_UpdateFields ='Y'    --CS03
        BEGIN   
 
              UPDATE RECEIPT WITH (ROWLOCK)
