@@ -33,6 +33,7 @@ GO
 /* 20-Jun-2013  NJOW01    1.2   281239-Add storerconfig to map color&size as  */
 /*                              busr6&busr7                                   */
 /* 05-Oct-2015  CSCHONG   1.3   SOS#354041    (CS01)                          */
+/* 28-Jan-2019  TLTING_ext 1.4 enlarge externorderkey field length            */  																			
 /******************************************************************************/  
   
 CREATE PROC dbo.nsp_PackListBySku03_chs (@c_PickSlipNo NVARCHAR(30))  
@@ -49,7 +50,8 @@ BEGIN
 	        @n_DashPos            INT,
 	        @c_ExecSQLStmt        NVARCHAR(MAX),
 	        @c_ExecArguments      NVARCHAR(MAX),
-	        @c_ExternOrderkey     NVARCHAR(30),
+	        --@c_ExternOrderkey     NVARCHAR(30),
+			@c_ExternOrderkey     NVARCHAR(50),   --tlting_ext  
 	        @c_OrderkeyStart      NVARCHAR(10),
 	        @c_OrderkeyEnd        NVARCHAR(10),
 	        @c_ReprintFlag        NVARCHAR(1),
@@ -82,7 +84,8 @@ BEGIN
 	CREATE TABLE #TempNPPL
 	(
 		OrderKey           NVARCHAR(30),
-		ExternOrderkey     NVARCHAR(10),
+		--ExternOrderkey     NVARCHAR(10),
+	    ExternOrderkey     NVARCHAR(50),   --tlting_ext  
 		Storerkey          NVARCHAR(15),
 		ST_Company         NVARCHAR(45),
 		ReprintFlag        NVARCHAR(1),
