@@ -24,6 +24,7 @@ GO
 /*                         - (FBR#101323).                              */  
 /* June 2008	HF Liew    Modified for FBR 110426 (HFLiew01)            */
 /* 03-Jul-2008 Shong      Change Sorting Order (Convert Carton# to Int) */
+/* 28-Jan-2019  TLTING_ext 1.1 enlarge externorderkey field length      */  																			
 /************************************************************************/  
   
 CREATE   PROC nsp_PackListBySkuTrinity (
@@ -31,6 +32,7 @@ CREATE   PROC nsp_PackListBySkuTrinity (
 AS  
    SET NOCOUNT ON
    SET ANSI_WARNINGS OFF
+   SET ANSI_NULLS OFF   						
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF	
   
@@ -46,7 +48,8 @@ BEGIN
    @theSQLStmt NVARCHAR(255),   
    @c_sku NVARCHAR(50), 
    @c_color NVARCHAR(3),  
-   @c_externorderkey NVARCHAR(30),  
+  -- @c_externorderkey NVARCHAR(30),  
+   @c_externorderkey NVARCHAR(50),    --tlting_ext  
    @c_ReprintFlag NVARCHAR(1), 
    @c_BUSR6 NVARCHAR(30) ,
    @c_Storerkey varchar (30),
@@ -99,7 +102,8 @@ BEGIN
    c_country NVARCHAR(45),
    c_phone1 NVARCHAR(20),
    OrderKey NVARCHAR(30),
-   ExternOrderKey NVARCHAR(20),
+   --ExternOrderKey NVARCHAR(20),
+   ExternOrderKey NVARCHAR(50),  --tlting_ext     
    SKU NVARCHAR(20),
    Color NVARCHAR(3),
    labelno NVARCHAR(30),
