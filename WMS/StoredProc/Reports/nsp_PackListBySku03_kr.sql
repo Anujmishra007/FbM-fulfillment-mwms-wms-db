@@ -26,6 +26,7 @@ GO
 /* Date         Author    Ver.  Purposes                                      */  
 /* 27-Feb-2017  NJOW01    1.0   WMS-1198 add configure to map size column to  */
 /*                              measurement                                   */ 
+/* 28-Jan-2019  TLTING_ext 1.1 enlarge externorderkey field length      */  																			
 /******************************************************************************/    
     
 CREATE   PROC nsp_PackListBySku03_kr (  
@@ -48,7 +49,8 @@ BEGIN
    @theSQLStmt NVARCHAR(255),     
    @c_sku NVARCHAR(50),   
    @c_color NVARCHAR(3),    
-   @c_externorderkey NVARCHAR(30),    
+   --@c_externorderkey NVARCHAR(30),    
+   @c_externorderkey NVARCHAR(50),      --tlting_ext  
    @c_ReprintFlag NVARCHAR(1),   
    @c_BUSR6 NVARCHAR(30) ,  
    @c_Storerkey varchar (30),  
@@ -103,7 +105,8 @@ BEGIN
    c_contact1  NVARCHAR(30),                                                                        --(Wan01)  
    c_phone1 NVARCHAR(20),  
    OrderKey NVARCHAR(30),  
-   ExternOrderKey NVARCHAR(20),  
+  -- ExternOrderKey NVARCHAR(20),  
+   ExternOrderKey NVARCHAR(50),    --tlting_ext  
    SKU NVARCHAR(20),  
    Color NVARCHAR(3),  
    labelno NVARCHAR(30),  
