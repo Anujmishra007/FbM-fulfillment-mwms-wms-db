@@ -6,7 +6,7 @@ GO
 SET ANSI_NULLS OFF 
 GO
 
-  
+
 /************************************************************************/  
 /* Store Procedure: nsp_NikePickPackList                                */  
 /* Creation Date:                                                       */  
@@ -35,12 +35,14 @@ GO
 /* 11-Jun-2014  NJOW01     -315696 - Fix duplicate size                 */  
 /* 23-Jun-2015  CSCHONG    -344737 - Change sorting  (CS01)             */  
 /* 17-Mar-2016  CSCHONG    -366296 - Change Sorting  (CS02)             */  
+/* 28-Jan-2019  TLTING_ext 1.1 enlarge externorderkey field length      */   																			 
 /************************************************************************/  
   
 CREATE PROC nsp_NikePickPackList (@c_wavekey_start NVARCHAR(10), @c_wavekey_end NVARCHAR(10),   
                                   @c_storerkey_start NVARCHAR(10), @c_storerkey_end NVARCHAR(10),   
-                                  @c_externorderkey_start NVARCHAR(10), @c_externorderkey_end NVARCHAR(10),   
-                                  @c_invoiceno_start NVARCHAR(10), @c_invoiceno_end NVARCHAR(10))  
+                                  --@c_externorderkey_start NVARCHAR(10), @c_externorderkey_end NVARCHAR(10),   
+								  @c_externorderkey_start NVARCHAR(50), @c_externorderkey_end NVARCHAR(50),    --tlting_ext  
+								  @c_invoiceno_start NVARCHAR(10), @c_invoiceno_end NVARCHAR(10))  
   
 AS  
   
@@ -58,7 +60,8 @@ BEGIN
    @c_loopcnt int,  
    @theSQLStmt NVARCHAR(255),   
    @c_sku NVARCHAR(50),  
-   @c_externorderkey NVARCHAR(30),  
+   --@c_externorderkey NVARCHAR(30),  
+   @c_externorderkey NVARCHAR(50),     --tlting_ext  
    @c_ReprintFlag NVARCHAR(1),  -- (YokeBeen01)   
       @c_BUSR6 NVARCHAR(30),   -- Ong sos34681 10Jun2005  
       @c_BUSR7 NVARCHAR(30),  --NJOW01  
