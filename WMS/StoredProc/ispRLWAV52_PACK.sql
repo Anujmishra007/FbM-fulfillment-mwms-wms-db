@@ -12,7 +12,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.3                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -23,6 +23,7 @@ GO
 /* 2022-05-12  Wan      1.0   Created.                                  */
 /* 2022-05-12  Wan      1.0   DevOps Combine Script.                    */
 /* 2022-08-04  Wan01    1.1   Fixed to get correct SourceType           */
+/* 2022-08-29  Wan02    1.3   Fixed. Infinity Loop due to differen UOM  */
 /************************************************************************/
 CREATE OR ALTER PROC ispRLWAV52_PACK
    @c_Wavekey     NVARCHAR(10)    
@@ -654,7 +655,7 @@ BEGIN
                ,PD.StdCube  
                ,PD.StdGrossWgt  
                ,Qty = SUM(PD.Qty) 
-               ,PD.UOM  
+               ,UOM + MAX(PD.UOM)               --(Wan02) Not to Group UOM, 6 and 7 may pack into same carton 
                ,PD.PackQtyIndicator                                 
          FROM #PICKDETAIL_WIP PD  
          WHERE PD.Orderkey = @c_Orderkey  
@@ -671,7 +672,7 @@ BEGIN
                ,  PD.SkuStdCube  
                ,  PD.SkuStdGrossWgt 
                ,  PD.CubeTolerance                
-               ,  PD.UOM  
+               --,  PD.UOM                      --(Wan02)              
                ,  PD.PackQtyIndicator                                                                                                                
          HAVING SUM(FLOOR(PD.Qty/PD.PackQtyIndicator)) > @n_PickedQty  
          ORDER BY SUM(PD.Qty) DESC                                  
@@ -1241,8 +1242,8 @@ BEGIN
                SET @n_QtyToPack_TTL = @n_QtyToPack_TTL + @n_QtyToPack
             END
          
-            SET @n_PackedCube= @n_PackedCube + (@n_StdCube * (@n_QtyToPack / (1.00 * @n_PackQtyIndicator)))         
-            SET @n_PackedWgt = @n_PackedWgt  + (@n_StdGrossWgt * ( @n_QtyToPack / (1.00 * @n_PackQtyIndicator)))    
+            SET @n_PackedCube= @n_PackedCube + (@n_StdCube * (@n_QtyToPack / (1.00 * @n_PackQtyIndicator)))            
+            SET @n_PackedWgt = @n_PackedWgt  + (@n_StdGrossWgt * ( @n_QtyToPack / (1.00 * @n_PackQtyIndicator)))        
   
             SET @n_AvailableCube = @n_MaxCube - @n_PackedCube  
             SET @n_AvailableWgt  = @n_MaxWeight - @n_PackedWgt  
