@@ -32,6 +32,7 @@ GO
 /*                              ** only IDSCN - Converse using this report.   */
 /* 07-Dec-2011  YTWan     1.3   SOS#23201 - Add buyerPo to report. (Wan03)    */
 /* 21-Mar-2014  TLTING    1.4   SQL20112 Bug                                  */
+/* 28-Jan-2019  TLTING_ext 1.5 enlarge externorderkey field length      */  																			
 /******************************************************************************/  
   
 CREATE   PROC nsp_PackListBySku03 (
@@ -55,7 +56,8 @@ BEGIN
    @theSQLStmt NVARCHAR(255),   
    @c_sku NVARCHAR(50), 
    @c_color NVARCHAR(3),  
-   @c_externorderkey NVARCHAR(30),  
+   --@c_externorderkey NVARCHAR(30),
+   @c_externorderkey NVARCHAR(50),    --tlting_ext  
    @c_ReprintFlag NVARCHAR(1), 
    @c_BUSR6 NVARCHAR(30) ,
    @c_Storerkey varchar (30),
@@ -110,7 +112,8 @@ BEGIN
    c_contact1  NVARCHAR(30),                                                                        --(Wan01)
    c_phone1 NVARCHAR(20),
    OrderKey NVARCHAR(30),
-   ExternOrderKey NVARCHAR(20),
+   --ExternOrderKey NVARCHAR(20),
+   ExternOrderKey NVARCHAR(50),   --tlting_ext  
    SKU NVARCHAR(20),
    Color NVARCHAR(3),
    labelno NVARCHAR(30),
