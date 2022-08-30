@@ -46,6 +46,7 @@ GO
 /* 17-Sep-2013  YTWan    1.1  FBR288717- Default Remark on Manifest Rpt */
 /*                            (Wan01)                                   */
 /* 02-Jun-2015  CSCHONG   1.2 SOS343199 (CS01)                          */
+/* 28-Jan-2019  TLTING_ext 1.3 enlarge externorderkey field length      */  																			
 /************************************************************************/
 
 CREATE PROCEDURE nsp_NikeDO (@c_input  NVARCHAR(10))
@@ -64,7 +65,8 @@ BEGIN
    @c_route       NVARCHAR(10),
    @c_MbolKey   NVARCHAR(10),
    @c_LoadKey   NVARCHAR(10),
-   @c_ExternOrderKey NVARCHAR(30),
+  -- @c_ExternOrderKey NVARCHAR(30),
+   @c_ExternOrderKey NVARCHAR(50),  --tlting_ext  
    @d_OrderDate      datetime,
    @d_DeliveryDate   datetime,
    @d_DepartureDate  datetime,
@@ -100,7 +102,8 @@ BEGIN
    Route       NVARCHAR(10) NULL,
    MbolKey   NVARCHAR(10) NULL,
    LoadKey   NVARCHAR(10) NULL,
-   ExternOrderKey NVARCHAR(30) NULL,
+  -- ExternOrderKey NVARCHAR(30) NULL,
+   ExternOrderKey NVARCHAR(50) NULL,   --tlting_ext  
    OrderDate      datetime NULL,
    DeliveryDate   datetime NULL,
    DepartureDate  datetime NULL,
