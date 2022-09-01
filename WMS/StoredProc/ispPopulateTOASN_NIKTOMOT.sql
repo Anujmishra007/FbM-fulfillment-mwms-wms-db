@@ -35,6 +35,7 @@ GO
 /* Updates:                                                               */
 /* Date         Author  Ver. Purposes                                     */
 /* 07-Feb-2022  WLChooi 1.0  DevOps Combine Script                        */
+/* 01-Sep-2022  WyeChun 1.1  JSM-89774 Remove remark (WC01)               */
 /**************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[ispPopulateTOASN_NIKTOMOT]
    @c_Orderkey NVARCHAR(10)
@@ -370,7 +371,7 @@ BEGIN
                      END
                      ELSE
                      BEGIN
-                        --  SELECT @n_QtyExpected = @n_ShippedQty
+                        SELECT @n_QtyExpected = @n_ShippedQty  --WC01
                         SELECT @n_BeforeReceivedQty = @n_ShippedQty
                         SELECT @n_QtyReceived = 0
                      END
