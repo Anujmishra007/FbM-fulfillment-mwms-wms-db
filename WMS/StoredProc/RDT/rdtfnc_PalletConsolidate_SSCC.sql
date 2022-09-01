@@ -1,6 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdtfnc_PalletConsolidate_SSCC]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdtfnc_PalletConsolidate_SSCC]
-GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -26,9 +24,11 @@ GO
 /* 18-Sep-2017  1.7   James     WMS2991-Add ExtendedValidateSP (james05)*/
 /* 27-Dec-2017  1.8   James     WMS3665-Add ExtVal @ step1 (james06)    */
 /* 02-Jul-2018  1.9   James     WMS5526-Add ExtVal @ step6 (james07)    */
+/* 13-Oct-2021  2.0   Chermaine WMS-18008 Add config in step2 to disable*/
+/*                              cartonID column in step6 (cc01)         */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_PalletConsolidate_SSCC](
+CREATE OR ALTER PROC [RDT].[rdtfnc_PalletConsolidate_SSCC](
    @nMobile    int,
    @nErrNo     int  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 NVARCHAR max
@@ -132,7 +132,10 @@ DECLARE
    @cSQL                   NVARCHAR( MAX),
    @cSQLParam              NVARCHAR( MAX),
    @cFromID_OrderKey       NVARCHAR( 10),
+   @cDisableCtnFieldSP     NVARCHAR( 20),
+   @cDisableCtnField       NVARCHAR( 20),
 
+   
    -- (james02)
    @nFromScn         INT,
    @nFromStep        INT,
@@ -140,7 +143,7 @@ DECLARE
    @cNoOfCarton      NVARCHAR( 5),
 
    -- (james03)
-   @cSSCC2Validate   NVARCHAR( 20),
+   @cSSCC2Validate   NVARCHAR( 30),
    @nSKUCount        INT,
    @nSSCCCount       INT,
 
@@ -148,9 +151,20 @@ DECLARE
    @cConsigneeKey    NVARCHAR( 15),
    
    -- (james05)
-   @cExtendedValidateSP NVARCHAR( 20), 
-   @nQTY_Scanned        INT,
-   @nIsUPC              INT,
+   @cExtendedValidateSP    NVARCHAR( 20), 
+   @nQTY_Scanned           INT,
+   @nIsUPC                 INT,
+   @nBeforeScn             INT,
+   @nBeforeStep            INT,
+   
+   --(cc01)
+   @cCheckSSCC             NVARCHAR(11), 
+   @cRemainSKU             NVARCHAR( 1),
+   @cDecodeSKUSP           NVARCHAR(20),
+   @cMultiSKUBarcode       NVARCHAR( 3),
+   @cDoctype               NVARCHAR(5),
+   @cFlowThStep4           NVARCHAR(1),
+   @cMultiOrder            NVARCHAR(1),
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -223,6 +237,9 @@ SELECT
    @cSKUDescr        = V_SKUDescr,
    @cFromLOC         = V_LOC,
 
+   @nBeforeScn       = V_Integer1,
+   @nBeforeStep      = V_Integer2,
+
    @cToID            = V_String1,
    @nMultiStorer     = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String2, 5), 0) = 1 THEN LEFT( V_String2, 5) ELSE 0 END,
    @cSSCC            = V_String3,
@@ -239,6 +256,15 @@ SELECT
    @nFromScn         = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String16, 5), 0) = 1 THEN LEFT( V_String16, 5) ELSE 0 END,
    @nFromStep        = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String17, 5), 0) = 1 THEN LEFT( V_String17, 5) ELSE 0 END,
    @cExtendedValidateSP = V_String18,
+   @cCheckSSCC          = V_String19,  --(cc01)
+   @cDisableCtnField    = V_String20,  --(cc01)
+   @cActSKU             = V_String21,  --(cc01)
+   @cRemainSKU          = V_String22,  --(cc01)
+   @cDecodeSKUSP        = V_String23,
+   @cMultiSKUBarcode    = V_String24,
+   @cDisableCtnFieldSP  = V_String25,
+   @cFlowThStep4        = V_String26,
+   @cMultiOrder         = V_String27,
 
    @nPUOM_Div = V_PUOM_Div,
    
@@ -282,6 +308,7 @@ BEGIN
    IF @nStep = 6   GOTO Step_6 -- Scn = 4545. Carton, Qty to move, Bal Qty (From Pallet)
    IF @nStep = 7   GOTO Step_7 -- Scn = 4546. No of carton  (james02)
    IF @nStep = 8   GOTO Step_8 -- Scn = 4547. From Pallet, SSCC#  (james03)
+   IF @nStep = 9   GOTO Step_9 -- Scn = 3570. MULTISKU barcode (cc01)
 END
 
 RETURN -- Do nothing if incorrect step
@@ -306,10 +333,32 @@ BEGIN
       @cFacility   = @cFacility,
       @cStorerKey  = @cStorerKey
 
+      -- Decode label
+   SET @cDecodeSKUSP = rdt.RDTGetConfig( @nFunc, 'DecodeSKUSP', @cStorerKey)
+
    SET @cExtendedValidateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)
    IF @cExtendedValidateSP = '0'  
       SET @cExtendedValidateSP = ''
+      
+   --(cc01)
+   SET @cCheckSSCC = rdt.RDTGetConfig( @nFunc, 'CheckSSCC', @cStorerKey)    
 
+   SET @cDisableCtnField = ''       
+    
+   SET @cDisableCtnFieldSP = rdt.RDTGetConfig( @nFunc, 'DisableCtnFieldSP', @cStorerKey)    
+   IF @cDisableCtnFieldSP = '0'    
+      SET @cDisableCtnFieldSP = ''   
+
+   SET @cFlowThStep4 = rdt.RDTGetConfig( @nFunc, 'FlowThStep4', @cStorerKey) 
+   
+   --(cc01)
+   SET @cRemainSKU = rdt.RDTGetConfig( @nFunc, 'RemainSKU', @cStorerKey)    
+
+   --(cc01)
+   SET @cMultiSKUBarcode = rdt.RDTGetConfig( @nFunc, 'MultiSKUBarcode', @cStorerKey)    
+
+   SET @cMultiOrder=  rdt.RDTGetConfig( @nFunc, 'MultiOrder', @cStorerKey)    
+  
    -- Go to next screen
    SET @nScn = 4540
    SET @nStep = 1
@@ -631,7 +680,7 @@ BEGIN
          AND   UserDefine01 = @cFromID
          ORDER BY EditDate DESC  -- latest scanned
 
-         IF ISNULL( @cFromID_OrderKey, '') <> ''
+         IF ISNULL( @cFromID_OrderKey, '') <> '' AND ISNULL(@cMultiOrder,'') in('','0')
          BEGIN
             IF EXISTS ( SELECT 1 FROM dbo.PickDetail WITH (NOLOCK) 
                         WHERE StorerKey = @cStorerKey
@@ -703,16 +752,52 @@ BEGIN
          -- Validate barcode return multiple SKU
          IF @nSKUCnt > 1
          BEGIN
-            IF NOT EXISTS ( 
-               SELECT 1 
-               FROM dbo.UPC UPC WITH (NOLOCK, INDEX(PK_UPC)) 
-               WHERE StorerKey = @cStorerKey
-               AND   UPC = @cActSKU)
-            BEGIN
-               SET @nErrNo = 97794
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MultiBarcodeSKU
-               GOTO Step_2_Fail
-            END
+            IF @cMultiSKUBarcode IN ('1', '2')    
+            BEGIN   
+               EXEC rdt.rdt_MultiSKUBarcode @nMobile, @nFunc, @cLangCode,    
+                  @cInField01 OUTPUT,  @cOutField01 OUTPUT,    
+                  @cInField02 OUTPUT,  @cOutField02 OUTPUT,    
+                  @cInField03 OUTPUT,  @cOutField03 OUTPUT,    
+                  @cInField04 OUTPUT,  @cOutField04 OUTPUT,    
+                  @cInField05 OUTPUT,  @cOutField05 OUTPUT,    
+                  @cInField06 OUTPUT,  @cOutField06 OUTPUT,    
+                  @cInField07 OUTPUT,  @cOutField07 OUTPUT,    
+                  @cInField08 OUTPUT,  @cOutField08 OUTPUT,    
+                  @cInField09 OUTPUT,  @cOutField09 OUTPUT,    
+                  @cInField10 OUTPUT,  @cOutField10 OUTPUT,    
+                  @cInField11 OUTPUT,  @cOutField11 OUTPUT,    
+                  @cInField12 OUTPUT,  @cOutField12 OUTPUT,    
+                  @cInField13 OUTPUT,  @cOutField13 OUTPUT,    
+                  @cInField14 OUTPUT,  @cOutField14 OUTPUT,    
+                  @cInField15 OUTPUT,  @cOutField15 OUTPUT,    
+                  'POPULATE',    
+                  @cMultiSKUBarcode,    
+                  @cStorerKey,    
+                  @cActSKU  OUTPUT,    
+                  @nErrNo   OUTPUT,    
+                  @cErrMsg  OUTPUT,    
+                  'LOTXLOCXID.ID',    -- DocType    
+                  @cFromID 
+               
+               IF @nErrNo = 0 -- Populate multi SKU screen    
+               BEGIN    
+                  -- Go to Multi SKU screen    
+                  SET @nBeforeScn = @nScn    
+                  SET @nBeforeStep = @nStep
+                  SET @nScn = 3570
+                  SET @nStep = @nStep + 7
+                  GOTO Quit    
+               END    
+               IF @nErrNo = -1 -- Found in Doc, skip multi SKU screen    
+                  SET @nErrNo = 0    
+            END    
+            ELSE    
+            BEGIN  
+               SET @nErrNo = 97798  
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MultiBarcodeSKU  
+               EXEC rdt.rdtSetFocusField @nMobile, 12   -- Sku  
+               GOTO Quit  
+            END  
          END
 
          EXEC [RDT].[rdt_GETSKU]
@@ -798,9 +883,21 @@ BEGIN
          AND   LOC.Facility = @cFacility
          AND   LOC.LocationCategory = 'STAGING'
 
+         --not to check ItemClass = 001 ----(cc01)
+         IF @cCheckSSCC = '1' --AND @cDisableCtnIDField = '0'
+         BEGIN
+         	SET @nFromScn = @nScn
+            SET @nFromStep = @nStep
+
+            SET @cOutField01 = @cFromID
+            SET @cOutField02 = ''
+
+            SET @nScn = @nScn + 6
+            SET @nStep = @nStep + 6
+         END
          -- If SKU.Itemclass = 001 and SSCC (lottable09) <> blank, null, X, NA
          -- Prompt step 8 to key in SSCC
-         IF @nSKUCount = 1 AND @nSSCCCount = 1 AND 
+         ELSE IF @nSKUCount = 1 AND @nSSCCCount = 1 AND 
             EXISTS ( SELECT 1 FROM dbo.LotxLocxID LLI WITH (NOLOCK) 
                      JOIN dbo.SKU SKU WITH (NOLOCK) ON ( LLI.StorerKey = SKU.StorerKey AND LLI.SKU = SKU.SKU)
                      JOIN dbo.LOC LOC WITH (NOLOCK) ON ( LLI.LOC = LOC.LOC)
@@ -1340,13 +1437,52 @@ BEGIN
       AND   NOT EXISTS ( SELECT 1 FROM dbo.MBOL MBOL WITH (NOLOCK)
                            WHERE PLTD.UserDefine03 = MBOL.MbolKey
                            AND   MBOL.Status = '9')
-                            
+                               
       --SELECT @nQTY_Scanned = ISNULL( SUM( Qty), 0) 
       --FROM dbo.PALLETDETAIL WITH (NOLOCK) 
       --WHERE PalletKey = @cSSCC
       --AND   UserDefine05 = @cFromID
       --AND   UserDefine01 = @cToID
       --AND   SKU = @cSKU
+
+      -- Disable carton field    
+      IF @cDisableCtnFieldSP <> ''    
+      BEGIN    
+         IF @cDisableCtnFieldSP = '1'    
+            SET @cDisableCtnField = @cDisableCtnFieldSP    
+         ELSE    
+         BEGIN    
+            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDisableCtnFieldSP AND type = 'P')    
+            BEGIN    
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cDisableCtnFieldSP) +    
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility,  ' +     
+               ' @cFromID, @cToID, @cSKU, @nQTY, @cOption, @cDisableCtnField OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '    
+               SET @cSQLParam =    
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,           ' +
+               '@nInputKey       INT,           ' + 
+               '@cStorerKey      NVARCHAR( 15), ' +
+               '@cFacility       NVARCHAR( 5),  ' +
+               '@cFromID         NVARCHAR( 18), ' +
+               '@cToID           NVARCHAR( 10), ' +
+               '@cSKU            NVARCHAR( 20), ' +
+               '@nQty            INT,           ' +
+               '@cOption         NVARCHAR( 1),  ' +    
+               '@cDisableCtnField   NVARCHAR( 1)  OUTPUT, ' +    
+               '@nErrNo             INT            OUTPUT, ' +    
+               '@cErrMsg            NVARCHAR( 20)  OUTPUT'    
+    
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, 
+                  @cFromID, @cToID, @cSKU, @nQTY,@cOption, @cDisableCtnField OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT     
+    
+               IF @nErrNo <> 0    
+                  GOTO Quit    
+            END    
+         END    
+      END    
 
       SELECT @nQTY_Scanned = ISNULL( SUM( QtyMove), 0) 
       FROM rdt.rdtDPKLog WITH (NOLOCK) 
@@ -1404,7 +1540,14 @@ BEGIN
       SET @cOutField13 = rdt.rdtRightAlign( @cMUOM_Desc, 5)
       SET @cOutField14 = ''--CASE WHEN @nPBalQty > 0 THEN '' ELSE CAST( @nMBalQty AS NVARCHAR( 5)) END
       SET @cOutField15 = @nMBalQty
-      
+      SET @cInField06  = ''
+
+     -- Enable field    
+      IF @cDisableCtnField = '1'    
+         SET @cFieldAttr06 = 'O'    
+      ELSE    
+         SET @cFieldAttr06 = ''  
+
       IF (@nPQTY - @nTtl_Scanned) > 0
       BEGIN 
          SET @cFieldAttr12 = ''
@@ -1418,6 +1561,16 @@ BEGIN
 
       SET @nScn = @nScn + 1
       SET @nStep = @nStep + 1
+
+      IF @cFlowThStep4='1'
+      BEGIN
+         SET @cInField11='1'
+         SET @cFieldAttr12 ='o'
+         GOTO STEP_4
+      END
+
+
+
    END
 
    IF @nInputKey = 0 -- ESC
@@ -1491,73 +1644,76 @@ BEGIN
       -- Get next SKU
       IF ISNULL( @cInField06, '') = '' AND ISNULL( @cInField11, '') = ''  
       BEGIN
-         IF ( @cFieldAttr12 = '' AND @cInField12 = '') OR ( @cFieldAttr12 = 'O' AND @cOutField12 = '')
+         IF @cDisableCtnField<>1
          BEGIN
-            SET @nErrNo = 0
-            EXECUTE rdt.rdt_PltConsoSSCC_GetNextSKU
-               @nMobile          = @nMobile,
-               @nFunc            = @nFunc,
-               @cLangCode        = @cLangCode,
-               @nStep            = @nStep,
-               @nInputKey        = @nInputKey,
-               @cFacility        = @cFacility,
-               @cStorerKey       = @cStorerKey,
-               @cFromID          = @cFromID,
-               @cOption          = 'NEXT',
-               @nQty             = @nQty,
-               @cToID            = @cToID,
-               @nMultiStorer     = @nMultiStorer,
-               @cSKU_StorerKey   = @cSKU_StorerKey    OUTPUT,
-               @cSKU             = @cCurrentSKU       OUTPUT,
-               @cDescr           = @cSKUDescr         OUTPUT,
-               @cPUOM_Desc       = @cPUOM_Desc        OUTPUT,
-               @cMUOM_Desc       = @cMUOM_Desc        OUTPUT,
-               @nSKU_CNT         = @nSKU_CNT          OUTPUT,
-               @nPQTY            = @nPQTY             OUTPUT,
-               @nMQTY            = @nMQTY             OUTPUT,
-               @nTtl_Scanned     = @nTtl_Scanned      OUTPUT,
-               @nErrNo           = @nErrNo            OUTPUT,
-               @cErrMsg          = @cErrMsg           OUTPUT   
-
-            IF @nErrNo <> 0 OR ISNULL( @cCurrentSKU, '') = '' OR ISNULL( @cSKU_StorerKey, '') = ''
+            IF ( @cFieldAttr12 = '' AND @cInField12 = '') OR ( @cFieldAttr12 = 'O' AND @cOutField12 = '')
             BEGIN
-               SET @nErrNo = 97783
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No suggest sku
-               GOTO Step_4_Fail
+               SET @nErrNo = 0
+               EXECUTE rdt.rdt_PltConsoSSCC_GetNextSKU
+                  @nMobile          = @nMobile,
+                  @nFunc            = @nFunc,
+                  @cLangCode        = @cLangCode,
+                  @nStep            = @nStep,
+                  @nInputKey        = @nInputKey,
+                  @cFacility        = @cFacility,
+                  @cStorerKey       = @cStorerKey,
+                  @cFromID          = @cFromID,
+                  @cOption          = 'NEXT',
+                  @nQty             = @nQty,
+                  @cToID            = @cToID,
+                  @nMultiStorer     = @nMultiStorer,
+                  @cSKU_StorerKey   = @cSKU_StorerKey    OUTPUT,
+                  @cSKU             = @cCurrentSKU       OUTPUT,
+                  @cDescr           = @cSKUDescr         OUTPUT,
+                  @cPUOM_Desc       = @cPUOM_Desc        OUTPUT,
+                  @cMUOM_Desc       = @cMUOM_Desc        OUTPUT,
+                  @nSKU_CNT         = @nSKU_CNT          OUTPUT,
+                  @nPQTY            = @nPQTY             OUTPUT,
+                  @nMQTY            = @nMQTY             OUTPUT,
+                  @nTtl_Scanned     = @nTtl_Scanned      OUTPUT,
+                  @nErrNo           = @nErrNo            OUTPUT,
+                  @cErrMsg          = @cErrMsg           OUTPUT   
+
+               IF @nErrNo <> 0 OR ISNULL( @cCurrentSKU, '') = '' OR ISNULL( @cSKU_StorerKey, '') = ''
+               BEGIN
+                  SET @nErrNo = 97783
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No suggest sku
+                  GOTO Step_4_Fail
+               END
+
+               SET @cStorerKey = @cSKU_StorerKey
+               SET @nCurSKU_CNT = CAST( CAST( SUBSTRING( @cOutField02, 1, CHARINDEX( '/', @cOutField02) - 1) AS INT) + 1 AS NVARCHAR( 2))
+               SET @cSKU = @cCurrentSKU
+
+               -- Prepare next screen var
+               SET @cOutField01 = @cToID
+               SET @cOutField02 = CAST( @nCurSKU_CNT AS NVARCHAR( 2)) + '/' + CAST( @nSKU_CNT AS NVARCHAR( 2))
+               SET @cOutField03 = @cSKU
+               SET @cOutField04 = SUBSTRING( @cSKUDescr, 1, 20)
+               SET @cOutField05 = SUBSTRING( @cSKUDescr, 21, 20)
+               SET @cOutField06 = ''
+               SET @cOutField07 = '1:' + CASE WHEN @nPUOM_Div > 99999 THEN '*' ELSE CAST( @nPUOM_Div AS NCHAR( 10)) END
+               SET @cOutField08 = @cPUOM_Desc
+               SET @cOutField09 = '1'
+               SET @cOutField10 = CASE WHEN CAST( (@nPQTY - @nTtl_Scanned) AS NVARCHAR( 3)) < 0 THEN '0' 
+                                  ELSE CAST( (@nPQTY - @nTtl_Scanned) AS NVARCHAR( 3)) END
+
+               SET @cOutField11 = ''
+               SET @cOutField12 = ''
+
+               IF (@nPQTY - @nTtl_Scanned) > 0
+               BEGIN 
+                  SET @cFieldAttr12 = ''
+                  EXEC rdt.rdtSetFocusField @nMobile, 12   -- Sku
+               END
+               ELSE
+               BEGIN
+                  SET @cFieldAttr12 = 'O'
+                  EXEC rdt.rdtSetFocusField @nMobile, 6 -- Carton id
+               END
+
+               GOTO Quit
             END
-
-            SET @cStorerKey = @cSKU_StorerKey
-            SET @nCurSKU_CNT = CAST( CAST( SUBSTRING( @cOutField02, 1, CHARINDEX( '/', @cOutField02) - 1) AS INT) + 1 AS NVARCHAR( 2))
-            SET @cSKU = @cCurrentSKU
-
-            -- Prepare next screen var
-            SET @cOutField01 = @cToID
-            SET @cOutField02 = CAST( @nCurSKU_CNT AS NVARCHAR( 2)) + '/' + CAST( @nSKU_CNT AS NVARCHAR( 2))
-            SET @cOutField03 = @cSKU
-            SET @cOutField04 = SUBSTRING( @cSKUDescr, 1, 20)
-            SET @cOutField05 = SUBSTRING( @cSKUDescr, 21, 20)
-            SET @cOutField06 = ''
-            SET @cOutField07 = '1:' + CASE WHEN @nPUOM_Div > 99999 THEN '*' ELSE CAST( @nPUOM_Div AS NCHAR( 10)) END
-            SET @cOutField08 = @cPUOM_Desc
-            SET @cOutField09 = '1'
-            SET @cOutField10 = CASE WHEN CAST( (@nPQTY - @nTtl_Scanned) AS NVARCHAR( 3)) < 0 THEN '0' 
-                               ELSE CAST( (@nPQTY - @nTtl_Scanned) AS NVARCHAR( 3)) END
-
-            SET @cOutField11 = ''
-            SET @cOutField12 = ''
-
-            IF (@nPQTY - @nTtl_Scanned) > 0
-            BEGIN 
-               SET @cFieldAttr12 = ''
-               EXEC rdt.rdtSetFocusField @nMobile, 12   -- Sku
-            END
-            ELSE
-            BEGIN
-               SET @cFieldAttr12 = 'O'
-               EXEC rdt.rdtSetFocusField @nMobile, 6 -- Carton id
-            END
-
-            GOTO Quit
          END
       END
 
@@ -1572,6 +1728,42 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Sku required
             EXEC rdt.rdtSetFocusField @nMobile, 12   -- Sku
             GOTO Quit
+         END
+
+         -- Extended update
+         IF @cDecodeSKUSP <> '' 
+         BEGIN
+            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSKUSP AND type = 'P')
+            BEGIN
+               SET @nQty = 0
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSKUSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFromID, @cToID, @cOption, ' + 
+                  ' @cSKU OUTPUT, @nQty OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+               SET @cSQLParam =
+                  '@nMobile         INT, '            +
+                  '@nFunc           INT, '            +
+                  '@cLangCode       NVARCHAR( 3), '   +
+                  '@nStep   INT, '            + 
+                  '@nInputKey       INT, '            +
+                  '@cStorerKey      NVARCHAR( 15), '  +
+                  '@cFromID         NVARCHAR( 18), '  +
+                  '@cToID           NVARCHAR( 18), '  +
+                  '@cOption         NVARCHAR( 10), '  +
+                  '@cSKU            NVARCHAR( 20)  OUTPUT, ' +
+                  '@nQty            INT            OUTPUT, ' +
+                  '@nErrNo          INT            OUTPUT, ' +
+                  '@cErrMsg         NVARCHAR( 20)  OUTPUT'  
+
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFromID, @cToID, @cOption, 
+                  @cActSKU OUTPUT, @nQty OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+            
+               IF @nErrNo <> 0 
+               BEGIN
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') 
+                  GOTO Quit
+               END
+            END
          END
 
          -- Retrieve actual sku
@@ -1591,40 +1783,72 @@ BEGIN
             GOTO Quit
          END
 
-         SET @nIsUPC = 0
-
          -- Validate barcode return multiple SKU
          IF @nSKUCnt > 1
          BEGIN
-            IF NOT EXISTS ( 
-               SELECT 1 
-               FROM dbo.UPC UPC WITH (NOLOCK, INDEX(PK_UPC)) 
-               WHERE UPC = @cActSKU)
+
+            IF @cMultiSKUBarcode IN ('1', '2')    
+            BEGIN   
+               EXEC rdt.rdt_MultiSKUBarcode @nMobile, @nFunc, @cLangCode,    
+                  @cInField01 OUTPUT,  @cOutField01 OUTPUT,    
+                  @cInField02 OUTPUT,  @cOutField02 OUTPUT,    
+                  @cInField03 OUTPUT,  @cOutField03 OUTPUT,    
+                  @cInField04 OUTPUT,  @cOutField04 OUTPUT,    
+                  @cInField05 OUTPUT,  @cOutField05 OUTPUT,    
+                  @cInField06 OUTPUT,  @cOutField06 OUTPUT,    
+                  @cInField07 OUTPUT,  @cOutField07 OUTPUT,    
+                  @cInField08 OUTPUT,  @cOutField08 OUTPUT,    
+                  @cInField09 OUTPUT,  @cOutField09 OUTPUT,    
+                  @cInField10 OUTPUT,  @cOutField10 OUTPUT,    
+                  @cInField11 OUTPUT,  @cOutField11 OUTPUT,    
+                  @cInField12 OUTPUT,  @cOutField12 OUTPUT,    
+                  @cInField13 OUTPUT,  @cOutField13 OUTPUT,    
+                  @cInField14 OUTPUT,  @cOutField14 OUTPUT,    
+                  @cInField15 OUTPUT,  @cOutField15 OUTPUT,    
+                  'POPULATE',    
+                  @cMultiSKUBarcode,    
+                  @cStorerKey,    
+                  @cActSKU  OUTPUT,    
+                  @nErrNo   OUTPUT,    
+                  @cErrMsg  OUTPUT,    
+                  'LOTXLOCXID.ID',    -- DocType    
+                  @cFromID 
+               
+               IF @nErrNo = 0 -- Populate multi SKU screen    
+               BEGIN    
+                  -- Go to Multi SKU screen    
+                  SET @nBeforeScn = @nScn    
+                  SET @nBeforeStep = @nStep
+                  SET @nScn = 3570
+                  SET @nStep = @nStep + 6
+                  GOTO Quit    
+               END    
+               IF @nErrNo = -1 -- Found in Doc, skip multi SKU screen    
+                  SET @nErrNo = 0    
+            END    
+            ELSE    
             BEGIN
                SET @nErrNo = 97798
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MultiBarcodeSKU
                EXEC rdt.rdtSetFocusField @nMobile, 12   -- Sku
                GOTO Quit
             END
-            
-            SET @nIsUPC = 1
          END
 
-         IF @nIsUPC = 0
-            EXEC [RDT].[rdt_GETSKU]
-               @cStorerKey  = @cStorerkey,
-               @cSKU        = @cActSKU       OUTPUT,
-               @bSuccess    = @bSuccess      OUTPUT,
-               @nErr        = @nErrNo        OUTPUT,
-               @cErrMsg     = @cErrMsg       OUTPUT
-         ELSE
-            SELECT TOP 1 @cActSku = Sku 
-            FROM dbo.LotxlocxId LLI WITH (NOLOCK) 
-            WHERE StorerKey =  @cStorerKey
-            AND   ID = @cFromID
-            AND EXISTS ( SELECT 1 FROM dbo.UPC UPC WITH (NOLOCK)
-                         WHERE LLI.StorerKey = UPC.StorerKey AND LLI.SKU = UPC.SKU
-                         AND   UPC.UPC = @cInField10)
+         EXEC [RDT].[rdt_GETSKU]
+            @cStorerKey  = @cStorerkey,
+            @cSKU        = @cActSKU       OUTPUT,
+            @bSuccess    = @bSuccess      OUTPUT,
+            @nErr        = @nErrNo        OUTPUT,
+            @cErrMsg     = @cErrMsg       OUTPUT
+         
+         IF @nErrNo <> 0
+         BEGIN 
+            SET @nErrNo = 97798
+            SET @cErrMsg = @cActSKU--rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MultiBarcodeSKU
+            EXEC rdt.rdtSetFocusField @nMobile, 12   -- Sku
+            GOTO Quit
+         END
 
          SELECT @cItemClass = ItemClass
          FROM dbo.SKU WITH (NOLOCK)
@@ -1867,7 +2091,7 @@ BEGIN
                '@cFromID         NVARCHAR( 18), '  +
                '@cToID           NVARCHAR( 18), '  +
                '@cOption         NVARCHAR( 10), '  +
-               '@cSKU            NVARCHAR( 20), OUTPUT, ' +
+               '@cSKU            NVARCHAR( 20)  OUTPUT, ' +
                '@nQty            INT            OUTPUT, ' +
                '@cCartonBarcode  NVARCHAR( 60)  OUTPUT, ' +
                '@nErrNo          INT            OUTPUT, ' +
@@ -1886,7 +2110,7 @@ BEGIN
             
             IF @nErrNo <> 0 
             BEGIN
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') 
+              -- SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') 
                GOTO Step_4a_Fail
             END
             ELSE
@@ -2410,6 +2634,56 @@ BEGIN
             GOTO Step_5_Fail
          END
 
+         -- Disable carton field    
+         IF @cDisableCtnFieldSP <> ''    
+         BEGIN    
+            IF @cDisableCtnFieldSP = '1'    
+               SET @cDisableCtnField = @cDisableCtnFieldSP    
+            ELSE    
+            BEGIN    
+               IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDisableCtnFieldSP AND type = 'P')    
+               BEGIN    
+                  SET @cSQL = 'EXEC rdt.' + RTRIM( @cDisableCtnFieldSP) +    
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility,  ' +     
+                  ' @cFromID, @cToID, @cSKU, @nQTY, @cOption, @cDisableCtnField OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '    
+                  SET @cSQLParam =    
+                  '@nMobile         INT,           ' +
+                  '@nFunc           INT,           ' +
+                  '@cLangCode       NVARCHAR( 3),  ' +
+                  '@nStep           INT,           ' +
+                  '@nInputKey       INT,           ' + 
+                  '@cStorerKey      NVARCHAR( 15), ' +
+                  '@cFacility       NVARCHAR( 5),  ' +
+                  '@cFromID         NVARCHAR( 18), ' +
+                  '@cToID           NVARCHAR( 10), ' +
+                  '@cSKU            NVARCHAR( 20), ' +
+                  '@nQty            INT,           ' +
+                  '@cOption         NVARCHAR( 1),  ' +    
+                  '@cDisableCtnField   NVARCHAR( 1)  OUTPUT, ' +    
+                  '@nErrNo             INT            OUTPUT, ' +    
+                  '@cErrMsg            NVARCHAR( 20)  OUTPUT'    
+    
+                  EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
+                     @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, 
+                     @cFromID, @cToID, @cSKU, @nQTY,@cOption, @cDisableCtnField OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT     
+    
+                  IF @nErrNo <> 0    
+                     GOTO Quit    
+               END    
+            END    
+         END    
+
+         --(cc01)
+         IF @cDisableCtnField = '1'
+         BEGIN
+         	SET @cFieldAttr05 = 'O'
+            SET @cInField05 = ''
+         END
+         ELSE
+         BEGIN
+         	SET @cFieldAttr05 = ''
+         END
+
          -- Prepare next screen var
          SET @cOutField01 = @cFromID
          SET @cOutField02 = @cSKU
@@ -2420,12 +2694,12 @@ BEGIN
          SET @cOutField07 = rdt.rdtRightAlign( @cPUOM_Desc, 5) 
          SET @cOutField08 = CASE WHEN @nPBalQty > 0 THEN '1' ELSE '' END
          SET @cOutField09 = CASE WHEN @nPBalQty = 0 OR @cFieldAttr08 = 'O' THEN '' ELSE CAST( @nPBalQty AS NVARCHAR( 5)) END
-         SET @cOutField10 = ''
+         SET @cOutField10 = CASE WHEN @cRemainSKU = '1' THEN @cActSKU ELSE '' END --(cc01)
          SET @cOutField11 = rdt.rdtRightAlign( @cMUOM_Desc, 5) 
          SET @cOutField12 = ''--CASE WHEN @nPBalQty > 0 THEN '' ELSE CAST( @nMBalQty AS NVARCHAR( 5)) END
          SET @cOutField13 = @nMBalQty
 
-         SET @cFieldAttr10 = ''
+         SET @cFieldAttr10 = CASE WHEN @cRemainSKU = '1' THEN @cActSKU ELSE '' END  --(cc01)
          EXEC rdt.rdtSetFocusField @nMobile, 10
 
          SET @nScn = @nScn + 1
@@ -2553,6 +2827,42 @@ BEGIN
             EXEC rdt.rdtSetFocusField @nMobile, 10   -- Sku
             GOTO Quit
          END
+
+         -- Extended update
+         IF @cDecodeSKUSP <> '' 
+         BEGIN
+            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSKUSP AND type = 'P')
+            BEGIN
+               SET @nQty = 0
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSKUSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFromID, @cToID, @cOption, ' + 
+                  ' @cSKU OUTPUT, @nQty OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+               SET @cSQLParam =
+                  '@nMobile         INT, '            +
+                  '@nFunc           INT, '            +
+                  '@cLangCode       NVARCHAR( 3), '   +
+                  '@nStep   INT, '            + 
+                  '@nInputKey       INT, '            +
+                  '@cStorerKey      NVARCHAR( 15), '  +
+                  '@cFromID         NVARCHAR( 18), '  +
+                  '@cToID           NVARCHAR( 18), '  +
+                  '@cOption         NVARCHAR( 10), '  +
+                  '@cSKU            NVARCHAR( 20)  OUTPUT, ' +
+                  '@nQty            INT            OUTPUT, ' +
+                  '@nErrNo          INT            OUTPUT, ' +
+                  '@cErrMsg         NVARCHAR( 20)  OUTPUT'  
+
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFromID, @cToID, @cOption, 
+                  @cActSKU OUTPUT, @nQty OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+            
+               IF @nErrNo <> 0 
+               BEGIN
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') 
+                  GOTO Step_6a_Fail
+               END
+            END
+         END
       
          -- Retrieve actual sku
          EXEC [RDT].[rdt_GETSKUCNT]
@@ -2570,42 +2880,71 @@ BEGIN
             EXEC rdt.rdtSetFocusField @nMobile, 10   -- Sku
             GOTO Quit
          END
-         
-         SET @nIsUPC = 0
-         
-         -- Validate barcode return multiple SKU
+
          IF @nSKUCnt > 1
          BEGIN
-            IF NOT EXISTS ( 
-               SELECT 1 
-               FROM dbo.UPC UPC WITH (NOLOCK, INDEX(PK_UPC)) 
-               WHERE StorerKey = @cStorerKey
-               AND UPC = @cActSKU)
+            IF @cMultiSKUBarcode IN ('1', '2')    
+            BEGIN   
+               EXEC rdt.rdt_MultiSKUBarcode @nMobile, @nFunc, @cLangCode,    
+                  @cInField01 OUTPUT,  @cOutField01 OUTPUT,    
+                  @cInField02 OUTPUT,  @cOutField02 OUTPUT,    
+                  @cInField03 OUTPUT,  @cOutField03 OUTPUT,    
+                  @cInField04 OUTPUT,  @cOutField04 OUTPUT,    
+                  @cInField05 OUTPUT,  @cOutField05 OUTPUT,    
+                  @cInField06 OUTPUT,  @cOutField06 OUTPUT,    
+                  @cInField07 OUTPUT,  @cOutField07 OUTPUT,    
+                  @cInField08 OUTPUT,  @cOutField08 OUTPUT,    
+                  @cInField09 OUTPUT,  @cOutField09 OUTPUT,    
+                  @cInField10 OUTPUT,  @cOutField10 OUTPUT,    
+                  @cInField11 OUTPUT,  @cOutField11 OUTPUT,    
+                  @cInField12 OUTPUT,  @cOutField12 OUTPUT,    
+                  @cInField13 OUTPUT,  @cOutField13 OUTPUT,    
+                  @cInField14 OUTPUT,  @cOutField14 OUTPUT,    
+                  @cInField15 OUTPUT,  @cOutField15 OUTPUT,    
+                  'POPULATE',    
+                  @cMultiSKUBarcode,    
+                  @cStorerKey,    
+                  @cActSKU  OUTPUT,    
+                  @nErrNo   OUTPUT,    
+                  @cErrMsg  OUTPUT,    
+                  'LOTXLOCXID.ID',    -- DocType    
+                  @cFromID 
+               
+               IF @nErrNo = 0 -- Populate multi SKU screen    
+               BEGIN    
+                  -- Go to Multi SKU screen    
+                  SET @nBeforeScn = @nScn    
+                  SET @nBeforeStep = @nStep
+                  SET @nScn = 3570
+                  SET @nStep = @nStep + 3
+                  GOTO Quit    
+               END    
+               IF @nErrNo = -1 -- Found in Doc, skip multi SKU screen    
+                  SET @nErrNo = 0    
+            END    
+            ELSE    
             BEGIN
                SET @nErrNo = 97798
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MultiBarcodeSKU
-               EXEC rdt.rdtSetFocusField @nMobile, 10   -- Sku
+               EXEC rdt.rdtSetFocusField @nMobile, 12   -- Sku
                GOTO Quit
             END
-            
-            SET @nIsUPC = 1
          END
 
-         IF @nIsUPC = 0
-            EXEC [RDT].[rdt_GETSKU]
-               @cStorerKey  = @cStorerkey,
-               @cSKU        = @cActSKU       OUTPUT,
-               @bSuccess    = @bSuccess      OUTPUT,
-               @nErr        = @nErrNo        OUTPUT,
-               @cErrMsg     = @cErrMsg       OUTPUT
-         ELSE
-            SELECT TOP 1 @cActSku = Sku 
-            FROM dbo.LotxlocxId LLI WITH (NOLOCK) 
-            WHERE StorerKey =  @cStorerKey
-            AND   ID = @cFromID
-            AND EXISTS ( SELECT 1 FROM dbo.UPC UPC WITH (NOLOCK)
-                         WHERE LLI.StorerKey = UPC.StorerKey AND LLI.SKU = UPC.SKU
-                         AND   UPC.UPC = @cInField10)
+         EXEC [RDT].[rdt_GETSKU]
+            @cStorerKey  = @cStorerkey,
+            @cSKU        = @cActSKU       OUTPUT,
+            @bSuccess    = @bSuccess      OUTPUT,
+            @nErr        = @nErrNo        OUTPUT,
+            @cErrMsg     = @cErrMsg       OUTPUT
+         
+         IF @nErrNo<>0
+         BEGIN
+            SET @nErrNo = 97798
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MultiBarcodeSKU
+            EXEC rdt.rdtSetFocusField @nMobile, 12   -- Sku
+            GOTO Quit
+         END
                       
          SELECT @cItemClass = ItemClass
          FROM dbo.SKU WITH (NOLOCK)
@@ -2643,7 +2982,8 @@ BEGIN
       END
 
       -- Validate blank
-      IF @cCartonBarcode = ''
+      IF @cCartonBarcode = '' 
+            AND @cDisableCtnField = '0'  --(cc01)
       BEGIN
          SET @nErrNo = 97775
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Carton id Req
@@ -3439,6 +3779,122 @@ BEGIN
 END
 GOTO Quit
 
+    
+/********************************************************************************    
+Step 9. Screen = 3570. Multi SKU    
+   SKU         (Field01)    
+   SKUDesc1    (Field02)    
+   SKUDesc2   (Field03)    
+   SKU         (Field04)    
+   SKUDesc1    (Field05)    
+   SKUDesc2    (Field06)    
+   SKU         (Field07)    
+   SKUDesc1    (Field08)    
+   SKUDesc2    (Field09)    
+   Option      (Field10, input)    
+********************************************************************************/    
+STEP_9:    
+BEGIN  
+   IF @nInputKey = 1 -- ENTER    
+   BEGIN    
+      EXEC rdt.rdt_MultiSKUBarcode @nMobile, @nFunc, @cLangCode,    
+         @cInField01 OUTPUT,  @cOutField01 OUTPUT,    
+         @cInField02 OUTPUT,  @cOutField02 OUTPUT,    
+         @cInField03 OUTPUT,  @cOutField03 OUTPUT,    
+         @cInField04 OUTPUT,  @cOutField04 OUTPUT,    
+         @cInField05 OUTPUT,  @cOutField05 OUTPUT,    
+         @cInField06 OUTPUT,  @cOutField06 OUTPUT,    
+         @cInField07 OUTPUT,  @cOutField07 OUTPUT,    
+         @cInField08 OUTPUT,  @cOutField08 OUTPUT,    
+         @cInField09 OUTPUT,  @cOutField09 OUTPUT,    
+         @cInField10 OUTPUT,  @cOutField10 OUTPUT,    
+         @cInField11 OUTPUT,  @cOutField11 OUTPUT,    
+         @cInField12 OUTPUT,  @cOutField12 OUTPUT,    
+         @cInField13 OUTPUT,  @cOutField13 OUTPUT,    
+         @cInField14 OUTPUT,  @cOutField14 OUTPUT,    
+         @cInField15 OUTPUT,  @cOutField15 OUTPUT,    
+         'CHECK',    
+         @cMultiSKUBarcode,    
+         @cStorerKey,    
+         @cACTSKU  OUTPUT,    
+         @nErrNo   OUTPUT,    
+         @cErrMsg  OUTPUT    
+    
+      IF @nErrNo <> 0    
+      BEGIN    
+         IF @nErrNo = -1    
+            SET @nErrNo = 0    
+         GOTO Quit    
+      END    
+    
+      -- Get SKU info    
+      SELECT @cSKUDescr = Descr FROM dbo.SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cACTSKU    
+   END 
+
+   IF @nBeforeStep=2
+   BEGIN
+      -- Prepare next screen var  
+      SET @cOutField01 = @cFromID  
+      SET @cOutField02 = CASE WHEN @nIDQty = @nLOTIDQty THEN 'FULL' ELSE 'PARTIAL' END  
+      SET @cOutField03 = @cHeight  
+      SET @cOutField04 = @cWeight  
+      SET @cOutField05 = @cSpecialInstruction  
+      SET @cOutField06 = '' -- Option  
+      SET @cOutField07 = @cACTSKU  
+      SET @cOutField08 = @cFromLoc -- LOC  (james03)  
+
+      -- Go to next screen    
+      SET @nScn = @nBeforeScn    
+      SET @nStep = @nBeforeStep 
+   END
+   ELSE IF @nBeforeStep=4
+   BEGIN
+      -- Prepare next screen var  
+      SET @cOutField01 = @cToID  
+      SET @cOutField02 = CAST( @nCurSKU_CNT AS NVARCHAR( 2)) + '/' + CAST( @nSKU_CNT AS NVARCHAR( 2))  
+      SET @cOutField03 = @cSKU  
+      SET @cOutField04 = SUBSTRING( @cSKUDescr, 1, 20)  
+      SET @cOutField05 = SUBSTRING( @cSKUDescr, 21, 20)  
+      SET @cOutField06 = ''  
+      SET @cOutField07 = '1:' + CASE WHEN @nPUOM_Div > 99999 THEN '*' ELSE CAST( @nPUOM_Div AS NCHAR( 10)) END  
+      SET @cOutField08 = rdt.rdtRightAlign( @cPUOM_Desc, 5)  
+      SET @cOutField09 = CASE WHEN @nPBalQty > 0 THEN '1' ELSE '' END  
+      SET @cOutField10 =  CASE WHEN @nPBalQty = 0 OR @cFieldAttr08 = 'O' THEN '' ELSE CAST( @nPBalQty AS NVARCHAR( 5)) END  
+      SET @cOutField11 = ''  
+      SET @cOutField12 = @cActSKU  
+      SET @cOutField13 = rdt.rdtRightAlign( @cMUOM_Desc, 5)  
+      SET @cOutField14 = ''--CASE WHEN @nPBalQty > 0 THEN '' ELSE CAST( @nMBalQty AS NVARCHAR( 5)) END  
+      SET @cOutField15 = @nMBalQty  
+
+      -- Go to next screen    
+      SET @nScn = @nBeforeScn    
+      SET @nStep = @nBeforeStep 
+   END
+   ELSE IF @nBeforeStep = 6
+   BEGIN
+      -- Prepare next screen var  
+      SET @cOutField01 = @cFromID  
+      SET @cOutField02 = @cSKU  
+      SET @cOutField03 = SUBSTRING( @cSKUDescr, 1, 20)  
+      SET @cOutField04 = SUBSTRING( @cSKUDescr, 21, 20)  
+      SET @cOutField05 = ''  
+      SET @cOutField06 = '1:' + CASE WHEN @nPUOM_Div > 99999 THEN '*' ELSE CAST( @nPUOM_Div AS NCHAR( 10)) END  
+      SET @cOutField07 = rdt.rdtRightAlign( @cPUOM_Desc, 5)   
+      SET @cOutField08 = CASE WHEN @nPBalQty > 0 THEN '1' ELSE '' END  
+      SET @cOutField09 = CASE WHEN @nPBalQty = 0 OR @cFieldAttr08 = 'O' THEN '' ELSE CAST( @nPBalQty AS NVARCHAR( 5)) END  
+      SET @cOutField10 = @cActSKU
+      SET @cOutField11 = rdt.rdtRightAlign( @cMUOM_Desc, 5)   
+      SET @cOutField12 = ''--CASE WHEN @nPBalQty > 0 THEN '' ELSE CAST( @nMBalQty AS NVARCHAR( 5)) END  
+      SET @cOutField13 = @nMBalQty  
+  
+      SET @cFieldAttr10 = ''  
+      EXEC rdt.rdtSetFocusField @nMobile, 10  
+      -- Go to next screen    
+      SET @nScn = @nBeforeScn    
+      SET @nStep = @nBeforeStep 
+   END
+END
+
 /********************************************************************************
 Quit. Update back to I/O table, ready to be pick up by JBOSS
 ********************************************************************************/
@@ -3465,6 +3921,9 @@ BEGIN
       V_SKUDescr  = @cSKUDescr,
       V_LOC       = @cFromLOC,
 
+      V_Integer1  = @nBeforeScn,
+      V_Integer2  = @nBeforeStep,
+
       V_String1    = @cToID,
       V_String2    = @nMultiStorer,
       V_String3    = @cSSCC,
@@ -3481,6 +3940,15 @@ BEGIN
       V_String16   = @nFromScn,
       V_String17   = @nFromStep,
       V_String18   = @cExtendedValidateSP,
+      V_String19   = @cCheckSSCC,          --(cc01)
+      V_String20   = @cDisableCtnField,  --(cc01)
+      V_String21   = @cActSKU,             --(cc01)
+      V_String22   = @cRemainSKU,          --(cc01)
+      V_String23   = @cDecodeSKUSP,
+      V_String24   = @cMultiSKUBarcode,
+      V_String25   = @cDisableCtnFieldSP,  --(cc01)
+      V_String26   = @cFlowThStep4,
+      V_String27   = @cMultiOrder,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,

@@ -4,7 +4,7 @@ GO
 SET ANSI_NULLS OFF
 GO
 /************************************************************************/
-/* Store procedure: rdt_PltConsoSSCC_BuildPlt                           */
+/* Store procedure: rdt_1723BuildPltSP01                                */
 /* Copyright      : IDS                                                 */
 /*                                                                      */
 /* Purpose: INSERT/UPDATE Pallet & PalletDetail table                   */
@@ -16,13 +16,10 @@ GO
 /* Modifications log:                                                   */
 /*                                                                      */
 /* Date        Rev  Author      Purposes                                */
-/* 23-Mar-2016 1.0  James       SOS357366 - Created                     */
-/* 01-Sep-2016 1.1  James       Add process for step 8 (james01)        */
-/* 13-May-2020 1.2  James       WMS-5526 Allow non casecnt (james02)    */
-/* 13-Oct-2021 1.3  Chermaine   WMS-18008 Add Custom BuildPltSP (cc01)  */
+/* 13-Oct-2021 1.3  Chermaine   WMS-18008 Created                       */
 /************************************************************************/
 
-CREATE OR ALTER PROC [RDT].[rdt_PltConsoSSCC_BuildPlt] (
+CREATE OR ALTER PROC [RDT].[rdt_1723BuildPltSP01] (
    @nMobile                   INT,           
    @nFunc                     INT,           
    @cLangCode                 NVARCHAR( 3),  
@@ -49,6 +46,7 @@ BEGIN
    DECLARE @nTranCount        INT,
            @nStep             INT,
            @nPD_Qty           INT,
+           @nUCC_Qty          INT,
            @nMV_Alloc         INT,
            @nMV_Pick          INT,
            @bSuccess          INT,
@@ -72,15 +70,11 @@ BEGIN
            @cItemClass        NVARCHAR( 10),
            @cCounter          NVARCHAR( 25),
            @cToID_MbolKey     NVARCHAR( 10),
-           @cFromID_OrderKey  NVARCHAR( 10)
-           
-
-   DECLARE @nQty              INT
-   DECLARE @cSQL              NVARCHAR(MAX)   --(cc01)
-   DECLARE @cSQLParam         NVARCHAR(MAX)   --(cc01)
-   DECLARE @cBuildPltSP       NVARCHAR( 20)   --(cc01)
-   
-   SET @cBuildPltSP = rdt.RDTGetConfig( @nFunc, 'BuildPltSP', @cStorerKey) --(cc01)
+           @cFromID_OrderKey  NVARCHAR( 10),
+           @nQty              INT,
+           @cLot              NVARCHAR( 10),
+           @uccNo             NVARCHAR( 20),
+           @cLottable09Lbl    NVARCHAR( 20)
 
    SELECT @nStep = Step, 
           @cFacility = Facility, 
@@ -89,48 +83,10 @@ BEGIN
    FROM RDT.RDTMOBREC WITH (NOLOCK) 
    WHERE Mobile = @nMobile
    
-/***********************************************************************************************
-                                          Custom BuildPltSP
-***********************************************************************************************/
-   IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cBuildPltSP AND type = 'P')
-      BEGIN           
-         SET @cSQL = 'EXEC rdt.' + RTRIM( @cBuildPltSP) +
-            ' @nMobile, @nFunc, @cLangCode, @cStorerKey, @cFromLOC, @cFromID, @cToID, @cType, ' +
-            ' @cOption, @cCartonID, @nQTY_Move, @nQTY_Alloc, @nQTY_Pick, ' +
-            ' @cSSCC OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT ' 
-         
-         SET @cSQLParam =
-            ' @nMobile        INT,            ' +
-            ' @nFunc          INT,           ' +
-            ' @cLangCode      NVARCHAR( 3),  ' + 
-            ' @cStorerkey     NVARCHAR( 15), ' +
-            ' @cFromLOC       NVARCHAR( 10), ' +
-            ' @cFromID        NVARCHAR( 18), ' +
-            ' @cToID          NVARCHAR( 18), ' +
-            ' @cType          NVARCHAR( 1),  ' +
-            ' @cOption        NVARCHAR( 1),  ' +
-            ' @cCartonID      NVARCHAR( 20), ' +
-            ' @nQTY_Move      INT,           ' +
-            ' @nQTY_Alloc     INT,           ' +
-            ' @nQTY_Pick      INT,           ' +
-            ' @cSSCC          NVARCHAR( 20)  OUTPUT, ' +
-            ' @nErrNo         INT            OUTPUT,  ' +
-            ' @cErrMsg        NVARCHAR( 20)  OUTPUT   '
-            
-         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-            @nMobile, @nFunc, @cLangCode, @cStorerKey, @cFromLOC, @cFromID, @cToID, @cType,
-            @cOption, @cCartonID, @nQTY_Move, @nQTY_Alloc, @nQTY_Pick,
-            @cSSCC OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
-
-         GOTO Quit
-      END
-/***********************************************************************************************
-                                             Standard confirmSP
-***********************************************************************************************/
    SET @nTranCount = @@TRANCOUNT
 
    BEGIN TRAN
-   SAVE TRAN rdt_PltConsoSSCC_BuildPlt
+   SAVE TRAN rdt_1723BuildPltSP01
 
    -- Pallet info. Need determine option 1 or 3. Then built pallet
    IF @nStep IN ( 2, 8) -- (james01)
@@ -143,7 +99,8 @@ BEGIN
          SET @cSSCC = ''
          -- Get SSCC
          SELECT TOP 1 @cSSCC = LA.Lottable09, 
-                      @cSKU = LLI.SKU
+                      @cSKU = LLI.SKU,
+                      @cLot = LLI.Lot
          FROM dbo.LOTxLOCxID LLI WITH (NOLOCK) 
          JOIN dbo.LOTAttribute LA WITH (NOLOCK) ON (LLI.LOT = LA.LOT)
          JOIN dbo.LOC LOC WITH (NOLOCK) ON ( LLI.LOC = LOC.LOC)
@@ -171,31 +128,31 @@ BEGIN
                SET @nBuildNewSSCC = 1
          END
 
-         IF @nBuildNewSSCC = 1
-         BEGIN
-            EXECUTE nspg_getkey
-               @KeyName       = 'MHAPSSCCP' ,
-               @fieldlength   = 17,    
-               @keystring     = @cCounter    Output,
-               @b_success     = @bSuccess    Output,
-               @n_err         = @nErrNo      Output,
-               @c_errmsg      = @cErrMsg     Output,
-               @b_resultset   = 0,
-               @n_batch       = 1
+         --IF @nBuildNewSSCC = 1
+         --BEGIN
+         --   EXECUTE nspg_getkey
+         --      @KeyName       = 'MHAPSSCCP' ,
+         --      @fieldlength   = 17,    
+         --      @keystring     = @cCounter    Output,
+         --      @b_success     = @bSuccess    Output,
+         --      @n_err         = @nErrNo      Output,
+         --      @c_errmsg      = @cErrMsg     Output,
+         --      @b_resultset   = 0,
+         --      @n_batch       = 1
 
-            IF @nErrNo <> 0 OR @bSuccess <> 1
-            BEGIN
-               SET @nErrNo = 98376
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Get sscc fail
-               GOTO RollBackTran
-            END
+         --   IF @nErrNo <> 0 OR @bSuccess <> 1
+         --   BEGIN
+         --      SET @nErrNo = 98376
+         --      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Get sscc fail
+         --      GOTO RollBackTran
+         --   END
 
-            SET @cSSCC = 'P' + @cCounter
-         END
+         --   SET @cSSCC = 'P' + @cCounter
+         --END
 
          IF ISNULL( @cSSCC, '') = ''
          BEGIN
-            SET @nErrNo = 98351
+            SET @nErrNo = 177001
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SSCC req
             GOTO RollBackTran
          END
@@ -205,7 +162,7 @@ BEGIN
                      AND   StorerKey = @cStorerKey)
          BEGIN
 
-            SET @nErrNo = 98375
+            SET @nErrNo = 177002
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Plt consoled
             GOTO RollBackTran
          END
@@ -225,8 +182,8 @@ BEGIN
                         AND   OrderKey = @cFromID_OrderKey
                         AND   [Status] < '9')
             BEGIN
-               SET @nErrNo = 98380
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Pallet consoled
+               SET @nErrNo = 177003
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Plt consoled
                GOTO RollBackTran
             END
          END
@@ -236,14 +193,14 @@ BEGIN
 
          IF @@ERROR <> 0
          BEGIN
-            SET @nErrNo = 98352
+            SET @nErrNo = 177004
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins plt fail
             GOTO RollBackTran
          END
 
          IF ISNULL( @cFromID, '') = ''
          BEGIN
-            SET @nErrNo = 98381
+            SET @nErrNo = 177005
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Inv asrs plt
             GOTO RollBackTran
          END
@@ -255,6 +212,7 @@ BEGIN
          WHERE PD.StorerKey = @cStorerKey
          AND   PD.ID = @cFromID 
          AND   PD.Status < '9'
+         AND   PD.lot = @cLot
          AND   LOC.Facility = @cFacility
          --AND   LOC.LocationCategory = 'STAGING'
          GROUP BY PickDetailKey
@@ -262,55 +220,82 @@ BEGIN
          FETCH NEXT FROM CUR_LOOP INTO @cPickDetailKey, @nPD_Qty
          WHILE @@FETCH_STATUS <> -1
          BEGIN
-            IF NOT EXISTS ( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) 
-                            WHERE PalletKey = @cSSCC
-                            AND   UserDefine02 = @cPickDetailKey)
+         	SELECT 
+         	   @cOrderKey = O.OrderKey,
+               @cMBOLKey = O.MBOLKey,
+               @cSKU = PD.SKU
+            FROM dbo.PickDetail PD WITH (NOLOCK)
+            JOIN dbo.Orders O WITH (NOLOCK) ON ( PD.OrderKey = O.OrderKey AND PD.StorerKey = O.StorerKey)
+            WHERE PickDetailKey = @cPickDetailKey
+                  
+         	DECLARE CUR_UCC CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+            SELECT UccNo,SKU, Qty
+               FROM UCC WITH (NOLOCK) 
+               WHERE Storerkey = @cStorerkey
+               AND Userdefined03 = @csscc
+               AND sku=@cSKU
+            OPEN CUR_UCC
+            FETCH NEXT FROM CUR_UCC INTO @uccNo, @cSKU, @nUCC_Qty
+            WHILE @@FETCH_STATUS <> -1
             BEGIN
-               SELECT @cPalletLineNumber = RIGHT( '00000' + CAST( CAST( ISNULL(MAX( PalletLineNumber), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
-               FROM dbo.PalletDetail WITH (NOLOCK)
-               WHERE PalletKey = @cSSCC
+               SELECT @cLottable09Lbl = lottable09Label
+               FROM dbo.SKU WITH (NOLOCK)
+               WHERE StorerKey = @cStorerkey
+               AND   SKU = @cSKU
 
-               SELECT @cOrderKey = O.OrderKey,
-                      @cMBOLKey = O.MBOLKey,
-                      @cSKU = PD.SKU
-               FROM dbo.PickDetail PD WITH (NOLOCK)
-               JOIN dbo.Orders O WITH (NOLOCK) ON ( PD.OrderKey = O.OrderKey AND PD.StorerKey = O.StorerKey)
-               WHERE PickDetailKey = @cPickDetailKey
+               SET @uccNo = CASE WHEN ISNULL(@cLottable09Lbl,'')='' THEN 'NOSSCC' else @uccNo END
 
-               INSERT INTO dbo.PalletDetail 
-               (PalletKey, PalletLineNumber, StorerKey, Sku, Qty, UserDefine01, UserDefine02, UserDefine03, UserDefine04, UserDefine05) 
-               VALUES
-               (@cSSCC, @cPalletLineNumber, @cStorerKey, @cSKU, @nPD_Qty, @cFromID, @cPickDetailKey, @cMBOLKey, @cOrderKey, @cFromID)
-
-               IF @@ERROR <> 0
+            	IF NOT EXISTS ( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) 
+                               WHERE PalletKey = @cSSCC
+                               AND   UserDefine02 = @cPickDetailKey
+            	                AND   caseID = @uccNo )
                BEGIN
-                  SET @nErrNo = 98353
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins pltdt fail
-                  GOTO RollBackTran
+                  SELECT @cPalletLineNumber = RIGHT( '00000' + CAST( CAST( ISNULL(MAX( PalletLineNumber), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
+                  FROM dbo.PalletDetail WITH (NOLOCK)
+                  WHERE PalletKey = @cSSCC
+
+                  INSERT INTO dbo.PalletDetail 
+                  (PalletKey, PalletLineNumber, caseID, StorerKey, Sku, Qty, UserDefine01, UserDefine02, UserDefine03, UserDefine04) 
+                  VALUES
+                  (@cSSCC, @cPalletLineNumber, @uccNo, @cStorerKey, @cSKU, @nUCC_Qty, @cFromID, @cPickDetailKey, @cMBOLKey, @cOrderKey)
+
+                  IF @@ERROR <> 0
+                  BEGIN
+                     SET @nErrNo = 177006
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins pltdt fail
+                     GOTO RollBackTran
+                  END
                END
-            END
-            ELSE
-            BEGIN
-               SELECT @cOrderKey = O.OrderKey,
-                      @cMBOLKey = O.MBOLKey 
-               FROM dbo.PickDetail PD WITH (NOLOCK)
-               JOIN dbo.Orders O WITH (NOLOCK) ON ( PD.OrderKey = O.OrderKey AND PD.StorerKey = O.StorerKey)
-               WHERE PickDetailKey = @cPickDetailKey
-
-               UPDATE dbo.PalletDetail WITH (ROWLOCK)
-                  SET Qty = Qty + @nPD_Qty,
-                      UserDefine01 = @cFromID,
-                      UserDefine03 = @cMBOLKey,
-                      UserDefine04 = @cOrderKey
-               WHERE PalletKey = @cSSCC
-               AND   UserDefine02 = @cPickDetailKey
-
-               IF @@ERROR <> 0
+               ELSE
                BEGIN
-                  SET @nErrNo = 98354
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd pltd err
-                  GOTO RollBackTran
+                  --SELECT @cOrderKey = O.OrderKey,
+                  --       @cMBOLKey = O.MBOLKey 
+                  --FROM dbo.PickDetail PD WITH (NOLOCK)
+                  --JOIN dbo.Orders O WITH (NOLOCK) ON ( PD.OrderKey = O.OrderKey AND PD.StorerKey = O.StorerKey)
+                  --WHERE PickDetailKey = @cPickDetailKey
+
+                  UPDATE dbo.PalletDetail WITH (ROWLOCK)
+                     SET Qty = Qty + @nUCC_Qty,
+                         UserDefine01 = @cFromID,
+                         UserDefine03 = @cMBOLKey,
+                         UserDefine04 = @cOrderKey
+                  WHERE PalletKey = @cSSCC
+                  AND   UserDefine02 = @cPickDetailKey
+
+                  IF @@ERROR <> 0
+                  BEGIN
+                     SET @nErrNo = 177007
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd pltd fail
+                     GOTO RollBackTran
+                  END
                END
+
+               SET @nPD_Qty=@nPD_Qty-@nUCC_Qty
+
+               IF  @nPD_Qty=0
+                  BREAK;
+
+            	FETCH NEXT FROM CUR_UCC INTO @uccNo, @cSKU, @nUCC_Qty
             END
             FETCH NEXT FROM CUR_LOOP INTO @cPickDetailKey, @nPD_Qty
          END
@@ -345,7 +330,7 @@ BEGIN
 
             IF @@ERROR <> 0
             BEGIN  
-               SET @nErrNo = 98371  
+               SET @nErrNo = 177008  
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins Log fail  
                GOTO RollBackTran  
             END  
@@ -356,220 +341,7 @@ BEGIN
                BREAK
          END
          GOTO Quit
-      END  -- @cType = 'I'
-         /*
-         -- Get SSCC if the pallet still not ship yet
-         -- Pallet will lose id when scan to container
-         SET @cSSCC = ''
-         SET @cToID_MbolKey = ''
-         SELECT TOP 1 @cSSCC = PalletKey, 
-                      @cToID_MbolKey = UserDefine03
-         FROM dbo.PalletDetail PLTD WITH (NOLOCK)
-         WHERE PLTD.Storerkey = @cStorerkey
-         AND   PLTD.UserDefine01 = @cToID
-         AND   PLTD.Status < '9'
-         AND   NOT EXISTS ( SELECT 1 FROM dbo.MBOL MBOL WITH (NOLOCK)
-                            WHERE PLTD.UserDefine03 = MBOL.MbolKey
-                            AND   MBOL.Status = '9')
-         --AND   EXISTS (
-         --      SELECT 1 FROM dbo.PickDetail PD WITH (NOLOCK) 
-         --      WHERE PLTD.Storerkey = PD.Storerkey
-         --      AND   PLTD.UserDefine01 = PD.ID
-         --      AND   PD.Status < '9')
-
-         IF ISNULL( @cSSCC, '') <> ''
-         BEGIN
-            -- If reuse pallet and the prev mbol already shipped
-            -- need generate a new palletkey
-            IF EXISTS ( SELECT 1 FROM Mbol WITH (NOLOCK) 
-                        WHERE MbolKey = @cToID_MbolKey
-                        AND   [Status] = '9')
-               SET @cSSCC = ''
-         END
-
-         -- Gen SSCC if it is blank
-         IF ISNULL( @cSSCC, '') = ''
-         BEGIN
-            SELECT @cItemClass = ItemClass
-            FROM dbo.SKU WITH (NOLOCK)
-            WHERE StorerKey = @cStorerkey
-            AND   SKU = @cSKU
-
-            IF ISNULL( @cItemClass, '') <> '001'
-            BEGIN
-               EXECUTE nspg_getkey
-                  @KeyName       = 'MHAPSSCCP' ,
-                  @fieldlength   = 17,    
-                  @keystring     = @cCounter    Output,
-                  @b_success     = @bSuccess    Output,
-                  @n_err         = @nErrNo      Output,
-                  @c_errmsg      = @cErrMsg     Output,
-                  @b_resultset   = 0,
-                  @n_batch       = 1
-
-               IF @nErrNo <> 0 OR @bSuccess <> 1
-               BEGIN
-                  SET @nErrNo = 98377
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Get sscc fail
-                  GOTO RollBackTran
-               END
-
-               SET @cSSCC = 'P' + @cCounter
-            END
-            ELSE
-            BEGIN
-               EXEC [rdt].[rdt_GenUCCLabelNo_02] 
-                  @nMobile       = @nMobile,
-                  @nFunc         = @nFunc,
-                  @cLangCode     = @cLangCode,
-                  @nStep         = @nStep,
-                  @nInputKey     = 1,
-                  @cStorerkey    = @cStorerkey,
-                  @cOrderKey     = '',
-                  @cPickSlipNo   = '',
-                  @cTrackNo      = '',
-                  @cSKU          = '',
-                  @nCartonNo     = '',
-                  @cLabelNo      = @cSSCC    OUTPUT,
-                  @nErrNo        = @nErrNo   OUTPUT,
-                  @cErrMsg       = @cErrMsg  OUTPUT
-
-               IF @nErrNo <> 0
-                  GOTO RollBackTran  
-            END
-         END
-
-         IF ISNULL( @cSSCC, '') = ''
-         BEGIN  
-            SET @nErrNo = 98355  
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Gen SSCC# fail  
-            GOTO RollBackTran  
-         END  
-
-         IF ISNULL( @cToID, '') = ''
-         BEGIN
-            SET @nErrNo = 98382
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Inv shipper plt
-            GOTO RollBackTran
-         END
-
-         WHILE @nQTY_Move > 0
-         BEGIN
-            SET @nCase_Qty = 0
-            SET @nPD_Qty = 0
-
-            -- Get pickdetailkey
-            DECLARE CUR_LOOP CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
-            SELECT PickDetailKey, Qty
-            FROM dbo.PickDetail WITH (NOLOCK) 
-            WHERE StorerKey = @cStorerkey
-            AND   SKU = @cSKU
-            AND   ID = @cToID
-            ORDER BY PickDetailKey
-            OPEN CUR_LOOP
-            FETCH NEXT FROM CUR_LOOP INTO @cPickDetailKey, @nPD_Qty
-            WHILE @@FETCH_STATUS <> -1
-            BEGIN
-               SELECT @nCase_Qty = ISNULL( SUM( Qty), 0)
-               FROM dbo.PalletDetail WITH (NOLOCK) 
-               WHERE PalletKey = @cSSCC
-               AND   UserDefine01 = @cToID
-               AND   SKU = @cSKU
-               AND   Userdefine02 = @cPickDetailKey
-
-               IF @nPD_Qty > @nCase_Qty
-                  BREAK
-
-               FETCH NEXT FROM CUR_LOOP INTO @cPickDetailKey, @nPD_Qty
-            END
-            CLOSE CUR_LOOP
-            DEALLOCATE CUR_LOOP
-
-            SELECT @cOrderKey = O.OrderKey,
-                   @cMBOLKey = O.MBOLKey 
-            FROM dbo.PickDetail PD WITH (NOLOCK)
-            JOIN dbo.Orders O WITH (NOLOCK) ON ( PD.OrderKey = O.OrderKey AND PD.StorerKey = O.StorerKey)
-            WHERE PickDetailKey = @cPickDetailKey
-
-            SELECT 
-               @nPUOM_Div = CAST( Pack.CaseCNT AS INT) 
-            FROM dbo.SKU S WITH (NOLOCK) 
-            JOIN dbo.Pack Pack WITH (NOLOCK) ON (S.PackKey = Pack.PackKey)
-            WHERE StorerKey = @cStorerKey
-            AND SKU = @cSKU
-
-            IF @nQTY_Move < @nPUOM_Div
-               SET @nQty = @nQTY_Move
-            ELSE
-               SET @nQty = @nPUOM_Div
-               
-            -- Insert into pallet table. SSCC = palletkey 
-            IF NOT EXISTS ( SELECT 1 FROM dbo.Pallet WITH (NOLOCK) 
-                              WHERE PalletKey = @cSSCC
-                              AND   StorerKey = @cStorerKey)
-            BEGIN
-               -- Insert Pallet info
-               INSERT INTO dbo.Pallet (PalletKey, StorerKey) VALUES (@cSSCC, @cStorerKey)
-
-               IF @@ERROR <> 0
-               BEGIN
-                  SET @nErrNo = 98356
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins plt fail
-                  GOTO RollBackTran
-               END
-            END
-
-            -- Insert into palletdetail table. Need a loop here to insert every case scanned
-            -- Insert with blank udf02-04 (pickdetailkey, mbolkey, orderkey) as we don't know the value yet
-            -- Case id here is not unique
-            IF NOT EXISTS ( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) 
-                              WHERE PalletKey = @cSSCC
-                              AND   UserDefine01 = @cToID
-                              AND   CaseID = @cCartonID
-                              AND   UserDefine04 = @cPickDetailKey
-                              AND   [Status] < '9')
-            BEGIN
-               SELECT @cPalletLineNumber = RIGHT( '00000' + CAST( CAST( ISNULL(MAX( PalletLineNumber), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
-               FROM dbo.PalletDetail WITH (NOLOCK)
-               WHERE PalletKey = @cSSCC
-               AND   [Status] < '9'
-
-               INSERT INTO dbo.PalletDetail 
-               (PalletKey, PalletLineNumber, CaseID, StorerKey, Sku, Qty, UserDefine01, UserDefine02, UserDefine03, UserDefine04, UserDefine05) 
-               VALUES
-               (@cSSCC, @cPalletLineNumber, @cCartonID, @cStorerKey, @cSKU, @nQty, @cToID, @cPickDetailKey, @cMBOLKey, @cOrderKey, @cFromID)
-
-               IF @@ERROR <> 0
-               BEGIN
-                  SET @nErrNo = 98357
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins pltdt fail
-                  GOTO RollBackTran
-               END
-            END
-            ELSE
-            BEGIN
-               UPDATE dbo.PalletDetail WITH (ROWLOCK)
-                  SET Qty = Qty + @nPUOM_Div
-               WHERE PalletKey = @cSSCC
-               AND   UserDefine01 = @cToID
-               AND   CaseID = @cCartonID
-               AND   UserDefine04 = @cPickDetailKey
-               AND   [Status] < '9'
-
-               IF @@ERROR <> 0
-               BEGIN
-                  SET @nErrNo = 98358
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd pltd err
-                  GOTO RollBackTran
-               END
-            END   -- If not exists palletdetail
-
-            SET @nQTY_Move = @nQTY_Move - @nPUOM_Div
-
-            IF @nQTY_Move <= 0
-               GOTO Quit
-         END   -- @nQTY_Move > 0
-         */
+      END  
    END
 
    IF @nStep = 5
@@ -587,11 +359,6 @@ BEGIN
          WHERE PLTD.Storerkey = @cStorerkey
          AND   PLTD.UserDefine01 = @cToID
          AND   PLTD.Status < '9'
-         --AND   EXISTS (
-         --      SELECT 1 FROM dbo.PickDetail PD WITH (NOLOCK) 
-         --      WHERE PLTD.Storerkey = PD.Storerkey
-         --      AND   PLTD.UserDefine01 = PD.ID
-         --      AND   PD.Status < '9')
          AND   NOT EXISTS ( SELECT 1 FROM dbo.MBOL MBOL WITH (NOLOCK)
                             WHERE PLTD.UserDefine03 = MBOL.MbolKey
                             AND   MBOL.Status = '9')
@@ -609,58 +376,104 @@ BEGIN
          -- Gen SSCC if it is blank
          IF ISNULL( @cSSCC, '') = ''
          BEGIN
-            SELECT @cItemClass = ItemClass
-            FROM dbo.SKU WITH (NOLOCK)
-            WHERE StorerKey = @cStorerkey
-            AND   SKU = @cSKU
+            --SELECT @cItemClass = ItemClass
+            --FROM dbo.SKU WITH (NOLOCK)
+            --WHERE StorerKey = @cStorerkey
+            --AND   SKU = @cSKU
 
-            IF ISNULL( @cItemClass, '') <> '001'
+            --IF ISNULL( @cItemClass, '') <> '001'
+            --BEGIN
+               --EXECUTE nspg_getkey
+               --   @KeyName       = 'MHAPSSCCP' ,
+               --   @fieldlength   = 17,    
+               --   @keystring     = @cCounter    Output,
+               --   @b_success     = @bSuccess    Output,
+               --   @n_err         = @nErrNo      Output,
+               --   @c_errmsg      = @cErrMsg     Output,
+               --   @b_resultset   = 0,
+               --   @n_batch       = 1
+               
+            DECLARE 
+               @cDateOfYear   NVARCHAR(1),
+               @cSiteNo       NVARCHAR(6),
+               @cProdLine     NVARCHAR(2),
+               @cNumOfDay     NVARCHAR(3),
+               @cTimeInSec    NVARCHAR(5),
+               @cLynKey       NVARCHAR(1),
+               @nLen          INT,
+               @nSum          INT
+               	
+               SET @cDateOfYear = RIGHT(YEAR(GETDATE()),1)
+               SET @cSiteNo = '302448'
+               SET @cProdLine = '99'
+               SET @cNumOfDay = DATEPART(DAYOFYEAR, GETDATE())
+               SET @cTimeInSec = DATEPART(SECOND, GETDATE()) +
+                              (60 * DATEPART(MINUTE, GETDATE())) + 
+                              (3600 * DATEPART(HOUR, GETDATE()))
+            --SET @cLynKey = '8'
+               
+            SET @cSSCC = @cDateOfYear + @cSiteNo + @cProdLine + @cNumOfDay + @cTimeInSec --+ @cLynKey
+            
+            SET @nLen = LEN(@cSSCC)
+            SET @nSum = 0
+            
+            WHILE @nLen > 0
             BEGIN
-               EXECUTE nspg_getkey
-                  @KeyName       = 'MHAPSSCCP' ,
-                  @fieldlength   = 17,    
-                  @keystring     = @cCounter    Output,
-                  @b_success     = @bSuccess    Output,
-                  @n_err         = @nErrNo      Output,
-                  @c_errmsg      = @cErrMsg     Output,
-                  @b_resultset   = 0,
-                  @n_batch       = 1
-
-               IF @nErrNo <> 0 OR @bSuccess <> 1
-               BEGIN
-                  SET @nErrNo = 98378
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Get sscc fail
-                  GOTO RollBackTran
-               END
-
-               SET @cSSCC = 'P' + @cCounter
+	            IF (@nLen%2) <> 0
+	            BEGIN
+		            SET @nSum = @nSum + SUBSTRING(@cSSCC, @nLen, 1) * 3
+	            END
+	            ELSE
+	            BEGIN
+		            SET @nSum = @nSum + SUBSTRING(@cSSCC, @nLen, 1) * 1
+	            END
+	
+	            SET @nLen = @nLen - 1
             END
-            ELSE
+            
+            IF RIGHT(@nSum,1) > 0 
             BEGIN
-               EXEC [rdt].[rdt_GenUCCLabelNo_02] 
-                  @nMobile       = @nMobile,
-                  @nFunc         = @nFunc,
-                  @cLangCode     = @cLangCode,
-                  @nStep         = @nStep,
-                  @nInputKey     = 1,
-                  @cStorerkey    = @cStorerkey,
-                  @cOrderKey     = '',
-                  @cPickSlipNo   = '',
-                  @cTrackNo      = '',
-                  @cSKU          = '',
-                  @nCartonNo     = '',
-                  @cLabelNo      = @cSSCC    OUTPUT,
-                  @nErrNo        = @nErrNo   OUTPUT,
-                  @cErrMsg       = @cErrMsg  OUTPUT
-
-               IF @nErrNo <> 0
-                  GOTO RollBackTran  
+	            SET @cLynKey = (ROUND(@nSum, -1, 1) + 10) - @nSum
             END
+            
+            --SET @cLynKey = ABS(ROUND(@nSum,-1) - @nSum)
+            SET @cSSCC = @cSSCC + @cLynKey
+
+               --IF @nErrNo <> 0 OR @bSuccess <> 1
+               --BEGIN
+               --   SET @nErrNo = 98378
+               --   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Get sscc fail
+               --   GOTO RollBackTran
+               --END
+
+               --SET @cSSCC = 'P' + @cCounter
+            --END
+            --ELSE
+            --BEGIN
+            --   EXEC [rdt].[rdt_GenUCCLabelNo_02] 
+            --      @nMobile       = @nMobile,
+            --      @nFunc         = @nFunc,
+            --      @cLangCode     = @cLangCode,
+            --      @nStep         = @nStep,
+            --      @nInputKey     = 1,
+            --      @cStorerkey    = @cStorerkey,
+            --      @cOrderKey     = '',
+            --      @cPickSlipNo   = '',
+            --      @cTrackNo      = '',
+            --      @cSKU          = '',
+            --      @nCartonNo     = '',
+            --      @cLabelNo      = @cSSCC    OUTPUT,
+            --      @nErrNo        = @nErrNo   OUTPUT,
+            --      @cErrMsg       = @cErrMsg  OUTPUT
+
+            --   IF @nErrNo <> 0
+            --      GOTO RollBackTran  
+            --END
          END
 
          IF ISNULL( @cSSCC, '') = ''
          BEGIN  
-            SET @nErrNo = 98359  
+            SET @nErrNo = 177009  
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Gen SSCC# fail  
             GOTO RollBackTran  
          END  
@@ -675,7 +488,7 @@ BEGIN
 
             IF @@ERROR <> 0
             BEGIN
-               SET @nErrNo = 98360
+               SET @nErrNo = 177010
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins plt fail
                GOTO RollBackTran
             END
@@ -683,7 +496,7 @@ BEGIN
 
          IF ISNULL( @cToID, '') = ''
          BEGIN
-            SET @nErrNo = 98383
+            SET @nErrNo = 177011
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Inv shipper plt
             GOTO RollBackTran
          END
@@ -736,42 +549,77 @@ BEGIN
             FROM dbo.PickDetail PD WITH (NOLOCK)
             JOIN dbo.Orders O WITH (NOLOCK) ON ( PD.OrderKey = O.OrderKey AND PD.StorerKey = O.StorerKey)
             WHERE PickDetailKey = @cPickDetailKey
-
-            IF NOT EXISTS ( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) 
-                              WHERE PalletKey = @cSSCC
-                              AND   UserDefine01 = @cToID
-                              AND   UserDefine02 = @cPickDetailKey
-                              AND   CaseID = @cCaseID
-                              AND   [Status] < '9')
+            
+            IF ISNULL (@cCaseID, '') = ''
             BEGIN
-               SELECT @cPalletLineNumber = RIGHT( '00000' + CAST( CAST( ISNULL(MAX( PalletLineNumber), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
-               FROM dbo.PalletDetail WITH (NOLOCK)
-               WHERE PalletKey = @cSSCC
-
-               INSERT INTO dbo.PalletDetail 
-               (PalletKey, PalletLineNumber, CaseID, StorerKey, Sku, Qty, UserDefine01, UserDefine02, UserDefine03, UserDefine04, UserDefine05) 
-               VALUES
-               (@cSSCC, @cPalletLineNumber, @cCaseID, @cStorerKey, @cSKU, @nCaseID_Qty, @cToID, @cPickDetailKey, @cMBOLKey, @cOrderKey, @cFromID)
-
-               IF @@ERROR <> 0
+            	IF NOT EXISTS ( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) 
+                                 WHERE PalletKey = @cSSCC
+                                 AND   UserDefine01 = @cToID
+                                 AND   UserDefine02 = @cPickDetailKey
+                                 AND   CaseID = @cCaseID
+                                 AND   [Status] < '9')
                BEGIN
-                  SET @nErrNo = 98361
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins pltdt fail
-                  GOTO RollBackTran
+                  SELECT @cPalletLineNumber = RIGHT( '00000' + CAST( CAST( ISNULL(MAX( PalletLineNumber), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
+                  FROM dbo.PalletDetail WITH (NOLOCK)
+                  WHERE PalletKey = @cSSCC
+
+                  INSERT INTO dbo.PalletDetail 
+                  (PalletKey, PalletLineNumber, CaseID, StorerKey, Sku, Qty, UserDefine01, UserDefine02, UserDefine03, UserDefine04, UserDefine05) 
+                  VALUES
+                  (@cSSCC, @cPalletLineNumber, 'NOSSCC', @cStorerKey, @cSKU, @nCaseID_Qty, @cToID, @cPickDetailKey, @cMBOLKey, @cOrderKey, @cFromID)
+
+                  IF @@ERROR <> 0
+                  BEGIN
+                     SET @nErrNo = 177012
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins pltdt fail
+                     GOTO RollBackTran
+                  END
+               END
+               ELSE
+               BEGIN
+                  UPDATE dbo.PalletDetail WITH (ROWLOCK)
+                     SET Qty = Qty + @nCaseID_Qty
+                  WHERE PalletKey = @cSSCC
+                  AND   UserDefine01 = @cToID
+                  AND   UserDefine02 = @cPickDetailKey
+                  AND   CaseID = 'NOSSCC'
+                  AND   [Status] < '9'
+
+                  IF @@ERROR <> 0
+                  BEGIN
+                     SET @nErrNo = 177013
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd pltd fail
+                     GOTO RollBackTran
+                  END
                END
             END
             ELSE
             BEGIN
-               --SET @cUserDefine02 = ''
-               --SELECT @cUserDefine02 = UserDefine02 
-               --FROM dbo.PalletDetail WITH (NOLOCK) 
-               --WHERE PalletKey = @cSSCC
-               --AND   UserDefine01 = @cToID
-               --AND   CaseID = @cCaseID
-               --AND   [Status] < '9'
+            	IF NOT EXISTS ( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) 
+                                 WHERE PalletKey = @cSSCC
+                                 AND   UserDefine01 = @cToID
+                                 AND   UserDefine02 = @cPickDetailKey
+                                 AND   CaseID = @cCaseID
+                                 AND   [Status] < '9')
+               BEGIN
+                  SELECT @cPalletLineNumber = RIGHT( '00000' + CAST( CAST( ISNULL(MAX( PalletLineNumber), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
+                  FROM dbo.PalletDetail WITH (NOLOCK)
+                  WHERE PalletKey = @cSSCC
 
-               --IF @cUserDefine02 = @cPickDetailKey
-               --BEGIN
+                  INSERT INTO dbo.PalletDetail 
+                  (PalletKey, PalletLineNumber, CaseID, StorerKey, Sku, Qty, UserDefine01, UserDefine02, UserDefine03, UserDefine04, UserDefine05) 
+                  VALUES
+                  (@cSSCC, @cPalletLineNumber, @cCaseID, @cStorerKey, @cSKU, @nCaseID_Qty, @cToID, @cPickDetailKey, @cMBOLKey, @cOrderKey, @cFromID)
+
+                  IF @@ERROR <> 0
+                  BEGIN
+                     SET @nErrNo = 177014
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins pltdt fail
+                     GOTO RollBackTran
+                  END
+               END
+               ELSE
+               BEGIN
                   UPDATE dbo.PalletDetail WITH (ROWLOCK)
                      SET Qty = Qty + @nCaseID_Qty
                   WHERE PalletKey = @cSSCC
@@ -782,52 +630,12 @@ BEGIN
 
                   IF @@ERROR <> 0
                   BEGIN
-                     SET @nErrNo = 98362
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd pltd err
+                     SET @nErrNo = 177015
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd pltd fail
                      GOTO RollBackTran
                   END
-               --END
-               --ELSE
-               --BEGIN
-               --   SELECT @cPalletLineNumber = RIGHT( '00000' + CAST( CAST( ISNULL(MAX( PalletLineNumber), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
-               --   FROM dbo.PalletDetail WITH (NOLOCK)
-               --   WHERE PalletKey = @cSSCC
-
-               --   INSERT INTO dbo.PalletDetail 
-               --   (PalletKey, PalletLineNumber, CaseID, StorerKey, Sku, Qty, UserDefine01, UserDefine02, UserDefine03, UserDefine04) 
-               --   VALUES
-               --   (@cSSCC, @cPalletLineNumber, @cCaseID, @cStorerKey, @cSKU, @nCaseID_Qty, @cToID, @cPickDetailKey, @cMBOLKey, @cOrderKey)
-
-               --   IF @@ERROR <> 0
-               --   BEGIN
-               --      SET @nErrNo = 98374
-               --      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins pltdt fail
-               --      GOTO RollBackTran
-               --   END
-               --END
-
-               --IF EXISTS ( SELECT 1 FROM dbo.PALLETDETAIL WITH (NOLOCK) 
-               --            WHERE PalletKey <> @cSSCC
-               --            AND   UserDefine01 = @cFromID
-               --            AND   UserDefine02 = @cPickDetailKey
-               --            AND   [Status] < '9')
-               --BEGIN
-               --   UPDATE dbo.PALLETDETAIL WITH (ROWLOCK) SET 
-               --      Qty = 0
-               --   WHERE PalletKey <> @cSSCC
-               --   AND   UserDefine01 = @cFromID
-               --   AND   UserDefine02 = @cPickDetailKey
-               --   AND   [Status] < '9'
-
-               --   IF @@ERROR <> 0
-               --   BEGIN
-               --      SET @nErrNo = 98379
-               --      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd pltdt fail
-               --      GOTO RollBackTran
-               --   END
-               --END
+               END
             END
-
             FETCH NEXT FROM CUR_LOOP INTO @cCaseID, @nCaseID_Qty  
          END
          CLOSE CUR_LOOP
@@ -869,7 +677,7 @@ BEGIN
 
             IF NOT @bSuccess = 1    
             BEGIN    
-               SET @nErrNo = 98363   
+               SET @nErrNo = 177016   
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Get RFKey Fail 
                GOTO RollBackTran
             END 
@@ -900,7 +708,7 @@ BEGIN
 
                   IF @@ERROR <> 0
                   BEGIN
-                     SET @nErrNo = 98364
+                     SET @nErrNo = 177017
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'OffSetPDtlFail'
                      GOTO RollBackTran
                   END
@@ -922,7 +730,7 @@ BEGIN
 
                   IF @bSuccess <> 1
                   BEGIN
-                     SET @nErrNo = 98365
+                     SET @nErrNo = 177018
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 'GetDetKeyFail'
                      GOTO RollBackTran
                   END
@@ -947,7 +755,7 @@ BEGIN
 
                   IF @@ERROR <> 0
                   BEGIN
-                     SET @nErrNo = 98366
+                     SET @nErrNo = 177019
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Ins PDtl Fail'
                      GOTO RollBackTran
                   END
@@ -963,7 +771,7 @@ BEGIN
 
                   IF @@ERROR <> 0
                   BEGIN
-                     SET @nErrNo = 98367
+                     SET @nErrNo = 177020
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'OffSetPDtlFail'
                      GOTO RollBackTran
                   END
@@ -1007,7 +815,7 @@ BEGIN
 
                   IF @@ERROR <> 0
                   BEGIN
-                     SET @nErrNo = 98368
+                     SET @nErrNo = 177021
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd pltd err
                      GOTO RollBackTran
                   END
@@ -1149,7 +957,7 @@ BEGIN
 
                   IF @@ERROR <> 0 
                   BEGIN
-                     SET @nErrNo = 98370   
+                     SET @nErrNo = 177022   
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --REL PDTL FAIL 
                      GOTO RollBackTran
                   END
@@ -1209,7 +1017,7 @@ BEGIN
 
             IF @@ERROR <> 0
             BEGIN  
-               SET @nErrNo = 98371  
+               SET @nErrNo = 177023  
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins Log fail  
                GOTO RollBackTran  
             END  
@@ -1226,7 +1034,7 @@ BEGIN
    GOTO Quit
 
    RollBackTran:
-      ROLLBACK TRAN rdt_PltConsoSSCC_BuildPlt
+      ROLLBACK TRAN rdt_1723BuildPltSP01
 
    IF CURSOR_STATUS('LOCAL' , 'CUR_LOOP') in (0 , 1)
    BEGIN
@@ -1242,7 +1050,7 @@ BEGIN
 
    Quit:
       WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-         COMMIT TRAN rdt_PltConsoSSCC_BuildPlt
+         COMMIT TRAN rdt_1723BuildPltSP01
 
 END
 GO
@@ -1252,5 +1060,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON RDT.rdt_PltConsoSSCC_BuildPlt TO NSQL
+GRANT EXECUTE ON RDT.rdt_1723BuildPltSP01 TO NSQL
 GO
