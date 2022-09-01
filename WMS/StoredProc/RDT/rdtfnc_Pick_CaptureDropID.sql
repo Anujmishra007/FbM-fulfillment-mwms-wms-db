@@ -1,6 +1,3 @@
-IF EXISTS ( SELECT * FROM sys.objects WHERE  object_id = OBJECT_ID(N'[RDT].[rdtfnc_Pick_CaptureDropID]') AND OBJECTPROPERTY(object_id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [RDT].[rdtfnc_Pick_CaptureDropID]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -24,7 +21,7 @@ GO
 /* 26-10-2021   1.4  Chermaine  WMS-18009 clear @cDropID after st1 (cc01)     */
 /******************************************************************************/  
   
-CREATE PROC [RDT].[rdtfnc_Pick_CaptureDropID] (  
+CREATE OR ALTER PROC [RDT].[rdtfnc_Pick_CaptureDropID] (  
    @nMobile    int,  
    @nErrNo     int  OUTPUT,  
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 VARCHAR max  
