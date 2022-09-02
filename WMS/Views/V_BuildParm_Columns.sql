@@ -33,6 +33,8 @@ GO
 /*                            Type 'SORT' - Do not have Sku_Total_Qty as*/
 /*                            in Exceed                                 */
 /* 2022-01-04  Wan04    1.7   Devops Combine Script                     */
+/* 2022-08-19  Wan05    1.8   LFWM-3672 - [CN] LOREAL_New Tab for order */
+/*                            analysis                                  */
 /************************************************************************/
 CREATE OR ALTER VIEW V_BuildParm_Columns AS
 SELECT BuildParmType = 'BUILDLOADPARM'
@@ -187,6 +189,15 @@ WHERE Col.TABLE_NAME IN ('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC')
 AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'ArchiveCop', 'TrafficCop')
 AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')
 AND Col.TABLE_NAME + '.' + Col.COLUMN_NAME NOT IN('ORDERINFO.Adddate','ORDERINFO.Orderkey','SKU.AddDate','PICKDETAIL.AddDate','LOC.AddDate')
+UNION ALL                                                                        --(Wan05)
+SELECT BuildParmType = 'BUILDWAVEPARM'
+      ,CondType  = 'EDIT'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('WAVE')
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho','AddDate', 'ArchiveCop', 'TrafficCop', 'Status'
+                           ,'BatchNo', 'TMSStatus', 'DoorBookStatus', 'ReplenishStatus', 'TMReleaseFlag')
+AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')
 UNION ALL
 SELECT BuildParmType = 'WAVEBUILDLOAD'                                           --(Wan03)
       ,CondType  = 'SORT'
