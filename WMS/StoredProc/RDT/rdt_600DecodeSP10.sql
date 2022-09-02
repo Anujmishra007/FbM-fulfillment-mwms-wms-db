@@ -15,6 +15,7 @@ GO
 /* 30-05-2022  Ung       1.1   WMS-19757 Scan case SSCC, auto retrieve QTY    */
 /*                             and its pallet SSCC at Lottable09              */
 /* 02-06-2022  Ung       1.2   WMS-19808 Map case SSCC to ReceiptDetail       */
+/* 29-08-2022  Ung       1.3   WMS-20644 Add SSCC pallet with multi lines     */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_600DecodeSP10 (
@@ -106,7 +107,7 @@ BEGIN
                      GOTO Quit
                	END
                END
-               Else
+               ELSE
                BEGIN
                	----2.Pallet SSCC (00)030244808343339608(93)
                   IF left( @cBarcode,2) = '00'
@@ -137,18 +138,19 @@ BEGIN
                         ELSE
                         BEGIN
                      	   SELECT TOP 1
-                     	      @cSKU = U.SKU,
+                     	      @cSKU = RD.SKU,
                      	      @cLottable01 = RD.Lottable01, 
                      	      @cLottable02 = RD.Lottable02, 
                      	      @cLottable03 = RD.Lottable03, 
                      	      @cLottable09 = RD.Lottable09
                		      FROM receiptDetail RD WITH (NOLOCK)
-               		      JOIN UCC U WITH (NOLOCK) ON (RD.StorerKey = U.Storerkey AND RD.ExternReceiptKey = U.ExternKey AND RD.Lottable09 = U.Userdefined03)
+               		         JOIN UCC WITH (NOLOCK) ON (RD.StorerKey = UCC.Storerkey AND RD.SKU = UCC.SKU AND RD.ExternReceiptKey = UCC.ExternKey AND RD.Lottable09 = UCC.Userdefined03)
                		      WHERE RD.StorerKey = @cStorerKey
-               		      AND RD.ReceiptKey = @cReceiptKey
-               		      AND RD.Lottable09 = @cPalleSSCC
-                           AND RD.FinalizeFlag <> 'Y'
-                           AND ISNULL( RD.DuplicateFrom, '') = '' -- Original line
+                  		      AND RD.ReceiptKey = @cReceiptKey
+                  		      AND RD.Lottable09 = @cPalleSSCC
+                              AND RD.FinalizeFlag <> 'Y'
+                              AND RD.QTYExpected > RD.BeforeReceivedQTY -- line with balance
+                           ORDER BY RD.ReceiptLineNumber
 
                		      IF EXISTS (SELECT 1 FROM SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU AND LOTTABLE09LABEL <> 'SSCC')
                		      BEGIN
@@ -165,8 +167,9 @@ BEGIN
                         GOTO Quit
                	   END
                   END
-                  ELSE
+                  
                   --3.caseSSCC (95)030244893132694952
+                  ELSE
                   BEGIN
                   	IF left( @cBarcode,2) = '95'
                   	BEGIN

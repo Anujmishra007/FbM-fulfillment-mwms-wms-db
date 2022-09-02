@@ -38,6 +38,7 @@ GO
 /* 2021-11-12 3.3  Chermain WMS-18067 Change goto Step_5_Fail in st5 ExtInfo(cc03)*/  
 /* 2021-11-15 3.4  YeeKung  JSM-33035 Bug Fix correct step (yeekung04)            */
 /* 2022-06-29 3.5  James    JSM-77967 Add skustatus for rdt_GetSKU (james06)     */
+/* 2022-08-29 3.6  Ung      WMS-20644 Add @cGetReceiveInfoSP to lottable screen  */
 /*********************************************************************************/    
     
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_NormalReceipt_V7] (    
@@ -179,7 +180,7 @@ DECLARE
    @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),    
    @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),    
     
-@cFieldAttr01 NVARCHAR( 1), @cFieldAttr02 NVARCHAR( 1),    
+   @cFieldAttr01 NVARCHAR( 1), @cFieldAttr02 NVARCHAR( 1),    
    @cFieldAttr03 NVARCHAR( 1), @cFieldAttr04 NVARCHAR( 1),    
    @cFieldAttr05 NVARCHAR( 1), @cFieldAttr06 NVARCHAR( 1),    
    @cFieldAttr07 NVARCHAR( 1), @cFieldAttr08 NVARCHAR( 1),    
@@ -274,7 +275,7 @@ SELECT
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,    
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,    
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,    
-@cInField04 = I_Field04,   @cOutField04 = O_Field04,    
+   @cInField04 = I_Field04,   @cOutField04 = O_Field04,    
    @cInField05 = I_Field05,   @cOutField05 = O_Field05,    
    @cInField06 = I_Field06,   @cOutField06 = O_Field06,    
    @cInField07 = I_Field07,   @cOutField07 = O_Field07,    
@@ -637,7 +638,7 @@ BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ASN not exist    
                   SET @cOutField01 = '' -- ReceiptKey    
                   SET @cReceiptKey = ''    
-   EXEC rdt.rdtSetFocusField @nMobile, 1    
+                  EXEC rdt.rdtSetFocusField @nMobile, 1    
                   GOTO Quit    
                END    
             END    
@@ -800,7 +801,7 @@ BEGIN
          DECLARE @c_authority NVARCHAR(1)    
          SELECT @b_success = 0    
          EXECUTE nspGetRight    
-        @cFacility,    
+            @cFacility,    
             @cStorerKey,    
             NULL, -- @cSKU    
             'ASNReceiptLocBasedOnFacility',    
@@ -890,18 +891,18 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need LOC    
          GOTO Step_2_Fail    
       END    
-    
-  --Loc Prefix        
-  IF @cLOCLookupSP = 1           
-  BEGIN            
-   EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,             
-   @cLOC      OUTPUT,             
-   @nErrNo      OUTPUT,             
-   @cErrMsg     OUTPUT            
-   IF @nErrNo <> 0            
-    GOTO Step_2_Fail            
-  END    
-      
+
+      --Loc Prefix
+      IF @cLOCLookupSP = 1
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+            @cLOC       OUTPUT,
+            @nErrNo     OUTPUT,
+            @cErrMsg    OUTPUT
+         IF @nErrNo <> 0
+            GOTO Step_2_Fail
+      END
+
       -- Get the location    
       SET @cChkLOC = ''    
       SET @cChkFacility = ''    
@@ -1046,7 +1047,7 @@ BEGIN
                   ' @cFieldName   NVARCHAR( 10),   ' +    
                   ' @cID          NVARCHAR( 18)  OUTPUT, ' +    
                   ' @cSKU         NVARCHAR( 20)  OUTPUT, ' +    
-  ' @nQTY         INT            OUTPUT, ' +    
+                  ' @nQTY         INT            OUTPUT, ' +    
                   ' @cLottable01  NVARCHAR( 18)  OUTPUT, ' +    
                   ' @cLottable02  NVARCHAR( 18)  OUTPUT, ' +    
                   ' @cLottable03  NVARCHAR( 18)  OUTPUT, ' +    
@@ -1059,7 +1060,7 @@ BEGIN
                   ' @cLottable10  NVARCHAR( 30)  OUTPUT, ' +    
                   ' @cLottable11  NVARCHAR( 30)  OUTPUT, ' +    
                   ' @cLottable12  NVARCHAR( 30)  OUTPUT, ' +    
-           ' @dLottable13  DATETIME       OUTPUT, ' +    
+                  ' @dLottable13  DATETIME       OUTPUT, ' +    
                   ' @dLottable14  DATETIME       OUTPUT, ' +    
                   ' @dLottable15  DATETIME       OUTPUT, ' +    
                   ' @nErrNo       INT            OUTPUT, ' +    
@@ -1420,7 +1421,7 @@ BEGIN
                @cInField01 OUTPUT,  @cOutField01 OUTPUT,    
                @cInField02 OUTPUT,  @cOutField02 OUTPUT,    
                @cInField03 OUTPUT,  @cOutField03 OUTPUT,    
-@cInField04 OUTPUT,  @cOutField04 OUTPUT,    
+               @cInField04 OUTPUT,  @cOutField04 OUTPUT,    
                @cInField05 OUTPUT,  @cOutField05 OUTPUT,    
                @cInField06 OUTPUT,  @cOutField06 OUTPUT,    
                @cInField07 OUTPUT,  @cOutField07 OUTPUT,    
@@ -1457,7 +1458,6 @@ BEGIN
               
             IF @nErrNo = 2 --(yeekung02)        
             BEGIN     
-                 
                DECLARE @cAllow_OverReceipt NVARCHAR (1)  
                    
                -- Storer config 'Allow_OverReceipt'    
@@ -1478,9 +1478,9 @@ BEGIN
                END   
   
                -- Not allow over receive, by DocType (follow Exceed way in ntrReceiptDetailUpdate)    
-               IF NOT(@cAllow_OverReceipt IN ('0', '') OR                   -- Not allow for all doc type    
-                  (@cAllow_OverReceipt = '2' AND @cDocType <> 'R') OR   -- Not allow, except return (means only return is allow)    
-                  (@cAllow_OverReceipt = '3' AND @cDocType <> 'A') OR   -- Not allow, except normal (means only normal is allow)    
+               IF NOT(@cAllow_OverReceipt IN ('0', '') OR                -- Not allow for all doc type    
+                  (@cAllow_OverReceipt = '2' AND @cDocType <> 'R') OR    -- Not allow, except return (means only return is allow)    
+                  (@cAllow_OverReceipt = '3' AND @cDocType <> 'A') OR    -- Not allow, except normal (means only normal is allow)    
                   (@cAllow_OverReceipt = '4' AND @cDocType <> 'X') )     -- Not allow, except xdock  (means only xdoc   is allow)    
                   AND (rdt.RDTGetConfig( @nFunc, 'SkipCheckingSKUNotInASN', @cStorerKey) = '1')  -- SKUNotinASN  
                BEGIN   
@@ -2012,6 +2012,8 @@ Step_5:
 BEGIN    
    IF @nInputKey = 1 -- Yes or Send    
    BEGIN    
+      DECLARE @cOutField15Backup NVARCHAR( 60) = @cOutField15
+      
       -- Dynamic lottable    
       EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'CAPTURE', 'CHECK', 5, 1,     
          @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,    
@@ -2041,6 +2043,61 @@ BEGIN
       IF @nMorePage = 1 -- Yes    
          GOTO Quit    
     
+      IF @cGetReceiveInfoSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cGetReceiveInfoSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cGetReceiveInfoSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, ' +
+               ' @cID         OUTPUT, @cSKU        OUTPUT, @nQTY        OUTPUT, ' +
+               ' @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT, ' +
+               ' @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT, ' +
+               ' @cLottable11 OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT, ' +
+               ' @nErrNo      OUTPUT, @cErrMsg     OUTPUT'
+            SET @cSQLParam =
+               ' @nMobile      INT,           ' +
+               ' @nFunc        INT,           ' +
+               ' @cLangCode    NVARCHAR( 3),  ' +
+               ' @nStep        INT,           ' +
+               ' @nInputKey    INT,           ' +
+               ' @cStorerKey   NVARCHAR( 15), ' +
+               ' @cReceiptKey  NVARCHAR( 10), ' +
+               ' @cPOKey       NVARCHAR( 10), ' +
+               ' @cLOC         NVARCHAR( 10), ' +
+               ' @cID          NVARCHAR( 18)  OUTPUT, ' +
+               ' @cSKU         NVARCHAR( 20)  OUTPUT, ' +
+               ' @nQTY         INT            OUTPUT, ' +
+               ' @cLottable01  NVARCHAR( 18)  OUTPUT, ' +
+               ' @cLottable02  NVARCHAR( 18)  OUTPUT, ' +
+               ' @cLottable03  NVARCHAR( 18)  OUTPUT, ' +
+               ' @dLottable04  DATETIME       OUTPUT, ' +
+               ' @dLottable05  DATETIME       OUTPUT, ' +
+               ' @cLottable06  NVARCHAR( 30)  OUTPUT, ' +
+               ' @cLottable07  NVARCHAR( 30)  OUTPUT, ' +
+               ' @cLottable08  NVARCHAR( 30)  OUTPUT, ' +
+               ' @cLottable09  NVARCHAR( 30)  OUTPUT, ' +
+               ' @cLottable10  NVARCHAR( 30)  OUTPUT, ' +
+               ' @cLottable11  NVARCHAR( 30)  OUTPUT, ' +
+               ' @cLottable12  NVARCHAR( 30)  OUTPUT, ' +
+               ' @dLottable13  DATETIME       OUTPUT, ' +
+               ' @dLottable14  DATETIME       OUTPUT, ' +
+               ' @dLottable15  DATETIME       OUTPUT, ' +
+               ' @nErrNo       INT            OUTPUT, ' +
+               ' @cErrMsg      NVARCHAR( 20)  OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC,
+               @cID         OUTPUT, @cSKU        OUTPUT, @nQTY        OUTPUT,
+               @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT,
+               @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT,
+               @cLottable11 OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT,
+               @nErrNo      OUTPUT, @cErrMsg     OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Step_5_Fail
+         END
+      END
+      
       -- Enable field    
       SET @cFieldAttr02 = '' -- Dynamic lottable 1..5    
       SET @cFieldAttr04 = ''    
@@ -2080,7 +2137,8 @@ BEGIN
       -- Convert to prefer UOM QTY    
       IF @cPUOM = '6' OR -- When preferred UOM = master unit    
          @nPUOM_Div = 0  -- UOM not setup    
-      BEGIN             SET @cPUOM_Desc = ''    
+      BEGIN
+         SET @cPUOM_Desc = ''
          SET @nPQTY = 0    
          SET @nMQTY = @nQTY    
          SET @cFieldAttr08 = 'O' -- @nPQTY    
@@ -2126,7 +2184,7 @@ BEGIN
                ' @nQTY, @cReasonCode, @cSuggToLOC, @cFinalLOC, @cReceiptLineNumber, ' +     
                ' @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'    
             SET @cSQLParam =    
-    '@nMobile       INT,           ' +    
+               '@nMobile       INT,           ' +    
                '@nFunc         INT,           ' +    
                '@cLangCode     NVARCHAR( 3),  ' +    
                '@nStep         INT,           ' +    
@@ -2157,7 +2215,7 @@ BEGIN
                '@nQTY          INT,           ' +    
                '@cReasonCode   NVARCHAR( 10), ' +    
                '@cSuggToLOC    NVARCHAR( 10), ' +    
-        '@cFinalLOC     NVARCHAR( 10), ' +    
+               '@cFinalLOC     NVARCHAR( 10), ' +    
                '@cReceiptLineNumber NVARCHAR( 10),   ' +    
                '@cExtendedInfo NVARCHAR(20)  OUTPUT, ' +     
                '@nErrNo        INT           OUTPUT, ' +    
@@ -2172,8 +2230,7 @@ BEGIN
                @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT    
     
             IF @nErrNo <> 0    
-               --GOTO Step_3_Fail    
-               GOTO Step_5_Fail --(cc03)  
+               GOTO Quit
     
             SET @cOutField15 = @cExtendedInfo    
          END    
@@ -2196,7 +2253,7 @@ BEGIN
          @cInField10  OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT,    
          @cInField11  OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,    
          @cInField12  OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,    
-     @cInField13  OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,    
+         @cInField13  OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,    
          @cInField14  OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,    
          @cInField15  OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,    
          @nMorePage   OUTPUT,    
@@ -2228,7 +2285,9 @@ BEGIN
    GOTO Quit    
     
    Step_5_Fail:    
-    
+   -- After captured lottable, screen exit and the hidden field (O_Field15) is clear. 
+   -- If any error occur, need to simulate as if still staying in lottable screen, by restoring this hidden field
+   SET @cOutField15 = @cOutField15Backup
 END    
 GOTO Quit    
     
@@ -2565,7 +2624,7 @@ BEGIN
                '@cErrMsg            NVARCHAR( 20)  OUTPUT'    
     
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
- @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cSKU,     
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cSKU,     
                @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,    
                @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,    
                @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,    
@@ -3015,7 +3074,7 @@ BEGIN
             SET @nScn = @nScn - 2    
             SET @nStep = @nStep - 2    
          END    
-    END    
+      END    
     
       IF @cOption = '2' -- No    
       BEGIN    
@@ -3383,16 +3442,16 @@ BEGIN
       -- Screen mapping    
       SET @cFinalLOC = @cInField02    
     
-     --Loc Prefix        
-     IF @cLOCLookupSP = 1            
-     BEGIN            
-      EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,             
-      @cFinalLOC  OUTPUT,             
-      @nErrNo      OUTPUT,             
-      @cErrMsg     OUTPUT            
-      IF @nErrNo <> 0            
-       GOTO Quit            
-     END      
+      --Loc Prefix
+      IF @cLOCLookupSP = 1
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+            @cFinalLOC  OUTPUT,
+            @nErrNo     OUTPUT,
+            @cErrMsg    OUTPUT
+         IF @nErrNo <> 0
+            GOTO Quit
+      END
       
       -- Putaway    
       EXEC rdt.rdt_NormalReceipt_Putaway @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'EXECUTE',     
@@ -3474,9 +3533,7 @@ BEGIN
          @cReceiptKey   = @cReceiptKey,    
          @cPOKey        = @cPOKey,     
          @cRefNo1       = @cRefNo,         
-         @cToLocation   = @cFinalLOC    
-      
-             
+         @cToLocation   = @cFinalLOC         
    END    
     
    IF @nInputKey = 0 -- ESC    

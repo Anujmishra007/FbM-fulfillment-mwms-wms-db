@@ -15,6 +15,7 @@ GO
 /* 2022-05-30  Ung       1.1   WMS-19757 case SSCC, update UDF03 = ToID       */
 /* 2022-06-10  Yee Kung  1.2   WMS-19808 Default Lottable06                   */
 /*                             change UCC.UDF03 to UDF04 = ToID               */
+/* 29-08-2022  Ung       1.3   WMS-20644 Add SSCC pallet with multi lines     */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_600RcvCfm12 (
@@ -77,7 +78,7 @@ BEGIN
    DECLARE @curReceipt     CURSOR
 
    SELECT
-      @cSSCCBarcode = V_String42
+      @cSSCCBarcode = V_String43
    FROM rdt.RDTMOBREC WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
