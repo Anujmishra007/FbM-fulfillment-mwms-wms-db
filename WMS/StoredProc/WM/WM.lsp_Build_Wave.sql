@@ -12,7 +12,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 2.2                                                    */                                                                                  
+/* PVCS Version: 2.1                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -43,16 +43,12 @@ GO
 /* 2022-05-16  LZG      1.9   Added missing ISNUMERIC to cond level (ZG01)*/
 /* 2022-05-24  Wan07    2.0   LFWM-3534 - Issue during 2022-05-12 SVT   */
 /* 2022-05-31  Wan08    2.1   LFWM-3543 - SCE Order Parameter Enhancement*/
-/* 2022-08-02  Wan09    2.2   LFWM-3665 - Australia WMS SCE Update Wave */
-/*                            Description from Build Wave parameters    */
-/* 2022-08-05  Wan10    2.3   LFWM-3672 - [CN] LOREAL_New Tab for order */
-/*                            analysis                                  */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_Build_Wave]                                                                                                                       
       @c_BuildParmKey      NVARCHAR(10)                                                                                                                    
    ,  @c_Facility          NVARCHAR(5)                                                                                                                     
    ,  @c_StorerKey         NVARCHAR(15)  
-   ,  @c_BuildWaveType     NVARCHAR(10)   = ''    --DEFAULT BLANK = BuildWave, Analysis, PreWave & etc
+   ,  @c_BuildWaveType     NVARCHAR(10)   = ''    --DEFAULT BLANK = BuildWave, Analysis, & etc
    ,  @c_GenByBuildValue   NVARCHAR(1)    = 'Y'   --DEFAULT Y = Use BuildValue, Otherwise use Value
    ,  @c_SQLBuildWave      NVARCHAR(4000) = '' OUTPUT                                  
    ,  @n_BatchNo           BIGINT         = 0  OUTPUT
@@ -68,7 +64,7 @@ AS
    SET QUOTED_IDENTIFIER OFF                                                                                                                                
    SET CONCAT_NULL_YIELDS_NULL OFF                                                                                                                          
    
-   DECLARE @n_Continue                 INT            = 1
+   DECLARE @n_Continue                 BIT            = 1
          , @n_StartTCnt                INT            = @@TRANCOUNT  
                                                                                                                               
    DECLARE @n_CondLevel                INT            = 0
@@ -149,8 +145,7 @@ AS
          , @c_SQLField                 NVARCHAR(2000) = ''
          , @c_SQLFieldGroupBy          NVARCHAR(2000) = ''    
          , @c_SQLBuildByGroup          NVARCHAR(4000) = ''
-         , @c_SQLBuildByGroupWhere     NVARCHAR(4000) = ''  
-         , @c_SQLCondPreWave           NVARCHAR(2000) = ''              --(Wan10) 
+         , @c_SQLBuildByGroupWhere     NVARCHAR(4000) = ''   
 
          , @b_ParmFound                BIT            = 0
          , @b_ParmTypeSP               INT            = 0
@@ -214,24 +209,6 @@ AS
    END                                 --(Wan01) - END
                                                                  
    BEGIN TRY -- SWT01 - Begin Outer Begin Try
-      --(Wan10) - START
-      IF @c_BuildWaveType = ''      -- NOT IN ('ANALYSIS', 'PREWAVE')
-      BEGIN
-         EXEC [WM].[lsp_Build_Wave_VLDN]                                                                                                                       
-            @c_BuildParmKey = @c_BuildParmKey                                                                                                                 
-         ,  @b_Success      = @b_Success  OUTPUT  
-         ,  @n_err          = @n_err      OUTPUT                                                                                                             
-         ,  @c_ErrMsg       = @c_ErrMsg   OUTPUT 
-         ,  @b_debug        = @b_debug   
-         
-         IF @b_Success = 0 
-         BEGIN
-            SET @n_Continue = 3
-            GOTO EXIT_SP
-         END  
-      END   
-      --(Wan10) - END
-      
       CREATE TABLE #tOrderData                                                                                                                                    
       (                                           
          RNum              INT PRIMARY KEY                                                                  
@@ -948,30 +925,7 @@ AS
       BEGIN
          SET @c_SQLGroupBy= @c_SQLGroupBy+ ', ' + @c_GroupBySortField
       END
-      
-      IF @c_BuildWaveType = ''            --(Wan10) - START
-      BEGIN
-         SET @c_SQLCondPreWave = ''
-         EXEC [WM].[lsp_BuildPreWaveCond]                                                                                                                       
-            @c_BuildParmKey   = @c_BuildParmKey                                                                                                               
-         ,  @c_SQLCondPreWave = @c_SQLCondPreWave OUTPUT
-         ,  @b_Success        = @b_Success        OUTPUT  
-         ,  @n_err            = @n_err            OUTPUT                                                                                                             
-         ,  @c_ErrMsg         = @c_ErrMsg         OUTPUT 
-         ,  @b_debug          = @b_debug          
-         
-         IF @b_Success = 0
-         BEGIN
-            SET @n_Continue = 3
-            GOTO EXIT_SP 
-         END
-         
-         IF @c_SQLCondPreWave <> '' 
-         BEGIN 
-            SET @c_SQLWhere = @c_SQLWhere + @c_SQLCondPreWave
-         END
-      END                                 --(Wan10) - END
-      
+
       SET @c_SQL = @c_SQL + @c_SQLWhere + @c_SQLBuildByGroupWhere +  @c_SQLGroupBy + @c_SQLHaving           --(Wan03)
       
       --(Wan05) - START
@@ -1000,16 +954,7 @@ AS
       BEGIN
          GOTO EXIT_SP
       END 
-      
-      --(Wan10) - START
-      IF @c_BuildWaveType = 'PREWAVE'
-      BEGIN
-         SET @c_SQLBuildWave = @c_SQLWhere 
-         
-         GOTO EXIT_SP
-      END 
-      --(Wan10) - END
-      
+
       IF @c_SQLBuildByGroupWhere <> ''
       BEGIN
          SET @c_SQLFieldGroupBy = @c_SQLField
@@ -1153,7 +1098,7 @@ AS
              + ' ,@n_MaxOpenQty = ' +  CAST(@n_MaxOpenQty AS NVARCHAR(20))    
          PRINT '--4.Do Buil Wave--'                                                                                                                          
          SET @d_StartTime_Debug = GETDATE()                                                                                                                       
-      END  
+      END                                                                                                                                                         
                                                                                                                                                            
       WHILE @@TRANCOUNT > 0                                                                                                                                       
          COMMIT TRAN;                                                                                                                                             
@@ -1254,6 +1199,7 @@ AS
 
             SET @n_SessionNo = @n_BatchNo
          END
+
       END
 
       SET @n_OrderCnt     = 0 
@@ -1585,54 +1531,7 @@ AS
          GOTO RETURN_BUILDWAVE                                                                                                                                    
       END
 
-    END_BUILDWAVE: 
-      --(Wan09) - START    
-      WHILE @@TRANCOUNT > 0 
-      BEGIN
-         COMMIT TRAN
-      END
-
-      IF @n_BatchNo > 0
-      BEGIN
-         IF @c_SQLCondPreWave <> ''             --(Wan10) - START
-         BEGIN
-         
-         IF EXISTS ( SELECT 1 FROM dbo.BUILDPREWAVE AS b WITH (NOLOCK)
-                        WHERE BuildParmKey = @c_BuildParmkey 
-                        AND [Status] = '1'
-                      )
-            BEGIN
-               UPDATE dbo.BUILDPREWAVE
-                  SET [Status] = '9'
-               WHERE BuildParmKey = @c_BuildParmkey 
-               AND [Status] = '1'
-               
-               IF @@ERROR <> 0
-               BEGIN
-                  SET @n_Continue = 3
-                  SET @n_Err = 555521
-                  SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6),@n_Err) + ': Update BUILDPREWAVE fail.'
-                                   + ' (lsp_Build_Wave)'                  
-                  GOTO EXIT_SP
-               END
-            END
-         END                                          --(Wan10) - END   
-         
-         SET @b_Success = 1
-         EXEC WM.lsp_Build_Wave_Update
-            @n_BatchNo = @n_BatchNo
-         ,  @b_Success = @b_Success  OUTPUT  
-         ,  @n_err     = @n_err      OUTPUT                                                                                                             
-         ,  @c_ErrMsg  = @c_ErrMsg   OUTPUT 
-         ,  @b_debug   = @b_debug 
-      
-         IF @b_Success <> 1
-         BEGIN
-            SET @n_Continue = 3                                                                                                                                        
-            GOTO EXIT_SP
-         END                        
-      END
-      --(Wan09) - END                                                                                                                                             
+    END_BUILDWAVE:                                                                                                                                              
                   
       IF @b_debug = 2                                                                                                                                              
       BEGIN                                                                                                                                                       
