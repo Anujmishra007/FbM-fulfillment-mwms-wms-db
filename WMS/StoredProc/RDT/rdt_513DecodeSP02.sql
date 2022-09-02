@@ -52,10 +52,15 @@ BEGIN
          BEGIN
             IF @cBarcode <> ''
             BEGIN
+               set @cBarcode= trim(@cBarcode)
+
 	                          -- If user key in sku
-               IF EXISTS ( SELECT 1 FROM dbo.SKU WITH (NOLOCK, INDEX(PKSKU)) 
+               IF EXISTS ( SELECT 1 FROM dbo.SKU WITH (NOLOCK) 
                            WHERE StorerKey = @cStorerKey
-                           AND   SKU = @cBarcode)
+                           AND  ( SKU = @cBarcode
+                           OR  ALTSKU = @cBarcode
+                           OR MANUFACTURERSKU = @cBarcode
+                           OR RETAILSKU =  @cBarcode))
                BEGIN
                   SET @cSKU = @cBarcode
 
@@ -66,7 +71,7 @@ BEGIN
                   SET @cSKU = ''
                   SELECT @cSKU = SKU 
                   FROM UPC (NOLOCK)
-                  WHERE upc = @cBarcode   
+                  WHERE upc = @cBarcode 
                   AND   StorerKey = @cStorerKey
 
                   IF ISNULL( @cSKU, '') <> ''
