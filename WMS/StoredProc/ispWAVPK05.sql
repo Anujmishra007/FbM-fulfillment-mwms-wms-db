@@ -40,6 +40,7 @@ GO
 /* 2019-10-29  WLChooi  1.4   WMS-11017 - Update Weight & Cube into     */
 /*                                        PackInfo table (WL01)         */
 /* 2020-1-17   AL01     1.5   Bug fix, initialize @n_TotalRatio         */
+/* 2022-08-31  BeeTin   1.6   JSM-92837-Fix duplicate  primary key      */ 
 /************************************************************************/
 CREATE PROC [dbo].[ispWAVPK05]
 (
@@ -529,6 +530,7 @@ BEGIN
    JOIN CODELKUP   CL WITH (NOLOCK) ON CL.ListName = 'ALLSorting'
                                     AND CL.Code2 = L.PickZone
                                     AND CL.Long = 'Y'
+                                    AND CL.STORERKEY=PD.STORERKEY            --JSM-92837 
    ORDER BY PD.Storerkey, PD.Sku, RTRIM(L.PickZone)
 
    OPEN @CUR_PD
