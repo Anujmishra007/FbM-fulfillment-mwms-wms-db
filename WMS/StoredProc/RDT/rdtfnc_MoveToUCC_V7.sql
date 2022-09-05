@@ -1,6 +1,3 @@
-if exists (select * from  sys.objects where object_id = object_id(N'[rdt].[rdtfnc_MoveToUCC_V7]') and OBJECTPROPERTY(object_id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdtfnc_MoveToUCC_V7]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -18,9 +15,11 @@ GO
 /* Date       Rev  Author   Purposes                                          */
 /* 2020-02-17 1.0  James    WMS-12070. Created                                */
 /* 2021-03-26 1.1  James    WMS-16614 Add StdEventLog to step to ucc (james01)*/
-/* 2021-07-27 2.0  SYChua   Bug Fix: duplicated @cid in SP execution (SY01)   */
+/* 2021-07-27 1.2  SYChua   Bug Fix: duplicated @cid in SP execution (SY01)   */
+/* 2022-08-08 1.3  Ung      WMS-20238 Add ExtendedValidateSP to SKU screen    */
+/*                          Add ToID format                                   */
 /******************************************************************************/
-CREATE PROC [RDT].[rdtfnc_MoveToUCC_V7](
+CREATE OR ALTER PROC [RDT].[rdtfnc_MoveToUCC_V7](
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR(20) OUTPUT -- screen limitation, 20 char max
@@ -568,6 +567,14 @@ BEGIN
       -- Screen mapping
       SET @cToID = @cInField02
 
+      -- Check barcode format
+      IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'ToID', @cToID) = 0
+      BEGIN
+         SET @nErrNo = 148376
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format
+         GOTO Step_2_Fail
+      END
+
       -- Prep next screen var
       SET @cOutField01 = @cToLoc
       SET @cOutField02 = @cToID
@@ -590,7 +597,7 @@ BEGIN
    GOTO Quit
 
    Step_2_Fail:
-   GOTO Quit
+   SET @cOutField01 = ''
 END
 GOTO Quit
 
@@ -956,6 +963,66 @@ BEGIN
       ,@nErr        = @n_Err         OUTPUT
       ,@cErrMsg     = @c_ErrMsg      OUTPUT
 
+      -- Extended validate
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @nErrNo = 0
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, ' +
+               ' @cToLOC, @cToID, @cFromLOC, @cFromID, @cSKU, @nQTY, @cUCC, ' +
+               ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
+               ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
+               ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
+               ' @tExtValidVar, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile         INT, ' +
+               '@nFunc           INT, ' +
+               '@cLangCode       NVARCHAR(3), ' +
+               '@nStep           INT, ' +
+               '@nInputKey       INT, ' +
+               '@cStorerKey      NVARCHAR(15), ' +
+               '@cFacility       NVARCHAR(5), '  +
+               '@cToLOC          NVARCHAR(10), ' +
+               '@cToID           NVARCHAR(18), ' +
+               '@cFromLOC        NVARCHAR(10), ' +
+               '@cFromID         NVARCHAR(18), ' +
+               '@cSKU            NVARCHAR(20), ' +
+               '@nQTY            INT, ' +
+               '@cUCC            NVARCHAR(20), ' +
+               '@cLottable01     NVARCHAR(18), ' +
+               '@cLottable02     NVARCHAR(18), ' +
+               '@cLottable03     NVARCHAR(18), ' +
+               '@dLottable04     DATETIME,     ' +
+               '@dLottable05     DATETIME,     ' +
+               '@cLottable06     NVARCHAR(18), ' +
+               '@cLottable07     NVARCHAR(18), ' +
+               '@cLottable08     NVARCHAR(18), ' +
+               '@cLottable09     NVARCHAR(18), ' +
+               '@cLottable10     NVARCHAR(18), ' +
+               '@cLottable11     NVARCHAR(18), ' +
+               '@cLottable12     NVARCHAR(18), ' +
+               '@dLottable13     DATETIME,     ' +
+               '@dLottable14     DATETIME,     ' +
+               '@dLottable15     DATETIME,     ' +
+               '@tExtValidVar    VARIABLETABLE READONLY, ' +
+               '@nErrNo          INT OUTPUT, ' +
+               '@cErrMsg         NVARCHAR(20) OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility,
+               @cToLOC, @cToID, @cFromLOC, @cFromID, @cSKU, @nQTY, @cUCC,
+               @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+               @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+               @tExtValidVar, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
+      END
+
       Skip_ValidateSKU:
       SELECT @cLottable01 = '', @cLottable02 = '', @cLottable03 = '',    @dLottable04 = NULL,  @dLottable05 = NULL,
              @cLottable06 = '', @cLottable07 = '', @cLottable08 = '',    @cLottable09 = '',    @cLottable10 = '',
@@ -1301,7 +1368,7 @@ BEGIN
             GOTO Quit
          END
 
-SET @nQTY = @nTempQty
+         SET @nQTY = @nTempQty
       END
 
       SET @nPQTY = CASE WHEN ISNULL(@cPUOM_Desc, '') <> '' THEN @nQTY / @nPUOM_Div ELSE @n_PQTY END
