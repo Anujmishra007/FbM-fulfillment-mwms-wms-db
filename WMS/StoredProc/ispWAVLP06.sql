@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispWAVLP06]')
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [dbo].[ispWAVLP06]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -39,8 +34,11 @@ GO
 /* Date        Author   Ver  Purposes                                   */
 /* 12-Nov-2021 NJOW01   1.0  WMS-18368 update sequence no to load plan  */
 /* 12-Nov-2021 NJOW01   1.0  DEVOPS combine script                      */
+/* 30-Aug-2022 NJOW02   1.1  WMS-20675 allow split load plan for child  */
+/*                           order if over qty limit. Optimize order qty*/
+/*                           in a load plan                             */
 /************************************************************************/
-CREATE PROC [dbo].[ispWAVLP06]
+CREATE OR ALTER PROC [dbo].[ispWAVLP06]
    @c_WaveKey NVARCHAR(10),
    @b_Success int OUTPUT,
    @n_err     int OUTPUT,
@@ -92,9 +90,10 @@ BEGIN
            ,@c_SQLDYN01            NVARCHAR(2000)
            ,@c_SQLDYN02            NVARCHAR(2000)
            ,@c_BuyerPO             NVARCHAR(20)
-           ,@c_PrevBuyerPO         NVARCHAR(20)
+           --,@c_PrevBuyerPO         NVARCHAR(20)
            ,@n_NoofChildOrders     INT
            ,@n_TotalChildQty       INT
+           ,@n_RowID               INT --NJOW02
                   
    IF @n_err = 0
       SET @b_debug = 1
@@ -109,6 +108,9 @@ BEGIN
      SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": No Orders being populated into WaveDetail. (ispWAVLP06)"
      GOTO RETURN_SP
    END
+   
+   --NJOW02
+   CREATE TABLE #TMP_ORDER (RowID INT IDENTITY(1,1) PRIMARY KEY, OrderKey NVARCHAR(10), BuyerPO NVARCHAR(20) NULL, NoofChildOrders INT, TotalChildQty INT, OrderQty INT)
    
    IF @@TRANCOUNT = 0 
       BEGIN TRAN
@@ -292,20 +294,11 @@ BEGIN
                       
            IF @b_debug = 1
               PRINT 'New1 @c_Loadkey=' + @c_Loadkey           
-           --loop the orders of the group
-           /*SELECT @c_SQLDYN02 = 'DECLARE cur_loadpland CURSOR FAST_FORWARD READ_ONLY FOR '
-           + ' SELECT ORDERS.OrderKey '
-           + ' FROM ORDERS WITH (NOLOCK) '
-           + ' JOIN WAVEDETAIL WD WITH (NOLOCK) ON (ORDERS.OrderKey = WD.OrderKey) '
-           + ' WHERE WD.WaveKey = @c_WaveKey ' +
-           + ' AND ORDERS.Status NOT IN (''9'',''CANC'') '
-           + ' AND ISNULL(ORDERS.Loadkey,'''') = '''' '
-           + ' AND ORDERS.Userdefine05 = @c_OrdUDF05 '
-           + ' AND ' + RTRIM(@c_GroupField) + ' = @c_FieldVal01 ' + 
-           + ' ORDER BY ORDERS.OrderKey '*/
 
-           SELECT @c_SQLDYN02 = 'DECLARE cur_loadpland CURSOR FAST_FORWARD READ_ONLY FOR '
-           + ' SELECT ORDERS.OrderKey, ORDERS.BuyerPO, ISNULL(P.NoofOrders,0), ISNULL(P.TotalQty,0) '
+           DELETE FROM #TMP_ORDER
+           --SELECT @c_SQLDYN02 = 'DECLARE cur_loadpland CURSOR FAST_FORWARD READ_ONLY FOR '
+           SELECT @c_SQLDYN02 = 'INSERT INTO #TMP_ORDER (Orderkey, BuyerPO, NoofChildOrders, TotalChildQty, OrderQty) '  --NJOW02  
+           + ' SELECT ORDERS.OrderKey, ISNULL(ORDERS.BuyerPO,''''), ISNULL(P.NoofOrders,0), ISNULL(P.TotalQty,0), ORDERS.OpenQty '
            + ' FROM ORDERS WITH (NOLOCK) '
            + ' JOIN WAVEDETAIL WD WITH (NOLOCK) ON (ORDERS.OrderKey = WD.OrderKey) '
            + ' LEFT JOIN #PARENTORDER P ON ORDERS.BuyerPO =  P.BuyerPO '
@@ -322,128 +315,193 @@ BEGIN
                @c_OrdUDF05,             
                @c_FieldVal01
   
-           OPEN cur_loadpland
+           --OPEN cur_loadpland
   
-           FETCH NEXT FROM cur_loadpland INTO @c_OrderKey, @c_BuyerPO, @n_NoofChildOrders, @n_TotalChildQty
+           --FETCH NEXT FROM cur_loadpland INTO @c_OrderKey, @c_BuyerPO, @n_NoofChildOrders, @n_TotalChildQty
            
-           SET @n_Ordercnt = 0
-           SET @c_PrevBuyerPO = ''
-           WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
-           BEGIN         	           	  
-           	  IF @b_debug = 1
-           	     PRINT '@c_OrderKey=' + @c_OrderKey + ' @c_BuyerPO=' +  @c_BuyerPO + ' @n_NoofChildOrders=' + CAST(@n_NoofChildOrders AS NVARCHAR) + ' @n_TotalChildQty=' + CAST(@n_TotalChildQty AS NVARCHAR)
-           	     
-              IF (SELECT COUNT(1) FROM LoadPlanDetail WITH (NOLOCK) WHERE OrderKey = @c_OrderKey) = 0
-              BEGIN
-                 SELECT @d_OrderDate = O.OrderDate,
-                        @d_Delivery_Date = O.DeliveryDate,
-                        @c_OrderType = O.Type,
-                        @c_Door = O.Door,
-                        @c_Route = O.Route,
-                        @c_DeliveryPlace = O.DeliveryPlace,
-                        @c_OrderStatus = O.Status,
-                        @c_priority = O.Priority,
-                        @n_totweight = SUM(OD.OpenQty * SKU.StdGrossWgt),
-                        @n_totcube = SUM(OD.OpenQty * SKU.StdCube),
-                        @n_TotOrdLine = COUNT(DISTINCT OD.OrderLineNumber),
-                        @c_C_Company = O.C_Company,
-                        @c_ExternOrderkey = O.ExternOrderkey,
-                        @c_Consigneekey = O.Consigneekey,
-                        @n_totOrdQty = SUM(OD.OpenQty)
-                 FROM Orders O WITH (NOLOCK)
-                 JOIN Orderdetail OD WITH (NOLOCK) ON (O.Orderkey = OD.Orderkey)
-                 JOIN SKU WITH (NOLOCK) ON (OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku)
-                 WHERE O.OrderKey = @c_OrderKey
-                 GROUP BY O.OrderDate, O.DeliveryDate, O.Type, O.Door, O.Route, O.DeliveryPlace,
-                          O.Status, O.Priority, O.C_Company, O.ExternOrderkey, O.Consigneekey
-              	
-              	 --IF @n_NoofChildOrders > 1  --if have many child order, change the counter when buyerpo(parent) changed.
-              	 --BEGIN
-              	 --	  IF @c_PrevBuyerPO <> @c_BuyerPO  
-              	 --	  BEGIN               	 
-              	 --	  	 SET @n_totOrdQty = @n_TotalChildQty 
-                 --      SET @n_Ordercnt = @n_Ordercnt + @n_NoofChildOrders               	               	               	 
-              	 --      SET @n_TotLoadQty = @n_TotLoadQty + @n_totOrdQty
-              	 --   END   
-              	 --END
-              	 --ELSE
-              	 --BEGIN   
-              	 	  --SET @n_NoofChildOrders = 1
-              	    SET @n_Ordercnt = @n_Ordercnt + 1 --@n_NoofChildOrders              	               	               	 
-              	    SET @n_TotLoadQty = @n_TotLoadQty + @n_totOrdQty
-              	 --END
-              	 
-              	 IF @b_debug = 1 
-              	    PRINT '@n_TotLoadQty=' + CAST(@n_TotLoadQty AS NVARCHAR) 
-              	    
-              	 IF (@n_Ordercnt > @n_MaxOrderPerLoad OR @n_TotLoadQty > @n_MaxQtyPerLoad) AND NOT (@n_NoofChildOrders > 1 AND @c_PrevBuyerPO = @c_BuyerPO) 
-              	 BEGIN
-              	 	  SET @c_Loadkey = ''
-                    SET @n_TotLoadQty = @n_totOrdQty           	 	  
-                    SET @n_Ordercnt = 1 --@n_NoofChildOrders
-                    SET @b_success = 0         
-                    EXECUTE nspg_GetKey
-                       'LOADKEY',
-                       10,
-                       @c_loadkey     OUTPUT,
-                       @b_success     OUTPUT,
-                       @n_err         OUTPUT,
-                       @c_errmsg      OUTPUT
-                    
-                    IF @b_success <> 1
-                    BEGIN
-                      SELECT @n_continue = 3
-                    END
-                    
-                    INSERT INTO LoadPlan (LoadKey, Facility, SuperOrderFlag, Load_Userdef1)
-                    VALUES (@c_loadkey, @c_Facility, @c_SuperOrderFlag, @c_FieldVal01)
-                    
-                    SELECT @n_loadcount = @n_loadcount + 1                     	 	
-
-              	 	  IF @b_debug = 1
-              	 	     PRINT 'New2 @c_Loadkey=' + @c_Loadkey
-              	 END
-              	 
-                 EXEC isp_InsertLoadplanDetail
-                      @cLoadKey          = @c_LoadKey,
-                      @cFacility         = @c_Facility,
-                      @cOrderKey         = @c_OrderKey,
-                      @cConsigneeKey     = @c_Consigneekey,
-                      @cPrioriry         = @c_Priority,
-                      @dOrderDate        = @d_OrderDate,
-                      @dDelivery_Date    = @d_Delivery_Date,
-                      @cOrderType        = @c_OrderType,
-                      @cDoor             = @c_Door,
-                      @cRoute            = @c_Route,
-                      @cDeliveryPlace    = @c_DeliveryPlace,
-                      @nStdGrossWgt      = @n_totweight,
-                      @nStdCube          = @n_totcube,
-                      @cExternOrderKey   = @c_ExternOrderKey,
-                      @cCustomerName     = @c_C_Company,
-                      @nTotOrderLines    = @n_TotOrdLine,
-                      @nNoOfCartons      = 0,
-                      @cOrderStatus      = @c_OrderStatus,
-                      @b_Success         = @b_Success OUTPUT,
-                      @n_err             = @n_err     OUTPUT,
-                      @c_errmsg          = @c_errmsg  OUTPUT
-  
-                 SELECT @n_err = @@ERROR
-  
-                 IF @n_err <> 0
-                 BEGIN
-                    SELECT @n_continue = 3
-                    SELECT @n_err = 63540
-                    SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Insert Into LOADPLANDETAIL Failed. (ispWAVLP06)"
-                 END
-              END
+           SET @n_Ordercnt = 0           
+           --SET @c_PrevBuyerPO = ''
+           
+           DECLARE cur_BuyerPO CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
+              SELECT DISTINCT BuyerPO
+              FROM #TMP_ORDER 
+              ORDER BY BuyerPO
               
-              SET @c_PrevBuyerPO = @c_BuyerPO
-  
-              FETCH NEXT FROM cur_loadpland INTO @c_OrderKey, @c_BuyerPO, @n_NoofChildOrders, @n_TotalChildQty
+           OPEN cur_BuyerPO   
+           
+           FETCH NEXT FROM cur_BuyerPO INTO @c_BuyerPO
+
+           WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)           
+           BEGIN
+              --WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
+              WHILE 1=1 AND @n_continue IN(1,2)  --NJOW02 S
+              BEGIN         	           	  
+              	  SELECT @n_RowID = 0, @c_Orderkey = '', @n_NoofChildOrders = 0, @n_TotalChildQty = 0
+              	  
+              	  --find the order can fit the load
+              	  IF @c_BuyerPO <> ''
+              	  BEGIN
+              	     SELECT TOP 1 @n_RowID = RowID,
+              	            @c_Orderkey = Orderkey, 
+              	            --@c_BuyerPO = BuyerPO,
+              	            @n_NoofChildOrders =  NoofChildOrders, 
+              	            @n_TotalChildQty = TotalChildQty
+              	     FROM #TMP_ORDER
+              	     WHERE BuyerPO = @c_BuyerPO
+              	     AND OrderQty <= (@n_MaxQtyPerLoad - @n_TotLoadQty)
+              	     ORDER BY OrderQty DESC, RowID
+              	  END
+              	  ELSE
+              	  BEGIN
+              	     SELECT TOP 1 @n_RowID = RowID,
+              	            @c_Orderkey = Orderkey, 
+              	            --@c_BuyerPO = BuyerPO,
+              	            @n_NoofChildOrders =  NoofChildOrders, 
+              	            @n_TotalChildQty = TotalChildQty
+              	     FROM #TMP_ORDER
+              	     WHERE BuyerPO = @c_BuyerPO
+              	     AND OrderQty <= (@n_MaxQtyPerLoad - @n_TotLoadQty)
+              	     ORDER BY RowID
+              	  END
+              	  
+              	  --find order follow the sequence and will create new load plan
+              	  IF @n_RowID = 0
+              	  BEGIN
+              	     SELECT TOP 1 @n_RowID = RowID,
+              	            @c_Orderkey = Orderkey, 
+              	            --@c_BuyerPO = BuyerPO,
+              	            @n_NoofChildOrders =  NoofChildOrders, 
+              	            @n_TotalChildQty = TotalChildQty
+              	     FROM #TMP_ORDER
+              	     WHERE BuyerPO = @c_BuyerPO
+              	     ORDER BY RowID
+              	  END
+              	  
+              	  IF @n_RowID = 0
+              	     BREAK
+              	  
+              	  --NJOW02 E
+              	  
+              	  IF @b_debug = 1
+              	     PRINT '@c_OrderKey=' + @c_OrderKey + ' @c_BuyerPO=' +  @c_BuyerPO + ' @n_NoofChildOrders=' + CAST(@n_NoofChildOrders AS NVARCHAR) + ' @n_TotalChildQty=' + CAST(@n_TotalChildQty AS NVARCHAR)
+              	     
+                 IF (SELECT COUNT(1) FROM LoadPlanDetail WITH (NOLOCK) WHERE OrderKey = @c_OrderKey) = 0
+                 BEGIN
+                    SELECT @d_OrderDate = O.OrderDate,
+                           @d_Delivery_Date = O.DeliveryDate,
+                           @c_OrderType = O.Type,
+                           @c_Door = O.Door,
+                           @c_Route = O.Route,
+                           @c_DeliveryPlace = O.DeliveryPlace,
+                           @c_OrderStatus = O.Status,
+                           @c_priority = O.Priority,
+                           @n_totweight = SUM(OD.OpenQty * SKU.StdGrossWgt),
+                           @n_totcube = SUM(OD.OpenQty * SKU.StdCube),
+                           @n_TotOrdLine = COUNT(DISTINCT OD.OrderLineNumber),
+                           @c_C_Company = O.C_Company,
+                           @c_ExternOrderkey = O.ExternOrderkey,
+                           @c_Consigneekey = O.Consigneekey,
+                           @n_totOrdQty = SUM(OD.OpenQty)
+                    FROM Orders O WITH (NOLOCK)
+                    JOIN Orderdetail OD WITH (NOLOCK) ON (O.Orderkey = OD.Orderkey)
+                    JOIN SKU WITH (NOLOCK) ON (OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku)
+                    WHERE O.OrderKey = @c_OrderKey
+                    GROUP BY O.OrderDate, O.DeliveryDate, O.Type, O.Door, O.Route, O.DeliveryPlace,
+                             O.Status, O.Priority, O.C_Company, O.ExternOrderkey, O.Consigneekey
+                 	
+                 	 --IF @n_NoofChildOrders > 1  --if have many child order, change the counter when buyerpo(parent) changed.
+                 	 --BEGIN
+                 	 --	  IF @c_PrevBuyerPO <> @c_BuyerPO  
+                 	 --	  BEGIN               	 
+                 	 --	  	 SET @n_totOrdQty = @n_TotalChildQty 
+                    --      SET @n_Ordercnt = @n_Ordercnt + @n_NoofChildOrders               	               	               	 
+                 	 --      SET @n_TotLoadQty = @n_TotLoadQty + @n_totOrdQty
+                 	 --   END   
+                 	 --END
+                 	 --ELSE
+                 	 --BEGIN   
+                 	 	  --SET @n_NoofChildOrders = 1
+                 	    SET @n_Ordercnt = @n_Ordercnt + 1 --@n_NoofChildOrders              	               	               	 
+                 	    SET @n_TotLoadQty = @n_TotLoadQty + @n_totOrdQty
+                 	 --END
+                 	 
+                 	 IF @b_debug = 1 
+                 	    PRINT '@n_TotLoadQty=' + CAST(@n_TotLoadQty AS NVARCHAR) 
+                 	    
+                 	 IF (@n_Ordercnt > @n_MaxOrderPerLoad OR @n_TotLoadQty > @n_MaxQtyPerLoad) --AND NOT (@n_NoofChildOrders > 1 AND @c_PrevBuyerPO = @c_BuyerPO) --NJOW02 removed
+                 	 BEGIN
+                 	 	  SET @c_Loadkey = ''
+                       SET @n_TotLoadQty = @n_totOrdQty           	 	  
+                       SET @n_Ordercnt = 1 --@n_NoofChildOrders
+                       SET @b_success = 0         
+                       EXECUTE nspg_GetKey
+                          'LOADKEY',
+                          10,
+                          @c_loadkey     OUTPUT,
+                          @b_success     OUTPUT,
+                          @n_err         OUTPUT,
+                          @c_errmsg      OUTPUT
+                       
+                       IF @b_success <> 1
+                       BEGIN
+                         SELECT @n_continue = 3
+                       END
+                       
+                       INSERT INTO LoadPlan (LoadKey, Facility, SuperOrderFlag, Load_Userdef1)
+                       VALUES (@c_loadkey, @c_Facility, @c_SuperOrderFlag, @c_FieldVal01)
+                       
+                       SELECT @n_loadcount = @n_loadcount + 1                     	 	
+              
+                 	 	  IF @b_debug = 1
+                 	 	     PRINT 'New2 @c_Loadkey=' + @c_Loadkey
+                 	 END
+                 	 
+                    EXEC isp_InsertLoadplanDetail
+                         @cLoadKey          = @c_LoadKey,
+                         @cFacility         = @c_Facility,
+                         @cOrderKey         = @c_OrderKey,
+                         @cConsigneeKey     = @c_Consigneekey,
+                         @cPrioriry         = @c_Priority,
+                         @dOrderDate        = @d_OrderDate,
+                         @dDelivery_Date    = @d_Delivery_Date,
+                         @cOrderType        = @c_OrderType,
+                         @cDoor             = @c_Door,
+                         @cRoute            = @c_Route,
+                         @cDeliveryPlace    = @c_DeliveryPlace,
+                         @nStdGrossWgt      = @n_totweight,
+                         @nStdCube          = @n_totcube,
+                         @cExternOrderKey   = @c_ExternOrderKey,
+                         @cCustomerName     = @c_C_Company,
+                         @nTotOrderLines    = @n_TotOrdLine,
+                         @nNoOfCartons      = 0,
+                         @cOrderStatus      = @c_OrderStatus,
+                         @b_Success         = @b_Success OUTPUT,
+                         @n_err             = @n_err     OUTPUT,
+                         @c_errmsg          = @c_errmsg  OUTPUT
+              
+                    SELECT @n_err = @@ERROR
+              
+                    IF @n_err <> 0
+                    BEGIN
+                       SELECT @n_continue = 3
+                       SELECT @n_err = 63540
+                       SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Insert Into LOADPLANDETAIL Failed. (ispWAVLP06)"
+                    END
+                 END
+                 
+                 DELETE FROM #TMP_ORDER WHERE RowID = @n_RowID  --NJOW02
+                 
+                 --SET @c_PrevBuyerPO = @c_BuyerPO
+              
+                 --FETCH NEXT FROM cur_loadpland INTO @c_OrderKey, @c_BuyerPO, @n_NoofChildOrders, @n_TotalChildQty
+              END
+              --CLOSE cur_loadpland
+              --DEALLOCATE cur_loadpland            
+              FETCH NEXT FROM cur_BuyerPO INTO @c_BuyerPO       
            END
-           CLOSE cur_loadpland
-           DEALLOCATE cur_loadpland                          
-                             	
+           CLOSE cur_BuyerPO
+           DEALLOCATE cur_BuyerPO
+                                        	
            FETCH NEXT FROM cur_LPGroup INTO @c_FieldVal01, @c_FieldVal01Name            	   	
         END	
         CLOSE cur_LPGroup
