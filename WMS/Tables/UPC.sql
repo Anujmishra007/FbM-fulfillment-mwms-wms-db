@@ -8,7 +8,8 @@ CREATE TABLE [dbo].[UPC]
 [AddWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_UPC_AddWho] DEFAULT (suser_sname()),
 [AddDate] [datetime] NULL CONSTRAINT [DF_UPC_AddDate] DEFAULT (getdate()),
 [EditWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_UPC_EditWho] DEFAULT (suser_sname()),
-[EditDate] [datetime] NULL CONSTRAINT [DF_UPC_EditDate] DEFAULT (getdate())
+[EditDate] [datetime] NULL CONSTRAINT [DF_UPC_EditDate] DEFAULT (getdate()),
+QTY         INT NULL CONSTRAINT DF_UPC_QTY DEFAULT 0
 ) ON [PRIMARY]
 GO
 GRANT SELECT ON  [dbo].[UPC] TO [JReportRole]
@@ -50,3 +51,17 @@ EXEC sp_addextendedproperty N'MS_Description', 'SKU Unit of measurement e.g. cas
 GO
 EXEC sp_addextendedproperty N'MS_Description', 'A unique number or barcode that identifies an individual product by UOM', 'SCHEMA', N'dbo', 'TABLE', N'UPC', 'COLUMN', N'UPC'
 GO
+EXEC sp_addextendedproperty N'MS_Description', 'Quatity', 'SCHEMA', N'dbo', 'TABLE', N'UPC', 'COLUMN', N'Qty'
+GO
+
+/*
+
+--  JR WMS-20664 [CN] CN_Yonex_ADD UPC.QTY
+
+ALTER TABLE dbo.UPC
+ADD QTY  INT NULL CONSTRAINT DF_UPC_QTY DEFAULT 0
+GO
+ 
+ 
+
+*/
