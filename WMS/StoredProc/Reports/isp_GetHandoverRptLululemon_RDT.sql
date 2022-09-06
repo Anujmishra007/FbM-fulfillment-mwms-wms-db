@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_GetHandoverRptLululemon_RDT]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[isp_GetHandoverRptLululemon_RDT]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -26,9 +21,9 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 19/12/2019  mingle01 1.0   Create new store procedure                */
-/*                                                                      */
+/* 22/08/2022  mingle01 1.1   WMS-20531 add new column(ML01)            */
 /************************************************************************/
-CREATE PROC isp_GetHandoverRptLululemon_RDT
+CREATE OR ALTER PROC isp_GetHandoverRptLululemon_RDT
          @c_storerkey      NVARCHAR(15),
          @c_sourcekey      NVARCHAR(50),
          @c_Type           NVARCHAR(10) = ''
@@ -61,12 +56,14 @@ BEGIN
          , @c_ReportID       NVARCHAR(10) = 'LULUSHIP'
          , @n_MaxRowID       INT
 
+
    SET @b_Success   = 1
    SET @n_Err       = 0
    SET @n_Continue  = 1
    SET @n_StartTCnt = @@TRANCOUNT
    SET @c_ErrMsg    = ''
    SET @c_UserId    = SUSER_SNAME() 
+	
    
    WHILE @@TRANCOUNT > 0
    BEGIN
@@ -80,7 +77,9 @@ BEGIN
       Externmbolkey   NVARCHAR(30) NULL,
       Externorderkey  NVARCHAR(50) NULL,
       Orderkey        NVARCHAR(10) NULL,
-      UserDefine04    NVARCHAR(20) NULL
+      UserDefine04    NVARCHAR(20) NULL,
+		Susr1				 NVARCHAR(20) NULL,	--ML01
+		Recgrp          INT	--ML01
    )
 
    SELECT @c_Getprinter = defaultprinter  
@@ -139,6 +138,8 @@ BEGIN
       GOTO QUIT_SP
    END  
 
+	SET @n_NoOfLine = 50
+
    BEGIN
       INSERT INTO #Handover_RPT
       SELECT OH.Shipperkey,
@@ -146,9 +147,12 @@ BEGIN
              Mbol.Externmbolkey,
              OH.Externorderkey,
              OH.Orderkey,
-             OH.Userdefine04
+             OH.Userdefine04,
+				 STORER.SUSR1,	--ML01
+				 (Row_Number() OVER (PARTITION BY oh.mbolkey ORDER BY oh.mbolkey,oh.OrderKey asc)-1)/@n_NoOfLine	--ML01
       FROM ORDERS OH (NOLOCK)    
       JOIN MBOL (NOLOCK) ON ( OH.Mbolkey = Mbol.Mbolkey )   
+		JOIN STORER (NOLOCK) ON STORER.StorerKey = OH.StorerKey
       WHERE OH.storerkey = @c_storerkey 
         AND OH.Mbolkey = CASE WHEN @c_mbolkey <> '' THEN @c_mbolkey ELSE OH.Mbolkey END 
         AND Externmbolkey = CASE WHEN @c_extmbolkey <> '' THEN @c_extmbolkey ELSE Externmbolkey END                  
@@ -157,8 +161,9 @@ BEGIN
                Mbol.Externmbolkey,
                OH.Externorderkey,
                OH.Orderkey,
-               OH.Userdefine04
-      
+               OH.Userdefine04,
+					STORER.SUSR1	--ML01
+
       SELECT @n_MaxRowID = MAX(ROWID)
       FROM #Handover_RPT
 
@@ -169,6 +174,8 @@ BEGIN
            , Orderkey      
            , UserDefine04  
            , @n_MaxRowID AS TotalRow
+			  , Susr1	--ML01
+			  , Recgrp	--ML01
       FROM #Handover_RPT
 
    END

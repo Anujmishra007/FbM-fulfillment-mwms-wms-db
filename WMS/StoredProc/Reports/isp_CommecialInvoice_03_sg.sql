@@ -14,7 +14,7 @@ GO
 /*                                                                      */      
 /* Called By: report dw = r_dw_commercialinvoice_03_sg                  */      
 /*                                                                      */      
-/* PVCS Version: 3.3                                                    */      
+/* PVCS Version: 3.5                                                    */      
 /*                                                                      */      
 /* Version: 5.4                                                         */      
 /*                                                                      */      
@@ -58,6 +58,7 @@ GO
 /* 14-Dec-2021  WLChooi   3.3   WMS-18504 - Change print logic based on */
 /*                              Orders.SpecialHandling (WL09)           */
 /* 22-Apr-2022  WLChooi   3.4   Bug Fix for WMS-18504 (WL10)            */
+/* 26-Aug-2022  WLChooi   3.5   WMS-20573 - ShowFOB Logic Change (WL11) */
 /************************************************************************/      
       
 CREATE OR ALTER PROC [dbo].[isp_CommecialInvoice_03_sg] (      
@@ -193,6 +194,7 @@ CREATE OR ALTER PROC [dbo].[isp_CommecialInvoice_03_sg] (
           ,  ShowRemark       NVARCHAR(1)   NULL       --WL06  
           ,  InvResetPageNo   NVARCHAR(100) NULL       --WL09
           ,  ResetPageNoFlag  NVARCHAR(10)  NULL       --WL09
+          ,  FOBDescr         NVARCHAR(30)  NULL       --WL11
           )      
                 
     --WL01 Start      
@@ -666,7 +668,8 @@ CREATE OR ALTER PROC [dbo].[isp_CommecialInvoice_03_sg] (
            --WL06 END  
            /*CS05 end*/   
            , InvResetPageNo  =  CASE WHEN @c_ShipType = '' AND TSH.SHandlingFlag = 'Y' THEN TSH.CombineSHandling + MBOL.Mbolkey END     --WL09  
-           , ResetPageNoFlag =  CASE WHEN ORDERS.C_Country IN ('ID','TH','VN','MY') AND TSH.SHandlingFlag = 'Y' THEN 'Y' ELSE 'N' END   --WL09  
+           , ResetPageNoFlag =  CASE WHEN ORDERS.C_Country IN ('ID','TH','VN','MY') AND TSH.SHandlingFlag = 'Y' THEN 'Y' ELSE 'N' END   --WL09
+           , FOBDescr = CASE WHEN ISNULL(CL.UDF03,'') = '' THEN 'Freight FCA' ELSE TRIM(ISNULL(CL.UDF03,'')) END   --WL11
            FROM MBOL WITH (NOLOCK)      
            INNER JOIN MBOLDETAIL WITH (NOLOCK) ON (MBOL.MBOLKey = MBOLDETAIL.MBOLKey)      
            INNER JOIN ORDERS WITH (NOLOCK) ON (ORDERS.OrderKey = MBOLDETAIL.OrderKey)      
@@ -777,6 +780,7 @@ CREATE OR ALTER PROC [dbo].[isp_CommecialInvoice_03_sg] (
            ,ORDERS.SpecialHandling  
            ,TSH.CombineSHandling   --WL09
            ,TSH.SHandlingFlag     --WL09
+           ,CASE WHEN ISNULL(CL.UDF03,'') = '' THEN 'Freight FCA' ELSE TRIM(ISNULL(CL.UDF03,'')) END   --WL11
            --CS08 START  
            --,CASE WHEN @c_ShipType = 'L' THEN 'A' + ORDERS.Orderkey   
            --                       WHEN @c_ShipType = '' AND ORDERS.SpecialHandling = 'O' THEN  MBOL.Mbolkey   
@@ -1005,7 +1009,7 @@ CREATE OR ALTER PROC [dbo].[isp_CommecialInvoice_03_sg] (
        -- select @c_company '@c_company'      
        UPDATE #TEMP_CommINV03      
        SET TaxAmt = CASE WHEN @c_getCountry = 'SG' AND @c_getconsignee <>'31624' THEN TaxAmt ELSE 0.00  END  --CS06      
-           ,TTLAmt = @n_TTLTaxamt      
+           ,TTLAmt = @n_TTLTaxamt
            ,TaxCurSymbol = TaxCurSymbol      
            ,Madein = @c_madein      
            ,ShipTO_Company = CASE WHEN @c_UPDATECCOM = 'Y' THEN @c_company ELSE ShipTO_Company END   --WL01      
@@ -1114,6 +1118,7 @@ CREATE OR ALTER PROC [dbo].[isp_CommecialInvoice_03_sg] (
              ,  @c_NSQLCountry AS NSQLCountry   --WL06  
              ,  InvResetPageNo   --WL09
              ,  ResetPageNoFlag  --WL09
+             ,  FOBDescr   --WL11
          FROM #TEMP_CommINV03      
          WHERE (InvResetPageNo LIKE @c_SHPFlag + '%' OR OrderKey_Inv LIKE @c_SHPFlag + '%')
          ORDER BY mbolkey,CASE WHEN OrderKey_Inv = '' THEN InvResetPageNo ELSE OrderKey_Inv END,ExternOrdKey   --CS09   --WL09
@@ -1184,6 +1189,7 @@ CREATE OR ALTER PROC [dbo].[isp_CommecialInvoice_03_sg] (
              ,  @c_NSQLCountry AS NSQLCountry   --WL06  
              ,  InvResetPageNo   --WL09
              ,  ResetPageNoFlag  --WL09
+             ,  FOBDescr   --WL11
          FROM #TEMP_CommINV03   
          WHERE (LEFT(InvResetPageNo,1) = @c_SHPFlag OR LEFT(OrderKey_Inv,1) = @c_SHPFlag) 
          ORDER BY mbolkey,CASE WHEN OrderKey_Inv = '' THEN InvResetPageNo ELSE OrderKey_Inv END,ExternOrdKey   --CS09   --WL09
@@ -1254,6 +1260,7 @@ CREATE OR ALTER PROC [dbo].[isp_CommecialInvoice_03_sg] (
              ,  @c_NSQLCountry AS NSQLCountry   --WL06  
              ,  InvResetPageNo   --WL09
              ,  ResetPageNoFlag  --WL09
+             ,  FOBDescr   --WL11
          FROM #TEMP_CommINV03      
          ORDER BY mbolkey,CASE WHEN OrderKey_Inv = '' THEN InvResetPageNo ELSE OrderKey_Inv END,ExternOrdKey   --CS09   --WL09
       END
