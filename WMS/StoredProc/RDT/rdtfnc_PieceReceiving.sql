@@ -137,6 +137,8 @@ GO
 /* 2022-05-19 8.9 Ung        WMS-19667 Migrate to new ExtendedInfoSP    */
 /* 2019-04-16 9.0 MT         Add missing nBulkSNOQTY in line 2576       */
 /* 2020-12-07 9.1 YeeKung    Change params in decodesku   (yeekung02)   */  
+/* 2022-09-02 9.2 James      WMS-20639 Change rdt_GetSKU output         */
+/*                           UPC Qty (james24)                          */
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_PieceReceiving] (
    @nMobile    INT,
@@ -190,7 +192,8 @@ DECLARE
    @nBulkSNO                INT,
    @nBulkSNOQTY             INT,
    @nDecodeQTY              INT, 
-   @tVar                    VariableTable
+   @tVar                    VariableTable,
+   @nUPCQty                 INT = 0
 
 -- Define a variable
 DECLARE
@@ -2327,6 +2330,7 @@ BEGIN
       END
 
       IF @nSKUCnt = 1
+      BEGIN
          --SET @cSKU = @cSKUCode
          EXEC [RDT].[rdt_GETSKU]
              @cStorerKey  = @cStorer
@@ -2334,7 +2338,12 @@ BEGIN
             ,@bSuccess    = @b_Success     OUTPUT
             ,@nErr        = @nErrNo        OUTPUT
             ,@cErrMsg     = @cErrMsg       OUTPUT
-
+            ,@nUPCQty     = @nUPCQty       OUTPUT
+         
+         IF @nUPCQty > 0
+            SET @cQTY = @nUPCQty
+      END      
+         
       -- Validate barcode return multiple SKU
       IF @nSKUCnt > 1
       BEGIN

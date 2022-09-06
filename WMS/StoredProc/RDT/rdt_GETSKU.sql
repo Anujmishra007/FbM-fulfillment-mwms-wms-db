@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_GETSKU]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [RDT].[rdt_GETSKU]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -31,14 +27,16 @@ GO
 /* 08-Feb-2018 1.5  James    WMS3967-Check status of SKU (james02)      */
 /* 06-Dec-2019 1.6  Chermaine INC0959117 not to hardcode errMsg (cc01)  */
 /* 29-Nov-2021 1.7  Ung      Perfomance tuning                          */
+/* 02-Sep-2022 1.8  James    WMS-20639 Add output UPC Qty (james03)     */
 /************************************************************************/
-CREATE PROC    [RDT].[rdt_GETSKU]
+CREATE OR ALTER PROC    [RDT].[rdt_GETSKU]
                @cStorerKey   NVARCHAR(15)
 ,              @cSKU         NVARCHAR(30)      OUTPUT -- (ung01)
 ,              @bSuccess     int               OUTPUT
 ,              @nErr         int               OUTPUT
 ,              @cErrMsg      NVARCHAR(250)     OUTPUT
 ,              @cSKUStatus   NVARCHAR(10) = ''
+,              @nUPCQty      INT = 0           OUTPUT
 
 AS
 BEGIN
@@ -49,6 +47,9 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @nContinue INT
    DECLARE @cLangCode  NVARCHAR( 3)
+   DECLARE @nFunc     INT
+   DECLARE @cGetUPCQty NVARCHAR( 1)
+   DECLARE @nQty      INT = 0
    
    SELECT @nContinue = 1
    SELECT @bSuccess = 1
@@ -80,7 +81,9 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                   AND StorerKey = @cStorerKey
                IF @@ROWCOUNT = 0 
                BEGIN
-                  SELECT TOP 1 @cSKU = SKU 
+                  SELECT TOP 1 
+                     @cSKU = UPC.SKU, 
+                     @nQty = UPC.QTY 
                   FROM dbo.UPC UPC WITH (NOLOCK) 
                   WHERE UPC = @cSKU 
                     AND StorerKey = @cStorerKey            
@@ -100,6 +103,18 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                      SET @nErr = 68500
                      SET @cErrMsg = rdt.rdtgetmessage( @nErr, @cLangCode,'DSP') -- Bad Sku 
                   END 
+                  
+                  IF @nErr = 0
+                  BEGIN
+                     SELECT @nFunc = Func 
+                     FROM rdt.RDTMOBREC WITH (NOLOCK) 
+                     WHERE UserName = SUSER_SNAME()
+
+                     SET @cGetUPCQty = rdt.RDTGetConfig( @nFunc, 'GetUPCQty', @cStorerKey)
+                     
+                     IF @cGetUPCQty = '1'
+                        SET @nUPCQty = @nQty
+                  END
                END
             END 
          END
@@ -136,7 +151,9 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 
                IF @@ROWCOUNT = 0 
                BEGIN
-                  SELECT TOP 1 @cSKU = SKU 
+                  SELECT TOP 1 
+                     @cSKU = UPC.SKU,
+                     @nQty = UPC.QTY 
                   FROM dbo.UPC UPC WITH (NOLOCK) 
                   WHERE UPC = @cSKU 
                   AND   StorerKey = @cStorerKey  
@@ -157,6 +174,18 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                      SET @nErr = 68500
                      SET @cErrMsg = rdt.rdtgetmessage( @nErr, @cLangCode,'DSP') -- Bad Sku         
                   END 
+
+                  IF @nErr = 0
+                  BEGIN
+                     SELECT @nFunc = Func 
+                     FROM rdt.RDTMOBREC WITH (NOLOCK) 
+                     WHERE UserName = SUSER_SNAME()
+                  
+                     SET @cGetUPCQty = rdt.RDTGetConfig( @nFunc, 'GetUPCQty', @cStorerKey)
+                     
+                     IF @cGetUPCQty = '1'
+                        SET @nUPCQty = @nQty
+                  END
                END
             END 
          END
