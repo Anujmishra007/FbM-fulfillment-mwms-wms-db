@@ -14,7 +14,7 @@ GO
 /* Called By: n_cst_packcarton_ecom                                     */        
 /*          : ue_getcartontrackno                                       */        
 /*        :                                                             */        
-/* PVCS Version: 1.2                                                    */        
+/* PVCS Version: 1.1                                                    */        
 /*                                                                      */        
 /* Version: 7.0                                                         */        
 /*                                                                      */        
@@ -24,6 +24,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */        
 /* 06-APR-2022 Mingle   1.0   Created(WMS-19152)                        */  
 /* 06-APR-2022 Mingle   1.0   DevOps Combine Script                     */    
+/* 04-Aug-2022 WLChooi  1.1   WMS-20403 Get Info from Option5 (WL01)    */
 /************************************************************************/        
 CREATE OR ALTER PROC [dbo].[isp_EPackCtnTrack09]        
          @c_PickSlipNo  NVARCHAR(10)         
@@ -61,7 +62,14 @@ BEGIN
          , @b_SuccessOld      INT   
          , @c_UpdateCT        NVARCHAR(1) = 'N'  
          , @n_RowRef          BIGINT   
-        
+         , @c_Facility        NVARCHAR(5)    --WL01
+         , @c_SValue          NVARCHAR(50)   --WL01
+         , @c_Option1         NVARCHAR(50) = ''   --WL01
+         , @c_Option2         NVARCHAR(50) = ''   --WL01
+         , @c_Option3         NVARCHAR(50) = ''   --WL01
+         , @c_Option4         NVARCHAR(50) = ''   --WL01
+         , @c_Option5         NVARCHAR(4000) = '' --WL01
+
    SET @b_Success  = 1        
    SET @n_err      = 0        
    SET @c_errmsg   = ''        
@@ -71,12 +79,17 @@ BEGIN
       COMMIT TRAN        
    END        
         
-   SET @c_Orderkey = ''        
-   SELECT @c_Orderkey = Orderkey         
-         ,@c_Storerkey= Storerkey
-         ,@c_TaskBatchNo = TaskBatchNo 
-   FROM PACKHEADER WITH (NOLOCK)        
-   WHERE PickSlipNo = @c_PickSlipNo        
+   SET @c_Orderkey = ''    
+   
+   --WL01 S
+   SELECT @c_Orderkey      = PACKHEADER.Orderkey         
+         ,@c_Storerkey     = PACKHEADER.Storerkey
+         ,@c_TaskBatchNo   = PACKHEADER.TaskBatchNo 
+         ,@c_Facility      = ORDERS.Facility
+   FROM PACKHEADER WITH (NOLOCK)    
+   JOIN ORDERS WITH (NOLOCK) ON ORDERS.OrderKey = PACKHEADER.OrderKey
+   WHERE PickSlipNo = @c_PickSlipNo  
+   --WL01 E
         
    IF @c_Orderkey = ''        
    BEGIN 
@@ -84,9 +97,34 @@ BEGIN
       SET @n_err = 60010          
       SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Orderkey is required to get Tracking #. (isp_EPackCtnTrack09)'         
       GOTO QUIT_SP                      
-   END    
+   END   
    
    --WL01 S
+   EXEC nspGetRight  
+      @c_Facility          -- facility  
+   ,  @c_Storerkey         -- Storerkey  
+   ,  NULL                 -- Sku  
+   ,  'EPackCtnTrackNo_SP' -- Configkey  
+   ,  @b_Success                 OUTPUT   
+   ,  @c_SValue                  OUTPUT   
+   ,  @n_Err                     OUTPUT   
+   ,  @c_ErrMsg                  OUTPUT 
+   ,  @c_Option1                 OUTPUT
+   ,  @c_Option2                 OUTPUT
+   ,  @c_Option3                 OUTPUT
+   ,  @c_Option4                 OUTPUT
+   ,  @c_Option5                 OUTPUT
+
+   IF @b_success <> 1  
+   BEGIN  
+      SET @n_continue = 3  
+      SET @n_err = 60014   
+      SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Executing nspGetRight. (isp_EPackCtnTrack09)'   
+                  + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '   
+      GOTO QUIT_SP  
+   END 
+   --WL01 E
+   
    --Get TrackingNo from Orders Header since Storerconfig ValidateTrackNo = '1' if CartonNo = 1 AND PackInfo is not exists
    IF NOT EXISTS (SELECT 1
                   FROM PACKINFO PIF (NOLOCK)
@@ -160,7 +198,6 @@ BEGIN
          WHERE RowRef = @n_RowRef
       END	 
    END
-   --WL01 E
 
    IF EXISTS (SELECT 1
                   FROM PACKINFO PIF (NOLOCK)
@@ -214,7 +251,19 @@ BEGIN
 
    SEND_ITF: -- Send ITF to get Tracking # for Next CartonNo
    BEGIN TRAN
-   SET @c_Tablename = 'WSCRPKADDCN'
+   
+   --WL01 S
+   SELECT @c_Tablename = dbo.fnc_GetParamValueFromString('@c_Tablename', @c_Option5, 'WSCRPKADDCN')  
+
+   IF ISNULL(@c_Tablename, '') = ''
+      SET @c_Tablename = 'WSCRPKADDCN' 
+
+   SELECT @c_DataStream = dbo.fnc_GetParamValueFromString('@c_DataStream', @c_Option5, '6157')  
+
+   IF ISNULL(@c_DataStream, '') = ''
+      SET @c_DataStream = '6157' 
+   --WL01 E
+
    SET @c_CartonNo = CONVERT(NVARCHAR(5), @n_CartonNo + 1)
    
    SET @c_TransmitlogKey = ''
@@ -339,7 +388,6 @@ BEGIN
    END        
         
    QUIT_SP: 
-   --WL01 S
    IF @b_Success = 1
    BEGIN
       --Check if b_SuccessOld = 2, if yes need to set b_success to 2, prevent ECOM Packing insert PackInfo
@@ -347,8 +395,7 @@ BEGIN
       BEGIN
          SET @b_Success = 2
       END
-   END
-   --WL01 E       
+   END      
         
    IF @n_Continue=3  -- Error Occured - Process And Return        
    BEGIN        
