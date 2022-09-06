@@ -55,12 +55,18 @@ BEGIN
                set @cBarcode= trim(@cBarcode)
 
 	                          -- If user key in sku
-               IF EXISTS ( SELECT 1 FROM dbo.SKU WITH (NOLOCK) 
+               IF EXISTS ( SELECT 1 FROM dbo.SKU WITH (NOLOCK, INDEX IDX_SKU_SKU) 
                            WHERE StorerKey = @cStorerKey
-                           AND  ( SKU = @cBarcode
-                           OR  ALTSKU = @cBarcode
-                           OR MANUFACTURERSKU = @cBarcode
-                           OR RETAILSKU =  @cBarcode))
+                           AND  SKU = @cBarcode) 
+                       OR (SELECT 1 FROM dbo.SKU WITH (NOLOCK , INDEX IX_SKU_ManufacturerSku) 
+                           WHERE StorerKey = @cStorerKey
+                           AND  ManufacturerSku = @cBarcode)                        
+                       OR (SELECT 1 FROM dbo.SKU WITH (NOLOCK , INDEX IX_SKU_RetailSKU) 
+                           WHERE StorerKey = @cStorerKey
+                           AND  retailsku = @cBarcode) 
+                        OR (SELECT 1 FROM dbo.SKU WITH (NOLOCK , INDEX IX_SKU_AltSku) 
+                           WHERE StorerKey = @cStorerKey
+                           AND  altsku = @cBarcode) 
                BEGIN
                   SET @cSKU = @cBarcode
 
