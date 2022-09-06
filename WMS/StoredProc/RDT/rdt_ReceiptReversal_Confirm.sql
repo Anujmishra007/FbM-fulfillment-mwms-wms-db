@@ -5,6 +5,7 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
+
 /************************************************************************/
 /* Store procedure: rdt_ReceiptReversal_Confirm                         */
 /* Copyright      : IDS                                                 */
@@ -27,7 +28,7 @@ GO
 /* 19-Jul-2022 1.4  YeeKung     JSM-81095 Join RDetail (yeekung01)      */
 /************************************************************************/
 
-CREATE OR ALTER  PROC [RDT].[rdt_ReceiptReversal_Confirm] (
+CREATE  OR ALTER  PROC [RDT].[rdt_ReceiptReversal_Confirm] (
    @nMobile                INT,
    @nFunc                  INT,
    @cLangCode              NVARCHAR( 3),
@@ -164,10 +165,11 @@ BEGIN
       SET @cSKU = ''
 
    DECLARE CUR_LOOP CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-   SELECT LLI.LOT, LLI.LOC, LLI.SKU,  ISNULL( SUM( RD.QtyReceived), 0) --(yeekung01)
+   SELECT LLI.LOT, LLI.LOC, LLI.SKU,  ISNULL( SUM( IT.QTY), 0) --(yeekung01)
    FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
    JOIN dbo.LOC LOC WITH (NOLOCK) ON LLI.LOC = LOC.LOC
    JOIN dbo.RECEIPTDETAIL RD(NOLOCK) ON LLI.loc=RD.toloc AND LLI.SKU=RD.SKU AND LLI.ID=RD.TOID AND LLI.storerkey=RD.storerkey --(yeekung01)
+   JOIN dbo.itrn IT (NOLOCK) ON IT.SourceKey= rd.ReceiptKey+rd.ReceiptLineNumber AND lli.lot=IT.lot AND lli.id=IT.TOID AND lli.loc=IT.ToLoc
    WHERE LLI.StorerKey = @cStorerKey
    AND   LLI.ID = @cID
    AND   RD.Receiptkey=@cReceiptkey
@@ -202,7 +204,7 @@ BEGIN
       SELECT
          @cLottable01     = Lottable01,
          @cLottable02     = Lottable02,
-         @cLottable03     = Lottable03,
+  @cLottable03     = Lottable03,
          @dLottable04     = Lottable04,
          @dLottable05     = Lottable05,
          @cLottable06     = Lottable06,
