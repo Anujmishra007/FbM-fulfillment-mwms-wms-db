@@ -1,5 +1,5 @@
 
---rdtfnc_DynamicPick_PickUCC_Confirm
+--rdt_DynamicPick_PickUCC_Confirm
 EXEC rdt.rdtDropMsg 184901, 184950	
 
 execute rdt.rdtAddMsg 184901, 10, '184901UPdOrdersFail',   'us_english', 958
