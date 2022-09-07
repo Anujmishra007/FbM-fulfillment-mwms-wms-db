@@ -14,6 +14,8 @@ GO
 /* Date       Rev  Author   Purposes                                    */  
 /* 20-03-2022 1.0  yeekung  WMS-19154. Created                          */
 /* 07-05-2022 1.1  Ung      WMS-19982 Add swap UCC                      */
+/* 07-09-2022 1.2  yeekung  fix rdtfnc_DynamicPick_PickUCC_Confirm      */
+/*                           -> rdt_DynamicPick_PickUCC_Confirm         */
 /************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdtfnc_DynamicPick_PickUCC] (  
@@ -784,7 +786,7 @@ BEGIN
       IF @cOption = '1' -- Short  
       BEGIN
 
-         EXECUTE rdt.rdtfnc_DynamicPick_PickUCC_Confirm @nMobile, @nFunc,@cLangCode, @cUserName,@cFacility,@cStorerKey,  
+         EXECUTE rdt.rdt_DynamicPick_PickUCC_Confirm @nMobile, @nFunc,@cLangCode, @cUserName,@cFacility,@cStorerKey,  
             @cSuggestedLOC,
             @cPickSlipNo,  
             @cSuggSKU,
@@ -1006,7 +1008,7 @@ BEGIN
          END  
       END  
 
-      EXECUTE rdt.rdtfnc_DynamicPick_PickUCC_Confirm @nMobile, @nFunc,@cLangCode, @cUserName,@cFacility,@cStorerKey,  
+      EXECUTE rdt.rdt_DynamicPick_PickUCC_Confirm @nMobile, @nFunc,@cLangCode, @cUserName,@cFacility,@cStorerKey,  
          @cSuggestedLOC,
          @cPickSlipNo,  
          @cSuggSKU,
