@@ -5,7 +5,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
-/* Store procedure: rdtfnc_DynamicPick_PickUCC_Confirm                  */
+/* Store procedure: rdt_DynamicPick_PickUCC_Confirm                     */
 /*                                                                      */
 /* Modifications log:                                                   */
 /*                                                                      */
@@ -13,7 +13,7 @@ GO
 /* 20-03-2022 1.0  yeekung  WMS-19154. Created                          */ 
 /************************************************************************/
 
-CREATE OR ALTER PROC [RDT].[rdtfnc_DynamicPick_PickUCC_Confirm] (
+CREATE OR ALTER PROC [RDT].[rdt_DynamicPick_PickUCC_Confirm] (
    @nMobile        INT,
    @nFunc          INT, 
 	@cLangCode	    NVARCHAR( 3),
@@ -269,5 +269,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON rdt.rdtfnc_DynamicPick_PickUCC_Confirm to nSQL
+GRANT EXECUTE ON rdt.rdt_DynamicPick_PickUCC_Confirm to nSQL
 GO

@@ -20,6 +20,8 @@ GO
 /* 17-11-2020  1.6  YeeKung     WMS-15690 Add New Batch (yeekung04)     */
 /* 2021-06-20  1.7  YeeKung     WMS-16535 Add New Batch (yeekung05)     */
 /* 2022-02-14  1.8  Ung         WMS-18866 Add new batch, UDF3=SP name   */
+/* 2022-08-18  1.9  Ung         WMS-20429 Add remain at lottable screen */
+/*                              if L04 changes                          */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_LottableProcess_GenL4L14ExpiryByL1Batch
@@ -302,12 +304,19 @@ BEGIN
 
 Quit:
    DECLARE @cLastLottable01 NVARCHAR( 18)
+   DECLARE @dLastLottable04 DATETIME
    DECLARE @cArchiveDB  NVARCHAR(30)   --(cc01)
-   SELECT @cLastLottable01 = V_Lottable01 FROM rdt.rdtMobRec WITH (NOLOCK) WHERE Mobile = @nMobile
+   
+   SELECT 
+      @cLastLottable01 = V_Lottable01, 
+      @dLastLottable04 = V_Lottable04 
+   FROM rdt.rdtMobRec WITH (NOLOCK) 
+   WHERE Mobile = @nMobile
 
    -- Setup error, or L01 changed
    IF (@dLottable14Value = 0 OR @dLottable14Value IS NULL) OR
-      (@cLottable01Value <> @cLastLottable01)
+      (@cLottable01Value <> @cLastLottable01) OR 
+      (@dLottable04 <> @dLastLottable04) 
    BEGIN
       --(cc01)
       IF @nErrNo > 0 AND @nFunc = '608' AND @cDisplayErr = '0'

@@ -68,7 +68,8 @@ GO
 /* 18-Nov-2021  Wan01      2.2  WMS-18336 - MYS–SBUXM–Default value in  */  
 /*                              POD Entry column upon update POD Status */  
 /* 18-Nov-2021  Wan01      2.3  DevOps Combine Script.                  */ 
-/* 18-Nov-2021  TLTING04   2.4  Disable STSORDERS insert 4Docstatustrack*/      
+/* 18-Nov-2021  TLTING04   2.4  Disable STSORDERS insert 4Docstatustrack*/   
+/* 07-Sep-2022  YTKuek     2.5  GVT Interface Trigger Point (YT01)      */
 /************************************************************************/    
 -- Added by YokeBeen on 14-Jan-2003 (YokeBeen01 - SOS#FBR8465)    
 CREATE OR ALTER TRIGGER [dbo].[ntrPODUpdate]    
@@ -720,7 +721,17 @@ END
       FROM  INSERTED INS   
       JOIN  ITFTriggerConfig ITC WITH (NOLOCK) ON ITC.StorerKey = INS.StorerKey    
       WHERE ITC.SourceTable = 'POD'    
-      AND   ITC.sValue      = '1'         
+      AND   ITC.sValue      = '1'    
+      --(YT01)-S
+      UNION
+      SELECT DISTINCT INS.Mbolkey  
+                    , INS.Mbollinenumber    
+                    , INS.StorerKey  
+      FROM  INSERTED INS   
+      JOIN  ITFTriggerConfig ITC WITH (NOLOCK) ON ITC.StorerKey = 'ALL'
+      WHERE ITC.SourceTable = 'POD'    
+      AND   ITC.sValue      = '1'   
+      --(YT01)-E     
   
       OPEN Cur_Order_TriggerPoints    
       FETCH NEXT FROM Cur_Order_TriggerPoints INTO @c_MBOLKey, @c_MBOLLineNumber, @c_Storerkey  
