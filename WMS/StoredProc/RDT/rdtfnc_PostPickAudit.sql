@@ -81,6 +81,9 @@ GO
 /*                            And Add CapturePackInfo Screen st8 (cc02) */    
 /* 21-12-2021 5.4 James       Bug fix (james10)                         */ 
 /* 28-03-2022 5.5 James       WMS-17439 Bug fix ON DECODESP (james11)   */ 
+/* 07-09-2022 5.6 James       WMS-20689 Add config to default qty onto  */
+/*                            preferred uom default (james12)           */
+/* 19-05-2021 5.7 SeongYaik   Revise IF Statement (SY01)                */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PostPickAudit] (
@@ -215,7 +218,8 @@ DECLARE
    @cPrintPackList                  NVARCHAR(1),
    @cReasonCode                     NVARCHAR(20),        
    @cCaptureReasonCode              NVARCHAR(1),  
-
+   @cPPADefaultPQTY                 NVARCHAR( 1),
+   
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
    @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),    @cFieldAttr03 NVARCHAR( 1),
@@ -264,7 +268,7 @@ SELECT
    @cTaskDetailKey  = V_TaskDetailKey, 
    
    @nTol            = V_Integer1, 
-
+   
    @cRefNo          = V_String1,
    @cDropID         = V_String2,
    @cExternOrderKey = V_String3,
@@ -273,7 +277,8 @@ SELECT
    @cTaskQty        = V_String6, 
    @cTaskDefaultQty = V_String7, 
    @cPUOM_Desc      = V_String8,   
-
+   @cPPADefaultPQTY = V_String9,
+   
    @cPackQTYIndicator               = V_String10,
    @cPrePackIndicator               = V_String11,
    @cPPACartonIDByPackDetailDropID  = V_String12,
@@ -476,11 +481,14 @@ BEGIN
    SET @cAllowWeightZero = rdt.rdtGetConfig( @nFunc, 'AllowWeightZero', @cStorer)
    SET @cAllowCubeZero = rdt.rdtGetConfig( @nFunc, 'AllowCubeZero', @cStorer)    
    
-    SET @cCaptureReasonCode = rdt.rdtGetConfig( @nFunc, 'CapReasonCode', @cStorer)        
+   SET @cCaptureReasonCode = rdt.rdtGetConfig( @nFunc, 'CapReasonCode', @cStorer)        
    IF @cCaptureReasonCode = '0'        
       SET @cCaptureReasonCode = '' 
      
-
+   SET @cPPADefaultPQTY = rdt.rdtGetConfig( @nFunc, 'PPADefaultPQTY', @cStorer)
+   IF @cPPADefaultPQTY = '0'        
+      SET @cPPADefaultPQTY = '' 
+   
    -- EventLog - Sign In Function  
    -- (ChewKP02) 
    EXEC RDT.rdt_STD_EventLog  
@@ -659,7 +667,7 @@ BEGIN
       END
 
       -- Ref No
-      IF @cRefNo <> ''
+      IF @cRefNo <> '' AND @cRefNo IS NOT NULL --SY01
       BEGIN
          -- Validate load plan status
          IF NOT EXISTS( SELECT 1
@@ -707,7 +715,7 @@ BEGIN
       END
 
       -- Pick Slip No
-      IF @cPickSlipNo <> ''
+      IF @cPickSlipNo <> '' AND @cPickSlipNo IS NOT NULL --SY01
       BEGIN
          SET @cOrderKey = ''  -- (james02)
 
@@ -812,7 +820,7 @@ BEGIN
       END
 
       -- OrderKey
-      IF @cOrderKey <> ''
+      IF @cOrderKey <> '' AND @cOrderKey IS NOT NULL --SY01
       BEGIN
          -- Validate order status
          IF NOT EXISTS( SELECT 1
@@ -855,7 +863,7 @@ BEGIN
       END
 
       -- DropID
-      IF @cDropID <> ''
+      IF @cDropID <> '' AND @cDropID IS NOT NULL --SY01
       BEGIN
          -- Validate drop ID status
          IF @cPPACartonIDByPackDetailDropID = '1'
@@ -915,7 +923,7 @@ BEGIN
       END
 
       -- Pallet ID
-      IF @cID <> ''
+      IF @cID <> '' AND @cID IS NOT NULL --SY01
       BEGIN
          IF NOT EXISTS( SELECT 1
             FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
@@ -933,7 +941,7 @@ BEGIN
       END
 
       -- TaskDetailKey
-      IF @cTaskDetailKey <> ''
+      IF @cTaskDetailKey <> '' AND @cTaskDetailKey IS NOT NULL --SY01
       BEGIN
          SELECT @nTaskQty = Qty
          FROM dbo.TaskDetail WITH (NOLOCK) 
@@ -1212,7 +1220,7 @@ BEGIN
       --(yeekung03)
       --IF @cPUOM <> '6'
       --   SET @cFieldAttr10 = 'O' -- MQTY
-
+      
       SET @cOutField01 = '' --@cSKU
       SET @cOutField02 = '' --@cSKU
       SET @cOutField03 = '' --SUBSTRING( @cSKUDesc, 1, 20)
@@ -1221,7 +1229,7 @@ BEGIN
       SET @cOutField06 = '' --@cColor
       SET @cOutField07 = '' --@cSize
       SET @cOutField08 = '' --@nPUOM_Div, @cPUOM_Desc, @cMUOM_Desc
-      SET @cOutField09 = '' --@nPUOM
+      SET @cOutField09 = CASE WHEN @cPPADefaultPQTY <> '' THEN @cPPADefaultPQTY ELSE '' END --@nPUOM
       SET @cOutField10 = CASE WHEN @cTaskDefaultQty = '1' THEN @cTaskQty ELSE @cPPADefaultQTY END --@nMUOM
       SET @cOutField11 = '' --@nPQTY_CHK
       SET @cOutField12 = '' --@nMQTY_CHK
@@ -2618,7 +2626,7 @@ BEGIN
       -- Display QTY info
       SET @cSKU = ''
       SET @cOutField01 = '' --@cSKU
-      SET @cOutField09 = '' --@nPQTY
+      SET @cOutField09 = CASE WHEN @cPPADefaultPQTY <> '' THEN @cPPADefaultPQTY ELSE '' END--@nPQTY
       SET @cOutField10 = CASE WHEN @cTaskDefaultQty = '1' THEN @cTaskQty ELSE @cPPADefaultQTY END
       SET @cOutField11 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY_CHK AS NVARCHAR(5)) END
       SET @cOutField12 = CAST( @nMQTY_CHK AS NVARCHAR(5))
@@ -3574,7 +3582,7 @@ BEGIN
       SET @cSKU = ''
       SET @cOutField01 = '' --@cSKU
       SET @cOutField04 = '' 
-      SET @cOutField09 = '' --@nPQTY
+      SET @cOutField09 = CASE WHEN @cPPADefaultPQTY <> '' THEN @cPPADefaultPQTY ELSE '' END--@nPQTY
       SET @cOutField10 = CASE WHEN @cTaskDefaultQty = '1' THEN @cTaskQty ELSE @cPPADefaultQTY END
       SET @cOutField11 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY_CHK AS NVARCHAR(5)) END
       SET @cOutField12 = CAST( @nMQTY_CHK AS NVARCHAR(5))
@@ -3657,7 +3665,7 @@ BEGIN
       SET @cOutField06 = '' --@cColor
       SET @cOutField07 = '' --@cSize
       SET @cOutField08 = '' --@nPUOM_Div, @cPUOM_Desc, @cMUOM_Desc
-      SET @cOutField09 = '' --@nPUOM
+      SET @cOutField09 = CASE WHEN @cPPADefaultPQTY <> '' THEN @cPPADefaultPQTY ELSE '' END--@nPUOM
       SET @cOutField10 = CASE WHEN @cTaskDefaultQty = '1' THEN @cTaskQty ELSE @cPPADefaultQTY END --@nMUOM
       SET @cOutField11 = '' --@nPQTY_CHK
       SET @cOutField12 = '' --@nMQTY_CHK
@@ -4204,6 +4212,7 @@ BEGIN
       V_String6  = @cTaskQty, 
       V_String7  = @cTaskDefaultQty, 
       V_String8  = @cPUOM_Desc, 
+      V_String9  = @cPPADefaultPQTY,
 
       V_String10 = @cPackQTYIndicator,
       V_String11 = @cPrePackIndicator,
