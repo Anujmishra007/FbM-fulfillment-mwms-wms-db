@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'rdt.rdtVFPPAExtUpd') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdtVFPPAExtUpd
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -21,9 +17,10 @@ GO
 /* 2017-06-02 3.5  James      Add new param (james01)                   */   
 /* 2019-06-25 3.6  Shong      Performance Tuning (SWT01)                */   
 /* 2019-09-18 3.7  LZG        INC0844811 - Add optional params (ZG01)   */    
+/* 2022-09-08 3.8  James      WMS-20689 - Add Reasonkey (james02)       */    
 /************************************************************************/    
     
-CREATE PROC rdt.rdtVFPPAExtUpd (    
+CREATE or ALTER PROC rdt.rdtVFPPAExtUpd (    
    @nMobile     INT,    
    @nFunc       INT,     
    @cLangCode   NVARCHAR( 3),     
@@ -41,7 +38,8 @@ CREATE PROC rdt.rdtVFPPAExtUpd (
    @nErrNo      INT       OUTPUT,     
    @cErrMsg     NVARCHAR( 20) OUTPUT,    
    @cID             NVARCHAR( 18) = '',    -- ZG01    
-   @cTaskDetailKey  NVARCHAR( 10) = ''     -- ZG01    
+   @cTaskDetailKey  NVARCHAR( 10) = '',     -- ZG01    
+   @cReasonCode  NVARCHAR(20) OUTPUT
 )    
 AS    
     
