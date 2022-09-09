@@ -1,0 +1,22 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
+CREATE OR ALTER VIEW [BI].[V_DropidDetail] AS
+SELECT *
+   FROM [DropidDetail] WITH (NOLOCK)
+GO
+GRANT SELECT ON  [BI].[V_DropidDetail] TO [JReportRole]
+GO
+
+/*
+EXEC AS LOGIN = 'tabrpt'
+EXEC AS LOGIN = 'JREPORTUSERCN'
+
+SELECT SUSER_SNAME()
+
+SELECT * FROM BI.V_DropidDetail
+revert;
+*/
+
