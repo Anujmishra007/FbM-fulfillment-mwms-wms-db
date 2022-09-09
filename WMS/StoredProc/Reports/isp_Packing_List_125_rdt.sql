@@ -21,6 +21,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author  Ver   Purposes                                  */
+/* 05-SEP-2022  MIGNLE  1.0   WMS-20684 add storer.b_contact(ML01)      */ 
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_Packing_List_125_rdt] (
@@ -56,10 +57,13 @@ BEGIN
         , SKU.Descr
         , SUM(PACKDETAIL.Qty) AS Qty
         , PACKDETAIL.PickSlipNo
+		  , storer.contact1	--ML01
    FROM ORDERS (NOLOCK)
    JOIN PACKHEADER(NOLOCK) ON PackHeader.OrderKey = ORDERS.OrderKey
    JOIN PACKDETAIL (NOLOCK) ON PackDetail.PickSlipNo = PackHeader.PickSlipNo
    JOIN SKU (NOLOCK) ON PACKDETAIL.StorerKey = SKU.StorerKey AND PACKDETAIL.Sku = SKU.Sku
+	--JOIN STORER (NOLOCK) ON STORER.StorerKey = ORDERS.StorerKey
+	JOIN STORER (NOLOCK) ON ORDERS.StorerKey=STORER.ConsigneeFor and orders.m_address1=storer.address1	--ML01
    WHERE ORDERS.ORDERKEY = @c_Pickslipno
    GROUP BY ORDERS.C_contact1
         , LTRIM(RTRIM(ISNULL(ORDERS.C_Address2,'')))
@@ -69,11 +73,14 @@ BEGIN
         , ORDERS.Adddate
         , PACKDETAIL.PickSlipNo
         , SKU.Descr
+		  , storer.contact1	--ML01
 
 END     
 GO
 GRANT EXECUTE ON isp_Packing_List_125_rdt TO NSQL
 GO    
+
+
 
 
 
