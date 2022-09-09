@@ -1,10 +1,8 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[nspLPRTSK4]') AND OBJECTPROPERTY(ID, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[nspLPRTSK4]
+SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF
-GO
+
 /*************************************************************************/
 /* Stored Procedure: nspLPRTSK4                                          */
 /* Creation Date: 23-Dec-2014                                            */
@@ -15,7 +13,7 @@ GO
 /*                                                                       */
 /* Called By:                                                            */
 /*                                                                       */
-/* PVCS Version: 1.0                                                     */
+/* PVCS Version: 1.3                                                     */
 /*                                                                       */
 /* Version: 5.4                                                          */
 /*                                                                       */
@@ -25,10 +23,12 @@ GO
 /* Date         Author   Ver  Purposes                                   */
 /* 09/06/2015   NJOW01   1.0  343924-group by pallet CBM                 */
 /* 30/10/2015   NJOW02   1.1  move raiseerror to control by wrapper      */
-/* 06-02-2018   Leong    1.2  INC0125972 - Bug Fix.                      */
+/* 06/02/2018   Leong    1.2  INC0125972 - Bug Fix.                      */
+/* 01-09-2022   Wan01    1.3  LFWM-3726 - PH -SCE Wave Release Validation*/
+/*                            DevOps Combine Script                      */
 /*************************************************************************/
 
-CREATE PROC nspLPRTSK4
+CREATE OR ALTER PROC [dbo].[nspLPRTSK4]
    @c_LoadKey     NVARCHAR(10),
    @n_err         INT          OUTPUT,
    @c_ErrMsg      NVARCHAR(250) OUTPUT,
@@ -66,10 +66,57 @@ BEGIN
            ,@b_success        INT
            ,@n_StartTranCnt   INT
 
+   --(Wan01) - START
+   DECLARE  @c_Facility             NVARCHAR(5)    = ''
+         ,  @c_LPRelTaskWithBooking NVARCHAR(30)   = ''
+         ,  @c_Option5_LPRelTaskWBk NVARCHAR(4000) = ''
+         ,  @c_BkNoFromTMSShipment  NVARCHAR(10)   = 'N'
+         ,  @n_BookingNo            INT            = 0
+   
+   IF OBJECT_ID('tempdb..#BookLoad','u') IS NOT NULL
+   BEGIN
+      DROP TABLE #BookLoad;
+   END    
+    
+   CREATE TABLE #BookLoad
+      (  RowID       INT            IDENTITY(1,1)  PRIMARY KEY
+      ,  LoadKey     NVARCHAR(10)   NOT NULL DEFAULT('')
+      ,  BookingNo   INT            NOT NULL DEFAULT(0)
+      )
+
    SELECT @n_continue = 1 ,@n_err = 0 ,@c_ErrMsg = '', @b_Success = 1
 
    SET @n_StartTranCnt = @@TRANCOUNT
 
+   --(Wan01) - START
+   SELECT @c_Facility = lp.facility
+         ,@n_BookingNo= ISNULL(lp.BookingNo,0)
+   FROM dbo.LoadPlan AS lp
+   WHERE lp.LoadKey = @c_LoadKey
+   
+   SELECT @c_LPRelTaskWithBooking = fgr.Authority
+         ,@c_Option5_LPRelTaskWBk = fgr.Option5 
+   FROM dbo.fnc_GetRight2(@c_Facility, @c_Storerkey, '','LPRELTASKWITHBOOKING') AS fgr
+   
+   SELECT  @c_BkNoFromTMSShipment = dbo.fnc_GetParamValueFromString('@c_BkNoFromTMSShipment', @c_Option5_LPRelTaskWBk, @c_BkNoFromTMSShipment) 
+   
+   IF @c_LPRelTaskWithBooking = '1' AND @c_BkNoFromTMSShipment = 'Y'
+   BEGIN
+      INSERT INTO #BookLoad ( LoadKey, BookingNo )
+      SELECT tto.Loadkey, ts.BookingNo
+      FROM dbo.TMS_Shipment AS ts WITH (NOLOCK)
+      JOIN dbo.TMS_ShipmentTransOrderLink AS tstol WITH (NOLOCK) ON tstol.ShipmentGID = ts.ShipmentGID
+      JOIN dbo.TMS_TransportOrder AS tto WITH (NOLOCK) ON tto.ProvShipmentID = tstol.ProvShipmentID
+      WHERE tto.Loadkey = @c_LoadKey
+      GROUP BY tto.Loadkey, ts.BookingNo
+   END
+   ELSE
+   BEGIN
+      INSERT INTO #BookLoad ( LoadKey, BookingNo )
+      VALUES ( @c_Loadkey, @n_BookingNo )
+   END
+   --(Wan01) - END  
+      
    IF @n_continue = 1 OR @n_continue = 2
    BEGIN
         --Clear invalid taskdetailkey at pickdetail
@@ -102,15 +149,18 @@ BEGIN
       END
    END
 
-   IF @n_continue = 1 OR @n_continue = 2
+   IF @c_LPRelTaskWithBooking = '1' AND (@n_continue = 1 OR @n_continue = 2)
    BEGIN
       IF EXISTS (SELECT 1
                  FROM LOADPLAN (NOLOCK)
                  JOIN ORDERS (NOLOCK) ON LOADPLAN.Loadkey = ORDERS.Loadkey
-                 JOIN V_Storerconfig2 SC2 ON ORDERS.Storerkey = SC2.Storerkey AND SC2.Configkey = 'LPRELTASKWITHBOOKING' AND SC2.Svalue = '1'
-                 LEFT JOIN BOOKING_OUT BO (NOLOCK) ON LOADPLAN.BookingNo = BO.BookingNo
+                 --(Wan01) - START
+                 --JOIN V_Storerconfig2 SC2 ON ORDERS.Storerkey = SC2.Storerkey AND SC2.Configkey = 'LPRELTASKWITHBOOKING' AND SC2.Svalue = '1'
+                 JOIN #BookLoad AS bl ON bl.LoadKey = LoadPlan.LoadKey
+                 LEFT JOIN BOOKING_OUT BO (NOLOCK) ON bl.BookingNo = BO.BookingNo
+                 --(Wan01) - END
                  --WHERE ISNULL(LOADPLAN.BookingNo,0) = 0
-                 WHERE ISNULL(BO.FinalizeFlag,'') IN ('','N')
+                 WHERE ISNULL(BO.FinalizeFlag,'') IN ('','N')  
                  AND LOADPLAN.Loadkey = @c_Loadkey
                  AND ORDERS.Storerkey = @c_Storerkey)
       BEGIN
@@ -178,7 +228,7 @@ BEGIN
                          'FPK'
                     ELSE 'FCP' END AS TaskType,
                MAX(O.Door) AS ToLoc,
-               MAX(AD.Areakey) AS Areakey,
+               AD.Areakey, 
                BO.BookingDate,
                SUM(PD.Qty) * SKU.Stdcube AS TotalCBM  --NJOW01
         FROM LOADPLAN L (NOLOCK)
@@ -188,9 +238,11 @@ BEGIN
         JOIN SKUXLOC SL (NOLOCK) ON PD.Storerkey = SL.Storerkey AND PD.Sku = SL.Sku AND PD.Loc = SL.Loc
         JOIN SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.Sku = SKU.Sku --NJOW01
         JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc
-        LEFT JOIN AREADETAIL AD (NOLOCK) ON LOC.Putawayzone = AD.Putawayzone
+        --LEFT JOIN AREADETAIL AD (NOLOCK) ON LOC.Putawayzone = AD.Putawayzone
+        OUTER APPLY (SELECT TOP 1 Areakey FROM AREADETAIL (NOLOCK) WHERE AREADETAIL.Putawayzone = LOC.Putawayzone ORDER BY AREADETAIL.Areakey) AD    
         LEFT JOIN #LOCXID_QTYAVAILABLE LI (NOLOCK) ON PD.Storerkey = LI.Storerkey AND PD.Loc = LI.Loc AND PD.Id = LI.Id
-        LEFT JOIN BOOKING_OUT BO (NOLOCK) ON L.BookingNo = BO.BookingNo AND ISNULL(L.BookingNo,0) <> 0
+        LEFT JOIN #BookLoad AS bl ON bl.LoadKey = L.LoadKey                                              --(Wan01) 
+        LEFT JOIN BOOKING_OUT BO (NOLOCK) ON bl.BookingNo = BO.BookingNo AND ISNULL(L.BookingNo,0) <> 0  --(Wan01)
         WHERE L.Loadkey = @c_Loadkey
         AND O.Storerkey = @c_Storerkey
         AND ISNULL(PD.Taskdetailkey,'') = ''
@@ -204,7 +256,7 @@ BEGIN
                         CASE WHEN LOC.LocationType NOT IN ('PICK','CASE') THEN --NJOW01
                                   'FPK'
                              ELSE 'FCP' END,
-                 BO.BookingDate, LOC.LogicalLocation,
+                 BO.BookingDate, LOC.LogicalLocation, AD.Areakey,  
                  SKU.Stdcube --NJOW01
         ORDER BY PD.Storerkey, MAX(AD.Areakey), LOC.LogicalLocation, PD.Loc, PD.Sku, PD.Lot
 
@@ -419,9 +471,5 @@ BEGIN
    END
 END
 GO
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS OFF
-GO
-GRANT EXECUTE ON [nspLPRTSK4] TO NSQL
+GRANT EXECUTE ON  [dbo].[nspLPRTSK4] TO [NSQL]
 GO
