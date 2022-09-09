@@ -23,6 +23,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author  Ver   Purposes                                  */
 /* 2022-04-05  CHONGCS  1.0   Created - DevOps Combine Script           */
+/* 2022-07-22  CSCHONG  1.1   WMS-20263 add report config  (CS02)       */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_UCC_Carton_Label_114_rdt] (
        @c_Pickslipno   NVARCHAR(10),
@@ -103,7 +104,7 @@ DECLARE @t_DropID TABLE (
          ,Storerkey      = ISNULL(ORDERS.storerkey,'')
         -- ,SkuDesc        = ''--ISNULL(RTRIM(SKU.Descr),'')
          ,SizeQty        = SUM(PACKDETAIL.Qty)
-         ,OHRoute        = ISNULL(ORDERS.ROUTE,'')
+         ,OHRoute        = CASE WHEN ISNULL(CL3.short,'') <> 'N' THEN ISNULL(ORDERS.ROUTE,'') ELSE '' END     --CS02
          ,Consigneekey   = ISNULL(ORDERS.consigneekey,'') 
          ,Facility       = ISNULL(ORDERS.facility,'') 
          --,ShowLargeFont  = ISNULL(CL.SHORT,'N')
@@ -136,14 +137,14 @@ DECLARE @t_DropID TABLE (
    --JOIN ORDERDETAIL OD WITH (NOLOCK) ON OD.Orderkey = ORDERS.Orderkey 
    OUTER APPLY (SELECT TOP 1 ISNULL(OD.userdefine02,'') AS ODUDF02 
                  FROM ORDERDETAIL OD (NOLOCK) WHERE OD.ORDERKEY = ORDERS.ORDERKEY) ODET
-   LEFT JOIN CODELKUP CL WITH (NOLOCK) ON (CL.LISTNAME = 'REPORTCFG' AND CL.CODE = 'ShowPONo' )
-                                      AND (CL.LONG = 'r_dw_carton_manifest_label_39_rdt' AND CL.STORERKEY = ORDERS.Storerkey)
-   LEFT JOIN CODELKUP CL1 WITH (NOLOCK) ON (CL1.LISTNAME = 'REPORTCFG' AND CL1.CODE = 'ShowDNNo' )
-                                       AND (CL1.LONG = 'r_dw_carton_manifest_label_39_rdt' AND CL1.STORERKEY = ORDERS.Storerkey)
-   LEFT JOIN CODELKUP CL2 WITH (NOLOCK) ON (CL2.LISTNAME = 'REPORTCFG' AND CL2.CODE = 'ShowSONo' )
-                                       AND (CL2.LONG = 'r_dw_carton_manifest_label_39_rdt' AND CL2.STORERKEY = ORDERS.Storerkey)
-   LEFT JOIN CODELKUP CL3 WITH (NOLOCK) ON (CL3.LISTNAME = 'REPORTCFG' AND CL3.CODE = 'ShowRoute' )
-                                       AND (CL3.LONG = 'r_dw_carton_manifest_label_39_rdt' AND CL3.STORERKEY = ORDERS.Storerkey)
+   --LEFT JOIN CODELKUP CL WITH (NOLOCK) ON (CL.LISTNAME = 'REPORTCFG' AND CL.CODE = 'ShowPONo' )
+   --                                   AND (CL.LONG = 'r_dw_carton_manifest_label_39_rdt' AND CL.STORERKEY = ORDERS.Storerkey)
+   --LEFT JOIN CODELKUP CL1 WITH (NOLOCK) ON (CL1.LISTNAME = 'REPORTCFG' AND CL1.CODE = 'ShowDNNo' )
+   --                                    AND (CL1.LONG = 'r_dw_carton_manifest_label_39_rdt' AND CL1.STORERKEY = ORDERS.Storerkey)
+   --LEFT JOIN CODELKUP CL2 WITH (NOLOCK) ON (CL2.LISTNAME = 'REPORTCFG' AND CL2.CODE = 'ShowSONo' )
+   --                                    AND (CL2.LONG = 'r_dw_carton_manifest_label_39_rdt' AND CL2.STORERKEY = ORDERS.Storerkey)
+   LEFT JOIN CODELKUP CL3 WITH (NOLOCK) ON (CL3.LISTNAME = 'REPORTCFG' AND CL3.CODE = 'ShowRoute' )                                           --CS02
+                                       AND (CL3.LONG = 'r_dw_UCC_Carton_Label_114_rdt' AND CL3.STORERKEY = ORDERS.Storerkey)
    LEFT JOIN PACKINFO PIF (NOLOCK) ON PIF.PickSlipNo = PACKDETAIL.PickSlipNo    
                                   AND PIF.CartonNo = PACKDETAIL.CartonNo        
    OUTER APPLY (SELECT TOP 1 ISNULL(TASKDETAIL.UserkeyOverride,'')              
@@ -168,8 +169,8 @@ DECLARE @t_DropID TABLE (
          ,  ISNULL(RTRIM(PACKDETAIL.LabelNo),'')
          ,  ISNULL(RTRIM(SKU.Style),'')
          --,  ISNULL(RTRIM(SKU.Descr),'')
-         ,  ISNULL(CL.SHORT,'N')
-         ,  ISNULL(CL1.SHORT,'N')
+         --,  ISNULL(CL.SHORT,'N')
+         --,  ISNULL(CL1.SHORT,'N')
          ,  ISNULL(PIF.CartonType,'')    
          ,  ISNULL(ORDERS.M_VAT,'')  
          ,  TD.UserkeyOverride           
@@ -177,7 +178,7 @@ DECLARE @t_DropID TABLE (
          ,  ISNULL(PF.Dvprefix,'')
          ,  PACKDETAIL.Cartonno  
          ,  ISNULL(ORDERS.storerkey,'')
-         ,  ISNULL(ORDERS.ROUTE,'')
+         ,  CASE WHEN ISNULL(CL3.short,'') <> 'N' THEN ISNULL(ORDERS.ROUTE,'') ELSE '' END     --CS02
          ,  ISNULL(ORDERS.consigneekey,'')      
          ,  ISNULL(ORDERS.facility,'')
          ,  ISNULL(ORDERS.c_Company,'') 
@@ -209,7 +210,7 @@ DECLARE @t_DropID TABLE (
          ,  ISNULL(ORDERS.c_city,'')
          ,  ISNULL(ORDERS.c_state,'')
          ,  ISNULL(ORDERS.c_zip,'')
-         ,  ISNULL(ORDERS.ROUTE,'')
+         ,  CASE WHEN ISNULL(CL3.short,'') <> 'N' THEN ISNULL(ORDERS.ROUTE,'') ELSE '' END     --CS02
          ,  ISNULL(ORDERS.consigneekey,'')
          ,  ISNULL(ORDERS.storerkey,'')
          ,  ISNULL(ORDERS.facility,'')
