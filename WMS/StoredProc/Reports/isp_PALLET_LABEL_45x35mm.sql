@@ -1,5 +1,5 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'isp_PALLET_LABEL_45x35mm') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'isp_PALLET_LABEL_45x35mm')
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
 DROP PROCEDURE isp_PALLET_LABEL_45x35mm
 GO
 
@@ -28,11 +28,12 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 24-AUG-2022 LZG      1.1   JSM-90463 - Extended to 10 chars (ZG01)   */
 /************************************************************************/
 
 CREATE PROC isp_PALLET_LABEL_45x35mm
          @n_Qty         INT
-      ,  @c_Prefix      NVARCHAR(3)
+      ,  @c_Prefix      NVARCHAR(10)          -- ZG01
       ,  @c_Title       NVARCHAR(30)
       ,  @c_StorerKey   NVARCHAR(15)
 AS
@@ -42,11 +43,11 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE  @c_ErrMsg      NVARCHAR(255)  
-         ,  @b_Success     INT            
-         ,  @n_Err         INT      
- 
-   CREATE TABLE #TMP_PALLET 
+   DECLARE  @c_ErrMsg      NVARCHAR(255)
+         ,  @b_Success     INT
+         ,  @n_Err         INT
+
+   CREATE TABLE #TMP_PALLET
       ( Title        NVARCHAR(30)
       , PalletID     NVARCHAR(10)
       , StorerKey    NVARCHAR(15)
@@ -61,15 +62,15 @@ BEGIN
       )
 
    INSERT INTO #TMP_PALLET
-   EXEC   isp_INSERT_PALLET_LABEL 
+   EXEC   isp_INSERT_PALLET_LABEL
              @n_Qty       = @n_Qty
            , @c_Prefix    = @c_Prefix
            , @c_Title     = @c_Title
            , @c_StorerKey = @c_StorerKey
            , @c_ErrMsg    = @c_ErrMsg  OUTPUT
-           , @b_Success   = @b_Success OUTPUT        
+           , @b_Success   = @b_Success OUTPUT
            , @n_Err       = @n_Err     OUTPUT
-         
+
    SELECT Title
         , PalletID
         , StorerKey
@@ -78,13 +79,10 @@ BEGIN
 
 END
 
-SET QUOTED_IDENTIFIER OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
 
-GRANT EXECUTE ON isp_PALLET_LABEL_45x35mm TO nSQL 
+GRANT EXECUTE ON isp_PALLET_LABEL_45x35mm TO nSQL
 GO
-
-
-
