@@ -17,6 +17,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
 /* 2017-11-15 1.0  Ung      WMS-3272 Created                            */
+/* 2022-08-24 1.1  LZG      JSM-90772 - Reset variable (ZG01)           */
 /************************************************************************/
 
 CREATE PROC [RDT].[rdtfnc_TM_Assist_PalletPick] (
@@ -31,10 +32,10 @@ SET ANSI_NULLS OFF
 
 -- Misc variable
 DECLARE
-   @bSuccess            INT, 
+   @bSuccess            INT,
    @cAreaKey            NVARCHAR( 10),
-   @cTTMStrategykey     NVARCHAR( 10), 
-   @cSQL                NVARCHAR( MAX), 
+   @cTTMStrategykey     NVARCHAR( 10),
+   @cSQL                NVARCHAR( MAX),
    @cSQLParam           NVARCHAR( MAX),
    @cFinalLOC           NVARCHAR( 10)
 
@@ -52,12 +53,12 @@ DECLARE
    @cPrinter            NVARCHAR( 10),
    @cUserName           NVARCHAR( 18),
 
-   @cFromID             NVARCHAR( 20), 
-   @cFromLOC            NVARCHAR( 10), 
+   @cFromID             NVARCHAR( 20),
+   @cFromLOC            NVARCHAR( 10),
    @cTaskDetailKey      NVARCHAR( 10),
-   
-   @cTTMTaskType        NVARCHAR( 10), 
-   @cSuggToLOC          NVARCHAR( 10), 
+
+   @cTTMTaskType        NVARCHAR( 10),
+   @cSuggToLOC          NVARCHAR( 10),
    @cExtendedValidateSP NVARCHAR( 20),
    @cExtendedUpdateSP   NVARCHAR( 20),
    @cOverwriteToLOC     NVARCHAR( 1),
@@ -126,7 +127,7 @@ SELECT
    @cExtendedInfo       = V_String9,
    @cDefaultToLoc       = V_String10,
    @cMaximumPallet      = V_String11,
-   
+
    @cTaskDetailKey1     = V_String20,
    @cTaskDetailKey2     = V_String21,
    @cTaskDetailKey3     = V_String22,
@@ -213,7 +214,7 @@ BEGIN
    -- Get equipment info
    DECLARE @nMaximumPallet INT
    SELECT @nMaximumPallet = E.MaximumPallet
-   FROM TaskManagerUser TMU WITH (NOLOCK) 
+   FROM TaskManagerUser TMU WITH (NOLOCK)
       JOIN EquipmentProfile E WITH (NOLOCK) ON (E.EquipmentProfileKey = TMU.EquipmentProfileKey)
    WHERE TMU.UserKey = @cUserName
    IF @nMaximumPallet = 0
@@ -249,7 +250,7 @@ BEGIN
       SET @cTaskDetailKey3 = ''
       SET @cTaskDetailKey4 = ''
       SET @cPalletCount = '1'
-      
+
       -- Prepare next screen var
       SET @cOutField01 = ''
       SET @cOutField02 = @cPalletCount + '/' + @cMaximumPallet
@@ -257,10 +258,10 @@ BEGIN
       SET @nScn  = 5061
       SET @nStep = 2
    END
-   
+
    -- Extended info
    SET @cOutField15 = ''
-   SET @cExtendedInfo = '' 
+   SET @cExtendedInfo = ''
    IF @cExtendedInfoSP <> ''
    BEGIN
       IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
@@ -273,7 +274,7 @@ BEGIN
             '@cLangCode       NVARCHAR( 3),  ' +
             '@nStep           INT,           ' +
             '@nAfterStep      INT,           ' +
-            '@nInputKey       INT,           ' + 
+            '@nInputKey       INT,           ' +
             '@cTaskdetailKey  NVARCHAR( 10), ' +
             '@cFinalLOC       NVARCHAR( 10), ' +
             '@cExtendedInfo   NVARCHAR( 20) OUTPUT, ' +
@@ -317,10 +318,10 @@ BEGIN
          IF @cOverwriteToLOC = '0'
          BEGIN
             SET @nErrNo = 116802
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Different LOC 
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Different LOC
             GOTO Step_1_Fail
          END
-         
+
          -- Check ToLOC valid
          IF NOT EXISTS( SELECT 1 FROM LOC WITH (NOLOCK) WHERE LOC = @cFinalLOC)
          BEGIN
@@ -343,15 +344,15 @@ BEGIN
                '@nFunc           INT,           ' +
                '@cLangCode       NVARCHAR( 3),  ' +
                '@nStep           INT,           ' +
-               '@nInputKey       INT,           ' + 
+               '@nInputKey       INT,           ' +
                '@cTaskdetailKey  NVARCHAR( 10), ' +
                '@cFinalLOC       NVARCHAR( 10), ' +
                '@nErrNo          INT OUTPUT,    ' +
                '@cErrMsg         NVARCHAR( 20) OUTPUT '
-   
+
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cFinalLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT
-   
+
             IF @nErrNo <> 0
                GOTO Step_1_Fail
          END
@@ -359,13 +360,13 @@ BEGIN
 
       -- Confirm (move by ID, update task status = 9)
       EXEC rdt.rdt_TM_Assist_PalletPick_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
-         ,@cTaskdetailKey  
-         ,@cFinalLOC       
+         ,@cTaskdetailKey
+         ,@cFinalLOC
          ,@nErrNo   OUTPUT
          ,@cErrMsg  OUTPUT
       IF @nErrNo <> 0
          GOTO Step_1_Fail
-      
+
       -- Extended validate
       IF @cExtendedUpdateSP <> ''
       BEGIN
@@ -378,24 +379,24 @@ BEGIN
                '@nFunc           INT,           ' +
                '@cLangCode       NVARCHAR( 3),  ' +
                '@nStep           INT,           ' +
-               '@nInputKey       INT,           ' + 
+               '@nInputKey       INT,           ' +
                '@cTaskdetailKey  NVARCHAR( 10), ' +
                '@cFinalLOC       NVARCHAR( 10), ' +
                '@nErrNo          INT OUTPUT,    ' +
                '@cErrMsg         NVARCHAR( 20) OUTPUT '
-   
+
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cFinalLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT
-   
+
             IF @nErrNo <> 0
                GOTO Step_1_Fail
          END
       END
-      
+
       -- Get next task
       DECLARE @cNextTaskDetailKey NVARCHAR(10)
       SET @cNextTaskDetailKey = ''
-      SELECT TOP 1 
+      SELECT TOP 1
          @cNextTaskDetailKey = TaskDetailKey,
          @cTTMTasktype = TaskType
       FROM dbo.TaskDetail WITH (NOLOCK)
@@ -403,7 +404,7 @@ BEGIN
       WHERE FromID = @cFromID
          AND Status = '0'
       ORDER BY TaskDetailKey
-      
+
       -- No task
       IF @cNextTaskDetailKey = ''
       BEGIN
@@ -415,7 +416,7 @@ BEGIN
             @nFunctionID = @nFunc,
             @cFacility   = @cFacility,
             @cStorerKey  = @cStorerKey
-         
+
          -- Go back to assist task manager
          SET @nFunc = 1814
          SET @nScn = 4060
@@ -425,12 +426,12 @@ BEGIN
 
          GOTO QUIT
       END
-      
+
       -- Have next task
       IF @cNextTaskDetailKey <> ''
       BEGIN
          SET @cTaskDetailKey = @cNextTaskDetailKey
-         
+
          -- Prepare next screen var
          SET @cOutField01 = @cTTMTasktype
 
@@ -492,7 +493,7 @@ BEGIN
          IF @cPalletCount = '3' SET @cTaskDetailKey = @cTaskDetailKey3 ELSE
          IF @cPalletCount = '2' SET @cTaskDetailKey = @cTaskDetailKey2 ELSE
          IF @cPalletCount = '1' SET @cTaskDetailKey = @cTaskDetailKey1
-         
+
          -- Get task info
          SELECT
             @cFromID      = FromID,
@@ -500,17 +501,17 @@ BEGIN
             @cSuggToLOC   = ToLOC
          FROM dbo.TaskDetail WITH (NOLOCK)
          WHERE TaskDetailKey = @cTaskDetailKey
-         
+
          -- Prepare next screen var
          SET @cOutField01 = @cFromID
          SET @cOutField02 = @cSuggToLOC
          SET @cOutField03 = CASE WHEN @cDefaultToLoc = '1' THEN @cSuggToLOC ELSE '' END   -- FinalLOC
          SET @cOutField04 = @cPalletCount + '/' + @cMaximumPallet
-         
+
          -- Go to final LOC (multi pallet)
          SET @nScn  = @nScn + 1
          SET @nStep = @nStep + 1
-         
+
          GOTO Quit
       END
 
@@ -529,10 +530,10 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid ID
          GOTO Step_2_Fail
       END
-      
+
       -- Get task
       SET @cTaskDetailKey = ''
-      SELECT TOP 1 
+      SELECT TOP 1
          @cTaskDetailKey = TaskDetailKey,
          @cTTMTaskType = TaskType,
          @cFromLOC = FromLOC
@@ -571,15 +572,15 @@ BEGIN
                '@nFunc           INT,           ' +
                '@cLangCode       NVARCHAR( 3),  ' +
                '@nStep           INT,           ' +
-               '@nInputKey       INT,           ' + 
+               '@nInputKey       INT,           ' +
                '@cTaskdetailKey  NVARCHAR( 10), ' +
                '@cFinalLOC       NVARCHAR( 10), ' +
                '@nErrNo          INT OUTPUT,    ' +
                '@cErrMsg         NVARCHAR( 20) OUTPUT '
-   
+
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cFinalLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT
-   
+
             IF @nErrNo <> 0
                GOTO Step_2_Fail
          END
@@ -592,7 +593,7 @@ BEGIN
       IF @cPalletCount = '3' SET @cTaskDetailKey3 = @cTaskDetailKey ELSE
       IF @cPalletCount = '2' SET @cTaskDetailKey2 = @cTaskDetailKey ELSE
       IF @cPalletCount = '1' SET @cTaskDetailKey1 = @cTaskDetailKey
-      
+
       -- Prep current screen var
       SET @cOutField01 = ''
       SET @cOutField02 = @cPalletCount + '/' + @cMaximumPallet
@@ -656,10 +657,10 @@ BEGIN
          IF @cOverwriteToLOC = '0'
          BEGIN
             SET @nErrNo = 116807
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Different LOC 
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Different LOC
             GOTO Step_1_Fail
          END
-         
+
          -- Check ToLOC valid
          IF NOT EXISTS( SELECT 1 FROM LOC WITH (NOLOCK) WHERE LOC = @cFinalLOC)
          BEGIN
@@ -682,15 +683,15 @@ BEGIN
                '@nFunc           INT,           ' +
                '@cLangCode       NVARCHAR( 3),  ' +
                '@nStep           INT,           ' +
-               '@nInputKey       INT,           ' + 
+               '@nInputKey       INT,           ' +
                '@cTaskdetailKey  NVARCHAR( 10), ' +
                '@cFinalLOC       NVARCHAR( 10), ' +
                '@nErrNo          INT OUTPUT,    ' +
                '@cErrMsg         NVARCHAR( 20) OUTPUT '
-   
+
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cFinalLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT
-   
+
             IF @nErrNo <> 0
                GOTO Step_3_Fail
          END
@@ -698,13 +699,13 @@ BEGIN
 
       -- Confirm (move by ID, update task status = 9)
       EXEC rdt.rdt_TM_Assist_PalletPick_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
-         ,@cTaskdetailKey  
-         ,@cFinalLOC       
+         ,@cTaskdetailKey
+         ,@cFinalLOC
          ,@nErrNo   OUTPUT
          ,@cErrMsg  OUTPUT
       IF @nErrNo <> 0
          GOTO Step_1_Fail
-      
+
       -- Extended validate
       IF @cExtendedUpdateSP <> ''
       BEGIN
@@ -717,24 +718,24 @@ BEGIN
                '@nFunc           INT,           ' +
                '@cLangCode       NVARCHAR( 3),  ' +
                '@nStep           INT,           ' +
-               '@nInputKey       INT,           ' + 
+               '@nInputKey       INT,           ' +
                '@cTaskdetailKey  NVARCHAR( 10), ' +
                '@cFinalLOC       NVARCHAR( 10), ' +
                '@nErrNo          INT OUTPUT,    ' +
                '@cErrMsg         NVARCHAR( 20) OUTPUT '
-   
+
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cFinalLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT
-   
+
             IF @nErrNo <> 0
                GOTO Step_3_Fail
          END
       END
-      
+
       -- Reduce pallet
       SET @cPalletCount = CAST( @cPalletCount AS INT) - 1
-      
-      -- Still have pallet 
+
+      -- Still have pallet
       IF @cPalletCount > '0'
       BEGIN
          -- Get task
@@ -742,7 +743,7 @@ BEGIN
          IF @cPalletCount = '3' SET @cTaskDetailKey = @cTaskDetailKey3 ELSE
          IF @cPalletCount = '2' SET @cTaskDetailKey = @cTaskDetailKey2 ELSE
          IF @cPalletCount = '1' SET @cTaskDetailKey = @cTaskDetailKey1
-         
+
          -- Get task info
          SELECT
             @cFromID      = FromID,
@@ -750,13 +751,13 @@ BEGIN
             @cSuggToLOC   = ToLOC
          FROM dbo.TaskDetail WITH (NOLOCK)
          WHERE TaskDetailKey = @cTaskDetailKey
-         
+
          -- Prepare next screen var
          SET @cOutField01 = @cFromID
          SET @cOutField02 = @cSuggToLOC
          SET @cOutField03 = CASE WHEN @cDefaultToLoc = '1' THEN @cSuggToLOC ELSE '' END   -- FinalLOC
          SET @cOutField04 = @cPalletCount + '/' + @cMaximumPallet
-      
+
          GOTO Quit
       END
 
@@ -766,6 +767,7 @@ BEGIN
       SET @nStep = 1
 
       SET @cOutField01 = ''  -- From ID
+      SET @cOutField02 = ''             -- ZG01
    END
 
    IF @nInputKey = 0 -- ESC
@@ -805,10 +807,10 @@ BEGIN
       SET @nToStep = 0
 
       -- Check if function setup
-      SELECT 
-         @nToFunc = Function_ID, 
+      SELECT
+         @nToFunc = Function_ID,
          @nToStep = Step
-      FROM rdt.rdtTaskManagerConfig WITH (NOLOCK) 
+      FROM rdt.rdtTaskManagerConfig WITH (NOLOCK)
       WHERE TaskType = @cTTMTaskType
       IF @nToFunc = 0
       BEGIN
@@ -834,7 +836,7 @@ BEGIN
          @nFunctionID = @nFunc,
          @cFacility   = @cFacility,
          @cStorerKey  = @cStorerKey
-      
+
       SET @cOutField06 = @cTaskDetailKey
       SET @cOutField07 = @cAreaKey
       SET @cOutField08 = @cTTMStrategykey
@@ -875,7 +877,7 @@ Quit. Update back to I/O table, ready to be pick up by JBOSS
 Quit:
 BEGIN
    UPDATE RDTMOBREC WITH (ROWLOCK) SET
-      EditDate = GETDATE(), 
+      EditDate = GETDATE(),
       ErrMsg = @cErrMsg,
       Func   = @nFunc,
       Step   = @nStep,
@@ -891,7 +893,7 @@ BEGIN
 
       V_String1  = @cAreakey,
       V_String2  = @cTTMStrategykey,
-      V_String3  = @cTTMTaskType,      
+      V_String3  = @cTTMTaskType,
       V_String4  = @cSuggToLOC,
       V_String5  = @cExtendedValidateSP,
       V_String6  = @cExtendedUpdateSP,
