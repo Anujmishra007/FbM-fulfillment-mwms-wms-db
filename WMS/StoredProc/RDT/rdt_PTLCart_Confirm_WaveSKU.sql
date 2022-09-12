@@ -57,7 +57,8 @@ BEGIN
    DECLARE @cActToteID     NVARCHAR( 20)    
    DECLARE @cPosition      NVARCHAR( 10)    
    DECLARE @cWaveKey       NVARCHAR( 10)    
-   DECLARE @cPickDetailKey NVARCHAR( 10)    
+   DECLARE @cPickDetailKey NVARCHAR( 10)
+   DECLARE @cUserName      NVARCHAR( 18)  
     
    DECLARE @cUpdatePickDetail NVARCHAR(1)    
    DECLARE @cPickDetailStatus NVARCHAR(1)    
@@ -72,6 +73,8 @@ BEGIN
       SET @cPickDetailStatus = '5'  -- 5=Pick confirm    
     
    SET @nQTY_Bal = @nQTY    
+
+   SELECT @cUserName = UserName FROM RDT.RDTMOBREC WITH (NOLOCK) WHERE Mobile = @nMobile  
     
    /***********************************************************************************************    
     
