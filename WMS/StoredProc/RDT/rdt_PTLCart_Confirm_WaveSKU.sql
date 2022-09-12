@@ -14,8 +14,9 @@ GO
 /* 25-05-2015 1.0  Ung         SOS336312 Created                        */    
 /* 31-07-2015 1.1  Ung         SOS348740 Add PickDetailStatus           */    
 /* 24-09-2018 1.2  James       Remove orderdetail.loadkey (james01)     */    
-/* 26-01-2018 1.1  Ung         Change to PTL.Schema                     */    
-/* 01-09-2022 1.4  KuanYee     INC1896195 Add Channel_ID (KY01)         */    
+/* 26-01-2018 1.3  Ung         Change to PTL.Schema                     */ 
+/* 14-08-2018 1.4  James       WMS5770-Add eventlog (james01)           */
+/* 01-09-2022 1.5  KuanYee     INC1896195 Add Channel_ID (KY01)         */    
 /************************************************************************/    
     
 CREATE OR ALTER PROC rdt.rdt_PTLCart_Confirm_WaveSKU (    
@@ -248,13 +249,34 @@ BEGIN
                   SET @nErrNo = 54854    
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PTL Fail    
                   GOTO RollBackTran    
-               END    
+               END   
+               ELSE  
+               BEGIN  
+                  -- Event log  
+                  EXEC RDT.rdt_STD_EventLog  
+                     @cActionType   = '3', -- Picking  
+                     @cUserID       = @cUserName,  
+                     @nMobileNo     = @nMobile,  
+                     @nFunctionID   = @nFunc,  
+                     @cFacility     = @cFacility,  
+                     @cStorerKey    = @cStorerkey,  
+                     @cWaveKey      = @cWaveKey,  
+                     @cSKU          = @cSKU,  
+                     @cLocation     = @cLOC,  
+                     @nQTY          = @nExpectedQTY,  
+                     @cDropID       = @cToteID,  
+                     @cRefNo1       = @cType,  
+                     @cRefNo2       = @cDPLKey,  
+                     @cRefNo3       = @nPTLKey,  
+                     @cRefNo4       = @cPosition,  
+                     @cRefNo5       = @cCartID  
+               END  
           
                SET @nQTY_Bal = 0 -- Reduce balance    
             END    
                 
             -- PTLTran have less    
-        ELSE IF @nQTY_PTL < @nQTY_Bal    
+            ELSE IF @nQTY_PTL < @nQTY_Bal    
             BEGIN    
                -- Confirm PickDetail    
                UPDATE PTL.PTLTran WITH (ROWLOCK) SET     
@@ -270,13 +292,34 @@ BEGIN
                   SET @nErrNo = 54855    
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PTL Fail    
                   GOTO RollBackTran    
-               END    
+               END 
+               ELSE  
+               BEGIN  
+                  -- Event log  
+                  EXEC RDT.rdt_STD_EventLog  
+                     @cActionType   = '3', -- Picking  
+                     @cUserID       = @cUserName,  
+                     @nMobileNo     = @nMobile,  
+                     @nFunctionID   = @nFunc,  
+                     @cFacility     = @cFacility,  
+                     @cStorerKey    = @cStorerkey,  
+                     @cWaveKey      = @cWaveKey,  
+                     @cSKU          = @cSKU,  
+                     @cLocation     = @cLOC,  
+                     @nQTY          = @nExpectedQTY,  
+                     @cDropID       = @cToteID,  
+                     @cRefNo1       = @cType,  
+                     @cRefNo2       = @cDPLKey,  
+                     @cRefNo3       = @nPTLKey,  
+                     @cRefNo4       = @cPosition,  
+                     @cRefNo5       = @cCartID  
+               END 
           
                SET @nQTY_Bal = @nQTY_Bal - @nQTY_PTL -- Reduce balance    
             END    
                 
             -- PTLTran have more    
-        ELSE IF @nQTY_PTL > @nQTY_Bal    
+            ELSE IF @nQTY_PTL > @nQTY_Bal    
             BEGIN    
                -- Short pick    
                IF @cType = 'SHORTTOTE' AND @nQTY_Bal = 0 -- Don't need to split    
@@ -296,6 +339,27 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PTL Fail    
                      GOTO RollBackTran    
                   END    
+                  ELSE  
+                  BEGIN  
+                     -- Event log  
+                     EXEC RDT.rdt_STD_EventLog  
+                        @cActionType   = '3', -- Picking  
+                        @cUserID       = @cUserName,  
+                        @nMobileNo     = @nMobile,  
+                        @nFunctionID   = @nFunc,  
+                        @cFacility     = @cFacility,  
+                        @cStorerKey    = @cStorerkey,  
+                        @cWaveKey      = @cWaveKey,  
+                        @cSKU          = @cSKU,  
+                        @cLocation     = @cLOC,  
+                        @nQTY          = @nExpectedQTY,  
+                        @cDropID       = @cToteID,  
+                        @cRefNo1       = @cType,  
+                        @cRefNo2       = @cDPLKey,  
+                        @cRefNo3       = @nPTLKey,  
+                        @cRefNo4       = @cPosition,  
+                        @cRefNo5       = @cCartID  
+                  END 
                END    
                ELSE    
                BEGIN -- Have balance, need to split    
@@ -308,11 +372,11 @@ BEGIN
                      @nQTY_PTL - @nQTY_Bal, @nQTY_PTL - @nQTY_Bal, NULL,     
                      IPAddress, DeviceID, DevicePosition, Status, PTLType, '', OrderKey, Storerkey, SKU, LOC, LOT, Remarks,     
                      DeviceProfileLogKey, ArchiveCop, SourceKey, ConsigneeKey, CaseID, LightUp, LightMode, LightSequence, UOM, RefPTLKey    
-  FROM PTL.PTLTran WITH (NOLOCK)     
-            WHERE PTLKey = @nPTLKey                   
+                  FROM PTL.PTLTran WITH (NOLOCK)     
+                  WHERE PTLKey = @nPTLKey                   
                   IF @@ERROR <> 0    
                   BEGIN    
-             SET @nErrNo = 54857    
+                     SET @nErrNo = 54857    
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- INS PTL Fail    
                      GOTO RollBackTran    
                   END    
@@ -332,7 +396,28 @@ BEGIN
                      SET @nErrNo = 54858    
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PTL Fail    
                      GOTO RollBackTran    
-                  END    
+                  END
+                  ELSE  
+                  BEGIN  
+                     -- Event log  
+                     EXEC RDT.rdt_STD_EventLog  
+                        @cActionType   = '3', -- Picking  
+                        @cUserID       = @cUserName,  
+                        @nMobileNo     = @nMobile,  
+                        @nFunctionID   = @nFunc,  
+                        @cFacility     = @cFacility,  
+                        @cStorerKey    = @cStorerkey,  
+                        @cWaveKey      = @cWaveKey,  
+                        @cSKU          = @cSKU,  
+                        @cLocation     = @cLOC,  
+                        @nQTY          = @nExpectedQTY,  
+                        @cDropID       = @cToteID,  
+                        @cRefNo1       = @cType,  
+                        @cRefNo2       = @cDPLKey,  
+                        @cRefNo3       = @nPTLKey,  
+                        @cRefNo4       = @cPosition,  
+                        @cRefNo5       = @cCartID  
+                  END 
              
                   SET @nQTY_Bal = 0 -- Reduce balance    
                END    
@@ -431,7 +516,7 @@ BEGIN
                END    
                    
                -- PickDetail have more    
-           ELSE IF @nQTY_PD > @nQTY_Bal    
+               ELSE IF @nQTY_PD > @nQTY_Bal    
                BEGIN    
                   -- Short pick    
                   IF @cType = 'SHORTTOTE' AND @nQTY_Bal = 0 -- Don't need to split    
@@ -474,7 +559,7 @@ BEGIN
                      INSERT INTO dbo.PickDetail (    
                         CaseID, PickHeaderKey, OrderKey, OrderLineNumber, LOT, StorerKey, SKU, AltSKU, UOM,     
                         UOMQTY, QTYMoved, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, CartonType,     
-                    ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,    
+                        ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,    
                         EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes,     
                         PickDetailKey,     
                         QTY,     
@@ -494,7 +579,7 @@ BEGIN
                         '1'   -- OptimizeCop   
                         , Channel_ID            --KY01  
                      FROM dbo.PickDetail WITH (NOLOCK)     
-                  WHERE PickDetailKey = @cPickDetailKey                   
+                     WHERE PickDetailKey = @cPickDetailKey                   
                      IF @@ERROR <> 0    
                      BEGIN    
                     SET @nErrNo = 54864    
@@ -616,7 +701,28 @@ BEGIN
                   SET @nErrNo = 54869    
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PTL Fail    
                   GOTO RollBackTran    
-               END    
+               END 
+               ELSE  
+               BEGIN  
+                  -- Event log  
+                  EXEC RDT.rdt_STD_EventLog  
+                     @cActionType   = '3', -- Picking  
+                     @cUserID       = @cUserName,  
+                     @nMobileNo     = @nMobile,  
+                     @nFunctionID   = @nFunc,  
+                     @cFacility     = @cFacility,  
+                     @cStorerKey    = @cStorerkey,  
+                     @cWaveKey      = @cWaveKey,  
+                     @cSKU          = @cSKU,  
+                     @cLocation     = @cLOC,  
+                     @nQTY          = @nExpectedQTY,  
+                     @cDropID       = @cToteID,  
+                     @cRefNo1       = @cType,  
+                     @cRefNo2       = @cDPLKey,  
+                     @cRefNo3       = @nPTLKey,  
+                     @cRefNo4       = @cPosition,  
+                     @cRefNo5       = @cCartID  
+               END  
                    
                -- Update PickDetail    
                IF @cUpdatePickDetail = '1'    
@@ -672,7 +778,7 @@ BEGIN
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail    
                         GOTO RollBackTran    
                      END    
-          FETCH NEXT FROM @curPD INTO @cPickDetailKey    
+                     FETCH NEXT FROM @curPD INTO @cPickDetailKey    
                   END    
                END    
                    
