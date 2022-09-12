@@ -72,8 +72,8 @@ BEGIN
          currentpage = @c_currentpage,
          totalpage = MBOLDETAIL.totalcartons,
          EObarcode = CASE WHEN ISNULL(CL.SHORT,'') = 'Y' THEN ORDERS.EXTERNORDERKEY ELSE MBOLDETAIL.OrderKey END,
-         showRcode = CASE WHEN ISNULL(CL1.SHORT,'') = 'Y' THEN R.code ELSE 'Case or Pallet' END
-	 showQRcode = CASE WHEN ISNULL(CL2.SHORT,'') = 'Y' THEN Left(ltrim(rtrim(ORDERS.EXTERNORDERKEY)),15) ELSE '' END 	--ML01
+         showRcode = CASE WHEN ISNULL(CL1.SHORT,'') = 'Y' THEN R.code ELSE 'Case or Pallet' END,
+	      showQRcode = CASE WHEN ISNULL(CL2.SHORT,'') = 'Y' THEN Left(ltrim(rtrim(ORDERS.EXTERNORDERKEY)),15) ELSE '' END 	--ML01
       FROM MBOL(nolock)
       join MBOLDETAIL (nolock) on (MBOLDETAIL.MBOLKEY=MBOL.MBOLKEY)
       join orders (nolock) on ( MBOLDETAIL.OrderKey = ORDERS.OrderKey )
