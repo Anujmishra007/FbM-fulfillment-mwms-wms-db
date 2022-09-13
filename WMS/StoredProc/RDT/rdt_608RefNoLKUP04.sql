@@ -1,12 +1,8 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[RDT].[rdt_608RefNoLKUP04]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [RDT].[rdt_608RefNoLKUP04]
-GO
 
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-
 
 /******************************************************************************/
 /* Store procedure: rdt_608RefNoLKUP04                                        */
@@ -16,16 +12,17 @@ GO
 /*                                                                            */
 /* Date        Author   Ver.  Purposes                                        */
 /* 21-03-2018  James    1.0   WMS-2605 Created                                */
+/* 08-09-2022  Ung      1.1   WMS-20348 Expand RefNo to 60 chars              */
 /******************************************************************************/
 
-CREATE PROCEDURE [RDT].[rdt_608RefNoLKUP04]
+CREATE OR ALTER PROCEDURE [RDT].[rdt_608RefNoLKUP04]
    @nMobile      INT,           
    @nFunc        INT,           
    @cLangCode    NVARCHAR( 3),  
    @cFacility    NVARCHAR( 5),   
    @cStorerGroup NVARCHAR( 20), 
    @cStorerKey   NVARCHAR( 15), 
-   @cRefNo       NVARCHAR( 30), 
+   @cRefNo       NVARCHAR( 60), 
    @cReceiptKey  NVARCHAR( 10)  OUTPUT, 
    @nErrNo       INT            OUTPUT, 
    @cErrMsg      NVARCHAR( 20)  OUTPUT

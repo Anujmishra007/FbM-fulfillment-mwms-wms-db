@@ -1,3 +1,4 @@
+
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -13,6 +14,7 @@ GO
 /* 03-Jul-2018  James     1.0   WMS-5444 Created                              */  
 /* 25-Jul-2018  James     1.1   Add ExternReceiptKey to ReceiptDetail(james01)*/  
 /* 05-Jul-2022  James     1.2   WMS-20062 Add new column (james02)            */
+/* 08-Sep-2022  Ung       1.3   WMS-20348 Expand RefNo to 60 chars            */
 /******************************************************************************/  
   
 CREATE OR ALTER PROCEDURE rdt.rdt_608RefNoLKUP05  
@@ -22,7 +24,7 @@ CREATE OR ALTER PROCEDURE rdt.rdt_608RefNoLKUP05
    @cFacility     NVARCHAR( 5),    
    @cStorerGroup  NVARCHAR( 20),   
    @cStorerKey    NVARCHAR( 15),   
-   @cRefNo        NVARCHAR( 20),   
+   @cRefNo        NVARCHAR( 60),   
    @cReceiptKey   NVARCHAR(10)  OUTPUT,   
    @nErrNo        INT           OUTPUT,   
    @cErrMsg       NVARCHAR( 20) OUTPUT    

@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdt_608RefNoLKUP01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_608RefNoLKUP01]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -17,16 +14,17 @@ GO
 /* 04-Jan-2015  Ung       1.0   SOS359609 Created                             */
 /* 28-Jul-2017  Ung       1.1   WMS-2534 Add WarehouseReference               */
 /* 09-Aug-2019  James     1.2   WMS-10183 Add filter ASNStatus<>CANC (james01)*/
+/* 08-Sep-2022  Ung       1.3   WMS-20348 Expand RefNo to 60 chars            */
 /******************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_608RefNoLKUP01
+CREATE OR ALTER PROCEDURE rdt.rdt_608RefNoLKUP01
    @nMobile       INT,           
    @nFunc         INT,           
    @cLangCode     NVARCHAR( 3),  
    @cFacility     NVARCHAR( 5),  
    @cStorerGroup  NVARCHAR( 20), 
    @cStorerKey    NVARCHAR( 15), 
-   @cRefNo        NVARCHAR( 20), 
+   @cRefNo        NVARCHAR( 60), 
    @cReceiptKey   NVARCHAR(10)  OUTPUT, 
    @nErrNo        INT           OUTPUT, 
    @cErrMsg       NVARCHAR( 20) OUTPUT  

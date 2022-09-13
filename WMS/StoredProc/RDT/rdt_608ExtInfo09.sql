@@ -1,11 +1,9 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_608ExtInfo09]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_608ExtInfo09]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO  
+
 /************************************************************************/    
 /* Store procedure: rdt_608ExtInfo09                                    */    
 /* Copyright      : LF                                                  */    
@@ -15,9 +13,10 @@ GO
 /* Modifications log:                                                   */    
 /* Date        Rev  Author   Purposes                                   */    
 /* 2020-09-17  1.0  YeeKung  WMS-14415. Created                         */
+/* 2022-09-08  1.1  Ung      WMS-20348 Expand RefNo to 60 chars         */
 /************************************************************************/    
 
-CREATE PROC [RDT].[rdt_608ExtInfo09] (    
+CREATE OR ALTER PROC [RDT].[rdt_608ExtInfo09] (    
   @nMobile       INT,           
   @nFunc         INT,           
   @cLangCode     NVARCHAR( 3),  
@@ -28,7 +27,7 @@ CREATE PROC [RDT].[rdt_608ExtInfo09] (
   @cStorerKey    NVARCHAR( 15), 
   @cReceiptKey   NVARCHAR( 10), 
   @cPOKey        NVARCHAR( 10), 
-  @cRefNo        NVARCHAR( 20), 
+  @cRefNo        NVARCHAR( 60), 
   @cID           NVARCHAR( 18), 
   @cLOC          NVARCHAR( 10), 
   @cMethod       NVARCHAR( 1),  

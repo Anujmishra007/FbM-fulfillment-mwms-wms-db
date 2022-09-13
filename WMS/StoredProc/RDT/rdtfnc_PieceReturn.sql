@@ -41,6 +41,7 @@ GO
 /*                              Add ExtendedValidateSP to post lottable screen*/
 /*                              Performance tuning                            */
 /* 2021-07-22   2.9  Chermaine  WMS-16119 Add ExtUpdate in scn2 (cc01)        */
+/* 2022-09-08   3.0  Ung        WMS-20348 Expand RefNo to 60 chars            */
 /******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_PieceReturn](
    @nMobile    int,
@@ -118,7 +119,7 @@ DECLARE
    @dPreLottable14      DATETIME,
    @dPreLottable15      DATETIME,
 
-   @cRefNo              NVARCHAR( 30),
+   @cRefNo              NVARCHAR( 60),  
    @cMethod             NVARCHAR( 1),
    @cLottableCode       NVARCHAR( 30),
    @cUOM                NVARCHAR( 6),  
@@ -421,7 +422,7 @@ BEGIN
                ' @cStorerGroup NVARCHAR(20), ' +
                ' @cStorerKey   NVARCHAR(15), ' +
                ' @cColumnName  NVARCHAR(20), ' +
-               ' @cRefNo       NVARCHAR(30), ' +
+               ' @cRefNo       NVARCHAR(60), ' +  
                ' @cReceiptKey  NVARCHAR(10) OUTPUT, ' +
                ' @nRowCount    INT          OUTPUT, ' +
                ' @nErrNo       INT          OUTPUT  '
@@ -470,7 +471,7 @@ BEGIN
                   '@cFacility     NVARCHAR( 5),  ' +
                   '@cStorerGroup  NVARCHAR( 20), ' +
                   '@cStorerKey    NVARCHAR( 15), ' +
-                  '@cRefNo        NVARCHAR( 30), ' +
+                  '@cRefNo        NVARCHAR( 60), ' +  
                   '@cReceiptKey   NVARCHAR(10)  OUTPUT, ' +
                   '@nErrNo        INT           OUTPUT, ' +
                   '@cErrMsg       NVARCHAR( 20) OUTPUT  '
@@ -800,7 +801,7 @@ BEGIN
                '@cStorerKey    NVARCHAR( 15), ' +  
                '@cReceiptKey   NVARCHAR( 10), ' +  
                '@cPOKey        NVARCHAR( 10), ' +  
-               '@cRefNo        NVARCHAR( 30), ' +  
+               '@cRefNo        NVARCHAR( 60), ' +  
                '@cID           NVARCHAR( 18), ' +  
                '@cSKU          NVARCHAR( 20), ' +  
                '@nQTY          INT,           ' +  
@@ -861,7 +862,7 @@ BEGIN
                '@cStorerKey    NVARCHAR( 15), ' +
                '@cReceiptKey   NVARCHAR( 10), ' +
                '@cPOKey        NVARCHAR( 10), ' +
-               '@cRefNo        NVARCHAR( 30), ' +
+               '@cRefNo        NVARCHAR( 60), ' +  
                '@cID           NVARCHAR( 18), ' +
                '@cLOC          NVARCHAR( 10), ' +
                '@cMethod       NVARCHAR( 1),  ' +
@@ -924,7 +925,7 @@ BEGIN
                '@cStorerKey    NVARCHAR( 15), ' +
                '@cReceiptKey   NVARCHAR( 10), ' +
                '@cPOKey        NVARCHAR( 10), ' +
-               '@cRefNo        NVARCHAR( 30), ' +
+               '@cRefNo        NVARCHAR( 60), ' +  
                '@cID           NVARCHAR( 18), ' +
                '@cLOC          NVARCHAR( 10), ' +
                '@cMethod       NVARCHAR( 1),  ' +
@@ -1149,7 +1150,7 @@ BEGIN
                '@cStorerKey    NVARCHAR( 15), ' +
                '@cReceiptKey   NVARCHAR( 10), ' +
                '@cPOKey        NVARCHAR( 10), ' +
-               '@cRefNo        NVARCHAR( 30), ' +
+               '@cRefNo        NVARCHAR( 60), ' +  
                '@cID           NVARCHAR( 18), ' +
                '@cLOC          NVARCHAR( 10), ' +
                '@cMethod       NVARCHAR( 1),  ' +
@@ -1220,7 +1221,7 @@ BEGIN
                '@cStorerKey    NVARCHAR( 15), ' +
                '@cReceiptKey   NVARCHAR( 10), ' +
                '@cPOKey        NVARCHAR( 10), ' +
-               '@cRefNo        NVARCHAR( 30), ' +
+               '@cRefNo        NVARCHAR( 60), ' +  
                '@cID           NVARCHAR( 18), ' +
                '@cLOC          NVARCHAR( 10), ' +
                '@cMethod       NVARCHAR( 1),  ' +
@@ -1353,7 +1354,7 @@ BEGIN
                '@cStorerKey    NVARCHAR( 15), ' +
                '@cReceiptKey   NVARCHAR( 10), ' +
                '@cPOKey        NVARCHAR( 10), ' +
-               '@cRefNo        NVARCHAR( 30), ' +
+               '@cRefNo        NVARCHAR( 60), ' +  
                '@cID           NVARCHAR( 18), ' +
                '@cLOC          NVARCHAR( 10), ' +
                '@cMethod       NVARCHAR( 1),  ' +
@@ -1416,7 +1417,7 @@ BEGIN
                '@cStorerKey    NVARCHAR( 15), ' +
                '@cReceiptKey   NVARCHAR( 10), ' +
                '@cPOKey        NVARCHAR( 10), ' +
-               '@cRefNo        NVARCHAR( 30), ' +
+               '@cRefNo        NVARCHAR( 60), ' +  
                '@cID           NVARCHAR( 18), ' +
                '@cLOC          NVARCHAR( 10), ' +
                '@cMethod       NVARCHAR( 1),  ' +
@@ -1671,7 +1672,7 @@ BEGIN
                '@cStorerKey    NVARCHAR( 15), ' +
                '@cReceiptKey   NVARCHAR( 10), ' +
                '@cPOKey        NVARCHAR( 10), ' +
-               '@cRefNo        NVARCHAR( 30), ' +
+               '@cRefNo        NVARCHAR( 60), ' +  
                '@cID           NVARCHAR( 18), ' +
                '@cLOC          NVARCHAR( 10), ' +
                '@cMethod       NVARCHAR( 1),  ' +
@@ -2057,7 +2058,7 @@ BEGIN
                '@cStorerKey    NVARCHAR( 15), ' +
                '@cReceiptKey   NVARCHAR( 10), ' +
                '@cPOKey        NVARCHAR( 10), ' +
-               '@cRefNo        NVARCHAR( 30), ' +
+               '@cRefNo        NVARCHAR( 60), ' +  
                '@cID           NVARCHAR( 18), ' +
                '@cLOC          NVARCHAR( 10), ' +
                '@cMethod       NVARCHAR( 1),  ' +
@@ -2185,7 +2186,7 @@ BEGIN
                '@cStorerKey    NVARCHAR( 15), ' +
                '@cReceiptKey   NVARCHAR( 10), ' +
                '@cPOKey        NVARCHAR( 10), ' +
-               '@cRefNo        NVARCHAR( 30), ' +
+               '@cRefNo        NVARCHAR( 60), ' +  
                '@cID           NVARCHAR( 18), ' +
                '@cLOC          NVARCHAR( 10), ' +
                '@cMethod       NVARCHAR( 1),  ' +
@@ -2281,7 +2282,7 @@ BEGIN
                '@cStorerKey    NVARCHAR( 15), ' +
                '@cReceiptKey   NVARCHAR( 10), ' +
                '@cPOKey        NVARCHAR( 10), ' +
-               '@cRefNo        NVARCHAR( 30), ' +
+               '@cRefNo        NVARCHAR( 60), ' +  
                '@cID           NVARCHAR( 18), ' +
                '@cLOC          NVARCHAR( 10), ' +
                '@cMethod       NVARCHAR( 1),  ' +
@@ -2342,7 +2343,7 @@ BEGIN
                '@cStorerKey    NVARCHAR( 15), ' +
                '@cReceiptKey   NVARCHAR( 10), ' +
                '@cPOKey        NVARCHAR( 10), ' +
-               '@cRefNo        NVARCHAR( 30), ' +
+               '@cRefNo        NVARCHAR( 60), ' +  
                '@cID           NVARCHAR( 18), ' +
                '@cLOC          NVARCHAR( 10), ' +
                '@cMethod       NVARCHAR( 1),  ' +
@@ -2485,7 +2486,7 @@ BEGIN
                '@cStorerKey    NVARCHAR( 15), ' +
                '@cReceiptKey   NVARCHAR( 10), ' +
                '@cPOKey        NVARCHAR( 10), ' +
-               '@cRefNo        NVARCHAR( 30), ' +
+               '@cRefNo        NVARCHAR( 60), ' +  
                '@cID           NVARCHAR( 18), ' +
                '@cLOC          NVARCHAR( 10), ' +
                '@cMethod       NVARCHAR( 1),  ' +
@@ -2614,7 +2615,7 @@ BEGIN
                '@cStorerKey    NVARCHAR( 15), ' +
                '@cReceiptKey   NVARCHAR( 10), ' +
                '@cPOKey        NVARCHAR( 10), ' +
-               '@cRefNo        NVARCHAR( 30), ' +
+               '@cRefNo        NVARCHAR( 60), ' +  
                '@cID           NVARCHAR( 18), ' +
                '@cLOC          NVARCHAR( 10), ' +
                '@cMethod       NVARCHAR( 1),  ' +
@@ -2696,7 +2697,7 @@ BEGIN
                '@cStorerKey    NVARCHAR( 15), ' +
                '@cReceiptKey   NVARCHAR( 10), ' +
                '@cPOKey        NVARCHAR( 10), ' +
-               '@cRefNo        NVARCHAR( 30), ' +
+               '@cRefNo        NVARCHAR( 60), ' +  
                '@cID           NVARCHAR( 18), ' +
                '@cLOC          NVARCHAR( 10), ' +
                '@cMethod       NVARCHAR( 1),  ' +
@@ -2863,7 +2864,7 @@ BEGIN
                '@cStorerKey    NVARCHAR( 15), ' +
                '@cReceiptKey   NVARCHAR( 10), ' +
                '@cPOKey        NVARCHAR( 10), ' +
-               '@cRefNo        NVARCHAR( 30), ' +
+               '@cRefNo        NVARCHAR( 60), ' +  
                '@cID           NVARCHAR( 18), ' +
                '@cLOC          NVARCHAR( 10), ' +
                '@cMethod       NVARCHAR( 1),  ' +
@@ -3005,7 +3006,7 @@ BEGIN
                '@cStorerKey    NVARCHAR( 15), ' +
                '@cReceiptKey   NVARCHAR( 10), ' +
                '@cPOKey        NVARCHAR( 10), ' +
-               '@cRefNo        NVARCHAR( 30), ' +
+               '@cRefNo        NVARCHAR( 60), ' +  
                '@cID           NVARCHAR( 18), ' +
                '@cLOC          NVARCHAR( 10), ' +
                '@cMethod       NVARCHAR( 1),  ' +
@@ -3176,7 +3177,7 @@ BEGIN
                '@cStorerKey    NVARCHAR( 15), ' +        
                '@cReceiptKey   NVARCHAR( 10), ' +        
                '@cPOKey        NVARCHAR( 10), ' +        
-               '@cRefNo        NVARCHAR( 30), ' +        
+               '@cRefNo        NVARCHAR( 60), ' +  
                '@cID           NVARCHAR( 18), ' +        
                '@cLOC          NVARCHAR( 10), ' +        
                '@cMethod       NVARCHAR( 1),  ' +        

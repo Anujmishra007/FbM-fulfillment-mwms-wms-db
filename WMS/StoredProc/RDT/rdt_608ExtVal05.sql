@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdt_608ExtVal05]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_608ExtVal05]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -15,10 +12,11 @@ GO
 /*                                                                            */          
 /* Date         Author    Ver.  Purposes                                      */          
 /* 2019-06-25   James     1.0   WMS9458. Created                              */        
-/* 2019-07-12   YeeKung   1.1   WMS-9091 Validate overreceipt                 */         
+/* 2019-07-12   YeeKung   1.1   WMS-9091 Validate overreceipt                 */  
+/* 2022-09-08   Ung       1.2   WMS-20348 Expand RefNo to 60 chars            */         
 /******************************************************************************/          
           
-CREATE PROCEDURE [RDT].[rdt_608ExtVal05]            
+CREATE OR ALTER PROCEDURE [RDT].[rdt_608ExtVal05]            
    @nMobile       INT,          
    @nFunc         INT,          
    @cLangCode     NVARCHAR( 3),          
@@ -28,7 +26,7 @@ CREATE PROCEDURE [RDT].[rdt_608ExtVal05]
    @cStorerKey    NVARCHAR( 15),          
    @cReceiptKey   NVARCHAR( 10),          
    @cPOKey        NVARCHAR( 10),          
-   @cRefNo        NVARCHAR( 20),          
+   @cRefNo        NVARCHAR( 60),          
    @cID           NVARCHAR( 18),          
    @cLOC          NVARCHAR( 10),          
    @cMethod       NVARCHAR( 1),          

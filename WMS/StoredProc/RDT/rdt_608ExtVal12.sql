@@ -2,7 +2,8 @@
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
-GO      
+GO   
+   
 /************************************************************************/  
 /* Store procedure: rdt_608ExtVal12                                     */  
 /* Copyright      : LF logistics                                        */  
@@ -14,6 +15,7 @@ GO
 /* 2022-01-06  1.0  James       WMS-18649. Created                      */  
 /* 2022-04-25  1.1  YeeKung     WMS-19543 Add New Validation toloc      */
 /*                               (yeekung01)                            */
+/* 2022-09-08  1.2  Ung         WMS-20348 Expand RefNo to 60 chars      */
 /************************************************************************/  
   
 CREATE OR ALTER PROCEDURE rdt.rdt_608ExtVal12  
@@ -26,7 +28,7 @@ CREATE OR ALTER PROCEDURE rdt.rdt_608ExtVal12
    @cStorerKey    NVARCHAR( 15),  
    @cReceiptKey   NVARCHAR( 10),  
    @cPOKey        NVARCHAR( 10),  
-   @cRefNo        NVARCHAR( 20),  
+   @cRefNo        NVARCHAR( 60),  
    @cID           NVARCHAR( 18),  
    @cLOC          NVARCHAR( 10),  
    @cMethod       NVARCHAR( 1),  

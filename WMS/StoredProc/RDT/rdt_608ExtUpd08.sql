@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdt_608ExtUpd08]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_608ExtUpd08]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -16,9 +13,10 @@ GO
 /* Date         Author    Ver.  Purposes                                      */
 /* 18-May-2018  James     1.0   WMS2605 Created                               */
 /* 26-Jun-2018  James     1.1   Output errmsg direct from finalize sp(james01)*/
+/* 08-Sep-2022  Ung       1.2   WMS-20348 Expand RefNo to 60 chars            */
 /******************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_608ExtUpd08
+CREATE OR ALTER PROCEDURE rdt.rdt_608ExtUpd08
    @nMobile       INT,           
    @nFunc         INT,           
    @cLangCode     NVARCHAR( 3),  
@@ -29,7 +27,7 @@ CREATE PROCEDURE rdt.rdt_608ExtUpd08
    @cStorerKey    NVARCHAR( 15), 
    @cReceiptKey   NVARCHAR( 10), 
    @cPOKey        NVARCHAR( 10), 
-   @cRefNo        NVARCHAR( 20), 
+   @cRefNo        NVARCHAR( 60), 
    @cID           NVARCHAR( 18), 
    @cLOC          NVARCHAR( 10), 
    @cMethod       NVARCHAR( 1), 

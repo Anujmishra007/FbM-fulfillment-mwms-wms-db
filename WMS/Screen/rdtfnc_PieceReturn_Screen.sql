@@ -6,7 +6,7 @@ EXECUTE rdt.rdtAddScn 4340, 'ENG'
    ,@cLine02 = 'PO : %10i02'
    ,@cLine03 = ''
    ,@cLine04 = 'REF NO:'
-   ,@cLine05 = '%30i03' -- extend to 30 chars (james02)
+   ,@cLine05 = '%60i03'
    ,@cLine13 = '%20d04'
    ,@cLine14 = '%e'
  

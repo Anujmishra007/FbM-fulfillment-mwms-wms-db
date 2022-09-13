@@ -2,7 +2,8 @@
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
-GO  
+GO
+  
 /******************************************************************************/  
 /* Store procedure: rdt_608SuggestLOC02                                       */  
 /* Copyright      : LF Logistics                                              */  
@@ -11,6 +12,7 @@ GO
 /*                                                                            */  
 /* Date         Author    Ver.  Purposes                                      */  
 /* 01-04-2020   YeeKung   1.0   WMS19543 - Created                            */  
+/* 08-09-2022   Ung       1.1   WMS-20348 Expand RefNo to 60 chars            */
 /******************************************************************************/  
   
 CREATE OR ALTER PROCEDURE rdt.rdt_608SuggestLOC02
@@ -23,7 +25,7 @@ CREATE OR ALTER PROCEDURE rdt.rdt_608SuggestLOC02
    @cStorerKey    NVARCHAR( 15),
    @cReceiptKey   NVARCHAR( 10),
    @cPOKey        NVARCHAR( 10),
-   @cRefNo        NVARCHAR( 30),
+   @cRefNo        NVARCHAR( 60),
    @cID           NVARCHAR( 18),
    @cSKU          NVARCHAR( 20),
    @nQTY          INT,          

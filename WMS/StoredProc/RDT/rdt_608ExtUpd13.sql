@@ -11,6 +11,7 @@ GO
 /*                                                                            */
 /* Date         Author    Ver.  Purposes                                      */
 /* 2021-10-21   James     1.0   WMS-18182 Created                             */
+/* 2022-09-08   Ung       1.1   WMS-20348 Expand RefNo to 60 chars            */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_608ExtUpd13
@@ -24,7 +25,7 @@ CREATE OR ALTER PROCEDURE rdt.rdt_608ExtUpd13
    @cStorerKey    NVARCHAR( 15), 
    @cReceiptKey   NVARCHAR( 10), 
    @cPOKey        NVARCHAR( 10), 
-   @cRefNo        NVARCHAR( 20), 
+   @cRefNo        NVARCHAR( 60), 
    @cID           NVARCHAR( 18), 
    @cLOC          NVARCHAR( 10), 
    @cMethod       NVARCHAR( 1), 
