@@ -280,6 +280,7 @@ SELECT
    @cMultiUCC              = V_String34,
    @cDecodeSP              = V_String35, --(yeekung01)
    @cDecodeQty             = V_String36, --(yeekung01)
+   @cVerifySKU             = V_String37, --(yeekung01)
 
    @nQTY             = V_Integer1,
    @nCaseCntQty      = V_Integer2,
@@ -3933,6 +3934,7 @@ BEGIN
       V_String34 = @cMultiUCC,
       V_String35 = @cDecodeSP,
       V_String36 = @cDecodeQty,
+      V_String37 = @cVerifySKU,
 
       V_Lottable01 = @cLottable01,
       V_Lottable02 = @cLottable02,
