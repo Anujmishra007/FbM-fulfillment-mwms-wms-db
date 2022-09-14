@@ -13,7 +13,7 @@ GO
 /*                                                                         */  
 /* Called By:                                                              */  
 /*                                                                         */  
-/* PVCS Version: 1.1                                                       */  
+/* PVCS Version: 1.2                                                       */  
 /*                                                                         */  
 /* Version: 5.4                                                            */  
 /*                                                                         */  
@@ -23,61 +23,77 @@ GO
 /* Date        Author      Ver   Purposes                                  */
 /* 08-Jun-2022 WLChooi     1.0   DevOps Combine Script                     */  
 /* 27-Jul-2022 WLChooi     1.1   Enhancement (WL01)                        */
+/* 14-Sep-2022 WLChooi     1.2   Add more fields (WL02)                    */
 /***************************************************************************/  
   
 CREATE OR ALTER PROC [dbo].[isp_AutoInsertWMReport] (
-        @c_ModuleName         NVARCHAR(20) 
-      , @c_ReportType         NVARCHAR(20) 
-      , @c_Storerkey          NVARCHAR(15) = ''
-      , @c_ReportTitle        NVARCHAR(60) = ''
-      , @c_TemplateName       NVARCHAR(60) 
-      , @c_PrintType          NVARCHAR(20) 
-      , @c_ReportCatalog      NVARCHAR(500) = ''
-      , @c_PrePrintSP         NVARCHAR(200) = ''
-      , @c_PreGenRptData      NVARCHAR(200) = ''
-      , @c_CreateDetail       NVARCHAR(10) = 'Y'
-      , @n_NoOfKeyFieldParms  INT = 0
-      , @c_KeyFieldName1      NVARCHAR(200) = ''
-      , @c_KeyFieldName2      NVARCHAR(200) = ''
-      , @c_KeyFieldName3      NVARCHAR(200) = ''
-      , @c_KeyFieldName4      NVARCHAR(200) = ''
-      , @c_KeyFieldName5      NVARCHAR(200) = ''
-      , @c_KeyFieldName6      NVARCHAR(200) = ''
-      , @c_KeyFieldName7      NVARCHAR(200) = ''
-      , @c_KeyFieldName8      NVARCHAR(200) = ''
-      , @c_KeyFieldName9      NVARCHAR(200) = ''
-      , @c_KeyFieldName10     NVARCHAR(200) = ''
-      , @c_KeyFieldName11     NVARCHAR(200) = ''
-      , @c_KeyFieldName12     NVARCHAR(200) = ''
-      , @c_KeyFieldName13     NVARCHAR(200) = ''
-      , @c_KeyFieldName14     NVARCHAR(200) = ''
-      , @c_KeyFieldName15     NVARCHAR(200) = ''
-      , @c_ExtendedParm1      NVARCHAR(200) = ''
-      , @c_ExtendedParm2      NVARCHAR(200) = ''
-      , @c_ExtendedParm3      NVARCHAR(200) = ''
-      , @c_ExtendedParm4      NVARCHAR(200) = ''
-      , @c_ExtendedParm5      NVARCHAR(200) = ''
-      , @c_ReportParmName1    NVARCHAR(100) = ''
-      , @c_ReportParmName2    NVARCHAR(100) = ''
-      , @c_ReportParmName3    NVARCHAR(100) = ''
-      , @c_ReportParmName4    NVARCHAR(100) = ''
-      , @c_ReportParmName5    NVARCHAR(100) = ''
-      , @c_ReportParmName6    NVARCHAR(100) = ''
-      , @c_ReportParmName7    NVARCHAR(100) = ''
-      , @c_ReportParmName8    NVARCHAR(100) = ''
-      , @c_ReportParmName9    NVARCHAR(100) = ''
-      , @c_ReportParmName10   NVARCHAR(100) = ''
-      , @c_ReportParmName11   NVARCHAR(100) = ''
-      , @c_ReportParmName12   NVARCHAR(100) = ''
-      , @c_ReportParmName13   NVARCHAR(100) = ''
-      , @c_ReportParmName14   NVARCHAR(100) = ''
-      , @c_ReportParmName15   NVARCHAR(100) = ''
-      , @c_ReportParmName16   NVARCHAR(100) = ''
-      , @c_ReportParmName17   NVARCHAR(100) = ''
-      , @c_ReportParmName18   NVARCHAR(100) = ''
-      , @c_ReportParmName19   NVARCHAR(100) = ''
-      , @c_ReportParmName20   NVARCHAR(100) = ''
-      , @c_ReportLineDesc    NVARCHAR(60) = ''
+        @c_ModuleName            NVARCHAR(20) 
+      , @c_ReportType            NVARCHAR(20) 
+      , @c_Storerkey             NVARCHAR(15) = ''
+      , @c_ReportTitle           NVARCHAR(60) = ''
+      , @c_TemplateName          NVARCHAR(60) 
+      , @c_PrintType             NVARCHAR(20) 
+      , @c_ReportCatalog         NVARCHAR(500) = ''
+      , @c_PrePrintSP            NVARCHAR(200) = ''
+      , @c_PreGenRptData         NVARCHAR(200) = ''
+      , @c_CreateDetail          NVARCHAR(10) = 'Y'
+      , @n_NoOfKeyFieldParms     INT = 0
+      , @c_KeyFieldName1         NVARCHAR(200) = ''
+      , @c_KeyFieldName2         NVARCHAR(200) = ''
+      , @c_KeyFieldName3         NVARCHAR(200) = ''
+      , @c_KeyFieldName4         NVARCHAR(200) = ''
+      , @c_KeyFieldName5         NVARCHAR(200) = ''
+      , @c_KeyFieldName6         NVARCHAR(200) = ''
+      , @c_KeyFieldName7         NVARCHAR(200) = ''
+      , @c_KeyFieldName8         NVARCHAR(200) = ''
+      , @c_KeyFieldName9         NVARCHAR(200) = ''
+      , @c_KeyFieldName10        NVARCHAR(200) = ''
+      , @c_KeyFieldName11        NVARCHAR(200) = ''
+      , @c_KeyFieldName12        NVARCHAR(200) = ''
+      , @c_KeyFieldName13        NVARCHAR(200) = ''
+      , @c_KeyFieldName14        NVARCHAR(200) = ''
+      , @c_KeyFieldName15        NVARCHAR(200) = ''
+      , @c_ExtendedParm1         NVARCHAR(200) = ''
+      , @c_ExtendedParm2         NVARCHAR(200) = ''
+      , @c_ExtendedParm3         NVARCHAR(200) = ''
+      , @c_ExtendedParm4         NVARCHAR(200) = ''
+      , @c_ExtendedParm5         NVARCHAR(200) = ''
+      , @c_KeyFieldParmLabel1    NVARCHAR(200) = ''   --WL02
+      , @c_KeyFieldParmLabel2    NVARCHAR(200) = ''   --WL02
+      , @c_KeyFieldParmLabel3    NVARCHAR(200) = ''   --WL02
+      , @c_KeyFieldParmLabel4    NVARCHAR(200) = ''   --WL02
+      , @c_KeyFieldParmLabel5    NVARCHAR(200) = ''   --WL02
+      , @c_KeyFieldParmLabel6    NVARCHAR(200) = ''   --WL02
+      , @c_KeyFieldParmLabel7    NVARCHAR(200) = ''   --WL02
+      , @c_KeyFieldParmLabel8    NVARCHAR(200) = ''   --WL02
+      , @c_KeyFieldParmLabel9    NVARCHAR(200) = ''   --WL02
+      , @c_KeyFieldParmLabel10   NVARCHAR(200) = ''   --WL02
+      , @c_KeyFieldParmLabel11   NVARCHAR(200) = ''   --WL02
+      , @c_KeyFieldParmLabel12   NVARCHAR(200) = ''   --WL02
+      , @c_KeyFieldParmLabel13   NVARCHAR(200) = ''   --WL02
+      , @c_KeyFieldParmLabel14   NVARCHAR(200) = ''   --WL02
+      , @c_KeyFieldParmLabel15   NVARCHAR(200) = ''   --WL02
+      , @c_ReportParmName1       NVARCHAR(100) = ''
+      , @c_ReportParmName2       NVARCHAR(100) = ''
+      , @c_ReportParmName3       NVARCHAR(100) = ''
+      , @c_ReportParmName4       NVARCHAR(100) = ''
+      , @c_ReportParmName5       NVARCHAR(100) = ''
+      , @c_ReportParmName6       NVARCHAR(100) = ''
+      , @c_ReportParmName7       NVARCHAR(100) = ''
+      , @c_ReportParmName8       NVARCHAR(100) = ''
+      , @c_ReportParmName9       NVARCHAR(100) = ''
+      , @c_ReportParmName10      NVARCHAR(100) = ''
+      , @c_ReportParmName11      NVARCHAR(100) = ''
+      , @c_ReportParmName12      NVARCHAR(100) = ''
+      , @c_ReportParmName13      NVARCHAR(100) = ''
+      , @c_ReportParmName14      NVARCHAR(100) = ''
+      , @c_ReportParmName15      NVARCHAR(100) = ''
+      , @c_ReportParmName16      NVARCHAR(100) = ''
+      , @c_ReportParmName17      NVARCHAR(100) = ''
+      , @c_ReportParmName18      NVARCHAR(100) = ''
+      , @c_ReportParmName19      NVARCHAR(100) = ''
+      , @c_ReportParmName20      NVARCHAR(100) = ''
+      , @c_ReportLineDesc        NVARCHAR(60) = ''
 )
 AS  
 BEGIN  
@@ -138,17 +154,35 @@ BEGIN
          ORDER BY RIGHT(REPORTID,9) DESC  
       
          SET @n_MaxReportID = @n_MaxReportID + 1  
-         SET @c_ReportID = 'R' + RIGHT('000000000' + CONVERT(NVARCHAR(4), @n_MaxReportID),9) 
+         SET @c_ReportID = 'R' + RIGHT('000000000' + CONVERT(NVARCHAR(9), @n_MaxReportID),9)   --WL02 
       
          INSERT INTO dbo.WMREPORT
          (
              ReportID, ReportTitle, ModuleID, PrintMethod, ReportType, NoOfKeyFieldParms,
              KeyFieldName1, KeyFieldName2, KeyFieldName3, KeyFieldName4, KeyFieldName5, KeyFieldName6, KeyFieldName7, KeyFieldName8, KeyFieldName9, KeyFieldName10,
-             KeyFieldName11, KeyFieldName12, KeyFieldName13, KeyFieldName14, KeyFieldName15, ExtendedParm1, ExtendedParm2, ExtendedParm3, ExtendedParm4, ExtendedParm5
+             KeyFieldName11, KeyFieldName12, KeyFieldName13, KeyFieldName14, KeyFieldName15, ExtendedParm1, ExtendedParm2, ExtendedParm3, ExtendedParm4, ExtendedParm5,
+             KeyFieldParmLabel1, KeyFieldParmLabel2, KeyFieldParmLabel3, KeyFieldParmLabel4, KeyFieldParmLabel5,        --WL02
+             KeyFieldParmLabel6, KeyFieldParmLabel7, KeyFieldParmLabel8, KeyFieldParmLabel9, KeyFieldParmLabel10,       --WL02
+             KeyFieldParmLabel11, KeyFieldParmLabel12, KeyFieldParmLabel13, KeyFieldParmLabel14, KeyFieldParmLabel15    --WL02
          )
          SELECT @c_ReportID, @c_ReportTitle, @c_ModuleName, N'WM', @c_ReportType, @n_NoOfKeyFieldParms,
                 @c_KeyFieldName1, @c_KeyFieldName2, @c_KeyFieldName3, @c_KeyFieldName4, @c_KeyFieldName5, @c_KeyFieldName6, @c_KeyFieldName7, @c_KeyFieldName8, @c_KeyFieldName9, @c_KeyFieldName10,
                 @c_KeyFieldName11, @c_KeyFieldName12, @c_KeyFieldName13, @c_KeyFieldName14, @c_KeyFieldName15, @c_ExtendedParm1, @c_ExtendedParm2, @c_ExtendedParm3, @c_ExtendedParm4, @c_ExtendedParm5
+              , @c_KeyFieldParmLabel1    --WL02
+              , @c_KeyFieldParmLabel2    --WL02
+              , @c_KeyFieldParmLabel3    --WL02
+              , @c_KeyFieldParmLabel4    --WL02
+              , @c_KeyFieldParmLabel5    --WL02
+              , @c_KeyFieldParmLabel6    --WL02
+              , @c_KeyFieldParmLabel7    --WL02
+              , @c_KeyFieldParmLabel8    --WL02
+              , @c_KeyFieldParmLabel9    --WL02
+              , @c_KeyFieldParmLabel10   --WL02
+              , @c_KeyFieldParmLabel11   --WL02
+              , @c_KeyFieldParmLabel12   --WL02
+              , @c_KeyFieldParmLabel13   --WL02
+              , @c_KeyFieldParmLabel14   --WL02
+              , @c_KeyFieldParmLabel15   --WL02
       
          SET @c_WMDRptLineNo = '00000'
          SET @c_WMFlag = 'Y'
