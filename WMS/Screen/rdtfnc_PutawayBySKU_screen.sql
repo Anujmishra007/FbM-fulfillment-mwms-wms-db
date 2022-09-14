@@ -45,8 +45,8 @@ EXECUTE rdt.rdtAddScn 2882, 'ENG'
    ,@cLine09 = '4 %20d07'
    --,@cLine10 = '%08d08 %05d09 %05d10'
    ,@cLine10 = '%20d08'    -- WMS-15820
-   ,@cLine11 = 'QTY PWY: %05d11 %05d12'
-   ,@cLine12 = 'QTY ACT: %05i13 %05i14'
+   ,@cLine11 = N'QTY PWY: %06d11 %06d12' --(ws01)
+   ,@cLine12 = N'QTY ACT: %06i13 %06i14' --(ws01)
    ,@cLine13 = '%20d15'    -- WMS-15820
    ,@cLine14 = '%e'
    ,@nFunc = 523
