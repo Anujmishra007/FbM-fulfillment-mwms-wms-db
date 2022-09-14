@@ -28,12 +28,14 @@ GO
 /* 12-Nov-09  NJOW01  1.2  SOS#153022 Assign toid by Putaway Zone,      */  
 /*                         Logical Location, Location and Sku sorting.  */ 
 /*                         Add Lottable02 & Lottable04                  */
+/* 28-Jan-2019  TLTING_ext 1.3 enlarge externorderkey field length      */
 /************************************************************************/
 CREATE PROC  nsp_ReplenishToFPA
              @c_Key_Type      NVARCHAR(13)
 AS
 BEGIN
    SET NOCOUNT ON 
+   SET ANSI_NULLS OFF 
    SET QUOTED_IDENTIFIER OFF 
    SET CONCAT_NULL_YIELDS_NULL OFF
    DECLARE        @n_continue int          /* continuation flag
@@ -79,7 +81,7 @@ BEGIN
            @c_MoveID         NVARCHAR(18),
            @c_Printedby      NVARCHAR(60),
            @c_Facility       NVARCHAR(5),
-           @c_ExternOrderkey NVARCHAR(20),
+           @c_ExternOrderkey NVARCHAR(50),  --tlting_ext 
            @c_PickdetailKey  NVARCHAR(10),
            @n_QtyNeeded      int,
            @n_Casecnt        int,
@@ -126,7 +128,7 @@ BEGIN
                                    Lot            NVARCHAR(10),
                                    ID             NVARCHAR(18),
                                    PickdetailKey  NVARCHAR(10),
-                                   ExternOrderkey NVARCHAR(20))	
+                                   ExternOrderkey NVARCHAR(50))   --tlting_ext  	
 
    CREATE TABLE #REPLENISHMENT (StorerKey      NVARCHAR(15),
                                 SKU            NVARCHAR(20),
@@ -136,7 +138,7 @@ BEGIN
 	                             Id             NVARCHAR(18),
 	                             Qty            int,
 	                             PackKey        NVARCHAR(10),
-	                             ExternOrderkey NVARCHAR(20),
+                                ExternOrderkey NVARCHAR(50),  --tlting_ext  
                                 MoveId         NVARCHAR(18))
 
 
