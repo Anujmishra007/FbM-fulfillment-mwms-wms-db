@@ -1,7 +1,3 @@
-IF (objectProperty(object_id('rdt.rdtfnc_Scan_To_Pallet'), 'IsProcedure') is not null)
-	DROP PROCEDURE [RDT].[rdtfnc_Scan_To_Pallet]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -33,7 +29,7 @@ GO
 /*                            Add ExtendedValidateSP at step 1          */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_Scan_To_Pallet] (
+CREATE OR ALTER PROC [RDT].[rdtfnc_Scan_To_Pallet] (
    @nMobile    int,
    @nErrNo     int  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max
