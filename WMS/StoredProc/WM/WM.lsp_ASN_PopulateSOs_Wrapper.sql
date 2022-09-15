@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.3                                                    */                                                                                  
+/* PVCS Version: 1.4                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -31,6 +31,8 @@ GO
 /* 2021-12-17  Wan03    1.3   DevOps Combine Script                     */
 /* 2021-03-14  Wan04    1.3   LFWM-3382 - UAT  Australia  Return module */
 /*                            populates wrong Lottable03                */
+/* 2022-08-23  Wan05    1.4   LFWM-3701 - PH SCE UAT -Trade Return issue*/
+/*                            (Populate Via Order)                      */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_ASN_PopulateSOs_Wrapper]                                                                                                                     
       @c_ReceiptKey           NVARCHAR(10)         
@@ -561,6 +563,16 @@ BEGIN
                , @c_Orderkey   = OH.Orderkey
                , @c_Consigneekey   = ISNULL(OH.Consigneekey,'')
                , @c_ExternOrderkey = ISNULL(OH.ExternOrderkey,'')
+               , @c_UserDefine01   = ISNULL(OH.UserDefine01,'')         --(Wan05) Found Not Populate From Orders as Exceed             
+               , @c_UserDefine02   = ISNULL(OH.UserDefine02,'')         --(Wan05) Found Not Populate From Orders as Exceed
+               , @c_UserDefine03   = ISNULL(OH.UserDefine03,'')         --(Wan05) Found Not Populate From Orders as Exceed
+               , @c_UserDefine04   = ISNULL(OH.UserDefine04,'')         --(Wan05) Found Not Populate From Orders as Exceed
+               , @c_UserDefine05   = ISNULL(OH.UserDefine05,'')         --(Wan05) Found Not Populate From Orders as Exceed
+               , @dt_UserDefine06  = OH.UserDefine06                    --(Wan05) Found Not Populate From Orders as Exceed
+               , @dt_UserDefine07  = OH.UserDefine07                    --(Wan05) Found Not Populate From Orders as Exceed
+               , @c_UserDefine08   = ISNULL(OH.UserDefine08,'')         --(Wan05) Found Not Populate From Orders as Exceed
+               , @c_UserDefine09   = ISNULL(OH.UserDefine09,'')         --(Wan05) Found Not Populate From Orders as Exceed
+               , @c_UserDefine10   = ISNULL(OH.UserDefine10,'')         --(Wan05) Found Not Populate From Orders as Exceed  
          FROM #tORDERS OH
          WHERE OH.RowRef > @n_RowRef_OH
          ORDER BY OH.RowRef 
@@ -667,6 +679,16 @@ BEGIN
                   , CarrierState       = @c_CarrierState
                   , CarrierZip         = @c_CarrierZip
                   , POKey              = @c_Orderkey
+                  , UserDefine01       = @c_UserDefine01             --(Wan05) Found Not Populate From Orders as Exceed
+                  , UserDefine02       = @c_UserDefine02             --(Wan05) Found Not Populate From Orders as Exceed
+                  , UserDefine03       = @c_UserDefine03             --(Wan05) Found Not Populate From Orders as Exceed
+                  , UserDefine04       = @c_UserDefine04             --(Wan05) Found Not Populate From Orders as Exceed
+                  , UserDefine05       = @c_UserDefine05             --(Wan05) Found Not Populate From Orders as Exceed
+                  , UserDefine06       = @dt_UserDefine06            --(Wan05) Found Not Populate From Orders as Exceed
+                  , UserDefine07       = @dt_UserDefine07            --(Wan05) Found Not Populate From Orders as Exceed
+                  , UserDefine08       = @c_UserDefine08             --(Wan05) Found Not Populate From Orders as Exceed
+                  , UserDefine09       = @c_UserDefine09             --(Wan05) Found Not Populate From Orders as Exceed
+                  , UserDefine10       = @c_UserDefine10             --(Wan05) Found Not Populate From Orders as Exceed     
             WHERE RowRef = @n_RowRef_RH
          END
      
@@ -704,8 +726,6 @@ BEGIN
                                 WHEN @c_DocType = 'X' AND  @c_XDockReceiptLoc <> ''THEN @c_XDockReceiptLoc 
                                 ELSE ''  
                                 END  
-
-
 
             INSERT INTO #tRECEIPTDETAIL
                (  ReceiptKey
@@ -1195,6 +1215,17 @@ BEGIN
                ,CarrierCity      = T.CarrierCity
                ,CarrierState     = T.CarrierState
                ,CarrierZip       = T.CarrierZip
+               ,POKey            = T.POKey                     --(Wan05)
+               ,UserDefine01     = T.UserDefine01              --(Wan05) Found Not Populate From Orders as Exceed
+               ,UserDefine02     = T.UserDefine02              --(Wan05) Found Not Populate From Orders as Exceed
+               ,UserDefine03     = T.UserDefine03              --(Wan05) Found Not Populate From Orders as Exceed
+               ,UserDefine04     = T.UserDefine04              --(Wan05) Found Not Populate From Orders as Exceed
+               ,UserDefine05     = T.UserDefine05              --(Wan05) Found Not Populate From Orders as Exceed
+               ,UserDefine06     = T.UserDefine06              --(Wan05) Found Not Populate From Orders as Exceed
+               ,UserDefine07     = T.UserDefine07              --(Wan05) Found Not Populate From Orders as Exceed
+               ,UserDefine08     = T.UserDefine08              --(Wan05) Found Not Populate From Orders as Exceed
+               ,UserDefine09     = T.UserDefine09              --(Wan05) Found Not Populate From Orders as Exceed
+               ,UserDefine10     = T.UserDefine10              --(Wan05) Found Not Populate From Orders as Exceed                 
          FROM #tRECEIPT T
          JOIN RECEIPT ON T.Receiptkey = RECEIPT.Receiptkey
       END TRY
