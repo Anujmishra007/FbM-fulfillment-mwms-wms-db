@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_WaveDetail_Delete]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_WaveDetail_Delete] 
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,7 +13,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.2                                                    */                                                                                  
+/* PVCS Version: 1.3                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -30,8 +25,12 @@ GO
 /* 04-Jan-2021 SWT02    1.1   Do not execute login if user already      */
 /*                            changed                                   */
 /* 15-Jan-2021 Wan01    1.2   Add Big Outer Begin try/Catch             */
+/* 2022-09-02  Wan02    1.3   LFWM-3602 - [CN]NIKE_Wave control_remove  */
+/*                            orderkey from wavekey and please keep     */
+/*                            orderkey in loadkey                       */
+/*                            DevOps Combine Script                     */
 /************************************************************************/                                                                                  
-CREATE PROC [WM].[lsp_WaveDetail_Delete] 
+CREATE OR ALTER PROC [WM].[lsp_WaveDetail_Delete] 
       @c_WaveKey              NVARCHAR(10)                                                                                                                    
    ,  @c_WaveDetailKey        NVARCHAR(10)  = ''        
    ,  @n_TotalSelectedKeys    INT = 1
@@ -50,21 +49,27 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF                                                                                                                                
    SET CONCAT_NULL_YIELDS_NULL OFF       
 
-   DECLARE  @n_StartTCnt      INT = @@TRANCOUNT  
-         ,  @n_Continue       INT = 1
+   DECLARE  @n_StartTCnt               INT = @@TRANCOUNT  
+         ,  @n_Continue                INT = 1
 
-         ,  @b_Deleted        BIT = 0
-         ,  @b_ReturnCode     INT = 0
+         ,  @b_Deleted                 BIT = 0
+         ,  @b_ReturnCode              INT = 0
 
-         ,  @c_Orderkey       NVARCHAR(10)   = ''  
-         ,  @c_Loadkey        NVARCHAR(10)   = ''
-         ,  @c_LoadLineNumber NVARCHAR(5)    = ''
-         ,  @c_MBOLkey        NVARCHAR(10)   = ''
-         ,  @c_MBOLLineNumber NVARCHAR(5)    = ''            
-         ,  @c_TableName      NVARCHAR(50)   = 'WAVEDETAIL'
-         ,  @c_SourceType     NVARCHAR(50)   = 'lsp_WaveDetail_Delete'
+         ,  @c_Orderkey                NVARCHAR(10)   = ''  
+         ,  @c_Loadkey                 NVARCHAR(10)   = ''
+         ,  @c_LoadLineNumber          NVARCHAR(5)    = ''
+         ,  @c_MBOLkey                 NVARCHAR(10)   = ''
+         ,  @c_MBOLLineNumber          NVARCHAR(5)    = ''            
+         ,  @c_TableName               NVARCHAR(50)   = 'WAVEDETAIL'
+         ,  @c_SourceType              NVARCHAR(50)   = 'lsp_WaveDetail_Delete'
+         
+         ,  @c_Facility                NVARCHAR(5)    = ''                                --(Wan02) 
+         ,  @c_Storerkey               NVARCHAR(15)   = ''                                --(Wan02) 
+         ,  @c_SCEWavCustomDel         NVARCHAR(30)   = ''                                --(Wan02) 
+         ,  @c_SCEWavCustomDel_Opt5    NVARCHAR(1000) = ''                                --(Wan02) 
+         ,  @c_RemainOrderInLoad       NVARCHAR(1)    = 'N'                               --(Wan02) 
 
-         ,  @CUR_DETAIL         CURSOR
+         ,  @CUR_DETAIL                CURSOR
    SET @b_Success = 1
    SET @n_Err     = 0
                
@@ -97,9 +102,22 @@ BEGIN
       SELECT @c_Orderkey = WD.Orderkey
             ,@c_Loadkey  = ISNULL(OH.Loadkey,'')
             ,@c_MBOLkey  = ISNULL(OH.MBOLkey,'')
+            ,@c_Facility = OH.Facility             --(Wan02)
+            ,@c_Storerkey= OH.Storerkey            --(Wan02)
       FROM WAVEDETAIL WD WITH (NOLOCK) 
       JOIN ORDERS     OH WITH (NOLOCK) ON (WD.Orderkey = OH.Orderkey)
       WHERE WaveDetailKey = @c_WaveDetailKey
+      
+      --(Wan02) - START
+      SELECT @c_SCEWavCustomDel = fgr.Authority
+            ,@c_SCEWavCustomDel_Opt5 = fgr.Option5
+      FROM dbo.fnc_GetRight2(@c_Facility, @c_Storerkey, '', 'SCEWavCustomDel') AS fgr
+      
+      IF @c_SCEWavCustomDel = '1'
+      BEGIN
+         SELECT @c_RemainOrderInLoad = dbo.fnc_GetParamValueFromString('@c_RemainOrderInLoad', @c_SCEWavCustomDel_Opt5, @c_RemainOrderInLoad)
+      END
+      --(Wan02) - END
 
       IF @c_MBOLkey <> ''
       BEGIN
@@ -152,7 +170,7 @@ BEGIN
          END
       END
 
-      IF @c_Loadkey <> ''
+      IF @c_Loadkey <> '' AND @c_RemainOrderInLoad = 'N'             --(Wan02)
       BEGIN
          SET @c_LoadLineNumber = ''
          SELECT @c_LoadLineNumber = LPD.LoadLineNumber
