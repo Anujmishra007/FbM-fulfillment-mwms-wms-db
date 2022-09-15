@@ -29,6 +29,8 @@ GO
 /*                            screen (james02)                          */
 /* 2021-01-18 1.8  James      WMS-15913 Add Decode Case Id (james03)    */
 /*                            Add Close Pallet Add ExtendedInfoSP       */
+/* 2022-05-26 1.9  James      WMS-19694 Add CapturePackInfoSP (james04) */
+/*                            Add ExtendedValidateSP at step 1          */
 /************************************************************************/
 
 CREATE PROC [RDT].[rdtfnc_Scan_To_Pallet] (
@@ -97,7 +99,11 @@ DECLARE
    @cOrderKey           NVARCHAR( 10),
    @cExtendedInfo       NVARCHAR( 20),
    @cExtendedInfoSP     NVARCHAR( 20),
-   
+   @cCapturePackInfoSP  NVARCHAR( 20),
+   @cWeight             NVARCHAR( 10),
+   @cCube               NVARCHAR( 10),
+   @cRefNo              NVARCHAR( 20),
+
    @cInField01 NVARCHAR( 60), @cOutField01 NVARCHAR( 60), @cFieldAttr01 NVARCHAR( 1), 
    @cInField02 NVARCHAR( 60), @cOutField02 NVARCHAR( 60), @cFieldAttr02 NVARCHAR( 1), 
    @cInField03 NVARCHAR( 60), @cOutField03 NVARCHAR( 60), @cFieldAttr03 NVARCHAR( 1), 
@@ -152,6 +158,7 @@ SELECT
    @cDefaultWeight      = V_String15,
    @cDecodeSP           = V_String16,
    @cExtendedInfoSP     = V_String17,
+   @cCapturePackInfoSP  = V_String18,
 
    @cPalletKey          = V_String41,
 
@@ -197,7 +204,7 @@ BEGIN
    -- Storer configure
    SET @cAllowCubeZero = rdt.rdtGetConfig( @nFunc, 'AllowCubeZero', @cStorerKey)
    SET @cAllowWeightZero = rdt.rdtGetConfig( @nFunc, 'AllowWeightZero', @cStorerKey)
-   SET @cCapturePackInfo = rdt.RDTGetConfig( @nFunc, 'CapturePackInfo', @cStorerKey)
+   SET @cCapturePackInfoSP = rdt.RDTGetConfig( @nFunc, 'CapturePackInfo', @cStorerKey)
    SET @cCapturePalletInfo = rdt.RDTGetConfig( @nFunc, 'CapturePalletInfo', @cStorerKey)
    SET @cDefaultWeight = rdt.RDTGetConfig( @nFunc, 'DefaultWeight', @cStorerKey)
 
@@ -327,7 +334,42 @@ BEGIN
       END
       SET @cOutField02 = @cLOC
 
-      IF @cCapturePackInfo = '1'
+      -- ExtendedValidateSP
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+            ' @nMobile, @nFunc, @nStep, @nInputKey, @cLangCode, @cFacility, @cStorerKey, @cPalletKey, @cCartonType, @cCaseID, '+ 
+            ' @cLOC, @cSKU, @nQTY, @cLength, @cWidth, @cHeight, @cGrossWeight, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+         SET @cSQLParam =
+            '@nMobile      INT,           ' +
+            '@nFunc        INT,           ' +
+            '@nStep        INT,           ' +
+            '@nInputKey    INT,           ' +
+            '@cLangCode    NVARCHAR( 3),  ' +
+            '@cFacility    NVARCHAR( 5),  ' +
+            '@cStorerkey   NVARCHAR( 15), ' +
+            '@cPalletKey   NVARCHAR( 30), ' +
+            '@cCartonType  NVARCHAR( 10), ' +
+            '@cCaseID      NVARCHAR( 20), ' +
+            '@cLOC         NVARCHAR( 10), ' +
+            '@cSKU         NVARCHAR( 20), ' +
+            '@nQTY         INT,           ' + 
+            '@cLength      NVARCHAR(5),   ' + 
+            '@cWidth       NVARCHAR(5),   ' + 
+            '@cHeight      NVARCHAR(5),   ' + 
+            '@cGrossWeight NVARCHAR(5),   ' + 
+            '@nErrNo       INT           OUTPUT, ' +
+            '@cErrMsg      NVARCHAR( 20) OUTPUT  '
+
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @nMobile, @nFunc, @nStep, @nInputKey, @cLangCode, @cFacility, @cStorerKey, @cPalletKey, @cCartonType, @cCaseID, 
+            @cLOC, @cSKU, @nQTY, @cLength, @cWidth, @cHeight, @cGrossWeight, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+         IF @nErrNo <> 0
+            GOTO Step_3_Fail
+      END
+
+      IF @cCapturePackInfoSP = '1'
       BEGIN
          -- Prepare next screen var
          SET @cOutField01 = @cPalletKey
@@ -661,6 +703,59 @@ BEGIN
 
          IF @nErrNo <> 0
             GOTO Step_3_Fail
+      END
+
+      SET @cCapturePackInfo = ''
+      IF @cCapturePackInfoSP <> ''
+      BEGIN
+         -- Custom SP to get PackInfo setup
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cCapturePackInfoSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cCapturePackInfoSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' + 
+               ' @cPalletKey, @cCaseID, @cLOC, @cSKU, @nQTY, ' +
+               ' @cCapturePackInfo  OUTPUT, ' +
+               ' @cCartonType       OUTPUT, ' +
+               ' @cWeight           OUTPUT, ' +
+               ' @cCube             OUTPUT, ' +
+               ' @cRefNo            OUTPUT, ' +
+               ' @nErrNo            OUTPUT, ' +
+               ' @cErrMsg           OUTPUT  '
+            SET @cSQLParam =
+               '@nMobile            INT,           ' +
+               '@nFunc              INT,           ' +
+               '@cLangCode          NVARCHAR( 3),  ' +
+               '@nStep              INT,           ' +
+               '@nInputKey          INT,           ' +
+               '@cFacility          NVARCHAR( 5),  ' +
+               '@cStorerKey         NVARCHAR( 15), ' +
+               '@cPalletKey         NVARCHAR( 30), ' +
+               '@cCaseID            NVARCHAR( 20), ' +
+               '@cLOC               NVARCHAR( 10), ' +
+               '@cSKU               NVARCHAR( 20), ' +
+               '@nQTY               INT, ' +
+               '@cCapturePackInfo   NVARCHAR( 3)  OUTPUT, ' +
+               '@cCartonType        NVARCHAR( 10) OUTPUT, ' +
+               '@cWeight            NVARCHAR( 10) OUTPUT, ' +
+               '@cCube              NVARCHAR( 10) OUTPUT, ' +
+               '@cRefNo             NVARCHAR( 20) OUTPUT, ' +
+               '@nErrNo             INT           OUTPUT, ' +
+               '@cErrMsg            NVARCHAR( 20) OUTPUT  ' 
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+               @cPalletKey, @cCaseID, @cLOC, @cSKU, @nQTY,
+               @cCapturePackInfo    OUTPUT,
+               @cCartonType         OUTPUT,
+               @cWeight             OUTPUT,
+               @cCube               OUTPUT,
+               @cRefNo              OUTPUT,
+               @nErrNo              OUTPUT,
+               @cErrMsg             OUTPUT
+         END
+         ELSE
+            -- Setup is non SP
+            SET @cCapturePackInfo = @cCapturePackInfoSP
       END
 
       -- Capture pack info (after)
@@ -1156,9 +1251,6 @@ BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
       DECLARE @cChkCartonType NVARCHAR( 10)
-      DECLARE @cWeight  NVARCHAR( 10)
-      DECLARE @cCube    NVARCHAR( 10)
-      DECLARE @cRefNo   NVARCHAR( 20)
 
       -- Screen mapping
       SET @cChkCartonType  = CASE WHEN @cFieldAttr01 = '' THEN @cInField01 ELSE @cOutField01 END
@@ -1462,6 +1554,40 @@ BEGIN
       SET @nScn = @nScn - 3
       SET @nStep = @nStep - 3
    END
+
+   -- ExtendedValidateSP
+   IF @cExtendedInfoSP <> ''
+   BEGIN
+      SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+         ' @nMobile, @nFunc, @nStep, @nInputKey, @cLangCode, @cFacility, @cStorerKey, @cPalletKey, @cCartonType, @cCaseID, '+ 
+         ' @cLOC, @cSKU, @nQTY, @cLength, @cWidth, @cHeight, @cGrossWeight, @cExtendedInfo OUTPUT '
+      SET @cSQLParam =
+         '@nMobile       INT,           ' +
+         '@nFunc         INT,           ' +
+         '@nStep         INT,           ' +
+         '@nInputKey     INT,           ' +
+         '@cLangCode     NVARCHAR( 3),  ' +
+         '@cFacility     NVARCHAR( 5),  ' +
+         '@cStorerkey    NVARCHAR( 15), ' +
+         '@cPalletKey    NVARCHAR( 30), ' +
+         '@cCartonType   NVARCHAR( 10), ' +
+         '@cCaseID       NVARCHAR( 20), ' +
+         '@cLOC          NVARCHAR( 10), ' +
+         '@cSKU          NVARCHAR( 20), ' +
+         '@nQTY          INT,           ' + 
+         '@cLength       NVARCHAR(5),   ' + 
+         '@cWidth        NVARCHAR(5),   ' + 
+         '@cHeight       NVARCHAR(5),   ' + 
+         '@cGrossWeight  NVARCHAR(5),   ' + 
+         '@cExtendedInfo NVARCHAR( 20)  OUTPUT ' 
+
+      EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+         @nMobile, @nFunc, @nStep, @nInputKey, @cLangCode, @cFacility, @cStorerKey, @cPalletKey, @cCartonType, @cCaseID, 
+         @cLOC, @cSKU, @nQTY, @cLength, @cWidth, @cHeight, @cGrossWeight, @cExtendedInfo OUTPUT
+
+      IF @cExtendedInfo <> ''
+         SET @cOutField15 = @cExtendedInfo
+   END
 END
 GOTO Quit
 
@@ -1699,6 +1825,7 @@ BEGIN
       V_String15   = @cDefaultWeight,
       V_String16   = @cDecodeSP,
       V_String17   = @cExtendedInfoSP,
+      V_String18   = @cCapturePackInfoSP,
 
       V_String41   = @cPalletKey,
 
