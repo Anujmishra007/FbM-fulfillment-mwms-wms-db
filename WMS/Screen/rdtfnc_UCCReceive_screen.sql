@@ -36,6 +36,7 @@ EXECUTE rdt.rdtAddScn 1303, 'ENG'
    ,@cLine06 = '%18d04'
    ,@cLine08 = 'ESTIMATED'
    ,@cLine09 = 'UCC ON ID: %02i05'
+    ,@cLine13 = '%20d15' --WMS20650 (yeekung04)
    ,@cLine14 = '%e'
    ,@nFunc = 898
 

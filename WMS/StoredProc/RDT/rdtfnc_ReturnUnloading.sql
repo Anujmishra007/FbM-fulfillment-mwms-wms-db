@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdtfnc_ReturnUnloading]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdtfnc_ReturnUnloading]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -18,8 +15,9 @@ GO
 /* Date         Rev  Author      Purposes                                     */
 /* 2021-02-17   1.0  Chermaine   WMS-16332. Created                           */
 /* 2021-05-03   1.1  Chermaine   WMS-16945 Add eventlog (cc01)                */
+/* 2022-02-16   1.2  Ung         WMS-18908 Add TransmitLog                    */
 /******************************************************************************/
-CREATE  PROC rdt.rdtfnc_ReturnUnloading(
+CREATE OR ALTER PROC rdt.rdtfnc_ReturnUnloading(
    @nMobile    INT,
    @nErrNo     INT           OUTPUT,
    @cErrMsg    NVARCHAR( 20) OUTPUT
@@ -29,6 +27,10 @@ SET NOCOUNT ON
 SET QUOTED_IDENTIFIER OFF
 SET ANSI_NULLS OFF
 SET CONCAT_NULL_YIELDS_NULL OFF
+
+DECLARE
+   @nRowCount        INT,
+   @b_success        INT
 
 -- Session variable
 DECLARE
@@ -51,13 +53,12 @@ DECLARE
    @cWhsRef          NVARCHAR( 18), 
    @cStatus          NVARCHAR( 10),
    @cVehicleDate     NVARCHAR( 18),
+   @cMissingTRITF    NVARCHAR( 1), 
    @cTrackingNo      NVARCHAR( 40), 
    @cReceiptKey      NVARCHAR( 10),  --(cc01)
    @nFromScn         INT,
    @nFromStep        INT,
    @nParcelQty       INT,
-   
-   @b_success        INT,
     
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -109,6 +110,9 @@ SELECT
    @cWhsRef       = V_String5,
    @cStatus       = V_String6,
    @cVehicleDate  = V_String7,
+   
+   @cMissingTRITF = V_String20, 
+   
    @cTracKingNo   = V_String41,
    
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
@@ -159,6 +163,9 @@ Step 0. func = 1852. Menu
 ********************************************************************************/
 Step_0:
 BEGIN
+   -- Storer configure
+   SET @cMissingTRITF = rdt.RDTGetConfig( @nFunc, 'MissingTradeReturnITF', @cStorerKey)
+   
    -- EventLog
    EXEC RDT.rdt_STD_EventLog
       @cActionType = '1', -- Sign-in
@@ -404,14 +411,30 @@ BEGIN
       AND WarehouseReference = @cWhsRef
       AND doctype = 'R'
       
-      IF @@ROWCOUNT = 0 
+      SET @nRowCount = @@ROWCOUNT 
+      
+      IF @nRowCount = 0 
       BEGIN
+         IF @cMissingTRITF = '1'
+         BEGIN
+            EXEC dbo.ispGenTransmitLog2 'WSRDTMISSDR', @cApptNo, @cWhsRef, @cStorerKey, ''
+               , @b_Success OUTPUT
+               , @nErrNo    OUTPUT
+               , @cErrMsg   OUTPUT
+            IF @b_Success = 0  
+            BEGIN  
+               SET @nErrNo = 163420  
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'INS TLog2 Fail'  
+               GOTO step_4_fail 
+            END  
+         END
+         
       	SET @nErrNo = 163407
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --AWB Not Exist
          GOTO step_4_fail
       END
       
-      IF @@ROWCOUNT > 1 
+      IF @nRowCount > 1 
       BEGIN
       	SET @nErrNo = 163408
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid AWB  
@@ -866,6 +889,9 @@ BEGIN
       V_String5    = @cWhsRef,
       V_String6    = @cStatus,
       V_String7    = @cVehicleDate,
+
+      V_String20   = @cMissingTRITF,
+
       V_String41   = @cTracKingNo,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,

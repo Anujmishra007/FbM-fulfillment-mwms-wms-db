@@ -1,4 +1,3 @@
-
 if exists (select * from dbo.sysobjects where id = object_id('dbo.nsp_ReplenishToFPA_Order_Summary') 
                                       and sysstat & 0xf = 4)
 	drop procedure dbo.nsp_ReplenishToFPA_Order_Summary
@@ -26,6 +25,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author    Purposes                                      */
 /* 05 Mar 2007  jwong     fix bug                                       */
+/* 28-Jan-2019  TLTING_ext 1.1 enlarge externorderkey field length      */  
 /************************************************************************/
 CREATE PROC  nsp_ReplenishToFPA_Order_Summary
              @c_Key_Type  NVARCHAR(13)
@@ -50,7 +50,7 @@ BEGIN
    SELECT @n_continue=1, @b_debug = 0
 
       
-   DECLARE @c_ExternOrderkey NVARCHAR(30),
+   DECLARE @c_ExternOrderkey NVARCHAR(50),  --tlting_ext 
            @c_OrderKey       NVARCHAR(10),
            @n_Count          int,
            @n_TotalOrd       int,
