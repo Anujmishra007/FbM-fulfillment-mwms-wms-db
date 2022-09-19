@@ -84,6 +84,7 @@ GO
 /* 07-09-2022 5.6 James       WMS-20689 Add config to default qty onto  */
 /*                            preferred uom default (james12)           */
 /* 19-05-2021 5.7 SeongYaik   Revise IF Statement (SY01)                */
+/* 18-08-2022 5.8 Ung         Fix CaptureDataSP after scn2              */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PostPickAudit] (
@@ -161,6 +162,7 @@ DECLARE
    @cOrderKey       NVARCHAR( 10),
    @cID             NVARCHAR( 18),
    @nFromScn        INT, 
+   @nFromStep       INT, 
    @nTol            INT,           -- Tolerance %
 
    @cRefNo          NVARCHAR( 10),
@@ -265,6 +267,7 @@ SELECT
    @cOrderKey   = V_OrderKey,
    @cID         = V_ID, 
    @nFromScn    = V_FromScn, 
+   @nFromStep        = V_FromStep, 
    @cTaskDetailKey  = V_TaskDetailKey, 
    
    @nTol            = V_Integer1, 
@@ -1290,6 +1293,9 @@ BEGIN
          SET @cOutField05 = ''
          SET @cOutField06 = ''
          
+         SET @nFromScn = @nScn
+         SET @nFromStep = @nStep
+         
          -- Go to data capture screen
          SET @nScn = @nScn + 4
          SET @nStep = @nStep + 5
@@ -1479,6 +1485,8 @@ BEGIN
                IF @cFieldAttr02 = '' AND @cOutField02 = '0' EXEC rdt.rdtSetFocusField @nMobile, 2 ELSE    
                IF @cFieldAttr03 = '' AND @cOutField03 = '0' EXEC rdt.rdtSetFocusField @nMobile, 3     
                                 
+               SET @nFromScn = @nScn
+               SET @nFromStep = @nStep
           
                -- Go to capture PackInfo screen    
                SET @nScn = 5980   
@@ -2455,6 +2463,9 @@ BEGIN
          END
 
          EXEC rdt.rdtSetFocusField @nMobile, 3
+
+         SET @nFromScn = @nScn
+         SET @nFromStep = @nStep
 
          -- Go to data capture screen
          SET @nScn = @nScn + 3
@@ -3642,42 +3653,62 @@ BEGIN
 
    IF @nInputKey = 0 -- ESC
    BEGIN
-      -- Set next screen var
-      SET @cSKU = ''
-      SET @cPackQTYIndicator = ''
-      SET @cPrePackIndicator = ''
-
-      -- Disable QTY field
-      IF @cDisableQTYField = '1'
+      IF @nFromStep = 2 -- Statistic
       BEGIN
-         SET @cFieldAttr09 = 'O' -- PQTY
-         SET @cFieldAttr10 = 'O' -- MQTY
+         -- Prepare next screen var
+         SET @cOutField01 = @cRefNo
+         SET @cOutField02 = @cPickSlipNo
+         SET @cOutField03 = @cLoadKey
+         SET @cOutField04 = @cOrderKey
+         SET @cOutField05 = @cDropID
+         SET @cOutField06 = @cSKUStat
+         SET @cOutField07 = @cQTYStat
+         SET @cOutField08 = '' -- @cExtendedInfo
+         SET @cOutField09 = @cID
+         SET @cOutField10 = @cTaskDetailKey
+         
+         SET @nScn = @nFromScn
+         SET @nStep = @nFromStep
       END
+      ELSE
+      BEGIN
+         -- Set next screen var
+         SET @cSKU = ''
+         SET @cPackQTYIndicator = ''
+         SET @cPrePackIndicator = ''
 
-      IF @cConvertQTYSP <> '' AND EXISTS( SELECT TOP 1 1 FROM dbo.sysobjects WHERE name = @cConvertQTYSP AND type = 'P')
-         SET @cFieldAttr09 = 'O' -- @nPQTY
+         -- Disable QTY field
+         IF @cDisableQTYField = '1'
+         BEGIN
+            SET @cFieldAttr09 = 'O' -- PQTY
+            SET @cFieldAttr10 = 'O' -- MQTY
+         END
 
-      SET @cOutField01 = '' --@cSKU
-      SET @cOutField02 = '' --@cSKU
-      SET @cOutField03 = '' --SUBSTRING( @cSKUDesc, 1, 20)
-      SET @cOutField04 = '' --SUBSTRING( @cSKUDesc, 21, 40)
-      SET @cOutField05 = '' --@cStyle
-      SET @cOutField06 = '' --@cColor
-      SET @cOutField07 = '' --@cSize
-      SET @cOutField08 = '' --@nPUOM_Div, @cPUOM_Desc, @cMUOM_Desc
-      SET @cOutField09 = CASE WHEN @cPPADefaultPQTY <> '' THEN @cPPADefaultPQTY ELSE '' END--@nPUOM
-      SET @cOutField10 = CASE WHEN @cTaskDefaultQty = '1' THEN @cTaskQty ELSE @cPPADefaultQTY END --@nMUOM
-      SET @cOutField11 = '' --@nPQTY_CHK
-      SET @cOutField12 = '' --@nMQTY_CHK
-      SET @cOutField13 = '' --@nPQTY_PPA
-      SET @cOutField14 = '' --@nMQTY_PPA
-      SET @cOutField15 = '' --@cExtendedInfo
-      SET @cOutField16 = '' --@cPackQTYIndicator
-      EXEC rdt.rdtSetFocusField @nMobile, 1 --SKU
+         IF @cConvertQTYSP <> '' AND EXISTS( SELECT TOP 1 1 FROM dbo.sysobjects WHERE name = @cConvertQTYSP AND type = 'P')
+            SET @cFieldAttr09 = 'O' -- @nPQTY
 
-      -- Go to next screen
-      SET @nScn = @nScn - 4
-      SET @nStep = @nStep - 4
+         SET @cOutField01 = '' --@cSKU
+         SET @cOutField02 = '' --@cSKU
+         SET @cOutField03 = '' --SUBSTRING( @cSKUDesc, 1, 20)
+         SET @cOutField04 = '' --SUBSTRING( @cSKUDesc, 21, 40)
+         SET @cOutField05 = '' --@cStyle
+         SET @cOutField06 = '' --@cColor
+         SET @cOutField07 = '' --@cSize
+         SET @cOutField08 = '' --@nPUOM_Div, @cPUOM_Desc, @cMUOM_Desc
+         SET @cOutField09 = CASE WHEN @cPPADefaultPQTY <> '' THEN @cPPADefaultPQTY ELSE '' END--@nPUOM
+         SET @cOutField10 = CASE WHEN @cTaskDefaultQty = '1' THEN @cTaskQty ELSE @cPPADefaultQTY END --@nMUOM
+         SET @cOutField11 = '' --@nPQTY_CHK
+         SET @cOutField12 = '' --@nMQTY_CHK
+         SET @cOutField13 = '' --@nPQTY_PPA
+         SET @cOutField14 = '' --@nMQTY_PPA
+         SET @cOutField15 = '' --@cExtendedInfo
+         SET @cOutField16 = '' --@cPackQTYIndicator
+         EXEC rdt.rdtSetFocusField @nMobile, 1 --SKU
+
+         -- Go to next screen
+         SET @nScn = @nScn - 4
+         SET @nStep = @nStep - 4
+      END
 
       -- Extended info
       IF @cExtendedInfoSP <> ''
@@ -4200,6 +4231,7 @@ BEGIN
       V_OrderKey   = @cOrderKey,
       V_ID         = @cID, 
       V_FromScn    = @nFromScn, 
+      V_FromStep      = @nFromStep, 
       V_TaskDetailKey = @cTaskDetailKey, 
       
       V_Integer1   = @nTol, 
