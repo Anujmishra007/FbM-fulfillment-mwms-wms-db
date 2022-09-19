@@ -22,6 +22,8 @@ GO
 /* Updates:                                                             */
 /* Date         Author  Ver.  Purposes                                  */
 /* 14-Jun-2022  NJOW    1.0   DEVOPS Combine Script                     */
+/* 15-Sep-2022  NJOW02  1.1   WMS-20781 Add lottable09 sorting if       */
+/*                            orderdetail.lottable09=''                 */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[nspALHNB02]
@@ -137,7 +139,7 @@ BEGIN
    	 
    	  SET @c_ExtraCondition = ' AND DATEDIFF(Day, GETDATE(), LA.Lottable04) >= @n_FromDay AND DATEDIFF(Day, GETDATE(), LA.Lottable04) <= @n_ToDay '
    
-      SET @c_SortingCondition = ' ORDER BY DATEDIFF(Day, GETDATE(), LA.Lottable04), LA.Lottable04,  QTYAVAILABLE, LOC.LogicalLocation, LOC.Loc '   	     	  
+      SET @c_SortingCondition = ' ORDER BY DATEDIFF(Day, GETDATE(), LA.Lottable04), LA.Lottable04,  QTYAVAILABLE, LA.Lottable09, LOC.LogicalLocation, LOC.Loc '   	     	  
    END
    ELSE
    BEGIN
