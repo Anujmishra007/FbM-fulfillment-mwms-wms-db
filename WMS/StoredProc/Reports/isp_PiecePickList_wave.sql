@@ -35,6 +35,7 @@ GO
 /*                             tested scripts (CS01)                    */  
 /* 17-AUG-2022  CSCHONG  1.2  Devops Scripts Combine                    */
 /* 17-AUG-2022  CSCHONG  1.2  Performance Tunning (CS02)                */
+/* 14-SEP-2022  CSCHONG  1.2  Performance Tunning (CS03)                */
 /************************************************************************/    
     
 CREATE OR ALTER PROC isp_PiecePickList_wave (    
@@ -118,7 +119,8 @@ CREATE OR ALTER PROC isp_PiecePickList_wave (
     --CS02 S
     CREATE TABLE #TMPWAVELPBULK
                   (loadkey          NVARCHAR(20),
-                  TotalQtyInBulk    INT)
+                  TotalQtyInBulk    INT,
+                  TLPAddate         DATETIME)     --CS03
     --CS02 E
      
    WHILE @@TRANCOUNT > 0  
@@ -131,36 +133,38 @@ CREATE OR ALTER PROC isp_PiecePickList_wave (
     INSERT INTO #TMPWAVELPBULK
          (
              loadkey,
-             TotalQtyInBulk
+             TotalQtyInBulk,TLPAddate
          )
-         SELECT ISNULL(RTRIM(LP.loadkey),'')    AS loadkey  
+         SELECT ISNULL(RTRIM(ORD.loadkey),'')    AS loadkey                        --CS03  
                             ,  ISNULL(SUM(PD.Qty),0) AS TotalQtyInBulk  
-                          FROM wavedetail WVDET WITH (NOLOCK)
-                          JOIN ORDERS ORD WITH (NOLOCK) ON ORD.ORDERKEY = WVDET.ORDERKEY
-                          JOIN LoadPlan LP WITH (NOLOCK)  ON LP.LoadKey = ORD.LoadKey
+                            , ISNULL(LP.AddDate,'1900/01/01')                                           --CS03
+                        --  FROM wavedetail WVDET WITH (NOLOCK)
+                          FROM ORDERS ORD WITH (NOLOCK) --ON ORD.ORDERKEY = WVDET.ORDERKEY
+                          JOIN LoadPlan LP WITH (NOLOCK)  ON LP.LoadKey = ORD.LoadKey   
                           JOIN PickDetail     PD  WITH (NOLOCK) ON PD.orderkey = ORD.Orderkey--ON (PD.PickSlipNo     = PH.pickheaderkey)  
                           JOIN LOC L WITH (NOLOCK) ON L.loc=PD.loc
-                         WHERE LP.Facility = @c_facility  
-                           AND WVDET.WaveKey = @c_Wavekey  
+                         WHERE ORD.Facility = @c_facility  
+                           --AND WVDET.WaveKey = @c_Wavekey  
+                           AND ORD.UserDefine09 = @c_Wavekey            --CS03
                           AND L.LocationType ='OTHER' AND L.LocationCategory='BULK'
-                        GROUP BY ISNULL(RTRIM(LP.loadkey),'')
+                        GROUP BY ISNULL(RTRIM(ORD.loadkey),'') ,LP.AddDate  --CS03
     --CS02 E
   
    DECLARE CURSOR_SO CURSOR LOCAL FAST_FORWARD READ_ONLY FOR    
-   SELECT          ISNULL(RTRIM(LP.LoadKey),'') ,MAX(ORD.storerkey)   
+   SELECT          MAX(ISNULL(RTRIM(ORD.LoadKey),'')) ,MAX(ORD.storerkey)                        --CS03
                   ,MAX(ORD.C_Company),ISNULL(MAX(ST.Company),'')  
                   ,ISNULL(MAX(ST.StorerKey),''),MAX(ORD.BillToKey),MAX(ord.ConsigneeKey),MAX(S1.SUSR2)   
                   ,ISNULL(RTRIM(MAX(ORD.C_State)),'') , ISNULL(RTRIM(MAX(ORD.C_City)),'')  
                   ,ISNULL(RTRIM(MAX(ST.State)),''), ISNULL(RTRIM(MAX(ST.City)),'')  
                   ,s.Style,s.size,s.color,pd.loc,sum(DISTINCT pd.qty),P.CaseCnt,p.PackUOM3,p.InnerPack  
                   ,LA.Lottable02   
-    FROM wavedetail WVDET WITH (NOLOCK)  
-    JOIN ORDERS ORD WITH (NOLOCK) ON ORD.ORDERKEY = WVDET.ORDERKEY  
-    JOIN LoadPlan LP WITH (NOLOCK)  ON LP.LoadKey = ORD.LoadKey  
-    JOIN LoadPlanDetail LPD WITH (NOLOCK) ON (LPD.LoadKey = LP.Loadkey)    
+    --FROM wavedetail WVDET WITH (NOLOCK)                                      --CS02 S
+    FROM ORDERS ORD WITH (NOLOCK) --ON ORD.ORDERKEY = WVDET.ORDERKEY  
+    --JOIN LoadPlan LP WITH (NOLOCK)  ON LP.LoadKey = ORD.LoadKey             
+    --JOIN LoadPlanDetail LPD WITH (NOLOCK) ON (LPD.LoadKey = LP.Loadkey)      --CS03 E  
    -- JOIN PickDetail     PD  WITH (NOLOCK) ON (PD.Orderkey = LPD.Orderkey)    
        
-    JOIN PickHeader     PH  WITH (NOLOCK) ON (PH.ExternOrderKey = LP.LoadKey)     
+    JOIN PickHeader     PH  WITH (NOLOCK) ON (PH.ExternOrderKey = ORD.LoadKey)     
   --                                        AND(PH.Orderkey       = OH.Orderkey)    
     JOIN PickDetail     PD  WITH (NOLOCK) ON (PD.PickSlipNo     = PH.pickheaderkey)   
     JOIN SKU            S   WITH (NOLOCK) ON (S.Storerkey       = PD.StorerKey)    
@@ -172,14 +176,15 @@ CREATE OR ALTER PROC isp_PiecePickList_wave (
     JOIN LotAttribute   LA  WITH (NOLOCK) ON (LA.Lot            = PD.Lot)  
     LEFT JOIN STORER ST WITH (NOLOCK) ON (ST.Storerkey = ISNULL(RTRIM(ORD.BillToKey),'') + ISNULL(RTRIM(ORD.ConsigneeKey),''))    
     LEFT JOIN Storer S1 WITH (NOLOCK) ON S1.StorerKey=ORD.ConsigneeKey        
-    WHERE  LP.Facility     =  @c_facility    
-    AND WVDET.WaveKey = @c_wavekey  
+    WHERE  ORD.Facility     =  @c_facility        --CS03
+   -- AND WVDET.WaveKey = @c_wavekey              --CS03
+       AND ORD.UserDefine09 = @c_Wavekey                --CS03  
     -- AND  SL.Locationtype = 'PICK'     --CS01 START   
     --AND  PD.Status       < '5'        
     AND  PD.Qty > 0        
     AND PD.uom <> '6'             ----- Luna 7.14  --CS01 END  
-   GROUP BY ISNULL(RTRIM(LP.LoadKey),''),s.Style,s.size,p.CaseCnt,pd.loc,s.Color,p.CaseCnt,p.PackUOM3,p.InnerPack,LA.Lottable02  
-   ORDER BY ISNULL(RTRIM(LP.LoadKey),'')    
+   GROUP BY s.Style,s.size,p.CaseCnt,pd.loc,s.Color,p.CaseCnt,p.PackUOM3,p.InnerPack,LA.Lottable02  --CS03
+   ORDER BY MAX(ISNULL(RTRIM(ORD.LoadKey),''))          --CS03    
          --,  ISNULL(RTRIM(LPD.OrderKey),'')    
     
    OPEN CURSOR_SO    
@@ -334,7 +339,7 @@ CREATE OR ALTER PROC isp_PiecePickList_wave (
       BEGIN TRAN  
  -- SELECT '123' , * FROM #TMPWAVELP  
   
-   SELECT ISNULL(RTRIM(LP.LoadKey),'')          AS Loadkey    
+   SELECT ISNULL(RTRIM(ORD.LoadKey),'')          AS Loadkey                --CS03
          ,ISNULL(RTRIM(PH.PickHeaderKey),'')    AS PickHeaderKey     
          --,CASE WHEN MAX(ST.Storerkey) IS NULL THEN ISNULL(RTRIM(MAX(OH.C_State)),'') + ISNULL(RTRIM(MAX(OH.C_City)),'')    
          --                                ELSE ISNULL(RTRIM(MAX(ST.State)),'') + ISNULL(RTRIM(MAX(ST.City)),'')    
@@ -342,8 +347,8 @@ CREATE OR ALTER PROC isp_PiecePickList_wave (
           ,CASE WHEN (TLP.STStorerkey) IS NULL THEN ISNULL(RTRIM((TLP.OHState)),'') + ISNULL(RTRIM((TLP.OHCity)),'')    
                                          ELSE ISNULL(RTRIM((TLP.STState)),'') + ISNULL(RTRIM((TLP.STCity)),'')    
                                          END    AS City    
-         ,ISNULL(LP.AddDate,'1900/01/01')       AS AddDate    
-         , WVDET.WaveKey                        AS Wavekey    
+         ,ISNULL(TPD.TLPAddate,'1900/01/01')       AS AddDate    
+         , ORD.UserDefine09                        AS Wavekey        --CS03
          ,''                                    AS ExternOrderkey    
          --,ISNULL(RTRIM(MAX(OH.BillTokey)),'') + '-'     
          --+ISNULL(RTRIM(MAX(OH.ConsigneeKey)),'')     AS CustomerNo    
@@ -364,12 +369,12 @@ CREATE OR ALTER PROC isp_PiecePickList_wave (
          ,ISNULL(RTRIM(TLP.Lottable02),'')         AS Lotable02   
          ,CASE WHEN ISNULL(TLP.STStorerkey,'')='' THEN (TLP.OHCompany) ELSE (TLP.STCompany) END AS Company     
          ,ISNULL(TLP.SUSR2,'')   AS SSUSR2                                                                                                                                                --         
-    FROM wavedetail WVDET WITH (NOLOCK)  
-    JOIN ORDERS ORD WITH (NOLOCK) ON ORD.ORDERKEY = WVDET.ORDERKEY  
-    JOIN LoadPlan LP WITH (NOLOCK)  ON LP.LoadKey = ORD.LoadKey  
-    JOIN LoadPlanDetail LPD WITH (NOLOCK) ON (LPD.LoadKey       = LP.LoadKey)     
+   -- FROM wavedetail WVDET WITH (NOLOCK)  
+    FROM ORDERS ORD WITH (NOLOCK) --ON ORD.ORDERKEY = WVDET.ORDERKEY  
+   -- JOIN LoadPlan LP WITH (NOLOCK)  ON LP.LoadKey = ORD.LoadKey  
+   -- JOIN LoadPlanDetail LPD WITH (NOLOCK) ON (LPD.LoadKey       = LP.LoadKey)     
     --JOIN Orders         OH  WITH (NOLOCK) ON (OH.Orderkey       = LPD.Orderkey)    
-    JOIN PickHeader     PH  WITH (NOLOCK) ON (PH.ExternOrderKey = LP.LoadKey)     
+    JOIN PickHeader     PH  WITH (NOLOCK) ON (PH.ExternOrderKey = ORD.LoadKey)     
   ----                                        AND(PH.Orderkey       = OH.Orderkey)    
     JOIN PickDetail     PD  WITH (NOLOCK) ON (PD.PickSlipNo     = PH.pickheaderkey)     
     --JOIN (SELECT ISNULL(RTRIM(OH.loadkey),'')    AS loadkey             --CS02 S
@@ -394,21 +399,21 @@ CROSS APPLY (SELECT DISTINCT ISNULL(RTRIM(OH.loadkey),'')    AS loadkey
     --              AND WVDET.WaveKey = @c_Wavekey    
     --             AND L.LocationType ='OTHER' AND L.LocationCategory='BULK'  
     --           GROUP BY ISNULL(RTRIM(LP.loadkey),'')) TPD    
-     LEFT JOIN #TMPWAVELPBULK TPD      ON (TPD.loadkey = LP.Loadkey)    --CS02 E
-     LEFT JOIN #TMPWAVELP TLP ON TLP.Loadkey=LP.LoadKey      
-     WHERE LP.Facility = @c_facility    
-     AND WVDET.WaveKey = @c_wavekey    
+     LEFT JOIN #TMPWAVELPBULK TPD      ON (TPD.loadkey = ORD.Loadkey)    --CS02 E    --CS03
+     LEFT JOIN #TMPWAVELP TLP ON TLP.Loadkey=ORD.LoadKey                             --CS03  
+     WHERE ORD.Facility = @c_facility                                                --CS03
+     AND ORD.UserDefine09 = @c_wavekey                                               --CS03
      AND PH.Zone     = '5'    
      --AND SL.LocationType = 'PICK'   ----- Luna 7.14     --CS01 START   
      --AND PD.STATUS  < '5'        
      AND PD.UOM <> '6'  ----- Luna 7.14                   --CS01 END  
-     GROUP BY ISNULL(RTRIM(LP.LoadKey),'')    
+     GROUP BY ISNULL(RTRIM(ORD.LoadKey),'')               --CS03
          ,  ISNULL(RTRIM(PH.PickHeaderKey),'')    
-         ,   WVDET.WaveKey             
+         ,   ORD.UserDefine09                                                         --CS03            
          ,CASE WHEN (TLP.STStorerkey) IS NULL THEN ISNULL(RTRIM((TLP.OHState)),'') + ISNULL(RTRIM((TLP.OHCity)),'')    
                                          ELSE ISNULL(RTRIM((TLP.STState)),'') + ISNULL(RTRIM((TLP.STCity)),'')    
                                          END            
-         ,  ISNULL(LP.AddDate,'1900/01/01')               
+         ,  ISNULL(TPD.TLPAddate,'1900/01/01')                                 --CS03 
          --,  ISNULL(RTRIM(OH.ExternOrderkey),'')      
          ,  ISNULL(RTRIM(TLP.BillTokey),'') + '-' + ISNULL(RTRIM(TLP.ConsigneeKey),'')          
          ,  ISNULL(TOD.TotalQtyOrdered,0)     
@@ -424,7 +429,7 @@ CROSS APPLY (SELECT DISTINCT ISNULL(RTRIM(OH.loadkey),'')    AS loadkey
          --,  CASE WHEN ISNULL(ST.Storerkey,'')='' THEN OH.C_Company ELSE ST.Company END    
          ,  CASE WHEN ISNULL(TLP.STStorerkey,'')='' THEN (TLP.OHCompany) ELSE (TLP.STCompany) END   
          ,  ISNULL(TLP.SUSR2,'')  ,ISNULL((TLP.PQty),0)                                                                                                                     --         
-   ORDER BY ISNULL(RTRIM(LP.Loadkey),'')     
+   ORDER BY ISNULL(RTRIM(ORD.Loadkey),'')     
          ,  ISNULL(RTRIM(PH.PickHeaderKey),'')    
          ,  ISNULL(RTRIM(TLP.PLoc),'')                   
          ,  ISNULL(RTRIM(TLP.SStyle),'')                 
