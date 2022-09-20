@@ -11,6 +11,7 @@ GO
 /*                                                                            */
 /* Date         Rev  Author     Purposes                                      */
 /* 2022-07-29   1.0  Ung        WMS-20347 Created                             */
+/* 2022-09-15   1.1  Ung        WMS-20347 Add LoadPlanDetail_dellog.Status = 5*/
 /******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_1856MbolCreate01](
     @nMobile      INT
@@ -22,7 +23,7 @@ CREATE OR ALTER PROC [RDT].[rdt_1856MbolCreate01](
    ,@cStorerKey   NVARCHAR( 15)
    ,@cOrderKey    NVARCHAR( 10)
    ,@cLoadKey     NVARCHAR( 10)
-   ,@cRefNo       NVARCHAR( 20)
+   ,@cRefNo       NVARCHAR( 20)  
    ,@tMbolCreate  VariableTable READONLY
    ,@cMBOLKey     NVARCHAR( 10)  OUTPUT
    ,@nErrNo       INT            OUTPUT
@@ -107,6 +108,7 @@ BEGIN
    SELECT @nOrderRemoved = COUNT(1) 
    FROM dbo.LoadPlanDetail_dellog WITH (NOLOCK) 
    WHERE LoadKey = @cLoadKey
+      AND Status <> '5'
    
    -- Loop cancel orders
    IF @nOrderRemoved > 0
@@ -125,6 +127,7 @@ BEGIN
          SELECT ROW_NUMBER() OVER(ORDER BY LoadLineNumber), LoadLineNumber
          FROM dbo.LoadPlanDetail_dellog WITH (NOLOCK) 
          WHERE LoadKey = @cLoadKey
+            AND Status <> '5'
          ORDER BY 1
       OPEN @cLog
       FETCH NEXT FROM @cLog INTO @nRec, @cLoadLineNo
