@@ -12,6 +12,7 @@ GO
 /*                                                                            */
 /* Date          Rev  Author     Purposes                                     */
 /* 2022-08-16 1.0  CSCHONG    Devops Scripts Combine & WMS-20494 Created      */
+/* 2022-09-19 1.1  CSCHONG    WMS-20494 add in missing field (CS01)           */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_SHIPMARK_01]
@@ -189,7 +190,7 @@ BEGIN
             Col60 )
           SELECT DISTINCT ORD.Externorderkey,ORD.c_Company,ISNULL(RTRIM(ORD.c_address1),'') , ISNULL(RTRIM(ORD.C_Address2),''), ISNULL(RTRIM(ORD.C_Address3),'') , --5
                           ISNULL(RTRIM(ORD.C_Address4),''),ORD.C_Country,PD.CartonNo,CT.CartonLength,CT.CartonWidth,     --10
-                          CT.CartonHeight,'','','','','','','','','',     --20
+                          CT.CartonHeight,PIF.Weight,'','','','','','','','',     --20
                           '','','','','','','','','','', --30
                           '','','','','','','','','','', --40
                           '','','','','','','','','','', --50
