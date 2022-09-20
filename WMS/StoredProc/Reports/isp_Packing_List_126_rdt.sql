@@ -24,6 +24,7 @@ GO
 /* Date         Author    Ver Purposes                                  */
 /* 12-JUL-2022  CHONGCS   1.0 DevOps Combine Script                     */
 /* 01-SEP-2022  CHONGCS   1.1 WMS-20126 revised field logic (CS01)      */
+/* 19-SEP-2022  CHONGCS   1.2 WMS-20126 fix duplicate qty (CS02)        */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_Packing_List_126_rdt]
             @c_pickslipno    NVARCHAR(20)
@@ -52,8 +53,8 @@ BEGIN
         , ISNULL(C.long,'') AS ShipFrom
         , ISNULL(C.UDF01,'') AS CustSrv
         , ISNULL(C.UDF02,'') AS CustSrvEmail
-        , PD.SKU
-        , SUM(PD.Qty) AS qty
+        , OD.SKU                           --CS02
+        , PAD.Qty  AS qty                   --CS02
         , ISNULL(C.UDF03,'') AS CustSrvTel
         , ISNULL(C.UDF04,'') AS CustSrvHLH
         , ISNULL(C.UDF05,'') AS CustSrvWH
@@ -74,9 +75,12 @@ BEGIN
    FROM ORDERS OH (NOLOCK)
    JOIN ORDERDETAIL OD (NOLOCK) ON OD.OrderKey = OH.OrderKey
    JOIN PACKHEADER PH (NOLOCK) ON PH.OrderKey = OH.OrderKey
-   JOIN PACKDETAIL PD (NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo
+   --JOIN PACKDETAIL PD (NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo   --CS02
+   CROSS APPLY (SELECT SUM(Qty) AS Qty FROM PACKDETAIL (NOLOCK) 
+               WHERE PACKDETAIL.PickSlipNo = PH.PickSlipNo 
+               AND PACKDETAIL.STORERKEY = od.STORERKEY AND PACKDETAIL.SKU = OD.SKU)  AS PAD --CS02
    JOIN STORER ST (NOLOCK) ON ST.StorerKey = OH.StorerKey
-   JOIN SKU (NOLOCK) ON SKU.StorerKey = PD.StorerKey AND SKU.SKU = PD.SKU
+   JOIN SKU (NOLOCK) ON SKU.StorerKey = OD.StorerKey AND SKU.SKU = OD.SKU               --CS02
    LEFT JOIN dbo.CODELKUP C WITH (NOLOCK) ON C.Storerkey = OH.StorerKey and C.LISTNAME = 'PVHSZEPKL' and C.code = OH.userdefine03
    LEFT JOIN dbo.CODELKUP C1 WITH (NOLOCK) ON C1.Storerkey = OH.StorerKey and C1.LISTNAME = 'PVHSZEPKL' and C1.code = '00020'
    LEFT JOIN dbo.CODELKUP C2 WITH (NOLOCK) ON C2.Storerkey = OH.StorerKey and C2.LISTNAME = 'PVHSZEPKL' and C2.code ='00030'
@@ -94,7 +98,7 @@ BEGIN
         ,ISNULL(OH.UserDefine01,'') ,CONVERT(nvarchar(10),OH.OrderDate,120) ,ISNULL(sku.descr,'') 
         , ISNULL(C1.long,'') , ISNULL(C1.long,''),ISNULL(C1.udf01,''),ISNULL(C1.udf02,''),ISNULL(C1.udf03,'')
         ,ISNULL(C1.udf04,''),ISNULL(C1.udf05,'') ,ISNULL(C2.long,''),ISNULL(C2.Notes,''),ISNULL(C2.Notes2,'')
-        ,OH.ExternOrderKey,ISNULL(OD.notes,''),ISNULL(SKU.size,''),PD.SKU   --CS01
+        ,OH.ExternOrderKey,ISNULL(OD.notes,''),ISNULL(SKU.size,''),OD.SKU,PAD.qty   --CS01    --CS02
    ORDER BY PH.PickSlipNo
 
 END
