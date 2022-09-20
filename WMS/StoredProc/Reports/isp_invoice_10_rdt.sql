@@ -34,6 +34,7 @@ GO
 /* 21-Nov-2021  CSCHONG  1.2  WMS-18242 revised field logic (CS02)      */
 /* 18-Feb-2022  CSCHONG  1.3  WMS-18242 remove invoiceno parameter      */
 /*                           and performance tunning  (CS03)            */
+/* 16-Aug-2022  MINGLE   1.4  WMS-20474 change url (ML01)               */
 /************************************************************************/      
       
 CREATE OR ALTER  PROC dbo.isp_invoice_10_rdt (        
@@ -96,7 +97,7 @@ BEGIN
          INSERT INTO #TMP_GUIORDERS(Storerkey,GExternOrderKey,orderkey,GInvoiceNo)  
          SELECT DISTINCT G.Storerkey,G.ExternOrderKey,OH.OrderKey,G.InvoiceNo  
          FROM ORDERS OH  WITH (NOLOCK)
-         JOIN GUI G WITH (NOLOCK)  ON G.EXTERNORDERKEY = Substring( OH.EXTERNORDERKEY , 2,Len(RTRIM(OH.EXTERNORDERKEY)) -1)
+         JOIN GUI G WITH (NOLOCK)  ON G.EXTERNORDERKEY = SUBSTRING( OH.EXTERNORDERKEY , 2,LEN(RTRIM(OH.EXTERNORDERKEY)) -1)
          WHERE OH.OrderKey = @c_OrderKey 
      END
    END    
@@ -105,7 +106,7 @@ BEGIN
        
            
    CREATE TABLE #INV10RDT_1(      
-      rowid              INT NOT NULL identity(1,1) PRIMARY KEY,       
+      rowid              INT NOT NULL IDENTITY(1,1) PRIMARY KEY,       
       GBillToName        NVARCHAR(80) NULL,
       GBillToAddr1       NVARCHAR(45) NULL,
       GBillToAddr2       NVARCHAR(45) NULL,
@@ -282,7 +283,8 @@ BEGIN
                SHIPBYAdd4       = ISNULL(ST.Address4,'') , 
                SHIPBYCountry    = ISNULL(St.Country,'') , 
                SHIPBYVAT        = ISNULL(ST.VAT,''), 
-               QRcode1          ='https://hm-india.return-my.delivery/en' , 
+               --QRcode1          ='https://hm-india.return-my.delivery/en' , 
+			   QRcode1          ='https://returns.parcellab.com/hm/in/en/#/',	--ML01
                AmtInWord        = '' , 
                MoneySymbol      = ISNULL(ST.susr2,'Rs'),     
                IGSTCGSTH        = CASE WHEN  ISNULL(GD.Userdefine03,'0.00') = '0.00' THEN 'CGST'
@@ -399,3 +401,4 @@ SET ANSI_NULLS OFF
 GO
 GRANT EXECUTE ON isp_invoice_10_rdt TO NSQL
 GO
+
