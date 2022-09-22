@@ -18,6 +18,7 @@ GO
 /* 2019-06-25 3.6  Shong      Performance Tuning (SWT01)                */   
 /* 2019-09-18 3.7  LZG        INC0844811 - Add optional params (ZG01)   */    
 /* 2022-09-08 3.8  James      WMS-20689 - Add Reasonkey (james02)       */    
+/*                            Step 2 skip print label if found variance */
 /************************************************************************/    
     
 CREATE or ALTER PROC rdt.rdtVFPPAExtUpd (    
@@ -52,10 +53,9 @@ AS
    DECLARE @cTargetDB           NVARCHAR( 20)     
    DECLARE @cPrintDispatchLabel NVARCHAR( 1)    
    DECLARE @nCartonNo           INT    
-    
-   -- Get PickSlipNo    
-   SELECT TOP 1 @cPickSlipNo = PickSlipNo FROM dbo.PackDetail WITH (NOLOCK) WHERE DropID = @cDropID    
-       
+   DECLARE @cFacility           NVARCHAR( 5)
+   DECLARE @cPUOM               NVARCHAR( 10)
+   
    -- Get Order info    
    DECLARE @cSOStatus NVARCHAR(10)    
    SET @cSOStatus = '' -- SWT01    
@@ -69,19 +69,31 @@ AS
    --WHERE PD.PickSlipNo = @cPickSlipNo    
     
    -- SWT01     
-   SELECT TOP 1     
-      @cStorerKey = O.StorerKey,     
-      @cOrderKey = O.OrderKey,     
-      @cSOStatus = O.SOStatus    
-   FROM dbo.Orders O WITH (NOLOCK)        
-   WHERE EXISTS(SELECT 1 FROM dbo.PickDetail PD WITH (NOLOCK)     
-                WHERE PD.PickSlipNo = @cPickSlipNo     
-                AND O.OrderKey = PD.OrderKey )      
+   --SELECT TOP 1     
+   --   @cStorerKey = O.StorerKey,     
+   --   @cOrderKey = O.OrderKey,     
+   --   @cSOStatus = O.SOStatus    
+   --FROM dbo.Orders O WITH (NOLOCK)        
+   --WHERE EXISTS(SELECT 1 FROM dbo.PickDetail PD WITH (NOLOCK)     
+   --             WHERE PD.PickSlipNo = @cPickSlipNo     
+   --             AND O.OrderKey = PD.OrderKey )      
        
    IF @nStep = 1 -- DropID    
    BEGIN    
       IF @nInputKey = 1 -- ENTER    
       BEGIN    
+         -- Get PickSlipNo    
+         SELECT TOP 1 @cPickSlipNo = PickSlipNo FROM dbo.PackDetail WITH (NOLOCK) WHERE DropID = @cDropID    
+
+         SELECT TOP 1     
+            @cStorerKey = O.StorerKey,     
+            @cOrderKey = O.OrderKey,     
+            @cSOStatus = O.SOStatus    
+         FROM dbo.Orders O WITH (NOLOCK)        
+         WHERE EXISTS(SELECT 1 FROM dbo.PickDetail PD WITH (NOLOCK)     
+                      WHERE PD.PickSlipNo = @cPickSlipNo     
+                      AND O.OrderKey = PD.OrderKey )    
+                
          IF @cDropID <> ''    
          BEGIN    
             IF EXISTS( SELECT TOP 1 1    
@@ -117,17 +129,27 @@ AS
    BEGIN    
       IF @nInputKey = 0 -- ESC    
       BEGIN    
-         -- Order cancel not print dispatch label and packing list    
-         IF @cSOStatus = 'CANC'    
-            GOTO Quit     
-             
          -- Get printer    
          SELECT     
             @cLabelPrinter = Printer,    
-            @cStorerKey = StorerKey    
+            @cStorerKey = StorerKey, 
+            @cFacility = Facility, 
+            @cPUOM = V_UOM  
          FROM rdt.rdtMobRec WITH (NOLOCK)    
-         WHERE Mobile = @nMobile    
-       
+         WHERE Mobile = @nMobile  
+         
+         ---- Order cancel not print dispatch label and packing list    
+         --IF @cSOStatus = 'CANC'    
+         --   GOTO Quit     
+
+         DECLARE @nVariance INT
+         SELECT @nVariance = 0
+         EXECUTE rdt.rdt_PostPickAudit_GetStat @nMobile, @nFunc, @cRefNo, @cPickSlipNo, @cLoadKey, 
+            @cOrderKey, @cDropID, @cID, @cTaskDetailKey, @cStorerKey, @cFacility, @cPUOM,
+            @nVariance = @nVariance OUTPUT
+         IF @nVariance = 1
+            GOTO Quit
+
          -- Get storer config    
          SET @cPrintDispatchLabel = rdt.rdtGetConfig( @nFunc, 'DispatchLabel', @cStorerKey)    
        
@@ -171,8 +193,25 @@ AS
             END    
                    
             -- Get CartonNo    
-            SELECT TOP 1 @nCartonNo = CartonNo FROM dbo.PackDetail WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND DropID = @cDropID    
-                
+            SELECT TOP 1 
+               @cPickSlipNo = PickSlipNo, 
+               @nCartonNo = CartonNo 
+            FROM dbo.PackDetail WITH (NOLOCK) 
+            WHERE DropID = @cDropID    
+
+            SELECT TOP 1     
+               @cStorerKey = O.StorerKey,     
+               @cOrderKey = O.OrderKey,     
+               @cSOStatus = O.SOStatus    
+            FROM dbo.Orders O WITH (NOLOCK)        
+            WHERE EXISTS(SELECT 1 FROM dbo.PickDetail PD WITH (NOLOCK)     
+                         WHERE PD.PickSlipNo = @cPickSlipNo     
+                         AND O.OrderKey = PD.OrderKey )    
+
+            -- Order cancel not print dispatch label and packing list    
+            IF @cSOStatus = 'CANC'    
+               GOTO Quit     
+
             -- Insert print job    
             EXEC RDT.rdt_BuiltPrintJob    
                @nMobile,    
@@ -227,6 +266,21 @@ AS
    BEGIN    
       IF @nInputKey = 1 -- ENTER    
       BEGIN    
+         SELECT TOP 1 
+            @cPickSlipNo = PickSlipNo, 
+            @nCartonNo = CartonNo 
+         FROM dbo.PackDetail WITH (NOLOCK) 
+         WHERE DropID = @cDropID    
+
+         SELECT TOP 1     
+            @cStorerKey = O.StorerKey,     
+            @cOrderKey = O.OrderKey,     
+            @cSOStatus = O.SOStatus    
+         FROM dbo.Orders O WITH (NOLOCK)        
+         WHERE EXISTS(SELECT 1 FROM dbo.PickDetail PD WITH (NOLOCK)     
+                        WHERE PD.PickSlipNo = @cPickSlipNo     
+                        AND O.OrderKey = PD.OrderKey )    
+
          IF @cOption = '1' -- Discrepency found, send to QC    
             EXEC dbo.ispJungheinrich @nMobile, @nFunc, @cLangCode, @nStep, '', @nErrNo OUTPUT, @cErrMsg OUTPUT, @cDropID, @cOrderKey, 'QC'    
              
@@ -291,8 +345,21 @@ AS
                END    
                       
                -- Get CartonNo    
-               SELECT TOP 1 @nCartonNo = CartonNo FROM dbo.PackDetail WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND DropID = @cDropID    
-                   
+               SELECT TOP 1 
+                  @cPickSlipNo = PickSlipNo,
+                  @nCartonNo = CartonNo 
+               FROM dbo.PackDetail WITH (NOLOCK) 
+               WHERE DropID = @cDropID    
+
+               SELECT TOP 1     
+                  @cStorerKey = O.StorerKey,     
+                  @cOrderKey = O.OrderKey,     
+                  @cSOStatus = O.SOStatus    
+               FROM dbo.Orders O WITH (NOLOCK)        
+               WHERE EXISTS(SELECT 1 FROM dbo.PickDetail PD WITH (NOLOCK)     
+                              WHERE PD.PickSlipNo = @cPickSlipNo     
+                              AND O.OrderKey = PD.OrderKey )    
+
                -- Insert print job    
                EXEC RDT.rdt_BuiltPrintJob    
                   @nMobile,    
@@ -333,7 +400,7 @@ AS
                   BEGIN    
                      SET @nErrNo = 78710    
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD DropIDFail    
-         GOTO Fail    
+                     GOTO Fail    
                   END    
                END    
             END    
