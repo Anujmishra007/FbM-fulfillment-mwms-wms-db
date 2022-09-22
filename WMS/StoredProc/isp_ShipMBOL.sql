@@ -72,6 +72,8 @@ GO
 /* 10-Mar-2022  Wan04     LFWM-3393 - PROD - CN  MBOL unable mark ship  */
 /*                        -Fixed EXIT SP Transcount <> START SP Transcount*/
 /*                        -When SCE SP issue BEGIN TRAN for Shipment    */
+/* 20-SEP-2022  NJOW02    WMS-20699 Update MBOL Carrierkey to POD PODDEF06*/
+/* 20-SEP-2022  NJOW02    DEVOPS Combine Script                         */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[isp_ShipMBOL]
@@ -122,10 +124,16 @@ BEGIN -- main
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
 
    DECLARE @c_PickDetailKey     NVARCHAR(10),
-           @c_PickDetailKeyship NVARCHAR(10)
+           @c_PickDetailKeyship NVARCHAR(10),           
+           @c_PostMBOLShipSP        NVARCHAR(10)   --(Wan02)
 
-         , @c_PostMBOLShipSP        NVARCHAR(10)   --(Wan02)
-
+   --NJOW02
+   DECLARE @c_UpdMBCarrierToPODDEF06 NVARCHAR(10) 
+         , @c_option1                NVARCHAR(50) 
+         , @c_option2                NVARCHAR(50) 
+         , @c_option3                NVARCHAR(50)
+         , @c_option4                NVARCHAR(50)
+         , @c_option5                NVARCHAR(4000)
 
    -- tlting02
    CREATE TABLE #StorerCfg1
@@ -226,15 +234,26 @@ BEGIN -- main
       JOIN   #t_Orders1 O with (NOLOCK) ON  O.Orderkey =  MD.OrderKey
       WHERE  MD.MBOLKEY = @c_MBOLKEY
 
+ 
       SELECT @b_success = 0
-      EXECUTE dbo.nspGetRight @c_facility, -- facility
-               @c_Storerkey, -- Storerkey
-               NULL,         -- Sku
-               'POD',        -- Configkey
-               @b_success    output,
-               @c_authorityPOD  output,
-               @n_err        output,
-               @c_errmsg     output
+      EXECUTE nspGetRight 
+              @c_Facility  = @c_facility, -- facility
+              @c_StorerKey = @c_storerkey, -- Storerkey -- SOS40271
+              @c_sku       = NULL,         -- Sku
+              @c_ConfigKey = 'POD',        -- Configkey
+              @b_Success   = @b_success    OUTPUT,
+              @c_authority = @c_authorityPOD  OUTPUT,
+              @n_err       = @n_err        OUTPUT,
+              @c_errmsg    = @c_errmsg     OUTPUT,                                     
+              @c_Option1   = @c_Option1    OUTPUT, --NJOW02
+              @c_Option2   = @c_Option2    OUTPUT,
+              @c_Option3   = @c_Option3    OUTPUT,
+              @c_Option4   = @c_Option4    OUTPUT,                            
+              @c_Option5   = @c_Option5    OUTPUT                    
+       
+      --NJOW02                                                     
+      SET @c_UpdMBCarrierToPODDEF06 = 'N'
+      SELECT @c_UpdMBCarrierToPODDEF06 = dbo.fnc_GetParamValueFromString('@c_UpdMBCarrierToPODDEF06', @c_Option5, @c_UpdMBCarrierToPODDEF06)               
 
       IF @b_success <> 1
       BEGIN
@@ -350,7 +369,7 @@ BEGIN -- main
                      SET @n_err=63810   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
                      SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Unable to Obtain transmitlogkey. (isp_ShipMBOL)' + ' ( ' + ' SQLSvr MESSAGE=' + LTRIM(RTRIM(@c_errmsg)) + ' ) '
                      CONTINUE
-      END
+                  END
                   ELSE
                   BEGIN
                      INSERT INTO Transmitlog (transmitlogkey, tablename, key1, key2, key3, transmitflag)
@@ -425,7 +444,7 @@ BEGIN -- main
                      OrderKey,        BuyerPO,            ExternOrderKey,
                      InvoiceNo,       status,             ActualDeliveryDate,
                      InvDespatchDate, poddef08,           Storerkey,
-                     SpecialHandling) -- SOS95698
+                     SpecialHandling, PODDef06) -- SOS95698
 
                SELECT  #t_MBOLDetail1.MBOLKey, #t_MBOLDetail1.MBOLLineNumber,
                      #t_MBOLDetail1.LoadKey,
@@ -441,8 +460,10 @@ BEGIN -- main
                GETDATE(),
                #t_MBOLDetail1.its,
                #t_Orders1.Storerkey,
-               #t_Orders1.SpecialHandling -- SOS95698
+               #t_Orders1.SpecialHandling, -- SOS95698
+               CASE WHEN @c_UpdMBCarrierToPODDEF06 = 'Y' THEN ISNULL(MB.CarrierKey,'') ELSE '' END  --NJOW02               
                FROM #t_MBOLDetail1 (NOLOCK)
+               JOIN MBOL MB (NOLOCK) ON #t_MBOLDetail1.Mbolkey = MB.Mbolkey  --NJOW02
                JOIN #t_Orders1 (NOLOCK) ON (#t_MBOLDetail1.OrderKey = #t_Orders1.OrderKey
                                            AND #t_MBOLDetail1.Loadkey = #t_Orders1.Loadkey) -- SOS39663
                JOIN ORDERS SO WITH (NOLOCK) ON (#t_Orders1.OrderKey = SO.OrderKey)         --(WAN03)
