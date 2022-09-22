@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrMBOLHeaderUpdate]') 
-              and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
-drop trigger [dbo].[ntrMBOLHeaderUpdate]
-GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
@@ -131,6 +127,8 @@ GO
 /* 28-Jan-2019  TLTING_ext 2.9  enlarge externorderkey field length              */
 /* 15-Feb-2019  MCTang    3.0   Remove Rowcount check (MC05)                     */
 /* 23-Jul-2020  TLTING07  3.1   WMS-14128 Mbol status update Lockdown            */
+/* 02-Sep-2022  NJOW06    3.2   WMS-20699 Update MBOL Carrierkey to POD PODDEF06 */
+/* 02-Sep-2022  NJOW06    3.2   DEVOPS Combine Script                            */
 /*********************************************************************************/
 
 /********************************************************************************************************
@@ -204,7 +202,16 @@ BEGIN -- main
          , @c_SQLParm            NVARCHAR(MAX)  -- (Chee01)
          , @c_MBOLKeyShipped     NVARCHAR(10)   -- (L01)
          , @c_MarkMBOLLockdown   NVARCHAR = '0'    -- (L01)
-
+   
+   DECLARE @c_UpdMBCarrierToPODDEF06 NVARCHAR(10) --NJOW06
+         , @c_option1                NVARCHAR(50) 
+         , @c_option2                NVARCHAR(50) 
+         , @c_option3                NVARCHAR(50)
+         , @c_option4                NVARCHAR(50)
+         , @c_option5                NVARCHAR(4000)
+         , @c_Carrierkey             NVARCHAR(10)
+         , @c_StorerKey              NVARCHAR(20)
+        
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
 
    IF UPDATE(ArchiveCop)      --KH01
@@ -241,9 +248,83 @@ BEGIN -- main
    DECLARE @b_ColumnsUpdated VARBINARY(1000)       --MC03
    SET @b_ColumnsUpdated = COLUMNS_UPDATED()       --MC03
 
-   IF EXISTS(SELECT * FROM DELETED WHERE Status = '9') AND UPDATE(TransMethod)
+   IF EXISTS(SELECT 1 FROM DELETED WHERE Status = '9') AND (UPDATE(TransMethod)
+      OR UPDATE(CarrierKey))  --NJOW06
    BEGIN
       SELECT @n_continue = 4
+      
+      IF UPDATE(Carrierkey) --NJOW06
+      BEGIN
+         DECLARE CUR_MBOL_POD CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+            SELECT DELETED.MBOLKEY, INSERTED.Carrierkey
+            FROM INSERTED
+            JOIN DELETED ON (INSERTED.MBOLKEY = DELETED.MBOLKEY)
+            WHERE DELETED.Status = '9'
+            AND INSERTED.Carrierkey <> DELETED.Carrierkey
+
+         OPEN CUR_MBOL_POD
+         
+         FETCH NEXT FROM CUR_MBOL_POD INTO @c_MBOLKeyShipped, @c_Carrierkey
+         
+         WHILE @@FETCH_STATUS <> -1 
+         BEGIN
+         	  SELECT TOP 1 @c_Storerkey = O.Storerkey, @c_Facility = O.Facility         	           
+         	  FROM MBOLDETAIL MD (NOLOCK)
+         	  JOIN ORDERS O (NOLOCK) ON MD.Orderkey = O.Orderkey
+         	  WHERE MD.Mbolkey = @c_MBOLKeyShipped         	  
+         	 
+            SELECT @b_success = 0
+            SET @c_authority = ''
+            EXECUTE nspGetRight 
+                    @c_Facility  = @c_facility, -- facility
+                    @c_StorerKey = @c_storerkey, -- Storerkey -- SOS40271
+                    @c_sku       = NULL,         -- Sku
+                    @c_ConfigKey = 'POD',        -- Configkey
+                    @b_Success   = @b_success    OUTPUT,
+                    @c_authority = @c_authority  OUTPUT,
+                    @n_err       = @n_err        OUTPUT,
+                    @c_errmsg    = @c_errmsg     OUTPUT,                                     
+                    @c_Option1   = @c_Option1    OUTPUT, 
+                    @c_Option2   = @c_Option2    OUTPUT,
+                    @c_Option3   = @c_Option3    OUTPUT,
+                    @c_Option4   = @c_Option4    OUTPUT,                            
+                    @c_Option5   = @c_Option5    OUTPUT                    
+             
+            SET @c_UpdMBCarrierToPODDEF06 = 'N'
+            SELECT @c_UpdMBCarrierToPODDEF06 = dbo.fnc_GetParamValueFromString('@c_UpdMBCarrierToPODDEF06', @c_Option5, @c_UpdMBCarrierToPODDEF06)     
+            
+            IF @c_UpdMBCarrierToPODDEF06 = 'Y'
+            BEGIN
+            	 DECLARE CUR_ORDER_POD CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+            	    SELECT Orderkey
+            	    FROM POD (NOLOCK)
+            	    WHERE Mbolkey = @c_MBOLKeyShipped            	 
+               
+               OPEN CUR_ORDER_POD
+         
+               FETCH NEXT FROM CUR_ORDER_POD INTO @c_OrderKeyShip
+         
+               WHILE @@FETCH_STATUS <> -1 
+               BEGIN               	
+               	  UPDATE POD WITH (ROWLOCK)
+               	  SET PODDEF06 = @c_Carrierkey,
+               	      TrafficCop = NULL,
+               	      EditWho = SUSER_SNAME(),
+               	      EditDate = GETDATE()
+               	  WHERE Mbolkey = @c_MBOLKeyShipped
+               	  AND Orderkey = @c_OrderKeyShip               	  
+               	  
+                  FETCH NEXT FROM CUR_ORDER_POD INTO @c_OrderKeyShip
+               END
+               CLOSE CUR_ORDER_POD
+               DEALLOCATE CUR_ORDER_POD         	            	    
+            END
+         	 
+            FETCH NEXT FROM CUR_MBOL_POD INTO @c_MBOLKeyShipped, @c_Carrierkey      	
+         END  
+         CLOSE CUR_MBOL_POD
+         DEALLOCATE CUR_MBOL_POD       
+      END            
    END
 
    DECLARE @c_PickDetailKey NVARCHAR(10), @c_PickDetailKeyship NVARCHAR(10)
@@ -255,7 +336,7 @@ BEGIN -- main
       BEGIN
          SELECT 'Reject UPDATE when MBOL.Status already ''SHIPPED'''
       END
-      IF EXISTS(SELECT * FROM DELETED WHERE Status = '9')
+      IF EXISTS(SELECT 1 FROM DELETED WHERE Status = '9')
       BEGIN
          SET @c_MBOLKeyShipped = '' --(L01)
          SELECT TOP 1 @c_MBOLKeyShipped = MBOLKey FROM DELETED WHERE Status = '9'
@@ -558,7 +639,6 @@ BEGIN -- main
    DECLARE @c_PickOrderKey  char (10),
          @c_XmitLogKey      char (10),
          @c_PickOrderLine   char (5),
-         @c_StorerKey       NVARCHAR(20),
          @c_OrderKey        NVARCHAR(10),
          @c_OrderLineNumber NVARCHAR(5),
          @c_MBOLKey         NVARCHAR(10),
@@ -859,15 +939,26 @@ BEGIN -- main
 
             -- Generate POD Records Here...................
             SELECT @b_success = 0
-            EXECUTE nspGetRight @c_facility, -- facility
-                     @c_storerkey, -- Storerkey -- SOS40271
-                     NULL,         -- Sku
-                     'POD',        -- Configkey
-                     @b_success    OUTPUT,
-                     @c_authority  OUTPUT,
-                     @n_err        OUTPUT,
-                     @c_errmsg     OUTPUT
-
+            SET @c_authority = ''
+            EXECUTE nspGetRight 
+                    @c_Facility  = @c_facility, -- facility
+                    @c_StorerKey = @c_storerkey, -- Storerkey -- SOS40271
+                    @c_sku       = NULL,         -- Sku
+                    @c_ConfigKey = 'POD',        -- Configkey
+                    @b_Success   = @b_success    OUTPUT,
+                    @c_authority = @c_authority  OUTPUT,
+                    @n_err       = @n_err        OUTPUT,
+                    @c_errmsg    = @c_errmsg     OUTPUT,                                     
+                    @c_Option1   = @c_Option1    OUTPUT, --NJOW06
+                    @c_Option2   = @c_Option2    OUTPUT,
+                    @c_Option3   = @c_Option3    OUTPUT,
+                    @c_Option4   = @c_Option4    OUTPUT,                            
+                    @c_Option5   = @c_Option5    OUTPUT                    
+             
+             --NJOW06                                                       
+             SET @c_UpdMBCarrierToPODDEF06 = 'N'
+             SELECT @c_UpdMBCarrierToPODDEF06 = dbo.fnc_GetParamValueFromString('@c_UpdMBCarrierToPODDEF06', @c_Option5, @c_UpdMBCarrierToPODDEF06)
+                                                                                                          
          IF @b_success <> 1
          BEGIN
             SELECT @n_continue = 3, @c_errmsg = 'ntrMBOLHeaderUpdate' + dbo.fnc_RTrim(@c_errmsg)
@@ -912,7 +1003,7 @@ BEGIN -- main
                                OrderKey,        BuyerPO,          ExternOrderKey,
                                InvoiceNo,       status,           ActualDeliveryDate,
                                InvDespatchDate, poddef08,         Storerkey,  SpecialHandling, -- SOS95698
-                               TrackCol01)    --SOS#141842
+                               TrackCol01,      PODDef06)    --SOS#141842 --NJOW06
                   SELECT   MBOLDetail.MBOLKey,
                            MBOLDetail.MBOLLineNumber,
                            MBOLDetail.LoadKey,
@@ -929,8 +1020,10 @@ BEGIN -- main
                            ISNULL(MBOLDetail.its,''),  --NJOW05
                           ORDERS.Storerkey,
                            ORDERS.SpecialHandling, -- SOS95698
-                           @c_SMSRefKey            -- SOS#141842
+                           @c_SMSRefKey,            -- SOS#141842
+                           CASE WHEN @c_UpdMBCarrierToPODDEF06 = 'Y' THEN ISNULL(MB.CarrierKey,'') ELSE '' END  --NJOW06
                     FROM #t_MBOLDetail MBOLDetail
+                    JOIN MBOL MB (NOLOCK) ON MBOLDetail.Mbolkey = MB.Mbolkey  --NJOW06
                     JOIN #t_ORDERS ORDERS ON (MBOLDetail.OrderKey = ORDERS.OrderKey)
                     JOIN ORDERS SO WITH (NOLOCK) ON (ORDERS.OrderKey = SO.OrderKey)          --(WAN02)
                     LEFT JOIN LOADPLAN LOADPLAN WITH (NOLOCK) ON (LOADPLAN.LoadKey = SO.LoadKey)  --(WAN02)--INC0128904
