@@ -17,6 +17,8 @@ GO
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
 /* 2019-03-25 1.0  James    WMS8254. Created                            */
+/* 2022-09-22 1.1  James    Bug fix on input field not matching on      */
+/*                          step to loc (james01)                       */
 /************************************************************************/
 
 CREATE PROC rdt.rdtfnc_Replenish_V7 (
@@ -1355,45 +1357,60 @@ BEGIN
          GOTO Step_3_Fail
       END
 
+      -- Enable field
+      SET @cFieldAttr01 = ''
+      SET @cFieldAttr02 = ''
+      SET @cFieldAttr03 = ''
+      SET @cFieldAttr04 = ''
+      SET @cFieldAttr05 = ''
+      SET @cFieldAttr06 = ''
+      SET @cFieldAttr07 = ''
+      SET @cFieldAttr08 = ''
+      SET @cFieldAttr09 = ''
+      SET @cFieldAttr10 = ''
+      SET @cFieldAttr11 = ''
+      SET @cFieldAttr12 = ''
+      SET @cFieldAttr13 = ''
+      SET @cFieldAttr14 = ''
+      SET @cFieldAttr15 = ''
+
+      SET @cPackDescr = '1:' + LEFT( CAST( @nPUOM_Div AS NVARCHAR( 6)) + SPACE( 6), 6) + 
+      LEFT( @cPUOM_Desc + SPACE( 8), 8) + 
+      LEFT( @cMUOM_Desc + SPACE( 8), 8)
+      
       -- Prep next screen var
       SET @cOutField01 = @cFromLoc
       SET @cOutField02 = @cFromID
       SET @cOutField03 = @cSKU
       SET @cOutField04 = SUBSTRING(@cDescr, 1, 20)
       SET @cOutField05 = SUBSTRING(@cDescr, 21, 20)
+      SET @cOutField06 = @cPackDescr
       IF @cPUOM_Desc = ''
       BEGIN
-         SET @cOutField06 = '' -- @cPUOM_Desc
-         SET @cOutField08 = '' -- @nPQTY
-         SET @cOutField10 = '' -- @nActPQty
-         SET @cOutField14 = '' -- @nPUOM_Div
+         SET @cOutField07 = '' -- @nPQTY
+         SET @cOutField09 = '' -- @nActPQty
       END
       ELSE
       BEGIN
-         SET @cOutField06 = @cPUOM_Desc
-         SET @cOutField08 = CAST( @nPQTY AS NVARCHAR( 5))
-         SET @cOutField10 = CAST( @nActPQty AS NVARCHAR( 5))
-         SET @cOutField14 = '1:' + CAST( @nPUOM_Div AS NVARCHAR( 6))
+         SET @cOutField07 = CAST( @nPQTY AS NVARCHAR( 5))
+         SET @cOutField09 = CAST( @nActPQty AS NVARCHAR( 5))
       END
-      SET @cOutField07 = @cMUOM_Desc
-      SET @cOutField09 = CAST( @nMQTY AS NVARCHAR( 5))
-      SET @cOutField11 = CAST( @nActMQty AS NVARCHAR( 5))
+      SET @cOutField08 = CAST( @nMQTY AS NVARCHAR( 5))
+      SET @cOutField10 = CAST( @nActMQty AS NVARCHAR( 5))
+      SET @cOutField11 = '' -- ToID
       SET @cOutField12 = @cToLoc
       SET @cOutField13 = '' -- ToLOC
-      SET @cOutField15 = '' -- ToID
 
       IF @cReplenEnableTOID = '1'
       BEGIN
-         SET @cFieldAttr15 = ''
-         EXEC rdt.rdtSetFocusField @nMobile, 15
+         SET @cFieldAttr11 = ''
+         EXEC rdt.rdtSetFocusField @nMobile, 11
       END
       ELSE
       BEGIN
-         SET @cFieldAttr15 = 'O'
+         SET @cFieldAttr11 = 'O'
          EXEC rdt.rdtSetFocusField @nMobile, 13
       END
-
-      SET @cFieldAttr12 = '' -- ActPQTY
 
       -- Go to next screen
       SET @nScn  = @nScn + 1
@@ -1453,7 +1470,7 @@ Step 4. Screen = 5373
    PUOM MUOM  (Field06, Field07)
    RPL QTY    (Field08, Field09)
    ACT QTY    (Field10, Field11)
-   ID         (Field14, input)
+   ID         (Field11, input)
    TO LOC     (Field12)
    TO LOC     (Field13, input)
 ********************************************************************************/
@@ -1462,8 +1479,8 @@ BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
       -- Screen mapping
+      SET @cToID = @cInField11
       SET @cActToLOC = @cInField13
-      SET @cToID = @cInField15
 
       IF @cReplenEnableTOID = '1'
       BEGIN
@@ -1726,38 +1743,132 @@ BEGIN
 
          GOTO Quit
       END
+      ELSE
+      BEGIN
+         -- Enable field
+         SET @cFieldAttr01 = ''
+         SET @cFieldAttr02 = ''
+         SET @cFieldAttr03 = ''
+         SET @cFieldAttr04 = ''
+         SET @cFieldAttr05 = ''
+         SET @cFieldAttr06 = ''
+         SET @cFieldAttr07 = ''
+         SET @cFieldAttr08 = ''
+         SET @cFieldAttr09 = ''
+         SET @cFieldAttr10 = ''
+         SET @cFieldAttr11 = ''
+         SET @cFieldAttr12 = ''
+         SET @cFieldAttr13 = ''
+         SET @cFieldAttr14 = ''
+         SET @cFieldAttr15 = ''
+
+         SET @cPackDescr = '1:' + LEFT( CAST( @nPUOM_Div AS NVARCHAR( 6)) + SPACE( 6), 6) + 
+         LEFT( @cPUOM_Desc + SPACE( 8), 8) + 
+         LEFT( @cMUOM_Desc + SPACE( 8), 8)
+         
+         -- Prep next screen var
+         SET @cOutField01 = @cFromLoc
+         SET @cOutField02 = @cFromID
+         SET @cOutField03 = @cSKU
+         SET @cOutField04 = SUBSTRING(@cDescr, 1, 20)
+         SET @cOutField05 = SUBSTRING(@cDescr, 21, 20)
+         SET @cOutField06 = @cPackDescr
+         IF @cPUOM_Desc = ''
+         BEGIN
+            SET @cOutField07 = '' -- @nPQTY
+            SET @cOutField09 = '' -- @nActPQty
+         END
+         ELSE
+         BEGIN
+            SET @cOutField07 = CAST( @nPQTY AS NVARCHAR( 5))
+            SET @cOutField09 = CAST( @nActPQty AS NVARCHAR( 5))
+         END
+         SET @cOutField08 = CAST( @nMQTY AS NVARCHAR( 5))
+         SET @cOutField10 = CAST( @nActMQty AS NVARCHAR( 5))
+         SET @cOutField11 = '' -- ToID
+         SET @cOutField12 = @cToLoc
+         SET @cOutField13 = '' -- ToLOC
+
+         IF @cReplenEnableTOID = '1'
+         BEGIN
+            SET @cFieldAttr11 = ''
+            EXEC rdt.rdtSetFocusField @nMobile, 11
+         END
+         ELSE
+         BEGIN
+            SET @cFieldAttr11 = 'O'
+            EXEC rdt.rdtSetFocusField @nMobile, 13
+         END
+
+         -- Go to QTY screen
+         SET @nScn  = @nScn - 1
+         SET @nStep = @nStep - 1
+      END
    END
 
-   -- Prep QTY screen var
-   SET @cOutField01 = @cFromLoc
-   SET @cOutField02 = @cFromID
-   SET @cOutField03 = @cSKU
-   SET @cOutField04 = SUBSTRING( @cDescr, 1, 20)
-   SET @cOutField05 = SUBSTRING( @cDescr, 21, 20)
-   IF @cPUOM_Desc = ''
+   IF @nInputKey = 0 -- ESC
    BEGIN
-      SET @cOutField06 = '' -- @cPUOM_Desc
-      SET @cOutField08 = '' -- @nPQTY
-      SET @cOutField10 = '' -- @nActPQty
-      SET @cOutField14 = '' -- @nPUOM_Div
-   END
-   ELSE
-   BEGIN
-      SET @cOutField06 = @cPUOM_Desc
-      SET @cOutField08 = CAST( @nPQTY AS NVARCHAR(5))
-      SET @cOutField10 = CAST( @nActPQty AS NVARCHAR(5))
-      SET @cOutField14 = '1:' + CAST( @nPUOM_Div AS NVARCHAR( 6))
-   END
-   SET @cOutField07 = @cMUOM_Desc
-   SET @cOutField09 = CAST( @nMQTY AS NVARCHAR(5))
-   SET @cOutField11 = CAST( @nActMQty AS NVARCHAR(5))
-   SET @cOutField12 = @cToLoc
-   SET @cOutField13 = '' -- Actual ToLOC
+      -- Enable field
+      SET @cFieldAttr01 = ''
+      SET @cFieldAttr02 = ''
+      SET @cFieldAttr03 = ''
+      SET @cFieldAttr04 = ''
+      SET @cFieldAttr05 = ''
+      SET @cFieldAttr06 = ''
+      SET @cFieldAttr07 = ''
+      SET @cFieldAttr08 = ''
+      SET @cFieldAttr09 = ''
+      SET @cFieldAttr10 = ''
+      SET @cFieldAttr11 = ''
+      SET @cFieldAttr12 = ''
+      SET @cFieldAttr13 = ''
+      SET @cFieldAttr14 = ''
+      SET @cFieldAttr15 = ''
 
-   -- Go to QTY screen
-   SET @nScn  = @nScn - 1
-   SET @nStep = @nStep - 1
+      SET @cPackDescr = '1:' + LEFT( CAST( @nPUOM_Div AS NVARCHAR( 6)) + SPACE( 6), 6) + 
+      LEFT( @cPUOM_Desc + SPACE( 8), 8) + 
+      LEFT( @cMUOM_Desc + SPACE( 8), 8)
+      
+      -- Prep next screen var
+      SET @cOutField01 = @cFromLoc
+      SET @cOutField02 = @cFromID
+      SET @cOutField03 = @cSKU
+      SET @cOutField04 = SUBSTRING(@cDescr, 1, 20)
+      SET @cOutField05 = SUBSTRING(@cDescr, 21, 20)
+      SET @cOutField06 = @cPackDescr
+      IF @cPUOM_Desc = ''
+      BEGIN
+         SET @cOutField07 = '' -- @nPQTY
+         SET @cOutField09 = '' -- @nActPQty
+      END
+      ELSE
+      BEGIN
+         SET @cOutField07 = CAST( @nPQTY AS NVARCHAR( 5))
+         SET @cOutField09 = CAST( @nActPQty AS NVARCHAR( 5))
+      END
+      SET @cOutField08 = CAST( @nMQTY AS NVARCHAR( 5))
+      SET @cOutField10 = CAST( @nActMQty AS NVARCHAR( 5))
+      SET @cOutField11 = '' -- ToID
+      SET @cOutField12 = @cToLoc
+      SET @cOutField13 = '' -- ToLOC
 
+      IF @cReplenEnableTOID = '1'
+      BEGIN
+         SET @cFieldAttr11 = ''
+         EXEC rdt.rdtSetFocusField @nMobile, 11
+      END
+      ELSE
+      BEGIN
+         SET @cFieldAttr11 = 'O'
+         EXEC rdt.rdtSetFocusField @nMobile, 13
+      END
+
+      -- Go to TO LOC screen
+      SET @nScn  = @nScn - 1
+      SET @nStep = @nStep - 1
+   END
+   
+   
    GOTO Quit
 
    Step_5_Fail:
