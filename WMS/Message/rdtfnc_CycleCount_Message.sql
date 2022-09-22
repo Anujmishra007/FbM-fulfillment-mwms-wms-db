@@ -264,3 +264,10 @@ execute rdt.rdtAddMsg 77726, 10, '77726^Invalid Format',  'us_english'
 -- WMS-11865
 execute rdt.rdtAddMsg 77727, 10, '77727^Last LOC',        'us_english'
 execute rdt.rdtAddMsg 77728, 10, '77728^Last LOC',        'us_english'
+
+-- WMS-20691
+execute rdt.rdtAddMsg 77729, 10, '77729^Opt Not Allow',   'us_english'
+execute rdt.rdtAddMsg 77730, 10, '77730^Invalid Qty',     'us_english'
+execute rdt.rdtAddMsg 77731, 10, '77731^Invalid Qty',     'us_english'
+execute rdt.rdtAddMsg 77732, 10, '77732^Enter X Allow',   'us_english'
+execute rdt.rdtAddMsg 77734, 10, '77734^Invalid Qty',     'us_english'
