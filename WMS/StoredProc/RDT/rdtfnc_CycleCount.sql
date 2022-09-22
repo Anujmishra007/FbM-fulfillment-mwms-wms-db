@@ -1,11 +1,8 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdtfnc_CycleCount]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdtfnc_CycleCount]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
+
 /************************************************************************/
 /* Store procedure: rdtfnc_CycleCount                                   */
 /* Copyright      : IDS                                                 */
@@ -137,9 +134,12 @@ GO
 /*                           Add ExtendedUpdateSP (james29)             */
 /* 04-Apr-2022 5.3  SYChua   JSM-60459 - Bug fix reset DoubleDeep       */
 /*                           config (SY01)                              */
+/* 06-Sep-2022 5.4  James    WMS-20691 Add flowthru from step 8 to      */
+/*                           step 17 (bypass step 13) (james30)         */
+/*                           Add check digit format at step Qty         */
+/*                           Add config step 17 must key in qty         */
 /************************************************************************/
-
-CREATE PROC [RDT].[rdtfnc_CycleCount] (
+CREATE OR ALTER PROC [RDT].[rdtfnc_CycleCount] (
    @nMobile    INT,
    @nErrNo     INT            OUTPUT,
    @cErrMsg    NVARCHAR( 1024) OUTPUT -- screen limitation, 20 char max
@@ -414,6 +414,10 @@ DECLARE
    @cAdHocGenCCSP       NVARCHAR( 20),
    @cCountTypeUCCSpecialHandling NVARCHAR( 1) = '0'
 
+DECLARE @cStepSKUAllowOpt     NVARCHAR( 1)
+DECLARE @cFlowThruStepSKU     NVARCHAR( 1)
+DECLARE @cSKUEditQTYNotAllowBlank   NVARCHAR( 1)
+
 -- Getting Mobile information
 SELECT
    @nFunc             = Func,
@@ -500,7 +504,10 @@ SELECT
    @cOptAction         = V_String42,
    @cAllowAddUCCNotInLocSP = V_String43,
    @cCountTypeUCCSpecialHandling = V_String44,
-
+   @cFlowThruStepSKU  = V_String45,
+   @cSKUEditQTYNotAllowBlank = V_String46,
+   @cStepSKUAllowOpt         = V_String47,
+    
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,
@@ -681,17 +688,29 @@ BEGIN
       SET @cDoubleDeep = ''
    --SY01 END
 
+   SET @cFlowThruStepSKU = rdt.RDTGetConfig( @nFunc, 'FlowThruStepSKU', @cStorer)
+   IF @cFlowThruStepSKU = '0'
+      SET @cFlowThruStepSKU = ''
+
+   SET @cSKUEditQTYNotAllowBlank = rdt.RDTGetConfig( @nFunc, 'SKUEditQTYNotAllowBlank', @cStorer)
+   IF @cSKUEditQTYNotAllowBlank = '0'
+      SET @cSKUEditQTYNotAllowBlank = ''
+
+   SET @cStepSKUAllowOpt = rdt.RDTGetConfig( @nFunc, 'StepSKUAllowOpt', @cStorer)
+   IF @cStepSKUAllowOpt = '0'
+      SET @cStepSKUAllowOpt = ''
+
    SELECT
       @cOutField01   = '',
       @cOutField02   = '',
-   @cOutField03   = '',
+      @cOutField03   = '',
       @cOutField04   = '',
       @cOutField05   = '',
       @cOutField06   = '',
       @cOutField07   = '',
       @cOutField08   = '',
       @cOutField09   = '',
-      @cOutField10 = '',
+      @cOutField10   = '',
       @cOutField11   = '',
       @cOutField12   = '',
       @cOutField13   = '',
@@ -3446,6 +3465,12 @@ BEGIN
          -- Go to SKU (Main) screen
          SET @nScn  = @nScn_SKU
          SET @nStep = @nStep_SKU
+         
+         IF @cFlowThruStepSKU = '1'
+         BEGIN
+         	SET @cInField14 = CASE WHEN @cCountedFlag = '[C]' THEN '' ELSE @cSKUCountDefaultOpt END
+            GOTO Step_SKU
+         END
       END
 
       -- SINGLE SCAN screen
@@ -5750,6 +5775,16 @@ END
             GOTO SKU_Fail
          END
 
+         IF @cStepSKUAllowOpt <> ''
+         BEGIN
+            IF @cOptAction <> @cStepSKUAllowOpt
+            BEGIN
+               SET @nErrNo = 77729
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 'Invalid Option'
+               GOTO SKU_Fail
+            END
+         END
+         
          -- 1=ADD
          IF @cOptAction = '1'
          BEGIN
@@ -8139,6 +8174,17 @@ BEGIN
       SET @cFieldAttr15 = ''
       -- (Vicky02) - End
 
+      -- Validate QTY keyed in    
+      IF @cSKUEditQTYNotAllowBlank = '1'
+      BEGIN
+      	IF ISNULL( @cNewCaseQTY, '') = '' AND ISNULL( @cNewEachQTY, '') = ''
+         BEGIN    
+            SET @nErrNo = 77734    
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Qty    
+            GOTO SKU_Edit_Qty_Fail    
+         END   
+      END      
+
       -- Validate QTY (CS)
       IF @cNewCaseQTY <> '' AND @cNewCaseQTY IS NOT NULL
       BEGIN
@@ -8167,6 +8213,14 @@ BEGIN
             EXEC rdt.rdtSetFocusField @nMobile, 4   -- QTY (CS)
             GOTO SKU_Edit_Qty_Fail
          END
+
+         -- Check Case QTY format    
+         IF rdt.rdtIsValidFormat( @nFunc, @cStorer, 'NewCaseQTY', @cNewCaseQTY) = 0    
+         BEGIN    
+            SET @nErrNo = 77730    
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Qty    
+            GOTO SKU_Edit_Qty_Fail    
+         END    
       END
 
       -- Validate QTY (EA)
@@ -8197,6 +8251,14 @@ BEGIN
             EXEC rdt.rdtSetFocusField @nMobile, 4   -- QTY (EA)
             GOTO SKU_Edit_Qty_Fail
          END
+
+         -- Check Each QTY format    
+         IF rdt.rdtIsValidFormat( @nFunc, @cStorer, 'NewEachQTY', @cNewEachQTY) = 0    
+         BEGIN    
+            SET @nErrNo = 77731    
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Qty    
+            GOTO SKU_Edit_Qty_Fail    
+         END    
       END
 
       -- Store in New variables
@@ -8250,7 +8312,7 @@ BEGIN
          -- Confirmed current record
          SET @nErrNo = 0
          SET @cErrMsg = ''
-IF dbo.fnc_GetSKUConfig( @cSKU, 'RDTDefaultUOM', @cStorer) <> '0'
+         IF dbo.fnc_GetSKUConfig( @cSKU, 'RDTDefaultUOM', @cStorer) <> '0'
             EXECUTE rdt.rdt_CycleCount_UpdateCCDetail
                @cCCRefNo,
                @cCCSheetNo,
@@ -14960,7 +15022,10 @@ BEGIN
       V_String42     = @cOptAction,
       V_String43     = @cAllowAddUCCNotInLocSP,
       V_String44     = @cCountTypeUCCSpecialHandling,
-
+      V_String45     = @cFlowThruStepSKU,
+      V_String46     = @cSKUEditQTYNotAllowBlank,
+      V_String47     = @cStepSKUAllowOpt,
+      
       V_Integer1     = @nQTY,
       V_Integer2     = @nCCCountNo,
       V_Integer3     = @nCntQTY,
