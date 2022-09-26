@@ -13,7 +13,7 @@ GO
 /*                                                                      */  
 /* Called By: ReleaseWave_SP                                            */  
 /*          :                                                           */  
-/* PVCS Version: 1.2                                                    */  
+/* PVCS Version: 1.3                                                    */  
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /*                                                                      */  
@@ -24,6 +24,8 @@ GO
 /* 2022-07-27  Wan01    1.1   Fixed. Not to get Not tally UCC for replen*/
 /* 2022-08-04  Wan02    1.2   Fixed Not get Wave.DispatchPiecePickMethod*/
 /*                            to construct SourceType                   */
+/* 2022-09-02  Wan03    1.3   WMS-20686 - TH-NIKE - customize Wave      */
+/*                            Release V2022                             */
 /************************************************************************/  
 CREATE OR ALTER PROC [dbo].[ispRLWAV52_RPF]  
    @c_Wavekey     NVARCHAR(10)    
@@ -112,7 +114,13 @@ BEGIN
          , @c_TransitLoc         NVARCHAR(10)   = ''
          , @c_FinalLoc           NVARCHAR(10)   = ''
          , @c_FinalID            NVARCHAR(18)   = ''
- 
+         
+         , @c_ReleaseWave_Authority    NVARCHAR(30)   = ''           --Wan03
+         , @c_ReleaseWave_Opt5         NVARCHAR(1000) = ''           --Wan03
+         , @c_SingleSkuPerDPLoc        CHAR(1)        = 'N'          --Wan03
+         , @c_SQL                      NVARCHAR(4000) = ''           --Wan03
+         , @c_SQLParms                 NVARCHAR(1000) = ''           --Wan03
+                                                                    
          , @CUR_UPDPM            CURSOR   
               
    SET @b_Success  = 1
@@ -124,7 +132,16 @@ BEGIN
                ,@c_Storerkey= OH.Storerkey           
    FROM WAVEDETAIL WD WITH (NOLOCK)  
    JOIN ORDERS OH WITH (NOLOCK) ON WD.Orderkey = OH.Orderkey  
-   WHERE WD.Wavekey= @c_Wavekey  
+   WHERE WD.Wavekey= @c_Wavekey 
+   
+   --Wan03 - START
+   SELECT @c_ReleaseWave_Authority = fgr.Authority
+         ,@c_ReleaseWave_Opt5 = fgr.Option5
+   FROM dbo.fnc_GetRight2( @c_Facility, @c_Storerkey, '', 'ReleaseWave_SP') AS fgr 
+   
+   SET @c_SingleSkuPerDPLoc = 'N' 
+   SELECT @c_SingleSkuPerDPLoc = dbo.fnc_GetParamValueFromString('@c_SingleSkuPerDPLoc', @c_ReleaseWave_Opt5, @c_SingleSkuPerDPLoc) 
+   --Wan03 - END
     
    DECLARE @t_UPDPICK TABLE  
    (  RowRef            INT   IDENTITY(1,1) PRIMARY KEY  
@@ -462,7 +479,7 @@ BEGIN
       ,  TaskDetailkey                                                                                      
    FROM #TMP_PICK                                                              
    ORDER BY RowRef  
-     
+ 
    OPEN CUR_PD  
      
    FETCH NEXT FROM CUR_PD INTO  @n_RowRef  
@@ -495,7 +512,7 @@ BEGIN
       FROM dbo.SKU as s WITH (NOLOCK)
       WHERE s.Storerkey = @c_Storerkey
       AND   s.Sku = @c_Sku
-  
+
       IF @c_FromLocType = 'DPP'  
       BEGIN  
          GOTO ADD_PSLIP -- Need to Generate Pickslipno  
@@ -514,7 +531,7 @@ BEGIN
   
          GOTO ADD_TASK  
       END  
-  
+
       SET @c_LocationHandling = CASE WHEN @c_Lottable01 = 'A' THEN '3'  
                                      WHEN @c_Lottable01 = 'B' THEN '4'  
                                      ELSE '3'  
@@ -553,57 +570,112 @@ BEGIN
                SET @c_LocationCategory = 'BULK'  
             END  
   
-            IF @c_LocationCategory = 'SHELVING'  
-            BEGIN  
-               SELECT TOP 1 @c_ToLoc = ISNULL(RTRIM(TD.ToLoc),'')                     
-               FROM #TMP_LOC_DP  LOC WITH (NOLOCK)                                    
-               JOIN TASKDETAIL   TD  WITH (NOLOCK) ON (LOC.Loc = TD.ToLoc)  
-               JOIN LOTATTRIBUTE LA  WITH (NOLOCK) ON (TD.Lot = LA.Lot)  
-               WHERE LOC.LocationType = 'DYNPICKP'  
-               AND   LOC.LocationHandling = @c_LocationHandling    
-               AND   LOC.LocationCategory = @c_LocationCategory                                                
-               AND   LOC.Facility = @c_Facility  
-               AND   TD.TaskType IN ('RPF','RP1','RPT')  
-               AND   TD.UOM       = '6'  
-               AND   TD.CaseID    <>''  
-               AND   TD.Status    < '9'  
-               AND   TD.SourceType like 'ispRLWAV52_RPF-%'  
-               AND   TD.Wavekey  = @c_Wavekey  
-               AND   TD.Storerkey= @c_Storerkey  
-               AND EXISTS (SELECT 1     
-                           FROM SKUxLOC SL WITH (NOLOCK)    
-                           JOIN LOC L WITH (NOLOCK) ON SL.loc = L.Loc                
-                           WHERE SL.Storerkey =  @c_Storerkey    
-                           AND   SL.Sku =  @c_Sku       
-                           AND   SL.locationType = 'PICK'      
-                           AND   L.LocationType = 'DYNPPICK'      
-                           AND   L.PickZone = LOC.PickZone    
-                           AND   L.LocationHandling = @c_LocationHandling    
-                           )                   
-               GROUP BY TD.Storerkey  
-                     ,  TD.ToLoc  
-               HAVING @n_NoOfUCCInDP > ISNULL(COUNT( DISTINCT TD.CaseID),0)
-               ORDER BY TD.ToLoc   
-            END  
-            ELSE  
-            BEGIN  
-               SELECT TOP 1 @c_ToLoc = ISNULL(RTRIM(TD.ToLoc),'')  
-               FROM #TMP_LOC_DP  LOC WITH (NOLOCK)                                  
-               JOIN TASKDETAIL   TD  WITH (NOLOCK) ON (LOC.Loc = TD.ToLoc)  
-               JOIN LOTATTRIBUTE LA  WITH (NOLOCK) ON (TD.Lot = LA.Lot)  
-               WHERE LOC.LocationType = 'DYNPICKP'  
-               AND   LOC.LocationHandling = @c_LocationHandling    
-               AND   LOC.LocationCategory = @c_LocationCategory                                                
-               AND   LOC.Facility = @c_Facility  
-               AND   TD.TaskType IN ('RPF','RP1','RPT')  
-               AND   TD.UOM       = '6'  
-               AND   TD.CaseID    <>''  
-               AND   TD.Status    < '9'  
-               AND   TD.FromID    = @c_ID  
-               AND   TD.SourceType   like 'ispRLWAV52_RPF-%'  
-               AND   TD.Wavekey  = @c_Wavekey  
-               AND   TD.Storerkey= @c_Storerkey  
-            END  
+            SET @c_SQL = N'SELECT TOP 1 @c_ToLoc = ISNULL(RTRIM(TD.ToLoc),'''')'                     
+                       + ' FROM #TMP_LOC_DP  LOC WITH (NOLOCK)'                                    
+                       + ' JOIN TASKDETAIL   TD  WITH (NOLOCK) ON (LOC.Loc = TD.ToLoc)'  
+                       + ' JOIN LOTATTRIBUTE LA  WITH (NOLOCK) ON (TD.Lot = LA.Lot)'  
+                       + ' WHERE LOC.LocationType = ''DYNPICKP'''  
+                       + ' AND   LOC.LocationHandling = @c_LocationHandling'    
+                       + ' AND   LOC.LocationCategory = @c_LocationCategory'                                                
+                       + ' AND   LOC.Facility = @c_Facility'  
+                       + ' AND   TD.TaskType IN (''RPF'',''RP1'',''RPT'')'  
+                       + ' AND   TD.UOM       = ''6'''  
+                       + ' AND   TD.CaseID    <>''''' 
+                       + ' AND   TD.Status    < ''9'''  
+                       + ' AND   TD.SourceType like ''ispRLWAV52_RPF-%'''  
+                       + ' AND   TD.Wavekey  = @c_Wavekey'  
+                       + ' AND   TD.Storerkey= @c_Storerkey'
+                       + CASE WHEN @c_SingleSkuPerDPLoc = 'N' THEN ''
+                              ELSE ' AND TD.Sku = @c_Sku' END
+                       + CASE WHEN @c_LocationCategory = 'BULK' THEN ''     
+                              ELSE ' AND EXISTS (SELECT 1     
+                                     FROM SKUxLOC SL WITH (NOLOCK)    
+                                     JOIN LOC L WITH (NOLOCK) ON SL.loc = L.Loc                
+                                     WHERE SL.Storerkey =  @c_Storerkey    
+                                     AND   SL.Sku =  @c_Sku       
+                                     AND   SL.locationType = ''PICK''      
+                                     AND   L.LocationType = ''DYNPPICK''      
+                                     AND   L.PickZone = LOC.PickZone    
+                                     AND   L.LocationHandling = @c_LocationHandling    
+                                     )' END      
+                       + CASE WHEN @c_LocationCategory = 'BULK' THEN ''
+                              ELSE ' GROUP BY TD.Storerkey, TD.ToLoc' END 
+                       + CASE WHEN @c_LocationCategory = 'BULK' THEN ''
+                              ELSE ' HAVING @n_NoOfUCCInDP > ISNULL(COUNT(DISTINCT TD.CaseID),0)' END 
+                       + ' ORDER BY TD.ToLoc' 
+            SET @c_SQLParms = N'@c_ToLoc              NVARCHAR(10) OUTPUT'
+                            + ',@c_LocationHandling   NVARCHAR(10)'
+                            + ',@c_LocationCategory   NVARCHAR(10)'
+                            + ',@c_Facility           NVARCHAR(5)'
+                            + ',@c_Wavekey            NVARCHAR(10)'
+                            + ',@c_Storerkey          NVARCHAR(15)'
+                            + ',@c_Sku                NVARCHAR(20)' 
+                            + ',@n_NoOfUCCInDP        INT'  
+                            
+            EXEC sp_ExecuteSQL @c_SQL
+                              ,@c_SQLParms 
+                              ,@c_ToLoc               OUTPUT
+                              ,@c_LocationHandling
+                              ,@c_LocationCategory
+                              ,@c_Facility        
+                              ,@c_Wavekey         
+                              ,@c_Storerkey       
+                              ,@c_Sku
+                              ,@n_NoOfUCCInDP                                           
+                                                                                                                                                        
+            --IF @c_LocationCategory = 'SHELVING'  
+            --BEGIN  
+            --   SELECT TOP 1 @c_ToLoc = ISNULL(RTRIM(TD.ToLoc),'')                     
+            --   FROM #TMP_LOC_DP  LOC WITH (NOLOCK)                                    
+            --   JOIN TASKDETAIL   TD  WITH (NOLOCK) ON (LOC.Loc = TD.ToLoc)  
+            --   JOIN LOTATTRIBUTE LA  WITH (NOLOCK) ON (TD.Lot = LA.Lot)  
+            --   WHERE LOC.LocationType = 'DYNPICKP'  
+            --   AND   LOC.LocationHandling = @c_LocationHandling    
+            --   AND   LOC.LocationCategory = @c_LocationCategory                                                
+            --   AND   LOC.Facility = @c_Facility  
+            --   AND   TD.TaskType IN ('RPF','RP1','RPT')  
+            --   AND   TD.UOM       = '6'  
+            --   AND   TD.CaseID    <>''  
+            --   AND   TD.Status    < '9'  
+            --   AND   TD.SourceType like 'ispRLWAV52_RPF-%'  
+            --   AND   TD.Wavekey  = @c_Wavekey  
+            --   AND   TD.Storerkey= @c_Storerkey 
+            --   AND   TD.Sku      = @c_Sku                --(Wan03)            
+            --   AND EXISTS (SELECT 1     
+            --               FROM SKUxLOC SL WITH (NOLOCK)    
+            --               JOIN LOC L WITH (NOLOCK) ON SL.loc = L.Loc                
+            --               WHERE SL.Storerkey =  @c_Storerkey    
+            --               AND   SL.Sku =  @c_Sku       
+            --               AND   SL.locationType = 'PICK'      
+            --               AND   L.LocationType = 'DYNPPICK'      
+            --               AND   L.PickZone = LOC.PickZone    
+            --               AND   L.LocationHandling = @c_LocationHandling    
+            --               )                   
+            --   GROUP BY TD.Storerkey  
+            --         ,  TD.ToLoc  
+            --   HAVING @n_NoOfUCCInDP > ISNULL(COUNT( DISTINCT TD.CaseID),0)
+            --   ORDER BY TD.ToLoc   
+            --END  
+            --ELSE  
+            --BEGIN  
+            --   SELECT TOP 1 @c_ToLoc = ISNULL(RTRIM(TD.ToLoc),'')  
+            --   FROM #TMP_LOC_DP  LOC WITH (NOLOCK)                                  
+            --   JOIN TASKDETAIL   TD  WITH (NOLOCK) ON (LOC.Loc = TD.ToLoc)  
+            --   JOIN LOTATTRIBUTE LA  WITH (NOLOCK) ON (TD.Lot = LA.Lot)  
+            --   WHERE LOC.LocationType = 'DYNPICKP'  
+            --   AND   LOC.LocationHandling = @c_LocationHandling    
+            --   AND   LOC.LocationCategory = @c_LocationCategory                                                
+            --   AND   LOC.Facility = @c_Facility  
+            --   AND   TD.TaskType IN ('RPF','RP1','RPT')  
+            --   AND   TD.UOM       = '6'  
+            --   AND   TD.CaseID    <>''  
+            --   AND   TD.Status    < '9'  
+            --   AND   TD.FromID    = @c_ID  
+            --   AND   TD.SourceType   like 'ispRLWAV52_RPF-%'  
+            --   AND   TD.Wavekey  = @c_Wavekey  
+            --   AND   TD.Storerkey= @c_Storerkey  
+            --   AND   TD.Sku      = @c_Sku             --Wan03
+            --END  
   
             IF @c_ToLoc = ''  
             BEGIN   

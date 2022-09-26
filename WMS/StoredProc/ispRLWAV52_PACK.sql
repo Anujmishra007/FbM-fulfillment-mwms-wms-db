@@ -24,6 +24,9 @@ GO
 /* 2022-05-12  Wan      1.0   DevOps Combine Script.                    */
 /* 2022-08-04  Wan01    1.1   Fixed to get correct SourceType           */
 /* 2022-08-29  Wan02    1.3   Fixed. Infinity Loop due to differen UOM  */
+/* 2022-08-31  SPChin   1.4   JSM-92661 - Bug Fixed                     */
+/* 2022-09-06  Wan03    1.4   WMS-20686 - TH-NIKE - customize Wave      */
+/*                            Release V2022                             */
 /************************************************************************/
 CREATE OR ALTER PROC ispRLWAV52_PACK
    @c_Wavekey     NVARCHAR(10)    
@@ -125,6 +128,10 @@ BEGIN
          , @n_PickedQty          INT         = 0  
          , @c_ItemClass          NVARCHAR(10)= '' 
          , @c_Size               NVARCHAR(10)= '' 
+         
+         , @c_ReleaseWave_Authority    NVARCHAR(30)   = ''           --Wan03
+         , @c_ReleaseWave_Opt5         NVARCHAR(1000) = ''           --Wan03
+         , @c_UseCTNBreakByFloor       CHAR(1)     = 'N'             --Wan03
          
          , @CUR_ORD              CURSOR
          , @CUR_PD               CURSOR
@@ -237,6 +244,14 @@ BEGIN
       GOTO QUIT_SP  
    END
 
+   --Wan03 - START
+   SELECT @c_ReleaseWave_Authority = fgr.Authority
+         ,@c_ReleaseWave_Opt5 = fgr.Option5
+   FROM dbo.fnc_GetRight2( @c_Facility, @c_Storerkey, '', 'ReleaseWave_SP') AS fgr 
+   
+   SET @c_UseCTNBreakByFloor = 'N' 
+   SELECT @c_UseCTNBreakByFloor = dbo.fnc_GetParamValueFromString('@c_UseCTNBreakByFloor', @c_ReleaseWave_Opt5, @c_UseCTNBreakByFloor) 
+   --Wan03 - END
    INSERT INTO #PICKDETAIL_WIP  
       (  
          Wavekey   
@@ -406,7 +421,7 @@ BEGIN
    ORDER BY PD.Orderkey
         
    UPDATE #PICKDETAIL_WIP
-      SET LocLevel = L.LocLevel
+   SET LocLevel = CASE WHEN @c_UseCTNBreakByFloor = 'N' THEN L.LocLevel ELSE L.[Floor] END             --Wan03)
          ,Logicallocation = L.LogicalLocation
    FROM #PICKDETAIL_WIP W
    JOIN LOC L (NOLOCK) ON W.ToLoc = L.Loc
@@ -655,7 +670,7 @@ BEGIN
                ,PD.StdCube  
                ,PD.StdGrossWgt  
                ,Qty = SUM(PD.Qty) 
-               ,UOM + MAX(PD.UOM)               --(Wan02) Not to Group UOM, 6 and 7 may pack into same carton 
+               ,UOM = MAX(PD.UOM)               --JSM-92661 --(Wan02) Not to Group UOM, 6 and 7 may pack into same carton 
                ,PD.PackQtyIndicator                                 
          FROM #PICKDETAIL_WIP PD  
          WHERE PD.Orderkey = @c_Orderkey  

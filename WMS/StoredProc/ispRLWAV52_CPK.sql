@@ -12,7 +12,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -23,6 +23,8 @@ GO
 /* 2022-05-12  Wan      1.0   Created.                                  */
 /* 2022-05-12  Wan      1.0   DevOps Combine Script.                    */
 /* 2022-08-04  Wan01    1.1   Fixed to get correct SourceType           */
+/* 2022-09-06  Wan02    1.2   WMS-20686 - TH-NIKE - customize Wave      */
+/*                            Release V2022                             */
 /************************************************************************/
 CREATE OR ALTER PROC ispRLWAV52_CPK
    @c_Wavekey     NVARCHAR(10)    
@@ -49,6 +51,7 @@ BEGIN
 
          , @c_LocMissAreaKey           NVARCHAR(10)= ''
 
+         , @c_Facility                 NVARCHAR(5) = ''              --Wan02
          , @c_Areakey_Prev             NVARCHAR(10)= ''  
          , @c_Areakey                  NVARCHAR(10)= ''  
          , @c_LocLevel_Prev            NVARCHAR(10)= ''
@@ -73,6 +76,13 @@ BEGIN
          , @c_CartPos2                 NVARCHAR(20)= ''
          , @c_CartPos3                 NVARCHAR(20)= ''
          , @c_CartPos4                 NVARCHAR(20)= ''
+         , @n_NoOfCartonPerCart        INT         = 0               --Wan02
+         , @n_NoOfReqGroupKey          INT         = 1               --Wan02
+         
+         , @c_ReleaseWave_Authority    NVARCHAR(30)   = ''           --Wan02
+         , @c_ReleaseWave_Opt5         NVARCHAR(1000) = ''           --Wan02
+         , @c_NoOfCartonPerCart        NVARCHAR(2)    = '4'          --Wan02
+         , @c_UseCTNBreakByFloor       CHAR(1)        = 'N'          --Wan02         
 
          , @CUR_TIP                    CURSOR
          , @CUR_UPDPICK                CURSOR
@@ -146,7 +156,7 @@ BEGIN
    LEFT JOIN TASKDETAIL TD WITH (NOLOCK) ON  PD.DropID = TD.CaseID
                                          AND TD.TaskType  = 'RPF'
                                          AND TD.Sourcetype LIKE 'ispRLWAV52_RPF-%'              --(Wan01)
-                                         AND PD.DropID <> ''                                    --(Wan01)                                         
+                                         AND PD.DropID <> ''                                    --(Wan01)                                          
    LEFT JOIN TASKDETAIL CPK WITH (NOLOCK) ON  PD.CaseID = CPK.CaseID                
                                          AND CPK.TaskType  = 'CPK'                  
                                          AND CPK.Sourcetype IN  ( 'ispRLWAV52_CPK' )            --(Wan01)
@@ -171,9 +181,24 @@ BEGIN
    BEGIN
       PRINT 'INsert data to #PICKDETAIL_WIP'
    END
+   
+   --Wan02 - START
+   SELECT TOP 1 @c_Facility = o.Facility
+               ,@c_Storerkey= o.Storerkey
+   FROM #PICKDETAIL_WIP AS pw
+   JOIN dbo.ORDERS AS o WITH (NOLOCK) ON o.OrderKey = pw.Orderkey
+   ORDER BY pw.RowRef
+   
+   SELECT @c_ReleaseWave_Authority = fgr.Authority
+         ,@c_ReleaseWave_Opt5 = fgr.Option5
+   FROM dbo.fnc_GetRight2( @c_Facility, @c_Storerkey, '', 'ReleaseWave_SP') AS fgr 
+   
+   SET @c_UseCTNBreakByFloor = 'N' 
+   SELECT @c_UseCTNBreakByFloor = dbo.fnc_GetParamValueFromString('@c_UseCTNBreakByFloor', @c_ReleaseWave_Opt5, @c_UseCTNBreakByFloor) 
+   --Wan02 - END   
       
    UPDATE #PICKDETAIL_WIP
-      SET LocLevel = L.LocLevel
+   SET LocLevel = CASE WHEN  @c_UseCTNBreakByFloor = 'N' THEN L.LocLevel ELSE L.[Floor] END              --Wan02
          ,Logicallocation = L.LogicalLocation
    FROM #PICKDETAIL_WIP PIP
    JOIN LOC L (NOLOCK) ON PIP.ToLoc = L.Loc
@@ -257,6 +282,22 @@ BEGIN
    ,  CartonType        NVARCHAR(10) DEFAULT('') 
    ,  CartonCube        FLOAT        DEFAULT(0.00)
    )
+   
+   --Wan02 - START
+   IF OBJECT_ID('tempdb..#CART','U') IS NOT NULL                                          
+   BEGIN
+      DROP TABLE #CART;
+   END
+   
+   CREATE TABLE #CART 
+   (  RowRef         INT            NOT NULL IDENTITY(1,1)  PRIMARY KEY
+   ,  CaseID         NVARCHAR(20)   NOT NULL DEFAULT('')
+   ,  GroupKey_WIP   INT            NOT NULL DEFAULT(0)
+   )                                                                                     
+
+   SET @n_NoOfCartonPerCart = 4 
+   SELECT @n_NoOfCartonPerCart = dbo.fnc_GetParamValueFromString('@n_NoOfCartonPerCart', @c_ReleaseWave_Opt5, @n_NoOfCartonPerCart) 
+   --Wan02 - END   
 
    IF @b_Debug = 1
    BEGIN
@@ -417,6 +458,57 @@ BEGIN
    END
 
    BEGIN TRAN
+   --Wan02 - START
+   ;WITH cpaf AS 
+   (  SELECT 
+           TIP.Areakey                          
+         , TIP.LocLevel                                                              
+         , TIP.CaseID
+         , CartonOnCart = ((DENSE_RANK() OVER (PARTITION BY TIP.Areakey,TIP.LocLevel  ORDER BY MIN(TIP.RowRef))) - 1) / @n_NoOfCartonPerCart
+      FROM #TASKDETAIL_WIP TIP
+      GROUP BY
+           TIP.Areakey                          
+         , TIP.LocLevel                                                              
+         , TIP.CaseID
+   )
+   INSERT INTO #CART (CaseID, GroupKey_WIP)
+   SELECT cpaf.CaseID, groupkey_wip = (DENSE_RANK() OVER (ORDER BY cpaf.Areakey, cpaf.LocLevel, cpaf.CartonOnCart)) - 1
+   FROM cpaf 
+   
+   SET @n_NoOfReqGroupKey = 1
+   SELECT @n_NoOfReqGroupKey = COUNT(DISTINCT c.GroupKey_WIP)
+   FROM #CART AS c
+   SET @c_NewGroupKey = ''
+   SET @b_success = 1  
+   EXECUTE nspg_getkey  
+           @KeyName   = 'GroupKey'  
+         , @fieldlength = 10     
+         , @KeyString   = @c_NewGroupKey     OUTPUT  
+         , @b_success   = @b_success         OUTPUT  
+         , @n_err       = @n_err             OUTPUT  
+         , @c_errmsg    = @c_errmsg          OUTPUT
+         , @n_batch     = @n_NoOfReqGroupKey    
+                 
+   IF NOT @b_success = 1  
+   BEGIN  
+      SET @n_continue = 3
+      SET @n_Err = 84020
+      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Get Groupkey Fail. (ispRLWAV52_CPK)' 
+      GOTO QUIT_SP  
+   END 
+   
+   ;WITH upd AS 
+   (  SELECT t.RowRef, c.GroupKey_WIP
+      FROM #TASKDETAIL_WIP AS t
+      JOIN #CART AS c ON c.CaseID = t.CaseID AND t.CaseID <> ''
+   )
+   
+   UPDATE tw
+      SET tw.GroupKey = RIGHT('0000000000' + CONVERT(VARCHAR(10),u.GroupKey_WIP + CONVERT(INT, @c_NewGroupKey)), 10)
+   FROM upd AS u
+   JOIN #TASKDETAIL_WIP AS tw ON tw.RowRef = u.RowRef
+   
+   /*
    SET @CUR_TIP = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    SELECT  TIP.RowRef
          , TIP.Areakey                          
@@ -551,6 +643,8 @@ BEGIN
    END
    CLOSE @CUR_TIP
    DEALLOCATE @CUR_TIP  
+   */
+   --Wan02 - END
 
    IF @b_debug = 1
    BEGIN
@@ -578,7 +672,7 @@ BEGIN
    END
 
    SET @n_Batch = 0
-   SELECT Top 1 @n_Batch = @n_RowRef
+   SELECT Top 1 @n_Batch = WIP.RowRef        --2022-09-19 Fix
    FROM #TASKDETAIL_WIP WIP
    ORDER BY RowRef DESC
 
