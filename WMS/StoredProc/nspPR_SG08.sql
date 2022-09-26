@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: nspOrderProcessing                                        */
 /*                                                                      */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Rev  Purposes                                   */      
 /* 23-May-2022 WLChooi  1.0  DevOps Combine Script                      */
+/* 20-Sep-2022 WLChooi  1.1  Bug Fix for WMS-19705 (WL01)               */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[nspPR_SG08]
@@ -323,21 +324,25 @@ BEGIN
           SELECT @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND LOTxLOCxID.Id = @c_ID '  
       END
 
+      --WL01 S
       IF @c_STSUSR2 = 'EXPORT' AND @c_SKUBUSR5 = 'VANS' 
       BEGIN
-         SELECT @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND LOTATTRIBUTE.Lottable10 = ''N'' '  
+         SELECT @c_Sorting = ' ORDER BY CASE WHEN LOTATTRIBUTE.Lottable10 = ''N'' THEN 1 WHEN LOTATTRIBUTE.Lottable10 = '''' THEN 2 ELSE 3 END, ' +
+                             ' Lotattribute.Lottable05, LOT.Lot '
+         SELECT @c_GroupBy = ' GROUP BY LOT.STORERKEY, LOT.SKU, LOT.LOT, Lotattribute.Lottable05, Lotattribute.Lottable10 '
       END
-
-      IF @c_STSUSR2 = 'EXPORT' AND @c_SKUBUSR5 = 'TNF' AND @c_Country = 'TW' 
+      ELSE IF @c_STSUSR2 = 'EXPORT' AND @c_SKUBUSR5 = 'TNF' AND @c_Country = 'TW' 
       BEGIN
-         SELECT @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND LOTATTRIBUTE.Lottable11 IN (''TNFTW'','''') ' 
-         SELECT @c_Sorting = ' ORDER BY CASE WHEN LOTATTRIBUTE.Lottable11 = ''TNFTW'' THEN 1 ELSE 2 END, Lotattribute.Lottable05, LOT.Lot '
+         --SELECT @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND LOTATTRIBUTE.Lottable11 IN (''TNFTW'','''') ' 
+         SELECT @c_Sorting = ' ORDER BY CASE WHEN LOTATTRIBUTE.Lottable11 = ''TNFTW'' THEN 1 WHEN LOTATTRIBUTE.Lottable11 = '''' THEN 2 ELSE 3 END, ' +
+                             ' Lotattribute.Lottable05, LOT.Lot '
          SELECT @c_GroupBy = ' GROUP BY LOT.STORERKEY, LOT.SKU, LOT.LOT, Lotattribute.Lottable05, Lotattribute.Lottable11 '
       END
       ELSE
       BEGIN
          SELECT @c_Sorting = ' ORDER BY Lotattribute.Lottable05, LOT.Lot '
       END
+      --WL01 E
 
       SELECT @c_SQLStatement =  ' DECLARE PREALLOCATE_CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR ' +
             ' SELECT LOT.STORERKEY, LOT.SKU, LOT.LOT, ' +
