@@ -12,7 +12,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.0                                                    */                                                                                  
+/* PVCS Version: 1.1                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -21,10 +21,12 @@ GO
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */  
 /* 2022-08-05  Wan      1.0   Created & DevOps Combine Script           */
+/* 2022-09-20  Wan01    1.1   LFWM-3763 - SCE  LOREAL PROD  Cannot build*/ 
+/*                            wave. Fix Truncated value                 */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_BuildPreWaveCond]                                                                                                                       
       @c_BuildParmKey      NVARCHAR(10)                                                                                                                    
-   ,  @c_SQLCondPreWave    NVARCHAR(2000) = '' OUTPUT
+   ,  @c_SQLCondPreWave    NVARCHAR(2000) = '' OUTPUT                  
    ,  @b_Success           INT            = 1  OUTPUT  
    ,  @n_err               INT            = 0  OUTPUT                                                                                                             
    ,  @c_ErrMsg            NVARCHAR(255)  = '' OUTPUT 
@@ -48,11 +50,11 @@ BEGIN
          , @c_FieldName03              NVARCHAR(100)  = '' 
          , @c_FieldName04              NVARCHAR(100)  = ''  
          , @c_FieldName05              NVARCHAR(100)  = ''  
-         , @c_Columns01                NVARCHAR(600)  = ''
-         , @c_Columns02                NVARCHAR(600)  = '' 
-         , @c_Columns03                NVARCHAR(600)  = ''  
-         , @c_Columns04                NVARCHAR(600)  = '' 
-         , @c_Columns05                NVARCHAR(600)  = ''                         
+         , @c_Columns01                NVARCHAR(600)  = ''              
+         , @c_Columns02                NVARCHAR(600)  = ''              
+         , @c_Columns03                NVARCHAR(600)  = ''              
+         , @c_Columns04                NVARCHAR(600)  = ''              
+         , @c_Columns05                NVARCHAR(600)  = ''                        
          , @c_Column01                 NVARCHAR(100)  = ''
          , @c_Column02                 NVARCHAR(100)  = '' 
          , @c_Column03                 NVARCHAR(100)  = ''  
@@ -91,67 +93,79 @@ BEGIN
       
    IF @n_Cnt > 0
    BEGIN
-      SET @n_RowID = 0
-      WHILE 1 = 1
-      BEGIN 
-         SELECT TOP 1
-                @c_Column01 = ISNULL(b.Column01,'') 
-               ,@c_Column02 = ISNULL(b.Column02,'') 
-               ,@c_Column03 = ISNULL(b.Column03,'') 
-               ,@c_Column04 = ISNULL(b.Column04,'') 
-               ,@c_Column05 = ISNULL(b.Column05,'') 
-               ,@n_RowID    = b.RowID
-         FROM dbo.BUILDPREWAVE AS b WITH (NOLOCK) 
-         WHERE b.BuildParmKey = @c_BuildParmKey
-         AND b.RowID > @n_RowID
-         AND b.[Status] = '1'
+      --(Wan01) - START
+      SET @c_SQLCondPreWave = @c_SQLCondPreWave 
+                        + ' AND EXISTS (SELECT 1 FROM dbo.BUILDPREWAVE AS b WITH (NOLOCK)'  
+                        + ' WHERE b.BuildParmKey = @c_BuildParmKey' 
+                        + ' AND b.[Status] = ''1'''
+                        + CASE WHEN @c_FieldName01 <> '' THEN ' AND ' + @c_FieldName01 + '= b.Column01' END
+                        + CASE WHEN @c_FieldName02 <> '' THEN ' AND ' + @c_FieldName02 + '= b.Column02' END
+                        + CASE WHEN @c_FieldName03 <> '' THEN ' AND ' + @c_FieldName03 + '= b.Column03' END
+                        + CASE WHEN @c_FieldName04 <> '' THEN ' AND ' + @c_FieldName04 + '= b.Column04' END
+                        + CASE WHEN @c_FieldName05 <> '' THEN ' AND ' + @c_FieldName05 + '= b.Column05' END 
+                        + ')'   
+      --SET @n_RowID = 0
+      --WHILE 1 = 1
+      --BEGIN 
+      --   SELECT TOP 1
+      --          @c_Column01 = ISNULL(b.Column01,'') 
+      --         ,@c_Column02 = ISNULL(b.Column02,'') 
+      --         ,@c_Column03 = ISNULL(b.Column03,'') 
+      --         ,@c_Column04 = ISNULL(b.Column04,'') 
+      --         ,@c_Column05 = ISNULL(b.Column05,'') 
+      --         ,@n_RowID    = b.RowID
+      --   FROM dbo.BUILDPREWAVE AS b WITH (NOLOCK) 
+      --   WHERE b.BuildParmKey = @c_BuildParmKey
+      --   AND b.RowID > @n_RowID
+      --   AND b.[Status] = '1'
             
-         IF @@ROWCOUNT = 0
-         BEGIN
-            BREAK
-         END
+      --   IF @@ROWCOUNT = 0
+      --   BEGIN
+      --      BREAK
+      --   END
             
-         IF @c_FieldName01 <> ''
-         BEGIN
-            IF @c_Columns01 <> '' SET @c_Columns01 = @c_Columns01 + ','
-            SET @c_Columns01 = @c_Columns01 + 'N''' + @c_Column01 + ''''
-         END
+      --   IF @c_FieldName01 <> ''
+      --   BEGIN
+      --      IF @c_Columns01 <> '' SET @c_Columns01 = @c_Columns01 + ','
+      --      SET @c_Columns01 = @c_Columns01 + 'N''' + @c_Column01 + ''''
+      --   END
             
-         IF @c_FieldName02 <> ''
-         BEGIN
-            IF @c_Columns02 <> '' SET @c_Columns02 = @c_Columns02 + ','
-            SET @c_Columns02 = @c_Columns02 + 'N''' + @c_Column02 + ''''
-         END
+      --   IF @c_FieldName02 <> ''
+      --   BEGIN
+      --      IF @c_Columns02 <> '' SET @c_Columns02 = @c_Columns02 + ','
+      --      SET @c_Columns02 = @c_Columns02 + 'N''' + @c_Column02 + ''''
+      --   END
             
-         IF @c_FieldName03 <> ''
-         BEGIN
-            IF @c_Columns03 <> '' SET @c_Columns03 = @c_Columns03 + ','
-            SET @c_Columns03 = @c_Columns03 + 'N''' + @c_Column03 + ''''
-         END
+      --   IF @c_FieldName03 <> ''
+      --   BEGIN
+      --      IF @c_Columns03 <> '' SET @c_Columns03 = @c_Columns03 + ','
+      --      SET @c_Columns03 = @c_Columns03 + 'N''' + @c_Column03 + ''''
+      --   END
             
-         IF @c_FieldName04 <> ''
-         BEGIN
-            IF @c_Columns04 <> '' SET @c_Columns04 = @c_Columns04 + ','
-            SET @c_Columns04 = @c_Columns04 + 'N''' + @c_Column04 + ''''
-         END 
+      --   IF @c_FieldName04 <> ''
+      --   BEGIN
+      --      IF @c_Columns04 <> '' SET @c_Columns04 = @c_Columns04 + ','
+      --      SET @c_Columns04 = @c_Columns04 + 'N''' + @c_Column04 + ''''
+      --   END 
              
-         IF @c_FieldName05 <> ''
-         BEGIN
-            IF @c_Columns05 <> '' SET @c_Columns05 = @c_Columns05 + ','
-            SET @c_Columns05 = @c_Columns05 + 'N''' + @c_Column05 + ''''
-         END                      
-      END
+      --   IF @c_FieldName05 <> ''
+      --   BEGIN
+      --      IF @c_Columns05 <> '' SET @c_Columns05 = @c_Columns05 + ','
+      --      SET @c_Columns05 = @c_Columns05 + 'N''' + @c_Column05 + ''''
+      --   END                      
+      --END
    
-      IF @c_FieldName01 <> '' AND @c_Columns01 <> ''
-         SET @c_SQLCondPreWave = @c_SQLCondPreWave + 'AND ' + @c_FieldName01 + ' IN ( ' + @c_Columns01 + ')'
-      IF @c_FieldName02 <> '' AND @c_Columns02 <> ''
-         SET @c_SQLCondPreWave = @c_SQLCondPreWave + 'AND ' + @c_FieldName02 + ' IN ( ' + @c_Columns02 + ')'
-      IF @c_FieldName03 <> '' AND @c_Columns03 <> ''
-         SET @c_SQLCondPreWave = @c_SQLCondPreWave + 'AND ' + @c_FieldName03 + ' IN ( ' + @c_Columns03 + ')'
-      IF @c_FieldName04 <> '' AND @c_Columns04 <> ''
-         SET @c_SQLCondPreWave = @c_SQLCondPreWave + 'AND ' + @c_FieldName04 + ' IN ( ' + @c_Columns04 + ')'
-      IF @c_FieldName05 <> '' AND @c_Columns05 <> ''
-         SET @c_SQLCondPreWave = @c_SQLCondPreWave + 'AND ' + @c_FieldName05 + ' IN ( ' + @c_Columns05 + ')'
+      --IF @c_FieldName01 <> '' AND @c_Columns01 <> ''
+      --   SET @c_SQLCondPreWave = @c_SQLCondPreWave + 'AND ' + @c_FieldName01 + ' IN ( ' + @c_Columns01 + ')'
+      --IF @c_FieldName02 <> '' AND @c_Columns02 <> ''
+      --   SET @c_SQLCondPreWave = @c_SQLCondPreWave + 'AND ' + @c_FieldName02 + ' IN ( ' + @c_Columns02 + ')'
+      --IF @c_FieldName03 <> '' AND @c_Columns03 <> ''
+      --   SET @c_SQLCondPreWave = @c_SQLCondPreWave + 'AND ' + @c_FieldName03 + ' IN ( ' + @c_Columns03 + ')'
+      --IF @c_FieldName04 <> '' AND @c_Columns04 <> ''
+      --   SET @c_SQLCondPreWave = @c_SQLCondPreWave + 'AND ' + @c_FieldName04 + ' IN ( ' + @c_Columns04 + ')'
+      --IF @c_FieldName05 <> '' AND @c_Columns05 <> ''
+      --   SET @c_SQLCondPreWave = @c_SQLCondPreWave + 'AND ' + @c_FieldName05 + ' IN ( ' + @c_Columns05 + ')'
+      --(Wan01) - END
    END
 END
 GO

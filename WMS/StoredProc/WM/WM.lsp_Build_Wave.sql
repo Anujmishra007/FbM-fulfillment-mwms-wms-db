@@ -12,7 +12,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 2.2                                                    */                                                                                  
+/* PVCS Version: 2.3                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -45,6 +45,8 @@ GO
 /* 2022-05-31  Wan08    2.1   LFWM-3543 - SCE Order Parameter Enhancement*/
 /* 2022-08-05  Wan09    2.2   LFWM-3672 - [CN] LOREAL_New Tab for order */
 /*                            analysis                                  */
+/* 2022-09-20  Wan11    2.3   LFWM-3763 - SCE  LOREAL PROD  Cannot build*/ 
+/*                            wave. Fix Truncated value                 */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_Build_Wave]                                                                                                                       
       @c_BuildParmKey      NVARCHAR(10)                                                                                                                    
@@ -1028,11 +1030,12 @@ AS
                                  + CHAR(13) + ' ORDER BY ORDERS.Storerkey ' + @c_SQLFieldGroupBy    
                                                                                                                                                                                            
          EXEC SP_EXECUTESQL @c_SQLBuildByGroup 
-               , N'@c_StorerKey NVARCHAR(15), @c_Facility NVARCHAR(5) 
+               , N'@c_StorerKey NVARCHAR(15), @c_Facility NVARCHAR(5), @c_BuildParmKey NVARCHAR(10)  
                   ,@c_Field01 NVARCHAR(60), @c_Field02 NVARCHAR(60), @c_Field03 NVARCHAR(60),@c_Field04 NVARCHAR(60), @c_Field05 NVARCHAR(60)
                   ,@c_Field06 NVARCHAR(60), @c_Field07 NVARCHAR(60), @c_Field08 NVARCHAR(60),@c_Field09 NVARCHAR(60), @c_Field10 NVARCHAR(60)' --(Wan03)
                , @c_StorerKey                                                                                          
                , @c_Facility 
+               , @c_BuildParmKey       --(Wan11)               
                , @c_Field01            --(Wan03)
                , @c_Field02            --(Wan03)
                , @c_Field03            --(Wan03)
@@ -1080,6 +1083,7 @@ AS
       SET @c_SQLParms= N'@c_Field01 NVARCHAR(60), @c_Field02 NVARCHAR(60), @c_Field03 NVARCHAR(60), @c_Field04 NVARCHAR(60)'
                      +', @c_Field05 NVARCHAR(60), @c_Field06 NVARCHAR(60), @c_Field07 NVARCHAR(60), @c_Field08 NVARCHAR(60)'
                      +', @c_Field09 NVARCHAR(60), @c_Field10 NVARCHAR(60), @c_StorerKey NVARCHAR(15), @c_Facility NVARCHAR(5)'
+                     +', @c_BuildParmKey NVARCHAR(10)'   --(Wan11) 
                      +', @n_MaxOpenQty INT'         --2020-07-10
 
       BEGIN TRY                     
@@ -1096,7 +1100,8 @@ AS
                         ,@c_Field09                                                                                                                                      
                         ,@c_Field10
                         ,@c_StorerKey 
-                        ,@c_Facility   
+                        ,@c_Facility 
+                        ,@c_BuildParmKey           --(Wan11)    
                         ,@n_MaxOpenQty             --2020-07-10                  
                            
       END TRY
