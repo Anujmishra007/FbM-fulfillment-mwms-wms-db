@@ -17,7 +17,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.3                                                    */                                                                                  
+/* PVCS Version: 1.4                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -31,6 +31,7 @@ GO
 /* 2021-02-24  Wan01    1.2   Fixed to call lsp_SetUser SP & Quip SP    */
 /*                            if @c_UserName <> SUSER_SNAME()           */
 /* 2021-08--5  Wan02    1.3   Fixed Linkage issue                       */
+/* 2022-09-20  SPChin   1.4   JSM-96335 - Extend ExternOrderkey Length  */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_Wave_BuildMBOL]                                                                                                                       
       @c_Wavekey        NVARCHAR(10)  
@@ -134,7 +135,7 @@ AS
          , @c_MBOLkey                  NVARCHAR(10)   = ''  
          , @c_Loadkey                  NVARCHAR(10)   = ''
          , @c_Orderkey                 NVARCHAR(10)   = '' 
-         , @c_ExternOrderkey           NVARCHAR(10)   = ''
+         , @c_ExternOrderkey           NVARCHAR(50)   = ''	--JSM-96335
          , @c_Route                    NVARCHAR(10)   = ''
          , @d_OrderDate                DATETIME       = NULL
          , @d_DeliveryDate             DATETIME       = NULL
@@ -175,7 +176,7 @@ AS
       RNum              INT NOT NULL PRIMARY KEY                                                                  
    ,  OrderKey          NVARCHAR(10)   NULL DEFAULT ('') 
    ,  Loadkey           NVARCHAR(10)   NULL DEFAULT ('')                                                                                                                               
-   ,  ExternOrderKey    NVARCHAR(30)   NULL DEFAULT ('')                                                                                                                        
+   ,  ExternOrderKey    NVARCHAR(50)   NULL DEFAULT ('')	--JSM-96335                                                                                                                       
    ,  [Route]           NVARCHAR(10)   NULL DEFAULT ('')
    ,  OrderDate         DATETIME       NULL                                                                                                                         
    ,  DeliveryDate      DATETIME       NULL                                                                                                                                  
