@@ -11,6 +11,7 @@ GO
 /* Date       Rev  Author     Purposes                                        */
 /* 09-09-2021 1.0  Chermaine  WMS-17331 Created                               */
 /* 12-05-2022 1.1  Ung        WMS-19619 Remove pre-assign LOC                 */
+/* 22-09-2022 1.2  Ung        WMS-19619 Check drop ID belong to station       */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_PTLPiece_Assign_DropID03] (
@@ -297,6 +298,24 @@ BEGIN
          BEGIN
             SET @nErrNo = 176002
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Bad DropID
+            SET @cOutField01 = ''
+            GOTO Quit
+         END
+
+         -- Check DropID assigned to this station
+         IF NOT EXISTS( SELECT TOP 1 1 
+            FROM PickDetail PD WITH (NOLOCK) 
+               JOIN PackTask PT WITH (NOLOCK) ON (PD.OrderKey = PT.OrderKey)
+               JOIN DeviceProfile DP WITH (NOLOCK) ON (
+                  DP.DeviceType = 'STATION' AND 
+                  DP.DeviceID = @cStation AND 
+                  DP.DevicePosition = PT.DevicePosition AND 
+                  DP.StorerKey = @cStorerKey)
+            WHERE PD.StorerKey = @cStorerKey 
+               AND PD.DropID = @cDropID)
+         BEGIN
+            SET @nErrNo = 176011
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Wrong Station
             SET @cOutField01 = ''
             GOTO Quit
          END
@@ -588,7 +607,7 @@ BEGIN
          IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'CartonID', @cCartonID) = 0
          BEGIN
             SET @nErrNo = 176010
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Log fail
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid format
             GOTO Quit
          END
 
@@ -598,7 +617,7 @@ BEGIN
                         AND CartonID = @cCartonID )
          BEGIN
             SET @nErrNo = 176009
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Log fail
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --CartonAssigned
             GOTO Quit
          END
 

@@ -9,8 +9,9 @@ execute rdt.rdtAddMsg 176005, 10, '176005^INS Log fail ', 'us_english', 803
 execute rdt.rdtAddMsg 176006, 10, '176006^UPD Log fail ', 'us_english', 803
 execute rdt.rdtAddMsg 176007, 10, '176007^Invalid DPLoc', 'us_english', 803
 execute rdt.rdtAddMsg 176008, 10, '176008^Upd Log Fail ', 'us_english', 803
-execute rdt.rdtAddMsg 176009, 10, '176009DuplicateDropID ', 'us_english', 803
-execute rdt.rdtAddMsg 176010, 10, '176010InvalidCartonID ', 'us_english', 803
+execute rdt.rdtAddMsg 176009, 10, '176009CartonAssigned', 'us_english', 803
+execute rdt.rdtAddMsg 176010, 10, '176010Invalid format', 'us_english', 803
+execute rdt.rdtAddMsg 176011, 10, '176011Wrong Station ', 'us_english', 803
 
 SELECT * FROM rdt.rdtmsg (NOLOCK) WHERE message_id BETWEEN 176001 and 176050
 
