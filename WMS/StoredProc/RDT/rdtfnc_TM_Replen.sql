@@ -1,4 +1,3 @@
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -48,6 +47,7 @@ GO
 /*                            Exit module if switch task                      */
 /* 2021-02-25 3.5  James      WMS-16271 Add ExtendedValidateSP (james07)      */
 /* 2021-04-21 3.6  James      WMS-15656 Add DefaultSuggToLOC config (james08) */
+/*                            Add ExtendedWCSSP                               */
 /* 2021-05-07 3.7  James      WMS-16964 Add custom SuggToLOC (james09)        */
 /* 2021-11-09 3.8  Chermaine  WMS-17383 Add AutoGen DropID in St1 (cc01)      */
 /******************************************************************************/
@@ -431,6 +431,7 @@ BEGIN
  --(cc01)      
    SET @cAutoGenDropID = rdt.RDTGetConfig( @nFunc, 'AutoGenDropID', @cStorerKey)
 
+   -- (james08)
    SET @cExtendedWCSSP = rdt.RDTGetConfig( @nFunc, 'ExtendedWCSSP', @cStorerKey)
    IF @cExtendedWCSSP = '0'
       SET @cExtendedWCSSP = ''
@@ -2541,6 +2542,7 @@ BEGIN
       WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
          COMMIT TRAN
 
+      -- (james08)
       -- Insert WCS ( conveyor info). Due to WSC db could be different server (linked server)
       -- the wcs stored proc cannot put within transaction block (no rollback allowed)
       -- Extended wcs
