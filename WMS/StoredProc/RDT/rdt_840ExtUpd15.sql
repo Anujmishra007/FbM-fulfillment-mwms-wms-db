@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'rdt.rdt_840ExtUpd15') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_840ExtUpd15
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -15,9 +11,11 @@ GO
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
 /* 2021-07-16 1.0  James      WMS-17472. Created                        */
+/* 2022-09-20 1.1  James      WMS-20831 Change printing to use          */
+/*                            rdt_rdtprint (james01)                    */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdt_840ExtUpd15] (
+CREATE OR ALTER PROC [RDT].[rdt_840ExtUpd15] (
    @nMobile     INT,
    @nFunc       INT, 
    @cLangCode   NVARCHAR( 3), 
@@ -248,105 +246,55 @@ AS
             FROM RDT.RDTMOBREC WITH (NOLOCK)
             WHERE Mobile = @nMobile
 
-            -- Print only if rdt report is setup (james05)
-            IF EXISTS (SELECT 1 FROM RDT.RDTReport WITH (NOLOCK)
-                        WHERE StorerKey = @cStorerKey
-                        AND   ReportType = 'PACKLIST'
-                        AND   1 = CASE WHEN Function_ID = @nFunc OR Function_ID = 0 THEN 1
-                                    ELSE 0 END)
+            DECLARE @tPACKLIST AS VariableTable
+            INSERT INTO @tPACKLIST (Variable, Value) VALUES ( '@cStorerKey',  @cStorerKey)
+            INSERT INTO @tPACKLIST (Variable, Value) VALUES ( '@cOrderKey',   @cOrderKey)
+
+            -- Print label
+            SET @nErrNo = 0
+            EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, '', @cPrinter_Paper, 
+               'PACKLIST', -- Report type
+               @tPACKLIST, -- Report params
+               'rdt_840ExtUpd15', 
+               @nErrNo  OUTPUT,
+               @cErrMsg OUTPUT 
+                     
+            IF @nErrNo <> 0
             BEGIN
-               SET @cReportType = 'PACKLIST'
-               SET @cPrintJobName = 'PRINT_PACKLIST'
-
-               SELECT @cDataWindow = ISNULL(RTRIM(DataWindow), ''),
-                        @cTargetDB = ISNULL(RTRIM(TargetDB), '')
-               FROM RDT.RDTReport WITH (NOLOCK)
-               WHERE StorerKey = @cStorerKey
-               AND   ReportType = @cReportType
-
-               IF ISNULL(@cDataWindow, '') = ''
-               BEGIN
-                  SET @nErrNo = 171407
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DWNOTSETUP
-                  GOTO Fail  
-               END
-
-               IF ISNULL(@cTargetDB, '') = ''
-               BEGIN
-                  SET @nErrNo = 171408
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --TGETDB NOT SET
-                  GOTO Fail  
-               END
-
-               SET @nErrNo = 0
-               EXEC RDT.rdt_BuiltPrintJob
-                  @nMobile,
-                  @cStorerKey,
-                  @cReportType,
-                  @cPrintJobName,
-                  @cDataWindow,
-                  @cPrinter_Paper,
-                  @cTargetDB,
-                  @cLangCode,
-                  @nErrNo  OUTPUT,
-                  @cErrMsg OUTPUT,
-                  @cStorerKey,
-                  @cOrderKey
-
-               IF @nErrNo <> 0
-               BEGIN
-                  SET @nErrNo = 171409
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSERTPRTFAIL
-                  GOTO Fail  
-               END
-            END   -- end print
-
-            -- Print only if rdt report is setup (james08)
-            IF EXISTS (SELECT 1 FROM RDT.RDTReport WITH (NOLOCK)
-                        WHERE StorerKey = @cStorerKey
-                        AND   ReportType = 'SHIPPLABEL'
-                        AND   1 = CASE WHEN Function_ID = @nFunc OR Function_ID = 0 THEN 1
-                                    ELSE 0 END)
-            BEGIN
-               SELECT @cLoadKey = ISNULL(RTRIM(LoadKey), ''),
-                      @cShipperKey = ISNULL(RTRIM(ShipperKey), '')
-               FROM dbo.Orders WITH (NOLOCK)
-               WHERE Storerkey = @cStorerkey
-               AND   Orderkey = @cOrderkey
-
-               IF ISNULL( @cShipperKey, '') = ''
-               BEGIN
-                  SET @nErrNo = 171410
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INV SHIPPERKEY
-                  GOTO Fail  
-               END
-
-               SELECT @cDataWindow = ISNULL(RTRIM(DataWindow), ''),
-                      @cTargetDB = ISNULL(RTRIM(TargetDB), '')
-               FROM RDT.RDTReport WITH (NOLOCK)
-               WHERE StorerKey = @cStorerkey
-               AND ReportType = 'SHIPPLABEL'
-
-               SET @nErrNo = 0
-               EXEC RDT.rdt_BuiltPrintJob
-                  @nMobile,
-                  @cStorerKey,
-                  'SHIPPLABEL',
-                  'PRINT_SHIPLABEL',
-                  @cDataWindow,
-                  @cPrinter,
-                  @cTargetDB,
-                  @cLangCode,
-                  @nErrNo  OUTPUT,
-                  @cErrMsg OUTPUT,
-                  @cLoadKey,
-                  @cOrderKey,
-                  @cShipperKey,
-                  0
-
-               IF @nErrNo <> 0
-                  GOTO Fail  
+               SET @nErrNo = 171409
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSERTPRTFAIL
+               GOTO Fail  
             END
+
+            SELECT @cLoadKey = ISNULL(RTRIM(LoadKey), ''),
+                     @cShipperKey = ISNULL(RTRIM(ShipperKey), '')
+            FROM dbo.Orders WITH (NOLOCK)
+            WHERE Storerkey = @cStorerkey
+            AND   Orderkey = @cOrderkey
+
+            IF ISNULL( @cShipperKey, '') = ''
+            BEGIN
+               SET @nErrNo = 171410
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INV SHIPPERKEY
+               GOTO Fail  
+            END
+
+            DECLARE @tSHIPPLABEL AS VariableTable
+            INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@cLoadKey',  @cLoadKey)
+            INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@cOrderKey',  @cOrderKey)
+            INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@cShipperKey',  @cShipperKey)
+
+            -- Print label
+            SET @nErrNo = 0
+            EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cPrinter, '', 
+               'SHIPPLABEL', -- Report type
+               @tSHIPPLABEL, -- Report params
+               'rdt_840ExtUpd15', 
+               @nErrNo  OUTPUT,
+               @cErrMsg OUTPUT 
+
+            IF @nErrNo <> 0
+               GOTO Fail  
          END
       END
    END
