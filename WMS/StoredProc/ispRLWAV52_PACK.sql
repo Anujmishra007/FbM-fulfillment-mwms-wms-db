@@ -670,7 +670,7 @@ BEGIN
                ,PD.StdCube  
                ,PD.StdGrossWgt  
                ,Qty = SUM(PD.Qty) 
-               ,UOM = MAX(PD.UOM)               --JSM-92661 --(Wan02) Not to Group UOM, 6 and 7 may pack into same carton 
+               ,UOM = MAX(PD.UOM)               --JSM-92661	--(Wan02) Not to Group UOM, 6 and 7 may pack into same carton 
                ,PD.PackQtyIndicator                                 
          FROM #PICKDETAIL_WIP PD  
          WHERE PD.Orderkey = @c_Orderkey  
