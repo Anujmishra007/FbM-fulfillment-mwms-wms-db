@@ -253,7 +253,7 @@ BEGIN
             
             DECLARE CUR_SKU CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
               SELECT DISTINCT Sku
-              FROM #TMP_SKUZO
+              FROM #TMP_SKUZONE
             
             OPEN CUR_SKU            
                         
