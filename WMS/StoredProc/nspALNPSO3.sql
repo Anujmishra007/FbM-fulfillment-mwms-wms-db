@@ -23,6 +23,9 @@ GO
 /* Updates:                                                             */        
 /* Date         Author  Ver.  Purposes                                  */        
 /* 06-APR-2022  NJOW    1.0   DEVOPS combine script                     */  
+/* 28-SEP-2022  NJOW01  1.1   Fix. if NESCOFEE sku of the order not in  */
+/*                            all rotate zones, try fix a zone available*/
+/*                            to all sku                                */
 /************************************************************************/        
 CREATE OR ALTER PROC [dbo].[nspALNPSO3]            
    @c_DocumentNo NVARCHAR(10),      
@@ -82,7 +85,9 @@ BEGIN
            @c_OrderPAzone        NVARCHAR(10), 
            @c_OrderPutwayzone    NVARCHAR(10),
            @n_B2BCnt             INT,
-           @n_B2CCnt             INT
+           @n_B2CCnt             INT,
+           @c_GetSku             NVARCHAR(15),
+           @c_PriorityZone       NVARCHAR(10) = ''
       
    SET @n_QtyAvailable = 0              
    SET @c_OtherValue = '1'     
@@ -218,8 +223,77 @@ BEGIN
         SET @c_PAZones = @c_OrderPutwayzone    
       END  
       ELSE  
-      BEGIN      
-         IF EXISTS (SELECT 1    
+      BEGIN
+      	 --NJOW01 S
+      	 --Get inventory zone of every NESCOFEE sku of the order
+      	 SELECT OD.Sku, LOC.Putawayzone    
+      	 INTO #TMP_SKUZONE
+         FROM ORDERS O (NOLOCK)  
+         JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey  
+         JOIN SKUXLOC (NOLOCK) ON OD.Storerkey = SKUXLOC.Storerkey AND OD.Sku = SKUXLOC.Sku 
+         JOIN LOC (NOLOCK) ON SKUXLOC.Loc = LOC.Loc  
+         JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku
+         WHERE O.Orderkey = @c_Orderkey
+         AND LOC.Putawayzone IN ('PTLB2CZONE','PTLB2CZON2','PTLB2CZON3')  
+         AND SKUXLOC.Qty - SKUXLOC.QtyAllocated - SKUXLOC.QtyPicked > 0   
+         AND Loc.LocationType = 'PICK'  
+         AND SKU.Skugroup = @c_SkuGroup
+         GROUP BY OD.Sku, LOC.Putawayzone 
+
+         --if any NESCOFEE sku of the order no stock in all 3 zones         
+      	 IF EXISTS(SELECT 1 
+      	           FROM #TMP_SKUZONE
+      	           GROUP BY Sku
+                   HAVING COUNT(DISTINCT Putawayzone) < 3)
+         BEGIN
+            --get the zone exist in all NESCOFEE sku of the order
+            SELECT DISTINCT Putawayzone
+            INTO #TMP_ZONE
+            FROM #TMP_SKUZONE            
+            
+            DECLARE CUR_SKU CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
+              SELECT DISTINCT Sku
+              FROM #TMP_SKUZO
+            
+            OPEN CUR_SKU            
+                        
+            FETCH NEXT FROM CUR_SKU INTO @c_GetSku   
+              
+            WHILE (@@FETCH_STATUS <> -1)         
+            BEGIN        
+            	 DELETE FROM #TMP_ZONE
+            	 WHERE Putawayzone NOT IN (SELECT Putawayzone FROM #TMP_SKUZONE 
+            	                           WHERE Sku = @c_GetSku)
+            	 
+               FETCH NEXT FROM CUR_SKU INTO @c_GetSku   
+            END
+            CLOSE CUR_SKU
+            DEALLOCATE CUR_SKU         
+            
+            IF EXISTS(SELECT 1 FROM #TMP_ZONE)
+            BEGIN    
+            	--get the pre-assigne zone as first priority
+              SELECT @c_PriorityZone = CASE WHEN (S.rowno % 3) = 1 THEN 'PTLB2CZONE' 
+                                       WHEN (S.rowno % 3) = 2 THEN 'PTLB2CZON2' 
+                                       ELSE 'PTLB2CZON3' END             
+              FROM (SELECT WD.orderkey, ROW_NUMBER() OVER (ORDER BY WD.Orderkey) AS rowno  
+                    FROM WAVEDETAIL WD (NOLOCK)  
+                    JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey  
+                    WHERE WD.Wavekey = @c_Wavekey  
+                    AND EXISTS(SELECT 1   
+                               FROM ORDERS O (NOLOCK)  
+                               JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey  
+                               JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku 
+                               WHERE O.Orderkey = WD.Orderkey  
+                               AND O.Type IN('HOME','OOH')  
+                               AND SKU.SkuGroup = @c_SkuGroup)) S            	
+            	
+              SELECT TOP 1 @c_PAZones = Putawayzone
+              FROM #TMP_ZONE
+              ORDER BY CASE WHEN Putawayzone = @c_PriorityZone THEN 1 ELSE 2 END, Putawayzone
+            END                   
+         END --NJOW01 E                  	       	      	
+         ELSE IF EXISTS (SELECT 1    
                     FROM SKUXLOC (NOLOCK)  
                     JOIN LOC (NOLOCK) ON SKUXLOC.Loc = LOC.Loc  
                     WHERE SKUXLOC.Storerkey = @c_Storerkey  
