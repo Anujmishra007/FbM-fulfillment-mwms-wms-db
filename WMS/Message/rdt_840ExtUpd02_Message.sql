@@ -29,5 +29,8 @@ execute rdt.rdtAddMsg 94825, 10, '94825^UPD Orders Err',    'us_english', 840
 execute rdt.rdtAddMsg 94826, 10, '94826^UPD PICKDTL Er',    'us_english', 840
 execute rdt.rdtAddMsg 94827, 10, '94827^UPD PACKDTL Er',    'us_english', 840
 
+--WMS-20115
+execute rdt.rdtAddMsg 94828, 10, '94828^UPD PACKINF Er',    'us_english', 840
+
 SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE Message_ID BETWEEN 94801 AND 94850
 
