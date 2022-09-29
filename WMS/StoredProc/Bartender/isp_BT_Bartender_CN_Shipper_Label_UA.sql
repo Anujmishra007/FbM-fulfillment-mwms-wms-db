@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_BT_Bartender_CN_Shipper_Label_UA]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_BT_Bartender_CN_Shipper_Label_UA]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,10 +12,11 @@ GO
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */   
 /*29-Mar-2019 1.0  WLCHOOI    WMS-7575 (Created)                              */         
-/*19-Jun-2019 1.1  WLCHOOI    WMS-9393 Updated logic for Col28 & Col41 (WL02) */     
+/*19-Jun-2019 1.1  WLCHOOI    WMS-9393 Updated logic for Col28 & Col41 (WL02) */   
+/*23-Sep-2022 1.2  MINGLE     WMS-20855 Updated logic for col20 & 45 (ML01)   */  
 /******************************************************************************/                
-                  
-CREATE PROC [dbo].[isp_BT_Bartender_CN_Shipper_Label_UA]                       
+              
+CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_CN_Shipper_Label_UA]                       
 (  @c_Sparm1            NVARCHAR(250),              
    @c_Sparm2            NVARCHAR(250),              
    @c_Sparm3            NVARCHAR(250),              
@@ -196,12 +192,12 @@ BEGIN
   SET @c_SQLJOIN = +'SELECT DISTINCT F.DESCR,F.Address1,F.Address2,F.Address3,F.Address4,'  
                    +' F.City,F.State,F.zip,F.Country,S.company,'  
                    +' MB.externmbolkey,MB.carrierkey,MB.mbolkey,ORD.consigneekey,ORD.c_company,'  
-                   +' ORD.c_address1,ORD.c_address2,ORD.c_address3,ORD.c_address4,ORD.c_city,'  
+                   +' ORD.c_address1,ORD.c_address2,ORD.c_address3,ORD.c_address4,CASE WHEN ISNULL(CL.LONG,'''') <> '''' THEN CL.LONG ELSE ORD.c_city END,'	--ML01 
                    +' ORD.c_state,ORD.c_zip,ORD.c_country,ORD.c_ISOCntryCode,ORD.Type,'  
                    +' ORD.externorderkey,ORD.externpokey,ISNULL(ORD.M_Address1,''''),ORD.Orderkey,PIF.CartonType,'  --(WL02)
                    +' PD.CartonNo,'''',PD.Labelno,'''','''', '  
                    +' '''','''','''',ORD.Shipperkey,ORD.Userdefine02,'     --40           --(CS03)  
-                   +' '''','''',PD.DropID,ORD.loadkey,'''','''','''','''','''','''', '  --50   --(WL01) --(CS03)  --(WL02) 
+                   +' '''','''',PD.DropID,ORD.loadkey,CASE WHEN ISNULL(CL2.LONG,'''') <> '''' THEN CL2.LONG ELSE '''' END,'''','''','''','''','''', '  --50   --(WL01) --(CS03)  --(WL02)	--ML01 
                    +' '''','''','''','''','''','''','''','''','''','''' '   --60        
                    +' FROM ORDERS ORD WITH (NOLOCK) '  
                    +' JOIN FACILITY F WITH (NOLOCK) ON F.facility = ORD.Facility'  
@@ -210,7 +206,9 @@ BEGIN
                    +' JOIN PACKHEADER PH WITH (NOLOCK) ON PH.OrderKey = ORD.OrderKey'  
                    +' JOIN PACKDETAIL PD WITH (NOLOCK) ON PD.Pickslipno = PH.Pickslipno '   
                    +' LEFT JOIN PACKINFO PIF WITH (NOLOCK) ON PIF.Pickslipno = PD.Pickslipno '  
-                   +' AND PIF.CartonNo = PD.CartonNo '      
+						 +' AND PIF.CartonNo = PD.CartonNo ' 
+						 +' LEFT JOIN CODELKUP CL WITH (NOLOCK) ON CL.LISTNAME = ''UALBCT'' AND CL.STORERKEY = ORD.Storerkey AND CL.CODE = ORD.CONSIGNEEKEY' --ML01
+						 +' LEFT JOIN CODELKUP CL2 WITH (NOLOCK) ON CL2.LISTNAME = ''UASPCT'' AND CL2.STORERKEY = ORD.Storerkey AND CL2.CODE = ORD.CONSIGNEEKEY'	--ML01              
 --                   +' WHERE ORD.LoadKey =CASE WHEN ISNULL(RTRIM(''' + @c_Sparm1+ '''),'''') <> '''' THEN ''' + @c_Sparm1+ ''' ELSE ORD.loadkey END '   --(CS02)  
 --                   +' AND ORD.OrderKey = CASE WHEN ISNULL(RTRIM(''' + @c_Sparm2+ '''),'''') <> '''' THEN ''' + @c_Sparm2+ ''' ELSE ORD.OrderKey END'   --(CS02)   
 --                   +' AND PD.Dropid = CASE WHEN ISNULL(RTRIM(''' + @c_Sparm3+ '''),'''') <> '''' THEN ''' + @c_Sparm3+ ''' ELSE PD.Dropid END'         --(CS02)   
@@ -411,3 +409,5 @@ END -- procedure
 GO
 GRANT EXECUTE ON [dbo].[isp_BT_Bartender_CN_Shipper_Label_UA] TO nSQL 
 GO
+
+
