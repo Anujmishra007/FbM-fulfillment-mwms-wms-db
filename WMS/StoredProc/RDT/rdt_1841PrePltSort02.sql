@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdt_1841PrePltSort02]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_1841PrePltSort02]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -18,9 +14,11 @@ GO
 /*                                                                      */
 /* Date        Rev  Author     Purposes                                 */
 /* 2021-04-06  1.0  James      WMS-16725. Created                       */
+/* 2022-09-29  1.1  James      WMS-20888 Enhance receiving logic to     */
+/*                             cater UCC with multi line in RD (james01)*/
 /************************************************************************/
 
-CREATE PROC [RDT].[rdt_1841PrePltSort02] (
+CREATE OR ALTER PROC [RDT].[rdt_1841PrePltSort02] (
    @nMobile         INT,
    @nFunc           INT,
    @cLangCode       NVARCHAR( 3),
@@ -73,7 +71,11 @@ AS
       @cPOKey              NVARCHAR( 10),
       @cSKUUOM             NVARCHAR( 10),
       @cReceiptLineNumber  NVARCHAR( 5),
-      @cMixSKUUCC          NVARCHAR( 1)
+      @cMixSKUUCC          NVARCHAR( 1),
+      @nQtyExpected        INT = 0,
+      @nQtyReceived        INT = 0,
+      @cReceiptLineNumberOutput NVARCHAR( 5),
+      @curRD               CURSOR
    
    SELECT @cUserName = UserName
    FROM rdt.RDTMOBREC WITH (NOLOCK) 
@@ -228,20 +230,26 @@ AS
             
          FETCH NEXT FROM @curUCC INTO @cUCCSKU, @nUCCQty
       END
-   
-      DECLARE @curPRL CURSOR
-      SET @curPRL = CURSOR FOR
-      SELECT RowRef, ID, SKU, Qty
-      FROM RDT.rdtPreReceiveSort WITH (NOLOCK)
+      
+      SET @nUCCQty = 0
+      SELECT @nUCCQty = SUM( QtyExpected)
+      FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
       WHERE ReceiptKey = @cReceiptKey
-      AND   (( @cLane = '') OR ( Loc = @cLane))
-      AND   UCCNo = @cUCC
-      AND   [Status] = '1'
-      OPEN @curPRL
-      FETCH NEXT FROM @curPRL INTO @nRowRef, @cID, @cUCCSKU, @nUCCQty
+      AND   UserDefine01 = @cUCC
+      
+      SET @curRD = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+      SELECT ReceiptLineNumber
+      FROM dbo.RECEIPTDETAIL WITH (NOLOCK) 
+      WHERE StorerKey = @cStorerkey
+      AND   ReceiptKey = @cReceiptKey
+      AND   UserDefine01 = @cUCC 
+      AND   FinalizeFlag <> 'Y'
+      ORDER BY 1
+      OPEN @curRD
+      FETCH NEXT FROM @curRD INTO @cReceiptLineNumber
       WHILE @@FETCH_STATUS = 0
       BEGIN
-         SELECT TOP 1 
+         SELECT  
             @cLottable01 = Lottable01,
             @cLottable02 = Lottable02,
             @cLottable03 = Lottable03,
@@ -255,19 +263,19 @@ AS
             @dLottable13 = Lottable13,
             @dLottable14 = Lottable14,
             @dLottable15 = Lottable15,
-            @cPOKey = POKey
+            @cPOKey = POKey,
+            @cUCCSKU = Sku, 
+            @nQtyExpected = QtyExpected
          FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
          WHERE ReceiptKey = @cReceiptKey
-         AND   UserDefine01 = @cUCC
-         AND   FinalizeFlag <> 'Y'
-         ORDER BY 1
+         AND   ReceiptLineNumber = @cReceiptLineNumber
 
          SELECT @cSKUUOM = P.PackUOM3
          FROM dbo.SKU S WITH (NOLOCK)
          JOIN dbo.PACK P WITH (NOLOCK) ON ( S.PACKKey = P.PackKey) 
          WHERE s.StorerKey = @cStorerkey
          AND   S.Sku = @cUCCSKU
-      
+
          SET @nErrNo = 0
          EXEC rdt.rdt_Receive_V7    
             @nFunc          = @nFunc,
@@ -283,7 +291,7 @@ AS
             @cToID          = @cID, 
             @cSKUCode       = @cUCCSKU,
             @cSKUUOM        = @cSKUUOM,
-            @nSKUQTY        = @nUCCQTY,
+            @nSKUQTY        = @nQtyExpected,
             @cUCC           = '',
             @cUCCSKU        = '',
             @nUCCQTY        = 0,
@@ -306,15 +314,24 @@ AS
             @nNOPOFlag      = 1,
             @cConditionCode = 'OK',
             @cSubreasonCode = '',
-            @cReceiptLineNumberOutput = @cReceiptLineNumber OUTPUT,  
+            @cReceiptLineNumberOutput = @cReceiptLineNumberOutput OUTPUT,  
             @cDebug         = '0'  
 
          IF @nErrNo <> 0
             GOTO RollBackTran
 
-         FETCH NEXT FROM @curPRL INTO @nRowRef, @cID, @cUCCSKU, @nUCCQty
+         SET @nQtyReceived = @nQtyReceived + @nQtyExpected
+            
+         IF @nQtyReceived > @nUCCQty
+         BEGIN
+            SET @nErrNo = 165671
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Over Receive
+            GOTO RollBackTran
+         END
+      
+         FETCH NEXT FROM @curRD INTO @cReceiptLineNumber
       END
-         
+
       SET @cToID = ''
       SELECT TOP 1 @cToID = ID
       FROM rdt.rdtPreReceiveSort WITH (NOLOCK)
@@ -379,6 +396,7 @@ AS
          SET @cClosePallet = '1'
    END
    
+   COMMIT TRAN rdt_1841PrePltSort02
    GOTO Quit
 
    RollBackTran:
