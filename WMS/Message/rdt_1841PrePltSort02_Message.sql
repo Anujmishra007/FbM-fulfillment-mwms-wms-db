@@ -12,5 +12,8 @@ execute rdt.rdtAddMsg 165658, 10, '65658^Upd Log Fail',     'us_english', 1841
 execute rdt.rdtAddMsg 165659, 10, '65659^Pallet In Used',   'us_english', 1841
 execute rdt.rdtAddMsg 165670, 10, '65670^Receive UCC Er',   'us_english', 1841
 
+--WMS-20888
+execute rdt.rdtAddMsg 165671, 10, '65671^Over Receive  ',   'us_english', 1841
+
 SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE Message_ID BETWEEN 165651 AND 165700
 
