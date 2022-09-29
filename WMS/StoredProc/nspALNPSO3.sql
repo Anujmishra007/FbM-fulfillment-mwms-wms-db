@@ -271,29 +271,39 @@ BEGIN
             END
             CLOSE CUR_SKU
             DEALLOCATE CUR_SKU         
-            
+
+      	    --get the pre-assigne zone of the order as first priority
+            SELECT @c_PriorityZone = CASE WHEN (S.rowno % 3) = 1 THEN 'PTLB2CZONE' 
+                                     WHEN (S.rowno % 3) = 2 THEN 'PTLB2CZON2' 
+                                     ELSE 'PTLB2CZON3' END             
+            FROM (SELECT WD.orderkey, ROW_NUMBER() OVER (ORDER BY WD.Orderkey) AS rowno  
+                  FROM WAVEDETAIL WD (NOLOCK)  
+                  JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey  
+                  WHERE WD.Wavekey = @c_Wavekey  
+                  AND EXISTS(SELECT 1   
+                             FROM ORDERS O (NOLOCK)  
+                             JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey  
+                             JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku 
+                             WHERE O.Orderkey = WD.Orderkey  
+                             AND O.Type IN('HOME','OOH')  
+                             AND SKU.SkuGroup = @c_SkuGroup)) S          
+            WHERE S.orderkey = @c_Orderkey                     	
+                          
             IF EXISTS(SELECT 1 FROM #TMP_ZONE)
-            BEGIN    
-            	--get the pre-assigne zone as first priority
-              SELECT @c_PriorityZone = CASE WHEN (S.rowno % 3) = 1 THEN 'PTLB2CZONE' 
-                                       WHEN (S.rowno % 3) = 2 THEN 'PTLB2CZON2' 
-                                       ELSE 'PTLB2CZON3' END             
-              FROM (SELECT WD.orderkey, ROW_NUMBER() OVER (ORDER BY WD.Orderkey) AS rowno  
-                    FROM WAVEDETAIL WD (NOLOCK)  
-                    JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey  
-                    WHERE WD.Wavekey = @c_Wavekey  
-                    AND EXISTS(SELECT 1   
-                               FROM ORDERS O (NOLOCK)  
-                               JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey  
-                               JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku 
-                               WHERE O.Orderkey = WD.Orderkey  
-                               AND O.Type IN('HOME','OOH')  
-                               AND SKU.SkuGroup = @c_SkuGroup)) S            	
-            	
-              SELECT TOP 1 @c_PAZones = Putawayzone
-              FROM #TMP_ZONE
-              ORDER BY CASE WHEN Putawayzone = @c_PriorityZone THEN 1 ELSE 2 END, Putawayzone
-            END                   
+            BEGIN                	                            
+            	 --get the zone available for all NESCOFEE sku of the order
+               SELECT TOP 1 @c_PAZones = Putawayzone
+               FROM #TMP_ZONE
+               ORDER BY CASE WHEN Putawayzone = @c_PriorityZone THEN 1 ELSE 2 END, Putawayzone
+            END   
+            ELSE 
+            BEGIN     
+            	 --get available zone for the sku
+               SELECT TOP 1 @c_PAZones = Putawayzone
+               FROM #TMP_SKUZONE 
+               WHERE Sku = @c_Sku
+               ORDER BY CASE WHEN Putawayzone = @c_PriorityZone THEN 1 ELSE 2 END, Putawayzone 
+            END
          END --NJOW01 E                  	       	      	
          ELSE IF EXISTS (SELECT 1    
                     FROM SKUXLOC (NOLOCK)  
