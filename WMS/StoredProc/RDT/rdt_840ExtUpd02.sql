@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'rdt.rdt_840ExtUpd02') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_840ExtUpd02
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -24,9 +20,11 @@ GO
 /*                            Params (yeekung01)                        */
 /* 2021-04-16 1.4  James      WMS-16024 Standarized use of TrackingNo   */
 /*                            (james03)                                 */
+/* 2022-07-05 1.5  James      WMS-20115 Assign trackno to packinfo for  */
+/*                            certain ordergroup (james04)              */
 /************************************************************************/
 
-CREATE PROC rdt.rdt_840ExtUpd02 (
+CREATE OR ALTER PROC rdt.rdt_840ExtUpd02 (
    @nMobile     INT,
    @nFunc       INT, 
    @cLangCode   NVARCHAR( 3), 
@@ -66,6 +64,10 @@ AS
 
    DECLARE @cPreDelNote       NVARCHAR( 10)  -- (james02)
    DECLARE @cPaperPrinter     NVARCHAR( 10)  -- (james02)
+   DECLARE @cOrderGroup       NVARCHAR( 20)
+   DECLARE @cTrackingNo       NVARCHAR( 20)
+   DECLARE @nPackInfCtnNo     INT = 0
+   DECLARE @curPackInfo       CURSOR
 
    SELECT @cCartonType = I_Field04,
           @cFacility = Facility, 
@@ -148,9 +150,60 @@ AS
       
       IF @nStep = 4
       BEGIN
-         SELECT @cShipperKey = ShipperKey
+         SELECT 
+            @cShipperKey = ShipperKey, 
+            @cOrderGroup = OrderGroup
          FROM dbo.ORDERS WITH (NOLOCK)
          WHERE OrderKey = @cOrderKey
+
+         SET @nTranCount = @@TRANCOUNT
+         BEGIN TRAN  -- Begin our own transaction
+         SAVE TRAN rdt_840ExtUpd02 -- For rollback or commit only our own transaction
+
+         -- (james04)
+         IF EXISTS ( SELECT 1 FROM dbo.PackHeader WITH (NOLOCK)
+                     WHERE PickSlipNo = @cPickSlipNo
+                     AND   [Status] = '9')
+         BEGIN
+         	SET @curPackInfo = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+         	SELECT CartonNo
+         	FROM dbo.PackInfo WITH (NOLOCK)
+         	WHERE PickSlipNo = @cPickSlipNo
+         	ORDER BY 1
+         	OPEN @curPackInfo
+         	FETCH NEXT FROM @curPackInfo INTO @nPackInfCtnNo
+         	WHILE @@FETCH_STATUS = 0
+         	BEGIN
+         	   IF @nPackInfCtnNo = 1
+         	   	SELECT @cTrackingNo = TrackingNo
+         	   	FROM dbo.ORDERS WITH (NOLOCK)
+         	   	WHERE OrderKey = @cOrderKey
+         	   ELSE
+         	   	SELECT @cTrackingNo = TrackingNo
+         	   	FROM dbo.CartonTrack WITH (NOLOCK)
+         	   	WHERE LabelNo = @cOrderKey
+         	   	AND   CarrierRef1 = @cOrderKey + CAST( @nPackInfCtnNo AS NVARCHAR( 1))
+         	   	
+         	   UPDATE dbo.PackInfo SET
+         	   	TrackingNo = @cTrackingNo, 
+         	   	EditWho = SUSER_SNAME(), 
+         	   	EditDate = GETDATE()
+         	   WHERE PickSlipNo = @cPickSlipNo
+         	   AND   CartonNo = @nPackInfCtnNo
+
+               IF @@ERROR <> 0  
+               BEGIN      
+                  SET @nErrNo = 94828      
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UPD PACKINF Er'      
+                  GOTO RollBackTran      
+               END 
+
+               -- Reset tracking no
+               SET @cTrackingNo = ''
+
+         	   FETCH NEXT FROM @curPackInfo INTO @nPackInfCtnNo
+         	END
+         END
          
          IF EXISTS ( SELECT 1 FROM dbo.CODELKUP WITH (NOLOCK) 
                      WHERE LISTNAME = 'FJNekoPack'
@@ -182,10 +235,6 @@ AS
             WHERE PickSlipNo = @cPickSlipNo
             AND   CartonNo = @nCartonNo
             
-            SET @nTranCount = @@TRANCOUNT
-            BEGIN TRAN  -- Begin our own transaction
-            SAVE TRAN rdt_840ExtUpd02 -- For rollback or commit only our own transaction
-      
             -- Lock new Tracking no  
             UPDATE dbo.CartonTrack WITH (ROWLOCK) SET   
                LabelNo = @cOrderKey,    
@@ -317,15 +366,6 @@ AS
                   GOTO RollBackTran
             END
 
-            COMMIT TRAN rdt_840ExtUpd02
-
-            GOTO Commit_Tran
-
-            RollBackTran:
-               ROLLBACK TRAN rdt_840ExtUpd02 -- Only rollback change made here
-            Commit_Tran:
-               WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-                  COMMIT TRAN
          END
          ELSE
          BEGIN
@@ -350,9 +390,19 @@ AS
                   @cErrMsg OUTPUT
                
                IF @nErrNo <> 0
-                  GOTO Quit
+                  GOTO RollBackTran
             END
          END
+
+         COMMIT TRAN rdt_840ExtUpd02
+
+         GOTO Commit_Tran
+
+         RollBackTran:
+            ROLLBACK TRAN rdt_840ExtUpd02 -- Only rollback change made here
+         Commit_Tran:
+            WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+               COMMIT TRAN
       END
    END
 
