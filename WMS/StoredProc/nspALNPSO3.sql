@@ -205,6 +205,7 @@ BEGIN
          HAVING COUNT(DISTINCT LOC.Putawayzone) = 1  
       END  
 
+      /* NJOW01 Removed
       IF ISNULL(@c_OrderPutwayzone,'') <> '' AND  --check if the sku available in the same PAZone
          NOT EXISTS(SELECT 1    
                     FROM SKUXLOC (NOLOCK)  
@@ -216,7 +217,8 @@ BEGIN
                     AND Loc.LocationType = 'PICK')
       BEGIN
          SET @c_OrderPutwayzone = ''
-      END                
+      END
+      */                
 
       IF ISNULL(@c_OrderPutwayzone,'') <> ''  
       BEGIN  
