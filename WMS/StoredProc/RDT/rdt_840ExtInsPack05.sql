@@ -1,11 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'rdt.rdt_840ExtInsPack05') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_840ExtInsPack05
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
+
 /************************************************************************/
 /* Stored Procedure: rdt_840ExtInsPack05                                */
 /*                                                                      */
@@ -24,9 +21,11 @@ GO
 /*                              Params (yeekung01)                      */
 /* 2021-04-16   James     1.2   WMS-16024 Standarized use of TrackingNo */
 /*                              (james01)                               */
+/* 2022-07-05   James     1.3   WMS-20115 Get TrackNo by orders.        */
+/*                              ordergroup (james02)                    */
 /************************************************************************/
 
-CREATE PROC [rdt].[rdt_840ExtInsPack05] (
+CREATE OR ALTER PROC [rdt].[rdt_840ExtInsPack05] (
    @nMobile                   INT, 
    @nFunc                     INT, 
    @cLangCode                 NVARCHAR( 3), 
@@ -79,12 +78,20 @@ BEGIN
            @nPickQty          INT, 
            @nPackQty          INT,
            @nNewCarton        INT,
-           @bSuccess          INT
+           @bSuccess          INT,
+           @cShipperKey       NVARCHAR( 15),
+           @cDefEcomCartonCnt INT,
+           @nCurrentCtnNo     INT,
+           @nNewCartonNo      INT
 
    DECLARE @b_success         INT,
            @n_err             INT,
            @c_errmsg          NVARCHAR( 20)
 
+   DECLARE @cOrderGroup       NVARCHAR( 20) = ''
+   DECLARE @cECOM_Platform    NVARCHAR( 30) = ''
+   DECLARE @cTableName        NVARCHAR( 30) = ''
+   
    SET @nTranCount = @@TRANCOUNT    
 
    BEGIN TRAN    
@@ -137,15 +144,18 @@ BEGIN
       END
    END
 
+      SELECT @cLoadKey = ISNULL(RTRIM(LoadKey),'')
+            , @cRoute = ISNULL(RTRIM(Route),'')
+            , @cConsigneeKey = ISNULL(RTRIM(ConsigneeKey),'') 
+            , @cOrderGroup = OrderGroup 
+            , @cECOM_Platform = ECOM_Platform
+            , @cShipperKey = ShipperKey
+      FROM dbo.Orders WITH (NOLOCK)
+      WHERE Orderkey = @cOrderkey
+      
    -- Create PackHeader if not yet created
    IF NOT EXISTS (SELECT 1 FROM dbo.PackHeader WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo)
    BEGIN
-      SELECT @cLoadKey = ISNULL(RTRIM(LoadKey),'')
-            , @cRoute = ISNULL(RTRIM(Route),'')
-            , @cConsigneeKey = ISNULL(RTRIM(ConsigneeKey),'')
-      FROM dbo.Orders WITH (NOLOCK)
-      WHERE Orderkey = @cOrderkey
-
       INSERT INTO dbo.PACKHEADER
       (PickSlipNo, StorerKey, OrderKey, LoadKey, Route, ConsigneeKey, OrderRefNo, TtlCnts, [STATUS])
       VALUES
@@ -214,20 +224,76 @@ BEGIN
                             WHERE PickSlipNo = @cPickSlipNo 
                             AND CartonNo = @nCartonNo)
             BEGIN
-               SET @cTrackNo = ''  
-               EXEC ispAsgnTNo2  
-                 @c_OrderKey    = @cOrderKey     
-               , @c_LoadKey     = ''  
-               , @b_Success     = @bSuccess  OUTPUT        
-               , @n_Err         = @nErrNo    OUTPUT        
-               , @c_ErrMsg      = @cErrMsg   OUTPUT        
-               , @b_ChildFlag   = 1  
-               , @c_TrackingNo  = @cTrackNo  OUTPUT   
+            	-- Decide whether need send interface to get new tracking no (james02)
+            	SELECT @cDefEcomCartonCnt = UDF01 
+            	FROM dbo.CODELKUP WITH (NOLOCK) 
+            	WHERE ListName = 'WSCOURIER' 
+            	AND   Code LIKE '%CourierMultiTrackNo' 
+            	AND   Storerkey = @cStorerkey
+            	AND   Short = @cShipperKey 
+            	AND   code2 = @cECOM_Platform
 
-               IF ISNULL( @cTrackNo, '') = '' OR @nErrNo > 0
+               SELECT @nCurrentCtnNo = MAX( CartonNo)
+               FROM dbo.PackDetail WITH (NOLOCK)
+               WHERE PickSlipNo = @cPickSlipNo
+               
+               IF CAST( @cDefEcomCartonCnt AS INT) - @nCurrentCtnNo < 2
+               BEGIN
+                  IF @cECOM_Platform = 'DY'
+            		   SET @cTableName = 'WSCRPKADDDY'
+            	   ELSE IF @cECOM_Platform = 'JD'
+            		   SET @cTableName = 'WSCRPKADDJD'
+            	   ELSE
+            		   SET @cTableName = 'WSCRPKADDCN'
+
+                  SET @nNewCartonNo = @nCartonNo + 1
+                  SET @bSuccess = 1    
+                  EXEC ispGenTransmitLog2    
+                        @c_TableName        = @cTableName    
+                     ,@c_Key1             = @cOrderKey    
+                     ,@c_Key2             = @nNewCartonNo    
+                     ,@c_Key3             = @cStorerkey    
+                     ,@c_TransmitBatch    = ''    
+                     ,@b_Success          = @bSuccess    OUTPUT    
+                     ,@n_err              = @nErrNo      OUTPUT    
+                     ,@c_errmsg           = @cErrMsg     OUTPUT    
+    
+                  IF @bSuccess <> 1    
+                  BEGIN
+                     SET @nErrNo = 135461  
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'InsTL2Log Err'  
+                     GOTO RollBackTran    
+                  END
+               END
+
+               SET @cTrackNo = ''  
+               SELECT TOP 1 @cTrackNo = CT.TrackingNo
+               FROM dbo.CartonTrack CT WITH (NOLOCK)
+               WHERE CT.LabelNo = @cOrderKey
+               AND   CT.CarrierName = @cShipperKey
+               AND   ISNULL( CT.CarrierRef2, '') = ''
+               AND   NOT EXISTS ( SELECT 1 FROM dbo.PackDetail PD WITH (NOLOCK)
+                                  WHERE PD.StorerKey = @cStorerkey
+                                  AND   PD.LabelNo = CT.TrackingNo)
+               ORDER BY 1
+               
+               IF ISNULL( @cTrackNo, '') = ''
                BEGIN
                   SET @nErrNo = 135456
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'GetTrack# Fail'
+                  GOTO RollBackTran
+               END
+               
+               UPDATE dbo.CartonTrack SET
+                  CarrierRef2 = 'GET'
+               WHERE TrackingNo = @cTrackNo
+               AND   CarrierName = @cShipperKey
+               AND   CarrierRef2 = ''
+               
+               IF @@ERROR <> 0
+               BEGIN
+                  SET @nErrNo = 135462
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Upd CTTRK Err'
                   GOTO RollBackTran
                END
             END
