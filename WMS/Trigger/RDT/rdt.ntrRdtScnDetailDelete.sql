@@ -1,12 +1,10 @@
+
 SET ANSI_NULLS OFF
 GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
-
-
 /***************************************************************************/  
-/* Trigger: ntrRdtScnDetailUpdate                                          */  
+/* Trigger: ntrRdtScnDetailDelete                                          */  
 /* Creation Date:                                                          */  
 /* Copyright: IDS                                                          */  
 /* Written by:                                                             */  
@@ -22,12 +20,11 @@ GO
 /*                                                                         */  
 /* Updates:                                                                */  
 /* Date         Author  Ver.  Purposes                                     */  
-/* 17-01-2020   yeekung  1.0   Updates EditDate & EditWho                  */
-/*                            On rdtscndetail Table                        */ 
+/* 03-10-2022   yeekung  1.0  Created                                      */
 /***************************************************************************/ 
 
-CREATE OR ALTER TRIGGER [RDT].[ntrRdtScnDetailUpdate]
-ON [RDT].[RDTSCNDETAIL] FOR UPDATE
+CREATE OR ALTER  TRIGGER [RDT].[ntrRdtScnDetailDelete]
+ON [RDT].[RDTSCNDETAIL] FOR Delete
 AS
 BEGIN
    IF @@ROWCOUNT = 0  
@@ -55,31 +52,15 @@ BEGIN
    --IF UPDATE(ArchiveCop)    
    --BEGIN    
    --   SELECT @n_continue = 4     
-   --END  
-   
-   IF UPDATE(colstringexp) AND ((SELECT COUNT(1) FROM Deleted (NOLOCK))>1)
-   BEGIN
-      SELECT @n_continue = 3
-		SELECT @n_err     = 62850   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-		SELECT @c_errmsg  = 'NSQL'+CONVERT(char(5),@n_err)+': Update row by row. (ntrRdtScnDetailUpdate)' + ' ( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '
-   END
-
-
+   --END    
+  
    IF ( @n_continue = 1 or @n_continue=2 )
    BEGIN  
-      UPDATE [RDT].[RDTSCNDETAIL] 
-      SET EditDate = GETDATE(),  
-          EditWho = SUSER_SNAME()  
-      FROM [RDT].[RDTSCNDETAIL] WITH (NOLOCK), INSERTED (NOLOCK)  
-      WHERE [RDT].[RDTSCNDETAIL].Scnkey = INSERTED.ScnKey  
-  
-      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
-
-       IF @n_err <> 0  
-      BEGIN  
+      IF EXISTS (SELECT 1 FROM DELETED WITH (NOLOCK)  WHERE colstringexp IS NOT NULL AND colstringexp <>'')
+      BEGIN
          SELECT @n_continue = 3  
          SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=69701   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
-         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table RDTSCNDETAIL. (ntrRdtScnDetailUpdate)' + ' ( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '  
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+':  Delete Trigger On Table RDT.RDTSCNDETAIL Failed. (ntrRdtScnDetailUpdate)' + ' ( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '  
       END
    END
 
@@ -101,7 +82,7 @@ BEGIN
             COMMIT TRAN  
          END  
       END  
-      execute nsp_logerror @n_err, @c_errmsg, 'ntrRdtScnDetailUpdate'  
+      execute nsp_logerror @n_err, @c_errmsg, 'ntrRdtScnDetailDelete'  
       RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012  
       RETURN  
    END  
