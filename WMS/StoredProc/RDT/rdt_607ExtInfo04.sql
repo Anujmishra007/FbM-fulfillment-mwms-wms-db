@@ -1,11 +1,8 @@
-IF EXISTS (SELECT name FROM sysobjects WHERE name = 'rdt_607ExtInfo04' AND type = 'P')
-   DROP PROC rdt.rdt_607ExtInfo04
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /************************************************************************/
 /* Store procedure: rdt_607ExtInfo04                                    */
@@ -15,9 +12,10 @@ GO
 /*                                                                      */
 /* Date        Rev  Author       Purposes                               */
 /* 23-08-2018  1.0  Ung          WMS-5956 Created                       */
+/* 12-09-2022  1.1  yeekung      WMS-20372 add userdefine02 (yeekung01) */
 /************************************************************************/
-            
-CREATE PROCEDURE rdt.rdt_607ExtInfo04
+
+CREATE OR ALTER PROCEDURE [RDT].[rdt_607ExtInfo04]
    @nMobile       INT,           
    @nFunc         INT,           
    @cLangCode     NVARCHAR( 3),  
@@ -68,22 +66,25 @@ BEGIN
       BEGIN
          DECLARE @nTotalQTYExp INT 
          DECLARE @nTotalQTYRcv INT 
+         DECLARE @cUserdefine02 NVARCHAR(20)
 
          -- Get statistic
          SELECT 
             @nTotalQTYExp = ISNULL( SUM( QtyExpected), 0), 
-            @nTotalQTYRcv = ISNULL( SUM( BeforeReceivedQty), 0)
+            @nTotalQTYRcv = ISNULL( SUM( BeforeReceivedQty), 0),
+            @cUserdefine02 = userdefine02
          FROM dbo.ReceiptDetail WITH (NOLOCK)
          WHERE ReceiptKey = @cReceiptKey
             AND POKey = CASE WHEN @cPOKey = 'NOPO' THEN '' ELSE @cPOKey END
             AND SKU = @cSKU
+         GROUP BY userdefine02
             
          SET @cExtendedInfo = N'BAL QTY: ' 
          
          IF @nTotalQTYExp > @nTotalQTYRcv
-            SET @cExtendedInfo = @cExtendedInfo + CAST( @nTotalQTYExp - @nTotalQTYRcv AS NVARCHAR(10))
+            SET @cExtendedInfo = @cExtendedInfo + CAST( @nTotalQTYExp - @nTotalQTYRcv AS NVARCHAR(10)) + Left(@cUserdefine02,5) 
          ELSE
-            SET @cExtendedInfo = @cExtendedInfo + '0'
+            SET @cExtendedInfo = @cExtendedInfo + '0' + Left(@cUserdefine02,5) 
       END
 
       IF @nAfterStep = 5 -- Suggest ID, LOC
@@ -116,11 +117,5 @@ Quit:
    
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON rdt.rdt_607ExtInfo04 TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_607ExtInfo04] TO [NSQL]
 GO
