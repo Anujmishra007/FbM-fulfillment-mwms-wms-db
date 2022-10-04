@@ -139,6 +139,7 @@ GO
 /* 2020-12-07 9.1 YeeKung    Change params in decodesku   (yeekung02)   */  
 /* 2022-09-02 9.2 James      WMS-20639 Change rdt_GetSKU output         */
 /*                           UPC Qty (james24)                          */
+/* 2021-10-15 9.3 yeekung    WMS-19640 Add eventlog refno1(yeekung03)   */
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_PieceReceiving] (
    @nMobile    INT,
@@ -3130,7 +3131,8 @@ BEGIN
          @cLottable03   = @cLottable03,
          @dLottable04   = @dLottable04,
          @nStep         = @nStep,
-         @cRefNo3       = @cBUSR1
+         @cRefNo3       = @cBUSR1,
+         @cRefNo2       = @cReceiptLineNumber
 
       -- Get ToIDQTY
       SELECT @nToIDQTY = ISNULL( SUM( BeforeReceivedQty), 0)
@@ -4033,7 +4035,8 @@ BEGIN
          @dLottable04   = @dLottable04,
          @nStep         = @nStep,
          @cSerialNo     = @cSerialNo,
-         @cRefNo3       = @cBUSR1
+         @cRefNo3       = @cBUSR1,
+         @cRefNo2       = @cReceiptLineNumber
 
       IF @nMoreSNO = 1
          GOTO Quit
