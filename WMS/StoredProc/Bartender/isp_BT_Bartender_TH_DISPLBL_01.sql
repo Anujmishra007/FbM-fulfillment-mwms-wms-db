@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_BT_Bartender_TH_DISPLBL_01]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[isp_BT_Bartender_TH_DISPLBL_01]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -15,10 +10,12 @@ GO
 /* Modifications log:                                                         */               
 /*                                                                            */               
 /* Date           Rev  Author     Purposes                                    */   
-/* 08-Jul-2020    1.0  WLChooi     Created (WMS-13954)                        */    
+/* 08-Jul-2020    1.0  WLChooi     Created (WMS-13954)                        */  
+/* 08-Sep-2022    1.1  WLChooi     WMS-20648 - Add Codelkup JDTracking (WL01) */
+/* 08-Sep-2022    1.1  WLChooi     DevOps Combine Script                      */
 /******************************************************************************/              
                 
-CREATE PROC [dbo].[isp_BT_Bartender_TH_DISPLBL_01]                     
+CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_TH_DISPLBL_01]                     
 (  @c_Sparm1            NVARCHAR(250),            
    @c_Sparm2            NVARCHAR(250),            
    @c_Sparm3            NVARCHAR(250),            
@@ -136,7 +133,9 @@ BEGIN
                     +' SUBSTRING(LTRIM(RTRIM(ISNULL(OH.C_City,''''))) + '' '' + LTRIM(RTRIM(ISNULL(OH.C_State,''''))) + '' '' + LTRIM(RTRIM(ISNULL(OH.C_Zip,''''))),1,80), '   --5
                     +' LTRIM(RTRIM(ISNULL(OH.C_Contact1,''''))), LTRIM(RTRIM(ISNULL(OH.C_Contact2,''''))), '   --7
                     +' LTRIM(RTRIM(ISNULL(OH.C_Phone1,''''))), LTRIM(RTRIM(ISNULL(OH.C_Phone2,''''))), OH.Orderkey, '   --10
-                    +' CONVERT(NVARCHAR(80),OH.AddDate,103), OH.Externorderkey, @c_Sparm3, @c_Sparm4, OH.Route, '      --15
+                    +' CONVERT(NVARCHAR(80),OH.AddDate,103), '   --11   --WL01
+                    +' CASE WHEN ISNULL(CL1.Short,'''') = '''' THEN OH.Externorderkey ELSE REPLACE(OH.ExternOrderKey, CL1.Short, CL1.Long) END, '   --12   --WL01
+                    +' @c_Sparm3, @c_Sparm4, OH.Route, '      --15   --WL01
                     +' t.DropID, ISNULL(OH.PmtTerm,''''), '''', '''', '''', '      --20
                     +' '''', '''', '''', '''', '''', '      --25
                     +' '''', '''', '''', '''', '''', '      --30
@@ -150,6 +149,8 @@ BEGIN
                     +' JOIN ORDERS OH WITH (NOLOCK) ON OH.MBOLKey = MD.MBOLKey'  
                     +' JOIN PICKDETAIL PD WITH (NOLOCK) ON PD.Orderkey = OH.Orderkey'  
                     +' LEFT JOIN #TEMP_DROPID t ON t.Orderkey = OH.Orderkey AND t.RowID = @c_Sparm3'
+                    +' LEFT JOIN CODELKUP CL1 (NOLOCK) ON CL1.Listname = ''JDTRACKING'' AND CL1.Storerkey = OH.Storerkey '   --WL01               
+                    +'                                AND CL1.Code = ''JDTRACKING'''   --WL01
                     +' WHERE MD.MBOLKey =  @c_Sparm1 '                                            
                     +' AND OH.Orderkey = @c_Sparm2 '                             
                  
