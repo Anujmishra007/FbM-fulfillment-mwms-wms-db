@@ -1,7 +1,4 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = N'nsp_GetPickSlipOrders02' AND type = 'P')
-   DROP PROC nsp_GetPickSlipOrders02
-GO   
-SET QUOTED_IDENTIFIER OFF 
+  SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
@@ -51,9 +48,11 @@ GO
 /* 29-Apr-2015  CSCHONG       SOS339808  (CS01)                         */
 /* 09-Jul-2015  CSCHONG       SOS346307 (CS02)                          */
 /* 04-Oct-2018  CSCHONG        WMS-6179 - add report config (CS03)      */
-/* 28-Jan-2019  TLTING_ext 1.1  enlarge externorderkey field length      */
+/* 28-Jan-2019  TLTING_ext 1.1  enlarge externorderkey field length     */
+/* 30-Sep-2022  NJOW01         WMS-20895 remove loadkey criteria when   */
+/*                             when search pickslip                     */
 /************************************************************************/
-CREATE PROC dbo.nsp_GetPickSlipOrders02 (@c_LoadKey NVARCHAR(10))
+CREATE OR ALTER PROC dbo.nsp_GetPickSlipOrders02 (@c_LoadKey NVARCHAR(10))
  AS
 BEGIN
    SET NOCOUNT ON 
@@ -214,10 +213,14 @@ BEGIN
     SELECT @c_firstorderkey = 'N'
     -- Use Zone as a UOM Picked 1 - Pallet, 2 - Case, 6 - Each, 8 - By Order
     IF EXISTS(
-           SELECT 1
+           /*SELECT 1
            FROM   PickHeader(NOLOCK)
            WHERE  ExternOrderKey = @c_LoadKey AND
-                  Zone = '3'
+                  Zone = '3'*/
+           SELECT 1   --NJOW01
+           FROM PICKHEADER PH (NOLOCK)
+           JOIN LOADPLANDETAIL LPD (NOLOCK) ON PH.Orderkey = LPD.Orderkey
+           WHERE LPD.Loadkey = @c_Loadkey
        )
     BEGIN
         SELECT @c_firsttime = 'N'
@@ -288,9 +291,9 @@ BEGIN
             IF NOT EXISTS(
                    SELECT 1
                    FROM   PICKHEADER(NOLOCK)
-                   WHERE  EXTERNORDERKEY = @c_LoadKey AND
-                          OrderKey = @c_OrderKey AND
-                          Zone = '3'
+                   WHERE  OrderKey = @c_OrderKey AND
+                          Zone = '3' 
+                          --EXTERNORDERKEY = @c_LoadKey  --NJOW01 removed
                )
             BEGIN
                 EXECUTE nspg_GetKey
@@ -344,9 +347,9 @@ BEGIN
                 SELECT TOP 1 
                        @c_pickheaderkey = PickHeaderKey
                 FROM   PickHeader(NOLOCK)
-                WHERE  ExternOrderKey = @c_LoadKey AND
-                       Zone = '3' AND
+                WHERE  Zone = '3' AND
                        OrderKey = @c_OrderKey
+                       --ExternOrderKey = @c_LoadKey AND  --NJOW01 Removed
             END
         END
         
@@ -734,7 +737,7 @@ QUIT_SP:
             COMMIT TRAN  
          END  
       END  
-      EXECUTE nsp_logerror @n_err, @c_errmsg, 'nsp_GetPickSlipWave_08'  
+      EXECUTE nsp_logerror @n_err, @c_errmsg, 'nsp_GetPickSlipOrders02'  
       RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012  
       RETURN  
    END  
