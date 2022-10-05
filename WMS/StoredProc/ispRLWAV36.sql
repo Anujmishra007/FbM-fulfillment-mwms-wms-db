@@ -1,48 +1,47 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ispRLWAV36]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[ispRLWAV36]
+SET ANSI_NULLS OFF
 GO
-SET QUOTED_IDENTIFIER OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF 
-GO
-/****************************************************************************/  
-/* Stored Procedure: ispRLWAV36                                             */  
-/* Creation Date: 20-JAN-2021                                               */  
-/* Copyright: LFL                                                           */  
-/* Written by:                                                              */  
-/*                                                                          */  
-/* Purpose: WMS-16019_iicombined_Exceed_ReleaseWaveSP                       */
-/*                                                                          */  
-/* Called By: wave                                                          */  
-/*                                                                          */  
-/* PVCS Version: 1.1                                                        */  
-/*                                                                          */  
-/* Version: 7.0                                                             */  
-/*                                                                          */  
-/* Data Modifications:                                                      */  
-/*                                                                          */  
-/* Updates:                                                                 */  
-/* Date        Author   Ver  Purposes                                       */  
-/* 17-FEB-2021 CSCHONG  1.0  WMS-16019 revised field logic (CS01)           */
-/****************************************************************************/   
 
-CREATE PROCEDURE [dbo].[ispRLWAV36]      
-  @c_wavekey      NVARCHAR(10)  
- ,@b_Success      int        OUTPUT  
- ,@n_err          int        OUTPUT  
- ,@c_errmsg       NVARCHAR(250)  OUTPUT 
- AS  
- BEGIN  
-    SET NOCOUNT ON   
-    SET QUOTED_IDENTIFIER OFF   
-    SET ANSI_NULLS OFF   
-    SET CONCAT_NULL_YIELDS_NULL OFF  
-    
-    DECLARE @n_continue int,    
-            @n_starttcnt int,         -- Holds the current transaction count  
+/****************************************************************************/
+/* Stored Procedure: ispRLWAV36                                             */
+/* Creation Date: 20-JAN-2021                                               */
+/* Copyright: LFL                                                           */
+/* Written by:                                                              */
+/*                                                                          */
+/* Purpose: WMS-16019_iicombined_Exceed_ReleaseWaveSP                       */
+/*                                                                          */
+/* Called By: wave                                                          */
+/*                                                                          */
+/* PVCS Version: 1.1                                                        */
+/*                                                                          */
+/* Version: 7.0                                                             */
+/*                                                                          */
+/* Data Modifications:                                                      */
+/*                                                                          */
+/* Updates:                                                                 */
+/* Date        Author   Ver  Purposes                                       */
+/* 17-FEB-2021 CSCHONG  1.0  WMS-16019 revised field logic (CS01)           */
+/* 18-JUL-2022 CSCHONG  1.1  Devops Scripts Combine & WMS-20186 (CS02)      */
+/****************************************************************************/
+
+CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV36]
+  @c_wavekey      NVARCHAR(10)
+ ,@b_Success      int        OUTPUT
+ ,@n_err          int        OUTPUT
+ ,@c_errmsg       NVARCHAR(250)  OUTPUT
+ AS
+ BEGIN
+    SET NOCOUNT ON
+    SET QUOTED_IDENTIFIER OFF
+    SET ANSI_NULLS OFF
+    SET CONCAT_NULL_YIELDS_NULL OFF
+
+    DECLARE @n_continue int,
+            @n_starttcnt int,         -- Holds the current transaction count
             @n_debug int,
             @n_cnt int
-            
+
     SELECT  @n_starttcnt=@@TRANCOUNT , @n_continue=1, @b_success=0,@n_err=0,@c_errmsg='',@n_cnt=0
     SELECT  @n_debug = 0
 
@@ -56,19 +55,19 @@ CREATE PROCEDURE [dbo].[ispRLWAV36]
             ,@c_ToLoc              NVARCHAR(10)
             ,@c_ID                 NVARCHAR(18)
             ,@c_ToID               NVARCHAR(18)
-            ,@c_Packkey            NVARCHAR(10) 
+            ,@c_Packkey            NVARCHAR(10)
             ,@c_PackUOM            NVARCHAR(10)
             ,@c_UOM                NVARCHAR(10)
-            ,@n_Qty                INT 
-            ,@c_ReplenishmentKey   NVARCHAR(10)    
+            ,@n_Qty                INT
+            ,@c_ReplenishmentKey   NVARCHAR(10)
             ,@n_RowID              INT
             ,@n_UCCQty             INT
             ,@c_UCCNo              NVARCHAR(20)
-            ,@n_OrderCnt           INT            
+            ,@n_OrderCnt           INT
             ,@c_ReplenType         NVARCHAR(10)
-            ,@c_DeviceID           NVARCHAR(20) 
-            ,@c_IPAddress          NVARCHAR(40) 
-            ,@c_DevicePosition     NVARCHAR(10) 
+            ,@c_DeviceID           NVARCHAR(20)
+            ,@c_IPAddress          NVARCHAR(40)
+            ,@c_DevicePosition     NVARCHAR(10)
             ,@c_DevLoc             NVARCHAR(10)
             ,@c_LabelNo            NVARCHAR(20)
             ,@c_Orderkey           NVARCHAR(10)
@@ -80,47 +79,49 @@ CREATE PROCEDURE [dbo].[ispRLWAV36]
             ,@c_PrevConsigneekey   NVARCHAR(15)
             ,@c_Userdefine03       NVARCHAR(20)
             ,@n_Position           INT
-            ,@c_dropid             NVARCHAR(20) 
+            ,@c_dropid             NVARCHAR(20)
             ,@n_noofline           INT
             ,@n_innerqty           FLOAT
             ,@n_inner              INT
             ,@n_loose              INT
             ,@n_looseinner         INT
             ,@c_LOTT07             NVARCHAR(30)    --CS01
-            ,@c_trmlogkey          NVARCHAR(10)    --CS01 
+            ,@c_trmlogkey          NVARCHAR(10)    --CS01
             ,@c_tablename          NVARCHAR(30)    --CS01
-            ,@c_key01              NVARCHAR(10)    --CS01  
-            ,@c_key02              NVARCHAR(30)    --CS01              
-            ,@c_key03              NVARCHAR(20)    --CS01    
-                                          
-    SET @c_SourceType = 'ispRLWAV36'    
+            ,@c_key01              NVARCHAR(10)    --CS01
+            ,@c_key02              NVARCHAR(30)    --CS01
+            ,@c_key03              NVARCHAR(20)    --CS01
+            ,@n_lliqty             INT             --CS02
+            ,@n_Oriqty             INT             --CS02
+
+    SET @c_SourceType = 'ispRLWAV36'
 
     -----Get Storerkey, facility
     IF  (@n_continue = 1 OR @n_continue = 2)
     BEGIN
-        SELECT TOP 1 @c_Storerkey     = O.Storerkey, 
+        SELECT TOP 1 @c_Storerkey     = O.Storerkey,
                      @c_Facility      = O.Facility,
                      @c_WaveType      = W.WaveType
         FROM WAVE W (NOLOCK)
         JOIN WAVEDETAIL WD(NOLOCK) ON W.Wavekey = WD.Wavekey
         JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
-        AND W.Wavekey = @c_Wavekey          
+        AND W.Wavekey = @c_Wavekey
     END
 
-    -----Wave Validation-----            
+    -----Wave Validation-----
     IF @n_continue = 1 OR @n_continue = 2
     BEGIN
-        IF EXISTS (SELECT 1 
+        IF EXISTS (SELECT 1
                    FROM REPLENISHMENT RP (NOLOCK)
-                   WHERE RP.Wavekey = @c_Wavekey    
-                   ) 
+                   WHERE RP.Wavekey = @c_Wavekey
+                   )
         BEGIN
-          SELECT @n_continue = 3  
-          SELECT @n_err = 83010    
-          SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': This Wave has beed released. (ispRLWAV36)'       
-        END                 
+          SELECT @n_continue = 3
+          SELECT @n_err = 83010
+          SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': This Wave has beed released. (ispRLWAV36)'
+        END
     END
-                   
+
     --Create pickdetail Work in progress temporary table
     IF @n_continue = 1 OR @n_continue = 2
     BEGIN
@@ -167,35 +168,35 @@ CREATE PROCEDURE [dbo].[ispRLWAV36]
           [Notes] [nvarchar](4000) NULL,
           [MoveRefKey] [nvarchar](10) NULL DEFAULT (''),
           [WIP_Refno] [nvarchar](30) NULL DEFAULT (''),
-          [Channel_ID] [bigint] NULL DEFAULT ((0)))                          
-          
+          [Channel_ID] [bigint] NULL DEFAULT ((0)))
+
        CREATE TABLE #DEVICEPOS (RowId INT IDENTITY(1,1),
                                 DevicePosition NVARCHAR(10) NULL,
-                                IPAddress NVARCHAR(40) NULL, 
-                                Loc NVARCHAR(10) NULL)          
+                                IPAddress NVARCHAR(40) NULL,
+                                Loc NVARCHAR(10) NULL)
     END
 
      BEGIN TRAN
-    
+
     --Initialize Pickdetail work in progress staging table
     IF @n_continue = 1 OR @n_continue = 2
-    BEGIN                         
+    BEGIN
        EXEC isp_CreatePickdetail_WIP
             @c_Loadkey               = ''
-           ,@c_Wavekey               = @c_wavekey  
-           ,@c_WIP_RefNo             = @c_SourceType 
+           ,@c_Wavekey               = @c_wavekey
+           ,@c_WIP_RefNo             = @c_SourceType
            ,@c_PickCondition_SQL     = ''
            ,@c_Action                = 'I'    --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records
            ,@c_RemoveTaskdetailkey   = 'N'    --N=No remove Y=Remove taskdetailkey from pickdetail record when initialization
            ,@b_Success               = @b_Success OUTPUT
-           ,@n_Err                   = @n_Err     OUTPUT 
+           ,@n_Err                   = @n_Err     OUTPUT
            ,@c_ErrMsg                = @c_ErrMsg  OUTPUT
-           
+
        IF @b_Success <> 1
        BEGIN
           SET @n_continue = 3
-       END          
-       
+       END
+
        UPDATE #PickDetail_WIP SET Toloc = ''
     END
 
@@ -207,13 +208,13 @@ CREATE PROCEDURE [dbo].[ispRLWAV36]
 
 -- SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.Id, SUM(PD.Qty),  PACK.Packkey, PACK.PackUOM3, PD.dropid, COUNT(DISTINCT PD.Orderkey) AS ordercnt,
 --                 PD.Uom, MAX(O.DocType),LOTT.Lottable07
---          FROM WAVEDETAIL WD (NOLOCK) 
+--          FROM WAVEDETAIL WD (NOLOCK)
 --          JOIN #PickDetail_WIP PD ON WD.Orderkey = PD.Orderkey
 --          JOIN ORDERS O (NOLOCK) ON PD.Orderkey = O.Orderkey
 --          JOIN SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.Sku = SKU.Sku
 --          JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey
 --          Join lotattribute LOTT with(nolock)  ON LOTT.lot = PD.lot
---          --JOIN UCC (NOLOCK) ON PD.Storerkey = UCC.Storerkey AND PD.Sku = UCC.Sku AND PD.LOT = UCC.LOT AND PD.LOC = UCC.LOC AND PD.ID = UCC.ID 
+--          --JOIN UCC (NOLOCK) ON PD.Storerkey = UCC.Storerkey AND PD.Sku = UCC.Sku AND PD.LOT = UCC.LOT AND PD.LOC = UCC.LOC AND PD.ID = UCC.ID
 --          WHERE WD.Wavekey = @c_Wavekey
 --          --AND PD.DropID <> ''
 --          --AND PD.DropID IS NOT NULL
@@ -223,30 +224,32 @@ CREATE PROCEDURE [dbo].[ispRLWAV36]
 --GOTO RETURN_SP
 
     -----Create replenishment task for pick face picking
-    IF (@n_continue = 1 OR @n_continue = 2)   
-    BEGIN                                  
-       --Retreive UCC pick 
+    IF (@n_continue = 1 OR @n_continue = 2)
+    BEGIN
+       --Retreive UCC pick
        DECLARE cur_Pick CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-          SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.Id, SUM(PD.Qty), PACK.innerpack,PACK.Packkey, PACK.PackUOM3, PD.dropid, COUNT(DISTINCT PD.Orderkey) AS ordercnt,
-                 PD.Uom, MAX(O.DocType),LOTT.Lottable07
-          FROM WAVEDETAIL WD (NOLOCK) 
+          SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, lli.Id, (PD.Qty),                                        
+               PACK.innerpack,PACK.Packkey, PACK.PackUOM3, PD.dropid, COUNT(DISTINCT PD.Orderkey) AS ordercnt,
+                 PD.Uom, MAX(O.DocType),LOTT.Lottable07,SUM(lli.Qty)                                            --CS02
+          FROM WAVEDETAIL WD (NOLOCK)
           JOIN #PickDetail_WIP PD ON WD.Orderkey = PD.Orderkey
           JOIN ORDERS O (NOLOCK) ON PD.Orderkey = O.Orderkey
           JOIN SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.Sku = SKU.Sku
           JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey
           Join lotattribute LOTT with(nolock)  ON LOTT.lot = PD.lot
+          JOIN LOTxLOCxID lli WITH (NOLOCK) ON  lli.id = PD.id                                 --CS02
           WHERE WD.Wavekey = @c_Wavekey
           --AND PD.DropID <> ''
           --AND PD.DropID IS NOT NULL
-          AND PD.UOM IN('7')
-          GROUP BY PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.Id, PACK.innerpack, PACK.Packkey, PACK.PackUOM3, PD.dropid, PD.UOM,LOTT.Lottable07
+          AND PD.UOM IN('6')                                                                    --CS02
+          GROUP BY PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, lli.Id, PACK.innerpack, PACK.Packkey, PACK.PackUOM3, PD.dropid, PD.UOM,LOTT.Lottable07 ,PD.qty    --CS02
           ORDER BY PD.UOM, PD.Sku, PD.Loc
 
        OPEN cur_Pick
-       
-       FETCH FROM cur_Pick INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID, @n_Qty, @n_innerqty, @c_Packkey, @c_PackUOM, 
-                                @c_dropid, @n_OrderCnt, @c_UOM, @c_DocType,@c_LOTT07
-       
+
+       FETCH FROM cur_Pick INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID, @n_Qty, @n_innerqty, @c_Packkey, @c_PackUOM,
+                                @c_dropid, @n_OrderCnt, @c_UOM, @c_DocType,@c_LOTT07,@n_lliqty                                     --CS02
+
        WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
        BEGIN
            SET @c_ToID =  @c_ID
@@ -257,87 +260,99 @@ CREATE PROCEDURE [dbo].[ispRLWAV36]
            SET @n_inner = 1
            SET @n_loose = 0
            SET @n_looseinner =0
+           SET @n_Oriqty = 0
 
-         -- select @c_UCCNo '@c_UCCNo', @c_FromLoc '@c_FromLoc',@c_Sku '@c_Sku', @c_Lot '@c_Lot', @c_Id '@c_Id'
-           
-           IF @c_UOM = '7'
+          -- select @c_UCCNo '@c_UCCNo', @c_FromLoc '@c_FromLoc',@c_Sku '@c_Sku', @c_Lot '@c_Lot', @c_Id '@c_Id'
+         --  SELECT * FROM #PickDetail_WIP WHERE uom= 6
+           IF @c_UOM = '6'                                          --CS02
            BEGIN
              IF EXISTS(SELECT 1 FROM REPLENISHMENT REP (NOLOCK)
-                       WHERE RefNo = @c_dropid 
-                       AND Storerkey = @c_Storerkey 
-                       AND Sku = @c_Sku  
+                       WHERE RefNo = @c_dropid
+                       AND Storerkey = @c_Storerkey
+                       AND Sku = @c_Sku
                        AND FromLoc = @c_FromLoc
                        AND Lot = @c_Lot
                        AND ID = @c_Id
                        AND Wavekey=@c_wavekey)
              BEGIN
                 GOTO NEXT_PICK
-             END          
+             END
            END
-           
+
            SET @n_inner = @n_Qty/nullif(cast(@n_innerqty as int),0)
            SET @n_loose = @n_qty % nullif(cast(@n_innerqty as int),0)
-           
-      
+
+
            IF @n_loose > 0
-           BEGIN  
-                  SET  @n_looseinner = 1   
+           BEGIN
+                  SET  @n_looseinner = 1
                   SET @n_noofline = @n_inner + @n_looseinner
            END
            ELSE
            BEGIN
-              SET @n_noofline = @n_inner 
+              SET @n_noofline = @n_inner
            END
-           
+              --CS02 S
+
+                 SELECT @n_Oriqty = SUM(PD.qty)
+                 FROM #PickDetail_WIP PD
+                 WHERE PD.UOM = '6'
+                 AND PD.lot =  @c_Lot
+                 AND PD.sku = @c_Sku            
+                 AND PD.id = @c_id 
+                 AND PD.loc =@c_FromLoc
+
+              --CS02 E
+
            --IF @c_UOM = '2' AND @n_OrderCnt = 1
            --BEGIN
            --   SET @c_ReplenType = 'FCP'
 
-           --   SELECT TOP 1 @c_Toloc = Short 
+           --   SELECT TOP 1 @c_Toloc = Short
            --   FROM CODELKUP (NOLOCK)
            --   WHERE Storerkey = @c_Storerkey
            --   AND Listname = 'RDTREPLEN'
            --   AND UDF01 = 'FCP'
            --   AND UDF02 = @c_DocType
-           --END   
+           --END
            --ELSE IF @c_UOM = '2' AND @n_OrderCnt > 1
            --BEGIN
            --   SET @c_ReplenType = 'FCS'
 
-           --   SELECT TOP 1 @c_Toloc = Short 
+           --   SELECT TOP 1 @c_Toloc = Short
            --   FROM CODELKUP (NOLOCK)
            --   WHERE Storerkey = @c_Storerkey
            --   AND Listname = 'RDTREPLEN'
            --   AND UDF01 = 'FCS'
            --END
            --ELSE
-           --BEGIN 
+           --BEGIN
               SET @c_ReplenType = 'RPL'
              --CS01 START
               --SELECT TOP 1 @c_ToLoc = L.Loc
-              --FROM SKUXLOC SL (NOLOCK)              
+              --FROM SKUXLOC SL (NOLOCK)
               --JOIN LOC L (NOLOCK) ON SL.Loc = L.Loc
               --WHERE L.Facility = @c_Facility
               --AND L.LocationType = 'DYNPPICK'
               --AND L.LocationFlag = 'NONE'
-              --AND SL.Storerkey = @c_Storerkey 
+              --AND SL.Storerkey = @c_Storerkey
               --AND SL.Sku = @c_Sku
               --AND (SL.Qty-SL.QtyPicked) + SL.QtyExpected > 0
               --ORDER BY (SL.Qty-SL.QtyPicked) + SL.QtyExpected, L.LogicalLocation, L.Loc
 
               SELECT TOP 1 @c_ToLoc = L.Loc
-              FROM lotxlocxid LLI with(nolock) 
-              Join lotattribute LOTT with(nolock)  on LLI.Lot = LOTT.Lot            
+              FROM lotxlocxid LLI with(nolock)
+              Join lotattribute LOTT with(nolock)  on LLI.Lot = LOTT.Lot
               JOIN LOC L (NOLOCK) ON LLI.Loc = L.Loc
               WHERE L.Facility = @c_Facility
               AND L.LocationType = 'DYNPPICK'
               AND L.LocationFlag = 'NONE'
-              AND LLI.Storerkey = @c_Storerkey 
+              AND LLI.Storerkey = @c_Storerkey
               AND LLI.Sku = @c_Sku
               AND LOTT.Lottable07 = @c_LOTT07
               AND (LLI.Qty-LLI.QtyPicked) + LLI.QtyExpected > 0
               ORDER BY (LLI.Qty-LLI.QtyPicked) + LLI.QtyExpected, L.LogicalLocation, L.LOC
-              
+
 
               --CS01 END
               --Find loc with zero stock with putawayzone priority in skuconfig
@@ -350,10 +365,10 @@ CREATE PROCEDURE [dbo].[ispRLWAV36]
                  WHERE L.Facility = @c_Facility
                  AND L.LocationType = 'DYNPPICK'
                  AND L.LocationFlag = 'NONE'
-                 AND ISNULL(SL.Qty,0) = 0   
+                 AND ISNULL(SL.Qty,0) = 0
                  ORDER BY CASE WHEN SC.Data IS NOT NULL THEN 1 ELSE 2 END, L.LogicalLocation, L.Loc
               END
-              
+
               --Find loc by putawayzone in codelkup
               IF ISNULL(@c_ToLoc,'') = ''
               BEGIN
@@ -364,20 +379,20 @@ CREATE PROCEDURE [dbo].[ispRLWAV36]
                  AND L.LocationType <> 'OTHER'
                  AND L.LocationFlag = 'NONE'
                  AND L.Putawayzone IN (SELECT CL.Short FROM CODELKUP CL (NOLOCK) WHERE CL.Listname = 'LSMIXLOC' AND CL.Storerkey = @c_Storerkey)
-                 AND ISNULL(SL.Qty,0) = 0 
+                 AND ISNULL(SL.Qty,0) = 0
                  ORDER BY L.LogicalLocation, L.Loc
-              END               
+              END
            --END
-                            
+
           IF @c_ToLoc = ''
            BEGIN
-             SELECT @n_continue = 3  
-             SELECT @n_err = 83020    
-             SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Unable find destination loc for ' + RTRIM(@c_ReplenType) + ' for Sku ' + RTRIM(@c_Sku)  + '. (ispRLWAV36)'        
-             BREAK               
-          END                            
+             SELECT @n_continue = 3
+             SELECT @n_err = 83020
+             SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Unable find destination loc for ' + RTRIM(@c_ReplenType) + ' for Sku ' + RTRIM(@c_Sku)  + '. (ispRLWAV36)'
+             BREAK
+          END
       --WHILE @n_noofline > 0
-      --BEGIN       
+      --BEGIN
           EXECUTE nspg_getkey
              'REPLENISHKEY'
              , 10
@@ -385,7 +400,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV36]
              , @b_success OUTPUT
              , @n_err OUTPUT
              , @c_errmsg OUTPUT
-             
+
           IF NOT @b_success = 1
           BEGIN
              SELECT @n_continue = 3
@@ -398,28 +413,28 @@ CREATE PROCEDURE [dbo].[ispRLWAV36]
                    Replenishmentgroup, ReplenishmentKey, StorerKey,
                    Sku,                FromLoc,          ToLoc,
                    Lot,                Id,               Qty,
-                   UOM,                PackKey,          Confirmed, 
-                   MoveRefKey,         ToID,             PendingMoveIn, 
-                   QtyReplen,          QtyInPickLoc,     RefNo, 
+                   UOM,                PackKey,          Confirmed,
+                   MoveRefKey,         ToID,             PendingMoveIn,
+                   QtyReplen,          QtyInPickLoc,     RefNo,
                    Wavekey,                   Remark,              ReplenNo,
                    OriginalQty,           OriginalFromLoc,   DropId)
-          VALUES ('DYNAMIC',              @c_ReplenishmentKey, @c_StorerKey, 
-                   @c_SKU,            @c_FromLOC,          @c_ToLOC, 
-                   @c_LOT,            @c_ID,               (@n_noofline*@n_innerqty), 
-                   @c_PackUOM,        @c_PackKey,          'N', 
-                   '',                @c_ToID,             0, 
+          VALUES ('DYNAMIC',              @c_ReplenishmentKey, @c_StorerKey,
+                   @c_SKU,            @c_FromLOC,          @c_ToLOC,
+                   @c_LOT,            @c_ID,               @n_lliqty,--(@n_noofline*@n_innerqty),     --CS02
+                   @c_PackUOM,        @c_PackKey,          'N',
+                   '',                @c_ToID,             0,
                    0,                  0,          @c_UCCNo,
-                   @c_Wavekey,            '',               @c_ReplenType, 
-                   @n_Qty,                @c_SourceType,    @c_UCCNo)  
+                   @c_Wavekey,            '',               @c_ReplenType,
+                   @n_Oriqty,                @c_SourceType,    @c_UCCNo)
 
           IF @@ERROR <> 0
           BEGIN
-             SELECT @n_continue = 3  
-             SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 83030     -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
-             SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Error Insert Replenishment Table. (ispRLWAV36)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
-          END                                
+             SELECT @n_continue = 3
+             SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 83030     -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+             SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Error Insert Replenishment Table. (ispRLWAV36)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+          END
      --    SET @n_noofline = @n_noofline - 1
-     --END    
+     --END
            IF @c_ReplenType = 'RPL'
            BEGIN
               UPDATE #PICKDETAIL_WIP
@@ -428,43 +443,43 @@ CREATE PROCEDURE [dbo].[ispRLWAV36]
               AND Storerkey = @c_Storerkey
               AND Sku = @c_Sku
            END
-           
+
            NEXT_PICK:
-           
-          FETCH FROM cur_Pick INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID, @n_Qty,@n_innerqty,@c_Packkey, 
-                                   @c_PackUOM, @c_dropid, @n_OrderCnt, @c_UOM, @c_DocType ,@c_LOTT07        
+
+          FETCH FROM cur_Pick INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID, @n_Qty,@n_innerqty,@c_Packkey,
+                                   @c_PackUOM, @c_dropid, @n_OrderCnt, @c_UOM, @c_DocType ,@c_LOTT07,@n_lliqty                --CS02
        END
        CLOSE cur_Pick
        DEALLOCATE cur_Pick
     END
 
-    -----Generate Pickslip No------    
-    IF @n_continue = 1 or @n_continue = 2 
+    -----Generate Pickslip No------
+    IF @n_continue = 1 or @n_continue = 2
     BEGIN
        EXEC isp_CreatePickSlip
             @c_Wavekey = @c_Wavekey
-           ,@c_LinkPickSlipToPick = 'Y'  --Y=Update pickslipno to pickdetail.pickslipno 
+           ,@c_LinkPickSlipToPick = 'Y'  --Y=Update pickslipno to pickdetail.pickslipno
            ,@c_ConsolidateByLoad = 'N'
            ,@b_Success = @b_Success OUTPUT
-           ,@n_Err = @n_err OUTPUT 
-           ,@c_ErrMsg = @c_errmsg OUTPUT        
-          
+           ,@n_Err = @n_err OUTPUT
+           ,@c_ErrMsg = @c_errmsg OUTPUT
+
        IF @b_Success = 0
           SELECT @n_continue = 3
-    END  
-    
+    END
+
     --Update load plan
-    IF (@n_continue = 1 or @n_continue = 2) AND @c_WaveType = 'DAS'   
+    IF (@n_continue = 1 or @n_continue = 2) AND @c_WaveType = 'DAS'
     BEGIN
        DECLARE cur_LOAD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
           SELECT DISTINCT LPD.Loadkey
           FROM #PICKDETAIL_WIP PD
           JOIN LOADPLANDETAIL LPD (NOLOCK) ON PD.Orderkey = LPD.Orderkey
-       
+
        OPEN cur_LOAD
-          
+
        FETCH FROM cur_LOAD INTO @c_Loadkey
-          
+
        WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
        BEGIN
            UPDATE LOADPLAN WITH (ROWLOCK)
@@ -472,25 +487,25 @@ CREATE PROCEDURE [dbo].[ispRLWAV36]
            WHERE Loadkey = @c_Loadkey
 
           SET @n_err = @@ERROR
-          
+
           IF @n_err <> 0
           BEGIN
-            SELECT @n_continue = 3  
-            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 83090     -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
-            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Error Update LOADPLAN Table. (ispRLWAV36)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
-          END                         
-         
+            SELECT @n_continue = 3
+            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 83090     -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Error Update LOADPLAN Table. (ispRLWAV36)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+          END
+
           FETCH FROM cur_LOAD INTO @c_Loadkey
        END
        CLOSE cur_LOAD
-       DEALLOCATE cur_LOAD             
+       DEALLOCATE cur_LOAD
     END
 
     /*CS01 START*/
       -- insert TransmitLog3 table
       IF @c_WaveType = 'DAS'
       BEGIN
-             
+
             SET @c_tablename = ''
             SET @c_key01 = ''
             SET @c_key02 = ''
@@ -500,34 +515,34 @@ CREATE PROCEDURE [dbo].[ispRLWAV36]
                           @c_key01 = WV.Wavekey,
                           @c_key02 = '',
                           @c_key03 = ORDERS.Storerkey
-          FROM WAVE WV WITH (NOLOCK) 
+          FROM WAVE WV WITH (NOLOCK)
           JOIN WAVEDETAIL WITH (NOLOCK) ON WAVEDETAIL.Wavekey = WV.Wavekey
           JOIN ORDERS WITH (NOLOCK) ON  (WAVEDETAIL.OrderKey = ORDERS.OrderKey)
           WHERE WAVEDETAIL.WaveKey = @c_WaveKey
 
 
           SELECT @n_Continue = 1, @b_success = 1
-    
-     --EXEC dbo.ispGenTransmitLog3 @c_tablename, @c_key01, @c_key02, @c_key03, ''    
-     --   , @b_success OUTPUT    
-     --   , @n_err OUTPUT    
-     --   , @c_errmsg OUTPUT    
-    IF NOT EXISTS ( SELECT 1 FROM TransmitLog3 (NOLOCK) WHERE TableName = @c_TableName  
-                      AND Key1 = @c_Key01 AND Key2 = @c_Key02 AND Key3 = @c_Key03 and tablename = @c_tablename )  
-    BEGIN  
-        
+
+     --EXEC dbo.ispGenTransmitLog3 @c_tablename, @c_key01, @c_key02, @c_key03, ''
+     --   , @b_success OUTPUT
+     --   , @n_err OUTPUT
+     --   , @c_errmsg OUTPUT
+    IF NOT EXISTS ( SELECT 1 FROM TransmitLog3 (NOLOCK) WHERE TableName = @c_TableName
+                      AND Key1 = @c_Key01 AND Key2 = @c_Key02 AND Key3 = @c_Key03 and tablename = @c_tablename )
+    BEGIN
+
        BEGIN TRAN
        SELECT @b_success = 0
-       EXECUTE nspg_getkey  
-         -- Change by June 15.Jun.2004  
-         -- To standardize name use in generating transmitlog3..transmitlogkey  
-         -- 'Transmitlog3Key'  
-         'TransmitlogKey3'  
-         , 10  
-         , @c_trmlogkey OUTPUT  
-         , @b_success   OUTPUT  
-         , @n_err       OUTPUT  
-         , @c_errmsg    OUTPUT       
+       EXECUTE nspg_getkey
+         -- Change by June 15.Jun.2004
+         -- To standardize name use in generating transmitlog3..transmitlogkey
+         -- 'Transmitlog3Key'
+         'TransmitlogKey3'
+         , 10
+         , @c_trmlogkey OUTPUT
+         , @b_success   OUTPUT
+         , @n_err       OUTPUT
+         , @c_errmsg    OUTPUT
 
               IF @b_success = 1
                BEGIN
@@ -544,12 +559,12 @@ CREATE PROCEDURE [dbo].[ispRLWAV36]
                END
 
             --  SET @n_seqno = 1
-                           
+
              BEGIN TRAN
 
-             INSERT INTO Transmitlog3 (transmitlogkey, tablename, key1, key2, key3, transmitflag, TransmitBatch)  
-             VALUES (@c_trmlogkey, @c_TableName, @c_Key01, ISNULL(@c_Key02,''), @c_Key03, '0', '')  
-              
+             INSERT INTO Transmitlog3 (transmitlogkey, tablename, key1, key2, key3, transmitflag, TransmitBatch)
+             VALUES (@c_trmlogkey, @c_TableName, @c_Key01, ISNULL(@c_Key02,''), @c_Key03, '0', '')
+
               SELECT @n_err = @@ERROR
               --print '@n_err : ' + cast(@n_err as nvarchar(5))
 
@@ -562,33 +577,33 @@ CREATE PROCEDURE [dbo].[ispRLWAV36]
 
                 GOTO RETURN_SP
               END
-              ELSE    
+              ELSE
                   COMMIT TRAN
          END
-    END 
+    END
      /*CS01 END*/
-          
-    --Create packtask record           
-    IF (@n_continue = 1 or @n_continue = 2) 
+
+    --Create packtask record
+    IF (@n_continue = 1 or @n_continue = 2)
     BEGIN
        DECLARE cur_PackTaskOrd CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
           SELECT O.Orderkey, O.Consigneekey, O.Userdefine03
           FROM #PICKDETAIL_WIP PD
           JOIN ORDERS O (NOLOCK) ON PD.Orderkey = O.Orderkey
-          WHERE O.DocType = 'N'          
+          WHERE O.DocType = 'N'
           GROUP BY O.Userdefine03, O.Consigneekey, O.Orderkey
           ORDER BY CASE WHEN O.Userdefine03 = 'NC' THEN 1 WHEN O.Userdefine03 = 'SC' THEN 2 ELSE 3 END, O.Consigneekey, O.Orderkey
-       
+
        OPEN cur_PackTaskOrd
-          
+
        FETCH FROM cur_PackTaskOrd INTO @c_Orderkey, @c_Consigneekey, @c_Userdefine03
-       
-       SET @n_Position = 0   
+
+       SET @n_Position = 0
        SET @c_PrevConsigneekey = '*'
        --SET @c_FirstSC = 'Y'
        WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
        BEGIN
-           IF @c_Userdefine03 = 'NC' 
+           IF @c_Userdefine03 = 'NC'
               SET @n_Position = 1
            ELSE IF @c_Userdefine03 = 'SC'
               SET @n_Position = 2
@@ -606,72 +621,72 @@ CREATE PROCEDURE [dbo].[ispRLWAV36]
            BEGIN
              IF @n_Position < 2
                 SET @n_Position = 2
-                
+
              IF @c_PrevConsigneekey <> @c_Consigneekey
-                  SET @n_Position = @n_Position +  1               
-           END   
-            
+                  SET @n_Position = @n_Position +  1
+           END
+
            INSERT INTO PACKTASK (TaskBatchNo, Orderkey, DevicePosition)
            VALUES (@c_Wavekey, @c_Orderkey, CAST(@n_Position AS NVARCHAR))
 
           SET @n_err = @@ERROR
-          
+
           IF @n_err <> 0
           BEGIN
-            SELECT @n_continue = 3  
-            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 83100     -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
-            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Error Insert PACKTASK Table. (ispRLWAV36)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
-          END                         
-           
+            SELECT @n_continue = 3
+            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 83100     -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Error Insert PACKTASK Table. (ispRLWAV36)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+          END
+
            SET @c_PrevConsigneekey = @c_Consigneekey
-           
+
           FETCH FROM cur_PackTaskOrd INTO @c_Orderkey, @c_Consigneekey, @c_Userdefine03
-       END     
+       END
        CLOSE cur_PackTaskOrd
        DEALLOCATE cur_PackTaskOrd
-    END   
-            
+    END
 
-        
-    -----Update pickdetail_WIP work in progress staging table back to pickdetail 
+
+
+    -----Update pickdetail_WIP work in progress staging table back to pickdetail
     IF @n_continue = 1 or @n_continue = 2
     BEGIN
        EXEC isp_CreatePickdetail_WIP
              @c_Loadkey               = ''
-            ,@c_Wavekey               = @c_wavekey  
-            ,@c_WIP_RefNo             = @c_SourceType 
+            ,@c_Wavekey               = @c_wavekey
+            ,@c_WIP_RefNo             = @c_SourceType
             ,@c_PickCondition_SQL     = ''
             ,@c_Action                = 'U'    --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records
             ,@c_RemoveTaskdetailkey   = 'N'    --N=No remove Y=Remove taskdetailkey from pickdetail record when initialization
             ,@b_Success               = @b_Success OUTPUT
-            ,@n_Err                   = @n_Err     OUTPUT 
+            ,@n_Err                   = @n_Err     OUTPUT
             ,@c_ErrMsg                = @c_ErrMsg  OUTPUT
-           
+
        IF @b_Success <> 1
        BEGIN
           SET @n_continue = 3
        END
-    END    
+    END
 
     -----Update Wave Status-----
-    IF @n_continue = 1 or @n_continue = 2  
-    BEGIN  
-      UPDATE WAVE   
+    IF @n_continue = 1 or @n_continue = 2
+    BEGIN
+      UPDATE WAVE
           SET TMReleaseFlag = 'Y'
-           ,  TrafficCop = NULL  
-           ,  EditWho = SUSER_SNAME() 
-           ,  EditDate= GETDATE()     
-       WHERE WAVEKEY = @c_wavekey    
-              
-       SELECT @n_err = @@ERROR  
-       IF @n_err <> 0  
-       BEGIN  
-          SELECT @n_continue = 3  
-          SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 83110   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
-          SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update on wave Failed (ispRLWAV36)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
-       END  
-    END  
-   
+           ,  TrafficCop = NULL
+           ,  EditWho = SUSER_SNAME()
+           ,  EditDate= GETDATE()
+       WHERE WAVEKEY = @c_wavekey
+
+       SELECT @n_err = @@ERROR
+       IF @n_err <> 0
+       BEGIN
+          SELECT @n_continue = 3
+          SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 83110   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+          SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update on wave Failed (ispRLWAV36)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+       END
+    END
+
 RETURN_SP:
 
     -----Delete pickdetail_WIP work in progress staging table
@@ -679,54 +694,52 @@ RETURN_SP:
     BEGIN
        EXEC isp_CreatePickdetail_WIP
              @c_Loadkey               = ''
-            ,@c_Wavekey               = @c_wavekey  
-            ,@c_WIP_RefNo             = @c_SourceType 
+            ,@c_Wavekey               = @c_wavekey
+            ,@c_WIP_RefNo             = @c_SourceType
             ,@c_PickCondition_SQL     = ''
             ,@c_Action                = 'D'    --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records
             ,@c_RemoveTaskdetailkey   = 'N'    --N=No remove Y=Remove taskdetailkey from pickdetail record when initialization
             ,@b_Success               = @b_Success OUTPUT
-            ,@n_Err                   = @n_Err     OUTPUT 
+            ,@n_Err                   = @n_Err     OUTPUT
             ,@c_ErrMsg                = @c_ErrMsg  OUTPUT
-           
+
        IF @b_Success <> 1
        BEGIN
           SET @n_continue = 3
-       END             
+       END
     END
-    
+
     IF OBJECT_ID('tempdb..#PICKDETAIL_WIP') IS NOT NULL
        DROP TABLE #PICKDETAIL_WIP
 
-    IF @n_continue=3  -- Error Occured - Process And Return  
-    BEGIN  
-       SELECT @b_success = 0  
-       IF @@TRANCOUNT = 1 and @@TRANCOUNT > @n_starttcnt  
-       BEGIN  
-          ROLLBACK TRAN  
-       END  
-       ELSE  
-       BEGIN  
-          WHILE @@TRANCOUNT > @n_starttcnt  
-          BEGIN  
-             COMMIT TRAN  
-          END  
-       END  
-       execute nsp_logerror @n_err, @c_errmsg, "ispRLWAV36"  
-       RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012  
-       RETURN  
-    END  
-    ELSE  
-    BEGIN  
-       SELECT @b_success = 1  
-       WHILE @@TRANCOUNT > @n_starttcnt  
-       BEGIN  
-          COMMIT TRAN  
-       END  
-       RETURN  
-    END            
+    IF @n_continue=3  -- Error Occured - Process And Return
+    BEGIN
+       SELECT @b_success = 0
+       IF @@TRANCOUNT = 1 and @@TRANCOUNT > @n_starttcnt
+       BEGIN
+          ROLLBACK TRAN
+       END
+       ELSE
+       BEGIN
+          WHILE @@TRANCOUNT > @n_starttcnt
+          BEGIN
+             COMMIT TRAN
+          END
+       END
+       execute nsp_logerror @n_err, @c_errmsg, "ispRLWAV36"
+       RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
+       RETURN
+    END
+    ELSE
+    BEGIN
+       SELECT @b_success = 1
+       WHILE @@TRANCOUNT > @n_starttcnt
+       BEGIN
+          COMMIT TRAN
+       END
+       RETURN
+    END
  END --sp end
 GO
-
-GRANT EXECUTE ON ispRLWAV36 TO NSQL
+GRANT EXECUTE ON  [dbo].[ispRLWAV36] TO [NSQL]
 GO
-

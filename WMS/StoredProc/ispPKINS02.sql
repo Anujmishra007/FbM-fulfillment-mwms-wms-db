@@ -1,7 +1,3 @@
-IF EXISTS (SELECT name FROM sysobjects WHERE name = 'ispPKINS02' AND type = 'P')
-   DROP PROC ispPKINS02
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -22,9 +18,11 @@ GO
 /* Date        Rev  Author     Purposes                                 */
 /* 01-Jul-2021 1.0  NJOW01     WMS-17290 Sku pack instruction for single*/
 /*                             order pack                               */
+/* 19-Sep-2022 1.1  NJOW02     WMS-20807 prompt alert for DG product    */
+/* 19-Sep-2022 1.1  NJOW02     DEVOPS Combine Script                    */
 /************************************************************************/
 
-CREATE PROCEDURE ispPKINS02
+CREATE OR ALTER PROCEDURE ispPKINS02
    @c_Pickslipno       NVARCHAR(10),
    @c_Storerkey        NVARCHAR(15),
    @c_Sku              NVARCHAR(50),  --if call from pack header sku no value(header instruction), if from packdetail sku have value(item instruction)
@@ -39,7 +37,9 @@ BEGIN
    SET ANSI_NULLS OFF   
    SET CONCAT_NULL_YIELDS_NULL OFF
    
-   DECLARE @c_countryname NVARCHAR(50)
+   DECLARE @c_countryname  NVARCHAR(50),
+           @c_ProductModel NVARCHAR(30),
+           @c_OrderGroup   NVARCHAR(20)
                                  
    SELECT @b_Success = 1, @n_ErrNo = 0, @c_ErrMsg = '', @c_PackInstruction = ''
         
@@ -58,7 +58,28 @@ BEGIN
    
    --NJOW01
    IF ISNULL(@c_Sku,'') <> ''  --only get detail instruction for single order pack
-   BEGIN   	
+   BEGIN   	                                    
+   	  --NJOW02 S                              
+   	  SELECT TOP 1 @c_OrderGroup = O.OrderGroup,
+   	               @c_ProductModel = SKU.ProductModel
+   	  FROM PICKHEADER PH (NOLOCK)
+      JOIN ORDERS O (NOLOCK) ON PH.Orderkey = O.Orderkey
+      JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey
+      JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku
+      WHERE PH.Pickheaderkey = @c_Pickslipno
+      AND OD.Sku = @c_Sku
+                      
+      IF @c_OrderGroup = 'SINGLE' AND @c_ProductModel = '1BOX'
+      BEGIN
+         SET @c_PackInstruction = '1 BOX SKU. No Shipping Box Required!' 
+      END          
+      ELSE IF @c_OrderGroup IN('SINGLE','MULTI') AND @c_ProductModel = 'DG'
+      BEGIN
+         SET @c_PackInstruction = 'Paste DG Label' 
+      END         
+      --NJOW02 E
+
+      /*
    	  IF EXISTS(SELECT 1
                 FROM PICKHEADER PH (NOLOCK)
                 JOIN ORDERS O (NOLOCK) ON PH.Orderkey = O.Orderkey
@@ -71,7 +92,8 @@ BEGIN
                 )
       BEGIN
          SET @c_PackInstruction = '1 BOX SKU. No Shipping Box Required!'
-      END                   
+      END    
+      */ 
    END
 END -- End Procedure
 
