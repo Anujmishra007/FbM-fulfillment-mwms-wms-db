@@ -1,21 +1,19 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_Replenish_V7_Confirm]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_Replenish_V7_Confirm]
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /************************************************************************/
 /* Store procedure: rdt_Replenish_V7_Confirm                            */
 /* Copyright      : LF Logistics                                        */
 /*                                                                      */
-/* Date       Rev  Author      Purposes                                 */
-/* 25-03-2018 1.0  James       WMS-8254 Created                         */
+/* Date       Rev  Author     Purposes                                  */
+/* 25-03-2018 1.0  James      WMS-8254 Created                          */
+/* 2022-08-23 1.1  Ung        WMS-20562 Add UCC                         */
 /************************************************************************/
 
-CREATE PROC rdt.rdt_Replenish_V7_Confirm (
+CREATE OR ALTER PROC [RDT].[rdt_Replenish_V7_Confirm] (
     @nMobile         INT
    ,@nFunc           INT
    ,@cLangCode       NVARCHAR( 3)
@@ -28,21 +26,22 @@ CREATE PROC rdt.rdt_Replenish_V7_Confirm (
    ,@cReplenKey      NVARCHAR( 20)
    ,@cFromLOC        NVARCHAR( 20)
    ,@cFromID         NVARCHAR( 20)
-   ,@cSKU            NVARCHAR( 20) 
+   ,@cSKU            NVARCHAR( 20)
    ,@nActQTY         INT
-   ,@cToLOC          NVARCHAR( 20)
+   ,@cUCCNo          NVARCHAR( 20)
+   ,@cToLOC          NVARCHAR( 10)
    ,@cToID           NVARCHAR( 18)
    ,@cLottableCode   NVARCHAR( 30) OUTPUT
    ,@cLottable01     NVARCHAR( 18) OUTPUT
-   ,@cLottable02     NVARCHAR( 18) OUTPUT  
-   ,@cLottable03     NVARCHAR( 18) OUTPUT  
-   ,@dLottable04     DATETIME      OUTPUT  
-   ,@dLottable05     DATETIME      OUTPUT  
-   ,@cLottable06     NVARCHAR( 30) OUTPUT 
-   ,@cLottable07     NVARCHAR( 30) OUTPUT 
-   ,@cLottable08     NVARCHAR( 30) OUTPUT 
-   ,@cLottable09     NVARCHAR( 30) OUTPUT 
-   ,@cLottable10     NVARCHAR( 30) OUTPUT 
+   ,@cLottable02     NVARCHAR( 18) OUTPUT
+   ,@cLottable03     NVARCHAR( 18) OUTPUT
+   ,@dLottable04     DATETIME      OUTPUT
+   ,@dLottable05     DATETIME      OUTPUT
+   ,@cLottable06     NVARCHAR( 30) OUTPUT
+   ,@cLottable07     NVARCHAR( 30) OUTPUT
+   ,@cLottable08     NVARCHAR( 30) OUTPUT
+   ,@cLottable09     NVARCHAR( 30) OUTPUT
+   ,@cLottable10     NVARCHAR( 30) OUTPUT
    ,@cLottable11     NVARCHAR( 30) OUTPUT
    ,@cLottable12     NVARCHAR( 30) OUTPUT
    ,@dLottable13     DATETIME      OUTPUT
@@ -62,7 +61,7 @@ BEGIN
    SET @nTranCount = @@TRANCOUNT
    BEGIN TRAN  -- Begin our own transaction
    SAVE TRAN rdt_Replenish_V7_Confirm -- For rollback or commit only our own transaction
-   
+
    IF @cReplenBySKUQTY = '1'
    BEGIN
       DECLARE @nQTY     INT
@@ -70,9 +69,9 @@ BEGIN
       DECLARE @nRPL_QTY INT
       DECLARE @nAVL_QTY INT
       DECLARE @cLOT     NVARCHAR( 10)
-      
+
       SET @nBal_QTY = @nActQTY
-      
+
       DECLARE @curPD CURSOR
       SET @curPD = CURSOR FOR
          SELECT ReplenishmentKey, LOT, QTY
@@ -81,20 +80,20 @@ BEGIN
             AND FromLOC = @cFromLOC
             AND ID = @cFromID
             AND SKU = @cSKU
-            AND Confirmed = 'N' 
+            AND Confirmed = 'N'
       OPEN @curPD
       FETCH NEXT FROM @curPD INTO @cReplenKey, @cLOT, @nRPL_QTY
       WHILE @@FETCH_STATUS = 0
       BEGIN
          -- Get QTY avail
-         SELECT @nAVL_QTY = ISNULL( SUM( QTY 
-            - CASE WHEN @cMoveQTYAlloc = '1' THEN 0 ELSE QTYAllocated END 
+         SELECT @nAVL_QTY = ISNULL( SUM( QTY
+            - CASE WHEN @cMoveQTYAlloc = '1' THEN 0 ELSE QTYAllocated END
             - QTYPicked), 0)
          FROM dbo.LOTxLOCxID WITH (NOLOCK)
          WHERE LOT = @cLOT
             AND LOC = @cFromLOC
             AND ID = @cFromID
-         
+
          -- Make sure replen QTY not more then avail QTY
          IF @nRPL_QTY > @nAVL_QTY
             SET @nRPL_QTY = @nAVL_QTY
@@ -104,12 +103,12 @@ BEGIN
             SET @nQTY = @nBal_QTY
          ELSE
             SET @nQTY = @nRPL_QTY
-            
+
          UPDATE dbo.Replenishment WITH (ROWLOCK) SET
             QTY = @nQTY,
             ToLOC = @cToLOC,
-            ToID = CASE WHEN @cToID <> '' THEN @cToID ELSE ToID END, 
-            Confirmed = 'Y'  
+            ToID = CASE WHEN @cToID <> '' THEN @cToID ELSE ToID END,
+            Confirmed = 'Y'
          WHERE ReplenishmentKey = @cReplenKey
          IF @@ERROR <> 0
          BEGIN
@@ -117,12 +116,12 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd RPL Fail
             GOTO RollBackTran
          END
-         
+
          -- Reduce balance
          SET @nBal_QTY = @nBal_QTY - @nQTY
          IF @nBal_QTY <= 0
             BREAK
-         
+
          FETCH NEXT FROM @curPD INTO @cReplenKey, @cLOT, @nRPL_QTY
       END
 
@@ -139,14 +138,35 @@ BEGIN
       UPDATE dbo.Replenishment WITH (ROWLOCK) SET
          QTY = @nActQTY,
          ToLOC = @cToLOC,
-         ToID = CASE WHEN @cToID <> '' THEN @cToID ELSE ToID END, 
-         Confirmed = 'Y'  
+         ToID = CASE WHEN @cToID <> '' THEN @cToID ELSE ToID END,
+         Confirmed = 'Y'
       WHERE ReplenishmentKey = @cReplenKey
       IF @@ERROR <> 0
       BEGIN
          SET @nErrNo = 141553
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd RPL Fail
          GOTO RollBackTran
+      END
+      
+      IF @cUCCNo <> ''
+      BEGIN
+         DECLARE @cLoseID NVARCHAR(1)
+         SELECT @cLoseID = LoseID FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @cToLOC
+         
+         UPDATE dbo.UCC WITH (ROWLOCK) SET
+            Status = '6',
+            LOC = @cToLOC, 
+            ID = CASE WHEN @cLoseID = '1' THEN '' ELSE @cToID END, 
+            EditWho = SUSER_SNAME(),
+            EditDate = GETDATE()
+         WHERE StorerKey = @cStorerKey
+            AND UCCNo = @cUCCNo
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 141554
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd UCC Fail
+            GOTO RollBackTran
+         END
       END
    END
 
@@ -160,11 +180,5 @@ Quit:
       COMMIT TRAN
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON RDT.rdt_Replenish_V7_Confirm TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_Replenish_V7_Confirm] TO [NSQL]
 GO

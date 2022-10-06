@@ -28,6 +28,9 @@ execute rdt.rdtAddMsg 136674, 10, '36674^Invalid LOC',    'us_english', 896
 execute rdt.rdtAddMsg 136675, 10, '36675^Diff facility',  'us_english', 896
 execute rdt.rdtAddMsg 136676, 10, '36676^No Task in LOC', 'us_english', 896
 execute rdt.rdtAddMsg 136677, 10, '36677^TO ID REQUIRED', 'us_english', 896
+execute rdt.rdtAddMsg 136678, 10, '36678^UCC needed',     'us_english', 896
+execute rdt.rdtAddMsg 136679, 10, '36679^UCC Not in RPL', 'us_english', 896
+execute rdt.rdtAddMsg 136680, 10, '36680^UCC Not in RPL', 'us_english', 896
 
 SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 136651 AND 136700	
 
