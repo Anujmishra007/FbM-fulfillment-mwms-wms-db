@@ -35,3 +35,6 @@ execute rdt.rdtAddMsg 51381, 10, '51381^UpdTaskdetFail', 'us_english', 1812
 execute rdt.rdtAddMsg 51382, 10, '51382^DelRPFLogFail ', 'us_english', 1812
 execute rdt.rdtAddMsg 51383, 10, '51383^Invalid Format', 'us_english', 1812
 execute rdt.rdtAddMsg 51384, 10, '51384^FullShortNoQTY', 'us_english', 1812
+
+--wms20172
+execute rdt.rdtAddMsg 51385, 10, '51385^InvalidLoc', 'us_english', 1812
