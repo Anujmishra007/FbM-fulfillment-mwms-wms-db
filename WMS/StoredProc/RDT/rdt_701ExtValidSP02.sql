@@ -33,7 +33,7 @@ AS
    SET ANSI_NULLS OFF
 
    DECLARE @cUDF05      NVARCHAR( 60)
-   DECLARE @cStatus     NVARCHAR( 10)
+   DECLARE @cStatus     NVARCHAR( 10) = ''
    
    IF @nFunc <> 701
       GOTO Quit
@@ -76,7 +76,7 @@ AS
             AND   UserName = @cUserID 
             ORDER BY EditDate DESC
          
-            IF @cStatus <> '9'
+            IF ISNULL( @cStatus, '') NOT IN ('9','')
             BEGIN
                SET @nErrNo = 191953  -- Job Not Done
                GOTO Quit
