@@ -132,7 +132,7 @@ BEGIN
             
   SET @c_SQLJOIN = +' SELECT DISTINCT  REC.Storerkey,RECDET.ReceiptKey,RECDET.ReceiptLineNumber,RECDET.SKU,S.Descr,'+ CHAR(13) +     --5     
              + ' RECDET.UOM,RECDET.lottable02,RECDET.lottable03,RECDET.lottable05,RECDET.toid, '      --10  
-             + ' RECDET.Lottable01,'''','''','''','''','     --15       --WL01
+             + ' RECDET.Lottable01,RECDET.qtyReceived,'''','''','''','     --15       --WL01
              + CHAR(13) +      
              + ' '''','''','''','''','''','         --20      
               + ' '''','''','''','''','''','''','''','''','''','''','  --30  
