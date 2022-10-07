@@ -1,6 +1,3 @@
-IF EXISTS ( SELECT * FROM sys.objects WHERE  objecT_id = OBJECT_ID(N'[RDT].[rdtfnc_PickCase]') AND OBJECTPROPERTY(objecT_id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [RDT].[rdtfnc_PickCase]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -13,9 +10,10 @@ GO
 /*                                                                            */
 /* Date         Rev  Author      Purposes                                     */
 /* 2018-11-05   1.0  ChewKP      WMS-6666  Created                            */
+/* 2022-08-17   1.1  Ung         WMS-20525 Add UCC                            */
 /******************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_PickCase] (
+CREATE OR ALTER PROC [RDT].[rdtfnc_PickCase] (
    @nMobile    INT,
    @nErrNo     INT          OUTPUT,
    @cErrMsg    NVARCHAR(20) OUTPUT
@@ -137,7 +135,6 @@ SELECT
 
    @cZone            = V_String1,
    @cSKUValidated    = V_String2,
-   @nTotalQty        = V_String3,
    @cDropID          = V_String4,
    @cFromStep        = V_String5,
 
@@ -180,19 +177,19 @@ IF @nFunc = 957 -- Pick Case
 BEGIN
    -- Redirect to respective screen
    IF @nStep = 0  GOTO Step_0  -- Menu. Func = 957
-   IF @nStep = 1  GOTO Step_1  -- Scn = 4640. PickSlipNo
-   IF @nStep = 2  GOTO Step_2  -- Scn = 4641. PickZone, DropID
-   IF @nStep = 3  GOTO Step_3  -- Scn = 4642. SKU QTY
-   IF @nStep = 4  GOTO Step_4  -- Scn = 4643. No more task in LOC
-   IF @nStep = 5  GOTO Step_5  -- Scn = 4644. Confrim Short Pick?
-   IF @nStep = 6  GOTO Step_6  -- Scn = 4645. Skip LOC?
-   IF @nStep = 7  GOTO Step_7  -- Scn = 4646. Confirm LOC
+   IF @nStep = 1  GOTO Step_1  -- Scn = 5290. PickSlipNo
+   IF @nStep = 2  GOTO Step_2  -- Scn = 5291. PickZone, DropID
+   IF @nStep = 3  GOTO Step_3  -- Scn = 5292. UCC
+   IF @nStep = 4  GOTO Step_4  -- Scn = 5293. No more task in LOC
+   IF @nStep = 5  GOTO Step_5  -- Scn = 5294. Confrim Short Pick?
+   IF @nStep = 6  GOTO Step_6  -- Scn = 5295. Skip LOC?
+   IF @nStep = 7  GOTO Step_7  -- Scn = 5296. Confirm LOC
 END
 RETURN -- Do nothing if incorrect step
 
 
 /********************************************************************************
-Step_0. Func = 839
+Step_0. Func = 957
 ********************************************************************************/
 Step_0:
 BEGIN
@@ -248,7 +245,7 @@ GOTO Quit
 
 
 /************************************************************************************
-Scn = 4640. PickSlipNo screen
+Scn = 5290. PickSlipNo screen
    PSNO    (field01)
 ************************************************************************************/
 Step_1:
@@ -495,7 +492,7 @@ GOTO Quit
 
 
 /********************************************************************************
-Scn = 4641. PickZone screen
+Scn = 5291. PickZone screen
    LOC         (field01)
    PickZone    (field02)
    DropID      (field03, input)
@@ -674,12 +671,12 @@ GOTO Quit
 
 
 /********************************************************************************
-Scn = 4642. SKU QTY screen
+Scn = 5292. UCC screen
    LOC         (field01)
    SKU         (field02)
    DESCR1      (field03)
    DESCR1      (field04)
-   SKU/UPC     (field05, input)
+   UCC         (field05, input)
    PK QTY      (field06)
    ACT QTY     (field07)
 ********************************************************************************/
@@ -731,7 +728,6 @@ BEGIN
       -- Validate SKU
       IF @cBarcode <> ''
       BEGIN
-         
          IF @cBarcode = '99' -- Fully short
          BEGIN
             SET @cSKUValidated = '99'
@@ -740,7 +736,6 @@ BEGIN
          END
          ELSE
          BEGIN
-            
             -- Decode
             IF @cDecodeSP <> ''
             BEGIN
@@ -769,6 +764,7 @@ BEGIN
                      @cErrMsg     = @cErrMsg OUTPUT,
                      @cType       = 'UPC'
                END
+               
                -- Customize decode
                ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
                BEGIN
@@ -833,8 +829,6 @@ BEGIN
             WHERE StorerKey = @cStorerKey
             AND UCCNo = @cBarcode
             --AND SKU = @cSuggSKU 
-            
-            
 
             -- Get SKU count
             DECLARE @nSKUCnt INT
@@ -890,8 +884,6 @@ BEGIN
          END
       END
 
-      
-
       -- Validate QTY
       IF @cQTY <> '' AND RDT.rdtIsValidQTY( @cQTY, 0) = 0
       BEGIN
@@ -920,8 +912,6 @@ BEGIN
             SET @nQTY = @nActQTY + 1
          ELSE
             SET @nQTY = CAST( @cQTY AS INT)
-
-
 
       -- Check over pick
 --      IF @nQTY > @nSuggQTY
@@ -1174,7 +1164,7 @@ GOTO Quit
 
 
 /********************************************************************************
-Scn = 4643. Message. No more task in LOC
+Scn = 5293. Message. No more task in LOC
 ********************************************************************************/
 Step_4:
 BEGIN
@@ -1252,7 +1242,7 @@ GOTO Quit
 
 
 /********************************************************************************
-Scn = 4644. Confirm Short Pick?    
+Scn = 5294. Confirm Short Pick?    
    Option (field01)
 ********************************************************************************/
 Step_5:
@@ -1414,7 +1404,7 @@ GOTO Quit
 
 
 /********************************************************************************
-Scn = 4645. Skip LOC?
+Scn = 5295. Skip LOC?
    Option (field01)
 ********************************************************************************/
 Step_6:
@@ -1549,7 +1539,7 @@ GOTO Quit
 
 
 /********************************************************************************
-Scn = 4646. Confirm LOC
+Scn = 5296. Confirm LOC
    Sugg LOC (field01)
    LOC      (filed02, input)
 ********************************************************************************/
@@ -1669,7 +1659,6 @@ BEGIN
 
       V_String1      = @cZone,
       V_String2      = @cSKUValidated,
-      V_String3      = @nTotalQty,
       V_String4      = @cDropID,
       V_String5      = @cFromStep,
 
