@@ -12,7 +12,7 @@ GO
 /*                                                                         */
 /* Called By: SCE                                                          */
 /*          :                                                              */
-/* PVCS Version: 1.9                                                       */
+/* PVCS Version: 2.2                                                       */
 /*                                                                         */
 /* Version: 8.0                                                            */
 /*                                                                         */
@@ -39,6 +39,8 @@ GO
 /* 2022-05-25  Wan08    2.0   LFWM-3505-Storerconfig DisAllowDuplicateIdsOnWSRcpt */
 /*                            Enhancement                                  */
 /* 2022-07-19  Wan09    2.1   JSM-82472 - Excluded unreceived line         */
+/* 2022-09-19  Wan10    2.2   LFWM-3760 - PH - SCE Returns Validation Allow*/
+/*                            Duplicate ID                                 */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE [WM].[lsp_FinalizeReceipt_Wrapper]
@@ -69,7 +71,7 @@ BEGIN
          , @c_Storerkey                NVARCHAR(10)   = ''
          , @c_ASNStatus                NVARCHAR(10)   = ''
          , @c_RecType                  NVARCHAR(10)   = ''
-         , @c_DocType                  NVARCHAR(10)   = ''
+         , @c_DocType                  NVARCHAR(1)    = ''
          , @c_UserDefine01             NVARCHAR(30)   = ''
          , @c_UserDefine02             NVARCHAR(30)   = ''
          , @dt_DeliveryDate            DATETIME
@@ -199,6 +201,8 @@ BEGIN
          , @c_ByPassTol                NVARCHAR(30)   = ''
          , @c_UCCTrackValue            NVARCHAR(10)   = ''        --(Wan05)
          , @c_DisAllowDuplicateIdsOnWSRcpt NVARCHAR(10)  = ''     --(Wan08)
+         , @c_DisAllowDupIDsOnWSRcpt_Option5 NVARCHAR(1000) = ''  --(Wan10)
+         , @c_UniqueIDSkipDocType      NVARCHAR(30) = ''          --(Wan10)
 
          , @c_MUID                     NVARCHAR(30)   = ''
          , @c_GenID                    NVARCHAR(30)   = ''
@@ -1829,9 +1833,17 @@ BEGIN
          VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg) 
          --(Wan06) - END
       END
-
-      SELECT @c_DisAllowDuplicateIdsOnWSRcpt = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'DisAllowDuplicateIdsOnWSRcpt')               ---(Wan08)
+      --(Wan10) - START
+      SELECT @c_DisAllowDuplicateIdsOnWSRcpt = fgr.Authority
+            ,@c_DisAllowDupIDsOnWSRcpt_Option5 = fgr.Option5
+      FROM dbo.fnc_GetRight2( @c_Facility, @c_Storerkey, '', 'DisAllowDuplicateIdsOnWSRcpt') AS fgr      ---(Wan08)
       
+      SELECT @c_UniqueIDSkipDocType = dbo.fnc_GetParamValueFromString('@c_UniqueIDSkipDocType', @c_DisAllowDupIDsOnWSRcpt_Option5, @c_UniqueIDSkipDocType)
+      IF @c_DisAllowDuplicateIdsOnWSRcpt = '1' AND CHARINDEX(@c_DocType, @c_UniqueIDSkipDocType, 1) > 0
+      BEGIN 
+         SET @c_DisAllowDuplicateIdsOnWSRcpt = '0'
+      END 
+      -- (Wan10) - END
       SET @c_ReceiptLineNo = ''
       WHILE 1 = 1
       BEGIN

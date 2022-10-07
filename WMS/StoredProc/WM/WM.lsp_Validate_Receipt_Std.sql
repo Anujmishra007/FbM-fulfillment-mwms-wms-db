@@ -13,7 +13,7 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.2                                                          */  
+/* Version: 1.3                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
@@ -22,6 +22,8 @@ GO
 /* 2021-02-10  mingle01 1.1   Add Big Outer Begin try/Catch              */
 /* 2021-05-20  Wan01    1.2   LFWM-3505 Storerconfig:                    */
 /*                            DisAllowDuplicateIdsOnWSRcpt SCE Enhancement*/
+/* 2022-09-19  Wan02    1.3   LFWM-3760 - PH - SCE Returns Validation Allow*/
+/*                            Duplicate ID                               */
 /*************************************************************************/   
 CREATE OR ALTER PROC [WM].[lsp_Validate_Receipt_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
@@ -128,13 +130,15 @@ BEGIN
             @c_ExternReceiptKey     NVARCHAR(20) = '',
             @c_WarehouseReference   NVARCHAR(18) = '', 
             @c_ASNReason            NVARCHAR(10) = '',
-            @c_CarrierKey           NVARCHAR(15) = '' 
+            @c_CarrierKey           NVARCHAR(15) = ''   
 
       -- StorerConfig 
       DECLARE 
             @c_RCPTRQD                       NVARCHAR(1) = '0'
          ,  @c_OWITF                         NVARCHAR(1) = '0'
-         ,  @c_DisAllowDuplicateIdsOnWSRcpt  NVARCHAR(30)= '0'             --(Wan03)
+         ,  @c_DisAllowDuplicateIdsOnWSRcpt  NVARCHAR(30)= '0'             --(Wan01)
+         ,  @c_DisAllowDupIDsOnWSRcpt_Option5 NVARCHAR(1000) = ''          --(Wan02)
+         ,  @c_UniqueIDSkipDocType           NVARCHAR(30) = ''             --(Wan02)         
             
       SELECT  
             @c_ReceiptKey = R.ReceiptKey
@@ -289,7 +293,18 @@ BEGIN
       --(Wan01) - START
       IF @n_Continue IN ( 1, 2 )
       BEGIN
-         SELECT @c_DisAllowDuplicateIdsOnWSRcpt = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'DisAllowDuplicateIdsOnWSRcpt')
+         --(Wan02) - START
+         SELECT @c_DisAllowDuplicateIdsOnWSRcpt = fgr.Authority
+               ,@c_DisAllowDupIDsOnWSRcpt_Option5 = fgr.Option5
+         FROM dbo.fnc_GetRight2( @c_Facility, @c_Storerkey, '', 'DisAllowDuplicateIdsOnWSRcpt') AS fgr      
+      
+         SELECT @c_UniqueIDSkipDocType = dbo.fnc_GetParamValueFromString('@c_UniqueIDSkipDocType', @c_DisAllowDupIDsOnWSRcpt_Option5, @c_UniqueIDSkipDocType)
+         IF @c_DisAllowDuplicateIdsOnWSRcpt = '1' AND CHARINDEX(@c_DocType, @c_UniqueIDSkipDocType, 1) > 0
+         BEGIN 
+            SET @c_DisAllowDuplicateIdsOnWSRcpt = '0'
+         END
+         --(Wan02) - END
+         
          IF @c_DisAllowDuplicateIdsOnWSRcpt = '1'
          BEGIN
             IF EXISTS ( SELECT TOP 1 1 FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK) JOIN dbo.ID AS i WITH (NOLOCK) ON i.ID = r.ToID

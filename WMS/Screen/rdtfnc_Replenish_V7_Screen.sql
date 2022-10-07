@@ -1,12 +1,10 @@
-IF NOT EXISTS ( SELECT 1 FROM RDT.RDTMSG WITH (NOLOCK) WHERE Message_ID = 896)
+IF NOT EXISTS ( SELECT 1 FROM RDT.RDTMSG WITH (NOLOCK) WHERE Message_ID = 896 AND Message_Type = 'FNC' AND Lang_Code = 'ENG')
 BEGIN
    INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
    VALUES (896, 'ENG', 'FNC', 'REPLENISHMENT V7', 'rdtfnc_Replenish_V7', '5')
 END
 
---SELECT * FROM RDT.RDTSCN (NOLOCK) WHERE SCN BETWEEN 5370 AND 5379
-
--- 5370 = ?? screen
+-- 5370 = FROM LOC,ID or RPLKEY screen
 DELETE rdt.RDTScn WHERE Scn = 5370 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 5370, 'ENG',
     @cLine01 = 'FROM LOC:'
@@ -19,7 +17,8 @@ EXECUTE rdt.rdtAddScn 5370, 'ENG',
    ,@cLine08 = 'RPL KEY:'
    ,@cLine09 = '%10i03'
    ,@cLine14 = '%e'
-    
+   ,@nFunc = 896
+
 -- 5371 = SKU screen
 DELETE rdt.RDTScn WHERE Scn = 5371 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 5371, 'ENG',
@@ -30,7 +29,8 @@ EXECUTE rdt.rdtAddScn 5371, 'ENG',
    ,@cLine05 = 'SKU/UPC:'
    ,@cLine06 = '%20i03'
    ,@cLine14 = '%e'
- 
+   ,@nFunc = 896
+
 -- 5372 = QTY screen
 DELETE rdt.RDTScn WHERE Scn = 5372 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 5372, 'ENG',
@@ -48,7 +48,8 @@ EXECUTE rdt.rdtAddScn 5372, 'ENG',
    ,@cLine12 = 'ACT QTY: %05i12 %05i13'
    ,@cLine13 = '%20d14'   -- WMS6778
    ,@cLine14 = '%e'
- 
+   ,@nFunc = 896
+
 -- 5373 = ToLOC screen
 DELETE rdt.RDTScn WHERE Scn = 5373 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 5373, 'ENG',
@@ -67,23 +68,40 @@ EXECUTE rdt.rdtAddScn 5373, 'ENG',
    ,@cLine13 = 'TO LOC: %10i13'
    ,@cLine14 = '%e'
 
--- 5374 = Dialog screen
+-- 5374 = Confirm LOC screen
 DELETE rdt.RDTScn WHERE Scn = 5374 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 5374, 'ENG',
-    @cLine01 = 'Replenish to'
-   ,@cLine02 = 'different location'
-   ,@cLine04 = 'Proceed?'
+    @cLine01 = 'REPLENISH TO'
+   ,@cLine02 = 'DIFFERENT LOC'
+   ,@cLine03 = ''
+   ,@cLine04 = 'PROCEED?'
+   ,@cLine05 = ''
    ,@cLine06 = '1 = YES'
-   ,@cLine07 = '2 = NO'
+   ,@cLine07 = '9 = NO'
+   ,@cLine08 = ''
    ,@cLine09 = 'OPTION: %01i01'
    ,@cLine14 = '%e'
+   ,@nFunc = 896
 
 -- 5375 = Message screen
 DELETE rdt.RDTScn WHERE Scn = 5375 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 5375, 'ENG',
     @cLine01 = 'Replenish'
    ,@cLine02 = 'successfully'
+   ,@cLine03 = ''
    ,@cLine04 = 'Press ENTER or ESC'
    ,@cLine05 = 'to continue'
    ,@cLine14 = '%e'
- 
+   ,@nFunc = 896
+
+-- 5376 = UCC screen
+DELETE rdt.RDTScn WHERE Scn = 5376 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 5376, 'ENG',
+    @cLine01 = 'FROM LOC:'
+   ,@cLine02 = '%10d01'
+   ,@cLine03 = 'FROM ID:'
+   ,@cLine04 = '%18D02'
+   ,@cLine05 = 'UCC:'
+   ,@cLine06 = '%20i03'
+   ,@cLine14 = '%e'
+   ,@nFunc = 896

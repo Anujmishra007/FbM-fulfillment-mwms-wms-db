@@ -1,11 +1,8 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdt_TM_CasePick_Confirm]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdt_TM_CasePick_Confirm]
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /************************************************************************/
 /* Store procedure: rdt_TM_CasePick_Confirm                             */
@@ -24,22 +21,24 @@ GO
 /* 13-06-2018 1.3  Ung       WMS-3333 Add ConfirmSP                     */
 /* 15-12-2018 1.4  TLTING01  Missing nolock                             */
 /* 20-03-2019 1.5  Ung       WMS-8058 UCCNo on PickDetail.DropID        */
+/* 09-09-2022 1.6  yeekung   WMS-20712 Add Toloc (yeekung01)            */
 /************************************************************************/
 
-CREATE PROC [rdt].[rdt_TM_CasePick_Confirm] (
+CREATE OR ALTER PROC [RDT].[rdt_TM_CasePick_Confirm] (
    @nMobile        INT,
    @nFunc          INT,
    @cLangCode      NVARCHAR( 3),
-   @cUserName      NVARCHAR( 18), 
-   @cFacility      NVARCHAR( 5), 
-   @cStorerKey     NVARCHAR( 15), 
+   @cUserName      NVARCHAR( 18),
+   @cFacility      NVARCHAR( 5),
+   @cStorerKey     NVARCHAR( 15),
    @cTaskDetailKey NVARCHAR( 10),
-   @cDropID        NVARCHAR( 20), 
-   @nQTY           INT, 
-   @cReasonKey     NVARCHAR( 10), 
-   @cListKey       NVARCHAR( 10), 
+   @cDropID        NVARCHAR( 20),
+   @nQTY           INT,
+   @cFinalLoc      NVARCHAR( 10), --(yeekung01)
+   @cReasonKey     NVARCHAR( 10),
+   @cListKey       NVARCHAR( 10),
    @nErrNo         INT           OUTPUT,
-   @cErrMsg        NVARCHAR( 20) OUTPUT, 
+   @cErrMsg        NVARCHAR( 20) OUTPUT,
    @nDebug         INT = 0
 ) AS
 BEGIN
@@ -59,7 +58,7 @@ BEGIN
       SET @cConfirmSP = ''
 
    SET @nTranCount = @@TRANCOUNT
-   
+
    /***********************************************************************************************
                                           Custom confirm
    ***********************************************************************************************/
@@ -68,34 +67,35 @@ BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cConfirmSP AND type = 'P')
       BEGIN
          SET @cSQL = 'EXEC rdt.' + RTRIM( @cConfirmSP) +
-            ' @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, @cTaskDetailKey, @cDropID, @nQTY, @cReasonKey, @cListKey, ' + 
+            ' @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, @cTaskDetailKey, @cDropID, @nQTY,@cFinalLoc, @cReasonKey, @cListKey, ' +
             ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
          SET @cSQLParam =
-            ' @nMobile        INT,           ' + 
-            ' @nFunc          INT,           ' + 
-            ' @cLangCode      NVARCHAR( 3),  ' + 
-            ' @cUserName      NVARCHAR( 18), ' + 
-            ' @cFacility      NVARCHAR( 5),  ' + 
-            ' @cStorerKey     NVARCHAR( 15), ' + 
-            ' @cTaskDetailKey NVARCHAR( 10), ' + 
-            ' @cDropID        NVARCHAR( 20), ' + 
-            ' @nQTY           INT,           ' + 
-            ' @cReasonKey     NVARCHAR( 10), ' + 
-            ' @cListKey       NVARCHAR( 10), ' + 
-            ' @nErrNo         INT           OUTPUT, ' + 
-            ' @cErrMsg        NVARCHAR( 20) OUTPUT, ' + 
+            ' @nMobile        INT,           ' +
+            ' @nFunc          INT,           ' +
+            ' @cLangCode      NVARCHAR( 3),  ' +
+            ' @cUserName      NVARCHAR( 18), ' +
+            ' @cFacility      NVARCHAR( 5),  ' +
+            ' @cStorerKey     NVARCHAR( 15), ' +
+            ' @cTaskDetailKey NVARCHAR( 10), ' +
+            ' @cDropID        NVARCHAR( 20), ' +
+            ' @nQTY           INT,           ' +
+            ' @cFinalLoc      NVARCHAR( 20), ' +
+            ' @cReasonKey     NVARCHAR( 10), ' +
+            ' @cListKey       NVARCHAR( 10), ' +
+            ' @nErrNo         INT           OUTPUT, ' +
+            ' @cErrMsg        NVARCHAR( 20) OUTPUT, ' +
             ' @nDebug         INT = 0               '
 
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-            @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, @cTaskDetailKey, @cDropID, @nQTY, @cReasonKey, @cListKey,  
-            @nErrNo OUTPUT, @cErrMsg OUTPUT 
+            @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, @cTaskDetailKey, @cDropID, @nQTY,@cFinalLoc, @cReasonKey, @cListKey,
+            @nErrNo OUTPUT, @cErrMsg OUTPUT
 
          GOTO Quit
       END
    END
 
    /***********************************************************************************************
-                                          Standard confirm 
+                                          Standard confirm
    ***********************************************************************************************/
    DECLARE @cNewTaskDetailKey NVARCHAR(10)
    DECLARE @cPickDetailKey NVARCHAR(10)
@@ -124,17 +124,21 @@ BEGIN
 
    -- Get task info
    SET @nSystemQTY = 0
-   SELECT 
-      @cTaskType = TaskType, 
-      @cFromLOC = FromLOC, 
-      @cFromID = FromID, 
-      @cToLOC = ToLOC, 
-      @nSystemQTY = QTY, 
-      @cLOT = LOT, 
-      @cPickMethod = PickMethod, 
+   SELECT
+      @cTaskType = TaskType,
+      @cFromLOC = FromLOC,
+      @cFromID = FromID,
+      @cToLOC = ToLOC,
+      @nSystemQTY = QTY,
+      @cLOT = LOT,
+      @cPickMethod = PickMethod,
       @cStatus = Status
-   FROM dbo.TaskDetail WITH (NOLOCK) 
+   FROM dbo.TaskDetail WITH (NOLOCK)
    WHERE TaskDetailKey = @cTaskDetailKey
+
+
+   IF ISNULL(@cFinalLoc,'')=''
+      SET @cFinalLoc=@cToLOC
 
    -- Check task already confirm/SKIP/CANCEL
    IF @cStatus IN ('5', '0', 'X')
@@ -144,10 +148,10 @@ BEGIN
    SET @cPickConfirmStatus = rdt.RDTGetConfig( @nFunc, 'PickConfirmStatus', @cStorerKey)
    IF @cPickConfirmStatus = '0'
       SET @cPickConfirmStatus = '5'
-   
+
    IF @cPickConfirmStatus NOT IN ('3', '5')
       SET @cPickConfirmStatus = '5'
-   
+
    -- Handling transaction
    BEGIN TRAN  -- Begin our own transaction
    SAVE TRAN rdt_TM_CasePick_Confirm -- For rollback or commit only our own transaction
@@ -169,14 +173,14 @@ BEGIN
          SET @nNewTaskQTY = 0
       END
       ELSE
-      BEGIN 
+      BEGIN
          SET @nShortQTY = 0
          SET @nNewTaskQTY = @nSystemQTY - @nQTY
       END
-      
+
 IF @nDebug = 1
    SELECT @nOrgTaskQty '@nOrgTaskQty', @nNewTaskQty '@nNewTaskQty', @nShortQTY '@nShortQTY'
-         
+
       IF @nNewTaskQTY > 0
       BEGIN
          -- Get new TaskDetailKey
@@ -195,19 +199,19 @@ IF @nDebug = 1
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GetKey Fail
             GOTO RollBackTran
          END
-            
+
          -- Insert TaskDetail
          INSERT INTO TaskDetail (
-            TaskDetailKey, RefTaskKey, ListKey, Status, UserKey, ReasonKey, DropID, QTY, SystemQTY, ToLOC, ToID, 
-            TaskType, Storerkey, Sku, LOT, UOM, UOMQTY, FromLOC, LogicalFromLOC, FromID, LogicalToLOC, CaseID, PickMethod, 
-            StatusMsg, Priority, SourcePriority, HoldKey, UserPosition, UserKeyOverRide, SourceType, SourceKey, 
+            TaskDetailKey, RefTaskKey, ListKey, Status, UserKey, ReasonKey, DropID, QTY, SystemQTY, ToLOC, ToID,
+            TaskType, Storerkey, Sku, LOT, UOM, UOMQTY, FromLOC, LogicalFromLOC, FromID, LogicalToLOC, CaseID, PickMethod,
+            StatusMsg, Priority, SourcePriority, HoldKey, UserPosition, UserKeyOverRide, SourceType, SourceKey,
             PickDetailKey, OrderKey, OrderLineNumber, WaveKey, Message01, Message02, Message03, LoadKey, AreaKey, GroupKey)
          SELECT
-            @cNewTaskDetailKey, @cTaskDetailKey, '', '0', '', '', '', @nNewTaskQTY, @nNewTaskQTY, 
-            ToLOC = CASE WHEN FinalLOC = '' THEN ToLOC ELSE FinalLOC END, 
-            ToID  = CASE WHEN FinalID  = '' THEN ToID  ELSE FinalID  END, 
-            TaskType, Storerkey, Sku, LOT, UOM, UOMQTY, FromLOC, LogicalFromLOC, FromID, LogicalToLOC, CaseID, PickMethod, 
-            StatusMsg, Priority, SourcePriority, HoldKey, UserPosition, UserKeyOverRide, SourceType, SourceKey, 
+            @cNewTaskDetailKey, @cTaskDetailKey, '', '0', '', '', '', @nNewTaskQTY, @nNewTaskQTY,
+            ToLOC = CASE WHEN FinalLOC = '' THEN ToLOC ELSE FinalLOC END,
+            ToID  = CASE WHEN FinalID  = '' THEN ToID  ELSE FinalID  END,
+            TaskType, Storerkey, Sku, LOT, UOM, UOMQTY, FromLOC, LogicalFromLOC, FromID, LogicalToLOC, CaseID, PickMethod,
+            StatusMsg, Priority, SourcePriority, HoldKey, UserPosition, UserKeyOverRide, SourceType, SourceKey,
             PickDetailKey, OrderKey, OrderLineNumber, WaveKey, Message01, Message02, Message03, LoadKey, AreaKey, GroupKey
          FROM TaskDetail WITH (NOLOCK)
          WHERE TaskDetailKey = @cTaskDetailKey
@@ -218,7 +222,7 @@ IF @nDebug = 1
             GOTO RollBackTran
          END
       END
-      
+
       -- Loop PickDetail for original task
       DECLARE @curPD CURSOR
       SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -250,15 +254,15 @@ IF @nDebug = 1
             SET @nPickQty = @nNewTaskQty
             --SET @cTaskDetailKey = @cNewTaskDetailKey
          END
-   
+
          -- PickDetail have less or exact match
          IF @nQTY_PD <= @nPickQty
          BEGIN
             -- Confirm PickDetail
             UPDATE dbo.PickDetail WITH (ROWLOCK) SET
-               TaskDetailKey = CASE WHEN @cTask = 'NEW' THEN @cNewTaskDetailKey ELSE @cTaskDetailKey END, 
-               Status = CASE WHEN @cTask = 'SHT' THEN '4' ELSE Status END, 
-               EditWho  = SUSER_SNAME(), 
+               TaskDetailKey = CASE WHEN @cTask = 'NEW' THEN @cNewTaskDetailKey ELSE @cTaskDetailKey END,
+               Status = CASE WHEN @cTask = 'SHT' THEN '4' ELSE Status END,
+               EditWho  = SUSER_SNAME(),
                EditDate = GETDATE(),
                Trafficcop = NULL
             WHERE PickDetailKey = @cPickDetailKey
@@ -269,7 +273,7 @@ IF @nDebug = 1
                GOTO RollBackTran
             END
          END
-   
+
          -- PickDetail have more, need to split
          ELSE IF @nQTY_PD > @nPickQty
          BEGIN
@@ -288,23 +292,23 @@ IF @nDebug = 1
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GetKey Fail
                GOTO RollBackTran
             END
-   
+
             -- Create a new PickDetail to hold the balance
             INSERT INTO dbo.PickDetail (
                CaseID, PickHeaderKey, OrderKey, OrderLineNumber, LOT, StorerKey, SKU, AltSKU, UOM, UOMQTY, QTYMoved,
                DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, CartonType, ToLoc, DoReplenish, ReplenishZone,
-               DoCartonize, PickMethod, WaveKey, EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes, 
+               DoCartonize, PickMethod, WaveKey, EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes,
                PickDetailKey,
-               Status, 
+               Status,
                QTY,
                TrafficCop,
                OptimizeCop)
             SELECT
                CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot, StorerKey, SKU, AltSku, UOM, UOMQTY, QTYMoved,
                DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, CartonType, ToLoc, DoReplenish, ReplenishZone,
-               DoCartonize, PickMethod, WaveKey, EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes, 
+               DoCartonize, PickMethod, WaveKey, EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes,
                @cNewPickDetailKey,
-               Status, 
+               Status,
                @nQTY_PD - @nPickQty, -- QTY
                NULL, --TrafficCop
                '1'   --OptimizeCop
@@ -316,13 +320,13 @@ IF @nDebug = 1
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS PKDtl Fail
                GOTO RollBackTran
             END
-   
+
             -- Change original PickDetail with exact QTY (with TrafficCop)
             UPDATE dbo.PickDetail WITH (ROWLOCK) SET
                QTY = @nPickQty,
-               TaskDetailKey = CASE WHEN @cTask = 'NEW' THEN @cNewTaskDetailKey ELSE @cTaskDetailKey END, 
-               Status = CASE WHEN @cTask = 'SHT' THEN '4' ELSE Status END, 
-               EditWho  = SUSER_SNAME(), 
+               TaskDetailKey = CASE WHEN @cTask = 'NEW' THEN @cNewTaskDetailKey ELSE @cTaskDetailKey END,
+               Status = CASE WHEN @cTask = 'SHT' THEN '4' ELSE Status END,
+               EditWho  = SUSER_SNAME(),
                EditDate = GETDATE(),
                Trafficcop = NULL
             WHERE PickDetailKey = @cPickDetailKey
@@ -332,22 +336,22 @@ IF @nDebug = 1
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
                GOTO RollBackTran
             END
-            
+
             -- Set QTY taken
             SET @nQTY_PD = @nPickQty
          END
-   
+
          -- Reduce balance
          IF @cTask = 'ORG' SET @nOrgTaskQty = @nOrgTaskQty - @nQTY_PD
          IF @cTask = 'SHT' SET @nShortQty   = @nShortQty   - @nQTY_PD
          IF @cTask = 'NEW' SET @nNewTaskQty = @nNewTaskQty - @nQTY_PD
-         
+
          FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD
       END
 
 IF @nDebug = 1
    SELECT @nOrgTaskQty '@nOrgTaskQty', @nNewTaskQty '@nNewTaskQty', @nShortQTY '@nShortQTY'
-   
+
       -- Must fully offset
       IF @nOrgTaskQty <> 0 OR @nNewTaskQty <> 0 OR @nShortQTY <> 0
       BEGIN
@@ -355,12 +359,12 @@ IF @nDebug = 1
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NotFullyOffset
          GOTO RollBackTran
       END
-         
+
       -- After split, set confirmed task SystemQTY = QTY
       SET @nSystemQTY = @nQTY
    END
-   
-   
+
+
    /***********************************************************************************************
 
                                           Update TaskDetail, PickDetail
@@ -369,14 +373,15 @@ IF @nDebug = 1
    -- Update Task
    UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
       Status = '5', -- Picked
-      DropID = @cDropID, 
-      ToID = CASE WHEN PickMethod = 'PP' THEN @cDropID ELSE ToID END, 
+      DropID = @cDropID,
+      ToID = CASE WHEN PickMethod = 'PP' THEN @cDropID ELSE ToID END,
       QTY = @nQTY,
-      SystemQTY = @nSystemQTY, 
-      ReasonKey = @cReasonKey, 
+      SystemQTY = @nSystemQTY,
+      toloc    = @cFinalLoc,
+      ReasonKey = @cReasonKey,
       EndTime = GETDATE(),
       EditDate = GETDATE(),
-      EditWho  = @cUserName, 
+      EditWho  = @cUserName,
       Trafficcop = NULL
    WHERE TaskDetailKey = @cTaskDetailKey
    IF @@ERROR <> 0
@@ -385,12 +390,12 @@ IF @nDebug = 1
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdTaskdetFail
       GOTO RollBackTran
    END
-   
+
    -- Get UCC info
    DECLARE @cUCC NVARCHAR(1)
    IF EXISTS( SELECT TOP 1 1 FROM rdt.rdtFCPLog WITH (NOLOCK) WHERE TaskDetailKey = @cTaskDetailKey)
       SET @cUCC = 'Y'
-   
+
    -- Loop PickDetail
    SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT PD.PickDetailKey
@@ -405,9 +410,9 @@ IF @nDebug = 1
    BEGIN
       -- Confirm PickDetail
       UPDATE dbo.PickDetail WITH (ROWLOCK) SET
-         Status   = @cPickConfirmStatus, 
+         Status   = @cPickConfirmStatus,
          DropID   = CASE WHEN @cUCC = 'Y' THEN DropID ELSE @cDropID END, -- Not stamp if UCC
-         EditWho  = SUSER_SNAME(), 
+         EditWho  = SUSER_SNAME(),
          EditDate = GETDATE()
       WHERE PickDetailKey = @cPickDetailKey
       IF @@ERROR <> 0
@@ -416,11 +421,11 @@ IF @nDebug = 1
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
          GOTO RollBackTran
       END
-      
+
       FETCH NEXT FROM @curPD INTO @cPickDetailKey
    END
-   
-   
+
+
    /***********************************************************************************************
 
                                           Confirm Extended Update
@@ -431,7 +436,7 @@ IF @nDebug = 1
    SET @cConfirmExtUpdSP = rdt.rdtGetConfig( @nFunc, 'ConfirmExtUpdSP', @cStorerKey)
    IF @cConfirmExtUpdSP = '0'
       SET @cConfirmExtUpdSP = ''
-   
+
    -- Confirm Extended update
    IF @cConfirmExtUpdSP <> ''
    BEGIN
@@ -446,7 +451,7 @@ IF @nDebug = 1
             '@cTaskdetailKey     NVARCHAR( 10), ' +
             '@cNewTaskDetailKey  NVARCHAR( 10), ' +
             '@nErrNo             INT OUTPUT,    ' +
-            '@cErrMsg            NVARCHAR( 20) OUTPUT ' 
+            '@cErrMsg            NVARCHAR( 20) OUTPUT '
 
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
             @nMobile, @nFunc, @cLangCode, @cTaskdetailKey, @cNewTaskDetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT
@@ -455,14 +460,14 @@ IF @nDebug = 1
             GOTO RollBackTran
       END
    END
-   
+
 IF @nDebug = 1
 begin
    select * from taskdetail (NOLOCK) where @cTaskDetailKey in (taskdetailkey, RefTaskKey)
    select * from pickdetail (NOLOCK) where taskdetailkey = @ctaskdetailkey or (taskdetailkey = @cNewTaskDetailKey and @cNewTaskDetailKey <> '')
    GOTO RollBackTran
 end
-   
+
    COMMIT TRAN rdt_TM_CasePick_Confirm -- Only commit change made here
    GOTO Quit
 
@@ -474,11 +479,5 @@ Quit:
       COMMIT TRAN
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON [rdt].[rdt_TM_CasePick_Confirm] TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_TM_CasePick_Confirm] TO [NSQL]
 GO

@@ -1,12 +1,8 @@
-
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[RDT].[rdtfnc_TM_CasePick]') AND type in (N'P', N'PC'))
-   DROP PROCEDURE [RDT].[rdtfnc_TM_CasePick]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 
 /******************************************************************************/
 /* Store procedure: rdtfnc_TM_CasePick                                        */
@@ -27,9 +23,10 @@ GO
 /*                            Fix PQTY not shown if DisableQTYField           */
 /* 2020-02-21 1.7  YeeKung    WMS-12082 Add ExtendedValidate(yeekung01)       */
 /* 2019-05-14 1.8  James      WMS-9920 Add MultiSKUBarcode (james01)          */
+/* 2022-09-09 1.9  YeeKung    WMS-20712 Add overwritetoloc (Yeekung02)        */   
 /******************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_TM_CasePick](
+CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CasePick](
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max
@@ -94,6 +91,7 @@ DECLARE
    @cListKey            NVARCHAR(10),
    @cDisableQTYField    NVARCHAR(1),
    @cSwapTaskSP         NVARCHAR(20),
+   @cOverwriteToLOC     NVARCHAR(1),    --(yeekung02)
 
    @cPUOM_Desc          NCHAR( 5),
    @cMUOM_Desc          NCHAR( 5),
@@ -129,7 +127,7 @@ DECLARE
    @cRefKey04           NVARCHAR(20),
    @cRefKey05           NVARCHAR(20),
    @cMultiSKUBarcode    NVARCHAR( 1),  -- (james01)
-   
+
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
    @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),
@@ -202,7 +200,7 @@ SELECT
    @cMUOM_Desc         = V_String10,
    @cPUOM_Desc         = V_String11,
    @cMultiSKUBarcode   = V_String12,
-   
+
    @cLOCLookupSP       = V_String19,
    @cSwapUCCSP         = V_String20,
    @cDecodeLabelNo     = V_String21,
@@ -225,6 +223,7 @@ SELECT
    @cRefKey03          = V_String37,
    @cRefKey04          = V_String38,
    @cRefKey05          = V_String39,
+   @cOverwriteToLOC    = V_String40, 
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -313,6 +312,7 @@ BEGIN
    SET @cDefaultFromID = rdt.rdtGetConfig( @nFunc, 'DefaultFromID', @cStorerKey)
    SET @cLOCLookupSP = rdt.RDTGetConfig( @nFunc, 'LOCLookupSP', @cStorerKey)
    SET @cMoveQTYAlloc = rdt.RDTGetConfig( @nFunc, 'MoveQTYAlloc', @cStorerKey)
+   SET @cOverwriteToLOC = rdt.rdtGetConfig( @nFunc, 'OverwriteToLOC', @cStorerKey) --(yeekung02)
 
    SET @cDecodeLabelNo = rdt.RDTGetConfig( @nFunc, 'DecodeLabelNo', @cStorerKey)
    IF @cDecodeLabelNo = '0'
@@ -343,7 +343,7 @@ BEGIN
       SET @cSwapUCCSP = ''
 
    SET @cMultiSKUBarcode = rdt.RDTGetConfig( @nFunc, 'MultiSKUBarcode', @cStorerKey)
-   
+
    -- Disable QTY field
    IF @cDisableQTYFieldSP <> ''
    BEGIN
@@ -737,10 +737,10 @@ BEGIN
       -- LOC lookup
       IF @cLOCLookupSP = '1'
       BEGIN
-         EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, 
+         EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility,
             @cFromLOC OUTPUT,
-            @nErrNo   OUTPUT, 
-            @cErrMsg  OUTPUT 
+            @nErrNo   OUTPUT,
+            @cErrMsg  OUTPUT
          IF @nErrNo <> 0
             GOTO Step_2_Fail
       END
@@ -938,7 +938,7 @@ BEGIN
                @cListKey     = ListKey
             FROM dbo.TaskDetail WITH (NOLOCK)
             WHERE TaskDetailKey = @cTaskDetailKey
-        
+
          END
       END
 
@@ -1038,7 +1038,7 @@ BEGIN
          SET @cLottable03 = ''
          SET @dLottable04 = NULL
 
-         -- Get lottable         
+         -- Get lottable
          SELECT
             @cLottable01 = LA.Lottable01,
             @cLottable02 = LA.Lottable02,
@@ -1380,7 +1380,7 @@ BEGIN
                   IF @nErrNo = -1 -- Found in Doc, skip multi SKU screen
                      SET @nErrNo = 0
 
-                  IF @nErrNo <> 0 
+                  IF @nErrNo <> 0
                   BEGIN
                      GOTO Step_4_Fail
                      EXEC rdt.rdtSetFocusField @nMobile, 8 -- SKU
@@ -1686,6 +1686,7 @@ BEGIN
             @cTaskDetailKey,
             @cDropID,
             @nQTY,
+            @cToLoc,
             @cReasonCode,
             @cListKey,
             @nErrNo             OUTPUT,
@@ -2050,10 +2051,10 @@ BEGIN
       -- LOC lookup
       IF @cLOCLookupSP = '1'
       BEGIN
-         EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, 
+         EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility,
             @cToLOC   OUTPUT,
-            @nErrNo   OUTPUT, 
-            @cErrMsg  OUTPUT 
+            @nErrNo   OUTPUT,
+            @cErrMsg  OUTPUT
          IF @nErrNo <> 0
             GOTO Step_6_Fail
       END
@@ -2061,9 +2062,20 @@ BEGIN
       -- Check if FromLOC match
       IF @cToLOC <> @cSuggToLOC
       BEGIN
-         SET @nErrNo = 51372
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ToLOC Diff
-        GOTO Step_6_Fail
+         IF @cOverwriteToLOC = '0'    
+         BEGIN    
+            SET @nErrNo = 51372    
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ToLOC Diff    
+            GOTO Step_4_Fail    
+         END    
+    
+         -- Check ToLOC valid    
+         IF NOT EXISTS( SELECT 1 FROM LOC WITH (NOLOCK) WHERE LOC = @cToLOC)    
+         BEGIN    
+            SET @nErrNo = 51385    
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid LOC    
+            GOTO Step_4_Fail    
+         END   
       END
 
       -- Confirm (TaskDetail to status 5, PickDetail to status 5)
@@ -2071,6 +2083,7 @@ BEGIN
          @cTaskDetailKey,
          @cDropID,
          @nQTY,
+         @cToLoc,
          @cReasonCode,
          @cListKey,
          @nErrNo  OUTPUT,
@@ -2561,6 +2574,7 @@ BEGIN
             @cTaskDetailKey,
             @cDropID,
             @nQTY,
+            @cToLoc,
             @cReasonCode,
             @cListKey,
             @nErrNo  OUTPUT,
@@ -2856,7 +2870,7 @@ BEGIN
       V_String10   = @cMUOM_Desc,
       V_String11   = @cPUOM_Desc,
       V_String12   = @cMultiSKUBarcode,
-      
+
       V_String19   = @cLOCLookupSP,
       V_String20   = @cSwapUCCSP,
       V_String21   = @cDecodeLabelNo,
@@ -2879,6 +2893,7 @@ BEGIN
       V_String37   = @cRefKey03,
       V_String38   = @cRefKey04,
       V_String39   = @cRefKey05,
+      V_String40   = @cOverwriteToLOC,   
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,
@@ -2927,10 +2942,5 @@ BEGIN
    END
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-GRANT EXECUTE ON RDT.rdtfnc_TM_CasePick TO NSQL
+GRANT EXECUTE ON  [RDT].[rdtfnc_TM_CasePick] TO [NSQL]
 GO
