@@ -123,17 +123,18 @@ BEGIN
  
    -- Get RDT.RDTPickLock candidate to offset  
    DECLARE curRPL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-   SELECT RowRef, DropID, PickQty, ID  
-   FROM RDT.RDTPickLock WITH (NOLOCK)  
-   WHERE StorerKey = @cStorerKey  
-      AND OrderKey = @cOrderKey  
-      AND SKU = @cSKU  
-      AND LOT = @cLOT  
-      AND LOC = @cLOC  
-      AND Status = '1'  
-      AND AddWho = @cUserName  
-      AND PutAwayZone = CASE WHEN @cPutAwayZone = 'ALL' THEN PutAwayZone ELSE @cPutAwayZone END  
-      AND PickZone = CASE WHEN ISNULL(@cPickZone  , '') = '' THEN PickZone ELSE @cPickZone END  
+   SELECT RowRef, DropID, PickQty, ID
+   FROM RDT.RDTPickLock WITH (NOLOCK)
+   WHERE StorerKey = @cStorerKey
+      AND OrderKey = @cOrderKey
+      AND SKU = @cSKU
+      AND LOT = @cLOT
+      AND LOC = @cLOC
+      AND Status = '1'
+      --AND PickQty > 0
+      AND AddWho = @cUserName
+      AND (( ISNULL( @cPutAwayZone, '') = 'ALL') OR ( PutAwayZone = @cPutAwayZone))
+      AND (( ISNULL( @cPickZone, '') = '') OR ( PickZone = @cPickZone)) 
    Order By RowRef  
    OPEN curRPL  
    FETCH NEXT FROM curRPL INTO @nRowRef, @cDropID, @nPickQty, @nCartonNo  
@@ -141,15 +142,15 @@ BEGIN
    BEGIN  
       -- Get PickDetail candidate to offset based on RPL's candidate  
       DECLARE curPD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-      SELECT PickDetailKey, QTY  
-      FROM dbo.PickDetail WITH (NOLOCK)  
-      WHERE OrderKey  = @cOrderKey  
-         AND StorerKey  = @cStorerKey  
-         AND SKU = @cSKU  
-         AND LOT = @cLOT  
-         AND LOC = @cLOC  
-         AND Status = '0'  
-      ORDER BY PickDetailKey  
+      SELECT PickDetailKey, QTY
+      FROM dbo.PickDetail WITH (NOLOCK)
+      WHERE OrderKey  = @cOrderKey
+         AND StorerKey  = @cStorerKey
+         AND SKU = @cSKU
+         AND LOT = @cLOT
+         AND LOC = @cLOC
+         AND Status = '0'
+      ORDER BY PickDetailKey 
       OPEN curPD  
       FETCH NEXT FROM curPD INTO @cPickDetailKey, @nQTY_PD  
       WHILE @@FETCH_STATUS <> -1  
