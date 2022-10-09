@@ -1,6 +1,8 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[ntrReplenishmentUpdate]') AND OBJECTPROPERTY(Id, N'IsTrigger') = 1)
-   DROP TRIGGER [dbo].[ntrReplenishmentUpdate]
+SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /************************************************************************/
 /* Trigger:  ntrReplenishmentUpdate                                     */
 /* Creation Date:                                                       */
@@ -45,9 +47,12 @@ GO
 /* 02-NOV-2018  Leong     INC0368977 - Allow edit Replenishment.Qty.    */
 /* 20-AUG-2019  NJOW01    WMS-9826 Post confirm replenishment call custom*/
 /*                        stored proc                                   */
+/* 12-Sep-2019  SHONG     Fixing QtyReplen Not Tally Issues (SWT02)     */ 
+/* 18-Aug-2022  WLChooi   WMS-20526 - ReplenUpdateUCC (WL01)            */
+/* 18-Aug-2022  WLChooi   DevOps Combine Script                         */
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrReplenishmentUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrReplenishmentUpdate]
 ON  [dbo].[REPLENISHMENT]
 FOR UPDATE AS
 BEGIN
@@ -77,6 +82,16 @@ BEGIN
       , @n_deletedQtyReplen     INT --SWT01
       , @n_deletedQty           INT --SWT01
 
+   --WL01 S
+   DECLARE @c_ReplenUpdateUCC   NVARCHAR(20)  
+          ,@c_Option1           NVARCHAR(50)  
+          ,@c_Option2           NVARCHAR(50)  
+          ,@c_Option3           NVARCHAR(50)  
+          ,@c_Option4           NVARCHAR(50)  
+          ,@c_Option5           NVARCHAR(4000)
+          ,@c_UCCNoField        NVARCHAR(30)  
+   --WL01 E
+
    -- To support RDT
    DECLARE @n_IsRDT INT
    EXECUTE RDT.rdtIsRDT @n_IsRDT OUTPUT
@@ -102,7 +117,7 @@ BEGIN
       BEGIN
          SELECT @n_Continue = 3
          SELECT @n_Err = 63501
-         SELECT @c_ErrMsg='NSQL'+CONVERT(varchar(5),@n_Err)+': UPDATE Replenishment Failed (ntrReplenishmentUpdate)'
+         SELECT @c_ErrMsg='NSQL'+CONVERT(VARCHAR(5),@n_Err)+': UPDATE Replenishment Failed (ntrReplenishmentUpdate)'
       END
    END
 
@@ -338,8 +353,9 @@ BEGIN
 
                   IF @n_QtyReplen > 0
                   BEGIN
-                     IF UPDATE(Qty) AND @n_Qty <> @n_QtyReplen
-                        SET @n_QtyReplen = @n_Qty
+                     -- Comment by Shong, If Confirm = Y. Should clean up the QtyReplen for this record (SWT02)  
+                     --IF UPDATE(Qty) AND @n_Qty <> @n_QtyReplen  
+                     --   SET @n_QtyReplen = @n_Qty
 
                      UPDATE LOTxLOCxID WITH (ROWLOCK)
                          SET QtyReplen = CASE WHEN (QtyReplen - @n_QtyReplen) < 0 THEN 0 ELSE QtyReplen - @n_QtyReplen END,
@@ -356,8 +372,9 @@ BEGIN
                      END
                   END
 
-                  IF UPDATE(Qty) AND @n_Qty <> @n_PendingMoveIn
-                     SET @n_PendingMoveIn = @n_Qty
+                  -- Comment by Shong, If Confirm = Y. Should clean up the PendingMoveIn for this record (SWT02)  
+                  --IF UPDATE(Qty) AND @n_Qty <> @n_PendingMoveIn  
+                  --   SET @n_PendingMoveIn = @n_Qty 
 
                   IF @n_PendingMoveIn > 0
                   BEGIN
@@ -638,6 +655,44 @@ BEGIN
                END
             END
          END
+
+         --WL01 S
+         IF @n_Continue = 1 OR @n_Continue = 2
+         BEGIN
+            SET @c_ReplenUpdateUCC = '0'
+
+            SELECT @b_success = 0
+
+            EXECUTE nspGetRight                                
+               @c_Facility        = '',                     
+               @c_StorerKey       = @c_StorerKey,                    
+               @c_sku             = '',
+               @c_ConfigKey       = 'ReplenUpdateUCC',
+               @b_Success         = @b_success           OUTPUT,             
+               @c_Authority       = @c_ReplenUpdateUCC   OUTPUT,             
+               @n_err             = @n_err               OUTPUT,             
+               @c_errmsg          = @c_errmsg            OUTPUT,             
+               @c_Option1         = @c_Option1           OUTPUT,               
+               @c_Option2         = @c_Option2           OUTPUT,               
+               @c_Option3         = @c_Option3           OUTPUT,               
+               @c_Option4         = @c_Option4           OUTPUT,               
+               @c_Option5         = @c_Option5           OUTPUT 
+
+            IF ISNULL(@c_UCCNoField,'') = ''
+               SELECT @c_UCCNoField = dbo.fnc_GetParamValueFromString('@c_UCCNoField', @c_Option5, @c_UCCNoField)  
+
+            IF ISNULL(@c_UCCNoField,'') = ''
+               SET @c_UCCNoField = 'DropID'
+
+            IF @c_ReplenUpdateUCC = '1' AND @c_UCCNoField IN ('DropID', 'RefNo')
+            BEGIN
+               UPDATE UCC WITH (ROWLOCK)
+               SET [Status] = CASE WHEN @c_Confirmed = 'Y' THEN '6' WHEN @c_Confirmed = 'N' THEN '4' ELSE [Status] END
+               WHERE UCCNo = CASE WHEN @c_UCCNoField = 'DropID' THEN @c_DropID ELSE @c_UCCNo END
+               AND [Status] <= '4'
+            END
+         END
+         --WL01 E
       END -- While
    END
 
