@@ -1,10 +1,8 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[nsp_GetPickSlipOrders37]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[nsp_GetPickSlipOrders37]
+SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF
-GO
+
 /************************************************************************/
 /* Store Procedure: nsp_GetPickSlipOrders37                             */
 /* Creation Date: 22-Jul-2010                                           */
@@ -32,9 +30,11 @@ GO
 /* 13-Nov-2015  NJOW02    1.5   Fix pickslipno prefix P                 */
 /* 28-JUL-2016  CSCHONG   1.6   SOS#373693 - report config (CS01)       */
 /* 28-Jan-2019  TLTING_ext 1.7 enlarge externorderkey field length      */
+/* 10-Jun-2021  Mingle    1.8   add ShowLot02(ML01)                     */
+/* 20-Sep-2022  Mingle    1.9   WMS-20805 modify showlot02 logic(ML02)  */
 /************************************************************************/
 
-CREATE PROC [dbo].[nsp_GetPickSlipOrders37] (@c_loadkey NVARCHAR(10))
+CREATE OR ALTER PROC [dbo].[nsp_GetPickSlipOrders37] (@c_loadkey NVARCHAR(10))
  AS
  BEGIN
    SET NOCOUNT ON
@@ -101,7 +101,8 @@ CREATE PROC [dbo].[nsp_GetPickSlipOrders37] (@c_loadkey NVARCHAR(10))
          Lottable03       NVARCHAR(18) NULL,      -- Added By SHONG On 2nd Mar 2004 (SOS#20463)
          Lottable01       NVARCHAR(18) NULL,  -- NJOW01
          ID               NVARCHAR(18) NULL,  -- (Vanessa)
-         ShowField        NVARCHAR(1) NULL ) -- CS01
+         ShowField        NVARCHAR(1) NULL, -- CS01
+         ShowLot02        NVARCHAR(20) NULL ) -- ML01
 
    INSERT INTO #TEMP_PICK
          (PickSlipNo,          LoadKey,          OrderKey,         ConsigneeKey,
@@ -114,30 +115,30 @@ CREATE PROC [dbo].[nsp_GetPickSlipOrders37] (@c_loadkey NVARCHAR(10))
           Lot,                 CarrierKey,       VehicleNo,        Lottable02,
           Lottable04,          Lottable05,       packpallet,       packcasecnt,
           externorderkey,      LogicalLoc,       Areakey,    DeliveryDate,
-          Lottable03,          Lottable01,       ID,ShowField) --NJOW01  --(Vanessa)  --(CS01)
-
+          Lottable03,          Lottable01,       ID,               ShowField, --NJOW01  --(Vanessa)  --(CS01)
+          ShowLot02) --ML01
    SELECT DISTINCT
          (SELECT PickHeaderKey FROM PICKHEADER (NOLOCK)
           WHERE ExternOrderKey = @c_LoadKey
           AND OrderKey = Orders.OrderKey
           AND ZONE = '3'),
-         @c_LoadKey as LoadKey,
+         @c_LoadKey AS LoadKey,
          Orders.OrderKey,
          -- SOS82873 Change company info from MBOL level to LOAD level
          -- NOTE: In ECCO case,2 style, the English information saved in C_company, C_Addressaand Chinese Information saved in B_company,B_Address
          (CASE WHEN StorerConfig.sValue = '1' THEN ISNULL(ORDERS.CONSIGNEEKEY , '')
-         ELSE ISNULL(ORDERS.BillToKey , '')  END  ) as ConsigneeKey ,
+         ELSE ISNULL(ORDERS.BillToKey , '')  END  ) AS ConsigneeKey ,
          (CASE WHEN StorerConfig.sValue = '1' THEN ISNULL(ORDERS.B_Company , '')
-         ELSE ISNULL(ORDERS.C_Company, '')  END  ) as Company  ,
+         ELSE ISNULL(ORDERS.C_Company, '')  END  ) AS Company  ,
 
          (CASE WHEN StorerConfig.sValue = '1' THEN ISNULL(ORDERS.B_Address1 , '')
-         ELSE ISNULL(ORDERS.C_Address1, '')  END  ) as Addr1  ,
+         ELSE ISNULL(ORDERS.C_Address1, '')  END  ) AS Addr1  ,
 
          (CASE WHEN StorerConfig.sValue = '1' THEN ISNULL(ORDERS.B_Address2 , '')
-         ELSE ISNULL(ORDERS.C_Address2, '')  END  ) as Addr2  ,
+         ELSE ISNULL(ORDERS.C_Address2, '')  END  ) AS Addr2  ,
          0 AS PgGroup,
          (CASE WHEN StorerConfig.sValue = '1' THEN ISNULL(ORDERS.B_Address3 , '')
-         ELSE ISNULL(ORDERS.C_Address3, '')  END  ) as Addr3,
+         ELSE ISNULL(ORDERS.C_Address3, '')  END  ) AS Addr3,
          ISNULL(ORDERS.C_Zip,'') AS PostCode,
          ISNULL(ORDERS.Route,'') AS Route,
          ISNULL(RouteMaster.Descr, '') Route_Desc,
@@ -148,7 +149,7 @@ CREATE PROC [dbo].[nsp_GetPickSlipOrders37] (@c_loadkey NVARCHAR(10))
          UPPER(PickDetail.loc), --ang01
          UPPER(PickDetail.sku), --ang01
          ISNULL(Sku.Descr,'') SkuDescr,
-         SUM(PickDetail.qty) as Qty,
+         SUM(PickDetail.qty) AS Qty,
          0 AS TEMPQTY1,
          TempQty2 =
              CASE WHEN (CASE SC.SValue WHEN Pack.PackUOM5  -- (Vanessa)
@@ -162,7 +163,7 @@ CREATE PROC [dbo].[nsp_GetPickSlipOrders37] (@c_loadkey NVARCHAR(10))
                           WHEN Pack.PackUOM9
                                THEN Pack.OtherUnit2
                           ELSE PACK.Pallet END) = 0 THEN 0
-             ELSE CASE WHEN (Sum(pickdetail.qty) % CAST((CASE SC.SValue WHEN Pack.PackUOM5 -- (Vanessa)
+             ELSE CASE WHEN (SUM(pickdetail.qty) % CAST((CASE SC.SValue WHEN Pack.PackUOM5 -- (Vanessa)
                                                                       THEN Pack.[Cube]
                                                                  WHEN Pack.PackUOM6
                                                                       THEN Pack.GrossWgt
@@ -203,6 +204,8 @@ CREATE PROC [dbo].[nsp_GetPickSlipOrders37] (@c_loadkey NVARCHAR(10))
          LotAttribute.Lottable01, -- NJOW01
          UPPER(PickDetail.ID) --ang01 -- (Vanessa)
          ,CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END AS ShowField     --(CS01)
+         --,CASE WHEN Orders.Storerkey = 'NAOS' THEN LotAttribute.Lottable02 ELSE LotAttribute.Lottable01 END AS ShowLot02 --ML01
+			,Case when isnull(CLR2.Short,'') = 'Y' then LotAttribute.Lottable02 Else LotAttribute.Lottable01 END AS ShowLot02   --(ML02)	
    FROM LoadPlanDetail (NOLOCK)
    JOIN Orders (NOLOCK) ON (ORDERS.OrderKey = LoadPlanDetail.OrderKey)
    JOIN Storer (NOLOCK) ON (ORDERS.StorerKey = Storer.StorerKey)
@@ -221,7 +224,9 @@ CREATE PROC [dbo].[nsp_GetPickSlipOrders37] (@c_loadkey NVARCHAR(10))
                                             AND LOC.Facility = SC.Facility
                                             AND SC.ConfigKey = 'DefaultPalletUOM') -- (Vanessa)
    LEFT OUTER JOIN Codelkup CLR (NOLOCK) ON (Orders.Storerkey = CLR.Storerkey AND CLR.Code = 'SHOWFIELD'                                         --(CS01)
-                                       AND CLR.Listname = 'REPORTCFG' AND CLR.Long = 'r_dw_print_pickorder37' AND ISNULL(CLR.Short,'') <> 'N')   --(CS01)                                        
+                                       AND CLR.Listname = 'REPORTCFG' AND CLR.Long = 'r_dw_print_pickorder37' AND ISNULL(CLR.Short,'') <> 'N')   --(CS01)
+	LEFT OUTER JOIN Codelkup CLR2 (NOLOCK) ON (Orders.Storerkey = CLR2.Storerkey AND CLR2.Code = 'showLOTTABLE02'                                         --(ML02)
+                                       AND CLR2.Listname = 'REPORTCFG' AND CLR2.Long = 'r_dw_print_pickorder37' AND ISNULL(CLR2.Short,'') <> 'N')   --(ML02)
    WHERE PickDetail.Status >= '0'
      AND LoadPlanDetail.LoadKey = @c_LoadKey
    GROUP BY ORDERS.OrderKey,
@@ -268,7 +273,9 @@ CREATE PROC [dbo].[nsp_GetPickSlipOrders37] (@c_loadkey NVARCHAR(10))
        LotAttribute.Lottable03, -- Added By SHONG On 2nd Mar 2004 (SOS#20463)
        LotAttribute.Lottable01, -- NJOW01
        UPPER(PickDetail.ID),  --ang01 -- (Vanessa)
-       CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END   --CS01
+       CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END,   --CS01
+       --CASE WHEN Orders.Storerkey = 'NAOS' THEN LotAttribute.Lottable02 ELSE LotAttribute.Lottable01 END --ML01
+		 Case when isnull(CLR2.Short,'') = 'Y' then LotAttribute.Lottable02 Else LotAttribute.Lottable01 END --(ML02)
 
       BEGIN TRAN
       -- Uses PickType as a Printed Flag
@@ -288,7 +295,7 @@ CREATE PROC [dbo].[nsp_GetPickSlipOrders37] (@c_loadkey NVARCHAR(10))
       ELSE
       BEGIN
          WHILE @@TRANCOUNT > 0
-         BEGIN 
+         BEGIN
             COMMIT TRAN
          END
          /*
@@ -316,57 +323,57 @@ CREATE PROC [dbo].[nsp_GetPickSlipOrders37] (@c_loadkey NVARCHAR(10))
       ELSE IF @n_pickslips_required > 0
       BEGIN
       	 --NJOW01 Start
-         DECLARE Cur_Pickslipno CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 			
+         DECLARE Cur_Pickslipno CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
             SELECT DISTINCT OrderKey
             FROM #TEMP_PICK
-            WHERE PickSlipNo IS NULL         
+            WHERE PickSlipNo IS NULL
             ORDER BY Orderkey
-            
+
          OPEN Cur_Pickslipno
-   
+
          FETCH NEXT FROM Cur_Pickslipno INTO @c_orderkey
-         WHILE @@FETCH_STATUS <> -1 
+         WHILE @@FETCH_STATUS <> -1
          BEGIN
             BEGIN TRAN
             SET @c_pickheaderkey = ''
             SET @n_err = 0
 
             EXECUTE nspg_GetKey 'PICKSLIP', 9, @c_pickheaderkey OUTPUT, @b_success OUTPUT, @n_err  OUTPUT, @c_errmsg OUTPUT
-            
+
             SET @c_pickheaderkey = 'P' + LTRIM(@c_pickheaderkey)
 
             IF @n_err = 0 AND @@ERROR = 0
             BEGIN
                INSERT INTO PICKHEADER (PickHeaderKey, OrderKey, ExternOrderKey, PickType, Zone, TrafficCop)
                VALUES (@c_pickheaderkey, @c_Orderkey, @c_Loadkey, '0', '3', '')
-               
+
                IF @@ERROR = 0
                BEGIN
                   WHILE @@TRANCOUNT > 0
-                  BEGIN 
-                     COMMIT TRAN                     
+                  BEGIN
+                     COMMIT TRAN
                   END
                END
                ELSE
                BEGIN
                	  IF @@TRANCOUNT > 0
-               	     ROLLBACK TRAN     
-                  GOTO FAILURE           
+               	     ROLLBACK TRAN
+                  GOTO FAILURE
                END
             END
             ELSE
             BEGIN
            	   IF @@TRANCOUNT > 0
                   ROLLBACK TRAN
-               GOTO FAILURE           
+               GOTO FAILURE
             END
-              
+
             FETCH NEXT FROM Cur_Pickslipno INTO @c_orderkey
          END
          CLOSE Cur_Pickslipno
          DEALLOCATE Cur_Pickslipno
          --NJOW01 End
-       	 
+
       	 /*
          BEGIN TRAN -- SOS#280077
          EXECUTE nspg_GetKey 'PICKSLIP', 9, @c_pickheaderkey OUTPUT, @b_success OUTPUT, @n_err  OUTPUT, @c_errmsg OUTPUT, 0, @n_pickslips_required
@@ -421,9 +428,9 @@ CREATE PROC [dbo].[nsp_GetPickSlipOrders37] (@c_loadkey NVARCHAR(10))
       DROP TABLE #TEMP_PICK
 
       --NJOW01
-      WHILE @@TRANCOUNT < @n_starttcnt 
+      WHILE @@TRANCOUNT < @n_starttcnt
          BEGIN TRAN
 END
 GO
-GRANT EXECUTE ON nsp_GetPickSlipOrders37 TO NSQL
+GRANT EXECUTE ON  [dbo].[nsp_GetPickSlipOrders37] TO [NSQL]
 GO
