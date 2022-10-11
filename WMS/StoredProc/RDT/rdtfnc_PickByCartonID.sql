@@ -13,6 +13,7 @@ GO
 /* 2019-08-19  1.1  Ung      WMS-10176 Add fully scan auto go to next screen  */
 /* 2022-04-04  1.2  Ung      WMS-18892 Wave optional                          */
 /*                           Add 1 carton don't need confirm carton ID        */
+/* 2022-10-03  1.3  Ung      WMS-20841 Add skip LOC screen                    */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PickByCartonID] (
@@ -180,6 +181,7 @@ BEGIN
    IF @nStep = 5 GOTO Step_5   -- Scn = 5354. SKU, QTY
    IF @nStep = 6 GOTO Step_6   -- Scn = 5355. Carton ID
    IF @nStep = 7 GOTO Step_7   -- Scn = 5356. Confirm Short Pick?
+   IF @nStep = 8 GOTO Step_8   -- Scn = 5357. Skip LOC?
 END
 RETURN -- Do nothing if incorrect step
 
@@ -673,32 +675,14 @@ BEGIN
          END
       END
 
-      -- Get next loc if ConfirmLoc is blank
+      -- Confirm Skip LOC
       IF @cLOC = ''
       BEGIN
-         EXEC rdt.rdt_PickByCartonID_GetNextLOC @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
-            @cWaveKey,
-            @cPWZone,
-            @cCartonID1,
-            @cCartonID2,
-            @cCartonID3,
-            @cCartonID4,
-            @cCartonID5,
-            @cCartonID6,
-            @cCartonID7,
-            @cCartonID8,
-            @cCartonID9,
-            @cSuggLOC,
-            @cSuggLOC  OUTPUT,
-            @nErrNo    OUTPUT,
-            @cErrMsg   OUTPUT
+         SET @cOutField01 = '' -- Option
 
-         -- No more loc
-         IF @nErrNo <> 0
-            GOTO Quit
-
-         SET @cOutField01 = @cSuggLOC
-         SET @cOutField02 = '' -- LOC
+         -- Go to skip LOC screen
+         SET @nScn  = @nScn + 4
+         SET @nStep = @nStep + 4
          
          GOTO Quit
       END
@@ -1439,6 +1423,70 @@ Step_7_Quit:
    IF @cFlowThruScreen = '1'
       IF @nStep = 6
          GOTO Step_6 
+END
+GOTO Quit
+
+
+/********************************************************************************
+Scn = 5357. Skip LOC?
+   Option (field01)
+********************************************************************************/
+Step_8:
+BEGIN
+   IF @nInputKey = 1 -- ENTER
+   BEGIN
+      -- Screen mapping
+      SET @cOption = @cInField01
+
+      -- Validate blank
+      IF @cOption = ''
+      BEGIN
+         SET @nErrNo = 136268
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Option require
+         GOTO Quit
+      END
+
+      -- Validate option
+      IF @cOption <> '1' AND @cOption <> '2'
+      BEGIN
+         SET @nErrNo = 136269
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Option
+         GOTO Quit
+      END
+
+      IF @cOption = '1'  -- Yes
+      BEGIN
+         -- Get next loc if ConfirmLoc is blank
+         EXEC rdt.rdt_PickByCartonID_GetNextLOC @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+            @cWaveKey,
+            @cPWZone,
+            @cCartonID1,
+            @cCartonID2,
+            @cCartonID3,
+            @cCartonID4,
+            @cCartonID5,
+            @cCartonID6,
+            @cCartonID7,
+            @cCartonID8,
+            @cCartonID9,
+            @cSuggLOC,
+            @cSuggLOC  OUTPUT,
+            @nErrNo    OUTPUT,
+            @cErrMsg   OUTPUT
+
+         -- No more loc
+         IF @nErrNo <> 0
+            GOTO Quit
+      END
+   END
+
+   -- Prepare next screen var
+   SET @cOutField01 = @cSuggLOC
+   SET @cOutField02 = '' -- LOC
+
+   -- Go to LOC screen
+   SET @nScn = @nScn - 4
+   SET @nStep = @nStep - 4
 END
 GOTO Quit
 

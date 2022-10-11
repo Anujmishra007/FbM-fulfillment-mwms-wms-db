@@ -18,3 +18,5 @@ execute rdt.rdtAddMsg 136264, 10, '136264Need carton ID', 'us_english', 831
 execute rdt.rdtAddMsg 136265, 10, '136265Diff storer   ', 'us_english', 831
 execute rdt.rdtAddMsg 136266, 10, '136266Diff carton ID', 'us_english', 831
 execute rdt.rdtAddMsg 136267, 10, '136267Diff facility ', 'us_english', 831
+execute rdt.rdtAddMsg 136268, 10, '136268Option require', 'us_english', 831
+execute rdt.rdtAddMsg 136269, 10, '136269Invalid Option', 'us_english', 831
