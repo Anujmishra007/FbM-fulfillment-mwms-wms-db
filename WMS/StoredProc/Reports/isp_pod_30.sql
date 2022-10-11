@@ -6,7 +6,6 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
-
    
 /************************************************************************/    
 /* Stored Procedure: isp_pod_30                                         */    
@@ -31,6 +30,7 @@ GO
 /* Date         Author    Ver. Purposes                                 */ 
 /* 09-DEC-2021  MINGLE    1.1  WMS-18477 Add sku size(ML01)             */   
 /* 09-DEC-2021  Mingle    1.1  DevOps Combine Script                    */ 
+/* 10-OCT-2022  MINGLE    1.2  WMS-20843 Add and update fields(ML02)    */  
 /************************************************************************/    
 CREATE PROCEDURE [dbo].[isp_pod_30]    
         @c_mbolkey NVARCHAR(10),     
@@ -156,7 +156,8 @@ BEGIN
     Uom  NVARCHAR(10)  NULL,
     Shippedqty int       NULL,
     Notes   NVARCHAR(20)  NULL,
-    Size    NVARCHAR(10)  NULL   --ML01
+    Size    NVARCHAR(10)  NULL,   --ML01
+	 PDQty	INT NULL	--ML02	
     )     
     
       
@@ -237,7 +238,7 @@ BEGIN
       Domain,         ConsigneeKey,       OrderLineNumber,       Sku,                                
       Notes1,         Descr,              Lottable02,            Lottable04,                       
       Lottable13,     Uom,                Shippedqty,             Notes,
-      Size   --ML01            
+      Size,				 PDQty   --ML01	--ML02            
       )        
     SELECT DISTINCT      
       a.mbolkey,     b.MbolLineNumber,    b.ExternOrderKey,    b.Orderkey,    c.type,            
@@ -380,8 +381,10 @@ BEGIN
          0,         
          g.Short,      
          CASE WHEN @c_showfield='1' AND ISNULL(c.ConsigneeKey,'') <> '' THEN c.ConsigneeKey ELSE '' END,        
-         k.OrderLineNumber,
-         k.Sku,
+         --k.OrderLineNumber,
+			m.OrderLineNumber,	--ML02
+         --k.Sku,
+			m.Sku,	--ML02
          l.Notes1,
          l.Descr,
          n.Lottable02,
@@ -390,7 +393,8 @@ BEGIN
          k.Uom,
          k.Shippedqty,
          c.Notes,
-         l.Size   --ML01
+         l.Size,   --ML01
+			m.qty
          
            
     FROM MBOL a (nolock) JOIN MBOLDETAIL b  WITH (nolock) ON a.mbolkey = b.mbolkey    
@@ -613,6 +617,7 @@ BEGIN
          , Shippedqty
          , Notes
          , Size   --ML01
+			, PDQty	--ML02
          
          
     FROM #POD

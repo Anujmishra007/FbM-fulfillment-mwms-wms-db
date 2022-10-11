@@ -30,6 +30,7 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 27-Oct-2021  NJOW01  1.0   DEVOPS combine script                        */
+/* 15-Sep-2022  NJOW02  1.1   WMS-20808 change formula and field update    */
 /***************************************************************************/  
 CREATE PROC [dbo].[ispPOALKIT01]  
 (     @c_Kitkey      NVARCHAR(10)   
@@ -73,6 +74,7 @@ BEGIN
          , @n_ExpectedQty     INT        
          , @c_Externkitkey    NVARCHAR(20)  
          , @c_ExternLineNo    NVARCHAR(10)
+         , @c_CustomerRefNo   NVARCHAR(10) --NJOW02
         
    SET @b_Success= 1 
    SET @n_Err    = 0  
@@ -104,12 +106,13 @@ BEGIN
    BEGIN	      	      	   
    	   DECLARE CUR_KITFR CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    	      SELECT KF.Storerkey, FC.Userdefine10 AS ToLoc, KF.UOM, 
-   	             (CASE WHEN ISNUMERIC(SKU.Susr5) = 1 THEN CAST(SKU.Susr5 AS INT) ELSE BOM.Qty END / BOM.Qty) * KF.ExpectedQty AS ExpectedQty,
-   	             (CASE WHEN ISNUMERIC(SKU.Susr5) = 1 THEN CAST(SKU.Susr5 AS INT) ELSE BOM.Qty END / BOM.Qty) * KF.Qty AS Qty,
+   	             ((CASE WHEN ISNUMERIC(SKU.Susr5) = 1 THEN CAST(SKU.Susr5 AS INT) ELSE BOM.Qty END / BOM.Qty) / BOM.ParentQty) * KF.ExpectedQty AS ExpectedQty,  --NJOW02
+   	             ((CASE WHEN ISNUMERIC(SKU.Susr5) = 1 THEN CAST(SKU.Susr5 AS INT) ELSE BOM.Qty END / BOM.Qty) / BOM.ParentQty) * KF.Qty AS Qty,  --NJOW02
    	             KF.Lottable01, KF.Lottable02, KF.Lottable03, KF.Lottable04, KF.Lottable05,    	      
    	             KF.Lottable06, KF.Lottable07, KF.Lottable08, KF.Lottable09, KF.Lottable10,    	      
    	             KF.Lottable11, KF.Lottable12, KF.Lottable13, KF.Lottable14, KF.Lottable15,
-   	             KF.ExternKitkey, KF.ExternLineNo   	      
+   	             KF.ExternKitkey, KF.ExternLineNo,
+   	             KIT.CustomerRefNo  -- NJOW02   	      
    	      FROM KIT (NOLOCK) 
    	      JOIN KITDETAIL KF (NOLOCK) ON KIT.Kitkey = KF.Kitkey
    	      JOIN SKU (NOLOCK) ON KF.Storerkey = SKU.Storerkey AND KF.Sku = SKU.Sku 
@@ -125,8 +128,8 @@ BEGIN
                                       @c_Lottable01, @c_Lottable02, @c_Lottable03, @dt_Lottable04, @dt_Lottable05,
                                       @c_Lottable06, @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10,
                                       @c_Lottable11, @c_Lottable12, @dt_Lottable13, @dt_Lottable14, @dt_Lottable15,
-                                      @c_Externkitkey, @c_ExternLineNo                                                                            
-       
+                                      @c_Externkitkey, @c_ExternLineNo, @c_CustomerRefNo --NJOW02                                                                            
+                                            
        SET @n_LineCnt = 0   
        WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)  
        BEGIN
@@ -135,6 +138,10 @@ BEGIN
        	  SET @c_KitLineNumber = RIGHT('00000' + RTRIM(LTRIM(CAST(@n_LineCnt AS NVARCHAR))),5)
        	  
        	  SET @c_Lottable10 = @c_Kitkey + @c_KitLineNumber
+       	  
+       	  --NJOW02
+       	  SET @c_Lottable07 = ISNULL(@c_Externkitkey,'')
+       	  SET @c_Lottable08 = ISNULL(@c_CustomerRefNo,'')
        	  
        	  IF EXISTS(SELECT 1 
        	            FROM KITDETAIL KT (NOLOCK)
@@ -180,7 +187,7 @@ BEGIN
    	         END
        	  END           
        	  ELSE
-       	  BEGIN
+       	  BEGIN       	  	 
        	     INSERT INTO KITDETAIL (Kitkey, KitLineNumber, Type, Storerkey, Sku, Loc, ExpectedQty, Qty, Packkey, UOM, 
        	                            Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, Lottable06, Lottable07,
        	                            Lottable08, Lottable09, Lottable10, Lottable11, LOttable12, Lottable13, Lottable14, 
@@ -203,7 +210,7 @@ BEGIN
                                          @c_Lottable01, @c_Lottable02, @c_Lottable03, @dt_Lottable04, @dt_Lottable05,
                                          @c_Lottable06, @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10,
                                          @c_Lottable11, @c_Lottable12, @dt_Lottable13, @dt_Lottable14, @dt_Lottable15,
-                                         @c_Externkitkey, @c_ExternLineNo                                                                                                                                                               	
+                                         @c_Externkitkey, @c_ExternLineNo, @c_CustomerRefNo --NJOW02                                                                                                                                                               	
        END
        CLOSE CUR_KITFR
        DEALLOCATE CUR_KITFR

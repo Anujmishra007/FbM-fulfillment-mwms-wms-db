@@ -87,3 +87,16 @@ EXECUTE rdt.rdtAddScn 5356, 'ENG'
    ,@cLine14 = '%e'
    ,@nFunc = 831
 
+-- Skip LOC screen
+DELETE rdt.RDTScn WHERE Scn = 5357 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 5357, 'ENG'
+   ,@cLine01 = ''
+   ,@cLine02 = 'SKIP LOC?'
+   ,@cLine03 = ''
+   ,@cLine04 = '1 = YES'
+   ,@cLine05 = '2 = NO'
+   ,@cLine06 = ''
+   ,@cLine07 = 'OPTION: %01i01'
+   ,@cLine14 = '%e'
+   ,@nFunc = 831
+   

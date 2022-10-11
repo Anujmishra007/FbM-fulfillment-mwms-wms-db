@@ -1,11 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrReplenishmentAdd]') 
-              and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
-drop trigger [dbo].[ntrReplenishmentAdd]
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /************************************************************************/
 /* Trigger: ntrReplenishmentAdd                                         */
 /* Creation Date:                                                       */
@@ -16,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By:                                                           */
 /*                                                                      */
-/* PVCS Version: 1.3                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -25,8 +22,10 @@ GO
 /* Updates:                                                             */
 /* Date         Ver     Author   Purposes                               */
 /* 12-Jul-2017  1.0     Shong    Created                                */
+/* 18-Aug-2022  1.1     WLChooi  WMS-20526 - ReplenUpdateUCC (WL01)     */
+/* 18-Aug-2022  1.1     WLChooi  DevOps Combine Script                  */
 /************************************************************************/
-CREATE TRIGGER [dbo].[ntrReplenishmentAdd]
+CREATE OR ALTER TRIGGER [dbo].[ntrReplenishmentAdd]
 ON [dbo].[Replenishment]
 FOR  INSERT
 AS
@@ -85,7 +84,20 @@ BEGIN
                ,@c_ReasonKey         NVARCHAR(10)
                ,@n_UOMQty            INT
                ,@c_Storerkey         NVARCHAR(15)
-               ,@c_SKU               NVARCHAR(20) 
+               ,@c_SKU               NVARCHAR(20)
+               
+        --WL01 S
+        DECLARE @c_DropID            NVARCHAR(20)  
+               ,@c_RefNo             NVARCHAR(20)  
+               ,@c_ReplenUpdateUCC   NVARCHAR(20)  
+               ,@c_Option1           NVARCHAR(50)  
+               ,@c_Option2           NVARCHAR(50)  
+               ,@c_Option3           NVARCHAR(50)  
+               ,@c_Option4           NVARCHAR(50)  
+               ,@c_Option5           NVARCHAR(4000)
+               ,@c_UCCNoField        NVARCHAR(30)  
+               ,@c_Confirmed         NVARCHAR(10)  
+        --WL01 E
 
         SELECT @c_Replenishmentkey = ''
         WHILE (1=1)
@@ -100,7 +112,10 @@ BEGIN
                   ,@n_QtyReplen = QtyReplen           
                   ,@n_PendingMoveIn = PendingMoveIn 
                   ,@c_Storerkey = StorerKey 
-                  ,@c_SKU = SKU                    
+                  ,@c_SKU = SKU  
+                  ,@c_DropID = DropID   --WL01
+                  ,@c_RefNo = RefNo     --WL01
+                  ,@c_Confirmed = Confirmed   --WL01
             FROM   INSERTED
             WHERE  Replenishmentkey > @c_Replenishmentkey
             ORDER BY Replenishmentkey
@@ -177,6 +192,44 @@ BEGIN
                   END                                                                                                 
             	 END            	 
             END
+
+            --WL01 S
+            IF @n_Continue = 1 OR @n_Continue = 2
+            BEGIN
+               SET @c_ReplenUpdateUCC = '0'
+
+               SELECT @b_success = 0
+
+               EXECUTE nspGetRight                                
+                  @c_Facility        = '',                     
+                  @c_StorerKey       = @c_StorerKey,                    
+                  @c_sku             = '',
+                  @c_ConfigKey       = 'ReplenUpdateUCC',
+                  @b_Success         = @b_success           OUTPUT,             
+                  @c_Authority       = @c_ReplenUpdateUCC   OUTPUT,             
+                  @n_err             = @n_err               OUTPUT,             
+                  @c_errmsg          = @c_errmsg            OUTPUT,             
+                  @c_Option1         = @c_Option1           OUTPUT,               
+                  @c_Option2         = @c_Option2           OUTPUT,               
+                  @c_Option3         = @c_Option3           OUTPUT,               
+                  @c_Option4         = @c_Option4           OUTPUT,               
+                  @c_Option5         = @c_Option5           OUTPUT 
+ 
+               IF ISNULL(@c_UCCNoField,'') = ''
+                  SELECT @c_UCCNoField = dbo.fnc_GetParamValueFromString('@c_UCCNoField', @c_Option5, @c_UCCNoField)  
+
+               IF ISNULL(@c_UCCNoField,'') = ''
+                  SET @c_UCCNoField = 'DropID'
+
+               IF @c_ReplenUpdateUCC = '1' AND @c_UCCNoField IN ('DropID', 'RefNo')
+               BEGIN
+                  UPDATE UCC WITH (ROWLOCK)
+                  SET [Status] = CASE WHEN @c_Confirmed = 'Y' THEN '6' WHEN @c_Confirmed = 'N' THEN '4' ELSE [Status] END
+                  WHERE UCCNo = CASE WHEN @c_UCCNoField = 'DropID' THEN @c_DropID ELSE @c_RefNo END
+                  AND [Status] <= '4'
+               END
+            END
+            --WL01 E
         END -- WHILE 1=1
     END
     /* #INCLUDE <TRTASKDA2.SQL> */

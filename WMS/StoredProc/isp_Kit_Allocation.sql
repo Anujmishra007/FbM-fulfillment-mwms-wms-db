@@ -26,6 +26,8 @@ GO
 /* 22-NOV-2021  NJOW01  1.0   DEVOPS combine script                     */
 /* 23-JUN-2022  NJOW02  1.1   WMS-20049 allow configure to copy qty to  */
 /*                            expectedqty                               */ 
+/* 15-Sep-2022  NJOW03  1.2   WMS-20808 set kit.status=1 if partial     */
+/*                            allocated                                 */
 /************************************************************************/
 CREATE OR ALTER PROC  isp_Kit_Allocation  
       @c_KitKey              NVARCHAR(10)
@@ -951,11 +953,27 @@ BEGIN
    	            AND Lot <> '' 
    	            AND Lot IS NOT NULL)   	                
    	   BEGIN
-   	      UPDATE KIT WITH (ROWLOCK)
-   	      SET Status = '2',
-   	          TrafficCop = NULL
-   	      WHERE KitKey = @c_Kitkey
-   	      AND Status < '2'
+   	   	  IF EXISTS(SELECT 1 
+   	                FROM KITDETAIL (NOLOCK)
+   	                WHERE Kitkey = @c_Kitkey
+   	                AND Type = 'F'
+   	                AND (Lot = '' OR Lot IS NULL)
+   	               )
+   	      BEGIN  --NJOW03               
+   	         UPDATE KIT WITH (ROWLOCK)
+   	         SET Status = '1',
+   	             TrafficCop = NULL
+   	         WHERE KitKey = @c_Kitkey
+   	         AND Status <= '2'   	      	 
+   	      END          
+   	      ELSE
+   	      BEGIN   	            
+   	         UPDATE KIT WITH (ROWLOCK)
+   	         SET Status = '2',
+   	             TrafficCop = NULL
+   	         WHERE KitKey = @c_Kitkey
+   	         AND Status < '2'
+   	      END
 
       	  SELECT @n_err = @@ERROR
       	  IF @n_err <> 0

@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_GLBL11]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_GLBL11]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -20,7 +17,7 @@ GO
 /*                                                                      */
 /* Usage: Call from isp_GenLabelNo_Wrapper                              */
 /*                                                                      */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -29,9 +26,11 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
 /* 20-Jan-2020  WLChooi  1.1  Performance Tuning (WL01)                 */
+/* 25-May-2022  WLChooi  1.2  DevOps Combine Script                     */
+/* 25-May-2022  WLChooi  1.2  WMS-19740 - Add new logic for CN (WL02)   */
 /************************************************************************/
 
-CREATE PROC [dbo].[isp_GLBL11] ( 
+CREATE OR ALTER PROC [dbo].[isp_GLBL11] ( 
          @c_PickSlipNo   NVARCHAR(10) 
       ,  @n_CartonNo     INT
       ,  @c_LabelNo      NVARCHAR(20)   OUTPUT )
@@ -48,7 +47,14 @@ BEGIN
           ,@n_Err           INT  
           ,@c_ErrMsg        NVARCHAR(255)
           ,@c_Label_SeqNo   NVARCHAR(9)
-          ,@c_Prefix        NVARCHAR(30)                   
+          ,@c_Prefix        NVARCHAR(30)  
+          ,@c_Country       NVARCHAR(20)   --WL02
+          ,@c_OHUDF10       NVARCHAR(50)   --WL02
+          ,@c_CLCode2       NVARCHAR(50)   --WL02
+          ,@c_CLUDF03       NVARCHAR(50)   --WL02
+          ,@c_Storerkey     NVARCHAR(15)   --WL02
+          ,@c_Facility      NVARCHAR(5)    --WL02
+          ,@c_Type          NVARCHAR(10)   --WL02
    
    DECLARE @n_CheckDigit    INT
           ,@n_TotalCnt      INT
@@ -67,8 +73,18 @@ BEGIN
    SET @n_Err               = 0
    SET @c_ErrMsg            = ''   
    SET @c_LabelNo           = ''
+
+   --WL02 S
+   SELECT @c_Country = N.NSQLValue
+   FROM dbo.NSQLCONFIG N (NOLOCK)
+   WHERE N.ConfigKey = 'Country'
+   --WL02 E
 	 
-	 SELECT TOP 1 @c_Prefix = O.RDD 
+    SELECT TOP 1 @c_Prefix = O.RDD 
+               , @c_OHUDF10 = O.UserDefine10   --WL02
+               , @c_Storerkey = O.StorerKey    --WL02
+               , @c_Facility = O.Facility      --WL02
+               , @c_Type = O.[Type]            --WL02
 	 FROM PICKHEADER PH (NOLOCK)
 	 JOIN ORDERS O (NOLOCK) ON PH.Orderkey = O.Orderkey
 	 WHERE PH.Pickheaderkey = @c_Pickslipno
@@ -76,6 +92,10 @@ BEGIN
 	 IF ISNULL(@c_Prefix,'') = ''
 	 BEGIN
        SELECT TOP 1 @c_Prefix = O.RDD 
+                  , @c_OHUDF10 = O.UserDefine10   --WL02
+                  , @c_Storerkey = O.StorerKey    --WL02
+                  , @c_Facility = O.Facility      --WL02
+                  , @c_Type = O.[Type]            --WL02
        FROM PICKHEADER PH (NOLOCK)
        --JOIN ORDERS O (NOLOCK) ON PH.ExternOrderkey = O.Loadkey             --WL01
        JOIN LOADPLANDETAIL LPD (NOLOCK) ON PH.ExternOrderkey = LPD.Loadkey   --WL01
@@ -83,6 +103,49 @@ BEGIN
        WHERE PH.Pickheaderkey = @c_Pickslipno	 	
        ORDER BY O.RDD DESC
 	 END
+
+   --WL02 S
+   IF @c_Country = 'CN'
+   BEGIN
+      IF @c_Type = 'WTW'
+      BEGIN
+         EXECUTE nspg_GetKey
+         'PACKNO', 
+         18 ,
+         @c_LabelNo  OUTPUT,
+         @b_success  OUTPUT,
+         @n_err      OUTPUT,
+         @c_errmsg   OUTPUT
+
+         IF @b_Success <> 1 
+         BEGIN
+            SELECT @n_Continue = 3         
+            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 38010   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+            SELECT @c_errmsg ='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Failed to get LabelNo for Type: WTW (isp_GLBL11)' 
+                             + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '           
+         END
+
+         GOTO QUIT_SP
+      END
+
+      SELECT @c_CLCode2 = ISNULL(CL1.Code2,'')
+      FROM CODELKUP CL1 (NOLOCK)
+      WHERE CL1.LISTNAME = 'PVHBRAND'
+      AND CL1.Storerkey = @c_Storerkey
+      AND CL1.Long = @c_OHUDF10
+
+      IF @c_CLCode2 <> 'DOM'
+      BEGIN
+         SELECT @c_CLUDF03 = ISNULL(CL.UDF03,'')
+         FROM CODELKUP CL (NOLOCK)
+         WHERE CL.LISTNAME = 'PVHECOMFAC'
+         AND CL.Storerkey = @c_Storerkey
+         AND CL.Short = @c_Facility
+
+         SET @c_Prefix = @c_CLUDF03
+      END
+   END
+   --WL02 E
 
    IF ISNULL(@c_Prefix,'') = ''
    BEGIN
@@ -92,7 +155,7 @@ BEGIN
       GOTO QUIT_SP
    END
 	 
-	 EXECUTE dbo.nspg_GetKey           
+   EXECUTE dbo.nspg_GetKey           
            'PVHLBLNO',                      
            9,                               
            @c_Label_SeqNo OUTPUT,           
@@ -185,5 +248,5 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-GRANT EXECUTE ON isp_GLBL11 TO NSQL
+GRANT EXECUTE ON [dbo].[isp_GLBL11] TO NSQL
 GO
