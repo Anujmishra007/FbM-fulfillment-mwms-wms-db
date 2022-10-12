@@ -3,8 +3,6 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
-
 /************************************************************************/
 /* Stored Procedure: nspTTMRP14                                         */
 /* Copyright: LF Logistics                                              */
@@ -15,6 +13,7 @@ GO
 /* 13-08-2019  Ung       1.0  WMS-10161 Created                         */
 /* 15-11-2019  Chermaine 1.1  WMS-11126 Add userkey override (cc01)     */
 /* 24-06-2022  YeeKung   1.2  JSM-76992 Performance Tune (yeekung01)    */
+/* 03-10-2022  Ung       1.3  WMS-20786 Fix wave not consider priority  */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[nspTTMRP14]
     @c_UserID    NVARCHAR(18)
@@ -117,7 +116,7 @@ BEGIN
       AND TaskDetail.Status = '0'
       AND LOC.facility  = CASE WHEN ISNULL(@c_AreaKey01,'')<>'' THEN  LOC.facility ELSE @cFacility  END
    GROUP BY WaveKey
-   ORDER BY MIN( TaskDetailKey)
+   ORDER BY MIN( TaskDetail.Priority), MIN( TaskDetailKey)
 
    DECLARE Cursor_RPFTaskwave CURSOR FAST_FORWARD READ_ONLY FOR --Note: global cursor
    SELECT WaveKey
