@@ -12,6 +12,7 @@ GO
 /* Date         Rev  Author     Purposes                                      */
 /* 2022-07-29   1.0  Ung        WMS-20347 Created                             */
 /* 2022-09-15   1.1  Ung        WMS-20347 Add LoadPlanDetail_dellog.Status = 5*/
+/* 2022-10-11   1.2  Ung        WMS-20347 Add MBOLDetail.Weight               */
 /******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_1856MbolCreate01](
     @nMobile      INT
@@ -195,6 +196,7 @@ BEGIN
 
    -- Loop orders
    DECLARE @cExternOrderKey NVARCHAR( 50)
+   DECLARE @nWeight FLOAT
    DECLARE @curOrder CURSOR
    SET @curOrder = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT OrderKey, ExternOrderKey 
@@ -206,12 +208,19 @@ BEGIN
    OPEN @curOrder
    FETCH NEXT FROM @curOrder INTO @cOrderKey, @cExternOrderKey
    WHILE @@FETCH_STATUS = 0
-   BEGIN
+   BEGIN      
+      -- Get order weight
+      SELECT @nWeight = ISNULL( SUM( PInf.Weight), 0)
+      FROM dbo.PackHeader PH WITH (NOLOCK)
+         JOIN dbo.PackInfo PInf WITH (NOLOCK) ON (PH.PickSlipNo = PInf.PickSlipNo)
+      WHERE PH.StorerKey = @cStorerKey
+         AND PH.OrderKey = @cOrderKey
+      
       -- Insert MBOLDetail
       INSERT INTO dbo.MBOLDetail
-         (MBOLKey, MBOLLineNumber, OrderKey, LoadKey, ExternOrderKey, AddWho, AddDate, EditWho, EditDate)
+         (MBOLKey, MBOLLineNumber, OrderKey, LoadKey, ExternOrderKey, Weight, AddWho, AddDate, EditWho, EditDate)
       VALUES
-         (@cMBOLKey, '00000', @cOrderKey, @cLoadKey, @cExternOrderKey, SUSER_SNAME(), GETDATE(), SUSER_SNAME(), GETDATE())
+         (@cMBOLKey, '00000', @cOrderKey, @cLoadKey, @cExternOrderKey, @nWeight, SUSER_SNAME(), GETDATE(), SUSER_SNAME(), GETDATE())
       IF @@ERROR <> 0
       BEGIN
          SET @nErrNo = 189010
