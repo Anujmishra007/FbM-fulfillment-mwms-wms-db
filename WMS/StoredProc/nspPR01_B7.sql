@@ -1,12 +1,7 @@
-if (objectProperty(object_id('dbo.nspPR01_B7'), 'IsPRocedure') is not null)
-   drop procedure dbo.nspPR01_B7
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF 
 GO
-
 /************************************************************************/
 /* Stored Procedure: nspPR01_B7                                         */
 /* Creation Date:                                                       */
@@ -37,9 +32,11 @@ GO
 /* 09/11/2018   NJOW04  1.5   WMS-6892 change FIFO shelflife filter     */
 /* 24/07/2019   NJOW05  1.6   WMS-9509 SG Prestige lottable03 filter    */
 /* 28/05/2020   NJOW06  1.7   WMS-13544 Change FIFO to use lottable04   */
+/* 15/12/2021   NJOW07  1.8   WMS-18573 Lottable07 filtring condition   */
+/* 15/12/2021   NJOW07  1.8   DEVOPS combine script                     */
 /************************************************************************/
 
-CREATE PROC    nspPR01_B7  -- Rename From nspPR01_07; used by IDSSG
+CREATE OR ALTER PROC    nspPR01_B7  -- Rename From nspPR01_07; used by IDSSG
 @c_storerkey NVARCHAR(15) ,
 @c_sku NVARCHAR(20) ,
 @c_lot NVARCHAR(10) ,
@@ -103,9 +100,9 @@ BEGIN
        BEGIN
             DECLARE  PREALLOCATE_CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR
             SELECT LOT.STORERKEY, LOT.SKU, LOT.LOT, 
---            QTYAVAILABLE = MAX(LOT.QTY - LOT.QTYALLOCATED - LOT.QTYPICKED - LOT.QTYPREALLOCATED - LOT.QtyOnHold) -- SOS38650
+--           QTYAVAILABLE = MAX(LOT.QTY - LOT.QTYALLOCATED - LOT.QTYPICKED - LOT.QTYPREALLOCATED - LOT.QtyOnHold) -- SOS38650
             QTYAVAILABLE = SUM(LOTXLOCXID.QTY - LOTXLOCXID.QTYALLOCATED - LOTXLOCXID.QTYPICKED) - MIN(ISNULL(P.QTYPREALLOCATED, 0))
---            FROM LOT (NOLOCK), LOTATTRIBUTE (NOLOCK), LOTXLOCXID (NOLOCK), LOC (NOLOCK), ID (NOLOCK)
+--           FROM LOT (NOLOCK), LOTATTRIBUTE (NOLOCK), LOTXLOCXID (NOLOCK), LOC (NOLOCK), ID (NOLOCK)
             FROM LOT WITH (NOLOCK)
             JOIN LOTATTRIBUTE (NOLOCK) ON (LOT.LOT = LOTATTRIBUTE.LOT) 
             JOIN LOTXLOCXID   (NOLOCK) ON (LOT.LOT = LOTXLOCXID.LOT) 
@@ -138,6 +135,12 @@ BEGIN
        END
        ELSE
        BEGIN
+         SELECT @c_Strategykey = Strategykey,
+                @n_SkuOGShelfLife = CASE WHEN ISNUMERIC(susr2) = 1 THEN CAST(Susr2 AS INT) ELSE 0 END --NJOW04
+         FROM  SKU (NOLOCK)
+         WHERE SKU = @c_SKU
+         AND   STORERKEY = @c_StorerKey
+                	
          --(Wan01) - START
          SET @c_Condition = ''
 
@@ -175,6 +178,20 @@ BEGIN
             SET @c_Condition = @c_Condition + ' AND LOTATTRIBUTE.Lottable06 = N''' + RTRIM(@c_Lottable06) + '''' 
          END   
    
+         --NJOW07
+         IF @c_Strategykey = 'PPDSTD'
+         BEGIN
+         	  SELECT TOP 1 @c_Lottable07 = CASE WHEN ISNULL(@c_Lottable07,'') = '' AND ISNULL(CL.Code2,'') <> ''  THEN ISNULL(CL.Code2,'') ELSE @c_Lottable07 END
+         	  FROM ORDERS O (NOLOCK)
+         	  JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey
+         	  JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku
+            JOIN STORER CONS (NOLOCK) ON O.Consigneekey = CONS.Storerkey
+            OUTER APPLY (SELECT TOP 1 CL.Code2 FROM CODELKUP CL (NOLOCK) WHERE O.Storerkey = CL.Storerkey AND SKU.Busr6 = CL.Code AND CL.Listname = 'ALLOBYLTBL' 
+                         AND ((CONS.Secondary = CL.UDF01 OR CONS.Secondary = CL.UDF02 OR CONS.Secondary = CL.UDF03 OR CONS.Secondary = CL.UDF04 OR CONS.Secondary = CL.UDF05) AND ISNULL(CONS.Secondary, '') <> '')) CL   
+            WHERE O.Orderkey = @c_Orderkey
+            AND SKU.Sku = @c_Sku
+         END
+
          IF RTRIM(@c_Lottable07) <> '' AND @c_Lottable07 IS NOT NULL
          BEGIN
             SET @c_Condition = @c_Condition + ' AND LOTATTRIBUTE.Lottable07 = N''' + RTRIM(@c_Lottable07) + '''' 
@@ -221,12 +238,6 @@ BEGIN
          END
    
          --NJOW02 Strart
-         SELECT @c_Strategykey = Strategykey,
-                @n_SkuOGShelfLife = CASE WHEN ISNUMERIC(susr2) = 1 THEN CAST(Susr2 AS INT) ELSE 0 END --NJOW04
-         FROM  SKU (NOLOCK)
-         WHERE SKU = @c_SKU
-         AND   STORERKEY = @c_StorerKey
-         
        	 SELECT @n_ConMinShelfLife = S.MinShelflife
          FROM ORDERS O (NOLOCK)
          JOIN STORER S (NOLOCK) ON O.Consigneekey = S.Storerkey
@@ -281,12 +292,6 @@ BEGIN
    END
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF 
-GO
-
 GRANT EXECUTE ON nspPR01_B7 to nSQL
 GO
 

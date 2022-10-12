@@ -1,11 +1,7 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspPRstdB1]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[nspPRstdB1]
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-
 /************************************************************************/      
 /* Stored Procedure: nspPRstdB1                                         */      
 /* Creation Date:                                                       */      
@@ -32,9 +28,11 @@ GO
 /* 09-Nov-2018 NJOW03   1.4   WMS-6892 change FIFO shelflife filter     */
 /* 24-Jul-2019 NJOW04   1.5   WMS-9509 SG Prestige lottable03 filter    */
 /* 28-May-2020 NJOW05   1.6   WMS-13544 Change FIFO to use lottable04   */
+/* 15-Dec-2021 NJOW06   1.7   WMS-18573 Lottable07 filtring condition   */
+/* 15-Dec-2021 NJOW06   1.7   DEVOPS combine script                     */
 /************************************************************************/  
 
-CREATE PROC  nspPRstdB1  -- Rename from IDSSG:nspPRstd01
+CREATE OR ALTER PROC  nspPRstdB1  -- Rename from IDSSG:nspPRstd01
 @c_storerkey NVARCHAR(15) ,
 @c_sku NVARCHAR(20) ,
 @c_lot NVARCHAR(10) ,
@@ -54,7 +52,7 @@ CREATE PROC  nspPRstdB1  -- Rename from IDSSG:nspPRstd01
 @d_lottable14 DATETIME ,      --(Wan01)   
 @d_lottable15 DATETIME ,      --(Wan01)
 @c_uom NVARCHAR(10) ,
-@c_facility NVARCHAR(10)  ,  -- added By Ricky for IDSV5
+@c_facility NVARCHAR(10)  ,   -- added By Ricky for IDSV5
 @n_uombase int ,
 @n_qtylefttofulfill int,
 @c_OtherParms NVARCHAR(200) = ''  --Orderinfo4PreAllocation   
@@ -168,6 +166,20 @@ BEGIN
    BEGIN
       SET @c_Condition = @c_Condition + ' AND LOTATTRIBUTE.Lottable06 = N''' + RTRIM(@c_Lottable06) + '''' 
    END   
+   
+   --NJOW06
+   IF @c_Strategykey = 'PPDSTD'
+   BEGIN
+   	  SELECT TOP 1 @c_Lottable07 = CASE WHEN ISNULL(@c_Lottable07,'') = '' AND ISNULL(CL.Code2,'') <> ''  THEN ISNULL(CL.Code2,'') ELSE @c_Lottable07 END
+   	  FROM ORDERS O (NOLOCK)
+   	  JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey
+   	  JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku
+      JOIN STORER CONS (NOLOCK) ON O.Consigneekey = CONS.Storerkey
+      OUTER APPLY (SELECT TOP 1 CL.Code2 FROM CODELKUP CL (NOLOCK) WHERE O.Storerkey = CL.Storerkey AND SKU.Busr6 = CL.Code AND CL.Listname = 'ALLOBYLTBL' 
+                   AND ((CONS.Secondary = CL.UDF01 OR CONS.Secondary = CL.UDF02 OR CONS.Secondary = CL.UDF03 OR CONS.Secondary = CL.UDF04 OR CONS.Secondary = CL.UDF05) AND ISNULL(CONS.Secondary, '') <> '')) CL   
+      WHERE O.Orderkey = @c_Orderkey
+      AND SKU.Sku = @c_Sku
+   END
 
    IF RTRIM(@c_Lottable07) <> '' AND @c_Lottable07 IS NOT NULL
    BEGIN
@@ -237,12 +249,6 @@ BEGIN
    --(Wan01) - END                     
 END
 END
-GO
- 
-
-SET ANSI_NULLS OFF
-GO
-SET QUOTED_IDENTIFIER OFF
-GO
+GO 
 GRANT EXECUTE ON nspPRstdB1 to nSQL
 GO

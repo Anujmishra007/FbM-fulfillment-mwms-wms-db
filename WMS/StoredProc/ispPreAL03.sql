@@ -1,10 +1,5 @@
-USE [SGWMS]
-GO
-
-/****** Object:  StoredProcedure [dbo].[ispPreAL03]    Script Date: 6/1/2022 5:33:41 PM ******/
 SET ANSI_NULLS OFF
 GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 
@@ -35,10 +30,12 @@ GO
 /*                            shelflife by consignee                    */
 /* 28/05/2020  NJOW07   1.6   WMS-13544 Change FIFO to use lottable04   */
 /* 14/09/2020  Leong    1.7   INC1283171 - Bug Fix.                     */
-/* 01/06/2022  CLVN01   1.8   JSM-71556 Add LocationFlag <> HOLD        */
+/* 15/12/2021  NJOW08   1.8   WMS-18573 Lottable07 filtring condition   */
+/* 15/12/2021  NJOW08   1.8   DEVOPS combine script                     */
+/* 01/06/2022  CLVN01   1.9   JSM-71556 Add LocationFlag <> HOLD        */
 /************************************************************************/
 
-ALTER PROC [dbo].[ispPreAL03]
+CREATE OR ALTER PROC [dbo].[ispPreAL03]
            @c_OrderKey NVARCHAR(10)
          , @c_LoadKey  NVARCHAR(10)
          , @b_Success  INT    OUTPUT
@@ -109,6 +106,8 @@ BEGIN
          , @n_SkuOGShelflife     INT --NJOW03
          , @n_SkuGroupShelfLife  INT --NJOW06
          , @n_SkuGroupShelfLife2 INT --NJOW06
+         , @c_SortMode           NVARCHAR(10)='' --NJOW08
+         , @c_AllowHOLDLoc       NVARCHAR(1) ='N' --NJOW08
 
          --NJOW04
    DECLARE @c_CONSIGTAG          NVARCHAR(1)
@@ -156,7 +155,7 @@ BEGIN
    --IF @c_CONSIGTAG = 'N' AND @c_DMGALLOC = 'N' AND @c_RTNNOALLOC = 'Y'
    --   GOTO QUIT_SP
    --NJOW04 E
-
+                                         
    IF EXISTS ( SELECT 1
                FROM PREALLOCATEPICKDETAIl PR WITH (NOLOCK)
                WHERE PR.Orderkey = @c_Orderkey
@@ -189,7 +188,10 @@ BEGIN
          ,Lottable04 = ISNULL(OD.Lottable04,'19000101')
          ,Lottable05 = ISNULL(OD.Lottable05,'19000101')
          ,Lottable06 = ISNULL(RTRIM(OD.Lottable06),'')
-         ,Lottable07 = ISNULL(RTRIM(OD.Lottable07),'')
+         ,Lottable07 = CASE WHEN ISNULL(RTRIM(OD.Lottable07),'') <> '' THEN ISNULL(RTRIM(OD.Lottable07),'') 
+                            WHEN ISNULL(RTRIM(CL3.Code2),'') <> '' THEN ISNULL(RTRIM(CL3.Code2),'') 
+                            ELSE ''
+                       END --NJOW08
          ,Lottable08 = ISNULL(RTRIM(OD.Lottable08),'')
          ,Lottable09 = ISNULL(RTRIM(OD.Lottable09),'')
          ,Lottable10 = ISNULL(RTRIM(OD.Lottable10),'')
@@ -209,8 +211,11 @@ BEGIN
          ,Strategykey = SKU.Strategykey --NJOW01
          ,ConMinShelfLife = ISNULL(CONS.MinShelflife,0)  --NJOW01
          ,SkuOGShelflife = CASE WHEN ISNUMERIC(SKU.Susr2) = 1 THEN CAST(SKU.Susr2 AS INT) ELSE 0 END --NJOW03
-         ,SkuGroupShelfLife = CASE WHEN ISNUMERIC(CL.Short) = 1 THEN CAST(CL.Short AS INT) ELSE 0 END --NJOW06
-         ,SkuGroupShelfLife2 = CASE WHEN ISNUMERIC(CL2.Short) = 1 THEN CAST(CL2.Short AS INT) ELSE 0 END --NJOW06
+         ,SkuGroupShelfLife = CASE WHEN ISNUMERIC(CL3.Short) = 1 THEN CAST(CL3.Short AS INT)  --NJOW08
+                                   WHEN ISNUMERIC(CL.Short) = 1 THEN CAST(CL.Short AS INT) ELSE 0 END --NJOW06         
+         ,SkuGroupShelfLife2 = CASE WHEN ISNUMERIC(CL2.Short) = 1 THEN CAST(CL2.Short AS INT) ELSE 0 END --NJOW06          
+         ,SortMode = ISNULL(CL.Long,'')  --NJOW08
+         ,AllowHoldLoc = CASE WHEN CL3.Code IS NOT NULL THEN 'Y' ELSE 'N' END --NJOW08
    FROM ORDERS OH      WITH (NOLOCK)
    JOIN ORDERDETAIL OD WITH (NOLOCK) ON (OH.Orderkey  = OD.Orderkey)
    JOIN SKU        SKU WITH (NOLOCK) ON (OD.Storerkey = SKU.Storerkey)
@@ -237,6 +242,9 @@ BEGIN
                          OR CONS.Secondary = CL3.UDF05)
                          AND ISNULL(CONS.Secondary, '') <> '' ) -- INC1283171
                          ) CL2
+   OUTER APPLY (SELECT TOP 1 CL4.Code2, CL4.Short, CL4.Code FROM CODELKUP CL4 (NOLOCK) WHERE OH.Storerkey = CL4.Storerkey AND SKU.Busr6 = CL4.Code AND CL4.Listname = 'ALLOBYLTBL' 
+               AND (CONS.Secondary = CL4.UDF01 OR CONS.Secondary = CL4.UDF02 OR CONS.Secondary = CL4.UDF03 OR CONS.Secondary = CL4.UDF04 OR CONS.Secondary = CL4.UDF05)
+               AND ISNULL(CONS.Secondary, '') <> '') CL3   --NJOW08                         
    WHERE OH.Orderkey = @c_Orderkey
    AND   OH.SOStatus <> 'CANC'
    AND   OH.Status < '9'
@@ -276,6 +284,8 @@ BEGIN
                               , @n_skuOGShelflife  --NJOW03
                               , @n_SkuGroupShelfLife  --NJOW06
                               , @n_SkuGroupShelfLife2 --NJOW06
+                              , @c_SortMode --NJOW08
+                              , @c_AllowHoldLoc --NJOW08
    WHILE @@FETCH_STATUS <> -1
    BEGIN
       IF @b_debug = 1
@@ -336,7 +346,7 @@ BEGIN
          ELSE
              SET @c_Lottable03Inc = @c_Lottable03Inc + ',''OK-RTN'',''OK'''
       END
-
+      
       IF @c_Lottable03Inc <> ''
          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable03 IN(' + @c_Lottable03Inc + ') '
 
@@ -396,8 +406,8 @@ BEGIN
       BEGIN
          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable06 = @c_Lottable06'
       END
-
-      IF @c_Lottable07 <> ''
+                                     
+ 	    IF @c_Lottable07 <> ''
       BEGIN
          SET @c_AddWhereSQL = @c_AddWhereSQL + N' AND LA.Lottable07 = @c_Lottable07'
       END
@@ -466,15 +476,23 @@ BEGIN
               -- + ' AND ID.Status <> ''HOLD'''  --NJOW04 remove
               -- + ' AND (LOC.Locationflag = ''HOLD'''
               -- + ' OR  LOC.Status = ''HOLD'')'
-			   + ' AND LOC.Locationflag <> ''HOLD''' --CLVN01
-               + ' AND NOT (LA.Lottable03 IN (''OK-RTN'',''OK'') AND (ID.Status <> ''OK'' OR LOC.Status <> ''OK'' OR LOT.Status <> ''OK'' OR LOC.LocationFlag <> ''NONE'')) '  --NJOW04
+               + CASE WHEN @c_AllowHoldLoc <> 'Y' THEN  --NJOW08
+                   ' AND LOC.Locationflag <> ''HOLD'''               
+                 ELSE '' END  
+			        --+ ' AND LOC.Locationflag <> ''HOLD''' --CLVN01
+			        + CASE WHEN @c_AllowHoldLoc = 'Y' THEN  --NJOW08			        
+                  ' AND NOT (LA.Lottable03 IN (''OK-RTN'',''OK'') AND (ID.Status <> ''OK'' OR LOC.Status <> ''OK'' OR LOT.Status <> ''OK'')) '  --NJOW04
+			          ELSE
+                  ' AND NOT (LA.Lottable03 IN (''OK-RTN'',''OK'') AND (ID.Status <> ''OK'' OR LOC.Status <> ''OK'' OR LOT.Status <> ''OK'' OR LOC.LocationFlag <> ''NONE'')) '  --NJOW04
+                END                                 
                + ' AND NOT (LA.Lottable03 IN (''PER-TAG'',''TAG'',''DMG-OK'') AND LOC.LocationCategory = ''STAGING'') '  --NJOW05
               -- + ' AND NOT (LA.Lottable03 IN (''PER-TAG'',''TAG'',''DMG-OK'') AND LOC.LocationCategory = ''STAGING'' AND (ID.Status <> ''OK'' OR LOC.Status <> ''OK'' OR LOT.Status <> ''OK'' OR LOC.LocationFlag <> ''NONE'')) '  --NJOW05
                + ' AND LOC.Facility = @c_Facility'
                + ' AND (LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED) > 0'
                + ' ' + @c_AddWhereSQL
                + ' ORDER BY CASE WHEN LA.Lottable03 IN(''PER-TAG'',''TAG'') THEN 1 WHEN LA.Lottable03 = ''DMG-OK'' THEN 2 WHEN LA.Lottable03 = ''OK'' THEN 3 WHEN LA.Lottable03 = ''OK-RTN'' THEN 4 ELSE 5 END'  --NJOW04
-               +        ',  LA.Lottable04'
+               +        ',  LA.Lottable04' 
+               + CASE WHEN @c_Strategy = 'FEFO' AND @c_SortMode = 'LEFO' THEN ' DESC ' ELSE '' END --NJOW08
                +        ',  LA.Lottable05'
                +        ',  LLI.Lot'
                +        ',  aUOM'
@@ -669,6 +687,8 @@ BEGIN
                                  , @n_skuOGShelflife --NJOW03
                                  , @n_SkuGroupShelfLife --NJOW06
                                  , @n_SkuGroupShelfLife2 --NJOW06
+                                 , @c_SortMode --NJOW08
+                                 , @c_AllowHoldLoc --NJOW08                              
    END
 
    QUIT_SP:
@@ -713,6 +733,8 @@ BEGIN
       RETURN
    END
 END -- Procedure
+GO
+GRANT EXECUTE ON [dbo].[ispPreAL03] TO nSQL
 GO
 
 

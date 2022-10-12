@@ -1,13 +1,7 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE  name = N'nspPRFEFO2' AND type = 'P')
-    DROP PROCEDURE nspPRFEFO2
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
-
 SET ANSI_NULLS OFF 
 GO
-
 /************************************************************************/      
 /* Stored Procedure: nspPRFEFO2                                         */      
 /* Creation Date:                                                       */      
@@ -35,10 +29,12 @@ GO
 /* 16-Jan-2020  Wan02   1.5   Dynamic SQL review, impact SQL cache log  */  
 /* 25-MAR-2020  NJOW04  1.6   WMS-12622 add sku brand and skugroup FEFO */  
 /*                            shelflife by consignee                    */   
+/* 15-Dec-2021  NJOW05  1.7   WMS-18573 Lottable07 filtring condition   */
+/* 15-Dec-2021  NJOW05  1.7   DEVOPS combine script                     */
 /************************************************************************/      
 
 -- PGD TH Preallocation Strategy 
-CREATE PROC nspPRFEFO2 
+CREATE OR ALTER PROC nspPRFEFO2 
     @c_StorerKey NVARCHAR(15) ,  
     @c_SKU NVARCHAR(20) ,  
     @c_LOT NVARCHAR(10) ,  
@@ -60,7 +56,7 @@ CREATE PROC nspPRFEFO2
     @c_UOM NVARCHAR(10) ,
     @c_Facility NVARCHAR(10)  ,
     @n_UOMBase int ,  
-    @n_QtyLeftToFulfill int  -- new column
+    @n_QtyLeftToFulfill int   -- new column
    ,@c_OtherParms NVARCHAR(200)=''--(Wan01) 
 AS  
 
@@ -76,7 +72,8 @@ DECLARE @c_Lottable04Label NVARCHAR(20),
         @c_Orderkey        NVARCHAR(10), --NJOW01
         @c_Strategykey     NVARCHAR(10), --NJOW01
         @n_SkuGroupShelfLife INT, --NJOW04
-        @n_SkuGroupShelfLife2 INT --NJOW04        
+        @n_SkuGroupShelfLife2 INT, --NJOW04        
+        @c_SortMode           NVARCHAR(10) = '' --NJOW05
 
 DECLARE @c_SQLParms        NVARCHAR(4000) = ''  --(Wan02) 
 
@@ -177,7 +174,16 @@ BEGIN
    IF @c_Manual = 'N'   
    BEGIN     	
       SELECT @c_LimitString = ''  
-   
+
+      SELECT @n_ShelfLife = CASE WHEN ISNUMERIC(SUSR2) = 1 Then CAST(SUSR2 as int) 
+                                ELSE 0
+                                END, 
+            @c_Lottable04Label = Lottable04Label,
+            @c_Strategykey = Strategykey --NJOW01 
+      FROM  SKU (NOLOCK)
+      WHERE SKU = @c_SKU
+      AND   STORERKEY = @c_StorerKey
+         
       IF @c_Lottable01 <> ' '  
          SELECT @c_LimitString =  dbo.fnc_RTrim(@c_LimitString) + " AND Lottable01= @c_Lottable01" --(Wan02) 
       
@@ -202,6 +208,20 @@ BEGIN
       BEGIN
          SET @c_LimitString = @c_LimitString + ' AND Lottable06 = @c_Lottable06' 
       END   
+
+      --NJOW05
+      IF @c_Strategykey = 'PPDFEFO'
+      BEGIN
+      	 SELECT TOP 1 @c_Lottable07 = CASE WHEN ISNULL(@c_Lottable07,'') = '' AND ISNULL(CL.Code2,'') <> ''  THEN ISNULL(CL.Code2,'') ELSE @c_Lottable07 END
+      	 FROM ORDERS O (NOLOCK)
+      	 JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey
+      	 JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku
+         JOIN STORER CONS (NOLOCK) ON O.Consigneekey = CONS.Storerkey
+         OUTER APPLY (SELECT TOP 1 CL.Code2 FROM CODELKUP CL (NOLOCK) WHERE O.Storerkey = CL.Storerkey AND SKU.Busr6 = CL.Code AND CL.Listname = 'ALLOBYLTBL' 
+                      AND ((CONS.Secondary = CL.UDF01 OR CONS.Secondary = CL.UDF02 OR CONS.Secondary = CL.UDF03 OR CONS.Secondary = CL.UDF04 OR CONS.Secondary = CL.UDF05) AND ISNULL(CONS.Secondary, '') <> '')) CL   
+         WHERE O.Orderkey = @c_Orderkey
+         AND SKU.Sku = @c_Sku
+      END
 
       IF RTRIM(@c_Lottable07) <> '' AND @c_Lottable07 IS NOT NULL
       BEGIN
@@ -248,30 +268,28 @@ BEGIN
          SET @c_LimitString = @c_LimitString + ' AND Lottable15 = @d_Lottable15'
       END
       --(Wan01) - END
-
-      SELECT @n_ShelfLife = CASE WHEN ISNUMERIC(SUSR2) = 1 Then CAST(SUSR2 as int) 
-                                ELSE 0
-                                END, 
-            @c_Lottable04Label = Lottable04Label,
-            @c_Strategykey = Strategykey --NJOW01 
-      FROM  SKU (NOLOCK)
-      WHERE SKU = @c_SKU
-      AND   STORERKEY = @c_StorerKey
-      
-      SELECT @c_SortOrder = " ORDER BY LOTATTRIBUTE.Lottable04, LOT.Lot"      
       
       --NJOW01
-          	SELECT TOP 1 @n_ConMinShelfLife = S.MinShelflife,
-    	             @n_SkuGroupShelfLife = CASE WHEN ISNUMERIC(CL.Short) = 1 THEN CAST(CL.Short AS INT) ELSE 0 END, --NJOW04
-    	             @n_SkuGroupShelfLife2 = CASE WHEN ISNUMERIC(CL2.Short) = 1 THEN CAST(CL2.Short AS INT) ELSE 0 END --NJOW04
+      SELECT TOP 1 @n_ConMinShelfLife = S.MinShelflife,
+    	             @n_SkuGroupShelfLife = CASE WHEN ISNUMERIC(CL3.Short) = 1 THEN CAST(CL3.Short AS INT)  --NJOW05
+    	                                         WHEN ISNUMERIC(CL.Short) = 1 THEN CAST(CL.Short AS INT) ELSE 0 END, --NJOW04
+    	             @n_SkuGroupShelfLife2 = CASE WHEN ISNUMERIC(CL2.Short) = 1 THEN CAST(CL2.Short AS INT) ELSE 0 END, --NJOW04
+    	             @c_SortMode = ISNULL(CL.Long,'') --NJOW05
       FROM ORDERS O (NOLOCK)
       JOIN STORER S (NOLOCK) ON O.Consigneekey = S.Storerkey
       JOIN SKU (NOLOCK) ON SKU.Storerkey = @c_Storerkey AND SKU.Sku = @c_Sku
       LEFT JOIN CODELKUP CL (NOLOCK) ON (O.Storerkey = CL.Storerkey AND SKU.Busr6 = CL.Code AND SKU.SkuGroup = CL.Code2 AND CL.Listname = 'PRESTALLOC'
-                                      AND (S.Secondary = CL.UDF01 OR S.Secondary = CL.UDF02 OR S.Secondary = CL.UDF03 OR S.Secondary = CL.UDF04 OR S.Secondary = CL.UDF05)) --NJOW04
+                                      AND ((S.Secondary = CL.UDF01 OR S.Secondary = CL.UDF02 OR S.Secondary = CL.UDF03 OR S.Secondary = CL.UDF04 OR S.Secondary = CL.UDF05) AND ISNULL(S.Secondary, '') <> '')) --NJOW04
       OUTER APPLY (SELECT TOP 1 CL3.Short FROM CODELKUP CL3 (NOLOCK) WHERE O.Storerkey = CL3.Storerkey AND SKU.Busr6 <> CL3.Code AND SKU.SkuGroup <> CL3.Code2 AND CL3.Listname = 'PRESTALLOC' AND CL3.Code = 'ALLOTHERS'
-                   AND (S.Secondary = CL3.UDF01 OR S.Secondary = CL3.UDF02 OR S.Secondary = CL3.UDF03 OR S.Secondary = CL3.UDF04 OR S.Secondary = CL3.UDF05)) CL2   --NJOW04      
+                   AND ((S.Secondary = CL3.UDF01 OR S.Secondary = CL3.UDF02 OR S.Secondary = CL3.UDF03 OR S.Secondary = CL3.UDF04 OR S.Secondary = CL3.UDF05) AND ISNULL(S.Secondary, '') <> '')) CL2   --NJOW04      
+      OUTER APPLY (SELECT TOP 1 CL4.Code2, CL4.Short FROM CODELKUP CL4 (NOLOCK) WHERE O.Storerkey = CL4.Storerkey AND SKU.Busr6 = CL4.Code AND CL4.Listname = 'ALLOBYLTBL' 
+                   AND ((S.Secondary = CL4.UDF01 OR S.Secondary = CL4.UDF02 OR S.Secondary = CL4.UDF03 OR S.Secondary = CL4.UDF04 OR S.Secondary = CL4.UDF05) AND ISNULL(S.Secondary, '') <> '')) CL3   --NJOW05                   
       WHERE O.Orderkey = @c_Orderkey
+
+      IF @c_Strategykey = 'PPDFEFO' AND @c_SortMode = 'LEFO' --NJOW05
+         SELECT @c_SortOrder = " ORDER BY LOTATTRIBUTE.Lottable04 DESC, LOT.Lot"      
+      ELSE
+         SELECT @c_SortOrder = " ORDER BY LOTATTRIBUTE.Lottable04, LOT.Lot"            
 
       IF @c_Strategykey = 'PPDFEFO' AND ISNULL(@n_SkuGroupShelfLife,0) > 0
       BEGIN
@@ -362,11 +380,5 @@ BEGIN
    END
 END
 GO
-
- 
-GO
-SET ANSI_NULLS OFF 
-GO
-
 GRANT EXECUTE ON nspPRFEFO2 to nSQL
 GO
