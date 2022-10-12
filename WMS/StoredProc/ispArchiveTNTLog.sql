@@ -33,6 +33,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author     Purposes                                     */
+/* 12-OCT-2022  TLTING01   archive status 5                             */
 /*                                                                      */
 /************************************************************************/
 
@@ -195,13 +196,13 @@ BEGIN
         IF @c_datetype = "1" -- EditDate
         BEGIN
            SELECT @c_whereclause = 'WHERE TNTLog.EditDate  <= ' + ''''+ CONVERT(char(11),@d_result,106)+''''
-                                    + ' AND ( TNTLog.TransmitFlag = ''9'' OR TNTLog.TransmitFlag = ''IGNOR'' )' +
+                                    + ' AND ( TNTLog.TransmitFlag in ( ''5'', ''9'', ''IGNOR'' )) ' +   -- TLTING01
                                    +  @c_temp
         END
         IF @c_datetype = "2" -- AddDate
         BEGIN
            SELECT @c_whereclause = 'WHERE TNTLog.AddDate  <= ' + ''''+ CONVERT(char(11),@d_result,106) +''''
-                                   + ' AND ( TNTLog.TransmitFlag = ''9'' OR TNTLog.TransmitFlag = ''IGNOR'' ) ' +
+                                   + ' AND ( TNTLog.TransmitFlag in ( ''5'', ''9'', ''IGNOR'' ))  ' +   -- TLTING01
                                    +  @c_temp
         END
 
