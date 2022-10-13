@@ -55,7 +55,6 @@ BEGIN
          , @c_AdjLineNumber      NVARCHAR(5)
          , @n_QtyExpected        INT
          , @n_QtyVariance        INT
-         , @n_QtyReceived        INT
          , @n_LineNo             INT
 
          , @c_lot                NVARCHAR(10)
@@ -155,7 +154,7 @@ BEGIN
       DECLARE CUR_RD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT RD.ReceiptKey, RD.ReceiptLineNumber, RD.SKU
            , CASE WHEN ISNULL(RD.UserDefine08,'') = '' THEN '0' ELSE RD.UserDefine08 END
-           , RD.StorerKey, ITRN.Lot, RD.ToLoc, RD.ToID , SUM(RD.QtyReceived)
+           , RD.StorerKey, ITRN.Lot, RD.ToLoc, RD.ToID , SUM(RD.QtyExpected)
            , RD.ExternReceiptKey, R.Facility, RD.PackKey, RD.UOM
       FROM RECEIPTDETAIL RD WITH (NOLOCK)
       JOIN RECEIPT R WITH (NOLOCK) ON R.ReceiptKey = RD.ReceiptKey
@@ -174,7 +173,7 @@ BEGIN
       OPEN CUR_RD 
 
       FETCH NEXT FROM CUR_RD INTO @c_Receiptkey, @c_ReceiptLineNumber, @c_SKU, @c_Userdefine08
-                                , @c_Storerkey, @c_ToLot, @c_ToLoc, @c_ToID, @n_QtyReceived
+                                , @c_Storerkey, @c_ToLot, @c_ToLoc, @c_ToID, @n_QtyExpected
                                 , @c_Remarks, @c_Facility, @c_Packkey, @c_UOM
 
       WHILE @@FETCH_STATUS <> -1
@@ -185,14 +184,14 @@ BEGIN
          SET @n_Userdefine08 = @c_Userdefine08
          SET @n_QtyVariance = 0
 
-         IF @n_Userdefine08 < @n_QtyReceived
+         IF @n_Userdefine08 < @n_QtyExpected
          BEGIN
-            SET @n_QtyVariance = @n_QtyReceived - @n_Userdefine08
+            SET @n_QtyVariance = @n_QtyExpected - @n_Userdefine08
             SET @n_QtyVariance = @n_QtyVariance * - 1
          END
-         ELSE IF @n_Userdefine08 > @n_QtyReceived
+         ELSE IF @n_Userdefine08 > @n_QtyExpected
          BEGIN
-            SET @n_QtyVariance = @n_Userdefine08 - @n_QtyReceived
+            SET @n_QtyVariance = @n_Userdefine08 - @n_QtyExpected
          END
 
          IF @n_QtyVariance <> 0
@@ -340,7 +339,7 @@ BEGIN
          
          NEXT_LOOP:
          FETCH NEXT FROM CUR_RD INTO @c_Receiptkey, @c_ReceiptLineNumber, @c_SKU, @c_Userdefine08
-                                   , @c_Storerkey, @c_ToLot, @c_ToLoc, @c_ToID, @n_QtyReceived
+                                   , @c_Storerkey, @c_ToLot, @c_ToLoc, @c_ToID, @n_QtyExpected
                                    , @c_Remarks, @c_Facility, @c_Packkey, @c_UOM
       END
       CLOSE CUR_RD
