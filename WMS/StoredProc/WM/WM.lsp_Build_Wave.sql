@@ -12,7 +12,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 2.3                                                    */                                                                                  
+/* PVCS Version: 2.4                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -47,6 +47,8 @@ GO
 /*                            analysis                                  */
 /* 2022-09-20  Wan11    2.3   LFWM-3763 - SCE  LOREAL PROD  Cannot build*/ 
 /*                            wave. Fix Truncated value                 */
+/* 2022-08-10  Wan10    2.4   LFWM-3470 - [CN]NIKE_PHC_Wave Release_Add */
+/*                            orderdate filter                          */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_Build_Wave]                                                                                                                       
       @c_BuildParmKey      NVARCHAR(10)                                                                                                                    
@@ -61,7 +63,9 @@ CREATE OR ALTER PROC [WM].[lsp_Build_Wave]
    ,  @n_err               INT            = 0  OUTPUT                                                                                                             
    ,  @c_ErrMsg            NVARCHAR(255)  = '' OUTPUT 
    ,  @c_UserName          NVARCHAR(128)  = ''              
-   ,  @b_debug             INT            = 0                                                                                                                              
+   ,  @b_debug             INT            = 0   
+   ,  @dt_Date_Fr          DATETIME       = NULL               --(Wan10)
+   ,  @dt_Date_To          DATETIME       = NULL               --(Wan10)                                                                                                                           
 AS                                                                                                                                                          
    SET NOCOUNT ON                                                                                                                                           
    SET ANSI_NULLS OFF                                                                                                                                       
@@ -116,6 +120,7 @@ AS
 
          , @c_ParmGroup                NVARCHAR(30)   = ''
          , @c_ParmGroupType            NVARCHAR(30)   = ''
+         , @c_BuildDateField           NVARCHAR(50)   = ''              --(Wan10)
 
          , @c_ParmBuildType            NVARCHAR(10)   = ''
          , @c_FieldName                NVARCHAR(100)  = ''                                                                                                                     
@@ -151,6 +156,7 @@ AS
          , @c_SQLBuildByGroup          NVARCHAR(4000) = ''
          , @c_SQLBuildByGroupWhere     NVARCHAR(4000) = ''  
          , @c_SQLCondPreWave           NVARCHAR(2000) = ''              --(Wan09) 
+         , @c_SQLCondDate              NVARCHAR(500)  = ''              --(Wan10) 
 
          , @b_ParmFound                BIT            = 0
          , @b_ParmTypeSP               INT            = 0
@@ -304,8 +310,16 @@ AS
       WHERE BP.BuildParmKey = @c_BuildParmKey                                                                                                                                            
 
       SELECT @c_ParmGroupType = CFG.[Type]
+            ,@c_BuildDateField = ISNULL(CFG.BuildDateField,'')                                     --(Wan10)
       FROM BUILDPARMGROUPCFG CFG WITH (NOLOCK)
       WHERE ParmGroup = @c_ParmGroup
+      
+      IF @c_BuildDateField <> '' AND @dt_Date_Fr IS NOT NULL AND @dt_Date_To IS NOT NULL           --(Wan10) - START
+      BEGIN
+         SET @c_SQLCondDate = ' AND ' + @c_BuildDateField 
+                            + ' BETWEEN ''' + CONVERT( CHAR(23), @dt_Date_Fr, 121) 
+                            + ' '' AND ''' + CONVERT( CHAR(23), @dt_Date_To, 121) + ''''  
+      END                                                                                          --(Wan10) - END
       ------------------------------------------------------
       -- Get Build Wave Restriction: 
       ------------------------------------------------------
@@ -971,6 +985,8 @@ AS
             SET @c_SQLWhere = @c_SQLWhere + @c_SQLCondPreWave
          END
       END                                 --(Wan09) - END
+      
+      SET @c_SQLWhere = @c_SQLWhere + @c_SQLCondDate                                               --(Wan10)
       
       SET @c_SQL = @c_SQL + @c_SQLWhere + @c_SQLBuildByGroupWhere +  @c_SQLGroupBy + @c_SQLHaving           --(Wan03)
       

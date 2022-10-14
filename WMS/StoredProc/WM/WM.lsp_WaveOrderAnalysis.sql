@@ -13,7 +13,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.5                                                    */                                                                                  
+/* PVCS Version: 1.7                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -32,6 +32,9 @@ GO
 /*                            in Exceed                                 */
 /* 22-FEB-2022 Wan04    1.5   LFWM-3290 - PROD CN Wave Release  Can not */
 /*                            display all parameter correctly           */
+/* 13-JUL-2022 LZG      1.6   JSM-81405 - Fixed custom SQL HAVING (ZG01)*/ 
+/* 2022-08-10  Wan05    1.7   LFWM-3470 - [CN]NIKE_PHC_Wave Release_Add */
+/*                            orderdate filter                          */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_WaveOrderAnalysis]                                                                                                                     
       @c_Facility          NVARCHAR(5)                                                                                                                     
@@ -44,7 +47,9 @@ CREATE OR ALTER PROC [WM].[lsp_WaveOrderAnalysis]
    ,  @c_ErrMsg            NVARCHAR(255)       OUTPUT               
    ,  @c_UserName          NVARCHAR(128)= ''                                                                                                                         
    ,  @d_debug             INT   = 0         --2020-07-10
-   ,  @c_SortPreference    NVARCHAR(100)= ''             --(Wan05)   -- Sort column + Sort type, If multiple Columns Sorting, seperate by ','
+   ,  @c_SortPreference    NVARCHAR(100)= ''             --(Wan04)   -- Sort column + Sort type, If multiple Columns Sorting, seperate by ','
+   ,  @dt_Date_Fr          DATETIME       = NULL         --(Wan05)
+   ,  @dt_Date_To          DATETIME       = NULL         --(Wan05)    
 AS  
 BEGIN                                                                                                                                                        
    SET NOCOUNT ON                                                                                                                                           
@@ -218,7 +223,9 @@ BEGIN
          ,  @b_Success        = @b_Success   OUTPUT  
          ,  @n_err            = @n_err       OUTPUT                                                                                                             
          ,  @c_ErrMsg         = @c_ErrMsg    OUTPUT 
-         ,  @c_UserName       = @c_UserName           
+         ,  @c_UserName       = @c_UserName
+         ,  @dt_Date_Fr       = @dt_Date_Fr              --(Wan05)
+         ,  @dt_Date_To       = @dt_Date_To              --(Wan05)           
     
       IF @b_Success = 1
       BEGIN
@@ -227,7 +234,8 @@ BEGIN
          SET @n_HavingPos = CHARINDEX('HAVING', @c_SQLBuildWave, 1)
          SET @n_GroupByPos= CHARINDEX('GROUP BY', @c_SQLBuildWave, 1)
 
-         IF @c_SQLHaving = 0
+         --IF @c_SQLHaving = 0   -- ZG01  
+         IF @n_HavingPos = 0     -- ZG01
          BEGIN
             SET @n_ToPos = @n_GroupByPos - @n_FromPos 
             IF @n_GroupByPos = 0
@@ -311,7 +319,7 @@ BEGIN
 
       SET @n_TotalBuild = @n_BuildOrders + @n_WavedOrders
 
-      INSERT INTO #t_WaveOrderAnalysis                            --(Wan05)
+      INSERT INTO #t_WaveOrderAnalysis                            --(Wan04)
          (  BuildParmKey 
          ,  TotalBuild        
          ,  BuildOrders      
@@ -361,7 +369,7 @@ BEGIN
       END
    END
 
-   --(Wan05) - START
+   --(Wan04) - START
    UPDATE #t_WaveOrderAnalysis
    SET SummWaved      = @n_WavedOrders
       ,SummWavedPctg  = @n_WavedPctg
@@ -397,7 +405,7 @@ BEGIN
               + @c_SortPreference
 
    EXEC (@c_SQL)
-   --(Wan05) - END 
+   --(Wan04) - END 
 
    END TRY  
   

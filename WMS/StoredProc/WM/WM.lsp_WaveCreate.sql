@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_WaveCreate]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_WaveCreate] 
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,7 +13,7 @@ GO
 /*                                                                      */                                                                                    
 /* Called By: SCE                                                       */                                                                                    
 /*          :                                                           */                                                                                    
-/* PVCS Version: 1.0                                                    */                                                                                    
+/* PVCS Version: 1.2                                                    */                                                                                    
 /*                                                                      */                                                                                    
 /* Version: 8.0                                                         */                                                                                    
 /*                                                                      */                                                                                    
@@ -28,8 +23,11 @@ GO
 /* Date        Author   Ver.  Purposes                                  */    
 /* 2021-02-10  mingle01 1.1   Add Big Outer Begin try/Catch             */
 /* 2021-02-15  Wan01    1.1   MOve Up to Include in Begin try/catch     */
+/* 2022-08-10  Wan02    1.2   LFWM-3470 - [CN]NIKE_PHC_Wave Release_Add */
+/*                            orderdate filter                          */
+/* 2022-08-10  Wan02    1.2   DevOps Combine Script                     */
 /************************************************************************/                                                                                    
-CREATE PROC [WM].[lsp_WaveCreate]                                                                                                                       
+CREATE OR ALTER PROC [WM].[lsp_WaveCreate]                                                                                                                       
       @c_Facility          NVARCHAR(5)                                                                                                                       
    ,  @c_StorerKey         NVARCHAR(15)    
    ,  @c_BuildParmKey      NVARCHAR(10) 
@@ -40,7 +38,9 @@ CREATE PROC [WM].[lsp_WaveCreate]
    ,  @n_err               INT = 0           OUTPUT                                                                                                               
    ,  @c_ErrMsg            NVARCHAR(255)     OUTPUT                 
    ,  @c_UserName          NVARCHAR(128)  = '' 
-   ,  @b_Debug             INT            = 0            --2020-07-10                                                                                                                       
+   ,  @b_Debug             INT            = 0            --2020-07-10 
+   ,  @dt_Date_Fr          DATETIME       = NULL         --(Wan02)
+   ,  @dt_Date_To          DATETIME       = NULL         --(Wan02)                                                                                                             
 AS    
 BEGIN                                                                
    SET NOCOUNT ON                                                                                                                                             
@@ -116,7 +116,9 @@ BEGIN
             ,  @n_err            = @n_err          OUTPUT                                                                                                               
             ,  @c_ErrMsg         = @c_ErrMsg       OUTPUT   
             ,  @c_UserName       = @c_UserName   
-            ,  @b_Debug          = @b_Debug                 --2020-07-10          
+            ,  @b_Debug          = @b_Debug                 --2020-07-10 
+            ,  @dt_Date_Fr       = @dt_Date_Fr              --(Wan02)
+            ,  @dt_Date_To       = @dt_Date_To              --(Wan02)
          
          --2020-07-10 - START
          IF @b_Debug IN (1,2)
