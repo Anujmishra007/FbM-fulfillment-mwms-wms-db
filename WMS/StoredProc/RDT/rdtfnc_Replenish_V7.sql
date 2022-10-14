@@ -154,6 +154,7 @@ SELECT
    @cUCCNo      = V_UCC, 
 
    @nPUOM_Div   = V_PUOM_Div,
+   @nQTY        = V_TaskQTY, 
    @nMQTY       = V_MTaskQTY,
    @nPQTY       = V_PTaskQTY,
    @nActMQTY    = V_MQTY,
@@ -417,6 +418,7 @@ BEGIN
             @cSKU = SKU,
             @cLOT = LOT,
             @nQTY = QTY,
+            @nActQTY = QTY, 
             @cToLOC = ToLOC,
             @cConfirmed = Confirmed, 
             @cRefNo = RefNo
@@ -439,6 +441,47 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --RPLKey done
             EXEC rdt.rdtSetFocusField @nMobile, 1
             GOTO Step_1_Fail
+         END
+
+         -- Get Pack info
+         SELECT
+            @cDescr = SKU.Descr,
+            @cMUOM_Desc = Pack.PackUOM3,
+            @cPUOM_Desc =
+               CASE @cPUOM
+                  WHEN '2' THEN Pack.PackUOM1 -- Case
+                  WHEN '3' THEN Pack.PackUOM2 -- Inner pack
+                  WHEN '6' THEN Pack.PackUOM3 -- Master unit
+                  WHEN '1' THEN Pack.PackUOM4 -- Pallet
+                  WHEN '4' THEN Pack.PackUOM8 -- Other unit 1
+                  WHEN '5' THEN Pack.PackUOM9 -- Other unit 2
+               END,
+            @nPUOM_Div = CAST( IsNULL(
+               CASE @cPUOM
+                  WHEN '2' THEN Pack.CaseCNT
+                  WHEN '3' THEN Pack.InnerPack
+                  WHEN '6' THEN Pack.QTY
+                  WHEN '1' THEN Pack.Pallet
+                  WHEN '4' THEN Pack.OtherUnit1
+                  WHEN '5' THEN Pack.OtherUnit2
+               END, 1) AS INT)
+         FROM dbo.SKU SKU WITH (NOLOCK)
+            INNER JOIN dbo.Pack Pack WITH (NOLOCK) ON (SKU.PackKey = Pack.PackKey)
+         WHERE SKU.StorerKey = @cStorerKey
+            AND SKU.SKU = @cSKU
+
+         -- Convert to prefer UOM QTY
+         IF @cPUOM = '6' OR -- When preferred UOM = master unit
+            @nPUOM_Div = 0  -- UOM not setup
+         BEGIN
+            SET @cPUOM_Desc = ''
+            SET @nPQTY = 0
+            SET @nMQTY = @nQTY
+         END
+         ELSE
+         BEGIN
+            SET @nPQTY = @nQTY / @nPUOM_Div  -- Calc QTY in preferred UOM
+            SET @nMQTY = @nQTY % @nPUOM_Div  -- Calc the remaining in master unit
          END
 
          -- Get LOC info
@@ -2273,6 +2316,7 @@ BEGIN
       V_UCC     = @cUCCNo, 
 
       V_PUOM_Div  = @nPUOM_Div,
+      V_TaskQTY   = @nQTY, 
       V_MTaskQTY  = @nMQTY,
       V_PTaskQTY  = @nPQTY,
       V_MQTY      = @nActMQTY,
