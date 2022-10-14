@@ -26,6 +26,8 @@ GO
 /* 28-SEP-2022  NJOW01  1.1   Fix. if NESCOFEE sku of the order not in  */
 /*                            all rotate zones, try fix a zone available*/
 /*                            to all sku                                */
+/* 14-OCT-2022  NJOW02  1.2   Fix. order must pick from one zone only   */
+/*                            apply for NESCOFFEE if have multi skugroup*/
 /************************************************************************/        
 CREATE OR ALTER PROC [dbo].[nspALNPSO3]            
    @c_DocumentNo NVARCHAR(10),      
@@ -187,6 +189,7 @@ BEGIN
       JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc  
       JOIN SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.Sku = SKU.Sku      
       AND PD.Orderkey = @c_Orderkey  
+      AND SKU.Skugroup = @c_SkuGroup --NJOW02 
       ORDER BY CASE WHEN SKU.SkuGroup = @c_SkuGroup THEN 1 ELSE 2 END
         
       IF ISNULL(@c_OrderPutwayzone,'') = ''  
