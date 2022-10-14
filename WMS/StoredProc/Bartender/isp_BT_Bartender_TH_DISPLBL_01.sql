@@ -13,6 +13,7 @@ GO
 /* 08-Jul-2020    1.0  WLChooi     Created (WMS-13954)                        */  
 /* 08-Sep-2022    1.1  WLChooi     WMS-20648 - Add Codelkup JDTracking (WL01) */
 /* 08-Sep-2022    1.1  WLChooi     DevOps Combine Script                      */
+/* 13-Oct-2022    1.2  WLChooi     WMS-20648 - Change mapping (WL02)          */
 /******************************************************************************/              
                 
 CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_TH_DISPLBL_01]                     
@@ -122,11 +123,20 @@ BEGIN
       DropID     NVARCHAR(50)
    )
 
+   --WL02 S
+   --INSERT INTO #TEMP_DROPID
+   --SELECT DISTINCT Orderkey, DropID
+   --FROM PICKDETAIL (NOLOCK) 
+   --WHERE Orderkey = @c_Sparm2
+   --ORDER BY Orderkey, DropID
+
    INSERT INTO #TEMP_DROPID
-   SELECT DISTINCT Orderkey, DropID
-   FROM PICKDETAIL (NOLOCK) 
-   WHERE Orderkey = @c_Sparm2
-   ORDER BY Orderkey, DropID
+   SELECT DISTINCT PH.Orderkey, PD.DropID
+   FROM PACKHEADER PH (NOLOCK)
+   JOIN PACKDETAIL PD (NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo
+   WHERE PH.Orderkey = @c_Sparm2
+   ORDER BY PH.Orderkey, PD.DropID
+   --WL02 E
 
    SET @c_SQLJOIN = +' SELECT DISTINCT @c_Sparm1, OH.C_Company, SUBSTRING(LTRIM(RTRIM(ISNULL(OH.C_Address1,''''))) + LTRIM(RTRIM(ISNULL(OH.C_Address2,''''))),1,80), '   --3
                     +' SUBSTRING(LTRIM(RTRIM(ISNULL(OH.C_Address3,''''))) + LTRIM(RTRIM(ISNULL(OH.C_Address4,''''))),1,80), '   --4
