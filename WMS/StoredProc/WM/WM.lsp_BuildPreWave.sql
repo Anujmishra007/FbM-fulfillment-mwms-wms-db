@@ -12,7 +12,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.0                                                    */                                                                                  
+/* PVCS Version: 1.1                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -21,18 +21,21 @@ GO
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */  
 /* 2022-08-02  Wan      1.0   Created & DevOps Combine Script           */
+/* 2022-09-22  Wan01    1.1   LFWM-3748 - [CN] LOREAL_Prewave add filter*/
+/*                            condition                                 */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_BuildPreWave]                                                                                                                       
       @c_BuildParmKey      NVARCHAR(10) 
    ,  @c_Facility          NVARCHAR(5)                                                                                                                     
    ,  @c_StorerKey         NVARCHAR(15)                                                                                                                     
    ,  @c_Action            NVARCHAR(10)   = 'PREWARE' -- 'Get', 'PreWare'  
-   ,  @c_SortPreference    NVARCHAR(100)= ''           -- Sort column + Sort type (ASC/DESC), If multiple Columns Sorting, seperate by ','
+   ,  @c_SortPreference    NVARCHAR(500)= ''          -- Sort column + Sort type (ASC/DESC), If multiple Columns Sorting, seperate by ','
    ,  @b_Success           INT            = 1  OUTPUT  
    ,  @n_err               INT            = 0  OUTPUT                                                                                                             
    ,  @c_ErrMsg            NVARCHAR(255)  = '' OUTPUT 
    ,  @c_UserName          NVARCHAR(128)  = ''              
-   ,  @b_debug             INT            = 0                                                                                                                              
+   ,  @b_debug             INT            = 0
+   ,  @c_SearchCondition   NVARCHAR(2000) = ''        -- eg: NoOfOrders >= 10 AND Column01 = 'XX'                                                                                                                              
 AS 
 BEGIN
    SET NOCOUNT ON                                                                                                                                           
@@ -398,7 +401,6 @@ BEGIN
    END CATCH
    
    EXIT_SP: 
-      
    IF @n_Continue = 3                                                                                                                                            
    BEGIN                                                                                                                                                       
       SET @b_Success = 0                                                                                                                                        
@@ -419,13 +421,20 @@ BEGIN
       
       IF @c_SortPreference = ''
       BEGIN
-         SET @c_SortPreference = 'ORDER BY BuildPreWave.NoOfOrders DESC'
+         SET @c_SortPreference = ' ORDER BY BuildPreWave.NoOfOrders DESC'
       END
       ELSE
       BEGIN
-         SET @c_SortPreference = 'ORDER BY ' + @c_SortPreference  
+         SET @c_SortPreference = ' ORDER BY ' + @c_SortPreference  
       END
       
+      --(Wan01) - START
+      IF @c_SearchCondition <> ''
+      BEGIN
+         SET @c_SearchCondition =  ' AND ' + @c_SearchCondition
+      END
+      
+      BEGIN TRY
       SET @c_SQL = N'SELECT BuildPreWave.RowID'  
                  + ', BuildPreWave.BuildParmKey' 
                  + ', BuildPreWave.[Status]'            
@@ -442,7 +451,8 @@ BEGIN
                  + ', ColumnLabel05 = @c_FieldLabel05'
                  + ' FROM dbo.BuildPreWave WITH (NOLOCK)' 
                  + ' WHERE BuildPreWave.BuildParmKey = @c_BuildParmKey' 
-                 + ' AND BuildPreWave.[Status] = ''0'''                            
+                 --+ ' AND BuildPreWave.[Status] = ''0''' 
+                 + @c_SearchCondition                                --Wan01                           
                  + @c_SortPreference
 
       SET @c_SQLParms = '@c_BuildParmKey  NVARCHAR(10)'
@@ -451,7 +461,7 @@ BEGIN
                       +',@c_FieldLabel03  NVARCHAR(50)'
                       +',@c_FieldLabel04  NVARCHAR(50)'
                       +',@c_FieldLabel05  NVARCHAR(50)'               
-               
+           
       EXEC sp_ExecuteSQL @c_SQL
                         ,@c_SQLParms
                         ,@c_BuildParmKey
@@ -460,9 +470,13 @@ BEGIN
                         ,@c_FieldLabel03
                         ,@c_FieldLabel04
                         ,@c_FieldLabel05
+      END TRY
+      BEGIN CATCH
+         SET @b_Success = 0
+         SET @c_ErrMsg  = ERROR_MESSAGE() 
+      END CATCH
    END     
-
-                                                                                                                                                              
+   --(Wan01) - END                                                                                                                                                           
    WHILE @@TRANCOUNT < @n_StartTCnt
    BEGIN
       BEGIN TRAN
