@@ -47,7 +47,9 @@ GO
 /* 2022-01-03  Wan09    1.7   Fixed. infinity Loop casuse group by UOM  */
 /* 2022-03-18  Wan10    1.8   JSM-57583 - Tune performance by subtracting*/
 /*                            largest possible Qty to reduce API load   */
-/************************************************************************/
+/* 2022-07-29  BeeTin   1.9   JSM-76147 -excess qty w/multi sku in      */      
+/*                            one carton  1 DN                          */  
+/************************************************************************/   
 CREATE PROC ispRLWAV20_PACK
            @c_Wavekey            NVARCHAR(10)
          , @b_Success            INT            OUTPUT
@@ -799,7 +801,8 @@ BEGIN
                      AND   p.LocLevel = @c_LocLevel      --2021-10-22
                      GROUP BY P.ItemClass
 
-                     IF @n_QtyNeedCube <> @n_ItemClass_Cube OR @n_QtyNeedWgt < @n_ItemClass_Wgt -- New Itemclass cannot fully fit into current box
+            --IF @n_QtyNeedCube <> @n_ItemClass_Cube OR @n_QtyNeedWgt < @n_ItemClass_Wgt -- New Itemclass cannot fully fit into current box  
+                     IF @n_AvailableCube < @n_ItemClass_Cube or @n_AvailableWgt < @n_ItemClass_Wgt  --(JSM-76147) 
                      BEGIN
                         SET @b_NewCarton = 1
                         GOTO NEW_CARTON
