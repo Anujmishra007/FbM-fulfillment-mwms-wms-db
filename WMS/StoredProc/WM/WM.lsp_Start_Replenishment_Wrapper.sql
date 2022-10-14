@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_Start_Replenishment_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_Start_Replenishment_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,7 +13,7 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.2                                                          */  
+/* Version: 1.3                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
@@ -29,8 +24,11 @@ GO
 /* 2021-03-31  Wan01    1.2   LFWM-2693 - UAT  Philippines  SCE  Zone 10 */
 /*                            Only First Sort Gets Generated; Zone 11 no */
 /*                            result                                     */
+/* 2022-08-11  Wan02    1.3   LFWM-3641 - [CN] DYSON Voice Picking       */
+/*                            replenishment trigger button New           */
+/* 2022-08-11  Wan02    1.3   DevOps Combine Script                      */
 /*************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_Start_Replenishment_Wrapper]  
+CREATE OR ALTER PROCEDURE [WM].[lsp_Start_Replenishment_Wrapper]  
    @c_Storerkey            NVARCHAR(15) = ''
 ,  @c_Facility             NVARCHAR(10) = ''
 ,  @c_ReplenishStrategyKey NVARCHAR(30) = ''      
@@ -59,23 +57,29 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @n_Continue           INT = 1
-         , @n_StartTCnt          INT = @@TRANCOUNT 
+   DECLARE @n_Continue                 INT = 1
+         , @n_StartTCnt                INT = @@TRANCOUNT 
                  
-         , @n_Count              INT = 0 
-         , @n_RowRef             INT = 0
+         , @n_Count                    INT = 0 
+         , @n_RowRef                   INT = 0
 
-         , @c_ReplenType         NVARCHAR(10)   = ''
-         , @c_ReplenSPName       NVARCHAR(500)  = ''
-         , @c_ReplenSQL          NVARCHAR(4000) = ''
-         , @c_ReplenSQL_Origin   NVARCHAR(500) = ''
+         , @c_ReplenType               NVARCHAR(10)   = ''
+         , @c_ReplenSPName             NVARCHAR(500)  = ''
+         , @c_ReplenSQL                NVARCHAR(4000) = ''
+         , @c_ReplenSQL_Origin         NVARCHAR(500) = ''
 
-         , @n_ParmPosStart       INT = 0
-         , @n_ParmPosEnd         INT = 0
-         , @c_ParmName           NVARCHAR(50)   = ''
+         , @n_ParmPosStart             INT = 0
+         , @n_ParmPosEnd               INT = 0
+         , @c_ParmName                 NVARCHAR(50)   = ''
 
-         , @b_Log                BIT = 0 
-         , @c_Status             NVARCHAR(10)   = '9'
+         , @b_Log                      BIT = 0 
+         , @c_Status                   NVARCHAR(10)   = '9'
+         
+         , @c_PreGenReplVLDN           NVARCHAR(50) = ''                                           --Wan02
+         , @c_PreGenReplVLDN_Option5   NVARCHAR(MAX)= ''                                           --Wan02
+         , @c_ReplDataVLDNCond         NVARCHAR(2000)= ''                                          --Wan02
+         , @c_SQL                      NVARCHAR(4000)= ''                                          --Wan02
+         , @c_SQLParms                 NVARCHAR(4000)= ''                                          --Wan02
 
    SET @b_Success = 1
    SET @c_ErrMsg = ''
@@ -192,6 +196,88 @@ BEGIN
                GOTO EXIT_SP
             END CATCH
          END
+         
+         --(Wan02) - START
+         ----------------------------------
+         -- Pre Generate Validation - START
+         ----------------------------------
+         SELECT @c_PreGenReplVLDN = fgr.Authority, @c_PreGenReplVLDN_Option5 = fgr.Option5 FROM dbo.fnc_GetRight2(@c_Facility, @c_Storerkey, '', 'PreGenReplVLDN') AS fgr
+   
+         IF @c_PreGenReplVLDN IN ( '1' )
+         BEGIN
+            -- @c_InvDataVLDNCond, @c_PreGenRepl_SP - For future enhancement 
+            SET @c_ReplDataVLDNCond = ''
+            SELECT @c_ReplDataVLDNCond = dbo.fnc_GetParamValueFromString('@c_ReplDataVLDNCond', @c_PreGenReplVLDN_Option5, @c_ReplDataVLDNCond) 
+            
+            IF @c_ReplDataVLDNCond <> ''
+            BEGIN
+               IF CHARINDEX('AND', LEFT(@c_ReplDataVLDNCond,10),1) = 0
+               BEGIN
+                  SET @c_ReplDataVLDNCond = 'AND ' + @c_ReplDataVLDNCond
+               END
+               SET @b_Success = 1
+               SET @c_SQL = N'SELECT TOP 1 @b_Success = 0'
+                          + ' FROM dbo.REPLENISHMENT WITH (NOLOCK)'
+                          + ' JOIN dbo.LOC WITH (NOLOCK) ON REPLENISHMENT.FromLoc = LOC.loc'
+                          + ' WHERE REPLENISHMENT.Storerkey = @c_Storerkey'
+                          + ' AND   LOC.Facility = @c_Facility' 
+                          + CASE WHEN @c_ReplGroup = 'ALL' THEN '' 
+                                 ELSE ' AND REPLENISHMENT.ReplenishmentGroup = @c_ReplGroup'
+                                 END 
+                          + CASE WHEN @c_Zone02 IN ( 'ALL', '' ) THEN '' 
+                                 ELSE ' AND LOC.PutawayZone IN ( @c_Zone02, @c_Zone03, @c_Zone04
+                                       , @c_Zone05, @c_Zone06, @c_Zone07, @c_Zone08, @c_Zone09
+                                       , @c_Zone10, @c_Zone11, @c_Zone12)' 
+                                 END 
+                          + ' ' + @c_ReplDataVLDNCond
+    
+               SET @c_SQLParms = N'@b_Success      INT   OUTPUT'
+                               + ',@c_Storerkey    NVARCHAR(15)'
+                               + ',@c_Facility     NVARCHAR(5)'
+                               + ',@c_ReplGroup    NVARCHAR(10)' 
+                               + ',@c_Zone02       NVARCHAR(10)'                                       
+                               + ',@c_Zone03       NVARCHAR(10)'   
+                               + ',@c_Zone04       NVARCHAR(10)'                         
+                               + ',@c_Zone05       NVARCHAR(10)'                                       
+                               + ',@c_Zone06       NVARCHAR(10)'   
+                               + ',@c_Zone07       NVARCHAR(10)'   
+                               + ',@c_Zone08       NVARCHAR(10)'   
+                               + ',@c_Zone09       NVARCHAR(10)'                         
+                               + ',@c_Zone10       NVARCHAR(500)'                                       
+                               + ',@c_Zone11       NVARCHAR(500)'   
+                               + ',@c_Zone12       NVARCHAR(10)'   
+                               
+               EXEC sp_ExecuteSQL  @c_SQL
+                                 , @c_SQLParms
+                                 , @b_Success   OUTPUT
+                                 , @c_Storerkey 
+                                 , @c_Facility  
+                                 , @c_ReplGroup 
+                                 , @c_Zone02                                         
+                                 , @c_Zone03     
+                                 , @c_Zone04                           
+                                 , @c_Zone05                                         
+                                 , @c_Zone06     
+                                 , @c_Zone07     
+                                 , @c_Zone08     
+                                 , @c_Zone09                           
+                                 , @c_Zone10                                          
+                                 , @c_Zone11      
+                                 , @c_Zone12 
+               IF @b_Success = 0
+               BEGIN
+                  SET @n_Continue = 3
+                  SET @n_Err = 551611
+                  SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) 
+                                + ': Fail By Replenishment Data Validation condition setup in Storerconfig: PreGenReplVLDN.'
+                                + ' (lsp_Start_Replenishment_Wrapper)'
+                  GOTO EXIT_SP
+               END
+            END
+         END
+         ----------------------------------
+         -- Pre Generate Validation - END
+         ----------------------------------       
       END
        
       IF @n_WarningNo < 1
