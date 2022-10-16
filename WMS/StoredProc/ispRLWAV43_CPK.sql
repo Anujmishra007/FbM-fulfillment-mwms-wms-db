@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispRLWAV43_CPK]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispRLWAV43_CPK]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,7 +12,7 @@ GO
 /*        :                                                             */  
 /* Called By:                                                           */  
 /*          :                                                           */  
-/* PVCS Version: 1.2                                                    */  
+/* PVCS Version: 1.3                                                    */  
 /*                                                                      */  
 /* Version: 7.0                                                         */  
 /*                                                                      */  
@@ -32,8 +27,10 @@ GO
 /*                            Fixed. For allocated stock from DPBULK,use*/ 
 /*                            DBBULK's PickZone to find PackStation     */
 /*                            regardless if there is Home Loc setup.    */
+/* 2022-10-06  Wan03    1.3   WMS-20898 - THA-adidas-Assign Wave priority*/
+/*                            to Taskdetail (RPF, RPT,CPK,ASTCPK)       */  
 /************************************************************************/  
-CREATE PROC [dbo].[ispRLWAV43_CPK]  
+CREATE OR ALTER PROC [dbo].[ispRLWAV43_CPK]  
    @c_Wavekey     NVARCHAR(10)      
 ,  @b_Success     INT            = 1   OUTPUT  
 ,  @n_Err         INT            = 0   OUTPUT  
@@ -57,7 +54,13 @@ BEGIN
          , @c_TaskDetailKey      NVARCHAR(10)= ''   
          , @c_TaskStatus         NVARCHAR(10)= '0'  
          
-         , @c_CaseID             NVARCHAR(20) = '' --(Wan01)
+         , @c_CaseID             NVARCHAR(20) = ''    --(Wan01)
+         
+         , @c_Facility           NVARCHAR(5)  = ''    --(Wan03)         
+         , @c_Storerkey          NVARCHAR(15) = ''    --(Wan03)
+         , @c_Priority_Wave      NVARCHAR(10) = '9'   --(Wan03)
+         , @c_Release_Opt5       NVARCHAR(1000)= ''   --(Wan03)
+         , @c_TaskByWavePriority NVARCHAR(10) = 'N'   --(Wan03)
      
    DECLARE @t_ORDERS             TABLE  
          (  Wavekey              NVARCHAR(10) NOT NULL   DEFAULT('')   
@@ -139,8 +142,28 @@ BEGIN
    SELECT WD.Wavekey, OH.Loadkey, OH.Orderkey, OH.Facility, OH.Storerkey, OH.DocType, OH.ECOM_SINGLE_Flag  
    FROM WAVEDETAIL WD WITH (NOLOCK)  
    JOIN ORDERS OH WITH (NOLOCK) ON WD.Orderkey = OH.Orderkey  
-   WHERE WD.Wavekey = @c_Wavekey  
-  
+   WHERE WD.Wavekey = @c_Wavekey 
+   
+   --(Wan03) - START
+   SELECT TOP 1                              
+            @c_Facility  = tor.Facility   
+         ,  @c_Storerkey = tor.Storerkey
+   FROM @t_ORDERS AS tor 
+   
+   SELECT @c_Release_Opt5 = ISNULL(fgr.Option5,'')
+   FROM dbo.fnc_GetRight2( @c_Facility, @c_Storerkey, '', 'ReleaseWave_SP') AS fgr
+   
+   SET @c_TaskByWavePriority = 'N'
+   SELECT @c_TaskByWavePriority = dbo.fnc_GetParamValueFromString('@c_TaskByWavePriority', @c_Release_Opt5, @c_TaskByWavePriority) 
+   
+   IF @c_TaskByWavePriority = 'Y'
+   BEGIN
+      SELECT @c_Priority_Wave = IIF(w.UserDefine09 <> '' AND w.UserDefine09 IS NOT NULL, w.UserDefine09, @c_Priority_Wave)
+      FROM dbo.WAVE AS w (NOLOCK) 
+      WHERE w.WaveKey = @c_Wavekey
+   END
+   --(Wan03) - END
+   
    INSERT INTO #CPK_WIP    
       (  Orderkey            
       ,  Pickdetailkey       
@@ -448,7 +471,7 @@ BEGIN
          ,c.CaseID    
          ,c.PickMethod    
          ,[Status] = @c_TaskStatus    
-         ,[Priority] = '9'    
+         ,[Priority] = @c_Priority_Wave               --(Wan03)   
          ,c.Areakey    
          ,SourceType = 'ispRLWAV43_CPK'    
          ,Sourcekey  = c.Wavekey    

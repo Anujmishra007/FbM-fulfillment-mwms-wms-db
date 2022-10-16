@@ -13,7 +13,7 @@ GO
 /*        :                                                             */  
 /* Called By:                                                           */  
 /*          :                                                           */  
-/* PVCS Version: 1.3                                                    */  
+/* PVCS Version: 1.4                                                    */  
 /*                                                                      */  
 /* Version: 7.0                                                         */  
 /*                                                                      */  
@@ -30,7 +30,9 @@ GO
 /*                            prompt HomeLoc Assignment                 */
 /* 2022-04-26  Wan04    1.3   WMS-19522 - RG - Adidas SEA - Release Wave*/
 /*                            on DP Loc Sequence                        */
-/* 2022-07-27  CheeMun  1.3   JSM-68356 - Bug Fix&Skip UOM 2 DP checking*/   
+/* 2022-07-27  CheeMun  1.3   JSM-68356 - Bug Fix&Skip UOM 2 DP checking*/ 
+/* 2022-10-06  Wan05    1.4   WMS-20898 - THA-adidas-Assign Wave priority*/
+/*                            to Taskdetail (RPF, RPT,CPK,ASTCPK)       */  
 /************************************************************************/  
 CREATE OR ALTER PROC [dbo].[ispRLWAV43_RPF]  
         @c_wavekey      NVARCHAR(10)    
@@ -133,8 +135,9 @@ BEGIN
          , @c_SkipNormalReplTask NVARCHAR(1) = 'N'             --Wan01
          , @c_TaskPriorityDPP    NVARCHAR(10)= '5'             --Wan03
          , @c_TaskPriority       NVARCHAR(10)= '5'             --Wan03  
-                                                               --
- 
+  
+         , @c_Priority_Wave      NVARCHAR(10) = '5'            --(Wan04)         
+         , @c_TaskByWavePriority NVARCHAR(10) = 'N'            --(Wan04)
          
    SET @n_StartTCnt = @@TRANCOUNT  
    SET @n_Continue = 1  
@@ -158,6 +161,18 @@ BEGIN
    SELECT @c_Release_Opt5 = ISNULL(fgr.Option5,'')
    FROM dbo.fnc_GetRight2( @c_Facility, @c_Storerkey, '', 'ReleaseWave_SP') AS fgr
    --(Wan01) - END
+   
+   --(Wan04) - START
+   SET @c_TaskByWavePriority = 'N'
+   SELECT @c_TaskByWavePriority = dbo.fnc_GetParamValueFromString('@c_TaskByWavePriority', @c_Release_Opt5, @c_TaskByWavePriority) 
+
+   IF @c_TaskByWavePriority = 'Y'
+   BEGIN
+      SELECT @c_Priority_Wave = w.UserDefine09
+      FROM dbo.WAVE AS w (NOLOCK) 
+      WHERE w.WaveKey = @c_Wavekey
+   END
+   --(Wan04) - END
    
    DECLARE @t_UPDPICK TABLE  
    (  RowRef            INT   IDENTITY(1,1) PRIMARY KEY  
@@ -1013,6 +1028,13 @@ BEGIN
                --(Wan03) - END                                           
             END   
             
+            IF @c_TaskByWavePriority = 'Y'               --(Wan04) - START
+            BEGIN
+               SET @c_TaskPriority = IIF(@c_Priority_Wave <> '' AND @c_Priority_Wave IS NOT NULL
+                                       , @c_Priority_Wave
+                                       , @c_TaskPriority)
+            END                                          --(Wan04) - END
+            
             SELECT @c_AreaKey = ISNULL(AD.AreaKey,'')
             FROM LOC L (NOLOCK)
             JOIN AREADETAIL AD WITH (NOLOCK) ON L.PickZone = AD.PutawayZone  
@@ -1371,6 +1393,13 @@ NEXT_LOOP:
          SET @c_UOM = '7'  
          SET @n_Qty = 0  
          SET @c_TaskPriority = '5'              --(Wan03)
+         
+         IF @c_TaskByWavePriority = 'Y'         --(Wan04) - START
+         BEGIN
+            SET @c_TaskPriority = IIF(@c_Priority_Wave <> '' AND @c_Priority_Wave IS NOT NULL
+                                    , @c_Priority_Wave
+                                    , @c_TaskPriority)
+         END                                   --(Wan04) - END
   
          SET @b_success = 1    
          EXECUTE nspg_getkey    
