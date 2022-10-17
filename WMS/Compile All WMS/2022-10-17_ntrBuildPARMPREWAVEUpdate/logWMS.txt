@@ -1,0 +1,57 @@
+: CN LIVE : CNWMS 
+--  ntrBuildPARMPREWAVEUpdate.sql 
+----------------------------------------------------------------------------- 
+: CN LIVE : HNM 
+--  ntrBuildPARMPREWAVEUpdate.sql 
+----------------------------------------------------------------------------- 
+: CN LIVE : NKE 
+--  ntrBuildPARMPREWAVEUpdate.sql 
+----------------------------------------------------------------------------- 
+: CN LIVE : SKE 
+--  ntrBuildPARMPREWAVEUpdate.sql 
+----------------------------------------------------------------------------- 
+: CN LIVE : UAM 
+--  ntrBuildPARMPREWAVEUpdate.sql 
+----------------------------------------------------------------------------- 
+: CN LIVE : SEP 
+--  ntrBuildPARMPREWAVEUpdate.sql 
+----------------------------------------------------------------------------- 
+: AUWMS 
+--  ntrBuildPARMPREWAVEUpdate.sql 
+----------------------------------------------------------------------------- 
+: DUWMS 
+--  ntrBuildPARMPREWAVEUpdate.sql 
+----------------------------------------------------------------------------- 
+: HK HKWMS 
+--  ntrBuildPARMPREWAVEUpdate.sql 
+----------------------------------------------------------------------------- 
+: IN LIVE : INWMS 
+--  ntrBuildPARMPREWAVEUpdate.sql 
+----------------------------------------------------------------------------- 
+: ID LIVE : IDWMS 
+--  ntrBuildPARMPREWAVEUpdate.sql 
+----------------------------------------------------------------------------- 
+: JP LIVE : JPWMS 
+--  ntrBuildPARMPREWAVEUpdate.sql 
+----------------------------------------------------------------------------- 
+: KR LIVE : KRWMS 
+--  ntrBuildPARMPREWAVEUpdate.sql 
+----------------------------------------------------------------------------- 
+: MY LIVE : MYWMS 
+--  ntrBuildPARMPREWAVEUpdate.sql 
+----------------------------------------------------------------------------- 
+: PH LIVE : PHWMS 
+--  ntrBuildPARMPREWAVEUpdate.sql 
+----------------------------------------------------------------------------- 
+: SG LIVE : SGWMS 
+--  ntrBuildPARMPREWAVEUpdate.sql 
+----------------------------------------------------------------------------- 
+: TH LIVE : THWMS 
+--  ntrBuildPARMPREWAVEUpdate.sql 
+----------------------------------------------------------------------------- 
+: TW LIVE : TWWMS 
+--  ntrBuildPARMPREWAVEUpdate.sql 
+----------------------------------------------------------------------------- 
+: VN LIVE : VNWMS 
+--  ntrBuildPARMPREWAVEUpdate.sql 
+----------------------------------------------------------------------------- 

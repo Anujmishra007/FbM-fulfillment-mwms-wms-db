@@ -1,0 +1,57 @@
+: CN LIVE : CNWMS 
+--  ntrBuildPARMGroupCFGUpdate.sql 
+----------------------------------------------------------------------------- 
+: CN LIVE : HNM 
+--  ntrBuildPARMGroupCFGUpdate.sql 
+----------------------------------------------------------------------------- 
+: CN LIVE : NKE 
+--  ntrBuildPARMGroupCFGUpdate.sql 
+----------------------------------------------------------------------------- 
+: CN LIVE : SKE 
+--  ntrBuildPARMGroupCFGUpdate.sql 
+----------------------------------------------------------------------------- 
+: CN LIVE : UAM 
+--  ntrBuildPARMGroupCFGUpdate.sql 
+----------------------------------------------------------------------------- 
+: CN LIVE : SEP 
+--  ntrBuildPARMGroupCFGUpdate.sql 
+----------------------------------------------------------------------------- 
+: AUWMS 
+--  ntrBuildPARMGroupCFGUpdate.sql 
+----------------------------------------------------------------------------- 
+: DUWMS 
+--  ntrBuildPARMGroupCFGUpdate.sql 
+----------------------------------------------------------------------------- 
+: HK HKWMS 
+--  ntrBuildPARMGroupCFGUpdate.sql 
+----------------------------------------------------------------------------- 
+: IN LIVE : INWMS 
+--  ntrBuildPARMGroupCFGUpdate.sql 
+----------------------------------------------------------------------------- 
+: ID LIVE : IDWMS 
+--  ntrBuildPARMGroupCFGUpdate.sql 
+----------------------------------------------------------------------------- 
+: JP LIVE : JPWMS 
+--  ntrBuildPARMGroupCFGUpdate.sql 
+----------------------------------------------------------------------------- 
+: KR LIVE : KRWMS 
+--  ntrBuildPARMGroupCFGUpdate.sql 
+----------------------------------------------------------------------------- 
+: MY LIVE : MYWMS 
+--  ntrBuildPARMGroupCFGUpdate.sql 
+----------------------------------------------------------------------------- 
+: PH LIVE : PHWMS 
+--  ntrBuildPARMGroupCFGUpdate.sql 
+----------------------------------------------------------------------------- 
+: SG LIVE : SGWMS 
+--  ntrBuildPARMGroupCFGUpdate.sql 
+----------------------------------------------------------------------------- 
+: TH LIVE : THWMS 
+--  ntrBuildPARMGroupCFGUpdate.sql 
+----------------------------------------------------------------------------- 
+: TW LIVE : TWWMS 
+--  ntrBuildPARMGroupCFGUpdate.sql 
+----------------------------------------------------------------------------- 
+: VN LIVE : VNWMS 
+--  ntrBuildPARMGroupCFGUpdate.sql 
+----------------------------------------------------------------------------- 
