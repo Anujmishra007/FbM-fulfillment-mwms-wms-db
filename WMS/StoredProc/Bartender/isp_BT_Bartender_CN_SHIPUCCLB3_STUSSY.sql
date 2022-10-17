@@ -16,6 +16,7 @@ GO
 /*                                                                            */                       
 /* Date        Rev  Author     Purposes                                       */      
 /* 09-Aug-2021 1.0  WLChooi    Created - DEVOPS Combine Script (WMS-17644)    */   
+/* 17-Oct-2022 1.1  Mingle     WMS-20977 Add col14(ML01)								*/
 /******************************************************************************/                      
                         
 CREATE PROC [dbo].[isp_BT_Bartender_CN_SHIPUCCLB3_STUSSY]                            
@@ -247,12 +248,13 @@ BEGIN
    SET @c_SQLJOIN = + ' SELECT DISTINCT @c_Col01, @c_Col02, @c_Col03, @c_Col04, @c_Col05, ' + CHAR(13)   --5
                     + ' @c_Col06, @c_Col07, @c_Col08, @c_Col09, @c_Col10, '   + CHAR(13)   --10 
                     + ' @c_Col11, CASE WHEN @c_LastCtn = ''Y'' THEN CAST(PD.CartonNo AS NVARCHAR) + ''/'' + @c_MaxCtn ELSE CAST(PD.CartonNo AS NVARCHAR) END, '   --12
-                    + ' PD.LabelNo, '''', '''', '''', '''', '''', '''', '''', ' + CHAR(13)  --20     
+                    + ' PD.LabelNo, PI.CartonType, '''', '''', '''', '''', '''', '''', ' + CHAR(13)  --20	--ML01     
                     + ' '''', '''', '''', '''', '''', '''', '''', '''', '''', '''', ' + CHAR(13)  --30     
                     + ' '''', '''', '''', '''', '''', '''', '''', '''', '''', '''', ' + CHAR(13)  --40        
                     + ' '''', '''', '''', '''', '''', '''', '''', '''', '''', '''', ' + CHAR(13)  --50                           
                     + ' '''', '''', '''', '''', '''', '''', '''', '''', '''', @c_Sparm01 ' + CHAR(13)  --60                
                     + ' FROM PACKDETAIL PD (NOLOCK) ' + CHAR(13)
+						  + ' JOIN PACKINFO PI (NOLOCK) ON PI.pickslipno = PD.pickslipno and PI.cartonno=PD.cartonno '	--ML01
                     + ' WHERE PD.Pickslipno = @c_Sparm01 ' + CHAR(13)  
                     + ' AND PD.CartonNo = CAST(@c_Sparm02 AS INT) '
 
