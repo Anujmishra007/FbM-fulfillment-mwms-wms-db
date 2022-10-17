@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_GetTaskBatchByLoad_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_GetTaskBatchByLoad_Wrapper] 
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -19,7 +14,7 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.0                                                          */  
+/* Version: 1.1                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
@@ -27,9 +22,12 @@ GO
 /* Date        Author   Ver   Purposes                                   */ 
 /* 2021-09-22  Wan      1.0   Created.                                   */
 /* 2021-09-22  Wan      1.0   DevOps Combine Script                      */
+/* 2022-10-17  Wan01    1.1   LFWM-3813 - SCE  LOREAL PROD  Wave Control */
+/*                            Cannot display more than 11 load detail lines*/
+/*                            SP changes.                                */
 /*************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_GetTaskBatchByLoad_Wrapper]  
-     @c_Loadkeys  NVARCHAR(128)  = ''  -- Multiple loadkeys will seperate by '|'     
+CREATE OR ALTER PROCEDURE [WM].[lsp_GetTaskBatchByLoad_Wrapper]  
+     @c_Loadkeys  NVARCHAR(1000) = ''  -- Multiple loadkeys will seperate by '|' --(Wan01) - extend to 1000     
    , @c_UserName  NVARCHAR(128)  = ''
    , @b_Success   INT            = 0   OUTPUT    
    , @n_err       INT            = 0   OUTPUT
