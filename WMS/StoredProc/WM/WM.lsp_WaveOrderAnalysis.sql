@@ -13,7 +13,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.7                                                    */                                                                                  
+/* PVCS Version: 1.8                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -35,6 +35,7 @@ GO
 /* 13-JUL-2022 LZG      1.6   JSM-81405 - Fixed custom SQL HAVING (ZG01)*/ 
 /* 2022-08-10  Wan05    1.7   LFWM-3470 - [CN]NIKE_PHC_Wave Release_Add */
 /*                            orderdate filter                          */
+/* 2022-10-17  Wan06    1.8   Reverse JSM-81405 Fixed Code              */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_WaveOrderAnalysis]                                                                                                                     
       @c_Facility          NVARCHAR(5)                                                                                                                     
@@ -234,8 +235,8 @@ BEGIN
          SET @n_HavingPos = CHARINDEX('HAVING', @c_SQLBuildWave, 1)
          SET @n_GroupByPos= CHARINDEX('GROUP BY', @c_SQLBuildWave, 1)
 
-         --IF @c_SQLHaving = 0   -- ZG01  
-         IF @n_HavingPos = 0     -- ZG01
+         IF @c_SQLHaving = 0   -- ZG01  
+         --IF @n_HavingPos = 0     -- ZG01      --Wan06
          BEGIN
             SET @n_ToPos = @n_GroupByPos - @n_FromPos 
             IF @n_GroupByPos = 0
