@@ -27,6 +27,7 @@ GO
 /*                              Orders.SpecialHandling (CS01)           */        
 /* 10-May-2022  WLChooi   1.2 WMS-19628 Extend Userdefine02 column to   */
 /*                            40 (WL01)                                 */
+/* 17-Oct-2022  Calvin    1.3 JSM-102897 Fix MadeIn looping (CLVN01)    */
 /************************************************************************/      
       
 CREATE OR ALTER PROC [dbo].[isp_Packing_List_103_SG] (      
@@ -1322,21 +1323,34 @@ DECLARE @c_OrderKey            NVARCHAR(10)
              
        WHILE @@FETCH_STATUS = 0      
        BEGIN      
-            
-       IF @n_CntRec >=2      
-       BEGIN      
-        IF @n_lineno >= 2       
-        BEGIN      
-          SET @c_madein = @c_lott11 + @c_delimiter      
-        END      
-        ELSE      
-         BEGIN      
-          SET @c_madein = @c_madein + @c_lott11      
-          END       
-       END      
            
-       SET @n_lineno = @n_lineno - 1      
-             
+	  --(CLVN01) START--	   
+      --IF @n_CntRec >=2      
+      --BEGIN      
+      -- IF @n_lineno >= 2       
+      -- BEGIN      
+      --   SET @c_madein = @c_lott11 + @c_delimiter      
+      -- END      
+      -- ELSE      
+      --  BEGIN      
+      --   SET @c_madein = @c_madein + @c_lott11      
+      --   END       
+      --END      
+      --    
+      --SET @n_lineno = @n_lineno - 1      
+
+	    IF @n_CntRec >=2        
+          BEGIN        
+             SET @c_madein = @c_madein + @c_lott11 + @c_delimiter    --(CLVN01)    
+          END        
+          ELSE        
+          BEGIN        
+             SET @c_madein = @c_madein + @c_lott11        
+          END          
+      
+        SET @n_CntRec = @n_CntRec - 1
+      --(CLVN01) END--
+	  
       FETCH FROM MadeIn_loop INTO @c_lott11      
       END      
               
