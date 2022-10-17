@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: Wave                                                      */ 
 /*                                                                      */
-/* GitLab Version: 1.1                                                  */
+/* GitLab Version: 1.4                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -23,6 +23,9 @@ GO
 /* Date         Author   Ver  Purposes                                  */
 /* 27-May-2022  WLChooi  1.0  DevOps Combine Script                     */
 /* 23-Jun-2022  WLChooi  1.1  WMS-19669 - Skip generate Pickheader(WL01)*/
+/* 14-Jul-2022  WLChooi  1.2  WMS-19669 - Cater 1 Lot Multi UCC (WL02)  */
+/* 15-Jul-2022  WLChooi  1.3  WMS-19669 - Fix update Pickslipno (WL03)  */
+/* 16-Aug-2022  WLChooi  1.4  WMS-19669 - Enhance Logic (WL04)          */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV53]      
@@ -82,23 +85,27 @@ BEGIN
          , @n_CSRMaxOrderPerBatch   INT
          , @c_UserName              NVARCHAR(250)
          , @n_PABookingKey          INT
+         , @c_CallFrom              NVARCHAR(20)
    
    DECLARE @n_CurrCnt         INT
          , @c_LocType         NVARCHAR(50)
+         , @c_PrevLocType     NVARCHAR(50)
          , @c_SUSR4           NVARCHAR(50)
          , @c_ProductType     NVARCHAR(50)
          , @n_CSOSMaxCarton   INT
          , @n_Casecnt         INT
          , @n_QtyInCtn        INT 
-         , @c_CurrSUSR4       NVARCHAR(50)
          , @n_CSOSMaxCBM      FLOAT
          , @n_TotalCBM        FLOAT
          , @n_CBM             FLOAT
          , @c_Loc             NVARCHAR(20)
          , @n_packqty         INT
+         , @c_SQL             NVARCHAR(MAX)
          , @c_SQLArgument     NVARCHAR(MAX)
+         , @c_SQLWhere        NVARCHAR(250)
          , @c_CaseID          NVARCHAR(20)
          , @c_Pickslipno      NVARCHAR(10)
+         , @c_PrevOrderkey    NVARCHAR(10)
 
    DECLARE @c_Identifier      NVARCHAR(2),
            @c_Packtype        NVARCHAR(1),
@@ -117,17 +124,20 @@ BEGIN
            @n_Odd             INT,
            @n_Even            INT,
            @c_LabelNo         NVARCHAR(20)
-
+   
    CREATE TABLE #TMP_CZ (
-           CartonNo           INT
-         , SKU                NVARCHAR(10)
-         , Loc                NVARCHAR(10)
+           RowID              INT NOT NULL IDENTITY(1,1) PRIMARY KEY
+         , CartonNo           INT
+         , SKU                NVARCHAR(20)
+         , SUSR4              NVARCHAR(50)   --WL04
          , LocType            NVARCHAR(10)
          , CaseCnt            INT
          , Qty                INT
          , CBM                FLOAT
          , CtnType            NVARCHAR(10)
          , BatchNo            NVARCHAR(10)
+         , OrderKey           NVARCHAR(10)   --WL04
+         , PickdetailKey      NVARCHAR(10) NULL   --WL04
    )
 
    CREATE TABLE #TMP_SUSR4 (
@@ -136,11 +146,11 @@ BEGIN
          , SKU                NVARCHAR(20)
          , Loc                NVARCHAR(20)
          , LocType            NVARCHAR(10)
-         , ProductType        NVARCHAR(20)
+         , ProductType        NVARCHAR(50)
          , Qty                INT
          , CaseCnt            INT
          , CBM                FLOAT
-         , CartonizeFlag      NVARCHAR(1) NULL
+         , Orderkey           NVARCHAR(10)   --WL04
    )
 
    SET @b_Debug = @n_err
@@ -260,12 +270,6 @@ BEGIN
       BEGIN
          SET @n_continue = 3
       END     
-      BEGIN
-         WHILE @@TRANCOUNT > 0
-         BEGIN
-            COMMIT TRAN
-         END
-      END
    END
 
    --Remove taskdetailkey and add wavekey from pickdetail of the wave      
@@ -317,32 +321,94 @@ BEGIN
       IF @@TRANCOUNT = 0
          BEGIN TRAN
 
-      DECLARE CUR_Pick CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-         SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, SUM(PD.Qty) AS Qty,  
-                PD.UOM, SUM(PD.UOMQty) AS UOMQty, LA.Lottable10 AS UCCNo, MAX(U.Qty)
-         FROM WAVEDETAIL WD (NOLOCK)
-         JOIN WAVE W (NOLOCK) ON WD.Wavekey = W.Wavekey
-         JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
-         JOIN #PICKDETAIL_WIP PD (NOLOCK) ON O.Orderkey = PD.Orderkey
-         JOIN SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.Sku = SKU.Sku  
-         JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc  
-         JOIN LOTATTRIBUTE LA (NOLOCK) ON PD.LOT = LA.LOT
-         CROSS APPLY (SELECT MAX(UCC.Qty) AS Qty
-                      FROM UCC (NOLOCK) 
-                      WHERE UCCNo = LA.Lottable10) AS U
-         WHERE WD.Wavekey = @c_Wavekey
-         AND PD.Status = '0'
-         AND PD.WIP_RefNo = @c_SourceType
-         AND PD.UOM IN ('2','7')        
-         AND LOC.LOC NOT IN (SELECT DISTINCT CL.Long 
-                             FROM CODELKUP CL (NOLOCK) 
-                             WHERE CL.LISTNAME = 'CSDEFLOC' AND CL.Storerkey = PD.Storerkey)
-         GROUP BY PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, PD.UOM, LOC.LogicalLocation, LA.Lottable10
-         ORDER BY PD.UOM, Loc.LogicalLocation, PD.Loc 
-      
+         --WL02 S
+         --SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, SUM(PD.Qty) AS Qty,  
+         --       PD.UOM, SUM(PD.UOMQty) AS UOMQty, LA.Lottable10 AS UCCNo, MAX(U.Qty)
+         --FROM WAVEDETAIL WD (NOLOCK)
+         --JOIN WAVE W (NOLOCK) ON WD.Wavekey = W.Wavekey
+         --JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
+         --JOIN #PICKDETAIL_WIP PD (NOLOCK) ON O.Orderkey = PD.Orderkey
+         --JOIN SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.Sku = SKU.Sku  
+         --JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc  
+         --JOIN LOTATTRIBUTE LA (NOLOCK) ON PD.LOT = LA.LOT
+         --CROSS APPLY (SELECT MAX(UCC.Qty) AS Qty
+         --             FROM UCC (NOLOCK) 
+         --             WHERE UCCNo = LA.Lottable10) AS U
+         --WHERE WD.Wavekey = @c_Wavekey
+         --AND PD.Status = '0'
+         --AND PD.WIP_RefNo = @c_SourceType
+         --AND PD.UOM IN ('2','7')        
+         --AND LOC.LOC NOT IN (SELECT DISTINCT CL.Long 
+         --                    FROM CODELKUP CL (NOLOCK) 
+         --                    WHERE CL.LISTNAME = 'CSDEFLOC' AND CL.Storerkey = PD.Storerkey)
+         --GROUP BY PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, PD.UOM, LOC.LogicalLocation, LA.Lottable10
+         --ORDER BY PD.UOM, Loc.LogicalLocation, PD.Loc 
+         --WITH CTE1 AS
+         --(
+         --   SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, PD.UOM
+         --        , LA.Lottable10 AS UCCNo
+         --        , LOC.LogicalLocation
+         --        , SUM(PD.Qty) AS QtyRequired
+         --        , CASE WHEN PD.UOM = '2' THEN SUM(PD.Qty) / SUM(PD.UOMQty) ELSE SUM(PD.Qty) END AS MaxQty
+         --        , CASE WHEN PD.UOM = '2' THEN SUM(PD.UOMQty) ELSE 0 END AS WHOLES 
+         --        , CASE WHEN PD.UOM = '2' THEN 0 ELSE SUM(PD.Qty) % SUM(PD.UOMQty) END AS PARTIALS
+         --   FROM WAVEDETAIL WD (NOLOCK)
+         --   JOIN WAVE W (NOLOCK) ON WD.Wavekey = W.Wavekey
+         --   JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
+         --   JOIN #PickDetail_WIP PD (NOLOCK) ON O.Orderkey = PD.Orderkey
+         --   JOIN SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.Sku = SKU.Sku  
+         --   JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc  
+         --   JOIN LOTATTRIBUTE LA (NOLOCK) ON PD.LOT = LA.LOT
+         --   WHERE WD.Wavekey = @c_Wavekey
+         --   AND PD.Status = '0'
+         --   AND PD.WIP_RefNo = @c_SourceType
+         --   AND PD.UOM IN ('2','7')        
+         --   AND LOC.LOC NOT IN (SELECT DISTINCT CL.Long 
+         --                       FROM CODELKUP CL (NOLOCK) 
+         --                       WHERE CL.LISTNAME = 'CSDEFLOC' AND CL.Storerkey = PD.Storerkey)
+         --   GROUP BY PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, PD.UOM, LOC.LogicalLocation, LA.Lottable10
+         --) 
+         --,CTE2 AS 
+         --(
+         --    SELECT Storerkey, SKU, Lot, Loc, ID, UOM, UCCNo, LogicalLocation, MaxQty, WHOLES, 'BASE ' AS Remark
+         --    FROM CTE1
+         --    UNION ALL
+         --    SELECT Storerkey, SKU, Lot, Loc, ID, UOM, UCCNo, LogicalLocation, MaxQty, WHOLES - 1, 'RECUR' AS Remark
+         --    FROM CTE2 
+         --    WHERE WHOLES > 1
+         --) 
+         --SELECT Storerkey, SKU, Lot, Loc, ID, UOM, UCCNo, LogicalLocation, MaxQty AS QuantityRequired 
+         --FROM CTE2
+         --WHERE MaxQty > 0
+         --UNION ALL
+         --SELECT Storerkey, SKU, Lot, Loc, ID, UOM, UCCNo, LogicalLocation, PARTIALS AS QuantityRequired 
+         --FROM CTE1 
+         --WHERE PARTIALS > 0
+         --ORDER BY CTE2.UOM, CTE2.LogicalLocation, CTE2.Loc
+         --OPTION (MAXRECURSION 0)
+
+         DECLARE CUR_Pick CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+         SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, SUM(PD.Qty) AS Qty, PD.UOM
+         FROM WAVEDETAIL WD (NOLOCK)  
+         JOIN WAVE W (NOLOCK) ON WD.Wavekey = W.Wavekey  
+         JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey  
+         JOIN #PICKDETAIL_WIP PD (NOLOCK) ON O.Orderkey = PD.Orderkey  
+         JOIN SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.Sku = SKU.Sku    
+         JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc    
+         WHERE WD.Wavekey = @c_Wavekey  
+         AND PD.Status = '0'  
+         AND PD.WIP_RefNo = @c_SourceType  
+         AND PD.UOM IN ('2','7')          
+         AND (LOC.LOC NOT IN (SELECT DISTINCT CL.Long   
+                             FROM CODELKUP CL (NOLOCK)   
+                             WHERE CL.LISTNAME = 'CSDEFLOC' AND CL.Storerkey = PD.Storerkey) AND PD.UOM = '2')
+         GROUP BY PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, PD.UOM, LOC.LogicalLocation
+         ORDER BY PD.UOM, Loc.LogicalLocation, PD.Loc   
+         --WL02 E
+
       OPEN CUR_Pick
 
-      FETCH NEXT FROM CUR_Pick INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID, @n_Qty, @c_UOM, @n_UOMQty, @c_UCCNo, @n_UCCQty
+      FETCH NEXT FROM CUR_Pick INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID, @n_Qty, @c_UOM   --WL02
 
       WHILE @@FETCH_STATUS <> -1
       BEGIN
@@ -353,304 +419,332 @@ BEGIN
          SET @c_Priority = CASE WHEN @c_UOM = '2' THEN '9' ELSE '8' END
          SET @c_SourcePriority = '9'
          
-         IF @c_UOM = '2'
+         --WL02 S
+         --Multi UCC per Lot
+         --IF ISNULL(@c_UCCNo,'') = ''
+         --BEGIN
+         --   SELECT TOP 1 @c_UCCNo   = UCC.UCCNo
+         --              , @n_UCCQty  = UCC.Qty
+         --   FROM UCC (NOLOCK)
+         --   WHERE UCC.LOT = @c_Lot
+         --   AND UCC.LOC = @c_FromLoc
+         --   AND UCC.ID = @c_ID
+         --   AND UCC.[Status] = '1'
+         --   ORDER BY UCC.UCCNo
+         --END
+         --ELSE
+         --BEGIN
+         --   SELECT @n_UCCQty = MAX(UCC.Qty)
+         --   FROM UCC (NOLOCK)
+         --   WHERE UCC.UCCNo = @c_UCCNo
+         --   AND UCC.[Status] = '1'
+         --END
+
+         DECLARE CUR_UCC CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT UCC.UCCNo, UCC.Qty
+         FROM UCC (NOLOCK)
+         WHERE UCC.LOT = @c_Lot
+         AND UCC.LOC = @c_FromLoc
+         AND UCC.ID = @c_ID
+         AND UCC.[Status] = '1'
+         ORDER BY UCC.UCCNo
+
+         OPEN CUR_UCC
+
+         FETCH NEXT FROM CUR_UCC INTO @c_UCCNo, @n_UCCQty
+
+         IF @@FETCH_STATUS = -1
          BEGIN
-            SET @c_Message03 = 'PACKSTATION'
-
-            SELECT @c_ToLoc = CL.Short
-            FROM CODELKUP CL (NOLOCK)
-            WHERE CL.LISTNAME = 'TM_TOLOC'
-            AND CL.Code = @c_Facility
-            AND CL.Storerkey = @c_Storerkey
-
-            IF @b_Debug = 99
-            BEGIN
-               SET @c_ToLoc = 'STAGE' 
-            END
- 
-            IF ISNULL(@c_ToLoc,'') = ''
-            BEGIN
-               SELECT @n_continue = 3    
-               SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 63010   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
-               SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Packstation not set up. Please check Codelkup. (ispRLWAV53)' 
-                                + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '    
-               GOTO QUIT_SP 
-            END
-
-            IF NOT EXISTS (SELECT 1 FROM LOC (NOLOCK) WHERE LOC = @c_Toloc)
-            BEGIN
-               SELECT @n_continue = 3  
-               SELECT @n_err = 63015    
-               SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Loc not found in Loc table. (ispRLWAV53)'         
-            END 
-         END
-         ELSE
-         BEGIN
-            SET @c_Message03 = 'PICK LOC'
-
-            SELECT @c_ToLoc = SL.LOC
-            FROM SKUxLOC SL (NOLOCK)
-            JOIN LOC L (NOLOCK) ON L.LOC = SL.LOC
-            WHERE SL.StorerKey = @c_Storerkey
-            AND SL.Sku = @c_SKU
-            AND SL.LocationType = 'PICK'
-            AND L.Facility = @c_Facility
-            
-            IF ISNULL(@c_ToLoc,'') = ''
-            BEGIN
-               SELECT @n_continue = 3    
-               SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 63020   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
-               SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Pick Loc not found. Please check SKUxLOC. (ispRLWAV53)' 
-                                + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '    
-               GOTO QUIT_SP 
-            END
-         END
-         
-         SELECT @c_Areakey = AD.Areakey
-         FROM LOC L (NOLOCK)
-         JOIN AreaDetail AD (NOLOCK) ON AD.PutawayZone = L.PutawayZone
-         WHERE L.LOC = @c_FromLoc
-
-         SELECT @b_success = 1    
-         EXECUTE nspg_getkey    
-         'TaskDetailKey'    
-         , 10    
-         , @c_taskdetailkey OUTPUT    
-         , @b_success OUTPUT    
-         , @n_err OUTPUT    
-         , @c_errmsg OUTPUT    
-         
-         IF NOT @b_success = 1    
-         BEGIN    
-            SELECT @n_continue = 3    
-         END    
-          
-         IF @b_success = 1    
-         BEGIN
-            INSERT TASKDETAIL    
-            (    
-              TaskDetailKey    
-             ,TaskType    
-             ,Storerkey    
-             ,Sku    
-             ,UOM    
-             ,UOMQty    
-             ,Qty    
-             ,SystemQty  
-             ,Lot    
-             ,FromLoc    
-             ,FromID    
-             ,ToLoc    
-             ,ToID    
-             ,SourceType    
-             ,SourceKey    
-             ,[Priority]    
-             ,SourcePriority    
-             ,[Status]    
-             ,LogicalFromLoc    
-             ,LogicalToLoc    
-             ,PickMethod  
-             ,Wavekey    
-             ,Areakey  
-             ,Message03 
-             ,Caseid
-             ,PendingMoveIn
-             ,QtyReplen
-            )    
-            VALUES    
-            (    
-              @c_taskdetailkey    
-             ,@c_TaskType --Tasktype    
-             ,@c_Storerkey    
-             ,@c_Sku    
-             ,@c_UOM -- UOM,    
-             ,@n_UCCQty  -- UOMQty,    
-             ,@n_UCCQty  --Qty  
-             ,@n_Qty  --systemqty  
-             ,@c_Lot     
-             ,@c_FromLoc     
-             ,@c_ID -- from id    
-             ,@c_ToLoc   
-             ,@c_ID -- to id    
-             ,@c_SourceType --Sourcetype    
-             ,@c_Wavekey --Sourcekey    
-             ,@c_Priority -- Priority    
-             ,'9' -- Sourcepriority    
-             ,'0' -- Status    
-             ,@c_FromLoc --Logical from loc    
-             ,@c_ToLoc --Logical to loc    
-             ,@c_PickMethod  
-             ,@c_Wavekey  
-             ,@c_Areakey  
-             ,@c_Message03
-             ,@c_UCCNo
-             ,CASE WHEN @c_UOM = '2' THEN 0 ELSE @n_UCCQty END
-             ,@n_UCCQty - @n_Qty
-            )  
-              
-            SELECT @n_err = @@ERROR    
-
-            IF @n_err <> 0    
-            BEGIN  
-                SELECT @n_continue = 3    
-                SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 63025   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
-                SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Taskdetail Failed. (ispRLWAV53)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '    
-                GOTO QUIT_SP  
-            END   
-            
-            --BEGIN TRY
-            --   EXEC rdt.rdt_Putaway_PendingMoveIn 
-            --         @cUserName        = @c_UserName
-            --      ,  @cType            = 'LOCK' 
-            --      ,  @cStorerKey       = @c_Storerkey 
-            --      ,  @cSKu             = @c_Sku
-            --      ,  @cFromLOT         = @c_Lot   
-            --      ,  @cFromLOC         = @c_FromLoc            
-            --      ,  @cFromID          = @c_ID
-            --      ,  @cSuggestedLOC    = @c_ToLoc  
-            --      ,  @nPutawayQTY      = @n_Qty
-            --      ,  @nPABookingKey    = @n_PABookingKey OUTPUT
-            --      ,  @nErrNo           = @n_Err          OUTPUT
-            --      ,  @cErrMsg          = @c_ErrMsg       OUTPUT
-            --END TRY
-            --BEGIN CATCH
-            --   SET @n_Continue = 3
-            --   SET @n_Err = 63026
-            --   SET @c_ErrMsg = ERROR_MESSAGE()
-                  
-            --   SET @c_ErrMsg = CONVERT(CHAR(5), @n_Err) + ': Error Executing rdt.rdt_Putaway_PendingMoveIn. Sku: ' + RTRIM(@c_Sku)
-            --                 + ' fail. (ispRLWAV53)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '    
-                  
-            --   GOTO QUIT_SP
-            --END CATCH
-         END  
-
-         --Update UCC Status to 3
-         UPDATE UCC WITH (ROWLOCK)
-         SET [Status] = '3'
-         WHERE UCCNo = @c_UCCNo
-         
-         SELECT @n_err = @@ERROR  
-         
-         IF @n_err <> 0  
-         BEGIN  
             SELECT @n_continue = 3  
-            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 63030   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
-            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update on UCC Failed (ispRLWAV53)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
-         END
-         
-         UPDATE #PickDetail_WIP
-         SET DropID = @c_UCCNo
-         WHERE Storerkey = @c_Storerkey
-         AND SKU = @c_Sku
-         AND Lot = @c_Lot
+            SELECT @n_err = 63009    
+            SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)
+                             + ': Unable to find UCC for Lot: ' + TRIM(@c_Lot) + ' Loc: ' + TRIM(@c_Loc) + ' ID: ' + TRIM(@c_ID) + '. (ispRLWAV53)'
+            GOTO QUIT_SP
+         END 
 
-         --Update taskdetailkey/wavekey to pickdetail  
-         IF @n_continue = 1 OR @n_continue = 2  
-         BEGIN  
-             SELECT @c_Pickdetailkey = '', @n_ReplenQty = @n_Qty  
-             WHILE @n_ReplenQty > 0   
-             BEGIN                          
-               SELECT TOP 1 @c_PickdetailKey = PICKDETAIL.Pickdetailkey, @n_PickQty = Qty  
-               FROM WAVEDETAIL (NOLOCK)   
-               JOIN #PickDetail_WIP PICKDETAIL (NOLOCK) ON WAVEDETAIL.Orderkey = PICKDETAIL.Orderkey  
-               WHERE WAVEDETAIL.Wavekey = @c_Wavekey  
-               AND ISNULL(PICKDETAIL.Taskdetailkey,'') = ''  
-               AND PICKDETAIL.Storerkey = @c_Storerkey  
-               AND PICKDETAIL.Sku = @c_sku  
-               AND PICKDETAIL.Lot = @c_Lot  
-               AND PICKDETAIL.Loc = @c_FromLoc  
-               AND PICKDETAIL.ID = @c_ID  
-               AND PICKDETAIL.UOM = @c_UOM  
-               AND PICKDETAIL.DropID = @c_UCCNo  
-               AND PICKDETAIL.Pickdetailkey > @c_pickdetailkey  
-               ORDER BY PICKDETAIL.Pickdetailkey  
+         WHILE @@FETCH_STATUS <> -1 AND @n_Qty > 0
+         BEGIN
+            IF @c_UOM = '2'
+            BEGIN
+               SET @c_Message03 = 'PACKSTATION'
+            
+               SELECT @c_ToLoc = CL.Short
+               FROM CODELKUP CL (NOLOCK)
+               WHERE CL.LISTNAME = 'TM_TOLOC'
+               AND CL.Code = @c_Facility
+               AND CL.Storerkey = @c_Storerkey
+            
+               IF @b_Debug = 99
+               BEGIN
+                  SET @c_ToLoc = 'STAGE' 
+               END
+            
+               IF ISNULL(@c_ToLoc,'') = ''
+               BEGIN
+                  SELECT @n_continue = 3    
+                  SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 63010   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+                  SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Packstation not set up. Please check Codelkup. (ispRLWAV53)' 
+                                   + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '    
+                  GOTO QUIT_SP 
+               END
+            
+               IF NOT EXISTS (SELECT 1 FROM LOC (NOLOCK) WHERE LOC = @c_Toloc)
+               BEGIN
+                  SELECT @n_continue = 3  
+                  SELECT @n_err = 63015    
+                  SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Loc not found in Loc table. (ispRLWAV53)'         
+               END 
+            END
+            ELSE
+            BEGIN
+               SET @c_Message03 = 'PICK LOC'
+            
+               SELECT @c_ToLoc = SL.LOC
+               FROM SKUxLOC SL (NOLOCK)
+               JOIN LOC L (NOLOCK) ON L.LOC = SL.LOC
+               WHERE SL.StorerKey = @c_Storerkey
+               AND SL.Sku = @c_SKU
+               AND SL.LocationType = 'PICK'
+               AND L.Facility = @c_Facility
+               
+               IF ISNULL(@c_ToLoc,'') = ''
+               BEGIN
+                  SELECT @n_continue = 3    
+                  SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 63020   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+                  SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Pick Loc not found. Please check SKUxLOC. (ispRLWAV53)' 
+                                   + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '    
+                  GOTO QUIT_SP 
+               END
+            END
+            
+            SET @c_Areakey = ''   --WL03
+            
+            SELECT @c_Areakey = AD.Areakey
+            FROM LOC L (NOLOCK)
+            JOIN AreaDetail AD (NOLOCK) ON AD.PutawayZone = L.PutawayZone
+            WHERE L.LOC = @c_FromLoc
+            
+            SELECT @b_success = 1    
+            EXECUTE nspg_getkey    
+            'TaskDetailKey'    
+            , 10    
+            , @c_taskdetailkey OUTPUT    
+            , @b_success OUTPUT    
+            , @n_err OUTPUT    
+            , @c_errmsg OUTPUT    
+            
+            IF NOT @b_success = 1    
+            BEGIN    
+               SELECT @n_continue = 3    
+            END    
+             
+            IF @b_success = 1    
+            BEGIN
+               INSERT TASKDETAIL    
+               (    
+                 TaskDetailKey    
+                ,TaskType    
+                ,Storerkey    
+                ,Sku    
+                ,UOM    
+                ,UOMQty    
+                ,Qty    
+                ,SystemQty  
+                ,Lot    
+                ,FromLoc    
+                ,FromID    
+                ,ToLoc    
+                ,ToID    
+                ,SourceType    
+                ,SourceKey    
+                ,[Priority]    
+                ,SourcePriority    
+                ,[Status]    
+                ,LogicalFromLoc    
+                ,LogicalToLoc    
+                ,PickMethod  
+                ,Wavekey    
+                ,Areakey  
+                ,Message03 
+                ,Caseid
+                ,PendingMoveIn
+                ,QtyReplen
+               )    
+               VALUES    
+               (    
+                 @c_taskdetailkey    
+                ,@c_TaskType --Tasktype    
+                ,@c_Storerkey    
+                ,@c_Sku    
+                ,@c_UOM -- UOM,    
+                ,@n_UCCQty  -- UOMQty,    
+                ,@n_UCCQty  --Qty  
+                ,CASE WHEN @c_UOM = '2' THEN @n_UCCQty ELSE @n_Qty END  --systemqty  
+                ,@c_Lot     
+                ,@c_FromLoc     
+                ,@c_ID -- from id    
+                ,@c_ToLoc   
+                ,@c_ID -- to id    
+                ,@c_SourceType --Sourcetype    
+                ,@c_Wavekey --Sourcekey    
+                ,@c_Priority -- Priority    
+                ,'9' -- Sourcepriority    
+                ,'0' -- Status    
+                ,@c_FromLoc --Logical from loc    
+                ,@c_ToLoc --Logical to loc    
+                ,@c_PickMethod  
+                ,@c_Wavekey  
+                ,@c_Areakey  
+                ,@c_Message03
+                ,@c_UCCNo
+                ,CASE WHEN @c_UOM = '2' THEN 0 ELSE @n_UCCQty END
+                ,CASE WHEN @c_UOM = '2' THEN @n_UCCQty ELSE @n_UCCQty - @n_Qty END
+               )  
                  
-               SELECT @n_cnt = @@ROWCOUNT  
-                 
-               IF @n_cnt = 0  
-                   BREAK  
-                 
-               IF @n_PickQty <= @n_ReplenQty  
+               SELECT @n_err = @@ERROR    
+            
+               IF @n_err <> 0    
                BEGIN  
-                  UPDATE #PickDetail_WIP WITH (ROWLOCK)  
-                  SET Taskdetailkey = @c_TaskdetailKey,  
-                      TrafficCop = NULL  
-                  WHERE Pickdetailkey = @c_PickdetailKey  
-
-                  SELECT @n_err = @@ERROR  
-
-                  IF @n_err <> 0   
-                  BEGIN  
-                     SELECT @n_continue = 3  
-                     SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 63035     
-                     SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Pickdetail Table Failed. (ispRLWAV53)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '  
-                     BREAK  
-                 END   
-                 SELECT @n_ReplenQty = @n_ReplenQty - @n_PickQty  
-               END  
-               ELSE  
-               BEGIN  -- pickqty > replenqty     
-                  SELECT @n_SplitQty = @n_PickQty - @n_ReplenQty  
-                  EXECUTE nspg_GetKey        
-                  'PICKDETAILKEY',        
-                  10,        
-                  @c_NewPickdetailKey OUTPUT,           
-                  @b_success OUTPUT,        
-                  @n_err OUTPUT,        
-                  @c_errmsg OUTPUT
-                  
-                  IF NOT @b_success = 1        
-                  BEGIN  
-                     SELECT @n_continue = 3        
-                     BREAK        
-                  END        
-                          
-                  INSERT #PickDetail_WIP    
-                         (PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot,         
-                          Storerkey, Sku, AltSku, UOM, UOMQty, Qty, QtyMoved, Status,         
-                          DropID, Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,         
-                          ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,         
-                          WaveKey, EffectiveDate, OptimizeCop, ShipFlag, PickSlipNo, WIP_Refno)        
-                  SELECT @c_NewpickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot,         
-                         Storerkey, Sku, AltSku, UOM, CASE WHEN UOM IN ('6','7') THEN @n_SplitQty ELSE UOMQty END , @n_SplitQty, QtyMoved, Status,         
-                         DropID, Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,         
-                         ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,         
-                         WaveKey, EffectiveDate, '9', ShipFlag, PickSlipNo, @c_SourceType
-                  FROM PICKDETAIL (NOLOCK)  
-                  WHERE PickdetailKey = @c_PickdetailKey  
-                                       
-                  SELECT @n_err = @@ERROR  
-
-                  IF @n_err <> 0       
-                  BEGIN       
-                     SELECT @n_continue = 3        
-                     SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 63040     
-                     SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Pickdetail Table Failed. (ispRLWAV53)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '  
-                     BREAK      
-                  END  
+                   SELECT @n_continue = 3    
+                   SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 63025   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+                   SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Taskdetail Failed. (ispRLWAV53)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '    
+                   GOTO QUIT_SP  
+               END   
+            END  
+            
+            --Update UCC Status to 3
+            UPDATE UCC WITH (ROWLOCK)
+            SET [Status] = '3'
+            WHERE UCCNo = @c_UCCNo
+            
+            SELECT @n_err = @@ERROR  
+            
+            IF @n_err <> 0  
+            BEGIN  
+               SELECT @n_continue = 3  
+               SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 63030   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+               SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update on UCC Failed (ispRLWAV53)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
+            END
+            
+            --WL02 
+            --UPDATE #PickDetail_WIP
+            --SET DropID = @c_UCCNo
+            --WHERE Storerkey = @c_Storerkey
+            --AND SKU = @c_Sku
+            --AND Lot = @c_Lot
+            
+            --Update taskdetailkey/wavekey to pickdetail  
+            IF @n_continue = 1 OR @n_continue = 2  
+            BEGIN  
+                SELECT @c_Pickdetailkey = '', @n_ReplenQty = @n_Qty  
+                WHILE @n_ReplenQty > 0   
+                BEGIN                          
+                  SELECT TOP 1 @c_PickdetailKey = PICKDETAIL.Pickdetailkey, @n_PickQty = Qty  
+                  FROM WAVEDETAIL (NOLOCK)   
+                  JOIN #PickDetail_WIP PICKDETAIL (NOLOCK) ON WAVEDETAIL.Orderkey = PICKDETAIL.Orderkey  
+                  WHERE WAVEDETAIL.Wavekey = @c_Wavekey  
+                  AND ISNULL(PICKDETAIL.Taskdetailkey,'') = ''  
+                  AND PICKDETAIL.Storerkey = @c_Storerkey  
+                  AND PICKDETAIL.Sku = @c_sku  
+                  AND PICKDETAIL.Lot = @c_Lot  
+                  AND PICKDETAIL.Loc = @c_FromLoc  
+                  AND PICKDETAIL.ID = @c_ID  
+                  AND PICKDETAIL.UOM = @c_UOM  
+                  --AND PICKDETAIL.DropID = @c_UCCNo   --WL02  
+                  AND PICKDETAIL.Pickdetailkey > @c_pickdetailkey  
+                  ORDER BY PICKDETAIL.Pickdetailkey  
                     
-                  UPDATE #PickDetail_WIP WITH (ROWLOCK)  
-                  SET Taskdetailkey   = @c_TaskdetailKey,  
-                      Qty             = @n_ReplenQty,  
-                      UOMQTY          = CASE WHEN UOM IN('6','7') THEN @n_ReplenQty ELSE UOMQty END,              
-                      TrafficCop      = NULL  
-                  WHERE Pickdetailkey = @c_PickdetailKey  
-                  SELECT @n_err = @@ERROR  
-         
-                  IF @n_err <> 0   
+                  SELECT @n_cnt = @@ROWCOUNT  
+                    
+                  IF @n_cnt = 0  
+                      BREAK  
+            
+                  IF @n_PickQty <= @n_ReplenQty  
                   BEGIN  
-                     SELECT @n_continue = 3  
-                     SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 63045     
-                     SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Pickdetail Table Failed. (ispRLWAV53)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '  
-                     BREAK  
+                     UPDATE #PickDetail_WIP WITH (ROWLOCK)  
+                     SET Taskdetailkey = @c_TaskdetailKey,
+                         DropID = @c_UCCNo,   --WL02
+                         TrafficCop = NULL  
+                     WHERE Pickdetailkey = @c_PickdetailKey  
+            
+                     SELECT @n_err = @@ERROR  
+            
+                     IF @n_err <> 0   
+                     BEGIN  
+                        SELECT @n_continue = 3  
+                        SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 63035     
+                        SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Pickdetail Table Failed. (ispRLWAV53)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '  
+                        BREAK  
+                    END   
+                    SELECT @n_ReplenQty = @n_ReplenQty - @n_PickQty  
                   END  
-                  SELECT @n_ReplenQty = 0  
-               END       
-             END -- While Qty > 0  
+                  ELSE  
+                  BEGIN  -- pickqty > replenqty     
+                     SELECT @n_SplitQty = @n_PickQty - @n_ReplenQty  
+                     EXECUTE nspg_GetKey        
+                     'PICKDETAILKEY',        
+                     10,        
+                     @c_NewPickdetailKey OUTPUT,           
+                     @b_success OUTPUT,        
+                     @n_err OUTPUT,        
+                     @c_errmsg OUTPUT
+                     
+                     IF NOT @b_success = 1        
+                     BEGIN  
+                        SELECT @n_continue = 3        
+                        BREAK        
+                     END        
+                             
+                     INSERT #PickDetail_WIP    
+                            (PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot,         
+                             Storerkey, Sku, AltSku, UOM, UOMQty, Qty, QtyMoved, Status,         
+                             DropID, Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,         
+                             ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,         
+                             WaveKey, EffectiveDate, OptimizeCop, ShipFlag, PickSlipNo, WIP_RefNo)   --WL02        
+                     SELECT @c_NewpickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot,         
+                            Storerkey, Sku, AltSku, UOM, CASE WHEN UOM IN ('6','7') THEN @n_SplitQty ELSE 1 END , @n_SplitQty, QtyMoved, Status,   --WL02         
+                            DropID, Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,         
+                            ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,         
+                            WaveKey, EffectiveDate, '9', ShipFlag, PickSlipNo, @c_SourceType   --WL02
+                     FROM #PickDetail_WIP PDW (NOLOCK)   --WL02  
+                     WHERE PickdetailKey = @c_PickdetailKey  
+            
+                     SELECT @n_err = @@ERROR  
+            
+                     IF @n_err <> 0       
+                     BEGIN       
+                        SELECT @n_continue = 3        
+                        SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 63040     
+                        SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Pickdetail Table Failed. (ispRLWAV53)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '  
+                        BREAK      
+                     END  
+                       
+                     UPDATE #PickDetail_WIP WITH (ROWLOCK)  
+                     SET Taskdetailkey   = @c_TaskdetailKey,  
+                         Qty             = @n_ReplenQty,  
+                         UOMQTY          = CASE WHEN UOM IN('6','7') THEN @n_ReplenQty ELSE 1 END,   --WL02 
+                         DropID          = @c_UCCNo,   --WL02
+                         TrafficCop      = NULL  
+                     WHERE Pickdetailkey = @c_PickdetailKey  
+                     SELECT @n_err = @@ERROR  
+            
+                     IF @n_err <> 0   
+                     BEGIN  
+                        SELECT @n_continue = 3  
+                        SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 63045     
+                        SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Pickdetail Table Failed. (ispRLWAV53)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '  
+                        BREAK  
+                     END  
+                     SELECT @n_ReplenQty = 0  
+                  END       
+                END -- While Qty > 0  
+            END
+            FETCH NEXT FROM CUR_UCC INTO @c_UCCNo, @n_UCCQty
          END
-
-         FETCH NEXT FROM CUR_Pick INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID, @n_Qty, @c_UOM, @n_UOMQty, @c_UCCNo, @n_UCCQty
+         CLOSE CUR_UCC
+         DEALLOCATE CUR_UCC
+         --WL02 E
+         FETCH NEXT FROM CUR_Pick INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID, @n_Qty, @c_UOM   --WL02
       END  
       CLOSE CUR_Pick
       DEALLOCATE CUR_Pick   
@@ -661,41 +755,46 @@ BEGIN
       END
    END
 
+   --WL04 S
    --WL01 S
-   ----Create Pickslip
-   --IF (@n_Continue = 1 OR @n_Continue = 2)
-   --BEGIN
-   --   IF @@TRANCOUNT = 0
-   --      BEGIN TRAN
+   --Create Pickslip
+   IF (@n_Continue = 1 OR @n_Continue = 2)
+   BEGIN
+      IF @@TRANCOUNT = 0
+         BEGIN TRAN
 
-   --   EXEC dbo.isp_CreatePickSlip @c_Wavekey = @c_Wavekey,       
-   --                               @c_PickslipType = N'3',     
-   --                               @b_Success = @b_Success OUTPUT,
-   --                               @n_Err = @n_Err OUTPUT,        
-   --                               @c_ErrMsg = @c_ErrMsg OUTPUT   
+      EXEC dbo.isp_CreatePickSlip @c_Wavekey = @c_Wavekey,       
+                                  @c_PickslipType = N'3',     
+                                  @b_Success = @b_Success OUTPUT,
+                                  @n_Err = @n_Err OUTPUT,        
+                                  @c_ErrMsg = @c_ErrMsg OUTPUT   
 
-   --   IF @n_err <> 0   
-   --   BEGIN  
-   --      SELECT @n_continue = 3  
-   --      SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 63050     
-   --      SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': EXEC isp_CreatePickSlip Failed. (ispRLWAV53)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '  
-   --      GOTO QUIT_SP
-   --   END 
+      IF @n_err <> 0   
+      BEGIN  
+         SELECT @n_continue = 3  
+         SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 63050     
+         SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': EXEC isp_CreatePickSlip Failed. (ispRLWAV53)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '  
+         GOTO QUIT_SP
+      END 
       
-   --   WHILE @@TRANCOUNT > 0
-   --   BEGIN
-   --      COMMIT TRAN
-   --   END
+      WHILE @@TRANCOUNT > 0
+      BEGIN
+         COMMIT TRAN
+      END
 
-   --   ;WITH CTE AS (SELECT DISTINCT PICKDETAIL.Pickdetailkey, PICKDETAIL.Pickslipno
-   --                 FROM PICKDETAIL (NOLOCK)
-   --                 JOIN #PickDetail_WIP PDW (NOLOCK) ON PDW.OrderKey = PICKDETAIL.OrderKey)
-   --   UPDATE #PickDetail_WIP
-   --   SET #PickDetail_WIP.PickSlipNo = CTE.PickSlipNo
-   --   FROM CTE
-   --   WHERE #PickDetail_WIP.PickDetailKey = CTE.PickDetailKey
-   --END
+      --Update Loadkey, Wavekey to Pickheader
+      ;WITH CTE2 AS (SELECT DISTINCT PICKHEADER.PickHeaderKey, ORDERS.LoadKey, PDW.WaveKey
+                    FROM PICKHEADER (NOLOCK)
+                    JOIN ORDERS (NOLOCK) ON ORDERS.OrderKey = PICKHEADER.OrderKey
+                    JOIN #PickDetail_WIP PDW (NOLOCK) ON PDW.OrderKey = PICKHEADER.OrderKey)
+      UPDATE PICKHEADER
+      SET PICKHEADER.ExternOrderKey = CTE2.LoadKey
+        , PICKHEADER.WaveKey = CTE2.WaveKey
+      FROM CTE2
+      WHERE PICKHEADER.PickHeaderKey = CTE2.PickHeaderKey
+   END
    --WL01 E
+   --WL04 E
 
    IF @c_WaveType IN ('0') SET @c_WaveType = ''
 
@@ -719,7 +818,8 @@ BEGIN
          SET @n_CSOSMaxCarton = 2
          SET @n_CSOSMaxCBM = 0.096
       END
-
+      
+      --WL04 S
       IF @c_WaveType = 'CSR'
       BEGIN
          IF @n_CSRMaxOrderPerBatch = 0
@@ -731,6 +831,9 @@ BEGIN
                           + @c_errmsg + ' ) ' 
             GOTO QUIT_SP                     
          END
+
+         SET @c_BatchNo = ''   --WL03
+         SET @n_CartonNo = 0   --WL03
 
          DECLARE CUR_PRECTN_CSR CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT DISTINCT PDW.OrderKey
@@ -747,23 +850,43 @@ BEGIN
          WHILE @@FETCH_STATUS <> -1
          BEGIN
             SET @n_CurrCnt = @n_CurrCnt + 1
+            SET @n_CartonNo = @n_CartonNo + 1   --WL03
 
-            IF @n_CurrCnt > @n_CSRMaxOrderPerBatch
-            BEGIN
-               SET @n_CurrCnt = 0
-               SET @n_CartonNo = @n_CartonNo + 1
-            END
-
-            IF @n_CartonNo > 99
+            --WL04 S
+            IF @n_CartonNo > 99 OR @n_CurrCnt > @n_CSRMaxOrderPerBatch
             BEGIN  
                SET @n_CartonNo = 1
-               SET @n_CurrCnt = 0
+               SET @n_CurrCnt = 1
+               SET @c_BatchNo = ''
+            END
+            --WL04 E
+
+            IF @c_BatchNo = ''
+            BEGIN
+               EXECUTE nspg_getkey  
+                   @c_KeyName
+                 , 9  
+                 , @c_BatchNo          OUTPUT  
+                 , @b_success          OUTPUT  
+                 , @n_err              OUTPUT  
+                 , @c_errmsg           OUTPUT  
+               
+               IF NOT @b_success = 1  
+               BEGIN  
+                  SET @n_continue = 3  
+                  SET @n_Err = 63056   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+                  SET @c_errmsg = 'NSQL' + CONVERT(char(5),@n_err)   
+                                    + ': Unable to Obtain BatchNo. (ispRLWAV53) ( SQLSvr MESSAGE='   
+                                      + @c_errmsg + ' ) ' 
+                  GOTO QUIT_SP                     
+               END
             END
 
             UPDATE #PickDetail_WIP
             SET CaseID = RIGHT('00' + CAST(@n_CartonNo AS NVARCHAR(2)), 2)
-            WHERE OrderKey = @c_Orderkey
-
+              , PickSlipNo = 'S' + @c_BatchNo   --WL03
+            WHERE OrderKey = @c_Orderkey AND UOM IN ('6','7')
+            
             FETCH NEXT FROM CUR_PRECTN_CSR INTO @c_Orderkey
          END
          CLOSE CUR_PRECTN_CSR
@@ -792,23 +915,23 @@ BEGIN
          END
          SET @c_curPickdetailkey = ''
          SET @n_CartonNo = 1
+         SET @c_BatchNo = ''
          
          --UOM 2, only for Case Shuttle Loc
-         DECLARE CUR_PRECTN_CSOS_2 CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         SELECT PDW.PickDetailKey, LA.Lottable10
+         /*DECLARE CUR_PRECTN_CSOS_2 CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT PDW.PickDetailKey
          FROM #PickDetail_WIP PDW
          JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'CSDEFLOC' 
                                   AND CL.Storerkey = PDW.Storerkey 
-                                  AND CL.Notes = @c_Facility
+                                  AND CL.Code = @c_Facility
                                   AND CL.Long = PDW.Loc
-         JOIN LOTATTRIBUTE LA (NOLOCK) ON LA.Lot = PDW.Lot
          WHERE PDW.UOM = '2'
          AND PDW.Status = '0'
          AND PDW.WIP_RefNo = @c_SourceType
          
          OPEN CUR_PRECTN_CSOS_2
          
-         FETCH NEXT FROM CUR_PRECTN_CSOS_2 INTO @c_curPickdetailkey, @c_UCCNo
+         FETCH NEXT FROM CUR_PRECTN_CSOS_2 INTO @c_curPickdetailkey
          
          WHILE @@FETCH_STATUS <> -1
          BEGIN
@@ -835,12 +958,11 @@ BEGIN
             UPDATE #PickDetail_WIP
             SET PickSlipNo = 'S' + @c_BatchNo
               , CaseID     = RIGHT('000' + CAST(@n_CartonNo AS NVARCHAR), 3)
-              , Notes      = @c_UCCNo
             WHERE PickDetailKey = @c_curPickdetailkey
          
             SET @n_CartonNo = @n_CartonNo + 1
          
-            FETCH NEXT FROM CUR_PRECTN_CSOS_2 INTO @c_curPickdetailkey, @c_UCCNo
+            FETCH NEXT FROM CUR_PRECTN_CSOS_2 INTO @c_curPickdetailkey
          END
          CLOSE CUR_PRECTN_CSOS_2
          DEALLOCATE CUR_PRECTN_CSOS_2
@@ -860,6 +982,7 @@ BEGIN
                  , SUM(PDW.Qty) AS Qty
                  , SUM(S.STDCUBE * PDW.Qty) AS CBM
                  , PDW.Loc
+                 , PDW.OrderKey
             FROM #PickDetail_WIP PDW
             LEFT JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'CSDEFLOC'
                                           AND CL.Storerkey = PDW.Storerkey
@@ -881,13 +1004,15 @@ BEGIN
                    , C1.Short
                    , PK.CaseCnt
                    , PDW.Loc
+                   , PDW.OrderKey
          )
-         INSERT INTO #TMP_SUSR4 (SUSR4, SKU, Loc, LocType, ProductType, CaseCnt, Qty, CBM)
-         SELECT CTE.SUSR4, CTE.SKU, CTE.Loc, CTE.LocType, CTE.ProductType, CTE.CaseCnt, CTE.Qty, CTE.CBM
+         INSERT INTO #TMP_SUSR4 (SUSR4, SKU, Loc, LocType, ProductType, CaseCnt, Qty, CBM, Orderkey)
+         SELECT CTE.SUSR4, CTE.SKU, CTE.Loc, CTE.LocType, CTE.ProductType, CTE.CaseCnt, CTE.Qty, CTE.CBM, CTE.OrderKey
          FROM CTE
          ORDER BY CTE.LocType
                 , CTE.ProductType
                 , CTE.SUSR4
+                , CTE.OrderKey
                 , CTE.SKU
 
          SET @c_SKU = ''
@@ -921,6 +1046,8 @@ BEGIN
          END
 
          SET @c_BatchNo = ''
+         SET @n_CartonNo = 1
+         SET @c_PrevOrderkey = ''
 
          DECLARE CUR_SUSR4 CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT DISTINCT TS.SUSR4
@@ -938,15 +1065,45 @@ BEGIN
             WHERE TS.SUSR4 = @c_SUSR4
 
             DECLARE CUR_PRECTN_CSOS_6_7 CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-            SELECT TS.LocType, SUM(TS.Qty)
-            FROM #TMP_SUSR4 TS
-            WHERE TS.SUSR4 = @c_SUSR4
-            GROUP BY TS.LocType
-            ORDER BY TS.LocType
+            --SELECT TS.LocType, SUM(TS.Qty)
+            --FROM #TMP_SUSR4 TS
+            --WHERE TS.SUSR4 = @c_SUSR4
+            --GROUP BY TS.LocType
+            --ORDER BY TS.LocType
+            WITH CTE1 AS
+            (
+               SELECT TS.LocType
+                    , TS.Orderkey
+                    , SUM(TS.Qty) AS QtyRequired
+                    , CASE WHEN SUM(TS.Qty) > @n_Casecnt THEN @n_Casecnt ELSE 0 END AS MaxQty 
+                    , CASE WHEN SUM(TS.Qty) > @n_Casecnt THEN CAST(SUM(TS.Qty) / @n_Casecnt AS INT) ELSE 0 END AS WHOLES 
+                    , CASE WHEN SUM(TS.Qty) > @n_Casecnt THEN SUM(TS.Qty) % @n_Casecnt ELSE SUM(TS.Qty) END AS PARTIALS
+               FROM #TMP_SUSR4 TS
+               WHERE TS.SUSR4 = @c_SUSR4
+               GROUP BY TS.LocType, TS.Orderkey
+            ) 
+            ,CTE2 AS 
+            (
+                SELECT LocType, Orderkey, MaxQty, WHOLES, 'BASE ' AS Remark
+                FROM CTE1
+                UNION ALL
+                SELECT LocType, Orderkey, MaxQty, WHOLES - 1, 'RECUR' AS Remark
+                FROM CTE2 
+                WHERE WHOLES > 1
+            ) 
+            SELECT LocType, Orderkey, MaxQty AS QuantityRequired
+            FROM CTE2
+            WHERE MaxQty > 0
+            UNION ALL
+            SELECT LocType, Orderkey, PARTIALS AS QuantityRequired
+            FROM CTE1 
+            WHERE PARTIALS > 0
+            ORDER BY LocType ASC, Orderkey ASC, QuantityRequired DESC
+            OPTION (MAXRECURSION 0)
 
             OPEN CUR_PRECTN_CSOS_6_7
          
-            FETCH NEXT FROM CUR_PRECTN_CSOS_6_7 INTO @c_LocType, @n_Qty
+            FETCH NEXT FROM CUR_PRECTN_CSOS_6_7 INTO @c_LocType, @c_Orderkey, @n_Qty
          
             WHILE @@FETCH_STATUS <> -1
             BEGIN
@@ -980,24 +1137,22 @@ BEGIN
                   SET @c_BatchNo = 'S' + @c_BatchNo
                END
 
-               --Casecnt = Qty -> Can fit in 1 carton
                IF @n_Qty = @n_Casecnt
                BEGIN
-                  INSERT INTO #TMP_CZ (CartonNo, SKU, LOC, LocType, CaseCnt, Qty, CBM, CtnType, BatchNo)
-                  SELECT @n_CartonNo, T1.SKU, T1.LOC, T1.LocType, T1.CaseCnt, T1.Qty, 0, 'FULL', @c_BatchNo
-                  FROM #TMP_SUSR4 T1
-                  WHERE T1.SUSR4 = @c_SUSR4
-                  AND T1.LocType = @c_LocType
+                  INSERT INTO #TMP_CZ (CartonNo, SKU, SUSR4, LocType, CaseCnt, Qty, CBM, CtnType, BatchNo, OrderKey)
+                  SELECT @n_CartonNo, '', @c_SUSR4, @c_LocType, @n_Casecnt, @n_Qty, 0, 'FULL', @c_BatchNo, @c_Orderkey
 
                   SET @n_CartonNo = @n_CartonNo + 1
-
-                  UPDATE #TMP_SUSR4
-                  SET CartonizeFlag = 'Y'
-                  WHERE SUSR4 = @c_SUSR4
-                  AND LocType = @c_LocType
+               END
+               ELSE
+               BEGIN
+                  INSERT INTO #TMP_CZ (CartonNo, SKU, SUSR4, LocType, CaseCnt, Qty, CBM, CtnType, BatchNo, OrderKey)
+                  SELECT 0, '', @c_SUSR4, @c_LocType, @n_Casecnt, @n_Qty, 0, 'PARTIAL', '', @c_Orderkey
                END
 
-               FETCH NEXT FROM CUR_PRECTN_CSOS_6_7 INTO @c_LocType, @n_Qty
+               SET @c_PrevOrderkey = @c_Orderkey
+
+               FETCH NEXT FROM CUR_PRECTN_CSOS_6_7 INTO @c_LocType, @c_Orderkey, @n_Qty
             END
             CLOSE CUR_PRECTN_CSOS_6_7
             DEALLOCATE CUR_PRECTN_CSOS_6_7
@@ -1007,104 +1162,257 @@ BEGIN
          CLOSE CUR_SUSR4
          DEALLOCATE CUR_SUSR4
 
+         SET @c_CallFrom = 'FULL_CTN'
+         GOTO UPD_PD
+         FULL_CTN:
+         */
          SET @n_TotalCBM = 0.00
+         SET @n_CartonNo = 0
+         SET @c_CallFrom = 'LOOSE_CTN'
+         SET @c_BatchNo = ''
+         SET @c_Orderkey = ''
+         SET @c_PrevOrderkey = ''
+         SET @c_PrevLocType = ''
 
          DECLARE CUR_PRECTN_CSOS_LOOSE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         SELECT TS.SKU, TS.Qty, TS.CBM
-         FROM #TMP_SUSR4 TS
-         WHERE TS.CartonizeFlag IS NULL
+         SELECT PDW.OrderKey, PDW.SKU, SUM(PDW.Qty) AS Qty, SUM(S.STDCUBE * PDW.Qty) AS CBM, PDW.PickDetailKey
+              , CASE WHEN ISNULL(CL.Long,'') <> '' THEN 'CS' ELSE 'NonCS' END AS LocType   --CS - Case Shuttle
+              , ISNULL(C1.Short,'') AS ProductType
+         FROM #PickDetail_WIP PDW WITH (NOLOCK)
+         JOIN SKU S WITH (NOLOCK) ON PDW.SKU = S.SKU AND PDW.Storerkey = S.StorerKey
+         LEFT JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'CSDEFLOC'
+                                       AND CL.Storerkey = PDW.Storerkey
+                                       AND CL.Long = PDW.Loc
+         LEFT JOIN CODELKUP C1 (NOLOCK) ON C1.LISTNAME = 'CBPRODUCT'
+                                       AND C1.Code = S.BUSR2
+                                       AND C1.Storerkey = S.StorerKey
+         --WHERE PDW.CaseID = '000'
+         WHERE PDW.Status = '0'
+         AND PDW.WIP_RefNo = @c_SourceType
+         AND PDW.UOM IN ('6','7')
+         GROUP BY PDW.SKU, PDW.OrderKey, PDW.PickDetailKey
+                , CASE WHEN ISNULL(CL.Long,'') <> '' THEN 'CS' ELSE 'NonCS' END
+                , ISNULL(C1.Short,'')
+         ORDER BY LocType
+                , ISNULL(C1.Short,'')
+                --, PDW.OrderKey
+                , PDW.SKU
+                , PDW.OrderKey
 
          OPEN CUR_PRECTN_CSOS_LOOSE
          
-         FETCH NEXT FROM CUR_PRECTN_CSOS_LOOSE INTO @c_Sku, @n_Qty, @n_CBM
+         FETCH NEXT FROM CUR_PRECTN_CSOS_LOOSE INTO @c_Orderkey, @c_Sku, @n_Qty, @n_CBM, @c_PickdetailKey, @c_LocType, @c_ProductType
          
          WHILE @@FETCH_STATUS <> -1
          BEGIN
-            
-            IF (@n_CartonNo > @n_CSOSMaxCarton) OR @c_BatchNo = '' OR (@n_TotalCBM + @n_CBM > @n_CSOSMaxCBM)
+            IF CHARINDEX('_', @c_ProductType) > 0
+               SET @c_ProductType = SUBSTRING(@c_ProductType, CHARINDEX('_', @c_ProductType) + 1, LEN(@c_ProductType))
+
+            IF ISNULL(@c_ProductType,'') NOT IN ('SHOES','CLOTH') AND ISNULL(@c_ProductType,'') <> ''
             BEGIN
-               IF @n_TotalCBM + @n_CBM > @n_CSOSMaxCBM
+               SET @n_continue = 3  
+               SET @n_Err = 63070   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+               SET @c_errmsg = 'NSQL' + CONVERT(char(5),@n_err)   
+                             + ': Product Type NOT IN (SHOES, CLOTH) for SKU ' + TRIM(@c_SKU) + '. (ispRLWAV53) ( SQLSvr MESSAGE='   
+                             + @c_errmsg + ' ) ' 
+               GOTO QUIT_SP 
+            END
+            
+            IF ISNULL(@c_ProductType,'') = ''
+            BEGIN
+               SET @n_continue = 3  
+               SET @n_Err = 63075   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+               SET @c_errmsg = 'NSQL' + CONVERT(char(5),@n_err)   
+                                 + ': Missing Product Type for SKU ' + TRIM(@c_SKU) + '. (ispRLWAV53) ( SQLSvr MESSAGE='   
+                                 + @c_errmsg + ' ) ' 
+               GOTO QUIT_SP 
+            END
+
+            IF (@n_CartonNo > @n_CSOSMaxCarton) OR @c_BatchNo = '' OR (@n_TotalCBM + @n_CBM > @n_CSOSMaxCBM) 
+               OR @c_PrevOrderkey <> @c_Orderkey OR @c_PrevLocType <> @c_LocType
+            BEGIN
+               IF @c_PrevOrderkey <> @c_Orderkey OR @c_PrevLocType <> @c_LocType
                BEGIN
-                  SET @n_CartonNo = @n_CartonNo + 1
+                  IF @c_BatchNo <> ''
+                  BEGIN
+                     SET @c_BatchNo = (SELECT MAX(Batchno)
+                                       FROM #TMP_CZ TC)
+
+                     SELECT @n_CartonNo = MAX(CartonNo) + 1
+                     FROM #TMP_CZ TC
+                     WHERE BatchNo = @c_BatchNo
+                  END
+                  ELSE
+                  BEGIN
+                     SET @n_CartonNo = @n_CartonNo + 1
+                  END
+
                   SET @n_TotalCBM = @n_CBM
                END
+               ELSE IF (@n_TotalCBM + @n_CBM > @n_CSOSMaxCBM) 
+               BEGIN
+                  SET @n_TotalCBM = 0
+                  SET @n_CartonNo = 0
+
+                  SELECT @n_TotalCBM = SUM(TC.CBM)
+                       , @n_CartonNo = TC.CartonNo
+                       , @c_BatchNo  = TC.BatchNo
+                  FROM #TMP_CZ TC
+                  WHERE TC.OrderKey = @c_Orderkey
+                  AND TC.CtnType = 'LOOSE'
+                  AND TC.LocType = @c_LocType
+                  GROUP BY TC.BatchNo, TC.CartonNo
+                  HAVING SUM(TC.CBM) + @n_CBM <= @n_CSOSMaxCBM
+                  ORDER BY TC.BatchNo, TC.CartonNo
+
+                  IF @b_Debug = 2
+                  BEGIN
+                     SELECT * FROM #TMP_CZ TC WHERE TC.CtnType = 'loose'
+                     SELECT @c_Sku AS '@c_Sku'
+                          , @n_TotalCBM AS '@n_TotalCBM'
+                          , @n_CartonNo AS '@n_CartonNo'
+                          , @n_CSOSMaxCBM AS '@n_CSOSMaxCBM'
+                          , @n_TotalCBM + @n_CBM  AS '@n_TotalCBM + @n_CBM'
+                  END
+
+                  IF ISNULL(@n_TotalCBM,0) = 0 AND ISNULL(@n_CartonNo,0) = 0   --New carton
+                  BEGIN
+                     SELECT @c_BatchNo = MAX(Batchno)
+                     FROM #TMP_CZ TC
+
+                     SELECT @n_CartonNo = MAX(CartonNo) + 1
+                     FROM #TMP_CZ TC
+                     WHERE BatchNo = @c_BatchNo
+
+                     SET @n_TotalCBM = @n_CBM
+                  END
+                  ELSE
+                  BEGIN
+                     SET @n_TotalCBM = @n_TotalCBM + @n_CBM
+                  END
+               END
                
+               IF (@n_CartonNo > @n_CSOSMaxCarton) OR @c_BatchNo = ''
+               BEGIN
+                  SET @c_BatchNo = ''
+
+                  EXECUTE nspg_getkey  
+                      @c_KeyName
+                    , 9  
+                    , @c_BatchNo          OUTPUT  
+                    , @b_success          OUTPUT  
+                    , @n_err              OUTPUT  
+                    , @c_errmsg           OUTPUT  
+               
+                  IF NOT @b_success = 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     SET @n_Err = 63085   -- Should Be Set To The SQL Errmessage but I don't know how to do so. 
+                     SET @c_errmsg = 'NSQL' + CONVERT(char(5),@n_err)   
+                                       + ': Unable to Obtain BatchNo. (ispRLWAV53) ( SQLSvr MESSAGE='   
+                                         + @c_errmsg + ' ) ' 
+                     GOTO QUIT_SP                     
+                  END
+
+                  SET @c_BatchNo = 'S' + @c_BatchNo
+               END
+
                IF (@n_CartonNo > @n_CSOSMaxCarton)
                BEGIN
                   SET @n_CartonNo = 1
                   SET @n_TotalCBM = @n_CBM
                END
-
-               SET @c_BatchNo = ''
-               
-               EXECUTE nspg_getkey  
-                   @c_KeyName
-                 , 9  
-                 , @c_BatchNo          OUTPUT  
-                 , @b_success          OUTPUT  
-                 , @n_err              OUTPUT  
-                 , @c_errmsg           OUTPUT  
-               
-               IF NOT @b_success = 1  
-               BEGIN  
-                  SET @n_continue = 3  
-                  SET @n_Err = 63085   -- Should Be Set To The SQL Errmessage but I don't know how to do so. 
-                  SET @c_errmsg = 'NSQL' + CONVERT(char(5),@n_err)   
-                                    + ': Unable to Obtain BatchNo. (ispRLWAV53) ( SQLSvr MESSAGE='   
-                                      + @c_errmsg + ' ) ' 
-                  GOTO QUIT_SP                     
-               END
-
-               SET @c_BatchNo = 'S' + @c_BatchNo
             END
             ELSE
             BEGIN
                SET @n_TotalCBM = @n_TotalCBM + @n_CBM
             END
 
-            INSERT INTO #TMP_CZ (CartonNo, SKU, LOC, LocType, CaseCnt, Qty, CBM, CtnType, BatchNo)
-            SELECT @n_CartonNo, T1.SKU, T1.Loc, T1.LocType, T1.CaseCnt, T1.Qty, @n_CBM, 'LOOSE', @c_BatchNo
-            FROM #TMP_SUSR4 T1
-            WHERE T1.SKU = @c_Sku
+            INSERT INTO #TMP_CZ (CartonNo, SKU, SUSR4, LocType, CaseCnt, Qty, CBM, CtnType, BatchNo, OrderKey, PickdetailKey)
+            SELECT @n_CartonNo, @c_Sku, '', @c_LocType, 0, @n_Qty, @n_CBM, 'LOOSE', @c_BatchNo, @c_Orderkey, @c_PickdetailKey
 
-            FETCH NEXT FROM CUR_PRECTN_CSOS_LOOSE INTO @c_Sku, @n_Qty, @n_CBM
+            SET @c_PrevOrderkey = @c_Orderkey
+            SET @c_PrevLocType = @c_LocType
+
+            FETCH NEXT FROM CUR_PRECTN_CSOS_LOOSE INTO @c_Orderkey, @c_Sku, @n_Qty, @n_CBM, @c_PickdetailKey, @c_LocType, @c_ProductType
          END
          CLOSE CUR_PRECTN_CSOS_LOOSE
          DEALLOCATE CUR_PRECTN_CSOS_LOOSE
 
+         --DELETE FROM #TMP_CZ WHERE CtnType = 'PARTIAL'
+         --SELECT * FROM #TMP_CZ WHERE CtnType = 'LOOSE'
          --Update CaseID to Pickdetail / Split Pickdetail
+         UPD_PD:
          IF (@n_Continue = 1 or @n_Continue = 2)
          BEGIN
             DECLARE CUR_UPD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-            SELECT DISTINCT TC.CartonNo, TC.SKU, TC.LOC, TC.Qty, TC.BatchNo
+            SELECT DISTINCT TC.CartonNo, TC.SKU, TC.SUSR4, TC.Qty, TC.BatchNo, TC.OrderKey
+                          , CASE WHEN TC.CtnType = 'LOOSE' THEN TC.PickdetailKey ELSE '' END
             FROM #TMP_CZ TC
          
             OPEN CUR_UPD
          
-            FETCH NEXT FROM CUR_UPD INTO @n_CartonNo, @c_SKU, @c_Loc, @n_packqty, @c_BatchNo
+            FETCH NEXT FROM CUR_UPD INTO @n_CartonNo, @c_SKU, @c_SUSR4, @n_packqty, @c_BatchNo, @c_Orderkey, @c_curPickdetailkey
          
             WHILE @@FETCH_STATUS <> -1
             BEGIN
-               SELECT @c_pickdetailkey = ''  
-         
+               SELECT @c_pickdetailkey = '' 
+
                WHILE @n_packqty > 0  
                BEGIN
                   SET @n_cnt = 0  
-         
-                  SELECT TOP 1 @n_cnt = 1
-                              ,@n_pickqty = PICKDETAIL.Qty
-                              ,@c_pickdetailkey = PICKDETAIL.Pickdetailkey 
-                  FROM #PickDetail_WIP Pickdetail WITH (NOLOCK) 
-                  JOIN ORDERS WITH (NOLOCK) ON PICKDETAIL.Orderkey = ORDERS.Orderkey 
-                  JOIN WAVEDETAIL WITH (NOLOCK) ON WAVEDETAIL.Orderkey = PICKDETAIL.Orderkey  
-                  WHERE WAVEDETAIL.WaveKey = @c_Wavekey  
-                  AND PICKDETAIL.Sku = @c_SKU  
-                  AND PICKDETAIL.LOC = @c_Loc
-                  AND PICKDETAIL.storerkey = @c_Storerkey
-                  AND PICKDETAIL.CaseID = ''
-                  AND PICKDETAIL.Pickdetailkey > @c_pickdetailkey   
-                  ORDER BY PICKDETAIL.Pickdetailkey
-         
+
+                  --IF @c_CallFrom = 'FULL_CTN'
+                  --BEGIN
+                  --   SET @c_SQLWhere = 'AND PICKDETAIL.CaseID = '''' '
+                  --END
+                  --ELSE
+                  --BEGIN
+                  --   SET @c_SQLWhere = 'AND PICKDETAIL.CaseID = ''000'' '
+                  --END
+
+                  SET @c_SQLWhere = 'AND PICKDETAIL.CaseID = '''' '
+
+                  SET @c_SQL = N'SELECT TOP 1 @n_cnt = 1 '
+                            +  '            , @n_pickqty = PICKDETAIL.Qty '
+                            +  '            , @c_pickdetailkey = PICKDETAIL.Pickdetailkey '
+                            +  'FROM #PickDetail_WIP Pickdetail WITH (NOLOCK) '
+                            +  'JOIN ORDERS WITH (NOLOCK) ON PICKDETAIL.Orderkey = ORDERS.Orderkey '
+                            +  'JOIN WAVEDETAIL WITH (NOLOCK) ON WAVEDETAIL.Orderkey = PICKDETAIL.Orderkey '   
+                            +  'JOIN SKU WITH (NOLOCK) ON SKU.Storerkey = PICKDETAIL.Storerkey AND SKU.SKU = PICKDETAIL.SKU '
+                            +  'WHERE WAVEDETAIL.WaveKey = @c_wavekey '
+                            +  'AND PICKDETAIL.Sku = CASE WHEN ISNULL(@c_SKU,'''') = '''' THEN PICKDETAIL.Sku ELSE @c_SKU END '
+                            +  'AND SKU.SUSR4 = CASE WHEN ISNULL(@c_SUSR4,'''') = '''' THEN SKU.SUSR4 ELSE @c_SUSR4 END '
+                            +  'AND PICKDETAIL.Pickdetailkey = CASE WHEN ISNULL(@c_curPickdetailkey,'''') = '''' THEN PICKDETAIL.Pickdetailkey ELSE @c_curPickdetailkey END '
+                            +  'AND PICKDETAIL.storerkey = @c_storerkey '
+                            +  'AND PICKDETAIL.Orderkey = @c_Orderkey '
+                            +  'AND PICKDETAIL.UOM IN (''6'',''7'') '
+                            +  @c_SQLWhere
+                            --+  'AND PICKDETAIL.Pickdetailkey > @c_pickdetailkey   '
+                            +  'ORDER BY PICKDETAIL.Pickdetailkey '
+
+                 SET @c_SQLArgument = N' @n_cnt              INT            OUTPUT'  
+                                    +  ',@n_pickqty          INT            OUTPUT'  
+                                    +  ',@c_PickDetailKey    NVARCHAR(10)   OUTPUT'  
+                                    +  ',@c_wavekey          NVARCHAR(10)'    
+                                    +  ',@c_StorerKey        NVARCHAR(15)' 
+                                    +  ',@c_SKU              NVARCHAR(20)'
+                                    +  ',@c_SUSR4            NVARCHAR(50)'
+                                    +  ',@c_Orderkey         NVARCHAR(10)'
+                                    +  ',@c_curPickdetailkey NVARCHAR(10)'
+                
+                 EXEC sp_executesql @c_SQL  
+                                 ,  @c_SQLArgument  
+                                 ,  @n_Cnt            OUTPUT  
+                                 ,  @n_pickqty        OUTPUT   
+                                 ,  @c_PickDetailKey  OUTPUT  
+                                 ,  @c_wavekey       
+                                 ,  @c_StorerKey  
+                                 ,  @c_SKU      
+                                 ,  @c_SUSR4
+                                 ,  @c_Orderkey
+                                 ,  @c_curPickdetailkey
+
                   IF @n_cnt = 0  
                      BREAK
                   
@@ -1149,7 +1457,7 @@ BEGIN
                       DropID, Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType,  
                       ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod,  
                       WaveKey, EffectiveDate, OptimizeCop, ShipFlag, PickSlipNo, Channel_ID,
-                      TaskDetailKey, Notes
+                      TaskDetailKey, Notes, WIP_Refno
                      )  
                      SELECT @c_newpickdetailkey  
                           , ''  
@@ -1159,7 +1467,7 @@ BEGIN
                           , Loc, ID, PackKey, UpdateSource, CartonGroup, CartonType
                           , ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod 
                           , WaveKey, EffectiveDate, '9', ShipFlag, PickSlipNo, Channel_ID
-                          , TaskDetailKey, Notes
+                          , TaskDetailKey, Notes, @c_SourceType
                      FROM #PickDetail_WIP (NOLOCK)  
                      WHERE PickdetailKey = @c_pickdetailkey  
                
@@ -1196,16 +1504,26 @@ BEGIN
                   END  
                END -- While packqty > 0
                NEXT_LOOP_UPD:
-               FETCH NEXT FROM CUR_UPD INTO @n_CartonNo, @c_SKU, @c_Loc, @n_packqty, @c_BatchNo
+               FETCH NEXT FROM CUR_UPD INTO @n_CartonNo, @c_SKU, @c_SUSR4, @n_packqty, @c_BatchNo, @c_Orderkey, @c_curPickdetailkey
             END
             CLOSE CUR_UPD
             DEALLOCATE CUR_UPD
-         END
 
+            --IF @c_CallFrom = 'FULL_CTN'
+            --BEGIN
+            --   --SELECT * FROM #TMP_CZ WHERE CtnType = 'FULL'
+            --   DELETE FROM #TMP_CZ WHERE CtnType = 'FULL'
+            --   GOTO FULL_CTN
+            --END
+         END
+         --SELECT * FROM #TMP_CZ WHERE CtnType = 'loose'
+
+         GEN_LABELNO:   --WL04 E
          DECLARE CUR_LABELNO CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT DISTINCT PDW.PickSlipNo AS BatchNo
                        , PDW.CaseID
          FROM #PickDetail_WIP PDW
+         WHERE PDW.UOM IN ('2','6','7') AND PDW.CaseID NOT IN ('')   --WL01
          ORDER BY PDW.PickSlipNo, PDW.CaseID
          
          OPEN CUR_LABELNO
@@ -1253,14 +1571,14 @@ BEGIN
                   SET @c_Keyname = 'PackNo' + LTRIM(RTRIM(@c_PackNo_Long))
                    
                EXECUTE nspg_getkey
-               @c_Keyname ,
-               7,
-               @c_nCounter     Output ,
-               @b_success      = @b_success output,
-               @n_err          = @n_err output,
-               @c_errmsg       = @c_errmsg output,
-               @b_resultset    = 0,
-               @n_batch        = 1
+                  @c_Keyname ,
+                  7,
+                  @c_nCounter     OUTPUT ,
+                  @b_success      = @b_success OUTPUT,
+                  @n_err          = @n_err OUTPUT,
+                  @c_errmsg       = @c_errmsg OUTPUT,
+                  @b_resultset    = 0,
+                  @n_batch        = 1
                   
                SET @c_LabelNo = @c_Identifier + @c_Packtype + RTRIM(@c_VAT) + RTRIM(@c_nCounter) --+ @n_CheckDigit
             
@@ -1322,9 +1640,78 @@ BEGIN
          END
          CLOSE CUR_LABELNO
          DEALLOCATE CUR_LABELNO
+
+         --WL04 S
+         --UOM 2 Case Shuttle Loc - Generate Packheader and Packdetail
+         IF @n_Continue IN (1,2)
+         BEGIN
+            DECLARE CUR_GENPACK CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT PH.PickHeaderKey, PDW.OrderKey, PDW.Notes AS LabelNo, PDW.SKU, SUM(PDW.Qty)
+            FROM #PickDetail_WIP PDW
+            JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'CSDEFLOC' 
+                                     AND CL.Storerkey = PDW.Storerkey 
+                                     AND CL.Code = @c_Facility
+                                     AND CL.Long = PDW.Loc
+            JOIN PICKHEADER PH (NOLOCK) ON PH.OrderKey = PDW.OrderKey
+            WHERE PDW.UOM = '2'
+            AND PDW.WaveKey = @c_Wavekey
+            AND PDW.WIP_RefNo = @c_SourceType
+            AND NOT EXISTS (SELECT 1 FROM PACKHEADER PHDR (NOLOCK) WHERE PHDR.PickSlipNo = PH.PickHeaderKey)
+            GROUP BY PH.PickHeaderKey, PDW.OrderKey, PDW.Notes, PDW.SKU
+            
+            OPEN CUR_GENPACK
+            
+            FETCH NEXT FROM CUR_GENPACK INTO @c_Pickslipno, @c_Orderkey, @c_LabelNo, @c_SKU, @n_Qty
+            
+            WHILE @@FETCH_STATUS <> -1
+            BEGIN
+               IF NOT EXISTS (SELECT 1 FROM PACKHEADER (NOLOCK) WHERE Pickslipno = @c_Pickslipno)
+               BEGIN
+                  INSERT INTO PACKHEADER (Route, OrderKey, OrderRefNo, Loadkey, Consigneekey
+                                        , StorerKey, PickSlipNo, CartonGroup)      
+                  SELECT O.[Route], O.OrderKey, SUBSTRING(O.ExternOrderKey, 1, 18), O.LoadKey, O.ConsigneeKey
+                       , O.Storerkey, @c_Pickslipno, ST.CartonGroup    
+                  FROM PICKHEADER PH (NOLOCK)      
+                  JOIN ORDERS O (NOLOCK) ON (PH.Orderkey = O.Orderkey)      
+                  JOIN STORER ST (NOLOCK) ON (ST.StorerKey = O.StorerKey)
+                  WHERE PH.PickHeaderKey = @c_Pickslipno
+
+                  SELECT @n_err = @@ERROR  
+
+                  IF @n_err <> 0  
+                  BEGIN  
+                     SELECT @n_continue = 3  
+                     SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 63108   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+                     SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Generate Packheader Failed (ispRLWAV53)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+                     GOTO QUIT_SP
+                  END  
+               END
+
+               IF EXISTS (SELECT 1 FROM PACKHEADER (NOLOCK) WHERE Pickslipno = @c_Pickslipno)
+               BEGIN
+                  INSERT INTO PACKDETAIL (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate)  
+                  VALUES (@c_PickSlipNo, 0, @c_LabelNo, '00000', @c_StorerKey, @c_SKU,  
+                          @n_Qty, SUSER_SNAME(), GETDATE(), SUSER_SNAME(), GETDATE())
+
+                  SELECT @n_err = @@ERROR  
+
+                  IF @n_err <> 0  
+                  BEGIN  
+                     SELECT @n_continue = 3  
+                     SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 63109   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+                     SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Generate Packdetail Failed (ispRLWAV53)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) ' 
+                     GOTO QUIT_SP
+                  END  
+               END
+
+               FETCH NEXT FROM CUR_GENPACK INTO @c_Pickslipno, @c_Orderkey, @c_LabelNo, @c_SKU, @n_Qty
+            END
+            CLOSE CUR_GENPACK
+            DEALLOCATE CUR_GENPACK
+         END
+         --WL04 E
       END
    END
-
    -----Update pickdetail_WIP work in progress staging table back to pickdetail 
    IF @n_continue = 1 or @n_continue = 2
    BEGIN
@@ -1347,8 +1734,6 @@ BEGIN
 
    IF @b_Debug IN (1,99)
    BEGIN
-      SELECT *FROM #TMP_SUSR4
-
       SELECT *
       FROM #TMP_CZ
       ORDER BY BatchNo, CartonNo
@@ -1445,6 +1830,12 @@ BEGIN
    BEGIN
       CLOSE CUR_LABELNO   
       DEALLOCATE CUR_LABELNO    
+   END 
+
+   IF (SELECT CURSOR_STATUS('LOCAL','CUR_GENPACK')) >=0 
+   BEGIN
+      CLOSE CUR_GENPACK   
+      DEALLOCATE CUR_GENPACK    
    END 
 
    WHILE @@TRANCOUNT < @n_StartTranCnt
