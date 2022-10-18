@@ -25,6 +25,7 @@ GO
 /* 29-SEP-2022  WZPang   1.2  Insert new Codelkup                       */  
 /* 07-Oct-2022  WLChooi  1.3  Fix - JOIN PICKHEADER as packing not start*/
 /*                            yet (WL01)                                */
+/* 19-OCT-2022  WZPang   1.4  Update Field Mapping						*/
 /************************************************************************/              
 CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTNTM_001] (      
       @c_loadkey NVARCHAR(10)          
@@ -47,7 +48,8 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTNTM_001] (
                ExternOrderkey   NVARCHAR(30),      
                Type             NVARCHAR(10),      
                Notes            NVARCHAR(500),      
-               Notes2           NVARCHAR(500),      
+               Notes2           NVARCHAR(500),
+			   BuyerPO			NVARCHAR(20),
                Consigneekey     NVARCHAR(20),      
                C_company        NVARCHAR(100),      
                C_Address1       NVARCHAR(100),      
@@ -75,7 +77,7 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTNTM_001] (
                ND9              NVARCHAR(500),  
                ND10             NVARCHAR(500),  
                ND11             NVARCHAR(500),  
-               ND12     NVARCHAR(500),  
+               ND12				NVARCHAR(500),  
                ND13             NVARCHAR(500),  
                ND14             NVARCHAR(500),  
                ND15             NVARCHAR(500),  
@@ -91,7 +93,8 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTNTM_001] (
                ExternOrderkey,         
                Type,                   
                Notes,                  
-               Notes2,                 
+               Notes2,
+			   BuyerPO,		--WZ03
                Consigneekey,           
                C_company,              
                C_Address1,             
@@ -133,7 +136,8 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTNTM_001] (
           ORDERS.ExternOrderkey,      
           ORDERS.Type,      
           ORDERS.Notes,      
-          ORDERS.Notes2,      
+          ORDERS.Notes2,
+		  ORDERS.BuyerPO,	--WZ03
           ORDERS.Consigneekey,      
           ORDERS.C_company,      
           ORDERS.C_Address1,      
@@ -201,7 +205,8 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTNTM_001] (
             ORDERS.ExternOrderkey,      
             ORDERS.Type,      
             ORDERS.Notes,      
-            ORDERS.Notes2,      
+            ORDERS.Notes2,
+			ORDERS.BuyerPO,		--WZ03
             ORDERS.Consigneekey,      
             ORDERS.C_company,      
             ORDERS.C_Address1,      
@@ -243,3 +248,8 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTNTM_001] (
       
       
 END -- procedure   
+GO
+GRANT EXECUTE ON [dbo].[isp_RPT_LP_PLISTNTM_001] TO nSQL 
+GO
+GRANT EXECUTE ON [dbo].[isp_RPT_LP_PLISTNTM_001] TO JReportRole
+GO
