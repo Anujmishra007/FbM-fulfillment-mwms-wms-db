@@ -62,25 +62,36 @@ BEGIN
       IF @nStep = 4 -- SKU
       BEGIN
          DECLARE  @cRDSKU   NVARCHAR(20),
-                  @nRDQTY   INT,
                   @cSKUUOM    NVARCHAR(20),
-                  @cReceiptLineNumberOutput NVARCHAR(20)
+                  @cReceiptLineNumberOutput NVARCHAR(20),
+                  @nRDQTY  INT,
+                  @nCounter INT 
 
          IF @nInputKey = 0 -- ENTER
          BEGIN
+
+            UPDATE receiptdetail WITH (ROWLOCK) 
+            SET beforereceivedqty=0
+            WHERE receiptkey=@cReceiptKey  
+
+            IF @@ERROR<>0
+            BEGIN
+               GOTO QUIT
+            END
+
             DECLARE C_Receiptdetail CURSOR LOCAL FAST_FORWARD READ_ONLY FOR    
-            SELECT sku, SUM(QtyExpected-BeforeReceivedQty),UOM,ID    
+            SELECT sku,SUM(qtyexpected),UOM 
             FROM receiptdetail WITH (NOLOCK)    
             WHERE receiptkey=@cReceiptKey  
             AND   storerkey=@cStorerKey
-            AND   QtyExpected > BeforeReceivedQty
-            group by   sku,UOM,ID 
+            group by   sku,UOM
             
             OPEN C_Receiptdetail          
-            FETCH NEXT FROM C_Receiptdetail INTO  @cRDSKU ,@nRDQTY,@cSKUUOM ,@cID  
+            FETCH NEXT FROM C_Receiptdetail INTO  @cRDSKU ,@nRDQTY,@cSKUUOM  
             WHILE (@@FETCH_STATUS <> -1)    
             BEGIN    
-                     EXEC rdt.rdt_Receive_V7
+
+               EXEC rdt.rdt_Receive_V7
                   @nFunc         = @nFunc,
                   @nMobile       = @nMobile,
                   @cLangCode     = @cLangCode,
@@ -119,20 +130,7 @@ BEGIN
                   @cSubreasonCode = '',
                   @cReceiptLineNumberOutput = @cReceiptLineNumberOutput OUTPUT
 
-                  IF EXISTS (SELECT 1 from receiptdetail (NOLOCK)
-                              WHERE receiptkey=@cReceiptKey
-                              AND receiptlinenumber=@cReceiptLineNumberOutput
-                               AND duplicatefrom<>''
-                               AND ID ='')
-                  BEGIN
-                     UPDATE RECEIPTDETAIL WITH (ROWLOCK)
-                     SET userdefine08= 0
-                     where receiptkey=@cReceiptKey
-                        and receiptlinenumber=@cReceiptLineNumberOutput
-                     
-                  END
-
-               FETCH NEXT FROM C_Receiptdetail INTO  @cRDSKU ,@nRDQTY,@cSKUUOM,@cID 
+               FETCH NEXT FROM C_Receiptdetail INTO  @cRDSKU ,@nRDQTY,@cSKUUOM 
             END
 
          END
