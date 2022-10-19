@@ -1,6 +1,4 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[RDT].[rdtfnc_Move_SKU_Lottable_V7]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [RDT].[rdtfnc_Move_SKU_Lottable_V7]
-GO
+
 
 SET ANSI_NULLS OFF
 GO
@@ -25,7 +23,7 @@ GO
 /* 17-Aug-2022 1.5  YeeKung  WMS-20075 Fix fromID (yeekung03)           */
 /************************************************************************/  
   
-CREATE  PROCEDURE [RDT].[rdtfnc_Move_SKU_Lottable_V7] (  
+CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Move_SKU_Lottable_V7] (  
    @nMobile    INT,  
    @nErrNo     INT  OUTPUT,  
    @cErrMsg    NVARCHAR( 20) OUTPUT -- screen limitation, 20 char max  
