@@ -1,6 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[RDT].[rdt_513ExtVal07]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [RDT].[rdt_513ExtVal07]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -16,9 +13,10 @@ GO
 /* Date         Author    Ver.  Purposes                                      */
 /* 2020-08-27   Chermaine 1.0   WMS-14688 Created                             */
 /* 2021-01-27   James     1.1   WMS-16185 Add To Loc check (james01)          */
+/* 2022-10-13   YeeKung   1.2   WMS-20987 Add To Loc check (yeekung01)        */
 /******************************************************************************/
 
-CREATE PROCEDURE [RDT].[rdt_513ExtVal07]
+CREATE OR ALTER PROCEDURE [RDT].[rdt_513ExtVal07]
    @nMobile         INT,
    @nFunc           INT,
    @cLangCode       NVARCHAR( 3),
@@ -58,15 +56,38 @@ BEGIN
             SELECT @cFrStatus = STATUS, @cFrPutawayZone = Putawayzone, @cFrLOCCat = locationcategory FROM Loc WITH (NOLOCK) WHERE LOC = @cFromLOC
             SELECT @cToStatus = STATUS, @cToPutawayZone = Putawayzone, @cToLOCCat = locationcategory FROM Loc WITH (NOLOCK) WHERE LOC = @cToLOC
 
-            -- (james01)
-            IF @cFrStatus = 'OK' AND @cFrLOCCat = 'STAGING'
+            IF @cFrPutawayZone <>'CRWZONE'
             BEGIN
-               IF @cToStatus <> 'OK' OR @cToLOCCat NOT IN ('MEZZNINE','HB') OR @cFrPutawayZone <> @cToPutawayZone
-            	BEGIN
-            		SET @nErrNo = 158051
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff LOC
-                  GOTO Quit
-            	END
+               -- (james01)
+               IF @cFrStatus = 'OK' AND @cFrLOCCat = 'STAGING'
+               BEGIN
+                  IF @cToStatus <> 'OK' OR @cToLOCCat NOT IN ('MEZZNINE','HB') OR @cFrPutawayZone <> @cToPutawayZone
+            	   BEGIN
+            		   SET @nErrNo = 158051
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff LOC
+                     GOTO Quit
+            	   END
+               END
+            END
+            ELSE
+            BEGIN
+
+               -- Receiving stage
+               IF @cFrLOCCat = 'STAGING'
+               BEGIN
+                  -- Check RFPutaway booking
+                  IF NOT EXISTS( SELECT TOP 1 1
+                     FROM RFPutaway WITH (NOLOCK)
+                     WHERE FromLOC = @cFromLOC
+                        AND StorerKey = @cStorerKey 
+                        AND SKU = @cSKU
+                        AND SuggestedLOC = @cToLOC)
+                  BEGIN
+                     SET @nErrNo = 158052
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff LOC
+                     GOTO QUIT
+                  END
+               END
             END
          END
       END
