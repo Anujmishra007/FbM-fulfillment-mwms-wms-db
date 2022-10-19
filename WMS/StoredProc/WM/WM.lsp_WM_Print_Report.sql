@@ -13,7 +13,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.5                                                    */
+/* PVCS Version: 1.7                                                    */
 /*                                                                      */
 /* Version: 8.0                                                         */
 /*                                                                      */
@@ -36,6 +36,9 @@ GO
 /* 2022-01-03  Wan05    1.5   Fixed. Set @n_Continue =  2 if Error      */
 /*                            Fixed. Add Criteria parameters            */
 /*                            Add Call to PreGenRptData                 */
+/* 2022-07-06  WLChooi  1.6   Fixed. Move PRINT_START Label to before   */
+/*                            PreGenRptDataSP (WL01)                    */
+/* 2022-10-14  WLChooi  1.7   Fixed. Extend Char Size for RowID (WL02)  */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_WM_Print_Report]
            @c_ModuleID           NVARCHAR(30)
@@ -590,7 +593,7 @@ BEGIN
                GOTO NEXT_REC
             END
          
-            GOTO PRINT_START
+            --GOTO PRINT_START   --WL01
          END
  
          --(Wan04) - Start Move UP 
@@ -778,6 +781,7 @@ BEGIN
             END        
          END
 
+         PRINT_START:   --WL01
          --(Wan05) - START
          IF @c_PreGenRptData_SP <> ''
          BEGIN
@@ -786,7 +790,7 @@ BEGIN
                    , p.[Name]
               FROM sys.parameters AS p (NOLOCK) WHERE p.[object_id] = OBJECT_ID(@c_PreGenRptData_SP)
             )
-            SELECT @c_SQL = STRING_AGG (SPP.[Name] + '=' + CASE WHEN SPP.[Name] = '@c_PreGenRptData' THEN '''Y''' ELSE '@c_Parm' + CONVERT(CHAR(1),SPP.RowID) END
+            SELECT @c_SQL = STRING_AGG (SPP.[Name] + '=' + CASE WHEN SPP.[Name] = '@c_PreGenRptData' THEN '''Y''' ELSE '@c_Parm' + CONVERT(CHAR(5),SPP.RowID) END   --WL02
                                        , ',') 
                               WITHIN GROUP ( ORDER BY SPP.RowID ASC )
             FROM SPP 
@@ -843,7 +847,7 @@ BEGIN
          END
          --(Wan05) - END
          --(Wan01) - START
-         PRINT_START:
+         --PRINT_START:   --WL01
          IF @c_PrintType IN ( 'JReport', 'LogiReport')   --Wan02
          BEGIN
             EXEC WM.lsp_WM_Get_WebReport_URL

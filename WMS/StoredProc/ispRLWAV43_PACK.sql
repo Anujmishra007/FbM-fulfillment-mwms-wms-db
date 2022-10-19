@@ -12,7 +12,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 2.0                                                    */
+/* PVCS Version: 2.3                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -45,6 +45,8 @@ GO
 /*                            on DP Loc Sequence                        */
 /* 2022-08-10  Wan12    2.2   WMS-20419 -TH-Adidas Pre-Cartonization New*/
 /*                            Logic (Customize)                         */
+/* 2022-10-18  Wan13    2.3   Fixed. @n_Status_FC not initialize for new*/
+/*                            orderkey                                  */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispRLWAV43_PACK]
    @c_Wavekey     NVARCHAR(10)    
@@ -911,6 +913,14 @@ BEGIN
       FROM #PICKDETAIL_WIP AS pw
       WHERE pw.Orderkey = @c_Orderkey
       ORDER BY pw.CartonSeqNo DESC
+      
+      --(Wan13) - START
+      SET @n_Status_FC = '9' 
+      IF @c_FullSkuCarton = 'Y'  
+      BEGIN  
+         SET @n_Status_FC = '0'  
+      END  
+      --(Wan13) - END  
 
       SET @n_PackAccessQty = NULL
       SET @n_SplitToAccessQty = 0                                                --Wan02 
