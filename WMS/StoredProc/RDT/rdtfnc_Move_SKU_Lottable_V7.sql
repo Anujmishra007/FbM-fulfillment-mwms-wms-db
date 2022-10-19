@@ -22,6 +22,7 @@ GO
 /* 06-Jan-2020 1.2  YeeKung  WMS-11540 Add MultiBarcode (yeekung01)     */  
 /* 15-03-2021  1.3  James    WMS-16464 Add suggested loc sp (james02)   */
 /* 12-Aug-2021 1.4  YeeKung  WMS-17528 Add extendedvalidate (yeekung02) */
+/* 17-Aug-2022 1.5  YeeKung  WMS-20075 Fix fromID (yeekung03)           */
 /************************************************************************/  
   
 CREATE  PROCEDURE [RDT].[rdtfnc_Move_SKU_Lottable_V7] (  
@@ -114,6 +115,7 @@ DECLARE
    @cMatchSuggestedLoc     NVARCHAR( 1),  -- (james02)
    @nPABookingKey          INT,           -- (james02)
    @nFlowThruToIDScn       INT,           -- (james02)
+   @cPrevOutField15        NVARCHAR(20),  --(yeekung03)
    
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),  
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),  
@@ -195,7 +197,8 @@ SELECT
    @cExtendedValidateSP = V_String17,  
    @cDefaultSKU2Move    = V_String18,  
    @cDefaultAvlQty2Move = V_String19,  
-   @cMultiSKUBarcode    = V_String20, -- (yeekung01)  
+   @cMultiSKUBarcode    = V_String20, -- (yeekung01) 
+   @cPrevOutField15     = V_String21, 
    
    @nFromStep           = V_FromStep,  --(yeekung01)  
    @nFromScn            = V_FromScn,   --(yeekung01)  
@@ -791,6 +794,7 @@ BEGIN
          -- Go to dynamic lottable screen  
          SET @cOutField13=''  
          SET @cInField13=''  
+         SET @cPrevOutField15 = @cOutField15
          SET @nScn = 3990  
          SET @nStep = @nStep_Lottables  
       END  
@@ -810,6 +814,8 @@ BEGIN
             SET @nPQTY_Avail = @nQTY_Avail / @nPUOM_Div -- Calc QTY in preferred UOM  
             SET @nMQTY_Avail = @nQTY_Avail % @nPUOM_Div -- Calc the remaining in master unit  
          END  
+         
+        	SET @cID =@cFromID --(yeekung01)
   
          -- Prepare next screen var  
          SET @nPQTY_Move = 0  
@@ -1097,7 +1103,10 @@ BEGIN
    END  
    GOTO Quit  
   
-   Step_Lottables_Fail:  
+   Step_Lottables_Fail:
+ 	BEGIN      
+      SET @cOutField15 = @cPrevOutField15
+   END 
 END  
 GOTO Quit  
   
@@ -2185,7 +2194,8 @@ BEGIN
       V_String17 = @cExtendedValidateSP,  
       V_String18 = @cDefaultSKU2Move,  
       V_String19 = @cDefaultAvlQty2Move,  
-      V_String20 = @cMultiSKUBarcode, -- (yeekung01)  
+      V_String20 = @cMultiSKUBarcode, -- (yeekung01) 
+      V_String21 = @cPrevOutField15, --(yeekung03) 
       
       V_FromStep = @nFromStep, --(yeekung01)  
       V_FromScn  = @nFromScn,  --(yeekung01)  
