@@ -14,7 +14,7 @@ GO
 /* Called By: n_cst_packcarton_ecom                                     */        
 /*          : ue_getcartontrackno                                       */        
 /*        :                                                             */        
-/* PVCS Version: 1.1                                                    */        
+/* PVCS Version: 1.2                                                    */        
 /*                                                                      */        
 /* Version: 7.0                                                         */        
 /*                                                                      */        
@@ -25,6 +25,8 @@ GO
 /* 06-APR-2022 Mingle   1.0   Created(WMS-19152)                        */  
 /* 06-APR-2022 Mingle   1.0   DevOps Combine Script                     */    
 /* 04-Aug-2022 WLChooi  1.1   WMS-20403 Get Info from Option5 (WL01)    */
+/* 30-Sep-2022 WLChooi  1.2   WMS-20913 Get Info from Option5 filter    */
+/*                            by ECOM Platform (WL02)                   */
 /************************************************************************/        
 CREATE OR ALTER PROC [dbo].[isp_EPackCtnTrack09]        
          @c_PickSlipNo  NVARCHAR(10)         
@@ -69,6 +71,8 @@ BEGIN
          , @c_Option3         NVARCHAR(50) = ''   --WL01
          , @c_Option4         NVARCHAR(50) = ''   --WL01
          , @c_Option5         NVARCHAR(4000) = '' --WL01
+         , @c_ECOMPlatform    NVARCHAR(20) = ''   --WL02
+         , @c_ECPlatform_JSON NVARCHAR(MAX) = ''   --WL02
 
    SET @b_Success  = 1        
    SET @n_err      = 0        
@@ -86,6 +90,7 @@ BEGIN
          ,@c_Storerkey     = PACKHEADER.Storerkey
          ,@c_TaskBatchNo   = PACKHEADER.TaskBatchNo 
          ,@c_Facility      = ORDERS.Facility
+         ,@c_ECOMPlatform  = ORDERS.ECOM_Platform   --WL02
    FROM PACKHEADER WITH (NOLOCK)    
    JOIN ORDERS WITH (NOLOCK) ON ORDERS.OrderKey = PACKHEADER.OrderKey
    WHERE PickSlipNo = @c_PickSlipNo  
@@ -252,17 +257,62 @@ BEGIN
    SEND_ITF: -- Send ITF to get Tracking # for Next CartonNo
    BEGIN TRAN
    
+   --WL02 S
    --WL01 S
-   SELECT @c_Tablename = dbo.fnc_GetParamValueFromString('@c_Tablename', @c_Option5, 'WSCRPKADDCN')  
+   --SELECT @c_Tablename = dbo.fnc_GetParamValueFromString('@c_Tablename', @c_Option5, 'WSCRPKADDCN')  
+
+   --IF ISNULL(@c_Tablename, '') = ''
+   --   SET @c_Tablename = 'WSCRPKADDCN' 
+
+   --SELECT @c_DataStream = dbo.fnc_GetParamValueFromString('@c_DataStream', @c_Option5, '6157')  
+
+   --IF ISNULL(@c_DataStream, '') = ''
+   --   SET @c_DataStream = '6157' 
+   --WL01 E
+
+   SET @c_Tablename = ''
+   SET @c_DataStream = ''
+   
+   SELECT @c_Tablename = dbo.fnc_GetParamValueFromString('@c_Tablename', @c_Option5, '') 
+   SELECT @c_DataStream = dbo.fnc_GetParamValueFromString('@c_DataStream', @c_Option5, '')  
+
+   IF ISNULL(@c_Tablename,'') = '' AND ISNULL(@c_DataStream,'') = ''
+   BEGIN
+      SELECT @c_ECPlatform_JSON = dbo.fnc_GetParamValueFromString('@c_ECPlatform_JSON', @c_Option5, '')  
+      
+      IF ISNULL(TRIM(@c_ECPlatform_JSON),'') <> ''
+      BEGIN
+         DECLARE @T TABLE (
+              ECOM_Platform   NVARCHAR(100) NULL
+            , Tablename       NVARCHAR(100) NULL
+            , Datastream      NVARCHAR(100) NULL
+         )
+      
+         INSERT INTO @T
+         SELECT ECOM_Platform      
+              , Tablename
+              , Datastream          
+         FROM
+            OPENJSON(@c_ECPlatform_JSON)
+            WITH (
+            ECOM_Platform  NVARCHAR(100) '$.ECOM_Platform'
+          , Tablename      NVARCHAR(100) '$.Tablename'
+          , Datastream     NVARCHAR(100) '$.Datastream'
+         )
+         WHERE ECOM_Platform = @c_ECOMPlatform
+      
+         SELECT TOP 1 @c_TableName  = T.Tablename
+                    , @c_DataStream = T.Datastream
+         FROM @T T
+      END
+   END
 
    IF ISNULL(@c_Tablename, '') = ''
       SET @c_Tablename = 'WSCRPKADDCN' 
 
-   SELECT @c_DataStream = dbo.fnc_GetParamValueFromString('@c_DataStream', @c_Option5, '6157')  
-
    IF ISNULL(@c_DataStream, '') = ''
       SET @c_DataStream = '6157' 
-   --WL01 E
+   --WL02 E
 
    SET @c_CartonNo = CONVERT(NVARCHAR(5), @n_CartonNo + 1)
    
