@@ -11,7 +11,7 @@ GO
 
 CREATE OR ALTER PROC [BI].[dspExecStmt]
     @Stmt    NVARCHAR(MAX)
-  , @LinkSrv NVARCHAR(128)
+  , @LinkSrv NVARCHAR(128) = ''
   , @LogId   INT
   , @Debug   BIT
 AS
@@ -23,10 +23,11 @@ BEGIN
         
    DECLARE @RowCnt  INT = 0
          , @ParamOut NVARCHAR(4000)= ''
-         , @Err     INT
-         , @ErrMsg  NVARCHAR(250)
+         , @Err     INT = 0
+         , @ErrMsg  NVARCHAR(250)  = ''
 
-   IF EXISTS (SELECT 1 FROM sys.servers WHERE server_id > 0 AND [name] = @LinkSrv) 
+   IF ISNULL(@LinkSrv,'')<>'' 
+      AND EXISTS (SELECT 1 FROM sys.servers WHERE server_id > 0 AND [name] = @LinkSrv) 
    BEGIN
       SET @Stmt = CONCAT('EXEC(N''', REPLACE(@Stmt,'''',''''''), ''') AT ', @LinkSrv)
    END
@@ -51,16 +52,14 @@ BEGIN
    IF @Err > 0
    BEGIN
       SET @RowCnt = 0
-      SET @ParamOut = '{ "Error_Message": "'+@ErrMsg+'"'
-                     + ', "Stmt": "'+@Stmt+'"'
-                     + ' }';
-   END
-   ELSE
-   BEGIN
-      SET @ParamOut = '{ "Stmt": "'+@Stmt+'" }';
    END
 
-   UPDATE dbo.ExecutionLog SET TimeEnd = GETDATE(), RowCnt = @RowCnt, ParamOut = @ParamOut WHERE LogId = @LogId;
+   SET @ParamOut = CONCAT('{ "Stmt": "', LEFT(@Stmt,3985)+CASE WHEN LEN(@Stmt)>3985 THEN '…' ELSE '' END, '" }');
+
+   UPDATE dbo.ExecutionLog SET TimeEnd = GETDATE(), RowCnt = @RowCnt, ParamOut = @ParamOut
+   , ErrNo = @Err
+   , ErrMsg = @ErrMsg
+   WHERE LogId = @LogId;
    
    IF @Err > 0
    BEGIN

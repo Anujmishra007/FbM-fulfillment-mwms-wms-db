@@ -15,6 +15,7 @@ CREATE OR ALTER PROC [BI].[dspExecInit]
   , @ParamIn  NVARCHAR(4000) = ''
   , @LogId    INT           OUTPUT
   , @Debug    BIT           OUTPUT
+  , @Schema   NVARCHAR(128)  = ''
 AS
 BEGIN
    SET NOCOUNT ON;  -- keeps the output generated to a minimum 
@@ -22,8 +23,12 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF;
    SET CONCAT_NULL_YIELDS_NULL OFF;
 
+   IF ISNULL(@Schema,'') = '' SET @Schema = ISNULL(object_schema_name(@@procid),'')
+
    DECLARE @tVarLogId TABLE (LogId INT);
-   INSERT dbo.ExecutionLog (ClientId, SP, ParamIn) OUTPUT INSERTED.LogId INTO @tVarLogId VALUES (ISNULL(@ClientId,''), @Proc, @ParamIn);
+   INSERT dbo.ExecutionLog (ClientId, Sch, SP, ParamIn) OUTPUT INSERTED.LogId 
+      INTO @tVarLogId VALUES (ISNULL(@ClientId,''), @Schema, @Proc, @ParamIn);
+
    SELECT TOP 1 @LogId = LogId FROM @tVarLogId
 
    IF OBJECT_ID('dbo.ExecDebug','u') IS NOT NULL
