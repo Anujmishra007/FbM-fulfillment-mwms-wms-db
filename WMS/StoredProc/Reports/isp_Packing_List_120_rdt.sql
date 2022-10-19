@@ -22,6 +22,8 @@ GO
 /* Updates:                                                                   */              
 /* Date         Author    Ver.  Purposes                                      */ 
 /* 30-MAY-2022  MINGLE    1.1   Add new column(ML01)                          */
+/* 11-OCT-2022  MINGLE    1.2   WMS-20959 Change codelkup.code from           */
+/*										  oh.IntermodalVehicle to OIF.StoreName(ML02)   */
 /******************************************************************************/     
   
 CREATE OR ALTER PROC [dbo].[isp_Packing_List_120_rdt]             
@@ -92,8 +94,8 @@ END
          , TTLUnitPrice    FLOAT
          , TrackingNo      NVARCHAR(30)
          , CLK1UDF05       NVARCHAR(60)
-		 , BuyerPO         NVARCHAR(20)  NULL	--ML01
-		 , SDESCR          NVARCHAR(60)  NULL	--ML01
+		   , BuyerPO         NVARCHAR(20)  NULL	--ML01
+		   , SDESCR          NVARCHAR(60)  NULL	--ML01
          )  
          
 
@@ -132,18 +134,18 @@ END
                    ORDDET.UnitPrice,pd.qty * ORDDET.UnitPrice,
                    CASE WHEN CLK.short='711' THEN SubString(OH.TrackingNo, 7 , 3)+ Right(OH.TrackingNo,8) ELSE OH.TrackingNo END,
                    ISNULL(CLK1.UDF05,''),
-				   OH.BuyerPO,	--ML01
-				   S.DESCR	--ML01
+						 OH.BuyerPO,	--ML01
+						 S.DESCR	--ML01
    FROM ORDERS OH WITH (NOLOCK)
    JOIN ORDERDETAIL ORDDET WITH (NOLOCK) ON ORDDET.Orderkey = OH.Orderkey
    JOIN dbo.OrderInfo OIF WITH (NOLOCK) ON OIF.Orderkey = OH.Orderkey 
    JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON PD.Storerkey = ORDDET.StorerKey AND PD.OrderKey = ORDDET.OrderKey AND PD.sku = ORDDET.sku AND PD.OrderLineNumber = ORDDET.OrderLineNumber
    JOIN SKU S WITH (NOLOCK) ON S.StorerKey = ORDDET.StorerKey AND S.Sku = ORDDET.Sku	--ML01 
-   JOIN CODELKUP C1 WITH (NOLOCK) ON c1.LISTNAME='ReprotCFG'  AND c1.Storerkey=oh.StorerKey AND c1.Code = oh.IntermodalVehicle AND c1.code2='01'
-   JOIN CODELKUP C2 WITH (NOLOCK) ON c2.LISTNAME='ReprotCFG'  AND c2.Storerkey=oh.StorerKey AND c2.Code = oh.IntermodalVehicle AND c2.code2='02'
-   JOIN CODELKUP C3 WITH (NOLOCK) ON c3.LISTNAME='ReprotCFG'  AND c3.Storerkey=oh.StorerKey AND c3.Code = oh.IntermodalVehicle AND c3.code2='03'
-   JOIN CODELKUP C4 WITH (NOLOCK) ON c4.LISTNAME='ReprotCFG'  AND c4.Storerkey=oh.StorerKey AND c4.Code = oh.IntermodalVehicle AND c4.code2='04'
-   JOIN CODELKUP C5 WITH (NOLOCK) ON c5.LISTNAME='ReprotCFG'  AND c5.Storerkey=oh.StorerKey AND c5.Code = oh.IntermodalVehicle AND c5.code2='05'
+   JOIN CODELKUP C1 WITH (NOLOCK) ON c1.LISTNAME='ReprotCFG'  AND c1.Storerkey=oh.StorerKey AND c1.Code = OIF.StoreName AND c1.code2='01'	--ML02
+   JOIN CODELKUP C2 WITH (NOLOCK) ON c2.LISTNAME='ReprotCFG'  AND c2.Storerkey=oh.StorerKey AND c2.Code = OIF.StoreName AND c2.code2='02'	--ML02
+   JOIN CODELKUP C3 WITH (NOLOCK) ON c3.LISTNAME='ReprotCFG'  AND c3.Storerkey=oh.StorerKey AND c3.Code = OIF.StoreName AND c3.code2='03'	--ML02
+   JOIN CODELKUP C4 WITH (NOLOCK) ON c4.LISTNAME='ReprotCFG'  AND c4.Storerkey=oh.StorerKey AND c4.Code = OIF.StoreName AND c4.code2='04'	--ML02
+   JOIN CODELKUP C5 WITH (NOLOCK) ON c5.LISTNAME='ReprotCFG'  AND c5.Storerkey=oh.StorerKey AND c5.Code = OIF.StoreName AND c5.code2='05'	--ML02
    LEFT JOIN Codelkup CLK WITH (NoLock) ON CLK.Storerkey = OH.StorerKey And CLK.Listname = 'ECDLMODE' And CLK.Code = OH.Shipperkey And CLK.Code2 = OH.salesman
    LEFT JOIN Codelkup CLK1 WITH (NoLock) ON  CLK1.Storerkey = OH.StorerKey  And CLK1.Listname = 'ECDLMODE' And CLK1.Code = OH.Shipperkey And CLK1.Code2 = OH.salesman
     WHERE OH.Orderkey = @c_getOrdKey
@@ -170,8 +172,8 @@ END
                 TTLUnitPrice,
                 TrackingNo,
                 CLK1UDF05,
-				BuyerPO,	--ML01
-				SDESCR	--ML01
+					 BuyerPO,	--ML01
+					 SDESCR	--ML01
          FROM #PACKLIST120rdt  
          GROUP BY c_Contact1,
                 C_Addresses,
@@ -193,8 +195,8 @@ END
                 TTLUnitPrice,
                 TrackingNo,
                 CLK1UDF05,
-				BuyerPO,	--ML01
-				SDESCR	--ML01
+					 BuyerPO,	--ML01
+					 SDESCR	--ML01
          ORDER BY OrderKey,paSKU  
                
 END

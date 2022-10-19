@@ -28,6 +28,9 @@ GO
 /* Date         Author   Ver  Purposes                                   */  
 /* 2021-08-16   WLChooi  1.1  DevOps Combine Script                      */  
 /* 2021-08-16   WLChooi  1.1  WMS-17699 - Update New Logic (WL01)        */  
+/* 2022-10-12   WyeChun  1.2  JSM-94410 - Change LocationCategory from   */  
+/*                            SHELVING to DPP to prevent insertion of    */  
+/*                            TaskDetail (WC01)                          */ 
 /*************************************************************************/     
 
 CREATE PROCEDURE [dbo].[ispRLWAV40]        
@@ -455,7 +458,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV40]
              CASE WHEN MIN(PD.PickMethod) = 'P' THEN 'FP'                            
                   ELSE 'PP' END AS PickMethod,  
              ISNULL(UCC.Qty,0) AS UCCQty,  
-             CASE WHEN LOC.LocationType = 'DYNPPICK' AND LOC.LocationCategory = 'SHELVING' THEN 'DPP'
+             CASE WHEN LOC.LocationType = 'DYNPPICK' AND LOC.LocationCategory = 'DPP' THEN 'DPP'  --WC01 
                   WHEN LOC.LocationType = 'PICK' AND LOC.LocationCategory = 'AGV' THEN 'AGV' 
                   ELSE 'BULK' END,
              ''-- O.Loadkey
@@ -470,7 +473,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV40]
       WHERE WD.Wavekey = @c_Wavekey
       GROUP BY PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, PD.UOM,
                PD.DropID, ISNULL(UCC.Qty,0),  
-               CASE WHEN LOC.LocationType = 'DYNPPICK' AND LOC.LocationCategory = 'SHELVING' THEN 'DPP'
+               CASE WHEN LOC.LocationType = 'DYNPPICK' AND LOC.LocationCategory = 'DPP' THEN 'DPP'  --WC01
                     WHEN LOC.LocationType = 'PICK' AND LOC.LocationCategory = 'AGV' THEN 'AGV' 
                     ELSE 'BULK' END--, O.Loadkey  
       ORDER BY PD.Storerkey, PD.UOM, PD.Sku, PD.Lot

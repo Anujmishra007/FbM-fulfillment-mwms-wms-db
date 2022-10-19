@@ -21,8 +21,10 @@ GO
 /* Updates:                                                             */    
 /* Date         Author        Purposes                                  */    
 /* 2018-03-08   CSCHONG       WMS-4159-insert loadkey to pickheader(CS01)*/    
-/* 28-Jan-2019  TLTING_ext 1.1 enlarge externorderkey field length      */    
-/* 26-JUL-2022  CSCHONG    1.2  Devops Scripts Combine & WMS-20120 (CS02) */    
+/* 28-Jan-2019  TLTING_ext 1.1 enlarge externorderkey field length       */    
+/* 26-JUL-2022  CSCHONG    1.2  Devops Scripts Combine & WMS-20120 (CS02)*/    
+/* 13-OCT-2022  CSCHONG    1.3  WMS-20874 Fix some loadkey cannot        */
+/*                              generate Pickslipno (CS03)               */
 /************************************************************************/    
     
 CREATE OR ALTER PROC [dbo].[nsp_GetPickSlipOrders75]   
@@ -107,19 +109,58 @@ BEGIN
    BEGIN    
     SET @c_ExternOrderKey_end = 'ZZZZZZZZZZ'    
    END    
+
+   --CS03 S
+   CREATE TABLE #TEMP_PICKLoad (
+     Storerkey      NVARCHAR(20), 
+     Wavekey        NVARCHAR(10),
+     Loadkey        NVARCHAR(10)
+       )  
+ 
     
-   IF @c_ExternOrderKey_start = '0'    
-   BEGIN    
-    SELECT @c_ExternOrderKey_start = MIN(OH.loadkey)    
-          ,@c_ExternOrderKey_end = MAX(OH.loadkey)    
-    FROM  WAVE a (nolock)    
-      JOIN orders OH (nolock) on a.wavekey=OH.userdefine09    
-    WHERE A.WaveKey BETWEEN @c_WaveKey_start AND @c_WaveKey_end    
-   END    
+   --IF @c_ExternOrderKey_start = '0'                          --remove
+   --BEGIN    
+   -- SELECT @c_ExternOrderKey_start = MIN(OH.loadkey)    
+   --       ,@c_ExternOrderKey_end = MAX(OH.loadkey)    
+   -- FROM  WAVE a (nolock)    
+   --   JOIN orders OH (nolock) on a.wavekey=OH.userdefine09    
+   -- WHERE A.WaveKey BETWEEN @c_WaveKey_start AND @c_WaveKey_end    
+   --END    
+
+    IF @c_WaveKey_start = @c_WaveKey_end
+    BEGIN
+        INSERT INTO #TEMP_PICKLoad
+        (
+            Storerkey,
+            Wavekey,
+            Loadkey
+        )
+        SELECT DISTINCT OH.StorerKey,OH.UserDefine09,OH.LoadKey
+        FROM  WAVE a (nolock)    
+        JOIN orders OH (nolock) on a.wavekey=OH.userdefine09    
+        WHERE A.WaveKey= @c_WaveKey_start  
+            
+    END
+    ELSE
+    BEGIN
+        INSERT INTO #TEMP_PICKLoad
+        (
+            Storerkey,
+            Wavekey,
+            Loadkey
+        )
+        SELECT DISTINCT OH.StorerKey,OH.UserDefine09,OH.LoadKey
+        FROM  WAVE a (nolock)    
+        JOIN orders OH (nolock) on a.wavekey=OH.userdefine09    
+        WHERE A.WaveKey BETWEEN @c_WaveKey_start AND @c_WaveKey_end   
+    END
     
    SELECT @n_cnt = COUNT(*)    
-   FROM PickHeader (NOLOCK)    
-   WHERE (externorderkey BETWEEN @c_ExternOrderKey_start AND @c_ExternOrderKey_end)    
+   FROM PickHeader PH (NOLOCK)    
+   --WHERE (externorderkey BETWEEN @c_ExternOrderKey_start AND @c_ExternOrderKey_end)   
+   JOIN #TEMP_PICKLoad TPL ON TPL.Storerkey = PH.StorerKey AND TPL.Loadkey = PH.ExternOrderKey
+
+   --CS01 E 
     
   -- SELECT @c_ExternOrderKey_start '@c_ExternOrderKey_start',@c_ExternOrderKey_end '@c_ExternOrderKey_end',@n_cnt '@n_cnt'    
     
@@ -233,7 +274,7 @@ BEGIN
             '' AS remarks,--MIN(dbo.fnc_RTrim(dbo.fnc_LTrim(CONVERT(NVARCHAR(255),ORDERS.Notes)))) AS Remarks,  -- change request 16July2003    
             '' AS logicallocation,--LOC.LogicalLocation,    
             'N' AS PrintFlag,    
- Sku.BUSR7,  -- change request 16July2003    
+            Sku.BUSR7,  -- change request 16July2003    
             '' AS notes2,--MIN(dbo.fnc_RTrim(dbo.fnc_LTrim(CONVERT(NVARCHAR(255),ORDERS.Notes2)))) AS Notes2,   -- Added By SHong ON 3-12-2003, SOS16003    
             dbo.fnc_RTrim(dbo.fnc_LTrim(CONVERT(NVARCHAR(20), LOTATTRIBUTE.lottable02))) AS lottable02,  -- added by Ong 3/5/05    
             dbo.fnc_RTrim(dbo.fnc_LTrim(CONVERT(NVARCHAR(10), pack.PackUOM3))) AS UOM3,                   -- added by Ong 3/5/05    
@@ -250,11 +291,12 @@ BEGIN
                                 AND PickDetail.Sku = SkuxLOC.Sku)    
       JOIN LOC (NOLOCK) ON (PickDetail.Loc = LOC.Loc)    
       LEFT OUTER JOIN STORER (NOLOCK) ON (ORDERS.StorerKey = STORER.StorerKey)-- AND STORER.Type = '2')    
+      JOIN #TEMP_PICKLoad TPL ON TPL.Loadkey= ORDERS.loadkey                                                   --CS03
       WHERE PickDetail.Status < '5'    
       AND (PickDetail.PickMethod = '8' OR PickDetail.PickMethod = '')    
       AND (WAVEDETAIL.WaveKey >= @c_WaveKey_start AND WAVEDETAIL.WaveKey <= @c_WaveKey_end )    
       AND (ORDERS.StorerKey >= @c_StorerKey_start AND ORDERS.StorerKey <= @c_StorerKey_end )    
-      AND (ORDERS.loadKey >= @c_ExternOrderKey_start AND ORDERS.loadKey <= @c_ExternOrderKey_end )    
+     -- AND (ORDERS.loadKey >= @c_ExternOrderKey_start AND ORDERS.loadKey <= @c_ExternOrderKey_end )      --CS03
       GROUP BY ORDERS.loadKey,    
                --ORDERS.ExternOrderKey,    
               -- CONVERT(NVARCHAR(10), ORDERS.DeliveryDate, 103),    
@@ -673,6 +715,8 @@ BEGIN
    ORDER BY wavekey,convert(datetime, deliverydate, 103),[Route],loadkey, Loc, Sku    
     
    DROP Table #TEMP_PICK    
+
+    DROP TABLE #TEMP_PICKLoad             --CS03
     
    WHILE @@TRANCOUNT < @n_starttcnt -- SOS# 303176    
    BEGIN    
