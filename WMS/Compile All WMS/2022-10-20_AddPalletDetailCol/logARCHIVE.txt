@@ -1,0 +1,74 @@
+: CN LIVE : CNARCHIVE 
+--  AddPalletDetailColArc.sql 
+----------------------------------------------------------------------------- 
+: CN LIVE : HNM 
+--  AddPalletDetailColArc.sql 
+----------------------------------------------------------------------------- 
+: CN LIVE : NKE 
+--  AddPalletDetailColArc.sql 
+----------------------------------------------------------------------------- 
+: CN LIVE : CN2 
+--  AddPalletDetailColArc.sql 
+----------------------------------------------------------------------------- 
+: CN LIVE : SKE 
+--  AddPalletDetailColArc.sql 
+----------------------------------------------------------------------------- 
+: CN LIVE : UAM 
+--  AddPalletDetailColArc.sql 
+----------------------------------------------------------------------------- 
+: CN LIVE : SEP 
+--  AddPalletDetailColArc.sql 
+----------------------------------------------------------------------------- 
+: AUWMS 
+--  AddPalletDetailColArc.sql 
+----------------------------------------------------------------------------- 
+: DUARCHIVE 
+--  AddPalletDetailColArc.sql 
+Msg 208, Level 16, State 1, Server VMDUWMSDBPD6, Procedure sys.sp_refreshsqlmodule_internal, Line 85
+Invalid object name 'VNWMS.dbo.PALLETDETAIL'.
+----------------------------------------------------------------------------- 
+: HK HKARCHIVE 
+--  AddPalletDetailColArc.sql 
+----------------------------------------------------------------------------- 
+: IN LIVE : INARCHIVE 
+--  AddPalletDetailColArc.sql 
+Msg 15165, Level 16, State 1, Server VMINWMSDBPD6, Procedure sys.sp_refreshsqlmodule_internal, Line 62
+Could not find object 'dbo.V_PALLETDETAIL' or you do not have permission.
+----------------------------------------------------------------------------- 
+: ID LIVE : IDARCHIVE 
+--  AddPalletDetailColArc.sql 
+Msg 15165, Level 16, State 1, Server VMTHWMSDBPD6, Procedure sys.sp_refreshsqlmodule_internal, Line 62
+Could not find object 'dbo.V_PALLETDETAIL' or you do not have permission.
+----------------------------------------------------------------------------- 
+: JP LIVE : JPARCHIVE 
+--  AddPalletDetailColArc.sql 
+Msg 15165, Level 16, State 1, Server VMJPWMSDBPD6, Procedure sys.sp_refreshsqlmodule_internal, Line 62
+Could not find object 'dbo.V_PALLETDETAIL' or you do not have permission.
+----------------------------------------------------------------------------- 
+: KR LIVE : KRARCHIVE 
+--  AddPalletDetailColArc.sql 
+Msg 15165, Level 16, State 1, Server VMJPWMSDBPD6, Procedure sys.sp_refreshsqlmodule_internal, Line 62
+Could not find object 'dbo.V_PALLETDETAIL' or you do not have permission.
+----------------------------------------------------------------------------- 
+: MY LIVE : MYARCHIVE 
+--  AddPalletDetailColArc.sql 
+----------------------------------------------------------------------------- 
+: PH LIVE : PHARCHIVE 
+--  AddPalletDetailColArc.sql 
+----------------------------------------------------------------------------- 
+: TH LIVE : THARCHIVE 
+--  AddPalletDetailColArc.sql 
+Msg 2705, Level 16, State 4, Server VMTHWMSDBPD6, Line 2
+Column names in each table must be unique. Column name 'Orderkey' in table 'dbo.palletdetail' is specified more than once.
+Msg 2705, Level 16, State 4, Server VMTHWMSDBPD6, Line 2
+Column names in each table must be unique. Column name 'TrackingNo' in table 'dbo.palletdetail' is specified more than once.
+----------------------------------------------------------------------------- 
+: SG LIVE : SGARCHIVE 
+--  AddPalletDetailColArc.sql 
+----------------------------------------------------------------------------- 
+: TW LIVE : TWARCHIVE 
+--  AddPalletDetailColArc.sql 
+----------------------------------------------------------------------------- 
+: VN LIVE : VNARCHIVE 
+--  AddPalletDetailColArc.sql 
+----------------------------------------------------------------------------- 
