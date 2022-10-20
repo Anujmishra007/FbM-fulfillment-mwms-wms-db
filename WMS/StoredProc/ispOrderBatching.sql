@@ -42,7 +42,7 @@ GO
 /*                                                                      */
 /* Called By:                                                           */
 /*                                                                      */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 3.8                                                    */
 /*                                                                      */
 /* Version: 1.0                                                         */
 /*                                                                      */
@@ -90,6 +90,7 @@ GO
 /* 11-Mar-2022  SYChua  3.6   JSM-56364 - Fix for 18467 that has 9 digit*/
 /*                            Score value (SY01)                        */
 /* 21-Jul-2022  WLChooi 3.7   WMS-20271 - Remove SKU.BUSR7 filter (WL01)*/
+/* 14-Jul-2022  WLChooi 3.8   WMS-20707 - Extend @c_rptprocess (WL02)   */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispOrderBatching]
@@ -104,7 +105,7 @@ CREATE OR ALTER PROC [dbo].[ispOrderBatching]
    , @c_WaveKey     NVARCHAR(10) = ''     --(Wan01)
    , @c_UOM         NVARCHAR(500)= ''     --(Wan01)
    , @c_updatepick  NCHAR(5)     = 'N'    --(Wan03)
-   , @c_rptprocess  NVARCHAR(10) = ''     --(CS01)
+   , @c_rptprocess  NVARCHAR(4000) = ''     --(CS01)   --WL02
 
 AS
 BEGIN
@@ -152,6 +153,7 @@ BEGIN
    ,  @c_OrdBatchM9Lot2SplitBth    NVARCHAR(30) --NJOW12
    ,  @n_GroupNo                   INT          --NJOW12
    ,  @n_PrevGroupNo               INT          --NJOW12
+   ,  @c_ByUOM                     NVARCHAR(10) --WL02
 
    --NJOW11
    DECLARE
@@ -321,7 +323,12 @@ BEGIN
       END
    END
 
-   IF ISNULL(@c_UOM,'') <> '' AND @c_Mode <> '9' AND ISNULL(@c_rptprocess,'') <> 'byuom' --CS01
+   SELECT @c_ByUOM = dbo.fnc_GetParamValueFromString('@byuom', @c_rptprocess, @c_ByUOM)   --WL02
+
+   IF ISNULL(@c_ByUOM,'') <> 'Y' SET @c_ByUOM = 'N'   --WL02
+
+   IF ISNULL(@c_UOM,'') <> '' AND @c_Mode <> '9' 
+      AND (LEFT(TRIM(ISNULL(@c_rptprocess,'')), 5) <> 'byuom' OR @c_ByUOM = 'N') --CS01   --WL02
    BEGIN
       SET @n_Continue = 3
       SET @n_Err = 63521
@@ -332,7 +339,7 @@ BEGIN
 
    --(CS01) START
 
-   IF ISNULL(@c_rptprocess,'') = 'byuom'
+   IF LEFT(TRIM(ISNULL(@c_rptprocess,'')), 5) = 'byuom' OR @c_ByUOM = 'Y'   --WL02
    BEGIN
       IF @c_UOM = '6'
        BEGIN
