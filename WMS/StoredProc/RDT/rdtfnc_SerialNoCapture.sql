@@ -1,11 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdtfnc_SerialNoCapture]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdtfnc_SerialNoCapture]
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /************************************************************************/
 /* Store procedure: rdtfnc_SerialNoCapture                              */
@@ -66,13 +63,14 @@ GO
 /* 14-Jul-2014 2.3  James    SOS315487 - Extend length of serial no     */
 /*                           from 20 to 30 chars (james03)              */
 /* 24-Feb-2015 2.4  ChewKP   SOS#331416 Iterate Step 4 (ChewKP02)       */
-/* 30-Sep-2016 2.5  Ung      Performance tuning                         */   
+/* 30-Sep-2016 2.5  Ung      Performance tuning                         */
 /* 15-Sep-2017 2.6  James    WMS2988-Bug fix (james04)                  */
 /* 24-Sep-2018 2.7  James    WMS7751-Remove OD.loadkey (james05)        */
 /* 11-Sep-2019 2.8  James    WMS-10383-Add validformat @ step 4(james06)*/
+/* 03-OCt-2022 2.9  YeeKung  WMS-20770 Change std decode (yeekung01)    */
 /************************************************************************/
 
-CREATE  PROC rdt.rdtfnc_SerialNoCapture (
+CREATE OR ALTER PROC [RDT].[rdtfnc_SerialNoCapture] (
    @nMobile    int,
    @nErrNo     int  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max
@@ -123,17 +121,17 @@ DECLARE
    @cSQL                 NVARCHAR(MAX), --(james03)
    @cSQLParam            NVARCHAR(MAX), --(james03)
    @cExtendedValidateSP  NVARCHAR(30),  -- (ChewKP02)
-   @cCaptureSNoIterate   NVARCHAR(1),   -- (ChewKP02) 
-   @cDecodeLabelNo       NVARCHAR(20),  -- (ChewKP02)
+   @cCaptureSNoIterate   NVARCHAR(1),   -- (ChewKP02)
+   @cDecodeSP       NVARCHAR(20),  -- (ChewKP02)
 
    @cQTY                 NVARCHAR( 5),
-   
+
    @c_oFieled01 NVARCHAR(20), @c_oFieled02 NVARCHAR(20), -- (ChewKP02)
    @c_oFieled03 NVARCHAR(20), @c_oFieled04 NVARCHAR(20), -- (ChewKP02)
    @c_oFieled05 NVARCHAR(20), @c_oFieled06 NVARCHAR(20), -- (ChewKP02)
    @c_oFieled07 NVARCHAR(20), @c_oFieled08 NVARCHAR(20), -- (ChewKP02)
    @c_oFieled09 NVARCHAR(20), @c_oFieled10 NVARCHAR(20), -- (ChewKP02)
-       
+
    @cInField01 NVARCHAR( 60),  @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),  @cOutField02 NVARCHAR( 60),
    @cInField03 NVARCHAR( 60),  @cOutField03 NVARCHAR( 60),
@@ -180,10 +178,10 @@ SELECT
    @cCaptureSNoAndQTY    = V_String11,
    @cSerialNo1           = V_String12,    -- (james03)
    @cSerialNo2           = V_String13,    -- (james03)
-   @cCaptureSNoIterate   = V_String14,    -- (ChewKP02) 
-   @cExtendedValidateSP  = V_String15,    -- (ChewKP02) 
-   @cDecodeLabelNo       = V_String16,    -- (ChewKP02) 
-      
+   @cCaptureSNoIterate   = V_String14,    -- (ChewKP02)
+   @cExtendedValidateSP  = V_String15,    -- (ChewKP02)
+   @cDecodeSP       = V_String16,    -- (ChewKP02)
+
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,
@@ -240,21 +238,21 @@ BEGIN
    SET @cNotCheckSNoUnique = rdt.RDTGetConfig( 0, 'CaptureSNoNotCheckSNoUnique', @cStorerKey)
    SET @cNotCheckScanOut = rdt.RDTGetConfig( @nFunc, 'CaptureSNoNotCheckScanOut', @cStorerKey)
    SET @cCaptureSNoAndQTY = rdt.RDTGetConfig( @nFunc, 'CaptureSNoAndQTY', @cStorerKey)
-   
+
    -- (ChewKP02)
    SET @cCaptureSNoIterate = rdt.RDTGetConfig( @nFunc, 'CaptureSNoIterate', @cStorerKey)
-   
+
    SET @cExtendedValidateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)
-   IF @cExtendedValidateSP = '0'  
+   IF @cExtendedValidateSP = '0'
    BEGIN
       SET @cExtendedValidateSP = ''
    END
-   
-   SET @cDecodeLabelNo = rdt.RDTGetConfig( @nFunc, 'DecodeLabelNo', @cStorerKey)
-   IF @cDecodeLabelNo = '0'
-      SET @cDecodeLabelNo = ''
-   
-   
+
+   SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeLabelNo', @cStorerKey)
+   IF @cDecodeSP = '0'
+      SET @cDecodeSP = ''
+
+
 END
 
 GOTO Quit
@@ -270,7 +268,7 @@ BEGIN
       -- Screen mapping
       SET @cPickSlipNo = @cInField01
 
-      
+
 
       -- Check PickSlipNo blank
       IF (@cPickSlipNo = '' OR @cPickSlipNo IS NULL)
@@ -316,7 +314,7 @@ BEGIN
          END
 
       -- Get counter
-      IF LEN( RTRIM( @cCheckSSCC)) > 1 
+      IF LEN( RTRIM( @cCheckSSCC)) > 1
          EXEC rdt.rdt_SerialNoCapture_GetPickSlipIterate
             @cPickSlipNo,
             NULL,
@@ -389,23 +387,23 @@ BEGIN
       -- Screen mapping
       SET @cSKU = @cInField02
 
-      -- (ChewKP02) 
-      IF @cSKU = '' 
+      -- (ChewKP02)
+      IF @cSKU = ''
       BEGIN
-         
-         IF @cDecodeLabelNo = ''
+
+         IF @cDecodeSP = ''
          BEGIN
             SET @nErrNo = 62524
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU/UPC needed
             GOTO Step_2_Fail
          END
-         
+
          SET @nScn = @nScn + 2
          SET @nStep = @nStep + 2
          GOTO QUIT
-         
+
       END
-      
+
       -- Check SKU blank
       IF @cSKU = ''
       BEGIN
@@ -486,9 +484,9 @@ BEGIN
             WHERE O.LoadKey = @cExternOrderKey
                AND O.OrderKey = CASE WHEN @cOrderKey = '' THEN O.OrderKey ELSE @cOrderKey END
                AND PD.SKU = @cSKU
-         END            
-      END      
-            
+         END
+      END
+
       IF @cSKUInPickSlip = ''
       BEGIN
          SET @nErrNo = 62509
@@ -508,7 +506,7 @@ BEGIN
       END
 
       -- Get counter
-      IF LEN( RTRIM( @cCheckSSCC)) > 1 
+      IF LEN( RTRIM( @cCheckSSCC)) > 1
          EXEC rdt.rdt_SerialNoCapture_GetPickSlipIterate
             @cPickSlipNo,
             @cSKU,
@@ -532,7 +530,7 @@ BEGIN
       END
 
       -- Get counter
-      IF LEN( RTRIM( @cCheckSSCC)) > 1 
+      IF LEN( RTRIM( @cCheckSSCC)) > 1
          EXEC rdt.rdt_SerialNoCapture_GetPickSlipIterate
             @cPickSlipNo,
             @cSKU,
@@ -581,7 +579,7 @@ BEGIN
       SET @nScannedSerialCount = 0
       SET @nTotalSerialCount = 0
       -- Get counter
-      IF LEN( RTRIM( @cCheckSSCC)) > 1 
+      IF LEN( RTRIM( @cCheckSSCC)) > 1
          EXEC rdt.rdt_SerialNoCapture_GetPickSlipIterate
             @cPickSlipNo,
             NULL,
@@ -701,131 +699,97 @@ BEGIN
       END
 
       -- (james06)
-      IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'SERIAL', @cSerialNo) = 0  
+      IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'SERIAL', @cSerialNo) = 0
       BEGIN
          SET @nErrNo = 62525
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format
          GOTO Step_4_Fail
       END
 
-      IF @cDecodeLabelNo <> ''
+      -- Decode
+      IF @cDecodeSP <> ''
       BEGIN
-         SET @c_oFieled01 = @cSKU
-         SET @c_oFieled05 = @cQTY
-
-         SELECT TOP 1
-            @cOrderKey = OrderKey
-         FROM dbo.PickHeader WITH (NOLOCK)
-         WHERE PickHeaderKey = @cPickSlipNo
-
-
-         EXEC dbo.ispLabelNo_Decoding_Wrapper
-             @c_SPName     = @cDecodeLabelNo
-            ,@c_LabelNo    = @cSerialNo
-            ,@c_Storerkey  = @cStorerkey
-            ,@c_ReceiptKey = @cPickSlipNo -- PickSlipNo
-            ,@c_POKey      = ''
-            ,@c_LangCode   = @cLangCode
-            ,@c_oFieled01  = @c_oFieled01 OUTPUT   -- SKU
-            ,@c_oFieled02  = @c_oFieled02 OUTPUT   -- STYLE
-            ,@c_oFieled03  = @c_oFieled03 OUTPUT   -- COLOR
-            ,@c_oFieled04  = @c_oFieled04 OUTPUT   -- SIZE
-            ,@c_oFieled05  = @c_oFieled05 OUTPUT   -- QTY
-            ,@c_oFieled06  = @c_oFieled06 OUTPUT   -- CO#
-            ,@c_oFieled07  = @c_oFieled07 OUTPUT   -- Lottable01
-            ,@c_oFieled08  = @c_oFieled08 OUTPUT   -- Lottable02
-            ,@c_oFieled09  = @c_oFieled09 OUTPUT   -- Lottable03
-            ,@c_oFieled10  = @c_oFieled10 OUTPUT   -- Lottable04
-            ,@b_Success    = @b_Success   OUTPUT
-            ,@n_ErrNo      = @nErrNo      OUTPUT
-            ,@c_ErrMsg     = @cErrMsg     OUTPUT
-
-         IF ISNULL(@cErrMsg, '') <> ''
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
          BEGIN
-            DECLARE @cErrMsg1 NVARCHAR(20)
-            SET @cErrMsg1 = @cErrMsg
-            EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1
-            GOTO Step_4_Fail
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
+               '    @nMobile, @nFunc, @nStep, @nInputKey, @cLangCode, @cStorerKey, @cFacility, @cPickSlipNo, @cLotNo,@cCheckSSCC,'+
+               '    @cSerialNo OUTPUT, @cSKU OUTPUT, @nQty OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+               '  @nMobile      INT                     '+
+               ' ,@nFunc        INT                     '+
+               ' ,@nStep        INT                     '+
+               ' ,@nInputKey    INT                     '+
+               ' ,@cLangCode    NVARCHAR( 3)            '+
+               ' ,@cStorerKey   NVARCHAR( 15)           '+
+               ' ,@cFacility    NVARCHAR( 5)            '+
+               ' ,@cPickSlipNo  NVARCHAR( 20)           '+
+               ' ,@cLotNo       NVARCHAR( 20)           '+
+               ' ,@cCheckSSCC   NVARCHAR( 20)           ' +
+               ' ,@cSerialNo    NVARCHAR( 30) OUTPUT    '+
+               ' ,@cSKU         NVARCHAR( 20) OUTPUT    '+
+               ' ,@nQTY         INT           OUTPUT    '+
+               ' ,@nErrNo       INT           OUTPUT    '+
+               ' ,@cErrMsg      NVARCHAR( 20) OUTPUT    '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @nStep, @nInputKey, @cLangCode, @cStorerKey, @cFacility, @cPickSlipNo, @cLotNo,@cCheckSSCC,
+               @cSerialNo OUTPUT, @cSKU OUTPUT, @nQty OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT 
+
+            IF @nErrNo <> 0
+            BEGIN
+               GOTO Step_4_Fail 
+            END
          END
-
-         SET @cSKU = @c_oFieled01
-         SET @cQTY = @c_oFieled05
-
-
-
       END
 
       -- (james03)
       -- If rdt CheckSSCC config has value 1 then check len of serialno
       -- If len of config > 1 and is a valid sp name then use customised sp to check for serial no validity
-      IF LEN( RTRIM( @cCheckSSCC)) > 1 AND 
-         EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cCheckSSCC AND type = 'P')
+      
+      -- Check SSCC
+      IF @cCheckSSCC = '1'
       BEGIN
-            SET @cSQL = 'EXEC rdt.' + RTRIM( @cCheckSSCC) +
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cSerialNo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
-            SET @cSQLParam =
-               '@nMobile      INT,       '     +
-               '@nFunc        INT,       '     +
-               '@cLangCode    NVARCHAR( 3),  ' +
-               '@nStep        INT,       '     + 
-               '@nInputKey    INT,       '     +
-               '@cSerialNo    NVARCHAR( 30)  OUTPUT, ' +
-               '@nErrNo       INT OUTPUT,  ' +
-               '@cErrMsg      NVARCHAR( 20)  OUTPUT '  
+         DECLARE @nSerialLength INT
+         SET @nSerialLength = LEN( RTRIM( @cSerialNo))
 
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cSerialNo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
-
-            IF @nErrNo <> 0
-               GOTO Step_4_Fail
-      END
-      ELSE
-      BEGIN
-         -- Check SSCC
-         IF @cCheckSSCC = '1'
+         -- Check label length
+         IF @nSerialLength > 13 AND @nSerialLength <= 19
          BEGIN
-            DECLARE @nSerialLength INT
-            SET @nSerialLength = LEN( RTRIM( @cSerialNo))
+            SET @nErrNo = 62515
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Inv Serial No
+            GOTO Step_4_Fail
+         END
 
-            -- Check label length
-            IF @nSerialLength > 13 AND @nSerialLength <= 19
+         -- Truncate serial no
+         IF @nSerialLength > 18
+         BEGIN
+            SET @cSerialNo = RIGHT( RTRIM( @cSerialNo), 18)
+            SET @nSerialLength = LEN( RTRIM( @cSerialNo))
+         END
+
+         -- Get QTY
+         IF @nSerialLength < 18
+            SET @nQTY = 1
+
+         IF @nSerialLength = 18
+         BEGIN
+            -- Get case count
+            DECLARE @nCaseCnt INT
+            SELECT @nCaseCnt = CAST( P.CaseCnt AS INT)
+            FROM dbo.PACK P WITH (NOLOCK)
+               JOIN dbo.SKU S WITH (NOLOCK) ON (P.Packkey = S.Packkey)
+            WHERE S.Storerkey = @cStorerkey
+               AND S.SKU = @cSKU
+
+            -- Check case count valid
+            IF @nCaseCnt < 1
             BEGIN
-               SET @nErrNo = 62515
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Inv Serial No
+               SET @nErrNo = 62516
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NoCaseCnt
                GOTO Step_4_Fail
             END
 
-            -- Truncate serial no
-            IF @nSerialLength > 18
-            BEGIN
-               SET @cSerialNo = RIGHT( RTRIM( @cSerialNo), 18)
-               SET @nSerialLength = LEN( RTRIM( @cSerialNo))
-            END
-            
-            -- Get QTY
-            IF @nSerialLength < 18
-               SET @nQTY = 1
-
-            IF @nSerialLength = 18
-            BEGIN
-               -- Get case count
-               DECLARE @nCaseCnt INT
-               SELECT @nCaseCnt = CAST( P.CaseCnt AS INT)
-               FROM dbo.PACK P WITH (NOLOCK)
-                  JOIN dbo.SKU S WITH (NOLOCK) ON (P.Packkey = S.Packkey)
-               WHERE S.Storerkey = @cStorerkey
-                  AND S.SKU = @cSKU
-
-               -- Check case count valid
-               IF @nCaseCnt < 1
-               BEGIN
-                  SET @nErrNo = 62516
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NoCaseCnt
-                  GOTO Step_4_Fail
-               END
-
-               SET @nQTY = @nCaseCnt
-            END
+            SET @nQTY = @nCaseCnt
          END
       END
 
@@ -858,13 +822,13 @@ BEGIN
             END
          END
       END
-      
+
       IF @cExtendedValidateSP <> ''
       BEGIN
-         
+
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
          BEGIN
-     
+
 
             SET @cSQL = 'EXEC rdt.' + RTRIM(@cExtendedValidateSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @cStorerKey, @cSKU, @cOrderKey, @cSerialNo, @cLotNo, @nErrNo OUTPUT, @cErrMsg OUTPUT '
@@ -878,28 +842,28 @@ BEGIN
                '@cOrderKey      NVARCHAR( 10), ' +
                '@cSerialNo      NVARCHAR( 20), ' +
                '@cLotNo         NVARCHAR( 20), ' +
-               '@nErrNo         INT           OUTPUT, ' + 
+               '@nErrNo         INT           OUTPUT, ' +
                '@cErrMsg        NVARCHAR( 20) OUTPUT'
-            
-           
+
+
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @cStorerKey, @cSKU, @cOrderKey, @cSerialNo, @cLotNo, @nErrNo OUTPUT, @cErrMsg OUTPUT 
-            
-            IF @nErrNo <> 0 
+               @nMobile, @nFunc, @cLangCode, @nStep, @cStorerKey, @cSKU, @cOrderKey, @cSerialNo, @cLotNo, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
             BEGIN
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') 
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
                EXEC rdt.rdtSetFocusField @nMobile, 3
-               GOTO QUIT 
+               GOTO QUIT
             END
-      
+
          END
-      END 
+      END
 
       -- Capture QTY
-      IF @cCaptureSNoAndQTY = '1' 
+      IF @cCaptureSNoAndQTY = '1'
       BEGIN
          -- Prepare next screen var
-         IF @cDecodeLabelNo <> ''
+         IF @cDecodeSP <> ''
          BEGIN
             SET @cOutField01 = @cQty
          END
@@ -938,11 +902,11 @@ BEGIN
          @nQTY        = @nQTY
       IF @nErrNo <> 0
          GOTO Step_4_Fail
-      
+
       -- (ChewKP02)
       IF @cCaptureSNoIterate = '1'
       BEGIN
-          IF LEN( RTRIM( @cCheckSSCC)) > 1 
+          IF LEN( RTRIM( @cCheckSSCC)) > 1
             EXEC rdt.rdt_SerialNoCapture_GetPickSlipIterate
                @cPickSlipNo,
                NULL,
@@ -956,13 +920,13 @@ BEGIN
                @nScannedSerialCount OUTPUT,
                @nTotalSerialCount OUTPUT,
                @cCheckSSCC -- (Vicky03)
-            
+
          SET @cOutField01 = @cPickSlipNo
          SET @cOutField02 = @cSKU
          SET @cOutField03 = '' -- LOT
          SET @cOutField05 = CAST( @nScannedSerialCount AS NVARCHAR(5)) + '/' + CAST( @nTotalSerialCount AS NVARCHAR(5))
-         
-      END  
+
+      END
       ELSE
       BEGIN
          -- Prepare next screen var
@@ -970,17 +934,17 @@ BEGIN
          SET @cOutField01 = @cPickSlipNo
          SET @cOutField02 = '' -- SKU
          SET @cOutField05 = CAST( @nScannedSerialCount AS NVARCHAR(5)) + '/' + CAST( @nTotalSerialCount AS NVARCHAR(5))
-      
+
          -- Go to SKU screen
          SET @nScn  = @nScn - 2
          SET @nStep = @nStep - 2
       END
-      
+
    END
 
    IF @nInputKey = 0 -- Esc OR No
    BEGIN
-      IF LEN( RTRIM( @cCheckSSCC)) > 1 
+      IF LEN( RTRIM( @cCheckSSCC)) > 1
       EXEC rdt.rdt_SerialNoCapture_GetPickSlipIterate
          @cPickSlipNo,
          NULL,
@@ -1033,12 +997,12 @@ Step_5:
 BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
-      
+
 
       -- Screen mapping
       SET @cQTY = @cInField01
 
- 
+
       -- Check QTY blank
       IF @cQTY = ''
       BEGIN
@@ -1064,7 +1028,7 @@ BEGIN
          GOTO Step_5_Fail
       END
 
-      SET @cSerialNo = @cSerialNo1 + @cSerialNo2 -- (ChewKP02) 
+      SET @cSerialNo = @cSerialNo1 + @cSerialNo2 -- (ChewKP02)
 
       -- Insert SerialNo
       EXECUTE rdt.rdt_SerialNoCapture_Confirm
@@ -1082,18 +1046,18 @@ BEGIN
          GOTO Step_5_Fail
 
 
-      --(ChewKP02) 
+      --(ChewKP02)
       IF @cCaptureSNoIterate = '1'
       BEGIN
-         
+
          SET @cOutField01 = @cPickSlipNo
          SET @cOutField02 = @cSKU
          SET @cOutField03 = '' -- LOT
          SET @cOutField05 = CAST( @nScannedSerialCount AS NVARCHAR(5)) + '/' + CAST( @nTotalSerialCount AS NVARCHAR(5))
-         
+
          SET @nScn  = @nScn - 1
          SET @nStep = @nStep - 1
-      END  
+      END
       ELSE
       BEGIN
          -- Prepare next screen var
@@ -1101,7 +1065,7 @@ BEGIN
          SET @cOutField01 = @cPickSlipNo
          SET @cOutField02 = '' -- SKU
          SET @cOutField05 = CAST( @nScannedSerialCount AS NVARCHAR(5)) + '/' + CAST( @nTotalSerialCount AS NVARCHAR(5))
-   
+
          -- Go to UPC screen
          SET @nScn  = @nScn - 3
          SET @nStep = @nStep - 3
@@ -1187,7 +1151,7 @@ Quit. Update back to I/O table, ready to be pick up by JBOSS
 Quit:
 BEGIN
    UPDATE RDTMOBREC WITH (ROWLOCK) SET
-      EditDate = GETDATE(), 
+      EditDate = GETDATE(),
       ErrMsg = @cErrMsg,
       Func = @nFunc,
       Step = @nStep,
@@ -1212,10 +1176,10 @@ BEGIN
       V_String11   = @cCaptureSNoAndQTY,
       V_String12   = @cSerialNo1,      -- (james03)
       V_String13   = @cSerialNo2,      -- (james03)
-      V_String14   = @cCaptureSNoIterate, -- (ChewKP02) 
-      V_String15   = @cExtendedValidateSP, -- (ChewKP02) 
-      V_String16   = @cDecodeLabelNo,  -- (ChewKP02)
-   
+      V_String14   = @cCaptureSNoIterate, -- (ChewKP02)
+      V_String15   = @cExtendedValidateSP, -- (ChewKP02)
+      V_String16   = @cDecodeSP,  -- (ChewKP02)
+
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,
       I_Field03 = @cInField03,  O_Field03 = @cOutField03,
@@ -1235,11 +1199,5 @@ BEGIN
    WHERE Mobile = @nMobile
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON RDT.rdtfnc_SerialNoCapture TO NSQL
+GRANT EXECUTE ON  [RDT].[rdtfnc_SerialNoCapture] TO [NSQL]
 GO
