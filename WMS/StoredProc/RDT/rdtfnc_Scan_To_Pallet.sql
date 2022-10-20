@@ -1,3 +1,6 @@
+
+
+
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -27,6 +30,7 @@ GO
 /*                            Add Close Pallet Add ExtendedInfoSP       */
 /* 2022-05-26 1.9  James      WMS-19694 Add CapturePackInfoSP (james04) */
 /*                            Add ExtendedValidateSP at step 1          */
+/* 2022-10-17 2.0  yeekung    WMS-20927. Fixed paper to paper (yeekung01)  */ 
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Scan_To_Pallet] (
@@ -127,7 +131,7 @@ SELECT
 
    @cStorerKey = StorerKey,
    @cFacility  = Facility,
-   @cPrinter   = Printer,
+   @cPrinter   = Printer_paper,
 
    @cPickSlipNo = V_PickSlipNo, 
    @nCartonNo   = V_CartonNo, 
@@ -364,7 +368,7 @@ BEGIN
          IF @nErrNo <> 0
             GOTO Step_3_Fail
       END
-
+      
       IF @cCapturePackInfoSP = '1'
       BEGIN
          -- Prepare next screen var
@@ -1549,9 +1553,9 @@ BEGIN
       -- Go to case ID screen
       SET @nScn = @nScn - 3
       SET @nStep = @nStep - 3
-   END
-
-   -- ExtendedValidateSP
+  	END
+      
+  	-- ExtendedValidateSP
    IF @cExtendedInfoSP <> ''
    BEGIN
       SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
@@ -1794,7 +1798,7 @@ BEGIN
 
       StorerKey    = @cStorerKey,
       Facility     = @cFacility, 
-      Printer      = @cPrinter,
+      Printer_paper  = @cPrinter, --(yeekung01)
 
       V_PickSlipNo = @cPickSlipNo, 
       V_CartonNo   = @nCartonNo, 
@@ -1851,3 +1855,4 @@ GO
 
 GRANT EXECUTE ON [RDT].[rdtfnc_Scan_To_Pallet] to nSQL
 GO
+
