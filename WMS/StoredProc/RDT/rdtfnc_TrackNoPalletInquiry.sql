@@ -1,6 +1,3 @@
-if exists (select * from sys.objects where object_id = object_id(N'[rdt].[rdtfnc_TrackNoPalletInquiry]') and OBJECTPROPERTY(object_id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdtfnc_TrackNoPalletInquiry]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -15,9 +12,11 @@ GO
 /* 2018-03-20 1.0  Ung      WMS-4225 Created                                  */
 /* 2018-10-01 1.1  Ung      WMS-4225 Fix multi page issue                     */
 /* 2018-10-10 1.2  Gan      Performance tuning                                */
+/* 2022-10-07 1.3  Ung      WMS-20952 Add PalletNotLinkMBOL                   */
+/*                          Add PalletDetailTrackingNo                        */
 /******************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_TrackNoPalletInquiry](
+CREATE OR ALTER PROC [RDT].[rdtfnc_TrackNoPalletInquiry](
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max
@@ -32,6 +31,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 DECLARE
    @bSuccess            INT, 
    @nTranCount          INT, 
+   @nRowCount           INT, 
    @cSQL                NVARCHAR(MAX), 
    @cSQLParam           NVARCHAR(MAX), 
    @cOption             NVARCHAR(1), 
@@ -67,6 +67,8 @@ DECLARE
    @cExtendedInfo       NVARCHAR(20),
    @cExtendedUpdateSP   NVARCHAR(20),
    @cExtendedValidateSP NVARCHAR(20),
+   @cPalletNotLinkMBOL  NVARCHAR(1),
+   @cPalletDetailTrackingNo NVARCHAR(1),
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
@@ -111,6 +113,8 @@ SELECT
    @cExtendedInfo       = V_String12,
    @cExtendedUpdateSP   = V_String13,
    @cExtendedValidateSP = V_String14,
+   @cPalletNotLinkMBOL  = V_String15,  
+   @cPalletDetailTrackingNo  = V_String16,  
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
@@ -166,6 +170,9 @@ Step 0. Called from menu (func = 1665)
 Step_Start:
 BEGIN
    -- Storer config
+   SET @cPalletDetailTrackingNo = rdt.rdtGetConfig( @nFunc, 'PalletDetailTrackingNo', @cStorerKey)
+   SET @cPalletNotLinkMBOL = rdt.rdtGetConfig( @nFunc, 'PalletNotLinkMBOL', @cStorerKey)
+   
    SET @cExtendedInfoSP = rdt.rdtGetConfig( @nFunc, 'ExtendedInfoSP', @cStorerKey)
    IF @cExtendedInfoSP = '0'
       SET @cExtendedInfoSP = ''
@@ -219,44 +226,48 @@ BEGIN
          GOTO Quit
       END
 
-      -- Get MBOL info
-      SELECT 
-         @cMBOLKey = MBOLKey, 
-         @cChkStatus = Status, 
-         @cChkFacility = Facility
-      FROM MBOL WITH (NOLOCK)
-      WHERE ExternMbolKey = @cPalletKey
-
-      IF @@ROWCOUNT = 0
+      -- Pallet linkage to MBOL
+      IF @cPalletNotLinkMBOL = '0' -- 0=link, 1=Not link
       BEGIN
-         SET @nErrNo = 121453
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Pallet
-         EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', @nErrNo, @cErrMsg
-         SET @nErrNo = 0
-         SET @cErrMsg = ''
-         GOTO Quit
-      END
+         -- Get MBOL info
+         SELECT 
+            @cMBOLKey = MBOLKey, 
+            @cChkStatus = Status, 
+            @cChkFacility = Facility
+         FROM MBOL WITH (NOLOCK)
+         WHERE ExternMbolKey = @cPalletKey
 
-      -- Check MBOL status
-      IF @cChkStatus = '9'
-      BEGIN
-         SET @nErrNo = 121454
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MBOL shipped
-         EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', @nErrNo, @cErrMsg
-         SET @nErrNo = 0
-         SET @cErrMsg = ''
-         GOTO Quit
-      END
+         IF @@ROWCOUNT = 0
+         BEGIN
+            SET @nErrNo = 121453
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Pallet
+            EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', @nErrNo, @cErrMsg
+            SET @nErrNo = 0
+            SET @cErrMsg = ''
+            GOTO Quit
+         END
 
-      -- Check MBOL facility
-      IF @cChkFacility <> @cFacility
-      BEGIN
-         SET @nErrNo = 121455
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MBOL FAC Diff
-         EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', @nErrNo, @cErrMsg
-         SET @nErrNo = 0
-         SET @cErrMsg = ''
-         GOTO Quit
+         -- Check MBOL status
+         IF @cChkStatus = '9'
+         BEGIN
+            SET @nErrNo = 121454
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MBOL shipped
+            EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', @nErrNo, @cErrMsg
+            SET @nErrNo = 0
+            SET @cErrMsg = ''
+            GOTO Quit
+         END
+
+         -- Check MBOL facility
+         IF @cChkFacility <> @cFacility
+         BEGIN
+            SET @nErrNo = 121455
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MBOL FAC Diff
+            EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', @nErrNo, @cErrMsg
+            SET @nErrNo = 0
+            SET @cErrMsg = ''
+            GOTO Quit
+         END
       END
 
       -- Get pallet info
@@ -322,7 +333,7 @@ GOTO Quit
 Step 2. screen = 5121
    PalletKey      (Field01)
    Invalid carton (Field02)
-   Option         (Field03)
+   Option         (Field03, input)
    Total carton   (Field04)
 ********************************************************************************/
 Step_Statistic:
@@ -408,6 +419,7 @@ GOTO Quit
 
 /********************************************************************************
 Step 3. screen = 5122
+   TrackNo1...10  (Field01..10)
    TrackNo        (Field11, input)
    Total carton   (Field12)
    Page           (Field13)
@@ -462,7 +474,13 @@ BEGIN
       END
 
       -- Check trackno on pallet
-      IF NOT EXISTS( SELECT 1 FROM PalletDetail WITH (NOLOCK) WHERE PalletKey = @cPalletKey AND CaseID = @cTrackNo)
+      SET @nRowCount = 0
+      IF @cPalletDetailTrackingNo = '1'
+         SELECT @nRowCount = 1 FROM PalletDetail WITH (NOLOCK) WHERE PalletKey = @cPalletKey AND TrackingNo = @cTrackNo
+      ELSE
+         SELECT @nRowCount = 1 FROM PalletDetail WITH (NOLOCK) WHERE PalletKey = @cPalletKey AND CaseID = @cTrackNo
+      
+      IF @nRowCount <> 1
       BEGIN
          SET @nErrNo = 121458
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidTrackNo
@@ -624,7 +642,9 @@ GOTO Quit
 
 /********************************************************************************
 Step 4. screen = 5123 Remove carton?
-   TrackNo (Field11, input)
+   TrackNo  (Field01)
+   ExtInfo  (Field02)
+   Option   (Field03, input)
 ********************************************************************************/
 Step_RemoveCarton:
 BEGIN
@@ -947,6 +967,8 @@ BEGIN
       V_String12 = @cExtendedInfo,
       V_String13 = @cExtendedUpdateSP,
       V_String14 = @cExtendedValidateSP,
+      V_String15 = @cPalletNotLinkMBOL, 
+      V_String16 = @cPalletDetailTrackingNo,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,

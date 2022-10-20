@@ -33,6 +33,8 @@ GO
 /* 2022-07-27  CheeMun  1.3   JSM-68356 - Bug Fix&Skip UOM 2 DP checking*/ 
 /* 2022-10-06  Wan05    1.4   WMS-20898 - THA-adidas-Assign Wave priority*/
 /*                            to Taskdetail (RPF, RPT,CPK,ASTCPK)       */  
+/* 2022-10-10  LZG      1.5   JSM-101260 - Fixed infinite looping       */
+/*                            when no DP Loc is found (ZG01)            */
 /************************************************************************/  
 CREATE OR ALTER PROC [dbo].[ispRLWAV43_RPF]  
         @c_wavekey      NVARCHAR(10)    
@@ -795,7 +797,12 @@ BEGIN
                            ORDER BY LOC.LogicalLocation  
                                    ,LOC.Loc  
                                    
-                           CONTINUE
+                           -- ZG01 (START)
+                           IF @c_ToLoc <> ''  
+                              BREAK 
+                              
+                           GOTO NEXT_DPPPKZone
+                           -- ZG01 (END)
                         END 
                         --(Wan04) - END
                         
