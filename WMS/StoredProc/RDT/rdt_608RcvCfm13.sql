@@ -11,6 +11,7 @@ GO
 /*                                                                         */  
 /* Date       Rev  Author  Purposes                                        */  
 /* 2022-03-09 1.0  James   WMS-18962 Created                               */  
+/* 2022-09-30 1.1  James   Add duplicate lottable07 (james01)              */
 /***************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_608RcvCfm13](  
@@ -87,9 +88,11 @@ BEGIN
       GOTO RollBackTran  
    END  
 
+   SET @cLottable07 = ''
    SET @cLottable11 = ''
    SET @cLottable12 = ''  
    SELECT TOP 1 
+      @cLottable07 = Lottable07,
       @cLottable11 = Lottable11,
       @cLottable12 = Lottable12  
    FROM dbo.ReceiptDetail WITH (NOLOCK)  
