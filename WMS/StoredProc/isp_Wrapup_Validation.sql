@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_Wrapup_Validation]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_Wrapup_Validation]
-GO
-
 SET ANSI_NULLs ON
 GO
 SET ANSI_PADDING ON
@@ -42,8 +38,11 @@ GO
 /*                            saving WaveDetail                          */
 /* 11-Jun-2021  NJOW04   1.7  WMS-17231 include inventoryhold validation */
 /* 11-Jun-2021  NJOW04   1.7  DEVOPS Combine script                      */
+/* 15-AUG-2022  Wan05    1.8  LFWM-3669 - VN ¨C ADIDAS- WMS-SCE¨CAdding    */
+/*                            Validation for Location Type of Module     */
+/*                            Assign Pick Location                       */
 /*************************************************************************/  
-CREATE PROCEDURE [dbo].[isp_Wrapup_Validation]    
+CREATE OR ALTER PROCEDURE [dbo].[isp_Wrapup_Validation]    
       @c_Window            NVARCHAR(60) = ''  
    ,  @c_BusObj            NVARCHAR(30) = ''  
    ,  @c_UpdateTable       NVARCHAR(30)  
@@ -323,7 +322,9 @@ BEGIN
                             + ' LEFT JOIN LOC WITH (NOLOCK) ON (INVENTORYHOLD.Loc = LOC.Loc)'  
                             + ' LEFT JOIN ID  WITH (NOLOCK) ON (INVENTORYHOLD.ID = ID.ID)'  
                             + ' LEFT JOIN SKU WITH (NOLOCK) ON (INVENTORYHOLD.Storerkey = SKU.Storerkey AND INVENTORYHOLD.Sku = SKU.Sku)'
-                            + ' LEFT JOIN STORER WITH (NOLOCK) ON (INVENTORYHOLD.Storerkey = STORER.Storerkey)'    
+                            + ' LEFT JOIN STORER WITH (NOLOCK) ON (INVENTORYHOLD.Storerkey = STORER.Storerkey)' 
+                         WHEN @c_UpdateTable = 'SKUXLOC'       --wan05 
+                         THEN ' JOIN LOC WITH (NOLOCK) ON (SKUXLOC.Loc = LOC.Loc)'  
                          ELSE ''  
                          END  
   

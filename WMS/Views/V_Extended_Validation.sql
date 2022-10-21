@@ -214,6 +214,14 @@ SELECT 'SkuInputValidation' AS ValidationType,
        'Sku.Storerkey' AS CfgValSourceCol,
        'isp_Wrapup_Validation' AS ValidationSP,
        '' AS IsConso
+UNION ALL               --LFWM-3669 - START
+SELECT 'SkuxLocInputValidation' AS ValidationType,
+       'SkuxLoc Input Record Validation' AS ValidationDesc,
+       'SkuxLoc' AS ValidateTable,
+       'Storer' AS ValidateBy,
+       'SkuxLoc.Storerkey' AS CfgValSourceCol,
+       'isp_Wrapup_Validation' AS ValidationSP,
+       '' AS IsConso    --LFWM-3669 - END
 UNION ALL
 SELECT 'POInputValidation' AS ValidationType,
        'PO Input Record Validation' AS ValidationDesc,

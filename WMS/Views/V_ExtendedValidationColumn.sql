@@ -150,6 +150,12 @@ SELECT 'SkuInputValidation' AS ValidationType,
 FROM INFORMATION_SCHEMA.COLUMNS Col
 WHERE Col.TABLE_NAME IN ('SKU')
 AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'AddDate', 'ArchiveCop', 'TrafficCop','TimeStamp')
+UNION ALL               --LFWM-3669                                    
+SELECT 'SkuxLocInputValidation' AS ValidationType,                      
+       UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME) AS ColumnName
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('SKUxLOC')
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'AddDate', 'ArchiveCop', 'TrafficCop','TimeStamp')
 UNION ALL
 SELECT 'POInputValidation' AS ValidationType,
        UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME) AS ColumnName
