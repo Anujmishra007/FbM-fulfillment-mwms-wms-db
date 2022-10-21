@@ -15,6 +15,7 @@ GO
 /*                                                                         */  
 /* Date       Rev  Author     Purposes                                     */  
 /* 2021-04-26 1.0  James      WMS-16668 Created                            */  
+/* 2021-07-02 1.1  James      WMS-17405 Add @nAfterStep param (james01)    */  
 /***************************************************************************/  
   
 CREATE PROC rdt.rdt_638ExtInfo01 (  
@@ -22,6 +23,7 @@ CREATE PROC rdt.rdt_638ExtInfo01 (
    @nFunc         INT,
    @cLangCode     NVARCHAR( 3),
    @nStep         INT,
+   @nAfterStep    INT ,
    @nInputKey     INT,
    @cFacility     NVARCHAR( 5),
    @cStorerKey    NVARCHAR( 15),
