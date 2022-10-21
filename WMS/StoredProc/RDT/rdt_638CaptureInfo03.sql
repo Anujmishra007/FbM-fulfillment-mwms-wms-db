@@ -1,11 +1,7 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdt_638CaptureInfo03]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_638CaptureInfo03]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
-GO  
+GO
   
 /***************************************************************************/  
 /* Store procedure: rdt_638CaptureInfo03                                   */  
@@ -14,9 +10,11 @@ GO
 /* Date       Rev  Author  Purposes                                        */  
 /* 2020-03-26 1.0  James   WMS-16506. Created                              */  
 /* 2021-07-01 1.1  James   Addhoc perf tuning (james01)                    */  
+/* 2021-07-14 1.2  James   WMS-17405 Bug fix on checking tracking no       */
+/*                         (Data1) is blank (james02)                      */
 /***************************************************************************/  
   
-CREATE PROC [RDT].[rdt_638CaptureInfo03](  
+ALTER PROC [RDT].[rdt_638CaptureInfo03](  
    @nMobile     INT,             
    @nFunc       INT,             
    @cLangCode   NVARCHAR( 3),    
@@ -125,26 +123,23 @@ BEGIN
      
    IF @cType = 'UPDATE'  
    BEGIN  
+      SET @cTempID = ''
       SELECT @cTempID = V_ID  
       FROM rdt.rdtDataCapture WITH (NOLOCK)   
       WHERE V_String1 = @cData1  
       AND   StorerKey = @cStorerKey -- (james01)  
       AND   Facility = @cFacility   -- (james01)  
-        
-      IF @@ROWCOUNT = 0  
+
+      -- (james02)
+      IF ISNULL( @cTempID, '') = ''  
       BEGIN  
-         IF @cData2 = ''  
-         BEGIN  
-            SET @nErrNo = 165251  
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Data not found  
-            --EXEC rdt.rdtSetFocusField @nMobile, 1  
-            --GOTO Quit  
-            EXEC rdt.rdtSetFocusField @nMobile, 4   
-            SET @nErrNo = -1  
-            GOTO Quit  
-         END  
+         SET @nErrNo = 165251  
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Data not found  
+         EXEC rdt.rdtSetFocusField @nMobile, 4   
+         SET @nErrNo = -1  
+         GOTO Quit  
       END  
-        
+
       IF @cData2 = ''  
       BEGIN  
          SELECT @cOutField04 = Code  
@@ -266,12 +261,3 @@ BEGIN
 Quit:  
   
 END  
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON RDT.rdt_638CaptureInfo03 TO NSQL
-GO

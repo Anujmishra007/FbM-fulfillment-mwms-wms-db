@@ -46,6 +46,8 @@ GO
 /* 2022-03-07   3.6  YeeKung     WMS-19062 Add extendedinfo step 1(yeekung04) */    
 /* 2022-03-21   3.7  YeeKung     WMS-19113 Fix step5 (yeekung03)              */
 /* 2022-07-21   3.8  Ung         Fix scan wrong SKU but clear lottable field  */
+/* 2022-09-20   3.9  James       WMS-20756 Change rdt_GetSKU output           */
+/*                               UPC Qty (james24)                            */
 /******************************************************************************/        
         
 CREATE OR ALTER PROC [RDT].[rdtfnc_PickPiece] (        
@@ -136,7 +138,8 @@ DECLARE
    @cMultiSKUBarcode    NVARCHAR( 1),      
    @nFromScn            INT,      
    @nFromStep           INT,      
-         
+   @nUPCQty             INT = 0,
+   
    @cLottable01 NVARCHAR( 18),      @cLottable02 NVARCHAR( 18),      @cLottable03 NVARCHAR( 18),        
    @dLottable04 DATETIME,           @dLottable05 DATETIME,           @cLottable06 NVARCHAR( 30),        
    @cLottable07 NVARCHAR( 30),      @cLottable08 NVARCHAR( 30),      @cLottable09 NVARCHAR( 30),        
@@ -150,10 +153,11 @@ DECLARE
    @dChkLottable13 DATETIME,        @dChkLottable14 DATETIME,        @dChkLottable15 DATETIME,        
         
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),        
-   @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),           @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),    @cFieldAttr03 NVARCHAR( 1),        
+   @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),           
+   @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),    @cFieldAttr03 NVARCHAR( 1),        
    @cInField04 NVARCHAR( 60),   @cOutField04 NVARCHAR( 60),    @cFieldAttr04 NVARCHAR( 1),        
    @cInField05 NVARCHAR( 60),   @cOutField05 NVARCHAR( 60),    @cFieldAttr05 NVARCHAR( 1),        
-  @cInField06 NVARCHAR( 60),   @cOutField06 NVARCHAR( 60),    @cFieldAttr06 NVARCHAR( 1),        
+   @cInField06 NVARCHAR( 60),   @cOutField06 NVARCHAR( 60),    @cFieldAttr06 NVARCHAR( 1),        
    @cInField07 NVARCHAR( 60),   @cOutField07 NVARCHAR( 60),    @cFieldAttr07 NVARCHAR( 1),        
    @cInField08 NVARCHAR( 60),   @cOutField08 NVARCHAR( 60),    @cFieldAttr08 NVARCHAR( 1),        
    @cInField09 NVARCHAR( 60),   @cOutField09 NVARCHAR( 60),    @cFieldAttr09 NVARCHAR( 1),        
@@ -1374,6 +1378,11 @@ BEGIN
                ,@bSuccess    = @bSuccess  OUTPUT        
                ,@nErr        = @nErrNo    OUTPUT        
                ,@cErrMsg     = @cErrMsg   OUTPUT        
+               ,@nUPCQty     = @nUPCQty   OUTPUT
+         
+            IF @nUPCQty > 0
+               SET @cQTY = @nUPCQty
+            
             IF @nErrNo <> 0        
                GOTO Step_3_Fail        
         
@@ -4455,6 +4464,3 @@ GO
 
 GRANT EXECUTE ON RDT.rdtfnc_PickPiece TO NSQL
 GO
-
-
-
