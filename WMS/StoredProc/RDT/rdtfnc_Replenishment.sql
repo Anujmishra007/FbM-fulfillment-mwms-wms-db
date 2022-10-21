@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM sys.objects WHERE object_Id = OBJECT_ID(N'[RDT].[rdtfnc_Replenishment]') AND OBJECTPROPERTY(object_Id, N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdtfnc_Replenishment]
-GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -32,10 +29,12 @@ GO
 /* 2021-02-04 2.0  James    WMS-16297 Fix PAZone cannot display more    */
 /*                          than 1 page (james03)                       */
 /* 2021-02-26 2.2  James    WMS-16020 Bug fix on case scanning (james04)*/
-/* 													Add ExtendedInfoSP @ step 5 								*/
+/* 							    Add ExtendedInfoSP @ step 5 					   */
+/* 2022-07-22 2.3  James    WMS-20209 Add DecodeSP (james05)            */
+/*                          Add flow thru sku screen                    */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_Replenishment] (
+CREATE OR ALTER PROC [RDT].[rdtfnc_Replenishment] (
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 nvarchar max
@@ -168,7 +167,11 @@ DECLARE
    @cSuggLocLoseId      NVARCHAR( 1),    -- (james01)        
    @cToLocLoseId        NVARCHAR( 1),    -- (james01)        
    @cReplenNo           NVARCHAR( 5),    -- (james01)        
-
+   @cDecodeSP           NVARCHAR( 20),
+   @cBarcode            NVARCHAR( 60),
+   @cFlowThruStep5      NVARCHAR( 1),
+   @nSKUOnPalletCnt     INT = 0,
+   
    @c_oFieled01 NVARCHAR(20), @c_oFieled02 NVARCHAR(20),
    @c_oFieled03 NVARCHAR(20), @c_oFieled04 NVARCHAR(20),
    @c_oFieled05 NVARCHAR(20), @c_oFieled06 NVARCHAR(20),
@@ -233,6 +236,8 @@ SELECT
    @cMUOM_Desc  = V_String3,
    @cPUOM_Desc  = V_String4,
    @cExtendedInfoSP   = V_String5,
+   @cDecodeSP   = V_String6,   
+   @cFlowThruStep5 = V_String7,
    @nPUOM_Div   = V_PUOM_Div,
    @nMQTY       = V_MQTY,
    @nPQTY       = V_PQTY,
@@ -387,7 +392,14 @@ BEGIN
 
    -- (james01)
    SET @cAllowOverWriteToLoc = rdt.RDTGetConfig( @nFunc, 'AllowOverWriteToLoc', @cStorerKey)
-   
+
+   -- (james05)
+   SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerKey)
+   IF @cDecodeSP = '0'
+      SET @cDecodeSP = ''
+
+   SET @cFlowThruStep5 = rdt.RDTGetConfig( @nFunc, 'FlowThruStep5', @cStorerKey)
+
    -- Set the entry point
    SET @nScn = 4210 --1225
    SET @nStep = 1
@@ -1658,6 +1670,7 @@ BEGIN
                GOTO Step_4_Fail
 
             SET @cOutfield14 = @cOutInfo01
+			   SELECT  @cOutfield09 = SKU FROM LOTATTRIBUTE(NOLOCK) WHERE LOT =  @cLOT--CJ
          END
          ELSE
          BEGIN
@@ -1670,6 +1683,23 @@ BEGIN
 
          SET @nScn = @nScn + 1
          SET @nStep = @nStep + 1
+
+         IF @cFlowThruStep5 = '1'
+         BEGIN
+         	SELECT @nSKUOnPalletCnt = COUNT( DISTINCT Sku)
+         	FROM rdt.rdtReplenishmentLog  WITH (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+            AND   WaveKey = @cWaveKey
+            AND   Confirmed <> 'Y'
+            AND   ID = @cFromID
+            AND   FromLoc = @cFromLoc
+         	
+         	IF @nSKUOnPalletCnt = 1
+         	BEGIN
+         	   SET @cInField01 = @cSuggSKU
+         	   GOTO Step_5         		
+         	END
+         END
       END
 
 
@@ -1744,7 +1774,7 @@ BEGIN
       SET @cActPQTY = IsNULL( @cInField12, '')
       SET @cActMQTY = IsNULL( @cInField13, '')
       SET @cLabelNo = IsNULL( RTRIM(@cInField01), '')
-
+      SET @cBarcode = IsNULL( RTRIM(@cInField01), '')
 
       -- Goto Short Screen If SKU & Qty = Blank
       IF ISNULL(RTRIM(@cLabelNo),'')  = '' AND ( @cActPQTY = '' AND @cActMQTY = '' ) AND @nSKUValidated = 0
@@ -1773,66 +1803,151 @@ BEGIN
 
       IF ISNULL(RTRIM(@cLabelNo),'')  <> ''
       BEGIN
-         -- Decode label
-         IF ISNULL(RTRIM(@cDecodeLabelNo),'')  <> ''
+         -- Decode
+         IF @cDecodeSP <> ''
          BEGIN
+            -- Standard decode
+            IF @cDecodeSP = '1'
+            BEGIN
+               EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode, 
+                  @cUPC          = @cSKU              OUTPUT, 
+                  @nQTY          = @nUCCQTY           OUTPUT, 
+                  @cUserDefine01 = @cUCC              OUTPUT,
+                  @cUserDefine02 = @cReplenishmentKey OUTPUT,
+                  @cLottable01   = @cLottable01       OUTPUT,
+                  @cLottable02   = @cLottable02       OUTPUT,
+                  @cLottable03   = @cLottable03       OUTPUT,
+                  @dLottable04   = @dLottable04       OUTPUT,
+                  @dLottable05   = @dLottable05       OUTPUT,
+                  @cLottable06   = @cLottable06       OUTPUT,
+                  @cLottable07   = @cLottable07       OUTPUT,
+                  @cLottable08   = @cLottable08       OUTPUT,
+                  @cLottable09   = @cLottable09       OUTPUT,
+                  @cLottable10   = @cLottable10       OUTPUT,
+                  @cLottable11   = @cLottable11       OUTPUT,
+                  @cLottable12   = @cLottable12       OUTPUT,
+                  @dLottable13   = @dLottable13       OUTPUT,
+                  @dLottable14   = @dLottable14       OUTPUT,
+                  @dLottable15   = @dLottable15       OUTPUT,
+                  @nErrNo        = @nErrNo            OUTPUT, 
+                  @cErrMsg       = @cErrMsg           OUTPUT,
+                  @cType         = 'UPC'
+            END
 
-            SET @cErrMsg = ''
-            SET @nErrNo = 0
+            -- Customize decode
+            ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
+            BEGIN
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cBarcode, ' +
+                  ' @cSKU        OUTPUT, @nQty        OUTPUT, @cUCC        OUTPUT, @cReplenishmentKey  OUTPUT, ' +
+                  ' @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT, ' +
+                  ' @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT, ' +
+                  ' @cLottable11 OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT, ' +
+                  ' @nErrNo      OUTPUT, @cErrMsg     OUTPUT'
+               SET @cSQLParam =
+                  ' @nMobile      INT,             ' +
+                  ' @nFunc        INT,             ' +
+                  ' @cLangCode    NVARCHAR( 3),    ' +
+                  ' @nStep        INT,             ' +
+                  ' @nInputKey    INT,             ' +
+                  ' @cStorerKey   NVARCHAR( 15),   ' +
+                  ' @cBarcode     NVARCHAR( 2000), ' +
+                  ' @cSKU         NVARCHAR( 20)  OUTPUT, ' +
+                  ' @nQty         INT            OUTPUT, ' +
+                  ' @cUCC         NVARCHAR( 20)  OUTPUT, ' +
+                  ' @cReplenishmentKey NVARCHAR( 10)  OUTPUT, ' +
+                  ' @cLottable01  NVARCHAR( 18)  OUTPUT, ' +
+                  ' @cLottable02  NVARCHAR( 18)  OUTPUT, ' +
+                  ' @cLottable03  NVARCHAR( 18)  OUTPUT, ' +
+                  ' @dLottable04  DATETIME       OUTPUT, ' +
+                  ' @dLottable05  DATETIME       OUTPUT, ' +
+                  ' @cLottable06  NVARCHAR( 30)  OUTPUT, ' +
+                  ' @cLottable07  NVARCHAR( 30)  OUTPUT, ' +
+                  ' @cLottable08  NVARCHAR( 30)  OUTPUT, ' +
+                  ' @cLottable09  NVARCHAR( 30)  OUTPUT, ' +
+                  ' @cLottable10  NVARCHAR( 30)  OUTPUT, ' +
+                  ' @cLottable11  NVARCHAR( 30)  OUTPUT, ' +
+                  ' @cLottable12  NVARCHAR( 30)  OUTPUT, ' +
+                  ' @dLottable13  DATETIME       OUTPUT, ' +
+                  ' @dLottable14  DATETIME       OUTPUT, ' +
+                  ' @dLottable15  DATETIME       OUTPUT, ' +
+                  ' @nErrNo       INT            OUTPUT, ' +
+                  ' @cErrMsg      NVARCHAR( 20)  OUTPUT'
 
-            EXEC dbo.ispLabelNo_Decoding_Wrapper
-                @c_SPName     = @cDecodeLabelNo
-               ,@c_LabelNo    = @cLabelNo
-               ,@c_Storerkey  = @cStorerKey
-               ,@c_ReceiptKey = ''
-               ,@c_POKey      = ''
-               ,@c_LangCode   = @cLangCode
-               ,@c_oFieled01  = @c_oFieled01 OUTPUT   -- SKU
-               ,@c_oFieled02  = @c_oFieled02 OUTPUT   -- STYLE
-               ,@c_oFieled03  = @c_oFieled03 OUTPUT   -- COLOR
-               ,@c_oFieled04  = @c_oFieled04 OUTPUT   -- SIZE
-               ,@c_oFieled05  = @c_oFieled05 OUTPUT   -- QTY
-               ,@c_oFieled06  = @c_oFieled06 OUTPUT   -- LOT
-               ,@c_oFieled07  = @c_oFieled07 OUTPUT   -- Label Type
-               ,@c_oFieled08  = @c_oFieled08 OUTPUT   -- UCC
-               ,@c_oFieled09  = @c_oFieled09 OUTPUT
-               ,@c_oFieled10  = @c_oFieled10 OUTPUT
-               ,@b_Success    = @b_Success   OUTPUT
-               ,@n_ErrNo      = @nErrNo      OUTPUT
-               ,@c_ErrMsg     = @cErrMsg     OUTPUT
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cBarcode,
+                  @cSKU        OUTPUT, @nUCCQty      OUTPUT, @cUCC        OUTPUT, @cReplenishmentKey  OUTPUT,
+                  @cLottable01 OUTPUT, @cLottable02  OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT,
+                  @cLottable06 OUTPUT, @cLottable07  OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT,
+                  @cLottable11 OUTPUT, @cLottable12  OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT,
+                  @nErrNo      OUTPUT, @cErrMsg      OUTPUT
+            END
 
             IF @nErrNo <> 0
                GOTO Step_5_Fail
-
-            SET @cSKU    = ISNULL( @c_oFieled01, '')
-            SET @nUCCQTY = CAST( ISNULL( @c_oFieled05, '') AS INT)
-            SET @cUCC    = ISNULL( @c_oFieled08, '')
-            SET @cReplenishmentKey = ISNULL( @c_oFieled09, '')
-
-            IF @cNotDisplayQty  = '1'
-            BEGIN
-               IF @nUCCQty > 0
-                  SET @nQty = @nUCCQty
-               ELSE
-                  SET @cActMQTY = @c_oFieled10
-            END
-
-            IF @cReplenishmentKey = ''
-            BEGIN
-               SET @nErrNo = 93684
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ReplenNotFound
-               EXEC rdt.rdtSetFocusField @nMobile, 1 -- SKU
-               GOTO Step_5_Fail
-            END
-
-
-
          END
          ELSE
          BEGIN
-            SET @cSKU = @cLabelNo
-         END
+            -- Decode label
+            IF ISNULL(RTRIM(@cDecodeLabelNo),'')  <> ''
+            BEGIN
 
+               SET @cErrMsg = ''
+               SET @nErrNo = 0
+
+               EXEC dbo.ispLabelNo_Decoding_Wrapper
+                   @c_SPName     = @cDecodeLabelNo
+                  ,@c_LabelNo    = @cLabelNo
+                  ,@c_Storerkey  = @cStorerKey
+                  ,@c_ReceiptKey = ''
+                  ,@c_POKey      = ''
+                  ,@c_LangCode   = @cLangCode
+                  ,@c_oFieled01  = @c_oFieled01 OUTPUT   -- SKU
+                  ,@c_oFieled02  = @c_oFieled02 OUTPUT   -- STYLE
+                  ,@c_oFieled03  = @c_oFieled03 OUTPUT   -- COLOR
+                  ,@c_oFieled04  = @c_oFieled04 OUTPUT   -- SIZE
+                  ,@c_oFieled05  = @c_oFieled05 OUTPUT   -- QTY
+                  ,@c_oFieled06  = @c_oFieled06 OUTPUT   -- LOT
+                  ,@c_oFieled07  = @c_oFieled07 OUTPUT   -- Label Type
+                  ,@c_oFieled08  = @c_oFieled08 OUTPUT   -- UCC
+                  ,@c_oFieled09  = @c_oFieled09 OUTPUT
+                  ,@c_oFieled10  = @c_oFieled10 OUTPUT
+                  ,@b_Success    = @b_Success   OUTPUT
+                  ,@n_ErrNo      = @nErrNo      OUTPUT
+                  ,@c_ErrMsg     = @cErrMsg     OUTPUT
+
+               IF @nErrNo <> 0
+                  GOTO Step_5_Fail
+
+               SET @cSKU    = ISNULL( @c_oFieled01, '')
+               SET @nUCCQTY = CAST( ISNULL( @c_oFieled05, '') AS INT)
+               SET @cUCC    = ISNULL( @c_oFieled08, '')
+               SET @cReplenishmentKey = ISNULL( @c_oFieled09, '')
+
+               IF @cNotDisplayQty  = '1'
+               BEGIN
+                  IF @nUCCQty > 0
+                     SET @nQty = @nUCCQty
+                  ELSE
+                     SET @cActMQTY = @c_oFieled10
+               END
+
+               IF @cReplenishmentKey = ''
+               BEGIN
+                  SET @nErrNo = 93684
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ReplenNotFound
+                  EXEC rdt.rdtSetFocusField @nMobile, 1 -- SKU
+                  GOTO Step_5_Fail
+               END
+
+
+
+            END
+            ELSE
+            BEGIN
+               SET @cSKU = @cLabelNo
+            END
+         END
 
 
          -- Get SKU barcode count
@@ -3267,6 +3382,7 @@ BEGIN
                     GOTO Step_4_Fail
 
                 SET @cOutfield14 = @cOutInfo01
+			       SELECT  @cOutfield09 = SKU FROM LOTATTRIBUTE(NOLOCK) WHERE LOT =  @cLOT--CJ
               END
               ELSE
               BEGIN
@@ -3726,6 +3842,7 @@ BEGIN
                      GOTO Step_4_Fail
 
                  SET @cOutfield14 = @cOutInfo01
+			        SELECT  @cOutfield09 = SKU FROM LOTATTRIBUTE(NOLOCK) WHERE LOT =  @cLOT--CJ
               END
               ELSE
               BEGIN
@@ -4034,7 +4151,7 @@ BEGIN
    --         SET @cOutField07 = rdt.rdtFormatDate( @dLottable04)
 
             SET @cOutField14 = @cOutInfo01
-			
+			   SELECT  @cOutfield09 = SKU FROM LOTATTRIBUTE(NOLOCK) WHERE LOT =  @cLOT--CJ
             -- Disable QTY field
             --SET @cFieldAttr12 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END -- PQTY
             --SET @cFieldAttr13 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END -- MQTY
@@ -4628,6 +4745,7 @@ BEGIN
                GOTO Step_10_Fail
 
             SET @cOutfield14 = @cOutInfo01
+			   SELECT  @cOutfield09 = SKU FROM LOTATTRIBUTE(NOLOCK) WHERE LOT =  @cLOT--CJ
          END
          ELSE
          BEGIN
@@ -4687,6 +4805,8 @@ BEGIN
       V_String3 = @cMUOM_Desc,
       V_String4 = @cPUOM_Desc,
       V_String5 = @cExtendedInfoSP,
+      V_String6 = @cDecodeSP,   
+      V_String7 = @cFlowThruStep5,
       V_PUOM_Div = @nPUOM_Div,
       V_MQTY = @nMQTY,
       V_PQTY = @nPQTY,
