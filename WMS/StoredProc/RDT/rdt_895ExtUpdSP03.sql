@@ -1,11 +1,7 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_895ExtUpdSP03]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_895ExtUpdSP03]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
-GO 
+GO
 
 /************************************************************************/  
 /* Store procedure: rdt_895ExtUpdSP03                                   */    
@@ -16,9 +12,10 @@ GO
 /* Modifications log:                                                   */    
 /* Date        Rev  Author   Purposes                                   */    
 /* 2021-02-19  1.0  James    WMS-16020. Created                         */
+/* 2022-09-01  1.1  James    WMS-20209 Remove DropID filter (james01)   */
 /************************************************************************/    
     
-CREATE PROC [RDT].[rdt_895ExtUpdSP03] (    
+CREATE OR ALTER PROC [RDT].[rdt_895ExtUpdSP03] (    
   @nMobile        INT, 
   @nFunc          INT, 
   @nStep          INT,
@@ -1094,9 +1091,12 @@ BEGIN
                   BEGIN
       					 SELECT @nQtyAlloc = ISNULL( SUM( QTY), 0)
       					 FROM dbo.PICKDETAIL WITH (NOLOCK)
-      					 WHERE DropID = @cReplenKey
-      					 AND   Storerkey = @cStorerKey
+      					 --WHERE DropID = @cReplenKey
+      					 WHERE Storerkey = @cStorerKey
       					 AND   STATUS = '0'
+      					 AND   Lot = @cLot
+      					 AND   LOC = @cFromLOC
+      					 AND   ID = @cID
                   END
                   
                   -- Actual Move of the Qty --
@@ -1118,12 +1118,12 @@ BEGIN
                      @nQTYAlloc   = @nQtyAlloc,
                      @nQTYPick    = 0, 
                      @nQTYReplen  = 0,
-                     @nFunc       = @nFunc,
-                     @cDropID     = @cReplenKey
+                     @nFunc       = @nFunc--,
+                     --@cDropID     = @cReplenKey
                      
                   IF @nErrNo <> 0 
                   BEGIN
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') 
+                        SET @cErrMsg = CAST(@nQtyAlloc AS NVARCHAR( 4))--rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') 
                         GOTO RollBackTran    
                   END   
                END
@@ -1373,6 +1373,5 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-
-GRANT EXECUTE ON RDT.rdt_895ExtUpdSP03 TO NSQL
+GRANT EXECUTE ON RDT.rdt_895ExtUpdSP03 TO nSQL
 GO
