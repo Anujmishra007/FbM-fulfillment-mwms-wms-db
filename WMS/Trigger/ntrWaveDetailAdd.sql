@@ -1,7 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects where id = object_id(N'[dbo].[ntrWaveDetailAdd]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-	DROP TRIGGER [dbo].[ntrWaveDetailAdd]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -40,8 +36,10 @@ GO
 /*                                            When Delete                     */
 /* 24-MAY-2022  LZG        1.3   JSM-69426 - Calculate Wave status when       */
 /*                               adding order into WaveDetail (ZG01)          */
+/* 20-OCT-2022  NJOW01     1.4   WMS-21042 call custom stored proc            */
+/* 20-OCT-2022  NJOW01     1.4   DEVOPS Combine Script                        */
 /******************************************************************************/
-CREATE TRIGGER [dbo].[ntrWaveDetailAdd]
+CREATE OR ALTER TRIGGER [dbo].[ntrWaveDetailAdd]
 ON [dbo].[WAVEDETAIL]
 FOR  INSERT
 AS
@@ -231,6 +229,49 @@ BEGIN
       DEALLOCATE CUR_Wave_Orders
    END
    --INC0349006 End
+   
+   --NJOW01
+   IF @n_continue=1 or @n_continue = 2
+   BEGIN
+      IF EXISTS (SELECT 1 FROM INSERTED i
+                 JOIN ORDERS       o WITH (NOLOCK) ON i.OrderKey = o.OrderKey
+                 JOIN storerconfig s WITH (NOLOCK) ON o.StorerKey = s.StorerKey
+                 JOIN sys.objects sys ON sys.type = 'P' AND sys.name = s.Svalue
+                 WHERE  s.configkey = 'WaveDetailTrigger_SP')
+      BEGIN
+         IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL
+            DROP TABLE #INSERTED
+
+         SELECT *
+         INTO #INSERTED
+         FROM INSERTED
+
+         IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL
+            DROP TABLE #DELETED
+
+         SELECT *
+         INTO #DELETED
+         FROM DELETED
+
+         EXECUTE dbo.isp_WaveDetailTrigger_Wrapper
+                   'INSERT'  --@c_Action
+                 , @b_Success  OUTPUT
+                 , @n_Err      OUTPUT
+                 , @c_ErrMsg   OUTPUT
+
+         IF @b_success <> 1
+         BEGIN
+            SELECT @n_continue = 3
+                  ,@c_errmsg = 'ntrWaveDetailAdd ' + RTRIM(LTRIM(ISNULL(@c_errmsg,'')))
+         END
+
+         IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL
+            DROP TABLE #INSERTED
+
+         IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL
+            DROP TABLE #DELETED
+      END
+   END   
 
    IF @n_continue = 3 -- Error Occured - Process And Return
    BEGIN

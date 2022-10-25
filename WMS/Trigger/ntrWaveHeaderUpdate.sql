@@ -1,12 +1,7 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[ntrWaveHeaderUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-    DROP TRIGGER [dbo].[ntrWaveHeaderUpdate]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-
 
 /************************************************************************/
 /* Trigger: ntrWaveHeaderUpdate                                         */
@@ -35,13 +30,15 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author    Purposes                                      */
-/* 25 May 2012  TLTING01  DM integrity - add update editdate B4         */
-/*                        TrafficCop                                    */ 
-/* 28-Oct-2013  TLTING     Review Editdate column update                */
+/* Date         Author     Ver  Purposes                                */
+/* 25 May 2012  TLTING01   1.0  DM integrity - add update editdate B4   */
+/*                              TrafficCop                              */ 
+/* 28-Oct-2013  TLTING     1.1  Review Editdate column update           */
+/* 20-OCT-2022  NJOW01     1.2  WMS-21042 call custom stored proc       */
+/* 20-OCT-2022  NJOW01     1.2  DEVOPS Combine Script                   */
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrWaveHeaderUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrWaveHeaderUpdate]
 ON  [dbo].[WAVE] FOR UPDATE
 AS
 BEGIN
@@ -93,6 +90,50 @@ BEGIN
 	BEGIN
 		SELECT @n_continue = 4 
 	END
+	
+  --NJOW01
+  IF @n_continue=1 or @n_continue=2                 
+  BEGIN          
+     IF EXISTS (SELECT 1 FROM DELETED d     
+                JOIN WAVEDETAIL wd WITH (NOLOCK) ON d.Wavekey = wd.Wavekey     
+                JOIN ORDERS       o WITH (NOLOCK) ON wd.OrderKey = o.OrderKey 
+                JOIN storerconfig s WITH (NOLOCK) ON o.storerkey = s.storerkey          
+                JOIN sys.objects sys WITH (NOLOCK) ON sys.type = 'P' AND sys.name = s.Svalue          
+                WHERE  s.configkey = 'WaveTrigger_SP')          
+     BEGIN          
+        IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL          
+           DROP TABLE #INSERTED          
+            
+        SELECT *          
+        INTO #INSERTED          
+        FROM INSERTED          
+            
+        IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL          
+           DROP TABLE #DELETED          
+            
+        SELECT *          
+        INTO #DELETED          
+        FROM DELETED          
+            
+        EXECUTE dbo.isp_WaveTrigger_Wrapper          
+                  'UPDATE'  --@c_Action          
+                , @b_Success  OUTPUT          
+                , @n_Err      OUTPUT          
+                , @c_ErrMsg   OUTPUT          
+            
+        IF @b_success <> 1          
+        BEGIN          
+           SELECT @n_continue = 3          
+                 ,@c_errmsg = 'ntrWaveHeaderUpdate ' + RTRIM(LTRIM(ISNULL(@c_errmsg,'')))          
+        END          
+            
+        IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL          
+           DROP TABLE #INSERTED          
+            
+        IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL          
+           DROP TABLE #DELETED          
+     END          
+  END          	
 	
 	   /* #INCLUDE <TRTHU1.SQL> */     
 

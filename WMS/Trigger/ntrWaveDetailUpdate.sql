@@ -1,6 +1,3 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'ntrWaveDetailUpdate' AND type = 'TR')
-   DROP TRIGGER ntrWaveDetailUpdate
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -33,13 +30,15 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author    Purposes                                      */
-/* 25 May 2012  TLTING01  DM integrity - add update editdate B4         */
-/*                        TrafficCop                                    */ 
-/* 28-Oct-2013  TLTING    Review Editdate column update                 */
+/* Date         Author     Ver. Purposes                                */
+/* 25 May 2012  TLTING01   1.0  DM integrity - add update editdate B4   */
+/*                              TrafficCop                              */ 
+/* 28-Oct-2013  TLTING     1.1  Review Editdate column update           */
+/* 20-OCT-2022  NJOW01     1.2  WMS-21042 call custom stored proc       */
+/* 20-OCT-2022  NJOW01     1.2  DEVOPS Combine Script                   */
 /************************************************************************/
 
-CREATE TRIGGER ntrWaveDetailUpdate  
+CREATE OR ALTER TRIGGER ntrWaveDetailUpdate  
  ON  WaveDetail  
  FOR UPDATE  
  AS  
@@ -117,6 +116,50 @@ CREATE TRIGGER ntrWaveDetailUpdate
  		SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Manual Orders cannot be waved.(ntrWaveDetailAdd)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "	
  	END
  END
+ 
+ --NJOW01
+ IF @n_continue=1 or @n_continue=2                 
+ BEGIN          
+    IF EXISTS (SELECT 1 FROM DELETED d          
+               JOIN ORDERS       o WITH (NOLOCK) ON d.OrderKey = o.OrderKey 
+               JOIN storerconfig s WITH (NOLOCK) ON o.storerkey = s.storerkey          
+               JOIN sys.objects sys WITH (NOLOCK) ON sys.type = 'P' AND sys.name = s.Svalue          
+               WHERE  s.configkey = 'WaveDetailTrigger_SP')          
+    BEGIN          
+       IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL          
+          DROP TABLE #INSERTED          
+           
+       SELECT *          
+       INTO #INSERTED          
+       FROM INSERTED          
+           
+       IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL          
+          DROP TABLE #DELETED          
+           
+       SELECT *          
+       INTO #DELETED          
+       FROM DELETED          
+           
+       EXECUTE dbo.isp_WaveDetailTrigger_Wrapper          
+                 'UPDATE'  --@c_Action          
+               , @b_Success  OUTPUT          
+               , @n_Err      OUTPUT          
+               , @c_ErrMsg   OUTPUT          
+           
+       IF @b_success <> 1          
+       BEGIN          
+          SELECT @n_continue = 3          
+                ,@c_errmsg = 'ntrWaveDetailUpdate ' + RTRIM(LTRIM(ISNULL(@c_errmsg,'')))          
+       END          
+           
+       IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL          
+          DROP TABLE #INSERTED          
+           
+       IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL          
+          DROP TABLE #DELETED          
+    END          
+ END          
+ 
  IF @n_continue=3  -- Error Occured - Process And Return  
  BEGIN  
     IF @@TRANCOUNT = 1 and @@TRANCOUNT >= @n_starttcnt  
