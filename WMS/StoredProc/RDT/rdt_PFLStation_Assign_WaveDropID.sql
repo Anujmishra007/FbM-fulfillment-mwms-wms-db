@@ -1,22 +1,20 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE Object_Id = OBJECT_ID(N'[RDT].[rdt_PFLStation_Assign_WaveDropID]') AND Type in (N'P', N'PC'))
-   DROP PROCEDURE rdt.rdt_PFLStation_Assign_WaveDropID
-GO
 
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/******************************************************************************/
-/* Store procedure: rdt_PFLStation_Assign_WaveDropID                          */
-/* Copyright      : LFLogistics                                               */
-/*                                                                            */
-/* Date       Rev  Author   Purposes                                          */
-/* 16-06-2019 1.0  Ung      WMS-9372 Created                                  */
-/* 21-01-2020 1.1  Chermaine WMS-11811 Not allow >1 order in one dropID (cc01)*/
-/******************************************************************************/
+/*********************************************************************************/
+/* Store procedure: rdt_PFLStation_Assign_WaveDropID                             */
+/* Copyright      : LFLogistics                                                  */
+/*                                                                               */
+/* Date       Rev  Author     Purposes                                           */
+/* 16-06-2019 1.0  Ung        WMS-9372 Created                                   */
+/* 21-01-2020 1.1  Chermaine  WMS-11811 Not allow >1 order in one dropID (cc01)  */
+/* 12-10-2022 1.1  Ung        WMS-20949 Add exclude zone                         */
+/*********************************************************************************/
 
-CREATE PROC rdt.rdt_PFLStation_Assign_WaveDropID (
+CREATE OR ALTER PROC rdt.rdt_PFLStation_Assign_WaveDropID (
    @nMobile          INT, 
    @nFunc            INT, 
    @cLangCode        NVARCHAR( 3), 
@@ -476,8 +474,7 @@ BEGIN
                   FROM PickDetail PD1 WITH (NOLOCK)
                      JOIN LOC WITH (NOLOCK) ON (PD1.LOC = LOC.LOC)
                   WHERE PD1.OrderKey = PD.OrderKey
-                     AND LOC.PutawayZone NOT IN ( 'PTLB2BZONE', 'PTLB2CZONE') )  
-                     --AND LOC.LocationType <> 'PICK')       
+                     AND LOC.PutawayZone NOT LIKE 'PTL%')       
          
             -- Check no order
             IF @cOrderKey = ''
