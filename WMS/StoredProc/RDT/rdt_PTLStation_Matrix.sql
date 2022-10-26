@@ -1,11 +1,8 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE Object_Id = OBJECT_ID(N'[RDT].[rdt_PTLStation_Matrix]') AND Type in (N'P', N'PC'))
-   DROP PROCEDURE [RDT].[rdt_PTLStation_Matrix]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 
 /************************************************************************/
 /* Store procedure: rdt_PTLStation_Matrix                               */
@@ -17,22 +14,23 @@ GO
 /* 23-08-2018 1.2  Ung      WMS-6027 Remove multi page                  */
 /* 04-04-2019 1.3  Ung      INC0645616 Fix not light up, if lights are  */
 /*                          more than matrix                            */
+/* 19-10-2022 1.4  Ung      WMS-21024 Fix IPAddress not setup           */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdt_PTLStation_Matrix] (
+CREATE OR ALTER PROC [RDT].[rdt_PTLStation_Matrix] (
     @nMobile    INT
    ,@nFunc      INT
    ,@cLangCode  NVARCHAR( 3)
-   ,@nStep      INT 
+   ,@nStep      INT
    ,@nInputKey  INT
    ,@cFacility  NVARCHAR( 5)
    ,@cStorerKey NVARCHAR( 15)
    ,@cLight     NVARCHAR( 1)
-   ,@cStation1  NVARCHAR( 10)  
-   ,@cStation2  NVARCHAR( 10)  
-   ,@cStation3  NVARCHAR( 10)  
-   ,@cStation4  NVARCHAR( 10)  
-   ,@cStation5  NVARCHAR( 10)  
+   ,@cStation1  NVARCHAR( 10)
+   ,@cStation2  NVARCHAR( 10)
+   ,@cStation3  NVARCHAR( 10)
+   ,@cStation4  NVARCHAR( 10)
+   ,@cStation5  NVARCHAR( 10)
    ,@cScanID    NVARCHAR( 20)
    ,@cSKU       NVARCHAR( 20)
    ,@nErrNo     INT            OUTPUT
@@ -90,16 +88,16 @@ BEGIN
             ' @nInputKey  INT,           ' +
             ' @cFacility  NVARCHAR( 5),  ' +
             ' @cStorerKey NVARCHAR( 15), ' +
-            ' @cLight     NVARCHAR( 1),  ' + 
-            ' @cStation1  NVARCHAR( 10), ' +  
-            ' @cStation2  NVARCHAR( 10), ' +  
-            ' @cStation3  NVARCHAR( 10), ' +  
-            ' @cStation4  NVARCHAR( 10), ' +  
-            ' @cStation5  NVARCHAR( 10), ' +  
+            ' @cLight     NVARCHAR( 1),  ' +
+            ' @cStation1  NVARCHAR( 10), ' +
+            ' @cStation2  NVARCHAR( 10), ' +
+            ' @cStation3  NVARCHAR( 10), ' +
+            ' @cStation4  NVARCHAR( 10), ' +
+            ' @cStation5  NVARCHAR( 10), ' +
             ' @cScanID    NVARCHAR( 20), ' +
             ' @cSKU       NVARCHAR( 20), ' +
             ' @nErrNo     INT            OUTPUT, ' +
-            ' @cErrMsg    NVARCHAR( 20)  OUTPUT, ' + 
+            ' @cErrMsg    NVARCHAR( 20)  OUTPUT, ' +
             ' @cResult01  NVARCHAR( 20)  OUTPUT, ' +
             ' @cResult02  NVARCHAR( 20)  OUTPUT, ' +
             ' @cResult03  NVARCHAR( 20)  OUTPUT, ' +
@@ -114,9 +112,9 @@ BEGIN
 
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
             @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
-            @cLight, @cStation1, @cStation2, @cStation3, @cStation4, @cStation5, @cScanID, @cSKU, @nErrNo OUTPUT, @cErrMsg OUTPUT, 
+            @cLight, @cStation1, @cStation2, @cStation3, @cStation4, @cStation5, @cScanID, @cSKU, @nErrNo OUTPUT, @cErrMsg OUTPUT,
             @cResult01 OUTPUT, @cResult02 OUTPUT, @cResult03 OUTPUT, @cResult04 OUTPUT, @cResult05 OUTPUT,
-            @cResult06 OUTPUT, @cResult07 OUTPUT, @cResult08 OUTPUT, @cResult09 OUTPUT, @cResult10 OUTPUT, 
+            @cResult06 OUTPUT, @cResult07 OUTPUT, @cResult08 OUTPUT, @cResult09 OUTPUT, @cResult10 OUTPUT,
             @nNextPage OUTPUT
 
          GOTO Quit
@@ -145,12 +143,12 @@ BEGIN
    DECLARE @cNoAltRow   NVARCHAR(1)
    DECLARE @cDeviceID   NVARCHAR(20)
    -- DECLARE @nMaxRecOnPage INT
-   
+
    DECLARE @tPos TABLE
    (
       Seq       INT IDENTITY(1,1) NOT NULL,
       PTLKey    BIGINT,
-      Station   NVARCHAR(10), 
+      Station   NVARCHAR(10),
       IPAddress NVARCHAR(40),
       Position  NVARCHAR(5),
       QTY       NVARCHAR(5)
@@ -163,10 +161,10 @@ BEGIN
    SET @cNoAltRow = rdt.RDTGetConfig( @nFunc, 'MatrixNoAltRow', @cStorerKey)
    SET @cCol = rdt.RDTGetConfig( @nFunc, 'MatrixColumn', @cStorerKey)
    SET @cDelimeter = '|'
-   
+
    -- Get login info
-   SELECT @cDeviceID = DeviceID FROM rdt.rdtMobRec WITH (NOLOCK) WHERE Mobile = @nMobile   
-   
+   SELECT @cDeviceID = DeviceID FROM rdt.rdtMobRec WITH (NOLOCK) WHERE Mobile = @nMobile
+
    -- Check column setup
    IF @cCol = '0'
    BEGIN
@@ -205,7 +203,7 @@ BEGIN
    SET @curPTLTran = CURSOR FOR
       SELECT T.PTLKey, T.IPAddress, T.DevicePosition, ExpectedQTY
       FROM PTL.PTLTran T WITH (NOLOCK)
-         JOIN @tPos P ON (T.IPAddress = P.IPAddress AND T.DevicePosition = P.Position)
+         JOIN @tPos P ON (T.IPAddress = P.IPAddress AND T.DevicePosition = P.Position AND T.DeviceID = P.Station)
       WHERE DropID = @cScanID
          AND SKU = @cSKU
          AND Status <> '9' -- Due to light on, set PTLTran.Status = 1
@@ -246,7 +244,7 @@ BEGIN
    IF @cCol = '8'  SET @nCellLen = 1  ELSE
    IF @cCol = '9'  SET @nCellLen = 1  ELSE
    IF @cCol = '10' SET @nCellLen = 1
-  
+
    -- Loop light position
    DECLARE @curLightPos CURSOR
    SET @curLightPos = CURSOR FOR
@@ -282,21 +280,21 @@ BEGIN
       -- Calc which row to write
       DECLARE @nWriteRow INT
       SET @nWriteRow = CEILING( @nCounter / CAST( @cCol AS FLOAT))
-      
+
       -- Alternate row
       IF @cNoAltRow <> '1'
          SET @nWriteRow = (@nWriteRow * 2) - 1
 
       -- Write to screen
-      IF @nWriteRow =  1 SET @cResult01 = @cResult01 + @cQTY ELSE  
-      IF @nWriteRow =  2 SET @cResult02 = @cResult02 + @cQTY ELSE 
-      IF @nWriteRow =  3 SET @cResult03 = @cResult03 + @cQTY ELSE 
-      IF @nWriteRow =  4 SET @cResult04 = @cResult04 + @cQTY ELSE 
-      IF @nWriteRow =  5 SET @cResult05 = @cResult05 + @cQTY ELSE 
-      IF @nWriteRow =  6 SET @cResult06 = @cResult06 + @cQTY ELSE 
-      IF @nWriteRow =  7 SET @cResult07 = @cResult07 + @cQTY ELSE 
-      IF @nWriteRow =  8 SET @cResult08 = @cResult08 + @cQTY ELSE 
-      IF @nWriteRow =  9 SET @cResult09 = @cResult09 + @cQTY ELSE 
+      IF @nWriteRow =  1 SET @cResult01 = @cResult01 + @cQTY ELSE
+      IF @nWriteRow =  2 SET @cResult02 = @cResult02 + @cQTY ELSE
+      IF @nWriteRow =  3 SET @cResult03 = @cResult03 + @cQTY ELSE
+      IF @nWriteRow =  4 SET @cResult04 = @cResult04 + @cQTY ELSE
+      IF @nWriteRow =  5 SET @cResult05 = @cResult05 + @cQTY ELSE
+      IF @nWriteRow =  6 SET @cResult06 = @cResult06 + @cQTY ELSE
+      IF @nWriteRow =  7 SET @cResult07 = @cResult07 + @cQTY ELSE
+      IF @nWriteRow =  8 SET @cResult08 = @cResult08 + @cQTY ELSE
+      IF @nWriteRow =  9 SET @cResult09 = @cResult09 + @cQTY ELSE
       IF @nWriteRow = 10 SET @cResult10 = @cResult10 + @cQTY
 
       -- Light up location
@@ -307,17 +305,17 @@ BEGIN
             SET @cQTY = '*'
          ELSE
             SET @cQTY = CAST( @nQTY AS NVARCHAR(5))
-         
+
          EXEC PTL.isp_PTL_LightUpLoc
             @n_Func           = @nFunc
            ,@n_PTLKey         = @nPTLKey
-           ,@c_DisplayValue   = @cQTY 
-           ,@b_Success        = @bSuccess    OUTPUT    
-           ,@n_Err            = @nErrNo      OUTPUT  
+           ,@c_DisplayValue   = @cQTY
+           ,@b_Success        = @bSuccess    OUTPUT
+           ,@n_Err            = @nErrNo      OUTPUT
            ,@c_ErrMsg         = @cErrMsg     OUTPUT
            ,@c_DeviceID       = @cStation
            ,@c_DevicePos      = @cPosition
-           ,@c_DeviceIP       = @cIPAddress  
+           ,@c_DeviceIP       = @cIPAddress
            ,@c_LModMode       = @cLightMode
          IF @nErrNo <> 0
             GOTO Quit
@@ -331,12 +329,5 @@ Quit:
 
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
+GRANT EXECUTE ON  [RDT].[rdt_PTLStation_Matrix] TO [NSQL]
 GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON RDT.rdt_PTLStation_Matrix TO NSQL
-GO
-
