@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: RPT_ASN_SKULABEL_001                                      */
 /*                                                                      */
-/* GitLab Version: 1.1                                                  */
+/* GitLab Version: 1.2                                                  */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -23,6 +23,7 @@ GO
 /* Date         Author   Ver. Purposes                                  */
 /* 27-Jul-2022  WLChooi  1.0  DevOps Combine Script                     */
 /* 15-Sep-2022  WLChooi  1.1  WMS-20319 - Add SKU.ALTSKU (WL01)         */
+/* 26-Oct-2022  WLChooi  1.2  WMS-20914 - Add SKU.busr1 (WL02)          */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_RPT_ASN_SKULABEL_001]
          @c_Receiptkey        NVARCHAR(10)
@@ -51,13 +52,13 @@ BEGIN
    FROM RECEIPTDETAIL RD (NOLOCK)
    WHERE RD.ReceiptKey = @c_Receiptkey
 
-   ;WITH t1 AS ( SELECT RD.Sku, SUM(RD.QtyExpected) AS QtyExpected, S.CLASS, S.Color, S.Size, S.ALTSKU   --WL01
+   ;WITH t1 AS ( SELECT RD.Sku, SUM(RD.QtyExpected) AS QtyExpected, S.CLASS, S.Color, S.Size, S.BUSR1   --WL01   --WL02
                 FROM RECEIPTDETAIL RD (NOLOCK)
                 JOIN SKU S (NOLOCK) ON S.StorerKey = RD.StorerKey AND S.Sku = RD.Sku
                 WHERE RD.ReceiptKey = @c_Receiptkey
-                GROUP BY RD.Sku, S.CLASS, S.Color, S.Size, S.ALTSKU),   --WL01 
+                GROUP BY RD.Sku, S.CLASS, S.Color, S.Size, S.BUSR1),   --WL01   --WL02 
         t2 AS ( SELECT TOP (@n_Count) ROW_NUMBER() OVER (ORDER BY ID) AS Val FROM sysobjects (NOLOCK)  )
-   SELECT t1.Sku, t1.CLASS, t1.Color, t1.Size, t1.ALTSKU   --WL01 
+   SELECT t1.Sku, t1.CLASS, t1.Color, t1.Size, t1.BUSR1   --WL01   --WL02 
    FROM t1, t2
    WHERE t1.QtyExpected >= t2.Val 
    ORDER BY t1.Sku
