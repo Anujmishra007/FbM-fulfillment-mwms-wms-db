@@ -73,6 +73,7 @@ GO
 /*2022-06-07 1.44 James    WMS-19882 Add Std SKU decode sp (james16)         */
 /*2022-06-09 1.45 yeekung WMS-19312 Fix extendedinfo (yeekung03)             */
 /*2022-07-28 1.46 James    WMS-20110 Enhance packinfo screen (james18)       */
+/*2022-10-21 1.47 KuanYee  INC1935847 Recorrect S7 cExtendedValidateSP (KY01)*/
 /*****************************************************************************/        
 CREATE OR ALTER PROC [RDT].[rdtfnc_DTC_Dispatch](        
    @nMobile    INT,        
@@ -156,7 +157,7 @@ DECLARE
    @cNoToteFlag         NVARCHAR(1),  -- (ChewKP01)         
    @nRefCount           INT,          -- (ChewKP01)        
    @cCartonType         NVARCHAR(20), --(yeekung01)         
- @cScanCTSCN          NVARCHAR(5), --(yeekung01)                       
+   @cScanCTSCN          NVARCHAR(5), --(yeekung01)                       
    @cCartongroup        NVARCHAR(10),  --(yeekung01)                  
    @cPickStatus         NVARCHAR(1),   --(yeekung01)                  
    @cExtendedinfoSP     NVARCHAR(20),   --(yeekung01)                
@@ -218,7 +219,7 @@ DECLARE
    @cInField09 NVARCHAR( 60),   @cOutField09 NVARCHAR( 60),        
    @cInField10 NVARCHAR( 60),   @cOutField10 NVARCHAR( 60),        
    @cInField11 NVARCHAR( 60),   @cOutField11 NVARCHAR( 60),        
- @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),        
+   @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),        
    @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60),        
    @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),        
    @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),        
@@ -663,7 +664,7 @@ BEGIN
                      '@cStorerKey     NVARCHAR( 15), ' +        
                      '@cToteno        NVARCHAR( 20), ' +        
                      '@cSKU           NVARCHAR( 20), ' +        
-   '@cPickSlipNo    NVARCHAR( 10), ' +        
+                     '@cPickSlipNo    NVARCHAR( 10), ' +        
                      '@cSerialNo      NVARCHAR( 30), ' +        
                      '@nSerialQTY     INT,           ' +            
                      '@nErrNo         INT           OUTPUT, ' +        
@@ -1674,7 +1675,7 @@ BEGIN
             @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,            
             @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,            
             @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,            
-         @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,            
+            @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,            
             @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,            
             @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,            
             @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,            
@@ -1855,7 +1856,7 @@ BEGIN
             JOIN rdt.rdtEcommLog ELOG WITH (NOLOCK) ON ELOG.OrderKey = PD.OrderKey AND ELOG.SKU = PD.SKU AND ELOG.ToteNo = PD.DropID -- (ChewKP08)         
             WHERE O.StorerKey = @cStorerKey        
                AND O.Status <> '9'         
-  AND O.SOStatus NOT IN ('9', 'CANC', 'PENDPACK', 'PENDCANC' , 'HOLD')        
+               AND O.SOStatus NOT IN ('9', 'CANC', 'PENDPACK', 'PENDCANC' , 'HOLD')        
                AND (PD.Status = '5' OR PD.ShipFlag = 'P')                
                AND PD.DropID = @cToteNo        
                AND ELOG.ToteNo = @cToteNo   -- (ChewKP08)         
@@ -2080,7 +2081,7 @@ BEGIN
               
                      -- Go to next screen        
                      SET @nScn = @nScn + 5        
-          SET @nStep = @nStep + 5        
+                     SET @nStep = @nStep + 5        
                     
                      GOTO Quit        
                   END         
@@ -2179,7 +2180,7 @@ BEGIN
                      DELETE FROM RDT.rdtECOMMLOG WITH (ROWLOCK) WHERE RowRef = @nRowRef        
                      IF @@ERROR <> 0        
                      BEGIN        
-  CLOSE CUR_DEL        
+                        CLOSE CUR_DEL        
                         DEALLOCATE CUR_DEL        
                         SET @nErrNo = 90478        
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DelEcommLogFail        
@@ -2296,7 +2297,7 @@ BEGIN
                                     AND PD.StorerKey = @cStorerKey                        
                                     AND PD.Status IN( '0'  ,@cPickStatus)                       
                                     AND PD.ShipFlag <> 'P'                        
-         AND O.SOStatus NOT IN ( 'PENDPACK', 'HOLD', 'PENDCANC' ) )         
+                                    AND O.SOStatus NOT IN ( 'PENDPACK', 'HOLD', 'PENDCANC' ) )         
                      BEGIN        
                         SET @nRefCount = 1         
                         /*      
@@ -2323,7 +2324,7 @@ BEGIN
                         JOIN dbo.Orders O WITH (NOLOCK) ON ( LPD.OrderKey = O.OrderKey)      
                         WHERE LPD.LoadKey = @cLoadKey        
                         AND O.Status = '5'        
-            AND O.SOStatus NOT IN ( 'PENDPACK', 'HOLD', 'PENDCANC' ) -- (ChewKP05)       
+                        AND O.SOStatus NOT IN ( 'PENDPACK', 'HOLD', 'PENDCANC' ) -- (ChewKP05)       
                      END        
                              
                    
@@ -2363,7 +2364,7 @@ BEGIN
                            -- Get PackInfo        
                            SET @cCartonType = ''        
                            SET @cWeight = ''        
-     SET @cCube = ''        
+                           SET @cCube = ''        
                            SET @cRefNo = ''        
                       
                            --set default Value      
@@ -2461,7 +2462,7 @@ BEGIN
          BEGIN                
             -- Get PackInfo        
             SET @cCartonType = ''        
-   SET @cWeight = ''        
+            SET @cWeight = ''        
             SET @cCube = ''        
             SET @cRefNo = ''        
                                  
@@ -3346,7 +3347,7 @@ BEGIN
                ('@cRefNo',       @cRefNo),       
                ('@cWaveKey',     @cWaveKey),      
                ('@cLoadKey',     @cLoadKey),       
-        ('@cOption',      @cOption)             
+               ('@cOption',      @cOption)             
                           
              SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +                          
                 ' @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, @cToteNo, @cSKU, @nStep, @cPickSlipNo, @cOrderKey, @cTrackNo, @cTrackNoFlag OUTPUT, @cOrderKeyOut OUTPUT,       
@@ -3406,7 +3407,7 @@ BEGIN
             BEGIN        
                SELECT @nRefCount = Count(OrderKey)        
                FROM dbo.LoadPlanDetail WITH (NOLOCK)        
-      WHERE LoadKey = @cLoadKey        
+               WHERE LoadKey = @cLoadKey        
                        
                SELECT @nOrderCount = Count( Distinct O.OrderKey)         
                FROM rdt.rdtECOMMLog ECOMM WITH (NOLOCK)        
@@ -3416,7 +3417,7 @@ BEGIN
                        
                        
             END        
-    ELSE         
+            ELSE         
             BEGIN        
                SELECT @nRefCount = Count(OrderKey)        
                FROM dbo.WaveDetail WITH (NOLOCK)        
@@ -3878,7 +3879,7 @@ BEGIN
                   SELECT @cSuggestedTrackNo = UserDefine04                        
                   FROM dbo.Orders WITH (NOLOCK)                        
                   WHERE StorerKey = @cStorerKey                        
-         AND OrderKey = @cOrderKeyOut                        
+                  AND OrderKey = @cOrderKeyOut                        
                ELSE      
                   SELECT @cSuggestedTrackNo = TrackingNo      
                   FROM dbo.Orders WITH (NOLOCK)                        
@@ -3992,16 +3993,50 @@ BEGIN
    IF @nInputKey = 0                      
    BEGIN                       
     -- Enable back field  
-      SET @cFieldAttr07 = ''        
-      SET @cFieldAttr02 = ''        
-      SET @cFieldAttr03 = ''        
-      SET @cFieldAttr04 = ''        
+      --SET @cFieldAttr07 = ''              --KY01
+      --SET @cFieldAttr02 = ''        
+      --SET @cFieldAttr03 = ''        
+      --SET @cFieldAttr04 = ''        
   
       IF @cExtendedValidateSP <> ''                          
       BEGIN                          
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')                          
-         BEGIN                          
-                          
+         BEGIN     
+              SET @cSQL = 'EXEC rdt.' + RTRIM(@cExtendedValidateSP) +          --KY01        
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @cStorerKey, @cToteno, @cSKU, @cPickSlipNo, @cSerialNo, @nSerialQTY, @nErrNo OUTPUT, @cErrMsg OUTPUT '                  
+              SET @cSQLParam =                  
+               '@nMobile        INT, ' +                  
+               '@nFunc          INT, ' +                  
+               '@cLangCode      NVARCHAR( 3),  ' +                  
+               '@nStep          INT, ' +                  
+               '@cStorerKey NVARCHAR( 15), ' +                  
+               '@cToteno        NVARCHAR( 20), ' +                  
+               '@cSKU           NVARCHAR( 20), ' +                  
+               '@cPickSlipNo    NVARCHAR( 10), ' +                  
+               '@cSerialNo      NVARCHAR( 30), ' +                       
+               '@nSerialQTY     INT,           ' +                   
+               '@nErrNo         INT           OUTPUT, ' +                  
+               '@cErrMsg        NVARCHAR( 20) OUTPUT'                  
+                  
+                  
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,                  
+               @nMobile, @nFunc, @cLangCode, @nStep, @cStorerKey, @cToteno, @cSKU, @cPickSlipNo ,@cSerialNo, @nSerialQTY, @nErrNo OUTPUT, @cErrMsg OUTPUT      
+                   
+            IF @nErrNo <> 0                
+            BEGIN                       
+               GOTO Step_7_Fail                
+            END        
+             
+         END    
+      END    
+            
+      IF @cExtendedUpdateSP <> ''                
+      BEGIN                
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')                
+         BEGIN                
+            SET @cTrackNoFlag = '0'                
+            SET @cOrderKeyOut = ''
+                                                      
             INSERT INTO @tExtUpd (Variable, Value) VALUES       
                ('@cCube',        @cCube),      
                ('@cWeight',      @cWeight),      
@@ -4039,8 +4074,10 @@ BEGIN
                 @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, @cToteNo, @cSKU, @nStep, @cPickSlipNo, @cOrderKey, @cTrackNo, @cTrackNoFlag OUTPUT, @cOrderKeyOut OUTPUT,       
                 @nErrNo OUTPUT, @cErrMsg OUTPUT, @cCartonType, @cSerialNo, @nSerialQTY, @tExtUpd                            
                           
-            IF @nErrNo <> 0                          
-               GOTO Step_7_Fail                          
+            IF @nErrNo <> 0   
+            BEGIN                       
+               GOTO Step_7_Fail   
+            END                       
          END                          
       END                         
                            
@@ -4051,8 +4088,13 @@ BEGIN
                         
       SET @cOutField05 = @nTotalPickedQty                        
       SET @cOutField06 = @nTotalScannedQty                       
-      SET @cOutField07 = @cExtendedinfo               
-              
+      SET @cOutField07 = @cExtendedinfo     
+
+      SET @cFieldAttr07 = ''              --KY01    
+      SET @cFieldAttr02 = ''                  
+      SET @cFieldAttr03 = ''                  
+      SET @cFieldAttr04 = ''     
+                        
       SET @nScn = @nScn -5                        
       SET @nStep = @nStep -5                     
                        
