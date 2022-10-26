@@ -11,6 +11,7 @@ GO
 /* Date       Rev  Author   Purposes                                          */
 /* 11-08-2022 1.0  Ung      WMS-20451 base onrdt_PTLCart_Assign_BatchTotes    */
 /*                          Add SKU.SKUGroup filter                           */
+/* 19-10-2022 1.1  Ung      WMS-20984 Take position from PackTask             */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_PTLCart_Assign_BatchTotes02] (
@@ -271,6 +272,8 @@ BEGIN
             DECLARE @cChkStorerKey NVARCHAR(15)
             DECLARE @cChkStatus    NVARCHAR(10)
             DECLARE @cChkSOStatus  NVARCHAR(10)
+            DECLARE @cPreassignPos NVARCHAR(10)
+            
             SET @cChkFacility = ''
             SET @cChkStorerKey = ''
             SET @cChkStatus = ''
@@ -407,19 +410,29 @@ BEGIN
                   GOTO RollBackTran
                END
 
-               -- Get position not yet assign
-               SET @cPosition = ''
-               SELECT TOP 1
-                  @cPosition = DP.DevicePosition
-               FROM dbo.DeviceProfile DP WITH (NOLOCK)
-               WHERE DP.DeviceType = 'CART'
-                  AND DP.DeviceID = @cCartID
-                  AND NOT EXISTS( SELECT 1
-                     FROM rdt.rdtPTLCartLog PCLog WITH (NOLOCK)
-                     WHERE CartID = @cCartID
-                        AND PCLog.Position = DP.DevicePosition)
-               ORDER BY DP.DevicePosition
+               -- Get pre-assigned position
+               SET @cPreassignPos = ''
+               SELECT @cPreassignPos = DevicePosition FROM PackTask WITH (NOLOCK) WHERE OrderKey = @cOrderKey 
 
+               -- Not pre-assign position
+               IF @cPreassignPos = ''
+               BEGIN
+                  -- Get position not yet assign
+                  SET @cPosition = ''
+                  SELECT TOP 1
+                     @cPosition = DP.DevicePosition
+                  FROM dbo.DeviceProfile DP WITH (NOLOCK)
+                  WHERE DP.DeviceType = 'CART'
+                     AND DP.DeviceID = @cCartID
+                     AND NOT EXISTS( SELECT 1
+                        FROM rdt.rdtPTLCartLog PCLog WITH (NOLOCK)
+                        WHERE CartID = @cCartID
+                           AND PCLog.Position = DP.DevicePosition)
+                  ORDER BY DP.DevicePosition
+               END
+               ELSE
+                  SET @cPosition = @cPreassignPos
+                  
                -- Check position blank
                IF @cPosition = ''
                BEGIN
@@ -740,7 +753,7 @@ BEGIN
          -- Update PackTask
          IF @nRowRef > 0
          BEGIN
-          UPDATE PackTask SET
+            UPDATE PackTask SET
                DevicePosition = @cPosition,
                EditDate = GETDATE(),
                EditWho = SUSER_SNAME()
