@@ -11,10 +11,10 @@ GO
 /*                                                                      */          
 /* Modifications log:                                                   */          
 /*                                                                      */          
-/* Date       Rev  Author     Purposes                                  */          
-/* 2017-09-15 1.0  ChewKP     WMS-1993 Created                          */    
-/* 2020-01-23 1.1  YeeKung    WMS-11662 Check MBOL (yeekung01)          */       
-/* 2022-10-27 1.2  CALVIN     From Orderkey to Userdefine02 (CLVN01)    */
+/* Date       Rev  Author   Purposes                                    */          
+/* 2017-09-15 1.0  ChewKP   WMS-1993 Created                            */    
+/* 2020-01-23 1.1  YeeKung  WMS-11662 Check MBOL (yeekung01)            */       
+/* 2022-10-27 1.2  CALVIN   JSM-105362 Orderkey to Userdefine02 (CLVN01)*/
 /************************************************************************/          
           
 ALTER PROC [RDT].[rdt_1637ExtValid02] (          
