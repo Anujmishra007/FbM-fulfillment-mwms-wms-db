@@ -97,7 +97,7 @@ BEGIN
             FROM taskdetail (NOLOCK)
             where  caseid=@cID
             AND storerkey =@cStorerKey 
-            GROUP BY wavekey,toloc
+            Order by editdate desc
 
             -- Check pallet valid
             IF @@ROWCOUNT = ''
@@ -138,7 +138,7 @@ BEGIN
             FROM taskdetail (NOLOCK)
             where dropid=@cID
                AND storerkey =@cStorerKey 
-            GROUP BY wavekey,toloc
+            order by editdate desc
 
             -- Check pallet valid
             IF ISNULL(@cWavekey,'') = ''
