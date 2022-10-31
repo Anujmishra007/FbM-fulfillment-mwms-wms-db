@@ -162,3 +162,6 @@ GRANT SELECT ON  [RDT].[rdtPTLStationLog] TO [NSQL]
 GO
 GRANT UPDATE ON  [RDT].[rdtPTLStationLog] TO [NSQL]
 GO
+GRANT SELECT ON  [RDT].[rdtPTLStationLog] TO [JReportRole]
+GO
+
