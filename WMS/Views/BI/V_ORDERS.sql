@@ -5,6 +5,7 @@ GO
 
 CREATE OR ALTER VIEW [BI].[V_ORDERS] AS
 SELECT *
+,ltrim(rtrim(BillToKey)) + ltrim(rtrim(ConsigneeKey)) AS ShipToCode
    FROM DBO.[ORDERS] WITH (NOLOCK)
 GO
 GRANT SELECT ON  [BI].[V_ORDERS] TO [JReportRole]
