@@ -26,6 +26,8 @@ GO
 /* 2020-12-28   2.0  YeeKung    WMS-15995 Add PickZone (yeekung03 )              */
 /* 2020-12-28   2.1  WyeChun    Add in PickZone (WC01)                           */  
 /* 2022-04-08   2.2  Ung        WMS-19402 Add AutoScanOut                        */
+/* 2021-10-04   2.3  YeeKung    WMS-16543 Fix multisku (yeekung04)               */   
+/*                               Add SwapIDSP                                    */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdtfnc_PickSKU (
@@ -121,6 +123,7 @@ DECLARE
    @cClearid            NVARCHAR( 1),  --(yeekung02)
    @cPickZone        NVARCHAR(10), --(yeekung03)
    @cVerifyPickZone  NVARCHAR(1), --(yeekung03)
+   @cSwapidSP        NVARCHAR(20), 
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
@@ -215,6 +218,7 @@ SELECT
    @cOrderKey           = V_string37,
    @cLoadKey            = V_string38,
    @cZone               = V_string39,
+   @cSwapidSP           = V_String40,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01  = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02, @cFieldAttr02  = FieldAttr02,
@@ -298,6 +302,7 @@ BEGIN
    SET @cSkipLOC = rdt.RDTGetConfig( @nFunc, 'SkipLOC', @cStorerKey)
    SET @cSuggestLOC = rdt.RDTGetConfig( @nFunc, 'SuggestLOC', @cStorerKey)
    SET @cVerifyID = rdt.RDTGetConfig( @nFunc, 'VerifyID', @cStorerKey)
+   SET @cSwapidSP = rdt.RDTGetConfig( @nFunc, 'SwapIDSP', @cStorerKey) 
 
    SET @cClearID = rdt.RDTGetConfig( @nFunc, 'clearID', @cStorerKey)
 
@@ -1222,6 +1227,8 @@ BEGIN
 
             SET @cDoctype = CASE WHEN ISNULL(@cLOC,'') <>'' THEN 'LOC' ELSE '' END
 
+            SET @cOutField13 =''
+            
             EXEC rdt.rdt_MultiSKUBarcode @nMobile, @nFunc, @cLangCode,
                @cInField01 OUTPUT,  @cOutField01 OUTPUT,
                @cInField02 OUTPUT,  @cOutField02 OUTPUT,
@@ -2457,12 +2464,76 @@ BEGIN
          GOTO ID_Fail
       END
 */
-      -- Validate ID
-      IF @cID <> @cSuggID
-      BEGIN
-         SET @nErrNo = 101997
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff ID
-         GOTO ID_Fail
+      -- Extended info      
+      IF @cSwapidSP <> ''      
+      BEGIN      
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cSwapidSP AND type = 'P')      
+         BEGIN          
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cSwapidSP) +       
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo,@cPickZone, @cSuggLOC, @cLOC, @cDropID, @cSKU, ' +      
+               ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +      
+               ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +      
+               ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +      
+               ' @nTaskQTY, @nQTY, @cToLOC, @cOption,@cSuggID,@cID, @nErrNo OUTPUT, @cErrMsg OUTPUT '      
+            SET @cSQLParam =       
+               '@nMobile       INT,           ' +      
+               '@nFunc         INT,           ' +      
+               '@cLangCode     NVARCHAR( 3),  ' +      
+               '@nStep         INT,           ' +      
+               '@nAfterStep    INT,           ' +      
+               '@nInputKey     INT,           ' +      
+               '@cFacility     NVARCHAR( 5),  ' +       
+               '@cStorerKey    NVARCHAR( 15), ' +      
+               '@cPickSlipNo   NVARCHAR( 10), ' +      
+               '@cSuggLOC NVARCHAR( 10), ' +    
+               '@cPickZone     NVARCHAR( 10), ' +      
+               '@cLOC          NVARCHAR( 10), ' +      
+               '@cDropID       NVARCHAR( 20), ' +      
+               '@cSKU          NVARCHAR( 20), ' +      
+               '@cLottable01   NVARCHAR( 18), ' +      
+               '@cLottable02   NVARCHAR( 18), ' +      
+               '@cLottable03   NVARCHAR( 18), ' +      
+               '@dLottable04   DATETIME,      ' +      
+               '@dLottable05   DATETIME,      ' +      
+               '@cLottable06   NVARCHAR( 30), ' +      
+               '@cLottable07   NVARCHAR( 30), ' +      
+               '@cLottable08   NVARCHAR( 30), ' +      
+               '@cLottable09   NVARCHAR( 30), ' +      
+               '@cLottable10   NVARCHAR( 30), ' +      
+               '@cLottable11   NVARCHAR( 30), ' +      
+               '@cLottable12   NVARCHAR( 30), ' +      
+               '@dLottable13   DATETIME,      ' +      
+               '@dLottable14   DATETIME,      ' +      
+               '@dLottable15   DATETIME,      ' +      
+               '@nTaskQTY      INT,           ' +      
+               '@nQTY          INT,           ' +      
+               '@cToLOC        NVARCHAR( 10), ' +      
+               '@cOption       NVARCHAR( 1),  ' + 
+               '@cSuggID       NVARCHAR( 20),'  +   
+               '@cID           NVARCHAR( 20), ' +      
+               '@nErrNo        INT           OUTPUT, ' +      
+               '@cErrMsg       NVARCHAR( 20) OUTPUT  '      
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,       
+               @nMobile, @nFunc, @cLangCode, @nStep_VerifyID, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo,@cPickZone, @cSuggLOC, @cLOC, @cDropID, @cSKU,       
+               @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,      
+               @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,      
+               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,      
+               @nTaskQTY, @nPQTY, @cToLOC, @cOption,@cSuggID, @cID, @nErrNo OUTPUT, @cErrMsg OUTPUT      
+            IF @nErrNo <> 0      
+               GOTO Quit      
+      
+            SET @cOutField20 = @cExtendedInfo      
+         END      
+      END 
+      ELSE  
+      BEGIN  
+         -- Validate ID      
+         IF @cID <> @cSuggID      
+         BEGIN      
+            SET @nErrNo = 101997      
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff ID      
+            GOTO ID_Fail      
+         END      
       END
 
       SELECT @cSKU = '', @nTaskQTY = 0,
@@ -2756,6 +2827,7 @@ BEGIN
       V_string37  = @cOrderKey,
       V_string38  = @cLoadKey,
       V_string39  = @cZone,
+      V_string40  = @cSwapidSP,   
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,

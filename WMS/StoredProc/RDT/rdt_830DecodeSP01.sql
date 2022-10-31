@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'rdt.rdt_830DecodeSP01') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_830DecodeSP01
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -15,9 +12,10 @@ GO
 /*                                                                            */
 /* Date        Author    Ver.  Purposes                                       */
 /* 10-10-2020  YeeKung   1.0   WMS-15415 Created                              */
+/* 30-09-2021  YeeKung   1.1   WMS-16543 Add multisku (yeekung01)             */
 /******************************************************************************/
 
-CREATE PROC rdt.rdt_830DecodeSP01 ( 
+CREATE OR ALTER PROC rdt.rdt_830DecodeSP01 ( 
   @nMobile      INT,               
   @nFunc        INT,               
   @cLangCode    NVARCHAR( 3),      
@@ -78,7 +76,20 @@ BEGIN
    -- Other than return from MultiSKU barcode screen  
    IF @cInField04 <> @cOutField04    
    BEGIN
-      IF EXISTS (SELECt 1 from sku (NOLOCK) where sku=@cUPC) OR ISNULL(@cSKU,'')=''
+      IF NOT EXISTS (SELECT 1          
+            FROM          
+            (          
+               SELECT StorerKey, SKU FROM dbo.SKU SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU.SKU = @cSKU          
+               UNION ALL          
+               SELECT StorerKey, SKU FROM dbo.SKU SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU.AltSKU = @cSKU          
+               UNION ALL          
+               SELECT StorerKey, SKU FROM dbo.SKU SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU.RetailSKU = @cSKU          
+               UNION ALL          
+               SELECT StorerKey, SKU FROM dbo.SKU SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU.ManufacturerSKU = @cSKU          
+               UNION ALL          
+               SELECT StorerKey, SKU FROM dbo.UPC UPC WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND UPC.UPC = @cSKU          
+            ) A          
+            WHERE A.SKU =@cUPC) OR ISNULL(@cSKU,'')=''
       BEGIN
          SET @nErrNo = 160001
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid SKU
