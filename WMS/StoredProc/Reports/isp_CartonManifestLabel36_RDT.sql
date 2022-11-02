@@ -1,6 +1,3 @@
-if exists (select * from  dbo.sysobjects where id = object_id(N'[dbo].[isp_CartonManifestLabel36_RDT]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [dbo].[isp_CartonManifestLabel36_RDT]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -29,8 +26,9 @@ GO
 /* 28-JUL-2021  CSCHONG       WMS-17587 fix dupliacte qty issue (CS03)  */
 /* 24-JAN-2022  MINGLE        WMS-18724 add new field(ML01)             */
 /* 24-JAN-2022  MINGLE        DevOps Combine Script                     */
+/* 28-OCT-2022  MINGLE        WMS-21093 add new mappings (ML02)			*/
 /************************************************************************/
-CREATE PROC [dbo].[isp_CartonManifestLabel36_RDT] (
+CREATE OR ALTER PROC [dbo].[isp_CartonManifestLabel36_RDT] (
       @c_Orderkey      NVARCHAR(10) 
  
 ) 
@@ -123,6 +121,7 @@ BEGIN
          ,  editdate = CONVERT(VARCHAR(50),Packheader.editdate,101) + ' ' + FORMAT(Packheader.editdate,'hh:mm:ss tt')   --ML01
          ,  LBC = CASE WHEN SHPC.Code = 'PHSDLBC' THEN 'No automatic RTS' ELSE '' END   --ML01
          , Packheader.editdate   --ML01 
+			,  FA.Notes2	--ML02
    FROM  PACKDETAIL  WITH (NOLOCK) 
    JOIN  PACKHEADER  WITH (NOLOCK)  ON (PACKDETAIL.PickSlipNo = PACKHEADER.PickSlipNo)
    JOIN  ORDERS      WITH (NOLOCK)  ON (PACKHEADER.Orderkey = ORDERS.Orderkey)
@@ -186,6 +185,7 @@ BEGIN
          , ISNULL(RTRIM(ORDERS.C_State),'') 
          , CASE WHEN SHPC.Code = 'PHSDLBC' THEN 'No automatic RTS' ELSE '' END   --ML01
          , Packheader.editdate   --ML01
+			,  FA.Notes2	--ML02
 
    WHILE @@TRANCOUNT < @n_StartTCnt
    BEGIN
