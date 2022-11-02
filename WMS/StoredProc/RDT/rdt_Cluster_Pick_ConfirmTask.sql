@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_Cluster_Pick_ConfirmTask]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [RDT].[rdt_Cluster_Pick_ConfirmTask]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -60,9 +57,10 @@ GO
 /*                              order 1 dropid (james19)                */
 /* 19-May-2021 1.60 James       WMS16756-Bug fix on short pick couldn't */
 /*                              handle multi same sku, loc line(james20)*/
+/* 14-Sep-2021 1.61 ian         INC1611727 - picking Error(ian01)       */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdt_Cluster_Pick_ConfirmTask] (
+CREATE OR ALTER PROC [RDT].[rdt_Cluster_Pick_ConfirmTask] (
    @cStorerKey       NVARCHAR( 15),
    @cUserName        NVARCHAR( 15),
    @cFacility        NVARCHAR( 5),
@@ -512,7 +510,7 @@ BEGIN
                   EditWho = SUSER_SNAME(),
                   EditDate = GETDATE(),
                   DropID = @cDropID,
-                  Status = '5'
+                  Status = @cStatus  
                WHERE PickDetailKey = @cPickDetailKey
             END
 
@@ -664,14 +662,17 @@ BEGIN
                      DoCartonize, PickMethod, WaveKey, EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, PickDetailKey,
                      QTY,
                      TrafficCop,
-                     OptimizeCop)
-                  SELECT
-                     CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot, StorerKey, SKU, AltSku, UOM, UOMQTY, QTYMoved,
-                     '0', DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, CartonType, ToLoc, DoReplenish, ReplenishZone,
-                     DoCartonize, PickMethod, WaveKey, EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, @cNewPickDetailKey,
-                     @nQTY_PD - @nPickQty, -- QTY
-                     NULL, --TrafficCop,
-                     '1'  --OptimizeCop
+                     OptimizeCop,
+					 		channel_id --ian01
+					 		)  
+                  SELECT  
+                     CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot, StorerKey, SKU, AltSku, UOM, UOMQTY, QTYMoved,  
+                     '0', DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, CartonType, ToLoc, DoReplenish, ReplenishZone,  
+                     DoCartonize, PickMethod, WaveKey, EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, @cNewPickDetailKey,  
+                     @nQTY_PD - @nPickQty, -- QTY  
+                     NULL, --TrafficCop,  
+                     '1',  --OptimizeCop
+							channel_id --ian01	
                   FROM dbo.PickDetail WITH (NOLOCK)
                   WHERE PickDetailKey = @cPickDetailKey
                END
