@@ -10,7 +10,8 @@ GO
 /* Purpose: Ad-hoc check LOC integrity                                  */
 /*                                                                      */
 /* Date        Rev  Author     Purposes                                 */
-/* 03-Aug-2016 1.0  Ung        WMS-20334 Created                        */
+/* 03-Aug-2022 1.0  Ung        WMS-20334 Created                        */
+/* 03-Oct-2022 1.1  Ung        WMS-20844 Add ExtendedValidateSP         */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_AuditLOC] (
@@ -28,9 +29,12 @@ DECLARE
    @b_Success  INT,
    @n_Err      INT,
    @c_ErrMsg   NVARCHAR( 20), 
+   @cSQL       NVARCHAR( MAX), 
+   @cSQLParam  NVARCHAR( MAX), 
    @cDescr     NVARCHAR( 60), 
    @nQTYSKU    INT, 
-   @nQTYAvail  INT
+   @nQTYAvail  INT, 
+   @tVar       VariableTable
 
 -- RDT.RDTMobRec variable
 DECLARE
@@ -46,6 +50,8 @@ DECLARE
 
    @cLOC       NVARCHAR( 10),
    @cSKU       NVARCHAR( 20),
+
+   @cExtendedValidateSP NVARCHAR( 20),
 
    @nQTYScan   INT,
    @nTotalRec  INT,
@@ -80,6 +86,8 @@ SELECT
    @cFacility  = Facility,
    @cLOC       = V_LOC,
    @cSKU       = V_SKU,
+
+   @cExtendedValidateSP = V_String21,
 
    @nQTYScan   = V_Integer1,
    @nTotalRec  = V_Integer2,
@@ -120,6 +128,11 @@ Step 0. func = 653. Menu
 ********************************************************************************/
 Step_0:
 BEGIN
+   -- Storer configure
+   SET @cExtendedValidateSP = rdt.rdtGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)
+   IF @cExtendedValidateSP = '0'
+      SET @cExtendedValidateSP = ''
+   
    -- Set the entry point
    SET @nScn = 6090
    SET @nStep = 1
@@ -167,6 +180,38 @@ BEGIN
          GOTO Quit
       END
 
+      -- Extended validate
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+               ' @cLOC, @cSKU, @nQTYScan, @tVar, ' +
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,           ' +
+               '@nInputKey       INT,           ' +
+               '@cFacility       NVARCHAR( 5),  ' +
+               '@cStorerKey      NVARCHAR( 15), ' +
+               '@cLOC            NVARCHAR( 10), ' +
+               '@cSKU            NVARCHAR( 20), ' +
+               '@nQTYScan        INT,           ' +
+               '@tVar            VariableTable  READONLY, ' +
+               '@nErrNo          INT            OUTPUT,   ' +
+               '@cErrMsg         NVARCHAR( 20)  OUTPUT    '
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+               @cLOC, @cSKU, @nQTYScan, @tVar, 
+               @nErrNo OUTPUT, @cErrMsg OUTPUT 
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
+      END
+
       SET @cOutField01 = @cLOC
       SET @cOutField02 = '' -- SKU
       SET @cOutField03 = '' -- QTYScan
@@ -211,9 +256,9 @@ BEGIN
       SET @cBarcode = @cInField02
 
        -- Check blank
-      IF @cBarcode = ''
+      IF @cBarcode IN ('', '99')
       BEGIN
-         IF @nQTYScan > 0
+         IF @nQTYScan > 0 OR @cBarcode = '99'
          BEGIN
             -- Get variance
             SELECT 
@@ -318,6 +363,38 @@ BEGIN
          ,@cErrMsg     = @c_ErrMsg  OUTPUT
 
       SET @cSKU = @cBarcode
+
+      -- Extended validate
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+               ' @cLOC, @cSKU, @nQTYScan, @tVar, ' +
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,           ' +
+               '@nInputKey       INT,           ' +
+               '@cFacility       NVARCHAR( 5),  ' +
+               '@cStorerKey      NVARCHAR( 15), ' +
+               '@cLOC            NVARCHAR( 10), ' +
+               '@cSKU            NVARCHAR( 20), ' +
+               '@nQTYScan        INT,           ' +
+               '@tVar            VariableTable  READONLY, ' +
+               '@nErrNo          INT            OUTPUT,   ' +
+               '@cErrMsg         NVARCHAR( 20)  OUTPUT    '
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+               @cLOC, @cSKU, @nQTYScan, @tVar, 
+               @nErrNo OUTPUT, @cErrMsg OUTPUT 
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
+      END
 
       -- Confirm
       IF EXISTS( SELECT TOP 1 1 
@@ -503,6 +580,8 @@ BEGIN
       
       V_LOC     = @cLOC,
       V_SKU     = @cSKU,
+
+      V_String21 = @cExtendedValidateSP,
 
       V_Integer1 = @nQTYScan,
       V_Integer2 = @nTotalRec,
