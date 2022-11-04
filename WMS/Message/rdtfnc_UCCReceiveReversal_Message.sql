@@ -1,7 +1,7 @@
 
 -- UCC Receive Reversal Messages
 -- ******************************
-
+execute rdt.rdtDropMsg 62901 , 62926
 
 execute rdt.rdtAddMsg 62901, 10, '62901 UCC Config OFF', 'us_english'
 execute rdt.rdtAddMsg 62902, 10, '62902 ASN needed', 'us_english'
@@ -25,4 +25,9 @@ execute rdt.rdtAddMsg 62919, 10, '62919 Line finalized', 'us_english'
 execute rdt.rdtAddMsg 62920, 10, '62920 UCC finalized', 'us_english'
 execute rdt.rdtAddMsg 62921, 10, '62921 Fail to adjust', 'us_english'
 
+--WMS-20734
+execute rdt.rdtAddMsg 62922, 10, '62922 MIX SKU UCC   ', 'us_english', 888
+execute rdt.rdtAddMsg 62923, 10, '62923 OVER UCC QTY  ', 'us_english', 888
+
+SELECT * FROM RDT.RDTMsg (NOLOCK) WHERE Message_ID BETWEEN 62901 AND 62926
 

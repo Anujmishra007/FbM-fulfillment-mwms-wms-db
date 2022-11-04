@@ -1,12 +1,7 @@
-if exists (select * from sys.objects where object_id = object_id(N'[rdt].[rdtfnc_UCCReceiveReversal]') and OBJECTPROPERTY(object_id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdtfnc_UCCReceiveReversal]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
-
 
 /************************************************************************/
 /* Copyright: IDS                                                       */
@@ -21,9 +16,11 @@ GO
 /* 2016-09-30 1.2  Ung        Performance tuning                        */
 /* 2018-11-21 1.3  TungGH     Performance                               */  
 /* 2019-05-27 1.4  James      WMS-9128 Add ASNStatus 1 (james01)        */
+/* 2022-09-22 1.5  James      WMS-20734 Allow closed ASNStatus (james02)*/
+/*                            Revamp logic on ucc reveived reversal     */
 /************************************************************************/
 
-CREATE PROC rdt.rdtfnc_UCCReceiveReversal (
+CREATE OR ALTER PROC rdt.rdtfnc_UCCReceiveReversal (
    @nMobile    int,
    @nErrNo     int  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max
@@ -88,7 +85,9 @@ DECLARE
    @nTotalCount        INT,
    @nNewQty            INT,
    @nError             INT,
-
+   @cNotAllowOverAdjustUCCQty  NVARCHAR( 1),
+   @cAllowFinalizedASN NVARCHAR( 1),
+   
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
    @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),
@@ -139,7 +138,9 @@ SELECT
    @cTotalCount       = V_String10,
    @cNewQty           = V_String11,
    @cReceiptLineNo    = V_String12,
-
+   @cNotAllowOverAdjustUCCQty = V_String13,
+   @cAllowFinalizedASN        = V_String14,
+   
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,
@@ -185,6 +186,11 @@ BEGIN
    SET @nScn = 1050
    SET @nStep = 1
 
+   -- (james02)    
+   SET @cNotAllowOverAdjustUCCQty = rdt.rdtGetConfig( @nFunc, 'NotAllowOverAdjustUCCQty', @cStorerKey)   
+
+   SET @cAllowFinalizedASN = rdt.rdtGetConfig( @nFunc, 'AllowFinalizedASN', @cStorerKey)
+
    -- Initiate var
    SET @cReceiptKey = ''
    SET @cLOC = ''
@@ -210,19 +216,19 @@ BEGIN
    BEGIN
 
       SET @cReceiptKey = @cInField01
+      --TEMP COMMENT FOR TESTING
+      --SELECT @cConfigValue = RTRIM(sVALUE)
+      --FROM dbo.StorerConfig (NOLOCK)
+      --WHERE Storerkey = @cStorerKey
+      --AND   Configkey = 'UCC'
 
-      SELECT @cConfigValue = RTRIM(sVALUE)
-      FROM dbo.StorerConfig (NOLOCK)
-      WHERE Storerkey = @cStorerKey
-      AND   Configkey = 'UCC'
 
-
-      IF @cConfigValue <> '1'
-      BEGIN
-         SET @nErrNo = 62901
-         SET @cErrMsg = rdt.rdtgetmessage( 62901, @cLangCode,'DSP') --UCC Config OFF
-         GOTO Step_1_Fail
-      END
+      --IF @cConfigValue <> '1'
+      --BEGIN
+      --   SET @nErrNo = 62901
+      --   SET @cErrMsg = rdt.rdtgetmessage( 62901, @cLangCode,'DSP') --UCC Config OFF
+      --   GOTO Step_1_Fail
+      --END
 
       -- Validate blank
       IF @cReceiptKey = '' OR @cReceiptKey IS NULL
@@ -249,12 +255,20 @@ BEGIN
       END
 
       -- Validate ASN status
-      IF @cStatus <> '0' AND -- Open ASN
-         @cASNStatus > '1'   -- (james01)
+      IF @cStatus <> '0' -- Open ASN
       BEGIN
-         SET @nErrNo = 62904
-         SET @cErrMsg = rdt.rdtgetmessage( 62904, @cLangCode,'DSP') -- ASN closed
-         GOTO Step_1_Fail
+      	IF @cASNStatus > '1'
+      	BEGIN
+      		IF EXISTS ( SELECT 1 FROM dbo.CODELKUP WITH (NOLOCK)
+      		            WHERE LISTNAME = 'INVASNSTS'
+      		            AND   Code = @cASNStatus
+      		            AND   Storerkey = @cStorerKey)
+      		BEGIN
+               SET @nErrNo = 62904
+               SET @cErrMsg = rdt.rdtgetmessage( 62904, @cLangCode,'DSP') -- ASN closed
+               GOTO Step_1_Fail
+      		END
+      	END
       END
 
 --      SET @cReceiptKey = @cInField01 -- Receiptkey
@@ -510,58 +524,57 @@ BEGIN
       -- Screen mapping
       SET @cUCC = @cInField04
 
-  -- Get UCC Count
-     DECLARE @cCntUCC_UCC INT
+      -- Get UCC Count
+      DECLARE @cCntUCC_UCC INT
       IF @cUCC <> '' AND @cUCC IS NOT NULL
       BEGIN
-        IF (@cLOC <> '' AND @cLOC IS NOT NULL) AND (@cID <> '' AND @cID IS NOT NULL)
-        BEGIN
-      SELECT  @cCntUCC_UCC = COUNT(UCCNo)
-      FROM dbo.UCC (NOLOCK)
-      WHERE LOC = @cLOC
-          AND   [ID] = @cID
-          AND   UCCNo = @cUCC
-          AND   ReceiptKey = @cReceiptKey
-          AND   Storerkey = @cStorerKey
-          AND   Status = '1'
-        END
-        ELSE IF (@cLOC = '' OR @cLOC IS NULL) AND (@cID = '' OR @cID IS NULL)
-        BEGIN
-      SELECT  @cCntUCC_UCC = COUNT(UCCNo)
-      FROM dbo.UCC (NOLOCK)
-      WHERE UCCNo = @cUCC
-          AND   ReceiptKey = @cReceiptKey
-          AND   Storerkey = @cStorerKey
-          AND   Status = '1'
-        END
-        ELSE IF (@cLOC <> '' AND @cLOC IS NOT NULL) AND (@cID = '' OR @cID IS NULL)
-        BEGIN
-      SELECT  @cCntUCC_UCC = COUNT(UCCNo)
-      FROM dbo.UCC (NOLOCK)
-      WHERE UCCNo = @cUCC
- AND   LOC = @cLOC
-       AND   ReceiptKey = @cReceiptKey
-          AND   Storerkey = @cStorerKey
-          AND   Status = '1'
-        END
-        ELSE IF (@cLOC = '' OR @cLOC IS NULL) AND (@cID <> '' AND @cID IS NOT NULL)
-        BEGIN
-      SELECT  @cCntUCC_UCC = COUNT(UCCNo)
-      FROM dbo.UCC (NOLOCK)
-      WHERE UCCNo = @cUCC
+         IF (@cLOC <> '' AND @cLOC IS NOT NULL) AND (@cID <> '' AND @cID IS NOT NULL)
+         BEGIN
+            SELECT  @cCntUCC_UCC = COUNT(UCCNo)
+            FROM dbo.UCC (NOLOCK)
+            WHERE LOC = @cLOC
+            AND   [ID] = @cID
+            AND   UCCNo = @cUCC
+            AND   ReceiptKey = @cReceiptKey
+            AND   Storerkey = @cStorerKey
+            AND   Status = '1'
+         END
+         ELSE IF (@cLOC = '' OR @cLOC IS NULL) AND (@cID = '' OR @cID IS NULL)
+         BEGIN
+            SELECT  @cCntUCC_UCC = COUNT(UCCNo)
+            FROM dbo.UCC (NOLOCK)
+            WHERE UCCNo = @cUCC
+            AND   ReceiptKey = @cReceiptKey
+            AND   Storerkey = @cStorerKey
+            AND   Status = '1'
+         END
+         ELSE IF (@cLOC <> '' AND @cLOC IS NOT NULL) AND (@cID = '' OR @cID IS NULL)
+         BEGIN
+            SELECT  @cCntUCC_UCC = COUNT(UCCNo)
+            FROM dbo.UCC (NOLOCK)
+            WHERE UCCNo = @cUCC
+            AND   LOC = @cLOC
+            AND   ReceiptKey = @cReceiptKey
+            AND   Storerkey = @cStorerKey
+            AND   Status = '1'
+         END
+         ELSE IF (@cLOC = '' OR @cLOC IS NULL) AND (@cID <> '' AND @cID IS NOT NULL)
+         BEGIN
+            SELECT  @cCntUCC_UCC = COUNT(UCCNo)
+            FROM dbo.UCC (NOLOCK)
+            WHERE UCCNo = @cUCC
             AND   ID = @cID
-          AND   ReceiptKey = @cReceiptKey
-          AND   Storerkey = @cStorerKey
-          AND   Status = '1'
+            AND   ReceiptKey = @cReceiptKey
+            AND   Storerkey = @cStorerKey
+            AND   Status = '1'
+         END
+
+        IF @cCntUCC_UCC < 1
+        BEGIN
+           SET @nErrNo = 62910
+           SET @cErrMsg = rdt.rdtgetmessage( 62910, @cLangCode, 'DSP') --'UCC not in ASN'
+           GOTO Step_4_Fail
         END
-
-
-     IF @cCntUCC_UCC < 1
-     BEGIN
-        SET @nErrNo = 62910
-        SET @cErrMsg = rdt.rdtgetmessage( 62910, @cLangCode, 'DSP') --'UCC not in ASN'
-        GOTO Step_4_Fail
-     END
       END -- IF @cUCC <> '' AND @cUCC IS NOT NULL
 
       DECLARE @nPrevTotalCount INT
@@ -570,79 +583,79 @@ BEGIN
       SELECT @nRecCnt = 0
       SELECT @nUCCCnt = 0
 
-  EXECUTE rdt.rdt_ReceiveReserval_UCCRetrieve
-           @cReceiptKey, @cLOC, @cID, @cUCC, @cStorerkey, @cPrevUCC, @nRecCnt, @nPrevTotalCount,
-      @cCurrentUCC    OUTPUT,
-      @nTotalCount    OUTPUT,
-      @cSKU           OUTPUT,
-      @cSKUDescr      OUTPUT,
-      @cUOM           OUTPUT,
-      @nQty           OUTPUT,
-      @cPPK           OUTPUT,
-      @cLottable1     OUTPUT,
-      @cLottable2     OUTPUT,
-      @cLottable3     OUTPUT,
-      @dLottable4     OUTPUT,
-      @dLottable5     OUTPUT
+      EXECUTE rdt.rdt_ReceiveReserval_UCCRetrieve
+         @cReceiptKey, @cLOC, @cID, @cUCC, @cStorerkey, @cPrevUCC, @nRecCnt, @nPrevTotalCount,
+         @cCurrentUCC    OUTPUT,
+         @nTotalCount    OUTPUT,
+         @cSKU           OUTPUT,
+         @cSKUDescr      OUTPUT,
+         @cUOM           OUTPUT,
+         @nQty           OUTPUT,
+         @cPPK           OUTPUT,
+         @cLottable1     OUTPUT,
+         @cLottable2     OUTPUT,
+         @cLottable3     OUTPUT,
+         @dLottable4     OUTPUT,
+         @dLottable5     OUTPUT
 
-         IF @nTotalCount = 0
-         BEGIN
-            -- Blank out var
-            SET @cCurrentUCC = ''
-            SET @nTotalCount = 0
-            SET @cSKU = ''
-            SET @cSKUDescr = ''
-            SET @cUOM = ''
-            SET @nQty = 0
-            SET @cPPK = ''
-            SET @cLottable1 = ''
-            SET @cLottable2 = ''
-            SET @cLottable3 = ''
-            SET @dLottable4 = ''
-            SET @dLottable5 = ''
+      IF @nTotalCount = 0
+      BEGIN
+         -- Blank out var
+         SET @cCurrentUCC = ''
+         SET @nTotalCount = 0
+         SET @cSKU = ''
+         SET @cSKUDescr = ''
+         SET @cUOM = ''
+         SET @nQty = 0
+         SET @cPPK = ''
+         SET @cLottable1 = ''
+         SET @cLottable2 = ''
+         SET @cLottable3 = ''
+         SET @dLottable4 = ''
+         SET @dLottable5 = ''
 
-            -- Clear all outfields
-            SET @cOutField01 = ''   -- TotalCount
-            SET @cOutField02 = ''   -- Option
-            SET @cOutField03 = ''   -- UCC
-            SET @cOutField04 = ''   -- PPK
-            SET @cOutField05 = ''   -- SKU
-            SET @cOutField06 = ''   -- SKU DESCR1
-            SET @cOutField07 = ''   -- SKU DESCR2
-            SET @cOutField08 = ''   -- QTY + UOM
-            SET @cOutField09 = ''   -- Lottable01
-            SET @cOutField10 = ''   -- Lottable02
-            SET @cOutField11 = ''   -- Lottable03
-            SET @cOutField12 = ''   -- Lottable04
-            SET @cOutField13 = ''   -- Lottable05
-         END
-         ELSE
-         BEGIN
-            -- Prepare OPTION Screen
-            SET @nUCCCnt = @nUCCCnt + 1
-            SET @cUCCCnt = RTRIM(CONVERT(CHAR(4), @nUCCCnt))
-            SET @cTotalCount =  CONVERT(CHAR(4), @nTotalCount)
+         -- Clear all outfields
+         SET @cOutField01 = ''   -- TotalCount
+         SET @cOutField02 = ''   -- Option
+         SET @cOutField03 = ''   -- UCC
+         SET @cOutField04 = ''   -- PPK
+         SET @cOutField05 = ''   -- SKU
+         SET @cOutField06 = ''   -- SKU DESCR1
+         SET @cOutField07 = ''   -- SKU DESCR2
+         SET @cOutField08 = ''   -- QTY + UOM
+         SET @cOutField09 = ''   -- Lottable01
+         SET @cOutField10 = ''   -- Lottable02
+         SET @cOutField11 = ''   -- Lottable03
+         SET @cOutField12 = ''   -- Lottable04
+         SET @cOutField13 = ''   -- Lottable05
+      END
+      ELSE
+      BEGIN
+         -- Prepare OPTION Screen
+         SET @nUCCCnt = @nUCCCnt + 1
+         SET @cUCCCnt = RTRIM(CONVERT(CHAR(4), @nUCCCnt))
+         SET @cTotalCount =  CONVERT(CHAR(4), @nTotalCount)
 
-            SET @cTotalALL = RTRIM(@cUCCCnt) + '/' + RTRIM(@cTotalCount)
-            SET @cQty = CAST( @nQTY AS NVARCHAR( 5))
-            SET @cSKUDescr01 = SUBSTRING( @cSKUDescr, 1, 20)
-            SET @cSKUDescr02 = SUBSTRING( @cSKUDescr, 21, 20) --ang01
+         SET @cTotalALL = RTRIM(@cUCCCnt) + '/' + RTRIM(@cTotalCount)
+         SET @cQty = CAST( @nQTY AS NVARCHAR( 5))
+         SET @cSKUDescr01 = SUBSTRING( @cSKUDescr, 1, 20)
+         SET @cSKUDescr02 = SUBSTRING( @cSKUDescr, 21, 20) --ang01
 
-            SET @cOutField01 = @cTotalALL--RTRIM(CONVERT(CHAR(4), @nUCCCnt)) + '/' + CONVERT(CHAR(4), @nTotalCount)
-            SET @cOutField02 = ''   -- Option
-            SET @cOutField03 = @cCurrentUCC
-            SET @cOutField04 = @cPPK
-            SET @cOutField05 = @cSKU
-            SET @cOutField06 = @cSKUDescr01
-            SET @cOutField07 = @cSKUDescr02
-            SET @cOutField08 = @cQty
-            SET @cOutField09 = @cUOM
-            SET @cOutField10 = @cLottable1
-            SET @cOutField11 = @cLottable2
-            SET @cOutField12 = @cLottable3
-            SET @cOutField13 = rdt.rdtFormatDate( @dLottable4)
-            SET @cOutField14 = rdt.rdtFormatDate( @dLottable5)
-         END
+         SET @cOutField01 = @cTotalALL--RTRIM(CONVERT(CHAR(4), @nUCCCnt)) + '/' + CONVERT(CHAR(4), @nTotalCount)
+         SET @cOutField02 = ''   -- Option
+         SET @cOutField03 = @cCurrentUCC
+         SET @cOutField04 = @cPPK
+         SET @cOutField05 = @cSKU
+         SET @cOutField06 = @cSKUDescr01
+         SET @cOutField07 = @cSKUDescr02
+         SET @cOutField08 = @cQty
+         SET @cOutField09 = @cUOM
+         SET @cOutField10 = @cLottable1
+         SET @cOutField11 = @cLottable2
+         SET @cOutField12 = @cLottable3
+         SET @cOutField13 = rdt.rdtFormatDate( @dLottable4)
+         SET @cOutField14 = rdt.rdtFormatDate( @dLottable5)
+      END
 
       SET @nScn  = @nScn + 1
       SET @nStep = @nStep + 1
@@ -708,143 +721,123 @@ Step 5. Scn = 1054. Display, counter, option
    LOT5    (field14)
 ********************************************************************************/
 Step_5:
+BEGIN
+   IF @nInputKey = 1 -- ENTER
+   BEGIN
       -- Screen mapping
       SET @cOption = ''
       SET @cOption = @cInField02
-
-
-      IF @nInputKey = 1 -- ENTER
+      IF @cOption = ''
       BEGIN
-       IF @cOption = ''
-       BEGIN
+         DECLARE @nPrevUCCCnt INT
+         SELECT @nPrevUCCCnt = CAST(@cUCCCnt AS INT)
+         SELECT @nPrevTotalCount = CAST(@cTotalCount AS INT)
+         SELECT @cPrevUCC = @cCurrentUCC
+         SELECT @nRecCnt = 0
 
-            DECLARE @nPrevUCCCnt INT
-            SELECT @nPrevUCCCnt = CAST(@cUCCCnt AS INT)
-            SELECT @nPrevTotalCount = CAST(@cTotalCount AS INT)
-        SELECT @cPrevUCC = @cCurrentUCC
-        SELECT @nRecCnt = 0
-
-    EXECUTE rdt.rdt_ReceiveReserval_UCCRetrieve
-             @cReceiptKey, @cLOC, @cID, @cUCC, @cStorerkey, @cPrevUCC, @nRecCnt, @nPrevTotalCount,
-        @cCurrentUCC    OUTPUT,
-        @nTotalCount    OUTPUT,
-        @cSKU           OUTPUT,
-        @cSKUDescr      OUTPUT,
-        @cUOM           OUTPUT,
-        @nQty           OUTPUT,
-        @cPPK           OUTPUT,
-        @cLottable1     OUTPUT,
-        @cLottable2     OUTPUT,
-        @cLottable3     OUTPUT,
-        @dLottable4     OUTPUT,
-        @dLottable5     OUTPUT
+         EXECUTE rdt.rdt_ReceiveReserval_UCCRetrieve
+            @cReceiptKey, @cLOC, @cID, @cUCC, @cStorerkey, @cPrevUCC, @nRecCnt, @nPrevTotalCount,
+            @cCurrentUCC    OUTPUT,
+            @nTotalCount    OUTPUT,
+            @cSKU           OUTPUT,
+            @cSKUDescr      OUTPUT,
+            @cUOM           OUTPUT,
+            @nQty           OUTPUT,
+            @cPPK           OUTPUT,
+            @cLottable1     OUTPUT,
+            @cLottable2     OUTPUT,
+            @cLottable3     OUTPUT,
+            @dLottable4     OUTPUT,
+            @dLottable5     OUTPUT
 
 
-             -- Prepare OPTION Screen
-             --IF @cCurrentUCC = @cPrevUCC AND @nTotalCount > @nPrevUCCCnt
-               IF @nTotalCount > @nPrevUCCCnt
-             BEGIN
-                SET @nUCCCnt = CAST(@cUCCCnt AS INT) + 1
-                SET @cUCCCnt = RTRIM(CONVERT(CHAR(4), @nUCCCnt))
-              SET @cTotalCount =  CONVERT(CHAR(4), @nTotalCount)
+         -- Prepare OPTION Screen
+         --IF @cCurrentUCC = @cPrevUCC AND @nTotalCount > @nPrevUCCCnt
+         IF @nTotalCount > @nPrevUCCCnt
+         BEGIN
+            SET @nUCCCnt = CAST(@cUCCCnt AS INT) + 1
+            SET @cUCCCnt = RTRIM(CONVERT(CHAR(4), @nUCCCnt))
+            SET @cTotalCount =  CONVERT(CHAR(4), @nTotalCount)
 
-              SET @cTotalALL = RTRIM(@cUCCCnt) + '/' + RTRIM(@cTotalCount)
-              SET @cQty = CAST( @nQTY AS NVARCHAR( 5))
-              SET @cSKUDescr01 = SUBSTRING( @cSKUDescr, 1, 20)
-              SET @cSKUDescr02 = SUBSTRING( @cSKUDescr, 21, 20)--ang01
+            SET @cTotalALL = RTRIM(@cUCCCnt) + '/' + RTRIM(@cTotalCount)
+            SET @cQty = CAST( @nQTY AS NVARCHAR( 5))
+            SET @cSKUDescr01 = SUBSTRING( @cSKUDescr, 1, 20)
+            SET @cSKUDescr02 = SUBSTRING( @cSKUDescr, 21, 20)--ang01
 
-              SET @cOutField01 = @cTotalALL--RTRIM(CONVERT(CHAR(4), @nUCCCnt)) + '/' + CONVERT(CHAR(4), @nTotalCount)
-              SET @cOutField02 = ''   -- Option
-              SET @cOutField03 = @cCurrentUCC
-              SET @cOutField04 = @cPPK
-              SET @cOutField05 = @cSKU
-              SET @cOutField06 = @cSKUDescr01
-              SET @cOutField07 = @cSKUDescr02
-              SET @cOutField08 = @cQty
-              SET @cOutField09 = @cUOM
-              SET @cOutField10 = @cLottable1
-              SET @cOutField11 = @cLottable2
-              SET @cOutField12 = @cLottable3
-              SET @cOutField13 = rdt.rdtFormatDate( @dLottable4)
-              SET @cOutField14 = rdt.rdtFormatDate( @dLottable5)
+            SET @cOutField01 = @cTotalALL--RTRIM(CONVERT(CHAR(4), @nUCCCnt)) + '/' + CONVERT(CHAR(4), @nTotalCount)
+            SET @cOutField02 = ''   -- Option
+            SET @cOutField03 = @cCurrentUCC
+            SET @cOutField04 = @cPPK
+            SET @cOutField05 = @cSKU
+            SET @cOutField06 = @cSKUDescr01
+            SET @cOutField07 = @cSKUDescr02
+            SET @cOutField08 = @cQty
+            SET @cOutField09 = @cUOM
+            SET @cOutField10 = @cLottable1
+            SET @cOutField11 = @cLottable2
+            SET @cOutField12 = @cLottable3
+            SET @cOutField13 = rdt.rdtFormatDate( @dLottable4)
+            SET @cOutField14 = rdt.rdtFormatDate( @dLottable5)
 
 
-          -- Go to ASN screen
-    SET @nScn = @nScn
-           SET @nStep = @nStep
-          END
+            -- Go to ASN screen
+            SET @nScn = @nScn
+            SET @nStep = @nStep
+         END
 
           GOTO Quit
-       END
-       ELSE IF @cOption <> '1' AND @cOption <> '2' AND @cOption <> ''
-     BEGIN
-             SET @nErrNo = 62911
+      END
+      ELSE IF @cOption <> '1' AND @cOption <> '2' AND @cOption <> ''
+      BEGIN
+         SET @nErrNo = 62911
          SET @cErrMsg = rdt.rdtgetmessage( 62911, @cLangCode, 'DSP') --'Invalid Option'
          GOTO Step_5_Fail
-     END
       END
-
-    IF @nInputKey = 0 -- ESC
-    BEGIN
-        SET @cOption = ''
-          SET @cInField01 = ''
-
-        -- Clear all outfields
-        SET @cOutField01 = ''   -- TotalCount
-        SET @cOutField02 = ''   -- Option
-        SET @cOutField03 = ''   -- UCC
-        SET @cOutField04 = ''   -- PPK
-        SET @cOutField05 = ''   -- SKU
-        SET @cOutField06 = ''   -- SKU DESCR1
-        SET @cOutField07 = ''   -- SKU DESCR2
-        SET @cOutField08 = ''   -- QTY + UOM
-        SET @cOutField09 = ''   -- Lottable01
-        SET @cOutField10 = ''   -- Lottable02
-        SET @cOutField11 = ''   -- Lottable03
-        SET @cOutField12 = ''   -- Lottable04
-        SET @cOutField13 = ''   -- Lottable05
-
-        SET @cOutField01 = @cReceiptKey
-        SET @cOutField02 = @cLOC -- LOC
-        SET @cOutField03 = @cID -- ID
-        SET @cOutField04 = '' -- UCC
-
-   SET @nScn = @nScn - 1
-   SET @nStep = @nStep - 1
-  GOTO Quit
-  END
 
       IF @cOption = '1' -- Edit
       BEGIN
-       -- If UCC's case count is fixed (i.e. NOT dynamic), check the case count
-       IF rdt.rdtGetConfig( 0, 'UCCWithDynamicCaseCnt', @cStorerKey) <> '1' -- 1=Dynamic CaseCNT
+         -- Allow reverse receive on single sku ucc only
+         -- (This module doesn't have screen to key in particular sku to reverse)
+         IF EXISTS ( SELECT 1 FROM dbo.UCC WITH (NOLOCK) 
+                     WHERE Storerkey = @cStorerKey
+                     AND   UCCNo = @cUCC 
+                     GROUP BY UCCNo
+                     HAVING COUNT( DISTINCT SKU) > 1)
          BEGIN
-             SET @nErrNo = 62912
-         SET @cErrMsg = rdt.rdtgetmessage( 62912, @cLangCode, 'DSP') --'UCC QTY Fixed'
-         GOTO Step_5_Fail
+            SET @nErrNo = 62922
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UCC MIX SKU
+            GOTO Step_5_Fail
          END
-       ELSE
-       BEGIN
-        SET @cOutField01 = @cTotalALL--RTRIM(CONVERT(CHAR(4), @nUCCCnt)) + '/' + CONVERT(CHAR(4), @nTotalCount)
-        SET @cOutField02 = @cCurrentUCC
-        SET @cOutField03 = @cPPK
-        SET @cOutField04 = @cSKU
-        SET @cOutField05 = @cSKUDescr01
-        SET @cOutField06 = @cSKUDescr02
-        SET @cOutField07 = @cQty
-        SET @cOutField08 = @cUOM
-        SET @cOutField09 = '' -- New Qty
-        SET @cOutField10 = @cLottable1
-        SET @cOutField11 = @cLottable2
-        SET @cOutField12 = @cLottable3
-        SET @cOutField13 = rdt.rdtFormatDate( @dLottable4)
-        SET @cOutField14 = rdt.rdtFormatDate( @dLottable5)
+         
+         -- If UCC's case count is fixed (i.e. NOT dynamic), check the case count
+         IF rdt.rdtGetConfig( 0, 'UCCWithDynamicCaseCnt', @cStorerKey) <> '1' -- 1=Dynamic CaseCNT
+         BEGIN
+            SET @nErrNo = 62912
+            SET @cErrMsg = rdt.rdtgetmessage( 62912, @cLangCode, 'DSP') --'UCC QTY Fixed'
+            GOTO Step_5_Fail
+         END
+         ELSE
+         BEGIN
+            SET @cOutField01 = @cTotalALL--RTRIM(CONVERT(CHAR(4), @nUCCCnt)) + '/' + CONVERT(CHAR(4), @nTotalCount)
+            SET @cOutField02 = @cCurrentUCC
+            SET @cOutField03 = @cPPK
+            SET @cOutField04 = @cSKU
+            SET @cOutField05 = @cSKUDescr01
+            SET @cOutField06 = @cSKUDescr02
+            SET @cOutField07 = @cQty
+            SET @cOutField08 = @cUOM
+            SET @cOutField09 = '' -- New Qty
+            SET @cOutField10 = @cLottable1
+            SET @cOutField11 = @cLottable2
+            SET @cOutField12 = @cLottable3
+            SET @cOutField13 = rdt.rdtFormatDate( @dLottable4)
+            SET @cOutField14 = rdt.rdtFormatDate( @dLottable5)
 
-       SET @nScn = @nScn + 1
-       SET @nStep = @nStep + 1
+            SET @nScn = @nScn + 1
+            SET @nStep = @nStep + 1
 
-       GOTO Quit
-       END
+            GOTO Quit
+         END
       END
 
       IF @cOption = '2' -- DEL
@@ -858,7 +851,39 @@ Step_5:
 
          GOTO Quit
       END
+   END
 
+   IF @nInputKey = 0 -- ESC
+   BEGIN
+      SET @cOption = ''
+      SET @cInField01 = ''
+
+      -- Clear all outfields
+      SET @cOutField01 = ''   -- TotalCount
+      SET @cOutField02 = ''   -- Option
+      SET @cOutField03 = ''   -- UCC
+      SET @cOutField04 = ''   -- PPK
+      SET @cOutField05 = ''   -- SKU
+      SET @cOutField06 = ''   -- SKU DESCR1
+      SET @cOutField07 = ''   -- SKU DESCR2
+      SET @cOutField08 = ''   -- QTY + UOM
+      SET @cOutField09 = ''   -- Lottable01
+      SET @cOutField10 = ''   -- Lottable02
+      SET @cOutField11 = ''   -- Lottable03
+      SET @cOutField12 = ''   -- Lottable04
+      SET @cOutField13 = ''   -- Lottable05
+
+      SET @cOutField01 = @cReceiptKey
+      SET @cOutField02 = @cLOC -- LOC
+      SET @cOutField03 = @cID -- ID
+      SET @cOutField04 = '' -- UCC
+
+      SET @nScn = @nScn - 1
+      SET @nStep = @nStep - 1
+      GOTO Quit
+   END
+
+   GOTO Quit
 
    Step_5_Fail:
    BEGIN
@@ -866,6 +891,7 @@ Step_5:
       SET @cOption = ''
       SET @cOutField02 = '' -- Option
    END
+END
 GOTO Quit
 
 /********************************************************************************
@@ -894,81 +920,93 @@ BEGIN
       SET @cNewQty = @cInField09
 
       -- Validate if QTY is numeric
-      IF ISNUMERIC(@cNewQty) = 0
-    BEGIN
+      IF RDT.rdtIsValidQTY( @cNewQty, 1) = 0
+      BEGIN
          SET @nErrNo = 62913
-       SET @cErrMsg = rdt.rdtgetmessage( 62913, @cLangCode, 'DSP') --'Invalid QTY'
-       GOTO Step_6_Fail
-      END
-
-      IF SUBSTRING(@cNewQty,1,1) = '-'
-    BEGIN
-         SET @nErrNo = 62913
-       SET @cErrMsg = rdt.rdtgetmessage( 62913, @cLangCode, 'DSP') --'Invalid QTY'
-       GOTO Step_6_Fail
-      END
-
-      IF @cNewQty = '0'
-    BEGIN
-         SET @nErrNo = 62913
-       SET @cErrMsg = rdt.rdtgetmessage( 62913, @cLangCode, 'DSP') --'Invalid QTY'
-       GOTO Step_6_Fail
+         SET @cErrMsg = rdt.rdtgetmessage( 62913, @cLangCode, 'DSP') --'Invalid QTY'
+         GOTO Step_6_Fail
       END
 
       IF CAST(@cNewQty AS INT) > CAST(@cQTY AS INT)
       BEGIN
-    EXECUTE rdt.rdt_ReceiveReserval_UCCQtyValidation
+      	-- If turn on then cannot adjust > received ucc qty
+      	IF @cNotAllowOverAdjustUCCQty = '1'
+         BEGIN
+            SET @nErrNo = 62923
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Over UCC Qty'
+            GOTO Step_6_Fail
+         END
+      
+         EXECUTE rdt.rdt_ReceiveReserval_UCCQtyValidation
              @cReceiptKey, @cLOC, @cID, @cCurrentUCC, @cStorerkey, @cNewQty,
-                    @cReceiptLineNo OUTPUT,
-        @cResult        OUTPUT
+             @cReceiptLineNo OUTPUT,
+             @cResult        OUTPUT
 
-            IF @cResult = '0'
-            BEGIN
-        SET @nErrNo = 62914
-     SET @cErrMsg = rdt.rdtgetmessage( 62914, @cLangCode, 'DSP') --'Line Over Rcpt'
-     GOTO Step_6_Fail
-            END
+         IF @cResult = '0'
+         BEGIN
+            SET @nErrNo = 62914
+            SET @cErrMsg = rdt.rdtgetmessage( 62914, @cLangCode, 'DSP') --'Line Over Rcpt'
+            GOTO Step_6_Fail
+         END
       END
       ELSE
       BEGIN
-    EXECUTE rdt.rdt_ReceiveReserval_UCCQtyValidation
-             @cReceiptKey, @cLOC, @cID, @cCurrentUCC, @cStorerkey, @cNewQty,
-                    @cReceiptLineNo OUTPUT,
-        @cResult        OUTPUT
+         EXECUTE rdt.rdt_ReceiveReserval_UCCQtyValidation
+            @cReceiptKey, @cLOC, @cID, @cCurrentUCC, @cStorerkey, @cNewQty,
+            @cReceiptLineNo OUTPUT,
+            @cResult        OUTPUT
 
       END
 
-      IF EXISTS (SELECT 1 FROM dbo.RECEIPTDETAIL RD (NOLOCK) WHERE RD.ReceiptKey = @cReceiptKey
-                   AND RD.Storerkey = @cStorerkey
-                   AND RD.ReceiptLineNumber = @cReceiptLineNo
-                   AND RD.FinalizeFlag = 'Y')
+      IF @cAllowFinalizedASN = '0'
       BEGIN
-      SET @nErrNo = 62915
-    SET @cErrMsg = rdt.rdtgetmessage( 62915, @cLangCode, 'DSP') --'Line finalized'
-    GOTO Step_6_Fail
-      END
+         IF EXISTS (SELECT 1 FROM dbo.RECEIPTDETAIL RD (NOLOCK) WHERE RD.ReceiptKey = @cReceiptKey
+                      AND RD.Storerkey = @cStorerkey
+                      AND RD.ReceiptLineNumber = @cReceiptLineNo
+                      AND RD.FinalizeFlag = 'Y')
+         BEGIN
+            SET @nErrNo = 62915
+            SET @cErrMsg = rdt.rdtgetmessage( 62915, @cLangCode, 'DSP') --'Line finalized'
+            GOTO Step_6_Fail
+         END
 
-      IF EXISTS (SELECT 1 FROM dbo.UCC UCC (NOLOCK) WHERE UCC.ReceiptKey = @cReceiptKey
-                   AND UCC.Storerkey = @cStorerkey
-                   AND UCC.UCCNo = @cCurrentUCC
-                   AND UCC.Status = '1'
-                   AND (UCC.LOT <> '' AND UCC.LOT IS NOT NULL))
-      BEGIN
-      SET @nErrNo = 62916
-    SET @cErrMsg = rdt.rdtgetmessage( 62916, @cLangCode, 'DSP') --'UCC finalized'
-    GOTO Step_6_Fail
+         IF EXISTS (SELECT 1 FROM dbo.UCC UCC (NOLOCK) WHERE UCC.ReceiptKey = @cReceiptKey
+                      AND UCC.Storerkey = @cStorerkey
+                      AND UCC.UCCNo = @cCurrentUCC
+                      AND UCC.Status = '1'
+                      AND (UCC.LOT <> '' AND UCC.LOT IS NOT NULL))
+         BEGIN
+            SET @nErrNo = 62916
+            SET @cErrMsg = rdt.rdtgetmessage( 62916, @cLangCode, 'DSP') --'UCC finalized'
+            GOTO Step_6_Fail
+         END
       END
 
       SET @nError = 0
-  EXECUTE rdt.rdt_ReceiveReserval_UCCQtyAdjustment
-            @cReceiptKey, @cLOC, @cID, @cCurrentUCC, @cStorerkey, @cQTY, @cNewQty, @cReceiptLineNo,
-       @nError        OUTPUT
+      EXECUTE rdt.rdt_ReceiveReserval_UCCQtyAdjustment
+         @nMobile       = @nMobile,
+         @nFunc         = @nFunc,
+         @cLangCode     = @cLangCode,
+         @nStep         = @nStep,
+         @nInputKey     = @nInputKey,
+         @cFacility     = @cFacility,
+         @cStorerkey    = @cStorerkey,
+         @cReceiptKey   = @cReceiptKey, 
+         @cLOC          = @cLOC, 
+         @cID           = @cID, 
+         @cUCC          = @cCurrentUCC, 
+         @cQTY          = @cQTY, 
+         @cNewQty       = @cNewQty, 
+         @cReceiptLineNo= @cReceiptLineNo,
+         @cType         = 'EDT',
+         @nErrNo        = @nErrNo      OUTPUT,
+         @cErrMsg       = @cErrMsg     OUTPUT
 
-      IF @nError = 1
+      IF @nErrNo <> 0
       BEGIN
-            SET @nErrNo = 62917
-    SET @cErrMsg = rdt.rdtgetmessage( 62917, @cLangCode, 'DSP') --'Fail to adjust'
-    GOTO Step_6_Fail
+         SET @nErrNo = 62917
+         SET @cErrMsg = rdt.rdtgetmessage( 62917, @cLangCode, 'DSP') --'Fail to adjust'
+         GOTO Step_6_Fail
       END
 
       SET @cInField01 = 'UCC Adjusted '
@@ -1031,133 +1069,148 @@ Step 7. Scn = 1056. Un-receive screen
 ********************************************************************************/
 Step_7:
 BEGIN
+   IF @nInputKey = 1
+   BEGIN
       SET @cOption = ''
       SET @cOption = @cInField02
 
-      IF @nInputKey = 1
+      IF @cOption <> '1' AND @cOption <> '2' --AND @cOption <> ''
       BEGIN
-
-   IF @cOption <> '1' AND @cOption <> '2' --AND @cOption <> ''
-         BEGIN
-             SET @nErrNo = 62918
+         SET @nErrNo = 62918
          SET @cErrMsg = rdt.rdtgetmessage( 62918, @cLangCode, 'DSP') --'Invalid Option'
          GOTO Step_7_Fail
+      END
+
+      IF @cOption = '1' -- Yes
+      BEGIN
+         SELECT @cReceiptLineNo = UCC.ReceiptLineNumber
+         FROM dbo.UCC UCC (NOLOCK)
+         WHERE UCC.Storerkey = @cStorerkey
+            AND UCC.ReceiptKey = @cReceiptKey
+            AND UCC.UCCNo = @cCurrentUCC
+            AND UCC.Status = '1'
+
+         IF @cAllowFinalizedASN = '0'
+         BEGIN
+            IF EXISTS (SELECT 1 FROM dbo.RECEIPTDETAIL RD (NOLOCK) WHERE RD.ReceiptKey = @cReceiptKey
+                        AND RD.Storerkey = @cStorerkey
+                        AND RD.ReceiptLineNumber = @cReceiptLineNo
+                        AND RD.FinalizeFlag = 'Y')
+            BEGIN
+               SET @nErrNo = 62919
+               SET @cErrMsg = rdt.rdtgetmessage( 62919, @cLangCode, 'DSP') --'Line finalized'
+               GOTO Step_7_Fail
+            END
+
+            IF EXISTS (SELECT 1 FROM dbo.UCC UCC (NOLOCK) WHERE UCC.ReceiptKey = @cReceiptKey
+                        AND UCC.Storerkey = @cStorerkey
+                        AND UCC.UCCNo = @cCurrentUCC
+                        AND UCC.Status = '1'
+                     AND (UCC.LOT <> '' AND UCC.LOT IS NOT NULL))
+            BEGIN
+               SET @nErrNo = 62920
+               SET @cErrMsg = rdt.rdtgetmessage( 62920, @cLangCode, 'DSP') --'UCC finalized'
+               GOTO Step_7_Fail
+            END
+         END
+      
+         SET @nErrNo = 0
+         EXECUTE rdt.rdt_ReceiveReserval_UCCQtyAdjustment
+            @nMobile       = @nMobile,
+            @nFunc         = @nFunc,
+            @cLangCode     = @cLangCode,
+            @nStep         = @nStep,
+            @nInputKey     = @nInputKey,
+            @cFacility     = @cFacility,
+            @cStorerkey    = @cStorerkey,
+            @cReceiptKey   = @cReceiptKey, 
+            @cLOC          = @cLOC, 
+            @cID           = @cID, 
+            @cUCC          = @cCurrentUCC, 
+            @cQTY          = @cQTY, 
+            @cNewQty       = @cNewQty, 
+            @cReceiptLineNo= @cReceiptLineNo,
+            @cType         = 'DEL',
+            @nErrNo        = @nErrNo      OUTPUT,
+            @cErrMsg       = @cErrMsg     OUTPUT
+
+         IF @nErrNo <> 0
+         BEGIN
+            SET @nErrNo = 62921
+            SET @cErrMsg = rdt.rdtgetmessage( 62921, @cLangCode, 'DSP') --'Fail to adjust'
+            GOTO Step_7_Fail
          END
 
-       IF @cOption = '1' -- Yes
-       BEGIN
+         SET @cInField01 = 'UCC Adjusted '
+         SET @cInField02 = 'successfully'
+         SET @cInField03 = 'Press ENTER or ESC'
+         SET @cInField04 = 'to continue'
 
-            SELECT @cReceiptLineNo = UCC.ReceiptLineNumber
-            FROM dbo.UCC UCC (NOLOCK)
-            WHERE UCC.Storerkey = @cStorerkey
-              AND UCC.ReceiptKey = @cReceiptKey
-              AND UCC.UCCNo = @cCurrentUCC
-              AND UCC.Status = '1'
+         SET @cOutField01 = @cInField01
+         SET @cOutField02 = @cInField02
+         SET @cOutField03 = @cInField03
+         SET @cOutField04 = @cInField04
 
-        IF EXISTS (SELECT 1 FROM dbo.RECEIPTDETAIL RD (NOLOCK) WHERE RD.ReceiptKey = @cReceiptKey
-                     AND RD.Storerkey = @cStorerkey
-                     AND RD.ReceiptLineNumber = @cReceiptLineNo
-                     AND RD.FinalizeFlag = 'Y')
-        BEGIN
-        SET @nErrNo = 62919
-      SET @cErrMsg = rdt.rdtgetmessage( 62919, @cLangCode, 'DSP') --'Line finalized'
-      GOTO Step_7_Fail
-        END
+         -- Go to ASN screen
+         SET @nScn = @nScn + 1
+         SET @nStep = @nStep + 1
 
-        IF EXISTS (SELECT 1 FROM dbo.UCC UCC (NOLOCK) WHERE UCC.ReceiptKey = @cReceiptKey
-                     AND UCC.Storerkey = @cStorerkey
-                     AND UCC.UCCNo = @cCurrentUCC
-                         AND UCC.Status = '1'
-                     AND (UCC.LOT <> '' AND UCC.LOT IS NOT NULL))
-        BEGIN
-        SET @nErrNo = 62920
-      SET @cErrMsg = rdt.rdtgetmessage( 62920, @cLangCode, 'DSP') --'UCC finalized'
-      GOTO Step_7_Fail
-        END
+         GOTO Quit
+      END
 
-            SET @nError = 0
-    EXECUTE rdt.rdt_ReceiveReserval_UCCQtyUnReceive
-              @cReceiptKey, @cLOC, @cID, @cCurrentUCC, @cStorerkey, @cQTY, @cReceiptLineNo,
-         @nError        OUTPUT
-
-        IF @nError = 1
-        BEGIN
-              SET @nErrNo = 62921
-      SET @cErrMsg = rdt.rdtgetmessage( 62921, @cLangCode, 'DSP') --'Fail to adjust'
-      GOTO Step_7_Fail
-        END
-
-
-        SET @cInField01 = 'UCC Adjusted '
-        SET @cInField02 = 'successfully'
-        SET @cInField03 = 'Press ENTER or ESC'
-        SET @cInField04 = 'to continue'
-
-          SET @cOutField01 = @cInField01
-          SET @cOutField02 = @cInField02
-          SET @cOutField03 = @cInField03
-          SET @cOutField04 = @cInField04
-
-          -- Go to ASN screen
-          SET @nScn = @nScn + 1
-          SET @nStep = @nStep + 1
-
-          GOTO Quit
-       END
-
-       IF @cOption = '2' -- No
-       BEGIN
-
-        SET @cInField02 = ''
-            SET @cOutField01 = @cTotalALL
-          -- Go to ASN screen
-          SET @nScn = @nScn - 2
-          SET @nStep = @nStep - 2
-          GOTO Quit
-       END
-      END -- IF InputKey = 1
-
-    IF @nInputKey = 0 -- ESC
-    BEGIN
-       -- Prepare prev screen var
-       -- Clear all outfields
-         SET @cOutField01 = ''   -- TotalCount
-         SET @cOutField02 = ''   -- Option
-         SET @cOutField03 = ''   -- UCC
-         SET @cOutField04 = ''   -- PPK
-         SET @cOutField05 = ''   -- SKU
-         SET @cOutField06 = ''   -- SKU DESCR1
-         SET @cOutField07 = ''   -- SKU DESCR2
-         SET @cOutField08 = ''   -- QTY + UOM
-         SET @cOutField09 = ''   -- Lottable01
-         SET @cOutField10 = ''   -- Lottable02
-         SET @cOutField11 = ''   -- Lottable03
-         SET @cOutField12 = ''   -- Lottable04
-         SET @cOutField13 = ''   -- Lottable05
-         SET @cInField01 = ''
+      IF @cOption = '2' -- No
+      BEGIN
          SET @cInField02 = ''
+         SET @cOutField01 = @cTotalALL
+         
+         -- Go to ASN screen
+         SET @nScn = @nScn - 2
+         SET @nStep = @nStep - 2
+         GOTO Quit
+       END
+   END -- IF InputKey = 1
 
-       SET @cOption = ''
-       SET @cOutField01 = @cTotalALL--RTRIM(CONVERT(CHAR(4), @nUCCCnt)) + '/' + CONVERT(CHAR(4), @nTotalCount)
-       SET @cOutField02 = ''   -- Option
-       SET @cOutField03 = @cCurrentUCC
-       SET @cOutField04 = @cPPK
-       SET @cOutField05 = @cSKU
-       SET @cOutField06 = @cSKUDescr01
-       SET @cOutField07 = @cSKUDescr02
-       SET @cOutField08 = @cQty
-       SET @cOutField09 = @cUOM
-       SET @cOutField10 = @cLottable1
-       SET @cOutField11 = @cLottable2
-       SET @cOutField12 = @cLottable3
-       SET @cOutField13 = rdt.rdtFormatDate( @dLottable4)
-       SET @cOutField14 = rdt.rdtFormatDate( @dLottable5)
+   IF @nInputKey = 0 -- ESC
+   BEGIN
+      -- Prepare prev screen var
+      -- Clear all outfields
+      SET @cOutField01 = ''   -- TotalCount
+      SET @cOutField02 = ''   -- Option
+      SET @cOutField03 = ''   -- UCC
+      SET @cOutField04 = ''   -- PPK
+      SET @cOutField05 = ''   -- SKU
+      SET @cOutField06 = ''   -- SKU DESCR1
+      SET @cOutField07 = ''   -- SKU DESCR2
+      SET @cOutField08 = ''   -- QTY + UOM
+      SET @cOutField09 = ''   -- Lottable01
+      SET @cOutField10 = ''   -- Lottable02
+      SET @cOutField11 = ''   -- Lottable03
+      SET @cOutField12 = ''   -- Lottable04
+      SET @cOutField13 = ''   -- Lottable05
+      SET @cInField01 = ''
+      SET @cInField02 = ''
 
-       -- Go to prev screen
-       SET @nScn = @nScn - 2
-       SET @nStep = @nStep - 2
-    END
-     GOTO Quit
+      SET @cOption = ''
+      SET @cOutField01 = @cTotalALL--RTRIM(CONVERT(CHAR(4), @nUCCCnt)) + '/' + CONVERT(CHAR(4), @nTotalCount)
+      SET @cOutField02 = ''   -- Option
+      SET @cOutField03 = @cCurrentUCC
+      SET @cOutField04 = @cPPK
+      SET @cOutField05 = @cSKU
+      SET @cOutField06 = @cSKUDescr01
+      SET @cOutField07 = @cSKUDescr02
+      SET @cOutField08 = @cQty
+      SET @cOutField09 = @cUOM
+      SET @cOutField10 = @cLottable1
+      SET @cOutField11 = @cLottable2
+      SET @cOutField12 = @cLottable3
+      SET @cOutField13 = rdt.rdtFormatDate( @dLottable4)
+      SET @cOutField14 = rdt.rdtFormatDate( @dLottable5)
+
+      -- Go to prev screen
+      SET @nScn = @nScn - 2
+      SET @nStep = @nStep - 2
+   END
+   GOTO Quit
 
    Step_7_Fail:
    BEGIN
@@ -1279,7 +1332,9 @@ BEGIN
       V_String10 = @cTotalCount,
       V_String11 = @cNewQty,
       V_String12 = @cReceiptLineNo,
-
+      V_String13 = @cNotAllowOverAdjustUCCQty,
+      V_String14 = @cAllowFinalizedASN,
+      
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,
       I_Field03 = @cInField03,  O_Field03 = @cOutField03,

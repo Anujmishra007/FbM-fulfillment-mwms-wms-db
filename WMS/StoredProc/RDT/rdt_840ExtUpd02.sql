@@ -22,9 +22,12 @@ GO
 /*                            (james03)                                 */
 /* 2022-07-05 1.5  James      WMS-20115 Assign trackno to packinfo for  */
 /*                            certain ordergroup (james04)              */
+/* 2022-10-11 1.6  James      WMS-20920 Change stamp tracking no to     */
+/*                            packinfo carton by carton (james05)       */
+/* 2022-11-01 1.7  James      Bug fix add orderkey filter (james06)     */
 /************************************************************************/
 
-CREATE OR ALTER PROC rdt.rdt_840ExtUpd02 (
+CREATE OR ALTER PROC [RDT].[rdt_840ExtUpd02] (
    @nMobile     INT,
    @nFunc       INT, 
    @cLangCode   NVARCHAR( 3), 
@@ -83,7 +86,8 @@ AS
          IF EXISTS ( SELECT 1 FROM dbo.ORDERS WITH (NOLOCK)
                      WHERE StorerKey = @cStorerkey
                      AND   DocType = 'E'
-                     AND   UserDefine01 = 'VC30')
+                     AND   UserDefine01 = 'VC30'
+                     AND   OrderKey = @cOrderKey)  -- (james06)
          BEGIN
             SET @cPreDelNote = rdt.RDTGetConfig( @nFunc, 'PreDelNote', @cStorerKey)
             IF @cPreDelNote = '0'
@@ -160,50 +164,39 @@ AS
          BEGIN TRAN  -- Begin our own transaction
          SAVE TRAN rdt_840ExtUpd02 -- For rollback or commit only our own transaction
 
-         -- (james04)
-         IF EXISTS ( SELECT 1 FROM dbo.PackHeader WITH (NOLOCK)
-                     WHERE PickSlipNo = @cPickSlipNo
-                     AND   [Status] = '9')
+         -- (james04)/(james05)
+         -- Reset tracking no
+         SET @cTrackingNo = ''
+
+         IF @nCartonNo = 1
+         	SELECT @cTrackingNo = TrackingNo
+         	FROM dbo.ORDERS WITH (NOLOCK)
+         	WHERE OrderKey = @cOrderKey
+         ELSE
          BEGIN
-         	SET @curPackInfo = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-         	SELECT CartonNo
-         	FROM dbo.PackInfo WITH (NOLOCK)
+         	SELECT @cTrackingNo = LabelNo
+         	FROM dbo.PackDetail WITH (NOLOCK)
          	WHERE PickSlipNo = @cPickSlipNo
-         	ORDER BY 1
-         	OPEN @curPackInfo
-         	FETCH NEXT FROM @curPackInfo INTO @nPackInfCtnNo
-         	WHILE @@FETCH_STATUS = 0
-         	BEGIN
-         	   IF @nPackInfCtnNo = 1
-         	   	SELECT @cTrackingNo = TrackingNo
-         	   	FROM dbo.ORDERS WITH (NOLOCK)
-         	   	WHERE OrderKey = @cOrderKey
-         	   ELSE
-         	   	SELECT @cTrackingNo = TrackingNo
-         	   	FROM dbo.CartonTrack WITH (NOLOCK)
-         	   	WHERE LabelNo = @cOrderKey
-         	   	AND   CarrierRef1 = @cOrderKey + CAST( @nPackInfCtnNo AS NVARCHAR( 1))
-         	   	
-         	   UPDATE dbo.PackInfo SET
-         	   	TrackingNo = @cTrackingNo, 
-         	   	EditWho = SUSER_SNAME(), 
-         	   	EditDate = GETDATE()
-         	   WHERE PickSlipNo = @cPickSlipNo
-         	   AND   CartonNo = @nPackInfCtnNo
-
-               IF @@ERROR <> 0  
-               BEGIN      
-                  SET @nErrNo = 94828      
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UPD PACKINF Er'      
-                  GOTO RollBackTran      
-               END 
-
-               -- Reset tracking no
-               SET @cTrackingNo = ''
-
-         	   FETCH NEXT FROM @curPackInfo INTO @nPackInfCtnNo
-         	END
+         	AND   CartonNo = @nCartonNo
          END
+         --SELECT @cTrackingNo = TrackingNo
+         --FROM dbo.CartonTrack WITH (NOLOCK)
+         --WHERE LabelNo = @cOrderKey
+         --AND   CarrierRef1 = @cOrderKey + CAST( @nPackInfCtnNo AS NVARCHAR( 1))
+         	   	
+         UPDATE dbo.PackInfo SET
+         	TrackingNo = @cTrackingNo, 
+         	EditWho = SUSER_SNAME(), 
+         	EditDate = GETDATE()
+         WHERE PickSlipNo = @cPickSlipNo
+         AND   CartonNo = @nCartonNo
+
+         IF @@ERROR <> 0  
+         BEGIN      
+            SET @nErrNo = 94828      
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UPD PACKINF Er'      
+            GOTO RollBackTran      
+         END 
          
          IF EXISTS ( SELECT 1 FROM dbo.CODELKUP WITH (NOLOCK) 
                      WHERE LISTNAME = 'FJNekoPack'
@@ -408,6 +401,7 @@ AS
 
    Quit:  
 GO
+
 
 SET QUOTED_IDENTIFIER OFF
 GO
