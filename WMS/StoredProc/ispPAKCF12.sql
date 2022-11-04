@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispPAKCF12]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispPAKCF12]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -19,7 +14,7 @@ GO
 /* Called By: PostPackConfirmSP                                            */
 /*                                                                         */
 /*                                                                         */
-/* PVCS Version: 1.0                                                       */
+/* PVCS Version: 1.1                                                       */
 /*                                                                         */
 /* Version: 5.4                                                            */
 /*                                                                         */
@@ -27,8 +22,10 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
+/* 04-Nov-2022  WLChooi 1.1   DevOps Combine Script                        */
+/* 04-Nov-2022  WLChooi 1.1   Performance Tuning (WL01)                    */
 /***************************************************************************/  
-CREATE PROC [dbo].[ispPAKCF12]  
+CREATE OR ALTER PROC [dbo].[ispPAKCF12]  
 (     @c_PickSlipNo  NVARCHAR(10)   
   ,   @c_Storerkey   NVARCHAR(15)
   ,   @b_Success     INT           OUTPUT
@@ -69,7 +66,7 @@ BEGIN
    IF @@TRANCOUNT = 0
       BEGIN TRAN
       	
-
+   
    SELECT PD.Storerkey, PD.Sku, PD.DropID, MAX(PD.CartonNo) AS CartonNo, MAX(PD.LabelLine) AS LabelLine     
    INTO #TMP_DROPID
    FROM PACKHEADER PH (NOLOCK) 
@@ -77,6 +74,8 @@ BEGIN
    WHERE PH.PickslipNo = @c_Pickslipno
    AND ISNULL(PD.DropID,'') <> ''
    GROUP BY PD.Storerkey, PD.Sku, PD.DropID
+
+   CREATE INDEX IDX_TMP_DROPID_DropID ON #TMP_DROPID (Storerkey, Sku, DropID)   --WL01
    
    DECLARE cur_ORDLINE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    SELECT O.Orderkey, OD.OrderLineNumber, OD.Storerkey, OD.Sku, SUM(PD.Qty) AS Qty
@@ -121,6 +120,8 @@ BEGIN
       	     ,LabelLine = ''
       	     ,TrafficCop = NULL
       	     --,OrderLineNumber = ''
+              ,EditDate = GETDATE()   --WL01
+              ,EditWho = SUSER_SNAME()   --WL01
       	  WHERE (Orderkey = @c_Orderkey
       	  OR EXISTS(SELECT 1 FROM #TMP_DROPID
       	       	    WHERE #TMP_DROPID.DropID = SERIALNO.Userdefine01
@@ -199,6 +200,8 @@ BEGIN
       	     ,Labelline = @c_LabelLine
       	     ,Status = '6'
       	     ,TrafficCop = NULL
+              ,EditDate = GETDATE()   --WL01
+              ,EditWho = SUSER_SNAME()   --WL01
       	  WHERE SerialNokey = @c_SerialNokey
 
          SET @n_Err = @@ERROR
