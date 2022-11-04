@@ -50,10 +50,12 @@ BEGIN
    DECLARE @nChkSuggQty       INT
    DECLARE @tChkGetTask       VARIABLETABLE
    DECLARE @curWorkOrder      CURSOR
+   DECLARE @curUpdWorkOrder   CURSOR
    DECLARE @cWorkOrderKey     NVARCHAR( 10)
    DECLARE @cWKORDUDEF1       NVARCHAR( 18)
    DECLARE @cWKORDUDEF2       NVARCHAR( 18)
    DECLARE @cWKORDUDEF3       NVARCHAR( 18)
+   DECLARE @cPalletId         NVARCHAR( 18)
    DECLARE @cWaveKey          NVARCHAR( 10)
    DECLARE @cCartPickMethod   NVARCHAR( 20)
    DECLARE @cCaseId           NVARCHAR( 20)
@@ -218,48 +220,66 @@ BEGIN
                SET @nErrNo = 0
             END
 
-            -- Stamp WKORDUDEF4 = FULL for same wavekey (wkordudef1), same PalletID (wkordudef3) 
-            -- already all status = '9'
-            IF NOT EXISTS ( SELECT 1  
-                            FROM dbo.WorkOrder W WITH (NOLOCK)
-         	                JOIN #PalletId P ON W.WkOrdUdef3 = P.PalletId
-         	                WHERE WkOrdUdef1 = @cWaveKey
-         	                AND   W.StorerKey = @cStorerKey
-         	                AND   W.Facility = @cFacility
-         	                AND   W.[Type] = 'TASK'
-         	                AND   [STATUS] = '0')
-            BEGIN
-               SET @curWorkOrder = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-         	   SELECT W.WorkOrderKey  
-         	   FROM dbo.WorkOrder W WITH (NOLOCK)
-         	   JOIN #PalletId P ON W.WkOrdUdef3 = P.PalletId
-         	   WHERE WkOrdUdef1 = @cWaveKey
-         	   AND   W.StorerKey = @cStorerKey
-         	   AND   W.Facility = @cFacility
-         	   AND   W.[Type] = 'TASK'
-         	   AND   [STATUS] = '9'
-         	   OPEN @curWorkOrder
-         	   FETCH NEXT FROM @curWorkOrder INTO @cWorkOrderKey
-         	   WHILE @@FETCH_STATUS = 0
-         	   BEGIN
-         	   	UPDATE dbo.WorkOrder SET 
-         	   	   WkOrdUdef4 = 'FULL', 
-         	   	   TrafficCop = NULL,
-                     EditWho = @cUserName,
-                     EditDate = GETDATE()
-         	   	WHERE WorkOrderKey = @cWorkOrderKey
+            INSERT INTO traceinfo(TraceName, TimeIn, Step1, Step2, Step3, Col1, Col2, Col3, Col4)
+            SELECT '640', GETDATE(), [STATUS], WkOrdUdef3, WkOrdUdef4, @cWaveKey, @cStorerKey, @cFacility, @cUserName
+            FROM dbo.WorkOrder W WITH (NOLOCK)
+         	JOIN #PalletId P ON W.WkOrdUdef3 = P.PalletId
+         	WHERE WkOrdUdef1 = @cWaveKey
+         	AND   W.StorerKey = @cStorerKey
+         	AND   W.Facility = @cFacility
+         	AND   W.[Type] = 'TASK'
+         	
+         	SET @curUpdWorkOrder = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+         	SELECT PalletID FROM #PalletId
+         	OPEN @curUpdWorkOrder
+         	FETCH NEXT FROM @curUpdWorkOrder INTO @cPalletId
+         	WHILE @@FETCH_STATUS = 0
+         	BEGIN
+               -- Stamp WKORDUDEF4 = FULL for same wavekey (wkordudef1), same PalletID (wkordudef3) 
+               -- already all status = '9'
+               IF NOT EXISTS ( SELECT 1  
+                               FROM dbo.WorkOrder WITH (NOLOCK)
+         	                   WHERE WkOrdUdef1 = @cWaveKey
+         	                   AND   WkOrdUdef3 = @cPalletId
+         	                   AND   StorerKey = @cStorerKey
+         	                   AND   Facility = @cFacility
+         	                   AND   [Type] = 'TASK'
+         	                   AND   ([STATUS] = '0' OR [STATUS] = ''))
+               BEGIN
+                  SET @curWorkOrder = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+         	      SELECT W.WorkOrderKey  
+         	      FROM dbo.WorkOrder W WITH (NOLOCK)
+         	      WHERE WkOrdUdef1 = @cWaveKey
+         	      AND   WkOrdUdef3 = @cPalletId
+         	      AND   StorerKey = @cStorerKey
+         	      AND   Facility = @cFacility
+         	      AND   [Type] = 'TASK'
+         	      AND   [STATUS] = '9'
+         	      OPEN @curWorkOrder
+         	      FETCH NEXT FROM @curWorkOrder INTO @cWorkOrderKey
+         	      WHILE @@FETCH_STATUS = 0
+         	      BEGIN
+         	   	   UPDATE dbo.WorkOrder SET 
+         	   	      WkOrdUdef4 = 'FULL', 
+         	   	      TrafficCop = NULL,
+                        EditWho = @cUserName,
+                        EditDate = GETDATE()
+         	   	   WHERE WorkOrderKey = @cWorkOrderKey
 
-                  IF @@ERROR <> 0               
-                  BEGIN          
-                     SET @nErrNo = 193252          
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Upd WkOrder Err          
-                     GOTO RollBackTran          
-                  END
+                     IF @@ERROR <> 0               
+                     BEGIN          
+                        SET @nErrNo = 193252          
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Upd WkOrder Err          
+                        GOTO RollBackTran          
+                     END
                   
-         	   	FETCH NEXT FROM @curWorkOrder INTO @cWorkOrderKey
-         	   END
-         	   CLOSE @curWorkOrder
-         	   DEALLOCATE @curWorkOrder
+         	   	   FETCH NEXT FROM @curWorkOrder INTO @cWorkOrderKey
+         	      END
+         	      CLOSE @curWorkOrder
+         	      DEALLOCATE @curWorkOrder
+               END
+               
+               FETCH NEXT FROM @curUpdWorkOrder INTO @cPalletId
             END
          END
       END
