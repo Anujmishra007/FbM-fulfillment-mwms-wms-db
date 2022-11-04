@@ -106,35 +106,11 @@ BEGIN
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidCaseID
                GOTO QUIT
             END
-
-            SELECT @nNoofTote = count(distinct caseid)
-            FROM taskdetail (NOLOCK)
-            where wavekey=@cwavekey
-            AND storerkey =@cStorerKey 
-
-            SELECT @nToteCompleted= count(distinct caseid)
-            FROM taskdetail (NOLOCK)
-            where status='9'
-            and wavekey=@cwavekey 
-            AND storerkey =@cStorerKey 
-            
-            SELECT @nTotePending= count(distinct caseid)
-            FROM taskdetail (NOLOCK)
-            where status<>'9'
-            and wavekey=@cwavekey
-            AND storerkey =@cStorerKey 
-
-            IF @nNoofTote=@nToteCompleted
-               SET @cstatus='Complete'
-            ELSE
-               SET @cstatus='NotComplete'
          END
-                  
          ELSE IF  @cMethod ='2'
          BEGIN
             SELECT TOP 1 @cWavekey = wavekey,
-                   @cTOLOC = toloc
-                   
+                   @cTOLOC = toloc  
             FROM taskdetail (NOLOCK)
             where dropid=@cID
                AND storerkey =@cStorerKey 
@@ -147,29 +123,30 @@ BEGIN
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidDropID
                GOTO QUIT
             END
-
-            SELECT @nNoofTote = count(distinct Dropid)
-            FROM taskdetail (NOLOCK)
-            where wavekey=@cwavekey
-            AND storerkey =@cStorerKey 
-
-            SELECT @nToteCompleted= count(distinct Dropid)
-            FROM taskdetail (NOLOCK)
-            where status='9'
-            and wavekey=@cwavekey
-            AND storerkey =@cStorerKey 
-            
-            SELECT @nTotePending= count(distinct Dropid)
-            FROM taskdetail (NOLOCK)
-            where status<>'9'
-            and wavekey=@cwavekey
-            AND storerkey =@cStorerKey 
-
-            IF @nNoofTote=@nToteCompleted
-               SET @cstatus='Complete'
-            ELSE
-               SET @cstatus='NotComplete'
          END
+
+         SELECT @nNoofTote = count(distinct caseid)
+         FROM taskdetail (NOLOCK)
+         where wavekey=@cwavekey
+         AND storerkey =@cStorerKey 
+
+         SELECT @nToteCompleted= count(distinct caseid)
+         FROM taskdetail (NOLOCK)
+         where status='9'
+         and wavekey=@cwavekey 
+         AND storerkey =@cStorerKey 
+            
+         SELECT @nTotePending= count(distinct caseid)
+         FROM taskdetail (NOLOCK)
+         where status<>'9'
+         and wavekey=@cwavekey
+         AND storerkey =@cStorerKey 
+
+         IF @nNoofTote=@nToteCompleted
+            SET @cstatus='Complete'
+         ELSE
+            SET @cstatus='NotComplete'
+
          -- Get label
          SET @c_oFieled01 = rdt.rdtgetmessage( 193056, @cLangCode, 'DSP') --Wavekey: 
          SET @c_oFieled02 = @cWavekey
