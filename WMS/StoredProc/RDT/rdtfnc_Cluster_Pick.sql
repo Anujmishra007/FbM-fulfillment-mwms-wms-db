@@ -1,4 +1,3 @@
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -179,6 +178,8 @@ GO
 /*                              step 10 (james72)                       */
 /* 26-Jan-2022  2.2 yeekung     WMS-18619 Add ExtendedWCS SP             */
 /* 17-Jun-2022  2.3 yeekung     WMS-18523 Add defaultloadplan (yeekung01)*/
+/* 28-Jul-2022  2.4 LZG         JSM-84937 - Disallowed option if config */
+/*                              is disabled (ZG02)                      */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Cluster_Pick](
@@ -692,9 +693,9 @@ BEGIN
       INNER JOIN RDT.rdtUser U WITH (NOLOCK) ON (M.UserName = U.UserName)
    WHERE M.Mobile = @nMobile
 
-	SET @cExtendedWCSSP = rdt.RDTGetConfig( @nFunc, 'ExtendedWCSSP', @cStorerKey)  
-   IF @cExtendedWCSSP = '0'  
-      SET @cExtendedWCSSP = ''  
+	SET @cExtendedWCSSP = rdt.RDTGetConfig( @nFunc, 'ExtendedWCSSP', @cStorerKey)
+   IF @cExtendedWCSSP = '0'
+      SET @cExtendedWCSSP = ''
    -- (james25)
    SET @nMultiStorer = 0
    IF EXISTS (SELECT 1 FROM dbo.StorerGroup WITH (NOLOCK) WHERE StorerGroup = @cStorerKey)
@@ -1061,7 +1062,7 @@ BEGIN
          IF ISNULL(@cLoadDefaultPickMethod,'') IN('','0') --(yeekung01)
          BEGIN
             -- (james07)
-            SELECT @cLoadDefaultPickMethod = LoadPickMethod 
+            SELECT @cLoadDefaultPickMethod = LoadPickMethod
             FROM dbo.LoadPlan WITH (NOLOCK)
             WHERE LoadKey = @cLoadKey
          END
@@ -1737,11 +1738,11 @@ BEGIN
                AND OD.Status >= '1'
                AND OD.Status < '5'
                AND NOT EXISTS ( SELECT 1 FROM RDT.rdtPickLock RPL WITH (NOLOCK)    -- INC1408845
-                                WHERE RPL.Orderkey = O.OrderKey    
-                                AND   RPL.WaveKey = O.UserDefine09    
-                                AND   RPL.Storerkey = O.StorerKey    
-                                AND   RPL.[Status] = '1'    
-                                AND   RPL.AddWho = @cUserName)  
+                                WHERE RPL.Orderkey = O.OrderKey
+                                AND   RPL.WaveKey = O.UserDefine09
+                                AND   RPL.Storerkey = O.StorerKey
+                                AND   RPL.[Status] = '1'
+                                AND   RPL.AddWho = @cUserName)
             GROUP BY O.UserDefine09, O.LoadKey, O.OrderKey, O.Storerkey
          END
          ELSE
@@ -9197,7 +9198,8 @@ BEGIN
       SET @cOption = @cInField01
 
       --if input is not either '1' or '2' OR '3'
-      IF @cOption NOT IN ('1', '2', '3')
+      --IF @cOption NOT IN ('1', '2', '3')
+      IF @cOption NOT IN ('1', '2', CASE WHEN (rdt.RDTGetConfig(@nFunc, 'ClusterPickAllowSkipSKU', @cStorerKey) = 1) THEN '3' END)   --ZG02
       BEGIN
          SET @nErrNo = 65944
          SET @cErrMsg = rdt.rdtgetmessage( 65944, @cLangCode, 'DSP') --Invalid Option
@@ -18154,14 +18156,14 @@ BEGIN
          WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
             COMMIT TRAN
 
-			-- Insert WCS ( conveyor info). Due to WSC db could be different server (linked server)  
-			-- the wcs stored proc cannot put within transaction block (no rollback allowed)  
-			-- Extended wcs  
-			IF @cExtendedWCSSP <> ''  
-			BEGIN  
-				IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedWCSSP AND type = 'P')  
-				BEGIN 
-					SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedWCSSP) +  
+			-- Insert WCS ( conveyor info). Due to WSC db could be different server (linked server)
+			-- the wcs stored proc cannot put within transaction block (no rollback allowed)
+			-- Extended wcs
+			IF @cExtendedWCSSP <> ''
+			BEGIN
+				IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedWCSSP AND type = 'P')
+				BEGIN
+					SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedWCSSP) +
 						' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, ' +
                   ' @cWaveKey, @cLoadKey, @cOrderKey, @cPutAwayZone, @cPickZone, @cSKU, @cPickSlipNo, ' +
                   ' @cLOT, @cLOC, @cDropID, @cStatus, @cCartonType, @nErrNo OUTPUT, @cErrMsg OUTPUT '
