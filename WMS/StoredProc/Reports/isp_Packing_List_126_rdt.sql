@@ -25,6 +25,7 @@ GO
 /* 12-JUL-2022  CHONGCS   1.0 DevOps Combine Script                     */
 /* 01-SEP-2022  CHONGCS   1.1 WMS-20126 revised field logic (CS01)      */
 /* 19-SEP-2022  CHONGCS   1.2 WMS-20126 fix duplicate qty (CS02)        */
+/* 20-OCT-2022  LZG       1.3 JSM-101324 - Display only packed SKU(ZG01)*/
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_Packing_List_126_rdt]
             @c_pickslipno    NVARCHAR(20)
@@ -36,18 +37,18 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-  
+
 
 
    SELECT PH.PickSlipNo
         , ISNULL(OH.userdefine03,'') AS Logo
         , TRIM(ISNULL(OH.C_contact1,'')) + TRIM(ISNULL(OH.C_Contact2,'')) AS C_Contact
         , TRIM(ISNULL(OH.C_Address1,'')) + SPACE(1) + TRIM(ISNULL(OH.C_Address2,'')) + SPACE(1)  +
-          TRIM(ISNULL(OH.C_Address3,'')) + SPACE(1) + TRIM(ISNULL(OH.C_Address4,''))  AS C_Address1 
+          TRIM(ISNULL(OH.C_Address3,'')) + SPACE(1) + TRIM(ISNULL(OH.C_Address4,''))  AS C_Address1
         , TRIM(ISNULL(OH.C_Zip,'')) + SPACE(1) + TRIM(ISNULL(OH.C_City,''))  AS C_ZipCity
         , OH.ExternOrderKey
         , TRIM(ISNULL(OH.C_State,'')) + SPACE(1) + TRIM(ISNULL(OH.C_Country,''))  AS C_State
-        , ISNULL(OD.notes,'') AS ODnotes                    --CS01 
+        , ISNULL(OD.notes,'') AS ODnotes                    --CS01
         , ISNULL(OH.C_Phone1,'') AS CPhone
         , ISNULL(SKU.Size,'') AS Size
         , ISNULL(C.long,'') AS ShipFrom
@@ -76,9 +77,13 @@ BEGIN
    JOIN ORDERDETAIL OD (NOLOCK) ON OD.OrderKey = OH.OrderKey
    JOIN PACKHEADER PH (NOLOCK) ON PH.OrderKey = OH.OrderKey
    --JOIN PACKDETAIL PD (NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo   --CS02
-   CROSS APPLY (SELECT SUM(Qty) AS Qty FROM PACKDETAIL (NOLOCK) 
-               WHERE PACKDETAIL.PickSlipNo = PH.PickSlipNo 
-               AND PACKDETAIL.STORERKEY = od.STORERKEY AND PACKDETAIL.SKU = OD.SKU)  AS PAD --CS02
+   CROSS APPLY (
+      SELECT SUM(Qty) AS Qty FROM PACKDETAIL (NOLOCK)
+      WHERE PACKDETAIL.PickSlipNo = PH.PickSlipNo
+      AND PACKDETAIL.STORERKEY = od.STORERKEY 
+      AND PACKDETAIL.SKU = OD.SKU
+      GROUP BY SKU   -- ZG01
+   )  AS PAD --CS02
    JOIN STORER ST (NOLOCK) ON ST.StorerKey = OH.StorerKey
    JOIN SKU (NOLOCK) ON SKU.StorerKey = OD.StorerKey AND SKU.SKU = OD.SKU               --CS02
    LEFT JOIN dbo.CODELKUP C WITH (NOLOCK) ON C.Storerkey = OH.StorerKey and C.LISTNAME = 'PVHSZEPKL' and C.code = OH.userdefine03
@@ -88,14 +93,14 @@ BEGIN
    AND oh.doctype ='E'
    GROUP BY PH.PickSlipNo
         , ISNULL(OH.userdefine03,'')
-        , TRIM(ISNULL(OH.C_contact1,'')) + TRIM(ISNULL(OH.C_Contact2,'')) 
+        , TRIM(ISNULL(OH.C_contact1,'')) + TRIM(ISNULL(OH.C_Contact2,''))
         , TRIM(ISNULL(OH.C_Address1,'')) + SPACE(1) + TRIM(ISNULL(OH.C_Address2,'')) + SPACE(1)  +
-          TRIM(ISNULL(OH.C_Address3,'')) + SPACE(1) + TRIM(ISNULL(OH.C_Address4,'')) 
-        , TRIM(ISNULL(OH.C_Zip,'')) + SPACE(1) + TRIM(ISNULL(OH.C_City,'')) 
-        ,TRIM(ISNULL(OH.C_State,'')) + SPACE(1) + TRIM(ISNULL(OH.C_Country,'')) 
+          TRIM(ISNULL(OH.C_Address3,'')) + SPACE(1) + TRIM(ISNULL(OH.C_Address4,''))
+        , TRIM(ISNULL(OH.C_Zip,'')) + SPACE(1) + TRIM(ISNULL(OH.C_City,''))
+        ,TRIM(ISNULL(OH.C_State,'')) + SPACE(1) + TRIM(ISNULL(OH.C_Country,''))
         ,ISNULL(OH.C_Phone1,''), ISNULL(C.long,''),ISNULL(C.UDF01,''),ISNULL(C.UDF02,'')
         ,ISNULL(C.UDF03,''),ISNULL(C.UDF04,''),ISNULL(C.UDF05,''),ISNULL(C.notes,''),ISNULL(C.Notes2,'')
-        ,ISNULL(OH.UserDefine01,'') ,CONVERT(nvarchar(10),OH.OrderDate,120) ,ISNULL(sku.descr,'') 
+        ,ISNULL(OH.UserDefine01,'') ,CONVERT(nvarchar(10),OH.OrderDate,120) ,ISNULL(sku.descr,'')
         , ISNULL(C1.long,'') , ISNULL(C1.long,''),ISNULL(C1.udf01,''),ISNULL(C1.udf02,''),ISNULL(C1.udf03,'')
         ,ISNULL(C1.udf04,''),ISNULL(C1.udf05,'') ,ISNULL(C2.long,''),ISNULL(C2.Notes,''),ISNULL(C2.Notes2,'')
         ,OH.ExternOrderKey,ISNULL(OD.notes,''),ISNULL(SKU.size,''),OD.SKU,PAD.qty   --CS01    --CS02
