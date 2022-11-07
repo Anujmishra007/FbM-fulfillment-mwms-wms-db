@@ -47,7 +47,8 @@ GO
 /* 03-JUN-2021  Wan09   2.1  LFWM-2800 - RG UAT PB Report Print Preview */
 /*                           SP & sharedrive for PDF Storage            */
 /* 24-SEP-2021  Wan09   2.1  DevOps Combine Script                      */
-/************************************************************************/ 
+/* 02-NOV-2022  NJOW02  2.2  if skip printer close the job (D11)        */
+/************************************************************************/
 
 CREATE PROC [dbo].[isp_PrintToRDTSpooler] ( 
    @c_ReportType     NVARCHAR(10), 
@@ -115,7 +116,7 @@ BEGIN
    ,  @c_DataReceived NVARCHAR(4000)         --(Wan01)
 
    ,  @c_SkipQCmdByPrinter NVARCHAR(50)      --(Wan03)
-   ,  @c_SpoolerPrinterID  NVARCHAR(10)      --(Wan03)
+   ,  @c_SpoolerPrinterID  NVARCHAR(50)      --(Wan03)
 
    ,  @c_Application       NVARCHAR(30)      --(Wan05) = ''
    ,  @c_JobID             NVARCHAR(10)      --(Wan05) = ''
@@ -426,8 +427,15 @@ BEGIN
          GOTO EXIT_SP
       END
 
-      IF @c_SkipQCmdByPrinter = '1' AND @c_PrinterID = @c_SpoolerPrinterID
+      IF @c_SkipQCmdByPrinter = '1' AND @c_PrinterID IN (SELECT Value FROM STRING_SPLIT(@c_SpoolerPrinterID,','))  --NJOW02
+         --@c_PrinterID = @c_SpoolerPrinterID
       BEGIN
+      	 --NJOW02
+      	 UPDATE rdt.RDTPrintJob WITH (ROWLOCK)
+      	 SET JobStatus = '9',
+      	     PrintData = 'SKIPPRINTER'
+      	 WHERE JobId = @n_JobID
+      	       	   
          GOTO QCMD_END
       END
       --(Wan03) - END
