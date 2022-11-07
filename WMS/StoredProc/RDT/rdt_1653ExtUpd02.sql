@@ -1,11 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_1653ExtUpd02]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_1653ExtUpd02]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO    
+
 /************************************************************************/    
 /* Store procedure: rdt_1653ExtUpd02                                    */    
 /* Copyright      : IDS                                                 */    
@@ -20,9 +17,11 @@ GO
 /* 2021-08-25  1.1  James    WMS-17773 Extend TrackNo to 40 chars       */
 /* 2021-11-15  1.2  James    WMS-18115 Delete rdtecomlog when           */
 /*                           close plt (james01)                        */
+/* 2022-09-15  1.3  James    WMS-20667 Add Lane (james01)               */
+/* 2022-10-26  1.4  James    WMS-19711 Delete short pick line (james02) */
 /************************************************************************/    
     
-CREATE PROC [RDT].[rdt_1653ExtUpd02] (    
+CREATE OR ALTER PROC [RDT].[rdt_1653ExtUpd02] (    
    @nMobile        INT,
    @nFunc          INT,
    @cLangCode      NVARCHAR( 3),
@@ -34,6 +33,7 @@ CREATE PROC [RDT].[rdt_1653ExtUpd02] (
    @cOrderKey      NVARCHAR( 20),
    @cPalletKey     NVARCHAR( 20),
    @cMBOLKey       NVARCHAR( 10),
+   @cLane          NVARCHAR( 20),
    @tExtValidVar   VariableTable READONLY,
    @nErrNo         INT           OUTPUT,
    @cErrMsg        NVARCHAR( 20) OUTPUT
@@ -44,14 +44,44 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF    
    SET CONCAT_NULL_YIELDS_NULL OFF    
    
-   DECLARE @bSuccess    INT
-   DECLARE @nRowRef     INT
-
-   DECLARE @nTranCount INT  
+   DECLARE @bSuccess       INT
+   DECLARE @nRowRef        INT
+   DECLARE @cPickdetailkey NVARCHAR( 10)
+   DECLARE @curDelPD       CURSOR
+   DECLARE @nTranCount     INT
+     
    SET @nTranCount = @@TRANCOUNT  
    BEGIN TRAN  
    SAVE TRAN rdt_1653ExtUpd02  
    
+   IF @nStep = 2  
+   BEGIN  
+      IF @nInputKey = 1  
+      BEGIN  
+         SET @curDelPD = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR    
+         SELECT PickDetailKey    
+         FROM dbo.PickDetail WITH (NOLOCK)    
+         WHERE OrderKey = @cOrderKey    
+         AND   [Status] = '4'  
+         OPEN @curDelPD    
+         FETCH NEXT FROM @curDelPD INTO @cPickdetailkey    
+         WHILE @@FETCH_STATUS = 0    
+         BEGIN   
+            DELETE PickDetail 
+            WHERE PickDetailKey = @cPickdetailkey  
+  
+            IF @@ERROR <> 0    
+            BEGIN    
+               SET @nErrNo = 173053    
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Del ShtPickError'    
+               GOTO RollBackTran    
+            END  
+
+            FETCH NEXT FROM @curDelPD INTO @cPickdetailkey   
+         END  
+      END  
+   END  
+
    IF @nStep = 4
    BEGIN
       IF @nInputKey = 1
