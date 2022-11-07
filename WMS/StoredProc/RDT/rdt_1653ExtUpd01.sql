@@ -16,6 +16,7 @@ GO
 /* 2020-08-01  1.0  James    WMS-14248. Created                         */  
 /* 2021-08-25  1.1  James    WMS-17773 Extend TrackNo to 40 chars       */
 /* 2022-05-31  1.2  yeekung  WMS-18350. Add delete pickdetail           */  
+/* 2022-09-15  1.3  James    WMS-20667 Add Lane (james01)               */
 /************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdt_1653ExtUpd01] (    
@@ -30,6 +31,7 @@ CREATE OR ALTER PROC [RDT].[rdt_1653ExtUpd01] (
    @cOrderKey      NVARCHAR( 20),
    @cPalletKey     NVARCHAR( 20),
    @cMBOLKey       NVARCHAR( 10),
+   @cLane          NVARCHAR( 20),
    @tExtValidVar   VariableTable READONLY,
    @nErrNo         INT           OUTPUT,
    @cErrMsg        NVARCHAR( 20) OUTPUT

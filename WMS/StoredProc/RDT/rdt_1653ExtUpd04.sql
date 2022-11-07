@@ -14,6 +14,7 @@ GO
 /* Modifications log:                                                   */    
 /* Date        Rev  Author   Purposes                                   */    
 /* 2021-11-19  1.0  James    WMS-18350. Created                         */  
+/* 2022-09-15  1.1  James    WMS-20667 Add Lane (james01)               */
 /************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdt_1653ExtUpd04] (    
@@ -28,6 +29,7 @@ CREATE OR ALTER PROC [RDT].[rdt_1653ExtUpd04] (
    @cOrderKey      NVARCHAR( 20),
    @cPalletKey     NVARCHAR( 20),
    @cMBOLKey       NVARCHAR( 10),
+   @cLane          NVARCHAR( 20),
    @tExtValidVar   VariableTable READONLY,
    @nErrNo         INT           OUTPUT,
    @cErrMsg        NVARCHAR( 20) OUTPUT
