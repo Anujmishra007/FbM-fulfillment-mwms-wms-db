@@ -1,8 +1,8 @@
-
+SET ANSI_NULLS OFF
+GO
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF
-GO    
+
 /************************************************************************/    
 /* Store procedure: rdt_1653GetMbolKey01                                */    
 /* Copyright      : IDS                                                 */    
@@ -18,6 +18,7 @@ GO
 /* 2021-08-25  1.2  James    WMS-17773 Extend TrackNo to 40 chars       */
 /* 2022-03-07  1.3  James    WMS-18350 Filter storer when suggest       */
 /*                           palletkey (james02)                        */
+/* 2022-09-15  1.3  James    WMS-20667 Add Lane (james02)               */
 /************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdt_1653GetMbolKey01] (    
@@ -32,6 +33,7 @@ CREATE OR ALTER PROC [RDT].[rdt_1653GetMbolKey01] (
    @cOrderKey      NVARCHAR( 20),
    @cPalletKey     NVARCHAR( 20) OUTPUT,
    @cMBOLKey       NVARCHAR( 10) OUTPUT,
+   @cLane          NVARCHAR( 20) OUTPUT,
    @nErrNo         INT           OUTPUT,
    @cErrMsg        NVARCHAR( 20) OUTPUT
 ) AS    
@@ -101,6 +103,5 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-
-GRANT EXECUTE ON RDT.rdt_1653GetMbolKey01 TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_1653GetMbolKey01] TO [NSQL]
 GO
