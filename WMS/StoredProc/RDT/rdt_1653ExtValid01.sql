@@ -17,7 +17,8 @@ GO
 /* 2021-08-25  1.1  James    WMS-17773 Extend TrackNo to 40 chars       */
 /* 2022-05-12  1.2  James    WMS-19645 Change pallet status to 9 when   */  
 /*                           check pallet close (james02)               */  
-/* 2022-02-28  1.3  James    WMS-18350 Filter short pick (james01)      */
+/* 2022-05-24  1.3  James    WMS-18350 Filter short pick (james01)      */  
+/* 2022-09-15  1.4  James    WMS-20667 Add Lane (james03)               */
 /************************************************************************/        
         
 CREATE OR ALTER PROC [RDT].[rdt_1653ExtValid01] (        
@@ -32,6 +33,7 @@ CREATE OR ALTER PROC [RDT].[rdt_1653ExtValid01] (
    @cOrderKey      NVARCHAR( 20),    
    @cPalletKey     NVARCHAR( 20),    
    @cMBOLKey       NVARCHAR( 10),    
+   @cLane          NVARCHAR( 20),
    @tExtValidVar   VariableTable READONLY,    
    @nErrNo         INT           OUTPUT,    
    @cErrMsg        NVARCHAR( 20) OUTPUT    
@@ -81,8 +83,8 @@ BEGIN
          SELECT @nQty_Picked = ISNULL( SUM( Qty), 0)    
          FROM dbo.PickDetail WITH (NOLOCK)    
          WHERE OrderKey = @cOrderKey    
-         AND   [Status] <> '4'
-  
+         AND Status <> '4'    -- ZG01  
+           
          SELECT @nQty_Packed = ISNULL( SUM( Qty), 0)    
          FROM dbo.PackDetail PD WITH (NOLOCK)    
          JOIN dbo.PackHeader PH WITH (NOLOCK) ON ( PD.PickSlipNo = PH.PickSlipNo)    
