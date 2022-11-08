@@ -1,7 +1,4 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nspArchiveShippingOrder]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[nspArchiveShippingOrder]
-GO
+ 
 
 SET ANSI_NULLS OFF
 GO
@@ -68,10 +65,11 @@ GO
 /* 22-Apr-2020  kocy          Change Archive CartonTrack not during Orders archive task,           */
 /*                            but when POD archive https://jiralfl.atlassian.net/browse/WMS-12986  */
 /* 12-Oct-2020  TLTING01      Archive Orders_PI_Encrypted                                          */
+/* 01-Oct-2022  TLTING02      Archive PickingVoice                                                 */
 /*                                                                                                 */
 /***************************************************************************************************/
 
-CREATE PROC [dbo].[nspArchiveShippingOrder]
+CREATE OR ALTER PROC [dbo].[nspArchiveShippingOrder]
       @c_archivekey   NVARCHAR(10)
    ,  @b_success      int        OUTPUT
    ,  @n_err          int        OUTPUT
@@ -99,6 +97,7 @@ BEGIN -- main
          , @n_archive_mbol_records        int      -- # of MBOL records to be archived
          , @n_archive_mbol_detail_records int      -- # of MBOLDetail records to be archived
          , @n_archive_carton_track_records   int =0-- khlim01
+         , @n_archivePickingVoice_records   int =0-- tlting02
          , @n_default_id                  int
          , @n_strlen                      int
          , @local_n_err                   int
@@ -153,6 +152,7 @@ BEGIN -- main
   DECLARE  @n_DelayArchiveCT_Exist        INT = 0        --kocy01    
          , @c_StorerKey                   NVARCHAR(15) =''  --kocy01
          , @c_PrevStorerKey               NVARCHAR(15) =''  --kocy01
+         , @nPickingVoiceKey              INT
 
    SELECT @n_starttcnt=@@trancount , @n_continue=1, @b_success=0, @n_err=0, @c_errmsg='',
           @b_debug = 0, @local_n_err = 0, @local_c_errmsg = ' '
@@ -447,6 +447,25 @@ BEGIN -- main
             select @n_continue = 3  
          end  
       end 
+      if ((@n_continue = 1 or @n_continue = 2) and @copyrowstoarchivedatabase = 'y')  
+      begin    
+         if (@b_debug =1 )  
+         begin  
+            print 'starting table existence check for PickingVoice...'  
+         end  
+         select @b_success = 1  
+         exec nsp_build_archive_table   
+            @c_copyfrom_db,   
+            @c_copyto_db,   
+            'PickingVoice',  
+            @b_success output ,   
+            @n_err output,   
+            @c_errmsg output  
+         if not @b_success = 1  
+         begin  
+            select @n_continue = 3  
+         end  
+      end 
 
       IF ((@n_continue = 1 OR @n_continue = 2) AND @CopyRowsToArchiveDatabase = 'y')
       BEGIN
@@ -576,7 +595,25 @@ BEGIN -- main
               SELECT @n_continue = 3
           END
       END 
-
+      IF ((@n_continue=1 OR @n_continue=2)
+         AND @copyrowstoarchivedatabase='y')
+      BEGIN
+          IF (@b_debug=1)
+          BEGIN
+              PRINT 'building alter table string for PickingVoice...'
+          END
+       
+          EXECUTE nspbuildaltertablestring 
+          @c_copyto_db, 
+          'PickingVoice', 
+          @b_success OUTPUT, 
+          @n_err OUTPUT, 
+          @c_errmsg OUTPUT 
+          IF NOT @b_success=1
+          BEGIN
+              SELECT @n_continue = 3
+          END
+      END 
 
       -- DECLARE Cursor
       IF @c_datetype = '1' -- ordersdate
@@ -831,6 +868,35 @@ BEGIN -- main
                   END
                   -- END : June01
 
+                  --TLTING02
+                  IF @@ERROR = 0
+                  BEGIN
+                     SET @n_archivePickingVoice_records = @n_archivePickingVoice_records + 1
+
+                     IF EXISTS (SELECT 1 FROM PickingVoice (NOLOCK) WHERE PickDetailKey = @cPickDetailKey)
+                     BEGIN
+                        BEGIN TRAN
+
+                        UPDATE PickingVoice with (rowlock)
+                           SET ArchiveCop = '9'
+                        WHERE PickDetailKey = @cPickDetailKey
+                        SELECT @local_n_err = @@error
+                        IF @local_n_err <> 0
+                        BEGIN
+                           SELECT @n_continue = 3
+                           SELECT @local_n_err = 77363
+                           SELECT @local_c_errmsg = convert(char(5),@local_n_err)
+                           SELECT @local_c_errmsg =
+                           ': UPDATE of archivecop failed - PickingVoice. (nspArchiveShippingOrder) ' + ' ( ' +
+                           ' sqlsvr message = ' + dbo.fnc_LTrim(dbo.fnc_RTrim(@local_c_errmsg)) + ')'
+                           ROLLBACK TRAN
+                        END
+                        ELSE
+                        BEGIN
+                           COMMIT TRAN
+                        END
+                     END
+                  END
                   FETCH NEXT FROM C_PickDetailKey INTO @cPickDetailKey
                END -- While PickDetailKey
                CLOSE C_PickDetailKey
@@ -841,6 +907,7 @@ BEGIN -- main
          END -- While Order Line
          CLOSE C_OrderLine
          DEALLOCATE C_OrderLine
+
 
          -- TLTING01
          IF EXISTS (SELECT 1 FROM Orders_PI_Encrypted WITH (NOLOCK) WHERE OrderKey = @cOrderKey )
@@ -965,8 +1032,10 @@ BEGIN -- main
       BEGIN
          SELECT @c_temp = 'attempting to archive ' + rtrim(convert(char(6),@n_archive_ship_records )) +
             ' Orders records AND ' + rtrim(convert(char(6),@n_archive_ship_detail_records )) + ' OrderDetail records'
-            + ' AND ' +  rtrim(convert(char(6),@n_archive_pick_detail_records )) + ' of PickDetail records'+ 
+            + ' AND ' +  rtrim(convert(char(6),@n_archive_pick_detail_records )) + ' of PickDetail records' 
             + ' AND ' + rtrim(convert(varchar(6),@n_archive_carton_track_records )) +' of cartontrack records '
+            + ' AND ' + rtrim(convert(varchar(6),@n_archivePickingVoice_records )) +' of PickingVoice records '
+
          EXECUTE dbo.nspLogAlert
                   @c_modulename   = 'nspArchiveShippingOrder',
                   @c_alertmessage = @c_temp ,
@@ -1174,6 +1243,26 @@ BEGIN -- main
          EXEC dbo.nsp_Build_Insert
                @c_copyto_db,
                'OrderInfo',
+               1 ,
+               @b_success OUTPUT,
+               @n_err     OUTPUT,
+               @c_errmsg  OUTPUT
+         IF NOT @b_success = 1
+         BEGIN
+            SELECT @n_continue = 3
+         END
+      END
+
+      IF ((@n_continue = 1 OR @n_continue = 2) AND @CopyRowsToArchiveDatabase = 'y')
+      BEGIN
+         IF @b_debug = 1
+         BEGIN
+            PRINT 'building insert for PickingVoice...'
+         END
+         SELECT @b_success = 1
+         EXEC dbo.nsp_Build_Insert
+               @c_copyto_db,
+               'PickingVoice',
                1 ,
                @b_success OUTPUT,
                @n_err     OUTPUT,
