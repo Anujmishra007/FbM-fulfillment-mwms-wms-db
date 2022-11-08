@@ -10,6 +10,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author      Purposes                                 */
 /* 11-02-2022 1.0  Ung         WMS-19000 Created                        */
+/* 12-09-2022 1.1  Ung         WMS-20521 Add capture PackData3          */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_838DataCap05 (
@@ -58,32 +59,30 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @nL02_Count  INT
-   DECLARE @nL04_Count  INT
-   DECLARE @dLottable04 DATETIME
-   DECLARE @cOrderKey   NVARCHAR( 10)
-   DECLARE @cPickStatus NVARCHAR(1)
-   DECLARE @cSKUDataCapture NVARCHAR(1)
+   DECLARE @nKeyCount         INT
+   DECLARE @cOrderKey         NVARCHAR( 10)
+   DECLARE @cPickStatus       NVARCHAR( 1)
+   DECLARE @cSKUDataCapture   NVARCHAR( 1)
 
    DECLARE @tPick TABLE
    (
-      Lottable02 NVARCHAR( 18)   NOT NULL, 
-      QTY        INT             NOT NULL, 
-      PRIMARY KEY CLUSTERED (Lottable02)
+      KeyData  NVARCHAR( 18)   NOT NULL, 
+      QTY      INT             NOT NULL, 
+      PRIMARY KEY CLUSTERED (KeyData)
    )
    
    DECLARE @tPack TABLE
    (
-      Lottable02 NVARCHAR( 18)   NOT NULL, 
-      QTY        INT             NOT NULL, 
-      PRIMARY KEY CLUSTERED (Lottable02)
+      KeyData  NVARCHAR( 18)   NOT NULL, 
+      QTY      INT             NOT NULL, 
+      PRIMARY KEY CLUSTERED (KeyData)
    )
 
    DECLARE @tBalance TABLE
    (
-      Lottable02 NVARCHAR( 18)   NOT NULL, 
-      QTY        INT             NOT NULL, 
-      PRIMARY KEY CLUSTERED (Lottable02)
+      KeyData  NVARCHAR( 18)   NOT NULL, 
+      QTY      INT             NOT NULL, 
+      PRIMARY KEY CLUSTERED (KeyData)
    )
 
    SET @cPackData1 = '' -- Batch no, L02
@@ -109,8 +108,12 @@ BEGIN
    FROM dbo.PickHeader WITH (NOLOCK)
    WHERE PickHeaderKey = @cPickSlipNo
 
+
+   /***************************************************************************************************
+                                                   PackData1
+   ***************************************************************************************************/
    -- Get pick
-   INSERT INTO @tPick (Lottable02, QTY)
+   INSERT INTO @tPick (KeyData, QTY)
    SELECT LA.Lottable02, ISNULL( SUM( PD.QTY), 0)
    FROM dbo.PickDetail PD WITH (NOLOCK)
       JOIN dbo.LOTAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT)
@@ -123,10 +126,8 @@ BEGIN
    GROUP BY LA.Lottable02
 
    -- Get pack
-   INSERT INTO @tPack (Lottable02, QTY)
-   SELECT 
-      UserDefine01, 
-      ISNULL( SUM( QTY), 0)
+   INSERT INTO @tPack (KeyData, QTY)
+   SELECT UserDefine01, ISNULL( SUM( QTY), 0)
    FROM dbo.PackDetailInfo WITH (NOLOCK) 
    WHERE PickSlipNo = @cPickSlipNo
       AND StorerKey = @cStorerKey
@@ -134,33 +135,36 @@ BEGIN
    GROUP BY UserDefine01
 
    -- Get balance
-   INSERT INTO @tBalance (Lottable02, QTY)
-   SELECT Pick.Lottable02, Pick.QTY - ISNULL( Pack.QTY, 0)
+   INSERT INTO @tBalance (KeyData, QTY)
+   SELECT Pick.KeyData, Pick.QTY - ISNULL( Pack.QTY, 0)
    FROM @tPick Pick
-      LEFT JOIN @tPack Pack ON (Pick.Lottable02 = Pack.Lottable02)
+      LEFT JOIN @tPack Pack ON (Pick.KeyData = Pack.KeyData)
    WHERE Pick.QTY - ISNULL( Pack.QTY, 0) > 0
    
    -- Get stat
-   SELECT @nL02_Count = COUNT( DISTINCT Lottable02)
+   SELECT @nKeyCount = COUNT( DISTINCT KeyData)
    FROM @tBalance
    
-   -- Auto default L02
-   IF @nL02_Count = 1
+   -- Auto default / force key-in
+   IF @nKeyCount = 1
    BEGIN
-      SELECT TOP 1 @cPackData1 = Lottable02 FROM @tBalance
+      SELECT TOP 1 @cPackData1 = KeyData FROM @tBalance
+      SET @cPackAttr1 = 'O'
    END
-   ELSE IF @nL02_Count > 1
+   ELSE IF @nKeyCount > 1
    BEGIN
-      EXEC rdt.rdtSetFocusField @nMobile, 1 -- PackData1  
       SET @cPackData1 = '' -- force key-in
       SET @cPackAttr1 = ''
    END
    
-   -- Get default L01 (1 SKU + Batch, only 1 L01)
+   
+   /***************************************************************************************************
+                                                   PackData2
+   ***************************************************************************************************/
    IF @cPackData1 <> ''
    BEGIN
       SELECT TOP 1 
-         @cPackData2 = LA.Lottable01
+         @cPackData2 = LA.Lottable01 -- 1 SKU + Batch, only 1 L01
       FROM dbo.PickDetail PD WITH (NOLOCK)
          JOIN dbo.LOTAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT)
       WHERE PD.OrderKey = @cOrderKey
@@ -172,8 +176,72 @@ BEGIN
          AND LA.Lottable02 = @cPackData1
    END
 
-   IF @cPackData1 = ''
+
+   /***************************************************************************************************
+                                                   PackData3
+   ***************************************************************************************************/
+   DELETE @tPick
+   DELETE @tPack
+   DELETE @tBalance
+   
+   -- Get pick
+   INSERT INTO @tPick (KeyData, QTY)
+   SELECT OD.ExternLineNo, ISNULL( SUM( PD.QTY), 0)
+   FROM dbo.PickDetail PD WITH (NOLOCK)
+      JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
+   WHERE PD.OrderKey = @cOrderKey
+      AND PD.StorerKey = @cStorerKey
+      AND PD.SKU = @cSKU
+      AND PD.QTY > 0
+      AND PD.Status = @cPickStatus
+      AND PD.Status <> '4'
+   GROUP BY OD.ExternLineNo
+
+   -- Get pack
+   INSERT INTO @tPack (KeyData, QTY)
+   SELECT UserDefine03, ISNULL( SUM( QTY), 0)
+   FROM dbo.PackDetailInfo WITH (NOLOCK) 
+   WHERE PickSlipNo = @cPickSlipNo
+      AND StorerKey = @cStorerKey
+      AND SKU = @cSKU
+   GROUP BY UserDefine03
+
+   -- Get balance
+   INSERT INTO @tBalance (KeyData, QTY)
+   SELECT Pick.KeyData, Pick.QTY - ISNULL( Pack.QTY, 0)
+   FROM @tPick Pick
+      LEFT JOIN @tPack Pack ON (Pick.KeyData = Pack.KeyData)
+   WHERE Pick.QTY - ISNULL( Pack.QTY, 0) > 0
+   
+   -- Get stat
+   SELECT @nKeyCount = COUNT( DISTINCT KeyData)
+   FROM @tBalance
+   
+   -- Auto default / force key-in
+   IF @nKeyCount = 1
+   BEGIN
+      SELECT TOP 1 @cPackData3 = KeyData FROM @tBalance
+      SET @cPackAttr3 = 'O'
+   END
+   ELSE IF @nKeyCount > 1
+   BEGIN
+      SET @cPackData3 = '' -- force key-in
+      SET @cPackAttr3 = ''
+   END
+   
+
+   /***************************************************************************************************
+                                          Decide capture / not capture
+   ***************************************************************************************************/
+   IF @cPackData1 = '' OR @cPackData3 = ''
+   BEGIN
+      IF @cPackData1 = ''
+         EXEC rdt.rdtSetFocusField @nMobile, 2 -- PackData1  
+      ELSE IF @cPackData3 = ''
+         EXEC rdt.rdtSetFocusField @nMobile, 6 -- PackData3 
+      
       SET @cDataCapture = '1' -- need to capture
+   END
    
 Quit:
    

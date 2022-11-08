@@ -11,6 +11,7 @@ GO
 /* Date       Rev  Author     Purposes                                  */
 /* 11-02-2022 1.0  Ung        WMS-19000 Created                         */
 /* 02-06-2022 1.1  Ung        WMS-19000 Fix get max PackDetail.RefNo    */
+/* 13-09-2022 1.2  Ung        WMS-20521 Change custom carton no logic   */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_838ConfirmSP12 (
@@ -258,25 +259,27 @@ BEGIN
          AND AddWho = 'rdt.' + SUSER_SNAME()
       ORDER BY CartonNo DESC -- max cartonno
 
+      DECLARE @cExternOrderKey   NVARCHAR( 50)
+      DECLARE @cOrderGroup       NVARCHAR( 20)
+      DECLARE @cRoute            NVARCHAR( 10)
+      DECLARE @cCartonPrefix     NVARCHAR( 10)
+      DECLARE @cCartonStartNo    NVARCHAR( 10)
+      DECLARE @cMaxCartonNo      NVARCHAR( 20)
+
       -- Get order info
-      DECLARE @cOrderGroup NVARCHAR( 20)
       SELECT @cOrderKey = OrderKey FROM dbo.PackHeader WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo
-      SELECT @cOrderGroup = OrderGroup FROM dbo.Orders WITH (NOLOCK) WHERE OrderKey = @cOrderKey
+      SELECT 
+         @cExternOrderKey = ExternOrderKey, 
+         @cOrderGroup = OrderGroup, 
+         @cRoute = Route, 
+         @cCartonPrefix = RTRIM( ISNULL( DeliveryNote, '')), 
+         @cCartonStartNo = Stop
+      FROM dbo.Orders WITH (NOLOCK) 
+      WHERE OrderKey = @cOrderKey
 
       -- Order not grouped
       IF @cOrderGroup = ''
       BEGIN
-         -- Get order info
-         DECLARE @cCartonPrefix NVARCHAR( 10)
-         DECLARE @cCartonStartNo NVARCHAR( 10)
-         SELECT  
-            @cCartonPrefix = RTRIM( ISNULL( DeliveryNote, '')), 
-            @cCartonStartNo = Stop
-         FROM dbo.Orders WITH (NOLOCK) 
-         WHERE OrderKey = @cOrderKey
-
-         -- Get group carton no
-         DECLARE @cMaxCartonNo NVARCHAR( 20)
          IF @cCartonPrefix = ''
             SELECT @cMaxCartonNo = ISNULL( MAX( CAST( RefNo AS INT)), '')
             FROM dbo.PackDetail WITH (NOLOCK)
@@ -285,99 +288,78 @@ BEGIN
             SELECT @cMaxCartonNo = ISNULL( MAX( CAST( SUBSTRING( RefNo, LEN( @cCartonPrefix) + 1, LEN( RefNo)) AS INT)), '')
             FROM dbo.PackDetail WITH (NOLOCK)
             WHERE PickSlipNo = @cPickSlipNo
-
-         -- Add carton no
-         IF @cMaxCartonNo = '0' -- 1st carton
-         BEGIN
-            SET @cCartonStartNo = CAST( @cCartonStartNo AS INT) + 1
-            SET @cMaxCartonNo = @cCartonPrefix + @cCartonStartNo
-         END
-         ELSE
-         BEGIN
-            SET @cMaxCartonNo = CAST( @cMaxCartonNo AS INT) + 1
-            SET @cMaxCartonNo = @cCartonPrefix + @cMaxCartonNo
-         END
-            
-         -- Update Packdetail
-         UPDATE dbo.PackDetail SET   
-            RefNo = @cMaxCartonNo, 
-            EditWho = 'rdt.' + SUSER_SNAME(), 
-            EditDate = GETDATE(), 
-            ArchiveCop = NULL
-         WHERE PickSlipNo = @cPickSlipNo
-            AND CartonNo = @nCartonNo
-            AND LabelNo = @cLabelNo
-            AND LabelLine = @cLabelLine
-         IF @@ERROR <> 0
-         BEGIN
-            SET @nErrNo = 183519
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdPackDtlFail
-            GOTO RollBackTran
-         END
       END
 
-      -- Orders are grouped and outbound together
+      -- Order are grouped
       IF @cOrderGroup <> ''
       BEGIN
-         -- Get parent order info
-         DECLARE @cGroupCartonPrefix NVARCHAR( 10)
-         DECLARE @cGroupCartonStartNo NVARCHAR( 10)
-         SELECT  
-            @cGroupCartonPrefix = RTRIM( ISNULL( DeliveryNote, '')), 
-            @cGroupCartonStartNo = Stop
-         FROM dbo.Orders WITH (NOLOCK) 
-         WHERE StorerKey = @cStorerKey
-            AND ExternOrderKey = @cOrderGroup
-      
-         -- Use parent order
-         IF @@ROWCOUNT = 1
+         -- Get parent carton prefix
+         IF @cExternOrderKey <> @cOrderGroup  -- child order
+            SELECT 
+               @cCartonPrefix = RTRIM( ISNULL( DeliveryNote, '')), 
+               @cCartonStartNo = CASE WHEN @cRoute = 'R' THEN @cCartonStartNo ELSE Stop END -- If use own order carton start, don't retrieve group carton start
+            FROM dbo.Orders WITH (NOLOCK) 
+            WHERE StorerKey = @cStorerKey
+               AND OrderGroup = @cOrderGroup
+               AND ExternOrderKey = @cOrderGroup -- Parent order
+
+         -- Use own order carton no
+         IF @cRoute = 'R' -- Reset
          BEGIN
-            -- Get group carton no
-            DECLARE @cMaxGroupCartonNo NVARCHAR( 20)
-            IF @cGroupCartonPrefix = ''
-               SELECT @cMaxGroupCartonNo = ISNULL( MAX( CAST( PD.RefNo AS INT)), '')
-               FROM dbo.PackHeader PH WITH (NOLOCK)
-                  JOIN dbo.Orders O WITH (NOLOCK) ON (PH.OrderKey = O.OrderKey)
-                  JOIN dbo.PackDetail PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)
-               WHERE O.StorerKey = @cStorerKey
-                  AND O.OrderGroup = @cOrderGroup
+            IF @cCartonPrefix = ''
+               SELECT @cMaxCartonNo = ISNULL( MAX( CAST( RefNo AS INT)), '')
+               FROM dbo.PackDetail WITH (NOLOCK)
+               WHERE PickSlipNo = @cPickSlipNo
             ELSE
-               SELECT @cMaxGroupCartonNo = ISNULL( MAX( CAST( SUBSTRING( PD.RefNo, LEN( @cGroupCartonPrefix) + 1, LEN( PD.RefNo)) AS INT)), '')
-               FROM dbo.PackHeader PH WITH (NOLOCK)
-                  JOIN dbo.Orders O WITH (NOLOCK) ON (PH.OrderKey = O.OrderKey)
-                  JOIN dbo.PackDetail PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)
-               WHERE O.StorerKey = @cStorerKey
-                  AND O.OrderGroup = @cOrderGroup
-                  
-            -- Add carton no
-            IF @cMaxGroupCartonNo = '0' -- 1st carton
-            BEGIN
-               SET @cGroupCartonStartNo = CAST( @cGroupCartonStartNo AS INT) + 1
-               SET @cMaxGroupCartonNo = @cGroupCartonPrefix + @cGroupCartonStartNo
-            END
-            ELSE
-            BEGIN
-               SET @cMaxGroupCartonNo = CAST( @cMaxGroupCartonNo AS INT) + 1
-               SET @cMaxGroupCartonNo = @cGroupCartonPrefix + @cMaxGroupCartonNo
-            END
-            
-            -- Update Packdetail
-            UPDATE dbo.PackDetail SET   
-               RefNo = @cMaxGroupCartonNo, 
-               EditWho = 'rdt.' + SUSER_SNAME(), 
-               EditDate = GETDATE(), 
-               ArchiveCop = NULL
-            WHERE PickSlipNo = @cPickSlipNo
-               AND CartonNo = @nCartonNo
-               AND LabelNo = @cLabelNo
-               AND LabelLine = @cLabelLine
-            IF @@ERROR <> 0
-            BEGIN
-               SET @nErrNo = 183519
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdPackDtlFail
-               GOTO RollBackTran
-            END
+               SELECT @cMaxCartonNo = ISNULL( MAX( CAST( SUBSTRING( RefNo, LEN( @cCartonPrefix) + 1, LEN( RefNo)) AS INT)), '')
+               FROM dbo.PackDetail WITH (NOLOCK)
+               WHERE PickSlipNo = @cPickSlipNo
          END
+
+         -- Use order group carton no
+         IF @cRoute <> 'R'
+         BEGIN
+            IF @cCartonPrefix = ''
+               SELECT @cMaxCartonNo = ISNULL( MAX( CAST( PD.RefNo AS INT)), '')
+               FROM dbo.PackHeader PH WITH (NOLOCK)
+                  JOIN dbo.Orders O WITH (NOLOCK) ON (PH.OrderKey = O.OrderKey AND O.Route <> 'R') -- Exclude those by own order carton no
+                  JOIN dbo.PackDetail PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)
+               WHERE O.StorerKey = @cStorerKey
+                  AND O.OrderGroup = @cOrderGroup
+            ELSE
+               SELECT @cMaxCartonNo = ISNULL( MAX( CAST( SUBSTRING( PD.RefNo, LEN( @cCartonPrefix) + 1, LEN( PD.RefNo)) AS INT)), '')
+               FROM dbo.PackHeader PH WITH (NOLOCK)
+                  JOIN dbo.Orders O WITH (NOLOCK) ON (PH.OrderKey = O.OrderKey AND O.Route <> 'R') -- Exclude those by own order carton no
+                  JOIN dbo.PackDetail PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)
+               WHERE O.StorerKey = @cStorerKey
+                  AND O.OrderGroup = @cOrderGroup
+         END
+      END
+      
+      -- Increase carton no
+      IF @cMaxCartonNo = '0' -- 1st carton
+         SET @cMaxCartonNo = CAST( @cCartonStartNo AS INT) + 1
+      ELSE
+         SET @cMaxCartonNo = CAST( @cMaxCartonNo AS INT) + 1
+
+      -- Add prefix
+      SET @cMaxCartonNo = @cCartonPrefix + @cMaxCartonNo
+ 
+      -- Update Packdetail
+      UPDATE dbo.PackDetail SET   
+         RefNo = @cMaxCartonNo, 
+         EditWho = 'rdt.' + SUSER_SNAME(), 
+         EditDate = GETDATE(), 
+         ArchiveCop = NULL
+      WHERE PickSlipNo = @cPickSlipNo
+         AND CartonNo = @nCartonNo
+         AND LabelNo = @cLabelNo
+         AND LabelLine = @cLabelLine
+      IF @@ERROR <> 0
+      BEGIN
+         SET @nErrNo = 183519
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdPackDtlFail
+         GOTO RollBackTran
       END
    END   
 

@@ -4,3 +4,6 @@ execute rdt.rdtdropmsg 183751, 183800
 execute rdt.rdtAddMsg 183751, 10, '183751Need batch no ', 'us_english', 838
 execute rdt.rdtAddMsg 183752, 10, '183752Not In PSNO   ', 'us_english', 838
 execute rdt.rdtAddMsg 183753, 10, '183753Over pack     ', 'us_english', 838
+execute rdt.rdtAddMsg 183754, 10, '183751Need ExtLineNo', 'us_english', 838
+execute rdt.rdtAddMsg 183755, 10, '183752Not In Batch  ', 'us_english', 838
+execute rdt.rdtAddMsg 183756, 10, '183753Over pack     ', 'us_english', 838
