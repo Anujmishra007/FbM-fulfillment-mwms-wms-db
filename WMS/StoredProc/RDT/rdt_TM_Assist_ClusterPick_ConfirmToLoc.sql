@@ -101,8 +101,7 @@ BEGIN
    WHERE Mobile = @nMobile  
      
    SET @cConfirmToLocMoveInventory = rdt.rdtGetConfig( @nFunc, 'ConfirmToLocMoveInventory', @cStorerKey)  
-   IF @cUserName = 'james'  
-      SET @cConfirmToLocMoveInventory = '0'  
+
    SELECT TOP 1   
       @cGroupKey = Groupkey,  
       @cCartID = DeviceID  
