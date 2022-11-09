@@ -12,6 +12,8 @@ GO
 /* Date        Rev  Author     Purposes                                 */    
 /* 2021-07-23  1.0  James      WMS-17435. Created                       */  
 /* 2022-07-28  1.1  James      WMS-20111. Add update trackno (james01)  */  
+/* 2022-11-07  1.2  James      WMS-21130 Move interface triggering from */
+/*                             step 5 to step 4 (james02)               */
 /************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdt_840ExtUpd16] (    
@@ -141,7 +143,7 @@ Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
       COMMIT TRAN    
   
-   IF @nStep = 5    
+   IF @nStep = 4    
    BEGIN    
       IF @nInputKey = 1   
       BEGIN    
