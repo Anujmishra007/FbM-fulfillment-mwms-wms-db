@@ -11,6 +11,7 @@ GO
 /* Modifications log:                                                   */
 /* Date        Rev  Author   Purposes                                   */
 /* 2022-04-01  1.0  Ung      WMS-19306 Created                          */
+/* 2022-11-08  1.1  Ung      WMS-21157 Add ResubmitInterval             */
 /************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_593Print35] (
@@ -96,6 +97,28 @@ BEGIN
    DECLARE @cPrintData     NVARCHAR( 1024)
    DECLARE @nQueueID       BIGINT
    DECLARE @tConfig        VariableTable
+
+   -- Get storer config
+   DECLARE @cIntervalInMin NVARCHAR(2)
+   SET @cIntervalInMin = rdt.RDTGetConfig( @nFunc, 'ResubmitInterval', @cStorerKey)
+
+   -- Check resubmit interval
+   IF rdt.rdtIsValidQTY( @cIntervalInMin, 1) = 1
+   BEGIN
+      -- Get Load info
+      DECLARE @dUserDefine06 DATETIME
+      SELECT @dUserDefine06 = ISNULL( UserDefine06, 0) 
+      FROM LoadPlan WITH (NOLOCK)
+      WHERE LoadKey = @cLoadKey
+   
+      -- Check job just submitted
+      IF DATEDIFF( mi, @dUserDefine06, GETDATE()) <= CAST( @cIntervalInMin AS INT)
+      BEGIN
+         SET @nErrNo = 185108
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --JobJustSubmit
+         GOTO Quit
+      END
+   END
 
    -- Get report info
    SELECT @cNotes = ISNULL( Notes, '')
@@ -186,9 +209,23 @@ BEGIN
       BEGIN  
          SET @nErrNo = 185107  
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD QTask Fail  
+         GOTO Quit
       END  
    END
-   
+  
+   UPDATE LoadPlan SET
+      UserDefine06 = GETDATE(), 
+      EditDate = GETDATE(), 
+      EditWho = SUSER_SNAME(),  
+      TrafficCop = NULL 
+   WHERE LoadKey = @cLoadKey
+   IF @@ERROR <> 0
+   BEGIN  
+      SET @nErrNo = 185109 
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Load Fail 
+      GOTO Quit
+   END 
+  
 Quit:
 
 END
