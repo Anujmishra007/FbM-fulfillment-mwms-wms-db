@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_Build_Loadplan]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_Build_Loadplan]
-GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -69,8 +66,10 @@ GO
 /*                              to include min function for the field   */
 /* 2022/02/22   SYChua    v3.2  JSM-51723 Extend @cValue parameter from */
 /*                              NVARCHAR(250) to NVARCHAR(4000) (SY01)  */
+/* 2022/11/10   NJOW11    v3.3  log @n_NoOfOrderToRelease to buildloadlog*/
+/*                              UDF02 and fix Max order to release      */
 /************************************************************************/
-CREATE PROC [dbo].[isp_Build_Loadplan]
+CREATE  OR ALTER PROC [dbo].[isp_Build_Loadplan]
    @cParmCode              NVARCHAR(10),
    @cFacility              NVARCHAR(5),
    @cStorerKey             NVARCHAR(15),
@@ -730,7 +729,8 @@ SELECT @cSQLWhere = N' FROM ORDERS WITH (NOLOCK) ' + CHAR(13)
 IF ISNULL(@cSortBy,'') = ''
    SET @cSortBy = 'ORDERS.[OrderKey]'
 
-
+ SET @n_TotalOrderCnt = 0   --(Wan06)  --NJOW11 move up
+ 
 IF ISNULL(@c_GroupFlag,'') = 'Y' AND  @bDebug <> 3                               -- (Wan10)
 BEGIN
    SELECT @c_SQLGroup = @c_SQLField
@@ -764,9 +764,6 @@ BEGIN
          ,@cFacility                                                                                              --(Wan06)
          ,@dt_StartDate                                                                                           --(Wan06)
          ,@dt_EndDate                                                                                            --(Wan06)
-
-
-
 
    OPEN cur_LPGroup
    FETCH NEXT FROM cur_LPGroup INTO @c_Storerkey, @c_Field01, @c_Field02, @c_Field03, @c_Field04, @c_Field05,
@@ -1065,7 +1062,6 @@ DECLARE @n_eNum            INT
 
 SET @nTotalOpenQty = 0
 SET @n_OrderCnt    = 0
-SET @n_TotalOrderCnt = 0   --(Wan06)
 
 DECLARE CUR_ROWNO CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
 SELECT RNUM, OpenQty, OrderKey, [Weight], [Cube]
@@ -1103,6 +1099,7 @@ BEGIN
             ,  BuildParmCode
             ,  BuildParmString
             ,  UDF01
+            ,  UDF02
             ,  AddWho
             ,  AddDate)
          VALUES
@@ -1112,6 +1109,7 @@ BEGIN
             ,  @cParmCode
             ,  @cSQL
             ,  @@SPID
+            ,  CAST(@n_NoOfOrderToRelease AS NVARCHAR) --NJOW11
             ,  SUSER_NAME()
             ,  @d_StartBatchTime
             )
@@ -1376,7 +1374,15 @@ BEGIN
    -- (Wan06) - START
    IF (@n_TotalOrderCnt >= @n_NoOfOrderToRelease AND @n_NoOfOrderToRelease > 0)
    BEGIN
-      BREAK
+      --BREAK
+      
+      --NJOW11 S
+      CLOSE CUR_ROWNO  
+      DEALLOCATE CUR_ROWNO  
+      IF OBJECT_ID('tempdb..#T2','u') IS NOT NULL  
+         DROP TABLE #T2;
+      GOTO END_BUILDLOAD  
+      --NJOW11 E
    END
    -- (Wan06) - END
 END -- WHILE(@@FETCH_STATUS <> -1)
