@@ -7,7 +7,8 @@ GO
 /***************************************************************************/
 --[CN] Create new BI view for Jreport https://jiralfl.atlassian.net/browse/WMS-20516
 /* Date         Author      Ver.  Purposes                                 */
-/* 12-Aug-2022  Gywong      1.0   Created                                  */
+/* 12-Aug-2022  Gywong      1.0   Created IN TH                            */
+/* 11-Nov-2022  JarekLIM    1.0   Created IN KR https://jiralfl.atlassian.net/browse/WMS-21163 */
 /***************************************************************************/
 
 CREATE  OR ALTER VIEW [BI].[V_RDTPrintJob_Log]  AS  
@@ -20,11 +21,11 @@ GO
 
 
 /*
-exec as login ='JreportuserTH'
+exec as login ='JreportuserKR'
 
 select suser_sname()
 
-select * from [BI].[V_RDTPrintJob_Log]
+select TOP 99999 * from [BI].[V_RDTPrintJob_Log]
 
 
 revert;
