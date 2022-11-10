@@ -52,6 +52,16 @@ BEGIN
       GOTO Quit  
    END
 
+   IF EXISTS (SELECT 1 FROM palletdetail (nolock)
+              where palletkey=@cPalletKey
+                  AND storerkey=@cStorerkey
+                  AND trackingno=@cInTrackNo)
+   BEGIN
+      SET @nErrNo = 192653 
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DuplicateCaseiD  
+      GOTO Quit  
+   END
+
    SELECT TOP 1 @cTrackNo=pd.labelno
    FROM packdetail PD (NOLOCK)
    JOIN packheader PH (NOLOCK) ON PD.pickslipno=PH.pickslipno

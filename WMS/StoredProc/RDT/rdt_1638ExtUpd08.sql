@@ -44,6 +44,7 @@ BEGIN
    DECLARE @cCurrentTrackNo NVARCHAR(20)
    DECLARE @cPalletLineNumber NVARCHAR(5)
    DECLARE @cUserName      NVARCHAR(20)
+   DECLARE @cMBOLKEY       NVARCHAR(20)
    DECLARE @nTranCount INT
    SET @nTranCount = @@TRANCOUNT
    BEGIN TRAN
@@ -51,6 +52,7 @@ BEGIN
    
    IF @nFunc = 1638 -- Scan to pallet
    BEGIN
+
        IF @nStep = 3    -- Case ID
       BEGIN
          IF @nInputKey = 1 -- ENTER
@@ -61,6 +63,12 @@ BEGIN
             FROM  rdt.rdtmobrec (NOLOCK)
             WHERE mobile=@nMobile
 
+            SELECT @cMBOLKEY=mbolkey
+            FROM ORDERS (NOLOCK)
+            WHERE StorerKey=@cStorerkey
+               AND [Status] = '9'
+               AND TrackingNo = @cCurrentTrackNo
+               and doctype='e' 
 
             DECLARE @curUpdPlt   CURSOR
             SET @curUpdPlt = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
@@ -79,6 +87,7 @@ BEGIN
                UPDATE dbo.PALLETDETAIL SET
                   trackingno = @cCurrentTrackNo,
                   EditWho = 'rdt.' + @cUserName,
+                  UserDefine03 =  @cMBOLKEY,
                   EditDate = GETDATE()
                WHERE PalletKey = @cPalletKey
                AND   PalletLineNumber = @cPalletLineNumber
@@ -92,12 +101,34 @@ BEGIN
 
                FETCH NEXT FROM @curUpdPlt INTO @cPalletLineNumber
             END
+
+            IF NOT EXISTS ( SELECT 1
+                           FROM MBOL (NOLOCK)
+                           where mbolkey=@cMBOLKEY
+                           AND [Status] = '9'
+                           AND PlaceOfdischargeQualifier='THAILAND')
+            BEGIN
+               UPDATE MBOL WITH (ROWLOCK)
+               SET PlaceOfLoadingQualifier='THAILAND',
+                   TrafficCop = NULL
+               where mbolkey=@cMBOLKEY
+                  AND [Status] = '9'
+
+               
+               IF @@ERROR<>0
+               BEGIN
+                  SET @nErrNo = 192703 
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdMBOLFail  
+                  GOTO ROLLBACKTRAN
+               END
+            END
          END
       END
       IF @nStep = 4  -- CaseID
       BEGIN
          IF @nInputKey = 1 -- ENTER
          BEGIN
+
             UPDATE pallet WITH (ROWLOCK)
             SET status='3'
             where palletkey=@cPalletKey
