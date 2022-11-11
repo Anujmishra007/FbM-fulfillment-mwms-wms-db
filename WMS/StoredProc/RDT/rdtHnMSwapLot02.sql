@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdtHnMSwapLot02]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [RDT].[rdtHnMSwapLot02]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -28,9 +24,12 @@ GO
 /*                              in msgqueue (james01)                   */
 /* 16-Apr-2021 1.4  James       WMS-16024 Standarized use of TrackingNo */
 /*                              (james02)                               */
+/* 17-Aug-2022 1.5  James       WMS-20442 Add scanned barcode to        */
+/*                              PackDetail.LottableValue (james03)      */
+/*                              Comment assign tracking no              */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdtHnMSwapLot02] (
+CREATE OR ALTER PROC [RDT].[rdtHnMSwapLot02] (
    @n_Mobile         INT, 
    @c_Storerkey      NVARCHAR( 15), 
    @c_OrderKey       NVARCHAR( 10), 
@@ -103,13 +102,16 @@ BEGIN
    
    DECLARE @n_MsgQErrNo     INT
    DECLARE @n_MsgQErrMsg    NVARCHAR( 20)
-           
+
+   DECLARE @c_DropID        NVARCHAR( 20)
+   
    SET @n_ErrNo = 0
    SET @n_SwapLot = 1
 
    SELECT @n_Func = Func, 
           @n_Step = Step, 
-          @n_InputKey = InputKey
+          @n_InputKey = InputKey,
+          @c_DropID = V_CaseID
    FROM RDT.RDTMOBREC WITH (NOLOCK) 
    WHERE Mobile = @n_Mobile
 
@@ -585,7 +587,9 @@ BEGIN
          GOTO RollBackTran    
       END    
    END    
-
+   /* commented because now HM uses interface to get tracking no
+      RDT pack only use temp running no as tracking no/label no
+      IML will then update back packdetail.labelno and pickdetail.caseid
    -- If customer order (only customer order can swap lot)
    IF @n_SwapLot = 1
    BEGIN
@@ -684,7 +688,7 @@ BEGIN
          END 
       END
    END
-
+   */
    -- Update PackDetail.Qty if it is already exists    
    IF EXISTS (SELECT 1 FROM dbo.PackDetail WITH (NOLOCK)    
               WHERE StorerKey = @c_Storerkey    
@@ -721,7 +725,24 @@ BEGIN
       BEGIN    
          -- Set label no = tracking no (Only for customer orders)
          IF @n_SwapLot = 1
-            SET @c_LabelNo = @c_TrackNo
+         BEGIN
+            -- Get new LabelNo    
+            EXECUTE isp_GenUCCLabelNo    
+                     @c_Storerkey,    
+                     @c_LabelNo    OUTPUT,    
+                     @b_Success     OUTPUT,    
+                     @n_ErrNo       OUTPUT,    
+                     @c_ErrMsg      OUTPUT    
+    
+            IF @b_Success <> 1    
+            BEGIN    
+               SET @n_ErrNo = 57577    
+               SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --'GET LABEL Fail'    
+               EXEC rdt.rdtSetFocusField @n_Mobile, 6    
+               GOTO RollBackTran    
+            END    
+            --SET @c_LabelNo = @c_TrackNo
+         END
          ELSE
          BEGIN
          -- (james02)
@@ -784,10 +805,10 @@ BEGIN
 
          -- CartonNo = 0 & LabelLine = '0000', trigger will auto assign    
          INSERT INTO dbo.PackDetail    
-            (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, Refno, AddWho, AddDate, EditWho, EditDate, DropID, UPC)    
+            (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, Refno, AddWho, AddDate, EditWho, EditDate, DropID, UPC, LOTTABLEVALUE)    
          VALUES    
             (@c_PickSlipNo, 0, @c_LabelNo, '00000', @c_Storerkey, @c_SKU, 1,    
-            '', 'rdt.' + sUser_sName(), GETDATE(), 'rdt.' + sUser_sName(), GETDATE(), '', @c_Barcode)   
+            '', 'rdt.' + sUser_sName(), GETDATE(), 'rdt.' + sUser_sName(), GETDATE(), @c_DropID, @c_Barcode, @c_Barcode)   
 
          IF @@ERROR <> 0    
          BEGIN    
@@ -815,10 +836,10 @@ BEGIN
  
          -- need to use the existing labelno    
          INSERT INTO dbo.PackDetail    
-            (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, Refno, AddWho, AddDate, EditWho, EditDate, DropID, UPC)    
+            (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, Refno, AddWho, AddDate, EditWho, EditDate, DropID, UPC, LOTTABLEVALUE)    
          VALUES    
             (@c_PickSlipNo, @n_CartonNo, @c_CurLabelNo, @c_CurLabelLine, @c_Storerkey, @c_SKU, 1,    
-            '', 'rdt.' + sUser_sName(), GETDATE(), 'rdt.' + sUser_sName(), GETDATE(), '', @c_Barcode)    
+            '', 'rdt.' + sUser_sName(), GETDATE(), 'rdt.' + sUser_sName(), GETDATE(), @c_DropID, @c_Barcode, @c_Barcode)    
 
          IF @@ERROR <> 0    
          BEGIN    
