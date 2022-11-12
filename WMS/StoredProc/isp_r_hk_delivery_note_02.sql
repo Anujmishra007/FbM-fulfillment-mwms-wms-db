@@ -30,6 +30,7 @@ GO
 /* 01/02/2021   ML       1.4  WMS-16288 - Add Parm DeliveryDate          */
 /* 25/11/2021   ML       1.5  WMS-18440 - Nike SEC - change the delivery */
 /*                                        note layout                    */
+/* 23/03/2022   ML       1.6  Add NULL to Temp Table                     */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_delivery_note_02] (
@@ -85,11 +86,11 @@ BEGIN
    WHERE value<>''
 
    CREATE TABLE #TEMP_ORDERKEY (
-        Orderkey         NVARCHAR(10)
-      , ExternOrderkey   NVARCHAR(50)
-      , Loadkey          NVARCHAR(10)
-      , DeliveryDate     DATE
-      , RptVersion       NVARCHAR(10)
+        Orderkey         NVARCHAR(10) NULL
+      , ExternOrderkey   NVARCHAR(50) NULL
+      , Loadkey          NVARCHAR(10) NULL
+      , DeliveryDate     DATE         NULL
+      , RptVersion       NVARCHAR(10) NULL
    )
 
    -- Get Orderkey
