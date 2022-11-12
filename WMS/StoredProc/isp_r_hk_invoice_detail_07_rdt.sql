@@ -23,6 +23,9 @@ GO
 /*                                                                       */
 /* Updates:                                                              */
 /* Date         Author   Ver  Purposes                                   */
+/* 18/03/2022   Michael  1.1  WMS-19257 Add MapField: GiftUnitPrice      */
+/* 23/03/2022   Michael  1.2  Add NULL to Temp Table                     */
+/* 20/09/2022   Michael  1.3  Remove ShipFromName dft value LF Logistics */
 /*************************************************************************/
 
 CREATE PROC [dbo].[isp_r_hk_invoice_detail_07_rdt] (
@@ -41,7 +44,7 @@ BEGIN
    [MAPFIELD]
       ExternORderkey, C_Contact, C_Address, C_Phone, InvoiceNo, InvoiceAmount, PmtTerm, TermOfSale, NH_Number, TrackingNo, TotalWeight
       TotalCarton, SellerName, SellerAddress, SellerPhone, ShipFromName, ShipFromAddress, ShipFromPhone, Carrier
-      Sku, Size, Descr, Qty, UOM, HTSCode, COO, UnitPrice, FooterNotes1, FooterNotes2
+      Sku, Size, Descr, Qty, UOM, HTSCode, COO, UnitPrice, GiftUnitPrice, FooterNotes1, FooterNotes2
 
    [MAPVALUE]
    [SHOWFIELD]
@@ -82,6 +85,7 @@ BEGIN
          , @c_HTSCodeExp         NVARCHAR(MAX)
          , @c_COOExp             NVARCHAR(MAX)
          , @c_UnitPriceExp       NVARCHAR(MAX)
+         , @c_GiftUnitPriceExp   NVARCHAR(MAX)
          , @c_FooterNotes1Exp    NVARCHAR(MAX)
          , @c_FooterNotes2Exp    NVARCHAR(MAX)
          , @c_ExecStatements     NVARCHAR(MAX)
@@ -91,51 +95,52 @@ BEGIN
 
 
    CREATE TABLE #TEMP_PIKDT (
-        Orderkey         NVARCHAR(10)
-      , PickslipNo       NVARCHAR(10)
-      , Loadkey          NVARCHAR(10)
-      , ConsolPick       NVARCHAR(1)
-      , DocKey           NVARCHAR(20)
-      , Storerkey        NVARCHAR(15)
-      , Externorderkey   NVARCHAR(500)
-      , C_Contact        NVARCHAR(500)
-      , C_Address        NVARCHAR(500)
-      , C_Phone          NVARCHAR(500)
-      , InvoiceNo        NVARCHAR(500)
-      , InvoiceAmount    NVARCHAR(500)
-      , PmtTerm          NVARCHAR(500)
-      , TermOfSale       NVARCHAR(500)
-      , NH_Number        NVARCHAR(500)
-      , TrackingNo       NVARCHAR(500)
-      , TotalWeight      NVARCHAR(500)
-      , TotalCarton      NVARCHAR(500)
-      , SellerName       NVARCHAR(500)
-      , SellerAddress    NVARCHAR(500)
-      , SellerPhone      NVARCHAR(500)
-      , ShipFromName     NVARCHAR(500)
-      , ShipFromAddress  NVARCHAR(500)
-      , ShipFromPhone    NVARCHAR(500)
-      , Carrier          NVARCHAR(500)
-      , Sku              NVARCHAR(500)
-      , Size             NVARCHAR(500)
-      , Descr            NVARCHAR(500)
-      , Qty              INT
-      , UOM              NVARCHAR(500)
-      , HTSCode          NVARCHAR(500)
-      , COO              NVARCHAR(500)
-      , UnitPrice        FLOAT
-      , FooterNotes1     NVARCHAR(500)
-      , FooterNotes2     NVARCHAR(500)
+        Orderkey         NVARCHAR(10)  NULL
+      , PickslipNo       NVARCHAR(10)  NULL
+      , Loadkey          NVARCHAR(10)  NULL
+      , ConsolPick       NVARCHAR(1)   NULL
+      , DocKey           NVARCHAR(20)  NULL
+      , Storerkey        NVARCHAR(15)  NULL
+      , Externorderkey   NVARCHAR(500) NULL
+      , C_Contact        NVARCHAR(500) NULL
+      , C_Address        NVARCHAR(500) NULL
+      , C_Phone          NVARCHAR(500) NULL
+      , InvoiceNo        NVARCHAR(500) NULL
+      , InvoiceAmount    NVARCHAR(500) NULL
+      , PmtTerm          NVARCHAR(500) NULL
+      , TermOfSale       NVARCHAR(500) NULL
+      , NH_Number        NVARCHAR(500) NULL
+      , TrackingNo       NVARCHAR(500) NULL
+      , TotalWeight      NVARCHAR(500) NULL
+      , TotalCarton      NVARCHAR(500) NULL
+      , SellerName       NVARCHAR(500) NULL
+      , SellerAddress    NVARCHAR(500) NULL
+      , SellerPhone      NVARCHAR(500) NULL
+      , ShipFromName     NVARCHAR(500) NULL
+      , ShipFromAddress  NVARCHAR(500) NULL
+      , ShipFromPhone    NVARCHAR(500) NULL
+      , Carrier          NVARCHAR(500) NULL
+      , Sku              NVARCHAR(500) NULL
+      , Size             NVARCHAR(500) NULL
+      , Descr            NVARCHAR(500) NULL
+      , Qty              INT           NULL
+      , UOM              NVARCHAR(500) NULL
+      , HTSCode          NVARCHAR(500) NULL
+      , COO              NVARCHAR(500) NULL
+      , UnitPrice        FLOAT         NULL
+      , GiftUnitPrice    FLOAT         NULL
+      , FooterNotes1     NVARCHAR(500) NULL
+      , FooterNotes2     NVARCHAR(500) NULL
    )
 
    -- Final Orderkey, PickslipNo List
    CREATE TABLE #TEMP_FINALORDERKEY (
-        Orderkey         NVARCHAR(10)
-      , PickslipNo       NVARCHAR(10)
-      , Loadkey          NVARCHAR(10)
-      , ConsolPick       NVARCHAR(1)
-      , DocKey           NVARCHAR(20)
-      , Storerkey        NVARCHAR(15)
+        Orderkey         NVARCHAR(10)  NULL
+      , PickslipNo       NVARCHAR(10)  NULL
+      , Loadkey          NVARCHAR(10)  NULL
+      , ConsolPick       NVARCHAR(1)   NULL
+      , DocKey           NVARCHAR(20)  NULL
+      , Storerkey        NVARCHAR(15)  NULL
    )
 
    INSERT INTO #TEMP_FINALORDERKEY
@@ -148,8 +153,6 @@ BEGIN
      FROM dbo.ORDERS        OH (NOLOCK)
      JOIN dbo.PICKHEADER PIKHD (NOLOCK) ON OH.Orderkey = PIKHD.Orderkey AND OH.Orderkey<>''
      JOIN dbo.PICKDETAIL    PD (NOLOCK) ON OH.Orderkey = PD.Orderkey
---     JOIN dbo.PACKHEADER    PH (NOLOCK) ON PIKHD.PickheaderKey = PH.PickslipNo
---     JOIN dbo.PACKDETAIL    PD (NOLOCK) ON PH.PickslipNo = PD.Pickslipno
     WHERE OH.Storerkey = @as_storerkey
       AND OH.OrderKey IN (SELECT DISTINCT TRIM(value) FROM STRING_SPLIT(REPLACE(@as_orderkey,CHAR(13)+CHAR(10),','),',') WHERE value<>'')
       AND PD.Qty > 0
@@ -165,8 +168,6 @@ BEGIN
      FROM dbo.ORDERS        OH (NOLOCK)
      JOIN dbo.PICKHEADER PIKHD (NOLOCK) ON OH.Loadkey = PIKHD.ExternOrderkey AND ISNULL(PIKHD.Orderkey,'')=''
      JOIN dbo.PICKDETAIL    PD (NOLOCK) ON OH.Orderkey = PD.Orderkey
---     JOIN dbo.PACKHEADER    PH (NOLOCK) ON PIKHD.PickheaderKey = PH.PickslipNo
---     JOIN dbo.PACKDETAIL    PD (NOLOCK) ON PH.PickslipNo = PD.Pickslipno
      LEFT JOIN #TEMP_FINALORDERKEY  FOK ON OH.Orderkey = FOK.Orderkey
     WHERE OH.Storerkey = @as_storerkey
       AND OH.Loadkey IN (SELECT DISTINCT a.Loadkey FROM dbo.ORDERS a(NOLOCK) WHERE ISNULL(a.Loadkey,'')<>'' AND a.OrderKey IN (SELECT DISTINCT TRIM(value) FROM STRING_SPLIT(REPLACE(@as_orderkey,CHAR(13)+CHAR(10),','),',') WHERE value<>''))
@@ -219,6 +220,7 @@ BEGIN
            , @c_HTSCodeExp         = ''
            , @c_COOExp             = ''
            , @c_UnitPriceExp       = ''
+           , @c_GiftUnitPriceExp   = ''
            , @c_FooterNotes1Exp    = ''
            , @c_FooterNotes2Exp    = ''
            , @c_JoinClause         = ''
@@ -324,6 +326,9 @@ BEGIN
            , @c_UnitPriceExp       = ISNULL(RTRIM((select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(TRIM(UDF01),RTRIM(Notes)) a, dbo.fnc_DelimSplit(TRIM(UDF01),RTRIM(Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='UnitPrice')), '' )
+           , @c_GiftUnitPriceExp   = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(TRIM(UDF01),RTRIM(Notes)) a, dbo.fnc_DelimSplit(TRIM(UDF01),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='GiftUnitPrice')), '' )
            , @c_FooterNotes1Exp    = ISNULL(RTRIM((select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(TRIM(UDF01),RTRIM(Notes)) a, dbo.fnc_DelimSplit(TRIM(UDF01),RTRIM(Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='FooterNotes1')), '' )
@@ -343,7 +348,7 @@ BEGIN
           +' (Orderkey, PickslipNo, Loadkey, ConsolPick, DocKey, Storerkey'
           +', Externorderkey, C_Contact, C_Address, C_Phone, InvoiceNo, InvoiceAmount, PmtTerm, TermOfSale, NH_Number, TrackingNo, TotalWeight'
           +', TotalCarton, SellerName, SellerAddress, SellerPhone, ShipFromName, ShipFromAddress, ShipFromPhone, Carrier'
-          +', Sku, Size, Descr, Qty, UOM, HTSCode, COO, UnitPrice, FooterNotes1, FooterNotes2)'
+          +', Sku, Size, Descr, Qty, UOM, HTSCode, COO, UnitPrice, GiftUnitPrice, FooterNotes1, FooterNotes2)'
           +' SELECT FOK.Orderkey'
                + ', FOK.PickslipNo'
                + ', FOK.Loadkey'
@@ -381,7 +386,7 @@ BEGIN
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_SellerPhoneExp    ,'')<>'' THEN @c_SellerPhoneExp     ELSE ''''''                     END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
-               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_ShipFromNameExp   ,'')<>'' THEN @c_ShipFromNameExp    ELSE '''LF Logistics'''         END + '),'''')'
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_ShipFromNameExp   ,'')<>'' THEN @c_ShipFromNameExp    ELSE ''''''                     END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_ShipFromAddressExp,'')<>'' THEN @c_ShipFromAddressExp ELSE 'TRIM(TRIM(ISNULL(FAC.Address1,''''))+'' ''+TRIM(ISNULL(FAC.Address2,'''')))' END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
@@ -404,6 +409,8 @@ BEGIN
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_COOExp            ,'')<>'' THEN @c_COOExp             ELSE ''''''                     END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_UnitPriceExp      ,'')<>'' THEN @c_UnitPriceExp       ELSE 'CASE WHEN OD.OriginalQty=0 THEN 0 ELSE OD.UnitPrice/OD.OriginalQty END' END + '),'''')'
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_GiftUnitPriceExp  ,'')<>'' THEN @c_GiftUnitPriceExp   ELSE ''''''                     END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_FooterNotes1Exp   ,'')<>'' THEN @c_FooterNotes1Exp    ELSE ''''''                     END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
@@ -504,6 +511,7 @@ BEGIN
         , FooterNotes1       = RTRIM( MAX( PIKDT.FooterNotes1 ) )
         , FooterNotes2       = RTRIM( MAX( PIKDT.FooterNotes2 ) )
         , ShowFields         = MAX( RptCfg.ShowFields )
+        , GiftUnitPrice      = PIKDT.GiftUnitPrice
 
    FROM #TEMP_PIKDT PIKDT
 
@@ -522,8 +530,9 @@ BEGIN
           , PIKDT.HTSCode
           , PIKDT.COO
           , PIKDT.UnitPrice
+          , PIKDT.GiftUnitPrice
 
-   ORDER BY DocKey, Sku, Size, UOM, UnitPrice
+   ORDER BY DocKey, Sku, Size, UOM, UnitPrice, GiftUnitPrice
 END
 GO
 GRANT EXECUTE ON isp_r_hk_invoice_detail_07_rdt TO NSQL
