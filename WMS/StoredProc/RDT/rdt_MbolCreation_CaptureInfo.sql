@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdt_MbolCreation_CaptureInfo]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_MbolCreation_CaptureInfo]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -13,9 +9,10 @@ GO
 /*                                                                         */
 /* Date       Rev  Author  Purposes                                        */
 /* 2021-08-09 1.0  James   WMS-17621. Created                              */
+/* 2022-08-03 1.1  James   WMS-20213 Add custom lookup field (james02)     */
 /***************************************************************************/
 
-CREATE PROC [RDT].[rdt_MbolCreation_CaptureInfo](
+CREATE OR ALTER PROC [RDT].[rdt_MbolCreation_CaptureInfo](
    @nMobile      INT,           
    @nFunc        INT,           
    @cLangCode    NVARCHAR( 3),  
@@ -24,9 +21,12 @@ CREATE PROC [RDT].[rdt_MbolCreation_CaptureInfo](
    @cFacility    NVARCHAR( 5),
    @cStorerKey   NVARCHAR( 15), 
    @cType        NVARCHAR( 10),  -- DISPLAY/UPDATE
+   @cMBOLKey     NVARCHAR( 10),
    @cOrderkey    NVARCHAR( 10), 
    @cLoadKey     NVARCHAR( 10), 
-   @cRefNo       NVARCHAR( 20),                
+   @cRefNo1      NVARCHAR( 20),                
+   @cRefNo2      NVARCHAR( 20),
+   @cRefNo3      NVARCHAR( 20),
    @cData1       NVARCHAR( 60),
    @cData2       NVARCHAR( 60),
    @cData3       NVARCHAR( 60),
@@ -74,7 +74,8 @@ BEGIN
       BEGIN
          SET @cSQL = 'EXEC rdt.' + RTRIM( @cCaptureInfoSP) +
             ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,  ' +
-            ' @cOrderKey, @cLoadKeyKey, @cRefNo, @cData1, @cData2, @cData3, @cData4, @cData5, ' + 
+            ' @cMBOLKey, @cOrderKey, @cLoadKeyKey, @cRefNo1, @cRefNo2, @cRefNo3, ' + 
+            ' @cData1, @cData2, @cData3, @cData4, @cData5, ' + 
             ' @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT, ' +   
             ' @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT, ' +   
             ' @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT, ' +   
@@ -100,6 +101,7 @@ BEGIN
             ' @cFacility   NVARCHAR( 5),  ' +
             ' @cStorerKey  NVARCHAR( 15), ' +
             ' @cType       NVARCHAR( 10), ' +
+            ' @cMBOLKey    NVARCHAR( 10), ' +
             ' @cOrderKey   NVARCHAR( 10), ' +
             ' @cLoadKey    NVARCHAR( 10), ' +
             ' @cRefNo      NVARCHAR( 20), ' +
@@ -129,7 +131,8 @@ BEGIN
          
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
             @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType, 
-            @cOrderkey, @cLoadKey, @cRefNo, @cData1, @cData2, @cData3, @cData4, @cData5, 
+            @cMBOLKey, @cOrderkey, @cLoadKey, @cRefNo1, @cRefNo2, @cRefNo3, 
+            @cData1, @cData2, @cData3, @cData4, @cData5, 
             @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,   
             @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,   
             @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,   
