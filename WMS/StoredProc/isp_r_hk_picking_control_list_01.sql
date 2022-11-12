@@ -28,6 +28,7 @@ GO
 /* 13/03/2018   ML       1.2  Fix TrackingNo not update issue            */
 /* 08/12/2021   ML       1.3  WMS-18543 Add MAPFIELD: DocNumber          */
 /*                            MAPVALUE: T_DocNumber                      */
+/* 23/03/2022   ML       1.4  Add NULL to Temp Table                     */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_picking_control_list_01] (
@@ -127,22 +128,22 @@ BEGIN
 
 
    CREATE TABLE #TEMP_ORDET (
-        OrderKey         NVARCHAR(10)
-      , Storerkey        NVARCHAR(15)
-      , Wavekey          NVARCHAR(10)
-      , Loadkey          NVARCHAR(10)
-      , PickslipNo       NVARCHAR(18)
-      , DocNumber        NVARCHAR(500)
-      , ReferenceNo      NVARCHAR(500)
-      , ItemGroup        NVARCHAR(500)
-      , OrderQty         INT
-      , AllocQty         INT
-      , StdCube          FLOAT
-      , Putawayzone      NVARCHAR(10)
-      , ConsolPick       NVARCHAR(1)
-      , DocKey           NVARCHAR(10)
-      , FirstOrderkey    NVARCHAR(10)
-      , SeqNo            INT
+        OrderKey         NVARCHAR(10)  NULL
+      , Storerkey        NVARCHAR(15)  NULL
+      , Wavekey          NVARCHAR(10)  NULL
+      , Loadkey          NVARCHAR(10)  NULL
+      , PickslipNo       NVARCHAR(18)  NULL
+      , DocNumber        NVARCHAR(500) NULL
+      , ReferenceNo      NVARCHAR(500) NULL
+      , ItemGroup        NVARCHAR(500) NULL
+      , OrderQty         INT           NULL
+      , AllocQty         INT           NULL
+      , StdCube          FLOAT         NULL
+      , Putawayzone      NVARCHAR(10)  NULL
+      , ConsolPick       NVARCHAR(1)   NULL
+      , DocKey           NVARCHAR(10)  NULL
+      , FirstOrderkey    NVARCHAR(10)  NULL
+      , SeqNo            INT           NULL
    )
 
    -- Final Orderkey
