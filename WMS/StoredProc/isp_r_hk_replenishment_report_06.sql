@@ -28,6 +28,7 @@ GO
 /*                            2. Add new parameter @as_sku               */
 /* 03/01/2019   ML       1.2  Handle QtyReplen & PendingMovein           */
 /* 07/03/2019   ML       1.3  Change to use SEQKey table for SeqTbl      */
+/* 23/03/2022   ML       1.4  Add NULL to Temp Table                     */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_replenishment_report_06] (
@@ -99,11 +100,11 @@ BEGIN
       , StorerKey      NVARCHAR(15)  NOT NULL
       , SKU            NVARCHAR(20)  NOT NULL
       , LOC            NVARCHAR(10)  NOT NULL
-      , EachUOM        NVARCHAR(10)
-      , PackKey        NVARCHAR(10)
-      , ReplenPriority NVARCHAR(5 )
-      , ReplenSeverity INT
-      , Barcode        NVARCHAR(30)
+      , EachUOM        NVARCHAR(10)  NULL
+      , PackKey        NVARCHAR(10)  NULL
+      , ReplenPriority NVARCHAR(5 )  NULL
+      , ReplenSeverity INT           NULL
+      , Barcode        NVARCHAR(30)  NULL
    )
 
    CREATE TABLE #TEMP_LOTXLOCXID (
@@ -111,30 +112,30 @@ BEGIN
       , Lot            NVARCHAR(10)  NOT NULL
       , LOC            NVARCHAR(10)  NOT NULL
       , Id             NVARCHAR(30)  NOT NULL
-      , Storerkey      NVARCHAR(15)
-      , Sku            NVARChAR(20)
-      , CtnAvail       INT
-      , CaseCnt        INT
-      , CaseUOM        NVARCHAR(10)
+      , Storerkey      NVARCHAR(15)  NULL
+      , Sku            NVARChAR(20)  NULL
+      , CtnAvail       INT           NULL
+      , CaseCnt        INT           NULL
+      , CaseUOM        NVARCHAR(10)  NULL
    )
 
    CREATE TABLE #TEMP_REPLENISHMENT (
         RowID      INT IDENTITY(1,1) NOT NULL Primary Key
-      , ReplenishmentKey NVARCHAR(10)
-      , StorerKey        NVARCHAR(20)
-      , SKU              NVARCHAR(20)
-      , FromLOC          NVARCHAR(10)
-      , ToLOC            NVARCHAR(10)
-      , LOT              NVARCHAR(10)
-      , ID               NVARCHAR(18)
-      , QTY              INT
-      , ReplenPriority   NVARCHAR(5)
-      , EachUOM          NVARCHAR(10)
-      , PACKKEY          NVARCHAR(10)
-      , ReplenSeverity   INT
-      , ReplenCasecnt    INT
-      , CaseUOM          NVARCHAR(10)
-      , Barcode          NVARCHAR(30)
+      , ReplenishmentKey NVARCHAR(10) NULL
+      , StorerKey        NVARCHAR(20) NULL
+      , SKU              NVARCHAR(20) NULL
+      , FromLOC          NVARCHAR(10) NULL
+      , ToLOC            NVARCHAR(10) NULL
+      , LOT              NVARCHAR(10) NULL
+      , ID               NVARCHAR(18) NULL
+      , QTY              INT          NULL
+      , ReplenPriority   NVARCHAR(5)  NULL
+      , EachUOM          NVARCHAR(10) NULL
+      , PACKKEY          NVARCHAR(10) NULL
+      , ReplenSeverity   INT          NULL
+      , ReplenCasecnt    INT          NULL
+      , CaseUOM          NVARCHAR(10) NULL
+      , Barcode          NVARCHAR(30) NULL
    )
 
    SELECT @c_ShowFields        = ''
