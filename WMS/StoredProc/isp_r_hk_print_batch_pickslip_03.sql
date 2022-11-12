@@ -26,7 +26,8 @@ GO
 /* Date         Author   Ver  Purposes                                   */
 /* 2021-10-08   Michael  V1.1 Fix mult-PickHeader created when using SCE */
 /*                            Add Showfield: NoGenPickHeader             */
-/* 2021-11-30   Michael  V1.4 Fix RptCfg.ShowFields NULL value issue     */
+/* 2021-11-30   Michael  V1.2 Fix RptCfg.ShowFields NULL value issue     */
+/* 2022-03-23   Michael  V1.3 Add NULL to Temp Table                     */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_print_batch_pickslip_03] (
@@ -157,41 +158,41 @@ BEGIN
 
 
    CREATE TABLE #TEMP_PIKDT (
-        Loadkey          NVARCHAR(10)
-      , Storerkey        NVARCHAR(15)
-      , PickSlipNo       NVARCHAR(10)
-      , Zone             NVARCHAR(1)
-      , Facility         NVARCHAR(5)
-      , ExternLoadkey    NVARCHAR(30)
-      , DeliveryDate     DATETIME
-      , Delivery_Zone    NVARCHAR(30)
-      , Route            NVARCHAR(10)
-      , Route_Desc       NVARCHAR(60)
-      , TrfRoom          NVARCHAR(10)
-      , Notes1           NVARCHAR(4000)
-      , Notes2           NVARCHAR(4000)
-      , PrintedFlag      NVARCHAR(1)
-      , VehicleNo        NVARCHAR(10)
-      , AlLocatedCube    FLOAT
-      , AlLocatedWeight  FLOAT
-      , Sku              NVARCHAR(20)
-      , SkuDesc          NVARCHAR(60)
-      , Putawayzone      NVARCHAR(10)
-      , ZoneDesc         NVARCHAR(60)
-      , LogicalLocation  NVARCHAR(18)
-      , Loc              NVARCHAR(10)
-      , ID               NVARCHAR(20)
-      , AltSku           NVARCHAR(20)
-      , Lottable02       NVARCHAR(18)
-      , Lottable04       DATETIME
-      , Qty              INT
-      , CaseCnt          INT
-      , InnerPack        INT
-      , LineRemark1      NVARCHAR(500)
-      , LineRemark2      NVARCHAR(500)
-      , LineRemark3      NVARCHAR(500)
-      , ShowFields       NVARCHAR(4000)
-      , Storer_Logo      NVARCHAR(60)
+        Loadkey          NVARCHAR(10)   NULL
+      , Storerkey        NVARCHAR(15)   NULL
+      , PickSlipNo       NVARCHAR(10)   NULL
+      , Zone             NVARCHAR(1)    NULL
+      , Facility         NVARCHAR(5)    NULL
+      , ExternLoadkey    NVARCHAR(30)   NULL
+      , DeliveryDate     DATETIME       NULL
+      , Delivery_Zone    NVARCHAR(30)   NULL
+      , Route            NVARCHAR(10)   NULL
+      , Route_Desc       NVARCHAR(60)   NULL
+      , TrfRoom          NVARCHAR(10)   NULL
+      , Notes1           NVARCHAR(4000) NULL
+      , Notes2           NVARCHAR(4000) NULL
+      , PrintedFlag      NVARCHAR(1)    NULL
+      , VehicleNo        NVARCHAR(10)   NULL
+      , AlLocatedCube    FLOAT          NULL
+      , AlLocatedWeight  FLOAT          NULL
+      , Sku              NVARCHAR(20)   NULL
+      , SkuDesc          NVARCHAR(60)   NULL
+      , Putawayzone      NVARCHAR(10)   NULL
+      , ZoneDesc         NVARCHAR(60)   NULL
+      , LogicalLocation  NVARCHAR(18)   NULL
+      , Loc              NVARCHAR(10)   NULL
+      , ID               NVARCHAR(20)   NULL
+      , AltSku           NVARCHAR(20)   NULL
+      , Lottable02       NVARCHAR(18)   NULL
+      , Lottable04       DATETIME       NULL
+      , Qty              INT            NULL
+      , CaseCnt          INT            NULL
+      , InnerPack        INT            NULL
+      , LineRemark1      NVARCHAR(500)  NULL
+      , LineRemark2      NVARCHAR(500)  NULL
+      , LineRemark3      NVARCHAR(500)  NULL
+      , ShowFields       NVARCHAR(4000) NULL
+      , Storer_Logo      NVARCHAR(60)   NULL
    )
 
    -- Storerkey Loop
