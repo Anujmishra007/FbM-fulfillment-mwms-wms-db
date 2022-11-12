@@ -27,6 +27,7 @@ GO
 /* 2019-04-04   ML       1.1  Jira WMS8570 - Add Brand code              */
 /* 2021-08-02   ML       1.2  WMS-17623 - Add Extend Validation          */
 /* 2021-09-02   ML       1.3  If Multi-Sku Carton Then ToZone = Residual */
+/* 2022-03-23   ML       1.4  Add NULL to Temp Table                     */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_replenishment_report_07] (
@@ -57,21 +58,21 @@ BEGIN
       DROP TABLE #TEMP_PICKDETAIL
 
    CREATE TABLE #TEMP_PICKDETAIL (
-        Storerkey        NVARCHAR(15)
-      , Wavekey          NVARCHAR(10)
-      , PutawayZone      NVARCHAR(10)
-      , PA_Descr         NVARCHAR(60)
-      , LogicalLoc       NVARCHAR(18)
-      , Loc              NVARCHAR(10)
-      , ID               NVARCHAR(18)
-      , Sku              NVARCHAR(20)
-      , Sku_Descr        NVARCHAR(60)
-      , Qty              INT
-      , PikDetUOM        NVARCHAR(10)
-      , ToZone           NVARCHAR(60)
-      , Remarks          NVARCHAR(200)
-      , ErrMsg           NVARCHAR(500)
-      , Brand            NVARCHAR(60)
+        Storerkey        NVARCHAR(15)  NULL
+      , Wavekey          NVARCHAR(10)  NULL
+      , PutawayZone      NVARCHAR(10)  NULL
+      , PA_Descr         NVARCHAR(60)  NULL
+      , LogicalLoc       NVARCHAR(18)  NULL
+      , Loc              NVARCHAR(10)  NULL
+      , ID               NVARCHAR(18)  NULL
+      , Sku              NVARCHAR(20)  NULL
+      , Sku_Descr        NVARCHAR(60)  NULL
+      , Qty              INT           NULL
+      , PikDetUOM        NVARCHAR(10)  NULL
+      , ToZone           NVARCHAR(60)  NULL
+      , Remarks          NVARCHAR(200) NULL
+      , ErrMsg           NVARCHAR(500) NULL
+      , Brand            NVARCHAR(60)  NULL
    )
 
    IF ISNULL(@as_wavekey,'')=''
