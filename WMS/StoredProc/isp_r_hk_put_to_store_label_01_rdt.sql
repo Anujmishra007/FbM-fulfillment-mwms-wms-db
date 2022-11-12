@@ -1,5 +1,5 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[isp_r_hk_put_to_store_label_01_rdt]') AND OBJECTPROPERTY(Id, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[isp_r_hk_put_to_store_label_01_rdt]
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_r_hk_put_to_store_label_01_rdt]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+drop procedure [dbo].[isp_r_hk_put_to_store_label_01_rdt]
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -24,6 +24,7 @@ GO
 /*                                                                       */
 /* Updates:                                                              */
 /* Date         Author   Ver  Purposes                                   */
+/* 23/03/2022   ML       1.1  Add NULL to Temp Table                     */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_put_to_store_label_01_rdt] (
@@ -52,11 +53,11 @@ BEGIN
         , @n_StartTCnt  = @@TRANCOUNT
 
    CREATE TABLE #TEMP_PICKDETAIL (
-        PickdetailKey    NVARCHAR(20)
-      , DropID           NVARCHAR(20)
-      , DropIDNew        NVARCHAR(20)
-      , EditDate         DATETIME
-      , EditWho          NVARCHAR(128)
+        PickdetailKey    NVARCHAR(20)  NULL
+      , DropID           NVARCHAR(20)  NULL
+      , DropIDNew        NVARCHAR(20)  NULL
+      , EditDate         DATETIME      NULL
+      , EditWho          NVARCHAR(128) NULL
    )
 
    IF ISNULL(@as_palletid,'')<>''
@@ -176,5 +177,6 @@ QUIT:
    END
 END
 GO
+
 GRANT EXECUTE ON isp_r_hk_put_to_store_label_01_rdt TO NSQL
 GO
