@@ -32,6 +32,7 @@ GO
 /* 10/06/2021  ML       WMS-17263 Change all fields Configurable         */
 /* 24/06/2021  ML       Handle printing from both EXceed and RDT         */
 /* 23/03/2022  ML       Add NULL to Temp Table                           */
+/* 11/10/2022  ML       Change default ShipFrom to 'From :  MCL'         */
 /*************************************************************************/
 -- From EXceed Packing: PickSlipNo, CartonNoStart, CartonNoEnd, LabelNoStart, LabelNoEnd
 -- From RDT: Storerkey, PickSlipNo/Orderkey/ExtOrderkey, CartonNoStart, CartonNoEnd, LabelNoStart, LabelNoEnd
@@ -356,7 +357,7 @@ BEGIN
    SET @c_ExecStatements = @c_ExecStatements
      +      ', UDF04ShowBarcode = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_UDF04ShowBarcodeExp,'')<>'' THEN @c_UDF04ShowBarcodeExp ELSE ''''''               END + '),'''')'
    SET @c_ExecStatements = @c_ExecStatements
-     +      ', ShipFrom         = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_ShipFromExp        ,'')<>'' THEN @c_ShipFromExp         ELSE '''From :  LF'''     END + '),'''')'
+     +      ', ShipFrom         = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_ShipFromExp        ,'')<>'' THEN @c_ShipFromExp         ELSE '''From :  MCL'''    END + '),'''')'
    SET @c_ExecStatements = @c_ExecStatements
      +      ', TrackingNo       = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_TrackingNoExp      ,'')<>'' THEN @c_TrackingNoExp       ELSE '''OH.TrackingNo'''  END + '),'''')'
    SET @c_ExecStatements = @c_ExecStatements
