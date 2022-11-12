@@ -61,6 +61,16 @@ GO
 /* 08/11/2021   ML       1.28 Add MAPFIELD: T_CartonNo                   */
 /*                            Add MAPVALURE: N_Width_CartonNo            */
 /*                            Add SHOWFIELD: HideCartonNoBorder          */
+/* 21/03/2022   ML       1.29 WMS-19258                                  */
+/*                            1. Add SQLJOIN-CUSTOM_PAKDT                */
+/*                            2. Add MapField: Total_Carton, StdCube,    */
+/*                                             PrePackIndicator          */
+/*                            3. Fix PACKDETAIL Loop when no PickDetail  */
+/* 23/03/2022   ML       1.30 Add NULL to Temp Table                     */
+/* 04/04/2022   ML       1.31 Fix "PH.PickslipNo not bound" error when   */
+/*                            inserting temp table #TEMP_FINALORDERKEY   */
+/* 23/05/2022   ML       1.32 Add MAPVALURE: N_Height_Logo, N_Width_Logo */
+/* 27/06/2022   ML       1.33 Extend field len:RefNo,RefNo2 in temp table*/
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_packing_list_01] (
@@ -91,9 +101,9 @@ BEGIN
       B_Company, B_Address, B_Phone, B_Fax, B_Contact, C_Company, C_Address, C_Phone, C_Fax, C_Contact
       B_Company_M3, B_Address_M3, C_Company_M3, C_Address_M3
       Remark, TotalWeight, T_HDR_Ref, HDR_Ref, CtnGrouping, LineGrouping, LineSort, LineSplit, InvoiceAmount,
-      CartonSort, T_CartonNo, CartonNo, LabelNo, CartonWeight, CartonCBM, Dimenson, Refno, Refno2
+      CartonSort, T_CartonNo, CartonNo, Total_Carton, LabelNo, CartonWeight, CartonCBM, Dimenson, Refno, Refno2
       Style, Color, Measurement, Size, SizeSort, Sku, Dept, Descr
-      LineRef, LineRef2, LineRef3, LineRemark, Qty, UOM, UnitPrice
+      LineRef, LineRef2, LineRef3, LineRemark, Qty, UOM, UnitPrice, StdCube, PrePackIndicator
       ExtOrdKey_Summary
 
    [MAPVALUE]
@@ -124,8 +134,9 @@ BEGIN
       N_Width_LineNo, N_Width_Style, N_Width_Color, N_Width_Size, N_Width_Sku
       N_Width_Dept, N_Width_Descr, N_Width_UnitPrice, N_Width_Qty, N_Width_UOM
       N_Width_TotalPCE, N_Width_LineRef, N_Width_LineRef2, N_Width_LineRef3, N_Width_LineRemark
-      N_Height_BillTo, N_Height_ShipTo
+      N_Height_Logo, N_Width_Logo, N_Height_BillTo, N_Height_ShipTo
       T_ExtOrdKey_Summary, N_Col_ExtOrdKey_Summary, N_Width_ExtOrdKey_Summary
+
    [SHOWFIELD]
       UsePickDetail
       ReportHeading_NoInvertColor, Logo, UseLFLogo, Barcode, UseCode39, OrderType, AddressDirectConcate, BuyerPO, Brand, StorerBillTo
@@ -148,7 +159,10 @@ BEGIN
       OrderGroupFooter, OrderGroupFooterM3
       UseOrderBAddressM3, UseOrderCAddressM3, BuyerPOM3, BrandM3, OriginalUCCM3, ConsolPickSummary
       Check_Pick_Pack_Unmatch
+
    [SQLJOIN]
+
+   [SQLJOIN-CUSTOM_PAKDT]
 */
    DECLARE @n_Temp INT
 
@@ -244,79 +258,82 @@ BEGIN
 
    DECLARE @c_DataWindow         NVARCHAR(40)
          , @c_SP_Name            NVARCHAR(40)
-         , @c_SizeList           NVARCHAR(4000)
-         , @c_DocKeyExp          NVARCHAR(4000)
-         , @c_ReportHeadingExp   NVARCHAR(4000)
-         , @c_ReportTitleExp     NVARCHAR(4000)
-         , @c_ReportTitle_M2Exp  NVARCHAR(4000)
-         , @c_ReportTitle_M3Exp  NVARCHAR(4000)
-         , @c_SplitPrintKeyExp   NVARCHAR(4000)
-         , @c_OrderGroupingExp   NVARCHAR(4000)
-         , @c_BarcodeExp         NVARCHAR(4000)
-         , @c_CompanyExp         NVARCHAR(4000)
-         , @c_DocNumberExp       NVARCHAR(4000)
-         , @c_ExternOrderkeyExp  NVARCHAR(4000)
-         , @c_OrderkeyExp        NVARCHAR(4000)
-         , @c_OrderkeyConsoExp   NVARCHAR(4000)
-         , @c_ConsigneekeyExp    NVARCHAR(4000)
-         , @c_T_WavekeyExp       NVARCHAR(4000)
-         , @c_T_PickslipNoExp    NVARCHAR(4000)
-         , @c_T_DeliveryDateExp  NVARCHAR(4000)
-         , @c_T_BuyerPOExp       NVARCHAR(4000)
-         , @c_T_BrandExp         NVARCHAR(4000)
-         , @c_WavekeyExp         NVARCHAR(4000)
-         , @c_PickslipNoExp      NVARCHAR(4000)
-         , @c_DeliveryDateExp    NVARCHAR(4000)
-         , @c_BuyerPOExp         NVARCHAR(4000)
-         , @c_BrandExp           NVARCHAR(4000)
-         , @c_B_CompanyExp       NVARCHAR(4000)
-         , @c_B_AddressExp       NVARCHAR(4000)
-         , @c_B_PhoneExp         NVARCHAR(4000)
-         , @c_B_FaxExp           NVARCHAR(4000)
-         , @c_B_ContactExp       NVARCHAR(4000)
-         , @c_C_CompanyExp       NVARCHAR(4000)
-         , @c_C_AddressExp       NVARCHAR(4000)
-         , @c_C_PhoneExp         NVARCHAR(4000)
-         , @c_C_FaxExp           NVARCHAR(4000)
-         , @c_C_ContactExp       NVARCHAR(4000)
-         , @c_B_Company_M3Exp    NVARCHAR(4000)
-         , @c_B_Address_M3Exp    NVARCHAR(4000)
-         , @c_C_Company_M3Exp    NVARCHAR(4000)
-         , @c_C_Address_M3Exp    NVARCHAR(4000)
-         , @c_RemarkExp          NVARCHAR(4000)
-         , @c_TotalWeightExp     NVARCHAR(4000)
-         , @c_T_HDR_RefExp       NVARCHAR(4000)
-         , @c_HDR_RefExp         NVARCHAR(4000)
-         , @c_CtnGroupingExp     NVARCHAR(4000)
-         , @c_LineGroupingExp    NVARCHAR(4000)
-         , @c_LineSortExp        NVARCHAR(4000)
-         , @c_LineSplitExp       NVARCHAR(4000)
-         , @c_InvoiceAmountExp   NVARCHAR(4000)
-         , @c_CartonSortExp      NVARCHAR(4000)
-         , @c_T_CartonNoExp      NVARCHAR(4000)
-         , @c_CartonNoExp        NVARCHAR(4000)
-         , @c_LabelNoExp         NVARCHAR(4000)
-         , @c_CartonWeightExp    NVARCHAR(4000)
-         , @c_CartonCBMExp       NVARCHAR(4000)
-         , @c_DimensonExp        NVARCHAR(4000)
-         , @c_RefnoExp           NVARCHAR(4000)
-         , @c_Refno2Exp          NVARCHAR(4000)
-         , @c_StyleExp           NVARCHAR(4000)
-         , @c_ColorExp           NVARCHAR(4000)
-         , @c_MeasurementExp     NVARCHAR(4000)
-         , @c_SizeExp            NVARCHAR(4000)
-         , @c_SizeSortExp        NVARCHAR(4000)
-         , @c_SkuExp             NVARCHAR(4000)
-         , @c_DeptExp            NVARCHAR(4000)
-         , @c_DescrExp           NVARCHAR(4000)
-         , @c_LineRefExp         NVARCHAR(4000)
-         , @c_LineRef2Exp        NVARCHAR(4000)
-         , @c_LineRef3Exp        NVARCHAR(4000)
-         , @c_LineRemarkExp      NVARCHAR(4000)
-         , @c_QtyExp             NVARCHAR(4000)
-         , @c_UOMExp             NVARCHAR(4000)
-         , @c_UnitpriceExp       NVARCHAR(4000)
-         , @c_ExtOrdKey_SumExp   NVARCHAR(4000)
+         , @c_SizeList           NVARCHAR(MAX)
+         , @c_DocKeyExp          NVARCHAR(MAX)
+         , @c_ReportHeadingExp   NVARCHAR(MAX)
+         , @c_ReportTitleExp     NVARCHAR(MAX)
+         , @c_ReportTitle_M2Exp  NVARCHAR(MAX)
+         , @c_ReportTitle_M3Exp  NVARCHAR(MAX)
+         , @c_SplitPrintKeyExp   NVARCHAR(MAX)
+         , @c_OrderGroupingExp   NVARCHAR(MAX)
+         , @c_BarcodeExp         NVARCHAR(MAX)
+         , @c_CompanyExp         NVARCHAR(MAX)
+         , @c_DocNumberExp       NVARCHAR(MAX)
+         , @c_ExternOrderkeyExp  NVARCHAR(MAX)
+         , @c_OrderkeyExp        NVARCHAR(MAX)
+         , @c_OrderkeyConsoExp   NVARCHAR(MAX)
+         , @c_ConsigneekeyExp    NVARCHAR(MAX)
+         , @c_T_WavekeyExp       NVARCHAR(MAX)
+         , @c_T_PickslipNoExp    NVARCHAR(MAX)
+         , @c_T_DeliveryDateExp  NVARCHAR(MAX)
+         , @c_T_BuyerPOExp       NVARCHAR(MAX)
+         , @c_T_BrandExp         NVARCHAR(MAX)
+         , @c_WavekeyExp         NVARCHAR(MAX)
+         , @c_PickslipNoExp      NVARCHAR(MAX)
+         , @c_DeliveryDateExp    NVARCHAR(MAX)
+         , @c_BuyerPOExp         NVARCHAR(MAX)
+         , @c_BrandExp           NVARCHAR(MAX)
+         , @c_B_CompanyExp       NVARCHAR(MAX)
+         , @c_B_AddressExp       NVARCHAR(MAX)
+         , @c_B_PhoneExp         NVARCHAR(MAX)
+         , @c_B_FaxExp           NVARCHAR(MAX)
+         , @c_B_ContactExp       NVARCHAR(MAX)
+         , @c_C_CompanyExp       NVARCHAR(MAX)
+         , @c_C_AddressExp       NVARCHAR(MAX)
+         , @c_C_PhoneExp         NVARCHAR(MAX)
+         , @c_C_FaxExp           NVARCHAR(MAX)
+         , @c_C_ContactExp       NVARCHAR(MAX)
+         , @c_B_Company_M3Exp    NVARCHAR(MAX)
+         , @c_B_Address_M3Exp    NVARCHAR(MAX)
+         , @c_C_Company_M3Exp    NVARCHAR(MAX)
+         , @c_C_Address_M3Exp    NVARCHAR(MAX)
+         , @c_RemarkExp          NVARCHAR(MAX)
+         , @c_TotalWeightExp     NVARCHAR(MAX)
+         , @c_T_HDR_RefExp       NVARCHAR(MAX)
+         , @c_HDR_RefExp         NVARCHAR(MAX)
+         , @c_CtnGroupingExp     NVARCHAR(MAX)
+         , @c_LineGroupingExp    NVARCHAR(MAX)
+         , @c_LineSortExp        NVARCHAR(MAX)
+         , @c_LineSplitExp       NVARCHAR(MAX)
+         , @c_InvoiceAmountExp   NVARCHAR(MAX)
+         , @c_CartonSortExp      NVARCHAR(MAX)
+         , @c_T_CartonNoExp      NVARCHAR(MAX)
+         , @c_CartonNoExp        NVARCHAR(MAX)
+         , @c_Total_CartonExp    NVARCHAR(MAX)
+         , @c_LabelNoExp         NVARCHAR(MAX)
+         , @c_CartonWeightExp    NVARCHAR(MAX)
+         , @c_CartonCBMExp       NVARCHAR(MAX)
+         , @c_DimensonExp        NVARCHAR(MAX)
+         , @c_RefnoExp           NVARCHAR(MAX)
+         , @c_Refno2Exp          NVARCHAR(MAX)
+         , @c_StyleExp           NVARCHAR(MAX)
+         , @c_ColorExp           NVARCHAR(MAX)
+         , @c_MeasurementExp     NVARCHAR(MAX)
+         , @c_SizeExp            NVARCHAR(MAX)
+         , @c_SizeSortExp        NVARCHAR(MAX)
+         , @c_SkuExp             NVARCHAR(MAX)
+         , @c_DeptExp            NVARCHAR(MAX)
+         , @c_DescrExp           NVARCHAR(MAX)
+         , @c_LineRefExp         NVARCHAR(MAX)
+         , @c_LineRef2Exp        NVARCHAR(MAX)
+         , @c_LineRef3Exp        NVARCHAR(MAX)
+         , @c_LineRemarkExp      NVARCHAR(MAX)
+         , @c_QtyExp             NVARCHAR(MAX)
+         , @c_UOMExp             NVARCHAR(MAX)
+         , @c_UnitpriceExp       NVARCHAR(MAX)
+         , @c_StdCubeExp         NVARCHAR(MAX)
+         , @c_PrePackIndExp      NVARCHAR(MAX)
+         , @c_ExtOrdKey_SumExp   NVARCHAR(MAX)
          , @n_LoadkeyCnt         INT
          , @n_PickslipNoCnt      INT
          , @n_ExternOrderkeyCnt  INT
@@ -326,6 +343,7 @@ BEGIN
          , @c_ExecStatements     NVARCHAR(MAX)
          , @c_ExecArguments      NVARCHAR(MAX)
          , @c_JoinClause         NVARCHAR(MAX)
+         , @c_JoinCustomPackDet  NVARCHAR(MAX)
          , @n_Col                INT
          , @n_Cur_RowID          INT
          , @c_Cur_DocKey         NVARCHAR(10)
@@ -345,91 +363,92 @@ BEGIN
 
 
    CREATE TABLE #TEMP_PAKDT (
-        Orderkey         NVARCHAR(10)
-      , Storerkey        NVARCHAR(15)
-      , PickslipNo_key   NVARCHAR(18)
-      , ReportHeading    NVARCHAR(500)
-      , ReportTitle      NVARCHAR(500)
-      , ReportTitle_M2   NVARCHAR(500)
-      , ReportTitle_M3   NVARCHAR(500)
-      , SplitPrintKey    NVARCHAR(500)
-      , OrderGrouping    NVARCHAR(500)
-      , Barcode          NVARCHAR(500)
-      , Company          NVARCHAR(500)
-      , DocNumber        NVARCHAR(500)
-      , ExternOrderkey   NVARCHAR(500)
-      , WMSOrderkey      NVARCHAR(500)
-      , Consigneekey     NVARCHAR(500)
-      , T_Wavekey        NVARCHAR(500)
-      , T_PickslipNo     NVARCHAR(500)
-      , T_DeliveryDate   NVARCHAR(500)
-      , T_BuyerPO        NVARCHAR(500)
-      , T_Brand          NVARCHAR(500)
-      , Wavekey          NVARCHAR(500)
-      , PickslipNo       NVARCHAR(500)
-      , DeliveryDate     NVARCHAR(500)
-      , BuyerPO          NVARCHAR(500)
-      , Brand            NVARCHAR(500)
-      , B_Company        NVARCHAR(4000)
-      , B_Address        NVARCHAR(4000)
-      , B_Phone          NVARCHAR(4000)
-      , B_Fax            NVARCHAR(4000)
-      , B_Contact        NVARCHAR(4000)
-      , C_Company        NVARCHAR(4000)
-      , C_Address        NVARCHAR(4000)
-      , C_Phone          NVARCHAR(4000)
-      , C_Fax            NVARCHAR(4000)
-      , C_Contact        NVARCHAR(4000)
-      , B_Company_M3     NVARCHAR(4000)
-      , B_Address_M3     NVARCHAR(4000)
-      , C_Company_M3     NVARCHAR(4000)
-      , C_Address_M3     NVARCHAR(4000)
-      , Remark           NVARCHAR(500)
-      , TotalWeight      NVARCHAR(500)
-      , T_HDR_Ref        NVARCHAR(500)
-      , HDR_Ref          NVARCHAR(500)
-      , CtnGrouping      NVARCHAR(500)
-      , LineGrouping     NVARCHAR(500)
-      , LineSort         NVARCHAR(500)
-      , LineSplit        NVARCHAR(500)
-      , InvoiceAmount    NVARCHAR(500)
-      , Sku              NVARCHAR(500)
-      , Style            NVARCHAR(500)
-      , Color            NVARCHAR(500)
-      , Measurement      NVARCHAR(500)
-      , Size             NVARCHAR(500)
-      , SizeSeq          NVARCHAR(100)
-      , Descr            NVARCHAR(500)
-      , Dept             NVARCHAR(500)
-      , LineRef          NVARCHAR(500)
-      , LineRef2         NVARCHAR(500)
-      , LineRef3         NVARCHAR(500)
-      , LineRemark       NVARCHAR(500)
-      , CartonSort       NVARCHAR(500)
-      , T_CartonNo       NVARCHAR(500)
-      , CartonNo         INT
-      , LabelNo          NVARCHAR(500)
-      , CartonWeight     NVARCHAR(500)
-      , CartonCBM        NVARCHAR(500)
-      , Dimenson         NVARCHAR(500)
-      , LabelLine        NVARCHAR(5)
-      , DropID           NVARCHAR(20)
-      , RefNo            NVARCHAR(20)
-      , RefNo2           NVARCHAR(30)
-      , Qty              INT
-      , UOM              NVARCHAR(500)
-      , Unitprice        FLOAT
-      , StdCube          FLOAT
-      , PrePackIndicator NVARCHAR(30)
-      , ConsolPick       NVARCHAR(1)
-      , DocKey           NVARCHAR(500)
-      , FirstOrderkey    NVARCHAR(10)
-      , ExtOrdKey01      NVARCHAR(50)
-      , ExtOrdKey02      NVARCHAR(50)
-      , ExtOrdKey03      NVARCHAR(50)
-      , ExtOrdKey04      NVARCHAR(50)
-      , ExtOrdKey05      NVARCHAR(50)
-      , Section          NVARCHAR(1)
+        Orderkey         NVARCHAR(10)   NULL
+      , Storerkey        NVARCHAR(15)   NULL
+      , PickslipNo_key   NVARCHAR(18)   NULL
+      , ReportHeading    NVARCHAR(500)  NULL
+      , ReportTitle      NVARCHAR(500)  NULL
+      , ReportTitle_M2   NVARCHAR(500)  NULL
+      , ReportTitle_M3   NVARCHAR(500)  NULL
+      , SplitPrintKey    NVARCHAR(500)  NULL
+      , OrderGrouping    NVARCHAR(500)  NULL
+      , Barcode          NVARCHAR(500)  NULL
+      , Company          NVARCHAR(500)  NULL
+      , DocNumber        NVARCHAR(500)  NULL
+      , ExternOrderkey   NVARCHAR(500)  NULL
+      , WMSOrderkey      NVARCHAR(500)  NULL
+      , Consigneekey     NVARCHAR(500)  NULL
+      , T_Wavekey        NVARCHAR(500)  NULL
+      , T_PickslipNo     NVARCHAR(500)  NULL
+      , T_DeliveryDate   NVARCHAR(500)  NULL
+      , T_BuyerPO        NVARCHAR(500)  NULL
+      , T_Brand          NVARCHAR(500)  NULL
+      , Wavekey          NVARCHAR(500)  NULL
+      , PickslipNo       NVARCHAR(500)  NULL
+      , DeliveryDate     NVARCHAR(500)  NULL
+      , BuyerPO          NVARCHAR(500)  NULL
+      , Brand            NVARCHAR(500)  NULL
+      , B_Company        NVARCHAR(4000) NULL
+      , B_Address        NVARCHAR(4000) NULL
+      , B_Phone          NVARCHAR(4000) NULL
+      , B_Fax            NVARCHAR(4000) NULL
+      , B_Contact        NVARCHAR(4000) NULL
+      , C_Company        NVARCHAR(4000) NULL
+      , C_Address        NVARCHAR(4000) NULL
+      , C_Phone          NVARCHAR(4000) NULL
+      , C_Fax            NVARCHAR(4000) NULL
+      , C_Contact        NVARCHAR(4000) NULL
+      , B_Company_M3     NVARCHAR(4000) NULL
+      , B_Address_M3     NVARCHAR(4000) NULL
+      , C_Company_M3     NVARCHAR(4000) NULL
+      , C_Address_M3     NVARCHAR(4000) NULL
+      , Remark           NVARCHAR(500)  NULL
+      , TotalWeight      NVARCHAR(500)  NULL
+      , T_HDR_Ref        NVARCHAR(500)  NULL
+      , HDR_Ref          NVARCHAR(500)  NULL
+      , CtnGrouping      NVARCHAR(500)  NULL
+      , LineGrouping     NVARCHAR(500)  NULL
+      , LineSort         NVARCHAR(500)  NULL
+      , LineSplit        NVARCHAR(500)  NULL
+      , InvoiceAmount    NVARCHAR(500)  NULL
+      , Sku              NVARCHAR(500)  NULL
+      , Style            NVARCHAR(500)  NULL
+      , Color            NVARCHAR(500)  NULL
+      , Measurement      NVARCHAR(500)  NULL
+      , Size             NVARCHAR(500)  NULL
+      , SizeSeq          NVARCHAR(100)  NULL
+      , Descr            NVARCHAR(500)  NULL
+      , Dept             NVARCHAR(500)  NULL
+      , LineRef          NVARCHAR(500)  NULL
+      , LineRef2         NVARCHAR(500)  NULL
+      , LineRef3         NVARCHAR(500)  NULL
+      , LineRemark       NVARCHAR(500)  NULL
+      , CartonSort       NVARCHAR(500)  NULL
+      , T_CartonNo       NVARCHAR(500)  NULL
+      , CartonNo         INT            NULL
+      , Total_Carton     INT            NULL
+      , LabelNo          NVARCHAR(500)  NULL
+      , CartonWeight     NVARCHAR(500)  NULL
+      , CartonCBM        NVARCHAR(500)  NULL
+      , Dimenson         NVARCHAR(500)  NULL
+      , LabelLine        NVARCHAR(5)    NULL
+      , DropID           NVARCHAR(20)   NULL
+      , RefNo            NVARCHAR(500)  NULL
+      , RefNo2           NVARCHAR(500)  NULL
+      , Qty              INT            NULL
+      , UOM              NVARCHAR(500)  NULL
+      , Unitprice        FLOAT          NULL
+      , StdCube          FLOAT          NULL
+      , PrePackIndicator NVARCHAR(30)   NULL
+      , ConsolPick       NVARCHAR(1)    NULL
+      , DocKey           NVARCHAR(500)  NULL
+      , FirstOrderkey    NVARCHAR(10)   NULL
+      , ExtOrdKey01      NVARCHAR(50)   NULL
+      , ExtOrdKey02      NVARCHAR(50)   NULL
+      , ExtOrdKey03      NVARCHAR(50)   NULL
+      , ExtOrdKey04      NVARCHAR(50)   NULL
+      , ExtOrdKey05      NVARCHAR(50)   NULL
+      , Section          NVARCHAR(1)    NULL
    )
 
    -- Loadkey List
@@ -475,19 +494,19 @@ BEGIN
 
    -- Final Orderkey, PickslipNo List
    CREATE TABLE #TEMP_FINALORDERKEY (
-        Orderkey         NVARCHAR(10)
-      , PickslipNo       NVARCHAR(10)
-      , Loadkey          NVARCHAR(10)
-      , ConsolPick       NVARCHAR(1)
-      , DocKey           NVARCHAR(10)
-      , Storerkey        NVARCHAR(15)
+        Orderkey         NVARCHAR(10) NULL
+      , PickslipNo       NVARCHAR(10) NULL
+      , Loadkey          NVARCHAR(10) NULL
+      , ConsolPick       NVARCHAR(1)  NULL
+      , DocKey           NVARCHAR(10) NULL
+      , Storerkey        NVARCHAR(15) NULL
    )
    SET @c_ExecArguments = N'@as_storerkey NVARCHAR(15)'
                         + ',@as_wavekey NVARCHAR(10)'
                         + ',@as_mbolkey NVARCHAR(10)'
 
    -- Discrete Orders
-   SET @c_ExecStatements = N'INSERT INTO #TEMP_FINALORDERKEY'
+   SET @c_ExecStatements = N'INSERT INTO #TEMP_FINALORDERKEY (Orderkey, PickslipNo, Loadkey, ConsolPick, DocKey, Storerkey)'
                          + ' SELECT Orderkey   = OH.Orderkey'
                          +       ', PickslipNo = MAX( PIKHD.PickheaderKey )'
                          +       ', Loadkey    = MAX( OH.Loadkey )'
@@ -496,10 +515,7 @@ BEGIN
                          +       ', Storerkey  = MAX( OH.Storerkey )'
                          +   ' FROM dbo.ORDERS        OH (NOLOCK)'
                          +   ' JOIN dbo.PICKHEADER PIKHD (NOLOCK) ON OH.Orderkey = PIKHD.Orderkey AND OH.Orderkey<>'''''
-                         +   ' JOIN dbo.PACKHEADER    PH (NOLOCK) ON PIKHD.PickheaderKey = PH.PickslipNo'
-                         +   ' JOIN dbo.PACKDETAIL    PD (NOLOCK) ON PH.PickslipNo = PD.Pickslipno'
                          +  ' WHERE OH.Status >= ''3'' AND OH.Status <= ''9'''
-                         +    ' AND PD.Qty > 0'
    IF (ISNULL(@as_wavekey,'')<>'' OR ISNULL(@as_mbolkey,'')<>'' OR @n_LoadkeyCnt>0 OR @n_PickslipNoCnt>0 OR @n_ExternOrderkeyCnt>0 OR @n_OrderkeyCnt>0)
    BEGIN
       IF ISNULL(@as_storerkey,'')<>CHAR(9) AND ISNULL(@as_storerkey,'')<>''
@@ -511,7 +527,7 @@ BEGIN
       IF @n_LoadkeyCnt>0
          SET @c_ExecStatements += ' AND OH.LoadKey IN (SELECT ColValue FROM #TEMP_LOADKEY)'
       IF @n_PickslipNoCnt>0
-         SET @c_ExecStatements += ' AND PH.PickSlipNo IN (SELECT ColValue FROM #TEMP_PICKSLIPNO)'
+         SET @c_ExecStatements += ' AND PIKHD.PickheaderKey IN (SELECT ColValue FROM #TEMP_PICKSLIPNO)'
       IF @n_ExternOrderkeyCnt>0
          SET @c_ExecStatements += ' AND OH.ExternOrderKey IN (SELECT ColValue FROM #TEMP_EXTERNORDERKEY)'
       IF @n_OrderkeyCnt>0
@@ -530,7 +546,7 @@ BEGIN
                     , @as_mbolkey
 
    -- Consol Orders
-   SET @c_ExecStatements = N'INSERT INTO #TEMP_FINALORDERKEY'
+   SET @c_ExecStatements = N'INSERT INTO #TEMP_FINALORDERKEY (Orderkey, PickslipNo, Loadkey, ConsolPick, DocKey, Storerkey)'
                          + ' SELECT Orderkey   = OH.Orderkey'
                          +       ', PickslipNo = MAX( PIKHD.PickheaderKey )'
                          +       ', Loadkey    = MAX( OH.Loadkey )'
@@ -539,12 +555,9 @@ BEGIN
                          +       ', Storerkey  = MAX( OH.Storerkey )'
                          +   ' FROM dbo.ORDERS        OH (NOLOCK)'
                          +   ' JOIN dbo.PICKHEADER PIKHD (NOLOCK) ON OH.Loadkey = PIKHD.ExternOrderkey AND ISNULL(PIKHD.Orderkey,'''')='''''
-                         +   ' JOIN dbo.PACKHEADER    PH (NOLOCK) ON PIKHD.PickheaderKey = PH.PickslipNo'
-                         +   ' JOIN dbo.PACKDETAIL    PD (NOLOCK) ON PH.PickslipNo = PD.Pickslipno'
                          +   ' LEFT JOIN #TEMP_FINALORDERKEY  FOK ON OH.Orderkey = FOK.Orderkey'
                          +  ' WHERE OH.Status >= ''3'' AND OH.Status <= ''9'''
                          +    ' AND OH.Loadkey<>'''''
-                         +    ' AND PD.Qty > 0'
                          +    ' AND FOK.Orderkey IS NULL'
    IF (ISNULL(@as_wavekey,'')<>'' OR ISNULL(@as_mbolkey,'')<>'' OR @n_LoadkeyCnt>0 OR @n_PickslipNoCnt>0 OR @n_ExternOrderkeyCnt>0 OR @n_OrderkeyCnt>0)
    BEGIN
@@ -557,7 +570,7 @@ BEGIN
       IF @n_LoadkeyCnt>0
          SET @c_ExecStatements += ' AND OH.LoadKey IN (SELECT ColValue FROM #TEMP_LOADKEY)'
       IF @n_PickslipNoCnt>0
-         SET @c_ExecStatements += ' AND PH.PickSlipNo IN (SELECT ColValue FROM #TEMP_PICKSLIPNO)'
+         SET @c_ExecStatements += ' AND PIKHD.PickheaderKey IN (SELECT ColValue FROM #TEMP_PICKSLIPNO)'
       IF @n_ExternOrderkeyCnt>0
          SET @c_ExecStatements += ' AND OH.ExternOrderKey IN (SELECT ColValue FROM #TEMP_EXTERNORDERKEY)'
       IF @n_OrderkeyCnt>0
@@ -642,6 +655,7 @@ BEGIN
            , @c_CartonSortExp      = ''
            , @c_T_CartonNoExp      = ''
            , @c_CartonNoExp        = ''
+           , @c_Total_CartonExp    = ''
            , @c_LabelNoExp         = ''
            , @c_CartonWeightExp    = ''
            , @c_CartonCBMExp       = ''
@@ -663,9 +677,12 @@ BEGIN
            , @c_QtyExp             = ''
            , @c_UOMExp             = ''
            , @c_UnitpriceExp       = ''
+           , @c_StdCubeExp         = ''
+           , @c_PrePackIndExp      = ''
            , @c_ExtOrdKey_SumExp   = ''
            , @b_UsePickDetail      = 0
            , @c_JoinClause         = ''
+           , @c_JoinCustomPackDet  = ''
 
 
       ----------
@@ -673,6 +690,13 @@ BEGIN
              @c_JoinClause = Notes
         FROM dbo.CodeLkup (NOLOCK)
        WHERE Listname='REPORTCFG' AND Code='SQLJOIN' AND Long=@c_DataWindow AND Short='Y'
+         AND Storerkey = @c_Storerkey
+       ORDER BY Code2
+
+      SELECT TOP 1
+             @c_JoinCustomPackDet = Notes
+        FROM dbo.CodeLkup (NOLOCK)
+       WHERE Listname='REPORTCFG' AND Code='SQLJOIN-CUSTOM_PAKDT' AND Long=@c_DataWindow AND Short='Y'
          AND Storerkey = @c_Storerkey
        ORDER BY Code2
 
@@ -836,6 +860,9 @@ BEGIN
            , @c_CartonNoExp        = ISNULL(RTRIM((select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='CartonNo')), '' )
+           , @c_Total_CartonExp    = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='Total_Carton')), '' )
            , @c_LabelNoExp         = ISNULL(RTRIM((select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='LabelNo')), '' )
@@ -899,6 +926,12 @@ BEGIN
            , @c_UnitPriceExp       = ISNULL(RTRIM((select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='UnitPrice')), '' )
+           , @c_StdCubeExp         = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='StdCube')), '' )
+           , @c_PrePackIndExp      = ISNULL(RTRIM((select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='PrePackIndicator')), '' )
            , @c_ExtOrdKey_SumExp   = ISNULL(RTRIM((select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='ExtOrdKey_Summary')), '' )
@@ -1051,9 +1084,22 @@ BEGIN
                SET Qty = Qty - @n_Tmp_Qty
              WHERE RowID = @n_Tmp_RowID
 
-            INSERT INTO #TEMP_PACKDETAIL (DocKey, ConsolPick, PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, Qty, AddWho, AddDate, EditWho, EditDate, RefNo, ArchiveCop, ExpQty, UPC, DropID, RefNo2, LOTTABLEVALUE, OrderKey, OrderLineNumber)
-            SELECT DocKey, ConsolPick, PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, @n_Tmp_Qty, AddWho, AddDate, EditWho, EditDate, RefNo, ArchiveCop, ExpQty, UPC, DropID, RefNo2, LOTTABLEVALUE
-                 , @c_Tmp_Orderkey, @c_Tmp_OrderLineNo
+            INSERT INTO #TEMP_PACKDETAIL
+                  (DocKey, ConsolPick, PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, Qty, AddWho, AddDate, EditWho, EditDate
+                 , RefNo, ArchiveCop, ExpQty, UPC, DropID, RefNo2, LOTTABLEVALUE, OrderKey, OrderLineNumber)
+            SELECT DocKey, ConsolPick, PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, @n_Tmp_Qty, AddWho, AddDate, EditWho, EditDate
+                 , RefNo, ArchiveCop, ExpQty, UPC, DropID, RefNo2, LOTTABLEVALUE, @c_Tmp_Orderkey, @c_Tmp_OrderLineNo
+              FROM #TEMP_PACKDETAIL2
+             WHERE RowID = @n_Cur_RowID
+         END
+
+         IF @c_Cur_Qty > 0
+         BEGIN
+            INSERT INTO #TEMP_PACKDETAIL
+                  (DocKey, ConsolPick, PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, Qty, AddWho, AddDate, EditWho, EditDate
+                 , RefNo, ArchiveCop, ExpQty, UPC, DropID, RefNo2, LOTTABLEVALUE, OrderKey, OrderLineNumber)
+            SELECT DocKey, ConsolPick, PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, @c_Cur_Qty, AddWho, AddDate, EditWho, EditDate
+                 , RefNo, ArchiveCop, ExpQty, UPC, DropID, RefNo2, LOTTABLEVALUE, NULL, NULL
               FROM #TEMP_PACKDETAIL2
              WHERE RowID = @n_Cur_RowID
          END
@@ -1078,7 +1124,7 @@ BEGIN
           + ', Remark, TotalWeight, T_HDR_Ref, HDR_Ref, CtnGrouping, LineGrouping, LineSort, LineSplit, InvoiceAmount, Sku'
           + ', Style, Color, Measurement, Size, SizeSeq'
           + ', Descr, Dept, LineRef, LineRef2'
-          + ', LineRef3, LineRemark, CartonSort, T_CartonNo, CartonNo, LabelNo, CartonWeight, CartonCBM, Dimenson'
+          + ', LineRef3, LineRemark, CartonSort, T_CartonNo, CartonNo, Total_Carton, LabelNo, CartonWeight, CartonCBM, Dimenson'
           + ', LabelLine, DropID, RefNo, RefNo2, Qty'
           + ', UOM, UnitPrice, StdCube, PrePackIndicator'
           + ', ConsolPick, DocKey, FirstOrderkey, Section)'
@@ -1123,9 +1169,9 @@ BEGIN
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_WavekeyExp        ,'')<>'' THEN @c_WavekeyExp         ELSE 'UPPER(OH.Userdefine09)'   END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
-               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_PickslipNoExp     ,'')<>'' THEN @c_PickslipNoExp      ELSE 'UPPER(PH.PickSlipNo)'     END + '),'''')'
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_PickslipNoExp     ,'')<>'' THEN @c_PickslipNoExp      ELSE 'UPPER(FOK.PickSlipNo)'     END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
-               + ', UPPER(PH.PickSlipNo)'
+               + ', UPPER(FOK.PickSlipNo)'
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_DeliveryDateExp   ,'')<>'' THEN @c_DeliveryDateExp    ELSE 'CONVERT(CHAR(10),OH.DeliveryDate,103)' END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
@@ -1153,11 +1199,11 @@ BEGIN
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_C_ContactExp      ,'')<>'' THEN @c_C_ContactExp       ELSE ''''''              END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
-               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_B_Company_M3Exp   ,'')<>'' THEN @c_B_Company_M3Exp    ELSE 'CX.B_Company'      END + '),'''')'
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_B_Company_M3Exp   ,'')<>'' THEN @c_B_Company_M3Exp    ELSE IIF(ISNULL(@c_JoinCustomPackDet,'')<>'','NULL','CX.B_Company') END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_B_Address_M3Exp   ,'')<>'' THEN @c_B_Address_M3Exp    ELSE ''''''              END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
-               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_C_Company_M3Exp   ,'')<>'' THEN @c_C_Company_M3Exp    ELSE 'CX.Company'        END + '),'''')'
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_C_Company_M3Exp   ,'')<>'' THEN @c_C_Company_M3Exp    ELSE IIF(ISNULL(@c_JoinCustomPackDet,'')<>'','NULL','CX.Company') END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_C_Address_M3Exp   ,'')<>'' THEN @c_C_Address_M3Exp    ELSE ''''''              END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
@@ -1179,19 +1225,19 @@ BEGIN
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_InvoiceAmountExp  ,'')<>'' THEN @c_InvoiceAmountExp   ELSE '''~'''             END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
-               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_SkuExp            ,'')<>'' THEN @c_SkuExp             ELSE 'PD.Sku'            END + '),'''')'
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_SkuExp            ,'')<>'' THEN @c_SkuExp             ELSE IIF(ISNULL(@c_JoinCustomPackDet,'')<>'','NULL','PD.Sku') END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
-               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_StyleExp          ,'')<>'' THEN @c_StyleExp           ELSE 'SKU.Style'         END + '),'''')'
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_StyleExp          ,'')<>'' THEN @c_StyleExp           ELSE IIF(ISNULL(@c_JoinCustomPackDet,'')<>'','NULL','SKU.Style') END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
-               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_ColorExp          ,'')<>'' THEN @c_ColorExp           ELSE 'SKU.Color'         END + '),'''')'
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_ColorExp          ,'')<>'' THEN @c_ColorExp           ELSE IIF(ISNULL(@c_JoinCustomPackDet,'')<>'','NULL','SKU.Color') END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
-               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_MeasurementExp    ,'')<>'' THEN @c_MeasurementExp     ELSE 'SKU.Measurement'   END + '),'''')'
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_MeasurementExp    ,'')<>'' THEN @c_MeasurementExp     ELSE IIF(ISNULL(@c_JoinCustomPackDet,'')<>'','NULL','SKU.Measurement') END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
-               + ', ISNULL(LTRIM(RTRIM(' + CASE WHEN ISNULL(@c_SizeExp     ,'')<>'' THEN @c_SizeExp            ELSE 'SKU.Size'          END + ')),'''')'
+               + ', ISNULL(LTRIM(RTRIM(' + CASE WHEN ISNULL(@c_SizeExp     ,'')<>'' THEN @c_SizeExp            ELSE IIF(ISNULL(@c_JoinCustomPackDet,'')<>'','NULL','SKU.Size') END + ')),'''')'
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_SizeSortExp       ,'')<>'' THEN @c_SizeSortExp        ELSE ''''''              END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
-               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_DescrExp          ,'')<>'' THEN @c_DescrExp           ELSE 'SKU.DESCR'         END + '),'''')'
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_DescrExp          ,'')<>'' THEN @c_DescrExp           ELSE IIF(ISNULL(@c_JoinCustomPackDet,'')<>'','NULL','SKU.DESCR') END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
                + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_DeptExp           ,'')<>'' THEN @c_DeptExp            ELSE ''''''              END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
@@ -1207,63 +1253,69 @@ BEGIN
       SET @c_ExecStatements = @c_ExecStatements
                +        ', RTRIM(' + CASE WHEN ISNULL(@c_T_CartonNoExp     ,'')<>'' THEN @c_T_CartonNoExp      ELSE 'NULL'              END + ')'
       SET @c_ExecStatements = @c_ExecStatements
-               + ', ' + CASE WHEN ISNULL(@c_CartonNoExp    ,'')<>'' THEN @c_CartonNoExp ELSE IIF(@b_UsePickDetail=1,'NULL','PD.CartonNo') END
+               + ', ' + CASE WHEN ISNULL(@c_CartonNoExp    ,'')<>'' THEN @c_CartonNoExp     ELSE IIF(@b_UsePickDetail=1 OR ISNULL(@c_JoinCustomPackDet,'')<>'','NULL','PD.CartonNo') END
       SET @c_ExecStatements = @c_ExecStatements
-               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_LabelNoExp        ,'')<>'' THEN @c_LabelNoExp         ELSE IIF(@b_UsePickDetail=1,'NULL','PD.LabelNo')  END + '),'''')'
+               + ', ' + CASE WHEN ISNULL(@c_Total_CartonExp,'')<>'' THEN @c_Total_CartonExp ELSE 'NULL' END
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_LabelNoExp        ,'')<>'' THEN @c_LabelNoExp         ELSE IIF(@b_UsePickDetail=1 OR ISNULL(@c_JoinCustomPackDet,'')<>'','NULL','PD.LabelNo')  END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
                + ', ' + CASE WHEN ISNULL(@c_CartonWeightExp,'')<>'' THEN 'ISNULL(RTRIM('+@c_CartonWeightExp+'),'''')' ELSE 'NULL' END
       SET @c_ExecStatements = @c_ExecStatements
                + ', ' + CASE WHEN ISNULL(@c_CartonCBMExp   ,'')<>'' THEN 'ISNULL(RTRIM('+@c_CartonCBMExp   +'),'''')' ELSE 'NULL' END
       SET @c_ExecStatements = @c_ExecStatements
                + ', ' + CASE WHEN ISNULL(@c_DimensonExp    ,'')<>'' THEN 'ISNULL(RTRIM('+@c_DimensonExp    +'),'''')' ELSE 'NULL' END
-               + ', ' + IIF(@b_UsePickDetail=1,'NULL','PD.LabelLine')
-               + ', PD.DropID'
+               + ', ' + IIF(@b_UsePickDetail=1 OR ISNULL(@c_JoinCustomPackDet,'')<>'','NULL','PD.LabelLine')
+               + ', ' + IIF(ISNULL(@c_JoinCustomPackDet,'')<>'','NULL','PD.DropID')
       SET @c_ExecStatements = @c_ExecStatements
-               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_RefnoExp          ,'')<>'' THEN @c_RefnoExp           ELSE IIF(@b_UsePickDetail=1,'NULL','PD.RefNo')    END + '),'''')'
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_RefnoExp          ,'')<>'' THEN @c_RefnoExp           ELSE IIF(@b_UsePickDetail=1 OR ISNULL(@c_JoinCustomPackDet,'')<>'','NULL','PD.RefNo')    END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
-               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_Refno2Exp         ,'')<>'' THEN @c_Refno2Exp          ELSE IIF(@b_UsePickDetail=1,'NULL','PD.RefNo2')   END + '),'''')'
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_Refno2Exp         ,'')<>'' THEN @c_Refno2Exp          ELSE IIF(@b_UsePickDetail=1 OR ISNULL(@c_JoinCustomPackDet,'')<>'','NULL','PD.RefNo2')   END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
-               + ', '              + CASE WHEN ISNULL(@c_QtyExp            ,'')<>'' THEN @c_QtyExp             ELSE 'PD.Qty'            END
+               + ', '              + CASE WHEN ISNULL(@c_QtyExp            ,'')<>'' THEN @c_QtyExp             ELSE IIF(ISNULL(@c_JoinCustomPackDet,'')<>'','NULL','PD.Qty') END
       SET @c_ExecStatements = @c_ExecStatements
-               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_UOMExp            ,'')<>'' THEN @c_UOMExp             ELSE 'PACK.PackUOM3'     END + '),'''')'
+               + ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_UOMExp            ,'')<>'' THEN @c_UOMExp             ELSE IIF(ISNULL(@c_JoinCustomPackDet,'')<>'','NULL','PACK.PackUOM3') END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
-               + ', '              + CASE WHEN ISNULL(@c_UnitPriceExp      ,'')<>'' THEN @c_UnitPriceExp       ELSE 'OD.UnitPrice'      END
+               + ', '              + CASE WHEN ISNULL(@c_UnitPriceExp      ,'')<>'' THEN @c_UnitPriceExp       ELSE IIF(ISNULL(@c_JoinCustomPackDet,'')<>'','NULL','OD.UnitPrice') END
       SET @c_ExecStatements = @c_ExecStatements
-               + ', SKU.StdCube'
-               + ', SKU.PrePackIndicator'
+               + ', '              + CASE WHEN ISNULL(@c_StdCubeExp        ,'')<>'' THEN @c_StdCubeExp         ELSE IIF(ISNULL(@c_JoinCustomPackDet,'')<>'','NULL','SKU.StdCube') END
+      SET @c_ExecStatements = @c_ExecStatements
+               + ', '              + CASE WHEN ISNULL(@c_PrePackIndExp     ,'')<>'' THEN @c_PrePackIndExp      ELSE IIF(ISNULL(@c_JoinCustomPackDet,'')<>'','NULL','SKU.PrePackIndicator') END
+      SET @c_ExecStatements = @c_ExecStatements
                + ', FOK.ConsolPick'
                + ', FOK.DocKey'
                + ', FIRST_VALUE(FOK.Orderkey) OVER(PARTITION BY FOK.DocKey ORDER BY FOK.Orderkey)'
                + ', ''1'''
           +' FROM #TEMP_FINALPICKSLIPNO FOK'
-          +' JOIN dbo.ORDERS      OH (NOLOCK) ON FOK.Orderkey=OH.Orderkey'
-          +' JOIN dbo.PACKHEADER  PH (NOLOCK) ON FOK.PickslipNo=PH.PickslipNo'
+          +' JOIN dbo.ORDERS       OH (NOLOCK) ON FOK.Orderkey=OH.Orderkey'
+          +' JOIN dbo.STORER       ST (NOLOCK) ON OH.StorerKey=ST.StorerKey'
       SET @c_ExecStatements = @c_ExecStatements
-          +CASE WHEN @b_UsePickDetail = 1 THEN
-              ' JOIN #TEMP_FINALORDERKEY OK ON FOK.PickslipNo=OK.PickslipNo'
-             +' JOIN dbo.ORDERDETAIL OD (NOLOCK) ON OK.Orderkey=OD.Orderkey'
-             +' JOIN dbo.PICKDETAIL  PD (NOLOCK) ON OD.Orderkey=PD.Orderkey AND OD.OrderLineNumber=PD.OrderLineNumber'
+          +CASE
+           WHEN ISNULL(@c_JoinCustomPackDet,'')<>'' THEN ' ' + ISNULL(LTRIM(RTRIM(@c_JoinCustomPackDet)),'')
+           WHEN @b_UsePickDetail = 1 THEN
+              ' JOIN dbo.PACKHEADER    PH (NOLOCK) ON FOK.PickslipNo=PH.PickslipNo'
+             +' JOIN #TEMP_FINALORDERKEY OK ON FOK.PickslipNo=OK.PickslipNo'
+             +' JOIN dbo.ORDERDETAIL   OD (NOLOCK) ON OK.Orderkey=OD.Orderkey'
+             +' JOIN dbo.PICKDETAIL    PD (NOLOCK) ON OD.Orderkey=PD.Orderkey AND OD.OrderLineNumber=PD.OrderLineNumber'
+             +' JOIN dbo.SKU          SKU (NOLOCK) ON PD.StorerKey=SKU.StorerKey AND PD.Sku=SKU.Sku'
+             +' JOIN dbo.PACK        PACK (NOLOCK) ON SKU.PACKKey=PACK.PackKey'
+             +' LEFT JOIN dbo.STORER   CX (NOLOCK) ON CX.Storerkey=''PL-''+RTRIM(OH.Storerkey)+''-''+ ISNULL(OH.C_Country,'''')'
            ELSE
-              ' JOIN #TEMP_PACKDETAIL  PD (NOLOCK) ON PH.PickslipNo=PD.PickslipNo'
-           END
-          +' JOIN dbo.SKU        SKU (NOLOCK) ON PD.StorerKey=SKU.StorerKey AND PD.Sku=SKU.Sku'
-          +' JOIN dbo.PACK      PACK (NOLOCK) ON SKU.PACKKey=PACK.PackKey'
-          +' JOIN dbo.STORER      ST (NOLOCK) ON OH.StorerKey=ST.StorerKey'
-          +' LEFT JOIN dbo.STORER CX (NOLOCK) ON CX.Storerkey=''PL-''+RTRIM(OH.Storerkey)+''-''+ ISNULL(OH.C_Country,'''')'
-      SET @c_ExecStatements = @c_ExecStatements
-          +CASE WHEN @b_UsePickDetail = 1 THEN ''
-           ELSE
-              ' LEFT JOIN dbo.PACKINFO PI (NOLOCK) ON PD.PickslipNo=PI.PickslipNo AND PD.CartonNo=PI.CartonNo'
+              ' JOIN dbo.PACKHEADER    PH (NOLOCK) ON FOK.PickslipNo=PH.PickslipNo'
+             +' JOIN #TEMP_PACKDETAIL  PD (NOLOCK) ON PH.PickslipNo=PD.PickslipNo'
+             +' JOIN dbo.SKU          SKU (NOLOCK) ON PD.StorerKey=SKU.StorerKey AND PD.Sku=SKU.Sku'
+             +' JOIN dbo.PACK        PACK (NOLOCK) ON SKU.PACKKey=PACK.PackKey'
+             +' LEFT JOIN dbo.STORER   CX (NOLOCK) ON CX.Storerkey=''PL-''+RTRIM(OH.Storerkey)+''-''+ ISNULL(OH.C_Country,'''')'
+             +' LEFT JOIN dbo.PACKINFO PI (NOLOCK) ON PD.PickslipNo=PI.PickslipNo AND PD.CartonNo=PI.CartonNo'
              +' LEFT JOIN ('
              +   ' SELECT *, SeqNo = ROW_NUMBER() OVER(PARTITION BY CartonizationGroup,CartonType ORDER BY UseSequence)'
-              + ' FROM dbo.CARTONIZATION (NOLOCK)'
+             +   ' FROM dbo.CARTONIZATION (NOLOCK)'
              + ') CT ON ST.CartonGroup = CT.CartonizationGroup AND PI.CartonType = CT.CartonType AND CT.SeqNo=1'
              +' LEFT JOIN dbo.ORDERDETAIL OD (NOLOCK) ON PD.Orderkey=OD.Orderkey AND PD.OrderLineNumber=OD.OrderLineNumber'
            END
       SET @c_ExecStatements = @c_ExecStatements
           + CASE WHEN ISNULL(@c_JoinClause,'')='' THEN '' ELSE ' ' + ISNULL(LTRIM(RTRIM(@c_JoinClause)),'') END
       SET @c_ExecStatements = @c_ExecStatements
-          +' WHERE PD.Qty > 0 AND OH.Storerkey=@c_Storerkey'
+          +' WHERE OH.Storerkey=@c_Storerkey'
 
       SET @c_ExecArguments = N'@as_docmode          NVARCHAR(10)'
                            + ',@c_Storerkey         NVARCHAR(15)'
@@ -1273,6 +1325,8 @@ BEGIN
                        , @as_docmode
                        , @c_Storerkey
 
+
+      DELETE FROM #TEMP_PAKDT WHERE ISNULL(Qty,0) <= 0
 
 
       -- ExternOrderKey Summary (Section = 2)
@@ -1391,7 +1445,8 @@ BEGIN
       UPDATE #TEMP_PAKDT SET SizeSeq =
          CASE WHEN ISNUMERIC(Size)=1 AND LTRIM(Size) NOT IN ('-','+','.',',') THEN FORMAT(CONVERT(FLOAT,Size)+400000,'000000.00')
               WHEN RTRIM(Size) LIKE N'%[0-9]H' AND ISNUMERIC(LEFT(Size,LEN(Size)-1))=1 THEN FORMAT(CONVERT(FLOAT,LEFT(Size,LEN(Size)-1)+'.5')+400000,'000000.00')
-              WHEN TRIM(Size) LIKE N'%[ -]%' THEN FORMAT(ISNULL(TRY_PARSE(ISNULL(LEFT(TRIM(Size),PATINDEX('%[ -]%',TRIM(Size))-1),'') AS FLOAT)+400000, CHARINDEX(N'|'+LTRIM(RTRIM(LEFT(TRIM(Size),PATINDEX('%[ -]%',TRIM(Size))-1)))+N'|', @c_SizeList)+800000),'000000.00')
+              WHEN TRIM(Size) LIKE N'%[ -]%' THEN FORMAT(ISNULL(TRY_PARSE(ISNULL(LEFT(TRIM(Size),PATINDEX('%[ -]%',TRIM(Size))-1),'') AS FLOAT)+400000,
+                                                  CHARINDEX(N'|'+LTRIM(RTRIM(LEFT(TRIM(Size),PATINDEX('%[ -]%',TRIM(Size))-1)))+N'|', @c_SizeList)+800000),'000000.00')
               ELSE FORMAT(CHARINDEX(N'|'+LTRIM(RTRIM(Size))+N'|', @c_SizeList)+800000,'000000.00')
          END +'-'+ Size
    END
@@ -1530,26 +1585,42 @@ BEGIN
         , ST_B_Contact1      = MAX( ISNULL( LTRIM(RTRIM( ST.B_Contact1)), '' ) )
         , ST_B_Fax1          = MAX( ISNULL( LTRIM(RTRIM( ST.B_Fax1    )), '' ) )
         , B_Company          = MAX( ISNULL( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderBAddressM3,%' THEN PAKDT.B_Company_M3 ELSE PAKDT.B_Company END, '') )
-        , B_Address1         = MAX( ISNULL( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderBAddressM3,%' THEN IIF(@c_B_Address_M3Exp<>'',PAKDT.B_Address_M3,CX.B_Address1) ELSE IIF(@c_B_AddressExp<>'',PAKDT.B_Address,OH.B_Address1) END, '' ) )
-        , B_Address2         = MAX( ISNULL( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderBAddressM3,%' THEN IIF(@c_B_Address_M3Exp<>'',''                ,CX.B_Address2) ELSE IIF(@c_B_AddressExp<>'',''             ,OH.B_Address2) END, '' ) )
-        , B_Address3         = MAX( ISNULL( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderBAddressM3,%' THEN IIF(@c_B_Address_M3Exp<>'',''                ,CX.B_Address3) ELSE IIF(@c_B_AddressExp<>'',''             ,OH.B_Address3) END, '' ) )
-        , B_Address4         = MAX( ISNULL( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderBAddressM3,%' THEN IIF(@c_B_Address_M3Exp<>'',''                ,CX.B_Address4) ELSE IIF(@c_B_AddressExp<>'',''             ,OH.B_Address4) END, '' ) )
-        , B_City             = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderBAddressM3,%' THEN IIF(@c_B_Address_M3Exp<>'','',CX.B_City)     ELSE IIF(@c_B_AddressExp<>'','',OH.B_City)     END )), '' ) )
-        , B_State            = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderBAddressM3,%' THEN IIF(@c_B_Address_M3Exp<>'','',CX.B_State)    ELSE IIF(@c_B_AddressExp<>'','',OH.B_State)    END )), '' ) )
-        , B_Zip              = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderBAddressM3,%' THEN IIF(@c_B_Address_M3Exp<>'','',CX.B_Zip)      ELSE IIF(@c_B_AddressExp<>'','',OH.B_Zip)      END )), '' ) )
-        , B_Country          = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderBAddressM3,%' THEN IIF(@c_B_Address_M3Exp<>'','',CX.B_Country)  ELSE IIF(@c_B_AddressExp<>'','',OH.B_Country)  END )), '' ) )
+        , B_Address1         = MAX( ISNULL( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderBAddressM3,%' THEN IIF(@c_B_Address_M3Exp<>'',PAKDT.B_Address_M3,CX.B_Address1)
+                                            ELSE IIF(@c_B_AddressExp<>'',PAKDT.B_Address,OH.B_Address1) END, '' ) )
+        , B_Address2         = MAX( ISNULL( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderBAddressM3,%' THEN IIF(@c_B_Address_M3Exp<>'',''                ,CX.B_Address2)
+                                            ELSE IIF(@c_B_AddressExp<>'',''             ,OH.B_Address2) END, '' ) )
+        , B_Address3         = MAX( ISNULL( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderBAddressM3,%' THEN IIF(@c_B_Address_M3Exp<>'',''                ,CX.B_Address3)
+                                            ELSE IIF(@c_B_AddressExp<>'',''             ,OH.B_Address3) END, '' ) )
+        , B_Address4         = MAX( ISNULL( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderBAddressM3,%' THEN IIF(@c_B_Address_M3Exp<>'',''                ,CX.B_Address4)
+                                            ELSE IIF(@c_B_AddressExp<>'',''             ,OH.B_Address4) END, '' ) )
+        , B_City             = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderBAddressM3,%' THEN IIF(@c_B_Address_M3Exp<>'','',CX.B_City)
+                                            ELSE IIF(@c_B_AddressExp<>'','',OH.B_City)     END )), '' ) )
+        , B_State            = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderBAddressM3,%' THEN IIF(@c_B_Address_M3Exp<>'','',CX.B_State)
+                                            ELSE IIF(@c_B_AddressExp<>'','',OH.B_State)    END )), '' ) )
+        , B_Zip              = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderBAddressM3,%' THEN IIF(@c_B_Address_M3Exp<>'','',CX.B_Zip)
+                                            ELSE IIF(@c_B_AddressExp<>'','',OH.B_Zip)      END )), '' ) )
+        , B_Country          = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderBAddressM3,%' THEN IIF(@c_B_Address_M3Exp<>'','',CX.B_Country)
+                                            ELSE IIF(@c_B_AddressExp<>'','',OH.B_Country)  END )), '' ) )
         , B_Phone1           = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderBAddressM3,%' THEN CX.B_Phone1   ELSE IIF(@c_B_PhoneExp<>'',PAKDT.B_Phone,OH.B_Phone1) END )), '' ) )
         , B_Contact1         = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderBAddressM3,%' THEN CX.B_Contact1 ELSE IIF(@c_B_ContactExp<>'',PAKDT.B_Contact,OH.B_Contact1) END )), '' ) )
         , B_Fax1             = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderBAddressM3,%' THEN CX.B_Fax1     ELSE IIF(@c_B_FaxExp<>'',PAKDT.B_Fax,OH.B_Fax1) END )), '' ) )
         , C_Company          = MAX( ISNULL( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN PAKDT.C_Company_M3 ELSE PAKDT.C_Company END, '') )
-        , C_Address1         = MAX( ISNULL( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN IIF(@c_C_Address_M3Exp<>'',PAKDT.C_Address_M3,CX.Address1)   ELSE IIF(@c_C_AddressExp<>'',PAKDT.C_Address,OH.C_Address1) END, '' ) )
-        , C_Address2         = MAX( ISNULL( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN IIF(@c_C_Address_M3Exp<>'',''                ,CX.Address2)   ELSE IIF(@c_C_AddressExp<>'',''             ,OH.C_Address2) END, '' ) )
-        , C_Address3         = MAX( ISNULL( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN IIF(@c_C_Address_M3Exp<>'',''                ,CX.Address3)   ELSE IIF(@c_C_AddressExp<>'',''             ,OH.C_Address3) END, '' ) )
-        , C_Address4         = MAX( ISNULL( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN IIF(@c_C_Address_M3Exp<>'',''                ,CX.Address4)   ELSE IIF(@c_C_AddressExp<>'',''             ,OH.C_Address4) END, '' ) )
-        , C_City             = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN IIF(@c_C_Address_M3Exp<>'','',CX.City)       ELSE IIF(@c_C_AddressExp<>'','',OH.C_City)     END )), '' ) )
-        , C_State            = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN IIF(@c_C_Address_M3Exp<>'','',CX.State)      ELSE IIF(@c_C_AddressExp<>'','',OH.C_State)    END )), '' ) )
-        , C_Zip              = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN IIF(@c_C_Address_M3Exp<>'','',CX.Zip)        ELSE IIF(@c_C_AddressExp<>'','',OH.C_Zip)      END )), '' ) )
-        , C_Country          = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN IIF(@c_C_Address_M3Exp<>'','',CX.Country)    ELSE IIF(@c_C_AddressExp<>'','',OH.C_Country)  END )), '' ) )
+        , C_Address1         = MAX( ISNULL( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN IIF(@c_C_Address_M3Exp<>'',PAKDT.C_Address_M3,CX.Address1)
+                                            ELSE IIF(@c_C_AddressExp<>'',PAKDT.C_Address,OH.C_Address1) END, '' ) )
+        , C_Address2         = MAX( ISNULL( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN IIF(@c_C_Address_M3Exp<>'',''                ,CX.Address2)
+                                            ELSE IIF(@c_C_AddressExp<>'',''             ,OH.C_Address2) END, '' ) )
+        , C_Address3         = MAX( ISNULL( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN IIF(@c_C_Address_M3Exp<>'',''                ,CX.Address3)
+                                            ELSE IIF(@c_C_AddressExp<>'',''             ,OH.C_Address3) END, '' ) )
+        , C_Address4         = MAX( ISNULL( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN IIF(@c_C_Address_M3Exp<>'',''                ,CX.Address4)
+                                            ELSE IIF(@c_C_AddressExp<>'',''             ,OH.C_Address4) END, '' ) )
+        , C_City             = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN IIF(@c_C_Address_M3Exp<>'','',CX.City)
+                                            ELSE IIF(@c_C_AddressExp<>'','',OH.C_City)     END )), '' ) )
+        , C_State            = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN IIF(@c_C_Address_M3Exp<>'','',CX.State)
+                                            ELSE IIF(@c_C_AddressExp<>'','',OH.C_State)    END )), '' ) )
+        , C_Zip              = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN IIF(@c_C_Address_M3Exp<>'','',CX.Zip)
+                                            ELSE IIF(@c_C_AddressExp<>'','',OH.C_Zip)      END )), '' ) )
+        , C_Country          = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN IIF(@c_C_Address_M3Exp<>'','',CX.Country)
+                                            ELSE IIF(@c_C_AddressExp<>'','',OH.C_Country)  END )), '' ) )
         , C_Phone1           = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN CX.Phone1   ELSE IIF(@c_C_PhoneExp<>'',PAKDT.C_Phone,OH.C_Phone1) END )), '' ) )
         , C_Contact1         = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN CX.Contact1 ELSE IIF(@c_C_ContactExp<>'',PAKDT.C_Contact,OH.C_Contact1) END )), '' ) )
         , C_Fax1             = MAX( ISNULL( LTRIM(RTRIM( CASE WHEN @as_docmode='3' AND RptCfg.ShowFields NOT LIKE '%,UseOrderCAddressM3,%' THEN CX.Fax1     ELSE IIF(@c_C_FaxExp<>'',PAKDT.C_Fax,OH.C_Fax1) END )), '' ) )
@@ -1579,7 +1650,7 @@ BEGIN
         , Total_Weight       = MAX( PI_TTL.Total_Weight )
         , Total_NetWeight    = MAX( PI_TTL.Total_NetWeight )
         , Total_CBM          = MAX( PI_TTL.Total_CBM )
-        , Total_Carton       = MAX( PD_TTL.Total_Carton )
+        , Total_Carton       = MAX( ISNULL( PAKDT.Total_Carton, PD_TTL.Total_Carton ) )
         , Style              = MAX( ISNULL( RTRIM( PAKDT.Style ), '' ) )
         , Color              = MAX( ISNULL( RTRIM( PAKDT.Color ), '' ) )
         , Measurement        = MAX( ISNULL( RTRIM( PAKDT.Measurement ), '' ) )
@@ -2164,7 +2235,12 @@ BEGIN
         , N_Width_CartonNo   = CAST( RTRIM( (select top 1 b.ColValue
                                      from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
                                      where a.SeqNo=b.SeqNo and a.ColValue='N_Width_CartonNo') ) AS NVARCHAR(50))
-
+        , N_Height_Logo      = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='N_Height_Logo') ) AS NVARCHAR(50))
+        , N_Width_Logo       = CAST( RTRIM( (select top 1 b.ColValue
+                                     from dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes)) a, dbo.fnc_DelimSplit(MAX(RptCfg3.Delim),MAX(RptCfg3.Notes2)) b
+                                     where a.SeqNo=b.SeqNo and a.ColValue='N_Width_Logo') ) AS NVARCHAR(50))
    FROM #TEMP_PAKDT PAKDT
    JOIN dbo.ORDERS OH (NOLOCK) ON PAKDT.FirstOrderKey=OH.OrderKey
    JOIN dbo.STORER ST (NOLOCK) ON OH.StorerKey=ST.StorerKey
