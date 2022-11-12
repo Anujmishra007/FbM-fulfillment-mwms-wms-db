@@ -1,5 +1,5 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_stocktake_report_01a]') AND OBJECTPROPERTY(ID, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[isp_r_hk_stocktake_report_01a]
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_r_hk_stocktake_report_01a]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+drop procedure [dbo].[isp_r_hk_stocktake_report_01a]
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -24,6 +24,7 @@ GO
 /* Updates:                                                              */
 /* Date         Author   Ver  Purposes                                   */
 /* 21/11/2019   ML       1.1  Add Variance Filter 3=SKUxLOCxID,9=CCDetail*/
+/* 24/12/2021   ML       1.2  Handle non-11320 storer                    */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_stocktake_report_01a] (
@@ -61,6 +62,9 @@ BEGIN
       DROP TABLE #TEMP_CCDETAIL2
    IF OBJECT_ID('tempdb..#TEMP_CONTROLSHEET') IS NOT NULL
       DROP TABLE #TEMP_CONTROLSHEET
+   
+   IF ISNULL(@as_facility,'')='1177' AND ISNULL(@as_storerkey,'')<>'11320'
+      SET @as_facility = ''
 
    SET @c_CountDesc = LTRIM(RTRIM(SUBSTRING(@as_countno, 2, LEN(@as_countno))))
    SET @as_countno  = LEFT(@as_countno, 1)
@@ -71,7 +75,6 @@ BEGIN
        FROM dbo.StockTakeSheetParameters (NOLOCK)
       WHERE StockTakeKey = @as_cckey
    END
-
 
    SELECT Storerkey           = ISNULL( RTRIM( CC.Storerkey ), '' )
         , Facility            = ISNULL( RTRIM( LOC.Facility ), '' )
@@ -112,7 +115,7 @@ BEGIN
      AND ( ISNULL(@as_facility,'')='' OR LOC.Facility IN (SELECT LTRIM(ColValue) FROM dbo.fnc_DelimSplit(',',replace(@as_facility,char(13)+char(10),',')) WHERE ColValue<>'') )
      AND ( ISNULL(@as_sku,'')='' OR CC.Sku IN (SELECT LTRIM(ColValue) FROM dbo.fnc_DelimSplit(',',replace(@as_sku,char(13)+char(10),',')) WHERE ColValue<>'') )
      AND IIF(ISNULL(@as_dmqazone,'')='Y','Y','N') = IIF(ISNULL(@as_expect_dmqazone,'')='Y','Y','N')
-     AND @as_var_filter IN ('', '1', '2', '3', '9')
+     AND ISNULL(@as_var_filter,'') IN ('', '1', '2', '3', '9')
      AND ( IIF(ISNULL(@as_cntsht_bysku,'')='','N',@as_cntsht_bysku) = IIF(ISNULL(@as_expect_bysku,'')='','N',@as_expect_bysku) )
 
 
@@ -243,7 +246,7 @@ BEGIN
             LEFT JOIN dbo.CODELKUP BRD(NOLOCK) ON (BRD.Listname='LORBRAND' AND SKU.Storerkey=BRD.Storerkey AND SKU.Class=BRD.Description)
          ) X
       ) Y
-      WHERE ISNULL(CASE @as_var_filter
+      WHERE ISNULL(CASE ISNULL(@as_var_filter,'')
             WHEN '1' THEN (CASE @as_countno WHEN '2' THEN Y.Cnt2_Filter_SKU                  WHEN '3' THEN Y.Cnt3_Filter_SKU        END)
             WHEN '2' THEN (CASE @as_countno WHEN '2' THEN Y.Cnt2_Filter_SKUxLOC              WHEN '3' THEN Y.Cnt3_Filter_SKUxLOC    END)
             WHEN '3' THEN (CASE @as_countno WHEN '2' THEN Y.Cnt2_Filter_SKUxLOCxID           WHEN '3' THEN Y.Cnt3_Filter_SKUxLOCxID END)
@@ -270,5 +273,6 @@ RESULTS:
 QUIT:
 END
 GO
+
 GRANT EXECUTE ON isp_r_hk_stocktake_report_01a TO NSQL
 GO
