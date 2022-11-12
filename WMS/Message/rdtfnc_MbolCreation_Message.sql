@@ -18,6 +18,10 @@ execute rdt.rdtAddMsg 172111, 10, '172111 CloseMBOLFail',   'us_english', 1856
 --WMS17494
 execute rdt.rdtAddMsg 172112, 10, '172112Either 1 Value',   'us_english', 1856
 
-
+--WMS20213
+execute rdt.rdtAddMsg 172113, 10, '172113Param NotSetup',   'us_english', 1856
+execute rdt.rdtAddMsg 172114, 10, '172114Param1NotValid',   'us_english', 1856
+execute rdt.rdtAddMsg 172115, 10, '172115 Invalid MBOL ',   'us_english', 1856
+execute rdt.rdtAddMsg 172116, 10, '172116 Need OrderKey',   'us_english', 1856
 
 SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 172101 AND 172150	
