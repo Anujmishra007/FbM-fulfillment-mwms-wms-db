@@ -49,6 +49,8 @@ GO
 /* 10/11/2021   ML       1.14 Allow ToLoc not exist in LOC table         */
 /* 29/11/2021   ML       1.15 Add ShowField: IgnoreOrderUDF08,           */
 /*                     NotAllowReplenByLoadplan, NotAllowReplenByWaveplan*/
+/* 21/01/2022   ML       1.16 Add MapField: FromLoc                      */
+/* 23/03/2022   ML       1.17 Add NULL to Temp Table                     */
 /*************************************************************************/
 CREATE PROCEDURE [dbo].[isp_r_hk_replenish_to_fpa_02] (
        @as_Key_Type  NVARCHAR(13)
@@ -63,7 +65,7 @@ BEGIN
 
 /* CODELKUP.REPORTCFG
    [MAPFIELD]
-      Div, Brand, CaseCnt, Replen_Div, Replen_Brand, Replen_CaseCnt, ReserveLoc_Cond
+      Div, Brand, CaseCnt, FromLoc, Replen_Div, Replen_Brand, Replen_CaseCnt, ReserveLoc_Cond
 
    [MAPVALUE]
       DPLoc_PAZone_SEL, DPLoc_PAZone_VNA, DPLoc_PAZone_FPR, DPLoc_ReplenALL
@@ -192,6 +194,7 @@ BEGIN
          , @c_Replen_BrandExp    NVARCHAR(MAX)
          , @c_Replen_CaseCntExp  NVARCHAR(MAX)
          , @c_ReserveLoc_Cond    NVARCHAR(MAX)
+         , @c_FromLocExp         NVARCHAR(MAX)
 
    SELECT @c_DataWindow        = 'r_hk_replenish_to_fpa_02'
         , @n_StartTCnt         = @@TRANCOUNT
@@ -221,150 +224,147 @@ BEGIN
 
 
    CREATE TABLE #TEMP_PICKDETAILKEY (
-        PickdetailKey    NVARCHAR(20)
-      , ORD_Status       NVARCHAR(10)
-      , ToLoc            NVARCHAR(10)
-      , DropID           NVARCHAR(20)
-      , ReplenKey        NVARCHAR(20)
-      , Storerkey        NVARCHAR(15)
+        PickdetailKey    NVARCHAR(20)  NOT NULL
+      , ORD_Status       NVARCHAR(10)  NULL
+      , ToLoc            NVARCHAR(10)  NULL
+      , DropID           NVARCHAR(20)  NULL
+      , ReplenKey        NVARCHAR(20)  NULL
+      , Storerkey        NVARCHAR(15)  NULL
       , PRIMARY KEY (PickdetailKey)
    )
 
    CREATE TABLE #TEMP_OUTSTANDING (
-        PickdetailKey    NVARCHAR(20)
-      , Storerkey        NVARCHAR(15)
-      , Facility         NVARCHAR(5)
-      , SKU              NVARCHAR(20)
-      , LOT              NVARCHAR(10)
-      , LogicalLocation  NVARCHAR(20)
-      , LOC              NVARCHAR(10)
-      , ID               NVARCHAR(20)
-      , Original_DropID  NVARCHAR(20)
-      , Qty              INT
-      , Div              NVARCHAR(100)
-      , Brand            NVARCHAR(100)
-      , StdCube          FLOAT
-      , CaseCnt          INT
-      , Lottable02       NVARCHAR(20)
-      , Lottable04       DATETIME
-      , PA_Floor         NVARCHAR(3)
-      , LocAisle         NVARCHAR(10)
-      , PackKey          NVARCHAR(10)
-      , PackUOM3         NVARCHAR(10)
-      , Completed        NVARCHAR(1)
+        PickdetailKey    NVARCHAR(20)  NOT NULL
+      , Storerkey        NVARCHAR(15)  NULL
+      , Facility         NVARCHAR(5)   NULL
+      , SKU              NVARCHAR(20)  NULL
+      , LOT              NVARCHAR(10)  NULL
+      , LogicalLocation  NVARCHAR(20)  NULL
+      , LOC              NVARCHAR(10)  NULL
+      , ID               NVARCHAR(20)  NULL
+      , Original_DropID  NVARCHAR(20)  NULL
+      , Qty              INT           NULL
+      , Div              NVARCHAR(100) NULL
+      , Brand            NVARCHAR(100) NULL
+      , StdCube          FLOAT         NULL
+      , CaseCnt          INT           NULL
+      , Lottable02       NVARCHAR(20)  NULL
+      , Lottable04       DATETIME      NULL
+      , PA_Floor         NVARCHAR(3)   NULL
+      , LocAisle         NVARCHAR(10)  NULL
+      , PackKey          NVARCHAR(10)  NULL
+      , PackUOM3         NVARCHAR(10)  NULL
+      , Completed        NVARCHAR(1)   NULL
       , PRIMARY KEY (PickdetailKey)
    )
    CREATE INDEX IDX_TEMP_OUTSTANDING ON #TEMP_OUTSTANDING (Storerkey, Facility, Div, SKU, LOC, LOT, PickdetailKey)
 
    CREATE TABLE #TEMP_DPLOC (
-        DPLoc            NVARCHAR(10)
-      , Facility         NVARCHAR(5)
-      , LocAisle         NVARCHAR(10)
-      , PutawayZone      NVARCHAR(10)
-      , LogicalLocation  NVARCHAR(20)
-      , PA_Descr         NVARCHAR(60)
-      , PA_Floor         NVARCHAR(3)
-      , CubicCapacity    FLOAT
-      , CBM              FLOAT
-      , Qty              INT
-      , MaxPallet        INT
-      , NoOfMoveID       INT
-      , Div              NVARCHAR(100)
-      , Brand            NVARCHAR(100)
-      , Sku              NVARCHAR(20)
-      , Lot              NVARCHAR(10)
-      , ID               NVARCHAR(20)
-      , DropID           NVARCHAR(20)
-      , DivCount         INT
-      , FullPalletReplen NVARCHAR(1)
-      , Type             NVARCHAR(1)
+        DPLoc            NVARCHAR(10)  NOT NULL
+      , Facility         NVARCHAR(5)   NULL
+      , LocAisle         NVARCHAR(10)  NULL
+      , PutawayZone      NVARCHAR(10)  NULL
+      , LogicalLocation  NVARCHAR(20)  NULL
+      , PA_Descr         NVARCHAR(60)  NULL
+      , PA_Floor         NVARCHAR(3)   NULL
+      , CubicCapacity    FLOAT         NULL
+      , CBM              FLOAT         NULL
+      , Qty              INT           NULL
+      , MaxPallet        INT           NULL
+      , NoOfMoveID       INT           NULL
+      , Div              NVARCHAR(100) NULL
+      , Brand            NVARCHAR(100) NULL
+      , Sku              NVARCHAR(20)  NOT NULL
+      , Lot              NVARCHAR(10)  NOT NULL
+      , ID               NVARCHAR(20)  NOT NULL
+      , DropID           NVARCHAR(20)  NOT NULL
+      , DivCount         INT           NULL
+      , FullPalletReplen NVARCHAR(1)   NULL
+      , Type             NVARCHAR(1)   NOT NULL
       , PRIMARY KEY (DPLoc, Sku, Lot, ID, DropID, Type)
    )
 
    CREATE TABLE #TEMP_PICKFACE (
-        Storerkey          NVARCHAR(15)
-      , Sku                NVARCHAR(20)
-      , Loc                NVARCHAR(10)
-      , Facility           NVARCHAR(5)
-      , LogicalLocation    NVARCHAR(20)
-      , Qty                INT
-      , QtyLocationLimit   INT
-      , QtyLocationMinimum INT
+        Storerkey          NVARCHAR(15) NOT NULL
+      , Sku                NVARCHAR(20) NOT NULL
+      , Loc                NVARCHAR(10) NOT NULL
+      , Facility           NVARCHAR(5)  NULL
+      , LogicalLocation    NVARCHAR(20) NULL
+      , Qty                INT          NULL
+      , QtyLocationLimit   INT          NULL
+      , QtyLocationMinimum INT          NULL
       , PRIMARY KEY (StorerKey, Sku, Loc)
    )
 
 
    CREATE TABLE #TEMP_REPLENISHMENT (
-        DPLoc            NVARCHAR(10)
-      , MoveID           NVARCHAR(20)
-      , ReplenQty        INT
-      , ReplenCBM        FLOAT
-      , Div              NVARCHAR(100)
+        DPLoc            NVARCHAR(10)  NOT NULL
+      , MoveID           NVARCHAR(20)  NOT NULL
+      , ReplenQty        INT           NULL
+      , ReplenCBM        FLOAT         NULL
+      , Div              NVARCHAR(100) NULL
       , PRIMARY KEY (DPLoc, MoveID)
    )
 
    CREATE TABLE #TEMP_REPLENISHMENT_FINAL (
-        RowID            INT IDENTITY(1,1)
-      , StorerKey        NVARCHAR(15)
-      , Sku              NVARCHAR(20)
-      , FromLoc          NVARCHAR(10)
-      , Lot              NVARCHAR(10)
-      , Id               NVARCHAR(20)
-      , ToLoc            NVARCHAR(10)
-      , Qty              INT
-      , CaseCnt          INT
-      , AllocQty         INT
-      , UOM              NVARCHAR(10)
-      , PackKey          NVARCHAR(10)
-      , ReplenNo         NVARCHAR(10)
-      , Remark           NVARCHAR(255)
-      , RefNo            NVARCHAR(20)
-      , LoadKey          NVARCHAR(10)
-      , Wavekey          NVARCHAR(10)
-      , Div              NVARCHAR(100)
-      , IsPickFace       NVARCHAR(1)
+        RowID            INT IDENTITY(1,1) NOT NULL
+      , StorerKey        NVARCHAR(15)  NULL
+      , Sku              NVARCHAR(20)  NULL
+      , FromLoc          NVARCHAR(20)  NULL
+      , Lot              NVARCHAR(20)  NULL
+      , Id               NVARCHAR(20)  NULL
+      , ToLoc            NVARCHAR(20)  NULL
+      , Qty              INT           NULL
+      , CaseCnt          INT           NULL
+      , AllocQty         INT           NULL
+      , UOM              NVARCHAR(10)  NULL
+      , PackKey          NVARCHAR(10)  NULL
+      , ReplenNo         NVARCHAR(10)  NULL
+      , Remark           NVARCHAR(255) NULL
+      , RefNo            NVARCHAR(20)  NULL
+      , LoadKey          NVARCHAR(10)  NULL
+      , Wavekey          NVARCHAR(10)  NULL
+      , Div              NVARCHAR(100) NULL
+      , IsPickFace       NVARCHAR(1)   NULL
       , PRIMARY KEY (RowID)
    )
 
    CREATE TABLE #TEMP_RESULTSET (
-        ReplenishmentKey   NVARCHAR(10)
-      , ReplenNo           NVARCHAR(10)
-      , Div                NVARCHAR(250)
-      , PutawayZone        NVARCHAR(10)
-      , Facility           NVARCHAR(5)
-      , StorerKey          NVARCHAR(15)
-      , Sku                NVARCHAR(20)
-      , Descr              NVARCHAR(60)
-      , AltSku             NVARCHAR(20)
-      , LogicalLocation    NVARCHAR(20)
-      , FromLoc            NVARCHAR(10)
-      , FromID             NVARCHAR(20)
-      , ToFacility         NVARCHAR(5)
-      , ToLoc              NVARCHAR(10)
-      , DropID             NVARCHAR(20)
-      , Lottable02         NVARCHAR(20)
-      , Lottable04         DATETIME
-      , PackKey            NVARCHAR(10)
-      , CaseCnt            INT
-      , PACKUOM1           NVARCHAR(10)
-      , PACKUOM3           NVARCHAR(10)
-      , AllocQty           INT
-      , ReplenQty          INT
-      , PA_LoosePiece      INT
-      , UserName           NVARCHAR(128)
-      , datawindow         NVARCHAR(40)
-      , ReplenType         NVARCHAR(2)
-      , PA_Descr           NVARCHAR(60)
-      , Brand              NVARCHAR(100)
-      , Lot                NVARCHAR(10)
-      , TOLOC_LocationType NVARCHAR(10)
-      , FromID_Long        NVARCHAR(30)
-      , ShowFields         NVARCHAR(4000)
+        ReplenishmentKey   NVARCHAR(10)   NULL
+      , ReplenNo           NVARCHAR(10)   NULL
+      , Div                NVARCHAR(250)  NULL
+      , PutawayZone        NVARCHAR(10)   NULL
+      , Facility           NVARCHAR(10)   NULL
+      , StorerKey          NVARCHAR(15)   NULL
+      , Sku                NVARCHAR(20)   NULL
+      , Descr              NVARCHAR(60)   NULL
+      , AltSku             NVARCHAR(20)   NULL
+      , LogicalLocation    NVARCHAR(20)   NULL
+      , FromLoc            NVARCHAR(20)   NULL
+      , FromID             NVARCHAR(20)   NULL
+      , ToFacility         NVARCHAR(10)   NULL
+      , ToLoc              NVARCHAR(20)   NULL
+      , DropID             NVARCHAR(20)   NULL
+      , Lottable02         NVARCHAR(20)   NULL
+      , Lottable04         DATETIME       NULL
+      , PackKey            NVARCHAR(10)   NULL
+      , CaseCnt            INT            NULL
+      , PACKUOM1           NVARCHAR(10)   NULL
+      , PACKUOM3           NVARCHAR(10)   NULL
+      , AllocQty           INT            NULL
+      , ReplenQty          INT            NULL
+      , ReplenType         NVARCHAR(2)    NULL
+      , PA_Descr           NVARCHAR(60)   NULL
+      , Brand              NVARCHAR(100)  NULL
+      , Lot                NVARCHAR(10)   NULL
+      , TOLOC_LocationType NVARCHAR(10)   NULL
+      , FromID_Long        NVARCHAR(30)   NULL
+      , ShowFields         NVARCHAR(4000) NULL
    )
 
    CREATE TABLE #TEMP_ERROR (
-        ErrSeq             INT IDENTITY(1,1)
-      , ErrMsg             NVARCHAR(500)
+        ErrSeq             INT IDENTITY(1,1) NOT NULL
+      , ErrMsg             NVARCHAR(500)     NULL
    )
 
    IF ISNULL(@c_Type,'') NOT IN ('WP', 'LP') OR ISNULL(@c_Key,'')=''
@@ -2260,6 +2260,7 @@ REPORT_RESULTSET:
               , @c_DivExp             = ''
               , @c_BrandExp           = ''
               , @c_CaseCntExp         = ''
+              , @c_FromLocExp         = ''
 
          SELECT TOP 1
                 @c_JoinClause = Notes
@@ -2278,6 +2279,9 @@ REPORT_RESULTSET:
               , @c_CaseCntExp         = ISNULL(RTRIM((select top 1 b.ColValue
                                         from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
                                         where a.SeqNo=b.SeqNo and a.ColValue='CaseCnt')), '' )
+              , @c_FromLocExp         = ISNULL(RTRIM((select top 1 b.ColValue
+                                        from dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes)) a, dbo.fnc_DelimSplit(LTRIM(RTRIM(UDF01)),RTRIM(Notes2)) b
+                                        where a.SeqNo=b.SeqNo and a.ColValue='FromLoc')), '' )
            FROM dbo.CodeLkup (NOLOCK)
           WHERE Listname='REPORTCFG' AND Code='MAPFIELD' AND Long=@c_DataWindow AND Short='Y'
             AND Storerkey = @c_Storerkey
@@ -2288,50 +2292,49 @@ REPORT_RESULTSET:
             N'INSERT INTO #TEMP_RESULTSET ('
               + ' ReplenishmentKey, ReplenNo, Div, PutawayZone, Facility, StorerKey, Sku, Descr, AltSku, LogicalLocation'
               +', FromLoc, FromID, ToFacility, ToLoc, DropID, Lottable02, Lottable04, PackKey, CaseCnt, PACKUOM1'
-              +', PACKUOM3, AllocQty, ReplenQty, PA_LoosePiece, UserName, datawindow, ReplenType, PA_Descr, Brand, Lot'
+              +', PACKUOM3, AllocQty, ReplenQty, ReplenType, PA_Descr, Brand, Lot'
               +', TOLOC_LocationType, FromID_Long, ShowFields)'
 
          SET @c_ExecStatements = @c_ExecStatements
-           + ' SELECT ReplenishmentKey = RTRIM ( ISNULL(RP.ReplenishmentKey, '''') )'
-           +       ', ReplenNo         = RTRIM ( @c_Key )'
+           + ' SELECT ReplenishmentKey   = RTRIM( ISNULL(RP.ReplenishmentKey, '''') )'
+           +       ', ReplenNo           = RTRIM( @c_Key )'
          SET @c_ExecStatements = @c_ExecStatements
-           +       ', Div              = RTRIM( MAX( ISNULL(' + CASE WHEN ISNULL(@c_DivExp,'')<>'' THEN @c_DivExp ELSE '''''' END + ','''')))'
+           +       ', Div                = RTRIM( ISNULL(' + CASE WHEN ISNULL(@c_DivExp,'')<>'' THEN @c_DivExp ELSE '''''' END + ',''''))'
          SET @c_ExecStatements = @c_ExecStatements
-           +       ', PutawayZone      = RTRIM ( MAX ( FRLOC.PutawayZone ) )'
-           +       ', Facility         = RTRIM ( MAX ( FRLOC.Facility ) )'
-           +       ', StorerKey        = RTRIM ( MAX ( PD.StorerKey ) )'
-           +       ', Sku              = RTRIM ( MAX ( PD.Sku ) )'
-           +       ', Descr            = RTRIM ( MAX ( SKU.Descr ) )'
-           +       ', AltSku           = RTRIM ( MAX ( ISNULL(SKU.AltSku, '''') ) )'
-           +       ', LogicalLocation  = RTRIM ( MAX ( FRLOC.LogicalLocation ) )'
-           +       ', FromLoc          = RTRIM ( PD.Loc )'
-           +       ', FromID           = RTRIM ( PD.ID )'
-           +       ', ToFacility       = RTRIM ( MAX ( TOLOC.Facility ) )'
-           +       ', ToLoc            = RTRIM ( MAX ( PD.ToLoc ) )'
-           +       ', DropID           = RTRIM ( PD.DropID )'
-           +       ', Lottable02       = RTRIM ( MAX ( LA.Lottable02 ) )'
-           +       ', Lottable04       = MAX ( LA.Lottable04 )'
-           +       ', PackKey          = RTRIM ( MAX ( SKU.PackKey ) )'
+           +       ', PutawayZone        = RTRIM( FRLOC.PutawayZone )'
+           +       ', Facility           = RTRIM( FRLOC.Facility )'
+           +       ', StorerKey          = RTRIM( PD.StorerKey )'
+           +       ', Sku                = RTRIM( PD.Sku )'
+           +       ', Descr              = RTRIM( SKU.Descr )'
+           +       ', AltSku             = RTRIM( ISNULL(SKU.AltSku, '''') )'
+           +       ', LogicalLocation    = RTRIM( FRLOC.LogicalLocation )'
          SET @c_ExecStatements = @c_ExecStatements
-           +       ', CaseCnt          = MAX( ISNULL(' + CASE WHEN ISNULL(@c_CaseCntExp  ,'')<>'' THEN @c_CaseCntExp ELSE 'PACK.CaseCnt' END + ',0))'
+           +       ', FromLoc            = RTRIM( ISNULL(' + CASE WHEN ISNULL(@c_FromLocExp,'')<>'' THEN @c_FromLocExp ELSE 'PD.Loc' END + ',''''))'
          SET @c_ExecStatements = @c_ExecStatements
-           +       ', PACKUOM1         = RTRIM ( IIF(ISNULL(MAX(PACK.PACKUOM1),'''')='''', ''CS'', MAX(PACK.PACKUOM1) ) )'
-           +       ', PACKUOM3         = RTRIM ( MAX ( PACK.PACKUOM3 ) )'
-           +       ', AllocQty         = SUM ( PD.Qty )'
-           +       ', ReplenQty        = ISNULL( MAX(RP.Qty), SUM(PD.Qty) )'
-           +       ', PA_LoosePiece    = ISNULL( MAX(RP.Qty), SUM(PD.Qty) ) - SUM ( PD.Qty )'
-           +       ', UserName         = RTRIM ( suser_sname() )'
-           +       ', datawindow       = @c_DataWindow'
-           +       ', ReplenType       = RTRIM ( @c_Type )'
-           +       ', PA_Descr         = RTRIM ( MAX ( FRPA.Descr ) )'
+           +       ', FromID             = RTRIM( PD.ID )'
+           +       ', ToFacility         = RTRIM( TOLOC.Facility )'
+           +       ', ToLoc              = RTRIM( PD.ToLoc )'
+           +       ', DropID             = RTRIM( PD.DropID )'
+           +       ', Lottable02         = RTRIM( LA.Lottable02 )'
+           +       ', Lottable04         = LA.Lottable04'
+           +       ', PackKey            = RTRIM( SKU.PackKey )'
          SET @c_ExecStatements = @c_ExecStatements
-           +       ', Brand            = RTRIM( MAX( ISNULL(' + CASE WHEN ISNULL(@c_BrandExp,'')<>'' THEN @c_BrandExp ELSE '''''' END + ','''')))'
+           +       ', CaseCnt            = ISNULL(' + CASE WHEN ISNULL(@c_CaseCntExp  ,'')<>'' THEN @c_CaseCntExp ELSE 'PACK.CaseCnt' END + ',0)'
          SET @c_ExecStatements = @c_ExecStatements
-           +       ', Lot              = PD.Lot'
-           +       ', TOLOC_LocationType = MAX(ISNULL(TOLOC.LocationType,''DYNAMICPK''))'
-           +       ', FromID_Long      = RTRIM ( MAX ( CASE WHEN ISNULL(ID.PalletFlag,'''')<>'''' AND LEFT(ID.PalletFlag,COLUMNPROPERTY(OBJECT_ID(''ID''), ''Id'', ''Precision''))=PD.ID'
-           +                                         ' THEN ID.PalletFlag ELSE PD.ID END ) )'
-           +       ', ShowFields       = MAX( RptCfg.ShowFields )'
+           +       ', PACKUOM1           = RTRIM( IIF(ISNULL(PACK.PACKUOM1,'''')='''', ''CS'', PACK.PACKUOM1) )'
+           +       ', PACKUOM3           = RTRIM( PACK.PACKUOM3 )'
+           +       ', AllocQty           = PD.Qty'
+           +       ', ReplenQty          = RP.Qty'
+           +       ', ReplenType         = RTRIM( @c_Type )'
+           +       ', PA_Descr           = RTRIM( FRPA.Descr )'
+         SET @c_ExecStatements = @c_ExecStatements
+           +       ', Brand              = RTRIM( ISNULL(' + CASE WHEN ISNULL(@c_BrandExp,'')<>'' THEN @c_BrandExp ELSE '''''' END + ',''''))'
+         SET @c_ExecStatements = @c_ExecStatements
+           +       ', Lot                = PD.Lot'
+           +       ', TOLOC_LocationType = ISNULL(TOLOC.LocationType,''DYNAMICPK'')'
+           +       ', FromID_Long        = RTRIM( CASE WHEN ISNULL(ID.PalletFlag,'''')<>'''' AND LEFT(ID.PalletFlag,COLUMNPROPERTY(OBJECT_ID(''ID''), ''Id'', ''Precision''))=PD.ID'
+           +                                         ' THEN ID.PalletFlag ELSE PD.ID END )'
+           +       ', ShowFields         = RptCfg.ShowFields'
 
          SET @c_ExecStatements = @c_ExecStatements
            +   ' FROM #TEMP_PICKDETAILKEY PDK'
@@ -2357,9 +2360,6 @@ REPORT_RESULTSET:
          SET @c_ExecStatements = @c_ExecStatements
            +   ' WHERE PDK.Storerkey = @c_Storerkey'
 
-         SET @c_ExecStatements = @c_ExecStatements
-           +   ' GROUP BY RP.ReplenishmentKey, PD.Lot, PD.Loc, PD.ID, PD.DropID'
-
 
          SET @c_ExecArguments = N'@c_DataWindow   NVARCHAR(40)'
                               + ',@c_Key          NVARCHAR(10)'
@@ -2378,12 +2378,43 @@ REPORT_RESULTSET:
    END
 
    -- Result Set
-   SELECT ReplenishmentKey, ReplenNo, Div, PutawayZone, Facility, StorerKey, Sku, Descr, AltSku, LogicalLocation
-        , FromLoc, FromID, ToFacility, ToLoc, DropID, Lottable02, Lottable04, PackKey, CaseCnt, PACKUOM1
-        , PACKUOM3, AllocQty, ReplenQty, PA_LoosePiece, UserName, datawindow, ReplenType, PA_Descr, Brand, Lot
-        , TOLOC_LocationType, FromID_Long, ShowFields
-        , ErrSeq = NULL, ErrMsg = NULL
-     FROM #TEMP_RESULTSET
+   SELECT ReplenishmentKey   = X.ReplenishmentKey
+        , ReplenNo           = MAX(X.ReplenNo)
+        , Div                = MAX(X.Div)
+        , PutawayZone        = MAX(X.PutawayZone)
+        , Facility           = MAX(X.Facility)
+        , StorerKey          = MAX(X.StorerKey)
+        , Sku                = MAX(X.Sku)
+        , Descr              = MAX(X.Descr)
+        , AltSku             = MAX(X.AltSku)
+        , LogicalLocation    = MAX(X.LogicalLocation)
+        , FromLoc            = X.FromLoc
+        , FromID             = X.FromID
+        , ToFacility         = MAX(X.ToFacility)
+        , ToLoc              = MAX(X.ToLoc)
+        , DropID             = X.DropID
+        , Lottable02         = MAX(X.Lottable02)
+        , Lottable04         = MAX(X.Lottable04)
+        , PackKey            = MAX(X.PackKey)
+        , CaseCnt            = MAX(X.CaseCnt)
+        , PACKUOM1           = MAX(X.PACKUOM1)
+        , PACKUOM3           = MAX(X.PACKUOM3)
+        , AllocQty           = SUM(X.AllocQty)
+        , ReplenQty          = ISNULL( MAX(X.ReplenQty), SUM(X.AllocQty) )
+        , PA_LoosePiece      = ISNULL( MAX(X.ReplenQty), SUM(X.AllocQty) ) - SUM(X.AllocQty)
+        , UserName           = RTRIM( SUSER_SNAME() )
+        , datawindow         = @c_DataWindow
+        , ReplenType         = MAX(X.ReplenType)
+        , PA_Descr           = MAX(X.PA_Descr)
+        , Brand              = MAX(X.Brand)
+        , Lot                = X.Lot
+        , TOLOC_LocationType = MAX(X.TOLOC_LocationType)
+        , FromID_Long        = MAX(X.FromID_Long)
+        , ShowFields         = MAX(X.ShowFields)
+        , ErrSeq             = NULL
+        , ErrMsg             = NULL
+     FROM #TEMP_RESULTSET X
+    GROUP BY X.ReplenishmentKey, X.Lot, X.FromLoc, X.FromID, X.DropID
 
    UNION ALL
 
