@@ -25,7 +25,8 @@ GO
 /* Updates:                                                              */
 /* Date         Author   Ver  Purposes                                   */
 /* 2021-08-26   Michael  v1.1 Add Showfield Update_PD_PickslipNo         */
-/* 2021-11-30   Michael  V1.4 Fix RptCfg.ShowFields NULL value issue     */
+/* 2021-11-30   Michael  V1.2 Fix RptCfg.ShowFields NULL value issue     */
+/* 2022-03-23   Michael  V1.3 Add NULL to Temp Table                     */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_print_pickorder_01] (
@@ -240,67 +241,67 @@ BEGIN
    DEALLOCATE PICK_CUR
 
    CREATE TABLE #TEMP_PIKDT (
-        Loadkey           NVARCHAR(10)
-      , Storerkey         NVARCHAR(15)
-      , PickSlipNo        NVARCHAR(10)
-      , OrderKey          NVARCHAR(10)
-      , DocNumber         NVARCHAR(500)
-      , CarrierKey        NVARCHAR(500)
-      , ConsigneeKey      NVARCHAR(500)
-      , Company           NVARCHAR(500)
-      , Address1          NVARCHAR(500)
-      , Address2          NVARCHAR(500)
-      , Address3          NVARCHAR(500)
-      , Address4          NVARCHAR(500)
-      , Zip               NVARCHAR(500)
-      , LabelPrice        NVARCHAR(500)
-      , Route             NVARCHAR(500)
-      , TrfRoom           NVARCHAR(500)
-      , Notes1            NVARCHAR(500)
-      , Notes2            NVARCHAR(500)
-      , PrintedFlag       NVARCHAR(1)
-      , VehicleNo         NVARCHAR(500)
-      , RefNo             NVARCHAR(500)
-      , Sku               NVARCHAR(500)
-      , SkuDesc           NVARCHAR(500)
-      , Putawayzone       NVARCHAR(500)
-      , ZoneDesc          NVARCHAR(500)
-      , LogicalLocation   NVARCHAR(500)
-      , Loc               NVARCHAR(500)
-      , Lottable02        NVARCHAR(500)
-      , Lottable04        NVARCHAR(500)
-      , Qty               INT
-      , CaseCnt           INT
-      , InnerPack         INT
-      , LineRemark1       NVARCHAR(500)
-      , LineRemark2       NVARCHAR(500)
-      , LineRemark3       NVARCHAR(500)
-      , ShowFields        NVARCHAR(4000)
-      , Storer_Logo       NVARCHAR(500)
-      , Lbl_Route         NVARCHAR(500)
-      , Lbl_DocNumber     NVARCHAR(500)
-      , Lbl_Consignee     NVARCHAR(500)
-      , Lbl_Company       NVARCHAR(500)
-      , Lbl_Address1      NVARCHAR(500)
-      , Lbl_Address2      NVARCHAR(500)
-      , Lbl_Address3      NVARCHAR(500)
-      , Lbl_Address4      NVARCHAR(500)
-      , Lbl_Zip           NVARCHAR(500)
-      , Lbl_Notes1        NVARCHAR(500)
-      , Lbl_Notes2        NVARCHAR(500)
-      , Lbl_TrfRoom       NVARCHAR(500)
-      , Lbl_Carrierkey    NVARCHAR(500)
-      , Lbl_VehicleNo     NVARCHAR(500)
-      , Lbl_RefNo         NVARCHAR(500)
-      , Lbl_Loc           NVARCHAR(500)
-      , Lbl_Sku           NVARCHAR(500)
-      , Lbl_Lottable02    NVARCHAR(500)
-      , Lbl_Lottable04    NVARCHAR(500)
-      , Lbl_CaseCnt       NVARCHAR(500)
-      , Lbl_InnerPack     NVARCHAR(500)
-      , Lbl_Cartons       NVARCHAR(500)
-      , Lbl_Inner         NVARCHAR(500)
-      , Lbl_Each          NVARCHAR(500)
+        Loadkey           NVARCHAR(10)   NULL
+      , Storerkey         NVARCHAR(15)   NULL
+      , PickSlipNo        NVARCHAR(10)   NULL
+      , OrderKey          NVARCHAR(10)   NULL
+      , DocNumber         NVARCHAR(500)  NULL
+      , CarrierKey        NVARCHAR(500)  NULL
+      , ConsigneeKey      NVARCHAR(500)  NULL
+      , Company           NVARCHAR(500)  NULL
+      , Address1          NVARCHAR(500)  NULL
+      , Address2          NVARCHAR(500)  NULL
+      , Address3          NVARCHAR(500)  NULL
+      , Address4          NVARCHAR(500)  NULL
+      , Zip               NVARCHAR(500)  NULL
+      , LabelPrice        NVARCHAR(500)  NULL
+      , Route             NVARCHAR(500)  NULL
+      , TrfRoom           NVARCHAR(500)  NULL
+      , Notes1            NVARCHAR(500)  NULL
+      , Notes2            NVARCHAR(500)  NULL
+      , PrintedFlag       NVARCHAR(1)    NULL
+      , VehicleNo         NVARCHAR(500)  NULL
+      , RefNo             NVARCHAR(500)  NULL
+      , Sku               NVARCHAR(500)  NULL
+      , SkuDesc           NVARCHAR(500)  NULL
+      , Putawayzone       NVARCHAR(500)  NULL
+      , ZoneDesc          NVARCHAR(500)  NULL
+      , LogicalLocation   NVARCHAR(500)  NULL
+      , Loc               NVARCHAR(500)  NULL
+      , Lottable02        NVARCHAR(500)  NULL
+      , Lottable04        NVARCHAR(500)  NULL
+      , Qty               INT            NULL
+      , CaseCnt           INT            NULL
+      , InnerPack         INT            NULL
+      , LineRemark1       NVARCHAR(500)  NULL
+      , LineRemark2       NVARCHAR(500)  NULL
+      , LineRemark3       NVARCHAR(500)  NULL
+      , ShowFields        NVARCHAR(4000) NULL
+      , Storer_Logo       NVARCHAR(500)  NULL
+      , Lbl_Route         NVARCHAR(500)  NULL
+      , Lbl_DocNumber     NVARCHAR(500)  NULL
+      , Lbl_Consignee     NVARCHAR(500)  NULL
+      , Lbl_Company       NVARCHAR(500)  NULL
+      , Lbl_Address1      NVARCHAR(500)  NULL
+      , Lbl_Address2      NVARCHAR(500)  NULL
+      , Lbl_Address3      NVARCHAR(500)  NULL
+      , Lbl_Address4      NVARCHAR(500)  NULL
+      , Lbl_Zip           NVARCHAR(500)  NULL
+      , Lbl_Notes1        NVARCHAR(500)  NULL
+      , Lbl_Notes2        NVARCHAR(500)  NULL
+      , Lbl_TrfRoom       NVARCHAR(500)  NULL
+      , Lbl_Carrierkey    NVARCHAR(500)  NULL
+      , Lbl_VehicleNo     NVARCHAR(500)  NULL
+      , Lbl_RefNo         NVARCHAR(500)  NULL
+      , Lbl_Loc           NVARCHAR(500)  NULL
+      , Lbl_Sku           NVARCHAR(500)  NULL
+      , Lbl_Lottable02    NVARCHAR(500)  NULL
+      , Lbl_Lottable04    NVARCHAR(500)  NULL
+      , Lbl_CaseCnt       NVARCHAR(500)  NULL
+      , Lbl_InnerPack     NVARCHAR(500)  NULL
+      , Lbl_Cartons       NVARCHAR(500)  NULL
+      , Lbl_Inner         NVARCHAR(500)  NULL
+      , Lbl_Each          NVARCHAR(500)  NULL
    )
 
    -- Storerkey Loop
