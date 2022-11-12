@@ -1,5 +1,5 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_picking_slip_06]') AND OBJECTPROPERTY(ID, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[isp_r_hk_picking_slip_06]
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_r_hk_picking_slip_06]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+drop procedure [dbo].[isp_r_hk_picking_slip_06]
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -31,6 +31,7 @@ GO
 /* 15/03/2021   ML       1.4  WMS-16584 - Add DocType, SpecialHandling   */
 /*                                        Delivery Date, OrderType       */
 /* 31/03/2021   ML       1.5  Fix PickHeader join issue for Conso order  */
+/* 23/03/2022   ML       1.6  Add NULL to Temp Table                     */
 /*************************************************************************/
 
 CREATE PROC [dbo].[isp_r_hk_picking_slip_06] (
@@ -91,39 +92,39 @@ BEGIN
          , @c_JoinClause         NVARCHAR(MAX)
 
    CREATE TABLE #TEMP_PIKDT (
-        Storerkey        NVARCHAR(15)
-      , Company          NVARCHAR(500)
-      , PutawayZone      NVARCHAR(500)
-      , Wavekey          NVARCHAR(500)
-      , LoadKey          NVARCHAR(500)
-      , Courier          NVARCHAR(500)
-      , EcomSingleFlag   NVARCHAR(500)
-      , C_Country        NVARCHAR(500)
-      , OrderKey         NVARCHAR(500)
-      , ExternOrderKey   NVARCHAR(500)
-      , PickslipNo       NVARCHAR(500)
-      , GiftWrapping     NVARCHAR(500)
-      , OH_AddDate       DATETIME
-      , OrderType        NVARCHAR(500)
-      , DocType          NVARCHAR(500)
-      , SpecialHandling  NVARCHAR(500)
-      , DeliveryDate     NVARCHAR(500)
-      , LogicalLocation  NVARCHAR(500)
-      , Loc              NVARCHAR(500)
-      , ID               NVARCHAR(500)
-      , Sku              NVARCHAR(500)
-      , DESCR            NVARCHAR(500)
-      , Qty              INT
+        Storerkey        NVARCHAR(15)  NULL
+      , Company          NVARCHAR(500) NULL
+      , PutawayZone      NVARCHAR(500) NULL
+      , Wavekey          NVARCHAR(500) NULL
+      , LoadKey          NVARCHAR(500) NULL
+      , Courier          NVARCHAR(500) NULL
+      , EcomSingleFlag   NVARCHAR(500) NULL
+      , C_Country        NVARCHAR(500) NULL
+      , OrderKey         NVARCHAR(500) NULL
+      , ExternOrderKey   NVARCHAR(500) NULL
+      , PickslipNo       NVARCHAR(500) NULL
+      , GiftWrapping     NVARCHAR(500) NULL
+      , OH_AddDate       DATETIME      NULL
+      , OrderType        NVARCHAR(500) NULL
+      , DocType          NVARCHAR(500) NULL
+      , SpecialHandling  NVARCHAR(500) NULL
+      , DeliveryDate     NVARCHAR(500) NULL
+      , LogicalLocation  NVARCHAR(500) NULL
+      , Loc              NVARCHAR(500) NULL
+      , ID               NVARCHAR(500) NULL
+      , Sku              NVARCHAR(500) NULL
+      , DESCR            NVARCHAR(500) NULL
+      , Qty              INT           NULL
    )
 
    -- Final Orderkey, PickslipNo List
    CREATE TABLE #TEMP_FINALORDERKEY (
-        Orderkey         NVARCHAR(10)
-      , PickslipNo       NVARCHAR(10)
-      , Loadkey          NVARCHAR(10)
-      , ConsolPick       NVARCHAR(1)
-      , DocKey           NVARCHAR(50)
-      , Storerkey        NVARCHAR(15)
+        Orderkey         NVARCHAR(10)  NULL
+      , PickslipNo       NVARCHAR(10)  NULL
+      , Loadkey          NVARCHAR(10)  NULL
+      , ConsolPick       NVARCHAR(1)   NULL
+      , DocKey           NVARCHAR(50)  NULL
+      , Storerkey        NVARCHAR(15)  NULL
    )
 
    SET @c_ExecArguments = N'@as_storerkey NVARCHAR(15)'
@@ -493,5 +494,6 @@ BEGIN
    ORDER BY Storerkey, PutawayZone, PmtTerm, Courier, Wavekey, Loadkey, Section, LogicalLocation, Loc, ID, Sku
 END
 GO
+
 GRANT EXECUTE ON isp_r_hk_picking_slip_06 TO NSQL
 GO
