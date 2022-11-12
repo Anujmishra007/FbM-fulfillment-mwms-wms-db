@@ -27,6 +27,7 @@ GO
 /*                            2. Exclude PD.UOM = 2 (FCP)                */
 /* 11/08/2021   ML       1.2  WMS-17708 Add MAPFILED:                    */
 /*                            Suggest_PAZone, T_Suggest_PAZone           */
+/* 23/03/2022   ML       1.3  Add NULL to Temp Table                     */
 /*************************************************************************/
 CREATE PROCEDURE [dbo].[isp_r_hk_picking_control_list_07b] (
        @as_storerkey NVARCHAR(15)
@@ -60,18 +61,18 @@ BEGIN
       DROP TABLE #TEMP_PICKDETAIL
 
    CREATE TABLE #TEMP_PICKDETAIL (
-        Storerkey          NVARCHAR(30)
-      , CustomerGroupCode  NVARCHAR(40)
-      , Wavekey            NVARCHAR(20)
-      , Wave_AddDate       DATETIME
-      , CaseID             NVARCHAR(40)
-      , PutawayZone        NVARCHAR(20)
-      , PickZone           NVARCHAR(20)
-      , Loc                NVARCHAR(20)
-      , Qty                INT
-      , ReqReplen          VARCHAR (1 )
-      , Suggest_PAZone     NVARCHAR(50)
-      , T_Suggest_PAZone   NVARCHAR(50)
+        Storerkey          NVARCHAR(30) NULL
+      , CustomerGroupCode  NVARCHAR(40) NULL
+      , Wavekey            NVARCHAR(20) NULL
+      , Wave_AddDate       DATETIME     NULL
+      , CaseID             NVARCHAR(40) NULL
+      , PutawayZone        NVARCHAR(20) NULL
+      , PickZone           NVARCHAR(20) NULL
+      , Loc                NVARCHAR(20) NULL
+      , Qty                INT          NULL
+      , ReqReplen          VARCHAR (1 ) NULL
+      , Suggest_PAZone     NVARCHAR(50) NULL
+      , T_Suggest_PAZone   NVARCHAR(50) NULL
    )
 
    SELECT TOP 1
