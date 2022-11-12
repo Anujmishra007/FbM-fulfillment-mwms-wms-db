@@ -20,13 +20,16 @@ DELETE rdt.RDTScn WHERE Scn = 5931 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 5931, 'ENG'
    ,@cLine01 = 'MBOL CREATION'
    ,@cLine03 = 'FACILITY: %05d01'
-   ,@cLine04 = 'MBOLKEY: %10d02'
-   ,@cLine05 = ''
-   ,@cLine06 = 'ORDERKEY: %10i03'
-   ,@cLine07 = 'LOADKEY: %10i04'
-   ,@cLine08 = 'REF NO:'
-   ,@cLine09 = '%20i05'
-   ,@cLine10 = 'ORDER #: %03d06'
+   ,@cLine04 = 'MBOLKEY : %10i02'
+   ,@cLine05 = 'ORDERKEY: %10i03'
+   ,@cLine06 = 'LOADKEY : %10i04'
+   ,@cLine07 = '%20d05'          -- Refno 1 Label (WMS-20213)
+   ,@cLine08 = '%20i06'          -- Refno 1 input 
+   ,@cLine09 = '%20d07'          -- Refno 2 Label
+   ,@cLine10 = '%20i08'          -- Refno 2 input
+   ,@cLine11 = '%20d09'          -- Refno 3 Label
+   ,@cLine12 = '%20i10'          -- Refno 3 input
+   ,@cLine13 = 'ORDER #: %03d15'
    ,@cLine14 = '%e'
    ,@nFunc = 1856
 
