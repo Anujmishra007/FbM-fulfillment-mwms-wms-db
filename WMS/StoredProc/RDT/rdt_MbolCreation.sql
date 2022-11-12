@@ -107,6 +107,11 @@ BEGIN
    DECLARE @CColumnName    NVARCHAR( 20)
    DECLARE @nCnt           INT = 1
    DECLARE @cOperator      NVARCHAR( 10)
+   DECLARE @curCondition   CURSOR
+   DECLARE @cValue         NVARCHAR( 30)
+   DECLARE @cSQLCondition  NVARCHAR( MAX)
+   DECLARE @nOrderAdded    INT = 0
+   DECLARE @ndebug         INT = 0
    
    SELECT @cUserName = UserName
    FROM rdt.RDTMOBREC WITH (NOLOCK)
@@ -187,7 +192,7 @@ BEGIN
          GOTO RollBackTran
       END
    END
-   
+   /*
    IF @cMBOLKey = ''
    BEGIN
       SET @nSuccess = 1
@@ -216,7 +221,7 @@ BEGIN
          GOTO RollBackTran
       END
    END
-
+   */
    SET @cSQL = ''
    SET @cSQLSelect = ''
    SET @cSQLWhere = ''
@@ -225,10 +230,12 @@ BEGIN
    SET @cSQLSelect = 
       ' SELECT OrderKey, LoadKey, ExternOrderKey FROM dbo.ORDERS O WITH (NOLOCK) '  
 
+   SET @cSQLWhere = ' WHERE O.StorerKey = @cStorerKey '
+   
    IF @cOrderKey <> ''
-      SET @cSQLWhere = ' WHERE O.OrderKey = @cOrderKey ' 
+      SET @cSQLWhere = @cSQLWhere + ' AND O.OrderKey = @cOrderKey ' 
    IF @cLoadKey <> ''
-      SET @cSQLWhere = ' WHERE O.LoadKey = @cLoadKey ' 
+      SET @cSQLWhere = @cSQLWhere + ' AND O.LoadKey = @cLoadKey ' 
       
    IF @cMbolCriteria <> '' 
    BEGIN
@@ -240,17 +247,12 @@ BEGIN
          AND COLUMN_NAME = @cRefnoLabel1
 
          IF @cDATA_TYPE = 'NVARCHAR'
-            SET @cSQLWhere = ' WHERE O.' + @cRefnoLabel1 + ' = ' +  '@cRefNo1 '
+            SET @cSQLWhere = @cSQLWhere + ' AND O.' + @cRefnoLabel1 + ' = ' +  '@cRefNo1 '
          ELSE IF @cDATA_TYPE = 'INT'
-            SET @cSQLWhere = ' WHERE O.' + @cRefnoLabel1 + ' = ' +  'CAST( @cRefNo1 AS INT) '
+            SET @cSQLWhere = @cSQLWhere + ' AND O.' + @cRefnoLabel1 + ' = ' +  'CAST( @cRefNo1 AS INT) '
          ELSE 
-         	SET @cSQLWhere = ' WHERE CONVERT( NVARCHAR( 8), CAST( O.' + @cRefnoLabel1 + ' AS DATE), 112)' + ' = ' +  '@cRefNo1 '
+         	SET @cSQLWhere = @cSQLWhere + ' AND CONVERT( NVARCHAR( 8), CAST( O.' + @cRefnoLabel1 + ' AS DATE), 112)' + ' = ' +  '@cRefNo1 '
       END
-
-      IF @cSQLWhere <> ''
-         SET @cOperator = ' AND ' 
-      ELSE
-         SET @cOperator = ' WHERE '
          	
       IF @cRefno2 <> ''
       BEGIN
@@ -260,11 +262,11 @@ BEGIN
          AND COLUMN_NAME = @cRefnoLabel2
 
          IF @cDATA_TYPE = 'NVARCHAR'
-            SET @cSQLWhere = @cSQLWhere + @cOperator + ' O.' + @cRefnoLabel2 + ' = ' +  '@cRefNo2 '
+            SET @cSQLWhere = @cSQLWhere + ' AND O.' + @cRefnoLabel2 + ' = ' +  '@cRefNo2 '
          ELSE IF @cDATA_TYPE = 'INT'
-            SET @cSQLWhere = @cSQLWhere + @cOperator + ' O.' + @cRefnoLabel2 + ' = ' +  'CAST( @cRefNo2 AS INT) '
+            SET @cSQLWhere = @cSQLWhere + ' AND O.' + @cRefnoLabel2 + ' = ' +  'CAST( @cRefNo2 AS INT) '
          ELSE 
-         	SET @cSQLWhere = @cSQLWhere + @cOperator + ' CONVERT( NVARCHAR( 8), CAST( O.' + @cRefnoLabel2 + ' AS DATE), 112)' + ' = ' +  '@cRefNo2 '
+         	SET @cSQLWhere = @cSQLWhere + ' AND CONVERT( NVARCHAR( 8), CAST( O.' + @cRefnoLabel2 + ' AS DATE), 112)' + ' = ' +  '@cRefNo2 '
       END
 
       IF @cRefno3 <> ''
@@ -275,22 +277,60 @@ BEGIN
          AND COLUMN_NAME = @cRefnoLabel3
 
          IF @cDATA_TYPE = 'NVARCHAR'
-            SET @cSQLWhere = @cSQLWhere + @cOperator + ' O.' + @cRefnoLabel3 + ' = ' +  '@cRefNo3 '
+            SET @cSQLWhere = @cSQLWhere + ' AND O.' + @cRefnoLabel3 + ' = ' +  '@cRefNo3 '
          ELSE IF @cDATA_TYPE = 'INT'
-            SET @cSQLWhere = @cSQLWhere + @cOperator + ' O.' + @cRefnoLabel3 + ' = ' +  'CAST( @cRefNo3 AS INT) '
+            SET @cSQLWhere = @cSQLWhere + ' AND O.' + @cRefnoLabel3 + ' = ' +  'CAST( @cRefNo3 AS INT) '
          ELSE 
-         	SET @cSQLWhere = @cSQLWhere + @cOperator + ' CONVERT( NVARCHAR( 8), CAST( O.' + @cRefnoLabel3 + ' AS DATE), 112)' + ' = ' +  '@cRefNo3 '
+         	SET @cSQLWhere = @cSQLWhere + ' AND CONVERT( NVARCHAR( 8), CAST( O.' + @cRefnoLabel3 + ' AS DATE), 112)' + ' = ' +  '@cRefNo3 '
       END
    END
+
+   SET @cSQLCondition = ''
+   SET @cColumnName = ''
+   SET @cOperator = ''
+   SET @cValue = ''
+   
+   SET @curCondition = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+   SELECT UDF01, UDF02, UDF03
+   FROM dbo.CODELKUP WITH (NOLOCK)
+   WHERE LISTNAME = 'BuildMBCon' 
+   AND   Storerkey = @cStorerKey
+   AND   code2 = @cFacility
+   OPEN @curCondition
+   FETCH NEXT FROM @curCondition INTO @cColumnName, @cOperator, @cValue
+   WHILE @@FETCH_STATUS = 0
+   BEGIN
+      SELECT @cDATA_TYPE = DATA_TYPE
+      FROM INFORMATION_SCHEMA.COLUMNS 
+      WHERE TABLE_NAME = 'ORDERS' 
+      AND COLUMN_NAME = @cColumnName
+
+      IF @@ROWCOUNT = 0
+         BREAK
+
+      IF @cDATA_TYPE = 'NVARCHAR'
+         SET @cSQLCondition = @cSQLCondition + ' AND O.' + @cColumnName + @cOperator + '''' + @cValue + ''''
+      ELSE IF @cDATA_TYPE = 'INT'
+         SET @cSQLCondition = @cSQLCondition + ' AND O.' + @cColumnName + @cOperator + CAST( @cValue AS INT)
+      ELSE 
+         SET @cSQLCondition = @cSQLCondition + ' AND CONVERT( NVARCHAR( 8), CAST( O.' + @cColumnName + ' AS DATE), 112)' + @cOperator + '''' + @cValue + ''''
+
+   	FETCH NEXT FROM @curCondition INTO @cColumnName, @cOperator, @cValue
+   END 
 
    SET @cSQLExists = +  ' AND NOT EXISTS ( SELECT 1 
                           FROM dbo.MBOLDetail MD WITH (NOLOCK) 
                           WHERE O.OrderKey = MD.OrderKey)'
 
-   SET @cSQL = @cSQLSelect + @cSQLWhere + @cSQLExists
+   SET @cSQL = @cSQLSelect + @cSQLWhere + @cSQLCondition + @cSQLExists
    SET @cSQL = @cSQL +  ' GROUP BY OrderKey, LoadKey, ExternOrderKey'
    SET @cSQL = @cSQL +  ' ORDER BY OrderKey'
 
+   IF @ndebug > 0
+   BEGIN
+      PRINT @cSQL
+   END
+   
    -- Open cursor  
    SET @cSQL =   
       ' SET @curMBOLDTL = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR ' +   
@@ -299,6 +339,7 @@ BEGIN
 
    SET @cSQLParam = 
       '@curMBOLDTL   CURSOR OUTPUT, ' + 
+      '@cStorerKey   NVARCHAR( 15), ' +
       '@cOrderKey    NVARCHAR( 10), ' +  
       '@cLoadKey     NVARCHAR( 10), ' +  
       '@cRefNo1      NVARCHAR( 20), ' +
@@ -307,11 +348,40 @@ BEGIN
          --      SET @nErrNo = -1 
          --GOTO RollBackTran
    EXEC sp_ExecuteSQL @cSQL, @cSQLParam, 
-      @curMBOLDTL OUTPUT, @cOrderKey, @cLoadKey, @cRefNo1, @cRefNo2, @cRefNo3
+      @curMBOLDTL OUTPUT, @cStorerKey, @cOrderKey, @cLoadKey, @cRefNo1, @cRefNo2, @cRefNo3
 
    FETCH NEXT FROM @curMBOLDTL INTO @cOUTOrderKey, @cOUTLoadKey, @cOUTExternOrderKey
    WHILE @@FETCH_STATUS = 0
    BEGIN
+      IF @cMBOLKey = ''
+      BEGIN
+         SET @nSuccess = 1
+         EXECUTE dbo.nspg_getkey
+            'MBOL'
+            , 10
+            , @cMBOLKey    OUTPUT
+            , @nSuccess    OUTPUT
+            , @nErrNo      OUTPUT
+            , @cErrMsg     OUTPUT
+
+         IF @nSuccess <> 1
+         BEGIN
+            SET @nErrNo = 172152
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --nspg_getkey
+            GOTO RollBackTran
+         END
+
+         INSERT INTO MBOL (MBOLKey, ExternMBOLKey, Facility, STATUS, Remarks) VALUES 
+         (@cMBOLKey, '', @cFacility, '0', 'rdt_MbolCreation')    
+
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 172153
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins MBOL Err
+            GOTO RollBackTran
+         END
+      END
+   
       INSERT INTO dbo.MBOLDetail 
       (MBOLKey, MBOLLineNumber, OrderKey, LoadKey, ExternOrderKey, AddWho, AddDate, EditWho, EditDate) 
       VALUES
@@ -324,7 +394,17 @@ BEGIN
          GOTO RollBackTran
       END
 
+      SET @nOrderAdded = @nOrderAdded + 1
+
       FETCH NEXT FROM @curMBOLDTL INTO @cOUTOrderKey, @cOUTLoadKey, @cOUTExternOrderKey
+   END
+
+   IF @nOrderAdded = 0
+   BEGIN
+      SET @nErrNo = 172155
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NO ORDERS ADD
+      SET @cMBOLKey = ''
+      GOTO RollBackTran
    END
 
    EXEC RDT.rdt_STD_EventLog    --(yeekung01)
@@ -348,7 +428,7 @@ Fail:
 Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
       COMMIT TRAN
-
+      
 --INSERT INTO TESTTEST (SQL, SQLPARAM, REFNO1, REFNO2, REFNO3) VALUES
 --(@cSQL, @cSQLParam, @cRefNo1, @cRefNo2, @cRefNo3)
 END
