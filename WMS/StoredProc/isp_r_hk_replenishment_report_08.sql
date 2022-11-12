@@ -1,5 +1,5 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_replenishment_report_08]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[isp_r_hk_replenishment_report_08]
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_r_hk_replenishment_report_08]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+drop procedure [dbo].[isp_r_hk_replenishment_report_08]
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -23,6 +23,7 @@ GO
 /*                                                                       */
 /* Updates:                                                              */
 /* Date         Author   Ver  Purposes                                   */
+/* 23/03/2022   ML       1.1  Add NULL to Temp Table                     */
 /*************************************************************************/
 
 CREATE PROC [dbo].[isp_r_hk_replenishment_report_08] (
@@ -84,20 +85,20 @@ BEGIN
    END
 
    CREATE TABLE #TEMP_PIKDT (
-        Storerkey        NVARCHAR(15)
-      , Wavekey          NVARCHAR(10)
-      , Channel          NVARCHAR(20)
-      , PutawayZone      NVARCHAR(10)
-      , PA_Descr         NVARCHAR(60)
-      , LogicalLoc       NVARCHAR(20)
-      , Loc              NVARCHAR(10)
-      , ID               NVARCHAR(20)
-      , Sku              NVARCHAR(20)
-      , Sku_Descr        NVARCHAR(60)
-      , Qty              INT
-      , Remarks          NVARCHAR(4000)
-      , SkuCount         INT
-      , ShowFields       NVARCHAR(4000)
+        Storerkey        NVARCHAR(15)   NULL
+      , Wavekey          NVARCHAR(10)   NULL
+      , Channel          NVARCHAR(20)   NULL
+      , PutawayZone      NVARCHAR(10)   NULL
+      , PA_Descr         NVARCHAR(60)   NULL
+      , LogicalLoc       NVARCHAR(20)   NULL
+      , Loc              NVARCHAR(10)   NULL
+      , ID               NVARCHAR(20)   NULL
+      , Sku              NVARCHAR(20)   NULL
+      , Sku_Descr        NVARCHAR(60)   NULL
+      , Qty              INT            NULL
+      , Remarks          NVARCHAR(4000) NULL
+      , SkuCount         INT            NULL
+      , ShowFields       NVARCHAR(4000) NULL
    )
 
    -- Storerkey Loop
@@ -292,5 +293,6 @@ BEGIN
           , ID
 END
 GO
+
 GRANT EXECUTE ON isp_r_hk_replenishment_report_08 TO NSQL
 GO
