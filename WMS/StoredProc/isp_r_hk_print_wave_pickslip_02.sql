@@ -24,6 +24,7 @@ GO
 /*                                                                       */
 /* Updates:                                                              */
 /* Date         Author   Ver  Purposes                                   */
+/* 23/03/2022   ML       1.2  Add NULL to Temp Table                     */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_print_wave_pickslip_02] (
@@ -106,59 +107,59 @@ BEGIN
 
 
    CREATE TABLE #TEMP_RESULT (
-        PickslipNo      NVARCHAR(18)
-      , ConsolPick      VARCHAR(1)
-      , DocKey          NVARCHAR(10)
-      , Wavekey         NVARCHAR(10)
-      , Loadkey         NVARCHAR(10)
-      , PrintedFlag     NVARCHAR(10)
-      , Storerkey       NVARCHAR(15)
-      , ST_Company      NVARCHAR(45)
-      , Facility        NVARCHAR(5)
-      , Orderkey        NVARCHAR(10)
-      , ExternOrderKey  NVARCHAR(50)
-      , OrderType       NVARCHAR(10)
-      , Route           NVARCHAR(10)
-      , Route_Desc      NVARCHAR(60)
-      , TrfRoom         NVARCHAR(10)
-      , VehicleNo       NVARCHAR(10)
-      , Delivery_zone   NVARCHAR(10)
-      , ExternPOKey     NVARCHAR(20)
-      , BuyerPO         NVARCHAR(20)
-      , InvoiceNo       NVARCHAR(20)
-      , DeliveryDate    DATETIME
-      , Consigneekey    NVARCHAR(15)
-      , C_Company       NVARCHAR(45)
-      , C_Address1      NVARCHAR(45)
-      , C_Address2      NVARCHAR(45)
-      , C_Address3      NVARCHAR(45)
-      , C_Address4      NVARCHAR(45)
-      , BillToKey       NVARCHAR(15)
-      , B_Company       NVARCHAR(45)
-      , B_Address1      NVARCHAR(45)
-      , B_Address2      NVARCHAR(45)
-      , B_Address3      NVARCHAR(45)
-      , B_Address4      NVARCHAR(45)
-      , Notes           NVARCHAR(4000)
-      , Notes2          NVARCHAR(4000)
-      , Capacity        FLOAT
-      , GrossWeight     FLOAT
-      , Sku             NVARCHAR(20)
-      , SkuDescr        NVARCHAR(60)
-      , Altsku          NVARCHAR(20)
-      , HazardousFlag   NVARCHAR(30)
-      , PutawayZone     NVARCHAR(10)
-      , PADescr         NVARCHAR(60)
-      , Loc             NVARCHAR(10)
-      , LogicalLocation NVARCHAR(18)
-      , ID              NVARCHAR(18)
-      , Qty             INT
-      , CaseCnt         FLOAT
-      , Lottable02      NVARCHAR(18)
-      , Lottable03      NVARCHAR(18)
-      , Lottable04      DATETIME
-      , Report_Logo     NVARCHAR(4000)
-      , LineRemark      NVARCHAR(4000)
+        PickslipNo      NVARCHAR(18)   NULL
+      , ConsolPick      VARCHAR(1)     NULL
+      , DocKey          NVARCHAR(10)   NULL
+      , Wavekey         NVARCHAR(10)   NULL
+      , Loadkey         NVARCHAR(10)   NULL
+      , PrintedFlag     NVARCHAR(10)   NULL
+      , Storerkey       NVARCHAR(15)   NULL
+      , ST_Company      NVARCHAR(45)   NULL
+      , Facility        NVARCHAR(5)    NULL
+      , Orderkey        NVARCHAR(10)   NULL
+      , ExternOrderKey  NVARCHAR(50)   NULL
+      , OrderType       NVARCHAR(10)   NULL
+      , Route           NVARCHAR(10)   NULL
+      , Route_Desc      NVARCHAR(60)   NULL
+      , TrfRoom         NVARCHAR(10)   NULL
+      , VehicleNo       NVARCHAR(10)   NULL
+      , Delivery_zone   NVARCHAR(10)   NULL
+      , ExternPOKey     NVARCHAR(20)   NULL
+      , BuyerPO         NVARCHAR(20)   NULL
+      , InvoiceNo       NVARCHAR(20)   NULL
+      , DeliveryDate    DATETIME       NULL
+      , Consigneekey    NVARCHAR(15)   NULL
+      , C_Company       NVARCHAR(45)   NULL
+      , C_Address1      NVARCHAR(45)   NULL
+      , C_Address2      NVARCHAR(45)   NULL
+      , C_Address3      NVARCHAR(45)   NULL
+      , C_Address4      NVARCHAR(45)   NULL
+      , BillToKey       NVARCHAR(15)   NULL
+      , B_Company       NVARCHAR(45)   NULL
+      , B_Address1      NVARCHAR(45)   NULL
+      , B_Address2      NVARCHAR(45)   NULL
+      , B_Address3      NVARCHAR(45)   NULL
+      , B_Address4      NVARCHAR(45)   NULL
+      , Notes           NVARCHAR(4000) NULL
+      , Notes2          NVARCHAR(4000) NULL
+      , Capacity        FLOAT          NULL
+      , GrossWeight     FLOAT          NULL
+      , Sku             NVARCHAR(20)   NULL
+      , SkuDescr        NVARCHAR(60)   NULL
+      , Altsku          NVARCHAR(20)   NULL
+      , HazardousFlag   NVARCHAR(30)   NULL
+      , PutawayZone     NVARCHAR(10)   NULL
+      , PADescr         NVARCHAR(60)   NULL
+      , Loc             NVARCHAR(10)   NULL
+      , LogicalLocation NVARCHAR(18)   NULL
+      , ID              NVARCHAR(18)   NULL
+      , Qty             INT            NULL
+      , CaseCnt         FLOAT          NULL
+      , Lottable02      NVARCHAR(18)   NULL
+      , Lottable03      NVARCHAR(18)   NULL
+      , Lottable04      DATETIME       NULL
+      , Report_Logo     NVARCHAR(4000) NULL
+      , LineRemark      NVARCHAR(4000) NULL
    )
 
 
