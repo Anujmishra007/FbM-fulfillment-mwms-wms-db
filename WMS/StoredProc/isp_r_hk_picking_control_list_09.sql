@@ -1,5 +1,5 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[dbo].[isp_r_hk_picking_control_list_09]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[isp_r_hk_picking_control_list_09]
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_r_hk_picking_control_list_09]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+drop procedure [dbo].[isp_r_hk_picking_control_list_09]
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -23,6 +23,7 @@ GO
 /*                                                                       */
 /* Updates:                                                              */
 /* Date         Author   Ver  Purposes                                   */
+/* 23/03/2022   ML       1.1  Add NULL to Temp Table                     */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_picking_control_list_09] (
@@ -70,20 +71,20 @@ BEGIN
 
 
    CREATE TABLE #TEMP_PIKDT (
-        Storerkey         NVARCHAR(15)
-      , Facility          NVARCHAR(5)
-      , Loadkey           NVARCHAR(10)
-      , Wavekey           NVARCHAR(10)
-      , PickslipNo        NVARCHAR(20)
-      , Route             NVARCHAR(10)
-      , PutawayZone       NVARCHAR(10)
-      , DeliveryDate      DATE
-      , LFL_Company       NVARCHAR(500)
-      , CustomerGroupCode NVARCHAR(500)
-      , PageBreakValue    NVARCHAR(500)
-      , ShipTo            NVARCHAR(500)
-      , ExternOrderKey    NVARCHAR(500)
-      , Qty               INT
+        Storerkey         NVARCHAR(15)  NULL
+      , Facility          NVARCHAR(5)   NULL
+      , Loadkey           NVARCHAR(10)  NULL
+      , Wavekey           NVARCHAR(10)  NULL
+      , PickslipNo        NVARCHAR(20)  NULL
+      , Route             NVARCHAR(10)  NULL
+      , PutawayZone       NVARCHAR(10)  NULL
+      , DeliveryDate      DATE          NULL
+      , LFL_Company       NVARCHAR(500) NULL
+      , CustomerGroupCode NVARCHAR(500) NULL
+      , PageBreakValue    NVARCHAR(500) NULL
+      , ShipTo            NVARCHAR(500) NULL
+      , ExternOrderKey    NVARCHAR(500) NULL
+      , Qty               INT           NULL
    )
 
    SELECT @c_LFL_CompanyExp   = ''
@@ -132,7 +133,10 @@ BEGIN
    SET @c_ExecStatements = @c_ExecStatements
        +      ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_PageBrkValueExp  ,'')<>'' THEN @c_PageBrkValueExp   ELSE 'CONVERT(NVARCHAR(10),ISNULL(PH.PickHeaderKey,''''))+CONVERT(NVARCHAR(10),ISNULL(OH.Loadkey,''''))' END + '),'''')'
    SET @c_ExecStatements = @c_ExecStatements
-       +      ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_ShipToExp        ,'')<>'' THEN @c_ShipToExp         ELSE 'RTRIM(RTRIM(RTRIM(RTRIM(RTRIM(TRIM(ISNULL(OH.Consigneekey,''''))+'' ''+TRIM(ISNULL(OH.C_Address1,'''')))+'' ''+TRIM(ISNULL(OH.C_Address2,'''')))+'' ''+TRIM(ISNULL(OH.C_Address3,'''')))+'' ''+TRIM(ISNULL(OH.C_Address4,'''')))+'' ''+TRIM(ISNULL(OH.C_City,'''')))' END + '),'''')'
+       +      ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_ShipToExp        ,'')<>'' THEN @c_ShipToExp
+                                  ELSE 'RTRIM(RTRIM(RTRIM(RTRIM(RTRIM(TRIM(ISNULL(OH.Consigneekey,''''))+'' ''+TRIM(ISNULL(OH.C_Address1,'''')))+'' ''+TRIM(ISNULL(OH.C_Address2,'''')))'
+                                     + '+'' ''+TRIM(ISNULL(OH.C_Address3,'''')))+'' ''+TRIM(ISNULL(OH.C_Address4,'''')))+'' ''+TRIM(ISNULL(OH.C_City,'''')))'
+                                  END + '),'''')'
    SET @c_ExecStatements = @c_ExecStatements
        +      ', ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_ExtOrderkeyExp   ,'')<>'' THEN @c_ExtOrderkeyExp    ELSE 'CASE WHEN X.NoOfOrder=1 THEN OH.ExternOrderkey END' END + '),'''')'
    SET @c_ExecStatements = @c_ExecStatements
@@ -167,7 +171,7 @@ BEGIN
    BEGIN
       IF ISNULL(@as_deliverydatefrom,'')<>''
          SET @c_ExecStatements = @c_ExecStatements
-             +' AND OH.DeliveryDate >= @d_DeliveryDateFrom AND OH.DeliveryDate < @d_DeliveryDateTo)'
+             +' AND OH.DeliveryDate >= @d_DeliveryDateFrom AND OH.DeliveryDate < @d_DeliveryDateTo'
 
       IF ISNULL(@as_wavekey,'')<>''
          SET @c_ExecStatements = @c_ExecStatements
@@ -208,7 +212,7 @@ BEGIN
    FROM #TEMP_PIKDT PIKDT
    GROUP BY PIKDT.StorerKey
           , PIKDT.Facility
-          , PIKDT.DeliveryDate
+          , PIKDT.DeliveryDate 
           , PIKDT.Wavekey
           , PIKDT.PickslipNo
           , PIKDT.Route
@@ -219,5 +223,6 @@ BEGIN
    ORDER BY Storerkey, Facility, PageBreakValue, PutawayZone, Loadkey
 END
 GO
+
 GRANT EXECUTE ON isp_r_hk_picking_control_list_09 TO NSQL
 GO
