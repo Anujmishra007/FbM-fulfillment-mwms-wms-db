@@ -29,6 +29,7 @@ GO
 /*                               T_CompanyFrom, Indicator1, Indicator2   */
 /*                               Indicator3                              */
 /*                            2. Fix incorrect CartonMax issue           */
+/* 23/03/2022   ML       1.2  Add NULL to Temp Table                     */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_carton_label_03] (
@@ -113,57 +114,57 @@ BEGIN
         , @n_CartonNoTo   = ISNULL( IIF(ISNULL(@as_endcartonno  ,'')='', 0, TRY_PARSE(@as_endcartonno   AS FLOAT)), 0 )
 
    CREATE TABLE #TEMP_PAKDT (
-        PickslipNo       NVARCHAR(18)
-      , Orderkey         NVARCHAR(10)
-      , ExternOrderKey   NVARCHAR(50)
-      , Storerkey        NVARCHAR(15)
-      , Loadkey          NVARCHAR(10)
-      , DocNum           NVARCHAR(50)
-      , DocKey           NVARCHAR(50)
-      , InvoiceNo        NVARCHAR(50)
-      , RefNo            NVARCHAR(50)
-      , Userdefine04     NVARCHAR(50)
-      , C_Company        NVARCHAR(500)
-      , C_Address1       NVARCHAR(500)
-      , C_Address2       NVARCHAR(500)
-      , C_Address3       NVARCHAR(500)
-      , C_Address4       NVARCHAR(500)
-      , C_Zip            NVARCHAR(500)
-      , C_Country        NVARCHAR(500)
-      , Route            NVARCHAR(500)
-      , CompanyFrom      NVARCHAR(50)
-      , DropID           NVARCHAR(50)
-      , ExtraBarcode     NVARCHAR(50)
-      , T_DocNum         NVARCHAR(50)
-      , T_DocKey         NVARCHAR(50)
-      , T_InvoiceNo      NVARCHAR(50)
-      , T_RefNo          NVARCHAR(50)
-      , T_Userdefine04   NVARCHAR(50)
-      , T_Carton         NVARCHAR(50)
-      , T_TotalQty       NVARCHAR(50)
-      , T_ToCustomer     NVARCHAR(50)
-      , T_CompanyFrom    NVARCHAR(50)
-      , Indicator1       NVARCHAR(50)
-      , Indicator2       NVARCHAR(50)
-      , Indicator3       NVARCHAR(50)
-      , LabelNo          NVARCHAR(50)
-      , CartonNoStr      NVARCHAR(50)
-      , TotalQty         INT
-      , CartonNo         INT
-      , CartonMax        INT
-      , ConsolPick       NVARCHAR(1)
+        PickslipNo       NVARCHAR(18)  NULL
+      , Orderkey         NVARCHAR(10)  NULL
+      , ExternOrderKey   NVARCHAR(50)  NULL
+      , Storerkey        NVARCHAR(15)  NULL
+      , Loadkey          NVARCHAR(10)  NULL
+      , DocNum           NVARCHAR(50)  NULL
+      , DocKey           NVARCHAR(50)  NULL
+      , InvoiceNo        NVARCHAR(50)  NULL
+      , RefNo            NVARCHAR(50)  NULL
+      , Userdefine04     NVARCHAR(50)  NULL
+      , C_Company        NVARCHAR(500) NULL
+      , C_Address1       NVARCHAR(500) NULL
+      , C_Address2       NVARCHAR(500) NULL
+      , C_Address3       NVARCHAR(500) NULL
+      , C_Address4       NVARCHAR(500) NULL
+      , C_Zip            NVARCHAR(500) NULL
+      , C_Country        NVARCHAR(500) NULL
+      , Route            NVARCHAR(500) NULL
+      , CompanyFrom      NVARCHAR(50)  NULL
+      , DropID           NVARCHAR(50)  NULL
+      , ExtraBarcode     NVARCHAR(50)  NULL
+      , T_DocNum         NVARCHAR(50)  NULL
+      , T_DocKey         NVARCHAR(50)  NULL
+      , T_InvoiceNo      NVARCHAR(50)  NULL
+      , T_RefNo          NVARCHAR(50)  NULL
+      , T_Userdefine04   NVARCHAR(50)  NULL
+      , T_Carton         NVARCHAR(50)  NULL
+      , T_TotalQty       NVARCHAR(50)  NULL
+      , T_ToCustomer     NVARCHAR(50)  NULL
+      , T_CompanyFrom    NVARCHAR(50)  NULL
+      , Indicator1       NVARCHAR(50)  NULL
+      , Indicator2       NVARCHAR(50)  NULL
+      , Indicator3       NVARCHAR(50)  NULL
+      , LabelNo          NVARCHAR(50)  NULL
+      , CartonNoStr      NVARCHAR(50)  NULL
+      , TotalQty         INT           NULL
+      , CartonNo         INT           NULL
+      , CartonMax        INT           NULL
+      , ConsolPick       NVARCHAR(1)   NULL
    )
 
    -- Final Orderkey
    CREATE TABLE #TEMP_FINALORDERKEY (
-        PickslipNo       NVARCHAR(10)
-      , Orderkey         NVARCHAR(10)
-      , Loadkey          NVARCHAR(10)
-      , ConsolPick       NVARCHAR(1)
-      , Storerkey        NVARCHAR(15)
-      , TotPikQty        INT
-      , TotPakQty        INT
-      , CartonMax        INT
+        PickslipNo       NVARCHAR(10) NULL
+      , Orderkey         NVARCHAR(10) NULL
+      , Loadkey          NVARCHAR(10) NULL
+      , ConsolPick       NVARCHAR(1)  NULL
+      , Storerkey        NVARCHAR(15) NULL
+      , TotPikQty        INT          NULL
+      , TotPakQty        INT          NULL
+      , CartonMax        INT          NULL
    )
    SELECT *
      INTO #TEMP_FINALORDERKEY2
