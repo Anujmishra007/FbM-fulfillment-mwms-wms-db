@@ -24,3 +24,9 @@ execute rdt.rdtAddMsg 166270, 10, '66270^UPDPKLockFail',  'us_english'
 execute rdt.rdtAddMsg 166271, 10, '66271^UPDMOBRECFail',  'us_english'
 execute rdt.rdtAddMsg 166272, 10, '66272^DROPID IS REQ',  'us_english'
 execute rdt.rdtAddMsg 166273, 10, '66273^CASECNT = 0',    'us_english'
+
+--WMS-20784
+execute rdt.rdtAddMsg 166274, 10, '66274^PrintPKSLP Err',  'us_english'
+execute rdt.rdtAddMsg 166275, 10, '66275^Scan In Fail  ',  'us_english'
+execute rdt.rdtAddMsg 166276, 10, '66276^Conf Pack Fail',  'us_english'
+
