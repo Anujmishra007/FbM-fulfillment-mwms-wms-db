@@ -1,12 +1,7 @@
-if exists (select * from sys.objects where object_id = object_id(N'[rdt].[rdtfnc_MbolCreation]') and OBJECTPROPERTY(object_id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdtfnc_MbolCreation]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
-
   
 /***************************************************************************/  
 /* Store procedure: rdtfnc_MbolCreation                                    */  
@@ -19,9 +14,10 @@ GO
 /* Date         Rev  Author   Purposes                                     */  
 /* 2021-07-27   1.0  James    WMS-17484 Created                            */ 
 /* 2021-08-09   1.1  James    WMS-17621 Add capture data (james01)         */
+/* 2022-08-03   1.2  James    WMS-20213 Add custom lookup field (james02)  */
 /***************************************************************************/  
   
-CREATE PROC [RDT].[rdtfnc_MbolCreation](  
+CREATE OR ALTER PROC [RDT].[rdtfnc_MbolCreation](  
    @nMobile    int,  
    @nErrNo     int  OUTPUT,  
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max  
@@ -58,7 +54,9 @@ DECLARE
    @cLoadKey            NVARCHAR( 10),  
    @cOrderKey           NVARCHAR( 10),  
    @cMBOLKey            NVARCHAR( 10),
-   @cRefNo              NVARCHAR( 20),
+   @cRefNo1             NVARCHAR( 20),
+   @cRefNo2             NVARCHAR( 20),
+   @cRefNo3             NVARCHAR( 20),
    @cRefNoLookupColumn  NVARCHAR( 20),
    @cLockFacility       NVARCHAR( 1),
    @nOrderCnt           INT,
@@ -74,7 +72,12 @@ DECLARE
    @cData3              NVARCHAR( 60),
    @cData4              NVARCHAR( 60),
    @cData5              NVARCHAR( 60),
-
+   @cMbolCriteria       NVARCHAR( 20),
+   @cRefnoLabel1        NVARCHAR( 20),
+   @cRefnoLabel2        NVARCHAR( 20),
+   @cRefnoLabel3        NVARCHAR( 20),
+   @cColumnName         NVARCHAR( 20),
+   
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),  @cFieldAttr01 NVARCHAR( 1),  
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),  @cFieldAttr02 NVARCHAR( 1),  
    @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),  @cFieldAttr03 NVARCHAR( 1),  
@@ -113,11 +116,17 @@ SELECT
    @cExtendedInfoSP     = V_String3,  
    @cMBOLKey            = V_String4,   
    @cCloseMbol          = V_String5,
-   @cRefNo              = V_String6,  
-   @cLockFacility       = V_String7,  
-   @cRefNoLookupColumn  = V_String8,
-   @cCaptureInfoSP      = V_String9,
-
+   @cRefNo1             = V_String6,  
+   @cRefNo2             = V_String7,
+   @cRefNo3             = V_String8,
+   @cLockFacility       = V_String9,  
+   @cRefNoLookupColumn  = V_String10,
+   @cCaptureInfoSP      = V_String11,
+   @cMbolCriteria       = V_String12,
+   @cRefnoLabel1        = V_String13,
+   @cRefnoLabel2        = V_String14,
+   @cRefnoLabel3        = V_String15,
+   
    @cData1              = V_String41,
    @cData2              = V_String42,
    @cData3              = V_String43,
@@ -196,6 +205,10 @@ BEGIN
 
    SET @cCloseMbol = rdt.rdtGetConfig( @nFunc, 'CloseMbol', @cStorerKey)
 
+   SET @cMbolCriteria = rdt.rdtGetConfig( @nFunc, 'MbolCriteria', @cStorerKey)
+   IF @cMbolCriteria = '0'
+      SET @cMbolCriteria = ''
+      
    -- Prepare next screen var  
    SET @cOutField01 = @cFacility  
    SET @cFieldAttr01 = CASE WHEN @cLockFacility = '1' THEN 'O' ELSE '' END
@@ -209,11 +222,13 @@ BEGIN
       @cFacility       = @cFacility,  
       @cStorerKey      = @cStorerKey,  
       @nStep           = @nStep  
-  
+
   SET @cMBOLKey = ''
   SET @cOrderKey = ''
   SET @cLoadKey = ''
-  SET @cRefNo = ''
+  SET @cRefNo1 = ''
+  SET @cRefNo2 = ''
+  SET @cRefNo3 = ''
   
    -- Go to next screen  
    SET @nScn = @nScn_Facility  
@@ -255,7 +270,8 @@ BEGIN
          BEGIN  
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +  
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +   
-               ' @cOrderKey, @cLoadKey, @cRefNo, @tExtValidate, @nErrNo OUTPUT, @cErrMsg OUTPUT '  
+               ' @cMBOLKey, @cOrderKey, @cLoadKey, @cRefNo1, @cRefNo2, @cRefNo3, @tExtValidate, ' + 
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '  
   
             SET @cSQLParam =  
                ' @nMobile        INT,           ' +  
@@ -264,36 +280,126 @@ BEGIN
                ' @nStep          INT,           ' +  
                ' @nInputKey      INT,           ' +  
                ' @cFacility      NVARCHAR( 5),  ' +  
-               ' @cStorerKey     NVARCHAR( 15), ' +  
+               ' @cStorerKey     NVARCHAR( 15), ' +
+               ' @cMBOLKey       NVARCHAR( 10), ' +  
                ' @cOrderKey      NVARCHAR( 10), ' +  
                ' @cLoadKey       NVARCHAR( 10), ' +  
-               ' @cRefNo         NVARCHAR( 10), ' +  
+               ' @cRefNo1        NVARCHAR( 20), ' +  
+               ' @cRefNo2        NVARCHAR( 20), ' +
+               ' @cRefNo3        NVARCHAR( 20), ' +
                ' @tExtValidate   VariableTable READONLY, ' +   
                ' @nErrNo         INT           OUTPUT, ' +  
                ' @cErrMsg        NVARCHAR( 20) OUTPUT  '  
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,   
-               @cOrderKey, @cLoadKey, @cRefNo, @tExtValidate, @nErrNo OUTPUT, @cErrMsg OUTPUT  
+               @cMBOLKey, @cOrderKey, @cLoadKey, @cRefNo1, @cRefNo2, @cRefNo3, @tExtValidate, 
+               @nErrNo OUTPUT, @cErrMsg OUTPUT  
   
             IF @nErrNo <> 0   
                GOTO Step_Facility_Fail  
          END  
       END  
 
+      -- MBOL criteria
+      IF @cMbolCriteria <> ''
+      BEGIN
+         -- Get pallet criteria label
+         SELECT
+            @cRefnoLabel1 = UDF01,
+            @cRefnoLabel2 = UDF02,
+            @cRefnoLabel3 = UDF03
+         FROM dbo.CodeLKUP WITH (NOLOCK)
+         WHERE ListName = 'RDTBuildMB'
+         AND   Code = @cMbolCriteria
+         AND   StorerKey = @cStorerKey
+         AND   code2 = @cFacility
+
+         -- Check pallet criteria setup
+         IF @cRefnoLabel1 = '' AND
+            @cRefnoLabel2 = '' AND
+            @cRefnoLabel3 = '' 
+         BEGIN
+            SET @nErrNo = 172113
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Param NotSetup
+            GOTO Quit
+         END
+
+         DECLARE @curMBOLRule CURSOR
+         SET @curMBOLRule = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+         SELECT UDF01
+         FROM dbo.CODELKUP WITH (NOLOCK)
+         WHERE LISTNAME = @cMbolCriteria
+         AND   StorerKey = @cStorerKey
+         AND   code2 = @cFacility
+         ORDER BY Code
+         OPEN @curMBOLRule
+         FETCH NEXT FROM @curMBOLRule INTO @cColumnName
+         WHILE @@FETCH_STATUS = 0
+         BEGIN
+            IF NOT EXISTS (SELECT 1
+                           FROM INFORMATION_SCHEMA.COLUMNS 
+                           WHERE TABLE_NAME = 'ORDERS' 
+                           AND COLUMN_NAME = @cColumnName)
+            BEGIN
+               SET @nErrNo = 172114
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Param NotValid
+               GOTO Quit
+            END
+
+            FETCH NEXT FROM @curMBOLRule INTO @cColumnName
+         END
+         
+         -- Enable / disable field
+         SET @cFieldAttr06 = CASE WHEN @cRefnoLabel1 = '' THEN 'O' ELSE '' END
+         SET @cFieldAttr08 = CASE WHEN @cRefnoLabel2 = '' THEN 'O' ELSE '' END
+         SET @cFieldAttr10 = CASE WHEN @cRefnoLabel3 = '' THEN 'O' ELSE '' END
+
+         -- Clear optional in field
+         SET @cInField06 = ''
+         SET @cInField08 = ''
+         SET @cInField10 = ''
+
+         -- Prepare next screen var
+         SET @cOutField05 = @cRefnoLabel1
+         SET @cOutField06 = ''
+         SET @cOutField07 = @cRefnoLabel2
+         SET @cOutField08 = ''
+         SET @cOutField09 = @cRefnoLabel3
+         SET @cOutField10 = ''
+      END
+      ELSE
+      BEGIN
+      	SET @cOutField05 = ''
+      	SET @cOutField06 = ''
+      	SET @cOutField07 = ''
+      	SET @cOutField08 = ''
+      	SET @cOutField09 = ''
+      	SET @cOutField10 = ''
+
+    	   SET @cFieldAttr05 = 'O' 
+    	   SET @cFieldAttr06 = 'O'
+    	   SET @cFieldAttr07 = 'O'
+    	   SET @cFieldAttr08 = 'O'
+    	   SET @cFieldAttr09 = 'O'
+    	   SET @cFieldAttr10 = 'O'
+      END
+      
       -- Prepare next screen var  
       SET @cOutField01 = @cFacility  
       SET @cOutField02 = ''  
       SET @cOutField03 = ''  
       SET @cOutField04 = ''  
-      SET @cOutField05 = ''  
-      SET @cOutField06 = ''  
+      SET @cOutField15 = ''
       
       SET @cMBOLKey = ''  
       SET @cOrderKey = ''  
       SET @cLoadKey = ''  
-      SET @cRefNo = ''  
+      SET @cRefNo1 = ''  
+      SET @cRefNo2 = ''
+      SET @cRefNo3 = ''
+      SET @nOrderCnt = 0
       
-      EXEC rdt.rdtSetFocusField @nMobile, 3
+      EXEC rdt.rdtSetFocusField @nMobile, 2
       
       -- Go to next screen  
       SET @nScn = @nScn_Scan  
@@ -358,12 +464,16 @@ BEGIN
    IF @nInputKey = 1 -- ENTER  
    BEGIN  
       -- Screen mapping  
+      SET @cMBOLKey = @cInField02
       SET @cOrderKey = @cInField03  
       SET @cLoadKey = @cInField04
-      SET @cRefNo = @cInField05
+      SET @cRefNo1 = @cInField06
+      SET @cRefNo2 = @cInField08
+      SET @cRefNo3 = @cInField10
   
       -- Validate blank  
-      IF ISNULL( @cOrderKey, '') = '' AND ISNULL( @cLoadKey, '') = '' AND ISNULL( @cRefNo, '') = ''  
+      IF ISNULL( @cOrderKey, '') = '' AND ISNULL( @cLoadKey, '') = '' AND 
+         ( @cMbolCriteria <> '' AND ( ISNULL( @cRefNo1, '') = ''))  
       BEGIN  
          SET @nErrNo = 172103  
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Value req  
@@ -371,9 +481,9 @@ BEGIN
       END  
 
       -- Either 1 value  
-      IF ISNULL( @cOrderKey, '') <> '' AND (ISNULL( @cLoadKey, '') <> '' OR ISNULL( @cRefNo, '') <> '') OR 
-         ISNULL( @cLoadKey, '') <> '' AND (ISNULL( @cOrderKey, '') <> '' OR ISNULL( @cRefNo, '') <> '') OR
-         ISNULL( @cRefNo, '') <> '' AND (ISNULL( @cOrderKey, '') <> '' OR ISNULL( @cLoadKey, '') <> '') 
+      IF ISNULL( @cOrderKey, '') <> '' AND (ISNULL( @cLoadKey, '') <> '' OR ( @cMbolCriteria <> '' AND ( ISNULL( @cRefNo1, '') <> ''))) OR 
+         ISNULL( @cLoadKey, '') <> '' AND (ISNULL( @cOrderKey, '') <> '' OR ( @cMbolCriteria <> '' AND ( ISNULL( @cRefNo1, '') <> ''))) OR
+         ( @cMbolCriteria <> '' AND ( ISNULL( @cRefNo1, '') <> '')) AND (ISNULL( @cOrderKey, '') <> '' OR ISNULL( @cLoadKey, '') <> '') 
       BEGIN  
          SET @nErrNo = 172112  
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Either 1 value  
@@ -389,8 +499,11 @@ BEGIN
          BEGIN  
             SET @nErrNo = 172104  
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Orders 
+            SET @cOutField02 = @cMBOLKey
             SET @cOutField04 = @cLoadKey
-            SET @cOutField05 = @cRefNo
+            SET @cOutField06 = @cRefNo1
+            SET @cOutField08 = @cRefNo2
+            SET @cOutField10 = @cRefNo3
             EXEC rdt.rdtSetFocusField @nMobile, 3
             GOTO Step_Scan_Fail  
          END  
@@ -405,50 +518,94 @@ BEGIN
          BEGIN  
             SET @nErrNo = 172105  
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Load 
+            SET @cOutField02 = @cMBOLKey
             SET @cOutField04 = @cOrderKey
-            SET @cOutField05 = @cRefNo
+            SET @cOutField06 = @cRefNo1
+            SET @cOutField08 = @cRefNo2
+            SET @cOutField10 = @cRefNo3
             EXEC rdt.rdtSetFocusField @nMobile, 4
             GOTO Step_Scan_Fail  
          END  
       END
       
-      -- Lookup ref no
-      IF @cRefNo <> '' 
+      -- MBOLKey
+      IF @cMBOLKey <> ''
       BEGIN
-         -- Check column valid
-         IF NOT EXISTS( SELECT 1
-            FROM INFORMATION_SCHEMA.COLUMNS 
-            WHERE TABLE_NAME = 'ORDERS' 
-               AND COLUMN_NAME = @cRefNoLookupColumn
-               AND DATA_TYPE = 'nvarchar')
-         BEGIN
-            SET @nErrNo = 172106
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Column
-            SET @cOutField04 = @cOrderKey
-            SET @cOutField05 = @cLoadKey
-            EXEC rdt.rdtSetFocusField @nMobile, 5
-            GOTO Step_Scan_Fail
-         END
+      	IF NOT EXISTS ( SELECT 1 FROM dbo.MBOL WITH (NOLOCK)
+      	                WHERE MbolKey = @cMBOLKey
+      	                AND   Facility = @cFacility
+      	                AND   [Status] < '5')
+         BEGIN  
+            SET @nErrNo = 172115  
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid MBOL 
+            SET @cOutField02 = ''
+            SET @cOutField03 = @cOrderKey
+            SET @cOutField04 = @cLoadKey
+            SET @cOutField06 = @cRefNo1
+            SET @cOutField08 = @cRefNo2
+            SET @cOutField10 = @cRefNo3
+            EXEC rdt.rdtSetFocusField @nMobile, 2
+            GOTO Step_Scan_Fail  
+         END  
          
-         -- Check column indexed
-         IF NOT EXISTS( SELECT TOP 1 1
-            FROM sys.index_columns (NOLOCK) 
-            WHERE OBJECT_ID = OBJECT_ID( 'ORDERS') 
-               AND COLUMNPROPERTY( object_id, @cRefNoLookupColumn, 'ColumnId') = column_id)
-         BEGIN
-            SET @nErrNo = 172107
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ColumnNoIndex
-            SET @cOutField04 = @cOrderKey
-            SET @cOutField05 = @cLoadKey
-            GOTO Step_Scan_Fail
-         END   
+         --IF @cOrderKey = ''
+         --BEGIN  
+         --   SET @nErrNo = 172116  
+         --   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need OrderKey 
+         --   SET @cOutField02 = @cMBOLKey
+         --   SET @cOutField03 = ''
+         --   SET @cOutField04 = @cLoadKey
+         --   SET @cOutField06 = @cRefNo1
+         --   SET @cOutField08 = @cRefNo2
+         --   SET @cOutField10 = @cRefNo3
+         --   EXEC rdt.rdtSetFocusField @nMobile, 3
+         --   GOTO Step_Scan_Fail  
+         --END 
       END
+
+      -- Extended validate  
+      IF @cExtendedValidateSP <> ''  
+      BEGIN  
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')  
+         BEGIN  
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +  
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +   
+               ' @cMBOLKey, @cOrderKey, @cLoadKey, @cRefNo1, @cRefNo2, @cRefNo3, @tExtValidate, ' + 
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '  
+  
+            SET @cSQLParam =  
+               ' @nMobile        INT,           ' +  
+               ' @nFunc          INT,           ' +  
+               ' @cLangCode      NVARCHAR( 3),  ' +  
+               ' @nStep          INT,           ' +  
+               ' @nInputKey      INT,           ' +  
+               ' @cFacility      NVARCHAR( 5),  ' +  
+               ' @cStorerKey     NVARCHAR( 15), ' +
+               ' @cMBOLKey       NVARCHAR( 10), ' +  
+               ' @cOrderKey      NVARCHAR( 10), ' +  
+               ' @cLoadKey       NVARCHAR( 10), ' +  
+               ' @cRefNo1        NVARCHAR( 20), ' +  
+               ' @cRefNo2        NVARCHAR( 20), ' +
+               ' @cRefNo3        NVARCHAR( 20), ' +
+               ' @tExtValidate   VariableTable READONLY, ' +   
+               ' @nErrNo         INT           OUTPUT, ' +  
+               ' @cErrMsg        NVARCHAR( 20) OUTPUT  '  
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,   
+               @cMBOLKey, @cOrderKey, @cLoadKey, @cRefNo1, @cRefNo2, @cRefNo3, @tExtValidate, 
+               @nErrNo OUTPUT, @cErrMsg OUTPUT  
+  
+            IF @nErrNo <> 0   
+               GOTO Step_Scan_Fail  
+         END  
+      END  
 
       -- Capture ASN Info
       IF @cCaptureInfoSP <> ''
       BEGIN
          EXEC rdt.rdt_MbolCreation_CaptureInfo @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'DISPLAY', 
-            @cOrderkey, @cLoadKey, @cRefNo, @cData1, @cData2, @cData3, @cData4, @cData5, 
+            @cMBOLKey, @cOrderkey, @cLoadKey, @cRefNo1, @cRefNo2, @cRefNo3, 
+            @cData1, @cData2, @cData3, @cData4, @cData5, 
             @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,   
             @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,   
             @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,   
@@ -487,7 +644,9 @@ BEGIN
          ,@cStorerKey   = @cStorerKey
          ,@cOrderKey    = @cOrderKey
          ,@cLoadKey     = @cLoadKey
-         ,@cRefNo       = @cRefNo
+         ,@cRefNo1      = @cRefNo1
+         ,@cRefNo2      = @cRefNo2
+         ,@cRefNo3      = @cRefNo3
          ,@tMbolCreate  = @tMbolCreate
          ,@cMBOLKey     = @cMBOLKey    OUTPUT
          ,@nErrNo       = @nErrNo      OUTPUT
@@ -500,13 +659,40 @@ BEGIN
       FROM dbo.MBOLDETAIL WITH (NOLOCK)
       WHERE MbolKey = @cMBOLKey
 
+
       -- Prepare next screen var  
       SET @cOutField01 = @cFacility   
       SET @cOutField02 = @cMBOLKey
       SET @cOutField03 = ''   
       SET @cOutField04 = ''
-      SET @cOutField05 = ''   
-      SET @cOutField06 = @nOrderCnt  
+      
+      IF @cMbolCriteria <> ''
+      BEGIN
+         SET @cOutField05 = @cRefnoLabel1
+         SET @cOutField06 = ''
+         SET @cOutField07 = @cRefnoLabel2
+         SET @cOutField08 = ''
+         SET @cOutField09 = @cRefnoLabel3
+         SET @cOutField10 = ''
+      END
+      ELSE
+      BEGIN
+      	SET @cOutField05 = ''
+      	SET @cOutField06 = ''
+      	SET @cOutField07 = ''
+      	SET @cOutField08 = ''
+      	SET @cOutField09 = ''
+      	SET @cOutField10 = ''
+
+    	   SET @cFieldAttr05 = 'O' 
+    	   SET @cFieldAttr06 = 'O'
+    	   SET @cFieldAttr07 = 'O' 
+    	   SET @cFieldAttr08 = 'O'
+    	   SET @cFieldAttr09 = 'O'
+    	   SET @cFieldAttr10 = 'O'
+      END
+      
+      SET @cOutField15 = @nOrderCnt  
 
       IF @cOrderKey <> ''
          EXEC rdt.rdtSetFocusField @nMobile, 3
@@ -514,13 +700,16 @@ BEGIN
       IF @cLoadKey <> ''
          EXEC rdt.rdtSetFocusField @nMobile, 4
 
-      IF @cRefno <> ''
-         EXEC rdt.rdtSetFocusField @nMobile, 5
+      IF @cMbolCriteria <> '' AND @cRefno1 <> ''
+         EXEC rdt.rdtSetFocusField @nMobile, 6
 
       -- Reset variable
+      SET @cMBOLKey = ''
       SET @cOrderKey = ''  
       SET @cLoadKey = ''
-      SET @cRefNo = ''
+      SET @cRefNo1 = ''
+      SET @cRefNo2 = ''
+      SET @cRefNo3 = ''
    END  
   
    IF @nInputKey = 0 -- ESC  
@@ -534,7 +723,9 @@ BEGIN
          SET @cMBOLKey = ''
          SET @cOrderKey = ''
          SET @cLoadKey = ''
-         SET @cRefNo = ''
+         SET @cRefNo1 = ''
+         SET @cRefNo2 = ''
+         SET @cRefNo3 = ''
   
          -- Go to next screen  
          SET @nScn = @nScn_Facility  
@@ -555,7 +746,48 @@ BEGIN
    END  
    GOTO Quit  
 
-   Step_Scan_Fail:  
+   Step_Scan_Fail:
+   BEGIN
+      SET @cOutField01 = @cFacility   
+      SET @cOutField02 = @cMBOLKey
+      SET @cOutField03 = ''   
+      SET @cOutField04 = ''
+      
+      IF @cMbolCriteria <> ''
+      BEGIN
+         SET @cOutField05 = @cRefnoLabel1
+         SET @cOutField06 = ''
+         SET @cOutField07 = @cRefnoLabel2
+         SET @cOutField08 = ''
+         SET @cOutField09 = @cRefnoLabel3
+         SET @cOutField10 = ''
+      END
+      ELSE
+      BEGIN
+      	SET @cOutField05 = ''
+      	SET @cOutField06 = ''
+      	SET @cOutField07 = ''
+      	SET @cOutField08 = ''
+      	SET @cOutField09 = ''
+      	SET @cOutField10 = ''
+
+    	   SET @cFieldAttr05 = 'O' 
+    	   SET @cFieldAttr06 = 'O'
+    	   SET @cFieldAttr07 = 'O' 
+    	   SET @cFieldAttr08 = 'O'
+    	   SET @cFieldAttr09 = 'O'
+    	   SET @cFieldAttr10 = 'O'
+      END
+
+      IF @cOrderKey <> ''
+         EXEC rdt.rdtSetFocusField @nMobile, 3
+
+      IF @cLoadKey <> ''
+         EXEC rdt.rdtSetFocusField @nMobile, 4
+
+      IF @cMbolCriteria <> '' AND @cRefno1 <> ''
+         EXEC rdt.rdtSetFocusField @nMobile, 6
+   END  
 END  
 GOTO Quit  
   
@@ -617,7 +849,9 @@ BEGIN
          SET @cMBOLKey = ''
          SET @cOrderKey = ''
          SET @cLoadKey = ''
-         SET @cRefNo = ''
+         SET @cRefNo1 = ''
+         SET @cRefNo2 = ''
+         SET @cRefNo3 = ''
 
          -- Go to next screen  
          SET @nScn = @nScn_Facility  
@@ -630,8 +864,13 @@ BEGIN
          SET @cOutField02 = @cMBOLKey   
          SET @cOutField03 = ''
          SET @cOutField04 = ''
-         SET @cOutField05 = ''   
-         SET @cOutField06 = @nOrderCnt  
+         SET @cOutField05 = @cRefnoLabel1
+         SET @cOutField06 = '' 
+         SET @cOutField07 = @cRefnoLabel2
+         SET @cOutField08 = ''
+         SET @cOutField09 = @cRefnoLabel3
+         SET @cOutField10 = ''
+         SET @cOutField15 = @nOrderCnt  
 
          -- Go to next screen  
          SET @nScn = @nScn_Scan  
@@ -655,15 +894,19 @@ BEGIN
                ' @nInputKey      INT,           ' +  
                ' @cFacility      NVARCHAR( 5),  ' +  
                ' @cStorerKey     NVARCHAR( 15), ' +  
+               ' @cMBOLKey       NVARCHAR( 10), ' +
                ' @cOrderKey      NVARCHAR( 10), ' +  
                ' @cLoadKey       NVARCHAR( 10), ' +  
-               ' @cRefNo         NVARCHAR( 10), ' +  
+               ' @cRefNo1        NVARCHAR( 20), ' +  
+               ' @cRefNo2        NVARCHAR( 20), ' +
+               ' @cRefNo3        NVARCHAR( 20), ' +
                ' @tExtUpdate     VariableTable READONLY, ' +   
                ' @nErrNo         INT           OUTPUT, ' +  
                ' @cErrMsg        NVARCHAR( 20) OUTPUT  '  
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,   
-               @cOrderKey, @cLoadKey, @cRefNo, @tExtUpdate, @nErrNo OUTPUT, @cErrMsg OUTPUT  
+               @cMBOLKey, @cOrderKey, @cLoadKey, @cRefNo1, @cRefNo2, @cRefNo3, @tExtUpdate, 
+               @nErrNo OUTPUT, @cErrMsg OUTPUT  
   
             IF @nErrNo <> 0   
             BEGIN
@@ -684,8 +927,13 @@ BEGIN
       SET @cOutField02 = @cMBOLKey   
       SET @cOutField03 = ''
       SET @cOutField04 = ''
-      SET @cOutField05 = ''   
-      SET @cOutField06 = @nOrderCnt  
+      SET @cOutField05 = @cRefnoLabel1
+      SET @cOutField06 = '' 
+      SET @cOutField07 = @cRefnoLabel2
+      SET @cOutField08 = ''
+      SET @cOutField09 = @cRefnoLabel3
+      SET @cOutField10 = ''
+      SET @cOutField15 = @nOrderCnt  
 
       -- Go to next screen  
       SET @nScn = @nScn_Scan  
@@ -731,7 +979,7 @@ BEGIN
       SET @cOutField10 = @cInField10
 
       EXEC rdt.rdt_MbolCreation_CaptureInfo @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'UPDATE', 
-         @cOrderKey, @cLoadKey, @cRefNo, @cData1, @cData2, @cData3, @cData4, @cData5, 
+         @cMBOLKey, @cOrderKey, @cLoadKey, @cRefNo1, @cRefNo2, @cRefNo3, @cData1, @cData2, @cData3, @cData4, @cData5, 
          @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,   
          @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,   
          @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,   
@@ -770,7 +1018,9 @@ BEGIN
          ,@cStorerKey   = @cStorerKey
          ,@cOrderKey    = @cOrderKey
          ,@cLoadKey     = @cLoadKey
-         ,@cRefNo       = @cRefNo
+         ,@cRefNo1      = @cRefNo1
+         ,@cRefNo2      = @cRefNo2
+         ,@cRefNo3      = @cRefNo3
          ,@tMbolCreate  = @tMbolCreate
          ,@cMBOLKey     = @cMBOLKey    OUTPUT
          ,@nErrNo       = @nErrNo      OUTPUT
@@ -784,26 +1034,53 @@ BEGIN
       WHERE MbolKey = @cMBOLKey
 
       -- Prepare next screen var  
-      SET @cOutField01 = @cFacility   
-      SET @cOutField02 = @cMBOLKey
-      SET @cOutField03 = ''   
+      SET @cOutField01 = @cFacility  
+      SET @cOutField02 = @cMBOLKey   
+      SET @cOutField03 = ''
       SET @cOutField04 = ''
-      SET @cOutField05 = ''   
-      SET @cOutField06 = @nOrderCnt  
+      SET @cOutField15 = @nOrderCnt  
 
+      IF @cMbolCriteria <> ''
+      BEGIN
+         SET @cOutField05 = @cRefnoLabel1
+         SET @cOutField06 = ''
+         SET @cOutField07 = @cRefnoLabel2
+         SET @cOutField08 = ''
+         SET @cOutField09 = @cRefnoLabel3
+         SET @cOutField10 = ''
+      END
+      ELSE
+      BEGIN
+      	SET @cOutField05 = ''
+      	SET @cOutField06 = ''
+      	SET @cOutField07 = ''
+      	SET @cOutField08 = ''
+      	SET @cOutField09 = ''
+      	SET @cOutField10 = ''
+
+    	   SET @cFieldAttr05 = 'O' 
+    	   SET @cFieldAttr06 = 'O'
+    	   SET @cFieldAttr07 = 'O' 
+    	   SET @cFieldAttr08 = 'O'
+    	   SET @cFieldAttr09 = 'O'
+    	   SET @cFieldAttr10 = 'O'
+      END
+      
       IF @cOrderKey <> ''
          EXEC rdt.rdtSetFocusField @nMobile, 3
 
       IF @cLoadKey <> ''
          EXEC rdt.rdtSetFocusField @nMobile, 4
 
-      IF @cRefno <> ''
-         EXEC rdt.rdtSetFocusField @nMobile, 5
+      IF @cMbolCriteria <> '' AND @cRefno1 <> ''
+         EXEC rdt.rdtSetFocusField @nMobile, 6
 
       -- Reset variable
       SET @cOrderKey = ''  
       SET @cLoadKey = ''
-      SET @cRefNo = ''
+      SET @cRefNo1 = ''
+      SET @cRefNo2 = ''
+      SET @cRefNo3 = ''
 
       -- Go to next screen
       SET @nScn = @nScn_Scan
@@ -819,21 +1096,55 @@ BEGIN
       SET @cFieldAttr08 = ''
       SET @cFieldAttr10 = ''
 
-      -- Prepare next screen var  
-      SET @cOutField01 = @cFacility  
-      SET @cOutField02 = ''  
-      SET @cOutField03 = ''  
-      SET @cOutField04 = ''  
-      SET @cOutField05 = ''  
-      SET @cOutField06 = ''  
-      
-      SET @cMBOLKey = ''  
       SET @cOrderKey = ''  
       SET @cLoadKey = ''  
-      SET @cRefNo = ''  
+      SET @cRefNo1 = ''  
+      SET @cRefNo2 = ''
+      SET @cRefNo3 = ''
       
       EXEC rdt.rdtSetFocusField @nMobile, 3
+
+      -- Prepare next screen var  
+      SET @cOutField01 = @cFacility   
+      SET @cOutField02 = @cMBOLKey
+      SET @cOutField03 = ''   
+      SET @cOutField04 = ''
       
+      IF @cMbolCriteria <> ''
+      BEGIN
+         SET @cOutField05 = @cRefnoLabel1
+         SET @cOutField06 = ''
+         SET @cOutField07 = @cRefnoLabel2
+         SET @cOutField08 = ''
+         SET @cOutField09 = @cRefnoLabel3
+         SET @cOutField10 = ''
+      END
+      ELSE
+      BEGIN
+      	SET @cOutField05 = ''
+      	SET @cOutField06 = ''
+      	SET @cOutField07 = ''
+      	SET @cOutField08 = ''
+      	SET @cOutField09 = ''
+      	SET @cOutField10 = ''
+
+    	   SET @cFieldAttr05 = 'O' 
+    	   SET @cFieldAttr06 = 'O'
+    	   SET @cFieldAttr07 = 'O' 
+    	   SET @cFieldAttr08 = 'O'
+    	   SET @cFieldAttr09 = 'O'
+    	   SET @cFieldAttr10 = 'O'
+      END
+
+      IF @cOrderKey <> ''
+         EXEC rdt.rdtSetFocusField @nMobile, 3
+
+      IF @cLoadKey <> ''
+         EXEC rdt.rdtSetFocusField @nMobile, 4
+
+      IF @cMbolCriteria <> '' AND @cRefno1 <> ''
+         EXEC rdt.rdtSetFocusField @nMobile, 6
+
       -- Go to next screen  
       SET @nScn = @nScn_Scan  
       SET @nStep = @nStep_Scan   
@@ -864,11 +1175,17 @@ BEGIN
       V_String3  = @cExtendedInfoSP,  
       V_String4  = @cMBOLKey,    
       V_String5  = @cCloseMbol,
-      V_String6  = @cRefNo,    
-      V_String7  = @cLockFacility,
-      V_String8  = @cRefNoLookupColumn,
-      V_String9  = @cCaptureInfoSP,
-
+      V_String6  = @cRefNo1,    
+      V_String7  = @cRefNo2,
+      V_String8  = @cRefNo3,
+      V_String9  = @cLockFacility,
+      V_String10 = @cRefNoLookupColumn,
+      V_String11 = @cCaptureInfoSP,
+      V_String12 = @cMbolCriteria,
+      V_String13 = @cRefnoLabel1,
+      V_String14 = @cRefnoLabel2,
+      V_String15 = @cRefnoLabel3,
+      
       V_String41 = @cData1,
       V_String42 = @cData2,
       V_String43 = @cData3,
