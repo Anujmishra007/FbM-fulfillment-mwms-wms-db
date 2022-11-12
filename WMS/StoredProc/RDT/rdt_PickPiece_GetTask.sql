@@ -26,6 +26,7 @@ GO
 /* 20-08-2020 2.0  YeeKung      WMS-14630 Add suggID(yeekung03)         */  
 /* 02-04-2021 2.1  YeeKung      WMS-16741 Add close type (yeekung04)    */   
 /* 19-07-2021 2.2  YeeKung      WMS-20239 Add DisExtValue(yeekung05)    */  
+/* 11-11-2022 2.3  James       Bug fix on pickzone filter (james05)     */
 /************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdt_PickPiece_GetTask] (    
@@ -1961,7 +1962,7 @@ BEGIN
                   JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)                  
                   JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)                  
                WHERE RKL.PickSlipNo = @cPickSlipNo      
-                  AND LOC.PickZone <> @cPickZone                   
+                  AND LOC.PickZone = @cPickZone                   
                   AND PD.QTY > 0                              
       END      
       -- Discrete PickSlip                  
@@ -1978,7 +1979,7 @@ BEGIN
             FROM dbo.PickDetail PD WITH (NOLOCK)                  
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)                  
             WHERE PD.OrderKey = @cOrderKey                  
-               AND LOC.PickZone <> @cPickZone                  
+               AND LOC.PickZone = @cPickZone                  
                AND PD.QTY > 0                                     
       END      
        -- Conso PickSlip                  
@@ -1997,7 +1998,7 @@ BEGIN
                JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)                      
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)                  
             WHERE LPD.LoadKey = @cLoadKey                    
-               AND LOC.PickZone <> @cPickZone                  
+               AND LOC.PickZone = @cPickZone                  
                AND PD.QTY > 0                                                          
       END                  
                         
@@ -2015,7 +2016,7 @@ BEGIN
             FROM dbo.PickDetail PD WITH (NOLOCK)                  
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)                  
             WHERE PD.PickSlipNo = @cPickSlipNo                  
-               AND LOC.PickZone <> @cPickZone                  
+               AND LOC.PickZone = @cPickZone                  
                AND PD.QTY > 0                                                            
       END         
    END       
@@ -2038,7 +2039,7 @@ BEGIN
                JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)                  
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)                  
             WHERE RKL.PickSlipNo = @cPickSlipNo      
-               AND LOC.PickZone <> @cPickZone                   
+               AND LOC.PickZone = @cPickZone                   
                AND PD.QTY > 0                  
                --AND PD.Status <>'4'         
                AND PD.Status <@cPickConfirmStatus                           
@@ -2060,7 +2061,7 @@ BEGIN
          FROM dbo.PickDetail PD WITH (NOLOCK)                
             JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)                  
          WHERE PD.OrderKey = @cOrderKey                  
-            AND LOC.PickZone <> @cPickZone                  
+            AND LOC.PickZone = @cPickZone                  
             AND PD.QTY > 0                  
             --AND PD.Status <>'4'         
             AND PD.Status <@cPickConfirmStatus                           
@@ -2083,7 +2084,7 @@ BEGIN
             JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)                      
             JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)                  
          WHERE LPD.LoadKey = @cLoadKey                    
-            AND LOC.PickZone <> @cPickZone                  
+            AND LOC.PickZone = @cPickZone                  
             AND PD.QTY > 0                  
             --AND PD.Status <>'4'         
             AND PD.Status <@cPickConfirmStatus            
@@ -2105,7 +2106,7 @@ BEGIN
          FROM dbo.PickDetail PD WITH (NOLOCK)                  
             JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)                  
          WHERE PD.PickSlipNo = @cPickSlipNo                  
-            AND LOC.PickZone <> @cPickZone                  
+            AND LOC.PickZone = @cPickZone                  
             AND PD.QTY > 0                  
             --AND PD.Status <>'4'         
             AND PD.Status <@cPickConfirmStatus                                  
