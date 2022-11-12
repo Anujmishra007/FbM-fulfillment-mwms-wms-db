@@ -27,6 +27,7 @@ GO
 /* Updates:                                                              */
 /* Date         Author   Ver  Purposes                                   */
 /* 2021-08-26   Michael  v1.1 Add Showfield Update_PD_PickslipNo         */
+/* 2022-03-23   Michael  V1.2 Add NULL to Temp Table                     */
 /*************************************************************************/
 
 CREATE PROC [dbo].[isp_r_hk_print_wave_pickslip_04] (
@@ -109,45 +110,45 @@ BEGIN
 
 
    CREATE TABLE #TEMP_PICKHEADER (
-        LoadKey          NVARCHAR(10)
-      , Storerkey        NVARCHAR(15)
-      , PickSlipNo       NVARCHAR(10)
-      , PickSlipNo_New   NVARCHAR(10)
+        LoadKey          NVARCHAR(10)   NULL
+      , Storerkey        NVARCHAR(15)   NULL
+      , PickSlipNo       NVARCHAR(10)   NULL
+      , PickSlipNo_New   NVARCHAR(10)   NULL
    )
 
    CREATE TABLE #TEMP_PIKDT (
-        WaveKey          NVARCHAR(10)
-      , LoadKey          NVARCHAR(10)
-      , PickSlipNo       NVARCHAR(10)
-      , StorerKey        NVARCHAR(15)
-      , StorerCompany    NVARCHAR(45)
-      , ExternOrderKey   NVARCHAR(50)
-      , DeliveryDate     DATETIME
-      , C_Company        NVARCHAR(45)
-      , C_Address1       NVARCHAR(45)
-      , C_Address2       NVARCHAR(45)
-      , C_Address3       NVARCHAR(45)
-      , C_Address4       NVARCHAR(45)
-      , C_City           NVARCHAR(45)
-      , Route            NVARCHAR(10)
-      , Sku              NVARCHAR(50)
-      , SkuDescr         NVARCHAR(60)
-      , LogicalLocation  NVARCHAR(10)
-      , Loc              NVARCHAR(10)
-      , LocDescr         NVARCHAR(60)
-      , PackUOM3         NVARCHAR(10)
-      , Qty              INT
-      , PrintedFlag      NVARCHAR(1)
-      , ShipToAddress    NVARCHAR(500)
-      , RefNo            NVARCHAR(500)
-      , Style            NVARCHAR(500)
-      , Color            NVARCHAR(500)
-      , Size             NVARCHAR(500)
-      , SkuGroup         NVARCHAR(500)
-      , PackQtyIndicator NVARCHAR(500)
-      , Lottable02       NVARCHAR(500)
-      , ShowFields       NVARCHAR(4000)
-      , Storer_Logo      NVARCHAR(60)
+        WaveKey          NVARCHAR(10)   NULL
+      , LoadKey          NVARCHAR(10)   NULL
+      , PickSlipNo       NVARCHAR(10)   NULL
+      , StorerKey        NVARCHAR(15)   NULL
+      , StorerCompany    NVARCHAR(45)   NULL
+      , ExternOrderKey   NVARCHAR(50)   NULL
+      , DeliveryDate     DATETIME       NULL
+      , C_Company        NVARCHAR(45)   NULL
+      , C_Address1       NVARCHAR(45)   NULL
+      , C_Address2       NVARCHAR(45)   NULL
+      , C_Address3       NVARCHAR(45)   NULL
+      , C_Address4       NVARCHAR(45)   NULL
+      , C_City           NVARCHAR(45)   NULL
+      , Route            NVARCHAR(10)   NULL
+      , Sku              NVARCHAR(50)   NULL
+      , SkuDescr         NVARCHAR(60)   NULL
+      , LogicalLocation  NVARCHAR(10)   NULL
+      , Loc              NVARCHAR(10)   NULL
+      , LocDescr         NVARCHAR(60)   NULL
+      , PackUOM3         NVARCHAR(10)   NULL
+      , Qty              INT            NULL
+      , PrintedFlag      NVARCHAR(1)    NULL
+      , ShipToAddress    NVARCHAR(500)  NULL
+      , RefNo            NVARCHAR(500)  NULL
+      , Style            NVARCHAR(500)  NULL
+      , Color            NVARCHAR(500)  NULL
+      , Size             NVARCHAR(500)  NULL
+      , SkuGroup         NVARCHAR(500)  NULL
+      , PackQtyIndicator NVARCHAR(500)  NULL
+      , Lottable02       NVARCHAR(500)  NULL
+      , ShowFields       NVARCHAR(4000) NULL
+      , Storer_Logo      NVARCHAR(60)   NULL
    )
 
 
@@ -466,7 +467,8 @@ BEGIN
       SET @c_ExecStatements = @c_ExecStatements
         +       ', ShipToAddress    =        RTRIM(' + CASE WHEN ISNULL(@c_ShipToAddressExp,'')<>'' THEN @c_ShipToAddressExp ELSE 'NULL'                 END + ')'
       SET @c_ExecStatements = @c_ExecStatements
-        +       ', ExternOrderKey   = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_ExtOrderKeyExp  ,'')<>'' THEN @c_ExtOrderKeyExp   ELSE 'CASE WHEN (SELECT COUNT(DISTINCT a.Orderkey) FROM dbo.ORDERS a(NOLOCK) WHERE a.Loadkey=OH.Loadkey AND a.Loadkey<>'''')=1 THEN OH.ExternOrderkey END' END + '),'''')'
+        +       ', ExternOrderKey   = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_ExtOrderKeyExp  ,'')<>'' THEN @c_ExtOrderKeyExp
+                                                       ELSE 'CASE WHEN (SELECT COUNT(DISTINCT a.Orderkey) FROM dbo.ORDERS a(NOLOCK) WHERE a.Loadkey=OH.Loadkey AND a.Loadkey<>'''')=1 THEN OH.ExternOrderkey END' END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
         +       ', RefNo            = ISNULL(RTRIM(' + CASE WHEN ISNULL(@c_RefNoExp        ,'')<>'' THEN @c_RefNoExp         ELSE 'NULL'                 END + '),'''')'
       SET @c_ExecStatements = @c_ExecStatements
