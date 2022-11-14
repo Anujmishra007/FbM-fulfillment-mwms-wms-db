@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispSEPCDConsoLQ7]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[ispSEPCDConsoLQ7]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,7 +13,7 @@ GO
 /*        :                                                             */  
 /* Called By:                                                           */  
 /*          :                                                           */  
-/* GitLab Version: 1.0                                                  */  
+/* GitLab Version: 1.1                                                  */  
 /*                                                                      */  
 /* Version: 7.0                                                         */  
 /*                                                                      */  
@@ -27,8 +22,9 @@ GO
 /* Updates:                                                             */
 /* Date         Author  Ver   Purposes                                  */
 /* 19-Aug-2021  WLChooi 1.0   DevOps Combine Script                     */
+/* 14-NOV-2022  Wan01   1.1   Sync filter Start Point/Enhancement       */
 /************************************************************************/  
-CREATE PROC ispSEPCDConsoLQ7  
+CREATE OR ALTER PROC ispSEPCDConsoLQ7  
      @c_WaveKey            NVARCHAR(10)  
    , @c_Facility           NVARCHAR(5)  = ''  
    , @c_Storerkey          NVARCHAR(15) = ''  
@@ -271,12 +267,12 @@ BEGIN
    + ' JOIN LOT             WITH (NOLOCK) ON LLI.Lot = LOT.Lot AND LOT.[Status] = ''OK'''  
    + ' JOIN LOC             WITH (NOLOCK) ON LLI.Loc = LOC.Loc AND LOC.[Status] = ''OK'''  
    + ' JOIN LOTATTRIBUTE LA WITH (NOLOCK) ON LLI.Lot = LA.Lot'   
-   + ' WHERE LLI.Storerkey = @c_Storerkey'  
-   + ' AND   LLI.Sku       = @c_Sku'  
+   + ' WHERE LA.Storerkey = @c_Storerkey'             --(Wan01)  
+   + ' AND   LA.Sku       = @c_Sku'                   --(Wan01)
    + CASE WHEN ISNULL(@c_Lottable01,'') = '' THEN '' ELSE ' AND LA.Lottable01 = @c_Lottable01' END  
    + CASE WHEN ISNULL(@c_Lottable02,'') = '' THEN '' ELSE ' AND LA.Lottable02 = @c_Lottable02' END  
    + CASE WHEN ISNULL(@c_Lottable03,'') = '' THEN '' ELSE ' AND LA.Lottable03 = @c_Lottable03' END  
-   + CASE WHEN @c_WaveType IN ('SEPB2CAGV','SEPB2B_AGV','SEPB2CAGV2') THEN '' ELSE ' AND LA.Lottable04 = @dt_InvLot04'  END   --(Wan01)  
+   + CASE WHEN @c_WaveType IN ('SEPB2CAGV','SEPB2B_AGV','SEPB2CAGV2') THEN '' ELSE ' AND LA.Lottable04 = @dt_InvLot04'  END   
    + CASE WHEN ISNULL(@c_Lottable06,'') = '' THEN '' ELSE ' AND LA.Lottable06 = @c_Lottable06' END  
    + CASE WHEN ISNULL(@c_Lottable07,'') = '' THEN '' ELSE ' AND LA.Lottable07 = @c_Lottable07' END  
    + CASE WHEN ISNULL(@c_Lottable08,'') = '' THEN '' ELSE ' AND LA.Lottable08 = @c_Lottable08' END  
@@ -379,12 +375,10 @@ BEGIN
          SET @n_TotalExpiryDay = DATEDIFF(day, GETDATE(), @dt_InvLot04)  
       END  
         
-      --(Wan01) - START  
       IF @n_TotalExpiryDay = 0                                                           
       BEGIN  
          GOTO NEXT_LLI  
       END  
-      --(Wan01) - END  
   
       SET @CUR_OD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
       SELECT OL.RowID  
@@ -398,7 +392,7 @@ BEGIN
       AND  OL.[Status]= 0  
       AND (OD.OpenQty - ( OD.QtyAllocated + OD.QtyPicked )) > 0  
       AND (OD.OpenQty - ( OD.QtyAllocated + OD.QtyPicked )) <= @n_QtyLeftToFullFill  
-      AND OL.ShelfLife <= @n_TotalExpiryDay                                            --(Wan01)  
+      AND OL.ShelfLife <= @n_TotalExpiryDay                                            
       ORDER BY OL.RowID  
   
       OPEN @CUR_OD  
@@ -515,7 +509,7 @@ BEGIN
       CLOSE @CUR_OD  
       DEALLOCATE @CUR_OD  
         
-      NEXT_LLI:                                                   --(Wan01)  
+      NEXT_LLI:                                                    
       FETCH NEXT FROM @CUR_LLI INTO @c_Lot   
                                  ,  @c_Loc  
                                  ,  @c_ID  

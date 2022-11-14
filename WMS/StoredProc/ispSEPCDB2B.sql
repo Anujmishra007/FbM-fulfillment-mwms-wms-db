@@ -13,7 +13,7 @@ GO
 /*        :                                                             */  
 /* Called By:                                                           */  
 /*          :                                                           */  
-/* GitLab Version: 1.1                                                  */  
+/* GitLab Version: 1.2                                                  */  
 /*                                                                      */  
 /* Version: 7.0                                                         */  
 /*                                                                      */  
@@ -25,6 +25,7 @@ GO
 /* 29-Apr-2022  WLChooi 1.1   Performance Tuning - Create new TRAN      */
 /*                            before executing sub-sp & commit the TRAN */
 /*                            after execution complete (WL01)           */
+/* 14-NOV-2022  Wan01   1.2   Sync filter Start Point/Enhancement       */
 /************************************************************************/  
 CREATE OR ALTER PROC [dbo].[ispSEPCDB2B]
      @c_WaveKey                     NVARCHAR(10)  
@@ -212,8 +213,8 @@ BEGIN
    + ' JOIN LOT             WITH (NOLOCK) ON LLI.Lot = LOT.Lot AND LOT.[Status] = ''OK'''  
    + ' JOIN LOC             WITH (NOLOCK) ON LLI.Loc = LOC.Loc AND LOC.[Status] = ''OK'''  
    + ' JOIN LOTATTRIBUTE LA WITH (NOLOCK) ON LLI.Lot = LA.Lot'   
-   + ' WHERE LLI.Storerkey = @c_Storerkey'  
-   + ' AND   LLI.Sku       = @c_Sku'  
+   + ' WHERE LA.Storerkey = @c_Storerkey'             --(Wan01)  
+   + ' AND   LA.Sku       = @c_Sku'                   --(Wan01)
    + CASE WHEN ISNULL(@c_Lottable01,'') = '' THEN '' ELSE ' AND LA.Lottable01 = @c_Lottable01' END  
    + CASE WHEN ISNULL(@c_Lottable02,'') = '' THEN '' ELSE ' AND LA.Lottable02 = @c_Lottable02' END  
    + CASE WHEN ISNULL(@c_Lottable03,'') = '' THEN '' ELSE ' AND LA.Lottable03 = @c_Lottable03' END  

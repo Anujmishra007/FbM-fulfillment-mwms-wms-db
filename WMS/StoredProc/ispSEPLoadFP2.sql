@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispSEPLoadFP2]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispSEPLoadFP2]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,7 +12,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -25,8 +20,10 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 2022-11-14  Wan01    1.1   Sync filter Start Point/Enhancement       */
+/* 2022-11-14  Wan01    1.1   DevOps Combine Script                     */
 /************************************************************************/
-CREATE PROC ispSEPLoadFP2
+CREATE OR ALTER PROC ispSEPLoadFP2
      @c_WaveKey            NVARCHAR(10)
    , @c_Facility           NVARCHAR(5)  = ''
    , @c_Storerkey          NVARCHAR(15) = ''
@@ -285,8 +282,8 @@ BEGIN
    + ' JOIN LOC             WITH (NOLOCK) ON LLI.Loc = LOC.Loc AND LOC.[Status] = ''OK'''
    + ' JOIN LOTATTRIBUTE LA WITH (NOLOCK) ON LLI.Lot = LA.Lot' 
    + ' JOIN UCC             WITH (NOLOCK) ON LLI.Lot = UCC.Lot AND LLI.Loc = UCC.Loc AND LLI.ID = UCC.ID'
-   + ' WHERE LLI.Storerkey = @c_Storerkey'
-   + ' AND   LLI.Sku       = @c_Sku'
+   + ' WHERE LA.Storerkey = @c_Storerkey'             --(Wan01)
+   + ' AND   LA.Sku       = @c_Sku'                   --(Wan01)
    + CASE WHEN ISNULL(@c_Lottable01,'') = '' THEN '' ELSE ' AND LA.Lottable01 = @c_Lottable01' END
    + CASE WHEN ISNULL(@c_Lottable02,'') = '' THEN '' ELSE ' AND LA.Lottable02 = @c_Lottable02' END
    + CASE WHEN ISNULL(@c_Lottable03,'') = '' THEN '' ELSE ' AND LA.Lottable03 = @c_Lottable03' END
