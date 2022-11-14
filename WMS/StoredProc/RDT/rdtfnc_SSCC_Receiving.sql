@@ -2,6 +2,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
+
 /************************************************************************/
 /* Store procedure: rdtfnc_SSCC_Receiving                               */
 /* Copyright      : IDS                                                 */
@@ -14,6 +15,7 @@ GO
 /* 2021-12-09 1.0  James    WMS-18515. Created                          */
 /* 17-03-2022 1.1  Leong    JSM-57674 - Add RDTGetConfig                */
 /* 2022-04-05 1.2  YeeKung  WMS-19352 Add ExtendedInfo (yeekung01)      */
+/* 2022-08-11 1.3  Ung      WMS-20503 Add SM carton                     */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdtfnc_SSCC_Receiving (
@@ -328,7 +330,7 @@ BEGIN
       FROM dbo.RECEIPT R WITH (NOLOCK)
       JOIN dbo.RECEIPTDETAIL RD WITH (NOLOCK) ON ( R.ReceiptKey = RD.ReceiptKey)
       WHERE R.StorerKey = @cStorerkey
-      AND   R.Notes = 'S'
+      AND   R.Notes IN ('S', 'SM')
       AND   RD.UserDefine01 = @cSSCC
 
       --check if receiptkey exists
