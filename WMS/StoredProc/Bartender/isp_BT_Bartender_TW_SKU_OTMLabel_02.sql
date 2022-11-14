@@ -13,6 +13,7 @@ GO
 /* Date       Rev  Author     Purposes                                        */                   
 /* 2022-04-11 1.0  Mingle     Created (WMS-19379)                             */   
 /* 2022-04-11 1.0  Mingle     DevOps Combine Script                           */ 
+/* 2022-09-23 1.1  Mingle     WMS-20793 Modify col04 logic(ML01)              */ 
 /******************************************************************************/                  
                     
 CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_TW_SKU_OTMLabel_02]                        
@@ -177,7 +178,8 @@ BEGIN
              + ' FROM '     
              + ' (SELECT AL1.PalletKey, SUBSTRING ( AL1.PalletKey, 3, 2 )as DTWHS, AL1.ExternOrderKey, '  
              --+ '  ISNULL ( AL3.SUSR3, AL1.Principal ) as CustName, AL1.UserDefine01 as CS'   +CHAR(13)  
-             + '  ISNULL ( SUBSTRING(RTRIM(AL2.C_Company),1,5), AL1.Principal ) as CustName, AL1.UserDefine01 as CS'   +CHAR(13) --KEVIN 2019-01-23  
+             --+ '  ISNULL ( SUBSTRING(RTRIM(AL2.C_Company),1,5), AL1.Principal ) as CustName, AL1.UserDefine01 as CS'   +CHAR(13) --KEVIN 2019-01-23 
+				 + '  CASE WHEN ISNULL(AL3.SUSR2,'''') <> '''' THEN AL3.SUSR2 ELSE left(AL2.c_company,5) + right(AL2.c_company,4) END as CustName, AL1.UserDefine01 as CS'   +CHAR(13) --KEVIN 2019-01-23	--ML01
              + ' FROM  OTMIDTrack AL1 WITH (NOLOCK)'   +CHAR(13)  
              + '  LEFT OUTER JOIN ORDERS AL2 WITH (NOLOCK) ON (AL1.ExternOrderKey=AL2.ExternOrderKey)' +CHAR(13)  
              + '  LEFT OUTER JOIN STORER AL3 WITH (NOLOCK)  ON (AL2.ConsigneeKey=AL3.StorerKey)  ' +CHAR(13)  
@@ -215,7 +217,7 @@ BEGIN
            
    IF @b_debug=1          
    BEGIN          
-      SELECT * FROM #Result (nolock)   
+      SELECT * FROM #Result (NOLOCK)   
      -- GOTO EXIT_SP        
    END          
     
@@ -238,21 +240,22 @@ BEGIN
         
         
       INSERT INTO [#TEMPOTMSKU01] (Palletkey,DESTWHS,CustName,ExtOrdKey,CS,Retrieve)  
-      SELECT Q1.Palletkey,CK.description,Q1.CustName,Q1.Externorderkey,sum(cast(Q1.CS as numeric)),'N'  
-      FROM  (SELECT AL1.PalletKey, SUBSTRING ( AL1.PalletKey, 3, 2 )as DTWHS, AL1.ExternOrderKey  
+      SELECT Q1.Palletkey,CK.description,Q1.CustName,Q1.Externorderkey,SUM(CAST(Q1.CS AS NUMERIC)),'N'  
+      FROM  (SELECT AL1.PalletKey, SUBSTRING ( AL1.PalletKey, 3, 2 )AS DTWHS, AL1.ExternOrderKey  
            --,ISNULL ( NULLIF( AL3.SUSR3,''), AL1.Principal )  as CustName  
-            ,ISNULL ( NULLIF( SUBSTRING(RTRIM(AL2.C_Company),1,5),''), AL1.Principal )  as CustName --KEVIN 2019-01-23  
-            , AL1.UserDefine01 as CS  
+           -- ,ISNULL ( NULLIF( SUBSTRING(RTRIM(AL2.C_Company),1,5),''), AL1.Principal )  as CustName --KEVIN 2019-01-23  
+			   , CASE WHEN ISNULL(AL3.SUSR2,'') <> '' THEN AL3.SUSR2 ELSE left(AL2.c_company,5) + right(AL2.c_company,4) END as CustName --KEVIN 2019-01-23	--ML01 
+            , AL1.UserDefine01 AS CS  
             FROM  OTMIDTrack AL1 WITH (NOLOCK)  
             LEFT OUTER JOIN ORDERS AL2 WITH (NOLOCK)  ON (AL1.ExternOrderKey=AL2.ExternOrderKey)  
             LEFT OUTER JOIN STORER AL3 WITH (NOLOCK)   ON (AL2.ConsigneeKey=AL3.StorerKey)    
             WHERE (AL1.PalletKey=@c_PLTKey )) AS Q1   
-    LEFT Join   
-   (select palletkey,sum(cast (userdefine01 as numeric )) as TTLCS from otmidtrack WITH (NOLOCK)   
-    where palletkey=@c_PLTKey --and MUStatus='5'   
-    group by palletkey)  AS Q2 on Q1.Palletkey=Q2.Palletkey   
-    left join codelkup CK WITH (nolock) on ck.code=Q1.DTWHS and CK.listname='PLTDECODE'  
-    group by Q1.Palletkey,CK.description,Q1.CustName,Q1.Externorderkey  
+    LEFT JOIN   
+   (SELECT palletkey,SUM(CAST (userdefine01 AS NUMERIC )) AS TTLCS FROM otmidtrack WITH (NOLOCK)   
+    WHERE palletkey=@c_PLTKey --and MUStatus='5'   
+    GROUP BY palletkey)  AS Q2 ON Q1.Palletkey=Q2.Palletkey   
+    LEFT JOIN codelkup CK WITH (NOLOCK) ON ck.code=Q1.DTWHS AND CK.listname='PLTDECODE'  
+    GROUP BY Q1.Palletkey,CK.description,Q1.CustName,Q1.Externorderkey  
           
           
       SET @c_Cust01 = ''  
@@ -438,3 +441,5 @@ END -- procedure
 GO
 GRANT EXECUTE ON isp_BT_Bartender_TW_SKU_OTMLabel_02 TO NSQL
 GO   
+
+
