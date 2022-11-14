@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_RFID_ASNValidateRFIDNo]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_RFID_ASNValidateRFIDNo]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -29,8 +24,11 @@ GO
 /* 03-MAR-2021 Wan01    1.1   WMS-16467 - [CN]NIKE_O2_RFID_Receiving_ChangeField_CR*/
 /* 08-APR-2021 Wan02    1.2   WMS-16505 - [CN]NIKE_Phoenix_RFID_Receiving*/
 /*                           _Overall_CR                                */
+/* 14-NOV-2022 NJOW01   1.3   Change storerkey filter to EXTERNORDERS   */
+/*                            to take advantage of current index        */
+/* 14-NOV-2022 NJOW01   1.3   DEVOPS Combine Script                     */
 /************************************************************************/
-CREATE PROC isp_RFID_ASNValidateRFIDNo
+CREATE OR ALTER PROC isp_RFID_ASNValidateRFIDNo
            @c_ReceiptKey         NVARCHAR(10)
          , @c_RFIDNo1            NVARCHAR(100)= ''  
          , @c_TidNo1             NVARCHAR(100)= '' 
@@ -85,10 +83,10 @@ BEGIN
    FROM EXTERNORDERS EOH WITH (NOLOCK) 
    JOIN EXTERNORDERSDETAIL EOD WITH (NOLOCK) ON EOH.ExternOrderKey = EOD.ExternOrderKey
    WHERE EOD.RFIDNo IN ( @c_RFIDNo1, @c_RFIDNo2 )
-   AND   EOD.Storerkey = @c_Storerkey
+   AND   EOH.Storerkey = @c_Storerkey
    AND   EOH.PlatFormorderNo = @c_CarrierName                   --Wan02--(Wan01)
    AND   EOH.[Status]  = '9'
-   GROUP BY EOD.Storerkey
+   GROUP BY EOH.Storerkey
          ,  EOH.Externorderkey
          ,  EOH.[Status]
 
