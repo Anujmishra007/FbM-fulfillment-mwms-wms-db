@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_GetPickSlipWave26_2]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_GetPickSlipWave26_2]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -29,8 +24,9 @@ GO
 /* 2021-03-31  WLChooi  1.1   WMS-16733 - Get the Distinct SKU of the   */
 /*                            whole Wave (WL01)                         */
 /* 2021-04-16  WLChooi  1.2   WMS-16380 - Take QtyAllocated (WL02)      */
+/* 2022-10-31  Mingle   1.3   WMS-21045 - Add new mapping(ML01)         */
 /************************************************************************/
-CREATE PROC isp_GetPickSlipWave26_2
+CREATE OR ALTER PROC isp_GetPickSlipWave26_2
             @c_Wavekey        NVARCHAR(10)
          ,  @c_PickSlipNo     NVARCHAR(10)
          ,  @c_Zone           NVARCHAR(10)
@@ -63,21 +59,23 @@ BEGIN
          , @b_Success         INT          
          , @n_err             INT          
          , @c_errmsg          NVARCHAR(250)
-         , @c_WaveSeq         NVARCHAR(10)                                      
+         , @c_WaveSeq         NVARCHAR(10) 
+			, @c_salesman			NVARCHAR(30)	--ML01
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
   
    SELECT TOP 1 @dt_Adddate = CASE WHEN ISNULL(TD.AddDate,'')  <>'1900-01-01 00:00:00.000' 
                               THEN MIN(TD.AddDate) ELSE WH.EditDate END  
-               ,@c_Storerkey= OH.Storerkey                                           
+               ,@c_Storerkey= OH.Storerkey
+					,@c_salesman = OH.Salesman	--ML01
    FROM WAVE WH  WITH (NOLOCK)
    JOIN WAVEDETAIL WD WITH (NOLOCK) ON (WH.Wavekey = WD.Wavekey)               
    JOIN ORDERS     OH WITH (NOLOCK) ON (WD.Orderkey= OH.Orderkey)              
    LEFT JOIN Taskdetail TD WITH (NOLOCK) ON TD.wavekey=WH.wavekey              
    WHERE WH.Wavekey = @c_Wavekey
    AND OH.DocType='N'
-   GROUP BY OH.Storerkey,TD.AddDate ,WH.EditDate
+   GROUP BY OH.Storerkey,TD.AddDate ,WH.EditDate,OH.Salesman
    
    SET @d_Adddate = CONVERT (DATETIME, CONVERT(NVARCHAR(10), @dt_Adddate, 112))
  
@@ -210,17 +208,18 @@ BEGIN
          ,Colorcode = @c_colorcode          
          ,Orderkey = ODSUM.Orderkey
          ,Openqty = ODSUM.Openqty
-         --,RptDesc = ISNULL(C.long,'')
+         --,RptDesc = ISNULL(C.long,''
+			,Salesman = @c_salesman	--ML01
    FROM PICKDETAIL PD   WITH (NOLOCK) 
    JOIN LOC        LOC  WITH (NOLOCK) ON (PD.Loc = LOC.Loc)    
    JOIN SKU        SKU  WITH (NOLOCK) ON (PD.Storerkey = SKU.Storerkey)
                                       AND(PD.Sku = SKU.Sku)
    --JOIN REFKEYLOOKUP RL WITH (NOLOCK) ON (PD.PickDetailKey = RL.PickDetailkey)
-   JOIN (SELECT OD.Orderkey, Openqty = SUM(OD.QtyAllocated) FROM ORDERS OH WITH (NOLOCK)   --WL02
+   JOIN (SELECT OD.Orderkey, Openqty = SUM(OD.QtyAllocated) FROM ORDERS OH WITH (NOLOCK)   --WL02	
          JOIN ORDERDETAIL OD WITH (NOLOCK) ON (OH.Orderkey = OD.Orderkey) 
          WHERE OH.UserDefine09 = @c_Wavekey
          AND OH.DocType='N'
-         GROUP BY OD.Orderkey) ODSUM ON (ODSUM.Orderkey = PD.Orderkey)
+         GROUP BY OD.Orderkey) ODSUM ON (ODSUM.Orderkey = PD.Orderkey)	
    JOIN PICKHEADER PH WITH (NOLOCK) ON (PD.Orderkey = PH.Orderkey)
    LEFT JOIN CODELKUP C WITH (NOLOCK) ON C.LISTNAME = 'ADSKUDIV' AND C.Storerkey=sku.StorerKey AND C.code=SKU.SKUGROUP
    WHERE PH.PickHeaderKey = @c_PickSlipNo
@@ -240,7 +239,7 @@ BEGIN
          , ISNULL(C.long,'')
          , loc.logicallocation      
          , ODSUM.Orderkey           
-         , ODSUM.Openqty                 
+         , ODSUM.Openqty  
    ORDER BY ISNULL(RTRIM(PH.PickHeaderkey), '') 
          ,  LOC.PutawayZone                                       
          ,  loc.logicallocation                              
@@ -253,3 +252,11 @@ END -- procedure
 GO
 GRANT EXECUTE ON [dbo].[isp_GetPickSlipWave26_2] TO nSQL 
 GO
+
+
+
+
+
+
+
+
