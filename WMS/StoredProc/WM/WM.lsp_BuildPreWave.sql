@@ -12,7 +12,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.1                                                    */                                                                                  
+/* PVCS Version: 1.2                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -23,12 +23,13 @@ GO
 /* 2022-08-02  Wan      1.0   Created & DevOps Combine Script           */
 /* 2022-09-22  Wan01    1.1   LFWM-3748 - [CN] LOREAL_Prewave add filter*/
 /*                            condition                                 */
+/* 2022-11-04  Wan02    1.2   Correct Default @c_Action = 'PREWAVE'     */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_BuildPreWave]                                                                                                                       
       @c_BuildParmKey      NVARCHAR(10) 
    ,  @c_Facility          NVARCHAR(5)                                                                                                                     
    ,  @c_StorerKey         NVARCHAR(15)                                                                                                                     
-   ,  @c_Action            NVARCHAR(10)   = 'PREWARE' -- 'Get', 'PreWare'  
+   ,  @c_Action            NVARCHAR(10)   = 'PREWAVE' -- 'Get', 'PreWave'        --(Wan02)  
    ,  @c_SortPreference    NVARCHAR(500)= ''          -- Sort column + Sort type (ASC/DESC), If multiple Columns Sorting, seperate by ','
    ,  @b_Success           INT            = 1  OUTPUT  
    ,  @n_err               INT            = 0  OUTPUT                                                                                                             
