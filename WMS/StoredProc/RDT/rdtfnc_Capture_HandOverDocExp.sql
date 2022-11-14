@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdtfnc_Capture_HandOverDocExp]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdtfnc_Capture_HandOverDocExp]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -19,8 +16,9 @@ GO
 /* 2021-05-17   1.0  Chermaine   WMS-16968. Created                           */
 /* 2021-09-10   1.1  Chermaine   WMS-17807 Add codelkup for screen Name       */
 /*                               Add SKU screen (cc01)                        */
+/* 2022-11-09   1.2  Ung         Performance tuning for D11                   */
 /******************************************************************************/
-CREATE  PROC rdt.rdtfnc_Capture_HandOverDocExp(
+CREATE OR ALTER PROC rdt.rdtfnc_Capture_HandOverDocExp(
    @nMobile    INT,
    @nErrNo     INT           OUTPUT,
    @cErrMsg    NVARCHAR( 20) OUTPUT
@@ -448,7 +446,8 @@ BEGIN
          END  
       END	
       
-      SELECT @nDocQty = COUNT(RowRef) FROM DocStatusTrack WITH (NOLOCK) WHERE storerKey = @cStorerKey AND Userdefine04 = @cToLoc AND key1 = @cHandoverKey
+      --SELECT @nDocQty = COUNT(RowRef) FROM DocStatusTrack WITH (NOLOCK) WHERE storerKey = @cStorerKey AND Userdefine04 = @cToLoc AND key1 = @cHandoverKey
+      SET @nDocQty += 1
       
       --IF @cHandOverOpt = '7'
       --BEGIN
