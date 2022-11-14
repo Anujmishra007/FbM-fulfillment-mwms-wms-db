@@ -15,7 +15,7 @@ GO
 /*                                                                      */  
 /* Parameters:                                                          */  
 /*                                                                      */  
-/* GitLab Version: 1.0                                                  */  
+/* GitLab Version: 1.1                                                  */  
 /*                                                                      */  
 /* Version: 5.4                                                         */  
 /*                                                                      */  
@@ -24,6 +24,8 @@ GO
 /* Updates:                                                             */  
 /* Date         Author    Ver.  Purposes                                */  
 /* 10-Mar-2022  WLChooi   1.0   DevOps Combine Script                   */
+/* 02-Nov-2022  Wan01     1.1   Fixed Create Multi Loadkey into ASN due */
+/*                              to Loadkey not in correct sort order    */
 /************************************************************************/  
   
 CREATE OR ALTER PROCEDURE [dbo].[isp_RCM_MB_CONVERSE_GenASN]  
@@ -96,6 +98,7 @@ BEGIN
           , LA.Lottable01, LA.Lottable02, LA.Lottable03
           , LA.Lottable04, LA.Lottable05
           , PD.ID, PD.Loc, PD.PackKey
+   ORDER BY PH.ExternOrderKey                --(Wan01) - Add Order by Loadkey           
    
    OPEN CUR_LOOP
    
