@@ -34,6 +34,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author     Purposes                                     */
 /* 12-OCT-2022  TLTING01   archive status 5                             */
+/* 13-Nov-2022  TLTING01   Archive all TransmitFlag 'IGNOR'          */       
 /*                                                                      */
 /************************************************************************/
 
@@ -73,7 +74,8 @@ BEGIN
     @c_copyfrom_db     NVARCHAR(30),
     @c_copyto_db      NVARCHAR(30),
     @c_TNTLogKey    NVARCHAR(10),
-    @d_today       datetime
+    @d_today       datetime,
+    @c_whereclauseIgnore         NVARCHAR(254) -- TLTING01  
 
  SELECT @n_starttcnt=@@TRANCOUNT , @n_continue=1, @b_success=0,@n_err=0,@c_errmsg="",
     @b_debug = 0, @local_n_err = 0, @local_c_errmsg = ' '
@@ -196,24 +198,31 @@ BEGIN
         IF @c_datetype = "1" -- EditDate
         BEGIN
            SELECT @c_whereclause = 'WHERE TNTLog.EditDate  <= ' + ''''+ CONVERT(char(11),@d_result,106)+''''
-                                    + ' AND ( TNTLog.TransmitFlag in ( ''5'', ''9'', ''IGNOR'' )) ' +   -- TLTING01
+                                    + ' AND ( TNTLog.TransmitFlag in ( ''5'', ''9'' )) ' +   -- TLTING01
                                    +  @c_temp
         END
         IF @c_datetype = "2" -- AddDate
         BEGIN
            SELECT @c_whereclause = 'WHERE TNTLog.AddDate  <= ' + ''''+ CONVERT(char(11),@d_result,106) +''''
-                                   + ' AND ( TNTLog.TransmitFlag in ( ''5'', ''9'', ''IGNOR'' ))  ' +   -- TLTING01
+                                   + ' AND ( TNTLog.TransmitFlag in ( ''5'', ''9'' ))  ' +   -- TLTING01
                                    +  @c_temp
         END
 
+         -- TLTING02
+         SELECT @c_whereclauseIgnore = " WHERE TNTLog.TRANSMITFLAG = 'IGNOR' " +      
+                                       +  @c_temp   
+                 
+                 
     IF (@b_debug = 1)
     BEGIN
      SELECT @c_whereclause '@c_whereclause'
+     SELECT @c_whereclauseIgnore '@c_whereclauseIgnore'
     END
 
          EXEC (
          ' DECLARE CUR_TNTLogkey CURSOR FAST_FORWARD READ_ONLY FOR ' +
          ' SELECT TNTLogKey FROM TNTLog (NOLOCK) ' + @c_whereclause +
+         ' UNION ALL SELECT TNTLogKey FROM TNTLog (NOLOCK) ' + @c_whereclauseIgnore +
          ' ORDER BY TNTLogKey ' )
 
          OPEN CUR_TNTLogkey
@@ -226,15 +235,15 @@ BEGIN
                SET ArchiveCop = '9'
             WHERE TNTLogKey = @c_TNTLogKey
 
-      SELECT @local_n_err = @@error, @n_cnt = @@rowcount
+            SELECT @local_n_err = @@error, @n_cnt = @@rowcount
             SELECT @n_archive_TL_records = @n_archive_TL_records + 1
 
-     IF (@b_debug = 1)
-     BEGIN
-      SELECT @c_TNTLogKey '@c_TNTLogKey',  @n_archive_TL_records '@n_archive_TL_records'
-     END
+            IF (@b_debug = 1)
+            BEGIN
+               SELECT @c_TNTLogKey '@c_TNTLogKey',  @n_archive_TL_records '@n_archive_TL_records'
+            END
 
-             IF @local_n_err <> 0
+           IF @local_n_err <> 0
            BEGIN
                 SELECT @n_continue = 3
                 SELECT @local_n_err = 77101
@@ -242,10 +251,10 @@ BEGIN
                 SELECT @local_c_errmsg =
                 ": Update of Archivecop failed - TNTLog Table. (ispArchiveTNTLog) " + " ( " +
                 " SQLSvr MESSAGE = " + dbo.fnc_LTrim(dbo.fnc_RTrim(@local_c_errmsg)) + ")"
-     END
+           END
 
-     FETCH NEXT FROM CUR_TNTLogkey INTO @c_TNTLogKey
-    END -- while TNTLogKey
+        FETCH NEXT FROM CUR_TNTLogkey INTO @c_TNTLogKey
+       END -- while TNTLogKey
 
       CLOSE CUR_TNTLogkey
       DEALLOCATE CUR_TNTLogkey

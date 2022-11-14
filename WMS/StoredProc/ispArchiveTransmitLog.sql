@@ -1,6 +1,3 @@
- IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispArchiveTransmitLog]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )   
-DROP PROCEDURE [dbo].[ispArchiveTransmitLog]
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -39,10 +36,11 @@ GO
 /* 14-Sep-2006  June          Include Transmitflag '5'                  */        
 /* 09-Nov-2010  TLTING        Commit at line level                      */        
 /* 16-Mar-2012  Leong         SOS# 238611 - Include TransmitFlag 'IGNOR'*/       
-/* 06-Jan-2021  kocy          remove convert date format column         */      
+/* 06-Jan-2021  kocy          remove convert date format column         */  
+/* 13-Nov-2022  TLTING01      Archive all TransmitFlag 'IGNOR'          */       
 /************************************************************************/        
         
-CREATE PROC [dbo].[ispArchiveTransmitLog]        
+CREATE OR ALTER PROC [dbo].[ispArchiveTransmitLog]        
      @c_archivekey NVARCHAR(10)        
    , @b_Success    int       OUTPUT        
    , @n_err        int       OUTPUT        
@@ -73,10 +71,11 @@ BEGIN
            @c_TLStart                   NVARCHAR(15),        
            @c_TLEnd                     NVARCHAR(15),        
            @c_whereclause               NVARCHAR(254),        
-      @c_temp                      NVARCHAR(254),        
+           @c_temp                      NVARCHAR(254),        
            @c_CopyRowsToArchiveDatabase NVARCHAR(1),        
            @c_copyfrom_db               NVARCHAR(30),        
-           @c_copyto_db                 NVARCHAR(30)        
+           @c_copyto_db                 NVARCHAR(30),
+           @c_whereclauseIgnore         NVARCHAR(254) -- TLTING01          
         
    DECLARE @cTransmitLogKey NVARCHAR(10)   -- added by Ong (SOS38267) 10-Aug-2005        
         
@@ -205,26 +204,29 @@ BEGIN
          BEGIN        
             IF @c_datetype = "1" -- EditDate        
             BEGIN        
-               SELECT @c_whereclause = --"WHERE CONVERT(Char(8),TransmitLog.EditDate,112)  <= " + ''''+ CONVERT(char(8),@d_result,112)+''''      
-                                       " WHERE TransmitLog.EditDate  <= " + ''''+ CONVERT(char(8),@d_result,112)+''''   -- kocy      
-                                       + " AND (TransmitLog.TRANSMITFLAG = '9' OR TransmitLog.TRANSMITFLAG = '5' OR TransmitLog.TRANSMITFLAG = 'IGNOR') " + -- SOS# 238611        
+               SELECT @c_whereclause = " WHERE TransmitLog.EditDate  <= " + ''''+ CONVERT(char(8),@d_result,112)+''''   -- kocy      
+                                       + " AND (TransmitLog.TRANSMITFLAG IN ('5', '9') ) " + -- SOS# 238611        
                                        +  @c_temp        
             END        
             IF @c_datetype = "2" -- AddDate        
             BEGIN        
-               SELECT @c_whereclause = --"WHERE CONVERT(Char(8),TransmitLog.AddDate,112)  <= " + ''''+ CONVERT(char(20),@d_result,112) +''''       
-                                       " WHERE TransmitLog.AddDate  <= " + ''''+ CONVERT(char(8),@d_result,112) +''''   -- kocy      
-                                       + " AND (TransmitLog.TRANSMITFLAG = '9' OR TransmitLog.TRANSMITFLAG = '5' OR TransmitLog.TRANSMITFLAG = 'IGNOR') " + -- SOS# 238611        
+               SELECT @c_whereclause = " WHERE TransmitLog.AddDate  <= " + ''''+ CONVERT(char(8),@d_result,112) +''''   -- kocy      
+                                       + " AND (TransmitLog.TRANSMITFLAG IN ('5', '9') ) " + -- SOS# 238611        
                                        +  @c_temp        
             END        
-        
+            -- TLTING01
+            SELECT @c_whereclauseIgnore = " WHERE TransmitLog.TRANSMITFLAG = 'IGNOR' " +      
+                                          +  @c_temp   
+                                             
+                                                     
             /* BEGIN (SOS38267) UPDATE*/        
         
             SELECT @n_archive_TL_records = 0        
         
            EXEC (        
             ' DECLARE CUR_TransmitLogkey CURSOR FAST_FORWARD READ_ONLY FOR ' +        
-            ' SELECT TransmitLogKey FROM TransmitLog (NOLOCK) ' + @c_whereclause +        
+            ' SELECT TransmitLogKey FROM TransmitLog (NOLOCK) ' + @c_whereclause +   
+            ' UNION ALL SELECT TransmitLogKey FROM TransmitLog WITH (NOLOCK) ' + @c_whereclauseIgnore +      -- TLTING01           
             ' ORDER BY TransmitLogKey ' )        
         
             OPEN CUR_TransmitLogkey        
@@ -363,3 +365,6 @@ BEGIN
       RETURN        
    END        
 END 
+GO
+GRANT EXECUTE ON  [dbo].[ispArchiveTransmitLog] TO [NSQL]
+GO
