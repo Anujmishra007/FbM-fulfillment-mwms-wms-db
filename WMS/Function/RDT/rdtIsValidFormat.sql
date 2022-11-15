@@ -1,11 +1,8 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[RDT].[rdtIsValidFormat]')  AND type in (N'FN', N'IF', N'TF', N'FS', N'FT')) 
-DROP FUNCTION [RDT].[rdtIsValidFormat]
-GO
-
-SET ANSI_NULLS OFF
-GO
 SET QUOTED_IDENTIFIER OFF
 GO
+SET ANSI_NULLS OFF
+GO
+
 /************************************************************************/
 /* Store procedure: rdtIsValidFormat                                    */
 /* Copyright      : LF Logistics                                        */
@@ -16,12 +13,13 @@ GO
 /* 06-Mar-2014  1.0  Ung        Created                                 */
 /* 03-Jul-2015  1.1  Ung        SOS315262 Add check blank, null         */
 /* 30-Apr-2020  1.2  James      WMS-13073 Add facility checking(james01)*/
+/* 26-Jul-2022  1.3  Ung        WMS-18861 Expand @cFieldName            */
 /************************************************************************/
 
-CREATE FUNCTION rdt.rdtIsValidFormat(
+CREATE OR ALTER FUNCTION rdt.rdtIsValidFormat(
    @nFunc      INT, 
    @cStorerKey NVARCHAR( 15), 
-   @cFieldName NVARCHAR( 10), 
+   @cFieldName NVARCHAR( 25), 
    @cInput     NVARCHAR( 60)
 ) RETURNS INT AS -- 0=false, 1=true
 BEGIN
@@ -56,14 +54,14 @@ BEGIN
       -- Retrieve own facility config  
       IF @cFacility <> @cLoginFacility  
       BEGIN   
-      -- Get config by facility, then by storer  
-      SET @cPattern = ''
-      SELECT @cPattern = ISNULL( Long, '')
-      FROM CodeLkup WITH (NOLOCK) 
-      WHERE ListName = 'RDTFormat' 
-         AND Code = @cCode 
-         AND StorerKey = @cStorerKey
-         AND (code2 = '' OR code2 = @cLoginFacility) 
+         -- Get config by facility, then by storer  
+         SET @cPattern = ''
+         SELECT @cPattern = ISNULL( Long, '')
+         FROM CodeLkup WITH (NOLOCK) 
+         WHERE ListName = 'RDTFormat' 
+            AND Code = @cCode 
+            AND StorerKey = @cStorerKey
+            AND (code2 = '' OR code2 = @cLoginFacility) 
       END
    END
    
@@ -76,5 +74,9 @@ Quit:
    RETURN @iMatch
 END
 GO
-GRANT EXECUTE ON [RDT].[rdtIsValidFormat] TO nSQL 
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+GRANT EXECUTE ON RDT.rdtIsValidFormat TO NSQL
 GO
