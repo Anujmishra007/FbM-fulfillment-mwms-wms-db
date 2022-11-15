@@ -1,20 +1,20 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[RDT].[rdt_593PrintLOGITECH]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdt_593PrintLOGITECH]
-GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO  
+
 /***************************************************************************/        
 /* Store procedure: rdt_593PrintLOGITECH                                   */        
 /*                                                                         */        
 /* Modifications log:                                                      */        
 /*                                                                         */        
 /* Date       Rev  Author   Purposes                                       */        
-/* 2017-08-02 1.0  ChewKP   WMS-1931 Created                               */      
+/* 2017-08-02 1.0  ChewKP   WMS-1931 Created                               */  
+/* 2021-02-03 1.1  Ung      WMS-18794 Add bundle SKU label                 */    
 /***************************************************************************/        
         
-CREATE PROC rdt.rdt_593PrintLOGITECH (        
+CREATE OR ALTER PROC rdt.rdt_593PrintLOGITECH (        
    @nMobile    INT,        
    @nFunc      INT,        
    @nStep      INT,        
@@ -118,7 +118,7 @@ AS
       SET @cGenSerialSP = ''      
    END       
     
-   IF @cOption IN ( '1','2','3')    
+   IF @cOption IN ( '1','2','3', '9')    
    BEGIN    
       SET @cWorkOrderNo       = @cParam1    
       SET @cSKUInput          = @cParam3    
@@ -350,8 +350,7 @@ AS
             END     
          END    
           
-   END    
-       
+   END           
        
    IF @cOption = '2'     
    BEGIN     
@@ -702,24 +701,115 @@ AS
           
    END    
        
-       
+   IF @cOption = '9'
+   BEGIN
+      IF EXISTS ( SELECT 1 FROM dbo.WorkOrderDetail WITH (NOLOCK)
+                  WHERE WorkOrderKey = @cWorkOrderNo
+                  AND Unit = '9L-BUNDLE'
+                  AND WkOrdUDef1 = '1' )
+      BEGIN
+         DECLARE @t9LBundleLabel AS VariableTable
+
+         -- Print 9L
+         SET @nCount = 1
+         WHILE @nCount <= @nMasterQty
+         BEGIN
+            SET @c9LSerialNo = ''
+
+            IF @cGenSerialSP <> ''
+            BEGIN
+               IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cGenSerialSP AND type = 'P')
+               BEGIN
+                  SET @cSQL = 'EXEC rdt.' + RTRIM( @cGenSerialSP) +
+                     ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, ' + 
+                     ' @cFromSKU, @cToSKU, @cSerialNo, @cSerialType, @cWorkOrderKey, @cBatchKey, ' +
+                     ' @cNewSerialNo OUTPUT ,@nErrNo OUTPUT ,@cErrMsg OUTPUT '
+                  SET @cSQLParam =
+                     ' @nMobile        INT,                  '+
+                     ' @nFunc          INT,                  '+
+                     ' @cLangCode      NVARCHAR( 3),         '+
+                     ' @nStep          INT,                  '+
+                     ' @nInputKey      INT,                  '+
+                     ' @cStorerkey     NVARCHAR( 15),        '+
+                     ' @cFromSKU       NVARCHAR( 20),        '+
+                     ' @cToSKU         NVARCHAR( 20),        '+
+                     ' @cSerialNo      NVARCHAR( 20),        '+
+                     ' @cSerialType    NVARCHAR( 10),        '+
+                     ' @cWorkOrderKey  NVARCHAR( 10),        '+
+                     ' @cBatchKey      NVARCHAR( 10),        '+
+                     ' @cNewSerialNo   NVARCHAR( 20) OUTPUT, '+
+                     ' @nErrNo         INT           OUTPUT, '+
+                     ' @cErrMsg        NVARCHAR( 20) OUTPUT   '
+
+                  EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                     @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey,
+                     @cSKU, @cSKU, @cSerialNo, 'EACHES', @cWorkOrderNo, @cBatchKey,
+                     @c9LSerialNo OUTPUT, @nErrNo OUTPUT ,@cErrMsg OUTPUT
+
+                  IF @nErrNo <> 0
+                  BEGIN
+                     SET @nErrNo = 113308
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'GenSerialNoFail'
+                     SET @nFocusParam = 1
+                     GOTO RollBackTran
+                  END
+               END
+            END
+
+            -- Bartender No Datawindow Required (SHONG)
+            IF ISNULL(@c9LSerialNo,'')  <> ''
+            BEGIN
+               -- Get work order info
+               DECLARE @cWkOrdUdef1 NVARCHAR( 18)
+               DECLARE @cWkOrdUdef2 NVARCHAR( 18)
+               SELECT
+                  @cWkOrdUdef1 = ISNULL( WkOrdUdef1, ''), 
+                  @cWkOrdUdef2 = ISNULL( WkOrdUdef2, '')
+               FROM dbo.WorkOrder WITH (NOLOCK)
+               WHERE WorkOrderKey = @cWorkOrderNo
+               
+               -- Common params
+               DELETE @t9LBundleLabel
+               INSERT INTO @t9LBundleLabel (Variable, Value) VALUES   
+                  ( '@cStorerKey',     @cStorerKey),   
+                  ( '@cSKU',           @cSKU),   
+                  ( '@c9LSerialNo',    @c9LSerialNo),   
+                  ( '@cWkOrdUdef1',    @cWkOrdUdef1),   
+                  ( '@cWkOrdUdef2',    @cWkOrdUdef2)  
+     
+               -- Print label  
+               EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPrinterMaster, '',   
+                  'LOG9LBLBL',     -- Report type  
+                  @t9LBundleLabel, -- Report params  
+                  'rdt_593PrintLOGITECH',   
+                  @nErrNo  OUTPUT,  
+                  @cErrMsg OUTPUT  
+               IF @nErrNo <> 0  
+                  GOTO Quit  
+            END
+
+            SET @nCount = @nCount + 1
+         END
+      END
+   END
+
    GOTO QUIT           
              
 RollBackTran:          
    ROLLBACK TRAN rdt_593PrintLOGITECH -- Only rollback change made here          
    EXEC rdt.rdtSetFocusField @nMobile, @nFocusParam    
-    
-     
+   
 Quit:          
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started          
       COMMIT TRAN rdt_593PrintLOGITECH        
    EXEC rdt.rdtSetFocusField @nMobile, @nFocusParam     
-
 GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
+
 GRANT EXEC ON RDT.rdt_593PrintLOGITECH TO NSQL
 GO
 
