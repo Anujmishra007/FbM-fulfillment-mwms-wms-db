@@ -1,0 +1,157 @@
+: CN UAT : CNWMS 
+--  rdt.rdtBundleSKULog.sql 
+Msg 15233, Level 16, State 1, Server WVSHWMSMADBUT01, Procedure sp_addextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'rdt.rdtBundleSKULog'.
+----------------------------------------------------------------------------- 
+: CN UAT : CNWMS_HM1 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: CN UAT : CNWMS_HM2 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: CN UAT : CNWMSSEP 
+--  rdt.rdtBundleSKULog.sql 
+----------------------------------------------------------------------------- 
+: CN UAT : CNWMS_NIKE 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: GT  : GTWMS 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: GT  : SCEWMS_UAT 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: GT  : SCEWMS 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: VMGBWMSDBDV4  : LFL_WMS_DEV 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: GT  : LFL_WMS_UAT 
+--  rdt.rdtBundleSKULog.sql 
+----------------------------------------------------------------------------- 
+: GT  : LFL_WMS_CHN 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: GT  : LFL_WMS_SGP 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: AU UAT : AUWMS 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: DU UAT : DUWMS 
+--  rdt.rdtBundleSKULog.sql 
+----------------------------------------------------------------------------- 
+: HK UAT : HKWMS 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: ID UAT : IDWMS 
+--  rdt.rdtBundleSKULog.sql 
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS_HM1 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS_HM2 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS_HM1 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS_HM2 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS_HM1 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS_HM2 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: MY UAT : MYWMS 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: PH UAT : PHWMS 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: SG UAT : SGWMS 
+--  rdt.rdtBundleSKULog.sql 
+Msg 15233, Level 16, State 1, Server WVWSWMSMYDBUT01, Procedure sp_addextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'rdt.rdtBundleSKULog'.
+----------------------------------------------------------------------------- 
+: TH UAT : THWMS 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: TH UAT : THWMS_NIKE 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: TW UAT : TWWMS 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: TW UAT : TWWMS_NSC 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: VN UAT : VNWMS 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 

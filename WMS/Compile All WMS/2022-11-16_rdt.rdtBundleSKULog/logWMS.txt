@@ -1,0 +1,93 @@
+: CN LIVE : CNWMS 
+--  rdt.rdtBundleSKULog.sql 
+----------------------------------------------------------------------------- 
+: CN LIVE : HNM 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: CN LIVE : NKE 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: CN LIVE : SKE 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: CN LIVE : UAM 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: CN LIVE : SEP 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: AUWMS 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: DUWMS 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: HK HKWMS 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: IN LIVE : INWMS 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: ID LIVE : IDWMS 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: JP LIVE : JPWMS 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: KR LIVE : KRWMS 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: MY LIVE : MYWMS 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: PH LIVE : PHWMS 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: SG LIVE : SGWMS 
+--  rdt.rdtBundleSKULog.sql 
+Msg 15233, Level 16, State 1, Server VMSGWMSDBPD6, Procedure sp_addextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'rdt.rdtBundleSKULog'.
+----------------------------------------------------------------------------- 
+: TH LIVE : THWMS 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: TW LIVE : TWWMS 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
+: VN LIVE : VNWMS 
+--  rdt.rdtBundleSKULog.sql 
+
+(1 rows affected)
+----------------------------------------------------------------------------- 
