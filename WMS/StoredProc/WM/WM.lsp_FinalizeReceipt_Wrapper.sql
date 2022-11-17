@@ -12,7 +12,7 @@ GO
 /*                                                                         */
 /* Called By: SCE                                                          */
 /*          :                                                              */
-/* PVCS Version: 2.2                                                       */
+/* PVCS Version: 2.3                                                       */
 /*                                                                         */
 /* Version: 8.0                                                            */
 /*                                                                         */
@@ -41,6 +41,8 @@ GO
 /* 2022-07-19  Wan09    2.1   JSM-82472 - Excluded unreceived line         */
 /* 2022-09-19  Wan10    2.2   LFWM-3760 - PH - SCE Returns Validation Allow*/
 /*                            Duplicate ID                                 */
+/* 2022-10-13  Wan11    2.3   LFWM-3780 - PH Unilever                      */
+/*                            DisAllowDuplicateIdsOnWSRcpt StorerCFG CR    */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE [WM].[lsp_FinalizeReceipt_Wrapper]
@@ -203,7 +205,9 @@ BEGIN
          , @c_DisAllowDuplicateIdsOnWSRcpt NVARCHAR(10)  = ''     --(Wan08)
          , @c_DisAllowDupIDsOnWSRcpt_Option5 NVARCHAR(1000) = ''  --(Wan10)
          , @c_UniqueIDSkipDocType      NVARCHAR(30) = ''          --(Wan10)
+         , @c_AllowDupWithinPLTCnt     NVARCHAR(30) = 'N'         --(Wan11) 
 
+         , @b_ValidID                  INT          = 0           --(Wan11) 
          , @c_MUID                     NVARCHAR(30)   = ''
          , @c_GenID                    NVARCHAR(30)   = ''
          , @c_RF_Enable                NVARCHAR(30)   = ''
@@ -1844,6 +1848,13 @@ BEGIN
          SET @c_DisAllowDuplicateIdsOnWSRcpt = '0'
       END 
       -- (Wan10) - END
+      --(Wan11) - START
+      IF @c_DisAllowDuplicateIdsOnWSRcpt = '1'
+      BEGIN
+         SET @c_AllowDupWithinPLTCnt = 'N'
+         SELECT @c_AllowDupWithinPLTCnt = dbo.fnc_GetParamValueFromString('@c_AllowDupWithinPLTCnt', @c_DisAllowDupIDsOnWSRcpt_Option5, @c_AllowDupWithinPLTCnt)
+      END
+      --(Wan11) - END
       SET @c_ReceiptLineNo = ''
       WHILE 1 = 1
       BEGIN
@@ -1991,27 +2002,84 @@ BEGIN
                      
          IF @c_DisAllowDuplicateIdsOnWSRcpt = '1' AND @c_ToID <> ''              --(Wan08)
          BEGIN
-            IF EXISTS ( SELECT TOP 1 1 FROM dbo.ID AS i WITH (NOLOCK) 
-                        WHERE i.ID = @c_ToID
-                        UNION
-                        SELECT TOP 1 1 FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK) 
-                        WHERE r.Storerkey = @c_Storerkey
-                        AND r.ToID = @c_ToID
-                        AND r.FinalizeFlag = 'N'
-                        GROUP BY r.ToID
-                        HAVING COUNT(1) > 1
-                        )
+            IF @c_AllowDupWithinPLTCnt = 'N'                                     --(Wan11) 
             BEGIN
-               SET @n_Continue = 3
-               SET @n_Err = 550050
-               SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Disallow duplicate Movable Unit Id: ' + @c_ToID
-                              + '. Receipt #: ' + @c_Receiptkey + ', Line #: ' + @c_ReceiptLineNo
-                              + '. (lsp_FinalizeReceipt_Wrapper)'
-                              + ' |' + @c_ReceiptKey + '|'  + @c_ReceiptLineNo 
+               IF EXISTS ( SELECT TOP 1 1 FROM dbo.ID AS i WITH (NOLOCK) 
+                           WHERE i.ID = @c_ToID
+                           UNION
+                           SELECT TOP 1 1 FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK) 
+                           WHERE r.Storerkey = @c_Storerkey
+                           AND r.ToID = @c_ToID
+                           AND r.FinalizeFlag = 'N'
+                           GROUP BY r.ToID
+                           HAVING COUNT(1) > 1
+                           )
+               BEGIN
+                  SET @n_Continue = 3
+                  SET @n_Err = 550050
+                  SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Disallow duplicate Movable Unit Id: ' + @c_ToID
+                                 + '. Receipt #: ' + @c_Receiptkey + ', Line #: ' + @c_ReceiptLineNo
+                                 + '. (lsp_FinalizeReceipt_Wrapper)'
+                                 + ' |' + @c_ReceiptKey + '|'  + @c_ReceiptLineNo 
 
-               INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
-               VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNo, '', 'ERROR', 0, @n_err, @c_errmsg) 
-            END
+                  INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+                  VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNo, '', 'ERROR', 0, @n_err, @c_errmsg) 
+               END
+            END                                                                  --(Wan11) - START
+            ELSE
+            BEGIN
+               SET @b_ValidID = 1
+               SELECT TOP 1 @b_ValidID = 0
+               FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK)
+               WHERE r.ReceiptKey = @c_ReceiptKey
+               AND r.ToID = @c_ToID
+               AND r.FinalizeFlag = 'N'
+               AND EXISTS (SELECT 1 FROM dbo.RECEIPTDETAIL AS r2 WITH (NOLOCK)
+                           WHERE r2.ReceiptKey <> @c_ReceiptKey
+                           AND   r2.ToId = r.ToId)
+                           
+               IF @b_ValidID = 1
+               BEGIN
+                  SELECT TOP 1 @b_ValidID = IIF(COUNT(DISTINCT r.Sku) > 1 OR SUM(r.BeforeReceivedQty) > MIN(p.Pallet), 0, 1)
+                  FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK)
+                  JOIN dbo.SKU AS s WITH (NOLOCK) ON s.StorerKey = r.StorerKey AND s.Sku = r.Sku
+                  JOIN dbo.PACK AS p WITH (NOLOCK) ON s.PackKey = p.PackKey
+                  WHERE r.ReceiptKey = @c_ReceiptKey
+                  AND r.ToID = @c_ToID
+                  GROUP BY r.ToId
+                  ORDER BY IIF(COUNT(DISTINCT r.Sku) > 1 OR SUM(r.BeforeReceivedQty) > MIN(p.Pallet), 0, 1)
+               END 
+               
+               IF @b_ValidID = 1
+               BEGIN
+                  -- Last & Further check if the Received ID is archived with inventory 
+                  SELECT TOP 1 @b_ValidID = 0
+                  FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK)
+                  WHERE r.ReceiptKey = @c_ReceiptKey
+                  AND r.ToID = @c_ToID
+                  AND EXISTS (SELECT 1 FROM dbo.LOTxLOCxID AS ltlci WITH (NOLOCK)
+                              WHERE ltlci.ID = r.ToId
+                              AND ltlci.Qty + ltlci.PendingMoveIN > 0
+                              )    
+                  GROUP BY r.ToId
+                  HAVING MAX(r.FinalizeFlag) = 'N' 
+                  
+                  SELECT @b_ValidID '@b_ValidID 3'
+               END
+                          
+               IF @b_ValidID = 0
+               BEGIN
+                  SET @n_Continue = 3
+                  SET @n_Err = 561001
+                  SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Disallow duplicate Movable Unit Id with qty more than Pallet Count: ' + @c_ToID
+                                + '. Receipt #: ' + @c_Receiptkey + ', Line #: ' + @c_ReceiptLineNo
+                                + '. (lsp_FinalizeReceipt_Wrapper)'
+                                + ' |' + @c_ReceiptKey + '|'  + @c_ReceiptLineNo 
+
+                  INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+                  VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNo, '', 'ERROR', 0, @n_err, @c_errmsg) 
+               END
+            END                                                                  --(Wan11) - END
          END                                                                     --(Wan08)
       END
 

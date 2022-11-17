@@ -13,7 +13,7 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.4                                                          */  
+/* Version: 1.5                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
@@ -27,6 +27,8 @@ GO
 /*                            DisAllowDuplicateIdsOnWSRcpt SCE Enhancement*/
 /* 2022-09-19  Wan04    1.4   LFWM-3760 - PH - SCE Returns Validation Allow*/
 /*                            Duplicate ID                                */
+/* 2022-10-13  Wan05    1.5   LFWM-3780 - PH Unilever                    */
+/*                            DisAllowDuplicateIdsOnWSRcpt StorerCFG CR  */
 /*************************************************************************/   
 CREATE OR ALTER PROC [WM].[lsp_Validate_ReceiptDetail_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
@@ -176,6 +178,10 @@ BEGIN
          ,  @c_DisAllowDuplicateIdsOnWSRcpt  NVARCHAR(30) = '0'            --(Wan03)
          ,  @c_DisAllowDupIDsOnWSRcpt_Option5 NVARCHAR(1000) = ''          --(Wan04)
          ,  @c_UniqueIDSkipDocType           NVARCHAR(30) = ''             --(Wan04)
+         
+         ,  @c_AllowDupWithinPLTCnt          NVARCHAR(30) = 'N'            --(Wan05)
+         ,  @n_BeforeReceivedQty             FLOAT        = 0.00           --(Wan05)
+         ,  @b_ValidID                       INT          = 0              --(Wan05)  
 
       SELECT TOP 1 
             @c_ReceiptKey   = RD.ReceiptKey
@@ -199,6 +205,7 @@ BEGIN
          ,  @dt_Lottable14  = RD.Lottable14     --(Wan01)
          ,  @dt_Lottable15  = RD.Lottable15     --(Wan01)
          ,  @c_ToID          = ISNULL(RD.ToID,'')              --(Wan03)
+         ,  @n_BeforeReceivedQty = RD.BeforeReceivedQty        --(Wan05)
       FROM  #RECEIPTDETAIL RD  
 
       SELECT TOP 1 
@@ -383,25 +390,77 @@ BEGIN
          
          IF @c_DisAllowDuplicateIdsOnWSRcpt = '1'
          BEGIN
-            IF EXISTS ( SELECT TOP 1 1 FROM dbo.ID AS i WITH (NOLOCK) WHERE ID = @c_ToID
-                        UNION
-                        SELECT TOP 1 1 FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK) WHERE r.Toid = @c_ToID AND r.FinalizeFlag = 'N'
-                        AND r.ReceiptKey < @c_ReceiptKey
-                        AND r.Storerkey = @c_Storerkey
-                        UNION
-                        SELECT TOP 1 1 FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK) WHERE r.Toid = @c_ToID AND r.FinalizeFlag = 'N'
-                        AND r.ReceiptKey = @c_ReceiptKey AND r.ReceiptLineNumber <> @c_ReceiptLineNo
-                        UNION
-                        SELECT TOP 1 1 FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK) WHERE r.Toid = @c_ToID AND r.FinalizeFlag = 'N'
-                        AND r.ReceiptKey > @c_ReceiptKey 
-                        AND r.Storerkey = @c_Storerkey
-                      )
+            --(Wan05) - START
+            SET @c_AllowDupWithinPLTCnt = 'N'
+            SELECT @c_AllowDupWithinPLTCnt = dbo.fnc_GetParamValueFromString('@c_AllowDupWithinPLTCnt', @c_DisAllowDupIDsOnWSRcpt_Option5, @c_AllowDupWithinPLTCnt)
+            --(Wan05) - END
+            
+            IF @c_AllowDupWithinPLTCnt = 'N'                --(Wan05) 
             BEGIN
-               SET @n_Continue = 3
-               SET @n_Err = 555256
-               SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Disallow duplicate Movable Unit Id. (lsp_Validate_ReceiptDetail_Std)'
-               GOTO EXIT_SP
-            END
+               IF EXISTS ( SELECT TOP 1 1 FROM dbo.ID AS i WITH (NOLOCK) WHERE ID = @c_ToID
+                           UNION
+                           SELECT TOP 1 1 FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK) WHERE r.Toid = @c_ToID AND r.FinalizeFlag = 'N'
+                           AND r.ReceiptKey < @c_ReceiptKey
+                           AND r.Storerkey = @c_Storerkey
+                           UNION
+                           SELECT TOP 1 1 FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK) WHERE r.Toid = @c_ToID AND r.FinalizeFlag = 'N'
+                           AND r.ReceiptKey = @c_ReceiptKey AND r.ReceiptLineNumber <> @c_ReceiptLineNo
+                           UNION
+                           SELECT TOP 1 1 FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK) WHERE r.Toid = @c_ToID AND r.FinalizeFlag = 'N'
+                           AND r.ReceiptKey > @c_ReceiptKey 
+                           AND r.Storerkey = @c_Storerkey
+                         )
+               BEGIN
+                  SET @n_Continue = 3
+                  SET @n_Err = 555256
+                  SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Disallow duplicate Movable Unit Id. (lsp_Validate_ReceiptDetail_Std)'
+                  GOTO EXIT_SP
+               END
+            END                                             --(Wan05) - START                                       
+            ELSE
+            BEGIN
+               SET @b_ValidID = 1
+               SELECT TOP 1 @b_ValidID = 0
+               FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK)
+               WHERE r.ReceiptKey <> @c_ReceiptKey
+               AND r.ToID = @c_ToID
+                           
+               IF @b_ValidID = 1
+               BEGIN
+                  SELECT TOP 1 @b_ValidID = IIF(r.Sku <> @c_Sku OR SUM(r.BeforeReceivedQty + @n_BeforeReceivedQty) > p.Pallet, 0, 1)
+                  FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK)
+                  JOIN dbo.SKU AS s WITH (NOLOCK) ON s.StorerKey = r.StorerKey AND s.Sku = r.Sku
+                  JOIN dbo.PACK AS p WITH (NOLOCK) ON s.PackKey = p.PackKey
+                  WHERE r.ReceiptKey = @c_ReceiptKey
+                  AND r.ToID = @c_ToID
+                  GROUP BY r.Sku, r.ToId, p.Pallet 
+                  ORDER BY IIF(r.Sku <> @c_Sku OR SUM(r.BeforeReceivedQty + @n_BeforeReceivedQty) > p.Pallet, 0, 1)
+               END 
+               
+               IF @b_ValidID = 1
+               BEGIN
+                  -- Last & Further check if the Received ID is archived with inventory 
+                  SELECT TOP 1 @b_ValidID = 0
+                  FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK)
+                  WHERE r.ReceiptKey = @c_ReceiptKey
+                  AND r.ToID = @c_ToID
+                  AND EXISTS (SELECT 1 FROM dbo.LOTxLOCxID AS ltlci WITH (NOLOCK)
+                              WHERE ltlci.ID = r.ToId
+                              AND ltlci.Qty + ltlci.PendingMoveIN > 0
+                              )    
+                  GROUP BY r.ToId
+                  HAVING MAX(r.FinalizeFlag) = 'N' 
+               END 
+                          
+               IF @b_ValidID = 0
+               BEGIN
+                  SET @n_Continue = 3
+                  SET @n_Err = 555257
+                  SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Diallow duplicate Movable Unit Id with qty more than Pallet Count'
+                                + '. (lsp_Validate_ReceiptDetail_Std)'
+                  GOTO EXIT_SP
+               END
+            END                                             --(Wan05) - END
          END
       END
       --(Wan03) - END
