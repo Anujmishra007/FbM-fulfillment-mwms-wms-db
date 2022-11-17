@@ -1,7 +1,3 @@
-if exists (select * from sys.sysobjects where id = object_id(N'[RDT].[rdt_840SwapLot03]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [RDT].[rdt_840SwapLot03]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -23,11 +19,11 @@ GO
 /* 2021-07-08  1.1  LZG         JSM-8234 - Catered for move order (ZG01)*/
 /* 2021-12-23  1.2  James       WMS-18321 Add IT69 scanned to packdetail*/
 /*                              Lottablevalue, dropid (james01)         */
-/* 2022-08-02  1.3  LZG         JSM-85654 - Stamp DropID by             */
-/*                                          Lottable02 (ZG02)           */
+/* 2022-08-02  1.3  LZG         JSM-85654/WMS21133 - Stamp DropID by    */
+/*                              Lottable02 (ZG02)                       */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdt_840SwapLot03] (
+CREATE OR ALTER PROC [RDT].[rdt_840SwapLot03] (
    @n_Mobile         INT,
    @c_Storerkey      NVARCHAR( 15),
    @c_OrderKey       NVARCHAR( 10),
@@ -107,21 +103,21 @@ BEGIN
 
    IF ISNULL( @c_OrderKey, '') = ''
    BEGIN
-      SET @n_ErrNo = 140401
+      SET @n_ErrNo = 193751
       SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --'Invalid Order'
       GOTO Quit_WithoutTran
    END
 
    IF ISNULL( @c_SKU, '') = ''
    BEGIN
-      SET @n_ErrNo = 140402
+      SET @n_ErrNo = 193752
       SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --'Invalid SKU'
       GOTO Quit_WithoutTran
    END
 
    IF ISNULL( @c_Lottable02, '') = ''
    BEGIN
-      SET @n_ErrNo = 140403
+      SET @n_ErrNo = 193753
       SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --'Invalid LOT02'
       GOTO Quit_WithoutTran
    END
@@ -132,7 +128,7 @@ BEGIN
                    AND   SKU = @c_SKU
                    AND   [Status] < '9')
    BEGIN
-      SET @n_ErrNo = 140404
+      SET @n_ErrNo = 193754
       SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --'SKU NOT IN ORD'
       GOTO Quit_WithoutTran
    END
@@ -159,10 +155,38 @@ BEGIN
                       AND   PD.QtyMoved < PD.QTY
                       AND   LA.Lottable02 = @c_Lottable02)
       BEGIN
-         SET @n_ErrNo = 140405
+         SET @n_ErrNo = 193755
          SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --'Invalid Label'
          GOTO Quit_WithoutTran
       END
+
+      --**** CHANGES (START) ****
+      -- Get sum of picked Qty by Lottable02
+      DECLARE @n_PickL2Sum INT = 0, @n_PackL2Sum INT = 0, @c_ScannedL2 NVARCHAR(18) = ''    
+      SET @c_ScannedL2 = STUFF(RIGHT(@c_Barcode, 14), 13, 0, '-')     
+    
+      SELECT @n_PickL2Sum = SUM(PD.Qty) FROM dbo.PickDetail PD WITH (NOLOCK)        
+      JOIN dbo.LotAttribute LA WITH (NOLOCK) ON LA.Lot = PD.Lot AND LA.StorerKey = PD.StorerKey        
+      WHERE PD.Orderkey = @c_Orderkey        
+      AND   PD.Storerkey = @c_StorerKey        
+      AND   PD.[Status] < '9'        
+      AND   PD.SKU = @c_SKU        
+      AND   LA.Lottable02 = @c_ScannedL2      
+              
+      -- Get sum of packed Qty plus the scanned Qty by Lottable02        
+      SELECT @n_PackL2Sum = SUM(Qty) FROM dbo.PackDetail WITH (NOLOCK)        
+      WHERE PickSlipNo = @c_PickSlipNo         
+      AND   Storerkey = @c_StorerKey        
+      AND   SKU = @c_SKU        
+      AND   RIGHT(UPC, 14) = REPLACE(@c_ScannedL2, '-', '')       
+          
+      IF ISNULL(@n_PackL2Sum, 0) + 1 > ISNULL(@n_PickL2Sum, 0)        
+      BEGIN        
+         SET @n_ErrNo = 193780        
+         SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') -- IT69 not match        
+         GOTO Quit_WithoutTran        
+      END         
+      --**** CHANGES (END) ****
 
       -- Get carton info
       DECLARE @c_UPC NVARCHAR(30)
@@ -181,7 +205,7 @@ BEGIN
          -- Check different lottable12 (HMOrderNumber)
          IF @c_Carton_L12 <> @c_Scan_L12
          BEGIN
-            SET @n_ErrNo = 140406
+            SET @n_ErrNo = 193756
             SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --'Diff HMOrder'
             GOTO Quit_WithoutTran
          END
@@ -204,7 +228,7 @@ BEGIN
 
    IF (@n_PackedQty + 1) > @n_ExpectedQty
    BEGIN
-      SET @n_ErrNo = 140407
+      SET @n_ErrNo = 193757
       SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --'SKU OVERPACKED'
       GOTO Quit_WithoutTran
    END
@@ -234,7 +258,7 @@ BEGIN
 
       IF @@ERROR <> 0
       BEGIN
-         SET @n_ErrNo = 140408
+         SET @n_ErrNo = 193758
          SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --QtyMoved Fail
          EXEC rdt.rdtSetFocusField @n_Mobile, 6
          GOTO RollBackTran
@@ -324,7 +348,7 @@ BEGIN
 
                IF @@ERROR <> 0
                BEGIN
-                  SET @n_ErrNo = 140408
+                  SET @n_ErrNo = 193758
                   SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --Swap Lot Fail
                   EXEC rdt.rdtSetFocusField @n_Mobile, 6
                   GOTO RollBackTran
@@ -340,7 +364,7 @@ BEGIN
 
                IF @@ERROR <> 0
                   BEGIN
-                  SET @n_ErrNo = 140409
+                  SET @n_ErrNo = 193759
                   SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --Swap Lot Fail
                   EXEC rdt.rdtSetFocusField @n_Mobile, 6
                   GOTO RollBackTran
@@ -363,7 +387,7 @@ BEGIN
 
          IF @@ERROR <> 0
          BEGIN
-            SET @n_ErrNo = 140427
+            SET @n_ErrNo = 193777
             SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') ----'UPDPKDET Fail'
             EXEC rdt.rdtSetFocusField @n_Mobile, 6
             GOTO RollBackTran
@@ -417,7 +441,7 @@ BEGIN
 
          IF @@ERROR <> 0
             BEGIN
-            SET @n_ErrNo = 140410
+            SET @n_ErrNo = 193760
             SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --Swap Lot Fail
             EXEC rdt.rdtSetFocusField @n_Mobile, 6
             GOTO RollBackTran
@@ -426,7 +450,7 @@ BEGIN
 
       IF ISNULL( @c_TargetOrderKey, '') = ''
       BEGIN
-         SET @n_ErrNo = 140411
+         SET @n_ErrNo = 193761
          SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --Swap Lot Fail
          EXEC rdt.rdtSetFocusField @n_Mobile, 6
          GOTO RollBackTran
@@ -453,7 +477,7 @@ BEGIN
 
       IF @@ERROR <> 0
       BEGIN
-         SET @n_ErrNo = 140412
+         SET @n_ErrNo = 193762
          SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --'UpdLog Failed'
          EXEC rdt.rdtSetFocusField @n_Mobile, 6
          GOTO RollBackTran
@@ -466,7 +490,7 @@ BEGIN
 
        IF @@ERROR <> 0
        BEGIN
-         SET @n_ErrNo = 140413
+         SET @n_ErrNo = 193763
          SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --'InsLog Failed'
          EXEC rdt.rdtSetFocusField @n_Mobile, 6
          GOTO RollBackTran
@@ -495,7 +519,7 @@ BEGIN
 
        IF @@ERROR <> 0
        BEGIN
-         SET @n_ErrNo = 140414
+         SET @n_ErrNo = 193764
          SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --'InsPKHDR Failed'
          EXEC rdt.rdtSetFocusField @n_Mobile, 6
          GOTO RollBackTran
@@ -522,7 +546,7 @@ BEGIN
 
       IF @@ERROR <> 0
       BEGIN
-         SET @n_ErrNo = 140415
+         SET @n_ErrNo = 193765
          SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --'UPDPKDET Failed'
          EXEC rdt.rdtSetFocusField @n_Mobile, 6
          GOTO RollBackTran
@@ -592,9 +616,9 @@ BEGIN
                         @n_ErrNo       OUTPUT,
                         @c_ErrMsg      OUTPUT
 
-    IF @b_Success <> 1
+               IF @b_Success <> 1
                BEGIN
-                  SET @n_ErrNo = 140416
+                  SET @n_ErrNo = 193766
                   SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --'GET LABEL Fail'
                   EXEC rdt.rdtSetFocusField @n_Mobile, 6
                   GOTO RollBackTran
@@ -611,7 +635,7 @@ BEGIN
 
          IF @@ERROR <> 0
          BEGIN
-            SET @n_ErrNo = 140416
+            SET @n_ErrNo = 193767
             SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --'INSPKDET Failed'
             EXEC rdt.rdtSetFocusField @n_Mobile, 6
             GOTO RollBackTran
@@ -642,7 +666,7 @@ BEGIN
 
          IF @@ERROR <> 0
          BEGIN
-            SET @n_ErrNo = 140418
+            SET @n_ErrNo = 193768
             SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --'INSPKDET Failed'
             EXEC rdt.rdtSetFocusField @n_Mobile, 6
             GOTO RollBackTran
@@ -706,7 +730,7 @@ BEGIN
      WHERE PickDetailKey = @c_PDOwn_Key
          IF @@ERROR <> 0
          BEGIN
-            SET @n_ErrNo = 140419
+            SET @n_ErrNo = 193769
             SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') -- UPD PKDtl Fail
             GOTO RollBackTran
          END
@@ -765,7 +789,7 @@ BEGIN
             WHERE PickDetailKey = @c_PDBorrow_Key
             IF @@ERROR <> 0
             BEGIN
-               SET @n_ErrNo = 140420
+               SET @n_ErrNo = 193770
                SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') -- UPD PKDtl Fail
                GOTO RollBackTran
             END
@@ -780,7 +804,7 @@ BEGIN
             WHERE PickDetailKey = @c_PDOwn_Key
             IF @@ERROR <> 0
             BEGIN
-               SET @n_ErrNo = 140421
+               SET @n_ErrNo = 193771
                SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') -- UPD PKDtl Fail
                GOTO RollBackTran
             END
@@ -800,7 +824,7 @@ BEGIN
                @c_ErrMsg          OUTPUT
             IF @b_Success <> 1
             BEGIN
-               SET @n_ErrNo = 87078
+               SET @n_ErrNo = 193781
                SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') -- GetKey Fail
                GOTO RollBackTran
             END
@@ -834,7 +858,7 @@ BEGIN
         WHERE PickDetailKey = @c_PDBorrow_Key
             IF @@ERROR <> 0
             BEGIN
-         SET @n_ErrNo = 140422
+               SET @n_ErrNo = 193772
                SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') -- INS PKDtl Fail
                GOTO RollBackTran
             END
@@ -849,7 +873,7 @@ BEGIN
                WHERE PickDetailKey = @c_PDBorrow_Key
                IF @@ERROR <> 0
                BEGIN
-                  SET @n_ErrNo = 140423
+                  SET @n_ErrNo = 193773
                   SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') -- INS RefKeyFail
                   GOTO RollBackTran
                END
@@ -864,7 +888,7 @@ BEGIN
             WHERE PickDetailKey = @c_PDBorrow_Key
             IF @@ERROR <> 0
             BEGIN
-               SET @n_ErrNo = 140424
+               SET @n_ErrNo = 193774
                SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') -- UPD PKDtl Fail
                GOTO RollBackTran
             END
@@ -876,7 +900,7 @@ BEGIN
             DELETE PickDetail WHERE PickDetailKey = @c_PDBorrow_Key
             IF @@ERROR <> 0
             BEGIN
-               SET @n_ErrNo = 140425
+               SET @n_ErrNo = 193775
                SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') -- UPD PKDtl Fail
                GOTO RollBackTran
             END
@@ -884,7 +908,7 @@ BEGIN
       END
       ELSE
       BEGIN
-         SET @n_ErrNo = 140426
+         SET @n_ErrNo = 193776
          SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') -- Offset error
          GOTO RollBackTran
       END
@@ -938,7 +962,7 @@ BEGIN
 
          IF @@ERROR <> 0
          BEGIN
-            SET @n_ErrNo = 156612
+            SET @n_ErrNo = 193782
             SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --'Upd Case Fail'
             GOTO RollBackTran
          END
@@ -956,7 +980,7 @@ BEGIN
 
          IF @@ERROR <> 0
          BEGIN
-            SET @n_ErrNo = 156613
+            SET @n_ErrNo = 193783
             SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --'Upd Case Fail'
             GOTO RollBackTran
          END
@@ -977,7 +1001,7 @@ BEGIN
 
          IF @b_success <> 1
          BEGIN
-            SET @n_ErrNo = 156614
+            SET @n_ErrNo = 193784
             SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') -- 'Get PDKey Fail'
             GOTO RollBackTran
          END
@@ -1002,7 +1026,7 @@ BEGIN
 
          IF @@ERROR <> 0
          BEGIN
-            SET @n_ErrNo = 156615
+            SET @n_ErrNo = 193785
             SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --'Ins PDtl Fail'
             GOTO RollBackTran
          END
@@ -1015,7 +1039,7 @@ BEGIN
 
          IF @@ERROR <> 0
          BEGIN
-            SET @n_ErrNo = 156616
+            SET @n_ErrNo = 193786
             SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --'Upd Case Fail'
             GOTO RollBackTran
          END
@@ -1052,7 +1076,7 @@ BEGIN
 
          IF @b_Success <> 1
          BEGIN
-            SET @n_ErrNo = 140428
+            SET @n_ErrNo = 193778
             SET @c_Errmsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --'nspGetRightErr'
             GOTO RollBackTran
          End
@@ -1071,7 +1095,7 @@ BEGIN
 
             IF @b_Success <> 1
             BEGIN
-               SET @n_ErrNo = 140429
+               SET @n_ErrNo = 193779
                SET @c_Errmsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --'GenTLog3 Fail'
                GOTO RollBackTran
             End
