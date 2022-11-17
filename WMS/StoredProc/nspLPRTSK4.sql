@@ -13,7 +13,7 @@ GO
 /*                                                                       */
 /* Called By:                                                            */
 /*                                                                       */
-/* PVCS Version: 1.3                                                     */
+/* PVCS Version: 1.4                                                     */
 /*                                                                       */
 /* Version: 5.4                                                          */
 /*                                                                       */
@@ -26,8 +26,9 @@ GO
 /* 06/02/2018   Leong    1.2  INC0125972 - Bug Fix.                      */
 /* 01-09-2022   Wan01    1.3  LFWM-3726 - PH -SCE Wave Release Validation*/
 /*                            DevOps Combine Script                      */
+/* 10-11-2022   Wan02    1.4  LFWM-3840-UAT Philippines Unilever Release */
+/*                            Wave Validation (LPRELTASKWITHBOOKING)     */
 /*************************************************************************/
-
 CREATE OR ALTER PROC [dbo].[nspLPRTSK4]
    @c_LoadKey     NVARCHAR(10),
    @n_err         INT          OUTPUT,
@@ -156,8 +157,8 @@ BEGIN
                  JOIN ORDERS (NOLOCK) ON LOADPLAN.Loadkey = ORDERS.Loadkey
                  --(Wan01) - START
                  --JOIN V_Storerconfig2 SC2 ON ORDERS.Storerkey = SC2.Storerkey AND SC2.Configkey = 'LPRELTASKWITHBOOKING' AND SC2.Svalue = '1'
-                 JOIN #BookLoad AS bl ON bl.LoadKey = LoadPlan.LoadKey
-                 LEFT JOIN BOOKING_OUT BO (NOLOCK) ON bl.BookingNo = BO.BookingNo
+                 LEFT OUTER JOIN #BookLoad AS bl ON bl.LoadKey = LoadPlan.LoadKey            --(Wan02) When No TMS_SHipment record
+                 LEFT OUTER JOIN BOOKING_OUT BO (NOLOCK) ON bl.BookingNo = BO.BookingNo
                  --(Wan01) - END
                  --WHERE ISNULL(LOADPLAN.BookingNo,0) = 0
                  WHERE ISNULL(BO.FinalizeFlag,'') IN ('','N')  
