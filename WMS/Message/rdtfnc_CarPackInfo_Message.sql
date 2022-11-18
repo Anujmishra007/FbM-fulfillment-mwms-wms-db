@@ -34,6 +34,7 @@ execute rdt.rdtAddMsg 157726, 10, '157726TrackingNo Req', 'us_english',1847
 execute rdt.rdtAddMsg 157727, 10, '157727Not Pre Del   ', 'us_english',1847
 execute rdt.rdtAddMsg 157728, 10, '157728^UPD Fail     ', 'us_english',1847
 execute rdt.rdtAddMsg 157729, 10, '157729TrackNo Exists', 'us_english',1847
+execute rdt.rdtAddMsg 157730, 10, '157730Order Shipped ', 'us_english',1847
 
 SELECT * FROM rdt.RDTMsg (NOLOCK) WHERE Message_ID BETWEEN 157701 AND 157750
 
