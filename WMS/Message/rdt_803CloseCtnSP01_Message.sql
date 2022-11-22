@@ -1,6 +1,6 @@
 
 
--- rdt_803CloseCartonSP01
+-- rdt_803CloseCtnSP01
 execute rdt.rdtDropMsg 165051 , 165100	
 
 execute rdt.rdtAddMsg 165051, 10, '165051UpdPTLPieceFail', 'us_english', 803
