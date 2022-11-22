@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdt_523ExtPA01]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdt_523ExtPA01]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -18,9 +15,10 @@ GO
 /* 06-09-2017  1.2  Ung      WMS-1660 Add facility                            */
 /* 11-10-2018  1.3  Ung      WMS-6567 Change code lookup setup                */
 /* 22-11-2018  1.4  Ung      WMS-6567 Remove putaway to empty LOC             */
+/* 21-10-2022  1.5  Ung      WMS-20980 Change LocationFlag                    */
 /******************************************************************************/
 
-CREATE PROC [rdt].[rdt_523ExtPA01] (
+CREATE OR ALTER PROC [rdt].[rdt_523ExtPA01] (
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -124,7 +122,8 @@ BEGIN
             AND LOC.Facility = @cFacility
             AND LOC.PutawayZone IN (
                SELECT Long FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTPAZone' AND Short = @cBUSR7 + @cLottable10 AND StorerKey = @cStorerKey AND Code2 = @nFunc)
-            AND LOC.LocationFlag = 'HOLD'
+            AND LOC.LocationFlag = 'NONE'
+            AND LOC.LOC NOT IN ('81RB', 'F1RB', 'F1RBE')
             AND (SL.QTY - SL.QTYPicked) > 0
          GROUP BY LOC.LOC, LOC.LogicalLocation, SUBSTRING( SL.SKU, 1, 9)
          ORDER BY 
@@ -207,7 +206,8 @@ BEGIN
             AND LOC.Facility = @cFacility
             AND LOC.PutawayZone IN (
                SELECT Long FROM CodeLKUP WITH (NOLOCK) WHERE ListName = 'RDTPAZone' AND Short = @cBUSR7 + @cLottable10 AND StorerKey = @cStorerKey AND Code2 = @nFunc)
-            AND LOC.LocationFlag = 'HOLD'
+            AND LOC.LocationFlag = 'NONE'
+            AND LOC.LOC NOT IN ('81RB', 'F1RB', 'F1RBE')
          GROUP BY LOC.LOC, LOC.LogicalLocation, SUBSTRING( SL.SKU, 1, 9)
          ORDER BY 
             SUM( SL.QTY - SL.QTYPicked), 
