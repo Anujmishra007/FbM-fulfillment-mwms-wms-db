@@ -16,7 +16,7 @@ GO
 /*                                                                      */
 /* Parameters:                                                          */
 /*                                                                      */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -25,6 +25,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author    Ver.  Purposes                                */
 /* 19-Nov-2021  WLChooi   1.0   DevOps Combine Script                   */
+/* 10-Nov-2022  WLChooi   1.1   WMS-21162 - Change Key1 (WL01)          */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[isp_RCM_MB_QHW_ITF]
    @c_Mbolkey  NVARCHAR(10),
@@ -58,20 +59,27 @@ BEGIN
       GOTO QUIT_SP
    END
 
-   DECLARE CUR_LOOP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-   SELECT OH.Orderkey, OH.Storerkey
+   --WL01 S
+   SELECT @c_Storerkey = OH.Storerkey
    FROM ORDERS OH (NOLOCK)
    WHERE OH.MBOLKey = @c_Mbolkey
 
-   OPEN CUR_LOOP
+   --DECLARE CUR_LOOP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+   --SELECT OH.Orderkey, OH.Storerkey
+   --FROM ORDERS OH (NOLOCK)
+   --WHERE OH.MBOLKey = @c_Mbolkey
 
-   FETCH NEXT FROM CUR_LOOP INTO @c_Orderkey, @c_Storerkey
+   --OPEN CUR_LOOP
 
-   WHILE @@FETCH_STATUS <> -1
+   --FETCH NEXT FROM CUR_LOOP INTO @c_Orderkey, @c_Storerkey
+
+   --WHILE @@FETCH_STATUS <> -1
+
+   IF @n_Continue = 1 OR @n_Continue = 2
    BEGIN
       IF NOT EXISTS (SELECT 1 FROM TRANSMITLOG2 T2 (NOLOCK)
                      WHERE T2.tablename = @c_Tablename
-                     AND T2.key1 = @c_Orderkey
+                     AND T2.key1 = @c_Mbolkey   --WL01
                      AND T2.key2 = ''
                      AND T2.key3 = @c_Storerkey)
       BEGIN
@@ -95,7 +103,7 @@ BEGIN
          ELSE
          BEGIN
             INSERT INTO Transmitlog2 (transmitlogkey, tablename, key1, key2, key3, transmitflag, TransmitBatch)
-            VALUES (@c_trmlogkey, @c_TableName, @c_Orderkey, '', @c_Storerkey, '0', '')
+            VALUES (@c_trmlogkey, @c_TableName, @c_Mbolkey, '', @c_Storerkey, '0', '')   --WL01
 
             IF @@ERROR <> 0
             BEGIN
@@ -112,7 +120,7 @@ BEGIN
          UPDATE dbo.TRANSMITLOG2 WITH (ROWLOCK)
          SET transmitflag = '0'
          WHERE tablename = @c_TableName
-         AND key1 = @c_Orderkey
+         AND key1 = @c_Mbolkey   --WL01
          AND key2 = ''
          AND key3 = @c_Storerkey
 
@@ -125,18 +133,21 @@ BEGIN
                              + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '
          END
       END
-
-      FETCH NEXT FROM CUR_LOOP INTO @c_Orderkey, @c_Storerkey
    END
-   CLOSE CUR_LOOP
-   DEALLOCATE CUR_LOOP
+   --   FETCH NEXT FROM CUR_LOOP INTO @c_Orderkey, @c_Storerkey
+   --END
+   --CLOSE CUR_LOOP
+   --DEALLOCATE CUR_LOOP
+   --WL01 E
 
 QUIT_SP:
-   IF CURSOR_STATUS('LOCAL', 'CUR_LOOP') IN (0 , 1)
-   BEGIN
-      CLOSE CUR_LOOP
-      DEALLOCATE CUR_LOOP
-   END
+   --WL01 S
+   --IF CURSOR_STATUS('LOCAL', 'CUR_LOOP') IN (0 , 1)
+   --BEGIN
+   --   CLOSE CUR_LOOP
+   --   DEALLOCATE CUR_LOOP
+   --END
+   --WL01 E
 
    IF @n_continue = 3  -- Error Occured - Process And Return
    BEGIN

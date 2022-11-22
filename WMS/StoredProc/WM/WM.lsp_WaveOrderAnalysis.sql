@@ -13,7 +13,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.8                                                    */                                                                                  
+/* PVCS Version: 1.9                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -36,6 +36,8 @@ GO
 /* 2022-08-10  Wan05    1.7   LFWM-3470 - [CN]NIKE_PHC_Wave Release_Add */
 /*                            orderdate filter                          */
 /* 2022-10-17  Wan06    1.8   Reverse JSM-81405 Fixed Code              */
+/* 2022-10-17  Wan07    1.9   Fixed issue result from JSM-81405 solution*/
+/*                            Refixed JSM-81405                         */ 
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_WaveOrderAnalysis]                                                                                                                     
       @c_Facility          NVARCHAR(5)                                                                                                                     
@@ -232,11 +234,13 @@ BEGIN
       BEGIN
          SET @n_BuildOrders = 0
          SET @n_FromPos   = CHARINDEX('FROM ', @c_SQLBuildWave , 1)
-         SET @n_HavingPos = CHARINDEX('HAVING', @c_SQLBuildWave, 1)
-         SET @n_GroupByPos= CHARINDEX('GROUP BY', @c_SQLBuildWave, 1)
-
+         --SET @n_HavingPos = CHARINDEX('HAVING', @c_SQLBuildWave, 1)      --(Wan07)
+         --SET @n_GroupByPos= CHARINDEX('GROUP BY', @c_SQLBuildWave, 1)    --(Wan07)
+         
+         SET @n_ToPos = LEN(@c_SQLBuildWave) - @n_FromPos + 1              --(Wan07)
+         /* (Wan07 - START
          IF @c_SQLHaving = 0   -- ZG01  
-         --IF @n_HavingPos = 0     -- ZG01      --Wan06
+         --IF @n_HavingPos = 0     -- ZG01                                 --Wan06
          BEGIN
             SET @n_ToPos = @n_GroupByPos - @n_FromPos 
             IF @n_GroupByPos = 0
@@ -254,13 +258,18 @@ BEGIN
                         + ' ' + CHAR(13) + SUBSTRING(@c_SQLBuildWave, @n_HavingPos, LEN(@c_SQLBuildWave) - @n_HavingPos + 1)
                         + ' ) t' 
          END
+         (Wan07) - END */
+         
+         SET @c_SQL  = N'SELECT @n_BuildOrders = COUNT(1) FROM ( SELECT ORDERS.Orderkey'              --(Wan07)
+                     + ' ' + CHAR(13) + SUBSTRING(@c_SQLBuildWave, @n_FromPos, @n_ToPos)
+                     + ' ) t' 
 
          SET @c_SQLParms = N'@c_Facility     NVARCHAR(5)'
                          + ',@c_Storerkey    NVARCHAR(10)'
                          + ',@n_MaxOpenQty   INT'           --2020-07-10
                          + ',@n_BuildOrders  INT   OUTPUT'
  
-   --print CAST(@n_BuildOrders AS NVARCHAR) + '=>' + @c_Facility + ' ' +  @c_buildparmkey + ' - ' + @c_SQL
+   
          EXEC SP_EXECUTESQL
                @c_SQL
             ,  @c_SQLParms

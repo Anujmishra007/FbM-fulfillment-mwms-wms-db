@@ -63,6 +63,7 @@ GO
 /* 2020-02-04 3.9  YeeKung    WMS12740 Add ExtendedinfoSP (yeekung02)   */
 /* 2021-06-09 4.0  YeeKung    WMS-17216 Add LOCLookUP (yeekung03)       */ 
 /* 2022-05-18 4.1  Ung        WMS-19661 Add MultiSKUBarcode             */
+/* 2022-11-01 4.2  James      WMS-20940-Extend variable langth (james11)*/
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Inquiry] (
@@ -140,8 +141,8 @@ DECLARE
    @cBarcode      NVARCHAR( 60), -- (ChewKP04)
    @cUPC          NVARCHAR( 30), -- (ChewKP04)
    @nQty          INT,           -- (ChewKP04)
-   @cSQL          NVARCHAR( 1000), -- (ChewKP04)
-   @cSQLParam     NVARCHAR( 1000), -- (ChewKP04)
+   @cSQL          NVARCHAR( MAX), -- (ChewKP04)/(james11)
+   @cSQLParam     NVARCHAR( MAX), -- (ChewKP04)/(james11)
    @cUserDefine01 NVARCHAR( 60),
    @cUserDefine02 NVARCHAR( 60),
    @cUserDefine03 NVARCHAR( 60),
