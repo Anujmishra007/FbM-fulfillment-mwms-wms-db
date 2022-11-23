@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_GetBooking1stBayByDate]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_GetBooking1stBayByDate]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -16,21 +13,23 @@ GO
 /*                                                                      */
 /* Called By:  Booking Module                                           */
 /*                                                                      */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author    Ver.  Purposes                                */
+/* Date        Author   Ver.  Purposes                                */
+/* 2022-11-16  Wan01    1.1   WMS-21173-[PH] - Colgate-Palmolive Inbound*/
+/*                            Doorbooking EndTime                       */
+/*                            DevOps Combine Script                     */
 /************************************************************************/
-
-CREATE PROCEDURE isp_GetBooking1stBayByDate
+CREATE OR ALTER PROCEDURE isp_GetBooking1stBayByDate
    @cFacility NVARCHAR(5),
    @dDate     DATETIME,
    @cInOut    NVARCHAR(1),
-   @cLoc   NVARCHAR(10) OUTPUT
+   @cLoc      NVARCHAR(10) OUTPUT
 AS
 BEGIN
   SET NOCOUNT ON  
@@ -67,7 +66,8 @@ BEGIN
   WHERE BI.Facility = @cFacility 
   AND LOC.LocationCategory IN(@cInCategory,'Bay') 
   AND CODELKUP.Code IS NULL
-  AND BI.BookingDate BETWEEN @dFromDate AND @dToDate  
+  AND (BI.BookingDate BETWEEN @dFromDate AND @dToDate OR                   --(Wan01)
+       BI.EndTime BETWEEN @dFromDate AND @dToDate)                         --(Wan01)
   ORDER BY LOC.logicallocation, LOC.Loc
   
   SELECT TOP 1 @cOutLoc = LOC.Loc 
@@ -78,7 +78,8 @@ BEGIN
   WHERE BO.Facility = @cFacility 
   AND LOC.LocationCategory IN(@cOutCategory,'Bay') 
   AND CODELKUP.Code IS NULL
-  AND BO.BookingDate BETWEEN @dFromDate AND @dToDate  
+  AND (BO.BookingDate BETWEEN @dFromDate AND @dToDate OR                   --(Wan01)
+       BO.EndTime BETWEEN @dFromDate AND @dToDate)                         --(Wan01)
   ORDER BY LOC.logicallocation, LOC.Loc    
      
   IF ISNULL(@cInLoc,'ZZZZZZZZZZ') <= ISNULL(@cOutLoc,'ZZZZZZZZZ')
