@@ -14,10 +14,11 @@ GO
 /* Modifications log:                                                   */    
 /* Date        Rev  Author   Purposes                                   */    
 /* 2021-11-30  1.0  yeekung   WMS-18241 Created                         */ 
-/* 2021-07-27  1.1  Chermain WMS-17410 Add VariableTable Param (cc01)   */
+/* 2021-07-27  1.1  Chermain  WMS-17410 Add VariableTable Param (cc01)   */
 /* 2022-03-01  1.2  yeekung   WMS-19008 Add packdetail support orderkey */
 /*                            (yeekung01)                               */ 
 /* 2022-06-24  1.3  yeekung  JSM-76518 Fix bugs (yeekung01)             */
+/* 2022-07-26  1.4  yeekung  WMS-20327 supprt Pd.status='3'(yeekung02)  */
 /************************************************************************/    
   
 CREATE OR ALTER PROC [RDT].[rdt_841ExtUpdSP23] (    
@@ -126,18 +127,88 @@ BEGIN
    IF @nStep = 2    
    BEGIN    
       SET @cGenLabelNoSP = rdt.RDTGetConfig( @nFunc, 'GenLabelNo', @cStorerkey)    
-    
-      -- check if sku exists in tote    
-      IF NOT EXISTS (SELECT 1 FROM rdt.rdtECOMMLog ECOMM WITH (NOLOCK)    
-                      WHERE ToteNo = @cDropID    
-                      AND SKU = @cSKU    
-                      AND AddWho = @cUserName    
-                      AND Status IN ('0', '1') )    
-      BEGIN    
-          SET @nErrNo = 179405    
-          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKuNotIntote    
-          GOTO RollBackTran    
-      END    
+
+      IF @cDropID<>''
+      BEGIN
+         -- check if sku exists in tote    
+         IF NOT EXISTS (SELECT 1 FROM rdt.rdtECOMMLog ECOMM WITH (NOLOCK)    
+                         WHERE ToteNo = @cDropID    
+                         AND SKU = @cSKU    
+                         AND AddWho = @cUserName    
+                         AND Status IN ('0', '1') )    
+         BEGIN    
+            DECLARE @cUseUdf04AsTrackNo   NVARCHAR(1)
+            SET @cUseUdf04AsTrackNo = rdt.RDTGetConfig( @nFunc, 'UseUdf04AsTrackNo', @cStorerKey)
+
+            IF EXISTS( SELECT 1  
+               FROM dbo.PICKDETAIL PK WITH (NOLOCK)  
+               JOIN dbo.Orders O WITH (NOLOCK) ON O.Orderkey = PK.Orderkey  
+               WHERE PK.DROPID = @cDropID  
+                 AND (PK.Status >= '3' OR PK.ShipFlag = '0')
+                 AND PK.Status <> '4'
+                 AND PK.Status < '9'
+                 AND PK.SKU = @cSKU
+                 AND PK.CaseID = ''  
+                 AND PK.Qty > 0 
+                 AND O.SOStatus IN ( 'PENDCANC' ) )
+                 --AND (( @cUseUdf04AsTrackNo = '1' AND ISNULL( O.UserDefine04, '') <> '') OR ( ISNULL(O.TrackingNo ,'') <> '')) 
+                 --AND EXISTS ( SELECT 1 FROM dbo.CODELKUP C WITH (NOLOCK) WHERE LISTNAME = 'ORDERTYPE' AND Storerkey = @cStorerKey AND O.[Type] = C.Code))
+            BEGIN
+                SET @nErrNo = 179446   
+                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU    
+                GOTO RollBackTran    
+            END
+            ELSE
+            BEGIN
+               SET @nErrNo = 179405    
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKuNotIntote    
+               GOTO RollBackTran    
+            END
+         END    
+         ELSE
+         BEGIN
+            IF EXISTS( SELECT 1  
+               FROM dbo.PICKDETAIL PK WITH (NOLOCK)  
+               JOIN dbo.Orders O WITH (NOLOCK) ON O.Orderkey = PK.Orderkey  
+               WHERE PK.DROPID = @cDropID  
+                  AND (PK.Status >= '3' OR PK.ShipFlag = '0')
+                  AND PK.Status <> '4'
+                  AND PK.Status < '9'
+                  AND PK.SKU = @cSKU
+                  AND PK.CaseID = ''  
+                  AND PK.Qty > 0 
+                  AND O.SOStatus NOT IN ( 'PENDCANC' ))
+            BEGIN
+               DELETE rdt.rdtECOMMLog
+               WHERE ToteNo = @cDropID 
+               AND orderkey in (SELECT o.orderkey 
+                  FROM dbo.PICKDETAIL PK WITH (NOLOCK)  
+                  JOIN dbo.Orders O WITH (NOLOCK) ON O.Orderkey = PK.Orderkey  
+                  WHERE PK.DROPID = @cDropID  
+                     AND (PK.Status >= '3' OR PK.ShipFlag = '0')
+                     AND PK.Status <> '4'
+                     AND PK.Status < '9'
+                     AND PK.SKU = @cSKU
+                     AND PK.CaseID = ''  
+                     AND PK.Qty > 0 
+                     AND O.SOStatus IN ( 'PENDCANC' ))
+
+               IF @@ERROR <> 0    
+               BEGIN    
+                  SET @nErrNo = 179448    
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UpdEcommFail'    
+                  GOTO RollBackTran    
+               END  
+            END
+
+            ELSE
+            BEGIN
+               SET @nErrNo = 179447   
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU    
+               GOTO RollBackTran    
+            END
+         END
+      END
 
       IF NOT EXISTS (SELECT 1 FROM rdt.rdtECOMMLog ECOMM WITH (NOLOCK)    
                       WHERE ToteNo = @cDropID    
@@ -158,10 +229,12 @@ BEGIN
          -- processing new order    
          SELECT @cOrderkey   = MIN(RTRIM(ISNULL(Orderkey,'')))    
          FROM rdt.rdtECOMMLog WITH (NOLOCK)    
-         WHERE Status IN ('0', '1')    
-         AND   Sku = @cSKU    
-         AND   AddWho = @cUserName    
-    
+         WHERE Status in('0','1') 
+         AND   Sku =  @cSKU    
+         AND   AddWho = @cUserName  
+         
+         SET @cOrderKeyOut = @cOrderkey  
+
       END    
       ELSE    
       BEGIN    
@@ -435,7 +508,7 @@ BEGIN
                INNER JOIN dbo.PickHeader PH WITH (NOLOCK) ON PH.OrderKey = PD.OrderKey    
                WHERE PD.StorerKey = @cStorerKey    
                  AND PD.DropID = @cDropID    
-                 AND (PD.Status = '5' OR PD.ShipFlag = 'P')    
+                 AND (PD.Status IN ('3','5') OR PD.ShipFlag = 'P')    --(yeekung02)
                  AND PH.PickHeaderKey = @cPickSlipNo    
             END    
             ELSE    
@@ -654,7 +727,7 @@ BEGIN
                      FROM dbo.PickDetail PD WITH (NOLOCK)    
                      JOIN dbo.PickHeader PH WITH (NOLOCK) ON PD.OrderKey = PH.OrderKey    
                      WHERE PD.StorerKey = @cStorerKey    
-                        AND (PD.Status = '5' OR PD.ShipFlag = 'P')    
+                        AND (PD.Status IN ('3','5') OR PD.ShipFlag = 'P')    --(yeekung02)
                         AND PD.SKU = @cPackSku    
                         AND PH.PickHeaderKey = @cPickSlipNo    
                   END    
@@ -931,7 +1004,8 @@ BEGIN
                      ,Editdate   = GETDATE()  
                      ,EditWho    = SUSER_SNAME()   
                   WHERE OrderKey = @cOrderkey    
-                  AND StorerKey = @cStorerKey    
+                  AND StorerKey = @cStorerKey  
+                  AND SOStatus NOT IN ('PENCANC','HOLD')
     
                   IF  @@ERROR <> 0    
                   BEGIN    
@@ -1000,9 +1074,9 @@ BEGIN
                   GOTO RollBackTran    
                END    
     
-               SELECT @cPickSlipNo = PickHeaderKey    
-               FROM dbo.PickHeader (NOLOCK)    
-               WHERE OrderKey = @cPrevOrderkey    
+               SELECT @cPickSlipNo = pickslipno    
+               FROM dbo.pickdetail (NOLOCK)    
+               WHERE OrderKey = @cOrderkey    
     
                EXEC isp_ScanOutPickSlip  
                   @c_PickSlipNo = @cPickSlipNo,  
@@ -1039,7 +1113,7 @@ BEGIN
             SET @nTotalPickQty = 0    
             SELECT @nTotalPickQty = SUM(PD.QTY)    
             FROM PICKDETAIL PD WITH (NOLOCK)    
-WHERE PD.ORDERKEY = @cOrderKey    
+            WHERE PD.ORDERKEY = @cOrderKey    
             AND PD.Storerkey = @cStorerkey    
             AND PD.Status NOT IN ( '4' , '9' )  
                  
@@ -1135,7 +1209,7 @@ WHERE PD.ORDERKEY = @cOrderKey
                   AND PickDetailKey = @cPickDetailKey  
           
                   IF @@ERROR <> 0    
-BEGIN    
+                  BEGIN    
                      SET @nErrNo = 179435    
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdPickDetailFail    
                      GOTO RollBackTran    
@@ -1263,6 +1337,7 @@ BEGIN
                      ,EditWho    = SUSER_SNAME()   
                   WHERE OrderKey = @cOrderkey    
                   AND StorerKey = @cStorerKey    
+                  AND SOStatus NOT IN ('PENCANC','HOLD')
     
                   IF  @@ERROR <> 0    
                   BEGIN    
@@ -1676,7 +1751,8 @@ BEGIN
                   EditWho    = SUSER_SNAME(),   
                   EditDate   = GETDATE()   
             WHERE OrderKey = @cPrevOrderkey    
-            AND StorerKey = @cStorerKey    
+            AND StorerKey = @cStorerKey 
+            AND Sostatus NOT IN ( 'PENCANC','HOLD')
     
             IF  @@ERROR <> 0    
             BEGIN    
@@ -1838,7 +1914,7 @@ BEGIN
    GOTO QUIT           
              
 RollBackTran:          
-   ROLLBACK TRAN rdt_841ExtUpdSP23 -- Only rollback change made here          
+   ROLLBACK TRAN -- Only rollback change made here          
           
 Quit:          
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started          

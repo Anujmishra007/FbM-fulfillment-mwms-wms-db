@@ -46,3 +46,6 @@ execute rdt.rdtAddMsg 179442, 10, '179442UpdPHFail ',  'us_english',841
 execute rdt.rdtAddMsg 179443, 10, 'PLS USE BOX',         'us_english', 841
 execute rdt.rdtAddMsg 179444, 10, 'PLS USE GWP',         'us_english', 841
 execute rdt.rdtAddMsg 179445, 10, '179445UpdPickInfoFail',         'us_english', 841
+execute rdt.rdtAddMsg 179446, 10, '179446OrdersPendcanc',         'us_english', 841
+execute rdt.rdtAddMsg 179447, 10, '179447OrdersPendcanc',         'us_english', 841
+
