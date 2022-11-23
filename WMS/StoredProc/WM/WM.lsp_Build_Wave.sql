@@ -49,6 +49,8 @@ GO
 /*                            wave. Fix Truncated value                 */
 /* 2022-08-10  Wan10    2.4   LFWM-3470 - [CN]NIKE_PHC_Wave Release_Add */
 /*                            orderdate filter                          */
+/* 2022-11-04  Wan12    2.5   Fixed incorrent duration & TotalWaveCnt   */   
+/*                            due to rebuild using same batchno         */ 
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_Build_Wave]                                                                                                                       
       @c_BuildParmKey      NVARCHAR(10)                                                                                                                    
@@ -1725,8 +1727,11 @@ EXIT_SP:
          SET @d_EndTime = GETDATE()
          BEGIN TRY
             UPDATE BUILDWAVELOG 
-            SET Duration = CONVERT(CHAR(12), @d_EndTime - @d_StartBatchTime, 114)
-               , TotalWaveCnt = @n_WaveCnt
+            SET --Duration = CONVERT(CHAR(12), @d_EndTime - @d_StartTime, 114)            --(Wan12)  
+                 Duration = CONVERT(CHAR(12),                                             --(Wan12)  
+                                   (CONVERT(DATETIME, Duration))                          --(Wan12)  
+                                 + (@d_EndTime - @d_StartTime), 114)                      --(Wan12)  
+               , TotalWaveCnt = TotalWaveCnt + @n_WaveCnt                                 --(Wan12) 
                , UDF01    = ''
                , [Status] = '9'
                , EditDate = @d_EndTime
