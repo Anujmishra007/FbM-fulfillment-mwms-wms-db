@@ -11,6 +11,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
 /* 2022-09-23 1.0  James      WMS-20830. Created                        */
+/* 2022-11-17 1.1  James      WMS-21172 Add new validation (james01)    */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_701ExtValidSP02] (
@@ -79,6 +80,19 @@ AS
             IF ISNULL( @cStatus, '') NOT IN ('9','')
             BEGIN
                SET @nErrNo = 191953  -- Job Not Done
+               GOTO Quit
+            END
+
+            -- (james01)
+            SELECT TOP 1 @cStatus = WL.STATUS
+            FROM RDT.rdtWATLog WL WITH (NOLOCK)   
+            JOIN RDT.RDTWatTeamLog WRL WITH (NOLOCK) ON ( WL.ROWREF = WRL.UDF01)
+            WHERE WRL.MEMBERUSER = @cUserID
+            ORDER BY WL.EditDate DESC  
+
+            IF ISNULL( @cStatus, '') NOT IN ('9','')
+            BEGIN
+               SET @nErrNo = 191954  -- 707 Job Not Done
                GOTO Quit
             END
          END
