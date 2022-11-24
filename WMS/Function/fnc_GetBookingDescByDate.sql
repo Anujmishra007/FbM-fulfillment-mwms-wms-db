@@ -1,7 +1,3 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[fnc_GetBookingDescByDate]')  AND type in (N'FN', N'IF', N'TF', N'FS', N'FT')) 
-DROP FUNCTION [dbo].[fnc_GetBookingDescByDate]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -23,12 +19,15 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author   Ver. Purposes                                  */
-/* 31-OCT-2014  YTWan    1.2  SOS#322304 - PH - CPPI WMS Door Booking   */
+/* Date        Author   Ver.  Purposes                                  */
+/* 31-OCT-2014 YTWan    1.2   SOS#322304 - PH - CPPI WMS Door Booking   */
 /*                            Enhancement (Wan01)                       */
+/* 16-NOV-2022 Wan02    1.3   WMS-21173-[PH] - Colgate-Palmolive Inbound*/
+/*                            Doorbooking EndTime                       */
+/*                            DevOps Combine Script                     */
 /************************************************************************/
 
-CREATE FUNCTION [dbo].[fnc_GetBookingDescByDate] ( 
+CREATE OR ALTER FUNCTION [dbo].[fnc_GetBookingDescByDate] ( 
    @cFacility NVARCHAR(5),
    @dDate     DATETIME,
    @cInOut    NVARCHAR(1)
@@ -51,52 +50,59 @@ BEGIN
    
   IF @cInOut = 'I'
   BEGIN
-  	SELECT @nCount = COUNT(*), @nDurationMin = SUM(datediff(mi,'1900-01-01', BI.duration))
-  	FROM BOOKING_IN BI (NOLOCK)
-  	WHERE BI.Facility = @cFacility
-  	AND BI.Status <> '9'
-  	AND BI.BookingDate BETWEEN @dFromDate AND @dToDate
-  	
-  	SELECT @nCount_ShareBay = COUNT(*), @nDurationMin_ShareBay = SUM(datediff(mi,'1900-01-01', BO.duration))
-  	FROM BOOKING_OUT BO (NOLOCK)
+   SELECT @nCount = COUNT(*), @nDurationMin = SUM(datediff(mi,'1900-01-01', BI.duration))
+   FROM BOOKING_IN BI (NOLOCK)
+   WHERE BI.Facility = @cFacility
+   AND BI.Status <> '9'
+   --(Wan02) - START
+   --AND BI.BookingDate BETWEEN @dFromDate AND @dToDate
+   AND ( BI.BookingDate BETWEEN @dFromDate AND @dToDate OR
+         BI.EndTime     BETWEEN @dFromDate AND @dToDate )
+   --(Wan02) - END   
+   
+   SELECT @nCount_ShareBay = COUNT(*), @nDurationMin_ShareBay = SUM(datediff(mi,'1900-01-01', BO.duration))
+   FROM BOOKING_OUT BO (NOLOCK)
     JOIN LOC (NOLOCK) ON BO.Loc = LOC.Loc
-  	WHERE BO.Facility = @cFacility
-  	AND BO.Status <> '9'
-   --(Wan01) - START  	
-  	--AND BO.BookingDate BETWEEN @dFromDate AND @dToDate
+   WHERE BO.Facility = @cFacility
+   AND BO.Status <> '9'
+   --(Wan01) - START    
+   --AND BO.BookingDate BETWEEN @dFromDate AND @dToDate
    AND ( BO.BookingDate BETWEEN @dFromDate AND @dToDate OR
-         BO.EndTime     BETWEEN @dFromDate AND @dToDate )	 	
+         BO.EndTime     BETWEEN @dFromDate AND @dToDate )      
    --(Wan01) - END
-  	AND LOC.LocationCategory = 'BAY'
-  	  	
-  	SELECT @nTotalLoc = COUNT(*)
-  	FROM LOC(NOLOCK)
-  	WHERE LocationCategory IN('BAYIN','BAY')
-  	AND Facility = @cfacility
+   AND LOC.LocationCategory = 'BAY'
+      
+   SELECT @nTotalLoc = COUNT(*)
+   FROM LOC(NOLOCK)
+   WHERE LocationCategory IN('BAYIN','BAY')
+   AND Facility = @cfacility
   END
   ELSE
   BEGIN
-  	SELECT @nCount = COUNT(*), @nDurationMin = SUM(datediff(mi,'1900-01-01', BO.duration))
-  	FROM BOOKING_OUT BO (NOLOCK)
-  	WHERE BO.Facility = @cFacility
-  	AND BO.Status <> '9'
+   SELECT @nCount = COUNT(*), @nDurationMin = SUM(datediff(mi,'1900-01-01', BO.duration))
+   FROM BOOKING_OUT BO (NOLOCK)
+   WHERE BO.Facility = @cFacility
+   AND BO.Status <> '9'
    --(Wan01) - START
-  	--AND BO.BookingDate BETWEEN @dFromDate AND @dToDate 
+   --AND BO.BookingDate BETWEEN @dFromDate AND @dToDate 
    AND ( BO.BookingDate BETWEEN @dFromDate AND @dToDate OR
-         BO.EndTime     BETWEEN @dFromDate AND @dToDate )	 	
+         BO.EndTime     BETWEEN @dFromDate AND @dToDate )      
    --(Wan01) - END
-  	SELECT @nCount_ShareBay = COUNT(*), @nDurationMin_ShareBay = SUM(datediff(mi,'1900-01-01', BI.duration))
-  	FROM BOOKING_IN BI (NOLOCK)
+   SELECT @nCount_ShareBay = COUNT(*), @nDurationMin_ShareBay = SUM(datediff(mi,'1900-01-01', BI.duration))
+   FROM BOOKING_IN BI (NOLOCK)
     JOIN LOC (NOLOCK) ON BI.Loc = LOC.Loc
-  	WHERE BI.Facility = @cFacility
-  	AND BI.Status <> '9'
-  	AND BI.BookingDate BETWEEN @dFromDate AND @dToDate
-  	AND LOC.LocationCategory = 'BAY'
+   WHERE BI.Facility = @cFacility
+   AND BI.Status <> '9'
+   --AND BI.BookingDate BETWEEN @dFromDate AND @dToDate
+   AND ( BI.BookingDate BETWEEN @dFromDate AND @dToDate OR
+         BI.EndTime     BETWEEN @dFromDate AND @dToDate )
+   --(Wan02) - END
+   AND LOC.LocationCategory = 'BAY'
 
-  	SELECT @nTotalLoc = COUNT(*)
-  	FROM LOC(NOLOCK)
-  	WHERE LocationCategory IN('BAYOUT','BAY')
-  	AND Facility = @cfacility
+   SELECT @nTotalLoc = COUNT(*)
+   FROM LOC(NOLOCK)
+   WHERE LocationCategory IN('BAYOUT','BAY')
+   AND Facility = @cfacility
   END
   
   IF @nCount IS NULL
@@ -108,26 +114,26 @@ BEGIN
   IF @nDurationMin_ShareBay IS NULL
      SET @nDurationMin_ShareBay = 0
   
-	IF (@nCount + @nCount_ShareBay) > 0
-	BEGIN
- 	   IF @nCount_ShareBay > 0
- 	   BEGIN 
- 	   	  IF @cInOut = 'I'
-    	     SET @cDesc = rtrim(ltrim(str(@nCount))) + ' Booking (I)' + char(10) + rtrim(ltrim(str(@nCount_ShareBay))) + ' Booking (O)'
-    	  ELSE
-    	     SET @cDesc = rtrim(ltrim(str(@nCount))) + ' Booking (O)' + char(10) + rtrim(ltrim(str(@nCount_ShareBay))) + ' Booking (I)'    	  
- 	   END
- 	   ELSE
- 	   	  IF @cInOut = 'I'
-    	     SET @cDesc = rtrim(ltrim(str(@nCount))) + ' Booking (I)'
-    	  ELSE
-    	     SET @cDesc = rtrim(ltrim(str(@nCount))) + ' Booking (O)'    	   
-    	    	      
+   IF (@nCount + @nCount_ShareBay) > 0
+   BEGIN
+      IF @nCount_ShareBay > 0
+      BEGIN 
+           IF @cInOut = 'I'
+           SET @cDesc = rtrim(ltrim(str(@nCount))) + ' Booking (I)' + char(10) + rtrim(ltrim(str(@nCount_ShareBay))) + ' Booking (O)'
+        ELSE
+           SET @cDesc = rtrim(ltrim(str(@nCount))) + ' Booking (O)' + char(10) + rtrim(ltrim(str(@nCount_ShareBay))) + ' Booking (I)'       
+      END
+      ELSE
+           IF @cInOut = 'I'
+           SET @cDesc = rtrim(ltrim(str(@nCount))) + ' Booking (I)'
+        ELSE
+           SET @cDesc = rtrim(ltrim(str(@nCount))) + ' Booking (O)'        
+                  
      IF (@nDurationMin + @nDurationMin_ShareBay) > 0
- 	   BEGIN
-		    SET @cDesc = @cDesc + char(10) + ' ' + STR(( (@nDurationMin+@nDurationMin_ShareBay) / ((@nTotalLoc * 24) * 60.00) * 100),5,2)+ '%'
- 	   END 
- 	END
+      BEGIN
+          SET @cDesc = @cDesc + char(10) + ' ' + STR(( (@nDurationMin+@nDurationMin_ShareBay) / ((@nTotalLoc * 24) * 60.00) * 100),5,2)+ '%'
+      END 
+   END
 
   RETURN @cDesc
 END

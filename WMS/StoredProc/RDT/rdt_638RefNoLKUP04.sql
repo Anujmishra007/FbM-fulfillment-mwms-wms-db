@@ -1,6 +1,6 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /******************************************************************************/  
@@ -18,9 +18,10 @@ GO
 /*                              to prompt error instead of msgqueue (james03) */  
 /* 02-08-2022   James     1.5   WMS-20356 Change logic on checking time-out   */
 /*                              period (james04)                              */
+/* 11-11-2022   James     1.6   Perf tuning (james05)                         */
 /******************************************************************************/  
   
-CREATE OR ALTER PROCEDURE rdt.rdt_638RefNoLKUP04  
+CREATE OR ALTER PROC [RDT].[rdt_638RefNoLKUP04]  
     @nMobile      INT  
    ,@nFunc        INT  
    ,@cLangCode    NVARCHAR( 3)  
@@ -93,21 +94,21 @@ BEGIN
             OMS order no      (Orders.ExternOrderKey), like Bao Jun  
             WMS order no      (Orders.OrderKey)  
       */  
-      IF @cReceiptKey = ''  
-      BEGIN  
-         SELECT @cReceiptKey = ReceiptKey  
-         FROM Receipt WITH (NOLOCK)  
-         WHERE StorerKey = @cStorerKey  
-            AND CarrierName = @cRefNo   
-            AND ASNStatus NOT IN ('9', 'CANC')  
+      --IF @cReceiptKey = ''  
+      --BEGIN  
+      --   SELECT @cReceiptKey = ReceiptKey  
+      --   FROM Receipt WITH (NOLOCK)  
+      --   WHERE StorerKey = @cStorerKey  
+      --      AND CarrierName = @cRefNo   
+      --      AND ASNStatus NOT IN ('9', 'CANC')  
   
-         IF @@ROWCOUNT > 1  
-         BEGIN  
-            SET @nErrNo = 158402  
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Found MultiASN  
-            GOTO Quit  
-         END  
-      END  
+      --   IF @@ROWCOUNT > 1  
+      --   BEGIN  
+      --      SET @nErrNo = 158402  
+      --      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Found MultiASN  
+      --      GOTO Quit  
+      --   END  
+      --END  
   
       -- Scan PlatformOrderNo  
       IF @cReceiptKey = ''  
@@ -137,16 +138,29 @@ BEGIN
          WHERE QRCode = @cRefNo   
            
          IF @@ROWCOUNT = 1  
+            --SELECT TOP 1 @cReceiptKey = R.ReceiptKey  
+            --FROM dbo.RECEIPT R WITH (NOLOCK)  
+            --JOIN dbo.RECEIPTDETAIL RD WITH (NOLOCK) ON ( R.ReceiptKey = RD.ReceiptKey)  
+            --JOIN dbo.ExternOrders EO WITH (NOLOCK)  ON ( R.CarrierName = EO.PlatformOrderNo)  
+            --JOIN dbo.ExternOrdersDetail EOD WITH (NOLOCK) ON ( EO.ExternOrderKey = EOD.ExternOrderKey AND RD.Sku = EOD.SKU)  
+            --WHERE EOD.StorerKey = @cStorerKey  
+            --AND   EOD.QRCode = @cRefNo   
+            --AND   R.StorerKey = @cStorerKey  
+            --AND   R.ASNStatus NOT IN ('1', '9', 'CANC')  
+            --ORDER BY R.AddDate DESC  
+
             SELECT TOP 1 @cReceiptKey = R.ReceiptKey  
-            FROM dbo.RECEIPT R WITH (NOLOCK)  
-            JOIN dbo.RECEIPTDETAIL RD WITH (NOLOCK) ON ( R.ReceiptKey = RD.ReceiptKey)  
-            JOIN dbo.ExternOrders EO WITH (NOLOCK)  ON ( R.CarrierName = EO.PlatformOrderNo)  
-            JOIN dbo.ExternOrdersDetail EOD WITH (NOLOCK) ON ( EO.ExternOrderKey = EOD.ExternOrderKey AND RD.Sku = EOD.SKU)  
-            WHERE EOD.StorerKey = @cStorerKey  
+            FROM dbo.ExternOrdersDetail EOD WITH (NOLOCK)
+            JOIN dbo.ExternOrders EO WITH (NOLOCK)  ON ( EO.ExternOrderKey = EOD.ExternOrderKey  )
+            JOIN dbo.RECEIPTDETAIL RD WITH (NOLOCK) ON ( RD.StorerKey = EOD.StorerKey AND RD.Sku = EOD.SKU )
+            JOIN dbo.RECEIPT R WITH (NOLOCK)  ON  ( R.ReceiptKey = RD.ReceiptKey )
+            WHERE R.CarrierName = EO.PlatformOrderNo
+            AND   EOD.StorerKey = @cStorerKey  
             AND   EOD.QRCode = @cRefNo   
             AND   R.StorerKey = @cStorerKey  
             AND   R.ASNStatus NOT IN ('1', '9', 'CANC')  
-            ORDER BY R.AddDate DESC  
+            ORDER BY R.AddDate DESC
+
          ELSE  
          BEGIN  
             SELECT @cPlatformOrderNo = EO.PlatformOrderNo  
@@ -183,7 +197,23 @@ BEGIN
             END     
          END  
       END  
-        
+
+      IF @cReceiptKey = ''  
+      BEGIN  
+         SELECT @cReceiptKey = ReceiptKey  
+         FROM Receipt WITH (NOLOCK)  
+         WHERE StorerKey = @cStorerKey  
+            AND CarrierName = @cRefNo   
+            AND ASNStatus NOT IN ('9', 'CANC')  
+  
+         IF @@ROWCOUNT > 1  
+         BEGIN  
+            SET @nErrNo = 158402  
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Found MultiASN  
+            GOTO Quit  
+         END  
+      END  
+
       -- Scan cs return orders  
       IF @cReceiptKey = ''  
       BEGIN  
@@ -381,5 +411,6 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-GRANT EXEC ON RDT.rdt_638RefNoLKUP04 TO NSQL
+
+GRANT EXECUTE ON [RDT].[rdt_638RefNoLKUP04] to nSQL
 GO

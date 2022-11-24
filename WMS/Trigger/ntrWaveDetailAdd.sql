@@ -23,7 +23,7 @@ GO
 /*                                                                            */
 /* Called By: When records Insert                                             */
 /*                                                                            */
-/* PVCS Version: 1.0                                                          */
+/* PVCS Version: 1.5                                                          */
 /*                                                                            */
 /* Version: 5.4                                                               */
 /*                                                                            */
@@ -38,6 +38,9 @@ GO
 /*                               adding order into WaveDetail (ZG01)          */
 /* 20-OCT-2022  NJOW01     1.4   WMS-21042 call custom stored proc            */
 /* 20-OCT-2022  NJOW01     1.4   DEVOPS Combine Script                        */
+/* 23-Nov-2022  Wan01      1.5   LFWM-3861 - CN Loreal build Wave performance */
+/*                               enhancement and Calculate Wave Status when   */
+/*                               wave detail's orderkey change/remove         */   
 /******************************************************************************/
 CREATE OR ALTER TRIGGER [dbo].[ntrWaveDetailAdd]
 ON [dbo].[WAVEDETAIL]
@@ -59,6 +62,10 @@ BEGIN
           ,@n_cnt         INT
           ,@c_wavekey     NVARCHAR(10)
           ,@c_OrderKey    NVARCHAR(10) --INC0349006
+          
+          ,@c_Status_ORD      NVARCHAR(10)   = '0'                -- (Wan01)
+          ,@c_Status_Wav      NVARCHAR(10)   = '0'                -- (Wan01)
+          ,@c_WaveKey_Prior   NVARCHAR(10)   = ''                 -- (Wan01)
 
    SET @c_wavekey  = '' --INC0349006
    SET @c_OrderKey = '' --INC0349006
@@ -179,14 +186,17 @@ BEGIN
    BEGIN
       DECLARE @c_Wv_Cur_Status NVARCHAR(10) = ''
       DECLARE CUR_Wave_Orders CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT DISTINCT I.WaveKey, I.OrderKey
+      SELECT DISTINCT I.WaveKey, I.OrderKey, w.[Status], o.[Status]              --(Wan01)
       FROM INSERTED I
       JOIN ORDERS O WITH (NOLOCK) ON I.OrderKey = O.OrderKey
+      JOIN dbo.WAVE AS w WITH (NOLOCK) ON I.WaveKey = w.WaveKey                  --(Wan01)
+      ORDER BY I.WaveKey, o.[Status]
 
       OPEN CUR_Wave_Orders
       FETCH NEXT FROM CUR_Wave_Orders INTO @c_wavekey, @c_OrderKey
+                                          ,@c_Wv_Cur_Status, @c_Status_ORD       --(Wan01)
 
-      WHILE @@FETCH_STATUS <> -1
+      WHILE @@FETCH_STATUS <> -1 AND @n_continue IN ( 1, 2 )                     --(Wan01)
       BEGIN
          IF EXISTS (SELECT 1 FROM PickDetail WITH (NOLOCK)
                     WHERE OrderKey = @c_OrderKey)
@@ -207,23 +217,61 @@ BEGIN
                                   ' SQLSvr MESSAGE=' + ISNULL(LTRIM(RTRIM(@c_errmsg)),'') + ' ) '
             END
          END
-         
-         -- ZG01 (Start)
-         EXEC [dbo].[isp_GetWaveStatus]
-             @c_WaveKey    = @c_WaveKey
-          ,  @b_UpdateWave = 1                         --1 => yes, 0 => No
-          ,  @c_Status     = @c_Wv_Cur_Status OUTPUT
-          ,  @b_Success    = @b_Success       OUTPUT
-          ,  @n_Err        = @n_Err           OUTPUT
-          ,  @c_ErrMsg     = @c_ErrMsg        OUTPUT
-         
-         IF @b_Success = 0
+
+         IF @n_continue = 1                                                      --(Wan01) - START
          BEGIN
-            SET @n_continue = 3
-         END
-         -- ZG01 (End)
+         	IF @c_WaveKey_Prior <> @c_Wavekey                                        
+            BEGIN
+               SET @c_Status_Wav = @c_Wv_Cur_Status
+            END  
+             
+            IF @c_Status_ORD BETWEEN '0' AND '5' AND
+            1 = CASE WHEN @c_Status_Wav = '0' AND @c_Status_ORD > '0' THEN 1              
+                     WHEN @c_Status_Wav = '2' AND @c_Status_ORD < '2' THEN 1
+                     WHEN @c_Status_Wav = '5' AND @c_Status_ORD < '5' THEN 1  
+                     ELSE 0
+                     END                    
+
+         	SET @c_Status_Wav = IIF (@c_Status_ORD IN (3,4), '2', @c_Status_ORD)
+  
+            IF @c_Wv_Cur_Status <> @c_Status_Wav
+            BEGIN
+            	UPDATE dbo.WAVE WITH (ROWLOCK)
+            	   SET [Status] = @c_Status_Wav      
+                  ,   EditWho  = SUSER_SNAME()      
+                  ,   EditDate = GETDATE()      
+                  ,   TrafficCop = NULL 
+            	WHERE WaveKey = @c_wavekey 
+            	AND [Status] = @c_Status_Wav         
+               
+               IF @@ERROR <> 0
+               BEGIN
+                  SET @n_Continue = 3      
+                  SET @n_Err      = 67890      
+                  SET @c_ErrMsg   = ERROR_MESSAGE()      
+                  SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Update WAVE Table fail. (ntrWaveDetailAdd)'      
+                                  + '( ' + @c_ErrMsg + ' )'      
+               END
+            END
+            -- ZG01 (Start)
+            --EXEC [dbo].[isp_GetWaveStatus]
+            --    @c_WaveKey    = @c_WaveKey
+            -- ,  @b_UpdateWave = 1                         --1 => yes, 0 => No
+            -- ,  @c_Status     = @c_Status_Wav    OUTPUT                          
+            -- ,  @b_Success    = @b_Success       OUTPUT
+            -- ,  @n_Err        = @n_Err           OUTPUT
+            -- ,  @c_ErrMsg     = @c_ErrMsg        OUTPUT
+         
+            --IF @b_Success = 0
+            --BEGIN
+            --   SET @n_continue = 3
+            --END
+            ---- ZG01 (End)
+         END                                                                      
+         SET @c_WaveKey_Prior = @c_Wavekey                                       --(Wan01) - END
          
          FETCH NEXT FROM CUR_Wave_Orders INTO @c_wavekey, @c_OrderKey
+                                             ,@c_Wv_Cur_Status, @c_Status_ORD    --(Wan01)
       END
       CLOSE CUR_Wave_Orders
       DEALLOCATE CUR_Wave_Orders

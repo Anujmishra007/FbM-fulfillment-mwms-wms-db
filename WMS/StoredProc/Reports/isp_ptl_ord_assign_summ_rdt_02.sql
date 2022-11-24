@@ -24,6 +24,8 @@ GO
 /* Updates:                                                             */
 /* Date         Author    Ver Purposes                                  */
 /* 05-Jul-2021  Mingle    1.1 WMS-17115 - Add new mappings(ML01)        */
+/* 25-Nov-2022  BeeTin    1.2 JSM-112611- Ext temp table column length  */  
+/*                            to NVARCHAR(20) istead of NVARCHAR(10)    */
 /************************************************************************/
 CREATE PROC isp_ptl_ord_assign_summ_rdt_02
            @c_waveKey   NVARCHAR(20)
@@ -91,7 +93,7 @@ BEGIN
       ,  courier2       NVARCHAR(50)   NULL  DEFAULT('') 
       ,  salesman       NVARCHAR(30)   NULL  DEFAULT('')    --ML01
       ,  storerkey      NVARCHAR(10)   NULL  DEFAULT('')    --ML01
-      ,  shipperkey     NVARCHAR(10)   NULL  DEFAULT('')    --ML01
+      ,  shipperkey     NVARCHAR(20)   NULL  DEFAULT('')    --ML01 --(JSM-112611)  
      )
 
    CREATE TABLE #TMP_UDF03    --ML01

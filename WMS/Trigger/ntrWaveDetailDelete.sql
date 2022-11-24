@@ -23,7 +23,7 @@ GO
 /*                                                                            */
 /* Called By: When records deleted                                            */
 /*                                                                            */
-/* PVCS Version: 1.7                                                          */
+/* PVCS Version: 1.8                                                          */
 /*                                                                            */
 /* Version: 5.4                                                               */
 /*                                                                            */
@@ -44,6 +44,9 @@ GO
 /*                                            When Delete                     */
 /* 20-OCT-2022  NJOW01     1.7   WMS-21042 call custom stored proc            */
 /* 20-OCT-2022  NJOW01     1.7   DEVOPS Combine Script                        */
+/* 23-Nov-2022  Wan02      1.8   LFWM-3861 - CN Loreal build Wave performance */
+/*                               enhancement and Calculate Wave Status when   */
+/*                               wave detail's orderkey change/remove         */ 
 /******************************************************************************/
 
 CREATE OR ALTER TRIGGER ntrWaveDetailDelete
@@ -54,21 +57,24 @@ BEGIN
    SET NOCOUNT ON
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
-	
+   
    DECLARE
-      @b_Success            int                 -- Populated by calls to stored procedures - was the proc successful?
-      ,         @n_err                int       -- Error number returned by stored procedure or this trigger
-      ,         @n_err2               int       -- For Additional Error Detection
-      ,         @c_errmsg             NVARCHAR(250) -- Error message returned by stored procedure or this trigger
-      ,         @n_continue int                 
-      ,         @n_starttcnt int                -- Holds the current transaction count
-      ,         @c_preprocess NVARCHAR(250)         -- preprocess
-      ,         @c_pstprocess NVARCHAR(250)         -- post process
-      ,         @n_cnt int                  
-      ,			    @c_wavekey NVARCHAR(10) 
-      ,         @c_authority        NVARCHAR(1)  -- KHLim02
-      ,         @c_SOStatus         NVARCHAR(10) --(Wan01)
-      ,         @c_Status           NVARCHAR(10) --(Wan01)
+         @b_Success           int       -- Populated by calls to stored procedures - was the proc successful?
+      ,  @n_err               int       -- Error number returned by stored procedure or this trigger
+      ,  @n_err2              int       -- For Additional Error Detection
+      ,  @c_errmsg            NVARCHAR(250) -- Error message returned by stored procedure or this trigger
+      ,  @n_continue          INT                 
+      ,  @n_starttcnt         INT                -- Holds the current transaction count
+      ,  @c_preprocess        NVARCHAR(250)      -- preprocess
+      ,  @c_pstprocess        NVARCHAR(250)      -- post process
+      ,  @n_cnt               INT                  
+      ,  @c_wavekey           NVARCHAR(10) 
+      ,  @c_authority         NVARCHAR(1)  -- KHLim02
+      ,  @c_SOStatus          NVARCHAR(10) --(Wan01)
+      ,  @c_Status            NVARCHAR(10) --(Wan01)
+      ,  @c_Status_Wav        NVARCHAR(10) = '0'         --(Wan02)
+     
+      ,  @CUR_CALCSTATUS      CURSOR                     --(Wan02)
       
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
         /* #INCLUDE <TROHA1.SQL> */     
@@ -95,9 +101,9 @@ BEGIN
    
    IF @n_continue = 1 OR @n_continue = 2
    BEGIN
-   	  IF EXISTS (SELECT 1 FROM PICKHEADER (NOLOCK), DELETED
-   	             WHERE DELETED.Orderkey = PICKHEADER.Orderkey 
-   	             AND DELETED.Wavekey = PICKHEADER.Wavekey)
+        IF EXISTS (SELECT 1 FROM PICKHEADER (NOLOCK), DELETED
+                   WHERE DELETED.Orderkey = PICKHEADER.Orderkey 
+                   AND DELETED.Wavekey = PICKHEADER.Wavekey)
                  --(Wan01) - START
                  AND  NOT EXISTS ( SELECT 1 
                                    FROM DELETED 
@@ -109,33 +115,33 @@ BEGIN
                                    AND   ORDERS.SOStatus = 'CANC'
                                    AND   ORDERS.Status = '0')
                  --(Wan01) - END
-   	  BEGIN
-   	  	 SELECT @n_continue = 3  
-       	 SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=121003   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
-       	 SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Pickslip has been printed. Cannot Delete (ntrWaveDetaildetail)" + " ( " + " SQLSvr MESSAGE=" + ISNULL(LTRIM(RTRIM(@c_errmsg)),'') + " ) "  
-   	  END
+        BEGIN
+          SELECT @n_continue = 3  
+          SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=121003   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+          SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Pickslip has been printed. Cannot Delete (ntrWaveDetaildetail)" + " ( " + " SQLSvr MESSAGE=" + ISNULL(LTRIM(RTRIM(@c_errmsg)),'') + " ) "  
+        END
    END  
       
    -- Start : SOS39951
    IF @n_continue = 1 OR @n_continue = 2
    BEGIN
-   	  IF EXISTS (SELECT 1 FROM WaveOrderLn (NOLOCK), DELETED
-   	             WHERE DELETED.Wavekey  = WaveOrderLn.Wavekey
-   	             AND   DELETED.Orderkey = WaveOrderLn.Orderkey)
-   	  BEGIN
-   	  	 DELETE WaveOrderLn
-   	  	 FROM   WaveOrderLn, DELETED
-   	  	 WHERE  DELETED.Wavekey  = WaveOrderLn.Wavekey
-   	  	 AND    DELETED.Orderkey = WaveOrderLn.Orderkey 
-   	  	 
-   	  	 SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
-   	  	 IF @n_err <> 0
-   	  	 BEGIN
-   	  	    SELECT @n_continue = 3
-   	  	    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 63200   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-   	  	    SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Delete Trigger On WaveDetailDelete Failed. (ntrWaveDetailDelete)" + " ( " + " SQLSvr MESSAGE=" + ISNULL(LTRIM(RTRIM(@c_errmsg)),'') + " ) "
-   	  	 END
-   	  END
+        IF EXISTS (SELECT 1 FROM WaveOrderLn (NOLOCK), DELETED
+                   WHERE DELETED.Wavekey  = WaveOrderLn.Wavekey
+                   AND   DELETED.Orderkey = WaveOrderLn.Orderkey)
+        BEGIN
+          DELETE WaveOrderLn
+          FROM   WaveOrderLn, DELETED
+          WHERE  DELETED.Wavekey  = WaveOrderLn.Wavekey
+          AND    DELETED.Orderkey = WaveOrderLn.Orderkey 
+          
+          SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+          IF @n_err <> 0
+          BEGIN
+             SELECT @n_continue = 3
+             SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 63200   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+             SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Delete Trigger On WaveDetailDelete Failed. (ntrWaveDetailDelete)" + " ( " + " SQLSvr MESSAGE=" + ISNULL(LTRIM(RTRIM(@c_errmsg)),'') + " ) "
+          END
+        END
    END  
    -- End : SOS39951
    
@@ -219,21 +225,20 @@ BEGIN
    IF @n_continue = 1 OR @n_continue = 2
    BEGIN
       UPDATE ORDERS
-   	  SET 	ORDERS.USERDEFINE09 = NULL,
-   	        TRAFFICCOP = NULL
-   	  FROM ORDERS, DELETED 
-   	  WHERE ORDERS.Orderkey = DELETED.Orderkey
-   	  AND ORDERS.USERDEFINE09 = DELETED.Wavekey
+        SET    ORDERS.USERDEFINE09 = NULL,
+              TRAFFICCOP = NULL
+        FROM ORDERS, DELETED 
+        WHERE ORDERS.Orderkey = DELETED.Orderkey
+        AND ORDERS.USERDEFINE09 = DELETED.Wavekey
       
-   	  SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
-   	  IF @n_err <> 0
-   	  BEGIN
-   	  	 SELECT @n_continue = 3
-   	  	 SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62301   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-   	  	 SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": DELETE Failed On WaveDetail. (ntrWaveDetailDelete)" + " ( " + " SQLSvr MESSAGE=" + ISNULL(LTRIM(RTRIM(@c_errmsg)),'') + " ) "
-   	  END
+        SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+        IF @n_err <> 0
+        BEGIN
+          SELECT @n_continue = 3
+          SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62301   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+          SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": DELETE Failed On WaveDetail. (ntrWaveDetailDelete)" + " ( " + " SQLSvr MESSAGE=" + ISNULL(LTRIM(RTRIM(@c_errmsg)),'') + " ) "
+        END
    END
-
    -- (ChewKP01)
    IF @n_continue = 1 OR @n_continue = 2
    BEGIN
@@ -243,57 +248,57 @@ BEGIN
                   AND ORDERDETAIL.ConsoOrderKey IS NOT NULL)  
       BEGIN           
          UPDATE ORDERDETAIL WITH (ROWLOCK)
-      	 SET 	ORDERDETAIL.ConsoOrderKey = '', 
-      	      ORDERDETAIL.ConsoOrderLineNo = '', --(ung01)
+          SET  ORDERDETAIL.ConsoOrderKey = '', 
+               ORDERDETAIL.ConsoOrderLineNo = '', --(ung01)
               ORDERDETAIL.ExternConsoOrderKey = '', 
-      	      ORDERDETAIL.TRAFFICCOP = NULL
-      	 FROM ORDERDETAIL, DELETED 
-      	 WHERE ORDERDETAIL.Orderkey = DELETED.Orderkey
+               ORDERDETAIL.TRAFFICCOP = NULL
+          FROM ORDERDETAIL, DELETED 
+          WHERE ORDERDETAIL.Orderkey = DELETED.Orderkey
          AND ORDERDETAIL.ConsoOrderKey <> '' -- Added by Shong on 05-Feb-2013  
          AND ORDERDETAIL.ConsoOrderKey IS NOT NULL   
-      	 
-      	 SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
-      	 IF @n_err <> 0
-      	 BEGIN
-      	 	  SELECT @n_continue = 3
-      	 	  SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62302   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-      	 	  SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": DELETE Failed On WaveDetail. (ntrWaveDetailDelete)" + " ( " + " SQLSvr MESSAGE=" + ISNULL(LTRIM(RTRIM(@c_errmsg)),'') + " ) "
-      	 END
+          
+          SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+          IF @n_err <> 0
+          BEGIN
+              SELECT @n_continue = 3
+              SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62302   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+              SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": DELETE Failed On WaveDetail. (ntrWaveDetailDelete)" + " ( " + " SQLSvr MESSAGE=" + ISNULL(LTRIM(RTRIM(@c_errmsg)),'') + " ) "
+          END
       END
    END
                      
    -- added by jeff -- delete the pickslip and taskdetail as well
    IF @n_continue = 1 OR @n_continue = 2  
    BEGIN  
-   	  DELETE PICKHEADER  
-   	  FROM DELETED  
-   	  WHERE PICKHEADER.OrderKey = DELETED.OrderKey  
+        DELETE PICKHEADER  
+        FROM DELETED  
+        WHERE PICKHEADER.OrderKey = DELETED.OrderKey  
       AND (PICKHEADER.OrderKey <> '' AND PICKHEADER.OrderKey IS NOT NULL) -- Added by Shong on 05-Feb-2013    
       
-    	SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT  
-    	IF @n_err <> 0  
-    	BEGIN  
-     		SELECT @n_continue = 3  
-     		SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=121004   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
-     		SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": DELETE Failed On PickHeader. (ntrWaveDetailDelete)" + " ( " + " SQLSvr MESSAGE=" + ISNULL(LTRIM(RTRIM(@c_errmsg)),'') + " ) "  
-    	END  
+      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT  
+      IF @n_err <> 0  
+      BEGIN  
+         SELECT @n_continue = 3  
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=121004   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+         SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": DELETE Failed On PickHeader. (ntrWaveDetailDelete)" + " ( " + " SQLSvr MESSAGE=" + ISNULL(LTRIM(RTRIM(@c_errmsg)),'') + " ) "  
+      END  
    END  
      
    IF @n_continue = 1 OR @n_continue = 2  
    BEGIN  
-    	DELETE TaskDetail  
-    	FROM  DELETED  
-    	WHERE TaskDetail.OrderKey = DELETED.OrderKey  
+      DELETE TaskDetail  
+      FROM  DELETED  
+      WHERE TaskDetail.OrderKey = DELETED.OrderKey  
       AND   (TaskDetail.OrderKey IS NOT NULL AND TaskDetail.OrderKey <> '') -- Added by Shong on 05-Feb-2013  
         
-    	SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT  
-    	IF @n_err <> 0  
+      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT  
+      IF @n_err <> 0  
    
-    	BEGIN  
-     		SELECT @n_continue = 3  
-     		SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=121005   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
-     		SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": DELETE Failed On TaskDetail. (ntrWaveDetailDelete)" + " ( " + " SQLSvr MESSAGE=" + ISNULL(LTRIM(RTRIM(@c_errmsg)),'') + " ) "  
-    	END  
+      BEGIN  
+         SELECT @n_continue = 3  
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=121005   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+         SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": DELETE Failed On TaskDetail. (ntrWaveDetailDelete)" + " ( " + " SQLSvr MESSAGE=" + ISNULL(LTRIM(RTRIM(@c_errmsg)),'') + " ) "  
+      END  
    END  
    -- end
         
@@ -307,13 +312,14 @@ BEGIN
               @c_WaveDetDelRemvLoad CHAR(1)    
         
       DECLARE CUR_Wave_Orders CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-      SELECT O.Facility, O.StorerKey, O.OrderKey    
+      SELECT O.Facility, O.StorerKey, O.OrderKey
       FROM DELETED D   
-      JOIN ORDERS O WITH (NOLOCK) ON D.OrderKey = O.OrderKey    
+      JOIN ORDERS O WITH (NOLOCK) ON D.OrderKey = O.OrderKey 
+      JOIN dbo.WAVE AS w WITH (NOLOCK) ON w.WaveKey = D.WaveKey 
      
       OPEN CUR_Wave_Orders   
         
-      FETCH NEXT FROM CUR_Wave_Orders INTO @c_Facility, @c_StorerKey, @c_OrderKey  
+      FETCH NEXT FROM CUR_Wave_Orders INTO @c_Facility, @c_StorerKey, @c_OrderKey
         
       WHILE @@FETCH_STATUS <> -1  
       BEGIN  
@@ -368,8 +374,8 @@ BEGIN
             END
          END
          --INC0349006 End
-         
-         FETCH NEXT FROM CUR_Wave_Orders INTO @c_Facility, @c_StorerKey, @c_OrderKey  
+
+         FETCH NEXT FROM CUR_Wave_Orders INTO @c_Facility, @c_StorerKey, @c_OrderKey 
       END               
       CLOSE CUR_Wave_Orders  
       DEALLOCATE CUR_Wave_Orders  
@@ -383,20 +389,20 @@ BEGIN
                  JOIN storerconfig s WITH (NOLOCK) ON  o.storerkey = s.storerkey    
                  JOIN sys.objects sys ON sys.type = 'P' AND sys.name = s.Svalue
                  WHERE  s.configkey = 'WaveDetailTrigger_SP')  
-      BEGIN        	  
+      BEGIN            
          IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL
             DROP TABLE #INSERTED
    
-      	 SELECT * 
-      	 INTO #INSERTED
-      	 FROM INSERTED
+          SELECT * 
+          INTO #INSERTED
+          FROM INSERTED
             
          IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL
             DROP TABLE #DELETED
    
-      	 SELECT * 
-      	 INTO #DELETED
-      	 FROM DELETED
+          SELECT * 
+          INTO #DELETED
+          FROM DELETED
    
          EXECUTE dbo.isp_WaveDetailTrigger_Wrapper
                    'DELETE'  --@c_Action
@@ -418,6 +424,41 @@ BEGIN
       END
    END   
 
+   IF @n_continue=1 or @n_continue=2               -- (Wan02) - START          
+   BEGIN
+      SET @CUR_CALCSTATUS = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+      SELECT d.WaveKey  
+      FROM DELETED AS D   
+      JOIN dbo.WAVE AS w WITH (NOLOCK) ON w.WaveKey = D.WaveKey 
+      LEFT OUTER JOIN ORDERS AS O WITH (NOLOCK) ON O.OrderKey = D.OrderKey  -- cater for when delete orders.orderkey 
+      WHERE w.[Status] NOT IN ( o.[Status] )
+      GROUP BY d.WaveKey                                                
+     
+      OPEN @CUR_CALCSTATUS   
+        
+      FETCH NEXT FROM @CUR_CALCSTATUS INTO @c_WaveKey  
+        
+      WHILE @@FETCH_STATUS <> -1 AND @n_continue IN (1,2) 
+      BEGIN                                                  
+         EXEC [dbo].[isp_GetWaveStatus]
+               @c_WaveKey    = @c_WaveKey
+            ,  @b_UpdateWave = 1                         --1 => yes, 0 => No
+            ,  @c_Status     = @c_Status_Wav    OUTPUT
+            ,  @b_Success    = @b_Success       OUTPUT
+            ,  @n_Err        = @n_Err           OUTPUT
+            ,  @c_ErrMsg     = @c_ErrMsg        OUTPUT
+         
+         IF @b_Success = 0
+         BEGIN
+            SET @n_continue = 3
+         END
+         
+         FETCH NEXT FROM @CUR_CALCSTATUS INTO @c_WaveKey     
+      END               
+      CLOSE @CUR_CALCSTATUS  
+      DEALLOCATE @CUR_CALCSTATUS  
+   END                                             -- (Wan02) - END
+   
    -- Start (KHLim01)
    IF @n_continue = 1 or @n_continue = 2
    BEGIN

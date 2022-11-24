@@ -1,49 +1,38 @@
-IF EXISTS (SELECT * FROM DBO.SYSOBJECTS WHERE ID = OBJECT_ID(N'[dbo].[ntrFACILITYDelete]') 
-AND OBJECTPROPERTY(id, N'IsTrigger') = 1)
-DROP TRIGGER [dbo].[ntrFACILITYDelete]
-GO
+/************************************************************************************/
+/* Trigger: ntrFACILITYDelete                                              			*/
+/* Creation Date:                                                          			*/
+/* Copyright: LFL                                                          			*/
+/* Written by:                                                             			*/
+/*                                                                         			*/
+/* Purpose:  Facility delete trigger                                       			*/
+/*                                                                         			*/
+/* Input Parameters:                                                       			*/
+/*                                                                         			*/
+/* Output Parameters:                                                      			*/
+/*                                                                         			*/
+/* Return Status:                                                          			*/
+/*                                                                         			*/
+/* Usage:                                                                  			*/
+/*                                                                         			*/
+/* Local Variables:                                                        			*/
+/*                                                                         			*/
+/* Called By: When update records                                          			*/
+/*                                                                         			*/
+/* PVCS Version: 1.0                                                       			*/
+/*                                                                         			*/
+/* Version: 6.0                                                            			*/
+/*                                                                         			*/
+/* Data Modifications:                                                     			*/
+/*                                                                         			*/
+/* Updates:                                                                			*/
+/* Date         Author     	Ver.  Purposes                                  		*/
+/* 14-Jul-2011  KHLim02    	1.0   GetRight for Delete log                   		*/
+/* 02-May-2018  NJOW01     	1.1   WMS-4914 facility delete validation       		*/
+/* 04-Mar-2022  TLTING     	1.2  	WMS-19029 prevent bulk update or delete    		*/
+/* 2022-04-12   kelvinongcy	1.3   amend way for control user run batch (kocy01)	*/
+/************************************************************************************/
 
-SET ANSI_NULLS OFF
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-
-
-/************************************************************************/
-/* Trigger: ntrFACILITYDelete                                           */
-/* Creation Date:                                                       */
-/* Copyright: LFL                                                       */
-/* Written by:                                                          */
-/*                                                                      */
-/* Purpose:  Facility delete trigger                                    */
-/*                                                                      */
-/* Input Parameters:                                                    */
-/*                                                                      */
-/* Output Parameters:                                                   */
-/*                                                                      */
-/* Return Status:                                                       */
-/*                                                                      */
-/* Usage:                                                               */
-/*                                                                      */
-/* Local Variables:                                                     */
-/*                                                                      */
-/* Called By: When update records                                       */
-/*                                                                      */
-/* PVCS Version: 1.0                                                    */
-/*                                                                      */
-/* Version: 6.0                                                         */
-/*                                                                      */
-/* Data Modifications:                                                  */
-/*                                                                      */
-/* Updates:                                                             */
-/* Date         Author     Ver.  Purposes                               */
-/* 14-Jul-2011  KHLim02    1.0   GetRight for Delete log                */
-/* 02-May-2018  NJOW01     1.1   WMS-4914 facility delete validation    */
-/* 04-Mar-2022  TLTING     1.2   prevent bulk Delete                    */ 
-/************************************************************************/
-
-CREATE   TRIGGER [dbo].[ntrFACILITYDelete]
+CREATE OR ALTER TRIGGER [dbo].[ntrFACILITYDelete]
 ON [dbo].[FACILITY]
 FOR DELETE
 AS
@@ -64,7 +53,9 @@ BEGIN
             @n_starttcnt   int,       -- Holds the current transaction count
             @n_cnt         int        -- Holds the number of rows affected by the DELETE statement that fired this trigger.
            ,@c_authority   NVARCHAR(1)  -- KHLim02
+   
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
+
 -- if (select count(*) from DELETED) =
 -- (select count(*) from DELETED where DELETED.ArchiveCop = '9')
 -- BEGIN
@@ -91,23 +82,25 @@ BEGIN
       IF @c_authority = '1'         --    End   (KHLim02)
       BEGIN
          INSERT INTO dbo.FACILITY_DELLOG ( Facility )
-         SELECT Facility FROM DELETED
+         SELECT Facility FROM DELETED WITH (NOLOCK)
 
          SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
          IF @n_err <> 0
          BEGIN
             SELECT @n_continue = 3
-            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 68101   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 68101   -- Should Be Set To The SQL Err message but I don't know how to do so.
             SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Delete Trigger On Table FACILITY Failed. (ntrFACILITYDelete)' + ' ( ' + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '
          END
       END
    END
  
-   IF ( (Select count(1) FROM   Deleted  ) > 100 ) 
-       AND Suser_sname() not in ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn', 'iml'    )
+   --IF ( (Select count(1) FROM   Deleted  ) > 100 ) 
+   --    AND Suser_sname() not in ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn', 'iml'    )
+   IF ( (SELECT COUNT(1) FROM Deleted WITH (NOLOCK) ) > 100 )    --kocy01
+       AND NOT EXISTS (SELECT Code FROM dbo.CODELKUP WITH (NOLOCK) WHERE Listname = 'TrgUserID' AND Short = '1' AND Code = SUSER_NAME()) 
    BEGIN      
          SELECT @n_continue = 3
-         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=68108   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=68108   -- Should Be Set To The SQL Err message but I don't know how to do so.
          SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Delete Failed On Table Facility. Batch Delete not allow! (ntrFacilityDelete)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
    END
 
@@ -115,11 +108,11 @@ BEGIN
    IF @n_continue = 1 or @n_continue = 2
    BEGIN
    	  IF EXISTS(SELECT 1 
-   	            FROM DELETED 
+   	            FROM DELETED  WITH (NOLOCK)
    	            JOIN LOC (NOLOCK) ON DELETED.Facility = LOC.Facility)
    	  BEGIN
          SELECT @n_continue = 3
-         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 68102   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 68102   -- Should Be Set To The SQL Err message but I don't know how to do so.
          SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Facility refer by location. Not allow to delete. (ntrFACILITYDelete)' + ' ( ' + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '
    	  END          
    END
@@ -150,6 +143,7 @@ BEGIN
       END
       RETURN
    END
+
 END
 GO
 

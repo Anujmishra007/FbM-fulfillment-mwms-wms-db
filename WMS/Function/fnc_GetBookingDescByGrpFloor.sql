@@ -14,7 +14,7 @@ GO
 /*                                                                      */
 /* Called By:  Booking Module                                           */
 /*                                                                      */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -22,7 +22,9 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver.  Purposes                                  */
-/* 2022-02-28  Wan02    1.0   Created & DevOps Combine Script           */
+/* 2022-02-28  Wan      1.0   Created & DevOps Combine Script           */
+/* 2022-11-16  Wan01    1.1   WMS-21173-[PH] - Colgate-Palmolive Inbound*/
+/*                            Doorbooking EndTime                       */
 /************************************************************************/
 
 CREATE OR ALTER FUNCTION [dbo].[fnc_GetBookingDescByGrpFloor] ( 
@@ -127,15 +129,22 @@ BEGIN
       (
          SELECT [Count] = COUNT(1)
                ,DurationMin = SUM( CEILING(DATEDIFF(mi,'1900-01-01', BI.duration)/@n_interval) * @n_interval )             --CR 2.0 (END)
-               ,[Date] = CONVERT(CHAR(10), BI.BookingDate, 121)
+               ,[Date] = CASE WHEN BI.BookingDate BETWEEN @d_Fromdate AND @d_ToDate    --(Wan01) 
+                              THEN CONVERT(CHAR(10), BI.BookingDate, 121)              --(Wan01) 
+                              ELSE CONVERT(CHAR(10), BI.EndTime, 121)                  --(Wan01) 
+                              END 
                ,NoOfReserved = 0
          FROM BOOKING_IN BI (NOLOCK)
          JOIN dbo.LOC AS l WITH (NOLOCK) ON l.Loc = BI.Loc                                                                                
          JOIN @t_Loc AS tl ON tl.Loc = l.Loc   
          WHERE BI.Facility = @c_Facility
          AND BI.[Status] <> '9'
-         AND BI.BookingDate BETWEEN @d_Fromdate AND @d_ToDate
-         GROUP BY CONVERT(CHAR(10), BI.BookingDate, 121)
+         AND (BI.BookingDate BETWEEN @d_Fromdate AND @d_ToDate OR                      --(Wan01)
+              BI.EndTime     BETWEEN @d_Fromdate AND @d_ToDate)                        --(Wan01)
+         GROUP BY CASE WHEN BI.BookingDate BETWEEN @d_Fromdate AND @d_ToDate           --(Wan01) 
+                              THEN CONVERT(CHAR(10), BI.BookingDate, 121)              --(Wan01) 
+                              ELSE CONVERT(CHAR(10), BI.EndTime, 121)                  --(Wan01) 
+                              END 
       )
       , SB AS
       (
@@ -211,16 +220,23 @@ BEGIN
       (
          SELECT Count_ShareBay = COUNT(1)
                ,DurationMin_ShareBay = SUM( CEILING(DATEDIFF(mi,'1900-01-01', BI.duration)/@n_interval) * @n_interval )    --CR 2.0 (END)
-               ,[Date] = CONVERT(CHAR(10), BI.BookingDate, 121)
+               ,[Date] = CASE WHEN BI.BookingDate BETWEEN @d_Fromdate AND @d_ToDate    --(Wan01) 
+                              THEN CONVERT(CHAR(10), BI.BookingDate, 121)              --(Wan01) 
+                              ELSE CONVERT(CHAR(10), BI.EndTime, 121)                  --(Wan01) 
+                              END                                                      --(Wan01) 
                ,NoOfReserved = 0
          FROM BOOKING_IN BI (NOLOCK)
          JOIN dbo.LOC AS l(NOLOCK) ON BI.Loc = l.Loc
          JOIN @t_Loc AS tl ON tl.Loc = l.Loc        
          WHERE BI.Facility = @c_Facility
          AND BI.[Status] <> '9'
-         AND BI.BookingDate BETWEEN @d_Fromdate AND @d_ToDate
+         AND (BI.BookingDate BETWEEN @d_Fromdate AND @d_ToDate OR                      --(Wan01)
+              BI.EndTime BETWEEN @d_Fromdate AND @d_ToDate)                            --(Wan01)
          AND l.LocationCategory = 'BAY'
-         GROUP BY CONVERT(CHAR(10), BI.BookingDate, 121)
+         GROUP BY CASE WHEN BI.BookingDate BETWEEN @d_Fromdate AND @d_ToDate           --(Wan01) 
+                       THEN CONVERT(CHAR(10), BI.BookingDate, 121)                     --(Wan01) 
+                       ELSE CONVERT(CHAR(10), BI.EndTime, 121)                         --(Wan01) 
+                       END 
       )
       INSERT INTO @t_DoorBook
           (

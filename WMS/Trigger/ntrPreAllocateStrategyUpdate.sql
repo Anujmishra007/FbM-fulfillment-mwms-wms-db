@@ -1,36 +1,37 @@
-/************************************************************************/
-/* Trigger: ntrPreAllocateStrategyUpdate                                */
-/* Creation Date:  18-March-2020                                        */
-/* Copyright: IDS                                                       */
-/* Written by:  TLTING                                                  */
-/*                                                                      */
-/* Purpose: PreAllocateStrategy Update                                  */
-/*                                                                      */
-/* Input Parameters:                                                    */
-/*                                                                      */
-/* Output Parameters:                                                   */
-/*                                                                      */
-/* Return Status:                                                       */
-/*                                                                      */
-/* Usage:                                                               */
-/*                                                                      */
-/* Local Variables:                                                     */
-/*                                                                      */
-/* Called By: When records updated                                      */
-/*                                                                      */
-/* PVCS Version: 1.5                                                    */
-/*                                                                      */
-/* Version: 5.4                                                         */
-/*                                                                      */
-/* Data Modifications:                                                  */
-/*                                                                      */
-/* Updates:                                                             */
-/* Date         Author   Ver  Purposes                                  */
-/* 2022-04-12   TLTING   1.2  prevent bulk update or delete             */ 
-/************************************************************************/
+/***************************************************************************************/
+/* Trigger: ntrPreAllocateStrategyUpdate                                           		*/
+/* Creation Date:  18-March-2020                                                   		*/
+/* Copyright: IDS                                                                  		*/
+/* Written by:  TLTING                                                             		*/
+/*                                                                                 		*/
+/* Purpose: PreAllocateStrategy Update                                             		*/
+/*                                                                                 		*/
+/* Input Parameters:                                                               		*/
+/*                                                                                 		*/
+/* Output Parameters:                                                              		*/
+/*                                                                                 		*/
+/* Return Status:                                                                  		*/
+/*                                                                                 		*/
+/* Usage:                                                                          		*/
+/*                                                                                 		*/
+/* Local Variables:                                                                		*/
+/*                                                                                 		*/
+/* Called By: When records updated                                                 		*/
+/*                                                                                 		*/
+/* PVCS Version: 1.5                                                               		*/
+/*                                                                                 		*/
+/* Version: 5.4                                                                    		*/
+/*                                                                                 		*/
+/* Data Modifications:                                                             		*/
+/*                                                                                 		*/
+/* Updates:                                                                        		*/
+/* Date         Author   		Ver  	Purposes                                           */
+/* 2022-04-12   kelvinongcy	1.1	WMS-19428 prevent bulk update or delete (kocy01)	*/
+/***************************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrPreAllocateStrategyUpdate]
-ON [dbo].[PreAllocateStrategy] FOR UPDATE
+ON [dbo].[PreAllocateStrategy] 
+FOR UPDATE
 AS 
 BEGIN
    IF @@ROWCOUNT = 0
@@ -44,10 +45,10 @@ BEGIN
 	SET CONCAT_NULL_YIELDS_NULL OFF
 	
 	DECLARE	 @n_err              INT           -- Error number returned by stored procedure or this trigger
-	,         @c_errmsg           NVARCHAR(250) -- Error message returned by stored procedure or this trigger
-	,         @n_continue         INT                 
-	,         @n_starttcnt        INT           -- Holds the current transaction count
-	,         @n_cnt              INT                  
+	         ,@c_errmsg           NVARCHAR(250) -- Error message returned by stored procedure or this trigger
+	         ,@n_continue         INT                 
+	         ,@n_starttcnt        INT           -- Holds the current transaction count
+	         ,@n_cnt              INT                  
 	
 	SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
 
@@ -63,14 +64,14 @@ BEGIN
 		SET EditDate = GETDATE(),
 		    EditWho  = SUSER_SNAME(),
 		    TrafficCop = NULL	
-		FROM PreAllocateStrategy , INSERTED WITH (NOLOCK)
+		FROM PreAllocateStrategy , INSERTED
 		WHERE PreAllocateStrategy.PreAllocateStrategyKey = INSERTED.PreAllocateStrategyKey
 
 		SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
 		IF @n_err <> 0
 		BEGIN
 			SELECT @n_continue = 3
-			SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62303   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+			SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62303   -- Should Be Set To The SQL Err message but I don't know how to do so.
 			SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": UPDATE Failed on PreAllocateStrategy table. (ntrPreAllocateStrategyUpdate)" + " ( " + " SQLSvr MESSAGE=" + LTrim(RTrim(@c_errmsg)) + " ) "
 		END
 	END
@@ -80,11 +81,11 @@ BEGIN
    	SELECT @n_continue = 4 
    END   
     
-   IF ( (SELECT COUNT(1) FROM   INSERTED  ) > 100 ) 
-       AND SUSER_SNAME() NOT IN ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn', 'iml'    )
+   IF ( (SELECT COUNT(1) FROM INSERTED WITH (NOLOCK) ) > 100 )   --kocy01
+       AND NOT EXISTS (SELECT Code FROM dbo.CODELKUP WITH (NOLOCK) WHERE Listname = 'TrgUserID' AND Short = '1' AND Code = SUSER_NAME())
    BEGIN      
          SELECT @n_continue = 3
-         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=67405   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=67405   -- Should Be Set To The SQL Err message but I don't know how to do so.
          SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Update Failed On Table PreAllocateStrategy. Batch Update not allow! (ntrPreAllocateStrategyUpdate)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
    END
 	
@@ -106,6 +107,7 @@ BEGIN
 		END
 		RETURN
 	END
+
 END
 GO
 

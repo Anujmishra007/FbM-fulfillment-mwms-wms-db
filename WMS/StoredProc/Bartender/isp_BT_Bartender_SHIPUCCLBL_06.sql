@@ -12,6 +12,8 @@ GO
 /* 2022-03-01 1.0  CSCHONG    Devops Scripts Combine & Created (WMS-19013)    */     
 /* 2022-06-22 1.1  MINGLE     Add new logic (WMS-20005)(ML01)                 */   
 /* 2022-07-10 1.1  MINGLE     Add new labelno (WMS-20151)(ML02)               */   
+/* 2022-08-23 1.2  CHONGCS    WMS-20570 revised field logic (CS01)            */
+/* 2022-10-03 1.3  CHONGCS    WMS-20570 revised field logic (CS02)            */
 /******************************************************************************/                    
                       
 CREATE  OR ALTER PROC [dbo].[isp_BT_Bartender_SHIPUCCLBL_06]                          
@@ -38,7 +40,7 @@ BEGIN
       @c_ReceiptKey      NVARCHAR(10),                        
       @c_sku             NVARCHAR(80),    
       @c_sdescr          NVARCHAR(80),   
-   @c_odnotes         NVARCHAR(80), --ML01  
+      @c_odnotes         NVARCHAR(80), --ML01  
       @n_intFlag         INT,         
       @n_CntRec          INT,        
       @c_SQL             NVARCHAR(4000),            
@@ -63,19 +65,24 @@ BEGIN
           @c_SDESCR04         NVARCHAR(80),    
           @c_SDESCR05         NVARCHAR(80),   
     --START ML01  
-    @c_ODNotes01        NVARCHAR(80),             
+          @c_ODNotes01        NVARCHAR(80),             
           @c_ODNotes02        NVARCHAR(80),      
           @c_ODNotes03        NVARCHAR(80),             
           @c_ODNotes04        NVARCHAR(80),    
           @c_ODNotes05        NVARCHAR(80),  
     --END ML01  
-          @c_SKUQty01         NVARCHAR(10),            
+          @c_SKUQty01         NVARCHAR(10),         
           @c_SKUQty02         NVARCHAR(10),      
           @c_SKUQty03         NVARCHAR(10),            
           @c_SKUQty04         NVARCHAR(10),         
-          @c_SKUQty05         NVARCHAR(10),                    
+          @c_SKUQty05         NVARCHAR(10),     
+          @c_QtyUOM01         NVARCHAR(30),     --CS01 S       
+          @c_QtyUOM02         NVARCHAR(30),      
+          @c_QtyUOM03         NVARCHAR(30),            
+          @c_QtyUOM04         NVARCHAR(30),         
+          @c_QtyUOM05         NVARCHAR(30),     --CS01 E                
           @n_TTLpage          INT,            
- @n_CurrentPage      INT,    
+          @n_CurrentPage      INT,    
           @n_MaxLine          INT  ,    
           @n_MaxCtnNo         INT  ,    
           @c_labelno          NVARCHAR(20) ,    
@@ -104,7 +111,8 @@ BEGIN
           @c_packstatus       NVARCHAR(5),  
           @c_getOrderkey      NVARCHAR(20),  
           @n_packqty          INT = 0,  
-          @n_pickqty          INT = 0         
+          @n_pickqty          INT = 0,
+          @c_uom              NVARCHAR(20)    --CS01         
       
    SET @d_Trace_StartTime = GETDATE()      
    SET @c_Trace_ModuleName = ''      
@@ -200,7 +208,9 @@ BEGIN
       [SDescr]       [NVARCHAR](80) NULL,    
       [NetWgt]       FLOAT,   
       [Retrieve]     [NVARCHAR](1) DEFAULT 'N',  
-   [ODNotes]      [NVARCHAR](80) NULL --ML01  
+      [ODNotes]      [NVARCHAR](80) NULL, --ML01  
+      [UOM]          [NVARCHAR](20) NULL,  --CS01
+      [PDIUDF03]     [NVARCHAR](30) NULL   --CS02
    )        
     
           
@@ -286,15 +296,17 @@ SET @c_SQL = @c_SQL + @c_SQLJOIN
          SELECT @c_pickslipno '@c_pickslipno' ,   @c_cartonno '@c_cartonno'                  
       END     
           
-      INSERT INTO #TEMPPDSKULOC (pickslipno,Cartonno,SKU,PQty,SDescr,NetWgt,Retrieve,ODNotes) --ML01            
-      SELECT DISTINCT @c_pickslipno,CAST(@c_cartonno AS INT),PD.sku, SUM(pd.qty),SUBSTRING(ISNULL(s.descr,''),1,80),SUM(s.NetWgt*pd.qty),'N',SUBSTRING(ISNULL(OD.Notes,''),1,80) --ML01    
+      INSERT INTO #TEMPPDSKULOC (pickslipno,Cartonno,SKU,PQty,SDescr,NetWgt,Retrieve,ODNotes,UOM,PDIUDF03) --ML01  --CS01  --CS02          
+      SELECT DISTINCT @c_pickslipno,CAST(@c_cartonno AS INT),PD.sku, SUM(PDI.qty),SUBSTRING(ISNULL(s.descr,''),1,80),      --CS02
+                      SUM(s.NetWgt*pd.qty),'N',SUBSTRING(ISNULL(OD.Notes,''),1,80),OD.UOM,PDI.UserDefine03 --ML01   --CS01 --CS02
       FROM  PackDetail AS pd WITH (NOLOCK)     
       JOIN SKU S WITH (NOLOCK) ON S.StorerKey = pd.StorerKey AND S.sku = pd.sku    
-   JOIN PACKHEADER PH WITH (NOLOCK) ON pd.pickslipno=ph.pickslipno          
+      JOIN PACKHEADER PH WITH (NOLOCK) ON pd.pickslipno=ph.pickslipno          
       JOIN ORDERDETAIL OD WITH (NOLOCK) ON OD.StorerKey = pd.StorerKey AND OD.sku = pd.sku AND od.orderkey=ph.orderkey  
+      JOIN PackDetailInfo PDI WITH (NOLOCK) ON PDI.PickSlipNo=PD.PickSlipNo AND PDI.UserDefine03=OD.ExternLineNo AND PDI.SKU=OD.Sku AND PDI.StorerKey=OD.StorerKey  --CS02
       WHERE  pd.Pickslipno = @c_pickslipno    
       AND pd.cartonno = CONVERT(INT,@c_cartonno)    
-      GROUP BY PD.sku  ,SUBSTRING(ISNULL(s.descr,''),1,80),SUBSTRING(ISNULL(OD.Notes,''),1,80)   
+      GROUP BY PD.sku  ,SUBSTRING(ISNULL(s.descr,''),1,80),SUBSTRING(ISNULL(OD.Notes,''),1,80) ,OD.UOM,PDI.UserDefine03   --CS01  --CS02
   
           
       SET @c_SKU01 = ''    
@@ -308,7 +320,7 @@ SET @c_SQL = @c_SQL + @c_SQLJOIN
       SET @c_SDESCR04 = ''  
       SET @c_SDESCR05 = ''  
    --START ML01  
-   SET @c_ODNotes01 = ''  
+      SET @c_ODNotes01 = ''  
       SET @c_ODNotes02 = ''  
       SET @c_ODNotes03 = ''  
       SET @c_ODNotes04 = ''  
@@ -322,6 +334,15 @@ SET @c_SQL = @c_SQL + @c_SQLJOIN
       SET @n_pskuqty = 0  
       SET @n_ttlnetwgt = 0   
       SET @n_qtybyctn = 0  
+
+      --CS01 S
+      SET @c_QtyUOM01 = ''
+      SET @c_QtyUOM02 = ''
+      SET @c_QtyUOM03 = ''
+      SET @c_QtyUOM04 = ''
+      SET @c_QtyUOM05 = ''
+
+      --CS01 E
     
       SET @n_MaxCtnNo =1    
       SET @c_LastCtn = 'N'    
@@ -352,7 +373,7 @@ SET @c_SQL = @c_SQL + @c_SQLJOIN
   
   
          SELECT @c_packstatus = PH.status  
-         ,@c_getOrderkey = PH.OrderKey  
+               ,@c_getOrderkey = PH.OrderKey  
          FROM dbo.PackHeader PH WITH (NOLOCK)  
           WHERE PH.PickSlipNo = @c_Sparm01  
       
@@ -449,22 +470,31 @@ SET @c_SQL = @c_SQL + @c_SQLJOIN
                SET @c_SKU05 = ''   
                SET @c_SDESCR01 = ''  
                SET @c_SDESCR02 = ''  
-   SET @c_SDESCR03 = ''  
+               SET @c_SDESCR03 = ''  
                SET @c_SDESCR04 = ''  
                SET @c_SDESCR05 = ''  
-      --START ML01  
-      SET @c_ODNotes01 = ''  
-      SET @c_ODNotes02 = ''  
-      SET @c_ODNotes03 = ''  
-      SET @c_ODNotes04 = ''  
-      SET @c_ODNotes05 = ''  
-      --END ML01  
+               --START ML01  
+               SET @c_ODNotes01 = ''  
+               SET @c_ODNotes02 = ''  
+               SET @c_ODNotes03 = ''  
+               SET @c_ODNotes04 = ''  
+               SET @c_ODNotes05 = ''  
+               --END ML01  
                SET @c_SKUQty01 = ''    
                SET @c_SKUQty02 = ''    
                SET @c_SKUQty03 = ''    
                SET @c_SKUQty04 = ''    
                SET @c_SKUQty05 = ''     
-               SET @n_pskuqty  = 0             
+               SET @n_pskuqty  = 0     
+
+               --CS01 S
+               SET @c_QtyUOM01 = ''
+               SET @c_QtyUOM02 = ''
+               SET @c_QtyUOM03 = ''
+               SET @c_QtyUOM04 = ''
+               SET @c_QtyUOM05 = ''
+
+               --CS01 E        
           
        END        
                 
@@ -472,10 +502,11 @@ SET @c_SQL = @c_SQL + @c_SQLJOIN
       SELECT @c_sku = SKU,     
              @n_skuqty = SUM(PQty),    
              @c_sdescr = SDescr,  
-    @c_odnotes = ODNotes --ML01  
+             @c_odnotes = ODNotes, --ML01  
+             @c_uom = UOM          --CS01
       FROM #TEMPPDSKULOC     
       WHERE ID = @n_intFlag    
-      GROUP BY SKU,SDescr,ODNotes --ML01    
+      GROUP BY SKU,SDescr,ODNotes,UOM --ML01    --CS01
   
       
       IF (@n_intFlag%@n_MaxLine) = 1   
@@ -483,8 +514,9 @@ SET @c_SQL = @c_SQL + @c_SQLJOIN
          --SELECT '1'           
         SET @c_sku01    = @c_sku     
         SET @c_SDESCR01 = @c_sdescr  
-  SET @c_ODNotes01 = @c_odnotes --ML01  
-        SET @c_SKUQty01 = CONVERT(NVARCHAR(10),@n_skuqty)          
+        SET @c_ODNotes01 = @c_odnotes --ML01  
+        SET @c_SKUQty01 = CONVERT(NVARCHAR(10),@n_skuqty)   
+        SET @c_QtyUOM01 =  @c_SKUQty01 + SPACE(1) + @c_uom   --CS01      
        END            
            
        ELSE IF (@n_intFlag%@n_MaxLine) = 2    
@@ -492,32 +524,36 @@ SET @c_SQL = @c_SQL + @c_SQLJOIN
          --SELECT '2'         
         SET @c_sku02 = @c_sku    
         SET @c_SDESCR02 = @c_sdescr  
-  SET @c_ODNotes02 = @c_odnotes --ML01  
-        SET @c_SKUQty02 = CONVERT(NVARCHAR(10),@n_skuqty)             
+        SET @c_ODNotes02 = @c_odnotes --ML01  
+        SET @c_SKUQty02 = CONVERT(NVARCHAR(10),@n_skuqty)     
+        SET @c_QtyUOM02 =  @c_SKUQty02 + SPACE(1) + @c_uom   --CS01          
        END      
        ELSE IF (@n_intFlag%@n_MaxLine) = 3    
        BEGIN        
          --SELECT '3'         
         SET @c_sku03 = @c_sku  
         SET @c_SDESCR03 = @c_sdescr   
-  SET @c_ODNotes03 = @c_odnotes --ML01  
-        SET @c_SKUQty03 = CONVERT(NVARCHAR(10),@n_skuqty)             
+        SET @c_ODNotes03 = @c_odnotes --ML01  
+        SET @c_SKUQty03 = CONVERT(NVARCHAR(10),@n_skuqty)   
+        SET @c_QtyUOM03 =  @c_SKUQty03 + SPACE(1) + @c_uom   --CS01            
        END      
       ELSE IF (@n_intFlag%@n_MaxLine) = 4    
        BEGIN        
          --SELECT '4'         
         SET @c_sku04 = @c_sku    
         SET @c_SDESCR04 = @c_sdescr   
-  SET @c_ODNotes04 = @c_odnotes --ML01  
-        SET @c_SKUQty04 = CONVERT(NVARCHAR(10),@n_skuqty)             
+        SET @c_ODNotes04 = @c_odnotes --ML01  
+        SET @c_SKUQty04 = CONVERT(NVARCHAR(10),@n_skuqty)     
+        SET @c_QtyUOM04 =  @c_SKUQty04 + SPACE(1) + @c_uom   --CS01          
        END      
        ELSE IF (@n_intFlag%@n_MaxLine) = 0   
        BEGIN        
          --SELECT '5'         
         SET @c_sku05 = @c_sku    
         SET @c_SDESCR05 = @c_sdescr  
-  SET @c_ODNotes05 = @c_odnotes --ML01  
-        SET @c_SKUQty05 = CONVERT(NVARCHAR(10),@n_skuqty)             
+        SET @c_ODNotes05 = @c_odnotes --ML01  
+        SET @c_SKUQty05 = CONVERT(NVARCHAR(10),@n_skuqty)     
+        SET @c_QtyUOM05 =  @c_SKUQty05 + SPACE(1) + @c_uom   --CS01          
        END              
   
   
@@ -526,16 +562,26 @@ SET @c_SQL = @c_SQL + @c_SQLJOIN
               
         UPDATE #Result                      
        -- SET Col06 = @n_ttlnetwgt,       
-        SET Col09 = CASE WHEN @c_ODNotes01 <> '' THEN @c_ODNotes01 ELSE @c_SDESCR01 END, --ML01  
-            Col10 = CASE WHEN @c_ODNotes02 <> '' THEN @c_ODNotes02 ELSE @c_SDESCR02 END, --ML01                    
-            Col11 = CASE WHEN @c_ODNotes03 <> '' THEN @c_ODNotes03 ELSE @c_SDESCR03 END, --ML01  
-            Col12 = CASE WHEN @c_ODNotes04 <> '' THEN @c_ODNotes04 ELSE @c_SDESCR04 END, --ML01               
-            Col13 = CASE WHEN @c_ODNotes05 <> '' THEN @c_ODNotes05 ELSE @c_SDESCR05 END, --ML01  
-            Col14 = @c_SKUQty01,    
-            Col15 = @c_SKUQty02,   
-            Col16 = @c_SKUQty03,  
-            Col17 = @c_SKUQty04,             
-            Col18 = @c_SKUQty05,            
+        --SET Col09 = CASE WHEN @c_ODNotes01 <> '' THEN @c_ODNotes01 ELSE @c_SDESCR01 END, --ML01  --CS01 S
+        --    Col10 = CASE WHEN @c_ODNotes02 <> '' THEN @c_ODNotes02 ELSE @c_SDESCR02 END, --ML01                    
+        --    Col11 = CASE WHEN @c_ODNotes03 <> '' THEN @c_ODNotes03 ELSE @c_SDESCR03 END, --ML01  
+        --    Col12 = CASE WHEN @c_ODNotes04 <> '' THEN @c_ODNotes04 ELSE @c_SDESCR04 END, --ML01               
+        --    Col13 = CASE WHEN @c_ODNotes05 <> '' THEN @c_ODNotes05 ELSE @c_SDESCR05 END, --ML01  
+        SET Col09 = @c_ODNotes01 , 
+            Col10 = @c_ODNotes02 ,                    
+            Col11 = @c_ODNotes03 ,  
+            Col12 = @c_ODNotes04 ,                
+            Col13 = @c_ODNotes05 ,    
+            --Col14 = @c_SKUQty01,    
+            --Col15 = @c_SKUQty02,   
+            --Col16 = @c_SKUQty03,  
+            --Col17 = @c_SKUQty04,             
+            --Col18 = @c_SKUQty05,           
+            Col14 = @c_QtyUOM01,    
+            Col15 = @c_QtyUOM02,   
+            Col16 = @c_QtyUOM03,  
+            Col17 = @c_QtyUOM04,             
+            Col18 = @c_QtyUOM05,           --CS01 E 
             Col19 = CASE WHEN @c_lastpage = 'Y' THEN @n_qtybyctn ELSE '' END,   
             Col20 = @n_CurrentPage    
         WHERE ID = @n_CurrentPage     
