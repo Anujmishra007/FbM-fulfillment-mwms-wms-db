@@ -1,10 +1,10 @@
 /***************************************************************************************/
-/* Trigger:  ntrTTMStrategyDelete                                                		*/
+/* Trigger:  ntrStorerSODefaultDelete                                            		*/
 /* Creation Date:                                                                		*/
 /* Copyright: IDS                                                                		*/
 /* Written by:                                                                   		*/
 /*                                                                               		*/
-/* Purpose:  Trigger point upon any Delete on the TTMStrategy                    		*/
+/* Purpose:  Trigger point upon any Delete on the StorerSODefault                		*/
 /*                                                                               		*/
 /* Return Status:  None                                                          		*/
 /*                                                                               		*/
@@ -22,11 +22,11 @@
 /*                                                                               		*/
 /* Updates:                                                                      		*/
 /* Date         Author    		Ver.  Purposes                                         	*/
-/* 2022-04-12   kelvinongcy	1.1	WMS-19428 prevent bulk update or delete (kocy01)	*/
+/* 2022-05-17   kelvinongcy	1.1	WMS-19673 prevent bulk update or delete (kocy01)	*/
 /***************************************************************************************/
  
-CREATE OR ALTER TRIGGER [dbo].[ntrTTMStrategyDelete]
- ON [dbo].[TTMStrategy]
+CREATE OR ALTER TRIGGER [dbo].[ntrStorerSODefaultDelete]
+ ON [dbo].[StorerSODefault]
  FOR DELETE
  AS
  BEGIN
@@ -49,46 +49,14 @@ CREATE OR ALTER TRIGGER [dbo].[ntrTTMStrategyDelete]
            @c_authority       NVARCHAR(1)  -- KHLim02
            
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
-
-      /* #INCLUDE <TRTHD1.SQL> */      
-   IF @n_continue = 1 or @n_continue = 2
-   BEGIN
-      SELECT @b_success = 0         --    Start (KHLim02)
-      EXECUTE nspGetRight  NULL,             -- facility  
-                           NULL,             -- Storerkey  
-                           NULL,             -- Sku  
-                           'DataMartDELLOG', -- Configkey  
-                           @b_success     OUTPUT, 
-                           @c_authority   OUTPUT, 
-                           @n_err         OUTPUT, 
-                           @c_errmsg      OUTPUT  
-      IF @b_success <> 1
-      BEGIN
-         SELECT @n_continue = 3
-               ,@c_errmsg = 'ntrTTMStrategyDelete' + dbo.fnc_RTrim(@c_errmsg)
-      END
-      ELSE 
-      IF @c_authority = '1'         --    End   (KHLim02)
-      BEGIN
-         INSERT INTO dbo.TTMStrategy_DELLOG ( TTMStrategyKey )
-         SELECT TTMStrategyKey FROM DELETED WITH (NOLOCK)
-
-         SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
-         IF @n_err <> 0
-         BEGIN
-            SELECT @n_continue = 3
-            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 68101   -- Should Be Set To The SQL Err message but I don't know how to do so.
-            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Delete Trigger On Table TTMStrategy Failed. (ntrTTMStrategyDelete)' + ' ( ' + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '
-         END
-      END
-   END
+  
 
    IF ( (SELECT COUNT(1) FROM Deleted WITH (NOLOCK) ) > 100 )    --kocy01
        AND NOT EXISTS (SELECT Code FROM dbo.CODELKUP WITH (NOLOCK) WHERE Listname = 'TrgUserID' AND Short = '1' AND Code = SUSER_NAME()) 
    BEGIN      
          SELECT @n_continue = 3
-         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=68102   -- Should Be Set To The SQL Err message but I don't know how to do so.
-         SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Delete Failed On Table Strategy. Batch Delete not allow! (ntrTTMStrategyDelete)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=69701   -- Should Be Set To The SQL Err message but I don't know how to do so.
+         SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Delete Failed On Table StorerSODefault. Batch Delete not allow! (ntrStorerSODefaultDelete)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
    END
 
 
@@ -106,7 +74,7 @@ CREATE OR ALTER TRIGGER [dbo].[ntrTTMStrategyDelete]
             COMMIT TRAN
          END
       END
-      EXECUTE nsp_logerror @n_err, @c_errmsg, "ntrTTMStrategyDelete"
+      EXECUTE nsp_logerror @n_err, @c_errmsg, "ntrStorerSODefaultDelete"
       RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
       RETURN
    END
@@ -122,6 +90,7 @@ CREATE OR ALTER TRIGGER [dbo].[ntrTTMStrategyDelete]
 END
 GO
 
-ALTER TABLE [dbo].[TTMStrategy] ENABLE TRIGGER [ntrTTMStrategyDelete]
+ALTER TABLE [dbo].[StorerSODefault] ENABLE TRIGGER [ntrStorerSODefaultDelete]
 GO
+
 

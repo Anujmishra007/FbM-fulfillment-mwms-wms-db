@@ -1,29 +1,29 @@
-
-/***************************************************************/  
-/*  Author  : Ricky Yee                                        */  
-/*  Date    : Nov 24th, 2007                                   */  
-/*  Purpose : To Check against the Inventory upon              */  
-/*         the deletion of the BOM record.                     */  
-/*         If Inventory > 0, Delete Not Allow                  */  
-/*                                                             */  
-/* Date        Rev  Author   Purposes                          */   
-/* 24-Nov-2007 1.0  Ricky    Created                           */  
-/* 26-Nov-2007 1.1  Vicky    Add in StorerConfigkey to control */  
-/*                           deletion (Vicky01)                */  
-/* 19-Apr-2011 1.2  TLTING   Insert Delete log                 */
-/* 14-Jul-2011 1.3  KHLim02  GetRight for Delete log           */
-/* 2022-04-12  1.4  TLTING   prevent bulk update or delete     */
-/***************************************************************/  
+/************************************************************************************/ 
+/* Trigger: ntrBillOfMaterialDelete                                               	*/ 
+/*  Author  : Ricky Yee                                                             */  
+/*  Date    : Nov 24th, 2007                                                        */  
+/*  Purpose : To Check against the Inventory upon                                   */  
+/*         the deletion of the BOM record.                                          */  
+/*         If Inventory > 0, Delete Not Allow                                       */  
+/*                                                                                  */  
+/* Date        Rev  	Author   	Purposes                                           */   
+/* 24-Nov-2007 1.0  	Ricky    	Created                                            */  
+/* 26-Nov-2007 1.1  	Vicky    	Add in StorerConfigkey to control                  */  
+/*                           		deletion (Vicky01)                                 */  
+/* 19-Apr-2011 1.2  	TLTING   	Insert Delete log                                  */
+/* 14-Jul-2011 1.3  	KHLim02  	GetRight for Delete log                            */
+/* 2022-04-12  1.4	kelvinongcy	WMS-19428 prevent bulk update or delete (kocy01)	*/
+/************************************************************************************/  
   
 CREATE OR ALTER TRIGGER [dbo].[ntrBillOfMaterialDelete]  
 ON  [dbo].[BillOfMaterial]   
 FOR DELETE  
 AS  
 BEGIN  
- IF @@ROWCOUNT = 0  
- BEGIN  
-  RETURN  
- END  
+   IF @@ROWCOUNT = 0  
+   BEGIN  
+      RETURN  
+   END  
   
    SET NOCOUNT ON
    SET ANSI_NULLS OFF
@@ -46,8 +46,7 @@ BEGIN
    
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT  
 
-   if (select count(*) from DELETED) =
-   (select count(*) from DELETED where DELETED.ArchiveCop = '9')
+   IF (select count(*) from DELETED WITH (NOLOCK)) = (select count(*) from DELETED WITH (NOLOCK) where DELETED.ArchiveCop = '9')
    BEGIN
       SELECT @n_continue = 4
    END 
@@ -56,19 +55,20 @@ BEGIN
    BEGIN   
        -- (Vicky01 - Start)  
        IF EXISTS (SELECT 1 FROM StorerConfig SCFG (NOLOCK)  
-                  JOIN DELETED ON (DELETED.Storerkey = SCFG.Storerkey)  
+                  JOIN DELETED WITH (NOLOCK) ON (DELETED.Storerkey = SCFG.Storerkey)  
                   WHERE SCFG.Configkey = 'PrepackByBOM'  
                   AND   SCFG.sValue = '1')  
-       BEGIN -- (Vicky01 - End)  
-       IF (Select Count(1) from lotattribute la (nolock), lotxlocxid lli (nolock), DELETED    
-            Where la.lot = lli.lot   
-              And DELETED.storerkey = LA.storerkey   
-              And DELETED.sku = LA.lottable03   
-              And DELETED.componentsku = LA.sku  
-              And lli.qty > 0) > 0   
+       BEGIN -- (Vicky01 - End) 
+       
+           IF (Select Count(1) from lotattribute la (nolock), lotxlocxid lli (nolock), DELETED WITH (NOLOCK)   
+               Where la.lot = lli.lot   
+               And DELETED.storerkey = LA.storerkey   
+               And DELETED.sku = LA.lottable03   
+               And DELETED.componentsku = LA.sku  
+               And lli.qty > 0) > 0   
            BEGIN  
              SELECT @n_continue = 3  
-             SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 60001   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+             SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 60001   -- Should Be Set To The SQL Err message but I don't know how to do so.  
              SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Inventory Exists! Delete trigger On BillOfMaterial Failed. (ntrBillOfMaterialDelete)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "  
            END  
         END -- Configkey  
@@ -94,23 +94,24 @@ BEGIN
       IF @c_authority = '1'         --    End   (KHLim02)
       BEGIN
          INSERT INTO dbo.BillOfMaterial_DELLOG ( StorerKey, Sku, ComponentSku )
-         SELECT StorerKey, Sku, ComponentSku FROM DELETED
+         SELECT StorerKey, Sku, ComponentSku 
+         FROM DELETED WITH (NOLOCK)
 
          SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
          IF @n_err <> 0
          BEGIN
             SELECT @n_continue = 3
-            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 68101   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 68101   -- Should Be Set To The SQL Err message but I don't know how to do so.
             SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Delete Trigger On Table BillOfMaterial Failed. (ntrBillOfMaterialDelete)' + ' ( ' + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '
          END
       END
    END
 
-   IF ( (Select count(1) FROM   Deleted  ) > 100 ) 
-       AND Suser_sname() not in ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn', 'iml'    )
+   IF ( (SELECT COUNT(1) FROM Deleted WITH (NOLOCK) ) > 100 )    --kocy01
+       AND NOT EXISTS (SELECT Code FROM dbo.CODELKUP WITH (NOLOCK) WHERE Listname = 'TrgUserID' AND Short = '1' AND Code = SUSER_NAME()) 
    BEGIN      
          SELECT @n_continue = 3
-         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 68102   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 68102   -- Should Be Set To The SQL Err message but I don't know how to do so.
          SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Delete Failed On Table BillOfMaterial. Batch Delete not allow! (ntrBillOfMaterialDelete)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
    END
    
@@ -138,10 +139,9 @@ BEGIN
          COMMIT TRAN  
       END  
       RETURN  
-   END  
-END  
+   END 
    
-  
+END    
 GO
 
 ALTER TABLE [dbo].[BillOfMaterial] ENABLE TRIGGER [ntrBillOfMaterialDelete]

@@ -1,29 +1,29 @@
-/*********************************************************************************/  
-/* Trigger:  ntrPickZoneUpdate                                                   */
-/* Creation Date:                                                                */
-/* Copyright: IDS                                                                */
-/* Written by:                                                                   */
-/*                                                                               */
-/* Purpose:  Trigger point upon any Update on the PickZone                       */
-/*                                                                               */
-/* Return Status:  None                                                          */
-/*                                                                               */
-/* Usage:                                                                        */
-/*                                                                               */
-/* Local Variables:                                                              */
-/*                                                                               */
-/* Called By: When records updated                                               */
-/*                                                                               */
-/* PVCS Version: 1.0                                                             */
-/*                                                                               */
-/* Version: 5.4                                                                  */
-/*                                                                               */
-/* Data Modifications:                                                           */
-/*                                                                               */
-/* Updates:                                                                      */
-/* Date         Author    Ver.  Purposes                                         */
-/* 2022-04-12   TLTING    1.1   prevent bulk update or delete                    */ 
-/*********************************************************************************/  
+/***************************************************************************************/  
+/* Trigger:  ntrPickZoneUpdate                                                   		*/
+/* Creation Date:                                                                		*/
+/* Copyright: IDS                                                                		*/
+/* Written by:                                                                   		*/
+/*                                                                               		*/
+/* Purpose:  Trigger point upon any Update on the PickZone                       		*/
+/*                                                                               		*/
+/* Return Status:  None                                                          		*/
+/*                                                                               		*/
+/* Usage:                                                                        		*/
+/*                                                                               		*/
+/* Local Variables:                                                              		*/
+/*                                                                               		*/
+/* Called By: When records updated                                               		*/
+/*                                                                               		*/
+/* PVCS Version: 1.0                                                             		*/
+/*                                                                               		*/
+/* Version: 5.4                                                                  		*/
+/*                                                                               		*/
+/* Data Modifications:                                                           		*/
+/*                                                                               		*/
+/* Updates:                                                                      		*/
+/* Date         Author    		Ver.  Purposes                                         	*/
+/* 2022-04-12   kelvinongcy	1.1	WMS-19428 prevent bulk update or delete (kocy01)	*/
+/***************************************************************************************/  
 
 CREATE OR ALTER TRIGGER [dbo].[ntrPickZoneUpdate]
 ON  [dbo].[PickZone]
@@ -44,11 +44,8 @@ BEGIN -- main
          , @c_errmsg             NVARCHAR(250) -- Error message returned by stored procedure or this trigger
          , @n_continue           int                 
          , @n_starttcnt          int       -- Holds the current transaction count
-         , @c_TrafficCop         NCHAR(1)
+   
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT      
-
-   SELECT @c_TrafficCop = TrafficCop
-   FROM INSERTED
    
    IF UPDATE(TrafficCop)  
    BEGIN
@@ -61,22 +58,23 @@ BEGIN -- main
       SET PickZone.EditWho = SUSER_SNAME(),
    	  	 PickZone.EditDate = GETDATE(),
    	  	 PickZone.TrafficCop = NULL
-   	FROM PickZone JOIN INSERTED ON PickZone.PickZone = INSERTED.PickZone
+   	FROM PickZone 
+      JOIN INSERTED ON PickZone.PickZone = INSERTED.PickZone
 
       SELECT @n_err = @@ERROR 
       IF @n_err <> 0
       BEGIN
          SELECT @n_continue = 3
-         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=67404   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=67404   -- Should Be Set To The SQL Err message but I don't know how to do so.
          SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table PickZone. (ntrPickZoneUpdate)' + ' ( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '
       END
    END
 
-  IF ( (SELECT COUNT(1) FROM   INSERTED  ) > 100 ) 
-       AND SUSER_SNAME() NOT IN ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn', 'iml'    )
+   IF ( (SELECT COUNT(1) FROM INSERTED WITH (NOLOCK) ) > 100 )   --kocy01
+       AND NOT EXISTS (SELECT Code FROM dbo.CODELKUP WITH (NOLOCK) WHERE Listname = 'TrgUserID' AND Short = '1' AND Code = SUSER_NAME())
    BEGIN      
          SELECT @n_continue = 3
-         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=67405   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=67405   -- Should Be Set To The SQL Err message but I don't know how to do so.
          SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Update Failed On Table PickZone. Batch Update not allow! (ntrPickZoneUpdate)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
    END
 
@@ -91,7 +89,7 @@ BEGIN -- main
     BEGIN
        WHILE @@TRANCOUNT > @n_starttcnt
        BEGIN
-       COMMIT TRAN
+         COMMIT TRAN
        END
     END
     EXECUTE nsp_logerror @n_err, @c_errmsg, 'ntrPickZoneUpdate'
@@ -106,6 +104,7 @@ BEGIN -- main
     END
     RETURN
    END
+
 END -- main
 GO
 

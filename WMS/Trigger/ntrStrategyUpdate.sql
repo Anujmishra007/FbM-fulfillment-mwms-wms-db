@@ -1,37 +1,35 @@
-
-/************************************************************************/
-/* Trigger: ntrStrategyUpdate                                           */
-/* Creation Date:                                                       */
-/* Copyright: IDS                                                       */
-/* Written by:                                                          */
-/*                                                                      */
-/* Purpose:  Strategy Update Transaction                                */
-/*                                                                      */
-/* Input Parameters:                                                    */
-/*                                                                      */
-/* Output Parameters:                                                   */
-/*                                                                      */
-/* Return Status:                                                       */
-/*                                                                      */
-/* Usage:                                                               */
-/*                                                                      */
-/* Local Variables:                                                     */
-/*                                                                      */
-/* Called By: When update records                                       */
-/*                                                                      */
-/* PVCS Version: 1.0                                                    */
-/*                                                                      */
-/* Version: 6.0                                                         */
-/*                                                                      */
-/* Data Modifications:                                                  */
-/*                                                                      */
-/* Updates:                                                             */
-/* Date         Author    Ver    Purposes                               */
-/* 25 May 2012  TLTING01         DM integrity - add update editdate B4  */
-/*                               TrafficCop                             */ 
-/* 28-Oct-2013  TLTING           Review Editdate column update          */ 
-/* 2022-04-12   TLTING    1.1    prevent bulk update or delete          */
-/************************************************************************/
+/***************************************************************************************/
+/* Trigger: ntrStrategyUpdate                                                        	*/
+/* Creation Date:                                                                    	*/
+/* Copyright: IDS                                                                    	*/
+/* Written by:                                                                       	*/
+/*                                                                                   	*/
+/* Purpose:  Strategy Update Transaction                                             	*/
+/*                                                                                   	*/
+/* Input Parameters:                                                                 	*/
+/*                                                                                   	*/
+/* Output Parameters:                                                                	*/
+/*                                                                                   	*/
+/* Return Status:                                                                    	*/
+/*                                                                                   	*/
+/* Usage:                                                                            	*/
+/*                                                                                   	*/
+/* Local Variables:                                                                  	*/
+/*                                                                                   	*/
+/* Called By: When update records                                                    	*/
+/*                                                                                   	*/
+/* PVCS Version: 1.0                                                                 	*/
+/*                                                                                   	*/
+/* Version: 6.0                                                                      	*/
+/*                                                                                   	*/
+/* Data Modifications:                                                               	*/
+/*                                                                                   	*/
+/* Updates:                                                                          	*/
+/* Date         Author    		Ver	Purposes                                          	*/
+/* 25 May 2012  TLTING01         	DM integrity - add update editdate B4 TrafficCop   */
+/* 28-Oct-2013  TLTING           	Review Editdate column update                      */ 
+/* 2022-04-12   kelvinongcy	1.3	WMS-19428 prevent bulk update or delete (kocy01)	*/
+/***************************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrStrategyUpdate]
 ON  [dbo].[Strategy] FOR UPDATE
@@ -66,17 +64,18 @@ BEGIN
    --tlting01
 	IF ( @n_continue = 1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
 	BEGIN
-		UPDATE Strategy
+		UPDATE Strategy WITH (ROWLOCK)
 		SET EditDate = GETDATE(),
 		    EditWho  = SUSER_SNAME(),
 		    TrafficCop = NULL
-		FROM Strategy (NOLOCK), INSERTED (NOLOCK)
+		FROM Strategy , INSERTED
       WHERE Strategy.StrategyKey = INSERTED.StrategyKey
+
 		SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
 		IF @n_err <> 0
 		BEGIN
 			SELECT @n_continue = 3
-			SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=69701   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+			SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=69701   -- Should Be Set To The SQL Err message but I don't know how to do so.
 			SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table Strategy. (ntrStrategyUpdate)' + ' ( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '
 		END
 	END
@@ -86,11 +85,11 @@ BEGIN
 		SELECT @n_continue = 4 
 	END
 	
-   IF ( (SELECT COUNT(1) FROM   INSERTED  ) > 100 ) 
-       AND SUSER_SNAME() NOT IN ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn', 'iml'    )
+   IF ( (SELECT COUNT(1) FROM INSERTED WITH (NOLOCK) ) > 100 )   --kocy01
+       AND NOT EXISTS (SELECT Code FROM dbo.CODELKUP WITH (NOLOCK) WHERE Listname = 'TrgUserID' AND Short = '1' AND Code = SUSER_NAME())
    BEGIN      
          SELECT @n_continue = 3
-         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=69702   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=69702   -- Should Be Set To The SQL Err message but I don't know how to do so.
          SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Update Failed On Table Strategy. Batch Update not allow! (ntrStrategyUpdate)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
    END
 
@@ -122,8 +121,8 @@ BEGIN
 		 END
 		 RETURN
 	 END
-END
 
+END
 GO
 
 ALTER TABLE [dbo].[Strategy] ENABLE TRIGGER [ntrStrategyUpdate]

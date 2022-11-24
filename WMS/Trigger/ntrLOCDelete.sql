@@ -1,14 +1,3 @@
-IF EXISTS (SELECT * FROM DBO.SYSOBJECTS WHERE ID = OBJECT_ID(N'[dbo].[ntrLOCDelete]') 
-AND OBJECTPROPERTY(id, N'IsTrigger') = 1)
-DROP TRIGGER [dbo].[ntrLOCDelete]
-GO
-
-SET ANSI_NULLS OFF
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-
 /*********************************************************************************/  
 /* Trigger:  ntrLOCDelete                                                        */
 /* Creation Date:                                                                */
@@ -34,11 +23,11 @@ GO
 /* Updates:                                                                      */
 /* Date         Author    Ver.  Purposes                                         */
 /* 14-Jul-2011  KHLim02   1.1   GetRight for Delete log                          */
-/* 04-Mar-2022  TLTING    1.2   prevent bulk Delete                              */ 
+/* 04-Mar-2022  TLTING    1.1   WMS-19029 prevent bulk update or delete          */ 
+/* 2022-04-12   kocy01    1.2   amend alternative way control user account       */ 
 /*********************************************************************************/  
  
-
-CREATE TRIGGER [dbo].[ntrLOCDelete]
+CREATE OR ALTER TRIGGER [dbo].[ntrLOCDelete]
 ON [dbo].[LOC]
 FOR DELETE
 AS
@@ -59,12 +48,14 @@ BEGIN
             @n_starttcnt   int,       -- Holds the current transaction count
             @n_cnt         int        -- Holds the number of rows affected by the DELETE statement that fired this trigger.
            ,@c_authority   NVARCHAR(1)  -- KHLim02
-   SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
-   IF (SELECT count(1) FROM DELETED) =
-   (SELECT count(1) FROM DELETED WHERE DELETED.ArchiveCop = '9')
-   BEGIN
+  
+  SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
+   
+  IF (SELECT count(1) FROM DELETED WITH (NOLOCK)) =
+  (SELECT count(1) FROM DELETED WITH (NOLOCK) WHERE DELETED.ArchiveCop = '9')
+  BEGIN
       SELECT @n_continue = 4
-   END
+  END
 
       /* #INCLUDE <TRCONHD1.SQL> */     
    IF @n_continue = 1 or @n_continue = 2
@@ -78,6 +69,7 @@ BEGIN
                            @c_authority   OUTPUT, 
                            @n_err         OUTPUT, 
                            @c_errmsg      OUTPUT  
+      
       IF @b_success <> 1
       BEGIN
          SELECT @n_continue = 3
@@ -87,7 +79,7 @@ BEGIN
       IF @c_authority = '1'         --    End   (KHLim02)
       BEGIN
          INSERT INTO dbo.LOC_DELLOG ( Loc )
-         SELECT Loc FROM DELETED
+         SELECT Loc FROM DELETED WITH (NOLOCK)
 
          SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
          IF @n_err <> 0
@@ -99,8 +91,10 @@ BEGIN
       END
    END
 
-   IF ( (Select count(1) FROM   Deleted  ) > 100 ) 
-       AND Suser_sname() not in ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn', 'iml'    )
+   --IF ( (Select count(1) FROM   Deleted  ) > 100 ) 
+   --    AND Suser_sname() not in ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn', 'iml'    )
+   IF ( (SELECT COUNT(1) FROM Deleted WITH (NOLOCK) ) > 100 )    --kocy01
+       AND NOT EXISTS (SELECT Code FROM dbo.CODELKUP WITH (NOLOCK) WHERE Listname = 'TrgUserID' AND Short = '1' AND Code = SUSER_NAME()) 
    BEGIN      
          SELECT @n_continue = 3
          SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=68108   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
@@ -133,6 +127,7 @@ BEGIN
       END
       RETURN
    END
+
 END
 GO
 

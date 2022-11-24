@@ -1,37 +1,37 @@
-
-/************************************************************************/
-/* Trigger: ntrTTMStrategyUpdate                                        */
-/* Creation Date:  18-March-2020                                        */
-/* Copyright: IDS                                                       */
-/* Written by:  TLTING                                                  */
-/*                                                                      */
-/* Purpose: TTMStrategy Update                                          */
-/*                                                                      */
-/* Input Parameters:                                                    */
-/*                                                                      */
-/* Output Parameters:                                                   */
-/*                                                                      */
-/* Return Status:                                                       */
-/*                                                                      */
-/* Usage:                                                               */
-/*                                                                      */
-/* Local Variables:                                                     */
-/*                                                                      */
-/* Called By: When records updated                                      */
-/*                                                                      */
-/* PVCS Version: 1.5                                                    */
-/*                                                                      */
-/* Version: 5.4                                                         */
-/*                                                                      */
-/* Data Modifications:                                                  */
-/*                                                                      */
-/* Updates:                                                             */
-/* Date         Author    Ver   Purposes                                */
-/* 2022-04-12   TLTING    1.1   prevent bulk update or delete           */
-/************************************************************************/
+/***************************************************************************************/
+/* Trigger: ntrTTMStrategyUpdate                                                  		*/
+/* Creation Date:  18-March-2020                                                  		*/
+/* Copyright: IDS                                                                 		*/
+/* Written by:  TLTING                                                            		*/
+/*                                                                                		*/
+/* Purpose: TTMStrategy Update                                                    		*/
+/*                                                                                		*/
+/* Input Parameters:                                                              		*/
+/*                                                                                		*/
+/* Output Parameters:                                                             		*/
+/*                                                                                		*/
+/* Return Status:                                                                 		*/
+/*                                                                                		*/
+/* Usage:                                                                         		*/
+/*                                                                                		*/
+/* Local Variables:                                                               		*/
+/*                                                                                		*/
+/* Called By: When records updated                                                		*/
+/*                                                                                		*/
+/* PVCS Version: 1.5                                                              		*/
+/*                                                                                		*/
+/* Version: 5.4                                                                   		*/
+/*                                                                                		*/
+/* Data Modifications:                                                            		*/
+/*                                                                                		*/
+/* Updates:                                                                       		*/
+/* Date         Author    		Ver   Purposes                                          	*/
+/* 2022-04-12   kelvinongcy	1.1	WMS-19428 prevent bulk update or delete (kocy01)	*/
+/***************************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrTTMStrategyUpdate]
-ON [dbo].[TTMStrategy] FOR UPDATE
+ON [dbo].[TTMStrategy] 
+FOR UPDATE
 AS 
 BEGIN
    IF @@ROWCOUNT = 0
@@ -64,32 +64,30 @@ BEGIN
 		SET EditDate = GETDATE(),
 		    EditWho  = SUSER_SNAME(),
 		    TrafficCop = NULL	
-		FROM TTMStrategy , INSERTED WITH (NOLOCK)
+		FROM TTMStrategy , INSERTED
 		WHERE TTMStrategy.TTMStrategyKey = INSERTED.TTMStrategyKey
 
 		SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
 		IF @n_err <> 0
 		BEGIN
 			SELECT @n_continue = 3
-			SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62303   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+			SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62303   -- Should Be Set To The SQL Err message but I don't know how to do so.
 			SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": UPDATE Failed on TTMStrategy table. (ntrTTMStrategyUpdate)" + " ( " + " SQLSvr MESSAGE=" + LTrim(RTrim(@c_errmsg)) + " ) "
 		END
 	END
-
-   IF UPDATE(TrafficCop)
+   
+   IF ( (SELECT COUNT(1) FROM INSERTED WITH (NOLOCK) ) > 100 )   --kocy01
+       AND NOT EXISTS (SELECT Code FROM dbo.CODELKUP WITH (NOLOCK) WHERE Listname = 'TrgUserID' AND Short = '1' AND Code = SUSER_NAME())
+   BEGIN      
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62304   -- Should Be Set To The SQL Err message but I don't know how to do so.
+         SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Update Failed On Table Strategy. Batch Update not allow! (ntrTTMStrategyUpdate)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
+   END
+	
+	IF UPDATE(TrafficCop)
    BEGIN
    	SELECT @n_continue = 4 
    END 
-   
-   IF ( (SELECT COUNT(1) FROM   INSERTED  ) > 100 ) 
-       AND SUSER_SNAME() NOT IN ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn', 'iml'    )
-   BEGIN      
-         SELECT @n_continue = 3
-         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=67405   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-         SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Update Failed On Table TTMStrategy. Batch Update not allow! (ntrTTMStrategyUpdate)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
-   END
-
-    
 	
 	IF @n_continue=3  -- Error Occured - Process And Return
 	BEGIN
@@ -109,6 +107,7 @@ BEGIN
 		END
 		RETURN
 	END
+
 END
 GO
 

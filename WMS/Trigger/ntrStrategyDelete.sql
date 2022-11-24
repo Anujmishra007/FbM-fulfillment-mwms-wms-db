@@ -1,32 +1,31 @@
-/*********************************************************************************/  
-/* Trigger:  ntrStrategyDelete                                                   */
-/* Creation Date:                                                                */
-/* Copyright: IDS                                                                */
-/* Written by:                                                                   */
-/*                                                                               */
-/* Purpose:  Trigger point upon any Delete on the Strategy                       */
-/*                                                                               */
-/* Return Status:  None                                                          */
-/*                                                                               */
-/* Usage:                                                                        */
-/*                                                                               */
-/* Local Variables:                                                              */
-/*                                                                               */
-/* Called By: When records Deleted                                               */
-/*                                                                               */
-/* PVCS Version: 1.0                                                             */
-/*                                                                               */
-/* Version: 5.4                                                                  */
-/*                                                                               */
-/* Data Modifications:                                                           */
-/*                                                                               */
-/* Updates:                                                                      */
-/* Date         Author    Ver.  Purposes                                         */
-/* 2022-04-12   TLTING    1.1   prevent bulk update or delete                    */ 
-/*********************************************************************************/  
+/***************************************************************************************/  
+/* Trigger:  ntrStrategyDelete                                                      	*/
+/* Creation Date:                                                                   	*/
+/* Copyright: IDS                                                                   	*/
+/* Written by:                                                                      	*/
+/*                                                                                  	*/
+/* Purpose:  Trigger point upon any Delete on the Strategy                          	*/
+/*                                                                                  	*/
+/* Return Status:  None                                                             	*/
+/*                                                                                  	*/
+/* Usage:                                                                           	*/
+/*                                                                                  	*/
+/* Local Variables:                                                                 	*/
+/*                                                                                  	*/
+/* Called By: When records Deleted                                                  	*/
+/*                                                                                  	*/
+/* PVCS Version: 1.0                                                                	*/
+/*                                                                                  	*/
+/* Version: 5.4                                                                     	*/
+/*                                                                                  	*/
+/* Data Modifications:                                                              	*/
+/*                                                                                  	*/
+/* Updates:                                                                         	*/
+/* Date         Author    		Ver.  Purposes                                           */
+/* 2022-04-12   kelvinongcy	1.1	WMS-19428 prevent bulk update or delete (kocy01)	*/
+/***************************************************************************************/  
  
-
-CREATE OR ALTER TRIGGER [dbo].[ntrStrategyDelete]
+ CREATE OR ALTER TRIGGER [dbo].[ntrStrategyDelete]
  ON [dbo].[Strategy]
  FOR DELETE
  AS
@@ -72,23 +71,24 @@ CREATE OR ALTER TRIGGER [dbo].[ntrStrategyDelete]
       IF @c_authority = '1'         --    End   (KHLim02)
       BEGIN
          INSERT INTO dbo.Strategy_DELLOG ( StrategyKey )
-         SELECT StrategyKey FROM DELETED
+         SELECT StrategyKey 
+         FROM DELETED WITH (NOLOCK)
 
          SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
          IF @n_err <> 0
          BEGIN
             SELECT @n_continue = 3
-            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 68101   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 68101   -- Should Be Set To The SQL Err message but I don't know how to do so.
             SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Delete Trigger On Table Strategy Failed. (ntrStrategyDelete)' + ' ( ' + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '
          END
       END
    END
 
-   IF ( (Select count(1) FROM   Deleted  ) > 100 ) 
-       AND Suser_sname() not in ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn', 'iml'    )
+   IF ( (SELECT COUNT(1) FROM Deleted WITH (NOLOCK) ) > 100 )    --kocy01
+       AND NOT EXISTS (SELECT Code FROM dbo.CODELKUP WITH (NOLOCK) WHERE Listname = 'TrgUserID' AND Short = '1' AND Code = SUSER_NAME()) 
    BEGIN      
          SELECT @n_continue = 3
-         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=68102   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=68102   -- Should Be Set To The SQL Err message but I don't know how to do so.
          SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Delete Failed On Table Strategy. Batch Delete not allow! (ntrStrategyDelete)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
    END
 
@@ -119,6 +119,7 @@ CREATE OR ALTER TRIGGER [dbo].[ntrStrategyDelete]
       END
       RETURN
    END
+
 END
 GO
 

@@ -1,30 +1,29 @@
-/*********************************************************************************/  
-/* Trigger:  ntrPreAllocateStrategyDelete                                        */
-/* Creation Date:                                                                */
-/* Copyright: IDS                                                                */
-/* Written by:                                                                   */
-/*                                                                               */
-/* Purpose:  Trigger point upon any Delete on the PreAllocateStrategy            */
-/*                                                                               */
-/* Return Status:  None                                                          */
-/*                                                                               */
-/* Usage:                                                                        */
-/*                                                                               */
-/* Local Variables:                                                              */
-/*                                                                               */
-/* Called By: When records Deleted                                               */
-/*                                                                               */
-/* PVCS Version: 1.0                                                             */
-/*                                                                               */
-/* Version: 5.4                                                                  */
-/*                                                                               */
-/* Data Modifications:                                                           */
-/*                                                                               */
-/* Updates:                                                                      */
-/* Date         Author    Ver.  Purposes                                         */
-/* 2022-04-12   TLTING    1.1   prevent bulk update or delete                    */ 
-/*********************************************************************************/  
- 
+/***************************************************************************************/  
+/* Trigger:  ntrPreAllocateStrategyDelete                                           	*/
+/* Creation Date:                                                                   	*/
+/* Copyright: IDS                                                                   	*/
+/* Written by:                                                                      	*/
+/*                                                                                  	*/
+/* Purpose:  Trigger point upon any Delete on the PreAllocateStrategy               	*/
+/*                                                                                  	*/
+/* Return Status:  None                                                             	*/
+/*                                                                                  	*/
+/* Usage:                                                                           	*/
+/*                                                                                  	*/
+/* Local Variables:                                                                 	*/
+/*                                                                                  	*/
+/* Called By: When records Deleted                                                  	*/
+/*                                                                                  	*/
+/* PVCS Version: 1.0                                                                	*/
+/*                                                                                  	*/
+/* Version: 5.4                                                                     	*/
+/*                                                                                  	*/
+/* Data Modifications:                                                              	*/
+/*                                                                                  	*/
+/* Updates:                                                                         	*/
+/* Date         Author    		Ver.  Purposes                                           */
+/* 2022-04-12   kelvinongcy	1.1	WMS-19428 prevent bulk update or delete (kocy01)	*/
+/***************************************************************************************/  
 
 CREATE OR ALTER TRIGGER [dbo].[ntrPreAllocateStrategyDelete]
  ON [dbo].[PreAllocateStrategy]
@@ -55,6 +54,7 @@ CREATE OR ALTER TRIGGER [dbo].[ntrPreAllocateStrategyDelete]
    IF @n_continue = 1 or @n_continue = 2
    BEGIN
       SELECT @b_success = 0         --    Start (KHLim02)
+
       EXECUTE nspGetRight  NULL,             -- facility  
                            NULL,             -- Storerkey  
                            NULL,             -- Sku  
@@ -72,23 +72,24 @@ CREATE OR ALTER TRIGGER [dbo].[ntrPreAllocateStrategyDelete]
       IF @c_authority = '1'         --    End   (KHLim02)
       BEGIN
          INSERT INTO dbo.PreAllocateStrategy_DELLOG ( PreAllocateStrategyKey )
-         SELECT PreAllocateStrategyKey FROM DELETED
+         SELECT PreAllocateStrategyKey 
+         FROM DELETED WITH (NOLOCK)
 
          SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
          IF @n_err <> 0
          BEGIN
             SELECT @n_continue = 3
-            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 68101   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 68101   -- Should Be Set To The SQL Err message but I don't know how to do so.
             SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Delete Trigger On Table PreAllocateStrategy Failed. (ntrPreAllocateStrategyDelete)' + ' ( ' + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '
          END
       END
    END
 
-   IF ( (Select count(1) FROM   Deleted  ) > 100 ) 
-       AND Suser_sname() not in ( 'itadmin', 'alpha\wmsadmingt', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn', 'iml'    )
+   IF ( (SELECT COUNT(1) FROM Deleted WITH (NOLOCK) ) > 100 )    --kocy01
+       AND NOT EXISTS (SELECT Code FROM dbo.CODELKUP WITH (NOLOCK) WHERE Listname = 'TrgUserID' AND Short = '1' AND Code = SUSER_NAME()) 
    BEGIN      
          SELECT @n_continue = 3
-         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=68102   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=68102   -- Should Be Set To The SQL Err message but I don't know how to do so.
          SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Delete Failed On Table PreAllocateStrategy. Batch Delete not allow! (ntrPreAllocateStrategyDelete)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
    END
 
@@ -119,6 +120,7 @@ CREATE OR ALTER TRIGGER [dbo].[ntrPreAllocateStrategyDelete]
       END
       RETURN
    END
+
 END
 GO
 
