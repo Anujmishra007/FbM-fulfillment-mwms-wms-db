@@ -73,7 +73,8 @@ GO
 /*2022-06-09 1.45 yeekung WMS-19312 Fix extendedinfo (yeekung03)             */  
 /*2022-07-28 1.46 James    WMS-20110 Enhance packinfo screen (james18)       */  
 /*2022-10-21 1.47 KuanYee  INC1935847 Recorrect S7 cExtendedValidateSP (KY01)*/     
-/*2022-07-26 1.48 yeekung  WMS-20327 supprt two method (yeekung04)           */  
+/*2022-07-26 1.48 yeekung  WMS-20327 supprt two method (yeekung04)           */
+/*2022-11-17 1.49 James    WMS-20370 Bug fix (james19)                       */  
 /*****************************************************************************/          
 CREATE OR ALTER PROC [RDT].[rdtfnc_DTC_Dispatch](          
    @nMobile    INT,          
@@ -1903,21 +1904,35 @@ BEGIN
           
          -- Check if all SKU in this tote picked and packed (james01)          
          -- Check total picked & unshipped qty          
-         IF @cNoToteFlag <> '1'          
-         BEGIN          
-            SELECT @nSKU_Picked_TTL = ISNULL(SUM(PD.QTY), 0)          
-            FROM dbo.Pickdetail PD WITH (NOLOCK)          
-            JOIN dbo.Orders O WITH (NOLOCK) ON PD.StorerKey = O.StorerKey AND PD.OrderKey = O.OrderKey          
-            JOIN DROPID DI WITH (NOLOCK) ON PD.DROPID = DI.DROPID AND DI.LOADKEY = O.LOADKEY          
-            JOIN rdt.rdtEcommLog ELOG WITH (NOLOCK) ON ELOG.OrderKey = PD.OrderKey AND ELOG.SKU = PD.SKU AND ELOG.ToteNo = PD.DropID -- (ChewKP08)           
-    WHERE O.StorerKey = @cStorerKey          
-    AND O.Status <> '9'           
-  AND O.SOStatus NOT IN ('9', 'CANC', 'PENDPACK', 'PENDCANC' , 'HOLD')          
-               AND (PD.Status = '5' OR PD.ShipFlag = 'P')                  
-               AND PD.DropID = @cToteNo          
-               AND ELOG.ToteNo = @cToteNo   -- (ChewKP08)           
-               AND ELOG.AddWho = @cUserName -- (ChewKP08)             
-               AND ELOG.Status = '9'        -- (ChewKP08)             
+         IF @cNoToteFlag <> '1'        
+         BEGIN
+            IF @cNotCheckDropIDTable = '1'  
+            BEGIN  
+               SELECT @nSKU_Picked_TTL = ISNULL(SUM(PD.QTY), 0)          
+               FROM dbo.Pickdetail PD WITH (NOLOCK)          
+               JOIN dbo.Orders O WITH (NOLOCK) ON PD.StorerKey = O.StorerKey AND PD.OrderKey = O.OrderKey          
+               WHERE O.StorerKey = @cStorerKey          
+                  AND O.Status <> '9'           
+                  AND O.SOStatus NOT IN ('9', 'CANC', 'PENDPACK', 'PENDCANC' , 'HOLD')          
+                  AND (PD.Status IN ('3', '5') OR PD.ShipFlag = 'P')                  
+                  AND PD.DropID = @cToteNo          
+            END  
+            ELSE  
+            BEGIN  
+               SELECT @nSKU_Picked_TTL = ISNULL(SUM(PD.QTY), 0)        
+               FROM dbo.Pickdetail PD WITH (NOLOCK)        
+               JOIN dbo.Orders O WITH (NOLOCK) ON PD.StorerKey = O.StorerKey AND PD.OrderKey = O.OrderKey        
+               JOIN DROPID DI WITH (NOLOCK) ON PD.DROPID = DI.DROPID AND DI.LOADKEY = O.LOADKEY        
+               JOIN rdt.rdtEcommLog ELOG WITH (NOLOCK) ON ELOG.OrderKey = PD.OrderKey AND ELOG.SKU = PD.SKU AND ELOG.ToteNo = PD.DropID -- (ChewKP08)         
+               WHERE O.StorerKey = @cStorerKey        
+                  AND O.Status <> '9'         
+                  AND O.SOStatus NOT IN ('9', 'CANC', 'PENDPACK', 'PENDCANC' , 'HOLD')        
+                  AND (PD.Status = '5' OR PD.ShipFlag = 'P')                
+                  AND PD.DropID = @cToteNo        
+                  AND ELOG.ToteNo = @cToteNo   -- (ChewKP08)         
+                  AND ELOG.AddWho = @cUserName -- (ChewKP08)           
+                  AND ELOG.Status = '9'        -- (ChewKP08)           
+            END
                         
                    
             IF @cGenPackDetail = '1'          
@@ -4000,14 +4015,19 @@ BEGIN
       ELSE                          
       BEGIN                          
                                
-         --IF @nTotalPickedQty=0 and @nTotalScannedQty=0                    
-         IF EXISTS (SELECT 1          
-               FROM rdt.rdtECOMMLog WITH (NOLOCK)          
-               WHERE ToteNo = @cToteNo          
-               AND Status = '0'          
-               AND OrderKey = CASE WHEN ISNULL(@cOrderKey,'')  = '' THEN OrderKey ELSE @cOrderKey END          
-               AND AddWho = @cUserName         
-               HAVING SUM(ExpectedQty) = sum(ScannedQty))     --(cc01)        
+         --IF @nTotalPickedQty=0 and @nTotalScannedQty=0                  
+         --IF EXISTS (SELECT 1        
+         --      FROM rdt.rdtECOMMLog WITH (NOLOCK)        
+         --      WHERE ToteNo = @cToteNo        
+         --      AND Status = '0'        
+         --      AND OrderKey = CASE WHEN ISNULL(@cOrderKey,'')  = '' THEN OrderKey ELSE @cOrderKey END        
+         --      AND AddWho = @cUserName       
+         --      HAVING SUM(ExpectedQty) = sum(ScannedQty))     --(cc01)      
+         IF NOT EXISTS (SELECT 1        -- (james19)
+               FROM rdt.rdtECOMMLog WITH (NOLOCK)        
+               WHERE ToteNo = @cToteNo        
+               AND Status <> '9'        
+               AND AddWho = @cUserName )      
          BEGIN                      
                SET @cOutField01  = ''                          
                SET @cToteNo      = ''                          
@@ -4019,7 +4039,7 @@ BEGIN
                SET @cWaveKey    = ''                           
                SET @cOutField02 = ''                           
                SET @cOutField03 = ''                           
-                                                  
+               SET @cInField07 =''                                                  
                            
                SET @nScn = @nScn - 6                      
                SET @nStep = @nStep - 6                          
@@ -4048,7 +4068,7 @@ BEGIN
    IF @nInputKey = 0                        
    BEGIN                         
     ---- Enable back field    
-    --  SET @cFieldAttr07 = ''          
+    --  SET @cFieldAttr07 = ''          --KY01
     --  SET @cFieldAttr02 = ''          
     --  SET @cFieldAttr03 = ''          
     --  SET @cFieldAttr04 = ''          
@@ -4058,7 +4078,7 @@ BEGIN
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')            
          BEGIN            
             
-            SET @cSQL = 'EXEC rdt.' + RTRIM(@cExtendedValidateSP) +            
+            SET @cSQL = 'EXEC rdt.' + RTRIM(@cExtendedValidateSP) +            --KY01
                ' @nMobile, @nFunc, @cLangCode, @nStep, @cStorerKey, @cToteno, @cSKU, @cPickSlipNo,@cSerialNo, @nSerialQTY, @nErrNo OUTPUT, @cErrMsg OUTPUT '            
             SET @cSQLParam =            
                '@nMobile        INT, ' +            
