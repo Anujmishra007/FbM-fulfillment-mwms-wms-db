@@ -13,7 +13,7 @@ GO
 /*                                                                            */    
 /* Called By: Powerbuilder                                                    */    
 /*                                                                            */    
-/* PVCS Version: 2.4                                                          */    
+/* PVCS Version: 2.5                                                          */    
 /*                                                                            */    
 /* Version: 5.4                                                               */    
 /*                                                                            */    
@@ -37,6 +37,7 @@ GO
 /*                             query (WL02)                                   */
 /* 07-Jun-2022  WLChooi   2.4  DevOps Combine Script                          */
 /* 07-Jun-2022  WLChooi   2.4  Performance Tune - Filter UDF01 <> '' (WL03)   */
+/* 25-Nov-2022  WLChooi   2.5  Performance Tune - Filter UDF01 <> NULL (WL04) */
 /******************************************************************************/    
 CREATE OR ALTER PROC [dbo].[isp_carton_shipping_label_KidsRUS](@c_LabelNo NVARCHAR(20))    
 AS    
@@ -296,7 +297,7 @@ BEGIN
             AND S.sku = BOM.Sku  
             WHERE UDF01=@c_ODUDef03                                             --(CS08)  
             AND BOM.Storerkey = @c_Storerkey                                    --(CS04)  
-            AND BOM.UDF01 <> ''   --WL03
+            AND BOM.UDF01 <> '' AND BOM.UDF01 IS NOT NULL   --WL03   --WL04
      
             IF ISNULL(@c_Altsku,'') <> ''  
             BEGIN  
