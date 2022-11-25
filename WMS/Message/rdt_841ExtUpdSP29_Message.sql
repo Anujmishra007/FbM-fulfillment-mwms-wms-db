@@ -18,5 +18,6 @@ execute rdt.rdtAddMsg 190014, 10, '190014UpdEcommFail',     'us_english',841
 execute rdt.rdtAddMsg 190015, 10, '190015GetRightFail',     'us_english',841
 execute rdt.rdtAddMsg 190016, 10, '190016AutoMBOLPack',     'us_english',841
 execute rdt.rdtAddMsg 190017, 10, '190017UpdPInfoFail',     'us_english',841
+execute rdt.rdtAddMsg 190018, 10, '190018 Ins DropID Er',   'us_english',841
 
 SELECT * FROM rdt.RDTMsg (NOLOCK) WHERE Message_ID BETWEEN 190001 AND 190050
