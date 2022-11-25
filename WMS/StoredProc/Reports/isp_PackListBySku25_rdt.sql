@@ -1,136 +1,148 @@
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
-GO
-
-/************************************************************************/
-/* Stored Proc: isp_PackListBySku25_rdt                                 */
-/* Creation Date: 04-APR-2022                                           */
-/* Copyright: LF Logistics                                              */
-/* Written by: MINGLE                                                   */
-/*                                                                      */
-/* Purpose: WMS-19345 - CN Loreal Packing list for activities_NEW       */
-/*        :                                                             */
-/* Called By: r_dw_packing_list_By_Sku25_rdt                            */
-/*          :                                                           */
-/* PVCS Version: 1.0                                                    */
-/*                                                                      */
-/* Version: 7.0                                                         */
-/*                                                                      */
-/* Data Modifications:                                                  */
-/*                                                                      */
-/* Updates:                                                             */
-/* Date         Author   Ver   Purposes                                 */
-/* 04-APR-2022  MINGLE   1.0   Devops Scripts Comnbine                  */
-/************************************************************************/
-CREATE OR ALTER PROC [dbo].[isp_PackListBySku25_rdt]
-           @c_Loadkey      NVARCHAR(10)
-AS
-BEGIN
-   SET NOCOUNT ON
-   SET ANSI_NULLS OFF
-   SET QUOTED_IDENTIFIER OFF
-   SET CONCAT_NULL_YIELDS_NULL OFF
-
-   DECLARE
-           @n_StartTCnt       INT
-         , @n_Continue        INT
-         , @n_MaxLineno       INT
-         , @n_MaxRec          INT
-         , @n_CurrentRec      INT
-         , @n_Maxrecgrp       INT
-
-   SET @n_StartTCnt = @@TRANCOUNT
-
-   --SET @n_MaxLineno = 10   
-
-  CREATE TABLE #TMP_PICKLISTBYSKU25RDT (
-    ohudf03               NVARCHAR(20),
-    ORDDate               DATETIME,
-    loadkey               NVARCHAR(20),
-    SDescr                NVARCHAR(80),
-	qty                   INT,
-	SKU                   NVARCHAR(20),
-	altSKU			      NVARCHAR(20),
-	ttlqty			      INT,
-	st_notes1             NVARCHAR(4000),
-	st_BAdd3              NVARCHAR(45),
-    st_BAdd4              NVARCHAR(45),
-	OrderCnt			  INT
-  )
+GO  
+/************************************************************************/  
+/* Stored Proc: isp_PackListBySku25_rdt                                 */  
+/* Creation Date: 04-APR-2022                                           */  
+/* Copyright: LF Logistics                                              */  
+/* Written by: MINGLE                                                   */  
+/*                                                                      */  
+/* Purpose: WMS-19345 - CN Loreal Packing list for activities_NEW       */  
+/*        :                                                             */  
+/* Called By: r_dw_packing_list_By_Sku25_rdt                            */  
+/*          :                                                           */  
+/* PVCS Version: 1.0                                                    */  
+/*                                                                      */  
+/* Version: 7.0                                                         */  
+/*                                                                      */  
+/* Data Modifications:                                                  */  
+/*                                                                      */  
+/* Updates:                                                             */  
+/* Date         Author   Ver   Purposes                                 */  
+/* 04-APR-2022  MINGLE   1.0   Devops Scripts Combine                   */  
+/************************************************************************/  
+CREATE OR ALTER PROC [dbo].[isp_PackListBySku25_rdt]  
+           @c_Loadkey      NVARCHAR(10)  
+AS  
+BEGIN  
+   SET NOCOUNT ON  
+   SET ANSI_NULLS OFF  
+   SET QUOTED_IDENTIFIER OFF  
+   SET CONCAT_NULL_YIELDS_NULL OFF  
   
-INSERT INTO #TMP_PICKLISTBYSKU25RDT
-(
-    ohudf03,
-    ORDDate,
-    loadkey,
-    SDescr,
-    qty,
-    SKU,
-    altSKU,
-    ttlqty,
-    st_notes1,
-    st_BAdd3,
-    st_BAdd4,
-	OrderCnt
-)
-
-   SELECT   OHUDF03 = ISNULL(RTRIM(OH.UserDefine03),'')
-         , ORDDate = convert(varchar, OH.OrderDate, 20)
-		 --, OH.OrderDate
-         , OH.Loadkey     
-		 , SDescr= ISNULL(RTRIM(sku.descr),'')
-		 , Qty = ISNULL((PD.Qty),0)
-         , SKU = RTRIM(OD.sku)
-		 , AltSKU = SKU.ALTSKU
-         , ttlqty = ISNULL(SUM(PD.Qty),0)
-		 , ODNotst_notes1es2 = ISNULL(RTRIM(ST.notes1),'')
-         , st_BAdd3  = ISNULL(RTRIM(ST.B_Address3),'')
-         , st_BAdd4  = ISNULL(RTRIM(ST.B_Address4),'')
-		 , OrderCnt = (SELECT OrderCnt FROM LOADPLAN(NOLOCK) WHERE LOADKEY = @c_Loadkey)
-   FROM ORDERS     OH WITH (NOLOCK)
-   JOIN ORDERDETAIL OD WITH (NOLOCK) ON OD.OrderKey = OH.OrderKey
-   JOIN PICKDETAIL PD WITH (NOLOCK) ON (OD.Orderkey = PD.Orderkey AND OD.OrderLineNumber=PD.OrderLineNumber AND OD.SKU = PD.Sku)
-   JOIN SKU       SKU WITH (NOLOCK) ON (PD.Storerkey= SKU.Storerkey)
-                                    AND(PD.Sku = SKU.Sku)
-   LEFT JOIN LOADPLAN LP WITH (NOLOCK) ON LP.LoadKey = OH.LoadKey
-   --LEFT JOIN dbo.STORER ST WITH (NOLOCK) ON ST.StorerKey = OH.ConsigneeKey AND ST.type='1'
-   LEFT JOIN STORER ST WITH (NOLOCK) ON ST.StorerKey = OH.StorerKey AND ST.type='1'
-   --WHERE PH.PickSlipNo = @c_PickSlipNo
-   WHERE OH.LoadKey = @c_Loadkey
-   GROUP BY ISNULL(RTRIM(OH.UserDefine03),'')
-         ,  OH.OrderDate
-         ,  OH.Loadkey 
-         ,  ISNULL(RTRIM(sku.descr),'')
-         ,  ISNULL((PD.Qty),0)
-         ,  RTRIM(OD.sku)
-         ,  SKU.ALTSKU
-         ,  ISNULL(RTRIM(ST.notes1),'')
-         ,  ISNULL(RTRIM(ST.B_Address3),'')
-         ,  ISNULL(RTRIM(ST.B_Address4),'')
-
-
-
-    --SET @n_Maxrecgrp = 1
-    --SET @n_MaxRec = 1
-
-     SELECT  ohudf03,
-			ORDDate,
-			loadkey,
-			SDescr,
-			qty,
-			SKU,
-			altSKU,
-			ttlqty,
-			st_notes1,
-			st_BAdd3,
-			st_BAdd4,
-		    OrderCnt
-   FROM #TMP_PICKLISTBYSKU25RDT
-   --ORDER BY PickSlipNo,Orderkey,sku
-
-END -- procedure
+   DECLARE  
+           @n_StartTCnt       INT  
+         , @n_Continue        INT  
+         , @n_MaxLineno       INT  
+         , @n_MaxRec          INT  
+         , @n_CurrentRec      INT  
+         , @n_Maxrecgrp       INT  
+  
+   SET @n_StartTCnt = @@TRANCOUNT  
+  
+   --SET @n_MaxLineno = 10     
+  
+  CREATE TABLE #TMP_PICKLISTBYSKU25RDT (  
+    ohudf03               NVARCHAR(20),  
+    ORDDate               DATETIME,  
+    loadkey               NVARCHAR(20),  
+    SDescr                NVARCHAR(80),  
+ qty                   INT,  
+ SKU                   NVARCHAR(20),  
+ altSKU         NVARCHAR(20),  
+ ttlqty         INT,  
+ st_notes1             NVARCHAR(4000),  
+ st_BAdd3              NVARCHAR(45),  
+    st_BAdd4              NVARCHAR(45),  
+ OrderCnt     INT,  
+ Externorderkey        NVARCHAR(20),  
+ Orderkey              NVARCHAR(20)  
+  
+  )  
+    
+INSERT INTO #TMP_PICKLISTBYSKU25RDT  
+(  
+    ohudf03,  
+    ORDDate,  
+    loadkey,  
+    SDescr,  
+    qty,  
+    SKU,  
+    altSKU,  
+    ttlqty,  
+    st_notes1,  
+    st_BAdd3,  
+    st_BAdd4,  
+ OrderCnt,  
+ Externorderkey,  
+ Orderkey  
+)  
+  
+   SELECT   OHUDF03 = ISNULL(RTRIM(OH.UserDefine03),'')  
+         , ORDDate = convert(varchar, OH.OrderDate, 20)  
+   --, OH.OrderDate  
+         , OH.Loadkey       
+   , SDescr= ISNULL(RTRIM(sku.descr),'')  
+   --, SDescr= MAX(ISNULL(RTRIM(sku.descr),''))  
+   , Qty = ISNULL((PD.Qty),0)  
+   --, SKU = RTRIM(OD.sku)  
+         , SKU = MAX(RTRIM(OD.sku))  
+   --, AltSKU = SKU.ALTSKU  
+   , AltSKU = MAX(SKU.ALTSKU)  
+         , ttlqty = ISNULL(SUM(PD.Qty),0)  
+   , ODNotst_notes1es2 = ISNULL(RTRIM(ST.notes1),'')  
+         , st_BAdd3  = ISNULL(RTRIM(ST.B_Address3),'')  
+         , st_BAdd4  = ISNULL(RTRIM(ST.B_Address4),'')  
+   , OrderCnt = (SELECT OrderCnt FROM LOADPLAN(NOLOCK) WHERE LOADKEY = @c_Loadkey)  
+   , OH.Externorderkey  
+   , OH.OrderKey  
+   FROM ORDERS     OH WITH (NOLOCK)  
+   JOIN ORDERDETAIL OD WITH (NOLOCK) ON OD.OrderKey = OH.OrderKey  
+   JOIN PICKDETAIL PD WITH (NOLOCK) ON (OD.Orderkey = PD.Orderkey AND OD.OrderLineNumber=PD.OrderLineNumber AND OD.SKU = PD.Sku)  
+   JOIN SKU       SKU WITH (NOLOCK) ON (PD.Storerkey= SKU.Storerkey)  
+                                    AND(PD.Sku = SKU.Sku)  
+   LEFT JOIN LOADPLAN LP WITH (NOLOCK) ON LP.LoadKey = OH.LoadKey  
+   --LEFT JOIN dbo.STORER ST WITH (NOLOCK) ON ST.StorerKey = OH.ConsigneeKey AND ST.type='1'  
+   LEFT JOIN STORER ST WITH (NOLOCK) ON ST.StorerKey = OH.StorerKey AND ST.type='1'  
+   --WHERE PH.PickSlipNo = @c_PickSlipNo  
+   WHERE OH.LoadKey = @c_Loadkey  
+   GROUP BY ISNULL(RTRIM(OH.UserDefine03),'')  
+         ,  OH.OrderDate  
+         ,  OH.Loadkey   
+         ,  ISNULL(RTRIM(sku.descr),'')  
+         ,  ISNULL((PD.Qty),0)  
+         --,  RTRIM(OD.sku)  
+         --,  SKU.ALTSKU  
+         ,  ISNULL(RTRIM(ST.notes1),'')  
+         ,  ISNULL(RTRIM(ST.B_Address3),'')  
+         ,  ISNULL(RTRIM(ST.B_Address4),'')  
+   ,  OH.Externorderkey  
+   ,  OH.OrderKey  
+  
+  
+  
+    --SET @n_Maxrecgrp = 1  
+    --SET @n_MaxRec = 1  
+  
+     SELECT  ohudf03,  
+   ORDDate,  
+   loadkey,  
+   SDescr,  
+   qty,  
+   SKU,  
+   altSKU,  
+   ttlqty,  
+   st_notes1,  
+   st_BAdd3,  
+   st_BAdd4,  
+      OrderCnt,  
+   Externorderkey,  
+   Orderkey  
+   FROM #TMP_PICKLISTBYSKU25RDT  
+   ORDER BY Orderkey,sku  
+  
+END -- procedure  
 GO
 GRANT EXECUTE ON  [dbo].[isp_PackListBySku25_rdt] TO [NSQL]
 GO
-
