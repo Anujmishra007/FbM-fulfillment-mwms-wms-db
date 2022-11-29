@@ -49,6 +49,8 @@ GO
 /* 2020-03-09 3.5  YeeKung  WMS-12381 Add RDTFormat step_8   (yeekung03)     */     
 /* 2020-04-24 3.6  YeeKung  WMS-13025 Add popup Message (yeekung04)          */ 
 /* 2020-07-08 3.7  YeeKung  WMS-13899 Add PalletLbl print (yeekung05)        */   
+/* 2022-11-29 3.8  YeeKung  JSM-103586 Fix Count @cTotalCTNCnt by labelno    */
+/*                          Instead by CartonNo (yeekung06)                  */
 /*****************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdtfnc_Scan_To_Container](  
@@ -752,7 +754,7 @@ BEGIN
          WHERE CH.OtherReference = CASE WHEN @cMbolNotFromOtherReference = '1' THEN CH.OtherReference ELSE @cMBOLKEY END  
          AND   CH.MBOLKey = CASE WHEN @cMbolNotFromOtherReference = '1' THEN @cMBOLKEY ELSE CH.MBOLKEY END  
      
-         SELECT @cTotalCTNCnt = CAST(COUNT(PD.CartonNo) AS CHAR)  
+         SELECT @cTotalCTNCnt = CAST(COUNT(PD.LabelNo) AS CHAR)  --(yeekung06)
          FROM dbo.MBOLDETAIL MD WITH (NOLOCK)  
          JOIN dbo.PACKHEADER PH WITH (NOLOCK) ON (MD.Orderkey = PH.Orderkey)  
          JOIN dbo.PACKDETAIL PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)  
