@@ -74,7 +74,8 @@ GO
 /*2022-07-28 1.46 James    WMS-20110 Enhance packinfo screen (james18)       */  
 /*2022-10-21 1.47 KuanYee  INC1935847 Recorrect S7 cExtendedValidateSP (KY01)*/     
 /*2022-07-26 1.48 yeekung  WMS-20327 supprt two method (yeekung04)           */
-/*2022-11-17 1.49 James    WMS-20370 Bug fix (james19)                       */  
+/*2022-11-17 1.49 James    WMS-20370 Bug fix (james19)                       */ 
+/*2022-10-20 1.50 YeeKung  WMS-21027 Add eventlog (yeekung05)                */ 
 /*****************************************************************************/          
 CREATE OR ALTER PROC [RDT].[rdtfnc_DTC_Dispatch](          
    @nMobile    INT,          
@@ -1891,8 +1892,23 @@ BEGIN
             IF @nErrNo <> 0                          
                GOTO Step_2_Fail                          
          END                          
-      END                          
-      
+      END 
+                               
+      -- EventLog   (yeekung05)     
+      EXEC RDT.rdt_STD_EventLog        
+         @cActionType = '4', -- Packing       
+         @cUserID     = @cUserName,        
+         @nMobileNo   = @nMobile,        
+         @nFunctionID = @nFunc,        
+         @cFacility   = @cFacility,        
+         @cStorerKey  = @cStorerKey,        
+         @nStep       = @nStep,
+         @cLoadKey    = @cLoadKey,
+         @cSKU        = @cSKU,
+         @cRefNo1     = @cRefno,
+         @cDropID     = @cToteno,
+         @cWaveKey    = @cWaveKey   
+            
       /****************************          
        Prepare Next Screen          
       ****************************/          

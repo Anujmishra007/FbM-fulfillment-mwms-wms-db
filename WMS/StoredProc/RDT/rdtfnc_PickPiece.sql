@@ -48,6 +48,7 @@ GO
 /* 2022-07-21   3.8  Ung         Fix scan wrong SKU but clear lottable field  */
 /* 2022-09-20   3.9  James       WMS-20756 Change rdt_GetSKU output           */
 /*                               UPC Qty (james24)                            */
+/* 2022-10-20   4.0  YeeKung     WMS-21027 Add eventlog (yeekung05)           */
 /******************************************************************************/        
         
 CREATE OR ALTER PROC [RDT].[rdtfnc_PickPiece] (        
@@ -1513,7 +1514,22 @@ BEGIN
             EXEC rdt.rdtSetFocusField @nMobile, 7 -- MQTY        
             GOTO Quit_Step3             
          END                    
-      END        
+      END  
+      
+    	-- EventLog   (yeekung05)     
+      EXEC RDT.rdt_STD_EventLog        
+         @cActionType = '3', -- Picking       
+         @cUserID     = @cUserName,        
+         @nMobileNo   = @nMobile,        
+         @nFunctionID = @nFunc,        
+         @cFacility   = @cFacility,        
+         @cStorerKey  = @cStorerKey,        
+         @nStep       = @nStep,
+         @cLocation   = @cSuggLOC,
+         @cSKU        = @cSKU,
+         @nQTY        = @nActQTY,
+         @cDropID     = @cDropID,
+         @cPickSlipNo = @cPickSlipNo      
         
       -- QTY short        
       IF @nActQTY < @nSuggQTY        
@@ -1666,7 +1682,7 @@ BEGIN
             SET @cOutField07 = CASE WHEN @cDefaultQTY = '1' THEN CAST( @nSuggQTY AS NVARCHAR(6))         
                                     WHEN @cDefaultPickQTY <> '0' THEN @cDefaultPickQTY        
                                     ELSE '' END -- QTY        
-  SET @cOutField13 =LTRIM(CAST(@nBalQty AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6))             
+  				SET @cOutField13 =LTRIM(CAST(@nBalQty AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6))             
         
             IF @cFieldAttr07='O'          
                SET @cOutField07= CASE WHEN @cDefaultPickQTY <> '0' THEN @cDefaultPickQTY ELSE @nActQTY END        
