@@ -237,13 +237,16 @@ BEGIN
       BEGIN
          SELECT  TOP 1 @cPickZone=pickzone,
                 @cLOC = LOC
-         FROM rdt.rdtPickConsoLog (nolock)
-         WHERE DROPID in (SELECT DISTINCT (dropid)
-                           FROM PICKDETAIL (NOLOCK)
+         FROM rdt.rdtPickConsoLog DP (nolock)
+         WHERE EXISTS( SELECT  DISTINCT 1
+                           FROM PICKDETAIL PD(NOLOCK)
                            where pickslipno=@cpickslipno
                            AND storerkey=@cstorerkey
-                           AND status <'9')
+                           AND status <'9'
+                           AND pd.dropid=DP.dropid
+                           AND pd.orderkey=dp.orderkey)
           order by adddate desc;
+
          IF ISNULL(@cPickZone, '') = ''
          BEGIN
             SET @nErrNo = 190453
@@ -294,11 +297,20 @@ BEGIN
       BEGIN TRAN  
       SAVE TRAN rdtPickConsoLog_Insert  
 
-      IF NOT EXISTS ( SELECT 1 FROM rdt.rdtPickConsoLog WITH (NOLOCK) 
-                      WHERE dropid=@cDropID)
+      IF NOT EXISTS ( SELECT 1 FROM rdt.rdtPickConsoLog dp WITH (NOLOCK) 
+                       WHERE EXISTS( SELECT 1
+                           FROM PICKDETAIL PD(NOLOCK)
+                           where pickslipno=@cpickslipno
+                              AND storerkey=@cstorerkey
+                              AND status <'9'
+                              AND pd.dropid=@cDropID
+                              AND pd.orderkey=dp.orderkey)
+                           AND dp.dropid=@cDropID
+                        )
+                        
       BEGIN
          INSERT INTO rdt.rdtPickConsoLog (Orderkey, PickZone, SKU, LOC, [Status], AddWho, AddDate, Mobile,DropID) 
-         Select orderkey,@cPickZone,sku,@cLOC,'0',sUser_sName(), GETDATE(), @nMobile,@cDropID
+         Select orderkey,@cPickZone,sku,@cLOC,'9',sUser_sName(), GETDATE(), @nMobile,@cDropID
          FROM dbo.pickdetail PH WITH (NOLOCK) 
          WHERE StorerKey = @cStorerKey
             AND   dropid = @cDropID
