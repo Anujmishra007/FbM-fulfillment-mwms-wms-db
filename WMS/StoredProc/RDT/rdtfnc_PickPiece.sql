@@ -49,6 +49,7 @@ GO
 /* 2022-09-20   3.9  James       WMS-20756 Change rdt_GetSKU output           */
 /*                               UPC Qty (james24)                            */
 /* 2022-10-20   4.0  YeeKung     WMS-21027 Add eventlog (yeekung05)           */
+/* 2021-03-30   4.1  James       WMS-16553 Add ExtValidSP in step 1 (james09) */  
 /******************************************************************************/        
         
 CREATE OR ALTER PROC [RDT].[rdtfnc_PickPiece] (        
@@ -529,7 +530,41 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff storer        
             GOTO Step_1_Fail        
          END        
-      END        
+      END 
+      
+      IF @cExtendedValidateSP <> ''        
+      BEGIN        
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')        
+         BEGIN        
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +        
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType, ' +        
+               ' @cPickSlipNo, @cPickZone, @cDropID, @cLOC, @cSKU, @nQTY, @nErrNo OUTPUT, @cErrMsg OUTPUT '        
+            SET @cSQLParam =        
+               ' @nMobile      INT,           ' +        
+               ' @nFunc        INT,           ' +        
+               ' @cLangCode    NVARCHAR( 3),  ' +        
+               ' @nStep        INT,           ' +        
+               ' @nInputKey    INT,           ' +        
+               ' @cFacility    NVARCHAR( 5) , ' +        
+               ' @cStorerKey   NVARCHAR( 15), ' +        
+               ' @cType        NVARCHAR( 10), ' +        
+               ' @cPickSlipNo  NVARCHAR( 10), ' +        
+               ' @cPickZone    NVARCHAR( 10), ' +        
+               ' @cDropID      NVARCHAR( 20), ' +        
+               ' @cLOC         NVARCHAR( 10), ' +        
+               ' @cSKU         NVARCHAR( 20), ' +        
+               ' @nQTY         INT,           ' +        
+               ' @nErrNo       INT    OUTPUT, ' +        
+               ' @cErrMsg      NVARCHAR(250) OUTPUT  '        
+        
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,        
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,        
+               @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSKU, @nQTY, @nErrNo OUTPUT, @cErrMsg OUTPUT        
+                    
+            IF @nErrNo <> 0         
+               GOTO Step_1_Fail        
+         END        
+      END    
         
       DECLARE @dScanInDate DATETIME        
       DECLARE @dScanOutDate DATETIME        
@@ -539,7 +574,7 @@ BEGIN
          @dScanInDate = ScanInDate,        
          @dScanOutDate = ScanOutDate        
       FROM dbo.PickingInfo WITH (NOLOCK)        
- WHERE PickSlipNo = @cPickSlipNo        
+      WHERE PickSlipNo = @cPickSlipNo        
         
       IF @@ROWCOUNT = 0        
       BEGIN        
