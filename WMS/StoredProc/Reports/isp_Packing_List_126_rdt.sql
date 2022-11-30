@@ -3,7 +3,6 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /************************************************************************/
 /* Stored Proc: isp_Packing_List_126_rdt                                */
 /* Creation Date: 12-JUL-2022                                           */
@@ -14,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: r_dw_packing_list_126_rdt                                 */
 /*                                                                      */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.4                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -26,6 +25,7 @@ GO
 /* 01-SEP-2022  CHONGCS   1.1 WMS-20126 revised field logic (CS01)      */
 /* 19-SEP-2022  CHONGCS   1.2 WMS-20126 fix duplicate qty (CS02)        */
 /* 20-OCT-2022  LZG       1.3 JSM-101324 - Display only packed SKU(ZG01)*/
+/* 10-Nov-2022  WLChooi   1.4 WMS-21156 - Revamp new layout (WL01)      */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_Packing_List_126_rdt]
             @c_pickslipno    NVARCHAR(20)
@@ -37,9 +37,8 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-
-
-
+   --WL01 S
+   /*
    SELECT PH.PickSlipNo
         , ISNULL(OH.userdefine03,'') AS Logo
         , TRIM(ISNULL(OH.C_contact1,'')) + TRIM(ISNULL(OH.C_Contact2,'')) AS C_Contact
@@ -104,7 +103,94 @@ BEGIN
         , ISNULL(C1.long,'') , ISNULL(C1.long,''),ISNULL(C1.udf01,''),ISNULL(C1.udf02,''),ISNULL(C1.udf03,'')
         ,ISNULL(C1.udf04,''),ISNULL(C1.udf05,'') ,ISNULL(C2.long,''),ISNULL(C2.Notes,''),ISNULL(C2.Notes2,'')
         ,OH.ExternOrderKey,ISNULL(OD.notes,''),ISNULL(SKU.size,''),OD.SKU,PAD.qty   --CS01    --CS02
-   ORDER BY PH.PickSlipNo
+   ORDER BY PH.PickSlipNo*/
+
+   SELECT TRIM(ISNULL(CL2.Notes, '')) AS Logo
+        , ISNULL(CL.Short, '') AS ShipTo_t
+        , ISNULL(CL.UDF01, '') AS OrderNumber_t
+        , ISNULL(CL.UDF02, '') AS ShipmentNumber_t
+        , ISNULL(CL.UDF03, '') AS OrderDate_t
+        , ISNULL(CL.UDF04, '') AS ItemNumber_t
+        , ISNULL(CL.UDF05, '') AS SKU_t
+        , ISNULL(CL1.UDF01, '') AS Description_t
+        , ISNULL(CL1.UDF02, '') AS Size_t
+        , ISNULL(CL1.UDF03, '') AS QtyShipped_t
+        , ISNULL(CL1.UDF04, '') AS TotalQty_t
+        , TRIM(ISNULL(OH.C_contact1, '')) + TRIM(ISNULL(OH.C_Contact2, '')) AS C_Contact
+        , TRIM(ISNULL(OH.C_Address1, '')) + TRIM(ISNULL(OH.C_Address2, '')) + TRIM(ISNULL(OH.C_Address3, ''))
+          + TRIM(ISNULL(OH.C_Address3, '')) AS C_Addresses
+        , TRIM(ISNULL(OH.C_Zip, '')) + ' ' + TRIM(ISNULL(OH.C_City, '')) AS C_ZipCity
+        , TRIM(ISNULL(OH.C_State, '')) + ' ' + TRIM(ISNULL(OH.C_Country, '')) AS C_StateCountry
+        , TRIM(ISNULL(OH.C_Phone1, '')) AS C_Phone1
+        , CASE WHEN CHARINDEX(':', OH.ExternOrderKey) - 1 > 1 THEN
+                  SUBSTRING(OH.ExternOrderKey, 1, CHARINDEX(':', OH.ExternOrderKey) - 1)
+               ELSE OH.ExternOrderKey END AS ExternOrderKey
+        , TRIM(ISNULL(OH.UserDefine01,'')) AS UserDefine01
+        , CONVERT(NVARCHAR(10),OH.OrderDate,120) AS OrderDate
+        , OH.OrderKey
+        , TRIM(OD.SKU) AS ItemNumber
+        , TRIM(ISNULL(S.Style, '')) + TRIM(ISNULL(S.Color, '')) + TRIM(ISNULL(S.BUSR6, '')) AS SKU
+        , TRIM(ODT.Notes) AS Notes
+        , ISNULL(S.Size, '') AS Size
+        , PAD.Qty
+        , PH.PickSlipNo
+        , ISNULL(CL3.[Description],'') AS CountryName
+   FROM PACKHEADER PH (NOLOCK)
+   JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = PH.OrderKey
+   JOIN ORDERDETAIL OD (NOLOCK) ON OD.OrderKey = OH.OrderKey
+   CROSS APPLY (  SELECT SUM(Qty) AS Qty
+                  FROM PackDetail (NOLOCK)
+                  WHERE PackDetail.PickSlipNo = PH.PickSlipNo
+                  AND   PackDetail.StorerKey = OD.StorerKey
+                  AND   PackDetail.SKU = OD.Sku
+                  GROUP BY SKU) AS PAD
+   JOIN SKU S (NOLOCK) ON S.StorerKey = OD.StorerKey AND S.Sku = OD.Sku
+   LEFT JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'PVHSZUEPKL' AND CL.Code = OH.C_ISOCntryCode AND CL.code2 = '00010'
+   LEFT JOIN CODELKUP CL1 (NOLOCK) ON CL1.LISTNAME = 'PVHSZUEPKL' AND CL1.Code = OH.C_ISOCntryCode AND CL1.code2 = '00020'
+   LEFT JOIN CODELKUP CL2 (NOLOCK) ON  CL2.LISTNAME = 'RPTLOGO'
+                                   AND CL2.Storerkey = OH.StorerKey
+                                   AND CL2.Long = 'r_dw_Packing_List_126_rdt'
+                                   AND CL2.Code = OH.UserDefine03
+   LEFT JOIN CODELKUP CL3 (NOLOCK) ON CL3.LISTNAME = 'ITNSF' AND CL3.Code = OH.C_ISOCntryCode 
+                                  AND CL3.Storerkey = OH.StorerKey
+   CROSS APPLY (  SELECT TOP 1 ISNULL(ORDERDETAIL.Notes, '') AS Notes
+                  FROM ORDERDETAIL (NOLOCK)
+                  WHERE ORDERDETAIL.OrderKey = OH.OrderKey
+                  AND   ORDERDETAIL.Sku = OD.Sku
+                  AND   ORDERDETAIL.StorerKey = OD.StorerKey) AS ODT
+   WHERE PH.PickSlipNo = @c_pickslipno
+   AND OH.DocType = 'E'
+   GROUP BY TRIM(ISNULL(CL2.Notes, ''))
+          , ISNULL(CL.Short, '')
+          , ISNULL(CL.UDF01, '')
+          , ISNULL(CL.UDF02, '')
+          , ISNULL(CL.UDF03, '')
+          , ISNULL(CL.UDF04, '')
+          , ISNULL(CL.UDF05, '')
+          , ISNULL(CL1.UDF01, '')
+          , ISNULL(CL1.UDF02, '')
+          , ISNULL(CL1.UDF03, '')
+          , ISNULL(CL1.UDF04, '')
+          , TRIM(ISNULL(OH.C_contact1, '')) + TRIM(ISNULL(OH.C_Contact2, ''))
+          , TRIM(ISNULL(OH.C_Address1, '')) + TRIM(ISNULL(OH.C_Address2, '')) + TRIM(ISNULL(OH.C_Address3, ''))
+            + TRIM(ISNULL(OH.C_Address3, ''))
+          , TRIM(ISNULL(OH.C_Zip, '')) + ' ' + TRIM(ISNULL(OH.C_City, ''))
+          , TRIM(ISNULL(OH.C_State, '')) + ' ' + TRIM(ISNULL(OH.C_Country, ''))
+          , TRIM(ISNULL(OH.C_Phone1, ''))
+          , CASE WHEN CHARINDEX(':', OH.ExternOrderKey) - 1 > 1 THEN
+                    SUBSTRING(OH.ExternOrderKey, 1, CHARINDEX(':', OH.ExternOrderKey) - 1)
+                 ELSE OH.ExternOrderKey END
+          , TRIM(ISNULL(OH.UserDefine01,''))
+          , CONVERT(NVARCHAR(10),OH.OrderDate,120)
+          , OH.OrderKey
+          , TRIM(OD.SKU)
+          , TRIM(ISNULL(S.Style, '')) + TRIM(ISNULL(S.Color, '')) + TRIM(ISNULL(S.BUSR6, ''))
+          , TRIM(ODT.Notes)
+          , ISNULL(S.Size, '')
+          , PAD.Qty
+          , PH.PickSlipNo
+          , ISNULL(CL3.[Description],'')
+   --WL01 E
 
 END
 GO
