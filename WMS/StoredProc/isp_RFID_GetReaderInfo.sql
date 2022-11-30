@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_RFID_GetReaderInfo]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_RFID_GetReaderInfo]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,7 +12,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -26,8 +21,11 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 09-OCT-2020 Wan      1.0   Created                                   */
+/* 11-Nov-2022 Wan01    1.1   WMS-21150 - [CN] Nike Ecom Packing        */
+/*                            Chinesization                             */
+/* 11-Nov-2022 Wan01    1.1   DevOps Combine Script                     */
 /************************************************************************/
-CREATE PROC isp_RFID_GetReaderInfo
+CREATE OR ALTER PROC isp_RFID_GetReaderInfo
            @c_ClientComputerName NVARCHAR(30) 
          , @c_Storerkey          NVARCHAR(15)
          , @c_RemoteEndPoint     NVARCHAR(30) = '' OUTPUT   -- Given by GIT 
@@ -83,8 +81,13 @@ BEGIN
    BEGIN
       SET @n_Continue = 3
       SET @n_Err      = 89010
-      SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': Communicate Device has not setup for Station:' + @c_ClientComputerName
-                      + ' yet. (isp_RFID_GetReaderInfo)'
+      SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) 
+                      + ': '
+                      + dbo.fnc_GetLangMsgText(                 --(Wan01)
+                        'sp_RFID_Reader_NotSet'               
+                      , 'Communicate Device has not setup for Station: %s.'
+                      , @c_ClientComputerName)
+                      + ' (isp_RFID_GetReaderInfo)'  
       GOTO QUIT_SP
    END
 
@@ -92,8 +95,13 @@ BEGIN
    BEGIN
       SET @n_Continue = 3
       SET @n_Err      = 89020
-      SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': RemoteEndPoint has not setup yet'
-                      + '. (isp_RFID_GetReaderInfo)'
+      SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) 
+                      + ': '
+                      + dbo.fnc_GetLangMsgText(                 --(Wan01)
+                        'sp_RFID_Reader_RemoteIPNotSet'               
+                      , 'RemoteEndPoint has not setup yet.'
+                      , '')
+                      + ' (isp_RFID_GetReaderInfo)'  
       GOTO QUIT_SP
    END
 
@@ -101,8 +109,13 @@ BEGIN
    BEGIN
       SET @n_Continue = 3
       SET @n_Err      = 89030
-      SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': ReaderEndPoint has not setup yet'
-                      + '. (isp_RFID_GetReaderInfo)'
+      SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) 
+                      + ': '
+                      + dbo.fnc_GetLangMsgText(                 --(Wan01)
+                        'sp_RFID_Reader_IPNotSet'               
+                      , 'ReaderEndPoint has not setup yet.'
+                      , '')
+                      + ' (isp_RFID_GetReaderInfo)'
       GOTO QUIT_SP
    END
 
@@ -110,8 +123,13 @@ BEGIN
    BEGIN
       SET @n_Continue = 3
       SET @n_Err      = 89040
-      SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': Device ID has not setup yet'
-                      + '. (isp_RFID_GetReaderInfo)'
+      SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) 
+                      + ': '
+                      + dbo.fnc_GetLangMsgText(                 --(Wan01)
+                        'sp_RFID_Reader_IDNotSet'               
+                      , 'Device ID has not setup yet.'
+                      , '')
+                      + ' (isp_RFID_GetReaderInfo)'
       GOTO QUIT_SP
    END
 
@@ -119,8 +137,13 @@ BEGIN
    BEGIN
       SET @n_Continue = 3
       SET @n_Err      = 89050
-      SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': Antenna ID has not setup yet'
-                      + '. (isp_RFID_GetReaderInfo)'
+      SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) 
+                      + ': '
+                      + dbo.fnc_GetLangMsgText(                 --(Wan01)
+                        'sp_RFID_Reader_AntennaIDNotSet'               
+                      , 'Antenna ID has not setup yet.'
+                      , '')
+                      + ' (isp_RFID_GetReaderInfo)'
       GOTO QUIT_SP
    END
 

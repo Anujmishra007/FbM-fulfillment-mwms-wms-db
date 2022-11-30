@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_RFIDTagReadCheck_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[isp_RFIDTagReadCheck_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,7 +12,7 @@ GO
 /*        :                                                             */
 /* Called By: Of_RFIDValidateTag                                        */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -26,8 +21,11 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2021-01-11  Wan      1.0   Created                                   */
+/* 2022-11-11  Wan01    1.1   WMS-21150 - [CN] Nike Ecom Packing        */
+/*                            Chinesization                             */
+/* 2022-11-11  Wan01    1.1   DevOps Combine Script                     */
 /************************************************************************/
-CREATE PROC isp_RFIDTagReadCheck_Wrapper
+CREATE OR ALTER PROC isp_RFIDTagReadCheck_Wrapper
            @n_Try          INT               OUTPUT
          , @c_Facility     NVARCHAR(5)
          , @c_Storerkey    NVARCHAR(10)
@@ -84,7 +82,12 @@ BEGIN
    BEGIN
       SET @n_Continue = 3
       SET @n_err = 81020   
-      SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Executing nspGetRight. (isp_RFIDTagReadCheck_Wrapper)'   
+      SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err) + ': '
+                   + dbo.fnc_GetLangMsgText(                 --(Wan01)
+                     'sp_Exec_Err'               
+                   , 'Error Executing nspGetRight.'
+                   , 'nspGetRight')
+                  +' (isp_RFIDTagReadCheck_Wrapper)'   
                   + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '   
       GOTO QUIT_SP  
    END
@@ -99,34 +102,46 @@ BEGIN
    
    IF @n_NoOfTag_Read = 0 
    BEGIN
-   	SET @c_TryLimit = CASE WHEN ISNUMERIC(@c_TryLimit) = 1 THEN @c_TryLimit ELSE 5 END
-   	
-   	IF @c_TryLimit = 0 SET @c_TryLimit = '5'
-   	
-   	IF @n_Try >= CONVERT(INT,@c_TryLimit)
-   	BEGIN 
-   		SET @n_Continue = 3
-         SET @n_err = 81010   
-         SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Unable to get RFID Tag Value after try limit. Please check. (isp_RFIDTagReadCheck_Wrapper)'   
+      SET @c_TryLimit = CASE WHEN ISNUMERIC(@c_TryLimit) = 1 THEN @c_TryLimit ELSE 5 END
+      
+      IF @c_TryLimit = 0 SET @c_TryLimit = '5'
+      
+      IF @n_Try >= CONVERT(INT,@c_TryLimit)
+      BEGIN 
+         SET @n_Continue = 3
+         SET @n_err = 81010 
+         SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)
+                      + ': '
+                      + dbo.fnc_GetLangMsgText(                 --(Wan01)
+                        'sp_RFID_ReadTag_MaxLimitTry'               
+                      , 'Unable to get RFID Tag Value after try limit. Please check.'
+                      , '')
+                      +' (isp_RFIDTagReadCheck_Wrapper)' 
          GOTO QUIT_SP  
-   	END
-   	
-   	SET @n_Try = @n_Try + 1
+      END
+      
+      SET @n_Try = @n_Try + 1
       SET @b_Success = 2
       GOTO QUIT_SP
    END
 
    IF @c_RFIDTagReadChk_SP= '0'
    BEGIN
-   	SET @b_Success = 1
-   	GOTO QUIT_SP 
+      SET @b_Success = 1
+      GOTO QUIT_SP 
    END
    
    IF NOT EXISTS (SELECT 1 FROM Sys.Objects (NOLOCK) WHERE object_id = object_id(@c_RFIDTagReadChk_SP) AND [Type] = 'P') 
    BEGIN
-   	SET @n_Continue = 3
+      SET @n_Continue = 3
       SET @n_err = 81030   
-      SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Invalid Custom SP: ' + @c_RFIDTagReadChk_SP + '. (isp_RFIDTagReadCheck_Wrapper)'   
+      SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)
+                   + ': '
+                   + dbo.fnc_GetLangMsgText(                 --(Wan01)
+                     'sp_Invalid_SP'               
+                   , 'Invalid Custom SP: ' + + @c_RFIDTagReadChk_SP + '.'
+                   , @c_RFIDTagReadChk_SP)
+                   +' (isp_RFIDTagReadCheck_Wrapper)'  
       GOTO QUIT_SP 
    END
 
@@ -171,7 +186,13 @@ BEGIN
    BEGIN
       SET @n_Continue = 3
       SET @n_err = 81040   
-      SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Executing ' + @c_RFIDTagReadChk_SP + '. (isp_RFIDTagReadCheck_Wrapper)'   
+      SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)
+                   + ': '
+                   + dbo.fnc_GetLangMsgText(                 --(Wan01)
+                     'sp_Exec_Err'               
+                   , 'Error Executing ' + + @c_RFIDTagReadChk_SP + '.'
+                   , @c_RFIDTagReadChk_SP)
+                   +' (isp_RFIDTagReadCheck_Wrapper)' 
                   + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '   
       GOTO QUIT_SP  
    END

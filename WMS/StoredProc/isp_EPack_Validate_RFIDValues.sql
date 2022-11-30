@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_EPack_Validate_RFIDValues]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_EPack_Validate_RFIDValues]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -26,8 +21,11 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2020-12-14  Wan      1.0   Created                                   */
+/* 2022-11-11  Wan01    1.1   WMS-21150 - [CN] Nike Ecom Packing        */
+/*                            Chinesization                             */
+/* 2022-11-11  Wan01    1.1   DevOps Combine Script                     */
 /************************************************************************/
-CREATE PROC isp_EPack_Validate_RFIDValues
+CREATE OR ALTER PROC isp_EPack_Validate_RFIDValues
            @c_PickSlipNo   NVARCHAR(10)
          , @n_CartonNo     INT
          , @c_LabelLine    NVARCHAR(5)       
@@ -82,7 +80,12 @@ BEGIN
    BEGIN
       SET @n_continue = 3  
       SET @n_err = 80010   
-      SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Disallow to pack duplicate RFIDNo. (isp_EPack_Validate_RFIDValues)'   
+      SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err) + ': '
+                   +dbo.fnc_GetLangMsgText(                 --(Wan01)
+                     'sp_EPack_RFID_VALD_UNIQ'               
+                   , 'Disallow to pack duplicate RFIDNo'
+                   , '')
+                   +'. (isp_EPack_Validate_RFIDValues)'   
       GOTO QUIT_SP  
    END 
    
@@ -95,7 +98,12 @@ BEGIN
    BEGIN
       SET @n_continue = 3  
       SET @n_err = 80020   
-      SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Disallow to pack unshipped RFIDNo. (isp_EPack_Validate_RFIDValues)'   
+      SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err) + ': '
+                   +dbo.fnc_GetLangMsgText(                 --(Wan01)
+                     'sp_EPack_RFID_VALD_Ship'
+                   , 'Disallow to pack unshipped RFIDNo.'
+                   , '')
+                   +' (isp_EPack_Validate_RFIDValues)'   
       GOTO QUIT_SP  
    END 
 
