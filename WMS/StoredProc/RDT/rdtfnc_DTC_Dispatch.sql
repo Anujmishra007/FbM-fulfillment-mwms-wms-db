@@ -76,6 +76,8 @@ GO
 /*2022-07-26 1.48 yeekung  WMS-20327 supprt two method (yeekung04)           */
 /*2022-11-17 1.49 James    WMS-20370 Bug fix (james19)                       */ 
 /*2022-10-20 1.50 YeeKung  WMS-21027 Add eventlog (yeekung05)                */ 
+/*2022-11-30 1.51 YeeKung  JSM-114083 Fix for nototeflag keep back to step 1 */
+/*                                    (yeekung06)                            */
 /*****************************************************************************/          
 CREATE OR ALTER PROC [RDT].[rdtfnc_DTC_Dispatch](          
    @nMobile    INT,          
@@ -526,7 +528,7 @@ Step 1. screen = 3910
 Step_1:          
 BEGIN          
    IF @nInputKey = 1 -- ENTER          
- BEGIN          
+   BEGIN          
       -- Screen mapping          
       SET @cToteno  = @cInField01          
       SET @cWaveKey = @cInField02          
@@ -1848,8 +1850,8 @@ BEGIN
                --SET @cErrMsg2 = @cErrMsg                
                SET @cErrMsg3 = ''                
                SET @cErrMsg4 = ''                
-       SET @cErrMsg5 = ''                
-        EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT,                
+               SET @cErrMsg5 = ''                
+               EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT,                
                   @cErrMsg1, @cErrMsg, @cErrMsg3, @cErrMsg4, @cErrMsg5                
                          
                SET @cErrMsg = ''          
@@ -2013,102 +2015,102 @@ BEGIN
          -- Close DropID when pick & pack qty matches          
          IF @nSKU_Picked_TTL <> @nSKU_Packed_TTL          
          BEGIN          
-               IF @cTrackNoFlag = '1'          
-               BEGIN        
-                  --(cc01)        
-                  IF @cScanCTSCN <> ''                      
-                  BEGIN                  
-                     -- Get PackInfo          
-                     SET @cCartonType = ''          
-                 SET @cWeight = ''          
-                     SET @cCube = ''          
-                     SET @cRefNo = ''          
+            IF @cTrackNoFlag = '1'          
+            BEGIN        
+               --(cc01)        
+               IF @cScanCTSCN <> ''                      
+               BEGIN                  
+                  -- Get PackInfo          
+                  SET @cCartonType = ''          
+               SET @cWeight = ''          
+                  SET @cCube = ''          
+                  SET @cRefNo = ''          
                          
-                     SET @cOutField02 = ''    
-                     SET @cOutField03 = ''    
-                     SET @cOutField04 = ''    
-                     SET @cOutField07 = ''    
+                  SET @cOutField02 = ''    
+                  SET @cOutField03 = ''    
+                  SET @cOutField04 = ''    
+                  SET @cOutField07 = ''    
                          
-                     --set default Value        
-                     SET @cOutField07 = CASE WHEN @cDefaultCtnType <> '' THEN @cDefaultCtnType ELSE '' END        
+                  --set default Value        
+                  SET @cOutField07 = CASE WHEN @cDefaultCtnType <> '' THEN @cDefaultCtnType ELSE '' END        
                                    
-                     -- Enable disable field          
-                     SET @cFieldAttr07 = CASE WHEN CHARINDEX( 'T', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
-                     SET @cFieldAttr02 = CASE WHEN CHARINDEX( 'C', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
-                     SET @cFieldAttr03 = CASE WHEN CHARINDEX( 'W', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
-                     SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
-                     SET @cFieldAttr08 = '' -- QTY          
+                  -- Enable disable field          
+                  SET @cFieldAttr07 = CASE WHEN CHARINDEX( 'T', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
+                  SET @cFieldAttr02 = CASE WHEN CHARINDEX( 'C', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
+                  SET @cFieldAttr03 = CASE WHEN CHARINDEX( 'W', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
+                  SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
+                  SET @cFieldAttr08 = '' -- QTY          
                 
-                     -- Position cursor          
-                     IF @cFieldAttr07 = '' AND @cOutField07 = ''  EXEC rdt.rdtSetFocusField @nMobile, 1 ELSE          
-                     IF @cFieldAttr02 = '' AND @cOutField02 = '0' EXEC rdt.rdtSetFocusField @nMobile, 2 ELSE          
-                     IF @cFieldAttr03 = '' AND @cOutField03 = '0' EXEC rdt.rdtSetFocusField @nMobile, 3 ELSE          
-                     IF @cFieldAttr04 = '' AND @cOutField04 = ''  EXEC rdt.rdtSetFocusField @nMobile, 4          
+                  -- Position cursor          
+                  IF @cFieldAttr07 = '' AND @cOutField07 = ''  EXEC rdt.rdtSetFocusField @nMobile, 1 ELSE          
+                  IF @cFieldAttr02 = '' AND @cOutField02 = '0' EXEC rdt.rdtSetFocusField @nMobile, 2 ELSE          
+                  IF @cFieldAttr03 = '' AND @cOutField03 = '0' EXEC rdt.rdtSetFocusField @nMobile, 3 ELSE          
+                  IF @cFieldAttr04 = '' AND @cOutField04 = ''  EXEC rdt.rdtSetFocusField @nMobile, 4          
                 
-                     -- Go to next screen          
-                     SET @nScn = @nScn + 5          
-                     SET @nStep = @nStep + 5          
+                  -- Go to next screen          
+                  SET @nScn = @nScn + 5          
+                  SET @nStep = @nStep + 5          
                       
-                     GOTO Quit          
-                  END          
-                  IF @cShowTrackNoScn = '1'          
-                  BEGIN        
-                     IF @cDefaultTrackNo = '1'          
-                     BEGIN          
-                        SET @cSuggestedTrackNo = ''          
-        
-                        IF @cUseUdf04AsTrackNo = '1'        
-                           SELECT @cSuggestedTrackNo = UserDefine04          
-                           FROM dbo.Orders WITH (NOLOCK)          
-                           WHERE StorerKey = @cStorerKey          
-                           AND OrderKey = @cOrderKeyOut          
-                        ELSE        
-                           SELECT @cSuggestedTrackNo = TrackingNo        
-                           FROM dbo.Orders WITH (NOLOCK)          
-                           WHERE StorerKey = @cStorerKey          
-                           AND OrderKey = @cOrderKeyOut          
-        
-                        SET @cOrderKey = @cOrderKeyOut          
-                     END          
-          
-                     SET @cOutField01 = @cOrderKey          
-                     SET @cOutfield02 = @cSuggestedTrackNo          
-          
-                     SET @nScn = @nScn + 4          
-                     SET @nStep = @nStep + 4          
-                  END          
-                  ELSE          
+                  GOTO Quit          
+               END          
+               IF @cShowTrackNoScn = '1'          
+               BEGIN        
+                  IF @cDefaultTrackNo = '1'          
                   BEGIN          
-                     SET @nTotalScannedQty = @nTotalScannedQty + 1          
-            
-                     SET @cOutField01 = @cDropIDType          
-                     SET @cOutField02 = @cToteNo --'' --@cSku  -- (Vicky02)          
-                     SET @cOutField03 = @cOrderKey          
-                     SET @cOutField04 = ''          
-             
-                     SET @cOutField05 = @nTotalPickedQty          
-                     SET @cOutField06 = @nTotalScannedQty         
-                     SET @cOutField07 = @cExtendedinfo              
+                     SET @cSuggestedTrackNo = ''          
+        
+                     IF @cUseUdf04AsTrackNo = '1'        
+                        SELECT @cSuggestedTrackNo = UserDefine04          
+                        FROM dbo.Orders WITH (NOLOCK)          
+                        WHERE StorerKey = @cStorerKey          
+                        AND OrderKey = @cOrderKeyOut          
+                     ELSE        
+                        SELECT @cSuggestedTrackNo = TrackingNo        
+                        FROM dbo.Orders WITH (NOLOCK)          
+                        WHERE StorerKey = @cStorerKey          
+                        AND OrderKey = @cOrderKeyOut          
+        
+                     SET @cOrderKey = @cOrderKeyOut          
                   END          
+          
+                  SET @cOutField01 = @cOrderKey          
+                  SET @cOutfield02 = @cSuggestedTrackNo          
+          
+                  SET @nScn = @nScn + 4          
+                  SET @nStep = @nStep + 4          
                END          
                ELSE          
                BEGIN          
-             
-           SET @nTotalScannedQty = @nTotalScannedQty + 1          
-                            
-              SET @cOutField01 = @cDropIDType          
+                  SET @nTotalScannedQty = @nTotalScannedQty + 1          
+            
+                  SET @cOutField01 = @cDropIDType          
                   SET @cOutField02 = @cToteNo --'' --@cSku  -- (Vicky02)          
                   SET @cOutField03 = @cOrderKey          
                   SET @cOutField04 = ''          
-          
+             
                   SET @cOutField05 = @nTotalPickedQty          
-                  SET @cOutField06 = @nTotalScannedQty        
-                  SET @cOutField07 = @cExtendedinfo             
+                  SET @cOutField06 = @nTotalScannedQty         
+                  SET @cOutField07 = @cExtendedinfo              
+               END          
+            END          
+            ELSE          
+            BEGIN          
+             
+               SET @nTotalScannedQty = @nTotalScannedQty + 1          
+                            
+               SET @cOutField01 = @cDropIDType          
+               SET @cOutField02 = @cToteNo --'' --@cSku  -- (Vicky02)          
+               SET @cOutField03 = @cOrderKey          
+               SET @cOutField04 = ''          
+          
+               SET @cOutField05 = @nTotalPickedQty          
+               SET @cOutField06 = @nTotalScannedQty        
+               SET @cOutField07 = @cExtendedinfo             
                                
 --                  SET @cSKU = ''          
 --                  SET @cOutField01 = @cToteNo          
 --                  SET @cOutField02 = ''          
-               END          
+            END          
          END          
          ELSE          
          BEGIN          
@@ -3987,7 +3989,7 @@ BEGIN
          ELSE                          
          BEGIN                          
             --IF @nTotalPickedQty=0 and @nTotalScannedQty=0            
-          --(cc01) if not more orderKey  back to screen1        
+            --(cc01) if not more orderKey  back to screen1        
             IF NOT EXISTS (SELECT 1          
                   FROM rdt.rdtECOMMLog WITH (NOLOCK)          
                   WHERE ToteNo = @cToteNo          
@@ -3996,21 +3998,21 @@ BEGIN
                   AND AddWho = @cUserName )        
                   --HAVING SUM(ExpectedQty) = sum(ScannedQty)        
             BEGIN                      
-                  SET @cOutField01  = ''                          
-                  SET @cToteNo      = ''                          
-                  SET @cDropIDType  = ''                          
-                  SET @cOrderkey    = ''                          
-                  SET @cSku         = ''                          
+               SET @cOutField01  = ''                          
+               SET @cToteNo      = ''                          
+               SET @cDropIDType  = ''                          
+               SET @cOrderkey    = ''                          
+               SET @cSku         = ''                          
                                                   
-                  SET @cLoadKey    = ''                           
-                  SET @cWaveKey    = ''                           
-                  SET @cOutField02 = ''                    
-                  SET @cOutField03 = ''              
-                  SET @cInField07 =''                             
+               SET @cLoadKey    = ''                           
+               SET @cWaveKey    = ''                           
+               SET @cOutField02 = ''                    
+               SET @cOutField03 = ''              
+               SET @cInField07 =''                             
                                                   
                SET @nScn = @nScn - 6                      
-                  SET @nStep = @nStep - 6                          
-      END                      
+               SET @nStep = @nStep - 6                          
+            END                      
             ELSE                      
             BEGIN                      
                SET @cOutField01 = @cDropIDType                          
@@ -4039,41 +4041,135 @@ BEGIN
          --      AND OrderKey = CASE WHEN ISNULL(@cOrderKey,'')  = '' THEN OrderKey ELSE @cOrderKey END        
          --      AND AddWho = @cUserName       
          --      HAVING SUM(ExpectedQty) = sum(ScannedQty))     --(cc01)      
-         IF NOT EXISTS (SELECT 1        -- (james19)
-               FROM rdt.rdtECOMMLog WITH (NOLOCK)        
-               WHERE ToteNo = @cToteNo        
-               AND Status <> '9'        
-               AND AddWho = @cUserName )      
-         BEGIN                      
-               SET @cOutField01  = ''                          
-               SET @cToteNo      = ''                          
-               SET @cDropIDType  = ''                          
-               SET @cOrderkey    = ''                          
-               SET @cSku         = ''                          
+
+         --yeekung06
+         IF @cNoToteFlag <> '1' 
+         BEGIN
+            IF NOT EXISTS (SELECT 1        -- (james19)
+                  FROM rdt.rdtECOMMLog WITH (NOLOCK)        
+                  WHERE ToteNo = @cToteNo        
+                  AND Status <> '9'        
+                  AND AddWho = @cUserName )      
+            BEGIN                      
+                  SET @cOutField01  = ''                          
+                  SET @cToteNo      = ''                          
+                  SET @cDropIDType  = ''                          
+                  SET @cOrderkey    = ''                          
+                  SET @cSku         = ''                          
                                       
-               SET @cLoadKey    = ''                           
-               SET @cWaveKey    = ''                           
-               SET @cOutField02 = ''                           
-               SET @cOutField03 = ''                           
-               SET @cInField07 =''                                                  
+                  SET @cLoadKey    = ''                           
+                  SET @cWaveKey    = ''                           
+                  SET @cOutField02 = ''                           
+                  SET @cOutField03 = ''                           
+                  SET @cInField07 =''                                                  
                            
-               SET @nScn = @nScn - 6                      
-               SET @nStep = @nStep - 6                          
-         END                      
-         ELSE                      
-         BEGIN                      
-            SET @cOutField01 = @cDropIDType                          
-            SET @cOutField02 = @cToteNo --'' --@cSku  -- (Vicky02)                          
-            SET @cOutField03 = @cOrderKey                          
-            SET @cOutField04 = ''                          
+                  SET @nScn = @nScn - 6                      
+                  SET @nStep = @nStep - 6                          
+            END                      
+            ELSE                      
+            BEGIN                      
+               SET @cOutField01 = @cDropIDType                          
+               SET @cOutField02 = @cToteNo --'' --@cSku  -- (Vicky02)                          
+               SET @cOutField03 = @cOrderKey                          
+               SET @cOutField04 = ''                          
                           
-            SET @cOutField05 = @nTotalPickedQty                 
-            SET @cOutField06 = @nTotalScannedQty                
-            SET @cOutField07 = @cExtendedinfo                         
+               SET @cOutField05 = @nTotalPickedQty                 
+               SET @cOutField06 = @nTotalScannedQty                
+               SET @cOutField07 = @cExtendedinfo                         
                                   
-            SET @nScn = @nScn -5                          
-            SET @nStep = @nStep -5                       
-         END                      
+               SET @nScn = @nScn -5                          
+               SET @nStep = @nStep -5                       
+            END          
+         END
+         ELSE
+         BEGIN
+            SET @nTotalPickedQty = 0           
+            SET @nTotalScannedQty = 0           
+          
+            IF ISNULL(RTRIM(@cLoadKey),'')  <> '' OR ISNULL(RTRIM(@cWaveKey),'')  <> ''           
+            BEGIN          
+               SET @nRefCount = 0           
+          
+               IF EXISTS (SELECT PD.* FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)      --(yeekung01)                    
+                              INNER JOIN dbo.ORDERS O WITH (NOLOCK) ON O.ORDERKEY = LPD.ORDERKEY                          
+                              INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON PD.ORDERKEY = O.ORDERKEY                          
+                              WHERE LPD.LoadKey = @cLoadKey                          
+                              AND PD.StorerKey = @cStorerKey                          
+                              AND PD.Status IN( '0'  ,@cPickStatus)                         
+                              AND PD.ShipFlag <> 'P'                          
+                              AND O.SOStatus NOT IN ( 'PENDPACK', 'HOLD', 'PENDCANC' ) )           
+               BEGIN          
+                  SET @nRefCount = 1           
+
+                  SELECT @nTotalPickedQty = Count( LPD.OrderKey)           
+                  FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)        
+                  JOIN dbo.Orders O WITH (NOLOCK) ON ( LPD.OrderKey = O.OrderKey)        
+                  WHERE LPD.LoadKey = @cLoadKey          
+                  AND O.SOStatus NOT IN ( 'PENDPACK', 'HOLD', 'PENDCANC' ) -- (ChewKP05)           
+          
+                  SELECT @nTotalScannedQty = Count( LPD.OrderKey)          
+                  FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)        
+                  JOIN dbo.Orders O WITH (NOLOCK) ON ( LPD.OrderKey = O.OrderKey)        
+                  WHERE LPD.LoadKey = @cLoadKey          
+                  AND O.Status = '5'          
+                  AND O.SOStatus NOT IN ( 'PENDPACK', 'HOLD', 'PENDCANC' ) -- (ChewKP05)         
+               END          
+                               
+                     
+               IF EXISTS (SELECT PD.* FROM dbo.WaveDetail WD WITH (NOLOCK)          
+                              INNER JOIN dbo.ORDERS O WITH (NOLOCK) ON O.ORDERKEY = WD.ORDERKEY          
+                              INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON PD.ORDERKEY = O.ORDERKEY          
+                              WHERE WD.WaveKey = @cWaveKey          
+                              AND PD.StorerKey = @cStorerKey          
+                              AND PD.Status = '0'           
+                              AND PD.ShipFlag <> 'P'          
+                              AND O.SOStatus NOT IN ( 'PENDPACK', 'HOLD', 'PENDCANC' ) )           
+               BEGIN          
+                  SET @nRefCount = 1          
+          
+                  SELECT @nTotalPickedQty  = Count(O.OrderKey),           
+                           @nTotalScannedQty = SUM(CASE WHEN O.Status = '5' THEN 1 ELSE 0 END)          
+                  FROM dbo.WaveDetail WD WITH (NOLOCK)          
+                  INNER JOIN dbo.Orders O WITH (NOLOCK) ON O.OrderKey = WD.OrderKey          
+                  WHERE WD.WaveKey = @cWaveKey          
+                  AND O.SOStatus NOT IN ( 'PENDPACK', 'HOLD', 'PENDCANC' ) -- (ChewKP05)           
+              
+               END          
+                               
+               IF @nRefCount = 0 -- No More PickDetail Go to Screen 1           
+               BEGIN                      
+                  SET @cOutField01  = ''                          
+                  SET @cToteNo      = ''                          
+                  SET @cDropIDType  = ''                          
+                  SET @cOrderkey    = ''                          
+                  SET @cSku         = ''                          
+                                      
+                  SET @cLoadKey    = ''                           
+                  SET @cWaveKey    = ''                           
+                  SET @cOutField02 = ''                           
+                  SET @cOutField03 = ''                           
+                  SET @cInField07 =''                                                  
+                           
+                  SET @nScn = @nScn - 6                     
+                  SET @nStep = @nStep - 6                        
+               END                      
+               ELSE                      
+               BEGIN                      
+                  SET @cOutField01 = @cDropIDType                          
+                  SET @cOutField02 = @cToteNo --'' --@cSku  -- (Vicky02)                          
+                  SET @cOutField03 = @cOrderKey                          
+                  SET @cOutField04 = ''                          
+                          
+                  SET @cOutField05 = @nTotalPickedQty                 
+                  SET @cOutField06 = @nTotalScannedQty                
+                  SET @cOutField07 = @cExtendedinfo                         
+                                  
+                  SET @nScn = @nScn -5                          
+                  SET @nStep = @nStep -5                       
+               END          
+            END        
+
+         END
       END                      
       SET @cFieldAttr07 = ''           
       SET @cFieldAttr02 = ''        
@@ -4323,14 +4419,14 @@ BEGIN
                 '@nSerialQTY     INT,'  +                
                 '@tExtUpd        VariableTable READONLY '            
                             
-         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,                            
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,                            
                 @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, @cToteNo, @cSKU, @nStep, @cPickSlipNo, @cOrderKey, @cTrackNo, @cTrackNoFlag OUTPUT, @cOrderKeyOut OUTPUT,         
                 @nErrNo OUTPUT, @cErrMsg OUTPUT, @cCartonType, @cSerialNo, @nSerialQTY, @tExtUpd                            
                             
-             IF @nErrNo < 0 -- (ChewKP06)             
-   BEGIN            
+            IF @nErrNo < 0 -- (ChewKP06)             
+            BEGIN            
                --SET @nErrNo = 0                  
- SET @cErrMsg1 = 'WayBill Not Found'            
+               SET @cErrMsg1 = 'WayBill Not Found'            
                --SET @cErrMsg2 = @cErrMsg                  
                SET @cErrMsg3 = ''                  
                SET @cErrMsg4 = ''                  
@@ -4339,7 +4435,7 @@ BEGIN
                   @cErrMsg1, @cErrMsg, @cErrMsg3, @cErrMsg4, @cErrMsg5                  
                            
                SET @cErrMsg = ''            
-             END            
+            END            
              ELSE IF @nErrNo > 0             
              BEGIN            
                 GOTO quit            
@@ -4536,7 +4632,7 @@ BEGIN
             IF EXISTS( SELECT 1 FROM dbo.DROPID WITH (NOLOCK) WHERE DropID = @cToteNo AND Status < '9')            
             BEGIN            
                UPDATE dbo.DROPID WITH (Rowlock)            
-        SET   Status = '9'            
+               SET   Status = '9'            
                     ,Editdate = GetDate()            
                WHERE DropID = @cToteNo            
                -- AND   Status < '9'            
@@ -4546,7 +4642,7 @@ BEGIN
                   SET @nErrNo = 90495          
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UpdDropIdFail'            
                   GOTO quit            
-      END            
+               END            
             END            
             --(Kc04) - end            
            
@@ -4621,7 +4717,7 @@ BEGIN
                   DECLARE CUR_DEL CURSOR LOCAL READ_ONLY FAST_FORWARD FOR             
                   SELECT ROWREF FROM RDT.rdtECOMMLOG WITH (NOLOCK)             
                   WHERE ToteNo = @cToteno             
-           AND   AddWho = @cUserName            
+                  AND   AddWho = @cUserName            
                   OPEN CUR_DEL            
                   FETCH NEXT FROM CUR_DEL INTO @nRowRef            
                   WHILE @@FETCH_STATUS <> -1            
@@ -4687,7 +4783,7 @@ BEGIN
                         CLOSE CUR_DEL            
                         DEALLOCATE CUR_DEL            
                         SET @nErrNo = 90497            
-    SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DelEcommLogFail            
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DelEcommLogFail            
                         GOTO quit          
                      END            
             
@@ -4880,8 +4976,8 @@ BEGIN
                      ELSE            
                      BEGIN            
                      --(cc01)                              
-                      IF @cScanCTSCN <> ''                      
-           BEGIN                  
+                        IF @cScanCTSCN <> ''                      
+                        BEGIN                  
                            -- Get PackInfo          
                            SET @cCartonType = ''          
                            SET @cWeight = ''          
