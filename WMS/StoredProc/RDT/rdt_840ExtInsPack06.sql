@@ -1,11 +1,9 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'rdt.rdt_840ExtInsPack06') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_840ExtInsPack06
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF 
-GO
+
 /****************************************************************************/
 /* Stored Procedure: rdt_840ExtInsPack06                                    */
 /*                                                                          */
@@ -13,7 +11,7 @@ GO
 /*          Retrieve tracking no and used as packdetail.labelno             */
 /*          Update pickdetail.dropid = tracking no                          */
 /*                                                                          */
-/* Called By: RDT Pack By Track No                                          */ 
+/* Called By: RDT Pack By Track No                                          */
 /*                                                                          */
 /* Data Modifications:                                                      */
 /*                                                                          */
@@ -21,30 +19,29 @@ GO
 /* Date        Author  Ver.  Purposes                                       */
 /* 2019-03-11  James   1.0   WMS8234-Created                                */
 /* 2020-01-03  James   1.1   WMS-11661 Stamp pickdtl.dropid=labelno(james01)*/
-/* 2021-04-01  YeeKung 1.2   WMS-16717 Add serialno and serialqty           */
-/*                              Params (yeekung01)                          */
-/* 2021-04-16  James   1.3   WMS-16024 Standarized use of TrackingNo        */
+/* 2021-04-16  James   1.2   WMS-16024 Standarized use of TrackingNo        */
 /*                           (james02)                                      */
+/* 2021-04-01  YeeKung 1.3   WMS-16717 Add serialno and serialqty           */
+/*                              Params (yeekung01)                          */
+/* 03-08-2022  YeeKung 1.4   WMS-20495 add label type     (yeekung02)       */  
 /****************************************************************************/
 
-CREATE PROC [rdt].[rdt_840ExtInsPack06] (
-   @nMobile                   INT, 
-   @nFunc                     INT, 
-   @cLangCode                 NVARCHAR( 3), 
-   @nStep                     INT, 
-   @nInputKey                 INT, 
-   @cStorerkey                NVARCHAR( 15), 
-   @cOrderKey                 NVARCHAR( 10), 
-   @cPickSlipNo               NVARCHAR( 10), 
-   @cTrackNo                  NVARCHAR( 20), 
-   @cSKU                      NVARCHAR( 20), 
-   @nQty                      INT, 
-   @nCartonNo                 INT, 
-   @cSerialNo                 NVARCHAR( 30), 
-   @nSerialQTY                INT,  
-   @cLabelNo                  NVARCHAR( 20) OUTPUT, 
-   @nErrNo                    INT           OUTPUT, 
-   @cErrMsg                   NVARCHAR( 20) OUTPUT  
+CREATE OR ALTER PROC [RDT].[rdt_840ExtInsPack06] (
+   @nMobile                   INT,
+   @nFunc                     INT,
+   @cLangCode                 NVARCHAR( 3),
+   @nStep                     INT,
+   @nInputKey                 INT,
+   @cStorerkey                NVARCHAR( 15),
+   @cOrderKey                 NVARCHAR( 10),
+   @cPickSlipNo               NVARCHAR( 10),
+   @cTrackNo                  NVARCHAR( 20),
+   @cSKU                      NVARCHAR( 20),
+   @nQty                      INT,
+   @nCartonNo                 INT,
+   @cLabelNo                  NVARCHAR( 20) OUTPUT,
+   @nErrNo                    INT           OUTPUT,
+   @cErrMsg                   NVARCHAR( 20) OUTPUT
 )
 AS
 BEGIN
@@ -62,38 +59,39 @@ BEGIN
            @cTargetDB         NVARCHAR( 20),
            @cPaperPrinter     NVARCHAR( 10),
            @cLabelPrinter     NVARCHAR( 10),
-           @cPickDetailKey    NVARCHAR( 10), 
-           @cCarrierName      NVARCHAR( 30), 
-           @cKeyName          NVARCHAR( 30), 
-           @cUserName         NVARCHAR( 18), 
+           @cPickDetailKey    NVARCHAR( 10),
+           @cCarrierName      NVARCHAR( 30),
+           @cKeyName          NVARCHAR( 30),
+           @cUserName         NVARCHAR( 18),
            @cLoadKey          NVARCHAR( 10),
            @cRoute            NVARCHAR( 10),
-           @cConsigneeKey     NVARCHAR( 15), 
+           @cConsigneeKey     NVARCHAR( 15),
            @cCurLabelNo       NVARCHAR( 20),
-           @cCurLabelLine     NVARCHAR( 5), 
-           @cPack_LblNo       NVARCHAR( 20), 
-           @cPack_SKU         NVARCHAR( 20), 
+           @cCurLabelLine     NVARCHAR( 5),
+           @cPack_LblNo       NVARCHAR( 20),
+           @cPack_SKU         NVARCHAR( 20),
            @cShipLabel        NVARCHAR( 10),
            @cDelNotes         NVARCHAR( 10),
            @cFacility         NVARCHAR( 5),
-           @nPack_QTY         INT, 
-           @nPickQty          INT, 
+           @nPack_QTY         INT,
+           @nPickQty          INT,
            @nPackQty          INT,
            @nNewCarton        INT,
            @nPD_CartonNo      INT,
            @nFromCartonNo     INT,
-           @nToCartonNo       INT
+           @nToCartonNo       INT,
+           @cOrderGroup       NVARCHAR(20)
 
    DECLARE @b_success         INT,
            @n_err             INT,
            @c_errmsg          NVARCHAR( 20)
 
-   SET @nTranCount = @@TRANCOUNT    
+   SET @nTranCount = @@TRANCOUNT
 
-   BEGIN TRAN    
-   SAVE TRAN rdt_840ExtInsPack06    
+   BEGIN TRAN
+   SAVE TRAN rdt_840ExtInsPack06
 
-   SELECT @cUserName = UserName, 
+   SELECT @cUserName = UserName,
           @cFacility = Facility
    FROM rdt.rdtMOBREC WITH (NOLOCK)
    WHERE Mobile = @nMobile
@@ -145,6 +143,7 @@ BEGIN
          , @cConsigneeKey = ISNULL(RTRIM(ConsigneeKey),'')
          --, @cTrackNo = UserDefine04
          , @cTrackNo = TrackingNo   -- (james02)
+         , @cOrderGroup = ordergroup
    FROM dbo.Orders WITH (NOLOCK)
    WHERE Orderkey = @cOrderkey
 
@@ -218,8 +217,8 @@ BEGIN
             GOTO RollBackTran
          END
          ELSE
-            SELECT @nNewCarton = CartonNo 
-            FROM dbo.PackDetail WITH (NOLOCK) 
+            SELECT @nNewCarton = CartonNo
+            FROM dbo.PackDetail WITH (NOLOCK)
             WHERE PickSlipNo = @cPickSlipNo
             AND   LabelNo = @cLabelNo
             AND   StorerKey = @cStorerKey
@@ -272,7 +271,7 @@ BEGIN
    WHILE @@FETCH_STATUS = 0
    BEGIN
 
-      UPDATE dbo.PICKDETAIL WITH (ROWLOCK) SET 
+      UPDATE dbo.PICKDETAIL WITH (ROWLOCK) SET
          DropID = @cTrackNo,
          TrafficCop = NULL
       WHERE PickDetailKey = @cPickDetailKey
@@ -290,20 +289,20 @@ BEGIN
    DEALLOCATE curPICKD
 
    GOTO Quit
-   
-   RollBackTran:  
-      ROLLBACK TRAN rdt_840ExtInsPack06  
-   Quit:  
-      WHILE @@TRANCOUNT > @nTranCount  
-         COMMIT TRAN  
+
+   RollBackTran:
+      ROLLBACK TRAN rdt_840ExtInsPack06
+   Quit:
+      WHILE @@TRANCOUNT > @nTranCount
+         COMMIT TRAN
 
    SELECT @nPickQty = ISNULL( SUM( QTY), 0)
    FROM dbo.PickDetail WITH (NOLOCK)
-   WHERE OrderKey = @cOrderKey 
+   WHERE OrderKey = @cOrderKey
    AND   StorerKey = @cStorerkey
 
    SELECT @nPackQty = ISNULL( SUM( QTY), 0)
-   FROM dbo.PackDetail WITH (NOLOCK) 
+   FROM dbo.PackDetail WITH (NOLOCK)
    WHERE StorerKey = @cStorerkey
    AND   PickSlipNo = @cPickSlipNo
 
@@ -314,7 +313,7 @@ BEGIN
       -- (james01)
       -- Get storer config
       DECLARE @cAssignPackLabelToOrdCfg NVARCHAR(1)
-      DECLARE @bsuccess INT    
+      DECLARE @bsuccess INT
       EXECUTE nspGetRight
          @cFacility,
          @cStorerKey,
@@ -338,13 +337,13 @@ BEGIN
             ,@cErrMsg  OUTPUT
          IF @nErrNo <> 0
             GOTO Fail
-      END             
-      
-      SELECT   
-         @cLabelPrinter = Printer,   
-         @cPaperPrinter = Printer_Paper  
-      FROM rdt.rdtMobRec WITH (NOLOCK)  
-      WHERE Mobile = @nMobile  
+      END
+
+      SELECT
+         @cLabelPrinter = Printer,
+         @cPaperPrinter = Printer_Paper
+      FROM rdt.rdtMobRec WITH (NOLOCK)
+      WHERE Mobile = @nMobile
 
       SET @cDelNotes = rdt.RDTGetConfig( @nFunc, 'DelNotes', @cStorerKey)
       IF @cDelNotes = '0'
@@ -361,25 +360,38 @@ BEGIN
          INSERT INTO @tDELNOTES (Variable, Value) VALUES ( '@cLabelNo',     @cLabelNo)
 
          -- Print label
-         EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, '', @cPaperPrinter, 
+         EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, '', @cPaperPrinter,
             @cDelNotes, -- Report type
             @tDELNOTES, -- Report params
-            'rdt_840ExtInsPack06', 
+            'rdt_840ExtInsPack06',
             @nErrNo  OUTPUT,
-            @cErrMsg OUTPUT 
+            @cErrMsg OUTPUT
 
          IF @nErrNo <> 0
             GOTO Fail
       END
 
-      SET @cShipLabel = rdt.RDTGetConfig( @nFunc, 'ShipLabel', @cStorerKey)
-      IF @cShipLabel = '0'
-         SET @cShipLabel = ''
+      IF EXISTS (SELECT 1 FROM Codelkup (nolock) 
+                  where listname='VIPORDTYPE' 
+                     and storerkey=@cstorerkey
+                     and code = @cOrdergroup
+                     and short =@nFunc) --yeekung02
+      BEGIN
+         SET @cShipLabel = rdt.RDTGetConfig( @nFunc, 'ShipLabels', @cStorerKey)      
+         IF @cShipLabel = '0'      
+            SET @cShipLabel = ''   
+      END
+      ELSE
+      BEGIN
+         SET @cShipLabel = rdt.RDTGetConfig( @nFunc, 'ShipLabel', @cStorerKey)      
+         IF @cShipLabel = '0'      
+            SET @cShipLabel = ''   
+      END
 
       IF @cShipLabel <> ''
       BEGIN
 
-         SELECT @nFromCartonNo = MIN( CartonNo), 
+         SELECT @nFromCartonNo = MIN( CartonNo),
                   @nToCartonNo = MAX( CartonNo)
          FROM dbo.PackDetail WITH (NOLOCK)
          WHERE PickSlipNo = @cPickSlipNo
@@ -391,25 +403,20 @@ BEGIN
          INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@cLoadKey',        @cLoadKey)
 
          -- Print label
-         EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, '', 
+         EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, '',
             @cShipLabel,  -- Report type
             @tSHIPPLABEL, -- Report params
-            'rdt_840ExtInsPack06', 
+            'rdt_840ExtInsPack06',
             @nErrNo  OUTPUT,
-            @cErrMsg OUTPUT 
+            @cErrMsg OUTPUT
 
          IF @nErrNo <> 0
             GOTO Fail
       END
    END
-   
+
    Fail:
 END
 GO
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF 
-GO
-
-GRANT EXECUTE ON rdt.rdt_840ExtInsPack06 to nSQL
+GRANT EXECUTE ON  [RDT].[rdt_840ExtInsPack06] TO [NSQL]
 GO
