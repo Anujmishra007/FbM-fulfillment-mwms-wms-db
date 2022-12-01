@@ -16,7 +16,7 @@ GO
 /*                                                                      */
 /* Called By: isp_WaveReleaseToWCS_Wrapper                              */
 /*                                                                      */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -25,6 +25,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
 /* 24-May-2022  WLChooi  1.0  DevOps Combine Script                     */
+/* 21-Nov-2022  WLChooi  1.1  WMS-21215 - Add Validation (WL01)         */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispWAVRL07] 
@@ -84,6 +85,53 @@ BEGIN
                           + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '           
          GOTO RETURN_SP
       END
+
+      --WL01 S
+      IF EXISTS (  SELECT 1
+                   FROM WAVEDETAIL WD (NOLOCK)
+                   JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = WD.OrderKey
+                   JOIN PICKDETAIL PD (NOLOCK) ON PD.OrderKey = OH.OrderKey
+                   JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'CSDEFLOC' AND CL.Storerkey = PD.StorerKey 
+                                            AND CL.Long = PD.Loc
+                   WHERE WD.WaveKey = @c_WaveKey
+                   AND   (  (ISNULL(PD.PickSlipNo, '') = '') -- CSR
+                       OR   ((ISNULL(PD.PickSlipNo, '') = '' AND (ISNULL(PD.Notes, '') = '') ) -- CSOS
+                            )
+                         ) 
+                )
+      BEGIN
+         SELECT @n_continue = 3  
+         SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 67111   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+         SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Data error found. Please verify. (ispWAVRL07)' 
+                          + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '           
+         GOTO RETURN_SP
+      END
+
+      IF NOT EXISTS (  SELECT 1
+                       FROM WAVEDETAIL WD (NOLOCK)
+                       JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = WD.OrderKey
+                       JOIN PICKDETAIL PD (NOLOCK) ON PD.OrderKey = OH.OrderKey
+                       JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'CSDEFLOC' AND CL.Storerkey = PD.StorerKey 
+                                                AND CL.Long = PD.Loc
+                       WHERE WD.WaveKey = @c_WaveKey
+                    )
+      BEGIN
+         SELECT @n_continue = 3  
+         SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 67112   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+         SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': No record release to Case Shuttle. (ispWAVRL07)' 
+                          + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '           
+         GOTO RETURN_SP
+      END
+
+      IF @c_WaveType NOT IN ('CSR','CSOS')
+      BEGIN
+         SELECT @n_continue = 3  
+         SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 67113   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+         SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Please choose the correct wavetype to trigger case shuttle interface. (ispWAVRL07)' 
+                          + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '           
+         GOTO RETURN_SP
+      END
+      --WL01 E
    END
 
    ------Insert Into Transmitlog2-------   
