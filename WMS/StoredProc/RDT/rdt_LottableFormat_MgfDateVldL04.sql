@@ -4,17 +4,17 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /******************************************************************************/
-/* Store procedure: rdt_LottableFormat_MgfDate                                */
+/* Store procedure: rdt_LottableFormat_MgfDateVldL04                          */
 /* Copyright      : LF Logistics                                              */
 /*                                                                            */
 /* Purpose: Check manufacturer date same                                      */
+/*          change from rdt_LottableFormat_MgfDate                            */
 /*                                                                            */
 /* Date        Author    Ver.  Purposes                                       */
-/* 03-10-2020  Ung       1.0   WMS-20822 Created                              */
-/* 12-10-2022  YeeKung   1.1   WMS-20737 Add lottable15 validation(yeekung01) */
+/* 12-10-2022  YeeKung   1.0   WMS-20737 Created                              */
 /******************************************************************************/
 
-CREATE OR ALTER PROCEDURE [RDT].[rdt_LottableFormat_MgfDate]
+CREATE OR ALTER PROCEDURE [RDT].[rdt_LottableFormat_MgfDateVldL04]
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -39,16 +39,25 @@ BEGIN
    DECLARE @cMFGDateYMD NVARCHAR( 60) = ''
    DECLARE @cLottable01 NVARCHAR( 18)
    DECLARE @dMFGDate    DATETIME
+   DECLARE @dLottable04 DATETIME
 
    -- Get session info
    DECLARE @nStep INT
    DECLARE @cFacility NVARCHAR(5)
+   DECLARE @cReceiptkey NVARCHAR(20)
    SELECT
       @nStep = Step,
       @cFacility = Facility, 
-      @cLottable01 = V_Lottable01
+      @cLottable01 = V_Lottable01,
+      @cReceiptkey =V_receiptkey
    FROM rdt.rdtMobRec WITH (NOLOCK)
    WHERE Mobile = @nMobile
+
+   SELECT TOP 1 @dLottable04=lottable04
+   FROM receiptdetail (Nolock)
+   where receiptkey =@cReceiptkey
+      and storerkey=@cStorerKey
+      and sku=@cSKU
 
    -- Decode
    EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cLottableValue,
@@ -63,7 +72,7 @@ BEGIN
          AND SKU = @cSKU
          AND UPC = @cMasterCase)
    BEGIN
-      SET @nErrNo = 192351
+      SET @nErrNo = 191551
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No Master Case
       GOTO Quit
    END
@@ -77,7 +86,7 @@ BEGIN
    -- Check same MfgDate
    IF @cLottable01 <> @cMFGDate
    BEGIN
-      SET @nErrNo = 192352
+      SET @nErrNo = 191552
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff MfgDate
       GOTO Quit
    END
@@ -88,7 +97,7 @@ BEGIN
    -- Check date valid
    IF rdt.rdtIsValidDate( @cMFGDate) = 0
    BEGIN
-      SET @nErrNo = 192353
+      SET @nErrNo = 191553
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidMfgDate
       GOTO Quit
    END
@@ -98,8 +107,15 @@ BEGIN
 
    IF  @dMFGDate > getdate()
    BEGIN
-      SET @nErrNo = 192354
+      SET @nErrNo = 191554
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Future MfgDate
+      GOTO Quit
+   END
+
+   IF @dLottable04 < @dMFGDate
+   BEGIN
+      SET @nErrNo = 191555
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvExpDate
       GOTO Quit
    END
    
@@ -109,5 +125,5 @@ Quit:
    
 END
 GO
-GRANT EXECUTE ON  [RDT].[rdt_LottableFormat_MgfDate] TO [NSQL]
+GRANT EXECUTE ON  [RDT].[rdt_LottableFormat_MgfDateVldL04] TO [NSQL]
 GO
