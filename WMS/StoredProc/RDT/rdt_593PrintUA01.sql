@@ -14,9 +14,10 @@ GO
 /* 2019-09-10 1.2  James    WMS-10521 Add insert packinfo (james01)        */
 /* 2020-01-03 1.3  James    WMS-11661 Stamp pickdtl.dropid=labelno(james02)*/
 /* 2022-09-15 1.4  yeekung  WMS-20794 Add reporttype (yeekung01)           */
+/* 2022-11-23 1.5  yeekung  WMS-21213 Add Shiplabel (yeekung02)            */
 /***************************************************************************/
 
-CREATE OR ALTER PROC [RDT].[rdt_593PrintUA01] (
+CREATE OR ALTER  PROC [RDT].[rdt_593PrintUA01] (
    @nMobile    INT,
    @nFunc      INT,
    @nStep      INT,
@@ -88,6 +89,12 @@ AS
           ,@cLoadKey          NVARCHAR(10)
           ,@nInputKey         INT
           ,@cFacility         NVARCHAR( 5)
+          ,@cShipLbl          NVARCHAR( 20)
+          ,@cOrdergroup       NVARCHAR( 20)
+          ,@cUDF01            NVARCHAR( 20)
+          ,@cChkOrderKey      NVARCHAR( 20)
+          ,@cChkStatus        NVARCHAR( 20)
+          ,@cChkSOStatus      NVARCHAR( 20)
 
 
    DECLARE @tOutBoundList AS VariableTable
@@ -134,6 +141,130 @@ AS
 
    BEGIN TRAN
    SAVE TRAN rdt_593PrintUA01
+
+   
+   IF @cOption = '1'
+   BEGIN
+
+      -- Screen mapping
+      SET @cOrderKey = @cParam1
+      SET @cUDF01 = @cParam2
+
+      -- james01
+      IF ISNULL( @cUDF01 , '') <> ''
+      BEGIN
+         SELECT TOP 1 @cLabelNo = LabelNo
+         FROM dbo.CartonTrack WITH (NOLOCK, INDEX =IX_CARTONTRACK_03)
+         WHERE CarrierName='HTKY'
+         AND   UDF01 = @cUDF01
+
+         IF @@ROWCOUNT = 0
+         BEGIN
+            SET @nErrNo = 123171
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Invalid UDF
+            EXEC rdt.rdtSetFocusField @nMobile, 4 --Param1
+            GOTO Quit
+         END
+
+         SET @cOrderKey = @cLabelNo
+      END
+
+      -- Check blank
+      IF @cOrderKey = ''
+      BEGIN
+         SET @nErrNo = 123172
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Need OrderKey
+         EXEC rdt.rdtSetFocusField @nMobile, 2 --Param1
+         GOTO Quit
+      END
+
+      -- Get Order info
+      SELECT
+         @cChkOrderKey = OrderKey,
+         @cChkStatus   = Status,
+         @cChkSOStatus = SOStatus,
+         @cOrdergroup = ordergroup
+      FROM dbo.Orders WITH (NOLOCK)
+      WHERE OrderKey = @cOrderKey
+
+      -- Check OrderKey valid
+      IF @cChkOrderKey = ''
+      BEGIN
+         SET @nErrNo = 123173
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Bad OrderKey
+         GOTO Quit
+      END
+
+      -- Check order shipped
+      IF @cChkStatus = '9' AND @cUDF01 = ''
+      BEGIN
+         SET @nErrNo = 123174
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Order shipped
+         GOTO Quit
+      END
+
+      -- Check order cancel
+      IF @cChkStatus = 'CANC'
+      BEGIN
+         SET @nErrNo = 123175
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Order cancel
+         GOTO Quit
+      END
+
+      -- Check order status
+      IF @cChkSOStatus IN ('HOLD','PENDCANC','PENDGET','PENDPACK')
+      BEGIN
+         SET @nErrNo = 123176
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --BadOrderStatus
+         GOTO Quit
+      END
+   /*
+      -- Check order status
+      IF @cChkSOStatus <> 'PENDPRINT'
+      BEGIN
+         DECLARE @cErrMsg1 NVARCHAR(20)
+         SET @cErrMsg1 = @cChkSOStatus
+
+         SET @nErrNo = 85256
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+         EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg, @cErrMsg1
+         GOTO Quit
+      END
+   */
+      -- Get LoadKey
+      SELECT
+         @cLoadKey = LoadKey
+      FROM OrderDetail WITH (NOLOCK)
+      WHERE OrderKey = @cOrderKey
+
+      -- Check LoadKey
+      IF @cLoadKey = ''
+      BEGIN
+         SET @nErrNo = 123177
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') + @cChkSOStatus --OrdNotLoadPlan
+         GOTO Quit
+      END
+
+      IF @cOrdergroup ='JITX'
+         SET @cShipLbl ='SHPLBVIPUA'
+      ELSE
+         SET @cShipLbl='ShipLabel'
+
+      SELECT @cUserName = UserName FROM rdt.rdtMobRec WITH (NOLOCK) WHERE Mobile = @nMobile
+      
+      DECLARE @tShipLabel AS VariableTable  --(yeekung02)
+      INSERT INTO @tShipLabel (Variable, Value) VALUES ( '@cStorerKey', @cStorerKey)    
+      INSERT INTO @tShipLabel (Variable, Value) VALUES ( '@cOrderKey', @cOrderKey)          
+      INSERT INTO @tShipLabel (Variable, Value) VALUES ( '@cLoadKey', @cLoadKey)       
+
+         -- Print label  
+      EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, '1', @cFacility, @cStorerkey, @cLabelPrinter, @cPaperPrinter,   
+         @cShipLbl, -- Report type    SHIPPLABEL  / ShipLabel
+         @tShipLabel, -- Report params  
+         'rdt_593PrintUA01',   
+         @nErrNo  OUTPUT,  
+         @cErrMsg OUTPUT   
+   END
 
 
    IF @cOption ='5'
@@ -326,8 +457,8 @@ AS
 
                   SET @cExecStatements = N'EXEC dbo.' + RTRIM( @cGenLabelNoSP) +
                                        '   @cPickslipNo           ' +
-         ' , @nCartonNo             ' +
-                                ' , @cLabelNo     OUTPUT   '
+                                       ' , @nCartonNo             ' +
+                                       ' , @cLabelNo     OUTPUT   '
 
 
                   SET @cExecArguments =
@@ -970,7 +1101,10 @@ Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
       COMMIT TRAN rdt_593PrintUA01
    EXEC rdt.rdtSetFocusField @nMobile, @nFocusParam
-
-
+GO
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
 GRANT EXECUTE ON  [RDT].[rdt_593PrintUA01] TO [NSQL]
 GO

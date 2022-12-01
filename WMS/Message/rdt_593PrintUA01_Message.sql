@@ -26,3 +26,11 @@ execute rdt.rdtAddMsg 123169, 10, '23169^nspg_GetKey',    'us_english'
 -- WMS-10521
 execute rdt.rdtAddMsg 123170, 10, '23170^INS PACKInf Fail',    'us_english'
 
+-- WMS-21213
+execute rdt.rdtAddMsg 123171, 10, '23171^Invalid UDF',    'us_english'
+execute rdt.rdtAddMsg 123172, 10, '23172^Need OrderKey',    'us_english'
+execute rdt.rdtAddMsg 123173, 10, '23173^Bad OrderKey',    'us_english'
+execute rdt.rdtAddMsg 123174, 10, '23174^Order shipped',    'us_english'
+execute rdt.rdtAddMsg 123175, 10, '23175^Order cancel',    'us_english'
+execute rdt.rdtAddMsg 123176, 10, '23176^BadOrderStatus',    'us_english'
+execute rdt.rdtAddMsg 123177, 10, '23177^OrdNotLoadPlan',    'us_english'
