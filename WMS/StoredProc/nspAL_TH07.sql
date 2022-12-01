@@ -15,7 +15,7 @@ GO
 /*                                                                       */
 /* Called By: Exceed Allocate Orders (Discrete Only)                     */
 /*                                                                       */
-/* GitLab Version: 1.0                                                   */
+/* GitLab Version: 1.1                                                   */
 /*                                                                       */
 /* Version: 7.0                                                          */
 /*                                                                       */
@@ -24,6 +24,7 @@ GO
 /* Updates:                                                              */
 /* Date         Author     Ver   Purposes                                */
 /* 27-Apr-2022  WLChooi    1.0   DevOps Combine Script                   */
+/* 01-Dec-2022  WLChooi    1.1   Bug Fix - Remove HostWHCode filter(WL01)*/
 /*************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[nspAL_TH07]
@@ -82,7 +83,7 @@ BEGIN
       WHERE LOTxLOCxID.Lot = @c_lot
       AND LOC.Facility = @c_Facility     
       AND LOC.Locationflag NOT IN ('HOLD','DAMAGE')
-      AND LOC.HostWhCode = @c_HostWHCode   
+      --AND LOC.HostWhCode = @c_HostWHCode   --WL01
       AND LOC.Loc = @c_Loc
       AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QTYREPLEN > 0)
       ORDER BY LOC.LogicalLocation, LOC.LOC  
@@ -105,7 +106,7 @@ BEGIN
       AND LOC.Facility = @c_Facility     
       AND LOC.Locationflag NOT IN ('HOLD','DAMAGE')
       AND LOC.[Status] <> 'HOLD'    
-      AND LOC.HostWhCode = @c_HostWHCode   
+      --AND LOC.HostWhCode = @c_HostWHCode   --WL01 
       AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QTYREPLEN > 0)
       ORDER BY LOC.LogicalLocation, LOC.LOC 
    END
