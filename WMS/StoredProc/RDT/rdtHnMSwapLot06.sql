@@ -20,6 +20,8 @@ GO
 /* 15-09-2022  1.2  James       WMS-20788 Use running no as labelno     */
 /*                              Add scanned barcode to                  */
 /*                              PackDetail.LottableValue (james02)      */
+/* 02-12-2022  1.3  James       WMS-20788 Add move orders type generate */
+/*                              labelnologic (james03)                  */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtHnMSwapLot06] (
@@ -86,7 +88,8 @@ BEGIN
            @c_SQLStatement          NVARCHAR(2000),
            @c_SQLParms              NVARCHAR(2000),
            @c_GenLabelNo_SP         NVARCHAR( 20),
-           @nFragileChk             INT
+           @nFragileChk             INT,
+           @cOrderGroup             NVARCHAR( 20)
 
    DECLARE @c_DropID        NVARCHAR( 20)
 
@@ -133,6 +136,13 @@ BEGIN
    END
 
    SELECT @c_UserName = UserName FROM RDT.RDTMOBREC WITH (NOLOCK) WHERE Mobile = @n_Mobile
+
+   SELECT @c_LoadKey = ISNULL(RTRIM(LoadKey),'')    
+         , @c_Route = ISNULL(RTRIM(Route),'')    
+         , @c_ConsigneeKey = ISNULL(RTRIM(ConsigneeKey),'')    
+         , @cOrderGroup = OrderGroup
+   FROM dbo.Orders WITH (NOLOCK)    
+   WHERE Orderkey = @c_Orderkey    
 
    -- If it is not Sales type order then no need swap lot. Check validity of 2D barcode
    IF EXISTS ( SELECT 1 FROM dbo.CODELKUP C WITH (NOLOCK) 
@@ -528,12 +538,6 @@ BEGIN
    -- Create PackHeader if not yet created    
    IF NOT EXISTS (SELECT 1 FROM dbo.PackHeader WITH (NOLOCK) WHERE PickSlipNo = @c_PickSlipNo)    
    BEGIN    
-      SELECT @c_LoadKey = ISNULL(RTRIM(LoadKey),'')    
-           , @c_Route = ISNULL(RTRIM(Route),'')    
-           , @c_ConsigneeKey = ISNULL(RTRIM(ConsigneeKey),'')    
-      FROM dbo.Orders WITH (NOLOCK)    
-      WHERE Orderkey = @c_Orderkey    
-          
       INSERT INTO dbo.PACKHEADER    
       (PickSlipNo, StorerKey, OrderKey, LoadKey, Route, ConsigneeKey, OrderRefNo, TtlCnts, [STATUS])     
       VALUES    
@@ -720,14 +724,15 @@ BEGIN
                  AND PickSlipNo = @c_PickSlipNo    
                  AND CartonNo = @n_CartonNo)    
       BEGIN    
-      	SET @c_LabelNo = @c_TrackNo
-      	/*
-         -- Set label no = tracking no (Only for customer orders)
-         IF @n_SwapLot = 1
-            SET @c_LabelNo = @c_TrackNo
+      	IF @cOrderGroup <> 'MOVE'
+      	   SET @c_LabelNo = @c_TrackNo
+
+         ---- Set label no = tracking no (Only for customer orders)
+         --IF @n_SwapLot = 1
+         --   SET @c_LabelNo = @c_TrackNo
          ELSE
          BEGIN
-         -- (james02)
+         -- (james02)/(james03)
          -- If it is move orders then can apply customize label no logic, 
          -- for sales orders then use tracking no as label no
             SET @c_GenLabelNo_SP = rdt.RDTGetConfig( @n_Func, 'PackByTrackNoGenLabelNo_SP', @c_Storerkey) 
@@ -784,7 +789,7 @@ BEGIN
                END    
             END
          END
-         */
+
          -- CartonNo = 0 & LabelLine = '0000', trigger will auto assign    
          INSERT INTO dbo.PackDetail    
             (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, Refno, AddWho, AddDate, EditWho, EditDate, DropID, UPC, LOTTABLEVALUE)    
