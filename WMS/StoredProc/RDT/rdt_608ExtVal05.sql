@@ -17,7 +17,7 @@ GO
 /* 2022-08-30   Ung       1.3   WMS-20251 Add receive by carton               */
 /******************************************************************************/
 
-CREATE OR ALTER PROCEDURE [RDT].[rdt_608ExtVal05]
+CREATE  OR ALTER  PROCEDURE [RDT].[rdt_608ExtVal05]
    @nMobile       INT,
    @nFunc         INT,
    @cLangCode     NVARCHAR( 3),
@@ -116,7 +116,8 @@ BEGIN
                FROM dbo.Receipt R WITH (NOLOCK) 
                   JOIN dbo.ReceiptDetail RD WITH (NOLOCK) ON (R.ReceiptKey = RD.ReceiptKey)
                WHERE R.ReceiptKey = @cReceiptKey
-                  AND RD.UserDefine08 = @cRefNo) -- Carton ID
+                  AND RD.UserDefine08 = @cRefNo
+                  AND ISNULL(RD.UserDefine08,'')<>'') -- Carton ID
             BEGIN
                -- Check SKU in carton ID
                IF NOT EXISTS( SELECT TOP 1 1 
