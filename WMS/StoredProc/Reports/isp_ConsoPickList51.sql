@@ -34,6 +34,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author    Version    Purposes                           */
 /* 05-SEP-2022  CHONGCS   1.0        Devops Scripts Combine             */
+/* 07-Nov-2022  CHONGCS   1.1        Fix sorting issue (CS01)           */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_ConsoPickList51] 
                            (@c_LoadKey     NVARCHAR(10)
@@ -131,7 +132,7 @@ BEGIN
    SET @n_InnerPack  = 0.00
 
     CREATE TABLE #temp_cosopick51
-    (
+    (  rowno            INT  IDENTITY(1,1) NOT NULL,   --CS01 
        PickSlipNo       NVARCHAR(10),
        LoadKey          NVARCHAR(10),
        OrderKey         NVARCHAR(10),
@@ -162,6 +163,7 @@ BEGIN
     ,  Lottable06       NVARCHAR(30) NULL
     ,  RetailSKU        NVARCHAR(20) NULL  
     ,  LPCarrierkey     NVARCHAR(20) NULL
+    ,  Logicalloc       NVARCHAR(18) NULL      --CS01
     )
 
     SELECT @n_continue = 1,
@@ -205,7 +207,7 @@ BEGIN
                PickDetail.Packkey,
                LOC.Pickzone AS Pickzone,
                Loadplan.Route,
-               S.RETAILSKU,LoadPlanDetail.ExternOrderKey,ISNULL(Loadplan.carrierkey,'')
+               S.RETAILSKU,LoadPlanDetail.ExternOrderKey,ISNULL(Loadplan.carrierkey,''),loc.LogicalLocation   --CS01
         FROM   PickDetail(NOLOCK)
                JOIN LoadPlanDetail  (NOLOCK) ON PickDetail.OrderKey = LoadPlanDetail.OrderKey
                JOIN LoadPlan   (NOLOCK) ON LoadPlan.Loadkey = LoadPlanDetail.Loadkey
@@ -224,15 +226,17 @@ BEGIN
                Pickdetail.Lot,
                PickDetail.Packkey,
                 LOC.Pickzone ,
-               Loadplan.Route,s.RETAILSKU,LoadPlanDetail.ExternOrderKey,Loadplan.carrierkey
+               Loadplan.Route,s.RETAILSKU,LoadPlanDetail.ExternOrderKey,Loadplan.carrierkey,LogicalLocation    --CS01
 
         ORDER BY
-               PickDetail.ORDERKEY
+               loc.LogicalLocation,PickDetail.ORDERKEY    --CS01
 
     OPEN pick_cur
     SELECT @c_PrevOrderKey = ''
     FETCH NEXT FROM pick_cur INTO @c_sku, @c_loc, @n_Qty, @n_uom3, @c_storerkey,
-                                  @c_orderkey, @c_UOM, @c_lot, @c_packkey, @c_pickzone,@c_LRoute,@c_retailsku,@c_LPExtorderkey,@c_LPCarrierkey
+                                  @c_orderkey, @c_UOM, @c_lot, @c_packkey, @c_pickzone,@c_LRoute,@c_retailsku,@c_LPExtorderkey,@c_LPCarrierkey,
+                                  @c_logicalloc
+
 
     WHILE (@@FETCH_STATUS<>-1)
     BEGIN
@@ -401,6 +405,7 @@ BEGIN
           , Lottable06
           ,  RetailSKU
           ,  LPCarrierkey
+        --  ,  Logicalloc                   --CS01
           )
         VALUES
           (
@@ -434,11 +439,13 @@ BEGIN
           , @c_Lottable06
           , @c_retailsku
           , @c_LPCarrierkey
+         -- , @c_logicalloc                 --CS01
           )
 
        -- SELECT @c_PrevOrderKey = @c_OrderKey
         FETCH NEXT FROM pick_cur INTO @c_sku, @c_loc, @n_Qty, @n_uom3, @c_storerkey,
-                                  @c_orderkey, @c_UOM, @c_lot, @c_packkey, @c_pickzone,@c_LRoute,@c_retailsku,@c_LPExtorderkey,@c_LPCarrierkey
+                                  @c_orderkey, @c_UOM, @c_lot, @c_packkey, @c_pickzone,@c_LRoute,@c_retailsku,@c_LPExtorderkey,@c_LPCarrierkey,
+                                  @c_logicalloc    --CS01
     END
     CLOSE pick_cur
     DEALLOCATE pick_cur
@@ -503,7 +510,7 @@ BEGIN
           , #temp_cosopick51.LPCarrierkey
      FROM   #temp_cosopick51
      WHERE #temp_cosopick51.LoadKey=@c_LoadKey
-     ORDER BY  #temp_cosopick51.PickSlipNo, #temp_cosopick51.LoadKey, #temp_cosopick51.pickzone, #temp_cosopick51.LOC, #temp_cosopick51.sku,#temp_cosopick51.OrderKey
+     ORDER BY  #temp_cosopick51.rowNo,#temp_cosopick51.PickSlipNo, #temp_cosopick51.LoadKey, #temp_cosopick51.pickzone, #temp_cosopick51.LOC, #temp_cosopick51.sku,#temp_cosopick51.OrderKey
   END 
   ELSE
   BEGIN
