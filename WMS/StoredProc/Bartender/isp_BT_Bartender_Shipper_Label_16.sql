@@ -1,6 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[isp_BT_Bartender_Shipper_Label_16]') AND OBJECTPROPERTY(Id, N'IsProcedure') = 1 )
-   DROP PROCEDURE [dbo].[isp_BT_Bartender_Shipper_Label_16]
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,9 +14,11 @@ GO
 /* 2020-04-30 1.1  WLChooi    Remove Traceinfo Insertion (WL01)               */
 /* 2020-10-27 1.2  CSCHONG    Performance Tunning (CS01)                      */
 /* 2020-07-13 1.3  WLChooi    WMS-14184 - Add column level decryption (WL02)  */
+/* 2022-11-30 1.4  WLChooi    WMS-21251 - Mask Customer Details (WL03)        */
+/* 2022-11-30 1.4  WLChooi    DevOps Combine Script                           */
 /******************************************************************************/  
   
-CREATE PROC [dbo].[isp_BT_Bartender_Shipper_Label_16]  
+CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_Shipper_Label_16]  
 (  @c_Sparm1            NVARCHAR(250),  
    @c_Sparm2            NVARCHAR(250),  
    @c_Sparm3            NVARCHAR(250),  
@@ -538,7 +537,10 @@ BEGIN
           Col11 = @c_col11,  
           Col57 = @c_col57,  
           Col58 = @c_col58,  
-          Col60 = @c_col60  
+          Col60 = @c_col60,
+          Col31 = CASE WHEN LEN(Col31) > 0 THEN LEFT(Col31, 1) + REPLICATE('*', (LEN(Col31) - 1)) ELSE Col31 END,    --WL03
+          Col32 = CASE WHEN LEN(Col32) > 4 THEN REPLICATE('*', (LEN(Col32) - 4)) + RIGHT(Col32, 4) ELSE Col32 END,   --WL03
+          Col33 = CASE WHEN LEN(Col33) > 4 THEN REPLICATE('*', (LEN(Col33) - 4)) + RIGHT(Col33, 4) ELSE Col33 END    --WL03
       WHERE Col02=@c_OrderKey  
   
      INSERT INTO @t_PICK (OrderKey,TTLPICKQTY,PickZone,picknotes)  
