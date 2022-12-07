@@ -1,7 +1,3 @@
-IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[isp_Delivery_Note19_RDT]') AND type in (N'P', N'PC'))
-DROP PROCEDURE [dbo].[isp_Delivery_Note19_RDT]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -35,9 +31,10 @@ GO
 /* 27-Jul-2020  WLChooi  1.6   WMS-14388 - Modify sorting for INDIA(WL01)*/
 /* 08-Sep-2020  WLChooi  1.7   WMS-14388 - Sorting only for Single PCS   */
 /*                             Order (WL02)                              */
+/* 02-Dec-2022  Mingle   1.8   WMS-21185 - revise fields for KR(ML01)    */
 /*************************************************************************/
 
-CREATE PROC [dbo].[isp_Delivery_Note19_RDT] 
+CREATE OR ALTER PROC [dbo].[isp_Delivery_Note19_RDT] 
          (  @c_Orderkey    NVARCHAR(10)
          ,  @c_Loadkey     NVARCHAR(10)= ''
          ,  @c_Type        NVARCHAR(1) = ''
@@ -305,11 +302,12 @@ BEGIN
 
 --SELECT * FROM #TMP_ORDH
 --ORDER BY SeqNo
-        
+        --exec isp_Delivery_Note19_RDT '0000000215','','','H','0'
          SET @c_ExecStatements = 'SELECT DISTINCT  TMP.Seqno' +
             ',OH.Orderkey ' +
-            ',A1= CASE WHEN @c_country <> ''IN'' THEN OH.C_Company + ISNULL(MAX(CASE WHEN CL.Code =''A1'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' +  --CS05
-            ' ELSE ISNULL(MAX(CASE WHEN CL.Code =''A1'' THEN RTRIM(CL.Description) ELSE '''' END),'''') + space(2) + OH.C_Company END' +                                  --CS05
+            ',A1= CASE WHEN @c_country = ''KR'' THEN OH.C_Contact1 + ISNULL(MAX(CASE WHEN CL.Code =''A1'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' +  --CS05	--ML01
+				'          WHEN @c_country <>  ''IN'' THEN OH.C_Company + ISNULL(MAX(CASE WHEN CL.Code =''A1'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' +
+            '          ELSE ISNULL(MAX(CASE WHEN CL.Code =''A1'' THEN RTRIM(CL.Description) ELSE '''' END),'''') + space(2) + OH.C_Company END' +                                  --CS05                                 
             ',A2=ISNULL(MAX(CASE WHEN CL.Code =''A2'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' +
             ',A3=ISNULL(MAX(CASE WHEN CL.Code =''A3'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' +
             ',A4=ISNULL(MAX(CASE WHEN CL.Code =''A4'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' +
@@ -321,13 +319,15 @@ BEGIN
             ',A14=ISNULL(MAX(CASE WHEN CL.Code =''A14'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' +
             ',A15=ISNULL(RTRIM(OH.BuyerPO),'''') ' +
             ',A16=ISNULL(RTRIM(CONVERT(NVARCHAR(10),OH.OrderDate,112)),'''') ' + 
-            ',A17=ISNULL(RTRIM(MAX(OH.Notes2)),'''') ' +
-            ',A18_1=(ISNULL(RTRIM(OH.C_Company),'''') + ISNULL(RTRIM(ST.B_Contact2),'''') ) ' + 
-            ',A18_2=ISNULL(RTRIM(OH.C_Zip),'''') ' + 
-            ',A18_3=ISNULL(RTRIM(OH.C_State),'''') ' +
-            ',A18_4=ISNULL(RTRIM(OH.C_City),'''') ' +
-            ',A18_5=ISNULL(RTRIM(C_Address1),'''') ' +                                                                  --(CS02)
-            ',A18_6=ISNULL(RTRIM(C_Address2),'''') + ISNULL(RTRIM(C_Address3),'''') + ISNULL(RTRIM(C_Address4),'''') ' +
+				--START ML01
+            ',A17=CASE WHEN @c_country = ''KR'' THEN '''' ELSE ISNULL(RTRIM(MAX(OH.Notes2)),'''') END ' +
+            ',A18_1=CASE WHEN @c_country = ''KR'' THEN '''' ELSE (ISNULL(RTRIM(OH.C_Company),'''') + ISNULL(RTRIM(ST.B_Contact2),'''') ) END ' + 
+            ',A18_2=CASE WHEN @c_country = ''KR'' THEN '''' ELSE ISNULL(RTRIM(OH.C_Zip),'''') END ' + 
+            ',A18_3=CASE WHEN @c_country = ''KR'' THEN '''' ELSE ISNULL(RTRIM(OH.C_State),'''') END ' +
+            ',A18_4=CASE WHEN @c_country = ''KR'' THEN '''' ELSE ISNULL(RTRIM(OH.C_City),'''') END ' +
+            ',A18_5=CASE WHEN @c_country = ''KR'' THEN '''' ELSE ISNULL(RTRIM(C_Address1),'''') END' +                                                                  --(CS02)
+            ',A18_6=CASE WHEN @c_country = ''KR'' THEN '''' ELSE ISNULL(RTRIM(C_Address2),'''') + ISNULL(RTRIM(C_Address3),'''') + ISNULL(RTRIM(C_Address4),'''') END' +
+				--END ML01
             ',B1=ISNULL(MAX(CASE WHEN CL.Code =''B1'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' +
             ',B2=ISNULL(MAX(CASE WHEN CL.Code =''B2'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' + 
             ',B9=ISNULL(MAX(CASE WHEN CL.Code =''B9'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' +
@@ -362,6 +362,7 @@ BEGIN
             ' WHERE ' + @c_ExecWhere +
             ' GROUP BY TMP.Seqno,OH.Orderkey' + 
             ',OH.Storerkey' + 
+				',OH.C_Contact1' +  --ML01
             ',OH.C_Company' +  
             ',ISNULL(RTRIM(OH.Notes),'''') ' + 
             ',ISNULL(RTRIM(OH.Notes2),'''') ' +  
@@ -980,4 +981,7 @@ GO
        
 GRANT EXECUTE ON isp_Delivery_Note19_RDT TO NSQL
 GO     
+
+
+
 
