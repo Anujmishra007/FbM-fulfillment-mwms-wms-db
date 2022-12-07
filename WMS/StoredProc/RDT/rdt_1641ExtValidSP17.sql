@@ -15,6 +15,7 @@ GO
 /* 2021-11-05 1.0  Chermaine  WMS-18186 Created                               */        
 /* 2022-04-25 1.1  YeeKung    Performance Tune (yeekung01)                    */   
 /* 2022-05-20 1.2  YeeKung    WMS-19685 Modify validation(yeekung02)          */
+/* 2022-12-01 1.3  YeeKung    WMS-21215 Add validation(yeekung03)             */
 /******************************************************************************/          
           
 CREATE OR ALTER PROC rdt.rdt_1641ExtValidSP17 (         
@@ -56,7 +57,8 @@ BEGIN
            @nCartonNo         INT,            
            @nDebug            INT,
            @cOrderGroup       NVARCHAR(20),
-           @cAccomPlatform    NVARCHAR( 30)
+           @cAccomPlatform    NVARCHAR( 30),
+           @cBID              NVARCHAR(20)
                    
    SET @nDebug = 0          
              
@@ -82,7 +84,8 @@ BEGIN
             @cSalesMan = O.Salesman,        
             @cPlatform = ISNULL(C.Long,''),
             @cOrderGroup = O.ordergroup,
-            @cAccomPlatform = OI.Platform
+            @cAccomPlatform = OI.Platform,
+            @cBID       = O.userdefine10 --(yeekung03)
          From PackDetail PD WITH (NOLOCK)         
          JOIN PackHeader PH WITH (NOLOCK) ON (PH.StorerKey = PD.StorerKey AND PH.PickSlipNo = PD.PickSlipNo)        
          JOIN Orders O WITH (NOLOCK) ON (PH.StorerKey = O.StorerKey AND O.OrderKey = PH.OrderKey)     
@@ -107,7 +110,8 @@ BEGIN
                @cSalesMan = O.Salesman,        
                @cPlatform = ISNULL(C.Long,''),
                @cOrderGroup = O.ordergroup,
-            @cAccomPlatform = OI.Platform
+               @cAccomPlatform = OI.Platform,
+               @cBID       = O.userdefine10 --(yeekung03)
             From PackDetail PD WITH (NOLOCK)         
             JOIN PackHeader PH WITH (NOLOCK) ON (PH.StorerKey = PD.StorerKey AND PH.PickSlipNo = PD.PickSlipNo)        
             JOIN Orders O WITH (NOLOCK) ON (PH.StorerKey = O.StorerKey AND O.OrderKey = PH.OrderKey)        
@@ -192,7 +196,8 @@ BEGIN
                      WHERE PltD.Palletkey = @cDropID            
                      AND PltD.StorerKey = @cStorerKey            
                      AND (O.C_Country <> @cOdrCountry            
-                     OR O.Route <> @cRoute)         
+                     OR O.Route <> @cRoute
+                     OR O.Userdefine10 <> @cBID) --(yeekung03)         
                      AND PltD.caseID <> '')                                
             BEGIN        
                SET @nErrNo = 178506          

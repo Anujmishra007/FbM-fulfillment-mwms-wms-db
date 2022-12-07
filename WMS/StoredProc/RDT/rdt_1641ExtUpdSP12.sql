@@ -16,6 +16,7 @@ GO
 /* Date        Rev  Author    Purposes                                  */  
 /* 2021-11-05  1.0  Chermaine WMS-18186 Created                         */
 /* 2022-05-20  1.1  YeeKung   WMS-19685 Left country,2 (yeekung01)      */
+/* 2022-12-01  1.2  YeeKung   WMS-21215 Add userdefine10(yeekung02)     */
 /************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_1641ExtUpdSP12] (  
@@ -60,7 +61,8 @@ BEGIN
             @cTrackingNumber06 NVARCHAR(20)='',
             @cTrackingNumber07 NVARCHAR(20)='', 
             @cPalletCaseID NVARCHAR(20),
-            @cOrderGroup   NVARCHAR(20)
+            @cOrderGroup   NVARCHAR(20),
+            @cBID          NVARCHAR(20) --(yeekung02)
 
    SELECT @nStep = Step,
           @nInputKey = InputKey,
@@ -122,7 +124,8 @@ BEGIN
             @cRoute = ROUTE,
             @cShipperKey = shipperKey,
             @cSalesMan = Salesman,
-            @cOrderGroup = ordergroup
+            @cOrderGroup = ordergroup,
+            @cBID    = userdefine10
          FROM Orders WITH (NOLOCK)
          WHERE StorerKey = @cStorerKey
          AND OrderKey =  @cOrderKey
@@ -161,7 +164,7 @@ BEGIN
             INSERT INTO dbo.PalletDetail 
             (PalletKey, PalletLineNumber, CaseId, StorerKey, Sku, Qty, UserDefine01, UserDefine02) 
             VALUES
-            (@cDropID, @cPalletLineNumber, @cCartonID, @cStorerKey, @cSKU, @nPD_Qty, @cOdrCountry+@cRoute, @cOrderKey)  
+            (@cDropID, @cPalletLineNumber, @cCartonID, @cStorerKey, @cSKU, @nPD_Qty, @cOdrCountry+@cRoute+@cBID, @cOrderKey)  --(yeekung02)
 
             IF @@ERROR <> 0
             BEGIN
