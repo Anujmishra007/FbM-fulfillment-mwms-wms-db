@@ -43,6 +43,7 @@ GO
 /* 28-MAY-2019  TLTING01 1.10  Performance tunning (CS07)               */
 /* 12-Jun-2020  TLTING02 1.11  Performance tunning                      */
 /* 13-JUL-2022  CSCHONG  1.12  WMS-20223 add report config (CS08)       */
+/* 20-Oct-2022  CSCHONG  1.13  Devops Scripts Combine & WMS-20999(CS09) */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_CartonManifestLabel24_rdt] (
@@ -196,7 +197,7 @@ BEGIN
   --JOIN LoadPlanDetail LoadPlanDetail WITH (NOLOCK) ON (Orders.OrderKey = LoadplanDetail.OrderKey)         --(CS04)
   JOIN Packheader Packheader WITH (NOLOCK) ON (Orders.LoadKey = Packheader.LoadKey)                         --(CS04)
   JOIN Packdetail Packdetail WITH (NOLOCK) ON (Packheader.Pickslipno = Packdetail.pickslipno AND OrderDetail.Storerkey = PackDetail.Storerkey  --tlting01
-									AND OrderDetail.SKU = PackDetail.SKU)
+                           AND OrderDetail.SKU = PackDetail.SKU)
   --CS06 Start
   JOIN SKU S WITH (NOLOCK) ON S.Storerkey = Packdetail.storerkey and S.Sku = Packdetail.sku --and s.itemclass = LEFT(Packdetail.sku,6) + SUBSTRING(Packdetail.sku,7,3)
   LEFT JOIN CODELKUP CT WITH (NOLOCK) ON CT.Listname = 'Category' AND CT.Storerkey = Orders.Storerkey AND CT.code = S.susr4
@@ -330,10 +331,17 @@ BEGIN
    IF @n_cntRefno > 1
    BEGIN
     UPDATE #TMP_CartonLBL24
-    SET loadkey = ISNULL(@c_RefNo,'') + '-' +loadkey
+    SET loadkey = ISNULL(@c_RefNo,'') + '-' + Pickslipno   --CS09
     FROM #TMP_CartonLBL24
     WHERE Pickslipno = @c_PickSlipNo
    END
+   ELSE    --CS09 S
+   BEGIN
+    UPDATE #TMP_CartonLBL24
+    SET loadkey = Pickslipno   
+    FROM #TMP_CartonLBL24
+    WHERE Pickslipno = @c_PickSlipNo
+   END   --CS09 E
 
   /*CS03 End*/
 
