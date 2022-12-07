@@ -12,6 +12,7 @@ GO
 /* 2016-05-09 1.0  CSCHONG    Created (WMS-3450)                              */  
 /* 2021-08-11 1.1  MINGLE     Add new columns(WMS-17578(ML01)                 */  
 /* 2022-07-11 1.2  MINGLE     Add new column(WMS-20121)(ML02)                 */  
+/* 2022-10-27 1.3  MINGLE     Add new column(WMS-21005)(ML03)                 */ 
 /******************************************************************************/  
   
 CREATE OR ALTER  PROC [dbo].[isp_Bartender_CustomLabel_KR_NIKE]  
@@ -54,7 +55,7 @@ BEGIN
            @c_mode             NVARCHAR(1),  
            @c_sku              NVARCHAR(20),  
            @c_condition        NVARCHAR(150) ,  
-           @c_GroupBy          NVARCHAR(200),  
+           @c_GroupBy          NVARCHAR(500),  
            @c_ExecStatements   NVARCHAR(4000),  
            @c_ExecArguments    NVARCHAR(4000)  
   
@@ -182,7 +183,8 @@ BEGIN
        END  
   
       SET @c_GroupBy = ' GROUP BY U.Uccno,RECDET.ExternReceiptkey,Substring(RECDET.Sku,1,9),C.UDF01,RECDET.SKU,S.Altsku,S.Descr,S.putawayzone,U.editdate,'+ CHAR(13)  
-                          +' S.ReceiptInspectionLoc,S.ReceiptHoldCode,U.Userdefined01' --ML01 --ML02  
+                          +' S.ReceiptInspectionLoc,S.ReceiptHoldCode,U.Userdefined01,'+ CHAR(13) --ML01 --ML02  
+								  +' SI.ExtendedField01,SI.ExtendedField02,SI.ExtendedField03,s.SUSR1,s.SUSR2,s.SUSR3'	--ML03
   
    DECLARE CUR_RESULT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
    SELECT DISTINCT SKU  
@@ -200,8 +202,8 @@ BEGIN
              + ' S.Altsku,S.Descr,C.UDF01,''0'','''', '      --10  
              + ' s.putawayzone,U.editdate,S.ReceiptInspectionLoc,S.ReceiptHoldCode,U.Userdefined01,'     --15   --ML01 --ML02  
              + CHAR(13) +  
-             + ' '''','''','''','''','''','         --20  
-              + ' '''','''','''','''','''','''','''','''','''','''','  --30  
+             + ' SI.ExtendedField01,SI.ExtendedField02,SI.ExtendedField03,s.SUSR1,s.SUSR2,'         --20	--ML03  
+             + ' s.SUSR3,'''','''','''','''','''','''','''','''','''','  --30	--ML03  
              + ' '''','''','''','''','''','''','''','''','''','''','   --40  
              + ' '''','''','''','''','''','''','''','''','''','''', '  --50  
              + ' '''','''','''','''','''','''','''','''','''','''' '   --60  
@@ -211,6 +213,7 @@ BEGIN
              + ' JOIN RECEIPTDETAIL RECDET WITH (NOLOCK) ON RECDET.receiptkey=  U.receiptkey AND RECDET.receiptlinenumber = U.receiptlinenumber'  
              + ' JOIN RECEIPT REC WITH (NOLOCK) ON REC.Receiptkey=RECDET.Receiptkey'  
              + ' JOIN SKU s WITH (NOLOCK) ON s.storerkey = RECDET.storerkey AND s.sku=RECDET.sku'  
+				 + ' LEFT JOIN SKUINFO SI WITH (NOLOCK) ON SI.storerkey = s.storerkey AND SI.sku=s.sku'	--ML03
              + ' LEFT JOIN CODELKUP C WITH (NOLOCK) ON C.listname = ''SKUGROUP'' and C.code = s.Busr7'  
             -- + ' WHERE U.Uccno =''' + @c_Sparm01+ ''' '  
              + ' WHERE U.SKU =  @c_sku '  
@@ -291,5 +294,10 @@ BEGIN
    GO
    GRANT EXECUTE ON [dbo].[isp_Bartender_CustomLabel_KR_NIKE] TO nSQL 
    GO
+
+	--EXEC isp_Bartender_CustomLabel_KR_NIKE '00047100830080806254','','','','','','','','',''
+
+
+
   
   
