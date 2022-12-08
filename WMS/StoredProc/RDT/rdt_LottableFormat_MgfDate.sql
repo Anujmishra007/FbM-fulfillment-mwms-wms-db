@@ -11,7 +11,7 @@ GO
 /*                                                                            */
 /* Date        Author    Ver.  Purposes                                       */
 /* 03-10-2020  Ung       1.0   WMS-20822 Created                              */
-/* 12-10-2022  YeeKung   1.1   WMS-20737 Add lottable15 validation(yeekung01) */
+/* 12-10-2022  YeeKung   1.1   WMS-20737 Add lottable15 validation(yeekung01) */ 
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_LottableFormat_MgfDate]
@@ -35,9 +35,10 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
+   DECLARE @cLottable01 NVARCHAR( 18)
    DECLARE @cMasterCase NVARCHAR( 60) = ''
    DECLARE @cMFGDateYMD NVARCHAR( 60) = ''
-   DECLARE @cLottable01 NVARCHAR( 18)
+   DECLARE @cMFGDate    NVARCHAR( 10)
    DECLARE @dMFGDate    DATETIME
 
    -- Get session info
@@ -68,7 +69,7 @@ BEGIN
       GOTO Quit
    END
    
-   DECLARE @cMFGDate NVARCHAR( 10)
+   -- Convert to DMY
    SET @cMFGDate = 
       SUBSTRING( @cMFGDateYMD, 5, 2) + '/' + -- DD
       SUBSTRING( @cMFGDateYMD, 3, 2) + '/' + -- MM
@@ -93,10 +94,11 @@ BEGIN
       GOTO Quit
    END
    
-   SET @dMFGDate =  rdt.rdtConvertToDate(@cMFGDate)
-
-
-   IF  @dMFGDate > getdate()
+   -- Convert to date
+   SET @dMFGDate = rdt.rdtConvertToDate( @cMFGDate)
+   
+   -- Check future date
+   IF @dMFGDate > GETDATE()
    BEGIN
       SET @nErrNo = 192354
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Future MfgDate
