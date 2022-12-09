@@ -218,7 +218,7 @@ BEGIN
    LEFT JOIN STORER ST WITH (NOLOCK) ON ST.Storerkey = ORDERS.Consigneekey AND ST.consigneefor = 'LOGITECH'     --CS01  
    LEFT JOIN SERIALNO SN  WITH (NOLOCK) ON (SN.PickSlipNo = PACKDETAIL.PickSlipNo   --WL02  
                                         AND SN.CartonNo = PACKDETAIL.CartonNo       --WL02  
-                                        AND SN.LabelLine = PACKDETAIL.LabelLine)     --WL02  
+                                        AND SN.LabelLine = PACKDETAIL.LabelLine     --WL02  
                                         AND SN.ExternStatus NOT IN ('CANC') )       --WL04  
    CROSS APPLY (SELECT TOP 1 LA.Lottable05                                                --WL02  
                 FROM PickDetail PD WITH (NOLOCK)                                          --WL02  
