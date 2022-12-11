@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdtfnc_ECOMM]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdtfnc_ECOMM]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -32,9 +28,11 @@ GO
 /* 2021-03-18 1.9  James    WMS-16541 Prompt error when orders contain  */
 /*                          > 1 tote (james05)                          */
 /* 2021-09-13 2.0  CheeMun  JSM-19632 Extend @fLWeight length           */
+/* 2022-11-06 2.1  James    WMS-21082 Add new param ExtendedInfoSP      */
+/*                          Add ExtendedInfoSP into step 2 & 3 (james06)*/
 /************************************************************************/  
   
-CREATE PROC [RDT].[rdtfnc_ECOMM] (  
+CREATE OR ALTER PROC [RDT].[rdtfnc_ECOMM] (  
    @nMobile    INT,  
    @nErrNo     INT  OUTPUT,  
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 nvarchar max  
@@ -107,7 +105,9 @@ DECLARE
    @cSerialNoCapture    NVARCHAR( 1),
    @cPickSlipNo         NVARCHAR( 10),
    @cMultiToteOrdersNotAllow  NVARCHAR( 1),  -- (james05)
-
+   @nAfterStep          INT,
+   @tExtendedInfo       VARIABLETABLE,
+   
    @c_oFieled01 NVARCHAR(20), @c_oFieled02 NVARCHAR(20),  
    @c_oFieled03 NVARCHAR(20), @c_oFieled04 NVARCHAR(20),  
    @c_oFieled05 NVARCHAR(20), @c_oFieled06 NVARCHAR(20),  
@@ -172,6 +172,7 @@ SELECT
    
    @cTTLPickedQty    = V_Integer1, 
    @cTTLScannedQty   = V_Integer2, 
+   @nAfterStep       = V_Integer3, 
    
    @cExtendedUpdateSP   = V_String1,  
    @cExtendedValidateSP = V_String2,   
@@ -292,7 +293,7 @@ BEGIN
    -- Set the entry point  
    SET @nScn = 4680 
    SET @nStep = 1  
-  
+   SET @nAfterStep = 1
 
   
    -- Get prefer UOM  
@@ -401,7 +402,8 @@ BEGIN
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')    
          BEGIN    
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +     
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @cUserName, @cFacility, @cStorerKey, @cDropID, @cSKU, @cOption, @cOrderKey OUTPUT, @cTrackNo OUTPUT, @cCartonType OUTPUT, @cWeight OUTPUT, @cTaskStatus OUTPUT, @cTTLPickedQty OUTPUT, @cTTLScannedQty OUTPUT,' +     
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @cUserName, @cFacility, @cStorerKey, @cDropID, @cSKU, @cOption, ' + 
+               ' @cOrderKey OUTPUT, @cTrackNo OUTPUT, @cCartonType OUTPUT, @cWeight OUTPUT, @cTaskStatus OUTPUT, @cTTLPickedQty OUTPUT, @cTTLScannedQty OUTPUT,' +     
                ' @nErrNo OUTPUT, @cErrMsg OUTPUT'    
             SET @cSQLParam =    
                '@nMobile        INT,            ' +    
@@ -425,7 +427,8 @@ BEGIN
                '@cErrMsg        NVARCHAR( 20) OUTPUT'    
                 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,     
-               @nMobile, @nFunc, @cLangCode, @nStep, @cUserName, @cFacility, @cStorerKey, @cDropID, @cSKU, @cOption, @cOrderKey OUTPUT, @cTrackNo OUTPUT, @cCartonType OUTPUT, @cWeight OUTPUT, @cTaskStatus OUTPUT, @cTTLPickedQty OUTPUT, @cTTLScannedQty OUTPUT,
+               @nMobile, @nFunc, @cLangCode, @nStep, @cUserName, @cFacility, @cStorerKey, @cDropID, @cSKU, @cOption, 
+               @cOrderKey OUTPUT, @cTrackNo OUTPUT, @cCartonType OUTPUT, @cWeight OUTPUT, @cTaskStatus OUTPUT, @cTTLPickedQty OUTPUT, @cTTLScannedQty OUTPUT,
                @nErrNo OUTPUT, @cErrMsg OUTPUT    
         
             IF @nErrNo <> 0    
@@ -450,47 +453,12 @@ BEGIN
             GOTO Step_1_Fail      
          END
 
-         IF @cExtendedInfoSP <> ''    
-         BEGIN    
-            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')    
-            BEGIN    
-               SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +     
-                  ' @nMobile, @nFunc, @cLangCode, @nStep, @cUserName, @cFacility, @cStorerKey, @cDropID, @cOutfield01 OUTPUT, @cOutfield02 OUTPUT, @cOutfield03 OUTPUT, @cOutfield04 OUTPUT, @cOutfield05 OUTPUT, @cOutfield06 OUTPUT, ' +     
-                  ' @nErrNo OUTPUT, @cErrMsg OUTPUT'    
-               SET @cSQLParam =    
-                  '@nMobile        INT,            ' +    
-                  '@nFunc          INT,            ' +    
-                  '@cLangCode      NVARCHAR(3),    ' +    
-                  '@nStep          INT,            ' +    
-                  '@cUserName      NVARCHAR( 18),  ' +     
-                  '@cFacility      NVARCHAR( 5),   ' +     
-                  '@cStorerKey     NVARCHAR( 15),  ' +     
-                  '@cDropID        NVARCHAR( 20),  ' +     
-                  '@cOutField01    NVARCHAR( 20) OUTPUT,  ' +
-                  '@cOutField02    NVARCHAR( 20) OUTPUT,  ' +
-                  '@cOutField03    NVARCHAR( 20) OUTPUT,  ' +
-                  '@cOutField04    NVARCHAR( 20) OUTPUT,  ' +
-                  '@cOutField05    NVARCHAR( 20) OUTPUT,  ' +
-                  '@cOutField06    NVARCHAR( 20) OUTPUT,  ' +
-                  '@nErrNo         INT OUTPUT, ' +      
-                  '@cErrMsg        NVARCHAR( 20) OUTPUT'    
-                   
-               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,     
-                   @nMobile, @nFunc, @cLangCode, @nStep, @cUserName, @cFacility, @cStorerKey, @cDropID, @cOutfield01 OUTPUT, @cOutfield02 OUTPUT, @cOutfield03 OUTPUT, @cOutfield04 OUTPUT, @cOutfield05 OUTPUT, @cOutfield06 OUTPUT, 
-                   @nErrNo OUTPUT, @cErrMsg OUTPUT
-           
-               IF @nErrNo <> 0    
-                  GOTO Step_1_Fail    
-            END    
-         END  -- IF @cExtendedInfoSP <> ''    
-         
-         
          SET @cOutField07 = ''
          
           -- GOTO Next Screen        
          SET @nScn = @nScn + 4        
          SET @nStep = @nStep + 4        
-                 
+         SET @nAfterStep = @nStep
          
       END
       ELSE IF @cTaskStatus = '9'
@@ -506,7 +474,8 @@ BEGIN
          -- GOTO Next Screen        
          SET @nScn = @nScn + 1        
          SET @nStep = @nStep + 1        
-                 
+         SET @nAfterStep = @nStep
+         
          EXEC rdt.rdtSetFocusField @nMobile, 4        
       END
       
@@ -546,6 +515,48 @@ BEGIN
   
   
    END      
+
+   IF @cExtendedInfoSP <> ''    
+   BEGIN    
+      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')    
+      BEGIN    
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +     
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cUserName, @cFacility, @cStorerKey, @cDropID, @cSKU, @cOrderKey, ' + 
+            ' @cOutfield01 OUTPUT, @cOutfield02 OUTPUT, @cOutfield03 OUTPUT, @cOutfield04 OUTPUT, @cOutfield05 OUTPUT, @cOutfield06 OUTPUT, ' +     
+            ' @tExtendedInfo, @nErrNo OUTPUT, @cErrMsg OUTPUT'    
+         SET @cSQLParam =    
+            '@nMobile        INT,            ' +    
+            '@nFunc          INT,            ' +    
+            '@cLangCode      NVARCHAR(3),    ' +    
+            '@nStep          INT,            ' +    
+            '@nAfterStep     INT,            ' +
+            '@nInputKey      INT,            ' +
+            '@cUserName      NVARCHAR( 18),  ' +     
+            '@cFacility      NVARCHAR( 5),   ' +     
+            '@cStorerKey     NVARCHAR( 15),  ' +     
+            '@cDropID        NVARCHAR( 20),  ' +     
+            '@cSKU           NVARCHAR( 20),  ' +
+            '@cOrderKey      NVARCHAR( 20),  ' +
+            '@cOutField01    NVARCHAR( 20) OUTPUT,  ' +
+            '@cOutField02    NVARCHAR( 20) OUTPUT,  ' +
+            '@cOutField03    NVARCHAR( 20) OUTPUT,  ' +
+            '@cOutField04    NVARCHAR( 20) OUTPUT,  ' +
+            '@cOutField05    NVARCHAR( 20) OUTPUT,  ' +
+            '@cOutField06    NVARCHAR( 20) OUTPUT,  ' +
+            '@tExtendedInfo  VariableTable READONLY,   ' +
+            '@nErrNo         INT OUTPUT, ' +      
+            '@cErrMsg        NVARCHAR( 20) OUTPUT'    
+                   
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,     
+               @nMobile, @nFunc, @cLangCode, @nCurrentStep, @nAfterStep, @nInputKey, @cUserName, @cFacility, @cStorerKey, @cDropID, @cSKU, @cOrderKey, 
+               @cOutfield01 OUTPUT, @cOutfield02 OUTPUT, @cOutfield03 OUTPUT, @cOutfield04 OUTPUT, @cOutfield05 OUTPUT, @cOutfield06 OUTPUT, 
+               @tExtendedInfo, @nErrNo OUTPUT, @cErrMsg OUTPUT
+           
+         IF @nErrNo <> 0    
+            GOTO Step_1_Fail    
+      END    
+   END  -- IF @cExtendedInfoSP <> ''    
+         
    GOTO Quit      
       
    STEP_1_FAIL:      
@@ -832,7 +843,8 @@ BEGIN
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')    
          BEGIN    
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +     
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @cUserName, @cFacility, @cStorerKey, @cDropID, @cSKU, @cOption, @cOrderKey OUTPUT, @cTrackNo OUTPUT, @cCartonType OUTPUT, @cWeight OUTPUT, @cTaskStatus OUTPUT, @cTTLPickedQty OUTPUT, @cTTLScannedQty OUTPUT,' +     
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @cUserName, @cFacility, @cStorerKey, @cDropID, @cSKU, @cOption, ' + 
+               ' @cOrderKey OUTPUT, @cTrackNo OUTPUT, @cCartonType OUTPUT, @cWeight OUTPUT, @cTaskStatus OUTPUT, @cTTLPickedQty OUTPUT, @cTTLScannedQty OUTPUT,' +     
                ' @nErrNo OUTPUT, @cErrMsg OUTPUT'    
             SET @cSQLParam =    
                '@nMobile        INT,            ' +    
@@ -856,7 +868,8 @@ BEGIN
                '@cErrMsg        NVARCHAR( 20) OUTPUT'    
                 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,     
-               @nMobile, @nFunc, @cLangCode, @nStep, @cUserName, @cFacility, @cStorerKey, @cDropID, @cSKU, @cOption, @cOrderKey OUTPUT, @cTrackNo OUTPUT, @cCartonType OUTPUT, @cWeight OUTPUT, @cTaskStatus OUTPUT, @cTTLPickedQty OUTPUT, @cTTLScannedQty OUTPUT,
+               @nMobile, @nFunc, @cLangCode, @nStep, @cUserName, @cFacility, @cStorerKey, @cDropID, @cSKU, @cOption, 
+               @cOrderKey OUTPUT, @cTrackNo OUTPUT, @cCartonType OUTPUT, @cWeight OUTPUT, @cTaskStatus OUTPUT, @cTTLPickedQty OUTPUT, @cTTLScannedQty OUTPUT,
                @nErrNo OUTPUT, @cErrMsg OUTPUT    
         
             IF @nErrNo <> 0    
@@ -868,7 +881,8 @@ BEGIN
       -- 9 = Tote need to go to Pack Info screen after Pack by Orders
       IF @cTaskStatus = '1'
       BEGIN
-
+         SET @nAfterStep = @nStep
+         
          SET @cOutField01 = @cDropIDType
          SET @cOutField02 = @cDropID
          SET @cOutField03 = @cOrderKey
@@ -884,6 +898,7 @@ BEGIN
            -- GOTO Next Screen        
             SET @nScn = @nScn - 1        
             SET @nStep = @nStep - 1        
+            SET @nAfterStep = @nStep
             
             SET @cOutField01 = ''
                     
@@ -935,7 +950,8 @@ BEGIN
             -- GOTO Next Screen        
             SET @nScn = @nScn + 1        
             SET @nStep = @nStep + 1        
-                   
+            SET @nAfterStep = @nStep
+            
             EXEC rdt.rdtSetFocusField @nMobile, 4     
          END
          ELSE
@@ -944,6 +960,7 @@ BEGIN
              -- GOTO Next Screen        
             SET @nScn = @nScn - 1        
             SET @nStep = @nStep - 1        
+            SET @nAfterStep = @nStep
             
             SET @cOutField01 = ''
                     
@@ -985,6 +1002,48 @@ BEGIN
       SET @nStep = @nStep + 2
 
    END
+   
+   IF @cExtendedInfoSP <> ''    
+   BEGIN    
+      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')    
+      BEGIN    
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +     
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cUserName, @cFacility, @cStorerKey, @cDropID, @cSKU, @cOrderKey, ' + 
+            ' @cOutfield01 OUTPUT, @cOutfield02 OUTPUT, @cOutfield03 OUTPUT, @cOutfield04 OUTPUT, @cOutfield05 OUTPUT, @cOutfield06 OUTPUT, ' +     
+            ' @tExtendedInfo, @nErrNo OUTPUT, @cErrMsg OUTPUT'    
+         SET @cSQLParam =    
+            '@nMobile        INT,            ' +    
+            '@nFunc          INT,            ' +    
+            '@cLangCode      NVARCHAR(3),    ' +    
+            '@nStep          INT,            ' +    
+            '@nAfterStep     INT,            ' +
+            '@nInputKey      INT,            ' +
+            '@cUserName      NVARCHAR( 18),  ' +     
+            '@cFacility      NVARCHAR( 5),   ' +     
+            '@cStorerKey     NVARCHAR( 15),  ' +     
+            '@cDropID        NVARCHAR( 20),  ' +     
+            '@cSKU           NVARCHAR( 20),  ' +
+            '@cOrderKey      NVARCHAR( 20),  ' +
+            '@cOutField01    NVARCHAR( 20) OUTPUT,  ' +
+            '@cOutField02    NVARCHAR( 20) OUTPUT,  ' +
+            '@cOutField03    NVARCHAR( 20) OUTPUT,  ' +
+            '@cOutField04    NVARCHAR( 20) OUTPUT,  ' +
+            '@cOutField05    NVARCHAR( 20) OUTPUT,  ' +
+            '@cOutField06    NVARCHAR( 20) OUTPUT,  ' +
+            '@tExtendedInfo  VariableTable READONLY,   ' +
+            '@nErrNo         INT OUTPUT, ' +      
+            '@cErrMsg        NVARCHAR( 20) OUTPUT'    
+                   
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,     
+               @nMobile, @nFunc, @cLangCode, @nCurrentStep, @nAfterStep, @nInputKey, @cUserName, @cFacility, @cStorerKey, @cDropID, @cSKU, @cOrderKey, 
+               @cOutfield01 OUTPUT, @cOutfield02 OUTPUT, @cOutfield03 OUTPUT, @cOutfield04 OUTPUT, @cOutfield05 OUTPUT, @cOutfield06 OUTPUT, 
+               @tExtendedInfo, @nErrNo OUTPUT, @cErrMsg OUTPUT
+           
+         IF @nErrNo <> 0    
+            GOTO Quit    
+      END    
+   END  -- IF @cExtendedInfoSP <> ''    
+
    GOTO Quit
 
    Step_2_Fail:
@@ -1011,7 +1070,7 @@ Step_3:
 BEGIN      
    IF @nInputKey = 1 --ENTER      
    BEGIN      
-            
+      SET @nCurrentStep  = @nStep
       SET @cTrackNo = ISNULL(RTRIM(@cInField03),'')      
       SET @cCartonType = ISNULL(RTRIM(@cInField05),'')      
       SET @cWeight = ISNULL(RTRIM(@cInField07),'')      
@@ -1227,9 +1286,10 @@ BEGIN
          
    
          -- Remember the current scn & step
+         SET @nCurrentStep = @nStep
          SET @nScn = @nScn - 1
          SET @nStep = @nStep - 1
-         
+         SET @nAfterStep = @nStep
       END 
       ELSE IF @cTaskStatus = '9'
       BEGIN
@@ -1260,9 +1320,10 @@ BEGIN
          SET @cOutField06 = ''
          
          -- GOTO Next Screen        
+         SET @nCurrentStep = @nStep
          SET @nScn = @nScn - 2        
          SET @nStep = @nStep - 2        
-      
+         SET @nAfterStep = @nStep
       END
     
         
@@ -1291,6 +1352,46 @@ BEGIN
   
   
    --END      
+   IF @cExtendedInfoSP <> ''    
+   BEGIN    
+      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')    
+      BEGIN    
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +     
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cUserName, @cFacility, @cStorerKey, @cDropID, @cSKU, @cOrderKey, ' + 
+            ' @cOutfield01 OUTPUT, @cOutfield02 OUTPUT, @cOutfield03 OUTPUT, @cOutfield04 OUTPUT, @cOutfield05 OUTPUT, @cOutfield06 OUTPUT, ' +     
+            ' @tExtendedInfo, @nErrNo OUTPUT, @cErrMsg OUTPUT'    
+         SET @cSQLParam =    
+            '@nMobile        INT,            ' +    
+            '@nFunc          INT,            ' +    
+            '@cLangCode      NVARCHAR(3),    ' +    
+            '@nStep          INT,            ' +    
+            '@nAfterStep     INT,            ' +
+            '@nInputKey      INT,            ' +
+            '@cUserName      NVARCHAR( 18),  ' +     
+            '@cFacility      NVARCHAR( 5),   ' +     
+            '@cStorerKey     NVARCHAR( 15),  ' +     
+            '@cDropID        NVARCHAR( 20),  ' +     
+            '@cSKU           NVARCHAR( 20),  ' +
+            '@cOrderKey      NVARCHAR( 20),  ' +
+            '@cOutField01    NVARCHAR( 20) OUTPUT,  ' +
+            '@cOutField02    NVARCHAR( 20) OUTPUT,  ' +
+            '@cOutField03    NVARCHAR( 20) OUTPUT,  ' +
+            '@cOutField04    NVARCHAR( 20) OUTPUT,  ' +
+            '@cOutField05    NVARCHAR( 20) OUTPUT,  ' +
+            '@cOutField06    NVARCHAR( 20) OUTPUT,  ' +
+            '@tExtendedInfo  VariableTable READONLY,   ' +
+            '@nErrNo         INT OUTPUT, ' +      
+            '@cErrMsg        NVARCHAR( 20) OUTPUT'    
+                   
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,     
+               @nMobile, @nFunc, @cLangCode, @nCurrentStep, @nStep, @nInputKey, @cUserName, @cFacility, @cStorerKey, @cDropID, @cSKU, @cOrderKey, 
+               @cOutfield01 OUTPUT, @cOutfield02 OUTPUT, @cOutfield03 OUTPUT, @cOutfield04 OUTPUT, @cOutfield05 OUTPUT, @cOutfield06 OUTPUT, 
+               @tExtendedInfo, @nErrNo OUTPUT, @cErrMsg OUTPUT
+           
+         IF @nErrNo <> 0    
+            GOTO Quit    
+      END    
+   END  -- IF @cExtendedInfoSP <> ''    
    GOTO Quit      
       
    STEP_3_FAIL:      
@@ -1960,7 +2061,8 @@ BEGIN
    
       V_Integer1 = @cTTLPickedQty, 
       V_Integer2 = @cTTLScannedQty,
-   
+      V_Integer3 = @nAfterStep,
+
       V_String1 = @cExtendedUpdateSP   ,   
       V_String2 = @cExtendedValidateSP ,   
       V_String3 = @cDecodeLabelNo      ,
