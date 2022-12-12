@@ -50,6 +50,22 @@ BEGIN
    where sku=@csku
    AND storerkey=@cstorerkey
 
+      --Lowest Qty of SKU in LOC
+   IF @cSuggestedLOC=''
+   BEGIN
+
+      SELECT TOP 1 @cSuggestedLOC=LLI.loc
+      FROM lotxlocxid LLI(NOLOCK) JOIN
+         loc loc (nolock) ON LLI.loc=loc.loc
+      WHERE LLI.storerkey=@cStorerkey
+         AND LLI.loc<>@cLOC
+         AND locationtype='NORMAL'
+         AND LLI.sku=@csku
+         AND LLI.qty<>0
+      ORDER BY lli.qty
+   END
+
+
    --New Empty LOC
    IF @cSuggestedLOC=''
    BEGIN
@@ -75,21 +91,6 @@ BEGIN
                               AND storerkey= @cStorerKey
                            GROUP BY LLI.LOC
                            HAVING SUM(LLI.QTY -LLI.QtyAllocated- LLI.QTYPicked) > 0 )
-   END
-
-   --Lowest Qty of SKU in LOC
-   IF @cSuggestedLOC=''
-   BEGIN
-
-      SELECT TOP 1 @cSuggestedLOC=LLI.loc
-      FROM lotxlocxid LLI(NOLOCK) JOIN
-         loc loc (nolock) ON LLI.loc=loc.loc
-      WHERE LLI.storerkey=@cStorerkey
-         AND LLI.loc<>@cLOC
-         AND locationtype='NORMAL'
-         AND LLI.sku=@csku
-         AND LLI.qty<>0
-      ORDER BY lli.qty
    END
 
    --Max SKU of LOC
