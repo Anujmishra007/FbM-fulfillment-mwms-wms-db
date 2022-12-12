@@ -305,7 +305,7 @@ BEGIN
         --exec isp_Delivery_Note19_RDT '0000000215','','','H','0'
          SET @c_ExecStatements = 'SELECT DISTINCT  TMP.Seqno' +
             ',OH.Orderkey ' +
-            ',A1= CASE WHEN @c_country = ''KR'' THEN OH.C_Contact1 + ISNULL(MAX(CASE WHEN CL.Code =''A1'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' +  --CS05	--ML01
+            ',A1= CASE WHEN @c_country = ''KR'' THEN OH.C_Contact2 + ISNULL(MAX(CASE WHEN CL.Code =''A1'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' +  --CS05	--ML01
 				'          WHEN @c_country <>  ''IN'' THEN OH.C_Company + ISNULL(MAX(CASE WHEN CL.Code =''A1'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' +
             '          ELSE ISNULL(MAX(CASE WHEN CL.Code =''A1'' THEN RTRIM(CL.Description) ELSE '''' END),'''') + space(2) + OH.C_Company END' +                                  --CS05                                 
             ',A2=ISNULL(MAX(CASE WHEN CL.Code =''A2'' THEN RTRIM(CL.Description) ELSE '''' END),'''') ' +
@@ -362,7 +362,7 @@ BEGIN
             ' WHERE ' + @c_ExecWhere +
             ' GROUP BY TMP.Seqno,OH.Orderkey' + 
             ',OH.Storerkey' + 
-				',OH.C_Contact1' +  --ML01
+				',OH.C_Contact2' +  --ML01
             ',OH.C_Company' +  
             ',ISNULL(RTRIM(OH.Notes),'''') ' + 
             ',ISNULL(RTRIM(OH.Notes2),'''') ' +  
