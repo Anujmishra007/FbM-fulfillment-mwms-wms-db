@@ -1,12 +1,8 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdtfnc_PTLStation]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC rdt.rdtfnc_PTLStation
-GO
 
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-
 
 /******************************************************************************/
 /* Store procedure: rdtfnc_PTLStation                                         */
@@ -37,9 +33,11 @@ GO
 /*                            (james02)                                       */
 /* 03-08-2021 2.7  YeeKung    WMS-17625 add light=0 allow multiuser go in the */
 /*                            station(yeekung01)                              */
+/* 15-11-2022 2.8  Ung        WMS-21024 Adjust ExtendedInfoSP at SKU screen   */
+/*                            Clear QTY field when ESC to SKU screen          */
 /******************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_PTLStation] (
+CREATE OR ALTER PROC [RDT].[rdtfnc_PTLStation] (
    @nMobile    int,
    @nErrNo     int  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 NVARCHAR max
@@ -918,7 +916,7 @@ BEGIN
             SET @nErrNo = 96008
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need SKU
             EXEC rdt.rdtSetFocusField @nMobile, 3 -- SKU
-            GOTO Quit
+            GOTO Step_3_Quit
          END
    
          IF @cDecodeLabelNo <> ''
@@ -1012,7 +1010,7 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid QTY
             EXEC rdt.rdtSetFocusField @nMobile, 6 -- QTY
             SET @cOutField06 = ''
-            GOTO Quit
+            GOTO Step_3_Quit
          END
          SET @nQTY = CAST( @cActQTY AS INT)
       END
@@ -1048,7 +1046,6 @@ BEGIN
       -- Remain in current screen
       IF @nErrNo = -1
          GOTO Quit
-
       
       -- Draw matrix (and light up)
       SET @nNextPage = 0
@@ -1082,18 +1079,6 @@ BEGIN
       SET @cFieldAttr01 = '' -- ID/UCC
       SET @cFieldAttr03 = '' -- SKU
       SET @cFieldAttr06 = '' -- QTY
-      
-     -- EventLog - Sign In Function -- (ChewKP03)     
-    /*  EXEC RDT.rdt_STD_EventLog    
-         @cActionType = '3', -- Sign in function    
-         @nMobileNo   = @nMobile,    
-         @nFunctionID = @nFunc,    
-         @cFacility   = @cFacility,    
-         @cStorerKey  = @cStorerKey,  
-         @cSKU        = @cSKU,    
-         @cUCC        = @cScanID,  
-         @nQTY        = @nQTY,    
-         @nStep       = @nStep */ --(cc01)
                
       -- Prepare next screen var
       SET @cOutField01 = @cResult01
@@ -1112,7 +1097,44 @@ BEGIN
       -- Go to matrix screen
       SET @nScn = @nScn + 1
       SET @nStep = @nStep + 1
-   
+   END
+
+   IF @nInputKey = 0
+   BEGIN
+      -- Enable field
+      SET @cFieldAttr01 = '' -- ID/UCC
+      SET @cFieldAttr03 = '' -- SKU
+      SET @cFieldAttr06 = '' -- QTY
+      
+      -- Dynamic assign  
+      EXEC rdt.rdt_PTLStation_Assign @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+         @cStation1, @cStation2, @cStation3, @cStation4, @cStation5, @cMethod, 'POPULATE-IN',  
+         @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  
+         @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  
+         @cInField03  OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  
+         @cInField04  OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  
+         @cInField05  OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  
+         @cInField06  OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  
+         @cInField07  OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  
+         @cInField08  OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  
+         @cInField09  OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  
+         @cInField10  OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  
+         @cInField11  OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  
+         @cInField12  OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  
+         @cInField13  OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  
+         @cInField14  OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  
+         @cInField15  OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  
+         @nScn        OUTPUT,  
+         @nErrNo      OUTPUT,  
+         @cErrMsg     OUTPUT  
+      IF @nErrNo <> 0  
+         GOTO Quit  
+  
+      SET @nStep = @nStep - 1  
+   END
+
+   Step_3_Quit:
+   BEGIN
       -- Extended info
       IF @cExtendedInfoSP <> ''
       BEGIN
@@ -1155,46 +1177,15 @@ BEGIN
                @nMobile, @nFunc, @cLangCode, 3, @nStep, @nInputKey, @cFacility, @cStorerKey, @tVar, 
                @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
    
-            IF @nErrNo <> 0
-               GOTO Quit
+            -- IF @nErrNo <> 0
+            --    GOTO Quit
                
-            SET @cOutField12 = @cExtendedInfo
+            IF @nStep = 3
+               SET @cOutField07 = @cExtendedInfo
+            IF @nStep = 4
+               SET @cOutField12 = @cExtendedInfo
          END
       END
-   END
-
-   IF @nInputKey = 0
-   BEGIN
-      -- Enable field
-      SET @cFieldAttr01 = '' -- ID/UCC
-      SET @cFieldAttr03 = '' -- SKU
-      SET @cFieldAttr06 = '' -- QTY
-      
-      -- Dynamic assign  
-      EXEC rdt.rdt_PTLStation_Assign @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
-         @cStation1, @cStation2, @cStation3, @cStation4, @cStation5, @cMethod, 'POPULATE-IN',  
-         @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  
-         @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  
-         @cInField03  OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  
-         @cInField04  OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  
-         @cInField05  OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  
-         @cInField06  OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  
-         @cInField07  OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  
-         @cInField08  OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  
-         @cInField09  OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  
-         @cInField10  OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  
-         @cInField11  OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  
-         @cInField12  OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  
-         @cInField13  OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  
-         @cInField14  OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  
-         @cInField15  OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  
-         @nScn        OUTPUT,  
-         @nErrNo      OUTPUT,  
-         @cErrMsg     OUTPUT  
-      IF @nErrNo <> 0  
-         GOTO Quit  
-  
-      SET @nStep = @nStep - 1  
    END
    GOTO Quit
 
@@ -1704,7 +1695,7 @@ BEGIN
       SET @cOutField03 = '' -- @cSKU
       SET @cOutField04 = SUBSTRING( @cSKUDescr, 1, 20)
       SET @cOutField05 = SUBSTRING( @cSKUDescr, 21, 20)
-      SET @cOutField06 = CAST( @nQTY AS NVARCHAR(5))
+      SET @cOutField06 = '' -- CAST( @nQTY AS NVARCHAR(5))
       SET @cOutField07 = '' -- ExtendedInfo
 
       -- Enable disable field

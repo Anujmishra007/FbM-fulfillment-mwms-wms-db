@@ -304,7 +304,7 @@ BEGIN
 
             -- Save assign
             INSERT INTO rdt.rdtPTLStationLog (Station, IPAddress, Position, CartonID, Method, OrderKey, StorerKey, PickSlipNo, LOC)
-            VALUES (@cStation, @cIPAddress, @cPosition, @cOrderKey, @cMethod, @cOrderKey, @cStorerKey, @cPickSlipNo, @cPosition)
+            VALUES (@cStation, @cIPAddress, @cPosition, @cPosition, @cMethod, @cOrderKey, @cStorerKey, @cPickSlipNo, @cPosition)
             IF @@ERROR <> 0
             BEGIN
                SET @nErrNo = 192962
