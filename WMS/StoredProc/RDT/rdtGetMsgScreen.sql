@@ -1,6 +1,4 @@
-IF  EXISTS (SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'[RDT].[rdtGetMsgScreen]') AND OBJECTPROPERTY(id,N'IsProcedure') = 1)
-DROP PROCEDURE [RDT].[rdtGetMsgScreen]
-GO
+
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -44,9 +42,10 @@ GO
 /* 20-Jul-2017  1.8    ChewKP    Add MediaType Parameter (ChewKP03)          */   
 /* 01-Mar-2018  1.9    James     Change ESC text to std error (james01)      */   
 /* 24-Mar-2020  2.0    YeeKung   Add two inputfield username (yeekung01)     */   
+/* 10-Nov-2022  2.1    yeekung   WMS-21053. Add dynamic screen(yeekung01)    */
 /*****************************************************************************/    
     
-CREATE PROC [RDT].[rdtGetMsgScreen] (  
+CREATE OR ALTER PROC [RDT].[rdtGetMsgScreen] (  
    @nMobile       INT,     
    @nMsgQueueNo   INT,     
    @OutMessage    NVARCHAR(4000) OUTPUT,    
@@ -60,22 +59,23 @@ AS
     
    DECLARE @nScreen int,    
            @cLangCode NVARCHAR(3)    
-               
-   DECLARE @cLine01 NVARCHAR(125),     
-           @cLine02 NVARCHAR(125),     
-           @cLine03 NVARCHAR(125),     
-           @cLine04 NVARCHAR(125),     
-           @cLine05 NVARCHAR(125),     
-           @cLine06 NVARCHAR(125),     
-           @cLine07 NVARCHAR(125),     
-           @cLine08 NVARCHAR(125),     
-           @cLine09 NVARCHAR(125),     
-           @cLine10 NVARCHAR(125),     
-           @cLine11 NVARCHAR(125),     
-           @cLine12 NVARCHAR(125),     
-           @cLine13 NVARCHAR(125),     
-           @cLine14 NVARCHAR(125),     
-           @cLine15 NVARCHAR(125)     
+                                      --(yeekung01)
+   DECLARE @cLine01 NVARCHAR(MaX),    --(yeekung01) 
+           @cLine02 NVARCHAR(MaX),    --(yeekung01) 
+           @cLine03 NVARCHAR(MaX),    --(yeekung01) 
+           @cLine04 NVARCHAR(MaX),    --(yeekung01) 
+           @cLine05 NVARCHAR(MaX),    --(yeekung01) 
+           @cLine06 NVARCHAR(MaX),    --(yeekung01) 
+           @cLine07 NVARCHAR(MaX),    --(yeekung01) 
+           @cLine08 NVARCHAR(MaX),    --(yeekung01) 
+           @cLine09 NVARCHAR(MaX),    --(yeekung01) 
+           @cLine10 NVARCHAR(MaX),    --(yeekung01) 
+           @cLine11 NVARCHAR(MaX),    --(yeekung01) 
+           @cLine12 NVARCHAR(MaX),    --(yeekung01) 
+           @cLine13 NVARCHAR(MaX),    --(yeekung01) 
+           @cLine14 NVARCHAR(MaX),    --(yeekung01) 
+           @cLine15 NVARCHAR(MaX),     --(yeekung01)
+           @cCounter  INT = 0
     
    -- (Vicky01) - Start    
    DECLARE @cMsgAddDate NVARCHAR(20)     
@@ -143,31 +143,146 @@ AS
    ELSE    
    -- (Vicky02) - End    
    BEGIN    
-       SET @OutMessage = '<?xml version="1.0" encoding="UTF-8"?>' +    
-        '<tordt number="' + RTRIM( CAST( @nMobile AS NVARCHAR( 10))) + '" status = ''error'' >' +    
-                   '<field typ="output" x="01" y="01" value="' + RTRIM( @cLine01 ) + '"/>' +    
-                   '<field typ="output" x="01" y="02" value="' + RTRIM( @cLine02 ) + '"/>' +    
-                   '<field typ="output" x="01" y="03" value="' + RTRIM( @cLine03 ) + '"/>' +    
-                   '<field typ="output" x="01" y="04" value="' + RTRIM( @cLine04 ) + '"/>' +    
-                   '<field typ="output" x="01" y="05" value="' + RTRIM( @cLine05 ) + '"/>' +    
-                   '<field typ="output" x="01" y="06" value="' + RTRIM( @cLine06 ) + '"/>'     
 
-                   
-                  
-       
        IF ISNULL(@cLine14,'')<>'' OR ISNULL(@cLine14,'')<>0
        BEGIN
-         SET @OutMessage=@OutMessage+
-                         '<field typ="output" x="01" y="08" value="Username:"/>' +    
-                         '<field typ="input" x="01" y="09" length="10" id="I_Field19" default="" match="" />' +    
-                         '<field typ="output" x="01" y="10" value="Password:"/>' +    
-                         '<field typ="input" x="01" y="11" length="10" id="I_Field20" default="" match="" />' +    
-                         '<field typ="output" x="01" y="12" value="' + RTRIM( @cMsgAddDate ) + '"/>'  
-                         --'<field typ="output" x="01" y="13" value="' + RTRIM( @cErrMsg) + '"/>'  
+         IF ISNULL(@cLine14,'')='1'
+         BEGIN
+            SET @OutMessage='<?xml version="1.0" encoding="UTF-8"?>' +    
+            '<tordt number="' + RTRIM( CAST( @nMobile AS NVARCHAR( 10))) + '" status = ''error'' >' +
+            '<field typ="output" x="01" y="01" value="' + RTRIM( @cLine01 ) + '"/>' + 
+            '<field typ="output" x="01" y="02" value="' + RTRIM( @cLine02 ) + '"/>' 
+
+            IF @cLine03 ='%I_Field'
+            BEGIN
+               SET @OutMessage = @OutMessage +'<field typ="input" x="01" y="03" length="20" id="I_Field16" default="" match="" />'
+               SET @cCounter='1'
+            END
+            ELSE
+            BEGIN
+               SET @OutMessage = @OutMessage +'<field typ="output" x="01" y="03" value="' + RTRIM( @cLine03 ) + '"/>' 
+            END
+            
+            IF @cLine04 ='%I_Field'
+            BEGIN
+               SET @OutMessage = @OutMessage +CASE WHEN @cCounter='0' THEN'<field typ="input" x="01" y="04" length="20" id="I_Field16" default="" match="" />'
+                                                   WHEN @cCounter='1' THEN'<field typ="input" x="01" y="04" length="20" id="I_Field17" default="" match="" />' END
+               SET @cCounter=@cCounter+1
+            END
+            ELSE
+            BEGIN
+               SET @OutMessage = @OutMessage +'<field typ="output" x="01" y="04" value="' + RTRIM( @cLine04 ) + '"/>' 
+            END
+
+            IF @cLine05 ='%I_Field'
+            BEGIN
+               SET @OutMessage = @OutMessage +CASE WHEN @cCounter='0' THEN'<field typ="input" x="01" y="05" length="20" id="I_Field16" default="" match="" />'
+                                                   WHEN @cCounter='1' THEN'<field typ="input" x="01" y="05" length="20" id="I_Field17" default="" match="" />' 
+                                                   WHEN @cCounter='2' THEN'<field typ="input" x="01" y="05" length="20" id="I_Field18" default="" match="" />' END
+               SET @cCounter=@cCounter+1
+            END
+            ELSE
+            BEGIN
+               SET @OutMessage = @OutMessage +'<field typ="output" x="01" y="05" value="' + RTRIM( @cLine05 ) + '"/>' 
+            END
+            IF @cLine06 ='%I_Field'
+            BEGIN
+               SET @OutMessage = @OutMessage +CASE WHEN @cCounter='0' THEN'<field typ="input" x="01" y="06" length="20" id="I_Field16" default="" match="" />'
+                                                   WHEN @cCounter='1' THEN'<field typ="input" x="01" y="06" length="20" id="I_Field17" default="" match="" />' 
+                                                   WHEN @cCounter='2' THEN'<field typ="input" x="01" y="06" length="20" id="I_Field18" default="" match="" />' 
+                                                   WHEN @cCounter='3' THEN'<field typ="input" x="01" y="06" length="20" id="I_Field19" default="" match="" />'  END
+               SET @cCounter=@cCounter+1
+            END
+            ELSE
+            BEGIN
+               SET @OutMessage = @OutMessage +'<field typ="output" x="01" y="06" value="' + RTRIM( @cLine06 ) + '"/>' 
+            END
+            IF @cLine07 ='%I_Field'
+            BEGIN
+               SET @OutMessage = @OutMessage +CASE WHEN @cCounter='0' THEN'<field typ="input" x="01" y="07" length="20" id="I_Field16" default="" match="" />'
+                                                   WHEN @cCounter='1' THEN'<field typ="input" x="01" y="07" length="20" id="I_Field17" default="" match="" />' 
+                                                   WHEN @cCounter='2' THEN'<field typ="input" x="01" y="07" length="20" id="I_Field18" default="" match="" />' 
+                                                   WHEN @cCounter='3' THEN'<field typ="input" x="01" y="07" length="20" id="I_Field19" default="" match="" />'
+                                                   WHEN @cCounter='4' THEN'<field typ="input" x="01" y="07" length="20" id="I_Field20" default="" match="" />'  END
+               SET @cCounter=@cCounter+1
+            END
+            ELSE
+            BEGIN
+               SET @OutMessage = @OutMessage +'<field typ="output" x="01" y="07" value="' + RTRIM( @cLine07 ) + '"/>' 
+            END
+            IF @cLine08 ='%I_Field'
+            BEGIN
+               SET @OutMessage = @OutMessage +CASE WHEN @cCounter='0' THEN'<field typ="input" x="01" y="08" length="20" id="I_Field16" default="" match="" />'
+                                                   WHEN @cCounter='1' THEN'<field typ="input" x="01" y="08" length="20" id="I_Field17" default="" match="" />' 
+                                                   WHEN @cCounter='2' THEN'<field typ="input" x="01" y="08" length="20" id="I_Field18" default="" match="" />' 
+                                                   WHEN @cCounter='3' THEN'<field typ="input" x="01" y="08" length="20" id="I_Field19" default="" match="" />'
+                                                   WHEN @cCounter='4' THEN'<field typ="input" x="01" y="08" length="20" id="I_Field20" default="" match="" />'  END
+               SET @cCounter=@cCounter+1
+            END
+            ELSE
+            BEGIN
+               SET @OutMessage = @OutMessage +'<field typ="output" x="01" y="08" value="' + RTRIM( @cLine08 ) + '"/>' 
+            END
+            IF @cLine09 ='%I_Field'
+            BEGIN
+               SET @OutMessage = @OutMessage +CASE WHEN @cCounter='0' THEN'<field typ="input" x="01" y="09" length="20" id="I_Field16" default="" match="" />'
+                                                   WHEN @cCounter='1' THEN'<field typ="input" x="01" y="09" length="20" id="I_Field17" default="" match="" />' 
+                                                   WHEN @cCounter='2' THEN'<field typ="input" x="01" y="09" length="20" id="I_Field18" default="" match="" />' 
+                                                   WHEN @cCounter='3' THEN'<field typ="input" x="01" y="09" length="20" id="I_Field19" default="" match="" />'
+                                                   WHEN @cCounter='4' THEN'<field typ="input" x="01" y="09" length="20" id="I_Field20" default="" match="" />'  END
+               SET @cCounter=@cCounter+1
+            END
+            ELSE
+            BEGIN
+               SET @OutMessage = @OutMessage +'<field typ="output" x="01" y="09" value="' + RTRIM( @cLine09 ) + '"/>' 
+            END
+            IF @cLine10 ='%I_Field'
+            BEGIN
+               SET @OutMessage = @OutMessage +CASE WHEN @cCounter='0' THEN'<field typ="input" x="01" y="10" length="20" id="I_Field16" default="" match="" />'
+                                                   WHEN @cCounter='1' THEN'<field typ="input" x="01" y="10" length="20" id="I_Field17" default="" match="" />' 
+                                                   WHEN @cCounter='2' THEN'<field typ="input" x="01" y="10" length="20" id="I_Field18" default="" match="" />' 
+                                                   WHEN @cCounter='3' THEN'<field typ="input" x="01" y="10" length="20" id="I_Field19" default="" match="" />'
+                                                   WHEN @cCounter='4' THEN'<field typ="input" x="01" y="10" length="20" id="I_Field20" default="" match="" />'  END
+               SET @cCounter=@cCounter+1
+            END
+            ELSE
+            BEGIN
+               SET @OutMessage = @OutMessage +'<field typ="output" x="01" y="10" value="' + RTRIM( @cLine10 ) + '"/>' 
+            END
+            
+            SET @OutMessage= @OutMessage +
+                        '<field typ="output" x="01" y="12" value="' + RTRIM( @cMsgAddDate ) + '"/>'+  
+                        '<field typ="output" x="01" y="13" value="' + RTRIM( @cErrMsg) + '"/>' 
+         END
+         ELSE
+         BEGIN
+
+            SET @OutMessage='<?xml version="1.0" encoding="UTF-8"?>' +    
+                            '<tordt number="' + RTRIM( CAST( @nMobile AS NVARCHAR( 10))) + '" status = ''error'' >' +    
+                            '<field typ="output" x="01" y="01" value="' + RTRIM( @cLine01 ) + '"/>' +    
+                            '<field typ="output" x="01" y="02" value="' + RTRIM( @cLine02 ) + '"/>' +    
+                            '<field typ="output" x="01" y="03" value="' + RTRIM( @cLine03 ) + '"/>' +    
+                            '<field typ="output" x="01" y="04" value="' + RTRIM( @cLine04 ) + '"/>' +    
+                            '<field typ="output" x="01" y="05" value="' + RTRIM( @cLine05 ) + '"/>' +    
+                            '<field typ="output" x="01" y="06" value="' + RTRIM( @cLine06 ) + '"/>' +
+                            '<field typ="output" x="01" y="08" value="Username:"/>' +    
+                            '<field typ="input" x="01" y="09" length="10" id="I_Field19" default="" match="" />' +    
+                            '<field typ="output" x="01" y="10" value="Password:"/>' +    
+                            '<field typ="input" x="01" y="11" length="10" id="I_Field20" default="" match="" />' +    
+                            '<field typ="output" x="01" y="12" value="' + RTRIM( @cMsgAddDate ) + '"/>' + 
+                            '<field typ="output" x="01" y="13" value="%e"/>'  
+         END
        END
        ELSE
        BEGIN
-         SET @OutMessage=  @OutMessage+
+         SET @OutMessage=   '<?xml version="1.0" encoding="UTF-8"?>' +    
+            '<tordt number="' + RTRIM( CAST( @nMobile AS NVARCHAR( 10))) + '" status = ''error'' >' +    
+            '<field typ="output" x="01" y="01" value="' + RTRIM( @cLine01 ) + '"/>' +    
+            '<field typ="output" x="01" y="02" value="' + RTRIM( @cLine02 ) + '"/>' +    
+            '<field typ="output" x="01" y="03" value="' + RTRIM( @cLine03 ) + '"/>' +    
+            '<field typ="output" x="01" y="04" value="' + RTRIM( @cLine04 ) + '"/>' +    
+            '<field typ="output" x="01" y="05" value="' + RTRIM( @cLine05 ) + '"/>' +    
+            '<field typ="output" x="01" y="06" value="' + RTRIM( @cLine06 ) + '"/>' +   
             '<field typ="output" x="01" y="07" value="' + RTRIM( @cLine07 ) + '"/>' +    
             '<field typ="output" x="01" y="08" value="' + RTRIM( @cLine08 ) + '"/>' +    
             '<field typ="output" x="01" y="09" value="' + RTRIM( @cLine09 ) + '"/>' +    
@@ -179,8 +294,8 @@ AS
                (Vicky01) - End */    
 --               '<field typ="output" x="01" y="13" value="' + RTRIM( @cLine13 ) + '"/>' +    
 --               '<field typ="output" x="01" y="14" value="' + RTRIM( @cLine14 ) + '"/>' +    
-               --'<field typ="output" x="01" y="13" value="ESC to Continue^"/>' -- (james01)  
-               '<field typ="output" x="01" y="13" value="' + RTRIM( @cErrMsg) + '"/>' 
+               '<field typ="output" x="01" y="13" value="ESC to Continue^"/>' -- (james01)  
+              -- '<field typ="output" x="01" y="13" value="' + RTRIM( @cErrMsg) + '"/>' 
        END 
    END    
     
