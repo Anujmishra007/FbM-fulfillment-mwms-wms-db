@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ispFinalizeStkTakeCount]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[ispFinalizeStkTakeCount]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -33,11 +30,14 @@ GO
 /* 09/07/2020  NJOW02  1.1   WMS-13685 CC Finalize Extended validation     */
 /* 12/11/2021  Wan01   1.2   DevOps Combine Script.                        */
 /* 12/11/2021  Wan01   1.2   WMS-18332 - [TW]LOR_CycleCount_CR             */
+/* 19/10/2022  NJOW03  1.3   WMS-20991 TH Finalize stocktake by count sheet*/
+/* 19/10/2022  NJOW03  1.3   DEVOPS Combine script                         */
 /***************************************************************************/  
 
-CREATE PROCEDURE ispFinalizeStkTakeCount
+CREATE OR ALTER PROCEDURE ispFinalizeStkTakeCount
    @c_StockTakeKey NVARCHAR(10), 
-   @n_CountNo int
+   @n_CountNo int,
+   @c_CountSheets NVARCHAR(MAX) = ''  --NJOW03
 AS
     SET NOCOUNT ON   
     SET ANSI_NULLS OFF
@@ -49,16 +49,20 @@ AS
    SELECT @n_Continue = 1
    
    --NJOW01 Start
-   DECLARE @c_SQL                      NVARCHAR(1000),
-           @c_Facility                 NVARCHAR(5),
-           @c_StorerParm               NVARCHAR(60),
-           @c_Storer_SCSQL             NVARCHAR(800), 
-           @c_Storer_SCSQL2            NVARCHAR(800),
-           @b_success                  INT,
-           @c_ErrMsg                   NVARCHAR(250),
-           @n_err                      INT,
-           @c_CCFinalizeUpdLastCntDate NVARCHAR(10),
-           @c_CCValidationRules        NVARCHAR(30) --NJOW02
+   DECLARE @c_SQL                           NVARCHAR(1000),
+           @c_Facility                      NVARCHAR(5),
+           @c_StorerParm                    NVARCHAR(60),
+           @c_Storer_SCSQL                  NVARCHAR(800), 
+           @c_Storer_SCSQL2                 NVARCHAR(800),
+           @b_success                       INT,
+           @c_ErrMsg                        NVARCHAR(250),
+           @n_err                           INT,
+           @c_CCFinalizeUpdLastCntDate      NVARCHAR(10),
+           @c_CCValidationRules             NVARCHAR(30), --NJOW02
+           @c_StockTakeFinalizeByCountSheet NVARCHAR(30), --NJOW03
+           @c_AllCSheetFinalized            NVARCHAR(5)   --NJOW03 
+  
+   SET @c_AllCSheetFinalized = 'Y'  --NJOW03
   
    CREATE TABLE #STORER_CONFIG 
    (
@@ -99,8 +103,21 @@ AS
    ELSE
    BEGIN
         SELECT @c_CCFinalizeUpdLastCntDate = '0'
-   END      
+   END                          
    --NJOW01 End
+   
+   --NJOW03 S   
+    IF ((SELECT COUNT(DISTINCT Storerkey) FROM #STORER_CONFIG WHERE Configkey = 'StockTakeFinalizeByCountSheet' AND ISNULL(Svalue,'')='1') =      
+      (SELECT COUNT(DISTINCT Storerkey) FROM #STORER_CONFIG)) AND 
+      (SELECT COUNT(DISTINCT Storerkey) FROM #STORER_CONFIG WHERE Configkey = 'StockTakeFinalizeByCountSheet' AND ISNULL(Svalue,'')='1') > 0
+   BEGIN
+        SELECT @c_StockTakeFinalizeByCountSheet = '1'
+   END
+   ELSE
+   BEGIN
+        SELECT @c_StockTakeFinalizeByCountSheet = '0'
+   END  
+   --NJOW03 E                           
       
    --NJOW02 S
    IF @n_continue IN(1,2)
@@ -171,10 +188,27 @@ AS
       IF @n_CountNo = 1 
       BEGIN
          BEGIN TRAN
-      
-         UPDATE CCDETAIL
-            SET FinalizeFlag = 'Y'
-         WHERE CCKEY = @c_StockTakeKey
+         
+         IF @c_StockTakeFinalizeByCountSheet = '1'  --NJOW03
+         BEGIN
+            UPDATE CCDETAIL
+               SET FinalizeFlag = 'Y'
+            WHERE CCKEY = @c_StockTakeKey
+            AND CCSheetNo IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_CountSheets))
+            
+            IF EXISTS(SELECT 1 FROM CCDETAIL (NOLOCK) 
+                      WHERE CCKEY = @c_StockTakeKey
+                      AND FinalizeFlag <> 'Y')
+            BEGIN              
+               SET @c_AllCSheetFinalized = 'N'
+            END
+         END
+         ELSE
+         BEGIN
+            UPDATE CCDETAIL
+               SET FinalizeFlag = 'Y'
+            WHERE CCKEY = @c_StockTakeKey
+         END
          IF @@ERROR <> 0
          BEGIN
             SELECT @n_continue = 3
@@ -188,10 +222,37 @@ AS
       ELSE IF @n_CountNo = 2 
       BEGIN
          BEGIN TRAN
-      
-         UPDATE CCDETAIL
-            SET FinalizeFlag_Cnt2 = 'Y'
-         WHERE CCKEY = @c_StockTakeKey
+
+         IF @c_StockTakeFinalizeByCountSheet = '1'  --NJOW03
+         BEGIN
+            IF EXISTS(SELECT 1 FROM CCDETAIL (NOLOCK)
+                      WHERE CCKEY = @c_StockTakeKey  
+                      AND CCSheetNo IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_CountSheets))
+                      AND FinalizeFlag <> 'Y')  
+            BEGIN
+               SELECT @n_continue = 3
+               RAISERROR ('Not allow Finalize Count 2. Found some previous count is not finalized Yet. ispFinalizeStkTakeCount.', 16, 1)
+               RETURN            	
+            END                  	         	  
+         	  
+            UPDATE CCDETAIL
+               SET FinalizeFlag_Cnt2 = 'Y'
+            WHERE CCKEY = @c_StockTakeKey
+            AND CCSheetNo IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_CountSheets))
+            
+            IF EXISTS(SELECT 1 FROM CCDETAIL (NOLOCK) 
+                      WHERE CCKEY = @c_StockTakeKey
+                      AND FinalizeFlag_Cnt2 <> 'Y')
+            BEGIN              
+               SET @c_AllCSheetFinalized = 'N'
+            END            
+         END
+         ELSE
+         BEGIN
+            UPDATE CCDETAIL
+               SET FinalizeFlag_Cnt2 = 'Y'
+            WHERE CCKEY = @c_StockTakeKey
+         END
          IF @@ERROR <> 0
          BEGIN
             SELECT @n_continue = 3
@@ -205,9 +266,36 @@ AS
       BEGIN
          BEGIN TRAN
       
-         UPDATE CCDETAIL
-            SET FinalizeFlag_Cnt3 = 'Y'
-         WHERE CCKEY = @c_StockTakeKey
+         IF @c_StockTakeFinalizeByCountSheet = '1'  --NJOW03
+         BEGIN
+            IF EXISTS(SELECT 1 FROM CCDETAIL (NOLOCK)
+                      WHERE CCKEY = @c_StockTakeKey  
+                      AND CCSheetNo IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_CountSheets))
+                      AND (FinalizeFlag <> 'Y' OR FinalizeFlag_Cnt2 <> 'Y'))  
+            BEGIN
+               SELECT @n_continue = 3
+               RAISERROR ('Not allow Finalize Count 3. Found some previous count is not finalized Yet. ispFinalizeStkTakeCount.', 16, 1)
+               RETURN            	
+            END                  	         	  
+         	
+            UPDATE CCDETAIL
+               SET FinalizeFlag_Cnt3 = 'Y'
+            WHERE CCKEY = @c_StockTakeKey
+            AND CCSheetNo IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_CountSheets))
+            
+            IF EXISTS(SELECT 1 FROM CCDETAIL (NOLOCK) 
+                      WHERE CCKEY = @c_StockTakeKey
+                      AND FinalizeFlag_Cnt3 <> 'Y')
+            BEGIN              
+               SET @c_AllCSheetFinalized = 'N'
+            END                        
+         END
+         ELSE
+         BEGIN
+            UPDATE CCDETAIL
+               SET FinalizeFlag_Cnt3 = 'Y'
+            WHERE CCKEY = @c_StockTakeKey
+         END
          IF @@ERROR <> 0
          BEGIN
             SELECT @n_continue = 3
@@ -220,7 +308,8 @@ AS
       END
    END
 
-   IF @n_continue = 1 OR @n_continue = 2
+   IF (@n_continue = 1 OR @n_continue = 2) 
+      AND @c_AllCSheetFinalized = 'Y'  --NJOW03
    BEGIN
       BEGIN TRAN
 
@@ -241,12 +330,15 @@ AS
    --NJOW01
    IF (@n_continue = 1 OR @n_continue = 2) AND @c_CCFinalizeUpdLastCntDate = '1' AND @n_CountNo IN(1,2,3)
    BEGIN
-      BEGIN TRAN     
+      BEGIN TRAN       
+      	
         UPDATE SKU WITH (ROWLOCK)
         SET SKU.LastCycleCount = GETDATE()
         FROM CCDETAIL (NOLOCK) 
         JOIN SKU ON CCDETAIL.Storerkey = SKU.Storerkey AND CCDETAIL.Sku = SKU.Sku
         WHERE CCDETAIL.CCKey = @c_StockTakeKey
+        AND (CCDETAIL.CCSheetNo IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_CountSheets))  --NJOW03
+            OR @c_StockTakeFinalizeByCountSheet <> '1') 
         
         IF @@ERROR <> 0
         BEGIN
@@ -262,6 +354,8 @@ AS
           FROM CCDETAIL (NOLOCK) 
           JOIN LOC ON CCDETAIL.Loc = LOC.Loc
           WHERE CCDETAIL.CCKey = @c_StockTakeKey
+          AND (CCDETAIL.CCSheetNo IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_CountSheets))  --NJOW03
+              OR @c_StockTakeFinalizeByCountSheet <> '1') 
           
           IF @@ERROR <> 0
           BEGIN
