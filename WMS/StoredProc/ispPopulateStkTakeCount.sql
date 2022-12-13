@@ -1,6 +1,3 @@
-IF EXISTS (SELECT name FROM   dbo.sysobjects WHERE  name = N'ispPopulateStkTakeCount' AND type = 'P')
-    DROP PROCEDURE ispPopulateStkTakeCount
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -27,11 +24,16 @@ GO
 /* 01-Mar-2011  Shong     Skip Count 2 If System Qty = Counted Qty      */  
 /* 27-May-2014  TKLIM     Added Lottables 06-15                         */
 /* 13-Apr-2021  NJOW01    Fix retrieve storerkey and facility           */
+/* 19-Oct-2022  NJOW02    Fix OnlyCountLocWithVariance for popoulate    */
+/*                        count 3                                       */
+/* 19/10/2022   NJOW03    WMS-20991 TH Finalize stocktake by count sheet*/
+/* 19/10/2022   NJOW03    DEVOPS Combine script                         */
 /************************************************************************/  
   
-CREATE PROCEDURE [dbo].[ispPopulateStkTakeCount]  
+CREATE OR ALTER PROCEDURE [dbo].[ispPopulateStkTakeCount]  
       @c_StockTakeKey NVARCHAR(10),   
-      @n_CountNo int  
+      @n_CountNo INT,
+      @c_CountSheets NVARCHAR(MAX) = ''  --NJOW03  
 AS  
    SET NOCOUNT ON   
    SET QUOTED_IDENTIFIER OFF   
@@ -43,8 +45,13 @@ AS
            @c_OnlyCountLocWithVariance NVARCHAR(1),   
            @b_Success   INT,  
            @n_ErrNo     INT,  
-           @c_ErrMsg    NVARCHAR(215)  
-  
+           @c_ErrMsg    NVARCHAR(215),
+           @c_StockTakeFinalizeByCountSheet NVARCHAR(30), --NJOW03
+           @c_AllCSheetPopulated NVARCHAR(5), --NJOW03            
+           @c_CCSheetNo NVARCHAR(10) --NJOW03
+                                           
+   SET @c_AllCSheetPopulated = 'Y'  --NJOW03
+
    SELECT @n_Continue = 1  
   
    -- Do nothing is count no no equal 2 and 3  
@@ -75,11 +82,41 @@ AS
          @c_authority  = @c_OnlyCountLocWithVariance  OUTPUT,     
          @n_err        = @n_ErrNo   OUTPUT,    
          @c_errmsg     = @c_ErrMsg  OUTPUT    
+
+   --NJOW03
+   SET @c_StockTakeFinalizeByCountSheet = ''  
+   EXEC nspGetRight    
+         @c_Facility   = @c_Facility ,     
+         @c_StorerKey  = @c_StorerKey,     
+         @c_sku        = '',     
+         @c_ConfigKey  = 'StockTakeFinalizeByCountSheet',     
+         @b_Success    = @b_Success OUTPUT,     
+         @c_authority  = @c_StockTakeFinalizeByCountSheet  OUTPUT,     
+         @n_err        = @n_ErrNo   OUTPUT,    
+         @c_errmsg     = @c_ErrMsg  OUTPUT    
   
    IF @n_CountNo = 2  
    BEGIN  
+   	  IF @c_StockTakeFinalizeByCountSheet = '1'  --NJOW03
+   	  BEGIN
+   	     SELECT TOP 1 @c_CCSheetNo = CCSheetNo
+   	     FROM CCDETAIL (NOLOCK)
+   	     WHERE FinalizeFlag <> 'Y'
+   	     AND CCKey = @c_StockTakeKey 
+   	     AND CCSheetNo IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_CountSheets))   	
+   	     ORDER BY CCSheetNo   
+   	     
+   	     IF ISNULL(@c_CCSheetNo,'') <> ''
+   	     BEGIN
+            SELECT @n_continue = 3  
+            SELECT @c_ErrMsg = 'Populate Count 2 is Not Allowed. Count Sheet ''' + RTRIM(@c_CCSheetNo) + ''' Not Yet Finalize. (ispPopulateStkTakeCount).'
+            RAISERROR (@c_ErrMsg, 16, 1)  
+            RETURN
+         END     	       
+   	  END
+   	  
       BEGIN TRAN  
-  
+
       UPDATE CCDETAIL  
          SET Qty_Cnt2 = Qty, 
              Lottable01_Cnt2 = ISNULL(Lottable01, ''),  
@@ -98,7 +135,9 @@ AS
              Lottable14_Cnt2 = Lottable14,
              Lottable15_Cnt2 = Lottable15
       WHERE CCKEY = @c_StockTakeKey  
-
+      AND (CCSheetNo IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_CountSheets))  --NJOW03
+           OR @c_StockTakeFinalizeByCountSheet <> '1')
+      
       IF @@ERROR <> 0  
       BEGIN  
          SELECT @n_continue = 3  
@@ -115,6 +154,9 @@ AS
          SELECT DISTINCT c.LOC   
          FROM CCDetail c WITH (NOLOCK)   
          WHERE CCKEY = @c_StockTakeKey   
+         AND (CCSheetNo IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_CountSheets))  --NJOW03
+             OR @c_StockTakeFinalizeByCountSheet <> '1')
+               
          GROUP BY c.StorerKey, c.Sku, c.LOC, 
                   c.Lottable01, c.Lottable02, c.Lottable03, c.Lottable04,
                   c.Lottable06, c.Lottable07, c.Lottable08, c.Lottable09, c.Lottable10, 
@@ -128,21 +170,51 @@ AS
          WHERE CC.Counted_Cnt2 = '0'  
             AND CC.CCKEY = @c_StockTakeKey
             AND NOT EXISTS(SELECT 1 FROM #RECNT_LOC SLOC WHERE SLOC.LOC = CC.LOC)     
-       
+         AND (CC.CCSheetNo IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_CountSheets))  --NJOW03
+           OR @c_StockTakeFinalizeByCountSheet <> '1')
+                
        IF @@ERROR <> 0  
        BEGIN  
           SELECT @n_continue = 3  
-        RAISERROR ('Update CCDETAIL Failed - ispPopulateStkTakeCount.', 16, 1)  
+          RAISERROR ('Update CCDETAIL Failed - ispPopulateStkTakeCount.', 16, 1)  
           ROLLBACK TRAN  
           RETURN  
        END  
        ELSE  
          COMMIT TRAN    
       END         
-        
+      
+      IF @c_StockTakeFinalizeByCountSheet = '1' --NJOW03
+      BEGIN
+         IF EXISTS(SELECT 1 FROM CCDETAIL (NOLOCK) 
+                   WHERE CCKEY = @c_StockTakeKey
+                   GROUP BY CCSheetNo 
+                   HAVING SUM(Qty_Cnt2) = 0)
+         BEGIN              
+            SET @c_AllCSheetPopulated = 'N'
+         END
+      END              
    END  
    ELSE IF @n_CountNo = 3  
    BEGIN  
+   	  IF @c_StockTakeFinalizeByCountSheet = '1'  --NJOW03 
+   	  BEGIN
+   	     SELECT TOP 1 @c_CCSheetNo = CCSheetNo
+   	     FROM CCDETAIL (NOLOCK)
+   	     WHERE FinalizeFlag_Cnt2 <> 'Y'
+   	     AND CCKey = @c_StockTakeKey 
+   	     AND CCSheetNo IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_CountSheets))   	   
+   	     ORDER BY CCSheetNo
+   	     
+   	     IF ISNULL(@c_CCSheetNo,'') <> ''
+   	     BEGIN
+            SELECT @n_continue = 3  
+            SELECT @c_ErrMsg = 'Populate Count 3 is Not Allowed. Count Sheet ''' + RTRIM(@c_CCSheetNo) + ''' Not Yet Finalize. (ispPopulateStkTakeCount).'
+            RAISERROR (@c_ErrMsg, 16, 1)  
+            RETURN
+         END     	       
+   	  END
+   	
       BEGIN TRAN  
   
       UPDATE CCDETAIL  
@@ -163,6 +235,9 @@ AS
              Lottable14_Cnt3 = Lottable14_Cnt2,  
              Lottable15_Cnt3 = Lottable15_Cnt2  
       WHERE CCKEY = @c_StockTakeKey
+      AND (CCSheetNo IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_CountSheets))  --NJOW03
+           OR @c_StockTakeFinalizeByCountSheet <> '1')
+      
       
       IF @@ERROR <> 0  
       BEGIN  
@@ -180,11 +255,20 @@ AS
          SELECT DISTINCT c.LOC   
          FROM CCDetail c WITH (NOLOCK)   
          WHERE CCKEY = @c_StockTakeKey   
+         AND (CCSheetNo IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_CountSheets))  --NJOW03
+              OR @c_StockTakeFinalizeByCountSheet <> '1')               
          GROUP BY c.StorerKey, c.Sku, c.LOC, 
                   c.Lottable01, c.Lottable02, c.Lottable03,  c.Lottable04,
                   c.Lottable06, c.Lottable07, c.Lottable08, c.Lottable09, c.Lottable10, 
                   c.Lottable11, c.Lottable12, c.Lottable13, c.Lottable14, c.Lottable15
          HAVING SUM(c.Qty - C.Qty_Cnt2) = 0   
+         UNION  --NJOW02
+         SELECT DISTINCT c.LOC   
+         FROM CCDetail c WITH (NOLOCK)   
+         WHERE CCKEY = @c_StockTakeKey           
+         AND (CCSheetNo IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_CountSheets))  --NJOW03
+              OR @c_StockTakeFinalizeByCountSheet <> '1')                
+         AND c.EditWho_Cnt2 = 'IC_SKIP'           
 
          BEGIN TRAN                  
          UPDATE CC   
@@ -193,6 +277,9 @@ AS
          WHERE CC.Counted_Cnt3 = '0'  
          AND CC.CCKEY = @c_StockTakeKey 
          AND NOT EXISTS(SELECT 1 FROM #RECNT_LOC SLOC WHERE SLOC.LOC = CC.LOC)    
+         AND (CC.CCSheetNo IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_CountSheets))  --NJOW03
+              OR @c_StockTakeFinalizeByCountSheet <> '1')
+               
          
          IF @@ERROR <> 0  
          BEGIN  
@@ -204,9 +291,21 @@ AS
          ELSE  
             COMMIT TRAN  
       END   
+      
+      IF @c_StockTakeFinalizeByCountSheet = '1' --NJOW03
+      BEGIN
+         IF EXISTS(SELECT 1 FROM CCDETAIL (NOLOCK) 
+                   WHERE CCKEY = @c_StockTakeKey
+                   GROUP BY CCSheetNo 
+                   HAVING SUM(Qty_Cnt3) = 0)
+         BEGIN              
+            SET @c_AllCSheetPopulated = 'N'
+         END
+      END                    
    END   
   
-   IF @n_continue = 1 OR @n_continue = 2  
+   IF (@n_continue = 1 OR @n_continue = 2)
+      AND @c_AllCSheetPopulated = 'Y'  --NJOW03
    BEGIN  
       BEGIN TRAN  
   
