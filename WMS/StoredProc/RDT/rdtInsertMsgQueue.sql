@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'rdt.rdtInsertMsgQueue') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure rdt.rdtInsertMsgQueue
-GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -24,9 +21,10 @@ GO
 /*                                                                      */  
 /* Date        Rev  Author   Purposes                                   */  
 /* 2020-Jun-24 1.1  YeeKung  Add Input Username and pasword (yeekung01) */
+/* 2022-Oct-03 1.2  YeeKung  Fix length params (yeekung02)              */
 /************************************************************************/  
   
-CREATE  PROC rdt.rdtInsertMsgQueue (  
+CREATE  OR ALTER PROC rdt.rdtInsertMsgQueue (  
    @nMobile    INT,  
    @nErrNo     INT            OUTPUT,  
    @cErrMsg    NVARCHAR( 1024) OUTPUT, -- screen limitation, 20 char max  
@@ -61,7 +59,7 @@ SELECT @nFunc=FUNC,@cStorerKey=storerkey
 FROM RDT.RDTMOBREC (NOLOCK)
 WHERE mobile=@nMobile
 
-SET @cConfigkey=@cConfigkey+'-'+ CAST(@nErrNo AS NVARCHAR(5))
+SET @cConfigkey=@cConfigkey+'-'+ CAST(@nErrNo AS NVARCHAR(6)) --(yeekung02)
 
 SET @cPosition = rdt.rdtGetConfig( @nFunc, @cConfigkey, @cStorerKey) 
   
