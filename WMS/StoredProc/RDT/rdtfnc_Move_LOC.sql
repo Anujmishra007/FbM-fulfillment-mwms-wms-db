@@ -1,12 +1,8 @@
-IF EXISTS ( SELECT * FROM sys.objects WHERE  object_id = OBJECT_ID(N'[RDT].[rdtfnc_Move_LOC]') 
-AND OBJECTPROPERTY(object_id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [RDT].[rdtfnc_Move_LOC]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /************************************************************************/
 /* Copyright: IDS                                                       */
 /* Purpose: Move pallet                                                 */
@@ -27,7 +23,7 @@ GO
 /* 2010-09-15 1.6  Shong    QtyAvailable Should exclude QtyReplen       */
 /* 2011-11-11 1.7  ChewKP   LCI Project Changes Update UCC Table        */
 /*                          (ChewKP01)                                  */
-/* 2011-02-14 1.8  James    Update toid to ucc table (james01)          */  
+/* 2011-02-14 1.8  James    Update toid to ucc table (james01)          */
 /* 2012-07-19 1.9  ChewKP   SOS#250946 - Move UCC Update to SP rdt_Move */
 /*                          (ChewKP02)                                  */
 /* 2013-02-26 2.0  Shong    Revised Qty Allocated Checking              */
@@ -39,11 +35,12 @@ GO
 /* 2018-06-04 2.5  James    WMS5307-Add rdt_decode sp (james05)         */
 /* 2018-10-29 2.6  TungGH   Performance                                 */
 /* 2019-01-07 2.7  James    WMS4787-Add ExtendedInfoSP (james06)        */
-/* 2019-09-11 2.8  YeeKung  WMS10516 Set focusfield  (yeekung01)        */ 
+/* 2019-09-11 2.8  YeeKung  WMS10516 Set focusfield  (yeekung01)        */
 /* 2021-01-04 2.9  Chermaine WMS-15903 add LOCLookupSP config (cc01)    */
+/* 2022-12-13 3.0  YeeKung   JSM-116802 Add func for rdt_move (yeekung02)*/
 /************************************************************************/
 
-CREATE  PROCEDURE [RDT].[rdtfnc_Move_LOC] (
+CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Move_LOC] (
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR( 20) OUTPUT -- screen limitation, 20 NVARCHAR max
@@ -51,13 +48,13 @@ CREATE  PROCEDURE [RDT].[rdtfnc_Move_LOC] (
 SET NOCOUNT ON
 SET QUOTED_IDENTIFIER OFF
 SET ANSI_NULLS OFF
-SET CONCAT_NULL_YIELDS_NULL OFF  
+SET CONCAT_NULL_YIELDS_NULL OFF
 
 -- Misc variable
-DECLARE 
-   @i             INT, 
-   @nRowCount     INT, 
-   @cChkFacility  NVARCHAR( 5), 
+DECLARE
+   @i             INT,
+   @nRowCount     INT,
+   @cChkFacility  NVARCHAR( 5),
    @cPUOM_Desc    NVARCHAR( 5), -- Preferred UOM desc
    @cMUOM_Desc    NVARCHAR( 5), -- Master unit desc
    @nPUOM_Div     INT, -- UOM divider
@@ -66,10 +63,10 @@ DECLARE
    @nQTY          INT,
    @nMoveCnt      INT,
    @nTotalMoveCnt INT,
-   @cOption       NVARCHAR( 1)  
+   @cOption       NVARCHAR( 1)
 
 -- RDT.RDTMobRec variable
-DECLARE 
+DECLARE
    @nFunc      INT,
    @nScn       INT,
    @nStep      INT,
@@ -78,35 +75,35 @@ DECLARE
    @nMenu      INT,
 
    @cStorerKey NVARCHAR( 15),
-   @cFacility  NVARCHAR( 5), 
+   @cFacility  NVARCHAR( 5),
 
-   @cFromLOC   NVARCHAR( 10), 
-   @cSKU       NVARCHAR( 20), 
-   @cSKUDescr  NVARCHAR( 60), 
+   @cFromLOC   NVARCHAR( 10),
+   @cSKU       NVARCHAR( 20),
+   @cSKUDescr  NVARCHAR( 60),
    @cPUOM      NVARCHAR( 1), -- Prefer UOM
-   @cToLOC     NVARCHAR( 10), 
+   @cToLOC     NVARCHAR( 10),
    @cToID      NVARCHAR( 18), -- (Vicky01)
    @cFromID    NVARCHAR( 18), -- (Vicky01)
 
-   @nTotalRec    INT, 
-   @nCurrentRec  INT, 
+   @nTotalRec    INT,
+   @nCurrentRec  INT,
 
    @cUserName    NVARCHAR(18), -- (Vicky06)
-   
+
    @nMultiStorer        INT,              -- (james02)
- 	 @nCounter INT,              						-- (yeekung01)  
+   @nCounter INT,                    -- (yeekung01)
    @cLoop_StorerKey     NVARCHAR( 15),    -- (james02)
    @cSKU_StorerKey      NVARCHAR( 15),    -- (james02)
    @cExtendedUpdateSP   NVARCHAR( 20),    -- (james04)
    @cChkStorerKey       NVARCHAR( 15),    -- (james04)
    @cSQL                NVARCHAR(MAX),    -- (james04)
    @cSQLParam           NVARCHAR(MAX),    -- (james04)
-   @cExtendedValidateSP NVARCHAR( 20),    -- (james04)    
-   @cStorerGroup        NVARCHAR( 20),    -- (james04)   
+   @cExtendedValidateSP NVARCHAR( 20),    -- (james04)
+   @cStorerGroup        NVARCHAR( 20),    -- (james04)
    @cTempToLOC          NVARCHAR( 10),
    @cTempToID           NVARCHAR( 18),
-   @cBarcode            NVARCHAR( 60), 
-   @cDecodeSP           NVARCHAR( 20), 
+   @cBarcode            NVARCHAR( 60),
+   @cDecodeSP           NVARCHAR( 20),
    @cLottable01         NVARCHAR( 18),
    @cLottable02         NVARCHAR( 18),
    @cLottable03         NVARCHAR( 18),
@@ -125,25 +122,25 @@ DECLARE
    @cExtendedInfo       NVARCHAR( 20), -- (james07)
    @cExtendedInfoSP     NVARCHAR( 20), -- (james07)
    @cLOCLookupSP        NVARCHAR(20),  --(cc01)
-      
+
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
    @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),
    @cInField04 NVARCHAR( 60),   @cOutField04 NVARCHAR( 60),
    @cInField05 NVARCHAR( 60),   @cOutField05 NVARCHAR( 60),
-   @cInField06 NVARCHAR( 60),   @cOutField06 NVARCHAR( 60), 
-   @cInField07 NVARCHAR( 60),   @cOutField07 NVARCHAR( 60), 
-   @cInField08 NVARCHAR( 60),   @cOutField08 NVARCHAR( 60), 
-   @cInField09 NVARCHAR( 60),   @cOutField09 NVARCHAR( 60), 
-   @cInField10 NVARCHAR( 60),   @cOutField10 NVARCHAR( 60), 
-   @cInField11 NVARCHAR( 60),   @cOutField11 NVARCHAR( 60), 
-   @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60), 
-   @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60), 
-   @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60), 
+   @cInField06 NVARCHAR( 60),   @cOutField06 NVARCHAR( 60),
+   @cInField07 NVARCHAR( 60),   @cOutField07 NVARCHAR( 60),
+   @cInField08 NVARCHAR( 60),   @cOutField08 NVARCHAR( 60),
+   @cInField09 NVARCHAR( 60),   @cOutField09 NVARCHAR( 60),
+   @cInField10 NVARCHAR( 60),   @cOutField10 NVARCHAR( 60),
+   @cInField11 NVARCHAR( 60),   @cOutField11 NVARCHAR( 60),
+   @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),
+   @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60),
+   @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),
    @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60)
 
 -- Load RDT.RDTMobRec
-SELECT 
+SELECT
    @nFunc      = Func,
    @nScn       = Scn,
    @nStep      = Step,
@@ -151,44 +148,44 @@ SELECT
    @nMenu      = Menu,
    @cLangCode  = Lang_code,
 
-   @cStorerGroup = StorerGroup, 
+   @cStorerGroup = StorerGroup,
    @cFacility  = Facility,
 
    @cUserName  = UserName,-- (Vicky06)
 
    @cStorerKey = V_StorerKey,
-   @cSKU       = V_SKU, 
-   @cSKUDescr  = V_SKUDescr, 
+   @cSKU       = V_SKU,
+   @cSKUDescr  = V_SKUDescr,
    @cPUOM      = V_UOM,
-   
-   @cFromLOC            = V_String2, 
-   @cToLOC              = V_String3, 
+
+   @cFromLOC            = V_String2,
+   @cToLOC              = V_String3,
    @cExtendedInfoSP     = V_String4,
    @cExtendedValidateSP = V_String5,
    @cToID               = V_String7,   -- (Vicky01)
    @cDecodeSP           = V_String9,
-   @cLOCLookupSP        = V_String10, --(cc01)  
+   @cLOCLookupSP        = V_String10, --(cc01)
 
    @nTotalRec     = V_Integer1,
    @nCurrentRec   = V_Integer2,
    @nTotalMoveCnt = V_Integer3,
    @nMultiStorer  = V_Integer4,   -- (james02)
-   @nCounter      = V_Integer5,   --(yeekung01)    
-      
+   @nCounter      = V_Integer5,   --(yeekung01)
+
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
-   @cInField03 = I_Field03,   @cOutField03 = O_Field03, 
-   @cInField04 = I_Field04,   @cOutField04 = O_Field04, 
-   @cInField05 = I_Field05,   @cOutField05 = O_Field05, 
-   @cInField06 = I_Field06,   @cOutField06 = O_Field06, 
-   @cInField07 = I_Field07,   @cOutField07 = O_Field07, 
-   @cInField08 = I_Field08,   @cOutField08 = O_Field08, 
-   @cInField09 = I_Field09,   @cOutField09 = O_Field09, 
-   @cInField10 = I_Field10,   @cOutField10 = O_Field10, 
-   @cInField11 = I_Field11,   @cOutField11 = O_Field11, 
-   @cInField12 = I_Field12,   @cOutField12 = O_Field12, 
-   @cInField13 = I_Field13,   @cOutField13 = O_Field13, 
-   @cInField14 = I_Field14,   @cOutField14 = O_Field14, 
+   @cInField03 = I_Field03,   @cOutField03 = O_Field03,
+   @cInField04 = I_Field04,   @cOutField04 = O_Field04,
+   @cInField05 = I_Field05,   @cOutField05 = O_Field05,
+   @cInField06 = I_Field06,   @cOutField06 = O_Field06,
+   @cInField07 = I_Field07,   @cOutField07 = O_Field07,
+   @cInField08 = I_Field08,   @cOutField08 = O_Field08,
+   @cInField09 = I_Field09,   @cOutField09 = O_Field09,
+   @cInField10 = I_Field10,   @cOutField10 = O_Field10,
+   @cInField11 = I_Field11,   @cOutField11 = O_Field11,
+   @cInField12 = I_Field12,   @cOutField12 = O_Field12,
+   @cInField13 = I_Field13,   @cOutField13 = O_Field13,
+   @cInField14 = I_Field14,   @cOutField14 = O_Field14,
    @cInField15 = I_Field15,   @cOutField15 = O_Field15
 
 FROM RDTMOBREC (NOLOCK)
@@ -204,7 +201,7 @@ BEGIN
    --IF @nStep = 4 GOTO Step_4   -- Scn = 1012. Confirm only move 10 records per screen
 END
 
-RETURN -- Do nothing if incorrect step   
+RETURN -- Do nothing if incorrect step
 
 
 /********************************************************************************
@@ -221,7 +218,7 @@ BEGIN
    SET @cSKU = ''
    SET @cSKUDescr = ''
    SET @cToLOC = ''
-   
+
    SET @nTotalRec = 0
    SET @nCurrentRec = 0
 
@@ -247,8 +244,8 @@ BEGIN
    SET @cExtendedInfoSP = rdt.rdtGetConfig( @nFunc, 'ExtendedInfoSP', @cStorerKey)
    IF @cExtendedInfoSP = '0'
       SET @cExtendedInfoSP = ''
-      
-   SET @cLOCLookupSP = rdt.rdtGetConfig(@nFunc,'LOCLookupSP',@cStorerKey)   --(cc01)   
+
+   SET @cLOCLookupSP = rdt.rdtGetConfig(@nFunc,'LOCLookupSP',@cStorerKey)   --(cc01)
 
     -- (Vicky06) EventLog - Sign In Function
     EXEC RDT.rdt_STD_EventLog
@@ -259,7 +256,7 @@ BEGIN
      @cFacility   = @cFacility,
      @cStorerKey  = @cStorerkey,
      @nStep       = @nStep
-      
+
    -- Init screen
    SET @cOutField02 = '' -- FromLOC
 END
@@ -276,7 +273,7 @@ BEGIN
    BEGIN
       -- Screen mapping
       SET @cFromLOC = @cInField02
-      
+
       -- Validate blank
       IF @cFromLOC = '' OR @cFromLOC IS NULL
       BEGIN
@@ -284,17 +281,17 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( 62551, @cLangCode, 'DSP') --'LOC needed'
          GOTO Step_1_Fail
       END
-      
-      -- add from loc prefix (cc01)          
-     IF @cLOCLookupSP = 1                
-     BEGIN                
-      EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,                 
-      @cFromLOC    OUTPUT,                 
-      @nErrNo     OUTPUT,                 
-      @cErrMsg    OUTPUT                
-      IF @nErrNo <> 0                
-       GOTO Step_1_Fail                
-     END    
+
+      -- add from loc prefix (cc01)
+     IF @cLOCLookupSP = 1
+     BEGIN
+      EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+      @cFromLOC    OUTPUT,
+      @nErrNo     OUTPUT,
+      @cErrMsg    OUTPUT
+      IF @nErrNo <> 0
+       GOTO Step_1_Fail
+     END
 
       -- Get LOC info
       SELECT @cChkFacility = Facility
@@ -308,7 +305,7 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( 62552, @cLangCode, 'DSP') --'Invalid LOC'
          GOTO Step_1_Fail
       END
-      
+
       -- Validate LOC's facility
       IF @cChkFacility <> @cFacility
       BEGIN
@@ -321,24 +318,24 @@ BEGIN
       IF @cStorerGroup <> ''
       BEGIN
          -- If LOC having more than 1 storer then is multi storer else turn multi storer off
-         IF EXISTS ( SELECT 1 FROM dbo.LOTxLOCxID LLI WITH (NOLOCK) 
-                     JOIN dbo.LOC LOC WITH (NOLOCK) ON LLI.LOC = LOC.LOC 
+         IF EXISTS ( SELECT 1 FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
+                     JOIN dbo.LOC LOC WITH (NOLOCK) ON LLI.LOC = LOC.LOC
                      WHERE EXISTS (SELECT 1 FROM dbo.StorerGroup ST WITH (NOLOCK) WHERE LLI.StorerKey = ST.StorerKey AND StorerGroup = @cStorerKey)
                      AND   (LLI.QTY - LLI.QTYAllocated - LLI.QTYPicked - (CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END)) > 0
                      AND   LOC.Facility = @cFacility
                      AND   LOC.LOC = @cFromLoc
-                     GROUP BY LLI.LOC 
-                     HAVING COUNT( DISTINCT StorerKey) > 1) 
+                     GROUP BY LLI.LOC
+                     HAVING COUNT( DISTINCT StorerKey) > 1)
          BEGIN
-            IF NOT EXISTS ( SELECT 1 
+            IF NOT EXISTS ( SELECT 1
                             FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-                            JOIN dbo.LOC LOC WITH (NOLOCK) ON LLI.LOC = LOC.LOC 
+                            JOIN dbo.LOC LOC WITH (NOLOCK) ON LLI.LOC = LOC.LOC
                             WHERE  LLI.LOC = @cFromLOC
-                            AND   (LLI.QTY - LLI.QTYAllocated - LLI.QTYPicked - 
+                            AND   (LLI.QTY - LLI.QTYAllocated - LLI.QTYPicked -
                                   (CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END)) > 0
                             AND   LOC.Facility = @cFacility
-                            AND   EXISTS ( SELECT 1 FROM dbo.StorerGroup SG WITH (NOLOCK) 
-                                           WHERE SG.StorerGroup = @cStorerGroup 
+                            AND   EXISTS ( SELECT 1 FROM dbo.StorerGroup SG WITH (NOLOCK)
+                                           WHERE SG.StorerGroup = @cStorerGroup
                                            AND SG.StorerKey = LLI.StorerKey))
             BEGIN
                SET @nErrNo = 62562
@@ -349,7 +346,7 @@ BEGIN
             BEGIN
                SELECT TOP 1 @cChkStorerKey = StorerKey
                FROM dbo.LOTxLOCxID LLI (NOLOCK)
-               JOIN dbo.LOC LOC WITH (NOLOCK) ON LLI.LOC = LOC.LOC 
+               JOIN dbo.LOC LOC WITH (NOLOCK) ON LLI.LOC = LOC.LOC
                WHERE  LLI.LOC = @cFromLOC
                AND   (LLI.QTY - LLI.QTYAllocated - LLI.QTYPicked - (CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END)) > 0
                AND   LOC.Facility = @cFacility
@@ -363,7 +360,7 @@ BEGIN
          BEGIN
             SELECT TOP 1 @cChkStorerKey = StorerKey
             FROM dbo.LOTxLOCxID LLI (NOLOCK)
-            JOIN dbo.LOC LOC WITH (NOLOCK) ON LLI.LOC = LOC.LOC 
+            JOIN dbo.LOC LOC WITH (NOLOCK) ON LLI.LOC = LOC.LOC
             WHERE  LLI.LOC = @cFromLOC
             AND   (LLI.QTY - LLI.QTYAllocated - LLI.QTYPicked - (CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END)) > 0
             AND   LOC.Facility = @cFacility
@@ -383,14 +380,14 @@ BEGIN
       END
 
       -- (james02)
-      -- If for the loc entered, there is record in lotxlocxid.storerkey 
+      -- If for the loc entered, there is record in lotxlocxid.storerkey
       -- not defined in storergroup.storerkey, error message should be prompted.
       IF @nMultiStorer = 1
       BEGIN
          SET @nTotalRec = 0
-         SELECT @nTotalRec = COUNT(1) 
-         FROM dbo.LotxLocxID LLI WITH (NOLOCK) 
-         JOIN dbo.LOC LOC WITH (NOLOCK) ON LLI.LOC = LOC.LOC 
+         SELECT @nTotalRec = COUNT(1)
+         FROM dbo.LotxLocxID LLI WITH (NOLOCK)
+         JOIN dbo.LOC LOC WITH (NOLOCK) ON LLI.LOC = LOC.LOC
          WHERE  LLI.LOC = @cFromLOC
          AND   (LLI.QTY - LLI.QTYAllocated - LLI.QTYPicked - (CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END)) > 0
          AND   LOC.Facility = @cFacility
@@ -403,16 +400,16 @@ BEGIN
             GOTO Step_1_Fail
          END
       END
-      
+
       -- Get total record
       DECLARE @nQTYAlloc INT
       SET @nTotalRec = 0
-      SELECT 
+      SELECT
          @nTotalRec = COUNT( DISTINCT SKU.SKU), -- Total no of SKU
          @nQTYAlloc = IsNULL( SUM( QTYAllocated + (CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END)), 0)  -- SHONG 26022013
       FROM dbo.LOTxLOCxID LLI (NOLOCK)
          INNER JOIN dbo.SKU SKU (NOLOCK) ON (LLI.StorerKey = SKU.StorerKey AND LLI.SKU = SKU.SKU)
-      WHERE LLI.StorerKey = CASE WHEN @nMultiStorer = 1 THEN LLI.StorerKey ELSE @cStorerKey END 
+      WHERE LLI.StorerKey = CASE WHEN @nMultiStorer = 1 THEN LLI.StorerKey ELSE @cStorerKey END
          AND LLI.LOC = @cFromLOC
          AND (LLI.QTY - LLI.QTYAllocated - LLI.QTYPicked - (CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END)) > 0
       IF @nTotalRec = 0
@@ -431,7 +428,7 @@ BEGIN
       END
 
       -- Extended update
-      IF @cExtendedValidateSP <> '' 
+      IF @cExtendedValidateSP <> ''
       BEGIN
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
          BEGIN
@@ -441,7 +438,7 @@ BEGIN
                '@nMobile         INT,       '     +
                '@nFunc           INT,       '     +
                '@cLangCode       NVARCHAR( 3),  ' +
-               '@nStep           INT,       '     + 
+               '@nStep           INT,       '     +
                '@nInputKey       INT,       '     +
                '@cStorerKey      NVARCHAR( 15), ' +
                '@cFromLOC        NVARCHAR( 10), ' +
@@ -449,23 +446,23 @@ BEGIN
                '@cToID           NVARCHAR( 18), ' +
                '@cOption         NVARCHAR( 1),  ' +
                '@nErrNo          INT OUTPUT,    ' +
-               '@cErrMsg         NVARCHAR( 20) OUTPUT'  
+               '@cErrMsg         NVARCHAR( 20) OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFromLOC, @cToLOC, @cToID, @cOption, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
             IF @nErrNo <> 0
             BEGIN
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') 
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
                GOTO Step_1_Fail
             END
          END
       END
 
       -- Get LOTxLOCxID info
-      SELECT TOP 1 
-         @cSKU_StorerKey = SKU.StorerKey, 
-         @cSKU = SKU.SKU, 
+      SELECT TOP 1
+         @cSKU_StorerKey = SKU.StorerKey,
+         @cSKU = SKU.SKU,
          @nQTY = SUM( LLI.QTY - LLI.QTYAllocated - LLI.QTYPicked - (CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END))
       FROM dbo.LOTxLOCxID LLI (NOLOCK)
          INNER JOIN dbo.SKU SKU (NOLOCK) ON (LLI.StorerKey = SKU.StorerKey AND LLI.SKU = SKU.SKU)
@@ -477,18 +474,18 @@ BEGIN
 
       -- Get Pack info
       SELECT
-         @cSKUDescr = SKU.Descr, 
-         @cMUOM_Desc = Pack.PackUOM3, 
-         @cPUOM_Desc = 
+         @cSKUDescr = SKU.Descr,
+         @cMUOM_Desc = Pack.PackUOM3,
+         @cPUOM_Desc =
             CASE @cPUOM
                WHEN '2' THEN Pack.PackUOM1 -- Case
                WHEN '3' THEN Pack.PackUOM2 -- Inner pack
-               WHEN '6' THEN Pack.PackUOM3 -- Master unit
+  WHEN '6' THEN Pack.PackUOM3 -- Master unit
                WHEN '1' THEN Pack.PackUOM4 -- Pallet
                WHEN '4' THEN Pack.PackUOM8 -- Other unit 1
                WHEN '5' THEN Pack.PackUOM9 -- Other unit 2
-            END, 
-         @nPUOM_Div = CAST( IsNULL( 
+            END,
+         @nPUOM_Div = CAST( IsNULL(
             CASE @cPUOM
                WHEN '2' THEN Pack.CaseCNT
                WHEN '3' THEN Pack.InnerPack
@@ -497,13 +494,13 @@ BEGIN
                WHEN '4' THEN Pack.OtherUnit1
                WHEN '5' THEN Pack.OtherUnit2
             END, 1) AS INT)
-      FROM dbo.SKU SKU (NOLOCK) 
+      FROM dbo.SKU SKU (NOLOCK)
          INNER JOIN dbo.Pack Pack (NOLOCK) ON (SKU.PackKey = Pack.PackKey)
       WHERE SKU.StorerKey = CASE WHEN @nMultiStorer = 1 THEN @cSKU_StorerKey ELSE @cStorerKey END
          AND SKU.SKU = @cSKU
 
       -- Convert to prefer UOM QTY
-      IF @cPUOM = '6' OR -- When preferred UOM = master unit 
+      IF @cPUOM = '6' OR -- When preferred UOM = master unit
          @nPUOM_Div = 0 -- UOM not setup
       BEGIN
          SET @cPUOM_Desc = ''
@@ -517,7 +514,7 @@ BEGIN
       END
 
       -- Extended update
-      IF @cExtendedInfoSP <> '' 
+      IF @cExtendedInfoSP <> ''
       BEGIN
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
          BEGIN
@@ -529,7 +526,7 @@ BEGIN
                '@nMobile         INT,       '     +
                '@nFunc           INT,       '     +
                '@cLangCode       NVARCHAR( 3),  ' +
-               '@nStep           INT,       '     + 
+               '@nStep           INT,       '     +
                '@nInputKey       INT,       '     +
                '@cStorerKey      NVARCHAR( 15), ' +
                '@cFromLOC        NVARCHAR( 10), ' +
@@ -537,7 +534,7 @@ BEGIN
                '@cToID           NVARCHAR( 18), ' +
                '@cSKU            NVARCHAR( 20), ' +
                '@cOption         NVARCHAR( 1),  ' +
-               '@cExtendedInfo   NVARCHAR( 20) OUTPUT'  
+               '@cExtendedInfo   NVARCHAR( 20) OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFromLOC, @cToLOC, @cToID, @cSKU, @cOption, @cExtendedInfo OUTPUT
@@ -545,7 +542,7 @@ BEGIN
             SET @cOutField13 = CASE WHEN ISNULL( @cExtendedInfo, '') <> '' THEN @cExtendedInfo ELSE '' END
          END
       END
-      
+
       -- Prep next screen var
       SET @nCurrentRec = 1
       SET @cToLOC = ''
@@ -560,9 +557,9 @@ BEGIN
       SET @cOutField10 = CAST( @nMQTY AS NVARCHAR( 5))
       SET @cOutField11 = '' -- ToLOC
       SET @cOutField12 = '' -- ToID
-      SET @nCounter    = 0  
-      EXEC rdt.rdtSetFocusField @nMobile, 11 -- LOC  
-      
+      SET @nCounter    = 0
+      EXEC rdt.rdtSetFocusField @nMobile, 11 -- LOC
+
       -- Go to next screen
       SET @nScn = @nScn + 1
       SET @nStep = @nStep + 1
@@ -626,11 +623,11 @@ BEGIN
          -- Standard decode
          IF @cDecodeSP = '1'
          BEGIN
-            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode, 
-               @cID     = @cToID   OUTPUT, 
-               @cUPC    = @cSKU    OUTPUT, 
-               @nQTY    = @nQTY    OUTPUT, 
-               @nErrNo  = @nErrNo  OUTPUT, 
+            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
+               @cID     = @cToID   OUTPUT,
+               @cUPC    = @cSKU    OUTPUT,
+               @nQTY    = @nQTY    OUTPUT,
+               @nErrNo  = @nErrNo  OUTPUT,
                @cErrMsg = @cErrMsg OUTPUT,
                @cType   = 'ID'
          END
@@ -667,30 +664,30 @@ BEGIN
       END
 
       -- Validate blank
-      IF @cToLOC = '' OR @cToLOC IS NULL 
+      IF @cToLOC = '' OR @cToLOC IS NULL
       BEGIN
          IF @nCurrentRec = @nTotalRec
             SET @nCurrentRec = 0
-         
+
          -- Get LOTxLOCxID info
          DECLARE @curLLI CURSOR
          SET @curLLI = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-            SELECT 
-               SKU.StorerKey, 
-               SKU.SKU, 
+            SELECT
+               SKU.StorerKey,
+               SKU.SKU,
                SUM( LLI.QTY - LLI.QTYAllocated - LLI.QTYPicked - (CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END))
             FROM dbo.LOTxLOCxID LLI (NOLOCK)
                INNER JOIN dbo.SKU SKU (NOLOCK) ON (LLI.StorerKey = SKU.StorerKey AND LLI.SKU = SKU.SKU)
             WHERE LLI.StorerKey = CASE WHEN @nMultiStorer = 1 THEN LLI.StorerKey ELSE @cStorerKey END
                AND LLI.LOC = @cFromLOC
                AND (LLI.QTY - LLI.QTYAllocated - LLI.QTYPicked - (CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END)) > 0
-               AND 1 = CASE WHEN @nMultiStorer = 1 THEN (SELECT 1 FROM dbo.StorerGroup SG WITH (NOLOCK) WHERE LLI.StorerKey = SG.StorerKey AND SG.StorerGroup = @cStorerKey) 
+               AND 1 = CASE WHEN @nMultiStorer = 1 THEN (SELECT 1 FROM dbo.StorerGroup SG WITH (NOLOCK) WHERE LLI.StorerKey = SG.StorerKey AND SG.StorerGroup = @cStorerKey)
                        ELSE 1 END
-            GROUP BY SKU.StorerKey, SKU.SKU
+        GROUP BY SKU.StorerKey, SKU.SKU
             ORDER BY SKU.SKU
          OPEN @curLLI
          FETCH NEXT FROM @curLLI INTO @cSKU_StorerKey, @cSKU, @nQTY
-         
+
          -- Skip to the record
          SET @i = 1
          WHILE @@FETCH_STATUS = 0
@@ -702,9 +699,9 @@ BEGIN
 
          -- Get Pack info
          SELECT
-            @cSKUDescr = SKU.Descr, 
-            @cMUOM_Desc = Pack.PackUOM3, 
-            @cPUOM_Desc = 
+            @cSKUDescr = SKU.Descr,
+            @cMUOM_Desc = Pack.PackUOM3,
+            @cPUOM_Desc =
                CASE @cPUOM
                   WHEN '2' THEN Pack.PackUOM1 -- Case
                   WHEN '3' THEN Pack.PackUOM2 -- Inner pack
@@ -712,8 +709,8 @@ BEGIN
                   WHEN '1' THEN Pack.PackUOM4 -- Pallet
                   WHEN '4' THEN Pack.PackUOM8 -- Other unit 1
                   WHEN '5' THEN Pack.PackUOM9 -- Other unit 2
-               END, 
-            @nPUOM_Div = CAST( IsNULL( 
+               END,
+            @nPUOM_Div = CAST( IsNULL(
                CASE @cPUOM
                   WHEN '2' THEN Pack.CaseCNT
                   WHEN '3' THEN Pack.InnerPack
@@ -722,13 +719,13 @@ BEGIN
                   WHEN '4' THEN Pack.OtherUnit1
                   WHEN '5' THEN Pack.OtherUnit2
                END, 1) AS INT)
-         FROM dbo.SKU SKU (NOLOCK) 
+         FROM dbo.SKU SKU (NOLOCK)
             INNER JOIN dbo.Pack Pack (NOLOCK) ON (SKU.PackKey = Pack.PackKey)
          WHERE SKU.StorerKey = CASE WHEN @nMultiStorer = 1 THEN @cSKU_StorerKey ELSE @cStorerKey END
             AND SKU.SKU = @cSKU
-         
+
          -- Convert to prefer UOM QTY
-         IF @cPUOM = '6' OR -- When preferred UOM = master unit 
+         IF @cPUOM = '6' OR -- When preferred UOM = master unit
             @nPUOM_Div = 0 -- UOM not setup
          BEGIN
             SET @cPUOM_Desc = ''
@@ -742,7 +739,7 @@ BEGIN
          END
 
          -- Extended update
-         IF @cExtendedInfoSP <> '' 
+         IF @cExtendedInfoSP <> ''
          BEGIN
             IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
             BEGIN
@@ -754,7 +751,7 @@ BEGIN
                   '@nMobile         INT,       '     +
                   '@nFunc           INT,       '     +
                   '@cLangCode       NVARCHAR( 3),  ' +
-                  '@nStep           INT,       '     + 
+                  '@nStep           INT,       '     +
                   '@nInputKey       INT,       '     +
                   '@cStorerKey      NVARCHAR( 15), ' +
                   '@cFromLOC        NVARCHAR( 10), ' +
@@ -762,7 +759,7 @@ BEGIN
                   '@cToID           NVARCHAR( 18), ' +
                   '@cSKU            NVARCHAR( 20), ' +
                   '@cOption         NVARCHAR( 1),  ' +
-                  '@cExtendedInfo   NVARCHAR( 20) OUTPUT'  
+                  '@cExtendedInfo   NVARCHAR( 20) OUTPUT'
 
                EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                   @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFromLOC, @cToLOC, @cToID, @cSKU, @cOption, @cExtendedInfo OUTPUT
@@ -770,7 +767,7 @@ BEGIN
                SET @cOutField13 = CASE WHEN ISNULL( @cExtendedInfo, '') <> '' THEN @cExtendedInfo ELSE '' END
             END
          END
-      
+
          -- Prep next screen var
          SET @nCurrentRec = @nCurrentRec + 1
          SET @cToLOC = ''
@@ -778,7 +775,7 @@ BEGIN
          SET @cOutField03 = CAST( @nCurrentRec AS NVARCHAR( 5)) + '/' + CAST( @nTotalRec AS NVARCHAR( 5))
          SET @cOutField04 = @cSKU
          SET @cOutField05 = SUBSTRING( @cSKUDescr, 1, 20)
-         SET @cOutField06 = SUBSTRING( @cSKUDescr, 21, 20)
+       SET @cOutField06 = SUBSTRING( @cSKUDescr, 21, 20)
          SET @cOutField07 = @cPUOM_Desc
          SET @cOutField08 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 5)) END
          SET @cOutField09 = @cMUOM_Desc
@@ -788,22 +785,25 @@ BEGIN
 
          GOTO Quit
       END
-      
-      -- add loc prefix (cc01)          
-     IF @cLOCLookupSP = 1   and @nCounter<1          
-     BEGIN                
-      EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,         
-      @cToLOC        OUTPUT,                 
-      @nErrNo     OUTPUT,                 
-      @cErrMsg    OUTPUT                
-      IF @nErrNo <> 0                
-       GOTO Step_2_Fail                
-     END  
+
+      -- add loc prefix (cc01)
+     IF @cLOCLookupSP = 1   and @nCounter<1
+     BEGIN
+      EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+      @cToLOC        OUTPUT,
+      @nErrNo     OUTPUT,
+      @cErrMsg    OUTPUT
+      IF @nErrNo <> 0
+       GOTO Step_2_Fail
+     END
 
       -- Get LOC info
       SELECT @cChkFacility = Facility
       FROM dbo.LOC (NOLOCK)
       WHERE LOC = @cToLOC
+
+      --INSERT INTO traceinfo (TraceName,Col1,Col2,col3)
+      --VALUES ('cc512',@cToLOC,@cLOCLookupSP,@cChkFacility)
 
       -- Validate LOC
       IF @@ROWCOUNT = 0
@@ -821,21 +821,21 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( 62557, @cLangCode, 'DSP') --'Diff facility'
             GOTO Step_2_Fail
          END
-         
-      IF isnull(@cToID,'') = '' and @nCounter<1 --(yeekung01)  
-      BEGIN  
-         SET @cOutField11=@cToLOC   
-         SET @nCounter = @nCounter+1  
-         EXEC rdt.rdtSetFocusField @nMobile, 12 -- ID  
-         GOTO Quit  
-      END 
-      
+
+      IF isnull(@cToID,'') = '' and @nCounter<1 --(yeekung01)
+      BEGIN
+         SET @cOutField11=@cToLOC
+         SET @nCounter = @nCounter+1
+         EXEC rdt.rdtSetFocusField @nMobile, 12 -- ID
+         GOTO Quit
+      END
+
      -- (Vicky01) - Start
      IF ISNULL(RTRIM(@cToID), '') <> ''
      BEGIN
          -- Get LOTxLOCxID info
-         DECLARE C_CUR CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
-         SELECT LLI.ID 
+         DECLARE C_CUR CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT LLI.ID
          FROM dbo.LOTxLOCxID LLI (NOLOCK)
          WHERE LLI.StorerKey = CASE WHEN @nMultiStorer = 1 THEN LLI.StorerKey ELSE @cStorerKey END
             AND LLI.LOC = @cFromLOC
@@ -843,11 +843,11 @@ BEGIN
             AND ISNULL(RTRIM(LLI.ID), '') <> ''
             AND (LLI.QTY - LLI.QTYAllocated - LLI.QTYPicked - (CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END)) > 0
          GROUP BY LLI.ID
-         
-         OPEN C_CUR 
-         
+
+         OPEN C_CUR
+
          FETCH NEXT FROM C_CUR INTO @cFromID
-         
+
          WHILE @@FETCH_STATUS <> -1
          BEGIN
 
@@ -863,12 +863,12 @@ BEGIN
           FETCH NEXT FROM C_CUR INTO @cFromID
          END -- While detail
          CLOSE C_CUR
-         DEALLOCATE C_CUR 
+         DEALLOCATE C_CUR
      END
      -- (Vicky01) - End
 
       -- Extended update
-      IF @cExtendedValidateSP <> '' 
+      IF @cExtendedValidateSP <> ''
       BEGIN
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
          BEGIN
@@ -878,7 +878,7 @@ BEGIN
                '@nMobile         INT,       '     +
                '@nFunc           INT,       '     +
                '@cLangCode       NVARCHAR( 3),  ' +
-               '@nStep           INT,       '     + 
+               '@nStep           INT,       '     +
                '@nInputKey       INT,       '     +
                '@cStorerKey      NVARCHAR( 15), ' +
                '@cFromLOC        NVARCHAR( 10), ' +
@@ -886,14 +886,14 @@ BEGIN
                '@cToID           NVARCHAR( 18), ' +
                '@cOption         NVARCHAR( 1),  ' +
                '@nErrNo          INT OUTPUT,    ' +
-               '@cErrMsg         NVARCHAR( 20) OUTPUT'  
+               '@cErrMsg         NVARCHAR( 20) OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFromLOC, @cToLOC, @cToID, @cOption, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
             IF @nErrNo <> 0
             BEGIN
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') 
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
                GOTO Step_2_Fail
             END
          END
@@ -906,13 +906,14 @@ BEGIN
          BEGIN
             EXECUTE rdt.rdt_Move
                @nMobile     = @nMobile,
-               @cLangCode   = @cLangCode, 
+               @nFunc       = @nFunc, --(yeekung02)
+               @cLangCode   = @cLangCode,
                @nErrNo      = @nErrNo  OUTPUT,
                @cErrMsg     = @cErrMsg OUTPUT, -- screen limitation, 20 NVARCHAR max
-               @cSourceType = 'rdtfnc_Move_LOC', 
+               @cSourceType = 'rdtfnc_Move_LOC',
                @cStorerKey  = @cStorerKey,
-               @cFacility   = @cFacility, 
-               @cFromLOC    = @cFromLOC, 
+               @cFacility   = @cFacility,
+               @cFromLOC    = @cFromLOC,
                @cToLOC      = @cToLOC,
                @nMoveCnt    = 0
          END
@@ -920,24 +921,25 @@ BEGIN
          BEGIN
             -- (james02)
             -- Using loop here to make sure every move is within storerkey defined in storergroup
-            DECLARE CUR_LOOP CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
-            SELECT DISTINCT StorerKey 
-            FROM dbo.LotxLocxID LLI WITH (NOLOCK) 
+            DECLARE CUR_LOOP CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+            SELECT DISTINCT StorerKey
+            FROM dbo.LotxLocxID LLI WITH (NOLOCK)
             WHERE LLI.LOC = @cFromLOC
             AND   EXISTS (SELECT 1 from dbo.StorerGroup SG WITH (NOLOCK) WHERE LLI.StorerKey = SG.StorerKey AND SG.StorerGroup = @cStorerKey)
             OPEN CUR_LOOP
-            FETCH NEXT FROM CUR_LOOP INTO @cLoop_StorerKey 
+            FETCH NEXT FROM CUR_LOOP INTO @cLoop_StorerKey
             WHILE @@FETCH_STATUS <> -1
             BEGIN
                EXECUTE rdt.rdt_Move
                   @nMobile     = @nMobile,
-                  @cLangCode   = @cLangCode, 
+                  @nFunc       = @nFunc, --(yeekung02)
+                  @cLangCode   = @cLangCode,
                   @nErrNo      = @nErrNo  OUTPUT,
                   @cErrMsg     = @cErrMsg OUTPUT, -- screen limitation, 20 NVARCHAR max
-                  @cSourceType = 'rdtfnc_Move_LOC', 
+                  @cSourceType = 'rdtfnc_Move_LOC',
                   @cStorerKey  = @cLoop_StorerKey,
-                  @cFacility   = @cFacility, 
-                  @cFromLOC    = @cFromLOC, 
+                  @cFacility   = @cFacility,
+                  @cFromLOC    = @cFromLOC,
                   @cToLOC      = @cToLOC,
                   @nMoveCnt    = 0
 
@@ -953,13 +955,14 @@ BEGIN
          BEGIN
             EXECUTE rdt.rdt_Move
                @nMobile     = @nMobile,
-               @cLangCode   = @cLangCode, 
+               @nFunc       = @nFunc, --(yeekung02)
+               @cLangCode   = @cLangCode,
                @nErrNo      = @nErrNo  OUTPUT,
                @cErrMsg     = @cErrMsg OUTPUT, -- screen limitation, 20 NVARCHAR max
-               @cSourceType = 'rdtfnc_Move_LOC', 
+               @cSourceType = 'rdtfnc_Move_LOC',
                @cStorerKey  = @cStorerKey,
-               @cFacility   = @cFacility, 
-               @cFromLOC    = @cFromLOC, 
+               @cFacility   = @cFacility,
+               @cFromLOC    = @cFromLOC,
                @cToLOC      = @cToLOC,
                @cToID       = @cToID,
                @nMoveCnt    = 0
@@ -968,24 +971,25 @@ BEGIN
          BEGIN
             -- (james02)
             -- Using loop here to make sure every move is within storerkey defined in storergroup
-            DECLARE CUR_LOOP CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
-            SELECT DISTINCT StorerKey 
-            FROM dbo.LotxLocxID LLI WITH (NOLOCK) 
+            DECLARE CUR_LOOP CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+            SELECT DISTINCT StorerKey
+            FROM dbo.LotxLocxID LLI WITH (NOLOCK)
             WHERE LLI.LOC = @cFromLOC
             AND   EXISTS (SELECT 1 from dbo.StorerGroup SG WITH (NOLOCK) WHERE LLI.StorerKey = SG.StorerKey AND SG.StorerGroup = @cStorerKey)
             OPEN CUR_LOOP
-            FETCH NEXT FROM CUR_LOOP INTO @cLoop_StorerKey 
+            FETCH NEXT FROM CUR_LOOP INTO @cLoop_StorerKey
             WHILE @@FETCH_STATUS <> -1
             BEGIN
                EXECUTE rdt.rdt_Move
                   @nMobile     = @nMobile,
-                  @cLangCode   = @cLangCode, 
+                  @nFunc       = @nFunc, --(yeekung02)
+                  @cLangCode   = @cLangCode,
                   @nErrNo      = @nErrNo  OUTPUT,
                   @cErrMsg     = @cErrMsg OUTPUT, -- screen limitation, 20 NVARCHAR max
-                  @cSourceType = 'rdtfnc_Move_LOC', 
+                  @cSourceType = 'rdtfnc_Move_LOC',
                   @cStorerKey  = @cLoop_StorerKey,
-                  @cFacility   = @cFacility, 
-                  @cFromLOC    = @cFromLOC, 
+                  @cFacility   = @cFacility,
+                  @cFromLOC    = @cFromLOC,
                   @cToLOC      = @cToLOC,
                   @cToID       = @cToID,
                   @nMoveCnt    = 0
@@ -997,17 +1001,17 @@ BEGIN
          END
       END
       -- Vicky01 - End
- 
+
       IF @nErrNo <> 0
       BEGIN
          SET @cErrMsg = @cErrMsg --rdt.rdtgetmessage( 62558, @cLangCode, 'DSP') --LocMoveFailed
          SET @cOption = ''
-         GOTO Step_2_Fail      
+         GOTO Step_2_Fail
       END
       ELSE
       BEGIN
           -- (Vicky06) EventLog - QTY
-          IF ISNULL(RTRIM(@cToID), '') = '' 
+          IF ISNULL(RTRIM(@cToID), '') = ''
           BEGIN
              SET @cToID = ''
           END
@@ -1026,21 +1030,21 @@ BEGIN
       END
 
       SET @cOutField01 = @cToLOC -- (james03)
-         
+
       SET @nScn  = @nScn + 1   --msg
       SET @nStep = @nStep + 1   --msg
 
 
       /*
       SELECT @nTotalMoveCnt = COUNT(1)
-      FROM dbo.LOTxLOCxID LLI (NOLOCK) 
+      FROM dbo.LOTxLOCxID LLI (NOLOCK)
       WHERE LLI.StorerKey = CASE WHEN @nMultiStorer = 1 THEN LLI.StorerKey ELSE @cStorerKey END
          AND LLI.LOC = @cFromLOC
          AND (LLI.QTY - LLI.QTYAllocated - LLI.QTYPicked - (CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END)) > 0
-         
+
       SET @cOutField01 = @nTotalMoveCnt -- no. of loc to be moved
-      SET @cOutField02 = '' 
-      
+      SET @cOutField02 = ''
+
       -- Go to next screen
       SET @nScn = @nScn + 2
       SET @nStep = @nStep + 2
@@ -1082,7 +1086,7 @@ BEGIN
 
    -- Prep next screen var
    SET @cFromLOC = ''
-   
+
    SET @cOutField02 = '' -- FromLOC
 END
 GOTO Quit
@@ -1090,7 +1094,7 @@ GOTO Quit
 /*
 /********************************************************************************
 Step 4. scn = 1013. Message screen
-   Only move 10 records 
+   Only move 10 records
    at one time
 
    Remaining Rec = 999
@@ -1111,13 +1115,13 @@ BEGIN
    BEGIN
       SET @cErrMsg = rdt.rdtgetmessage( 4, @cLangCode, 'DSP') --Invalid Option
       SET @cOption = ''
-      GOTO Step_4_Fail      
+      GOTO Step_4_Fail
    END
 
    IF @nTotalMoveCnt > 10    --still got > 10 records to move
       SET @nMoveCnt = 10
    ELSE
-      SET @nMoveCnt = 0   --move remaining records
+      SET @nMoveCnt = 0 --move remaining records
 
    IF RTRIM(@cOption) = '1'   --Yes, start to move
    BEGIN
@@ -1128,13 +1132,13 @@ BEGIN
          BEGIN
             EXECUTE rdt.rdt_Move
                @nMobile     = @nMobile,
-               @cLangCode   = @cLangCode, 
+               @cLangCode   = @cLangCode,
                @nErrNo      = @nErrNo  OUTPUT,
                @cErrMsg     = @cErrMsg OUTPUT, -- screen limitation, 20 NVARCHAR max
-               @cSourceType = 'rdtfnc_Move_LOC', 
+               @cSourceType = 'rdtfnc_Move_LOC',
                @cStorerKey  = @cStorerKey,
-               @cFacility   = @cFacility, 
-               @cFromLOC    = @cFromLOC, 
+               @cFacility   = @cFacility,
+               @cFromLOC    = @cFromLOC,
                @cToLOC      = @cToLOC,
                @nMoveCnt    = @nMoveCnt
          END
@@ -1142,24 +1146,24 @@ BEGIN
          BEGIN
             -- (james02)
             -- Using loop here to make sure every move is within storerkey defined in storergroup
-            DECLARE CUR_LOOP CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
-            SELECT DISTINCT StorerKey 
-            FROM dbo.LotxLocxID LLI WITH (NOLOCK) 
+            DECLARE CUR_LOOP CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+            SELECT DISTINCT StorerKey
+            FROM dbo.LotxLocxID LLI WITH (NOLOCK)
             WHERE LLI.LOC = @cFromLOC
             AND   EXISTS (SELECT 1 from dbo.StorerGroup SG WITH (NOLOCK) WHERE LLI.StorerKey = SG.StorerKey AND SG.StorerGroup = @cStorerKey)
             OPEN CUR_LOOP
-            FETCH NEXT FROM CUR_LOOP INTO @cLoop_StorerKey 
+            FETCH NEXT FROM CUR_LOOP INTO @cLoop_StorerKey
             WHILE @@FETCH_STATUS <> -1
             BEGIN
                EXECUTE rdt.rdt_Move
                   @nMobile     = @nMobile,
-                  @cLangCode   = @cLangCode, 
+                  @cLangCode   = @cLangCode,
                   @nErrNo      = @nErrNo  OUTPUT,
                   @cErrMsg     = @cErrMsg OUTPUT, -- screen limitation, 20 NVARCHAR max
-                  @cSourceType = 'rdtfnc_Move_LOC', 
+                  @cSourceType = 'rdtfnc_Move_LOC',
                   @cStorerKey  = @cLoop_StorerKey,
-                  @cFacility   = @cFacility, 
-                  @cFromLOC    = @cFromLOC, 
+                  @cFacility   = @cFacility,
+                  @cFromLOC    = @cFromLOC,
                   @cToLOC      = @cToLOC,
                   @nMoveCnt    = @nMoveCnt
 
@@ -1175,13 +1179,13 @@ BEGIN
          BEGIN
             EXECUTE rdt.rdt_Move
                @nMobile     = @nMobile,
-               @cLangCode   = @cLangCode, 
+               @cLangCode   = @cLangCode,
                @nErrNo      = @nErrNo  OUTPUT,
                @cErrMsg     = @cErrMsg OUTPUT, -- screen limitation, 20 NVARCHAR max
-               @cSourceType = 'rdtfnc_Move_LOC', 
+               @cSourceType = 'rdtfnc_Move_LOC',
                @cStorerKey  = @cStorerKey,
-               @cFacility   = @cFacility, 
-               @cFromLOC    = @cFromLOC, 
+               @cFacility   = @cFacility,
+               @cFromLOC    = @cFromLOC,
                @cToLOC      = @cToLOC,
                @cToID       = @cToID,
                @nMoveCnt    = @nMoveCnt
@@ -1190,24 +1194,24 @@ BEGIN
          BEGIN
             -- (james02)
             -- Using loop here to make sure every move is within storerkey defined in storergroup
-            DECLARE CUR_LOOP CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
-            SELECT DISTINCT StorerKey 
-            FROM dbo.LotxLocxID LLI WITH (NOLOCK) 
+            DECLARE CUR_LOOP CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+            SELECT DISTINCT StorerKey
+            FROM dbo.LotxLocxID LLI WITH (NOLOCK)
             WHERE LLI.LOC = @cFromLOC
             AND   EXISTS (SELECT 1 from dbo.StorerGroup SG WITH (NOLOCK) WHERE LLI.StorerKey = SG.StorerKey AND SG.StorerGroup = @cStorerKey)
             OPEN CUR_LOOP
-            FETCH NEXT FROM CUR_LOOP INTO @cLoop_StorerKey 
+            FETCH NEXT FROM CUR_LOOP INTO @cLoop_StorerKey
             WHILE @@FETCH_STATUS <> -1
             BEGIN
                EXECUTE rdt.rdt_Move
                   @nMobile     = @nMobile,
-                  @cLangCode   = @cLangCode, 
+                  @cLangCode   = @cLangCode,
                   @nErrNo      = @nErrNo  OUTPUT,
                   @cErrMsg     = @cErrMsg OUTPUT, -- screen limitation, 20 NVARCHAR max
-                  @cSourceType = 'rdtfnc_Move_LOC', 
+                  @cSourceType = 'rdtfnc_Move_LOC',
                   @cStorerKey  = @cLoop_StorerKey,
-                  @cFacility   = @cFacility, 
-                  @cFromLOC    = @cFromLOC, 
+                  @cFacility   = @cFacility,
+                  @cFromLOC    = @cFromLOC,
                   @cToLOC      = @cToLOC,
                   @cToID       = @cToID,
                   @nMoveCnt    = @nMoveCnt
@@ -1219,19 +1223,19 @@ BEGIN
          END
       END
       -- Vicky01 - End
- 
+
       IF @nErrNo <> 0
       BEGIN
          SET @cErrMsg = @cErrMsg --rdt.rdtgetmessage( 62558, @cLangCode, 'DSP') --LocMoveFailed
          SET @cOption = ''
-         GOTO Step_4_Fail      
+         GOTO Step_4_Fail
       END
       ELSE
       BEGIN
          SET @nTotalMoveCnt = @nTotalMoveCnt - 10
 
           -- (Vicky06) EventLog - QTY
-          IF ISNULL(RTRIM(@cToID), '') = '' 
+          IF ISNULL(RTRIM(@cToID), '') = ''
           BEGIN
              SET @cToID = ''
           END
@@ -1252,12 +1256,12 @@ BEGIN
       IF @nTotalMoveCnt > 0
       BEGIN
          SET @cOutField01 = @nTotalMoveCnt -- no. of loc to be moved
-         SET @cOutField02 = '' 
+         SET @cOutField02 = ''
       END
       ELSE
       BEGIN
          SET @cOutField01 = @cToLOC -- (james03)
-         
+
          SET @nScn  = @nScn - 1   --msg
          SET @nStep = @nStep - 1   --msg
       END
@@ -1289,23 +1293,23 @@ Quit. Update back to I/O table, ready to be pick up by JBOSS
 ********************************************************************************/
 Quit:
 BEGIN
-   UPDATE RDTMOBREC WITH (ROWLOCK) SET 
-      EditDate = GETDATE(), 
-      ErrMsg = @cErrMsg, 
+   UPDATE RDTMOBREC WITH (ROWLOCK) SET
+      EditDate = GETDATE(),
+      ErrMsg = @cErrMsg,
       Func   = @nFunc,
       Step   = @nStep,
       Scn    = @nScn,
 
-      Facility  = @cFacility, 
+      Facility  = @cFacility,
       -- UserName  = @cUserName,-- (Vicky06)
 
-      V_StorerKey = @cStorerKey, 
-      V_SKU      = @cSKU, 
-      V_SKUDescr = @cSKUDescr, 
+      V_StorerKey = @cStorerKey,
+      V_SKU      = @cSKU,
+      V_SKUDescr = @cSKUDescr,
       V_UOM      = @cPUOM,
-   
-      V_String2  = @cFromLOC, 
-      V_String3  = @cToLOC, 
+
+      V_String2  = @cFromLOC,
+      V_String3  = @cToLOC,
       V_String4  = @cExtendedInfoSP,
       V_String5  = @cExtendedValidateSP,
 
@@ -1313,30 +1317,30 @@ BEGIN
       V_Integer2 = @nCurrentRec,
       V_Integer3 = @nTotalMoveCnt,
       V_Integer4 = @nMultiStorer,    -- (james25)
-			V_Integer5 = @nCounter, --(yeekung01) 
-      
+   V_Integer5 = @nCounter, --(yeekung01)
+
       V_String7 = @cToID,           -- (Vicky01)
       V_String9 = @cDecodeSP,
-      V_String10 = @cLOCLookupSP,   --(cc01)    
+      V_String10 = @cLOCLookupSP,   --(cc01)
 
-      I_Field01 = @cInField01,  O_Field01 = @cOutField01, 
-      I_Field02 = @cInField02,  O_Field02 = @cOutField02, 
-      I_Field03 = @cInField03,  O_Field03 = @cOutField03, 
-      I_Field04 = @cInField04,  O_Field04 = @cOutField04, 
-      I_Field05 = @cInField05,  O_Field05 = @cOutField05, 
-      I_Field06 = @cInField06,  O_Field06 = @cOutField06, 
-      I_Field07 = @cInField07,  O_Field07 = @cOutField07, 
-      I_Field08 = @cInField08,  O_Field08 = @cOutField08, 
-      I_Field09 = @cInField09,  O_Field09 = @cOutField09, 
-      I_Field10 = @cInField10,  O_Field10 = @cOutField10, 
-      I_Field11 = @cInField11,  O_Field11 = @cOutField11, 
-      I_Field12 = @cInField12,  O_Field12 = @cOutField12, 
-      I_Field13 = @cInField13,  O_Field13 = @cOutField13, 
-      I_Field14 = @cInField14,  O_Field14 = @cOutField14, 
+      I_Field01 = @cInField01,  O_Field01 = @cOutField01,
+      I_Field02 = @cInField02,  O_Field02 = @cOutField02,
+      I_Field03 = @cInField03,  O_Field03 = @cOutField03,
+      I_Field04 = @cInField04,  O_Field04 = @cOutField04,
+      I_Field05 = @cInField05,  O_Field05 = @cOutField05,
+      I_Field06 = @cInField06,  O_Field06 = @cOutField06,
+      I_Field07 = @cInField07,  O_Field07 = @cOutField07,
+      I_Field08 = @cInField08,  O_Field08 = @cOutField08,
+      I_Field09 = @cInField09,  O_Field09 = @cOutField09,
+      I_Field10 = @cInField10,  O_Field10 = @cOutField10,
+      I_Field11 = @cInField11,  O_Field11 = @cOutField11,
+      I_Field12 = @cInField12,  O_Field12 = @cOutField12,
+      I_Field13 = @cInField13,  O_Field13 = @cOutField13,
+      I_Field14 = @cInField14,  O_Field14 = @cOutField14,
       I_Field15 = @cInField15,  O_Field15 = @cOutField15
 
    WHERE Mobile = @nMobile
 END
 GO
-GRANT EXECUTE ON [RDT].[rdtfnc_Move_LOC] TO nSQL 
+GRANT EXECUTE ON  [RDT].[rdtfnc_Move_LOC] TO [NSQL]
 GO
