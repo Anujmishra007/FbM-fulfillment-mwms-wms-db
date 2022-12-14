@@ -15,7 +15,7 @@ GO
 /* Called By: ispPostMBOLShipWrapper                                       */
 /*                                                                         */
 /*                                                                         */
-/* GitLab Version: 1.0                                                     */
+/* GitLab Version: 1.1                                                     */
 /*                                                                         */
 /* Version: 5.4                                                            */
 /*                                                                         */
@@ -24,6 +24,7 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 21-Jan-2021  WLChooi 1.0   DevOps Combine Script                        */
+/* 20-Oct-2022  WLChooi 1.1   WMS-21029 - Insert TL2 by Option5 (WL01)     */
 /***************************************************************************/  
 CREATE OR ALTER PROC [dbo].[ispSHPMO07]  
 (     @c_MBOLkey     NVARCHAR(10)   
@@ -47,7 +48,53 @@ BEGIN
          , @c_Orderkey        NVARCHAR(10)
          , @c_Pickslipno      NVARCHAR(10)
          , @c_TransmitLogKey  NVARCHAR(10)
-       
+
+   --WL01 S
+   DECLARE @c_Key2            NVARCHAR(100)
+         , @c_SQL             NVARCHAR(MAX)
+         , @c_ExecArguments   NVARCHAR(MAX)
+         , @c_Facility        NVARCHAR(5) 
+         , @c_SValue          NVARCHAR(50)
+         , @c_Option1         NVARCHAR(50) = ''
+         , @c_Option2         NVARCHAR(50) = ''
+         , @c_Option3         NVARCHAR(50) = ''
+         , @c_Option4         NVARCHAR(50) = ''
+         , @c_Option5         NVARCHAR(4000) = ''
+
+   IF ISNULL(@c_Storerkey,'') = ''
+   BEGIN
+      SELECT TOP 1 @c_Storerkey = OH.Storerkey
+      FROM ORDERS OH (NOLOCK)
+      WHERE OH.MBOLKey = @c_MBOLkey
+   END
+
+   EXEC nspGetRight  
+      @c_Facility          -- facility  
+   ,  @c_Storerkey         -- Storerkey  
+   ,  NULL                 -- Sku  
+   ,  'PostMBOLShipSP' -- Configkey  
+   ,  @b_Success                 OUTPUT   
+   ,  @c_SValue                  OUTPUT   
+   ,  @n_Err                     OUTPUT   
+   ,  @c_ErrMsg                  OUTPUT 
+   ,  @c_Option1                 OUTPUT
+   ,  @c_Option2                 OUTPUT
+   ,  @c_Option3                 OUTPUT
+   ,  @c_Option4                 OUTPUT
+   ,  @c_Option5                 OUTPUT
+
+   IF @b_success <> 1  
+   BEGIN  
+      SET @n_continue = 3  
+      SET @n_err = 72790   
+      SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Executing nspGetRight. (ispSHPMO07)'   
+                  + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '   
+      GOTO QUIT_SP  
+   END 
+
+   SELECT @c_Key2 = dbo.fnc_GetParamValueFromString('@c_Key2', @c_Option5, '') 
+   --WL01 E
+
    SET @b_Success= 1 
    SET @n_Err    = 0  
    SET @c_ErrMsg = ''
@@ -63,34 +110,48 @@ BEGIN
          Orderkey    NVARCHAR(10) NULL,
          Storerkey   NVARCHAR(15) NULL,
          Pickslipno  NVARCHAR(10) NULL,
-         Conso       NVARCHAR(1)  NULL 
+         Conso       NVARCHAR(1)  NULL,
+         Key2        NVARCHAR(100)  NULL --WL01
       )
-      
+
+      --WL01 S
       --Discrete
-      INSERT INTO #TMP_DATA (Loadkey, Orderkey, Storerkey, Pickslipno, Conso) 
-      SELECT DISTINCT '', MD.Orderkey, PH.Storerkey, PH.Pickslipno, 'N'  
-      FROM MBOLDETAIL MD (NOLOCK)
-      JOIN ORDERS O (NOLOCK) ON MD.Orderkey = O.Orderkey  
-      JOIN PACKHEADER PH (NOLOCK) ON MD.Orderkey = PH.Orderkey  
-      WHERE MD.MBOLKey = @c_MBOLkey 
-      UNION ALL
-      SELECT DISTINCT LPD.LoadKey, '', PH.Storerkey, PH.Pickslipno, 'Y'  --Conso 
-      FROM MBOLDETAIL MD (NOLOCK)
-      JOIN LOADPLANDETAIL LPD (NOLOCK) ON LPD.Orderkey = MD.OrderKey
-      JOIN PACKHEADER PH (NOLOCK) ON PH.Loadkey = LPD.Loadkey  
-      WHERE MD.MBOLKey = @c_MBOLkey AND (PH.OrderKey = '' OR PH.OrderKey IS NULL)
+      SET @c_SQL = N' INSERT INTO #TMP_DATA (Loadkey, Orderkey, Storerkey, Pickslipno, Conso ' + CHAR(13)
+                 + N'                      , Key2) ' + CHAR(13)
+                 + N' SELECT DISTINCT '''', MBOLDETAIL.Orderkey, PACKHEADER.Storerkey, PACKHEADER.Pickslipno, ''N'' ' + CHAR(13)  
+                 + CASE WHEN ISNULL(@c_Key2,'') = '' THEN N' , '''' ' ELSE N' , ' + @c_Key2 END + CHAR(13)
+                 + N' FROM MBOLDETAIL (NOLOCK) ' + CHAR(13)
+                 + N' JOIN ORDERS (NOLOCK) ON MBOLDETAIL.Orderkey = ORDERS.Orderkey ' + CHAR(13)  
+                 + N' JOIN PACKHEADER (NOLOCK) ON MBOLDETAIL.Orderkey = PACKHEADER.Orderkey ' + CHAR(13)  
+                 + N' WHERE MBOLDETAIL.MBOLKey = @c_MBOLkey ' + CHAR(13) 
+                 + N' UNION ALL ' + CHAR(13)
+                 + N' SELECT DISTINCT LOADPLANDETAIL.LoadKey, '''', PACKHEADER.Storerkey, PACKHEADER.Pickslipno, ''Y'' ' + CHAR(13)  --Conso
+                 + CASE WHEN ISNULL(@c_Key2,'') = '' THEN N' , '''' ' ELSE N' , ' + @c_Key2 END + CHAR(13)
+                 + N' FROM MBOLDETAIL (NOLOCK) ' + CHAR(13)
+                 + N' JOIN LOADPLANDETAIL (NOLOCK) ON LOADPLANDETAIL.Orderkey = MBOLDETAIL.OrderKey ' + CHAR(13)
+                 + N' JOIN PACKHEADER (NOLOCK) ON PACKHEADER.Loadkey = LOADPLANDETAIL.Loadkey ' + CHAR(13)  
+                 + N' JOIN ORDERS (NOLOCK) ON MBOLDETAIL.Orderkey = ORDERS.Orderkey ' + CHAR(13)  
+                 + N' WHERE MBOLDETAIL.MBOLKey = @c_MBOLkey AND (PACKHEADER.OrderKey = '''' OR PACKHEADER.OrderKey IS NULL) '
+
+      SET @c_ExecArguments = N'  @c_MBOLkey  NVARCHAR(10)'
+
+      EXEC sp_ExecuteSql   @c_SQL     
+                         , @c_ExecArguments    
+                         , @c_MBOLkey
+      --WL01 E
 
       IF NOT EXISTS (SELECT 1 FROM #TMP_DATA)
       BEGIN
          GOTO QUIT_SP 
       END 
    END
-   
+
    --Discrete Cursor
    IF (@n_continue = 1 OR @n_continue = 2) 
    BEGIN
       DECLARE CUR_PACK CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-         SELECT Orderkey, Storerkey, Pickslipno  
+         SELECT Orderkey, Storerkey, Pickslipno
+              , Key2 --WL01   
          FROM #TMP_DATA 
          WHERE Conso = 'N'
          ORDER BY Orderkey
@@ -98,6 +159,7 @@ BEGIN
       OPEN CUR_PACK  
   
       FETCH NEXT FROM CUR_PACK INTO @c_Orderkey, @c_Storerkey, @c_Pickslipno 
+                                  , @c_Key2  --WL01
   
       WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)  
       BEGIN  
@@ -119,8 +181,8 @@ BEGIN
             GOTO QUIT_SP  
          END      
       
-         INSERT INTO TRANSMITLOG2 (transmitlogkey, tablename, key1, key3, transmitflag)
-         SELECT @c_TransmitLogKey, 'WSSOISCFMLOG', @c_Pickslipno, @c_Storerkey, '0'
+         INSERT INTO TRANSMITLOG2 (transmitlogkey, tablename, key1, key3, transmitflag, key2)   --WL01
+         SELECT @c_TransmitLogKey, 'WSSOISCFMLOG', @c_Pickslipno, @c_Storerkey, '0', @c_Key2    --WL01
          
          SELECT @n_err = @@ERROR  
          
@@ -134,6 +196,7 @@ BEGIN
          END 
          
          FETCH NEXT FROM CUR_PACK INTO @c_Orderkey, @c_Storerkey, @c_Pickslipno
+                                     , @c_Key2  --WL01
       END
    END
    
@@ -142,6 +205,7 @@ BEGIN
    BEGIN
       DECLARE CUR_PACKConso CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
          SELECT LoadKey, Storerkey , Pickslipno
+              , Key2   --WL01   
          FROM #TMP_DATA 
          WHERE Conso = 'Y'
          ORDER BY Loadkey
@@ -149,6 +213,7 @@ BEGIN
       OPEN CUR_PACKConso  
   
       FETCH NEXT FROM CUR_PACKConso INTO @c_Loadkey, @c_Storerkey, @c_Pickslipno  
+                                       , @c_Key2  --WL01
   
       WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)  
       BEGIN  
@@ -170,8 +235,8 @@ BEGIN
             GOTO QUIT_SP  
          END 
 
-         INSERT INTO TRANSMITLOG2 (transmitlogkey, tablename, key1, key3, transmitflag)
-         SELECT @c_TransmitLogKey, 'WSSOISCFMLOG', @c_Pickslipno, @c_Storerkey, '0'
+         INSERT INTO TRANSMITLOG2 (transmitlogkey, tablename, key1, key3, transmitflag, key2)   --WL01
+         SELECT @c_TransmitLogKey, 'WSSOISCFMLOG', @c_Pickslipno, @c_Storerkey, '0', @c_Key2    --WL01
          
          SELECT @n_err = @@ERROR  
          
@@ -185,6 +250,7 @@ BEGIN
          END 
          
          FETCH NEXT FROM CUR_PACKConso INTO @c_Loadkey, @c_Storerkey, @c_Pickslipno  
+                                          , @c_Key2  --WL01
       END
    END
 
