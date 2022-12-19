@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'dbo.isp_RtnLabel01_RP') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure dbo.isp_RtnLabel01_RP
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -13,9 +9,10 @@ GO
 /*                                                                         */    
 /* Date       Rev  Author   Purposes                                       */    
 /* 2020-08-10 1.0  James    WMS-13913 Created                              */    
+/* 2022-12-19 1.1  James    Perf tuning (james01)                          */
 /***************************************************************************/    
     
-CREATE PROC [dbo].[isp_RtnLabel01_RP] (    
+CREATE OR ALTER PROC [dbo].[isp_RtnLabel01_RP] (    
    @nMobile          INT,     
    @nFunc            INT,     
    @cLangCode        NVARCHAR( 3),     
@@ -66,7 +63,7 @@ AS
       WHERE C2.TrackingNo = @cLabelNo 
       AND   C2.LabelNo = @cBuyerPO)
    AND C1.TrackingNo <> @cLabelNo
-
+   AND C1.CarrierRef1 <> ''   -- (james01)
       
    SET @cPrintData = @cPrintTemplate    
     
