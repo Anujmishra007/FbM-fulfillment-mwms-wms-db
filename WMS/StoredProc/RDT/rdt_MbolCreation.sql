@@ -1,6 +1,6 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /******************************************************************************/
@@ -15,8 +15,9 @@ GO
 /* 2021-07-27   1.0  James      WMS-17484 Created                             */
 /* 2022-08-03   1.1  James      WMS-20213 Add custom lookup field (james01)   */
 /* 2022-10-05   1.2  YeeKung    WMS-20491 Add eventlog (yeekung01)            */
+/* 2022-12-15   1.3  James      WMS-21350 Create mbol with header (james02)   */
 /******************************************************************************/
-CREATE OR ALTER PROC rdt.rdt_MbolCreation(
+CREATE OR ALTER PROC [RDT].[rdt_MbolCreation](
     @nMobile      INT
    ,@nFunc        INT
    ,@cLangCode    NVARCHAR( 3)
@@ -192,8 +193,10 @@ BEGIN
          GOTO RollBackTran
       END
    END
-   /*
-   IF @cMBOLKey = ''
+
+   -- Create MBOL header only (james02)
+   -- Sometime user wanna create header only and use Excel loader to upload details
+   IF @cMBOLKey = 'NOORDER'
    BEGIN
       SET @nSuccess = 1
       EXECUTE dbo.nspg_getkey
@@ -206,7 +209,7 @@ BEGIN
 
       IF @nSuccess <> 1
       BEGIN
-         SET @nErrNo = 172152
+         SET @nErrNo = 172157
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --nspg_getkey
          GOTO RollBackTran
       END
@@ -216,12 +219,15 @@ BEGIN
 
       IF @@ERROR <> 0
       BEGIN
-         SET @nErrNo = 172153
+         SET @nErrNo = 172158
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins MBOL Err
          GOTO RollBackTran
       END
+
+      COMMIT TRAN MbolCreation -- Only commit change made here
+      GOTO Quit
    END
-   */
+
    SET @cSQL = ''
    SET @cSQLSelect = ''
    SET @cSQLWhere = ''
@@ -428,16 +434,13 @@ Fail:
 Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
       COMMIT TRAN
-      
---INSERT INTO TESTTEST (SQL, SQLPARAM, REFNO1, REFNO2, REFNO3) VALUES
---(@cSQL, @cSQLParam, @cRefNo1, @cRefNo2, @cRefNo3)
 END
 GO
 
-SET QUOTED_IDENTIFIER OFF
+SET QUOTED_IDENTIFIER OFF 
 GO
-SET ANSI_NULLS ON
+SET ANSI_NULLS ON 
 GO
 
-GRANT EXECUTE ON [rdt].[rdt_MbolCreation] TO NSQL
+GRANT EXECUTE ON RDT.rdt_MbolCreation TO NSQL
 GO

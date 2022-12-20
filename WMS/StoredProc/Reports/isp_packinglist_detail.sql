@@ -1,12 +1,8 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_packinglist_detail]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_packinglist_detail]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 
 /************************************************************************/
 /* Store Procedure:  isp_packinglist_detail                             */
@@ -25,9 +21,10 @@ GO
 /* 2018-MAR-29  CSCHONG       Revised scripts for carton no issue (CS02)*/
 /* 2018-Oct-25  CSCHONG       Performance tunning (CS03)                */
 /* 28-Jan-2019  TLTING_ext 1.1  enlarge externorderkey field length      */
+/* 26-OCT-2022  CSCHONG       WMS-20996 revised field logic (CS04)      */
 /************************************************************************/
 
-CREATE PROC [dbo].[isp_packinglist_detail] (
+CREATE OR ALTER PROC [dbo].[isp_packinglist_detail] (
    @c_pickslipno              NVARCHAR( 10),
    @c_RefNo                   NVARCHAR(20) = ''
 )
@@ -45,8 +42,11 @@ BEGIN
           -- , @c_Zone            NVARCHAR(30)           --(CS02)
            ,@n_cntRefno           INT                    --(CS01)
            ,@c_site               NVARCHAR(30)           --(CS01)
+           ,@c_showconsignee      NVARCHAR(1)='N'        --(CS04)
+           ,@c_consoord           NVARCHAR(1)='N'        --(CS04)
+           ,@c_getordkey          NVARCHAR(20)=''        --(CS04)
 
-   DECLARE @n_NewCartonNo      	INT							
+   DECLARE @n_NewCartonNo      	INT
          , @n_OriginalCartonNo 	INT
 
    SELECT @c_storerkey = PH.Storerkey
@@ -62,12 +62,358 @@ BEGIN
    AND C.Code = 'PackListFilterByRefNo'
    AND C.Long = 'r_dw_packing_list_detail'
 
+
+      /*CS04 S*/
+
+   SET @c_getordkey=''
+   SET @c_consoord='N'
+
+   SELECT @c_getordkey=ph.orderkey
+   FROM dbo.PackHeader ph (NOLOCK)
+   WHERE ph.Pickslipno = @c_pickslipno
+
+   IF @c_getordkey =''
+   BEGIN
+     SET @c_consoord='Y'
+   END
+
+   SELECT @c_showconsignee =  CASE WHEN ISNULL(CLR.Code,'') <> '' THEN 'Y' ELSE 'N' END      
+   FROM CODELKUP CLR WITH (NOLOCK)
+   WHERE CLR.LISTNAME='REPORTCFG'
+   AND CLR.Storerkey = @c_storerkey
+   AND CLR.Code = 'SHOWCONSIGNEE'
+   AND CLR.Long = 'r_dw_packing_list_detail'
+   AND ISNULL(CLR.Short,'') <> 'N'  
+
+
+   CREATE TABLE #TMP_PACKDETORD (
+        RowRef            INT NOT NULL IDENTITY(1,1) PRIMARY KEY
+      , Orderkey          NVARCHAR(10)   NULL
+      , ExternOrderkey    NVARCHAR(50)   NULL  
+      , ConsigneeKey      NVARCHAR(15)   NULL
+      , C_Contact1        NVARCHAR(30)   NULL
+      , C_Address1        NVARCHAR(45)   NULL
+      , C_Address2        NVARCHAR(45)   NULL
+      , C_Address3        NVARCHAR(45)   NULL
+      , C_Address4        NVARCHAR(45)   NULL
+      , C_Phone1          NVARCHAR(18)   NULL
+      , DeliveryDate      DATETIME       NULL
+      , Loadkey           NVARCHAR(20)   NULL
+      , BuyerPO           NVARCHAR(20)   NULL
+      , C_Company         NVARCHAR(45)   NULL
+      , B_Company         NVARCHAR(45)   NULL
+      , showconsignee     NVARCHAR(30)   NULL  
+      , RSCStorer         NVARCHAR(1)    DEFAULT 'N'
+      , Storerkey         NVARCHAR(20)   NULL
+      , SKU               NVARCHAR(20)   NULL
+      , CartonNo          INT            NULL
+      , PickSlipNo        NVARCHAR(10)   NULL
+      , PackQty           INT            NULL
+      , LabelNo           NVARCHAR(20)   NULL
+      , Refno             NVARCHAR(20)   NULL
+      , Refno2            NVARCHAR(30)   NULL
+      , LabelLine         NVARCHAR(5)    NULL
+                               )
+
+  IF @c_consoord='N'
+  BEGIN
+       INSERT INTO #TMP_PACKDETORD
+       (
+           Orderkey,
+           ExternOrderkey,
+           ConsigneeKey,
+           C_Contact1,
+           C_Address1,
+           C_Address2,
+           C_Address3,
+           C_Address4,
+           C_Phone1,
+           DeliveryDate,
+           Loadkey,
+           BuyerPO,
+           C_Company,
+           B_Company,
+           showconsignee,
+           RSCStorer,Storerkey,
+           sku,Cartonno,PickSlipNo,PackQty,LabelNo,Refno,Refno2,LabelLine
+       )
+       SELECT  ORDERS.OrderKey,
+         ORDERS.ExternOrderKey,
+         ORDERS.ConsigneeKey,     
+         ORDERS.C_contact1,
+         CASE WHEN ISNULL(ST.storerkey,'') <> ''  THEN ST.Address2 ELSE CASE WHEN  @c_showconsignee = 'Y' THEN ORDERS.C_Address2 ELSE ORDERS.C_Address1 END END , 
+         CASE WHEN ISNULL(ST.storerkey,'') <> ''  THEN ST.Address1 ELSE CASE WHEN  @c_showconsignee = 'Y' THEN ORDERS.C_Address1 ELSE ORDERS.C_Address2 END END,   
+         CASE WHEN ISNULL(ST.storerkey,'') <> ''  THEN ST.Address3 ELSE CASE WHEN  @c_showconsignee= 'Y' THEN ORDERS.C_Address3 ELSE ORDERS.C_Address3 END END,   
+         ORDERS.C_Address4,
+         ORDERS.C_Phone1,
+         ORDERS.DeliveryDate,
+         ORDERS.loadkey,
+         ORDERS.BuyerPO ,
+         CASE WHEN ISNULL(ST.storerkey,'') <> '' THEN ST.company ELSE ORDERS.C_Company END, 
+         orders.B_company ,
+         @c_showconsignee AS showconsignee ,
+         CASE WHEN ISNULL(ST.storerkey,'') <> '' THEN 'Y' ELSE 'N' END,
+         orders.storerkey,
+         OD.Sku,PackDetail.cartonno,packheader.pickslipno,packdetail.qty,
+         packdetail.labelno,packdetail.refno,packdetail.refno2,'' AS labeline
+         FROM ORDERS (NOLOCK)
+         LEFT JOIN ORDERDETAIL OD (NOLOCK) ON ORDERS.OrderKey=OD.OrderKey
+         LEFT JOIN PICKDETAIL  (NOLOCK) ON OD.OrderKey=PICKDETAIL.OrderKey AND PICKDETAIL.Sku=OD.SKU AND OD.OrderLineNumber = PICKDETAIL.OrderLineNumber
+         LEFT JOIN  PackDetail   (NOLOCK) ON PackDetail.LabelNo=PICKDETAIL.DropID AND OD.Sku=PackDetail.SKU
+         JOIN dbo.PackHeader (NOLOCK) ON Packheader.OrderKey=ORDERS.ORderkey
+         --JOIN PackHeader (NOLOCK) ON Packheader.Orderkey = Orders.Orderkey         
+         --                     AND Packheader.Loadkey = Orders.Loadkey
+         --                     AND Packheader.Consigneekey = Orders.Consigneekey
+   LEFT JOIN STORER ST (NOLOCK) ON ST.StorerKey = orders.B_Company AND ST.type='4'AND ST.ConsigneeFor='NIKECN' AND ST.Notes1='RSC' 
+   WHERE ( RTRIM(PackHeader.OrderKey) IS NOT NULL AND RTRIM(PackHeader.OrderKey) <> '') AND
+          Packheader.Pickslipno = @c_pickslipno AND packdetail.refno= CASE WHEN @c_RefNo <> '' THEN @c_RefNo ELSE packdetail.refno END
+    GROUP BY Packheader.Loadkey,
+            Orders.Consigneekey,
+            Orders.Orderkey,
+            Orders.ExternOrderkey,
+            Orders.BuyerPO,
+            ORDERS.C_Address1 ,
+            ORDERS.C_Address2 ,
+            ORDERS.C_Address3 ,   
+            Orders.C_Address4,
+            Orders.C_contact1,
+            Orders.C_Phone1,
+            Orders.DeliveryDate,
+            Orders.loadkey, 
+            CASE WHEN ISNULL(ST.storerkey,'') <> '' THEN ST.company ELSE ORDERS.C_Company END        
+            , ISNULL(ST.storerkey,'')                                       
+            ,orders.B_company                                                
+            ,ST.Address2
+            ,ST.Address1
+            ,ST.Address3 
+            ,orders.storerkey  
+            , OD.Sku,PackDetail.cartonno,packheader.pickslipno,packdetail.qty,
+              packdetail.labelno,packdetail.refno,packdetail.refno2
+
+   END
+   ELSE IF @c_consoord='Y'
+   BEGIN     
+    -- UNION
+   
+           IF @c_showconsignee ='N'
+           BEGIN
+
+          INSERT INTO #TMP_PACKDETORD
+       (
+           Orderkey,
+           ExternOrderkey,
+           ConsigneeKey,
+           C_Contact1,
+           C_Address1,
+           C_Address2,
+           C_Address3,
+           C_Address4,
+           C_Phone1,
+           DeliveryDate,
+           Loadkey,
+           BuyerPO,
+           C_Company,
+           B_Company,
+           showconsignee,
+           RSCStorer,Storerkey,
+           sku,Cartonno,PickSlipNo,PackQty,LabelNo,Refno,Refno2,LabelLine
+       )
+            SELECT '' AS OrderKey,
+               '' AS ExternOrderKey,
+               '' AS ConsigneeKey,
+               MAX(ORDERS.C_contact1) AS C_contact1,
+               CASE WHEN ISNULL(ST.storerkey,'') <> ''  THEN MAX(ST.Address2) 
+                                                        ELSE CASE WHEN  @c_showconsignee = 'Y' THEN MAX(ORDERS.C_Address2) ELSE MAX(ORDERS.C_Address1) END END , 
+               CASE WHEN ISNULL(ST.storerkey,'') <> ''  THEN MAX(ST.Address1) 
+                                                        ELSE CASE WHEN  @c_showconsignee = 'Y' THEN MAX(ORDERS.C_Address1) ELSE MAX(ORDERS.C_Address2) END END , 
+               CASE WHEN ISNULL(ST.storerkey,'') <> ''  THEN MAX(ST.Address3) 
+                                                        ELSE CASE WHEN  @c_showconsignee = 'Y' THEN MAX(ORDERS.C_Address3) ELSE MAX(ORDERS.C_Address3) END END , 
+               MAX(ORDERS.C_Address4) AS C_Address4,
+               MAX(ORDERS.C_Phone1) AS C_Phone1,
+               MAX(ORDERS.DeliveryDate) AS DeliveryDate,
+               orders.LoadKey,
+               '' AS BuyerPO,
+               CASE WHEN ISNULL(ST.storerkey,'') <> '' THEN MAX(ST.company) ELSE MAX(Orders.C_Company) END AS C_Company,
+               '' AS b_company,
+               @c_showconsignee AS showconsignee ,
+               CASE WHEN ISNULL(ST.storerkey,'') <> '' THEN 'Y' ELSE 'N' END ,
+              MAX(orders.storerkey) ,
+               OD.Sku,PackDetail.cartonno,packheader.pickslipno,
+               SUM(Packdetail.Qty) AS PackQty,
+              packdetail.labelno,packdetail.refno,packdetail.refno2,packdetail.labelline
+         --FROM PackDetail (NOLOCK)
+         --JOIN PackHeader (NOLOCK) ON ( PackDetail.PickSlipNo = PackHeader.PickSlipNo )
+         --JOIN  ORDERS (NOLOCK) ON Orders.loadkey = Packheader.loadkey      
+         FROM ORDERS (NOLOCK)
+         LEFT JOIN ORDERDETAIL OD (NOLOCK) ON ORDERS.OrderKey=OD.OrderKey
+         LEFT JOIN PICKDETAIL  (NOLOCK) ON OD.OrderKey=PICKDETAIL.OrderKey AND PICKDETAIL.Sku=OD.SKU  AND OD.OrderLineNumber = PICKDETAIL.OrderLineNumber
+         LEFT JOIN  PackDetail   (NOLOCK) ON PackDetail.LabelNo=PICKDETAIL.DropID AND OD.Sku=PackDetail.SKU
+         JOIN dbo.PackHeader (NOLOCK) ON Packheader.loadkey=ORDERS.loadkey                      
+         LEFT JOIN STORER ST (NOLOCK) ON ST.StorerKey = orders.B_Company AND ST.type='4'AND ST.ConsigneeFor='NIKECN' AND ST.Notes1='RSC' 
+         WHERE ( RTRIM(PackHeader.OrderKey) IS NULL OR RTRIM(PackHeader.OrderKey) = '') AND
+               ( Packheader.Pickslipno = @c_pickslipno ) 
+               AND packdetail.refno= CASE WHEN @c_RefNo <> '' THEN @c_RefNo ELSE packdetail.refno END
+         GROUP BY orders.Loadkey,
+                ISNULL(ST.storerkey,'') ,OD.Sku,PackDetail.cartonno,packheader.pickslipno,
+             --  Packdetail.Qty,
+              packdetail.labelno,packdetail.refno,packdetail.refno2,packdetail.labelline
+         END
+         ELSE
+         BEGIN
+         INSERT INTO #TMP_PACKDETORD
+       (
+           Orderkey,
+           ExternOrderkey,
+           ConsigneeKey,
+           C_Contact1,
+           C_Address1,
+           C_Address2,
+           C_Address3,
+           C_Address4,
+           C_Phone1,
+           DeliveryDate,
+           Loadkey,
+           BuyerPO,
+           C_Company,
+           B_Company,
+           showconsignee,
+           RSCStorer,Storerkey,
+           sku,Cartonno,PickSlipNo,PackQty,LabelNo,Refno,Refno2,LabelLine
+       )
+              SELECT '' AS OrderKey,
+               '' AS ExternOrderKey,
+               (ORDERS.consigneekey) AS ConsigneeKey,
+               MAX(ORDERS.C_contact1) AS C_contact1,
+               CASE WHEN ISNULL(ST.storerkey,'') <> ''  THEN MAX(ST.Address2) 
+                                                        ELSE CASE WHEN  @c_showconsignee = 'Y' THEN MAX(ORDERS.C_Address2) ELSE MAX(ORDERS.C_Address1) END END , 
+               CASE WHEN ISNULL(ST.storerkey,'') <> ''  THEN MAX(ST.Address1) 
+                                                        ELSE CASE WHEN  @c_showconsignee = 'Y' THEN MAX(ORDERS.C_Address1) ELSE MAX(ORDERS.C_Address2) END END , 
+               CASE WHEN ISNULL(ST.storerkey,'') <> ''  THEN MAX(ST.Address3) 
+                                                        ELSE CASE WHEN  @c_showconsignee = 'Y' THEN MAX(ORDERS.C_Address3) ELSE MAX(ORDERS.C_Address3) END END , 
+               MAX(ORDERS.C_Address4) AS C_Address4,
+               MAX(ORDERS.C_Phone1) AS C_Phone1,
+               MAX(ORDERS.DeliveryDate) AS DeliveryDate,
+               orders.LoadKey,
+               '' AS BuyerPO,
+               CASE WHEN ISNULL(ST.storerkey,'') <> '' THEN MAX(ST.company) ELSE MAX(Orders.C_Company) END AS C_Company,
+               '' AS b_company,
+               @c_showconsignee AS showconsignee ,
+               CASE WHEN ISNULL(ST.storerkey,'') <> '' THEN 'Y' ELSE 'N' END ,
+              MAX(orders.storerkey) ,OD.Sku,PackDetail.cartonno,packheader.pickslipno,
+              SUM(pickdetail.qty)  AS PackQty,
+              packdetail.labelno,packdetail.refno,packdetail.refno2,packdetail.labelline
+         FROM ORDERS (NOLOCK)
+         LEFT JOIN ORDERDETAIL OD (NOLOCK) ON ORDERS.OrderKey=OD.OrderKey
+         LEFT JOIN PICKDETAIL  (NOLOCK) ON OD.OrderKey=PICKDETAIL.OrderKey AND PICKDETAIL.Sku=OD.SKU  AND OD.OrderLineNumber = PICKDETAIL.OrderLineNumber
+         LEFT JOIN  PackDetail   (NOLOCK) ON PackDetail.LabelNo=PICKDETAIL.DropID AND OD.Sku=PackDetail.SKU
+         JOIN dbo.PackHeader (NOLOCK) ON Packheader.loadkey=ORDERS.loadkey                              
+         LEFT JOIN STORER ST (NOLOCK) ON ST.StorerKey = orders.B_Company AND ST.type='4'AND ST.ConsigneeFor='NIKECN' AND ST.Notes1='RSC' 
+         WHERE ( RTRIM(PackHeader.OrderKey) IS NULL OR RTRIM(PackHeader.OrderKey) = '') AND
+               ( Packheader.Pickslipno = @c_pickslipno )
+          AND packdetail.refno= CASE WHEN @c_RefNo <> '' THEN @c_RefNo ELSE packdetail.refno END
+         GROUP BY orders.Loadkey,
+                ISNULL(ST.storerkey,'') ,(ORDERS.consigneekey) ,OD.Sku,PackDetail.cartonno,packheader.pickslipno,
+             -- pickdetail.qty,
+              packdetail.labelno,packdetail.refno,packdetail.refno2,packdetail.labelline
+
+         END
+ END                                                                                         
+--    SELECT * FROM #TMP_PACKDETORD
+--   SELECT '' AS OrderKey,
+--         '' AS ExternOrderKey,
+--         CASE WHEN ISNULL(TORD.ConsigneeKey,'') <> '' THEN ISNULL(TORD.ConsigneeKey,'')  ELSE '' END AS ConsigneeKey,
+--         MAX(TORD.C_contact1) AS C_contact1,     --CS04 S
+--         MAX(TORD.C_Address1) AS C_Address1,     
+--         MAX(TORD.C_Address2) AS C_Address2,
+--         MAX(TORD.C_Address3) AS C_Address3,
+--         MAX(TORD.C_Address4) AS C_Address4,
+--         MAX(TORD.C_Phone1) AS C_Phone1,
+--         MAX(TORD.DeliveryDate) AS DeliveryDate,   --CS04 E
+--         TORD.SKU,
+--         TORD.CartonNo,
+--         TORD.PickSlipNo,
+--         TORD.LoadKey,
+--         --CASE WHEN ISNULL(TORD.showconsignee,'') = 'Y' THEN pid.qty ELSE Packdetail.Qty END AS PackQty,   --CS04
+--         TORD.PackQty AS packqty,  
+--         '' AS BuyerPO,
+--         MAX(TORD.C_Company) AS C_Company,    --CS04
+--         CONVERT(DECIMAL(10,5), ISNULL(PACKINFO.Weight,0)) AS PWGT,
+--         CONVERT(DECIMAL(10,5), ISNULL(PACKINFO.[Cube],0)) AS PCube,
+--         CONVERT(DECIMAL(10,5), ISNULL(PACKINFOSUM.TotalWeight,0)) AS PISTTLWGT,
+--         CONVERT(DECIMAL(10,5), ISNULL(PACKINFOSUM.TotalCube,0)) AS PISTTTLCUBE,
+--         TORD.LabelLine,
+--         SKU.PackQtyIndicator,
+--         PACK.PackUOM3,
+--         TORD.LabelNo,
+--         CASE WHEN ISNULL(CLR.Code,'') = '' THEN 'N' ELSE 'Y' END AS showfullsku,
+--         CASE WHEN ISNULL(CLR1.Code,'') = '' THEN '' ELSE ('2' + RIGHT(TORD.orderkey,9)) END AS LBIShipNo,
+--         CASE WHEN ISNULL(CLR1.Code,'') = '' THEN 'N' ELSE 'Y' END AS showlbiship
+--         ,'' AS [SITE]                                     --CS02
+--         ,CASE WHEN @c_zone <> '' THEN TORD.RefNo ELSE '' END            --CS01
+--         ,CASE WHEN @c_zone <> '' THEN TORD.RefNo2 ELSE '' END            --CS01
+--         ,TORD.showconsignee AS showconsignee   --CS04
+--   --FROM  #TMP_PACKDETORD TORD (NOLOCK)
+--   --FROM PackDetail (NOLOCK)
+--   --FROM PackHeader (NOLOCK)
+--   --JOIN PackDetail (NOLOCK) ON ( PackDetail.PickSlipNo = PackHeader.PickSlipNo )
+--   --JOIN LoadplanDetail (NOLOCK) ON ( Packheader.Loadkey = LoadplanDetail.LoadKey )       --(CS03)
+--   --JOIN ORDERS (NOLOCK) ON ( Orders.Orderkey = LoadplanDetail.OrderKey )
+--   --JOIN  ORDERS (NOLOCK) ON Orders.loadkey = Packheader.loadkey                            --(CS03)
+--    FROM #TMP_PACKDETORD TORD (NOLOCK) --ON TORD.loadkey = Packheader.loadkey  AND TORD.CartonNo = PackDetail.CartonNo 
+--  --  AND TORD.SKU=packdetail.sku AND TORD.PickSlipNo = PackDetail.PickSlipNo              --(CS04)
+--   JOIN SKU (NOLOCK) ON ( TORD.Sku = SKU.Sku AND TORD.StorerKey = SKU.StorerKey )
+--  -- JOIN dbo.ORDERDETAIL OD (NOLOCK) ON OD.OrderKey=TORD.Orderkey
+--   JOIN PACK (NOLOCK) ON ( SKU.PackKey = PACK.PackKey )
+--   LEFT OUTER JOIN PACKINFO (NOLOCK) ON ( TORD.PickSlipNo = PACKINFO.PickSlipNo
+--                                      AND TORD.CartonNo = PACKINFO.CartonNo )
+--   LEFT OUTER JOIN ( SELECT PickSlipNo,CartonNo, SUM(Weight) AS TotalWeight, SUM(Cube) AS TotalCube
+--                     FROM PACKINFO (NOLOCK) GROUP BY PickSlipNo,CartonNo ) AS PACKINFOSUM
+--                ON ( PACKINFO.PickSlipNo = PACKINFOSUM.PickSlipNo AND PACKINFO.CartonNo = PACKINFOSUM.CartonNo)
+--   LEFT OUTER JOIN Codelkup CLR (NOLOCK) ON (TORD.Storerkey = CLR.Storerkey AND CLR.Code = 'SHOWFULLSKU'
+--                                         AND CLR.Listname = 'REPORTCFG' AND CLR.Long = 'r_dw_packing_list_detail' AND ISNULL(CLR.Short,'') <> 'N')
+--   LEFT OUTER JOIN Codelkup CLR1 (NOLOCK) ON (TORD.Storerkey = CLR1.Storerkey AND CLR1.Code = 'SHOWLBISHIP'
+--                                          AND CLR1.Listname = 'REPORTCFG' AND CLR1.Long = 'r_dw_packing_list_detail' AND ISNULL(CLR1.Short,'') <> 'N')
+------CS04 S
+--   -- LEFT JOIN dbo.PICKDETAIL PID WITH (NOLOCK) ON PID.DropID=packdetail.labelno AND PID.sku=packdetail.sku AND PID.Status='5'
+--    --CROSS APPLY( SELECT dropid,sku,(qty) AS qty FROM PICKDETAIL WITH (NOLOCK) WHERE Status='5' AND DropID=TORD.labelno AND sku=TORD.sku ) AS pid
+----   LEFT JOIN STORER ST (NOLOCK) ON ST.StorerKey = orders.B_Company AND ST.type='4'AND ST.ConsigneeFor='NIKECN' AND ST.Notes1='RSC' 
+----   LEFT OUTER JOIN Codelkup CLR2 (NOLOCK) ON (ORDERS.Storerkey = CLR2.Storerkey AND CLR2.Code = 'SHOWCONSIGNEE'
+----                                          AND CLR2.Listname = 'REPORTCFG' AND CLR2.Long = 'r_dw_packing_list_detail' AND ISNULL(CLR2.Short,'') <> 'N')
+------CS04 E
+--   WHERE ( RTRIM(TORD.OrderKey) IS NULL OR RTRIM(TORD.OrderKey) = '') AND
+--         ( TORD.Pickslipno = @c_pickslipno )
+--   GROUP BY TORD.Loadkey,
+--            TORD.Pickslipno,
+--            TORD.CartonNo,
+--            TORD.Sku,
+--           -- Packdetail.Qty,
+--            TORD.PackQty,--CASE WHEN ISNULL(TORD.showconsignee,'') = 'Y' THEN pid.qty ELSE Packdetail.Qty END,  --CS04
+--            CONVERT(DECIMAL(10,5), ISNULL(PACKINFO.Weight,0)),
+--            CONVERT(DECIMAL(10,5), ISNULL(PACKINFO.[Cube],0)),
+--            CONVERT(DECIMAL(10,5), ISNULL(PACKINFOSUM.TotalWeight,0)),
+--            CONVERT(DECIMAL(10,5), ISNULL(PACKINFOSUM.TotalCube,0)),
+--            TORD.LabelLine,
+--            SKU.PackQtyIndicator,
+--            PACK.PackUOM3,
+--            TORD.LabelNo,
+--            CASE WHEN ISNULL(CLR.Code,'') = '' THEN 'N' ELSE 'Y' END,
+--            CASE WHEN ISNULL(CLR1.Code,'') = '' THEN '' ELSE ('2' + RIGHT(TORD.orderkey,9)) END,    --CS04
+--            CASE WHEN ISNULL(CLR1.Code,'') = '' THEN 'N' ELSE 'Y' END
+--           ,CASE WHEN @c_zone <> '' THEN TORD.RefNo ELSE '' END            --CS01
+--           ,CASE WHEN @c_zone <> '' THEN TORD.RefNo2 ELSE '' END            --CS01
+--           ,TORD.showconsignee                                                    --CS04
+--           ,TORD.RSCStorer                                                       --CS04
+--           ,ISNULL(TORD.ConsigneeKey,'')                                               --CS04
+--   ORDER BY TORD.CartonNo
+
+      /*CS04 E*/
+
    /*CS01 Start*/
    CREATE TABLE #TMP_PACKDET
    (    RowRef            INT NOT NULL IDENTITY(1,1) PRIMARY KEY
       , Orderkey          NVARCHAR(10)   NULL
       , ExternOrderkey    NVARCHAR(50)   NULL  --tlting_ext
-      , ConsigneeKey      NVARCHAR(15)   NULL
+      , ConsigneeKey      NVARCHAR(45)   NULL  --CS04
       , C_Contact1        NVARCHAR(30)   NULL
       , C_Address1        NVARCHAR(45)   NULL
       , C_Address2        NVARCHAR(45)   NULL
@@ -96,6 +442,7 @@ BEGIN
       , LSite             NVARCHAR(50)   NULL
       , Refno             NVARCHAR(20)   NULL
       , Refno2            NVARCHAR(30)   NULL
+      , showconsignee     NVARCHAR(30)   NULL    --CS04
    )
 
    INSERT INTO #TMP_PACKDET
@@ -130,25 +477,26 @@ BEGIN
       , Lsite
       , Refno
       , Refno2
+      , showconsignee       --CS04
    )
 
-   SELECT ORDERS.OrderKey,
-         ORDERS.ExternOrderKey,
-         ORDERS.ConsigneeKey,
-         ORDERS.C_contact1,
-         ORDERS.C_Address1,
-         ORDERS.C_Address2,
-         ORDERS.C_Address3,
-         ORDERS.C_Address4,
-         ORDERS.C_Phone1,
-         ORDERS.DeliveryDate,
-         PackDetail.SKU,
-         PackDetail.CartonNo,
-         PackHeader.PickSlipNo,
-         PackHeader.LoadKey,
-         SUM(Packdetail.Qty) AS PackQty ,
-         ORDERS.BuyerPO ,
-         ORDERS.C_Company,
+   SELECT TORD.OrderKey,       --CS04 S
+         TORD.ExternOrderKey,
+         CASE WHEN TORD.RSCStorer ='Y' THEN TORD.B_company ELSE TORD.ConsigneeKey END,      
+         TORD.C_contact1,
+         TORD.C_Address1 ,  
+         TORD.C_Address2 ,  
+         TORD.C_Address3 , 
+         TORD.C_Address4,
+         TORD.C_Phone1,
+         TORD.DeliveryDate,   --CS04 E
+         TORD.SKU,
+         TORD.CartonNo,
+         TORD.PickSlipNo,
+         TORD.LoadKey,
+         (TORD.PackQty) AS PackQty ,
+         TORD.BuyerPO ,                               --CS04
+         TORD.C_Company ,    
          CONVERT(DECIMAL(10,5), ISNULL(PACKINFO.Weight,0)) AS PWGT,
          CONVERT(DECIMAL(10,5), ISNULL(PACKINFO.[Cube],0)) AS PCube,
          CONVERT(DECIMAL(10,5), ISNULL(PACKINFOSUM.TotalWeight,0)) AS PISTTLWGT,
@@ -156,131 +504,168 @@ BEGIN
          '' AS LabelLine,
          SKU.PackQtyIndicator,
          PACK.PackUOM3,
-         PackDetail.LabelNo,
+         TORD.LabelNo,
          CASE WHEN ISNULL(CLR.Code,'') = '' THEN 'N' ELSE 'Y' END AS showfullsku,
-         CASE WHEN ISNULL(CLR1.Code,'') = '' THEN '' ELSE ('2' + RIGHT(ORDERS.orderkey,9)) END AS LBIShipNo,
+         CASE WHEN ISNULL(CLR1.Code,'') = '' THEN '' ELSE ('2' + RIGHT(TORD.orderkey,9)) END AS LBIShipNo,     --CS04
          CASE WHEN ISNULL(CLR1.Code,'') = '' THEN 'N' ELSE 'Y' END AS showlbiship
          ,'' AS [SITE]                                                         --CS02
-         ,CASE WHEN @c_zone <> '' THEN PACKDETAIL.RefNo ELSE '' END            --CS01
-         ,CASE WHEN @c_zone <> '' THEN PACKDETAIL.RefNo2 ELSE '' END            --CS01
-   FROM ORDERS (NOLOCK)
-   JOIN PackHeader (NOLOCK) ON Packheader.Orderkey = Orders.Orderkey           --CS03
-                              AND Packheader.Loadkey = Orders.Loadkey
-                              AND Packheader.Consigneekey = Orders.Consigneekey 
-   JOIN PackDetail (NOLOCK) ON ( PackDetail.PickSlipNo = PackHeader.PickSlipNo )        --CS03
-   JOIN SKU (NOLOCK) ON ( PackDetail.Sku = SKU.Sku AND PackDetail.StorerKey = SKU.StorerKey )
+         ,CASE WHEN @c_zone <> '' THEN TORD.RefNo ELSE '' END            --CS01
+         ,CASE WHEN @c_zone <> '' THEN TORD.RefNo2 ELSE '' END            --CS01
+         ,TORD.showconsignee  --CS04 
+   FROM #TMP_PACKDETORD TORD (NOLOCK)
+   LEFT JOIN ORDERDETAIL OD WITH (NOLOCK) ON OD.OrderKey = TORD.Orderkey     --CS03
+   --JOIN PackHeader (NOLOCK) ON Packheader.Orderkey = TORD.Orderkey           --CS03
+   --                           AND Packheader.Loadkey = TORD.Loadkey
+   --                           AND Packheader.Consigneekey = TORD.Consigneekey
+   --JOIN PackDetail (NOLOCK) ON ( PackDetail.PickSlipNo = PackHeader.PickSlipNo )        --CS03
+  --LEFT JOIN PICKDETAIL  (NOLOCK) PID ON OD.OrderKey=PID.OrderKey AND PID.Sku=OD.SKU
+  --LEFT JOIN  PackDetail  (NOLOCK) ON PackDetail.LabelNo=PID.DropID AND OD.Sku=PackDetail.SKU                  
+  -- LEFT JOIN Packheader (NOLOCK) ON PackHeader.PickSlipNo = PackDetail.PickSlipNo
+   JOIN SKU (NOLOCK) ON ( TORD.Sku = SKU.Sku AND TORD.StorerKey = SKU.StorerKey )
    JOIN PACK (NOLOCK) ON ( SKU.PackKey = PACK.PackKey )
-   LEFT OUTER JOIN PACKINFO (NOLOCK) ON ( PackDetail.PickSlipNo = PACKINFO.PickSlipNo
-                                      AND PackDetail.CartonNo = PACKINFO.CartonNo )
+   LEFT OUTER JOIN PACKINFO (NOLOCK) ON ( TORD.PickSlipNo = PACKINFO.PickSlipNo
+                                      AND TORD.CartonNo = PACKINFO.CartonNo )
    LEFT OUTER JOIN ( SELECT PickSlipNo, SUM(Weight) AS TotalWeight, SUM(Cube) AS TotalCube
                      FROM PACKINFO (NOLOCK) GROUP BY PickSlipNo ) AS PACKINFOSUM
                 ON ( PACKINFO.PickSlipNo = PACKINFOSUM.PickSlipNo )
-   LEFT OUTER JOIN Codelkup CLR (NOLOCK) ON (ORDERS.Storerkey = CLR.Storerkey AND CLR.Code = 'SHOWFULLSKU'
+   LEFT OUTER JOIN Codelkup CLR (NOLOCK) ON (TORD.Storerkey = CLR.Storerkey AND CLR.Code = 'SHOWFULLSKU'
                AND CLR.Listname = 'REPORTCFG' AND CLR.Long = 'r_dw_packing_list_detail' AND ISNULL(CLR.Short,'') <> 'N')
-   LEFT OUTER JOIN Codelkup CLR1 (NOLOCK) ON (ORDERS.Storerkey = CLR1.Storerkey AND CLR1.Code = 'SHOWLBISHIP'
+   LEFT OUTER JOIN Codelkup CLR1 (NOLOCK) ON (TORD.Storerkey = CLR1.Storerkey AND CLR1.Code = 'SHOWLBISHIP'
                                           AND CLR1.Listname = 'REPORTCFG' AND CLR1.Long = 'r_dw_packing_list_detail' AND ISNULL(CLR1.Short,'') <> 'N')
-   WHERE ( RTRIM(PackHeader.OrderKey) IS NOT NULL AND RTRIM(PackHeader.OrderKey) <> '') AND
-          Packheader.Pickslipno = @c_pickslipno
-   GROUP BY Packheader.Loadkey,
-            Orders.Consigneekey,
-            Orders.Orderkey,
-            Orders.ExternOrderkey,
-            Orders.BuyerPO,
-            Packheader.Pickslipno,
-            Packdetail.CartonNo,
-            Packdetail.Sku,
-            Orders.C_Address1,
-            Orders.C_Address2,
-            Orders.C_Address3,
-            Orders.C_Address4,
-            Orders.C_contact1,
-            Orders.C_Phone1,
-            Orders.DeliveryDate,
-            Orders.C_Company,
+----CS04 S
+--   LEFT JOIN STORER ST (NOLOCK) ON ST.StorerKey = orders.B_Company AND ST.type='4'AND ST.ConsigneeFor='NIKECN' AND ST.Notes1='RSC' 
+--   LEFT OUTER JOIN Codelkup CLR2 (NOLOCK) ON (ORDERS.Storerkey = CLR2.Storerkey AND CLR2.Code = 'SHOWCONSIGNEE'
+--                                          AND CLR2.Listname = 'REPORTCFG' AND CLR2.Long = 'r_dw_packing_list_detail' AND ISNULL(CLR2.Short,'') <> 'N')
+----CS04 E
+   WHERE ( RTRIM(TORD.OrderKey) IS NOT NULL AND RTRIM(TORD.OrderKey) <> '') AND
+          TORD.Pickslipno = @c_pickslipno
+   GROUP BY TORD.Loadkey,
+            TORD.Consigneekey,
+            TORD.Orderkey,
+            TORD.ExternOrderkey,
+            TORD.BuyerPO,
+            TORD.Pickslipno,
+            TORD.CartonNo,
+            TORD.Sku,
+            TORD.C_Address1,                                   --CS04 S
+            TORD.C_Address2,
+            TORD.C_Address3,
+            TORD.C_Address4,
+            TORD.C_contact1,
+            TORD.C_Phone1,
+            TORD.DeliveryDate,
+            TORD.C_Company ,           --Cs04 E
             CONVERT(DECIMAL(10,5), ISNULL(PACKINFO.Weight,0)),
             CONVERT(DECIMAL(10,5), ISNULL(PACKINFO.[Cube],0)),
             CONVERT(DECIMAL(10,5), ISNULL(PACKINFOSUM.TotalWeight,0)),
             CONVERT(DECIMAL(10,5), ISNULL(PACKINFOSUM.TotalCube,0)),
             SKU.PackQtyIndicator,
             PACK.PackUOM3,
-            PackDetail.LabelNo,
+            TORD.LabelNo,
             CASE WHEN ISNULL(CLR.Code,'') = '' THEN 'N' ELSE 'Y' END,
-            CASE WHEN ISNULL(CLR1.Code,'') = '' THEN '' ELSE ('2' + RIGHT(ORDERS.orderkey,9)) END,
+            CASE WHEN ISNULL(CLR1.Code,'') = '' THEN '' ELSE ('2' + RIGHT(TORD.orderkey,9)) END,    --CS04
             CASE WHEN ISNULL(CLR1.Code,'') = '' THEN 'N' ELSE 'Y' END
-             ,CASE WHEN @c_zone <> '' THEN PACKDETAIL.RefNo ELSE '' END            --CS01
-            ,CASE WHEN @c_zone <> '' THEN PACKDETAIL.RefNo2 ELSE '' END            --CS01
+             ,CASE WHEN @c_zone <> '' THEN TORD.RefNo ELSE '' END            --CS01
+            ,CASE WHEN @c_zone <> '' THEN TORD.RefNo2 ELSE '' END            --CS01
+         --   ,CASE WHEN ISNULL(CLR2.Code,'') = '' THEN 'N' ELSE 'Y' END             --CS04 S
+            , TORD.RSCStorer                                                       --CS04
+            ,TORD.B_company                                                        --CS04 
+            ,TORD.showconsignee                                                    --CS04 
+            ,(TORD.PackQty) 
    UNION ALL
    SELECT '' AS OrderKey,
          '' AS ExternOrderKey,
-         '' AS ConsigneeKey,
-         MAX(ORDERS.C_contact1) AS C_contact1,
-         MAX(ORDERS.C_Address1) AS C_Address1,
-         MAX(ORDERS.C_Address2) AS C_Address2,
-         MAX(ORDERS.C_Address3) AS C_Address3,
-         MAX(ORDERS.C_Address4) AS C_Address4,
-         MAX(ORDERS.C_Phone1) AS C_Phone1,
-         MAX(ORDERS.DeliveryDate) AS DeliveryDate,
-         PackDetail.SKU,
-         PackDetail.CartonNo,
-         PackHeader.PickSlipNo,
-         PackHeader.LoadKey,
-         Packdetail.Qty AS PackQty,
+         CASE WHEN ISNULL(TORD.ConsigneeKey,'') <> '' THEN ISNULL(TORD.ConsigneeKey,'')  ELSE '' END AS ConsigneeKey,
+         MAX(TORD.C_contact1) AS C_contact1,     --CS04 S
+         MAX(TORD.C_Address1) AS C_Address1,     
+         MAX(TORD.C_Address2) AS C_Address2,
+         MAX(TORD.C_Address3) AS C_Address3,
+         MAX(TORD.C_Address4) AS C_Address4,
+         MAX(TORD.C_Phone1) AS C_Phone1,
+         MAX(TORD.DeliveryDate) AS DeliveryDate,   --CS04 E
+         TORD.SKU,
+         TORD.CartonNo,
+         TORD.PickSlipNo,
+         TORD.LoadKey,
+         --CASE WHEN ISNULL(TORD.showconsignee,'') = 'Y' THEN pid.qty ELSE Packdetail.Qty END AS PackQty,   --CS04
+         TORD.PackQty AS packqty,  
          '' AS BuyerPO,
-         MAX(Orders.C_Company) AS C_Company,
+         MAX(TORD.C_Company) AS C_Company,    --CS04
          CONVERT(DECIMAL(10,5), ISNULL(PACKINFO.Weight,0)) AS PWGT,
          CONVERT(DECIMAL(10,5), ISNULL(PACKINFO.[Cube],0)) AS PCube,
          CONVERT(DECIMAL(10,5), ISNULL(PACKINFOSUM.TotalWeight,0)) AS PISTTLWGT,
          CONVERT(DECIMAL(10,5), ISNULL(PACKINFOSUM.TotalCube,0)) AS PISTTTLCUBE,
-         Packdetail.LabelLine,
+         TORD.LabelLine,
          SKU.PackQtyIndicator,
          PACK.PackUOM3,
-         PackDetail.LabelNo,
+         TORD.LabelNo,
          CASE WHEN ISNULL(CLR.Code,'') = '' THEN 'N' ELSE 'Y' END AS showfullsku,
-         CASE WHEN ISNULL(CLR1.Code,'') = '' THEN '' ELSE ('2' + RIGHT(ORDERS.orderkey,9)) END AS LBIShipNo,
+         CASE WHEN ISNULL(CLR1.Code,'') = '' THEN '' ELSE ('2' + RIGHT(TORD.orderkey,9)) END AS LBIShipNo,
          CASE WHEN ISNULL(CLR1.Code,'') = '' THEN 'N' ELSE 'Y' END AS showlbiship
          ,'' AS [SITE]                                     --CS02
-         ,CASE WHEN @c_zone <> '' THEN PACKDETAIL.RefNo ELSE '' END            --CS01
-         ,CASE WHEN @c_zone <> '' THEN PACKDETAIL.RefNo2 ELSE '' END            --CS01
-   FROM PackDetail (NOLOCK)
-   JOIN PackHeader (NOLOCK) ON ( PackDetail.PickSlipNo = PackHeader.PickSlipNo )
+         ,CASE WHEN @c_zone <> '' THEN TORD.RefNo ELSE '' END            --CS01
+         ,CASE WHEN @c_zone <> '' THEN TORD.RefNo2 ELSE '' END            --CS01
+         ,TORD.showconsignee AS showconsignee   --CS04
+   --FROM  #TMP_PACKDETORD TORD (NOLOCK)
+   --FROM PackDetail (NOLOCK)
+   --FROM PackHeader (NOLOCK)
+   --JOIN PackDetail (NOLOCK) ON ( PackDetail.PickSlipNo = PackHeader.PickSlipNo )
    --JOIN LoadplanDetail (NOLOCK) ON ( Packheader.Loadkey = LoadplanDetail.LoadKey )       --(CS03)
    --JOIN ORDERS (NOLOCK) ON ( Orders.Orderkey = LoadplanDetail.OrderKey )
-   JOIN  ORDERS (NOLOCK) ON Orders.loadkey = Packheader.loadkey                            --(CS03)
-   JOIN SKU (NOLOCK) ON ( PackDetail.Sku = SKU.Sku AND PackDetail.StorerKey = SKU.StorerKey )
+   --JOIN  ORDERS (NOLOCK) ON Orders.loadkey = Packheader.loadkey                            --(CS03)
+    --  LEFT JOIN #TMP_PACKDETORD TORD (NOLOCK) ON TORD.loadkey = Packheader.loadkey  AND TORD.CartonNo = PackDetail.CartonNo 
+    --AND TORD.SKU=packdetail.sku AND TORD.PickSlipNo = PackDetail.PickSlipNo              --(CS04)
+    FROM #TMP_PACKDETORD TORD (NOLOCK)
+   JOIN SKU (NOLOCK) ON ( TORD.Sku = SKU.Sku AND TORD.StorerKey = SKU.StorerKey )
+  -- JOIN dbo.ORDERDETAIL OD (NOLOCK) ON OD.OrderKey=TORD.Orderkey
    JOIN PACK (NOLOCK) ON ( SKU.PackKey = PACK.PackKey )
-   LEFT OUTER JOIN PACKINFO (NOLOCK) ON ( PackDetail.PickSlipNo = PACKINFO.PickSlipNo
-                                      AND PackDetail.CartonNo = PACKINFO.CartonNo )
+   LEFT OUTER JOIN PACKINFO (NOLOCK) ON ( TORD.PickSlipNo = PACKINFO.PickSlipNo
+                                      AND TORD.CartonNo = PACKINFO.CartonNo )
    LEFT OUTER JOIN ( SELECT PickSlipNo, SUM(Weight) AS TotalWeight, SUM(Cube) AS TotalCube
                      FROM PACKINFO (NOLOCK) GROUP BY PickSlipNo ) AS PACKINFOSUM
                 ON ( PACKINFO.PickSlipNo = PACKINFOSUM.PickSlipNo )
-   LEFT OUTER JOIN Codelkup CLR (NOLOCK) ON (ORDERS.Storerkey = CLR.Storerkey AND CLR.Code = 'SHOWFULLSKU'
+   LEFT OUTER JOIN Codelkup CLR (NOLOCK) ON (TORD.Storerkey = CLR.Storerkey AND CLR.Code = 'SHOWFULLSKU'
                                          AND CLR.Listname = 'REPORTCFG' AND CLR.Long = 'r_dw_packing_list_detail' AND ISNULL(CLR.Short,'') <> 'N')
-   LEFT OUTER JOIN Codelkup CLR1 (NOLOCK) ON (ORDERS.Storerkey = CLR1.Storerkey AND CLR1.Code = 'SHOWLBISHIP'
+   LEFT OUTER JOIN Codelkup CLR1 (NOLOCK) ON (TORD.Storerkey = CLR1.Storerkey AND CLR1.Code = 'SHOWLBISHIP'
                                           AND CLR1.Listname = 'REPORTCFG' AND CLR1.Long = 'r_dw_packing_list_detail' AND ISNULL(CLR1.Short,'') <> 'N')
-   WHERE ( RTRIM(PackHeader.OrderKey) IS NULL OR RTRIM(PackHeader.OrderKey) = '') AND
-         ( Packheader.Pickslipno = @c_pickslipno )
-   GROUP BY Packheader.Loadkey,
-            Packheader.Pickslipno,
-            Packdetail.CartonNo,
-            Packdetail.Sku,
-            Packdetail.Qty,
+----CS04 S
+   -- LEFT JOIN dbo.PICKDETAIL PID WITH (NOLOCK) ON PID.DropID=packdetail.labelno AND PID.sku=packdetail.sku AND PID.Status='5'
+   -- CROSS APPLY( SELECT dropid,sku,(qty) AS qty FROM PICKDETAIL WITH (NOLOCK) WHERE Status='5' AND DropID=packdetail.labelno AND sku=packdetail.sku ) AS pid
+--   LEFT JOIN STORER ST (NOLOCK) ON ST.StorerKey = orders.B_Company AND ST.type='4'AND ST.ConsigneeFor='NIKECN' AND ST.Notes1='RSC' 
+--   LEFT OUTER JOIN Codelkup CLR2 (NOLOCK) ON (ORDERS.Storerkey = CLR2.Storerkey AND CLR2.Code = 'SHOWCONSIGNEE'
+--                                          AND CLR2.Listname = 'REPORTCFG' AND CLR2.Long = 'r_dw_packing_list_detail' AND ISNULL(CLR2.Short,'') <> 'N')
+----CS04 E
+   WHERE ( RTRIM(TORD.OrderKey) IS NULL OR RTRIM(TORD.OrderKey) = '') AND
+         ( TORD.Pickslipno = @c_pickslipno )
+   GROUP BY TORD.Loadkey,
+            TORD.Pickslipno,
+            TORD.CartonNo,
+            TORD.Sku,
+           -- Packdetail.Qty,
+            TORD.PackQty,--CASE WHEN ISNULL(TORD.showconsignee,'') = 'Y' THEN pid.qty ELSE Packdetail.Qty END,  --CS04
             CONVERT(DECIMAL(10,5), ISNULL(PACKINFO.Weight,0)),
             CONVERT(DECIMAL(10,5), ISNULL(PACKINFO.[Cube],0)),
             CONVERT(DECIMAL(10,5), ISNULL(PACKINFOSUM.TotalWeight,0)),
             CONVERT(DECIMAL(10,5), ISNULL(PACKINFOSUM.TotalCube,0)),
-            Packdetail.LabelLine,
+            TORD.LabelLine,
             SKU.PackQtyIndicator,
             PACK.PackUOM3,
-            PackDetail.LabelNo,
+            TORD.LabelNo,
             CASE WHEN ISNULL(CLR.Code,'') = '' THEN 'N' ELSE 'Y' END,
-            CASE WHEN ISNULL(CLR1.Code,'') = '' THEN '' ELSE ('2' + RIGHT(ORDERS.orderkey,9)) END,
+            CASE WHEN ISNULL(CLR1.Code,'') = '' THEN '' ELSE ('2' + RIGHT(TORD.orderkey,9)) END,    --CS04
             CASE WHEN ISNULL(CLR1.Code,'') = '' THEN 'N' ELSE 'Y' END
-           ,CASE WHEN @c_zone <> '' THEN PACKDETAIL.RefNo ELSE '' END            --CS01
-           ,CASE WHEN @c_zone <> '' THEN PACKDETAIL.RefNo2 ELSE '' END            --CS01
-   ORDER BY PACKDETAIL.CartonNo
+           ,CASE WHEN @c_zone <> '' THEN TORD.RefNo ELSE '' END            --CS01
+           ,CASE WHEN @c_zone <> '' THEN TORD.RefNo2 ELSE '' END            --CS01
+           ,TORD.showconsignee                                                    --CS04
+           ,TORD.RSCStorer                                                       --CS04
+           ,ISNULL(TORD.ConsigneeKey,'')                                               --CS04
+   ORDER BY TORD.CartonNo
+
+--SELECT * FROM #TMP_PACKDET
 
    IF @c_Zone = ''  --CS02 Start
    BEGIN
+
       SELECT
           Orderkey
          ,ExternOrderkey
@@ -311,6 +696,8 @@ BEGIN
          ,LBIShipNo
          ,showlbiship
          ,''                           --CS01
+         ,showconsignee                --CS04
+         ,''                           --CS04
       FROM #TMP_PACKDET AS tp
       ORDER BY CartonNo
    END
@@ -318,7 +705,7 @@ BEGIN
    BEGIN
       -- --CS01 Start
        SET @n_cntRefno = 0
-      
+
        SELECT @n_cntRefno = COUNT(DISTINCT c.code)
        FROM PackDetail (NOLOCK)
        JOIN PackHeader (NOLOCK) ON ( PackDetail.PickSlipNo = PackHeader.PickSlipNo )
@@ -448,6 +835,8 @@ BEGIN
          , LBIShipNo
          , showlbiship
          , @c_RefNo --CASE WHEN @n_cntRefno>1 THEN @c_RefNo ELSE '' END AS LSite                       --CS01
+         , showconsignee                                                                               --CS04  
+         ,CASE WHEN @n_cntRefno >1 THEN @c_RefNo + '-' + tp.PickSlipNo ELSE tp.PickSlipNo END AS prefixpickslipno  --CS04
        FROM #TMP_PACKDET AS tp
        WHERE Pickslipno = @c_PickSlipNo
        AND ISNULL(RTRIM(RefNo),'') <> @c_Zone
@@ -458,5 +847,5 @@ END
 
 SET QUOTED_IDENTIFIER OFF
 GO
-GRANT EXECUTE ON [dbo].[isp_packinglist_detail] TO nSQL 
+GRANT EXECUTE ON  [dbo].[isp_packinglist_detail] TO [NSQL]
 GO

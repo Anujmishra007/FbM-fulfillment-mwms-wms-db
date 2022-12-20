@@ -1,5 +1,6 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_PackListByCtn09]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_PackListByCtn09]
+SET QUOTED_IDENTIFIER OFF 
+GO
+SET ANSI_NULLS OFF 
 GO
 
 /******************************************************************************/  
@@ -21,10 +22,11 @@ GO
 /*                                                                            */  
 /* Updates:                                                                   */  
 /* Date         Author    Ver.  Purposes                                      */
-/* 28-Jan-2019  TLTING_ext 1.1  enlarge externorderkey field length      */
+/* 28-Jan-2019  TLTING_ext 1.1  enlarge externorderkey field length           */
+/* 13-Dec-2022  Mingle    1.2   WMS-21311 add new field(ML01)                 */
 /******************************************************************************/  
   
-CREATE PROC dbo.isp_PackListByCtn09 (
+CREATE OR ALTER PROC dbo.isp_PackListByCtn09 (
          @c_PickSlipNo NVARCHAR(10))  
 AS  
    SET NOCOUNT ON 
@@ -61,6 +63,7 @@ BEGIN
          , @c_D_Userdefine03  NVARCHAR(18)  
          , @c_D_Userdefine05  NVARCHAR(18)  
          , @n_Qty             INT
+			, @n_maxcarton       INT
  
    SET @n_continue      = 1
    SET @n_starttcnt     = @@TRANCOUNT
@@ -91,6 +94,12 @@ BEGIN
    SET @c_D_Userdefine05= ''
    SET @n_Qty           = 0
 
+	SELECT @n_maxcarton = MAX(PD.CARTONNO)
+	FROM PACKHEADER PH(NOLOCK)
+	JOIN PACKDETAIL PD(NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo
+	WHERE PH.PickSlipNo = @c_PickSlipNo
+	
+
    CREATE Table #TempPackListByCtn09 (
    	           OrderKey 		      NVARCHAR(30) NULL 
                , ExternOrderkey 	   NVARCHAR(50) NULL  --tlting_ext
@@ -113,6 +122,7 @@ BEGIN
                , SKUSize            NVARCHAR(30) NULL
 					, BUSR1              NVARCHAR(10) NULL
 --               , NoOfCarton 	      INT NULL
+					, Refno					NVARCHAR(20) NULL
     ) 
 
  
@@ -138,7 +148,8 @@ BEGIN
                , ItemClass
                , Price
                , SKUSize
-					, BUSR1)
+					, BUSR1
+					, Refno)
    SELECT DISTINCT ORD.OrderKey
                , ORD.ExternOrderkey   
                , ORD.ConsigneeKey       
@@ -157,14 +168,21 @@ BEGIN
                , ORD.BuyerPO 
                , S.SKUGroup
                , S.ItemClass
-               , SUM((S.Price*PDET.qty)) as Price
-               , (RTRIM(s.sku) +'/'+ s.size) as SKUSize
+               , SUM((S.Price*PDET.qty)) AS Price
+               , (RTRIM(s.sku) +'/'+ s.size) AS SKUSize
                ,LEFT(S.BUSR1,10) 
+					--, CASE WHEN PH.STATUS = '9' AND PDET.CARTONNO = @n_maxcarton THEN PDET.RefNo ELSE '' END AS Refno 
+					, (SELECT TOP 1 PACKDETAIL.REFNO
+						FROM PACKHEADER(NOLOCK)
+						JOIN PACKDETAIL(NOLOCK) ON PackDetail.PickSlipNo = PackHeader.PickSlipNo
+						WHERE PACKHEADER.PICKSLIPNO = @c_PickSlipNo
+						AND PACKHEADER.STATUS = '9'
+						AND PACKDETAIL.CARTONNO = @n_maxcarton)
    FROM ORDERS ORD  WITH (NOLOCK)
    JOIN STORER ST1 WITH (NOLOCK)
      ON (ST1.StorerKey = ORD.storerkey)  
    JOIN PACKHEADER PH WITH (NOLOCK) 
-     ON (ORD.Orderkey = PH.Orderkey and ORD.Storerkey = PH.Storerkey)
+     ON (ORD.Orderkey = PH.Orderkey AND ORD.Storerkey = PH.Storerkey)
    JOIN PACKDETAIL PDET WITH (NOLOCK) 
      ON (PDET.PickSlipNo = PH.PickSlipNo)
    JOIN SKU S WITH  (NOLOCK) 
@@ -200,6 +218,9 @@ GROUP BY ORD.ExternOrderkey
                ,ST1.SUSR4
                ,CL.long
                ,LEFT(S.BUSR1,10)
+					--, CASE WHEN PH.STATUS = '9' THEN PDET.RefNo ELSE '' END 
+					,PH.STATUS
+					,PDET.RefNo
                          
 
    SELECT *
@@ -210,6 +231,6 @@ GROUP BY ORD.ExternOrderkey
    DROP TABLE #TempPackListByCtn09
 END  
 GO
-
 GRANT EXECUTE ON isp_PackListByCtn09 to nSQL
 GO        
+

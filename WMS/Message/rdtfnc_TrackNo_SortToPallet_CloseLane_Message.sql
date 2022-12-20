@@ -14,6 +14,16 @@ execute rdt.rdtAddMsg 191260, 10, '191260 NOT ALL SCAN ',   'us_english', 1654
 execute rdt.rdtAddMsg 191261, 10, '191261 Invalid Lane ',   'us_english', 1654
 execute rdt.rdtAddMsg 191262, 10, '191262 Other Storer ',   'us_english', 1654
 execute rdt.rdtAddMsg 191263, 10, '191263 Lane Closed  ',   'us_english', 1654
+execute rdt.rdtAddMsg 191264, 10, '191264 Need Option  ',   'us_english', 1654
+execute rdt.rdtAddMsg 191265, 10, '191265Invalid Option',   'us_english', 1654
+execute rdt.rdtAddMsg 191266, 10, '191266 Need Option  ',   'us_english', 1654
+execute rdt.rdtAddMsg 191267, 10, '191267Invalid Option',   'us_english', 1654
+execute rdt.rdtAddMsg 191268, 10, '191268ValidateMBOLEr',   'us_english', 1654
+execute rdt.rdtAddMsg 191269, 10, '191269MBOL Ship Fail',   'us_english', 1654
+execute rdt.rdtAddMsg 191270, 10, 'PLEASE ALSO COMPLETE',   'us_english', 1654
+execute rdt.rdtAddMsg 191271, 10, 'THE REMAINING IN    ',   'us_english', 1654
+
+execute rdt.rdtAddMsg 191272, 10, '191272 SplitLaneFail',   'us_english', 1654
 
 SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE Message_ID BETWEEN 191251 AND 191300
 

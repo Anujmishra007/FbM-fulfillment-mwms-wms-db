@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspAL_TRI2]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[nspAL_TRI2]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -26,9 +23,12 @@ GO
 /* Updates:                                                             */            
 /* Date         Author    Ver.  Purposes                                */    
 /* 14-Nov-2018  NJOW01    1.0   WMS-6765 add filter for XDOCK orders    */
+/* 13-Oct-2022  NJOW02    1.1   WMS-20993 FIFO allocation for certain   */
+/*                              orders                                  */
+/* 13-Oct-2022  NJOW02    1.1   DEVOPS Combine Script                   */
 /************************************************************************/            
 
-CREATE PROC nspAL_TRI2
+CREATE OR ALTER PROC nspAL_TRI2
    @c_Orderey    NVARCHAR(10),  
    @c_Facility   NVARCHAR(5),     
    @c_StorerKey  NVARCHAR(15),     
@@ -75,7 +75,9 @@ BEGIN
            @c_UCCQty             INT,
            @n_PackQty            INT,
            @c_OtherValue         NVARCHAR(20),
-           @c_OrderType          NVARCHAR(10)  --NJOW01
+           @c_OrderType          NVARCHAR(10),  --NJOW01
+           @c_GroupingFields     NVARCHAR(200), --NJOW02
+           @c_OrderGroup         NVARCHAR(10) --NJOW02           
        
    IF ISNULL(RTRIM(@c_OtherParms) ,'')<>''          
    BEGIN        
@@ -85,16 +87,20 @@ BEGIN
        --NJOW01
        IF ISNULL(@c_OrderLine,'') <> '' AND ISNULL(@c_Orderkey,'') <> ''
        BEGIN
-          SELECT @c_OrderType = Type
+          SELECT @c_OrderType = Type,
+                 @c_Country = C_Country,
+                 @c_OrderGroup = OrderGroup --NJOW02          
           FROM ORDERS (NOLOCK)
           WHERE Orderkey = @c_Orderkey
        END
        ELSE   
-          SET @c_OrderType = SUBSTRING(RTRIM(@c_OtherParms) ,17, 10)   
-              
-       SELECT @c_Country = C_Country
-       FROM ORDERS(NOLOCK)
-       WHERE Orderkey = @c_Orderkey               
+       BEGIN
+       	  --NJOW02
+       	  SET @c_GroupingFields = SUBSTRING(RTRIM(@c_OtherParms) ,17, 184)   
+          SELECT @c_OrderType = ColValue FROM dbo.fnc_DelimSplit(',',@c_GroupingFields) WHERE SeqNo = 1
+          SELECT @c_Country = ColValue FROM dbo.fnc_DelimSplit(',',@c_GroupingFields) WHERE SeqNo = 2
+          SELECT @c_OrderGroup = ColValue FROM dbo.fnc_DelimSplit(',',@c_GroupingFields) WHERE SeqNo = 3
+       END                     
    END        
                  
    /* Get Storer Minimum Shelf Life */
@@ -277,7 +283,8 @@ BEGIN
           RTRIM(@c_Condition)  + 
           " GROUP By LOT.STORERKEY, LOT.SKU, LOT.LOT, LOTxLOCxID.LOC, LOTxLOCxID.ID, LOTATTRIBUTE.Lottable05, LOTATTRIBUTE.Lottable08, LOC.Loc, LOC.LogicalLocation " +
           " HAVING SUM(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen) > 0 " + 
-          " ORDER BY LOTATTRIBUTE.Lottable05 DESC, LOT.Lot DESC, LOC.LogicalLocation, LOC.Loc "  
+          " ORDER BY LOTATTRIBUTE.Lottable05 " + CASE WHEN (@c_Country='SGP' AND @c_OrderType IN('NONFTA','NON-FTA')) OR @c_OrderGroup='ECOM' THEN ' ASC ' ELSE ' DESC ' END +  --NJOW02
+          "         ,LOT.Lot DESC, LOC.LogicalLocation, LOC.Loc "  
           
    EXEC sp_executesql @c_SQL 
       , N'@c_Storerkey NVARCHAR(15), @c_Sku NVARCHAR(20), @c_Facility NVARCHAR(5)'             

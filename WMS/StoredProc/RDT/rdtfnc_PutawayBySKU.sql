@@ -74,7 +74,9 @@ GO
 /* 2020-12-15 4.5  James    WMS-15820 Restructure output @ Qty screen(james12)*/
 /*                          Add ExtInfo @ step 2 & 4, ExtValid @ step 3       */
 /* 2022-07-08 4.6  James    WMS-20188 Add flow thru screen 3-> 4 (james13)    */
-/* 2020-09-17 4.7  WinSern  Increase @nMQTY_PWY AS NVARCHAR( 5) to (6)  (ws01)*/       
+/* 2020-09-17 4.7  WinSern  Increase @nMQTY_PWY AS NVARCHAR( 5) to (6)  (ws01)*/ 
+/* 2022-12-06 4.8  James    WMS-21272 Add DecodeSP, retrieve lot using        */
+/*                          lottable returned (james14)                       */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_PutawayBySKU] (
@@ -171,7 +173,15 @@ DECLARE
    @cSKUDefault         NVARCHAR( 20), --(yeekung04)
    @cUPC                NVARCHAR( 30),  --(cc01)
    @cFlowThruQtyScn     NVARCHAR( 1),
-
+   @cDecodeLottable01   NVARCHAR( 18),
+   @cDecodeLottable02   NVARCHAR( 18),
+   @cDecodeLottable03   NVARCHAR( 18),
+   @dDecodeLottable04   DATETIME,
+   @cSQLSelect          NVARCHAR( MAX),
+   @cSQLWhere           NVARCHAR( MAX),
+   @cSQLOrderBy         NVARCHAR( MAX),
+   @nRowCount           INT,
+   
    @c_oFieled01 NVARCHAR(20), @c_oFieled02 NVARCHAR(20),
    @c_oFieled03 NVARCHAR(20), @c_oFieled04 NVARCHAR(20),
    @c_oFieled05 NVARCHAR(20), @c_oFieled06 NVARCHAR(20),
@@ -759,19 +769,67 @@ BEGIN
          GOTO Step_2_Fail
       END
 
-      -- Standard decode
-      IF @cDecodeSP = '1'
+      -- Decode
+      IF @cDecodeSP <> ''
       BEGIN
-         EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility, @cBarcode,
-            @cUPC    = @cSKU    OUTPUT,
-            @nQTY    = @nQTY    OUTPUT,
-            @nErrNo  = @nErrNo  OUTPUT,
-            @cErrMsg = @cErrMsg OUTPUT,
-            @cType   = 'UPC'
+         -- Standard decode
+         IF @cDecodeSP = '1'
+         BEGIN
+            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility, @cBarcode,
+               @cUPC    = @cSKU    OUTPUT,
+               @nQTY    = @nQTY    OUTPUT,
+               @nErrNo  = @nErrNo  OUTPUT,
+               @cErrMsg = @cErrMsg OUTPUT,
+               @cType   = 'UPC'
 
-         IF @nErrNo <> 0
-            GOTO Quit
-      END
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
+         -- Customize decode    
+         ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')    
+         BEGIN    
+         	SET @cDecodeLottable01 = ''
+         	SET @cDecodeLottable02 = ''
+         	SET @cDecodeLottable03 = ''
+         	SET @dDecodeLottable04 = ''
+
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +    
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cBarcode, ' +    
+               ' @cID, @cUCC, @cLOC, @cSKU OUTPUT, @nQTY OUTPUT, ' + 
+               ' @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, ' +
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '   
+   
+            SET @cSQLParam =    
+               ' @nMobile           INT,           ' +    
+               ' @nFunc             INT,           ' +    
+               ' @cLangCode         NVARCHAR( 3),  ' +    
+               ' @nStep             INT,           ' +    
+               ' @nInputKey         INT,           ' +    
+               ' @cFacility         NVARCHAR( 5),  ' +    
+               ' @cStorerKey        NVARCHAR( 15), ' +    
+               ' @cBarcode          NVARCHAR( 60), ' +    
+               ' @cID               NVARCHAR( 18), ' +
+               ' @cUCC              NVARCHAR( 20), ' +
+               ' @cLOC              NVARCHAR( 10), ' +
+               ' @cSKU              NVARCHAR( 20)  OUTPUT, ' +
+               ' @nQTY              INT            OUTPUT, ' +
+               ' @cLottable01       NVARCHAR( 18)  OUTPUT, ' +
+               ' @cLottable02       NVARCHAR( 18)  OUTPUT, ' +
+               ' @cLottable03       NVARCHAR( 18)  OUTPUT, ' +
+               ' @dLottable04       DATETIME       OUTPUT, ' +
+               ' @nErrNo            INT            OUTPUT, ' +    
+               ' @cErrMsg           NVARCHAR( 20)  OUTPUT'    
+    
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorer, @cBarcode,    
+               @cID, @cUCC, @cLOC, @cSKU OUTPUT, @nQTY OUTPUT, 
+               @cDecodeLottable01 OUTPUT, @cDecodeLottable02 OUTPUT, @cDecodeLottable03 OUTPUT, @dDecodeLottable04 OUTPUT,
+               @nErrNo OUTPUT, @cErrMsg OUTPUT    
+
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
+      END    
       ELSE
       BEGIN
          -- Decode label
@@ -959,16 +1017,58 @@ BEGIN
             AND SKU = @cSKU
             AND Status = '1'
       ELSE
-         SELECT TOP 1
-            @cLOT = LOT
-         FROM dbo.LOTxLOCxID WITH (NOLOCK)
-         WHERE ID = @cID
-            AND LOC = @cLOC
-            AND StorerKey = @cStorer
-            AND SKU = @cSKU
-            AND (QTY - QTYAllocated - QTYPicked - ABS( QTYReplen)) > 0
-         ORDER BY LOT
+      BEGIN
+      	SET @cSQLSelect = ''
+      	SET @cSQLWhere = ''
+      	SET @cSQLOrderBy = ''
+         SET @nRowCount = 0
+         
+         SET @cSQLSelect = 
+            ' SELECT TOP 1 @cLOT = LLI.LOT ' + 
+            ' FROM dbo.LOTxLOCxID LLI WITH (NOLOCK) ' +
+            ' JOIN dbo.LOTATTRIBUTE LA WITH (NOLOCK) ' +
+            '    ON ( LLI.LOT = LA.LOT)' +
+            ' WHERE LLI.ID = @cID ' +
+            ' AND   LLI.LOC = @cLOC ' +
+            ' AND   LLI.StorerKey = @cStorerKey ' +
+            ' AND   LLI.SKU = @cSKU ' +
+            ' AND  (LLI.QTY - LLI.QTYAllocated - LLI.QTYPicked - ABS( LLI.QTYReplen)) > 0 '
+  
+         IF ISNULL( @cDecodeLottable01, '') <> ''
+            SET @cSQLWhere = ' AND   LA.Lottable01 = @cLottable01 '
 
+         IF ISNULL( @cDecodeLottable02, '') <> ''
+            SET @cSQLWhere = @cSQLWhere + ' AND   LA.Lottable02 = @cLottable02 '
+
+         IF ISNULL( @cDecodeLottable03, '') <> ''
+            SET @cSQLWhere = @cSQLWhere + ' AND   LA.Lottable03 = @cLottable03 '
+
+         IF ISNULL( @dDecodeLottable04, '') <> ''
+            SET @cSQLWhere = @cSQLWhere + ' AND   LA.Lottable04 = @dLottable04 '
+         
+         SET @cSQLOrderBy = 'ORDER BY LLI.LOT '
+         SET @cSQLOrderBy = @cSQLOrderBy + 'SET @nRowCount = @@ROWCOUNT'
+         
+         SET @cSQL = @cSQLSelect + @cSQLWhere + @cSQLOrderBy
+   
+         SET @cSQLParam = 
+            '@cID             NVARCHAR( 18), ' +  
+            '@cLOC            NVARCHAR( 10), ' +  
+            '@cStorerKey      NVARCHAR( 15), ' + 
+            '@cSKU            NVARCHAR( 20), ' +
+            '@cLottable01     NVARCHAR( 18), ' +
+            '@cLottable02     NVARCHAR( 18), ' +
+            '@cLottable03     NVARCHAR( 18), ' +
+            '@dLottable04     DATETIME, ' +
+            '@cLOT            NVARCHAR( 10)  OUTPUT, ' + 
+            '@nRowCount       INT            OUTPUT '
+            
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam, 
+            @cID, @cLOC, @cStorer, @cSKU, 
+            @cDecodeLottable01, @cDecodeLottable02, @cDecodeLottable03, @dDecodeLottable04, 
+            @cLOT OUTPUT, @nRowCount OUTPUT
+    	END
+    	
       -- Check SKU on ID
       IF @@ROWCOUNT = 0
       BEGIN

@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspConsoPickList17]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[nspConsoPickList17]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -21,7 +17,7 @@ GO
 /*                                                                      */  
 /* Return Status:  None                                                 */  
 /*                                                                      */  
-/* Usage:  Used for report dw = r_dw_consolidated_pick16_1              */  
+/* Usage:  Used for report dw = r_dw_consolidated_pick17_1              */  
 /*                                                                      */  
 /* Local Variables:                                                     */  
 /*                                                                      */  
@@ -45,9 +41,10 @@ GO
 /* 18-Nov-2020  WLChooi 1.6  WMS-15667 Add Innerpack calculation (WL01) */
 /* 15-Dec-2021  WLChooi 1.7  DevOps Combine Script                      */
 /* 15-Dec-2021  WLChooi 1.7  WMS-18587 - Add Lottable06 (WL02)          */
+/* 09-Dec-2022  Mingle  1.8  WMS-21293 - Add reportcfg (ML01)           */
 /************************************************************************/  
   
-CREATE PROC nspConsoPickList17 (  
+CREATE OR ALTER PROC nspConsoPickList17 (  
  @c_LoadKey NVARCHAR(10)  
 )  
 AS  
@@ -129,7 +126,8 @@ BEGIN
            PACK.InnerPack,
            --WL01 END
            LOTATTRIBUTE.Lottable06,   --WL02
-           ISNULL(CL4.Short,'N') AS ShowLott06   --WL02
+           ISNULL(CL4.Short,'N') AS ShowLott06,   --WL02
+			  ISNULL(CL5.Short,'N') AS ShowPalletBarcode   --ML01
    INTO #TEMP_PICK   
    FROM LoadPlanDetail WITH (NOLOCK)  
    JOIN ORDERDETAIL WITH (NOLOCK) ON ( LoadPlanDetail.LoadKey = ORDERDETAIL.LoadKey AND   
@@ -151,6 +149,8 @@ BEGIN
                                        AND CL3.Storerkey = ORDERS.Storerkey AND ISNULL(CL3.Short,'') <> 'N')   --WL01
    LEFT JOIN CODELKUP CL4 WITH (NOLOCK) ON (CL4.ListName = 'REPORTCFG' AND CL4.Code = 'ShowLott06' AND CL4.Long = 'r_dw_consolidated_pick17'  
                                        AND CL4.Storerkey = ORDERS.Storerkey AND ISNULL(CL4.Short,'') <> 'N')   --WL02
+	LEFT JOIN CODELKUP CL5 WITH (NOLOCK) ON (CL5.ListName = 'REPORTCFG' AND CL5.Code = 'ShowPalletBarcode' AND CL5.Long = 'r_dw_consolidated_pick17'  
+                                       AND CL5.Storerkey = ORDERS.Storerkey AND ISNULL(CL5.Short,'') <> 'N')   --ML01
    JOIN LOC WITH (NOLOCK) ON ( PICKDETAIL.Loc = LOC.Loc ) --NJOW01  
    WHERE ( LoadPlanDetail.LoadKey = @c_LoadKey )  
    GROUP BY LoadPlanDetail.LoadKey,     
@@ -188,7 +188,8 @@ BEGIN
             PACK.InnerPack,         --WL01
             ISNULL(CL3.Short,'N'),  --WL01
             LOTATTRIBUTE.Lottable06,   --WL02
-            ISNULL(CL4.Short,'N')   --WL02
+            ISNULL(CL4.Short,'N'),   --WL02
+				ISNULL(CL5.Short,'N')	--ML01
       
   DECLARE C_zone CURSOR LOCAL FAST_FORWARD READ_ONLY FOR     
   SELECT DISTINCT PutawayZone, Locationtype, GroupByPAZone, GroupByLocType  
@@ -244,7 +245,7 @@ BEGIN
         END     
           
        -- Do Auto Scan-in when only 1 storer found and configkey is setup  
-       IF @n_continue = 1 or @n_continue = 2  
+       IF @n_continue = 1 OR @n_continue = 2  
        BEGIN    
         IF ( SELECT COUNT(DISTINCT StorerKey) FROM ORDERS WITH (NOLOCK), LOADPLANDETAIL WITH (NOLOCK)  
            WHERE LOADPLANDETAIL.OrderKey = ORDERS.OrderKey AND LOADPLANDETAIL.LoadKey = @c_LoadKey ) = 1  
@@ -260,7 +261,7 @@ BEGIN
               SValue = '1' AND StorerKey = @c_StorerKey)  
          BEGIN   
           -- Configkey is setup  
-                IF NOT Exists(SELECT 1 FROM PickingInfo WITH (NOLOCK) WHERE PickSlipNo = @c_PickSlipNo)  
+                IF NOT EXISTS(SELECT 1 FROM PickingInfo WITH (NOLOCK) WHERE PickSlipNo = @c_PickSlipNo)  
                 BEGIN  
                    INSERT INTO PickingInfo  (PickSlipNo, ScanInDate, PickerID, ScanOutDate)  
                    VALUES (@c_PickSlipNo, GetDate(), sUser_sName(), NULL)      
@@ -361,7 +362,8 @@ BEGIN
             ShowInner,             --(WL01)   
             InnerPack,             --(WL01)  
             Lottable06,            --WL02
-            ShowLott06             --WL02                                        
+            ShowLott06,            --WL02         
+				ShowPalletBarcode      --ML01  
       FROM #TEMP_PICK     
       
    IF OBJECT_ID('tempdb..#TEMP_PICK') IS NOT NULL   --WL01
@@ -402,5 +404,6 @@ GO
 
 GRANT EXECUTE ON nspConsoPickList17 TO NSQL
 GO
- 
+
+
   
