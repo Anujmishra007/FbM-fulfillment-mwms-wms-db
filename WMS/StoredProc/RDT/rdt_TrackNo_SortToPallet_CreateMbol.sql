@@ -68,7 +68,7 @@ BEGIN
          ' @nInputKey      INT,           ' +
          ' @cFacility      NVARCHAR( 5) , ' +
          ' @cStorerKey     NVARCHAR( 15), ' +
-         ' @cTrackNo       NVARCHAR( 20), ' +
+         ' @cTrackNo       NVARCHAR( 40), ' +
          ' @cOrderKey      NVARCHAR( 10), ' +
          ' @cPalletKey     NVARCHAR( 20), ' +
          ' @cMBOLKey       NVARCHAR( 10) OUTPUT, ' +
