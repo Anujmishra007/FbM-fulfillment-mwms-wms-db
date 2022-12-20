@@ -28,6 +28,7 @@ EXECUTE rdt.rdtAddScn 2881, 'ENG',
    ,@cLine10 = '%32i05'
    ,@cLine11 = '%20d06'
    ,@cLine12 = '%20d07'
+   ,@cLine13 = '%20d15'    -- ExtendedInfo WMS-21307
    ,@cLine14 = '%e'
    ,@nFunc = 523
    
