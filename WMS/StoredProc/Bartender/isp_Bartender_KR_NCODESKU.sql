@@ -12,7 +12,8 @@ GO
 /* Modifications log:                                                         */                 
 /*                                                                            */                 
 /* Date       Rev  Author     Purposes                                        */                 
-/* 2022-06-22 1.0  CSCHONG    Devops Scripts Combine & Created (WMS-20019)    */          
+/* 2022-06-22 1.0  CSCHONG    Devops Scripts Combine & Created (WMS-20019)    */ 
+/* 2022-12-15 1.1  WLChooi    WMS-21351 - Add Col09, Col10 (WL01)             */
 /******************************************************************************/                
                   
 CREATE OR ALTER PROC [dbo].[isp_Bartender_KR_NCODESKU]                      
@@ -137,7 +138,8 @@ BEGIN
                          ,Col45,Col46,Col47,Col48,Col49,Col50,Col51,Col52,Col53,Col54      
                          ,Col55,Col56,Col57,Col58,Col59,Col60) 
           
-    SELECT DISTINCT CONVERT(NVARCHAR(10), GETDATE(), 120),S.StorerKey,S.sku,ISNULL(S.DESCR,''),s.SKUGROUP, s.Style,s.Color,s.Size,'','',--10   
+    SELECT DISTINCT CONVERT(NVARCHAR(10), GETDATE(), 120),S.StorerKey,S.sku,ISNULL(S.DESCR,''),s.SKUGROUP, s.Style,s.Color,s.Size,
+              LEFT(TRIM(ISNULL(S.NOTES1,'')),80),LEFT(TRIM(ISNULL(S.NOTES2,'')),80),--10   --WL01
               isnull(s.MANUFACTURERSKU,'') ,'' ,'' ,'' ,'' ,     --15         
               isnull(s.susr1,''),isnull(s.susr2,'') ,isnull(s.susr3,'') ,isnull(s.susr4,'') ,isnull(s.susr5,'') ,         --20   
               isnull(s.busr1,''),isnull(s.busr2,'') ,isnull(s.busr3,'') ,isnull(s.busr4,'') ,isnull(s.busr5,'') ,         --25   
@@ -193,8 +195,3 @@ BEGIN
 GO
 GRANT EXECUTE ON [dbo].[isp_Bartender_KR_NCODESKU] TO nsql
 GO
-
-  
-   
-  
-  
