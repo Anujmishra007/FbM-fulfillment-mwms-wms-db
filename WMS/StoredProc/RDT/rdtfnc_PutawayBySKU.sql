@@ -74,9 +74,10 @@ GO
 /* 2020-12-15 4.5  James    WMS-15820 Restructure output @ Qty screen(james12)*/
 /*                          Add ExtInfo @ step 2 & 4, ExtValid @ step 3       */
 /* 2022-07-08 4.6  James    WMS-20188 Add flow thru screen 3-> 4 (james13)    */
-/* 2020-09-17 4.7  WinSern  Increase @nMQTY_PWY AS NVARCHAR( 5) to (6)  (ws01)*/ 
+/* 2020-09-17 4.7  WinSern  Increase @nMQTY_PWY AS NVARCHAR( 5) to (6)  (ws01)*/       
 /* 2022-12-06 4.8  James    WMS-21272 Add DecodeSP, retrieve lot using        */
 /*                          lottable returned (james14)                       */
+/* 2022-12-09 4.9  James    WMS-21307 Add ExtendedInfoSP step 1 & 5 (james14) */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_PutawayBySKU] (
@@ -181,7 +182,7 @@ DECLARE
    @cSQLWhere           NVARCHAR( MAX),
    @cSQLOrderBy         NVARCHAR( MAX),
    @nRowCount           INT,
-   
+
    @c_oFieled01 NVARCHAR(20), @c_oFieled02 NVARCHAR(20),
    @c_oFieled03 NVARCHAR(20), @c_oFieled04 NVARCHAR(20),
    @c_oFieled05 NVARCHAR(20), @c_oFieled06 NVARCHAR(20),
@@ -727,6 +728,43 @@ BEGIN
       SET @nStep = 0
       SET @cOutField01 = '' -- Option
    END
+
+   -- (james14)
+   -- Extended info
+   IF @cExtendedInfoSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+      BEGIN
+         SET @cExtendedInfo1 = ''
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cStorerkey, @cFacility, ' +
+            ' @cLOC, @cID, @cSKU, @nQTY, @cSuggestedLOC, @cFinalLOC, @cOption, @cExtendedInfo1 OUTPUT'
+         SET @cSQLParam =
+            '@nMobile         INT,           ' +
+            '@nFunc           INT,           ' +
+            '@cLangCode       NVARCHAR( 3),  ' +
+            '@nStep           INT,           ' +
+            '@nAfterStep      INT,           ' +
+            '@nInputKey       INT,           ' +
+            '@cStorerKey      NVARCHAR( 15), ' +
+            '@cFacility       NVARCHAR( 5),  ' +
+            '@cLOC            NVARCHAR( 10), ' +
+            '@cID             NVARCHAR( 18), ' +
+            '@cSKU            NVARCHAR( 20), ' +
+            '@nQTY            INT,           ' +
+            '@cSuggestedLOC   NVARCHAR( 10), ' +
+            '@cFinalLOC       NVARCHAR( 10), ' +
+            '@cOption         NVARCHAR( 1),  ' +
+            '@cExtendedInfo1  NVARCHAR( 20) OUTPUT '
+
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @nMobile, @nFunc, @cLangCode, 1, @nStep, @nInputKey, @cStorer, @cFacility,
+            @cLOC, @cID, @cSKU, @nQTY, @cSuggestedLOC, @cFinalLOC, @cOption, @cExtendedInfo1 OUTPUT
+
+         SET @cOutfield15 = @cExtendedInfo1
+      END
+   END
+   
    GOTO Quit
 
    Step_1_Fail:
@@ -1068,7 +1106,7 @@ BEGIN
             @cDecodeLottable01, @cDecodeLottable02, @cDecodeLottable03, @dDecodeLottable04, 
             @cLOT OUTPUT, @nRowCount OUTPUT
     	END
-    	
+
       -- Check SKU on ID
       IF @@ROWCOUNT = 0
       BEGIN
@@ -2066,6 +2104,42 @@ BEGIN
          -- Go back to ID screen
          SET @nScn  = @nScn  - 4
          SET @nStep = @nStep - 4
+      END
+
+      -- (james14)
+      -- Extended info
+      IF @cExtendedInfoSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+         BEGIN
+            SET @cExtendedInfo1 = ''
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cStorerkey, @cFacility, ' +
+               ' @cLOC, @cID, @cSKU, @nQTY, @cSuggestedLOC, @cFinalLOC, @cOption, @cExtendedInfo1 OUTPUT'
+            SET @cSQLParam =
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,           ' +
+               '@nAfterStep      INT,           ' +
+               '@nInputKey       INT,           ' +
+               '@cStorerKey      NVARCHAR( 15), ' +
+               '@cFacility       NVARCHAR( 5),  ' +
+               '@cLOC            NVARCHAR( 10), ' +
+               '@cID             NVARCHAR( 18), ' +
+               '@cSKU            NVARCHAR( 20), ' +
+               '@nQTY            INT,           ' +
+               '@cSuggestedLOC   NVARCHAR( 10), ' +
+               '@cFinalLOC       NVARCHAR( 10), ' +
+               '@cOption         NVARCHAR( 1),  ' +
+               '@cExtendedInfo1  NVARCHAR( 20) OUTPUT '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, 5, @nStep, @nInputKey, @cStorer, @cFacility,
+               @cLOC, @cID, @cSKU, @nQTY, @cSuggestedLOC, @cFinalLOC, @cOption, @cExtendedInfo1 OUTPUT
+
+            SET @cOutfield15 = @cExtendedInfo1
+         END
       END
    END
 END
