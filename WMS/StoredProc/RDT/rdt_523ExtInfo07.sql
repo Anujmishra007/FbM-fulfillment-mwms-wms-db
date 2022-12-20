@@ -11,7 +11,9 @@ GO
 /* Modifications log:                                                   */
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
-/* 2022-09-01 1.0  yeekung   WMS-20683. Created                         */
+/* 2022-09-01 1.0  yeekung  WMS-20683. Created                          */
+/* 2022-12-09 1.1  James    WMS-21307 Afterstep = 2 display (james01)   */
+/*                          Add ItemClass at Afterstep = 3              */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_523ExtInfo07]
@@ -40,9 +42,24 @@ BEGIN
 
    DECLARE @cUserdefine01 NVARCHAR(20)
    DECLARE @cData NVARCHAR(20)
-
+   DECLARE @nQtyOnID       INT = 0
+   DECLARE @cItemClass     NVARCHAR( 10) = ''
+   
    IF @nFunc = 523 -- Putaway by SKU
    BEGIN
+   	IF @nAfterStep = 2
+   	BEGIN
+   		SELECT @nQtyOnID = ISNULL( SUM( Qty), 0)
+   		FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
+   		JOIN dbo.LOC LOC WITH (NOLOCK) ON ( LLI.LOC = LOC.LOC)
+   		WHERE LLI.StorerKey = @cStorerKey
+   		AND   LLI.Loc = @cLOC
+   		AND   LLI.Id = @cID
+   		AND   LOC.Facility = @cFacility
+   		
+   		SET @cExtendedInfo1 = 'QTY ON ID: '+  CAST( @nQtyOnID AS NVARCHAR( 5))
+   	END
+   	
       IF @nAfterStep = 3  -- QTY PWY, QTY ACT
       BEGIN
          SELECT @cUserdefine01=userdefine01,
@@ -51,7 +68,14 @@ BEGIN
          WHERE SKU=@cSKU
             AND  storerkey=@cStorerKey
 
-         SET @cExtendedInfo1 = @cUserdefine01 + ' '+  @cData
+         SELECT @cItemClass = itemclass
+         FROM dbo.SKU WITH (NOLOCK)
+         WHERE StorerKey = @cStorerKey
+         AND   Sku= @cSKU
+         
+         SET @cExtendedInfo1 = RTRIM( @cUserdefine01) + ' ' +  
+                               RTRIM( @cData) + ' ' + 
+                               @cItemClass
       END
    END
 
