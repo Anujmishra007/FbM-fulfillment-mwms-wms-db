@@ -80,6 +80,11 @@ execute rdt.rdtAddMsg 189814, 10, '189814 Pallet In Use',    'us_english', 1653
 execute rdt.rdtAddMsg 189815, 10, '189814Diff StorerKey',    'us_english', 1653
 execute rdt.rdtAddMsg 189816, 10, '189816PltInOtherLane',    'us_english', 1653
 execute rdt.rdtAddMsg 189817, 10, '189817 TrackNo InUse',    'us_english', 1653
+execute rdt.rdtAddMsg 189818, 10, '189818 Lane In Use  ',    'us_english', 1653
+execute rdt.rdtAddMsg 189819, 10, '189819 LaneAlrdSplit',    'us_english', 1653
+execute rdt.rdtAddMsg 189820, 10, '189820 LaneAlrdSplit',    'us_english', 1653
+execute rdt.rdtAddMsg 189821, 10, '189821 LaneAlrdSplit',    'us_english', 1653
+execute rdt.rdtAddMsg 189822, 10, '189822 LaneAlrdSplit',    'us_english', 1653
 
 SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE Message_ID BETWEEN 156351 AND 156400
 
