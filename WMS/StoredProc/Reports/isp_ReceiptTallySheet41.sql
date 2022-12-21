@@ -1,14 +1,10 @@
-IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[isp_ReceiptTallySheet41]') AND type in (N'P', N'PC'))
-DROP PROCEDURE [dbo].[isp_ReceiptTallySheet41]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
 
 /************************************************************************/
-/* Stored Procedure: isp_ReceiptTallySheet41    					    */
+/* Stored Procedure: isp_ReceiptTallySheet41    					         */
 /* Creation Date: 28/10/2014                                            */
 /* Copyright: IDS                                                       */
 /* Written by:                                                          */
@@ -26,13 +22,15 @@ GO
 /* Updates:                                                             */
 /* Date         Author  Ver   Purposes                                  */
 /* 28/10/2014   CSCHONG 1.0   Change Request of Adidas Tally Sheet      */
+/* 08/12/2022   MINGLE  1.1   WMS-21245 add new parm username(ML01)     */
 /************************************************************************/
 
-CREATE PROC [dbo].[isp_ReceiptTallySheet41] (
+CREATE OR ALTER PROC [dbo].[isp_ReceiptTallySheet41] (
    @c_receiptkeystart NVARCHAR(10),
    @c_receiptkeyend NVARCHAR(10),
    @c_storerkeystart NVARCHAR(15),
-   @c_storerkeyend NVARCHAR(15)
+   @c_storerkeyend NVARCHAR(15),
+	@c_username NVARCHAR(30)	--ML01 
    )
  AS
  BEGIN
@@ -40,6 +38,7 @@ CREATE PROC [dbo].[isp_ReceiptTallySheet41] (
     SET QUOTED_IDENTIFIER OFF 
     SET ANSI_NULLS OFF   
     SET CONCAT_NULL_YIELDS_NULL OFF
+	 
 
     DECLARE @c_storerkey NVARCHAR(15),
             @c_udf01 NVARCHAR(60),
@@ -49,9 +48,10 @@ CREATE PROC [dbo].[isp_ReceiptTallySheet41] (
             @c_ColName NVARCHAR(100),
             @c_ColType NVARCHAR(100),
             @c_ISCombineSKU NCHAR(1),
-            @cSQL NVARCHAR(Max),
+            @cSQL NVARCHAR(MAX),
             @c_FromWhere NVARCHAR(2000),              
-            @c_InsertSelect NVARCHAR(2000)                        
+            @c_InsertSelect NVARCHAR(2000)
+    
                           
     CREATE TABLE #TEMP_SKU (Storerkey NVARCHAR(15) NULL, SKU NVARCHAR(20) NULL, DESCR NVARCHAR(60) NULL, 
                             Packkey NVARCHAR(10) NULL, SUSR3 NVARCHAR(18) NULL, IVAS NVARCHAR(30) NULL, COMBINESKU NVARCHAR(100) NULL,
@@ -96,10 +96,10 @@ CREATE PROC [dbo].[isp_ReceiptTallySheet41] (
           --UDF01
           SET @c_ColName = @c_udf01
           SET @c_TableName = 'SKU'
-          IF CharIndex('.', @c_udf01) > 0
+          IF CHARINDEX('.', @c_udf01) > 0
           BEGIN
-             SET @c_TableName = LEFT(@c_udf01, CharIndex('.', @c_udf01) - 1)
-             SET @c_ColName   = SUBSTRING(@c_udf01, CharIndex('.', @c_udf01) + 1, LEN(@c_udf01) - CharIndex('.', @c_udf01))
+             SET @c_TableName = LEFT(@c_udf01, CHARINDEX('.', @c_udf01) - 1)
+             SET @c_ColName   = SUBSTRING(@c_udf01, CHARINDEX('.', @c_udf01) + 1, LEN(@c_udf01) - CHARINDEX('.', @c_udf01))
           END
 
 		
@@ -118,10 +118,10 @@ CREATE PROC [dbo].[isp_ReceiptTallySheet41] (
           --UDF02
           SET @c_ColName = @c_udf02
           SET @c_TableName = 'SKU'
-          IF CharIndex('.', @c_udf02) > 0
+          IF CHARINDEX('.', @c_udf02) > 0
           BEGIN
-             SET @c_TableName = LEFT(@c_udf02, CharIndex('.', @c_udf02) - 1)
-             SET @c_ColName   = SUBSTRING(@c_udf02, CharIndex('.', @c_udf02) + 1, LEN(@c_udf02) - CharIndex('.', @c_udf02))
+             SET @c_TableName = LEFT(@c_udf02, CHARINDEX('.', @c_udf02) - 1)
+             SET @c_ColName   = SUBSTRING(@c_udf02, CHARINDEX('.', @c_udf02) + 1, LEN(@c_udf02) - CHARINDEX('.', @c_udf02))
           END
           
           SET @c_ColType = ''
@@ -138,10 +138,10 @@ CREATE PROC [dbo].[isp_ReceiptTallySheet41] (
           --UDF03
           SET @c_ColName = @c_udf03
           SET @c_TableName = 'SKU'
-          IF CharIndex('.', @c_udf03) > 0
+          IF CHARINDEX('.', @c_udf03) > 0
           BEGIN
-             SET @c_TableName = LEFT(@c_udf03, CharIndex('.', @c_udf03) - 1)
-             SET @c_ColName   = SUBSTRING(@c_udf03, CharIndex('.', @c_udf03) + 1, LEN(@c_udf03) - CharIndex('.', @c_udf03))
+             SET @c_TableName = LEFT(@c_udf03, CHARINDEX('.', @c_udf03) - 1)
+             SET @c_ColName   = SUBSTRING(@c_udf03, CHARINDEX('.', @c_udf03) + 1, LEN(@c_udf03) - CHARINDEX('.', @c_udf03))
           END
           
           SET @c_ColType = ''
@@ -200,7 +200,8 @@ CREATE PROC [dbo].[isp_ReceiptTallySheet41] (
          SKU.SUSR3,   
          RECEIPTDETAIL.QtyExpected , 
 			RECEIPTDETAIL.BeforeReceivedQty,			
-			(user_name()) username,
+			--(user_name()) username,
+			CASE WHEN ISNULL(CL.SHORT,'N') = 'Y' AND ISNULL(@c_username,'') <> '' THEN @c_username ELSE (SUSER_SNAME()) END AS Username,	--ML01
 			PACK.Packuom1,
 			PACK.Casecnt,
 			PACK.Packuom4,
@@ -212,8 +213,9 @@ CREATE PROC [dbo].[isp_ReceiptTallySheet41] (
 			ReceiptDetail.ToLoc ToLoc,
 			RECEIPT.Warehousereference,  
 			ReceiptDetail.Toid,			 
-		    SKU.SKUGROUP,
-		    SKU.BUSR6
+		   SKU.SKUGROUP,
+		   SKU.BUSR6,
+			ISNULL(CL.SHORT,'') AS ShowMYUsername	--ML01
 
     FROM RECEIPT WITH (NOLOCK) 
 	 JOIN RECEIPTDETAIL WITH (NOLOCK) ON ( RECEIPT.ReceiptKey = RECEIPTDETAIL.ReceiptKey ) 
@@ -221,6 +223,8 @@ CREATE PROC [dbo].[isp_ReceiptTallySheet41] (
          					  AND SKU.Sku = RECEIPTDETAIL.Sku )
     JOIN STORER WITH (NOLOCK) ON ( RECEIPT.Storerkey = STORER.Storerkey ) 
 	 JOIN PACK WITH (NOLOCK) ON ( SKU.Packkey = PACK.Packkey ) 
+	 LEFT JOIN CODELKUP CL WITH (NOLOCK) ON CL.ListName = 'REPORTCFG' AND CL.Long = 'r_receipt_tallysheet41'
+                                      AND CL.Code = 'ShowMYUsername' AND CL.Storerkey = RECEIPT.Storerkey	--ML01 
    WHERE ( RECEIPT.ReceiptKey >= @c_receiptkeystart ) 
 	  AND ( RECEIPT.ReceiptKey <= @c_receiptkeyend ) 
 	  AND ( RECEIPT.Storerkey >= @c_storerkeystart ) 
@@ -232,4 +236,7 @@ GO
             
 GRANT EXECUTE ON isp_ReceiptTallySheet41 TO NSQL
 GO  
+
+
+	 
 

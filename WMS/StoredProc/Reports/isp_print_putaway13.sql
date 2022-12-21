@@ -1,7 +1,3 @@
-IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[isp_Print_Putaway13]') AND type in (N'P', N'PC'))
-DROP PROCEDURE [dbo].[isp_Print_Putaway13]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -16,7 +12,7 @@ GO
 /*                                                                      */
 /* Purpose: SOS#323881                                                  */
 /*                                                                      */
-/* Called By: d_dw_print_putaway12                                      */
+/* Called By: d_dw_print_putaway13                                      */
 /*                                                                      */
 /* PVCS Version: 1.1                                                    */
 /*                                                                      */
@@ -28,9 +24,10 @@ GO
 /* Date         Author  Ver   Purposes                                  */
 /* 28/10/2014	CSCHONG 1.0	  Change Request of Adidas Putaway Advice   */
 /* 10-MAR-2017  JayLim   1.1  SQL2012 compatibility modification (Jay01)*/
+/* 12-DEC-2022  MINGLE  1.2   WMS-21245 modify username logic(ML01)     */
 /************************************************************************/
 
-CREATE PROC [dbo].[isp_Print_Putaway13] (
+CREATE OR ALTER PROC [dbo].[isp_Print_Putaway13] (
    @c_receiptkeystart NVARCHAR(10),
    @c_receiptkeyend NVARCHAR(10),
    @c_userid NVARCHAR(18)
@@ -50,9 +47,11 @@ CREATE PROC [dbo].[isp_Print_Putaway13] (
             @c_ColName NVARCHAR(100),
             @c_ColType NVARCHAR(100),
             @c_ISCombineSKU NCHAR(1),
-            @cSQL NVARCHAR(Max),
+            @cSQL NVARCHAR(MAX),
             @c_FromWhere NVARCHAR(2000),              
-            @c_InsertSelect NVARCHAR(2000)                        
+            @c_InsertSelect NVARCHAR(2000) 
+				
+	
                           
     CREATE TABLE #TEMP_SKU (Storerkey NVARCHAR(15) NULL, SKU NVARCHAR(20) NULL, DESCR NVARCHAR(60) NULL, 
                             Packkey NVARCHAR(10) NULL, BUSR6 NVARCHAR(18) NULL, IVAS NVARCHAR(30) NULL,                             
@@ -95,10 +94,10 @@ CREATE PROC [dbo].[isp_Print_Putaway13] (
           --UDF01
           SET @c_ColName = @c_udf01
           SET @c_TableName = 'SKU'
-          IF CharIndex('.', @c_udf01) > 0
+          IF CHARINDEX('.', @c_udf01) > 0
           BEGIN
-             SET @c_TableName = LEFT(@c_udf01, CharIndex('.', @c_udf01) - 1)
-             SET @c_ColName   = SUBSTRING(@c_udf01, CharIndex('.', @c_udf01) + 1, LEN(@c_udf01) - CharIndex('.', @c_udf01))
+             SET @c_TableName = LEFT(@c_udf01, CHARINDEX('.', @c_udf01) - 1)
+             SET @c_ColName   = SUBSTRING(@c_udf01, CHARINDEX('.', @c_udf01) + 1, LEN(@c_udf01) - CHARINDEX('.', @c_udf01))
           END
           
           SET @c_ColType = ''
@@ -115,7 +114,7 @@ CREATE PROC [dbo].[isp_Print_Putaway13] (
           --UDF02
           SET @c_ColName = @c_udf02
           SET @c_TableName = 'SKU'
-          IF CharIndex('.', @c_udf02) > 0
+          IF CHARINDEX('.', @c_udf02) > 0
           BEGIN
              SET @c_TableName = LEFT(@c_udf02, CharIndex('.', @c_udf02) - 1)
              SET @c_ColName   = SUBSTRING(@c_udf02, CharIndex('.', @c_udf02) + 1, LEN(@c_udf02) - CharIndex('.', @c_udf02))
@@ -194,7 +193,8 @@ CREATE PROC [dbo].[isp_Print_Putaway13] (
            RECEIPTDETAIL.BeforeReceivedQty,
 			     RECEIPT.ReceiptDate,
 			     STORER.Company, 
-			     (suser_sname()) user_name, 
+			     --(suser_sname()) user_name, 
+				  CASE WHEN ISNULL(@c_userid,'') <> '' THEN @c_userid ELSE (SUSER_SNAME()) END AS Username,	--ML01
 			     receipt.warehousereference,  
 			     PACK.CaseCnt,
 			     PACK.InnerPack,
@@ -238,13 +238,13 @@ CREATE PROC [dbo].[isp_Print_Putaway13] (
 			     ELSE 
 			     		CASE PACK.Casecnt WHEN 0 THEN (cast(RECEIPTDETAIL.BeforeReceivedQty as int) % cast(PACK.InnerPack as int)) 
 			     								ELSE (cast(RECEIPTDETAIL.BeforeReceivedQty as int) % cast(PACK.Casecnt as int)) END /*SOS290189 - change innerpack to casecnt*/
-			     END ReceivedEA 
+			     END ReceivedEA
     FROM RECEIPT (NOLOCK) 
     JOIN RECEIPTDETAIL (NOLOCK) ON ( RECEIPT.ReceiptKey = RECEIPTDETAIL.ReceiptKey )
     JOIN #TEMP_SKU2 SKU (NOLOCK) ON ( SKU.StorerKey = RECEIPTDETAIL.StorerKey ) AND  ( SKU.Sku = RECEIPTDETAIL.Sku ) 
 	  JOIN STORER (NOLOCK) ON ( RECEIPT.Storerkey = STORER.Storerkey ) 
 	  JOIN PACK (NOLOCK) ON ( pack.packkey = sku.packkey ) 
-	  JOIN FACILITY (NOLOCK) ON ( RECEIPT.Facility = FACILITY.Facility ) 
+	  JOIN FACILITY (NOLOCK) ON ( RECEIPT.Facility = FACILITY.Facility )  
     WHERE ( RECEIPT.ReceiptKey >= @c_receiptkeystart ) AND  
           ( RECEIPT.ReceiptKey <= @c_receiptkeyend )
    
@@ -254,4 +254,5 @@ GO
 
 GRANT EXECUTE ON isp_Print_Putaway13 TO NSQL
 GO    
+
 
