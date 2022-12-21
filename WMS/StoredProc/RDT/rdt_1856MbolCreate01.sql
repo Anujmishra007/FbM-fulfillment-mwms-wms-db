@@ -24,7 +24,9 @@ CREATE OR ALTER PROC [RDT].[rdt_1856MbolCreate01](
    ,@cStorerKey   NVARCHAR( 15)
    ,@cOrderKey    NVARCHAR( 10)
    ,@cLoadKey     NVARCHAR( 10)
-   ,@cRefNo       NVARCHAR( 20)  
+   ,@cRefNo1      NVARCHAR( 20)
+   ,@cRefNo2      NVARCHAR( 20)
+   ,@cRefNo3      NVARCHAR( 20)
    ,@tMbolCreate  VariableTable READONLY
    ,@cMBOLKey     NVARCHAR( 10)  OUTPUT
    ,@nErrNo       INT            OUTPUT
@@ -208,7 +210,7 @@ BEGIN
    OPEN @curOrder
    FETCH NEXT FROM @curOrder INTO @cOrderKey, @cExternOrderKey
    WHILE @@FETCH_STATUS = 0
-   BEGIN      
+   BEGIN
       -- Get order weight
       SELECT @nWeight = ISNULL( SUM( PInf.Weight), 0)
       FROM dbo.PackHeader PH WITH (NOLOCK)
