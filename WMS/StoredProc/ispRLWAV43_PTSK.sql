@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispRLWAV43_PTSK]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispRLWAV43_PTSK]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,7 +12,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -27,9 +22,10 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2021-07-15  Wan      1.0   Created.                                  */
 /* 2021-09-28  Wan      1.0   DevOps Combine Script.                    */
+/* 2022-12-02  Wan03    1.1   Fixed Blocking                            */
 /************************************************************************/
 
-CREATE PROC [dbo].[ispRLWAV43_PTSK]
+CREATE OR ALTER PROC [dbo].[ispRLWAV43_PTSK]
    @c_Wavekey     NVARCHAR(10)    
 ,  @b_Success     INT            = 1   OUTPUT
 ,  @n_Err         INT            = 0   OUTPUT
@@ -49,6 +45,11 @@ BEGIN
          , @c_TaskBatchNo           NVARCHAR(10) = ''    
             
          , @c_PickZone              NVARCHAR(10) = '' 
+         
+         , @c_PickdetailKey         NVARCHAR(10) = ''             --(Wan01)
+         
+         , @CUR_UPD                 CURSOR                        --(Wan01)         
+         , @CUR_PTSK                CURSOR                        --(Wan01)  
    
    DECLARE @t_SingleOrder           TABLE
          ( Orderkey                 NVARCHAR(10)   NOT NULL DEFAULT('')    PRIMARY KEY
@@ -130,31 +131,43 @@ BEGIN
       SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Error Update Pickdetail. (ispRLWAV43_PTSK)'
       GOTO QUIT_SP
    END
-        
-   ;WITH o ( Pickdetailkey ) AS
-   ( 
+   --(Wan01) - START
+   --;WITH o ( Pickdetailkey ) AS
+   --( 
+   SET @CUR_UPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT pd.PickDetailKey
       FROM PACKTASK as pt WITH (NOLOCK)
       JOIN PICKDETAIL as pd WITH (NOLOCK) ON pt.Orderkey = pd.Orderkey
       WHERE pt.TaskBatchNo = @c_TaskBatchNo
-   )
-   UPDATE p WITH (ROWLOCK)
-      SET PickSlipNo = @c_TaskBatchNo
-         , Notes = @c_Wavekey + '-' + @c_PickZone + '-' + RIGHT(@c_TaskBatchNo,3) + CASE WHEN @c_PickZone = '' THEN '-4' ELSE '-1' END
-         , EditWho  = SUSER_SNAME()
-         , EditDate = GETDATE()
-         , Trafficcop = NULL
-   FROM PICKDETAIL as p
-   JOIN o ON o.PickDetailKey = p.PickDetailKey
-
-   IF @@ERROR <> 0 
+   --)
+   OPEN @CUR_UPD
+   FETCH NEXT FROM @CUR_UPD INTO @c_PickDetailKey
+     
+   WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)
    BEGIN
-      SET @n_Continue = 3
-      SET @n_Err = 63020
-      SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Error Update Pickdetail. (ispRLWAV43_PTSK)'
-      GOTO QUIT_SP
-   END
+      UPDATE p WITH (ROWLOCK)
+         SET PickSlipNo = @c_TaskBatchNo
+            , Notes = @c_Wavekey + '-' + @c_PickZone + '-' + RIGHT(@c_TaskBatchNo,3) + CASE WHEN @c_PickZone = '' THEN '-4' ELSE '-1' END
+            , EditWho  = SUSER_SNAME()
+            , EditDate = GETDATE()
+            , Trafficcop = NULL
+      FROM PICKDETAIL as p
+      --JOIN o ON o.PickDetailKey = p.PickDetailKey
+      WHERE p.PickdetailKey = @c_Pickdetailkey
 
+      IF @@ERROR <> 0 
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_Err = 63020
+         SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Error Update Pickdetail. (ispRLWAV43_PTSK)'
+         GOTO QUIT_SP
+      END
+      FETCH NEXT FROM @CUR_UPD INTO @c_PickDetailKey
+   END
+   CLOSE @CUR_UPD
+   DEALLOCATE @CUR_UPD
+   --(Wan01) - END
+      
 QUIT_SP:
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN

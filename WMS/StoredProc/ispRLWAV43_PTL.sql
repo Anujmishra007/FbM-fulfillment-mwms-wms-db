@@ -12,7 +12,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.2                                                    */
+/* PVCS Version: 1.3                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -25,6 +25,7 @@ GO
 /* 2021-10-26  Wan01    1.1   CR 2.7 Change FAILPTL flag to InvoiceNo   */
 /* 2022-04-26  Wan02    1.2   WMS-19522 - RG - Adidas SEA - Release Wave*/
 /*                            on DP Loc Sequence                        */
+/* 2022-12-02  Wan03    1.3   Fixed Blocking                            */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispRLWAV43_PTL]
@@ -64,7 +65,10 @@ BEGIN
          , @c_TaskBatchNo           NVARCHAR(10) = ''    
          , @c_PickZone              NVARCHAR(10) = '' 
          
-         , @CUR_PTSK                CURSOR 
+         , @c_PickdetailKey         NVARCHAR(10) = ''             --(Wan03)
+         
+         , @CUR_UPD                 CURSOR                        --(Wan03)         
+         , @CUR_PTSK                CURSOR                        --(Wan03)  
            
    DECLARE @t_SortLocCubic          TABLE
          ( RowID                    INT            IDENTITY(1,1)           PRIMARY KEY
@@ -582,29 +586,43 @@ BEGIN
          GOTO QUIT_SP
       END
          
-      ;WITH o ( Pickdetailkey ) AS
-      ( 
+      --(Wan03) - START
+      --;WITH o ( Pickdetailkey ) AS
+      --( 
+      SET @CUR_UPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT pd.PickDetailKey
          FROM PACKTASK as pt WITH (NOLOCK)
          JOIN PICKDETAIL as pd WITH (NOLOCK) ON pt.Orderkey = pd.Orderkey
          WHERE pt.TaskBatchNo = @c_TaskBatchNo
-      )
-      UPDATE p WITH (ROWLOCK)
-         SET PickSlipNo = @c_TaskBatchNo
-            , Notes = @c_Wavekey + '-' + @c_PickZone + '-' + RIGHT(@c_TaskBatchNo,3) + CASE WHEN @c_PickZone = '' THEN '-4' ELSE '-1' END
-            , EditWho  = SUSER_SNAME()
-            , EditDate = GETDATE()
-            , Trafficcop = NULL
-      FROM PICKDETAIL as p
-      JOIN o ON o.PickDetailKey = p.PickDetailKey
-
-      IF @@ERROR <> 0 
+         ORDER BY pd.PickDetailKey
+      --)
+      OPEN @CUR_UPD
+      FETCH NEXT FROM @CUR_UPD INTO @c_PickDetailKey
+      
+      WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)
       BEGIN
-         SET @n_Continue = 3
-         SET @n_Err = 62070
-         SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Error Update Pickdetail. (ispRLWAV43_PTL)'
-         GOTO QUIT_SP
+         UPDATE p WITH (ROWLOCK)
+            SET PickSlipNo = @c_TaskBatchNo
+               , Notes = @c_Wavekey + '-' + @c_PickZone + '-' + RIGHT(@c_TaskBatchNo,3) + CASE WHEN @c_PickZone = '' THEN '-4' ELSE '-1' END
+               , EditWho  = SUSER_SNAME()
+               , EditDate = GETDATE()
+               , Trafficcop = NULL
+         FROM PICKDETAIL as p
+         --JOIN o ON o.PickDetailKey = p.PickDetailKey
+         WHERE p.PickdetailKey = @c_Pickdetailkey
+
+         IF @@ERROR <> 0 
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 62070
+            SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Error Update Pickdetail. (ispRLWAV43_PTL)'
+            GOTO QUIT_SP
+         END
+         FETCH NEXT FROM @CUR_UPD INTO @c_PickDetailKey
       END
+      CLOSE @CUR_UPD
+      DEALLOCATE @CUR_UPD
+      --(Wan03) - END
       
       FETCH NEXT FROM @CUR_PTSK INTO @c_SortStation
    END
