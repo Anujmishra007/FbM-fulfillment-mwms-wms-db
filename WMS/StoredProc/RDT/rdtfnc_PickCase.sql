@@ -11,6 +11,7 @@ GO
 /* Date         Rev  Author      Purposes                                     */
 /* 2018-11-05   1.0  ChewKP      WMS-6666  Created                            */
 /* 2022-08-17   1.1  Ung         WMS-20525 Add UCC                            */
+/* 2022-12-09   1.2  Ung         WMS-21275 Fix AllowSkipLOC                   */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PickCase] (
@@ -696,7 +697,7 @@ BEGIN
       SET @nQTY = 0
 
       -- Skip LOC
-      IF @cAllowSkipLOC = '1' AND @cBarcode = '' AND @cQTY = ''
+      IF @cAllowSkipLOC = '1' AND @cBarcode = '' AND @nTotalQTY = ''
       BEGIN
          -- Prepare skip LOC screen var
          SET @cOutField01 = ''
