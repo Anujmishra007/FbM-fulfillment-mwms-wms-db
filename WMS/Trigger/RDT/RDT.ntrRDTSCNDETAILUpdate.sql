@@ -26,7 +26,7 @@ GO
 /*                            On rdtscndetail Table                        */ 
 /***************************************************************************/ 
 
-CREATE OR ALTER TRIGGER [RDT].[ntrRdtScnDetailUpdate]
+CREATE OR ALTER   TRIGGER [RDT].[ntrRdtScnDetailUpdate]
 ON [RDT].[RDTSCNDETAIL] FOR UPDATE
 AS
 BEGIN
@@ -70,7 +70,7 @@ BEGIN
       UPDATE [RDT].[RDTSCNDETAIL] 
       SET EditDate = GETDATE(),  
           EditWho = SUSER_SNAME()  
-      FROM [RDT].[RDTSCNDETAIL] WITH (NOLOCK), INSERTED (NOLOCK)  
+      FROM [RDT].[RDTSCNDETAIL] , INSERTED  
       WHERE [RDT].[RDTSCNDETAIL].Scnkey = INSERTED.ScnKey  
   
       SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
