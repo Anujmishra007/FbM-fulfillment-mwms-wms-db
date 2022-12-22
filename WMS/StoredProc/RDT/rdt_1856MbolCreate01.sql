@@ -13,6 +13,7 @@ GO
 /* 2022-07-29   1.0  Ung        WMS-20347 Created                             */
 /* 2022-09-15   1.1  Ung        WMS-20347 Add LoadPlanDetail_dellog.Status = 5*/
 /* 2022-10-11   1.2  Ung        WMS-20347 Add MBOLDetail.Weight               */
+/* 2022-12-22   1.3  YeeKung    JSM-118875 Blank Mbolkey (yeekung01)          */
 /******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_1856MbolCreate01](
     @nMobile      INT
@@ -112,6 +113,8 @@ BEGIN
    FROM dbo.LoadPlanDetail_dellog WITH (NOLOCK) 
    WHERE LoadKey = @cLoadKey
       AND Status <> '5'
+
+   set @nOrderRemoved = case when (ISNULL(@nOrderRemoved,'')) ='' THEN 0 else @nOrderRemoved end
    
    -- Loop cancel orders
    IF @nOrderRemoved > 0
@@ -245,6 +248,8 @@ BEGIN
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
       GOTO RollBackTran
    END
+
+   SET @cMBOLKey ='' --(yeekung01)
    
    COMMIT TRAN rdt_1856MbolCreate01 -- Only commit change made here
    GOTO Quit
@@ -256,3 +261,6 @@ Quit:
       COMMIT TRAN
 END
 GO
+GRANT EXECUTE ON  [RDT].[rdt_1856MbolCreate01] TO [NSQL]
+GO
+
