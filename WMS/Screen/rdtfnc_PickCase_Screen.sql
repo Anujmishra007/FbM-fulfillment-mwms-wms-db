@@ -62,8 +62,8 @@ EXECUTE rdt.rdtAddScn 5294, 'ENG'
    ,@nFunc = 957
 
 -- 5295 = Skip LOC screen
-DELETE rdt.RDTScn WHERE Scn = 5296 AND Lang_Code = 'ENG'
-EXECUTE rdt.rdtAddScn 5296, 'ENG'
+DELETE rdt.RDTScn WHERE Scn = 5295 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 5295, 'ENG'
    ,@cLine01 = ''
    ,@cLine02 = 'SKIP LOC?'
    ,@cLine03 = ''
