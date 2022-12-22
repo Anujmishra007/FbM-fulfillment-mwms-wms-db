@@ -567,15 +567,15 @@ BEGIN
             SET @cOutField10 = @cRefNo3    
             EXEC rdt.rdtSetFocusField @nMobile, 2    
             GOTO Step_Scan_Fail      
-         END      
-             
-         IF @cOrderKey = ''    
+         END        
+         
+         IF @cOrderKey = '' AND @cLoadKey = '' AND @cRefNo1 = '' AND  @cRefNo2  = '' AND   @cRefNo3  = ''
          BEGIN      
             SET @nErrNo = 172116      
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need OrderKey     
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --OrdOrLoad Req     
             SET @cOutField02 = @cMBOLKey    
             SET @cOutField03 = ''    
-            SET @cOutField04 = @cLoadKey    
+            SET @cOutField04 = ''    
             SET @cOutField06 = @cRefNo1    
             SET @cOutField08 = @cRefNo2    
             SET @cOutField10 = @cRefNo3    
