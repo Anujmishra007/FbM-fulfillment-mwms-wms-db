@@ -14,6 +14,7 @@ GO
 /* Date       Rev  Author     Purposes                                        */
 /* 31-03-2021 1.0  yeekung    WMS-18729 Created                               */
 /* 03-06-2022 1.1  Ung        WMS-19779 Change codelkup to printer group      */
+/* 23-11-2022 1.2  yeekung    Add error trigger                               */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [PTL].[isp_803PTL_Confirm08] (
@@ -27,7 +28,7 @@ CREATE OR ALTER PROC [PTL].[isp_803PTL_Confirm08] (
    @cDebug        NVARCHAR( 1) = ''
 )
 AS
-BEGIN  
+BEGIN TRY 
    SET NOCOUNT ON
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
@@ -67,6 +68,8 @@ BEGIN
    DECLARE @cDNotesLbl     NVARCHAR(20)
    DECLARE @cFacility      NVARCHAR(20)
    DECLARE @cUpdatePackDetail NVARCHAR(1)
+   DECLARE @nSPErrNo       INT
+   DECLARE @cSPErrMSG      NVARCHAR(20)
    
    DECLARE @cDisplay NVARCHAR(20)
 
@@ -679,18 +682,48 @@ BEGIN
       COMMIT TRAN isp_803PTL_Confirm08
       GOTO Quit
    END
+   ELSE
+   BEGIN
+      GOTO ROLLBACKTRAN 
+   END
    GOTO Quit
 
-  
 RollBackTran:  
    ROLLBACK TRAN isp_803PTL_Confirm08 -- Only rollback change made here  
-     
--- Raise error to go to catch block  
+  
+END TRY
+BEGIN CATCH
 
-Quit:  
-   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
-      COMMIT TRAN 
-END
+   SET @nSPErrNo = @nErrNo
+   SET @cSPErrMSG = @cErrMsg
+
+   IF isnull(@cInputValue,'')=''
+      SET @cInputValue='1'
+
+   -- RelightUp
+   EXEC PTL.isp_PTL_LightUpLoc
+      @n_Func           = @nFunc
+     ,@n_PTLKey         = 0
+     ,@c_DisplayValue   = @cInputValue
+     ,@b_Success        = @bSuccess    OUTPUT
+     ,@n_Err            = @nErrNo      OUTPUT
+     ,@c_ErrMsg         = @cErrMsg     OUTPUT
+     ,@c_DeviceID       = @cStation
+     ,@c_DevicePos      = @cPosition
+     ,@c_DeviceIP       = @cIPAddress
+     ,@c_LModMode       = '99'
+
+   IF ISNULL(@nSPErrNo , 0 ) <> '0'  AND ISNULL(@nErrNo , 0 ) = '0'
+   BEGIN
+      SET @nErrNo = @nSPErrNo
+      SET @cErrMsg = @cSPErrMSG
+   END
+
+END CATCH
+
+Quit:
+   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+      COMMIT TRAN
 GO
 
 SET QUOTED_IDENTIFIER OFF
