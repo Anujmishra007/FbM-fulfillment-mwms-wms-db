@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_Ecom_GetPackTaskOrders_S]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_Ecom_GetPackTaskOrders_S]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -32,14 +27,23 @@ GO
 /* 04-Apr-2019 NJOW01   1.4   WMS-8741 Add DropId parameter and filter  */
 /*                            order by dropid                           */
 /* 24-JUN-2019 Wan05    1.5   Performance Tune                          */ 
-/* 16-AUG-2019 Wan06    1.6   Performance Tune. Remove debug - Print    */ 
+/* 16-AUG-2019 Wan06    1.6   Performance Tune. Remove debug - Print    */
+/* 30-NOV-2021 Wan07    1.7   WMS-18322 - [CN]DYSON_Ecompacking_X708_   */
+/*                            Function_CR                               */
+/*                      1.7   DevOps Combine Script                     */
 /************************************************************************/
-CREATE PROC [dbo].[isp_Ecom_GetPackTaskOrders_S]
+CREATE OR ALTER PROC [dbo].[isp_Ecom_GetPackTaskOrders_S]
             @c_TaskBatchNo    NVARCHAR(10)
          ,  @c_PickSlipNo     NVARCHAR(10)
          ,  @c_Orderkey       NVARCHAR(10) OUTPUT
          ,  @b_packcomfirm    INT            = 0
-         ,  @c_DropID         NVARCHAR(20)   = '' --NJOW01         
+         ,  @c_DropID         NVARCHAR(20)   = '' --NJOW01 
+         ,  @c_FindSku        NVARCHAR(20)   = '' --(Wan07)
+         ,  @c_PackByLA01     NVARCHAR(30)   = '' --(Wan07)  
+         ,  @c_PackByLA02     NVARCHAR(30)   = '' --(Wan07)  
+         ,  @c_PackByLA03     NVARCHAR(30)   = '' --(Wan07) 
+         ,  @c_PackByLA04     NVARCHAR(30)   = '' --(Wan07) 
+         ,  @c_PackByLA05     NVARCHAR(30)   = '' --(Wan07)                                                  --                                                --                                                 --                                                  --                                              
 AS
 BEGIN
    SET NOCOUNT ON
@@ -48,24 +52,38 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE  
-           @n_StartTCnt       INT
-         , @n_Continue        INT 
+           @n_StartTCnt             INT
+         , @n_Continue              INT 
 
-         , @c_InProgOrderkey  NVARCHAR(10)
-         , @c_Storerkey       NVARCHAR(15)   
-         , @c_NonEPackSOLabel NVARCHAR(150)
+         , @c_InProgOrderkey        NVARCHAR(10)
+         , @c_Storerkey             NVARCHAR(15)   
+         , @c_NonEPackSOLabel       NVARCHAR(150)
          
-         , @b_AutoAssignOrder INT               --(Wan01)
-         , @n_RowRef          BIGINT            --(Wan01)
-         , @c_PH_Orderkey     NVARCHAR(10)      --(Wan01)
+         , @b_AutoAssignOrder       INT               --(Wan01)
+         , @n_RowRef                BIGINT            --(Wan01)
+         , @c_PH_Orderkey           NVARCHAR(10)      --(Wan01)
 
-         , @c_Sku             NVARCHAR(20)      --(Wan01)
+         , @c_Sku                   NVARCHAR(20)      --(Wan01)
 
-         , @n_TotalOrder      INT               --(Wan01)
-         , @n_TotalPacked     INT               --(Wan01)
-         , @n_TotalCanc       INT               --(Wan01)
-         , @n_Retry           INT 
-         , @n_Retry1          INT               --(Wan03)
+         , @n_TotalOrder            INT               --(Wan01)
+         , @n_TotalPacked           INT               --(Wan01)
+         , @n_TotalCanc             INT               --(Wan01)
+         , @n_Retry                 INT 
+         , @n_Retry1                INT               --(Wan03)
+         
+         , @c_Facility              NVARCHAR(5)       --(Wan07)
+         , @c_PackByLottable_Opt1   NVARCHAR(60) = '' --(Wan07)
+         , @c_PackByLottable_Opt3   NVARCHAR(60) = '' --(Wan07)
+         
+         , @c_PackByLACondition     NVARCHAR(250)= '' --(Wan07)
+         
+         , @c_SQL                   NVARCHAR(500)= '' --(Wan07)
+         , @c_SQLParms              NVARCHAR(500)= '' --(Wan07)
+         
+   DECLARE @t_LAField   TABLE
+         (  RowRef      INT   IDENTITY(1,1) PRIMARY KEY
+         ,  PackByLA    NVARCHAR(20)  NOT NULL DEFAULT('')
+         )
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_TotalOrder = 0                        --(Wan02)
@@ -118,11 +136,27 @@ BEGIN
          SET @c_Storerkey = ''
          SET @c_sku = ''
 
-         SELECT @c_Storerkey = Storerkey
-               ,@c_sku = Sku
-         FROM PACKDETAIL WITH(NOLOCK)
-         WHERE PickSlipNo = @c_PickSlipNo
-
+         --(Wan07) - START
+         IF @c_PackByLA01 <> ''
+         BEGIN
+            SELECT TOP 1 @c_Facility = o.Facility
+                        ,@c_Storerkey= o.Storerkey
+            FROM dbo.PackTask AS pt WITH (NOLOCK)
+            JOIN dbo.ORDERS AS o WITH (NOLOCK) ON o.OrderKey = pt.Orderkey
+            WHERE pt.TaskBatchNo = @c_TaskbatchNo
+            ORDER BY pt.RowRef 
+            
+            SET @c_sku = @c_FindSku
+         END
+         ELSE
+         BEGIN
+            SELECT @c_Storerkey = Storerkey
+                  ,@c_sku = Sku
+            FROM PACKDETAIL WITH(NOLOCK)
+            WHERE PickSlipNo = @c_PickSlipNo
+         END
+         --(Wan07) - END
+         
          SET @n_Retry = 0 
          SET @n_Retry1= 0 
       
@@ -130,6 +164,68 @@ BEGIN
       
          SET @n_RowRef = 0
          
+         --(Wan07) - START
+         IF @c_PackByLA01 <> ''
+         BEGIN
+            SELECT @c_PackByLottable_Opt1 = fgr.Option1 FROM dbo.fnc_GetRight2(@c_Facility, @c_Storerkey, '', 'PackByLottable') AS fgr
+            
+            IF @c_PackByLottable_Opt1 <> ''
+            BEGIN
+               INSERT INTO @t_LAfield ( PackByLA ) 
+               SELECT 'Lottable' + ss.value 
+               FROM STRING_SPLIT(@c_PackByLottable_Opt1, ',') AS ss
+      
+               SET @c_PackByLACondition = @c_PackByLACondition  
+                             + RTRIM(ISNULL(CONVERT(VARCHAR(250),  
+                                            (  SELECT ' AND l.' + RTRIM(tla.PackByLA) + ' = @c_PackByLA0' + CONVERT(CHAR(1),tla.RowRef)
+                                               FROM @t_LAfield AS tla
+                                               ORDER BY tla.RowRef 
+                                               FOR XML PATH(''), TYPE  
+                                             )  
+                                           )  
+                                       ,'')  
+                                    )  
+            END
+            
+            SET @c_SQL = N'SELECT TOP 1' 
+                       + '        @n_RowRef  = PTD.RowRef'
+                       + '       ,@c_InProgOrderkey = PTD.Orderkey'
+                       + ' FROM PACKTASKDETAIL PTD WITH (NOLOCK)'
+                       + ' JOIN PICKDETAIL PD WITH (NOLOCK) ON PTD.Orderkey = PD.Orderkey AND PTD.Storerkey = PD.Storerkey AND PTD.Sku = PD.Sku'
+                       + ' JOIN dbo.LOTATTRIBUTE AS l WITH (NOLOCK) ON pd.Lot = l.Lot'    
+                       + ' WHERE PTD.TaskBatchNo = @c_TaskBatchNo'
+                       + ' AND   PTD.Storerkey = @c_Storerkey'
+                       + ' AND   PTD.Sku = @c_Sku'
+                       + ' AND   PTD.[Status] = ''0''' 
+                       + @c_PackByLACondition
+                       + ' ORDER BY PTD.RowRef'
+            
+            SET @c_SQLParms = N'@c_TaskBatchNo     NVARCHAR(10)'
+                            + ',@c_Storerkey       NVARCHAR(15)'
+                            + ',@c_Sku             NVARCHAR(20)'
+                            + ',@c_PackByLA01      NVARCHAR(30)'      
+                            + ',@c_PackByLA02      NVARCHAR(30)'   
+                            + ',@c_PackByLA03      NVARCHAR(30)'                    
+                            + ',@c_PackByLA04      NVARCHAR(30)'  
+                            + ',@c_PackByLA05      NVARCHAR(30)' 
+                            + ',@n_RowRef          BIGINT         OUTPUT'  
+                            + ',@c_InProgOrderkey  NVARCHAR(10)   OUTPUT'                              
+                      
+            EXEC sp_ExecuteSQL @c_SQL
+                              ,@c_SQLParms
+                              ,@c_TaskBatchNo
+                              ,@c_Storerkey     
+                              ,@c_Sku           
+                              ,@c_PackByLA01
+                              ,@c_PackByLA02
+                              ,@c_PackByLA03
+                              ,@c_PackByLA04
+                              ,@c_PackByLA05
+                              ,@n_RowRef           OUTPUT 
+                              ,@c_InProgOrderkey   OUTPUT
+         END
+         ELSE
+         --(Wan07) - END
          IF ISNULL(@c_DropID,'') <> '' --NJOW01
          BEGIN
             SELECT TOP 1 
@@ -212,6 +308,13 @@ BEGIN
          GOTO QUIT_SP
       END
       --12-OCT-2016 - END
+      --(Wan07) - START
+      IF @c_PackByLA01 <> '' AND @c_InProgOrderkey <> ''
+      BEGIN
+         SET @c_Orderkey = @c_InProgOrderkey
+         GOTO QUIT_SP
+      END
+      --(Wan07) - END
    END 
    --(Wan1) - END
 
@@ -225,8 +328,7 @@ BEGIN
       FROM PACKTASKDETAIL PTD WITH (NOLOCK)
       WHERE PTD.TaskBatchNo = @c_TaskBatchNo
    END
---print '@c_Storerkey'     --(Wan06)
---print @c_Storerkey       --(Wan06)
+
    --(Wan04) - START
    IF EXISTS ( SELECT 1   
                FROM CODELKUP CL WITH (NOLOCK)  
@@ -238,7 +340,7 @@ BEGIN
                              + RTRIM(ISNULL(CONVERT(VARCHAR(250),
                                             (  SELECT  RTRIM(Code) + '/ ' 
                                                 FROM CODELKUP WITH (NOLOCK) 
-						                              WHERE ListName = 'NONEPACKSO'
+                                                WHERE ListName = 'NONEPACKSO'
                                                 AND Code NOT IN ('CANC', 'HOLD')
                                                 AND Storerkey = @c_Storerkey
                                                 FOR XML PATH(''), TYPE
@@ -253,7 +355,7 @@ BEGIN
                              + RTRIM(ISNULL(CONVERT(VARCHAR(250),
                                             (  SELECT  RTRIM(Code) + '/ ' 
                                                 FROM CODELKUP WITH (NOLOCK) 
-						                              WHERE ListName = 'NONEPACKSO'
+                                                WHERE ListName = 'NONEPACKSO'
                                                 AND Code NOT IN ('CANC', 'HOLD')
                                                 AND Storerkey = ''
                                                 FOR XML PATH(''), TYPE
