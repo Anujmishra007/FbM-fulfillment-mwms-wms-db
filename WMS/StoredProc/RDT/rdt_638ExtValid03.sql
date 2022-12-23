@@ -1,25 +1,23 @@
-if exists (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'rdt.rdt_638ExtValid03') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_638ExtValid03  
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-  
-/************************************************************************/  
-/* Store procedure: rdt_638ExtValid03                                   */  
-/* Purpose: Check receiveinfo                                           */  
-/*                                                                      */  
-/* Modifications log:                                                   */  
-/*                                                                      */  
-/* Date       Rev  Author     Purposes                                  */  
-/* 2020-04-14 1.0  YeeKung    WMS-14241. Created                        */  
+SET QUOTED_IDENTIFIER OFF
+GO
+
+
+/************************************************************************/
+/* Store procedure: rdt_638ExtValid03                                   */
+/* Purpose: Check receiveinfo                                           */
+/*                                                                      */
+/* Modifications log:                                                   */
+/*                                                                      */
+/* Date       Rev  Author     Purposes                                  */
+/* 2020-04-14 1.0  YeeKung    WMS-14241. Created                        */
 /* 2020-08-18 1.1  Ung        WMS-13555 Change params                   */
 /* 2020-09-30 1.2  Ung        WMS-14241 Fix RefNo could also be OrderKey*/
-/************************************************************************/  
-  
-CREATE PROC rdt.rdt_638ExtValid03 (  
+/* 2022-09-23 1.3  YeeKung    WMS-20820 Extended refno length (yeekung01)*/
+/************************************************************************/
+
+CREATE OR ALTER PROC [RDT].[rdt_638ExtValid03] (
    @nMobile       INT,
    @nFunc         INT,
    @cLangCode     NVARCHAR( 3),
@@ -28,7 +26,7 @@ CREATE PROC rdt.rdt_638ExtValid03 (
    @cFacility     NVARCHAR( 5),
    @cStorerKey    NVARCHAR( 15),
    @cReceiptKey   NVARCHAR( 10),
-   @cRefNo        NVARCHAR( 20),
+   @cRefNo        NVARCHAR( 60), --(yeekung01)
    @cID           NVARCHAR( 18),
    @cLOC          NVARCHAR( 10),
    @cSKU          NVARCHAR( 20),
@@ -57,66 +55,60 @@ CREATE PROC rdt.rdt_638ExtValid03 (
    @dArriveDate   DATETIME,
    @tExtUpdateVar VariableTable READONLY,
    @nErrNo        INT           OUTPUT,
-   @cErrMsg       NVARCHAR( 20) OUTPUT 
-)  
-AS  
-   SET NOCOUNT ON  
-   SET QUOTED_IDENTIFIER OFF  
-   SET ANSI_NULLS OFF  
-   SET CONCAT_NULL_YIELDS_NULL OFF  
+   @cErrMsg       NVARCHAR( 20) OUTPUT
+)
+AS
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
-   SET @nErrNo = 0  
-  
-   IF @nStep = 3  
-   BEGIN  
-      IF @nInputKey = 1  
-      BEGIN  
+   SET @nErrNo = 0
+
+   IF @nStep = 3
+   BEGIN
+      IF @nInputKey = 1
+      BEGIN
          DECLARE @nQTYExpected_Total INT,
-                 @nBeforeReceivedQTY_Total INT, 
+                 @nBeforeReceivedQTY_Total INT,
                  @cExternReceiptKey NVARCHAR( 20)
-                 
+
          SELECT @cExternReceiptKey = ExternReceiptKey
          FROM Receipt WITH (NOLOCK)
          WHERE ReceiptKey = @cReceiptKey
-         
+
          SELECT @nQTYExpected_Total= ISNULL(SUM(ShippedQty),0)
          FROM ORDERDETAIL (NOLOCK)
          WHERE Externorderkey=@cExternReceiptKey
             AND sku=@cSKU
             AND StorerKey=@cStorerKey
             and ShippedQty<>0
-           
-         SELECT  
-            @nBeforeReceivedQTY_Total = ISNULL( SUM( BeforeReceivedQTY), 0)  
-         FROM dbo.RECEIPTDETAIL WITH (NOLOCK)  
-         WHERE externreceiptkey=@cExternReceiptKey  
+
+         SELECT
+            @nBeforeReceivedQTY_Total = ISNULL( SUM( BeforeReceivedQTY), 0)
+         FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
+         WHERE externreceiptkey=@cExternReceiptKey
             AND sku=@cSKU
             AND StorerKey=@cStorerKey
 
-         IF @nQTYExpected_Total = 0  
-         BEGIN  
-            SET @nErrNo = 155851   
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Non LF Item  
-            GOTO Quit  
-         END  
-  
-         -- Check over receipt  
-         IF  (1 + @nBeforeReceivedQTY_Total) > @nQTYExpected_Total  
-         BEGIN  
-            SET @nErrNo = 155852 
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Non LF Item  
-            GOTO Quit  
-         END  
-      END  
-   END 
-  
-Quit:  
-GO
+         IF @nQTYExpected_Total = 0
+         BEGIN
+            SET @nErrNo = 155851
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Non LF Item
+            GOTO Quit
+         END
 
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
+         -- Check over receipt
+         IF  (1 + @nBeforeReceivedQTY_Total) > @nQTYExpected_Total
+         BEGIN
+            SET @nErrNo = 155852
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Non LF Item
+            GOTO Quit
+         END
+      END
+   END
 
-GRANT EXECUTE ON rdt.rdt_638ExtValid03 TO NSQL
+Quit:
+GO
+GRANT EXECUTE ON  [RDT].[rdt_638ExtValid03] TO [NSQL]
 GO

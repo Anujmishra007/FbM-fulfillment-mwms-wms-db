@@ -1,11 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdt_638RcvCfm06]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_638RcvCfm06]
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /***************************************************************************/
 /* Store procedure: rdt_638RcvCfm06                                        */
@@ -16,17 +13,18 @@ GO
 /* 2021-01-27 1.1  James   WMS-16163 Add To Loc checking (james01)         */
 /* 2021-04-09 1.2  James   WMS-16506 Change captureinfo update seq(james02)*/
 /* 2021-05-06 1.3  James   WMS-16735 Add grade update to RDetail (james03) */
+/* 2022-09-23 1.4  YeeKung WMS-20820 Extended refno length (yeekung01)     */
 /***************************************************************************/
 
-CREATE PROC [RDT].[rdt_638RcvCfm06](
+CREATE OR ALTER PROC [RDT].[rdt_638RcvCfm06](
    @nFunc          INT,
    @nMobile        INT,
    @cLangCode      NVARCHAR( 3),
    @cStorerKey     NVARCHAR( 15),
    @cFacility      NVARCHAR( 5),
-   @dArriveDate    DATETIME, 
+   @dArriveDate    DATETIME,
    @cReceiptKey    NVARCHAR( 10),
-   @cRefNo         NVARCHAR( 20),
+   @cRefNo         NVARCHAR( 60), --(yeekung01)
    @cToLOC         NVARCHAR( 10),
    @cToID          NVARCHAR( 18),
    @cSKUCode       NVARCHAR( 20),
@@ -46,21 +44,21 @@ CREATE PROC [RDT].[rdt_638RcvCfm06](
    @cLottable12    NVARCHAR( 30),
    @dLottable13    DATETIME,
    @dLottable14    DATETIME,
-   @dLottable15    DATETIME,      
+   @dLottable15    DATETIME,
    @cData1         NVARCHAR( 60),
    @cData2         NVARCHAR( 60),
    @cData3         NVARCHAR( 60),
    @cData4         NVARCHAR( 60),
    @cData5         NVARCHAR( 60),
-   @cConditionCode NVARCHAR( 10), 
-   @cSubreasonCode NVARCHAR( 10), 
-   @cSerialNo      NVARCHAR( 60),  
+   @cConditionCode NVARCHAR( 10),
+   @cSubreasonCode NVARCHAR( 10),
+   @cSerialNo      NVARCHAR( 60),
    @nSerialQTY     INT,
    @tConfirmVar    VARIABLETABLE READONLY,
-   @cReceiptLineNumber NVARCHAR( 5) OUTPUT, 
+   @cReceiptLineNumber NVARCHAR( 5) OUTPUT,
    @nErrNo         INT           OUTPUT,
    @cErrMsg        NVARCHAR( 20) OUTPUT
-   
+
 ) AS
 BEGIN
    SET NOCOUNT ON
@@ -71,11 +69,11 @@ BEGIN
    DECLARE @nisValidLoc INT
    DECLARE @cUserName   NVARCHAR( 18)
    DECLARE @cGrade      NVARCHAR( 30)
-   
-   DECLARE @nTranCount  INT    
-   SET @nTranCount = @@TRANCOUNT    
-   BEGIN TRAN    
-   SAVE TRAN rdt_638RcvCfm06  
+
+   DECLARE @nTranCount  INT
+   SET @nTranCount = @@TRANCOUNT
+   BEGIN TRAN
+   SAVE TRAN rdt_638RcvCfm06
 
    -- Receive
    EXEC rdt.rdt_Receive_V7
@@ -83,11 +81,11 @@ BEGIN
       @nMobile       = @nMobile,
       @cLangCode     = @cLangCode,
       @nErrNo        = @nErrNo  OUTPUT,
-      @cErrMsg       = @cErrMsg OUTPUT, 
+      @cErrMsg       = @cErrMsg OUTPUT,
       @cStorerKey    = @cStorerKey,
       @cFacility     = @cFacility,
       @cReceiptKey   = @cReceiptKey,
-      @cPOKey        = 'NOPO',  
+      @cPOKey        = 'NOPO',
       @cToLOC        = @cToLOC,
       @cToID         = @cToID,
       @cSKUCode      = @cSKUCode,
@@ -114,22 +112,22 @@ BEGIN
       @dLottable15   = @dLottable15,
       @nNOPOFlag     = 1,
       @cConditionCode = @cConditionCode,
-      @cSubreasonCode = @cSubreasonCode, 
-      @cReceiptLineNumberOutput = @cReceiptLineNumber OUTPUT 
+      @cSubreasonCode = @cSubreasonCode,
+      @cReceiptLineNumberOutput = @cReceiptLineNumber OUTPUT
    IF @nErrNo <> 0
       GOTO RollBackTran
-      
+
    -- Stock arrive date
    IF @dArriveDate IS NOT NULL
    BEGIN
       IF EXISTS( SELECT 1 FROM Receipt WITH (NOLOCK) WHERE ReceiptKey = @cReceiptKey AND ReceiptDate <> @dArriveDate)
       BEGIN
          UPDATE Receipt SET
-            ReceiptDate = @dArriveDate, 
-            EditWho = SUSER_SNAME(), 
+            ReceiptDate = @dArriveDate,
+            EditWho = SUSER_SNAME(),
             EditDate = GETDATE()
          WHERE ReceiptKey = @cReceiptKey
-         SET @nErrNo = @@ERROR 
+         SET @nErrNo = @@ERROR
          IF @nErrNo <> 0
          BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
@@ -137,26 +135,26 @@ BEGIN
          END
       END
    END
-   
+
    -- Actual courier name, tracking no
-   IF @cData1 <> '' OR 
-      @cData2 <> '' 
+   IF @cData1 <> '' OR
+      @cData2 <> ''
    BEGIN
-      IF EXISTS( SELECT 1 
-         FROM ReceiptDetail WITH (NOLOCK) 
-         WHERE ReceiptKey = @cReceiptKey 
+      IF EXISTS( SELECT 1
+         FROM ReceiptDetail WITH (NOLOCK)
+         WHERE ReceiptKey = @cReceiptKey
             AND ReceiptLineNumber = @cReceiptLineNumber
             AND (UserDefine02 <> @cData2
              OR  UserDefine04 <> @cData1))
       BEGIN
          UPDATE ReceiptDetail SET
-            UserDefine02 = @cData2, 
-            UserDefine04 = @cData1, 
-            EditWho = SUSER_SNAME(), 
+            UserDefine02 = @cData2,
+            UserDefine04 = @cData1,
+            EditWho = SUSER_SNAME(),
             EditDate = GETDATE()
          WHERE ReceiptKey = @cReceiptKey
             AND ReceiptLineNumber = @cReceiptLineNumber
-         SET @nErrNo = @@ERROR 
+         SET @nErrNo = @@ERROR
          IF @nErrNo <> 0
          BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
@@ -166,21 +164,21 @@ BEGIN
    END
 
    IF (SELECT COUNT(1)
-      FROM dbo.RECEIPTDETAIL RD WITH (NOLOCK)   
+      FROM dbo.RECEIPTDETAIL RD WITH (NOLOCK)
       LEFT JOIN dbo.SKUINFO SI WITH (NOLOCK) ON ( RD.STORERKEY = SI.STORERKEY AND RD.SKU = SI.SKU)
-      LEFT JOIN dbo.CODELKUP CLK WITH (NOLOCK) ON 
+      LEFT JOIN dbo.CODELKUP CLK WITH (NOLOCK) ON
          ( ISNULL( RD.Lottable01, '') = ISNULL( CLK.UDF01, '') AND ISNULL( SI.Extendedfield02, '') = ISNULL( CLK.UDF02, '') AND ISNULL( SI.Extendedfield03, '') = ISNULL( CLK.UDF03, ''))
       LEFT JOIN LOC LOC WITH (NOLOCK) ON ( RD.TOLOC = LOC.LOC AND LOC.PutawayZone = CLK.LONG AND LOC.LocationCategory = CLK.SHORT)
-      WHERE RD.RECEIPTKEY = @cReceiptKey 
+      WHERE RD.RECEIPTKEY = @cReceiptKey
       AND RD.BeforeReceivedQty <> 0
       AND RD.SKU = @cSKUCode
       AND RD.ReceiptLineNumber = @cReceiptLineNumber
-      AND CLK.LISTNAME = 'NIKERecLoc' 
-      AND CLK.STORERKEY = @cStorerKey 
-      AND LOC.LOC= @cToLOC) = 
-      (SELECT COUNT(1) FROM dbo.RECEIPTDETAIL WITH (NOLOCK) 
-         WHERE RECEIPTKEY = @cReceiptKey 
-         AND SKU = @cSKUCode 
+      AND CLK.LISTNAME = 'NIKERecLoc'
+      AND CLK.STORERKEY = @cStorerKey
+      AND LOC.LOC= @cToLOC) =
+      (SELECT COUNT(1) FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
+         WHERE RECEIPTKEY = @cReceiptKey
+         AND SKU = @cSKUCode
          AND ReceiptLineNumber = @cReceiptLineNumber
          AND BeforeReceivedQty <> 0)
    BEGIN
@@ -207,16 +205,16 @@ BEGIN
              @cUserName = UserName
       FROM rdt.RDTMOBREC WITH (NOLOCK)
       WHERE Mobile = @nMobile
-      
+
       IF @cGrade = 'A'
       BEGIN
-         UPDATE dbo.RECEIPTDETAIL SET 
+         UPDATE dbo.RECEIPTDETAIL SET
             UserDefine10 = CASE WHEN FinalizeFlag = 'N' THEN BeforeReceivedQty ELSE QtyReceived END,
             EditWho = @cUserName,
             EditDate = GETDATE()
          WHERE ReceiptKey = @cReceiptKey
          AND   ReceiptLineNumber = @cReceiptLineNumber
-         SET @nErrNo = @@ERROR 
+         SET @nErrNo = @@ERROR
          IF @nErrNo <> 0
          BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
@@ -224,7 +222,7 @@ BEGIN
          END
       END
    END
-   
+
    -- EventLog
    EXEC RDT.rdt_STD_EventLog
       @cActionType   = '2', -- Receiving
@@ -253,23 +251,17 @@ BEGIN
       @cLottable12   = @cLottable12,
       @dLottable13   = @dLottable13,
       @dLottable14   = @dLottable14,
-      @dLottable15   = @dLottable15, 
+      @dLottable15   = @dLottable15,
       @cSerialNo     = @cSerialNo
 
-   GOTO QUIT           
-          
-RollBackTran:          
-   ROLLBACK TRAN rdt_638RcvCfm06 -- Only rollback change made here          
-Quit:          
-   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started          
-      COMMIT TRAN 
+   GOTO QUIT
+
+RollBackTran:
+   ROLLBACK TRAN rdt_638RcvCfm06 -- Only rollback change made here
+Quit:
+   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+      COMMIT TRAN
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON RDT.rdt_638RcvCfm06 TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_638RcvCfm06] TO [NSQL]
 GO

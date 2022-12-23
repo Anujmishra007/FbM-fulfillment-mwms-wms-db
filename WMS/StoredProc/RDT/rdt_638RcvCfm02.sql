@@ -1,7 +1,4 @@
 
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[RDT].[rdt_638RcvCfm02]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [RDT].[rdt_638RcvCfm02]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -19,8 +16,9 @@ GO
 /* 2020-07-22 1.1  Ung     WMS-13555 Change params                         */
 /* 2020-11-24 1.2  Ung     WMS-14691 Add serial no params                  */
 /* 2020-03-18 1.3  YeeKung WMS-12488 Add On update lot11,lot07(yeekung01)  */
+/* 2022-09-23 1.4  YeeKung WMS-20820 Extended refno length (yeekung01)     */
 /***************************************************************************/
-CREATE PROC [RDT].[rdt_638RcvCfm02](
+CREATE OR ALTER PROC [RDT].[rdt_638RcvCfm02](
    @nFunc          INT,
    @nMobile        INT,
    @cLangCode      NVARCHAR( 3),
@@ -28,7 +26,7 @@ CREATE PROC [RDT].[rdt_638RcvCfm02](
    @cFacility      NVARCHAR( 5),
    @dArriveDate    DATETIME,
    @cReceiptKey    NVARCHAR( 10),
-   @cRefNo         NVARCHAR( 20),
+   @cRefNo         NVARCHAR( 60), --(yeekung01)
    @cToLOC         NVARCHAR( 10),
    @cToID          NVARCHAR( 18),
    @cSKUCode       NVARCHAR( 20),

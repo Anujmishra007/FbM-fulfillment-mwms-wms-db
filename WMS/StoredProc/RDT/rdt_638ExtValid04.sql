@@ -1,23 +1,21 @@
-if exists (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'rdt.rdt_638ExtValid04') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_638ExtValid04  
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
-  
-/************************************************************************/  
-/* Store procedure: rdt_638ExtValid04                                   */  
-/* Purpose: Validate TO ID                                              */  
-/*                                                                      */  
-/* Modifications log:                                                   */  
-/*                                                                      */  
-/* Date       Rev  Author     Purposes                                  */  
-/* 2020-08-26 1.0  Ung        WMS-14617 Created                         */  
-/************************************************************************/  
-  
-CREATE PROC rdt.rdt_638ExtValid04 (  
+SET QUOTED_IDENTIFIER OFF
+GO
+
+
+/************************************************************************/
+/* Store procedure: rdt_638ExtValid04                                   */
+/* Purpose: Validate TO ID                                              */
+/*                                                                      */
+/* Modifications log:                                                   */
+/*                                                                      */
+/* Date       Rev  Author     Purposes                                  */
+/* 2020-08-26 1.0  Ung        WMS-14617 Created                         */
+/* 2022-09-23 1.1  YeeKung    WMS-20820 Extended refno length (yeekung01)*/
+/************************************************************************/
+
+CREATE OR ALTER PROC [RDT].[rdt_638ExtValid04] (
    @nMobile       INT,
    @nFunc         INT,
    @cLangCode     NVARCHAR( 3),
@@ -26,7 +24,7 @@ CREATE PROC rdt.rdt_638ExtValid04 (
    @cFacility     NVARCHAR( 5),
    @cStorerKey    NVARCHAR( 15),
    @cReceiptKey   NVARCHAR( 10),
-   @cRefNo        NVARCHAR( 20),
+   @cRefNo        NVARCHAR( 60), --(yeekung01)
    @cID           NVARCHAR( 18),
    @cLOC          NVARCHAR( 10),
    @cSKU          NVARCHAR( 20),
@@ -55,41 +53,35 @@ CREATE PROC rdt.rdt_638ExtValid04 (
    @dArriveDate   DATETIME,
    @tExtUpdateVar VariableTable READONLY,
    @nErrNo        INT           OUTPUT,
-   @cErrMsg       NVARCHAR( 20) OUTPUT 
-)  
-AS  
-   SET NOCOUNT ON  
-   SET QUOTED_IDENTIFIER OFF  
-   SET ANSI_NULLS OFF  
-   SET CONCAT_NULL_YIELDS_NULL OFF  
+   @cErrMsg       NVARCHAR( 20) OUTPUT
+)
+AS
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
-   SET @nErrNo = 0  
-  
+   SET @nErrNo = 0
+
    IF @nFunc = 638 -- ECOM return
    BEGIN
-      IF @nStep = 5 -- TO ID  
-      BEGIN  
-         IF @nInputKey = 1  
-         BEGIN  
+      IF @nStep = 5 -- TO ID
+      BEGIN
+         IF @nInputKey = 1
+         BEGIN
             -- Check TO ID exist (1 line 1 QTY 1 TO ID)
             IF EXISTS( SELECT TOP 1 1 FROM ReceiptDetail WITH (NOLOCK) WHERE ReceiptKey = @cReceiptKey AND ToID = @cID)
-            BEGIN  
-               SET @nErrNo = 157751   
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --TO ID exist  
-               GOTO Quit  
-            END 
-         END  
-      END 
+            BEGIN
+               SET @nErrNo = 157751
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --TO ID exist
+               GOTO Quit
+            END
+         END
+      END
    END
-   
+
 Quit:
 
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON rdt.rdt_638ExtValid04 TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_638ExtValid04] TO [NSQL]
 GO

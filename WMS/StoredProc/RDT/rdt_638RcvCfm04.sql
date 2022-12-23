@@ -1,11 +1,8 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[RDT].[rdt_638RcvCfm04]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdt_638RcvCfm04]
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /************************************************************************/
 /* Store procedure: rdt_638RcvCfm04                                     */
@@ -16,9 +13,10 @@ GO
 /* Date        Rev  Author      Purposes                                */
 /* 2020-07-21  1.0  Ung         WMS-13962 Created                       */
 /* 2020-11-24  1.1  Ung         WMS-14691 Add serial no params          */
+/* 2022-09-23  1.2  YeeKung     WMS-20820 Extended refno length (yeekung01)*/
 /************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_638RcvCfm04
+CREATE OR ALTER PROCEDURE [RDT].[rdt_638RcvCfm04]
    @nFunc          INT,
    @nMobile        INT,
    @cLangCode      NVARCHAR( 3),
@@ -26,7 +24,7 @@ CREATE PROCEDURE rdt.rdt_638RcvCfm04
    @cFacility      NVARCHAR( 5),
    @dArriveDate    DATETIME,
    @cReceiptKey    NVARCHAR( 10),
-   @cRefNo         NVARCHAR( 20),
+   @cRefNo         NVARCHAR( 60), --(yeekung01)
    @cToLOC         NVARCHAR( 10),
    @cToID          NVARCHAR( 18),
    @cSKUCode       NVARCHAR( 20),
@@ -54,7 +52,7 @@ CREATE PROCEDURE rdt.rdt_638RcvCfm04
    @cData5         NVARCHAR( 60),
    @cConditionCode NVARCHAR( 10),
    @cSubreasonCode NVARCHAR( 10),
-   @cSerialNo      NVARCHAR( 60),  
+   @cSerialNo      NVARCHAR( 60),
    @nSerialQTY     INT,
    @tConfirmVar    VARIABLETABLE READONLY,
    @cReceiptLineNumber NVARCHAR( 5) OUTPUT,
@@ -264,12 +262,5 @@ Quit:
 		COMMIT TRAN
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
+GRANT EXECUTE ON  [RDT].[rdt_638RcvCfm04] TO [NSQL]
 GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXEC ON RDT.rdt_638RcvCfm04 TO NSQL
-GO
-

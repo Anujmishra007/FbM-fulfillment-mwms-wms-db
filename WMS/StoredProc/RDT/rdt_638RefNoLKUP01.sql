@@ -1,11 +1,8 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[RDT].[rdt_638RefNoLKUP01]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdt_638RefNoLKUP01]
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /******************************************************************************/
 /* Store procedure: rdt_638RefNoLKUP01                                        */
@@ -17,9 +14,10 @@ GO
 /* 12-03-2020   YeeKung   1.0   WMS-12465 Created                             */
 /* 13-07-2020   Ung       1.1   WMS-13555 Change params                       */
 /* 28-08-2020   Ung       1.2   WMS-14796 Add TrackingNo                      */
+/* 23-09-2022   YeeKung   1.3   WMS-20820 Extended refno length (yeekung01)   */
 /******************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_638RefNoLKUP01
+CREATE OR ALTER PROCEDURE [RDT].[rdt_638RefNoLKUP01]
     @nMobile      INT
    ,@nFunc        INT
    ,@cLangCode    NVARCHAR( 3)
@@ -28,7 +26,7 @@ CREATE PROCEDURE rdt.rdt_638RefNoLKUP01
    ,@cFacility    NVARCHAR( 5)
    ,@cStorerKey   NVARCHAR( 15)
    ,@cSKU         NVARCHAR( 20)  -- Optional, lookup by RefNo + SKU
-   ,@cRefNo       NVARCHAR( 20)  OUTPUT
+   ,@cRefNo       NVARCHAR( 60)  OUTPUT --(yeekung01)
    ,@cReceiptKey  NVARCHAR( 10)  OUTPUT
    ,@nBalQTY      INT            OUTPUT
    ,@nErrNo       INT            OUTPUT
@@ -56,7 +54,7 @@ BEGIN
             AND TrackingNo = @cRefNo
          SELECT @nRowCount = @@ROWCOUNT
       END
-      
+
       IF @cReceiptKey = ''
       BEGIN
          SELECT @cReceiptKey = ReceiptKey
@@ -69,7 +67,7 @@ BEGIN
             AND userdefine09 = @cRefNo
          SELECT @nRowCount = @@ROWCOUNT
       END
-      
+
       IF @cReceiptKey = ''
       BEGIN
          SELECT @cReceiptKey = ReceiptKey
@@ -105,9 +103,5 @@ Quit:
 
 END
 GO
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-GRANT EXEC ON RDT.rdt_638RefNoLKUP01 TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_638RefNoLKUP01] TO [NSQL]
 GO

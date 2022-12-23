@@ -1,11 +1,8 @@
-if exists (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'rdt.rdt_638RcvCfm09') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_638RcvCfm09
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /***************************************************************************/
 /* Store procedure: rdt_638RcvCfm09                                        */
@@ -16,8 +13,9 @@ GO
 /* Date       Rev  Author  Purposes                                        */
 /* 07-06-2021 1.0  YeeKung WMS-17175 Created                               */
 /* 09-07-2021 1.1  Ung     WMS-17458 Enable SubreasonCode                  */
+/* 2022-09-23 1.2  YeeKung WMS-20820 Extended refno length (yeekung01)     */
 /***************************************************************************/
-CREATE PROC [RDT].[rdt_638RcvCfm09](
+CREATE OR ALTER PROC [RDT].[rdt_638RcvCfm09](
    @nFunc          INT,
    @nMobile        INT,
    @cLangCode      NVARCHAR( 3),
@@ -25,7 +23,7 @@ CREATE PROC [RDT].[rdt_638RcvCfm09](
    @cFacility      NVARCHAR( 5),
    @dArriveDate    DATETIME,
    @cReceiptKey    NVARCHAR( 10),
-   @cRefNo         NVARCHAR( 20),
+   @cRefNo         NVARCHAR( 60), --(yeekung01)
    @cToLOC         NVARCHAR( 10),
    @cToID          NVARCHAR( 18),
    @cSKUCode       NVARCHAR( 20),
@@ -215,8 +213,8 @@ BEGIN
 
    UPDATE dbo.ReceiptDetail SET
       -- conditioncode = 'OK',
-      ExternLineNo = receiptlinenumber, 
-      EditDate = GETDATE(), 
+      ExternLineNo = receiptlinenumber,
+      EditDate = GETDATE(),
       EditWho = SUSER_SNAME()
    WHERE ReceiptKey = @cReceiptKey
       AND ReceiptLineNumber = @cReceiptLineNumber
@@ -238,11 +236,5 @@ Quit:
       COMMIT TRAN
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXEC ON RDT.rdt_638RcvCfm09 TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_638RcvCfm09] TO [NSQL]
 GO

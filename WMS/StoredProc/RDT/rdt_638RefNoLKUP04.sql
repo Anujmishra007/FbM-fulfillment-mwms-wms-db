@@ -19,6 +19,7 @@ GO
 /* 02-08-2022   James     1.5   WMS-20356 Change logic on checking time-out   */
 /*                              period (james04)                              */
 /* 11-11-2022   James     1.6   Perf tuning (james05)                         */
+/* 23-09-2022   YeeKung   1.7   WMS-20820 Extended refno length (yeekung01)   */
 /******************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_638RefNoLKUP04]  
@@ -30,7 +31,7 @@ CREATE OR ALTER PROC [RDT].[rdt_638RefNoLKUP04]
    ,@cFacility    NVARCHAR( 5)  
    ,@cStorerKey   NVARCHAR( 15)  
    ,@cSKU         NVARCHAR( 20)  -- Optional, lookup by RefNo + SKU  
-   ,@cRefNo       NVARCHAR( 20)  OUTPUT  
+   ,@cRefNo       NVARCHAR( 60)  OUTPUT --(yeekung01)
    ,@cReceiptKey  NVARCHAR( 10)  OUTPUT  
    ,@nBalQTY      INT            OUTPUT  
    ,@nErrNo       INT            OUTPUT  

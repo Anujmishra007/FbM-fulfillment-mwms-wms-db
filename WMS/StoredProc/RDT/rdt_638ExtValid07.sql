@@ -1,6 +1,4 @@
-if exists (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'rdt.rdt_638ExtValid07') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_638ExtValid07
-GO
+
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -17,9 +15,10 @@ GO
 /* Date       Rev  Author     Purposes                                  */
 /* 2021-08-25 1.0  yeekung    WMS-17691 Created                         */
 /* 2022-01-11 1.1  yeekung    WMS-18645 add msg queue (yeekung01)       */
+/* 2022-09-23 1.2  YeeKung    WMS-20820 Extended refno length (yeekung02)*/
 /************************************************************************/
 
-CREATE PROC rdt.rdt_638ExtValid07 (
+CREATE OR ALTER PROC rdt.rdt_638ExtValid07 (
    @nMobile       INT,           
    @nFunc         INT,           
    @cLangCode     NVARCHAR( 3),  
@@ -28,7 +27,7 @@ CREATE PROC rdt.rdt_638ExtValid07 (
    @cFacility     NVARCHAR( 5),   
    @cStorerKey    NVARCHAR( 15), 
    @cReceiptKey   NVARCHAR( 10), 
-   @cRefNo        NVARCHAR( 20), 
+   @cRefNo        NVARCHAR( 60), --(yeekung01) 
    @cID           NVARCHAR( 18), 
    @cLOC          NVARCHAR( 10), 
    @cSKU          NVARCHAR( 20), 
@@ -175,7 +174,6 @@ AS
                   @cErrMsg,
                   'NOT fully received',
                   'Please check received qty'
-                  SET @nErrNo = 174305 
 
                   GOTO Quit  
                END  

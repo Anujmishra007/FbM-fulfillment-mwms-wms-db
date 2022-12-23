@@ -1,11 +1,8 @@
-if exists (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'rdt.rdt_638ExtValid02') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_638ExtValid02
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /************************************************************************/
 /* Store procedure: rdt_638ExtValid02                                   */
@@ -16,9 +13,10 @@ GO
 /* Date       Rev  Author     Purposes                                  */
 /* 2020-03-18 1.0  YeeKung    WMS-12465. Created                        */
 /* 2020-07-13 1.1  Ung        WMS-13555 Change params                   */
+/* 2022-09-23 1.2  YeeKung    WMS-20820 Extended refno length (yeekung01)*/
 /************************************************************************/
 
-CREATE PROC rdt.rdt_638ExtValid02 (
+CREATE OR ALTER PROC [RDT].[rdt_638ExtValid02] (
    @nMobile       INT,
    @nFunc         INT,
    @cLangCode     NVARCHAR( 3),
@@ -27,7 +25,7 @@ CREATE PROC rdt.rdt_638ExtValid02 (
    @cFacility     NVARCHAR( 5),
    @cStorerKey    NVARCHAR( 15),
    @cReceiptKey   NVARCHAR( 10),
-   @cRefNo        NVARCHAR( 20),
+   @cRefNo        NVARCHAR( 60), --(yeekung01)
    @cID           NVARCHAR( 18),
    @cLOC          NVARCHAR( 10),
    @cSKU          NVARCHAR( 20),
@@ -133,11 +131,5 @@ AS
 Quit:
 
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON rdt.rdt_638ExtValid02 TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_638ExtValid02] TO [NSQL]
 GO

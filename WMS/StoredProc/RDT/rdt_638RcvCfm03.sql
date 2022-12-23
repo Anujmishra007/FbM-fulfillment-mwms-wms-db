@@ -12,7 +12,8 @@
 /* 2020-10-02 1.2  CheeMun INC1312311 - Fix Join Pickdetail & OrderDetail  */              
 /* 2020-11-02 1.3  Chermaine WMS-15626 Add userdefine04 and lottable03(cc01)*/          
 /* 2020-11-24 1.4  Ung     WMS-14691 add serial no params                  */          
-/* 2021-05-28 1.5  YeeKung WMS-17175 change receiptlineno(yeekung01)       */        
+/* 2021-05-28 1.5  YeeKung WMS-17175 change receiptlineno(yeekung01)       */    
+/* 2022-09-23 1.6  YeeKung WMS-20820 Extended refno length (yeekung02)     */
 /***************************************************************************/                      
 CREATE OR ALTER PROC [RDT].[rdt_638RcvCfm03](                      
    @nFunc          INT,          
@@ -22,7 +23,7 @@ CREATE OR ALTER PROC [RDT].[rdt_638RcvCfm03](
    @cFacility      NVARCHAR( 5),          
    @dArriveDate    DATETIME,          
    @cReceiptKey    NVARCHAR( 10),          
-   @cRefNo         NVARCHAR( 20),          
+   @cRefNo         NVARCHAR( 60), --(yeekung02) 
    @cToLOC         NVARCHAR( 10),          
    @cToID          NVARCHAR( 18),          
    @cSKUCode       NVARCHAR( 20),          

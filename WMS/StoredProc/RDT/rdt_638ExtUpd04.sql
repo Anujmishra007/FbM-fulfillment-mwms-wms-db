@@ -1,11 +1,8 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[RDT].[rdt_638ExtUpd04]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [RDT].[rdt_638ExtUpd04]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 
 /************************************************************************/
 /* Store procedure: rdt_638ExtUpd04                                     */
@@ -15,9 +12,10 @@ GO
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
 /* 2021-06-09 1.0  James      WMS-16735 Created                         */
+/* 2022-09-23 1.1  YeeKung    WMS-20820 Extended refno length (yeekung01)*/
 /************************************************************************/
 
-CREATE PROC rdt.rdt_638ExtUpd04 (
+CREATE OR ALTER PROC [RDT].[rdt_638ExtUpd04] (
    @nMobile       INT,
    @nFunc         INT,
    @cLangCode     NVARCHAR( 3),
@@ -26,7 +24,7 @@ CREATE PROC rdt.rdt_638ExtUpd04 (
    @cFacility     NVARCHAR( 5),
    @cStorerKey    NVARCHAR( 15),
    @cReceiptKey   NVARCHAR( 10),
-   @cRefNo        NVARCHAR( 20),
+   @cRefNo        NVARCHAR( 60), --(yeekung01)
    @cID           NVARCHAR( 18),
    @cLOC          NVARCHAR( 10),
    @cSKU          NVARCHAR( 20),
@@ -72,7 +70,7 @@ BEGIN
    DECLARE @cCaseIDLabel         NVARCHAR( 10)
 
    SET @nErrNo = 0
-   
+
    SET @nTranCount = @@TRANCOUNT
    BEGIN TRAN
    SAVE TRAN rdt_638ExtUpd04
@@ -84,7 +82,7 @@ BEGIN
          IF @nInputKey = 1
          BEGIN
             SET @curRD = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-            SELECT ReceiptLineNumber 
+            SELECT ReceiptLineNumber
             FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
             WHERE ReceiptKey = @cReceiptKey
             AND  ( ISNULL( UserDefine08, '') <> '' OR ISNULL( UserDefine09, '') <> '')
@@ -94,8 +92,8 @@ BEGIN
             WHILE @@FETCH_STATUS = 0
             BEGIN
                UPDATE dbo.RECEIPTDETAIL SET
-                  UserDefine10 = QtyReceived, 
-                  EditDate = GETDATE(), 
+                  UserDefine10 = QtyReceived,
+                  EditDate = GETDATE(),
                   EditWho = SUSER_SNAME()
                WHERE ReceiptKey = @cReceiptKey
                AND   ReceiptLineNumber = @cReceiptLineNumber
@@ -108,23 +106,17 @@ BEGIN
          END
       END
    END
-   
+
    GOTO Quit
 
-   RollBackTran:          
-      ROLLBACK TRAN rdt_638ExtUpd04 -- Only rollback change made here          
-   Quit:          
-      WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started          
-         COMMIT TRAN 
+   RollBackTran:
+      ROLLBACK TRAN rdt_638ExtUpd04 -- Only rollback change made here
+   Quit:
+      WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+         COMMIT TRAN
 
 
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXEC ON [RDT].[rdt_638ExtUpd04] TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_638ExtUpd04] TO [NSQL]
 GO

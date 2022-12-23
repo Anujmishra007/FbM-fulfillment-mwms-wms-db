@@ -1,11 +1,8 @@
-if exists (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'rdt.rdt_638RefNoLKUP03') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_638RefNoLKUP03
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 
 /******************************************************************************/
@@ -16,9 +13,10 @@ GO
 /*                                                                            */
 /* Date         Author    Ver.  Purposes                                      */
 /* 26-08-2020   Ung       1.0   WMS-14617 Created                             */
+/* 23-09-2022   YeeKung   1.1   WMS-20820 Extended refno length (yeekung01)   */
 /******************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_638RefNoLKUP03
+CREATE OR ALTER PROCEDURE [RDT].[rdt_638RefNoLKUP03]
     @nMobile      INT
    ,@nFunc        INT
    ,@cLangCode    NVARCHAR( 3)
@@ -27,7 +25,7 @@ CREATE PROCEDURE rdt.rdt_638RefNoLKUP03
    ,@cFacility    NVARCHAR( 5)
    ,@cStorerKey   NVARCHAR( 15)
    ,@cSKU         NVARCHAR( 20)  -- Optional, lookup by RefNo + SKU
-   ,@cRefNo       NVARCHAR( 20)  OUTPUT
+   ,@cRefNo       NVARCHAR( 60)  OUTPUT  --(yeekung01)
    ,@cReceiptKey  NVARCHAR( 10)  OUTPUT
    ,@nBalQTY      INT            OUTPUT
    ,@nErrNo       INT            OUTPUT
@@ -57,7 +55,7 @@ BEGIN
       DECLARE @cOrderKey NVARCHAR(10) = ''
       DECLARE @cExternOrderKey NVARCHAR(20)
       DECLARE @curSearch CURSOR
-      
+
       -- Loop production and archive DB
       WHILE (1=1)
       BEGIN
@@ -68,23 +66,23 @@ BEGIN
                AND StorerKey = @cStorerKey
                AND Code2 = @cFacility
             ORDER BY Short
-         OPEN @curSearch 
+         OPEN @curSearch
          FETCH NEXT FROM @curSearch INTO @cColumnName, @cOperator
-         WHILE @@FETCH_STATUS = 0  
+         WHILE @@FETCH_STATUS = 0
          BEGIN
             -- Check column valid
             SET @nRowCount = 0
-            SET @cSQL = 
-               ' SELECT @nRowCount = 1 ' + 
-               ' FROM ' + @cDBName + 'INFORMATION_SCHEMA.COLUMNS ' + 
-               ' WHERE TABLE_NAME = ''Orders'' ' + 
-                  ' AND COLUMN_NAME = @cColumnName ' + 
-                  ' AND DATA_TYPE = ''nvarchar'' ' 
+            SET @cSQL =
+               ' SELECT @nRowCount = 1 ' +
+               ' FROM ' + @cDBName + 'INFORMATION_SCHEMA.COLUMNS ' +
+               ' WHERE TABLE_NAME = ''Orders'' ' +
+                  ' AND COLUMN_NAME = @cColumnName ' +
+                  ' AND DATA_TYPE = ''nvarchar'' '
             SET @cSQLParam =
-               ' @cColumnName    NVARCHAR(20), ' + 
-               ' @nRowCount      INT OUTPUT    ' 
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam, 
-               @cColumnName, 
+               ' @cColumnName    NVARCHAR(20), ' +
+               ' @nRowCount      INT OUTPUT    '
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @cColumnName,
                @nRowCount OUTPUT
             IF @nRowCount = 0
             BEGIN
@@ -92,59 +90,59 @@ BEGIN
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Column
                GOTO Quit
             END
-            
+
             -- Check column indexed
             SET @nRowCount = 0
-            SET @cSQL = 
-               CASE WHEN @cDBName = '' THEN '' ELSE ' USE ' + LEFT( @cDBName, LEN( @cDBName)-1) END + 
-               ' SELECT @nRowCount = 1 ' + 
-               ' FROM sys.index_columns (NOLOCK) ' + 
-               ' WHERE OBJECT_ID = OBJECT_ID( ''Orders'') ' + 
-                  ' AND COLUMNPROPERTY( object_id, @cColumnName, ''ColumnId'') = column_id ' 
+            SET @cSQL =
+               CASE WHEN @cDBName = '' THEN '' ELSE ' USE ' + LEFT( @cDBName, LEN( @cDBName)-1) END +
+               ' SELECT @nRowCount = 1 ' +
+               ' FROM sys.index_columns (NOLOCK) ' +
+               ' WHERE OBJECT_ID = OBJECT_ID( ''Orders'') ' +
+                  ' AND COLUMNPROPERTY( object_id, @cColumnName, ''ColumnId'') = column_id '
             SET @cSQLParam =
-               ' @cColumnName    NVARCHAR(20), ' + 
-               ' @nRowCount      INT OUTPUT    ' 
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam, 
-               @cColumnName, 
+               ' @cColumnName    NVARCHAR(20), ' +
+               ' @nRowCount      INT OUTPUT    '
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @cColumnName,
                @nRowCount OUTPUT
             IF @nRowCount = 0
             BEGIN
                SET @nErrNo = 157852
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ColumnNoIndex
                GOTO Quit
-            END   
+            END
 
             -- Get order
-            SET @cSQL = 
-               ' SELECT ' + 
-                  ' @cRefNo = O.' + @cColumnName + ', ' + 
-                  ' @cOrderKey = O.OrderKey, ' + 
-                  ' @cExternOrderKey = O.ExternOrderKey ' + 
-               ' FROM ' + @cDBName + 'dbo.Orders O WITH (NOLOCK) ' + 
-               ' WHERE O.Facility = @cFacility ' + 
-                  ' AND O.StorerKey = @cStorerKey ' + 
-                  CASE WHEN @cOperator = '' 
-                     THEN ' AND O.' + @cColumnName + ' = @cRefNo ' 
-                     ELSE ' AND O.' + @cColumnName + ' LIKE @cRefNoPattern '  
+            SET @cSQL =
+               ' SELECT ' +
+                  ' @cRefNo = O.' + @cColumnName + ', ' +
+                  ' @cOrderKey = O.OrderKey, ' +
+                  ' @cExternOrderKey = O.ExternOrderKey ' +
+               ' FROM ' + @cDBName + 'dbo.Orders O WITH (NOLOCK) ' +
+               ' WHERE O.Facility = @cFacility ' +
+                  ' AND O.StorerKey = @cStorerKey ' +
+                  CASE WHEN @cOperator = ''
+                     THEN ' AND O.' + @cColumnName + ' = @cRefNo '
+                     ELSE ' AND O.' + @cColumnName + ' LIKE @cRefNoPattern '
                   END
             SET @cSQLParam =
-               ' @cFacility         NVARCHAR(5),  ' + 
-               ' @cStorerKey        NVARCHAR(15), ' + 
-               ' @cRefNoPattern     NVARCHAR(22), ' + 
-               ' @cRefNo            NVARCHAR(20) OUTPUT, ' + 
-               ' @cOrderKey         NVARCHAR(10) OUTPUT, ' + 
+               ' @cFacility         NVARCHAR(5),  ' +
+               ' @cStorerKey        NVARCHAR(15), ' +
+               ' @cRefNoPattern     NVARCHAR(22), ' +
+               ' @cRefNo            NVARCHAR(20) OUTPUT, ' +
+               ' @cOrderKey         NVARCHAR(10) OUTPUT, ' +
                ' @cExternOrderKey   NVARCHAR(20) OUTPUT  '
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam, 
-               @cFacility, 
-               @cStorerKey, 
-               @cRefNoPattern, 
-               @cRefNo           OUTPUT, 
-               @cOrderKey        OUTPUT, 
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @cFacility,
+               @cStorerKey,
+               @cRefNoPattern,
+               @cRefNo           OUTPUT,
+               @cOrderKey        OUTPUT,
                @cExternOrderKey  OUTPUT
-         
+
             IF @cOrderKey <> ''
                BREAK
-            
+
             FETCH NEXT FROM @curSearch INTO @cColumnName, @cOperator
          END
 
@@ -159,7 +157,7 @@ BEGIN
                CONTINUE
             END
          END
-         
+
          BREAK
       END
 
@@ -170,36 +168,36 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Order NotFound
          GOTO Quit
       END
-      
+
       -- Get open ASN
-      SELECT @cReceiptKey = ReceiptKey 
-      FROM Receipt WITH (NOLOCK) 
-      WHERE StorerKey = @cStorerKey 
+      SELECT @cReceiptKey = ReceiptKey
+      FROM Receipt WITH (NOLOCK)
+      WHERE StorerKey = @cStorerKey
          AND ExternReceiptKey = @cExternOrderKey
          AND Status < '9'
-      
-      -- Create new ASN 
-      IF @cReceiptKey = '' 
+
+      -- Create new ASN
+      IF @cReceiptKey = ''
       BEGIN
          -- Get order QTY
          DECLARE @nOrderQTY INT
-         SET @cSQL = 
-            ' SELECT @nOrderQTY = ISNULL( SUM( QTY), 0) ' + 
-            ' FROM ' + @cDBName + 'dbo.PickDetail WITH (NOLOCK) ' + 
+         SET @cSQL =
+            ' SELECT @nOrderQTY = ISNULL( SUM( QTY), 0) ' +
+            ' FROM ' + @cDBName + 'dbo.PickDetail WITH (NOLOCK) ' +
             ' WHERE OrderKey = @cOrderKey '
          SET @cSQLParam =
-            ' @cOrderKey      NVARCHAR(10), ' + 
-            ' @nOrderQTY      INT OUTPUT    ' 
-         EXEC sp_ExecuteSQL @cSQL, @cSQLParam, 
-            @cOrderKey, 
+            ' @cOrderKey      NVARCHAR(10), ' +
+            ' @nOrderQTY      INT OUTPUT    '
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @cOrderKey,
             @nOrderQTY OUTPUT
 
          -- Get ASN QTY (could be multiple ASN, due to received across different period)
          DECLARE @nReceiptQTY INT
          SELECT @nReceiptQTY = ISNULL( SUM( RD.BeforeReceivedQTY), 0)
-         FROM Receipt R WITH (NOLOCK) 
+         FROM Receipt R WITH (NOLOCK)
             JOIN ReceiptDetail RD WITH (NOLOCK) ON (R.ReceiptKey = RD.ReceiptKey)
-         WHERE R.StorerKey = @cStorerKey 
+         WHERE R.StorerKey = @cStorerKey
             AND R.ExternReceiptKey = @cExternOrderKey
 
          -- Create ASN if not fully received
@@ -233,14 +231,14 @@ BEGIN
             IF @@ERROR <> 0
             BEGIN
                ROLLBACK TRAN rdt_638RefNoLKUP03
-               WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started          
+               WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
                   COMMIT TRAN
-               
+
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
             END
 
             COMMIT TRAN rdt_638RefNoLKUP03
-            WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started          
+            WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
                COMMIT TRAN
 
             SET @cReceiptKey = @cNewReceiptKey
@@ -266,9 +264,5 @@ Quit:
       COMMIT TRAN
 END
 GO
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-GRANT EXEC ON RDT.rdt_638RefNoLKUP03 TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_638RefNoLKUP03] TO [NSQL]
 GO

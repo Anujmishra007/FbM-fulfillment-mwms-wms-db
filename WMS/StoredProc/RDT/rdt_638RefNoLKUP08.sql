@@ -13,6 +13,7 @@ GO
 /* Date         Author    Ver.  Purposes                                      */
 /* 26-08-2022  YeeKung    1.0   WMS-20616 Created                             */
 /* 23-11-2022  YeeKung    1.1   WMS-21214 substring refno (yeekung02)         */
+/* 23-09-2022  YeeKung    1.2   WMS-20820 Extended refno length (yeekung01)   */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_638RefNoLKUP08]
@@ -24,7 +25,7 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_638RefNoLKUP08]
    ,@cFacility    NVARCHAR( 5)
    ,@cStorerKey   NVARCHAR( 15)
    ,@cSKU         NVARCHAR( 20)  -- Optional, lookup by RefNo + SKU
-   ,@cRefNo       NVARCHAR( 20)  OUTPUT --(yeekung)
+   ,@cRefNo       NVARCHAR( 60)  OUTPUT --(yeekung)
    ,@cReceiptKey  NVARCHAR( 10)  OUTPUT
    ,@nBalQTY      INT            OUTPUT
    ,@nErrNo       INT            OUTPUT

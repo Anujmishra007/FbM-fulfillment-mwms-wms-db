@@ -1,11 +1,8 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[RDT].[rdt_638RcvCfm05]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [RDT].[rdt_638RcvCfm05]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 
 /***************************************************************************/
 /* Store procedure: rdt_638RcvCfm05                                        */
@@ -14,8 +11,9 @@ GO
 /* Date       Rev  Author  Purposes                                        */
 /* 2020-08-28 1.0  Ung     WMS-14617 Created                               */
 /* 2020-11-24 1.1  Ung     WMS-14691 Add serial no params                  */
+/* 2022-09-23 1.2  YeeKung WMS-20820 Extended refno length (yeekung01)     */
 /***************************************************************************/
-CREATE PROC [RDT].[rdt_638RcvCfm05](
+CREATE OR ALTER PROC [RDT].[rdt_638RcvCfm05](
    @nFunc          INT,
    @nMobile        INT,
    @cLangCode      NVARCHAR( 3),
@@ -23,7 +21,7 @@ CREATE PROC [RDT].[rdt_638RcvCfm05](
    @cFacility      NVARCHAR( 5),
    @dArriveDate    DATETIME,
    @cReceiptKey    NVARCHAR( 10),
-   @cRefNo         NVARCHAR( 20),
+   @cRefNo         NVARCHAR( 60), --(yeekung01)
    @cToLOC         NVARCHAR( 10),
    @cToID          NVARCHAR( 18),
    @cSKUCode       NVARCHAR( 20),
@@ -51,7 +49,7 @@ CREATE PROC [RDT].[rdt_638RcvCfm05](
    @cData5         NVARCHAR( 60),
    @cConditionCode NVARCHAR( 10),
    @cSubreasonCode NVARCHAR( 10),
-   @cSerialNo      NVARCHAR( 60),  
+   @cSerialNo      NVARCHAR( 60),
    @nSerialQTY     INT,
    @tConfirmVar    VARIABLETABLE READONLY,
    @cReceiptLineNumber NVARCHAR( 5) OUTPUT,
@@ -110,35 +108,29 @@ BEGIN
       @cReceiptLineNumberOutput = @cReceiptLineNumber OUTPUT
    IF @nErrNo <> 0
       GOTO RollBackTran
-   
+
    UPDATE ReceiptDetail SET
-      ContainerKey = @cLottable06, 
-      EditDate = GETDATE(), 
+      ContainerKey = @cLottable06,
+      EditDate = GETDATE(),
       EditWho = SUSER_SNAME()
    WHERE Receiptkey = @cReceiptkey
       AND ReceiptLineNumber = @cReceiptLineNumber
    SET @nErrNo = @@ERROR
    IF @nErrNo <> 0
    BEGIN
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') 
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
       GOTO RollBackTran
    END
 
    COMMIT TRAN rdt_638RcvCfm05
    GOTO Quit
-      
+
 RollBackTran:
    ROLLBACK TRAN rdt_638RcvCfm05
 Quit:
-   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started          
+   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
       COMMIT TRAN
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXEC ON [RDT].[rdt_638RcvCfm05] TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_638RcvCfm05] TO [NSQL]
 GO

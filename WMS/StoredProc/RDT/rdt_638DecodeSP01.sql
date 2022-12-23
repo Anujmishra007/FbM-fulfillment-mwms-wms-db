@@ -1,11 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'rdt.rdt_638DecodeSP01') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_638DecodeSP01
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /******************************************************************************/
 /* Store procedure: rdt_638DecodeSP01                                         */
@@ -18,9 +15,10 @@ GO
 /* Date        Author    Ver.  Purposes                                       */
 /* 09-07-2020  YeeKung   1.0   WMS12488.Created                               */
 /* 22-07-2020  Ung       1.1   WMS-13555 Change params                        */
+/* 23-09-2022  YeeKung   1.2   WMS-20820 Extended refno length (yeekung01)    */
 /******************************************************************************/
 
-CREATE PROC rdt.rdt_638DecodeSP01 (
+CREATE OR ALTER PROC [RDT].[rdt_638DecodeSP01] (
    @nMobile      INT,
    @nFunc        INT,
    @cLangCode    NVARCHAR( 3),
@@ -28,7 +26,7 @@ CREATE PROC rdt.rdt_638DecodeSP01 (
    @nInputKey    INT,
    @cStorerKey   NVARCHAR( 15),
    @cReceiptKey  NVARCHAR( 10),
-   @cRefNo       NVARCHAR( 20),
+   @cRefNo       NVARCHAR( 60), --(yeekung01)
    @cLOC         NVARCHAR( 10),
    @cBarcode     NVARCHAR( 60),
    @cSKU         NVARCHAR( 20)  OUTPUT,
@@ -168,11 +166,5 @@ Quit:
 
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON rdt.rdt_638DecodeSP01 TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_638DecodeSP01] TO [NSQL]
 GO

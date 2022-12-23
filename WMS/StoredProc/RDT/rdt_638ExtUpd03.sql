@@ -1,11 +1,8 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[RDT].[rdt_638ExtUpd03]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [RDT].[rdt_638ExtUpd03]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 
 /************************************************************************/
 /* Store procedure: rdt_638ExtUpd03                                     */
@@ -15,9 +12,10 @@ GO
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
 /* 2021-01-07 1.0  Ung        WMS-15663 Created                         */
+/* 2022-09-23 1.1  YeeKung    WMS-20820 Extended refno length (yeekung01)*/
 /************************************************************************/
 
-CREATE PROC rdt.rdt_638ExtUpd03 (
+CREATE OR ALTER PROC [RDT].[rdt_638ExtUpd03] (
    @nMobile       INT,
    @nFunc         INT,
    @cLangCode     NVARCHAR( 3),
@@ -26,7 +24,7 @@ CREATE PROC rdt.rdt_638ExtUpd03 (
    @cFacility     NVARCHAR( 5),
    @cStorerKey    NVARCHAR( 15),
    @cReceiptKey   NVARCHAR( 10),
-   @cRefNo        NVARCHAR( 20),
+   @cRefNo        NVARCHAR( 60), --(yeekung01)
    @cID           NVARCHAR( 18),
    @cLOC          NVARCHAR( 10),
    @cSKU          NVARCHAR( 20),
@@ -86,68 +84,68 @@ BEGIN
             SET @cCaseIDLabel = rdt.rdtGetConfig( @nFunc, 'CaseIDLabel', @cStorerKey)
             IF @cCaseIDLabel = '0'
                SET @cCaseIDLabel = ''
-               
+
             IF @cIT69Label <> '' OR @cCaseIDLabel <> ''
             BEGIN
                DECLARE @bSuccess    INT
                DECLARE @cUDF02      NVARCHAR( 30)
-               DECLARE @cCOO        NVARCHAR( 20)  
-               DECLARE @cLabelLot   NVARCHAR( 12)  
+               DECLARE @cCOO        NVARCHAR( 20)
+               DECLARE @cLabelLot   NVARCHAR( 12)
                DECLARE @cCaseID     NVARCHAR( 10)
                DECLARE @cLabelPrinter NVARCHAR(10)
                DECLARE @tIT69Label   AS VariableTable
                DECLARE @tCaseIDLabel AS VariableTable
-                         
+
                -- Get label printer
                SELECT @cLabelPrinter = Printer FROM rdt.rdtMobRec WITH (NOLOCK) WHERE Mobile = @nMobile
-               
+
                -- Get ReceiptInfo
                SELECT @cUDF02 = UserDefine02 FROM Receipt WITH (NOLOCK) WHERE ReceiptKey = @cReceiptKey
-               
+
                IF @cUDF02 <> 'LabelPrinted'
                BEGIN
                   -- Loop ReceiptDetail
                   -- Print same label as FN593 option 8 - IT69Label BY ID.
-                  SET @curRD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-                     SELECT RD.SKU, RD.Lottable02, RD.QTYExpected  
+                  SET @curRD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+                     SELECT RD.SKU, RD.Lottable02, RD.QTYExpected
                      FROM dbo.Receipt R WITH (NOLOCK)
                         JOIN dbo.ReceiptDetail RD WITH (NOLOCK) ON (R.ReceiptKey = RD.ReceiptKey)
                      WHERE R.ReceiptKey = @cReceiptKey
-                        AND RD.QTYExpected > 0  
-                  OPEN @curRD  
-                  FETCH NEXT FROM @curRD INTO @cSKU, @cLottable02, @nQTY  
-                  WHILE @@FETCH_STATUS = 0  
+                        AND RD.QTYExpected > 0
+                  OPEN @curRD
+                  FETCH NEXT FROM @curRD INTO @cSKU, @cLottable02, @nQTY
+                  WHILE @@FETCH_STATUS = 0
                   BEGIN
                      IF @cIT69Label <> ''
                      BEGIN
-                        SET @cCOO = RIGHT(@cLottable02,2)  
-                        SET @cLabelLot = Substring(@cLottable02,1,12)  
-                 
-                        DELETE FROM @tIT69Label  
-                        INSERT INTO @tIT69Label (Variable, Value) VALUES   
-                           ( '@cSKU',     @cSKU),   
-                           ( '@cCOO',     @cCOO),   
-                           ( '@cLOT',     @cLabelLot),   
-                           ( '@cQTY',     CAST( @nQTY AS NVARCHAR( 5))),   
-                           ( '@cOption',  '8') --@cPrintOption  
-                 
-                        -- Print label  
-                        EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, '',  
-                           @cIT69LABEL, -- Report type  
-                           @tIT69Label, -- Report params  
-                           'rdt_638ExtUpd03',  
-                           @nErrNo  OUTPUT,  
-                           @cErrMsg OUTPUT  
-                        IF @nErrNo <> 0  
-                           GOTO Quit  
+                        SET @cCOO = RIGHT(@cLottable02,2)
+                        SET @cLabelLot = Substring(@cLottable02,1,12)
+
+                        DELETE FROM @tIT69Label
+                        INSERT INTO @tIT69Label (Variable, Value) VALUES
+                           ( '@cSKU',     @cSKU),
+                           ( '@cCOO',     @cCOO),
+                           ( '@cLOT',     @cLabelLot),
+                           ( '@cQTY',     CAST( @nQTY AS NVARCHAR( 5))),
+                           ( '@cOption',  '8') --@cPrintOption
+
+                        -- Print label
+                        EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, '',
+                           @cIT69LABEL, -- Report type
+                           @tIT69Label, -- Report params
+                           'rdt_638ExtUpd03',
+                           @nErrNo  OUTPUT,
+                           @cErrMsg OUTPUT
+                        IF @nErrNo <> 0
+                           GOTO Quit
                      END
-                     
+
                      IF @cCaseIDLabel <> ''
                      BEGIN
                      	WHILE @nQTY > 0
                      	BEGIN
                         	EXECUTE dbo.nspg_GetKey
-                        		'CaseID', 
+                        		'CaseID',
                         		8,
                         		@cCaseID   OUTPUT,
                         		@bSuccess  OUTPUT,
@@ -155,37 +153,37 @@ BEGIN
                         		@cErrMsg   OUTPUT
                            IF @bSuccess <> 1
                               GOTO Quit
-                           
+
                            SET @cCaseID = 'RT' + @cCaseID
-                           
-                           DELETE FROM @tCaseIDLabel  
-                           INSERT INTO @tCaseIDLabel (Variable, Value) VALUES   
+
+                           DELETE FROM @tCaseIDLabel
+                           INSERT INTO @tCaseIDLabel (Variable, Value) VALUES
                               ( '@cCaseID', @cCaseID)
-                              
-                           -- Print label  
-                           EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, '',  
-                              @cCaseIDLabel, -- Report type  
-                              @tCaseIDLabel, -- Report params  
-                              'rdt_638ExtUpd03',  
-                              @nErrNo  OUTPUT,  
-                              @cErrMsg OUTPUT  
-                           IF @nErrNo <> 0  
-                              GOTO Quit 
-                        
+
+                           -- Print label
+                           EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, '',
+                              @cCaseIDLabel, -- Report type
+                              @tCaseIDLabel, -- Report params
+                              'rdt_638ExtUpd03',
+                              @nErrNo  OUTPUT,
+                              @cErrMsg OUTPUT
+                           IF @nErrNo <> 0
+                              GOTO Quit
+
                            SET @nQTY = @nQTY - 1
                         END
                      END
-                     
-                     FETCH NEXT FROM @curRD INTO @cSKU, @cLottable02, @nQTY  
+
+                     FETCH NEXT FROM @curRD INTO @cSKU, @cLottable02, @nQTY
                   END
-                  
+
                   SET @nTranCount = @@TRANCOUNT
                   BEGIN TRAN
                   SAVE TRAN rdt_638ExtUpd03
-                  
+
                   UPDATE Receipt SET
-                     UserDefine02 = 'LabelPrinted', 
-                     EditDate = GETDATE(), 
+                     UserDefine02 = 'LabelPrinted',
+                     EditDate = GETDATE(),
                      EditWho = SUSER_SNAME()
                   WHERE ReceiptKey = @cReceiptKey
                   IF @@ERROR <> 0
@@ -195,7 +193,7 @@ BEGIN
                         COMMIT TRAN
                      GOTO Quit
                   END
-                  
+
                   WHILE @@TRANCOUNT > @nTranCount
                      COMMIT TRAN rdt_638ExtUpd03
                END
@@ -203,16 +201,10 @@ BEGIN
          END
       END
    END
-   
+
 Quit:
 
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXEC ON [RDT].[rdt_638ExtUpd03] TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_638ExtUpd03] TO [NSQL]
 GO

@@ -20,6 +20,7 @@ GO
 /*                            to prompt error instead of msgqueue (james04)*/  
 /* 02-08-2022 1.5  James      WMS-20356 Change logic on checking time-out  */
 /*                            period (james04)                             */
+/* 23-09-2022 1.6  YeeKung    WMS-20820 Extended refno length (yeekung01)  */
 /***************************************************************************/    
     
 CREATE OR ALTER PROC rdt.rdt_638ExtValid05 (    
@@ -31,7 +32,7 @@ CREATE OR ALTER PROC rdt.rdt_638ExtValid05 (
    @cFacility     NVARCHAR( 5),  
    @cStorerKey    NVARCHAR( 15),  
    @cReceiptKey   NVARCHAR( 10),  
-   @cRefNo        NVARCHAR( 20),  
+   @cRefNo        NVARCHAR( 60), --(yeekung01)
    @cID           NVARCHAR( 18),  
    @cLOC          NVARCHAR( 10),  
    @cSKU          NVARCHAR( 20),  

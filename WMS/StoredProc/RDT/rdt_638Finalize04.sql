@@ -9,6 +9,7 @@ GO
 /*                                                                         */
 /* Date       Rev  Author  Purposes                                        */
 /* 2022-08-25 1.0  yeekung WMS-20619. Created                              */
+/* 2022-09-23 1.1  YeeKung WMS-20820 Extended refno length (yeekung01)     */
 /***************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_638Finalize04](
    @nMobile       INT,
@@ -19,7 +20,7 @@ CREATE OR ALTER PROC [RDT].[rdt_638Finalize04](
    @cFacility     NVARCHAR( 5),
    @cStorerKey    NVARCHAR( 15),
    @cReceiptKey   NVARCHAR( 10),
-   @cRefNo        NVARCHAR( 20),
+   @cRefNo        NVARCHAR( 60), --(yeekung01)
    @nErrNo        INT           OUTPUT,
    @cErrMsg       NVARCHAR( 20) OUTPUT
 ) AS
@@ -32,9 +33,8 @@ BEGIN
    DECLARE @nTranCount  INT
    DECLARE @bSuccess    INT
    DECLARE @cReceiptLineNumber   NVARCHAR( 5)
-   DECLARE @cToLoc         NVARCHAR(20)
-   DECLARE @cUDF01         NVARCHAR(20)
-   DECLARE @cUDF02         NVARCHAR(20)   
+   DECLARE @cToLoc        NVARCHAR(20)
+   DECLARE @cUDF01      NVARCHAR(20)
 
    SET @nTranCount = @@TRANCOUNT
 
@@ -60,8 +60,7 @@ BEGIN
    BEGIN
       IF @cFinalizeRD = '1'
       BEGIN
-         SELECT @cUDF01=udf01,
-                @cUdf02 =udf02
+         SELECT @cUDF01=udf01
          FROM codelkup (NOLOCK)
          where listname='NKRTNRSNCD'
             AND storerkey= @cStorerkey
@@ -73,8 +72,7 @@ BEGIN
             FinalizeFlag = 'Y',
             EditWho = SUSER_SNAME(),
             EditDate = GETDATE(),
-            subreasoncode= @cUDF01,
-            lottable02=@cUDF02
+            subreasoncode= @cUDF01
          FROM dbo.ReceiptDetail RD
          WHERE ReceiptKey = @cReceiptKey
             AND ReceiptLineNumber = @cReceiptLineNumber

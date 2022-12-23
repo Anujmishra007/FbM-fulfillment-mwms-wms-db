@@ -18,6 +18,7 @@ GO
 /* 2020-07-13 1.1  Ung        WMS-13555 Change params                   */
 /* 2020-10-08 1.2  James      WMS-15363 Update receiptdetail.toloc when */
 /*                            finalize ASN (james01)                    */
+/* 2022-09-23 1.3  YeeKung   WMS-20820 Extended refno length (yeekung02)*/
 /************************************************************************/
 
 CREATE PROC [RDT].[rdt_638ExtUpd01] (
@@ -29,7 +30,7 @@ CREATE PROC [RDT].[rdt_638ExtUpd01] (
    @cFacility     NVARCHAR( 5),
    @cStorerKey    NVARCHAR( 15),
    @cReceiptKey   NVARCHAR( 10),
-   @cRefNo        NVARCHAR( 20),
+   @cRefNo        NVARCHAR( 60), --(yeekung02)
    @cID           NVARCHAR( 18),
    @cLOC          NVARCHAR( 10),
    @cSKU          NVARCHAR( 20),
