@@ -17,6 +17,7 @@ GO
 /* 2022-08-03   1.2  James    WMS-20213 Add custom lookup field (james02)  */    
 /* 2022-12-15   1.3  James    WMS-21350 Allow create mbol with header      */
 /*                            only (james03)                               */
+/* 2022-12-22   1.4  yeekung  JSM-118875 blank mbolkey (yeekung01)         */
 /***************************************************************************/      
       
 CREATE OR ALTER PROC [RDT].[rdtfnc_MbolCreation](      
@@ -78,7 +79,8 @@ DECLARE
    @cRefnoLabel1        NVARCHAR( 20),    
    @cRefnoLabel2        NVARCHAR( 20),    
    @cRefnoLabel3        NVARCHAR( 20),    
-   @cColumnName         NVARCHAR( 20),    
+   @cColumnName         NVARCHAR( 20), 
+   @cBlankMBOL          NVARCHAR( 20), --(yeekung01)
        
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),  @cFieldAttr01 NVARCHAR( 1),      
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),  @cFieldAttr02 NVARCHAR( 1),      
@@ -128,6 +130,7 @@ SELECT
    @cRefnoLabel1        = V_String13,    
    @cRefnoLabel2        = V_String14,    
    @cRefnoLabel3        = V_String15,    
+   @cBlankMBOL          = V_String16,
        
    @cData1              = V_String41,    
    @cData2              = V_String42,    
@@ -210,6 +213,10 @@ BEGIN
    SET @cMbolCriteria = rdt.rdtGetConfig( @nFunc, 'MbolCriteria', @cStorerKey)    
    IF @cMbolCriteria = '0'    
       SET @cMbolCriteria = ''    
+
+   SET @cBlankMBOL =  rdt.rdtGetConfig( @nFunc, 'BlankMBOLKey', @cStorerKey)  
+   IF @cBlankMBOL = '0'    
+      SET @cBlankMBOL = ''    
           
    -- Prepare next screen var      
    SET @cOutField01 = @cFacility      
@@ -567,9 +574,9 @@ BEGIN
             SET @cOutField10 = @cRefNo3    
             EXEC rdt.rdtSetFocusField @nMobile, 2    
             GOTO Step_Scan_Fail      
-         END        
-         
-         IF @cOrderKey = '' AND @cLoadKey = '' AND @cRefNo1 = '' AND  @cRefNo2  = '' AND   @cRefNo3  = ''
+         END      
+             
+         IF @cOrderKey = '' AND @cLoadKey = ''   
          BEGIN      
             SET @nErrNo = 172116      
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --OrdOrLoad Req     
@@ -679,6 +686,9 @@ BEGIN
       SELECT @nOrderCnt = COUNT( 1)    
       FROM dbo.MBOLDETAIL WITH (NOLOCK)    
       WHERE MbolKey = @cMBOLKey    
+
+      IF @cBlankMBOL ='1' --(yeekung01)
+         SET @cMBOLKey=''
     
     
       -- Prepare next screen var      
@@ -1205,7 +1215,8 @@ BEGIN
       V_String12 = @cMbolCriteria,    
       V_String13 = @cRefnoLabel1,    
       V_String14 = @cRefnoLabel2,    
-      V_String15 = @cRefnoLabel3,    
+      V_String15 = @cRefnoLabel3, 
+      V_String16 = @cBlankMBOL,
           
       V_String41 = @cData1,    
       V_String42 = @cData2,    
