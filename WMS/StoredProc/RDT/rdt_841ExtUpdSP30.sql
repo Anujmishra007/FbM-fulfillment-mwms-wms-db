@@ -13,6 +13,7 @@ GO
 /* Modifications log:                                                   */    
 /* Date        Rev  Author   Purposes                                   */    
 /* 2022-08-26  1.0  yeekung  WMS-20618 Created                          */
+/* 2022-12-27  1.1  yeekung  WMS-21356 Add Cube logic(yeekung01)        */
 /************************************************************************/    
   
 CREATE OR ALTER PROC [RDT].[rdt_841ExtUpdSP30] (    
@@ -335,7 +336,7 @@ BEGIN
                         WHERE ToteNo = @cDropID    
                         AND Orderkey = @cOrderkey    
                         AND ExpectedQty > ScannedQty    
-                        AND Status < '5'    
+                   AND Status < '5'    
                         AND AddWho = @cUserName)    
          BEGIN    
             IF NOT EXISTS (SELECT 1 FROM dbo.PackHeader WITH (NOLOCK) WHERE Orderkey = @cOrderkey)    
@@ -778,7 +779,7 @@ BEGIN
                BEGIN    
                   UPDATE dbo.Packdetail WITH (ROWLOCK)    
                   SET   QTY      = QTY + @nPackQty,    
-                        LabelNo  = @cLabelNo,    
+                   LabelNo  = @cLabelNo,    
                         RefNo    = @cLabelNo,    
                         UPC = @cTrackNo,   
                         EditDate = GETDATE(),  
@@ -1270,7 +1271,7 @@ BEGIN
     
     
     
-                     EXEC sp_executesql @cExecStatements, @cExecArguments,    
+                        EXEC sp_executesql @cExecStatements, @cExecArguments,    
                                              @nMobile    
                                           , @nFunc    
                                           , @cLangCode    
@@ -1494,9 +1495,9 @@ BEGIN
     
       IF @@ERROR <> 0    
       BEGIN    
-            SET @nErrNo = 190369    
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InsTrackLogFail    
-            GOTO RollBackTran    
+         SET @nErrNo = 190369    
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InsTrackLogFail    
+         GOTO RollBackTran    
       END    
     
       --Insert into Traceinfo (tracename , timein , col1 ,col2 , col3 , col4 , col5 )    
@@ -1513,9 +1514,9 @@ BEGIN
     
          IF @@ERROR <> 0    
          BEGIN    
-               SET @nErrNo = 190377    
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InsCtnShpmentDetFail    
-               GOTO RollBackTran    
+            SET @nErrNo = 190377    
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InsCtnShpmentDetFail    
+            GOTO RollBackTran    
          END    
       END    
 
@@ -1885,13 +1886,15 @@ BEGIN
       DECLARE @cCartongroup NVARCHAR(20),
               @nWeight      Float = 0,
               @nCartonWeight      Float = 0,
+			     @nCartonCube      Float = 0,
               @nTotalWeight Float = 0
 
       SET @cCartongroup = rdt.RDTGetConfig( @nFunc, 'Cartongroup', @cStorerkey)                          
       IF @cCartongroup = '0'                        
          SET @cCartongroup = ''      
 
-      SELECT  @nCartonWeight=CartonWeight 
+      SELECT  @nCartonWeight=CartonWeight,
+	          @nCartonCube=Cube
       FROM CARTONIZATION (NOLOCK) 
       WHERE CARTONTYPE=@cCartonType 
          AND CartonizationGroup = @cCartongroup
@@ -1927,7 +1930,8 @@ BEGIN
 
       UPDATE PackInfo WITH (ROWLOCK)
       SET   CartonType=@cCartonType,
-            weight = @nTotalWeight+@nCartonWeight
+            weight = @nTotalWeight+@nCartonWeight,
+			cube = @nCartonCube
       where PickSlipNo=@cPickslipNo
       
       IF @@ERROR <>0    
@@ -1949,6 +1953,7 @@ Quit:
             
     
 END    
+   
 GO
 
 SET QUOTED_IDENTIFIER OFF
