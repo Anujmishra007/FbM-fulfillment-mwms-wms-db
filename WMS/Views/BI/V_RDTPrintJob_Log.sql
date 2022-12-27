@@ -9,6 +9,7 @@ GO
 /* Date         Author      Ver.  Purposes                                 */
 /* 12-Aug-2022  Gywong      1.0   Created IN TH                            */
 /* 11-Nov-2022  JarekLIM    1.0   Created IN KR https://jiralfl.atlassian.net/browse/WMS-21163 */
+/* 27-Dec-2022  JAREKLIM    1.1   Created IN JP https://jiralfl.atlassian.net/browse/WMS-21382 */
 /***************************************************************************/
 
 CREATE  OR ALTER VIEW [BI].[V_RDTPrintJob_Log]  AS  
@@ -21,12 +22,11 @@ GO
 
 
 /*
-exec as login ='JreportuserKR'
+exec as login ='JreportuserJP'
 
 select suser_sname()
 
-select TOP 99999 * from [BI].[V_RDTPrintJob_Log]
-
+select TOP 9999 * from [BI].[V_RDTPrintJob_Log]
 
 revert;
 
