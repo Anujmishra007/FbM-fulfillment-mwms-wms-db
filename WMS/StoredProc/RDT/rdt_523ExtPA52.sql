@@ -45,6 +45,11 @@ BEGIN
    DECLARE @cStyle         NVARCHAR(20)
    DECLARE @cSKUGroup      NVARCHAR(20)
 
+   DECLARE @tloc TABLE (
+   loc        NVARCHAR( 20)
+   )
+
+
    SELECT @cSKUGroup = skugroup
    FROM SKU (NOLOCK)
    where sku=@csku
@@ -58,6 +63,7 @@ BEGIN
       FROM lotxlocxid LLI(NOLOCK) JOIN
          loc loc (nolock) ON LLI.loc=loc.loc
       WHERE LLI.storerkey=@cStorerkey
+         AND LOC.facility=@cFacility
          AND LLI.loc<>@cLOC
          AND locationtype='NORMAL'
          AND LLI.sku=@csku
@@ -66,12 +72,15 @@ BEGIN
    END
 
 
+
+
    --New Empty LOC
    IF @cSuggestedLOC=''
    BEGIN
 
-      --New Empty LOC (Match Product Category) 
-      SELECT TOP 1 @cSuggestedLOC=LOC.loc
+       --New Empty LOC (Match Product Category) 
+      INSERT INTO @tloc
+      SELECT LOC.loc
       FROM loc loc (nolock) 
       WHERE  loc.loc<>@cLOC
          AND LocationCategory in (SELECT udf01
@@ -80,17 +89,20 @@ BEGIN
                                   AND storerkey=@cStorerKey
                                   AND listname= 'BSJPCate')
          AND locationtype='NORMAL'
+         AND LOC.facility=@cFacility
          AND loc NOT IN (  select distinct lli.loc
                            from lotxlocxid lli (nolock) join loc loc (nolock) on lli.loc=loc.loc
-                           WHERE loc.loc<>@cLOC   
-                              AND loc.LocationCategory in (SELECT udf01
-                                                          FROM codelkup (NOLOCK)
-                                                          where LEFT(long,10)= @cSKUGroup
-                                                          AND storerkey=@cStorerKey
-                                                          AND listname= 'BSJPCate')  
-                              AND storerkey= @cStorerKey
+                           WHERE  storerkey= @cStorerKey
                            GROUP BY LLI.LOC
                            HAVING SUM(LLI.QTY -LLI.QtyAllocated- LLI.QTYPicked) > 0 )
+
+      SELECT TOP 1 @cSuggestedLOC=loc
+      from @tloc 
+      WHERE loc not in (select suggestedloc
+                              FROM RFPutaway (NOLOCK)
+                              where storerkey=@cStorerKey
+                              AND fromloc=@cLOC)
+
    END
 
    --Max SKU of LOC
@@ -103,6 +115,7 @@ BEGIN
       WHERE  loc.loc<>@cLOC
          AND locationtype='NORMAL'
          AND storerkey= @cStorerKey
+         AND LOC.facility=@cFacility
          AND LocationCategory in (SELECT udf01
                                   FROM codelkup (NOLOCK)
                                   where LEFT(long,10)= @cSKUGroup
@@ -120,6 +133,7 @@ BEGIN
          loc loc (nolock) ON LLI.loc=loc.loc
          WHERE  loc.loc<>@cLOC
             AND storerkey= @cStorerKey
+            AND LOC.facility=@cFacility
             AND LocationCategory in (SELECT udf01
                                      FROM codelist (NOLOCK)
                                      where listname= 'BSJPCate')

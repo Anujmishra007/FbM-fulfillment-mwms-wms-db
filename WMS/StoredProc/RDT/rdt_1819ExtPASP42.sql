@@ -61,13 +61,21 @@ BEGIN
    where sku=@cSKU
    AND storerkey=@cstorerkey
 
+
+   DECLARE @tloc TABLE (
+      loc        NVARCHAR( 20)
+   )
+
+
    --New Empty LOC
    IF @cSuggLOC=''
    BEGIN
        --New Empty LOC (Match Product Category) 
-      SELECT TOP 1 @cSuggLOC=LOC.loc
+      INSERT INTO @tloc
+      SELECT LOC.loc
       FROM loc loc (nolock) 
       WHERE  loc.loc<>@cFromLOC
+         AND LOC.facility=@cFacility
          AND LocationCategory in (SELECT  udf01
                                   FROM codelkup (NOLOCK)
                                   where LEFT(long,10)= @cSKUGroup
@@ -76,16 +84,16 @@ BEGIN
          AND locationtype='NORMAL'
          AND loc NOT IN (select distinct lli.loc
                          from lotxlocxid lli (nolock) join loc loc (nolock) on lli.loc=loc.loc
-                           WHERE  loc.loc<>@cFromLOC   AND
-                           loc.LocationCategory in (SELECT udf01
-                                                    FROM codelkup (NOLOCK)
-                                                    where LEFT(long,10)= @cSKUGroup
-                                                    AND storerkey=@cStorerKey
-                                                    AND listname= 'BSJPCate')  
-                              AND storerkey= @cStorerKey
+                           WHERE  storerkey= @cStorerKey
                               GROUP BY LLI.LOC
                               HAVING SUM(LLI.QTY -LLI.QtyAllocated- LLI.QTYPicked) > 0 )
-	  
+
+      SELECT TOP 1 @cSuggLOC=loc
+      from @tloc 
+      WHERE loc not in (select suggestedloc
+                              FROM RFPutaway (NOLOCK)
+                              where storerkey=@cStorerKey
+                              AND fromloc=@cFromLOC)
    END
 
    --Lowest Qty of SKU in LOC
@@ -96,6 +104,7 @@ BEGIN
          loc loc (nolock) ON LLI.loc=loc.loc
       WHERE LLI.storerkey=@cStorerkey
          AND LLI.loc<>@cFromLOC
+         AND LOC.facility=@cFacility
          AND locationtype='NORMAL'
          AND LLI.sku=@csku
          AND LLI.qty<>0
@@ -112,6 +121,7 @@ BEGIN
       WHERE  loc.loc<>@cFromLOC
          AND locationtype='NORMAL'
          AND storerkey= @cStorerKey
+         AND LOC.facility=@cFacility
          AND LocationCategory in (SELECT udf01
                                   FROM codelkup (NOLOCK)
                                   where LEFT(long,10)= @cSKUGroup
@@ -128,6 +138,7 @@ BEGIN
          FROM lotxlocxid LLI(NOLOCK) JOIN
          loc loc (nolock) ON LLI.loc=loc.loc
          WHERE  loc.loc<>@cFromLOC
+            AND LOC.facility=@cFacility
             AND storerkey= @cStorerKey
             AND LocationCategory in (SELECT udf01
                                      FROM codelist (NOLOCK)
