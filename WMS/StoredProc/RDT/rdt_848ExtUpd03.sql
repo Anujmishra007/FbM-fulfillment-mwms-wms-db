@@ -12,6 +12,8 @@ GO
 /* Date        Rev  Author      Purposes                                */  
 /* 2021-12-02  1.0  James       WMS-18457. Created                      */  
 /* 2022-04-04  1.1  yeekung     WMS-19378 Add eventlog (yeekung01)      */
+/* 2022-12-16  1.2 YeeKung      WMS-21260 Add palletid/taskdetail       */
+/*                            (yeekung02)                               */
 /************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_848ExtUpd03] (  
@@ -25,7 +27,9 @@ CREATE OR ALTER PROC [RDT].[rdt_848ExtUpd03] (
    @cPickSlipNo  NVARCHAR( 10),   
    @cLoadKey     NVARCHAR( 10),   
    @cOrderKey    NVARCHAR( 10),   
-   @cDropID      NVARCHAR( 20),   
+   @cDropID      NVARCHAR( 20),
+   @cID          NVARCHAR( 18), 
+   @cTaskdetailKey NVARCHAR( 10),
    @cSKU         NVARCHAR( 20),    
    @cOption      NVARCHAR( 1),    
    @nErrNo       INT OUTPUT,    

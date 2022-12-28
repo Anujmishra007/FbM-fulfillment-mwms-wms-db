@@ -10,7 +10,9 @@ GO
 /* Modifications log:                                                   */  
 /*                                                                      */  
 /* Date        Rev  Author      Purposes                                */  
-/* 2022-05-10  1.0  YeeKung     WMS-19631. Created                      */  
+/* 2022-05-10  1.0  YeeKung     WMS-19631. Created                      */
+/* 2022-12-16  1.1  YeeKung     WMS-21260 Add palletid/taskdetail       */
+/*                              (yeekung02)                             */
 /************************************************************************/  
   
 CREATE or ALTER PROC [RDT].[rdt_848ExtUpd04] (  
@@ -24,7 +26,9 @@ CREATE or ALTER PROC [RDT].[rdt_848ExtUpd04] (
    @cPickSlipNo  NVARCHAR( 10),   
    @cLoadKey     NVARCHAR( 10),   
    @cOrderKey    NVARCHAR( 10),   
-   @cDropID      NVARCHAR( 20),   
+   @cDropID      NVARCHAR( 20),
+   @cID          NVARCHAR( 18), 
+   @cTaskdetailKey NVARCHAR( 10),
    @cSKU         NVARCHAR( 20),    
    @cOption      NVARCHAR( 1),    
    @nErrNo       INT OUTPUT,    

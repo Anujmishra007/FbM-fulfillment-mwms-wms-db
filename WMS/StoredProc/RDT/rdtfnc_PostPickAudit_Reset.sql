@@ -33,6 +33,8 @@ GO
 /* 11-08-2020 1.8  James      INC1244432 - Bug fix (james02)            */  
 /* 08-12-2021 1.9  James      WMS-18457 Add cfg skip step sku(james03)  */  
 /* 05-04-2022 2.0  yeekung    WMS-19378 Add extendedvalidate (yeekung01)*/
+/* 11-12-2022 2.1 YeeKung    WMS-21260 Add palletid/taskdetail         */
+/*                            (yeekung02)                               */
 /************************************************************************/  
   
 CREATE OR ALTER PROC rdt.rdtfnc_PostPickAudit_Reset (  
@@ -79,6 +81,8 @@ DECLARE
    @cRefNo          NVARCHAR( 10),  
    @cOrderKey       NVARCHAR( 10),  
    @cDropID         NVARCHAR( 20), -- SOS359525  
+   @cID             NVARCHAR( 18),  --(yeekung02)
+   @cTaskDetailKey  NVARCHAR( 10), --(yeekung02)
    @cStyle          NVARCHAR( 20),  
    @cColor          NVARCHAR( 10),  
    @cSize           NVARCHAR( 10), -- SOS359525  
@@ -88,6 +92,7 @@ DECLARE
    @cExtendedUpdateSP               NVARCHAR( 20),  
    @cFlowThruStepSKU                NVARCHAR( 1),  
    @cExtendedValidateSP             NVARCHAR( 20), --(yeekung01)
+   @cSkipChkPSlipMustScanOut        NVARCHAR( 1),
       
    @cWhere                          NVARCHAR( 100),  
    @cSQL                            NVARCHAR( MAX),  
@@ -127,6 +132,8 @@ SELECT
    @cSKUDescr  = V_SKUDescr,  
    @cLoadKey   = V_LoadKey,  
    @cPickSlipNo = V_PickSlipNo,  
+   @cTaskDetailKey  = V_TaskDetailKey, 
+   @cID         = V_ID, 
   
    @cRefNo            = V_String1,  
    @cOrderKey         = V_String2,  
@@ -138,8 +145,9 @@ SELECT
    @cPPACartonIDByPackDetailLabelNo = V_String8,  
    @cPPACartonIDByPickDetailCaseID  = V_String9,  
    @cExtendedUpdateSP               = V_String10,  
-   @cFlowThruStepSKU  = V_String11,  
-   @cExtendedValidateSP = V_String12,
+   @cFlowThruStepSKU                = V_String11,  
+   @cExtendedValidateSP             = V_String12,
+   @cSkipChkPSlipMustScanOut        = V_String13,
   
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  
@@ -193,22 +201,26 @@ BEGIN
   
    -- (james03)  
    SET @cFlowThruStepSKU  = rdt.rdtGetConfig( @nFunc, 'FlowThruStepSKU', @cStorer)  
+
+   SET @cSkipChkPSlipMustScanOut = rdt.rdtGetConfig( @nFunc, 'SkipChkPSlipMustScanOut', @cStorer)
   
-   -- Init var  
-   SET @cRefNo      = ''  
-   SET @cPickSlipNo = ''  
-   SET @cLoadKey    = ''  
-   SET @cOrderKey   = ''  
-   SET @cDropID     = ''  
-   SET @cSKU        = ''  
-  
-   -- Prepare next screen var  
-   SET @cOutField01 = @cRefNo  
-   SET @cOutField02 = @cPickSlipNo  
-   SET @cOutField03 = @cLoadKey  
-   SET @cOutField04 = @cOrderKey  
-   SET @cOutField05 = @cDropID  
-   SET @cOutField06 = @cSKU  
+
+   -- Init var
+   SET @cRefNo      = ''
+   SET @cPickSlipNo = ''
+   SET @cLoadKey    = ''
+   SET @cOrderKey   = ''
+   SET @cDropID     = ''
+   SET @cSKU        = ''
+
+   -- Prepare next screen var
+   SET @cOutField01 = @cRefNo
+   SET @cOutField02 = @cPickSlipNo
+   SET @cOutField03 = @cLoadKey
+   SET @cOutField04 = @cOrderKey
+   SET @cOutField05 = @cDropID
+   SET @cOutField06 = @cID
+   SET @cOutField07 = @cTaskDetailKey
   
    -- Go to next screen  
    SET @nScn = 2830  
@@ -236,35 +248,41 @@ BEGIN
       SET @cPickSlipNo = ISNULL( @cInField02, '') -- PickSlipNo  
       SET @cLoadKey    = ISNULL( @cInField03, '') -- LoadKey  
       SET @cOrderKey   = ISNULL( @cInField04, '') -- OrderKey  
-      SET @cDropID     = ISNULL( @cInField05, '') -- DropID  
+      SET @cDropID     = ISNULL( @cInField05, '') -- DropID
+      SET @cID         = ISNULL( @cInField06, '') -- ID
+      SET @cTaskDetailKey  = ISNULL( @cInField07, '') -- ID
   
-      -- Validate blank  
-      IF @cRefNo      = '' AND  
-         @cPickSlipNo = '' AND  
-         @cLoadKey    = '' AND  
-         @cOrderKey   = '' AND  
-         @cDropID     = ''  
-      BEGIN  
-         SET @nErrNo = 73216  
-         SET @cErrMsg = rdt.rdtgetmessage( 73216, @cLangCode,'DSP') -- Value required!  
-         EXEC rdt.rdtSetFocusField @nMobile, 1  
-         GOTO Step_1_Fail  
-      END  
-  
-      -- Validate more then 1 param  
-      DECLARE @i INT  
-      SET @i = 0  
-      IF @cRefNo      <> '' SET @i = @i + 1  
-      IF @cPickSlipNo <> '' SET @i = @i + 1  
-      IF @cLoadKey    <> '' SET @i = @i + 1  
-      IF @cOrderKey   <> '' SET @i = @i + 1  
-      IF @cDropID     <> '' SET @i = @i + 1  
-      IF @i > 1  
-      BEGIN  
-         SET @nErrNo = 73217  
-         SET @cErrMsg = rdt.rdtgetmessage( 73217, @cLangCode,'DSP') -- Key-in either 1  
-         GOTO Step_1_Fail  
-      END  
+      -- Validate blank
+      IF @cRefNo      = '' AND
+         @cPickSlipNo = '' AND
+         @cLoadKey    = '' AND
+         @cOrderKey   = '' AND
+         @cDropID     = '' AND
+         @cID         = '' AND
+         @cTaskDetailKey =''
+      BEGIN
+         SET @nErrNo = 73216
+         SET @cErrMsg = rdt.rdtgetmessage( 73216, @cLangCode,'DSP') -- Value required!
+         EXEC rdt.rdtSetFocusField @nMobile, 1
+         GOTO Step_1_Fail
+      END
+
+      -- Validate more then 1 param
+      DECLARE @i INT
+      SET @i = 0
+      IF @cRefNo      <> '' SET @i = @i + 1
+      IF @cPickSlipNo <> '' SET @i = @i + 1
+      IF @cLoadKey    <> '' SET @i = @i + 1
+      IF @cOrderKey   <> '' SET @i = @i + 1
+      IF @cDropID     <> '' SET @i = @i + 1
+      IF @cID         <> '' SET @i = @i + 1
+      IF @cTaskDetailKey <> '' SET @i = @i + 1
+      IF @i > 1
+      BEGIN
+         SET @nErrNo = 73217
+         SET @cErrMsg = rdt.rdtgetmessage( 73217, @cLangCode,'DSP') -- Key-in either 1
+         GOTO Step_1_Fail
+      END
   
       -- Ref No  
       IF @cRefNo <> ''  
@@ -311,48 +329,54 @@ BEGIN
       END  
   
       -- Pick Slip No  
-      IF @cPickSlipNo <> ''  
-      BEGIN  
-         -- Get pickheader info  
-         SELECT TOP 1  
-            @cChkPickSlipNo = PickHeaderKey  
-         FROM dbo.PickHeader WITH (NOLOCK)  
-         WHERE PickHeaderKey = @cPickSlipNo  
-  
-         -- Validate pickslip no  
-         IF @cChkPickSlipNo = '' OR @cChkPickSlipNo IS NULL  
-         BEGIN  
-            SET @nErrNo = 73221  
-            SET @cErrMsg = rdt.rdtgetmessage( 73221, @cLangCode,'DSP') -- Invalid PS#  
-            EXEC rdt.rdtSetFocusField @nMobile, 2  
-            GOTO Step_1_Fail  
-         END  
-  
-         -- Get picking info  
-         SELECT TOP 1  
-            @dScanInDate = ScanInDate,  
-            @dScanOutDate = ScanOutDate  
-         FROM dbo.PickingInfo WITH (NOLOCK)  
-         WHERE PickSlipNo = @cPickSlipNo  
-  
-         -- Validate pickslip not scan in  
-         IF @dScanInDate IS NULL  
-         BEGIN  
-            SET @nErrNo = 73222  
-            SET @cErrMsg = rdt.rdtgetmessage( 73222, @cLangCode,'DSP') -- Not scan-in  
-            EXEC rdt.rdtSetFocusField @nMobile, 2  
-            GOTO Step_1_Fail  
-         END  
-  
-         -- Validate pickslip not scan out  
-         IF @dScanOutDate IS NULL  
-         BEGIN  
-            SET @nErrNo = 73223  
-            SET @cErrMsg = rdt.rdtgetmessage( 73223, @cLangCode,'DSP') -- Not scan-out  
-            EXEC rdt.rdtSetFocusField @nMobile, 2  
-            GOTO Step_1_Fail  
-         END  
-      END  
+      -- Pick Slip No
+      IF @cPickSlipNo <> ''
+      BEGIN
+         -- Get pickheader info
+         SELECT TOP 1
+            @cChkPickSlipNo = PickHeaderKey
+         FROM dbo.PickHeader WITH (NOLOCK)
+         WHERE PickHeaderKey = @cPickSlipNo
+
+         -- Validate pickslip no
+         IF @cChkPickSlipNo = '' OR @cChkPickSlipNo IS NULL
+         BEGIN
+            SET @nErrNo = 73221
+            SET @cErrMsg = rdt.rdtgetmessage( 73221, @cLangCode,'DSP') -- Invalid PS#
+            EXEC rdt.rdtSetFocusField @nMobile, 2
+            GOTO Step_1_Fail
+         END
+
+         -- Get picking info
+         SELECT TOP 1
+            @dScanInDate = ScanInDate,
+            @dScanOutDate = ScanOutDate
+         FROM dbo.PickingInfo WITH (NOLOCK)
+         WHERE PickSlipNo = @cPickSlipNo
+
+         -- Validate pickslip not scan in
+         IF @dScanInDate IS NULL
+         BEGIN
+            SET @nErrNo = 73222
+            SET @cErrMsg = rdt.rdtgetmessage( 73222, @cLangCode,'DSP') -- Not scan-in
+            EXEC rdt.rdtSetFocusField @nMobile, 2
+            GOTO Step_1_Fail
+         END
+
+         --(yeekung01)
+         IF @cSkipChkPSlipMustScanOut <> '1'
+         BEGIN
+            -- Validate pickslip not scan out
+            IF @dScanOutDate IS NULL
+            BEGIN
+               SET @nErrNo = 73223
+               SET @cErrMsg = rdt.rdtgetmessage( 73223, @cLangCode,'DSP') -- Not scan-out
+               EXEC rdt.rdtSetFocusField @nMobile, 2
+               GOTO Step_1_Fail
+            END
+         END
+      END
+
   
       -- LoadKey  
       IF @cLoadKey <> '' AND @cLoadKey IS NOT NULL  
@@ -505,13 +529,45 @@ BEGIN
          END  
       END  
 
+      -- Pallet ID
+      IF @cID <> '' AND @cID IS NOT NULL 
+      BEGIN
+         IF NOT EXISTS( SELECT 1
+            FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
+               JOIN dbo.LOC WITH (NOLOCK) ON (LLI.LOC = LOC.LOC)
+            WHERE LOC.Facility = @cFacility
+               AND LLI.StorerKey = @cStorer
+               AND LLI.ID = @cID
+               AND LLI.QTY > 0)
+         BEGIN
+            SET @nErrNo = 73238
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Inv PalletID
+            GOTO Step_1_Fail
+         END
+         
+      END
+
+      -- TaskDetailKey
+      IF @cTaskDetailKey <> '' AND @cTaskDetailKey IS NOT NULL --SY01
+      BEGIN
+
+         IF NOT EXISTS (SELECT 1
+                        FROM dbo.TaskDetail WITH (NOLOCK) 
+                        WHERE TaskDetailKey = @cTaskDetailKey)
+         BEGIN
+            SET @nErrNo = 73239
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Inv TaskKey
+            GOTO Step_1_Fail
+         END
+      END
+
       -- Extended validate  
       IF @cExtendedValidateSP <> ''  
       BEGIN  
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')  
          BEGIN  
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +  
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID,   
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID,@cID,@cTaskdetailKey,   
                  @cSKU, @cOption, @nErrNo OUTPUT, @cErrMsg OUTPUT'  
             SET @cSQLParam =  
                '@nMobile      INT,       ' +  
@@ -525,13 +581,15 @@ BEGIN
                '@cLoadKey     NVARCHAR( 10), ' +  
                '@cOrderKey    NVARCHAR( 10), ' +  
                '@cDropID      NVARCHAR( 20), ' +  
+               '@cID          NVARCHAR( 18), ' +
+               '@cTaskdetailKey NVARCHAR( 10), ' +
                '@cSKU         NVARCHAR( 20), ' +  
                '@cOption      NVARCHAR( 1),  ' +  
                '@nErrNo       INT OUTPUT,  ' +  
                '@cErrMsg      NVARCHAR( 20) OUTPUT'  
   
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID,   
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID,@cID,@cTaskdetailKey,   
                @cSKU, '', @nErrNo OUTPUT, @cErrMsg OUTPUT  
   
             IF @nErrNo <> 0  
@@ -539,15 +597,17 @@ BEGIN
          END  
       END  
   
-      -- Prepare next screen var  
-      SET @cSKU = ''  
-  
-      SET @cOutField01 = @cRefNo  
-      SET @cOutField02 = @cPickSlipNo  
-      SET @cOutField03 = @cLoadKey  
-      SET @cOutField04 = @cOrderKey  
-      SET @cOutField05 = @cDropID  
-      SET @cOutField06 = @cSKU  
+    -- Prepare next screen var
+      SET @cSKU = ''
+
+      SET @cOutField01 = @cRefNo
+      SET @cOutField02 = @cPickSlipNo
+      SET @cOutField03 = @cLoadKey
+      SET @cOutField04 = @cOrderKey
+      SET @cOutField05 = @cDropID
+      SET @cOutField06 = @cSKU
+      SET @cOutField07 = @cID
+      SET @cOutField08 = @cTaskDetailKey	
   
       -- Go to next screen  
       SET @nScn = @nScn + 1  
@@ -572,19 +632,21 @@ BEGIN
   
    Step_1_Fail:  
    BEGIN  
-      -- Reset this screen var  
-      SET @cRefNo = ''  
-      SET @cPickSlipNo = ''  
-      SET @cLoadKey = ''  
-      SET @cOrderKey = ''  
-      SET @cDropID = ''  
-  
-      SET @cOutField01 = @cRefNo  
-      SET @cOutField02 = @cPickSlipNo  
-      SET @cOutField03 = @cLoadKey  
-      SET @cOutField04 = @cOrderKey  
-      SET @cOutField05 = @cDropID  
-      SET @cOutField06 = @cSKU  
+      -- Reset this screen var
+      SET @cRefNo = ''
+      SET @cPickSlipNo = ''
+      SET @cLoadKey = ''
+      SET @cOrderKey = ''
+      SET @cDropID = ''
+
+      SET @cOutField01 = @cRefNo
+      SET @cOutField02 = @cPickSlipNo
+      SET @cOutField03 = @cLoadKey
+      SET @cOutField04 = @cOrderKey
+      SET @cOutField05 = @cDropID
+      SET @cOutField06 = @cSKU
+      SET @cOutField07 = @cID
+      SET @cOutField08 = @cTaskDetailKey	
    END  
 END  
 GOTO Quit  
@@ -631,18 +693,13 @@ BEGIN
          SET @cSize = ''  
       END  
   
-      -- Prepare next screen var  
-      SET @cOutField01 = @cRefNo  
-      SET @cOutField02 = @cPickSlipNo  
-      SET @cOutField03 = @cLoadKey  
-      SET @cOutField04 = @cOrderKey  
-      SET @cOutField05 = @cDropID  
-      SET @cOutField06 = @cSKU  
-      SET @cOutField07 = SUBSTRING( @cSKUDescr,  1, 20)  
-      SET @cOutField08 = SUBSTRING( @cSKUDescr, 21, 20)  
-      SET @cOutField09 = @cStyle  
-      SET @cOutField10 = @cColor  
-      SET @cOutField11 = @cSize  
+      -- Prepare next screen var
+      SET @cOutField01 = @cSKU
+      SET @cOutField02 = SUBSTRING( @cSKUDescr,  1, 20)
+      SET @cOutField03 = SUBSTRING( @cSKUDescr, 21, 20)
+      SET @cOutField04 = @cStyle
+      SET @cOutField05 = @cColor
+      SET @cOutField06 = @cSize
   
       -- Go to next screen  
       SET @nScn = @nScn + 1  
@@ -651,18 +708,21 @@ BEGIN
   
    IF @nInputKey = 0 -- Esc or No  
    BEGIN  
-      -- Reset prev screen var  
-      SET @cRefNo = ''  
-      SET @cPickSlipNo = ''  
-      SET @cLoadKey = ''  
-      SET @cOrderKey = ''  
-      SET @cDropID = ''  
-  
-      SET @cOutField01 = @cRefNo  
-      SET @cOutField02 = @cPickSlipNo  
-      SET @cOutField03 = @cLoadKey  
-      SET @cOutField04 = @cOrderKey  
-      SET @cOutField05 = @cDropID  
+      -- Reset prev screen var
+      SET @cRefNo = ''
+      SET @cPickSlipNo = ''
+      SET @cLoadKey = ''
+      SET @cOrderKey = ''
+      SET @cDropID = ''
+
+      SET @cOutField01 = @cRefNo
+      SET @cOutField02 = @cPickSlipNo
+      SET @cOutField03 = @cLoadKey
+      SET @cOutField04 = @cOrderKey
+      SET @cOutField05 = @cDropID
+      SET @cOutField06 = @cSKU
+      SET @cOutField07 = @cID
+      SET @cOutField08 = @cTaskDetailKey	
   
       -- Go to prev screen  
       SET @nScn = @nScn - 1  
@@ -707,11 +767,14 @@ BEGIN
          SET @cOrderKey = ''  
          SET @cDropID = ''  
   
-         SET @cOutField01 = @cRefNo  
-         SET @cOutField02 = @cPickSlipNo  
-         SET @cOutField03 = @cLoadKey  
-         SET @cOutField04 = @cOrderKey  
-         SET @cOutField05 = @cDropID  
+         SET @cOutField01 = @cRefNo
+         SET @cOutField02 = @cPickSlipNo
+         SET @cOutField03 = @cLoadKey
+         SET @cOutField04 = @cOrderKey
+         SET @cOutField05 = @cDropID
+         SET @cOutField06 = @cSKU
+         SET @cOutField07 = @cID
+         SET @cOutField08 = @cTaskDetailKey	 
   
          -- Go to prev screen  
          SET @nScn = @nScn - 2  
@@ -719,19 +782,21 @@ BEGIN
       END  
       ELSE  
       BEGIN  
-         -- Reset prev screen var  
-         SET @cSKU = ''  
-  
-         SET @cOutField01 = @cRefNo  
-         SET @cOutField02 = @cPickSlipNo  
-         SET @cOutField03 = @cLoadKey  
-        SET @cOutField04 = @cOrderKey  
-         SET @cOutField05 = @cDropID  
-         SET @cOutField06 = @cSKU  
-  
-         -- Go to prev screen  
-         SET @nScn = @nScn - 1  
-         SET @nStep = @nStep - 1  
+         -- Reset prev screen var
+         SET @cSKU = ''
+
+         SET @cOutField01 = @cRefNo
+         SET @cOutField02 = @cPickSlipNo
+         SET @cOutField03 = @cLoadKey
+         SET @cOutField04 = @cOrderKey
+         SET @cOutField05 = @cDropID
+         SET @cOutField06 = @cSKU
+         SET @cOutField07 = @cID
+         SET @cOutField08 = @cTaskDetailKey	
+
+         -- Go to prev screen
+         SET @nScn = @nScn - 1
+         SET @nStep = @nStep - 1
       END  
    END  
 END  
@@ -789,69 +854,26 @@ BEGIN
          GOTO Quit  
       END  
   
-      SET @cWhere = ''  
-      SET @cSQL = ''  
-  
-      -- SKU  
-      IF @cSKU <> '' AND @cSKU IS NOT NULL  
-         SET @cWhere = @cWhere + ' SKU = N''' + @cSKU + ''' AND '  
-  
-      -- Storer  
-      SET @cWhere = @cWhere + ' StorerKey = N''' + @cStorer + ''' AND '  
-  
-      -- RefNo  
-      IF @cRefNo <> '' AND @cRefNo IS NOT NULL  
-         SET @cWhere = @cWhere + ' RefKey = N''' + @cRefNo + ''''  
-  
-      -- PickSlipNo  
-      IF @cPickSlipNo <> '' AND @cPickSlipNo IS NOT NULL  
-         SET @cWhere = @cWhere + ' PickSlipNo = N''' + @cPickSlipNo + ''''  
-  
-      -- LoadKey  
-      IF @cLoadKey <> '' AND @cLoadKey IS NOT NULL  
-         SET @cWhere = @cWhere + ' LoadKey = N''' + @cLoadKey + ''''  
-  
-      -- OrderKey  
-      IF @cOrderKey <> '' AND @cOrderKey IS NOT NULL  
-         SET @cWhere = @cWhere + ' OrderKey = N''' + @cOrderKey + ''''  
-  
-      -- DropID  
-      IF @cDropID <> '' AND @cDropID IS NOT NULL  
-         SET @cWhere = @cWhere + ' DropID = N''' + @cDropID + ''''  
-  
-      CREATE TABLE #PPA (RowRef INT)  
-  
-      SET @cSQL = 'INSERT INTO #PPA SELECT RowRef FROM rdt.rdtPPA WITH (NOLOCK) WHERE ' + @cWhere  
-      EXEC (@cSQL)  
-  
-      -- Handling transaction  
-      DECLARE @nTranCount INT  
-      SET @nTranCount = @@TRANCOUNT  
-      BEGIN TRAN  -- Begin our own transaction  
-      SAVE TRAN rdtfnc_PostPickAudit_Reset -- For rollback or commit only our own transaction  
-  
-      -- Delete PPA  
-      DECLARE @curPPA CURSOR  
-      SET @curPPA = CURSOR FAST_FORWARD READ_ONLY FOR  
-         SELECT RowRef  
-         FROM #PPA  
-      OPEN @curPPA  
-      FETCH NEXT FROM @curPPA INTO @nRowRef  
-      WHILE @@FETCH_STATUS = 0  
-      BEGIN  
-         DELETE rdt.rdtPPA WHERE RowRef = @nRowRef  
-         IF @@ERROR <> 0  
-         BEGIN  
-            SET @nErrNo = 73235  
-            SET @cErrMsg = rdt.rdtgetmessage( 73235, @cLangCode, 'DSP') --Fail DEL PPA  
-            CLOSE @curPPA  
-            DEALLOCATE @curPPA  
-            GOTO ROLLBACKTRAN  
-         END  
-         FETCH NEXT FROM @curPPA INTO @nRowRef  
-      END  
-      CLOSE @curPPA  
-      DEALLOCATE @curPPA  
+     --Remove hardcode change to standard confirm SP
+      EXEC  RDT.rdt_PostPickAudit_Reset_Confirm
+         @nMobile         = @nMobile       ,
+         @nFunc           = @nFunc         ,
+         @cLangCode       = @cLangCode     ,
+         @nStep           = @nStep         ,
+         @nInputKey       = @nInputKey     ,
+         @cStorerKey      = @cStorer       ,
+         @cRefNo          = @cRefNo        ,
+         @cPickSlipNo     = @cPickSlipNo   ,
+         @cLoadKey        = @cLoadKey      ,
+         @cOrderKey       = @cOrderKey     ,
+         @cDropID         = @cDropID       ,
+         @cID             = @cID           ,
+         @cTaskdetailKey  = @cTaskdetailKey,
+         @cSKU            = @cSKU          ,
+         @cOption         = @cOption       ,
+         @nErrNo          = @nErrNo       OUTPUT,
+         @cErrMsg         = @cErrMsg      OUTPUT
+
   
       -- Extended update  
       IF @cExtendedUpdateSP <> ''  
@@ -859,7 +881,7 @@ BEGIN
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')  
          BEGIN  
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +  
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID,   
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID,@cID,@cTaskdetailKey,   
                  @cSKU, @cOption, @nErrNo OUTPUT, @cErrMsg OUTPUT'  
             SET @cSQLParam =  
                '@nMobile      INT,       ' +  
@@ -872,52 +894,44 @@ BEGIN
                '@cPickSlipNo  NVARCHAR( 10), ' +  
                '@cLoadKey     NVARCHAR( 10), ' +  
                '@cOrderKey    NVARCHAR( 10), ' +  
-               '@cDropID      NVARCHAR( 20), ' +  
+               '@cDropID      NVARCHAR( 20), ' + 
+               '@cID          NVARCHAR( 18), ' +
+               '@cTaskdetailKey NVARCHAR( 10), ' +
                '@cSKU         NVARCHAR( 20), ' +  
                '@cOption      NVARCHAR( 1),  ' +  
                '@nErrNo       INT OUTPUT,  ' +  
                '@cErrMsg      NVARCHAR( 20) OUTPUT'  
   
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID,   
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID,@cID,@cTaskdetailKey,   
                @cSKU, '', @nErrNo OUTPUT, @cErrMsg OUTPUT  
   
             IF @nErrNo <> 0  
-               GOTO ROLLBACKTRAN  
+               GOTO Step_4_Fail  
          END  
       END  
   
-      GOTO COMMITTRAN  
-  
-      -- Handling transaction  
-      ROLLBACKTRAN:  
-         ROLLBACK TRAN rdtfnc_PostPickAudit_Reset  
-  
-      COMMITTRAN:  
-         WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
-            COMMIT TRAN  
-  
-      IF @nErrNo <> 0  
-         GOTO Step_4_Fail  
-  
-      -- Init screen var  
-      SET @cRefNo = ''  
-      SET @cPickSlipNo = ''  
-      SET @cLoadKey = ''  
-      SET @cOrderKey = ''  
-      SET @cDropID = ''  
-      SET @cSKU = ''  
-      SET @cSKUDescr = ''  
-      SET @cStyle = ''  
-      SET @cColor = ''  
-      SET @cSize = ''  
-  
-      SET @cOutField01 = @cRefNo  
-      SET @cOutField02 = @cPickSlipNo  
-      SET @cOutField03 = @cLoadKey  
-      SET @cOutField04 = @cOrderKey  
-      SET @cOutField05 = @cDropID  
-      SET @cOutField06 = @cSKU  
+
+      -- Init screen var
+      SET @cRefNo = ''
+      SET @cPickSlipNo = ''
+      SET @cLoadKey = ''
+      SET @cOrderKey = ''
+      SET @cDropID = ''
+      SET @cSKU = ''
+      SET @cSKUDescr = ''
+      SET @cStyle = ''
+      SET @cColor = ''
+      SET @cSize = ''
+
+      -- Prepare next screen var
+      SET @cOutField01 = @cRefNo
+      SET @cOutField02 = @cPickSlipNo
+      SET @cOutField03 = @cLoadKey
+      SET @cOutField04 = @cOrderKey
+      SET @cOutField05 = @cDropID
+      SET @cOutField06 = @cID
+      SET @cOutField07 = @cTaskDetailKey
   
       -- Set screen focus  
       EXEC rdt.rdtSetFocusField @nMobile, 1 --RefNo  
@@ -929,17 +943,13 @@ BEGIN
   
    IF @nInputKey = 0 -- Esc or No  
    BEGIN  
-      -- Prepare prev screen var  
-      SET @cOutField01 = @cRefNo  
-      SET @cOutField02 = @cPickSlipNo  
-      SET @cOutField03 = @cLoadKey  
-      SET @cOutField04 = @cOrderKey  
-      SET @cOutField05 = @cDropID  
-      SET @cOutField07 = SUBSTRING( @cSKUDescr,  1, 20)  
-      SET @cOutField08 = SUBSTRING( @cSKUDescr, 21, 20)  
-      SET @cOutField09 = @cStyle  
-      SET @cOutField10 = @cColor  
-      SET @cOutField11 = @cSize  
+      -- Prepare next screen var
+      SET @cOutField01 = @cSKU
+      SET @cOutField02 = SUBSTRING( @cSKUDescr,  1, 20)
+      SET @cOutField03 = SUBSTRING( @cSKUDescr, 21, 20)
+      SET @cOutField04 = @cStyle
+      SET @cOutField05 = @cColor
+      SET @cOutField06 = @cSize
   
       -- Go to prev screen  
       SET @nScn = @nScn - 1  
@@ -972,7 +982,9 @@ BEGIN
       V_SKU     = @cSKU,  
       V_SKUDescr= @cSKUDescr,  
       V_LoadKey = @cLoadKey,  
-      V_PickSlipNo = @cPickSlipNo,  
+      V_PickSlipNo = @cPickSlipNo,
+      V_TaskDetailKey = @cTaskDetailKey, 
+      V_ID         = @cID, 
   
       V_String1 = @cRefNo,  
       V_String2 = @cOrderKey,  
@@ -986,6 +998,7 @@ BEGIN
       V_String10 = @cExtendedUpdateSP,  
       V_String11 = @cFlowThruStepSKU,  
       V_String12 = @cExtendedValidateSP,
+      V_String13 = @cSkipChkPSlipMustScanOut,
         
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,  
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,  

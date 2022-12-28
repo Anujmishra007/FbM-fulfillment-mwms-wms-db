@@ -23,3 +23,5 @@ execute rdt.rdtAddMsg 73234, 10, '73234^Invalid option', 'us_english', 848
 execute rdt.rdtAddMsg 73235, 10, '73235^Fail DEL PPA',   'us_english', 848
 execute rdt.rdtAddMsg 73236, 10, '73236^Inv Carton ID',  'us_english', 848
 execute rdt.rdtAddMsg 73237, 10, '73237^Inv Carton ID',  'us_english', 848
+execute rdt.rdtAddMsg 73238, 10, '73238^Inv PalletID',  'us_english', 848
+execute rdt.rdtAddMsg 73239, 10, '73239^Inv TaskKey',  'us_english', 848

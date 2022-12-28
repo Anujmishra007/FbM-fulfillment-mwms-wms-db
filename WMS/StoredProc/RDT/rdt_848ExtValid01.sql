@@ -11,6 +11,8 @@ GO
 /*                                                                      */  
 /* Date        Rev  Author      Purposes                                */  
 /* 2022-04-05  1.0  yeekung    WMS-19378. Created                       */  
+/* 2022-12-16  1.1  YeeKung    MS-21260 Add palletid/taskdetail         */
+/*                            (yeekung02)                               */
 /************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_848ExtValid01] (  
@@ -24,7 +26,9 @@ CREATE OR ALTER PROC [RDT].[rdt_848ExtValid01] (
    @cPickSlipNo  NVARCHAR( 10),   
    @cLoadKey     NVARCHAR( 10),   
    @cOrderKey    NVARCHAR( 10),   
-   @cDropID      NVARCHAR( 20),   
+   @cDropID      NVARCHAR( 20),
+   @cID          NVARCHAR( 18), 
+   @cTaskdetailKey NVARCHAR( 10),
    @cSKU         NVARCHAR( 20),    
    @cOption      NVARCHAR( 1),    
    @nErrNo       INT OUTPUT,    
