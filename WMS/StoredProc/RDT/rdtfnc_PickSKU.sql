@@ -28,6 +28,7 @@ GO
 /* 2022-04-08   2.2  Ung        WMS-19402 Add AutoScanOut                        */
 /* 2021-10-04   2.3  YeeKung    WMS-16543 Fix multisku (yeekung04)               */   
 /*                               Add SwapIDSP                                    */
+/* 2022-12-30   2.4  Calvin     JSM-119684 Reset Pickzone Variable (CLVN01)      */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdtfnc_PickSKU (
@@ -532,6 +533,7 @@ BEGIN
       -- Get next LOC
       SET @cLoc = ''
       SET @cSuggLOC = ''
+	  SET @cPickZone = ''	--(CLVN01)
       IF @cSuggestLOC = '1'
       BEGIN
          EXEC rdt.rdt_PickSKU_SuggestLOC @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
