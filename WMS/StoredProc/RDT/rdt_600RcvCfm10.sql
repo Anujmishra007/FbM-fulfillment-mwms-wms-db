@@ -1,6 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'rdt.rdt_600RcvCfm10') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_600RcvCfm10
-GO
+
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -15,9 +13,10 @@ GO
 /*                                                                            */
 /* Date        Author    Ver.  Purposes                                       */
 /* 25-05-2021 YeeKung   1.0   WMS-17095 Created                               */
+/* 29-12-2022 YeeKung   1.1   WMS-21432 Fix Bug (yeekung01)                   */
 /******************************************************************************/
 
-CREATE PROC rdt.rdt_600RcvCfm10 (
+CREATE OR ALTER PROC rdt.rdt_600RcvCfm10 (
    @nFunc          INT,           
    @nMobile        INT,           
    @cLangCode      NVARCHAR( 3),  
@@ -73,6 +72,7 @@ BEGIN
                   WHERE ExternPoKey=@cLottable01
                   AND receiptkey=@cReceiptKey
                   AND storerkey=@cStorerKey
+                  AND SKU = @cSKUCode -- (yeekung01)
                   HAVING SUM(QtyExpected)<SUM(BeforeReceivedQty)+@nSKUQTY)
       BEGIN
          SET @nErrNo = 168302 
