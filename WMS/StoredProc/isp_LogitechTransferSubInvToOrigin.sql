@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_LogitechTransferSubInvToOrigin]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[isp_LogitechTransferSubInvToOrigin]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -19,7 +14,7 @@ GO
 /*                                                                      */
 /* Called By: SQL Job                                                   */
 /*          :                                                           */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -28,8 +23,9 @@ GO
 /* Updates:                                                             */
 /* Date         Author    Ver Purposes                                  */
 /* 21-Oct-2021  WLChooi   1.0 DevOps Combine Script                     */
+/* 01-Dec-2022  WLChooi   1.1 WMS-21274 - Hardcode ToLoc (WL01)         */
 /************************************************************************/
-CREATE PROC isp_LogitechTransferSubInvToOrigin 
+CREATE OR ALTER PROC [dbo].[isp_LogitechTransferSubInvToOrigin]
             @c_Storerkey  NVARCHAR(15) = ''
           , @b_debug      INT = 0
 AS
@@ -63,6 +59,15 @@ BEGIN
    SET @n_Err = 0
    SET @c_ErrMsg = ''
    SET @b_debug = 0
+
+   --WL01 S
+   IF EXISTS (SELECT 1
+              FROM LOC (NOLOCK)
+              WHERE LOC = 'BTRXTEM2')
+   BEGIN
+      SET @c_ToLoc = 'BTRXTEM2'
+   END
+   --WL01 E
 
    CREATE TABLE #TMP_EXCLUDESKU (
       Storerkey   NVARCHAR(15)
