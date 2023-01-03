@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_GetPickSlipWave21_3]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[isp_GetPickSlipWave21_3]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -29,7 +24,7 @@ GO
 /* 13-NOV-2021 MINGLE   1.1   WMS-18334-Add new field (ML01)            */
 /* 29-NOV-2021 Mingle   1.1   DevOps Combine Script                     */
 /************************************************************************/
-CREATE PROC isp_GetPickSlipWave21_3
+CREATE OR ALTER PROC isp_GetPickSlipWave21_3
            @c_WaveKey   NVARCHAR(10)
 AS
 BEGIN
