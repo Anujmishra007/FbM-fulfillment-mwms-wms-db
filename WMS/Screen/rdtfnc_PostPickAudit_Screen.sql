@@ -43,8 +43,8 @@ EXECUTE rdt.rdtAddScn 816, 'ENG',
    ,@cLine08 = '%20d08'
    ,@cLine09 = 'QTY:     %05i09 %05i10'
    ,@cLine10 = ''
-   ,@cLine11 = 'COUNTED: %05d11 %05d12'
-   ,@cLine12 = 'TOTAL:   %05d13 %05d14'
+   ,@cLine11 = 'COUNTED:%05d11 %06d12' --(WMS-20944
+   ,@cLine12 = 'TOTAL:  %05d13 %06d14' --WMS-20944
    ,@cLine13 = '%20d15'
    ,@cLine14 = '%e'
  

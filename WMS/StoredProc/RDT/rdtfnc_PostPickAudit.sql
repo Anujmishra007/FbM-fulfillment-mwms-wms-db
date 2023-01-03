@@ -85,6 +85,7 @@ GO
 /*                            preferred uom default (james12)           */
 /* 19-05-2021 5.7 SeongYaik   Revise IF Statement (SY01)                */
 /* 18-08-2022 5.8 Ung         Fix CaptureDataSP after scn2              */
+/* 13-12-2022 5.9 Yeekung     WMS-20944 fix nvarchar(5)->6  (yeekung07) */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PostPickAudit] (
@@ -2223,9 +2224,9 @@ BEGIN
       SET @cOutField07 = @cSize
       SET @cOutField08 = '1:' + CAST( @nPUOM_Div AS NCHAR( 6)) + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc
       SET @cOutField11 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY_CHK AS NVARCHAR(5)) END
-      SET @cOutField12 = CAST( @nMQTY_CHK AS NVARCHAR(5))
+      SET @cOutField12 = CAST( @nMQTY_CHK AS NVARCHAR(6)) --(yeekung07)
       SET @cOutField13 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY_PPA AS NVARCHAR(5)) END
-      SET @cOutField14 = CAST( @nMQTY_PPA AS NVARCHAR(5))
+      SET @cOutField14 = CAST( @nMQTY_PPA AS NVARCHAR(6)) --(yeekung07)
       SET @cOutField15 = '' -- @cExtendedInfo
       SET @cOutField16 = @cPackQTYIndicator
 
@@ -2640,7 +2641,7 @@ BEGIN
       SET @cOutField09 = CASE WHEN @cPPADefaultPQTY <> '' THEN @cPPADefaultPQTY ELSE '' END--@nPQTY
       SET @cOutField10 = CASE WHEN @cTaskDefaultQty = '1' THEN @cTaskQty ELSE @cPPADefaultQTY END
       SET @cOutField11 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY_CHK AS NVARCHAR(5)) END
-      SET @cOutField12 = CAST( @nMQTY_CHK AS NVARCHAR(5))
+      SET @cOutField12 = CAST( @nMQTY_CHK AS NVARCHAR(6)) --(yeekung07)
       SET @cOutField15 = '' -- @cExtendedInfo
       EXEC rdt.rdtSetFocusField @nMobile, 1 --SKU
 
@@ -3432,9 +3433,9 @@ BEGIN
    SET @cOutField07 = @cSize
    SET @cOutField08 = '1:' + CAST( @nPUOM_Div AS NCHAR( 6)) + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc
    SET @cOutField11 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY_CHK AS NVARCHAR(5)) END
-   SET @cOutField12 = CAST( @nMQTY_CHK AS NVARCHAR(5))
+   SET @cOutField12 = CAST( @nMQTY_CHK AS NVARCHAR(6)) --(yeekung07)
    SET @cOutField13 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY_PPA AS NVARCHAR(5)) END
-   SET @cOutField14 = CAST( @nMQTY_PPA AS NVARCHAR(5))
+   SET @cOutField14 = CAST( @nMQTY_PPA AS NVARCHAR(6)) --(yeekung07)
    SET @cOutField15 = '' -- @cExtendedInfo
 
    -- Go to SKU QTY screen
@@ -3596,7 +3597,7 @@ BEGIN
       SET @cOutField09 = CASE WHEN @cPPADefaultPQTY <> '' THEN @cPPADefaultPQTY ELSE '' END--@nPQTY
       SET @cOutField10 = CASE WHEN @cTaskDefaultQty = '1' THEN @cTaskQty ELSE @cPPADefaultQTY END
       SET @cOutField11 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY_CHK AS NVARCHAR(5)) END
-      SET @cOutField12 = CAST( @nMQTY_CHK AS NVARCHAR(5))
+      SET @cOutField12 = CAST( @nMQTY_CHK AS NVARCHAR(6)) --(yeekung07)
       SET @cOutField15 = '' -- @cExtendedInfo
       EXEC rdt.rdtSetFocusField @nMobile, 1 --SKU
 
