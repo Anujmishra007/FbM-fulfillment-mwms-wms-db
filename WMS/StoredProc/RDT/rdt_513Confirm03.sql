@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'rdt.rdt_513Confirm03') AND OBJECTPROPERTY(id,N'IsProcedure') = 1)
-   DROP PROCEDURE rdt.rdt_513Confirm03
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -15,9 +12,10 @@ GO
 /*                                                                            */
 /* Date         Author    Ver.  Purposes                                      */
 /* 2021-01-26   Ung       1.0   WMS-16054 Created                             */
+/* 2022-01-03   Ung       1.1   Fix error no                                  */
 /******************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_513Confirm03
+CREATE OR ALTER PROCEDURE rdt.rdt_513Confirm03
     @nMobile         INT 
    ,@nFunc           INT 
    ,@cLangCode       NVARCHAR( 3) 
@@ -249,7 +247,7 @@ BEGIN
                -- Check fully offset
                IF @nQTY_Bal <> 0
                BEGIN
-                  SET @nErrNo = 133251
+                  SET @nErrNo = 194351
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --QTYOffsetError
                   GOTO RollBackTran
                END
