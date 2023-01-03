@@ -28,6 +28,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author    Ver.  Purposes                                */
 /* 22-Nov-2021  Mingle    1.0   DevOps Combine Script                   */ 
+/* 03-Jan-2022  ian       2.0   fix date issue                          */
 /************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_my_packing_list02]
@@ -96,7 +97,8 @@ BEGIN
    AND LPD.LOADKEY = CASE WHEN ISNULL(@c_loadkey, '') = '' THEN LPD.LOADKey ELSE @c_loadkey END
    AND O.OrderKey = CASE WHEN ISNULL(@c_orderkey, '') = '' THEN O.OrderKey ELSE @c_orderkey END
    --AND Convert(VarChar(10), Convert(Date, O.DeliveryDate)) = CASE WHEN ISNULL(@c_deliverydate, '') = '' THEN O.DeliveryDate ELSE @c_deliverydate END
-   AND O.DeliveryDate = CASE WHEN ISNULL(@c_deliverydate, '') = '' THEN Convert(VarChar(20), Convert(Date, O.DeliveryDate)) ELSE @c_deliverydate END
+   --AND O.DeliveryDate = CASE WHEN ISNULL(@c_deliverydate, '') = '' THEN Convert(VarChar(20), Convert(Date, O.DeliveryDate)) ELSE @c_deliverydate END --ian2.0
+   AND Convert(VarChar(20), Convert(Date, O.DeliveryDate)) = CASE WHEN ISNULL(@c_deliverydate, '') = '' THEN Convert(VarChar(20), Convert(Date, O.DeliveryDate)) ELSE @c_deliverydate END --ian2.0
    --AND Convert(VarChar(10), Convert(Date, O.DeliveryDate)) = CASE WHEN ISNULL(@c_deliverydate, '') = '' THEN Convert(VarChar(10), Convert(Date, O.DeliveryDate)) ELSE @c_deliverydate END
    AND (Case When IsNull(RM.Descr, '') <> '' Then RM.Descr Else O.Route End) LIKE '%' + IsNull(@c_route, '')
    --AND O.Route = (Case When IsNull(RM.Descr, '') <> '' Then RM.Descr Else @c_route End)
