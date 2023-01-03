@@ -1,4 +1,4 @@
 -- rdt_513Confirm02
-exec rdt.rdtDropMsg 133251, 133300
+exec rdt.rdtDropMsg 194401, 194450
 
-execute rdt.rdtAddMsg 133251, 10, '133251NoBookingQTY  ', 'us_english', 513
+execute rdt.rdtAddMsg 194401, 10, '194401NoBookingQTY  ', 'us_english', 513

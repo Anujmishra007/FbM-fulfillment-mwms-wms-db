@@ -13,6 +13,7 @@ GO
 /* 2018-12-18   Ung       1.0   WMS-6467 Created                              */
 /* 2019-07-31   Ung       1.1   WMS-9941 Add QTYPrinted                       */
 /* 2021-06-01   James     1.2   WMS-17130 Deduce QTYPrinted                   */
+/* 2022-01-03   Ung       1.4   Fix error no                                  */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_513Confirm02]
@@ -143,7 +144,7 @@ BEGIN
                -- Check fully offset
                IF @nQTY_Bal <> 0
                BEGIN
-                  SET @nErrNo = 133251
+                  SET @nErrNo = 194401
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NoBookingQTY
                   GOTO RollBackTran
                END
