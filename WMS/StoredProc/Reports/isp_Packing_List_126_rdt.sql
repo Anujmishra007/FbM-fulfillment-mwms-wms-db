@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: r_dw_packing_list_126_rdt                                 */
 /*                                                                      */
-/* GitLab Version: 1.4                                                  */
+/* GitLab Version: 1.5                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -26,9 +26,13 @@ GO
 /* 19-SEP-2022  CHONGCS   1.2 WMS-20126 fix duplicate qty (CS02)        */
 /* 20-OCT-2022  LZG       1.3 JSM-101324 - Display only packed SKU(ZG01)*/
 /* 10-Nov-2022  WLChooi   1.4 WMS-21156 - Revamp new layout (WL01)      */
+/* 11-Dec-2022  WLChooi   1.5 WMS-21156 - Print By Carton (WL02)        */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_Packing_List_126_rdt]
-            @c_pickslipno    NVARCHAR(20)
+            @c_Storerkey      NVARCHAR(15),   --WL02
+            @c_Pickslipno     NVARCHAR(20),
+            @c_CartonNoStart  NVARCHAR(10) = '',   --WL02
+            @c_CartonNoEnd    NVARCHAR(10) = ''    --WL02
 
 AS
 BEGIN
@@ -105,6 +109,14 @@ BEGIN
         ,OH.ExternOrderKey,ISNULL(OD.notes,''),ISNULL(SKU.size,''),OD.SKU,PAD.qty   --CS01    --CS02
    ORDER BY PH.PickSlipNo*/
 
+   --WL02 S
+   IF ISNULL(@c_CartonNoStart,'') = ''
+      SET @c_CartonNoStart = '1'
+
+   IF ISNULL(@c_CartonNoEnd,'') = ''
+      SET @c_CartonNoEnd = '99999'
+   --WL02 E
+
    SELECT TRIM(ISNULL(CL2.Notes, '')) AS Logo
         , ISNULL(CL.Short, '') AS ShipTo_t
         , ISNULL(CL.UDF01, '') AS OrderNumber_t
@@ -116,7 +128,7 @@ BEGIN
         , ISNULL(CL1.UDF02, '') AS Size_t
         , ISNULL(CL1.UDF03, '') AS QtyShipped_t
         , ISNULL(CL1.UDF04, '') AS TotalQty_t
-        , TRIM(ISNULL(OH.C_contact1, '')) + TRIM(ISNULL(OH.C_Contact2, '')) AS C_Contact
+        , TRIM(ISNULL(OH.C_contact1, '')) + ' ' + TRIM(ISNULL(OH.C_Contact2, '')) AS C_Contact   --WL02
         , TRIM(ISNULL(OH.C_Address1, '')) + TRIM(ISNULL(OH.C_Address2, '')) + TRIM(ISNULL(OH.C_Address3, ''))
           + TRIM(ISNULL(OH.C_Address3, '')) AS C_Addresses
         , TRIM(ISNULL(OH.C_Zip, '')) + ' ' + TRIM(ISNULL(OH.C_City, '')) AS C_ZipCity
@@ -138,11 +150,13 @@ BEGIN
    FROM PACKHEADER PH (NOLOCK)
    JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = PH.OrderKey
    JOIN ORDERDETAIL OD (NOLOCK) ON OD.OrderKey = OH.OrderKey
+   JOIN PACKDETAIL PD (NOLOCK) ON PD.Pickslipno = PH.Pickslipno    --WL02
    CROSS APPLY (  SELECT SUM(Qty) AS Qty
                   FROM PackDetail (NOLOCK)
                   WHERE PackDetail.PickSlipNo = PH.PickSlipNo
                   AND   PackDetail.StorerKey = OD.StorerKey
                   AND   PackDetail.SKU = OD.Sku
+                  AND   PackDetail.CartonNo = PD.CartonNo   --WL02
                   GROUP BY SKU) AS PAD
    JOIN SKU S (NOLOCK) ON S.StorerKey = OD.StorerKey AND S.Sku = OD.Sku
    LEFT JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'PVHSZUEPKL' AND CL.Code = OH.C_ISOCntryCode AND CL.code2 = '00010'
@@ -160,6 +174,7 @@ BEGIN
                   AND   ORDERDETAIL.StorerKey = OD.StorerKey) AS ODT
    WHERE PH.PickSlipNo = @c_pickslipno
    AND OH.DocType = 'E'
+   AND PD.CartonNo BETWEEN @c_CartonNoStart AND @c_CartonNoEnd   --WL02
    GROUP BY TRIM(ISNULL(CL2.Notes, ''))
           , ISNULL(CL.Short, '')
           , ISNULL(CL.UDF01, '')
@@ -171,7 +186,7 @@ BEGIN
           , ISNULL(CL1.UDF02, '')
           , ISNULL(CL1.UDF03, '')
           , ISNULL(CL1.UDF04, '')
-          , TRIM(ISNULL(OH.C_contact1, '')) + TRIM(ISNULL(OH.C_Contact2, ''))
+          , TRIM(ISNULL(OH.C_contact1, '')) + ' ' + TRIM(ISNULL(OH.C_Contact2, ''))   --WL02
           , TRIM(ISNULL(OH.C_Address1, '')) + TRIM(ISNULL(OH.C_Address2, '')) + TRIM(ISNULL(OH.C_Address3, ''))
             + TRIM(ISNULL(OH.C_Address3, ''))
           , TRIM(ISNULL(OH.C_Zip, '')) + ' ' + TRIM(ISNULL(OH.C_City, ''))
@@ -190,7 +205,9 @@ BEGIN
           , PAD.Qty
           , PH.PickSlipNo
           , ISNULL(CL3.[Description],'')
+          , PD.CartonNo   --WL02
    --WL01 E
+   ORDER BY PH.Pickslipno, PD.CartonNo   --WL02
 
 END
 GO
