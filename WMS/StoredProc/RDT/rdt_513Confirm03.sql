@@ -247,7 +247,7 @@ BEGIN
                -- Check fully offset
                IF @nQTY_Bal <> 0
                BEGIN
-                  SET @nErrNo = 194351
+                  SET @nErrNo = 195351
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --QTYOffsetError
                   GOTO RollBackTran
                END
