@@ -16,6 +16,8 @@ GO
 /* 10-10-2019  1.1  YeeKung    WMS-10672 RDT 707 Enhancement            */     
 /* 08-06-2022  1.2  YeeKung    WMS-19782 Add New screen Data capture    */
 /*                             (yeekung01)                              */
+/* 22-12-2022  1.3  YeeKung    WMS-21376 Add extendedvalidatesp         */
+/*                             (yeekung02)                              */
 /************************************************************************/                      
                       
 CREATE OR ALTER PROC [RDT].[rdtfnc_GroupJobCapture] (                      
@@ -291,7 +293,59 @@ BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 1 -- Order                      
          SET @cOutField01 = ''                      
          GOTO Quit                      
-      END                      
+      END     
+      
+       -- Extended validate (yeekung02)
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            INSERT INTO @tVar (Variable, Value) VALUES
+               ('@cUserID',      @cUserID),
+               ('@cJobType',     @cJobType),
+               ('@UserID01',     @cUserID01),
+               ('@UserID02',     @cUserID02),
+               ('@UserID03',     @cUserID03),
+               ('@UserID04',     @cUserID04),
+               ('@UserID05',     @cUserID05),
+               ('@UserID06',     @cUserID06),
+               ('@UserID07',     @cUserID07),
+               ('@UserID08',     @cUserID08),
+               ('@UserID09',     @cUserID09),
+               ('@cJobType',     @cStart),
+               ('@cEnd',         @cEnd),
+               ('@cDuration',    @cDuration),
+               ('@cRef01',       @cRef01),
+               ('@cRef02',       @cRef02),
+               ('@cRef03',       @cRef03),
+               ('@cRef04',       @cRef04),
+               ('@cRef05',       @cRef05)
+
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @tVar, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,           ' +
+               '@nInputKey       INT,           ' +
+               '@cStorerKey      NVARCHAR( 15), ' +
+               '@cFacility       NVARCHAR( 5),  ' +
+               '@tVar            VariableTable READONLY, ' +
+               '@nErrNo          INT           OUTPUT,   ' +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT    '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @tVar, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+            BEGIN
+               SET @cOutField02 = ''
+               GOTO Quit
+            END
+         END
+      END
+
                       
       --Get job info                    
       SELECT                       
@@ -625,7 +679,78 @@ BEGIN
          -- Go to next screen                  
          SET @nScn = @nScn + 1                  
          SET @nStep = @nStep + 1    
-      END     
+      END  
+      
+      -- Extended validate (yeekung02)
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            INSERT INTO @tVar (Variable, Value) VALUES
+               ('@cUserID',      @cUserID),
+               ('@cJobType',     @cJobType),
+               ('@cUserID01',    @cUserID01),
+               ('@cUserID02',    @cUserID02),
+               ('@cUserID03',    @cUserID03),
+               ('@cUserID04',    @cUserID04),
+               ('@cUserID05',    @cUserID05),
+               ('@cUserID06',    @cUserID06),
+               ('@cUserID07',    @cUserID07),
+               ('@cUserID08',    @cUserID08),
+               ('@cUserID09',    @cUserID09),
+               ('@cJobType',     @cStart),
+               ('@cEnd',         @cEnd),
+               ('@cDuration',    @cDuration),
+               ('@cRef01',       @cRef01),
+               ('@cRef02',       @cRef02),
+               ('@cRef03',       @cRef03),
+               ('@cRef04',       @cRef04),
+               ('@cRef05',       @cRef05)
+
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @tVar, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,           ' +
+               '@nInputKey       INT,           ' +
+               '@cStorerKey      NVARCHAR( 15), ' +
+               '@cFacility       NVARCHAR( 5),  ' +
+               '@tVar            VariableTable READONLY, ' +
+               '@nErrNo          INT           OUTPUT,   ' +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT    '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @tVar, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+            BEGIN              
+               IF @cInField01<>''  set @i = 1                
+               IF @cInField02<>''  set @i = 2                
+               IF @cInField03<>''  set @i = 3                
+               IF @cInField04<>''  set @i = 4                
+               IF @cInField05<>''  set @i = 5                
+               IF @cInField06<>''  set @i = 6                
+               IF @cInField07<>''  set @i = 7                
+               IF @cInField08<>''  set @i = 8                
+               IF @cInField09<>''  set @i = 9                
+                                                                              
+               -- Error, clear the UCC field                  
+               IF @i = 1 SELECT @cUserID01 = '', @cInField01 = '', @cOutField01 = ''                  
+               IF @i = 2 SELECT @cUserID02 = '', @cInField02 = '', @cOutField02 = ''                  
+               IF @i = 3 SELECT @cUserID03 = '', @cInField03 = '', @cOutField03 = ''                  
+               IF @i = 4 SELECT @cUserID04 = '', @cInField04 = '', @cOutField04 = ''                  
+               IF @i = 5 SELECT @cUserID05 = '', @cInField05 = '', @cOutField05 = ''                  
+               IF @i = 6 SELECT @cUserID06 = '', @cInField06 = '', @cOutField06 = ''                  
+               IF @i = 7 SELECT @cUserID07 = '', @cInField07 = '', @cOutField07 = ''                  
+               IF @i = 8 SELECT @cUserID08 = '', @cInField08 = '', @cOutField08 = ''                  
+               IF @i = 9 SELECT @cUserID09 = '', @cInField09 = '', @cOutField09 = ''                  
+               EXEC rdt.rdtSetFocusField @nMobile, @i                  
+            END     
+         END
+      END
+
    END                  
                       
    IF @nInputKey = 0 -- ESC                      
