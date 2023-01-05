@@ -110,5 +110,4 @@ CREATE  OR ALTER TRIGGER [dbo].[ntrPreAllocatePickDetailAdd]
  END    
  GO
  
- ALTER TABLE [dbo].[PreAllocatePickDetail] ENABLE TRIGGER [dbo].[ntrPreAllocatePickDetailAdd]
- GO
+ 

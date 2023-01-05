@@ -1,4 +1,3 @@
-/****** Object:  Trigger [dbo].[ntrOTMIDTrackAdd]    Script Date: 23-Jul-2020 9:53:16 AM ******/
 SET ANSI_NULLS OFF
 GO
 
@@ -30,7 +29,7 @@ GO
 /* Date         Author    Ver.  Purposes                                */  
 /************************************************************************/  
   
-CREATE TRIGGER [dbo].[ntrOTMIDTrackAdd]  
+CREATE OR ALTER TRIGGER [dbo].[ntrOTMIDTrackAdd]  
 ON  [dbo].[OTMIDTrack]  
 FOR INSERT
 AS  

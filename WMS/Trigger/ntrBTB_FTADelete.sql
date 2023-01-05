@@ -1,14 +1,12 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[ntrBTB_FTADelete]') AND OBJECTPROPERTY(Id, N'IsTrigger') = 1)
-   DROP TRIGGER [dbo].[ntrBTB_FTADelete]
-GO
+ 
 
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-* 28-dec-2020  kocy    1.0   GetRight for Delete log                */
+/* 28-dec-2020  kocy    1.0   GetRight for Delete log                */
 
-CREATE TRIGGER [dbo].[ntrBTB_FTADelete]
+CREATE OR ALTER TRIGGER [dbo].[ntrBTB_FTADelete]
  ON [dbo].[BTB_FTA]
  FOR DELETE
  AS
