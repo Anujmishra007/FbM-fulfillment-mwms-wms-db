@@ -1,7 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'rdt.rdt_GenSerialNo01') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_GenSerialNo01
-GO
-
+ 
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -21,7 +18,7 @@ GO
 /* 2022-07-28 1.1  Calvin     JSM-85080 Corrected WeekCode (CLVN01)     */
 /************************************************************************/  
   
-ALTER PROC [RDT].[rdt_GenSerialNo01] (  
+CREATE OR ALTER PROC [RDT].[rdt_GenSerialNo01] (  
    @nMobile                   INT,             
    @nFunc                     INT,             
    @cLangCode                 NVARCHAR( 3),    

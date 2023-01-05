@@ -1,6 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[RDT].[rdt_1637ExtValid02]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdt_1637ExtValid02]
-GO
+ 
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -17,7 +15,7 @@ GO
 /* 2022-10-27 1.2  CALVIN   JSM-105362 Orderkey to Userdefine02 (CLVN01)*/
 /************************************************************************/          
           
-ALTER PROC [RDT].[rdt_1637ExtValid02] (          
+CREATE OR ALTER PROC [RDT].[rdt_1637ExtValid02] (          
    @nMobile                   INT,                   
    @nFunc                     INT,                   
    @cLangCode                 NVARCHAR( 3),          
