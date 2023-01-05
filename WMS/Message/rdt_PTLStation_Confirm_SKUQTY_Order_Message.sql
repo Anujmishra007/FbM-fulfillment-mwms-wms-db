@@ -1,38 +1,38 @@
 -- rdt_PTLStation_Confirm_OrderSKU
-execute rdt.rdtDropMsg 193951, 194000
+execute rdt.rdtDropMsg 194951, 195000
 
-execute rdt.rdtAddMsg 193951, 10, '193951UPD PTL Fail  ', 'us_english', 805
-execute rdt.rdtAddMsg 193952, 10, '193952PKDtl changed ', 'us_english', 805
-execute rdt.rdtAddMsg 193953, 10, '193953UPD PKDtl Fail', 'us_english', 805
-execute rdt.rdtAddMsg 193954, 10, '193954UPD PKDtl Fail', 'us_english', 805
-execute rdt.rdtAddMsg 193955, 10, '193955nspg_GetKey   ', 'us_english', 805
-execute rdt.rdtAddMsg 193956, 10, '193956INS PKDtl Fail', 'us_english', 805
-execute rdt.rdtAddMsg 193957, 10, '193957INS RefKeyFail', 'us_english', 805
-execute rdt.rdtAddMsg 193958, 10, '193958UPD PKDtl Fail', 'us_english', 805
-execute rdt.rdtAddMsg 193959, 10, '193959UPD PKDtl Fail', 'us_english', 805
-execute rdt.rdtAddMsg 193960, 10, '193960InsPHdrFail   ', 'us_english', 805
-execute rdt.rdtAddMsg 193961, 10, '193961InsPackDtlFail', 'us_english', 805
-execute rdt.rdtAddMsg 193962, 10, '193962UpdPackDtlFail', 'us_english', 805
-execute rdt.rdtAddMsg 193963, 10, '193963PackCfm Fail  ', 'us_english', 805
-execute rdt.rdtAddMsg 193964, 10, '193964UPD PTL Fail  ', 'us_english', 805
-execute rdt.rdtAddMsg 193965, 10, '193965UPD PTL Fail  ', 'us_english', 805
-execute rdt.rdtAddMsg 193966, 10, '193966UPD PTL Fail  ', 'us_english', 805
-execute rdt.rdtAddMsg 193967, 10, '193967INS PTL Fail  ', 'us_english', 805
-execute rdt.rdtAddMsg 193968, 10, '193968UPD PTL Fail  ', 'us_english', 805
-execute rdt.rdtAddMsg 193969, 10, '193969PKDtl changed ', 'us_english', 805
-execute rdt.rdtAddMsg 193970, 10, '193970UPD PKDtl Fail', 'us_english', 805
-execute rdt.rdtAddMsg 193971, 10, '193971UPD PKDtl Fail', 'us_english', 805
-execute rdt.rdtAddMsg 193972, 10, '193972UPD PKDtl Fail', 'us_english', 805
-execute rdt.rdtAddMsg 193973, 10, '193973nspg_GetKey   ', 'us_english', 805
-execute rdt.rdtAddMsg 193974, 10, '193974INS PKDtl Fail', 'us_english', 805
-execute rdt.rdtAddMsg 193975, 10, '193975INS RefKeyFail', 'us_english', 805
-execute rdt.rdtAddMsg 193976, 10, '193976UPD PKDtl Fail', 'us_english', 805
-execute rdt.rdtAddMsg 193977, 10, '193977UPD PKDtl Fail', 'us_english', 805
-execute rdt.rdtAddMsg 193978, 10, '193978InsPHdrFail   ', 'us_english', 805
-execute rdt.rdtAddMsg 193979, 10, '193979InsPackDtlFail', 'us_english', 805
-execute rdt.rdtAddMsg 193980, 10, '193980UpdPackDtlFail', 'us_english', 805
-execute rdt.rdtAddMsg 193981, 10, '193981PackCfm Fail  ', 'us_english', 805
-execute rdt.rdtAddMsg 193982, 10, '193982UPD Log Fail  ', 'us_english', 805
-execute rdt.rdtAddMsg 193983, 10, '193983UPD PTL Fail  ', 'us_english', 805
-execute rdt.rdtAddMsg 193984, 10, '193984PKDtl changed ', 'us_english', 805
-execute rdt.rdtAddMsg 193985, 10, '193985UPD PKDtl Fail', 'us_english', 805
+execute rdt.rdtAddMsg 194951, 10, '194951UPD PTL Fail  ', 'us_english', 805
+execute rdt.rdtAddMsg 194952, 10, '194952PKDtl changed ', 'us_english', 805
+execute rdt.rdtAddMsg 194953, 10, '194953UPD PKDtl Fail', 'us_english', 805
+execute rdt.rdtAddMsg 194954, 10, '194954UPD PKDtl Fail', 'us_english', 805
+execute rdt.rdtAddMsg 194955, 10, '194955nspg_GetKey   ', 'us_english', 805
+execute rdt.rdtAddMsg 194956, 10, '194956INS PKDtl Fail', 'us_english', 805
+execute rdt.rdtAddMsg 194957, 10, '194957INS RefKeyFail', 'us_english', 805
+execute rdt.rdtAddMsg 194958, 10, '194958UPD PKDtl Fail', 'us_english', 805
+execute rdt.rdtAddMsg 194959, 10, '194959UPD PKDtl Fail', 'us_english', 805
+execute rdt.rdtAddMsg 194960, 10, '194960InsPHdrFail   ', 'us_english', 805
+execute rdt.rdtAddMsg 194961, 10, '194961InsPackDtlFail', 'us_english', 805
+execute rdt.rdtAddMsg 194962, 10, '194962UpdPackDtlFail', 'us_english', 805
+execute rdt.rdtAddMsg 194963, 10, '194963PackCfm Fail  ', 'us_english', 805
+execute rdt.rdtAddMsg 194964, 10, '194964UPD PTL Fail  ', 'us_english', 805
+execute rdt.rdtAddMsg 194965, 10, '194965UPD PTL Fail  ', 'us_english', 805
+execute rdt.rdtAddMsg 194966, 10, '194966UPD PTL Fail  ', 'us_english', 805
+execute rdt.rdtAddMsg 194967, 10, '194967INS PTL Fail  ', 'us_english', 805
+execute rdt.rdtAddMsg 194968, 10, '194968UPD PTL Fail  ', 'us_english', 805
+execute rdt.rdtAddMsg 194969, 10, '194969PKDtl changed ', 'us_english', 805
+execute rdt.rdtAddMsg 194970, 10, '194970UPD PKDtl Fail', 'us_english', 805
+execute rdt.rdtAddMsg 194971, 10, '194971UPD PKDtl Fail', 'us_english', 805
+execute rdt.rdtAddMsg 194972, 10, '194972UPD PKDtl Fail', 'us_english', 805
+execute rdt.rdtAddMsg 194973, 10, '194973nspg_GetKey   ', 'us_english', 805
+execute rdt.rdtAddMsg 194974, 10, '194974INS PKDtl Fail', 'us_english', 805
+execute rdt.rdtAddMsg 194975, 10, '194975INS RefKeyFail', 'us_english', 805
+execute rdt.rdtAddMsg 194976, 10, '194976UPD PKDtl Fail', 'us_english', 805
+execute rdt.rdtAddMsg 194977, 10, '194977UPD PKDtl Fail', 'us_english', 805
+execute rdt.rdtAddMsg 194978, 10, '194978InsPHdrFail   ', 'us_english', 805
+execute rdt.rdtAddMsg 194979, 10, '194979InsPackDtlFail', 'us_english', 805
+execute rdt.rdtAddMsg 194980, 10, '194980UpdPackDtlFail', 'us_english', 805
+execute rdt.rdtAddMsg 194981, 10, '194981PackCfm Fail  ', 'us_english', 805
+execute rdt.rdtAddMsg 194982, 10, '194982UPD Log Fail  ', 'us_english', 805
+execute rdt.rdtAddMsg 194983, 10, '194983UPD PTL Fail  ', 'us_english', 805
+execute rdt.rdtAddMsg 194984, 10, '194984PKDtl changed ', 'us_english', 805
+execute rdt.rdtAddMsg 194985, 10, '194985UPD PKDtl Fail', 'us_english', 805

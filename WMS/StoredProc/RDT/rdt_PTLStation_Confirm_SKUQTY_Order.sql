@@ -10,6 +10,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author      Purposes                                 */
 /* 15-11-2022 1.0  Ung         WMS-21024 Created                        */
+/* 05-01-2023 1.1  Ung         Fix error no                             */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_PTLStation_Confirm_SKUQTY_Order (
@@ -132,7 +133,7 @@ BEGIN
          WHERE PTLKey = @nPTLKey
          IF @@ERROR <> 0
          BEGIN
-            SET @nErrNo = 193951
+            SET @nErrNo = 194951
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PTL Fail
             GOTO RollBackTran
          END
@@ -166,7 +167,7 @@ BEGIN
             -- Check PickDetail changed
             IF @nQTY_PD < @nExpectedQTY
             BEGIN
-               SET @nErrNo = 193952
+               SET @nErrNo = 194952
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PKDtl changed
                GOTO RollBackTran
             END
@@ -214,7 +215,7 @@ BEGIN
                   WHERE PickDetailKey = @cPickDetailKey
                   IF @@ERROR <> 0
                   BEGIN
-                     SET @nErrNo = 193953
+                     SET @nErrNo = 194953
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
                      GOTO RollBackTran
                   END
@@ -234,7 +235,7 @@ BEGIN
                   WHERE PickDetailKey = @cPickDetailKey
                   IF @@ERROR <> 0
                   BEGIN
-                     SET @nErrNo = 193954
+                     SET @nErrNo = 194954
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
                      GOTO RollBackTran
                   END
@@ -255,7 +256,7 @@ BEGIN
                      @cErrMsg           OUTPUT
                   IF @bSuccess <> 1
                   BEGIN
-                     SET @nErrNo = 193955
+                     SET @nErrNo = 194955
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- nspg_GetKey
                      GOTO RollBackTran
                   END
@@ -283,7 +284,7 @@ BEGIN
          			WHERE PickDetailKey = @cPickDetailKey			            
                   IF @@ERROR <> 0
                   BEGIN
-         				SET @nErrNo = 193956
+         				SET @nErrNo = 194956
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- INS PKDtl Fail
                      GOTO RollBackTran
                   END
@@ -298,7 +299,7 @@ BEGIN
                      WHERE PickDetailKey = @cPickDetailKey
                      IF @@ERROR <> 0
                      BEGIN
-                        SET @nErrNo = 193957
+                        SET @nErrNo = 194957
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- INS RefKeyFail
                         GOTO RollBackTran
                      END
@@ -314,7 +315,7 @@ BEGIN
                   WHERE PickDetailKey = @cPickDetailKey 
                   IF @@ERROR <> 0
                   BEGIN
-                     SET @nErrNo = 193958
+                     SET @nErrNo = 194958
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
                      GOTO RollBackTran
                   END
@@ -327,7 +328,7 @@ BEGIN
                   WHERE PickDetailKey = @cPickDetailKey
                   IF @@ERROR <> 0
                   BEGIN
-                     SET @nErrNo = 193959
+                     SET @nErrNo = 194959
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
                      GOTO RollBackTran
                   END
@@ -379,7 +380,7 @@ BEGIN
                VALUES (@cPickSlipNo, @cStorerKey, @cOrderKey)
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 193960
+                  SET @nErrNo = 194960
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsPHdrFail
                   GOTO RollBackTran
                END
@@ -409,7 +410,7 @@ BEGIN
                   (@cPickSlipNo, @nCartonNo, @cActCartonID, @cLabelLine, @cStorerKey, @cSKU, @nExpectedQTY, 'rdt.' + SUSER_SNAME(), GETDATE(), 'rdt.' + SUSER_SNAME(), GETDATE())
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 193961
+                  SET @nErrNo = 194961
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsPackDtlFail
                   GOTO RollBackTran
                END     
@@ -428,7 +429,7 @@ BEGIN
                   AND SKU = @cSKU
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 193962
+                  SET @nErrNo = 194962
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdPackDtlFail
                   GOTO RollBackTran
                END
@@ -453,7 +454,7 @@ BEGIN
                         AND Status <> '9'
                      IF @@ERROR <> 0
                      BEGIN
-                        SET @nErrNo = 193963
+                        SET @nErrNo = 194963
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- PackCfm Fail
                         GOTO RollBackTran
                      END
@@ -530,7 +531,7 @@ BEGIN
                WHERE PTLKey = @nPTLKey
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 193964
+                  SET @nErrNo = 194964
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PTL Fail
                   GOTO RollBackTran
                END
@@ -552,7 +553,7 @@ BEGIN
                WHERE PTLKey = @nPTLKey
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 193965
+                  SET @nErrNo = 194965
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PTL Fail
                   GOTO RollBackTran
                END
@@ -577,7 +578,7 @@ BEGIN
                   WHERE PTLKey = @nPTLKey
                   IF @@ERROR <> 0
                   BEGIN
-                     SET @nErrNo = 193966
+                     SET @nErrNo = 194966
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PTL Fail
                      GOTO RollBackTran
                   END
@@ -597,7 +598,7 @@ BEGIN
          			WHERE PTLKey = @nPTLKey			            
                   IF @@ERROR <> 0
                   BEGIN
-         				SET @nErrNo = 193967
+         				SET @nErrNo = 194967
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- INS PTL Fail
                      GOTO RollBackTran
                   END
@@ -614,7 +615,7 @@ BEGIN
                   WHERE PTLKey = @nPTLKey
                   IF @@ERROR <> 0
                   BEGIN
-                     SET @nErrNo = 193968
+                     SET @nErrNo = 194968
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PTL Fail
                      GOTO RollBackTran
                   END
@@ -658,7 +659,7 @@ BEGIN
 
             IF @nQTY_PD < @nExpectedQTY
             BEGIN
-               SET @nErrNo = 193969
+               SET @nErrNo = 194969
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PKDtl changed
                GOTO RollBackTran
             END
@@ -706,7 +707,7 @@ BEGIN
                   WHERE PickDetailKey = @cPickDetailKey
                   IF @@ERROR <> 0
                   BEGIN
-                     SET @nErrNo = 193970
+                     SET @nErrNo = 194970
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
                      GOTO RollBackTran
                   END
@@ -726,7 +727,7 @@ BEGIN
                   WHERE PickDetailKey = @cPickDetailKey
                   IF @@ERROR <> 0
                   BEGIN
-                     SET @nErrNo = 193971
+                     SET @nErrNo = 194971
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
                      GOTO RollBackTran
                   END
@@ -750,7 +751,7 @@ BEGIN
                      WHERE PickDetailKey = @cPickDetailKey
                      IF @@ERROR <> 0
                      BEGIN
-                        SET @nErrNo = 193972
+                        SET @nErrNo = 194972
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
                         GOTO RollBackTran
                      END
@@ -769,7 +770,7 @@ BEGIN
                         @cErrMsg           OUTPUT
                      IF @bSuccess <> 1
                      BEGIN
-                        SET @nErrNo = 193973
+                        SET @nErrNo = 194973
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- nspg_GetKey
                         GOTO RollBackTran
                      END
@@ -797,7 +798,7 @@ BEGIN
             			WHERE PickDetailKey = @cPickDetailKey			            
                      IF @@ERROR <> 0
                      BEGIN
-            				SET @nErrNo = 193974
+            				SET @nErrNo = 194974
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- INS PKDtl Fail
                         GOTO RollBackTran
                      END
@@ -812,7 +813,7 @@ BEGIN
                         WHERE PickDetailKey = @cPickDetailKey
                         IF @@ERROR <> 0
                         BEGIN
-                           SET @nErrNo = 193975
+                           SET @nErrNo = 194975
                            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- INS RefKeyFail
                            GOTO RollBackTran
                         END
@@ -828,7 +829,7 @@ BEGIN
                      WHERE PickDetailKey = @cPickDetailKey 
                      IF @@ERROR <> 0
                      BEGIN
-                        SET @nErrNo = 193976
+                        SET @nErrNo = 194976
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
                         GOTO RollBackTran
                      END
@@ -841,7 +842,7 @@ BEGIN
                      WHERE PickDetailKey = @cPickDetailKey
                      IF @@ERROR <> 0
                      BEGIN
-                        SET @nErrNo = 193977
+                        SET @nErrNo = 194977
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
                         GOTO RollBackTran
                      END
@@ -889,7 +890,7 @@ BEGIN
                VALUES (@cPickSlipNo, @cStorerKey, @cOrderKey)
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 193978
+                  SET @nErrNo = 194978
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsPHdrFail
                   GOTO RollBackTran
                END
@@ -919,7 +920,7 @@ BEGIN
                   (@cPickSlipNo, @nCartonNo, @cCartonID, @cLabelLine, @cStorerKey, @cSKU, @nCartonQTY, 'rdt.' + SUSER_SNAME(), GETDATE(), 'rdt.' + SUSER_SNAME(), GETDATE())
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 193979
+                  SET @nErrNo = 194979
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsPackDtlFail
                   GOTO RollBackTran
                END     
@@ -938,7 +939,7 @@ BEGIN
                   AND SKU = @cSKU
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 193980
+                  SET @nErrNo = 194980
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdPackDtlFail
                   GOTO RollBackTran
                END
@@ -963,7 +964,7 @@ BEGIN
                         AND Status <> '9'
                      IF @@ERROR <> 0
                      BEGIN
-                        SET @nErrNo = 193981
+                        SET @nErrNo = 194981
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- PackCfm Fail
                         GOTO RollBackTran
                      END
@@ -992,7 +993,7 @@ BEGIN
             WHERE RowRef = @nRowRef 
             IF @@ERROR <> 0
             BEGIN
-               SET @nErrNo = 193982
+               SET @nErrNo = 194982
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Log Fail
                GOTO RollBackTran
             END
@@ -1036,7 +1037,7 @@ BEGIN
                WHERE PTLKey = @nPTLKey
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 193983
+                  SET @nErrNo = 194983
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PTL Fail
                   GOTO RollBackTran
                END
@@ -1069,7 +1070,7 @@ BEGIN
                      
                   IF @nQTY_PD < @nExpectedQTY
                   BEGIN
-                     SET @nErrNo = 193984
+                     SET @nErrNo = 194984
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PKDtl changed
                      GOTO RollBackTran
                   END
@@ -1111,7 +1112,7 @@ BEGIN
                      WHERE PickDetailKey = @cPickDetailKey
                      IF @@ERROR <> 0
                      BEGIN
-                        SET @nErrNo = 193985
+                        SET @nErrNo = 194985
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
                         GOTO RollBackTran
                      END
