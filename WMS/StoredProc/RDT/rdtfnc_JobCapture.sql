@@ -30,6 +30,7 @@ GO
 /*                            Change CaptureData = 1, confirm end job flow    */
 /*                            Clean up source                                 */
 /* 14-06-2022  1.9  Ung       WMS-19943 Add JobCapColC.Notes as script        */
+/* 13-12-2022  2.0  Ung       WMS-21400 Add ExtendedValidateSP at step 1      */  
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_JobCapture] (
@@ -289,9 +290,52 @@ BEGIN
       BEGIN
          SET @nErrNo = 128503
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Inactive user
-         EXEC rdt.rdtSetFocusField @nMobile, 1 -- Order
          SET @cOutField01 = ''
          GOTO Quit
+      END
+
+      -- Extended validate
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            INSERT INTO @tVar (Variable, Value) VALUES
+               ('@cUserID',      @cUserID),
+               ('@cJobType',     @cJobType),
+               ('@cQTY',         @cQTY),
+               ('@cLOC',         @cLOC),
+               ('@cStart',       @cStart),
+               ('@cEnd',         @cEnd),
+               ('@cDuration',    @cDuration),
+               ('@cRef01',       @cRef01),
+               ('@cRef02',       @cRef02),
+               ('@cRef03',       @cRef03),
+               ('@cRef04',       @cRef04),
+               ('@cRef05',       @cRef05)
+
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @tVar, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,           ' +
+               '@nInputKey       INT,           ' +
+               '@cStorerKey      NVARCHAR( 15), ' +
+               '@cFacility       NVARCHAR( 5),  ' +
+               '@tVar            VariableTable READONLY, ' +
+               '@nErrNo          INT           OUTPUT,   ' +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT    '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @tVar, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+            BEGIN
+               SET @cOutField01 = '' -- User ID
+               GOTO Quit
+            END
+         END
       END
 
       -- Get job info
