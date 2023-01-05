@@ -1,4 +1,4 @@
 -- rdtfnc_PostPickAudit_Reset_confirm
-execute rdt.rdtDropMsg 193901, 193950
+execute rdt.rdtDropMsg 194901, 194950
 
-execute rdt.rdtAddMsg 193901, 10, '193901DelPPaFail', 'us_english', 848
+execute rdt.rdtAddMsg 194901, 10, '194901DelPPaFail', 'us_english', 848

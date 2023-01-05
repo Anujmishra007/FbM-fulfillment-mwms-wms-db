@@ -148,7 +148,7 @@ BEGIN
          DELETE rdt.rdtPPA WHERE RowRef = @nRowRef
          IF @@ERROR <> 0
          BEGIN
-            SET @nErrNo = 193901
+            SET @nErrNo = 194901
             SET @cErrMsg = rdt.rdtgetmessage( 73235, @cLangCode, 'DSP') --Fail DEL PPA
             CLOSE @curPPA
             DEALLOCATE @curPPA
