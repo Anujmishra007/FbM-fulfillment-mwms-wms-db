@@ -1,7 +1,7 @@
 
-SET QUOTED_IDENTIFIER ON
+SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
 GO
 
 /************************************************************************/
@@ -21,7 +21,7 @@ GO
 /* 26-08-2020  Chermaine  Review Editdate column update                 */
 /************************************************************************/
 
-CREATE TRIGGER [RDT].[ntrRDTTruckPackInfoUpdate]
+CREATE OR ALTER TRIGGER [RDT].[ntrRDTTruckPackInfoUpdate]
 ON  [RDT].[rdtTruckPackInfo]
 FOR UPDATE
 AS
@@ -118,5 +118,4 @@ BEGIN
 END
 
 GO
-ALTER TABLE [RDT].[rdtTruckPackInfo] ADD CONSTRAINT [PK_rdtTruckPackInfo] PRIMARY KEY CLUSTERED ([RowRef]) ON [PRIMARY]
-GO
+ 
