@@ -9,7 +9,8 @@ GO
 /* Modifications log:                                                         */                         
 /*                                                                            */                         
 /* Date       Rev  Author     Purposes                                        */        
-/*08-AUG-2022 1.0  MINGLE     Created (WMS-20321)                             */        
+/*08-AUG-2022 1.0  MINGLE     Created (WMS-20321)                             */     
+/*22-DEC-2022 1.1  MINGLE     WMS-21371 - add col 56-59(ML02)                 */ 
 /******************************************************************************/                        
                           
 CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_CTNLBLUA]                              
@@ -42,7 +43,15 @@ BEGIN
       @c_SQLJOIN         NVARCHAR(MAX),        
       @c_col58           NVARCHAR(10),      
       @c_labelline       NVARCHAR(10),      
-      @n_CartonNo        INT              
+      @n_CartonNo        INT,
+		@n_SumPick         INT,
+		@n_SumPack         INT,
+		@c_orderkey        NVARCHAR(10),
+		@n_MaxCtnNo			 INT,
+		@c_CntNo				 NVARCHAR(10),
+		@n_PIFCtnNo			 INT,
+		@n_MaxPIFCtnNo		 INT,
+		@n_col56				 INT
             
    DECLARE @d_Trace_StartTime  DATETIME,           
            @d_Trace_EndTime    DATETIME,          
@@ -138,15 +147,16 @@ BEGIN
                         +' '''','''',PD.DROPID,PAD.LABELNO,ST.SECONDARY, ' + CHAR(13) --45       
                         +' ST.COMPANY,ST.SUSR1,ST.SUSR2,FC.STATE,FC.CITY,' + CHAR(13) --50      
 								+' FC.ZIP,FC.CONTACT1,FC.PHONE1,FC.PHONE2,'''',' + CHAR(13) --55      
-                        +' '''', '''','''','''','''' ' + CHAR(13) --60                     
+                        +' '''', PI.CartonNo,'''','''','''' ' + CHAR(13) --60                     
 							   +' FROM ORDERS OH WITH (NOLOCK)      '  + CHAR(13)                                
                         +' JOIN PICKDETAIL PD WITH (NOLOCK)  ON PD.ORDERKEY = OH.ORDERKEY AND PD.STORERKEY = OH.STORERKEY '+ CHAR(13)                                     
                         +' JOIN PACKDETAIL PAD WITH (NOLOCK)  ON PAD.LABELNO = PD.DROPID    '+ CHAR(13)                  
                         +' JOIN STORER ST WITH (NOLOCK) ON ST.Storerkey = OH.STORERKEY ' + CHAR(13)           
                         +' JOIN FACILITY FC WITH (NOLOCK) ON FC.FACILITY = OH.FACILITY ' + CHAR(13)       
+								+' LEFT JOIN PACKINFO PI WITH (NOLOCK) ON PI.PICKSLIPNO = PAD.PICKSLIPNO AND PI.CartonNo = PAD.CartonNo ' + CHAR(13)	--ML02   
 								+' LEFT JOIN CODELKUP CL WITH (NOLOCK) ON CL.LISTNAME = ''CREPOPARM'' AND CL.CODE2 = OH.FACILITY AND CL.STORERKEY = OH.STORERKEY AND CL.CODE = ''carrier_code'' ' + CHAR(13)        
 								+' LEFT JOIN CODELKUP CL1 WITH (NOLOCK) ON CL1.LISTNAME = ''VIPWH'' AND CL1.CODE2 = OH.FACILITY AND CL1.STORERKEY = OH.STORERKEY ' + CHAR(13)   
-								+'              AND CL1.CODE = OH.M_ADDRESS3 AND CL1.SHORT = ''1'' ' + CHAR(13)   
+								+'                                     AND CL1.CODE = OH.M_ADDRESS3 AND CL1.SHORT = ''1'' ' + CHAR(13)   
                         +' WHERE PD.DROPID = @c_Sparm01 '+ CHAR(13)  
 							 --+' AND OH.ECOM_PLATFORM = ''JIT'' OR OH.ORDERGROUP = ''JIT'' '      
 							 --+' AND OH.DOCTYPE = ''E'' AND OH.TYPE = ''VIP'' '     
@@ -186,7 +196,56 @@ SET @c_SQL = @c_SQL + @c_SQLJOIN
    BEGIN                  
       PRINT @c_SQL                  
    END          
-           
+   
+	--START ML02
+	DECLARE CUR_RowNoLoop CURSOR LOCAL FAST_FORWARD READ_ONLY FOR              
+             
+   SELECT DISTINCT OH.OrderKey,PAD.CartonNo,PAD.PickSlipNo 
+	FROM ORDERS OH WITH (NOLOCK)                                   
+   JOIN PICKDETAIL PD WITH (NOLOCK)  ON PD.ORDERKEY = OH.ORDERKEY AND PD.STORERKEY = OH.STORERKEY                                    
+   JOIN PACKDETAIL PAD WITH (NOLOCK)  ON PAD.LABELNO = PD.DROPID 
+	--LEFT JOIN PACKINFO PIF WITH (NOLOCK) ON PIF.PICKSLIPNO = PAD.PICKSLIPNO AND PIF.CartonNo = PAD.CartonNo  
+	WHERE PD.DROPID = @c_Sparm01
+       
+   OPEN CUR_RowNoLoop            
+       
+   FETCH NEXT FROM CUR_RowNoLoop INTO @c_orderkey,@c_CntNo,@c_Pickslipno   
+         
+   WHILE @@FETCH_STATUS <> -1            
+   BEGIN
+     SELECT @n_SumPick = SUM(Qty)
+     FROM PICKDETAIL (NOLOCK)
+     WHERE Orderkey = @c_Orderkey
+     
+     SELECT @n_SumPack  = SUM(PACKDETAIL.Qty),
+            @n_MaxCtnNo = MAX(PACKDETAIL.CartonNo),
+				@n_MaxPIFCtnNo = MAX(PIF.CartonNo)
+				--@n_PIFCtnNo = PIF.CartonNo
+     FROM PACKDETAIL (NOLOCK)
+	  LEFT JOIN PACKINFO PIF WITH (NOLOCK) ON PIF.PICKSLIPNO = PACKDETAIL.PICKSLIPNO AND PIF.CartonNo = PACKDETAIL.CartonNo
+     WHERE PACKDETAIL.pickslipno = @c_Pickslipno
+	  --GROUP BY PIF.CartonNo
+
+
+	  SELECT @n_col56 = SUM(qty)
+	  FROM PACKDETAIL (NOLOCK)
+     WHERE PACKDETAIL.dropid = @c_Sparm01
+    
+
+	  UPDATE #Result
+	  SET COL56 = @n_col56,
+			--COL57 = @n_PIFCtnNo,
+			COL58 = @n_MaxPIFCtnNo,
+		   COL59 = CASE WHEN ( (@n_SumPick = @n_SumPack) AND (@n_MaxCtnNo = @c_CntNo) ) THEN 1 ELSE 0 END 
+
+	  FETCH NEXT FROM CUR_RowNoLoop INTO @c_orderkey,@c_CntNo,@c_Pickslipno     
+	  END -- While             
+	  CLOSE CUR_RowNoLoop            
+	  DEALLOCATE CUR_RowNoLoop 
+	  --END ML02
+
+			
+							
                  
    IF @b_debug=1                
    BEGIN                
@@ -224,3 +283,9 @@ END -- procedure
 GO
 GRANT EXECUTE ON [dbo].[isp_BT_Bartender_CTNLBLUA] TO nSQL 
 GO
+
+
+
+
+
+
