@@ -27,6 +27,7 @@ GO
 /* 24-JAN-2022  MINGLE        WMS-18724 add new field(ML01)             */
 /* 24-JAN-2022  MINGLE        DevOps Combine Script                     */
 /* 28-OCT-2022  MINGLE        WMS-21093 add new mappings (ML02)			*/
+/* 09-DEC-2022  MINGLE        WMS-21328 modify logic (ML03)			      */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_CartonManifestLabel36_RDT] (
       @c_Orderkey      NVARCHAR(10) 
@@ -85,7 +86,8 @@ BEGIN
 
  SELECT     Orderkey = ORDERS.Orderkey
          ,  ConsigneeKey = ISNULL(RTRIM(ORDERS.ConsigneeKey),'') 
-         ,  C_Company  = ISNULL(RTRIM(ORDERS.C_Company),'') 
+         --,  C_Company  = ISNULL(RTRIM(ORDERS.C_Company),'') 
+			,  C_Company  = CASE WHEN STORER.SUSR5 = 'FOM' THEN ISNULL(RTRIM(ORDERS.C_Contact1),'') ELSE ISNULL(RTRIM(ORDERS.C_Company),'') END	--ML03 
          ,  F_Address1 = ISNULL(RTRIM(FA.notes),'')  
          ,  C_Address1 = ISNULL(RTRIM(ORDERS.C_ADDRESS1),'')      
          ,  C_Address2 = ISNULL(RTRIM(ORDERS.C_ADDRESS2),'') 
@@ -95,7 +97,8 @@ BEGIN
          ,  C_Zip      = ISNULL(RTRIM(ORDERS.C_Zip),'')   
          ,  c_phone1      = ISNULL(RTRIM(ORDERS.c_phone1),'')   
          ,  Trackingno    = ISNULL(RTRIM(ORDERS.trackingno),'')  
-         ,  ExternOrderkey = ISNULL(RTRIM(ORDERS.ExternOrderkey),'')    
+         --,  ExternOrderkey = ISNULL(RTRIM(ORDERS.ExternOrderkey),'') 
+			,  ExternOrderkey  = CASE WHEN STORER.SUSR5 = 'FOM' THEN ISNULL(RTRIM(ORDERS.M_Company),'') ELSE ISNULL(RTRIM(ORDERS.ExternOrderkey),'') END	--ML03 
          ,  ZCUDF02    = ISNULL(RTRIM(SHPC.UDF03),'')                      --CS01
          ,  ZCUDF03    = ISNULL(RTRIM(ZC.UDF03),'')  
          ,  ZCUDF04    = ISNULL(RTRIM(ZC.UDF04),'')  
@@ -132,6 +135,7 @@ BEGIN
    JOIN  SKU         WITH (NOLOCK)  ON (PACKDETAIL.Storerkey = SKU.Storerkey)
                                    AND (PACKDETAIL.Sku = SKU.Sku)
    JOIN  PACK        WITH (NOLOCK)  ON (SKU.Packkey = PACK.Packkey)
+	JOIN  STORER	   WITH (NOLOCK)  ON (STORER.StorerKey = ORDERS.StorerKey)	--ML03
    LEFT JOIN  ORDERINFO OIF WITH (NOLOCK)  ON (OIF.OrderKey = ORDERS.Orderkey)
    LEFT JOIN  CODELKUP FA WITH (NOLOCK)  ON (FA.ListName = 'BRANCHCODE') 
                                          AND(FA.short = ORDERS.Facility)
@@ -151,7 +155,8 @@ BEGIN
    --AND OD.userdefine02 <> 'K'             --CS03
    GROUP BY ORDERS.Orderkey
          ,  ISNULL(RTRIM(ORDERS.ConsigneeKey),'')
-         ,  ISNULL(RTRIM(ORDERS.C_Company),'')
+         --,  ISNULL(RTRIM(ORDERS.C_Company),'')
+			,  CASE WHEN STORER.SUSR5 = 'FOM' THEN ISNULL(RTRIM(ORDERS.C_Contact1),'') ELSE ISNULL(RTRIM(ORDERS.C_Company),'') END	--ML03 
          ,  ISNULL(RTRIM(FA.notes),'') 
          ,  ISNULL(RTRIM(ORDERS.C_ADDRESS1),'')     
          ,  ISNULL(RTRIM(ORDERS.C_ADDRESS2),'')
@@ -161,9 +166,10 @@ BEGIN
          ,  ISNULL(RTRIM(ORDERS.C_Zip),'')        
          ,  ISNULL(RTRIM(ORDERS.c_phone1),'') 
          ,  ISNULL(RTRIM(ORDERS.trackingno),'')   
-         ,  ISNULL(RTRIM(ORDERS.ExternOrderkey),'')  
+         --,  ISNULL(RTRIM(ORDERS.ExternOrderkey),'')  
+			,  CASE WHEN STORER.SUSR5 = 'FOM' THEN ISNULL(RTRIM(ORDERS.M_Company),'') ELSE ISNULL(RTRIM(ORDERS.ExternOrderkey),'') END	--ML03
         -- ,  ISNULL(RTRIM(ZC.UDF02),'')      --CS01
-         , ISNULL(RTRIM(SHPC.UDF03),'')       --CS01 
+         ,  ISNULL(RTRIM(SHPC.UDF03),'')       --CS01 
          ,  ISNULL(RTRIM(ZC.UDF03),'')   
          ,  ISNULL(RTRIM(ZC.UDF04),'')   
       --   ,  CONVERT(NVARCHAR(60), ORDERS.Notes) 
@@ -195,4 +201,6 @@ END
 GO
 GRANT EXECUTE ON dbo.isp_CartonManifestLabel36_RDT TO NSQL
 GO
+
+
 
