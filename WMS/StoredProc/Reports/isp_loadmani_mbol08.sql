@@ -30,7 +30,8 @@ GO
 /*                                                                      */    
 /* Updates:                                                             */    
 /* Date         Author        Purposes                                  */    
-/* 2022-04-07   mingle01       Created - (WMS-19333)                    */    
+/* 2022-04-07   mingle01      Created - (WMS-19333)                     */    
+/* 2022-12-21   mingle01      WMS-20348 - Update fields(ML01)           */ 
 /************************************************************************/    
 CREATE  OR ALTER  PROC [dbo].[isp_loadmani_mbol08] (    
      @c_mbolkey   NVARCHAR(10)    
@@ -171,7 +172,7 @@ BEGIN
 			,  ISNULL(RTRIM(OH.Consigneekey),'')  
 			,  ISNULL(CL2.SHORT,'') AS SHOWFIELD  
 			,  MH.ArrivalDateFinalDestination
-			,  MH.Route
+			--,  OH.Route	--ML01
 			,  SUM(ISNULL(PH.TTLCNTS,'0'))
 			,  MD.Description
    FROM MBOL         MH WITH (NOLOCK)    
@@ -215,7 +216,7 @@ BEGIN
 			,  ISNULL(RTRIM(OH.Consigneekey),'')  
 			,  ISNULL(CL2.SHORT,'')  
 			,  MH.ArrivalDateFinalDestination
-			,  MH.Route
+			--,  OH.Route	--ML01
 			--,  PH.TTLCNTS
 			,  MD.Description
     
@@ -239,7 +240,7 @@ BEGIN
 											,@c_Consigneekey    
 											,@c_SHOWFIELD  
 										   ,@dt_ArrivalDateFD 
-											,@c_Route
+											--,@c_Route
 											,@n_totcs
 											,@c_mboldesc
     
@@ -253,7 +254,7 @@ BEGIN
       SET @c_ST_Address3= ''    
       SET @c_c_Zip     = ''    
       SET @c_c_City   = ''    
-      --SET @c_Route     = ''    
+      SET @c_Route     = ''    
       SET @c_BuyerPO   = ''    
     
       SET @c_ExternSO      = ''    
@@ -280,7 +281,7 @@ BEGIN
             --,@c_c_Zip      = CASE WHEN @n_ShowAddresses = 1 THEN ISNULL(OH.c_Zip,'')      ELSE '' END    
             --,@c_c_City     = CASE WHEN @n_ShowAddresses = 1 THEN ISNULL(OH.c_City,'')     ELSE '' END    
             ,@c_BuyerPO    = CASE WHEN OH.STORERKEY = 'LVS' THEN ISNULL(OH.BuyerPO,'') ELSE '' END     
-            --,@c_Route      = ISNULL(OH.Route,'') 
+            ,@c_Route      = ISNULL(OH.Route,'') 
 				,@c_OrderKey   = OH.OrderKey
 				,@c_invoiceno = OH.InvoiceNo
       FROM ORDERS OH  WITH (NOLOCK)    
@@ -384,7 +385,7 @@ BEGIN
       ,  Departuredate           
       ,  totalwgt                 
       ,  transmethod              
-      ,  route                    
+      --,  route                    
       ,  m3                       
       ,  Storerkey                
       ,  deliverydate             
@@ -404,6 +405,7 @@ BEGIN
       ,  LM_SG   
 	   ,  pqty
 	   ,  buyerpo
+		,  route
 	   ,  totcs
 		,  mboldesc
 		,  invoiceno
@@ -418,7 +420,7 @@ BEGIN
             ,  @c_Departuredate    
 				,  @n_totalwgt    
             ,  @c_transmethod    
-				,  @c_Route    
+				--,  @c_Route    
 				,  @n_m3    
             ,  @c_Storerkey    
             ,  @dt_DeliveryDate    
@@ -438,6 +440,7 @@ BEGIN
             ,  CASE WHEN @c_Loadkey = '' THEN '1' ELSE '0' END 
 				,  @n_pqty
 				,  @c_BuyerPO
+				,  @c_route
 				,  @n_totcs
 				,  @c_mboldesc
 				,  @c_invoiceno
@@ -462,7 +465,7 @@ BEGIN
 											,@c_Consigneekey  
 											,@c_showfield  
 											,@dt_ArrivalDateFD  
-										   ,@c_Route
+										   --,@c_Route
 											,@n_totcs
 											,@c_mboldesc
    END    
@@ -523,7 +526,7 @@ BEGIN
       ,  Departuredate           
       ,  totalwgt                 
       ,  transmethod              
-      ,  route                    
+      --,  route                    
       ,  m3                       
       ,  Storerkey                
       ,  deliverydate             
@@ -543,15 +546,17 @@ BEGIN
       ,  LM_SG  
 	   ,  pqty
 	   ,  buyerpo
+		,  route
 	   ,  totcs
 		,  mboldesc
 		,  invoiceno
-   FROM #TMP_LOAD    
-   ORDER BY Route    
-         ,  Consigneekey    
-         ,  Loadkey    
-         ,  DeliveryDate    
-         ,  Orderkey    
+   FROM #TMP_LOAD  
+	ORDER BY Externorderkey
+   --ORDER BY Route    
+   --      ,  Consigneekey    
+   --      ,  Loadkey    
+   --      ,  DeliveryDate    
+   --      ,  Orderkey    
     
     
    WHILE @@TRANCOUNT < @n_StartTCnt    
@@ -592,6 +597,9 @@ END
 GO
 GRANT EXECUTE ON [dbo].[isp_loadmani_mbol08] TO nSQL 
 GO
+
+
+
 
 
 	
