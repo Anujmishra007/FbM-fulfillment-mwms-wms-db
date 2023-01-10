@@ -13,6 +13,7 @@ GO
 /* Date        Rev  Author      Purposes                                      */
 /* 24-02-2021  1.1  Chermaine   WMS-16328 Remove Lottable01 &Lottable03       */
 /*                              (base on ExtVal13)                            */
+/* 22-12-2022  1.2   yeekung    WMS-21405 add step 1 validate (yeekung01)     */
 /******************************************************************************/
 CREATE OR ALTER PROCEDURE rdt.rdt_1580ExtVal24
     @nMobile      INT
@@ -43,6 +44,25 @@ BEGIN
 
    DECLARE @nReceivedQty   INT
           ,@nExpectedQty   INT
+
+   IF @nStep = 1 -- Lottable
+   BEGIN
+      IF @nInputKey = 1 -- ENTER
+      BEGIN        
+         -- Check L03
+         IF  EXISTS (SELECT 1 FROM Receipt WITH (NOLOCK)
+                        WHERE Storerkey = @cStorerKey 
+                           AND Receiptkey = @cReceiptKey 
+                           AND RECType   IN ('RSO-N','RSO-F')
+                           AND ASNstatus = '0')
+         BEGIN
+            SET @nErrNo = 163655
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvaidReceiveRSO
+            GOTO Quit
+         END
+      END
+   END
+   
           
    IF @nStep = 4 -- Lottable
    BEGIN

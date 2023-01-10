@@ -140,6 +140,8 @@ GO
 /* 2022-09-02 9.2 James      WMS-20639 Change rdt_GetSKU output         */
 /*                           UPC Qty (james24)                          */
 /* 2021-10-15 9.3 yeekung    WMS-19640 Add eventlog refno1(yeekung03)   */
+/* 2022-10-04 9.4 yeekung    WMS-21405 Add extendedvalidate step 1      */
+/*                            (yeekung05)                               */
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_PieceReceiving] (
    @nMobile    INT,
@@ -960,6 +962,45 @@ BEGIN
             END
          END
       END
+
+      -- Extended validate (yeekung05)
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+            ' @nMobile, @nFunc, @nStep, @nInputKey, @cLangCode, @cStorerkey, @cReceiptKey, @cPOKey, @cExtASN, @cToLOC, @cToID, ' +
+            ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cSKU, @nQTY, ' +
+            ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+
+         SET @cSQLParam =
+            '@nMobile      INT,           ' +
+            '@nFunc        INT,           ' +
+            '@nStep        INT,           ' +
+            '@nInputKey    INT,           ' +
+            '@cLangCode    NVARCHAR( 3),  ' +
+            '@cStorerkey   NVARCHAR( 15), ' +
+            '@cReceiptKey  NVARCHAR( 10), ' +
+            '@cPOKey       NVARCHAR( 10), ' +
+            '@cExtASN      NVARCHAR( 20), ' +
+            '@cToLOC       NVARCHAR( 10), ' +
+            '@cToID        NVARCHAR( 18), ' +
+            '@cLottable01  NVARCHAR( 18), ' +
+            '@cLottable02  NVARCHAR( 18), ' +
+            '@cLottable03  NVARCHAR( 18), ' +
+            '@dLottable04  DATETIME,      ' +
+            '@cSKU         NVARCHAR( 20), ' +
+            '@nQTY         INT,           ' +
+            '@nErrNo       INT           OUTPUT, ' +
+            '@cErrMsg      NVARCHAR( 20) OUTPUT  '
+
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+              @nMobile, @nFunc, @nStep, @nInputKey, @cLangCode, @cStorer, @cReceiptKey, @cPOKey, @cRefNo, @cLOC, @cToID,
+              @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cSKU, 0,
+              @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+         IF @nErrNo <> 0 OR ISNULL( @cErrMsg, '') <> ''
+            GOTO Step_1_Fail
+      END
+
 
       -- (james04)
       IF @cExtendedUpdateSP <> ''
