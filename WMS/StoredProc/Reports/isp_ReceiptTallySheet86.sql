@@ -9,11 +9,11 @@ GO
 /* Copyright: LF Logistics                                              */  
 /* Written by: mingle(copy from isp_ReceiptTallySheet77)                */  
 /*                                                                      */  
-/* Purpose: WMS-20351 - SG – IDSMED – Tally Sheet Barcode and signature */   
+/* Purpose: WMS-20351 - SG - IDSMED - Tally Sheet Barcode and signature */   
 /*                      changes                                         */  
 /* Called By: r_receipt_tallysheet86                                    */
 /*          :                                                           */  
-/* PVCS Version: 1.0                                                    */  
+/* PVCS Version: 1.1                                                    */  
 /*                                                                      */  
 /* Version: 7.0                                                         */  
 /*                                                                      */  
@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */  
 /* Date         Author    Ver Purposes                                  */ 
 /* 05/08/2022   Mingle    1.0 DevOps Combine Script(Created)            */ 
+/* 06-Jan-2023  WLChooi   1.1 WMS-21469 - Add Lottable06 (WL01)         */
 /************************************************************************/ 
 
 CREATE OR ALTER PROC [dbo].[isp_ReceiptTallySheet86]  
@@ -99,7 +100,8 @@ BEGIN
          SKUGroup = CASE WHEN RECEIPTDETAIL.StorerKey = 'IDSMED' THEN SKU.SKUGroup ELSE '' END,
          --END (ML01)
          RECEIPTDETAIL.toloc,    
-         ISNULL(CL.SHORT,'') as ShowToLoc 
+         ISNULL(CL.SHORT,'') as ShowToLoc,
+         ISNULL(RECEIPTDETAIL.Lottable06,'') AS Lottable06   --WL01
    FROM RECEIPT (nolock)  
    JOIN RECEIPTDETAIL (nolock) ON RECEIPT.ReceiptKey = RECEIPTDETAIL.ReceiptKey 
    JOIN STORER (nolock) ON RECEIPTDETAIL.StorerKey = STORER.StorerKey 
@@ -156,7 +158,8 @@ BEGIN
             CASE WHEN RECEIPTDETAIL.StorerKey = 'IDSMED' THEN SKU.SKUGroup ELSE '' END,
             --END (ML01)
             RECEIPTDETAIL.toloc,     
-            ISNULL(CL.SHORT,'')   
+            ISNULL(CL.SHORT,''),
+            ISNULL(RECEIPTDETAIL.Lottable06,'')   --WL01
    
      ORDER BY RECEIPT.ReceiptKey, RECEIPTDETAIL.ReceiptLineNumber 
 
