@@ -4,7 +4,6 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /************************************************************************/
 /* Store Procedure: nsp_JRPT_LEGO_TRANSPORT_CHARGE						*/
 /* Creation Date: 03-03-2021											*/
@@ -27,6 +26,7 @@ GO
 /* 2021-3-17	BLLIM		1.1		Exclude parcel shipment type		*/
 /* 2021-4-19	BLLIM		1.2		Added StorerKey join (WMS-16853)	*/
 /* 2023-1-4     BLLIM		1.3		Fix InvoiceRef# Issie (WMS-21487) 	*/
+/* 2023-1-10	Nicholas	1.4		to cater for Orders.InvoiceNo	    */
 /************************************************************************/
 
 -- Test: EXEC BI.nsp_JRPT_LEGO_TRANSPORT_CHARGE '', '2021-02-22';
@@ -67,7 +67,9 @@ DECLARE @c_Currency      NVARCHAR(20),
         @d_Fuel_Sur      DECIMAL(12,6),
         @d_VAT           DECIMAL(12,6),
 		@n_Pos           Integer,
-        @dt_ShipDate     DateTime
+        @dt_ShipDate     DateTime,
+		@cInvoiceNo			NVARCHAR(40), --Added 2023-1-10	Nicholas,
+		@cFinalInvoiceNo	NVARCHAR(40) --Added 2023-1-10	Nicholas
 
    SET @dt_RetrieveDT = @dt_Date
    IF @dt_Date is NULL
@@ -191,7 +193,7 @@ DECLARE @c_Currency      NVARCHAR(20),
    Address = CASE O.C_Company WHEN '' THEN '' ELSE O.C_Company + ' ' END + CASE O.C_Address1  WHEN '' THEN '' ELSE O.C_Address1 + ' ' END + CASE O.C_Address2  WHEN '' THEN '' ELSE O.C_Address2 + ' ' END + CASE O.C_City WHEN '' THEN '' ELSE O.C_City + ' ' END + CASE O.C_State WHEN '' THEN '' ELSE O.C_State END, 
    PostalCode = O.C_Zip, PlatformName, Cast(EXO1.Userdefine01 AS Decimal(12,6)), IsNull(CAST(EXO1.Userdefine02 AS INT),0), 
    IsNull(CAST(EXO1.Userdefine03 AS INT),0), Cast(EXO1.Userdefine06 AS Decimal(10,2)),
-   Cast(EXO1.Userdefine07 AS Decimal(10,2)), Cast(EXO1.Userdefine08 AS Decimal(10,2)), MBH.ShipDate
+   Cast(EXO1.Userdefine07 AS Decimal(10,2)), Cast(EXO1.Userdefine08 AS Decimal(10,2)), MBH.ShipDate, O.InvoiceNo --Added 2023-1-10	Nicholas
    FROM ExternOrders EXO1 WITH (NOLOCK), ORDERS O WITH (NOLOCK), #TEMP_FRTCHARGE_MBOLKEY MBH
    WHERE EXO1.OrderKey = O.OrderKey
    AND EXO1.ExternOrderKey = MBH.ShipmentNo
@@ -200,7 +202,7 @@ DECLARE @c_Currency      NVARCHAR(20),
    OPEN CUR_EXTERNORDERS   
      
    FETCH NEXT FROM CUR_EXTERNORDERS INTO @c_MBolkey, @c_DeliveryNo,@c_NewDeliveryNo, @c_Orderkey, @c_ShipmentNo, @c_ContainerKey,@c_ConsigneeKey, @c_Address,
-      @c_PostalCode, @c_PlatformName,@d_Tot_Vol, @n_NoFullCA, @n_NoLooseCA, @d_FRT_Amt,@d_Fuel_Sur, @d_VAT,@dt_ShipDate
+      @c_PostalCode, @c_PlatformName,@d_Tot_Vol, @n_NoFullCA, @n_NoLooseCA, @d_FRT_Amt,@d_Fuel_Sur, @d_VAT,@dt_ShipDate, @cInvoiceNo  --Added 2023-1-10	Nicholas
      
    WHILE @@FETCH_STATUS <> -1  
    BEGIN 
@@ -220,13 +222,20 @@ DECLARE @c_Currency      NVARCHAR(20),
          END
       END
 
+	  --Added 2023-1-10	Nicholas
+	  Select @cFinalInvoiceNo = @c_invoice
+
+	  If @cInvoiceNo <> ''
+		Select @cFinalInvoiceNo = @cInvoiceNo
+
+	  --Added 2023-1-10	Nicholas, change @c_invoice to @cFinalInvoiceNo
       INSERT INTO #TEMP_FRTCHARGE ( InvoiceNo, Inv_Curr, MBolkey, DONo, NewDONo, Orderkey, ShipmentNo, ContainerKey, ConsigneeKey,
                                    Address, PostalCode, NoofPallet, Tot_Vol, Tot_GrWgt, NoofFullCA, NoofLooseCA, Frt_Amt, SurCharge_Amt, VAT_Amt,ShipDate)
-      VALUES (@c_invoice, @c_Currency,@c_MBolkey,@c_DeliveryNo,@c_NewDeliveryNo, @c_Orderkey, @c_ShipmentNo, @c_ContainerKey,@c_ConsigneeKey, 
+      VALUES (@cFinalInvoiceNo, @c_Currency,@c_MBolkey,@c_DeliveryNo,@c_NewDeliveryNo, @c_Orderkey, @c_ShipmentNo, @c_ContainerKey,@c_ConsigneeKey, 
               @c_Address,@c_PostalCode, @d_No_of_Pallets,@d_Tot_Vol,@d_Tot_GrossWgt, @n_NoFullCA, @n_NoLooseCA, @d_FRT_Amt,@d_Fuel_Sur, @d_VAT,@dt_ShipDate)
 
       FETCH NEXT FROM CUR_EXTERNORDERS INTO @c_MBolkey, @c_DeliveryNo,@c_NewDeliveryNo, @c_Orderkey, @c_ShipmentNo, @c_ContainerKey,@c_ConsigneeKey, @c_Address,
-         @c_PostalCode, @c_PlatformName,@d_Tot_Vol, @n_NoFullCA, @n_NoLooseCA, @d_FRT_Amt,@d_Fuel_Sur, @d_VAT,@dt_ShipDate
+         @c_PostalCode, @c_PlatformName,@d_Tot_Vol, @n_NoFullCA, @n_NoLooseCA, @d_FRT_Amt,@d_Fuel_Sur, @d_VAT,@dt_ShipDate, @cInvoiceNo --Added 2023-1-10	Nicholas
    END  
    CLOSE CUR_EXTERNORDERS  
    DEALLOCATE CUR_EXTERNORDERS     
