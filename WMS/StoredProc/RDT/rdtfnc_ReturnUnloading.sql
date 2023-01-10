@@ -16,6 +16,7 @@ GO
 /* 2021-02-17   1.0  Chermaine   WMS-16332. Created                           */
 /* 2021-05-03   1.1  Chermaine   WMS-16945 Add eventlog (cc01)                */
 /* 2022-02-16   1.2  Ung         WMS-18908 Add TransmitLog                    */
+/* 2022-11-06   1.3  YeeKung     WMS-21120 Chang Mapping (yeekung01)          */ 
 /******************************************************************************/
 CREATE OR ALTER PROC rdt.rdtfnc_ReturnUnloading(
    @nMobile    INT,
@@ -662,7 +663,10 @@ BEGIN
          @cBuyerPO         NVARCHAR(20),
          @cUserDefine03    NVARCHAR(30),
          @cOrderType       NVARCHAR(10),
-         @nOpenQty         INT 
+         @nOpenQty         INT,
+         @cBizUnit         NVARCHAR(20),
+         @cStoreName       NVARCHAR(20),
+         @cTOLoc           NVARCHAR(20)
       
       IF @nArchiveDB = 1
       BEGIN
@@ -670,17 +674,31 @@ BEGIN
             @cExternOrderKey = ExternOrderKey,
             @cOrderKey = OrderKey,
             @cBuyerPO = Buyerpo,
-            @cOrderType = TYPE
-         FROM INARCHIVE.dbo.ORDERS WITH (NOLOCK) 
+            @cOrderType = TYPE, 
+            @cBizUnit = BizUnit --(yeekung01)
+         FROM INARCHIVE.dbo.ORDERS O WITH (NOLOCK) 
          WHERE StorerKey = @cStorerKey
          AND TrackingNo = @cTrackingNo
          AND DocType <> 'R'
          AND STATUS = '9'
          AND addDate < DATEADD(MONTH, 7, GETDATE())
       
-         SELECT @nOpenQty = SUM(ShippedQty) FROM INARCHIVE.dbo.OrderDetail WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND orderKey = @cOrderKey
+         SELECT @nOpenQty = SUM(ShippedQty) 
+         FROM INARCHIVE.dbo.OrderDetail WITH (NOLOCK) 
+         WHERE StorerKey = @cStorerKey 
+            AND orderKey = @cOrderKey
 
-         SELECT Top 1 @cUserDefine03 = UDF04 FROM CODELKUP WITH (NOLOCK) WHERE @cStorerKey = @cStorerKey AND listName = 'HMORDTYPE' AND code = @cOrderType
+         SELECT @cStoreName=StoreName --(yeekung01)
+         FROM INARCHIVE.dbo.OrderInfo WITH (NOLOCK)          
+         WHERE  orderKey = @cOrderKey
+
+
+
+         SELECT Top 1 @cUserDefine03 = UDF04 
+         FROM CODELKUP WITH (NOLOCK) 
+         WHERE @cStorerKey = @cStorerKey 
+            AND listName = 'HMORDTYPE' 
+            AND code = @cOrderType
          
          --SELECT Top 1 @cUserDefine03 = LK.UDF04 
          --FROM CODELKUP LK WITH (NOLOCK) 
@@ -695,14 +713,22 @@ BEGIN
       	SELECT 
             @cExternOrderKey = ExternOrderKey,
             @cOrderKey = OrderKey,
-            @cBuyerPO = Buyerpo
+            @cBuyerPO = Buyerpo,
+             @cBizUnit = BizUnit --(yeekung01)
          FROM ORDERS WITH (NOLOCK) 
          WHERE StorerKey = @cStorerKey
          AND TrackingNo = @cTrackingNo
          AND DocType <> 'R'
          AND STATUS = '9'
       
-         SELECT @nOpenQty = SUM(ShippedQty) FROM OrderDetail WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND orderKey = @cOrderKey
+         SELECT @nOpenQty = SUM(ShippedQty) 
+         FROM OrderDetail WITH (NOLOCK) 
+         WHERE StorerKey = @cStorerKey 
+            AND orderKey = @cOrderKey
+
+        SELECT @cStoreName=StoreName --(yeekung01)
+         FROM dbo.OrderInfo WITH (NOLOCK)          
+         WHERE  orderKey = @cOrderKey
                   
          SELECT Top 1 @cUserDefine03 = LK.UDF04 
          FROM CODELKUP LK WITH (NOLOCK) 
@@ -712,6 +738,12 @@ BEGIN
          AND O.TrackingNo = @cTrackingNo
          ORDER BY O.Orderkey DESC
       END
+
+      SELECT @cToloc=code  --(yeekung01)
+      FROM codelkup (NOLOCK)
+      WHERE listname = 'HMRETLOC' 
+         AND long  = @cFacility
+         AND storerkey=@cStorerKey
       
       SET @cVehicleDate = CONVERT(NVARCHAR(18),GETDATE(),120)--CONVERT(NVARCHAR(8),GETDATE(),112)+' '+CONVERT(NVARCHAR(8),GETDATE(),114)
           
@@ -736,22 +768,35 @@ BEGIN
          INSERT INTO RECEIPT 
             (ReceiptKey, ExternReceiptKey, StorerKey, CarrierState, WarehouseReference, 
             VehicleNumber, VehicleDate,Containerkey, OpenQty, RECType, 
-            Facility, Appointment_No, DOCTYPE, ASNReason)  
+            Facility, Appointment_No, DOCTYPE, ASNReason,UserDefine04,SellerName)  
          VALUES 
             (@cNewReceiptKey, @cExternOrderKey, @cStorerKey, @cTrackingNo, @cTrackingNo, 
             @cVehicleNo, @cVehicleDate, @cContainerKey, 0, 'HM_F', 
-            @cFacility, @cApptNo, 'R', '12') 
+            @cFacility, @cApptNo, 'R', '12',@cBuyerPO,@cBizUnit) --(yeekung01)
           
          IF @@ERROR <> 0  
          BEGIN  
-            SET @nErrNo = 163418  
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'INS Rec Fail  
+            SET @nErrNo = 163422  
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UPD Rec Fail  
             GOTO step_6_fail  
          END     
       END
       ELSE
       BEGIN
       	SELECT @cNewReceiptKey = ReceiptKey FROM Receipt WITH (NOLOCK) WHERE storerKey = @cStorerKey AND (WarehouseReference = @cTrackingNo OR CarrierState =  @cTrackingNo)
+
+         UPDATE Receipt WITH (ROWLOCK)--(yeekung01)
+         set UserDefine04= @cBuyerPO,
+            SellerName =@cBizUnit
+         WHERE receiptkey=@cNewReceiptKey
+
+                   
+         IF @@ERROR <> 0  
+         BEGIN  
+            SET @nErrNo = 163418  
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'INS Rec Fail  
+            GOTO step_6_fail  
+         END     
       END
       
       IF NOT EXISTS (SELECT 1 FROM ReceiptDetail WITH (NOLOCK) WHERE storerKey = @cStorerKey AND ReceiptKey = @cNewReceiptKey ) 
@@ -769,17 +814,18 @@ BEGIN
                   ReceiptKey, ReceiptLineNumber, ExternReceiptKey, ExternLineNo, StorerKey, 
                   SKU, STATUS, QtyExpected, UOM, PackKey, 
                   VoyageKey, ToLoc, Lottable01, Lottable02, Lottable03, SubReasonCode,  
-                  ExternPoKey, UserDefine03, UserDefine08, UserDefine09, Lottable12 )                   
+                  ExternPoKey, UserDefine03, UserDefine08, UserDefine09, Lottable12)                   
                SELECT 
                   @cNewReceiptKey, OD.OrderLineNumber, @cExternOrderKey, OD.ExternLineNo, @cStorerKey, 
                   OD.SKU, '0', PD.QTY, OD.UOM, OD.PackKey,  
-                  @cTrackingNo, 'HM_RETURN', ISNULL(Lot.Lottable01,''), ISNULL(Lot.Lottable02,''), 'RET', 'NULL', 
+                  @cTrackingNo, @cToloc, ISNULL(Lot.Lottable01,''), ISNULL(Lot.Lottable02,''), 'RET', 'NULL', 
                   @cBuyerPO, @cUserDefine03, @cBuyerPO, OD.ExternLineNo ,ISNULL(Lot.Lottable12,'')
                FROM INARCHIVE.dbo.OrderDetail OD WITH (NOLOCK) 
                JOIN INARCHIVE.dbo.PICKDETAIL PD WITH (NOLOCK) ON (OD.StorerKey = PD.Storerkey AND OD.OrderKey = PD.OrderKey AND PD.SKU = OD.SKU AND PD.orderLineNumber = OD.OrderLineNumber)
                JOIN LOTATTRIBUTE LOT WITH (NOLOCK) ON (LOT.Lot = PD.Lot)
                WHERE OD.StorerKey = @cStorerKey 
                AND OD.OrderKey = @cOrderKey
+
             END
       	END
       	ELSE
@@ -788,22 +834,34 @@ BEGIN
                ReceiptKey, ReceiptLineNumber, ExternReceiptKey, ExternLineNo, StorerKey, 
                SKU, STATUS, QtyExpected, UOM, PackKey, 
                VoyageKey, ToLoc, Lottable01, Lottable02, Lottable03, SubReasonCode,  
-               ExternPoKey, UserDefine03, UserDefine08, UserDefine09, Lottable12 )                   
+               ExternPoKey, UserDefine03, UserDefine08, UserDefine09, Lottable12)                   
             SELECT 
                @cNewReceiptKey, OD.OrderLineNumber, @cExternOrderKey, OD.ExternLineNo, @cStorerKey, 
                OD.SKU, '0', PD.QTY, OD.UOM, OD.PackKey,  
-               @cTrackingNo, 'HM_RETURN', Lot.Lottable01, Lot.Lottable02, 'RET', 'NULL', 
+               @cTrackingNo, @cToloc, Lot.Lottable01, Lot.Lottable02, 'RET', 'NULL', 
                @cBuyerPO, @cUserDefine03, @cBuyerPO, OD.ExternLineNo ,Lot.Lottable12
             FROM OrderDetail OD WITH (NOLOCK) 
             JOIN PICKDETAIL PD WITH (NOLOCK) ON (OD.StorerKey = PD.Storerkey AND OD.OrderKey = PD.OrderKey AND PD.SKU = OD.SKU AND PD.orderLineNumber = OD.OrderLineNumber)
             JOIN LOTATTRIBUTE LOT WITH (NOLOCK) ON (LOT.Lot = PD.Lot)
             WHERE OD.StorerKey = @cStorerKey 
             AND OD.OrderKey = @cOrderKey
+
+
          END
          
          IF @@ERROR <> 0  
          BEGIN  
             SET @nErrNo = 163419  
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSRecDtFail  
+            GOTO step_6_fail  
+         END    
+
+         INSERT INTO ReceiptInfo (receiptkey,StoreName) --(yeekung01)
+         VALUES(@cNewReceiptKey,@cStoreName)
+
+         IF @@ERROR <> 0  
+         BEGIN  
+            SET @nErrNo = 163423  
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSRecDtFail  
             GOTO step_6_fail  
          END    

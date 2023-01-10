@@ -22,6 +22,8 @@ execute rdt.rdtAddMsg 163418, 10, '163418INS Rec Fail  ', 'us_english', 1852
 execute rdt.rdtAddMsg 163419, 10, '163419INSRecDtFail  ', 'us_english', 1852
 execute rdt.rdtAddMsg 163420, 10, '163420INS TLog2 Fail', 'us_english', 1852
 execute rdt.rdtAddMsg 163421, 10, '163421INS TLog2 Fail', 'us_english', 1852
+execute rdt.rdtAddMsg 163422, 10, '163422UPD Rec Fail  ', 'us_english', 1852
+execute rdt.rdtAddMsg 163423, 10, '163423INSRecInfoFail  ', 'us_english', 1852
 
 SELECT TOP 100 * FROM rdt.rdtmsg (NOLOCK) WHERE Message_ID BETWEEN 163401 and 163450
 
