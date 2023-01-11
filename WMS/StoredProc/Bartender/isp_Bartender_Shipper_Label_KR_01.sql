@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_Bartender_Shipper_Label_KR_01]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_Bartender_Shipper_Label_KR_01]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -19,9 +14,10 @@ GO
 /* 2017-08-11 1.0  CSCHONG    Created (WMS-4871&4952)                         */ 
 /* 2018-07-18 1.1  CSCHONG    WMS-5582 add new field (CS01)                   */ 
 /* 2018-08-20 1.2  CSCHONG    WMS-5920 Revised field mapping (CS02)           */ 
+/* 2022-12-20 1.3  MINGLE     WMS-21296 Add col50-col58 (ML01)                */
 /******************************************************************************/                
                   
-CREATE PROC [dbo].[isp_Bartender_Shipper_Label_KR_01]                               
+CREATE OR ALTER PROC [dbo].[isp_Bartender_Shipper_Label_KR_01]                               
 (  @c_Sparm1            NVARCHAR(250),                      
    @c_Sparm2            NVARCHAR(250),                      
    @c_Sparm3            NVARCHAR(250),                      
@@ -78,7 +74,8 @@ BEGIN
       @c_Scolor            NVARCHAR(80),
       @c_Ssize             NVARCHAR(80),
       @c_SMEASM            NVARCHAR(80),  
-      @n_qty               INT,              
+      @n_qty               INT,     
+		@c_snotes				NVARCHAR(4000),
       @c_Style01           NVARCHAR(80),  
       @c_Scolor01          NVARCHAR(80),  
       @c_SSize01           NVARCHAR(80),
@@ -120,8 +117,18 @@ BEGIN
       @c_SSize07           NVARCHAR(80),
       @c_SMEASM07          NVARCHAR(80),   
       @n_qty07             INT,   
-      @n_ttlPqty           INT
-      
+      @n_ttlPqty           INT,
+		--START ML01
+		@c_snotes01				NVARCHAR(4000),
+		@c_snotes02				NVARCHAR(4000),
+		@c_snotes03				NVARCHAR(4000),
+		@c_snotes04				NVARCHAR(4000),
+		@c_snotes05				NVARCHAR(4000),
+		@c_snotes06				NVARCHAR(4000),
+		@c_snotes07				NVARCHAR(4000),
+		@c_ohloadkey		   NVARCHAR(10),
+		@c_ohnotes				NVARCHAR(4000)
+      --END ML01
   
  Declare                           
       @c_SQL             NVARCHAR(4000),                
@@ -228,7 +235,8 @@ BEGIN
       [SSize]                 [NVARCHAR] (10) NULL, 
       [SMeasurement]          [NVARCHAR] (10) NULL,                                          
       [skuqty]                INT NULL,        
-      [ttlctn]                INT,                     
+      [ttlctn]                INT,  
+		[snotes]						[NVARCHAR] (4000) NULL,	--ML01
       [Retrieve]              [NVARCHAR] (1) default 'N')               
                     
                            
@@ -251,7 +259,8 @@ BEGIN
                     ELSE ISNULL(o.c_Address3,'') END as OHAddress3,
     CASE WHEN ISNULL(ST.Address4,'')  <> '' THEN ISNULL(ST.Address4,'') 
                     ELSE ISNULL(o.c_Address4,'') END as OHAddress4, 
-     SUM(pd.Qty) AS ttlqty ,ph.PickSlipNo                                             
+     SUM(pd.Qty) AS ttlqty ,ph.PickSlipNo,
+	  o.LoadKey,o.Notes	--ML01
      FROM PackHeader AS ph WITH (NOLOCK) 
      JOIN PackDetail AS pd WITH (NOLOCK) ON pd.PickSlipNo = ph.PickSlipNo 
      JOIN ORDERS AS o WITH (NOLOCK) ON o.OrderKey = ph.OrderKey  
@@ -269,13 +278,14 @@ BEGIN
     CASE WHEN ISNULL(ST.Address3,'')  <> '' THEN ISNULL(ST.Address3,'') 
                     ELSE ISNULL(o.c_Address3,'') END,
     CASE WHEN ISNULL(ST.Address4,'')  <> '' THEN ISNULL(ST.Address4,'') 
-                    ELSE ISNULL(o.c_Address4,'') END   ,ph.PickSlipNo              
+                    ELSE ISNULL(o.c_Address4,'') END   ,ph.PickSlipNo,o.LoadKey,o.Notes	--ML01
+						  
     
           
    OPEN CUR_StartRecLoop                    
                
    FETCH NEXT FROM CUR_StartRecLoop INTO @c_Statecity,@c_ExtOrdKey,@c_OHCompany,@c_billtokey,@c_consigneekey,@c_labelno,@c_czip ,
-                               @c_OHAddress1, @c_OHAddress2,@c_OHAddress3,@c_OHAddress4,@n_ttlqty   ,@c_Pickslipno
+                               @c_OHAddress1, @c_OHAddress2,@c_OHAddress3,@c_OHAddress4,@n_ttlqty   ,@c_Pickslipno,@c_ohloadkey,@c_ohnotes	--ML01
                                                        
                  
    WHILE @@FETCH_STATUS <> -1                    
@@ -296,12 +306,12 @@ BEGIN
             @c_OHAddress1,@c_OHAddress2,@c_OHAddress3,@c_OHAddress4,'','',          
             '','','','','','','',           
             '','','','','','','','','','','','','','','','','','','','','','','','','','','','',CONVERT(NVARCHAR(10),@n_ttlqty),''      
-            ,'','','','','','','','',@c_Pickslipno,'O')          
+            ,'','','','','','',@c_ohloadkey,@c_ohnotes,@c_Pickslipno,'O')	--ML01          
           
           
    IF @b_debug=1                
    BEGIN                
-     SELECT * FROM #Result (nolock)                
+     SELECT * FROM #Result (NOLOCK)                
    END           
           
    SET @n_MaxLine    = 7
@@ -345,10 +355,12 @@ BEGIN
    	SMeasurement,
    	skuqty,
    	Retrieve,
-   	ttlctn
+   	ttlctn,
+		snotes	--ML01
    )               
    SELECT ph.PickSlipNo,pd.cartonno,s.style,s.color,s.size,s.skugroup,pd.Qty,'N',
-	CASE WHEN ph.[status] <> '0' THEN @c_Sparm4 ELSE 0 END--ph.TTLCNTS   --CS02  
+	CASE WHEN ph.[status] <> '0' THEN @c_Sparm4 ELSE 0 END,--ph.TTLCNTS   --CS02
+	s.NOTES2	--ML01
       FROM PackHeader AS ph WITH (NOLOCK) 
      JOIN PackDetail AS pd WITH (NOLOCK) ON pd.PickSlipNo = ph.PickSlipNo 
      JOIN ORDERS AS o WITH (NOLOCK) ON o.OrderKey = ph.OrderKey  
@@ -372,10 +384,12 @@ BEGIN
    	SMeasurement,
    	skuqty,
    	Retrieve,
-   	ttlctn
+   	ttlctn,
+		snotes	--ML01
    )               
    SELECT ph.PickSlipNo,pd.cartonno,s.style,s.color,s.size,s.Measurement,pd.Qty,'N',
-	CASE WHEN ph.[status] <> '0' THEN @c_Sparm4 ELSE 0 END--ph.TTLCNTS   --CS02
+	CASE WHEN ph.[status] <> '0' THEN @c_Sparm4 ELSE 0 END,--ph.TTLCNTS   --CS02
+	s.NOTES2	--ML01
       FROM PackHeader AS ph WITH (NOLOCK) 
      JOIN PackDetail AS pd WITH (NOLOCK) ON pd.PickSlipNo = ph.PickSlipNo 
      JOIN ORDERS AS o WITH (NOLOCK) ON o.OrderKey = ph.OrderKey  
@@ -436,7 +450,15 @@ BEGIN
       SET @n_qty07      = 0 
       SET @n_TTLCNT     = 0
       SET @c_PDCartonNo = ''
-          
+		--START ML01
+		SET @c_snotes01 = ''
+		SET @c_snotes02 = ''
+		SET @c_snotes03 = ''
+		SET @c_snotes04 = ''
+		SET @c_snotes05 = ''
+		SET @c_snotes06 = ''
+		SET @c_snotes07 = ''
+		--END ML01          
       
       SELECT @n_CntRec = COUNT (1)
       FROM [#TEMPSKUContent]
@@ -448,7 +470,7 @@ BEGIN
        IF @b_debug = '1'              
        BEGIN             
          SELECT * FROM  #TEMPSKUContent  WITH (NOLOCK)  WHERE Retrieve='N'         
-         select   @n_CntRec '@n_CntRec',@n_TTLpage '@n_TTLpage'        
+         SELECT   @n_CntRec '@n_CntRec',@n_TTLpage '@n_TTLpage'        
        END  
        
        
@@ -463,6 +485,7 @@ BEGIN
 					,@n_qty = c.skuqty 
 					,@n_TTLCNT = c.ttlctn 
 					,@c_PDCartonNo = c.cartonno
+					,@c_snotes = c.snotes	--ML01
        FROM  #TEMPSKUContent c WITH (NOLOCK) 
        WHERE id = @n_intFlag
             
@@ -473,7 +496,8 @@ BEGIN
 			SET    @c_Scolor01  = @c_scolor 
 			SET    @c_SSize01   = @c_Ssize
 			SET    @c_SMEASM01  = @c_SMEASM
-			SET    @n_qty01     = @n_qty         
+			SET    @n_qty01     = @n_qty      
+			SET    @c_snotes01  = @c_snotes	--ML01 
        END   
        ELSE IF (@n_intFlag%@n_MaxLine) = 2
        BEGIN
@@ -481,7 +505,8 @@ BEGIN
 			SET    @c_Scolor02  = @c_scolor 
 			SET    @c_SSize02   = @c_Ssize
 			SET    @c_SMEASM02  = @c_SMEASM  
-		  SET     @n_qty02= @n_qty           
+		   SET    @n_qty02= @n_qty      
+		   SET    @c_snotes02  = @c_snotes	--ML01
        END  
        ELSE IF (@n_intFlag%@n_MaxLine) = 3
        BEGIN
@@ -489,7 +514,8 @@ BEGIN
 			SET    @c_Scolor03  = @c_scolor 
 			SET    @c_SSize03   = @c_Ssize
 			SET    @c_SMEASM03  = @c_SMEASM 
-			SET    @n_qty03 = @n_qty          
+			SET    @n_qty03 = @n_qty   
+			SET    @c_snotes03  = @c_snotes	--ML01
        END 
         
         ELSE IF (@n_intFlag%@n_MaxLine) = 4
@@ -498,7 +524,8 @@ BEGIN
 			SET    @c_Scolor04  = @c_scolor 
 			SET    @c_SSize04   = @c_Ssize
 			SET    @c_SMEASM04  = @c_SMEASM 
-			SET    @n_qty04 = @n_qty          
+			SET    @n_qty04 = @n_qty 
+			SET    @c_snotes04  = @c_snotes	--ML01
        END   
        ELSE IF (@n_intFlag%@n_MaxLine) = 5
        BEGIN
@@ -506,7 +533,8 @@ BEGIN
 			SET    @c_Scolor05  = @c_scolor 
 			SET    @c_SSize05   = @c_Ssize
 			SET    @c_SMEASM05  = @c_SMEASM 
-			SET    @n_qty05= @n_qty          
+			SET    @n_qty05= @n_qty 
+			SET    @c_snotes05  = @c_snotes	--ML01
        END  
        ELSE IF (@n_intFlag%@n_MaxLine) = 6
        BEGIN
@@ -514,7 +542,8 @@ BEGIN
 			SET    @c_Scolor06  = @c_scolor 
 			SET    @c_SSize06   = @c_Ssize
 			SET    @c_SMEASM06  = @c_SMEASM
-			SET    @n_qty06 = @n_qty           
+			SET    @n_qty06 = @n_qty   
+			SET    @c_snotes06  = @c_snotes	--ML01
        END   
        ELSE IF (@n_intFlag%@n_MaxLine) = 0
        BEGIN
@@ -522,7 +551,8 @@ BEGIN
 			SET    @c_Scolor07 = @c_scolor 
 			SET    @c_SSize07   = @c_Ssize
 			SET    @c_SMEASM07  = @c_SMEASM
-			SET    @n_qty07     = @n_qty            
+			SET    @n_qty07     = @n_qty 
+			SET    @c_snotes07  = @c_snotes	--ML01
        END  
        
         SET @n_ttlPqty = (@n_qty01+@n_qty02+@n_qty03+@n_qty04+@n_qty05+@n_qty06+@n_qty07)
@@ -568,7 +598,17 @@ BEGIN
            col45 = @c_Scolor07,
            col46 = @c_SSize07,
            col47 = @c_SMEASM07,
-           col48 = CASE WHEN @n_qty07 > 0 THEN CONVERT(NVARCHAR(5),@n_qty07) ELSE '' END  
+           col48 = CASE WHEN @n_qty07 > 0 THEN CONVERT(NVARCHAR(5),@n_qty07) ELSE '' END,  
+			  --START ML01
+			  col50 = @c_snotes01,
+			  col51 = @c_snotes02,
+			  col52 = @c_snotes03,
+			  col53 = @c_snotes04,
+			  col54 = @c_snotes05,
+			  col55 = @c_snotes06,
+			  col56 = @c_snotes07
+			  --END ML01
+			  
        WHERE col59 = @c_getPickslipno AND col06 = @c_getlabelno 
        AND id = @n_CurrentPage 
        
@@ -639,6 +679,15 @@ BEGIN
       SET @c_SSize07    = ''
       SET @c_SMEASM07   = ''
       SET @n_qty07      = 0 
+		--START ML01
+		SET @c_snotes01 = ''
+		SET @c_snotes02 = ''
+		SET @c_snotes03 = ''
+		SET @c_snotes04 = ''
+		SET @c_snotes05 = ''
+		SET @c_snotes06 = ''
+		SET @c_snotes07 = ''
+		--END ML01   
     	       
     	  END       
     	  
@@ -656,7 +705,7 @@ BEGIN
              
           
    FETCH NEXT FROM CUR_StartRecLoop INTO @c_Statecity,@c_ExtOrdKey,@c_OHCompany,@c_billtokey,@c_consigneekey,@c_labelno,@c_czip ,
-                               @c_OHAddress1, @c_OHAddress2,@c_OHAddress3,@c_OHAddress4,@n_ttlqty   ,@c_Pickslipno           
+                               @c_OHAddress1, @c_OHAddress2,@c_OHAddress3,@c_OHAddress4,@n_ttlqty   ,@c_Pickslipno,@c_ohloadkey,@c_ohnotes           
           
    END -- While                     
    CLOSE CUR_StartRecLoop                    
@@ -693,6 +742,10 @@ END -- procedure
 GO
 GRANT EXECUTE ON [dbo].[isp_Bartender_Shipper_Label_KR_01] TO nsql 
 GO 
+
+
+
+
 
 
       
