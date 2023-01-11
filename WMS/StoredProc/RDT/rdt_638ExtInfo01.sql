@@ -13,7 +13,8 @@ GO
 /* Date       Rev  Author     Purposes                                     */
 /* 2021-04-26 1.0  James      WMS-16668 Created                            */
 /* 2021-07-02 1.1  James      WMS-17405 Add @nAfterStep param (james01)    */
-/* 2022-09-23 1.2   YeeKung   WMS-20820 Extended refno length (yeekung01)   */
+/* 2022-09-23 1.2  YeeKung   WMS-20820 Extended refno length (yeekung01)   */
+/* 2023-01-04 1.3  James      WMS-21408 Add item flag popup (james02)      */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_638ExtInfo01] (
@@ -67,7 +68,13 @@ AS
    DECLARE @cColumnName    NVARCHAR( 20)
    DECLARE @nTtl_ASN       INT
    DECLARE @nTtl_Qty       INT
-
+   DECLARE @curPM          CURSOR
+   DECLARE @cPM            NVARCHAR( 30)
+   DECLARE @cTempFlag      NVARCHAR( 20) = ''
+   DECLARE @nErrNo         INT
+   DECLARE @cErrMsg        NVARCHAR( 20)
+   DECLARE @cErrMsg1       NVARCHAR( 20)
+   
    IF @nFunc = 638 -- ECOM return
    BEGIN
       IF @nStep = 3 -- SKU, Qty
@@ -122,6 +129,94 @@ AS
                   BREAK
 
                FETCH NEXT FROM @curSearch INTO @cColumnName
+            END
+            CLOSE @curSearch
+            DEALLOCATE @curSearch
+            
+            -- (james02)
+            IF OBJECT_ID('tempdb..#ASN') IS NOT NULL
+               DROP TABLE #ASN
+
+            CREATE TABLE #ASN  (
+               ReceiptKey     NVARCHAR( 10))
+
+            IF OBJECT_ID('tempdb..#ProductModel') IS NOT NULL
+               DROP TABLE #ProductModel
+
+            CREATE TABLE #ProductModel  (
+               ProductModel     NVARCHAR( 30))
+
+            SET @cSQL = ''
+            SET @cSQLParam = ''
+            SET @curSearch = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+               SELECT Code
+               FROM CodeLKUP WITH (NOLOCK)
+               WHERE ListName = 'REFNOLKUP'
+                  AND StorerKey = @cStorerKey
+                  AND Code2 = @cFacility
+               ORDER BY Short
+            OPEN @curSearch
+            FETCH NEXT FROM @curSearch INTO @cColumnName
+            WHILE @@FETCH_STATUS = 0
+            BEGIN
+               -- Check column valid
+               IF NOT EXISTS( SELECT 1
+                  FROM INFORMATION_SCHEMA.COLUMNS
+                  WHERE TABLE_NAME = 'Receipt'
+                     AND COLUMN_NAME = @cColumnName
+                     AND DATA_TYPE = 'nvarchar')
+                  GOTO Quit
+                  
+               SET @cSQL =
+                  ' INSERT INTO #ASN (ReceiptKey) ' +
+                  ' SELECT DISTINCT R.ReceiptKey ' +
+                  ' FROM dbo.Receipt R WITH (NOLOCK) ' +
+                  ' JOIN dbo.ReceiptDetail RD WITH (NOLOCK) ON (R.ReceiptKey = RD.ReceiptKey) ' +
+                  ' WHERE R.Facility = @cFacility ' +
+                     ' AND R.StorerKey = @cStorerKey ' +
+                     ' AND R.Status <> ''9'' ' +
+                     ' AND R.ASNStatus NOT IN (''CANC'', ''9'') ' +
+                     ' AND R.' + @cColumnName + ' = @cRefNo '
+               SET @cSQLParam =
+                  ' @cFacility      NVARCHAR(5),  ' +
+                  ' @cStorerKey     NVARCHAR(15), ' +
+                  ' @cRefNo         NVARCHAR(20)  ' 
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @cFacility,
+                  @cStorerKey,
+                  @cRefNo
+               
+               FETCH NEXT FROM @curSearch INTO @cColumnName
+            END
+            
+            INSERT INTO #ProductModel (ProductModel)
+            SELECT DISTINCT ( RIGHT( SKU.AltSku, 5)) 
+            FROM dbo.RECEIPTDETAIL RD WITH (NOLOCK)
+            JOIN dbo.SKU SKU WITH (NOLOCK) ON ( RD.StorerKey = SKU.StorerKey AND RD.Sku = SKU.Sku)
+            WHERE EXISTS ( SELECT 1 FROM #ASN ASN WHERE ASN.ReceiptKey = RD.ReceiptKey)
+            AND   SKU.ProductModel = 'TRI'
+
+            IF @@ROWCOUNT > 0
+            BEGIN
+               SET @curPM = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+               SELECT ProductModel FROM #ProductModel
+               OPEN @curPM
+               FETCH NEXT FROM @curPM INTO @cPM
+               WHILE @@FETCH_STATUS = 0
+               BEGIN
+               	SET @cTempFlag = @cTempFlag + RTRIM( @cPM) + ','
+               	
+               	FETCH NEXT FROM @curPM INTO @cPM
+               END
+               
+               SET @cTempFlag = REVERSE( STUFF( REVERSE( @cTempFlag), 1, 1, ''))
+               
+               SET @nErrNo = 0  
+               SET @cErrMsg1 = @cTempFlag  
+               EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1  
+               IF @nErrNo = 1  
+                  SET @cErrMsg1 = ''  
+               SET @nErrNo = 0 
             END
          END
       END
