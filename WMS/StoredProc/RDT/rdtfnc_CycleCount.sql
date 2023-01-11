@@ -138,6 +138,8 @@ GO
 /*                           step 17 (bypass step 13) (james30)         */
 /*                           Add check digit format at step Qty         */
 /*                           Add config step 17 must key in qty         */
+/* 07-Dec-2022 5.5  James    WMS-21288 Extend SKU length, add output    */
+/*                           Qty for decodesp (james31)                 */
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_CycleCount] (
    @nMobile    INT,
@@ -347,7 +349,11 @@ DECLARE  @cLottable01_Code    NVARCHAR( 20),
    @nID_Count              INT,            -- (james28)
    @tExtUpdate             VARIABLETABLE,  -- (james29)
    @cExtendedUpdateSP      NVARCHAR( 20),  -- (james29)
-
+   @cPUOM                  NVARCHAR(  1),
+   @nPUOM_Div              INT,
+   @nPQTY                  INT,
+   @nMQTY                  INT,
+   
    -- (james18)
    @c_oFieled01 NVARCHAR(20), @c_oFieled02 NVARCHAR(20),
    @c_oFieled03 NVARCHAR(20), @c_oFieled04 NVARCHAR(20),
@@ -6360,7 +6366,7 @@ BEGIN
       IF @cNewSKU = '' OR @cNewSKU IS NULL
       BEGIN
          SET @nErrNo = 62119
-   SET @cErrMsg = rdt.rdtgetmessage( 62119, @cLangCode, 'DSP') -- 'SKU/UPC req'
+         SET @cErrMsg = rdt.rdtgetmessage( 62119, @cLangCode, 'DSP') -- 'SKU/UPC req'
          GOTO SKU_Add_Sku_Fail
       END
 
@@ -6423,6 +6429,7 @@ BEGIN
             BEGIN
                SET @cBarcode = @cInField03
                SET @cUPC = ''
+               SET @nQTY = 0
 
                -- Standard decode
                IF @cDecodeSP = '1'
@@ -6565,7 +6572,8 @@ BEGIN
          BEGIN
             SET @cBarcode = @cInField03
             SET @cUPC = ''
-
+            SET @nQTY = 0
+            
             -- Standard decode
             IF @cDecodeSP = '1'
             BEGIN
@@ -6645,7 +6653,7 @@ BEGIN
 
          SET @b_success = 0
          EXEC dbo.nspg_GETSKU @cStorer, @cNewSKU OUTPUT, @b_success OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
-  IF @b_success = 0
+         IF @b_success = 0
          BEGIN
             SET @nErrNo = 62120
             SET @cErrMsg = rdt.rdtgetmessage( 62120, @cLangCode, 'DSP') -- 'Invalid SKU'
@@ -6653,6 +6661,9 @@ BEGIN
          END
       END
       -- SHONG001 (End)
+
+      -- Get default UOM
+      SELECT @cPUOM = DefaultUOM FROM rdt.rdtUser WITH (NOLOCK) WHERE UserName = @cUserName
 
       SELECT TOP 1
          @cNewSKUDescr = SKU.DESCR,
@@ -6663,7 +6674,16 @@ BEGIN
          @cNewEachUOM  = PAC.PACKUOM3,
          @cNewPPK      = CASE WHEN SKU.PrePackIndicator = '2'
                            THEN 'PPK:' + CAST( SKU.PackQtyIndicator AS NVARCHAR( 2))
-                         ELSE '' END
+                         ELSE '' END,
+         @nPUOM_Div = CAST( IsNULL(
+         CASE @cPUOM
+            WHEN '2' THEN PAC.CaseCNT
+            WHEN '3' THEN PAC.InnerPack
+            WHEN '6' THEN PAC.QTY
+            WHEN '1' THEN PAC.Pallet
+            WHEN '4' THEN PAC.OtherUnit1
+            WHEN '5' THEN PAC.OtherUnit2
+         END, 1) AS INT)
       FROM dbo.SKU SKU (NOLOCK)
       INNER JOIN dbo.PACK PAC (NOLOCK) ON (SKU.PackKey = PAC.PackKey)
       WHERE SKU.StorerKey = @cStorer
@@ -6700,6 +6720,20 @@ BEGIN
          GOTO SKU_Add_Sku_Fail
       END
 
+      -- Convert to prefer UOM QTY
+      IF @cPUOM = '6' OR -- When preferred UOM = master unit
+         @nPUOM_Div = 0  -- UOM not setup
+      BEGIN
+         SET @nPQTY = 0
+         SET @nMQTY = @nQTY
+      END
+      ELSE
+      BEGIN
+         SET @nPQTY = @nQTY / @nPUOM_Div -- Calc QTY in preferred UOM
+         SET @nMQTY = @nQTY % @nPUOM_Div -- Calc the remaining in master unit
+         SET @cFieldAttr08 = '' -- @nPQTY
+      END
+         
       -- If SKUCONFIG setup
       IF ISNULL(@cSKUDefaultUOM, '0') <> '0'
       BEGIN
@@ -6745,13 +6779,13 @@ BEGIN
          SET @cOutField03 = @cNewSKU
          SET @cOutField04 = @cNewSKUDescr1
          SET @cOutField05 = @cNewSKUDescr2
-         SET @cOutField06 = ''                            -- QTY (CS)
+         SET @cOutField06 = @nPQTY                            -- QTY (CS)
          SET @cOutField07 = @cNewCaseUOM                  -- UOM (CS)
-         SET @cOutField08 = ''      -- QTY (EA)
+         SET @cOutField08 = @nMQTY      -- QTY (EA)
          SET @cOutField09 = @cNewEachUOM + ' ' + @cNewPPK -- UOM (EA) + PPK
          SET @cOutField10 = ''
          SET @cOutField11 = ''
-        SET @cOutField12 = ''
+         SET @cOutField12 = ''
       END
 
       SET @cSKU = @cNewSKU -- (james10)
