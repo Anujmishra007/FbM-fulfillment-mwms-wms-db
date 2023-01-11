@@ -1,7 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdt_PutawayBySKU_GetSuggestLOC]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdt_PutawayBySKU_GetSuggestLOC]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -14,9 +10,11 @@ GO
 /*                                                                      */
 /* Date        Rev  Author   Purposes                                   */
 /* 07-12-2016  1.0  Ung      WMS-751 Created                            */
+/* 04-10-2022  1.1  James    WMS-20881 Add Putaway Strategy Key as part */
+/*                           of the standard putaway logic (james01)    */
 /************************************************************************/
 
-CREATE PROC [rdt].[rdt_PutawayBySKU_GetSuggestLOC] (
+CREATE OR ALTER PROC [rdt].[rdt_PutawayBySKU_GetSuggestLOC] (
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -84,6 +82,25 @@ BEGIN
 
          IF @nErrNo <> 0
             GOTO Quit
+         ELSE
+         	GOTO Sucess
+      END
+      ELSE
+      BEGIN
+         -- Suggest LOC
+         EXEC @nErrNo = [dbo].[nspRDTPASTD]
+              @c_userid          = 'RDT'
+            , @c_storerkey       = @cStorerKey
+            , @c_lot             = @cLOT
+            , @c_sku             = @cSKU
+            , @c_id              = @cID
+            , @c_fromloc         = @cLOC
+            , @n_qty             = @nQTY
+            , @c_uom             = '' -- not used
+            , @c_packkey         = '' -- optional, if pass-in SKU
+            , @n_putawaycapacity = 0
+            , @c_final_toloc     = @cSuggestedLOC OUTPUT
+            , @c_PAStrategyKey   = @cExtendedPutawaySP
       END
    END
    ELSE
@@ -101,41 +118,42 @@ BEGIN
          , @c_packkey         = '' -- optional, if pass-in SKU
          , @n_putawaycapacity = 0
          , @c_final_toloc     = @cSuggestedLOC OUTPUT
-
-      -- Check suggest loc
-      IF @cSuggestedLOC = ''
-      BEGIN
-         SET @nErrNo = -1
-         GOTO Quit
-      END
-      
-      -- Lock suggested location
-      IF @cSuggestedLOC <> '' 
-      BEGIN
-         -- Handling transaction
-         SET @nTranCount = @@TRANCOUNT
-         BEGIN TRAN  -- Begin our own transaction
-         SAVE TRAN rdt_PutawayBySKU_GetSuggestLOC -- For rollback or commit only our own transaction
-         
-         EXEC rdt.rdt_Putaway_PendingMoveIn @cUserName, 'LOCK'
-            ,@cLOC
-            ,@cID
-            ,@cSuggestedLOC
-            ,@cStorerKey
-            ,@nErrNo  OUTPUT
-            ,@cErrMsg OUTPUT
-            ,@cSKU          = @cSKU
-            ,@nPutawayQTY   = @nQTY
-            ,@cFromLOT      = @cLOT
-            ,@cUCCNo        = @cUCC
-            ,@nPABookingKey = @nPABookingKey OUTPUT
-         
-         IF @nErrNo <> 0
-            GOTO RollBackTran
-
-         COMMIT TRAN rdt_PutawayBySKU_GetSuggestLOC -- Only commit change made here
-      END
    END
+            
+   -- Check suggest loc
+   IF @cSuggestedLOC = ''
+   BEGIN
+      SET @nErrNo = -1
+      GOTO Quit
+   END
+      
+   -- Lock suggested location
+   IF @cSuggestedLOC <> '' 
+   BEGIN
+      -- Handling transaction
+      SET @nTranCount = @@TRANCOUNT
+      BEGIN TRAN  -- Begin our own transaction
+      SAVE TRAN rdt_PutawayBySKU_GetSuggestLOC -- For rollback or commit only our own transaction
+         
+      EXEC rdt.rdt_Putaway_PendingMoveIn @cUserName, 'LOCK'
+         ,@cLOC
+         ,@cID
+         ,@cSuggestedLOC
+         ,@cStorerKey
+         ,@nErrNo  OUTPUT
+         ,@cErrMsg OUTPUT
+         ,@cSKU          = @cSKU
+         ,@nPutawayQTY   = @nQTY
+         ,@cFromLOT      = @cLOT
+         ,@cUCCNo        = @cUCC
+         ,@nPABookingKey = @nPABookingKey OUTPUT
+         
+      IF @nErrNo <> 0
+         GOTO RollBackTran
+
+      COMMIT TRAN rdt_PutawayBySKU_GetSuggestLOC -- Only commit change made here
+   END
+
    GOTO Quit
 
 RollBackTran:
@@ -143,6 +161,7 @@ RollBackTran:
 Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
       COMMIT TRAN
+Sucess:
 END
 GO
 
