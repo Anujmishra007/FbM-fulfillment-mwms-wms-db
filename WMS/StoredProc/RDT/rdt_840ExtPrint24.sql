@@ -11,6 +11,8 @@ GO
 /*                                                                      */  
 /* Date       Rev  Author     Purposes                                  */  
 /* 2022-07-12 1.0  James      WMS-20111. Created                        */  
+/* 2022-12-29 1.1  James      WMS-21433 Only shipperkey = KERRY can     */
+/*                            print kerry label (james01)               */
 /************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_840ExtPrint24] (  
@@ -52,7 +54,9 @@ AS
   
    DECLARE @tShippLabel    VariableTable  
    DECLARE @tPackList      VariableTable  
-     
+   
+   DECLARE @cShipperKey    NVARCHAR( 15)
+   
    SELECT @cLabelPrinter = Printer,  
           @cPaperPrinter = Printer_Paper,  
           @cFacility = Facility,  
@@ -64,6 +68,10 @@ AS
    BEGIN  
       IF @nStep = 4  
       BEGIN  
+      	SELECT @cShipperKey = ShipperKey
+      	FROM dbo.ORDERS WITH (NOLOCK)
+      	WHERE OrderKey = @cOrderkey
+      	
          SET @cShippLabel = rdt.RDTGetConfig( @nFunc, 'SHIPPLABEL', @cStorerkey)    
          IF @cShippLabel = '0'    
             SET @cShippLabel = ''    
@@ -72,7 +80,7 @@ AS
          IF @cPackList = '0'  
             SET @cPackList = ''  
   
-         IF @cShippLabel <> ''  
+         IF @cShippLabel <> '' AND @cShipperKey = 'KERRY' 
          BEGIN  
             SELECT @nExpectedQty = ISNULL(SUM(Qty), 0) FROM PickDetail WITH (NOLOCK)
             WHERE Orderkey = @cOrderkey
