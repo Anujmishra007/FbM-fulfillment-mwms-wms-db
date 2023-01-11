@@ -184,7 +184,7 @@ EXECUTE rdt.rdtAddScn 673, 'ENG',
    @cLine02 = 'ID:',
    @cLine03 = '%18d02',
    @cLine04 = 'SKU/UPC:',
-   @cLine05 = '%30i03',
+   @cLine05 = '%60i03',  -- WMS-21288 Extend length
    @cLine14 = '%e'
 
 -- Screen 12   
