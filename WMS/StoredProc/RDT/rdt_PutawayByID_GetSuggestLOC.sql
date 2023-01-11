@@ -1,7 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdt_PutawayByID_GetSuggestLOC]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdt_PutawayByID_GetSuggestLOC]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -14,9 +10,11 @@ GO
 /*                                                                      */
 /* Date        Rev  Author   Purposes                                   */
 /* 23-03-2013  1.0  Ung      SOS336606. Created                         */
+/* 04-10-2022  1.1  James    WMS-20881 Add Putaway Strategy Key as part */
+/*                           of the standard putaway logic (james01)    */
 /************************************************************************/
 
-CREATE PROC [rdt].[rdt_PutawayByID_GetSuggestLOC] (
+CREATE OR ALTER PROC [rdt].[rdt_PutawayByID_GetSuggestLOC] (
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -83,6 +81,27 @@ BEGIN
 
          IF @nErrNo <> 0
             GOTO Quit
+         ELSE
+            GOTO Success
+      END
+      ELSE IF EXISTS( SELECT 1 FROM PutawayStrategy WITH (NOLOCK) WHERE PutawayStrategyKey = @cExtendedPutawaySP)
+      BEGIN
+         -- Suggest LOC
+         EXEC @nErrNo = [dbo].[nspRDTPASTD]
+              @c_userid          = 'RDT'
+            , @c_storerkey       = @cStorerKey
+            , @c_lot             = ''
+            , @c_sku             = ''
+            , @c_id              = @cID
+            , @c_fromloc         = @cFromLOC
+            , @n_qty             = 0
+            , @c_uom             = '' -- not used
+            , @c_packkey         = '' -- optional, if pass-in SKU
+            , @n_putawaycapacity = 0
+            , @c_final_toloc     = @cSuggLOC          OUTPUT
+            , @c_PickAndDropLoc  = @cPickAndDropLOC   OUTPUT
+            , @c_FitCasesInAisle = @cFitCasesInAisle  OUTPUT
+            , @c_PAStrategyKey   = @cExtendedPutawaySP
       END
    END
    ELSE
@@ -102,54 +121,55 @@ BEGIN
          , @c_final_toloc     = @cSuggLOC          OUTPUT
          , @c_PickAndDropLoc  = @cPickAndDropLOC   OUTPUT
          , @c_FitCasesInAisle = @cFitCasesInAisle  OUTPUT
-
-      -- Check suggest loc
-      IF @cSuggLOC = ''
-      BEGIN
-         SET @nErrNo = -1
-         GOTO Quit
-      END
-   
-      -- Lock suggested location
-      IF @cSuggLOC <> '' 
-      BEGIN
-         -- Handling transaction
-         SET @nTranCount = @@TRANCOUNT
-         BEGIN TRAN  -- Begin our own transaction
-         SAVE TRAN rdt_PutawayByID_GetSuggestLOC -- For rollback or commit only our own transaction
-         
-         IF @cFitCasesInAisle <> 'Y'
-         BEGIN
-            EXEC rdt.rdt_Putaway_PendingMoveIn @cUserName, 'LOCK'
-               ,@cFromLOC
-               ,@cID
-               ,@cSuggLOC
-               ,@cStorerKey
-               ,@nErrNo  OUTPUT
-               ,@cErrMsg OUTPUT
-               ,@nPABookingKey = @nPABookingKey OUTPUT
-            IF @nErrNo <> 0
-               GOTO RollBackTran
-         END
-   
-         -- Lock PND location
-         IF @cPickAndDropLOC <> ''
-         BEGIN
-            EXEC rdt.rdt_Putaway_PendingMoveIn @cUserName, 'LOCK'
-               ,@cFromLOC
-               ,@cID
-               ,@cPickAndDropLOC
-               ,@cStorerKey
-               ,@nErrNo  OUTPUT
-               ,@cErrMsg OUTPUT
-               ,@nPABookingKey = @nPABookingKey OUTPUT
-            IF @nErrNo <> 0
-               GOTO RollBackTran
-         END
-   
-         COMMIT TRAN rdt_PutawayByID_GetSuggestLOC -- Only commit change made here
-      END
    END
+           
+   -- Check suggest loc
+   IF @cSuggLOC = ''
+   BEGIN
+      SET @nErrNo = -1
+      GOTO Quit
+   END
+   
+   -- Lock suggested location
+   IF @cSuggLOC <> '' 
+   BEGIN
+      -- Handling transaction
+      SET @nTranCount = @@TRANCOUNT
+      BEGIN TRAN  -- Begin our own transaction
+      SAVE TRAN rdt_PutawayByID_GetSuggestLOC -- For rollback or commit only our own transaction
+         
+      IF @cFitCasesInAisle <> 'Y'
+      BEGIN
+         EXEC rdt.rdt_Putaway_PendingMoveIn @cUserName, 'LOCK'
+            ,@cFromLOC
+            ,@cID
+            ,@cSuggLOC
+            ,@cStorerKey
+            ,@nErrNo  OUTPUT
+            ,@cErrMsg OUTPUT
+            ,@nPABookingKey = @nPABookingKey OUTPUT
+         IF @nErrNo <> 0
+            GOTO RollBackTran
+      END
+   
+      -- Lock PND location
+      IF @cPickAndDropLOC <> ''
+      BEGIN
+         EXEC rdt.rdt_Putaway_PendingMoveIn @cUserName, 'LOCK'
+            ,@cFromLOC
+            ,@cID
+            ,@cPickAndDropLOC
+            ,@cStorerKey
+            ,@nErrNo  OUTPUT
+            ,@cErrMsg OUTPUT
+            ,@nPABookingKey = @nPABookingKey OUTPUT
+         IF @nErrNo <> 0
+            GOTO RollBackTran
+      END
+   
+      COMMIT TRAN rdt_PutawayByID_GetSuggestLOC -- Only commit change made here
+   END
+
    GOTO Quit
 
 RollBackTran:
@@ -158,7 +178,7 @@ Fail:
 Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
       COMMIT TRAN
-
+Success:
 END
 GO
 
