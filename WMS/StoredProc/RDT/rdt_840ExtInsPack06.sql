@@ -23,7 +23,8 @@ GO
 /*                           (james02)                                      */
 /* 2021-04-01  YeeKung 1.3   WMS-16717 Add serialno and serialqty           */
 /*                              Params (yeekung01)                          */
-/* 03-08-2022  YeeKung 1.4   WMS-20495 add label type     (yeekung02)       */  
+/* 03-08-2022  YeeKung 1.4   WMS-20495 Add Shiplabels    (yeekung02)        */  
+/* 12-08-2022  YeeKung 1.5   WMS-20499 Add PDF Print     (yeekung03)        */
 /****************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_840ExtInsPack06] (
@@ -39,6 +40,8 @@ CREATE OR ALTER PROC [RDT].[rdt_840ExtInsPack06] (
    @cSKU                      NVARCHAR( 20),
    @nQty                      INT,
    @nCartonNo                 INT,
+   @cSerialNo                 NVARCHAR( 30),
+   @nSerialQTY                INT,
    @cLabelNo                  NVARCHAR( 20) OUTPUT,
    @nErrNo                    INT           OUTPUT,
    @cErrMsg                   NVARCHAR( 20) OUTPUT
@@ -80,11 +83,15 @@ BEGIN
            @nPD_CartonNo      INT,
            @nFromCartonNo     INT,
            @nToCartonNo       INT,
-           @cOrderGroup       NVARCHAR(20)
+           @cOrderGroup       NVARCHAR(20),
+           @cEcomPlatform     VARCHAR(20)
 
    DECLARE @b_success         INT,
            @n_err             INT,
            @c_errmsg          NVARCHAR( 20)
+
+              
+   DECLARE @cShipLabelEcom    NVARCHAR(20)
 
    SET @nTranCount = @@TRANCOUNT
 
@@ -144,6 +151,7 @@ BEGIN
          --, @cTrackNo = UserDefine04
          , @cTrackNo = TrackingNo   -- (james02)
          , @cOrderGroup = ordergroup
+         , @cEcomPlatform = Ecom_platform --(yeekung03)
    FROM dbo.Orders WITH (NOLOCK)
    WHERE Orderkey = @cOrderkey
 
@@ -383,11 +391,14 @@ BEGIN
       END
       ELSE
       BEGIN
-         SET @cShipLabel = rdt.RDTGetConfig( @nFunc, 'ShipLabel', @cStorerKey)      
+         SET @cShipLabel = rdt.RDTGetConfig( @nFunc, 'ShippLabel', @cStorerKey)      
          IF @cShipLabel = '0'      
             SET @cShipLabel = ''   
       END
-
+      SET @cShipLabelEcom = rdt.RDTGetConfig( @nFunc, 'ShipLabelEC', @cStorerKey)        
+      IF @cShipLabelEcom = '0'        
+         SET @cShipLabelEcom = ''   
+  
       IF @cShipLabel <> ''
       BEGIN
 
@@ -402,16 +413,66 @@ BEGIN
          INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@nToCartonNo',     @nToCartonNo)
          INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@cLoadKey',        @cLoadKey)
 
-         -- Print label
-         EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, '',
-            @cShipLabel,  -- Report type
-            @tSHIPPLABEL, -- Report params
-            'rdt_840ExtInsPack06',
-            @nErrNo  OUTPUT,
-            @cErrMsg OUTPUT
+         IF @cEcomPlatform='PDD'
+         BEGIN
+            SET @cShipLabel=@cShipLabelEcom
 
-         IF @nErrNo <> 0
-            GOTO Fail
+            DECLARE @cPrinter      NVARCHAR( 10)
+                  ,@cPrintData        NVARCHAR( MAX)
+                  ,@cWorkingFilePath  NVARCHAR( 250)
+                  ,@cFilePath         NVARCHAR( 250)
+                  ,@cFileType         NVARCHAR( 10)
+                  ,@cPrintServer      NVARCHAR( 50)
+                  ,@cPrintFilePath  NVARCHAR(250)
+                  ,@cFileName         NVARCHAR( 100)
+
+            DECLARE @cWinPrinterName   NVARCHAR( 100),
+                        @cPrintCommand       NVARCHAR(MAX) 
+
+            SELECT @cWorkingFilePath = UDF01,
+                     @cFileType = UDF02,
+                     @cPrintServer = UDF03,
+                     @cPrintFilePath = Notes   -- foxit program
+            FROM dbo.CODELKUP WITH (NOLOCK)      
+            WHERE LISTNAME = 'printlabel'        
+            AND   StorerKey = @cStorerKey
+            Order By Code
+
+            SELECT @cWinPrinterName = WinPrinter
+            FROM rdt.rdtPrinter WITH (NOLOCK)  
+            WHERE PrinterID = @cLabelPrinter
+
+            SET @cFileName =  RTRIM( @cTrackNo) + '.' + @cFileType
+
+            IF CHARINDEX( 'SEND2PRINTER', @cPrintFilePath) > 0    
+               SET @cPrintCommand = '"' + @cPrintFilePath + '" "' + @cWorkingFilePath + '\' + @cFileName + '" "33" "3" "' + @cWinPrinterName + '"'  
+
+            -- Print label
+            EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, '',
+               @cShipLabel,  -- Report type
+               @tSHIPPLABEL, -- Report params
+               'rdt_840ExtInsPack06',
+               @nErrNo  OUTPUT,
+               @cErrMsg OUTPUT,
+               1,
+               @cPrintCommand
+
+            IF @nErrNo <> 0
+               GOTO QUIT
+         END
+         ELSE
+         BEGIN
+            -- Print label
+            EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, '',
+               @cShipLabel,  -- Report type
+               @tSHIPPLABEL, -- Report params
+               'rdt_840ExtInsPack06',
+               @nErrNo  OUTPUT,
+               @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO QUIT
+         END
       END
    END
 
