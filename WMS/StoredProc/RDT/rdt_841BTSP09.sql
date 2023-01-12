@@ -21,7 +21,8 @@ GO
 /* Modifications log:                                                   */    
 /*                                                                      */    
 /* Date         Rev  Author   Purposes                                  */      
-/* 03-08-2022  1.0  yeekung  WMS-20464 Created                          */     
+/* 03-08-2022  1.0  yeekung  WMS-20464 Created                          */ 
+/* 12-08-2022  1.1  yeekung  WMS-20500 Add PDF print (yeekung01)        */
 /************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdt_841BTSP09] (    
@@ -55,6 +56,9 @@ BEGIN
           ,@cShipperKey AS NVARCHAR(10)    
          ,@nCartonNo         INT     
          ,@cOrderGroup  NVARCHAR(20)
+         ,@cTrackingno  NVARCHAR(20)
+         ,@cPlatform    NVARCHAR(20)
+         , @cShipLabelEcom NVARCHAR(20)
     
     
    SET @nErrNo     = 0    
@@ -108,6 +112,8 @@ BEGIN
           ,@cShipperKey     = ShipperKey    
           ,@cLoadKey        = LoadKey   
           , @cOrderGroup    = ordergroup
+          ,@cTrackingno     = Trackingno
+          ,@cPlatform       = Ecom_Platform
    FROM dbo.Orders WITH (NOLOCK)    
    WHERE StorerKey = @cStorerKey    
    AND OrderKey = @cOrderKey     
@@ -154,6 +160,10 @@ BEGIN
          IF @cLabelType = '0'      
             SET @cLabelType = ''   
       END
+
+      SET @cShipLabelEcom = rdt.RDTGetConfig( @nFunc, 'ShipLabelEC', @cStorerKey)        
+      IF @cShipLabelEcom = '0'        
+         SET @cShipLabelEcom = ''   
     
       IF @cLabelType <> ''      
       BEGIN      
@@ -170,15 +180,62 @@ BEGIN
          INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@cloadkey',  @cLoadKey)    
          INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@cOrderkey',  @cOrderKey)    
          INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@cShipperKey',  @cShipperKey)    
-         INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@nCartonNo',    @nCartonNo)      
-      
-         -- Print label      
-         EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, 2, 1, @cFacility, @cStorerkey, @cPrinterID, '',       
-            @cLabelType, -- Report type      
-            @tSHIPPLABEL, -- Report params      
-            'rdt_841BTSP09',       
-            @nErrNo  OUTPUT,      
-            @cErrMsg OUTPUT       
+         INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@nCartonNo',    @nCartonNo)  
+         
+
+         IF @cPlatform='PDD'
+         BEGIN
+            DECLARE @cPrinter      NVARCHAR( 10)
+                  ,@cPrintData        NVARCHAR( MAX)
+                  ,@cWorkingFilePath  NVARCHAR( 250)
+                  ,@cFilePath         NVARCHAR( 250)
+                  ,@cFileType         NVARCHAR( 10)
+                  ,@cPrintServer      NVARCHAR( 50)
+                  ,@cPrintFilePath  NVARCHAR(250)
+                  ,@cFileName         NVARCHAR( 100)
+
+            DECLARE @cWinPrinterName   NVARCHAR( 100),
+                       @cPrintCommand       NVARCHAR(MAX) 
+
+            SELECT @cWorkingFilePath = UDF01,
+                     @cFileType = UDF02,
+                     @cPrintServer = UDF03,
+                     @cPrintFilePath = Notes   -- foxit program
+            FROM dbo.CODELKUP WITH (NOLOCK)      
+            WHERE LISTNAME = 'printlabel'        
+            AND   StorerKey = @cStorerKey
+            Order By Code
+
+            SELECT @cWinPrinterName = WinPrinter
+            FROM rdt.rdtPrinter WITH (NOLOCK)  
+            WHERE PrinterID = @cPrinterID
+
+            SET @cFileName =  RTRIM( @cTrackingno) + '.' + @cFileType
+
+            IF CHARINDEX( 'SEND2PRINTER', @cPrintFilePath) > 0    
+               SET @cPrintCommand = '"' + @cPrintFilePath + '" "' + @cWorkingFilePath + '\' + @cFileName + '" "33" "3" "' + @cWinPrinterName + '"'  
+
+            SET @cLabelType=@cShipLabelEcom
+            -- Print label
+            EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, 2, 1, @cFacility, @cStorerkey, @cPrinterID, '',
+               @cLabelType,  -- Report type
+               @tSHIPPLABEL, -- Report params
+               'rdt_840ExtInsPack06',
+               @nErrNo  OUTPUT,
+               @cErrMsg OUTPUT,
+               1,
+               @cPrintCommand
+         END
+         ELSE
+         BEGIN
+            -- Print label      
+            EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, 2, 1, @cFacility, @cStorerkey, @cPrinterID, '',       
+               @cLabelType, -- Report type      
+               @tSHIPPLABEL, -- Report params      
+               'rdt_841BTSP09',       
+               @nErrNo  OUTPUT,      
+               @cErrMsg OUTPUT       
+         END
       END    
       ELSE    
       BEGIN    
