@@ -1,22 +1,24 @@
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
-GO    
+GO
 
-/************************************************************************/    
-/* Store procedure: rdt_1653CreateMbol01                                */    
-/* Copyright      : IDS                                                 */    
-/*                                                                      */    
-/* Called from: rdt_TrackNo_SortToLane_CreateMbol                       */    
-/*                                                                      */    
-/* Purpose: Create Pallet and MBOL record                               */    
-/*                                                                      */    
-/* Modifications log:                                                   */    
-/* Date        Rev  Author   Purposes                                   */    
-/* 2022-09-15  1.0  James    WMS-20667. Created                         */  
-/************************************************************************/    
-    
-CREATE OR ALTER PROC [RDT].[rdt_1653CreateMbol01] (    
+/************************************************************************/
+/* Store procedure: rdt_1653CreateMbol01                                */
+/* Copyright      : IDS                                                 */
+/*                                                                      */
+/* Called from: rdt_TrackNo_SortToLane_CreateMbol                       */
+/*                                                                      */
+/* Purpose: Create Pallet and MBOL record                               */
+/*                                                                      */
+/* Modifications log:                                                   */
+/* Date        Rev  Author   Purposes                                   */
+/* 2022-09-15  1.0  James    WMS-20667. Created                         */
+/* 2023-01-09  1.1  SYCHUA   JSM-115662 Fix to reset MBOLKEY value when */
+/*                           error if MBOLKEY is generated (SY01)       */
+/************************************************************************/
+
+CREATE OR ALTER PROC [RDT].[rdt_1653CreateMbol01] (
    @nMobile        INT,
    @nFunc          INT,
    @cLangCode      NVARCHAR( 3),
@@ -33,27 +35,29 @@ CREATE OR ALTER PROC [RDT].[rdt_1653CreateMbol01] (
    @tCreateMBOLVar VariableTable READONLY,
    @nErrNo         INT           OUTPUT,
    @cErrMsg        NVARCHAR( 20) OUTPUT
-) AS    
-BEGIN    
-   SET NOCOUNT ON    
-   SET ANSI_NULLS OFF    
-   SET QUOTED_IDENTIFIER OFF    
-   SET CONCAT_NULL_YIELDS_NULL OFF    
+) AS
+BEGIN
+   SET NOCOUNT ON
+   SET ANSI_NULLS OFF
+   SET QUOTED_IDENTIFIER OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @nTranCount     INT
    DECLARE @bSuccess       INT
    DECLARE @nCtnCnt1       INT
-   DECLARE @cPalletLineNumber          NVARCHAR( 5)  
+   DECLARE @cPalletLineNumber          NVARCHAR( 5)
    DECLARE @cSortToPalletNotCreateMBOL NVARCHAR( 1)
    DECLARE @cExternOrderKey            NVARCHAR( 50)
    DECLARE @cSKU           NVARCHAR( 20)
    DECLARE @cLoadKey       NVARCHAR( 10)
    DECLARE @dOrderDate     DATETIME
-   DECLARE @dDeliveryDate  DATETIME 
+   DECLARE @dDeliveryDate  DATETIME
    DECLARE @curDel         CURSOR
-   
+   DECLARE @resetMBOLFlag  INT   --SY01
+
+   SET @resetMBOLFlag = 0        --SY01
    SET @cSortToPalletNotCreateMBOL = rdt.RDTGetConfig( @nFunc, 'SortToPalletNotCreateMBOL', @cStorerKey)
-      
+
    SET @nTranCount = @@TRANCOUNT
    BEGIN TRAN  -- Begin our own transaction
    SAVE TRAN rdt_CreateMbol -- For rollback or commit only our own transaction
@@ -130,8 +134,8 @@ BEGIN
                         AND   CT.TrackingNo = @cTrackNo)
          ORDER BY 1
 
-      IF ISNULL( @cSKU, '') = ''  
-         SET @cSKU = ''  
+      IF ISNULL( @cSKU, '') = ''
+         SET @cSKU = ''
 
       INSERT INTO dbo.PalletDetail
          (PalletKey, PalletLineNumber, CaseID, StorerKey, SKU, LOC, QTY, Status, UserDefine01, UserDefine02, UserDefine03)
@@ -158,6 +162,7 @@ BEGIN
       IF NOT EXISTS( SELECT 1 FROM dbo.MBOL WITH (NOLOCK) WHERE MBOLKey = @cMBOLKey AND [Status] = '0')
       BEGIN
          SELECT @bSuccess = 0
+         SET @resetMBOLFlag = 1   --SY01
          EXECUTE nspg_GetKey
                   'MBOL',
                   10,
@@ -170,6 +175,8 @@ BEGIN
          BEGIN
             SET @nErrNo = 191355
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GetKey Fail
+            IF @resetMBOLFlag = 1     --SY01
+               SET @cMBOLKey = ''     --SY01
             GOTO RollBackTran_CreateMbol
          END
 
@@ -178,6 +185,8 @@ BEGIN
          BEGIN
             SET @nErrNo = 191356
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS MBOL Fail
+            IF @resetMBOLFlag = 1     --SY01
+               SET @cMBOLKey = ''     --SY01
             GOTO RollBackTran_CreateMbol
          END
       END
@@ -190,6 +199,8 @@ BEGIN
          BEGIN
             SET @nErrNo = 191357
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MBOL Shipped
+            IF @resetMBOLFlag = 1     --SY01
+               SET @cMBOLKey = ''     --SY01
             GOTO RollBackTran_CreateMbol
          END
 
@@ -216,6 +227,8 @@ BEGIN
          BEGIN
             SET @nErrNo = 191358
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS MBDtl Err
+            IF @resetMBOLFlag = 1     --SY01
+               SET @cMBOLKey = ''     --SY01
             GOTO RollBackTran_CreateMbol
          END
       END
