@@ -14,6 +14,7 @@ GO
 /* 2020-10-28 1.1  YeeKung  WMS-15617 Add Validation(yeekung01)               */ 
 /* 2020-11-20 1.2  YeeKung  Tune the performance (yeekung02)                  */     
 /* 2022-12-20 1.3  YeeKung  Tune the performance (yeekung03)                  */   
+/* 2022-12-20 1.4  YeeKung  Tune the performance (yeekung03)                  */   
 /******************************************************************************/    
     
 CREATE  OR ALTER PROC rdt.rdt_1641ExtValidSP04 (    
@@ -156,6 +157,7 @@ BEGIN
                                     join packdetail PD (nolock)
                                     on PH.pickslipno=PD.pickslipno AND PH.storerkey=PD.storerkey
                                     where  PD.refno=@cUCCNo
+                                    AND PD.refno <> ''
                                     AND PD.storerkey=@cstorerkey
                                     AND PAD.UserDefine02 = PH.orderkey
                                     )    
