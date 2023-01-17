@@ -1,10 +1,8 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[isp_GetPickSlipWave21]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[isp_GetPickSlipWave21]
+SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF
-GO
+
 /************************************************************************/
 /* Store Procedure:  isp_GetPickSlipWave21                              */
 /* Creation Date: 08-May-2020                                           */
@@ -34,9 +32,10 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   ver. Purposes                                   */
+/* 19-Dec-2022 CHONGCS  1.1  Devops Scripts Combine & WMS-21357 (CS01)  */
 /************************************************************************/
 
-CREATE PROC isp_GetPickSlipWave21 (@c_wavekey NVARCHAR(10))
+CREATE OR ALTER PROC [dbo].[isp_GetPickSlipWave21] (@c_wavekey NVARCHAR(10))
 AS
 BEGIN
    SET NOCOUNT ON
@@ -58,20 +57,20 @@ BEGIN
             @c_StorerKey            NVARCHAR(15),      -- (YokeBeen01)
             @c_PickSlipNo           NVARCHAR(10),      -- (YokeBeen01)
             @c_VASLBLValue          NVARCHAR(10),      -- (Wan01)
-				@c_pickgrp              NVARCHAR(1),       --(CCS01)
-				@c_getUdf01             NVARCHAR(100),     --(CS03)
-				@c_getUdf02             NVARCHAR(100),     --(CS03)
-				@c_ordudf05             NVARCHAR(20),      --(CS03)
-				@c_udf01                NVARCHAR(5),       --(CS03)                                               
-				@c_getorderkey          NVARCHAR(10),      --(CS03)
-				@c_condition            NVARCHAR(100),     --(CS03)
-				@c_ExecStatements       NVARCHAR(4000),    --(CS03)  
-				@c_ExecAllStatements    NVARCHAR(4000),    --(CS03) 
-				@c_ExecArguments        NVARCHAR(4000)     --(CS03) 
-				,@c_CSKUUDF04           NVARCHAR(30)       --(CS06)
-           
-           
-   SET @c_udf01 = ''        
+            @c_pickgrp              NVARCHAR(1),       --(CCS01)
+            @c_getUdf01             NVARCHAR(100),     --(CS03)
+            @c_getUdf02             NVARCHAR(100),     --(CS03)
+            @c_ordudf05             NVARCHAR(20),      --(CS03)
+            @c_udf01                NVARCHAR(5),       --(CS03)
+            @c_getorderkey          NVARCHAR(10),      --(CS03)
+            @c_condition            NVARCHAR(100),     --(CS03)
+            @c_ExecStatements       NVARCHAR(4000),    --(CS03)
+            @c_ExecAllStatements    NVARCHAR(4000),    --(CS03)
+            @c_ExecArguments        NVARCHAR(4000)     --(CS03)
+            ,@c_CSKUUDF04           NVARCHAR(30)       --(CS06)
+
+
+   SET @c_udf01 = ''
 
    SELECT @n_starttcnt=@@TRANCOUNT, @n_continue=1, @b_success=0, @n_err=0, @c_errmsg=''
 
@@ -128,7 +127,9 @@ BEGIN
       showbuyerpo       NCHAR(1) NULL, --CS06
       CSKUUDF04         NVARCHAR(30) NULL,  --CS06
       Putawayzone       NVARCHAR(10) NULL,   --WL01
-      ShowPutawayzone   NVARCHAR(10) NULL  ) --WL01
+      ShowPutawayzone   NVARCHAR(10) NULL,   --WL01
+      Altsku            NVARCHAR(20) NULL )  --CS01
+ 
    -- Check if wavekey existed
    IF EXISTS(SELECT 1 FROM PICKHEADER (NOLOCK)
                WHERE WaveKey = @c_wavekey
@@ -189,16 +190,16 @@ BEGIN
    AND   Configkey = 'WAVEPICKSLIP04_VASLBL'
    --(Wan01) - END
 
-	--(CCS01) -  Start
-	SELECT @c_pickgrp = CASE WHEN ISNULL(Code,'') <> '' THEN 'Y' ELSE 'N' END
-	FROM CODELKUP  WITH (NOLOCK)
-	WHERE Code = 'PICKPGRP' 
-   AND Listname = 'REPORTCFG' 
-	AND Long = 'r_dw_print_wave_pickslip_21'
-	AND ISNULL(Short,'') <> 'N'
-	AND Storerkey = @c_Storerkey
+   --(CCS01) -  Start
+   SELECT @c_pickgrp = CASE WHEN ISNULL(Code,'') <> '' THEN 'Y' ELSE 'N' END
+   FROM CODELKUP  WITH (NOLOCK)
+   WHERE Code = 'PICKPGRP'
+   AND Listname = 'REPORTCFG'
+   AND Long = 'r_dw_print_wave_pickslip_21'
+   AND ISNULL(Short,'') <> 'N'
+   AND Storerkey = @c_Storerkey
 
-	--(CCS01) -  End
+   --(CCS01) -  End
 
    BEGIN TRAN
 
@@ -224,10 +225,10 @@ BEGIN
    ISNULL(dbo.fnc_RTrim(ORDERS.C_City), ''),
    SKU.Sku,
    --ISNULL(SKU.Descr,'') AS SkuDescr,
- 	 CASE WHEN ISNULL(CL4.Code,'') <> '' AND ISNULL(SKU.Notes1,'') <> '' THEN SKU.Notes1 ELSE ISNULL(SKU.Descr,'') END AS SkuDescr, --NJOW06   
+    CASE WHEN ISNULL(CL4.Code,'') <> '' AND ISNULL(SKU.Notes1,'') <> '' THEN SKU.Notes1 ELSE ISNULL(SKU.Descr,'') END AS SkuDescr, --NJOW06
    --PICKDETAIL.Lot,                     --(CCS01)
-	CASE WHEN @c_pickgrp <> 'Y' THEN PICKDETAIL.Lot ELSE '' END as Lot, --(CCS01)
-   ISNULL(LOTATTRIBUTE.Lottable01, ''),
+   CASE WHEN @c_pickgrp <> 'Y' THEN PICKDETAIL.Lot ELSE '' END as Lot, --(CCS01)
+   '', --ISNULL(LOTATTRIBUTE.Lottable01, ''),    --CS01
    ISNULL(CONVERT(NVARCHAR(10), LOTATTRIBUTE.Lottable04,112), '01/01/1900'),
    SUM(PICKDETAIL.Qty) AS QTY,
    ISNULL(PICKDETAIL.Loc, ''),
@@ -241,7 +242,7 @@ BEGIN
    CONVERT(NVARCHAR(60), ISNULL(ORDERS.Notes, '')) AS Notes1,
    CONVERT(NVARCHAR(60), ISNULL(ORDERS.Notes2, '')) AS Notes2,
    ISNULL(LOTATTRIBUTE.Lottable02, '') Lottable02,          -- ONG02
-   CASE WHEN ISNULL(CL6.Code,'') = '' OR ISNULL(CL6.Code,'') = 'N' THEN ISNULL(Orders.DeliveryNote,'') 
+   CASE WHEN ISNULL(CL6.Code,'') = '' OR ISNULL(CL6.Code,'') = 'N' THEN ISNULL(Orders.DeliveryNote,'')
     ELSE ISNULL(orders.buyerpo,'') END DeliveryNote,                   -- ONG02  --CS06
    SKU.SKUGROUP,                                            -- ONG03
    0,                                                       -- ONG03
@@ -262,15 +263,16 @@ BEGIN
    ,CASE WHEN LEFT(ORDERS.Userdefine10,3) = 'YFD' AND SKU.SKUGroup = 'YFG' THEN
         'YFG' ELSE '' END AS Internalflag --NJOW04
    ,CASE WHEN MAX(ISNULL(CL1.Code,'')) = '' AND MIN(PICKDETAIL.UOM) IN (1,2) AND MAX(ISNULL(CL3.Code,'')) <> '' THEN '*' ELSE '' END AS scancaseidflag --NJOW05
- 	 ,CASE WHEN ISNULL(CL2.Code,'') <> '' THEN 'Y' ELSE 'N' END AS showbarcodeflag --NJOW05
- 	 ,'' AS udf01                                                                  --(Cs03)
- 	 ,ISNULL(ORDERS.UserDefine04,'')                                               --(CS04)
- 	 ,CASE WHEN ISNULL(CL5.Code,'') <> '' THEN 'Y' ELSE 'N' END AS showfield --CS05
- 	 ,ISNULL(substring(OD.userdefine05,1,1),'') AS ODUDF05                     --CS05
- 	 ,CASE WHEN ISNULL(CL6.Code,'') <> '' THEN 'Y' ELSE 'N' END AS showbuyerpo --CS06
- 	 ,''  AS cskuudf04                                                         --CS06  
+    ,CASE WHEN ISNULL(CL2.Code,'') <> '' THEN 'Y' ELSE 'N' END AS showbarcodeflag --NJOW05
+    ,'' AS udf01                                                                  --(Cs03)
+    ,ISNULL(ORDERS.UserDefine04,'')                                               --(CS04)
+    ,CASE WHEN ISNULL(CL5.Code,'') <> '' THEN 'Y' ELSE 'N' END AS showfield --CS05
+    ,ISNULL(substring(OD.userdefine05,1,1),'') AS ODUDF05                     --CS05
+    ,CASE WHEN ISNULL(CL6.Code,'') <> '' THEN 'Y' ELSE 'N' END AS showbuyerpo --CS06
+    ,''  AS cskuudf04                                                         --CS06
     ,CASE WHEN ISNULL(CL7.Short,'N') = 'Y' THEN LOC.Putawayzone ELSE '' END AS Putawayzone --WL01
-    ,ISNULL(CL7.Short,'N') AS ShowPutawayzone  --WL01                                                     
+    ,ISNULL(CL7.Short,'N') AS ShowPutawayzone  --WL01
+    , SKU.altsku                               --CS01
    FROM PICKDETAIL (NOLOCK)
    JOIN ORDERS (NOLOCK) ON (PICKDETAIL.Orderkey = ORDERS.Orderkey)
    JOIN ORDERDETAIL OD (NOLOCK) ON (OD.Orderkey = PICKDETAIL.Orderkey                                          --(CS05)
@@ -289,18 +291,18 @@ BEGIN
    --(Wan01) - END
    LEFT OUTER JOIN v_storerconfig2 SC WITH (NOLOCK) ON ORDERS.Storerkey = SC.Storerkey AND SC.Configkey = 'DELNOTE06_RSKU'
    LEFT OUTER JOIN CODELKUP CL1 (NOLOCK) ON (SKU.Class = CL1.Code AND CL1.Listname = 'MHCSSCAN') --NJOW05
-   LEFT OUTER JOIN CODELKUP CL2 (NOLOCK) ON (PICKDETAIL.Storerkey = CL2.Storerkey AND CL2.Code = 'SHOWBARCODE' 
+   LEFT OUTER JOIN CODELKUP CL2 (NOLOCK) ON (PICKDETAIL.Storerkey = CL2.Storerkey AND CL2.Code = 'SHOWBARCODE'
                                           AND CL2.Listname = 'REPORTCFG' AND CL2.Long = 'r_dw_print_wave_pickslip_21' AND ISNULL(CL2.Short,'') <> 'N') --NJOW05
-   LEFT OUTER JOIN CODELKUP CL3 (NOLOCK) ON (PICKDETAIL.Storerkey = CL3.Storerkey AND CL3.Code = 'SHOWSCNFG' 
+   LEFT OUTER JOIN CODELKUP CL3 (NOLOCK) ON (PICKDETAIL.Storerkey = CL3.Storerkey AND CL3.Code = 'SHOWSCNFG'
                                           AND CL3.Listname = 'REPORTCFG' AND CL3.Long = 'r_dw_print_wave_pickslip_21' AND ISNULL(CL3.Short,'') <> 'N') --NJOW05
-   LEFT OUTER JOIN CODELKUP CL4 (NOLOCK) ON (PICKDETAIL.Storerkey = CL4.Storerkey AND CL4.Code = 'PRTSKUDESC' 
-                                          AND CL4.Listname = 'REPORTCFG' AND CL4.Long = 'r_dw_print_wave_pickslip_21' AND ISNULL(CL4.Short,'') <> 'N') --NJOW06    
-   LEFT OUTER JOIN CODELKUP CL5 (NOLOCK) ON (PICKDETAIL.Storerkey = CL5.Storerkey AND CL5.Code = 'SHOWFIELD' 
-                                          AND CL5.Listname = 'REPORTCFG' AND CL5.Long = 'r_dw_print_wave_pickslip_21' AND ISNULL(CL5.Short,'') <> 'N') --CS05            
-   LEFT OUTER JOIN CODELKUP CL6 (NOLOCK) ON (PICKDETAIL.Storerkey = CL6.Storerkey AND CL6.Code = 'SHOWBUYERPO' 
-                                          AND CL6.Listname = 'REPORTCFG' AND CL6.Long = 'r_dw_print_wave_pickslip_21' AND ISNULL(CL6.Short,'') <> 'N') --CS06        
-   LEFT OUTER JOIN CODELKUP CL7 (NOLOCK) ON (PICKDETAIL.Storerkey = CL7.Storerkey AND CL7.Code = 'ShowPutawayzone' 
-                                          AND CL7.Listname = 'REPORTCFG' AND CL7.Long = 'r_dw_print_wave_pickslip_21' AND ISNULL(CL7.Short,'') <> 'N') --WL01                                                                                                                                                                                                                                        
+   LEFT OUTER JOIN CODELKUP CL4 (NOLOCK) ON (PICKDETAIL.Storerkey = CL4.Storerkey AND CL4.Code = 'PRTSKUDESC'
+                                          AND CL4.Listname = 'REPORTCFG' AND CL4.Long = 'r_dw_print_wave_pickslip_21' AND ISNULL(CL4.Short,'') <> 'N') --NJOW06
+   LEFT OUTER JOIN CODELKUP CL5 (NOLOCK) ON (PICKDETAIL.Storerkey = CL5.Storerkey AND CL5.Code = 'SHOWFIELD'
+                                          AND CL5.Listname = 'REPORTCFG' AND CL5.Long = 'r_dw_print_wave_pickslip_21' AND ISNULL(CL5.Short,'') <> 'N') --CS05
+   LEFT OUTER JOIN CODELKUP CL6 (NOLOCK) ON (PICKDETAIL.Storerkey = CL6.Storerkey AND CL6.Code = 'SHOWBUYERPO'
+                                          AND CL6.Listname = 'REPORTCFG' AND CL6.Long = 'r_dw_print_wave_pickslip_21' AND ISNULL(CL6.Short,'') <> 'N') --CS06
+   LEFT OUTER JOIN CODELKUP CL7 (NOLOCK) ON (PICKDETAIL.Storerkey = CL7.Storerkey AND CL7.Code = 'ShowPutawayzone'
+                                          AND CL7.Listname = 'REPORTCFG' AND CL7.Long = 'r_dw_print_wave_pickslip_21' AND ISNULL(CL7.Short,'') <> 'N') --WL01
    WHERE (WAVEDETAIL.Wavekey = @c_wavekey)
 -- AND (PICKDETAIL.PickMethod = '8' OR PICKDETAIL.PickMethod = '')      -- ONG01
    GROUP BY ORDERS.Orderkey,
@@ -321,7 +323,7 @@ BEGIN
    --ISNULL(SKU.Descr,''),
    CASE WHEN ISNULL(CL4.Code,'') <> '' AND ISNULL(SKU.Notes1,'') <> '' THEN SKU.Notes1 ELSE ISNULL(SKU.Descr,'') END,  --NJOW06
    PICKDETAIL.Lot,
-   ISNULL(LOTATTRIBUTE.Lottable01, ''),
+   --ISNULL(LOTATTRIBUTE.Lottable01, ''),              --CS01
    ISNULL(Convert(NVARCHAR(10), LOTATTRIBUTE.Lottable04,112), '01/01/1900'),
    ISNULL(PICKDETAIL.Loc, ''),
    ISNULL(PACK.Qty, 0),
@@ -333,7 +335,7 @@ BEGIN
    CONVERT(NVARCHAR(60), ISNULL(ORDERS.Notes, '')),
    CONVERT(NVARCHAR(60), ISNULL(ORDERS.Notes2, '')),
    ISNULL(LOTATTRIBUTE.Lottable02, ''),         -- ONG02
-   CASE WHEN ISNULL(CL6.Code,'') = '' OR ISNULL(CL6.Code,'') = 'N' THEN ISNULL(Orders.DeliveryNote,'') 
+   CASE WHEN ISNULL(CL6.Code,'') = '' OR ISNULL(CL6.Code,'') = 'N' THEN ISNULL(Orders.DeliveryNote,'')
     ELSE ISNULL(orders.buyerpo,'') END,                    -- ONG02    --CS06
    SKU.SKUGROUP,                                -- ONG03
    ORDERS.DeliveryDate,                         -- ONG04
@@ -352,13 +354,14 @@ BEGIN
    ELSE '' END
    ,CASE WHEN LEFT(ORDERS.Userdefine10,3) = 'YFD' AND SKU.SKUGroup = 'YFG' THEN
         'YFG' ELSE '' END --NJOW04
- 	 ,CASE WHEN ISNULL(CL2.Code,'') <> '' THEN 'Y' ELSE 'N' END --NJOW05
- 	 ,ISNULL(ORDERS.UserDefine04,'')                                               --(CS04)
- 	 ,CASE WHEN ISNULL(CL5.Code,'') <> '' THEN 'Y' ELSE 'N' END --CS05
- 	 ,ISNULL(substring(OD.userdefine05,1,1),'')                   --CS05
- 	 ,CASE WHEN ISNULL(CL6.Code,'') <> '' THEN 'Y' ELSE 'N' END --CS06
+    ,CASE WHEN ISNULL(CL2.Code,'') <> '' THEN 'Y' ELSE 'N' END --NJOW05
+    ,ISNULL(ORDERS.UserDefine04,'')                                               --(CS04)
+    ,CASE WHEN ISNULL(CL5.Code,'') <> '' THEN 'Y' ELSE 'N' END --CS05
+    ,ISNULL(substring(OD.userdefine05,1,1),'')                   --CS05
+    ,CASE WHEN ISNULL(CL6.Code,'') <> '' THEN 'Y' ELSE 'N' END --CS06
     ,CASE WHEN ISNULL(CL7.Short,'N') = 'Y' THEN LOC.Putawayzone ELSE '' END --WL01
-    ,ISNULL(CL7.Short,'N')  --WL01  
+    ,ISNULL(CL7.Short,'N')  --WL01
+    , SKU.altsku            --CS01
 
    SELECT @n_err = @@ERROR
    IF @n_err <> 0
@@ -396,78 +399,78 @@ BEGIN
 
    WHILE @@FETCH_STATUS <> -1
    BEGIN
-   	
-   	   /*CS03 Start*/
-   IF EXISTS (SELECT * FROM CODELKUP CLK WITH (NOLOCK) 
-              WHERE listname = 'REPORTCFG' 
+
+         /*CS03 Start*/
+   IF EXISTS (SELECT * FROM CODELKUP CLK WITH (NOLOCK)
+              WHERE listname = 'REPORTCFG'
               AND code = 'afroutedes'
               AND long ='r_dw_print_wave_pickslip_21'
               AND storerkey = @c_StorerKey)
     BEGIN
-    	
+
     SELECT TOP 1 @c_getudf01 = C.udf01
-                ,@c_getUdf02 = C.udf02  
-    FROM Codelkup C WITH (NOLOCK)  
-    WHERE C.listname='REPORTCFG'  
+                ,@c_getUdf02 = C.udf02
+    FROM Codelkup C WITH (NOLOCK)
+    WHERE C.listname='REPORTCFG'
     AND code = 'afroutedes'
     AND long ='r_dw_print_wave_pickslip_21'
-    AND c.Storerkey = @c_Storerkey            
-      
-    SET @c_ExecStatements = ''  
-    SET @c_ExecArguments = '' 
+    AND c.Storerkey = @c_Storerkey
+
+    SET @c_ExecStatements = ''
+    SET @c_ExecArguments = ''
     SET @c_condition = ''
     SET @c_ordudf05 = ''    --(CS03a)
-    
+
     IF  ISNULL(@c_getUdf02,'') <> ''
     BEGIN
-    	SET @c_condition = 'AND ' + @c_getUdf02
+      SET @c_condition = 'AND ' + @c_getUdf02
     END
-    ELSE 
+    ELSE
     BEGIN
-    	SET @c_condition = 'AND Orders.userdefine05=''*'''
-    END	
-  
-    SET @c_ExecStatements = N'SELECT @c_ordudf05 =' + @c_getudf01 + ' from Orders (nolock) where orderkey=@c_OrderKey '  
+      SET @c_condition = 'AND Orders.userdefine05=''*'''
+    END
+
+    SET @c_ExecStatements = N'SELECT @c_ordudf05 =' + @c_getudf01 + ' from Orders (nolock) where orderkey=@c_OrderKey '
     SET @c_ExecAllStatements = @c_ExecStatements + @c_condition
-  
-    SET @c_ExecArguments = N'@c_getudf01    NVARCHAR(100) '  
-                          +',@c_OrderKey    NVARCHAR(30)'  
-                          +',@c_ordudf05    NVARCHAR(20) OUTPUT'  
-  
-     EXEC sp_ExecuteSql @c_ExecAllStatements   
-                      , @c_ExecArguments  
-                      , @c_getudf01      
-                      , @c_OrderKey  
-                      , @c_ordudf05 OUTPUT  
-  
-  
-    --IF @b_debug = '1'  
-    --    BEGIN  
-    --      PRINT ' @c_ordudf05 : ' + @c_ordudf05  
-    --    END   
-    	
-    END 
-             
-   
+
+    SET @c_ExecArguments = N'@c_getudf01    NVARCHAR(100) '
+                          +',@c_OrderKey    NVARCHAR(30)'
+                          +',@c_ordudf05    NVARCHAR(20) OUTPUT'
+
+     EXEC sp_ExecuteSql @c_ExecAllStatements
+                      , @c_ExecArguments
+                      , @c_getudf01
+                      , @c_OrderKey
+                      , @c_ordudf05 OUTPUT
+
+
+    --IF @b_debug = '1'
+    --    BEGIN
+    --      PRINT ' @c_ordudf05 : ' + @c_ordudf05
+    --    END
+
+    END
+
+
    /*CS03 End*/
-   
+
    /*CS06 Start*/
-   
+
    SET @c_CSKUUDF04 = ''
-   
-    SELECT @c_CSKUUDF04 = udf04 
-    FROM consigneesku csku WITH (nolock) 
+
+    SELECT @c_CSKUUDF04 = udf04
+    FROM consigneesku csku WITH (nolock)
     JOIN Orders O WITH (NOLOCK) ON O.storerkey = csku.StorerKey AND o.ConsigneeKey = csku.ConsigneeKey
     where O.OrderKey =  @c_Orderkey
     AND sku in (select top 1 sku
                from orderdetail(nolock)
-		 where orderkey=@c_Orderkey)
+       where orderkey=@c_Orderkey)
 
-   
+
    /*CS06 End*/
-   	
-   	
-   	
+
+
+
       UPDATE #TEMP_PICK
       SET SKUGroupQty = @n_Qty
          ,UDF01 = @c_ordudf05                --CS03
@@ -567,14 +570,14 @@ BEGIN
    -- (YokeBeen01) - End
 
    --declare @n_count int = 10
-    
+
    --while(@n_count > 0)
    --begin
    --   insert into #TEMP_PICK(orderkey, sku,wavekey, putawayzone)
    --   select '0011854799','tw59105766' + cast(@n_count as nvarchar(10)),'0000292528','lor_ppd_p'
    --   set @n_count = @n_count - 1
    --end
-   
+
 
    SELECT PickSlipNo ,OrderKey ,ExternOrderkey ,WaveKey ,StorerKey  ,InvoiceNo ,Route  ,RouteDescr ,ConsigneeKey
          ,C_Company ,C_Addr1 ,C_Addr2 ,C_Addr3 ,C_PostCode, C_City, Sku ,SkuDescr ,Lot ,Lottable01 ,Lottable04
@@ -586,7 +589,8 @@ BEGIN
          ,ISNULL(OHUDF04,'') AS OHUDF04                                          --CS04
          ,showfield,ODUDF05,showbuyerpo,CSKUUDF04                                --CS05   --CS06
          ,CASE WHEN ShowPutawayzone = 'Y' THEN Putawayzone ELSE '' END AS Putawayzone, ShowPutawayzone   --WL01
-   FROM #TEMP_PICK 
+         ,Altsku              --CS01
+   FROM #TEMP_PICK
          --CS02 Start
    GROUP BY PickSlipNo ,OrderKey ,ExternOrderkey ,WaveKey ,StorerKey  ,InvoiceNo ,Route  ,RouteDescr ,ConsigneeKey
          ,C_Company ,C_Addr1 ,C_Addr2 ,C_Addr3 ,C_PostCode, C_City, Sku ,SkuDescr ,Lot ,Lottable01 ,Lottable04
@@ -598,8 +602,9 @@ BEGIN
          ,showbuyerpo,CSKUUDF04                                                   --Cs06
          --CS02 End
          ,CASE WHEN ShowPutawayzone = 'Y' THEN Putawayzone ELSE '' END, ShowPutawayzone   --WL01
+         ,altsku                          --CS01
    ORDER BY PickSlipNo, CASE WHEN ShowPutawayzone = 'Y' THEN Putawayzone ELSE '' END, LogicalLoc, Loc, Sku, SkuGroup   -- ChewKP01   --WL01
-                                                        
+
    DROP TABLE #TEMP_PICK
 
    IF @n_continue = 3  -- Error Occured - Process And Return
@@ -632,9 +637,5 @@ BEGIN
    END
 END
 GO
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS OFF
-GO
-GRANT EXECUTE ON isp_GetPickSlipWave21 TO NSQL
+GRANT EXECUTE ON  [dbo].[isp_GetPickSlipWave21] TO [NSQL]
 GO
