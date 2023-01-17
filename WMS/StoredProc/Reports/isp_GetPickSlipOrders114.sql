@@ -22,6 +22,7 @@ GO
 /* Updates:                                                                */  
 /* Date        Author      Ver   Purposes                                  */  
 /* 17-Mar-2022 Mingle      1.1   WMS-19194 - Add new field(ML01)           */  
+/* 14-Dec-2022 CHONGCS     1.2   WMS-21300 new field and page break (CS01) */
 /***************************************************************************/  
 CREATE OR ALTER PROC [dbo].[isp_GetPickSlipOrders114] (@c_loadkey NVARCHAR(10))  
 AS  
@@ -117,7 +118,10 @@ BEGIN TRAN
          BatchNameField   NVARCHAR(25) NULL,  
          LOCPickzone      NVARCHAR(10) NULL,  
          ConsigneeSKU     NVARCHAR(20),  
-   RepOvasWithConSKU NVARCHAR(1)  NULL  
+         RepOvasWithConSKU NVARCHAR(1)  NULL,
+         locaisle          NVARCHAR(10) NULL,    --CS01
+         locaisleseq       NVARCHAR(20)          --CS01
+  
    )  
    INSERT INTO #TEMP_PICK  
         (PickSlipNo,    LoadKey,          OrderKey,     ConsigneeKey,  
@@ -134,7 +138,7 @@ BEGIN TRAN
          DeliveryDate,  RetailSKU,        BuyerPO,      InvoiceNo,  OrderDate,  
          Susr4,         Vat,              OVAS,         SKUGROUP,Lottable06,  
          ShowLot06,ShowSKUBusr10,SKUBusr10, ShowPickDetailID,BatchNameField,  
-         LOCPickzone,ConsigneeSKU,RepOvasWithConSKU )  
+         LOCPickzone,ConsigneeSKU,RepOvasWithConSKU,locaisle,locaisleseq )          --CS01  
    SELECT  
          (SELECT PICKHEADERKEY FROM PICKHEADER  
           WHERE ExternOrderKey = @c_LoadKey  
@@ -206,7 +210,8 @@ BEGIN TRAN
         CASE WHEN ISNULL(CLR3.Code,'') <> '' THEN 'Custom Lot' ELSE 'Batch No' END as BatchNameField,  
         ISNULL(LTRIM(RTRIM(LOC.Pickzone)),'') AS Pickzone,  
         ConsigneeSKU.ConsigneeSKU,   --ML01  
-        ISNULL(CLR4.SHORT,'') AS RepOvasWithConSKU   --ML01
+        ISNULL(CLR4.SHORT,'') AS RepOvasWithConSKU,   --ML01
+        ISNULL(CLR5.code2,''),ISNULL(CLR5.Short,'00')          --cs01
    FROM PickDetail (NOLOCK)  
    JOIN Orders (NOLOCK) ON PickDetail.orderkey = Orders.orderkey  
    JOIN LotAttribute (NOLOCK) ON PickDetail.lot = LotAttribute.lot  
@@ -229,7 +234,9 @@ BEGIN TRAN
    LEFT OUTER JOIN Codelkup CLR3 (NOLOCK) ON (Orders.Storerkey = CLR1.Storerkey AND CLR3.Code = 'RPTCOLUMNNAME'                                              
                                          AND CLR3.Listname = 'REPORTCFG' AND CLR3.Long = 'r_dw_print_pickorder114' AND ISNULL(CLR3.Short,'') <> 'N')    
    LEFT OUTER JOIN Codelkup CLR4 (NOLOCK) ON (Orders.Storerkey = CLR4.Storerkey AND CLR4.Code = 'RepOvasWithConSKU'                                              
-                                         AND CLR4.Listname = 'REPORTCFG' AND CLR4.Long = 'r_dw_print_pickorder114' AND ISNULL(CLR4.Short,'') <> 'N')    
+                                         AND CLR4.Listname = 'REPORTCFG' AND CLR4.Long = 'r_dw_print_pickorder114' AND ISNULL(CLR4.Short,'') <> 'N')  
+   LEFT OUTER JOIN CODELKUP CLR5 (NOLOCK) ON (Orders.Storerkey = CLR5.Storerkey AND CLR5.Code2 = loc.LocAisle                                              
+                                         AND CLR5.Listname = 'RPTPKSLIP' )
    WHERE PickDetail.Status < '5'  
    AND LoadPlanDetail.LoadKey = @c_LoadKey  
    GROUP BY PickDetail.OrderKey,  
@@ -281,7 +288,8 @@ BEGIN TRAN
    CASE WHEN ISNULL(CLR3.Code,'') <> '' THEN 'Custom Lot' ELSE 'Batch No' END,  
    ISNULL(LTRIM(RTRIM(LOC.Pickzone)),''),  
    ConsigneeSKU.ConsigneeSKU,   --ML01  
-   ISNULL(CLR4.SHORT,'')   --ML01  
+   ISNULL(CLR4.SHORT,''),   --ML01  
+   ISNULL(CLR5.code2,''),ISNULL(CLR5.Short,'00')         --cs01
   
    UPDATE #temp_pick  
       SET cartons_cal = CASE packcasecnt  
@@ -351,18 +359,18 @@ BEGIN TRAN
       BEGIN TRAN  
       EXECUTE nspg_GetKey 'PICKSLIP', 9, @c_pickheaderkey OUTPUT, @b_success OUTPUT, @n_err  OUTPUT, @c_errmsg OUTPUT, 0, @n_pickslips_required  
       COMMIT TRAN  
- --             SELECT 'P' + RIGHT ( REPLICATE ('0', 9) +  
- --             dbo.fnc_LTrim( dbo.fnc_RTrim(  
- --                STR(  
- --                   CAST(@c_pickheaderkey AS INT) + ( SELECT COUNT(DISTINCT orderkey)  
- --                                                     FROM #TEMP_PICK AS Rank  
- --                                                     WHERE Rank.OrderKey < #TEMP_PICK.OrderKey )  
- --                    ) -- str  
- --                    )) -- dbo.fnc_RTrim  
- --                 , 9)  
- --              , OrderKey, LoadKey, '0', '8', ''  
- --             FROM #TEMP_PICK WHERE PickSlipNo IS NULL  
- --             GROUP By LoadKey, OrderKey  
+              --SELECT 'P' + RIGHT ( REPLICATE ('0', 9) +  
+              --dbo.fnc_LTrim( dbo.fnc_RTrim(  
+              --   STR(  
+              --      CAST(@c_pickheaderkey AS INT) + ( SELECT COUNT(DISTINCT orderkey)  
+              --                                        FROM #TEMP_PICK AS Rank  
+              --                                        WHERE Rank.OrderKey < #TEMP_PICK.OrderKey )  
+              --       ) -- str  
+              --       )) -- dbo.fnc_RTrim  
+              --    , 9)  
+              -- , OrderKey, LoadKey, '0', '8', ''  
+              --FROM #TEMP_PICK WHERE PickSlipNo IS NULL  
+              --GROUP By LoadKey, OrderKey  
   
       BEGIN TRAN  
       INSERT INTO PICKHEADER (PickHeaderKey, OrderKey, ExternOrderKey, PickType, Zone, TrafficCop)  
@@ -400,12 +408,61 @@ FAILURE:
    DELETE FROM #TEMP_PICK  
   
 SUCCESS:  
-   SELECT *   
+
+   SELECT *
+,DENSE_RANK() OVER ( PARTITION BY PickSlipNo,LoadKey,OrderKey,Company ORDER BY Company, Orderkey, LOCPickzone,CASE WHEN locaisleseq ='00' THEN 999 ELSE CAST(locaisleseq AS INT) END  ) AS recgrp 
+INTO #TEMP_PICKRESULT
    FROM #TEMP_PICK  
-   ORDER BY Company, Orderkey, LOCPickzone, Areakey, LogicalLOC, LOC, SKU  
+   ORDER BY Company, Orderkey, LOCPickzone, 
+            locaisleseq  ,Areakey, LogicalLOC, LOC, SKU  --CS01
+
+
+SELECT PickSlipNo,    LoadKey,          OrderKey,     ConsigneeKey,  
+         Company,       Addr1,            Addr2,       -- PgGroup,  
+         Addr3,         PostCode,         Route,  
+         Route_Desc,    TrfRoom,          Notes1,      -- RowNum,  
+         Notes2,        LOC,              ID,           SKU,  
+         SKUDesc,       Qty,              TempQty1,  
+         TempQty2,      PrintedFlag,      Zone,  PgGroup, RowNum,  
+         Lot,           CarrierKey,       VehicleNo,    Lottable02,  
+         Lottable04,    packpallet,       packcasecnt,  packinner,  
+         packeaches,    externorderkey,   LogicalLOC,   Areakey,    UOM,  
+         Pallet_cal,    Cartons_cal,      inner_cal,    Each_cal,   Total_cal,  
+         DeliveryDate,  RetailSKU,        BuyerPO,      InvoiceNo,  OrderDate,  
+         Susr4,         Vat,              OVAS,         SKUGROUP,Lottable06,  
+         ShowLot06,ShowSKUBusr10,SKUBusr10, ShowPickDetailID,BatchNameField,  
+         LOCPickzone,ConsigneeSKU,RepOvasWithConSKU,locaisle,locaisleseq,recgrp,TPTTL.ttlpage AS ttlpage 
+FROM #TEMP_PICKRESULT TP
+CROSS APPLY (SELECT pickslipno PSN,loadkey LK,orderkey ordkey,MAX(recgrp) AS ttlpage
+             FROM #TEMP_PICKRESULT TPS 
+             WHERE  TPS.pickslipno =  TP.PickSlipNo AND TPS.LoadKey=TP.LoadKey AND TPS.OrderKey=TP.OrderKey
+             GROUP BY TPS.PickSlipNo,TPS.LoadKey,TPS.OrderKey) TPTTL
+   ORDER BY Company, Orderkey, LOCPickzone, 
+            locaisleseq  ,Areakey, LogicalLOC, LOC, SKU
+--GROUP BY 
+--         PickSlipNo,    LoadKey,          OrderKey,     ConsigneeKey,  
+--         Company,       Addr1,            Addr2,        PgGroup,  
+--         Addr3,         PostCode,         Route,  
+--         Route_Desc,    TrfRoom,          Notes1,       RowNum,  
+--         Notes2,        LOC,              ID,           SKU,  
+--         SKUDesc,       Qty,              TempQty1,  
+--         TempQty2,      PrintedFlag,      Zone,  
+--         Lot,           CarrierKey,       VehicleNo,    Lottable02,  
+--         Lottable04,    packpallet,       packcasecnt,  packinner,  
+--         packeaches,    externorderkey,   LogicalLOC,   Areakey,    UOM,  
+--         Pallet_cal,    Cartons_cal,      inner_cal,    Each_cal,   Total_cal,  
+--         DeliveryDate,  RetailSKU,        BuyerPO,      InvoiceNo,  OrderDate,  
+--         Susr4,         Vat,              OVAS,         SKUGROUP,Lottable06,  
+--         ShowLot06,ShowSKUBusr10,SKUBusr10, ShowPickDetailID,BatchNameField,  
+--         LOCPickzone,ConsigneeSKU,RepOvasWithConSKU,locaisle,locaisleseq,recgrp
+--ORDER BY  Company, Orderkey, LOCPickzone, 
+--            locaisleseq  ,Areakey, LogicalLOC, LOC, SKU  --CS01
      
    IF OBJECT_ID('tempdb..#TEMP_PICK') IS NOT NULL  
       DROP TABLE #TEMP_PICK  
+
+   IF OBJECT_ID('tempdb..#TEMP_PICKRESULT') IS NOT NULL  
+      DROP TABLE #TEMP_PICKRESULT 
   
    WHILE @@TRANCOUNT < @n_starttcnt  
    BEGIN  
