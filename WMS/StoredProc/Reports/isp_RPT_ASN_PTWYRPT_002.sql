@@ -2,13 +2,15 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
+
 /************************************************************************/              
 /* Stored Procedure: isp_RPT_ASN_PTWYRPT_002                            */              
 /* Creation Date: 14-Oct-2022                                           */          
 /* Copyright: LF Logistics                                              */          
 /* Written by: WZPang                                                   */          
 /*                                                                      */          
-/* Purpose: WMS-20938 - MY - KFMY Putaway Advice Reformat		        */            
+/* Purpose: WMS-20938 - MY - KFMY Putaway Advice Reformat		        */ 
+/*			WMS-21438 - MY - Modify UserName							*/
 /*                                                                      */              
 /* Called By: RPT_ASN_PTWYRPT_002                                       */              
 /*                                                                      */              
@@ -23,6 +25,7 @@ GO
 /************************************************************************/              
 CREATE OR ALTER PROC [dbo].[isp_RPT_ASN_PTWYRPT_002] (      
       @c_ReceiptKey		NVARCHAR(10)
+	, @c_Username		NVARCHAR(20) = ''
 )              
  AS              
  BEGIN              
@@ -184,7 +187,7 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_ASN_PTWYRPT_002] (
            RECEIPTDETAIL.BeforeReceivedQty,  
            RECEIPT.ReceiptDate,  
            STORER.Company,   
-           (suser_sname()) user_name,   
+           SUSER_SNAME() AS UserName,   
            receipt.warehousereference,    
            PACK.CaseCnt,  
            PACK.InnerPack,  
