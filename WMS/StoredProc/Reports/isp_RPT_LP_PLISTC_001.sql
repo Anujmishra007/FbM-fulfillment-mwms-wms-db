@@ -3,6 +3,7 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
+
 /***************************************************************************/
 /* Stored Procedure: isp_RPT_LP_PLISTC_001                                 */
 /* Creation Date: 20-JAN-2022                                              */
@@ -13,7 +14,7 @@ GO
 /*                                                                         */
 /* Called By: RPT_LP_PLISTC_001                                            */
 /*                                                                         */
-/* GitLab Version: 1.1                                                     */
+/* GitLab Version: 1.0                                                     */
 /*                                                                         */
 /* Version: 1.0                                                            */
 /*                                                                         */
@@ -22,12 +23,11 @@ GO
 /* Updates:                                                                */
 /* Date         Author      Ver. Purposes                                  */
 /* 24-Jan-2022  WLChooi     1.0  DevOps Combine Script                     */
-/* 16-Jan-2022  WLChooi     1.1  Bug Fix - report unable to print (WL01)   */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTC_001]
       @c_LoadKey        NVARCHAR(10)
-    , @c_PreGenRptData  NVARCHAR(10) = ''   --WL01
+    , @c_PreGenRptData  NVARCHAR(10)
  AS
  BEGIN
    SET NOCOUNT ON
@@ -36,10 +36,6 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTC_001]
 
    DECLARE @d_ExprDate DateTime
    SELECT @d_ExprDate = NULL
-
-   --WL01
-   IF ISNULL(@c_PreGenRptData,'') = '0'
-      SET @c_PreGenRptData = ''
 
    SELECT  ORDERS.Storerkey,
            ORDERS.C_Company,
@@ -92,11 +88,8 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTC_001]
             SKU.DESCR,
             C_Address1, C_Address2, C_Address3, C_Address4, C_Zip, SKU.StdNetWgt, SKU.StdCube,
             CONVERT(NVARCHAR(255), ORDERS.Notes) ,CASE WHEN ISNULL(C.Code,'') <> '' THEN 'Y' ELSE 'N' END
-   
-   IF ISNULL(@c_PreGenRptData,'') = ''   --WL01
-   BEGIN
-      SELECT * FROM #RESULT
-   END
+
+   SELECT * FROM #RESULT
 
    IF OBJECT_ID('tempdb..#RESULT') IS NOT NULL
       DROP TABLE #RESULT
