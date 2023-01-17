@@ -23,7 +23,8 @@ GO
 /*                                                                      */    
 /* Updates:                                                             */    
 /* Date         Author    Ver.  Purposes                                */    
-/* 12-OCT-2022  CHONGCS   1.0   Devops Scripts Combine                  */    
+/* 12-OCT-2022  CHONGCS   1.0   Devops Scripts Combine                  */   
+/* 03-JAN-2023  CHONGCS   1.1   Fixed cancel route (CS01)               */ 
 /************************************************************************/    
     
 CREATE OR ALTER  PROCEDURE [dbo].[isp_RCM_WV_Update_OrdersRoute]    
@@ -32,7 +33,7 @@ CREATE OR ALTER  PROCEDURE [dbo].[isp_RCM_WV_Update_OrdersRoute]
    @n_err      int OUTPUT,    
    @c_errmsg   NVARCHAR(225) OUTPUT,    
    @c_code     NVARCHAR(30)='',  
-   @b_debug    NVARCHAR(1) = '0'  
+   @b_debug    NVARCHAR(1) = ''  
 AS    
 BEGIN    
    SET NOCOUNT ON    
@@ -230,7 +231,7 @@ BEGIN
                  ,ST.SUSR3 AS shareroute    
                  ,ST.SUSR4 AS roverroute    
                  ,oh.UserDefine07,oh.SOStatus    
-                 ,'C',ISNULL(oh.ContainerQty,0),Cancord.ctndrop    
+                 ,ISNULL(OH.UserDefine10,''),ISNULL(oh.ContainerQty,0),Cancord.ctndrop    
       FROM wave wv (NOLOCK)    
       JOIN orders oh (NOLOCK) ON oh.UserDefine09=wv.WaveKey    
       JOIN dbo.STORER ST (NOLOCK) ON ST.StorerKey = oh.ConsigneeKey AND ST.type='2'    
@@ -254,7 +255,7 @@ BEGIN
       FROM #TMPWVORDROUTE    
       WHERE Wavekey=@c_Wavekey    
         
-      IF @b_debug = '5'    
+      IF @b_debug = '9'    
       BEGIN      
           SELECT '#TMPWVORDROUTE',* FROM #TMPWVORDROUTE ORDER BY routetype    
       END     
@@ -398,12 +399,16 @@ BEGIN
                 SET @c_notctn ='Y'    
              END    
            
-             IF @n_rowno =1    
-             BEGIN    
+             --IF @n_rowno =1    --CS01
+             --BEGIN    
                 --Check whether there had any orders cancel which already assign route as need to minus out total case and total drop id    
                 --Ignoe if the cancel orders had been deduct before with orders userdefine07 = 'C'    
                 --SELECT @n_ctncancelord = COUNT(DISTINCT Oh.orderkey)     
-                IF EXISTS (SELECT 1 FROM #TMPWVORDCANC WHERE CAST(UpdateORD AS DATE)= CAST(GETDATE() AS DATE) AND OHRoute=@c_mainroute AND OHStatus='CANC')    
+            --IF @c_mainroute='E04'
+            --BEGIN
+            --      SELECT 'cancord',* FROM #TMPWVORDCANC
+            --END
+                IF EXISTS (SELECT 1 FROM #TMPWVORDCANC WHERE CAST(UpdateORD AS DATE)= CAST(GETDATE() AS DATE) AND OHRoute=@c_mainroute AND OHStatus='CANC' AND CancelORD='')   --CS01 
                 BEGIN                         
                    SET @n_ctncancelcases = 0    
                    SET @n_ctncanceldrop = 0    
@@ -413,24 +418,30 @@ BEGIN
                    --FROM pickdetail PD (nolock)     
                    FROM #TMPWVORDCANC    
                    --AND TR.Wavekey = oh.UserDefine09     
-                   WHERE  OHRoute = @c_mainroute AND CAST(UpdateORD AS DATE)= CAST(GETDATE() AS DATE) AND CancelORD <> 'C'    
+                   WHERE  OHRoute = @c_mainroute AND CAST(UpdateORD AS DATE)= CAST(GETDATE() AS DATE) AND CancelORD = ''     --CS01
                    AND OHStatus='CANC'     
                      
                    SELECT @n_ctncanceldrop = TTLCancDrop    
                    FROM #TMPWVORDCANC    
                    --AND TR.Wavekey = oh.UserDefine09     
-                   WHERE OHRoute = @c_mainroute AND CAST(UpdateORD AS DATE)= CAST(GETDATE() AS DATE) AND CancelORD <> 'C'     
+                   WHERE OHRoute = @c_mainroute AND CAST(UpdateORD AS DATE)= CAST(GETDATE() AS DATE) AND CancelORD = ''    --CS01 
                    AND OHStatus='CANC'                        
                 END    
-             END     
+             --END     --CS01
          END    
            
          SET @n_daycase = 0    
            
-         IF @b_debug='9'    
+         IF @b_debug='9'AND  @c_mainroute='E04'    
          BEGIN    
-            SELECT @c_notctn '@c_notctn', @c_recntroute '@c_recntroute',@c_consigneekey '@c_consigneekey' , @n_ttldaycase '@b4_ttldaycase',@n_ttldaydrop '@b4_ttldaydrop',    
-            CAST(@c_clkmaxdrop AS INT) 'CAST(@c_clkmaxdrop AS INT)', CAST(@c_clkmaxcase AS INT) 'CAST(@c_clkmaxcase AS INT)'    
+          SELECT @n_rowno '@n_rowno'
+           SELECT 'chk canc',*
+          FROM #TMPWVORDCANC    
+                   --AND TR.Wavekey = oh.UserDefine09     
+                   WHERE  OHRoute = @c_mainroute AND CAST(UpdateORD AS DATE)= CAST(GETDATE() AS DATE) AND CancelORD <> 'C'    
+                   AND OHStatus='CANC'   
+            --SELECT @c_notctn '@c_notctn', @c_recntroute '@c_recntroute',@c_consigneekey '@c_consigneekey' , @n_ttldaycase '@b4_ttldaycase',@n_ttldaydrop '@b4_ttldaydrop',    
+            --CAST(@c_clkmaxdrop AS INT) 'CAST(@c_clkmaxdrop AS INT)', CAST(@c_clkmaxcase AS INT) 'CAST(@c_clkmaxcase AS INT)'    
          END    
            
          IF  @c_notctn ='N' --get total cases    
@@ -466,11 +477,11 @@ BEGIN
                END     
          END       
            
-         IF @b_debug ='9'    
+         IF @b_debug ='9'  AND @c_mainroute='E04'
          BEGIN    
             SELECT 'retrieve orders ttl ',@n_rowno 'rowno',@c_orderkey '@c_orderkey' ,@c_UseRoverroute '@c_UseRoverroute',@c_originalRoute '@c_originalRoute',@c_mainroute '@c_mainroute',@c_roverroute '@c_roverroute'    
                    , @n_ttldaycase '@n_ttldaycase', @n_ttldaydrop '@n_ttldaydrop', @c_UseRoverroute '@c_UseRoverroute',@c_clkmaxdrop '@c_clkmaxdrop',@c_clkmaxcase '@c_clkmaxcase'    
-            SELECT @n_ctncancelcases '@n_ctncancelcases',@n_ctncanceldrop '@n_ctncanceldrop'    
+            SELECT @n_ctncancelcases '@n_ctncancelcases',@n_ctncanceldrop '@n_ctncanceldrop'  , @c_updatecancelord '@c_updatecancelord'  
          END     
            
          --Update #TM TABLE    
@@ -480,9 +491,21 @@ BEGIN
              ,CancelORD = CASE WHEN @c_updatecancelord ='Y' THEN 'C' ELSE 'N' END    
              ,TTLCases = @n_daycase     
              ,TTLDrop = @n_daydrop    
-         WHERE OrderKey   = @c_orderkey AND storerkey = @c_storerkey    
-             
-           
+         WHERE OrderKey   = @c_orderkey AND storerkey = @c_storerkey   
+
+        --Update #TMP Cancel order TBL
+         IF @c_updatecancelord='Y'    --CS01 S
+         BEGIN 
+             UPDATE #TMPWVORDCANC
+             SET CancelORD = 'C'
+             WHERE OHRoute   = @c_mainroute AND storerkey = @c_storerkey AND OHStatus='CANC'
+
+             IF @b_debug='9' AND @c_mainroute='E04'
+             BEGIN
+                 SELECT @c_orderkey '@c_orderkey' , @c_storerkey '@c_storerkey'
+                 SELECT 'update CancelORD',* FROM #TMPWVORDCANC
+             END  
+         END   --CS01 E
          --Update the route , userdefine10 and containerqty for orders cases    
          UPDATE ORDERS WITH (ROWLOCK)    
          SET Route = CASE WHEN @c_UseRoverroute = 'N' THEN CASE WHEN @c_originalRoute = '' THEN @c_mainroute ELSE @c_originalRoute END ELSE @c_roverroute END    
@@ -514,9 +537,17 @@ BEGIN
               , EditWho      = SUSER_SNAME()    
             FROM ORDERS OH --WITH (NOLOCK)    
             JOIN #TMPWVORDCANC TRC ON TRC.OrderKey=OH.OrderKey AND TRC.Storerkey=OH.StorerKey    
-            WHERE TRC.Wavekey= @c_Getwavekey AND TRC.mainroute= @c_mainroute AND TRC.CancelORD='C'     
+            WHERE TRC.mainroute= @c_mainroute AND TRC.CancelORD='C'         --CS01
             --WHERE OH.OrderKey   = @c_orderkey AND OH.storerkey = @c_storerkey    
              
+             IF @b_debug='9' AND @c_mainroute='E04'
+             BEGIN
+                   SELECT OH.OrderKey,OH.UserDefine10,oh.Route,oh.UserDefine07
+                   FROM ORDERS OH --WITH (NOLOCK)    
+                  JOIN #TMPWVORDCANC TRC ON TRC.OrderKey=OH.OrderKey AND TRC.Storerkey=OH.StorerKey    
+                  WHERE TRC.Wavekey= @c_Getwavekey AND TRC.mainroute= @c_mainroute  
+             END  
+
             SELECT @n_err = @@ERROR    
                 
             IF @n_err <> 0                                                                                                                                                                   
@@ -728,12 +759,12 @@ BEGIN
                SET @c_updateroute =@c_originalRoute      
             END    
            
-            IF @n_rowno =1    
-            BEGIN    
+            --IF @n_rowno =1    --CS01
+            --BEGIN    
               --Check whether there had any orders cancel which already assign route as need to minus out total case and total drop id    
               --Ignoe if the cancel orders had been deduct before with orders userdefine07 = 'C'    
                --SELECT @n_ctncancelord = COUNT(DISTINCT Oh.orderkey)     
-               IF EXISTS (SELECT 1 FROM #TMPWVORDCANC WHERE CAST(UpdateORD AS DATE)= CAST(GETDATE() AS DATE) AND OHRoute=@c_mainroute AND OHStatus='CANC')    
+               IF EXISTS (SELECT 1 FROM #TMPWVORDCANC WHERE CAST(UpdateORD AS DATE)= CAST(GETDATE() AS DATE) AND OHRoute=@c_mainroute AND OHStatus='CANC' AND CancelORD='')  --CS01    
                BEGIN      
                   SET @n_ctncancelcases = 0    
                   SET @n_ctncanceldrop = 0    
@@ -746,7 +777,7 @@ BEGIN
                      --FROM pickdetail PD (nolock)     
                      FROM #TMPWVORDCANC    
                      --AND TR.Wavekey = oh.UserDefine09     
-                     WHERE  OHRoute = @c_mainroute AND CAST(UpdateORD AS DATE)= CAST(GETDATE() AS DATE) AND CancelORD = 'C'    
+                     WHERE  OHRoute = @c_mainroute AND CAST(UpdateORD AS DATE)= CAST(GETDATE() AS DATE) AND CancelORD = ''    --CS01
                      AND OHStatus='CANC'       
                   END    
                     
@@ -754,16 +785,16 @@ BEGIN
                   --FROM pickdetail PD (nolock)     
                   FROM #TMPWVORDCANC    
                   --AND TR.Wavekey = oh.UserDefine09     
-                  WHERE OHRoute = @c_mainroute AND CAST(UpdateORD AS DATE)= CAST(GETDATE() AS DATE) AND CancelORD = 'C'    
+                  WHERE OHRoute = @c_mainroute AND CAST(UpdateORD AS DATE)= CAST(GETDATE() AS DATE) AND CancelORD = ''   --CS01
                   AND OHStatus='CANC'     
                     
                   SELECT @n_ctncanceldrop = TTLCancDrop    
                   FROM #TMPWVORDCANC    
                   --AND TR.Wavekey = oh.UserDefine09     
-                  WHERE  OHRoute = @c_mainroute AND CAST(UpdateORD AS DATE)= CAST(GETDATE() AS DATE) AND CancelORD = 'C'     
+                  WHERE  OHRoute = @c_mainroute AND CAST(UpdateORD AS DATE)= CAST(GETDATE() AS DATE) AND CancelORD = ''  --CS01  
                   AND OHStatus='CANC'     
                END    
-            END     
+           -- END     --CS01
            
             IF @b_debug='8'    
             BEGIN     
@@ -881,7 +912,7 @@ BEGIN
                SET @n_ttldaycase = CAST(@c_clkttldaycase AS INT)    
                SET @n_ttldaydrop =  CAST(@c_clkttldaydrop AS INT)     
                  
-               IF EXISTS (SELECT 1 FROM #TMPWVORDCANC WHERE CAST(UpdateORD AS DATE)= CAST(GETDATE() AS DATE) AND OHRoute=@c_shareroute AND OHStatus='CANC')    
+               IF EXISTS (SELECT 1 FROM #TMPWVORDCANC WHERE CAST(UpdateORD AS DATE)= CAST(GETDATE() AS DATE) AND OHRoute=@c_shareroute AND OHStatus='CANC' AND CancelORD='')  --CS01  
                BEGIN                      
                   SET @n_ctncancelcases = 0    
                   SET @n_ctncanceldrop = 0    
@@ -894,7 +925,7 @@ BEGIN
                      --FROM pickdetail PD (nolock)     
                      FROM #TMPWVORDCANC    
                      --AND TR.Wavekey = oh.UserDefine09     
-                     WHERE  OHRoute = @c_shareroute AND CAST(UpdateORD AS DATE)= CAST(GETDATE() AS DATE) AND CancelORD = 'C'    
+                     WHERE  OHRoute = @c_shareroute AND CAST(UpdateORD AS DATE)= CAST(GETDATE() AS DATE) AND CancelORD = ''    --CS01  
                      AND OHStatus='CANC'       
                   END    
                     
@@ -902,14 +933,14 @@ BEGIN
                   --FROM pickdetail PD (nolock)     
                   FROM #TMPWVORDCANC    
                   --AND TR.Wavekey = oh.UserDefine09     
-                  WHERE OHRoute = @c_shareroute AND CAST(UpdateORD AS DATE)= CAST(GETDATE() AS DATE) AND CancelORD = 'C'    
+                  WHERE OHRoute = @c_shareroute AND CAST(UpdateORD AS DATE)= CAST(GETDATE() AS DATE) AND CancelORD = ''      --CS01
                   AND OHStatus='CANC'     
                     
                   SELECT @n_ctncanceldrop = TTLCancDrop    
                   FROM #TMPWVORDCANC    
                   --AND TR.Wavekey = oh.UserDefine09     
                   WHERE  routetype =  @c_OrdRouteType    
-                  AND OHRoute = @c_shareroute AND CAST(UpdateORD AS DATE)= CAST(GETDATE() AS DATE) AND CancelORD = 'C'     
+                  AND OHRoute = @c_shareroute AND CAST(UpdateORD AS DATE)= CAST(GETDATE() AS DATE) AND CancelORD = ''     --CS01 
                   AND OHStatus='CANC'                     
                END     
                  
@@ -981,6 +1012,20 @@ BEGIN
              ,TTLCases = @n_daycase     
              ,TTLDrop = @n_daydrop    
          WHERE OrderKey   = @c_orderkey AND storerkey = @c_storerkey    
+
+           --Update #TMP Cancel order TBL
+         IF @c_updatecancelord='Y'    --CS01 S
+         BEGIN 
+             UPDATE #TMPWVORDCANC
+             SET CancelORD = 'C'
+             WHERE OHRoute   = @c_updateroute AND storerkey = @c_storerkey AND OHStatus='CANC'
+
+             IF @b_debug='9' AND @c_mainroute='E04'
+             BEGIN
+                 SELECT @c_orderkey '@c_orderkey' , @c_storerkey '@c_storerkey'
+                 SELECT 'update CancelORD',* FROM #TMPWVORDCANC
+             END  
+         END   --CS01 E   
              
          --Update the route and userdefine10    
          UPDATE ORDERS WITH (ROWLOCK)    
@@ -1002,6 +1047,38 @@ BEGIN
             SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update shared route ORDERS Failed. (isp_RCM_WV_Update_OrdersRoute)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '     
             GOTO ENDPROC           
          END    
+
+         --Update the orders table cancel route    
+         IF @c_updatecancelord='Y'    
+         BEGIN    
+            UPDATE ORDERS WITH (ROWLOCK)    
+            SET userdefine10 = TRC.CancelORD    
+              , TrafficCop   = NULL    
+              , EditDate     = GETDATE()    
+              , EditWho      = SUSER_SNAME()    
+            FROM ORDERS OH --WITH (NOLOCK)    
+            JOIN #TMPWVORDCANC TRC ON TRC.OrderKey=OH.OrderKey AND TRC.Storerkey=OH.StorerKey    
+            WHERE TRC.mainroute= @c_updateroute AND TRC.CancelORD='C'         --CS01
+            --WHERE OH.OrderKey   = @c_orderkey AND OH.storerkey = @c_storerkey    
+             
+             IF @b_debug='9' AND @c_mainroute='E04'
+             BEGIN
+                   SELECT OH.OrderKey,OH.UserDefine10,oh.Route,oh.UserDefine07
+                   FROM ORDERS OH --WITH (NOLOCK)    
+                  JOIN #TMPWVORDCANC TRC ON TRC.OrderKey=OH.OrderKey AND TRC.Storerkey=OH.StorerKey    
+                  WHERE TRC.Wavekey= @c_Getwavekey AND TRC.mainroute= @c_mainroute  
+             END  
+
+            SELECT @n_err = @@ERROR    
+                
+            IF @n_err <> 0                                                                                                                                                                   
+            BEGIN                                                                                                                                                                                      
+               SELECT @n_Continue = 3                                                                                                                                                                  
+               SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 64100  -- Should Be Set To The SQL Errmessage but I don't know how to do so.                                                
+               SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update cancel ORDERS Failed. (isp_RCM_WV_Update_OrdersRoute)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '     
+               GOTO ENDPROC           
+            END    
+         END 
            
          --Update total days cases and total day deopid based on route    
          IF @c_UseSharedroute ='N'    
@@ -1061,32 +1138,32 @@ BEGIN
       --End Loop Share Route          
    END --end share route  
      
-   --Update cancel orders  
-   IF @n_continue IN(1,2)  
-   BEGIN       
-      --Update the orders table cancel route    
-      IF @c_updatecancelord='Y'    
-      BEGIN        
-         UPDATE ORDERS WITH (ROWLOCK)    
-         SET userdefine10 = TRC.CancelORD    
-           , TrafficCop   = NULL    
-           , EditDate     = GETDATE()    
-           , EditWho      = SUSER_SNAME()    
-         FROM ORDERS OH --WITH (NOLOCK)    
-         JOIN #TMPWVORDCANC TRC ON TRC.OrderKey=OH.OrderKey AND TRC.Storerkey=OH.StorerKey    
-         WHERE TRC.mainroute= @c_mainroute AND TRC.CancelORD='C'              
+   --Update cancel orders  --CS01 remove
+   --IF @n_continue IN(1,2)  
+   --BEGIN       
+   --   --Update the orders table cancel route    
+   --   IF @c_updatecancelord='Y'    
+   --   BEGIN        
+   --      UPDATE ORDERS WITH (ROWLOCK)    
+   --      SET userdefine10 = TRC.CancelORD    
+   --        , TrafficCop   = NULL    
+   --        , EditDate     = GETDATE()    
+   --        , EditWho      = SUSER_SNAME()    
+   --      FROM ORDERS OH --WITH (NOLOCK)    
+   --      JOIN #TMPWVORDCANC TRC ON TRC.OrderKey=OH.OrderKey AND TRC.Storerkey=OH.StorerKey    
+   --      WHERE TRC.mainroute= @c_mainroute AND TRC.CancelORD='C'              
            
-         SELECT @n_err = @@ERROR    
+   --      SELECT @n_err = @@ERROR    
              
-         IF @n_err <> 0                                                                                                                                                                   
-         BEGIN                                                                                                    
-            SELECT @n_Continue = 3                                                                                                                                                                  
-            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 64200   -- Should Be Set To The SQL Errmessage but I don't know how to do so.                                                
-            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update cancel shared ORDERS Failed. (isp_RCM_WV_Update_OrdersRoute)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '     
-            GOTO ENDPROC           
-         END    
-      END      
-   END  
+   --      IF @n_err <> 0                                                                                                                                                                   
+   --      BEGIN                                                                                                    
+   --         SELECT @n_Continue = 3                                                                                                                                                                  
+   --         SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 64200   -- Should Be Set To The SQL Errmessage but I don't know how to do so.                                                
+   --         SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update cancel shared ORDERS Failed. (isp_RCM_WV_Update_OrdersRoute)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '     
+   --         GOTO ENDPROC           
+   --      END    
+   --   END      
+   --END  
     
    --Check Route from redeliver POD  
    IF @n_continue IN(1,2)  
