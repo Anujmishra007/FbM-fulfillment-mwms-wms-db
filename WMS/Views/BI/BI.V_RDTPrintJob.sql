@@ -20,7 +20,7 @@ GRANT SELECT ON  [BI].[V_RDTPrintJob] TO [JReportRole]
 GO
 
 /*
-exec as login ='JreportuserJP'
+exec as login ='JreportuserCN'
 
 select suser_sname()
 
