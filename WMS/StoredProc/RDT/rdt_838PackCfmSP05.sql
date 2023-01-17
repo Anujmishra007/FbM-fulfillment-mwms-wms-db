@@ -138,17 +138,17 @@ BEGIN
       ELSE
          SET @cPackConfirm = 'Y'
 
-      ---- Check fully packed
-      --IF @cPackConfirm = 'Y'
-      --BEGIN
-      --   SELECT @nPickQTY = SUM( PD.QTY)
-      --   FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
-      --      JOIN dbo.PickDetail PD WITH (NOLOCK) ON (LPD.OrderKey = PD.OrderKey)
-      --   WHERE LPD.LoadKey = @cLoadKey
+      -- Check fully packed
+      IF @cPackConfirm = 'Y'
+      BEGIN
+         SELECT @nPickQTY = SUM( PD.QTY)
+         FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
+            JOIN dbo.PickDetail PD WITH (NOLOCK) ON (LPD.OrderKey = PD.OrderKey)
+         WHERE LPD.LoadKey = @cLoadKey
 
-      --   IF @nPickQTY <> @nPackQTY
-      --      SET @cPackConfirm = 'N'
-      --END
+         IF @nPickQTY <> @nPackQTY
+            SET @cPackConfirm = 'N'
+      END
    END
 
    -- Custom PickSlip
