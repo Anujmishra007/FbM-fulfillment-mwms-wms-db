@@ -10,11 +10,10 @@ GO
 /* Written by: WZPang                                                   */          
 /*                                                                      */          
 /* Purpose: WMS-20938 - MY - KFMY Putaway Advice Reformat		        */ 
-/*			WMS-21438 - MY - Modify UserName							*/
 /*                                                                      */              
 /* Called By: RPT_ASN_PTWYRPT_002                                       */              
 /*                                                                      */              
-/* PVCS Version: 1.1                                                    */              
+/* GitLab Version: 1.4                                                  */              
 /*                                                                      */              
 /* Version: 7.0                                                         */              
 /*                                                                      */              
@@ -22,6 +21,8 @@ GO
 /*                                                                      */              
 /* Updates:                                                             */              
 /* Date         Author   Ver  Purposes                                  */
+/* 11-Jan-2023	WZPang	 1.1  WMS-21438 - MY - Modify UserName			*/
+/* 11-Jan-2023  WZPang	 1.2  DevOps Combine Script						*/
 /************************************************************************/              
 CREATE OR ALTER PROC [dbo].[isp_RPT_ASN_PTWYRPT_002] (      
       @c_ReceiptKey		NVARCHAR(10)
