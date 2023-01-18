@@ -21,6 +21,7 @@ GO
 /* 2022-03-29 1.7  Ung        WMS-19254 Add MultiSKUBarocde                   */
 /* 2022-11-22 1.8  Ung        WMS-21112 Revise close carton                   */
 /*                            Add custom carton ID                            */
+/* 2022-12-15 1.9  Ung        WMS-21056 Allow multi sorter, if not use light  */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdtfnc_PTLPiece (
@@ -92,45 +93,26 @@ DECLARE
    @cUPC                   NVARCHAR( 30), 
 
    @cDefaultDeviceID       NVARCHAR( 20), -- (james01)
-   @cUserWhoLockedStation  NVARCHAR( 20), -- (james02)
    @cDefaultMethod         NVARCHAR( 1),  -- (james03)
    @tExtValid              VARIABLETABLE, -- (james03)
    @cNewCartonID           NVARCHAR(20),
    @cLOC                   NVARCHAR(10),
 
-   @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
-   @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
-   @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),
-   @cInField04 NVARCHAR( 60),   @cOutField04 NVARCHAR( 60),
-   @cInField05 NVARCHAR( 60),   @cOutField05 NVARCHAR( 60),
-   @cInField06 NVARCHAR( 60),   @cOutField06 NVARCHAR( 60),
-   @cInField07 NVARCHAR( 60),   @cOutField07 NVARCHAR( 60),
-   @cInField08 NVARCHAR( 60),   @cOutField08 NVARCHAR( 60),
-   @cInField09 NVARCHAR( 60),   @cOutField09 NVARCHAR( 60),
-   @cInField10 NVARCHAR( 60),   @cOutField10 NVARCHAR( 60),
-   @cInField11 NVARCHAR( 60),   @cOutField11 NVARCHAR( 60),
-   @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),
-   @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60),
-   @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),
-   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),
-
-   @cFieldAttr01 NVARCHAR( 1), @cFieldAttr02 NVARCHAR( 1),
-   @cFieldAttr03 NVARCHAR( 1), @cFieldAttr04 NVARCHAR( 1),
-   @cFieldAttr05 NVARCHAR( 1), @cFieldAttr06 NVARCHAR( 1),
-   @cFieldAttr07 NVARCHAR( 1), @cFieldAttr08 NVARCHAR( 1),
-   @cFieldAttr09 NVARCHAR( 1), @cFieldAttr10 NVARCHAR( 1),
-   @cFieldAttr11 NVARCHAR( 1), @cFieldAttr12 NVARCHAR( 1),
-   @cFieldAttr13 NVARCHAR( 1), @cFieldAttr14 NVARCHAR( 1),
-   @cFieldAttr15 NVARCHAR( 1),
-
-   @cErrMsg1    NVARCHAR( 20), @cErrMsg2    NVARCHAR( 20),
-   @cErrMsg3    NVARCHAR( 20), @cErrMsg4    NVARCHAR( 20),
-   @cErrMsg5    NVARCHAR( 20), @cErrMsg6    NVARCHAR( 20),
-   @cErrMsg7    NVARCHAR( 20), @cErrMsg8    NVARCHAR( 20),
-   @cErrMsg9    NVARCHAR( 20), @cErrMsg10   NVARCHAR( 20),
-   @cErrMsg11   NVARCHAR( 20), @cErrMsg12   NVARCHAR( 20),
-   @cErrMsg13   NVARCHAR( 20), @cErrMsg14   NVARCHAR( 20),
-   @cErrMsg15   NVARCHAR( 20) 
+   @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
+   @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
+   @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),    @cFieldAttr03 NVARCHAR( 1),
+   @cInField04 NVARCHAR( 60),   @cOutField04 NVARCHAR( 60),    @cFieldAttr04 NVARCHAR( 1),
+   @cInField05 NVARCHAR( 60),   @cOutField05 NVARCHAR( 60),    @cFieldAttr05 NVARCHAR( 1),
+   @cInField06 NVARCHAR( 60),   @cOutField06 NVARCHAR( 60),    @cFieldAttr06 NVARCHAR( 1),
+   @cInField07 NVARCHAR( 60),   @cOutField07 NVARCHAR( 60),    @cFieldAttr07 NVARCHAR( 1),
+   @cInField08 NVARCHAR( 60),   @cOutField08 NVARCHAR( 60),    @cFieldAttr08 NVARCHAR( 1),
+   @cInField09 NVARCHAR( 60),   @cOutField09 NVARCHAR( 60),    @cFieldAttr09 NVARCHAR( 1),
+   @cInField10 NVARCHAR( 60),   @cOutField10 NVARCHAR( 60),    @cFieldAttr10 NVARCHAR( 1),
+   @cInField11 NVARCHAR( 60),   @cOutField11 NVARCHAR( 60),    @cFieldAttr11 NVARCHAR( 1),
+   @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),    @cFieldAttr12 NVARCHAR( 1),
+   @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60),    @cFieldAttr13 NVARCHAR( 1),
+   @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),    @cFieldAttr14 NVARCHAR( 1),
+   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),    @cFieldAttr15 NVARCHAR( 1)
 
 -- Load RDT.RDTMobRec
 SELECT
@@ -168,30 +150,21 @@ SELECT
 
    @cUPC                = V_String41, 
 
-   @cInField01 = I_Field01,   @cOutField01 = O_Field01,
-   @cInField02 = I_Field02,   @cOutField02 = O_Field02,
-   @cInField03 = I_Field03,   @cOutField03 = O_Field03,
-   @cInField04 = I_Field04,   @cOutField04 = O_Field04,
-   @cInField05 = I_Field05,   @cOutField05 = O_Field05,
-   @cInField06 = I_Field06,   @cOutField06 = O_Field06,
-   @cInField07 = I_Field07,   @cOutField07 = O_Field07,
-   @cInField08 = I_Field08,   @cOutField08 = O_Field08,
-   @cInField09 = I_Field09,   @cOutField09 = O_Field09,
-   @cInField10 = I_Field10,   @cOutField10 = O_Field10,
-   @cInField11 = I_Field11,   @cOutField11 = O_Field11,
-   @cInField12 = I_Field12,   @cOutField12 = O_Field12,
-   @cInField13 = I_Field13,   @cOutField13 = O_Field13,
-   @cInField14 = I_Field14,   @cOutField14 = O_Field14,
-   @cInField15 = I_Field15,   @cOutField15 = O_Field15,
-
-   @cFieldAttr01  = FieldAttr01,    @cFieldAttr02   = FieldAttr02,
-   @cFieldAttr03 =  FieldAttr03,    @cFieldAttr04   = FieldAttr04,
-   @cFieldAttr05 =  FieldAttr05,    @cFieldAttr06   = FieldAttr06,
-   @cFieldAttr07 =  FieldAttr07,    @cFieldAttr08   = FieldAttr08,
-   @cFieldAttr09 =  FieldAttr09,    @cFieldAttr10   = FieldAttr10,
-   @cFieldAttr11 =  FieldAttr11,    @cFieldAttr12   = FieldAttr12,
-   @cFieldAttr13 =  FieldAttr13,    @cFieldAttr14   = FieldAttr14,
-   @cFieldAttr15 =  FieldAttr15
+   @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01, 
+   @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02, 
+   @cInField03 = I_Field03,   @cOutField03 = O_Field03,  @cFieldAttr03 = FieldAttr03, 
+   @cInField04 = I_Field04,   @cOutField04 = O_Field04,  @cFieldAttr04 = FieldAttr04, 
+   @cInField05 = I_Field05,   @cOutField05 = O_Field05,  @cFieldAttr05 = FieldAttr05, 
+   @cInField06 = I_Field06,   @cOutField06 = O_Field06,  @cFieldAttr06 = FieldAttr06, 
+   @cInField07 = I_Field07,   @cOutField07 = O_Field07,  @cFieldAttr07 = FieldAttr07, 
+   @cInField08 = I_Field08,   @cOutField08 = O_Field08,  @cFieldAttr08 = FieldAttr08, 
+   @cInField09 = I_Field09,   @cOutField09 = O_Field09,  @cFieldAttr09 = FieldAttr09, 
+   @cInField10 = I_Field10,   @cOutField10 = O_Field10,  @cFieldAttr10 = FieldAttr10, 
+   @cInField11 = I_Field11,   @cOutField11 = O_Field11,  @cFieldAttr11 = FieldAttr11, 
+   @cInField12 = I_Field12,   @cOutField12 = O_Field12,  @cFieldAttr12 = FieldAttr12, 
+   @cInField13 = I_Field13,   @cOutField13 = O_Field13,  @cFieldAttr13 = FieldAttr13, 
+   @cInField14 = I_Field14,   @cOutField14 = O_Field14,  @cFieldAttr14 = FieldAttr14, 
+   @cInField15 = I_Field15,   @cOutField15 = O_Field15,  @cFieldAttr15 = FieldAttr15
 
 FROM rdt.rdtMobRec (NOLOCK)
 WHERE Mobile = @nMobile
@@ -313,39 +286,30 @@ BEGIN
          GOTO Quit
       END
 
-      -- (james02)
-      SET @cUserWhoLockedStation = ''
-
       -- Check station in use                  
-      SELECT @cUserWhoLockedStation = UserName 
-      FROM rdt.rdtMobRec WITH (NOLOCK) 
-      WHERE Mobile <> @nMobile
-      AND   Func = @nFunc 
-      AND   @cStation = V_String1
-
-      IF ISNULL( @cUserWhoLockedStation, '') <> ''
+      IF @cLight = '1'
       BEGIN
-         SET @nErrNo = 99503
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --StationInUse
-         EXEC rdt.rdtSetFocusField @nMobile, 1
-         SET @cOutField01 = ''
+         -- Get station info
+         DECLARE @cUserWhoLockedStation NVARCHAR( 20) = ''
+         SELECT @cUserWhoLockedStation = UserName 
+         FROM rdt.rdtMobRec WITH (NOLOCK) 
+         WHERE Mobile <> @nMobile
+            AND Func = @nFunc 
+            AND @cStation = V_String1
 
-         IF rdt.RDTGetConfig( @nFunc, 'ShowStationInUseWithUserName', @cStorerKey) = '1'
+         -- Station in use by other
+         IF @cUserWhoLockedStation <> ''
          BEGIN
-            SET @cErrMsg1 = SUBSTRING( @cErrMsg, 7, 14)
-            SET @cErrMsg2 = SUBSTRING( rdt.rdtgetmessage( 99512, @cLangCode, 'DSP'), 7, 14) --Locked By
-            SET @cErrMsg3 = @cUserWhoLockedStation
-            SET @nErrNo = 0
-            EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1, @cErrMsg2, @cErrMsg3
-            IF @nErrNo = 1
-            BEGIN
-               SET @cErrMsg1 = ''
-               SET @cErrMsg2 = ''
-               SET @cErrMsg3 = ''
-            END   
-         END
+            DECLARE @cMsg1 NVARCHAR(20), @cMsg2 NVARCHAR(20)
+            SET @cMsg1 = rdt.rdtgetmessage( 99503, @cLangCode, 'DSP') --STATION IN USE
+            SET @cMsg2 = rdt.rdtgetmessage( 99512, @cLangCode, 'DSP') --LOCKED BY:
 
-         GOTO Quit
+            EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', @cMsg1, '', @cMsg2, @cUserWhoLockedStation
+
+            EXEC rdt.rdtSetFocusField @nMobile, 1
+            SET @cOutField01 = ''
+            GOTO Quit
+         END
       END
       SET @cOutField01 = @cStation
                   
@@ -1368,30 +1332,22 @@ BEGIN
 
       V_String41 = @cUPC, 
 
-      I_Field01 = @cInField01,  O_Field01 = @cOutField01,
-      I_Field02 = @cInField02,  O_Field02 = @cOutField02,
-      I_Field03 = @cInField03,  O_Field03 = @cOutField03,
-      I_Field04 = @cInField04,  O_Field04 = @cOutField04,
-      I_Field05 = @cInField05,  O_Field05 = @cOutField05,
-      I_Field06 = @cInField06,  O_Field06 = @cOutField06,
-      I_Field07 = @cInField07,  O_Field07 = @cOutField07,
-      I_Field08 = @cInField08,  O_Field08 = @cOutField08,
-      I_Field09 = @cInField09,  O_Field09 = @cOutField09,
-      I_Field10 = @cInField10,  O_Field10 = @cOutField10,
-      I_Field11 = @cInField11,  O_Field11 = @cOutField11,
-      I_Field12 = @cInField12,  O_Field12 = @cOutField12,
-      I_Field13 = @cInField13,  O_Field13 = @cOutField13,
-      I_Field14 = @cInField14,  O_Field14 = @cOutField14,
-      I_Field15 = @cInField15,  O_Field15 = @cOutField15,
-
-      FieldAttr01  = @cFieldAttr01,   FieldAttr02  = @cFieldAttr02,
-      FieldAttr03  = @cFieldAttr03,   FieldAttr04  = @cFieldAttr04,
-      FieldAttr05  = @cFieldAttr05,   FieldAttr06  = @cFieldAttr06,
-      FieldAttr07  = @cFieldAttr07,   FieldAttr08  = @cFieldAttr08,
-      FieldAttr09  = @cFieldAttr09,   FieldAttr10  = @cFieldAttr10,
-      FieldAttr11  = @cFieldAttr11,   FieldAttr12  = @cFieldAttr12,
-      FieldAttr13  = @cFieldAttr13,   FieldAttr14  = @cFieldAttr14,
-      FieldAttr15  = @cFieldAttr15
+      I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01, 
+      I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02, 
+      I_Field03 = @cInField03,  O_Field03 = @cOutField03,   FieldAttr03  = @cFieldAttr03, 
+      I_Field04 = @cInField04,  O_Field04 = @cOutField04,   FieldAttr04  = @cFieldAttr04, 
+      I_Field05 = @cInField05,  O_Field05 = @cOutField05,   FieldAttr05  = @cFieldAttr05, 
+      I_Field06 = @cInField06,  O_Field06 = @cOutField06,   FieldAttr06  = @cFieldAttr06, 
+      I_Field07 = @cInField07,  O_Field07 = @cOutField07,   FieldAttr07  = @cFieldAttr07, 
+      I_Field08 = @cInField08,  O_Field08 = @cOutField08,   FieldAttr08  = @cFieldAttr08, 
+      I_Field09 = @cInField09,  O_Field09 = @cOutField09,   FieldAttr09  = @cFieldAttr09, 
+      I_Field10 = @cInField10,  O_Field10 = @cOutField10,   FieldAttr10  = @cFieldAttr10, 
+      I_Field11 = @cInField11,  O_Field11 = @cOutField11,   FieldAttr11  = @cFieldAttr11, 
+      I_Field12 = @cInField12,  O_Field12 = @cOutField12,   FieldAttr12  = @cFieldAttr12, 
+      I_Field13 = @cInField13,  O_Field13 = @cOutField13,   FieldAttr13  = @cFieldAttr13, 
+      I_Field14 = @cInField14,  O_Field14 = @cOutField14,   FieldAttr14  = @cFieldAttr14, 
+      I_Field15 = @cInField15,  O_Field15 = @cOutField15,   FieldAttr15  = @cFieldAttr15
+      
    WHERE Mobile = @nMobile
 END
 
