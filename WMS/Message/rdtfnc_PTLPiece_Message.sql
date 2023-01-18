@@ -12,9 +12,12 @@ execute rdt.rdtAddMsg 99508, 10, '99508^Invalid SKU   ', 'us_english', 803
 execute rdt.rdtAddMsg 99509, 10, '99509^MultiSKUBarcod', 'us_english', 803
 execute rdt.rdtAddMsg 99510, 10, '99510^Need Option   ', 'us_english', 803
 execute rdt.rdtAddMsg 99511, 10, '99511^Invalid Option', 'us_english', 803
-
--- WMS6781
 execute rdt.rdtAddMsg 99512, 10, '99512^Locked By     ', 'us_english', 803
-
-execute rdt.rdtAddMsg 99513, 10, '99513^Need Loc', 'us_english', 803
-execute rdt.rdtAddMsg 99514, 10, '99514^Need Carton', 'us_english', 803
+execute rdt.rdtAddMsg 99513, 10, '99513^Need LOC      ', 'us_english', 803
+execute rdt.rdtAddMsg 99514, 10, '99514^Invalid LOC   ', 'us_english', 803
+execute rdt.rdtAddMsg 99515, 10, '99515^LOC Multi POS ', 'us_english', 803
+execute rdt.rdtAddMsg 99516, 10, '99516^LOC Not Assign', 'us_english', 803
+execute rdt.rdtAddMsg 99517, 10, '99517^Need Carton ID', 'us_english', 803
+execute rdt.rdtAddMsg 99518, 10, '99518^Invalid Format', 'us_english', 803
+execute rdt.rdtAddMsg 99519, 10, '99519^Same carton ID', 'us_english', 803
+execute rdt.rdtAddMsg 99520, 10, '99520^ExistingCarton', 'us_english', 803

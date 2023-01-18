@@ -19,6 +19,8 @@ GO
 /*                            Add extvalid @ step 1                           */
 /* 2021-02-22 1.6  YeeKung    WMS-16066 Add Close carton(yeekung01)           */
 /* 2022-03-29 1.7  Ung        WMS-19254 Add MultiSKUBarocde                   */
+/* 2022-11-22 1.8  Ung        WMS-21112 Revise close carton                   */
+/*                            Add custom carton ID                            */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdtfnc_PTLPiece (
@@ -38,6 +40,7 @@ DECLARE
    @nCount        INT,
    @bSuccess      INT,
    @nTranCount    INT,
+   @nRowCount     INT, 
    @cSQL          NVARCHAR( MAX),
    @cSQLParam     NVARCHAR( MAX),
    @cIPAddress    NVARCHAR( 40), 
@@ -84,6 +87,7 @@ DECLARE
    @cLight                 NVARCHAR( 1),
    @cExtendedInfo          NVARCHAR( 20),
    @cMultiSKUBarcode       NVARCHAR( 1),
+   @cCustomCartonIDSP      NVARCHAR( 20),
 
    @cUPC                   NVARCHAR( 30), 
 
@@ -91,8 +95,8 @@ DECLARE
    @cUserWhoLockedStation  NVARCHAR( 20), -- (james02)
    @cDefaultMethod         NVARCHAR( 1),  -- (james03)
    @tExtValid              VARIABLETABLE, -- (james03)
-   @cCartonID              NVARCHAR(20),
-   @cLOC                   NVARCHAR(20),
+   @cNewCartonID           NVARCHAR(20),
+   @cLOC                   NVARCHAR(10),
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -158,8 +162,9 @@ SELECT
    @cDecodeSP           = V_String23,
    @cLight              = V_String24,
    @cExtendedInfo       = V_String25,
-   @cCartonID           = V_String26,
+   @cNewCartonID        = V_String26,
    @cMultiSKUBarcode    = V_String27, 
+   @cCustomCartonIDSP   = V_String28, 
 
    @cUPC                = V_String41, 
 
@@ -211,6 +216,9 @@ Step 0. func = 803. Menu
 Step_0:
 BEGIN
    -- Get storer config
+   SET @cCustomCartonIDSP = rdt.rdtGetConfig( @nFunc, 'CustomCartonIDSP', @cStorerKey)
+   IF @cCustomCartonIDSP = '0'
+      SET @cCustomCartonIDSP = ''
    SET @cDecodeSP = rdt.rdtGetConfig( @nFunc, 'DecodeSP', @cStorerKey)
    IF @cDecodeSP = '0'
       SET @cDecodeSP = ''
@@ -590,6 +598,7 @@ Step 3. Scn = 4592. Matrix, SKU screen
    Result10 (Field10)
    SKU      (Field11, input)
    LAST     (Field12)
+   OPTION   (Field13, input) 
 ********************************************************************************/
 Step_3:
 BEGIN
@@ -602,13 +611,21 @@ BEGIN
       SET @cUPC = LEFT( @cInField11, 30)
       SET @cOption = @cInField13
 
-      IF @cOption='9'
+      IF @cOption = '9' -- Close
       BEGIN
-         SET @cOutField01=''
-         SET @cOutField02=''
+         -- Prepare next screen var
+         SET @cOutField01 = '' -- LOC
+         SET @cOutField02 = ''
 
-         SET @nStep=@nStep+2
-         SET @nScn=@nScn+2
+         IF @cCustomCartonIDSP <> ''
+            SET @cFieldAttr02 = 'O'
+
+         EXEC rdt.rdtSetFocusField @nMobile, 1 -- LOC
+
+         -- Go to close carton ID screen
+         SET @nStep = @nStep + 2
+         SET @nScn = @nScn + 2
+         
          GOTO Quit
       END
 
@@ -1047,86 +1064,176 @@ GOTO QUIT
 
 
 /********************************************************************************
-Step 5. Scn = 4594 Carton ID screen
-   Carton ID
-   (field01, input)
+Step 5. Scn = 4594 New Carton ID screen
+   LOC            (field01, input)
+   NEW CARTON ID  (field02, input)
 ********************************************************************************/
 Step_5:
 BEGIN
    IF @nInputKey = 1 --ENTER
    BEGIN
-      SET @cLOC=@cInField01
-      SET @cCartonID=@cInField02
+      -- Screen mapping
+      SET @cLOC = @cInField01
+      SET @cNewCartonID = CASE WHEN @cFieldAttr02 = '' THEN @cInField02 ELSE @cOutField02 END
 
       -- Validate blank
       IF @cLOC = ''
       BEGIN
          SET @nErrNo = 99513
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need station
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need LOC
          EXEC rdt.rdtSetFocusField @nMobile, 1
          GOTO Quit
       END
-
-      SET @cOutField01 = @cLOC
-
-      -- Validate blank
-      IF @cCartonID = ''
+      
+      -- Get assign info
+      DECLARE @cClosePosition NVARCHAR( 10)
+      SELECT @cClosePosition = DevicePosition
+      FROM DeviceProfile WITH (NOLOCK) 
+      WHERE DeviceType = 'STATION'
+         AND DeviceID = @cStation
+         AND LOC = @cLOC
+      
+      SET @nRowCount = @@ROWCOUNT
+      
+      -- Check LOC valid
+      IF @nRowCount = 0
       BEGIN
          SET @nErrNo = 99514
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need station
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid LOC
+         EXEC rdt.rdtSetFocusField @nMobile, 1 -- LOC
+         SET @cOutField01 = ''
+         GOTO Quit
+      END
+
+      --- Check multi LOC
+      IF @nRowCount > 1
+      BEGIN
+         SET @nErrNo = 99515
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LOC Multi POS
+         EXEC rdt.rdtSetFocusField @nMobile, 1 -- LOC
+         SET @cOutField01 = ''
+         GOTO Quit
+      END
+      
+      --- Check LOC assigned
+      IF NOT EXISTS( SELECT 1
+         FROM rdt.rdtPTLPieceLog WITH (NOLOCK)
+         WHERE Station = @cStation
+            AND LOC = @cLOC)
+      BEGIN
+         SET @nErrNo = 99516
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LOC Not Assign
+         EXEC rdt.rdtSetFocusField @nMobile, 1 -- LOC
+         SET @cOutField01 = ''
+         GOTO Quit
+      END
+      SET @cOutField01 = @cLOC
+
+      -- Custom carton ID
+      IF @cCustomCartonIDSP <> ''
+      BEGIN
+         -- Custom carton ID
+         SET @cNewCartonID = ''
+         EXEC rdt.rdt_PTLPiece_CustomCartonID @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+            @cStation, 
+            @cClosePosition, 
+            @cMethod, 
+            @cSKU, 
+            @nErrNo        OUTPUT, 
+            @cErrMsg       OUTPUT, 
+            @cNewCartonID  OUTPUT 
+         IF @nErrNo <> 0
+            GOTO Quit
+      END
+         
+      -- Validate blank
+      IF @cNewCartonID = ''
+      BEGIN
+         SET @nErrNo = 99517
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need Carton ID
          EXEC rdt.rdtSetFocusField @nMobile, 2
          GOTO Quit
       END
 
-      -- Close station
-      EXEC rdt.rdt_PTLPiece_CloseCarton @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,@cStation,@cPosition,@cLOC
+      -- Check barcode format
+      IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'CartonID', @cNewCartonID) = 0
+      BEGIN
+         SET @nErrNo = 99518
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format
+         EXEC rdt.rdtSetFocusField @nMobile, 2 -- NewCartonID
+         SET @cOutField02 = ''
+         GOTO Quit
+      END
+
+      -- Get assign info
+      DECLARE @cCartonID NVARCHAR( 20)
+      SELECT @cCartonID = CartonID 
+      FROM rdt.rdtPTLPieceLog WITH (NOLOCK) 
+      WHERE Station = @cStation
+         AND Position = @cClosePosition
+
+      -- Check same carton ID
+      IF @cCartonID = @cNewCartonID
+      BEGIN
+         SET @nErrNo = 99519
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Same carton ID
+         EXEC rdt.rdtSetFocusField @nMobile, 2 -- NewCartonID
+         SET @cOutField02 = ''
+         GOTO Quit
+      END
+
+      -- Check carton on cart
+      IF EXISTS( SELECT 1 
+         FROM rdt.rdtPTLPieceLog WITH (NOLOCK) 
+         WHERE Station = @cStation
+            AND CartonID = @cNewCartonID)
+      BEGIN
+         SET @nErrNo = 99520
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ExistingCarton
+         EXEC rdt.rdtSetFocusField @nMobile, 2 -- CartonID
+         SET @cOutField02 = ''
+         GOTO Quit
+      END
+      
+      -- Close carton
+      EXEC rdt.rdt_PTLPiece_CloseCarton @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
+         ,@cStation
+         ,@cClosePosition
+         ,@cLOC
          ,@cCartonID
+         ,@cNewCartonID
          ,@nErrNo     OUTPUT
          ,@cErrMsg    OUTPUT
       IF @nErrNo <> 0
          GOTO Quit
 
+      -- Save last position
       SET @cLastPos = ''
-
-      -- Prepare next screen var
-      SET @cOutField01 = '' --Result01
-      SET @cOutField02 = '' 
-      SET @cOutField03 = '' 
-      SET @cOutField04 = '' 
-      SET @cOutField05 = '' 
-      SET @cOutField06 = '' 
-      SET @cOutField07 = '' 
-      SET @cOutField08 = '' 
-      SET @cOutField09 = '' 
-      SET @cOutField10 = '' --Result10
-      SET @cOutField11 = '' --@cSKU
-      SET @cOutField12 = '' --@cLastPos
-
-      -- Go to matrix, SKU screen
-      SET @nScn = 4592
-      SET @nStep=@nStep-2
+      SELECT @cLastPos = LEFT( LogicalName, 5)
+      FROM DeviceProfile WITH (NOLOCK)
+      WHERE DeviceType = 'STATION'
+         AND DeviceID = @cStation
+         AND LOC = @cLOC
    END
+   
+   -- Prepare next screen var
+   SET @cOutField01 = '' --Result01
+   SET @cOutField02 = '' 
+   SET @cOutField03 = '' 
+   SET @cOutField04 = '' 
+   SET @cOutField05 = '' 
+   SET @cOutField06 = '' 
+   SET @cOutField07 = '' 
+   SET @cOutField08 = '' 
+   SET @cOutField09 = '' 
+   SET @cOutField10 = '' --Result10
+   SET @cOutField11 = '' -- SKU
+   SET @cOutField12 = @cLastPos
+   SET @cOutField13 = '' --Option
 
-   IF @nInputKey = 0
-   BEGIN
-      -- Prepare next screen var
-      SET @cOutField01 = '' --Result01
-      SET @cOutField02 = '' 
-      SET @cOutField03 = '' 
-      SET @cOutField04 = '' 
-      SET @cOutField05 = '' 
-      SET @cOutField06 = '' 
-      SET @cOutField07 = '' 
-      SET @cOutField08 = '' 
-      SET @cOutField09 = '' 
-      SET @cOutField10 = '' --Result10
-      SET @cOutField11 = '' --@cSKU
-      SET @cOutField12 = '' --@cLastPos
-
-      -- Go to matrix, SKU screen
-      SET @nScn = 4592
-      SET @nStep=@nStep-2
-   END
+   -- Go to matrix, SKU screen
+   SET @nScn = @nScn - 2
+   SET @nStep= @nStep - 2
 END
 GOTO QUIT
 
@@ -1238,7 +1345,6 @@ BEGIN
       StorerKey = @cStorerKey,
       Facility  = @cFacility,
       Printer   = @cPrinter,
-      -- UserName  = @cUserName,
       InputKey  = @nInputKey,
 
       V_SKU      = @cSKU,
@@ -1256,8 +1362,9 @@ BEGIN
       V_String23 = @cDecodeSP,
       V_String24 = @cLight,
       V_String25 = @cExtendedInfo,
-      V_String26 = @cCartonID,
+      V_String26 = @cNewCartonID,
       V_String27 = @cMultiSKUBarcode, 
+      V_String28 = @cCustomCartonIDSP, 
 
       V_String41 = @cUPC, 
 

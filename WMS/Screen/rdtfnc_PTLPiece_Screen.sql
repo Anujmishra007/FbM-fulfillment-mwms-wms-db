@@ -20,11 +20,12 @@ EXECUTE rdt.rdtAddScn 4592, 'ENG'
    ,@cLine05 = '%20d05'
    ,@cLine06 = '%20d06'
    ,@cLine07 = '%20d07'
-   ,@cLine08 = 'SKU/UPC:'
-   ,@cLine09 = '%30i11'
-   ,@cLine10= 'LAST POS: %05d12'
-   ,@cLine11= 'Option: %05i13'
-   ,@cLine12= '9=CLOSE'
+   ,@cLine08 = '%20d08'
+   ,@cLine09 = '%20d09'
+   ,@cLine10 = 'SKU/UPC:'
+   ,@cLine11 = '%30i11'
+   ,@cLine12 = 'LAST POS: %05d12'
+   ,@cLine13 = 'OPTION: %01i13 9=CLOSE'
    ,@cLine14 = '%e'
    ,@nFunc = 803
    
@@ -40,13 +41,13 @@ EXECUTE rdt.rdtAddScn 4593, 'ENG'
    ,@cLine14 = '%e'
    ,@nFunc = 803
    
-   
 -- Close Carton
 DELETE rdt.RDTScn WHERE Scn = 4594 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4594, 'ENG'
    ,@cLine01 = 'LOC:'
-   ,@cLine02 = '%20i01'
-   ,@cLine04 = 'Carton ID'
+   ,@cLine02 = '%10i01'
+   ,@cLine03 = ''
+   ,@cLine04 = 'NEW CARTON ID:'
    ,@cLine05 = '%20i02'
    ,@cLine14 = '%e'
    ,@nFunc = 803

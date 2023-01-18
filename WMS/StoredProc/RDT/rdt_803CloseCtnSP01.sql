@@ -1,10 +1,6 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_803CloseCtnSP01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_803CloseCtnSP01]
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
@@ -13,24 +9,26 @@ GO
 /*                                                                      */
 /* Purpose: Close station                                               */
 /*                                                                      */
-/* Date        Rev  Author      Purposes                                */
-/* 01-03-2021 1.0  YeeKung     WMS-16066 Created                        */  
+/* Date        Rev  Author    Purposes                                  */
+/* 01-03-2021 1.0  YeeKung    WMS-16066 Created                         */
+/* 02-12-2022 1.1  Ung        WMS-21112 Add NewCartonID param           */
 /************************************************************************/
 
-CREATE PROC rdt.rdt_803CloseCtnSP01 (
-    @nMobile    INT
-   ,@nFunc      INT
-   ,@cLangCode  NVARCHAR( 3)
-   ,@nStep      INT
-   ,@nInputKey  INT
-   ,@cFacility  NVARCHAR(5)
-   ,@cStorerKey NVARCHAR( 15)
-   ,@cStation   NVARCHAR( 10)
-   ,@cPosition  NVARCHAR( 20)
-   ,@cLOC       NVARCHAR( 20)
-   ,@cCartonID  NVARCHAR( 20)
-   ,@nErrNo     INT           OUTPUT
-   ,@cErrMsg    NVARCHAR(250) OUTPUT
+CREATE OR ALTER PROC rdt.rdt_803CloseCtnSP01 (
+    @nMobile      INT
+   ,@nFunc        INT
+   ,@cLangCode    NVARCHAR( 3)
+   ,@nStep        INT
+   ,@nInputKey    INT
+   ,@cFacility    NVARCHAR(5)
+   ,@cStorerKey   NVARCHAR( 15)
+   ,@cStation     NVARCHAR( 10)
+   ,@cPosition    NVARCHAR( 20)
+   ,@cLOC         NVARCHAR( 10)
+   ,@cCartonID    NVARCHAR( 20)
+   ,@cNewCartonID NVARCHAR( 20)
+   ,@nErrNo       INT           OUTPUT
+   ,@cErrMsg      NVARCHAR(250) OUTPUT
 )
 AS
 BEGIN
@@ -39,31 +37,29 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @nRowRef INT
-   DECLARE @nPTLKey INT
-   DECLARE @cIPAddress NVARCHAR(40)
-
    -- Handling transaction
    DECLARE @nTranCount INT
    SET @nTranCount = @@TRANCOUNT
    BEGIN TRAN  -- Begin our own transaction
    SAVE TRAN rdt_803CloseCtnSP01 -- For rollback or commit only our own transaction
 
-   UPDATE RDT.rdtPTLPieceLog WITH (ROWLOCK)
-   set cartonid=@cCartonID,
-       sku=''
-   where loc=@cloc
+   UPDATE rdt.rdtPTLPieceLog SET
+      CartonID = @cNewCartonID,
+      SKU = '', 
+      EditDate = GETDATE(),
+      EditWho = SUSER_SNAME()
+   WHERE LOC = @cLOC
 
    IF @@ERROR<>0
    BEGIN
-      SET @nErrNo = 165051  
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd 
+      SET @nErrNo = 165051
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdPTLPieceFail
       GOTO RollBackTran
    END
 
    COMMIT TRAN rdt_803CloseCtnSP01
    GOTO Quit
-   
+
 RollBackTran:
    ROLLBACK TRAN rdt_803CloseCtnSP01 -- Only rollback change made here
 Quit:
