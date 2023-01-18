@@ -27,8 +27,10 @@ GO
 /* 2020-12-28   2.1  WyeChun    Add in PickZone (WC01)                           */  
 /* 2022-04-08   2.2  Ung        WMS-19402 Add AutoScanOut                        */
 /* 2021-10-04   2.3  YeeKung    WMS-16543 Fix multisku (yeekung04)               */   
-/*                               Add SwapIDSP                                    */
+/*                              Add SwapIDSP                                     */
 /* 2022-12-30   2.4  Calvin     JSM-119684 Reset Pickzone Variable (CLVN01)      */
+/* 2022-11-24   2.5  Ung        WMS-21032 Fix ExtendedInfoSP at LOC screen       */
+/*                              Add DefaultQTY                                   */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdtfnc_PickSKU (
@@ -106,6 +108,7 @@ DECLARE
    @cLoadKey       NVARCHAR( 10)  ,
    @cZone          NVARCHAR( 18)  ,
 
+   @cDefaultQTY         NVARCHAR( 1),
    @cExtendedValidateSP NVARCHAR( 20),
    @cExtendedUpdateSP   NVARCHAR( 20),
    @cExtendedInfoSP     NVARCHAR( 20),
@@ -120,11 +123,11 @@ DECLARE
    @cVerifyID           NVARCHAR( 1),
    @cAutoScanIn         NVARCHAR( 1),  -- (james01)
    @cMultiSKUBarcode    NVARCHAR( 3),
-   @cDoctype         NVARCHAR(5), --yeekung01
+   @cDoctype            NVARCHAR(5),   --yeekung01
    @cClearid            NVARCHAR( 1),  --(yeekung02)
-   @cPickZone        NVARCHAR(10), --(yeekung03)
-   @cVerifyPickZone  NVARCHAR(1), --(yeekung03)
-   @cSwapidSP        NVARCHAR(20), 
+   @cPickZone           NVARCHAR(10),  --(yeekung03)
+   @cVerifyPickZone     NVARCHAR(1),   --(yeekung03)
+   @cSwapidSP           NVARCHAR(20), 
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
@@ -200,6 +203,7 @@ SELECT
    @cMUOM_Desc       = V_String10,
    @cPUOM_Desc       = V_String11,
 
+   @cDefaultQTY         = V_String20,
    @cExtendedValidateSP = V_String21,
    @cExtendedUpdateSP   = V_String22,
    @cExtendedInfoSP     = V_String23,
@@ -297,19 +301,24 @@ BEGIN
    SELECT @cPUOM = DefaultUOM FROM rdt.rdtUser WITH (NOLOCK) WHERE UserName = @cUserName
 
    -- Get RDT storer configure
+   SET @cAutoScanIn = rdt.rdtGetConfig( @nFunc, 'AutoScanIn', @cStorerKey)
+   SET @cClearID = rdt.RDTGetConfig( @nFunc, 'clearID', @cStorerKey)
    SET @cMoveQTYAlloc = rdt.rdtGetConfig( @nFunc, 'MoveQTYAlloc', @cStorerKey)
    SET @cMoveQTYPick = rdt.rdtGetConfig( @nFunc, 'MoveQTYPick', @cStorerKey)
+   SET @cMultiSKUBarcode = rdt.RDTGetConfig( @nFunc, 'MultiSKUBarcode', @cStorerKey)
    SET @cOverrideLOC = rdt.RDTGetConfig( @nFunc, 'OverrideLOC', @cStorerKey)
    SET @cSkipLOC = rdt.RDTGetConfig( @nFunc, 'SkipLOC', @cStorerKey)
    SET @cSuggestLOC = rdt.RDTGetConfig( @nFunc, 'SuggestLOC', @cStorerKey)
-   SET @cVerifyID = rdt.RDTGetConfig( @nFunc, 'VerifyID', @cStorerKey)
    SET @cSwapidSP = rdt.RDTGetConfig( @nFunc, 'SwapIDSP', @cStorerKey) 
-
-   SET @cClearID = rdt.RDTGetConfig( @nFunc, 'clearID', @cStorerKey)
+   SET @cVerifyID = rdt.RDTGetConfig( @nFunc, 'VerifyID', @cStorerKey)
+   SET @cVerifyPickZone = rdt.RDTGetConfig( @nFunc, 'verifypickzone', @cStorerKey)
 
    SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerKey)
    IF @cDecodeSP = '0'
       SET @cDecodeSP = ''
+   SET @cDefaultQTY = rdt.rdtGetConfig( @nFunc, 'DefaultQTY', @cStorerKey)
+   IF @cDefaultQTY = '0'
+      SET @cDefaultQTY = ''
    SET @cDefaultToLOC = rdt.RDTGetConfig( @nFunc, 'DefaultToLOC', @cStorerKey)
    IF @cDefaultToLOC = '0'
       SET @cDefaultToLOC = ''
@@ -322,16 +331,6 @@ BEGIN
    SET @cExtendedInfoSP = rdt.rdtGetConfig( @nFunc, 'ExtendedInfoSP', @cStorerKey)
    IF @cExtendedInfoSP = '0'
       SET @cExtendedInfoSP = ''
-
-   -- (james01)
-   SET @cAutoScanIn = rdt.rdtGetConfig( @nFunc, 'AutoScanIn', @cStorerKey)
-
-   -- (james03)
-   SET @cMultiSKUBarcode = rdt.RDTGetConfig( @nFunc, 'MultiSKUBarcode', @cStorerKey)
-
-   --(yeekung02)
-   SET @cVerifyPickZone = rdt.RDTGetConfig( @nFunc, 'verifypickzone', @cStorerKey)
-
 
    -- Sign-In
    EXEC RDT.rdt_STD_EventLog
@@ -519,7 +518,7 @@ BEGIN
             SET @nErrNo = 101959
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PS not scan in
             GOTO PickSlipNo_Fail
-   END
+         END
       END
 
       -- Validate pickslip already scan out
@@ -533,7 +532,7 @@ BEGIN
       -- Get next LOC
       SET @cLoc = ''
       SET @cSuggLOC = ''
-	  SET @cPickZone = ''	--(CLVN01)
+      SET @cPickZone = ''	--(CLVN01)
       IF @cSuggestLOC = '1'
       BEGIN
          EXEC rdt.rdt_PickSKU_SuggestLOC @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
@@ -758,6 +757,7 @@ BEGIN
          BEGIN
             EXEC rdt.rdt_PickSKU_SuggestLOC @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
                @cPickSlipNo,
+               @cPickZone, 
                @cSuggLOC,
                @cSuggLOC OUTPUT,
                @nErrNo   OUTPUT,
@@ -990,7 +990,7 @@ BEGIN
       BEGIN
          SET @cExtendedInfo = ''
          SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
-            ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo,@cPickZone @cSuggLOC, @cLOC, @cDropID, @cSKU, ' +
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cPickZone, @cSuggLOC, @cLOC, @cDropID, @cSKU, ' +
             ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
             ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
             ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
@@ -1006,7 +1006,7 @@ BEGIN
             '@cStorerKey    NVARCHAR( 15), ' +
             '@cPickSlipNo   NVARCHAR( 10), ' +
             '@cPickZone     NVARCHAR( 10), ' +
-            '@cSuggLOC NVARCHAR( 10), ' +
+            '@cSuggLOC      NVARCHAR( 10), ' +
             '@cLOC          NVARCHAR( 10), ' +
             '@cDropID       NVARCHAR( 20), ' +
             '@cSKU          NVARCHAR( 20), ' +
@@ -1033,7 +1033,7 @@ BEGIN
             '@nErrNo        INT           OUTPUT, ' +
             '@cErrMsg       NVARCHAR( 20) OUTPUT  '
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-          @nMobile, @nFunc, @cLangCode, @nStep_LOC, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo,@cPickZone, @cSuggLOC, @cLOC, @cDropID, @cSKU,
+            @nMobile, @nFunc, @cLangCode, @nStep_LOC, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cPickZone, @cSuggLOC, @cLOC, @cDropID, @cSKU,
             @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
             @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
             @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
@@ -1192,11 +1192,11 @@ BEGIN
 
                EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                   @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey,@cFacility,@cLoc,@cDropid,@cpickslipno, @cUPC, 'SKU',
-                  @cUPC        OUTPUT,@cSKU OUTPUT,  @nTaskQTY        OUTPUT,
+                  @cUPC           OUTPUT, @cSKU           OUTPUT, @nTaskQTY       OUTPUT,
                   @cChkLottable01 OUTPUT, @cChkLottable02 OUTPUT, @cChkLottable03 OUTPUT, @dChkLottable04 OUTPUT, @dChkLottable05 OUTPUT,
                   @cChkLottable06 OUTPUT, @cChkLottable07 OUTPUT, @cChkLottable08 OUTPUT, @cChkLottable09 OUTPUT, @cChkLottable10 OUTPUT,
                   @cChkLottable11 OUTPUT, @cChkLottable12 OUTPUT, @dChkLottable13 OUTPUT, @dChkLottable14 OUTPUT, @dChkLottable15 OUTPUT,
-                  @nErrNo      OUTPUT, @cErrMsg     OUTPUT
+                  @nErrNo         OUTPUT, @cErrMsg        OUTPUT
 
                IF @nErrNo <> 0
                   GOTO SKU_Fail
@@ -1226,7 +1226,6 @@ BEGIN
       BEGIN
          IF @cMultiSKUBarcode IN ('1', '2')
          BEGIN
-
             SET @cDoctype = CASE WHEN ISNULL(@cLOC,'') <>'' THEN 'LOC' ELSE '' END
 
             SET @cOutField13 =''
@@ -1398,7 +1397,7 @@ BEGIN
          SET @cOutField12 = CASE WHEN @cFieldAttr14 = 'O' THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 5)) END
          SET @cOutField13 = CAST( @nMQTY AS NVARCHAR( 5))
          SET @cOutField14 = '' -- @nPQTY
-         SET @cOutField15 = '' -- @nMQTY
+         SET @cOutField15 = @cDefaultQTY -- @nMQTY
 
          -- Goto QTY screen
          SET @nScn = @nScn_QTY
@@ -1901,7 +1900,7 @@ BEGIN
          @cInField08  OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT,
          @cInField09  OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT,
          @cInField10  OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT,
-      @cInField11  OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
+         @cInField11  OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
          @cInField12  OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
          @cInField13  OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
          @cInField14  OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
@@ -1965,7 +1964,7 @@ BEGIN
       BEGIN
          -- Go to next screen
          EXEC rdt.rdt_PickSKU_GoToNextScreen @nMobile, @nFunc, @cLangCode, @nInputKey, @cFacility, @cStorerKey, @cPUOM, @cPickSlipNo,@cPickZone, @cLOC, @cID, @cDropID,
-            @cSuggLOC   OUTPUT,  @cSuggID     OUTPUT,  @cSKU        OUTPUT,   @nTaskQTY      OUTPUT,  @cLottableCode OUTPUT,
+            @cSuggLOC   OUTPUT,  @cSuggID     OUTPUT,  @cSKU         OUTPUT,  @nTaskQTY      OUTPUT,  @cLottableCode OUTPUT,
             @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01   OUTPUT,
             @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02   OUTPUT,
             @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03   OUTPUT,
@@ -1980,7 +1979,7 @@ BEGIN
             @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12   OUTPUT,
             @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13   OUTPUT,
             @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14   OUTPUT,
-      @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15   OUTPUT,
+            @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15   OUTPUT,
             @cSKUDescr  OUTPUT,  @cMUOM_Desc  OUTPUT,  @cPUOM_Desc   OUTPUT,  @nPUOM_Div     OUTPUT,
             @nStep      OUTPUT,  @nScn        OUTPUT,  @nErrNo       OUTPUT,  @cErrMsg       OUTPUT,
             @cPPK       OUTPUT
@@ -2810,6 +2809,7 @@ BEGIN
       V_String14   = @nMQTY,
       V_String15   = @nQTY,
 
+      V_String20  = @cDefaultQTY,
       V_String21  = @cExtendedValidateSP,
       V_String22  = @cExtendedUpdateSP,
       V_String23  = @cExtendedInfoSP,
@@ -2855,9 +2855,11 @@ BEGIN
    WHERE Mobile = @nMobile
 END
 GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
+
 GRANT EXEC ON RDT.rdtfnc_PickSKU TO NSQL
 GO
