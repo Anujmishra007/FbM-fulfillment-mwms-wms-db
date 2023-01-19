@@ -10,6 +10,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author      Purposes                                 */
 /* 08-04-2022 1.0  Ung         WMS-19402 Created                        */
+/* 09-01-2023 1.1  Ung         JSM-122167 Add custom pick slip          */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_PickSKU_ScanOut (
@@ -102,6 +103,18 @@ BEGIN
                JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
                JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             WHERE LPD.LoadKey = @cLoadKey  
+               AND PD.QTY > 0
+               AND (PD.Status = '4' OR PD.Status < @cPickConfirmStatus))
+            SET @cScanOut = 'Y'
+      END
+      
+      -- Custom pick slip
+      ELSE
+      BEGIN
+         -- Check outstanding PickDetail
+         IF NOT EXISTS( SELECT 1
+            FROM dbo.PickDetail PD WITH (NOLOCK) 
+            WHERE PD.PickSlipNo = @cPickSlipNo
                AND PD.QTY > 0
                AND (PD.Status = '4' OR PD.Status < @cPickConfirmStatus))
             SET @cScanOut = 'Y'
