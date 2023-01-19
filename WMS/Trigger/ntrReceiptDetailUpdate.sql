@@ -25,7 +25,7 @@ GO
 /*                                                                          */ 
 /* PVCS Version: 1.20                                                       */ 
 /*                                                                          */ 
-/* Version: 5.4                                                             */ 
+/* Version: 5.6                                                             */ 
 /*                                                                          */ 
 /* Data Modifications:                                                      */ 
 /*                                                                          */ 
@@ -169,6 +169,7 @@ GO
 /* 14-Mar-2022  James     5.4   Fix RDT error no & message (james03)        */
 /* 04-Aug-2022  WLChooi   5.5   WMS-20405 - Add ReceiptType 'VFEGRN' (WL01) */
 /* 04-Aug-2022  WLChooi   5.5   DevOps Combine Script                       */
+/* 16-Dec-2022  SPChin    5.6   JSM-99648 - Add Validation of FinalizeFlag  */
 /****************************************************************************/ 
  
 CREATE OR ALTER TRIGGER [dbo].[ntrReceiptDetailUpdate] 
@@ -403,13 +404,14 @@ BEGIN
              FROM INSERTED, DELETED 
              WHERE INSERTED.ReceiptKey  = DELETED.ReceiptKey  AND INSERTED.ReceiptLineNumber = DELETED.ReceiptLineNumber 
              AND DELETED.QtyReceived > 0 
-             AND ( INSERTED.POKey <> DELETED.POKey  OR INSERTED.SKU <> DELETED.SKU OR INSERTED.Storerkey <> DELETED.Storerkey ) 
-             ) 
+             AND ( INSERTED.POKey <> DELETED.POKey  OR INSERTED.SKU <> DELETED.SKU OR INSERTED.Storerkey <> DELETED.Storerkey 
+             OR (INSERTED.FinalizeFlag <> DELETED.FinalizeFlag AND DELETED.FinalizeFlag = 'Y'))	--JSM-99648 
+             )	 
    BEGIN 
       SELECT @n_continue=3 
       SELECT @n_err=60052 
       SELECT @c_errmsg = 'NSQL' + CONVERT(char(5),@n_err)  
-                       + ': Columns ''PO, SKU, STORER'' may not be edited when QtyReceived > 0. Update on table ''ReceiptDetail'' rejected. (ntrReceiptDetailUpdate)' 
+                       + ': Columns ''PO, SKU, STORER, FinalizeFlag'' may not be edited when QtyReceived > 0. Update on table ''ReceiptDetail'' rejected. (ntrReceiptDetailUpdate)'	--JSM-99648 
       GOTO QUIT 
    END 
 END 
