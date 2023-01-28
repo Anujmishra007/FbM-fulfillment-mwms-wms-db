@@ -1,0 +1,6 @@
+--rdt_1580RcptCfm25
+execute rdt.rdtDropMsg 195451, 195500
+
+execute rdt.rdtAddMsg 195451, 10, '195451 UpdRcvDtl Err', 'us_english', 1580
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 195451 AND 195500
