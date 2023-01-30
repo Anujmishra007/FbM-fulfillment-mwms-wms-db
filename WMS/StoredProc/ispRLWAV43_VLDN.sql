@@ -42,8 +42,9 @@ GO
 /*                            on DP Loc Sequence                        */
 /* 2022-08-19  Wan09    1.7   Config for PH to skip Loadplaning required*/
 /*                            check                                     */
+/* 2023-01-10  Mingle   1.8   WMS-21440 - Add Validation: Not allow to  */
+/*                            release wave when mbol not generated(ML01)*/
 /************************************************************************/
-
 CREATE OR ALTER PROC [dbo].[ispRLWAV43_VLDN]
    @c_Wavekey     NVARCHAR(10)    
 ,  @b_Success     INT            = 1   OUTPUT
@@ -90,6 +91,9 @@ BEGIN
          , @c_SkuGroupSkipOptim     NVARCHAR(30)= ''        --(Wan08) CR 3.0
          
          , @c_SkipRequiredLoad      NVARCHAR(30)= ''        --(Wan09) Fix PH Production Issue
+         , @c_CheckMBOLIsPopulated  NVARCHAR(30)= ''        --(ML01)
+         , @c_mbolkey               NVARCHAR(10)= ''        --(ML01)
+                     
          
    DECLARE @t_SortLocCubic          TABLE
          ( RowRef                   INT            IDENTITY(1,1)           PRIMARY KEY
@@ -145,6 +149,7 @@ BEGIN
    ,  @c_Storerkey   = o.Storerkey
    ,  @c_Facility    = o.Facility
    ,  @n_Loadplaning = CASE WHEN lpd.LoadKey IS NULL THEN 0 ELSE 1 END
+   ,  @c_mbolkey     = o.mbolkey --ML01
    FROM dbo.WAVE AS w WITH (NOLOCK)
    JOIN dbo.WAVEDETAIL AS w2 WITH (NOLOCK) ON w2.WaveKey = w.WaveKey
    JOIN dbo.ORDERS AS o WITH (NOLOCK) ON o.OrderKey = w2.OrderKey
@@ -193,7 +198,7 @@ BEGIN
    END
    
    --Wan01 - START
-   INSERT INTO @t_ORDERS ( Orderkey, Status, ADCourier )
+   INSERT INTO @t_ORDERS ( Orderkey, Status, ADCourier )	
    SELECT o.Orderkey, o.[Status], ADCourier = CASE WHEN c.LISTNAME IS NULL THEN 0 ELSE 1 END
    FROM dbo.WAVE AS w WITH (NOLOCK)
    JOIN dbo.WAVEDETAIL AS w2 WITH (NOLOCK) ON w2.WaveKey = w.WaveKey
@@ -209,6 +214,7 @@ BEGIN
    GROUP BY o.Orderkey
          ,  o.[Status]
          ,  CASE WHEN c.LISTNAME IS NULL THEN 0 ELSE 1 END
+
             
    IF EXISTS ( SELECT 1 FROM @t_Orders AS tor WHERE tor.ADCourier = 1 AND tor.[Status] < '2'
                --SELECT 1 
@@ -243,6 +249,22 @@ BEGIN
       END
    END
    --Wan01 - END
+
+   --START ML01
+   SET @c_CheckMBOLIsPopulated = 'N'
+   SELECT @c_CheckMBOLIsPopulated = dbo.fnc_GetParamValueFromString('@c_CheckMBOLIsPopulated', @c_Release_Opt5, @c_CheckMBOLIsPopulated) 
+   
+   IF @c_CheckMBOLIsPopulated = 'Y'
+   BEGIN
+      IF @c_mbolkey = NULL OR ISNULL(@c_mbolkey,'') = ''
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_Err = 61022
+         SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Not allow to release wave for picking due to order do not have mbolkey. (ispRLWAV43_VLDN)'
+         GOTO QUIT_SP
+      END
+   END
+   --END ML01
    
    IF EXISTS ( SELECT 1 FROM dbo.WAVE AS w WITH (NOLOCK)
                JOIN dbo.WAVEDETAIL AS w2 WITH (NOLOCK) ON w2.WaveKey = w.WaveKey
@@ -590,3 +612,14 @@ END
 GO
 GRANT EXECUTE ON [dbo].[ispRLWAV43_VLDN] TO nSQL 
 GO
+
+
+
+
+
+ 
+
+
+
+
+
