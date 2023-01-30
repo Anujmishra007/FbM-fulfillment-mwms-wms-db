@@ -103,7 +103,10 @@ BEGIN
          AND locationtype='NORMAL'
          AND LLI.sku=@csku
          AND LLI.qty<>0
-      ORDER BY lli.qty
+      GROUP BY LLI.LOC
+      HAVING SUM(LLI.QTY -LLI.QtyAllocated- LLI.QTYPicked) > 0 
+      ORDER BY SUM(LLI.QTY -LLI.QtyAllocated- LLI.QTYPicked)
+
    END
 
    --Max SKU of LOC
