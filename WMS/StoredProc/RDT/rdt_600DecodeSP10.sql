@@ -16,6 +16,7 @@ GO
 /*                             and its pallet SSCC at Lottable09              */
 /* 02-06-2022  Ung       1.2   WMS-19808 Map case SSCC to ReceiptDetail       */
 /* 29-08-2022  Ung       1.3   WMS-20644 Add SSCC pallet with multi lines     */
+/* 14-09-2022  Ung       1.4   WMS-20760 Add pallet with non SSCC SKU         */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_600DecodeSP10 (
@@ -89,15 +90,14 @@ BEGIN
             	      @cLottable01 = RD.Lottable01, 
             	      @cLottable02 = RD.Lottable02, 
             	      @cLottable03 = RD.Lottable03, 
-                     @cLottable09 = ''
+                     @cLottable09 = RD.Lottable09
                	FROM SKU S WITH (NOLOCK)
-                  JOIN ReceiptDetail RD WITH (NOLOCK) ON (RD.StorerKey = S.StorerKey AND RD.SKU = S.SKU)
-                  WHERE RD.StorerKey = @cStorerKey
-                  AND (S.sku = @cBarcode
-                  OR S.Altsku = @cBarcode
-                  OR S.MANUFACTURERSKU = @cBarcode
-                  OR S.RetailSku = @cBarcode)
-                  AND RD.ReceiptKey = @cReceiptKey
+                     JOIN ReceiptDetail RD WITH (NOLOCK) ON (RD.StorerKey = S.StorerKey AND RD.SKU = S.SKU)
+                  WHERE RD.ReceiptKey = @cReceiptKey
+                     AND RD.StorerKey = @cStorerKey
+                     AND @cBarcode IN (S.SKU, S.AltSKU, S.MANUFACTURERSKU, S.RetailSKU)
+                     AND RD.FinalizeFlag <> 'Y'
+                     AND RD.QTYExpected > RD.BeforeReceivedQTY -- line with balance
                   ORDER BY RD.ReceiptLineNumber
 
                	IF NOT EXISTS (SELECT 1 FROM SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND sku = @cSku AND LOTTABLE09LABEL <> 'SSCC')
@@ -116,20 +116,13 @@ BEGIN
                	   BEGIN
                		   SET @cPalleSSCC = SUBSTRING( @cBarcode,  3, 18)
 
-               		   IF EXISTS (SELECT 1 FROM SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU AND LOTTABLE09LABEL <> 'SSCC')
-               		   BEGIN
-               		      SET @nErrNo = 176603
-                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- PltSSCCNotReq
-                           GOTO Quit
-               		   END
-
-               		   IF NOT EXISTS (SELECT 1
-               		                  FROM receiptDetail RD WITH (NOLOCK)
-               		                  JOIN UCC U WITH (NOLOCK) ON (RD.StorerKey = U.Storerkey AND RD.ExternReceiptKey = U.ExternKey AND RD.Lottable09 = U.Userdefined03)
-               		                  WHERE RD.StorerKey = @cStorerKey
-               		                  AND RD.ReceiptKey = @cReceiptKey
-               		                  AND RD.Lottable09 = @cPalleSSCC
-               		                  AND RD.FinalizeFlag <> 'Y')
+               		   -- Check pallet valid
+               		   IF NOT EXISTS( SELECT 1
+   		                  FROM receiptDetail RD WITH (NOLOCK)
+   		                  WHERE RD.StorerKey = @cStorerKey
+      		                  AND RD.ReceiptKey = @cReceiptKey
+      		                  AND RD.Lottable09 = @cPalleSSCC
+      		                  AND RD.FinalizeFlag <> 'Y')
                         BEGIN
                      	   SET @nErrNo = 176602
                            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- PalletSSCCErr
@@ -137,6 +130,7 @@ BEGIN
                         END
                         ELSE
                         BEGIN
+                     	   -- Pallet with SSCC SKU
                      	   SELECT TOP 1
                      	      @cSKU = RD.SKU,
                      	      @cLottable01 = RD.Lottable01, 
@@ -152,12 +146,30 @@ BEGIN
                               AND RD.QTYExpected > RD.BeforeReceivedQTY -- line with balance
                            ORDER BY RD.ReceiptLineNumber
 
-               		      IF EXISTS (SELECT 1 FROM SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU AND LOTTABLE09LABEL <> 'SSCC')
-               		      BEGIN
-               		         SET @nErrNo = 176603
-                              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- PltSSCCNotReq
-                              GOTO Quit
-               		      END
+               		      IF @@ROWCOUNT = 0
+                        	   -- Pallet with non SSCC SKU
+                        	   SELECT TOP 1
+                        	      @cSKU = RD.SKU,
+                        	      @cLottable01 = RD.Lottable01, 
+                        	      @cLottable02 = RD.Lottable02, 
+                        	      @cLottable03 = RD.Lottable03, 
+                        	      @cLottable09 = RD.Lottable09
+                  		      FROM receiptDetail RD WITH (NOLOCK)
+                  		      WHERE RD.StorerKey = @cStorerKey
+                     		      AND RD.ReceiptKey = @cReceiptKey
+                     		      AND RD.Lottable09 = @cPalleSSCC
+                                 AND RD.FinalizeFlag <> 'Y'
+                                 AND RD.QTYExpected > RD.BeforeReceivedQTY -- line with balance
+                              ORDER BY RD.ReceiptLineNumber
+
+                           /*
+                  		      IF EXISTS (SELECT 1 FROM SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU AND LOTTABLE09LABEL <> 'SSCC')
+                  		      BEGIN
+                  		         SET @nErrNo = 176603
+                                 SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- PltSSCCNotReq
+                                 GOTO Quit
+                  		      END
+                           */
                         END
                	   END
                	   ELSE
@@ -224,7 +236,7 @@ BEGIN
                   	ELSE
                   	BEGIN
                   		SET @nErrNo = 176608
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- PalletSSCCErr
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid data
                         GOTO Quit
                   	END
                   END
