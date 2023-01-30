@@ -12,6 +12,7 @@ GO
 /*                                                                            */
 /* Date        Author    Ver.  Purposes                                       */
 /* 2022-08-29  Ung       1.0   WMS-20644 Created                              */
+/* 2022-10-28  Ung       1.1   WMS-20760 Add pallet with non SSCC SKU         */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_600GetRcvInfo09] (
@@ -67,31 +68,48 @@ BEGIN
             -- Pallet SSCC
             IF left( @cBarcode,2) = '00'
             BEGIN
-         	   IF SUBSTRING( @cBarcode, 21, 2) = '93'
-         	   BEGIN
-         		   SET @cPalleSSCC = SUBSTRING( @cBarcode,  3, 18)
+               IF SUBSTRING( @cBarcode, 21, 2) = '93'
+               BEGIN
+                  SET @cPalleSSCC = SUBSTRING( @cBarcode,  3, 18)
 
-            	   -- Retrieve SKU base on lottable
-            	   SELECT TOP 1
-            	      @cChkSKU = RD.SKU
-      		      FROM receiptDetail RD WITH (NOLOCK)
-      		         JOIN UCC WITH (NOLOCK) ON (RD.StorerKey = UCC.Storerkey AND RD.SKU = UCC.SKU AND RD.ExternReceiptKey = UCC.ExternKey AND RD.Lottable09 = UCC.Userdefined03)
-      		      WHERE RD.StorerKey = @cStorerKey
-         		      AND RD.ReceiptKey = @cReceiptKey
+                  -- Pallet with SSCC SKU
+                  SELECT TOP 1
+                     @cChkSKU = RD.SKU
+                  FROM receiptDetail RD WITH (NOLOCK)
+                     JOIN UCC WITH (NOLOCK) ON (RD.StorerKey = UCC.Storerkey AND RD.SKU = UCC.SKU AND RD.ExternReceiptKey = UCC.ExternKey AND RD.Lottable09 = UCC.Userdefined03)
+                  WHERE RD.StorerKey = @cStorerKey
+                     AND RD.ReceiptKey = @cReceiptKey
                      AND RD.FinalizeFlag <> 'Y'
                      AND RD.QTYExpected > RD.BeforeReceivedQTY -- line with balance
-            	      AND RD.Lottable01 = @cLottable01
-            	      AND RD.Lottable02 = @cLottable02
-            	      AND RD.Lottable03 = @cLottable03
-         		      AND RD.Lottable09 = @cPalleSSCC
+                     AND RD.Lottable01 = @cLottable01
+                     AND RD.Lottable02 = @cLottable02
+                     AND RD.Lottable03 = @cLottable03
+                     AND RD.Lottable09 = @cPalleSSCC
                   ORDER BY RD.ReceiptLineNumber
+
+      		      IF @@ROWCOUNT = 0
+      		      BEGIN
+               	   -- Pallet with non SSCC SKU
+               	   SELECT TOP 1
+               	      @cChkSKU = RD.SKU
+         		      FROM receiptDetail RD WITH (NOLOCK)
+         		      WHERE RD.StorerKey = @cStorerKey
+            		      AND RD.ReceiptKey = @cReceiptKey
+                        AND RD.FinalizeFlag <> 'Y'
+                        AND RD.QTYExpected > RD.BeforeReceivedQTY -- line with balance
+                        AND RD.Lottable01 = @cLottable01
+                        AND RD.Lottable02 = @cLottable02
+                        AND RD.Lottable03 = @cLottable03
+                        AND RD.Lottable09 = @cPalleSSCC
+                     ORDER BY RD.ReceiptLineNumber
                
-                  -- Check lottable valid
-                  IF @@ROWCOUNT = 0
-                  BEGIN
-               	   SET @nErrNo = 190501
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Bad Lottables
-                     GOTO Quit
+                     -- Check lottable valid
+                     IF @@ROWCOUNT = 0
+                     BEGIN
+                        SET @nErrNo = 190501
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Bad Lottables
+                        GOTO Quit
+                     END
                   END
                   
                   -- Return SKU
