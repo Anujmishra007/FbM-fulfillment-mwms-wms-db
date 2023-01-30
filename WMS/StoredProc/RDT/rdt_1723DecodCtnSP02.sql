@@ -14,10 +14,11 @@ GO
 /*                                                                            */    
 /*                                                                            */    
 /* Date        Author    Ver.  Purposes                                       */    
-/* 12-10-2021  Chermaine 1.0   WMS-18008 - Created                            */     
+/* 12-10-2021  Chermaine 1.0   WMS-18008 - Created                            */   
+/* 10-01-2023  YeeKung   1.1   WMS-20759 Add qty picked (yeekung01)           */
 /******************************************************************************/    
     
-CREATE OR ALTER PROC [RDT].[rdt_1723DecodCtnSP02] (    
+CREATE  OR ALTER PROC [RDT].[rdt_1723DecodCtnSP02] (    
    @nMobile         INT,     
    @nFunc           INT,     
    @cLangCode       NVARCHAR( 3),     
@@ -98,11 +99,12 @@ BEGIN
       	      -- Get SSCC
                SELECT TOP 1 @cLottable09 = LA.lottable09
                FROM dbo.LOTxLOCxID LLI WITH (NOLOCK) 
-                  JOIN lotattribute LA (NOLOCK) ON ( LLI.lot=LA.lot and LLI.SKU=LA.SKU)
+               JOIN lotattribute LA (NOLOCK) ON ( LLI.lot=LA.lot and LLI.SKU=LA.SKU)
                WHERE LLI.StorerKey = @cStorerKey
                AND   LLI.ID = @cFromID 
                AND   LLI.SKU = @CSKU
                AND   LLI.Qty > 0
+               AND   LLI.Qtypicked > 0
 
                IF NOT EXISTS (SELECT 1 from UCC (NOLOCK)
                               WHERE UCCNO=@cCartonBarcode
@@ -112,6 +114,16 @@ BEGIN
                BEGIN
                   SET @nErrNo = 176801 
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- CaseSSCCErr
+                  GOTO QUIT
+               END
+
+                IF EXISTS (SELECT 1 from rdt.rdtDPKLog (NOLOCK)
+                              WHERE caseid=@cCartonBarcode
+                              AND fromid=@cFromID
+                              AND dropid=@cToID) --(yeekung01)
+               BEGIN
+                  SET @nErrNo = 176807
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- CaseSSCCScanned
                   GOTO QUIT
                END
 
@@ -148,6 +160,7 @@ BEGIN
                WHERE LLI.StorerKey = @cStorerKey
                AND   LLI.ID = @cFromID 
                AND   LLI.Qty > 0
+               AND   LLI.Qtypicked > 0
                AND   LOC.Facility = @cFacility
          
          
@@ -157,29 +170,41 @@ BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- SSCC NotMatch
                   GOTO Quit    
                END
-         
-               IF EXISTS (SELECT 1 FROM UCC WITH (NOLOCK) WHERE Storerkey = @cStorerKey AND Userdefined03 = @cCartonBarcode)
+
+               IF EXISTS (SELECT 1
+                           FROM SKU (NOLOCK) 
+                           WHERE SKU = @cSKU
+                           AND storerkey= @cStorerKey
+                           AND Lottable09Label ='SSCC') --(yeekung01)
                BEGIN
-         	      IF EXISTS (SELECT 1
-                              FROM dbo.PickDetail PD WITH (NOLOCK) 
-                              JOIN dbo.LOC LOC WITH (NOLOCK) ON ( PD.LOC = LOC.LOC)
-                              WHERE PD.StorerKey = @cStorerKey
-                              AND   PD.ID = @cFromID 
-                              AND   PD.Lot = @cLot
-                              AND   PD.SKU = @cSKU
-                              AND   PD.Status < '9'
-                              AND   LOC.Facility = @cFacility )
+         
+                  IF EXISTS (SELECT 1 FROM UCC WITH (NOLOCK) WHERE Storerkey = @cStorerKey AND Userdefined03 = @cCartonBarcode)
                   BEGIN
-            	      SET @cCartonBarcode =  @cCartonBarcode
+         	         IF EXISTS (SELECT 1
+                                 FROM dbo.PickDetail PD WITH (NOLOCK) 
+                                 JOIN dbo.LOC LOC WITH (NOLOCK) ON ( PD.LOC = LOC.LOC)
+                                 WHERE PD.StorerKey = @cStorerKey
+                                 AND   PD.ID = @cFromID 
+                                 AND   PD.Lot = @cLot
+                                 AND   PD.SKU = @cSKU
+                                 AND   PD.Status < '9'
+                                 AND   LOC.Facility = @cFacility )
+                     BEGIN
+            	         SET @cCartonBarcode =  @cCartonBarcode
+                     END
+                     ELSE
+                     BEGIN
+            	         SET @cCartonBarcode = ''
+                     END
                   END
                   ELSE
                   BEGIN
-            	      SET @cCartonBarcode = ''
+                     SET @cCartonBarcode = ''
                   END
                END
                ELSE
                BEGIN
-                  SET @cCartonBarcode = ''
+                  SET @cCartonBarcode =  @cCartonBarcode
                END
             END
             ELSE
@@ -201,6 +226,7 @@ BEGIN
 Quit:    
     
 END 
+
 GO
 
 SET QUOTED_IDENTIFIER OFF 

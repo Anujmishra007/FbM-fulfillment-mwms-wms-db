@@ -3,6 +3,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
+
 /************************************************************************/
 /* Store procedure: rdt_1723BuildPltSP01                                */
 /* Copyright      : IDS                                                 */
@@ -16,10 +17,12 @@ GO
 /* Modifications log:                                                   */
 /*                                                                      */
 /* Date        Rev  Author      Purposes                                */
-/* 13-Oct-2021 1.3  Chermaine   WMS-18008 Created                       */
+/* 13-Oct-2021 1.1  Chermaine   WMS-18008 Created                       */
+/* 25-Nov-2022 1.2  Calvin      JSM-112662 Fix Palletkey Char (CLVN01)  */
+/* 25-Sep-2022 1.3 YeeKung      WMS-20759 change lottable09 (yeekung01) */
 /************************************************************************/
 
-CREATE OR ALTER PROC [RDT].[rdt_1723BuildPltSP01] (
+CREATE OR ALTER  PROC [RDT].[rdt_1723BuildPltSP01] (
    @nMobile                   INT,           
    @nFunc                     INT,           
    @cLangCode                 NVARCHAR( 3),  
@@ -227,28 +230,94 @@ BEGIN
             FROM dbo.PickDetail PD WITH (NOLOCK)
             JOIN dbo.Orders O WITH (NOLOCK) ON ( PD.OrderKey = O.OrderKey AND PD.StorerKey = O.StorerKey)
             WHERE PickDetailKey = @cPickDetailKey
-                  
-         	DECLARE CUR_UCC CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-            SELECT UccNo,SKU, Qty
-               FROM UCC WITH (NOLOCK) 
-               WHERE Storerkey = @cStorerkey
-               AND Userdefined03 = @csscc
-               AND sku=@cSKU
-            OPEN CUR_UCC
-            FETCH NEXT FROM CUR_UCC INTO @uccNo, @cSKU, @nUCC_Qty
-            WHILE @@FETCH_STATUS <> -1
-            BEGIN
-               SELECT @cLottable09Lbl = lottable09Label
-               FROM dbo.SKU WITH (NOLOCK)
-               WHERE StorerKey = @cStorerkey
-               AND   SKU = @cSKU
 
+
+             IF EXISTS (SELECT 1
+                        FROM SKU (NOLOCK) 
+                        WHERE SKU = @cSKU
+                        AND storerkey= @cStorerKey
+                        AND Lottable09Label ='SSCC') --(yeekung01)
+            BEGIN
+                  
+         	   DECLARE CUR_UCC CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+               SELECT UccNo,SKU, Qty
+                  FROM UCC WITH (NOLOCK) 
+                  WHERE Storerkey = @cStorerkey
+                  AND Userdefined03 = @csscc
+                  AND sku=@cSKU
+               OPEN CUR_UCC
+               FETCH NEXT FROM CUR_UCC INTO @uccNo, @cSKU, @nUCC_Qty
+               WHILE @@FETCH_STATUS <> -1
+               BEGIN
+                  SELECT @cLottable09Lbl = lottable09Label
+                  FROM dbo.SKU WITH (NOLOCK)
+                  WHERE StorerKey = @cStorerkey
+                  AND   SKU = @cSKU
+
+                  SET @uccNo = CASE WHEN ISNULL(@cLottable09Lbl,'')='' THEN 'NOSSCC' else @uccNo END
+
+            	   IF NOT EXISTS ( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) 
+                                  WHERE PalletKey = @cSSCC
+                                  AND   UserDefine02 = @cPickDetailKey
+            	                   AND   caseID = @uccNo )
+                  BEGIN
+                     SELECT @cPalletLineNumber = RIGHT( '00000' + CAST( CAST( ISNULL(MAX( PalletLineNumber), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
+                     FROM dbo.PalletDetail WITH (NOLOCK)
+                     WHERE PalletKey = @cSSCC
+
+                     INSERT INTO dbo.PalletDetail 
+                     (PalletKey, PalletLineNumber, caseID, StorerKey, Sku, Qty, UserDefine01, UserDefine02, UserDefine03, UserDefine04) 
+                     VALUES
+                     (@cSSCC, @cPalletLineNumber, @uccNo, @cStorerKey, @cSKU, @nUCC_Qty, @cFromID, @cPickDetailKey, @cMBOLKey, @cOrderKey)
+
+                     IF @@ERROR <> 0
+                     BEGIN
+                        SET @nErrNo = 177006
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins pltdt fail
+                        GOTO RollBackTran
+                     END
+                  END
+                  ELSE
+                  BEGIN
+                     --SELECT @cOrderKey = O.OrderKey,
+                     --       @cMBOLKey = O.MBOLKey 
+                     --FROM dbo.PickDetail PD WITH (NOLOCK)
+                     --JOIN dbo.Orders O WITH (NOLOCK) ON ( PD.OrderKey = O.OrderKey AND PD.StorerKey = O.StorerKey)
+                     --WHERE PickDetailKey = @cPickDetailKey
+
+                     UPDATE dbo.PalletDetail WITH (ROWLOCK)
+                        SET Qty = Qty + @nUCC_Qty,
+                            UserDefine01 = @cFromID,
+                            UserDefine03 = @cMBOLKey,
+                            UserDefine04 = @cOrderKey
+                     WHERE PalletKey = @cSSCC
+                     AND   UserDefine02 = @cPickDetailKey
+
+                     IF @@ERROR <> 0
+                     BEGIN
+                        SET @nErrNo = 177007
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd pltd fail
+                        GOTO RollBackTran
+                     END
+                  END
+
+                  SET @nPD_Qty=@nPD_Qty-@nUCC_Qty
+
+                  IF  @nPD_Qty=0
+                     BREAK;
+
+            	   FETCH NEXT FROM CUR_UCC INTO @uccNo, @cSKU, @nUCC_Qty
+               END
+               FETCH NEXT FROM CUR_LOOP INTO @cPickDetailKey, @nPD_Qty
+            END
+            ELSE
+            BEGIN
                SET @uccNo = CASE WHEN ISNULL(@cLottable09Lbl,'')='' THEN 'NOSSCC' else @uccNo END
 
-            	IF NOT EXISTS ( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) 
-                               WHERE PalletKey = @cSSCC
-                               AND   UserDefine02 = @cPickDetailKey
-            	                AND   caseID = @uccNo )
+               IF NOT EXISTS ( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) 
+                                 WHERE PalletKey = @cSSCC
+                                 AND   UserDefine02 = @cPickDetailKey
+            	               AND   caseID = @uccNo )
                BEGIN
                   SELECT @cPalletLineNumber = RIGHT( '00000' + CAST( CAST( ISNULL(MAX( PalletLineNumber), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
                   FROM dbo.PalletDetail WITH (NOLOCK)
@@ -257,7 +326,7 @@ BEGIN
                   INSERT INTO dbo.PalletDetail 
                   (PalletKey, PalletLineNumber, caseID, StorerKey, Sku, Qty, UserDefine01, UserDefine02, UserDefine03, UserDefine04) 
                   VALUES
-                  (@cSSCC, @cPalletLineNumber, @uccNo, @cStorerKey, @cSKU, @nUCC_Qty, @cFromID, @cPickDetailKey, @cMBOLKey, @cOrderKey)
+                  (@cSSCC, @cPalletLineNumber, @uccNo, @cStorerKey, @cSKU, @nPD_Qty , @cFromID, @cPickDetailKey, @cMBOLKey, @cOrderKey)
 
                   IF @@ERROR <> 0
                   BEGIN
@@ -275,10 +344,10 @@ BEGIN
                   --WHERE PickDetailKey = @cPickDetailKey
 
                   UPDATE dbo.PalletDetail WITH (ROWLOCK)
-                     SET Qty = Qty + @nUCC_Qty,
-                         UserDefine01 = @cFromID,
-                         UserDefine03 = @cMBOLKey,
-                         UserDefine04 = @cOrderKey
+                     SET Qty = Qty + @nPD_Qty,
+                           UserDefine01 = @cFromID,
+                           UserDefine03 = @cMBOLKey,
+                           UserDefine04 = @cOrderKey
                   WHERE PalletKey = @cSSCC
                   AND   UserDefine02 = @cPickDetailKey
 
@@ -289,15 +358,7 @@ BEGIN
                      GOTO RollBackTran
                   END
                END
-
-               SET @nPD_Qty=@nPD_Qty-@nUCC_Qty
-
-               IF  @nPD_Qty=0
-                  BREAK;
-
-            	FETCH NEXT FROM CUR_UCC INTO @uccNo, @cSKU, @nUCC_Qty
             END
-            FETCH NEXT FROM CUR_LOOP INTO @cPickDetailKey, @nPD_Qty
          END
          CLOSE CUR_LOOP
          DEALLOCATE CUR_LOOP
@@ -310,6 +371,7 @@ BEGIN
       -- Insert record into the log table
       IF @cType = 'I'
       BEGIN
+
          SELECT 
             @nPUOM_Div = CAST( Pack.CaseCNT AS INT) 
          FROM dbo.SKU S WITH (NOLOCK) 
@@ -403,14 +465,17 @@ BEGIN
                @nLen          INT,
                @nSum          INT
                	
-               SET @cDateOfYear = RIGHT(YEAR(GETDATE()),1)
-               SET @cSiteNo = '302448'
-               SET @cProdLine = '99'
-               SET @cNumOfDay = DATEPART(DAYOFYEAR, GETDATE())
-               SET @cTimeInSec = DATEPART(SECOND, GETDATE()) +
-                              (60 * DATEPART(MINUTE, GETDATE())) + 
-                              (3600 * DATEPART(HOUR, GETDATE()))
+            SET @cDateOfYear = RIGHT(YEAR(GETDATE()),1)
+            SET @cSiteNo = '302448'
+            SET @cProdLine = '99'
+            SET @cNumOfDay = DATEPART(DAYOFYEAR, GETDATE())
+            SET @cTimeInSec = DATEPART(SECOND, GETDATE()) +
+                           (60 * DATEPART(MINUTE, GETDATE())) + 
+                           (3600 * DATEPART(HOUR, GETDATE()))
             --SET @cLynKey = '8'
+
+            SET  @cNumOfDay = CASE  WHEN len(@cNumOfDay) = 1 THEN '00'+@cNumOfDay
+                                    WHEN len(@cNumOfDay) = 2 THEN '0'+@cNumOfDay END
                
             SET @cSSCC = @cDateOfYear + @cSiteNo + @cProdLine + @cNumOfDay + @cTimeInSec --+ @cLynKey
             
@@ -431,14 +496,31 @@ BEGIN
 	            SET @nLen = @nLen - 1
             END
             
-            IF RIGHT(@nSum,1) > 0 
+            /* --(CLVN01)
+			IF RIGHT(@nSum,1) > 0 
             BEGIN
 	            SET @cLynKey = (ROUND(@nSum, -1, 1) + 10) - @nSum
             END
             
             --SET @cLynKey = ABS(ROUND(@nSum,-1) - @nSum)
             SET @cSSCC = @cSSCC + @cLynKey
+			*/ --(CLVN01)
+			--(CLVN01) START--
+			IF LEN(@cSSCC)=17
+            BEGIN
+               SET @cLynKey = (ROUND(@nSum, -1, 1) + 10) - @nSum
+            
+               --SET @cLynKey = ABS(ROUND(@nSum,-1) - @nSum)
+               SET @cSSCC = @cSSCC + @cLynKey
+            END
 
+            IF LEN(@cSSCC)<>18
+            BEGIN
+               SET @nErrNo = 177008  
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins Log fail  
+               GOTO RollBackTran  
+            END
+			--(CLVN01) END--
                --IF @nErrNo <> 0 OR @bSuccess <> 1
                --BEGIN
                --   SET @nErrNo = 98378
@@ -793,7 +875,7 @@ BEGIN
 
                -- Stamp palletdetail with udf02-04 (pickdetailkey, orderkey, mbolkey) 
                -- for each case here. After stamp then update PAQty=QtyMove to indicate finish update
-               DECLARE CUR_UPD CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
+          DECLARE CUR_UPD CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
                SELECT CaseID, ISNULL( SUM( QtyMove), 0) 
                FROM rdt.rdtDPKLOG WITH (NOLOCK) 
                WHERE FromID = @cFromID
@@ -933,7 +1015,9 @@ BEGIN
             @cDropID     = @cMoveRefKey
                   
          IF @nErrNo <> 0
+         BEGIN
             GOTO RollBackTran
+         END
          ELSE
          BEGIN
             -- After finish move then need to clear the dropid
@@ -997,6 +1081,19 @@ BEGIN
       -- Insert record into the log table
       IF @cType = 'I'
       BEGIN
+         IF EXISTS (SELECT 1 
+            FROM PALLET PT  (NOLOCK)JOIN 
+               PALLETDETAIL PD (NOLOCK) ON PT.palletkey=PD.palletkey JOIN
+               orders O (NOLOCK) ON PD.userdefine04=o.orderkey and  PD.storerkey=o.storerkey
+            WHERE caseid=@cCartonID
+               AND PT.storerkey=@cStorerKey
+               AND O.status not in ('9'))
+         BEGIN  
+            SET @nErrNo = 177024  
+          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins Log fail  
+            GOTO RollBackTran  
+         END 
+
          SELECT 
             @nPUOM_Div = CAST( Pack.CaseCNT AS INT) 
          FROM dbo.SKU S WITH (NOLOCK) 
@@ -1053,6 +1150,11 @@ BEGIN
          COMMIT TRAN rdt_1723BuildPltSP01
 
 END
+
+
+
+
+
 GO
 
 SET QUOTED_IDENTIFIER OFF
