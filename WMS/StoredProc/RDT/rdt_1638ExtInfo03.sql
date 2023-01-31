@@ -9,6 +9,7 @@ GO
 /*                                                                      */  
 /* Date        Rev  Author   Purposes                                   */  
 /* 2022-12-19  1.0  James    WMS-21135 Created                          */  
+/* 2023-01-31  1.1  James    Extend display length (james01)            */
 /************************************************************************/  
   
 CREATE OR ALTER PROC [rdt].[rdt_1638ExtInfo03] (  
@@ -72,8 +73,8 @@ BEGIN
                            WHERE PACKD.PickSlipNo = @cPickSlipNo  
                            AND   PACKD.LabelNo = PLTD.CaseID)  
                              
-            SELECT @cExtendedInfo = 'LOAD:' + @cLoadKey + ' ' +  
-                  CAST( @nScannedCaseId AS NVARCHAR( 2)) + '/' + CAST( @nActTtLCaseId AS NVARCHAR( 2))  
+            SELECT @cExtendedInfo = @cLoadKey + ' ' +  
+                  CAST( @nScannedCaseId AS NVARCHAR( 4)) + '/' + CAST( @nActTtLCaseId AS NVARCHAR( 4))  
          END  
       END  
    END  
