@@ -202,7 +202,8 @@ BEGIN
          CASE WHEN @cPickZone = '' THEN '' ELSE ' AND LOC.PickZone = @cPickZone ' END + 
       ' GROUP BY LOC.LOCAisle, LOC.LogicalLocation, LOC.LOC ' +
       ' ORDER BY ' + 
-         ' LOC.LogicalLocation ' + @cPickSEQ +   --G01      
+         '  LOC.LOCAisle ' + @cPickSEQ + 
+         ' ,LOC.LogicalLocation ' + @cPickSEQ + 
          ' ,LOC.LOC ' + @cPickSEQ
 
    WHILE (1=1)
