@@ -35,7 +35,7 @@ GO
 /* 03-Jun-2021  YeeKung   1.9 Remove the retired user (yeekung01)       */
 /************************************************************************/
 
-CREATE TRIGGER [RDT].[ntrRDTMobRecUpdate]
+CREATE OR ALTER TRIGGER [RDT].[ntrRDTMobRecUpdate]
 ON [RDT].[RDTMOBREC]
 FOR UPDATE
 AS
@@ -816,5 +816,5 @@ BEGIN
 END
 GO
 
-ALTER TABLE [RDT].[ntrRDTMobRecUpdate] ENABLE TRIGGER [ntrRDTMobRecUpdate]
+ALTER TABLE [RDT].[RDTMOBREC]  ENABLE TRIGGER [ntrRDTMobRecUpdate]
 GO
