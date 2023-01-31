@@ -255,17 +255,7 @@ CREATE TABLE #TMPWAVPLISTC004
    SET @c_Pickzone = ''        
    SET @c_PrevPAzone = ''        
    SET @c_PickDetailKey = ''          
-   SET @n_continue = 1        
-
-IF EXISTS (SELECT 1 FROM PICKHEADER (NOLOCK)    --G01         
-WHERE wavekey      = @c_Getwavekey or Loadkey in ( Select distinct loadkey from orders where userdefine09=@c_Getwavekey ))  
-BEGIN    
- Delete PICKHEADER where wavekey = @c_Getwavekey  
- Delete PICKHEADER where Loadkey in ( Select distinct loadkey from orders where userdefine09=@c_Getwavekey )  
- Delete PACKHEADER where Loadkey in ( Select distinct loadkey from orders where userdefine09=@c_Getwavekey )  
- Update Pickdetail set pickslipno ='' where orderkey in (Select distinct orderkey from orders where userdefine09=@c_Getwavekey)  
-END  
-                
+   SET @n_continue = 1                   
          
 DECLARE CUR_WAVELOAD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR         
     SELECT DISTINCT OH.UserDefine09,OH.LoadKey        
@@ -412,7 +402,7 @@ SELECT PD.PICKDETAILKEY,ph.PickHeaderKey,pd.PICKSLIPNO,O.ORDERKEY,pd.SKU,pd.QTY,
                      LEFT JOIN dbo.PickHeader PH WITH (NOLOCK) ON PH.LoadKey=o.LoadKey        
                      WHERE O.USERDEFINE09 =@c_Getwavekey and o.loadkey =@c_loadkey and pd.qty <= @n_Xpickqty        
                        AND ISNULL(PD.PICKHEADERKEY,'') = '' --AND ISNULL(PD.PICKSLIPNO,'') = ''        
-                     ORDER BY pd.sku   --G01        
+                     ORDER BY PD.LOC,pd.sku   --G01        
         
                       OPEN CUR_LOADPICK2        
                       FETCH NEXT FROM CUR_LOADPICK2 INTO @c_pickdetailkey,@c_PAPickslipno,@c_PIPickslipno,@c_orderkey,@c_sku,@n_pqty,@c_loc,@n_ODqty,@c_ExtOrdkey,@c_odlineno        
