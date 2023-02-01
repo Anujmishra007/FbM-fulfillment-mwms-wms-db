@@ -912,8 +912,7 @@ BEGIN
                   BEGIN              
                      SELECT TOP 1 @nCartonNo = CartonNo              
                      FROM dbo.PackDetail WITH (NOLOCK)              
-                     WHERE PickSlipNo = @cPickSlipNo              
-                     AND   DropID = @cDropID              
+                     WHERE PickSlipNo = @cPickSlipNo                           
                      ORDER BY 1              
               
                      SET @nErrNo = 0              
