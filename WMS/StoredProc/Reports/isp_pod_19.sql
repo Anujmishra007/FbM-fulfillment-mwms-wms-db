@@ -1,7 +1,3 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'isp_pod_19' AND type = 'P')
-   DROP PROC isp_pod_19
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -28,12 +24,13 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author    Ver. Purposes                                 */
+/* 2023-01-17   mingle    1.1   WMS-21451 - Add showmbol(ML01)          */
 /************************************************************************/
-CREATE  PROCEDURE isp_pod_19
+CREATE OR ALTER  PROCEDURE isp_pod_19
         @c_mbolkey NVARCHAR(10), 
         @c_exparrivaldate  NVARCHAR(30) = ''
 AS
-BEGIN
+BEGIN  
    SET NOCOUNT ON
    SET ANSI_NULLS OFF  
    SET QUOTED_IDENTIFIER OFF
@@ -106,7 +103,8 @@ BEGIN
     c_city            NVARCHAR(45)  NULL,
     STNotes1          NVARCHAR(250) NULL,  
     MCube             FLOAT         NULL,
-    STNotes2          NVARCHAR(250)  NULL)  
+    STNotes2          NVARCHAR(250) NULL,
+	 showmbol			 NVARCHAR(5)   NULL)  
 
    SELECT TOP 1 @c_Storerkey = OH.Storerkey
    FROM MBOLDETAIL MB WITH (NOLOCK)
@@ -121,7 +119,7 @@ BEGIN
       C_Address     , C_Phone,            c_city,            
       Qty,            casecnt,            STNotes1 , leadtime,        Logo,
       B_Address1,     B_Contact1,         B_Phone1,              B_Fax1,
-      Susr2,          MCube,               STNotes2 )     
+      Susr2,          MCube,               STNotes2,              showmbol)   --ML01     
     SELECT 
       MB.mbolkey,     MD.MbolLineNumber,    MD.ExternOrderKey,    MD.Orderkey,  CASE WHEN ISNULL(ST.logo,'') = '' THEN ST.b_company ELSE '' END,        
       MB.editdate,    OH.c_company,         ltrim(rtrim(isnull(OH.C_Contact1,''))) + ltrim(rtrim(isnull(OH.C_Contact2,''))), 
@@ -132,7 +130,8 @@ BEGIN
       SUM(Pd.qty), COUNT(DISTINCT PD.CartonNo), ISNULL(ST.notes1,''),
       CASE WHEN OH.Storerkey = 'DICKIES' THEN MB.Editdate + 1 ELSE DATEADD(day,ISNULL(CAST(c.Short AS int),0),MB.editdate) END,ISNULL(ST.logo,''),
       ST.B_Address1,  ST.B_Contact1,        ST.B_Phone1,          ST.B_fax1,
-      ST.Susr2, cast(MD.[cube] as float),ISNULL(ST.notes2,'')
+      ST.Susr2, cast(MD.[cube] as float),ISNULL(ST.notes2,''),
+      ISNULL(C1.SHORT,'') AS showmbol	--ML01
     FROM MBOL MB WITH (nolock) 
     JOIN MBOLDETAIL MD  WITH (nolock) ON MB.mbolkey = MD.mbolkey
     JOIN ORDERS OH WITH (nolock) ON MD.orderkey = OH.orderkey
@@ -144,7 +143,11 @@ BEGIN
                                        AND c.Description = OH.Consigneekey
                                        AND (ISNULL(RTRIM(c.Long),'')= '') OR 
                                              (ISNULL(RTRIM(c.Long),'') <> '' AND ISNULL(RTRIM(c.Long),'') = OH.storerkey)
-                                       AND ( (CONVERT( NVARCHAR(20), c.Notes2) = OH.IntermodalVehicle) )                                   
+                                       AND ( (CONVERT( NVARCHAR(20), c.Notes2) = OH.IntermodalVehicle) )   
+    LEFT JOIN CODELKUP c1 WITH (nolock) ON c1.listname ='REPORTCFG' 
+                                       AND c1.Storerkey = OH.storerkey
+                                       AND c1.Long = 'r_dw_pod_19'
+                                       AND c1.Code = 'showmbol'   --ML01
     WHERE MB.mbolkey = @c_mbolkey 
     Group by MB.mbolkey,     MD.MbolLineNumber,    MD.ExternOrderKey,    MD.Orderkey,  CASE WHEN ISNULL(ST.logo,'') = '' THEN ST.b_company ELSE '' END,        
       MB.editdate,    OH.c_company,         ltrim(rtrim(isnull(OH.C_Contact1,''))) + ltrim(rtrim(isnull(OH.C_Contact2,''))), 
@@ -154,7 +157,8 @@ BEGIN
       ELSE ISNULL(OH.c_phone1,'')+ISNULL(OH.c_phone2,'') END,ISNULL(OH.c_city,''), ISNULL(ST.notes1,''),
       CASE WHEN OH.Storerkey = 'DICKIES' THEN MB.Editdate + 1 ELSE DATEADD(day,ISNULL(CAST(c.Short AS int),0),MB.editdate) END,ISNULL(ST.logo,''),
       ST.B_Address1,  ST.B_Contact1,        ST.B_Phone1,          ST.B_fax1,
-      ST.Susr2, cast(MD.[cube] as float),ISNULL(ST.notes2,'')
+      ST.Susr2, cast(MD.[cube] as float),ISNULL(ST.notes2,''),
+      ISNULL(C1.SHORT,'')	--ML01
 
 
    DECLARE CUR_RESULT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
@@ -183,13 +187,13 @@ BEGIN
       C_Address     , C_Phone,            c_city,            
       Qty,            casecnt,            STNotes1 , leadtime,        Logo,
       B_Address1,     B_Contact1,         B_Phone1,              B_Fax1,
-      Susr2,          MCube,               STNotes2 ) 
+      Susr2,          MCube,               STNotes2,              showmbol )  --ML01 
       SELECT TOP 1 mbolkey,MbolLineNumber,ExternOrderKey,@c_orderkey,''
       ,EditDate,c_Company,C_Contact,
       '','','',
       0,'','',leadtime,'',
       '','','','',
-      '','',''
+      '','','',''
       FROM #POD19
       where orderkey = @c_orderkey
 
@@ -211,6 +215,9 @@ END
 GO
 GRANT EXECUTE ON isp_pod_19 TO NSQL 
 GO
+
+
+
 
  
 

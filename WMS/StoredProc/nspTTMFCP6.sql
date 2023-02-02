@@ -1,6 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nspTTMFCP6]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [dbo].[nspTTMFCP6]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -16,8 +13,9 @@ GO
 /* Modifications log:                                                   */
 /* Date        Author    Ver  Purposes                                  */
 /* 2018-04-19  Ung       1.0  WMS-3273 Separate PND for pick            */
+/* 2023-01-30  Ung       1.1  WMS-21599 Migrate to SCE                  */
 /************************************************************************/
-CREATE PROC [dbo].[nspTTMFCP6]
+CREATE OR ALTER PROC [dbo].[nspTTMFCP6]
     @c_UserID        NVARCHAR(18)
    ,@c_AreaKey01     NVARCHAR(10)
    ,@c_AreaKey02     NVARCHAR(10)
@@ -92,7 +90,8 @@ BEGIN
             JOIN dbo.LOC WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC.LOC)
             JOIN AreaDetail WITH (NOLOCK) ON (AreaDetail.PutawayZone = LOC.PutAwayZone)
             JOIN dbo.LoadPlan WITH (NOLOCK) ON (LoadPlan.LoadKey = TaskDetail.LoadKey)
-            JOIN dbo.Booking_Out WITH (NOLOCK) ON (Loadplan.BookingNo = Booking_Out.BookingNo)
+            JOIN dbo.TMS_Shipment (NOLOCK) ON (LoadPlan.LoadKey = TMS_Shipment.ShipmentGID)
+            JOIN dbo.Booking_Out WITH (NOLOCK) ON (TMS_Shipment.BookingNo = Booking_Out.BookingNo)
          WHERE AreaDetail.AreaKey = @c_AreaKey01
             AND TaskDetail.TaskType IN ('FCP', 'FCP1')
             AND TaskDetail.Status = '0'
@@ -134,7 +133,8 @@ BEGIN
          FROM dbo.TaskDetail WITH (NOLOCK)
             JOIN dbo.LOC WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC.LOC)
             JOIN dbo.LoadPlan WITH (NOLOCK) ON (LoadPlan.LoadKey = TaskDetail.LoadKey)
-            JOIN dbo.Booking_Out WITH (NOLOCK) ON (Loadplan.BookingNo = Booking_Out.BookingNo)
+            JOIN dbo.TMS_Shipment (NOLOCK) ON (LoadPlan.LoadKey = TMS_Shipment.ShipmentGID)
+            JOIN dbo.Booking_Out WITH (NOLOCK) ON (TMS_Shipment.BookingNo = Booking_Out.BookingNo)
          WHERE dbo.TaskDetail.TaskType IN ('FCP', 'FCP1')
             AND TaskDetail.Status = '0'
             AND TaskDetail.UserKeyOverRide IN (@c_userid, '')

@@ -22,7 +22,7 @@ GO
 /* Date         Author   Ver. Purposes                                  */  
 /* 21-Sep-2022  CHONGCS  1.0  DevOps Combine Script                     */  
 /************************************************************************/  
-CREATE   PROC [dbo].[isp_RPT_WV_PLIST_WAVE_015]  
+CREATE OR ALTER  PROC [dbo].[isp_RPT_WV_PLIST_WAVE_015]  
          @c_Wavekey        NVARCHAR(10)  
        , @c_PreGenRptData  NVARCHAR(10) = ''  
   
@@ -41,13 +41,39 @@ BEGIN
          , @n_Count           INT  
          , @c_Orderkey        NVARCHAR(10)  
          , @c_pickheaderkey   NVARCHAR(10)  
+
+DECLARE    @c_Type        NVARCHAR(1) = '1'                          
+         , @c_DataWindow  NVARCHAR(60) = 'RPT_WV_PLIST_WAVE_015'      
+         , @c_RetVal      NVARCHAR(255) 
+         , @c_storerkey   NVARCHAR(20)  
   
+SELECT TOP 1 @c_storerkey = ORD.StorerKey
+ FROM WAVEDETAIL WVD WITH (NOLOCK)  
+         JOIN PICKDETAIL PD WITH (NOLOCK) ON WVD.OrderKey = PD.OrderKey  
+         join Loc loc WITH (NOLOCK) on PD.Loc = loc.Loc  
+         join ORDERS ORD WITH (NOLOCK) on PD.OrderKey = ord.OrderKey  
+         join SKU s WITH (NOLOCK) on PD.Storerkey = s.StorerKey and PD.Sku = s.Sku  
+         left join REPLENISHMENT RP WITH (NOLOCK) on WVD.WaveKey = RP.Wavekey and PD.Storerkey = RP.Storerkey and PD.Sku = RP.Sku and PD.Loc = RP.ToLoc  
+         where WVD.WaveKey = @c_Wavekey  
+
+ IF ISNULL(@c_Storerkey,'') <> ''      
+      BEGIN      
+      
+      EXEC [dbo].[isp_GetCompanyInfo]      
+               @c_Storerkey  = @c_Storerkey      
+            ,  @c_Type       = @c_Type      
+            ,  @c_DataWindow = @c_DataWindow      
+            ,  @c_RetVal     = @c_RetVal           OUTPUT      
+       
+      END 
+
    SET @n_StartTCnt = @@TRANCOUNT    
    SET @n_Continue  = 1    
    SET @b_Success   = 1    
    SET @n_Err       = 0    
-   SET @c_Errmsg    = ''   
-  
+   SET @c_Errmsg    = ''    
+
+
    IF ISNULL(@c_PreGenRptData,'') IN ('','0') SET @c_PreGenRptData = ''  
   
    IF ISNULL(@c_PreGenRptData,'') = ''  
@@ -66,6 +92,7 @@ BEGIN
           , Sum(case when Len(Trim(PD.ID)) > 0 then 0 else PD.Qty end) [Qty]  
           , Sum(case when Len(Trim(PD.ID)) > 0 then 1 else 0 end) [CTNQty]  
           , case when IsNull(RP.Sku, '') = '' then 'N' else 'Y' end [RPL]  
+          , ISNULL(@c_Retval,'')    AS Logo
          FROM WAVEDETAIL WVD WITH (NOLOCK)  
          JOIN PICKDETAIL PD WITH (NOLOCK) ON WVD.OrderKey = PD.OrderKey  
          join Loc loc WITH (NOLOCK) on PD.Loc = loc.Loc  

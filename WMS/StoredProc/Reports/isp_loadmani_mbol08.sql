@@ -32,6 +32,7 @@ GO
 /* Date         Author        Purposes                                  */    
 /* 2022-04-07   mingle01      Created - (WMS-19333)                     */    
 /* 2022-12-21   mingle01      WMS-20348 - Update fields(ML01)           */ 
+/* 2023-01-19   mingle02      WMS-21535 - Modify datatype(ML02)         */ 
 /************************************************************************/    
 CREATE  OR ALTER  PROC [dbo].[isp_loadmani_mbol08] (    
      @c_mbolkey   NVARCHAR(10)    
@@ -59,9 +60,9 @@ BEGIN
          ,  @c_Loadkey        NVARCHAR(10)    
          ,  @c_ExternOrderkey NVARCHAR(50)   --tlting_ext    
          ,  @c_Consigneekey   NVARCHAR(15)    
-		   ,  @c_SHOWFIELD      NVARCHAR(5)  
+         ,  @c_SHOWFIELD      NVARCHAR(5)  
          ,  @dt_DeliveryDate  DATETIME   
-		   ,  @dt_ArrivalDateFD DATETIME  
+         ,  @dt_ArrivalDateFD DATETIME  
     
          ,  @c_ST_Company      NVARCHAR(45)    
          ,  @c_ST_Address1     NVARCHAR(45)    
@@ -72,7 +73,7 @@ BEGIN
          ,  @c_c_City         NVARCHAR(45)    
          ,  @c_Route          NVARCHAR(10)    
          ,  @c_BuyerPO        NVARCHAR(20)   
-			,  @c_invoiceno      NVARCHAR(20)
+         ,  @c_invoiceno      NVARCHAR(20)
     
          ,  @n_NoOfCartons    INT    
     
@@ -83,21 +84,21 @@ BEGIN
          ,  @n_ShowAddresses  INT    
          ,  @n_ShowBuyerPO    INT    
          ,  @n_ShowMultiExtSO INT    
-			,  @c_CarrierKey   NVARCHAR(10)    
-			,  @c_OrderKey     NVARCHAR(10)    
-			,  @c_Departuredate   NVARCHAR(30)    
-			,  @c_transmethod   NVARCHAR(30)    
-			,  @c_UserDefine03   NVARCHAR(20)    
-		   ,  @c_TPT   NVARCHAR(250)    
-		   ,  @c_Delivery_Zone   NVARCHAR(10)    
-			,  @c_RDD   NVARCHAR(30)    
-			,  @n_m3   INT    
-			,  @n_TTLCNTS   INT    
-			,  @n_totalwgt   INT    
-			,  @c_LM_SG   NVARCHAR(1)
-			,  @n_totcs INT
-			,  @n_pqty   INT
-			,  @c_mboldesc	NVARCHAR(30)
+         ,  @c_CarrierKey   NVARCHAR(10)    
+         ,  @c_OrderKey     NVARCHAR(10)    
+         ,  @c_Departuredate   NVARCHAR(30)    
+         ,  @c_transmethod   NVARCHAR(30)    
+         ,  @c_UserDefine03   NVARCHAR(20)    
+         ,  @c_TPT   NVARCHAR(250)    
+         ,  @c_Delivery_Zone   NVARCHAR(10)    
+         ,  @c_RDD   NVARCHAR(30)    
+         ,  @n_m3   DECIMAL(10,5)	--ML02    
+         ,  @n_TTLCNTS   INT    
+         ,  @n_totalwgt   DECIMAL(10,5)	--ML02    
+         ,  @c_LM_SG   NVARCHAR(1)
+         ,  @n_totcs INT
+         ,  @n_pqty   INT
+         ,  @c_mboldesc	NVARCHAR(30)
     
    SET @n_StartTCnt = @@TRANCOUNT    
     
@@ -114,10 +115,10 @@ BEGIN
       ,  orderkey             NVARCHAR(10)    
       ,  ST_Company           NVARCHAR(45)         
       ,  Departuredate        NVARCHAR(30)    
-      ,  totalwgt             INT    
+      ,  totalwgt             DECIMAL(10,5)	--ML02    
       ,  transmethod          NVARCHAR(30)    
       ,  route                NVARCHAR(10)    
-      ,  m3                   INT    
+      ,  m3                   DECIMAL(10,5)	--ML02    
       ,  Storerkey            NVARCHAR(15)    
       ,  deliverydate         DATETIME    
       ,  Facility             NVARCHAR(5)    
@@ -127,18 +128,18 @@ BEGIN
       ,  ST_Address3          NVARCHAR(45)    
       ,  TTLCNTS              INT    
       ,  TPT                  NVARCHAR(250)    
-	   ,  Delivery_Zone        NVARCHAR(10)    
-	   ,  Externorderkey       NVARCHAR(50)    
-	   ,  RDD                  NVARCHAR(20)    
-	   ,  Consigneekey         NVARCHAR(15)  
-	   ,  SHOWFIELD            NVARCHAR(5)  
-	   ,  ArrivalDateFD        DATETIME  
+      ,  Delivery_Zone        NVARCHAR(10)    
+      ,  Externorderkey       NVARCHAR(50)    
+      ,  RDD                  NVARCHAR(20)    
+      ,  Consigneekey         NVARCHAR(15)  
+      ,  SHOWFIELD            NVARCHAR(5)  
+      ,  ArrivalDateFD        DATETIME  
       ,  LM_SG                NVARCHAR(1)  
-	   ,  pqty                 INT 
-	   ,  buyerpo              NVARCHAR(20)
-	   ,  totcs			         INT
-		,  mboldesc             NVARCHAR(30)  
-		,  invoiceno            NVARCHAR(20)
+      ,  pqty                 INT 
+      ,  buyerpo              NVARCHAR(20)
+      ,  totcs			         INT
+      ,  mboldesc             NVARCHAR(30)  
+      ,  invoiceno            NVARCHAR(20)
       )    
     
    BEGIN TRAN    
@@ -148,59 +149,59 @@ BEGIN
          ,  MH.CarrierKey    
          --,  CASE WHEN ISNULL(SC.Svalue,'') = '1' THEN ''    
          --        ELSE ISNULL(RTRIM(OH.Loadkey),'') END    
-   --,  CASE WHEN ISNULL(SC.Svalue,'') = '0' THEN ISNULL(RTRIM(OH.Loadkey),'')   
-   --  WHEN ISNULL(SC2.Svalue,'') = '0' THEN ISNULL(RTRIM(OH.Loadkey),'') ELSE '' END  
-   --,CASE WHEN ISNULL(SC.Svalue,'') = '1' THEN ''    
-   --              ELSE ISNULL(RTRIM(OH.Loadkey),'') END  
+         --,  CASE WHEN ISNULL(SC.Svalue,'') = '0' THEN ISNULL(RTRIM(OH.Loadkey),'')   
+         --  WHEN ISNULL(SC2.Svalue,'') = '0' THEN ISNULL(RTRIM(OH.Loadkey),'') ELSE '' END  
+         --,CASE WHEN ISNULL(SC.Svalue,'') = '1' THEN ''    
+         --              ELSE ISNULL(RTRIM(OH.Loadkey),'') END  
          ,  CASE WHEN OH.Storerkey NOT LIKE '%NIKE%' AND ISNULL(SC.Svalue,'') <> '1' THEN ISNULL(RTRIM(OH.Loadkey),'')   
                  WHEN OH.Storerkey LIKE '%NIKE%' AND ISNULL(SC2.Svalue,'') <> '1' THEN ISNULL(RTRIM(OH.Loadkey),'') ELSE '' END  
-   --,  MD.OrderKey    
+         --,  MD.OrderKey    
          ,  CONVERT(VARCHAR, MH.Departuredate, 105)    
-   --,  MH.Departuredate    
+         --,  MH.Departuredate    
          ,  MH.transmethod    
          ,  OH.StorerKey    
          ,  OH.deliverydate    
          ,  OH.Facility    
-			,  OH.UserDefine03    
-			,  ISNULL(CL1.Description ,'')    
-			,  MH.Delivery_Zone    
-   --,  CASE WHEN ISNULL(SC.Svalue,'') <> '1' THEN ISNULL(RTRIM(OH.ExternOrderkey),'')   
-   --  WHEN ISNULL(SC2.Svalue,'') <> '1' THEN ISNULL(RTRIM(OH.ExternOrderkey),'') ELSE '' END  
-			,  CASE WHEN OH.Storerkey NOT LIKE '%NIKE%' AND ISNULL(SC.Svalue,'') <> '1' THEN ISNULL(RTRIM(OH.ExternOrderkey),'')   
-                 WHEN OH.Storerkey LIKE '%NIKE%' AND ISNULL(SC2.Svalue,'') = '1' THEN ISNULL(RTRIM(OH.ExternOrderkey),'') ELSE '' END  
-			,  CASE WHEN OH.Storerkey = 'ADIDAS' THEN CONVERT(VARCHAR,(CONVERT(DATETIME,OH.UserDefine03)),103) ELSE CONVERT(VARCHAR, MD.deliverydate, 103) END    
-			,  ISNULL(RTRIM(OH.Consigneekey),'')  
-			,  ISNULL(CL2.SHORT,'') AS SHOWFIELD  
-			,  MH.ArrivalDateFinalDestination
-			--,  OH.Route	--ML01
-			,  SUM(ISNULL(PH.TTLCNTS,'0'))
-			,  MD.Description
+         ,  OH.UserDefine03    
+         ,  ISNULL(CL1.Description ,'')    
+         ,  MH.Delivery_Zone    
+         --,  CASE WHEN ISNULL(SC.Svalue,'') <> '1' THEN ISNULL(RTRIM(OH.ExternOrderkey),'')   
+         --  WHEN ISNULL(SC2.Svalue,'') <> '1' THEN ISNULL(RTRIM(OH.ExternOrderkey),'') ELSE '' END  
+         ,  CASE WHEN OH.Storerkey NOT LIKE '%NIKE%' AND ISNULL(SC.Svalue,'') <> '1' THEN ISNULL(RTRIM(OH.ExternOrderkey),'')   
+                       WHEN OH.Storerkey LIKE '%NIKE%' AND ISNULL(SC2.Svalue,'') = '1' THEN ISNULL(RTRIM(OH.ExternOrderkey),'') ELSE '' END  
+         ,  CASE WHEN OH.Storerkey = 'ADIDAS' THEN CONVERT(VARCHAR,(CONVERT(DATETIME,OH.UserDefine03)),103) ELSE CONVERT(VARCHAR, MD.deliverydate, 103) END    
+         ,  ISNULL(RTRIM(OH.Consigneekey),'')  
+         ,  ISNULL(CL2.SHORT,'') AS SHOWFIELD  
+         ,  MH.ArrivalDateFinalDestination
+         --,  OH.Route	--ML01
+         ,  SUM(ISNULL(PH.TTLCNTS,'0'))
+         ,  MD.Description
    FROM MBOL         MH WITH (NOLOCK)    
    JOIN MBOLDETAIL   MD WITH (NOLOCK)  ON (MH.MBOLKey = MD.MBolKey)    
    JOIN ORDERS       OH WITH (NOLOCK)  ON (MD.OrderKey = OH.OrderKey) 
-	JOIN packheader   PH WITH (NOLOCK)  ON PH.OrderKey = OH.OrderKey
+   JOIN packheader   PH WITH (NOLOCK)  ON PH.OrderKey = OH.OrderKey
    LEFT OUTER JOIN CODELKUP CL1 WITH (NOLOCK) ON CL1.ListName = 'TRANSMETH' AND CL1.Code = MH.transmethod     
    LEFT OUTER JOIN STORERCONFIG SC WITH (NOLOCK) ON ( OH.Storerkey = SC.Storerkey AND OH.Facility = SC.Facility    
                                                  AND  SC.Configkey='LoadManiMBOL_MY' AND SC.Svalue='1' )    
    LEFT OUTER JOIN STORERCONFIG SC2 WITH (NOLOCK) ON ( OH.Storerkey = SC2.Storerkey AND OH.Facility = SC2.Facility    
                                                  AND  SC2.Configkey='CustomLoadMani' AND SC2.Svalue='1' )  
    LEFT OUTER JOIN CODELKUP CL2 WITH (NOLOCK) ON CL2.ListName = 'REPORTCFG' AND CL2.Code = 'SHOWFIELD'  
-             AND CL2.Storerkey = OH.Storerkey AND CL2.LONG = 'r_dw_load_manifest_mbol08'  
+                                                 AND CL2.Storerkey = OH.Storerkey AND CL2.LONG = 'r_dw_load_manifest_mbol08'  
    WHERE ( MH.MbolKey = @c_mbolkey ) 
 	GROUP BY MH.MbolKey    
          ,  MH.VoyageNumber    
          ,  MH.CarrierKey    
          --,  CASE WHEN ISNULL(SC.Svalue,'') = '1' THEN ''    
          --        ELSE ISNULL(RTRIM(OH.Loadkey),'') END    
-   --,  CASE WHEN ISNULL(SC.Svalue,'') = '0' THEN ISNULL(RTRIM(OH.Loadkey),'')   
-   --  WHEN ISNULL(SC2.Svalue,'') = '0' THEN ISNULL(RTRIM(OH.Loadkey),'') ELSE '' END  
-   --,CASE WHEN ISNULL(SC.Svalue,'') = '1' THEN ''    
-   --              ELSE ISNULL(RTRIM(OH.Loadkey),'') END  
+         --,  CASE WHEN ISNULL(SC.Svalue,'') = '0' THEN ISNULL(RTRIM(OH.Loadkey),'')   
+         --  WHEN ISNULL(SC2.Svalue,'') = '0' THEN ISNULL(RTRIM(OH.Loadkey),'') ELSE '' END  
+         --,CASE WHEN ISNULL(SC.Svalue,'') = '1' THEN ''    
+         --              ELSE ISNULL(RTRIM(OH.Loadkey),'') END  
          ,  CASE WHEN OH.Storerkey NOT LIKE '%NIKE%' AND ISNULL(SC.Svalue,'') <> '1' THEN ISNULL(RTRIM(OH.Loadkey),'')   
                  WHEN OH.Storerkey LIKE '%NIKE%' AND ISNULL(SC2.Svalue,'') <> '1' THEN ISNULL(RTRIM(OH.Loadkey),'') ELSE '' END  
-   --,  MD.OrderKey    
+         --,  MD.OrderKey    
          ,  CONVERT(VARCHAR, MH.Departuredate, 105)    
-   --,  MH.Departuredate    
+         --,  MH.Departuredate    
          ,  MH.transmethod    
          ,  OH.StorerKey    
          ,  OH.deliverydate    
@@ -208,17 +209,17 @@ BEGIN
 			,  OH.UserDefine03    
 			,  ISNULL(CL1.Description ,'')    
 			,  MH.Delivery_Zone    
-   --,  CASE WHEN ISNULL(SC.Svalue,'') <> '1' THEN ISNULL(RTRIM(OH.ExternOrderkey),'')   
-   --  WHEN ISNULL(SC2.Svalue,'') <> '1' THEN ISNULL(RTRIM(OH.ExternOrderkey),'') ELSE '' END  
-			,  CASE WHEN OH.Storerkey NOT LIKE '%NIKE%' AND ISNULL(SC.Svalue,'') <> '1' THEN ISNULL(RTRIM(OH.ExternOrderkey),'')   
-                 WHEN OH.Storerkey LIKE '%NIKE%' AND ISNULL(SC2.Svalue,'') = '1' THEN ISNULL(RTRIM(OH.ExternOrderkey),'') ELSE '' END  
-			,  CASE WHEN OH.Storerkey = 'ADIDAS' THEN CONVERT(VARCHAR,(CONVERT(DATETIME,OH.UserDefine03)),103) ELSE CONVERT(VARCHAR, MD.deliverydate, 103) END    
-			,  ISNULL(RTRIM(OH.Consigneekey),'')  
-			,  ISNULL(CL2.SHORT,'')  
-			,  MH.ArrivalDateFinalDestination
-			--,  OH.Route	--ML01
-			--,  PH.TTLCNTS
-			,  MD.Description
+         --,  CASE WHEN ISNULL(SC.Svalue,'') <> '1' THEN ISNULL(RTRIM(OH.ExternOrderkey),'')   
+         --  WHEN ISNULL(SC2.Svalue,'') <> '1' THEN ISNULL(RTRIM(OH.ExternOrderkey),'') ELSE '' END  
+         ,  CASE WHEN OH.Storerkey NOT LIKE '%NIKE%' AND ISNULL(SC.Svalue,'') <> '1' THEN ISNULL(RTRIM(OH.ExternOrderkey),'')   
+                       WHEN OH.Storerkey LIKE '%NIKE%' AND ISNULL(SC2.Svalue,'') = '1' THEN ISNULL(RTRIM(OH.ExternOrderkey),'') ELSE '' END  
+         ,  CASE WHEN OH.Storerkey = 'ADIDAS' THEN CONVERT(VARCHAR,(CONVERT(DATETIME,OH.UserDefine03)),103) ELSE CONVERT(VARCHAR, MD.deliverydate, 103) END    
+         ,  ISNULL(RTRIM(OH.Consigneekey),'')  
+         ,  ISNULL(CL2.SHORT,'')  
+         ,  MH.ArrivalDateFinalDestination
+         --,  OH.Route	--ML01
+         --,  PH.TTLCNTS
+         ,  MD.Description
     
    OPEN CUR_LOAD    
     
@@ -229,20 +230,20 @@ BEGIN
                                  --,@c_OrderKey    
                                  ,@c_Departuredate    
                                  ,@c_transmethod    
-											,@c_Storerkey    
+                                 ,@c_Storerkey    
                                  ,@dt_DeliveryDate    
                                  ,@c_Facility    
-											,@c_UserDefine03    
+                                 ,@c_UserDefine03    
                                  ,@c_TPT    
                                  ,@c_Delivery_Zone    
-											,@c_ExternOrderkey    
+                                 ,@c_ExternOrderkey    
                                  ,@c_RDD    
-											,@c_Consigneekey    
-											,@c_SHOWFIELD  
-										   ,@dt_ArrivalDateFD 
-											--,@c_Route
-											,@n_totcs
-											,@c_mboldesc
+                                 ,@c_Consigneekey    
+                                 ,@c_SHOWFIELD  
+                                   ,@dt_ArrivalDateFD 
+                                 --,@c_Route
+                                 ,@n_totcs
+                                 ,@c_mboldesc
     
     
     
@@ -282,11 +283,11 @@ BEGIN
             --,@c_c_City     = CASE WHEN @n_ShowAddresses = 1 THEN ISNULL(OH.c_City,'')     ELSE '' END    
             ,@c_BuyerPO    = CASE WHEN OH.STORERKEY = 'LVS' THEN ISNULL(OH.BuyerPO,'') ELSE '' END     
             ,@c_Route      = ISNULL(OH.Route,'') 
-				,@c_OrderKey   = OH.OrderKey
-				,@c_invoiceno = OH.InvoiceNo
+            ,@c_OrderKey   = OH.OrderKey
+            ,@c_invoiceno = OH.InvoiceNo
       FROM ORDERS OH  WITH (NOLOCK)    
-   --JOIN STORER ST(NOLOCK) ON ST.StorerKey = OH.StorerKey    
-	  LEFT OUTER JOIN Storer ST (NOLOCK) ON Oh.consigneekey = ST.Storerkey    
+      --JOIN STORER ST(NOLOCK) ON ST.StorerKey = OH.StorerKey    
+      LEFT OUTER JOIN Storer ST (NOLOCK) ON Oh.consigneekey = ST.Storerkey    
       WHERE OH.Loadkey        = CASE WHEN @c_Loadkey = '' THEN OH.Loadkey ELSE @c_Loadkey END    
       AND   OH.ExternOrderkey = CASE WHEN @c_ExternOrderkey = '' THEN OH.ExternOrderkey ELSE @c_ExternOrderkey END    
       AND   OH.Consigneekey = @c_Consigneekey    
@@ -396,54 +397,54 @@ BEGIN
       ,  ST_Address3              
       ,  TTLCNTS                  
       ,  TPT                      
-	   ,  Delivery_Zone            
-	   ,  Externorderkey           
-	   ,  RDD                      
-	   ,  Consigneekey  
-	   ,  SHOWFIELD  
-	   ,  ArrivalDateFD  
+      ,  Delivery_Zone            
+      ,  Externorderkey           
+      ,  RDD                      
+      ,  Consigneekey  
+      ,  SHOWFIELD  
+      ,  ArrivalDateFD  
       ,  LM_SG   
-	   ,  pqty
-	   ,  buyerpo
-		,  route
-	   ,  totcs
-		,  mboldesc
-		,  invoiceno
+      ,  pqty
+      ,  buyerpo
+      ,  route
+      ,  totcs
+      ,  mboldesc
+      ,  invoiceno
             )    
       VALUES    
             (    @c_MbolKey    
             ,  @c_VoyageNumber    
-				,  @c_CarrierKey    
+            ,  @c_CarrierKey    
             ,  @c_Loadkey    
             ,  @c_OrderKey    
-				,  @c_ST_Company    
+            ,  @c_ST_Company    
             ,  @c_Departuredate    
-				,  @n_totalwgt    
+            ,  @n_totalwgt    
             ,  @c_transmethod    
-				--,  @c_Route    
-				,  @n_m3    
+            --,  @c_Route    
+            ,  @n_m3    
             ,  @c_Storerkey    
             ,  @dt_DeliveryDate    
             ,  @c_Facility    
             ,  @c_UserDefine03    
-				,  @c_ST_Address1    
-				,  @c_ST_Address2    
-				,  @c_ST_Address3    
-			   ,  @n_TTLCNTS    
+            ,  @c_ST_Address1    
+            ,  @c_ST_Address2    
+            ,  @c_ST_Address3    
+            ,  @n_TTLCNTS    
             ,  @c_TPT    
             ,  @c_Delivery_Zone    
             ,  @c_ExternOrderkey    
             ,  @c_RDD    
             ,  @c_Consigneekey    
-				,  @c_showfield  
-				,  @dt_ArrivalDateFD  
+            ,  @c_showfield  
+            ,  @dt_ArrivalDateFD  
             ,  CASE WHEN @c_Loadkey = '' THEN '1' ELSE '0' END 
-				,  @n_pqty
-				,  @c_BuyerPO
-				,  @c_route
-				,  @n_totcs
-				,  @c_mboldesc
-				,  @c_invoiceno
+            ,  @n_pqty
+            ,  @c_BuyerPO
+            ,  @c_route
+            ,  @n_totcs
+            ,  @c_mboldesc
+            ,  @c_invoiceno
             )    
     
     
@@ -454,25 +455,25 @@ BEGIN
                                  --,@c_OrderKey    
                                  ,@c_Departuredate    
                                  ,@c_transmethod    
-											,@c_Storerkey    
+                                 ,@c_Storerkey    
                                  ,@dt_deliverydate    
                                  ,@c_Facility    
-											,@c_UserDefine03    
+                                 ,@c_UserDefine03    
                                  ,@c_TPT    
                                  ,@c_Delivery_Zone    
-											,@c_ExternOrderkey    
+                                 ,@c_ExternOrderkey    
                                  ,@c_RDD    
-											,@c_Consigneekey  
-											,@c_showfield  
-											,@dt_ArrivalDateFD  
-										   --,@c_Route
-											,@n_totcs
-											,@c_mboldesc
+                                 ,@c_Consigneekey  
+                                 ,@c_showfield  
+                                 ,@dt_ArrivalDateFD  
+                                   --,@c_Route
+                                 ,@n_totcs
+                                 ,@c_mboldesc
    END    
    CLOSE CUR_LOAD    
    DEALLOCATE CUR_LOAD    
 
-	DECLARE cur_1 CURSOR FAST_FORWARD READ_ONLY
+   DECLARE cur_1 CURSOR FAST_FORWARD READ_ONLY
    FOR
    SELECT orderkey FROM #TMP_LOAD
    OPEN cur_1
@@ -491,7 +492,7 @@ BEGIN
    CLOSE cur_1
    DEALLOCATE cur_1
 
-	SELECT ORDERS.Mbolkey,
+   SELECT ORDERS.Mbolkey,
    ORDERS.Orderkey,
    totwgt = ISNULL(SUM(PICKDETAIL.Qty),0) * SKU.stdgrosswgt,
    n_m3  = CASE WHEN PACK.CaseCnt > 0 THEN (SKU.[Cube] * ISNULL(SUM(PICKDETAIL.Qty),0)) / (PACK.CaseCnt) ELSE 0 END
@@ -504,12 +505,12 @@ BEGIN
    AND ORDERS.Mbolkey = @c_mbolkey
    GROUP BY ORDERS.Mbolkey, ORDERS.Orderkey, PACK.CaseCnt, SKU.stdgrosswgt,SKU.[Cube]
 
-	SELECT Mbolkey, Orderkey, totwgt = SUM(totwgt), n_m3 = SUM(n_m3)
+   SELECT Mbolkey, Orderkey, totwgt = SUM(totwgt), n_m3 = SUM(n_m3)
    INTO   #TEMPTOTAL
    FROM   #TEMPCALC
    GROUP BY Mbolkey, Orderkey
 
-	UPDATE #TMP_LOAD
+   UPDATE #TMP_LOAD
    SET totalwgt = t.totwgt,
        m3 = t.n_m3
    FROM  #TEMPTOTAL t
@@ -537,21 +538,21 @@ BEGIN
       ,  ST_Address3         
       ,  TTLCNTS                  
       ,  TPT                      
-	   ,  Delivery_Zone            
+      ,  Delivery_Zone            
       ,  Externorderkey           
       ,  RDD                      
       ,  Consigneekey    
       ,  SHOWFIELD  
-	   ,  ArrivalDateFD  
+      ,  ArrivalDateFD  
       ,  LM_SG  
-	   ,  pqty
-	   ,  buyerpo
-		,  route
-	   ,  totcs
-		,  mboldesc
-		,  invoiceno
+      ,  pqty
+      ,  buyerpo
+      ,  route
+      ,  totcs
+      ,  mboldesc
+      ,  invoiceno
    FROM #TMP_LOAD  
-	ORDER BY Externorderkey
+   ORDER BY Externorderkey
    --ORDER BY Route    
    --      ,  Consigneekey    
    --      ,  Loadkey    
