@@ -48,13 +48,14 @@ EXECUTE rdt.rdtAddScn 4342, 'ENG'
    ,@cLine14 = '%e'
 
 -- Scn = 4343. Finalize ASN
--- 4343 = ?? screen
 DELETE rdt.RDTScn WHERE Scn = 4343 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4343, 'ENG'
-   ,@cLine01 = 'Finalize ASN?'
-   ,@cLine03 = '1. No'
-   ,@cLine04 = '2. Yes'
-   ,@cLine06 = 'Option: %10i10'
+   ,@cLine01 = 'FINALIZE ASN?'
+   ,@cLine02 = ''
+   ,@cLine03 = '1 = YES'
+   ,@cLine04 = '9 = NO'
+   ,@cLine05 = ''
+   ,@cLine06 = 'OPTION: %10i10'
    ,@cLine14 = '%e'
  
  

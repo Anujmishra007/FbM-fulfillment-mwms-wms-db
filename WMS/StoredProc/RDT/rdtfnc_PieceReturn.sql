@@ -42,6 +42,7 @@ GO
 /* 2021-07-22   2.9  Chermaine  WMS-16119 Add ExtUpdate in scn2 (cc01)        */  
 /* 2022-09-08   3.0  Ung        WMS-20348 Expand RefNo to 60 chars            */
 /* 2022-03-09   3.1  James      WMS-18962 Add @cBarcode to V_String (james06) */
+/* 2023-01-16   3.2  Ung        WMS-21532 Add auto finalize                   */
 /******************************************************************************/  
 CREATE OR ALTER PROC [RDT].[rdtfnc_PieceReturn](  
    @nMobile    int,  
@@ -131,7 +132,6 @@ DECLARE
    @cReasonCode         NVARCHAR( 10),  
    @cReceiptLineNumber  NVARCHAR( 5),  
    @cUCCUOM             NVARCHAR( 6),--(yeekung02)  
-   @cDefaultCursor      NVARCHAR( 1),--(yeekung02)  
    @cSuggestLocSP       NVARCHAR(20),--(yeekung03)  
   
    @cDefaultToLOC       NVARCHAR( 20),  
@@ -146,7 +146,7 @@ DECLARE
    @cExtendedUpdateSP   NVARCHAR( 20),  
    @cCheckSKUInASN      NVARCHAR( 1),  
    @cOption             NVARCHAR( 1),  
-   @cFinalASN           NVARCHAR( 10),  
+   @cFinalizeASN        NVARCHAR( 10),  
   
    @cDefaultLottableMethod NVARCHAR( 1),  -- (james01)  
    @cCheckIDInUse          NVARCHAR( 20),    -- (james02)  
@@ -234,9 +234,9 @@ SELECT
    @cExtendedUpdateSP   = V_String30,  
    @cCheckSKUInASN      = V_String31,  
    @cReceiptLineNumber  = V_String32,  
-   @cFinalASN           = V_String33,  
+   @cFinalizeASN        = V_String33,  
    @cUCCUOM             = V_String34, --(yeekung02)  
-   @cDefaultCursor      = V_String35, --(yeekung02)  
+   -- @cDefaultCursor      = V_String35, --(yeekung02)  
    @cSuggestLocSP       = V_string36, --(yeekung03)  
    @cRDLineNo           = V_String38,  
    @cRefNo              = V_String41,  -- refno is 30 chars  
@@ -316,14 +316,13 @@ Step_Start. Func = 608
 Step_Start:  
 BEGIN  
    -- Get storer config  
+   DECLARE @cDefaultCursor NVARCHAR( 1)
    DECLARE @cPOKeyDefaultValue NVARCHAR( 10)  
+
+   SET @cDefaultCursor = rdt.RDTGetConfig( @nFunc, 'DefaultCursor', @cStorerKey)   --(yeekung01)  
    SET @cPOKeyDefaultValue = rdt.RDTGetConfig( @nFunc, 'ReceivingPOKeyDefaultValue', @cStorerKey)  
    IF @cPOKeyDefaultValue = '0'  
       SET @cPOKeyDefaultValue = ''  
-  
-   SET @cFinalASN = rdt.RDTGetConfig( @nFunc, 'FinalizeASN', @cStorerKey)  
-   IF @cFinalASN = '0'  
-      SET @cFinalASN = ''  
   
    -- EventLog  
    EXEC RDT.rdt_STD_EventLog  
@@ -334,10 +333,6 @@ BEGIN
       @cFacility   = @cFacility,  
       @cStorerKey  = @cStorerKey,  
       @nStep       = @nStep  
-  
-   SET @cDefaultCursor = rdt.RDTGetConfig( @nFunc, 'DefaultCursor', @cStorerKey)   --(yeekung01)  
-  
-   SET @cSuggestLocSP =  rdt.RDTGetConfig( @nFunc, 'SuggestLocSP', @cStorerKey)   --(yeekung03)  
   
    IF ISNULL(@cDefaultCursor,'')<>0  
       EXEC rdt.rdtSetFocusField @nMobile, @cDefaultCursor  
@@ -357,7 +352,7 @@ GOTO Quit
   
   
 /************************************************************************************  
-Step 1. Scn = 4270. ASN, PO, Container No screen  
+Step 1. Scn = 4340. ASN, PO, Container No screen  
    ASN          (field01, input)  
    PO           (field02, input)  
    REF NO       (field03, input)  
@@ -753,13 +748,17 @@ BEGIN
          SET @cReceiptKey = ''  
          GOTO Quit  
       END  
-  
+
       -- Get storer config  
       SET @cCheckSKUInASN = rdt.RDTGetConfig( @nFunc, 'CheckSKUInASN', @cStorerKey)  
       SET @cDisableQTYField = rdt.RDTGetConfig( @nFunc, 'DisableQTYField', @cStorerKey)  
+      SET @cFinalizeASN = rdt.RDTGetConfig( @nFunc, 'FinalizeASN', @cStorerKey)  
       SET @cMultiSKUBarcode = rdt.RDTGetConfig( @nFunc, 'MultiSKUBarcode', @cStorerKey)  
       SET @cVerifySKU = rdt.RDTGetConfig( @nFunc, 'VerifySKU', @cStorerKey)  
   
+      SET @cCheckIDInUse = rdt.RDTGetConfig( @nFunc, 'CheckIDInUse', @cStorerKey)  
+      IF @cCheckIDInUse = '0'  
+         SET @cCheckIDInUse = ''  
       SET @cDefaultLottableMethod = rdt.RDTGetConfig( @nFunc, 'DefaultLottableMethod', @cStorerKey)  
       IF @cDefaultLottableMethod = '0'  
          SET @cDefaultLottableMethod = ''  
@@ -781,10 +780,9 @@ BEGIN
       SET @cExtendedUpdateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorerKey)  
       IF @cExtendedUpdateSP = '0'  
          SET @cExtendedUpdateSP = ''  
-      -- (james02)  
-      SET @cCheckIDInUse = rdt.RDTGetConfig( @nFunc, 'CheckIDInUse', @cStorerKey)  
-      IF @cCheckIDInUse = '0'  
-         SET @cCheckIDInUse = ''  
+      SET @cSuggestLocSP =  rdt.RDTGetConfig( @nFunc, 'SuggestLocSP', @cStorerKey)
+      IF @cSuggestLocSP = '0'  
+         SET @cSuggestLocSP = ''  
   
       IF @cSuggestLocSP <> ''  
       BEGIN  
@@ -1004,7 +1002,7 @@ GOTO Quit
   
   
 /********************************************************************************  
-Step 2. Scn = 4274. ID, LOC screen  
+Step 2. Scn = 4341. ID, LOC screen  
    ASN     (field01)  
    PO      (field02)  
    ID      (field03, input)  
@@ -1031,7 +1029,8 @@ BEGIN
       END  
   
       IF @cID <> ''  
-      BEGIN/*  
+      BEGIN
+         /*  
          DECLARE @cAuthority NVARCHAR(1)  
          EXECUTE nspGetRight  
             @cFacility,  
@@ -1059,7 +1058,8 @@ BEGIN
                SET @cOutField03 = ''  
                GOTO Quit  
             END  
-         END*/  
+         END
+         */  
   
          IF @cCheckIDInUse = '1'  
          BEGIN  
@@ -1470,30 +1470,28 @@ BEGIN
       SET @cOutField02 = ''  
       SET @cOutField03 = ''  
   
-      IF EXISTS( SELECT 1 FROM dbo.receiptdetail with (nolock)  
-            WHERE storerkey=@cStorerKey  
-            AND receiptkey= @cReceiptKey  
-            AND beforereceivedqty >0)  
-      BEGIN  
-         IF (@cFinalASN <> '' AND @cFinalASN IS NOT NULL)  
+      -- Finalize ASN
+      IF @cFinalizeASN = '1'
+      BEGIN
+         -- Check start receiving
+         IF EXISTS( SELECT 1 
+            FROM dbo.ReceiptDetail WITH (NOLOCK)  
+            WHERE ReceiptKey= @cReceiptKey  
+               AND BeforeReceivedQTY > 0)  
          BEGIN  
+            SET @cOutField01 = '' -- Option
+            
             -- Go to ASN Finalize screen  
             SET @nScn = @nScn_FinalizeASN  
-            SET @nStep = @nStep_FinalizeASN  
-         END  
-         ELSE  
-         BEGIN  
-            -- Go to ASN screen  
-            SET @nScn = @nScn_ASNPO  
-            SET @nStep = @nStep_ASNPO  
+            SET @nStep = @nStep_FinalizeASN
+            
+            GOTO Quit
          END  
       END  
-      ELSE  
-      BEGIN  
-         -- Go to ASN screen  
-         SET @nScn = @nScn_ASNPO  
-         SET @nStep = @nStep_ASNPO  
-      END  
+
+      -- Go to ASN screen  
+      SET @nScn = @nScn_ASNPO  
+      SET @nStep = @nStep_ASNPO  
    END  
 END  
 GOTO Quit  
@@ -1718,7 +1716,7 @@ GOTO Quit
   
   
 /***********************************************************************************  
-Step 4. Scn = 4271. SKU, QTY screen  
+Step 4. Scn = 4342. SKU, QTY screen  
    ID       (field01)  
    LOC      (field02)  
    SKU      (field03, input)  
@@ -1994,7 +1992,7 @@ BEGIN
             @cInField13  OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,  
             @cInField14  OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,  
             @cInField15  OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,  
-     @nMorePage   OUTPUT,  
+            @nMorePage   OUTPUT,  
             @nErrNo      OUTPUT,  
             @cErrMsg     OUTPUT,  
             @cReceiptKey,  
@@ -2242,7 +2240,66 @@ BEGIN
       COMMIT TRAN rdtfnc_PieceReturn  
       WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
          COMMIT TRAN  
-  
+      
+      -- Finalize ASN
+      IF @cFinalizeASN = '2' -- No prompt, auto finalize
+      BEGIN
+         -- Fully received
+         IF NOT EXISTS( SELECT TOP 1 1
+            FROM ReceiptDetail WITH (NOLOCK)
+            WHERE ReceiptKey = @cReceiptKey
+            GROUP BY SKU
+            HAVING ISNULL( SUM( QTYExpected), 0) <>
+                   ISNULL( SUM( BeforeReceivedQty), 0))
+         BEGIN
+            -- Finalize ASN
+            EXEC rdt.rdt_PieceReturn_Finalize
+               @nFunc         = @nFunc,
+               @nMobile       = @nMobile,
+               @cLangCode     = @cLangCode,
+               @nStep         = @nStep,
+               @nInputKey     = @nInputKey,
+               @cFacility     = @cFacility,
+               @cStorerKey    = @cStorerKey,
+               @cReceiptKey   = @cReceiptKey,
+               @cRefNo        = @cRefNo,
+               @nErrNo        = @nErrNo  OUTPUT,
+               @cErrMsg       = @cErrMsg OUTPUT
+
+            -- Go to finalilze screen, to retry
+            -- (cannot remain at current screen, due to it is not inside the transaction. ENTER again will double receive)
+            IF @nErrNo <> 0
+            BEGIN
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+
+               SET @cOutField01 = '' -- @cOption
+
+               -- Go to next screen
+               SET @nScn = @nScn_FinalizeASN
+               SET @nStep = @nStep_FinalizeASN
+
+               GOTO Quit
+            END
+
+            -- Prepare next screen var
+            SET @cOutField01 = '' -- @cReceiptKey
+            SET @cOutField02 = '' -- @cPOKey
+            SET @cOutField03 = '' -- @cRefNo
+            
+
+            IF @cRefNo <> ''  
+               EXEC rdt.rdtSetFocusField @nMobile, 3 -- RefNo  
+            ELSE
+               EXEC rdt.rdtSetFocusField @nMobile, 1 -- ASN
+
+            -- Go to next screen
+            SET @nScn = @nScn_ASNPO
+            SET @nStep = @nStep_ASNPO
+
+            GOTO Step_SKUQTY_Quit
+         END
+      END
+   
       -- Reset data  
       SELECT @cSKU = '', @nQTY = 0,  
          @cLottable01 = '', @cLottable02 = '', @cLottable03 = '',    @dLottable04 = NULL, @dLottable05 = NULL,  
@@ -2466,7 +2523,7 @@ BEGIN
    BEGIN  
       -- Extended info  
       IF @cExtendedInfoSP <> ''  
-BEGIN  
+      BEGIN  
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')  
          BEGIN  
             SET @cExtendedInfo = ''  
@@ -3127,106 +3184,122 @@ BEGIN
    SET @nStep = @nStep_SKUQTY  
 END  
 GOTO Quit  
-  
+
+
 /********************************************************************************  
-Step 8. Screen = 4342. Finalize ASN  
-   Finalize ASN  
-   1 = No  
-   2 = Yes  
-  
-   Option:  (Field10, input)  
+Step 8. Screen = 4343. Finalize ASN  
+   FINALIZE ASN?  
+   1 = YES  
+   9 = NO  
+   OPTION:  (Field10, input)  
 ********************************************************************************/  
 Step_FinalizeASN:  --yeekung01  
 BEGIN  
    IF @nInputKey = 1 -- ENTER  
    BEGIN  
-      SET @cOption =@cInField10  
+      SET @cOption = @cInField10  
   
-      IF @cOption NOT IN ('1','2')  
+      IF @cOption NOT IN ('1','9')  
       BEGIN  
          SET @nErrNo = 57629  
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Option  
          GOTO Quit  
       END  
   
-      IF @cOption ='1'  
-      BEGIN  
-         -- Go to ASNPO Screen  
-         SET @nScn = @nScn_ASNPO  
-         SET @nStep = @nStep_ASNPO  
-      END  
-      ELSE  IF @cOption ='2'  
-      BEGIN  
-  
-          -- Extended update  
-      IF @cExtendedUpdateSP <> ''  
-      BEGIN  
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')  
+      IF @cOption = '1' -- YES
+      BEGIN
+         -- Finalize ASN
+         EXEC rdt.rdt_PieceReturn_Finalize
+            @nFunc         = @nFunc,
+            @nMobile       = @nMobile,
+            @cLangCode     = @cLangCode,
+            @nStep         = @nStep,
+            @nInputKey     = @nInputKey,
+            @cFacility     = @cFacility,
+            @cStorerKey    = @cStorerKey,
+            @cReceiptKey   = @cReceiptKey,
+            @cRefNo        = @cRefNo,
+            @nErrNo        = @nErrNo  OUTPUT,
+            @cErrMsg       = @cErrMsg OUTPUT
+         IF @nErrNo <> 0
+            GOTO Quit
+         
+         -- Extended update  
+         IF @cExtendedUpdateSP <> ''  
          BEGIN  
-            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +  
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' +  
-               ' @cReceiptKey, @cPOKey, @cRefNo, @cID, @cLOC, @cMethod, @cSKU, @nQTY, ' +  
-               ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +  
-               ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +  
-               ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +  
-               ' @cRDLineNo, @nErrNo OUTPUT, @cErrMsg OUTPUT'  
-            SET @cSQLParam =  
-               '@nMobile       INT,           ' +  
-               '@nFunc         INT,           ' +  
-               '@cLangCode     NVARCHAR( 3),  ' +  
-               '@nStep         INT,           ' +  
-               '@nAfterStep    INT,           ' +  
-               '@nInputKey     INT,           ' +  
-               '@cFacility     NVARCHAR( 5),  ' +  
-               '@cStorerKey    NVARCHAR( 15), ' +  
-               '@cReceiptKey   NVARCHAR( 10), ' +  
-               '@cPOKey        NVARCHAR( 10), ' +  
-               '@cRefNo        NVARCHAR( 60), ' +  
-               '@cID           NVARCHAR( 18), ' +  
-               '@cLOC          NVARCHAR( 10), ' +  
-               '@cMethod       NVARCHAR( 1),  ' +  
-               '@cSKU          NVARCHAR( 20), ' +  
-               '@nQTY          INT,           ' +  
-               '@cLottable01   NVARCHAR( 18), ' +  
-               '@cLottable02   NVARCHAR( 18), ' +  
-               '@cLottable03   NVARCHAR( 18), ' +  
-               '@dLottable04   DATETIME,      ' +  
-               '@dLottable05   DATETIME,      ' +  
-               '@cLottable06   NVARCHAR( 30), ' +  
-               '@cLottable07   NVARCHAR( 30), ' +  
-               '@cLottable08   NVARCHAR( 30), ' +  
-               '@cLottable09   NVARCHAR( 30), ' +  
-               '@cLottable10   NVARCHAR( 30), ' +  
-               '@cLottable11   NVARCHAR( 30), ' +  
-               '@cLottable12   NVARCHAR( 30), ' +  
-               '@dLottable13   DATETIME,      ' +  
-               '@dLottable14   DATETIME,      ' +  
-               '@dLottable15   DATETIME,      ' +  
-               '@cRDLineNo     NVARCHAR( 10),   ' +  
-               '@nErrNo        INT           OUTPUT, ' +  
-               '@cErrMsg       NVARCHAR( 20) OUTPUT  '  
-  
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
-               @nMobile, @nFunc, @cLangCode, @nStep, @nStep, @nInputKey, @cFacility, @cStorerKey,  
-               @cReceiptKey, @cPOKey, @cRefNo, @cID, @cLOC, @cMethod, @cSKU, @nQTY,  
-               @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,  
-               @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,  
-               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,  
-               @cRDLineNo, @nErrNo OUTPUT, @cErrMsg OUTPUT  
-  
-            IF @nErrNo <> 0  
-               GOTO Quit  
+            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')  
+            BEGIN  
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +  
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' +  
+                  ' @cReceiptKey, @cPOKey, @cRefNo, @cID, @cLOC, @cMethod, @cSKU, @nQTY, ' +  
+                  ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +  
+                  ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +  
+                  ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +  
+                  ' @cRDLineNo, @nErrNo OUTPUT, @cErrMsg OUTPUT'  
+               SET @cSQLParam =  
+                  '@nMobile       INT,           ' +  
+                  '@nFunc         INT,           ' +  
+                  '@cLangCode     NVARCHAR( 3),  ' +  
+                  '@nStep         INT,           ' +  
+                  '@nAfterStep    INT,           ' +  
+                  '@nInputKey     INT,           ' +  
+                  '@cFacility     NVARCHAR( 5),  ' +  
+                  '@cStorerKey    NVARCHAR( 15), ' +  
+                  '@cReceiptKey   NVARCHAR( 10), ' +  
+                  '@cPOKey        NVARCHAR( 10), ' +  
+                  '@cRefNo        NVARCHAR( 60), ' +  
+                  '@cID           NVARCHAR( 18), ' +  
+                  '@cLOC          NVARCHAR( 10), ' +  
+                  '@cMethod       NVARCHAR( 1),  ' +  
+                  '@cSKU          NVARCHAR( 20), ' +  
+                  '@nQTY          INT,           ' +  
+                  '@cLottable01   NVARCHAR( 18), ' +  
+                  '@cLottable02   NVARCHAR( 18), ' +  
+                  '@cLottable03   NVARCHAR( 18), ' +  
+                  '@dLottable04   DATETIME,      ' +  
+                  '@dLottable05   DATETIME,      ' +  
+                  '@cLottable06   NVARCHAR( 30), ' +  
+                  '@cLottable07   NVARCHAR( 30), ' +  
+                  '@cLottable08   NVARCHAR( 30), ' +  
+                  '@cLottable09   NVARCHAR( 30), ' +  
+                  '@cLottable10   NVARCHAR( 30), ' +  
+                  '@cLottable11   NVARCHAR( 30), ' +  
+                  '@cLottable12   NVARCHAR( 30), ' +  
+                  '@dLottable13   DATETIME,      ' +  
+                  '@dLottable14   DATETIME,      ' +  
+                  '@dLottable15   DATETIME,      ' +  
+                  '@cRDLineNo     NVARCHAR( 10),   ' +  
+                  '@nErrNo        INT           OUTPUT, ' +  
+                  '@cErrMsg       NVARCHAR( 20) OUTPUT  '  
+     
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nStep, @nInputKey, @cFacility, @cStorerKey,  
+                  @cReceiptKey, @cPOKey, @cRefNo, @cID, @cLOC, @cMethod, @cSKU, @nQTY,  
+                  @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,  
+                  @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,  
+                  @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,  
+                  @cRDLineNo, @nErrNo OUTPUT, @cErrMsg OUTPUT  
+     
+               IF @nErrNo <> 0  
+                  GOTO Quit  
+            END  
          END  
-      END  
   
          -- Go to ASNPO Screen  
          SET @nScn = @nScn_ASNPO  
          SET @nStep = @nStep_ASNPO  
       END  
-   END  
+
+      ELSE IF @cOption ='9' -- NO  
+      BEGIN  
+         -- Go to ASNPO Screen  
+         SET @nScn = @nScn_ASNPO  
+         SET @nStep = @nStep_ASNPO  
+      END  
+   END
+   
    IF @nInputKey = 0 -- ESC  
    BEGIN  
-  
       -- Prepare previous screen variable  
       SET @cOutField01 = @cReceiptKey  
       SET @cOutField02 = @cPOKey  
@@ -3236,9 +3309,7 @@ BEGIN
       -- Go to previous Screen  
       SET @nScn = @nScn_IDLOC  
       SET @nStep = @nStep_IDLOC  
-   END  
-  
-  
+   END    
 END  
 GOTO Quit  
   
@@ -3310,9 +3381,9 @@ BEGIN
       V_String30   = @cExtendedUpdateSP,  
       V_String31   = @cCheckSKUInASN,  
       V_String32   = @cReceiptLineNumber,  
-      V_String33   = @cFinalASN,  
+      V_String33   = @cFinalizeASN,  
       V_String34   = @cUCCUOM,  
-      V_String35   = @cDefaultCursor,  
+      -- V_String35   = @cDefaultCursor,  
       V_String36   = @cSuggestLocSP,  
       V_String38   = @cRDLineNo,  
       V_String41   = @cRefNo,  
