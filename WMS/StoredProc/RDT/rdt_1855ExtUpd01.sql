@@ -1,7 +1,3 @@
-IF EXISTS ( SELECT * FROM sys.objects WHERE  object_id = OBJECT_ID(N'[RDT].[rdt_1855ExtUpd01]') AND OBJECTPROPERTY(object_id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [RDT].[rdt_1855ExtUpd01]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,9 +13,11 @@ GO
 /*                                                                      */  
 /* Date         Author    Ver.  Purposes                                */  
 /* 2021-10-18   James     1.0   WMS-18084 Created                       */  
+/* 2022-12-15   James     1.1   WMS-21339 Add update orders status for  */
+/*                              Orders.Ecom_Single_flag = S (james01)   */
 /************************************************************************/  
   
-CREATE PROCEDURE rdt.rdt_1855ExtUpd01  
+CREATE OR ALTER PROCEDURE rdt.rdt_1855ExtUpd01  
    @nMobile        INT,
    @nFunc          INT,
    @cLangCode      NVARCHAR( 3),
@@ -73,6 +71,11 @@ BEGIN
    DECLARE @nNoOfTry          INT = 0
    DECLARE @cvbErrMsg         NVARCHAR( MAX)
    DECLARE @cRecipient        NVARCHAR( MAX)
+   DECLARE @cPickConfirmStatus   NVARCHAR( 1)
+   DECLARE @cOrderKey         NVARCHAR( 10) = ''
+   DECLARE @cOrderLineNumber  NVARCHAR( 5) = ''
+   DECLARE @curUpdOrd         CURSOR
+   DECLARE @curUpdOrdDtl      CURSOR
    
    SET @nErrNo = 0
    
@@ -80,11 +83,106 @@ BEGIN
    FROM RDT.RDTMOBREC WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
-   -- Handling transaction            
-   --SET @nTranCount = @@TRANCOUNT            
-   --BEGIN TRAN  -- Begin our own transaction            
-   --SAVE TRAN rdt_1855ExtUpd01 -- For rollback or commit only our own transaction            
-            
+
+   IF @nStep = 4
+   BEGIN
+      IF @nInputKey = 1
+      BEGIN
+         -- Handling transaction            
+         SET @nTranCount = @@TRANCOUNT            
+         BEGIN TRAN  -- Begin our own transaction            
+         SAVE TRAN rdt_1855ExtUpd01 -- For rollback or commit only our own transaction            
+
+         SET @cPickConfirmStatus = rdt.RDTGetConfig( @nFunc, 'PickConfirmStatus', @cStorerKey)  
+         IF @cPickConfirmStatus = '0'  
+            SET @cPickConfirmStatus = '5'  
+
+         SET @nErrNo = 0
+
+         SET @curUpdOrd = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+      	SELECT DISTINCT O.OrderKey
+      	FROM dbo.PICKDETAIL PD WITH (NOLOCK)
+      	JOIN dbo.TaskDetail TD WITH (NOLOCK) ON ( PD.TaskDetailKey = TD.TaskDetailKey)
+      	JOIN dbo.ORDERS O WITH (NOLOCK) ON ( PD.OrderKey = O.OrderKey)
+      	WHERE TD.TaskDetailKey = @cTaskDetailKey
+      	AND   TD.Storerkey = @cStorerKey
+      	AND   TD.[Status] = '5'
+      	AND   TD.Groupkey = @cGroupKey 
+         AND   TD.DeviceID = @cCartID 
+      	AND   PD.[Status] = @cPickConfirmStatus
+      	AND   O.Ecom_Single_flag = 'S'
+      	AND   O.[Status] < '3'
+      	ORDER BY 1
+         OPEN @curUpdOrd
+      	FETCH NEXT FROM @curUpdOrd INTO @cOrderKey
+      	WHILE @@FETCH_STATUS = 0
+      	BEGIN
+         	UPDATE dbo.ORDERS SET 
+         	   [Status] = '3', 
+         	   EditWho = SUSER_SNAME(), 
+         	   EditDate = GETDATE()
+         	WHERE OrderKey = @cOrderKey
+         	
+         	IF @@ERROR <> 0
+         	BEGIN
+               SET @nErrNo = 177309  
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UPD ORDHd Fail'  
+               GOTO RollBackTran 
+         	END
+         	
+         	SET @curUpdOrdDtl = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+         	SELECT DISTINCT PD.OrderLineNumber
+      	   FROM dbo.PICKDETAIL PD WITH (NOLOCK)
+      	   JOIN dbo.TaskDetail TD WITH (NOLOCK) ON ( PD.TaskDetailKey = TD.TaskDetailKey)
+      	   JOIN dbo.ORDERS O WITH (NOLOCK) ON ( PD.OrderKey = O.OrderKey)
+      	   WHERE TD.TaskDetailKey = @cTaskDetailKey
+      	   AND   TD.Storerkey = @cStorerKey
+      	   AND   TD.[Status] = '5'
+      	   AND   TD.Groupkey = @cGroupKey 
+            AND   TD.DeviceID = @cCartID 
+      	   AND   PD.[Status] = @cPickConfirmStatus
+      	   AND   O.Ecom_Single_flag = 'S'
+      	   AND   O.[Status] = '3' 
+      	   OPEN @curUpdOrdDtl
+      	   FETCH NEXT FROM @curUpdOrdDtl INTO @cOrderLineNumber
+      	   WHILE @@FETCH_STATUS = 0
+      	   BEGIN
+         	   UPDATE dbo.ORDERDETAIL SET 
+         	      [Status] = '3', 
+         	      EditWho = SUSER_SNAME(), 
+         	      EditDate = GETDATE()
+         	   WHERE OrderKey = @cOrderKey
+         	   AND   OrderLineNumber = @cOrderLineNumber
+         	   
+         	   IF @@ERROR <> 0
+         	   BEGIN
+                  SET @nErrNo = 177310  
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UPD ORDDt Fail'  
+                  GOTO RollBackTran 
+         	   END
+
+      	   	FETCH NEXT FROM @curUpdOrdDtl INTO @cOrderLineNumber
+      	   END
+      	   CLOSE @curUpdOrdDtl
+      	   DEALLOCATE @curUpdOrdDtl
+      	   
+      	   FETCH NEXT FROM @curUpdOrd INTO @cOrderKey
+         END
+
+         COMMIT TRAN rdt_1855ExtUpd01
+
+         GOTO Commit_Tran
+
+         RollBackTran:
+            ROLLBACK TRAN rdt_1855ExtUpd01 -- Only rollback change made here
+         Commit_Tran:
+            WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+               COMMIT TRAN
+         
+         GOTO Quit
+      END
+   END
+
    IF @nStep = 7
    BEGIN
       IF @nInputKey = 1
@@ -302,17 +400,6 @@ BEGIN
       END
    END
 
-
-      
-   --COMMIT TRAN rdt_1855ExtUpd01
-
-   --GOTO Commit_Tran
-
-   --RollBackTran:
-   --   ROLLBACK TRAN rdt_1855ExtUpd01 -- Only rollback change made here
-   --Commit_Tran:
-   --   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-   --      COMMIT TRAN
    Quit:               
    IF @nErrNo <> 0
       SET @nErrNo = -1

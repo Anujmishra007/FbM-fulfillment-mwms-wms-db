@@ -10,6 +10,10 @@ execute rdt.rdtAddMsg 177306, 10, '177306 SendEmailErrl',   'us_english', 1855
 execute rdt.rdtAddMsg 177307, 10, '177307 WCS Send Fail',   'us_english', 1855
 execute rdt.rdtAddMsg 177308, 10, '177308 UPD TL2 Fail ',   'us_english', 1855
 
+-- WMS-21339
+execute rdt.rdtAddMsg 177309, 10, '177309 UPD ORDHd Err',   'us_english', 1855
+execute rdt.rdtAddMsg 177310, 10, '177310 UPD ORDDt Err',   'us_english', 1855
+
 SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE Message_ID BETWEEN 177301 AND 177350
 
 
