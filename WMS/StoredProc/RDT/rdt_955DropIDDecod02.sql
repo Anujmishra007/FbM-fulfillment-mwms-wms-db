@@ -11,6 +11,7 @@ GO
 /*                                                                      */
 /* Date        Rev  Author      Purposes                                */
 /* 14-10-2021  1.0  Chermaine   WMS-18009.Created                       */
+/* 06-12-2022  1.1  James       WMS-20758 Duplicate dropid chk (james01)*/
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_955DropIDDecod02
@@ -56,7 +57,11 @@ BEGIN
    DECLARE  @cBarcode         NVARCHAR( 60),
             @cCartonBarcode   NVARCHAR( 60),
             @cMstQTY          NVARCHAR( 5),
-            @cLottable09Label NVARCHAR(20)
+            @cLottable09Label NVARCHAR(20),
+            @cPH_OrderKey     NVARCHAR( 10),  
+            @cPH_LoadKey      NVARCHAR( 10),  
+            @cZone            NVARCHAR( 18),
+            @nIsDropIdExists  INT = 0
 
            
    SELECT 
@@ -99,6 +104,57 @@ BEGIN
             IF ISNULL( @cCartonBarcode, '') <> ''
             BEGIN
                SET @cDropID = @cCartonBarcode
+
+               -- (james01)
+               SELECT 
+                  @cZone = Zone, 
+                  @cPH_OrderKey = OrderKey, 
+                  @cPH_LoadKey = ExternOrderKey          
+               FROM dbo.PickHeader WITH (NOLOCK)     
+               WHERE PickHeaderKey = @cPickSlipNo   
+               
+               If ISNULL(@cZone, '') = 'XD' OR ISNULL(@cZone, '') = 'LB' OR ISNULL(@cZone, '') = 'LP' OR ISNULL(@cZone, '') = '7'    
+               BEGIN
+                  IF EXISTS ( SELECT 1    
+                  FROM dbo.PickDetail PD WITH (NOLOCK)   
+                  JOIN RefKeyLookup RPL WITH (NOLOCK) ON (RPL.PickDetailKey = PD.PickDetailKey)  
+                  JOIN dbo.LotAttribute LA WITH (NOLOCK) ON (PD.LOT = LA.LOT)      
+                  WHERE RPL.PickslipNo = @cPickSlipNo      
+                  AND   PD.DropID = @cDropID)
+                     SET @nIsDropIdExists = 1
+               END
+               ELSE  -- discrete picklist    
+               BEGIN    
+                  IF ISNULL(@cPH_OrderKey, '') <> ''    
+                  BEGIN  
+                     IF EXISTS ( SELECT 1    
+                     FROM dbo.PickHeader PH WITH (NOLOCK)     
+                     JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PH.OrderKey = PD.OrderKey)    
+                     JOIN dbo.LotAttribute LA WITH (NOLOCK) ON (PD.LOT = LA.LOT)    
+                     WHERE PH.PickHeaderKey = @cPickSlipNo    
+                     AND   PD.DropID = @cDropID)           
+                        SET @nIsDropIdExists = 1
+                  END  
+                  ELSE  
+                  BEGIN  
+                     IF EXISTS( SELECT 1    
+                     FROM dbo.PickHeader PH WITH (NOLOCK)       
+                     JOIN dbo.LoadPlanDetail LPD WITH (NOLOCK) ON (PH.ExternOrderKey = LPD.LoadKey)  
+                     JOIN dbo.PickDetail PD WITH (NOLOCK) ON (LPD.OrderKey = PD.OrderKey)      
+                     JOIN dbo.LotAttribute LA WITH (NOLOCK) ON (PD.LOT = LA.LOT)      
+                     WHERE PH.PickHeaderKey = @cPickSlipNo    
+                     AND   PD.DropID = @cDropID)           
+                        SET @nIsDropIdExists = 1
+                  END  
+               END    
+   
+               IF @nIsDropIdExists = 1
+               BEGIN
+         		   SET @nErrNo = 177155 
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DropID Exists
+                  GOTO Quit
+               END
+                
                GOTO Quit
             END
          END
