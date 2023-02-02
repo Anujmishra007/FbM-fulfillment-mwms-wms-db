@@ -15,6 +15,7 @@ GO
 /* 2018-03-14  1.0  James    WMS-2605 Created                           */
 /* 2019-07-05  1.1  James    WMS-9487 Add display RcpDtl.Notes (james01)*/
 /* 2022-09-08  1.2  Ung      WMS-20348 Expand RefNo to 60 chars         */
+/* 2023-02-02  1.3  Ung      WMS-21532 Support for auto finalize        */
 /************************************************************************/    
 
 CREATE OR ALTER PROC [RDT].[rdt_608ExtInfo02] (    
@@ -95,27 +96,25 @@ BEGIN
       END
    END
 
-   IF @nStep = 2
+   IF (@nStep = 2 AND @nInputKey = 0) OR                    -- TOLOC/TOID, ESC
+      (@nStep = 4 AND @nInputKey = 1 AND @nAfterStep = 1)   -- SKU/QTY, ENTER, ASN/PO
    BEGIN
-      IF @nInputKey = 0
+      IF NOT EXISTS ( SELECT 1 FROM dbo.ReceiptDetail WITH (NOLOCK)
+                        WHERE ReceiptKey = @cReceiptKey
+                        AND   FinalizeFlag = 'N')
       BEGIN
-         IF NOT EXISTS ( SELECT 1 FROM dbo.ReceiptDetail WITH (NOLOCK)
-                           WHERE ReceiptKey = @cReceiptKey
-                           AND   FinalizeFlag = 'N')
+         SET @cErrMsg01 = rdt.rdtgetmessage( 123401, @cLangCode, 'DSP') --RETURN FINALIZED
+         SET @cErrMsg02 = rdt.rdtgetmessage( 123402, @cLangCode, 'DSP') --SUCESSFULLY
+
+         SET @nErrNo = 0
+         EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, 
+         @cErrMsg01, @cErrMsg02
+
+         IF @nErrNo = 1
          BEGIN
-            SET @cErrMsg01 = rdt.rdtgetmessage( 123401, @cLangCode, 'DSP') --RETURN FINALIZED
-            SET @cErrMsg02 = rdt.rdtgetmessage( 123402, @cLangCode, 'DSP') --SUCESSFULLY
-
+            SET @cErrMsg01 = ''
+            SET @cErrMsg02 = ''
             SET @nErrNo = 0
-            EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, 
-            @cErrMsg01, @cErrMsg02
-
-            IF @nErrNo = 1
-            BEGIN
-               SET @cErrMsg01 = ''
-               SET @cErrMsg02 = ''
-               SET @nErrNo = 0
-            END
          END
       END
    END
