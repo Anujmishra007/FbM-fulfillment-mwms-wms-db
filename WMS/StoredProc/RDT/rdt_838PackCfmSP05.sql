@@ -42,6 +42,9 @@ BEGIN
    DECLARE @cPickStatus  NVARCHAR(1)
    DECLARE @cPackConfirm NVARCHAR(1)
    DECLARE @cShipperKey NVARCHAR(20)
+   DECLARE @cTransmitLogKey      NVARCHAR( 10)
+   DECLARE @c_QCmdClass          NVARCHAR(10)   = ''   
+   DECLARE @b_Debug        INT
 
    SET @cOrderKey = ''
    SET @cLoadKey = ''
@@ -341,7 +344,26 @@ BEGIN
             ,@c_errmsg           = @cErrMsg     OUTPUT        
   
          IF @bSuccess <> 1      
-            GOTO RollBackTran  
+            GOTO RollBackTran 
+            
+         SELECT @cTransmitLogKey = transmitlogkey
+         FROM dbo.TRANSMITLOG2 WITH (NOLOCK)
+         WHERE tablename = 'WSSHIPINFOSGW'
+            AND   key1 = @cLoadKey
+            AND   key2 = ''
+            AND   key3 = @cStorerkey
+            
+         EXEC dbo.isp_QCmd_WSTransmitLogInsertAlert 
+            @c_QCmdClass         = @c_QCmdClass, 
+            @c_FrmTransmitlogKey = @cTransmitLogKey, 
+            @c_ToTransmitlogKey  = @cTransmitLogKey, 
+            @b_Debug             = @b_Debug, 
+            @b_Success           = @bSuccess    OUTPUT, 
+            @n_Err               = @nErrNo      OUTPUT, 
+            @c_ErrMsg            = @cErrMsg     OUTPUT 
+
+         IF @bSuccess <> 1    
+            GOTO RollBackTran
       END
    END
 
