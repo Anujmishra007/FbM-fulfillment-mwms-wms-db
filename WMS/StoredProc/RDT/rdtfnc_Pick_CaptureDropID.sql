@@ -19,6 +19,7 @@ GO
 /* 16-08-2021   1.3  yeekung    WMS17675 add extendedvalidate in step_dropid  */  
 /*                              (yeekung01)                                   */  
 /* 26-10-2021   1.4  Chermaine  WMS-18009 clear @cDropID after st1 (cc01)     */
+/* 22-09-2022   1.5  James      WMS-20758 Add FlowThruStepSP (james01)        */
 /******************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pick_CaptureDropID] (  
@@ -151,7 +152,10 @@ DECLARE
    @cDropIDBarcode         NVARCHAR( 60),  
    @cAutoScanIn            NVARCHAR( 1),  -- (yeekung01)  
    @cMultiSKUBarcode       NVARCHAR( 3),     
-  
+   @cFlowThruStepSP        NVARCHAR( 20),    
+   @nToScn                 INT,
+   @nToStep                INT,
+   
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),  
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),  
    @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),  
@@ -247,7 +251,8 @@ SELECT
    @cPickConfirm_SP       = V_String29,  
    @cAutoScanIn           = V_String30,  
    @cMultiSKUBarcode      = V_String31,  
-  
+   @cFlowThruStepSP       = V_String32,
+      
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,  
@@ -353,7 +358,11 @@ BEGIN
    SET @cMultiSKUBarcode = rdt.RDTGetConfig( @nFunc, 'MultiSKUBarcode', @cStorer)      
   
    SET @cAutoScanIn = rdt.rdtGetConfig( @nFunc, 'AutoScanIn', @cStorer)    
-  
+
+   SET @cFlowThruStepSP = rdt.rdtGetConfig( @nFunc, 'FlowThruStepSP', @cStorer)    
+   IF @cFlowThruStepSP = '0'    
+      SET @cFlowThruStepSP = ''  
+      
    -- Set pick type  
    SET @cPickType = 'S'  
   
@@ -1629,16 +1638,90 @@ BEGIN
         
       IF @nPQTY = @nTaskQTY  
       BEGIN  
-         HERE:  
-         SET @nDropID_Cnt = 0  
-         SET @cOutField01 = CAST( @nDropID_Cnt AS NVARCHAR( 3)) + '/' + CAST( @nActPQty AS NVARCHAR( 3))  
-         SET @cOutField02 = ''  
-         SET @cDropID = ''  
+         IF @cFlowThruStepSP <> ''    
+         BEGIN    
+            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cFlowThruStepSP AND type = 'P')    
+            BEGIN    
+            	SET @nErrNo = 0
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cFlowThruStepSP) +    
+                  ' @nMobile, @nFunc, @cLangCode, @nScn, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +    
+                  ' @cPickSlipNo, @cLOC, @cID, @cSKU, @cUOM, @nQTY, @cDropID, ' + 
+                  ' @cInField01 OUTPUT, @cInField02 OUTPUT, @cInField03 OUTPUT, @cInField04 OUTPUT, @cInField05 OUTPUT, ' + 
+                  ' @cInField06 OUTPUT, @cInField07 OUTPUT, @cInField08 OUTPUT, @cInField09 OUTPUT, @cInField10 OUTPUT, ' +
+                  ' @cInField11 OUTPUT, @cInField12 OUTPUT, @cInField13 OUTPUT, @cInField14 OUTPUT, @cInField15 OUTPUT, ' +
+                  ' @nToScn OUTPUT, @nToStep OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '    
+               SET @cSQLParam =    
+                  ' @nMobile      INT,           ' +    
+                  ' @nFunc        INT,           ' +    
+                  ' @cLangCode    NVARCHAR( 3),  ' +    
+                  ' @nScn         INT,           ' +    
+                  ' @nStep        INT,           ' +
+                  ' @nInputKey    INT,           ' +    
+                  ' @cFacility    NVARCHAR( 5) , ' +    
+                  ' @cStorerKey   NVARCHAR( 15), ' +    
+                  ' @cPickSlipNo  NVARCHAR( 10), ' +    
+                  ' @cLOC         NVARCHAR( 10), ' +
+                  ' @cID          NVARCHAR( 10), ' +
+                  ' @cSKU         NVARCHAR( 20), ' +    
+                  ' @cUOM         NVARCHAR( 10), ' +
+                  ' @nQTY         INT, ' +
+                  ' @cDropID      NVARCHAR( 20), ' +
+                  ' @cInField01   NVARCHAR( 60) OUTPUT,  ' +
+                  ' @cInField02   NVARCHAR( 60) OUTPUT,  ' +
+                  ' @cInField03   NVARCHAR( 60) OUTPUT,  ' +
+                  ' @cInField04   NVARCHAR( 60) OUTPUT,  ' +
+                  ' @cInField05   NVARCHAR( 60) OUTPUT,  ' +
+                  ' @cInField06   NVARCHAR( 60) OUTPUT,  ' +
+                  ' @cInField07   NVARCHAR( 60) OUTPUT,  ' +
+                  ' @cInField08   NVARCHAR( 60) OUTPUT,  ' +
+                  ' @cInField09   NVARCHAR( 60) OUTPUT,  ' +
+                  ' @cInField10   NVARCHAR( 60) OUTPUT,  ' +
+                  ' @cInField11   NVARCHAR( 60) OUTPUT,  ' +
+                  ' @cInField12   NVARCHAR( 60) OUTPUT,  ' +
+                  ' @cInField13   NVARCHAR( 60) OUTPUT,  ' +
+                  ' @cInField14   NVARCHAR( 60) OUTPUT,  ' +
+                  ' @cInField15   NVARCHAR( 60) OUTPUT,  ' +
+                  ' @nToScn       INT           OUTPUT,  ' +    
+                  ' @nToStep      INT           OUTPUT,  ' +
+                  ' @nErrNo       INT           OUTPUT, ' +    
+                  ' @cErrMsg      NVARCHAR(250) OUTPUT  '    
+    
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
+                  @nMobile, @nFunc, @cLangCode, @nScn, @nStep, @nInputKey, @cFacility, @cStorer,    
+                  @cPickSlipNo, @cLOC, @cID, @cSKU, @cUOM, @nQTY, @cDropID,  
+                  @cInField01 OUTPUT, @cInField02 OUTPUT, @cInField03 OUTPUT, @cInField04 OUTPUT, @cInField05 OUTPUT, 
+                  @cInField06 OUTPUT, @cInField07 OUTPUT, @cInField08 OUTPUT, @cInField09 OUTPUT, @cInField10 OUTPUT, 
+                  @cInField11 OUTPUT, @cInField12 OUTPUT, @cInField13 OUTPUT, @cInField14 OUTPUT, @cInField15 OUTPUT, 
+                  @nToScn OUTPUT, @nToStep OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT     
+
+               IF @nErrNo > 0     
+                  GOTO Quit    
+
+               SET @nDropID_Cnt = 0  
+               SET @cOutField01 = CAST( @nDropID_Cnt AS NVARCHAR( 3)) + '/' + CAST( @nActPQty AS NVARCHAR( 3))  
+               SET @cOutField02 = ''  
+               SET @cDropID = ''  
   
-         SET @nScn = @nScn_DropID  
-         SET @nStep = @nStep_DropID  
+               SET @nScn = @nToScn  
+               SET @nStep = @nToStep
+               
+               IF @nErrNo <> -1
+               	GOTO Step_DropID
+            END    
+         END    
+         ELSE
+         BEGIN
+            HERE:  
+            SET @nDropID_Cnt = 0  
+            SET @cOutField01 = CAST( @nDropID_Cnt AS NVARCHAR( 3)) + '/' + CAST( @nActPQty AS NVARCHAR( 3))  
+            SET @cOutField02 = ''  
+            SET @cDropID = ''  
   
-         GOTO Quit  
+            SET @nScn = @nScn_DropID  
+            SET @nStep = @nStep_DropID  
+  
+            GOTO Quit
+         END  
       END  
    END  
   
@@ -3108,6 +3191,7 @@ BEGIN
       V_String29     = @cPickConfirm_SP,  
       V_String30     = @cAutoScanIn,  
       V_String31     = @cMultiSKUBarcode,  
+      V_String32     = @cFlowThruStepSP,
   
       I_Field01 = '',  O_Field01 = @cOutField01,  
       I_Field02 = '',  O_Field02 = @cOutField02,  
