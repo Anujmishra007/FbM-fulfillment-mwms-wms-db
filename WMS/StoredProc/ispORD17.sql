@@ -20,6 +20,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
+/* 20230202 	ian(1.0) 1.0  amend storerky to storerkey				      */		
 /************************************************************************/
 
 CREATE OR ALTER PROC ispORD17   
@@ -54,7 +55,7 @@ BEGIN
       SELECT TOP 1 @c_DupExternOrderkey = O.ExternOrderkey
       FROM #INSERTED I 
       JOIN ORDERS O (NOLOCK) ON I.Orderkey = O.Orderkey
-      LEFT JOIN ORDERS O2 (NOLOCK) ON O.ExternOrderkey = O2.ExternOrderkey AND O.Storerkey = O2.Storerky AND O.Orderkey <> O2.Orderkey 
+      LEFT JOIN ORDERS O2 (NOLOCK) ON O.ExternOrderkey = O2.ExternOrderkey AND O.Storerkey = O2.Storerkey AND O.Orderkey <> O2.Orderkey   --ian1.0
       WHERE O.Storerkey = @c_Storerkey
       AND O.ExternOrderkey NOT LIKE '%SY%'
       AND O2.ExternOrderkey IS NOT NULL
