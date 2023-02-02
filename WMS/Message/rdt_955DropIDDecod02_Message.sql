@@ -6,4 +6,7 @@ EXECUTE rdt.rdtAddMsg 177152, 10, '177152^CaseSSCCErr  ',  'us_english', 955
 execute rdt.rdtAddMsg 177153, 10, '177153^CaseSSCCErr  ',  'us_english', 955
 execute rdt.rdtAddMsg 177154, 10, '177154^ScanCaseSSCC ',  'us_english', 955
 
+--WMS-20758
+execute rdt.rdtAddMsg 177155, 10, '177155^DropIDExists ',  'us_english', 955
+
 SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 177151 AND 177200
