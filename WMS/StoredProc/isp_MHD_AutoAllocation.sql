@@ -25,6 +25,7 @@ GO
 /* 04-APR-2022  NJOW01  1.0   DEVOPS Combine Script                        */          
 /* 27-JUL-2022  NJOW02  1.1   WMS-20340 auto-allocate based on delivery    */
 /*                            date                                         */
+/* 09-SEP-2022  CHONGCS 1.2   WMS-20585 add auto print (CS01)              */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_MHD_AutoAllocation]
 AS
@@ -66,6 +67,8 @@ BEGIN
            ,@d_MaxDelivery_Date   DATETIME  --NJOW02
            ,@n_NoOfDeliveryDay    INT = 0--NJOW02
            ,@n_DayCnt             INT = 0 --NJOW02
+           ,@c_DELNOTE_DW         NVARCHAR(50)    --CS01
+           ,@c_DNPRNUserName      NVARCHAR(128)   --CS01 
 
    SELECT @b_Success=1, @n_Err=0, @c_ErrMsg='', @n_Continue = 1, @n_StartTranCount=@@TRANCOUNT
    
@@ -74,27 +77,27 @@ BEGIN
   
    IF @n_continue IN(1,2)  --NJOW02
    BEGIN
-   	 IF EXISTS(SELECT 1 
-   	           FROM HOLIDAYHEADER H (NOLOCK)
-   	           JOIN HOLIDAYDETAIL HD (NOLOCK) ON H.Holidaykey = HD.Holidaykey
-   	           WHERE H.Userdefine01 = 'MHD_AUTOALLOCATE'
-   	           AND DATEDIFF(Day, HD.HolidayDate, GetDate()) = 0) 
-   	    --OR DATEPART(WEEKDAY, GETDATE()) IN (1,7)          	          
-   	 BEGIN
-   	 	 GOTO QUIT_SP
-   	 END   	           
-   	 
+       IF EXISTS(SELECT 1 
+                 FROM HOLIDAYHEADER H (NOLOCK)
+                 JOIN HOLIDAYDETAIL HD (NOLOCK) ON H.Holidaykey = HD.Holidaykey
+                 WHERE H.Userdefine01 = 'MHD_AUTOALLOCATE'
+                 AND DATEDIFF(Day, HD.HolidayDate, GetDate()) = 0) 
+          --OR DATEPART(WEEKDAY, GETDATE()) IN (1,7)                     
+       BEGIN
+          GOTO QUIT_SP
+       END                
+       
      SELECT TOP 1 @n_NoOfDeliveryDay = CASE WHEN ISNUMERIC(H.Userdefine02) = 1 THEN CAST(H.Userdefine02 AS INT) ELSE 0 END
-   	 FROM HOLIDAYHEADER H (NOLOCK)
-   	 WHERE H.Userdefine01 = 'MHD_AUTOALLOCATE'
-   	 ORDER BY H.Holidaykey
-   	 
-   	 IF ISNULL(@n_NoOfDeliveryDay,0) = 0
-   	    SET @n_NoOfDeliveryDay = 2   	    	 
+       FROM HOLIDAYHEADER H (NOLOCK)
+       WHERE H.Userdefine01 = 'MHD_AUTOALLOCATE'
+       ORDER BY H.Holidaykey
+       
+       IF ISNULL(@n_NoOfDeliveryDay,0) = 0
+          SET @n_NoOfDeliveryDay = 2             
    END
   
    IF @n_continue IN(1,2)
-   BEGIN   	
+   BEGIN    
       SET @c_Storerkey = 'MHD'
       SET @c_UserName = 'MHDALPRN'
       SET @c_AllocateFull_DW = 'r_dw_autoalloc_full'
@@ -119,14 +122,14 @@ BEGIN
       BEGIN
          IF DATEPART(WEEKDAY, GETDATE() + @n_DayCnt) IN (2,3,4,5,6) AND 
             NOT EXISTS (SELECT 1 
-   	                    FROM HOLIDAYHEADER H (NOLOCK)
-   	                    JOIN HOLIDAYDETAIL HD (NOLOCK) ON H.Holidaykey = HD.Holidaykey
-   	                    WHERE H.Userdefine01 = 'MHD_AUTOALLOCATE'
-   	                    AND DATEDIFF(Day, HD.HolidayDate, GetDate() + @n_DayCnt) = 0)  --workday
-   	     BEGIN
-   	     	  SET @d_MaxDelivery_Date = GETDATE() + @n_DayCnt
-   	     	  SET @n_NoOfDeliveryDay =  @n_NoOfDeliveryDay - 1
-   	     END                
+                          FROM HOLIDAYHEADER H (NOLOCK)
+                          JOIN HOLIDAYDETAIL HD (NOLOCK) ON H.Holidaykey = HD.Holidaykey
+                          WHERE H.Userdefine01 = 'MHD_AUTOALLOCATE'
+                          AND DATEDIFF(Day, HD.HolidayDate, GetDate() + @n_DayCnt) = 0)  --workday
+           BEGIN
+              SET @d_MaxDelivery_Date = GETDATE() + @n_DayCnt
+              SET @n_NoOfDeliveryDay =  @n_NoOfDeliveryDay - 1
+           END                
          
          SET @n_DayCnt = @n_DayCnt + 1
       END                                         
@@ -140,10 +143,10 @@ BEGIN
       AND DATEDIFF(Day, O.DeliveryDate, @d_MaxDelivery_Date) >= 0 --NJOW02
       AND DATEPART(WEEKDAY, O.DeliveryDate) IN (2,3,4,5,6) --Must be weekday NJOW02
       AND NOT EXISTS (SELECT 1 
-   	                  FROM HOLIDAYHEADER H (NOLOCK)
-   	                  JOIN HOLIDAYDETAIL HD (NOLOCK) ON H.Holidaykey = HD.Holidaykey
-   	                  WHERE H.Userdefine01 = 'MHD_AUTOALLOCATE'
-   	                  AND DATEDIFF(Day, HD.HolidayDate, O.DeliveryDate) = 0) --Exclude public holiday NJOW02
+                        FROM HOLIDAYHEADER H (NOLOCK)
+                        JOIN HOLIDAYDETAIL HD (NOLOCK) ON H.Holidaykey = HD.Holidaykey
+                        WHERE H.Userdefine01 = 'MHD_AUTOALLOCATE'
+                        AND DATEDIFF(Day, HD.HolidayDate, O.DeliveryDate) = 0) --Exclude public holiday NJOW02
       ORDER BY O.Priority, O.Orderkey   
       
       IF (SELECT COUNT(1) FROM #TMP_ORD) > 0
@@ -178,17 +181,17 @@ BEGIN
       
       WHILE @@FETCH_STATUS <> -1  AND @n_continue IN(1,2)
       BEGIN                             
-      	  --update batch no to order                   
-      	  UPDATE ORDERS WITH (ROWLOCK)
-      	  SET Userdefine01 = @c_BatchNo,
-      	      Trafficcop = NULL
-      	  WHERE Orderkey = @c_Orderkey
-      	  
-      	  SET @n_err = @@ERROR
-      	  
-      	  IF @n_err <> 0
-      	  BEGIN
-      	     SELECT @n_continue = 3
+           --update batch no to order                   
+           UPDATE ORDERS WITH (ROWLOCK)
+           SET Userdefine01 = @c_BatchNo,
+               Trafficcop = NULL
+           WHERE Orderkey = @c_Orderkey
+           
+           SET @n_err = @@ERROR
+           
+           IF @n_err <> 0
+           BEGIN
+              SELECT @n_continue = 3
              SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 63200
              SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Order Table Failed! (isp_MHD_AutoAllocation)' + ' ( '
                             + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
@@ -228,12 +231,12 @@ BEGIN
             IF @b_Success <> 1
                SET @n_continue = 3    
             
-      	     INSERT INTO LoadPlan(LoadKey, Facility, UserDefine10)
+              INSERT INTO LoadPlan(LoadKey, Facility, UserDefine10)
                VALUES(@c_LoadKey, @c_Facility, @c_BatchNo)
             
-      	     IF @n_err <> 0
-      	     BEGIN
-      	        SELECT @n_continue = 3
+              IF @n_err <> 0
+              BEGIN
+                 SELECT @n_continue = 3
                SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 63200
                SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Insert LoadPlan Table Failed! (isp_MHD_AutoAllocation)' + ' ( '
                               + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
@@ -295,9 +298,9 @@ BEGIN
             IF @b_Success <> 1
                SET @n_continue = 3        
          END
-            	    	
+                     
          FETCH NEXT FROM CUR_ORD INTO @c_Orderkey, @c_Facility, @c_Loadkey
-      END       	
+      END         
       CLOSE CUR_ORD
       DEALLOCATE CUR_ORD
    END
@@ -356,7 +359,7 @@ BEGIN
     FETCH NEXT FROM CUR_PICKSLIP INTO @c_Loadkey, @c_Facility
                                                                                        
     WHILE @@FETCH_STATUS <> -1                                
-    BEGIN                        	 
+    BEGIN                            
         EXEC isp_PrintToRDTSpooler 
            @c_ReportType     = 'PLISTN',
            @c_Storerkey      = @c_Storerkey,
@@ -372,12 +375,62 @@ BEGIN
            @c_IsPaperPrinter = 'Y', 
            @c_JobType        = 'TCPSPOOLER',
            @n_Function_ID    = 999
-       	 
-       FETCH NEXT FROM CUR_PICKSLIP INTO @c_Loadkey, @c_Facility                      	                                                          
+          
+       FETCH NEXT FROM CUR_PICKSLIP INTO @c_Loadkey, @c_Facility                                                                                 
     END
     CLOSE CUR_PICKSLIP
     DEALLOCATE CUR_PICKSLIP    
-    	
+
+    --CS01 S
+   --Print delivery note   
+
+    SET @c_DNPRNUserName = 'MHDDNPRN'
+
+    SELECT TOP 1 @c_DELNOTE_DW = PB_Datawindow
+      FROM RCMREPORT (NOLOCK)
+      WHERE Storerkey = @c_Storerkey
+      AND ReportType = 'DELNOTECTN'
+      ORDER BY EditDate DESC
+      
+      IF ISNULL(@c_DELNOTE_DW,'') = ''
+         SET @c_DELNOTE_DW = 'r_dw_delivery_note60'
+
+   DECLARE CUR_DN CURSOR LOCAL FAST_FORWARD READ_ONLY FOR   
+      SELECT DISTINCT O.OrderKey, O.Facility
+      FROM #TMP_ORD TM
+      JOIN ORDERS O (NOLOCK) ON TM.Orderkey = O.Orderkey
+      AND O.Status = '2'
+      ORDER BY O.OrderKey
+   
+    OPEN CUR_DN                                                                       
+                                                                                       
+    FETCH NEXT FROM CUR_DN INTO @c_Orderkey, @c_Facility
+                                                                                       
+    WHILE @@FETCH_STATUS <> -1                                
+    BEGIN                            
+        EXEC isp_PrintToRDTSpooler 
+           @c_ReportType     = 'DELNOTECTN',
+           @c_Storerkey      = @c_Storerkey,
+           @b_success        = @b_Success OUTPUT,
+           @n_err            = @n_err OUTPUT,
+           @c_errmsg         = @c_errmsg OUTPUT,
+           @n_Noofparam      = 1,
+           @c_Param01        = @c_Orderkey,        
+           @c_UserName       = @c_DNPRNUserName,
+           @c_Facility       = @c_Facility,
+           @c_PrinterID      = '',
+           @c_Datawindow     = @c_DELNOTE_DW,
+           @c_IsPaperPrinter = 'Y', 
+           @c_JobType        = 'TCPSPOOLER',
+           @n_Function_ID    = 999
+          
+       FETCH NEXT FROM CUR_DN INTO @c_Orderkey, @c_Facility                                                                                   
+    END
+    CLOSE CUR_DN
+    DEALLOCATE CUR_DN  
+
+    --CS01 E
+      
    QUIT_SP:
 
    IF @n_continue = 3  -- Error Occured - Process And Return
