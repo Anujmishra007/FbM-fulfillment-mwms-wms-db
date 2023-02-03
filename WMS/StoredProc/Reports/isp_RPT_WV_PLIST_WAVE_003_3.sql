@@ -13,15 +13,16 @@ GO
 /*                                                                         */
 /* Called By: RPT_WV_PLIST_WAVE_003_3                                      */
 /*                                                                         */
-/* GitLab Version: 1.0                                                     */
+/* GitLab Version: 1.1                                                     */
 /*                                                                         */
-/* Version: 1.0                                                            */
+/* Version: 1.1                                                            */
 /*                                                                         */
 /* Data Modifications:                                                     */
 /*                                                                         */
 /* Updates:                                                                */
 /* Date         Author      Ver. Purposes                                  */
 /* 24-Jan-2022  WLChooi     1.0  DevOps Combine Script                     */
+/* 03-Feb-2023  WLChooi     1.1  Bug Fix - Trim SKU (WL01)                 */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_RPT_WV_PLIST_WAVE_003_3]
       @c_WaveKey       NVARCHAR(10)
@@ -41,7 +42,7 @@ BEGIN
           Wave.AddDate,
           WAVE.WaveKey,
           PICKDETAIL.LOC,
-          PICKDETAIL.SKU,
+          TRIM(PICKDETAIL.SKU) AS SKU,   --WL01
           SKU.DESCR,
           PACK.CaseCnt,
           PICKDETAIL.Qty,
