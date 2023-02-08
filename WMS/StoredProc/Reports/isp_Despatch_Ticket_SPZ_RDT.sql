@@ -1,7 +1,3 @@
-IF EXISTS (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_Despatch_Ticket_SPZ_RDT]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[isp_Despatch_Ticket_SPZ_RDT]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -25,8 +21,9 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author    Ver.  Purposes                                */  
+/* 2023-01-03   mingle    1.1   WMS-21381 - Add oh.type(ML01)           */
 /************************************************************************/  
-CREATE PROC [dbo].[isp_Despatch_Ticket_SPZ_RDT] (  
+CREATE OR ALTER PROC [dbo].[isp_Despatch_Ticket_SPZ_RDT] (  
       @c_Pickslipno   NVARCHAR(10)  
 )  
 AS  
@@ -51,6 +48,7 @@ BEGIN
         , CASE WHEN TRIM(ISNULL(OH.DocType,'')) = ''
                THEN 'N'
                ELSE TRIM(ISNULL(OH.DocType,'')) END AS DocType
+        , OH.[Type]	--ML01
    FROM ORDERS OH (NOLOCK)
    WHERE OH.OrderKey = @c_Orderkey
 
