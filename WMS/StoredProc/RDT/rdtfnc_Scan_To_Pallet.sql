@@ -31,6 +31,7 @@ GO
 /* 2022-05-26 1.9  James      WMS-19694 Add CapturePackInfoSP (james04) */
 /*                            Add ExtendedValidateSP at step 1          */
 /* 2022-10-17 2.0  yeekung    WMS-20927. Fixed paper to paper (yeekung01)  */ 
+/* 2023-01-12 2.1  James      WMS-21135 Bug fix on extinfo @st1(james05)*/
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Scan_To_Pallet] (
@@ -416,6 +417,7 @@ BEGIN
          SET @cOutField02 = ''   -- Case ID
          SET @cOutField03 = ''   -- Case ID
          SET @cOutField04 = @nTotalCases   -- # OF Case ID
+         SET @cOutField15 = ''   -- (james05)
          SET @cCaseID = ''
 
          -- Go to next screen
