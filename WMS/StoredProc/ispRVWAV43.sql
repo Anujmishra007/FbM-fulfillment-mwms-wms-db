@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispRVWAV43]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispRVWAV43]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,7 +12,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -27,9 +22,12 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2021-07-15  Wan      1.0   Created.                                  */
 /* 2021-09-28  Wan      1.0   DevOps Combine Script.                    */
+/* 2021-11-17  Wan01    1.1   Update TMRelaseFlag to 'R' to prevent     */
+/*                            ReReverse & ReRelease before their process*/
+/*                            End                                       */
 /************************************************************************/
 
-CREATE PROC [dbo].[ispRVWAV43]
+CREATE OR ALTER PROC [dbo].[ispRVWAV43]
    @c_Wavekey     NVARCHAR(10) 
 ,  @c_Orderkey    NVARCHAR(10)   = ''
 ,  @b_Success     INT            = 1   OUTPUT
@@ -73,6 +71,23 @@ BEGIN
    WHERE w.WaveKey = @c_Wavekey
    ORDER BY w.WaveDetailKey
       
+   --(Wan01) - START
+   IF EXISTS (SELECT 1 FROM dbo.WAVE AS w (NOLOCK) WHERE w.WaveKey = @c_Wavekey AND w.TMReleaseFlag = 'R')
+   BEGIN
+      SET @n_Continue = 3
+      SET @n_Err = 69005
+      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Release/Reverse Task is in progress, TMReleaseFlag = ''R''. Reverse reject. (ispRVWAV43)'
+      GOTO QUIT_SP
+   END
+   
+   UPDATE WAVE WITH (ROWLOCK)  
+   SET TMReleaseFlag = 'R'               
+      ,Trafficcop = NULL  
+      ,EditWho = SUSER_SNAME()  
+      ,EditDate= GETDATE()  
+   WHERE Wavekey = @c_Wavekey   
+   --(Wan01) - END
+   
    INSERT INTO @t_TaskDetail (TaskDetailKey, TaskType, [Status], UOM, CaseID)
    SELECT td.TaskDetailKey, td.TaskType, td.[Status], td.UOM, td.Caseid
    FROM dbo.TaskDetail AS td (NOLOCK)
