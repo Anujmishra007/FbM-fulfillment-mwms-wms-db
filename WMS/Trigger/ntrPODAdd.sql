@@ -39,6 +39,7 @@ GO
 /* Date        Author   Ver.  Purposes                                  */  
 /* 2021-11-18  Wan01    1.0   Created.                                  */
 /* 2021-11-18  Wan01    1.0   DevOps Combine Script.                    */ 
+/* 2023-02-08  YTKuek   1.1   Add Interface Trigger (YT01)              */
 /************************************************************************/  
 CREATE TRIGGER [dbo].[ntrPODAdd]  
 ON  [dbo].[POD]  
@@ -63,7 +64,17 @@ END
          , @c_preprocess            NVARCHAR(250)   -- preprocess  
          , @c_pstprocess            NVARCHAR(250)   -- post process  
          , @n_cnt                   int     
-  
+
+   --(YT01)-S
+   DECLARE @c_StorerKey             NVARCHAR(15)  
+         , @c_MBOLKey               NVARCHAR(10)    
+         , @c_MBOLLineNumber        NVARCHAR(5)     
+
+   SET @c_StorerKey                 = ''
+   SET @c_MBOLKey                   = ''
+   SET @c_MBOLLineNumber            = ''
+   --(YT01)-E
+
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT  
      /* #INCLUDE <TRPOHA1.SQL> */  
   
@@ -113,6 +124,56 @@ END
             DROP TABLE #DELETED
       END
    END   
+
+   --(YT01)-S
+   /********************************************************/    
+   /* Interface Trigger Points Calling Process - (Start)   */    
+   /********************************************************/    
+   IF @n_continue = 1 OR @n_continue = 2     
+   BEGIN          
+      DECLARE Cur_Order_TriggerPoints CURSOR LOCAL FAST_FORWARD READ_ONLY FOR     
+      -- Extract values for required variables    
+      SELECT DISTINCT INS.Mbolkey  
+                    , INS.Mbollinenumber    
+                    , INS.StorerKey  
+      FROM  INSERTED INS   
+      JOIN  ITFTriggerConfig ITC WITH (NOLOCK) ON ITC.StorerKey = INS.StorerKey    
+      WHERE ITC.SourceTable = 'POD'    
+      AND   ITC.sValue      = '1'    
+      UNION
+      SELECT DISTINCT INS.Mbolkey  
+                    , INS.Mbollinenumber    
+                    , INS.StorerKey  
+      FROM  INSERTED INS   
+      JOIN  ITFTriggerConfig ITC WITH (NOLOCK) ON ITC.StorerKey = 'ALL'
+      WHERE ITC.SourceTable = 'POD'    
+      AND   ITC.sValue      = '1'       
+  
+      OPEN Cur_Order_TriggerPoints    
+      FETCH NEXT FROM Cur_Order_TriggerPoints INTO @c_MBOLKey, @c_MBOLLineNumber, @c_Storerkey  
+  
+      WHILE @@FETCH_STATUS <> -1    
+      BEGIN    
+         EXECUTE dbo.isp_ITF_ntrPOD     
+                  @c_TriggerName    = 'ntrPODAdd'  
+                , @c_SourceTable    = 'POD'    
+                , @c_Storerkey      = @c_Storerkey  
+                , @c_MBOLKey        = @c_MBOLKey    
+                , @c_MBOLLineNumber = @c_MBOLLineNumber    
+                , @b_ColumnsUpdated = 0      
+                , @b_Success        = @b_Success   OUTPUT    
+                , @n_err            = @n_err       OUTPUT    
+                , @c_errmsg         = @c_errmsg    OUTPUT    
+  
+         FETCH NEXT FROM Cur_Order_TriggerPoints INTO @c_MBOLKey, @c_MBOLLineNumber, @c_Storerkey  
+      END -- WHILE @@FETCH_STATUS <> -1    
+      CLOSE Cur_Order_TriggerPoints    
+      DEALLOCATE Cur_Order_TriggerPoints    
+   END -- IF @n_continue = 1 OR @n_continue = 2     
+   /********************************************************/    
+   /* Interface Trigger Points Calling Process - (End)     */    
+   /********************************************************/    
+   --(YT01)-E
    
      /* #INCLUDE <TRPOHA2.SQL> */  
    IF @n_continue=3  -- Error Occured - Process And Return  

@@ -369,563 +369,1030 @@ BEGIN
                   AND   STC.ConfigKey = 'GVTITF'  
                   AND   STC.SValue    = '1' )                       
       BEGIN  
-         --GVTEPODAPDD
-         IF EXISTS(SELECT 1 
-                   FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
-                   WHERE COLUMN_NAME IN (SELECT ColValue 
-                                         FROM dbo.fnc_DelimSplit(',', 'ActualDeliveryDate')
-                                         )
-                  )
+         IF (ISNULL(RTRIM(@c_TriggerName),'') = 'ntrPODUpdate')  
          BEGIN
+            --GVTEPODAPDD
+            IF EXISTS(SELECT 1 
+                      FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
+                      WHERE COLUMN_NAME IN (SELECT ColValue 
+                                            FROM dbo.fnc_DelimSplit(',', 'ActualDeliveryDate')
+                                            )
+                     )
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                           WHERE STC.StorerKey = @c_Storerkey   
+                           AND   STC.ConfigKey = 'GVTEPODAPDD'  
+                           AND   STC.SValue    = '1' )  
+               BEGIN  
+                  SET @c_ActualDeliveryDate = CONVERT(NVARCHAR(19),@dt_ActualDeliveryDate,120)
+
+                  EXEC ispGenGVTLog 'GVTEPODAPDD', @c_OrderKey, @c_ActualDeliveryDate, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
+  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END 
+            END
+
+            --GVTEPODAPID
+            IF EXISTS(SELECT 1 
+                      FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
+                      WHERE COLUMN_NAME IN (SELECT ColValue 
+                                            FROM dbo.fnc_DelimSplit(',', 'InvDespatchDate')
+                                            )
+                     )
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                           WHERE STC.StorerKey = @c_Storerkey   
+                           AND   STC.ConfigKey = 'GVTEPODAPID'  
+                           AND   STC.SValue    = '1' )  
+               BEGIN  
+                  SET @c_InvDespatchDate= CONVERT(NVARCHAR(19),@dt_InvDespatchDate,120)
+
+                  EXEC ispGenGVTLog 'GVTEPODAPID', @c_OrderKey, @c_InvDespatchDate, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
+  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END 
+            END
+
+            --GVTEPODAPRD
+            IF EXISTS(SELECT 1 
+                      FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
+                      WHERE COLUMN_NAME IN (SELECT ColValue 
+                                            FROM dbo.fnc_DelimSplit(',', 'PodReceivedDate')
+                                            )
+                     )
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                           WHERE STC.StorerKey = @c_Storerkey   
+                           AND   STC.ConfigKey = 'GVTEPODAPRD'  
+                           AND   STC.SValue    = '1' )  
+               BEGIN  
+                  SET @c_PodReceivedDate= CONVERT(NVARCHAR(19),@dt_PodReceivedDate,120)
+
+                  EXEC ispGenGVTLog 'GVTEPODAPRD', @c_OrderKey, @c_PodReceivedDate, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
+  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END 
+            END
+
+            --GVTEPODAPFD
+            IF EXISTS(SELECT 1 
+                      FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
+                      WHERE COLUMN_NAME IN (SELECT ColValue 
+                                            FROM dbo.fnc_DelimSplit(',', 'PodFiledDate')
+                                            )
+                     )
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                           WHERE STC.StorerKey = @c_Storerkey   
+                           AND   STC.ConfigKey = 'GVTEPODAPFD'  
+                           AND   STC.SValue    = '1' )  
+               BEGIN  
+                  SET @c_PodFiledDate= CONVERT(NVARCHAR(19),@dt_PodFiledDate,120)
+
+                  EXEC ispGenGVTLog 'GVTEPODAPFD', @c_OrderKey, @c_PodFiledDate, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
+  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END 
+            END
+
+            --GVTEPODAPCD
+            IF EXISTS(SELECT 1 
+                      FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
+                      WHERE COLUMN_NAME IN (SELECT ColValue 
+                                            FROM dbo.fnc_DelimSplit(',', 'InvCancelDate')
+                                            )
+                     )
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                           WHERE STC.StorerKey = @c_Storerkey   
+                           AND   STC.ConfigKey = 'GVTEPODAPCD'  
+                           AND   STC.SValue    = '1' )  
+               BEGIN  
+                  SET @c_InvCancelDate= CONVERT(NVARCHAR(19),@dt_InvCancelDate,120)
+
+                  EXEC ispGenGVTLog 'GVTEPODAPCD', @c_OrderKey, @c_InvCancelDate, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
+  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END 
+            END
+
+            --GVTEPODAPRL
+            IF EXISTS(SELECT 1 
+                      FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
+                      WHERE COLUMN_NAME IN (SELECT ColValue 
+                                            FROM dbo.fnc_DelimSplit(',', 'RedeliveryDate')
+                                            )
+                     )
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                           WHERE STC.StorerKey = @c_Storerkey   
+                           AND   STC.ConfigKey = 'GVTEPODAPRL'  
+                           AND   STC.SValue    = '1' )  
+               BEGIN  
+                  SET @c_RedeliveryDate= CONVERT(NVARCHAR(19),@dt_RedeliveryDate,120)
+
+                  EXEC ispGenGVTLog 'GVTEPODAPRL', @c_OrderKey, @c_RedeliveryDate, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
+  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END 
+            END
+
+            --GVTEPODAPFR
+            IF EXISTS(SELECT 1 
+                      FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
+                      WHERE COLUMN_NAME IN (SELECT ColValue 
+                                            FROM dbo.fnc_DelimSplit(',', 'FullRejectDate')
+                                            )
+                     )
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                           WHERE STC.StorerKey = @c_Storerkey   
+                           AND   STC.ConfigKey = 'GVTEPODAPFR'  
+                           AND   STC.SValue    = '1' )  
+               BEGIN  
+                  SET @c_FullRejectDate = CONVERT(NVARCHAR(19),@dt_FullRejectDate,120)
+
+                  EXEC ispGenGVTLog 'GVTEPODAPFR', @c_OrderKey, @c_FullRejectDate, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
+  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END 
+            END
+
+            --GVTEPODAPPR
+            IF EXISTS(SELECT 1 
+                      FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
+                      WHERE COLUMN_NAME IN (SELECT ColValue 
+                                            FROM dbo.fnc_DelimSplit(',', 'PartialRejectDate')
+                                            )
+                     )
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                           WHERE STC.StorerKey = @c_Storerkey   
+                           AND   STC.ConfigKey = 'GVTEPODAPPR'  
+                           AND   STC.SValue    = '1' )  
+               BEGIN  
+                  SET @c_PartialRejectDate = CONVERT(NVARCHAR(19),@dt_PartialRejectDate,120)
+
+                  EXEC ispGenGVTLog 'GVTEPODAPPR', @c_OrderKey, @c_PartialRejectDate, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
+  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END 
+            END
+
+            --GVTEPODAPPF
+            IF EXISTS(SELECT 1 
+                      FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
+                      WHERE COLUMN_NAME IN (SELECT ColValue 
+                                            FROM dbo.fnc_DelimSplit(',', 'PoisonFormDate')
+                                            )
+                     )
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                           WHERE STC.StorerKey = @c_Storerkey   
+                           AND   STC.ConfigKey = 'GVTEPODAPPF'  
+                           AND   STC.SValue    = '1' )  
+               BEGIN  
+                  SET @c_PoisonFormDate = CONVERT(NVARCHAR(19),@dt_PoisonFormDate,120)
+
+                  EXEC ispGenGVTLog 'GVTEPODAPPF', @c_OrderKey, @c_PoisonFormDate, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
+  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END 
+            END
+
+            --GVTEPODAPCQ
+            IF EXISTS(SELECT 1 
+                      FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
+                      WHERE COLUMN_NAME IN (SELECT ColValue 
+                                            FROM dbo.fnc_DelimSplit(',', 'ChequeDate')
+                                            )
+                     )
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                           WHERE STC.StorerKey = @c_Storerkey   
+                           AND   STC.ConfigKey = 'GVTEPODAPCQ'  
+                           AND   STC.SValue    = '1' )  
+               BEGIN  
+                  SET @c_ChequeDate = CONVERT(NVARCHAR(19),@dt_ChequeDate,120)
+
+                  EXEC ispGenGVTLog 'GVTEPODAPCQ', @c_OrderKey, @c_ChequeDate, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
+  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END 
+            END
+
+            --GVTEPODAPD1
+            IF EXISTS(SELECT 1 
+                      FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
+                      WHERE COLUMN_NAME IN (SELECT ColValue 
+                                            FROM dbo.fnc_DelimSplit(',', 'PODDate01')
+                                            )
+                     )
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                           WHERE STC.StorerKey = @c_Storerkey   
+                           AND   STC.ConfigKey = 'GVTEPODAPD1'  
+                           AND   STC.SValue    = '1' )  
+               BEGIN  
+                  SET @c_PODDate01 = CONVERT(NVARCHAR(19),@dt_PODDate01,120)
+
+                  EXEC ispGenGVTLog 'GVTEPODAPD1', @c_OrderKey, @c_PODDate01, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
+  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END 
+            END
+
+            --GVTEPODAPD2
+            IF EXISTS(SELECT 1 
+                      FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
+                      WHERE COLUMN_NAME IN (SELECT ColValue 
+                                            FROM dbo.fnc_DelimSplit(',', 'PODDate02')
+                                            )
+                     )
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                           WHERE STC.StorerKey = @c_Storerkey   
+                           AND   STC.ConfigKey = 'GVTEPODAPD2'  
+                           AND   STC.SValue    = '1' )  
+               BEGIN  
+                  SET @c_PODDate02 = CONVERT(NVARCHAR(19),@dt_PODDate02,120)
+
+                  EXEC ispGenGVTLog 'GVTEPODAPD2', @c_OrderKey, @c_PODDate02, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
+  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END 
+            END
+
+            --GVTEPODAPD3
+            IF EXISTS(SELECT 1 
+                      FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
+                      WHERE COLUMN_NAME IN (SELECT ColValue 
+                                            FROM dbo.fnc_DelimSplit(',', 'PODDate03')
+                                            )
+                     )
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                           WHERE STC.StorerKey = @c_Storerkey   
+                           AND   STC.ConfigKey = 'GVTEPODAPD3'  
+                           AND   STC.SValue    = '1' )  
+               BEGIN  
+                  SET @c_PODDate03 = CONVERT(NVARCHAR(19),@dt_PODDate03,120)
+
+                  EXEC ispGenGVTLog 'GVTEPODAPD3', @c_OrderKey, @c_PODDate03, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
+  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END 
+            END
+
+            --GVTEPODAPD4
+            IF EXISTS(SELECT 1 
+                      FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
+                      WHERE COLUMN_NAME IN (SELECT ColValue 
+                                            FROM dbo.fnc_DelimSplit(',', 'PODDate04')
+                                            )
+                     )
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                           WHERE STC.StorerKey = @c_Storerkey   
+                           AND   STC.ConfigKey = 'GVTEPODAPD4'  
+                           AND   STC.SValue    = '1' )  
+               BEGIN  
+                  SET @c_PODDate04 = CONVERT(NVARCHAR(19),@dt_PODDate04,120)
+
+                  EXEC ispGenGVTLog 'GVTEPODAPD4', @c_OrderKey, @c_PODDate04, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
+  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END 
+            END
+
+            --GVTEPODAPD5
+            IF EXISTS(SELECT 1 
+                      FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
+                      WHERE COLUMN_NAME IN (SELECT ColValue 
+                                            FROM dbo.fnc_DelimSplit(',', 'PODDate05')
+                                            )
+                     )
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                           WHERE STC.StorerKey = @c_Storerkey   
+                           AND   STC.ConfigKey = 'GVTEPODAPD5'  
+                           AND   STC.SValue    = '1' )  
+               BEGIN  
+                  SET @c_PODDate05 = CONVERT(NVARCHAR(19),@dt_PODDate05,120)
+
+                  EXEC ispGenGVTLog 'GVTEPODAPD5', @c_OrderKey, @c_PODDate05, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
+  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END 
+            END
+
+            --GVTEPODAPT1
+            IF EXISTS(SELECT 1 
+                      FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
+                      WHERE COLUMN_NAME IN (SELECT ColValue 
+                                            FROM dbo.fnc_DelimSplit(',', 'TrackDate01')
+                                            )
+                     )
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                           WHERE STC.StorerKey = @c_Storerkey   
+                           AND   STC.ConfigKey = 'GVTEPODAPT1'  
+                           AND   STC.SValue    = '1' )  
+               BEGIN  
+                  SET @c_TrackDate01 = CONVERT(NVARCHAR(19),@dt_TrackDate01,120)
+
+                  EXEC ispGenGVTLog 'GVTEPODAPT1', @c_OrderKey, @c_TrackDate01, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
+  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END 
+            END
+
+            --GVTEPODAPT2
+            IF EXISTS(SELECT 1 
+                      FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
+                      WHERE COLUMN_NAME IN (SELECT ColValue 
+                                            FROM dbo.fnc_DelimSplit(',', 'TrackDate02')
+                                            )
+                     )
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                           WHERE STC.StorerKey = @c_Storerkey   
+                           AND   STC.ConfigKey = 'GVTEPODAPT2'  
+                           AND   STC.SValue    = '1' )  
+               BEGIN  
+                  SET @c_TrackDate02 = CONVERT(NVARCHAR(19),@dt_TrackDate02,120)
+
+                  EXEC ispGenGVTLog 'GVTEPODAPT2', @c_OrderKey, @c_TrackDate02, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
+  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END 
+            END
+
+            --GVTEPODAPT3
+            IF EXISTS(SELECT 1 
+                      FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
+                      WHERE COLUMN_NAME IN (SELECT ColValue 
+                                            FROM dbo.fnc_DelimSplit(',', 'TrackDate03')
+                                            )
+                     )
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                           WHERE STC.StorerKey = @c_Storerkey   
+                           AND   STC.ConfigKey = 'GVTEPODAPT3'  
+                           AND   STC.SValue    = '1' )  
+               BEGIN  
+                  SET @c_TrackDate03 = CONVERT(NVARCHAR(19),@dt_TrackDate03,120)
+
+                  EXEC ispGenGVTLog 'GVTEPODAPT3', @c_OrderKey, @c_TrackDate03, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
+  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END 
+            END
+
+            --GVTEPODAPT4
+            IF EXISTS(SELECT 1 
+                      FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
+                      WHERE COLUMN_NAME IN (SELECT ColValue 
+                                            FROM dbo.fnc_DelimSplit(',', 'TrackDate04')
+                                            )
+                     )
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                           WHERE STC.StorerKey = @c_Storerkey   
+                           AND   STC.ConfigKey = 'GVTEPODAPT4'  
+                           AND   STC.SValue    = '1' )  
+               BEGIN  
+                  SET @c_TrackDate04 = CONVERT(NVARCHAR(19),@dt_TrackDate04,120)
+
+                  EXEC ispGenGVTLog 'GVTEPODAPT4', @c_OrderKey, @c_TrackDate04, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
+  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END 
+            END
+
+            --GVTEPODAPT5
+            IF EXISTS(SELECT 1 
+                      FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
+                      WHERE COLUMN_NAME IN (SELECT ColValue 
+                                            FROM dbo.fnc_DelimSplit(',', 'TrackDate05')
+                                            )
+                     )
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                           WHERE STC.StorerKey = @c_Storerkey   
+                           AND   STC.ConfigKey = 'GVTEPODAPT5'  
+                           AND   STC.SValue    = '1' )  
+               BEGIN  
+                  SET @c_TrackDate05 = CONVERT(NVARCHAR(19),@dt_TrackDate05,120)
+
+                  EXEC ispGenGVTLog 'GVTEPODAPT5', @c_OrderKey, @c_TrackDate05, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
+  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END 
+            END
+         END
+         ELSE IF (ISNULL(RTRIM(@c_TriggerName),'') = 'ntrPODAdd')  
+         BEGIN
+            --GVTEPODAPDD
             IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
                         WHERE STC.StorerKey = @c_Storerkey   
                         AND   STC.ConfigKey = 'GVTEPODAPDD'  
                         AND   STC.SValue    = '1' )  
-            BEGIN  
-               SET @c_ActualDeliveryDate = CONVERT(NVARCHAR(19),@dt_ActualDeliveryDate,120)
+            BEGIN
+               IF @dt_ActualDeliveryDate <> NULL
+               BEGIN
+                  SET @c_ActualDeliveryDate = CONVERT(NVARCHAR(19),@dt_ActualDeliveryDate,120)
 
-               EXEC ispGenGVTLog 'GVTEPODAPDD', @c_OrderKey, @c_ActualDeliveryDate, @c_StorerKey, ''    
-                                 , @b_success   OUTPUT    
-                                 , @n_err       OUTPUT    
-                                 , @c_errmsg    OUTPUT   
+                  EXEC ispGenGVTLog 'GVTEPODAPDD', @c_OrderKey, @c_ActualDeliveryDate, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
   
-               IF @b_success <> 1  
-               BEGIN  
-                  SET @n_continue = 3  
-                  GOTO QUIT   
-               END  
-            END 
-         END
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END
+            END
 
-         --GVTEPODAPID
-         IF EXISTS(SELECT 1 
-                   FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
-                   WHERE COLUMN_NAME IN (SELECT ColValue 
-                                         FROM dbo.fnc_DelimSplit(',', 'InvDespatchDate')
-                                         )
-                  )
-         BEGIN
+            --GVTEPODAPID
             IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
                         WHERE STC.StorerKey = @c_Storerkey   
                         AND   STC.ConfigKey = 'GVTEPODAPID'  
                         AND   STC.SValue    = '1' )  
             BEGIN  
-               SET @c_InvDespatchDate= CONVERT(NVARCHAR(19),@dt_InvDespatchDate,120)
+               IF @dt_InvDespatchDate <> NULL
+               BEGIN
+                  SET @c_InvDespatchDate= CONVERT(NVARCHAR(19),@dt_InvDespatchDate,120)
 
-               EXEC ispGenGVTLog 'GVTEPODAPID', @c_OrderKey, @c_InvDespatchDate, @c_StorerKey, ''    
-                                 , @b_success   OUTPUT    
-                                 , @n_err       OUTPUT    
-                                 , @c_errmsg    OUTPUT   
+                  EXEC ispGenGVTLog 'GVTEPODAPID', @c_OrderKey, @c_InvDespatchDate, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
   
-               IF @b_success <> 1  
-               BEGIN  
-                  SET @n_continue = 3  
-                  GOTO QUIT   
-               END  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END
             END 
-         END
 
-         --GVTEPODAPRD
-         IF EXISTS(SELECT 1 
-                   FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
-                   WHERE COLUMN_NAME IN (SELECT ColValue 
-                                         FROM dbo.fnc_DelimSplit(',', 'PodReceivedDate')
-                                         )
-                  )
-         BEGIN
+
+            --GVTEPODAPRD
             IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
                         WHERE STC.StorerKey = @c_Storerkey   
                         AND   STC.ConfigKey = 'GVTEPODAPRD'  
                         AND   STC.SValue    = '1' )  
             BEGIN  
-               SET @c_PodReceivedDate= CONVERT(NVARCHAR(19),@dt_PodReceivedDate,120)
+               IF @dt_PodReceivedDate <> NULL
+               BEGIN
+                  SET @c_PodReceivedDate= CONVERT(NVARCHAR(19),@dt_PodReceivedDate,120)
 
-               EXEC ispGenGVTLog 'GVTEPODAPRD', @c_OrderKey, @c_PodReceivedDate, @c_StorerKey, ''    
-                                 , @b_success   OUTPUT    
-                                 , @n_err       OUTPUT    
-                                 , @c_errmsg    OUTPUT   
+                  EXEC ispGenGVTLog 'GVTEPODAPRD', @c_OrderKey, @c_PodReceivedDate, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
   
-               IF @b_success <> 1  
-               BEGIN  
-                  SET @n_continue = 3  
-                  GOTO QUIT   
-               END  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END
             END 
-         END
 
-         --GVTEPODAPFD
-         IF EXISTS(SELECT 1 
-                   FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
-                   WHERE COLUMN_NAME IN (SELECT ColValue 
-                                         FROM dbo.fnc_DelimSplit(',', 'PodFiledDate')
-                                         )
-                  )
-         BEGIN
+            --GVTEPODAPFD
             IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
                         WHERE STC.StorerKey = @c_Storerkey   
                         AND   STC.ConfigKey = 'GVTEPODAPFD'  
                         AND   STC.SValue    = '1' )  
             BEGIN  
-               SET @c_PodFiledDate= CONVERT(NVARCHAR(19),@dt_PodFiledDate,120)
+               IF @dt_PodFiledDate <> NULL
+               BEGIN
+                  SET @c_PodFiledDate= CONVERT(NVARCHAR(19),@dt_PodFiledDate,120)
 
-               EXEC ispGenGVTLog 'GVTEPODAPFD', @c_OrderKey, @c_PodFiledDate, @c_StorerKey, ''    
-                                 , @b_success   OUTPUT    
-                                 , @n_err       OUTPUT    
-                                 , @c_errmsg    OUTPUT   
+                  EXEC ispGenGVTLog 'GVTEPODAPFD', @c_OrderKey, @c_PodFiledDate, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
   
-               IF @b_success <> 1  
-               BEGIN  
-                  SET @n_continue = 3  
-                  GOTO QUIT   
-               END  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END
             END 
-         END
 
-         --GVTEPODAPCD
-         IF EXISTS(SELECT 1 
-                   FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
-                   WHERE COLUMN_NAME IN (SELECT ColValue 
-                                         FROM dbo.fnc_DelimSplit(',', 'InvCancelDate')
-                                         )
-                  )
-         BEGIN
+            --GVTEPODAPCD
             IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
                         WHERE STC.StorerKey = @c_Storerkey   
                         AND   STC.ConfigKey = 'GVTEPODAPCD'  
                         AND   STC.SValue    = '1' )  
             BEGIN  
-               SET @c_InvCancelDate= CONVERT(NVARCHAR(19),@dt_InvCancelDate,120)
+               IF @dt_InvCancelDate <> NULL
+               BEGIN
+                  SET @c_InvCancelDate= CONVERT(NVARCHAR(19),@dt_InvCancelDate,120)
 
-               EXEC ispGenGVTLog 'GVTEPODAPCD', @c_OrderKey, @c_InvCancelDate, @c_StorerKey, ''    
-                                 , @b_success   OUTPUT    
-                                 , @n_err       OUTPUT    
-                                 , @c_errmsg    OUTPUT   
+                  EXEC ispGenGVTLog 'GVTEPODAPCD', @c_OrderKey, @c_InvCancelDate, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
   
-               IF @b_success <> 1  
-               BEGIN  
-                  SET @n_continue = 3  
-                  GOTO QUIT   
-               END  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END
             END 
-         END
 
-         --GVTEPODAPRL
-         IF EXISTS(SELECT 1 
-                   FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
-                   WHERE COLUMN_NAME IN (SELECT ColValue 
-                                         FROM dbo.fnc_DelimSplit(',', 'RedeliveryDate')
-                                         )
-                  )
-         BEGIN
+
+            --GVTEPODAPRL
             IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
                         WHERE STC.StorerKey = @c_Storerkey   
                         AND   STC.ConfigKey = 'GVTEPODAPRL'  
                         AND   STC.SValue    = '1' )  
             BEGIN  
-               SET @c_RedeliveryDate= CONVERT(NVARCHAR(19),@dt_RedeliveryDate,120)
+               IF @dt_RedeliveryDate <> NULL
+               BEGIN
+                  SET @c_RedeliveryDate= CONVERT(NVARCHAR(19),@dt_RedeliveryDate,120)
 
-               EXEC ispGenGVTLog 'GVTEPODAPRL', @c_OrderKey, @c_RedeliveryDate, @c_StorerKey, ''    
-                                 , @b_success   OUTPUT    
-                                 , @n_err       OUTPUT    
-                                 , @c_errmsg    OUTPUT   
+                  EXEC ispGenGVTLog 'GVTEPODAPRL', @c_OrderKey, @c_RedeliveryDate, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
   
-               IF @b_success <> 1  
-               BEGIN  
-                  SET @n_continue = 3  
-                  GOTO QUIT   
-               END  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END
             END 
-         END
 
-         --GVTEPODAPFR
-         IF EXISTS(SELECT 1 
-                   FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
-                   WHERE COLUMN_NAME IN (SELECT ColValue 
-                                         FROM dbo.fnc_DelimSplit(',', 'FullRejectDate')
-                                         )
-                  )
-         BEGIN
+            --GVTEPODAPFR
             IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
                         WHERE STC.StorerKey = @c_Storerkey   
                         AND   STC.ConfigKey = 'GVTEPODAPFR'  
                         AND   STC.SValue    = '1' )  
             BEGIN  
-               SET @c_FullRejectDate = CONVERT(NVARCHAR(19),@dt_FullRejectDate,120)
+               IF @dt_FullRejectDate <> NULL
+               BEGIN
+                  SET @c_FullRejectDate = CONVERT(NVARCHAR(19),@dt_FullRejectDate,120)
 
-               EXEC ispGenGVTLog 'GVTEPODAPFR', @c_OrderKey, @c_FullRejectDate, @c_StorerKey, ''    
-                                 , @b_success   OUTPUT    
-                                 , @n_err       OUTPUT    
-                                 , @c_errmsg    OUTPUT   
+                  EXEC ispGenGVTLog 'GVTEPODAPFR', @c_OrderKey, @c_FullRejectDate, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
   
-               IF @b_success <> 1  
-               BEGIN  
-                  SET @n_continue = 3  
-                  GOTO QUIT   
-               END  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END
             END 
-         END
 
-         --GVTEPODAPPR
-         IF EXISTS(SELECT 1 
-                   FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
-                   WHERE COLUMN_NAME IN (SELECT ColValue 
-                                         FROM dbo.fnc_DelimSplit(',', 'PartialRejectDate')
-                                         )
-                  )
-         BEGIN
+            --GVTEPODAPPR
             IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
                         WHERE STC.StorerKey = @c_Storerkey   
                         AND   STC.ConfigKey = 'GVTEPODAPPR'  
                         AND   STC.SValue    = '1' )  
             BEGIN  
-               SET @c_PartialRejectDate = CONVERT(NVARCHAR(19),@dt_PartialRejectDate,120)
+               IF @dt_PartialRejectDate <> NULL
+               BEGIN
+                  SET @c_PartialRejectDate = CONVERT(NVARCHAR(19),@dt_PartialRejectDate,120)
 
-               EXEC ispGenGVTLog 'GVTEPODAPPR', @c_OrderKey, @c_PartialRejectDate, @c_StorerKey, ''    
-                                 , @b_success   OUTPUT    
-                                 , @n_err       OUTPUT    
-                                 , @c_errmsg    OUTPUT   
+                  EXEC ispGenGVTLog 'GVTEPODAPPR', @c_OrderKey, @c_PartialRejectDate, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
   
-               IF @b_success <> 1  
-               BEGIN  
-                  SET @n_continue = 3  
-                  GOTO QUIT   
-               END  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END
             END 
-         END
 
-         --GVTEPODAPPF
-         IF EXISTS(SELECT 1 
-                   FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
-                   WHERE COLUMN_NAME IN (SELECT ColValue 
-                                         FROM dbo.fnc_DelimSplit(',', 'PoisonFormDate')
-                                         )
-                  )
-         BEGIN
+            --GVTEPODAPPF
             IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
                         WHERE STC.StorerKey = @c_Storerkey   
                         AND   STC.ConfigKey = 'GVTEPODAPPF'  
                         AND   STC.SValue    = '1' )  
-            BEGIN  
-               SET @c_PoisonFormDate = CONVERT(NVARCHAR(19),@dt_PoisonFormDate,120)
+            BEGIN 
+               IF @dt_PoisonFormDate <> NULL
+               BEGIN
+                  SET @c_PoisonFormDate = CONVERT(NVARCHAR(19),@dt_PoisonFormDate,120)
 
-               EXEC ispGenGVTLog 'GVTEPODAPPF', @c_OrderKey, @c_PoisonFormDate, @c_StorerKey, ''    
-                                 , @b_success   OUTPUT    
-                                 , @n_err       OUTPUT    
-                                 , @c_errmsg    OUTPUT   
+                  EXEC ispGenGVTLog 'GVTEPODAPPF', @c_OrderKey, @c_PoisonFormDate, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
   
-               IF @b_success <> 1  
-               BEGIN  
-                  SET @n_continue = 3  
-                  GOTO QUIT   
-               END  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END
             END 
-         END
 
-         --GVTEPODAPCQ
-         IF EXISTS(SELECT 1 
-                   FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
-                   WHERE COLUMN_NAME IN (SELECT ColValue 
-                                         FROM dbo.fnc_DelimSplit(',', 'ChequeDate')
-                                         )
-                  )
-         BEGIN
+            --GVTEPODAPCQ
             IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
                         WHERE STC.StorerKey = @c_Storerkey   
                         AND   STC.ConfigKey = 'GVTEPODAPCQ'  
                         AND   STC.SValue    = '1' )  
             BEGIN  
-               SET @c_ChequeDate = CONVERT(NVARCHAR(19),@dt_ChequeDate,120)
+               IF @dt_ChequeDate <> NULL
+               BEGIN
+                  SET @c_ChequeDate = CONVERT(NVARCHAR(19),@dt_ChequeDate,120)
 
-               EXEC ispGenGVTLog 'GVTEPODAPCQ', @c_OrderKey, @c_ChequeDate, @c_StorerKey, ''    
-                                 , @b_success   OUTPUT    
-                                 , @n_err       OUTPUT    
-                                 , @c_errmsg    OUTPUT   
+                  EXEC ispGenGVTLog 'GVTEPODAPCQ', @c_OrderKey, @c_ChequeDate, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
   
-               IF @b_success <> 1  
-               BEGIN  
-                  SET @n_continue = 3  
-                  GOTO QUIT   
-               END  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END
             END 
-         END
 
-         --GVTEPODAPD1
-         IF EXISTS(SELECT 1 
-                   FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
-                   WHERE COLUMN_NAME IN (SELECT ColValue 
-                                         FROM dbo.fnc_DelimSplit(',', 'PODDate01')
-                                         )
-                  )
-         BEGIN
+            --GVTEPODAPD1
             IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
                         WHERE STC.StorerKey = @c_Storerkey   
                         AND   STC.ConfigKey = 'GVTEPODAPD1'  
                         AND   STC.SValue    = '1' )  
             BEGIN  
-               SET @c_PODDate01 = CONVERT(NVARCHAR(19),@dt_PODDate01,120)
+               IF @dt_PODDate01 <> NULL
+               BEGIN
+                  SET @c_PODDate01 = CONVERT(NVARCHAR(19),@dt_PODDate01,120)
 
-               EXEC ispGenGVTLog 'GVTEPODAPD1', @c_OrderKey, @c_PODDate01, @c_StorerKey, ''    
-                                 , @b_success   OUTPUT    
-                                 , @n_err       OUTPUT    
-                                 , @c_errmsg    OUTPUT   
+                  EXEC ispGenGVTLog 'GVTEPODAPD1', @c_OrderKey, @c_PODDate01, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
   
-               IF @b_success <> 1  
-               BEGIN  
-                  SET @n_continue = 3  
-                  GOTO QUIT   
-               END  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END
             END 
-         END
 
-         --GVTEPODAPD2
-         IF EXISTS(SELECT 1 
-                   FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
-                   WHERE COLUMN_NAME IN (SELECT ColValue 
-                                         FROM dbo.fnc_DelimSplit(',', 'PODDate02')
-                                         )
-                  )
-         BEGIN
+            --GVTEPODAPD2
             IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
                         WHERE STC.StorerKey = @c_Storerkey   
                         AND   STC.ConfigKey = 'GVTEPODAPD2'  
                         AND   STC.SValue    = '1' )  
             BEGIN  
-               SET @c_PODDate02 = CONVERT(NVARCHAR(19),@dt_PODDate02,120)
+               IF @dt_PODDate02 <> NULL
+               BEGIN
+                  SET @c_PODDate02 = CONVERT(NVARCHAR(19),@dt_PODDate02,120)
 
-               EXEC ispGenGVTLog 'GVTEPODAPD2', @c_OrderKey, @c_PODDate02, @c_StorerKey, ''    
-                                 , @b_success   OUTPUT    
-                                 , @n_err       OUTPUT    
-                                 , @c_errmsg    OUTPUT   
+                  EXEC ispGenGVTLog 'GVTEPODAPD2', @c_OrderKey, @c_PODDate02, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
   
-               IF @b_success <> 1  
-               BEGIN  
-                  SET @n_continue = 3  
-                  GOTO QUIT   
-               END  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END
             END 
-         END
 
-         --GVTEPODAPD3
-         IF EXISTS(SELECT 1 
-                   FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
-                   WHERE COLUMN_NAME IN (SELECT ColValue 
-                                         FROM dbo.fnc_DelimSplit(',', 'PODDate03')
-                                         )
-                  )
-         BEGIN
+            --GVTEPODAPD3
             IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
                         WHERE STC.StorerKey = @c_Storerkey   
                         AND   STC.ConfigKey = 'GVTEPODAPD3'  
                         AND   STC.SValue    = '1' )  
-            BEGIN  
-               SET @c_PODDate03 = CONVERT(NVARCHAR(19),@dt_PODDate03,120)
+            BEGIN
+               IF @dt_PODDate03 <> NULL
+               BEGIN
+                  SET @c_PODDate03 = CONVERT(NVARCHAR(19),@dt_PODDate03,120)
 
-               EXEC ispGenGVTLog 'GVTEPODAPD3', @c_OrderKey, @c_PODDate03, @c_StorerKey, ''    
-                                 , @b_success   OUTPUT    
-                                 , @n_err       OUTPUT    
-                                 , @c_errmsg    OUTPUT   
+                  EXEC ispGenGVTLog 'GVTEPODAPD3', @c_OrderKey, @c_PODDate03, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
   
-               IF @b_success <> 1  
-               BEGIN  
-                  SET @n_continue = 3  
-                  GOTO QUIT   
-               END  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END
             END 
-         END
 
-         --GVTEPODAPD4
-         IF EXISTS(SELECT 1 
-                   FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
-                   WHERE COLUMN_NAME IN (SELECT ColValue 
-                                         FROM dbo.fnc_DelimSplit(',', 'PODDate04')
-                                         )
-                  )
-         BEGIN
+            --GVTEPODAPD4
             IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
                         WHERE STC.StorerKey = @c_Storerkey   
                         AND   STC.ConfigKey = 'GVTEPODAPD4'  
                         AND   STC.SValue    = '1' )  
             BEGIN  
-               SET @c_PODDate04 = CONVERT(NVARCHAR(19),@dt_PODDate04,120)
+               IF @dt_PODDate04 <> NULL
+               BEGIN
+                  SET @c_PODDate04 = CONVERT(NVARCHAR(19),@dt_PODDate04,120)
 
-               EXEC ispGenGVTLog 'GVTEPODAPD4', @c_OrderKey, @c_PODDate04, @c_StorerKey, ''    
-                                 , @b_success   OUTPUT    
-                                 , @n_err       OUTPUT    
-                                 , @c_errmsg    OUTPUT   
+                  EXEC ispGenGVTLog 'GVTEPODAPD4', @c_OrderKey, @c_PODDate04, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
   
-               IF @b_success <> 1  
-               BEGIN  
-                  SET @n_continue = 3  
-                  GOTO QUIT   
-               END  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END 
+               END 
             END 
-         END
 
-         --GVTEPODAPD5
-         IF EXISTS(SELECT 1 
-                   FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
-                   WHERE COLUMN_NAME IN (SELECT ColValue 
-                                         FROM dbo.fnc_DelimSplit(',', 'PODDate05')
-                                         )
-                  )
-         BEGIN
+            --GVTEPODAPD5
             IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
                         WHERE STC.StorerKey = @c_Storerkey   
                         AND   STC.ConfigKey = 'GVTEPODAPD5'  
                         AND   STC.SValue    = '1' )  
             BEGIN  
-               SET @c_PODDate05 = CONVERT(NVARCHAR(19),@dt_PODDate05,120)
+               IF @dt_PODDate05 <> NULL
+               BEGIN
+                  SET @c_PODDate05 = CONVERT(NVARCHAR(19),@dt_PODDate05,120)
 
-               EXEC ispGenGVTLog 'GVTEPODAPD5', @c_OrderKey, @c_PODDate05, @c_StorerKey, ''    
-                                 , @b_success   OUTPUT    
-                                 , @n_err       OUTPUT    
-                                 , @c_errmsg    OUTPUT   
+                  EXEC ispGenGVTLog 'GVTEPODAPD5', @c_OrderKey, @c_PODDate05, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
   
-               IF @b_success <> 1  
-               BEGIN  
-                  SET @n_continue = 3  
-                  GOTO QUIT   
-               END  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END
             END 
-         END
 
-         --GVTEPODAPT1
-         IF EXISTS(SELECT 1 
-                   FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
-                   WHERE COLUMN_NAME IN (SELECT ColValue 
-                                         FROM dbo.fnc_DelimSplit(',', 'TrackDate01')
-                                         )
-                  )
-         BEGIN
+            --GVTEPODAPT1
             IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
                         WHERE STC.StorerKey = @c_Storerkey   
                         AND   STC.ConfigKey = 'GVTEPODAPT1'  
                         AND   STC.SValue    = '1' )  
             BEGIN  
-               SET @c_TrackDate01 = CONVERT(NVARCHAR(19),@dt_TrackDate01,120)
+               IF @dt_TrackDate01 <> NULL
+               BEGIN
+                  SET @c_TrackDate01 = CONVERT(NVARCHAR(19),@dt_TrackDate01,120)
 
-               EXEC ispGenGVTLog 'GVTEPODAPT1', @c_OrderKey, @c_TrackDate01, @c_StorerKey, ''    
-                                 , @b_success   OUTPUT    
-                                 , @n_err       OUTPUT    
-                                 , @c_errmsg    OUTPUT   
+                  EXEC ispGenGVTLog 'GVTEPODAPT1', @c_OrderKey, @c_TrackDate01, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
   
-               IF @b_success <> 1  
-               BEGIN  
-                  SET @n_continue = 3  
-                  GOTO QUIT   
-               END  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END
             END 
-         END
 
-         --GVTEPODAPT2
-         IF EXISTS(SELECT 1 
-                   FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
-                   WHERE COLUMN_NAME IN (SELECT ColValue 
-                                         FROM dbo.fnc_DelimSplit(',', 'TrackDate02')
-                                         )
-                  )
-         BEGIN
+            --GVTEPODAPT2
             IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
                         WHERE STC.StorerKey = @c_Storerkey   
                         AND   STC.ConfigKey = 'GVTEPODAPT2'  
                         AND   STC.SValue    = '1' )  
             BEGIN  
-               SET @c_TrackDate02 = CONVERT(NVARCHAR(19),@dt_TrackDate02,120)
+               IF @dt_TrackDate02 <> NULL
+               BEGIN
+                  SET @c_TrackDate02 = CONVERT(NVARCHAR(19),@dt_TrackDate02,120)
 
-               EXEC ispGenGVTLog 'GVTEPODAPT2', @c_OrderKey, @c_TrackDate02, @c_StorerKey, ''    
-                                 , @b_success   OUTPUT    
-                                 , @n_err       OUTPUT    
-                                 , @c_errmsg    OUTPUT   
+                  EXEC ispGenGVTLog 'GVTEPODAPT2', @c_OrderKey, @c_TrackDate02, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
   
-               IF @b_success <> 1  
-               BEGIN  
-                  SET @n_continue = 3  
-                  GOTO QUIT   
-               END  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END
             END 
-         END
 
-         --GVTEPODAPT3
-         IF EXISTS(SELECT 1 
-                   FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
-                   WHERE COLUMN_NAME IN (SELECT ColValue 
-                                         FROM dbo.fnc_DelimSplit(',', 'TrackDate03')
-                                         )
-                  )
-         BEGIN
+            --GVTEPODAPT3
             IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
                         WHERE STC.StorerKey = @c_Storerkey   
                         AND   STC.ConfigKey = 'GVTEPODAPT3'  
                         AND   STC.SValue    = '1' )  
             BEGIN  
-               SET @c_TrackDate03 = CONVERT(NVARCHAR(19),@dt_TrackDate03,120)
+               IF @dt_TrackDate03 <> NULL
+               BEGIN
+                  SET @c_TrackDate03 = CONVERT(NVARCHAR(19),@dt_TrackDate03,120)
 
-               EXEC ispGenGVTLog 'GVTEPODAPT3', @c_OrderKey, @c_TrackDate03, @c_StorerKey, ''    
-                                 , @b_success   OUTPUT    
-                                 , @n_err       OUTPUT    
-                                 , @c_errmsg    OUTPUT   
+                  EXEC ispGenGVTLog 'GVTEPODAPT3', @c_OrderKey, @c_TrackDate03, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
   
-               IF @b_success <> 1  
-               BEGIN  
-                  SET @n_continue = 3  
-                  GOTO QUIT   
-               END  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END
             END 
-         END
 
-         --GVTEPODAPT4
-         IF EXISTS(SELECT 1 
-                   FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
-                   WHERE COLUMN_NAME IN (SELECT ColValue 
-                                         FROM dbo.fnc_DelimSplit(',', 'TrackDate04')
-                                         )
-                  )
-         BEGIN
+            --GVTEPODAPT4
             IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
                         WHERE STC.StorerKey = @c_Storerkey   
                         AND   STC.ConfigKey = 'GVTEPODAPT4'  
                         AND   STC.SValue    = '1' )  
             BEGIN  
-               SET @c_TrackDate04 = CONVERT(NVARCHAR(19),@dt_TrackDate04,120)
+               IF @dt_TrackDate04 <> NULL
+               BEGIN
+                  SET @c_TrackDate04 = CONVERT(NVARCHAR(19),@dt_TrackDate04,120)
 
-               EXEC ispGenGVTLog 'GVTEPODAPT4', @c_OrderKey, @c_TrackDate04, @c_StorerKey, ''    
-                                 , @b_success   OUTPUT    
-                                 , @n_err       OUTPUT    
-                                 , @c_errmsg    OUTPUT   
+                  EXEC ispGenGVTLog 'GVTEPODAPT4', @c_OrderKey, @c_TrackDate04, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
   
-               IF @b_success <> 1  
-               BEGIN  
-                  SET @n_continue = 3  
-                  GOTO QUIT   
-               END  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END
             END 
-         END
 
-         --GVTEPODAPT5
-         IF EXISTS(SELECT 1 
-                   FROM dbo.fnc_GetUpdatedColumns(@c_SourceTable, @b_ColumnsUpdated) 
-                   WHERE COLUMN_NAME IN (SELECT ColValue 
-                                         FROM dbo.fnc_DelimSplit(',', 'TrackDate05')
-                                         )
-                  )
-         BEGIN
+            --GVTEPODAPT5
             IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
                         WHERE STC.StorerKey = @c_Storerkey   
                         AND   STC.ConfigKey = 'GVTEPODAPT5'  
                         AND   STC.SValue    = '1' )  
             BEGIN  
-               SET @c_TrackDate05 = CONVERT(NVARCHAR(19),@dt_TrackDate05,120)
+               IF @dt_TrackDate05 <> NULL
+               BEGIN
+                  SET @c_TrackDate05 = CONVERT(NVARCHAR(19),@dt_TrackDate05,120)
 
-               EXEC ispGenGVTLog 'GVTEPODAPT5', @c_OrderKey, @c_TrackDate05, @c_StorerKey, ''    
-                                 , @b_success   OUTPUT    
-                                 , @n_err       OUTPUT    
-                                 , @c_errmsg    OUTPUT   
+                  EXEC ispGenGVTLog 'GVTEPODAPT5', @c_OrderKey, @c_TrackDate05, @c_StorerKey, ''    
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
   
-               IF @b_success <> 1  
-               BEGIN  
-                  SET @n_continue = 3  
-                  GOTO QUIT   
-               END  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END 
+               END 
             END 
          END
       END
