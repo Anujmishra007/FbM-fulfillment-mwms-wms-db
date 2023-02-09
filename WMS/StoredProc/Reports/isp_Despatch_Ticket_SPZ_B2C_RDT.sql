@@ -1,7 +1,3 @@
-IF EXISTS (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_Despatch_Ticket_SPZ_B2C_RDT]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[isp_Despatch_Ticket_SPZ_B2C_RDT]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -27,8 +23,9 @@ GO
 /* Date         Author    Ver.  Purposes                                */  
 /* 2021-06-15   WLChooi   1.1   WMS-17291 - Modify Logic and Add new    */
 /*                              column (WL01)                           */
+/* 2023-01-03   mingle    1.2   WMS-21381 - Add new col(ML01)           */
 /************************************************************************/  
-CREATE PROC [dbo].[isp_Despatch_Ticket_SPZ_B2C_RDT] (  
+CREATE OR ALTER PROC [dbo].[isp_Despatch_Ticket_SPZ_B2C_RDT] (  
       @c_Pickslipno   NVARCHAR(10)  
 )  
 AS  
@@ -111,6 +108,8 @@ BEGIN
        , ShowStamp               NVARCHAR(10) NULL    --WL01
        , ShowTerms               NVARCHAR(10) NULL    --WL01
        , Terms                   NVARCHAR(10) NULL    --WL01
+       , M_Contact2              NVARCHAR(100)  NULL	--ML01
+       , M_Phone1                NVARCHAR(18)  NULL	--ML01
    )
    	 
    INSERT INTO #TMP_SUM (Orderkey, UnitPricexQtyPicked, QtyPicked, Tax)
@@ -191,6 +190,8 @@ BEGIN
         , @n_ShowStamp AS ShowStamp   --WL01
         , @n_ShowTerms AS ShowTerms   --WL01
         , CASE WHEN LEN(OH.IncoTerm) > 1 AND CAST(@n_ShowTerms AS NVARCHAR) = '1' THEN OH.IncoTerm ELSE '' END AS Terms   --WL01
+        , ISNULL(OH.M_Contact2,'')  AS M_Contact2   --ML01
+        , ISNULL(OH.M_Phone1,'')  AS M_Phone1   --ML01
    FROM ORDERS OH (NOLOCK)
    JOIN STORER ST (NOLOCK) ON OH.Storerkey = ST.StorerKey
    JOIN ORDERDETAIL OD (NOLOCK) ON OD.OrderKey = OH.OrderKey
@@ -218,3 +219,4 @@ END
 GO
 GRANT EXECUTE ON isp_Despatch_Ticket_SPZ_B2C_RDT TO NSQL
 GO
+
