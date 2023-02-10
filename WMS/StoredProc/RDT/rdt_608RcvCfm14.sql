@@ -61,7 +61,7 @@ BEGIN
    IF ISNULL( @cToID, '') <> ''
    BEGIN
       SET @cLottable06 = CASE WHEN LEFT (@cTOID,2) ='TA' THEN 'ZP'
-                           WHEN  LEFT (@cTOID,2)  IN ('TB','TC') THEN 'CC' END
+                           WHEN  LEFT (@cTOID,2)  IN ('TB','TC','TD') THEN 'CC' END
    END
 
    SELECT TOP 1 
@@ -73,7 +73,7 @@ BEGIN
    order by adddate;
 
      -- Receive
-   EXEC rdt.rdt_Receive_V7_L05
+   EXEC rdt.rdt_Receive_V7
       @nFunc         = @nFunc,
       @nMobile       = @nMobile,
       @cLangCode     = @cLangCode,
