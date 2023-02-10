@@ -29,12 +29,6 @@ GO
 /* 23-Jun-2021 NJOW04   1.4  WMS-17326 allow skip lottable filtering    */
 /* 18-Apr-2022 NJOW05   1.5  WMS-19509 allow set sorting by dynamic SQL */
 /* 18-Apr-2022 NJOW05   1.5  DEVOPS Combine script                      */
-/* 05-May-2022 NJOW06   1.6  WMS-19571 support get strategykey from wave*/
-/*                           loadplan.defaultstrategykey and            */
-/*                           config StorerDefaultAllocStrategy          */
-/* 05-Sep-2022 NJOW07   1.7  WMS-19993 FIFO by multi UOM                */
-/* 18-Nov-2022 NJOW08   1.8  WMS-21206 Add force allocate lottable by   */
-/*                           by config include empty lottable filterring*/
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[nspALCFG01]
@@ -85,11 +79,9 @@ BEGIN
    LISTNAME             Refer the allocation setting from user created listname                <Listname>
    ALLOCATEQTYREPLEN    Allow allocate qty reserved for replenish at bulk loc                  Y/N
    SKIPLOTTABLEFILTER   Allow skip filtering for certain lottable 01-15                        01-15
-   FIFOBYMULTIUOM       Enforce FIFO by multiple UOM. (Default N)                              Y/N
-   FORCELOTTABLEFILTER  Force filtering for certain lottable 01-05 to include empty lottable   01-15
 
    Notes:
-   1.  Code2 - Optional UOM. If de fined, the setup only apply to the same UOM in the strategy otherwise apply to all UOM
+   1.  Code2 - Optional UOM. If defined, the setup only apply to the same UOM in the strategy otherwise apply to all UOM
        using this pickcode. The values are 1 to 7 or empty.
    2.  UDF01 is the Y or N flag for enable or disable ALLOCATEHOLD, FROMPICKLOC, FROMBULKLOC and FULLPALLETBYLOC. If ALLOCATEHOLD is not setup,
        will not allocate hold stock.
@@ -118,9 +110,6 @@ BEGIN
    10. For SHELFLIFE. Set E to enable check shelflife by expiry date in lottable04, M to check by manufacturing date, N is no checking.
    11. For LISTNAME. Only need to provide storerkey and UDF01. This option only can apply to listname 'nspALCFG01'
    12. For SKIPLOTTABLEFILTER, include the lottable need to skip filtering in the list delimited by comman from 01 to 15. e.g. 02,04,08
-   13. For FIFOBYMULTIUOM, Must complete pick a batch before proceed to next irregardless different UOM. The sorting must be Lottable05 
-   14. For FORCELOTTABLEFILTER, include the lottable need to force filtering in the list delimited by comman from 01 to 15. e.g. 02,04,08
-       The specific Orderdetail's Lottable value must exactly match with the lotattribute's lottable including empty lottable filter.
 
    Shelflife logic and sequence
    ----------------------------
@@ -167,7 +156,6 @@ BEGIN
            @c_AllocateStrategyKey NVARCHAR(10),
            @c_FullPalletByLocFlag NCHAR(1),
            @c_ShelfLifeFlag       NCHAR(1),
-           @c_FIFOByMultiUOM      NCHAR(1), --NJOW07
            @c_SQL                 NVARCHAR(MAX),
            @n_QtyAvailable     INT,
            @c_LOT              NVARCHAR(10),
@@ -179,14 +167,8 @@ BEGIN
            @c_ListName         NVARCHAR(10),
            @c_AllocateGetCasecntFrLottable NVARCHAR(30),
            @n_LotQtyAvailable  INT,
-           @c_SkipLottableFilter  NVARCHAR(60), --NJOW04
-           @c_Wavekey             NVARCHAR(10)='', --NJOW06 
-           @c_Loadkey             NVARCHAR(10)='', --NJOW06
-           @c_key3                NVARCHAR(10)='',  --NJOW06 
-           @c_StorerDefaultAllocStrategy NVARCHAR(30)='', --NJOW06
-           @dt_CurrLottable05     DATETIME, --NJOW07          
-           @c_ForceLottableFilter NVARCHAR(60) --NJOW08
-           
+           @c_SkipLottableFilter NVARCHAR(60) --NJOW04
+            
     SET @c_LocTypeList = ''
     SET @c_LocTypeSort = ''
     SET @c_CLKCondition = ''
@@ -199,11 +181,8 @@ BEGIN
    SET @n_ConsigneeSkuGroupMinShelfLife = 0
    SET @c_ContinueChkShelfLife = 'N'
    SET @c_SkipLottableFilter = '' --NJOW04
-   SET @c_ForceLottableFilter = '' --NJOW08
 
    EXEC isp_Init_Allocate_Candidates         --(Wan01)
-
-   SELECT @c_StorerDefaultAllocStrategy = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'StorerDefaultAllocStrategy') --NJOW06
 
    /*SELECT @c_AllocateGetCasecntFrLottable = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'AllocateGetCasecntFrLottable')
 
@@ -215,7 +194,6 @@ BEGIN
    IF LEN(@c_OtherParms) > 0
    BEGIN
       SELECT @c_OrderLineNumber = SUBSTRING(@c_OtherParms, 11, 5)
-      SELECT @c_Key3 = SUBSTRING(@c_OtherParms, 16, 1)
 
       IF ISNULL(@c_OrderLineNumber,'') <> ''
       BEGIN
@@ -226,35 +204,7 @@ BEGIN
          FROM ORDERDETAIL(NOLOCK)
          WHERE Orderkey = @c_Orderkey
          AND OrderLineNumber = @c_OrderLineNumber
-
-         --NJOW06 S
-         SELECT @c_Loadkey = Loadkey
-         FROM LOADPLANDETAIL(NOLOCK)
-         WHERE Orderkey = @c_Orderkey
-         
-         SELECT @c_Wavekey = Wavekey
-         FROM WAVEDETAIL(NOLOCK)
-         WHERE Orderkey = @c_Orderkey
-         --NJOW06 E
-      END
-      
-      --NJOW06 S
-      IF ISNULL(@c_OrderLineNumber,'')='' AND ISNULL(@c_key3,'')=''       
-      BEGIN
-      	 SELECT @c_Loadkey = LEFT(@c_OtherParms, 10)  --Load conso
-      	 
-      	 SELECT @c_Wavekey = MAX(WD.Wavekey)
-      	 FROM LOADPLANDETAIL LPD (NOLOCK)
-      	 JOIN WAVEDETAIL WD (NOLOCK) ON LPD.Orderkey = WD.Orderkey
-      	 AND LPD.Loadkey = @c_Loadkey
-      	 HAVING COUNT(DISTINCT WD.Wavekey) = 1
-      END
-      
-      IF ISNULL(@c_OrderLineNumber,'')='' AND ISNULL(@c_key3,'')='W'       
-      BEGIN
-      	 SELECT @c_Wavekey = LEFT(@c_OtherParms, 10) --Wave conso
-      END   
-      --NJOW06 E   
+      END      
    END
 
    DECLARE  @TMP_CODELKUP TABLE (
@@ -277,54 +227,12 @@ BEGIN
    CREATE TABLE #TMP_LOT (LOT NVARCHAR(10) NULL,
                           QtyAvailable INT NULL DEFAULT(0))                                     
    
-   --NJOW06 S                       
-   IF ISNULL(@c_Wavekey,'') <> ''
-   BEGIN
-   	  --Get strategy from wave
-   	  SELECT @c_AllocateStrategykey = ALS.AllocateStrategyKey
-   	  FROM WAVE W (NOLOCK)
-   	  JOIN STRATEGY SY (NOLOCK) ON W.Strategykey = SY.Strategykey
-   	  JOIN ALLOCATESTRATEGY ALS (NOLOCK) ON SY.AllocateStrategyKey = ALS.AllocateStrategyKey
-   	  AND W.Wavekey = @c_Wavekey
-   	  AND W.Strategykey <> ''
-   	  AND W.Strategykey IS NOT NULL
-   END      
-   
-   IF ISNULL(@c_AllocateStrategykey,'') = '' AND ISNULL(@c_Loadkey,'') <> ''
-   BEGIN
-   	  --Get strategy from load defaultstrategykey
-   	  SELECT TOP 1 @c_AllocateStrategykey = ALS.AllocateStrategyKey   	  
-   	  FROM LOADPLAN LP (NOLOCK)
-   	  JOIN LOADPLANDETAIL LPD (NOLOCK) ON LP.Loadkey = LPD.Loadkey
-   	  JOIN ORDERS O (NOLOCK) ON LPD.Orderkey = O.Orderkey
-   	  JOIN STORER S (NOLOCK) ON O.Storerkey = S.Storerkey
-   	  JOIN STRATEGY SY (NOLOCK) ON S.Strategykey = SY.Strategykey
-   	  JOIN ALLOCATESTRATEGY ALS (NOLOCK) ON SY.AllocateStrategyKey = ALS.AllocateStrategyKey
-   	  AND LP.Loadkey = @c_Loadkey
-   	  AND LP.DefaultStrategykey = 'Y'
-   	  AND S.Strategykey <> ''
-   	  AND S.Strategykey IS NOT NULL
-   END         
-   
-   IF ISNULL(@c_AllocateStrategykey,'') = '' AND ISNULL(@c_StorerDefaultAllocStrategy,'') <> ''
-   BEGIN
-   	  --Get strategy from storerconfig StorerDefaultAllocStrategy
-      SELECT @c_AllocateStrategykey = ALS.AllocateStrategyKey
-      FROM STRATEGY SY (NOLOCK)
-   	  JOIN ALLOCATESTRATEGY ALS (NOLOCK) ON SY.AllocateStrategyKey = ALS.AllocateStrategyKey
-   	  WHERE SY.Strategykey = @c_StorerDefaultAllocStrategy      
-   END
-   --NJOW06 E
-
-   IF ISNULL(@c_AllocateStrategykey,'') = ''  --NJOW06
-   BEGIN
-   	  --Get strategy from sku
-      SELECT @c_AllocateStrategykey = STRATEGY.AllocateStrategykey
-      FROM SKU (NOLOCK)
-      JOIN STRATEGY (NOLOCK) ON SKU.Strategykey = STRATEGY.Strategykey
-      WHERE SKU.Storerkey = @c_Storerkey
-      AND SKU.Sku = @c_Sku
-   END
+   --Get strategy from sku
+   SELECT @c_AllocateStrategykey = STRATEGY.AllocateStrategykey
+   FROM SKU (NOLOCK)
+   JOIN STRATEGY (NOLOCK) ON SKU.Strategykey = STRATEGY.Strategykey
+   WHERE SKU.Storerkey = @c_Storerkey
+   AND SKU.Sku = @c_Sku
 
    IF EXISTS(SELECT 1 FROM ALLOCATESTRATEGYDETAIL (NOLOCK)
              WHERE LocationTypeOverride IN ('PICK','CASE'))
@@ -466,18 +374,6 @@ BEGIN
    AND (Code2 = @c_UOM OR ISNULL(Code2,'') = '')
    ORDER BY CASE WHEN Code2 = @c_UOM THEN 0 ELSE 1 END
 
-   SELECT TOP 1 @c_FIFOByMultiUOM = ISNULL(UDF01,'')  --NJOW07
-   FROM @TMP_CODELKUP
-   WHERE Code = 'FIFOBYMULTIUOM' --FIFO by Multi UOM.
-   AND (Code2 = @c_UOM OR ISNULL(Code2,'') = '')
-   ORDER BY CASE WHEN Code2 = @c_UOM THEN 0 ELSE 1 END
-
-   SELECT TOP 1 @c_ForceLottableFilter = ISNULL(UDF01,'')  --NJOW08
-   FROM @TMP_CODELKUP
-   WHERE Code = 'FORCELOTTABLEFILTER' --Force lottable filtering.
-   AND (Code2 = @c_UOM OR ISNULL(Code2,'') = '')
-   ORDER BY CASE WHEN Code2 = @c_UOM THEN 0 ELSE 1 END
-
    IF ISNULL(@c_ShelfLifeFlag,'') IN('E','M')  --NJOW02
       SET @c_ContinueChkShelfLife = 'Y'
 
@@ -486,20 +382,17 @@ BEGIN
       SET @c_SortingFlag = 'Y'
    END
 
-   IF (ISNULL(@c_Lottable01,'') <> '' AND CHARINDEX('01',@c_SkipLottableFilter,1) = 0)  --NJOW04   
-      OR CHARINDEX('01',@c_ForceLottableFilter,1) > 0  --NJOW08
+   IF ISNULL(@c_Lottable01,'') <> '' AND CHARINDEX('01',@c_SkipLottableFilter,1) = 0  --NJOW04
    BEGIN
       SELECT @c_Condition = ISNULL(RTRIM(@c_Condition),'') + " AND LOTTABLE01 = RTRIM(@c_Lottable01) "         --(Wan01)
    END
 
-   IF (ISNULL(@c_Lottable02,'') <> '' AND CHARINDEX('02',@c_SkipLottableFilter,1) = 0)  --NJOW04
-      OR CHARINDEX('02',@c_ForceLottableFilter,1) > 0  --NJOW08
+   IF ISNULL(@c_Lottable02,'') <> '' AND CHARINDEX('02',@c_SkipLottableFilter,1) = 0  --NJOW04
    BEGIN
       SELECT @c_Condition = ISNULL(RTRIM(@c_Condition),'') + " AND LOTTABLE02 = RTRIM(@c_Lottable02) "         --(Wan01)
    END
 
-   IF (ISNULL(@c_Lottable03,'') <> '' AND CHARINDEX('03',@c_SkipLottableFilter,1) = 0)  --NJOW04
-      OR CHARINDEX('03',@c_ForceLottableFilter,1) > 0  --NJOW08   
+   IF ISNULL(@c_Lottable03,'') <> '' AND CHARINDEX('03',@c_SkipLottableFilter,1) = 0  --NJOW04
    BEGIN
       SELECT @c_Condition = ISNULL(RTRIM(@c_Condition),'') + " AND LOTTABLE03 = RTRIM(@c_Lottable03) "         --(Wan01)
    END
@@ -508,58 +401,43 @@ BEGIN
    BEGIN
       SELECT @c_Condition = ISNULL(RTRIM(@c_Condition),'') + " AND LOTTABLE04 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable04, 106)) " --(Wan01)
    END
-   ELSE IF CHARINDEX('04',@c_ForceLottableFilter,1) > 0 --NJOW08
-   BEGIN
-      SELECT @c_Condition = ISNULL(RTRIM(@c_Condition),'') + " AND LOTTABLE04 IS NULL OR CONVERT(CHAR(10), LOTTABLE04, 103) = '01/01/1900 "
-   END
 
    IF CONVERT(char(10), @d_Lottable05, 103) <> "01/01/1900" AND @d_Lottable05 IS NOT NULL AND CHARINDEX('05',@c_SkipLottableFilter,1) = 0  --NJOW04
    BEGIN
       SELECT @c_Condition = ISNULL(RTRIM(@c_Condition),'') + " AND LOTTABLE05 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable05, 106)) " --(Wan01)
    END
-   ELSE IF CHARINDEX('05',@c_ForceLottableFilter,1) > 0 --NJOW08
-   BEGIN
-      SELECT @c_Condition = ISNULL(RTRIM(@c_Condition),'') + " AND LOTTABLE05 IS NULL OR CONVERT(CHAR(10), LOTTABLE05, 103) = '01/01/1900 "
-   END
 
-   IF (ISNULL(@c_Lottable06,'') <> '' AND CHARINDEX('06',@c_SkipLottableFilter,1) = 0)  --NJOW04
-      OR CHARINDEX('06',@c_ForceLottableFilter,1) > 0  --NJOW08
+   IF ISNULL(@c_Lottable06,'') <> '' AND CHARINDEX('06',@c_SkipLottableFilter,1) = 0  --NJOW04
    BEGIN
       SET @c_Condition = ISNULL(RTRIM(@c_Condition),'')+ ' AND Lottable06 = RTRIM(@c_Lottable06) '             --(Wan01)
    END
 
-   IF (ISNULL(@c_Lottable07,'') <> '' AND CHARINDEX('07',@c_SkipLottableFilter,1) = 0)  --NJOW04
-      OR CHARINDEX('07',@c_ForceLottableFilter,1) > 0  --NJOW08
+   IF ISNULL(@c_Lottable07,'') <> '' AND CHARINDEX('07',@c_SkipLottableFilter,1) = 0  --NJOW04
    BEGIN
       SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable07 = RTRIM(@c_Lottable07) '            --(Wan01)
    END
 
-   IF (ISNULL(@c_Lottable08,'') <> '' AND CHARINDEX('08',@c_SkipLottableFilter,1) = 0)  --NJOW04
-      OR CHARINDEX('08',@c_ForceLottableFilter,1) > 0  --NJOW08
+   IF ISNULL(@c_Lottable08,'') <> '' AND CHARINDEX('08',@c_SkipLottableFilter,1) = 0  --NJOW04
    BEGIN
       SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable08 = RTRIM(@c_Lottable08) '            --(Wan01)
    END
 
-   IF (ISNULL(@c_Lottable09,'') <> '' AND CHARINDEX('09',@c_SkipLottableFilter,1) = 0)  --NJOW04
-      OR CHARINDEX('09',@c_ForceLottableFilter,1) > 0  --NJOW08
+   IF ISNULL(@c_Lottable09,'') <> '' AND CHARINDEX('09',@c_SkipLottableFilter,1) = 0  --NJOW04
    BEGIN
       SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable09 = RTRIM(@c_Lottable09) '            --(Wan01)
    END
 
-   IF (ISNULL(@c_Lottable10,'') <> '' AND CHARINDEX('10',@c_SkipLottableFilter,1) = 0)  --NJOW04
-      OR CHARINDEX('10',@c_ForceLottableFilter,1) > 0  --NJOW08   
+   IF ISNULL(@c_Lottable10,'') <> '' AND CHARINDEX('10',@c_SkipLottableFilter,1) = 0  --NJOW04
    BEGIN
       SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable10 = RTRIM(@c_Lottable10) '            --(Wan01)
    END
 
-   IF (ISNULL(@c_Lottable11,'') <> '' AND CHARINDEX('11',@c_SkipLottableFilter,1) = 0)  --NJOW04
-      OR CHARINDEX('11',@c_ForceLottableFilter,1) > 0  --NJOW08   
+   IF ISNULL(@c_Lottable11,'') <> '' AND CHARINDEX('11',@c_SkipLottableFilter,1) = 0  --NJOW04
    BEGIN
       SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable11 = RTRIM(@c_Lottable11) '            --(Wan01)
    END
 
-   IF (ISNULL(@c_Lottable12,'') <> '' AND CHARINDEX('12',@c_SkipLottableFilter,1) = 0)  --NJOW04
-      OR CHARINDEX('12',@c_ForceLottableFilter,1) > 0  --NJOW08
+   IF ISNULL(@c_Lottable12,'') <> '' AND CHARINDEX('12',@c_SkipLottableFilter,1) = 0  --NJOW04
    BEGIN
       SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable12 = RTRIM(@c_Lottable12) '            --(Wan01)
    END
@@ -568,27 +446,15 @@ BEGIN
    BEGIN
       SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable13 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable13, 106)) ' --(Wan01)
    END
-   ELSE IF CHARINDEX('13',@c_ForceLottableFilter,1) > 0 --NJOW08
-   BEGIN
-      SELECT @c_Condition = ISNULL(RTRIM(@c_Condition),'') + " AND LOTTABLE13 IS NULL OR CONVERT(CHAR(10), LOTTABLE13, 103) = '01/01/1900 "
-   END   
 
    IF CONVERT(char(10), @d_Lottable14, 103) <> '01/01/1900' AND @d_Lottable14 IS NOT NULL AND CHARINDEX('14',@c_SkipLottableFilter,1) = 0  --NJOW04
    BEGIN
       SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable14 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable14, 106)) ' --(Wan01)
    END
-   ELSE IF CHARINDEX('14',@c_ForceLottableFilter,1) > 0 --NJOW08
-   BEGIN
-      SELECT @c_Condition = ISNULL(RTRIM(@c_Condition),'') + " AND LOTTABLE14 IS NULL OR CONVERT(CHAR(10), LOTTABLE14, 103) = '01/01/1900 "
-   END
 
    IF CONVERT(char(10), @d_Lottable15, 103) <> '01/01/1900' AND @d_Lottable15 IS NOT NULL AND CHARINDEX('15',@c_SkipLottableFilter,1) = 0  --NJOW04
    BEGIN
       SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable15 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable15, 106)) ' --(Wan01)
-   END
-   ELSE IF CHARINDEX('15',@c_ForceLottableFilter,1) > 0 --NJOW08
-   BEGIN
-      SELECT @c_Condition = ISNULL(RTRIM(@c_Condition),'') + " AND LOTTABLE15 IS NULL OR CONVERT(CHAR(10), LOTTABLE15, 103) = '01/01/1900 "
    END
 
    ------Order shelflife (orderdetail.Minshelflife)
@@ -793,7 +659,7 @@ BEGIN
    	  	 SET @c_SortFields = ''
    	  	 
          SET @c_SQLParms = N'@c_Facility NVARCHAR(5), @c_StorerKey NVARCHAR(15), @c_SKU  NVARCHAR(20), @c_UOM NVARCHAR(10), @c_HostWHCode NVARCHAR(10)'
-             +', @n_UOMBase INT, @n_QtyLeftToFulfill INT, @c_Orderkey NVARCHAR(10), @c_OrderLineNumber NVARCHAR(5), @c_Loadkey NVARCHAR(10), @c_Wavekey NVARCHAR(10)'
+             +', @n_UOMBase INT, @n_QtyLeftToFulfill INT, @c_Orderkey NVARCHAR(10), @c_OrderLineNumber NVARCHAR(5)'
              +',@c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18), @d_Lottable04 DATETIME, @d_Lottable05 DATETIME'
              +',@c_Lottable06 NVARCHAR(30), @c_Lottable07 NVARCHAR(30), @c_Lottable08 NVARCHAR(30), @c_Lottable09 NVARCHAR(30), @c_Lottable10 NVARCHAR(30)'
              +',@c_Lottable11 NVARCHAR(30), @c_Lottable12 NVARCHAR(30), @d_Lottable13 DATETIME, @d_Lottable14 DATETIME, @d_Lottable15 DATETIME'
@@ -812,9 +678,7 @@ BEGIN
             @n_UOMBase    ,
             @n_QtyLeftToFulfill,
             @c_Orderkey,
-            @c_OrderLineNumber,
-            @c_Loadkey,  --NJOW06
-            @c_Wavekey   --NJOW06
+            @c_OrderLineNumber
            ,@c_Lottable01                                   
            ,@c_Lottable02                                   
            ,@c_Lottable03                                   
@@ -865,10 +729,9 @@ BEGIN
    ELSE
       SET @c_SortBy = " ORDER BY " + RTRIM(@c_LocTypeSort) + " Lotattribute.Lottable05, Lotattribute.Lot, Loc.LogicalLocation, Loc.Loc "
 
-   IF (@c_FullPalletByLocFlag = 'Y' AND @c_UOM = '1') OR (@c_OverAllocateFlag = 'Y') 
-      OR (@c_FIFOByMultiUOM = 'Y')  --NJOW07
+   IF (@c_FullPalletByLocFlag = 'Y' AND @c_UOM = '1') OR (@c_OverAllocateFlag = 'Y')
    BEGIN
-      SET @c_SQL = ''
+        SET @c_SQL = ''
 
       SELECT @c_SQLStatement = " DECLARE CURSOR_AVAILABLECFG CURSOR FAST_FORWARD READ_ONLY FOR " +
                               " SELECT LOTxLOCxID.LOT, LOTxLOCxID.LOC,LOTxLOCxID.ID, " +
@@ -889,23 +752,14 @@ BEGIN
                               " AND LOTxLOCxID.Sku = @c_Sku " +
                               " AND LOC.Facility = @c_Facility " +
                               CASE WHEN @c_AllocateQtyReplenFlag = 'Y' THEN
-                                 CASE WHEN @c_FIFOByMultiUOM = 'Y' THEN --NJOW07
-                                    " AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) >= 1 "
-                                 ELSE
-                                    " AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) >= @n_uombase "
-                                 END 
+                                 " AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) >= @n_uombase "
                               ELSE
-                                 CASE WHEN @c_FIFOByMultiUOM = 'Y' THEN --NJOW07                                 
-                                    " AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QTYREPLEN) >= 1 " 
-                                 ELSE
-                                    " AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QTYREPLEN) >= @n_uombase " 
-                                 END   
-                              END  +                                    
+                                 " AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QTYREPLEN) >= @n_uombase " END +
                               ISNULL(RTRIM(@c_Condition),'') + " " + ISNULL(RTRIM(@c_CLKCondition),'') + " " + @c_SortBy
 
       --(Wan01) - START
       SET @c_SQLParms = N'@c_Facility NVARCHAR(5), @c_StorerKey NVARCHAR(15), @c_SKU  NVARCHAR(20), @c_UOM NVARCHAR(10), @c_HostWHCode NVARCHAR(10)'
-          +', @n_UOMBase INT, @n_QtyLeftToFulfill INT, @c_Orderkey NVARCHAR(10), @c_OrderLineNumber NVARCHAR(5), @c_Loadkey NVARCHAR(10), @c_Wavekey NVARCHAR(10)'
+          +', @n_UOMBase INT, @n_QtyLeftToFulfill INT, @c_Orderkey NVARCHAR(10), @c_OrderLineNumber NVARCHAR(5)'
           +',@c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18), @d_Lottable04 DATETIME, @d_Lottable05 DATETIME'
           +',@c_Lottable06 NVARCHAR(30), @c_Lottable07 NVARCHAR(30), @c_Lottable08 NVARCHAR(30), @c_Lottable09 NVARCHAR(30), @c_Lottable10 NVARCHAR(30)'
           +',@c_Lottable11 NVARCHAR(30), @c_Lottable12 NVARCHAR(30), @d_Lottable13 DATETIME, @d_Lottable14 DATETIME, @d_Lottable15 DATETIME'
@@ -924,9 +778,7 @@ BEGIN
          @n_UOMBase    ,
          @n_QtyLeftToFulfill,
          @c_Orderkey,
-         @c_OrderLineNumber,
-         @c_Loadkey,  --NJOW06
-         @c_Wavekey   --NJOW06
+         @c_OrderLineNumber
         ,@c_Lottable01                                   --(Wan01)
         ,@c_Lottable02                                   --(Wan01)
         ,@c_Lottable03                                   --(Wan01)
@@ -962,52 +814,14 @@ BEGIN
 
       WHILE (@@FETCH_STATUS <> -1) AND (@n_QtyLeftToFulfill > 0)
       BEGIN
-         IF @c_FIFOByMultiUOM = 'Y' --NJOW07
-         BEGIN
-         	 SELECT @dt_CurrLottable05 = Lottable05
-         	 FROM LOTATTRIBUTE (NOLOCK)
-         	 WHERE Lot = @c_Lot
-         	 
-         	 SET @n_LotQtyAvailable = 0
-           SELECT @n_LotQtyAvailable = SUM(TL.QtyAvailable)
-           FROM #TMP_LOT TL 
-           JOIN LOTATTRIBUTE LA (NOLOCK) ON TL.Lot = LA.Lot
-           WHERE DATEDIFF(Day, LA.Lottable05, @dt_CurrLottable05) <> 0
-           AND TL.QtyAvailable > 0
-           
-           IF  @n_LotQtyAvailable > 0           
+           IF NOT EXISTS(SELECT 1 FROM #TMP_LOT WHERE Lot = @c_Lot)
            BEGIN
-              IF @n_LotQtyAvailable >= @n_QtyLeftToFulfill --Previous batch can fulfill in next UOM and not to proceed next batch for current UOM
-                 BREAK 
-              ELSE IF @n_LotQtyAvailable < @n_QtyLeftToFulfill --proceed next batch with the remaining qtylefttofulfill
-              BEGIN
-              	  SET @n_QtyLeftToFulfill = @n_QtyLeftToFulfill - @n_LotQtyAvailable 
-              END  
-           END         
-         END           
-      	
-         IF NOT EXISTS(SELECT 1 FROM #TMP_LOT WHERE Lot = @c_Lot)
-         BEGIN
-           INSERT INTO #TMP_LOT (Lot, QtyAvailable)
-           SELECT LOTXLOCXID.Lot, SUM(LOTXLOCXID.Qty - LOTXLOCXID.QtyAllocated - LOTXLOCXID.QtyPicked
-                  - CASE WHEN @c_AllocateQtyReplenFlag <> 'Y' THEN LOTXLOCXID.QtyReplen ELSE 0 END) --NJOW07
-           FROM LOTXLOCXID (NOLOCK)
-           JOIN LOT (NOLOCK) ON (LOTxLOCxID.Lot = LOT.Lot)
-           JOIN LOC (NOLOCK) ON (LOTxLOCxID.Loc = LOC.LOC)
-           JOIN ID (NOLOCK) ON (LOTxLOCxID.Id = ID.ID)
-           WHERE LOTXLOCXID.Lot = @c_Lot
-           AND ((LOT.Status = 'OK'
-                 AND ID.Status = 'OK'
-                 AND LOC.Status = 'OK'
-                 AND LOC.LocationFlag = 'NONE') OR ISNULL(@c_AllocateHoldFlag,'') = 'Y')
-           AND LOC.Facility = @c_Facility       
-           GROUP BY LOTXLOCXID.Lot      
-           
-           /*SELECT Lot, Qty - QtyAllocated - QtyPicked
-           FROM LOT (NOLOCK)
-           WHERE LOT = @c_LOT*/
-         END
-         
+             INSERT INTO #TMP_LOT (Lot, QtyAvailable)
+             SELECT Lot, Qty - QtyAllocated - QtyPicked
+             FROM LOT (NOLOCK)
+             WHERE LOT = @c_LOT
+           END
+
          SET @n_LotQtyAvailable = 0
 
          SELECT @n_LotQtyAvailable = QtyAvailable
@@ -1147,7 +961,7 @@ BEGIN
 
       --(Wan01) - START
       SET @c_SQLParms = N'@c_Facility NVARCHAR(5), @c_StorerKey NVARCHAR(15), @c_SKU  NVARCHAR(20), @c_UOM NVARCHAR(10), @c_HostWHCode NVARCHAR(10)'
-          +', @n_UOMBase INT, @n_QtyLeftToFulfill INT, @c_Orderkey NVARCHAR(10), @c_OrderLineNumber NVARCHAR(5), @c_Loadkey NVARCHAR(10), @c_Wavekey NVARCHAR(10)'
+          +', @n_UOMBase INT, @n_QtyLeftToFulfill INT, @c_Orderkey NVARCHAR(10), @c_OrderLineNumber NVARCHAR(5)'
           +',@c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18), @d_Lottable04 DATETIME, @d_Lottable05 DATETIME'
           +',@c_Lottable06 NVARCHAR(30), @c_Lottable07 NVARCHAR(30), @c_Lottable08 NVARCHAR(30), @c_Lottable09 NVARCHAR(30), @c_Lottable10 NVARCHAR(30)'
           +',@c_Lottable11 NVARCHAR(30), @c_Lottable12 NVARCHAR(30), @d_Lottable13 DATETIME, @d_Lottable14 DATETIME, @d_Lottable15 DATETIME'
@@ -1167,8 +981,6 @@ BEGIN
          @n_QtyLeftToFulfill,
          @c_Orderkey,
          @c_OrderLineNumber,
-         @c_Loadkey,  --NJOW06
-         @c_Wavekey,  --NJOW06
          @c_Lottable01                                   --(Wan01)
         ,@c_Lottable02                                   --(Wan01)
         ,@c_Lottable03                                   --(Wan01)
