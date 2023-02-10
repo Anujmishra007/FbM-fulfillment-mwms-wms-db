@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispALEC08]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[ispALEC08]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -31,10 +26,13 @@ GO
 /* 11-Nov-2015  Shong01 1.1   Bug Fixing                                */                                                                                                                                                                                       
 /* 10-Oct-2016  Shong02 1.2   Fixing Overallocation Issues              */                                                                                                                                                                                       
 /* 15-Oct-2016  Shong   1.3   Change Sorting Order                      */                                                                                                                                                                                       
-/* 24-Jul-2017  TLTING  1.4  Dynamic SQL review, impact SQL cache log   */                                                                                                                                                                                       
-/* 12-NOV-2017  WAN01   1.5   Order by Full case lot for UOM = '7'      */                                                                                                                                                                                       
+/* 24-Jul-2017  TLTING  1.4   Dynamic SQL review, impact SQL cache log  */                                                                                                                                                                                       
+/* 12-NOV-2017  WAN01   1.5   Order by Full case lot for UOM = '7'      */                
+/* 18-Nov-2022  NJOW01  1.6   WMS-21206 Force lottable06 filter to include*/
+/*                            empty lottable by config                  */                
+/* 18-Nov-2022  NJOW01  1.6   DEVOPS Combine Script                     */                                                                                                                                                           
 /************************************************************************/                                                                                                                                                                                     
-CREATE  PROC [dbo].[ispALEC08]                                                                                                                                                                                                                                 
+CREATE OR ALTER  PROC [dbo].[ispALEC08]                                                                                                                                                                                                                                 
    @c_LoadKey    NVARCHAR(10),                                                                                                                                                                                                                                 
    @c_Facility   NVARCHAR(5),                                                                                                                                                                                                                                    
    @c_StorerKey  NVARCHAR(15),                                                                                                                                                                                                                                   
@@ -141,7 +139,18 @@ BEGIN
 
    IF ISNULL(RTRIM(@c_Lottable06), '') <> ''
       SELECT @c_LimitString = RTRIM(@c_LimitString) + N' AND Lottable06= LTrim(RTrim(@c_Lottable06)) '
-
+   ELSE IF EXISTS(SELECT 1 FROM   
+                  CODELKUP (NOLOCK)
+                  WHERE ListName = 'PKCODECFG'
+                  AND Storerkey = @c_Storerkey
+                  AND Code = 'ForceLot06Filter'
+                  AND Code2 = 'ispALEC08'
+                  AND Short <> 'N') --NJOW01          
+   BEGIN
+       SELECT @c_LimitString = RTrim(@c_LimitString)+  
+              ' AND Lottable06= '''' '
+   END                 
+      
    IF ISNULL(RTRIM(@c_Lottable07), '') <> ''
       SELECT @c_LimitString = RTRIM(@c_LimitString) + N' AND Lottable07= LTrim(RTrim(@c_Lottable07)) '
 

@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispALEC03]')
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-DROP PROCEDURE [dbo].[ispALEC03]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -31,9 +26,12 @@ GO
 /* 24-Jul-2017 TLTING   1.1   Dynamic SQL review, impact SQL cache log  */  
 /* 15-Apr-2019 Wan01    1.2   WMS-8610 - CN_Skecher_Robot_AllocateStrategy*/
 /*                            _CR1(ispALEC03). Exclude Robot Location   */ 
-/* 14-Feb-2020 Wan02    1.3   Dynamic SQL review, impact SQL cache log   */ 
+/* 14-Feb-2020 Wan02    1.3   Dynamic SQL review, impact SQL cache log  */ 
+/* 18-Nov-2022 NJOW01   1.4   WMS-21206 Force lottable06 filter to include*/
+/*                            empty lottable by config                  */    
+/* 18-Nov-2022 NJOW01   1.4   DEVOPS Combine Script                     */                                                                                                                                                           
 /************************************************************************/    
-CREATE PROC [dbo].[ispALEC03]        
+CREATE OR ALTER PROC [dbo].[ispALEC03]        
    @c_LoadKey    NVARCHAR(10),  
    @c_Facility   NVARCHAR(5),     
    @c_StorerKey  NVARCHAR(15),     
@@ -170,6 +168,17 @@ BEGIN
    IF ISNULL(RTRIM(@c_Lottable06) ,'')<>''  
        SELECT @c_LimitString = RTrim(@c_LimitString)+  
               ' AND Lottable06= LTrim(RTrim(@c_Lottable06)) '
+   ELSE IF EXISTS(SELECT 1 FROM   
+                  CODELKUP (NOLOCK)
+                  WHERE ListName = 'PKCODECFG'
+                  AND Storerkey = @c_Storerkey
+                  AND Code = 'ForceLot06Filter'
+                  AND Code2 = 'ispALEC03'
+                  AND Short <> 'N') --NJOW01          
+   BEGIN
+       SELECT @c_LimitString = RTrim(@c_LimitString)+  
+              ' AND Lottable06= '''' '
+   END                 
 
    IF ISNULL(RTRIM(@c_Lottable07) ,'')<>''  
        SELECT @c_LimitString = RTrim(@c_LimitString)+  
