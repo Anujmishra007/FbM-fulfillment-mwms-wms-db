@@ -3,7 +3,6 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /***************************************************************************/
 /* Store procedure: rdt_638RcvCfm01                                        */
 /* Copyright      : LF Logistics                                           */
@@ -15,6 +14,7 @@ GO
 /* 2020-07-13 1.1  Ung     WMS-13555 Change params                         */
 /* 2020-11-24 1.2  Ung     WMS-14691 Add serial no params                  */
 /* 2022-09-23 1.3  YeeKung WMS-20820 Extended refno length (yeekung01)     */
+/* 2023-01-04 1.4  Ung     WMS-21385 Update Receipt.Notes                  */
 /***************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_638RcvCfm01](
    @nFunc          INT,
@@ -98,7 +98,7 @@ BEGIN
 
    IF (@cLottable10 NOT IN ('107ZZZZZ','207ZZZZZ','307ZZZZZ'))
    BEGIN
-      SET @nErrNo = 141007
+      SET @nErrNo = 149651
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid LOT10
       GOTO Quit
    END
@@ -110,7 +110,7 @@ BEGIN
    IF @cDocType = 'R' AND @cRecType IN ('RTN','GRN')
    BEGIN
       SET @nRTNFlag = 1
-   SET @cLottable01 = @cLottable10
+      SET @cLottable01 = @cLottable10
    END
 
    -- Receive
@@ -155,7 +155,7 @@ BEGIN
    IF @nErrNo <> 0
       GOTO RollBackTran
 
-    IF EXISTS ( SELECT 1 FROM dbo.ReceiptDetail WITH (NOLOCK)
+   IF EXISTS ( SELECT 1 FROM dbo.ReceiptDetail WITH (NOLOCK)
                WHERE StorerKey = @cStorerKey
                   AND ReceiptKey = @cReceiptKey
                   AND ReceiptLineNumber = @cReceiptLineNumber
@@ -232,11 +232,26 @@ BEGIN
 
       IF @@ERROR <> 0
       BEGIN
-         SET @nErrNo = 149651
+         SET @nErrNo = 149652
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdRcptDetFail
          GOTO Quit
       END
-
+   END
+   
+   IF @cData1 <> ''
+   BEGIN
+      UPDATE dbo.Receipt SET
+         Notes = @cData1, 
+         EditDate = GETDATE(), 
+         EditWho = SUSER_SNAME(), 
+         TrafficCop = NULL
+      WHERE ReceiptKey = @cReceiptKey
+      IF @@ERROR <> 0
+      BEGIN
+         SET @nErrNo = 149653
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd Rcpt Fail
+         GOTO Quit
+      END
    END
 
    COMMIT TRAN rdt_638RcvCfm01
