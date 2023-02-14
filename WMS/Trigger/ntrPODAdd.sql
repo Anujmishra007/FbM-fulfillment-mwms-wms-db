@@ -77,13 +77,15 @@ END
 
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT  
      /* #INCLUDE <TRPOHA1.SQL> */  
-  
-   IF UPDATE(ArchiveCop)   
-   BEGIN  
-      SELECT @n_continue = 4   
-      RETURN   
-   END  
-  
+   
+   --(YT01)-S
+   --IF UPDATE(ArchiveCop)   
+   --BEGIN  
+   --   SELECT @n_continue = 4   
+   --   RETURN   
+   --END  
+   --(YT01)-E
+
    IF @n_continue = 1 OR @n_continue = 2          
    BEGIN
       IF EXISTS (SELECT 1 FROM INSERTED d  
