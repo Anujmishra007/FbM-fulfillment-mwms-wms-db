@@ -193,7 +193,7 @@ BEGIN
             ' JOIN rdt.rdtPickSKULock L WITH (NOLOCK) ON (LOC.PickZone = L.PickZone AND LOC.LOCAisle = L.LOCAisle AND L.PickSlipNo = @cPickSlipNo) ' + 
          @cSQLCommonWhere + 
               CASE WHEN @cLOC = '' THEN '' ELSE 
-                 ' AND CAST( LOC.LOCAisle AS NCHAR( 10)) + CAST( LOC.LogicalLocation AS NCHAR( 18)) + CAST( LOC.LogicalLocation AS NCHAR( 10)) ' + 
+                 ' AND CAST( LOC.LOCAisle AS NCHAR( 10)) + CAST( LOC.LogicalLocation AS NCHAR( 18)) + CAST( LOC.LOC AS NCHAR( 10)) ' + 
                        CASE WHEN @cPickSEQ = 'ASC' THEN '>' ELSE '<' END + 
                      ' CAST( @cLOCAisle AS NCHAR( 10)) + CAST( @cLogicalLOC AS NCHAR( 18)) + CAST( @cLOC AS NCHAR( 10)) ' 
               END + 

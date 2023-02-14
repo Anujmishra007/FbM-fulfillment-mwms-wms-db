@@ -12,7 +12,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.5                                                    */                                                                                  
+/* PVCS Version: 1.7                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -31,6 +31,8 @@ GO
 /* 2022-02-18  Wan05    1.6   LFWM-3334 -CN NIKECN Wave control QCmdUser*/
 /* 2022-02-18  Wan06    1.6   LFWM-3280 - UAT|CN|SCE|Unable to allocate */
 /*                            with stuck on 'submitted'                 */
+/* 2022-12-16  Wan07    1.7   LFWM-3892 - [CN] UAT Converse-Wave Control*/
+/*                            - Allocation issue                        */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_WaveAllocation]                                                                                                                     
       @c_WaveKey              NVARCHAR(10)
@@ -102,6 +104,10 @@ BEGIN
          ,  @c_TaskType                   NVARCHAR(1)    = ''  --(Wan01)
          ,  @c_TransmitLogKey             NVARCHAR(10)   = ''  --(Wan01)
          ,  @n_Priority                   INT            = 0   --(Wan04)
+         
+         ,  @c_WaveType                   NVARCHAR(18)   = ''  --(Wan07)
+         ,  @c_WaveAllowSelectStrategy    NVARCHAR(30)   = ''  --(Wan07)
+         ,  @c_WaveGetStrategyByType      NVARCHAR(30)   = ''  --(Wan07)         
 
          ,  @CUR_WAVELOAD                 CURSOR
          ,  @CUR_ORD                      CURSOR
@@ -170,7 +176,7 @@ BEGIN
             SET @n_continue = 3
             SET @n_err = 555753
             SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err)
-                           + ': No Orders to allocate by Wave. (lsp_WaveAllocation)'
+                          + ': No Orders to allocate by Wave. (lsp_WaveAllocation)'
             EXEC [WM].[lsp_WriteError_List] 
                   @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
                ,  @c_TableName   = @c_TableName
@@ -201,6 +207,110 @@ BEGIN
          SELECT @c_ContinueAllocUnLoadSO= dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'ContinueAllocUnLoadSO')
          SELECT @c_ValidateCancelDate   = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'ValidateCancelDate')
 
+         --(Wan07) - START
+         SELECT @c_StrategykeyParm = ISNULL(w.Strategykey,'')              
+               ,@c_WaveType        = w.WaveType
+         FROM dbo.WAVE AS w WITH (NOLOCK) 
+         WHERE w.WaveKey = @c_WaveKey
+         
+         IF @c_StrategykeyParm <> ''
+         BEGIN
+            SELECT @c_WaveAllowSelectStrategy = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'WaveAllowSelectStrategy')
+            
+            IF @c_WaveAllowSelectStrategy = '1'
+            BEGIN
+               SET @n_Cnt = 0
+               SELECT TOP 1 @n_Cnt = IIF(c.Storerkey = @c_Storerkey OR c.Storerkey = '', 1, 0)
+               FROM dbo.CODELKUP AS c WITH (NOLOCK)
+               WHERE c.LISTNAME = 'WAVESTRGY'
+               AND c.Code = @c_StrategykeyParm
+               ORDER BY 1
+            
+               IF @n_Cnt = 0
+               BEGIN
+                  SET @n_Continue = 3
+                  SET @n_Err = 555771
+                  SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Invalid Strategy: ' + @c_StrategykeyParm
+                                + '. Please check ListName ''WAVESTRGY''. (lsp_WaveAllocation) |' + @c_StrategykeyParm  
+
+                  EXEC [WM].[lsp_WriteError_List] 
+                           @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                        ,  @c_TableName   = @c_TableName
+                        ,  @c_SourceType  = @c_SourceType
+                        ,  @c_Refkey1     = @c_WaveKey
+                        ,  @c_Refkey2     = @c_Loadkey
+                        ,  @c_Refkey3     = ''
+                        ,  @c_WriteType   = 'ERROR' 
+                        ,  @n_err2        = @n_err 
+                        ,  @c_errmsg2     = @c_errmsg 
+                        ,  @b_Success     = @b_Success   
+                        ,  @n_err         = @n_err       
+                        ,  @c_errmsg      = @c_errmsg  
+               END
+            END
+            ELSE
+            BEGIN
+               SET @n_Continue = 3
+               SET @n_Err = 555770
+               SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Storer Config ''WaveAllowSelectStrategy'' is turn off.'
+                             + 'Storer: ' + @c_Storerkey + ' is disallow to select wave''s strategy. (lsp_WaveAllocation) |' + @c_Storerkey  
+
+               EXEC [WM].[lsp_WriteError_List] 
+                        @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                     ,  @c_TableName   = @c_TableName
+                     ,  @c_SourceType  = @c_SourceType
+                     ,  @c_Refkey1     = @c_WaveKey
+                     ,  @c_Refkey2     = @c_Loadkey
+                     ,  @c_Refkey3     = ''
+                     ,  @c_WriteType   = 'ERROR' 
+                     ,  @n_err2        = @n_err 
+                     ,  @c_errmsg2     = @c_errmsg 
+                     ,  @b_Success     = @b_Success   
+                     ,  @n_err         = @n_err       
+                     ,  @c_errmsg      = @c_errmsg  
+               
+            END
+         END
+         
+         IF @c_StrategykeyParm = ''
+         BEGIN
+            SELECT @c_WaveGetStrategyByType = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'WaveGetStrategyByType')
+            
+            IF @c_WaveGetStrategyByType = '1'
+            BEGIN
+               SELECT TOP 1 @c_StrategykeyParm = IIF(c.Storerkey = @c_Storerkey OR c.Storerkey = '', c.Long, '')
+               FROM dbo.CODELKUP AS c WITH (NOLOCK)
+               JOIN dbo.Strategy AS s WITH (NOLOCK) ON c.Long = s.StrategyKey
+               WHERE c.ListName = 'WaveType'
+               AND c.Code = @c_WaveType
+               ORDER BY 1 DESC
+               
+               IF @c_StrategykeyParm = ''
+               BEGIN
+                  SET @n_Continue = 3
+                  SET @n_Err = 555772
+                  SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Invalid Wave type''s Strategy.'
+                                + 'Please check Long value for listname ''WAVETYPE''. (lsp_WaveAllocation)'   
+
+                  EXEC [WM].[lsp_WriteError_List] 
+                        @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
+                     ,  @c_TableName   = @c_TableName
+                     ,  @c_SourceType  = @c_SourceType
+                     ,  @c_Refkey1     = @c_WaveKey
+                     ,  @c_Refkey2     = @c_Loadkey
+                     ,  @c_Refkey3     = ''
+                     ,  @c_WriteType   = 'ERROR' 
+                     ,  @n_err2        = @n_err 
+                     ,  @c_errmsg2     = @c_errmsg 
+                     ,  @b_Success     = @b_Success   
+                     ,  @n_err         = @n_err       
+                     ,  @c_errmsg      = @c_errmsg       
+               END
+            END
+         END
+
+         --(Wan07) - END
+         
          BEGIN TRY
             EXEC  [dbo].[isp_WaveCheckAllocateMode_Wrapper]  
                  @c_WaveKey      = @c_WaveKey   
@@ -633,11 +743,11 @@ BEGIN
       END
       --(Wan06) - END
            
-      --(Wan03) - START
-      SET @c_StrategykeyParm = ''      
-      SELECT @c_StrategykeyParm = ISNULL(w.Strategykey,'')
-      FROM dbo.WAVE AS w WITH (NOLOCK)
-      WHERE w.WaveKey = @c_Wavekey
+      --(Wan03) - START             --(Wan07) Get on Above
+      --SET @c_StrategykeyParm = ''      
+      --SELECT @c_StrategykeyParm = ISNULL(w.Strategykey,'')
+      --FROM dbo.WAVE AS w WITH (NOLOCK)
+      --WHERE w.WaveKey = @c_Wavekey
       --(Wan03) - END
       
       WAVE_ALLOCATION:
