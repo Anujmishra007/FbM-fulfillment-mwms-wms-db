@@ -28,6 +28,7 @@ GO
 /* 05-Jun-2020 LZG      1.1   INC1161388 - Revise PickSlipNo generation */
 /*                                         logic (ZG01)                 */ 
 /* 16-Jun-2020 CSCHONG  1.1   WMS-13625 revised grouping (CS01)         */  
+/* 05-Oct-2021 MINGLE   1.2   WMS-18083 add storerkey(ML01)             */
 /************************************************************************/  
 CREATE PROC [dbo].[isp_GetPickSlipWave18_New]  
          @c_Wavekey_Type          NVARCHAR(15)     
@@ -169,6 +170,7 @@ BEGIN
       ,   PickZone  
       ,   Loc  
       ,   LogicalLocation  
+      ,   Storerkey
       ,   Sku  
       ,   SkuDescr  
       ,   Qty  
@@ -190,7 +192,8 @@ BEGIN
                           SUBSTRING(LTRIM(RTRIM(UPPER(PD.Loc))),7,2)   
                      ELSE PD.Loc  
                      END  
-         ,L.LogicalLocation  
+         ,L.LogicalLocation
+         ,PD.Storerkey     --ML01 
          ,PD.Sku  
          ,SkuDescr = ISNULL(RTRIM(S.Descr),'')  
          ,Qty      = PD.Qty  
