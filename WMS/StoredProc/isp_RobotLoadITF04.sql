@@ -23,6 +23,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 14-Sep-2022 WLChooi  1.0   DevOps Combine Script                     */
+/* 17-Jan-2023 CHONGCS  1.1   WMS-21536 add filter (CS01)               */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_RobotLoadITF04]
            @c_Loadkey   NVARCHAR(10) 
@@ -94,7 +95,8 @@ BEGIN
               JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = LPD.OrderKey
               JOIN PICKDETAIL PD (NOLOCK) ON OH.OrderKey = PD.OrderKey
               WHERE LPD.LoadKey = @c_Loadkey
-              AND ISNULL(PD.PickSlipNo,'') = '')
+              AND ISNULL(PD.PickSlipNo,'') = ''
+              AND PD.UOM <>'2' )    --CS01
    BEGIN
       SET @n_Continue= 3    
       SET @n_Err     = 62095   
@@ -147,6 +149,7 @@ BEGIN
    FROM LOADPLANDETAIL LPD (NOLOCK)
    JOIN PICKDETAIL PD (NOLOCK) ON PD.OrderKey = LPD.OrderKey
    WHERE LPD.LoadKey = @c_Loadkey
+   AND PD.UOM <>'2'     --CS01
 
    WHILE @@TRANCOUNT > 0 
    BEGIN
