@@ -29,7 +29,7 @@ CREATE  PROCEDURE [RDT].[rdt_CaseIDCapture_Confirm] (
    @cOrderKey  NVARCHAR( 15),
    @cSKU       NVARCHAR( 20),   
    @cBatchNo   NVARCHAR( 18),   
-   @cCaseID    NVARCHAR( 18), 
+   @cCaseID    NVARCHAR( 40),     --WC01   
    @cPalletID  NVARCHAR( 18),   
    @nErrNo     INT OUTPUT,   
    @cErrMsg    NVARCHAR( 20) OUTPUT
