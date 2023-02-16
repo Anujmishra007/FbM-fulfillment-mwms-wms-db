@@ -11,9 +11,10 @@ GO
 /*                                                                            */                     
 /* Date       Rev  Author     Purposes                                        */                     
 /* 08-FEB-2022  1.0  CSCHONG    Devops scripts combine                        */     
-/* 08-FEB-2022  1.1  CSCHONG    Created (WMS-18779)                           */     
+/* 08-FEB-2022  1.1  CSCHONG    Created (WMS-18779)                           */    
+/* 04-JAN-2023  1.2  Mingle     WMS-21422 - Add Col12 and change sign(ML01)   */
 /******************************************************************************/                    
-                      
+                    
 CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_TW_VASLABEL]                          
 (  @c_Sparm01            NVARCHAR(250),                  
    @c_Sparm02            NVARCHAR(250),                  
@@ -46,7 +47,8 @@ BEGIN
       @n_NoofCopy         INT,        
       @c_SQL              NVARCHAR(4000),            
       @c_SQLSORT          NVARCHAR(4000),            
-      @c_SQLJOIN          NVARCHAR(4000)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
+      @c_SQLJOIN          NVARCHAR(4000),
+      @c_col12            NVARCHAR(60) = ''	--ML01
         
   DECLARE  @d_Trace_StartTime   DATETIME,       
            @d_Trace_EndTime    DATETIME,      
@@ -60,11 +62,12 @@ BEGIN
    SET @d_Trace_StartTime = GETDATE()      
    SET @c_Trace_ModuleName = ''      
             
-    -- SET RowNo = 0                 
-    SET @c_SQL = ''      
-    SET @n_intFlag  = 1    
+   -- SET RowNo = 0                 
+   SET @c_SQL = ''      
+   SET @n_intFlag  = 1    
 
-    SET @c_DelimiterSign = ';'
+   --SET @c_DelimiterSign = ';'
+   SET @c_DelimiterSign = ','	--ML01
  
                   
     CREATE TABLE [#Result] (                 
@@ -262,7 +265,20 @@ BEGIN
    BEGIN              
       PRINT @c_SQL              
    END            
-   IF @b_debug=1            
+   
+	
+   --START ML01
+   SELECT TOP 1 @c_Col12 = PACKDETAIL.refno2
+   FROM ORDERS(NOLOCK)
+   JOIN PACKHEADER(NOLOCK) ON PackHeader.OrderKey = ORDERS.OrderKey
+   JOIN PACKDETAIL(NOLOCK) ON PackDetail.PickSlipNo = PackHeader.PickSlipNo
+   WHERE ORDERS.ORDERKEY = @c_Sparm02	--ML01
+
+   UPDATE #Result  
+   SET Col12 = @c_Col12  
+   --END ML01
+
+	IF @b_debug=1
    BEGIN            
       SELECT * FROM #Result (nolock)            
    END                            
@@ -282,3 +298,19 @@ END -- procedure
 GO
 GRANT EXECUTE ON [dbo].[isp_BT_Bartender_TW_VASLABEL] TO nsql 
 GO  
+
+--EXEC isp_BT_Bartender_TW_VASLABEL 'LOR','0013036494','','','','','','','',''
+--EXEC isp_BT_Bartender_TW_VASLABEL 'LOR','0013036500','','','','','','','',''
+
+--SELECT ORDERS.ORDERKEY
+--	FROM ORDERS(NOLOCK)
+--	JOIN PACKHEADER(NOLOCK) ON PackHeader.OrderKey = ORDERS.OrderKey
+--	JOIN PACKDETAIL(NOLOCK) ON PackDetail.PickSlipNo = PackHeader.PickSlipNo
+--	WHERE PACKHEADER.PICKSLIPNO = 'P009146259'	
+
+	--SELECT PACKDETAIL.REFNO2
+	--FROM ORDERS(NOLOCK)
+	--JOIN PACKHEADER(NOLOCK) ON PackHeader.OrderKey = ORDERS.OrderKey
+	--JOIN PACKDETAIL(NOLOCK) ON PackDetail.PickSlipNo = PackHeader.PickSlipNo
+	--WHERE ORDERS.ORDERKEY = '0013036494'
+	--AND ORDERS.STORERKEY = 'LOR'
