@@ -17,6 +17,8 @@ GO
 /* 2014-03-14 1.0  Ung      SOS305459 Created                           */
 /* 2017-03-27 1.1  Ung      WMS-1373 Add pallet ID                      */
 /* 2018-05-16 1.2  Ung      WMS-4846 CodeLKUP MHCSSCAN add StorerKey    */
+/* 2023-02-16 1.4  WyeChun  JSM-129049 Extend CaseID (18) length to 40  */    
+/*                          to store the proper barcode (WC01)          */  
 /************************************************************************/
   
 CREATE  PROCEDURE [RDT].[rdt_CaseIDCapture_Confirm] (  
