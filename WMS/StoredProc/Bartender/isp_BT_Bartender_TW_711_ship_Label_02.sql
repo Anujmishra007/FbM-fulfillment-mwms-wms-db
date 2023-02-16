@@ -12,6 +12,7 @@ GO
 /* Date       Rev  Author     Purposes                                        */
 /* 2022-01-25 1.0  CSCHONG    Devops Scripts Combine & Created (WMS-18816)    */     
 /* 2022-05-06 1.1  WLChooi    WMS-19589 - Add Col16, Col17 (WL01)             */
+/* 2023-01-04 1.2  Mingle     WMS-21421 - Add Col18 (ML01)                    */
 /******************************************************************************/                  
                     
 CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_TW_711_ship_Label_02]                        
@@ -171,7 +172,21 @@ BEGIN
    LEFT JOIN CODELKUP C   WITH (NOLOCK) ON C.listname = '711PAY' AND C.Code=ISNULL(ORDIF.orderinfo03,'N') AND C.storerkey = O.storerkey 
    LEFT JOIN CODELKUP C1   WITH (NOLOCK) ON C1.listname = 'CarrierInf' AND C1.Code='711' AND C1.storerkey = O.storerkey  AND c1.code2 = o.OrderGroup
    LEFT JOIN CODELKUP C2   WITH (NOLOCK) ON C2.listname = 'WebsitInfo' AND C2.Code = ORDIF.StoreName AND C2.storerkey = O.storerkey   
-   WHERE pd.pickslipno = @c_Sparm01 AND pd.labelno = @c_Sparm02                 
+   WHERE pd.pickslipno = @c_Sparm01 AND pd.labelno = @c_Sparm02      
+	
+   --START ML01
+   SELECT TOP 1 @c_Col18 = refno2
+   FROM PACKDETAIL(NOLOCK)
+   WHERE PICKSLIPNO = @c_Sparm01	
+
+   UPDATE #Result  
+   SET Col18 = @c_Col18
+   --END ML01
+
+   IF @b_debug=1        
+   BEGIN        
+      SELECT * FROM #Result (nolock)        
+   END 
           
    IF @b_debug = 1          
    BEGIN                     
@@ -207,4 +222,6 @@ EXIT_SP:
 END -- procedure     
 GO
 GRANT EXECUTE ON [dbo].[isp_BT_Bartender_TW_711_ship_Label_02] TO nSQL 
-GO  
+GO
+
+--EXEC isp_BT_Bartender_TW_711_ship_Label_02 'P009146259','0006495431','','','','','','','',''
