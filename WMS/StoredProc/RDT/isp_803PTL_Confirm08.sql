@@ -15,6 +15,7 @@ GO
 /* 31-03-2021 1.0  yeekung    WMS-18729 Created                               */
 /* 03-06-2022 1.1  Ung        WMS-19779 Change codelkup to printer group      */
 /* 23-11-2022 1.2  yeekung    Add error trigger                               */
+/* 22-12-2022 1.3  yeekung    WMS-21394 Add udf02 as loc (yeekung02)          */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [PTL].[isp_803PTL_Confirm08] (
@@ -347,9 +348,9 @@ BEGIN TRY
          
             -- Insert PackDetail
             INSERT INTO dbo.PackDetail
-               (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate, DropID) 
+               (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate, DropID,RefNo2 ) 
             VALUES
-               (@cPickSlipNo, '1', @cLabelNo, @cLabelLine, @cStorerKey, @cSKU, @nQTY, 'rdt.' + SUSER_SNAME(), GETDATE(), 'rdt.' + SUSER_SNAME(), GETDATE(), @cDropID ) 
+               (@cPickSlipNo, '1', @cLabelNo, @cLabelLine, @cStorerKey, @cSKU, @nQTY, 'rdt.' + SUSER_SNAME(), GETDATE(), 'rdt.' + SUSER_SNAME(), GETDATE(), @cDropID,@cLoc ) --yeekung02
             IF @@ERROR <> 0
             BEGIN
                SET @nErrNo = 101766
