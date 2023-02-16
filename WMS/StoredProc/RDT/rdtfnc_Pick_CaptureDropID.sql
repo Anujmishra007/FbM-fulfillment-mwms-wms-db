@@ -21,6 +21,7 @@ GO
 /* 26-10-2021   1.4  Chermaine  WMS-18009 clear @cDropID after st1 (cc01)     */
 /* 22-09-2022   1.5  James      WMS-20758 Add FlowThruStepSP (james01)        */
 /* 13-10-2022   1.6  YeeKung    WMS-20985 Add customize SP (yeekung01)        */
+/* 07-02-2023   1.7  YeeKung    WMS-21707 Fix FlowThru DropID (yeekung02)     */
 /******************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pick_CaptureDropID] (   
@@ -453,7 +454,7 @@ BEGIN
          -- Check order shipped  
          IF EXISTS( SELECT TOP 1 1  
             FROM dbo.PickHeader PickHeader WITH (NOLOCK)  
-               JOIN dbo.RefKeyLookup RefKeyLookup WITH (NOLOCK) ON (PickHeader.PickHeaderKey = RefKeyLookup.PickSlipNo)  
+          JOIN dbo.RefKeyLookup RefKeyLookup WITH (NOLOCK) ON (PickHeader.PickHeaderKey = RefKeyLookup.PickSlipNo)  
                JOIN dbo.Orders Orders WITH (NOLOCK) ON (RefKeyLookup.Orderkey = ORDERS.Orderkey)  
             WHERE PickHeader.PickHeaderKey = @cPickSlipNo  
               AND Orders.Status = '9'  
@@ -545,7 +546,7 @@ BEGIN
       -- Validate pickslip not scan in  
       IF @dScanInDate IS NULL  
       BEGIN  
-         -- Auto scan-in            
+        -- Auto scan-in            
          IF @cAutoScanIn = '1'            
          BEGIN            
             IF NOT EXISTS( SELECT 1 FROM PickingInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo)            
@@ -938,7 +939,7 @@ BEGIN
                ',@cID            ' +  
                ',@cDropID        ' +  
                ',@cSKU           ' +  
-               ',@cLottable01    ' +  
+      ',@cLottable01    ' +  
                ',@cLottable02    ' +  
                ',@cLottable03    ' +  
                ',@dLottable04    ' +  
@@ -1427,242 +1428,317 @@ BEGIN
             -- If config turn on then skip short pick and continue confirm pick   
             IF rdt.RDTGetConfig( @nFunc, 'DISABLESHORTPICK', @cStorer) = '1'  
             BEGIN  
-               goto HERE  
-               IF ISNULL(@cPickConfirm_SP, '') NOT IN ('', '0')  
-               BEGIN  
-                  EXEC RDT.rdt_Pick_ConfirmTask_Wrapper  
-                      @n_Mobile        = @nMobile  
-                     ,@n_Func          = @nFunc  
-                     ,@c_LangCode      = @cLangCode  
-                     ,@c_SPName        = @cPickConfirm_SP  
-                     ,@c_PickSlipNo    = @cPickSlipNo  
-                     ,@c_DropID        = @cDropID  
-                     ,@c_LOC           = @cLOC  
-                     ,@c_ID            = @cID  
-                     ,@c_Storerkey     = @cStorer  
-                     ,@c_SKU           = @cSKU  
-                     ,@c_UOM           = @cUOM  
-                     ,@c_Lottable1     = @cLottable1  
-                     ,@c_Lottable2     = @cLottable2  
-                     ,@c_Lottable3     = @cLottable3  
-                     ,@d_Lottable4     = @dLottable4  
-                     ,@n_TaskQTY       = @nTaskQTY  
-                     ,@n_PQTY          = @nPQTY  
-                     ,@c_UCCTask       = 'N'          -- Y = UCC, N = SKU/UPC  
-                     ,@c_PickType      = @cPickType  
-                     ,@b_Success       = @bSuccess    OUTPUT  
-                     ,@n_ErrNo         = @nErrNo      OUTPUT  
-                     ,@c_ErrMsg        = @cErrMsg     OUTPUT  
+               IF ISNULL(@cFlowThruStepSP,'') = ''    --yeekung02
+               BEGIN    
+                  goto HERE 
                END  
-               ELSE  
-               BEGIN  
-                  -- Confirm task  
-                  EXECUTE rdt.rdt_Pick_ConfirmTask @nErrNo OUTPUT, @cErrMsg OUTPUT, @cLangCode,  
-                     @cPickSlipNo,  
-                     @cDropID,  
-                     @cLOC,  
-                     @cID,  
-                     @cStorer,  
-                     @cSKU,  
-                     @cUOM,  
-                     @cLottable1,   
-                     @cLottable2,  
-                     @cLottable3,  
-                     @dLottable4,  
-                     @nTaskQTY,  
-                     @nPQTY,  
-                     'N', -- Y = UCC, N = SKU/UPC  
-                     @cPickType,    
-                     @nMobile   
-               END  
+               ELSE
+               BEGIN
+                  IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cFlowThruStepSP AND type = 'P')    
+                  BEGIN    
+            	      SET @nErrNo = 0
+                     SET @cSQL = 'EXEC rdt.' + RTRIM( @cFlowThruStepSP) +    
+                        ' @nMobile, @nFunc, @cLangCode, @nScn, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +    
+                        ' @cPickSlipNo, @cLOC, @cID, @cSKU, @cUOM, @nQTY, @cDropID, ' + 
+                        ' @cInField01 OUTPUT, @cInField02 OUTPUT, @cInField03 OUTPUT, @cInField04 OUTPUT, @cInField05 OUTPUT, ' + 
+                        ' @cInField06 OUTPUT, @cInField07 OUTPUT, @cInField08 OUTPUT, @cInField09 OUTPUT, @cInField10 OUTPUT, ' +
+                        ' @cInField11 OUTPUT, @cInField12 OUTPUT, @cInField13 OUTPUT, @cInField14 OUTPUT, @cInField15 OUTPUT, ' +
+                        ' @nToScn OUTPUT, @nToStep OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '    
+                     SET @cSQLParam =    
+                        ' @nMobile      INT,           ' +    
+                        ' @nFunc        INT,           ' +    
+                        ' @cLangCode    NVARCHAR( 3),  ' +    
+                        ' @nScn         INT,           ' +    
+                        ' @nStep        INT,           ' +
+                        ' @nInputKey INT,           ' +    
+                        ' @cFacility    NVARCHAR( 5) , ' +    
+                        ' @cStorerKey   NVARCHAR( 15), ' +    
+                        ' @cPickSlipNo  NVARCHAR( 10), ' +    
+                        ' @cLOC         NVARCHAR( 10), ' +
+                        ' @cID          NVARCHAR( 10), ' +
+                        ' @cSKU         NVARCHAR( 20), ' +    
+                        ' @cUOM         NVARCHAR( 10), ' +
+                        ' @nQTY         INT, ' +
+                        ' @cDropID      NVARCHAR( 20), ' +
+                        ' @cInField01   NVARCHAR( 60) OUTPUT,  ' +
+                        ' @cInField02   NVARCHAR( 60) OUTPUT,  ' +
+                        ' @cInField03   NVARCHAR( 60) OUTPUT,  ' +
+                        ' @cInField04   NVARCHAR( 60) OUTPUT,  ' +
+                        ' @cInField05   NVARCHAR( 60) OUTPUT,  ' +
+                        ' @cInField06   NVARCHAR( 60) OUTPUT,  ' +
+                        ' @cInField07   NVARCHAR( 60) OUTPUT,  ' +
+                        ' @cInField08   NVARCHAR( 60) OUTPUT,  ' +
+                        ' @cInField09   NVARCHAR( 60) OUTPUT,  ' +
+                        ' @cInField10   NVARCHAR( 60) OUTPUT,  ' +
+                        ' @cInField11   NVARCHAR( 60) OUTPUT,  ' +
+                        ' @cInField12   NVARCHAR( 60) OUTPUT,  ' +
+                        ' @cInField13   NVARCHAR( 60) OUTPUT,  ' +
+                        ' @cInField14   NVARCHAR( 60) OUTPUT,  ' +
+                        ' @cInField15   NVARCHAR( 60) OUTPUT,  ' +
+                        ' @nToScn       INT           OUTPUT,  ' +    
+                        ' @nToStep      INT           OUTPUT,  ' +
+                        ' @nErrNo       INT           OUTPUT, ' +    
+                        ' @cErrMsg      NVARCHAR(250) OUTPUT  '    
+    
+                     EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
+                        @nMobile, @nFunc, @cLangCode, @nScn, @nStep, @nInputKey, @cFacility, @cStorer,    
+                        @cPickSlipNo, @cLOC, @cID, @cSKU, @cUOM, @nQTY, @cDropID,  
+                        @cInField01 OUTPUT, @cInField02 OUTPUT, @cInField03 OUTPUT, @cInField04 OUTPUT, @cInField05 OUTPUT, 
+                        @cInField06 OUTPUT, @cInField07 OUTPUT, @cInField08 OUTPUT, @cInField09 OUTPUT, @cInField10 OUTPUT, 
+                        @cInField11 OUTPUT, @cInField12 OUTPUT, @cInField13 OUTPUT, @cInField14 OUTPUT, @cInField15 OUTPUT, 
+                        @nToScn OUTPUT, @nToStep OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT     
+
+                     IF @nErrNo > 0     
+                        GOTO Quit    
+
+                     SET @nDropID_Cnt = 0  
+                     SET @cOutField01 = CAST( @nDropID_Cnt AS NVARCHAR( 3)) + '/' + CAST( @nActPQty AS NVARCHAR( 3))  
+                     SET @cOutField02 = ''  
+                     SET @cDropID = ''  
   
-               IF @nErrNo <> 0  
-               BEGIN  
-                  -- Reverse back to prev value  
-                  SET @nActPQty = @nCurActPQty  
-                  SET @nActMQty = @nCurActMQty  
-  
-                  GOTO Quit  
-               END  
-               ELSE  
-               BEGIN  
-                  -- Re-Initiase value  
-                  SET @nActPQty = 0  
-                  SET @nActMQty = 0  
-               END  
-  
-               -- Check if anymore pick task in same loc  
-               SET @cID = ''  
-               SET @cSKU = ''  
-               SET @cUOM = ''  
-               SET @cLottable1 = ''  
-               SET @cLottable2 = ''  
-               SET @cLottable3 = ''  
-               SET @dLottable4 = 0 -- 1900-01-01  
-               SET @nTaskQTY = 0  
-  
-               SET @nErrNo = 0  
-               SET @cPickGetTaskInLOC_SP = rdt.RDTGetConfig( @nFunc, 'PickGetTaskInLOC_SP', @cStorer)  
-               IF ISNULL(@cPickGetTaskInLOC_SP, '') NOT IN ('', '0')  
-               BEGIN  
-                  EXEC RDT.RDT_PickGetTaskInLOC_Wrapper  
-                      @n_Mobile        = @nMobile  
-                     ,@n_Func          = @nFunc  
-                     ,@c_LangCode      = @cLangCode  
-         ,@c_SPName        = @cPickGetTaskInLOC_SP  
-                     ,@c_StorerKey     = @cStorer  
-                     ,@c_PickSlipNo    = @cPickSlipNo  
-                     ,@c_LOC           = @cLOC  
-                     ,@c_PrefUOM       = @cPrefUOM  
-                     ,@c_PickType      = @cPickType  
-                     ,@c_DropID        = @cDropID  
-                     ,@c_ID            = @cID            OUTPUT  
-                     ,@c_SKU           = @cSKU           OUTPUT  
-                     ,@c_UOM           = @cUOM           OUTPUT  
-       ,@c_Lottable1     = @cLottable1     OUTPUT  
-                     ,@c_Lottable2     = @cLottable2     OUTPUT  
-                     ,@c_Lottable3     = @cLottable3     OUTPUT  
-                     ,@d_Lottable4     = @dLottable4     OUTPUT  
-                     ,@c_SKUDescr      = @cSKUDescr      OUTPUT  
-                     ,@c_oFieled01     = @c_oFieled01    OUTPUT  
-                     ,@c_oFieled02     = @c_oFieled02    OUTPUT  
-                     ,@c_oFieled03     = @c_oFieled03    OUTPUT  
-                     ,@c_oFieled04     = @c_oFieled04    OUTPUT  
-                     ,@c_oFieled05     = @c_oFieled05    OUTPUT  
-                     ,@c_oFieled06     = @c_oFieled06    OUTPUT  
-                     ,@c_oFieled07     = @c_oFieled07    OUTPUT  
-                     ,@c_oFieled08     = @c_oFieled08    OUTPUT  
-                     ,@c_oFieled09     = @c_oFieled09    OUTPUT  
-                     ,@c_oFieled10     = @c_oFieled10    OUTPUT  
-                     ,@c_oFieled11     = @c_oFieled11    OUTPUT  
-                     ,@c_oFieled12     = @c_oFieled12    OUTPUT  
-                     ,@c_oFieled13     = @c_oFieled13    OUTPUT  
-                     ,@c_oFieled14     = @c_oFieled14    OUTPUT  
-                     ,@c_oFieled15     = @c_oFieled15    OUTPUT  
-                     ,@b_Success       = @bSuccess       OUTPUT  
-                     ,@n_ErrNo         = @nErrNo         OUTPUT  
-                     ,@c_ErrMsg        = @cErrMsg        OUTPUT  
-  
-                     SET @nTaskQTY     = CAST(@c_oFieled01 AS INT)  
-                     SET @nTask        = CAST(@c_oFieled02 AS INT)  
-                     SET @cUOMDesc     = @c_oFieled03  
-                     SET @cPPK         = @c_oFieled04  
-                     SET @nCaseCnt     = CAST(@c_oFieled05 AS INT)  
-                     SET @cPrefUOM_Desc= @c_oFieled06  
-                     SET @nPrefQTY     = CAST(@c_oFieled07 AS INT)  
-                     SET @cMstUOM_Desc = @c_oFieled08  
-                     SET @nMstQTY      = CAST(@c_oFieled09 AS INT)  
-                     SET @nPrefUOM_Div = CAST(@c_oFieled10 AS INT)  
-               END  
-               ELSE  
-               BEGIN  
-                  EXECUTE rdt.rdt_Pick_GetTaskInLOC @cStorer, @cPickSlipNo, @cLOC, @cPrefUOM, @cPickType, @cDropID,  
-                     @cID             OUTPUT,  
-                     @cSKU            OUTPUT,  
-                     @cUOM            OUTPUT,  
-                     @cLottable1      OUTPUT,  
-                     @cLottable2      OUTPUT,  
-                     @cLottable3      OUTPUT,  
-                     @dLottable4      OUTPUT,  
-                     @nTaskQTY        OUTPUT,  
-                     @nTask           OUTPUT,  
-                     @cSKUDescr       OUTPUT,  
-                     @cUOMDesc        OUTPUT,  
-                     @cPPK            OUTPUT,  
-                     @nCaseCnt        OUTPUT,  
-                     @cPrefUOM_Desc   OUTPUT,  
-                     @nPrefQTY        OUTPUT,  
-                     @cMstUOM_Desc    OUTPUT,  
-                     @nMstQTY         OUTPUT  
-               END  
-  
-               IF @nTask = 0  
-               BEGIN  
-                  -- Check if the display suggested loc turned on  
-                  IF @cPickShowSuggestedLOC <> '0'  
+                     SET @nScn = @nToScn  
+                     SET @nStep = @nToStep
+               
+                     IF @nErrNo <> -1
+               	      GOTO Step_DropID
+                  END  
+ 
+                  IF ISNULL(@cPickConfirm_SP, '') NOT IN ('', '0')  
                   BEGIN  
-                     -- If turned on then check whether there is another loc to pick  
-                     -- Get suggested loc  
-                     SET @cSuggestedLOC = ''  
-                     SET @cLoc = ''                       
-                     SET @nErrNo = 0  
-                     SET @cGetSuggestedLoc_SP = rdt.RDTGetConfig( @nFunc, 'PickGetSuggestedLoc_SP', @cStorer)  
-                     IF ISNULL(@cGetSuggestedLoc_SP, '') NOT IN ('', '0')  
-                     BEGIN  
-                        EXEC RDT.RDT_GetSuggestedLoc_Wrapper  
-                        @n_Mobile        = @nMobile  
-                           ,@n_Func          = @nFunc  
-                           ,@c_LangCode      = @cLangCode  
-                           ,@c_SPName        = @cGetSuggestedLoc_SP  
-                           ,@c_Storerkey     = @cStorer  
-                           ,@c_OrderKey      = ''  
-                           ,@c_PickSlipNo    = @cPickSlipNo  
-                           ,@c_SKU           = ''  
-                           ,@c_FromLoc       = @cLOC  
-                           ,@c_FromID        = ''  
-                           ,@c_oFieled01     = @c_oFieled01    OUTPUT  
-                           ,@c_oFieled02     = @c_oFieled02    OUTPUT  
-                           ,@c_oFieled03     = @c_oFieled03    OUTPUT  
-                           ,@c_oFieled04     = @c_oFieled04    OUTPUT  
-                           ,@c_oFieled05     = @c_oFieled05    OUTPUT  
-                           ,@c_oFieled06     = @c_oFieled06    OUTPUT  
-                           ,@c_oFieled07     = @c_oFieled07    OUTPUT  
-                           ,@c_oFieled08     = @c_oFieled08    OUTPUT  
-                           ,@c_oFieled09     = @c_oFieled09    OUTPUT  
-                           ,@c_oFieled10     = @c_oFieled10    OUTPUT  
-                           ,@c_oFieled11     = @c_oFieled11    OUTPUT  
-                           ,@c_oFieled12     = @c_oFieled12    OUTPUT  
-                           ,@c_oFieled13     = @c_oFieled13    OUTPUT  
-                           ,@c_oFieled14     = @c_oFieled14    OUTPUT  
-                           ,@c_oFieled15     = @c_oFieled15    OUTPUT  
-                           ,@b_Success       = @b_Success      OUTPUT  
-                           ,@n_ErrNo         = @nErrNo         OUTPUT  
-                           ,@c_ErrMsg        = @cErrMsg        OUTPUT  
-                     END  
-  
-                     -- Nothing to pick for the pickslip, goto display summary  
-                     IF ISNULL(@c_oFieled01, '') = ''  
-                     BEGIN  
-                        -- No need display error message if nothing to pick anymore  
-                        SET @cErrMsg = ''  
-                        SET @cOutField01 = '' -- PickSlipNo  
-  
-                        -- Go to PickSlipNo screen  
-                        SET @nScn = @nScn_PickSlipNo  
-                        SET @nStep = @nStep_PickSlipNo  
-                        GOTO Quit  
-                     END  
-  
+                     EXEC RDT.rdt_Pick_ConfirmTask_Wrapper  
+                         @n_Mobile        = @nMobile  
+                        ,@n_Func          = @nFunc  
+                        ,@c_LangCode      = @cLangCode  
+                        ,@c_SPName        = @cPickConfirm_SP  
+                        ,@c_PickSlipNo    = @cPickSlipNo  
+                        ,@c_DropID        = @cDropID  
+                        ,@c_LOC           = @cLOC  
+                        ,@c_ID            = @cID  
+                        ,@c_Storerkey     = @cStorer  
+                        ,@c_SKU           = @cSKU  
+                        ,@c_UOM           = @cUOM  
+                        ,@c_Lottable1     = @cLottable1  
+                        ,@c_Lottable2     = @cLottable2  
+                        ,@c_Lottable3     = @cLottable3  
+                        ,@d_Lottable4     = @dLottable4  
+                        ,@n_TaskQTY       = @nTaskQTY  
+                        ,@n_PQTY          = @nPQTY  
+                        ,@c_UCCTask       = 'N'          -- Y = UCC, N = SKU/UPC  
+                        ,@c_PickType      = @cPickType  
+                        ,@b_Success       = @bSuccess    OUTPUT  
+                        ,@n_ErrNo         = @nErrNo      OUTPUT  
+                        ,@c_ErrMsg        = @cErrMsg     OUTPUT  
                   END  
                   ELSE  
                   BEGIN  
-                     SET @cOutField01 = @cLOC  
-                     -- Go to screen 'No more task in LOC'  
-                     SET @nScn = @nScn_NoMoreTask  
-                     SET @nStep = @nStep_NoMoreTask  
+                     -- Confirm task  
+                     EXECUTE rdt.rdt_Pick_ConfirmTask @nErrNo OUTPUT, @cErrMsg OUTPUT, @cLangCode,  
+                        @cPickSlipNo,  
+                        @cDropID,  
+                        @cLOC,  
+                        @cID,  
+                        @cStorer,  
+                        @cSKU,  
+                        @cUOM,  
+                        @cLottable1,   
+                        @cLottable2,  
+                        @cLottable3,  
+                        @dLottable4,  
+                        @nTaskQTY,  
+                        @nPQTY,  
+                        'N', -- Y = UCC, N = SKU/UPC  
+                        @cPickType,    
+                        @nMobile   
                   END  
   
-                  GOTO Quit  
-               END  
-               ELSE  
-               BEGIN  
-                  -- Go to SKU screen  
-                  SET @cOutField01 = @cLOC  
-                  SET @cOutField02 = @cID  
-                  SET @cOutField03 = @cSKU  
-                  SET @cOutField04 = SUBSTRING( @cSKUDescr, 1, 20)  -- SKU desc 1  
-                  SET @cOutField05 = SUBSTRING( @cSKUDescr, 21, 20) -- SKU desc 2  
-                  SET @cOutField06 = @cLottable2  
-                  SET @cOutField07 = @cLottable3  
-                  SET @cOutField08 = rdt.rdtFormatDate( @dLottable4)  
-                  SET @cOutField09 = '' -- SKU/UPC  
-                  SET @cOutField10 = @cLottable1  
+                  IF @nErrNo <> 0  
+                  BEGIN  
+                     -- Reverse back to prev value  
+                     SET @nActPQty = @nCurActPQty  
+                     SET @nActMQty = @nCurActMQty  
   
-                  -- Go to SKU screen  
-                  SET @nScn = @nScn_SKU  
-                  SET @nStep = @nStep_SKU  
-               END  
-            END  
+                     GOTO Quit  
+                  END  
+                  ELSE  
+                  BEGIN  
+                     -- Re-Initiase value  
+                     SET @nActPQty = 0  
+                     SET @nActMQty = 0  
+                  END  
+  
+                  -- Check if anymore pick task in same loc  
+                  SET @cID = ''  
+                  SET @cSKU = ''  
+                  SET @cUOM = ''  
+                  SET @cLottable1 = ''  
+                  SET @cLottable2 = ''  
+                  SET @cLottable3 = ''  
+                  SET @dLottable4 = 0 -- 1900-01-01  
+                  SET @nTaskQTY = 0  
+  
+                  SET @nErrNo = 0  
+                  SET @cPickGetTaskInLOC_SP = rdt.RDTGetConfig( @nFunc, 'PickGetTaskInLOC_SP', @cStorer)  
+                  IF ISNULL(@cPickGetTaskInLOC_SP, '') NOT IN ('', '0')  
+                  BEGIN  
+                     EXEC RDT.RDT_PickGetTaskInLOC_Wrapper  
+                         @n_Mobile        = @nMobile  
+                        ,@n_Func          = @nFunc  
+                        ,@c_LangCode      = @cLangCode  
+            ,@c_SPName        = @cPickGetTaskInLOC_SP  
+                        ,@c_StorerKey     = @cStorer  
+                        ,@c_PickSlipNo    = @cPickSlipNo  
+                        ,@c_LOC           = @cLOC  
+                        ,@c_PrefUOM       = @cPrefUOM  
+                        ,@c_PickType      = @cPickType  
+                        ,@c_DropID        = @cDropID  
+                        ,@c_ID            = @cID            OUTPUT  
+                        ,@c_SKU           = @cSKU           OUTPUT  
+                        ,@c_UOM           = @cUOM           OUTPUT  
+          ,@c_Lottable1     = @cLottable1     OUTPUT  
+                        ,@c_Lottable2     = @cLottable2     OUTPUT  
+                        ,@c_Lottable3     = @cLottable3     OUTPUT  
+                        ,@d_Lottable4     = @dLottable4     OUTPUT  
+                        ,@c_SKUDescr      = @cSKUDescr      OUTPUT  
+                        ,@c_oFieled01     = @c_oFieled01    OUTPUT  
+                        ,@c_oFieled02     = @c_oFieled02    OUTPUT  
+                        ,@c_oFieled03     = @c_oFieled03    OUTPUT  
+                        ,@c_oFieled04     = @c_oFieled04    OUTPUT  
+                        ,@c_oFieled05     = @c_oFieled05    OUTPUT  
+                        ,@c_oFieled06     = @c_oFieled06    OUTPUT  
+                        ,@c_oFieled07     = @c_oFieled07    OUTPUT  
+                        ,@c_oFieled08     = @c_oFieled08    OUTPUT  
+                        ,@c_oFieled09     = @c_oFieled09    OUTPUT  
+                        ,@c_oFieled10     = @c_oFieled10    OUTPUT  
+                        ,@c_oFieled11     = @c_oFieled11    OUTPUT  
+                        ,@c_oFieled12     = @c_oFieled12    OUTPUT  
+                        ,@c_oFieled13     = @c_oFieled13    OUTPUT  
+                        ,@c_oFieled14     = @c_oFieled14    OUTPUT  
+                        ,@c_oFieled15     = @c_oFieled15    OUTPUT  
+                        ,@b_Success       = @bSuccess       OUTPUT  
+                        ,@n_ErrNo         = @nErrNo         OUTPUT  
+                        ,@c_ErrMsg        = @cErrMsg        OUTPUT  
+  
+                        SET @nTaskQTY     = CAST(@c_oFieled01 AS INT)  
+                        SET @nTask        = CAST(@c_oFieled02 AS INT)  
+                        SET @cUOMDesc     = @c_oFieled03  
+                        SET @cPPK         = @c_oFieled04  
+                        SET @nCaseCnt     = CAST(@c_oFieled05 AS INT)  
+                        SET @cPrefUOM_Desc= @c_oFieled06  
+                        SET @nPrefQTY     = CAST(@c_oFieled07 AS INT)  
+                        SET @cMstUOM_Desc = @c_oFieled08  
+                        SET @nMstQTY      = CAST(@c_oFieled09 AS INT)  
+                        SET @nPrefUOM_Div = CAST(@c_oFieled10 AS INT)  
+                  END  
+                  ELSE  
+                  BEGIN  
+                     EXECUTE rdt.rdt_Pick_GetTaskInLOC @cStorer, @cPickSlipNo, @cLOC, @cPrefUOM, @cPickType, @cDropID,  
+                        @cID             OUTPUT,  
+                        @cSKU            OUTPUT,  
+                        @cUOM            OUTPUT,  
+                        @cLottable1      OUTPUT,  
+                        @cLottable2      OUTPUT,  
+                        @cLottable3      OUTPUT,  
+                        @dLottable4      OUTPUT,  
+                        @nTaskQTY        OUTPUT,  
+                        @nTask           OUTPUT,  
+                        @cSKUDescr       OUTPUT,  
+                        @cUOMDesc        OUTPUT,  
+                        @cPPK            OUTPUT,  
+                        @nCaseCnt        OUTPUT,  
+                        @cPrefUOM_Desc   OUTPUT,  
+                        @nPrefQTY        OUTPUT,  
+                        @cMstUOM_Desc    OUTPUT,  
+                        @nMstQTY         OUTPUT  
+                  END  
+  
+                  IF @nTask = 0  
+                  BEGIN  
+                     -- Check if the display suggested loc turned on  
+                     IF @cPickShowSuggestedLOC <> '0'  
+                     BEGIN  
+                        -- If turned on then check whether there is another loc to pick  
+                        -- Get suggested loc  
+                        SET @cSuggestedLOC = ''  
+                        SET @cLoc = ''                       
+                        SET @nErrNo = 0  
+                        SET @cGetSuggestedLoc_SP = rdt.RDTGetConfig( @nFunc, 'PickGetSuggestedLoc_SP', @cStorer)  
+                        IF ISNULL(@cGetSuggestedLoc_SP, '') NOT IN ('', '0')  
+                        BEGIN  
+                           EXEC RDT.RDT_GetSuggestedLoc_Wrapper  
+                           @n_Mobile        = @nMobile  
+                              ,@n_Func          = @nFunc  
+                              ,@c_LangCode      = @cLangCode  
+                              ,@c_SPName        = @cGetSuggestedLoc_SP  
+                              ,@c_Storerkey     = @cStorer  
+                              ,@c_OrderKey      = ''  
+                              ,@c_PickSlipNo    = @cPickSlipNo  
+                              ,@c_SKU           = ''  
+                              ,@c_FromLoc       = @cLOC  
+                              ,@c_FromID        = ''  
+                              ,@c_oFieled01     = @c_oFieled01    OUTPUT  
+                              ,@c_oFieled02     = @c_oFieled02    OUTPUT  
+                              ,@c_oFieled03     = @c_oFieled03    OUTPUT  
+                              ,@c_oFieled04     = @c_oFieled04    OUTPUT  
+                              ,@c_oFieled05     = @c_oFieled05    OUTPUT  
+                              ,@c_oFieled06     = @c_oFieled06    OUTPUT  
+                              ,@c_oFieled07     = @c_oFieled07    OUTPUT  
+                              ,@c_oFieled08     = @c_oFieled08    OUTPUT  
+                              ,@c_oFieled09     = @c_oFieled09    OUTPUT  
+                              ,@c_oFieled10     = @c_oFieled10    OUTPUT  
+                              ,@c_oFieled11     = @c_oFieled11    OUTPUT  
+                              ,@c_oFieled12     = @c_oFieled12    OUTPUT  
+                              ,@c_oFieled13     = @c_oFieled13    OUTPUT  
+                              ,@c_oFieled14     = @c_oFieled14    OUTPUT  
+                              ,@c_oFieled15     = @c_oFieled15    OUTPUT  
+                              ,@b_Success       = @b_Success      OUTPUT  
+                              ,@n_ErrNo         = @nErrNo         OUTPUT  
+                              ,@c_ErrMsg        = @cErrMsg        OUTPUT  
+                        END  
+  
+                        -- Nothing to pick for the pickslip, goto display summary  
+                        IF ISNULL(@c_oFieled01, '') = ''  
+                        BEGIN  
+                           -- No need display error message if nothing to pick anymore  
+                           SET @cErrMsg = ''  
+                           SET @cOutField01 = '' -- PickSlipNo  
+  
+                           -- Go to PickSlipNo screen  
+                           SET @nScn = @nScn_PickSlipNo  
+                           SET @nStep = @nStep_PickSlipNo  
+                           GOTO Quit  
+                        END  
+  
+                     END  
+                     ELSE  
+                     BEGIN  
+                        SET @cOutField01 = @cLOC  
+                        -- Go to screen 'No more task in LOC'  
+                        SET @nScn = @nScn_NoMoreTask  
+                        SET @nStep = @nStep_NoMoreTask  
+                     END  
+  
+                     GOTO Quit  
+                  END  
+                  ELSE  
+                  BEGIN  
+                     -- Go to SKU screen  
+                     SET @cOutField01 = @cLOC  
+                     SET @cOutField02 = @cID  
+                     SET @cOutField03 = @cSKU  
+                     SET @cOutField04 = SUBSTRING( @cSKUDescr, 1, 20)  -- SKU desc 1  
+                     SET @cOutField05 = SUBSTRING( @cSKUDescr, 21, 20) -- SKU desc 2  
+                     SET @cOutField06 = @cLottable2  
+                     SET @cOutField07 = @cLottable3  
+                     SET @cOutField08 = rdt.rdtFormatDate( @dLottable4)  
+                     SET @cOutField09 = '' -- SKU/UPC  
+                     SET @cOutField10 = @cLottable1  
+  
+                     -- Go to SKU screen  
+                     SET @nScn = @nScn_SKU  
+                     SET @nStep = @nStep_SKU  
+                  END  
+            END 
+            END
             ELSE  
             BEGIN  
                -- Remember parent screen  
@@ -1697,7 +1773,7 @@ BEGIN
                   ' @cLangCode    NVARCHAR( 3),  ' +    
                   ' @nScn         INT,           ' +    
                   ' @nStep        INT,           ' +
-                  ' @nInputKey    INT,           ' +    
+                  ' @nInputKey INT,           ' +    
                   ' @cFacility    NVARCHAR( 5) , ' +    
                   ' @cStorerKey   NVARCHAR( 15), ' +    
                   ' @cPickSlipNo  NVARCHAR( 10), ' +    
@@ -1784,7 +1860,7 @@ BEGIN
       SET @cFieldAttr02 = ''  
       SET @cFieldAttr03 = ''  
       SET @cFieldAttr04 = ''  
-      SET @cFieldAttr05 = ''  
+     SET @cFieldAttr05 = ''  
       SET @cFieldAttr06 = ''  
       SET @cFieldAttr07 = ''  
       SET @cFieldAttr08 = ''  
@@ -1885,7 +1961,7 @@ BEGIN
                '@cDropID         NVARCHAR(60)   OUTPUT, ' +  
                '@cLOC            NVARCHAR(10)   OUTPUT, ' +  
                '@cID             NVARCHAR(18)   OUTPUT, ' +  
-               '@cSKU            NVARCHAR(20)   OUTPUT, ' +  
+               '@cSKU  NVARCHAR(20)   OUTPUT, ' +  
                '@nQty            INT            OUTPUT, ' +  
                '@cLottable01     NVARCHAR( 18)  OUTPUT, ' +   
                '@cLottable02     NVARCHAR( 18)  OUTPUT, ' +   
@@ -1959,7 +2035,7 @@ BEGIN
                ',@cLOC            NVARCHAR( 10)  ' +  
                ',@cID             NVARCHAR( 18)  ' +  
                ',@cDropID         NVARCHAR( 20)  ' +  
-               ',@cSKU            NVARCHAR( 20)  ' +  
+            ',@cSKU            NVARCHAR( 20)  ' +  
                ',@cLottable01     NVARCHAR( 18)  ' +  
                ',@cLottable02     NVARCHAR( 18)  ' +  
                ',@cLottable03     NVARCHAR( 18)  ' +  
@@ -2041,7 +2117,7 @@ BEGIN
       */  
       --INSERT INTO TRACEINFO ( TRACENAME, TIMEIN, COL1, COL2, COL3, COL4, COL5) VALUES ('955', GETDATE(), @cDropID, @cPrefUOM, @cPrefQTY, @cMstQTY, @nPickQty)  
         
- IF @cDropID IN ('NA', 'X')  
+      IF @cDropID IN ('NA', 'X')  
       BEGIN  
          SET @nPickQty = @nPQTY  
          SET @nPQty = 0  
@@ -2165,7 +2241,7 @@ BEGIN
                      ,@c_oFieled04     = @c_oFieled04    OUTPUT  
                      ,@c_oFieled05     = @c_oFieled05    OUTPUT  
                      ,@c_oFieled06     = @c_oFieled06    OUTPUT  
-                     ,@c_oFieled07     = @c_oFieled07    OUTPUT  
+                 ,@c_oFieled07     = @c_oFieled07    OUTPUT  
                      ,@c_oFieled08     = @c_oFieled08    OUTPUT  
                      ,@c_oFieled09     = @c_oFieled09    OUTPUT  
                      ,@c_oFieled10     = @c_oFieled10    OUTPUT  
@@ -2194,7 +2270,8 @@ BEGIN
                END  
   
                SET @cSuggestedLOC = @c_oFieled01  
-  
+               SET @cDropID = ''
+               
                -- Prepare LOC screen var  
                SET @cOutField01 = @cPickSlipNo  
                SET @cOutField02 = @cSuggestedLOC  
@@ -2344,7 +2421,7 @@ BEGIN
             SET @nPrefQTY     = CAST(@c_oFieled07 AS INT)  
             SET @cMstUOM_Desc = @c_oFieled08  
             SET @nMstQTY      = CAST(@c_oFieled09 AS INT)  
-            SET @nPrefUOM_Div = CAST(@c_oFieled10 AS INT)  
+       SET @nPrefUOM_Div = CAST(@c_oFieled10 AS INT)  
       END  
       ELSE  
       BEGIN  
@@ -2440,7 +2517,7 @@ BEGIN
                ',@nPQTY           INT           ' +  
                ',@cUCC            NVARCHAR( 20) ' +  
                ',@cOption         NVARCHAR( 1)  ' +  
-               ',@cExtendedInfo   NVARCHAR( 20) OUTPUT' +  
+   ',@cExtendedInfo   NVARCHAR( 20) OUTPUT' +  
                ',@nErrNo          INT           OUTPUT' +  
                ',@cErrMsg         NVARCHAR( 20) OUTPUT'  
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam, @nMobile, @nFunc, @cLangCode, @nStep_LOC, @nStep, @nInputKey, @cFacility, @cStorer  
@@ -2619,7 +2696,7 @@ BEGIN
                      ,@c_oFieled11     = @c_oFieled11    OUTPUT  
                      ,@c_oFieled12     = @c_oFieled12    OUTPUT  
                      ,@c_oFieled13     = @c_oFieled13    OUTPUT  
-                     ,@c_oFieled14     = @c_oFieled14    OUTPUT  
+     ,@c_oFieled14     = @c_oFieled14    OUTPUT  
                      ,@c_oFieled15     = @c_oFieled15    OUTPUT  
                      ,@b_Success       = @b_Success      OUTPUT  
                      ,@n_ErrNo         = @nErrNo         OUTPUT  
@@ -2934,7 +3011,7 @@ BEGIN
    IF @cParentScn = 'SKU'  
    BEGIN  
       -- Prepare SKU screen var  
-      SET @cOutField01 = @cLOC  
+SET @cOutField01 = @cLOC  
       SET @cOutField02 = @cID  
       SET @cOutField03 = @cSKU  
       SET @cOutField04 = SUBSTRING( @cSKUDescr, 1, 20)  -- SKU desc 1  
@@ -3059,7 +3136,7 @@ BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 3 -- LOC  
            
          -- Go to LOC screen  
-         SET @nScn = @nScn_LOC  
+      SET @nScn = @nScn_LOC  
          SET @nStep = @nStep_LOC  
       END  
    END  
