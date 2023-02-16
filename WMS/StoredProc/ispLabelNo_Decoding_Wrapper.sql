@@ -21,6 +21,8 @@ GO
 /* 09-Jan-2009 1.0  Vicky       Created                                 */
 /* 25-Apr-2013 1.1  Ung         Fix UPC should allow 30 chars (ung01)   */  
 /* 26-Mar-2014 1.2  Ung         SOS306108 Expand LabelNo 60 char (ung02)*/
+/* 2023-02-16  1.3  WyeChun     JSM-129049 Extend oField09 (20) length  */    
+/*                              to 40 to store the proper barcode (WC01)*/  
 /************************************************************************/
 
 CREATE PROC ispLabelNo_Decoding_Wrapper (
@@ -30,7 +32,7 @@ CREATE PROC ispLabelNo_Decoding_Wrapper (
    @c_ReceiptKey       NVARCHAR(10),
    @c_POKey            NVARCHAR(10),
 	@c_LangCode	        NVARCHAR(3),
-   @c_oFieled01        NVARCHAR(30) OUTPUT, --(ung01)  
+   @c_oFieled01        NVARCHAR(60) OUTPUT, --(ung01)  
 	@c_oFieled02        NVARCHAR(20) OUTPUT,
    @c_oFieled03        NVARCHAR(20) OUTPUT,
    @c_oFieled04        NVARCHAR(20) OUTPUT,
@@ -38,7 +40,7 @@ CREATE PROC ispLabelNo_Decoding_Wrapper (
    @c_oFieled06        NVARCHAR(20) OUTPUT,
    @c_oFieled07        NVARCHAR(20) OUTPUT,
    @c_oFieled08        NVARCHAR(20) OUTPUT,
-   @c_oFieled09        NVARCHAR(20) OUTPUT,
+   @c_oFieled09        NVARCHAR(40) OUTPUT,    --WC01  
    @c_oFieled10        NVARCHAR(20) OUTPUT,
    @b_Success          INT = 1  OUTPUT,
    @n_ErrNo            INT      OUTPUT, 
@@ -98,7 +100,7 @@ BEGIN
                         '@c_ReceiptKey       NVARCHAR(10),           ' +
                         '@c_POKey            NVARCHAR(10),           ' +
                         '@c_LangCode         NVARCHAR(3),            ' +
-                        '@c_oFieled01        NVARCHAR(30) OUTPUT, ' +  -- (ung01)  
+                        '@c_oFieled01        NVARCHAR(60) OUTPUT, ' +  -- (ung01)  
 	                     '@c_oFieled02        NVARCHAR(20) OUTPUT, ' + 
 	                     '@c_oFieled03        NVARCHAR(20) OUTPUT, ' + 
 	                     '@c_oFieled04        NVARCHAR(20) OUTPUT, ' + 
@@ -106,7 +108,7 @@ BEGIN
 	                     '@c_oFieled06        NVARCHAR(20) OUTPUT, ' + 
 	                     '@c_oFieled07        NVARCHAR(20) OUTPUT, ' + 
 	                     '@c_oFieled08        NVARCHAR(20) OUTPUT, ' + 
-	                     '@c_oFieled09        NVARCHAR(20) OUTPUT, ' + 
+                        '@c_oFieled09        NVARCHAR(40) OUTPUT, ' +     --WC01 
 	                     '@c_oFieled10        NVARCHAR(20) OUTPUT, ' + 	
                         '@b_Success          INT      OUTPUT,    ' +                     
                         '@n_ErrNo            INT      OUTPUT,    ' +
