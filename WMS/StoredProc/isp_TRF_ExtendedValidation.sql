@@ -1,6 +1,3 @@
-IF EXISTS (SELECT Name FROM dbo.sysobjects WHERE Name = N'isp_TRF_ExtendedValidation' AND Type = 'P')
-   DROP PROCEDURE isp_TRF_ExtendedValidation
-GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -30,10 +27,13 @@ GO
 /* 11-May-2015  NJOW02    1.2   341115-Left join to lot                 */
 /* 02-Feb-2015  YTWan     1.3   SOS#315474 - Project Merlion - Exceed   */
 /*                              GTM Kiosk Module (Wan01)                */
-/* 19-Jul-2017  JayLim    1.4   Performance tune-reduce cache log (jay01)*/
+/* 19-Jul-2017  JayLim    1.4   Performance tune-reduce cache log (jay01)*/                
+/* 28-Jul-2022  NJOW03    1.5   WMS-20353 display error message from    */
+/*                              codlekup for Stored proc validation     */
+/* 28-Jul-2022  NJOW03    1.5   DEVOPS combine script                   */
 /************************************************************************/
 
-CREATE PROC [dbo].[isp_TRF_ExtendedValidation]
+CREATE OR ALTER PROC [dbo].[isp_TRF_ExtendedValidation]
    @cTransferKey   NVARCHAR(10),
    @cTRFValidationRules NVARCHAR(30),
    @nSuccess   int = 1      OUTPUT,
@@ -313,9 +313,10 @@ BEGIN
 
       IF @nSuccess <> 1
       BEGIN
-         SET @bInValid = 1
+         SET @bInValid = 1        
+         SET @cErrorMsg = RTRIM(ISNULL(@cDescription,'')) + ' ' + master.dbo.fnc_GetCharASCII(13) + @cErrorMsg --NJOW03         
          CLOSE CUR_TRF_SPCONDITION
-         DEALLOCATE CUR_TRF_SPCONDITION
+         DEALLOCATE CUR_TRF_SPCONDITION         
          GOTO QUIT
       END
 
