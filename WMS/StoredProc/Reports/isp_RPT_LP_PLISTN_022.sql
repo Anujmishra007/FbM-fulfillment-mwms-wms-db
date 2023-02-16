@@ -24,8 +24,8 @@ GO
 /* 01-DEC-2022  WZPang   1.0  DevOps Combine Script                     */     
 /************************************************************************/        
 CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTN_022] (
-      @c_loadkey       NVARCHAR(10)  
-	, @c_PreGenRptData NVARCHAR(10) = ''
+      @c_Loadkey       NVARCHAR(10)  
+	,  @c_PreGenRptData NVARCHAR(10) = ''
 )        
  AS        
  BEGIN        
@@ -65,7 +65,7 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTN_022] (
          , @n_PalletCnt         INT  
          , @c_ReceiptTm         NVARCHAR(20)  
          , @c_PrintedFlag       NVARCHAR(1)  
-		 , @c_UOM               NVARCHAR(10)  
+		   , @c_UOM               NVARCHAR(10)  
          , @n_UOM3              INT  
          , @c_Lot               NVARCHAR(10)  
          , @c_StorerKey         NVARCHAR(15)  
@@ -765,9 +765,8 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTN_022] (
                   ELSE 0 END AS EA  
            , ShowCustomFormula  
            , LogicalLoc  
-      FROM #temp_pick  
-      --ORDER BY LoadKey, OrderKey, LogicalLoc, LOC, SKU  
-	  ORDER BY ExternOrderKey
+      FROM #temp_pick 
+	   ORDER BY ExternOrderKey 
         
    END  
   

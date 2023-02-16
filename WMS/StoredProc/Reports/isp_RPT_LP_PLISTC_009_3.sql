@@ -11,7 +11,7 @@ GO
 /*                                                                      */    
 /* Purpose: WMS-21180 (TW)                                              */      
 /*                                                                      */        
-/* Called By: RPT_LP_PLISTC_009_3         								*/        
+/* Called By: RPT_LP_PLISTC_009_3         								      */        
 /*                                                                      */        
 /* PVCS Version: 1.0                                                    */        
 /*                                                                      */        
@@ -35,13 +35,11 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTC_009_3] (
    SET CONCAT_NULL_YIELDS_NULL OFF        
    SET ANSI_WARNINGS ON        
   
-     SELECT LOADPLANDETAIL.LoadKey,  
-         --PICKHEADER.PickHeaderKey,  
+     SELECT LOADPLANDETAIL.LoadKey, 
          LOADPLAN.Route,  
          LOADPLAN.AddDate,  
          PICKDETAIL.Loc,  
-         TRIM(PICKDETAIL.Sku) AS SKU,  
-         --PICKDETAIL.Qty,
+         TRIM(PICKDETAIL.Sku) AS SKU,
          SUM(PICKDETAIL.Qty) AS Qty,
          TRIM(SKU.DESCR) AS DESCR,  
          PACK.CaseCnt,
@@ -59,27 +57,25 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTC_009_3] (
                            ( SKU.Sku = PICKDETAIL.Sku )  
      JOIN LoadPlan (NOLOCK) ON ( LoadPlanDetail.LoadKey = LoadPlan.LoadKey )  
      JOIN PACK (NOLOCK) ON ( PACK.PackKey = SKU.PACKKey )  
-     JOIN PICKHEADER (NOLOCK) ON ( PICKHEADER.OrderKey = ORDERS.OrderKey ) 
-							 --AND ( PICKHEADER.Zone = '3' )  
+     JOIN PICKHEADER (NOLOCK) ON ( PICKHEADER.OrderKey = ORDERS.OrderKey )  
      JOIN LOTATTRIBUTE (NOLOCK) ON ( LOTATTRIBUTE.Storerkey = PICKDETAIL.Storerkey  
             AND LOTATTRIBUTE.SKU = PICKDETAIL.SKU  
             AND LOTATTRIBUTE.Lot = PICKDETAIL.Lot)  
      JOIN LOC (NOLOCK) ON PICKDETAIL.LOC = LOC.Loc  
      WHERE ( LoadPlanDetail.LoadKey = @c_LoadKey )  
-	 GROUP BY LoadPlanDetail.LoadKey,  
-         --PICKHEADER.PickHeaderKey,  
+	  GROUP BY LoadPlanDetail.LoadKey,  
          LoadPlan.Route,  
          LoadPlan.AddDate,  
          PICKDETAIL.Loc,  
          PICKDETAIL.Sku,  
-         --PICKDETAIL.Qty,  
          SKU.DESCR,  
          PACK.CaseCnt,  
          PACK.PackKey,  
          LOTATTRIBUTE.Lottable04,  
          LOC.Putawayzone,  
          LOC.LogicalLocation
-     ORDER BY LOC.Putawayzone,CASE WHEN ISNULL(loc.LogicalLocation,'') = '' THEN 0 ELSE 1 END, Loc.LogicalLocation, PICKDETAIL.Loc,PICKDETAIL.Sku    
+     --ORDER BY LOC.Putawayzone,CASE WHEN ISNULL(loc.LogicalLocation,'') = '' THEN 0 ELSE 1 END, Loc.LogicalLocation, PICKDETAIL.Loc,PICKDETAIL.Sku    
+     ORDER BY Loc.LogicalLocation
     
   
   
