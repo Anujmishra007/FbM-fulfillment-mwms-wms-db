@@ -11,6 +11,7 @@ GO
 /*                                                                            */
 /* Date       Rev  Author     Purposes                                        */
 /* 2023-01-04 1.0  James      WMS-21441. Created                              */
+/* 2023-02-14 1.1  James      Bug fix (james01)                               */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1580RcptCfm27 (
@@ -213,7 +214,7 @@ CREATE OR ALTER PROCEDURE rdt.rdt_1580RcptCfm27 (
             Userdefine08 = @cOri_Userdefine08,
             Userdefine09 = @cOri_Userdefine09,
             Userdefine10 = @cOri_Userdefine10,
-            QtyExpected = 0,
+            --QtyExpected = 0,
             TrafficCop = NULL
          WHERE ReceiptKey = @cReceiptKey
          AND   ReceiptLineNumber = @cReceiptLineNumber
