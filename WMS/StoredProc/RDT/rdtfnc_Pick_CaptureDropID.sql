@@ -20,9 +20,10 @@ GO
 /*                              (yeekung01)                                   */  
 /* 26-10-2021   1.4  Chermaine  WMS-18009 clear @cDropID after st1 (cc01)     */
 /* 22-09-2022   1.5  James      WMS-20758 Add FlowThruStepSP (james01)        */
+/* 13-10-2022   1.6  YeeKung    WMS-20985 Add customize SP (yeekung01)        */
 /******************************************************************************/  
   
-CREATE OR ALTER PROC [RDT].[rdtfnc_Pick_CaptureDropID] (  
+CREATE OR ALTER PROC [RDT].[rdtfnc_Pick_CaptureDropID] (   
    @nMobile    int,  
    @nErrNo     int  OUTPUT,  
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 VARCHAR max  
@@ -92,7 +93,7 @@ DECLARE
    @cUOMDesc               NVARCHAR( 3),  
    @cPPK                   NVARCHAR( 5),  
    @cParentScn             NVARCHAR( 3),  
-   @cDropID                NVARCHAR( 60),  
+   @cDropID  NVARCHAR( 60),  
    @cPrefUOM               NVARCHAR( 1),  -- Pref UOM  
    @cPrefUOM_Desc          NVARCHAR( 5),  -- Pref UOM desc  
    @cMstUOM_Desc           NVARCHAR( 5),  -- Master UOM desc  
@@ -330,7 +331,7 @@ Step_Start. Func = 955
 Step_Start:  
 BEGIN  
    -- Get prefer UOM  
-   SELECT @cPrefUOM = IsNULL( DefaultUOM, '6') -- If not defined, default as EA  
+   SELECT @cPrefUOM = IsNULL( DefaultUOM, '6') -- If not defined, default as EA 
    FROM RDT.rdtMobRec M WITH (NOLOCK)  
       INNER JOIN RDT.rdtUser U WITH (NOLOCK) ON (M.UserName = U.UserName)  
    WHERE M.Mobile = @nMobile  
@@ -627,7 +628,7 @@ BEGIN
                ,@c_oFieled14     = @c_oFieled14    OUTPUT  
                ,@c_oFieled15     = @c_oFieled15    OUTPUT  
                ,@b_Success       = @b_Success      OUTPUT  
-               ,@n_ErrNo         = @nErrNo         OUTPUT  
+           ,@n_ErrNo         = @nErrNo         OUTPUT  
                ,@c_ErrMsg        = @cErrMsg        OUTPUT  
   
             IF ISNULL(@cErrMsg, '') <> ''  
@@ -845,7 +846,7 @@ BEGIN
             ,@c_Lottable3     = @cLottable3     OUTPUT  
             ,@d_Lottable4     = @dLottable4     OUTPUT  
             ,@c_SKUDescr      = @cSKUDescr      OUTPUT  
-            ,@c_oFieled01     = @c_oFieled01    OUTPUT  
+            ,@c_oFieled01     = @c_oFieled01 OUTPUT  
             ,@c_oFieled02     = @c_oFieled02    OUTPUT  
             ,@c_oFieled03     = @c_oFieled03    OUTPUT  
             ,@c_oFieled04     = @c_oFieled04    OUTPUT  
@@ -1052,7 +1053,7 @@ BEGIN
       SET @cFieldAttr15 = ''  
   
       -- Skip task  
-      IF ISNULL( @cBarcode, '') = ''   
+   IF ISNULL( @cBarcode, '') = ''   
       BEGIN  
          -- Remember parent screen  
          SET @cParentScn = 'SKU'  
@@ -1085,6 +1086,46 @@ BEGIN
                @cLottable03 = @cChkLottable03 OUTPUT,   
                @dLottable04 = @dChkLottable04 OUTPUT  
          END  
+          -- Customize decode        
+         ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')        
+         BEGIN        
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +        
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cBarcode, ' +        
+               ' @cPickSlipNo, @cDropID, @cLOC, ' +        
+               ' @cUPC        OUTPUT, @nQTY        OUTPUT, ' +        
+               ' @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT,'+    
+               ' @nErrNo   OUTPUT, @cErrMsg     OUTPUT'        
+            SET @cSQLParam =        
+               ' @nMobile      INT,           ' +        
+               ' @nFunc        INT,           ' +        
+               ' @cLangCode    NVARCHAR( 3),  ' +                         
+               ' @nStep        INT,           ' +        
+               ' @nInputKey    INT,           ' +        
+               ' @cFacility    NVARCHAR( 5),  ' +        
+               ' @cStorerKey   NVARCHAR( 15), ' +        
+               ' @cBarcode     NVARCHAR( 60), ' +        
+               ' @cPickSlipNo  NVARCHAR( 10), ' +              
+               ' @cDropID      NVARCHAR( 20), ' +        
+               ' @cLOC         NVARCHAR( 10), ' +        
+               ' @cUPC         NVARCHAR( 30)  OUTPUT, ' +        
+               ' @nQTY         INT            OUTPUT, ' +        
+               ' @cLottable01  NVARCHAR( 18)  OUTPUT, ' +        
+               ' @cLottable02  NVARCHAR( 18)  OUTPUT, ' +        
+               ' @cLottable03  NVARCHAR( 18)  OUTPUT, ' +        
+               ' @dLottable04  DATETIME       OUTPUT, ' +           
+               ' @nErrNo       INT            OUTPUT, ' +        
+               ' @cErrMsg      NVARCHAR( 20)  OUTPUT'        
+        
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,        
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorer, @cBarcode,        
+               @cPickSlipNo, @cDropID, @cLOC,        
+               @cUPC        OUTPUT, @nQTY        OUTPUT,        
+               @cChkLottable01 OUTPUT, @cChkLottable02 OUTPUT, @cChkLottable03 OUTPUT, @dChkLottable04 OUTPUT,    
+               @nErrNo      OUTPUT, @cErrMsg     OUTPUT        
+         END        
+
+         IF @nErrNo<>0
+            GOTO SKU_Fail 
       END  
   
       -- Validate SKU  
@@ -1478,7 +1519,7 @@ BEGIN
                      ,@c_ID            = @cID            OUTPUT  
                      ,@c_SKU           = @cSKU           OUTPUT  
                      ,@c_UOM           = @cUOM           OUTPUT  
-                     ,@c_Lottable1     = @cLottable1     OUTPUT  
+       ,@c_Lottable1     = @cLottable1     OUTPUT  
                      ,@c_Lottable2     = @cLottable2     OUTPUT  
                      ,@c_Lottable3     = @cLottable3     OUTPUT  
                      ,@d_Lottable4     = @dLottable4     OUTPUT  
@@ -1549,7 +1590,7 @@ BEGIN
                      IF ISNULL(@cGetSuggestedLoc_SP, '') NOT IN ('', '0')  
                      BEGIN  
                         EXEC RDT.RDT_GetSuggestedLoc_Wrapper  
-                            @n_Mobile        = @nMobile  
+                        @n_Mobile        = @nMobile  
                            ,@n_Func          = @nFunc  
                            ,@c_LangCode      = @cLangCode  
                            ,@c_SPName        = @cGetSuggestedLoc_SP  
@@ -1629,7 +1670,7 @@ BEGIN
   
                -- Go to screen 'Confirm Short Pick?'  
                SET @nScn = @nScn_ShortPick  
-               SET @nStep = @nStep_ShortPick  
+          SET @nStep = @nStep_ShortPick  
   
                SET @cOutField01 = '' -- Option  
             END  
@@ -1984,7 +2025,7 @@ BEGIN
                GOTO DropID_Fail  
             END  
             ELSE  
-            BEGIN  
+           BEGIN  
                -- Key in X meaning pick all qty at once  
                SET @nPickQty = @nPQTY  
                SET @nPQty = 0  
@@ -2371,7 +2412,7 @@ BEGIN
                ',@cSuggestedLOC  ' +  
                ',@cLOC           ' +  
                ',@cID            ' +  
-               ',@cDropID        ' +  
+               ',@cDropID        ' + 
                ',@cSKU           ' +  
                ',@cLottable01    ' +  
                ',@cLottable02    ' +  
@@ -2554,7 +2595,7 @@ BEGIN
                SET @cGetSuggestedLoc_SP = rdt.RDTGetConfig( @nFunc, 'PickGetSuggestedLoc_SP', @cStorer)  
                IF ISNULL(@cGetSuggestedLoc_SP, '') NOT IN ('', '0')  
                BEGIN  
-                  EXEC RDT.RDT_GetSuggestedLoc_Wrapper  
+             EXEC RDT.RDT_GetSuggestedLoc_Wrapper  
                       @n_Mobile        = @nMobile  
                      ,@n_Func          = @nFunc  
                      ,@c_LangCode      = @cLangCode  
@@ -2647,7 +2688,7 @@ BEGIN
       SET @cOutField04 = SUBSTRING( @cSKUDescr, 1, 20)  -- SKU desc 1  
       SET @cOutField05 = SUBSTRING( @cSKUDescr, 21, 20) -- SKU desc 2  
       SET @cOutField06 = @cLottable2  
-      SET @cOutField07 = @cLottable3  
+SET @cOutField07 = @cLottable3  
       SET @cOutField08 = rdt.rdtFormatDate( @dLottable4)  
       SET @cOutField09 = '' -- SKU/UPC  
       SET @cOutField10 = @cLottable1  
@@ -2845,7 +2886,7 @@ BEGIN
                   GOTO Quit  
                END  
   
-               SET @cSuggestedLOC = @c_oFieled01  
+      SET @cSuggestedLOC = @c_oFieled01  
   
                -- Prepare LOC screen var  
                SET @cOutField01 = @cPickSlipNo  
@@ -2970,7 +3011,7 @@ BEGIN
      
    EXEC rdt.rdtSetFocusField @nMobile, 2 -- LOC  
   
-   -- Back to LOC screen  
+  -- Back to LOC screen  
    SET @nScn = @nScn_LOC  
    SET @nStep = @nStep_LOC  
 END  
@@ -3090,7 +3131,7 @@ BEGIN
       BEGIN      
          IF @nErrNo = -1      
             SET @nErrNo = 0      
-         GOTO Quit      
+      GOTO Quit      
       END      
       
       -- Get SKU info      
