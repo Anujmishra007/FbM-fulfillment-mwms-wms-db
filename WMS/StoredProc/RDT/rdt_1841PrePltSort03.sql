@@ -1,10 +1,6 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdt_1841PrePltSort03]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_1841PrePltSort03]
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /***************************************************************************/
@@ -18,9 +14,10 @@ GO
 /*                                                                         */
 /* Date        Rev  Author     Purposes                                    */
 /* 2021-06-21  1.0  Chermaine  WMS-17254.Created (dup rdt_1841PrePltSort01)*/
+/* 2022-02-15  1.1  yeekung    Performance Tune (yeekung01)                */
 /***************************************************************************/
 
-CREATE PROC [RDT].[rdt_1841PrePltSort03] (
+CREATE OR ALTER PROC [RDT].[rdt_1841PrePltSort03] (
    @nMobile         INT,
    @nFunc           INT,
    @cLangCode       NVARCHAR( 3),
@@ -150,7 +147,7 @@ AS
       AND   SKU = @cSKU
       
       --get position logic
-      IF EXISTS (SELECT 1 FROM ReceiptDetail WITH (NOLOCK) WHERE StorerKey = @cStorerkey AND UserDefine01 = @cUCC)
+      IF EXISTS (SELECT 1 FROM ReceiptDetail WITH (NOLOCK) WHERE StorerKey = @cStorerkey AND UserDefine01 = @cUCC  and ISNULL(UserDefine01,'')<>'') --yeekung01
       BEGIN
       	SELECT TOP 1   
             @cUdf06 = Userdefined06,
@@ -509,7 +506,7 @@ AS
       BEGIN
          IF @cCode = '001'
          BEGIN
-            SELECT @cUCCCount = COUNT( 1) FROM (
+         SELECT @cUCCCount = COUNT( 1) FROM (
             SELECT COUNT( DISTINCT UCCNo) AS A
             FROM dbo.UCC UCC WITH (NOLOCK)
             WHERE UCC.StorerKey = @cStorerKey
@@ -656,7 +653,7 @@ AS
          AND   EXISTS ( SELECT 1 FROM dbo.ReceiptDetail RD WITH (NOLOCK) 
                         WHERE UCC.StorerKey = RD.StorerKey
                         AND   UCC.ReceiptKey = RD.POKey
-                        AND   RD.ReceiptKey = @cReceiptKey
+                        AND RD.ReceiptKey = @cReceiptKey
                         AND   RD.FinalizeFlag <> 'Y') 
             GROUP BY UCCNo
             HAVING 1 = CASE WHEN MAX(UCC.Userdefined06) IN ('', '0') THEN 1 ELSE '0' END AND
@@ -978,6 +975,7 @@ AS
    Quit:
       WHILE @@TRANCOUNT > @nTranCount
          COMMIT TRAN
+
 
 GO
 
