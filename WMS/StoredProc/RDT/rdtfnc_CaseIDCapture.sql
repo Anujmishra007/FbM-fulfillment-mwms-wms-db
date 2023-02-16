@@ -21,6 +21,9 @@ GO
 /*                              CodeLKUP MHCSSCAN add StorerKey         */
 /* 2018-10-16   1.4  TungGH     Performance                             */
 /* 2018-10-10   1.5  Ung        WMS-6576 Add inner barcode              */
+/* 2023-02-16   1.6  WyeChun    JSM-129049 Extend oField09 (20)         */  
+/*                              and CaseID (18) length to 40 to store   */  
+/*                              the proper barcode (WC01)               */
 /************************************************************************/
 
 CREATE PROC [RDT].[rdtfnc_CaseIDCapture] (
@@ -63,7 +66,7 @@ DECLARE
    @cSKU           NVARCHAR( 20),
    @cSKUDescr      NVARCHAR( 60),
    @cBatchNo       NVARCHAR( 18),
-   @cCaseID        NVARCHAR( 18),
+   @cCaseID        NVARCHAR( 40), --WC01 
    @cBarcode       NVARCHAR( MAX),
    
    @cDecodeLabelNo      NVARCHAR( 20),
@@ -321,7 +324,7 @@ BEGIN
                '@cBarcode     NVARCHAR( MAX), ' +
                '@cSKU         NVARCHAR( 18),  ' +
                '@cBatchNo     NVARCHAR( 18),  ' +
-               '@cCaseID      NVARCHAR( 20),  ' +
+               '@cCaseID      NVARCHAR( 40),  ' +  --WC01 
                '@nErrNo       INT            OUTPUT, ' +
                '@cErrMsg      NVARCHAR( 20)  OUTPUT  '
 
@@ -427,7 +430,7 @@ BEGIN
             @c_oFieled03 NVARCHAR(20), @c_oFieled04 NVARCHAR(20),
             @c_oFieled05 NVARCHAR(20), @c_oFieled06 NVARCHAR(20),
             @c_oFieled07 NVARCHAR(20), @c_oFieled08 NVARCHAR(20),
-            @c_oFieled09 NVARCHAR(20), @c_oFieled10 NVARCHAR(20)
+            @c_oFieled09 NVARCHAR(40), @c_oFieled10 NVARCHAR(20)  --WC01
 
          -- Retain value
          SET @c_oFieled01 = @cBarcode
@@ -487,7 +490,7 @@ BEGIN
                ' @cBarcode       NVARCHAR( MAX), ' +
                ' @cSKU           NVARCHAR( 20)  OUTPUT, ' +
                ' @cBatchNo       NVARCHAR( 18)  OUTPUT, ' +
-               ' @cCaseID        NVARCHAR( 18)  OUTPUT, ' +
+               ' @cCaseID        NVARCHAR( 40)  OUTPUT, ' +    --WC01  
                ' @cPalletID      NVARCHAR( 18)  OUTPUT, ' +
                ' @nScan          INT            OUTPUT, ' +
                ' @nTotal         INT            OUTPUT, ' +
