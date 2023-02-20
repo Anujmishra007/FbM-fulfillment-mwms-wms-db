@@ -43,6 +43,7 @@ GO
 /* 01-Mar-2018  1.9    James     Change ESC text to std error (james01)      */   
 /* 24-Mar-2020  2.0    YeeKung   Add two inputfield username (yeekung01)     */   
 /* 10-Nov-2022  2.1    yeekung   WMS-21053. Add dynamic screen(yeekung01)    */
+/* 20-Feb-2023  2.2    yeekung   Fix errmsg          (yeekung02)             */
 /*****************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdtGetMsgScreen] (  
@@ -75,7 +76,8 @@ AS
            @cLine13 NVARCHAR(MaX),    --(yeekung01) 
            @cLine14 NVARCHAR(MaX),    --(yeekung01) 
            @cLine15 NVARCHAR(MaX),     --(yeekung01)
-           @cCounter  INT = 0
+           @cCounter  INT = 0,
+           @cStatus   NVARCHAR(2)
     
    -- (Vicky01) - Start    
    DECLARE @cMsgAddDate NVARCHAR(20)     
@@ -85,18 +87,7 @@ AS
            @cMobileDisp NVARCHAR(1),  -- (Vicky02)    
            @cErrMsg     NVARCHAR(20), -- (james01)  
            @cLang_Code  NVARCHAR(3)   -- (james01)  
-    
-   -- (Vicky02) - Start    
-   SELECT @cUsername = RTRIM(UserName)    
-   FROM   RDT.RDTMOBREC (NOLOCK)    
-   WHERE  Mobile = @nMobile    
-       
-   SELECT @cMobileDisp = ISNULL(MobileNo_Display, 'Y'),  
-          @cLang_Code  = DefaultLangCode   
-   FROM RDT.RDTUSER (NOLOCK)    
-   WHERE Username = @cUsername    
-   -- (Vicky02) - End    
-     
+
    SELECT @cLine01 = ISNULL(Line01, ''),     
           @cLine02 = ISNULL(Line02, ''),     
           @cLine03 = ISNULL(Line03, ''),     
@@ -114,13 +105,27 @@ AS
           @cLine14 = ISNULL(Line14, ''),     --(yeekung01)  
           /*@cLine15 = ISNULL(Line15, ''),     
           (Vicky01) - End  */ 
-          @nMsgQueueNo = MsgQueueNo,    
+          @nMsgQueueNo = MsgQueueNo,  
+          @cStatus     = STATUS,
           @cMsgAddDate = CONVERT(Char(20), AddDate, 100) -- (Vicky01)    
    FROM RDT.rdtMsgQueue WITH (NOLOCK)    
    WHERE MsgQueueNo = @nMsgQueueNo     
    AND   Status < '9'    
-    
-   SELECT @cErrMsg = rdt.rdtgetmessage(54, @cLang_Code, 'DSP')  
+
+  -- SELECT @cErrMsg = rdt.rdtgetmessage(54, @cLang_Code, 'DSP')  
+
+   -- (Vicky02) - Start    
+   SELECT @cUsername = RTRIM(UserName),
+          @cErrMsg =  CASE WHEN (ISNULL(@cStatus,'')='0') THEN '' ELSE ErrMsg END --(yeekung01)
+   FROM   RDT.RDTMOBREC (NOLOCK)    
+   WHERE  Mobile = @nMobile    
+       
+   SELECT @cMobileDisp = ISNULL(MobileNo_Display, 'Y'),  
+          @cLang_Code  = DefaultLangCode   
+   FROM RDT.RDTUSER (NOLOCK)    
+   WHERE Username = @cUsername    
+   -- (Vicky02) - End    
+
     
    -- (Vicky02) - Start    
    IF @cMobileDisp = 'N'    
@@ -252,7 +257,7 @@ AS
             
             SET @OutMessage= @OutMessage +
                         '<field typ="output" x="01" y="12" value="' + RTRIM( @cMsgAddDate ) + '"/>'+  
-                        '<field typ="output" x="01" y="13" value="' + RTRIM( @cErrMsg) + '"/>' 
+                        '<field typ="output" x="01" y="14" value="' + RTRIM( @cErrMsg) + '"/>' 
          END
          ELSE
          BEGIN
@@ -270,7 +275,7 @@ AS
                             '<field typ="output" x="01" y="10" value="Password:"/>' +    
                             '<field typ="input" x="01" y="11" length="10" id="I_Field20" default="" match="" />' +    
                             '<field typ="output" x="01" y="12" value="' + RTRIM( @cMsgAddDate ) + '"/>' + 
-                            '<field typ="output" x="01" y="13" value="%e"/>'  
+                            '<field typ="output" x="01" y="14" value="%e"/>'  
          END
        END
        ELSE
