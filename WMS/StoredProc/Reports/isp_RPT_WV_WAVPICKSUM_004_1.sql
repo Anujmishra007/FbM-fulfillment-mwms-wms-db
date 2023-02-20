@@ -39,7 +39,7 @@ BEGIN
 	FROM	PICKDETAIL (NOLOCK)
 	JOIN	LOC (NOLOCK) L ON (PICKDETAIL.Loc = L.Loc)
 	JOIN	ORDERS (NOLOCK) ON (PICKDETAIL.Orderkey = ORDERS.Orderkey)
-	WHERE	PICKDETAIL.Storerkey = 'NIK' AND ORDERS.UserDefine09 = @c_Wavekey
+	WHERE	ORDERS.UserDefine09 = @c_Wavekey
 	GROUP BY L.LocationCategory
 
 END -- procedure   

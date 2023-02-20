@@ -173,15 +173,15 @@ BEGIN
           )) -- dbo.fnc_RTrim    
           , 9)    
          , OrderKey, 
-		   OriWavekey, '0', '3', '' 
+		   @c_Wavekey, '0', '3', '' 
         FROM #TEMP_WAVPICKSUM004    
         WHERE ISNULL(RTRIM(Pickheaderkey),'') = ''   
-        GROUP By OriWavekey, OrderKey    
+        GROUP By OrderKey    
 		
         UPDATE #TEMP_WAVPICKSUM004    
         SET Pickheaderkey = PICKHEADER.PickHeaderKey    
         FROM PICKHEADER (NOLOCK)
-        WHERE PICKHEADER.WaveKey = #TEMP_WAVPICKSUM004.OriWaveKey    
+        WHERE PICKHEADER.WaveKey = @c_Wavekey    
         AND   PICKHEADER.OrderKey = #TEMP_WAVPICKSUM004.OrderKey    
         AND   PICKHEADER.Zone = '3'    
         AND   ISNULL(RTRIM(#TEMP_WAVPICKSUM004.Pickheaderkey),'') = ''   
@@ -247,9 +247,9 @@ BEGIN
 
     IF ISNULL(@c_PreGenRptData,'') = ''    
     BEGIN    
-          SELECT OriWaveKey AS WaveKey, SUM(PDQty) AS WaveKeyTotal , LocationCategory, PDLoc      
+          SELECT @c_Wavekey AS WaveKey, SUM(PDQty) AS WaveKeyTotal , LocationCategory, PDLoc      
           FROM #TEMP_WAVPICKSUM004     
-          group by OriWaveKey, LocationCategory, PDLoc  
+          group by LocationCategory, PDLoc  
           ORDER BY LocationCategory  
     END                    
 	

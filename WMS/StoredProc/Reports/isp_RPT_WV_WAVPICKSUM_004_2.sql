@@ -38,7 +38,7 @@ BEGIN
         ,    PICKDETAIL.Loc
         ,    LEFT(PICKDETAIL.SKU,6) + '-' + SUBSTRING(PICKDETAIL.SKU,7,3) AS Material
         ,    SUBSTRING(PICKDETAIL.Sku,10,3) AS Size
-        ,    PACK.CaseCnt
+        ,    CAST(PACK.CaseCnt AS INT) AS CaseCnt
         ,    PICKDETAIL.ID
         ,    FLOOR(SUM(PICKDETAIL.Qty) / PACK.CaseCnt) AS CS
         ,    SUM(PICKDETAIL.Qty) % CAST(PACK.CaseCnt AS INT) AS pcs
