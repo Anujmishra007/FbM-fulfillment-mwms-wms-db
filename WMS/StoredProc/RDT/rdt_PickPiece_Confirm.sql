@@ -1,6 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_PickPiece_Confirm]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_PickPiece_Confirm]
-GO
+
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -19,9 +17,10 @@ GO
 /* 12-10-2020 1.5  YeeKung    Bug Fix (Change Alter to Create)                */  
 /* 30-04-2021 1.6  Chermaine  WMS-16868 Add Channel_ID (cc01)                 */ 
 /* 13-12-2021 1.7  YeeKung    WMS-17489 Change pickzone to 1->10 (yeekung01)  */ 
+/* 16-04-2022 1.8  YeeKung    WMS-19311 Add Data capture (yeekung02)          */
 /******************************************************************************/    
     
-CREATE PROC rdt.rdt_PickPiece_Confirm (    
+CREATE OR ALTER PROC rdt.rdt_PickPiece_Confirm (    
     @nMobile         INT    
    ,@nFunc           INT    
    ,@cLangCode       NVARCHAR( 3)    
@@ -51,7 +50,10 @@ CREATE PROC rdt.rdt_PickPiece_Confirm (
    ,@cLottable12     NVARCHAR( 30)    
    ,@dLottable13     DATETIME    
    ,@dLottable14     DATETIME    
-   ,@dLottable15     DATETIME    
+   ,@dLottable15     DATETIME
+   ,@cPackData1      NVARCHAR( 30)
+   ,@cPackData2      NVARCHAR( 30)
+   ,@cPackData3      NVARCHAR( 30)
    ,@nErrNo          INT           OUTPUT    
    ,@cErrMsg         NVARCHAR(250) OUTPUT    
 )    
@@ -84,7 +86,8 @@ BEGIN
          ' @cPickSlipNo, @cPickZone, @cDropID, @cLOC, @cSKU, @nQTY, @cLottableCode, ' +     
          ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +    
          ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +    
-         ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +    
+         ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +   
+         ' @cPackData1, @cPackData2, @cPackData3,'+
          ' @nErrNo OUTPUT, @cErrMsg OUTPUT '    
       SET @cSQLParam =    
          ' @nMobile        INT,           ' +    
@@ -117,6 +120,9 @@ BEGIN
          ' @dLottable13    DATETIME,      ' +    
          ' @dLottable14    DATETIME,      ' +    
          ' @dLottable15    DATETIME,      ' +    
+         ' @cPackData1     NVARCHAR( 30), ' +
+         ' @cPackData2     NVARCHAR( 30), ' +
+         ' @cPackData3     NVARCHAR( 30), ' +
          ' @nErrNo         INT           OUTPUT, ' +    
          ' @cErrMsg        NVARCHAR(250) OUTPUT  '    
     
@@ -125,7 +131,8 @@ BEGIN
          @cPickSlipNo, @cPickZone, @cDropID, @cLOC, @cSKU, @nQTY, @cLottableCode,     
          @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,    
          @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,    
-         @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,             
+         @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, 
+         @cPackData1, @cPackData2, @cPackData3,
          @nErrNo OUTPUT, @cErrMsg OUTPUT    
     
       GOTO Quit    

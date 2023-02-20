@@ -11,6 +11,7 @@ GO
 /*                                                                            */
 /* Date         Author    Ver.  Purposes                                      */
 /* 2022-02-24   James     1.0   WMS-18978. Created                            */
+/* 2022-04-20   YeeKung   1.1   WMS-19311 Add Data capture (yeekung02)        */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_839ExtUpd04
@@ -43,7 +44,10 @@ CREATE OR ALTER PROCEDURE rdt.rdt_839ExtUpd04
    ,@cLottable12     NVARCHAR( 30)          
    ,@dLottable13     DATETIME               
    ,@dLottable14     DATETIME               
-   ,@dLottable15     DATETIME               
+   ,@dLottable15     DATETIME
+   ,@cPackData1      NVARCHAR( 30)
+   ,@cPackData2      NVARCHAR( 30)
+   ,@cPackData3      NVARCHAR( 30)  
    ,@nErrNo          INT           OUTPUT   
    ,@cErrMsg         NVARCHAR(250) OUTPUT   
 AS

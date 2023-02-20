@@ -1,5 +1,3 @@
-
-
 -- 4640 = PickSlipNo screen
 DELETE rdt.RDTScn WHERE Scn = 4640 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4640, 'ENG'
@@ -16,7 +14,6 @@ EXECUTE rdt.rdtAddScn 4641, 'ENG'
    ,@cLine04 = ''
    ,@cLine05 = 'DROPID:'
    ,@cLine06 = '%20i03'
-   ,@cLine13 = '%20d04'
    ,@cLine14 = '%e'
    ,@nFunc = 839
 
@@ -106,5 +103,17 @@ EXECUTE rdt.rdtAddScn 4648, 'ENG'
    ,@cLine03 = '%20d04'
    ,@cLine04 = '%20i05'
    ,@cLine13 = '%20d12' 
+   ,@cLine14 = '%e'
+   ,@nFunc = 839
+
+-- 4648 CartonID screen
+DELETE rdt.RDTScn WHERE Scn = 4649 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 4649, 'ENG'
+   ,@cLine01 = N'%20d01'
+   ,@cLine02 = N'%20i02'
+   ,@cLine03 = N'%20d03'
+   ,@cLine04 = N'%20i04'
+   ,@cLine05 = N'%20d05'
+   ,@cLine06 = N'%20i06'
    ,@cLine14 = '%e'
    ,@nFunc = 839

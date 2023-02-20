@@ -1,6 +1,3 @@
-if exists (select * from sys.sysobjects where id = object_id(N'[rdt].[rdt_839ExtUpdSP01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_839ExtUpdSP01]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -17,8 +14,9 @@ GO
 /* 2019-09-10 1.2  YeeKung WMS-10517 Add parms in gettask (yeekung01)      */  
 /* 2020-02-25 1.3  James   WMS-11654 Fix error return bug (james02)        */
 /* 2021-01-08 1.4  James   WMS-15993 Add support suggested id (james03)    */
+/* 2022-04-20 1.5  YeeKung WMS-19311 Add Data capture (yeekung02)          */
 /***************************************************************************/  
-CREATE PROC [RDT].[rdt_839ExtUpdSP01](  
+CREATE OR ALTER PROC [RDT].[rdt_839ExtUpdSP01](  
    @nMobile         INT                       
   ,@nFunc           INT                       
   ,@cLangCode       NVARCHAR( 3)              
@@ -48,7 +46,10 @@ CREATE PROC [RDT].[rdt_839ExtUpdSP01](
   ,@cLottable12     NVARCHAR( 30)             
   ,@dLottable13     DATETIME                  
   ,@dLottable14     DATETIME                  
-  ,@dLottable15     DATETIME                  
+  ,@dLottable15     DATETIME
+  ,@cPackData1      NVARCHAR( 30)
+  ,@cPackData2      NVARCHAR( 30)
+  ,@cPackData3      NVARCHAR( 30)  
   ,@nErrNo          INT           OUTPUT      
   ,@cErrMsg         NVARCHAR(250) OUTPUT      
      
