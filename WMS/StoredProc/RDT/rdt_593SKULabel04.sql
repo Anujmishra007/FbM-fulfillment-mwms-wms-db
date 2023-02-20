@@ -16,6 +16,7 @@ GO
 /* 2019-04-22 1.2  ChewKP   WMS-8593 Add EventLog (ChewKP02)               */  
 /* 2021-05-18 1.3  YeeKung  WMS-17053 change asn to fromloc                */
 /*                           (yeekung01)                                   */
+/* 2023-02-17 1.4  YeeKung JSM-128558 Add block (yeekung02)                */
 /***************************************************************************/  
   
 CREATE OR ALTER PROC rdt.rdt_593SKULabel04 (  
@@ -153,14 +154,51 @@ AS
    -- Mark 1 QTY as printed  
    UPDATE RFPutaway SET  
       QTYPrinted = QTYPrinted + 1  
-   WHERE RowRef = @nRowRef  
-   IF @@ERROR <> 0  
-   BEGIN  
-      SET @nErrNo = 129963  
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD RFLog Fail  
-      EXEC rdt.rdtSetFocusField @nMobile, 6 --SKU  
-      GOTO Quit  
-   END  
+   WHERE RowRef = @nRowRef 
+   AND QTY > QTYPrinted  
+   --IF @@ERROR <> 0  
+   --BEGIN  
+   --   SET @nErrNo = 129963  
+   --   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD RFLog Fail  
+   --   EXEC rdt.rdtSetFocusField @nMobile, 6 --SKU  
+   --   GOTO Quit  
+   --END  
+   --(yeekung02)(work)
+   IF @@ROWCOUNT =0
+   BEGIN
+      SELECT TOP 1   
+         @nRowRef = RowRef,   
+         @cSuggestedLOC = SuggestedLoc  
+      FROM RFPutaway RF WITH (NOLOCK)  
+         JOIN LOTAttribute LA WITH (NOLOCK) ON (LA.LOT = RF.LOT)  
+      WHERE RF.FromLOC = @cFromLOC  
+         -- AND FromID = @cFromID -- LoseID upon Exceed calc putaway  
+         AND RF.StorerKey = @cStorerKey  
+         AND RF.SKU = @cSKU  
+         AND LA.Lottable01 = @cLottable01  
+         AND RF.QTY > RF.QTYPrinted  
+
+
+      IF @nRowRef = 0  
+      BEGIN  
+         SET @nErrNo = 129962  
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Over scanned  
+         EXEC rdt.rdtSetFocusField @nMobile, 6 --SKU  
+         GOTO Quit  
+      END  
+  
+      -- Mark 1 QTY as printed  
+      UPDATE RFPutaway SET  
+         QTYPrinted = QTYPrinted + 1  
+      WHERE RowRef = @nRowRef 
+      IF @@ERROR <> 0  
+      BEGIN  
+         SET @nErrNo = 129963  
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD RFLog Fail  
+         EXEC rdt.rdtSetFocusField @nMobile, 6 --SKU  
+         GOTO Quit  
+      END  
+   END
      
    -- Get login info  
    SELECT   
