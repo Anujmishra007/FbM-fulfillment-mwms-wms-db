@@ -25,6 +25,7 @@ GO
 /* 11-OCT-2021  CSCHONG   1.0 Devops Scripts combine                    */
 /* 11-MAR-2022  MINGLE    1.1 add new fields(ML01)                      */
 /* 01-APR-2022  MINGLE    1.2 fix record duplicate(ML02)                */
+/* 19-JAN-2023  MINGLE    1.3 WMS-21574 add new fields(ML03)            */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_ReceiptPreTallySheet10]
@@ -84,13 +85,15 @@ BEGIN
           CASE WHEN ISNULL(UCC.Qty,0) = 0 THEN SUM(RECEIPTDETAIL.QtyExpected) ELSE ISNULL(UCC.Qty,0) END AS Qty,
           SKU.style,
           ISNULL(UCC.UCCNo,'') AS UCCNo,
-          PalletPosition = CASE WHEN UCC.Userdefined06 = '1' AND (UCC.Userdefined08 IN ('HV') OR UCC.Userdefined09 = '1')  THEN 'QC-F'
+          PalletPosition = CASE --WHEN UCC.Userdefined06 ='1' AND UCC.Userdefined07 ='1' AND UCC.Userdefined09 = '1' THEN 'QC-F'   --ML03
+                                --WHEN UCC.Userdefined07 ='1' AND UCC.Userdefined09 = '1' THEN 'QC-M'   --ML03                                
+                                WHEN UCC.Userdefined06 = '1' AND (UCC.Userdefined08 IN ('HV') OR UCC.Userdefined09 = '1')  THEN 'QC-F'
                                 WHEN (UCC.Userdefined08 IN ('HV') OR UCC.Userdefined09 = '1')  THEN 'QC'
                                 WHEN UCC.Userdefined06 = '1' AND (UCC.Userdefined08 ='BL' AND UCC.Userdefined09 = '')  THEN 'BL-F'
                                 WHEN UCC.Userdefined08 ='BL' AND UCC.Userdefined09 = '' THEN 'BL'
                                 WHEN UCC.Userdefined06 = '1' AND UCC.Userdefined08 ='' AND UCC.Userdefined09 = '' THEN 'F'
                                 WHEN UCC.Userdefined06 = '' AND UCC.Userdefined07 = '1' AND UCC.Userdefined08 ='' AND UCC.Userdefined09 = '' THEN 'M'
-                                --ELSE 'N' + CAST(COUNT(DISTINCT SKU.style) AS NVARCHAR(10)) END,
+                                --ELSE 'N' + CAST(COUNT(DISTINCT SKU.style) AS NVARCHAR(10)) END,                                
                                 ELSE '' END,--+ cast( (ROW_NUMBER() over (partition by SKU.style order by SKU.style)) as varchar(5)) END,
           CountPallet = 0,--COUNT(DISTINCT SKU.style) + 6,
           UCCUDF08 = CASE WHEN ISNULL(UCC.Userdefined08,'') <> '' THEN UCC.Userdefined08 ELSE '' END,
@@ -109,7 +112,7 @@ BEGIN
             UCC.Userdefined07,
             UCC.Userdefined08, UCC.Userdefined09 ,SKU.style, ISNULL(SKU.SUSR1,0),SKU.Length ,  SKU.Width ,  SKU.Height
 
---SELECT * FROM #ITEMCLASS
+ --SELECT * FROM #ITEMCLASS   --test
 
  DECLARE cur_Loop CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    SELECT t.RECEIPTKEY,
@@ -158,11 +161,16 @@ BEGIN
                                     , @c_PalletPos
    END
 
+   --SELECT @c_Receiptkey, @c_SKU, @c_ItemClass, @n_Qty, @c_PalletPos
+   --SELECT * FROM #ITEMCLASS   --test
+
   SELECT DISTINCT receiptkey AS receiptkey,PalletPosition AS PalletPosition,uccno AS uccno,MAX(sku) AS sku,COUNT(DISTINCT sku) AS ctnuccno
   INTO #ITEMCLASS1
   FROM #ITEMCLASS
 --WHERE PalletPosition<>'M'
   GROUP BY receiptkey,PalletPosition,uccno
+
+  --SELECT * FROM #ITEMCLASS1 ORDER BY uccno,sku  --test
 
   SELECT DISTINCT receiptkey AS receiptkey,PalletPosition AS PalletPosition,sku AS sku,COUNT(uccno) AS ctnuccno
   INTO #ITEMCLASS2
@@ -170,6 +178,7 @@ BEGIN
 --WHERE PalletPosition<>'M'
  GROUP BY receiptkey,PalletPosition,sku
 
+   --SELECT * FROM #ITEMCLASS2 ORDER BY sku   --test
 
    DECLARE cur_GetCntPltLoop CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
     SELECT DISTINCT T1.receiptkey,MAX(T1.ctnuccno) ,t1.PalletPosition ,MAX(T2.ctnuccno),t2.sku AS sku
@@ -238,6 +247,11 @@ BEGIN
                                            , @c_T2Sku
    END
 
+   --SELECT @c_GetRecKey,@n_MaxUccCtn, @c_GetPLTPosition, @n_ctnuccsku, @c_T2Sku  --test
+   --SELECT @n_ctnuccsku AS ctnuccsku,@n_MaxUccCtn AS MaxUccCtn,@c_GetPLTPosition AS GetPltPos  --test
+   --SELECT @n_GetUccNoCtn
+   --select * from #ITEMCLASS   --test
+
    SELECT RECEIPT.ReceiptKey,
           '',
           (t.Sku) + (t.Indicator),
@@ -271,13 +285,15 @@ BEGIN
           (t.ItemClass),
           (t.PalletPosition),
           ISNULL(t.UCCNoCnt,0) AS UCCNoCnt,
-           (SELECT count(distinct itemclass) + 6 FROM #ITEMCLASS WHERE #ITEMCLASS.RECEIPTKEY = RECEIPT.ReceiptKey) AS CountPallet,--t.CountPallet,
+           (SELECT COUNT(DISTINCT itemclass) + 6 FROM #ITEMCLASS WHERE #ITEMCLASS.RECEIPTKEY = RECEIPT.ReceiptKey) AS CountPallet,--t.CountPallet,
           (SELECT TOP 1 RD.ToLoc FROM RECEIPTDETAIL RD (NOLOCK) WHERE RD.RECEIPTKEY = RECEIPT.RECEIPTKEY) AS ToLoc,
           (t.UCCUDF08),
           CASE WHEN ISNULL(CLR1.Code,'') <> '' THEN 'Y' ELSE 'N' END AS Hideskubarcode,
           MAX(PO.Userdefine02),       --ML02
           PO.SellersReference,   --ML01
-          ISNULL(CLR2.SHORT,'') AS SHOWFIELD --ML01
+          ISNULL(CLR2.SHORT,'') AS SHOWFIELD, --ML01
+          PO.OtherReference,	--ML03
+          CAST(SKU.Cost AS DECIMAL(7,2)) AS COST	--ML03
     FROM RECEIPT (NOLOCK)
     JOIN RECEIPTDETAIL (NOLOCK) ON RECEIPT.ReceiptKey = RECEIPTDETAIL.ReceiptKey
     JOIN SKU (NOLOCK) ON SKU.StorerKey = RECEIPTDETAIL.StorerKey AND SKU.Sku = RECEIPTDETAIL.Sku
@@ -317,14 +333,16 @@ BEGIN
              t.PalletPosition,
             -- t.CountPallet,
              t.TTLQTY,
-            ISNULL(t.UCCNoCnt,0) ,
+             ISNULL(t.UCCNoCnt,0) ,
              t.UCCUDF08,--t.UCCNo ,
-          CASE WHEN ISNULL(CLR1.Code,'') <> '' THEN 'Y' ELSE 'N' END,
-          --PO.Userdefine02,       --ML02
-          PO.SellersReference,   --ML01
-          ISNULL(CLR2.SHORT,'')  --ML01 
+             CASE WHEN ISNULL(CLR1.Code,'') <> '' THEN 'Y' ELSE 'N' END,
+             --PO.Userdefine02,       --ML02
+             PO.SellersReference,   --ML01
+             ISNULL(CLR2.SHORT,''),  --ML01 
+             PO.OtherReference,	--ML03
+             CAST(SKU.Cost AS DECIMAL(7,2))	--ML03
    ORDER BY RECEIPT.Receiptkey,
-             t.PalletPosition desc,
+             t.PalletPosition DESC,
              t.SKU
 
 
@@ -333,7 +351,7 @@ BEGIN
   --DROP TABLE #ITEMCLASS2
 
 
-   IF CURSOR_STATUS('LOCAL' , 'cur_Loop') in (0 , 1)
+   IF CURSOR_STATUS('LOCAL' , 'cur_Loop') IN (0 , 1)
    BEGIN
       CLOSE cur_Loop
       DEALLOCATE cur_Loop
@@ -373,7 +391,6 @@ END
 GO
 GRANT EXECUTE ON  [dbo].[isp_ReceiptPreTallySheet10] TO [NSQL]
 GO
-
 
 
 
