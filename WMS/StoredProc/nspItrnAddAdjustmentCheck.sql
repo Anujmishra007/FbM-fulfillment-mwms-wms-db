@@ -1,46 +1,46 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspItrnAddAdjustmentCheck]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[nspItrnAddAdjustmentCheck]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
 
-/************************************************************************/
-/* Stored Procedure: nspItrnAddAdjustmentCheck                          */
-/* Creation Date:                                                       */
-/* Copyright: IDS                                                       */
-/* Written by:                                                          */
-/*                                                                      */
-/* Purpose:                                                             */
-/*                                                                      */
-/* Called By:                                                           */
-/*                                                                      */
-/* PVCS Version: 1.7                                                    */
-/*                                                                      */
-/* Version: 5.4                                                         */
-/*                                                                      */
-/* Data Modifications:                                                  */
-/*                                                                      */
-/* Updates:                                                             */
-/* Date         Author        Purposes                                  */
-/* 11-May-2006  MaryVong      Add in RDT compatible error messages      */
-/* 13-Sep-2006  MaryVong      Add in RDT compatible error messages      */
-/* 25-Jun-2013  TLTING01      Deadlock Tune                             */
-/* 15-JUL-2013  YTWan     1.2 SOS#251326: Add Commingle Lottables       */
-/*                            validation to Exceed and RDT (Wan01)      */
-/* 28-APR-2014  CSCHONG   1.3 Add Lottable06-15  (CS01)                 */
-/* 18-MAY-2015  YTWan     1.4 SOS#341733 - ToryBurch HK SAP - Allow     */
-/*                            CommingleSKU with NoMixLottablevalidation */
-/*                            to Exceed and RDT (Wan02)                 */
-/* 01-JUN-2015  YTWan     1.5 SOS#343525 - UA ¨C NoMixLottable validation*/
-/*                            CR(Wan03)                                 */
-/* 06-Feb-2018  SWT02     1.6 Added Channel Management Logic            */
-/*                        1.6.1 Handle QtyOnHold For Channel Mgmt       */
-/* 23-JUL-2019  Wan04     1.7 WMS - 9914 [MY] JDSPORTSMY - Channel      */
-/*                            Inventory Ignore QtyOnHold - CR           */
-/************************************************************************/
-CREATE PROC  [dbo].[nspItrnAddAdjustmentCheck]
+/*************************************************************************/
+/* Stored Procedure: nspItrnAddAdjustmentCheck                           */
+/* Creation Date:                                                        */
+/* Copyright: IDS                                                        */
+/* Written by:                                                           */
+/*                                                                       */
+/* Purpose:                                                              */
+/*                                                                       */
+/* Called By:                                                            */
+/*                                                                       */
+/* PVCS Version: 1.7                                                     */
+/*                                                                       */
+/* Version: 5.4                                                          */
+/*                                                                       */
+/* Data Modifications:                                                   */
+/*                                                                       */
+/* Updates:                                                              */
+/* Date         Author        Purposes                                   */
+/* 11-May-2006  MaryVong      Add in RDT compatible error messages       */
+/* 13-Sep-2006  MaryVong      Add in RDT compatible error messages       */
+/* 25-Jun-2013  TLTING01      Deadlock Tune                              */
+/* 15-JUL-2013  YTWan     1.2 SOS#251326: Add Commingle Lottables        */
+/*                            validation to Exceed and RDT (Wan01)       */
+/* 28-APR-2014  CSCHONG   1.3 Add Lottable06-15  (CS01)                  */
+/* 18-MAY-2015  YTWan     1.4 SOS#341733 - ToryBurch HK SAP - Allow      */
+/*                            CommingleSKU with NoMixLottablevalidation  */
+/*                            to Exceed and RDT (Wan02)                  */
+/* 01-JUN-2015  YTWan     1.5 SOS#343525 - UA ï¿½C NoMixLottable validation*/
+/*                            CR(Wan03)                                  */
+/* 06-Feb-2018  SWT02     1.6 Added Channel Management Logic             */
+/*                        1.6.1 Handle QtyOnHold For Channel Mgmt        */
+/* 23-JUL-2019  Wan04     1.7 WMS - 9914 [MY] JDSPORTSMY - Channel       */
+/*                            Inventory Ignore QtyOnHold - CR            */
+/* 10-Feb-2023  NJOW01    1.8 WMS-21722 Allow check nomixlottable for all*/
+/*                            commingle sku in a loc.                    */
+/* 10-Feb-2023  NJOW01    1.8 DEVOPS Combine Script                      */
+/*************************************************************************/
+CREATE OR ALTER PROC  [dbo].[nspItrnAddAdjustmentCheck]
                @c_itrnkey      NVARCHAR(10)
 ,              @c_StorerKey    NVARCHAR(15)
 ,              @c_Sku          NVARCHAR(20)
@@ -127,6 +127,7 @@ BEGIN
       , @c_CommingleSku       NVARCHAR(1)              --(Wan02)  
       , @c_ChkLocByCommingleSkuFlag  NVARCHAR(10)      --(Wan02)
       , @c_ChannelInventoryMgmt      NVARCHAR(10) = '0' -- (SWT02)
+      , @c_ChkNoMixLottableForAllSku NVARCHAR(30) = ''  -- NJOW01      
       
    SET @c_IDLottable01     = ''
    SET @c_IDLottable02     = ''
@@ -394,6 +395,29 @@ BEGIN
             END
          END
          --(Wan02) - END
+
+         --NJOW01 S
+         IF @n_continue=1 or @n_continue=2
+         BEGIN
+            SET @b_success = 0
+            Execute nspGetRight 
+                    @c_facility 
+                  , @c_StorerKey               -- Storer
+                  , @c_Sku                     -- Sku
+                  , 'ChkNoMixLottableForAllSku'  -- ConfigKey
+                  , @b_success                   OUTPUT 
+                  , @c_ChkNoMixLottableForAllSku OUTPUT 
+                  , @n_err                       OUTPUT 
+                  , @c_errmsg                    OUTPUT
+            
+            IF @b_success <> 1
+            BEGIN
+               SET @n_continue = 3
+               SET @n_err = 61981
+               SET @c_errmsg = 'nspItrnAddAdjustmentCheck:' + RTRIM(@c_errmsg)
+            END
+         END
+         --NJOW01 E
          
          --(Wan01) - START
          IF @n_continue=1 or @n_continue=2
@@ -471,7 +495,7 @@ BEGIN
                IF EXISTS (SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK)
                           JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)
                           WHERE LLI.Loc = @c_ToLoc
-                          AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku AND LA.Lottable01 <> @c_IDLottable01)
+                          AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') AND LA.Lottable01 <> @c_IDLottable01) --NJOW01
                           AND   LLI.Qty - LLI.QtyPicked > 0)    
                BEGIN
                   SET @n_continue = 3
@@ -487,7 +511,7 @@ BEGIN
                IF EXISTS (SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK)
                           JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)
                           WHERE LLI.Loc = @c_ToLoc
-                          AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku AND LA.Lottable02 <> @c_IDLottable02)
+                          AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') AND LA.Lottable02 <> @c_IDLottable02) --NJOW01
                           AND   LLI.Qty - LLI.QtyPicked > 0)    
                BEGIN
                   SET @n_continue = 3
@@ -503,7 +527,7 @@ BEGIN
                IF EXISTS (SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK)
                           JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)
                           WHERE LLI.Loc = @c_ToLoc
-                          AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku AND LA.Lottable03 <> @c_IDLottable03)
+                          AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') AND LA.Lottable03 <> @c_IDLottable03) --NJOW01
                           AND   LLI.Qty - LLI.QtyPicked > 0)    
                BEGIN
                   SET @n_continue = 3
@@ -519,7 +543,7 @@ BEGIN
                IF EXISTS (SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK)
                           JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)
                           WHERE LLI.Loc = @c_ToLoc
-                          AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku  
+                          AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') --NJOW01
                           AND   ISNULL(LA.Lottable04, CONVERT(DATETIME, '19000101')) <> @d_IDLottable04)
                           AND   LLI.Qty - LLI.QtyPicked > 0)    
                BEGIN
@@ -537,7 +561,7 @@ BEGIN
                IF EXISTS (SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK)
                           JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)
                           WHERE LLI.Loc = @c_ToLoc
-                          AND   (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku AND LA.Lottable06 <> @c_IDLottable06)
+                          AND   (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') AND LA.Lottable06 <> @c_IDLottable06) --NJOW01
                           AND   LLI.Qty - LLI.QtyPicked > 0)
                BEGIN
                   SET @n_Continue = 3
@@ -553,7 +577,7 @@ BEGIN
                IF EXISTS (SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK)
                           JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)
                           WHERE LLI.Loc = @c_ToLoc
-                          AND   (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku AND LA.Lottable07 <> @c_IDLottable07)
+                          AND   (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') AND LA.Lottable07 <> @c_IDLottable07) --NJOW01
                           AND   LLI.Qty - LLI.QtyPicked > 0)
                BEGIN
                   SET @n_Continue = 3
@@ -569,7 +593,7 @@ BEGIN
                IF EXISTS (SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK)
                           JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)
                           WHERE LLI.Loc = @c_ToLoc
-                          AND   (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku AND LA.Lottable08 <> @c_IDLottable08)
+                          AND   (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') AND LA.Lottable08 <> @c_IDLottable08) --NJOW01
                           AND   LLI.Qty - LLI.QtyPicked > 0)
                BEGIN
                   SET @n_Continue = 3
@@ -585,7 +609,7 @@ BEGIN
                IF EXISTS (SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK)
                           JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)
                           WHERE LLI.Loc = @c_ToLoc
-                          AND   (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku AND LA.Lottable09 <> @c_IDLottable09)
+                          AND   (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') AND LA.Lottable09 <> @c_IDLottable09) --NJOW01
                           AND   LLI.Qty - LLI.QtyPicked > 0)
                BEGIN
                   SET @n_Continue = 3
@@ -601,7 +625,7 @@ BEGIN
                IF EXISTS (SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK)
                           JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)
                           WHERE LLI.Loc = @c_ToLoc
-                          AND   (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku AND LA.Lottable10 <> @c_IDLottable10)
+                          AND   (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') AND LA.Lottable10 <> @c_IDLottable10) --NJOW01
                           AND   LLI.Qty - LLI.QtyPicked > 0)
                BEGIN
                   SET @n_Continue = 3
@@ -617,7 +641,7 @@ BEGIN
                IF EXISTS (SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK)
                           JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)
                           WHERE LLI.Loc = @c_ToLoc
-                          AND   (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku AND LA.Lottable11 <> @c_IDLottable11)
+                          AND   (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') AND LA.Lottable11 <> @c_IDLottable11) --NJOW01
                           AND   LLI.Qty - LLI.QtyPicked > 0)
                BEGIN
                   SET @n_Continue = 3
@@ -633,7 +657,7 @@ BEGIN
                IF EXISTS (SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK)
                           JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)
                           WHERE LLI.Loc = @c_ToLoc
-                          AND   (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku AND LA.Lottable12 <> @c_IDLottable12)
+                          AND   (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') AND LA.Lottable12 <> @c_IDLottable12) --NJOW01
                           AND   LLI.Qty - LLI.QtyPicked > 0)
                BEGIN
                   SET @n_Continue = 3
@@ -649,7 +673,7 @@ BEGIN
                IF EXISTS (SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK)
                           JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)
                           WHERE LLI.Loc = @c_ToLoc
-                          AND   (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku 
+                          AND   (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku  OR @c_ChkNoMixLottableForAllSku = '1') --NJOW01
                           AND    ISNULL(LA.Lottable13, CONVERT(DATETIME, '19000101')) <> @d_IDLottable13)
                           AND   LLI.Qty - LLI.QtyPicked > 0) 
                BEGIN
@@ -666,7 +690,7 @@ BEGIN
                IF EXISTS (SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK)
                           JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)
                           WHERE LLI.Loc = @c_ToLoc
-                          AND   (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku 
+                          AND   (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku  OR @c_ChkNoMixLottableForAllSku = '1') --NJOW01
                           AND    ISNULL(LA.Lottable14, CONVERT(DATETIME, '19000101')) <> @d_IDLottable14)
                           AND   LLI.Qty - LLI.QtyPicked > 0) 
                BEGIN
@@ -683,7 +707,7 @@ BEGIN
                IF EXISTS (SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK)
                           JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)
                           WHERE LLI.Loc = @c_ToLoc
-                          AND   (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku 
+                          AND   (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') --NJOW01
                           AND    ISNULL(LA.Lottable15, CONVERT(DATETIME, '19000101')) <> @d_IDLottable15)
                           AND   LLI.Qty - LLI.QtyPicked > 0) 
                BEGIN
