@@ -1,143 +1,143 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nspRDTPASTD]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [dbo].[nspRDTPASTD]
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/******************************************************************************/
-/* Store Procedure:  nspRDTPASTD                                              */
-/* Creation Date: 28-Oct-2009                                                 */
-/* Copyright: IDS                                                             */
-/* Written by:                                                                */
-/*                                                                            */
-/* Purpose:  Stored Procedure for PUTAWAY FROM ASN                            */
-/*                                                                            */
-/* Called FROM RDT Pallet Putaway                                             */
-/*                                                                            */
-/* Input Parameters:  @c_userid,          - User Id                           */
-/*                    @c_storerkey,       - Storerkey                         */
-/*                    @c_LOT,             - Lot                               */
-/*                    @c_SKU,             - Sku                               */
-/*                    @c_ID,              - Id                                */
-/*                    @c_FromLoc,         - FROM Location                     */
-/*                    @n_Qty,             - Putaway Qty                       */
-/*                    @c_uom,             - UOM unit                          */
-/*                    @c_PackKey,         - Packkey for sku                   */
-/*                    @n_PutawayCapacity  - Putaway Capacity                  */
-/*                                                                            */
-/* Output Parameters: @c_Final_ToLoc      - Final ToLocation                  */
-/*                                                                            */
-/* Return Status:  None                                                       */
-/*                                                                            */
-/* Usage:                                                                     */
-/*                                                                            */
-/* Local Variables:                                                           */
-/*                                                                            */
-/* Called By:                                                                 */
-/*                                                                            */
-/* PVCS Version: 1.5                                                          */
-/*                                                                            */
-/* Version: 5.4                                                               */
-/*                                                                            */
-/* Data Modifications:                                                        */
-/*                                                                            */
-/* Updates:                                                                   */
-/* Date         Author        Ver   Purposes                                  */
-/* 28-Oct-2009  Shong               Created (Modified FROM nspASNPASTD)       */
-/* 05-Jan-2010  Shong         1.1   Titan Project                             */
-/* 23-FEb-2010  Vicky         1.1   NextPnDLocation search should include     */
-/*                                  PutawayZone (Vicky01)                     */
-/* 24-Feb-2010  Shong         1.1   Force to loop if no location found in     */
-/*                                  Aisle                                     */
-/* 25-Feb-2010  Vicky         1.1   Fixes on Loop stopped when                */
-/*                                  NextAisle = StartAisle and did NOT        */
-/*                                  to loop the next step in strategy         */
-/*                                  (Vicky02)               */
-/* 26-Feb-2010  Shong         1.1   Fixing Pnd Outer/Centre Seq Issues        */
-/* 27-Feb-2010  Vicky         1.1   Fixing Pnd Outer/Centre Seq (Vicky03)     */
-/* 03-Mar-2010  ChewKP        1.1   Fixing QTYHand need to - QTYPicked        */
-/*                                   (ChewKP01)                               */
-/* 26-May-2010  Vicky         1.2   Should NOT look at PutawayZone = ''       */
-/*                                  to eliminate Performance issue (Vicky04)  */
-/* 24-Jun-2010  ChewKP        1.3   Diana Project PA by BOM SKU Std Cube      */
-/*                                  (ChewKP02)                                */
-/* 05-Aug-2010  ChewKP        1.3   Bug Fixes on STDCUBE & STDGROSSWEIGHT     */
-/*                                  Calculation for BOMSKU (ChewKP03)         */
-/* 24-Aug-2010  Shong         1.3   Add new Strategy 03 - Put to Pick Loc If  */
-/*                                  FROM Specified Location                   */
-/* 03-Jan-2011  Shong         1.3   Cater Single SKU Putaway if SKU value pass*/
-/*                                  in as Parameter                           */
-/* 05-Jan-2011  ChewKP        1.4   Cater Putaway if SKU value pass in as     */
-/*                                  Parameter (ChewKP04)                      */
-/* 23-Mar-2011  Leong         1.5   SOS# 209838 - Add ISNULL check and display*/
-/*                                                error in handheld           */
-/* 14-Arp-2011  Audrey        1.5   SOS# 206770 - comment SET @b_MultiLotID   */
-/*                                                = @n_IdCnt (ang01)          */
-/* 28-Sep-2011  Shong         1.6   SOS#224116 - US LCI Project (Shong001)    */
-/* 07-Dec-2011  ChewKP        1.7   Failed Putaway when FromLoc = ToLoc       */
-/*                                  (ChewKP05)                                */
-/* 06-Feb-2012  Shong         1.8   Include Restriction By UCC Carton Size    */
-/* 21-Feb-2012  ChewKP        1.9   Calculating PackSize by Location          */
-/*                                  (ChewKP06)                                */
-/* 04-Apr-2012  Ung           2.0   Move check upfront for PAType = 28, 29 on */
-/*                                  LocationFlag and LocationStateRestriction */
-/*                                  2-Do not Mix Skus, 3-Do not Mix Lots      */
-/* 09-Apr-2012  Ung           2.1   Fix PAType = 26-29, infinite loop (ung01) */
-/* 04-Jun-2012  ChewKP        2.2   SOS#245272 - Bug Fix (ChewKP05)           */
-/* 13-Jun-2012  Ung           2.3   SOS240955 Add dimention restriction       */
-/*                                  17-Fit by UCC cube                        */
-/* 20-Jul-2012  Ung           2.4   SOS251060 Further fix on SOS240955 (ung02)*/
-/* 19-Jul-2012  Ung           2.5   SOS250731 PAType=61 Find PnD loc using    */
-/*                                  LOC.MaxPallet (ung03)                     */
-/* 13-Aug-2012  Ung           2.6   SOS252964 Add location state restriction  */
-/*                                  12-ABC Descending, 13-ABC EXC             */
-/* 14-Mar-2013  Ung           2.7   SOS272442 (ung04)                         */
-/*                                  Fix PND not reset when chg PAType         */
-/*                                  Fix PAType 61 fail not run next strategln */
-/*                                  PAType 61 PND consider MaxPallet          */
-/*                                  PAType 61 search next aisle by zone, aisle*/
-/* 13-Aug-2012  Ung           2.8   SOS251326 Add NoMixLottable01..04 (ung05) */
-/* 28-Jun-2012  Ung           2.9   SOS246200 Extra param and PutCode (ung06) */
-/*                                  SOS257227                                 */
-/*                                  Add Fit by aisle (ung07)                  */
-/*                                  Add PND_IN, PND_OUT (ung08)               */
-/*                                  Add PAType 05 From Zone then ToLoc (ung09)*/
-/* 15-Aug-2013  Shong         3.0   Performance Tuning VF-CDC                 */
-/* 21-Aug-2013  Shong         3.1   Order By Putaway Logical Location, Change */
-/*                                  Single Select into Cursor Loop            */
-/* 04-Feb-2014  ChewKP        3.2   SOS#292706 - Add Another PA Type '62'     */
-/*                                  Search Empty Loc Consider PendingMoveIn   */
-/*                                  (ChewKP07)                                */
-/* 06-Feb-2014  James         3.3   Bug fix (james01)                         */
-/* 05-May-2014  ChewKP        3.4   Include Multiple PutawayZone Search in    */
-/*                                  PAType = '19', '21' (ChewKP08)            */
-/* 02-Dec-2013  Ung           3.5   SOS257227 Fix PAType 61 infinite loop     */
-/* 30-May-2014  Ung           3.2   SOS322241 Add custom putaway strategy key */
-/*                                  Fix SUM without ISNULL                    */
-/* 02-Nov-2014  James         3.3   Change '62' to include multizone (james02)*/
-/* 28-May-2015  ChewKP        3.4   SOS#342117 Add NoMixLottable5-15(ChewKP09)*/
-/* 03-Jun-2015  ChewKP        3.5   SOS#341733 - Cater NoMixLottable with     */
-/*                                  CommingleSKU Flag on Loc setup            */
-/*                                  Fix SQL Statement (ChewKP10)              */
-/* 23-Sep-2015  James         3.6   SOS337104 - Add PAType 23 (james03)       */
-/* 26-Nov-2015  Ung           3.7   SOS357411 Change PREPACKBYBOM             */
-/* 03-Feb-2016  Ung           3.8   SOS360340 Add PABookingKey                */
-/* 06-Jun-2016  Ung           3.9   IN00057923 Cater UCC.Status=3             */
-/* 11-Aug-2016  TLTING        4.0   (nolock) and remove SetROWCOUNT           */
-/* 25-Oct-2016  Ung           4.1   Performance tuning                        */
-/* 11-Aug-2017  JHTAN         4.2   IN00433406 PAType = 07 did not suggest go */
-/*                                  to CASE location (JHTAN01)                */
-/* 05-Jun-2017  ChewKP        4.3   WMS-1956 - Add Fit by Aisle Multi Case    */
-/*                                  Count (ChewKP11)                          */
-/* 19-Dec-2017  Leong         4.4   INC0075406 - Revise PAType 07 checking.   */
-/* 15-May-2020  Shong         4.5   Replace Constant with Variable in Dynamic */
-/*                                  SQL Statement                             */  
-/* 08-Jul-2020  Shong         4.6   Bug Fixing                                */
-/* 15-Dec-2020  NJOW01        4.7   WMS-15776 TH Michelin PA                  */
-/* 12-Jan-2021  NJOW02        4.8   WMS-16023 type 07 cater for pendingmovein */
-/******************************************************************************/
-CREATE PROCEDURE [dbo].[nspRDTPASTD]
+/*******************************************************************************/
+/* Store Procedure:  nspRDTPASTD                                               */
+/* Creation Date: 28-Oct-2009                                                  */
+/* Copyright: IDS                                                              */
+/* Written by:                                                                 */
+/*                                                                             */
+/* Purpose:  Stored Procedure for PUTAWAY FROM ASN                             */
+/*                                                                             */
+/* Called FROM RDT Pallet Putaway                                              */
+/*                                                                             */
+/* Input Parameters:  @c_userid,          - User Id                            */
+/*                    @c_storerkey,       - Storerkey                          */
+/*                    @c_LOT,             - Lot                                */
+/*                    @c_SKU,             - Sku                                */
+/*                    @c_ID,              - Id                                 */
+/*                    @c_FromLoc,         - FROM Location                      */
+/*                    @n_Qty,             - Putaway Qty                        */
+/*                    @c_uom,             - UOM unit                           */
+/*                    @c_PackKey,         - Packkey for sku                    */
+/*                    @n_PutawayCapacity  - Putaway Capacity                   */
+/*                                                                             */
+/* Output Parameters: @c_Final_ToLoc      - Final ToLocation                   */
+/*                                                                             */
+/* Return Status:  None                                                        */
+/*                                                                             */
+/* Usage:                                                                      */
+/*                                                                             */
+/* Local Variables:                                                            */
+/*                                                                             */
+/* Called By:                                                                  */
+/*                                                                             */
+/* PVCS Version: 1.5                                                           */
+/*                                                                             */
+/* Version: 5.4                                                                */
+/*                                                                             */
+/* Data Modifications:                                                         */
+/*                                                                             */
+/* Updates:                                                                    */
+/* Date         Author        Ver   Purposes                                   */
+/* 28-Oct-2009  Shong               Created (Modified FROM nspASNPASTD)        */
+/* 05-Jan-2010  Shong         1.1   Titan Project                              */
+/* 23-FEb-2010  Vicky         1.1   NextPnDLocation search should include      */
+/*                                  PutawayZone (Vicky01)                      */
+/* 24-Feb-2010  Shong         1.1   Force to loop if no location found in      */
+/*                                  Aisle                                      */
+/* 25-Feb-2010  Vicky         1.1   Fixes on Loop stopped when                 */
+/*                                  NextAisle = StartAisle and did NOT         */
+/*                                  to loop the next step in strategy          */
+/*                                  (Vicky02)                                  */
+/* 26-Feb-2010  Shong         1.1   Fixing Pnd Outer/Centre Seq Issues         */
+/* 27-Feb-2010  Vicky         1.1   Fixing Pnd Outer/Centre Seq (Vicky03)      */
+/* 03-Mar-2010  ChewKP        1.1   Fixing QTYHand need to - QTYPicked         */
+/*                                   (ChewKP01)                                */
+/* 26-May-2010  Vicky         1.2   Should NOT look at PutawayZone = ''        */
+/*                                  to eliminate Performance issue (Vicky04)   */
+/* 24-Jun-2010  ChewKP        1.3   Diana Project PA by BOM SKU Std Cube       */
+/*                                  (ChewKP02)                                 */
+/* 05-Aug-2010  ChewKP        1.3   Bug Fixes on STDCUBE & STDGROSSWEIGHT      */
+/*                                  Calculation for BOMSKU (ChewKP03)          */
+/* 24-Aug-2010  Shong         1.3   Add new Strategy 03 - Put to Pick Loc If   */
+/*                                  FROM Specified Location                    */
+/* 03-Jan-2011  Shong         1.3   Cater Single SKU Putaway if SKU value pass */
+/*                                  in as Parameter                            */
+/* 05-Jan-2011  ChewKP        1.4   Cater Putaway if SKU value pass in as      */
+/*                                  Parameter (ChewKP04)                       */
+/* 23-Mar-2011  Leong         1.5   SOS# 209838 - Add ISNULL check and display */
+/*                                                error in handheld            */
+/* 14-Arp-2011  Audrey        1.5   SOS# 206770 - comment SET @b_MultiLotID    */
+/*                                                = @n_IdCnt (ang01)           */
+/* 28-Sep-2011  Shong         1.6   SOS#224116 - US LCI Project (Shong001)     */
+/* 07-Dec-2011  ChewKP        1.7   Failed Putaway when FromLoc = ToLoc        */
+/*                                  (ChewKP05)                                 */
+/* 06-Feb-2012  Shong         1.8   Include Restriction By UCC Carton Size     */
+/* 21-Feb-2012  ChewKP        1.9   Calculating PackSize by Location           */
+/*                                  (ChewKP06)                                 */
+/* 04-Apr-2012  Ung           2.0   Move check upfront for PAType = 28, 29 on  */
+/*                                  LocationFlag and LocationStateRestriction  */
+/*                                  2-Do not Mix Skus, 3-Do not Mix Lots       */
+/* 09-Apr-2012  Ung           2.1   Fix PAType = 26-29, infinite loop (ung01)  */
+/* 04-Jun-2012  ChewKP        2.2   SOS#245272 - Bug Fix (ChewKP05)            */
+/* 13-Jun-2012  Ung           2.3   SOS240955 Add dimention restriction        */
+/*                                  17-Fit by UCC cube                         */
+/* 20-Jul-2012  Ung           2.4   SOS251060 Further fix on SOS240955 (ung02) */
+/* 19-Jul-2012  Ung           2.5   SOS250731 PAType=61 Find PnD loc using     */
+/*                                  LOC.MaxPallet (ung03)                      */
+/* 13-Aug-2012  Ung           2.6   SOS252964 Add location state restriction   */
+/*                                  12-ABC Descending, 13-ABC EXC              */
+/* 14-Mar-2013  Ung           2.7   SOS272442 (ung04)                          */
+/*                                  Fix PND not reset when chg PAType          */
+/*                                  Fix PAType 61 fail not run next strategln  */
+/*                                  PAType 61 PND consider MaxPallet           */
+/*                                  PAType 61 search next aisle by zone, aisle */
+/* 13-Aug-2012  Ung           2.8   SOS251326 Add NoMixLottable01..04 (ung05)  */
+/* 28-Jun-2012  Ung           2.9   SOS246200 Extra param and PutCode (ung06)  */
+/*                                  SOS257227                                  */
+/*                                  Add Fit by aisle (ung07)                   */
+/*                                  Add PND_IN, PND_OUT (ung08)                */
+/*                                  Add PAType 05 From Zone then ToLoc (ung09) */
+/* 15-Aug-2013  Shong         3.0   Performance Tuning VF-CDC                  */
+/* 21-Aug-2013  Shong         3.1   Order By Putaway Logical Location, Change  */
+/*                                  Single Select into Cursor Loop             */
+/* 04-Feb-2014  ChewKP        3.2   SOS#292706 - Add Another PA Type '62'      */
+/*                                  Search Empty Loc Consider PendingMoveIn    */
+/*                                  (ChewKP07)                                 */
+/* 06-Feb-2014  James         3.3   Bug fix (james01)                          */
+/* 05-May-2014  ChewKP        3.4   Include Multiple PutawayZone Search in     */
+/*                                  PAType = '19', '21' (ChewKP08)             */
+/* 02-Dec-2013  Ung           3.5   SOS257227 Fix PAType 61 infinite loop      */
+/* 30-May-2014  Ung           3.2   SOS322241 Add custom putaway strategy key  */
+/*                                  Fix SUM without ISNULL                     */
+/* 02-Nov-2014  James         3.3   Change '62' to include multizone (james02) */
+/* 28-May-2015  ChewKP        3.4   SOS#342117 Add NoMixLottable5-15(ChewKP09) */
+/* 03-Jun-2015  ChewKP        3.5   SOS#341733 - Cater NoMixLottable with      */
+/*                                  CommingleSKU Flag on Loc setup             */
+/*                                  Fix SQL Statement (ChewKP10)               */
+/* 23-Sep-2015  James         3.6   SOS337104 - Add PAType 23 (james03)        */
+/* 26-Nov-2015  Ung           3.7   SOS357411 Change PREPACKBYBOM              */
+/* 03-Feb-2016  Ung           3.8   SOS360340 Add PABookingKey                 */
+/* 06-Jun-2016  Ung           3.9   IN00057923 Cater UCC.Status=3              */
+/* 11-Aug-2016  TLTING        4.0   (nolock) and remove SetROWCOUNT            */
+/* 25-Oct-2016  Ung           4.1   Performance tuning                         */
+/* 11-Aug-2017  JHTAN         4.2   IN00433406 PAType = 07 did not suggest go  */
+/*                                  to CASE location (JHTAN01)                 */
+/* 05-Jun-2017  ChewKP        4.3   WMS-1956 - Add Fit by Aisle Multi Case     */
+/*                                  Count (ChewKP11)                           */
+/* 19-Dec-2017  Leong         4.4   INC0075406 - Revise PAType 07 checking.    */
+/* 15-May-2020  Shong         4.5   Replace Constant with Variable in Dynamic  */
+/*                                  SQL Statement                              */  
+/* 08-Jul-2020  Shong         4.6   Bug Fixing                                 */
+/* 15-Dec-2020  NJOW01        4.7   WMS-15776 TH Michelin PA                   */
+/* 12-Jan-2021  NJOW02        4.8   WMS-16023 type 07 cater for pendingmovein  */
+/* 10-Feb-2023  NJOW03        4.9   WMS-21722 Allow check nomixlottable for all*/
+/*                                  commingle sku in a loc.                    */
+/* 10-Feb-2023  NJOW03        4.9   DEVOPS Combine Script                      */
+/*******************************************************************************/
+CREATE OR ALTER PROCEDURE [dbo].[nspRDTPASTD]
      @c_userid          NVARCHAR(18)
    , @c_StorerKey       NVARCHAR(15)
    , @c_LOT             NVARCHAR(10)
@@ -217,8 +217,8 @@ BEGIN
            @n_PrevPutLineNum  INT,  -- (Vicky03)
            @c_MultiPutawayZone NVARCHAR(100), -- (ChewKP08)
            @nPutawayZoneCount  INT, -- (ChewKP08)
-           @c_ChkLocByCommingleSkuFlag  NVARCHAR(10)         --(ChewKP10)
-
+           @c_ChkLocByCommingleSkuFlag  NVARCHAR(10),      --(ChewKP10)
+           @c_ChkNoMixLottableForAllSku NVARCHAR(30) = ''  --NJOW03      
 
    /* -- US LCI Project (Shong001) --*/
    DECLARE @c_PalletType NVARCHAR(30) -- 1_Lot_CartonSize, 1_Lot_2CartonSize, Mixed_Lot_CartonSize
@@ -279,6 +279,25 @@ BEGIN
       GOTO LOCATION_ERROR
    END
    --(ChewKP10) - END
+   
+   --NJOW03 S
+   SET @b_success = 0
+   Execute nspGetRight
+           @c_facility
+         , @c_StorerKey               -- Storer
+         , @c_Sku       -- Sku
+         , 'ChkNoMixLottableForAllSku' -- ConfigKey
+         , @b_success                     OUTPUT
+         , @c_ChkNoMixLottableForAllSku   OUTPUT
+         , @n_err                         OUTPUT
+         , @c_errmsg                      OUTPUT
+
+   IF @b_success <> 1
+   BEGIN
+      SET @c_ToLoc = ''
+      GOTO LOCATION_ERROR
+   END
+   --NJOW03 E
 
    IF OBJECT_ID('tempdb..#t_PutawayZone') IS NOT NULL
       DROP TABLE #t_PutawayZone
@@ -5562,7 +5581,8 @@ ELSE
                                + '     JOIN LOTAttribute ToLA WITH (NOLOCK) ON (ToLLI.LOT = ToLA.LOT)    '+
                                + '     WHERE ToLLI.LOC = @c_ToLoc '+
                                + '     AND ToLLI.StorerKey = @c_StorerKey '+
-                               + '     AND ToLLI.SKU = @c_SKU ' +
+                               CASE WHEN @c_ChkNoMixLottableForAllSku = '1' THEN ' ' ELSE 
+                                 '     AND ToLLI.SKU = @c_SKU ' END +  --NJOW03
                                + '     AND ToLA.' + @c_TempLottable + ' <> LOTAttribute.' + @c_TempLottable
                                + '     AND (ToLLI.QTY-ToLLI.QTYPicked > 0 OR ToLLI.PendingMoveIn > 0))   '
 
@@ -5609,8 +5629,9 @@ ELSE
                                        +' JOIN LOTAttribute ToLA WITH (NOLOCK) ON (ToLLI.LOT = ToLA.LOT)  '+
                                        +' WHERE ToLLI.LOC = @c_ToLoc '+
                                        +'    AND ToLLI.StorerKey = @c_Storer_MixLottable '+
-                                       +'    AND ToLLI.SKU = @c_SKU_MixLottable '+
-                                  +'    AND ToLA.' + @c_TempLottable + ' <> @c_From_Lottable '
+                                       CASE WHEN @c_ChkNoMixLottableForAllSku = '1' THEN ' ' ELSE                                        
+                                       '    AND ToLLI.SKU = @c_SKU_MixLottable ' END +   --NJOW03
+                                       +'    AND ToLA.' + @c_TempLottable + ' <> @c_From_Lottable '
                                        +'    AND (ToLLI.QTY-ToLLI.QTYPicked > 0 OR ToLLI.PendingMoveIn > 0)  '
 
 

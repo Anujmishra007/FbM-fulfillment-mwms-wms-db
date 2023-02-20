@@ -1,94 +1,94 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[nspASNPASTD]') AND objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [dbo].[nspASNPASTD]
-GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
-/******************************************************************************/
-/* Store Procedure:  nspASNPASTD                                              */
-/* Creation Date: 05-Aug-2002                                                 */
-/* Copyright: IDS                                                             */
-/* Written by:                                                                */
-/*                                                                            */
-/* Purpose:  Stored Procedure for PUTAWAY from ASN                            */
-/*                                                                            */
-/* Input Parameters:  @c_userid,          - User Id                           */
-/*                    @c_storerkey,       - Storerkey                         */
-/*                    @c_LOT,             - Lot                               */
-/*                    @c_SKU,             - Sku                               */
-/*                    @c_ID,              - Id                                */
-/*                    @c_FromLoc,         - From Location                     */
-/*                    @n_Qty,             - Putaway Qty                       */
-/*                    @c_uom,             - UOM unit                          */
-/*                    @c_PackKey,         - Packkey for sku                   */
-/*                    @n_PutawayCapacity  - Putaway Capacity                  */
-/*                                                                            */
-/* Output Parameters: @c_Final_ToLoc      - Final ToLocation                  */
-/*                                                                            */
-/* Return Status:  None                                                       */
-/*                                                                            */
-/* Usage:                                                                     */
-/*                                                                            */
-/* Local Variables:                                                           */
-/*                                                                            */
-/* Called By:                                                                 */
-/*                                                                            */
-/* PVCS Version: 2.1                                                          */
-/*                                                                            */
-/* Version: 5.4                                                               */
-/*                                                                            */
-/* Data Modifications:                                                        */
-/*                                                                            */
-/* Updates:                                                                   */
-/* Date         Author        Ver   Purposes                                  */
-/* 06-Aug-2002  June                Include changes for ULP (SOS3265)         */
-/* 28-Aug-2002  Administrator       Check in by Ricky                         */
-/* 05-Jun-2003  Ricky               Branch From 1.2.1.4 - Version 5.1         */
-/*                                  to include putaway by Facility based on   */
-/*                                  receiptloc, Max Pallet control and        */
-/*                                  new type '88'                             */
-/* 26-Jul-2004  Shong               Performance Tuning                        */
-/* 27-Jul-2004  Shong               Bug Fixed                                 */
-/* 03-Aug-2004  Wally               SOS25754 - GOTO fixes for patype '04'     */
-/* 16-Dec-2004  Shong               Remove comments                           */
-/* 20-Jul-2005  MaryVong            SOS36712 KCPI PutawayStrategy - Add in    */
-/*                                  new patype '17','18' and '19'             */
-/*                                  Note: Changes applied to nspPASTD         */
-/* 31-Mar-2007  MaryVong            SOS69388 KFP PutawayStrategy - Add in     */
-/*                                  '55','56','57' and '58'                   */
-/*                                  Add LocationStateRestriction '6' and '7'  */
-/*                                  Note: Changes applied to nspPASTD         */
-/* 08-Nov-2008  Shong               Performance Tuning                        */
-/* 08-Nov-2008  Leong               SOS#121517 - Bug Fix                      */
-/* 02-Dec-2008  Leong               SOS#122545 - Bug fix                      */
-/* 08-Apr-2009  Shong               SOS#133180 Add New Putaway Logic:         */
-/*                                  IF ID Held, PUT TO Specified ZONE or LOC  */
-/* 14-Apr-2009  Shong               SOS#133381 Add new restriction on Location*/
-/*                                  Aisle and Level                           */
-/* 26-Jun-2009  Shong               SOS#140197 Do not commingle Lottable05    */
-/* 29-Jun-2009  Shong         1.2   Modify to allow multiple LOT Putaway      */
-/* 23-Jul-2009  Leong         1.3   SOS# 143046 - Change Trace Type from      */
-/*                                  'nspAutoPASTD'to 'nspASNPASTD'            */
-/* 12-Jul-2010  Leong         1.4   SOS# 181262 - Include ISNULL check for    */
-/*                                                integer calculation         */
-/* 24-Aug-2010  Shong         1.5   Add new Strategy 03 - Put to Pick Loc If  */  
-/*                                  from Specified Location                   */  
-/* 30-JUL-2012  YTWan         1.7   SOS#251326:Add Commingle Lottables        */
-/*                            1.8   validation to Exceed and RDT (Wan01)      */ 
-/* 02-APR-2013  YTWan         1.9   SOS#251326: Allow place to loc that had   */
-/*                                  been picked (Wan02)                       */
-/* 16-APR-2014  SHONG         2.0   SQL2012 RaiseError                        */
-/* 19-AUG-2014  Audrey        2.1   SOS318213 - Bug fixed              (ang01)*/    
-/* 18-MAY-2015  YTWan         2.1   SOS#341733 - ToryBurch HK SAP - Allow     */
-/*                                  CommingleSKU with NoMixLottablevalidation */
-/*                                  to Exceed and RDT (Wan03)                 */
-/* 01-JUN-2015  YTWan         2.1   SOS#343525 - UA - NoMixLottable validation*/
-/*                                  CR(Wan04)                                 */
-/* 23-Mar-2021  WLChooi       2.2   Correct table name to LOTxLOCxID (WL01)   */
-/******************************************************************************/
+/*******************************************************************************/
+/* Store Procedure:  nspASNPASTD                                               */
+/* Creation Date: 05-Aug-2002                                                  */
+/* Copyright: IDS                                                              */
+/* Written by:                                                                 */
+/*                                                                             */
+/* Purpose:  Stored Procedure for PUTAWAY from ASN                             */
+/*                                                                             */
+/* Input Parameters:  @c_userid,          - User Id                            */
+/*                    @c_storerkey,       - Storerkey                          */
+/*                    @c_LOT,             - Lot                                */
+/*                    @c_SKU,             - Sku                                */
+/*                    @c_ID,              - Id                                 */
+/*                    @c_FromLoc,         - From Location                      */
+/*                    @n_Qty,             - Putaway Qty                        */
+/*                    @c_uom,             - UOM unit                           */
+/*                    @c_PackKey,         - Packkey for sku                    */
+/*                    @n_PutawayCapacity  - Putaway Capacity                   */
+/*                                                                             */
+/* Output Parameters: @c_Final_ToLoc      - Final ToLocation                   */
+/*                                                                             */
+/* Return Status:  None                                                        */
+/*                                                                             */
+/* Usage:                                                                      */
+/*                                                                             */
+/* Local Variables:                                                            */
+/*                                                                             */
+/* Called By:                                                                  */
+/*                                                                             */
+/* PVCS Version: 2.1                                                           */
+/*                                                                             */
+/* Version: 5.4                                                                */
+/*                                                                             */
+/* Data Modifications:                                                         */
+/*                                                                             */
+/* Updates:                                                                    */
+/* Date         Author        Ver   Purposes                                   */
+/* 06-Aug-2002  June                Include changes for ULP (SOS3265)          */
+/* 28-Aug-2002  Administrator       Check in by Ricky                          */
+/* 05-Jun-2003  Ricky               Branch From 1.2.1.4 - Version 5.1          */
+/*                                  to include putaway by Facility based on    */
+/*                                  receiptloc, Max Pallet control and         */
+/*                                  new type '88'                              */
+/* 26-Jul-2004  Shong               Performance Tuning                         */
+/* 27-Jul-2004  Shong               Bug Fixed                                  */
+/* 03-Aug-2004  Wally               SOS25754 - GOTO fixes for patype '04'      */
+/* 16-Dec-2004  Shong               Remove comments                            */
+/* 20-Jul-2005  MaryVong            SOS36712 KCPI PutawayStrategy - Add in     */
+/*                                  new patype '17','18' and '19'              */
+/*                                  Note: Changes applied to nspPASTD          */
+/* 31-Mar-2007  MaryVong            SOS69388 KFP PutawayStrategy - Add in      */
+/*                                  '55','56','57' and '58'                    */
+/*                                  Add LocationStateRestriction '6' and '7'   */
+/*                                  Note: Changes applied to nspPASTD          */
+/* 08-Nov-2008  Shong               Performance Tuning                         */
+/* 08-Nov-2008  Leong               SOS#121517 - Bug Fix                       */
+/* 02-Dec-2008  Leong               SOS#122545 - Bug fix                       */
+/* 08-Apr-2009  Shong               SOS#133180 Add New Putaway Logic:          */
+/*                                  IF ID Held, PUT TO Specified ZONE or LOC   */
+/* 14-Apr-2009  Shong               SOS#133381 Add new restriction on Location */
+/*                                  Aisle and Level                            */
+/* 26-Jun-2009  Shong               SOS#140197 Do not commingle Lottable05     */
+/* 29-Jun-2009  Shong         1.2   Modify to allow multiple LOT Putaway       */
+/* 23-Jul-2009  Leong         1.3   SOS# 143046 - Change Trace Type from       */
+/*                                  'nspAutoPASTD'to 'nspASNPASTD'             */
+/* 12-Jul-2010  Leong         1.4   SOS# 181262 - Include ISNULL check for     */
+/*                                                integer calculation          */
+/* 24-Aug-2010  Shong         1.5   Add new Strategy 03 - Put to Pick Loc If   */  
+/*                                  from Specified Location                    */  
+/* 30-JUL-2012  YTWan         1.7   SOS#251326:Add Commingle Lottables         */
+/*                            1.8   validation to Exceed and RDT (Wan01)       */ 
+/* 02-APR-2013  YTWan         1.9   SOS#251326: Allow place to loc that had    */
+/*                                  been picked (Wan02)                        */
+/* 16-APR-2014  SHONG         2.0   SQL2012 RaiseError                         */
+/* 19-AUG-2014  Audrey        2.1   SOS318213 - Bug fixed              (ang01) */    
+/* 18-MAY-2015  YTWan         2.1   SOS#341733 - ToryBurch HK SAP - Allow      */
+/*                                  CommingleSKU with NoMixLottablevalidation  */
+/*                                  to Exceed and RDT (Wan03)                  */
+/* 01-JUN-2015  YTWan         2.1   SOS#343525 - UA - NoMixLottable validation */
+/*                                  CR(Wan04)                                  */
+/* 23-Mar-2021  WLChooi       2.2   Correct table name to LOTxLOCxID (WL01)    */
+/* 10-Feb-2023  NJOW01        2.3   WMS-21722 Allow check nomixlottable for all*/
+/*                                  commingle sku in a loc.                    */
+/* 10-Feb-2023  NJOW01        2.3   DEVOPS Combine Script                      */
+/*******************************************************************************/
 
-CREATE PROCEDURE nspASNPASTD
+CREATE OR ALTER PROCEDURE nspASNPASTD
                @c_userid           NVARCHAR(18)
 ,              @c_StorerKey        NVARCHAR(15)
 ,              @c_LOT              NVARCHAR(10)
@@ -130,8 +130,9 @@ BEGIN
    @n_PalletQty int,
    @n_StackFactor int,           -- SOS36712 KCPI
    @n_MaxPalletStackFactor int,  -- SOS36712 KCPI
-   @c_ToHostWhCode NVARCHAR(10)      -- SOS69388 KFP 
-   ,@c_ChkLocByCommingleSkuFlag  NVARCHAR(10)         --(Wan03)
+   @c_ToHostWhCode NVARCHAR(10),      -- SOS69388 KFP 
+   @c_ChkLocByCommingleSkuFlag  NVARCHAR(10),      --(Wan03)
+   @c_ChkNoMixLottableForAllSku NVARCHAR(30) = ''  --NJOW01      
 
 --(Wan01) - START
 DECLARE @b_CurrIDMultiLot01   INT    
@@ -440,6 +441,25 @@ DECLARE @b_CurrIDMultiLot01   INT
       GOTO LOCATION_ERROR
    END
    --(Wan03) - END
+   
+   --NJOW01 S
+   SET @b_success = 0
+   Execute nspGetRight 
+           @c_facility
+         , @c_StorerKey                -- Storer
+         , @c_Sku                      -- Sku
+         , 'ChkNoMixLottableForAllSku' -- ConfigKey
+         , @b_success                     OUTPUT 
+         , @c_ChkNoMixLottableForAllSku   OUTPUT 
+         , @n_err                         OUTPUT 
+         , @c_errmsg                      OUTPUT
+   
+   IF @b_success <> 1
+   BEGIN
+      SET @c_ToLoc = ''
+      GOTO LOCATION_ERROR
+   END
+   --NJOW01 E
 
    DECLARE
    @c_PutawayStrategyLineNumber        NVARCHAR(5)   ,
@@ -2852,7 +2872,7 @@ BEGIN
                   FROM LOTATTRIBUTE LA WITH (NOLOCK)
                   JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)
                   WHERE LLI.Loc = @c_ToLoc
-                  AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku AND LA.Lottable01 <> @c_Lottable01) 
+                  AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') AND LA.Lottable01 <> @c_Lottable01) --NJOW01
                   AND   LLI.Qty - LLI.QtyPicked + LLI.PendingMoveIn > 0)   --(Wan02)
       BEGIN
          SET @b_RestrictionsPassed = 0
@@ -2874,7 +2894,7 @@ BEGIN
                   FROM LOTATTRIBUTE LA WITH (NOLOCK)
                   JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)
                   WHERE LLI.Loc = @c_ToLoc
-                  AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku AND LA.Lottable02 <> @c_Lottable02)
+                  AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') AND LA.Lottable02 <> @c_Lottable02) --NJOW01
                   AND   LLI.Qty - LLI.QtyPicked + LLI.PendingMoveIn > 0)   --(Wan02)
       BEGIN
          SET @b_RestrictionsPassed = 0
@@ -2896,7 +2916,7 @@ BEGIN
                   FROM LOTATTRIBUTE LA WITH (NOLOCK)
                   JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)
                   WHERE LLI.Loc = @c_ToLoc
-                  AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku AND LA.Lottable03 <> @c_Lottable03)
+                  AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') AND LA.Lottable03 <> @c_Lottable03) --NJOW01
                   AND   LLI.Qty - LLI.QtyPicked + LLI.PendingMoveIn > 0)   --(Wan02)
       BEGIN
          SET @b_RestrictionsPassed = 0
@@ -2918,7 +2938,7 @@ BEGIN
                   FROM LOTATTRIBUTE LA WITH (NOLOCK)
                   JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)
                   WHERE LLI.Loc = @c_ToLoc
-                  AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku  
+                  AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') --NJOW01
                   AND   ISNULL(LA.Lottable04, CONVERT(DATETIME,'19000101')) <> ISNULL(@d_Lottable04,CONVERT(DATETIME,'19000101')))
                   AND   LLI.Qty - LLI.QtyPicked + LLI.PendingMoveIn > 0)   --(Wan02)
       BEGIN
@@ -2942,7 +2962,7 @@ BEGIN
                   FROM LOTATTRIBUTE LA WITH (NOLOCK)
                   JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)
                   WHERE LLI.Loc = @c_ToLoc
-                  AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku AND LA.Lottable06 <> @c_Lottable06) 
+                  AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') AND LA.Lottable06 <> @c_Lottable06)  --NJOW01
                   AND   LLI.Qty - LLI.QtyPicked + LLI.PendingMoveIn > 0)   --(Wan02)
       BEGIN
          SET @b_RestrictionsPassed = 0
@@ -2964,7 +2984,7 @@ BEGIN
                   FROM LOTATTRIBUTE LA WITH (NOLOCK)
                   JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)
                   WHERE LLI.Loc = @c_ToLoc
-                  AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku AND LA.Lottable07 <> @c_Lottable07)
+                  AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') AND LA.Lottable07 <> @c_Lottable07) --NJOW01
                   AND   LLI.Qty - LLI.QtyPicked + LLI.PendingMoveIn > 0)   --(Wan02)
       BEGIN
          SET @b_RestrictionsPassed = 0
@@ -2986,7 +3006,7 @@ BEGIN
                   FROM LOTATTRIBUTE LA WITH (NOLOCK)
                   JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)
                   WHERE LLI.Loc = @c_ToLoc
-                  AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku AND LA.Lottable08 <> @c_Lottable08)
+                  AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') AND LA.Lottable08 <> @c_Lottable08) --NJOW01
                   AND   LLI.Qty - LLI.QtyPicked + LLI.PendingMoveIn > 0)   --(Wan02)
       BEGIN
          SET @b_RestrictionsPassed = 0
@@ -3008,7 +3028,7 @@ BEGIN
                   FROM LOTATTRIBUTE LA WITH (NOLOCK)
                   JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)
                   WHERE LLI.Loc = @c_ToLoc
-                  AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku AND LA.Lottable09 <> @c_Lottable09)
+                  AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') AND LA.Lottable09 <> @c_Lottable09) --NJOW01
                   AND   LLI.Qty - LLI.QtyPicked + LLI.PendingMoveIn > 0)   --(Wan02)
       BEGIN
          SET @b_RestrictionsPassed = 0
@@ -3030,7 +3050,7 @@ BEGIN
                   FROM LOTATTRIBUTE LA WITH (NOLOCK)
                   JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)
                   WHERE LLI.Loc = @c_ToLoc
-                  AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku AND LA.Lottable10 <> @c_Lottable10)
+                  AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') AND LA.Lottable10 <> @c_Lottable10) --NJOW01
                   AND   LLI.Qty - LLI.QtyPicked + LLI.PendingMoveIn > 0)   --(Wan02)
       BEGIN
          SET @b_RestrictionsPassed = 0
@@ -3052,7 +3072,7 @@ BEGIN
                   FROM LOTATTRIBUTE LA WITH (NOLOCK)
                   JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)
                   WHERE LLI.Loc = @c_ToLoc
-                  AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku AND LA.Lottable11 <> @c_Lottable11)
+                  AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') AND LA.Lottable11 <> @c_Lottable11) --NJOW01
                   AND   LLI.Qty - LLI.QtyPicked + LLI.PendingMoveIn > 0)   --(Wan02)
       BEGIN
          SET @b_RestrictionsPassed = 0
@@ -3074,7 +3094,7 @@ BEGIN
                   FROM LOTATTRIBUTE LA WITH (NOLOCK)
                   JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)
                   WHERE LLI.Loc = @c_ToLoc
-                  AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku AND LA.Lottable12 <> @c_Lottable12)
+                  AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') AND LA.Lottable12 <> @c_Lottable12) --NJOW01
                   AND   LLI.Qty - LLI.QtyPicked + LLI.PendingMoveIn > 0)   --(Wan02)
       BEGIN
          SET @b_RestrictionsPassed = 0
@@ -3096,7 +3116,7 @@ BEGIN
                   FROM LOTATTRIBUTE LA WITH (NOLOCK)
                   JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)
                   WHERE LLI.Loc = @c_ToLoc
-                  AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku  
+                  AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') --NJOW01
                   AND   ISNULL(LA.Lottable13, CONVERT(DATETIME,'19000101')) <> ISNULL(@d_Lottable13,CONVERT(DATETIME,'19000101')))
                   AND   LLI.Qty - LLI.QtyPicked + LLI.PendingMoveIn > 0)   --(Wan02)
       BEGIN
@@ -3119,7 +3139,7 @@ BEGIN
                   FROM LOTATTRIBUTE LA WITH (NOLOCK)
                   JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)
                   WHERE LLI.Loc = @c_ToLoc
-                  AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku  
+                  AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') --NJOW01
                   AND   ISNULL(LA.Lottable14, CONVERT(DATETIME,'19000101')) <> ISNULL(@d_Lottable14,CONVERT(DATETIME,'19000101')))
                   AND   LLI.Qty - LLI.QtyPicked + LLI.PendingMoveIn > 0)   --(Wan02)
       BEGIN
@@ -3142,7 +3162,7 @@ BEGIN
                   FROM LOTATTRIBUTE LA WITH (NOLOCK)
                   JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)
                   WHERE LLI.Loc = @c_ToLoc
-                  AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku  
+                  AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') --NJOW01
                   AND   ISNULL(LA.Lottable15, CONVERT(DATETIME,'19000101')) <> ISNULL(@d_Lottable15,CONVERT(DATETIME,'19000101')))
                   AND   LLI.Qty - LLI.QtyPicked + LLI.PendingMoveIn > 0)   --(Wan02)
       BEGIN

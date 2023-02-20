@@ -1,8 +1,3 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[ispFinalizeReceipt]') AND type in (N'P', N'PC'))
-   DROP PROCEDURE [dbo].[ispFinalizeReceipt]
-
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -87,9 +82,12 @@ GO
 /*                        CloseASNStatus (WL03)                         */ 
 /* 29-May-2020  Wan07     WMS-13117 - [CN] Sephora_WMS_ITRN_Add_UCC_CR  */
 /* 02-Feb-2021  Ung       WMS-15663 Add RDT compatible message          */
+/* 10-Feb-2023  NJOW11    WMS-21722 Allow check nomixlottable for all   */
+/*                        commingle sku in a loc.                       */
+/* 10-Feb-2023  NJOW11    DEVOPS Combine Script                         */
 /************************************************************************/  
   
-CREATE PROC    [dbo].[ispFinalizeReceipt]  
+CREATE OR ALTER PROC    [dbo].[ispFinalizeReceipt]  
                @c_ReceiptKey   NVARCHAR(10)  
 ,              @b_Success      int       = 1  OUTPUT  
 ,              @n_err          int       = 0  OUTPUT  
@@ -106,7 +104,7 @@ BEGIN
       @n_continue       int,  
       @n_StartTCnt      int,        -- Holds the current transaction count  
       @n_Err2           int,        -- For Additional Error Detection  
-      @c_ReceiptLineNo  NVARCHAR(5),  
+      @c_ReceiptLineNo  NVARCHAR(5), 
       @c_QtyReceived    int,  
       @c_ConfigKey      NVARCHAR(30),  
       @c_StorerKey      NVARCHAR(15),  
@@ -219,6 +217,7 @@ BEGIN
         , @c_Option4                   NVARCHAR(100) = ''    --WL03
         , @c_Option5                   NVARCHAR(4000) = ''   --WL03
         , @c_IncludeReceiptGroup       NVARCHAR(4000) = ''   --WL03
+        , @c_ChkNoMixLottableForAllSku NVARCHAR(30) = '' -- NJOW11
   
    SET @c_debug = 0  
   
@@ -458,7 +457,7 @@ BEGIN
             , @c_StorerKey               -- Storer  
             , @c_Sku                     -- Sku  
             , 'ChkLocByCommingleSkuFlag'  -- ConfigKey  
- , @b_success                  OUTPUT   
+            , @b_success                  OUTPUT   
             , @c_ChkLocByCommingleSkuFlag OUTPUT   
             , @n_err                      OUTPUT   
             , @c_errmsg                   OUTPUT  
@@ -471,7 +470,7 @@ BEGIN
       END  
    END  
    --(Wan04) - END  
-
+      
    --(Wan07) - START
    IF @n_continue=1 or @n_continue=2  
    BEGIN  
@@ -535,8 +534,30 @@ BEGIN
          SET @c_errmsg = 'ispFinalizeReceipt:' + RTRIM(@c_errmsg)  
       END  
    END 
-
    --(Wan07) - END
+     
+   --NJOW11 S
+  IF @n_continue=1 or @n_continue=2  
+   BEGIN  
+      SET @b_success = 0  
+      Execute nspGetRight   
+              @c_facility   
+            , @c_StorerKey               -- Storer  
+            , @c_Sku                     -- Sku  
+            , 'ChkNoMixLottableForAllSku'  -- ConfigKey  
+            , @b_success                   OUTPUT   
+            , @c_ChkNoMixLottableForAllSku OUTPUT   
+            , @n_err                       OUTPUT   
+            , @c_errmsg                    OUTPUT  
+        
+      IF @b_success <> 1  
+      BEGIN  
+         SET @n_continue = 3  
+         SET @n_err = 163060  
+         SET @c_errmsg = 'ispFinalizeReceipt:' + RTRIM(@c_errmsg)  
+      END  
+   END        
+   --NJOW11 E     
      
    DECLARE Cur_ReceiptDetail CURSOR FAST_FORWARD READ_ONLY FOR  
       SELECT RD.ReceiptLineNumber, RD.BeforeReceivedQty, RD.Sku  
@@ -706,7 +727,7 @@ BEGIN
                IF NOT EXISTS (SELECT 1 FROM dbo.sysobjects WHERE name = RTRIM(@c_sp_name) AND type = 'P')  
                BEGIN  
                    SELECT @n_continue = 3  
-                   SELECT @c_ErrMsg = CONVERT(char(250),@n_err), @n_err = 163060  
+                   SELECT @c_ErrMsg = CONVERT(char(250),@n_err), @n_err = 163061  
                    SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Lottable Rule Listname '+ RTRIM(@c_listname)+' - Stored Proc name invalid ('+RTRIM(ISNULL(@c_sp_name,''))+') (ispFinalizeReceipt)'  
                    GOTO RollbackTran  
                END  
@@ -907,7 +928,7 @@ BEGIN
                        AND   LLI.Qty - LLI.QtyPicked > 0)      
             BEGIN  
                SET @n_Continue = 3  
-               SET @n_err = 163061    
+               SET @n_err = 163062    
                SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)  
                            +': Not Allow to receive commingle sku to Location: ' + RTRIM(@c_ToLOC)   
                            + '. (ispFinalizeReceipt)'   
@@ -920,11 +941,11 @@ BEGIN
             IF EXISTS (SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK)  
                        JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)  
                        WHERE LLI.Loc = @c_ToLoc  
-                       AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku AND LA.Lottable01 <> @c_Lottable01)  
+                       AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') AND LA.Lottable01 <> @c_Lottable01)  ---NJOW11
                        AND   LLI.Qty - LLI.QtyPicked > 0)      
             BEGIN  
                SET @n_continue = 3  
-               SET @n_err = 163062    
+               SET @n_err = 163063    
                SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)  
                            +': Not Allow receive to No Mix Lottable01 Location: ' + RTRIM(@c_ToLoc) + '. (ispFinalizeReceipt)'    
                GOTO RollbackTran  
@@ -936,11 +957,11 @@ BEGIN
             IF EXISTS (SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK)  
                        JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)  
                        WHERE LLI.Loc = @c_ToLoc  
-                       AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku AND LA.Lottable02 <> @c_Lottable02)  
+                       AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') AND LA.Lottable02 <> @c_Lottable02)  --NJOW11
                        AND   LLI.Qty - LLI.QtyPicked > 0)      
             BEGIN  
                SET @n_continue = 3  
-               SET @n_err = 163063  
+               SET @n_err = 163064  
                SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)  
                            +': Not Allow to receive to No Mix Lottable02 Location: ' + RTRIM(@c_ToLoc) + '. (ispFinalizeReceipt)'    
                GOTO RollbackTran  
@@ -952,11 +973,11 @@ BEGIN
             IF EXISTS (SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK)  
                        JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)  
                        WHERE LLI.Loc = @c_ToLoc  
-                       AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku AND LA.Lottable03 <> @c_Lottable03)  
+                       AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') AND LA.Lottable03 <> @c_Lottable03)  --NJOW11
                        AND   LLI.Qty - LLI.QtyPicked > 0)      
             BEGIN  
                SET @n_continue = 3  
-               SET @n_err = 163064   
+               SET @n_err = 163065   
                SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)  
                            +': Not Allow to receive to No Mix Lottable03 Location: ' + RTRIM(@c_ToLoc) + '. (ispFinalizeReceipt)'  
                GOTO RollbackTran  
@@ -968,12 +989,12 @@ BEGIN
             IF EXISTS (SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK)  
                        JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)  
                        WHERE LLI.Loc = @c_ToLoc  
-                       AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku    
+                       AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1')  --NJOW11
                        AND   ISNULL(LA.Lottable04, CONVERT(DATETIME, '19000101')) <> @d_Lottable04)  
                        AND   LLI.Qty - LLI.QtyPicked > 0)      
             BEGIN  
                SET @n_continue = 3  
-               SET @n_err = 163065  
+               SET @n_err = 163066  
                SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)  
                            +': Not Allow to receive to No Mix Lottable04 Location: ' + RTRIM(@c_ToLoc) + '. (ispFinalizeReceipt)'  
                GOTO RollbackTran  
@@ -985,11 +1006,11 @@ BEGIN
             IF EXISTS (SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK)  
                        JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)  
                        WHERE LLI.Loc = @c_ToLoc  
-                       AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku AND LA.Lottable06 <> @c_Lottable06)  
+                       AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') AND LA.Lottable06 <> @c_Lottable06)   --NJOW11
                        AND   LLI.Qty - LLI.QtyPicked > 0)       
             BEGIN  
                SET @n_continue = 3  
-               SET @n_err = 163066  
+               SET @n_err = 163067  
                SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)  
                            +': Not Allow to receive to No Mix Lottable06 Location: ' + RTRIM(@c_ToLoc) + '. (ispFinalizeReceipt)'  
                GOTO RollbackTran  
@@ -1000,11 +1021,11 @@ BEGIN
             IF EXISTS (SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK)  
                        JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)  
                        WHERE LLI.Loc = @c_ToLoc  
-                       AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku AND LA.Lottable07 <> @c_Lottable07)  
+                       AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') AND LA.Lottable07 <> @c_Lottable07)  --NJOW11
                        AND   LLI.Qty - LLI.QtyPicked > 0)       
             BEGIN  
                SET @n_continue = 3  
-               SET @n_err = 163067  
+               SET @n_err = 163068  
                SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)  
                            +': Not Allow to receive to No Mix Lottable07 Location: ' + RTRIM(@c_ToLoc) + '. (ispFinalizeReceipt)'  
                GOTO RollbackTran  
@@ -1015,11 +1036,11 @@ BEGIN
             IF EXISTS (SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK)  
                        JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)  
                        WHERE LLI.Loc = @c_ToLoc  
-                       AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku AND LA.Lottable08 <> @c_Lottable08)  
+                       AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') AND LA.Lottable08 <> @c_Lottable08)  --NJOW11
                        AND   LLI.Qty - LLI.QtyPicked > 0)       
             BEGIN  
                SET @n_continue = 3  
-               SET @n_err = 163068  
+               SET @n_err = 163069  
                SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)  
                            +': Not Allow to receive to No Mix Lottable08 Location: ' + RTRIM(@c_ToLoc) + '. (ispFinalizeReceipt)'  
                GOTO RollbackTran  
@@ -1030,11 +1051,11 @@ BEGIN
             IF EXISTS (SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK)  
                        JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)  
                   WHERE LLI.Loc = @c_ToLoc  
-                       AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku AND LA.Lottable09 <> @c_Lottable09)  
+                       AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') AND LA.Lottable09 <> @c_Lottable09)   --NJOW11
                        AND   LLI.Qty - LLI.QtyPicked > 0)       
             BEGIN  
                SET @n_continue = 3  
-               SET @n_err = 163069  
+               SET @n_err = 163070  
                SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)  
                            +': Not Allow to receive to No Mix Lottable09 Location: ' + RTRIM(@c_ToLoc) + '. (ispFinalizeReceipt)'  
                GOTO RollbackTran  
@@ -1045,11 +1066,11 @@ BEGIN
             IF EXISTS (SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK)  
                        JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)  
                        WHERE LLI.Loc = @c_ToLoc  
-                       AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku AND LA.Lottable10 <> @c_Lottable10)  
+                       AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') AND LA.Lottable10 <> @c_Lottable10)   --NJOW11
                        AND   LLI.Qty - LLI.QtyPicked > 0)      
             BEGIN  
                SET @n_continue = 3  
-               SET @n_err = 163070  
+               SET @n_err = 163071  
                SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)  
                            +': Not Allow to receive to No Mix Lottable10 Location: ' + RTRIM(@c_ToLoc) + '. (ispFinalizeReceipt)'  
                GOTO RollbackTran  
@@ -1060,11 +1081,11 @@ BEGIN
             IF EXISTS (SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK)  
                        JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)  
                        WHERE LLI.Loc = @c_ToLoc  
-                       AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku AND LA.Lottable11 <> @c_Lottable11)  
+                       AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') AND LA.Lottable11 <> @c_Lottable11)  --NJOW11
                        AND   LLI.Qty - LLI.QtyPicked > 0)      
             BEGIN  
                SET @n_continue = 3  
-               SET @n_err = 163071  
+               SET @n_err = 163072  
                SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)  
                            +': Not Allow to receive to No Mix Lottable11 Location: ' + RTRIM(@c_ToLoc) + '. (ispFinalizeReceipt)'  
                GOTO RollbackTran  
@@ -1076,11 +1097,11 @@ BEGIN
             IF EXISTS (SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK)  
                        JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)  
                        WHERE LLI.Loc = @c_ToLoc  
-                       AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku AND LA.Lottable12 <> @c_Lottable12)  
+                       AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') AND LA.Lottable12 <> @c_Lottable12)   --NJOW11
                        AND   LLI.Qty - LLI.QtyPicked > 0)       
             BEGIN  
                SET @n_continue = 3  
-               SET @n_err = 163072  
+               SET @n_err = 163073  
                SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)  
                            +': Not Allow to receive to No Mix Lottable12 Location: ' + RTRIM(@c_ToLoc) + '. (ispFinalizeReceipt)'  
                GOTO RollbackTran  
@@ -1091,12 +1112,12 @@ BEGIN
             IF EXISTS (SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK)  
                        JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)  
                        WHERE LLI.Loc = @c_ToLoc  
-                       AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku    
+                       AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') --NJOW11
                        AND   ISNULL(LA.Lottable13, CONVERT(DATETIME, '19000101')) <> @d_Lottable13)  
                        AND   LLI.Qty - LLI.QtyPicked > 0)      
             BEGIN  
                SET @n_continue = 3  
-               SET @n_err = 163073  
+               SET @n_err = 163074  
                SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)  
                            +': Not Allow to receive to No Mix Lottable13 Location: ' + RTRIM(@c_ToLoc) + '. (ispFinalizeReceipt)'  
                GOTO RollbackTran  
@@ -1107,12 +1128,12 @@ BEGIN
             IF EXISTS (SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK)  
                        JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)  
                        WHERE LLI.Loc = @c_ToLoc  
-                       AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku    
+                       AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') --NJOW11
                        AND   ISNULL(LA.Lottable14, CONVERT(DATETIME, '19000101')) <> @d_Lottable14)  
                        AND   LLI.Qty - LLI.QtyPicked > 0)      
             BEGIN  
                SET @n_continue = 3  
-               SET @n_err = 163074  
+               SET @n_err = 163075  
                SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)  
                            +': Not Allow to receive to No Mix Lottable14 Location: ' + RTRIM(@c_ToLoc) + '. (ispFinalizeReceipt)'  
                GOTO RollbackTran  
@@ -1123,12 +1144,12 @@ BEGIN
             IF EXISTS (SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK)  
                        JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LA.Lot = LLI.Lot)  
                        WHERE LLI.Loc = @c_ToLoc  
-                       AND  (LA.Storerkey = @c_Storerkey AND LA.Sku = @c_Sku    
+                       AND  (LA.Storerkey = @c_Storerkey AND (LA.Sku = @c_Sku OR @c_ChkNoMixLottableForAllSku = '1') --NJOW11
                        AND   ISNULL(LA.Lottable15, CONVERT(DATETIME, '19000101')) <> @d_Lottable15)  
                        AND   LLI.Qty - LLI.QtyPicked > 0)      
             BEGIN  
                SET @n_continue = 3  
-               SET @n_err = 163075  
+               SET @n_err = 163076  
                SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)  
                            +': Not Allow to receive to No Mix Lottable15 Location: ' + RTRIM(@c_ToLoc) + '. (ispFinalizeReceipt)'  
                GOTO RollbackTran  
@@ -1208,7 +1229,7 @@ BEGIN
          IF @b_Success <> 1  
          BEGIN 
             SET @n_continue = 3    
-            SET @n_err = 163076 
+            SET @n_err = 163077 
             SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Add ITRN UCC Fail. (ispFinalizeReceipt)' 
                            + ' ( ' + ' SQLSvr MESSAGE=' + RTrim(@c_ErrMsg) + ' ) '  
             GOTO RollbackTran    -- CM01  
@@ -1348,7 +1369,7 @@ BEGIN
             BEGIN  
                SET @n_continue = 3  
                SET @c_ErrMsg = CONVERT(char(250),@n_err)  
-               SET @n_err = 163077  
+               SET @n_err = 163078  
                SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Finalize Receipt Fail. (''ispFinalizeReceipt'')' + ' ( ' + ' SQLSvr MESSAGE=' + RTrim(@c_ErrMsg) + ' ) '  
             END  
          END  
@@ -1378,7 +1399,7 @@ BEGIN
                                                 END)                                               --(Wan02)  
       BEGIN  
          SELECT @n_continue = 3  
-         SELECT @c_ErrMsg = CONVERT(char(250),@n_err), @n_err = 163078  
+         SELECT @c_ErrMsg = CONVERT(char(250),@n_err), @n_err = 163079  
          SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Finalize Receipt Fail. Lottable02 not tally with ReceiptLineNumber. (''ispFinalizeReceipt'')'  
          GOTO RollbackTran  
       END  
@@ -1759,7 +1780,7 @@ BEGIN
   
             IF @b_Success <> 1  
             BEGIN  
-               SET @n_err = 163079 -- @n_err2  
+               SET @n_err = 163080 -- @n_err2  
                SET @n_continue = 3  
                SET @c_ErrMsg = RTRIM(@c_ErrMsg) + ' ispFinalizeReceipt'  
             END  
@@ -1822,7 +1843,7 @@ BEGIN
   
          IF @b_Success <> 1  
          BEGIN  
-            SELECT @n_err = 163080 -- @n_err2  
+            SELECT @n_err = 163081 -- @n_err2  
             SELECT @n_continue = 3, @c_ErrMsg = RTRIM(@c_ErrMsg) + ' ispFinalizeReceipt'  
          END  
 
@@ -1853,7 +1874,7 @@ BEGIN
                @c_ErrMsg               OUTPUT  
          IF @b_Success <> 1  
          BEGIN  
-            SELECT @n_err = 163081 -- @n_err2  
+            SELECT @n_err = 163082 -- @n_err2  
             SELECT @n_continue = 3, @c_ErrMsg = RTRIM(@c_ErrMsg) + ' ispFinalizeReceipt'  
          END  
   
@@ -1869,7 +1890,7 @@ BEGIN
          @c_ErrMsg               OUTPUT  
          IF @b_Success <> 1  
          BEGIN  
-            SELECT @n_err = 163082 -- @n_err2  
+            SELECT @n_err = 163083 -- @n_err2  
             SELECT @n_continue = 3, @c_ErrMsg = RTRIM(@c_ErrMsg) + ' ispFinalizeReceipt'  
          END  
   
@@ -2015,7 +2036,7 @@ BEGIN
             BEGIN   
                SET @n_continue= 3   
                SET @b_Success = 0  
-               SET @n_err  = 163083 
+               SET @n_err  = 163084 
                SET @c_errmsg = 'Execute ispFinalizeReceipt Failed'  
             END   
          END   
