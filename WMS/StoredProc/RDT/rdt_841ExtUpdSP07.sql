@@ -25,6 +25,9 @@ GO
 /* 2021-04-01  1.6 YeeKung   WMS-16718 Add serialno and serialqty       */
 /*                           Params (yeekung02)                         */ 
 /* 2021-07-27  1.7 Chermain  WMS-17410 Add VariableTable Param (cc01)   */
+/* 2020-09-05  1.7  James    WMS-15010 Add AutoMBOLPack (james03)       */
+/* 2021-04-16  1.8  James    WMS-16024 Standarized use of TrackingNo    */
+/*                           (james04)                                  */
 /************************************************************************/
 
 CREATE PROC [RDT].[rdt_841ExtUpdSP07] (
@@ -94,6 +97,7 @@ BEGIN
           ,@cShowTrackNoScn   NVARCHAR(1)
           ,@nRowRef           INT
           ,@cPickDetailKey    NVARCHAR(10)
+          ,@cAutoMBOLPack     NVARCHAR( 1)   -- (james03)
 
    DECLARE @curPD CURSOR
 
@@ -464,7 +468,8 @@ BEGIN
             SET @cLabelNo = 0
             SET @nCartonNo = 0
             BEGIN
-               SELECT @cTrackNo = UserDefine04
+               --SELECT @cTrackNo = UserDefine04
+               SELECT @cTrackNo = TrackingNo -- (james04)
                FROM dbo.Orders WITH (NOLOCK)
                WHERE OrderKey = @cOrderkey
 
@@ -739,6 +744,42 @@ BEGIN
             -- Print Label
             IF @nTotalPickQty = @nTotalPackQty
             BEGIN
+               -- (james03)
+               SET @nErrNo = 0
+               EXEC nspGetRight
+                     @c_Facility   = @cFacility
+                  ,  @c_StorerKey  = @cStorerKey
+                  ,  @c_sku        = ''
+                  ,  @c_ConfigKey  = 'AutoMBOLPack'
+                  ,  @b_Success    = @bSuccess             OUTPUT
+                  ,  @c_authority  = @cAutoMBOLPack        OUTPUT
+                  ,  @n_err        = @nErrNo               OUTPUT
+                  ,  @c_errmsg     = @cErrMsg              OUTPUT
+
+               IF @nErrNo <> 0
+               BEGIN
+                  SET @nErrNo = 133689
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- GetRightFail
+                  GOTO RollBackTran
+               END
+
+               IF @cAutoMBOLPack = '1'
+               BEGIN
+                  SET @nErrNo = 0
+                  EXEC dbo.isp_QCmd_SubmitAutoMbolPack
+                    @c_PickSlipNo= @cPickSlipNo
+                  , @b_Success   = @bSuccess    OUTPUT
+                  , @n_Err       = @nErrNo      OUTPUT
+                  , @c_ErrMsg    = @cErrMsg     OUTPUT
+
+                  IF @nErrNo <> 0
+                  BEGIN
+                     SET @nErrNo = 133690
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- AutoMBOLPack
+                     GOTO RollBackTran
+                  END
+               END
+
                UPDATE dbo.PackHeader WITH (ROWLOCK)
                   SET Status = '9'
                   ,Editdate   = GETDATE()
@@ -775,8 +816,8 @@ BEGIN
                      ,@cErrMsg  OUTPUT
                   IF @nErrNo <> 0
                      GOTO RollBackTran
-               END             
-      
+               END
+
                SET @nTotalPickQty = 0
                SET @cOrderKeyOut = @cOrderkey
 
@@ -874,7 +915,7 @@ BEGIN
                   AND OrderKey = @cOrderkey
 
                   -- (james01)
-                  -- Order might get cancenlled during packing 
+                  -- Order might get cancenlled during packing
                   -- after key in tote, all orders get inserted into rdtecommlog
                   -- need prompt error here
                   IF @cSOStatus = 'PENDCANC'
