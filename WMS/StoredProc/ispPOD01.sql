@@ -21,7 +21,8 @@ GO
 /*                                                                      */    
 /* Updates:                                                             */      
 /* Date         Author   Ver  Purposes                                  */     
-/* 2021-11-22   mingle   1.0  DevOps Combine Script(Created)            */    
+/* 22-NOV-2021  mingle   1.0  DevOps Combine Script(Created)            */    
+/* 21-FEB-2023  NJOW01   1.1  Fix to close cur_pod                      */
 /************************************************************************/    
     
 CREATE OR ALTER PROC [dbo].[ispPOD01]    
@@ -61,8 +62,7 @@ BEGIN
        
        
    IF @c_Action IN ('UPDATE')     
-   BEGIN    
-      
+   BEGIN          
       --Update PODDef06 = 'SKTS' if Status = '7' or '8'    
       DECLARE CUR_POD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
            SELECT  I.Mbolkey ,I.mbolLineNumber    
@@ -96,11 +96,11 @@ BEGIN
             SET @c_errmsg='NSQL'+CONVERT(char(5), @n_err)+': Failed to UPDATE POD table. (ispPOD01)'       
          END    
     
-      FETCH NEXT FROM CUR_POD INTO @c_Mbolkey, @c_mbolLineNumber      
+         FETCH NEXT FROM CUR_POD INTO @c_Mbolkey, @c_mbolLineNumber      
       END  
+      CLOSE CUR_POD  
+      DEALLOCATE CUR_POD  
    END     
-   CLOSE CUR_POD  
-   DEALLOCATE CUR_POD  
         
 QUIT_SP:     
    IF @n_Continue=3  -- Error Occured - Process AND Return    
