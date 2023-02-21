@@ -12,6 +12,7 @@ GO
 /* 2020-08-20 1.0  yeekung    WMS-14630 Created                         */  
 /* 2022-05-07 1.1  Yeekung    WMS-20134 fix pickzone nvarchar 1->10     */
 /*                            (yeekung01)                               */
+/* 2022-04-20 1.2  YeeKung    WMS-19311 Add Data capture (yeekung01)    */
 /************************************************************************/  
   
 CREATE OR ALTER PROC rdt.rdt_839ExtInfo11 (  
@@ -32,6 +33,9 @@ CREATE OR ALTER PROC rdt.rdt_839ExtInfo11 (
    @nQTY         INT,           
    @nActQty      INT,
    @nSuggQTY     INT,
+   @cPackData1   NVARCHAR( 30),
+   @cPackData2   NVARCHAR( 30),
+   @cPackData3   NVARCHAR( 30), 
    @cExtendedInfo NVARCHAR(20) OUTPUT, 
    @nErrNo       INT           OUTPUT, 
    @cErrMsg      NVARCHAR(250) OUTPUT  

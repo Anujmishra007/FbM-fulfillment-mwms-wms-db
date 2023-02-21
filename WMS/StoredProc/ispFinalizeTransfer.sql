@@ -1,68 +1,68 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[ispFinalizeTransfer]') AND OBJECTPROPERTY(Id, N'IsProcedure') = 1)
-   DROP PROCEDURE ispFinalizeTransfer
-GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
 
-/************************************************************************/
-/* Trigger: ispFinalizeTransfer                                         */
-/* Creation Date: 21-Jul-2009                                           */
-/* Copyright: IDS                                                       */
-/* Written by:                                                          */
-/*                                                                      */
-/* Purpose: Finalize Transfer                                           */
-/*                                                                      */
-/* Called By: n_cst_transfer.Event ue_finalizeall                       */
-/*                                                                      */
-/* PVCS Version: 3.2                                                    */
-/*                                                                      */
-/* Version: 6.0                                                         */
-/*                                                                      */
-/* Data Modifications:                                                  */
-/*                                                                      */
-/* Updates:                                                             */
-/* Date         Author    Ver Purposes                                  */
-/* 21-Jul-2009  SHONG     1.0 Initial Version                           */
-/* 27-Apr-2010  AQS-KC    1.1 SOS#170283 Maintain hold on inventory if  */
-/*                            original lot was on hold (KC01)           */
-/* 19-Apr-2012  SHONG     1.2 Added New ConfigKey to AllowUCCTransfer   */
-/* 19-Jun-2012  ChewKP    1.3 SOS#247832 (ChewKP01)                     */
-/* 11-Sep-2012  ChewKP    1.4 SOS#255683 Update UCC Status when transfer*/
-/*                            to LoseUCC Location (ChewKP02)            */
-/* 30-JUL-2012  YTWan     1.5 SOS#251326:Add Commingle Lottables        */
-/*                        1.6 validation to Exceed and RDT (Wan01)      */
-/* 02-APR-2013  YTWan     1.7 SOS#251326: Allow place to loc that had   */
-/*                            been picked (Wan02)                       */
-/* 24-Sep-2013  YTWan     1.8 SOS#290122-Add Sku to UCC Checking.       */
-/*                            (for Multisku)(Wan03)                     */
-/* 08-OCT-2013  NJOW01    1.8 291413-Extended Validation                */
-/* 11-OCT-2013  NJOW02    1.9 291946-Combine Validation using codelkup  */
-/* 20-APR-2014  YTWan     2.1 SOS#304838 - ANF - Allocation strategy for*/
-/*                            Transfer (Wan04)                          */
-/* 20-APR-2014  YTWan     2.2 SOS#314107 - ANF RetailDTC Finalize       */
-/*                            Transfer with zero qty transfer (Wan05)   */
-/* 28-May-2014  TKLIM     2.3 Added Lottables 06-15                     */
-/* 06-May-2015  TLTING    2.4 Performance Tune                          */
-/* 18-MAY-2015  YTWan     2.5 SOS#341733 - ToryBurch HK SAP - Allow     */
-/*                            CommingleSKU with NoMixLottablevalidation */
-/*                            to Exceed and RDT (Wan06)                 */
-/* 01-JUN-2015  YTWan     2.6 SOS#343525 - UA NoMixLottable validation  */
-/*                            CR(Wan07)                                 */
-/* 02-Feb-2015  YTWan     2.7 SOS#315474 - Project Merlion - Exceed GTM */
-/*                            Kiosk Module (Wan08)                      */
-/* 14-Mar-2016  CSCHONG   2.8 Add new config to call Transfer finalize  */
-/*                            lottable rules SOS#364463 (CS01)          */
-/* 23-May-2016  Leong     2.9 IN00051925 - Check suspended sku to       */
-/*                            prevent rollback issue in itrn trigger.   */
-/* 24-Jul-2018  NJOW03    3.0 WMS-5839 CN-IKEA Pre-finalize             */
-/* 29-APR-2019  WAN09     3.1 Validation Check from/to UCC if turn on   */
+/**************************************************************************/
+/* Trigger: ispFinalizeTransfer                                           */
+/* Creation Date: 21-Jul-2009                                             */
+/* Copyright: IDS                                                         */
+/* Written by:                                                            */
+/*                                                                        */
+/* Purpose: Finalize Transfer                                             */
+/*                                                                        */
+/* Called By: n_cst_transfer.Event ue_finalizeall                         */
+/*                                                                        */
+/* PVCS Version: 3.2                                                      */
+/*                                                                        */
+/* Version: 6.0                                                           */
+/*                                                                        */
+/* Data Modifications:                                                    */
+/*                                                                        */
+/* Updates:                                                               */
+/* Date         Author    Ver Purposes                                    */
+/* 21-Jul-2009  SHONG     1.0 Initial Version                             */
+/* 27-Apr-2010  AQS-KC    1.1 SOS#170283 Maintain hold on inventory if    */
+/*                            original lot was on hold (KC01)             */
+/* 19-Apr-2012  SHONG     1.2 Added New ConfigKey to AllowUCCTransfer     */
+/* 19-Jun-2012  ChewKP    1.3 SOS#247832 (ChewKP01)                       */
+/* 11-Sep-2012  ChewKP    1.4 SOS#255683 Update UCC Status when transfer  */
+/*                            to LoseUCC Location (ChewKP02)              */
+/* 30-JUL-2012  YTWan     1.5 SOS#251326:Add Commingle Lottables          */
+/*                        1.6 validation to Exceed and RDT (Wan01)        */
+/* 02-APR-2013  YTWan     1.7 SOS#251326: Allow place to loc that had     */
+/*                            been picked (Wan02)                         */
+/* 24-Sep-2013  YTWan     1.8 SOS#290122-Add Sku to UCC Checking.         */
+/*                            (for Multisku)(Wan03)                       */
+/* 08-OCT-2013  NJOW01    1.8 291413-Extended Validation                  */
+/* 11-OCT-2013  NJOW02    1.9 291946-Combine Validation using codelkup    */
+/* 20-APR-2014  YTWan     2.1 SOS#304838 - ANF - Allocation strategy for  */
+/*                            Transfer (Wan04)                            */
+/* 20-APR-2014  YTWan     2.2 SOS#314107 - ANF RetailDTC Finalize         */
+/*                            Transfer with zero qty transfer (Wan05)     */
+/* 28-May-2014  TKLIM     2.3 Added Lottables 06-15                       */
+/* 06-May-2015  TLTING    2.4 Performance Tune                            */
+/* 18-MAY-2015  YTWan     2.5 SOS#341733 - ToryBurch HK SAP - Allow       */
+/*                            CommingleSKU with NoMixLottablevalidation   */
+/*                            to Exceed and RDT (Wan06)                   */
+/* 01-JUN-2015  YTWan     2.6 SOS#343525 - UA NoMixLottable validation    */
+/*                            CR(Wan07)                                   */
+/* 02-Feb-2015  YTWan     2.7 SOS#315474 - Project Merlion - Exceed GTM   */
+/*                            Kiosk Module (Wan08)                        */
+/* 14-Mar-2016  CSCHONG   2.8 Add new config to call Transfer finalize    */
+/*                            lottable rules SOS#364463 (CS01)            */
+/* 23-May-2016  Leong     2.9 IN00051925 - Check suspended sku to         */
+/*                            prevent rollback issue in itrn trigger.     */
+/* 24-Jul-2018  NJOW03    3.0 WMS-5839 CN-IKEA Pre-finalize               */
+/* 29-APR-2019  WAN09     3.1 Validation Check from/to UCC if turn on     */
 /*                            Storeroconfig UCCTracking & AllocUCCTransfer*/
 /* 01-Jun-2020  Wan10     3.2 WMS-13117 - [CN] Sephora_WMS_ITRN_Add_UCC_CR*/
-/************************************************************************/
+/* 10-Feb-2023  NJOW04    3.3 WMS-21722 Allow check nomixlottable for all */
+/*                            commingle sku in a loc.                     */
+/* 10-Feb-2023  NJOW04    3.3 DEVOPS Combine Script                       */
+/**************************************************************************/
 
-CREATE PROC ispFinalizeTransfer
+CREATE OR ALTER PROC ispFinalizeTransfer
    @c_Transferkey    NVARCHAR(10),
    @b_Success        int = 0  OUTPUT,
    @n_err            int = 0  OUTPUT,
@@ -158,50 +158,51 @@ BEGIN
    SET @nContinue = 1
 
    --(Wan01) - START
-   DECLARE @c_IDStorerkey              NVARCHAR(15)
-         , @c_IDSku                    NVARCHAR(20)
-         , @c_IDLottable01             NVARCHAR(18)
-         , @c_IDLottable02             NVARCHAR(18)
-         , @c_IDLottable03             NVARCHAR(18)
-         , @d_IDLottable04             DATETIME
-         , @c_IDLottable06             NVARCHAR(30)
-         , @c_IDLottable07             NVARCHAR(30)
-         , @c_IDLottable08             NVARCHAR(30)
-         , @c_IDLottable09             NVARCHAR(30)
-         , @c_IDLottable10             NVARCHAR(30)
-         , @c_IDLottable11             NVARCHAR(30)
-         , @c_IDLottable12             NVARCHAR(30)
-         , @d_IDLottable13             DATETIME
-         , @d_IDLottable14             DATETIME
-         , @d_IDLottable15             DATETIME
-
-         , @c_NoMixLottable01          NVARCHAR(1)
-         , @c_NoMixLottable02          NVARCHAR(1)
-         , @c_NoMixLottable03          NVARCHAR(1)
-         , @c_NoMixLottable04          NVARCHAR(1)
-         , @c_NoMixLottable06          NVARCHAR(1)
-         , @c_NoMixLottable07          NVARCHAR(1)
-         , @c_NoMixLottable08          NVARCHAR(1)
-         , @c_NoMixLottable09          NVARCHAR(1)
-         , @c_NoMixLottable10          NVARCHAR(1)
-         , @c_NoMixLottable11          NVARCHAR(1)
-         , @c_NoMixLottable12          NVARCHAR(1)
-         , @c_NoMixLottable13          NVARCHAR(1)
-         , @c_NoMixLottable14          NVARCHAR(1)
-         , @c_NoMixLottable15          NVARCHAR(1)
-
-         , @c_CommingleSku             NVARCHAR(1)       --(Wan06)
-         , @c_ChkLocByCommingleSkuFlag NVARCHAR(10)      --(Wan06)
-         , @c_TrfKey                   NVARCHAR(10)      --(Wan07)
-         , @c_TrfLineNo                NVARCHAR(5)       --(Wan07)
-         , @c_FromStorerkey            NVARCHAR(15)      --(Wan07)
-         , @c_FromSku                  NVARCHAR(20)      --(Wan07)
-         , @c_FromLoc                  NVARCHAR(10)      --(Wan07)
-         , @n_FromQty                  INT               --(Wan07)
-         , @c_ToStorerkey              NVARCHAR(15)      --(Wan07)
-         , @c_ToSku                    NVARCHAR(20)      --(Wan07)
-         , @c_ToLoc                    NVARCHAR(10)      --(Wan07)
-         , @n_ToQty                    INT               --(Wan07)
+   DECLARE @c_IDStorerkey               NVARCHAR(15)
+         , @c_IDSku                     NVARCHAR(20)
+         , @c_IDLottable01              NVARCHAR(18)
+         , @c_IDLottable02              NVARCHAR(18)
+         , @c_IDLottable03              NVARCHAR(18)
+         , @d_IDLottable04              DATETIME
+         , @c_IDLottable06              NVARCHAR(30)
+         , @c_IDLottable07              NVARCHAR(30)
+         , @c_IDLottable08              NVARCHAR(30)
+         , @c_IDLottable09              NVARCHAR(30)
+         , @c_IDLottable10              NVARCHAR(30)
+         , @c_IDLottable11              NVARCHAR(30)
+         , @c_IDLottable12              NVARCHAR(30)
+         , @d_IDLottable13              DATETIME
+         , @d_IDLottable14              DATETIME
+         , @d_IDLottable15              DATETIME
+                                        
+         , @c_NoMixLottable01           NVARCHAR(1)
+         , @c_NoMixLottable02           NVARCHAR(1)
+         , @c_NoMixLottable03           NVARCHAR(1)
+         , @c_NoMixLottable04           NVARCHAR(1)
+         , @c_NoMixLottable06           NVARCHAR(1)
+         , @c_NoMixLottable07           NVARCHAR(1)
+         , @c_NoMixLottable08           NVARCHAR(1)
+         , @c_NoMixLottable09           NVARCHAR(1)
+         , @c_NoMixLottable10           NVARCHAR(1)
+         , @c_NoMixLottable11           NVARCHAR(1)
+         , @c_NoMixLottable12           NVARCHAR(1)
+         , @c_NoMixLottable13           NVARCHAR(1)
+         , @c_NoMixLottable14           NVARCHAR(1)
+         , @c_NoMixLottable15           NVARCHAR(1)
+                                        
+         , @c_CommingleSku              NVARCHAR(1)       --(Wan06)
+         , @c_ChkLocByCommingleSkuFlag  NVARCHAR(10)      --(Wan06)
+         , @c_TrfKey                    NVARCHAR(10)      --(Wan07)
+         , @c_TrfLineNo                 NVARCHAR(5)       --(Wan07)
+         , @c_FromStorerkey             NVARCHAR(15)      --(Wan07)
+         , @c_FromSku                   NVARCHAR(20)      --(Wan07)
+         , @c_FromLoc                   NVARCHAR(10)      --(Wan07)
+         , @n_FromQty                   INT               --(Wan07)
+         , @c_ToStorerkey               NVARCHAR(15)      --(Wan07)
+         , @c_ToSku                     NVARCHAR(20)      --(Wan07)
+         , @c_ToLoc                     NVARCHAR(10)      --(Wan07)
+         , @n_ToQty                     INT               --(Wan07)
+         , @c_ChkNoMixLottableForAllSku NVARCHAR(30)=''  --NJOW04
 
   /*CS01 Start*/
  DECLARE    @c_Lottable01                  NVARCHAR(18),
@@ -349,7 +350,7 @@ BEGIN
    IF @b_success <> 1
    BEGIN
       SELECT @nContinue = 3
-      SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62900
+      SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62901
       SELECT @c_errmsg = 'NSQL' + CONVERT(CHAR(5), ISNULL(RTrim(@n_err),0))
                     + ' Retrieve of Right (ScanInLog) Failed (ispFinalizeTransfer) ( '
                     + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(RTRIM(@c_errmsg)),'') + ' ) '
@@ -369,7 +370,7 @@ BEGIN
    IF @b_success <> 1
    BEGIN
       SELECT @nContinue = 3
-      SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62900
+      SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62902
       SELECT @c_errmsg = 'NSQL' + CONVERT(CHAR(5), ISNULL(RTrim(@n_err),0))
                     + ' Retrieve of Right (RemainHoldOnTransfer) Failed (ispFinalizeTransfer) ( '
                     + ' SQLSvr MESSAGE=' + ISNULL(LTrim(RTrim(@c_errmsg)),'') + ' ) '
@@ -391,7 +392,7 @@ BEGIN
    IF @b_success <> 1
    BEGIN
       SELECT @nContinue = 3
-      SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62900
+      SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62903
       SELECT @c_errmsg = 'NSQL' + CONVERT(CHAR(5), ISNULL(RTrim(@n_err),0))
                     + ' Retrieve of Right (AllowTransferZeroQty) Failed (ispFinalizeTransfer) ( '
                     + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '
@@ -415,7 +416,7 @@ BEGIN
       IF @b_success <> 1
       BEGIN
          SET @nContinue = 3
-         SET @n_err = 62901
+         SET @n_err = 62904
          SET @c_errmsg =  'NSQL' + CONVERT(CHAR(5), ISNULL(RTrim(@n_err),0))
                        + ' Retrieve of Right (ChkLocByCommingleSkuFlag) Failed (ispFinalizeTransfer) ( '
                        + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '
@@ -423,6 +424,33 @@ BEGIN
       END
    END
    --(Wan06) - END
+   
+    --NJOW04 S
+   IF @nContinue=1 or @nContinue=2
+   BEGIN
+      SET @b_success = 0
+      Execute nspGetRight
+              @c_facility
+            , @cFromStorerKey             -- Storer
+            , ''                          -- Sku
+            , 'ChkNoMixLottableForAllSku'  -- ConfigKey
+            , @b_success                   OUTPUT
+            , @c_ChkNoMixLottableForAllSku OUTPUT
+            , @n_err                       OUTPUT
+            , @c_errmsg                    OUTPUT
+
+      IF @b_success <> 1
+      BEGIN
+         SET @nContinue = 3
+         SET @n_err = 62905
+         SET @c_errmsg =  'NSQL' + CONVERT(CHAR(5), ISNULL(RTrim(@n_err),0))
+                       + ' Retrieve of Right (ChkNoMixLottableForAllSku) Failed (ispFinalizeTransfer) ( '
+                       + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '
+         GOTO Quit_Proc
+      END
+   END
+   --NJOW04 E
+   
    --(CS01)  -Start
      IF EXISTS (SELECT 1 FROM dbo.StorerConfig WITH (NOLOCK)
               WHERE StorerKey = @cFromStorerKey
@@ -1469,7 +1497,7 @@ BEGIN
                        FROM #TMP_LLI LLI
                        WHERE LLI.Loc = @cToLOC
                        AND   LLI.Qty - LLI.QtyPicked > 0
-                       GROUP BY LLI.Storerkey, LLI.Sku
+                       GROUP BY LLI.Storerkey, CASE WHEN @c_ChkNoMixLottableForAllSku = '1' THEN '' ELSE LLI.Sku END  --NJOW04
                        HAVING COUNT(DISTINCT LLI.Lottable01) > 1
                      )
            --(Wan07) - END
@@ -1495,7 +1523,7 @@ BEGIN
                        FROM #TMP_LLI LLI
                        WHERE LLI.Loc = @cToLOC
                        AND   LLI.Qty - LLI.QtyPicked > 0
-                       GROUP BY LLI.Storerkey, LLI.Sku
+                       GROUP BY LLI.Storerkey, CASE WHEN @c_ChkNoMixLottableForAllSku = '1' THEN '' ELSE LLI.Sku END  --NJOW04
                        HAVING COUNT(DISTINCT LLI.Lottable02) > 1
                      )
            --(Wan07) - END
@@ -1522,7 +1550,7 @@ BEGIN
                        FROM #TMP_LLI LLI
                        WHERE LLI.Loc = @cToLOC
                        AND   LLI.Qty - LLI.QtyPicked > 0
-                       GROUP BY LLI.Storerkey, LLI.Sku
+                       GROUP BY LLI.Storerkey, CASE WHEN @c_ChkNoMixLottableForAllSku = '1' THEN '' ELSE LLI.Sku END  --NJOW04
                        HAVING COUNT(DISTINCT LLI.Lottable03) > 1
                      )
            --(Wan07) - END
@@ -1549,7 +1577,7 @@ BEGIN
                        FROM #TMP_LLI LLI
                        WHERE LLI.Loc = @cToLOC
                        AND   LLI.Qty - LLI.QtyPicked > 0
-                       GROUP BY LLI.Storerkey, LLI.Sku
+                       GROUP BY LLI.Storerkey, CASE WHEN @c_ChkNoMixLottableForAllSku = '1' THEN '' ELSE LLI.Sku END  --NJOW04
                        HAVING COUNT(DISTINCT LLI.Lottable04) > 1
                      )
            --(Wan07) - END
@@ -1577,7 +1605,7 @@ BEGIN
                        FROM #TMP_LLI LLI
                        WHERE LLI.Loc = @cToLOC
                        AND   LLI.Qty - LLI.QtyPicked > 0
-                       GROUP BY LLI.Storerkey, LLI.Sku
+                       GROUP BY LLI.Storerkey, CASE WHEN @c_ChkNoMixLottableForAllSku = '1' THEN '' ELSE LLI.Sku END  --NJOW04
                        HAVING COUNT(DISTINCT LLI.Lottable06) > 1
                      )
            --(Wan07) - END
@@ -1602,7 +1630,7 @@ BEGIN
                        FROM #TMP_LLI LLI
                        WHERE LLI.Loc = @cToLOC
                        AND   LLI.Qty - LLI.QtyPicked > 0
-                       GROUP BY LLI.Storerkey, LLI.Sku
+                       GROUP BY LLI.Storerkey, CASE WHEN @c_ChkNoMixLottableForAllSku = '1' THEN '' ELSE LLI.Sku END  --NJOW04
                        HAVING COUNT(DISTINCT LLI.Lottable07) > 1
                      )
            --(Wan07) - END
@@ -1627,7 +1655,7 @@ BEGIN
                        FROM #TMP_LLI LLI
                        WHERE LLI.Loc = @cToLOC
                        AND   LLI.Qty - LLI.QtyPicked > 0
-                       GROUP BY LLI.Storerkey, LLI.Sku
+                       GROUP BY LLI.Storerkey, CASE WHEN @c_ChkNoMixLottableForAllSku = '1' THEN '' ELSE LLI.Sku END  --NJOW04
                        HAVING COUNT(DISTINCT LLI.Lottable08) > 1
                      )
            --(Wan07) - END
@@ -1652,7 +1680,7 @@ BEGIN
                        FROM #TMP_LLI LLI
                        WHERE LLI.Loc = @cToLOC
                        AND   LLI.Qty - LLI.QtyPicked > 0
-                       GROUP BY LLI.Storerkey, LLI.Sku
+                       GROUP BY LLI.Storerkey, CASE WHEN @c_ChkNoMixLottableForAllSku = '1' THEN '' ELSE LLI.Sku END  --NJOW04
                        HAVING COUNT(DISTINCT LLI.Lottable09) > 1
                      )
            --(Wan07) - END
@@ -1677,7 +1705,7 @@ BEGIN
                        FROM #TMP_LLI LLI
                        WHERE LLI.Loc = @cToLOC
                        AND   LLI.Qty - LLI.QtyPicked > 0
-                       GROUP BY LLI.Storerkey, LLI.Sku
+                       GROUP BY LLI.Storerkey, CASE WHEN @c_ChkNoMixLottableForAllSku = '1' THEN '' ELSE LLI.Sku END  --NJOW04
                        HAVING COUNT(DISTINCT LLI.Lottable10) > 1
                      )
            --(Wan07) - END
@@ -1702,7 +1730,7 @@ BEGIN
                        FROM #TMP_LLI LLI
                        WHERE LLI.Loc = @cToLOC
                        AND   LLI.Qty - LLI.QtyPicked > 0
-                       GROUP BY LLI.Storerkey, LLI.Sku
+                       GROUP BY LLI.Storerkey, CASE WHEN @c_ChkNoMixLottableForAllSku = '1' THEN '' ELSE LLI.Sku END  --NJOW04
                        HAVING COUNT(DISTINCT LLI.Lottable11) > 1
                      )
            --(Wan07) - END
@@ -1727,7 +1755,7 @@ BEGIN
                        FROM #TMP_LLI LLI
                        WHERE LLI.Loc = @cToLOC
                        AND   LLI.Qty - LLI.QtyPicked > 0
-                       GROUP BY LLI.Storerkey, LLI.Sku
+                       GROUP BY LLI.Storerkey, CASE WHEN @c_ChkNoMixLottableForAllSku = '1' THEN '' ELSE LLI.Sku END  --NJOW04
                        HAVING COUNT(DISTINCT LLI.Lottable12) > 1
                      )
            --(Wan07) - END
@@ -1753,7 +1781,7 @@ BEGIN
                        FROM #TMP_LLI LLI
                        WHERE LLI.Loc = @cToLOC
                        AND   LLI.Qty - LLI.QtyPicked > 0
-                       GROUP BY LLI.Storerkey, LLI.Sku
+                       GROUP BY LLI.Storerkey, CASE WHEN @c_ChkNoMixLottableForAllSku = '1' THEN '' ELSE LLI.Sku END  --NJOW04
                        HAVING COUNT(DISTINCT LLI.Lottable13) > 1
                      )
            --(Wan07) - END
@@ -1779,7 +1807,7 @@ BEGIN
                        FROM #TMP_LLI LLI
                        WHERE LLI.Loc = @cToLOC
                        AND   LLI.Qty - LLI.QtyPicked > 0
-                       GROUP BY LLI.Storerkey, LLI.Sku
+                       GROUP BY LLI.Storerkey, CASE WHEN @c_ChkNoMixLottableForAllSku = '1' THEN '' ELSE LLI.Sku END  --NJOW04
                        HAVING COUNT(DISTINCT LLI.Lottable14) > 1
                      )
            --(Wan07) - END
@@ -1805,7 +1833,7 @@ BEGIN
                        FROM #TMP_LLI LLI
                        WHERE LLI.Loc = @cToLOC
                        AND   LLI.Qty - LLI.QtyPicked > 0
-                       GROUP BY LLI.Storerkey, LLI.Sku
+                       GROUP BY LLI.Storerkey, CASE WHEN @c_ChkNoMixLottableForAllSku = '1' THEN '' ELSE LLI.Sku END  --NJOW04
                        HAVING COUNT(DISTINCT LLI.Lottable15) > 1
                      )
            --(Wan07) - END

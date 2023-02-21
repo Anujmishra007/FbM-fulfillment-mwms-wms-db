@@ -1,6 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[RDT].[rdt_839ExtValidSP08]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [RDT].[rdt_839ExtValidSP08]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -14,10 +11,11 @@ GO
 /* Modifications log:                                                   */            
 /*                                                                      */            
 /* Date       Rev  Author     Purposes                                  */            
-/* 2021-08-02 1.0  YeeKung    WMS-17596 Created                         */             
+/* 2021-08-02 1.0  YeeKung    WMS-17596 Created                         */
+/* 2022-04-20 1.1  YeeKung    WMS-19311 Add Data capture (yeekung01)    */
 /************************************************************************/            
         
-CREATE PROC rdt.rdt_839ExtValidSP08 (            
+CREATE OR ALTER PROC rdt.rdt_839ExtValidSP08 (            
    @nMobile         INT,           
    @nFunc           INT,           
    @cLangCode       NVARCHAR( 3),        
@@ -31,7 +29,10 @@ CREATE PROC rdt.rdt_839ExtValidSP08 (
    @cDropID         NVARCHAR( 20),          
    @cLOC            NVARCHAR( 10),         
    @cSKU            NVARCHAR( 20),         
-   @nQTY            INT,                 
+   @nQTY            INT,   
+   @cPackData1      NVARCHAR( 30),
+   @cPackData2      NVARCHAR( 30),
+   @cPackData3      NVARCHAR( 30),                  
    @nErrNo          INT           OUTPUT,           
    @cErrMsg         NVARCHAR( 20) OUTPUT          
 )            

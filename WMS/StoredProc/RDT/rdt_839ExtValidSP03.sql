@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[RDT].[rdt_839ExtValidSP03]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdt_839ExtValidSP03]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -14,9 +11,10 @@ GO
 /* Modifications log:                                                   */  
 /*                                                                      */  
 /* Date       Rev  Author     Purposes                                  */  
-/* 2020-02-28 1.0  James      WMS-12197. Created                        */  
+/* 2020-02-28 1.0  James      WMS-12197. Created                        */
+/* 2022-04-20 1.1  YeeKung    WMS-19311 Add Data capture (yeekung01)    */
 /************************************************************************/  
-CREATE PROC rdt.rdt_839ExtValidSP03 (  
+CREATE OR ALTER PROC rdt.rdt_839ExtValidSP03 (  
    @nMobile      INT,           
    @nFunc        INT,           
    @cLangCode    NVARCHAR( 3),  
@@ -30,7 +28,10 @@ CREATE PROC rdt.rdt_839ExtValidSP03 (
    @cDropID      NVARCHAR( 20), 
    @cLOC         NVARCHAR( 10), 
    @cSKU         NVARCHAR( 20), 
-   @nQTY         INT,           
+   @nQTY         INT, 
+   @cPackData1   NVARCHAR( 30),
+   @cPackData2   NVARCHAR( 30),
+   @cPackData3   NVARCHAR( 30),                
    @nErrNo       INT           OUTPUT, 
    @cErrMsg      NVARCHAR(250) OUTPUT  
 )  

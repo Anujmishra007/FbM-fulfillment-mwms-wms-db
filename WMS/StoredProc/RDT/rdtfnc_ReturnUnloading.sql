@@ -17,6 +17,7 @@ GO
 /* 2021-05-03   1.1  Chermaine   WMS-16945 Add eventlog (cc01)                */
 /* 2022-02-16   1.2  Ung         WMS-18908 Add TransmitLog                    */
 /* 2022-11-06   1.3  YeeKung     WMS-21120 Chang Mapping (yeekung01)          */ 
+/* 2023-02-15   1.4  YeeKung     WMS-21762 add mapping (yeekung02)            */ 
 /******************************************************************************/
 CREATE OR ALTER PROC rdt.rdtfnc_ReturnUnloading(
    @nMobile    INT,
@@ -409,7 +410,7 @@ BEGIN
           @cReceiptKey = ReceiptKey  --(cc01)
       FROM dbo.RECEIPT  WITH (NOLOCK) 
       WHERE storerKey = @cStorerKey 
-      AND WarehouseReference = @cWhsRef
+      AND (WarehouseReference = @cWhsRef OR trackingno = @cWhsRef) --(yeekung02)
       AND doctype = 'R'
       
       SET @nRowCount = @@ROWCOUNT 
@@ -457,7 +458,7 @@ BEGIN
          VehicleNumber = @cVehicleNo,
          Containerkey = @cContainerKey
       WHERE storerKey = @cStorerKey 
-      AND WarehouseReference = @cWhsRef
+      AND (WarehouseReference = @cWhsRef OR trackingno = @cWhsRef) --(yeekung02)
       AND doctype = 'R'
       AND STATUS = '0'
       

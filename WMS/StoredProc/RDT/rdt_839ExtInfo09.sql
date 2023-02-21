@@ -1,8 +1,8 @@
-GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
-GO   
+GO  
 /************************************************************************/  
 /* Store procedure: rdt_839ExtInfo09                                    */  
 /* Purpose:                                                             */  
@@ -10,12 +10,13 @@ GO
 /* Modifications log:                                                   */  
 /*                                                                      */  
 /* Date       Rev  Author     Purposes                                  */  
-/* 2021-11-10 1.0  James      WMS-18286 Created                         */ 
+/* 2021-11-10 1.0  James      WMS-18286 Created                         */
 /* 2022-05-07 1.1  Yeekung    WMS-20134 fix pickzone nvarchar 1->10     */
 /*                            (yeekung01)                               */
+/* 2022-04-20 1.2  YeeKung    WMS-19311 Add Data capture (yeekung01)    */
 /************************************************************************/  
   
-CREATE   PROC rdt.rdt_839ExtInfo09 (  
+CREATE OR ALTER PROC rdt.rdt_839ExtInfo09 (  
    @nMobile      INT,           
    @nFunc        INT,           
    @cLangCode    NVARCHAR( 3),  
@@ -26,7 +27,7 @@ CREATE   PROC rdt.rdt_839ExtInfo09 (
    @cStorerKey   NVARCHAR( 15), 
    @cType        NVARCHAR( 10), 
    @cPickSlipNo  NVARCHAR( 10), 
-   @cPickZone    NVARCHAR( 10),  --(yeekung01)
+   @cPickZone    NVARCHAR( 10),--(yeekung01)  
    @cDropID      NVARCHAR( 20), 
    @cLOC         NVARCHAR( 10), 
    @cSKU         NVARCHAR( 20), 
@@ -64,7 +65,6 @@ AS
   
 QUIT:  
  
-  
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -73,3 +73,4 @@ GO
 GRANT EXEC ON RDT.rdt_839ExtInfo09 TO NSQL
 GO
   
+ 

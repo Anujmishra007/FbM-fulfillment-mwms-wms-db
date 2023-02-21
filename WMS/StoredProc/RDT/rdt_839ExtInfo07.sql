@@ -13,6 +13,7 @@ GO
 /* 2021-04-19 1.0  YeeKUng    WMS-16839 created                         */
 /* 2022-05-07 1.1  Yeekung    WMS-20134 fix pickzone nvarchar 1->10     */
 /*                            (yeekung01)                               */
+/* 2022-04-20 1.2  YeeKung    WMS-19311 Add Data capture (yeekung02)    */
 /************************************************************************/  
   
 CREATE OR ALTER PROC rdt.rdt_839ExtInfo07 (  
@@ -26,13 +27,16 @@ CREATE OR ALTER PROC rdt.rdt_839ExtInfo07 (
    @cStorerKey   NVARCHAR( 15), 
    @cType        NVARCHAR( 10), 
    @cPickSlipNo  NVARCHAR( 10), 
-   @cPickZone    NVARCHAR( 10),  --(yeekung01)
+   @cPickZone    NVARCHAR( 10), --(yeekung01)  
    @cDropID      NVARCHAR( 20), 
    @cLOC         NVARCHAR( 10), 
    @cSKU         NVARCHAR( 20), 
    @nQTY         INT,           
    @nActQty      INT,
-   @nSuggQTY     INT,
+   @nSuggQTY     INT,    
+   @cPackData1   NVARCHAR( 30),
+   @cPackData2   NVARCHAR( 30),
+   @cPackData3   NVARCHAR( 30), 
    @cExtendedInfo NVARCHAR(20) OUTPUT, 
    @nErrNo       INT           OUTPUT, 
    @cErrMsg      NVARCHAR(250) OUTPUT  
