@@ -13,6 +13,7 @@ GO
 /* Date         Rev  Author     Purposes                                      */
 /* 20-Jan-2023  1.0  WLChooi    Created (WMS-21592)                           */
 /* 20-Jan-2023  1.0  WLChooi    DevOps Combine Script                         */
+/* 21-Feb-2023  1.1  WLChooi    WMS-21592 - Update column mapping (WL01)      */
 /******************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_Shipper_Label_25]
 (
@@ -137,6 +138,7 @@ BEGIN
          , @c_Col46           NVARCHAR(250)
          , @c_Col47           NVARCHAR(250)
          , @c_Col48           NVARCHAR(250)
+         , @c_CartonNo        NVARCHAR(10)   --WL01
 
    DECLARE @T_OD TABLE (
       RowID       INT NOT NULL IDENTITY(1,1) PRIMARY KEY
@@ -162,6 +164,7 @@ BEGIN
    SET @c_Condition1 = N''
    SET @c_Condition2 = N''
    SET @n_Id = 1
+   SET @c_CartonNo = @c_Sparm5   --WL01
 
    CREATE TABLE [#t_BartenderResult]
    (
@@ -681,13 +684,20 @@ BEGIN
       SET @c_Col19 = ''
       SET @c_Col20 = ''
 
+      --WL01 S
       INSERT INTO @T_OD (DESCR, OriginalQty)
-      SELECT TOP 3 SKU.DESCR, SUM(ORDERDETAIL.OriginalQty)
-      FROM ORDERDETAIL (NOLOCK)
-      JOIN SKU (NOLOCK) ON SKU.StorerKey = ORDERDETAIL.StorerKey AND SKU.SKU = ORDERDETAIL.Sku
-      WHERE Orderkey = @c_OrderKey
-      GROUP BY ORDERDETAIL.OrderLineNumber, SKU.DESCR
-      ORDER BY CAST(ORDERDETAIL.OrderLineNumber AS INT)
+      SELECT TOP 3 SKU.DESCR, SUM(PACKDETAIL.Qty)
+      FROM PACKDETAIL (NOLOCK)
+      JOIN SKU (NOLOCK) ON SKU.StorerKey = PACKDETAIL.StorerKey AND SKU.SKU = PACKDETAIL.Sku
+      WHERE PACKDETAIL.PickSlipNo = @c_PickSlipNo
+      GROUP BY PACKDETAIL.LabelLine, SKU.DESCR
+      ORDER BY CAST(PACKDETAIL.LabelLine AS INT)
+
+      SELECT @c_TrackingNo = ISNULL(PKI.TrackingNo,'')
+      FROM PACKINFO PKI (NOLOCK)
+      WHERE PKI.PickSlipNo = @c_PickSlipNo
+      AND PKI.CartonNo = @c_CartonNo
+      --WL01 E
 
       SELECT @c_Col19 = ISNULL(TRIM(DESCR),''), @c_Col20 = OriginalQty FROM @T_OD TOD WHERE TOD.RowID = 1
       SELECT @c_Col45 = ISNULL(TRIM(DESCR),''), @c_Col46 = OriginalQty FROM @T_OD TOD WHERE TOD.RowID = 2
@@ -710,6 +720,7 @@ BEGIN
         , Col46 = LEFT(ISNULL(@c_Col46,''), 80)
         , Col47 = LEFT(ISNULL(@c_Col47,''), 80)
         , Col48 = LEFT(ISNULL(@c_Col48,''), 80)
+        , Col38 = CASE WHEN @c_CartonNo = '1' THEN Col38 ELSE @c_TrackingNo END   --WL01
       WHERE Col02 = @c_OrderKey
 
       UPDATE #t_BartenderResult
