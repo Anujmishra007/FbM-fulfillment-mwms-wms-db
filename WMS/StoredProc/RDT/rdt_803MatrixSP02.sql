@@ -1,21 +1,19 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE Object_Id = OBJECT_ID(N'[RDT].[rdt_803MatrixSP02]') AND Type in (N'P', N'PC'))
-   DROP PROCEDURE [RDT].[rdt_803MatrixSP02]
-GO
 
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/************************************************************************/
-/* Store procedure: rdt_803MatrixSP02                                   */
-/* Copyright      : LF Logistics                                        */
-/*                                                                      */
-/* Date       Rev  Author   Purposes                                    */
-/* 21-05-2020 1.0  Ung      WMS-13431 Created                           */
-/************************************************************************/
+/******************************************************************************/
+/* Store procedure: rdt_803MatrixSP02                                         */
+/* Copyright      : LF Logistics                                              */
+/*                                                                            */
+/* Date       Rev  Author   Purposes                                          */
+/* 21-05-2020 1.0  Ung      WMS-13431 Created                                 */
+/* 03-01-2023 1.1  Ung      Fix completed message by slot instead of station  */
+/******************************************************************************/
 
-CREATE PROC [RDT].[rdt_803MatrixSP02] (
+CREATE OR ALTER PROC [RDT].[rdt_803MatrixSP02] (
     @nMobile    INT
    ,@nFunc      INT
    ,@cLangCode  NVARCHAR( 3)
@@ -158,6 +156,7 @@ BEGIN
          JOIN Orders O WITH (NOLOCK) ON (O.OrderKey = L.OrderKey)
          JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
       WHERE L.Station = @cStation
+         AND O.OrderKey = @cOrderKey
          AND PD.Status <= '5'
          AND PD.CaseID = ''
          AND PD.QTY > 0

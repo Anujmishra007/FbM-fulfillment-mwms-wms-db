@@ -4,18 +4,19 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/************************************************************************/
-/* Store procedure: rdt_PTLPiece_CloseCarton                            */
-/* Copyright      : LF Logistics                                        */
-/*                                                                      */
-/* Purpose: Close station                                               */
-/*                                                                      */
-/* Date        Rev  Author    Purposes                                  */
-/* 01-03-2021 1.0  YeeKung    WMS-16066 Created                         */
-/* 22-11-2022 1.1  Ung        WMS-21112 Rename PtlPieceCloseCartonSP to */
-/*                            CloseCartonSP                             */
-/*                            Add ShipLabel, CartonManifest             */
-/************************************************************************/
+/******************************************************************************/
+/* Store procedure: rdt_PTLPiece_CloseCarton                                  */
+/* Copyright      : LF Logistics                                              */
+/*                                                                            */
+/* Purpose: Close station                                                     */
+/*                                                                            */
+/* Date        Rev  Author    Purposes                                        */
+/* 01-03-2021 1.0  YeeKung    WMS-16066 Created                               */
+/* 22-11-2022 1.1  Ung        WMS-21112 Rename PtlPieceCloseCartonSP to       */
+/*                            CloseCartonSP                                   */
+/*                            Add ShipLabel, CartonManifest                   */
+/* 30-11-2022 1.2  Ung        WMS-21170 Add DynamicSlot that need carton ID   */
+/******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_PTLPiece_CloseCarton (
     @nMobile      INT
@@ -25,9 +26,10 @@ CREATE OR ALTER PROC rdt.rdt_PTLPiece_CloseCarton (
    ,@nInputKey    INT
    ,@cFacility    NVARCHAR(5)
    ,@cStorerKey   NVARCHAR( 15)
+   ,@cLight       NVARCHAR( 1)
    ,@cStation     NVARCHAR( 10)
    ,@cPosition    NVARCHAR( 20)
-   ,@cLOC         NVARCHAR( 10)
+   ,@cLOC         NVARCHAR( 20)
    ,@cCartonID    NVARCHAR( 20)
    ,@cNewCartonID NVARCHAR( 20)
    ,@nErrNo       INT           OUTPUT
@@ -60,27 +62,28 @@ BEGIN
       BEGIN
          SET @cSQL = 'EXEC rdt.' + RTRIM( @cCloseCartonSP) +
             ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
-            ' @cStation, @cPosition, @cLOC, @cCartonID, @cNewCartonID, ' + 
+            ' @cLight, @cStation, @cPosition, @cLOC, @cCartonID, @cNewCartonID, ' + 
             ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
          SET @cSQLParam =
-            '  @nMobile       INT                  ' +
-            ' ,@nFunc         INT                  ' +
-            ' ,@cLangCode     NVARCHAR( 3)         ' +
-            ' ,@nStep         INT                  ' +
-            ' ,@nInputKey     INT                  ' +
-            ' ,@cFacility     NVARCHAR(5)          ' +
-            ' ,@cStorerKey    NVARCHAR( 15)        ' +
-            ' ,@cStation      NVARCHAR( 10)        ' +
-            ' ,@cPosition     NVARCHAR( 20)        ' +
-            ' ,@cLOC          NVARCHAR( 10)        ' +
-            ' ,@cCartonID     NVARCHAR( 20)        ' +
+            '  @nMobile    INT                 '+
+            ' ,@nFunc      INT                 '+
+            ' ,@cLangCode  NVARCHAR( 3)        '+
+            ' ,@nStep      INT                 '+
+            ' ,@nInputKey  INT                 '+
+            ' ,@cFacility  NVARCHAR(5)         '+
+            ' ,@cStorerKey NVARCHAR( 15)       '+
+            ' ,@cLight     NVARCHAR( 1)        '+
+            ' ,@cStation   NVARCHAR( 10)       '+
+            ' ,@cPosition  NVARCHAR( 20)       '+
+            ' ,@cLOC       NVARCHAR( 20)       '+
+            ' ,@cCartonID  NVARCHAR( 20)       '+
             ' ,@cNewCartonID  NVARCHAR( 20)        ' +
-            ' ,@nErrNo        INT           OUTPUT ' +
-            ' ,@cErrMsg       NVARCHAR(250) OUTPUT '
+            ' ,@nErrNo     INT           OUTPUT'+
+            ' ,@cErrMsg    NVARCHAR(250) OUTPUT'
 
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
             @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
-            @cStation, @cPosition, @cLOC, @cCartonID, @cNewCartonID, 
+            @cLight, @cStation, @cPosition, @cLOC, @cCartonID, @cNewCartonID, 
             @nErrNo OUTPUT, @cErrMsg OUTPUT
 
          GOTO Quit
@@ -110,7 +113,10 @@ BEGIN
    COMMIT TRAN rdt_PTLPiece_CloseCarton
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
       COMMIT TRAN
-      
+
+  /***********************************************************************************************
+                                             Print label
+  ***********************************************************************************************/
    -- Storer config
    DECLARE @cCartonManifest NVARCHAR( 10)
    DECLARE @cShipLabel      NVARCHAR( 10)
@@ -193,7 +199,37 @@ BEGIN
          END
       END
    END
-   
+
+  /***********************************************************************************************
+                                Off light after assigned new carton ID
+  ***********************************************************************************************/
+   -- Storer configure
+   DECLARE @cDynamicSlot NVARCHAR(30)
+   DECLARE @cCustomCartonIDSP NVARCHAR(30)
+
+   SET @cDynamicSlot = rdt.rdtGetConfig( @nFunc, 'DynamicSlot', @cStorerKey)
+   SET @cCustomCartonIDSP = rdt.rdtGetConfig( @nFunc, 'CustomCartonIDSP', @cStorerKey)
+
+   IF @cDynamicSlot = '1' AND
+      @cCustomCartonIDSP = '0' 
+   BEGIN
+      IF @cLight = '1'
+      BEGIN
+         -- Off light
+         DECLARE @bSuccess INT
+         EXEC PTL.isp_PTL_TerminateModuleSingle
+             @cStorerKey
+            ,@nFunc
+            ,@cStation
+            ,@cPosition
+            ,@bSuccess  OUTPUT
+            ,@nErrNo    OUTPUT
+            ,@cErrMsg   OUTPUT
+         IF @nErrNo <> 0
+            GOTO Quit
+      END
+   END
+
    GOTO Quit
 
 RollBackTran:

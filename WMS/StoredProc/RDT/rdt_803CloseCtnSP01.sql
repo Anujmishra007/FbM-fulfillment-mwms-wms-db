@@ -3,6 +3,8 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
+
+
 /************************************************************************/
 /* Store procedure: rdt_803CloseCtnSP01                                 */
 /* Copyright      : LF Logistics                                        */
@@ -12,6 +14,7 @@ GO
 /* Date        Rev  Author    Purposes                                  */
 /* 01-03-2021 1.0  YeeKung    WMS-16066 Created                         */
 /* 02-12-2022 1.1  Ung        WMS-21112 Add NewCartonID param           */
+/* 30-11-2022 1.2  Ung        WMS-21170 Add light param                 */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_803CloseCtnSP01 (
@@ -22,9 +25,10 @@ CREATE OR ALTER PROC rdt.rdt_803CloseCtnSP01 (
    ,@nInputKey    INT
    ,@cFacility    NVARCHAR(5)
    ,@cStorerKey   NVARCHAR( 15)
+   ,@cLight       NVARCHAR( 1)
    ,@cStation     NVARCHAR( 10)
    ,@cPosition    NVARCHAR( 20)
-   ,@cLOC         NVARCHAR( 10)
+   ,@cLOC         NVARCHAR( 20)
    ,@cCartonID    NVARCHAR( 20)
    ,@cNewCartonID NVARCHAR( 20)
    ,@nErrNo       INT           OUTPUT
