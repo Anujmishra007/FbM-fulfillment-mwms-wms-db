@@ -11,6 +11,7 @@ GO
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
 /* 2023-08-09 1.0  James    WMS-19868. Created                                */
+/* 2023-02-20 1.1  James    Bug fix (james01)                                 */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1663ExtUpd12](
@@ -56,7 +57,7 @@ BEGIN
             BEGIN
                SELECT TOP 1 @cOrderKey = OrderKey
                FROM dbo.MBOLDETAIL WITH (NOLOCK)
-               WHERE @cMBOLKey = @cMBOLKey
+               WHERE MBOLKey = @cMBOLKey
                ORDER BY 1
          
                IF EXISTS ( SELECT 1 
