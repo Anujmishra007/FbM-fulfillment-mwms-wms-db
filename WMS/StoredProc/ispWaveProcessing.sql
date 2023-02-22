@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispWaveProcessing]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispWaveProcessing]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -58,7 +53,7 @@ GO
 /*                            Allocation pickcode can return UCCNo from */  
 /*                            other column. Expect uom 2,6,7 have uccno */  
 /*                            value and other uom is empty. uom 2 will  */  
-/*      look for full ucc only, uom 2 only work if*/  
+/*                            look for full ucc only, uom 2 only work if*/  
 /*                            have fix ucc pack.casecnt or skip         */  
 /*                            preallocation for non-fix. UCC status will*/  
 /*                            change to 3 after allocation. UCC No. will*/  
@@ -97,11 +92,18 @@ GO
 /*                            Custom SP                                 */  
 /* 01-Dec-2020  NJOW26  4.5   WMS-15746 get channel hold qty by config  */    
 /* 10-Sep-2021  LZG     4.6   JSM-19631 - Wrong PD.Channel bug fix(ZG01)*/
-/* 18-MAY-2022  NJOW28  4.7   WMS-19173 UCC allocation not allow partial*/
+/* 21-Apr-2022  NJOW27  4.7   WMS-19078 support UOM by Load/Order for   */
+/*                            skip preallocation only.                  */
+/*                            Pass in AllocateStrategyKey and           */
+/*                            AllocateStrategyLineNumber to pickcode.   */
+/*                            othervalue enhancements.                  */
+/*                            Add custom sp config to update OPORDERLINES*/
+/* 21-Apr-2022  NJOW27  4.8   DEVOPS Combine script                     */
+/* 18-MAY-2022  NJOW28  4.9   WMS-19173 UCC allocation not allow partial*/
 /*                            UCC if the channel insufficient stock     */
 /************************************************************************/      
   
-CREATE PROC [dbo].[ispWaveProcessing]        
+CREATE OR ALTER PROC [dbo].[ispWaveProcessing]        
      @c_WaveKey NVARCHAR(10)        
    , @b_Success INT           OUTPUT        
    , @n_Err     INT           OUTPUT        
@@ -165,7 +167,15 @@ BEGIN
             @c_WconsoOption5              NVARCHAR(4000), --NJOW24  
             @c_OverAllocPickLoc_SP        NVARCHAR(30), --NJOW25              
             @n_OverAlQtyLeftToFulfill     INT,          --NJOW25  
-            @n_ChannelHoldQty             INT           --NJOW07  
+            @n_ChannelHoldQty             INT,           --NJOW07  
+            @c_Loadkey                    NVARCHAR(10), --NJOW27      
+            @c_PrevOrderkey               NVARCHAR(10), --NJOW27
+            @c_PrevLoadkey                NVARCHAR(10), --NJOW27
+            @n_TotalQty                   INT,          --NJOW27            
+            @c_UOMByLoad                  NVARCHAR(10), --NJOW27
+            @c_UOMByOrder                 NVARCHAR(10), --NJOW27
+            @c_FullPallet                 NVARCHAR(10), --NJOW27
+            @c_DYNUOMQty                  NVARCHAR(10)  --NJOW27
                 
     --NJOW17  
     DECLARE @c_OparmsOption1             NVARCHAR(50),   
@@ -582,7 +592,7 @@ BEGIN
       ,  Loc            NVARCHAR(10)   NOT NULL DEFAULT('')  
       ,  ID             NVARCHAR(18)   NOT NULL DEFAULT('')  
       ,  QtyAvailable   INT            NOT NULL DEFAULT(0)  
-      ,  OtherValue     NVARCHAR(20)   NOT NULL DEFAULT('')     
+      ,  OtherValue     NVARCHAR(500)  NOT NULL DEFAULT('')     --NJOW27
       )  
    END  
    --(Wan04) - END  
@@ -690,7 +700,7 @@ BEGIN
          ORDER BY ORDERS.Priority, [PREALLOCATEPICKDETAIL].[OrderKey], [PREALLOCATEPICKDETAIL].[OrderLineNumber]      
       END        
       ELSE        
- BEGIN        
+      BEGIN        
          INSERT INTO #OPORDERLINES        
          SELECT        
             PreAllocatePickDetailKey = '',        
@@ -901,7 +911,7 @@ BEGIN
                                  Loc              NVARCHAR(10) ,        
                                  Lot              NVARCHAR(10) ,        
                                  Id               NVARCHAR(18) ,        
- Caseid           NVARCHAR(10) ,        
+                                 Caseid           NVARCHAR(10) ,        
                                  UOM              NVARCHAR(10) ,        
                                  UOMQty           INT ,        
                                  Qty              INT ,        
@@ -966,6 +976,28 @@ BEGIN
       END        
    END        
    -- END -- @c_AllowOverAllocations = '1'        
+   
+   --NJOW27 Start        
+   IF ( @n_Continue = 1 OR @n_Continue = 2 )   
+   BEGIN
+      EXEC isp_AllocateUpd_OPORDERLINES_Wrapper @c_Orderkey = '',  
+                                                @c_Loadkey = '',  
+                                                @c_Wavekey = @c_Wavekey,  
+                                                @c_Storerkey = @c_Storerkey,
+                                                @c_Facility = @c_Facility,
+                                                @c_SourceType = 'ispWaveProcessing',  
+                                                @b_Success = @b_Success OUTPUT,            
+                                                @n_Err = @n_err OUTPUT,            
+                                                @c_Errmsg = @c_errmsg OUTPUT  
+                                             
+      IF @b_Success <> 1    
+      BEGIN    
+         EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'ispWaveProcessing'  
+         RAISERROR (@c_ErrMsg, 16, 1) WITH SETERROR    -- SQL2012  
+         RETURN  
+      END       
+   END
+   --NJOW27 End                       
         
    IF @n_Continue = 1 OR @n_Continue = 2        
    BEGIN   
@@ -996,7 +1028,7 @@ BEGIN
               @n_cPackQty                    INT,        
               @n_JumpSource                  INT,        
               @c_sCurrentLineNumber          NVARCHAR(5),        
-              @c_sAllocatePickCode           NVARCHAR(10),        
+              @c_sAllocatePickCode           NVARCHAR(30),    
               @c_sLocationTypeOverride       NVARCHAR(10),        
               @c_sLocationTypeOverridestripe NVARCHAR(10),        
               @c_PickLoc                     NVARCHAR(10),        
@@ -1032,8 +1064,8 @@ BEGIN
               @c_CartonizeOther1             NVARCHAR(1),        
               @c_CartonizeOther2             NVARCHAR(1),        
               @c_CartonizeEA                 NVARCHAR(1),        
-              @c_OtherValue                  NVARCHAR(20),        
-              @c_Pallettype             NVARCHAR(1),        
+              @c_OtherValue                  NVARCHAR(500),  --NJOW27      
+              @c_Pallettype                  NVARCHAR(1),        
               @c_OldStrategyKey              NVARCHAR(10),        
               @c_OldCurrentLineNumber        NVARCHAR(5),        
               @c_OldOriginalStrategyKey      NVARCHAR(10),        
@@ -1257,7 +1289,7 @@ BEGIN
             @c_errmsg     OUTPUT  
             IF @b_success <> 1  
             BEGIN  
-               SELECT @n_Continue = 3, @c_ErrMsg = 'nspLoadProcessing' + RTRIM(@c_ErrMsg)  
+               SELECT @n_Continue = 3, @c_ErrMsg = 'nspWaveProcessing' + RTRIM(@c_ErrMsg)  
             END  
   
             --NJOW09  
@@ -1272,7 +1304,7 @@ BEGIN
             @c_errmsg     output  
             IF @b_success <> 1  
             BEGIN  
-               SELECT @n_continue = 3, @c_errmsg = 'nspLoadProcessing' + RTRIM(@c_errmsg)  
+               SELECT @n_continue = 3, @c_errmsg = 'nspWaveProcessing' + RTRIM(@c_errmsg)  
             END  
   
   
@@ -1288,7 +1320,7 @@ BEGIN
             @c_errmsg     output  
             IF @b_success <> 1  
             BEGIN  
-               SELECT @n_continue = 3, @c_errmsg = 'nspLoadProcessing' + RTRIM(@c_errmsg)  
+               SELECT @n_continue = 3, @c_errmsg = 'nspWaveProcessing' + RTRIM(@c_errmsg)  
             END  
   
             -- SHONG03        
@@ -1384,7 +1416,7 @@ BEGIN
                   IF @b_debug = 1 OR @b_debug = 2        
                   BEGIN        
                      PRINT ''        
-  PRINT ''        
+                     PRINT ''        
                      PRINT '-- Allocate Strategy Not Found For UOM: ' + RTRIM(@c_aUOM)        
                      PRINT '   CurrentLineNumber: ' +  RTRIM(@c_sCurrentLineNumber)        
                      PRINT '   @c_aStrategyKey: ' + RTRIM(@c_aStrategyKey)        
@@ -1461,7 +1493,7 @@ BEGIN
                PRINT ''        
                PRINT ''        
                PRINT '-- Allocate Strategy Found For UOM: ' + RTRIM(@c_aUOM)        
-    PRINT '   CurrentLineNumber: ' +  RTRIM(@c_sCurrentLineNumber)        
+               PRINT '   CurrentLineNumber: ' +  RTRIM(@c_sCurrentLineNumber)        
                PRINT '   @c_aStrategyKey: ' + RTRIM(@c_aStrategyKey)        
                PRINT '   @c_sLocationTypeOverride: ' + RTRIM(@c_sLocationTypeOverride)        
                PRINT '   @c_AllowOverAllocations: ' + RTRIM(@c_AllowOverAllocations)        
@@ -1508,11 +1540,31 @@ BEGIN
                IF ISNULL(@c_SkipPreAllocationFlag,'0') <> '1'    
                   SELECT @c_OtherParms = RTRIM(@c_WaveKey) + '     W'    
                ELSE       
-                  SELECT @c_OtherParms = LTRIM(RTRIM(@c_WaveKey)) + '     W' + LTRIM(RTRIM(ISNULL(@c_Oparms,'')))  --NJOW17                       
-  
+                  SELECT @c_OtherParms = LTRIM(RTRIM(@c_WaveKey)) + '     W' + LTRIM(RTRIM(ISNULL(@c_Oparms,'')))  --NJOW17              
+                    
                --IF @c_Orderinfo4Allocation = '1' --NJOW14    
                IF @c_OtherParmsExist = 'Y' --NJOW24    
                   SELECT @c_EndString = RTRIM(@c_EndString) + ',@c_OtherParms = N''' +RTRIM(@c_OtherParms) + ''''                          
+                  
+               --NJOW27 S       
+               IF EXISTS(SELECT 1    
+                         FROM sys.parameters AS p    
+                         JOIN sys.types AS t ON t.user_type_id = p.user_type_id    
+                         WHERE object_id = OBJECT_ID(@c_sAllocatePickCode)    
+                         AND   P.name = N'@c_AllocateStrategyKey')    
+               BEGIN    
+                  SELECT @c_EndString = RTRIM(@c_EndString) + ',@c_AllocateStrategyKey = N''' +RTRIM(@c_aStrategyKey) + ''''                     	
+               END	                  
+
+               IF EXISTS(SELECT 1    
+                         FROM sys.parameters AS p    
+                         JOIN sys.types AS t ON t.user_type_id = p.user_type_id    
+                         WHERE object_id = OBJECT_ID(@c_sAllocatePickCode)    
+                         AND   P.name = N'@c_AllocateStrategyLineNumber')    
+               BEGIN    
+                  SELECT @c_EndString = RTRIM(@c_EndString) + ',@c_AllocateStrategyLineNumber = N''' +RTRIM(@c_sCurrentLineNumber) + ''''                     	
+               END	     
+               --NJOW27 E             
   
                IF ISNULL(@c_SkipPreAllocationFlag,'0') <> '1'        
                BEGIN        
@@ -1630,7 +1682,7 @@ BEGIN
                                  --WHEN '@d_Lottable15' THEN ',@d_Lottable15 = N''' + RTRIM(@d_Lottable15) + ''''    
                                  WHEN '@d_Lottable13' THEN ',@d_Lottable13 = N''' + @c_Lottable13 + ''''    --NJOW06  
                                  WHEN '@d_Lottable14' THEN ',@d_Lottable14 = N''' + @c_Lottable14 + ''''    --NJOW06  
-                               WHEN '@d_Lottable15' THEN ',@d_Lottable15 = N''' + @c_Lottable15 + ''''    --NJOW06  
+                                 WHEN '@d_Lottable15' THEN ',@d_Lottable15 = N''' + @c_Lottable15 + ''''    --NJOW06  
                                  WHEN '@c_UOM'        THEN ',@c_UOM = N''' + RTRIM(@c_aUOM) + ''''       
                                  WHEN '@c_HostWHCode' THEN ',@c_HostWHCode = N''' + RTRIM(@c_HostWHCode) + ''''   
                               END   
@@ -1726,6 +1778,10 @@ BEGIN
                      SELECT @n_Fetch_Status = 0        
                      SELECT @n_CandidateLine = @n_CandidateLine + 1  
                      SELECT @c_UCCNo = ''  --NJOW13        
+                     SELECT @c_UOMByLoad = 'N'  --NJOW27
+                     SELECT @c_UOMByOrder = 'N' --NJOW27
+                     SELECT @c_FullPallet = 'N' --NJOW27
+                     SELECT @c_DYNUOMQty = ''   --NJOW27
         
                      IF @n_CandidateLine = 1        
                      BEGIN        
@@ -1739,12 +1795,22 @@ BEGIN
                         BEGIN        
                            FETCH NEXT FROM CURSOR_CANDIDATES INTO @c_aLOT, @c_cLOC, @c_cid, @n_cQtyAvailable, @c_OtherValue                                              
                         END  
-                          
-                        --NJOW13  
-                          IF @c_UCCAllocation = '1' AND @c_OtherValue NOT IN ('1','FULLPALLET') AND LEFT(@c_OtherValue,4) <> 'UOM='  --NJOW16  
-                          BEGIN  
-                            SET @c_UCCNo = @c_OtherValue  
-                          END        
+                                  
+                        IF CHARINDEX('@', @c_OtherValue, 1) > 0  --NJOW27
+                        BEGIN                                                                                                                            
+                           IF @c_UCCAllocation = '1' --NJOW27
+                           BEGIN
+                              SET @c_UCCNo = dbo.fnc_GetParamValueFromString('@c_UCCNo', @c_OtherValue, '')
+                           END
+                        END
+                        ELSE 
+                        BEGIN
+                           --NJOW13 
+                           IF @c_UCCAllocation = '1' AND @c_OtherValue NOT IN ('1','FULLPALLET') AND LEFT(@c_OtherValue,4) <> 'UOM='  --NJOW16 
+                           BEGIN                                
+                              SET @c_UCCNo = @c_OtherValue  
+                           END
+                        END   
         
                         SELECT @n_Fetch_Status = @@Fetch_Status        
         
@@ -1776,11 +1842,21 @@ BEGIN
                            FETCH NEXT FROM CURSOR_CANDIDATES INTO @c_aLOT, @c_cLOC, @c_cid, @n_cQtyAvailable, @c_OtherValue        
                         END        
   
-                        --NJOW13  
-                          IF @c_UCCAllocation = '1' AND @c_OtherValue NOT IN ('1','FULLPALLET') AND LEFT(@c_OtherValue,4) <> 'UOM='  --NJOW16  
-                          BEGIN  
-                            SET @c_UCCNo = @c_OtherValue  
-                          END        
+                        IF CHARINDEX('@', @c_OtherValue, 1) > 0  --NJOW27
+                        BEGIN                                                                                                                            
+                           IF @c_UCCAllocation = '1' --NJOW27
+                           BEGIN
+                              SET @c_UCCNo = dbo.fnc_GetParamValueFromString('@c_UCCNo', @c_OtherValue, '')
+                           END
+                        END
+                        ELSE 
+                        BEGIN
+                           --NJOW13 
+                           IF @c_UCCAllocation = '1' AND @c_OtherValue NOT IN ('1','FULLPALLET') AND LEFT(@c_OtherValue,4) <> 'UOM='  --NJOW16  
+                           BEGIN                                
+                              SET @c_UCCNo = @c_OtherValue  
+                           END
+                        END   
         
                         SELECT @n_Fetch_Status = @@Fetch_Status        
         
@@ -1810,6 +1886,27 @@ BEGIN
                      END        
                      IF @n_Fetch_Status = 0        
                      BEGIN        
+                     	  --NJOW27 S
+                 	      IF CHARINDEX('@', @c_OtherValue, 1) > 0  
+                 	      BEGIN
+                  	       SET @c_UOMByLoad = dbo.fnc_GetParamValueFromString('@c_UOMBYLOAD', @c_OtherValue, 'N') 
+                 	         SET @c_UOMByOrder = dbo.fnc_GetParamValueFromString('@c_UOMBYORDER', @c_OtherValue, 'N') 
+                 	         SET @c_FullPallet = dbo.fnc_GetParamValueFromString('@c_FULLPALLET', @c_OtherValue, 'N') 
+                 	         SET @c_DYNUOMQty =  dbo.fnc_GetParamValueFromString('@c_DYNUOMQTY', @c_OtherValue, '') 
+                 	      END
+                 	      ELSE
+                 	      BEGIN
+                 	      	 IF ISNULL(@c_SkipPreAllocationFlag,'0') = '1'  
+                 	      	 BEGIN                 	      	 
+                 	      	    IF @c_OtherValue = 'FULLPALLET'
+                 	      	       SET @c_FullPallet = 'Y'
+                 	      	 
+                    	      	IF LEFT(@c_OtherValue,4) = 'UOM=' 
+                    	      	   SET @c_DYNUOMQty = SUBSTRING(@c_OtherValue,5,10)
+                 	      	 END   
+                 	      END
+                 	      --NJOW27 E
+                     	
                         --(NJOW15) - START  
                         IF ISNULL(@c_SkipPreAllocationFlag,'0') = '1'  
                         BEGIN         
@@ -1885,6 +1982,11 @@ BEGIN
                                     @b_Success = @b_Success OUTPUT,  
                                     @n_Err = @n_Err OUTPUT,   
                                     @c_ErrMsg = @c_ErrMsg OUTPUT  
+                                    
+                                 IF @b_success <> 1
+                                 BEGIN
+                                    SET @n_continue = 3                                                                                
+                                 END                                                                        
                                  --NJOW26 E     
                                                                     
                                   /*(Wan03) - START  
@@ -1905,7 +2007,7 @@ BEGIN
                                  WHERE ci.Channel_ID = @n_Channel_ID  
                                    
                                  IF @n_Channel_Qty_Available < @n_cQtyAvailable  
-                                 BEGIN                                    	
+                                 BEGIN   
                                  	  IF @c_UCCAllocation = '1' AND ISNULL(@c_UCCNo,'') <> '' AND @c_aUOM = '2' --NJOW28  not to take partial UCC 
                                  	     SET @n_cQtyAvailable = 0 
                                  	  ELSE   
@@ -1941,11 +2043,13 @@ BEGIN
                         END              
   
                         --NJOW16  
-                        IF LEFT(@c_OtherValue,4) = 'UOM=' AND ISNULL(@c_SkipPreAllocationFlag,'0') = '1'    
-                        BEGIN  
-                           IF ISNUMERIC(SUBSTRING(@c_OtherValue,5,10)) = 1  
+                        --IF LEFT(@c_OtherValue,4) = 'UOM=' AND ISNULL(@c_SkipPreAllocationFlag,'0') = '1'    
+                        --BEGIN  
+                           --IF ISNUMERIC(SUBSTRING(@c_OtherValue,5,10)) = 1  
+                           IF ISNUMERIC(@c_DYNUOMQty) = 1 AND ISNULL(@c_SkipPreAllocationFlag,'0') = '1'  --NJOW27
                            BEGIN  
-                              SET @n_dynUOMQty = CAST(SUBSTRING(@c_OtherValue,5,10) AS INT)  
+                              --SET @n_dynUOMQty = CAST(SUBSTRING(@c_OtherValue,5,10) AS INT)  
+                              SET @n_dynUOMQty = CAST(@c_DYNUOMQty AS INT)  --NJOW27
                                 
                               IF @c_aUOM = '1'  
                                  SET @n_palletqty = @n_dynUOMQty  
@@ -1960,13 +2064,13 @@ BEGIN
                                 
                               SET @n_cPackQty = @n_dynUOMQty  
                           END                                    
-                        END  
+                        --END  
                           
                         --NJOW13  
                         IF @c_UCCAllocation = '1' AND @c_aUOM = '2'  
                         BEGIN  
-                             SELECT @n_CaseQty = @n_cQtyAvailable  --set caseqty as UCC qty  
-                             SELECT @n_cPackQty = @n_CaseQty                             
+                           SELECT @n_CaseQty = @n_cQtyAvailable  --set caseqty as UCC qty  
+                           SELECT @n_cPackQty = @n_CaseQty                             
                         END   
   
                         IF @b_debug = 1 OR @b_debug = 2        
@@ -1996,7 +2100,7 @@ BEGIN
                            END                                 
                         END       
       
-                        IF @c_OtherValue = 'FULLPALLET' AND @c_aUOM = '1' --NJOW07 Start  
+                        IF @c_FullPallet = 'Y' AND @c_aUOM = '1' --NJOW07 Start   --NJOW27
                         BEGIN                             
                            SELECT @n_UOMQty = 1  
                               
@@ -2081,7 +2185,7 @@ BEGIN
                               SET @n_aQtyLeftToFulfill = @n_QtyToTake        
         
                               SELECT @n_JumpSource = 3        
-                            GOTO OVERALLOCATE_01        
+                              GOTO OVERALLOCATE_01        
                               RETURNFROMUPDATEINV_03:        
                            END        
                            /* #INCLUDE <SPOP4.SQL> */        
@@ -2090,7 +2194,7 @@ BEGIN
                            BEGIN        
                               IF @b_OverContinue = 1        
                               BEGIN        
-   SELECT @n_JumpSource = 1        
+                                 SELECT @n_JumpSource = 1        
                                  GOTO UPDATEINV        
                               END        
                            END        
@@ -2112,7 +2216,7 @@ BEGIN
                            END        
                         END        
                           
-                        SET @c_PrevUCCNo = @c_UCCNo --NJOW01  
+                        SET @c_PrevUCCNo = @c_UCCNo --NJOW13  
                         SET @c_aPrevLot = @c_aLot --NJOW20  
                      END -- fetch status = 0        
                   END -- WHILE @n_aQtyLeftToFulfill > 0        
@@ -2321,11 +2425,11 @@ BEGIN
                              FROM #OP_PickLocType PL        
                              LEFT OUTER JOIN LOTxLOCxID LLI (NOLOCK) ON PL.LOC = LLI.LOC AND LLI.LOT = @c_aLOT        
                                   AND LLI.Qty > 0        
-                            WHERE PL.LOC NOT IN (SELECT LOC FROM #OP_PICKLOCS        
+                             WHERE PL.LOC NOT IN (SELECT LOC FROM #OP_PICKLOCS        
                                                  WHERE StorerKey = @c_aStorerKey        
                                                  AND SKU = @c_aSKU        
                                                  AND LocationType = @c_sLocationTypeOverride)        
-               ORDER BY LLI.Qty DESC, PL.Loc        
+                             ORDER BY LLI.Qty DESC, PL.Loc        
                            -- SOS#129426 End        
                            IF ISNULL(RTRIM(@c_PickLoc),'') =''        
                            BEGIN        
@@ -2862,7 +2966,7 @@ BEGIN
       IF ISNULL(RTRIM(@c_SkipPreAllocationFlag),'0') <> '1'        
       BEGIN               
          DECLARE CUR_OrderLines CURSOR LOCAL FAST_FORWARD READ_ONLY FOR        
-            SELECT o.SeqNo, o.OrderKey, o.OrderLineNumber, o.Qty , o.UOMQty        
+            SELECT o.SeqNo, o.OrderKey, o.OrderLineNumber, o.Qty , o.UOMQty, SO.Loadkey --NJOW27        
             FROM   #OPORDERLINES o       
             JOIN   ORDERDETAIL OD WITH (NOLOCK) ON O.OrderKey = OD.OrderKey AND O.OrderLineNumber = OD.OrderLineNumber                  
             JOIN   ORDERS AS SO WITH (NOLOCK) ON SO.OrderKey = o.OrderKey        
@@ -2899,7 +3003,7 @@ BEGIN
       ELSE        
       BEGIN                   
          DECLARE CUR_OrderLines CURSOR LOCAL FAST_FORWARD READ_ONLY FOR        
-            SELECT o.SeqNo, o.OrderKey, o.OrderLineNumber, o.Qty , o.UOMQty        
+            SELECT o.SeqNo, o.OrderKey, o.OrderLineNumber, o.Qty , o.UOMQty, SO.Loadkey --NJOW27             
             FROM   #OPORDERLINES o         
             JOIN   ORDERDETAIL OD WITH (NOLOCK) ON O.OrderKey = OD.OrderKey AND O.OrderLineNumber = OD.OrderLineNumber      
             JOIN   ORDERS AS SO WITH (NOLOCK) ON SO.OrderKey = o.OrderKey AND SO.OrderKey = OD.OrderKey         
@@ -2929,52 +3033,9 @@ BEGIN
                    OD.Lottable13 = @d_Lottable13 AND        
                    OD.Lottable14 = @d_Lottable14 AND        
                    OD.Lottable15 = @d_Lottable15                                       
-                   /*EXISTS(SELECT 1 FROM LOTATTRIBUTE LA WITH (NOLOCK) -- SHONG   1.7        
-                          WHERE LOT = @c_aLOT        
-                          AND   LA.StorerKey = OD.StorerKey         
-                          AND   LA.SKU = OD.Sku         
-                          AND   LA.Lottable01 = CASE WHEN OD.Lottable01 = '' THEN LA.Lottable01 ELSE OD.Lottable01 END        
-                          AND   LA.Lottable02 = CASE WHEN OD.Lottable02 = '' THEN LA.Lottable02 ELSE OD.Lottable02 END        
-                          AND   LA.Lottable03 = CASE WHEN OD.Lottable03 = '' THEN LA.Lottable03 ELSE OD.Lottable03 END        
-                          AND   1 = CASE WHEN OD.Lottable04 = CAST('19000101' AS DATETIME) OR  OD.Lottable04 IS NULL         
-                                              THEN 1        
-                                         WHEN OD.Lottable04 = LA.Lottable04          
-                                              THEN 1        
-                                         ELSE 0        
-                                    END         
-                          AND   1 = CASE WHEN OD.Lottable05 = CAST('19000101' AS DATETIME) OR  OD.Lottable05 IS NULL         
-                                              THEN 1        
-                                         WHEN OD.Lottable05 = LA.Lottable05          
-                                              THEN 1        
-                                         ELSE 0        
-                                    END                                 
-                          AND   LA.Lottable06 = CASE WHEN OD.Lottable06 = '' THEN LA.Lottable06 ELSE OD.Lottable06 END --NJOW06  
-                          AND   LA.Lottable07 = CASE WHEN OD.Lottable07 = '' THEN LA.Lottable07 ELSE OD.Lottable07 END  
-                          AND   LA.Lottable08 = CASE WHEN OD.Lottable08 = '' THEN LA.Lottable08 ELSE OD.Lottable08 END  
-                          AND   LA.Lottable09 = CASE WHEN OD.Lottable09 = '' THEN LA.Lottable09 ELSE OD.Lottable09 END  
-                          AND   LA.Lottable10 = CASE WHEN OD.Lottable10 = '' THEN LA.Lottable10 ELSE OD.Lottable10 END  
-                          AND   LA.Lottable11 = CASE WHEN OD.Lottable11 = '' THEN LA.Lottable11 ELSE OD.Lottable11 END  
-                          AND   LA.Lottable12 = CASE WHEN OD.Lottable12 = '' THEN LA.Lottable12 ELSE OD.Lottable12 END  
-                          AND   1 = CASE WHEN OD.Lottable13 = CAST('19000101' AS DATETIME) OR  OD.Lottable13 IS NULL  
-                                              THEN 1  
-                                         WHEN OD.Lottable13 = LA.Lottable13  
-                                              THEN 1  
-                                         ELSE 0  
-                                    END  
-                          AND   1 = CASE WHEN OD.Lottable14 = CAST('19000101' AS DATETIME) OR  OD.Lottable14 IS NULL  
-                                              THEN 1  
-                                         WHEN OD.Lottable14 = LA.Lottable14  
-                                              THEN 1  
-                                         ELSE 0  
-                                    END  
-                          AND   1 = CASE WHEN OD.Lottable15 = CAST('19000101' AS DATETIME) OR  OD.Lottable15 IS NULL  
-                                              THEN 1  
-                                         WHEN OD.Lottable15 = LA.Lottable15  
-                                              THEN 1  
-                                         ELSE 0  
-                                    END  
-                         )*/        
-            ORDER BY SO.Priority, --NJOW02  
+            ORDER BY CASE WHEN ISNULL(@c_UOMByLoad,'N') = 'Y' THEN SO.Loadkey 
+                          WHEN ISNULL(@c_UOMByOrder,'N') = 'Y' THEN SO.Orderkey ELSE '' END,  --NJOW27
+                     SO.Priority, --NJOW02  
                      CASE WHEN @c_WConsoOption1 = 'FULFILLBYORDER' AND OD.QtyAllocated+OD.QtyPicked > 0 THEN 1 ELSE 2 END,  --NJOW24              
                      CASE WHEN @c_WConsoOption1 = 'FULFILLBYORDER' AND O.Qty % @n_QtyToInsert = 0 THEN 1 ELSE 2 END,  --NJOW24  
                      CASE WHEN @c_WConsoOption1 = 'FULFILLBYORDER' AND O.Qty <= @n_QtyToInsert THEN 1 ELSE 2 END,  --NJOW24  
@@ -2996,10 +3057,62 @@ BEGIN
       OPEN CUR_OrderLines        
         
       FETCH NEXT FROM CUR_OrderLines INTO @n_SeqNo, @c_aOrderKey,        
-                                          @c_aOrderLineNumber, @n_PickQty, @n_OriginUOMQty        
-        
+                                          @c_aOrderLineNumber, @n_PickQty, @n_OriginUOMQty, @c_Loadkey --NJOW27        
+      
+      SELECT @c_PrevLoadkey = '*', @n_TotalQty = 0, @c_PrevOrderKey = '*' --NJOW27
       WHILE @@FETCH_STATUS <> -1 AND @n_QtyToInsert > 0        
-      BEGIN   
+      BEGIN         	
+      	 --NJOW27 S
+      	 IF ((ISNULL(@c_UOMByLoad,'N') = 'Y' AND ISNULL(@c_Loadkey,'') <> '') OR ISNULL(@c_UOMByOrder,'N') = 'Y') 
+      	    AND ISNULL(@c_SkipPreAllocationFlag,'0') = '1'  
+      	 BEGIN      	 	  
+      	 	  IF (ISNULL(@c_Loadkey,'') <> ISNULL(@c_PrevLoadkey,'') AND ISNULL(@c_UOMByLoad,'N') = 'Y') 
+      	 	     OR (ISNULL(@c_aOrderKey,'') <> ISNULL(@c_PrevOrderKey,'') AND ISNULL(@c_UOMByOrder,'N') = 'Y') 
+            BEGIN
+            	 SET @n_TotalQty = 0
+      	 	     SELECT @n_TotalQty = SUM(o.Qty)
+      	 	     FROM #OPORDERLINES o         
+               JOIN ORDERDETAIL OD WITH (NOLOCK) ON o.OrderKey = OD.OrderKey AND o.OrderLineNumber = OD.OrderLineNumber                     
+               JOIN ORDERS SO (NOLOCK) ON SO.OrderKey = o.OrderKey AND OD.Orderkey = SO.Orderkey  
+               LEFT JOIN LOADPLANDETAIL LPD (NOLOCK) ON SO.Orderkey = LPD.Orderkey              
+               WHERE (LPD.Loadkey = @c_Loadkey OR ISNULL(@c_Loadkey,'') = '')       
+               AND (o.Orderkey = @c_aOrderkey OR ISNULL(@c_UOMByOrder,'N') <> 'Y')
+               AND o.StorerKey = @c_aStorerKey    
+               AND o.SKU = @c_aSKU 
+               AND o.Facility = @c_aFacility         
+               AND o.UOM = @c_OriginUOM         
+               AND o.Qty > 0         
+               AND o.StrategyKey = @c_aStrategyKey         
+               AND o.UOMQty = @n_OriginUOMQty        
+               AND o.Channel = CASE WHEN @c_ChannelInventoryMgmt = '1' THEN @c_channel ELSE o.Channel END 
+               AND OD.Lottable01 = @c_Lottable01 
+               AND OD.Lottable02 = @c_Lottable02 
+               AND OD.Lottable03 = @c_Lottable03 
+               AND OD.Lottable04 = @d_Lottable04 
+               AND OD.Lottable05 = @d_Lottable05 
+               AND OD.Lottable06 = @c_Lottable06      
+               AND OD.Lottable07 = @c_Lottable07      
+               AND OD.Lottable08 = @c_Lottable08      
+               AND OD.Lottable09 = @c_Lottable09      
+               AND OD.Lottable10 = @c_Lottable10      
+               AND OD.Lottable11 = @c_Lottable11      
+               AND OD.Lottable12 = @c_Lottable12      
+               AND OD.Lottable13 = @d_Lottable13      
+               AND OD.Lottable14 = @d_Lottable14      
+               AND OD.Lottable15 = @d_Lottable15      
+                              
+               SET @n_TotalQty = FLOOR(@n_TotalQty / @n_cPackQty) * @n_cPackQty                                       
+            END                       
+            
+            IF @n_TotalQty = 0 
+               GOTO NEXT_ORDLINE
+                        
+            IF @n_TotalQty < @n_PickQty 
+            BEGIN
+               SET @n_PickQty = @n_TotalQty
+            END  
+      	 END
+      	 --NJOW27 E
             
          IF (@b_debug = 1 OR @b_debug = 2)        
          BEGIN        
@@ -3115,7 +3228,7 @@ BEGIN
                       Qty,  
                       Loc,  
                       Id,  
-                 UOMQty,  
+                      UOMQty,  
                       UOM,  
                       CaseID,  
                       PackKey,  
@@ -3156,67 +3269,70 @@ BEGIN
                       @n_Channel_ID   
                     )  
   
-               SELECT @n_Err = @@ERROR, @n_cnt_sql = @@ROWCOUNT  
-               SELECT @n_cnt = COUNT(1) FROM PICKDETAIL WITH (NOLOCK) WHERE PickDetailKey = @c_PickDetailKey  
-  
-               IF (@b_debug = 1 OR @b_debug = 2) AND (@n_cnt_sql <> @n_cnt)  
-               BEGIN  
-                  PRINT ''  
-                  PRINT '**** Error - Insert Pick Detail ****'  
-               END  
-               IF NOT (@n_Err = 0 AND @n_cnt = 1)  
-               BEGIN  
-                  SELECT @b_PickUpdateSuccess = 0  
-               END  
-               IF @b_PickUpdateSuccess = 1  
-               BEGIN  
-                  UPDATE #OPORDERLINES  
-                     SET Qty = Qty - @n_PickQty  
-                  WHERE SeqNo = @n_SeqNo  
-  
-                  SELECT @n_aQtyLeftToFulfill = @n_aQtyLeftToFulfill - @n_PickQty  
-                  SET    @n_QtyToInsert = @n_QtyToInsert - @n_PickQty  
-  
-                  COMMIT TRAN TROUTERLOOP  
-  
-                  IF @b_debug = 3 --@b_debug = 1  
+                  SELECT @n_Err = @@ERROR, @n_cnt_sql = @@ROWCOUNT  
+                  SELECT @n_cnt = COUNT(1) FROM PICKDETAIL WITH (NOLOCK) WHERE PickDetailKey = @c_PickDetailKey  
+                  
+                  IF (@b_debug = 1 OR @b_debug = 2) AND (@n_cnt_sql <> @n_cnt)  
                   BEGIN  
                      PRINT ''  
-                     PRINT '**** Succeed - Insert Pick Detail ****'  
-                     PRINT '     PickDetail#: ' + RTRIM(@c_PickDetailKey) +  
-                           ' Qty: ' + CAST(@n_PickQty AS NVARCHAR(10))  
+                     PRINT '**** Error - Insert Pick Detail ****'  
                   END  
-                    
-                  --NJOW13  
-                  IF @c_UCCAllocation = '1' AND @c_UCCNo <> @c_PrevUCCNo AND @c_UCCNo <> ''  
+                  IF NOT (@n_Err = 0 AND @n_cnt = 1)  
                   BEGIN  
-                     IF EXISTS(SELECT 1 FROM UCC (NOLOCK)  
-                               WHERE UCCNo = @c_UCCNo  
-                               AND Storerkey = @c_aStorerkey  
-                               AND Sku = @c_aSku  
-                               AND Status < '3')  
+                     SELECT @b_PickUpdateSuccess = 0  
+                  END  
+                  IF @b_PickUpdateSuccess = 1  
+                  BEGIN  
+                     UPDATE #OPORDERLINES  
+                        SET Qty = Qty - @n_PickQty  
+                     WHERE SeqNo = @n_SeqNo  
+                  
+                     SELECT @n_aQtyLeftToFulfill = @n_aQtyLeftToFulfill - @n_PickQty  
+                     SET    @n_QtyToInsert = @n_QtyToInsert - @n_PickQty  
+
+                     IF (ISNULL(@c_UOMByLoad,'N')='Y' OR ISNULL(@c_UOMByOrder,'N')='Y') AND ISNULL(@c_SkipPreAllocationFlag,'0')='1'  --NJOW27
+                        SET @n_TotalQty = @n_TotalQty - @n_PickQty
+                  
+                     COMMIT TRAN TROUTERLOOP  
+                  
+                     IF @b_debug = 3 --@b_debug = 1  
                      BEGIN  
-                          UPDATE UCC WITH (ROWLOCK)  
-                          SET Status = '3',  
-                              Wavekey = @c_Wavekey  
-                          WHERE UCCNo = @c_UCCNo  
-                        AND Storerkey = @c_aStorerkey  
-                        AND Sku = @c_aSku  
-                        AND Status < '3'                       
+                        PRINT ''  
+                        PRINT '**** Succeed - Insert Pick Detail ****'  
+                        PRINT '     PickDetail#: ' + RTRIM(@c_PickDetailKey) +  
+                              ' Qty: ' + CAST(@n_PickQty AS NVARCHAR(10))  
                      END  
-                  END                    
-               END -- @b_PickUpdateSuccess = 1        
-               ELSE        
-              BEGIN        
-                     ROLLBACK TRAN TROUTERLOOP        
-                     BREAK        
+                       
+                     --NJOW13  
+                     IF @c_UCCAllocation = '1' AND @c_UCCNo <> @c_PrevUCCNo AND @c_UCCNo <> ''  
+                     BEGIN  
+                        IF EXISTS(SELECT 1 FROM UCC (NOLOCK)  
+                                  WHERE UCCNo = @c_UCCNo  
+                                  AND Storerkey = @c_aStorerkey  
+                                  AND Sku = @c_aSku  
+                                  AND Status < '3')  
+                        BEGIN  
+                             UPDATE UCC WITH (ROWLOCK)  
+                             SET Status = '3',  
+                                 Wavekey = @c_Wavekey  
+                             WHERE UCCNo = @c_UCCNo  
+                           AND Storerkey = @c_aStorerkey  
+                           AND Sku = @c_aSku  
+                           AND Status < '3'                       
+                        END  
+                     END                    
+                  END -- @b_PickUpdateSuccess = 1        
+                  ELSE        
+                  BEGIN        
+                        ROLLBACK TRAN TROUTERLOOP        
+                        BREAK        
                   END  -- @b_PickUpdateSuccess <> 1        
                END -- @b_Success = 1 ; Generation PickDetailKey        
             END        
             ELSE        
             BEGIN        
                SELECT @b_PickUpdateSuccess = 0        
-           END  -- IF @b_sucess = 1        
+            END  -- IF @b_sucess = 1        
             SELECT @n_PickRecsCreated = @n_PickRecsCreated + 1        
             IF @c_aUOM = '6' OR @c_aUOM = '7' OR @c_aUOM = '2' OR @c_aUOM = '3' OR @c_aUOM = '4'   --(Wan05)       
                OR @c_aUOM = '1' --NJOW22              
@@ -3224,9 +3340,14 @@ BEGIN
                BREAK        
             END        
          END -- While @n_PickRecsCreated < @n_UOMQty        
-        
+       
+       --NJOW27
+       NEXT_ORDLINE:        
+       SET @c_PrevLoadkey = @c_Loadkey      
+       SET @c_PrevOrderkey = @c_aOrderkey  
+                 
        FETCH NEXT FROM CUR_OrderLines INTO @n_SeqNo, @c_aOrderKey,        
-                        @c_aOrderLineNumber, @n_PickQty, @n_OriginUOMQty        
+                        @c_aOrderLineNumber, @n_PickQty, @n_OriginUOMQty, @c_Loadkey --NJOW27           
       END        
       CLOSE CUR_OrderLines        
       DEALLOCATE CUR_OrderLines        
