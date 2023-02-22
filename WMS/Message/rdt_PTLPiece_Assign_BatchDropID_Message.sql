@@ -12,3 +12,4 @@ execute rdt.rdtAddMsg 152658, 10, '152658Need CartonID ', 'us_english', 803
 execute rdt.rdtAddMsg 152659, 10, '152659Invalid Format', 'us_english', 803
 execute rdt.rdtAddMsg 152660, 10, '152660CartonAssigned', 'us_english', 803
 execute rdt.rdtAddMsg 152661, 10, '152661UPD Log fail  ', 'us_english', 803
+execute rdt.rdtAddMsg 152662, 10, '152662UPD Log fail  ', 'us_english', 803

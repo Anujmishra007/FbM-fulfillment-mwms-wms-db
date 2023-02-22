@@ -22,6 +22,7 @@ GO
 /* 2022-11-22 1.8  Ung        WMS-21112 Revise close carton                   */
 /*                            Add custom carton ID                            */
 /* 2022-12-15 1.9  Ung        WMS-21056 Allow multi sorter, if not use light  */
+/* 2022-11-30 2.0  Ung        WMS-21170 Add DynamicSlot that need carton ID   */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdtfnc_PTLPiece (
@@ -37,27 +38,29 @@ AS
 
 -- Misc variable
 DECLARE
-   @i             INT, 
-   @nCount        INT,
-   @bSuccess      INT,
-   @nTranCount    INT,
-   @nRowCount     INT, 
-   @cSQL          NVARCHAR( MAX),
-   @cSQLParam     NVARCHAR( MAX),
-   @cIPAddress    NVARCHAR( 40), 
-   @cPosition     NVARCHAR( 10), 
-   @cOption       NVARCHAR( 1), 
-      
-   @cResult01  NVARCHAR( 20),
-   @cResult02  NVARCHAR( 20),
-   @cResult03  NVARCHAR( 20),
-   @cResult04  NVARCHAR( 20),
-   @cResult05  NVARCHAR( 20),
-   @cResult06  NVARCHAR( 20),
-   @cResult07  NVARCHAR( 20),
-   @cResult08  NVARCHAR( 20),
-   @cResult09  NVARCHAR( 20),
-   @cResult10  NVARCHAR( 20)
+   @i                INT, 
+   @nCount           INT,
+   @bSuccess         INT,
+   @nTranCount       INT,
+   @nRowCount        INT, 
+   @cSQL             NVARCHAR( MAX),
+   @cSQLParam        NVARCHAR( MAX),
+   @cOption          NVARCHAR( 1), 
+   @cLOC             NVARCHAR( 10),
+   @cDefaultDeviceID NVARCHAR( 20),
+   @cDefaultMethod   NVARCHAR( 1),
+   @tExtValid        VARIABLETABLE,
+
+   @cResult01        NVARCHAR( 20),
+   @cResult02        NVARCHAR( 20),
+   @cResult03        NVARCHAR( 20),
+   @cResult04        NVARCHAR( 20),
+   @cResult05        NVARCHAR( 20),
+   @cResult06        NVARCHAR( 20),
+   @cResult07        NVARCHAR( 20),
+   @cResult08        NVARCHAR( 20),
+   @cResult09        NVARCHAR( 20),
+   @cResult10        NVARCHAR( 20)
 
 -- RDT.RDTMobRec variable
 DECLARE
@@ -74,12 +77,16 @@ DECLARE
    @cUserName     NVARCHAR( 18),
    @cDeviceID     NVARCHAR( 20),
 
-   @cSKU          NVARCHAR(20),
+   @cSKU          NVARCHAR( 20),
    @nFromScn      INT,
 
-   @cStation      NVARCHAR(10),
-   @cMethod       NVARCHAR(1),
-   @cLastPos      NVARCHAR(5),
+   @cStation      NVARCHAR( 10),
+   @cMethod       NVARCHAR( 1),
+   @cLastPos      NVARCHAR( 5),
+   @cIPAddress    NVARCHAR( 40), 
+   @cPosition     NVARCHAR( 10), 
+   @cNewCartonID  NVARCHAR( 20),
+   @cDynamicSlot  NVARCHAR( 1),
 
    @cExtendedValidateSP    NVARCHAR( 20),
    @cExtendedUpdateSP      NVARCHAR( 20),
@@ -91,12 +98,6 @@ DECLARE
    @cCustomCartonIDSP      NVARCHAR( 20),
 
    @cUPC                   NVARCHAR( 30), 
-
-   @cDefaultDeviceID       NVARCHAR( 20), -- (james01)
-   @cDefaultMethod         NVARCHAR( 1),  -- (james03)
-   @tExtValid              VARIABLETABLE, -- (james03)
-   @cNewCartonID           NVARCHAR(20),
-   @cLOC                   NVARCHAR(10),
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
@@ -137,6 +138,8 @@ SELECT
    @cLastPos         = V_String3,
    @cIPAddress       = V_String4,
    @cPosition        = V_String5,
+   @cNewCartonID     = V_String6,
+   @cDynamicSlot     = V_String7,
 
    @cExtendedValidateSP = V_String20,
    @cExtendedUpdateSP   = V_String21,
@@ -144,9 +147,8 @@ SELECT
    @cDecodeSP           = V_String23,
    @cLight              = V_String24,
    @cExtendedInfo       = V_String25,
-   @cNewCartonID        = V_String26,
-   @cMultiSKUBarcode    = V_String27, 
-   @cCustomCartonIDSP   = V_String28, 
+   @cMultiSKUBarcode    = V_String26, 
+   @cCustomCartonIDSP   = V_String27, 
 
    @cUPC                = V_String41, 
 
@@ -165,6 +167,7 @@ SELECT
    @cInField13 = I_Field13,   @cOutField13 = O_Field13,  @cFieldAttr13 = FieldAttr13, 
    @cInField14 = I_Field14,   @cOutField14 = O_Field14,  @cFieldAttr14 = FieldAttr14, 
    @cInField15 = I_Field15,   @cOutField15 = O_Field15,  @cFieldAttr15 = FieldAttr15
+
 
 FROM rdt.rdtMobRec (NOLOCK)
 WHERE Mobile = @nMobile
@@ -239,6 +242,7 @@ BEGIN
 
    -- Init var
    SET @cLastPos = ''
+   SET @cDynamicSlot = ''
 
    -- Init screen
    SET @cOutField01 = CASE WHEN @cDefaultDeviceID = '1' AND @cDeviceID <> '' THEN 
@@ -739,7 +743,37 @@ BEGIN
          ,@cResult09  OUTPUT
          ,@cResult10  OUTPUT
       IF @nErrNo <> 0
+      BEGIN
+         IF @nErrNo = -2 -- Assign carton ID
+         BEGIN
+            SET @cDynamicSlot = '1'
+            
+            -- Get LOC info
+            SELECT @cLOC = LOC
+            FROM DeviceProfile WITH (NOLOCK) 
+            WHERE DeviceType = 'STATION'
+               AND DeviceID = @cStation
+               AND DevicePosition = @cPosition
+            
+            -- Prepare next screen var
+            SET @cOutField01 = @cLOC
+            SET @cOutField02 = ''
+
+            SET @cFieldAttr01 = 'O'
+            IF @cCustomCartonIDSP <> ''
+               SET @cFieldAttr02 = 'O'
+               
+            EXEC rdt.rdtSetFocusField @nMobile, 2 -- New carton ID
+
+            -- Go to close carton ID screen
+            SET @nStep = @nStep + 2
+            SET @nScn = @nScn + 2
+            
+            GOTO Quit
+         END
+         
          GOTO Step_3_Fail
+      END
 
       -- Prepare next screen var
       SET @cOutField01 = @cResult01
@@ -1037,7 +1071,7 @@ BEGIN
    IF @nInputKey = 1 --ENTER
    BEGIN
       -- Screen mapping
-      SET @cLOC = @cInField01
+      SET @cLOC         = CASE WHEN @cFieldAttr01 = '' THEN @cInField01 ELSE @cOutField01 END
       SET @cNewCartonID = CASE WHEN @cFieldAttr02 = '' THEN @cInField02 ELSE @cOutField02 END
 
       -- Validate blank
@@ -1091,6 +1125,7 @@ BEGIN
          SET @cOutField01 = ''
          GOTO Quit
       END
+      
       SET @cOutField01 = @cLOC
 
       -- Custom carton ID
@@ -1159,8 +1194,14 @@ BEGIN
          GOTO Quit
       END
       
+      -- Handling transaction
+      SET @nTranCount = @@TRANCOUNT
+      BEGIN TRAN  -- Begin our own transaction
+      SAVE TRAN rdtfnc_PTLPiece -- For rollback or commit only our own transaction
+      
       -- Close carton
-      EXEC rdt.rdt_PTLPiece_CloseCarton @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
+      EXEC rdt.rdt_PTLPiece_CloseCarton @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey    
+         ,@cLight
          ,@cStation
          ,@cClosePosition
          ,@cLOC
@@ -1169,7 +1210,47 @@ BEGIN
          ,@nErrNo     OUTPUT
          ,@cErrMsg    OUTPUT
       IF @nErrNo <> 0
+      BEGIN
+         ROLLBACK TRAN rdtfnc_PTLPiece
+         WHILE @@TRANCOUNT > @nTranCount
+            COMMIT TRAN
          GOTO Quit
+      END
+      
+      -- Confirm task
+      IF @cDynamicSlot = '1'
+      BEGIN
+         EXEC rdt.rdt_PTLPiece_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
+            ,@cLight
+            ,@cStation
+            ,@cMethod
+            ,@cSKU
+            ,@cIPAddress OUTPUT
+            ,@cPosition  OUTPUT
+            ,@nErrNo     OUTPUT
+            ,@cErrMsg    OUTPUT
+            ,@cResult01  OUTPUT
+            ,@cResult02  OUTPUT
+            ,@cResult03  OUTPUT
+            ,@cResult04  OUTPUT
+            ,@cResult05  OUTPUT
+            ,@cResult06  OUTPUT
+            ,@cResult07  OUTPUT
+            ,@cResult08  OUTPUT
+            ,@cResult09  OUTPUT
+            ,@cResult10  OUTPUT
+         IF @nErrNo <> 0
+         BEGIN
+            ROLLBACK TRAN rdtfnc_PTLPiece
+            WHILE @@TRANCOUNT > @nTranCount
+               COMMIT TRAN
+            GOTO Quit
+         END         
+      END
+      
+      COMMIT TRAN rdtfnc_PTLPiece
+      WHILE @@TRANCOUNT > @nTranCount
+         COMMIT TRAN
 
       -- Save last position
       SET @cLastPos = ''
@@ -1178,26 +1259,78 @@ BEGIN
       WHERE DeviceType = 'STATION'
          AND DeviceID = @cStation
          AND LOC = @cLOC
+
+      IF @cDynamicSlot = '1'
+      BEGIN 
+         SET @cDynamicSlot = ''
+
+         -- Prepare next screen var
+         SET @cOutField01 = @cResult01
+         SET @cOutField02 = @cResult02 
+         SET @cOutField03 = @cResult03 
+         SET @cOutField04 = @cResult04
+         SET @cOutField05 = @cResult05
+         SET @cOutField06 = @cResult06
+         SET @cOutField07 = @cResult07
+         SET @cOutField08 = @cResult08
+         SET @cOutField09 = @cResult09
+         SET @cOutField10 = @cResult10
+         SET @cOutField11 = '' -- SKU
+         SET @cOutField12 = @cLastPos
+         SET @cOutField13 = '' --Option         
+      END
+      ELSE
+      BEGIN
+         -- Prepare next screen var
+         SET @cOutField01 = '' --Result01
+         SET @cOutField02 = '' 
+         SET @cOutField03 = '' 
+         SET @cOutField04 = '' 
+         SET @cOutField05 = '' 
+         SET @cOutField06 = '' 
+         SET @cOutField07 = '' 
+         SET @cOutField08 = '' 
+         SET @cOutField09 = '' 
+         SET @cOutField10 = '' --Result10
+         SET @cOutField11 = '' -- SKU
+         SET @cOutField12 = @cLastPos
+         SET @cOutField13 = '' --Option
+      END
+      
+      SET @cFieldAttr01 = '' -- LOC
+      SET @cFieldAttr02 = '' -- New carton ID
+      
+      -- Go to matrix, SKU screen
+      SET @nScn = @nScn - 2
+      SET @nStep= @nStep - 2
    END
    
-   -- Prepare next screen var
-   SET @cOutField01 = '' --Result01
-   SET @cOutField02 = '' 
-   SET @cOutField03 = '' 
-   SET @cOutField04 = '' 
-   SET @cOutField05 = '' 
-   SET @cOutField06 = '' 
-   SET @cOutField07 = '' 
-   SET @cOutField08 = '' 
-   SET @cOutField09 = '' 
-   SET @cOutField10 = '' --Result10
-   SET @cOutField11 = '' -- SKU
-   SET @cOutField12 = @cLastPos
-   SET @cOutField13 = '' --Option
+   IF @nInputKey = 0 -- ESC
+   BEGIN
+      SET @cDynamicSlot = ''
+      
+      -- Prepare next screen var
+      SET @cOutField01 = '' --Result01
+      SET @cOutField02 = '' 
+      SET @cOutField03 = '' 
+      SET @cOutField04 = '' 
+      SET @cOutField05 = '' 
+      SET @cOutField06 = '' 
+      SET @cOutField07 = '' 
+      SET @cOutField08 = '' 
+      SET @cOutField09 = '' 
+      SET @cOutField10 = '' --Result10
+      SET @cOutField11 = '' -- SKU
+      SET @cOutField12 = @cLastPos
+      SET @cOutField13 = '' --Option
 
-   -- Go to matrix, SKU screen
-   SET @nScn = @nScn - 2
-   SET @nStep= @nStep - 2
+      SET @cFieldAttr01 = '' -- LOC
+      SET @cFieldAttr02 = '' -- New carton ID
+
+      -- Go to matrix, SKU screen
+      SET @nScn = @nScn - 2
+      SET @nStep= @nStep - 2
+   END
 END
 GOTO QUIT
 
@@ -1319,6 +1452,8 @@ BEGIN
       V_String3  = @cLastPos,
       V_String4  = @cIPAddress,
       V_String5  = @cPosition,
+      V_String6  = @cNewCartonID,
+      V_String7  = @cDynamicSlot, 
    
       V_String20 = @cExtendedValidateSP,
       V_String21 = @cExtendedUpdateSP,
@@ -1326,9 +1461,8 @@ BEGIN
       V_String23 = @cDecodeSP,
       V_String24 = @cLight,
       V_String25 = @cExtendedInfo,
-      V_String26 = @cNewCartonID,
-      V_String27 = @cMultiSKUBarcode, 
-      V_String28 = @cCustomCartonIDSP, 
+      V_String26 = @cMultiSKUBarcode, 
+      V_String27 = @cCustomCartonIDSP, 
 
       V_String41 = @cUPC, 
 
@@ -1347,7 +1481,7 @@ BEGIN
       I_Field13 = @cInField13,  O_Field13 = @cOutField13,   FieldAttr13  = @cFieldAttr13, 
       I_Field14 = @cInField14,  O_Field14 = @cOutField14,   FieldAttr14  = @cFieldAttr14, 
       I_Field15 = @cInField15,  O_Field15 = @cOutField15,   FieldAttr15  = @cFieldAttr15
-      
+
    WHERE Mobile = @nMobile
 END
 
