@@ -24,7 +24,7 @@ GO
 /*                                                                         */
 /* Called By:                                                              */
 /*                                                                         */
-/* GitLab Version: 1.0                                                     */
+/* GitLab Version: 1.1                                                     */
 /*                                                                         */
 /* Version: 5.4                                                            */
 /*                                                                         */
@@ -33,6 +33,7 @@ GO
 /* Updates:                                                                */
 /* Date         Author      Ver. Purposes                                  */
 /* 06-Jan-2022  WLChooi     1.0  DevOps Combine Script                     */
+/* 22-Feb-2022  WLChooi     1.1  WMS-19760 - Show or hide field (WL01)     */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTN_001]
@@ -722,6 +723,72 @@ BEGIN
 
    IF @c_PreGenRptData = ''
    BEGIN
+      --WL01 S
+      ;WITH CTE AS (
+         SELECT PickSlipNo
+              , LoadKey
+              , OrderKey
+              , ConsigneeKey
+              , Company
+              , Addr1
+              , Addr2
+              , Addr3
+              , PostCode
+              , Route
+              , Route_Desc
+              , TrfRoom
+              , Notes1
+              , Notes2
+              , LOC
+              , SKU
+              , SkuDesc
+              , Qty
+              , TempQty1
+              , TempQty2
+              , PrintedFlag
+              , Zone
+              , PgGroup
+              , RowNum
+              , Lot
+              , Carrierkey
+              , VehicleNo
+              , Lottable01
+              , Lottable04
+              , LabelPrice
+              , ExternOrderKey
+              , Facility
+              , Lottable02
+              , DeliveryNote
+              , DeliveryDate
+              , SKU2
+              , Consigneekey2
+              , WrapSkuDesc
+              , ShowAltSku
+              , CustCol01
+              , CustCol01_Text
+              , CustCol02
+              , CustCol02_Text
+              , CustCol03
+              , CustCol03_Text
+              , CASE WHEN TempQty1 > 0
+                     AND  ShowCustomFormula = 'Y' THEN FLOOR(Qty / TempQty1)
+                     ELSE 0 END AS CS
+              , CASE WHEN TempQty2 > 0
+                     AND  ShowCustomFormula = 'Y' THEN
+                        FLOOR((Qty - (CASE WHEN TempQty1 > 0 THEN FLOOR(Qty / TempQty1) * TempQty1
+                                           ELSE 0 END)) / TempQty2)
+                     ELSE 0 END AS InnerP
+              , CASE WHEN ShowCustomFormula = 'Y' THEN
+                        Qty - (CASE WHEN TempQty1 > 0 THEN FLOOR(Qty / TempQty1) * TempQty1
+                                    ELSE 0 END)
+                        - (CASE WHEN TempQty2 > 0 THEN
+                                   FLOOR((Qty - (CASE WHEN TempQty1 > 0 THEN FLOOR(Qty / TempQty1) * TempQty1
+                                                      ELSE 0 END)) / TempQty2)
+                                ELSE 0 END * TempQty2)
+                     ELSE 0 END AS EA
+              , ShowCustomFormula
+              , LogicalLoc
+         FROM #temp_pick)
       SELECT PickSlipNo
            , LoadKey
            , OrderKey
@@ -767,26 +834,14 @@ BEGIN
            , CustCol02_Text
            , CustCol03
            , CustCol03_Text
-           , CASE WHEN TempQty1 > 0
-                  AND  ShowCustomFormula = 'Y' THEN FLOOR(Qty / TempQty1)
-                  ELSE 0 END AS CS
-           , CASE WHEN TempQty2 > 0
-                  AND  ShowCustomFormula = 'Y' THEN
-                     FLOOR((Qty - (CASE WHEN TempQty1 > 0 THEN FLOOR(Qty / TempQty1) * TempQty1
-                                        ELSE 0 END)) / TempQty2)
-                  ELSE 0 END AS InnerP
-           , CASE WHEN ShowCustomFormula = 'Y' THEN
-                     Qty - (CASE WHEN TempQty1 > 0 THEN FLOOR(Qty / TempQty1) * TempQty1
-                                 ELSE 0 END)
-                     - (CASE WHEN TempQty2 > 0 THEN
-                                FLOOR((Qty - (CASE WHEN TempQty1 > 0 THEN FLOOR(Qty / TempQty1) * TempQty1
-                                                   ELSE 0 END)) / TempQty2)
-                             ELSE 0 END * TempQty2)
-                  ELSE 0 END AS EA
+           , CASE WHEN ShowCustomFormula = 'Y' THEN CASE WHEN ISNULL(CS,0) = 0 THEN NULL ELSE CS END ELSE NULL END AS CS
+           , CASE WHEN ShowCustomFormula = 'Y' THEN CASE WHEN ISNULL(InnerP,0) = 0 THEN NULL ELSE InnerP END ELSE NULL END AS InnerP
+           , CASE WHEN ShowCustomFormula = 'Y' THEN CASE WHEN ISNULL(EA,0) = 0 THEN NULL ELSE EA END ELSE NULL END EA
            , ShowCustomFormula
            , LogicalLoc
-      FROM #temp_pick
+      FROM CTE
       ORDER BY RowNum
+      --WL01 E
       --ORDER BY CASE WHEN ISNULL(OrderKey, '') = '' THEN 2
       --              ELSE 1 END
       --       , LogicalLoc
