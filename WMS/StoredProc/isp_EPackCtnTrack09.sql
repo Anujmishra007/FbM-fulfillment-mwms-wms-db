@@ -14,7 +14,7 @@ GO
 /* Called By: n_cst_packcarton_ecom                                     */        
 /*          : ue_getcartontrackno                                       */        
 /*        :                                                             */        
-/* PVCS Version: 1.2                                                    */        
+/* PVCS Version: 1.3                                                    */        
 /*                                                                      */        
 /* Version: 7.0                                                         */        
 /*                                                                      */        
@@ -27,6 +27,7 @@ GO
 /* 04-Aug-2022 WLChooi  1.1   WMS-20403 Get Info from Option5 (WL01)    */
 /* 30-Sep-2022 WLChooi  1.2   WMS-20913 Get Info from Option5 filter    */
 /*                            by ECOM Platform (WL02)                   */
+/* 08-Feb-2023 WLChooi  1.3   WMS-21728 - Add prefix to TL2.KeyXX (WL03)*/
 /************************************************************************/        
 CREATE OR ALTER PROC [dbo].[isp_EPackCtnTrack09]        
          @c_PickSlipNo  NVARCHAR(10)         
@@ -73,6 +74,10 @@ BEGIN
          , @c_Option5         NVARCHAR(4000) = '' --WL01
          , @c_ECOMPlatform    NVARCHAR(20) = ''   --WL02
          , @c_ECPlatform_JSON NVARCHAR(MAX) = ''   --WL02
+         , @c_TL2KeyPrefix    NVARCHAR(MAX) = ''   --WL03
+         , @c_Key1Prefix      NVARCHAR(20) = ''   --WL03
+         , @c_Key2Prefix      NVARCHAR(20) = ''   --WL03
+         , @c_Key3Prefix      NVARCHAR(20) = ''   --WL03
 
    SET @b_Success  = 1        
    SET @n_err      = 0        
@@ -307,6 +312,32 @@ BEGIN
       END
    END
 
+   --WL03 S
+   SET @c_TL2KeyPrefix = ''
+   SELECT @c_TL2KeyPrefix = dbo.fnc_GetParamValueFromString('@c_TL2KeyPrefix', @c_Option5, '')  
+
+   IF ISJSON(@c_TL2KeyPrefix) = 1
+   BEGIN
+      DECLARE @TL2 TABLE
+      (
+         [Column] NVARCHAR(10)  NULL
+       , Prefix   NVARCHAR(100) NULL
+      )
+
+      INSERT INTO @TL2
+      SELECT [Column]
+           , Prefix
+      FROM
+         OPENJSON(@c_TL2KeyPrefix)
+         WITH ([Column] NVARCHAR(10)  '$.Column'
+             , Prefix   NVARCHAR(100) '$.Prefix')
+
+      SELECT @c_Key1Prefix = CAST(T.Prefix AS NVARCHAR) FROM @TL2 T WHERE T.[Column] = 'Key1'
+      SELECT @c_Key2Prefix = CAST(T.Prefix AS NVARCHAR) FROM @TL2 T WHERE T.[Column] = 'Key2'
+      SELECT @c_Key3Prefix = CAST(T.Prefix AS NVARCHAR) FROM @TL2 T WHERE T.[Column] = 'Key3'
+   END
+   --WL03 E
+
    IF ISNULL(@c_Tablename, '') = ''
       SET @c_Tablename = 'WSCRPKADDCN' 
 
@@ -336,8 +367,18 @@ BEGIN
       GOTO QUIT_SP                  
    END  
 
-   INSERT INTO TRANSMITLOG2 (transmitlogkey, tablename, key1, key2, key3, transmitflag, TransmitBatch)  
-   VALUES (@c_TransmitlogKey, @c_TableName, @c_OrderKey, @c_CartonNo, @c_StorerKey, '0', '') 
+   INSERT INTO TRANSMITLOG2 (transmitlogkey, tablename, key1, key2, key3, transmitflag, transmitbatch)
+   VALUES (@c_TransmitlogKey, @c_TableName
+         , CASE WHEN TRIM(ISNULL(@c_Key1Prefix, '')) = '' 
+                THEN TRIM(@c_Orderkey)
+                ELSE TRIM(ISNULL(@c_Key1Prefix, '')) + TRIM(@c_Orderkey) END    --WL03
+         , CASE WHEN TRIM(ISNULL(@c_Key2Prefix, '')) = '' 
+                THEN TRIM(@c_CartonNo)
+                ELSE TRIM(ISNULL(@c_Key2Prefix, '')) + TRIM(@c_CartonNo) END    --WL03
+         , CASE WHEN TRIM(ISNULL(@c_Key3Prefix, '')) = '' 
+                THEN TRIM(@c_Storerkey)
+                ELSE TRIM(ISNULL(@c_Key3Prefix, '')) + TRIM(@c_Storerkey) END   --WL03
+         , '0', '')
    
    IF @@ERROR <> 0            
    BEGIN					  
@@ -466,8 +507,3 @@ END -- procedure
 GO
 GRANT EXECUTE ON [dbo].[isp_EPackCtnTrack09] TO nSQL 
 GO
-
-
-
-
-
