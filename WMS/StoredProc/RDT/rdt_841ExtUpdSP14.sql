@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_841ExtUpdSP14]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_841ExtUpdSP14]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -20,7 +17,7 @@ GO
 /* 2021-07-27  1.2  Chermain WMS-17410 Add VariableTable Param (cc01)   */
 /************************************************************************/  
 
-CREATE PROC [RDT].[rdt_841ExtUpdSP14] (  
+CREATE OR ALTER PROC [RDT].[rdt_841ExtUpdSP14] (  
    @nMobile       INT,  
    @nFunc         INT,  
    @cLangCode     NVARCHAR( 3),  
