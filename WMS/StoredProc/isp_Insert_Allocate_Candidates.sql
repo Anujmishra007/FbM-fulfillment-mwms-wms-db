@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_Insert_Allocate_Candidates]')
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-DROP PROCEDURE [dbo].[isp_Insert_Allocate_Candidates]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -27,13 +22,15 @@ GO
 /*                                                                      */    
 /* Updates:                                                             */    
 /* Date        Author   Ver.  Purposes                                  */    
+/* 11-Jan-2023 NJOW01   1.0   WMS-19078 Increate othervalue size        */
+/* 11-Jan-2023 NJOW01   1.0   DEVOPS Combine Script                     */
 /************************************************************************/ 
-CREATE PROC [dbo].[isp_Insert_Allocate_Candidates]  
+CREATE OR ALTER PROC [dbo].[isp_Insert_Allocate_Candidates]  
       @c_Lot            NVARCHAR(10)  
    ,  @c_Loc            NVARCHAR(10)  
    ,  @c_ID             NVARCHAR(18)  
    ,  @n_QtyAvailable   INT
-   ,  @c_OtherValue     NVARCHAR(20) = '1'
+   ,  @c_OtherValue     NVARCHAR(500) = '1' --NJOW01
    ,  @c_PickCode       NVARCHAR(30) = ''
    ,  @c_Storerkey      NVARCHAR(10) = ''
    ,  @c_Sku            NVARCHAR(20) = ''
