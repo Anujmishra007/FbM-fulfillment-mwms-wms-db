@@ -30,6 +30,7 @@ GO
 /* 02-Sep-2022 1.8  James    WMS-20639 Add output UPC Qty (james03)     */
 /* 20-Sep-2022 1.9  James    WMS-20756 Return UPC Qty based on UPC.UOM  */
 /*                           setup (james04)                            */
+/* 27-Sep-2022 2.0  Ung      WMS-20659 Add UPC.UOM                      */
 /************************************************************************/
 CREATE OR ALTER PROC    [RDT].[rdt_GETSKU]
                @cStorerKey   NVARCHAR(15)
@@ -38,7 +39,7 @@ CREATE OR ALTER PROC    [RDT].[rdt_GETSKU]
 ,              @nErr         int               OUTPUT
 ,              @cErrMsg      NVARCHAR(250)     OUTPUT
 ,              @cSKUStatus   NVARCHAR(10) = ''
-,              @nUPCQty      INT = 0           OUTPUT
+,              @nUPCQTY      INT = 0           OUTPUT
 
 AS
 BEGIN
@@ -47,12 +48,11 @@ SET QUOTED_IDENTIFIER OFF
 SET ANSI_NULLS OFF
 SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @nContinue INT
-   DECLARE @cLangCode  NVARCHAR( 3)
-   DECLARE @nFunc     INT
-   DECLARE @cGetUPCQty NVARCHAR( 1)
-   DECLARE @nQty      INT = 0
-   DECLARE @cUPC_UOM  NVARCHAR( 10)
+   DECLARE @nContinue   INT
+   DECLARE @cLangCode   NVARCHAR( 3)
+   DECLARE @nFunc       INT
+   DECLARE @nQTY        INT = 0
+   DECLARE @cUOM        NVARCHAR( 10)
    
    SELECT @nContinue = 1
    SELECT @bSuccess = 1
@@ -86,8 +86,8 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                BEGIN
                   SELECT TOP 1 
                      @cSKU = UPC.SKU, 
-                     @nQty = UPC.QTY,
-                     @cUPC_UOM = UPC.UOM 
+                     @cUOM = UPC.UOM, 
+                     @nQTY = ISNULL( UPC.QTY, 0)
                   FROM dbo.UPC UPC WITH (NOLOCK) 
                   WHERE UPC = @cSKU 
                     AND StorerKey = @cStorerKey            
@@ -104,48 +104,43 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                   	
                      SELECT @nContinue=3        
                                   
-                     SET @nErr = 68500
+                     SET @nErr = 192751
                      SET @cErrMsg = rdt.rdtgetmessage( @nErr, @cLangCode,'DSP') -- Bad Sku 
                   END 
-                  
-                  IF @nErr = 0
+                  ELSE
                   BEGIN
-                     SELECT @nFunc = Func 
-                     FROM rdt.RDTMOBREC WITH (NOLOCK) 
-                     WHERE UserName = SUSER_SNAME()
+                     -- Get session info
+                     SELECT @nFunc = Func FROM rdt.rdtMobRec WITH (NOLOCK) WHERE UserName = SUSER_SNAME()
 
-                     SET @cGetUPCQty = rdt.RDTGetConfig( @nFunc, 'GetUPCQty', @cStorerKey)
-                     
-                     IF @cGetUPCQty = '1'
+                     /*
+                     Need a config (especially for UOM) as UPC.UOM already contain many data (before this feature) and it is not piece UOM.
+                     The config will help prevent piece scan module from auto retrieve, say previously piece, and now suddenly become carton QTY 
+                     */
+                     IF rdt.RDTGetConfig( @nFunc, 'GetUPCQTY', @cStorerKey) = '1'
                      BEGIN
-                     	IF @cUPC_UOM <> ''
-                     	BEGIN
-                     		IF @nQty > 0
-                     		   SET @nUPCQty = @nQty
-                           ELSE
-                           BEGIN
-                              SELECT CASE 
-                                 WHEN @cUPC_UOM = PACK.PackUOM1 THEN PACK.CaseCnt
-                                 WHEN @cUPC_UOM = PACK.PackUOM2 THEN PACK.InnerPack
-                                 WHEN @cUPC_UOM = PACK.PackUOM3 THEN PACK.Qty
-                                 WHEN @cUPC_UOM = PACK.PackUOM4 THEN PACK.Pallet
-                                 WHEN @cUPC_UOM = PACK.PackUOM5 THEN PACK.CUBE
-                                 WHEN @cUPC_UOM = PACK.PackUOM6 THEN PACK.GrossWgt
-                                 WHEN @cUPC_UOM = PACK.PackUOM7 THEN PACK.NetWgt
-                                 WHEN @cUPC_UOM = PACK.PackUOM8 THEN PACK.OtherUnit1
-                                 WHEN @cUPC_UOM = PACK.PackUOM9 THEN PACK.OtherUnit2
-                                 ELSE NULL END
-                              FROM dbo.SKU SKU (NOLOCK)
-                              INNER JOIN dbo.PACK PACK (NOLOCK) ON (SKU.PackKey = PACK.PackKey)
-                              WHERE SKU.StorerKey = @cStorerKey
-                              AND   SKU.SKU = @cSKU
-                           END
-                     	END
-                     	ELSE
-                        BEGIN
-                     		IF @nQty > 0
-                     		   SET @nUPCQty = @nQty
-                        END
+                        -- 1. Return UPC.QTY
+                        IF @nQTY > 0
+                           SET @nUPCQTY = @nQTY
+                        
+                        -- 2. Return pack UOM QTY
+                        ELSE IF @cUOM <> ''
+                           SELECT @nUPCQTY =
+                              CASE
+                                 WHEN @cUOM = PackUOM1 THEN Pack.CaseCnt
+                                 WHEN @cUOM = PackUOM2 THEN Pack.InnerPack
+                                 WHEN @cUOM = PackUOM3 THEN Pack.QTY
+                                 WHEN @cUOM = PackUOM4 THEN Pack.Pallet
+                                 WHEN @cUOM = PackUOM5 THEN Pack.Cube
+                                 WHEN @cUOM = PackUOM6 THEN Pack.GrossWgt
+                                 WHEN @cUOM = PackUOM7 THEN Pack.NetWgt
+                                 WHEN @cUOM = PackUOM8 THEN Pack.OtherUnit1
+                                 WHEN @cUOM = PackUOM9 THEN Pack.OtherUnit2
+                                 ELSE 0 
+                              END
+                           FROM dbo.SKU WITH (NOLOCK)
+                              JOIN dbo.Pack WITH (NOLOCK) ON (Pack.PackKey = SKU.PackKey)
+                           WHERE SKU.StorerKey = @cStorerKey
+                              AND SKU.SKU = @cSKU   
                      END
                   END
                END
@@ -185,9 +180,9 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                IF @@ROWCOUNT = 0 
                BEGIN
                   SELECT TOP 1 
-                     @cSKU = UPC.SKU,
-                     @nQty = UPC.QTY,
-                     @cUPC_UOM = UPC.UOM  
+                     @cSKU = UPC.SKU, 
+                     @cUOM = UPC.UOM, 
+                     @nQTY = ISNULL( UPC.QTY, 0)
                   FROM dbo.UPC UPC WITH (NOLOCK) 
                   WHERE UPC = @cSKU 
                   AND   StorerKey = @cStorerKey  
@@ -205,48 +200,41 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                   	
                      SELECT @nContinue=3
                      
-                     SET @nErr = 68500
+                     SET @nErr = 192752
                      SET @cErrMsg = rdt.rdtgetmessage( @nErr, @cLangCode,'DSP') -- Bad Sku         
                   END 
-
-                  IF @nErr = 0
+                  ELSE
                   BEGIN
-                     SELECT @nFunc = Func 
-                     FROM rdt.RDTMOBREC WITH (NOLOCK) 
-                     WHERE UserName = SUSER_SNAME()
-                  
-                     SET @cGetUPCQty = rdt.RDTGetConfig( @nFunc, 'GetUPCQty', @cStorerKey)
-                     
-                     IF @cGetUPCQty = '1'
+                     -- Get session info
+                     SELECT @nFunc = Func FROM rdt.rdtMobRec WITH (NOLOCK) WHERE UserName = SUSER_SNAME()
+
+                     /*
+                     Need a config (especially for UOM) as UPC.UOM already contain many data (before this feature) and it is not piece UOM.
+                     The config will help prevent piece scan module from auto retrieve, say previously piece, and now suddenly become carton QTY 
+                     */
+                     IF rdt.RDTGetConfig( @nFunc, 'GetUPCQTY', @cStorerKey) = '1'
                      BEGIN
-                     	IF @cUPC_UOM <> ''
-                     	BEGIN
-                     		IF @nQty > 0
-                     		   SET @nUPCQty = @nQty
-                           ELSE
-                           BEGIN
-                              SELECT CASE 
-                                 WHEN @cUPC_UOM = PACK.PackUOM1 THEN PACK.CaseCnt
-                                 WHEN @cUPC_UOM = PACK.PackUOM2 THEN PACK.InnerPack
-                                 WHEN @cUPC_UOM = PACK.PackUOM3 THEN PACK.Qty
-                                 WHEN @cUPC_UOM = PACK.PackUOM4 THEN PACK.Pallet
-                                 WHEN @cUPC_UOM = PACK.PackUOM5 THEN PACK.CUBE
-                                 WHEN @cUPC_UOM = PACK.PackUOM6 THEN PACK.GrossWgt
-                                 WHEN @cUPC_UOM = PACK.PackUOM7 THEN PACK.NetWgt
-                                 WHEN @cUPC_UOM = PACK.PackUOM8 THEN PACK.OtherUnit1
-                                 WHEN @cUPC_UOM = PACK.PackUOM9 THEN PACK.OtherUnit2
-                                 ELSE NULL END
-                              FROM dbo.SKU SKU (NOLOCK)
-                              INNER JOIN dbo.PACK PACK (NOLOCK) ON (SKU.PackKey = PACK.PackKey)
-                              WHERE SKU.StorerKey = @cStorerKey
-                              AND   SKU.SKU = @cSKU
-                           END
-                     	END
-                     	ELSE
-                        BEGIN
-                     		IF @nQty > 0
-                     		   SET @nUPCQty = @nQty
-                        END
+                        IF @nQTY > 0
+                           SET @nUPCQTY = @nQTY
+                        ELSE
+                           -- Retrieve QTY base on pack UOM
+                           SELECT @nUPCQTY =
+                              CASE
+                                 WHEN @cUOM = PackUOM1 THEN Pack.CaseCnt
+                                 WHEN @cUOM = PackUOM2 THEN Pack.InnerPack
+                                 WHEN @cUOM = PackUOM3 THEN Pack.QTY
+                                 WHEN @cUOM = PackUOM4 THEN Pack.Pallet
+                                 WHEN @cUOM = PackUOM5 THEN Pack.Cube
+                                 WHEN @cUOM = PackUOM6 THEN Pack.GrossWgt
+                                 WHEN @cUOM = PackUOM7 THEN Pack.NetWgt
+                                 WHEN @cUOM = PackUOM8 THEN Pack.OtherUnit1
+                                 WHEN @cUOM = PackUOM9 THEN Pack.OtherUnit2
+                                 ELSE 0 
+                              END
+                           FROM dbo.SKU WITH (NOLOCK)
+                              JOIN dbo.Pack WITH (NOLOCK) ON (Pack.PackKey = SKU.PackKey)
+                           WHERE SKU.StorerKey = @cStorerKey
+                              AND SKU.SKU = @cSKU   
                      END
                   END
                END

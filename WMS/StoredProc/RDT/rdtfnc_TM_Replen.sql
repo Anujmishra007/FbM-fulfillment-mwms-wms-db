@@ -1,3 +1,4 @@
+
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -50,6 +51,9 @@ GO
 /*                            Add ExtendedWCSSP                               */
 /* 2021-05-07 3.7  James      WMS-16964 Add custom SuggToLOC (james09)        */
 /* 2021-11-09 3.8  Chermaine  WMS-17383 Add AutoGen DropID in St1 (cc01)      */
+/* 2022-09-26 3.9  Ung        WMS-20659 Add skip FromID if LoseID             */
+/*                            Add decode base on UPC.UOM                      */
+/*                            Fix full short stuck at SKU screen              */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Replen](
@@ -77,7 +81,7 @@ DECLARE
    @cReasonCode         NVARCHAR(10),
    @nRowRef             INT,
    @nCurrentTranCount   INT,
-   @cUCC                NVARCHAR( 20),
+   @cUCC                NVARCHAR( 20) = '',
    @cSKU                NVARCHAR(20),
    @cPQTY               NVARCHAR( 5),
    @cMQTY               NVARCHAR( 5),
@@ -916,21 +920,124 @@ BEGIN
          END
       END
 
-      SELECT @cLocDescr = SUBSTRING( Descr, 1, 20) FROM dbo.LOC WITH (NOLOCK) WHERE Facility = @cFacility AND LOC = @cSuggFromLOC
-      IF ISNULL( @cLocDescr, '') = ''
-         SET @cLocDescr = @cSuggFromLOC
+      -- Lose ID
+      IF (SELECT LoseID FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @cSuggFromLOC) = '1' AND
+         @cPickMethod = 'PP' AND
+         @cSuggID = '' 
+      BEGIN
+         -- Get SKU info
+         SELECT
+            @cSKUDesc = S.Descr,
+            @cMUOM_Desc = Pack.PackUOM3,
+            @cPUOM_Desc =
+               CASE @cPUOM
+                  WHEN '2' THEN Pack.PackUOM1 -- Case
+                  WHEN '3' THEN Pack.PackUOM2 -- Inner pack
+                  WHEN '6' THEN Pack.PackUOM3 -- Master unit
+                  WHEN '1' THEN Pack.PackUOM4 -- Pallet
+                  WHEN '4' THEN Pack.PackUOM8 -- Other unit 1
+                  WHEN '5' THEN Pack.PackUOM9 -- Other unit 2
+               END,
+            @nPUOM_Div = CAST(
+               CASE @cPUOM
+                  WHEN '2' THEN Pack.CaseCNT
+                  WHEN '3' THEN Pack.InnerPack
+                  WHEN '6' THEN Pack.QTY
+                  WHEN '1' THEN Pack.Pallet
+                  WHEN '4' THEN Pack.OtherUnit1
+                  WHEN '5' THEN Pack.OtherUnit2
+               END AS INT)
+         FROM dbo.SKU S WITH (NOLOCK)
+            INNER JOIN dbo.Pack Pack (nolock) ON (S.PackKey = Pack.PackKey)
+         WHERE StorerKey = @cStorerKey
+            AND SKU = @cSuggSKU
 
-      -- Prepare Next Screen
-      SET @cOutField01 = @cPickMethod
-      SET @cOutField02 = @cDropID
-      SET @cOutField03 = CASE WHEN @cLocShowDescr = '1' THEN @cLocDescr ELSE @cSuggFromLOC END
-      SET @cOutField04 = @cSuggID
-      SET @cOutField05 = CASE WHEN @cDefaultFromID = '1' THEN @cSuggID ELSE '' END -- FromID
-      SET @cOutField10 = '' -- ExtendedInfo
+         -- Get lottable
+         SELECT
+            @cLottable01 = LA.Lottable01,
+            @cLottable02 = LA.Lottable02,
+            @cLottable03 = LA.Lottable03,
+            @dLottable04 = LA.Lottable04
+         FROM dbo.LOTAttribute LA WITH (NOLOCK)
+         WHERE LOT = @cSuggLOT
 
-      SET @nScn = @nScn + 1
-      SET @nStep = @nStep + 1
+         -- Restore scanned carton QTY
+         SELECT @nCartonQTY = ISNULL( SUM( QTY), 0)
+         FROM rdt.rdtRPFLog WITH (NOLOCK)
+         WHERE TaskDetailKey = @cTaskDetailKey
 
+         -- (ChewKP01)
+         IF @nCartonQTY = 0
+            SET @cSKUValidated = '0'
+         ELSE
+            SET @cSKUValidated = '1'
+
+         -- Disable QTY field
+         SET @cFieldAttr14 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END -- PQTY
+         SET @cFieldAttr15 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END -- MQTY
+
+         -- Convert to prefer UOM QTY
+         IF @cPUOM = '6' OR -- When preferred UOM = master unit
+            @nPUOM_Div = 0 -- UOM not setup
+         BEGIN
+            SET @cPUOM_Desc = ''
+            SET @nPQTY_RPL = 0
+            SET @nPQTY = 0
+            SET @nMQTY = @nCartonQTY
+            SET @nMQTY_RPL = @nQTY_RPL
+            SET @cFieldAttr14 = 'O' -- @nPQTY_PWY
+         END
+         ELSE
+         BEGIN
+            SET @nPQTY = 0
+            SET @nMQTY = @nCartonQTY
+
+            SET @nPQTY = @nCartonQTY / @nPUOM_Div -- Calc QTY in preferred UOM
+            SET @nMQTY = @nCartonQTY % @nPUOM_Div -- Calc the remaining in master unit
+
+            SET @nPQTY_RPL = @nQTY_RPL / @nPUOM_Div -- Calc QTY in preferred UOM
+            SET @nMQTY_RPL = @nQTY_RPL % @nPUOM_Div -- Calc the remaining in master unit
+         END
+
+         -- Prepare next screen variable
+         SET @cOutField01 = @cSuggSKU
+         SET @cOutField02 = SUBSTRING( @cSKUDesc, 1, 20)
+         SET @cOutField03 = SUBSTRING( @cSKUDesc, 21, 20)
+         SET @cOutField04 = @cLottable01
+         SET @cOutField05 = @cLottable02
+         SET @cOutField06 = @cLottable03
+         SET @cOutField07 = rdt.rdtFormatDate( @dLottable04)
+         SET @cOutField08 = CASE WHEN @cDefaultSKU = '1' THEN @cSuggSKU ELSE '' END -- SKU
+         SET @cOutField09 = ''
+         SET @cOutField10 = ''
+         SET @cOutField11 = '1:' + CAST( @nPUOM_Div AS NCHAR( 6)) + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc
+         SET @cOutField12 = CASE WHEN (@cPUOM = '6' OR @nPUOM_Div = 0) THEN '' ELSE CAST( @nPQTY_RPL AS NVARCHAR( 5)) END
+         SET @cOutField13 = CAST( @nMQTY_RPL AS NVARCHAR( 5))
+         SET @cOutField14 = CASE WHEN (@cPUOM = '6' OR @nPUOM_Div = 0) THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 5)) END -- PQTY
+         SET @cOutField15 = CAST( @nMQTY AS NVARCHAR( 5)) -- MQTY
+         EXEC rdt.rdtSetFocusField @nMobile, 8 -- SKU
+
+         SET @nScn = @nScn + 2
+         SET @nStep = @nStep + 2
+      END
+      ELSE
+      BEGIN
+         SELECT @cLocDescr = SUBSTRING( Descr, 1, 20) FROM dbo.LOC WITH (NOLOCK) WHERE Facility = @cFacility AND LOC = @cSuggFromLOC
+         IF ISNULL( @cLocDescr, '') = ''
+            SET @cLocDescr = @cSuggFromLOC
+
+         -- Prepare Next Screen
+         SET @cOutField01 = @cPickMethod
+         SET @cOutField02 = @cDropID
+         SET @cOutField03 = CASE WHEN @cLocShowDescr = '1' THEN @cLocDescr ELSE @cSuggFromLOC END
+         SET @cOutField04 = @cSuggID
+         SET @cOutField05 = CASE WHEN @cDefaultFromID = '1' THEN @cSuggID ELSE '' END -- FromID
+         SET @cOutField10 = '' -- ExtendedInfo
+
+         SET @nScn = @nScn + 1
+         SET @nStep = @nStep + 1
+      END
+      
       -- Extended info
       IF @cExtendedInfoSP <> ''
       BEGIN
@@ -991,7 +1098,7 @@ BEGIN
       SET @cOutfield04 = ''
       SET @cOutField05 = ''
       SET @cOutField09 = ''
-          SET @nFromScn = @nScn
+      SET @nFromScn = @nScn
       SET @nFromStep = @nStep
       SET @nScn  = 2109
       SET @nStep = @nStep + 7 -- Step 9
@@ -1022,7 +1129,6 @@ BEGIN
       SET @cFromID  = @cInField05
       SET @cBarcode = @cInField05
 
-      --SET @cFromID = 'S201808162'
 /*
       -- Check blank FromID
       IF @cFromID = ''
@@ -1239,7 +1345,7 @@ BEGIN
 
       -- Partial pallet
       IF @cPickMethod = 'PP'
-     BEGIN
+      BEGIN
          -- Get SKU info
          SELECT
             @cSKUDesc = S.Descr,
@@ -1426,11 +1532,6 @@ BEGIN
       SET @cMQTY = CASE WHEN @cFieldAttr15 = 'O' THEN @cOutField15 ELSE @cInField15 END
       SET @cBarcode = @cLabelNo
 
-      --SET @cLabelNo = '999704/NVBL8'
-      --SET @cMQty = 6
-
-      --SELECT @cMQTY '@cMQTY'
-
       -- Retain value
       SET @cOutField14 = CASE WHEN @cFieldAttr14 = 'O' THEN @cOutField14 ELSE @cInField14 END -- PQTY
       SET @cOutField15 = CASE WHEN @cFieldAttr15 = 'O' THEN @cOutField15 ELSE @cInField15 END -- MQTY
@@ -1608,7 +1709,6 @@ BEGIN
                   IF EXISTS ( SELECT 1 FROM DBO.UCC WITH (NOLOCK) WHERE Storerkey = @cStorerKey AND UCCNo = @cUCC 
                               GROUP BY UCCNo HAVING COUNT( DISTINCT SKU) > 1)
                      SET @nIsMultiSKUUCC = 1
-                  
                END
             END
 
@@ -1641,12 +1741,14 @@ BEGIN
             END
 
             -- Get SKU code
+            DECLARE @nUPCQTY INT
             EXEC rdt.rdt_GETSKU
                 @cStorerKey  = @cStorerKey
                ,@cSKU        = @cSKU          OUTPUT
                ,@bSuccess    = @b_Success     OUTPUT
                ,@nErr        = @nErrNo        OUTPUT
                ,@cErrMsg     = @cErrMsg       OUTPUT
+               ,@nUPCQTY     = @nUPCQTY       OUTPUT
 
             -- Check SKU same as suggested
             IF @cSKU <> @cSuggSKU AND @nIsMultiSKUUCC = 0
@@ -1656,7 +1758,10 @@ BEGIN
                EXEC rdt.rdtSetFocusField @nMobile, 8 -- SKU
                GOTO Step_4_Fail
             END
+            
             SET @cSuggSKU = @cSKU
+            IF @nUPCQTY > 0 AND @nUCCQTY = 0 -- Prevent double decode
+               SET @nUCCQTY = @nUPCQTY
             
             -- Mark SKU as validated
             SET @cSKUValidated = '1'
@@ -1693,35 +1798,33 @@ BEGIN
          GOTO Step_4_Fail
       END
 
-			-- (james07)
-			IF @cExtendedValidateSP <> ''
-			BEGIN
-	       IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
-	       BEGIN
-	          SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
-	             ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT'
-	          SET @cSQLParam =
-	             '@nMobile         INT,        ' +
+		-- (james07)
+		IF @cExtendedValidateSP <> ''
+		BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+	         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+	            ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+	         SET @cSQLParam =
+	            '@nMobile         INT,        ' +
                '@nFunc           INT,        ' +
-	             '@cLangCode       NVARCHAR( 3),   ' +
-	             '@nStep           INT,        ' +
-	             '@cTaskdetailKey  NVARCHAR( 10),  ' +
-	             '@nErrNo          INT OUTPUT, ' +
-	             '@cErrMsg         NVARCHAR( 20) OUTPUT'
+	            '@cLangCode       NVARCHAR( 3),   ' +
+	            '@nStep           INT,        ' +
+	            '@cTaskdetailKey  NVARCHAR( 10),  ' +
+	            '@nErrNo          INT OUTPUT, ' +
+	            '@cErrMsg         NVARCHAR( 20) OUTPUT'
 
-	          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-	             @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT
+	         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+	            @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
-	          IF @nErrNo <> 0
-	             GOTO Quit
-	       END
-			END
+	         IF @nErrNo <> 0
+	            GOTO Quit
+         END
+      END
 			
       -- Calc total QTY in master UOM
       SET @nQTY = rdt.rdtConvUOMQTY( @cStorerKey, @cSuggSKU, @cPQTY, @cPUOM, 6) -- Convert to QTY in master UOM
       SET @nQTY = @nQTY + @nMQTY
-
-                --SELECT   @nQTY '@nQTY' ,@nMQTY '@nMQTY' ,'test' 'test'
 
       -- Top up QTY
       IF @cSKUValidated = '99' -- Fully short
@@ -1732,50 +1835,48 @@ BEGIN
          IF @cSKU <> '' AND @cDisableQTYField = '1'
             SET @nQTY = @nQTY + 1
 
-                          --SELECT  @nMQTY '@nMQTY' ,  @nQTY '@nQTY' , @cSKUValidated '@cSKUValidated'
-
       DECLARE @nSystemQTY INT
       SET @nSystemQTY = CAST( @cSystemQTY AS INT)
 
       -- Check QTY available
       DECLARE @nQTYAllowToMove INT
       IF @nIsMultiSKUUCC = 0
-      SELECT @nQTYAllowToMove = ISNULL( SUM( QTY - QTYAllocated - QTYPicked   -- QTYAvail
-         - CASE WHEN QtyReplen < 0 THEN 0 ELSE QTYReplen END                  -- Minus all booking
-         + CASE WHEN @cMoveQTYAlloc = '1' THEN @nSystemQTY ELSE 0 END         -- If QTYAlloc can be moved, add own QTYAlloc
-         + CASE WHEN @cMoveQTYReplen = '1' THEN                               -- If booked QTYReplen, add own booking
-                     CASE WHEN @cMoveQTYAlloc = '1'
-                          THEN @nQTY_RPL - @nSystemQTY
-                          ELSE @nQTY_RPL
-                     END
-                ELSE 0
-           END
-         ), 0)
-      FROM dbo.LOTxLOCxID (NOLOCK)
-      WHERE StorerKey = @cStorerKey
-         AND LOC = @cSuggFromLOC
-         AND ID = @cSuggID
-         AND SKU = @cSuggSKU
-         AND LOT = @cSuggLOT
+         SELECT @nQTYAllowToMove = ISNULL( SUM( QTY - QTYAllocated - QTYPicked   -- QTYAvail
+            - CASE WHEN QtyReplen < 0 THEN 0 ELSE QTYReplen END                  -- Minus all booking
+            + CASE WHEN @cMoveQTYAlloc = '1' THEN @nSystemQTY ELSE 0 END         -- If QTYAlloc can be moved, add own QTYAlloc
+            + CASE WHEN @cMoveQTYReplen = '1' THEN                               -- If booked QTYReplen, add own booking
+                        CASE WHEN @cMoveQTYAlloc = '1'
+                             THEN @nQTY_RPL - @nSystemQTY
+                             ELSE @nQTY_RPL
+                        END
+                   ELSE 0
+              END
+            ), 0)
+         FROM dbo.LOTxLOCxID (NOLOCK)
+         WHERE StorerKey = @cStorerKey
+            AND LOC = @cSuggFromLOC
+            AND ID = @cSuggID
+            AND SKU = @cSuggSKU
+            AND LOT = @cSuggLOT
       ELSE
-      SELECT @nQTYAllowToMove = ISNULL( SUM( LLI.QTY - QTYAllocated - QTYPicked   -- QTYAvail
-         - CASE WHEN QtyReplen < 0 THEN 0 ELSE QTYReplen END                  -- Minus all booking
-         + CASE WHEN @cMoveQTYAlloc = '1' THEN @nSystemQTY ELSE 0 END         -- If QTYAlloc can be moved, add own QTYAlloc
-         + CASE WHEN @cMoveQTYReplen = '1' THEN                               -- If booked QTYReplen, add own booking
-                     CASE WHEN @cMoveQTYAlloc = '1'
-                          THEN @nQTY_RPL - @nSystemQTY
-                          ELSE @nQTY_RPL
-                     END
-                ELSE 0
-           END
-         ), 0)
-      FROM dbo.LOTxLOCxID LLI (NOLOCK)
-      JOIN dbo.UCC UCC WITH (NOLOCK) ON 
-      ( LLI.StorerKey = UCC.Storerkey AND LLI.Sku = UCC.SKU AND LLI.Lot = UCC.Lot)
-      WHERE LLI.StorerKey = @cStorerKey
-         AND LLI.LOC = @cSuggFromLOC
-         AND LLI.ID = @cSuggID
-         AND UCC.UCCNo = @cUCC
+         SELECT @nQTYAllowToMove = ISNULL( SUM( LLI.QTY - QTYAllocated - QTYPicked  -- QTYAvail
+            - CASE WHEN QtyReplen < 0 THEN 0 ELSE QTYReplen END                     -- Minus all booking
+            + CASE WHEN @cMoveQTYAlloc = '1' THEN @nSystemQTY ELSE 0 END            -- If QTYAlloc can be moved, add own QTYAlloc
+            + CASE WHEN @cMoveQTYReplen = '1' THEN                                  -- If booked QTYReplen, add own booking
+                        CASE WHEN @cMoveQTYAlloc = '1'
+                             THEN @nQTY_RPL - @nSystemQTY
+                             ELSE @nQTY_RPL
+                        END
+                   ELSE 0
+              END
+            ), 0)
+         FROM dbo.LOTxLOCxID LLI (NOLOCK)
+         JOIN dbo.UCC UCC WITH (NOLOCK) ON 
+         ( LLI.StorerKey = UCC.Storerkey AND LLI.Sku = UCC.SKU AND LLI.Lot = UCC.Lot)
+         WHERE LLI.StorerKey = @cStorerKey
+            AND LLI.LOC = @cSuggFromLOC
+            AND LLI.ID = @cSuggID
+            AND UCC.UCCNo = @cUCC
       /*            
       IF @nQTYAllowToMove < @nQTY
       BEGIN
@@ -1783,7 +1884,8 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- QTYAVLNotEnuf
          GOTO Step_4_Fail
       END
-*/
+      */
+      
       -- Check over replenish
       IF @cDisableOverReplen = '1'
       BEGIN
@@ -1826,7 +1928,7 @@ BEGIN
       ELSE
       BEGIN
          IF @cSKU <> '' AND @cDisableQTYField = '1' -- QTY field disabled
-      BEGIN
+         BEGIN
             IF @cPUOM = '6' OR -- When preferred UOM = master unit
                @nPUOM_Div = 0  -- UOM not setup
             BEGIN
@@ -1870,9 +1972,7 @@ BEGIN
       END
 
       -- SKU scanned, not fully replen, remain in current screen
-      INSERT INTO TraceInfo (traceName,timein,col1,col2)
-      VALUES ('cc',GETDATE(),@nQTY, @nQTY_RPL)
-      IF @cLabelNo <> ''
+      IF @cLabelNo <> '' AND @cLabelNo <> '99'
       BEGIN
          -- Not fully replen
          IF NOT (@cDisableOverReplen = '1' AND @nQTY = @nQTY_RPL)
@@ -1901,7 +2001,6 @@ BEGIN
          @cUCC          = @cLabelNo, 
          @cLocation     = @cFromLOC,
          @cID           = @cFromID
-
 
       -- QTY short
       IF @nQTY < @nQTY_RPL
@@ -1950,7 +2049,7 @@ BEGIN
             SET @cOutField10 = @cExtendedInfo1
          END
       END
-END
+   END
 
    IF @nInputKey = 0 -- ESC
    BEGIN
@@ -1962,18 +2061,36 @@ END
       IF ISNULL( @cLocDescr, '') = ''
          SET @cLocDescr = @cSuggFromLOC
 
-      -- Prepare next screen var
-      SET @cFromID = ''
-      SET @cOutField01 = @cPickMethod
-      SET @cOutField02 = @cDropID
-      SET @cOutField03 = CASE WHEN @cLocShowDescr = '1' THEN @cLocDescr ELSE @cSuggFromLOC END
-      SET @cOutField04 = @cSuggID
-      SET @cOutField05 = '' -- FromID
-      SET @cOutField10 = '' -- ExtendedInfo
+      -- Lose ID
+      IF (SELECT LoseID FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @cSuggFromLOC) = '1' AND
+         @cPickMethod = 'PP' AND
+         @cSuggID = '' 
+      BEGIN
+         -- Prepare prev screen var
+         SET @cFromLOC = ''
+         SET @cOutField01 = @cPickMethod
+         SET @cOutField02 = @cDropID
+         SET @cOutField03 = CASE WHEN @cLocShowDescr = '1' THEN @cLocDescr ELSE @cSuggFromLOC END
+         SET @cOutField04 = '' -- FromLOC
 
-      SET @nScn = @nScn - 1
-      SET @nStep = @nStep - 1
+         SET @nScn = @nScn - 2
+         SET @nStep = @nStep - 2
+      END
+      ELSE
+      BEGIN
+         -- Prepare next screen var
+         SET @cFromID = ''
+         SET @cOutField01 = @cPickMethod
+         SET @cOutField02 = @cDropID
+         SET @cOutField03 = CASE WHEN @cLocShowDescr = '1' THEN @cLocDescr ELSE @cSuggFromLOC END
+         SET @cOutField04 = @cSuggID
+         SET @cOutField05 = '' -- FromID
+         SET @cOutField10 = '' -- ExtendedInfo
 
+         SET @nScn = @nScn - 1
+         SET @nStep = @nStep - 1
+      END
+      
       -- Extended info
       IF @cExtendedInfoSP <> ''
       BEGIN
@@ -3378,7 +3495,7 @@ BEGIN
       V_SKUDescr   = @cSKUDesc,
       V_LOT        = @cSuggLOT,
       V_LOC        = @cSuggFromLOC,
-      V_ID      = @cSuggID,
+      V_ID         = @cSuggID,
       V_UOM        = @cPUOM,
       V_Lottable01 = @cLottable01,
       V_Lottable02 = @cLottable02,
