@@ -1,6 +1,3 @@
-IF EXISTS (SELECT name FROM   dbo.sysobjects WHERE  name = N'isp_PrePostallocate_Process' AND type = 'P')
-    DROP PROCEDURE isp_PrePostallocate_Process
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -31,9 +28,10 @@ GO
 /* 03/12/2019   NJOW02    1.1   WMS-11282 able to run discrete alllocation */
 /*                              after load/wave conso allocate.            */
 /* 08-Jan-2020  NJOW03    1.2   WMS-10420 add strategykey parameter        */
+/* 12-Jan-2023  NJOW04    1.3   WMS-19078 add @c_ConsoUnitByUCCNo option   */
 /***************************************************************************/
 
-CREATE PROC [dbo].[isp_PrePostallocate_Process] 
+CREATE OR ALTER PROC [dbo].[isp_PrePostallocate_Process] 
    @c_Orderkey        NVARCHAR(10) = '', 
    @c_Loadkey         NVARCHAR(10) = '',
    @c_Wavekey         NVARCHAR(10) = '',
@@ -77,7 +75,8 @@ BEGIN
            @c_PickMethodOfConso           NVARCHAR(1),
            @c_UOMOfConso                  NVARCHAR(10),
            @c_ConsolidatePieceProcess     NVARCHAR(5), 
-           @c_IdentifyConsoUnitProcess    NVARCHAR(5)            
+           @c_IdentifyConsoUnitProcess    NVARCHAR(5),
+           @c_ConsoUnitByUCCNo            NVARCHAR(5)  --NJOW04
    
    --NJOW02        
    DECLARE @c_DiscreteAllocAfterWaveConso NVARCHAR(10),
@@ -422,6 +421,7 @@ BEGIN
          SET @c_UOMOfConso = ''               
          SET @c_ConsolidatePieceProcess = 'N'  
          SET @c_IdentifyConsoUnitProcess  ='Y'
+         SET @c_ConsoUnitByUCCNo = 'N' --NJOW04
          
          IF (@c_AllocateFrom = 'LOADPLAN' AND @c_AllocationType = 'DISCRETE') OR (@c_AllocateFrom = 'WAVE' AND @c_AllocationType = 'DISCRETE')
              SET @c_ConsolidatePieceProcess = 'Y'  
@@ -437,6 +437,7 @@ BEGIN
          	  SELECT @c_UOMOfConso = dbo.fnc_GetParamValueFromString('@c_UOMOfConso', @c_Option5, @c_UOMOfConso) --can set the value as 1,2 for both pallet and carton
          	  SELECT @c_ConsolidatePieceProcess = dbo.fnc_GetParamValueFromString('@c_ConsolidatePieceProcess', @c_Option5, @c_ConsolidatePieceProcess)
          	  SELECT @c_IdentifyConsoUnitProcess = dbo.fnc_GetParamValueFromString('@c_IdentifyConsoUnitProcess', @c_Option5, @c_IdentifyConsoUnitProcess)
+         	  SELECT @c_ConsoUnitByUCCNo = dbo.fnc_GetParamValueFromString('@c_ConsoUnitByUCCNo', @c_Option5, @c_ConsoUnitByUCCNo)  --NJOW04
          END                  
           
          SET @n_SeqNo = 0 
@@ -461,7 +462,8 @@ BEGIN
                ,@c_PickMethodOfConso = @c_PickMethodOfConso            
                ,@c_UOMOfConso = @c_TempUOMofConso                  
                ,@c_ConsolidatePieceProcess = @c_ConsolidatePieceProcess     
-               ,@c_IdentifyConsoUnitProcess = @c_IdentifyConsoUnitProcess                                             
+               ,@c_IdentifyConsoUnitProcess = @c_IdentifyConsoUnitProcess        
+               ,@c_ConsoUnitByUCCNo = @c_ConsoUnitByUCCNo  --NJOW04                                     
                ,@b_Success = @b_Success OUTPUT                   
                ,@n_Err = @n_Err OUTPUT        
                ,@c_ErrMsg = @c_ErrMsg OUTPUT         
@@ -492,7 +494,8 @@ BEGIN
                ,@c_PickMethodOfConso = @c_PickMethodOfConso            
                ,@c_UOMOfConso = @c_TempUOMofConso                  
                ,@c_ConsolidatePieceProcess = @c_ConsolidatePieceProcess     
-               ,@c_IdentifyConsoUnitProcess = @c_IdentifyConsoUnitProcess                                             
+               ,@c_IdentifyConsoUnitProcess = @c_IdentifyConsoUnitProcess              
+               ,@c_ConsoUnitByUCCNo = @c_ConsoUnitByUCCNo  --NJOW04                                                                                   
                ,@b_Success = @b_Success OUTPUT                   
                ,@n_Err = @n_Err OUTPUT        
                ,@c_ErrMsg = @c_ErrMsg OUTPUT         
