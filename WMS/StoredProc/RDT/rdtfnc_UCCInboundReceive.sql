@@ -51,6 +51,7 @@ GO
 /* 2021-06-09 3.3  Chermaine  WMS-17155 Add Facility check on st1 (cc01)*/
 /* 2022-01-24 3.4  Ung        WMS-18776 Add Carton type                 */
 /* 2022-11-23 3.5  James      WMS-21207 Add ExtUpdSp at step 1 (james09)*/
+/* 2023-02-20 3.6  Ung        WMS-21436 Fix UCC screen ExtVal sequence  */
 /************************************************************************/
 CREATE OR ALTER PROC rdt.rdtfnc_UCCInboundReceive (
    @nMobile    INT,
@@ -1331,6 +1332,79 @@ BEGIN
             GOTO Step_4_Fail
       END
 
+      -- For ReceiptDetail
+      DECLARE @tRD TABLE
+      (
+         ReceiptKey NVARCHAR( 10) NOT NULL,
+         ReceiptLineNumber NVARCHAR( 5) NOT NULL,
+         QTYExpected INT NOT NULL,
+         BeforeReceivedQTY INT NOT NULL
+      )
+
+      -- Get ReceiptDetail
+      IF @cUCCReceivedDetail <> '1'
+      BEGIN
+         IF ISNULL(@cBypassASNBlankCheck, '') <> '1'
+         BEGIN
+            INSERT INTO @tRD (ReceiptKey, ReceiptLineNumber, QTYExpected, BeforeReceivedQTY)
+            SELECT RD.ReceiptKey, RD.ReceiptLineNumber, RD.QTYExpected, RD.BeforeReceivedQTY
+            FROM dbo.ReceiptDetail RD WITH (NOLOCK)
+            JOIN dbo.PODetail PODetail WITH (NOLOCK) ON (RD.POKey = PODetail.POKey AND RD.POLineNumber = PODetail.POLineNumber)
+            JOIN rdt.rdtConReceiveLog CR WITH (NOLOCK) ON RD.ReceiptKey = CR.ReceiptKey
+            WHERE CR.Mobile = @nMobile
+            AND   PODetail.UserDefine01 = @cUCC
+         END
+         ELSE  -- (james02)
+         BEGIN
+            INSERT INTO @tRD (ReceiptKey, ReceiptLineNumber, QTYExpected, BeforeReceivedQTY)
+            SELECT RD.ReceiptKey, RD.ReceiptLineNumber, RD.QTYExpected, RD.BeforeReceivedQTY
+            FROM dbo.ReceiptDetail RD WITH (NOLOCK)
+            JOIN dbo.PODetail PODetail WITH (NOLOCK) ON (RD.POKey = PODetail.POKey AND RD.POLineNumber = PODetail.POLineNumber)
+            JOIN rdt.rdtConReceiveLog CR WITH (NOLOCK) ON RD.ReceiptKey = CR.ReceiptKey
+            WHERE CR.Mobile = @nMobile
+            AND   PODetail.UserDefine01 = @cUCC
+         END
+      END
+      ELSE
+      BEGIN
+         IF ISNULL(@cBypassASNBlankCheck, '') <> '1'
+         BEGIN
+            INSERT INTO @tRD (ReceiptKey, ReceiptLineNumber, QTYExpected, BeforeReceivedQTY)
+            SELECT RD.ReceiptKey, RD.ReceiptLineNumber, RD.QTYExpected, RD.BeforeReceivedQTY
+            FROM dbo.ReceiptDetail RD WITH (NOLOCK)
+            JOIN rdt.rdtConReceiveLog CR WITH (NOLOCK) ON RD.ReceiptKey = CR.ReceiptKey
+            WHERE CR.Mobile = @nMobile
+            AND   RD.UserDefine01 = @cUCC
+         END
+         ELSE  -- (james02)
+         BEGIN
+            INSERT INTO @tRD (ReceiptKey, ReceiptLineNumber, QTYExpected, BeforeReceivedQTY)
+            SELECT RD.ReceiptKey, RD.ReceiptLineNumber, RD.QTYExpected, RD.BeforeReceivedQTY
+            FROM dbo.ReceiptDetail RD WITH (NOLOCK)
+            JOIN rdt.rdtConReceiveLog CR WITH (NOLOCK) ON RD.ReceiptKey = CR.ReceiptKey
+            WHERE CR.Mobile = @nMobile
+            AND   RD.UserDefine01 = @cUCC
+         END
+      END
+
+      -- Validate UCC
+      IF @@ROWCOUNT = 0
+      BEGIN
+         SET @nErrNo = 62236
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Invalid UCC
+         GOTO Step_4_Fail
+      END
+
+      -- Validate UCC double scan
+      IF EXISTS( SELECT 1
+         FROM @tRD
+         WHERE BeforeReceivedQTY > 0)
+      BEGIN
+         SET @nErrNo = 62237
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Double scan
+         GOTO Step_4_Fail
+      END
+
       -- (ChewKP04)
 	   IF @cExtendedValidateSP <> ''
 	   BEGIN
@@ -1401,77 +1475,12 @@ BEGIN
          END
 	   END
 
-      -- For ReceiptDetail
-      DECLARE @tRD TABLE
-      (
-         ReceiptKey NVARCHAR( 10) NOT NULL,
-         ReceiptLineNumber NVARCHAR( 5) NOT NULL,
-         QTYExpected INT NOT NULL,
-         BeforeReceivedQTY INT NOT NULL
-      )
-
-      -- Get ReceiptDetail
-      IF @cUCCReceivedDetail <> '1'
-      BEGIN
-         IF ISNULL(@cBypassASNBlankCheck, '') <> '1'
-         BEGIN
-            INSERT INTO @tRD (ReceiptKey, ReceiptLineNumber, QTYExpected, BeforeReceivedQTY)
-            SELECT RD.ReceiptKey, RD.ReceiptLineNumber, RD.QTYExpected, RD.BeforeReceivedQTY
-            FROM dbo.ReceiptDetail RD WITH (NOLOCK)
-            JOIN dbo.PODetail PODetail WITH (NOLOCK) ON (RD.POKey = PODetail.POKey AND RD.POLineNumber = PODetail.POLineNumber)
-            JOIN rdt.rdtConReceiveLog CR WITH (NOLOCK) ON RD.ReceiptKey = CR.ReceiptKey
-            WHERE CR.Mobile = @nMobile
-            AND   PODetail.UserDefine01 = @cUCC
-         END
-         ELSE  -- (james02)
-         BEGIN
-            INSERT INTO @tRD (ReceiptKey, ReceiptLineNumber, QTYExpected, BeforeReceivedQTY)
-            SELECT RD.ReceiptKey, RD.ReceiptLineNumber, RD.QTYExpected, RD.BeforeReceivedQTY
-            FROM dbo.ReceiptDetail RD WITH (NOLOCK)
-            JOIN dbo.PODetail PODetail WITH (NOLOCK) ON (RD.POKey = PODetail.POKey AND RD.POLineNumber = PODetail.POLineNumber)
-            JOIN rdt.rdtConReceiveLog CR WITH (NOLOCK) ON RD.ReceiptKey = CR.ReceiptKey
-            WHERE CR.Mobile = @nMobile
-            AND   PODetail.UserDefine01 = @cUCC
-         END
-      END
-      ELSE
-      BEGIN
-         IF ISNULL(@cBypassASNBlankCheck, '') <> '1'
-         BEGIN
-            INSERT INTO @tRD (ReceiptKey, ReceiptLineNumber, QTYExpected, BeforeReceivedQTY)
-            SELECT RD.ReceiptKey, RD.ReceiptLineNumber, RD.QTYExpected, RD.BeforeReceivedQTY
-            FROM dbo.ReceiptDetail RD WITH (NOLOCK)
-            JOIN rdt.rdtConReceiveLog CR WITH (NOLOCK) ON RD.ReceiptKey = CR.ReceiptKey
-            WHERE CR.Mobile = @nMobile
-            AND   RD.UserDefine01 = @cUCC
-         END
-         ELSE  -- (james02)
-         BEGIN
-            INSERT INTO @tRD (ReceiptKey, ReceiptLineNumber, QTYExpected, BeforeReceivedQTY)
-            SELECT RD.ReceiptKey, RD.ReceiptLineNumber, RD.QTYExpected, RD.BeforeReceivedQTY
-            FROM dbo.ReceiptDetail RD WITH (NOLOCK)
-            JOIN rdt.rdtConReceiveLog CR WITH (NOLOCK) ON RD.ReceiptKey = CR.ReceiptKey
-            WHERE CR.Mobile = @nMobile
-            AND   RD.UserDefine01 = @cUCC
-         END
-      END
-
-      -- Validate UCC
-      IF @@ROWCOUNT = 0
-      BEGIN
-         SET @nErrNo = 62236
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Invalid UCC
-         GOTO Step_4_Fail
-      END
-
       -- Print UCC ASN Label -- (ChewKP03)
       SELECT   @cDataWindow = DataWindow,
                @cTargetDB = TargetDB
       FROM rdt.rdtReport WITH (NOLOCK)
       WHERE StorerKey = @cStorerKey
       AND   ReportType = 'UCCASNLBL'
-
-
 
       IF ISNULL(RTRIM(@cDataWindow),'')  <> ''
       BEGIN
@@ -1532,16 +1541,6 @@ BEGIN
              @cErrMsg OUTPUT,
              @cUCCReceiptKey,
              @cUCC
-      END
-
-      -- Validate UCC double scan
-      IF EXISTS( SELECT 1
-         FROM @tRD
-         WHERE BeforeReceivedQTY > 0)
-      BEGIN
-         SET @nErrNo = 62237
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Double scan
-         GOTO Step_4_Fail
       END
 
       DECLARE @nQTY INT
