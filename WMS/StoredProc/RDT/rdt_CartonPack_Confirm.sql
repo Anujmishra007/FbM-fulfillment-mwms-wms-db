@@ -3,6 +3,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
+
 /************************************************************************/
 /* Store procedure: rdt_CartonPack_Confirm                              */
 /* Copyright      : LF Logistics                                        */
@@ -17,9 +18,10 @@ GO
 /* 2020-01-10   1.3  Ung      WMS-9064 Fix PackHeader create            */
 /* 2021-08-23   1.4  James    WMS-17751 Add AssignPackLabelToOrdCfg     */
 /* 2023-01-13   1.5  Ung      WMS-21489 Update PackInfo                 */
+/* 2023-01-30   1.6  Ung      WMS-21570 Add @cPrintPackList param       */ 
 /************************************************************************/
 
-CREATE or alter PROC [RDT].[rdt_CartonPack_Confirm] (
+CREATE OR ALTER PROC [RDT].[rdt_CartonPack_Confirm] (
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -41,6 +43,7 @@ CREATE or alter PROC [RDT].[rdt_CartonPack_Confirm] (
    @cPickSlipNo      NVARCHAR( 10) OUTPUT,
    @nCartonNo        INT           OUTPUT,
    @cLabelNo         NVARCHAR( 20) OUTPUT,
+   @cPrintPackList   NVARCHAR( 1)  OUTPUT, 
    @nErrNo           INT           OUTPUT,
    @cErrMsg          NVARCHAR( 20) OUTPUT
 ) AS
@@ -72,7 +75,7 @@ BEGIN
          SET @cSQL = 'EXEC rdt.' + RTRIM( @cConfirmSP) +
             ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cType, @tConfirm, ' + 
             ' @cDoc1Value, @cCartonID, @cCartonSKU, @nCartonQTY, @cPackInfo, @cCartonType, @fCube, @fWeight, @cPackInfoRefNo, ' + 
-            ' @cPickSlipNo OUTPUT, @nCartonNo OUTPUT, @cLabelNo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            ' @cPickSlipNo OUTPUT, @nCartonNo OUTPUT, @cLabelNo OUTPUT, @cPrintPackList OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '
          SET @cSQLParam =
             '@nMobile         INT,                    ' +
             '@nFunc           INT,                    ' +
@@ -95,13 +98,14 @@ BEGIN
             '@cPickSlipNo     NVARCHAR( 10) OUTPUT,   ' + 
             '@nCartonNo       INT           OUTPUT,   ' + 
             '@cLabelNo        NVARCHAR( 20) OUTPUT,   ' + 
+            '@cPrintPackList  NVARCHAR( 1)  OUTPUT,   ' + 
             '@nErrNo          INT           OUTPUT,   ' +
-            '@cErrMsg         NVARCHAR( 20) OUTPUT    ' 
+            '@cErrMsg         NVARCHAR( 20) OUTPUT    '
          
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
             @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cType, @tConfirm, 
             @cDoc1Value, @cCartonID, @cCartonSKU, @nCartonQTY, @cPackInfo, @cCartonType, @fCube, @fWeight, @cPackInfoRefNo, 
-            @cPickSlipNo OUTPUT, @nCartonNo OUTPUT, @cLabelNo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT 
+            @cPickSlipNo OUTPUT, @nCartonNo OUTPUT, @cLabelNo OUTPUT, @cPrintPackList OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
             
          GOTO Quit
       END
