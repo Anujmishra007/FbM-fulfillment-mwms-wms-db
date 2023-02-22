@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_CartonPack_Confirm]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_CartonPack_Confirm]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -19,9 +16,10 @@ GO
 /* 2019-09-30   1.2  Ung      WMS-10638 Add multi SKU carton ID         */
 /* 2020-01-10   1.3  Ung      WMS-9064 Fix PackHeader create            */
 /* 2021-08-23   1.4  James    WMS-17751 Add AssignPackLabelToOrdCfg     */
+/* 2023-01-13   1.5  Ung      WMS-21489 Update PackInfo                 */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdt_CartonPack_Confirm] (
+CREATE or alter PROC [RDT].[rdt_CartonPack_Confirm] (
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -680,13 +678,37 @@ BEGIN
    ***********************************************************************************************/
    IF @cPackInfo <> ''
    BEGIN
-      IF NOT EXISTS (SELECT 1 FROM dbo.PackInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo)
+      -- Get PackDetail info
+      DECLARE @nPackInfoQTY INT
+      SELECT @nPackInfoQTY = SUM( QTY) FROM dbo.PackDetail WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo         
+
+      IF EXISTS (SELECT 1 FROM dbo.PackInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo)
+      BEGIN
+         UPDATE dbo.PackInfo SET
+            CartonType = CASE WHEN CHARINDEX( 'T', @cPackInfo) = 0 THEN CartonType ELSE @cCartonType    END, 
+            Cube       = CASE WHEN CHARINDEX( 'C', @cPackInfo) = 0 THEN Cube       ELSE @fCube          END, 
+            Weight     = CASE WHEN CHARINDEX( 'W', @cPackInfo) = 0 THEN Weight     ELSE @fWeight        END, 
+            RefNo      = CASE WHEN CHARINDEX( 'R', @cPackInfo) = 0 THEN RefNo      ELSE @cPackInfoRefNo END, 
+            UCCNo      = @cUCCNo, 
+            QTY        = @nPackInfoQTY, 
+            EditDate   = GETDATE(), 
+            EditWho    = SUSER_SNAME()
+         WHERE PickSlipNo = @cPickSlipNo 
+            AND CartonNo = @nCartonNo
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 144217
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDPackInfFail
+            GOTO RollBackTran
+         END
+      END
+      ELSE
       BEGIN
          INSERT INTO dbo.PackInfo (PickslipNo, CartonNo, QTY, Weight, Cube, CartonType, RefNo, UCCNo)
          VALUES (@cPickSlipNo, @nCartonNo, @nQTY, @fWeight, @fCube, @cCartonType, @cPackInfoRefNo, @cUCCNo)
          IF @@ERROR <> 0
          BEGIN
-            SET @nErrNo = 144217
+            SET @nErrNo = 144218
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSPackInfFail
             GOTO RollBackTran
          END
@@ -744,7 +766,7 @@ BEGIN
          WHERE PickDetailKey = @cPickDetailKey
          IF @@ERROR <> 0
          BEGIN
-            SET @nErrNo = 144218
+            SET @nErrNo = 144219
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --OffSetPDtlFail
             GOTO RollBackTran
          END   

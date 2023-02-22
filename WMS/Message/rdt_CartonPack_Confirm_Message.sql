@@ -17,5 +17,6 @@ execute rdt.rdtAddMsg 144213, 10, '144213GenLabelNoFail', 'us_english', 832
 execute rdt.rdtAddMsg 144214, 10, '144214InsPackDtlFail', 'us_english', 832
 execute rdt.rdtAddMsg 144215, 10, '144215InsPackDtlFail', 'us_english', 832
 execute rdt.rdtAddMsg 144216, 10, '144216UPD UCC Fail  ', 'us_english', 832
-execute rdt.rdtAddMsg 144217, 10, '144217INSPackInfFail', 'us_english', 832
-execute rdt.rdtAddMsg 144218, 10, '144218OffSetPDtlFail', 'us_english', 832
+execute rdt.rdtAddMsg 144217, 10, '144217UPDPackInfFail', 'us_english', 832
+execute rdt.rdtAddMsg 144218, 10, '144218INSPackInfFail', 'us_english', 832
+execute rdt.rdtAddMsg 144219, 10, '144219OffSetPDtlFail', 'us_english', 832
