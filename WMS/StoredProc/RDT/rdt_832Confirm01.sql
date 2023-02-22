@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_832Confirm01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_832Confirm01]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -15,9 +12,10 @@ GO
 /*                                                                      */
 /* Date        Rev  Author    Purposes                                  */
 /* 2020-07-14  1.0  Ung       WMS-13699 Created (based on std Confirm)  */
+/* 2023-01-30  1.1  Ung       WMS-21570 Add @cPrintPackList param       */ 
 /************************************************************************/
 
-CREATE PROC [RDT].[rdt_832Confirm01] (
+CREATE OR ALTER PROC [RDT].[rdt_832Confirm01] (
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -39,6 +37,7 @@ CREATE PROC [RDT].[rdt_832Confirm01] (
    @cPickSlipNo      NVARCHAR( 10) OUTPUT,
    @nCartonNo        INT           OUTPUT,
    @cLabelNo         NVARCHAR( 20) OUTPUT,
+   @cPrintPackList   NVARCHAR( 1)  OUTPUT, 
    @nErrNo           INT           OUTPUT,
    @cErrMsg          NVARCHAR( 20) OUTPUT
 ) AS

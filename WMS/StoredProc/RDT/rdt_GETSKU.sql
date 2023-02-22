@@ -28,6 +28,8 @@ GO
 /* 06-Dec-2019 1.6  Chermaine INC0959117 not to hardcode errMsg (cc01)  */
 /* 29-Nov-2021 1.7  Ung      Perfomance tuning                          */
 /* 02-Sep-2022 1.8  James    WMS-20639 Add output UPC Qty (james03)     */
+/* 20-Sep-2022 1.9  James    WMS-20756 Return UPC Qty based on UPC.UOM  */
+/*                           setup (james04)                            */
 /************************************************************************/
 CREATE OR ALTER PROC    [RDT].[rdt_GETSKU]
                @cStorerKey   NVARCHAR(15)
@@ -50,6 +52,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
    DECLARE @nFunc     INT
    DECLARE @cGetUPCQty NVARCHAR( 1)
    DECLARE @nQty      INT = 0
+   DECLARE @cUPC_UOM  NVARCHAR( 10)
    
    SELECT @nContinue = 1
    SELECT @bSuccess = 1
@@ -83,7 +86,8 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                BEGIN
                   SELECT TOP 1 
                      @cSKU = UPC.SKU, 
-                     @nQty = UPC.QTY 
+                     @nQty = UPC.QTY,
+                     @cUPC_UOM = UPC.UOM 
                   FROM dbo.UPC UPC WITH (NOLOCK) 
                   WHERE UPC = @cSKU 
                     AND StorerKey = @cStorerKey            
@@ -113,7 +117,36 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                      SET @cGetUPCQty = rdt.RDTGetConfig( @nFunc, 'GetUPCQty', @cStorerKey)
                      
                      IF @cGetUPCQty = '1'
-                        SET @nUPCQty = @nQty
+                     BEGIN
+                     	IF @cUPC_UOM <> ''
+                     	BEGIN
+                     		IF @nQty > 0
+                     		   SET @nUPCQty = @nQty
+                           ELSE
+                           BEGIN
+                              SELECT CASE 
+                                 WHEN @cUPC_UOM = PACK.PackUOM1 THEN PACK.CaseCnt
+                                 WHEN @cUPC_UOM = PACK.PackUOM2 THEN PACK.InnerPack
+                                 WHEN @cUPC_UOM = PACK.PackUOM3 THEN PACK.Qty
+                                 WHEN @cUPC_UOM = PACK.PackUOM4 THEN PACK.Pallet
+                                 WHEN @cUPC_UOM = PACK.PackUOM5 THEN PACK.CUBE
+                                 WHEN @cUPC_UOM = PACK.PackUOM6 THEN PACK.GrossWgt
+                                 WHEN @cUPC_UOM = PACK.PackUOM7 THEN PACK.NetWgt
+                                 WHEN @cUPC_UOM = PACK.PackUOM8 THEN PACK.OtherUnit1
+                                 WHEN @cUPC_UOM = PACK.PackUOM9 THEN PACK.OtherUnit2
+                                 ELSE NULL END
+                              FROM dbo.SKU SKU (NOLOCK)
+                              INNER JOIN dbo.PACK PACK (NOLOCK) ON (SKU.PackKey = PACK.PackKey)
+                              WHERE SKU.StorerKey = @cStorerKey
+                              AND   SKU.SKU = @cSKU
+                           END
+                     	END
+                     	ELSE
+                        BEGIN
+                     		IF @nQty > 0
+                     		   SET @nUPCQty = @nQty
+                        END
+                     END
                   END
                END
             END 
@@ -153,7 +186,8 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                BEGIN
                   SELECT TOP 1 
                      @cSKU = UPC.SKU,
-                     @nQty = UPC.QTY 
+                     @nQty = UPC.QTY,
+                     @cUPC_UOM = UPC.UOM  
                   FROM dbo.UPC UPC WITH (NOLOCK) 
                   WHERE UPC = @cSKU 
                   AND   StorerKey = @cStorerKey  
@@ -184,7 +218,36 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                      SET @cGetUPCQty = rdt.RDTGetConfig( @nFunc, 'GetUPCQty', @cStorerKey)
                      
                      IF @cGetUPCQty = '1'
-                        SET @nUPCQty = @nQty
+                     BEGIN
+                     	IF @cUPC_UOM <> ''
+                     	BEGIN
+                     		IF @nQty > 0
+                     		   SET @nUPCQty = @nQty
+                           ELSE
+                           BEGIN
+                              SELECT CASE 
+                                 WHEN @cUPC_UOM = PACK.PackUOM1 THEN PACK.CaseCnt
+                                 WHEN @cUPC_UOM = PACK.PackUOM2 THEN PACK.InnerPack
+                                 WHEN @cUPC_UOM = PACK.PackUOM3 THEN PACK.Qty
+                                 WHEN @cUPC_UOM = PACK.PackUOM4 THEN PACK.Pallet
+                                 WHEN @cUPC_UOM = PACK.PackUOM5 THEN PACK.CUBE
+                                 WHEN @cUPC_UOM = PACK.PackUOM6 THEN PACK.GrossWgt
+                                 WHEN @cUPC_UOM = PACK.PackUOM7 THEN PACK.NetWgt
+                                 WHEN @cUPC_UOM = PACK.PackUOM8 THEN PACK.OtherUnit1
+                                 WHEN @cUPC_UOM = PACK.PackUOM9 THEN PACK.OtherUnit2
+                                 ELSE NULL END
+                              FROM dbo.SKU SKU (NOLOCK)
+                              INNER JOIN dbo.PACK PACK (NOLOCK) ON (SKU.PackKey = PACK.PackKey)
+                              WHERE SKU.StorerKey = @cStorerKey
+                              AND   SKU.SKU = @cSKU
+                           END
+                     	END
+                     	ELSE
+                        BEGIN
+                     		IF @nQty > 0
+                     		   SET @nUPCQty = @nQty
+                        END
+                     END
                   END
                END
             END 

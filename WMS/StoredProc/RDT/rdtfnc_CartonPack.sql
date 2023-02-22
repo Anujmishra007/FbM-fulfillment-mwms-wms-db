@@ -1,6 +1,3 @@
-if exists (select * from sys.objects where object_id = object_id(N'[rdt].[rdtfnc_CartonPack]') and OBJECTPROPERTY(object_id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdtfnc_CartonPack]
-GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -23,9 +20,15 @@ GO
 /* 2020-07-15   1.3  Ung      WMS-13699 Remove UserDefine01                */
 /*                            Add ExtendedInfo at PackInfo screen          */
 /* 2021-01-15   1.4  Chermaine WMS-16081 Add Eventlog (cc01)               */
+/* 2023-01-06   1.5  Ung      WMS-21489 Add DefaultCartonType              */
+/*                            Move Eventlog to sub SP                      */
+/* 2023-01-17   1.6  Ung      WMS-21570                                    */ 
+/*                            Add @cDoc1Value to print param               */
+/*                            Add conditional print pack list              */
+/*                            Add ExtendedValidateSP at print pack list    */
 /***************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_CartonPack](
+CREATE OR ALTER PROC [RDT].[rdtfnc_CartonPack](
    @nMobile    int,
    @nErrNo     int  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max
@@ -39,10 +42,11 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 
 -- Misc variables
 DECLARE 
-   @nRowcount     INT, 
-   @nTranCount    INT,
-   @cSQL          NVARCHAR( MAX), 
-   @cSQLParam     NVARCHAR( MAX), 
+   @nRowcount        INT, 
+   @nTranCount       INT,
+   @cSQL             NVARCHAR( MAX), 
+   @cSQLParam        NVARCHAR( MAX), 
+   @cPrintPackList   NVARCHAR( 1) = '', 
 
    @tExtVal          VariableTable, 
    @tExtUpd          VariableTable, 
@@ -95,6 +99,7 @@ DECLARE
    @cShipLabel          NVARCHAR( 10), 
    @cCartonManifest     NVARCHAR( 10), 
    @cPackList           NVARCHAR( 10),
+   @cDefaultCartonType  NVARCHAR( 10), 
 
    @nCartonNo           INT,
 
@@ -156,6 +161,7 @@ SELECT
    @cShipLabel          = V_String31, 
    @cCartonManifest     = V_String32, 
    @cPackList           = V_String33,
+   @cDefaultCartonType  = V_String34,
 
    @nCartonNo           = V_Integer1,
 
@@ -219,6 +225,9 @@ BEGIN
    SET @cCapturePackInfoSP = rdt.RDTGetConfig( @nFunc, 'CapturePackInfoSP', @cStorerKey)
    IF @cCapturePackInfoSP = '0'
       SET @cCapturePackInfoSP = ''
+   SET @cDefaultCartonType = rdt.RDTGetConfig( @nFunc, 'DefaultCartonType', @cStorerKey)
+   IF @cDefaultCartonType = '0'
+      SET @cDefaultCartonType = ''
    SET @cExtendedInfoSP = rdt.rdtGetConfig( @nFunc, 'ExtendedInfoSP', @cStorerKey)
    IF @cExtendedInfoSP = '0'
       SET @cExtendedInfoSP = ''
@@ -493,6 +502,8 @@ BEGIN
          END
       END
 
+      SET @cCartonType = @cDefaultCartonType
+
       -- Custom PackInfo field setup
       SET @cPackInfo = ''
       IF @cCapturePackInfoSP <> ''
@@ -536,26 +547,27 @@ BEGIN
       BEGIN
          -- Check
          EXEC rdt.rdt_CartonPack_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, 'CHECK', @tConfirm
-            ,@cDoc1Value  = @cDoc1Value
-            ,@cCartonID   = @cCartonID
-            ,@cCartonSKU  = @cCartonSKU
-            ,@nCartonQTY  = @nCartonQTY
-            ,@cPickSlipNo = @cPickSlipNo OUTPUT
-            ,@nCartonNo   = @nCartonNo   OUTPUT
-            ,@cLabelNo    = @cLabelNo    OUTPUT
-            ,@nErrNo      = @nErrNo      OUTPUT
-            ,@cErrMsg     = @cErrMsg     OUTPUT
+            ,@cDoc1Value      = @cDoc1Value
+            ,@cCartonID       = @cCartonID
+            ,@cCartonSKU      = @cCartonSKU
+            ,@nCartonQTY      = @nCartonQTY
+            ,@cPickSlipNo     = @cPickSlipNo    OUTPUT
+            ,@nCartonNo       = @nCartonNo      OUTPUT
+            ,@cLabelNo        = @cLabelNo       OUTPUT
+            ,@cPrintPackList  = @cPrintPackList OUTPUT
+            ,@nErrNo          = @nErrNo         OUTPUT
+            ,@cErrMsg         = @cErrMsg        OUTPUT
          IF @nErrNo <> 0
             GOTO Quit
 
          -- Get PackInfo
-         SET @cCartonType = ''
+         -- SET @cCartonType = ''
          SET @cWeight = ''
          SET @cCube = ''
          SET @cPackInfoRefNo = ''
       
          -- Prepare LOC screen var
-         SET @cOutField01 = '' -- @cCartonType
+         SET @cOutField01 = @cCartonType
          SET @cOutField02 = '' -- @cWeight
          SET @cOutField03 = '' -- @cCube  
          SET @cOutField04 = '' -- @cPackInfoRefNo
@@ -587,15 +599,16 @@ BEGIN
 
       -- Confirm
       EXEC rdt.rdt_CartonPack_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, 'CONFIRM', @tConfirm
-         ,@cDoc1Value  = @cDoc1Value
-         ,@cCartonID   = @cCartonID
-         ,@cCartonSKU  = @cCartonSKU
-         ,@nCartonQTY  = @nCartonQTY
-         ,@cPickSlipNo = @cPickSlipNo OUTPUT
-         ,@nCartonNo   = @nCartonNo   OUTPUT
-         ,@cLabelNo    = @cLabelNo    OUTPUT
-         ,@nErrNo      = @nErrNo      OUTPUT
-         ,@cErrMsg     = @cErrMsg     OUTPUT
+         ,@cDoc1Value      = @cDoc1Value
+         ,@cCartonID       = @cCartonID
+         ,@cCartonSKU      = @cCartonSKU
+         ,@nCartonQTY      = @nCartonQTY
+         ,@cPickSlipNo     = @cPickSlipNo    OUTPUT
+         ,@nCartonNo       = @nCartonNo      OUTPUT
+         ,@cLabelNo        = @cLabelNo       OUTPUT
+         ,@cPrintPackList  = @cPrintPackList OUTPUT
+         ,@nErrNo          = @nErrNo         OUTPUT
+         ,@cErrMsg         = @cErrMsg        OUTPUT
       IF @nErrNo <> 0
       BEGIN
          ROLLBACK TRAN rdtfnc_CartonPack
@@ -609,7 +622,7 @@ BEGIN
       BEGIN
          IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')
          BEGIN
-            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @tExtUpd, ' +
                ' @cDoc1Value, @cCartonID, @cCartonSKU, @nCartonQTY, @cPackInfo, @cCartonType, @cCube, @cWeight, @cPackInfoRefNo, ' + 
                ' @cPickSlipNo, @nCartonNo, @cLabelNo, @nErrNo OUTPUT, @cErrMsg OUTPUT '
@@ -656,15 +669,6 @@ BEGIN
       WHILE @@TRANCOUNT > @nTranCount
          COMMIT TRAN
       
-      -- eventlog (cc01)
-      EXEC RDT.rdt_STD_EventLog
-         @cActionType = '3',
-         @nMobileNo   = @nMobile,
-         @nFunctionID = @nFunc,
-         @cFacility   = @cFacility,
-         @cStorerKey  = @cStorerkey,
-         @cCartonID   = @cCartonID
-            
       IF @cShipLabel <> ''
       BEGIN
          -- Common params
@@ -673,7 +677,8 @@ BEGIN
             ('@cPickSlipNo',  @cPickSlipNo), 
             ('@cCartonID',    @cCartonID), 
             ('@nCartonNo',    CAST( @nCartonNo AS NVARCHAR( 10))), 
-            ('@cLabelNo',     @cLabelNo)
+            ('@cLabelNo',     @cLabelNo), 
+            ('@cDoc1Value',   @cDoc1Value)
 
          -- Print label
          EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, @cPaperPrinter, 
@@ -702,7 +707,8 @@ BEGIN
             ('@cPickSlipNo',  @cPickSlipNo), 
             ('@cCartonID',    @cCartonID), 
             ('@nCartonNo',    CAST( @nCartonNo AS NVARCHAR( 10))), 
-            ('@cLabelNo',     @cLabelNo)
+            ('@cLabelNo',     @cLabelNo), 
+            ('@cDoc1Value',   @cDoc1Value)
 
          -- Print label
          EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter, 
@@ -718,7 +724,7 @@ BEGIN
       IF @cPackList <> ''
       BEGIN
          -- Check pack confirm
-         IF EXISTS( SELECT 1 FROM PackHeader WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND Status = '9')
+         IF EXISTS( SELECT 1 FROM PackHeader WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND Status = '9') OR @cPrintPackList = 'Y'
          BEGIN
             SET @cOutField01 = '' -- Option
 
@@ -849,10 +855,56 @@ BEGIN
          GOTO Quit
       END
 
+      -- Extended validate
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            INSERT INTO @tExtVal (Variable, Value) VALUES ('@cOption', @cOption)
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @tExtVal, ' +
+               ' @cDoc1Value, @cCartonID, @cCartonSKU, @nCartonQTY, @cPackInfo, @cCartonType, @cCube, @cWeight, @cPackInfoRefNo, ' + 
+               ' @cPickSlipNo, @nCartonNo, @cLabelNo, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+               ' @nMobile        INT,           ' +
+               ' @nFunc          INT,           ' +
+               ' @cLangCode      NVARCHAR( 3),  ' +
+               ' @nStep          INT,           ' +
+               ' @nInputKey      INT,           ' +
+               ' @cStorerKey     NVARCHAR( 15), ' +
+               ' @cFacility      NVARCHAR( 5),  ' +
+               ' @tExtVal        VariableTable READONLY, ' + 
+               ' @cDoc1Value     NVARCHAR( 20), ' + 
+               ' @cCartonID      NVARCHAR( 20), ' +
+               ' @cCartonSKU     NVARCHAR( 20), ' +
+               ' @nCartonQTY     INT,           ' +
+               ' @cPackInfo      NVARCHAR( 4),  ' + 
+               ' @cCartonType    NVARCHAR( 10), ' + 
+               ' @cCube          NVARCHAR( 10), ' + 
+               ' @cWeight        NVARCHAR( 10), ' + 
+               ' @cPackInfoRefNo NVARCHAR( 20), ' +
+               ' @cPickSlipNo    NVARCHAR( 10), ' + 
+               ' @nCartonNo      INT,           ' + 
+               ' @cLabelNo       NVARCHAR( 20), ' + 
+               ' @nErrNo         INT           OUTPUT, ' +
+               ' @cErrMsg        NVARCHAR( 20) OUTPUT  '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @tExtVal, 
+               @cDoc1Value, @cCartonID, @cCartonSKU, @nCartonQTY, @cPackInfo, @cCartonType, @cCube, @cWeight, @cPackInfoRefNo, 
+               @cPickSlipNo, @nCartonNo, @cLabelNo, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0 
+               GOTO Quit
+         END
+      END
+
       IF @cOption = '1'  -- Yes
       BEGIN
          -- Common param
-         INSERT INTO @tPackList (Variable, Value) VALUES ( '@cPickSlipNo', @cPickSlipNo)
+         INSERT INTO @tPackList (Variable, Value) VALUES 
+            ('@cPickSlipNo', @cPickSlipNo), 
+            ('@cDoc1Value',  @cDoc1Value)
 
          -- Print packing list
          EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter, 
@@ -1103,11 +1155,12 @@ BEGIN
          ,@fCube          = @fCube
          ,@fWeight        = @fWeight
          ,@cPackInfoRefNo = @cPackInfoRefNo
-         ,@cPickSlipNo    = @cPickSlipNo OUTPUT
-         ,@nCartonNo      = @nCartonNo   OUTPUT
-         ,@cLabelNo       = @cLabelNo    OUTPUT
-         ,@nErrNo         = @nErrNo      OUTPUT
-         ,@cErrMsg        = @cErrMsg     OUTPUT
+         ,@cPickSlipNo    = @cPickSlipNo    OUTPUT
+         ,@nCartonNo      = @nCartonNo      OUTPUT
+         ,@cLabelNo       = @cLabelNo       OUTPUT
+         ,@cPrintPackList = @cPrintPackList OUTPUT
+         ,@nErrNo         = @nErrNo         OUTPUT
+         ,@cErrMsg        = @cErrMsg        OUTPUT
       IF @nErrNo <> 0
       BEGIN
          ROLLBACK TRAN rdtfnc_CartonPack
@@ -1121,7 +1174,7 @@ BEGIN
       BEGIN
          IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')
          BEGIN
-            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @tExtUpd, ' +
                ' @cDoc1Value, @cCartonID, @cCartonSKU, @nCartonQTY, @cPackInfo, @cCartonType, @cCube, @cWeight, @cPackInfoRefNo, ' + 
                ' @cPickSlipNo, @nCartonNo, @cLabelNo, @nErrNo OUTPUT, @cErrMsg OUTPUT '
@@ -1142,7 +1195,7 @@ BEGIN
                ' @cCartonType    NVARCHAR( 10), ' + 
                ' @cCube          NVARCHAR( 10), ' + 
                ' @cWeight        NVARCHAR( 10), ' + 
-               ' @cPackInfoRefNo NVARCHAR( 20)  ' +
+               ' @cPackInfoRefNo NVARCHAR( 20), ' +
                ' @cPickSlipNo    NVARCHAR( 10), ' + 
                ' @nCartonNo      INT,           ' + 
                ' @cLabelNo       NVARCHAR( 20), ' + 
@@ -1181,7 +1234,8 @@ BEGIN
             ('@cPickSlipNo',  @cPickSlipNo), 
             ('@cCartonID',    @cCartonID), 
             ('@nCartonNo',    CAST( @nCartonNo AS NVARCHAR( 10))), 
-            ('@cLabelNo',     @cLabelNo)
+            ('@cLabelNo',     @cLabelNo), 
+            ('@cDoc1Value',   @cDoc1Value)
 
          -- Print label
          EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, @cPaperPrinter, 
@@ -1210,7 +1264,8 @@ BEGIN
             ('@cPickSlipNo',  @cPickSlipNo), 
             ('@cCartonID',    @cCartonID), 
             ('@nCartonNo',    CAST( @nCartonNo AS NVARCHAR( 10))), 
-            ('@cLabelNo',     @cLabelNo)
+            ('@cLabelNo',     @cLabelNo), 
+            ('@cDoc1Value',   @cDoc1Value)
 
          -- Print label
          EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter, 
@@ -1226,7 +1281,7 @@ BEGIN
       IF @cPackList <> ''
       BEGIN
          -- Check pack confirm
-         IF EXISTS( SELECT 1 FROM PackHeader WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND Status = '9')
+         IF EXISTS( SELECT 1 FROM PackHeader WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND Status = '9') OR @cPrintPackList = 'Y'
          BEGIN
             SET @cOutField01 = '' -- Option
 
@@ -1249,6 +1304,12 @@ BEGIN
    BEGIN
       -- Prepare next screen var
       SET @cOutField01 = '' -- Carton ID
+
+      -- Enable field
+      SET @cFieldAttr01 = '' -- CartonType
+      SET @cFieldAttr02 = '' -- Weight
+      SET @cFieldAttr03 = '' -- Cube
+      SET @cFieldAttr04 = '' -- RefNo
 
       -- Go to next screen
       SET @nScn = @nScn_CartonID
@@ -1298,6 +1359,7 @@ BEGIN
       V_String31 = @cShipLabel,
       V_String32 = @cCartonManifest, 
       V_String33 = @cPackList,
+      V_String34 = @cDefaultCartonType,
 
       V_Integer1 = @nCartonNo,
 

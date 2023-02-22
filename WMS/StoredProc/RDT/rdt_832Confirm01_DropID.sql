@@ -17,6 +17,7 @@ GO
 /* Date         Rev  Author   Purposes                                  */
 /* 2019-05-29   1.0  James    WMS9146 Created (rdt_834ExtPack02)        */
 /* 2020-07-16   1.1  Ung      WMS-13699 Migrate to this SP              */
+/* 2023-01-13   1.2  Ung      WMS-21489 Move Eventlog to sub SP         */
 /************************************************************************/
 
 CREATE PROC [RDT].[rdt_832Confirm01_DropID] (
@@ -475,6 +476,15 @@ BEGIN
          END
       END
    END
+
+   -- Event log
+   EXEC RDT.rdt_STD_EventLog
+      @cActionType = '3',
+      @nMobileNo   = @nMobile,
+      @nFunctionID = @nFunc,
+      @cFacility   = @cFacility,
+      @cStorerKey  = @cStorerkey,
+      @cCartonID   = @cCartonID
 
    COMMIT TRAN rdt_832Confirm01_DropID
    GOTO Quit
