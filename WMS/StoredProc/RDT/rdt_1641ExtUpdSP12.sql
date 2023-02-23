@@ -17,6 +17,7 @@ GO
 /* 2021-11-05  1.0  Chermaine WMS-18186 Created                         */
 /* 2022-05-20  1.1  YeeKung   WMS-19685 Left country,2 (yeekung01)      */
 /* 2022-12-01  1.2  YeeKung   WMS-21215 Add userdefine10(yeekung02)     */
+/* 2023-02-10  1.3  YeeKung   WMS-21378 Add UCC column (yeekung03)       */
 /************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_1641ExtUpdSP12] (  
@@ -26,7 +27,8 @@ CREATE OR ALTER PROC [RDT].[rdt_1641ExtUpdSP12] (
    @cUserName   NVARCHAR( 15),  
    @cFacility   NVARCHAR( 5),  
    @cStorerKey  NVARCHAR( 15),  
-   @cDropID     NVARCHAR( 20),  
+   @cDropID     NVARCHAR( 20), 
+   @cUCCNo      NVARCHAR( 20),
    @nErrNo      INT          OUTPUT,  
    @cErrMsg     NVARCHAR( 20) OUTPUT  -- screen limitation, 20 char max  
 ) AS  
@@ -42,7 +44,6 @@ BEGIN
             @bSuccess      INT,
             @nPD_Qty       INT,
             @cSKU          NVARCHAR( 20),
-            @cCartonID     NVARCHAR( 20),
             @cDocType      NVARCHAR( 1),
             @cRouteCode    NVARCHAR( 30),
             @cOrderKey     NVARCHAR( 10),
@@ -65,8 +66,7 @@ BEGIN
             @cBID          NVARCHAR(20) --(yeekung02)
 
    SELECT @nStep = Step,
-          @nInputKey = InputKey,
-          @cCartonID = I_Field03
+          @nInputKey = InputKey
    FROM RDT.RDTMobRec WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
@@ -99,7 +99,7 @@ BEGIN
 
          IF EXISTS ( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) 
                      WHERE StorerKey = @cStorerKey
-                     AND   CaseId = @cCartonID
+                     AND   CaseId = @cUCCNo
                      AND  [Status] < '9')
          BEGIN
             SET @nErrNo = 178552
@@ -111,7 +111,7 @@ BEGIN
                       @cPickSlipNo = PickSlipNo
          FROM dbo.PackDetail WITH (NOLOCK)
          WHERE StorerKey = @cStorerKey
-         AND (RefNo = @cCartonID OR Dropid = @cCartonID)  
+         AND (RefNo = @cUCCNo OR Dropid = @cUCCNo)  
 
          SELECT @cOrderKey = OrderKey
          FROM dbo.PackHeader WITH (NOLOCK)
@@ -158,13 +158,13 @@ BEGIN
                 @nPD_Qty = ISNULL( SUM( Qty), 0)
             FROM dbo.PackDetail WITH (NOLOCK)
             WHERE StorerKey = @cStorerKey
-            AND   DropID = @cCartonID
+            AND   DropID = @cUCCNo
             GROUP BY SKU
             
             INSERT INTO dbo.PalletDetail 
             (PalletKey, PalletLineNumber, CaseId, StorerKey, Sku, Qty, UserDefine01, UserDefine02) 
             VALUES
-            (@cDropID, @cPalletLineNumber, @cCartonID, @cStorerKey, @cSKU, @nPD_Qty, @cOdrCountry+@cRoute+@cBID, @cOrderKey)  --(yeekung02)
+            (@cDropID, @cPalletLineNumber, @cUCCNo, @cStorerKey, @cSKU, @nPD_Qty, @cOdrCountry+@cRoute+@cBID, @cOrderKey)  --(yeekung02)
 
             IF @@ERROR <> 0
             BEGIN
@@ -180,13 +180,13 @@ BEGIN
                 @nPD_Qty = ISNULL( SUM( Qty), 0)
             FROM dbo.PackDetail WITH (NOLOCK)
             WHERE StorerKey = @cStorerKey
-            AND   RefNo = @cCartonID
+            AND   RefNo = @cUCCNo
             GROUP BY SKU
             
             INSERT INTO dbo.PalletDetail 
             (PalletKey, PalletLineNumber, CaseId, StorerKey, Sku, Qty, UserDefine01, UserDefine02) 
             VALUES
-            (@cDropID, @cPalletLineNumber, @cCartonID, @cStorerKey, @cSKU, @nPD_Qty, LEFT(@cOdrCountry,2)+@cShipperKey+@cMarketPlace, @cOrderKey) --yeekung01
+            (@cDropID, @cPalletLineNumber, @cUCCNo, @cStorerKey, @cSKU, @nPD_Qty, LEFT(@cOdrCountry,2)+@cShipperKey+@cMarketPlace, @cOrderKey) --yeekung01
 
             IF @@ERROR <> 0
             BEGIN

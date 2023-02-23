@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_1641ExtUpdSP08]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_1641ExtUpdSP08]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -18,16 +15,18 @@ GO
 /* Modifications log:                                                   */  
 /* Date        Rev  Author   Purposes                                   */  
 /* 2020-10-29  1.0  YeeKung  WMS-15617 Created                          */
+/* 2023-02-10  1.1  YeeKung   WMS21378 Add UCC column (yeekung01)       */
 /************************************************************************/  
   
-CREATE PROC [RDT].[rdt_1641ExtUpdSP08] (  
+CREATE OR ALTER PROC [RDT].[rdt_1641ExtUpdSP08] (  
    @nMobile     INT,  
    @nFunc       INT,  
    @cLangCode   NVARCHAR( 3),  
    @cUserName   NVARCHAR( 15),  
    @cFacility   NVARCHAR( 5),  
    @cStorerKey  NVARCHAR( 15),  
-   @cDropID     NVARCHAR( 20),  
+   @cDropID     NVARCHAR( 20),
+   @cUCCNo      NVARCHAR( 20),
    @nErrNo      INT          OUTPUT,  
    @cErrMsg     NVARCHAR( 20) OUTPUT  -- screen limitation, 20 char max  
 ) AS  
@@ -43,7 +42,6 @@ BEGIN
             @bSuccess      INT,
             @nPD_Qty       INT,
             @cSKU          NVARCHAR( 20),
-            @cCartonID     NVARCHAR( 20),
             @cRouteCode    NVARCHAR( 30),
             @cOrderKey     NVARCHAR( 10),
             @cPickSlipNo   NVARCHAR( 10),
@@ -58,8 +56,7 @@ BEGIN
             @cPalletCaseID NVARCHAR(20)
 
    SELECT @nStep = Step,
-          @nInputKey = InputKey,
-          @cCartonID = I_Field03
+          @nInputKey = InputKey
    FROM RDT.RDTMobRec WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
@@ -92,7 +89,7 @@ BEGIN
 
          IF EXISTS ( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) 
                      WHERE StorerKey = @cStorerKey
-                     AND   CaseId = @cCartonID
+                     AND   CaseId = @cUCCNo
                      AND  [Status] < '9')
          BEGIN
             SET @nErrNo = 160252
@@ -104,7 +101,7 @@ BEGIN
                       @cPickSlipNo = PickSlipNo
          FROM dbo.PackDetail WITH (NOLOCK)
          WHERE StorerKey = @cStorerKey
-         AND   RefNo = @cCartonID
+         AND   RefNo = @cUCCNo
 
          SELECT @cOrderKey = OrderKey
          FROM dbo.PackHeader WITH (NOLOCK)
@@ -119,13 +116,13 @@ BEGIN
                 @nPD_Qty = ISNULL( SUM( Qty), 0)
          FROM dbo.PackDetail WITH (NOLOCK)
          WHERE StorerKey = @cStorerKey
-         AND   RefNo = @cCartonID
+         AND   RefNo = @cUCCNo
          GROUP BY SKU
 
          INSERT INTO dbo.PalletDetail 
          (PalletKey, PalletLineNumber, CaseId, StorerKey, Sku, Qty, UserDefine01, UserDefine02) 
          VALUES
-         (@cDropID, @cPalletLineNumber, @cCartonID, @cStorerKey, @cSKU, @nPD_Qty, @cRouteCode, @cOrderKey)
+         (@cDropID, @cPalletLineNumber, @cUCCNo, @cStorerKey, @cSKU, @nPD_Qty, @cRouteCode, @cOrderKey)
 
          IF @@ERROR <> 0
          BEGIN

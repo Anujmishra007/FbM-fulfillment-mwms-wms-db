@@ -27,7 +27,7 @@ EXECUTE rdt.rdtAddScn 2322, 'ENG',
    ,@cLine05 = 'LOC:'
    ,@cLine06 = '%10d02'
    ,@cLine07 = 'UCC NO:'
-   ,@cLine08 = '%20i03'
+   ,@cLine08 = '%60i03' --WMS21738(yeekung03)
    ,@cLine10 = 'Total UCC Scanned:' -- (ChewKP01)
    ,@cLine11 = '%05d04'             -- (ChewKP01)
    ,@cLine13 = '%20d05'             -- SOS370791

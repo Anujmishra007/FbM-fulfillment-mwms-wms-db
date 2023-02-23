@@ -27,9 +27,11 @@ GO
 /* 2020-06-10 1.9  James    WMS-13606 Add capture pallet info (james03)       */
 /* 2020-07-25 2.0  Ung      WMS-13505 Add AutoGenDropID, DecodeSP             */
 /* 2022-04-20 2.1  Ung      WMS-19340 Expand DropID to 20 chars               */
+/* 2021-11-16 2.2  YeeKung  WMS-18255 Add Defaultloc (yeekung02)              */
+/* 2023-02-19 2.3  YeeKung  WMS-21738 Extended UCCNo length (yeekung03)       */
 /******************************************************************************/
 
-CREATE OR ALTER PROC [RDT].[rdtfnc_Pallet_Build](
+CREATE OR ALTER  PROC [RDT].[rdtfnc_Pallet_Build](
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max
@@ -66,6 +68,7 @@ DECLARE
 
    @nUCCCnt             INT,
    @nLoadkeyCnt         INT,
+   @cBarcode            NVARCHAR( 60), --(yeekung03)
 
    -- (ChewKP01)
    @cSkipDropLoc        NVARCHAR(1),
@@ -101,6 +104,7 @@ DECLARE
    @tCaptureVar               VARIABLETABLE,
    @nAfterStep                INT,
    @nAfterScn                 INT,
+   @cDefaultLoc               NVARCHAR(20),
    
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -169,6 +173,7 @@ SELECT
    @cCapturePalletInfoSP      = V_String26, -- (james03)  
    @cAutoGenDropID            = V_String27,
    @cDecodeSP                 = V_String28,
+   @cDefaultLoc               = V_String29, --(yeekung02)
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -249,6 +254,9 @@ BEGIN
    SET @cExtendedUpdateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorerKey)
    IF @cExtendedUpdateSP = '0'
       SET @cExtendedUpdateSP = ''
+
+   --(yeekung02)
+   SET @cDefaultLoc = rdt.RDTGetConfig( @nFunc, 'DefaultLoc', @cStorerKey)
 
    -- (james01)
    SET @cPltBuildNotInsDropID = rdt.RDTGetConfig( @nFunc, 'PltBuildNotInsDropID', @cStorerKey)
@@ -520,7 +528,7 @@ BEGIN
          SET @cDropLOC = ''
          --prepare next screen variable
          SET @cOutField01 = @cDropID
-         SET @cOutField02 = @cDropLOC
+         SET @cOutField02 = CASE WHEN ISNULL(@cDefaultLoc,'')='' THEN @cDropLOC ELSE @cDefaultLoc END --(yeekung02)
          SET @cOutField03 = ''
          SET @cOutField04 = ''      -- (james02)
          SET @cOutField05 = CASE WHEN ISNULL( @cExtendedInfo1, '') <> '' THEN @cExtendedInfo1 ELSE '' END     -- (james02)
@@ -532,7 +540,7 @@ BEGIN
       BEGIN
          --prepare next screen variable
          SET @cOutField01 = @cDropID
-         SET @cOutField02 = ''
+         SET @cOutField02 = CASE WHEN ISNULL(@cDefaultLoc,'')='' THEN '' ELSE @cDefaultLoc END --(yeekung02)
 
          SET @nScn = @nScn + 1
          SET @nStep = @nStep + 1
@@ -707,6 +715,7 @@ BEGIN
    BEGIN
       -- Screen mapping
       SET @cUCCNo = @cInField03
+      SET @cBarcode = @cInField03  --(yeekung03)
 
       --When UCC NO is blank
       IF @cUCCNo = ''
@@ -719,12 +728,11 @@ BEGIN
 
       IF @cDecodeSP = '1'  
       BEGIN  
-         EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cUCCNo,   
+         EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,   --(yeekung03)
             @cUCCNo  = @cUCCNo  OUTPUT,   
             @nErrNo  = @nErrNo  OUTPUT,   
             @cErrMsg = @cErrMsg OUTPUT,  
             @cType   = 'UCCNo'  
-  
          -- Decode is optional, allow some barcode to pass thru
          SET @nErrNo = 0
       END
@@ -888,7 +896,7 @@ BEGIN
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
-               ' @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, @cDropID, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+               ' @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, @cDropID,@cUCCNO, @nErrNo OUTPUT, @cErrMsg OUTPUT '
             SET @cSQLParam =
                '@nMobile        INT, ' +
                '@nFunc          INT, ' +
@@ -897,11 +905,12 @@ BEGIN
                '@cFacility      NVARCHAR( 5), ' +
                '@cStorerKey     NVARCHAR( 15), ' +
                '@cDropID        NVARCHAR( 20), ' +
+               '@cUCCNO         NVARCHAR( 20), ' +
                '@nErrNo         INT           OUTPUT, ' +
                '@cErrMsg        NVARCHAR( 20) OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, @cDropID, @nErrNo OUTPUT, @cErrMsg OUTPUT
+               @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, @cDropID,@cUCCNO, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
             IF @nErrNo <> 0
                GOTO QUIT
@@ -938,7 +947,7 @@ BEGIN
                @cExtendedInfo1 OUTPUT
          END
       END
-
+      
       DECLARE @cToID NVARCHAR( 18)
       SET @cToID = LEFT( @cDropID, 18)
 
@@ -1138,7 +1147,7 @@ BEGIN
             IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
             BEGIN
                SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
-                  ' @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, @cDropID, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+                  ' @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, @cDropID,@cUCCNO, @nErrNo OUTPUT, @cErrMsg OUTPUT '
                SET @cSQLParam =
                   '@nMobile        INT, ' +
                   '@nFunc          INT, ' +
@@ -1147,11 +1156,12 @@ BEGIN
                   '@cFacility      NVARCHAR( 5), ' +
                   '@cStorerKey     NVARCHAR( 15), ' +
                   '@cDropID        NVARCHAR( 20), ' +
+                  '@cUCCNO         NVARCHAR( 20), ' +
                   '@nErrNo         INT           OUTPUT, ' +
                   '@cErrMsg        NVARCHAR( 20) OUTPUT'
 
                EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                  @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, @cDropID, @nErrNo OUTPUT, @cErrMsg OUTPUT
+                  @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, @cDropID,@cUCCNO, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
                IF @nErrNo <> 0
                   GOTO QUIT
@@ -1441,30 +1451,31 @@ BEGIN
       -- Reopen the Pallet  
       IF @cOption = '1'  
       BEGIN  
-         IF @cExtendedUpdateSP <> ''  
-         BEGIN  
-            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')  
-            BEGIN  
-               SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +  
-                  ' @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, @cDropID, @nErrNo OUTPUT, @cErrMsg OUTPUT '  
-               SET @cSQLParam =  
-                  '@nMobile        INT, ' +  
-                  '@nFunc          INT, ' +  
-                  '@cLangCode      NVARCHAR( 3), ' +  
-                  '@cUserName      NVARCHAR( 18), ' +  
-                  '@cFacility      NVARCHAR( 5), ' +  
-                  '@cStorerKey     NVARCHAR( 15), ' +  
-                  '@cDropID        NVARCHAR( 20), ' +  
-                  '@nErrNo         INT           OUTPUT, ' +  
-                  '@cErrMsg        NVARCHAR( 20) OUTPUT'  
-  
-               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
-                  @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, @cDropID, @nErrNo OUTPUT, @cErrMsg OUTPUT  
-  
-               IF @nErrNo <> 0  
-                  GOTO Step_7_Fail  
-            END  
-         END  
+         IF @cExtendedUpdateSP <> ''
+         BEGIN
+            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+            BEGIN
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, @cDropID,@cUCCNO, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+               SET @cSQLParam =
+                  '@nMobile        INT, ' +
+                  '@nFunc          INT, ' +
+                  '@cLangCode      NVARCHAR( 3), ' +
+                  '@cUserName      NVARCHAR( 18), ' +
+                  '@cFacility      NVARCHAR( 5), ' +
+                  '@cStorerKey     NVARCHAR( 15), ' +
+                  '@cDropID        NVARCHAR( 20), ' +
+                  '@cUCCNO         NVARCHAR( 20), ' +
+                  '@nErrNo         INT           OUTPUT, ' +
+                  '@cErrMsg        NVARCHAR( 20) OUTPUT'
+
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, @cDropID,@cUCCNO, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+               IF @nErrNo <> 0
+                  GOTO QUIT
+            END
+         END
            
       END  
   
@@ -1722,6 +1733,7 @@ BEGIN
       V_String26    = @cCapturePalletInfoSP,
       V_String27    = @cAutoGenDropID,
       V_String28    = @cDecodeSP,
+      V_String29    = @cDefaultLoc, --(yeekung02)
       
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,

@@ -18,7 +18,7 @@ GO
 /* 2022-03-31  1.2  Ung       WMS-19340 Add shipping label              */  
 /* 2022-05-26  1.3  James     WMS-19695 Change pallet label printing    */
 /*                            logic (james01)                           */
-/* 2022-09-02  1.4  James     WMS-20692 Add print at step 6 (james02)   */
+/* 2023-02-10  1.4  YeeKung   WMS21378 Add UCC column (yeekung02)       */
 /************************************************************************/      
       
 CREATE OR ALTER PROC [RDT].[rdt_1641ExtUpdSP06] (      
@@ -28,7 +28,8 @@ CREATE OR ALTER PROC [RDT].[rdt_1641ExtUpdSP06] (
    @cUserName   NVARCHAR( 15),      
    @cFacility   NVARCHAR( 5),      
    @cStorerKey  NVARCHAR( 15),      
-   @cDropID     NVARCHAR( 20),      
+   @cDropID     NVARCHAR( 20),
+   @cUCCNo      NVARCHAR( 20),  
    @nErrNo      INT          OUTPUT,      
    @cErrMsg     NVARCHAR( 20) OUTPUT  -- screen limitation, 20 char max      
 ) AS      
@@ -43,8 +44,7 @@ BEGIN
             @nTranCount    INT,    
             @bSuccess      INT,    
             @nPD_Qty       INT,    
-            @cSKU          NVARCHAR( 20),    
-            @cCartonID     NVARCHAR( 20),    
+            @cSKU          NVARCHAR( 20),      
             @cRouteCode    NVARCHAR( 30),    
             @cOrderKey     NVARCHAR( 10),    
             @cPickSlipNo   NVARCHAR( 10),    
@@ -78,14 +78,9 @@ BEGIN
    DECLARE @cUDF03          NVARCHAR(60)    
    DECLARE @cUDF04          NVARCHAR(60)    
    DECLARE @cUDF05          NVARCHAR(60)     
-
-   DECLARE @tLGLblLis AS VariableTable
-   DECLARE @nPrintLGPALLETLB INT
-   DECLARE @cShipLabel NVARCHAR( 10)
-         
+  
    SELECT @nStep = Step,    
           @nInputKey = InputKey,    
-          @cCartonID = I_Field03,    
           @cPaperPrinter = Printer_Paper,   
           @cLabelPrinter = Printer  
    FROM RDT.RDTMobRec WITH (NOLOCK)    
@@ -129,7 +124,7 @@ BEGIN
     
          IF EXISTS ( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK)     
                      WHERE StorerKey = @cStorerKey    
-                     AND   CaseId = @cCartonID    
+                     AND   CaseId = @cUCCNo    
                      AND  [Status] < '9')    
         BEGIN    
             SET @nErrNo = 147952    
@@ -142,7 +137,7 @@ BEGIN
          SELECT PickSlipNo, SKU, ISNULL( SUM( Qty), 0)    
          FROM dbo.PackDetail WITH (NOLOCK)    
          WHERE StorerKey = @cStorerKey    
-         AND   LabelNo = @cCartonID    
+         AND   LabelNo = @cUCCNo    
          GROUP BY PickSlipNo, SKU    
          OPEN CUR_PalletDetail    
          FETCH NEXT FROM CUR_PalletDetail INTO @cPickSlipNo, @cSKU, @nPD_Qty    
@@ -167,7 +162,7 @@ BEGIN
             INSERT INTO dbo.PalletDetail     
             (PalletKey, PalletLineNumber, CaseId, StorerKey, Sku, Qty, UserDefine01, UserDefine02)     
             VALUES    
-            (@cDropID, 0, @cCartonID, @cStorerKey, @cSKU, @nPD_Qty, @cSortCode, @cOrderKey)    
+            (@cDropID, 0, @cUCCNo, @cStorerKey, @cSKU, @nPD_Qty, @cSortCode, @cOrderKey)    
     
             IF @@ERROR <> 0    
             BEGIN    
@@ -305,6 +300,7 @@ BEGIN
          SET @nPrintPLTSRLABEL = 1  
            
          --(cc01)-- print label when close pallet  
+         DECLARE @nPrintLGPALLETLB INT  
          SET @nSKU_Count = 0    
     
          SELECT @nSKU_Count = COUNT( DISTINCT SKU)    
@@ -363,6 +359,7 @@ BEGIN
             BEGIN  
                IF @nPrintLGPALLETLB = '1'  
                BEGIN  
+                  DECLARE @tLGLblLis AS VariableTable    
                   DELETE FROM @tLGLblLis  
                   INSERT INTO @tLGLblLis (Variable, Value) VALUES ( '@cDropID', @cDropID)    
                    
@@ -378,6 +375,29 @@ BEGIN
                      GOTO RollBackTran                  
                END  
             END  
+         END  
+           
+         -- Ship label    
+         DECLARE @cShipLabel NVARCHAR( 10)  
+         SET @cShipLabel = rdt.RDTGetConfig( @nFunc, 'ShipLabel', @cStorerKey)    
+         IF @cShipLabel = '0'    
+            SET @cShipLabel = ''   
+         IF @cShipLabel <> ''     
+         BEGIN    
+            -- Common params    
+            DECLARE @tShipLabel AS VariableTable    
+            INSERT INTO @tShipLabel (Variable, Value) VALUES     
+               ( '@cDropID',     @cDropID)  
+    
+            -- Print label    
+            EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,     
+               @cShipLabel, -- Report type    
+               @tShipLabel, -- Report params    
+               'rdt_1641ExtUpdSP06',     
+               @nErrNo  OUTPUT,    
+               @cErrMsg OUTPUT    
+            IF @nErrNo <> 0    
+               GOTO RollBackTran    
          END  
       END    
    END    
@@ -424,97 +444,6 @@ BEGIN
   
             SET @nNoOfCopy = @nNoOfCopy - 1  
          END    
-
-         SET @nSKU_Count = 0    
-    
-         SELECT @nSKU_Count = COUNT( DISTINCT SKU)    
-         FROM dbo.palletdetail WITH (NOLOCK)      
-            WHERE StorerKey = @cStorerKey      
-            AND   PalletKey = @cDropID    
-  
-         IF @nSKU_Count = 1    
-         BEGIN    
-            SET @nPrintLGPALLETLB = '1'  
-  
-            DECLARE CUR_pallet CURSOR LOCAL READ_ONLY FAST_FORWARD FOR     
-            SELECT SKU, UserDefine02  
-            FROM dbo.palletdetail WITH (NOLOCK)    
-            WHERE StorerKey = @cStorerKey    
-            AND   PalletKey = @cDropID    
-         
-            OPEN CUR_pallet    
-            FETCH NEXT FROM CUR_pallet INTO @cSKU, @cOrderKey   
-            WHILE @@FETCH_STATUS <> -1     
-            BEGIN    
-               SELECT @cCompany = C_Company,@cUDF03 = UserDefine03 FROM dbo.Orders WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND OrderKey = @cOrderKey  
-  
-               IF NOT EXISTS ( SELECT 1 FROM dbo.SKU SKU WITH (NOLOCK)
-                               JOIN dbo.SKUINFO SI WITH (NOLOCK) ON 
-                                 (SKU.StorerKey = SI.StorerKey AND SKU.SKU = SI.SKU)
-                               WHERE SKU.StorerKey = @cStorerKey 
-                               AND   SKU.SKU = @cSKU
-                               AND   SI.ExtendedField12 = 'Channel')
-               BEGIN  
-                  SET @nPrintLGPALLETLB = '0'  
-                  BREAK  
-               END  
-
-               IF NOT EXISTS (select TOP 1 1 from CODELKUP WITH (NOLOCK) where listname = 'LGCUSTOMER' AND Storerkey =@cStorerKey AND [Description] = @cCompany AND UDF01 = @cUDF03)  
-               BEGIN  
-                  SET @nPrintLGPALLETLB = '0'  
-                  Break  
-               END  
-                   
-               FETCH NEXT FROM CUR_pallet INTO @cSKU, @cOrderKey    
-            END    
-            CLOSE CUR_pallet          
-            DEALLOCATE CUR_pallet  
-                 
-  
-            IF EXISTS ( SELECT 1 FROM rdt.rdtReport WITH (NOLOCK)     
-                        WHERE StorerKey = @cStorerKey     
-                        AND ReportType = 'LGPALLETLB' )  
-            BEGIN  
-               IF @nPrintLGPALLETLB = '1'  
-               BEGIN  
-                  DELETE FROM @tLGLblLis  
-                  INSERT INTO @tLGLblLis (Variable, Value) VALUES ( '@cDropID', @cDropID)    
-                   
-                  -- Print label    
-                  EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, 0, 1, '', @cStorerKey, '', @cPaperPrinter,     
-                     'LGPALLETLB', -- Report type    
-                     @tLGLblLis, -- Report params    
-                     'rdt_1641ExtUpdSP06',     
-                     @nErrNo  OUTPUT,    
-                     @cErrMsg OUTPUT    
-                      
-                  IF @nErrNo <> 0    
-                     GOTO RollBackTran                  
-               END  
-            END  
-         END  
-
-         -- Ship label    
-         SET @cShipLabel = rdt.RDTGetConfig( @nFunc, 'ShipLabel', @cStorerKey)    
-         IF @cShipLabel = '0'    
-            SET @cShipLabel = ''   
-         IF @cShipLabel <> ''     
-         BEGIN    
-            -- Common params    
-            DECLARE @tShipLabel AS VariableTable    
-            INSERT INTO @tShipLabel (Variable, Value) VALUES     
-               ( '@cDropID',     @cDropID)  
-    
-            -- Print label    
-            EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, '',     
-               @cShipLabel, -- Report type    
-               @tShipLabel, -- Report params    
-               'rdt_1641ExtUpdSP06',     
-               @nErrNo  OUTPUT,    
-               @cErrMsg OUTPUT    
-            IF @nErrNo <> 0    
-               GOTO RollBackTran    
-         END  
       END    
    END    
      
