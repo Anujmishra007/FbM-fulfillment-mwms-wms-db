@@ -21,6 +21,8 @@ GO
 /*                                                                      */    
 /* Updates:                                                             */    
 /* Date         Author  Ver   Purposes                                  */
+/* 04-NOV-2022  WZPang  1.0   DevOps Combine Script                     */
+/* 01-FEB-2023  WZPang  1.1   Update SP                                 */
 /************************************************************************/    
 CREATE OR ALTER PROC [dbo].[isp_RPT_ASN_TALLYSHT_022](    
             @c_Receiptkey     NVARCHAR(10)    
