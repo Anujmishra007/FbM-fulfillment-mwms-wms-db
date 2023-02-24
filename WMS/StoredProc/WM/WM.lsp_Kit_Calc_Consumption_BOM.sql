@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_Kit_Calc_Consumption_BOM]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [WM].[lsp_Kit_Calc_Consumption_BOM]
-GO
-
 SET ANSI_NULLS OFF
 GO
 
@@ -20,7 +15,7 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.1                                                          */  
+/* Version: 1.2                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
@@ -28,36 +23,44 @@ GO
 /* Date        Author   Ver   Purposes                                   */ 
 /* 28-Dec-2020 SWT01    1.0   Adding Begin Try/Catch                     */
 /* 15-Jan-2021 Wan01    1.1   Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 31-Jan-2023 Wan02    1.2   LFWM-3911 - CN-SCE-Kitting-CalculateConsumptionbyBOM*/
+/*                            DevOps Combine Script                      */
 /*************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_Kit_Calc_Consumption_BOM]  (
+CREATE OR ALTER PROCEDURE [WM].[lsp_Kit_Calc_Consumption_BOM]  (
    @c_StorerKey      NVARCHAR(15), 
    @c_KitKey         NVARCHAR(10),
    @c_KitLineNumber  NVARCHAR(5),
    @c_Type           NVARCHAR(5), 
-   @c_DeletePrevious CHAR(1) = 'Y',
+   --@c_DeletePrevious CHAR(1) = 'Y',                                                              --(Wan02) - Not need
    @b_Success        int = 1 OUTPUT,
    @n_Err            int = 0 OUTPUT,
    @c_Errmsg         NVARCHAR(250) = '' OUTPUT,
    @c_UserName       NVARCHAR(128)  = '' )
 AS  
 BEGIN  
-   SET ANSI_NULLS ON
-   SET ANSI_PADDING ON
-   SET ANSI_WARNINGS ON
-   SET QUOTED_IDENTIFIER ON
-   SET CONCAT_NULL_YIELDS_NULL ON
-   SET ARITHABORT ON
+   --SET ANSI_NULLS ON                                                                             --(Wan02) - START
+   --SET ANSI_PADDING ON
+   --SET ANSI_WARNINGS ON
+   --SET QUOTED_IDENTIFIER ON
+   --SET CONCAT_NULL_YIELDS_NULL ON
+   --SET ARITHABORT ON
+   SET NOCOUNT ON                                                                                                                                                          
+   SET ANSI_NULLS OFF                                                                                                                                                      
+   SET QUOTED_IDENTIFIER OFF                                                                                                                                               
+   SET CONCAT_NULL_YIELDS_NULL OFF                                                                 --(Wan02) - END
 
-   DECLARE @n_Continue     INT = '1'         
-         , @n_Count        INT = 0 
-         , @c_ComponentSku NVARCHAR(20) = '' 
-         , @n_ComponentQty INT = 0 
-         , @n_ParentQty    INT = 0 
-         , @n_Remainder    INT = 0
-         , @n_BOMQty       INT = 0  
-         , @c_NewKitLineNo NVARCHAR(5)  = ''
-         , @c_PackKey      NVARCHAR(10) = ''
-         , @c_UOM          NVARCHAR(10) = ''
+   DECLARE @n_Continue        INT = '1'         
+         , @n_Count           INT = 0 
+         , @c_ComponentSku    NVARCHAR(20) = '' 
+         , @n_ComponentQty    INT = 0 
+         , @n_ParentQty       INT = 0 
+         , @n_Remainder       INT = 0
+         , @n_BOMQty          INT = 0  
+         , @c_NewKitLineNo    NVARCHAR(5)  = ''
+         , @c_PackKey         NVARCHAR(10) = ''
+         , @c_UOM             NVARCHAR(10) = ''
+         
+         , @c_ToType          NVARCHAR(10) = ''                                                    --(Wan02) - START 
          
    SET @b_Success = 1
    SET @c_ErrMsg = ''
@@ -86,6 +89,8 @@ BEGIN
               @n_RemainingQty    INT = 0,
               @n_ShortQty        INT = 0 
               
+      SET @c_ToType = IIF(@c_Type = 'T', 'F', 'T')                                                 --(Wan02)                           
+              
       SELECT @c_StorerKey = KD.StorerKey, 
              @c_FromSKU   = KD.Sku,
              @n_FromExpectedQty = KD.ExpectedQty,
@@ -93,13 +98,13 @@ BEGIN
       FROM KITDETAIL AS KD WITH (NOLOCK)
       WHERE KD.KITKey = @c_KitKey 
       AND   KD.KITLineNumber = @c_KitLineNumber 
-      AND   KD.[Type] = 'F'
+      AND   KD.[Type] = @c_Type                                                                    --(Wan02)
    
       IF ISNULL(RTRIM(@c_FromSKU),'') = ''
       BEGIN
          SET @n_continue = 3  
          SET @n_Err = 552451 
-         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + 
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + 
                ': SKU Cannot be BLANK (lsp_Kit_Calc_Consumption_BOM)'               
          GOTO EXIT_SP   
       END
@@ -108,19 +113,19 @@ BEGIN
       BEGIN
          SET @n_continue = 3  
          SET @n_Err = 552452 
-         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + 
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + 
                ': Completed Qty Cannot Be Blank (lsp_Kit_Calc_Consumption_BOM)'                 
          GOTO EXIT_SP      
       END
    
       IF NOT EXISTS (SELECT 1 FROM KITDETAIL AS k WITH(NOLOCK)
                      WHERE k.KITKey = @c_KitKey 
-                     AND   k.[Type] = 'T' 
+                     AND   k.[Type] = @c_ToType                                                    --(Wan02)
                      AND   k.[Status] <> '9' )
       BEGIN
          SET @n_continue = 3  
          SET @n_Err = 552453 
-         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + 
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + 
                ': To Components record not found (lsp_Kit_Calc_Consumption_BOM)'                
          GOTO EXIT_SP      
       END
@@ -140,22 +145,31 @@ BEGIN
       SELECT ComponentSku, Qty 
       FROM BillOfMaterial WITH (NOLOCK)
       WHERE Storerkey = @c_StorerKey 
-      AND   Sku = @c_ToSKU
+      AND   Sku = @c_FromSKU                                                                       --(Wan02)
    
       OPEN CUR_COMPONENTS
    
       FETCH FROM CUR_COMPONENTS INTO @c_ComponentSku, @n_ComponentQty 
+      
+      IF @@FETCH_STATUS = -1                                                                       --(Wan02) - START
+      BEGIN
+         SET @n_continue = 3  
+         SET @n_Err = 552455 
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + 
+               ': BOM Sku not found (lsp_Kit_Calc_Consumption_BOM)'                
+         GOTO EXIT_SP         
+      END                                                                                          --(Wan02) - END
                                                   
       WHILE @@FETCH_STATUS = 0
       BEGIN   
          SET @n_RemainingQty = @n_ComponentQty * @n_FromCompleteQty
          SET @n_ShortQty = 0 
-      
+    
          DECLARE CUR_SOURCE_KITDETAIL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT KITLineNumber, ExpectedQty 
          FROM KITDETAIL WITH (NOLOCK)
          WHERE KITKey = @c_KitKey 
-         AND   [Type] = 'T'
+         AND   [Type] = @c_ToType                                                                  --(Wan02)
          AND   [Status] <> '9' 
          AND   Sku = @c_ComponentSku 
    
@@ -166,7 +180,7 @@ BEGIN
          WHILE @@FETCH_STATUS = 0 
          BEGIN         
             IF @n_RemainingQty=0
-               SET @n_ToCompleteQty = @n_ToExpectedQty 
+               SET @n_ToCompleteQty = @n_RemainingQty - @n_ToExpectedQty                           --(Wan02)
             ELSE 
             IF (@n_RemainingQty < 0) AND (@n_ToExpectedQty > @n_RemainingQty)
             BEGIN
@@ -193,7 +207,7 @@ BEGIN
             (
                @c_KitKey,
                @c_KitLineNumber,
-               'T',
+               @c_ToType,                                                                          --(Wan02)
                @n_ToCompleteQty
             )
             
@@ -201,32 +215,42 @@ BEGIN
          END   
          CLOSE CUR_SOURCE_KITDETAIL
          DEALLOCATE CUR_SOURCE_KITDETAIL
-      
+   
          IF EXISTS(SELECT 1 FROM #KIT_BOM_DETAIL AS kbd WITH(NOLOCK)
                    WHERE kbd.Qty < 0 )
          BEGIN
             SET @n_continue = 3  
             SET @n_Err = 552454 
-            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + 
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + 
                   ': Insufficient Qty for Component SKU (lsp_Kit_Calc_Consumption_BOM)'               
             GOTO EXIT_SP         
          END
-         ELSE 
-         BEGIN
-            UPDATE KITDETAIL WITH (ROWLOCK)
-               SET Qty = kbd.Qty, EditDate = GETDATE(), EditWho = SUSER_SNAME() 
-            FROM KITDETAIL 
-            JOIN #KIT_BOM_DETAIL AS kbd WITH(NOLOCK) ON kbd.KITKey = KITDETAIL.KITKey 
-                  AND kbd.KITLineNumber = KITDETAIL.KITLineNumber 
-                  AND kbd.[Type] = KITDETAIL.[Type]
+         --ELSE                                                                                    --(Wan02) - START Move Down
+         --BEGIN
+         --   UPDATE KITDETAIL WITH (ROWLOCK)
+         --      SET Qty = kbd.Qty, EditDate = GETDATE(), EditWho = SUSER_SNAME() 
+         --   FROM KITDETAIL 
+         --   JOIN #KIT_BOM_DETAIL AS kbd WITH(NOLOCK) ON kbd.KITKey = KITDETAIL.KITKey 
+         --         AND kbd.KITLineNumber = KITDETAIL.KITLineNumber 
+         --         AND kbd.[Type] = KITDETAIL.[Type]
                
-         END
+         --END                                                                                     --(Wan02) - END Move Down
       
          FETCH FROM CUR_COMPONENTS INTO @c_ComponentSku, @n_ComponentQty 
       END
    
       CLOSE CUR_COMPONENTS
       DEALLOCATE CUR_COMPONENTS
+      
+      IF EXISTS (SELECT 1 FROM #KIT_BOM_DETAIL)                                                    --(Wan02) - START
+      BEGIN
+         UPDATE KITDETAIL WITH (ROWLOCK)
+            SET Qty = kbd.Qty, EditDate = GETDATE(), EditWho = SUSER_SNAME() 
+         FROM KITDETAIL 
+         JOIN #KIT_BOM_DETAIL AS kbd WITH(NOLOCK) ON kbd.KITKey = KITDETAIL.KITKey 
+               AND kbd.KITLineNumber = KITDETAIL.KITLineNumber 
+               AND kbd.[Type] = KITDETAIL.[Type]
+      END                                                                                          --(Wan02) - END
    
    END TRY  
   
