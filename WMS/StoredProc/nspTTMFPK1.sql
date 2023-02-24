@@ -1,7 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nspTTMFPK1]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [dbo].[nspTTMFPK1]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -20,8 +16,10 @@ GO
 /* 2016-08-23  TLTING    1.2  Performance tune - NOLOCK                 */
 /* 2017-09-08  Ung       1.3  WMS-2800 Add Priority                     */
 /* 2019-06-24  Desmond   1.4  INC0693341 Revise sorting                 */
+/* 2020-08-27  James     1.5  WMS-14684 SHUTTLE area cannot have multi  */
+/*                            user doing FPK task (james01)             */
 /************************************************************************/
-CREATE PROC [dbo].[nspTTMFPK1]
+CREATE OR ALTER PROC [dbo].[nspTTMFPK1]
     @c_UserID        NVARCHAR(18)
    ,@c_AreaKey01     NVARCHAR(10)
    ,@c_AreaKey02     NVARCHAR(10)
@@ -40,7 +38,7 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE 
+   DECLARE
        @b_debug      INT
       ,@n_starttcnt  INT -- Holds the current transaction count
       ,@n_continue   INT
@@ -48,8 +46,8 @@ BEGIN
       ,@c_LastLOCAisle  NVARCHAR(10)
       ,@cFoundTask    NVARCHAR( 1)
       ,@b_SkipTheTask INT
-      
-   DECLARE 
+
+   DECLARE
        @c_StorerKey NVARCHAR(15)
       ,@c_SKU       NVARCHAR(20)
       ,@c_FromID    NVARCHAR(18)
@@ -63,7 +61,7 @@ BEGIN
       ,@c_Facility  NVARCHAR(5)
       ,@c_GroupKey  NVARCHAR(10)
 
-    SELECT 
+    SELECT
        @b_debug = 0
       ,@n_starttcnt = @@TRANCOUNT
       ,@n_continue = 1
@@ -72,22 +70,22 @@ BEGIN
       ,@c_errmsg = ''
       ,@c_TaskDetailkey = ''
       ,@c_LastLOCAisle = ''
-   
+
    -- Get last GroupKey by this user
    SET @c_GroupKey = ''
    SELECT TOP 1 @c_GroupKey = GroupKey
-   FROM dbo.TaskDetail WITH (NOLOCK) 
+   FROM dbo.TaskDetail WITH (NOLOCK)
    WHERE TaskDetail.TaskType = 'FPK'
       AND TaskDetail.Status = '9'
       AND TaskDetail.UserKey = @c_UserID
    ORDER BY EditDate DESC
-   
+
    -- Handling transaction
    DECLARE @nTranCount INT
    SET @nTranCount = @@TRANCOUNT
    BEGIN TRAN  -- Begin our own transaction
    SAVE TRAN nspTTMFPK1 -- For rollback or commit only our own transaction
-      
+
    SET @c_TaskDetailKey = ''
 
    IF @c_AreaKey01 <> ''
@@ -100,13 +98,13 @@ BEGIN
             AND TaskDetail.TaskType = 'FPK'
             AND TaskDetail.Status = '0'
             -- Exclude GroupKey taken by others
-            AND NOT EXISTS( SELECT 1 
-               FROM dbo.TaskDetail T2 WITH (NOLOCK) 
-               WHERE T2.GroupKey = TaskDetail.GroupKey 
+            AND NOT EXISTS( SELECT 1
+               FROM dbo.TaskDetail T2 WITH (NOLOCK)
+               WHERE T2.GroupKey = TaskDetail.GroupKey
                   AND T2.GroupKey <> ''
                   AND T2.UserKey <> ''
                   AND T2.UserKey <> @c_UserID)
-            AND EXISTS( SELECT 1 
+            AND EXISTS( SELECT 1
                FROM TaskManagerUserDetail tmu WITH (NOLOCK)
                WHERE PermissionType = TaskDetail.TASKTYPE
                  AND tmu.UserKey = @c_UserID
@@ -122,7 +120,7 @@ BEGIN
             ,TaskDetail.Priority
             , LOC.LogicalLocation
             , LOC.LOC
-         --INC0693341 End                        
+         --INC0693341 End
    ELSE
       DECLARE Cursor_FPKTaskCandidates CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT TaskDetailkey, GroupKey
@@ -132,18 +130,18 @@ BEGIN
          WHERE dbo.TaskDetail.TaskType = 'FPK'
             AND TaskDetail.Status = '0'
             -- Exclude GroupKey taken by others
-            AND NOT EXISTS( SELECT 1 
-               FROM dbo.TaskDetail T2 WITH (NOLOCK) 
-               WHERE T2.GroupKey = TaskDetail.GroupKey 
+            AND NOT EXISTS( SELECT 1
+               FROM dbo.TaskDetail T2 WITH (NOLOCK)
+               WHERE T2.GroupKey = TaskDetail.GroupKey
                   AND T2.GroupKey <> ''
                   AND T2.UserKey <> ''
                   AND T2.UserKey <> @c_UserID)
-            AND EXISTS( SELECT 1 
+            AND EXISTS( SELECT 1
                FROM TaskManagerUserDetail tmu WITH (NOLOCK)
                WHERE PermissionType = TaskDetail.TASKTYPE
                  AND tmu.UserKey = @c_UserID
                  AND tmu.Permission = '1')
-         --INC0693341 Start       
+         --INC0693341 Start
          --ORDER BY
             -- CASE WHEN TaskDetail.GroupKey = @c_GroupKey THEN '0' ELSE '1' END
             --,TaskDetail.Priority
@@ -162,11 +160,11 @@ BEGIN
    BEGIN
       -- Get task info
       SELECT
-         @c_TaskType  = TaskType, 
-         @c_StorerKey = StorerKey, 
+         @c_TaskType  = TaskType,
+         @c_StorerKey = StorerKey,
          @c_SKU       = SKU,
          @c_LOT       = LOT,
-         @n_QTY       = QTY, 
+         @n_QTY       = QTY,
          @c_FromLOC   = FromLOC,
          @c_FromID    = FromID,
          @c_ToLOC     = ToLOC,
@@ -222,18 +220,18 @@ BEGIN
       END
 
       -- Get from LOC info
-      SELECT 
-         @c_LOCCategory = LocationCategory, 
-         @c_LOCAisle = LocAisle, 
+      SELECT
+         @c_LOCCategory = LocationCategory,
+         @c_LOCAisle = LocAisle,
          @c_Facility = Facility
-      FROM dbo.LOC WITH (NOLOCK) 
+      FROM dbo.LOC WITH (NOLOCK)
       WHERE LOC = @c_FromLoc
-      
+
       -- Check from aisle in used
-      IF @c_LOCCategory IN ('VNA')
+      IF @c_LOCCategory IN ('VNA', 'SHUTTLE')
       BEGIN
-         IF EXISTS( SELECT 1 
-            FROM dbo.TaskDetail TD WITH (NOLOCK) 
+         IF EXISTS( SELECT 1
+            FROM dbo.TaskDetail TD WITH (NOLOCK)
                JOIN dbo.LOC L1 WITH (NOLOCK) ON (TD.FromLOC = L1.LOC)
                LEFT JOIN dbo.LOC L2 WITH (NOLOCK) ON (TD.ToLOC = L2.LOC)
             WHERE TD.Status > '0' AND TD.Status < '9'
@@ -252,18 +250,18 @@ BEGIN
       IF @c_ToLOC <> ''
       BEGIN
          -- Get To LOC info
-         SELECT 
-            @c_LOCCategory = LocationCategory, 
-            @c_LOCAisle = LocAisle, 
+         SELECT
+            @c_LOCCategory = LocationCategory,
+            @c_LOCAisle = LocAisle,
             @c_Facility = Facility
-         FROM dbo.LOC WITH (NOLOCK) 
+         FROM dbo.LOC WITH (NOLOCK)
          WHERE LOC = @c_ToLOC
-         
+
          -- Check To aisle in used
-         IF @c_LOCCategory IN ('VNA')
+         IF @c_LOCCategory IN ('VNA', 'SHUTTLE')
          BEGIN
-            IF EXISTS( SELECT 1 
-               FROM dbo.TaskDetail TD WITH (NOLOCK) 
+            IF EXISTS( SELECT 1
+               FROM dbo.TaskDetail TD WITH (NOLOCK)
                   JOIN dbo.LOC L1 WITH (NOLOCK) ON (TD.FromLOC = L1.LOC)
                   LEFT JOIN dbo.LOC L2 WITH (NOLOCK) ON (TD.ToLOC = L2.LOC)
                WHERE TD.Status > '0' AND TD.Status < '9'
@@ -278,7 +276,7 @@ BEGIN
             END
          END
       END
-      
+
       -- Update task as in-progress
       IF NOT EXISTS( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE TaskDetailKey = @c_TaskDetailKey AND Status = '3' AND UserKey = @c_UserID)
       BEGIN
@@ -301,13 +299,13 @@ BEGIN
             GOTO Fail
          END
       END
-      
+
       SET @cFoundTask = 'Y'
       BREAK -- Task assiged sucessfully, Quit Now
    END
-   
+
    -- Exit if no task
-   IF @cFoundTask <> 'Y' 
+   IF @cFoundTask <> 'Y'
    BEGIN
       SET @c_TaskDetailKey = ''  --@c_TaskDetailKey still contain last record value if @@FETCH_STATUS <> 0 exit while loop
       GOTO Quit
@@ -324,10 +322,5 @@ Quit:
       COMMIT TRAN
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS OFF
-GO
-GRANT EXECUTE ON [dbo].[nspTTMFPK1] TO nSQL
+GRANT EXECUTE ON  [dbo].[nspTTMFPK1] TO [NSQL]
 GO
