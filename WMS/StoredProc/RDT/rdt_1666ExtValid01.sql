@@ -1,6 +1,3 @@
-IF  EXISTS (SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'[RDT].[rdt_1666ExtValid01]') AND OBJECTPROPERTY(id,N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdt_1666ExtValid01]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -17,11 +14,11 @@ GO
 /* 2019-08-29  1.1  YeeKung     WMS-10371 Add Validation                */    
 /*                               M_Comapny=TransMethod                  */  
 /* 2020-07-10  1.2  YeeKung     WMS-14188 Check delivermode (yeekung02) */  
-/* 2021-05-24  1.3  YeeKung     WMS-17053 Add codelkup in delivery mode */
+/* 2021-05-24  1.3  YeeKung     WMS-17052 Add codelkup in delivery mode */
 /*                              (yeekung03)                             */      
 /************************************************************************/      
       
-CREATE PROC [RDT].[rdt_1666ExtValid01] (      
+CREATE OR ALTER PROC [RDT].[rdt_1666ExtValid01] (      
    @nMobile        INT,      
    @nFunc          INT,      
    @cLangCode      NVARCHAR( 3),      
