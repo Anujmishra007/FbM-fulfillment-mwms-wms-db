@@ -1,12 +1,8 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispASNFZ11]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispASNFZ11]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 
 /***************************************************************************/
 /* Stored Procedure: ispASNFZ11                                            */
@@ -30,21 +26,24 @@ GO
 /* 2019-01-10   CSCHONG 1.0   WMS-7547 (CS01)                              */
 /* 2020-11-26   CSCHONG 1.1   WMS-15569 revised report logic (CS02)        */
 /* 2021-03-02   CSCHONG 1.2   WMS-15569 revised field logic (CS03)         */
-/***************************************************************************/  
-CREATE PROC [dbo].[ispASNFZ11]  
-(     @c_Receiptkey  NVARCHAR(10)   
+/* 2022-06-13   CSCHONG 1.3   WMS-19798 revised field logic (CS04)         */
+/* 2022-08-01   CSCHONG 1.4   WMS-19798 revised field logic (CS04a)        */
+/* 2022-08-09   CSCHONG 1.5   WMS-19798 revised field logic (CS04b)        */
+/***************************************************************************/
+CREATE OR ALTER PROC [dbo].[ispASNFZ11]
+(     @c_Receiptkey  NVARCHAR(10)
   ,   @b_Success     INT           OUTPUT
   ,   @n_Err         INT           OUTPUT
-  ,   @c_ErrMsg      NVARCHAR(255) OUTPUT   
+  ,   @c_ErrMsg      NVARCHAR(255) OUTPUT
   ,   @c_ReceiptLineNumber NVARCHAR(5)=''
-)  
-AS  
-BEGIN  
-   SET NOCOUNT ON  
-   SET QUOTED_IDENTIFIER OFF  
-   SET ANSI_NULLS OFF  
-   SET CONCAT_NULL_YIELDS_NULL OFF  
-      
+)
+AS
+BEGIN
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
+
    DECLARE @n_Continue       INT,
            @n_StartTranCount INT,
            @c_Storerkey      NVARCHAR(15),
@@ -57,8 +56,8 @@ BEGIN
            @c_option5        NVARCHAR(4000),
            @c_Sku            NVARCHAR(20)
 
-   --CS01 Start         
-   DECLARE  
+   --CS01 Start
+   DECLARE
            @n_StartTCnt             INT
          , @c_DocType               NVARCHAR(10)
          , @c_RecType               NVARCHAR(10)
@@ -91,7 +90,9 @@ BEGIN
          , @n_KeyLineNo             INT
          , @n_Cnt                   INT
          , @n_Batch                 INT
-        
+         , @c_Clkudf03              NVARCHAR(60)         --CS04     
+         , @c_ExtReckey             NVARCHAR(50)         --CS04  
+
        --CS02 START
   DECLARE  @c_lot                   NVARCHAR(10)
          , @c_Lot01                 NVARCHAR(18)
@@ -111,13 +112,15 @@ BEGIN
          , @d_Lot15                 DATETIME
          , @c_toid                  NVARCHAR(50)
          , @c_Lottable07            NVARCHAR(30)
-         , @c_Lottable08            NVARCHAR(30)    
-         , @c_RecGrp                NVARCHAR(20)          
-         , @c_ASNReason             NVARCHAR(10)          
+         , @c_Lottable08            NVARCHAR(30)
+         , @c_RecGrp                NVARCHAR(20)
+         , @c_ASNReason             NVARCHAR(10)
          , @c_RDLineNo              NVARCHAR(10)
          , @c_toLoc                 NVARCHAR(10)
          , @c_RDUDF01               NVARCHAR(30)
- 
+         , @c_RDUDF03               NVARCHAR(30)   --CS04b
+         , @c_Lottable06            NVARCHAR(30)   --CS04b
+
       --CS02 END
 
    SET @n_StartTCnt = @@TRANCOUNT
@@ -133,6 +136,7 @@ BEGIN
          ,  Facility       NVARCHAR(5)    NULL
          ,  UserDefine01   NVARCHAR(30)   NULL
          ,  ASNReason      NVARCHAR(20)   NULL            --CS02
+         ,  UserDefine02   NVARCHAR(30)   NULL            --CS04
          )
 
    CREATE TABLE #TMP_ADJDET
@@ -148,7 +152,7 @@ BEGIN
          ,  ID                   NVARCHAR(18)   NULL
          ,  Qty                  INT            NULL
          ,  ReasonCode           NVARCHAR(10)   NULL
-         ,  Lottable05           DATETIME       NULL     
+         ,  Lottable05           DATETIME       NULL
          ,  Channel              NVARCHAR(20)   NULL     --CS01
          ,  Lottable01           NVARCHAR(18)   NULL
          ,  Lottable02           NVARCHAR(18)   NULL
@@ -163,26 +167,27 @@ BEGIN
          ,  Lottable11           NVARCHAR(30)   NULL
          ,  Lottable12           NVARCHAR(30)   NULL
          ,  Lottable13           DATETIME       NULL
-         ,  Lottable14           DATETIME       NULL 
-         ,  Lottable15           DATETIME       NULL 
+         ,  Lottable14           DATETIME       NULL
+         ,  Lottable15           DATETIME       NULL
          ,  QtyExpected          INT            NULL
-         ,  QtyReceived          INT            NULL   
+         ,  QtyReceived          INT            NULL
          ,  UCCNO                NVARCHAR(30)   NULL         --CS02
+         ,  Userdefine03         NVARCHAR(30)   NULL         --CS04b
          )
-      --CS01 End                               
-   SELECT @b_Success = 1, @n_Err = 0, @c_ErrMsg = '', @n_Continue = 1, @n_StartTranCount = @@TRANCOUNT              
+      --CS01 End
+   SELECT @b_Success = 1, @n_Err = 0, @c_ErrMsg = '', @n_Continue = 1, @n_StartTranCount = @@TRANCOUNT
 
    IF @n_continue IN (1,2)
-   BEGIN    
+   BEGIN
         SELECT @c_Storerkey = R.Storerkey,
                @c_Facility = R.Facility
         FROM RECEIPT R (NOLOCK)
         WHERE R.Receiptkey = @c_Receiptkey
-      
-        Execute nspGetRight 
-              @c_facility,  
-              @c_StorerKey,              
-              '', -- @c_SKU,                    
+
+        Execute nspGetRight
+              @c_facility,
+              @c_StorerKey,
+              '', -- @c_SKU,
               'PostFinalizeReceiptSP ', -- Configkey
               @b_success    OUTPUT,
               @c_authority  OUTPUT,
@@ -190,42 +195,42 @@ BEGIN
               @c_errmsg     OUTPUT,
               @c_option1    OUTPUT,  --other storer
               @c_option2    OUTPUT,  --other strategykey
-              @c_option3    OUTPUT,  
-              @c_option4    OUTPUT,  
+              @c_option3    OUTPUT,
+              @c_option4    OUTPUT,
               @c_option5    OUTPUT
-              
+
       IF NOT EXISTS(SELECT 1 FROM STORER (NOLOCK) WHERE Storerkey = @c_Option1)
       BEGIN
          SELECT @n_continue = 3
          SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 63500
          SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Invalid Storerkey of option1 (ispASNFZ11)' + ' ( '
                                 + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
-      END        
-              
+      END
+
       IF NOT EXISTS(SELECT 1 FROM STRATEGY (NOLOCK) WHERE Strategykey = @c_Option2)
       BEGIN
          SELECT @n_continue = 3
          SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 63510
          SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Invalid strategykey of option2 (ispASNFZ11)' + ' ( '
                                 + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
-      END        
+      END
    END
 
    IF @n_continue IN (1,2)
-   BEGIN    
-      DECLARE CUR_RECEIPTDETAIL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+   BEGIN
+      DECLARE CUR_RECEIPTDETAIL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT DISTINCT RD.Sku
-         FROM RECEIPTDETAIL RD (NOLOCK)      
-         LEFT JOIN SKU (NOLOCK) ON RD.Sku = SKU.Sku AND SKU.Storerkey = @c_Option1     
+         FROM RECEIPTDETAIL RD (NOLOCK)
+         LEFT JOIN SKU (NOLOCK) ON RD.Sku = SKU.Sku AND SKU.Storerkey = @c_Option1
          WHERE RD.Receiptkey = @c_Receiptkey
          AND RD.ReceiptLineNumber = CASE WHEN ISNULL(@c_ReceiptLineNumber,'') <> '' THEN @c_ReceiptLineNumber ELSE RD.ReceiptLineNumber END
-         AND SKU.Sku IS NULL         
-      
-      OPEN CUR_RECEIPTDETAIL  
+         AND SKU.Sku IS NULL
+
+      OPEN CUR_RECEIPTDETAIL
       FETCH NEXT FROM CUR_RECEIPTDETAIL INTO @c_Sku
-      
+
       WHILE @@FETCH_STATUS = 0  AND @n_continue IN(1,2)
-      BEGIN   
+      BEGIN
          INSERT INTO SKU
          (
             StorerKey,
@@ -351,7 +356,7 @@ BEGIN
             Pressure,
             SerialNoCapture
 )
-         SELECT 
+         SELECT
             @c_Option1,
             Sku,
             DESCR,
@@ -476,7 +481,7 @@ BEGIN
             SerialNoCapture
          FROM SKU (NOLOCK)
          WHERE Storerkey = @c_Storerkey
-         AND Sku = @c_Sku  
+         AND Sku = @c_Sku
 
          SELECT @n_err = @@ERROR
          IF  @n_err <> 0
@@ -486,13 +491,13 @@ BEGIN
             SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Insert SKU Table Failed! (ispASNFZ11)' + ' ( '
                                    + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
          END
-                                   
+
          FETCH NEXT FROM CUR_RECEIPTDETAIL INTO @c_Sku
       END
-      CLOSE CUR_RECEIPTDETAIL  
-      DEALLOCATE CUR_RECEIPTDETAIL                                                 
-   END        
-   --STEP 1 
+      CLOSE CUR_RECEIPTDETAIL
+      DEALLOCATE CUR_RECEIPTDETAIL
+   END
+   --STEP 1
    --CS01 Start
    SET @c_Facility = ''
    SET @c_Storerkey= ''
@@ -509,6 +514,8 @@ BEGIN
          ,@c_UDF10    = RECEIPT.userdefine10
          ,@c_UDF02    = RECEIPT.userdefine02
          ,@c_ASNReason   = RECEIPT.ASNReason            --CS02
+         ,@c_RecGrp      = RECEIPT.ReceiptGroup        --CS04
+         ,@c_ExtReckey   = RECEIPT.ExternReceiptKey     --CS04
    FROM   RECEIPT WITH (NOLOCK)
    WHERE  RECEIPT.ReceiptKey = @c_ReceiptKey
    AND    RECEIPT.DocType = 'R'
@@ -518,47 +525,67 @@ BEGIN
    IF @c_DocType <> 'R'
    BEGIN
       GOTO QUIT_SP
-   END 
-    
+   END
+
    --IF @c_RecType = 'NIF'
    --BEGIN
    --   GOTO QUIT_SP
-   --END 
+   --END
 
    --IF @c_UDF02 <> 'TU'
    --BEGIN
    --   GOTO QUIT_SP
    --END
-
+   --CS04a S
    SET @c_Loc = ''
-   SELECT @c_Loc = FACILITY.UserDefine04
-   FROM FACILITY WITH (NOLOCK)
-   WHERE Facility = @c_Facility
+   --SELECT @c_Loc = FACILITY.UserDefine04
+   --FROM FACILITY WITH (NOLOCK)
+   --WHERE Facility = @c_Facility
+
+       SELECT TOP 1 @c_Loc =  UDF03
+      FROM CODELKUP WITH (NOLOCK)
+      WHERE ListName = 'PVHSHLOC'
+      AND   Storerkey = @c_Storerkey
+     AND code2  = @c_Facility
+     and code = @c_UDF10
+
+--CS04a E
 
    IF EXISTS ( SELECT 1
-               FROM   RECEIPTDETAIL WITH (NOLOCK)  
+               FROM   RECEIPTDETAIL WITH (NOLOCK)
                WHERE  RECEIPTDETAIL.ReceiptKey = @c_ReceiptKey
                AND    RECEIPTDETAIL.QtyExpected <> RECEIPTDETAIL.QtyReceived
              )
-   BEGIN  
+   BEGIN
       SET @c_AdjustmentType = ''
       SELECT TOP 1 @c_AdjustmentType1 = SUBSTRING(Code,3,28)
       FROM CODELKUP WITH (NOLOCK)
       WHERE ListName = 'NONADJITF'
       AND   Storerkey = @c_Storerkey
-      AND short='1'                            --CS03
+      AND short='1'                            --CS04
 
-      SET @c_Lottable02 = '' 
-      SET @c_AdjustmentType2 = '001'
-     
+      --CS04 START
+
+     SELECT TOP 1 @c_Clkudf03 = UDF03
+      FROM CODELKUP WITH (NOLOCK)
+      WHERE ListName = 'PVHASN'
+      AND   Storerkey = @c_Storerkey
+     AND short  = @c_DocType
+     and Codelkup.long = @c_RecGrp
+
+      --CS04 END
+
+      SET @c_Lottable02 = ''
+      SET @c_AdjustmentType2 = @c_Clkudf03 --'001'        --CS04
+
      SET @c_ReasonCode = ''
-      SELECT TOP 1 @c_ReasonCode = long
+      SELECT TOP 1 @c_ReasonCode = CASE WHEN @c_ASNReason ='DC' THEN 'PO' ELSE long END  --CS04a
       FROM CODELKUP WITH (NOLOCK)
       WHERE ListName = 'ASN2ADJ'
       AND   Storerkey = @c_Storerkey
      AND short  = @c_DocType
      and Codelkup.UDF01 = @c_UDF10
-      
+
    END
 
    WHILE @@TRANCOUNT > 0
@@ -566,16 +593,16 @@ BEGIN
       COMMIT TRAN
    END
 
-    BEGIN TRAN 
+    BEGIN TRAN
 
    SET @n_KeyNo = -1
    DECLARE CUR_RECDET CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    SELECT KeyLineNo = ROW_NUMBER() OVER (PARTITION BY RECEIPTDETAIL.ReceiptKey
-                                        , CASE WHEN RECEIPTDETAIL.QtyExpected > RECEIPTDETAIL.QtyReceived THEN 0 
+                                        , CASE WHEN RECEIPTDETAIL.QtyExpected > RECEIPTDETAIL.QtyReceived THEN 0
                                           WHEN RECEIPTDETAIL.QtyExpected < RECEIPTDETAIL.QtyReceived THEN 5
-                                          ELSE 9 END 
-                                          ORDER BY 
-                                          CASE WHEN RECEIPTDETAIL.QtyExpected > RECEIPTDETAIL.QtyReceived THEN 0 
+                                          ELSE 9 END
+                                          ORDER BY
+                                          CASE WHEN RECEIPTDETAIL.QtyExpected > RECEIPTDETAIL.QtyReceived THEN 0
                                                WHEN RECEIPTDETAIL.QtyExpected < RECEIPTDETAIL.QtyReceived THEN 5
                                                ELSE 9 END)
          ,RECEIPTDETAIL.Sku
@@ -584,14 +611,15 @@ BEGIN
          ,RECEIPTDETAIL.QtyExpected
          ,RECEIPTDETAIL.QtyReceived
          ,RECEIPTDETAIL.lottable07, RECEIPTDETAIL.lottable08        -- CS02
-   FROM   RECEIPTDETAIL WITH (NOLOCK)  
+         ,RECEIPTDETAIL.userdefine03,RECEIPTDETAIL.lottable06       --CS04b
+   FROM   RECEIPTDETAIL WITH (NOLOCK)
    WHERE  RECEIPTDETAIL.ReceiptKey = @c_ReceiptKey
-   ORDER BY CASE WHEN RECEIPTDETAIL.QtyExpected > RECEIPTDETAIL.QtyReceived THEN 0 
+   ORDER BY CASE WHEN RECEIPTDETAIL.QtyExpected > RECEIPTDETAIL.QtyReceived THEN 0
                  WHEN RECEIPTDETAIL.QtyExpected < RECEIPTDETAIL.QtyReceived THEN 5
                  ELSE 9 END
 
    OPEN CUR_RECDET
-   
+
    FETCH NEXT FROM CUR_RECDET INTO  @n_KeyLineNo
                                  ,  @c_Sku
                                  ,  @c_Packkey
@@ -599,8 +627,10 @@ BEGIN
                                  ,  @n_QtyExpected
                                  ,  @n_QtyReceived
                                  ,  @c_lottable07           --CS02
-                                 ,  @c_lottable08           --CS02  
-                                  
+                                 ,  @c_lottable08           --CS02
+                                 ,  @c_RDUDF03              --CS04b
+                                 ,  @c_Lottable06           --CS04b    
+
 
    WHILE @@FETCH_STATUS <> -1
    BEGIN
@@ -612,7 +642,7 @@ BEGIN
          SET @c_AdjustmentType= @c_AdjustmentType1
          --SET @c_ReasonCode = @c_ShortReasonCode
       END
-      ELSE 
+      ELSE
       BEGIN
          SET @n_QtyVariance = @n_QtyReceived - @n_QtyExpected
          SET @c_AdjustmentType= @c_AdjustmentType2
@@ -620,10 +650,10 @@ BEGIN
       END
 
       SET @n_Cnt = 1
-      IF @n_QtyVariance > 0 
+      IF @n_QtyVariance > 0
       BEGIN
          WHILE @n_Cnt <= 2
-         BEGIN 
+         BEGIN
             IF @n_KeyLineNo = 1
             BEGIN
                SET @n_KeyNo = @n_KeyNo + 1
@@ -634,9 +664,9 @@ BEGIN
                END
                ELSE
                BEGIN
-                  SET @n_KeyNo2 = @n_KeyNo 
-                  SET @c_AdjustmentType = CASE WHEN @c_AdjustmentType = @c_AdjustmentType1 THEN @c_AdjustmentType2 
-                                               WHEN @c_AdjustmentType = @c_AdjustmentType2 THEN @c_AdjustmentType1 
+                  SET @n_KeyNo2 = @n_KeyNo
+                  SET @c_AdjustmentType = CASE WHEN @c_AdjustmentType = @c_AdjustmentType1 THEN @c_AdjustmentType2
+                                               WHEN @c_AdjustmentType = @c_AdjustmentType2 THEN @c_AdjustmentType1
                                                END
               --SET @c_AdjustmentType = @c_AdjustmentType1
                END
@@ -648,22 +678,24 @@ BEGIN
                ,  Facility
                ,  UserDefine01
                ,  ASNReason                       --(CS02)
+               ,  UserDefine02                    --(CS04)
                )
-               VALUES 
+               VALUES
                (  @n_KeyNo
                ,  @c_AdjustmentType
                ,  @c_Storerkey
                ,  @c_Facility
                ,  @c_ReceiptKey
                ,  @c_ASNReason                      --(CS02)
+               ,  @c_ExtReckey                      --(CS04)
                )
                SET @n_err = @@ERROR
                IF @n_err <> 0
                BEGIN
                   SET @n_continue = 3
-                  SET @n_err = 60020  
-                  SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert into #TMP_ADJ Table. (ispASNFZ11)' 
-                                 + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+                  SET @n_err = 60020
+                  SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert into #TMP_ADJ Table. (ispASNFZ11)'
+                                 + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
                   GOTO QUIT_SP
                END
 
@@ -678,7 +710,7 @@ BEGIN
             BEGIN
                SET @n_KeyNo = @n_KeyNo2
                SET @n_QtyVariance = @n_QtyVariance * - 1
-            END 
+            END
 
             SET @c_AdjustmentLineNumber = RIGHT('00000' + CONVERT (NVARCHAR(5), @n_KeyLineNo),5)
 
@@ -698,23 +730,24 @@ BEGIN
                ,  Channel
                ,  Lottable07            --CS02
                ,  Lottable08            --CS02
-               ,  Lottable01            --CS02 
+               ,  Lottable01            --CS02
                ,  Lottable02            --CS02
-               ,  Lottable03            --CS02 
-               ,  Lottable04            --CS02 
+               ,  Lottable03            --CS02
+               ,  Lottable04            --CS02
                ,  Lottable06            --CS02
-               ,  Lottable09            --CS02 
+               ,  Lottable09            --CS02
                ,  Lottable10            --CS02
-               ,  Lottable11            --CS02 
+               ,  Lottable11            --CS02
                ,  Lottable12            --CS02
-               ,  Lottable13            --CS02 
+               ,  Lottable13            --CS02
                ,  Lottable14            --CS02
                ,  Lottable15            --CS02
                ,  QtyExpected           --CS02
                ,  QtyReceived           --CS02
                ,  UCCno                 --CS02
+               ,  Userdefine03          --CS04b
                )
-            VALUES 
+            VALUES
                (  @n_KeyNo
                ,  @c_AdjustmentLineNumber
                ,  @c_StorerKey
@@ -730,30 +763,31 @@ BEGIN
                ,  'B2B'
                ,  @c_lottable07           --CS02
                ,  @c_lottable08           --CS02
-               ,  ''                      --CS02  
                ,  ''                      --CS02
                ,  ''                      --CS02
                ,  ''                      --CS02
                ,  ''                      --CS02
-               ,  ''                      --CS02 
+               ,  @c_Lottable06           --CS02    --CS04b
                ,  ''                      --CS02
                ,  ''                      --CS02
                ,  ''                      --CS02
                ,  ''                      --CS02
                ,  ''                      --CS02
-               ,  ''                      --CS02 
+               ,  ''                      --CS02
+               ,  ''                      --CS02
                ,  @n_QtyExpected          --CS02
                ,  @n_QtyReceived          --CS02
                ,  ''                      --CS02
+               ,  @c_RDUDF03              --CS04b      
                )
-                 
+
             SET @n_err = @@ERROR
             IF @n_err <> 0
             BEGIN
                SET @n_continue = 3
-               SET @n_err = 60030  
-               SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert into #TMP_ADJDET Table. (ispASNFZ11)' 
-                              + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+               SET @n_err = 60030
+               SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert into #TMP_ADJDET Table. (ispASNFZ11)'
+                              + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
                GOTO QUIT_SP
             END
 
@@ -766,12 +800,14 @@ BEGIN
                                     ,  @c_Packkey
                                     ,  @c_UOM
                                     ,  @n_QtyExpected
-                                    ,  @n_QtyReceived 
+                                    ,  @n_QtyReceived
                                     ,  @c_lottable07           --CS02
-                                    ,  @c_lottable08           --CS02  
+                                    ,  @c_lottable08           --CS02
+                                    ,  @c_RDUDF03              --CS04b
+                                    ,  @c_Lottable06           --CS04b  
    END
    CLOSE CUR_RECDET
-   DEALLOCATE CUR_RECDET      
+   DEALLOCATE CUR_RECDET
 
    SET @n_batch = 0
    SELECT @n_batch = COUNT(1)
@@ -780,7 +816,7 @@ BEGIN
    IF @n_batch > 0
    BEGIN
       SET @c_AdjustmentKeys = ''
-      EXECUTE nspg_GetKey 
+      EXECUTE nspg_GetKey
               @KeyName     = 'ADJUSTMENT'
             , @fieldlength = 10
             , @keystring   = @c_AdjustmentKey   OUTPUT
@@ -789,53 +825,53 @@ BEGIN
             , @c_errmsg    = @c_errmsg          OUTPUT
             , @b_resultset = 0
             , @n_batch     = @n_Batch
-   
+
       IF @b_success <> 1
       BEGIN
-         SET @n_continue = 3                                                                                              
-         SET @n_err = 60040                                                                                               
-         SET @c_errmsg='NSQL'+ CONVERT(CHAR(5),@n_err)+': Error Executing nspg_GetKey. (ispASNFZ11)' 
-                        + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ).'                                  
-         GOTO QUIT_SP        
-      END
-
-      UPDATE #TMP_ADJ 
-         SET AdjustmentKey = RIGHT('0000000000' + CONVERT(NVARCHAR(10), CONVERT(INT, @c_AdjustmentKey) + KeyNo),10)
-
-      SET @n_err = @@ERROR
-      IF @n_err <> 0
-      BEGIN
          SET @n_continue = 3
-         SET @n_err = 60050  
-         SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Update ##TMP_ADJ Table. (ispASNFZ11)' 
-                        + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+         SET @n_err = 60040
+         SET @c_errmsg='NSQL'+ CONVERT(CHAR(5),@n_err)+': Error Executing nspg_GetKey. (ispASNFZ11)'
+                        + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ).'
          GOTO QUIT_SP
       END
 
-      UPDATE #TMP_ADJDET 
+      UPDATE #TMP_ADJ
          SET AdjustmentKey = RIGHT('0000000000' + CONVERT(NVARCHAR(10), CONVERT(INT, @c_AdjustmentKey) + KeyNo),10)
 
       SET @n_err = @@ERROR
       IF @n_err <> 0
       BEGIN
          SET @n_continue = 3
-         SET @n_err = 60060  
-         SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Update #TMP_ADJDET Table. (ispASNFZ11)' 
-                        + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+         SET @n_err = 60050
+         SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Update ##TMP_ADJ Table. (ispASNFZ11)'
+                        + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+         GOTO QUIT_SP
+      END
+
+      UPDATE #TMP_ADJDET
+         SET AdjustmentKey = RIGHT('0000000000' + CONVERT(NVARCHAR(10), CONVERT(INT, @c_AdjustmentKey) + KeyNo),10)
+
+      SET @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SET @n_continue = 3
+         SET @n_err = 60060
+         SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Update #TMP_ADJDET Table. (ispASNFZ11)'
+                        + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
          GOTO QUIT_SP
       END
       --STEP 1
       --SELECT 'STEP 1 ADJ',* from #TMP_ADJ
       --SELECT 'STEP 1 ADJDET',* from #TMP_ADJDET
       --GOTO QUIT_SP
-      
+
       DECLARE CUR_ADJ CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT Adjustmentkey
-      FROM   #TMP_ADJ  
+      FROM   #TMP_ADJ
       ORDER BY Adjustmentkey
 
       OPEN CUR_ADJ
-   
+
       FETCH NEXT FROM CUR_ADJ INTO @c_Adjustmentkey
       WHILE @@FETCH_STATUS <> -1
       BEGIN
@@ -845,13 +881,15 @@ BEGIN
             ,  StorerKey
             ,  Facility
             ,  UserDefine01
+            ,  Userdefine02                  --CS04
             )
-         SELECT 
+         SELECT
                Adjustmentkey
             ,  AdjustmentType
             ,  Storerkey
             ,  Facility
             ,  UserDefine01
+            ,  UserDefine02                  --CS04
          FROM #TMP_ADJ
          WHERE Adjustmentkey = @c_Adjustmentkey
 
@@ -859,9 +897,9 @@ BEGIN
          IF @n_err <> 0
          BEGIN
             SET @n_continue = 3
-            SET @n_err = 60070  
-            SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert into ADJUSTMENT Table. (ispASNFZ11)' 
-                           + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+            SET @n_err = 60070
+            SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert into ADJUSTMENT Table. (ispASNFZ11)'
+                           + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
             GOTO QUIT_SP
          END
 
@@ -880,22 +918,23 @@ BEGIN
             ,  Lottable05
             ,  Channel
             ,  Lottable07            --CS02
-            ,  Lottable08            --CS02 
-            ,  Lottable01            --CS02 
+            ,  Lottable08            --CS02
+            ,  Lottable01            --CS02
             ,  Lottable02            --CS02
-            ,  Lottable03            --CS02 
-            ,  Lottable04            --CS02 
+            ,  Lottable03            --CS02
+            ,  Lottable04            --CS02
             ,  Lottable06            --CS02
-            ,  Lottable09            --CS02 
+            ,  Lottable09            --CS02
             ,  Lottable10            --CS02
-            ,  Lottable11            --CS02 
+            ,  Lottable11            --CS02
             ,  Lottable12            --CS02
-            ,  Lottable13            --CS02 
+            ,  Lottable13            --CS02
             ,  Lottable14            --CS02
-            ,  Lottable15            --CS02 
+            ,  Lottable15            --CS02
             ,  UCCNo                 --CS02
+            ,  UserDefine03          --CS04b
             )
-         SELECT  
+         SELECT
                AdjustmentKey
             ,  AdjustmentLineNumber
             ,  StorerKey
@@ -910,49 +949,50 @@ BEGIN
             ,  Lottable05
             ,  channel
             ,  Lottable07            --CS02
-            ,  Lottable08            --CS02 
-            ,  Lottable01            --CS02 
+            ,  Lottable08            --CS02
+            ,  Lottable01            --CS02
             ,  Lottable02            --CS02
-            ,  Lottable03            --CS02 
-            ,  Lottable04            --CS02 
+            ,  Lottable03            --CS02
+            ,  Lottable04            --CS02
             ,  Lottable06            --CS02
-            ,  Lottable09            --CS02 
+            ,  Lottable09            --CS02
             ,  Lottable10            --CS02
-            ,  Lottable11            --CS02 
+            ,  Lottable11            --CS02
             ,  Lottable12            --CS02
-            ,  Lottable13            --CS02 
+            ,  Lottable13            --CS02
             ,  Lottable14            --CS02
             ,  Lottable15            --CS02
             ,  UccNo                 --CS02
+            , Userdefine03           --CS04b
          FROM #TMP_ADJDET
-         WHERE Adjustmentkey = @c_Adjustmentkey  
-         ORDER BY AdjustmentLineNumber       
-          
+         WHERE Adjustmentkey = @c_Adjustmentkey
+         ORDER BY AdjustmentLineNumber
+
          SET @n_err = @@ERROR
          IF @n_err <> 0
          BEGIN
             SET @n_continue = 3
-            SET @n_err = 60080  
-            SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert into ADJUSTMENTDETAIL Table. (ispASNFZ11)' 
-                           + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+            SET @n_err = 60080
+            SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert into ADJUSTMENTDETAIL Table. (ispASNFZ11)'
+                           + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
             GOTO QUIT_SP
          END
 
          FETCH NEXT FROM CUR_ADJ INTO @c_Adjustmentkey
-      END 
+      END
       CLOSE CUR_ADJ
       DEALLOCATE CUR_ADJ
    END
 
-   WHILE @@TRANCOUNT > 0 
+   WHILE @@TRANCOUNT > 0
    BEGIN
       COMMIT TRAN
-   END  
+   END
 
    --STEP 2
    --CS02 START
 
-  
+
 --select 'STEP 1 ' , @c_ASNReason '@c_ASNReason'
   --select * from #TMP_ADJ
   --select * from #TMP_ADJDET
@@ -960,9 +1000,9 @@ BEGIN
   --GOTO QUIT_SP
   IF @c_ASNReason = 'TRF'
   BEGIN
-   
+
    --SELECT 'START STEP 2'
- 
+
    SET @c_Lot01 = ''
    SET @c_Lot02 = ''
    SET @c_Lot03 = ''
@@ -978,11 +1018,11 @@ BEGIN
    SET @d_Lot13 = NULL
    SET @d_Lot14 = NULL
    SET @d_Lot15 = NULL
-  
-  BEGIN TRAN 
 
-  SET @n_KeyNo = 1 
-  SET @c_AdjustmentType = 'TRF' 
+  BEGIN TRAN
+
+  SET @n_KeyNo = 1
+  SET @c_AdjustmentType = 'TRF'
 
    INSERT INTO #TMP_ADJ
                (  KeyNo
@@ -991,33 +1031,35 @@ BEGIN
                ,  Facility
                ,  UserDefine01
                ,  ASNReason                       --(CS02)
+               ,  UserDefine02                    --(CS04)
                )
-               VALUES 
+               VALUES
                (  @n_KeyNo
                ,  @c_AdjustmentType              --(CS02)
                ,  @c_Storerkey
                ,  @c_Facility
                ,  @c_ReceiptKey
                ,  @c_ASNReason                   --(CS02)
+               ,  @c_ExtReckey                   --(CS04) 
                )
                SET @n_err = @@ERROR
                IF @n_err <> 0
                BEGIN
                   SET @n_continue = 3
-                  SET @n_err = 60020  
-                  SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert into #TMP_ADJ Table. (ispASNFZ11 Step 2)' 
-                                 + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+                  SET @n_err = 60020
+                  SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert into #TMP_ADJ Table. (ispASNFZ11 Step 2)'
+                                 + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
                   GOTO QUIT_SP
-               END 
+               END
 
-   
+
    DECLARE CUR_RECDET CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    SELECT KeyLineNo = ROW_NUMBER() OVER (PARTITION BY RECEIPTDETAIL.ReceiptKey
-                                        --, CASE WHEN RECEIPTDETAIL.QtyExpected <> RECEIPTDETAIL.QtyReceived THEN 0 
+                                        --, CASE WHEN RECEIPTDETAIL.QtyExpected <> RECEIPTDETAIL.QtyReceived THEN 0
                                         -- -- WHEN RECEIPTDETAIL.QtyExpected < RECEIPTDETAIL.QtyReceived THEN 5
-                                        --  ELSE 9 END 
+                                        --  ELSE 9 END
                                           ORDER BY ReceiptLineNumber )
-                                          --CASE WHEN RECEIPTDETAIL.QtyExpected <> RECEIPTDETAIL.QtyReceived THEN 0 
+                                          --CASE WHEN RECEIPTDETAIL.QtyExpected <> RECEIPTDETAIL.QtyReceived THEN 0
                                           --  --   WHEN RECEIPTDETAIL.QtyExpected < RECEIPTDETAIL.QtyReceived THEN 5
                                           --     ELSE 9 END)
          ,RECEIPTDETAIL.Sku
@@ -1028,17 +1070,18 @@ BEGIN
          ,RECEIPTDETAIL.ToId
          ,RECEIPTDETAIL.ReceiptLineNumber
          ,RECEIPTDETAIL.Toloc
-         ,RECEIPTDETAIL.Userdefine01           
-   FROM   RECEIPTDETAIL WITH (NOLOCK)  
+         ,RECEIPTDETAIL.Userdefine01
+         ,RECEIPTDETAIL.Userdefine03                             --CS04b
+   FROM   RECEIPTDETAIL WITH (NOLOCK)
    WHERE  RECEIPTDETAIL.ReceiptKey = @c_ReceiptKey
    AND RECEIPTDETAIL.QtyReceived > 0 --AND (RECEIPTDETAIL.QtyExpected <> RECEIPTDETAIL.QtyReceived)
    ORDER BY RECEIPTDETAIL.ReceiptLineNumber
-   --ORDER BY CASE WHEN RECEIPTDETAIL.QtyExpected > RECEIPTDETAIL.QtyReceived THEN 0 
+   --ORDER BY CASE WHEN RECEIPTDETAIL.QtyExpected > RECEIPTDETAIL.QtyReceived THEN 0
    --              WHEN RECEIPTDETAIL.QtyExpected < RECEIPTDETAIL.QtyReceived THEN 5
    --              ELSE 9 END
 
    OPEN CUR_RECDET
-   
+
    FETCH NEXT FROM CUR_RECDET INTO  @n_KeyLineNo
                                  ,  @c_Sku
                                  ,  @c_Packkey
@@ -1046,14 +1089,15 @@ BEGIN
                                  ,  @n_QtyExpected
                                  ,  @n_QtyReceived
                                  ,  @c_toid
-                                 ,  @c_RDLineNo 
+                                 ,  @c_RDLineNo
                                  ,  @c_toloc
-                                 ,  @c_RDUDF01   
-                                  
+                                 ,  @c_RDUDF01
+                                 ,  @c_RDUDF03              --CS04b
+
 
    WHILE @@FETCH_STATUS <> -1
    BEGIN
-        
+
       --SET @n_QtyVariance = 0
       --IF @n_QtyExpected > @n_QtyReceived
       --BEGIN
@@ -1061,7 +1105,7 @@ BEGIN
       --   SET @c_AdjustmentType= @c_AdjustmentType1
       --   --SET @c_ReasonCode = @c_ShortReasonCode
       --END
-      --ELSE 
+      --ELSE
       --BEGIN
       --   SET @n_QtyVariance = @n_QtyReceived - @n_QtyExpected
       --   SET @c_AdjustmentType= @c_AdjustmentType2
@@ -1118,13 +1162,13 @@ BEGIN
        FROM RECEIPTDETAIL RECEIPTDETAIL WITH (NOLOCK)
        WHERE RECEIPTDETAIL.Receiptkey = @c_ReceiptKey
        AND  RECEIPTDETAIL.SKU=@c_Sku
-      END 
+      END
 
       --SET @n_Cnt = 1
-      --IF @n_QtyVariance > 0 
+      --IF @n_QtyVariance > 0
       --BEGIN
       --   WHILE @n_Cnt <= 2
-      --   BEGIN 
+      --   BEGIN
       --      IF @n_KeyLineNo = 1
       --      BEGIN
       --         SET @n_KeyNo = @n_KeyNo + 1
@@ -1135,14 +1179,14 @@ BEGIN
       --         END
       --         ELSE
       --         BEGIN
-      --            SET @n_KeyNo2 = @n_KeyNo 
-      --            SET @c_AdjustmentType = CASE WHEN @c_AdjustmentType = @c_AdjustmentType1 THEN @c_AdjustmentType2 
-      --                                         WHEN @c_AdjustmentType = @c_AdjustmentType2 THEN @c_AdjustmentType1 
+      --            SET @n_KeyNo2 = @n_KeyNo
+      --            SET @c_AdjustmentType = CASE WHEN @c_AdjustmentType = @c_AdjustmentType1 THEN @c_AdjustmentType2
+      --                                         WHEN @c_AdjustmentType = @c_AdjustmentType2 THEN @c_AdjustmentType1
       --                                         END
               ----SET @c_AdjustmentType = @c_AdjustmentType1
       --         END
 
-              
+
 
 
         --    END
@@ -1155,7 +1199,7 @@ BEGIN
             --BEGIN
             --   SET @n_KeyNo = @n_KeyNo2
             --   SET @n_QtyVariance = @n_QtyVariance * - 1
-            --END 
+            --END
 
             SET @c_AdjustmentLineNumber = RIGHT('00000' + CONVERT (NVARCHAR(5), @n_KeyLineNo),5)
 
@@ -1189,8 +1233,9 @@ BEGIN
                ,  Lottable14
                ,  Lottable15
                ,  UCCNo
+               ,  Userdefine03                  --CS04a
                )
-            VALUES 
+            VALUES
                (  @n_KeyNo
                ,  @c_AdjustmentLineNumber
                ,  @c_StorerKey
@@ -1221,15 +1266,16 @@ BEGIN
                ,  ISNULL(@d_Lot14,'')
                ,  ISNULL(@d_Lot15,'')
                ,  @c_RDUDF01
+               ,  @c_RDUDF03                         --CS04b
                )
-                 
+
             SET @n_err = @@ERROR
             IF @n_err <> 0
             BEGIN
                SET @n_continue = 3
-               SET @n_err = 60030  
-               SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert into #TMP_ADJDET Table. (ispASNFZ11 Step 2)' 
-                              + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+               SET @n_err = 60030
+               SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert into #TMP_ADJDET Table. (ispASNFZ11 Step 2)'
+                              + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
                GOTO QUIT_SP
             END
 
@@ -1242,16 +1288,17 @@ BEGIN
                                     ,  @c_Packkey
                                     ,  @c_UOM
                                     ,  @n_QtyExpected
-                                    ,  @n_QtyReceived 
+                                    ,  @n_QtyReceived
                                     ,  @c_Toid
                                     ,  @c_RDLineNo
                                     ,  @c_toloc
                                     ,  @c_RDUDF01
+                                    ,  @c_RDUDF03              --CS04b
    END
    CLOSE CUR_RECDET
-   DEALLOCATE CUR_RECDET    
+   DEALLOCATE CUR_RECDET
 
-  -- select 'adjdet',* from #TMP_ADJDET  
+  -- select 'adjdet',* from #TMP_ADJDET
 
      --SELECT 'STEP 2 ADJ',* from #TMP_ADJ
      --SELECT 'STEP 2 ADJDET',* from #TMP_ADJDET
@@ -1260,13 +1307,13 @@ BEGIN
    SET @n_batch = 0
    SELECT @n_batch = COUNT(1)
    FROM #TMP_ADJ
-   WHERE ASNReason = 'TRF' 
+   WHERE ASNReason = 'TRF'
    AND AdjustmentType = 'TRF'
 
    IF @n_batch > 0
    BEGIN
       SET @c_AdjustmentKeys = ''
-      EXECUTE nspg_GetKey 
+      EXECUTE nspg_GetKey
               @KeyName     = 'ADJUSTMENT'
             , @fieldlength = 10
             , @keystring   = @c_AdjustmentKey   OUTPUT
@@ -1275,17 +1322,17 @@ BEGIN
             , @c_errmsg    = @c_errmsg          OUTPUT
             , @b_resultset = 0
             , @n_batch     = @n_Batch
-   
+
       IF @b_success <> 1
       BEGIN
-         SET @n_continue = 3                                                                                              
-         SET @n_err = 60040                                                                                               
-         SET @c_errmsg='NSQL'+ CONVERT(CHAR(5),@n_err)+': Error Executing nspg_GetKey. (ispASNFZ11 Step 2)' 
-                        + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ).'                                  
-         GOTO QUIT_SP        
+         SET @n_continue = 3
+         SET @n_err = 60040
+         SET @c_errmsg='NSQL'+ CONVERT(CHAR(5),@n_err)+': Error Executing nspg_GetKey. (ispASNFZ11 Step 2)'
+                        + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ).'
+         GOTO QUIT_SP
       END
 
-      UPDATE #TMP_ADJ 
+      UPDATE #TMP_ADJ
          SET AdjustmentKey = RIGHT('0000000000' + CONVERT(NVARCHAR(10), CONVERT(INT, @c_AdjustmentKey) + KeyNo),10)
       WHERE AdjustmentType ='TRF' AND ASNReason = 'TRF'
 
@@ -1293,39 +1340,39 @@ BEGIN
       IF @n_err <> 0
       BEGIN
          SET @n_continue = 3
-         SET @n_err = 60050  
-         SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Update ##TMP_ADJ Table. (ispASNFZ11 Step 2)' 
-                        + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+         SET @n_err = 60050
+         SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Update ##TMP_ADJ Table. (ispASNFZ11 Step 2)'
+                        + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
          GOTO QUIT_SP
       END
 
-      UPDATE #TMP_ADJDET 
+      UPDATE #TMP_ADJDET
          SET AdjustmentKey = RIGHT('0000000000' + CONVERT(NVARCHAR(10), CONVERT(INT, @c_AdjustmentKey) + KeyNo),10)
-      WHERE Channel = 'B2C' 
+      WHERE Channel = 'B2C'
 
       SET @n_err = @@ERROR
       IF @n_err <> 0
       BEGIN
          SET @n_continue = 3
-         SET @n_err = 60060  
-         SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Update #TMP_ADJDET Table. (ispASNFZ11  Step 2)' 
-                        + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+         SET @n_err = 60060
+         SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Update #TMP_ADJDET Table. (ispASNFZ11  Step 2)'
+                        + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
          GOTO QUIT_SP
       END
-     
+
      --SELECT 'STEP 2 Update ADJ',* from #TMP_ADJ
-     --SELECT 'STEP 2 Update ADJDET',* from #TMP_ADJDET 
+     --SELECT 'STEP 2 Update ADJDET',* from #TMP_ADJDET
      --GOTO QUIT_SP
-     
+
       DECLARE CUR_ADJ CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT Adjustmentkey
-      FROM   #TMP_ADJ  
+      FROM   #TMP_ADJ
       WHERE ASNReason = 'TRF'
       AND AdjustmentType = 'TRF'
       ORDER BY Adjustmentkey
 
       OPEN CUR_ADJ
-   
+
       FETCH NEXT FROM CUR_ADJ INTO @c_Adjustmentkey
       WHILE @@FETCH_STATUS <> -1
       BEGIN
@@ -1337,7 +1384,7 @@ BEGIN
             ,  UserDefine01
             ,  Userdefine02
             )
-         SELECT 
+         SELECT
                Adjustmentkey
             ,  AdjustmentType
             ,  Storerkey
@@ -1351,9 +1398,9 @@ BEGIN
          IF @n_err <> 0
          BEGIN
             SET @n_continue = 3
-            SET @n_err = 60070  
-            SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert into ADJUSTMENT Table. (ispASNFZ11  Step 2)' 
-                           + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+            SET @n_err = 60070
+            SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert into ADJUSTMENT Table. (ispASNFZ11  Step 2)'
+                           + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
             GOTO QUIT_SP
          END
 
@@ -1387,8 +1434,9 @@ BEGIN
             ,  Lottable14
             ,  Lottable15
             ,  UccNo
+            ,  UserDefine03                       --CS04b
             )
-         SELECT  
+         SELECT
                AdjustmentKey
             ,  AdjustmentLineNumber
             ,  StorerKey
@@ -1417,61 +1465,62 @@ BEGIN
             ,  Lottable13
             ,  Lottable14
             ,  Lottable15
-            ,  UccNo 
+            ,  UccNo
+            ,  Userdefine03                              --CS04b
          FROM #TMP_ADJDET
-         WHERE Adjustmentkey = @c_Adjustmentkey  
-         ORDER BY AdjustmentLineNumber       
-                 
+         WHERE Adjustmentkey = @c_Adjustmentkey
+         ORDER BY AdjustmentLineNumber
+
          SET @n_err = @@ERROR
          IF @n_err <> 0
          BEGIN
             SET @n_continue = 3
-            SET @n_err = 60080  
-            SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert into ADJUSTMENTDETAIL Table. (ispASNFZ11 Step 2)' 
-                           + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+            SET @n_err = 60080
+            SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert into ADJUSTMENTDETAIL Table. (ispASNFZ11 Step 2)'
+                           + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
             GOTO QUIT_SP
          END
 
          FETCH NEXT FROM CUR_ADJ INTO @c_Adjustmentkey
-      END 
+      END
       CLOSE CUR_ADJ
       DEALLOCATE CUR_ADJ
    END
 
-   WHILE @@TRANCOUNT > 0 
+   WHILE @@TRANCOUNT > 0
    BEGIN
       COMMIT TRAN
-   END 
+   END
 
   END
 
-   --CS02 END      
+   --CS02 END
   --select * from #TMP_ADJDET
 
    DECLARE CUR_ADJ CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    SELECT Adjustmentkey
-   FROM   #TMP_ADJ  
+   FROM   #TMP_ADJ
    ORDER BY Adjustmentkey
 
    OPEN CUR_ADJ
-   
+
    FETCH NEXT FROM CUR_ADJ INTO @c_Adjustmentkey
    WHILE @@FETCH_STATUS <> -1
    BEGIN
       EXECUTE isp_FinalizeADJ
                @c_ADJKey   = @c_AdjustmentKey
-            ,  @b_Success  = @b_Success OUTPUT 
-            ,  @n_err      = @n_err     OUTPUT 
-            ,  @c_errmsg   = @c_errmsg  OUTPUT   
+            ,  @b_Success  = @b_Success OUTPUT
+            ,  @n_err      = @n_err     OUTPUT
+            ,  @c_errmsg   = @c_errmsg  OUTPUT
 
-      IF @n_err <> 0  
-      BEGIN 
-         SET @n_continue= 3 
+      IF @n_err <> 0
+      BEGIN
+         SET @n_continue= 3
          SET @n_err  = 60090
          SET @c_errmsg = 'NSQL'+ CONVERT(CHAR(5),@n_err)+': Execute isp_FinalizeADJ Failed. (ispASNFZ11)'
-         GOTO QUIT_SP 
+         GOTO QUIT_SP
       END
-      
+
       SET @n_Cnt = 0
 
       SELECT @n_Cnt = 1
@@ -1480,29 +1529,29 @@ BEGIN
       AND FinalizedFlag <> 'Y'
 
       --IF @n_Cnt = 0
-      --BEGIN          
+      --BEGIN
       --   UPDATE ADJUSTMENT WITH (ROWLOCK)
       --   SET FinalizedFlag = 'Y'
       --   WHERE AdjustmentKey = @c_AdjustmentKey
 
 
-      --   IF @n_err <> 0  
-      --   BEGIN 
-      --      SET @n_continue= 3 
+      --   IF @n_err <> 0
+      --   BEGIN
+      --      SET @n_continue= 3
       --      SET @n_err  = 60090
       --      SET @c_errmsg = 'NSQL'+ CONVERT(CHAR(5),@n_err)+': Execute isp_FinalizeADJ Failed. (ispASNFZ11)'
-      --      GOTO QUIT_SP 
+      --      GOTO QUIT_SP
       --   END
       --END
 
       FETCH NEXT FROM CUR_ADJ INTO @c_Adjustmentkey
-   END 
+   END
    CLOSE CUR_ADJ
    DEALLOCATE CUR_ADJ
-   --CS01 End                 
+   --CS01 End
    QUIT_SP:
 
-   IF CURSOR_STATUS( 'LOCAL', 'CUR_RECDET') in (0 , 1)  
+   IF CURSOR_STATUS( 'LOCAL', 'CUR_RECDET') in (0 , 1)
    BEGIN
       CLOSE CUR_RECDET
       DEALLOCATE CUR_RECDET
@@ -1539,10 +1588,9 @@ BEGIN
    WHILE @@TRANCOUNT < @n_StartTCnt
    BEGIN
       BEGIN TRAN
-   END 
-    
+   END
+
 END
 GO
-
-GRANT EXECUTE ON [dbo].[ispASNFZ11] TO nSQL 
+GRANT EXECUTE ON  [dbo].[ispASNFZ11] TO [NSQL]
 GO

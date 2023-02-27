@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: Wave                                                      */
 /*                                                                      */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
 /* 12-Apr-2022  WLChooi  1.0  DevOps Combine Script                     */
+/* 23-Feb-2023  WLChooi  1.1  WMS-19079 - Fix FP/PP Calculation (WL01)  */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV50]
@@ -284,23 +285,6 @@ BEGIN
                            ELSE 'Onsite' END
       FROM CODELKUP CL (NOLOCK)
       WHERE CL.LISTNAME = 'NKEPKTSK' AND CL.Storerkey = @c_Storerkey AND CL.Short = 'Y'
-
-      --INSERT INTO #TMP_CODELKUP (Pickzone, SKUGroup, PEMaxQty, LocQty, Site)
-      --SELECT 'DP01','FOOTWEAR','10','1',''
-      --UNION ALL
-      --SELECT 'ZONEA','APPAREL','10','1',''
-      --UNION ALL
-      --SELECT 'FP01','FOOTWEAR','10','1',''
-      --UNION ALL
-      --SELECT '          ','FOOTWEAR','10','1',''
-
-      --EXECUTE dbo.nspg_GetKey
-      --   @c_KeyName,
-      --   10,
-      --   @c_SeqNo       OUTPUT,
-      --   @b_Success     OUTPUT,
-      --   @n_err         OUTPUT,
-      --   @c_errmsg      OUTPUT
    END
 
    --WHILE @@TRANCOUNT > 0 
@@ -595,6 +579,26 @@ BEGIN
       --IF @@TRANCOUNT = 0
       --   BEGIN TRAN
 
+      --WL01 S
+      SELECT TOP 1 @c_ToLoc = LOC.Loc
+      FROM LOC (NOLOCK)
+      WHERE LOC.LocationRoom = 'PACKSTATION' 
+      AND LOC.LocationFlag = 'NONE'
+      AND LOC.Facility = @c_Facility
+      GROUP BY LOC.Loc
+
+      IF ISNULL(@c_ToLoc, '') = ''
+      BEGIN
+         SELECT @n_Continue = 3
+         SELECT @c_errmsg = CONVERT(NVARCHAR(250), @n_err)
+              , @n_err = 87010 -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+         SELECT @c_errmsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_err) + ': ' + ' PACKSTATION not found for Facility: '
+                            + @c_Facility + '. (ispRLWAV50)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg)
+                            + ' ) '
+         GOTO RETURN_SP
+      END
+      --WL01 E
+
       DECLARE CUR_NEWRPF CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT PDW.Storerkey
            , PDW.Lot
@@ -667,10 +671,28 @@ BEGIN
             AND LLI.ID = @c_ID
 
             --Available qty > 0, not fully allocated
+            --WL01 S
             IF @n_AvailableQty > 0
+            BEGIN
                SET @c_Pickmethod = 'PP'
+            END
             ELSE
-               SET @c_Pickmethod = 'FP'
+            BEGIN
+               IF EXISTS (SELECT 1
+                          FROM #PickDetail_WIP PDW (NOLOCK)
+                          WHERE PDW.WaveKey = @c_Wavekey
+                          AND PDW.UOM = '2'
+                          AND PDW.ID = @c_ID
+                          HAVING COUNT(DISTINCT PDW.Pickmethod) > 1)
+               BEGIN
+                  SET @c_Pickmethod = 'PP'
+               END
+               ELSE
+               BEGIN
+                  SET @c_Pickmethod = 'FP'
+               END
+            END
+            --WL01 E
 
             --SELECT @n_Casecnt = SUM(U.Qty)
             --FROM UCC U (NOLOCK)
@@ -687,20 +709,22 @@ BEGIN
             --END
          END
 
-         SELECT @c_ToLoc = LOC.Loc
-         FROM LOC (NOLOCK)
-         WHERE LOC.LocationRoom = 'PACKSTATION' AND LOC.Facility = @c_Facility
-
-         IF ISNULL(@c_ToLoc, '') = ''
-         BEGIN
-            SELECT @n_Continue = 3
-            SELECT @c_errmsg = CONVERT(NVARCHAR(250), @n_err)
-                 , @n_err = 87010 -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
-            SELECT @c_errmsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_err) + ': ' + ' PACKSTATION not found for Facility: '
-                               + @c_Facility + '. (ispRLWAV50)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg)
-                               + ' ) '
-            GOTO RETURN_SP
-         END
+         --WL01 S
+         --SELECT @c_ToLoc = LOC.Loc
+         --FROM LOC (NOLOCK)
+         --WHERE LOC.LocationRoom = 'PACKSTATION' AND LOC.Facility = @c_Facility
+         
+         --IF ISNULL(@c_ToLoc, '') = ''
+         --BEGIN
+         --   SELECT @n_Continue = 3
+         --   SELECT @c_errmsg = CONVERT(NVARCHAR(250), @n_err)
+         --        , @n_err = 87010 -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+         --   SELECT @c_errmsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_err) + ': ' + ' PACKSTATION not found for Facility: '
+         --                      + @c_Facility + '. (ispRLWAV50)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg)
+         --                      + ' ) '
+         --   GOTO RETURN_SP
+         --END
+         --WL01 E
 
          --function to insert taskdetail  
          SELECT @b_Success = 1
@@ -1009,10 +1033,28 @@ BEGIN
             AND LLI.ID = @c_ID
 
             --Available qty > 0, not fully allocated
+            --WL01 S
             IF @n_AvailableQty > 0
+            BEGIN
                SET @c_Pickmethod = 'PP'
+            END
             ELSE
-               SET @c_Pickmethod = 'FP'
+            BEGIN
+               IF EXISTS (SELECT 1
+                          FROM #PickDetail_WIP PDW (NOLOCK)
+                          WHERE PDW.WaveKey = @c_Wavekey
+                          AND PDW.UOM = '2'
+                          AND PDW.ID = @c_ID
+                          HAVING COUNT(DISTINCT PDW.Pickmethod) > 1)
+               BEGIN
+                  SET @c_Pickmethod = 'PP'
+               END
+               ELSE
+               BEGIN
+                  SET @c_Pickmethod = 'FP'
+               END
+            END
+            --WL01 E
 
             --SELECT @n_Casecnt = SUM(U.Qty)
             --FROM UCC U (NOLOCK)
