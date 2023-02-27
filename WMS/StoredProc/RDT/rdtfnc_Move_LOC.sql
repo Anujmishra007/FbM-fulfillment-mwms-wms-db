@@ -38,6 +38,7 @@ GO
 /* 2019-09-11 2.8  YeeKung  WMS10516 Set focusfield  (yeekung01)        */
 /* 2021-01-04 2.9  Chermaine WMS-15903 add LOCLookupSP config (cc01)    */
 /* 2022-12-13 3.0  YeeKung   JSM-116802 Add func for rdt_move (yeekung02)*/
+/* 2023-02-22 3.1  YeeKung   WMS-21820 Add rdtformat toid (yeekung03)   */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Move_LOC] (
@@ -480,7 +481,7 @@ BEGIN
             CASE @cPUOM
                WHEN '2' THEN Pack.PackUOM1 -- Case
                WHEN '3' THEN Pack.PackUOM2 -- Inner pack
-  WHEN '6' THEN Pack.PackUOM3 -- Master unit
+               WHEN '6' THEN Pack.PackUOM3 -- Master unit
                WHEN '1' THEN Pack.PackUOM4 -- Pallet
                WHEN '4' THEN Pack.PackUOM8 -- Other unit 1
                WHEN '5' THEN Pack.PackUOM9 -- Other unit 2
@@ -789,12 +790,12 @@ BEGIN
       -- add loc prefix (cc01)
      IF @cLOCLookupSP = 1   and @nCounter<1
      BEGIN
-      EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
-      @cToLOC        OUTPUT,
-      @nErrNo     OUTPUT,
-      @cErrMsg    OUTPUT
-      IF @nErrNo <> 0
-       GOTO Step_2_Fail
+         EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+            @cToLOC        OUTPUT,
+            @nErrNo     OUTPUT,
+            @cErrMsg    OUTPUT
+         IF @nErrNo <> 0
+            GOTO Step_2_Fail
      END
 
       -- Get LOC info
@@ -829,6 +830,14 @@ BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 12 -- ID
          GOTO Quit
       END
+
+      -- Check DropID format        
+      IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'TOID', @cToID) = 0        --(yeekung03)
+      BEGIN        
+         SET @nErrNo = 62564        
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format        
+         GOTO Quit       
+      END    
 
      -- (Vicky01) - Start
      IF ISNULL(RTRIM(@cToID), '') <> ''

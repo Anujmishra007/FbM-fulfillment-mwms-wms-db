@@ -22,3 +22,6 @@ execute rdt.rdtAddMsg 62561, 10, '62561^LOC INV STORER', 'us_english'
 -- SOS348153
 execute rdt.rdtAddMsg 62562, 10, '62562^NotInStorerGrp', 'us_english'
 execute rdt.rdtAddMsg 62563, 10, '62563^NotInStorerGrp', 'us_english'
+
+-- WMS-21820
+execute rdt.rdtAddMsg 62564, 10, '62564^InvalidFormat ', 'us_english'
