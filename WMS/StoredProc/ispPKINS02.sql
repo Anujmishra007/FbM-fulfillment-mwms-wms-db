@@ -20,6 +20,7 @@ GO
 /*                             order pack                               */
 /* 19-Sep-2022 1.1  NJOW02     WMS-20807 prompt alert for DG product    */
 /* 19-Sep-2022 1.1  NJOW02     DEVOPS Combine Script                    */
+/* 05-Jan-2023 1.2  NJOW03     WMS-21380 Suggest carton type for ecom   */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE ispPKINS02
@@ -37,9 +38,18 @@ BEGIN
    SET ANSI_NULLS OFF   
    SET CONCAT_NULL_YIELDS_NULL OFF
    
-   DECLARE @c_countryname  NVARCHAR(50),
-           @c_ProductModel NVARCHAR(30),
-           @c_OrderGroup   NVARCHAR(20)
+   DECLARE @c_countryname    NVARCHAR(50),
+           @c_ProductModel   NVARCHAR(30),
+           @c_OrderGroup     NVARCHAR(20)
+   
+   --NJOW03        
+   DECLARE @c_Orderkey           NVARCHAR(10), 
+           @n_SumOrdQty          INT = 0,       
+           @c_Division           NVARCHAR(30),
+           @c_Gender             NVARCHAR(30),
+           @c_Size               NVARCHAR(10),
+           @c_CartonType         NVARCHAR(10) = '',
+           @c_CartonGroup        NVARCHAR(10) = ''
                                  
    SELECT @b_Success = 1, @n_ErrNo = 0, @c_ErrMsg = '', @c_PackInstruction = ''
         
@@ -53,7 +63,107 @@ BEGIN
    	  
    	  IF ISNULL(@c_countryname,'') <> ''
    	     SET @c_PackInstruction = 'Country: ' + @c_countryname
-   	  
+   	     
+   	  --NJOW03 S
+   	  SELECT @c_OrderGroup = O.OrderGroup,
+   	         @c_Orderkey = O.Orderkey,
+   	         @c_CartonGroup = STORER.CartonGroup,
+   	         @n_SumOrdQty = SUM(OD.OpenQty)
+   	  FROM PICKHEADER PH (NOLOCK)
+   	  JOIN ORDERS O (NOLOCK) ON PH.Orderkey = O.Orderkey
+   	  JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey
+   	  JOIN STORER (NOLOCK) ON O.Storerkey = STORER.Storerkey
+   	  WHERE PH.Pickheaderkey = @c_Pickslipno   
+   	  GROUP BY O.OrderGroup,
+   	           O.Orderkey,
+   	           STORER.CartonGroup
+   	     	     	  
+   	  IF @c_OrderGroup IN('SINGLE','MULTI')  --ECOM Order
+   	  BEGIN
+   	     SELECT SKU.Busr7 AS Division,  --10=Apparel(AP) 20=Footwear(FW) 30=Equipment(EQ)
+   	            SUBSTRING(SKU.Sku, 10, LEN(SKU.Sku)-9) AS Size,
+   	            ISNULL(CL.Short,'') AS Gender, --MENS, WOMEN, KIDS
+   	            SUM(OD.OpenQty) AS Qty
+   	     INTO #TMP_SKUREF
+   	     FROM ORDERDETAIL OD (NOLOCK)
+   	     JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku
+   	     LEFT JOIN CODELKUP CL (NOLOCK) ON CL.Storerkey = SKU.Storerkey AND CL.Listname = 'NGENDERAGE' AND CL.Code = SKU.Busr4
+   	     WHERE OD.Orderkey = @c_Orderkey
+   	     GROUP BY SKU.Busr7,                             
+                  SUBSTRING(SKU.Sku, 10, LEN(SKU.Sku)-9),   
+                  ISNULL(CL.Short,'')
+   	  	
+   	  	 IF @n_SumOrdQty = 1
+   	  	 BEGIN
+   	  	 	  IF EXISTS(SELECT 1 FROM #TMP_SKUREF WHERE Division = '20') --FW
+   	  	 	  BEGIN
+   	  	 	     SELECT TOP 1 @c_CartonType = CL.UDF01
+   	  	 	     FROM #TMP_SKUREF SR 
+   	  	 	     JOIN CODELKUP CL (NOLOCK) ON CL.Code = SR.Division AND CL.Short = SR.Size AND CL.Long = SR.Gender AND CL.ListName = 'NPACKAGING' AND CL.Storerkey = @c_Storerkey
+   	  	 	  END
+   	  	 	  ELSE --AP or EQ
+   	  	 	     SET @c_CartonType = 'APME305'   	  	 	    	  	 	  
+   	  	 END
+   	  	 
+   	  	 IF @n_SumOrdQty = 2
+   	  	 BEGIN
+   	  	 	  IF EXISTS(SELECT 1 FROM #TMP_SKUREF WHERE Division = '20' HAVING SUM(Qty) = 2) -- 2FW
+   	  	 	  BEGIN
+   	  	 	     SELECT TOP 1 @c_CartonType = CL.UDF02
+   	  	 	     FROM #TMP_SKUREF SR 
+   	  	 	     JOIN CODELKUP CL (NOLOCK) ON CL.Code = SR.Division AND CL.Short = SR.Size AND CL.Long = SR.Gender AND CL.ListName = 'NPACKAGING' AND CL.Storerkey = @c_Storerkey   	  
+   	  	 	     JOIN CARTONIZATION CZ (NOLOCK) ON CZ.CartonizationGroup = @c_CartonGroup AND CZ.CartonType = CL.UDF02
+   	  	 	     ORDER BY (CZ.CartonLength * CZ.CartonWidth * CZ.CartonHeight) DESC
+   	  	    END
+
+   	  	 	  IF EXISTS(SELECT 1 FROM #TMP_SKUREF WHERE Division = '20' HAVING SUM(Qty) = 1) -- 1FW+1AP or 1FW+1EQ
+   	  	 	  BEGIN
+   	  	 	     SELECT TOP 1 @c_CartonType = CL.UDF03
+   	  	 	     FROM #TMP_SKUREF SR 
+   	  	 	     JOIN CODELKUP CL (NOLOCK) ON CL.Code = SR.Division AND CL.Short = SR.Size AND CL.Long = SR.Gender AND CL.ListName = 'NPACKAGING' AND CL.Storerkey = @c_Storerkey
+   	  	 	     WHERE SR.Division = '20' --Get from FW
+   	  	    END
+   	  	    
+   	  	    IF NOT EXISTS(SELECT 1 FROM #TMP_SKUREF WHERE Division = '20') --1AP+1EQ or 1AP+1AP or 1EQ+1EQ
+   	  	       SET @c_CartonType = 'APME305'    	  	        
+   	  	 END
+   	  	 
+   	  	 IF @n_SumOrdQty >= 3
+   	  	 BEGIN
+   	  	    IF EXISTS(SELECT 1 FROM #TMP_SKUREF HAVING SUM(CASE WHEN Division IN('10','30') THEN 1 ELSE 0 END) = 0
+   	  	                AND SUM(CASE WHEN Division IN('20') THEN 1 ELSE 0 END) > 0)  --FW only
+   	  	    BEGIN
+   	  	       SET @c_CartonType = 'ALBOX'    	   	  	       	
+   	  	    END            
+
+   	  	 	  IF EXISTS(SELECT 1 FROM #TMP_SKUREF WHERE Division = '20' HAVING SUM(Qty) = 2) -- 2FW + APP/EQ 
+   	  	 	  BEGIN
+   	  	 	     SELECT TOP 1 @c_CartonType = CL.UDF03
+   	  	 	     FROM #TMP_SKUREF SR 
+   	  	 	     JOIN CODELKUP CL (NOLOCK) ON CL.Code = SR.Division AND CL.Short = SR.Size AND CL.Long = SR.Gender AND CL.ListName = 'NPACKAGING' AND CL.Storerkey = @c_Storerkey   	  
+   	  	 	     JOIN CARTONIZATION CZ (NOLOCK) ON CZ.CartonizationGroup = @c_CartonGroup AND CZ.CartonType = CL.UDF03
+   	  	 	     WHERE SR.Division = '20'  --Get from FW
+   	  	 	     ORDER BY (CZ.CartonLength * CZ.CartonWidth * CZ.CartonHeight) DESC
+   	  	    END   	  	       	  	      	  	    
+   	  	    
+  	  	 	  IF EXISTS(SELECT 1 FROM #TMP_SKUREF WHERE Division = '20' HAVING SUM(Qty) = 1) -- 1FW + APP/EQ 
+   	  	 	  BEGIN
+   	  	 	     SELECT TOP 1 @c_CartonType = CL.UDF03
+   	  	 	     FROM #TMP_SKUREF SR 
+   	  	 	     JOIN CODELKUP CL (NOLOCK) ON CL.Code = SR.Division AND CL.Short = SR.Size AND CL.Long = SR.Gender AND CL.ListName = 'NPACKAGING' AND CL.Storerkey = @c_Storerkey
+   	  	 	     WHERE SR.Division = '20' --Get from FW
+   	  	 	  END
+   	  	 	  
+            IF NOT EXISTS(SELECT 1 FROM #TMP_SKUREF WHERE Division = '20') --AP+EQ or AP+AP or EQ+EQ
+   	  	       SET @c_CartonType = 'APME380'    	  	           	  	 	  
+   	  	 END   	  	 
+   	  	 
+   	     IF ISNULL(@c_CartonType,'') <> ''
+   	     BEGIN
+   	        SET @c_PackInstruction = RTRIM(@c_PackInstruction) + IIF(ISNULL(@c_PackInstruction,'') <> '', '   ', '') + 'Carton Type: ' + @c_CartonType
+   	     END   	  	 
+   	  END   	     	  
+   	  --NJOW03 E
    END
    
    --NJOW01
