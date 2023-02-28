@@ -14,7 +14,7 @@ GO
 /* Called By: SQL Backend Job every 5 minutes                              */
 /*                                                                         */
 /*                                                                         */
-/* PVCS Version: 1.0                                                       */
+/* PVCS Version: 1.1                                                       */
 /*                                                                         */
 /* Version: 7.0                                                            */
 /*                                                                         */
@@ -23,6 +23,8 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 06-Jul-2022  WLChooi 1.0   DevOps Combine Script                        */
+/* 15-Feb-2023  WLChooi 1.1   WMS-21739 Codelkup to enable/disable print   */
+/*                            label (WL01)                                 */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_UNILEVER_AutoReleasePA]
 AS
@@ -52,7 +54,7 @@ BEGIN
    IF @n_continue IN(1,2)
    BEGIN      
       SET @c_Storerkey = 'UNILEVER'
-      SET @c_UserName = 'ULVPALABEL'
+      --SET @c_UserName = 'ULVPALABEL'   --WL01
       
       SELECT TOP 1 @c_ReceivingLBL_DW = PB_Datawindow
       FROM RCMREPORT (NOLOCK)
@@ -64,7 +66,7 @@ BEGIN
    IF @n_continue IN(1,2)
    BEGIN
       DECLARE CUR_ASN CURSOR LOCAL FAST_FORWARD READ_ONLY FOR      
-         SELECT DISTINCT RD.Receiptkey, RD.ReceiptLineNumber
+         SELECT DISTINCT RD.Receiptkey, RD.ReceiptLineNumber, RD.EditWho  --WL01
          FROM RECEIPT R (NOLOCK)
          JOIN RECEIPTDETAIL RD (NOLOCK) ON R.ReceiptKey = RD.ReceiptKey
          WHERE R.StorerKey = @c_Storerkey
@@ -76,7 +78,7 @@ BEGIN
       
       OPEN CUR_ASN
       
-      FETCH NEXT FROM CUR_ASN INTO @c_Receiptkey, @c_ReceiptLineNumber
+      FETCH NEXT FROM CUR_ASN INTO @c_Receiptkey, @c_ReceiptLineNumber, @c_UserName   --WL01
       
       WHILE @@FETCH_STATUS <> -1  AND @n_continue IN(1,2)
       BEGIN   
@@ -92,31 +94,41 @@ BEGIN
             GOTO QUIT_SP
          END         
          
-         --Print Receiving Label
-         EXEC [dbo].[isp_PrintToRDTSpooler]
-              @c_ReportType     = 'PALABEL',
-              @c_Storerkey      = @c_Storerkey,
-              @b_success        = @b_Success OUTPUT,
-              @n_err            = @n_err     OUTPUT,
-              @c_errmsg         = @c_errmsg  OUTPUT,
-              @n_Noofparam      = 3,
-              @c_Param01        = @c_Receiptkey,        
-              @c_Param02        = @c_ReceiptLineNumber,     
-              @c_Param03        = @c_ReceiptLineNumber, 
-              @c_UserName       = @c_UserName,
-              @c_PrinterID      = '',
-              @c_Datawindow     = @c_ReceivingLBL_DW,
-              @c_IsPaperPrinter = 'N', 
-              @c_JobType        = 'TCPSPOOLER',
-              @n_Function_ID    = 999
-
-         IF @b_Success <> 1
+         --WL01 S
+         IF EXISTS (SELECT 1
+                    FROM CODELKUP CL (NOLOCK)
+                    WHERE CL.Listname = 'ULVPALABEL'
+                    AND CL.Code = 'LABEL'
+                    AND CL.Storerkey = @c_Storerkey
+                    AND CL.Short = 'Y')
          BEGIN
-            SELECT @n_continue = 3
-            GOTO QUIT_SP
-         END 
-                      
-         FETCH NEXT FROM CUR_ASN INTO @c_Receiptkey, @c_ReceiptLineNumber
+            --Print Receiving Label
+            EXEC [dbo].[isp_PrintToRDTSpooler]
+                 @c_ReportType     = 'PALABEL',
+                 @c_Storerkey      = @c_Storerkey,
+                 @b_success        = @b_Success OUTPUT,
+                 @n_err            = @n_err     OUTPUT,
+                 @c_errmsg         = @c_errmsg  OUTPUT,
+                 @n_Noofparam      = 3,
+                 @c_Param01        = @c_Receiptkey,        
+                 @c_Param02        = @c_ReceiptLineNumber,     
+                 @c_Param03        = @c_ReceiptLineNumber, 
+                 @c_UserName       = @c_UserName,
+                 @c_PrinterID      = '',
+                 @c_Datawindow     = @c_ReceivingLBL_DW,
+                 @c_IsPaperPrinter = 'N', 
+                 @c_JobType        = 'TCPSPOOLER',
+                 @n_Function_ID    = 999
+
+            IF @b_Success <> 1
+            BEGIN
+               SELECT @n_continue = 3
+               GOTO QUIT_SP
+            END
+         END
+         --WL01 E
+         
+         FETCH NEXT FROM CUR_ASN INTO @c_Receiptkey, @c_ReceiptLineNumber, @c_UserName   --WL01
       END          
       CLOSE CUR_ASN
       DEALLOCATE CUR_ASN
