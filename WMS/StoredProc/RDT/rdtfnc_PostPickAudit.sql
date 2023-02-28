@@ -86,6 +86,8 @@ GO
 /* 19-05-2021 5.7 SeongYaik   Revise IF Statement (SY01)                */
 /* 18-08-2022 5.8 Ung         Fix CaptureDataSP after scn2              */
 /* 13-12-2022 5.9 Yeekung     WMS-20944 fix nvarchar(5)->6  (yeekung07) */
+/* 07-02-2022 6.0 YeeKung     WMS-21562 customize refno to support      */
+/*                            trackingno  (yeekung08)                   */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PostPickAudit] (
@@ -166,7 +168,7 @@ DECLARE
    @nFromStep       INT, 
    @nTol            INT,           -- Tolerance %
 
-   @cRefNo          NVARCHAR( 10),
+   @cRefNo          NVARCHAR( 20), --(yeekung08)  
    @cDropID         NVARCHAR( 20),
    @cExternOrderKey NVARCHAR( 20),
    @cZone           NVARCHAR( 18),
@@ -175,6 +177,7 @@ DECLARE
    @cToCartonNo  	  INT, --(yeekung01)    
    @nPPA_QTY        INT, --(yeekung01)    
    @nPD_QTY         INT, --(yeekung01) 
+   @nVariance       INT,
 
    @cPackQTYIndicator               NVARCHAR( 5),
    @cPrePackIndicator               NVARCHAR( 1),
@@ -222,6 +225,8 @@ DECLARE
    @cReasonCode                     NVARCHAR(20),        
    @cCaptureReasonCode              NVARCHAR(1),  
    @cPPADefaultPQTY                 NVARCHAR( 1),
+   @cExtendedRefNoSP                NVARCHAR(20),
+   @cMultiColScan                   NVARCHAR(20),
    
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
@@ -320,6 +325,8 @@ SELECT
    @cAllowCubeZero                  = V_String44,  --(cc02)    
    @cReasonCode                     = V_String45,        
    @cCaptureReasonCode              = V_String46,  
+   @cExtendedRefNoSP                = V_String47,
+   @cMultiColScan                   = V_String48,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
@@ -442,6 +449,10 @@ BEGIN
    SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorer)
    IF @cDecodeSP = '0'
       SET @cDecodeSP = ''
+
+   SET @cMultiColScan = rdt.RDTGetConfig( @nFunc, 'MultiColScan', @cStorer)
+   IF @cMultiColScan = '0'
+      SET @cMultiColScan = ''
       
    --SET @cPackList = rdt.RDTGetConfig( @nFunc, 'PackMans', @cStorer)     --(yeekung01)
    --IF @cPackList = '0'
@@ -492,6 +503,8 @@ BEGIN
    SET @cPPADefaultPQTY = rdt.rdtGetConfig( @nFunc, 'PPADefaultPQTY', @cStorer)
    IF @cPPADefaultPQTY = '0'        
       SET @cPPADefaultPQTY = '' 
+
+   SET @cExtendedRefNoSP = rdt.rdtGetConfig( @nFunc, 'ExtendedRefNoSP', @cStorer)
    
    -- EventLog - Sign In Function  
    -- (ChewKP02) 
@@ -566,7 +579,7 @@ BEGIN
          IF @cDropID     <> '' SET @i = @i + 1
          IF @cID         <> '' SET @i = @i + 1
          IF @cTaskDetailKey <> '' SET @i = @i + 1
-         IF @i > 1
+         IF @i > 1 and @cMultiColScan =''
          BEGIN
             SET @nErrNo = 60852
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Key-in either 1
@@ -647,7 +660,7 @@ BEGIN
                '@nStep          INT,           ' +
                '@cStorer        NVARCHAR( 15), ' +
                '@cFacility      NVARCHAR( 5),  ' +
-               '@cRefNo         NVARCHAR( 10), ' +
+               '@cRefNo         NVARCHAR( 20), ' +
                '@cOrderKey      NVARCHAR( 10), ' +
                '@cDropID        NVARCHAR( 20), ' +
                '@cLoadKey       NVARCHAR( 10), ' +
@@ -670,295 +683,346 @@ BEGIN
          END
       END
 
-      -- Ref No
-      IF @cRefNo <> '' AND @cRefNo IS NOT NULL --SY01
+                 -- (ChewKP01)
+      IF @cExtendedRefNoSP <> ''
       BEGIN
-         -- Validate load plan status
-         IF NOT EXISTS( SELECT 1
-            FROM dbo.LoadPlan WITH (NOLOCK)
-            WHERE UserDefine10 = @cRefNo
-               AND Status <= '9') -- 9=Closed
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedRefNoSP AND type = 'P')--yeekung08
          BEGIN
-            SET @nErrNo = 60858
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Invalid Ref#
-            EXEC rdt.rdtSetFocusField @nMobile, 1
-            GOTO Step_1_Fail
-         END
+            SET @cSQL = 'EXEC rdt.' + RTRIM(@cExtendedRefNoSP) +
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @cStorer, @cFacility, @cRefNo, @cOrderKey,  @cDropID, @cLoadKey, @cPickSlipNo,  @cID, @cTaskDetailKey,@cSKU ,@cType, ' + 
+            ' @nCSKU OUTPUT,@nCQTY OUTPUT,@nPSKU OUTPUT, @nPQTY OUTPUT,@nVariance OUTPUT,@nQTY_PPA OUTPUT,@nQTY_CHK OUTPUT,@nRowRef OUTPUT,@nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+            '@nMobile        INT, ' +                      
+            '@nFunc          INT, ' +                      
+            '@cLangCode      NVARCHAR( 3),  ' +            
+            '@nStep          INT,           ' +            
+            '@cStorer        NVARCHAR( 15), ' +            
+            '@cFacility      NVARCHAR( 5),  ' +            
+            '@cRefNo         NVARCHAR( 20), ' +            
+            '@cOrderKey      NVARCHAR( 10), ' +            
+            '@cDropID        NVARCHAR( 20), ' +            
+            '@cLoadKey       NVARCHAR( 10), ' +            
+            '@cPickSlipNo    NVARCHAR( 10), ' +            
+            '@cID            NVARCHAR( 18),       '+       
+            '@cTaskDetailKey NVARCHAR( 10),       '+       
+            '@cSKU           NVARCHAR( 20),       ' +      
+            '@cType          NVARCHAR( 20),       '+       
+            '@nCSKU          INT  OUTPUT ,  '+             
+            '@nCQTY          INT  OUTPUT ,  '+             
+            '@nPSKU          INT OUTPUT,          '+       
+            '@nPQTY          INT OUTPUT,          '+       
+            '@nVariance      INT OUTPUT,   '+              
+            '@nQTY_PPA       INT OUTPUT,          '+       
+            '@nQTY_CHK       INT OUTPUT,          '+   
+            '@nRowRef        INT OUTPUT,          '+ 
+            '@nErrNo         INT           OUTPUT,'+       
+            '@cErrMsg        NVARCHAR( 20) OUTPUT '        
 
-         -- Validate all pickslip already scan in
-         IF EXISTS( SELECT 1
-            FROM dbo.LoadPlan LP WITH (NOLOCK)
-               INNER JOIN dbo.PickHeader PH WITH (NOLOCK) ON PH.ExternOrderKey = LP.LoadKey
-               LEFT OUTER JOIN dbo.PickingInfo [PI] WITH (NOLOCK) ON [PI].PickSlipNo = PH.PickHeaderKey
-            WHERE LP.UserDefine10 = @cRefNo
-               AND [PI].ScanInDate IS NULL)
-         BEGIN
-            SET @nErrNo = 60859
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Not Scan-in
-            EXEC rdt.rdtSetFocusField @nMobile, 1
-            GOTO Step_1_Fail
-         END
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @nMobile, @nFunc, @cLangCode, @nStep, @cStorer, @cFacility, @cRefNo, @cOrderKey, @cDropID, @cLoadKey, @cPickSlipNo,  @cID, @cTaskDetailKey,@cSKU ,'CHECK',
+            @nCSKU OUTPUT,@nCQTY OUTPUT,@nPSKU OUTPUT, @nPQTY OUTPUT,@nVariance OUTPUT,@nQTY_PPA OUTPUT,@nQTY_CHK OUTPUT,@nRowRef OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
-         -- (james05)
-         IF @cSkipChkPSlipMustScanOut <> '1'
+
+            IF @nErrNo <> 0
+            BEGIN
+               GOTO Step_1_Fail
+            END
+
+         END
+      END
+      ELSE
+      BEGIN
+
+         -- Ref No
+         IF @cRefNo <> '' AND @cRefNo IS NOT NULL --SY01
          BEGIN
-            -- Validate all pickslip already scan out
+            -- Validate load plan status
+            IF NOT EXISTS( SELECT 1
+               FROM dbo.LoadPlan WITH (NOLOCK)
+               WHERE UserDefine10 = @cRefNo
+                  AND Status <= '9') -- 9=Closed
+            BEGIN
+               SET @nErrNo = 60858
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Invalid Ref#
+               EXEC rdt.rdtSetFocusField @nMobile, 1
+               GOTO Step_1_Fail
+            END
+
+            -- Validate all pickslip already scan in
             IF EXISTS( SELECT 1
                FROM dbo.LoadPlan LP WITH (NOLOCK)
                   INNER JOIN dbo.PickHeader PH WITH (NOLOCK) ON PH.ExternOrderKey = LP.LoadKey
                   LEFT OUTER JOIN dbo.PickingInfo [PI] WITH (NOLOCK) ON [PI].PickSlipNo = PH.PickHeaderKey
                WHERE LP.UserDefine10 = @cRefNo
-                  AND [PI].ScanOutDate IS NULL)
+                  AND [PI].ScanInDate IS NULL)
             BEGIN
-               SET @nErrNo = 60860
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --Not Scan-out
+               SET @nErrNo = 60859
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Not Scan-in
                EXEC rdt.rdtSetFocusField @nMobile, 1
                GOTO Step_1_Fail
             END
-         END
-      END
 
-      -- Pick Slip No
-      IF @cPickSlipNo <> '' AND @cPickSlipNo IS NOT NULL --SY01
-      BEGIN
-         SET @cOrderKey = ''  -- (james02)
-
-         -- Get pickheader info
-         DECLARE @cChkPickSlipNo NVARCHAR( 10)
-         SELECT TOP 1
-            @cChkPickSlipNo = PickHeaderKey,
-            @cExternOrderKey = ExternOrderkey,
-            @cOrderKey = OrderKey,
-            @cZone = Zone
-         FROM dbo.PickHeader WITH (NOLOCK)
-         WHERE PickHeaderKey = @cPickSlipNo
-
-         -- Validate pickslip no
-         IF @cChkPickSlipNo = '' OR @cChkPickSlipNo IS NULL
-         BEGIN
-            SET @nErrNo = 60861
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Invalid PS#
-            EXEC rdt.rdtSetFocusField @nMobile, 2
-            GOTO Step_1_Fail
-         END
-
-         DECLARE @dScanInDate  DATETIME
-         DECLARE @dScanOutDate DATETIME
-
-         -- Get picking info
-         SELECT TOP 1
-            @dScanInDate = ScanInDate,
-            @dScanOutDate = ScanOutDate
-         FROM dbo.PickingInfo WITH (NOLOCK)
-         WHERE PickSlipNo = @cPickSlipNo
-
-         -- Validate pickslip not scan in
-         IF @dScanInDate IS NULL
-         BEGIN
-            SET @nErrNo = 60862
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Not scan-in
-            EXEC rdt.rdtSetFocusField @nMobile, 2
-            GOTO Step_1_Fail
-         END
-
-         -- (james05)
-         IF @cSkipChkPSlipMustScanOut <> '1'
-         BEGIN
-            -- Validate pickslip not scan out
-            IF @dScanOutDate IS NULL
+            -- (james05)
+            IF @cSkipChkPSlipMustScanOut <> '1'
             BEGIN
-               SET @nErrNo = 60863
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Not scan-out
+               -- Validate all pickslip already scan out
+               IF EXISTS( SELECT 1
+                  FROM dbo.LoadPlan LP WITH (NOLOCK)
+                     INNER JOIN dbo.PickHeader PH WITH (NOLOCK) ON PH.ExternOrderKey = LP.LoadKey
+                     LEFT OUTER JOIN dbo.PickingInfo [PI] WITH (NOLOCK) ON [PI].PickSlipNo = PH.PickHeaderKey
+                  WHERE LP.UserDefine10 = @cRefNo
+                     AND [PI].ScanOutDate IS NULL)
+               BEGIN
+                  SET @nErrNo = 60860
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --Not Scan-out
+                  EXEC rdt.rdtSetFocusField @nMobile, 1
+                  GOTO Step_1_Fail
+               END
+            END
+         END
+
+         -- Pick Slip No
+         IF @cPickSlipNo <> '' AND @cPickSlipNo IS NOT NULL --SY01
+         BEGIN
+            SET @cOrderKey = ''  -- (james02)
+
+            -- Get pickheader info
+            DECLARE @cChkPickSlipNo NVARCHAR( 10)
+            SELECT TOP 1
+               @cChkPickSlipNo = PickHeaderKey,
+               @cExternOrderKey = ExternOrderkey,
+               @cOrderKey = OrderKey,
+               @cZone = Zone
+            FROM dbo.PickHeader WITH (NOLOCK)
+            WHERE PickHeaderKey = @cPickSlipNo
+
+            -- Validate pickslip no
+            IF @cChkPickSlipNo = '' OR @cChkPickSlipNo IS NULL
+            BEGIN
+               SET @nErrNo = 60861
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Invalid PS#
                EXEC rdt.rdtSetFocusField @nMobile, 2
                GOTO Step_1_Fail
             END
-         END
-      END
 
-      -- LoadKey
-      IF @cLoadKey <> '' AND @cLoadKey IS NOT NULL
-      BEGIN
-         -- Validate load plan status
-         IF NOT EXISTS( SELECT 1
-            FROM dbo.LoadPlan WITH (NOLOCK)
-            WHERE LoadKey = @cLoadKey
-               AND Status <= '9') -- 9=Closed
-         BEGIN
-            SET @nErrNo = 60864
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Invalid LoadKey
-            EXEC rdt.rdtSetFocusField @nMobile, 3
-            GOTO Step_1_Fail
+            DECLARE @dScanInDate  DATETIME
+            DECLARE @dScanOutDate DATETIME
+
+            -- Get picking info
+            SELECT TOP 1
+               @dScanInDate = ScanInDate,
+               @dScanOutDate = ScanOutDate
+            FROM dbo.PickingInfo WITH (NOLOCK)
+            WHERE PickSlipNo = @cPickSlipNo
+
+            -- Validate pickslip not scan in
+            IF @dScanInDate IS NULL
+            BEGIN
+               SET @nErrNo = 60862
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Not scan-in
+               EXEC rdt.rdtSetFocusField @nMobile, 2
+               GOTO Step_1_Fail
+            END
+
+            -- (james05)
+            IF @cSkipChkPSlipMustScanOut <> '1'
+            BEGIN
+               -- Validate pickslip not scan out
+               IF @dScanOutDate IS NULL
+               BEGIN
+                  SET @nErrNo = 60863
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Not scan-out
+                  EXEC rdt.rdtSetFocusField @nMobile, 2
+                  GOTO Step_1_Fail
+               END
+            END
          END
 
-         -- Validate all pickslip already scan in
-         IF EXISTS( SELECT 1
-            FROM dbo.LoadPlan LP WITH (NOLOCK)
-               INNER JOIN dbo.PickHeader PH WITH (NOLOCK) ON PH.ExternOrderKey = LP.LoadKey
-               LEFT OUTER JOIN dbo.PickingInfo [PI] WITH (NOLOCK) ON [PI].PickSlipNo = PH.PickHeaderKey
-            WHERE LP.LoadKey = @cLoadKey
-               AND [PI].ScanInDate IS NULL)
+         -- LoadKey
+         IF @cLoadKey <> '' AND @cLoadKey IS NOT NULL
          BEGIN
-            SET @nErrNo = 60865
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Not Scan-in
-            EXEC rdt.rdtSetFocusField @nMobile, 3
-            GOTO Step_1_Fail
-         END
+            -- Validate load plan status
+            IF NOT EXISTS( SELECT 1
+               FROM dbo.LoadPlan WITH (NOLOCK)
+               WHERE LoadKey = @cLoadKey
+                  AND Status <= '9') -- 9=Closed
+            BEGIN
+               SET @nErrNo = 60864
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Invalid LoadKey
+               EXEC rdt.rdtSetFocusField @nMobile, 3
+               GOTO Step_1_Fail
+            END
 
-         -- (james05)
-         IF @cSkipChkPSlipMustScanOut <> '1'
-         BEGIN
-            -- Validate all pickslip already scan out
+            -- Validate all pickslip already scan in
             IF EXISTS( SELECT 1
                FROM dbo.LoadPlan LP WITH (NOLOCK)
                   INNER JOIN dbo.PickHeader PH WITH (NOLOCK) ON PH.ExternOrderKey = LP.LoadKey
                   LEFT OUTER JOIN dbo.PickingInfo [PI] WITH (NOLOCK) ON [PI].PickSlipNo = PH.PickHeaderKey
                WHERE LP.LoadKey = @cLoadKey
-                  AND [PI].ScanOutDate IS NULL)
+                  AND [PI].ScanInDate IS NULL)
             BEGIN
-               SET @nErrNo = 60866
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --Not Scan-out
+               SET @nErrNo = 60865
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Not Scan-in
                EXEC rdt.rdtSetFocusField @nMobile, 3
                GOTO Step_1_Fail
             END
-         END
-      END
 
-      -- OrderKey
-      IF @cOrderKey <> '' AND @cOrderKey IS NOT NULL --SY01
-      BEGIN
-         -- Validate order status
-         IF NOT EXISTS( SELECT 1
-            FROM dbo.Orders WITH (NOLOCK)
-            WHERE OrderKey = @cOrderKey
-               AND StorerKey = @cStorer)
-         BEGIN
-            SET @nErrNo = 60867
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Inv OrderKey
-            GOTO Step_1_Fail
-         END
-
-         -- Validate pickslip already scan in
-         IF EXISTS( SELECT 1
-            FROM dbo.PickHeader PH WITH (NOLOCK)
-               LEFT OUTER JOIN dbo.PickingInfo [PI] WITH (NOLOCK) ON [PI].PickSlipNo = PH.PickHeaderKey
-            WHERE PH.OrderKey = @cOrderKey
-               AND [PI].ScanInDate IS NULL)
-         BEGIN
-            SET @nErrNo = 60868
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Not Scan-in
-            GOTO Step_1_Fail
+            -- (james05)
+            IF @cSkipChkPSlipMustScanOut <> '1'
+            BEGIN
+               -- Validate all pickslip already scan out
+               IF EXISTS( SELECT 1
+                  FROM dbo.LoadPlan LP WITH (NOLOCK)
+                     INNER JOIN dbo.PickHeader PH WITH (NOLOCK) ON PH.ExternOrderKey = LP.LoadKey
+                     LEFT OUTER JOIN dbo.PickingInfo [PI] WITH (NOLOCK) ON [PI].PickSlipNo = PH.PickHeaderKey
+                  WHERE LP.LoadKey = @cLoadKey
+                     AND [PI].ScanOutDate IS NULL)
+               BEGIN
+                  SET @nErrNo = 60866
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --Not Scan-out
+                  EXEC rdt.rdtSetFocusField @nMobile, 3
+                  GOTO Step_1_Fail
+               END
+            END
          END
 
-         -- (james05)
-         IF @cSkipChkPSlipMustScanOut <> '1'
+         -- OrderKey
+         IF @cOrderKey <> '' AND @cOrderKey IS NOT NULL --SY01
          BEGIN
-            -- Validate pickslip already scan out
+            -- Validate order status
+            IF NOT EXISTS( SELECT 1
+               FROM dbo.Orders WITH (NOLOCK)
+               WHERE OrderKey = @cOrderKey
+                  AND StorerKey = @cStorer)
+            BEGIN
+               SET @nErrNo = 60867
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Inv OrderKey
+               GOTO Step_1_Fail
+            END
+
+            -- Validate pickslip already scan in
             IF EXISTS( SELECT 1
                FROM dbo.PickHeader PH WITH (NOLOCK)
                   LEFT OUTER JOIN dbo.PickingInfo [PI] WITH (NOLOCK) ON [PI].PickSlipNo = PH.PickHeaderKey
                WHERE PH.OrderKey = @cOrderKey
-                  AND [PI].ScanOutDate IS NULL)
+                  AND [PI].ScanInDate IS NULL)
             BEGIN
-               SET @nErrNo = 60869
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --Not Scan-out
+               SET @nErrNo = 60868
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Not Scan-in
                GOTO Step_1_Fail
             END
-         END
-      END
 
-      -- DropID
-      IF @cDropID <> '' AND @cDropID IS NOT NULL --SY01
-      BEGIN
-         -- Validate drop ID status
-         IF @cPPACartonIDByPackDetailDropID = '1'
+            -- (james05)
+            IF @cSkipChkPSlipMustScanOut <> '1'
+            BEGIN
+               -- Validate pickslip already scan out
+               IF EXISTS( SELECT 1
+                  FROM dbo.PickHeader PH WITH (NOLOCK)
+                     LEFT OUTER JOIN dbo.PickingInfo [PI] WITH (NOLOCK) ON [PI].PickSlipNo = PH.PickHeaderKey
+                  WHERE PH.OrderKey = @cOrderKey
+                     AND [PI].ScanOutDate IS NULL)
+               BEGIN
+                  SET @nErrNo = 60869
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --Not Scan-out
+                  GOTO Step_1_Fail
+               END
+            END
+         END
+
+         -- DropID
+         IF @cDropID <> '' AND @cDropID IS NOT NULL --SY01
+         BEGIN
+            -- Validate drop ID status
+            IF @cPPACartonIDByPackDetailDropID = '1'
+            BEGIN
+               IF NOT EXISTS( SELECT 1
+                  FROM dbo.PackHeader PH WITH (NOLOCK)
+                     INNER JOIN dbo.PackDetail PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)
+                  WHERE PD.DropID = @cDropID
+                     AND PH.StorerKey = @cStorer)
+               BEGIN
+                  SET @nErrNo = 60870
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Inv DropID
+                  GOTO Step_1_Fail
+               END
+            END
+            ELSE
+            IF @cPPACartonIDByPackDetailLabelNo = '1'
+            BEGIN
+               IF NOT EXISTS( SELECT 1
+                  FROM dbo.PackHeader PH WITH (NOLOCK)
+                     INNER JOIN dbo.PackDetail PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)
+                  WHERE PD.LabelNo = @cDropID
+                     AND PH.StorerKey = @cStorer)
+               BEGIN
+                  SET @nErrNo = 60880
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Inv Carton ID
+                  GOTO Step_1_Fail
+               END
+            END
+            ELSE
+            IF @cPPACartonIDByPickDetailCaseID = '1'
+            BEGIN
+               IF NOT EXISTS( SELECT 1
+                  FROM dbo.PickDetail WITH (NOLOCK)
+                  WHERE CaseID = @cDropID
+                     AND StorerKey = @cStorer
+                     AND ShipFlag <> 'Y')
+               BEGIN
+                  SET @nErrNo = 60887
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Inv CaseID
+                  GOTO Step_1_Fail
+               END
+            END
+            ELSE
+            BEGIN
+               IF NOT EXISTS( SELECT 1
+                  FROM dbo.PickDetail WITH (NOLOCK)
+                  WHERE DropID = @cDropID
+                     AND StorerKey = @cStorer
+                     AND ShipFlag <> 'Y')
+               BEGIN
+                  SET @nErrNo = 60871
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Inv DropID
+                  GOTO Step_1_Fail
+               END
+            END
+         END
+
+         -- Pallet ID
+         IF @cID <> '' AND @cID IS NOT NULL --SY01
          BEGIN
             IF NOT EXISTS( SELECT 1
-               FROM dbo.PackHeader PH WITH (NOLOCK)
-                  INNER JOIN dbo.PackDetail PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)
-               WHERE PD.DropID = @cDropID
-                  AND PH.StorerKey = @cStorer)
+               FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
+                  JOIN dbo.LOC WITH (NOLOCK) ON (LLI.LOC = LOC.LOC)
+               WHERE LOC.Facility = @cFacility
+                  AND LLI.StorerKey = @cStorer
+                  AND LLI.ID = @cID
+                  AND LLI.QTY > 0)
             BEGIN
                SET @nErrNo = 60870
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Inv DropID
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Inv PalletID
                GOTO Step_1_Fail
             END
-         END
-         ELSE
-         IF @cPPACartonIDByPackDetailLabelNo = '1'
-         BEGIN
-            IF NOT EXISTS( SELECT 1
-               FROM dbo.PackHeader PH WITH (NOLOCK)
-                  INNER JOIN dbo.PackDetail PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)
-               WHERE PD.LabelNo = @cDropID
-                  AND PH.StorerKey = @cStorer)
-            BEGIN
-               SET @nErrNo = 60880
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Inv Carton ID
-               GOTO Step_1_Fail
-            END
-         END
-         ELSE
-         IF @cPPACartonIDByPickDetailCaseID = '1'
-         BEGIN
-            IF NOT EXISTS( SELECT 1
-               FROM dbo.PickDetail WITH (NOLOCK)
-               WHERE CaseID = @cDropID
-                  AND StorerKey = @cStorer
-                  AND ShipFlag <> 'Y')
-            BEGIN
-               SET @nErrNo = 60887
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Inv CaseID
-               GOTO Step_1_Fail
-            END
-         END
-         ELSE
-         BEGIN
-            IF NOT EXISTS( SELECT 1
-               FROM dbo.PickDetail WITH (NOLOCK)
-               WHERE DropID = @cDropID
-                  AND StorerKey = @cStorer
-                  AND ShipFlag <> 'Y')
-            BEGIN
-               SET @nErrNo = 60871
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Inv DropID
-               GOTO Step_1_Fail
-            END
-         END
-      END
-
-      -- Pallet ID
-      IF @cID <> '' AND @cID IS NOT NULL --SY01
-      BEGIN
-         IF NOT EXISTS( SELECT 1
-            FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LLI.LOC = LOC.LOC)
-            WHERE LOC.Facility = @cFacility
-               AND LLI.StorerKey = @cStorer
-               AND LLI.ID = @cID
-               AND LLI.QTY > 0)
-         BEGIN
-            SET @nErrNo = 60870
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Inv PalletID
-            GOTO Step_1_Fail
-         END
          
-      END
-
-      -- TaskDetailKey
-      IF @cTaskDetailKey <> '' AND @cTaskDetailKey IS NOT NULL --SY01
-      BEGIN
-         SELECT @nTaskQty = Qty
-         FROM dbo.TaskDetail WITH (NOLOCK) 
-         WHERE TaskDetailKey = @cTaskDetailKey
-
-         IF @@ROWCOUNT = 0
-         BEGIN
-            SET @nErrNo = 60890
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Inv TaskKey
-            GOTO Step_1_Fail
          END
 
-         SET @cTaskQty = CAST( @nTaskQty AS NVARCHAR( 5))
+         -- TaskDetailKey
+         IF @cTaskDetailKey <> '' AND @cTaskDetailKey IS NOT NULL --SY01
+         BEGIN
+            SELECT @nTaskQty = Qty
+            FROM dbo.TaskDetail WITH (NOLOCK) 
+            WHERE TaskDetailKey = @cTaskDetailKey
+
+            IF @@ROWCOUNT = 0
+            BEGIN
+               SET @nErrNo = 60890
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Inv TaskKey
+               GOTO Step_1_Fail
+            END
+
+            SET @cTaskQty = CAST( @nTaskQty AS NVARCHAR( 5))
+         END
       END
 
       -- Extended update
@@ -1174,14 +1238,31 @@ BEGIN
 
    Step_1_Fail:
    BEGIN
-      -- Reset this screen var
-      SET @cRefNo = ''
-      SET @cPickSlipNo = ''
-      SET @cLoadKey = ''
-      SET @cOrderKey = ''
-      SET @cDropID = ''
-      SET @cID = ''
-      SET @cTaskDetailKey = ''
+      IF ISNULL(@cMultiColScan,'')=''
+      BEGIN
+         -- Reset this screen var
+         SET @cRefNo = ''
+         SET @cPickSlipNo = ''
+         SET @cLoadKey = ''
+         SET @cOrderKey = ''
+         SET @cDropID = ''
+         SET @cID = ''
+         SET @cTaskDetailKey = ''
+      END
+      ELSE
+      BEGIN
+         -- Prepare next screen var
+         SET @cOutField01 = @cRefNo
+         SET @cOutField02 = @cPickSlipNo
+         SET @cOutField03 = @cLoadKey
+         SET @cOutField04 = @cOrderKey
+         SET @cOutField05 = @cDropID
+         SET @cOutField06 = @cSKUStat
+         SET @cOutField07 = @cQTYStat
+         SET @cOutField08 = '' -- @cExtendedInfo
+         SET @cOutField09 = @cID
+         SET @cOutField10 = @cTaskDetailKey		--INC1045866
+      END
    END
 END
 GOTO Quit
@@ -1361,8 +1442,6 @@ BEGIN
       -- Prompt discrepancy
       IF @cPPAPromptDiscrepancy = '1'
       BEGIN
-         -- Get statistic
-         DECLARE @nVariance INT
          SELECT @nVariance = 0
          EXECUTE rdt.rdt_PostPickAudit_GetStat @nMobile, @nFunc, @cRefNo, @cPickSlipNo, @cLoadKey, 
             @cOrderKey, @cDropID, @cID, @cTaskDetailKey, @cStorer, @cFacility, @cPUOM,
@@ -1911,213 +1990,263 @@ BEGIN
       SET @nQTY_PPA = 0
       SET @nQTY_CHK = 0
 
-      -- RefNo
-      IF @cRefNo <> '' AND @cRefNo IS NOT NULL
+            -- (ChewKP01)
+      IF @cExtendedRefNoSP <> ''
       BEGIN
-         -- Get PPA details
-         SELECT TOP 1
-            @nQTY_PPA = PQTY,
-            @nQTY_CHK = CQTY,
-            @nRowRef = RowRef
-         FROM rdt.rdtPPA WITH (NOLOCK)
-         WHERE SKU = @cSKU
-            AND StorerKey = @cStorer
-            AND RefKey = @cRefNo
-
-         -- Get pick QTY from load
-         IF @nRowRef IS NULL
-            SELECT @nQTY_PPA = SUM( PD.QTY)
-            FROM dbo.OrderDetail AS OD WITH (NOLOCK)
-               INNER JOIN dbo.PickDetail AS PD WITH (NOLOCK) ON OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber
-               INNER JOIN dbo.LoadPlan AS LP WITH (NOLOCK) ON OD.LoadKey = LP.LoadKey
-            WHERE LP.UserDefine10 = @cRefNo
-               AND OD.StorerKey = @cStorer
-               AND OD.SKU = @cSKU
-               AND PD.Status >= @cPickConfirmStatus
-      END
-
-      -- PickSlipNo
-      IF @cPickSlipNo <> '' AND @cPickSlipNo IS NOT NULL
-      BEGIN
-         -- Get PPA details
-         SELECT TOP 1
-            @nQTY_PPA = PQTY,
-            @nQTY_CHK = CQTY,
-            @nRowRef = RowRef
-         FROM rdt.rdtPPA WITH (NOLOCK)
-         WHERE SKU = @cSKU
-            AND StorerKey = @cStorer
-            AND PickSlipNo = @cPickSlipNo
-
-         -- Get pick QTY of the SKU
-         IF @nRowRef IS NULL
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedRefNoSP AND type = 'P')--yeekung08
          BEGIN
-            IF @cZone = 'XD' OR @cZone = 'LB' OR @cZone = 'LP'
-               SELECT @nQTY_PPA = SUM( PD.QTY)
-               FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
-                  INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON RKL.PickDetailKey = PD.PickDetailKey
-               WHERE RKL.PickSlipNo = @cPickSlipNo
-                  AND PD.SKU = @cSKU
-                  AND PD.Status >= @cPickConfirmStatus
-            ELSE
-               SELECT @nQTY_PPA = SUM( PD.QTY)
-               FROM dbo.OrderDetail OD WITH (NOLOCK)
-                  INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber
-                  INNER JOIN dbo.Pack Pack WITH (NOLOCK) ON Pack.PackKey = OD.PackKey
-               WHERE OD.LoadKey = @cExternOrderKey
-                  AND OD.OrderKey = CASE WHEN @cOrderKey = '' THEN OD.OrderKey ELSE @cOrderKey END
-                  AND PD.SKU = @cSKU
-                  AND PD.Status >= @cPickConfirmStatus
+            SET @cSQL = 'EXEC rdt.' + RTRIM(@cExtendedRefNoSP) +
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @cStorer, @cFacility, @cRefNo, @cOrderKey,  @cDropID, @cLoadKey, @cPickSlipNo,  @cID, @cTaskDetailKey,@cSKU ,@cType, ' + 
+            ' @nCSKU OUTPUT,@nCQTY OUTPUT,@nPSKU OUTPUT, @nPQTY OUTPUT,@nVariance OUTPUT,@nQTY_PPA OUTPUT,@nQTY_CHK OUTPUT,@nRowRef OUTPUT,@nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+            '@nMobile        INT, ' +                      
+            '@nFunc          INT, ' +                      
+            '@cLangCode      NVARCHAR( 3),  ' +            
+            '@nStep          INT,           ' +            
+            '@cStorer        NVARCHAR( 15), ' +            
+            '@cFacility      NVARCHAR( 5),  ' +            
+            '@cRefNo         NVARCHAR( 20), ' +            
+            '@cOrderKey      NVARCHAR( 10), ' +            
+            '@cDropID        NVARCHAR( 20), ' +            
+            '@cLoadKey       NVARCHAR( 10), ' +            
+            '@cPickSlipNo    NVARCHAR( 10), ' +            
+            '@cID            NVARCHAR( 18),       '+       
+            '@cTaskDetailKey NVARCHAR( 10),       '+       
+            '@cSKU           NVARCHAR( 20),       ' +      
+            '@cType          NVARCHAR( 20),       '+       
+            '@nCSKU          INT  OUTPUT ,  '+             
+            '@nCQTY          INT  OUTPUT ,  '+             
+            '@nPSKU          INT OUTPUT,          '+       
+            '@nPQTY          INT OUTPUT,          '+       
+            '@nVariance      INT OUTPUT,   '+              
+            '@nQTY_PPA       INT OUTPUT,          '+       
+            '@nQTY_CHK       INT OUTPUT,          '+   
+            '@nRowRef        INT OUTPUT,          '+ 
+            '@nErrNo         INT           OUTPUT,'+       
+            '@cErrMsg        NVARCHAR( 20) OUTPUT '        
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @nMobile, @nFunc, @cLangCode, @nStep, @cStorer, @cFacility, @cRefNo, @cOrderKey, @cDropID, @cLoadKey, @cPickSlipNo,  @cID, @cTaskDetailKey,@cSKU ,'QTY',
+            @nCSKU OUTPUT,@nCQTY OUTPUT,@nPSKU OUTPUT, @nPQTY OUTPUT,@nVariance OUTPUT,@nQTY_PPA OUTPUT,@nQTY_CHK OUTPUT,@nRowRef OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+
+            IF @nErrNo <> 0
+            BEGIN
+               GOTO QUIT
+            END
+
          END
       END
-
-      -- LoadKey
-      IF @cLoadKey <> '' AND @cLoadKey IS NOT NULL
+      ELSE
       BEGIN
-         -- Get PPA details
-         SELECT TOP 1
-            @nQTY_PPA = PQTY,
-            @nQTY_CHK = CQTY,
-            @nRowRef = RowRef
-         FROM rdt.rdtPPA WITH (NOLOCK)
-         WHERE SKU = @cSKU
-            AND StorerKey = @cStorer
-            AND LoadKey = @cLoadKey
-
-         -- Get pick QTY of the SKU
-         IF @nRowRef IS NULL
-            SELECT @nQTY_PPA = SUM( PD.QTY)
-            FROM dbo.OrderDetail AS OD WITH (NOLOCK)
-               INNER JOIN dbo.PickDetail AS PD WITH (NOLOCK) ON OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber
-               INNER JOIN dbo.LoadPlan AS LP WITH (NOLOCK) ON OD.LoadKey = LP.LoadKey
-            WHERE LP.LoadKey = @cLoadKey
-               AND OD.StorerKey = @cStorer
-               AND OD.SKU = @cSKU
-               AND PD.Status >= @cPickConfirmStatus
-      END
-
-      -- OrderKey
-      IF @cOrderKey <> '' AND @cOrderKey IS NOT NULL
-      BEGIN
-         -- Get PPA details
-         SELECT TOP 1
-            @nQTY_PPA = PQTY,
-            @nQTY_CHK = CQTY,
-            @nRowRef = RowRef
-         FROM rdt.rdtPPA WITH (NOLOCK)
-         WHERE SKU = @cSKU
-            AND StorerKey = @cStorer
-            AND OrderKey = @cOrderKey
-
-         -- Get pick QTY from load
-         IF @nRowRef IS NULL
-            SELECT @nQTY_PPA = SUM( QTY)
-            FROM dbo.PickDetail WITH (NOLOCK)
-            WHERE OrderKey = @cOrderKey
-               AND StorerKey = @cStorer
-               AND SKU = @cSKU
-               AND Status >= @cPickConfirmStatus
-      END
-
-      -- DropID
-      IF @cDropID <> '' AND @cDropID IS NOT NULL
-      BEGIN
-         -- Get PPA details
-         SELECT TOP 1
-            @nQTY_PPA = PQTY,
-            @nQTY_CHK = CQTY,
-            @nRowRef = RowRef
-         FROM rdt.rdtPPA WITH (NOLOCK)
-         WHERE SKU = @cSKU
-            AND StorerKey = @cStorer
-            AND DropID = @cDropID
-
-         -- Get pick QTY
-         IF @nRowRef IS NULL
+         -- RefNo
+         IF @cRefNo <> '' AND @cRefNo IS NOT NULL
          BEGIN
-            IF @cPPACartonIDByPackDetailDropID = '1'
-               SELECT @nQTY_PPA = SUM( CASE WHEN @cPreCartonization = '1' THEN PD.ExpQTY ELSE PD.QTY END)
-               FROM dbo.PackHeader PH WITH (NOLOCK)
-                  INNER JOIN dbo.PackDetail PD WITH (NOLOCK) ON ( PH.PickSlipNo = PD.PickSlipNo)
-               WHERE PD.DropID = @cDropID
-                  AND PH.StorerKey = @cStorer
-                  AND PD.SKU = @cSKU
-            ELSE
-            IF @cPPACartonIDByPackDetailLabelNo = '1'
-               SELECT @nQTY_PPA = SUM( CASE WHEN @cPreCartonization = '1' THEN PD.ExpQTY ELSE PD.QTY END)
-               FROM dbo.PackHeader PH WITH (NOLOCK)
-                  INNER JOIN dbo.PackDetail PD WITH (NOLOCK) ON ( PH.PickSlipNo = PD.PickSlipNo)
-               WHERE PD.LabelNo = @cDropID
-                  AND PH.StorerKey = @cStorer
-                  AND PD.SKU = @cSKU
-            ELSE
-            IF @cPPACartonIDByPickDetailCaseID = '1'
-               SELECT @nQTY_PPA = SUM( QTY)
-               FROM dbo.PickDetail WITH (NOLOCK)
-               WHERE CaseID = @cDropID
-                  AND StorerKey = @cStorer
-                  AND SKU = @cSKU
-                  AND Status >= @cPickConfirmStatus
-                  AND ShipFlag <> 'Y'
-            ELSE
-               SELECT @nQTY_PPA = SUM( QTY)
-               FROM dbo.PickDetail WITH (NOLOCK)
-               WHERE DropID = @cDropID
-                  AND StorerKey = @cStorer
-                  AND SKU = @cSKU
-                  AND Status >= @cPickConfirmStatus
-                  AND ShipFlag <> 'Y'
-         END
-      END
-
-      -- ID
-      IF @cID <> '' AND @cID IS NOT NULL
-      BEGIN
-         -- Get PPA details
-         SELECT TOP 1
-            @nQTY_PPA = PQTY,
-            @nQTY_CHK = CQTY,
-            @nRowRef = RowRef
-         FROM rdt.rdtPPA WITH (NOLOCK)
-         WHERE SKU = @cSKU
-            AND StorerKey = @cStorer
-            AND ID = @cID
-
-         -- Get pick QTY
-         IF @nRowRef IS NULL
-         BEGIN
-            SELECT @nQTY_PPA = SUM( QTY)
-            FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LLI.LOC = LOC.LOC)
-            WHERE LOC.Facility = @cFacility
-               AND ID = @cID
-               AND StorerKey = @cStorer
-               AND SKU = @cSKU
-         END
-      END
-
-
-      -- TaskDetailKey
-      IF @cTaskDetailKey <> '' AND @cTaskDetailKey IS NOT NULL
-      BEGIN
-         -- Get PPA details
-         SELECT TOP 1
-            @nQTY_PPA = PQTY,
-            @nQTY_CHK = CQTY,
-            @nRowRef = RowRef
-         FROM rdt.rdtPPA WITH (NOLOCK)
-         WHERE SKU = @cSKU
-            AND StorerKey = @cStorer
-            AND TaskDetailKey = @cTaskDetailKey
-
-         -- Get pick QTY
-         IF @nRowRef IS NULL
-         BEGIN
-            SELECT @nQTY_PPA = SUM( QTY)
-            FROM dbo.TaskDetail WITH (NOLOCK)
+            -- Get PPA details
+            SELECT TOP 1
+               @nQTY_PPA = PQTY,
+               @nQTY_CHK = CQTY,
+               @nRowRef = RowRef
+            FROM rdt.rdtPPA WITH (NOLOCK)
             WHERE SKU = @cSKU
-            AND   StorerKey = @cStorer
-            AND   TaskDetailKey = @cTaskDetailKey
+               AND StorerKey = @cStorer
+               AND RefKey = @cRefNo
+
+            -- Get pick QTY from load
+            IF @nRowRef IS NULL
+               SELECT @nQTY_PPA = SUM( PD.QTY)
+               FROM dbo.OrderDetail AS OD WITH (NOLOCK)
+                  INNER JOIN dbo.PickDetail AS PD WITH (NOLOCK) ON OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber
+                  INNER JOIN dbo.LoadPlan AS LP WITH (NOLOCK) ON OD.LoadKey = LP.LoadKey
+               WHERE LP.UserDefine10 = @cRefNo
+                  AND OD.StorerKey = @cStorer
+                  AND OD.SKU = @cSKU
+                  AND PD.Status >= @cPickConfirmStatus
+         END
+
+         -- PickSlipNo
+         IF @cPickSlipNo <> '' AND @cPickSlipNo IS NOT NULL
+         BEGIN
+            -- Get PPA details
+            SELECT TOP 1
+               @nQTY_PPA = PQTY,
+               @nQTY_CHK = CQTY,
+               @nRowRef = RowRef
+            FROM rdt.rdtPPA WITH (NOLOCK)
+            WHERE SKU = @cSKU
+               AND StorerKey = @cStorer
+               AND PickSlipNo = @cPickSlipNo
+
+            -- Get pick QTY of the SKU
+            IF @nRowRef IS NULL
+            BEGIN
+               IF @cZone = 'XD' OR @cZone = 'LB' OR @cZone = 'LP'
+                  SELECT @nQTY_PPA = SUM( PD.QTY)
+                  FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
+                     INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON RKL.PickDetailKey = PD.PickDetailKey
+                  WHERE RKL.PickSlipNo = @cPickSlipNo
+                     AND PD.SKU = @cSKU
+                     AND PD.Status >= @cPickConfirmStatus
+               ELSE
+                  SELECT @nQTY_PPA = SUM( PD.QTY)
+                  FROM dbo.OrderDetail OD WITH (NOLOCK)
+                     INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber
+                     INNER JOIN dbo.Pack Pack WITH (NOLOCK) ON Pack.PackKey = OD.PackKey
+                  WHERE OD.LoadKey = @cExternOrderKey
+                     AND OD.OrderKey = CASE WHEN @cOrderKey = '' THEN OD.OrderKey ELSE @cOrderKey END
+                     AND PD.SKU = @cSKU
+                     AND PD.Status >= @cPickConfirmStatus
+            END
+         END
+
+         -- LoadKey
+         IF @cLoadKey <> '' AND @cLoadKey IS NOT NULL
+         BEGIN
+            -- Get PPA details
+            SELECT TOP 1
+               @nQTY_PPA = PQTY,
+               @nQTY_CHK = CQTY,
+               @nRowRef = RowRef
+            FROM rdt.rdtPPA WITH (NOLOCK)
+            WHERE SKU = @cSKU
+               AND StorerKey = @cStorer
+               AND LoadKey = @cLoadKey
+
+            -- Get pick QTY of the SKU
+            IF @nRowRef IS NULL
+               SELECT @nQTY_PPA = SUM( PD.QTY)
+               FROM dbo.OrderDetail AS OD WITH (NOLOCK)
+                  INNER JOIN dbo.PickDetail AS PD WITH (NOLOCK) ON OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber
+                  INNER JOIN dbo.LoadPlan AS LP WITH (NOLOCK) ON OD.LoadKey = LP.LoadKey
+               WHERE LP.LoadKey = @cLoadKey
+                  AND OD.StorerKey = @cStorer
+                  AND OD.SKU = @cSKU
+                  AND PD.Status >= @cPickConfirmStatus
+         END
+
+         -- OrderKey
+         IF @cOrderKey <> '' AND @cOrderKey IS NOT NULL
+         BEGIN
+            -- Get PPA details
+            SELECT TOP 1
+               @nQTY_PPA = PQTY,
+               @nQTY_CHK = CQTY,
+               @nRowRef = RowRef
+            FROM rdt.rdtPPA WITH (NOLOCK)
+            WHERE SKU = @cSKU
+               AND StorerKey = @cStorer
+               AND OrderKey = @cOrderKey
+
+            -- Get pick QTY from load
+            IF @nRowRef IS NULL
+               SELECT @nQTY_PPA = SUM( QTY)
+               FROM dbo.PickDetail WITH (NOLOCK)
+               WHERE OrderKey = @cOrderKey
+                  AND StorerKey = @cStorer
+                  AND SKU = @cSKU
+                  AND Status >= @cPickConfirmStatus
+         END
+
+         -- DropID
+         IF @cDropID <> '' AND @cDropID IS NOT NULL
+         BEGIN
+            -- Get PPA details
+            SELECT TOP 1
+               @nQTY_PPA = PQTY,
+               @nQTY_CHK = CQTY,
+               @nRowRef = RowRef
+            FROM rdt.rdtPPA WITH (NOLOCK)
+            WHERE SKU = @cSKU
+               AND StorerKey = @cStorer
+               AND DropID = @cDropID
+
+            -- Get pick QTY
+            IF @nRowRef IS NULL
+            BEGIN
+               IF @cPPACartonIDByPackDetailDropID = '1'
+                  SELECT @nQTY_PPA = SUM( CASE WHEN @cPreCartonization = '1' THEN PD.ExpQTY ELSE PD.QTY END)
+                  FROM dbo.PackHeader PH WITH (NOLOCK)
+                     INNER JOIN dbo.PackDetail PD WITH (NOLOCK) ON ( PH.PickSlipNo = PD.PickSlipNo)
+                  WHERE PD.DropID = @cDropID
+                     AND PH.StorerKey = @cStorer
+                     AND PD.SKU = @cSKU
+               ELSE
+               IF @cPPACartonIDByPackDetailLabelNo = '1'
+                  SELECT @nQTY_PPA = SUM( CASE WHEN @cPreCartonization = '1' THEN PD.ExpQTY ELSE PD.QTY END)
+                  FROM dbo.PackHeader PH WITH (NOLOCK)
+                     INNER JOIN dbo.PackDetail PD WITH (NOLOCK) ON ( PH.PickSlipNo = PD.PickSlipNo)
+                  WHERE PD.LabelNo = @cDropID
+                     AND PH.StorerKey = @cStorer
+                     AND PD.SKU = @cSKU
+               ELSE
+               IF @cPPACartonIDByPickDetailCaseID = '1'
+                  SELECT @nQTY_PPA = SUM( QTY)
+                  FROM dbo.PickDetail WITH (NOLOCK)
+                  WHERE CaseID = @cDropID
+                     AND StorerKey = @cStorer
+                     AND SKU = @cSKU
+                     AND Status >= @cPickConfirmStatus
+                     AND ShipFlag <> 'Y'
+               ELSE
+                  SELECT @nQTY_PPA = SUM( QTY)
+                  FROM dbo.PickDetail WITH (NOLOCK)
+                  WHERE DropID = @cDropID
+                     AND StorerKey = @cStorer
+                     AND SKU = @cSKU
+                     AND Status >= @cPickConfirmStatus
+                     AND ShipFlag <> 'Y'
+            END
+         END
+
+         -- ID
+         IF @cID <> '' AND @cID IS NOT NULL
+         BEGIN
+            -- Get PPA details
+            SELECT TOP 1
+               @nQTY_PPA = PQTY,
+               @nQTY_CHK = CQTY,
+               @nRowRef = RowRef
+            FROM rdt.rdtPPA WITH (NOLOCK)
+            WHERE SKU = @cSKU
+               AND StorerKey = @cStorer
+               AND ID = @cID
+
+            -- Get pick QTY
+            IF @nRowRef IS NULL
+            BEGIN
+               SELECT @nQTY_PPA = SUM( QTY)
+               FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
+                  JOIN dbo.LOC WITH (NOLOCK) ON (LLI.LOC = LOC.LOC)
+               WHERE LOC.Facility = @cFacility
+                  AND ID = @cID
+                  AND StorerKey = @cStorer
+                  AND SKU = @cSKU
+            END
+         END
+
+
+         -- TaskDetailKey
+         IF @cTaskDetailKey <> '' AND @cTaskDetailKey IS NOT NULL
+         BEGIN
+            -- Get PPA details
+            SELECT TOP 1
+               @nQTY_PPA = PQTY,
+               @nQTY_CHK = CQTY,
+               @nRowRef = RowRef
+            FROM rdt.rdtPPA WITH (NOLOCK)
+            WHERE SKU = @cSKU
+               AND StorerKey = @cStorer
+               AND TaskDetailKey = @cTaskDetailKey
+
+            -- Get pick QTY
+            IF @nRowRef IS NULL
+            BEGIN
+               SELECT @nQTY_PPA = SUM( QTY)
+               FROM dbo.TaskDetail WITH (NOLOCK)
+               WHERE SKU = @cSKU
+               AND   StorerKey = @cStorer
+               AND   TaskDetailKey = @cTaskDetailKey
+            END
          END
       END
 
@@ -4284,6 +4413,8 @@ BEGIN
       V_String44 = @cAllowCubeZero,       --(cc02)
       V_String45 = @cReasonCode,        
       V_String46 = @cCaptureReasonCode,   
+      v_String47 = @cExtendedRefNoSP,
+      V_String48 = @cMultiColScan,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01 = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02 = @cFieldAttr02,

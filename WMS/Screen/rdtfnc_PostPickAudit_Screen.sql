@@ -1,7 +1,7 @@
 -- 814 = Criteria screen
 DELETE rdt.RDTScn WHERE Scn = 814 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 814, 'ENG',
-    @cLine01 = 'REFNO:    %10i01'
+    @cLine01 = 'REFNO:    %20i01' --WMS-21562
    ,@cLine02 = 'PSNO:     %10i02'
    ,@cLine03 = 'LOADKEY:  %10i03'
    ,@cLine04 = 'ORDERKEY: %10i04'
@@ -15,7 +15,7 @@ EXECUTE rdt.rdtAddScn 814, 'ENG',
 -- 815 = Statistic screen
 DELETE rdt.RDTScn WHERE Scn = 815 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 815, 'ENG',
-    @cLine01 = 'REFNO:    %10d01'
+    @cLine01 = 'REFNO:    %20d01' --WMS-21562
    ,@cLine02 = 'PSNO:     %10d02'
    ,@cLine03 = 'LOADKEY:  %10d03'
    ,@cLine04 = 'ORDERKEY: %10d04'
