@@ -82,7 +82,7 @@ BEGIN
             END
             ELSE
             BEGIN
-               IF @cOtherCompany <>@cCompany AND ISNULL(@cOtherCompany,'')<>''
+               IF SUBSTRING(@cOtherCompany,1,6) <> SUBSTRING(@cCompany,1,6) AND ISNULL(@cOtherCompany,'')<>''
                BEGIN
                   SET @nErrNo = 195655
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --OrderDiffCom
