@@ -14,7 +14,7 @@ GO
 /* Called By: n_cst_packcarton_ecom                                     */        
 /*          : ue_getcartontrackno                                       */        
 /*        :                                                             */        
-/* PVCS Version: 1.3                                                    */        
+/* PVCS Version: 1.4                                                    */        
 /*                                                                      */        
 /* Version: 7.0                                                         */        
 /*                                                                      */        
@@ -28,6 +28,7 @@ GO
 /* 30-Sep-2022 WLChooi  1.2   WMS-20913 Get Info from Option5 filter    */
 /*                            by ECOM Platform (WL02)                   */
 /* 08-Feb-2023 WLChooi  1.3   WMS-21728 - Add prefix to TL2.KeyXX (WL03)*/
+/* 24-Feb-2023 WLChooi  1.4   WMS-21728 - Bug Fix (WL04)                */
 /************************************************************************/        
 CREATE OR ALTER PROC [dbo].[isp_EPackCtnTrack09]        
          @c_PickSlipNo  NVARCHAR(10)         
@@ -89,6 +90,7 @@ BEGIN
    END        
         
    SET @c_Orderkey = ''    
+   SET @c_CTNTrackNo = ''   --WL04
    
    --WL01 S
    SELECT @c_Orderkey      = PACKHEADER.Orderkey         
@@ -210,9 +212,9 @@ BEGIN
    END
 
    IF EXISTS (SELECT 1
-                  FROM PACKINFO PIF (NOLOCK)
-                  WHERE PIF.PickSlipNo = @c_PickSlipNo
-                  AND PIF.CartonNo = @n_CartonNo AND PIF.PickSlipNo = '') AND @n_CartonNo > 1 
+              FROM PACKINFO PIF (NOLOCK)
+              WHERE PIF.PickSlipNo = @c_PickSlipNo
+              AND PIF.CartonNo = @n_CartonNo AND ISNULL(PIF.TrackingNo,'') = '') AND @n_CartonNo > 1   --WL04
    BEGIN
       SELECT TOP 1 @n_RowRef = CT.RowRef
                  , @c_CTNTrackNo = CT.TrackingNo
@@ -223,8 +225,8 @@ BEGIN
       ORDER BY CT.AddDate
 
       UPDATE dbo.PACKINFO
-	  SET TrackingNo = @c_CTNTrackNo
-	  WHERE CartonNo = @n_CartonNo AND PickSlipNo = @c_PickSlipNo
+      SET TrackingNo = @c_CTNTrackNo
+      WHERE CartonNo = @n_CartonNo AND PickSlipNo = @c_PickSlipNo
    END
 
  --  IF ISNULL(@c_CTNTrackNo,'') = ''
