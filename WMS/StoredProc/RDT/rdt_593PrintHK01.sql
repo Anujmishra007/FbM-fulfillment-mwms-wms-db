@@ -1,11 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'rdt.rdt_593PrintHK01') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_593PrintHK01
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 
 /******************************************************************************/
 /* Store procedure: rdt_593PrintHK01                                          */
@@ -19,23 +16,23 @@ GO
 /* 2018-04-20 1.3  ML         Pass @nNoOfCopy to rdt_Print                    */
 /* 2018-08-20 1.4  CheeMUN    SCTASK0183384 - Extend Parms Length             */
 /* 2019-05-20 1.5  ML         WMS-8878:Handle NoOfCopy,PrintCmd@ParmList(ML01)*/
-/* 2021-05-17 1.6  ML         WMS-16989: Extend Parm @cOption length (ML02)   */
+/* 2022-12-22 1.6  YeeKung    WMS-21359 Extend option length (yeekung01)      */
 /******************************************************************************/
 
-CREATE PROC rdt.rdt_593PrintHK01 (
+CREATE OR ALTER PROC [RDT].[rdt_593PrintHK01] (
    @nMobile    INT,
    @nFunc      INT,
    @nStep      INT,
    @cLangCode  NVARCHAR( 3),
-   @cStorerKey NVARCHAR(15),
-   @cOption    NVARCHAR(10),  --ML02
+   @cStorerKey NVARCHAR( 15),
+   @cOption    NVARCHAR( 2), --(yeekung01)
    @cParam1    NVARCHAR(60),  --SCTASK0183384
    @cParam2    NVARCHAR(60),  --SCTASK0183384
    @cParam3    NVARCHAR(60),  --SCTASK0183384
    @cParam4    NVARCHAR(60),  --SCTASK0183384
    @cParam5    NVARCHAR(60),  --SCTASK0183384
    @nErrNo     INT           OUTPUT,
-   @cErrMsg    NVARCHAR(20)  OUTPUT
+   @cErrMsg    NVARCHAR( 20) OUTPUT
 )
 AS
    SET NOCOUNT ON
@@ -199,7 +196,7 @@ AS
    BEGIN
       SELECT @cPaperWinPrinter = LEFT(WinPrinter, CHARINDEX(',',WinPrinter+',') -1)
         FROM rdt.rdtPrinter WITH (NOLOCK)
-       WHERE PrinterID = @cPaperPrinter
+     WHERE PrinterID = @cPaperPrinter
    END
 
    -- Validate Input
@@ -219,37 +216,36 @@ AS
 
       OPEN C_VALIDATION
 
-      SET @cSQLParam = '@bSuccess   INT           OUTPUT'
+      SET @cSQLParam = '@bSuccess   INT          OUTPUT'
                      +',@cMsgText   NVARCHAR(250) OUTPUT'
-                     +',@cStorerKey NVARCHAR(15)  OUTPUT'
-                     +',@cFacility  NVARCHAR(5)   OUTPUT'
-                     +',@cSku       NVARCHAR(20)  OUTPUT'
-                     +',@cParam1    NVARCHAR(60)  OUTPUT'
-                     +',@cParam2    NVARCHAR(60)  OUTPUT'
-                     +',@cParam3    NVARCHAR(60)  OUTPUT'
-                     +',@cParam4    NVARCHAR(60)  OUTPUT'
-                     +',@cParam5    NVARCHAR(60)  OUTPUT'
-                     +',@cParam6    NVARCHAR(60)  OUTPUT'
-                     +',@cParam7    NVARCHAR(60)  OUTPUT'
-                     +',@cParam8    NVARCHAR(60)  OUTPUT'
-                     +',@cParam9    NVARCHAR(60)  OUTPUT'
-                     +',@cParam10   NVARCHAR(60)  OUTPUT'
-                     +',@nNoOfCopy  INT           OUTPUT'
-                     +',@cOption    NVARCHAR(10)'               -- ML02
+                     +',@cStorerKey NVARCHAR(15) OUTPUT'
+                     +',@cFacility  NVARCHAR(5)  OUTPUT'
+                     +',@cSku       NVARCHAR(20) OUTPUT'
+                     +',@cParam1    NVARCHAR(60) OUTPUT'
+                     +',@cParam2    NVARCHAR(60) OUTPUT'
+                     +',@cParam3    NVARCHAR(60) OUTPUT'
+                     +',@cParam4    NVARCHAR(60) OUTPUT'
+                     +',@cParam5    NVARCHAR(60) OUTPUT'
+                     +',@cParam6    NVARCHAR(60) OUTPUT'
+                     +',@cParam7    NVARCHAR(60) OUTPUT'
+                     +',@cParam8    NVARCHAR(60) OUTPUT'
+                     +',@cParam9    NVARCHAR(60) OUTPUT'
+                     +',@cParam10   NVARCHAR(60) OUTPUT'
+                     +',@nNoOfCopy  INT OUTPUT'
+                     +',@cOption    NVARCHAR(1)'
                      +',@cCode2     NVARCHAR(30)'
-                     +',@cValidateAction  NVARCHAR(60)  OUTPUT' -- ML02
-                     +',@cFocusField      NVARCHAR(10)  OUTPUT' -- ML02
-                     +',@cPrintCmdExp     NVARCHAR(MAX)'        -- ML01
-                     +',@cPrintCmd        NVARCHAR(MAX) OUTPUT' -- ML01
-                     +',@cLabelPrinter    NVARCHAR(10)  OUTPUT' -- ML01
-                     +',@cPaperPrinter    NVARCHAR(10)  OUTPUT' -- ML01
-                     +',@cLabelWinPrinter NVARCHAR(128) OUTPUT' -- ML01
-                     +',@cPaperWinPrinter NVARCHAR(128) OUTPUT' -- ML01
-                     +',@cReportType      NVARCHAR(30)  OUTPUT' -- ML01
-                     +',@nMobile          INT'                  -- ML01
-                     +',@nFunc            INT'                  -- ML01
-                     +',@nStep            INT'                  -- ML01
-                     +',@cLangCode        NVARCHAR(3)'          -- ML01
+                     +',@cValidateAction NVARCHAR(60)'
+                     +',@cPrintCmdExp NVARCHAR(MAX)'      -- ML01
+                     +',@cPrintCmd  NVARCHAR(MAX) OUTPUT' -- ML01
+                     +',@cLabelPrinter NVARCHAR(10)'      -- ML01
+                     +',@cPaperPrinter NVARCHAR(10)'      -- ML01
+                     +',@cLabelWinPrinter NVARCHAR(128)'  -- ML01
+                     +',@cPaperWinPrinter NVARCHAR(128)'  -- ML01
+                     +',@cReportType NVARCHAR(30)'        -- ML01
+                     +',@nMobile INT'                     -- ML01
+                     +',@nFunc INT'                       -- ML01
+                     +',@nStep INT'                       -- ML01
+                     +',@cLangCode NVARCHAR(3)'           -- ML01
 
       WHILE 1=1
       BEGIN
@@ -285,19 +281,18 @@ AS
                , @nNoOfCopy   OUTPUT
                , @cOption
                , @cCode2
-               , @cValidateAction  OUTPUT -- ML02
-               , @cFocusField      OUTPUT -- ML02
-               , @cPrintCmdExp            -- ML01
-               , @cPrintCmd        OUTPUT -- ML01
-               , @cLabelPrinter    OUTPUT -- ML01
-               , @cPaperPrinter    OUTPUT -- ML01
-               , @cLabelWinPrinter OUTPUT -- ML01
-               , @cPaperWinPrinter OUTPUT -- ML01
-               , @cReportType      OUTPUT -- ML01
-               , @nMobile                 -- ML01
-               , @nFunc                   -- ML01
-               , @nStep                   -- ML01
-               , @cLangCode               -- ML01
+               , @cValidateAction
+               , @cPrintCmdExp       -- ML01
+               , @cPrintCmd   OUTPUT -- ML01
+               , @cLabelPrinter      -- ML01
+               , @cPaperPrinter      -- ML01
+               , @cLabelWinPrinter   -- ML01
+    , @cPaperWinPrinter   -- ML01
+               , @cReportType        -- ML01
+               , @nMobile            -- ML01
+               , @nFunc              -- ML01
+               , @nStep              -- ML01
+               , @cLangCode          -- ML01
          END TRY
          BEGIN CATCH
             SET @nErrNo = 119903
@@ -361,7 +356,7 @@ AS
                   +',@cParam9 NVARCHAR(60)'
                   +',@cParam10 NVARCHAR(60)'
                   +',@nNoOfCopy INT'
-                  +',@cOption NVARCHAR(10)'           -- ML02
+                  +',@cOption NVARCHAR(1)'
                   +',@cPrintCmdExp NVARCHAR(MAX)'     -- ML01
                   +',@cPrintCmd NVARCHAR(MAX)'        -- ML01
                   +',@cLabelPrinter NVARCHAR(10)'     -- ML01
@@ -404,7 +399,7 @@ AS
          , @cLangCode        -- ML01
    END TRY
    BEGIN CATCH
-      SET @nErrNo = 119905
+   SET @nErrNo = 119905
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ReportNotSetup
       GOTO Quit
    END CATCH
@@ -480,9 +475,8 @@ AS
            , @n_p_NoOfCopy  = TRY_PARSE(ISNULL((SELECT Value FROM @tReportParam WHERE Variable='@nNoOfCopy' ),'') AS INT) -- ML01
            , @c_p_PrintCmd  = (SELECT Value FROM @tReportParam WHERE Variable='@cPrintCmd' )                              -- ML01
 
-
       -- Get Report Info
-      SET @cJobName = 'rdt_593PrintHK01(' + LTRIM(RTRIM(ISNULL(@cOption,''))) + '): '   -- ML02
+      SET @cJobName = 'rdt_593PrintHK01(' + ISNULL(@cOption,'') + '): '
 
       SELECT @cJobName = @cJobName + ISNULL(RptDesc,'')
       FROM rdt.rdtReport WITH (NOLOCK)
@@ -530,7 +524,7 @@ AS
                         +',@nFunc INT'
                         +',@nStep INT'
                         +',@cLangCode NVARCHAR(3)'
-                        +',@cOption NVARCHAR(10)'      -- ML02
+                        +',@cOption NVARCHAR(1)'
 
          BEGIN TRY
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam
@@ -610,5 +604,5 @@ AS
 Quit:
 
 GO
-GRANT EXECUTE ON rdt.rdt_593PrintHK01 TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_593PrintHK01] TO [NSQL]
 GO
