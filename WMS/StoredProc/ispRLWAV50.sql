@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: Wave                                                      */
 /*                                                                      */
-/* GitLab Version: 1.1                                                  */
+/* GitLab Version: 1.2                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -23,6 +23,7 @@ GO
 /* Date         Author   Ver  Purposes                                  */
 /* 12-Apr-2022  WLChooi  1.0  DevOps Combine Script                     */
 /* 23-Feb-2023  WLChooi  1.1  WMS-19079 - Fix FP/PP Calculation (WL01)  */
+/* 27-Feb-2023  WLChooi  1.2  WMS-19079 - Fix ToLoc is blank (WL02)     */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV50]
@@ -641,7 +642,7 @@ BEGIN
 
       WHILE @@FETCH_STATUS = 0 AND @n_Continue IN ( 1, 2 )
       BEGIN
-         SET @c_ToLoc = N''
+         --SET @c_ToLoc = N''   --WL02
          SET @c_TaskType = N'RPF'
          SET @c_Areakey = N''
          SET @c_Message01 = N'0'
