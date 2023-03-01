@@ -24,6 +24,7 @@ GO
 /* 2021-04-01  YeeKung 1.3   WMS-16717 Add serialno and serialqty           */
 /*                              Params (yeekung01)                          */
 /* 03-08-2022  YeeKung 1.4   WMS-20495 remove label print     (yeekung02)   */  
+/* 19-12-2022  James   1.5   WMS-21358 Add VMI ordergroup process (james03) */
 /****************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_840ExtInsPack06] (
@@ -86,8 +87,9 @@ BEGIN
 
    DECLARE @b_success         INT,
            @n_err             INT,
-           @c_errmsg          NVARCHAR( 20)
-
+           @c_errmsg          NVARCHAR( 20),
+           @bsuccess          INT
+           
    SET @nTranCount = @@TRANCOUNT
 
    BEGIN TRAN
@@ -196,8 +198,48 @@ BEGIN
                   AND PickSlipNo = @cPickSlipNo
                   AND CartonNo = @nCartonNo)
       BEGIN
-         SET @cLabelNo = @cTrackNo
+      	-- (james03)
+      	IF EXISTS ( SELECT 1 FROM dbo.ORDERS WITH (NOLOCK)
+      	            WHERE OrderKey = @cOrderKey
+      	            AND   OrderGroup = 'VMI' 
+      	            AND   ShipperKey = 'JD') AND @nCartonNo > 1
+         BEGIN
+         	SET @cLabelNo = RTRIM( @cTrackNo) + '-' + CAST( @nCartonNo AS NVARCHAR( 3))
+         	
+         	--INSERT INTO dbo.CartonTrack 
+         	--( TrackingNo, CarrierName, KeyName, LabelNo, CarrierRef2) VALUES 
+         	--( @cLabelNo, 'VMI', 'VMI', @cOrderKey, 'GET')
+         	
+         	--IF @@ERROR <> 0
+          --  BEGIN
+          --     SET @nErrNo = 135809
+          --     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'INS CTNTRK ERR'
+          --     GOTO RollBackTran
+          --  END
+         END
+         ELSE
+         BEGIN
+         	IF @nCartonNo = 1
+               SET @cLabelNo = @cTrackNo
+            ELSE
+            BEGIN
+               -- Get new LabelNo
+               EXECUTE isp_GenUCCLabelNo
+                        @cStorerKey,
+                        @cLabelNo     OUTPUT,
+                        @bSuccess     OUTPUT,
+                        @nErrNo       OUTPUT,
+                        @cErrMsg      OUTPUT
 
+               IF @bSuccess <> 1
+               BEGIN
+                  SET @nErrNo = 135810
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'GET LABEL FAIL'
+                  GOTO RollBackTran
+               END
+            END
+         END
+         
          IF ISNULL( @cLabelNo, '') = ''
          BEGIN
             SET @nErrNo = 135805
