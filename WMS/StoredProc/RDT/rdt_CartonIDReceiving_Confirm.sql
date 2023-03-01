@@ -1,10 +1,8 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE Object_Id = OBJECT_ID(N'[RDT].[rdt_CartonIDReceiving_Confirm]') AND Type in (N'P', N'PC'))
-   DROP PROCEDURE [RDT].[rdt_CartonIDReceiving_Confirm]
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /************************************************************************/
 /* Store procedure: rdt_CartonIDReceiving_Confirm                       */
 /* Copyright      : IDS                                                 */
@@ -22,9 +20,10 @@ GO
 /* 10-15-2012 1.1  ChewKP   SOS#258706 Change Screen design on Screen 5,*/
 /*                         New StorerConfig, Label Validation (ChewKP01)*/ 
 /* 01-16-2013 1.2  James    SOS265346 - Add split line (james01)        */
+/* 02-10-2023 1.3  James    WMS-21643 Add Lot06-Lot15 (james02)         */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdt_CartonIDReceiving_Confirm] (
+CREATE OR ALTER PROC [RDT].[rdt_CartonIDReceiving_Confirm] (
        @nFunc          INT   
       ,@nMobile        INT   
       ,@cLangCode      NVARCHAR(3)
@@ -104,7 +103,18 @@ BEGIN
               @nRecordCount           INT,
               @nQtyExpected           INT,
               @nBeforeReceivedQty     INT,
-              @cDisAllowRDTOverReceipt NVARCHAR(1) -- (ChewKP01)
+              @cDisAllowRDTOverReceipt NVARCHAR(1), -- (ChewKP01)
+              @cLottable06            NVARCHAR( 30),    
+              @cLottable07            NVARCHAR( 30),
+              @cLottable08            NVARCHAR( 30),
+              @cLottable09            NVARCHAR( 30),
+              @cLottable10            NVARCHAR( 30),
+              @cLottable11            NVARCHAR( 30),
+              @cLottable12            NVARCHAR( 30),
+              @dLottable13            DATETIME,
+              @dLottable14            DATETIME,
+              @dLottable15            DATETIME
+              
 
    -- (james01)
    DECLARE   @cNewLoc                 NVARCHAR( 10), 
@@ -245,8 +255,18 @@ BEGIN
                         '  @cLottable01          = RD.Lottable01         , ' + 
                         '  @cLottable02          = RD.Lottable02         , ' +
                         '  @cLottable03          = RD.Lottable03         , ' +
-                        '  @dLottable04          = RD.Lottable04           ' +
-      	             ' FROM dbo.ReceiptDetail RD WITH (NOLOCK) ' 
+                        '  @dLottable04          = RD.Lottable04         , ' +
+                        '  @cLottable06          = RD.Lottable06         , ' +
+                        '  @cLottable07          = RD.Lottable07         , ' +
+                        '  @cLottable08          = RD.Lottable08         , ' +
+                        '  @cLottable09          = RD.Lottable09         , ' +
+                        '  @cLottable10          = RD.Lottable10         , ' +
+                        '  @cLottable11          = RD.Lottable11         , ' +
+                        '  @cLottable12          = RD.Lottable12         , ' +
+                        '  @dLottable13          = RD.Lottable13         , ' +
+                        '  @dLottable14          = RD.Lottable14         , ' +
+                        '  @dLottable15          = RD.Lottable15           ' +
+      	               ' FROM dbo.ReceiptDetail RD WITH (NOLOCK)          ' 
                	         
    SET @cExecStatements_2 =  ' WHERE RD.StorerKey = ''' + RTRIM(@cStorerKey)  + ''' ' + 
                             ' AND RD.ReceiptKey = ''' + RTRIM(@cReceiptKey) + ''' ' + 
@@ -659,7 +679,17 @@ BEGIN
                         '  @cLottable01            NVARCHAR( 18)      OUTPUT ,' +   
                         '  @cLottable02            NVARCHAR( 18)      OUTPUT ,' +  
                         '  @cLottable03            NVARCHAR( 18)      OUTPUT ,' +  
-                        '  @dLottable04            DATETIME       OUTPUT ,' + 
+                        '  @dLottable04            DATETIME           OUTPUT ,' + 
+                        '  @cLottable06            NVARCHAR( 30)      OUTPUT ,' +
+                        '  @cLottable07            NVARCHAR( 30)      OUTPUT ,' +
+                        '  @cLottable08            NVARCHAR( 30)      OUTPUT ,' +
+                        '  @cLottable09            NVARCHAR( 30)      OUTPUT ,' +
+                        '  @cLottable10            NVARCHAR( 30)      OUTPUT ,' +
+                        '  @cLottable11            NVARCHAR( 30)      OUTPUT ,' +
+                        '  @cLottable12            NVARCHAR( 30)      OUTPUT ,' +
+                        '  @dLottable13            DATETIME           OUTPUT ,' +
+                        '  @dLottable14            DATETIME           OUTPUT ,' +
+                        '  @dLottable15            DATETIME           OUTPUT ,' +                        
                         '  @cStorerKey             NVARCHAR( 15)  ,   ' +
                         '  @cReceiptKey            NVARCHAR( 10)      ' 
        
@@ -703,6 +733,16 @@ BEGIN
                         , @cLottable02             OUTPUT 
                         , @cLottable03             OUTPUT 
                         , @dLottable04             OUTPUT 
+                        , @cLottable06             OUTPUT
+                        , @cLottable07             OUTPUT
+                        , @cLottable08             OUTPUT
+                        , @cLottable09             OUTPUT
+                        , @cLottable10             OUTPUT
+                        , @cLottable11             OUTPUT
+                        , @cLottable12             OUTPUT
+                        , @dLottable13             OUTPUT
+                        , @dLottable14             OUTPUT
+                        , @dLottable15             OUTPUT
                         , @cStorerKey             
                         , @cReceiptKey            
 
@@ -729,7 +769,9 @@ BEGIN
       FreeGoodQtyReceived, ExportStatus, LoadKey, ExternPoKey,
       UserDefine01, UserDefine02, UserDefine03, UserDefine04, UserDefine05,
       UserDefine06, UserDefine07, UserDefine08, UserDefine09, UserDefine10, POLineNumber, SubReasonCode, DuplicateFrom,
-      Lottable01, Lottable02, Lottable03, Lottable04) 
+      Lottable01, Lottable02, Lottable03, Lottable04, Lottable06, 
+      Lottable07, Lottable08, Lottable09, Lottable10, Lottable11, 
+      Lottable12, Lottable13, Lottable14, Lottable15) 
    VALUES (
       @cReceiptKey, @cNewReceiptLineNumber, @cPOKey, @cStorerKey, @cSKU, 0, @nQtyReceived,  
       @cToID, @cToLOC, --@cLottable01, @cLottable02, @cLottable03, @dLottable04, --@dLottable05, 
@@ -740,7 +782,9 @@ BEGIN
       ISNULL(@cUserDefine01, ''), ISNULL(@cUserDefine02, ''), ISNULL(@cUserDefine03, ''), ISNULL(@cUserDefine04, ''), ISNULL(@cConditionCode, ''),
       @dtUserDefine06, @dtUserDefine07, ISNULL(RTRIM(@cCartonID),''), ISNULL(@cUserDefine09, ''), ISNULL(@cUserDefine10, ''), 
       ISNULL(@cPoLineNo, ''), ISNULL(@cSubreasonCode,'') , @cReceiptLineNumber, -- (ChewKP01)
-      ISNULL(@cLottable01,''), ISNULL(@cLottable02,''), ISNULL(@cLottable03,''), ISNULL(@dLottable04,'') )
+      ISNULL(@cLottable01,''), ISNULL(@cLottable02,''), ISNULL(@cLottable03,''), ISNULL(@dLottable04,''), ISNULL(@cLottable06,''), 
+      ISNULL(@cLottable07,''), ISNULL(@cLottable08,''), ISNULL(@cLottable09,''), ISNULL(@cLottable10,''), ISNULL(@cLottable11,''),
+      ISNULL(@cLottable12,''), ISNULL(@dLottable13,''), ISNULL(@dLottable14,''), ISNULL(@dLottable15,'') )
        
    IF @@ERROR <> 0
    BEGIN
