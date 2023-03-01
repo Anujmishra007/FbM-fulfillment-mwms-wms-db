@@ -44,6 +44,9 @@ execute rdt.rdtAddMsg 76283, 10, '76283^No Fac Prefix',  'us_english',  597
 --SOS283528
 execute rdt.rdtAddMsg 76284, 10, '76284^Invalid LOC',    'us_english',  597
 
+--WMS-21643
+execute rdt.rdtAddMsg 76285, 10, '76285^Invalid Format', 'us_english',  597
+
 
 
 
