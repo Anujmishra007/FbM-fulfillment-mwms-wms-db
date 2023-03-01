@@ -9,4 +9,7 @@ execute rdt.rdtAddMsg 145704, 10, 'ORDER CANCELLED',        'us_english', 840
 --WMS16145
 execute rdt.rdtAddMsg 145705, 10, '45705^INVALID LOT02',    'us_english', 840
 
+--WMS-21501
+execute rdt.rdtAddMsg 145706, 10, '45706^PACK NOT ALLOW',   'us_english', 840
+
 SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 145701 AND 145750
