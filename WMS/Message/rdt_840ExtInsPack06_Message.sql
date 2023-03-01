@@ -10,4 +10,8 @@ execute rdt.rdtAddMsg 135806, 10, '35806^INS PACK FAIL',   'us_english', 840
 execute rdt.rdtAddMsg 135807, 10, '35807^INS PACK FAIL',   'us_english', 840
 execute rdt.rdtAddMsg 135808, 10, '35808^UPD DROPID ERR',  'us_english', 840
 
+-- WMS-21358
+execute rdt.rdtAddMsg 135809, 10, '35809^INS CTNTRK ERR',  'us_english', 840
+execute rdt.rdtAddMsg 135810, 10, '35810^GET LABEL FAIL',  'us_english', 840
+
 select * from rdt.rdtmsg (nolock) where message_id between 135801 AND 135850
