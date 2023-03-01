@@ -25,7 +25,8 @@ GO
 /* 06-Jul-2022  WLChooi 1.0   DevOps Combine Script                        */
 /* 15-Feb-2023  WLChooi 1.1   WMS-21739 Codelkup to enable/disable print   */
 /*                            label (WL01)                                 */
-/* 01-Mar-2023  WLChooi 1.2   WMS-21739 Filter out old ASN (WL02)          */
+/* 01-Mar-2023  WLChooi 1.2   WMS-21739 Filter out old ASN and skip print  */
+/*                            if user not found (WL02)                     */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_UNILEVER_AutoReleasePA]
 AS
@@ -94,7 +95,16 @@ BEGIN
          BEGIN
             SELECT @n_continue = 3
             GOTO QUIT_SP
-         END         
+         END  
+
+         --WL02 S
+         IF NOT EXISTS (SELECT 1
+                        FROM RDT.RDTUSER (NOLOCK)
+                        WHERE UserName = @c_UserName)
+         BEGIN
+            GOTO NEXT_LOOP
+         END
+         --WL02 E
          
          --WL01 S
          IF EXISTS (SELECT 1
@@ -130,6 +140,7 @@ BEGIN
          END
          --WL01 E
          
+         NEXT_LOOP:   --WL02
          FETCH NEXT FROM CUR_ASN INTO @c_Receiptkey, @c_ReceiptLineNumber, @c_UserName   --WL01
       END          
       CLOSE CUR_ASN
