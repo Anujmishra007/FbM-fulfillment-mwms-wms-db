@@ -14,7 +14,7 @@ GO
 /* Called By: SQL Backend Job every 5 minutes                              */
 /*                                                                         */
 /*                                                                         */
-/* PVCS Version: 1.1                                                       */
+/* PVCS Version: 1.2                                                       */
 /*                                                                         */
 /* Version: 7.0                                                            */
 /*                                                                         */
@@ -25,6 +25,7 @@ GO
 /* 06-Jul-2022  WLChooi 1.0   DevOps Combine Script                        */
 /* 15-Feb-2023  WLChooi 1.1   WMS-21739 Codelkup to enable/disable print   */
 /*                            label (WL01)                                 */
+/* 01-Mar-2023  WLChooi 1.2   WMS-21739 Filter out old ASN (WL02)          */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_UNILEVER_AutoReleasePA]
 AS
@@ -73,6 +74,7 @@ BEGIN
          AND R.DOCTYPE = 'A'
          AND RD.FinalizeFlag = 'Y'
          AND RD.PutawayLoc = ''
+         AND R.ASNStatus <> '9'   --WL02
          ORDER BY RD.Receiptkey, RD.ReceiptLineNumber
         
       
