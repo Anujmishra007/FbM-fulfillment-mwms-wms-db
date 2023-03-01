@@ -1,10 +1,8 @@
-IF (objectProperty(object_id('rdt.rdtfnc_CartonIDReceiving'), 'IsProcedure') is not null)
-	DROP PROCEDURE [RDT].[rdtfnc_CartonIDReceiving] 
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /******************************************************************************/   
 /* Copyright: IDS                                                             */   
 /* Purpose: ZARA Carton ID Receiving SOS#243508                               */   
@@ -22,9 +20,10 @@ GO
 /* 2013-08-26 1.4  James      SOS287456 - Check label length (james03)        */
 /* 2016-10-05 1.5  James      Perf tuning                                     */
 /* 2018-10-30 1.6  Gan        Performance tuning                              */
+/* 2023-02-10 1.7  James      WMS-21643 Enhance label length check (james04)  */
 /******************************************************************************/  
   
-CREATE PROC [RDT].[rdtfnc_CartonIDReceiving] (  
+CREATE OR ALTER PROC [RDT].[rdtfnc_CartonIDReceiving] (  
    @nMobile    int,  
    @nErrNo     int  OUTPUT,  
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max  
@@ -115,7 +114,8 @@ DECLARE
    @cErrMsg4                  NVARCHAR( 20),  -- (james01)
    @cErrMsg5                  NVARCHAR( 20),  -- (james01)
    @cOutstring                NVARCHAR( 255), -- (james01)
-  
+   @nCartonIDChecked          INT,
+   
    @c_oFieled01 NVARCHAR(20), @c_oFieled02 NVARCHAR(20),
    @c_oFieled03 NVARCHAR(20), @c_oFieled04 NVARCHAR(20),
    @c_oFieled05 NVARCHAR(20), @c_oFieled06 NVARCHAR(20),
@@ -613,9 +613,30 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( 76260, @cLangCode, 'DSP') --'CartonID Req'
          GOTO Step_4_Fail
       END
+
+      -- (james04)
+      SET @nCartonIDChecked = 0
+      
+      -- If already setup check format then no need check for carton length below
+      IF EXISTS ( SELECT 1
+                  FROM CodeLkup WITH (NOLOCK)   
+                  WHERE ListName = 'RDTFormat'   
+                  AND Code = RTRIM( CAST( @nFunc AS NVARCHAR(5))) + '-CartonID'   
+                  AND StorerKey = @cStorerKey)
+      BEGIN
+         -- Check barcode format
+         IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'CartonID', @cCartonID) = 0
+         BEGIN
+            SET @nErrNo = 76285
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format
+            GOTO Step_4_Fail
+         END
+      
+      	SET @nCartonIDChecked = 1
+      END
       
       -- (ChewKP01)
-      IF Len(@cCartonID) NOT IN (16, 20)  -- (james03)
+      IF Len(@cCartonID) NOT IN (16, 20) AND @nCartonIDChecked = 0 -- (james03)
       BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( 76272, @cLangCode, 'DSP') --'Invalid CartonID'
          GOTO Step_4_Fail
