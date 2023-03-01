@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_GetPickSlipWave14_1]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_GetPickSlipWave14_1]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -36,8 +31,9 @@ GO
 /* 03-Dec-2019 Wan03    1.5   Performance enhancement                   */  
 /* 15-06-2020  Wan04    1.6   Sync Exceed & SCE                         */ 
 /* 26-07-2021  CSCHONG  1.7   WMS-17182 revised field logic (CS03)      */   
+/* 31-01-2023  MINGLE   1.8   WMS-21515 revised field logic (ML01)      */ 
 /************************************************************************/
-CREATE  PROC isp_GetPickSlipWave14_1
+CREATE OR ALTER PROC isp_GetPickSlipWave14_1
             @c_Wavekey        NVARCHAR(10)
          ,  @c_PickSlipNo     NVARCHAR(10)
          ,  @c_Zone           NVARCHAR(10)
@@ -212,12 +208,18 @@ BEGIN
          ,PD.Storerkey
          ,PD.Loc
          ,PD.ID
-         ,Style   = SUBSTRING(S1.Sku,3,6)                               --CS03
-         ,Color   = SUBSTRING(S1.Sku,9,3)                               --CS03
-         ,Size    = LTRIM(SUBSTRING(S1.Sku,12,5))                       --CS03
-         ,SkuDescr= ISNULL(MIN(S1.Descr),0)                             --CS03
+         ,Style   = SUBSTRING(SKU.Sku,1,6)                               --CS03  --ML01 use SKU instead of S1
+         ,Color   = SUBSTRING(SKU.Sku,7,3)                               --CS03  --ML01 use SKU instead of S1  
+         --,Size    = LTRIM(SUBSTRING(SKU.Sku,12,5))                       --CS03  --ML01 use SKU instead of S1
+         ,Size    = LTRIM(SUBSTRING(SKU.Sku,10,LEN(SKU.SKU)))
+         ,SkuDescr= ISNULL(MIN(SKU.Descr),0)                             --CS03  --ML01 use SKU instead of S1
          ,AltSku  = ISNULL(RTRIM(SKU.AltSku), '')
-         ,S1.SkuGroup                                                   --CS03
+         --,S1.SkuGroup                                                   --CS03
+         ,CASE SKU.BUSR7 WHEN '10' THEN 'AP'
+                         WHEN '20' THEN 'FW'
+                         WHEN '30' THEN 'EQ'
+                         WHEN '40' THEN 'VM' 
+                         ELSE 'XX' END AS SKUGroup                         --ML01 
          ,Qty    = ISNULL(SUM(PD.Qty),0)
          ,NoOfSku= @n_NoOfSku --COUNT(DISTINCT PD.Sku)
          ,NoOfPickLines= @n_NoOfPickLines --COUNT(DISTINCT PD.Loc + PD.ID)
@@ -229,7 +231,7 @@ BEGIN
    JOIN LOC        LOC  WITH (NOLOCK) ON (PD.Loc = LOC.Loc)    --(Wan01)
    JOIN SKU        SKU  WITH (NOLOCK) ON (PD.Storerkey = SKU.Storerkey)
                                       AND(PD.Sku = SKU.Sku)
-   JOIN SKU S1 (NOLOCK) ON S1.ALTSKU=SKU.ALTSKU AND S1.StorerKey='NIKEKRB' AND SKU.StorerKey='NIKEKR'      --CS03
+   --JOIN SKU S1 (NOLOCK) ON S1.ALTSKU=SKU.ALTSKU AND S1.StorerKey='NIKEKRB' AND SKU.StorerKey='NIKEKR'      --CS03
    JOIN REFKEYLOOKUP RL WITH (NOLOCK) ON (PD.PickDetailKey = RL.PickDetailkey)
    JOIN (SELECT OD.Orderkey, Openqty = SUM(OD.OpenQty) FROM ORDERS OH WITH (NOLOCK)
          JOIN ORDERDETAIL OD WITH (NOLOCK) ON (OH.Orderkey = OD.Orderkey) 
@@ -245,12 +247,17 @@ BEGIN
          ,  PD.Storerkey
          ,  PD.Loc
          ,  PD.ID
-         ,  SUBSTRING(S1.Sku,3,6)                              --CS03 
-         ,  SUBSTRING(S1.Sku,9,3)                              --CS03
-         ,  LTRIM(SUBSTRING(S1.Sku,12,5))                      --CS03
+         ,  SUBSTRING(SKU.Sku,1,6)                              --CS03  --ML01 use SKU instead of S1 
+         ,  SUBSTRING(SKU.Sku,7,3)                              --CS03  --ML01 use SKU instead of S1
+         ,  LTRIM(SUBSTRING(SKU.Sku,10,LEN(SKU.SKU)))           --CS03  --ML01 use SKU instead of S1
          ,  ISNULL(RTRIM(SKU.AltSku), '')
-         ,  S1.SkuGroup                                        --CS03
-         ,loc.logicallocation                                  --(CS02)
+         --,  S1.SkuGroup                                        --CS03
+         ,CASE SKU.BUSR7 WHEN '10' THEN 'AP'
+                         WHEN '20' THEN 'FW'
+                         WHEN '30' THEN 'EQ'
+                         WHEN '40' THEN 'VM' 
+                         ELSE 'XX' END                         --ML01
+         ,  loc.logicallocation                                --(CS02)
    ORDER BY ISNULL(RTRIM(PH.PickHeaderkey), '') 
          ,  LOC.PutawayZone                                    --(Wan01)  
          ,  loc.logicallocation                                --(CS02)
@@ -263,3 +270,7 @@ END -- procedure
 GO
 GRANT EXECUTE ON [dbo].[isp_GetPickSlipWave14_1] TO nSQL 
 GO
+
+
+
+
