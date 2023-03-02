@@ -12,15 +12,17 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author  Ver   Purposes                                  */
-/* 2022-11-11   Wan     1.0   Created & DevOps Combine Script           */
+/* Date        Author   Ver   Purposes                                  */
+/* 2022-11-11  Wan      1.0   Created & DevOps Combine Script           */
+/* 2023-03-01  Wan01    1.1   WMS-21512 - [CN] NIKE_NFC_RFID_ECOMPACKING*/
+/*                            _CR_V1.0                                  */
 /************************************************************************/
 CREATE OR ALTER FUNCTION [dbo].[fnc_GetLangMsgText] 
 (  @c_MsgId          NVARCHAR(40)
@@ -63,6 +65,11 @@ BEGIN
           
    IF CHARINDEX('%s', @c_MsgText) > 0 AND RTRIM(@c_Parms) <> '' 
    BEGIN
+      IF LEFT(@c_Parms,1) = '|'                                                           --(Wan01)
+      BEGIN
+         SET @c_Parms = SUBSTRING(@c_Parms, 2, LEN(@c_Parms) - 1)
+      END
+      
       SET @c_MsgText = REPLACE(@c_MsgText, '%s','%s|')
       
       INSERT INTO @t_SplitMsg (MsgText)
@@ -73,10 +80,10 @@ BEGIN
       SELECT Parm = LTRIM(RTRIM(s.[Value])) 
       FROM STRING_SPLIT(@c_Parms, '|') AS s
       
-      SELECT @c_MsgText = STRING_AGG(REPLACE(tsm.MsgText, '%s', ts.Parm), '')
+      SELECT @c_MsgText = STRING_AGG(REPLACE(tsm.MsgText, '%s', ISNULL(ts.Parm,'')), '')  --(Wan01)
       WITHIN GROUP (ORDER BY tsm.RowID ASC)
       FROM @t_SplitMsg AS tsm
-      JOIN @t_Subsitute AS ts ON ts.RowID = tsm.RowID
+      LEFT OUTER JOIN @t_Subsitute AS ts ON ts.RowID = tsm.RowID
       WHERE tsm.RowID IS NOT NULL
    END       
                     

@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_EPreScanRFID01]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_EPreScanRFID01]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -19,7 +14,7 @@ GO
 /* Called By: n_cst_packcarton_ecom                                     */        
 /*          : of_getprescanrfidsp                                       */        
 /*        :                                                             */        
-/* PVCS Version: 1.1                                                    */        
+/* PVCS Version: 1.3                                                    */        
 /*                                                                      */        
 /* Version: 7.0                                                         */        
 /*                                                                      */        
@@ -31,15 +26,19 @@ GO
 /* 11-MAY-2021 Wan01    1.1   WMS-17001 - [CN] NIKE_O2_Ecompacking_None */
 /*                            RFID SKU Skip Validation_CR               */
 /* 02-JUL-2021 ML01     1.2   WMS-17342 - [CN] NIKE CN ECOM Packing - CR*/
+/* 16-Jan-2023 Wan02    1.3   WMS-21512 - [CN] NIKE_NFC_RFID_ECOMPACKING*/
+/*                            _CR_V1.0                                  */
+/*                            DevOps Combine Script                     */
 /************************************************************************/        
-CREATE PROC [dbo].[isp_EPreScanRFID01]        
+CREATE OR ALTER PROC [dbo].[isp_EPreScanRFID01]        
          @c_TaskBatchNo NVARCHAR(10)         
       ,  @c_PickSlipNo  NVARCHAR(10)       
       ,  @c_Storerkey   NVARCHAR(15) = ''        
       ,  @c_Sku         NVARCHAR(20) = ''    
       ,  @b_Success     INT = 0              OUTPUT          
       ,  @n_err         INT = 0              OUTPUT         
-      ,  @c_errmsg      NVARCHAR(255) = ''   OUTPUT         
+      ,  @c_errmsg      NVARCHAR(255) = ''   OUTPUT 
+      ,  @c_Tag_Reader  NVARCHAR(10)  = ''   OUTPUT               --(Wan02)    
 AS        
 BEGIN        
    SET NOCOUNT ON        
@@ -50,7 +49,7 @@ BEGIN
    DECLARE @n_StartTCnt          INT         = @@TRANCOUNT         
          , @n_Continue           INT         = 1   
 
-         , @c_ExtendedField03    NVARCHAR(30)= ''       
+         , @c_ExtendedField03    NVARCHAR(30)= ''
           
    SET @b_Success  = 0        
    SET @n_err      = 0        
@@ -79,7 +78,7 @@ BEGIN
                  JOIN dbo.SkuInfo    AS si WITH (NOLOCK) ON  si.Storerkey = p.Storerkey
                                                          AND si.Sku = p.Sku
                  WHERE pt.TaskBatchNo = @c_TaskBatchNo
-                 AND si.ExtendedField03 = 'rfid'
+                 AND si.ExtendedField03 IN ( 'rfid', 'nfc' )               --(Wan02)
                  )
                  
       BEGIN
@@ -90,13 +89,13 @@ BEGIN
    END
    --(Wan01) - END
      
-   SET @c_ExtendedField03 = ''        
-   SELECT @c_ExtendedField03 = SIF.ExtendedField03        
+   SET @c_Tag_Reader = ''        
+   SELECT @c_Tag_Reader = LOWER(SIF.ExtendedField03)        --(Wan02)         
    FROM SKUINFO SIF WITH (NOLOCK)        
    WHERE SIF.Storerkey = @c_Storerkey  
    AND   SIF.Sku = @c_Sku          
         
-   IF @c_ExtendedField03 = 'rfid'       
+   IF @c_Tag_Reader IN ( 'rfid', 'nfc' )                    --(Wan02)      
    BEGIN          
      SET @b_Success = 1        
    END           
