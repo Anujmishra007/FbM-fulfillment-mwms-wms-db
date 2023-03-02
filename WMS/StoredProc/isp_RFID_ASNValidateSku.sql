@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_RFID_ASNValidateSku]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_RFID_ASNValidateSku]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,7 +12,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -27,8 +22,10 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 01-DEC-2020 Wan      1.0   Created                                   */
 /* 20-JAN-2021 Wan01    1.1   WMS-16143 - NIKE_O2_RFID_Receiving_CR V1.0*/
+/* 05-Jan-2023 Wan02    1.2   WMS-21467-[CN]NIKE_Ecom_NFC RFID Receiving-CR*/
+/*                            DevOps Combine Script                     */
 /************************************************************************/
-CREATE PROC isp_RFID_ASNValidateSku
+CREATE OR ALTER PROC isp_RFID_ASNValidateSku
            @c_Receiptkey         NVARCHAR(10)  
          , @c_Storerkey          NVARCHAR(15)  
          , @c_SKU                NVARCHAR(20)         OUTPUT
@@ -47,10 +44,11 @@ CREATE PROC isp_RFID_ASNValidateSku
          , @c_Lottable13attrib   NVARCHAR(1)  = '0'   OUTPUT
          , @c_Lottable14attrib   NVARCHAR(1)  = '0'   OUTPUT
          , @c_Lottable15attrib   NVARCHAR(1)  = '0'   OUTPUT
-         , @b_ReadRFIDTag        INT          = 0     OUTPUT      --(Wan01)  
+         , @b_ReadRFIDTag        INT          = 0     OUTPUT      --(Wan01) 
          , @b_Success            INT          = 1     OUTPUT
          , @n_Err                INT          = 0     OUTPUT
          , @c_ErrMsg             NVARCHAR(255)= ''    OUTPUT
+         , @c_Tag_Reader         NVARCHAR(10) = ''    OUTPUT      --(Wan02) 
 AS
 BEGIN
    SET NOCOUNT ON
@@ -180,10 +178,11 @@ BEGIN
                +'  @c_Receiptkey = @c_Receiptkey' 
                +', @c_Storerkey  = @c_Storerkey' 
                +', @c_Sku        = @c_Sku' 
-               +', @b_ReadRFIDTag= @b_ReadRFIDTag  OUTPUT'      --(Wan01)    
+               +', @b_ReadRFIDTag= @b_ReadRFIDTag  OUTPUT'     --(Wan01)    
                +', @b_Success    = @b_Success      OUTPUT'
                +', @n_Err        = @n_Err          OUTPUT'
                +', @c_ErrMsg     = @c_ErrMsg       OUTPUT'
+               +', @c_Tag_Reader = @c_Tag_Reader   OUTPUT'     --(Wan02)
 
    SET @c_SQLParms= N'@c_Receiptkey    NVARCHAR(10)'
                   +', @c_Storerkey     NVARCHAR(15)'
@@ -192,6 +191,7 @@ BEGIN
                   +', @b_Success       INT            OUTPUT'
                   +', @n_Err           INT            OUTPUT'
                   +', @c_ErrMsg        NVARCHAR(255)  OUTPUT'
+                  +', @c_Tag_Reader    NVARCHAR(10)   OUTPUT'  --(Wan02)
 
    EXEC sp_ExecuteSQL  @c_SQL
                      , @c_SQLParms
@@ -202,6 +202,7 @@ BEGIN
                      , @b_Success      OUTPUT
                      , @n_Err          OUTPUT
                      , @c_ErrMsg       OUTPUT
+                     , @c_Tag_Reader   OUTPUT                  --(Wan02)
 
    IF @b_Success = 0
    BEGIN
@@ -230,11 +231,11 @@ QUIT_SP:
    END
    ELSE
    BEGIN
-   	IF @b_Success < 2
-   	BEGIN
+      IF @b_Success < 2
+      BEGIN
          SET @b_Success = 1
-   	END
-   	
+      END
+      
       WHILE @@TRANCOUNT > @n_StartTCnt
       BEGIN
          COMMIT TRAN

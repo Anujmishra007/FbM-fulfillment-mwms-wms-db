@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_RFID_ASNValidateSku01]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_RFID_ASNValidateSku01]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,7 +12,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.2                                                    */
+/* PVCS Version: 1.3                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -29,8 +24,10 @@ GO
 /* 20-JAN-2021 Wan01    1.1   WMS-16143 - NIKE_O2_RFID_Receiving_CR V1.0*/
 /* 06-JUL-2021 WLChooi  1.2   WMS-17404 - Skip RFID Validation for      */
 /*                            Outlet ASN (WL01)                         */
+/* 05-Jan-2023 Wan02    1.3   WMS-21467-[CN]NIKE_Ecom_NFC RFID Receiving-CR*/
+/*                            DevOps Combine Script                     */
 /************************************************************************/
-CREATE PROC isp_RFID_ASNValidateSku01
+CREATE OR ALTER PROC isp_RFID_ASNValidateSku01
            @c_Receiptkey   NVARCHAR(10) = ''  
          , @c_Storerkey    NVARCHAR(15) = '' 
          , @c_SKU          NVARCHAR(20) = ''
@@ -38,6 +35,7 @@ CREATE PROC isp_RFID_ASNValidateSku01
          , @b_Success      INT          = 1  OUTPUT      --2: Question
          , @n_Err          INT          = 0  OUTPUT
          , @c_ErrMsg       NVARCHAR(255)= '' OUTPUT
+         , @c_Tag_Reader   NVARCHAR(10) = '' OUTPUT      --(Wan02)
 AS
 BEGIN
    SET NOCOUNT ON
@@ -55,7 +53,8 @@ BEGIN
    SET @c_errmsg   = ''
 
    SET @b_ReadRFIDTag = ISNULL(@b_ReadRFIDTag,0)
-   
+   SET @c_Tag_Reader = ''                                --(Wan02)
+                                                         --   
    IF NOT EXISTS ( SELECT 1 
                    FROM RECEIPTDETAIL RD WITH (NOLOCK)
                    WHERE RD.ReceiptKey = @c_Receiptkey
@@ -63,7 +62,7 @@ BEGIN
                    AND RD.Sku = @c_SKU
                   )
    BEGIN
-   	SET @n_Continue = 3
+      SET @n_Continue = 3
       SET @n_err = 83010   
       SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Sku not found in ASN#: ' + @c_Receiptkey
                      +'. (isp_RFID_ASNValidateSku01)'   
@@ -82,12 +81,14 @@ BEGIN
    AND   SIF.Sku       = @c_Sku
    AND   SIF.ExtendedField02 = 'BP2'
 
-   SELECT @c_errmsg= @c_errmsg + CASE WHEN @c_errmsg = '' THEN '' ELSE ', ' END + 'RFID'
+   SELECT @c_errmsg= @c_errmsg + CASE WHEN @c_errmsg = '' THEN '' ELSE ', ' END 
+                   + UPPER(SIF.ExtendedField03)                                  --(Wan02)
          ,@b_ReadRFIDTag = 1                                                     --(Wan01)
+         ,@c_Tag_Reader  = LOWER(SIF.ExtendedField03)                            --(Wan02)
    FROM SKUINFO SIF WITH (NOLOCK) 
    WHERE SIF.Storerkey = @c_Storerkey
    AND   SIF.Sku       = @c_Sku
-   AND   SIF.ExtendedField03 = 'RFID'
+   AND   SIF.ExtendedField03 IN ('NFC', 'RFID')                                  --(Wan02)
 
    SELECT @c_errmsg= @c_errmsg + CASE WHEN @c_errmsg = '' THEN '' ELSE ', ' END + 'SET SKU'
          ,@n_NikeSet  = 1
