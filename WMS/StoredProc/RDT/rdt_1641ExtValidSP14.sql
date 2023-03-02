@@ -11,7 +11,8 @@ GO
 /*                                                                            */                
 /* Date       Rev  Author   Purposes                                          */                 
 /* 2020-01-05 1.0  YeeKung  WMS15919 Created                                  */  
-/* 2021-05-24 1.1  YeeKung  WMS-17087  Add codelkup in delivery mode (yeekung01)*/       
+/* 2021-05-24 1.1  YeeKung  WMS-17087  Add codelkup in delivery mode (yeekung01)*/   
+/* 2023-02-22 1.2  YeeKung  WMS-21797 add insertmsgqueue (yeekung02)          */
 /******************************************************************************/                
                 
 CREATE OR ALTER PROC [RDT].[rdt_1641ExtValidSP14] (                  
@@ -70,15 +71,20 @@ BEGIN
            @nStart            INT,                  
            @nLen              INT,    
            @cCartontype       NVARCHAR (20) ,    
-           @cCartonNo         NVARCHAR( 20)                
+           @cCartonNo         NVARCHAR( 20),
+           @cPalletType       NVARCHAR( 20)
+
+
+    DECLARE @cOtherPallet     NVARCHAR(20),
+            @cOtherPalletType      NVARCHAR(20)
                   
    SET @nDebug = 0                  
                      
-   DECLARE @cErrMsg1   NVARCHAR( 20),                  
-           @cErrMsg2          NVARCHAR( 20),                  
-       @cErrMsg3          NVARCHAR( 20),                  
-           @cErrMsg4          NVARCHAR( 20),                  
-           @cErrMsg5          NVARCHAR( 20)                  
+   DECLARE  @cErrMsg1          NVARCHAR( 20),                  
+            @cErrMsg2          NVARCHAR( 20),                  
+            @cErrMsg3          NVARCHAR( 20),                  
+            @cErrMsg4          NVARCHAR( 20),                  
+            @cErrMsg5          NVARCHAR( 20)                  
                   
 --if suser_sname() = 'wmsgt'                  
 --set @nDebug = 1                  
@@ -106,10 +112,20 @@ BEGIN
       IF @nInputKey = 1 -- ENTER                  
       BEGIN                  
          SELECT TOP 1 @cRoute = RefNo2,        
-                      @cPickSlipNo = PickSlipNo                    
+                      @cPickSlipNo = PickSlipNo 
          FROM dbo.PackDetail WITH (NOLOCK)                  
          WHERE StorerKey = @cStorerKey                         
-         AND   RefNo = @cUCCNo                  
+         AND   RefNo = @cUCCNo     
+         
+         SELECT @cCartontype=cartontype    
+         FROM dbo.packinfo (NOLOCK)    
+         where pickslipno=@cpickslipno  
+
+         SELECT @cPalletType = pallettype
+         FROM Pallet (NOLOCK)
+         WHERE storerkey=@cStorerKey 
+            AND PalletKey=@cDropID
+
                   
          IF ISNULL( @cRoute, '') = ''                  
          BEGIN                  
@@ -150,13 +166,13 @@ BEGIN
                IF (SUBSTRING(@cdropid,1,4)IN ('PTHL','PBEL'))    --yeekung04            
                BEGIN                
                   SET @nErrNo = 163611                
- SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- invalid Pallet                 
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- invalid Pallet                 
                   GOTO Quit                   
                END                
             END                
          END                
          ELSE                
-   BEGIN                    
+         BEGIN                    
             IF (SUBSTRING(@cdropid,1,4)IN('PTHL','PBEL'))     --yeekung04           
             BEGIN                
                SET @nErrNo = 163612                
@@ -172,7 +188,41 @@ BEGIN
                      AND  [Status] < '9')                  
          BEGIN                  
             SET @nErrNo = 163603                  
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- carton scan b4                  
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- carton scan b4  
+
+
+            SELECT @cOtherPallet=Palletkey
+            FROM dbo.PalletDetail WITH (NOLOCK)                  
+            WHERE StorerKey = @cStorerKey                  
+            AND   CaseID = @cUCCNo                  
+            AND  [Status] < '9'
+
+            SELECT @cOtherPalletType = pallettype
+            FROM Pallet (NOLOCK)
+            WHERE storerkey=@cStorerKey 
+               AND PalletKey=@cOtherPallet
+            
+            SET @cErrMsg1 = 'S2'
+                           +'^'+SUBSTRING(@cOtherPallet,1,1)+SUBSTRING(@cOtherPallet,4,6)
+                           +'^'+ CASE WHEN ISNULL(@cOtherPalletType,'') ='MIX' THEN 'MIX' 
+                                 ELSE SUBSTRING (@cCartontype,1,1) + RIGHT(@cCartontype,2)  END
+            
+            EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT,  --(yeekung02)  
+            @cErrMsg,  
+            @cErrMsg1,
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            ''
+
             GOTO Quit                                 
          END                  
                   
@@ -184,10 +234,42 @@ BEGIN
                      AND   PalletKey <> @cDropID)                  
          BEGIN                  
             SET @nErrNo = 163604                  
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- carton scan b4                  
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- carton scan b4   
+            
+            SELECT @cOtherPallet=Palletkey
+            FROM dbo.PalletDetail WITH (NOLOCK)                  
+            WHERE StorerKey = @cStorerKey                  
+            AND   CaseID = @cUCCNo                  
+            AND  [Status] < '9'
+
+            SELECT @cOtherPalletType = pallettype
+            FROM Pallet (NOLOCK)
+            WHERE storerkey=@cStorerKey 
+               AND PalletKey=@cOtherPallet
+            
+            SET @cErrMsg1 = 'S2'
+               +'^'+SUBSTRING(@cOtherPallet,1,1)+SUBSTRING(@cOtherPallet,4,6)
+               +'^'+ CASE WHEN ISNULL(@cOtherPalletType,'') ='MIX' THEN 'MIX' 
+                     ELSE SUBSTRING (@cCartontype,1,1) + RIGHT(@cCartontype,2)  END
+            
+            EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT,  --(yeekung02)  
+            @cErrMsg,  
+            @cErrMsg1,
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            ''
             GOTO Quit                                 
-         END                  
-                  
+         END    
+         
          -- Existing route                  
          SELECT TOP 1 @cCurRoute = UserDefine01                  
          FROM dbo.PalletDetail WITH (NOLOCK)                  
@@ -257,10 +339,7 @@ BEGIN
          END        
     
          IF NOT EXISTS (SELECT 1 FROM PALLET (NOLOCK) WHERE PALLETTYPE='MIX' AND storerkey=@cStorerKey AND PalletKey=@cDropID)    
-         BEGIN    
-            SELECT @cCartontype=cartontype    
-            FROM dbo.packinfo (NOLOCK)    
-            where pickslipno=@cpickslipno    
+         BEGIN      
     
             SELECT TOP 1 @cCartonNo=caseid     
             from palletdetail (NOLOCK)    
