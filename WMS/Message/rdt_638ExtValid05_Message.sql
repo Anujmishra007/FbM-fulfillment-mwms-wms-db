@@ -21,5 +21,12 @@ execute rdt.rdtAddMsg 158361, 10, 'Must Receive        ', 'us_english', 638
 execute rdt.rdtAddMsg 158362, 10, 'Program Order       ', 'us_english', 638
 execute rdt.rdtAddMsg 158363, 10, 'Must Receive        ', 'us_english', 638
 
+-- WMS-21480
+execute rdt.rdtAddMsg 158364, 10, '158364 Black List   ', 'us_english', 638
+execute rdt.rdtAddMsg 158365, 10, '158365 Blank RDT UDF', 'us_english', 638
+execute rdt.rdtAddMsg 158366, 10, 'Cannot Rcv NFC SKU  ', 'us_english', 638
+execute rdt.rdtAddMsg 158367, 10, '158367 NFC ASN      ', 'us_english', 638
+execute rdt.rdtAddMsg 158368, 10, '158368 NFC RFID ASN ', 'us_english', 638
 
+SELECT * FROM rdt.rdtmsg (NOLOCK) WHERE Message_ID BETWEEN 158351 AND 158400
 

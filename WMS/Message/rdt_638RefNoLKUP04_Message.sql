@@ -14,3 +14,11 @@ execute rdt.rdtAddMsg 158407, 10, '158407OVER 14 DAYS  ', 'us_english', 638
 -- WMS-16735
 execute rdt.rdtAddMsg 158408, 10, 'Program Order       ', 'us_english', 638
 execute rdt.rdtAddMsg 158409, 10, 'Must Receive        ', 'us_english', 638
+
+--WMS-21480
+execute rdt.rdtAddMsg 158410, 10, '158410 Black List   ', 'us_english', 638
+execute rdt.rdtAddMsg 158411, 10, '158411 NFC ASN      ', 'us_english', 638
+execute rdt.rdtAddMsg 158412, 10, '158412 NFC RFID ASN ', 'us_english', 638
+
+SELECT * FROM rdt.RDTMsg (NOLOCK) WHERE Message_ID BETWEEN 158401 AND 158450
+
