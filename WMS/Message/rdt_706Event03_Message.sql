@@ -32,4 +32,8 @@ execute rdt.rdtAddMsg 159121, 10, '59121Outlet Order', 'us_english', 706
 execute rdt.rdtAddMsg 159122, 10, '159122KeySKU', 'us_english', 706
 execute rdt.rdtAddMsg 159123, 10, '159123One-Box SKU', 'us_english', 706
 
+--wms-21479
+execute rdt.rdtAddMsg 159124, 10, '159124NFC', 'us_english', 706
+execute rdt.rdtAddMsg 159125, 10, '159125NFC', 'us_english', 706
+
 SELECT * FROM rdt.rdtmsg (NOLOCK) WHERE message_id BETWEEN 159101 and 159150
