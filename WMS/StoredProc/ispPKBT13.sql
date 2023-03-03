@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: isp_Packing_Bartender_Print                               */
 /*                                                                      */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 13-Jan-2022 WLChooi  1.0   DevOps Combine Script                     */
+/* 03-Mar-2023 WLChooi  1.1   WMS-21500 - Bug Fix (WL01)                */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[ispPKBT13]
@@ -84,8 +85,8 @@ BEGIN
            ,  @c_LabelType = @c_LabelType
            ,  @c_userid = @c_UserId
            ,  @c_Parm01 = @c_Parm01 --pickslipno
-           ,  @c_Parm02 = @c_Parm02 --carton from
-           ,  @c_Parm03 = @c_Parm03 --carton to
+           ,  @c_Parm02 = '1' --carton from   --WL01
+           ,  @c_Parm03 = '99999' --carton to   --WL01
            ,  @c_Parm04 = @c_Parm04
            ,  @c_Parm05 = @c_Parm05
            ,  @c_Parm06 = @c_Parm06
