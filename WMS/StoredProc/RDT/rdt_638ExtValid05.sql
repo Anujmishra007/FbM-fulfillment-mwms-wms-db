@@ -21,6 +21,8 @@ GO
 /* 02-08-2022 1.5  James      WMS-20356 Change logic on checking time-out  */
 /*                            period (james04)                             */
 /* 23-09-2022 1.6  YeeKung    WMS-20820 Extended refno length (yeekung01)  */
+/* 18-01-2023 1.7  James      WMS-21480 Add NFC sku check (james05)        */
+/*                            Bug fix on blacklist checking                */
 /***************************************************************************/    
     
 CREATE OR ALTER PROC rdt.rdt_638ExtValid05 (    
@@ -85,6 +87,8 @@ AS
    DECLARE @nPromtUDF02         INT = 0  
    DECLARE @cUserDefine04        NVARCHAR( 30)  
    DECLARE @cSellerCity         NVARCHAR( 45) = ''
+   DECLARE @cUserDefine10       NVARCHAR( 30) = ''
+   DECLARE @nUpdErrNo           INT = 0
    
    SET @nErrNo = 0    
     
@@ -105,9 +109,25 @@ AS
                @cCarrierName = ISNULL( CarrierName, ''),   
                @cSellerPhone1 = ISNULL( SellerPhone1, ''),  
                @dUserDefine07 = UserDefine07, 
-               @cSellerCity = SellerCity    
+               @cSellerCity = SellerCity, 
+               @cUserDefine10 = UserDefine10    
             FROM Receipt WITH (NOLOCK)   
             WHERE ReceiptKey = @cReceiptKey    
+
+            IF @cUserDefine10 = 'NFC' AND ISNULL( @cUserDefine08, '') = ''
+            BEGIN  
+               SET @nErrNo = 158367  
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NFC ASN  
+               GOTO Quit  
+            END  
+
+            IF @cUserDefine10 = 'NFC' AND ISNULL( @cUserDefine08, '') = 'RFID'
+            BEGIN  
+               SET @nErrNo = 158368  
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NFC RFID ASN  
+               GOTO Quit  
+            END  
+
             -- Directly key-in ASN  
             IF @cRefNo = ''  
             BEGIN  
@@ -123,7 +143,7 @@ AS
                   SET @cErrMsg = ''  
                   SET @nPromtUDF02 = 1  
                END  
-  
+
                -- Check RFID ASN  
                IF @cUserDefine08 = 'RFID'  
                BEGIN  
@@ -171,7 +191,7 @@ AS
                BEGIN  
                   SET @nErrNo = 158364  
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Black List  
-                  GOTO Quit  
+                  --GOTO Quit  -- commented due to need stamp ASNReason below (james05)
                END  
                  
                SELECT TOP 1   
@@ -186,13 +206,18 @@ AS
                IF @cBlackList = 'Y' OR @cGroupList = 'Y'  
                BEGIN  
                   DECLARE @cMsg NVARCHAR(20)  
-                  IF @cBlackList = 'Y'  
-                     SET @cMsg = rdt.rdtgetmessage( 158352, @cLangCode, 'DSP') --BLACK LIST  
-                  ELSE  
-                     SET @cMsg = rdt.rdtgetmessage( 158359, @cLangCode, 'DSP') --BLACK LIST  
-                       
-                  EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo, @cErrMsg, '', @cMsg  
-                    
+                  --IF @cBlackList = 'Y'  
+                  --   SET @cMsg = rdt.rdtgetmessage( 158352, @cLangCode, 'DSP') --BLACK LIST  
+                  --ELSE  
+                  --   SET @cMsg = rdt.rdtgetmessage( 158359, @cLangCode, 'DSP') --BLACK LIST  
+                  -- (james05)
+                  IF @cBlackList <> 'Y' AND @cGroupList = 'Y'
+                  BEGIN
+                     SET @cMsg = rdt.rdtgetmessage( 158359, @cLangCode, 'DSP') --GROUP LIST  
+                     EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo, @cErrMsg, '', @cMsg  
+                     SET @nErrNo = 158359 -- For remain in RefNo screen
+                  END
+                  
                   DECLARE @nTranCount INT  
                   SET @nTranCount = @@TRANCOUNT  
                   BEGIN TRAN  -- Begin our own transaction  
@@ -204,22 +229,22 @@ AS
                      EditDate = GETDATE(),   
                      EditWho = SUSER_SNAME()  
                   WHERE ReceiptKey = @cReceiptKey  
-                  SET @nErrNo = @@ERROR   
-                  IF @nErrNo <> 0  
+                  SET @nUpdErrNo = @@ERROR   -- Not to overwrite existing error no if any
+                  IF @nUpdErrNo <> 0  
                   BEGIN  
                      ROLLBACK TRAN rdt_638ExtValid05  
                      WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
                         COMMIT TRAN  
                        
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --RFID ASN                       
+                     SET @cErrMsg = rdt.rdtgetmessage( @nUpdErrNo, @cLangCode, 'DSP') --RFID ASN                       
                      GOTO Quit  
                   END  
   
                   COMMIT TRAN rdt_638ExtValid05  
                   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
                      COMMIT TRAN  
-                       
-                  SET @nErrNo = -1 -- For remain in RefNo screen  
+
+                  -- SET @nErrNo = -1 -- For remain in RefNo screen  
                END  
             END  
   
@@ -298,20 +323,26 @@ AS
             DECLARE @cMsg2 NVARCHAR( 20) = ''  
             DECLARE @cMsg3 NVARCHAR( 20) = ''  
             DECLARE @cMsg4 NVARCHAR( 20) = ''  
-                 
+            DECLARE @cMsg5 NVARCHAR( 20) = ''
+            
             -- Check SKU warning  
             IF @cExtendedField01 = 'BP1'  SET @cMsg1 = rdt.rdtgetmessage( 158353, @cLangCode, 'DSP') --BP#1 SKU  
             IF @cExtendedField02 = 'BP2'  SET @cMsg2 = rdt.rdtgetmessage( 158354, @cLangCode, 'DSP') --BP#2 SKU  
             IF @cExtendedField03 = 'RFID' SET @cMsg3 = rdt.rdtgetmessage( 158355, @cLangCode, 'DSP') --RFID SKU  
             IF @cExtendedField04 = 'SET'  SET @cMsg4 = rdt.rdtgetmessage( 158356, @cLangCode, 'DSP') --SET SKU  
-                 
+
+            -- (james05)
+            IF @cExtendedField03 = 'NFC'   
+               SET @cMsg5 = rdt.rdtgetmessage( 158366, @cLangCode, 'DSP')  --Cannot Rcv NFC SKU
+
             -- Popup warning  
             IF @cMsg1 <> '' OR   
                @cMsg2 <> '' OR  
                @cMsg3 <> '' OR  
-               @cMsg4 <> ''  
+               @cMsg4 <> '' OR  
+               @cMsg5 <> ''   
             BEGIN  
-               EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo, @cErrMsg, '', @cMsg1, @cMsg2, @cMsg3, @cMsg4  
+               EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo, @cErrMsg, '', @cMsg1, @cMsg2, @cMsg3, @cMsg4, @cMsg5  
             END  
          END    
       END   
