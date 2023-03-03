@@ -12,7 +12,7 @@ GO
 /*        :                                                             */
 /* Called By: Of_RFIDValidateTag                                        */
 /*          :                                                           */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -24,6 +24,8 @@ GO
 /* 2022-11-11  Wan01    1.1   WMS-21150 - [CN] Nike Ecom Packing        */
 /*                            Chinesization                             */
 /* 2022-11-11  Wan01    1.1   DevOps Combine Script                     */
+/* 2022-03-01  Wan02    1.2   WMS-21512 - [CN] NIKE_NFC_RFID_ECOMPACKING*/
+/*                            _CR_V1.0                                  */
 /************************************************************************/
 CREATE OR ALTER PROC isp_RFIDTagReadCheck_Wrapper
            @n_Try          INT               OUTPUT
@@ -55,6 +57,7 @@ BEGIN
          , @c_SQL                NVARCHAR(4000) =''
          , @c_SQLParms           NVARCHAR(4000) =''
          
+         , @c_TagReader          NVARCHAR(10) = '' --(Wan02)
          
    DECLARE @TRFID TABLE 
          ( RowRef             INT      NOT NULL IDENTITY(1,1) PRIMARY KEY
@@ -102,6 +105,13 @@ BEGIN
    
    IF @n_NoOfTag_Read = 0 
    BEGIN
+      SET @c_TagReader = 'RFID'                             --(Wan02)
+      SELECT @c_TagReader = RTRIM(si.ExtendedField03)                                   
+      FROM SKUINFO AS si WITH (NOLOCK) 
+      WHERE si.Storerkey = @c_Storerkey          
+      AND si.Sku = @c_Sku
+      AND si.ExtendedField03 IN ('NFC')
+   
       SET @c_TryLimit = CASE WHEN ISNUMERIC(@c_TryLimit) = 1 THEN @c_TryLimit ELSE 5 END
       
       IF @c_TryLimit = 0 SET @c_TryLimit = '5'
@@ -112,10 +122,10 @@ BEGIN
          SET @n_err = 81010 
          SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)
                       + ': '
-                      + dbo.fnc_GetLangMsgText(                 --(Wan01)
+                      + dbo.fnc_GetLangMsgText(                --(Wan01)
                         'sp_RFID_ReadTag_MaxLimitTry'               
-                      , 'Unable to get RFID Tag Value after try limit. Please check.'
-                      , '')
+                      , 'Unable to get %s Tag Value after try limit. Please check.' --(Wan02)
+                      , @c_TagReader)                                               --(Wan02)
                       +' (isp_RFIDTagReadCheck_Wrapper)' 
          GOTO QUIT_SP  
       END

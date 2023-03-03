@@ -12,7 +12,7 @@ GO
 /*        :                                                             */
 /* Called By: Of_RFIDValidateTag                                        */
 /*          :                                                           */
-/* PVCS Version: 1.2                                                    */
+/* PVCS Version: 1.3                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -25,6 +25,7 @@ GO
 /* 2022-11-11  Wan02    1.2   WMS-21150 - [CN] Nike Ecom Packing        */
 /*                            Chinesization                             */
 /* 2022-11-11  Wan02    1.2   DevOps Combine Script                     */
+/* 2023-01-05  Wan03    1.3   WMS-21467-[CN]NIKE_Ecom_NFC RFID Receiving-CR*/
 /************************************************************************/
 CREATE OR ALTER PROC isp_RFIDTagReadChk01
            @n_Try          INT               OUTPUT
@@ -45,13 +46,15 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE  
-           @n_StartTCnt       INT = @@TRANCOUNT
-         , @n_Continue        INT = 1
+           @n_StartTCnt          INT = @@TRANCOUNT
+         , @n_Continue           INT = 1
 
-         , @n_NoOfTag_Read    INT = 0
-         , @n_NoOfTag_SKU     INT = 0
+         , @n_NoOfTag_Read       INT = 0
+         , @n_NoOfTag_SKU        INT = 0
          
-         , @c_SkuGroup        NVARCHAR(10) = ''
+         , @c_SkuGroup           NVARCHAR(10) = ''             
+         , @c_TagReader          NVARCHAR(10) = ''             -- (Wan03)
+         , @c_ListName_TagReader NVARCHAR(10) = ''             -- (Wan03)
          
          , @c_TryLimit           NVARCHAR(10) = ''
          , @c_RFIDTagReadChk_SP  NVARCHAR(30) = '' 
@@ -85,7 +88,7 @@ BEGIN
       SET @n_err = 89010   
       SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)
                    + ': '
-                   + dbo.fnc_GetLangMsgText(                 --(Wan01)
+                   + dbo.fnc_GetLangMsgText(                 --(Wan02)
                      'sp_Exec_Err'               
                    , 'Error Executing nspGetRight.'
                    , 'nspGetRight')
@@ -102,24 +105,29 @@ BEGIN
    SELECT S.VALUE
    FROM string_split (@c_SeqNos, '|') S
    
-   SELECT @n_NoOfTag_Read = S.SeqNo
+   SELECT TOP 1 @n_NoOfTag_Read = S.SeqNo             --(Wan03)
    FROM @TRFID S
    WHERE S.SeqNo > 0
-   
+   ORDER BY S.SeqNo DESC                              --(Wan03)
+
    SELECT @n_NoOfTag_SKU = CASE WHEN ISNUMERIC(s.SUSR1) = 1 THEN s.SUSR1 ELSE 0 END
          ,@c_SkuGroup = ISNULL(s.SKUGROUP,'')
+         ,@c_TagReader = RTRIM(si.ExtendedField03)    --(Wan03)
    FROM SKU AS s WITH (NOLOCK)
    JOIN SKUINFO AS si WITH (NOLOCK) ON  si.StorerKey = s.StorerKey
                                     AND si.Sku = s.Sku
-   WHERE s.Storerkey = @c_Storerkey          -- (Wan01) Fixed
+   WHERE s.Storerkey = @c_Storerkey                   --(Wan01) Fixed
    AND s.Sku = @c_Sku
-   AND si.ExtendedField03 = 'RFID'
+   AND si.ExtendedField03 IN ('NFC', 'RFID')          --(Wan03)
 
    IF @c_SkuGroup <> '' 
    BEGIN
+      SET @c_ListName_TagReader = CASE @c_TagReader WHEN 'nfc' THEN 'NFCTag'              --(Wan03)
+                                                    ELSE 'RFIDTag'
+                                                    END
       SELECT @n_NoOfTag_SKU = @n_NoOfTag_SKU + CASE WHEN ISNUMERIC(c.Short) = 1 THEN c.Short ELSE 0 END
       FROM CODELKUP AS c WITH (NOLOCK)
-      WHERE c.LISTNAME = 'RFIDTag'
+      WHERE c.LISTNAME = @c_ListName_TagReader                                            --(Wan03)
       AND   c.Storerkey= @c_Storerkey
       AND   c.Code = @c_SkuGroup
    END
@@ -130,10 +138,10 @@ BEGIN
       SET @n_Err      = 89020
       SET @c_ErrMsg   = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) 
                       + ': '
-                      + dbo.fnc_GetLangMsgText(                 --(Wan01)
+                      + dbo.fnc_GetLangMsgText(                                        --(Wan02)
                         'sp_RFID_READ_ItemTagNoSet'               
-                      , 'No Of RFID Tag Per Sku Not Setup.'
-                      , '')
+                      , 'No Of %s Tag Per Sku Not Setup.'                              --(Wan03)
+                      , @c_TagReader)                                                  --(Wan03)  
                       + ' (isp_RFIDTagReadChk01)'  
 
       GOTO QUIT_SP
@@ -147,10 +155,10 @@ BEGIN
          SET @n_err = 81030   
          SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)
                       + ': '
-                      + dbo.fnc_GetLangMsgText(                 --(Wan01)
+                      + dbo.fnc_GetLangMsgText(                 --(Wan02)
                         'sp_RFID_READ_FailGetTags'               
-                      , 'Unable to get complete RFID Tag Value after try limit. Please check.'
-                      , '')
+                      , 'Unable to get complete %s Tag Value after try limit. Please check.'      --(Wan03)
+                      , @c_TagReader)                                                             --(Wan03)
                       + ' (isp_RFIDTagReadChk01)'  
          GOTO QUIT_SP  
       END
@@ -159,6 +167,20 @@ BEGIN
       SET @b_Success = 2  
       GOTO QUIT_SP   
    END
+   
+   IF @n_NoOfTag_SKU < @n_NoOfTag_Read                         --(Wan03) - START
+   BEGIN
+      SET @n_Continue = 3
+      SET @n_err = 81040   
+      SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)
+                     + ': '
+                     + dbo.fnc_GetLangMsgText(                 
+                     'sp_RFID_READ_GetMoreTags'               
+                     , 'More %s tag detected. Please check.'   
+                     , @c_TagReader)                                                            
+                     + ' (isp_RFIDTagReadChk01)'  
+      GOTO QUIT_SP  
+   END                                                         --(Wan03) - END
    
    SET @b_Success = 1
    

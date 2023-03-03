@@ -12,7 +12,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.2                                                    */
+/* PVCS Version: 1.4                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -27,6 +27,7 @@ GO
 /* 14-NOV-2022 NJOW01   1.3   Change storerkey filter to EXTERNORDERS   */
 /*                            to take advantage of current index        */
 /* 14-NOV-2022 NJOW01   1.3   DEVOPS Combine Script                     */
+/* 05-JAN-2023 Wan03    1.4   WMS-21467-[CN]NIKE_Ecom_NFC RFID Receiving-CR*/
 /************************************************************************/
 CREATE OR ALTER PROC isp_RFID_ASNValidateRFIDNo
            @c_ReceiptKey         NVARCHAR(10)
@@ -34,7 +35,7 @@ CREATE OR ALTER PROC isp_RFID_ASNValidateRFIDNo
          , @c_TidNo1             NVARCHAR(100)= '' 
          , @c_RFIDNo2            NVARCHAR(100)= '' 
          , @c_TidNo2             NVARCHAR(100)= '' 
-         , @c_Sku                NVARCHAR(20) = '' OUTPUT
+         , @c_Sku                NVARCHAR(20) = '' --OUTPUT --(Wan03) PB define as input Parameter
          , @b_Success            INT          = 1  OUTPUT
          , @n_Err                INT          = 0  OUTPUT
          , @c_ErrMsg             NVARCHAR(255)= '' OUTPUT
@@ -63,6 +64,8 @@ BEGIN
 
          , @c_SQL                NVARCHAR(MAX)= ''
          , @c_SQLParms           NVARCHAR(MAX)= ''
+         
+         , @c_TagReader       NVARCHAR(10) = '' --(Wan03)
 
    SET @n_err      = 0
    SET @c_errmsg   = ''
@@ -75,6 +78,12 @@ BEGIN
    FROM RECEIPT RH WITH (NOLOCK)
    WHERE RH.ReceiptKey = @c_ReceiptKey
   
+   SET @c_TagReader = 'RFID'                             --(Wan03)
+   SELECT @c_TagReader = RTRIM(si.ExtendedField03)                                   
+   FROM SKUINFO AS si WITH (NOLOCK) 
+   WHERE si.Storerkey = @c_Storerkey          
+   AND si.Sku = @c_Sku
+   AND si.ExtendedField03 IN ('NFC')
 
    SELECT @c_Sku1 = MAX(CASE WHEN EOD.RFIDNo = @c_RFIDNo1 THEN EOD.Sku ELSE '' END)
          ,@c_Sku2 = MAX(CASE WHEN EOD.RFIDNo = @c_RFIDNo2 THEN EOD.Sku ELSE '' END)
@@ -90,50 +99,66 @@ BEGIN
          ,  EOH.Externorderkey
          ,  EOH.[Status]
 
-   IF @c_Sku1 = '' AND  @c_Sku2 = ''
+   IF @c_TagReader = 'RFID'                                                            --(Wan03) - START                         
+   BEGIN         
+      IF @c_Sku1 = '' AND @c_Sku2 = '' 
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_Err      = 84010
+         SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': Both Left and Right RFIDNo For Receive''s Sales Order: ' + @c_CarrierName   --(Wan01)
+                         + ' not found. (isp_RFID_ASNValidateRFIDNo)'
+         GOTO QUIT_SP
+      END
+
+      IF @c_Sku1 = '' OR @c_Sku2 = ''
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_Err      = 84020
+         SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': Either Left or Right RFIDNo Does Not Found in Received Sales Order.'
+                           + ' (isp_RFID_ASNValidateRFIDNo)'
+
+         GOTO QUIT_SP
+      END
+
+      IF @c_Sku1 <> @c_Sku2 
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_Err      = 84030
+         SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': Both RFIDNo''s Sku are unmatch.'
+                           + ' (isp_RFID_ASNValidateRFIDNo)'
+         GOTO QUIT_SP
+      END
+   END                                                                                 --(Wan03) - END
+   
+   IF @c_TagReader = 'NFC'                                                             --(Wan03) - START
    BEGIN
-      SET @n_Continue = 3
-      SET @n_Err      = 84010
-      SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': Both Left and Right RFIDNo For Receive''s Sales Order: ' + @c_CarrierName   --(Wan01)
-                        + ' not found. (isp_RFID_ASNValidateRFIDNo)'
-      GOTO QUIT_SP
-   END
-
-   IF @c_Sku1 = '' OR @c_Sku2 = ''
-   BEGIN
-      SET @n_Continue = 3
-      SET @n_Err      = 84020
-      SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': Either Left or Right RFIDNo Does Not Found in Received Sales Order.'
-                        + ' (isp_RFID_ASNValidateRFIDNo)'
-
-      GOTO QUIT_SP
-   END
-
-   IF @c_Sku1 <> @c_Sku2 
-   BEGIN
-      SET @n_Continue = 3
-      SET @n_Err      = 84030
-      SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': Both RFIDNo''s Sku are unmatch.'
-                        + ' (isp_RFID_ASNValidateRFIDNo)'
-      GOTO QUIT_SP
-   END
-
-   IF @n_MatchTidNo1 = 0 OR @n_MatchTidNo2 = 0 
+      IF @c_Sku1 = '' 
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_Err      = 84035
+         SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': NFC Tag For Receive''s Sales Order: ' + @c_CarrierName   --(Wan01)
+                         + ' not found. (isp_RFID_ASNValidateRFIDNo)'
+         GOTO QUIT_SP
+      END
+   END                                                                                    --(Wan03) - END
+   
+   IF @n_MatchTidNo1 = 0 OR (@n_MatchTidNo2 = 0 AND @c_TagReader = 'RFID')             --(Wan03)
    BEGIN
       SET @n_Continue = 3
       SET @n_Err      = 84040
       SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': Unmatch RFIDNo and TidNo is/are found.'
-                        + ' (isp_RFID_ASNValidateRFIDNo)'
+                      + ' (isp_RFID_ASNValidateRFIDNo)'
       GOTO QUIT_SP
    END
 
    --2021-01-07 for Scanned Sku then scanned RFID
-   IF @c_Sku <> @c_Sku1 AND @c_Sku <> ''
+   IF @c_Sku <> @c_Sku1 AND @c_Sku <> '' 
    BEGIN
       SET @n_Continue = 3
       SET @n_Err      = 84050
-      SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': Scanned Sku and RFID Sku are unmatch.'
-                        + ' (isp_RFID_ASNValidateRFIDNo)'
+      SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': Scanned Sku and ' + @c_TagReader 
+                      + ' Sku are unmatch.'
+                      + ' (isp_RFID_ASNValidateRFIDNo)'
       GOTO QUIT_SP
    END
    
@@ -147,12 +172,13 @@ BEGIN
    BEGIN
       SET @n_Continue = 3
       SET @n_Err      = 84060
-      SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': RFID Sku not Found in Receipt or Sku is received.'
-                        + ' (isp_RFID_ASNValidateRFIDNo)'
+      SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': ' + @c_TagReader
+                      + ' Sku not Found in Receipt or Sku is received.'
+                      + ' (isp_RFID_ASNValidateRFIDNo)'
       GOTO QUIT_SP
    END
 
-   SET @c_Sku = @c_Sku1
+   --SET @c_Sku = @c_Sku1              --(Wan03) Not a Output Parameter
   
 QUIT_SP:
    IF @n_Continue=3  -- Error Occured - Process And Return

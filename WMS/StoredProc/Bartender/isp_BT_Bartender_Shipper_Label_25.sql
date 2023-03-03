@@ -14,6 +14,7 @@ GO
 /* 20-Jan-2023  1.0  WLChooi    Created (WMS-21592)                           */
 /* 20-Jan-2023  1.0  WLChooi    DevOps Combine Script                         */
 /* 21-Feb-2023  1.1  WLChooi    WMS-21592 - Update column mapping (WL01)      */
+/* 02-Mar-2023  1.2  WLChooi    WMS-21592 - Update Col59 (WL02)               */
 /******************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_Shipper_Label_25]
 (
@@ -284,7 +285,7 @@ BEGIN
                           + N' CASE WHEN STO.StorerKey IN (''ANF'',''18354'',''18467'') THEN ORD.DeliveryNote Else ORD.PmtTerm END ,'
                           + N'ORD.InvoiceAmount,'''','''','
                           + N'ORD.ShipperKey,STO.B_Company,(STO.B_Address1+STO.B_Address2+STO.B_Address3),STO.B_Contact1,STO.B_Phone1,ORD.DeliveryPlace,'''', ' --50       
-                          + N' '''',ORD.M_Address1,ORD.M_Address2,ORD.M_City,'''','''',ORD.Priority,ORD.Userdefine10,LOC.Logicallocation,LOC.LOC '
+                          + N' '''',ORD.M_Address1,ORD.M_Address2,ORD.M_City,'''','''',ORD.Priority,ORD.Userdefine10,ISNULL(ORD.DischargePlace,''''),LOC.LOC '   --WL02
                           + CHAR(13)
                           + N' FROM ORDERS ORD WITH (NOLOCK) INNER JOIN ORDERDETAIL ORDDET WITH (NOLOCK)  ON ORD.ORDERKEY = ORDDET.ORDERKEY   '
                           + N' INNER JOIN STORER STO WITH (NOLOCK) ON STO.StorerKey = ORD.StorerKey '
@@ -292,8 +293,6 @@ BEGIN
                           + N' INNER JOIN LOC LOC WITH (NOLOCK) ON LOC.LOC = PD.LOC '
                           + N' LEFT JOIN ORDERINFO ORDIF WITH (NOLOCK) ON ORDIF.orderkey = ORD.Orderkey '
                           + N' WHERE ORD.StorerKey = @c_StorerKey '
-
-
       END
       ELSE
       BEGIN
@@ -314,7 +313,7 @@ BEGIN
                           + +N' CASE WHEN STO.StorerKey IN (''ANF'',''18354'',''18467'') THEN ORD.DeliveryNote Else ORD.PmtTerm END ,'
                           + N'ORD.InvoiceAmount,'''','''','
                           + N'ORD.ShipperKey,STO.B_Company,(STO.B_Address1+STO.B_Address2+STO.B_Address3),STO.B_Contact1,STO.B_Phone1,ORD.DeliveryPlace,'''', ' --50  
-                          + N' '''',ORD.M_Address1,ORD.M_Address2,ORD.M_City,'''','''',ORD.Priority,ORD.Userdefine10,'''','''' '
+                          + N' '''',ORD.M_Address1,ORD.M_Address2,ORD.M_City,'''','''',ORD.Priority,ORD.Userdefine10,ISNULL(ORD.DischargePlace,''''),'''' '   --WL02
                           + CHAR(13) + +N' FROM ORDERS ORD WITH (NOLOCK) '
                           + N' INNER JOIN STORER STO WITH (NOLOCK) ON STO.StorerKey = ORD.StorerKey '
                           + N' LEFT JOIN ORDERINFO ORDIF WITH (NOLOCK) ON ORDIF.orderkey = ORD.Orderkey '
@@ -340,7 +339,7 @@ BEGIN
                        + +N' CASE WHEN STO.StorerKey IN (''ANF'',''18354'',''18467'') THEN ORD.DeliveryNote Else ORD.PmtTerm END ,'
                        + N'ORD.InvoiceAmount,'''','''','
                        + N'ORD.ShipperKey,STO.B_Company,(STO.B_Address1+STO.B_Address2+STO.B_Address3),STO.B_Contact1,STO.B_Phone1,ORD.DeliveryPlace,'''', ' --50     
-                       + N' '''',ORD.M_Address1,ORD.M_Address2,ORD.M_City,'''','''',ORD.Priority,ORD.Userdefine10,'''','''' '
+                       + N' '''',ORD.M_Address1,ORD.M_Address2,ORD.M_City,'''','''',ORD.Priority,ORD.Userdefine10,ISNULL(ORD.DischargePlace,''''),'''' '   --WL02
                        + CHAR(13)
                        + +N' FROM ORDERS ORD (NOLOCK) JOIN STORER STO (NOLOCK) ON STO.StorerKey = ORD.StorerKey '
                        + N' LEFT JOIN ORDERINFO ORDIF WITH (NOLOCK) ON ORDIF.orderkey = ORD.Orderkey '
@@ -690,6 +689,7 @@ BEGIN
       FROM PACKDETAIL (NOLOCK)
       JOIN SKU (NOLOCK) ON SKU.StorerKey = PACKDETAIL.StorerKey AND SKU.SKU = PACKDETAIL.Sku
       WHERE PACKDETAIL.PickSlipNo = @c_PickSlipNo
+      AND PACKDETAIL.CartonNo = @c_CartonNo   --WL02
       GROUP BY PACKDETAIL.LabelLine, SKU.DESCR
       ORDER BY CAST(PACKDETAIL.LabelLine AS INT)
 
