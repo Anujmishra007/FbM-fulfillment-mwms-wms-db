@@ -20,6 +20,7 @@ GO
 /*                              period (james04)                              */
 /* 11-11-2022   James     1.6   Perf tuning (james05)                         */
 /* 23-09-2022   YeeKung   1.7   WMS-20820 Extended refno length (yeekung01)   */
+/* 03-02-2023   James     1.8   WMS-21480 Add NFC sku check (james06)         */
 /******************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_638RefNoLKUP04]  
@@ -56,6 +57,7 @@ BEGIN
    DECLARE @cErrMsg2            NVARCHAR( 20)  
    DECLARE @cUDF02              NVARCHAR( 60) = ''  
    DECLARE @cSellerCity         NVARCHAR( 45) = ''
+   DECLARE @cUserDefine10       NVARCHAR( 30) = ''
    
    DECLARE @nTranCount INT  
    SET @nTranCount = @@TRANCOUNT  
@@ -247,7 +249,8 @@ BEGIN
          @cCarrierName = ISNULL( CarrierName, ''),   
          @cSellerPhone1 = ISNULL( SellerPhone1, ''),  
          @dUserDefine07 = UserDefine07, 
-         @cSellerCity = SellerCity  
+         @cSellerCity = SellerCity, 
+         @cUserDefine10 = UserDefine10  
       FROM Receipt WITH (NOLOCK)   
       WHERE ReceiptKey = @cReceiptKey  
   
@@ -262,7 +265,23 @@ BEGIN
          SET @nErrNo = 0 -- Promopt only, still need goto next screen  
          SET @cErrMsg = ''  
       END  
-  
+
+      IF @cUserDefine10 = 'NFC' AND ISNULL( @cUserDefine08, '') = ''
+      BEGIN  
+         SET @nErrNo = 158411  
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NFC ASN  
+         SET @cReceiptKey = ''
+         GOTO Quit  
+      END  
+
+      IF @cUserDefine10 = 'NFC' AND ISNULL( @cUserDefine08, '') = 'RFID'
+      BEGIN  
+         SET @nErrNo = 158412  
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NFC RFID ASN  
+         SET @cReceiptKey = ''
+         GOTO Quit  
+      END  
+            
       -- Check RFID ASN  
       IF @cUserDefine08 = 'RFID'  
       BEGIN  
