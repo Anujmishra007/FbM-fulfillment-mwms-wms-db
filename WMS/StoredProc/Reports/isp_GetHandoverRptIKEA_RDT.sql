@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_GetHandoverRptIKEA_RDT]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[isp_GetHandoverRptIKEA_RDT]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -25,8 +20,9 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 03-MAR-2023 CSCHONG  1.1   DEvops Scripts Combine & WMS-21879 (CS01) */
 /************************************************************************/
-CREATE PROC isp_GetHandoverRptIKEA_RDT
+CREATE OR ALTER PROC isp_GetHandoverRptIKEA_RDT
          @c_sourcekey      NVARCHAR(50)
              
 AS
@@ -71,7 +67,8 @@ BEGIN
       Externmbolkey   NVARCHAR(30) NULL,
       M_Company       NVARCHAR(45) NULL,
       Userdefine01    NVARCHAR(30) NULL,
-      CaseId          NVARCHAR(20) NULL
+      CaseId          NVARCHAR(20) NULL,
+      STSUSR1         NVARCHAR(20) NULL       --CS01
    )
 
    IF EXISTS (SELECT 1 FROM MBOL (NOLOCK) WHERE MBOLKEY = @c_sourcekey)
@@ -80,16 +77,20 @@ BEGIN
       SET @c_extmbolkey = @c_sourcekey
 
       INSERT INTO #Handover_RPT
-      SELECT OH.Shipperkey,
+      SELECT CASE WHEN ISNULL(C.short,'')='Y'  AND LEFT(OH.Shipperkey,2) = 'SF' THEN LEFT(OH.Shipperkey,2) ELSE OH.Shipperkey END AS shipperkey,   --CS01
              OH.Mbolkey,
              MBOL.Externmbolkey,
              OH.M_Company,
              PLTD.Userdefine01,
-             LTRIM(RTRIM(ISNULL(PLTD.CaseId,'')))
+             LTRIM(RTRIM(ISNULL(PLTD.CaseId,''))),
+             CASE WHEN ISNULL(C.short,'')='Y' THEN ISNULL(ST.SUSR1,'') ELSE 'IKEA CPU 037' END      --CS01
       FROM ORDERS OH (NOLOCK)    
       JOIN MBOL (NOLOCK) ON ( OH.Mbolkey = Mbol.Mbolkey )   
       JOIN PALLETDETAIL PLTD (NOLOCK) ON (PLTD.Palletkey = MBOL.ExternMbolKey) AND (PLTD.Userdefine01 = OH.Orderkey)
       JOIN PALLET PLT (NOLOCK) ON (PLT.Palletkey = PLTD.Palletkey)
+      JOIN STORER ST WITH (NOLOCK) ON ST.StorerKey = OH.StorerKey     --CS01 S
+      LEFT JOIN dbo.CODELKUP C WITH (NOLOCK) ON C.listname = 'REPORTCFG' and C.Code = 'SHOWFIELD'
+                                        AND C.Long = 'r_dw_handover_rpt_IKEA_rdt' AND c.Storerkey = OH.StorerKey
       WHERE OH.Mbolkey = CASE WHEN @c_mbolkey <> '' THEN @c_mbolkey ELSE OH.Mbolkey END 
         AND Externmbolkey = CASE WHEN @c_extmbolkey <> '' THEN @c_extmbolkey ELSE Externmbolkey END     
         --AND (PLT.[Status] = '9' OR MBOL.[Status] >= '5')  
@@ -98,7 +99,7 @@ BEGIN
                MBOL.Externmbolkey,
                OH.M_Company,
                PLTD.Userdefine01,
-               LTRIM(RTRIM(ISNULL(PLTD.CaseId,'')))
+               LTRIM(RTRIM(ISNULL(PLTD.CaseId,''))), ISNULL(ST.SUSR1,''),ISNULL(C.short,'')      --CS01
       
       SELECT Shipperkey    
            , Mbolkey       
@@ -118,7 +119,8 @@ BEGIN
               CASE WHEN SUBSTRING(CaseId,1,2) = 'JD' THEN
                  CASE WHEN ISNUMERIC(SUBSTRING(CaseId,CHARINDEX('-', CaseId) + 1,CHARINDEX('-', CaseId) + 2)) = 1 THEN
                     CAST(SUBSTRING(CaseId,CHARINDEX('-', CaseId) + 1,CHARINDEX('-', CaseId) + 2) AS INT) END END
-              , CaseId ASC) ) AS NVARCHAR(10)) AS CaseIDCount
+          , CaseId ASC) ) AS NVARCHAR(10)) AS CaseIDCount
+          , STSUSR1 AS STSUSR1                 --CS01
       FROM #Handover_RPT
       ORDER BY Externmbolkey, Userdefine01
              , CASE WHEN SUBSTRING(CaseId,1,2) = 'JD' THEN
