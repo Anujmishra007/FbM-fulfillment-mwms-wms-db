@@ -27,6 +27,7 @@ GO
 /* 09-04-2021   Wan01   1.2   WMS-16026 - PB-Standardize TrackingNo        */
 /* 27-05-2022   WLChooi 1.3   DevOps Combine Script                        */
 /* 27-05-2022   WLChooi 1.3   WMS-19766 - Get Keyname filter UDF05 (WL01)  */
+/* 08-03-2023   NJOW01  1.4   Fix - Update new labelno to packserialno     */
 /***************************************************************************/        
 CREATE OR ALTER PROC [dbo].[ispPAKCF09]        
 (     @c_PickSlipNo  NVARCHAR(10)         
@@ -64,6 +65,7 @@ BEGIN
          , @c_CarrierName     NVARCHAR(30)      --(CS01)      
          , @c_DropID          NVARCHAR(20)      --(CS01)      
          , @c_TrackingNo_PI   NVARCHAR(50) =''  --(Wan01)    
+         , @c_TrackingNo_PSR  NVARCHAR(30) =''  --NJOW01
       
          , @CUR_PACKSN        CURSOR      
          , @CUR_TrackingNo    CURSOR        --(CS01)    
@@ -125,7 +127,7 @@ BEGIN
    BEGIN      
        SET @n_Continue = 3      
        SET @c_ErrMsg   = CONVERT(NVARCHAR(250), @n_Err)       
-       SET @n_Err = 61804      
+       SET @n_Err = 61801      
        SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(5), @n_Err) + ': Update PACKHEADER Fail. (ispPAKCF09)'      
                        + ' ( SQLSvr MESSAGE=' + RTRIM(@c_ErrMsg) + ' )'      
        GOTO QUIT_SP      
@@ -262,13 +264,42 @@ BEGIN
             BEGIN      
                SET @n_Continue = 3      
                SET @c_ErrMsg   = CONVERT(NVARCHAR(250), @n_Err)       
-               SET @n_Err = 61802      
+               SET @n_Err = 61803      
                SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(5), @n_Err) + ': Update PACKINFO Fail. (ispPAKCF09)'      
                              + ' ( SQLSvr MESSAGE=' + RTRIM(@c_ErrMsg) + ' )'      
                GOTO QUIT_SP      
             END      
-         END                                                          
-      
+         END           
+         
+         --NJOW01 S
+         SET @c_TrackingNo_PSR = ''
+         SELECT TOP 1 @c_TrackingNo_PSR = LabelNo
+         FROM PACKSERIALNO (NOLOCK)
+         WHERE PickSlipNo = @c_PickSlipNo 
+         AND CartonNo = @n_TCartonNo          
+         
+         IF @c_TrackingNo_PSR <> @c_TrackingNo
+         BEGIN
+            UPDATE PACKSERIALNO WITH (ROWLOCK)
+            SET LabelNo = @c_TrackingNo,
+                TrafficCop = NULL
+            WHERE PickSlipNo = @c_PickSlipNo 
+            AND CartonNo = @n_TCartonNo 
+            AND LabelNo = @c_TrackingNo_PSR
+
+            SET @n_Err = @@ERROR       
+            IF @n_Err <> 0      
+            BEGIN      
+               SET @n_Continue = 3      
+               SET @c_ErrMsg   = CONVERT(NVARCHAR(250), @n_Err)       
+               SET @n_Err = 61804      
+               SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(5), @n_Err) + ': Update PACKSERIALNO Fail. (ispPAKCF09)'      
+                             + ' ( SQLSvr MESSAGE=' + RTRIM(@c_ErrMsg) + ' )'      
+               GOTO QUIT_SP      
+            END      
+         END
+         --NJOW01 E
+               
          FETCH NEXT FROM @CUR_PD INTO @c_LabelLine      
                                     , @c_DropID     
                                     , @c_TrackingNo_PI                 
@@ -311,7 +342,7 @@ BEGIN
       BEGIN    
          SET @n_Continue = 3    
          SET @c_ErrMsg   = CONVERT(NVARCHAR(250), @n_Err)     
-         SET @n_Err = 61803    
+         SET @n_Err = 61805    
          SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(5), @n_Err) + ': Update CARTONTRACK Fail. (ispPAKCF09) '    
                        + ' ( SQLSvr MESSAGE=' + RTRIM(@c_ErrMsg) + ' )'    
          GOTO QUIT_SP    
@@ -341,7 +372,7 @@ BEGIN
    IF @b_success <> 1
    BEGIN
       SET @n_continue = 3
-      SET @n_err = 61805 
+      SET @n_err = 61806 
       SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Executing nspGetRight. (ispPAKCF09)' 
                      + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
       GOTO QUIT_SP
@@ -358,7 +389,7 @@ BEGIN
       IF @b_Success <> 1
       BEGIN
          SET @n_Continue = 3
-         SET @n_Err = 61806
+         SET @n_Err = 61807
          SET @c_ErrMsg = 'NSQL' +  CONVERT(CHAR(5),@n_Err)  + ':'  
                         + 'Error Executing isp_AssignPackLabelToOrderByLoad.(ispPAKCF09)'
          GOTO QUIT_SP
@@ -411,7 +442,7 @@ BEGIN
             IF @n_err <> 0          
             BEGIN          
                SET @n_continue = 3          
-               SET @n_err = 61801-- Should Be Set To The SQL Errmessage but I don't know how to do so.       
+               SET @n_err = 61808-- Should Be Set To The SQL Errmessage but I don't know how to do so.       
                SET @c_errmsg='NSQL'+CONVERT(char(5), @n_err)+': Update Failed On Table SERIALNO. (ispPAKCF09)'         
       
                GOTO QUIT_SP       
