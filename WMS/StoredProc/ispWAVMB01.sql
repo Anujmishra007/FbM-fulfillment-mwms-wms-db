@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ispWAVMB01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[ispWAVMB01]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -38,9 +34,12 @@ GO
 /* 28-Jan-2019 TLTING_ext 1.0  enlarge externorderkey field length     	*/
 /* 14-Mar-2019 NJOW01     1.1  Fix join bug                             */
 /* 28-Jun-2021 NJOW02     1.2  Fix datatime to datetime                 */
+/* 07-Mar-2023 WLChooi    1.3  WMS-21905 - Add SkipUpdateMBOLUserdefine */
+/*                             config (WL01)                            */
+/* 07-Mar-2023 WLChooi    1.3  DevOps Combine Script                    */
 /************************************************************************/
 
-CREATE PROC [dbo].[ispWAVMB01]
+CREATE OR ALTER PROC [dbo].[ispWAVMB01]
    @c_WaveKey NVARCHAR(10),
    @b_Success Int          OUTPUT,
    @n_err     Int          OUTPUT,
@@ -93,6 +92,13 @@ BEGIN
          , @c_Field10         NVARCHAR(60)
          , @n_cnt             Int
          , @c_FoundMBOLKey    NVARCHAR(10)
+         , @c_Configkey       NVARCHAR(30) = 'WAVEGENMBOL_SP'   --WL01
+         , @c_Authority       NVARCHAR(30)   --WL01
+         , @c_Userdefine02    NVARCHAR(20)   --WL01
+         , @c_Userdefine04    NVARCHAR(20)   --WL01
+         , @c_Userdefine09    NVARCHAR(10)   --WL01
+         , @c_Option5         NVARCHAR(4000) --WL01
+         , @c_SkipUpdateMBOLUserdefine NVARCHAR(10) = 'N'   --WL01
 
    SELECT @n_StartTranCnt=@@TRANCOUNT, @n_continue = 1, @n_mbolcount = 0
 
@@ -105,6 +111,41 @@ BEGIN
       SELECT @c_errmsg="NSQL"+CONVERT(Char(5),@n_err)+": No Orders being populated INTO WaveDetail. (ispWAVMB01)"
       GOTO RETURN_SP
    END
+
+   --WL01 S
+   SET @c_Userdefine02 = 'Y'
+   SET @c_Userdefine04 = 'Y'
+   SET @c_Userdefine09 = @c_WaveKey
+
+   SELECT @c_StorerKey = MIN(OH.Storerkey)
+        , @c_Facility  = MIN(OH.Facility)
+   FROM WAVEDETAIL WD (NOLOCK)
+   JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = WD.OrderKey
+   WHERE WD.WaveKey = @c_WaveKey
+
+   EXECUTE nspGetRight                                
+      @c_Facility  = @c_Facility,                     
+      @c_StorerKey = @c_StorerKey,                    
+      @c_sku       = '',
+      @c_ConfigKey = @c_Configkey,
+      @b_Success   = @b_Success   OUTPUT,             
+      @c_authority = @c_Authority OUTPUT,             
+      @n_err       = @n_err       OUTPUT,             
+      @c_errmsg    = @c_errmsg    OUTPUT,                           
+      @c_Option5   = @c_Option5   OUTPUT
+     
+   IF ISNULL(@c_authority,'') = 'ispWAVMB01'
+   BEGIN
+      SELECT @c_SkipUpdateMBOLUserdefine = dbo.fnc_GetParamValueFromString('@c_SkipUpdateMBOLUserdefine', @c_Option5, 'N')  
+
+      IF @c_SkipUpdateMBOLUserdefine = 'Y'
+      BEGIN
+         SET @c_Userdefine02 = ''
+         SET @c_Userdefine04 = ''
+         SET @c_Userdefine09 = ''
+      END
+   END
+   --WL01 E
 
    -------------------------- Construct Wave Dynamic Grouping ------------------------------
    IF @n_continue = 1 OR @n_continue = 2
@@ -306,7 +347,7 @@ BEGIN
 
             -- Create MBOL
             INSERT INTO MBOL (MBOLKey, Facility, PlaceOfdeliveryQualifier, TransMethod, Userdefine09, Userdefine02, Userdefine04) 
-            VALUES (@c_MBOLKey, @c_Facility, 'D','O', @c_Wavekey, 'Y', 'Y')
+            VALUES (@c_MBOLKey, @c_Facility, 'D','O', @c_Userdefine09, @c_Userdefine02, @c_Userdefine04)   --WL01
 
             SELECT @n_err = @@ERROR
             IF @n_err <> 0
@@ -453,6 +494,5 @@ BEGIN
    RETURN
 END
 GO
-
-GRANT EXECUTE ON ispWAVMB01 TO NSQL
+GRANT EXECUTE ON [dbo].[ispWAVMB01] TO [NSQL]
 GO
