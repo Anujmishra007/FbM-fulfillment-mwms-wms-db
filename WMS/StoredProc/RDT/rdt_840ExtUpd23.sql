@@ -14,6 +14,7 @@ GO
 /*                                                                      */
 /* Date        Rev  Author     Purposes                                 */
 /* 2022-11-11  1.0  James      WMS-20442. Created                       */
+/* 2023-08-03  1.1  James      JSM-126884 Bug fix (james01)             */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_840ExtUpd23 (
@@ -395,73 +396,82 @@ AS
             END
          END
 
-         -- If already trigger WSOrdRecalculate, no need trigger WSCRRDTMTE
-         -- Short pack occurred 
-         IF NOT EXISTS ( SELECT 1 FROM dbo.TransmitLog2 WITH (NOLOCK)
-                     WHERE TableName = 'WSOrdRecalculate'
-                     AND   key1 = @cOrderKey
-                     AND   key2 = ''
-                     AND   key3 = @cStorerKey)
+         -- Only customer orders need trigger interface WSCRRDTMTE (james01)
+         IF EXISTS ( SELECT 1 FROM dbo.CODELKUP C WITH (NOLOCK) 
+                     JOIN dbo.Orders O WITH (NOLOCK) ON (C.Code = O.Type AND C.StorerKey = O.StorerKey)
+                     WHERE C.ListName = 'HMORDTYPE'
+                     AND   C.Short = 'S'
+                     AND   O.OrderKey = @cOrderkey
+                     AND   O.StorerKey = @cStorerKey) OR @cOrdType IN ('COD', 'NORMAL')
          BEGIN
-            IF EXISTS ( SELECT 1 FROM dbo.TransmitLog2 WITH (NOLOCK)
-                        WHERE TableName = 'WSCRRDTMTE'
+            -- If already trigger WSOrdRecalculate, no need trigger WSCRRDTMTE
+            -- Short pack occurred 
+            IF NOT EXISTS ( SELECT 1 FROM dbo.TransmitLog2 WITH (NOLOCK)
+                        WHERE TableName = 'WSOrdRecalculate'
                         AND   key1 = @cOrderKey
-                        AND   key2 = @nCartonNo
-                        AND   key3 = @cStorerKey
-                        AND   transmitflag = '9')
+                        AND   key2 = ''
+                        AND   key3 = @cStorerKey)
             BEGIN
-               DELETE FROM dbo.TransmitLog2
-               WHERE TableName = 'WSCRRDTMTE'
+               IF EXISTS ( SELECT 1 FROM dbo.TransmitLog2 WITH (NOLOCK)
+                           WHERE TableName = 'WSCRRDTMTE'
+                           AND   key1 = @cOrderKey
+                           AND   key2 = @nCartonNo
+                           AND   key3 = @cStorerKey
+                           AND   transmitflag = '9')
+               BEGIN
+                  DELETE FROM dbo.TransmitLog2
+                  WHERE TableName = 'WSCRRDTMTE'
+                  AND   key1 = @cOrderKey
+                  AND   key2 = @nCartonNo
+                  AND   key3 = @cStorerKey
+                  AND   transmitflag = '9'
+
+                  IF @@ERROR <> 0
+                  BEGIN    
+                     SET @nErrNo = 193862    
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'DelTLog2 Err'    
+                     GOTO RollBackTran    
+                  END    
+               END
+         
+               EXEC dbo.ispGenTransmitLog2
+                  @c_TableName      = 'WSCRRDTMTE',
+                  @c_Key1           = @cOrderKey,
+                  @c_Key2           = @nCartonNo ,
+                  @c_Key3           = @cStorerKey,
+                  @c_TransmitBatch  = '',
+                  @b_success        = @bSuccess    OUTPUT,
+                  @n_err            = @nErrNo      OUTPUT,
+                  @c_errmsg         = @cErrMsg     OUTPUT
+
+               IF @bSuccess <> 1
+               BEGIN
+                  SET @nErrNo = 193863
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'GenTLog2 Fail'
+                  GOTO RollBackTran
+               END
+         
+               SELECT @cTransmitLogKey = transmitlogkey
+               FROM dbo.TRANSMITLOG2 WITH (NOLOCK)
+               WHERE tablename = 'WSCRRDTMTE'
                AND   key1 = @cOrderKey
                AND   key2 = @nCartonNo
                AND   key3 = @cStorerKey
-               AND   transmitflag = '9'
-
-               IF @@ERROR <> 0
-               BEGIN    
-                  SET @nErrNo = 193862    
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'DelTLog2 Err'    
-                  GOTO RollBackTran    
-               END    
-            END
-         
-            EXEC dbo.ispGenTransmitLog2
-               @c_TableName      = 'WSCRRDTMTE',
-               @c_Key1           = @cOrderKey,
-               @c_Key2           = @nCartonNo ,
-               @c_Key3           = @cStorerKey,
-               @c_TransmitBatch  = '',
-               @b_success        = @bSuccess    OUTPUT,
-               @n_err            = @nErrNo      OUTPUT,
-               @c_errmsg         = @cErrMsg     OUTPUT
-
-            IF @bSuccess <> 1
-            BEGIN
-               SET @nErrNo = 193863
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'GenTLog2 Fail'
-               GOTO RollBackTran
-            END
-         
-            SELECT @cTransmitLogKey = transmitlogkey
-            FROM dbo.TRANSMITLOG2 WITH (NOLOCK)
-            WHERE tablename = 'WSCRRDTMTE'
-            AND   key1 = @cOrderKey
-            AND   key2 = @nCartonNo
-            AND   key3 = @cStorerKey
               
-            EXEC dbo.isp_QCmd_WSTransmitLogInsertAlert   
-               @c_QCmdClass         = @c_QCmdClass,   
-               @c_FrmTransmitlogKey = @cTransmitLogKey,   
-               @c_ToTransmitlogKey  = @cTransmitLogKey,   
-               @b_Debug             = @b_Debug,   
-               @b_Success           = @bSuccess    OUTPUT,   
-               @n_Err               = @nErrNo      OUTPUT,   
-               @c_ErrMsg            = @cErrMsg     OUTPUT   
+               EXEC dbo.isp_QCmd_WSTransmitLogInsertAlert   
+                  @c_QCmdClass         = @c_QCmdClass,   
+                  @c_FrmTransmitlogKey = @cTransmitLogKey,   
+                  @c_ToTransmitlogKey  = @cTransmitLogKey,   
+                  @b_Debug             = @b_Debug,   
+                  @b_Success           = @bSuccess    OUTPUT,   
+                  @n_Err               = @nErrNo      OUTPUT,   
+                  @c_ErrMsg            = @cErrMsg     OUTPUT   
 
-            IF @bSuccess <> 1
-               GOTO RollBackTran            
+               IF @bSuccess <> 1
+                  GOTO RollBackTran            
+            END
          END
-      
+         
          -- Only customer order need print below label
          IF EXISTS ( SELECT 1 FROM dbo.CODELKUP C WITH (NOLOCK)
                      JOIN dbo.Orders O WITH (NOLOCK) ON (C.Code = O.Type AND C.StorerKey = O.StorerKey)
