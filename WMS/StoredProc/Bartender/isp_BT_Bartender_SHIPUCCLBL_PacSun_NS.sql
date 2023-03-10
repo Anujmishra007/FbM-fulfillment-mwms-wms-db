@@ -10,7 +10,8 @@ GO
 /* Modifications log:                                                         */                   
 /*                                                                            */                   
 /* Date       Rev  Author     Purposes                                        */  
-/*21-FEB-2023 1.0  CHONGCS    Devops Scripts Combine & Created (WMS-21805)    */  
+/*21-FEB-2023 1.0  CHONGCS    Devops Scripts Combine & Created (WMS-21805)    */
+/* 7-MAR-2023 1.1  WZPang     Modify column and add columns (WMS-21882)       */
 /******************************************************************************/                  
                     
 CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_SHIPUCCLBL_PacSun_NS]                        
@@ -188,10 +189,10 @@ BEGIN
          
    SET @c_SQLJOIN = N' SELECT DISTINCT ISNULL(F.Descr,''''), substring(ISNULL(F.Address1,'''') + ISNULL(F.Address2,'''')+  '
                   +  ' ISNULL(F.Address3,'''') + ISNULL(F.Address4,''''),1,80),ISNULL(OH.m_Company,''''), ' + CHAR(13) --3
-                  +  ' substring(ISNULL(OH.M_Address1,'''') + ISNULL(OH.M_Address2,'''')+ ISNULL(OH.M_Address3,'''') + ISNULL(OH.M_Address4,''''),1,80), ISNULL(oh.markforkey,''''),'  --5
+                  +  ' LEFT(TRIM(OH.M_Address1),80), ISNULL(oh.markforkey,''''),'  --5      --(WZ01)
                   +  ' ISNULL(oh.m_zip,''''), oh.userdefine04, OH.Userdefine03,oh.bizunit, oh.userdefine02,' + CHAR(13) --10  
                   +  '  @c_labelno, ISNULL(F.City,'''') + '','' + ISNULL(F.State,'''') + '','' + ISNULL(F.Country,''''), '
-                  +  ' ISNULL(oh.m_City,'''') + '','' + ISNULL(oh.m_State,'''')+ ISNULL(oh.m_zip,'''') + '','' + ISNULL(oh.m_country,''''), '''', '''', '''','''', '''', '''', '''', ' + CHAR(13) --20
+                  +  ' ISNULL(oh.m_City,'''') + '','' + ISNULL(oh.m_State,'''')+ ISNULL(oh.m_zip,'''') + '','' + ISNULL(oh.m_country,''''), LEFT(TRIM(OH.M_address2),80), LEFT(TRIM(OH.M_address3),80), LEFT(TRIM(OH.M_address4),80),'''', '''', '''', '''', ' + CHAR(13) --20      --(WZ01)
                   +  ' '''', '''', '''', '''', '''', '''', '''', '''', '''', '''', ' + CHAR(13) --30
                   +  ' '''', '''', '''', '''', '''', '''', '''', '''', '''', '''', ' + CHAR(13) --40
                   +  ' '''', '''', '''', '''', '''', '''', '''', '''', '''', '''', ' + CHAR(13) --50
