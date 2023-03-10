@@ -11,6 +11,7 @@ GO
 /* Date       Rev  Author     Purposes                                        */
 /* 2022-11-15 1.0  MINGLE     DevOps Combine Script(WMS-21136 - Created)      */
 /* 2023-02-14 1.1  MINGLE     WMS-21749 - Add col 58 & 59(ML01)               */
+/* 2023-03-10 1.2  WLChooi    WMS-21749 - Bug Fix (WL01)                      */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_JP_Carton_Label_BSJ]
@@ -489,7 +490,9 @@ BEGIN
          FROM PackHeader ph WITH (NOLOCK)
          JOIN PackDetail pd WITH (NOLOCK) ON ph.PickSlipNo = pd.PickSlipNo
          JOIN SKU S WITH (NOLOCK) ON S.Sku = pd.SKU AND S.StorerKey = pd.StorerKey
-         WHERE ph.PickSlipNo = @c_Sparm1 AND pd.CartonNo >= CONVERT(INT, 1) AND pd.CartonNo <= CONVERT(INT, 1)
+         WHERE ph.PickSlipNo = @c_Sparm1 
+         AND pd.CartonNo >= CONVERT(INT, @c_Sparm2)   --WL01
+         AND pd.CartonNo <= CONVERT(INT, @c_Sparm3)   --WL01
          GROUP BY pd.SKU
                 , S.DESCR
 
