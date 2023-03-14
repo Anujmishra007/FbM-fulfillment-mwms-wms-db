@@ -3513,6 +3513,9 @@ BEGIN
       END
    END
 
+   SET @cPUOM_Desc =''
+   SET @nPUOM_Div = ''
+
    --Get SKU Description, UOMQTY
    SELECT
       @cSKUDesc = SKU.Descr,
@@ -3545,14 +3548,86 @@ BEGIN
    WHERE SKU.StorerKey = @cStorer
       AND SKU.SKU = @cSKU
 
-   SET @nQTY_PPA  = 0
-   SET @nQTY_CHK  = 0
-   SET @nMQTY_CHK = 0
-   SET @nQTY_PPA  = 0
-   SET @nPQTY_PPA = 0
-   SET @nMQTY_PPA = 0
+
+   -- Convert QTY
+   IF @cConvertQTYSP <> '' AND EXISTS( SELECT TOP 1 1 FROM dbo.sysobjects WHERE name = @cConvertQTYSP AND type = 'P')
+   BEGIN
+      -- Convert to prefer UOM QTY
+      IF @cPUOM = '6' OR -- When preferred UOM = master unit
+         @nPUOM_Div = 0 -- UOM not setup
+      BEGIN
+         SET @cPUOM_Desc = ''
+         SET @nPQTY = 0
+         SET @nMQTY = 0
+         SET @nPQTY_CHK = 0
+         SET @nPQTY_PPA = 0
+         SET @nMQTY_CHK = @nQTY_CHK
+         SET @nMQTY_PPA = @nQTY_PPA
+         SET @cFieldAttr09 = 'O' -- @nPQTY
+         IF @cDisableQTYField <> '1'
+            EXEC rdt.rdtSetFocusField @nMobile, 10 -- MQTY
+
+         SET @nMQTY_PPA = @nQTY_PPA
+         SET @nMQTY_CHK = @nQTY_CHK
+
+         SET @cSQL = 'EXEC ' + RTRIM( @cConvertQTYSP) + ' @cType, @cStorer, @cSKU, @nQTY OUTPUT'
+         SET @cSQLParam =
+            '@cType   NVARCHAR( 10), ' +
+            '@cStorer NVARCHAR( 15), ' +
+            '@cSKU    NVARCHAR( 20), ' +
+            '@nQTY    INT OUTPUT'
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam, 'ToDispQTY', @cStorer, @cSKU, @nMQTY_CHK OUTPUT
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam, 'ToDispQTY', @cStorer, @cSKU, @nMQTY_PPA OUTPUT
+      END
+      ELSE
+      BEGIN
+         SET @nPQTY = 0
+         SET @nMQTY = 0
+         SET @nPQTY_CHK = @nQTY_CHK / @nPUOM_Div -- Calc QTY in preferred UOM
+         SET @nMQTY_CHK = @nQTY_CHK % @nPUOM_Div -- Calc the remaining in master unit
+         SET @nPQTY_PPA = @nQTY_PPA / @nPUOM_Div -- Calc QTY in preferred UOM
+         SET @nMQTY_PPA = @nQTY_PPA % @nPUOM_Div -- Calc the remaining in master unit
+         IF @cDisableQTYField <> '1'
+         BEGIN
+            SET @cFieldAttr09 = '' -- @nPQTY
+            EXEC rdt.rdtSetFocusField @nMobile, 9 -- PQTY
+         END
+      END
+   END
+   ELSE
+   BEGIN
+      -- Convert to prefer UOM QTY
+      IF @cPUOM = '6' OR -- When preferred UOM = master unit
+         @nPUOM_Div = 0 -- UOM not setup
+      BEGIN
+         SET @cPUOM_Desc = ''
+         SET @nPQTY = 0
+         SET @nMQTY = 0
+         SET @nPQTY_CHK = 0
+         SET @nPQTY_PPA = 0
+         SET @nMQTY_CHK = @nQTY_CHK
+         SET @nMQTY_PPA = @nQTY_PPA
+         SET @cFieldAttr09 = 'O' -- @nPQTY
+         IF @cDisableQTYField <> '1'
+            EXEC rdt.rdtSetFocusField @nMobile, 10 -- MQTY
+      END
+      ELSE
+      BEGIN
+         SET @nPQTY = 0
+         SET @nMQTY = 0
+         SET @nPQTY_CHK = @nQTY_CHK / @nPUOM_Div -- Calc QTY in preferred UOM
+         SET @nMQTY_CHK = @nQTY_CHK % @nPUOM_Div -- Calc the remaining in master unit
+         SET @nPQTY_PPA = @nQTY_PPA / @nPUOM_Div -- Calc QTY in preferred UOM
+         SET @nMQTY_PPA = @nQTY_PPA % @nPUOM_Div -- Calc the remaining in master unit
+         IF @cDisableQTYField <> '1'
+         BEGIN
+            SET @cFieldAttr09 = '' -- @nPQTY
+            EXEC rdt.rdtSetFocusField @nMobile, 9 -- PQTY
+         END
+      END
+   END
    
-   -- Init next screen var
+      -- Display SKU info
    SET @cOutField01 = @cSKU
    SET @cOutField02 = @cSKU
    SET @cOutField03 = SUBSTRING( @cSKUDesc, 1, 20)
@@ -3561,11 +3636,14 @@ BEGIN
    SET @cOutField06 = @cColor
    SET @cOutField07 = @cSize
    SET @cOutField08 = '1:' + CAST( @nPUOM_Div AS NCHAR( 6)) + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc
+   SET @cOutField09 = CASE WHEN @cPPADefaultPQTY <> '' THEN @cPPADefaultPQTY ELSE '' END --@nPUOM
+   SET @cOutField10 = CASE WHEN @cTaskDefaultQty = '1' THEN @cTaskQty ELSE @cPPADefaultQTY END --@nMUOM
    SET @cOutField11 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY_CHK AS NVARCHAR(5)) END
    SET @cOutField12 = CAST( @nMQTY_CHK AS NVARCHAR(6)) --(yeekung07)
-   SET @cOutField13 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY_PPA AS NVARCHAR(5)) END
+   SET @cOutField13 = CASE WHEN ISNULL(@cPUOM_Desc,'') = '' THEN '' ELSE CAST( @nPQTY_PPA AS NVARCHAR(5)) END
    SET @cOutField14 = CAST( @nMQTY_PPA AS NVARCHAR(6)) --(yeekung07)
    SET @cOutField15 = '' -- @cExtendedInfo
+   SET @cOutField16 = @cPackQTYIndicator
 
    -- Go to SKU QTY screen
    SET @nScn = @nFromScn
