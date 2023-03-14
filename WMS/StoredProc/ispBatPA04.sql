@@ -66,6 +66,7 @@ BEGIN
          , @n_SkuQtyReceived     INT            = 0  
          , @n_SkuQtyRemaining    INT            = 0  
          , @n_QtyReceived        INT            = 0  
+		     , @n_ReceiptUCCQTY      INT            = 0  --JS added
          , @n_LinePAQty          INT            = 0  
          , @n_PAToLocQty         INT            = 0  
          , @c_Lottable01         NVARCHAR(18)   = ''          
@@ -96,31 +97,32 @@ BEGIN
          , @n_MezzanineX         INT            = 0  
          , @n_MezzanineY         INT            = 0  
          , @n_MezzanineZ         INT            = 0                
-         , @c_MostEmptyLocPickZone NVARCHAR(10) = ''  
-         , @n_SafetyStockPAQty     INT          = 0  
-         , @c_SafetyStockPALoc     NVARCHAR(10) = ''  
-         , @n_SafetyStockPALocQty  INT          = 0  
-		     , @n_SafetyStockPALocScore INT         = 0   --JS
-		     , @c_SafetyStockPALocZone  NVARCHAR(10) = '' --JS
-         , @n_RowID                INT          = 0                
-         , @c_HBStockPALoc         NVARCHAR(10) = ''  
-         , @n_HBStockPALocQty      INT          = 0  
-         , @n_HB_PACarton          INT          = 0        
-         , @c_FreeSeatsStockPALoc  NVARCHAR(10) = ''  
-         , @n_FreeSeatsStockPALocQty INT        = 0  
-		     , @n_FreeSeatsStockPALocScore  NVARCHAR(10) = '' --JS
-		     , @c_ASNType              NVARCHAR(10)
-		     , @c_UCCNo                NVARCHAR(20)
-		     , @n_UCCQty               INT
-		     , @n_TotalPieceQtyTake    INT
-         , @n_TotalCaseQtyTake     INT
-         , @n_RemainTotalPieceQtyTake INT
-         , @n_TotalPiece           INT
-         , @n_FP_CartonCnt         INT
-         , @n_HP_CartonCnt         INT              
-         , @n_PACarton             INT
-         , @c_ToLoc                NVARCHAR(10)
-         , @n_RowID_SkuQtySumm     INT
+         , @c_MostEmptyLocPickZone     NVARCHAR(10) = ''  
+         , @n_SafetyStockPAQty         INT          = 0  
+         , @c_SafetyStockPALoc         NVARCHAR(10) = ''  
+         , @n_SafetyStockPALocQty      INT          = 0  
+		     , @n_SafetyStockPALocScore    INT         = 0   --JS
+		     , @c_SafetyStockPALocZone     NVARCHAR(10) = '' --JS
+         , @n_RowID                    INT          = 0                
+         , @c_HBStockPALoc             NVARCHAR(10) = ''  
+         , @n_HBStockPALocQty          INT          = 0  
+         , @n_HB_PACarton              INT          = 0        
+         , @c_FreeSeatsStockPALoc      NVARCHAR(10) = ''  
+         , @n_FreeSeatsStockPALocQty   INT        = 0  
+		     , @n_FreeSeatsStockPALocScore NVARCHAR(10) = '' --JS
+		     , @c_ASNType                  NVARCHAR(10)
+		     , @c_UCCNo                    NVARCHAR(20)
+		     , @n_UCCQty                   INT
+		     , @n_TotalPieceQtyTake        INT
+         , @n_TotalCaseQtyTake         INT
+         , @n_RemainTotalPieceQtyTake  INT
+         , @n_TotalPiece               INT
+         , @n_FP_CartonCnt             INT
+         , @n_HP_CartonCnt             INT              
+         , @n_PACarton                 INT
+         , @c_ToLoc                    NVARCHAR(10)
+         , @n_RowID_SkuQtySumm         INT
+		     , @n_RowID_UCC                INT   --JS2 add rowid for temp ucctable use
          , @CUR_RDSKU            CURSOR           
            
    IF @b_debug = 1  
@@ -144,7 +146,8 @@ BEGIN
                        + '. (ispBatPA04)'  
          GOTO QUIT_SP        
       END  
-                  
+      
+  
       SET @n_Cnt = 1  
       SELECT @n_Cnt = 0  
       FROM RECEIPTDETAIL RD WITH (NOLOCK)  
@@ -172,7 +175,20 @@ BEGIN
                        + '. (ispBatPA04)'  
          GOTO QUIT_SP        
       END  
-      
+      	  
+	    -------JS added valdation to check if Receipt Detail without ToLoc
+	    IF EXISTS(SELECT 1  
+                FROM RECEIPTDETAIL(NOLOCK)  
+                WHERE Receiptkey IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',', @c_ReceiptKey))  
+                AND ISNULL(ToLoc,'')='')  
+      BEGIN  
+         SET @n_Continue = 3  
+         SET @n_Err = 63040  
+         SET @c_ErrMsg = CONVERT(CHAR(5), @n_Err) + ': Not allow Receipt Detail ToLoc is empty'   
+                       + '. (ispBatPA04)'  
+         GOTO QUIT_SP        
+      END  
+
       SET @c_Sku = ''
       SELECT TOP 1 @c_Sku = RD.Sku 
       FROM RECEIPT R(NOLOCK)  
@@ -187,13 +203,32 @@ BEGIN
       IF @c_Sku <> ''
       BEGIN  
          SET @n_Continue = 3  
-         SET @n_Err = 63040  
+         SET @n_Err = 63050  
          SET @c_ErrMsg = CONVERT(CHAR(5), @n_Err) + ': Sku: '+ RTRIM(@c_Sku) + ' does not has proper cube settings (CarrierReference)'   
                        + '. (ispBatPA04)'  
          GOTO QUIT_SP        
       END
+			
+	    ----JS added sku config check
+	    SET @c_Sku = ''
+      SELECT TOP 1 @c_Sku = RD.Sku 
+      FROM RECEIPT R(NOLOCK)  
+      JOIN RECEIPTDETAIL RD (NOLOCK) ON R.Receiptkey = RD.Receiptkey
+      LEFT JOIN SKUCONFIG SC (NOLOCK) ON RD.Storerkey = SC.Storerkey AND RD.Sku = SC.Sku AND SC.ConfigType = 'NK-PUTAWAY' 
+      WHERE R.Receiptkey IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',', @c_ReceiptKey))
+      AND ISNULL(SC.SKU,'') = ''
+      ORDER BY RD.Sku
+               
+      IF @c_Sku <> ''
+      BEGIN  
+         SET @n_Continue = 3  
+         SET @n_Err = 63060  
+         SET @c_ErrMsg = CONVERT(CHAR(5), @n_Err) + ': Sku: '+ RTRIM(@c_Sku) + ' does not has SKUCONFIG settings'   
+                       + '. (ispBatPA04)'  
+         GOTO QUIT_SP        
+      END
    END  
-        
+   
    --Populate loc info to temporary working table and retrieve common data  
    IF @n_continue IN(1,2)  
    BEGIN      
@@ -266,6 +301,7 @@ BEGIN
       AND CL.Code = @c_Site  
       AND LOC.Facility = @c_Facility  
       AND LOC.LocationRoom IN ('SAFETYSTOCK','HIGHBAY','FREESEATS')   
+	    AND LOC.LocationHandling <> 'INUSE'   --JS added to filter CASE type used LOC
       
 		  IF @c_ASNType = 'CASE'  --By UCC
 		  BEGIN		
@@ -300,10 +336,12 @@ BEGIN
          WHILE @@FETCH_STATUS <> -1  AND @n_continue IN(1,2)        
          BEGIN                                         	
          	  DECLARE CUR_UCCSKU CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-         	    SELECT Storerkey, Sku, CaseCnt
+         	    SELECT Storerkey, Sku, Qty     --JS should be Qty
          	    FROM #TMP_UCC
          	    WHERE UccNo = @c_UCCNo
 
+				    OPEN CUR_UCCSKU      --JS missed OPEN
+				    
             FETCH NEXT FROM CUR_UCCSKU INTO @c_Storerkey, @c_Sku, @n_CaseCnt                 	    
             
             WHILE @@FETCH_STATUS <> -1  AND @n_continue IN(1,2)       
@@ -332,7 +370,7 @@ BEGIN
    IF @b_debug = 1  
    BEGIN  
       PRINT '@c_Storerkey' + @c_Storerkey + ' @c_Facility=' + @c_Facility + ' @c_Site=' + @c_Site  
-      SELECT * FROM #TMP_PALOC   
+      SELECT * FROM #TMP_PALOC  
    END  
      
    IF @c_CommitPerSku = 'Y'   
@@ -349,7 +387,7 @@ BEGIN
    --      BEGIN TRAN  
    --   END  
    --END CATCH  
-     
+
    SET @CUR_RDSKU = CURSOR FAST_FORWARD READ_ONLY FOR  
    SELECT RD.Storerkey  
          ,RD.Sku  
@@ -375,7 +413,7 @@ BEGIN
 		     ,  ISNULL(RTRIM(S.SkuGroup),'')  --JS
          ,  S.PrePackIndicator   
          ,  S.PackQtyIndicator  
-         ,  P.CaseCnt  
+         --,  P.CaseCnt  --JS no need this
          ,  CARNIZ.[Cube]
          ,  S.[Cube]
          --,  RD.Lottable02  
@@ -403,11 +441,17 @@ BEGIN
       
       IF @c_PrePackIndicator = '2' AND @n_PackQtyIndicator > 0  
       BEGIN  
+	      SET @n_CaseCnt = FLOOR(@n_CaseCnt / @n_PackQtyIndicator) * @n_PackQtyIndicator   ---JS cube will be sku cube, and for innerpack casecnt need be multi innerpackqty
         SET @n_SkuQtyReceived = FLOOR(@n_SkuQtyReceived / @n_PackQtyIndicator) * @n_PackQtyIndicator   
         IF @n_SkuQtyReceived = 0   
            GOTO NEXT_SKU  
       END  
-        
+       
+	    IF @b_debug =  1  
+      BEGIN  
+         PRINT 'After PackQtyIndicator @n_Casecnt=' + CAST(@n_CaseCnt AS NVARCHAR)  
+      END    
+	  
       IF @c_CommitPerSku = 'Y'  
          BEGIN TRAN      
             
@@ -463,7 +507,8 @@ BEGIN
            
          SELECT TOP 1 @c_MostEmptyLocPickZone = T.PickZone   
          FROM #TMP_PALOC T   
-         WHERE T.Qty = 0 AND T.PutawayZone = @c_SkuGroup    --JS Add  TPA.PutawayZone = @c_SkuGroup 
+         WHERE T.Qty = 0 
+         AND T.PutawayZone = @c_SkuGroup    --JS Add  TPA.PutawayZone = @c_SkuGroup 
          GROUP BY T.PickZone  
          ORDER BY COUNT(DISTINCT T.Loc) DESC              
          
@@ -513,72 +558,72 @@ BEGIN
             IF @b_debug = 1   
             BEGIN  
                PRINT '1---SAFETYSTOCK PA '  
-                PRINT '@n_SafetyStockPAQty=' + CAST(@n_SafetyStockPAQty AS NVARCHAR)  
+               PRINT '@n_SafetyStockPAQty=' + CAST(@n_SafetyStockPAQty AS NVARCHAR)  
             END  
   
            IF @n_SafetyStockPAQty > 0  
            BEGIN              
-             --Find same sku  
-             IF @c_SuggestLoc = ''  
-             BEGIN  
-                SELECT TOP 1 @n_RowID = RowID,  
-                       @n_SafetyStockPALocQty = CASE WHEN TPA.LocationCategory = 'MezzanineB' THEN @n_MezzanineB   
-                                                     WHEN TPA.LocationCategory = 'MezzanineS' THEN @n_MezzanineS   
-                                                     WHEN TPA.LocationCategory = 'MezzanineM' THEN @n_MezzanineM   
-                                                     WHEN TPA.LocationCategory = 'MezzanineX' THEN @n_MezzanineX   
-                                                     WHEN TPA.LocationCategory = 'MezzanineY' THEN @n_MezzanineY   
-                                                     WHEN TPA.LocationCategory = 'MezzanineZ' THEN @n_MezzanineZ   
-                                                     ELSE 0 END - TPA.Qty,  
-                       @c_SafetyStockPALoc = TPA.Loc,
-					             @c_SafetyStockPALocZone = TPA.PickZone,    --JS add param
-					             @n_SafetyStockPALocScore = TPA.Score       --JS add param
-                FROM #TMP_PALOC TPA  
-                WHERE TPA.LocationRoom = 'SAFETYSTOCK' AND TPA.PutawayZone = @c_SkuGroup    --JS Add  TPA.PutawayZone = @c_SkuGroup 
-                AND TPA.Qty < CASE WHEN TPA.LocationCategory = 'MezzanineB' THEN @n_MezzanineB   
-                                   WHEN TPA.LocationCategory = 'MezzanineS' THEN @n_MezzanineS   
-                                   WHEN TPA.LocationCategory = 'MezzanineM' THEN @n_MezzanineM   
-                                   WHEN TPA.LocationCategory = 'MezzanineX' THEN @n_MezzanineX   
-                                   WHEN TPA.LocationCategory = 'MezzanineY' THEN @n_MezzanineY   
-                                   WHEN TPA.LocationCategory = 'MezzanineZ' THEN @n_MezzanineZ   
-                                   ELSE 0 END   
-                AND TPA.Sku = @c_Sku  
-                ORDER BY TPA.LogicalLocation, TPA.Loc  
-                  
-                IF @c_PrePackIndicator = '2' AND @n_PackQtyIndicator > 0 AND @n_SafetyStockPALocQty > 0  
-                BEGIN  
-                   SET @n_SafetyStockPALocQty = FLOOR(@n_SafetyStockPALocQty / @n_PackQtyIndicator) * @n_PackQtyIndicator   
-                END  
+              --Find same sku  
+              IF @c_SuggestLoc = ''  
+              BEGIN  
+                 SELECT TOP 1 @n_RowID = RowID,  
+                        @n_SafetyStockPALocQty = CASE WHEN TPA.LocationCategory = 'MezzanineB' THEN @n_MezzanineB   
+                                                      WHEN TPA.LocationCategory = 'MezzanineS' THEN @n_MezzanineS   
+                                                      WHEN TPA.LocationCategory = 'MezzanineM' THEN @n_MezzanineM   
+                                                      WHEN TPA.LocationCategory = 'MezzanineX' THEN @n_MezzanineX   
+                                                      WHEN TPA.LocationCategory = 'MezzanineY' THEN @n_MezzanineY   
+                                                      WHEN TPA.LocationCategory = 'MezzanineZ' THEN @n_MezzanineZ   
+                                                      ELSE 0 END - TPA.Qty,  
+                        @c_SafetyStockPALoc = TPA.Loc,
+					              @c_SafetyStockPALocZone = TPA.PickZone,    --JS add param
+					              @n_SafetyStockPALocScore = TPA.Score       --JS add param
+                 FROM #TMP_PALOC TPA  
+                 WHERE TPA.LocationRoom = 'SAFETYSTOCK' AND TPA.PutawayZone = @c_SkuGroup    --JS Add  TPA.PutawayZone = @c_SkuGroup 
+                 AND TPA.Qty < CASE WHEN TPA.LocationCategory = 'MezzanineB' THEN @n_MezzanineB   
+                                    WHEN TPA.LocationCategory = 'MezzanineS' THEN @n_MezzanineS   
+                                    WHEN TPA.LocationCategory = 'MezzanineM' THEN @n_MezzanineM   
+                                    WHEN TPA.LocationCategory = 'MezzanineX' THEN @n_MezzanineX   
+                                    WHEN TPA.LocationCategory = 'MezzanineY' THEN @n_MezzanineY   
+                                    WHEN TPA.LocationCategory = 'MezzanineZ' THEN @n_MezzanineZ   
+                                    ELSE 0 END   
+                 AND TPA.Sku = @c_Sku  
+                 ORDER BY TPA.LogicalLocation, TPA.Loc  
                    
-                IF @n_SafetyStockPALocQty > 0  
-                BEGIN                 
-                   SET @c_SuggestLoc = @c_SafetyStockPALoc  
-					
-					         --JS some time @n_SkuQtyRemaining more then @n_SafetyStockPALocQty and @n_SafetyStockPALocQty 
-					         --IF @n_SkuQtyRemaining < @n_SafetyStockPALocQty  
-                   --   SET @n_SuggestQty = @n_SkuQtyRemaining  
-                   --ELSE     
-                   --   SET @n_SuggestQty = @n_SafetyStockPALocQty    
-
-                   IF @n_SkuQtyRemaining < @n_SafetyStockPAQty  
-					         BEGIN
-					            IF @n_SkuQtyRemaining > @n_SafetyStockPALocQty
-					               SET @n_SuggestQty = @n_SafetyStockPALocQty  
-					            ELSE
-					               SET @n_SuggestQty = @n_SkuQtyRemaining  
-					         END
-                   ELSE 
-					         BEGIN
-					            IF @n_SafetyStockPAQty > @n_SafetyStockPALocQty
-					               SET @n_SuggestQty = @n_SafetyStockPALocQty  
-					            ELSE
-					               SET @n_SuggestQty = @n_SafetyStockPAQty       
-					         END	  
-                END    
-                  
-                IF @b_debug = 1  
-                BEGIN  
-                    PRINT 'Find Same Sku @c_SuggestLoc=' +@c_SuggestLoc + ' @n_SuggestQty=' + CAST(@n_SuggestQty AS NVARCHAR)                    
-                END  
+                 IF @c_PrePackIndicator = '2' AND @n_PackQtyIndicator > 0 AND @n_SafetyStockPALocQty > 0  
+                 BEGIN  
+                    SET @n_SafetyStockPALocQty = FLOOR(@n_SafetyStockPALocQty / @n_PackQtyIndicator) * @n_PackQtyIndicator   
+                 END  
+                    
+                 IF @n_SafetyStockPALocQty > 0  
+                 BEGIN                 
+                    SET @c_SuggestLoc = @c_SafetyStockPALoc  
+					    
+				            --JS some time @n_SkuQtyRemaining more then @n_SafetyStockPALocQty and @n_SafetyStockPALocQty 
+				            --IF @n_SkuQtyRemaining < @n_SafetyStockPALocQty  
+                    --   SET @n_SuggestQty = @n_SkuQtyRemaining  
+                    --ELSE     
+                    --   SET @n_SuggestQty = @n_SafetyStockPALocQty    
+              
+                    IF @n_SkuQtyRemaining < @n_SafetyStockPAQty  
+				            BEGIN
+				                IF @n_SkuQtyRemaining > @n_SafetyStockPALocQty
+				                   SET @n_SuggestQty = @n_SafetyStockPALocQty  
+				                ELSE
+				                   SET @n_SuggestQty = @n_SkuQtyRemaining  
+				            END
+                    ELSE 
+				            BEGIN
+				               IF @n_SafetyStockPAQty > @n_SafetyStockPALocQty
+				                  SET @n_SuggestQty = @n_SafetyStockPALocQty  
+				               ELSE
+				                  SET @n_SuggestQty = @n_SafetyStockPAQty       
+				            END	  
+                 END    
+                   
+                 IF @b_debug = 1  
+                 BEGIN  
+                     PRINT 'Find Same Sku @c_SuggestLoc=' +@c_SuggestLoc + ' @n_SuggestQty=' + CAST(@n_SuggestQty AS NVARCHAR)                    
+                 END  
               END  
                 
               --Find same pickzone of same itemclass  
@@ -597,15 +642,15 @@ BEGIN
                        @c_SafetyStockPALoc = TPA.Loc,
 					             @c_SafetyStockPALocZone = TPA.PickZone,   ---JS add param
 					             @n_SafetyStockPALocScore = TPA.Score ---JS add param
-                FROM #TMP_PALOC TPA  
-                WHERE TPA.LocationRoom = 'SAFETYSTOCK' AND TPA.PutawayZone = @c_SkuGroup    --JS Add  TPA.PutawayZone = @c_SkuGroup   
-                AND TPA.PickZone IN (SELECT DISTINCT T.Pickzone   
-                                     FROM #TMP_PALOC T   
-                                     WHERE T.ItemClass = @c_ItemClass  
-                                     AND T.Qty > 0)  
-			        	AND TPA.PickZone = CASE WHEN @c_SafetyStockPALocZone = '' THEN TPA.PickZone ELSE @c_SafetyStockPALocZone END --JS 
-                AND TPA.Qty = 0  
-                ORDER BY ABS(TPA.Score - @n_SafetyStockPALocScore), TPA.LogicalLocation, TPA.Loc  --JS add order ABS score           
+                 FROM #TMP_PALOC TPA  
+                 WHERE TPA.LocationRoom = 'SAFETYSTOCK' AND TPA.PutawayZone = @c_SkuGroup    --JS Add  TPA.PutawayZone = @c_SkuGroup   
+                 AND TPA.PickZone IN (SELECT DISTINCT T.Pickzone   
+                                      FROM #TMP_PALOC T   
+                                      WHERE T.ItemClass = @c_ItemClass  
+                                      AND T.Qty > 0)  
+			           AND TPA.PickZone = CASE WHEN @c_SafetyStockPALocZone = '' THEN TPA.PickZone ELSE @c_SafetyStockPALocZone END --JS 
+                 AND TPA.Qty = 0  
+                 ORDER BY ABS(TPA.Score - @n_SafetyStockPALocScore), TPA.LogicalLocation, TPA.Loc  --JS add order ABS score           
                                    
                  IF @n_SafetyStockPALocQty > 0  
                  BEGIN                 
@@ -650,8 +695,8 @@ BEGIN
                                                       WHEN TPA.LocationCategory = 'MezzanineM' THEN @n_MezzanineM   
                                                       WHEN TPA.LocationCategory = 'MezzanineX' THEN @n_MezzanineX   
                                                       WHEN TPA.LocationCategory = 'MezzanineY' THEN @n_MezzanineY   
-                                        WHEN TPA.LocationCategory = 'MezzanineZ' THEN @n_MezzanineZ   
-                                                      ELSE 0 END,  
+                                                      WHEN TPA.LocationCategory = 'MezzanineZ' THEN @n_MezzanineZ   
+                                                 ELSE 0 END,  
                         @c_SafetyStockPALoc = TPA.Loc,
 					              @c_SafetyStockPALocZone = TPA.PickZone
                  FROM #TMP_PALOC TPA  
@@ -718,7 +763,7 @@ BEGIN
               	    	 	  FROM #TMP_UCC
               	    	 	  WHERE Storerkey = @c_Storerkey
               	    	 	  AND Sku = @c_Sku
-              	    	 	  AND Qty <= @n_SuggestQty - (@n_TotalPieceQtyTake + @n_TotalCaseQtyTake)
+              	    	 	  --AND Qty <= @n_SuggestQty - (@n_TotalPieceQtyTake + @n_TotalCaseQtyTake)   --JS just choose ucc no need check qty
               	    	 	  AND SuggestLoc = ''              	    	 	 
               	    	 	  ORDER BY Qty DESC
               	    	 	  
@@ -730,7 +775,8 @@ BEGIN
               	    	 	  WHERE UCCNo = @c_UCCNo 
               	    	 	  
               	    	 	  UPDATE #TMP_SKUQTYSUMM 
-              	    	 	  SET TotalCase = TotalCase - 1
+              	    	 	  SET TotalCase = TotalCase - 1,
+							                TotalPiece = TotalPiece + CaseCnt  --JS added totalpiece qty, since safetystock sometime will not use all UCC QTY
               	    	 	  WHERE Storerkey = @c_Storerkey
               	    	 	  AND Sku = @c_Sku
               	    	 	  AND CaseCnt = @n_UCCQty
@@ -739,35 +785,41 @@ BEGIN
               	    	 END
               	    END              	      
               	    
+				           	SET @n_TotalPieceQtyTake = @n_TotalPieceQtyTake + @n_TotalCaseQtyTake
               	    --Update piece qty to sku PA qty summary
-              	    SET @n_RowId = 0
+					          IF @n_TotalPieceQtyTake >= @n_SuggestQty
+              	    BEGIN
+              	    	 SET @n_TotalPieceQtyTake = @n_SuggestQty
+              	    END
+              	    
+              	    SET @n_RowID_SkuQtySumm = 0   --not use @n_RowID, shoud @n_RowID_SkuQtySumm
               	    SET @n_RemainTotalPieceQtyTake =  @n_TotalPieceQtyTake
               	    WHILE @n_RemainTotalPieceQtyTake > 0
               	    BEGIN
-              	    	 SELECT TOP 1 @n_RowID = RowID, 
-              	    	             @n_TotalPiece = TotalPiece
+              	    	 SELECT TOP 1 @n_RowID_SkuQtySumm = RowID,  --JS not use @n_RowID, shoud @n_RowID_SkuQtySumm
+              	    	              @n_TotalPiece = TotalPiece
               	    	 FROM #TMP_SKUQTYSUMM
               	    	 WHERE Storerkey = @c_Storerkey
               	    	 AND Sku = @c_Sku
               	    	 AND TotalPiece > 0
-              	    	 AND RowID > @n_RowID 
+              	    	 AND RowID > @n_RowID_SkuQtySumm   --JS not use @n_RowID, shoud @n_RowID_SkuQtySumm
               	    	 ORDER BY RowID
               	    	 
               	    	 IF @@ROWCOUNT = 0
               	    	    BREAK
               	    	 
-              	    	 if @n_TotalPiece > @n_RemainTotalPieceQtyTake         
+              	    	 IF @n_TotalPiece > @n_RemainTotalPieceQtyTake         
               	    	    SET @n_TotalPiece = @n_RemainTotalPieceQtyTake    
               	    	               	    	    
               	    	 UPDATE #TMP_SKUQTYSUMM
               	    	 SET TotalPiece = TotalPiece - @n_TotalPiece
-              	    	 WHERE RowID = @n_RowID
+              	    	 WHERE RowID = @n_RowID_SkuQtySumm   --JS not use @n_RowID, shoud @n_RowID_SkuQtySumm
               	    	 
               	    	 SET @n_RemainTotalPieceQtyTake = @n_RemainTotalPieceQtyTake - @n_TotalPiece              	    	 
-              	    END              	    
+              	    END             	                  	                	    
               	 END
               	 
-           	     SET @n_SuggestQty = @n_TotalPieceQtyTake + @n_TotalCaseQtyTake              	                  	                	    
+           	     --SET @n_SuggestQty = @n_TotalPieceQtyTake + @n_TotalCaseQtyTake   --JS suggestqty no need change           	                  	                	    
               	
                  SET @n_SafetyStockSum = @n_SafetyStockSum + @n_SuggestQty                      
               END     
@@ -823,10 +875,14 @@ BEGIN
                   
                   IF @c_HBStockPALoc <> ''
                   BEGIN
-                  	 SELECT @n_HBStockPALocQty = FLOOR(@n_HB_PACarton / @n_HP_CartonCnt)
+                  	 --SELECT @n_HBStockPALocQty = FLOOR(@n_HB_PACarton / @n_HP_CartonCnt) 
+					           SELECT @n_HBStockPALocQty = FLOOR(@n_HB_PACarton / @n_FP_CartonCnt) * @n_FP_CartonCnt  --JS shoube be max multi FP*max HP Cartcnt
                   	 
                   	 IF (@n_HB_PACarton - @n_HBStockPALocQty) >= @n_HP_CartonCnt
-                  	    SET @n_HBStockPALocQty = @n_HB_PACarton
+					           BEGIN
+					              SET @n_HBStockPALocQty = @n_HBStockPALocQty + @n_HP_CartonCnt  --JS should be all max FP + min FP
+						            --SET @n_HBStockPALocQty = @n_HB_PACarton  
+					           END
                   END                                    
                     
                   IF @n_HBStockPALocQty > 0  
@@ -881,10 +937,14 @@ BEGIN
                   
                   IF @c_HBStockPALoc <> ''
                   BEGIN
-                  	 SELECT @n_HBStockPALocQty = FLOOR(@n_HB_PACarton / @n_HP_CartonCnt)
-                  	 
+                  	 --SELECT @n_HBStockPALocQty = FLOOR(@n_HB_PACarton / @n_HP_CartonCnt) 
+					           SELECT @n_HBStockPALocQty = FLOOR(@n_HB_PACarton / @n_FP_CartonCnt) * @n_FP_CartonCnt  --JS shoube be max multi HP*max FP Cartoncnt
+										 
                   	 IF (@n_HB_PACarton - @n_HBStockPALocQty) >= @n_HP_CartonCnt
-                  	    SET @n_HBStockPALocQty = @n_HB_PACarton
+					           BEGIN 
+                  	    SET @n_HBStockPALocQty = @n_HBStockPALocQty + @n_HP_CartonCnt  --JS should be all max HP + min HP
+                        --SET @n_HBStockPALocQty = @n_HB_PACarton  
+					           END
                   END                                    
                     
                   IF @n_HBStockPALocQty > 0  
@@ -964,7 +1024,7 @@ BEGIN
                   FROM #TMP_PALOC TPA  
                   WHERE TPA.LocationRoom = 'HIGHBAY'  
                   AND TPA.LocationCategory = 'FC'  
-                  AND TPA.FP_CartonCnt > 0                   
+                  --AND TPA.FP_CartonCnt > 0   --JS no need setup max FC since all FC can putaway                
                   AND TPA.Qty = 0  
                   ORDER BY TPA.Priority, TPA.LogicalLocation, TPA.Loc                          
                   
@@ -1016,7 +1076,7 @@ BEGIN
                   --Update UCC suggest PA Loc
                   WHILE @n_PACarton > 0
                   BEGIN              	    	 	                                                           
-                  	 SELECT TOP 1 @n_RowID = RowId
+                  	 SELECT TOP 1 @n_RowID_UCC = RowId  --JS not @n_RowID, should use @n_RowID_UCC
                   	 FROM #TMP_UCC                                                                        
                   	 WHERE Storerkey = @c_Storerkey                                                       
                   	 AND Sku = @c_Sku                                                                     
@@ -1029,7 +1089,7 @@ BEGIN
                   	  
                   	 UPDATE #TMP_UCC
                   	 SET SuggestLoc = @c_SuggestLoc
-                  	 WHERE RowId = @n_RowID                
+                  	 WHERE RowId = @n_RowID_UCC    --JS not @n_RowID, should use @n_RowID_UCC              
                   	 
                   	 SET @n_PACarton = @n_PACarton - 1  	                                                                                       
                   END                                                                                                    	                 	   
@@ -1135,18 +1195,18 @@ BEGIN
            --Update SKU PA Qty summary
            IF @c_ASNType = 'CASE' AND @c_SuggestLoc <> ''  --By UCC
            BEGIN                
-           	  SET @n_RowId = 0
+           	  SET @n_RowID_SkuQtySumm = 0  --JS not use @n_RowID, shoud @n_RowID_SkuQtySumm
            	  SET @n_TotalPiece = 0
            	  SET @n_RemainTotalPieceQtyTake = @n_SuggestQty
               WHILE @n_RemainTotalPieceQtyTake > 0                                                        
           	  BEGIN                                                                                       
-          	  	 SELECT TOP 1 @n_RowID = RowID,                                                           
+          	  	 SELECT TOP 1 @n_RowID_SkuQtySumm = RowID,                                                           
           	  	             @n_TotalPiece = TotalPiece                                                   
           	  	 FROM #TMP_SKUQTYSUMM                                                                     
           	  	 WHERE Storerkey = @c_Storerkey                                                           
           	  	 AND Sku = @c_Sku                                                                         
           	  	 AND TotalPiece > 0                                                                       
-          	  	 AND RowID > @n_RowID                                                                     
+          	  	 AND RowID > @n_RowID_SkuQtySumm  --Js not use @n_RowID, shoud @n_RowID_SkuQtySumm                                                                   
           	  	 ORDER BY RowID                                                                           
           	  	                                                                                          
           	  	 IF @@ROWCOUNT = 0                                                                        
@@ -1157,7 +1217,7 @@ BEGIN
           	  	               	    	                                                                    
           	  	 UPDATE #TMP_SKUQTYSUMM                                                                   
           	  	 SET TotalPiece = TotalPiece - @n_TotalPiece                                              
-          	  	 WHERE RowID = @n_RowID                                                                   
+          	  	 WHERE RowID = @n_RowID_SkuQtySumm  --JS not use @n_RowID, shoud @n_RowID_SkuQtySumm                                                                  
           	  	                                                                                          
           	  	 SET @n_RemainTotalPieceQtyTake = @n_RemainTotalPieceQtyTake - @n_TotalPiece              
           	  END              	                                                                          
@@ -1201,7 +1261,32 @@ BEGIN
                FETCH NEXT FROM CUR_UCCUPD INTO @c_UCCNo, @c_ToLoc
             END
             CLOSE CUR_UCCUPD
-            DEALLOCATE CUR_UCCUPD            
+            DEALLOCATE CUR_UCCUPD   
+			
+
+			      --JS Added loic for case type locked loc
+			      DECLARE CUR_LOCUPD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+               SELECT DISTINCT SuggestLoc
+               FROM #TMP_UCC
+               WHERE Storerkey = @c_Storerkey
+               AND Sku = @c_Sku
+               AND SuggestLoc <> ''
+
+            OPEN CUR_LOCUPD                                            
+                                                                       
+            FETCH NEXT FROM CUR_LOCUPD INTO @c_ToLoc
+                                                                       
+            WHILE @@FETCH_STATUS <> -1  AND @n_continue IN(1,2)         
+            BEGIN
+            	 UPDATE LOC 
+            	 SET LocationHandling = 'INUSE',
+            	     TrafficCop = NULL
+            	 WHERE Loc = @c_ToLoc
+            	 
+               FETCH NEXT FROM CUR_LOCUPD INTO @c_ToLoc
+            END
+            CLOSE CUR_LOCUPD
+            DEALLOCATE CUR_LOCUPD 
          END
                    
          SET @n_PAToLocQty = @n_SuggestQty  
@@ -1213,9 +1298,9 @@ BEGIN
          IF EXISTS(SELECT 1 FROM LOC (NOLOCK) WHERE Loc = @c_SuggestLoc AND LocationRoom  = 'HIGHBAY') --if highbay skip RFPUTAWAY
             AND @c_ASNType = 'CASE'
             GOTO NEXT_LOC
-  
+
          WHILE @n_PAToLocQty > 0  
-         BEGIN              
+         BEGIN     
             SELECT TOP 1  
                      @c_CurrReceiptkey = RD.Receiptkey   
                   ,  @c_ReceiptLineNumber = RD.ReceiptLineNumber  
@@ -1226,7 +1311,8 @@ BEGIN
                                          FLOOR((CASE WHEN RD.Beforereceivedqty > 0 THEN RD.Beforereceivedqty ELSE RD.QtyExpected END - @n_LinePAQty) / @n_PackQtyIndicator) * @n_PackQtyIndicator  
                                       ELSE  
                                          CASE WHEN RD.Beforereceivedqty > 0 THEN RD.Beforereceivedqty ELSE RD.QtyExpected END - @n_LinePAQty  
-                                      END - ISNULL(UCC.Qty,0)   --exclude ucc qty for highbay due to skip RFPUTAWAY                      
+                                      END - ISNULL(UCC.Qty,0)   --exclude ucc qty for highbay due to skip RFPUTAWAY     
+				  ,  @n_ReceiptUCCQTY = ISNULL(UCC.Qty,0)					  
                   ,  @c_lottable01 = R.ExternReceiptkey                   
                   ,  @c_lottable02 = RD.Lottable02                        
                   ,  @c_lottable03 = RD.Lottable03                        
@@ -1341,7 +1427,7 @@ BEGIN
             IF @b_Success <> 1  
             BEGIN  
                SET @n_Continue = 3  
-               SET @n_Err = 63050  
+               SET @n_Err = 63070  
                SET @c_ErrMsg = CONVERT(CHAR(5), @n_Err) + ': Error Executing nsp_lotlookup. '   
                GOTO QUIT_SP  
             END  
@@ -1385,14 +1471,14 @@ BEGIN
                INSERT INTO LOT (Lot, Storerkey, Sku, Qty)  
                VALUES (@c_FromLot, @c_storerkey, @c_Sku, 0)  
             END   
-              
-            IF @n_PAToLocQty < @n_QtyReceived    
+            
+            IF (@n_PAToLocQty < @n_QtyReceived) OR (@n_ReceiptUCCQTY > 0)    --JS Added for check if still have uccqty, not move to next ASN
             BEGIN  
                SET @n_PAInsertQty = @n_PAToLocQty  
                SET @n_PAToLocQty = 0  
                SET @n_LinePAQty = @n_LinePAQty + @n_PAInsertQty  
-              SET @c_CurrReceiptkey = @c_PrevReceiptkey  
-              SET @c_ReceiptLineNumber = @c_PrevReceiptLineNumber  
+               SET @c_CurrReceiptkey = @c_PrevReceiptkey  
+               SET @c_ReceiptLineNumber = @c_PrevReceiptLineNumber  
             END  
             ELSE  
             BEGIN  
@@ -1429,9 +1515,9 @@ BEGIN
                        AND ReceiptLineNumber = @c_ReceiptLineUpdate   
                END  
                ELSE  
-               BEGIN                                                  
-                  INSERT INTO dbo.RFPutaway (Storerkey, SKU, LOT, FromLOC, FromID, SuggestedLOC, ID, ptcid, QTY, CaseID, TaskDetailKey, Func, PABookingKey, Receiptkey, ReceiptLineNumber) --NJOW01  
-                  VALUES (@c_Storerkey, @c_Sku, @c_FromLot, @c_FromLoc, @c_FromID, @c_SuggestLoc, @c_ToID, @c_UserName, @n_PAInsertQty, '', '', 0, @n_PABookingKey, @c_ReceiptKeyUpdate, @c_ReceiptLineUpdate)  
+               BEGIN    
+                  INSERT INTO dbo.RFPutaway (Storerkey, SKU, LOT, FromLOC, FromID, SuggestedLOC, ID, ptcid, QTY, CaseID, TaskDetailKey, Func, PABookingKey, Receiptkey, ReceiptLineNumber, UDF03) --NJOW01  --JS added UDF03
+                  VALUES (@c_Storerkey, @c_Sku, @c_FromLot, @c_FromLoc, @c_FromID, @c_SuggestLoc, @c_ToID, @c_UserName, @n_PAInsertQty, '', '', 0, @n_PABookingKey, @c_ReceiptKeyUpdate, @c_ReceiptLineUpdate, @n_CaseCnt)  
                END  
                  
                IF @n_PABookingKey = 0 --renew every sku + lottable02  
@@ -1492,7 +1578,7 @@ BEGIN
                   IF @@ERROR <> 0   
                   BEGIN   
                      SET @n_Continue = 3  
-                     SET @n_Err = 63060  
+                     SET @n_Err = 63080  
                      SET @c_ErrMsg = CONVERT(CHAR(5), @n_Err) + ': Error Update RECEIPTDETAIL Fail.'  
                                    + '. (ispBatPA04)'   
                      GOTO QUIT_SP   
@@ -1529,7 +1615,7 @@ BEGIN
    DEALLOCATE @CUR_RDSKU   
      
 QUIT_SP:  
-  
+
    IF @n_Continue=3  -- Error Occured - Process And Return  
    BEGIN  
       SET @b_Success = 0  
@@ -1595,10 +1681,7 @@ QUIT_SP:
    BEGIN  
       BEGIN TRAN  
    END  
-END -- procedure  
-GO
+END -- procedure
 GO
 GRANT EXECUTE ON [dbo].[ispBatPA04] TO nSQL 
 GO
-
-
