@@ -10,6 +10,8 @@ GO
 /*                                                                         */  
 /* Date       Rev  Author     Purposes                                     */  
 /* 2020-03-24 1.0  Chermiane  WMS-16328 Created (dup rdt_1580RcptCfm11)    */  
+/* 2022-09-21 1.1  Ung        WMS-19596 Add LocationGroup                  */
+/*                            Fix reduct from closed pallet record         */
 /***************************************************************************/  
 CREATE OR ALTER PROC [RDT].[rdt_1580RcptCfm22](  
    @nFunc          INT,  
@@ -111,7 +113,7 @@ BEGIN
       @nSKUQTY        = @nSKUQTY,  
       @cUCC           = @cUCC,  
       @cUCCSKU        = @cUCCSKU,  
-      @nUCCQTY   = @nUCCQTY,  
+      @nUCCQTY        = @nUCCQTY,  
       @cCreateUCC     = @cCreateUCC,  
       @cLottable01    = @cLottable01,  
       @cLottable02    = @cLottable02,  
@@ -159,13 +161,15 @@ BEGIN
          @cLOT = LOT,  
          @nOriginalQTY = QTY  
       FROM dbo.RFPutaway WITH (NOLOCK)  
+         JOIN LOC WITH (NOLOCK) ON (RFPutaway.SuggestedLOC = LOC.LOC)  --zoe  
       WHERE PABookingKey = @cPABookingKey  
          AND StorerKey = @cStorerKey  
          AND SKU = @cSKUCode  
          AND FromLOC = @cToLOC  
-         AND FromID = ''    -- Original Exceed booking, without pallet ID  
+         AND FromID = ''     -- Original Exceed booking, without pallet ID  
          AND QTY >= @nSKUQTY -- Still have balance  (yeekung)    
-      ORDER BY RowRef  
+         AND CaseID <> 'Close Pallet'
+      ORDER BY LOC.LocationGroup, RowRef     --zoe              
       IF @@ROWCOUNT = 0  
       BEGIN  
          SET @nErrNo = 184501  
@@ -191,6 +195,7 @@ BEGIN
       SELECT TOP 1  
          @nToRowRef = RowRef  
       FROM dbo.RFPutaway WITH (NOLOCK)  
+         JOIN LOC WITH (NOLOCK) ON (RFPutaway.SuggestedLOC = LOC.LOC)  --zoe  
       WHERE PABookingKey = @cPABookingKey  
          AND StorerKey = @cStorerKey  
          AND SKU = @cSKUCode  
@@ -198,7 +203,8 @@ BEGIN
          AND FromLOC = @cToLOC             -- Same LOC  
          AND FromID = @cToID               -- Same ID  
          AND SuggestedLOC = @cSuggestedLOC -- Going to same place  
-      ORDER BY RowRef  
+         AND CaseID <> 'Close Pallet'
+      ORDER BY LOC.LocationGroup, RowRef     --zoe          
   
       -- Increase TO RFputaway  
       IF @@ROWCOUNT = 0  
@@ -213,7 +219,7 @@ BEGIN
          SELECT @nErrNo = @@ERROR, @nToRowRef = SCOPE_IDENTITY()  
          IF @nErrNo <> 0  
          BEGIN  
-    SET @nErrNo = 184503  
+            SET @nErrNo = 184503  
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS RF Fail  
             GOTO RollbackTran  
          END  
@@ -330,7 +336,7 @@ BEGIN
    EXEC RDT.rdt_BuiltPrintJob  
       @nMobile,  
       @cStorerKey,  
-      'SKULABEL01',       -- ReportType  
+      'SKULABEL01',     -- ReportType  
       'PRINT_SKULABEL', -- PrintJobName  
       @cDataWindow,  
       @cPrinter,  
@@ -342,6 +348,7 @@ BEGIN
       @cReceiptLineNumber,  
       @nSKUQTY  
 
+   SET @nErrNo = 0    
   
    COMMIT TRAN rdt_1580RcptCfm22  
    GOTO Quit  
