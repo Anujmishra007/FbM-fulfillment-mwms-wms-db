@@ -17,6 +17,7 @@ GO
 /* 2021-05-06 1.3  YeeKung    Fix deadlock issues (yeekung02)                   */    
 /* 2021-06-16 1.4  YeeKung    WMS-17277 Add pickerID (yeekung03)                */  
 /* 2021-11-02 1.5  YeeKung    Fix Deadlock issues (yeekung04)                   */
+/* 2023-02-27 1.6  YeeKung    WMS-21821 Add rdtformat (yeekung05)                */
 /********************************************************************************/        
         
 CREATE OR ALTER  PROC RDT.rdtfnc_SCAN_INOUT_PBO (        
@@ -234,6 +235,14 @@ BEGIN
         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UserID Needed        
          GOTO Step_2_Fail        
       END        
+
+      -- Check userid format (yeekung05)
+      IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'USERID', @cUserID) = 0
+      BEGIN
+         SET @nErrNo = 153708
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format
+         GOTO Step_2_Fail
+      END
   
       BEGIN TRAN rdtfnc_SCAN_INOUT_PBO        
         

@@ -11,6 +11,9 @@ execute rdt.rdtAddMsg 153705, 10, '153705UpdatePDFail', 'us_english', 1652
 execute rdt.rdtAddMsg 153706, 10, '153706InsPIFail', 'us_english', 1652
 execute rdt.rdtAddMsg 153707, 10, '153707UpdateOSFail', 'us_english', 1652
 
+--wms-21821
+execute rdt.rdtAddMsg 153708, 10, '153708InvalidFormat', 'us_english', 1652
+
 
 
 
