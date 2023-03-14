@@ -156,7 +156,7 @@ BEGIN
       SET @cPrintTemplate = REPLACE (@cPrintTemplate, '<Field15>', RTRIM( @cUDF02))        
       SET @cPrintTemplate = REPLACE (@cPrintTemplate, '<Field16>', RTRIM( @cUDF03))
       SET @cPrintTemplate = REPLACE (@cPrintTemplate, '<Field17>', SUBSTRING( RTRIM( @cSKU), 1, 6))
-      SET @cPrintTemplate = REPLACE (@cPrintTemplate, '<Field18>', SUBSTRING( RTRIM( @cSKU), 7, 2))
+      SET @cPrintTemplate = REPLACE (@cPrintTemplate, '<Field18>', SUBSTRING( RTRIM( @cSKU), 7, 3))
       SET @cPrintTemplate = REPLACE (@cPrintTemplate, '<Field19>', SUBSTRING( RTRIM( @cSKU), 10, 6))
 
       SET @cPrintData = ISNULL(@cPrintTemplate,'')  
