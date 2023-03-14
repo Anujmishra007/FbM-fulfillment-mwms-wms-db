@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdtfnc_Move_UCC]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdtfnc_Move_UCC]
-GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -47,9 +44,10 @@ GO
 /* 2019-03-26 2.4  James    WMS-8352 Add From ID (james06)              */
 /*                          Add Loc lookup                              */
 /* 2020-05-04 2.5  Ung      WMS-12637 Add ConfirmSP                     */
+/* 2023-01-20 2.6  Ung      WMS-21577 Add unlimited UCC to move         */
 /************************************************************************/
 
-CREATE  PROCEDURE [RDT].[rdtfnc_Move_UCC] (
+CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Move_UCC] (
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR( 20) OUTPUT -- screen limitation, 20 char max
@@ -63,7 +61,9 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 DECLARE 
    @cUCC         NVARCHAR( 20), 
    @cChkFacility NVARCHAR( 5), 
-   @i            INT
+   @nRowRef      INT, 
+   @i            INT,
+   @curUCC       CURSOR
 
 -- RDT.RDTMobRec variable
 DECLARE 
@@ -100,6 +100,9 @@ DECLARE
    @cSQLParam           NVARCHAR(1000), -- (ChewKP03)
    @cFromID             NVARCHAR( 18), -- (james06)
    @cLOCLookUP          NVARCHAR(20),           
+   
+   @nTotalUCC  INT, 
+   @nPage      INT, 
    
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -150,6 +153,9 @@ SELECT
    @cExtendedUpdateSP   = V_String14,
    @cFromID       = V_String15,
    @cLOCLookUP    = V_String18,      
+
+   @nTotalUCC  = V_Integer1, 
+   @nPage      = V_Integer2, 
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -231,6 +237,8 @@ BEGIN
    SET @cUCC7 = ''
    SET @cUCC8 = ''
    SET @cUCC9 = ''
+   SET @nTotalUCC = 0
+   SET @nPage = 1
 
    SET @cFROMLOC = ''
    SET @cToLOC = ''
@@ -251,7 +259,27 @@ BEGIN
    SET @cOutField10 = '' -- SKU
    SET @cOutField11 = '' -- Desc1
    SET @cOutField12 = '' -- Desc2
+   SET @cOutField13 = CAST( @nTotalUCC AS NVARCHAR( 3))
 
+   -- Clear temp table
+   IF EXISTS( SELECT TOP 1 1 
+      FROM rdt.rdtMoveUCCLog WITH (NOLOCK)
+      WHERE StorerKey = @cStorerKey
+         AND AddWho = SUSER_SNAME())
+   BEGIN
+      SET @curUCC = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+         SELECT RowRef
+         FROM rdt.rdtMoveUCCLog WITH (NOLOCK)
+         WHERE StorerKey = @cStorerKey
+            AND AddWho = SUSER_SNAME()
+      OPEN @curUCC 
+      FETCH NEXT FROM @curUCC INTO @nRowRef
+      WHILE @@FETCH_STATUS = 0
+      BEGIN
+         DELETE rdt.rdtMoveUCCLog WHERE RowRef = @nRowRef
+         FETCH NEXT FROM @curUCC INTO @nRowRef
+      END
+   END
 END
 GOTO Quit
 
@@ -297,10 +325,14 @@ BEGIN
          @cInField08 = '' AND
          @cInField09 = ''
       BEGIN
-        SET @nErrNo = 60601
-         SET @cErrMsg = rdt.rdtgetmessage( 60601, @cLangCode, 'DSP') --'UCC needed'
-         EXEC rdt.rdtSetFocusField @nMobile, 1
-         GOTO Step_1_Fail
+         -- Nothing in log
+         IF NOT EXISTS( SELECT TOP 1 1 FROM rdt.rdtMoveUCCLog WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND AddWho = SUSER_SNAME())
+         BEGIN
+            SET @nErrNo = 60601
+            SET @cErrMsg = rdt.rdtgetmessage( 60601, @cLangCode, 'DSP') --'UCC needed'
+            EXEC rdt.rdtSetFocusField @nMobile, 1
+            GOTO Step_1_Fail
+         END
       END
 
       -- Put all UCC into temp table
@@ -448,6 +480,19 @@ BEGIN
                IF @i = 7 SET @cUCC7 = @cInField07
                IF @i = 8 SET @cUCC8 = @cInField08
                IF @i = 9 SET @cUCC9 = @cInField09
+               
+               -- Save to log
+               -- Remove old value
+               IF @cUCC <> '' 
+                  DELETE rdt.rdtMoveUCCLog 
+                  WHERE StorerKey = @cStorerKey
+                     AND UCCNo = @cUCC
+                     AND AddWho = SUSER_SNAME()
+               
+               -- Add new value
+               IF @cInField <> '' 
+                  INSERT INTO rdt.rdtMoveUCCLog (StorerKey, UCCNo, RecNo) 
+                  SELECT @cStorerKey, @cInField, (@nPage-1) * 9 + @i
             END
             SET @i = @i + 1
          END
@@ -463,27 +508,113 @@ BEGIN
                AND UCC.UCCNo = @nLastValidatedUCC
                AND UCC.Status = '1' -- Received
 
+         SELECT @nTotalUCC = COUNT(1) 
+         FROM rdt.rdtMoveUCCLog WITH (NOLOCK)
+         WHERE StorerKey = @cStorerKey
+            AND AddWho = SUSER_SNAME()
+
          -- Prepare current screen var
          SET @cOutField10 = @cSKU
          SET @cOutField11 = SUBSTRING( @cSKUDescr,  1, 20)
          SET @cOutField12 = SUBSTRING( @cSKUDescr, 21, 20)
+         SET @cOutField13 = CAST( @nTotalUCC AS NVARCHAR( 3))
 
-         -- Set next field focus
-         SET @i = 1 -- start from 1st field
-         IF @cInField01 <> '' SET @i = @i + 1
-         IF @cInField02 <> '' SET @i = @i + 1
-         IF @cInField03 <> '' SET @i = @i + 1
-         IF @cInField04 <> '' SET @i = @i + 1
-         IF @cInField05 <> '' SET @i = @i + 1
-         IF @cInField06 <> '' SET @i = @i + 1
-         IF @cInField07 <> '' SET @i = @i + 1
-         IF @cInField08 <> '' SET @i = @i + 1
-         IF @cInField09 <> '' SET @i = @i + 1
-         IF @i > 9 SET @i = 1
-         EXEC rdt.rdtSetFocusField @nMobile, @i
+         -- Turn to next page
+         IF @cUCC1 <> '' AND 
+            @cUCC2 <> '' AND 
+            @cUCC3 <> '' AND 
+            @cUCC4 <> '' AND 
+            @cUCC5 <> '' AND 
+            @cUCC6 <> '' AND 
+            @cUCC7 <> '' AND 
+            @cUCC8 <> '' AND 
+            @cUCC9 <> '' 
+         BEGIN
+            -- Prepare next page
+            SELECT
+               @cUCC1 = '', @cOutField01 = '', 
+               @cUCC2 = '', @cOutField02 = '', 
+               @cUCC3 = '', @cOutField03 = '', 
+               @cUCC4 = '', @cOutField04 = '', 
+               @cUCC5 = '', @cOutField05 = '', 
+               @cUCC6 = '', @cOutField06 = '', 
+               @cUCC7 = '', @cOutField07 = '', 
+               @cUCC8 = '', @cOutField08 = '', 
+               @cUCC9 = '', @cOutField09 = ''
+
+            EXEC rdt.rdtSetFocusField @nMobile, 1 -- UCC1
+            SET @nPage += 1
+         END
+         ELSE
+         BEGIN
+            -- Set next field focus
+            SET @i = 1 -- start from 1st field
+            IF @cInField01 <> '' SET @i = @i + 1
+            IF @cInField02 <> '' SET @i = @i + 1
+            IF @cInField03 <> '' SET @i = @i + 1
+            IF @cInField04 <> '' SET @i = @i + 1
+            IF @cInField05 <> '' SET @i = @i + 1
+            IF @cInField06 <> '' SET @i = @i + 1
+            IF @cInField07 <> '' SET @i = @i + 1
+            IF @cInField08 <> '' SET @i = @i + 1
+            IF @cInField09 <> '' SET @i = @i + 1
+            IF @i > 9 SET @i = 1
+            EXEC rdt.rdtSetFocusField @nMobile, @i
+         END
       END
       ELSE
       BEGIN
+         -- Turn to next page
+         IF @cUCC1 <> '' AND 
+            @cUCC2 <> '' AND 
+            @cUCC3 <> '' AND 
+            @cUCC4 <> '' AND 
+            @cUCC5 <> '' AND 
+            @cUCC6 <> '' AND 
+            @cUCC7 <> '' AND 
+            @cUCC8 <> '' AND 
+            @cUCC9 <> '' 
+         BEGIN
+            SET @nPage += 1
+            
+            -- Load page
+            SELECT 
+               @cUCC1 = '', @cUCC2 = '', @cUCC3 = '', @cUCC4 = '', @cUCC5 = '', 
+               @cUCC6 = '', @cUCC7 = '', @cUCC8 = '', @cUCC9 = ''
+               
+            SELECT
+               @cUCC1 = CASE WHEN RecNo % 9 = 1 THEN UCCNo ELSE @cUCC1 END, 
+               @cUCC2 = CASE WHEN RecNo % 9 = 2 THEN UCCNo ELSE @cUCC2 END, 
+               @cUCC3 = CASE WHEN RecNo % 9 = 3 THEN UCCNo ELSE @cUCC3 END, 
+               @cUCC4 = CASE WHEN RecNo % 9 = 4 THEN UCCNo ELSE @cUCC4 END, 
+               @cUCC5 = CASE WHEN RecNo % 9 = 5 THEN UCCNo ELSE @cUCC5 END, 
+               @cUCC6 = CASE WHEN RecNo % 9 = 6 THEN UCCNo ELSE @cUCC6 END, 
+               @cUCC7 = CASE WHEN RecNo % 9 = 7 THEN UCCNo ELSE @cUCC7 END, 
+               @cUCC8 = CASE WHEN RecNo % 9 = 8 THEN UCCNo ELSE @cUCC8 END, 
+               @cUCC9 = CASE WHEN RecNo % 9 = 0 THEN UCCNo ELSE @cUCC9 END
+            FROM rdt.rdtMoveUCCLog WITH (NOLOCK)
+            WHERE StorerKey = @cStorerKey 
+               AND AddWho = SUSER_SNAME()
+               AND RecNo BETWEEN @nPage * 9 - (9-1) AND @nPage * 9
+            
+            SET @cOutField01 = @cUCC1
+            SET @cOutField02 = @cUCC2
+            SET @cOutField03 = @cUCC3
+            SET @cOutField04 = @cUCC4
+            SET @cOutField05 = @cUCC5
+            SET @cOutField06 = @cUCC6
+            SET @cOutField07 = @cUCC7
+            SET @cOutField08 = @cUCC8
+            SET @cOutField09 = @cUCC9
+            SET @cOutField10 = '' -- @cSKU
+            SET @cOutField11 = '' -- SUBSTRING( @cSKUDescr,  1, 20)
+            SET @cOutField12 = '' -- SUBSTRING( @cSKUDescr, 21, 20)
+            SET @cOutField13 = CAST( @nTotalUCC AS NVARCHAR(3))
+            
+            EXEC rdt.rdtSetFocusField @nMobile, 1 --UCC1
+            GOTO Quit
+         END
+         
          -- Extended validate
          IF @cExtendedValidateSP <> ''
          BEGIN
@@ -548,34 +679,89 @@ BEGIN
 
    IF @nInputKey = 0 -- Esc or No
    BEGIN
-     -- (Vicky06) EventLog - Sign Out Function
-     EXEC RDT.rdt_STD_EventLog
-       @cActionType = '9', -- Sign Out function
-       @cUserID     = @cUserName,
-       @nMobileNo   = @nMobile,
-       @nFunctionID = @nFunc,
-       @cFacility   = @cFacility,
-       @cStorerKey  = @cStorerkey
+      IF @nPage > 1
+      BEGIN
+         SET @nPage -= 1
+         
+         -- Load page
+         SELECT 
+            @cUCC1 = '', @cUCC2 = '', @cUCC3 = '', @cUCC4 = '', @cUCC5 = '', 
+            @cUCC6 = '', @cUCC7 = '', @cUCC8 = '', @cUCC9 = ''
+         SELECT
+            @cUCC1 = CASE WHEN RecNo % 9 = 1 THEN UCCNo ELSE @cUCC1 END, 
+            @cUCC2 = CASE WHEN RecNo % 9 = 2 THEN UCCNo ELSE @cUCC2 END, 
+            @cUCC3 = CASE WHEN RecNo % 9 = 3 THEN UCCNo ELSE @cUCC3 END, 
+            @cUCC4 = CASE WHEN RecNo % 9 = 4 THEN UCCNo ELSE @cUCC4 END, 
+            @cUCC5 = CASE WHEN RecNo % 9 = 5 THEN UCCNo ELSE @cUCC5 END, 
+            @cUCC6 = CASE WHEN RecNo % 9 = 6 THEN UCCNo ELSE @cUCC6 END, 
+            @cUCC7 = CASE WHEN RecNo % 9 = 7 THEN UCCNo ELSE @cUCC7 END, 
+            @cUCC8 = CASE WHEN RecNo % 9 = 8 THEN UCCNo ELSE @cUCC8 END, 
+            @cUCC9 = CASE WHEN RecNo % 9 = 0 THEN UCCNo ELSE @cUCC9 END
+         FROM rdt.rdtMoveUCCLog WITH (NOLOCK)
+         WHERE StorerKey = @cStorerKey 
+            AND AddWho = SUSER_SNAME()
+            AND RecNo BETWEEN @nPage * 9 - (9-1) AND @nPage * 9
 
-      -- Initiate var before exit to prevent  
-      -- next module using isvalidqty having  
-      -- overflowed int error coz UCC 20 digits  
-      -- (james05)  
-      SET @cUCC1 = ''  
-      SET @cUCC2 = ''  
-      SET @cUCC3 = ''  
-      SET @cUCC4 = ''  
-      SET @cUCC5 = ''  
-      SET @cUCC6 = ''  
-      SET @cUCC7 = ''  
-      SET @cUCC8 = ''  
-      SET @cUCC9 = '' 
-      
-      -- Back to menu
-      SET @nFunc = @nMenu
-      SET @nScn  = @nMenu
-      SET @nStep = 0
-      SET @cOutField01 = ''
+         SET @cOutField01 = @cUCC1
+         SET @cOutField02 = @cUCC2
+         SET @cOutField03 = @cUCC3
+         SET @cOutField04 = @cUCC4
+         SET @cOutField05 = @cUCC5
+         SET @cOutField06 = @cUCC6
+         SET @cOutField07 = @cUCC7
+         SET @cOutField08 = @cUCC8
+         SET @cOutField09 = @cUCC9
+         SET @cOutField10 = '' -- @cSKU
+         SET @cOutField11 = '' -- SUBSTRING( @cSKUDescr,  1, 20)
+         SET @cOutField12 = '' -- SUBSTRING( @cSKUDescr, 21, 20)
+         SET @cOutField13 = CAST( @nTotalUCC AS NVARCHAR(3))
+         
+         EXEC rdt.rdtSetFocusField @nMobile, 1 --UCC1
+      END
+      ELSE
+      BEGIN
+         SET @curUCC = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+            SELECT RowRef
+            FROM rdt.rdtMoveUCCLog WITH (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+               AND AddWho = SUSER_SNAME()
+         OPEN @curUCC 
+         FETCH NEXT FROM @curUCC INTO @nRowRef
+         WHILE @@FETCH_STATUS = 0
+         BEGIN
+            DELETE rdt.rdtMoveUCCLog WHERE RowRef = @nRowRef
+            FETCH NEXT FROM @curUCC INTO @nRowRef
+         END
+         
+         -- EventLog
+         EXEC RDT.rdt_STD_EventLog
+            @cActionType = '9', -- Sign Out
+            @cUserID     = @cUserName,
+            @nMobileNo   = @nMobile,
+            @nFunctionID = @nFunc,
+            @cFacility   = @cFacility,
+            @cStorerKey  = @cStorerkey
+
+         -- Initiate var before exit to prevent  
+         -- next module using isvalidqty having  
+         -- overflowed int error coz UCC 20 digits  
+         -- (james05)  
+         SET @cUCC1 = ''  
+         SET @cUCC2 = ''  
+         SET @cUCC3 = ''  
+         SET @cUCC4 = ''  
+         SET @cUCC5 = ''  
+         SET @cUCC6 = ''  
+         SET @cUCC7 = ''  
+         SET @cUCC8 = ''  
+         SET @cUCC9 = '' 
+         
+         -- Back to menu
+         SET @nFunc = @nMenu
+         SET @nScn  = @nMenu
+         SET @nStep = 0
+         SET @cOutField01 = ''
+      END
    END
 
    Step_1_Fail:
@@ -705,6 +891,28 @@ BEGIN
          WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
             COMMIT TRAN
 
+         -- Recalc page
+         SET @nPage = CEILING( @i / 9.0)
+
+         -- Load page
+         SELECT 
+            @cUCC1 = '', @cUCC2 = '', @cUCC3 = '', @cUCC4 = '', @cUCC5 = '', 
+            @cUCC6 = '', @cUCC7 = '', @cUCC8 = '', @cUCC9 = ''
+         SELECT
+            @cUCC1 = CASE WHEN RecNo % 9 = 1 THEN UCCNo ELSE @cUCC1 END, 
+            @cUCC2 = CASE WHEN RecNo % 9 = 2 THEN UCCNo ELSE @cUCC2 END, 
+            @cUCC3 = CASE WHEN RecNo % 9 = 3 THEN UCCNo ELSE @cUCC3 END, 
+            @cUCC4 = CASE WHEN RecNo % 9 = 4 THEN UCCNo ELSE @cUCC4 END, 
+            @cUCC5 = CASE WHEN RecNo % 9 = 5 THEN UCCNo ELSE @cUCC5 END, 
+            @cUCC6 = CASE WHEN RecNo % 9 = 6 THEN UCCNo ELSE @cUCC6 END, 
+            @cUCC7 = CASE WHEN RecNo % 9 = 7 THEN UCCNo ELSE @cUCC7 END, 
+            @cUCC8 = CASE WHEN RecNo % 9 = 8 THEN UCCNo ELSE @cUCC8 END, 
+            @cUCC9 = CASE WHEN RecNo % 9 = 0 THEN UCCNo ELSE @cUCC9 END
+         FROM rdt.rdtMoveUCCLog WITH (NOLOCK)
+         WHERE StorerKey = @cStorerKey 
+            AND AddWho = SUSER_SNAME()
+            AND RecNo BETWEEN @nPage * 9 - (9-1) AND @nPage * 9
+
          SET @cOutField01 = @cUCC1
          SET @cOutField02 = @cUCC2
          SET @cOutField03 = @cUCC3
@@ -714,9 +922,10 @@ BEGIN
          SET @cOutField07 = @cUCC7
          SET @cOutField08 = @cUCC8
          SET @cOutField09 = @cUCC9
-         SET @cOutField10 = @cSKU
-         SET @cOutField11 = SUBSTRING( @cSKUDescr,  1, 20)
-         SET @cOutField12 = SUBSTRING( @cSKUDescr, 21, 20)
+         SET @cOutField10 = '' -- @cSKU
+         SET @cOutField11 = '' -- SUBSTRING( @cSKUDescr,  1, 20)
+         SET @cOutField12 = '' -- SUBSTRING( @cSKUDescr, 21, 20)
+         SET @cOutField13 = CAST( @nTotalUCC AS NVARCHAR(3))
 
          -- Go back to UCC screen indicate which UCC encountered error
          -- Not reset so that user do not need to rescan the ToID, ToLOC again and again if multiple UCC encounter error
@@ -776,6 +985,20 @@ BEGIN
          END
       END
 
+      -- Clear temp table
+      SET @curUCC = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+         SELECT RowRef
+         FROM rdt.rdtMoveUCCLog WITH (NOLOCK)
+         WHERE StorerKey = @cStorerKey
+            AND AddWho = SUSER_SNAME()
+      OPEN @curUCC 
+      FETCH NEXT FROM @curUCC INTO @nRowRef
+      WHILE @@FETCH_STATUS = 0
+      BEGIN
+         DELETE rdt.rdtMoveUCCLog WHERE RowRef = @nRowRef
+         FETCH NEXT FROM @curUCC INTO @nRowRef
+      END
+
       COMMIT TRAN rdtfnc_Move_UCC
       WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
          COMMIT TRAN
@@ -787,6 +1010,25 @@ BEGIN
 
    IF @nInputKey = 0 -- Esc or No
    BEGIN
+      -- Load page
+      SELECT 
+         @cUCC1 = '', @cUCC2 = '', @cUCC3 = '', @cUCC4 = '', @cUCC5 = '', 
+         @cUCC6 = '', @cUCC7 = '', @cUCC8 = '', @cUCC9 = ''
+      SELECT
+         @cUCC1 = CASE WHEN RecNo % 9 = 1 THEN UCCNo ELSE @cUCC1 END, 
+         @cUCC2 = CASE WHEN RecNo % 9 = 2 THEN UCCNo ELSE @cUCC2 END, 
+         @cUCC3 = CASE WHEN RecNo % 9 = 3 THEN UCCNo ELSE @cUCC3 END, 
+         @cUCC4 = CASE WHEN RecNo % 9 = 4 THEN UCCNo ELSE @cUCC4 END, 
+         @cUCC5 = CASE WHEN RecNo % 9 = 5 THEN UCCNo ELSE @cUCC5 END, 
+         @cUCC6 = CASE WHEN RecNo % 9 = 6 THEN UCCNo ELSE @cUCC6 END, 
+         @cUCC7 = CASE WHEN RecNo % 9 = 7 THEN UCCNo ELSE @cUCC7 END, 
+         @cUCC8 = CASE WHEN RecNo % 9 = 8 THEN UCCNo ELSE @cUCC8 END, 
+         @cUCC9 = CASE WHEN RecNo % 9 = 0 THEN UCCNo ELSE @cUCC9 END
+      FROM rdt.rdtMoveUCCLog WITH (NOLOCK)
+      WHERE StorerKey = @cStorerKey 
+         AND AddWho = SUSER_SNAME()
+         AND RecNo BETWEEN @nPage * 9 - (9-1) AND @nPage * 9
+      
       -- Prepare prev screen var
       SET @cToID = ''
       SET @cToLOC = ''
@@ -799,9 +1041,10 @@ BEGIN
       SET @cOutField07 = @cUCC7
       SET @cOutField08 = @cUCC8
       SET @cOutField09 = @cUCC9
-      SET @cOutField10 = @cSKU
-      SET @cOutField11 = SUBSTRING( @cSKUDescr,  1, 20)
-      SET @cOutField12 = SUBSTRING( @cSKUDescr, 21, 20)
+      SET @cOutField10 = '' -- @cSKU
+      SET @cOutField11 = '' -- SUBSTRING( @cSKUDescr,  1, 20)
+      SET @cOutField12 = '' -- SUBSTRING( @cSKUDescr, 21, 20)
+      SET @cOutField13 = CAST( @nTotalUCC AS NVARCHAR(3))
 
       -- Set next field focus
       SET @i = 1 -- start from 1st field
@@ -994,14 +1237,27 @@ BEGIN
    
    IF @nInputKey = 0 -- ESC
    BEGIN
-     -- (Vicky06) EventLog - Sign Out Function
-     EXEC RDT.rdt_STD_EventLog
-       @cActionType = '9', -- Sign Out function
-       @cUserID     = @cUserName,
-       @nMobileNo   = @nMobile,
-       @nFunctionID = @nFunc,
-       @cFacility   = @cFacility,
-       @cStorerKey  = @cStorerkey
+      SET @curUCC = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+         SELECT RowRef
+         FROM rdt.rdtMoveUCCLog WITH (NOLOCK)
+         WHERE StorerKey = @cStorerKey
+            AND AddWho = SUSER_SNAME()
+      OPEN @curUCC 
+      FETCH NEXT FROM @curUCC INTO @nRowRef
+      WHILE @@FETCH_STATUS = 0
+      BEGIN
+         DELETE rdt.rdtMoveUCCLog WHERE RowRef = @nRowRef
+         FETCH NEXT FROM @curUCC INTO @nRowRef
+      END
+      
+      -- EventLog
+      EXEC RDT.rdt_STD_EventLog
+         @cActionType = '9', -- Sign Out
+         @cUserID     = @cUserName,
+         @nMobileNo   = @nMobile,
+         @nFunctionID = @nFunc,
+         @cFacility   = @cFacility,
+         @cStorerKey  = @cStorerkey
 
       -- Back to menu
       SET @nFunc = @nMenu
@@ -1049,7 +1305,10 @@ BEGIN
       V_String13 = @cExtendedValidateSP, -- (ChewKP03)
       V_String14 = @cExtendedUpdateSP,                        
       V_String15 = @cFromID,
-      V_String18 = @cLOCLookUP,         
+      V_String18 = @cLOCLookUP,     
+      
+      V_Integer1 = @nTotalUCC,  
+      V_Integer2 = @nPage,  
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01, 
       I_Field02 = @cInField02,  O_Field02 = @cOutField02, 

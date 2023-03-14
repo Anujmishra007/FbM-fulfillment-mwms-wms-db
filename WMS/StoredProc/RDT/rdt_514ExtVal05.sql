@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[RDT].[rdt_514ExtVal05]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdt_514ExtVal05]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -14,10 +11,11 @@ GO
 /* Modifications log:                                                   */  
 /*                                                                      */  
 /* Date       Rev  Author     Purposes                                  */  
-/* 2019-03-26 1.0  James      WMS-8254 Created                          */  
+/* 2019-03-26 1.0  James      WMS-8254 Created                          */ 
+/* 2023-01-20 1.1  Ung        WMS-21577 Add unlimited UCC to move       */ 
 /************************************************************************/  
   
-CREATE PROC rdt.rdt_514ExtVal05 (  
+CREATE OR ALTER PROC rdt.rdt_514ExtVal05 (  
    @nMobile        INT, 
    @nFunc          INT, 
    @cLangCode      NVARCHAR( 3),  
@@ -55,15 +53,11 @@ BEGIN
    BEGIN  
       IF @nStep = 1 -- Key in UCC
       BEGIN
-         INSERT INTO @tUCC (UCC, i) VALUES (@cUCC1, 1)
-         INSERT INTO @tUCC (UCC, i) VALUES (@cUCC2, 2)
-         INSERT INTO @tUCC (UCC, i) VALUES (@cUCC3, 3)
-         INSERT INTO @tUCC (UCC, i) VALUES (@cUCC4, 4)
-         INSERT INTO @tUCC (UCC, i) VALUES (@cUCC5, 5)
-         INSERT INTO @tUCC (UCC, i) VALUES (@cUCC6, 6)
-         INSERT INTO @tUCC (UCC, i) VALUES (@cUCC7, 7)
-         INSERT INTO @tUCC (UCC, i) VALUES (@cUCC8, 8)
-         INSERT INTO @tUCC (UCC, i) VALUES (@cUCC9, 9)
+         INSERT INTO @tUCC (UCC, i) 
+         SELECT UCCNo, RecNo
+         FROM rdt.rdtMoveUCCLog WITH (NOLOCK)
+         WHERE StorerKey = @cStorerKey
+            AND AddWho = SUSER_SNAME()
 
          IF EXISTS ( SELECT 1 FROM @tUCC t
                      JOIN dbo.UCC UCC WITH (NOLOCK) ON T.UCC = UCC.UCCNo
@@ -92,15 +86,11 @@ BEGIN
 
       IF @nStep = 2 -- To Loc/To ID
       BEGIN
-         INSERT INTO @tUCC (UCC, i) VALUES (@cUCC1, 1)
-         INSERT INTO @tUCC (UCC, i) VALUES (@cUCC2, 2)
-         INSERT INTO @tUCC (UCC, i) VALUES (@cUCC3, 3)
-         INSERT INTO @tUCC (UCC, i) VALUES (@cUCC4, 4)
-         INSERT INTO @tUCC (UCC, i) VALUES (@cUCC5, 5)
-         INSERT INTO @tUCC (UCC, i) VALUES (@cUCC6, 6)
-         INSERT INTO @tUCC (UCC, i) VALUES (@cUCC7, 7)
-         INSERT INTO @tUCC (UCC, i) VALUES (@cUCC8, 8)
-         INSERT INTO @tUCC (UCC, i) VALUES (@cUCC9, 9)
+         INSERT INTO @tUCC (UCC, i) 
+         SELECT UCCNo, RecNo
+         FROM rdt.rdtMoveUCCLog WITH (NOLOCK)
+         WHERE StorerKey = @cStorerKey
+            AND AddWho = SUSER_SNAME()
 
          -- Need join ucc here because user might use this as normal move ucc.
          -- Those exists here is for pallet merge

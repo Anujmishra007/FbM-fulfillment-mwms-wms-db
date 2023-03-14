@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[RDT].[rdt_514ExtVal06]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdt_514ExtVal06]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -15,9 +12,10 @@ GO
 /*                                                                            */
 /* Date        Rev  Author   Purposes                                         */
 /* 26-03-2020  1.0  Ung      WMS-12637 Created                                */
+/* 20-01-2023  1.1  Ung      WMS-21577 Add unlimited UCC to move              */ 
 /******************************************************************************/
 
-CREATE PROC rdt.rdt_514ExtVal06 (
+CREATE OR ALTER PROC rdt.rdt_514ExtVal06 (
    @nMobile        INT,
    @nFunc          INT,
    @cLangCode      NVARCHAR( 3),
@@ -48,32 +46,17 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @tUCC TABLE 
-   (
-      UCCNo NVARCHAR( 20) NOT NULL PRIMARY KEY CLUSTERED
-   )
-
    IF @nFunc = 514 -- Move by UCC
    BEGIN
       IF @nStep = 2 -- To Loc/To ID
       BEGIN
          IF @nInputKey = 1 -- ENTER
          BEGIN
-            IF @cUCC1 <> '' INSERT INTO @tUCC (UCCNo) VALUES (@cUCC1)
-            IF @cUCC2 <> '' INSERT INTO @tUCC (UCCNo) VALUES (@cUCC2)
-            IF @cUCC3 <> '' INSERT INTO @tUCC (UCCNo) VALUES (@cUCC3)
-            IF @cUCC4 <> '' INSERT INTO @tUCC (UCCNo) VALUES (@cUCC4)
-            IF @cUCC5 <> '' INSERT INTO @tUCC (UCCNo) VALUES (@cUCC5)
-            IF @cUCC6 <> '' INSERT INTO @tUCC (UCCNo) VALUES (@cUCC6)
-            IF @cUCC7 <> '' INSERT INTO @tUCC (UCCNo) VALUES (@cUCC7)
-            IF @cUCC8 <> '' INSERT INTO @tUCC (UCCNo) VALUES (@cUCC8)
-            IF @cUCC9 <> '' INSERT INTO @tUCC (UCCNo) VALUES (@cUCC9)
-
             DECLARE @curUCC CURSOR
             SET @curUCC = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
                SELECT DISTINCT UCC.LOC
                FROM UCC WITH (NOLOCK)
-                  JOIN @tUCC T ON (T.UCCNo = UCC.UCCNo)
+                  JOIN rdt.rdtMoveUCCLog T WITH (NOLOCK) ON (T.UCCNo = UCC.UCCNo AND T.StorerKey = @cStorerKey AND T.AddWho = SUSER_SNAME())
                WHERE UCC.StorerKey = @cStorerKey
             OPEN @curUCC
             FETCH NEXT FROM @curUCC INTO @cFromLOC
