@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdt_Move_UCC_Confirm]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_Move_UCC_Confirm]
-GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -15,8 +12,9 @@ GO
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
 /* 2020-05-04 1.0  Ung      WMS-12637 Created                                 */
+/* 2023-01-20 1.1  Ung      WMS-21577 Add unlimited UCC to move               */
 /******************************************************************************/
-CREATE  PROCEDURE [RDT].[rdt_Move_UCC_Confirm] (
+CREATE OR ALTER PROCEDURE [RDT].[rdt_Move_UCC_Confirm] (
    @nMobile        INT, 
    @nFunc          INT, 
    @cLangCode      NVARCHAR( 3),
@@ -124,87 +122,82 @@ BEGIN
    BEGIN TRAN
    SAVE TRAN rdt_Move_UCC_Confirm
 
-   SET @i = 1
-   WHILE @i < 10
+   DECLARE @curUCC CURSOR
+   SET @curUCC = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+      SELECT RecNo, UCCNo
+      FROM rdt.rdtMoveUCCLog WITH (NOLOCK)
+      WHERE StorerKey = @cStorerKey
+         AND AddWho = SUSER_SNAME()
+   OPEN @curUCC 
+   FETCH NEXT FROM @curUCC INTO @i, @cUCC
+   WHILE @@FETCH_STATUS = 0
    BEGIN
-      IF @i = 1 SET @cUCC = @cUCC1
-      IF @i = 2 SET @cUCC = @cUCC2
-      IF @i = 3 SET @cUCC = @cUCC3
-      IF @i = 4 SET @cUCC = @cUCC4
-      IF @i = 5 SET @cUCC = @cUCC5
-      IF @i = 6 SET @cUCC = @cUCC6
-      IF @i = 7 SET @cUCC = @cUCC7
-      IF @i = 8 SET @cUCC = @cUCC8
-      IF @i = 9 SET @cUCC = @cUCC9
-      
-      IF @cUCC <> ''
+      -- Get FromLOC, FromID
+      SELECT 
+         @cUCCLOC = LOC, 
+         @cUCCID = ID,
+         @nUCCQTY = ISNULL( SUM( Qty), 0)
+      FROM dbo.UCC (NOLOCK)
+      WHERE StorerKey = @cStorerKey
+         AND UCCNo = @cUCC
+         AND Status = '1' -- Received
+      GROUP BY LOC, ID
+
+      -- Calc QTY to move
+      IF @cMoveQTYAlloc = '1'
       BEGIN
-         -- Get FromLOC, FromID
-         SELECT 
-            @cUCCLOC = LOC, 
-            @cUCCID = ID,
-            @nUCCQTY = ISNULL( SUM( Qty), 0)
-         FROM dbo.UCC (NOLOCK)
-         WHERE StorerKey = @cStorerKey
-            AND UCCNo = @cUCC
-            AND Status = '1' -- Received
-         GROUP BY LOC, ID
-
-         -- Calc QTY to move
-         IF @cMoveQTYAlloc = '1'
-         BEGIN
-            SET @nQTYAlloc = @nUCCQTY
-            SET @nQTYPick = 0
-         END
-         ELSE IF @cMoveQTYPick = '1'
-         BEGIN
-            SET @nQTYAlloc = 0
-            SET @nQTYPick = @nUCCQTY
-         END
-         ELSE
-         BEGIN
-            SET @nQTYAlloc = 0
-            SET @nQTYPick = 0
-         END
-
-         EXEC RDT.rdt_Move
-            @nMobile     = @nMobile,
-            @cLangCode   = @cLangCode, 
-            @nErrNo      = @nErrNo  OUTPUT,
-            @cErrMsg     = @cErrMsg OUTPUT, 
-            @cSourceType = 'rdt_Move_UCC_Confirm', 
-            @cStorerKey  = @cStorerKey,
-            @cFacility   = @cFacility, 
-            @cFromLOC    = @cUCCLOC, 
-            @cToLOC      = @cToLOC, 
-            @cFromID     = @cUCCID,
-            @cToID       = @cToID,
-            @cSKU        = NULL, 
-            @cUCC        = @cUCC,
-            @nFunc       = @nFunc, 
-            @nQTYAlloc   = @nQTYAlloc,
-            @nQTYPick    = @nQTYPick,
-            @cDropID     = @cUCC
-         IF @nErrNo <> 0
-            GOTO RollBackTran
-         
-         -- Log event
-         EXEC RDT.rdt_STD_EventLog
-            @cActionType   = '4', -- Move
-            @nMobileNo     = @nMobile,
-            @nFunctionID   = @nFunc,
-            @cFacility     = @cFacility,
-            @cStorerKey    = @cStorerkey,
-            @cLocation     = @cUCCLOC,
-            @cToLocation   = @cToLOC,
-            @cID           = @cUCCID, 
-            @cToID         = @cToID, 
-            @cRefNo1       = @cUCC, 
-            @cUCC          = @cUCC
+         SET @nQTYAlloc = @nUCCQTY
+         SET @nQTYPick = 0
       END
-      SET @i = @i + 1
+      ELSE IF @cMoveQTYPick = '1'
+      BEGIN
+         SET @nQTYAlloc = 0
+         SET @nQTYPick = @nUCCQTY
+      END
+      ELSE
+      BEGIN
+         SET @nQTYAlloc = 0
+         SET @nQTYPick = 0
+      END
+
+      EXEC RDT.rdt_Move
+         @nMobile     = @nMobile,
+         @cLangCode   = @cLangCode, 
+         @nErrNo      = @nErrNo  OUTPUT,
+         @cErrMsg     = @cErrMsg OUTPUT, 
+         @cSourceType = 'rdt_Move_UCC_Confirm', 
+         @cStorerKey  = @cStorerKey,
+         @cFacility   = @cFacility, 
+         @cFromLOC    = @cUCCLOC, 
+         @cToLOC      = @cToLOC, 
+         @cFromID     = @cUCCID,
+         @cToID       = @cToID,
+         @cSKU        = NULL, 
+         @cUCC        = @cUCC,
+         @nFunc       = @nFunc, 
+         @nQTYAlloc   = @nQTYAlloc,
+         @nQTYPick    = @nQTYPick,
+         @cDropID     = @cUCC
+      IF @nErrNo <> 0
+         GOTO RollBackTran
+      
+      -- Log event
+      EXEC RDT.rdt_STD_EventLog
+         @cActionType   = '4', -- Move
+         @nMobileNo     = @nMobile,
+         @nFunctionID   = @nFunc,
+         @cFacility     = @cFacility,
+         @cStorerKey    = @cStorerkey,
+         @cLocation     = @cUCCLOC,
+         @cToLocation   = @cToLOC,
+         @cID           = @cUCCID, 
+         @cToID         = @cToID, 
+         @cRefNo1       = @cUCC, 
+         @cUCC          = @cUCC
+
+      FETCH NEXT FROM @curUCC INTO @i, @cUCC
    END
-   
+
    COMMIT TRAN rdt_Move_UCC_Confirm
    GOTO Quit
 

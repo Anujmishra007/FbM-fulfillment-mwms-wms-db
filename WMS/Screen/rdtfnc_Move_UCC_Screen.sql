@@ -5,7 +5,7 @@
 -- 808 = Move from
 DELETE rdt.RDTScn WHERE Scn = 808 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 808, 'ENG', 
-   @cLine01 = 'UCC 1-9:', 
+   @cLine01 = 'UCC:             %03d13', 
    @cLine02 = '%20i01', -- UCC1
    @cLine03 = '%20i02', 
    @cLine04 = '%20i03', 

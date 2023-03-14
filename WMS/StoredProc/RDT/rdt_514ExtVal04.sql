@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[RDT].[rdt_514ExtVal04]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdt_514ExtVal04]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -16,9 +13,10 @@ GO
 /* Date       Rev  Author     Purposes                                  */  
 /* 2018-01-29 1.0  Ung        WMS-3897 Created                          */  
 /* 2019-03-26 1.1  James      WMS-8352 Add From ID (james01)            */  
+/* 2023-01-20 1.2  Ung        WMS-21577 Add unlimited UCC to move       */
 /************************************************************************/  
   
-CREATE PROC [RDT].[rdt_514ExtVal04] (  
+CREATE OR ALTER PROC [RDT].[rdt_514ExtVal04] (  
    @nMobile        INT, 
    @nFunc          INT, 
    @cLangCode      NVARCHAR( 3),  
@@ -81,16 +79,10 @@ BEGIN
                   
                   -- Get UCC
                   DECLARE @nUCC INT
-                  SET @nUCC = 0
-                  IF @cUCC1 <> '' SET @nUCC = @nUCC + 1
-                  IF @cUCC2 <> '' SET @nUCC = @nUCC + 1
-                  IF @cUCC3 <> '' SET @nUCC = @nUCC + 1
-                  IF @cUCC4 <> '' SET @nUCC = @nUCC + 1
-                  IF @cUCC5 <> '' SET @nUCC = @nUCC + 1
-                  IF @cUCC6 <> '' SET @nUCC = @nUCC + 1
-                  IF @cUCC7 <> '' SET @nUCC = @nUCC + 1
-                  IF @cUCC8 <> '' SET @nUCC = @nUCC + 1
-                  IF @cUCC9 <> '' SET @nUCC = @nUCC + 1
+                  SELECT @nUCC = COUNT(1)
+                  FROM rdt.rdtMoveUCCLog WITH (NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                     AND AddWho = SUSER_SNAME()
 
                   -- Check able to fit
                   IF (@nCartons + @nUCC) > @nMaxPallet

@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[RDT].[rdt_514ExtVal07]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdt_514ExtVal07]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -15,9 +12,10 @@ GO
 /*                                                                            */
 /* Date        Rev  Author   Purposes                                         */
 /* 2021-06-24  1.0  James    WMS-17322 Created                                */
+/* 2023-01-20  1.1  Ung      WMS-21577 Add unlimited UCC to move              */ 
 /******************************************************************************/
 
-CREATE PROC rdt.rdt_514ExtVal07 (
+CREATE OR ALTER PROC rdt.rdt_514ExtVal07 (
    @nMobile        INT,
    @nFunc          INT,
    @cLangCode      NVARCHAR( 3),
@@ -62,41 +60,13 @@ BEGIN
       BEGIN
          IF @nInputKey = 1 -- ENTER
          BEGIN
-            IF @cUCC1 <> ''
-               INSERT INTO @tUCC (UCCNo, Qty) 
-               SELECT UCCNo, ISNULL( SUM( qty), 0) FROM dbo.UCC WITH (NOLOCK) WHERE UCCNo = @cUCC1 AND Storerkey = @cStorerKey GROUP BY UCCNo
-
-            IF @cUCC2 <> ''
-               INSERT INTO @tUCC (UCCNo, Qty) 
-               SELECT UCCNo, ISNULL( SUM( qty), 0) FROM dbo.UCC WITH (NOLOCK) WHERE UCCNo = @cUCC2 AND Storerkey = @cStorerKey GROUP BY UCCNo
-            
-            IF @cUCC3 <> ''
-               INSERT INTO @tUCC (UCCNo, Qty) 
-               SELECT UCCNo, ISNULL( SUM( qty), 0) FROM dbo.UCC WITH (NOLOCK) WHERE UCCNo = @cUCC3 AND Storerkey = @cStorerKey GROUP BY UCCNo
-
-            IF @cUCC4 <> ''
-               INSERT INTO @tUCC (UCCNo, Qty) 
-               SELECT UCCNo, ISNULL( SUM( qty), 0) FROM dbo.UCC WITH (NOLOCK) WHERE UCCNo = @cUCC4 AND Storerkey = @cStorerKey GROUP BY UCCNo
-
-            IF @cUCC5 <> ''
-               INSERT INTO @tUCC (UCCNo, Qty) 
-               SELECT UCCNo, ISNULL( SUM( qty), 0) FROM dbo.UCC WITH (NOLOCK) WHERE UCCNo = @cUCC5 AND Storerkey = @cStorerKey GROUP BY UCCNo
-
-            IF @cUCC6 <> ''
-               INSERT INTO @tUCC (UCCNo, Qty) 
-               SELECT UCCNo, ISNULL( SUM( qty), 0) FROM dbo.UCC WITH (NOLOCK) WHERE UCCNo = @cUCC6 AND Storerkey = @cStorerKey GROUP BY UCCNo
-            
-            IF @cUCC7 <> ''
-               INSERT INTO @tUCC (UCCNo, Qty) 
-               SELECT UCCNo, ISNULL( SUM( qty), 0) FROM dbo.UCC WITH (NOLOCK) WHERE UCCNo = @cUCC7 AND Storerkey = @cStorerKey GROUP BY UCCNo
-            
-            IF @cUCC8 <> ''
-               INSERT INTO @tUCC (UCCNo, Qty) 
-               SELECT UCCNo, ISNULL( SUM( qty), 0) FROM dbo.UCC WITH (NOLOCK) WHERE UCCNo = @cUCC8 AND Storerkey = @cStorerKey GROUP BY UCCNo
-            
-            IF @cUCC9 <> ''
-               INSERT INTO @tUCC (UCCNo, Qty) 
-               SELECT UCCNo, ISNULL( SUM( qty), 0) FROM dbo.UCC WITH (NOLOCK) WHERE UCCNo = @cUCC9 AND Storerkey = @cStorerKey GROUP BY UCCNo
+            INSERT INTO @tUCC (UCCNo, Qty)
+            SELECT UCC.UCCNo, ISNULL( SUM( UCC.QTY), 0)
+            FROM rdt.rdtMoveUCCLog L WITH (NOLOCK)
+               JOIN dbo.UCC WITH (NOLOCK) ON (L.UCCNo = UCC.UCCNo AND L.StorerKey = @cStorerKey AND L.AddWho = SUSER_SNAME())
+            WHERE L.StorerKey = @cStorerKey
+               AND L.AddWho = SUSER_SNAME()
+            GROUP BY UCC.UCCNo
 
             SELECT TOP 1 @nChkUCC_Qty = Qty FROM @tUCC
             

@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdt_514ExtUpdSP02]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdt_514ExtUpdSP02]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -17,9 +14,10 @@ GO
 /*                                                                      */
 /* Date        Rev  Author   Purposes                                   */
 /* 2019-07-02  1.0  James    WMS-9565 Created                           */
+/* 2023-01-20  1.1  Ung      WMS-21577 Add unlimited UCC to move        */
 /************************************************************************/
 
-CREATE PROC [rdt].[rdt_514ExtUpdSP02] (
+CREATE OR ALTER PROC [rdt].[rdt_514ExtUpdSP02] (
    @nMobile        INT, 
    @nFunc          INT, 
    @cLangCode      NVARCHAR( 3),  
@@ -76,28 +74,19 @@ BEGIN
    BEGIN
       IF @nInputKey = 1 -- ENTER
       BEGIN
-         DECLARE @tUCC TABLE (UCC NVARCHAR( 20), i INT)
-         INSERT INTO @tUCC (UCC, i) VALUES ( ISNULL( @cUCC1, ''), 1)
-         INSERT INTO @tUCC (UCC, i) VALUES ( ISNULL( @cUCC2, ''), 2)
-         INSERT INTO @tUCC (UCC, i) VALUES ( ISNULL( @cUCC3, ''), 3)
-         INSERT INTO @tUCC (UCC, i) VALUES ( ISNULL( @cUCC4, ''), 4)
-         INSERT INTO @tUCC (UCC, i) VALUES ( ISNULL( @cUCC5, ''), 5)
-         INSERT INTO @tUCC (UCC, i) VALUES ( ISNULL( @cUCC6, ''), 6)
-         INSERT INTO @tUCC (UCC, i) VALUES ( ISNULL( @cUCC7, ''), 7)
-         INSERT INTO @tUCC (UCC, i) VALUES ( ISNULL( @cUCC8, ''), 8)
-         INSERT INTO @tUCC (UCC, i) VALUES ( ISNULL( @cUCC9, ''), 9)
-
-         IF EXISTS ( SELECT 1 FROM TransferDetail TD WITH (NOLOCK)
-                     JOIN @tUCC UCC ON ( TD.UserDefine01 = UCC.UCC)
-                     WHERE @cStorerKey IN ( TD.FromStorerKey, TD.ToStorerKey)
-                     AND   TD.Status = '3'
-                     AND   UCC.UCC <> '')
+         IF EXISTS ( SELECT 1 
+            FROM TransferDetail TD WITH (NOLOCK)
+               JOIN rdt.rdtMoveUCCLog UCC WITH (NOLOCK) ON ( TD.UserDefine01 = UCC.UCCNo AND UCC.StorerKey = @cStorerKey AND UCC.AddWho = SUSER_SNAME())
+            WHERE @cStorerKey IN ( TD.FromStorerKey, TD.ToStorerKey)
+               AND TD.Status = '3'
+               AND UCC.UCCNo <> '')
          BEGIN
             DECLARE @curUCC CURSOR  
             SET @curUCC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-            SELECT UCC FROM @tUCC 
-            WHERE UCC <> '' 
-            ORDER BY 1
+               SELECT UCCNo 
+               FROM rdt.rdtMoveUCCLog WITH (NOLOCK)
+               WHERE StorerKey = @cStorerKey
+                  AND AddWho = SUSER_SNAME()
             OPEN @curUCC
             FETCH NEXT FROM @curUCC INTO @cUCC
             WHILE @@FETCH_STATUS = 0
