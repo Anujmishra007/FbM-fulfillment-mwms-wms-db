@@ -21,7 +21,7 @@ GO
 /* 2022-07-26  1.4  yeekung  WMS-20327 supprt Pd.status='3'(yeekung02)  */
 /************************************************************************/    
   
-CREATE OR ALTER PROC [RDT].[rdt_841ExtUpdSP23] (    
+CREATE OR ALTER  PROC [RDT].[rdt_841ExtUpdSP23] (    
    @nMobile       INT,  
    @nFunc         INT,  
    @cLangCode     NVARCHAR( 3),  
@@ -207,6 +207,33 @@ BEGIN
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU    
                GOTO RollBackTran    
             END
+         END
+
+         DECLARE C_ECOMMLOG CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+         SELECT PK.OrderKey
+         FROM dbo.PICKDETAIL PK WITH (NOLOCK)  
+         JOIN dbo.Orders O WITH (NOLOCK) ON O.Orderkey = PK.Orderkey  
+         WHERE PK.DROPID = @cDropID  
+            AND (PK.Status >= '5' OR PK.ShipFlag = '0')
+            AND PK.Status <> '4'
+            AND PK.Status < '9'
+            AND PK.CaseID = ''  
+            AND PK.Qty > 0 
+            AND O.SOStatus IN ( 'PENDPACK', 'HOLD', 'PENDCANC' ) 
+            AND EXISTS ( SELECT 1 FROM dbo.CODELKUP C WITH (NOLOCK) WHERE LISTNAME = 'ORDERTYPE' AND Storerkey = @cStorerKey AND O.[Type] = C.Code)
+         GROUP BY PK.OrderKey, PK.SKU 
+
+         OPEN C_ECOMMLOG        
+         FETCH NEXT FROM C_ECOMMLOG INTO  @cOrderkey        
+         WHILE (@@FETCH_STATUS <> -1)        
+         BEGIN 
+
+            UPDATE ORDERS WITH (ROWLOCK)
+            set status ='3'
+            WHERE orderkey=@cOrderkey
+
+            FETCH NEXT FROM C_ECOMMLOG INTO  @cOrderkey   
+
          END
       END
 
@@ -470,7 +497,7 @@ BEGIN
                WHERE PH.Orderkey = @cOrderkey    
     
                IF @@ERROR <> 0    
-               BEGIN    
+               BEGIN 
                   SET @nErrNo = 179411    
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'CreatePHdrFail'    
                   GOTO RollBackTran    
@@ -653,7 +680,7 @@ BEGIN
                                   AND OrderKey = @cOrderKey    
                                   AND ISNULL(UserDefine04,'')  = '' )    
             BEGIN    
-               UPDATE dbo.Orders WITH (ROWLOCK)     
+               UPDATE dbo.Orders WITH (ROWLOCK)   
                SET TrackingNo = @cTrackNo -- (james04)
                   ,Trafficcop   = NULL -- (ChewKP02)  
                   ,EditDate = GETDATE()  
@@ -741,7 +768,7 @@ BEGIN
                         AND PD.SKU = @cPackSku    
                         --AND PH.PickHeaderKey = @cPickSlipNo    
                   END    
-    
+  
     
                   SELECT @nTTL_PackedQty = ISNULL(SUM(QTY), 0)    
                   FROM dbo.PackDetail WITH (NOLOCK)    
@@ -826,7 +853,7 @@ BEGIN
                FETCH NEXT FROM C_TOTE_DETAIL INTO  @cPackSku , @nPackQty    
             END --while    
             CLOSE C_TOTE_DETAIL    
-            DEALLOCATE C_TOTE_DETAIL    
+      DEALLOCATE C_TOTE_DETAIL    
     
             /****************************    
              PACKINFO    
@@ -913,7 +940,7 @@ BEGIN
                                              ' , @cFacility             ' +    
                                              ' , @cStorerKey            ' +    
                                              ' , @cLabelPrinter         ' +    
-                                             ' , @cDropID               ' +    
+                                ' , @cDropID               ' +    
                                              ' , @cLoadKey              ' +    
                                              ' , @cLabelNo              ' +    
                                              ' , @cUserName             ' +    
@@ -1102,7 +1129,7 @@ BEGIN
             END    
          END    
       END    
-      ELSE    
+     ELSE    
       BEGIN    
     
          SET @cShowTrackNoScn = rdt.RDTGetConfig( @nFunc, 'ShowTrackNoScn', @cStorerKey)    
@@ -1201,7 +1228,7 @@ BEGIN
                BEGIN    
                   -- PickDetail.CaseID = TrackNo    
                   UPDATE dbo.PickDetail WITH (ROWLOCK)    
-                  SET CaseID     = @cTrackNo    
+      SET CaseID     = @cTrackNo    
                      ,TrafficCop = NULL  
                      ,Editdate   = GETDATE()  
                      ,EditWho    = SUSER_SNAME()  
@@ -1275,7 +1302,7 @@ BEGIN
                                           , @cLangCode    
                                           , @cFacility    
                                           , @cStorerKey    
-                                          , @cLabelPrinter    
+       , @cLabelPrinter    
                                           , @cDropID    
                                           , @cLoadKey    
                                           , @cLabelNo    
@@ -1375,7 +1402,7 @@ BEGIN
                END    
 
                IF @cPaperPrinter <> 'PDF' AND @cPaperPrinter <> '' --JYHBIN  
-               BEGIN  
+       BEGIN  
                   EXEC RDT.rdt_BuiltPrintJob    
                      @nMobile,    
                      @cStorerKey,    
@@ -1680,7 +1707,7 @@ BEGIN
                                     , @nFunc    
                                     , @cLangCode    
                                     , @cFacility    
-                                    , @cStorerKey    
+                             , @cStorerKey    
                                     , @cLabelPrinter    
                                     , @cDropID    
                                     , @cLoadKey    
@@ -1886,7 +1913,7 @@ BEGIN
             , @n_Err       = @nErrNo      OUTPUT      
             , @c_ErrMsg    = @cErrMsg     OUTPUT   
            
-            IF @nErrNo <> 0   
+         IF @nErrNo <> 0   
             BEGIN  
                SET @nErrNo = 179439  
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- AutoMBOLPack       
@@ -1914,7 +1941,7 @@ BEGIN
    GOTO QUIT           
              
 RollBackTran:          
-   ROLLBACK TRAN -- Only rollback change made here          
+   ROLLBACK TRAN rdt_841ExtUpdSP23 -- Only rollback change made here          
           
 Quit:          
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started          
