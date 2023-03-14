@@ -291,7 +291,9 @@ BEGIN
          END                  
       END             
       
-      SELECT @cTrackingNo = TrackingNo          
+      SELECT @cTrackingNo = TrackingNo,
+             @cLoadkey = Loadkey,
+             @cShipperKey = shipperkey
       FROM dbo.Orders WITH (NOLOCK)          
       WHERE OrderKey = @cOrderkey          
           
@@ -631,8 +633,8 @@ BEGIN
 
                SET @nErrNo = 0
                INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@cOrderKey',       @cOrderKey)
-               INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@nFromCartonNo',   @nCartonNo)
-               INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@nToCartonNo',     @nCartonNo)
+               INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@cLoadkey',   @cLoadkey)
+               INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@cShipperkey',     @cShipperkey)
 
                -- Print label
                EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, 1, @cFacility, @cStorerkey, @cLabelPrinter, '',
