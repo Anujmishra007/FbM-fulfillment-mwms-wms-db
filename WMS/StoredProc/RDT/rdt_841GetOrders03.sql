@@ -1,6 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_841GetOrders03]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_841GetOrders03]
-GO
+
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -19,7 +17,7 @@ GO
 /* 2022-01-24  1.1. YeeKung  WMS-18823  Add status in ('3') (yeekung01) */    
 /************************************************************************/    
   
-CREATE PROC [RDT].[rdt_841GetOrders03] (    
+CREATE OR ALTER PROC [RDT].[rdt_841GetOrders03] (    
    @nMobile       INT,    
    @nFunc         INT,    
    @cLangCode     NVARCHAR( 3),    
