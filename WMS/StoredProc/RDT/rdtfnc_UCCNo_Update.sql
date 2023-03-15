@@ -290,7 +290,7 @@ BEGIN
          SET @nErrNo = 196754        
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need value 
          EXEC rdt.rdtSetFocusField @nMobile, 3
-         GOTO Quit        
+         GOTO Step1_Data_Fail        
       END 
 
             
@@ -299,7 +299,7 @@ BEGIN
          SET @nErrNo = 196755        
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need value 
          EXEC rdt.rdtSetFocusField @nMobile, 5
-         GOTO Quit        
+         GOTO Step1_Data_Fail        
       END 
 
       IF @cLblData3<>'' AND ISNULL(@cData3,'')=''
@@ -307,7 +307,7 @@ BEGIN
          SET @nErrNo = 196756        
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need value 
          EXEC rdt.rdtSetFocusField @nMobile, 7
-         GOTO Quit        
+         GOTO Step1_Data_Fail        
       END 
 
       IF @cLblData4<>'' AND ISNULL(@cData4,'')=''
@@ -315,7 +315,7 @@ BEGIN
          SET @nErrNo = 196757        
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need value
          EXEC rdt.rdtSetFocusField @nMobile, 9
-         GOTO Quit        
+         GOTO Step1_Data_Fail        
       END 
 
       IF @cLblData5<>'' AND ISNULL(@cData5,'')=''
@@ -323,7 +323,7 @@ BEGIN
          SET @nErrNo = 196758        
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need value 
          EXEC rdt.rdtSetFocusField @nMobile, 11
-         GOTO Quit        
+         GOTO Step1_Data_Fail        
       END 
 
       DECLARE @nTranCount  INT
@@ -352,7 +352,7 @@ BEGIN
                   AND DATA_TYPE = 'nvarchar')
             BEGIN
                SET @nErrNo = 154651
-               SET @cErrMsg = @cLabel--rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Column
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Column
                ROLLBACK TRAN 
                GOTO Quit
             END
@@ -425,7 +425,13 @@ BEGIN
       SET @cInField01=''    
       SET @cUCCNo='' 
       GOTO QUIT
-   END    
+   END   
+   
+   Step1_Data_Fail:
+   BEGIN    
+      SET @cOutField01= @cUCCNo   
+      GOTO QUIT
+   END   
 END        
 GOTO Quit         
 

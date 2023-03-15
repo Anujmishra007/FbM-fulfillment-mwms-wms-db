@@ -288,7 +288,7 @@ BEGIN
          SET @nErrNo = 196704        
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need value
          EXEC rdt.rdtSetFocusField @nMobile, 3
-         GOTO Quit        
+         GOTO Step1_Data_Fail        
       END 
 
             
@@ -297,7 +297,7 @@ BEGIN
          SET @nErrNo = 196705        
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need value 
          EXEC rdt.rdtSetFocusField @nMobile, 5
-         GOTO Quit        
+         GOTO Step1_Data_Fai        
       END 
 
       IF @cLblData3<>'' AND ISNULL(@cData3,'')=''
@@ -305,7 +305,7 @@ BEGIN
          SET @nErrNo = 196706        
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need value 
          EXEC rdt.rdtSetFocusField @nMobile, 7
-         GOTO Quit        
+         GOTO Step1_Data_Fai        
       END 
 
       IF @cLblData4<>'' AND ISNULL(@cData4,'')=''
@@ -313,7 +313,7 @@ BEGIN
          SET @nErrNo = 196707        
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need value 
          EXEC rdt.rdtSetFocusField @nMobile, 9
-         GOTO Quit        
+         GOTO Step1_Data_Fai        
       END 
 
       IF @cLblData5<>'' AND ISNULL(@cData5,'')=''
@@ -321,7 +321,7 @@ BEGIN
          SET @nErrNo = 196708        
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need value 
          EXEC rdt.rdtSetFocusField @nMobile, 11
-         GOTO Quit        
+         GOTO Step1_Data_Fai        
       END 
 
       DECLARE @nTranCount  INT
@@ -421,6 +421,12 @@ BEGIN
    BEGIN    
       SET @cInField01=''    
       SET @cSerialNo='' 
+      GOTO QUIT
+   END    
+
+   Step1_Data_Fail:    
+   BEGIN    
+      SET @COutField01=@cSerialNo
       GOTO QUIT
    END    
 END        
