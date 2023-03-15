@@ -1,0 +1,116 @@
+: CN UAT : CNWMS 
+--  rdtMoveUCCLog.sql 
+Msg 15233, Level 16, State 1, Server WVSHWMSMADBUT01, Procedure sp_addextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'RDT.rdtMoveUCCLog'.
+----------------------------------------------------------------------------- 
+: CN UAT : CNWMS_HM1 
+--  rdtMoveUCCLog.sql 
+Msg 15233, Level 16, State 1, Server WVSHWMSMADBUT01, Procedure sp_addextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'RDT.rdtMoveUCCLog'.
+----------------------------------------------------------------------------- 
+: CN UAT : CNWMS_HM2 
+--  rdtMoveUCCLog.sql 
+Msg 15233, Level 16, State 1, Server WVSHWMSMADBUT01, Procedure sp_addextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'RDT.rdtMoveUCCLog'.
+----------------------------------------------------------------------------- 
+: CN UAT : CNWMSSEP 
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
+: CN UAT : CNWMS_NIKE 
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
+Country: China  UAT - CNWMS Dev
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
+: GT  : GTWMS 
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
+: GT  : SCEWMS_UAT 
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
+: GT  : SCEWMS 
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
+: GT  : LFL_WMS_DEV 
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
+: GT  : LFL_WMS_UAT 
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
+: GT  : LFL_WMS_CHN 
+--  rdtMoveUCCLog.sql 
+Msg 15233, Level 16, State 1, Server WVWSWMSRGDBDV01, Procedure sp_addextendedproperty, Line 37
+Property cannot be added. Property 'MS_Description' already exists for 'RDT.rdtMoveUCCLog'.
+----------------------------------------------------------------------------- 
+: GT  : LFL_WMS_SGP 
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
+: GT  : SCEWMS_UAT
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
+: AU UAT : AUWMS 
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
+: DU UAT : DUWMS 
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
+: HK UAT : HKWMS 
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
+: ID UAT : IDWMS 
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS 
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS_HM1 
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS_HM2 
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS 
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS_HM1 
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS_HM2 
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS 
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS_HM1 
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS_HM2 
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
+: MY UAT : MYWMS 
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
+: PH UAT : PHWMS 
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
+: SG UAT : SGWMS 
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
+: TH UAT : THWMS 
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
+Country: Thailand UAT - THWMS 
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
+: TH UAT : THWMS_NIKE 
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
+: TW UAT : TWWMS 
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
+: TW UAT : TWWMS_NSC 
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
+: VN UAT : VNWMS 
+--  rdtMoveUCCLog.sql 
+----------------------------------------------------------------------------- 
