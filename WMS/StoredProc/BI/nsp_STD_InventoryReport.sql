@@ -11,6 +11,7 @@ DATE				VER		CREATEDBY   PURPOSE
 22-Feb-2023			1.2		JEFF		ADDED FIELDS FROM CUSTOM REPORT
 07-MAR-2023			1.3		JAM			FINE TUNE. CHANGE SOME TABLES TO INNER JOIN
 09-MAR-2023			1.4		JEFFClidoro		Amend and add table 
+15-MAR-2023			1.5		JEFFClidoro		Remove the RECEIPTDETAIL table and column
 ************************************************************************/
 
 CREATE OR ALTER PROC [BI].[nsp_STD_InventoryReport] --NAME OF SP
@@ -50,8 +51,6 @@ DECLARE @Stmt NVARCHAR(MAX) = '' -- for dynamic SQL only
 	
 /****** START YOUR SELECT STATEMENT HERE USE @Stmt FOR DYNAMIC SQL ******/
 
-
-/****** START YOUR SELECT STATEMENT HERE USE @Stmt FOR DYNAMIC SQL ******/
 set @Stmt = ' SELECT
 LLI.StorerKey as ''01Storerkey'',
 LC.Facility as ''02Facility'',
@@ -146,11 +145,6 @@ PK.CaseCnt AS ''66 CaseCnt'',
 PK.Innerpack AS ''67 Inner Pack'',
 CUP2.Description AS ''68 Principal Description'',
 CUP1.Description AS ''69 SKU Category Description'',
-RD.SubReasonCode AS ''70 Subreasoncode'', 
-RD.UserDefine01 AS ''71 Userdefine01'', 
-RD.UserDefine02 AS ''72 Userdefine02'', 
-RD.UserDefine04 AS ''73 Userdefine04'', 
-RD.ReceiptKey AS ''74 Receiptkey'',
 S.BUSR7 AS ''75 BUSR7'',
 S.ALTSKU AS ''76 ALTERNATESKU'' '
 
@@ -164,7 +158,6 @@ BI.V_LOTxLOCxID LLI (nolock)
 	JOIN BI.V_PACK PK (nolock) ON (S.PACKKey = PK.PackKey) 
 	LEFT JOIN BI.V_CODELKUP CUP1 (nolock) ON (CUP1.LISTNAME = ''SKUGROUP'' AND S.SKUGROUP = CUP1.Code AND S.StorerKey =CUP1.Storerkey )   
     LEFT JOIN BI.V_CODELKUP CUP2 (nolock) ON (CUP2.LISTNAME = ''PRINCIPAL'' AND S.SUSR3 = CUP2.Code AND S.StorerKey =CUP2.Storerkey )   
-	JOIN BI.V_RECEIPTDETAIL RD (nolock) ON (LLI.Id = RD.ToId AND LLI.Sku = RD.Sku AND LLI.StorerKey = RD.StorerKey)
 WHERE        (LLI.StorerKey = '''+@Param_Generic_Storerkey+''') 
 			AND (LC.Facility = '''+@Param_Generic_facility+''')
 			AND (LLI.Qty>0) ' 
