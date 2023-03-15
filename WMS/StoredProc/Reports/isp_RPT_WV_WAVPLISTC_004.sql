@@ -495,10 +495,10 @@ CREATE TABLE #TMPWAVPLISTC004
                                       
                                                        
          SET @c_mergeExtOrdkey =          
-         (SELECT STUFF((SELECT distinct RTRIM(OH.externorderkey)+', 'FROM ORDERS OH (NOLOCK) where OH.LoadKey=@c_loadkey  FOR XML PATH('')),1,1,''))          
+         (SELECT STUFF((SELECT distinct RTRIM(OH.externorderkey)+', 'FROM ORDERS OH (NOLOCK) where OH.LoadKey=@c_loadkey  FOR XML PATH('')),1,0,''))          
                                       
          SET @c_mergeorderkey  =           
-         (SELECT STUFF((SELECT distinct RTRIM(OH.orderkey)+', 'FROM ORDERS OH (NOLOCK) where OH.LoadKey=@c_loadkey  FOR XML PATH('')),1,1,''))                                          
+         (SELECT STUFF((SELECT distinct RTRIM(OH.orderkey)+', 'FROM ORDERS OH (NOLOCK) where OH.LoadKey=@c_loadkey  FOR XML PATH('')),1,0,''))                                          
                      
          SELECT @n_TTLPQty = SUM(PD.QTY) FROM ORDERS O (NOLOCK) JOIN PICKDETAIL PD (NOLOCK) ON (O.ORDERKEY=PD.ORDERKEY)          
          WHERE O.USERDEFINE09 = @C_GETWAVEKEY AND O.LOADKEY =@C_LOADKEY           
