@@ -27,6 +27,7 @@ GO
 /*                                        table multiple times (WL01)      */
 /* 2022-05-25   WLChooi 1.2   DevOps Combine Script                        */
 /* 2022-05-25   WLChooi 1.2   WMS-19738 - Add new logic (WL02)             */
+/* 2023-03-15   NJOW01  1.3   WMS-21966 Skip update lottable09 by codelkup */
 /***************************************************************************/  
 CREATE OR ALTER PROC [dbo].[ispPRREC08]  
 (     @c_Receiptkey  NVARCHAR(10)  
@@ -50,6 +51,7 @@ BEGIN
          , @c_ExternReceiptkey      NVARCHAR(50)   --WL02
          , @c_CLUDF01               NVARCHAR(50)   --WL02
          , @c_Code2                 NVARCHAR(30)   --WL02
+         , @c_UpdLottable09         NVARCHAR(1)='Y'  --NJOW01
    
    SET @b_Success= 1 
    SET @n_Err    = 0  
@@ -68,6 +70,15 @@ BEGIN
    --   GOTO QUIT_SP        
    --END
    --WL02 E
+   
+   --NJOW01
+   IF EXISTS(SELECT 1 
+             FROM RECEIPT R (NOLOCK)
+             JOIN CODELKUP CL (NOLOCK) ON R.RecType = CL.Code AND CL.ListName = 'PVHNOUPD'
+             WHERE R.Receiptkey = @c_Receiptkey)
+   BEGIN
+   	  SET @c_UpdLottable09 = 'N'
+   END          
 
    IF EXISTS(SELECT 1 
              FROM RECEIPT R (NOLOCK)
@@ -95,7 +106,7 @@ BEGIN
          UPDATE RECEIPTDETAIL WITH (ROWLOCK)
    	   SET Userdefine02  = Userdefine01,
    	       Userdefine01  = ToId,
-             Lottable09    = @c_Receiptkey,  --WL02
+             Lottable09    = CASE WHEN @c_UpdLottable09 = 'Y' THEN @c_Receiptkey ELSE Lottable09 END,  --WL02   --NJOW01
              TrafficCop    = NULL,           --WL02
              EditDate      = GETDATE(),      --WL02
              EditWho       = SUSER_SNAME()   --WL02
@@ -156,7 +167,7 @@ BEGIN
    	   SET ExternReceiptKey = CASE WHEN @c_ExternReceiptkey = '' THEN ExternReceiptKey ELSE @c_ExternReceiptkey END,
    	       Lottable07       = CASE WHEN @c_Code2 = '1' AND ISNULL(Lottable07,'') = '' AND ISNULL(@c_CLUDF01,'') <> '' 
                                      THEN @c_CLUDF01 ELSE Lottable07 END,
-             Lottable09       = @c_Receiptkey,
+             Lottable09       = CASE WHEN @c_UpdLottable09 = 'Y' THEN @c_Receiptkey ELSE Lottable09 END, --NJOW01
              TrafficCop       = NULL,        
              EditDate         = GETDATE(),   
              EditWho          = SUSER_SNAME()
