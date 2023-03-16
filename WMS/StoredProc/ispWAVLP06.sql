@@ -37,6 +37,8 @@ GO
 /* 30-Aug-2022 NJOW02   1.1  WMS-20675 allow split load plan for child  */
 /*                           order if over qty limit. Optimize order qty*/
 /*                           in a load plan                             */
+/* 16-Mar-2023 NJOW03   1.2  WMS-22019 Cater for B2C wave using different*/
+/*                           generate load logic                        */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispWAVLP06]
    @c_WaveKey NVARCHAR(10),
@@ -108,6 +110,23 @@ BEGIN
      SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": No Orders being populated into WaveDetail. (ispWAVLP06)"
      GOTO RETURN_SP
    END
+   
+   --NJOW03 S
+   IF EXISTS(SELECT TOP 1 1 
+             FROM WAVEDETAIL WD (NOLOCK)
+             JOIN ORDERDETAIL OD (NOLOCK) ON WD.Orderkey = OD.Orderkey
+             WHERE OD.Channel = 'B2C'
+             AND WD.Wavekey = @c_Wavekey)
+   BEGIN
+      EXEC ispWAVLP03
+           @c_WaveKey = @c_Wavekey
+         , @b_Success = @b_Success  OUTPUT
+         , @n_err     = @n_err      OUTPUT
+         , @c_errmsg  = @c_errmsg   OUTPUT   	
+         
+       RETURN         
+   END                       
+   --NJOW03 E
    
    --NJOW02
    CREATE TABLE #TMP_ORDER (RowID INT IDENTITY(1,1) PRIMARY KEY, OrderKey NVARCHAR(10), BuyerPO NVARCHAR(20) NULL, NoofChildOrders INT, TotalChildQty INT, OrderQty INT)
