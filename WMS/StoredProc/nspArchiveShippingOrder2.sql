@@ -1,54 +1,35 @@
-SET ANSI_NULLS OFF
-GO
-SET QUOTED_IDENTIFIER OFF
-GO
-
-/***************************************************************************************************/
-/* Stored Proc : nspArchiveShippingOrder2                                                          */
-/* Creation Date:                                                                                  */
-/* Copyright: IDS                                                                                  */
-/* Written by:                                                                                     */
-/*                                                                                                 */
-/* Purpose: THIS ARCHIVE SCRIPT WILL PURGE THE FOLLOWING TABLES:                                   */
-/*          Orders, OrderDetail, PickDetail, LOADPLAN, LOADPLANDETAIL,                             */
-/*          MBOL, MBOLDetail, PICKINGINFO, PICKHEADER, REFKEYLOOKUP                                */
-/*          OrderDetailRef, OrderInfo                                                              */
-/*                                                                                                 */
-/* Input Parameters: NONE                                                                          */
-/*                                                                                                 */
-/* OUTPUT Parameters: NONE                                                                         */
-/*                                                                                                 */
-/* Return Status: NONE                                                                             */
-/*                                                                                                 */
-/* Usage:                                                                                          */
-/*                                                                                                 */
-/* Local Variables:                                                                                */
-/*                                                                                                 */
-/* Called By:                                                                                      */
-/*                                                                                                 */
-/* PVCS Version: 1.1                                                                               */
-/*                                                                                                 */
-/* Version: 5.4                                                                                    */
-/*                                                                                                 */
-/* Data Modifications:                                                                             */
-/*                                                                                                 */
-/* Updates:                                                                                        */
-/* Date         Author        Purposes                                                             */
-/* 10-Dec-2014  KHLim         Extra where clause  (KHLim03)                                        */
-/* 15-Sep-2015  TLTING        EVersion sync with Original                                          */
-/* 02-Aug-2018  TLTING        Archive Caretontrack                                                 */
-/* 22-Apr-2020  kocy          Change Archive CartonTrack not during Orders archive task,           */
-/*                            but when POD archive https://jiralfl.atlassian.net/browse/WMS-12986  */
-/* 25-Jun-2020  TLTING01      Archive Orders_PI_Encrypted                                          */
-/* 01-Oct-2022  TLTING02      Archive PickingVoice                                                 */
-/***************************************************************************************************/
+/*********************************************************************************************************/
+/* Stored Proc : nspArchiveShippingOrder2                                                                */
+/* Creation Date:                                                                                        */
+/* Copyright: IDS                                                                                        */
+/* Written by:                                                                                           */
+/*                                                                                                       */
+/* Purpose: THIS ARCHIVE SCRIPT WILL PURGE THE FOLLOWING TABLES:                                         */
+/*          Orders, OrderDetail, PickDetail, LOADPLAN, LOADPLANDETAIL,                                   */
+/*          MBOL, MBOLDetail, PICKINGINFO, PICKHEADER, REFKEYLOOKUP                                      */
+/*          OrderDetailRef, OrderInfo                                                                    */
+/*                                                                                                       */
+/* Data Modifications:                                                                                   */
+/*                                                                                                       */
+/* Updates:                                                                                              */
+/* Date         Author        Purposes                                                                   */
+/* 10-Dec-2014  KHLim         Extra where clause  (KHLim03)                                              */
+/* 15-Sep-2015  TLTING        EVersion sync with Original                                                */
+/* 02-Aug-2018  TLTING        Archive Caretontrack                                                       */
+/* 22-Apr-2020 kelvinongcy    WMS-12986 Change Archive CartonTrack not during Orders archive task,       */    
+/*                            but when POD archive (kocy01)                                              */
+/* 25-Jun-2020  TLTING01      Archive Orders_PI_Encrypted                                                */
+/* 01-Oct-2022  TLTING02      Archive PickingVoice                                                       */
+/* 10-03-2023  kelvinongcy    WMS-21896 Delay Mbol Archive with validate orders days retention (kocy02)  */  
+/*                                                                                                       */  
+/*********************************************************************************************************/    
 
 CREATE OR ALTER PROC [dbo].[nspArchiveShippingOrder2]
-      @c_archivekey   NVARCHAR(10)
-   ,  @b_success      int        OUTPUT
-   ,  @n_err          int        OUTPUT
-   ,  @c_errmsg       NVARCHAR(250)  OUTPUT
-   ,  @c_WhereClauseExtra NVARCHAR(4000) = ''   --KHLim03
+      @c_archivekey        NVARCHAR(10)
+   ,  @b_success           int        OUTPUT
+   ,  @n_err               int        OUTPUT
+   ,  @c_errmsg            NVARCHAR(250)  OUTPUT
+   ,  @c_WhereClauseExtra  NVARCHAR(4000) = ''   --KHLim03
 AS
 BEGIN -- main
    SET NOCOUNT ON
@@ -994,7 +975,7 @@ BEGIN -- main
                         ')'
                END 
             END 
-         END-- END @n_DelayArchiveCT_Exist = '1'  
+         END-- END @n_DelayArchiveCT_Exist <> 1  
 
          IF @n_continue = 3
          BEGIN
@@ -1092,6 +1073,7 @@ BEGIN -- main
                   @c_copyfrom_db,
                   @c_copyto_db,
                   @CopyRowsToArchiveDatabase,
+                  @n_retain_days,                  --kocy02  
                   @b_success OUTPUT
          IF NOT @b_success = 1
          BEGIN
@@ -1392,5 +1374,3 @@ END -- main
 GO
 
 
-GRANT EXECUTE ON [dbo].[nspArchiveShippingOrder2] TO nSQL 
-GO
