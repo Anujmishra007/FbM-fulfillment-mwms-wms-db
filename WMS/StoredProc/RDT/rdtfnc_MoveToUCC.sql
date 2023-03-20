@@ -40,6 +40,7 @@ GO
 /*                          instead of 0                                      */
 /* 2019-10-22 3.1  Chermaine WMS-10909 Add Event log  (cc01)                  */ 
 /* 2022-04-11 3.2  Ung       WMS-19419 Add rdtFormat for To ID                */
+/* 2023-03-13 3.3  Ung       WMS-21971 Add ExtendedValidateSP at FromLOC      */
 /******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_MoveToUCC](
    @nMobile    INT,
@@ -627,6 +628,38 @@ BEGIN
          SET @nErrNo = 82909
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Same FromToLOC'
          GOTO Step_3_Fail
+      END
+
+      -- Extended validate
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @cStorerKey, @cFacility, @cFromLOC, @cFromID, @cSKU, @nQTY, @cUCC, @cToID, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile         INT, ' +
+               '@nFunc           INT, ' +
+               '@cLangCode       NVARCHAR(3), ' +
+               '@nStep           INT, ' +
+               '@cStorerKey      NVARCHAR(15), ' +
+               '@cFacility       NVARCHAR(5), '  +
+               '@cFromLOC        NVARCHAR(10), ' +
+               '@cFromID         NVARCHAR(18), ' +
+               '@cSKU            NVARCHAR(20), ' +
+               '@nQTY            INT, ' +
+               '@cUCC            NVARCHAR(20), ' +
+               '@cToID           NVARCHAR(18), ' +
+               '@cToLOC          NVARCHAR(10), ' +
+               '@nErrNo          INT OUTPUT, ' +
+               '@cErrMsg         NVARCHAR(20) OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @cStorerKey, @cFacility, @cFromLOC, @cFromID, @cSKU, @nQTY, @cUCC, @cToID, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
       END
 
       -- Prep next screen var
