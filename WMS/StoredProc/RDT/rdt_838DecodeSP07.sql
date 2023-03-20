@@ -10,7 +10,7 @@ GO
 /* Purpose: Decode SKU & Default QTY                                    */
 /*                                                                      */
 /* Date        Rev  Author      Purposes                                */
-/* 2022-07-04  1.  YeeKung     WMS-19592 Add UPC qty (yeekung01)       */
+/* 2022-07-04  1.  YeeKung     WMS-19593 Add UPC qty (yeekung01)       */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_838DecodeSP07
