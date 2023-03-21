@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_WaveGenMbol_Wrapper]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_WaveGenMbol_Wrapper]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -13,7 +10,7 @@ GO
 /*                                                                      */  
 /* Purpose: WMS-5760 CN Levi Wave Generate MBOL                         */  
 /*                                                                      */  
-/* Called By: RMC Generate MBOL From Wave (Call ispWAVMB01)              */  
+/* Called By: RMC Generate MBOL From Wave (Call ispWAVMB01)             */  
 /*                                                                      */  
 /* PVCS Version: 1.0                                                    */  
 /*                                                                      */  
@@ -22,9 +19,11 @@ GO
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author   Ver  Purposes                                  */  
+/* Date         Author   Ver  Purposes                                  */        
+/* 21-Mar-2023  NJOW01   1.0  Increate @c_SPCode to char(30)            */
+/* 21-Mar-2023  NJOW01   1.0  DEVOPS Combine Script                     */
 /************************************************************************/   
-CREATE PROCEDURE [dbo].[isp_WaveGenMbol_Wrapper]  
+CREATE OR ALTER PROCEDURE [dbo].[isp_WaveGenMbol_Wrapper]  
    @c_WaveKey    NVARCHAR(10),    
    @b_Success    INT      OUTPUT,
    @n_Err        INT      OUTPUT, 
@@ -38,7 +37,7 @@ BEGIN
    
    DECLARE @n_continue      INT,
            @c_StorerKey     NVARCHAR(15),
-           @c_SPCode        NVARCHAR(10),
+           @c_SPCode        NVARCHAR(30),
            @c_SQL           NVARCHAR(MAX)
                                                       
    SELECT @c_SPCode = '', @n_err=0, @b_success=1, @c_errmsg=''
