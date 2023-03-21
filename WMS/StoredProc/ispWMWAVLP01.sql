@@ -23,6 +23,7 @@ GO
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */  
 /* 03-NOV-2022 NJOW     1.0   DEVOPS Combine Script                     */
+/* 21-MAR-2023 NJOW01   1.1   Fix custom field                          */
 /************************************************************************/                                                                                  
 
 CREATE OR ALTER PROC [dbo].[ispWMWAVLP01]   
@@ -344,6 +345,7 @@ AS
          -- IF @c_BuildTypeValue is a SQL FUNCTION
          SET @c_BuildTypeValue = TRANSLATE(@c_BuildTypeValue, ',', ' ')
          SET @c_BuildTypeValue = TRANSLATE(@c_BuildTypeValue, ')', ' ')
+         SET @c_BuildTypeValue = TRANSLATE(@c_BuildTypeValue, '=', ' ')  --NJOW01
          SET @c_BuildTypeValue = STUFF(@c_BuildTypeValue, 1, CHARINDEX('(',@c_BuildTypeValue),'')
          
          --1. STC=>Split String by 1 empty space with Split column has '.'; Split_Text
@@ -370,7 +372,7 @@ AS
                  , RowID = ROW_NUMBER() OVER (PARTITION BY STC.Split_Text ORDER BY STC.Split_Text)
             FROM STC 
             JOIN x ON x.n <= LEN(STC.Split_Text) 
-            WHERE SUBSTRING(STC.Split_Text, x.n, 1) LIKE '[A-Z,0-9,.]'
+            WHERE SUBSTRING(STC.Split_Text, x.n, 1) LIKE '[A-Z,0-9,.,_]'  --NJOW01
          )
          , TC AS
          (
