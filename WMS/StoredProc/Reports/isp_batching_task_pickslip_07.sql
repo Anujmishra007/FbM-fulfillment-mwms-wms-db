@@ -24,7 +24,7 @@ GO
 /*                                                                      */
 /* Called By:                                                           */
 /*                                                                      */
-/* PVCS Version: 1.6                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -32,7 +32,9 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver.  Purposes                                  */
-/* 27-FEB-2023 Mingle   1.0   DevOps Combine Script                     */ 
+/* 27-FEB-2023 Mingle   1.0   DevOps Combine Script                     */
+/* 15-Mar-2023 Wan01    1.1   Fixed to use latest code from             */
+/*                            isp_batching_task_pickslip_03             */  
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_batching_task_pickslip_07] (
@@ -92,13 +94,13 @@ CREATE OR ALTER PROC [dbo].[isp_batching_task_pickslip_07] (
 
     IF @c_PickZone = 'ALL'
     BEGIN
-      SELECT @c_ZoneList = @c_ZoneList + RTRIM(Loc.PickZone) + ','
+      SELECT @c_ZoneList = STUFF((SELECT ',' + RTRIM(Loc.PickZone)         --(Wan01)   
       FROM ORDERS O (NOLOCK)
-      JOIN PICKDETAIL PD (NOLOCK) ON O.Orderkey = PD.Orderkey
+      JOIN PICKDETAIL PD (NOLOCK) ON O.Orderkey = PD.Orderkey     
       JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc
       WHERE O.Loadkey = @c_Loadkey
-      GROUP BY LOC.PickZone
-      ORDER BY LOC.PickZone
+      GROUP BY LOC.PickZone 
+      ORDER BY LOC.PickZone FOR XML PATH('')),1,1,'' ) + ','  
 
       IF ISNULL(@c_ZoneList,'') <> ''
       BEGIN
@@ -107,6 +109,17 @@ CREATE OR ALTER PROC [dbo].[isp_batching_task_pickslip_07] (
       END
     END
 
+   DECLARE @PICKZONE TABLE (PICKZONE NVARCHAR(30))                         --(Wan01)
+   IF @c_PickZone = ''
+   BEGIN
+      INSERT INTO @PICKZONE (PICKZONE) VALUES ('')
+   END
+   ELSE
+   BEGIN
+      INSERT INTO @PICKZONE
+      SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_PickZone)
+   END
+   
     IF @c_ReportType IN ('2','3','5')
     BEGIN
        SELECT TOP 1 @c_Storerkey = Storerkey,
@@ -245,7 +258,7 @@ CREATE OR ALTER PROC [dbo].[isp_batching_task_pickslip_07] (
                                               AND CL4.Listname = 'REPORTCFG' AND CL4.Long = 'isp_batching_task_pickslip_07' AND ISNULL(CL4.Short,'') <> 'N')
     WHERE LP.Loadkey = @c_Loadkey
     AND PT.TaskBatchNo = CASE WHEN @c_TaskBatchNo <> '' THEN @c_TaskBatchNo ELSE PT.TaskBatchNo END
-    AND L.Pickzone IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_PickZone))
+    AND L.Pickzone IN (SELECT PICKZONE FROM @PICKZONE)                     --(Wan01)
     AND RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) = @c_Mode
     AND 1 = CASE WHEN (@c_ReportType = '3' AND @c_MultiConsoTaskPick = '1') OR (@c_ReportType = '5' AND @c_MultiConsoTaskPick <> '1') THEN 2 ELSE 1 END
     GROUP BY PT.TaskBatchNo,
