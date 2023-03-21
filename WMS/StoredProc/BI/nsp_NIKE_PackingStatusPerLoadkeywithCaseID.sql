@@ -3,11 +3,11 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 /***********************************************************************
-TITLE: PH_LogiReport - Customized Reports - OrderProcessing [SP] https://jiralfl.atlassian.net/browse/WMS-21816
+TITLE: PH_LogiReport - Customized Reports - OrderProcessing [SP] https://jiralfl.atlassian.net/browse/WMS-21816 
 
 DATE				VER		CREATEDBY   PURPOSE
 19-FEB-2022			1.0		PCN			CONVERT SCRIPT TO SP 
-09-Mar-2023			1.1		JayCanete	Create sp in PHWMS PROD & UAT
+2023-03-21			1.2		Crisnah		Change para datatype and filter condition .
 ************************************************************************/
 
 CREATE OR ALTER   PROC [BI].[nsp_NIKE_PackingStatusPerLoadkeywithCaseID] --NAME OF SP */		
@@ -47,12 +47,9 @@ BEGIN
    , @LogId = @LogId OUTPUT
    , @Debug = @Debug OUTPUT
    , @Schema = @Schema;
-
-DECLARE @Stmt NVARCHAR(MAX) = '' -- for dynamic SQL only
+	DECLARE @Stmt NVARCHAR(MAX) = '' -- for dynamic SQL only
 	
 /****** START YOUR SELECT STATEMENT HERE USE @Stmt FOR DYNAMIC SQL ******/
-
-
 set @Stmt = '
 	SELECT 
 	  DISTINCT AL2.MBOLKey as ''01MBOLKey'', 
@@ -73,9 +70,9 @@ set @Stmt = '
 	  AL3.ID as ''13ID'', 
 	  AL3.CaseID ''14CaseID''
 	FROM 
-	  BI.V_PackHeader AL1 (NOLOCK)
-	  INNER JOIN BI.V_ORDERS AL2 (NOLOCK) on (AL1.StorerKey = AL2.StorerKey AND AL1.OrderKey = AL2.OrderKey AND AL1.LoadKey = AL2.LoadKey)  
-	  INNER JOIN BI.V_PICKDETAIL AL3 (NOLOCK) on (AL2.Storerkey = AL3.StorerKey AND AL2.OrderKey = AL3.OrderKey AND AL2.UserDefine09 = AL3.WaveKey AND AL1.PickSlipNo = AL3.PickSlipNo )
+	  BI.V_ORDERS AL2 (NOLOCK)
+	  JOIN BI.V_PackHeader AL1 (NOLOCK) on (AL1.StorerKey = AL2.StorerKey AND AL1.OrderKey = AL2.OrderKey AND AL1.LoadKey = AL2.LoadKey)  
+	  JOIN BI.V_PICKDETAIL AL3 (NOLOCK) on (AL2.Storerkey = AL3.StorerKey AND AL2.OrderKey = AL3.OrderKey AND AL2.UserDefine09 = AL3.WaveKey AND AL1.PickSlipNo = AL3.PickSlipNo )
 	WHERE 
 		  AL1.StorerKey = ''NIKEPH'' 
 		  AND AL2.UserDefine09 = '''+@PARAM_GENERIC_Wavekey+''' 
@@ -84,7 +81,7 @@ set @Stmt = '
       		  AL2.LoadKey = COALESCE(NULLIF(isnull('''+@PARAM_GENERIC_Loadkey+''',''''), ''''),AL2.LoadKey)  
 			  OR 
 			  AL2.ExternOrderKey = COALESCE(NULLIF(isnull('''+@PARAM_GENERIC_ExternOrderKey+''',''''), ''''),AL2.ExternOrderKey) 
-		  )    
+		  )   
 	GROUP BY 
 	  AL2.MBOLKey, 
 	  AL2.UserDefine09, 
@@ -105,7 +102,7 @@ set @Stmt = '
 '  
 
 /*************************** FOOTER *******************************/
-   EXEC BI.dspExecStmt @Stmt = @stmt
+   EXEC BI.dspExecStmt @Stmt = @Stmt
    , @LogId = @LogId
    , @Debug = @Debug;
 
@@ -120,7 +117,7 @@ EXEC AS LOGIN ='JReportUserPH'
 
 SELECT SUSER_SNAME()
 
-EXEC BI.nsp_NIKE_PackingStatusPerLoadkeywithCaseID '0000319792','0005967577','0675295228' 
+EXEC BI.nsp_NIKE_PackingStatusPerLoadkeywithCaseID '0000325141' ,'0006054687','0676213810' 
 EXEC BI.nsp_NIKE_PackingStatusPerLoadkeywithCaseID '','',''
 EXEC BI.nsp_NIKE_PackingStatusPerLoadkeywithCaseID NULL,NULL,NULL
 
