@@ -1,11 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_1765SuggLocSP01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_1765SuggLocSP01]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO  
+
 /************************************************************************/    
 /* Store procedure: rdt_1765SuggLocSP01                                 */    
 /* Copyright      : LF                                                  */    
@@ -19,9 +16,10 @@ GO
 /* 21-06-2019  1.2  Ung      WMS-8496 Fix PendingMoveIn                 */
 /* 14-10-2019  1.3  Chermaine WMS-10793 Not hardcode from Lot04 (cc01)  */
 /* 27-05-2021  1.4  James    WMS-17060 Add new suggestloc logic(james01)*/
+/* 20-02-2023  1.5  James    WMS-21740 Filter all AGV loc (james02)     */
 /************************************************************************/    
     
-CREATE PROC [RDT].[rdt_1765SuggLocSP01] (    
+CREATE OR ALTER PROC [RDT].[rdt_1765SuggLocSP01] (    
    @nMobile        INT,    
    @nFunc          INT,    
    @cLangCode      NVARCHAR( 3),    
@@ -100,6 +98,21 @@ BEGIN
       AND   Storerkey = @cStorerKey      
       SET @nExists = @@ROWCOUNT
       
+      IF OBJECT_ID('tempdb..#AGVLOC') IS NOT NULL  
+      DROP TABLE #AGVLOC
+         
+      CREATE TABLE #AGVLOC  (  
+         RowRef        BIGINT IDENTITY(1,1)  Primary Key,
+         LOC           NVARCHAR( 10))  
+
+      INSERT INTO #AGVLOC ( LOC)
+      SELECT DISTINCT Long
+      FROM dbo.CODELKUP WITH (NOLOCK)
+      WHERE LISTNAME = 'RPTFEXLOC'
+      AND   Code = @cFacility
+      AND   Short = '1'
+      AND   Storerkey = @cStorerKey
+      
       IF ISNULL( @cShort, '0') = '0' OR @nExists = 0
       BEGIN
          --Step1 Find same SKU from SKU PutawayZone
@@ -116,6 +129,7 @@ BEGIN
             AND LLI.SKU = @cSKU
             AND LLI.QTY-LLI.QTYPicked+LLI.PendingMoveIn > 0
             --AND LA.Lottable04 = @dLottable04 --(cc01)
+            AND NOT EXISTS ( SELECT 1 FROM #AGVLOC AGVLOC WHERE LOC.Loc = AGVLOC.LOC)
          ORDER BY LOC.LogicalLocation, LOC.Loc
       
          --Step2 Find Empty Loc from same SKU Putawayzone
@@ -128,6 +142,7 @@ BEGIN
             AND   LOC.putawayzone = @cPutawayZone
             AND   LOC.LocationCategory = 'MEZZANINE'
             AND   LOC.Facility = @cFacility  
+            AND   NOT EXISTS ( SELECT 1 FROM #AGVLOC AGVLOC WHERE LOC.Loc = AGVLOC.LOC)
             GROUP BY LOC.LogicalLocation, LOC.LOC   
             HAVING SUM( ISNULL(LLI.Qty,0)) = 0  /*ChewKP01*/
                AND SUM( ISNULL(LLI.PendingMoveIn,0)) = 0
@@ -142,6 +157,7 @@ BEGIN
                WHERE LOC.LOC <> @cFromLoc  
                AND   LOC.LocationCategory = 'MEZZANINE'
                AND   LOC.Facility = @cFacility  
+               AND   NOT EXISTS ( SELECT 1 FROM #AGVLOC AGVLOC WHERE LOC.Loc = AGVLOC.LOC)
                GROUP BY LOC.LogicalLocation, LOC.LOC   
                HAVING SUM( ISNULL(LLI.Qty,0))  = 0  /*ChewKP01*/
                   AND SUM( ISNULL(LLI.PendingMoveIn,0)) = 0
