@@ -1,7 +1,8 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /******************************************************************************/
 /* Store procedure: rdt_511ExtValid05                                         */
@@ -12,6 +13,7 @@ GO
 /* Date        Rev  Author     Purposes                                       */
 /* 2021-07-30  1.0  James      WMS-17576. Created                             */
 /* 2022-01-13  1.1  James      Add new validation (james01)                   */
+/* 2022-10-20  1.2  yeekung    WMS-21035 Add new condition (yeekung01)        */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_511ExtValid05] (
@@ -57,23 +59,30 @@ AS
                         AND   Long = @cToLOC
                         AND   Storerkey = @cStorerKey)
             BEGIN
-               IF EXISTS (
-                  SELECT 1 FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-                  JOIN dbo.SKU SKU WITH (NOLOCK) ON ( LLI.StorerKey = SKU.StorerKey AND LLI.Sku = SKU.SKU)
-                  JOIN dbo.LOC LOC WITH (NOLOCK) ON ( LLI.Loc = LOC.Loc)
-                  WHERE LLI.StorerKey = @cStorerKey
-                  AND   LLI.Loc = @cFromLOC
-                  AND   LLI.Id = @cFromID
-                  AND   LOC.Facility = @cFacility
-                  AND   NOT EXISTS (
-                        SELECT 1 FROM dbo.CODELKUP CLP WITH (NOLOCK)
+               IF NOT EXISTS (SELECT 1 FROM dbo.CODELKUP CLP WITH (NOLOCK)
                         WHERE CLP.LISTNAME = 'AGVSKUCat'
                         AND   CLP.Storerkey = @cStorerKey
-                        AND   CLP.Long = SKU.BUSR9))
+                        AND   CLP.Long IN('ALL','')) --(yeekung01)
+
                BEGIN
-                  SET @nErrNo = 172451
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'NotAllAGVGoods'
-                  GOTO Quit
+                  IF EXISTS (
+                     SELECT 1 FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
+                     JOIN dbo.SKU SKU WITH (NOLOCK) ON ( LLI.StorerKey = SKU.StorerKey AND LLI.Sku = SKU.SKU)
+                     JOIN dbo.LOC LOC WITH (NOLOCK) ON ( LLI.Loc = LOC.Loc)
+                     WHERE LLI.StorerKey = @cStorerKey
+                     AND   LLI.Loc = @cFromLOC
+                     AND   LLI.Id = @cFromID
+                     AND   LOC.Facility = @cFacility
+                     AND   NOT EXISTS (
+                           SELECT 1 FROM dbo.CODELKUP CLP WITH (NOLOCK)
+                           WHERE CLP.LISTNAME = 'AGVSKUCat'
+                           AND   CLP.Storerkey = @cStorerKey
+                           AND   CLP.Long = SKU.BUSR9))
+                  BEGIN
+                     SET @nErrNo = 172451
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'NotAllAGVGoods'
+                     GOTO Quit
+                  END
                END
 
                IF NOT EXISTS ( SELECT 1 FROM dbo.CODELKUP WITH (NOLOCK)
