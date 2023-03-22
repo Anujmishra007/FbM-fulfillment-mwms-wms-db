@@ -156,10 +156,12 @@ GO
 /* 25-Nov-2020  WLChooi      1.16   WMS-15742 - Disable status update to 9 when*/
 /*                                  openqty <= 0 (WL02)                        */
 /* 27-Aug-2021  TLTING05     2.1    Extend ExternReceiptKey field length       */
+/* 22-Mar-2023  CalvinKhor   2.2    Comment 'CONTINUE' as it prevents the logic*/
+/*                                  below it to be executed (CLVN01)           */
 /*******************************************************************************/
 
-CREATE TRIGGER ntrReceiptHeaderUpdate
-ON  Receipt
+ALTER TRIGGER [dbo].[ntrReceiptHeaderUpdate]
+ON  [dbo].[RECEIPT]
 FOR UPDATE
 AS
 -- SOS27626 (ML) 14/10/04    Nuance Outbound interface - Change to use Trnasmitlog3
@@ -1704,7 +1706,7 @@ BEGIN
    --                   END -- check RecType
    --                END
             -- Commented by YokeBeen on 14-Apr-2004 - End
-                  CONTINUE 
+            --      CONTINUE --(CLVN01)
                END -- if @c_authority = '1'
                -------- SOS#15351 ---------------------------------------------------------------------------------
             END -- SOS34204
@@ -2773,3 +2775,6 @@ ELSE
       RETURN
    END
 END
+GO
+
+
