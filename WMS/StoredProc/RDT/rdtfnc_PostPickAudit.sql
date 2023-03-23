@@ -505,6 +505,8 @@ BEGIN
       SET @cPPADefaultPQTY = '' 
 
    SET @cExtendedRefNoSP = rdt.rdtGetConfig( @nFunc, 'ExtendedRefNoSP', @cStorer)
+   IF @cExtendedRefNoSP = '0'
+      SET @cExtendedRefNoSP = ''
    
    -- EventLog - Sign In Function  
    -- (ChewKP02) 
@@ -684,7 +686,7 @@ BEGIN
       END
 
                  -- (ChewKP01)
-      IF @cExtendedRefNoSP <> ''
+      IF ISNULL(@cExtendedRefNoSP,'') <> ''
       BEGIN
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedRefNoSP AND type = 'P')--yeekung08
          BEGIN
@@ -1991,7 +1993,7 @@ BEGIN
       SET @nQTY_CHK = 0
 
             -- (ChewKP01)
-      IF @cExtendedRefNoSP <> ''
+      IF ISNULL(@cExtendedRefNoSP,'') <> ''
       BEGIN
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedRefNoSP AND type = 'P')--yeekung08
          BEGIN
