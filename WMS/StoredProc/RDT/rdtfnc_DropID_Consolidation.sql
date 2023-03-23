@@ -14,6 +14,7 @@ GO
 /*                                                                      */
 /* Date        Rev  Author   Purposes                                   */
 /* 26-Aug-2022 1.0  yeekung  WMS-20381 - Created                        */
+/* 14-Mar-2023 1.1  yeekung  JSM-135615 Fix dropid  (yeekung01)         */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_DropID_Consolidation] (
@@ -236,16 +237,13 @@ BEGIN
       IF ISNULL(@cPickZone, '') = ''
       BEGIN
          SELECT  TOP 1 @cPickZone=pickzone,
-                @cLOC = LOC
+                @cLOC = DP.LOC
          FROM rdt.rdtPickConsoLog DP (nolock)
-         WHERE EXISTS( SELECT  DISTINCT 1
-                           FROM PICKDETAIL PD(NOLOCK)
-                           where pickslipno=@cpickslipno
-                           AND storerkey=@cstorerkey
-                           AND status <'9'
-                           AND pd.dropid=DP.dropid
-                           AND pd.orderkey=dp.orderkey)
-          order by adddate desc;
+         JOIN PICKDETAIL PD (NOLOCK) ON PD.OrderKey=DP.Orderkey 
+         WHERE  PD.pickslipno = @cPickslipNo
+            AND PD.storerkey = @cStorerkey
+            and pd.status < '5'
+         order by DP.adddate desc; --(yeekung01)
 
          IF ISNULL(@cPickZone, '') = ''
          BEGIN
@@ -280,13 +278,13 @@ BEGIN
       IF EXISTS (SELECT 1
                FROM rdt.rdtPickConsoLog PCL (nolock)
                JOIN PICKDETAIL PD ON PD.orderkey=pcl.orderkey and pcl.sku=pd.sku and pcl.dropid=pd.dropid
-               WHERE pd.pickslipno <>@cPickslipno 
-               AND   PCL.status<>'9'
+               WHERE pd.pickslipno <> @cPickslipno 
+               AND   PCL.status <'9'
                AND   PCL.Loc = @cLOC
                AND   storerkey=@cStorerkey)
       BEGIN
-         SET @nErrNo = 190455
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PICKZONE REQ
+         SET @nErrNo = 190458
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LocisSorted
          EXEC rdt.rdtSetFocusField @nMobile, 2
          GOTO Step_1_Loc_Fail
       END
@@ -310,7 +308,7 @@ BEGIN
                         
       BEGIN
          INSERT INTO rdt.rdtPickConsoLog (Orderkey, PickZone, SKU, LOC, [Status], AddWho, AddDate, Mobile,DropID) 
-         Select orderkey,@cPickZone,sku,@cLOC,'9',sUser_sName(), GETDATE(), @nMobile,@cDropID
+         Select orderkey,@cPickZone,sku,@cLOC,'1',sUser_sName(), GETDATE(), @nMobile,@cDropID
          FROM dbo.pickdetail PH WITH (NOLOCK) 
          WHERE StorerKey = @cStorerKey
             AND   dropid = @cDropID
@@ -337,7 +335,8 @@ BEGIN
                         FROM rdt.rdtPickConsoLog PCL (nolock)
                         JOIN PICKDETAIL PD ON PD.orderkey=pcl.orderkey and pcl.sku=pd.sku and pcl.dropid=pd.dropid
                         WHERE pd.pickslipno=@cPickslipno 
-                        AND storerkey=@cStorerkey))
+                        AND storerkey=@cStorerkey)
+           AND ISNULL(dropid,'') <>'')
       BEGIN
          UPDATE rdtPickConsoLog WITH (ROWLOCK)
          set  status='9'
