@@ -12,7 +12,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 2.4                                                    */                                                                                  
+/* PVCS Version: 2.6                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -51,6 +51,8 @@ GO
 /*                            orderdate filter                          */
 /* 2022-11-04  Wan12    2.5   Fixed incorrent duration & TotalWaveCnt   */   
 /*                            due to rebuild using same batchno         */ 
+/* 2023-03-20  Wan13    2.6   LFWM-4085 - UAT -CN  Build Wave error     */
+/*                            parameters not tally                      */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_Build_Wave]                                                                                                                       
       @c_BuildParmKey      NVARCHAR(10)                                                                                                                    
@@ -58,7 +60,7 @@ CREATE OR ALTER PROC [WM].[lsp_Build_Wave]
    ,  @c_StorerKey         NVARCHAR(15)  
    ,  @c_BuildWaveType     NVARCHAR(10)   = ''    --DEFAULT BLANK = BuildWave, Analysis, PreWave & etc
    ,  @c_GenByBuildValue   NVARCHAR(1)    = 'Y'   --DEFAULT Y = Use BuildValue, Otherwise use Value
-   ,  @c_SQLBuildWave      NVARCHAR(4000) = '' OUTPUT                                  
+   ,  @c_SQLBuildWave      NVARCHAR(MAX)  = '' OUTPUT          --(Wan13)                               
    ,  @n_BatchNo           BIGINT         = 0  OUTPUT
    ,  @n_SessionNo         BIGINT         = 0  OUTPUT
    ,  @b_Success           INT            = 1  OUTPUT  
@@ -163,7 +165,8 @@ AS
          , @b_ParmFound                BIT            = 0
          , @b_ParmTypeSP               INT            = 0
          , @n_idx                      INT            = 0                                                                                                                  
-         , @c_SPName                   NVARCHAR(50)   = ''                                                                                                        
+         , @c_SPName                   NVARCHAR(50)   = ''  
+         , @c_SPParms                  NVARCHAR(1000) = ''              --(Wan13)
                                                                                                               
          , @c_SQL                      NVARCHAR(MAX)  = ''
          , @c_SQLParms                 NVARCHAR(2000) = ''
@@ -818,25 +821,42 @@ AS
                SET @c_SPName = SUBSTRING(@c_SQL,1, @n_idx - 1)                                                                                              
             END   
          
-            SET @b_ParmFound = 0
-            SELECT @b_ParmFound = 1
-            FROM [INFORMATION_SCHEMA].[PARAMETERS] 
-            WHERE SPECIFIC_NAME = @c_SPName 
-            AND PARAMETER_NAME = '@c_BuildWaveType'                                                                                                                                                      
+            --SET @b_ParmFound = 0                                                                             --(Wan12) - START
+            --SELECT @b_ParmFound = 1
+            --FROM [INFORMATION_SCHEMA].[PARAMETERS] 
+            --WHERE SPECIFIC_NAME = @c_SPName 
+            --AND PARAMETER_NAME = '@c_BuildWaveType'    
+            SET @c_SPParms = ''
+            SELECT @c_SPParms = STRING_AGG(CONVERT(NVARCHAR(MAX),p.PARAMETER_NAME + '='
+                                          + CASE WHEN p.PARAMETER_NAME='@c_ParmCodeCond' THEN '@c_SQLCond'
+                                                 WHEN p.PARAMETER_NAME='@c_ParmCode' THEN '@c_BuildParmKey'
+                                                 WHEN p.PARAMETER_NAME='@dt_StartDate' THEN '@dt_Date_Fr' 
+                                                 WHEN p.PARAMETER_NAME='@dt_EndDate' THEN '@dt_Date_To' 
+                                                 WHEN p.PARAMETER_NAME='@n_NoOfOrderToRelease' THEN '@n_MaxWaveOrders' 
+                                                 ELSE p.PARAMETER_NAME END)
+                                           , ',' )
+            WITHIN GROUP (ORDER BY p.ORDINAL_POSITION ASC)
+            FROM [INFORMATION_SCHEMA].[PARAMETERS] AS p 
+            WHERE p.SPECIFIC_NAME = @c_SPName 
+            AND p.PARAMETER_NAME NOT IN ('@c_Parm01', '@c_Parm02','@c_Parm03','@c_Parm04','@c_Parm05')         --(Wan13) - END
                                                                                                                                                         
             SET @c_SQL  = RTRIM(@c_SQL)                                                                                                                
-                        + CASE WHEN CHARINDEX('@',@c_SQL, 1) > 0  THEN ',' ELSE '' END  
-                        + ' @c_Facility = @c_Facility'                                                                                                                                       
-                        + ',@c_Storerkey= @c_StorerKey'                                                              
-                        + ',@c_BuildParmKey = @c_BuildParmKey'                                                                     
-                        + ',@c_ParmCodeCond = @c_SQLCond' 
-                        + CASE WHEN @b_ParmFound = 0 THEN '' ELSE ', @c_BuildWaveType = @c_BuildWaveType' END                                                        
+                        + CASE WHEN CHARINDEX('@',@c_SQL, 1) > 0  THEN ',' ELSE '' END 
+                        + @c_SPParms                                                                           --(Wan13)
+                        --+ ' @c_Facility = @c_Facility'                                                       --(Wan13)                                                                                     
+                        --+ ',@c_Storerkey= @c_StorerKey'                                                      --(Wan13)       
+                        --+ ',@c_BuildParmKey = @c_BuildParmKey'                                               --(Wan13)                     
+                        --+ ',@c_ParmCodeCond = @c_SQLCond'                                                    --(Wan13)
+                        --+ CASE WHEN @b_ParmFound = 0 THEN '' ELSE ', @c_BuildWaveType = @c_BuildWaveType' END--(Wan13)                                                       
 
             SET @c_SQLParms= N'@c_Facility      NVARCHAR(5)'                                                                                                                
                            + ',@c_StorerKey     NVARCHAR(15)'  
                            + ',@c_BuildParmKey  NVARCHAR(10)'                                                                                                                                       
                            + ',@c_SQLCond       NVARCHAR(4000)'     
-                           + ',@c_BuildWaveType NVARCHAR(30)'                                                                                   
+                           + ',@c_BuildWaveType NVARCHAR(30)' 
+                           + ',@dt_Date_Fr      DATETIME'                                                      --(Wan13) 
+                           + ',@dt_Date_To      DATETIME'                                                      --(Wan13)
+                           + ',@n_MaxWaveOrders INT'                                                           --(Wan13)
 
             EXEC sp_executesql @c_SQL                                                                                   
                               ,@c_SQLParms                                                              
@@ -844,7 +864,10 @@ AS
                               ,@c_StorerKey                                                                                                  
                               ,@c_BuildParmKey                                                                                               
                               ,@c_SQLCond
-                              ,@c_BuildWaveType                                                                                                                                                                                                                            
+                              ,@c_BuildWaveType 
+                              ,@dt_Date_Fr                                                                     --(Wan13)
+                              ,@dt_Date_To                                                                     --(Wan13)
+                              ,@n_MaxWaveOrders                                                                --(Wan13)
 
             IF @@ERROR <> 0                                                                                                                                       
             BEGIN                                                                                                                                                 
@@ -869,7 +892,7 @@ AS
          SET @c_SQLCond = @c_SQLCond                                                                                                                              
                         + ' AND EXISTS (SELECT 1 FROM #TMP_ORDERS TMP WHERE TMP.Orderkey = ORDERS.Orderkey)'                                                      
       END                                                                                                                                                         
-    
+  
       ------------------------------------------------------
       -- Construct Build Wave SQL
       ------------------------------------------------------                                                                                                                                       
@@ -964,7 +987,7 @@ AS
       BEGIN
          SET @c_SQLGroupBy= @c_SQLGroupBy+ ', ' + @c_GroupBySortField
       END
-      
+     
       IF @c_BuildWaveType = ''            --(Wan09) - START
       BEGIN
          SET @c_SQLCondPreWave = ''
