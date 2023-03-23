@@ -4,77 +4,80 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/******************************************************************************/
-/* Store procedure: rdtfnc_Pack                                               */
-/* Copyright      : LFLogistics                                               */
-/*                                                                            */
-/* Date         Rev  Author     Purposes                                      */
-/* 2016-05-05   1.0  Ung        SOS368666 Created                             */
-/* 2016-09-30   1.1  Ung        Performance tuning                            */
-/* 2016-10-05   1.2  Ung        SQL2014                                       */
-/* 2016-10-31   1.3  Ung        WMS-458 Add pack UCC                          */
-/* 2017-05-19   1.4  Ung        WMS-1919 Add serial no, FromDropID,           */
-/*                              new printing method                           */
-/* 2017-06-06   1.5  Ung        WMS-2126 PackDetail.RefNo,RefNo2,UPC,DropID   */
-/* 2017-08-16   1.6  Ung        WMS-1919 Show pack confirm error              */
-/* 2017-09-05   1.7  Ung        WMS-2795 Add ExtendedInfo                     */
-/* 2017-09-05   1.8  Ung        IN00456144 Fix decode UserDefine not reset    */
-/* 2018-04-12   1.9  James      WMS4231 - Add ExtendedInfoSP at screen 3 after*/
-/*                              validate SKU (james01)                        */
-/*                              Fix wgt & cube wrong position issue (james02) */
-/* 2018-04-27   2.0  WinSern    INC0210466 Swap position for weight and cube  */
-/* 2018-04-02   2.1  Ung        WMS-3845                                      */
-/*                              Change ExtendedInfoSP for SKU QTY to SKU only */
-/*                              Add ExtendedValidateSP at screen 1            */
-/*                              Add CustomCartonNo                            */
-/*                              Add PrePackIndicator                          */
-/* 2018-09-18   2.2 James       WMS-6320 Change SerialNoCapture config        */
-/*                              Allow svalue 3 only (james02)                 */
-/* 2018-09-28   2.3 Gan         Performance                                   */
-/* 2018-10-17   2.4 James       WMS-6654 Add ExtendedUpdateSP@ step7 (james03)*/
-/* 2019-03-13   2.5 Ung         WMS-8134 Add bulk serial no                   */
-/*                              Add data capture                              */
-/* 2019-05-14   2.6 Ung         WMS-9050 Add multi SKU barcode                */
-/*                              Add DefaultWeight                             */
-/* 2019-08-01   2.7 James       WMS-10030 - Fix DecodeSP output wrong         */
-/*                              variable (james04)                            */
-/*                              Add ext validate/update sp @ step 4           */
-/* 2019-09-03   2.8 LZG         INC0841202 - Allow multiple disabled          */
-/*                              options (ZG01)                                */
-/* 2019-09-25   2.9 James       WMS-10434 Add param to rdt_serialno(james15)  */
-/* 2019-09-30   3.0 Ung         WMS-10729 Add DefaultPrintLabelOption         */
-/*                              Add ExtendedUpdateSP at print label screen    */
-/*                              Migrate DataCapture to DataCaptureSP          */
-/* 2019-10-01   3.1 James       WMS-10570 Display qty based on UOM (james16)  */
-/* 2019-11-04   3.2 James       WMS-10890 Add ExtInfo @ screen 1 (james17)    */
-/*                              Add show pickslipno if config turn on         */
-/* 2020-01-15   3.3 James       WMS-11706 Fix decode qty (james18)            */
-/* 2019-10-03   3.4 Ung         WMS-10717 Add DefaultPrintPackListOption      */
-/* 2020-02-18   3.5 James       WMS-12052 Add DisableQTYFieldSP (james19)     */
-/* 2020-08-04   3.6 Chermaine   WMS-14497 Set DefaultQty @scn3 (cc01)         */
-/* 2020-07-29   3.7 Chermaine   WMS-14153 Add packinfo.qty at scn4 (cc02)     */
-/* 2020-12-08   3.8 Chermaine   WMS-15727 Add DisableQTYFieldSP at scn3 (cc03)*/
-/* 2021-01-06   3.9 James       WMS-15989 Add Length, Weight, Height (james20)*/
-/* 2021-03-09   4.0 Chermaine   WMS-12426 Add rdtIsValidFormat in scn4 (cc04) */
-/* 2021-03-24   4.1 James       WMS-16439 Enhance DefaultOption (james21)     */
-/* 2021-05-09   4.2 YeeKung     WMS-16963 Default cartontype(yeekung01)       */
-/* 2021-06-09   4.3 LZG         INC1527070 - Extended variable length (ZG02)  */
-/* 2021-06-22   4.4 LZG         JSM-5211 - Corrected @cFieldAttr (ZG03)       */
-/* 2021-08-30   4.5 YeeKung     WMS-17656 add flow thourgh screen (yeekung02) */
-/* 2021-10-21   4.6 James       WMS-18152 Add ExtendedValidateSP to           */
-/*                              print packing list step (james22)             */
-/* 2021-12-15   4.7 SYCHUA      JSM-39973 - Bug Fix: Swap position correctly  */
-/*                              for cube and weight (SY01)                    */
-/* 2021-12-13   4.8 Chermaine   WMS-18503 Able to go serialNo scn             */
-/*                              after capturePackInfo scn (cc05)              */
-/* 2021-11-13   4.9 YeeKung     WMS-18323 Add data capture label (yeekung03)  */
-/* 2022-02-18   5.0 Ung         WMS-18900 Support 1 carton 1 PackDetail       */
-/******************************************************************************/
+/************************************************************************************************/
+/* Store procedure: rdtfnc_Pack                                                                 */
+/* Copyright      : LFLogistics                                                                 */
+/*                                                                                              */
+/* Date         Rev  Author     Purposes                                                        */
+/* 2016-05-05   1.0  Ung        SOS368666 Created                                               */
+/* 2016-09-30   1.1  Ung        Performance tuning                                              */
+/* 2016-10-05   1.2  Ung        SQL2014                                                         */
+/* 2016-10-31   1.3  Ung        WMS-458 Add pack UCC                                            */
+/* 2017-05-19   1.4  Ung        WMS-1919 Add serial no, FromDropID,                             */
+/*                              new printing method                                             */
+/* 2017-06-06   1.5  Ung        WMS-2126 PackDetail.RefNo,RefNo2,UPC,DropID                     */
+/* 2017-08-16   1.6  Ung        WMS-1919 Show pack confirm error                                */
+/* 2017-09-05   1.7  Ung        WMS-2795 Add ExtendedInfo                                       */
+/* 2017-09-05   1.8  Ung        IN00456144 Fix decode UserDefine not reset                      */
+/* 2018-04-12   1.9  James      WMS4231 - Add ExtendedInfoSP at screen 3 after                  */
+/*                              validate SKU (james01)                                          */
+/*                              Fix wgt & cube wrong position issue (james02)                   */
+/* 2018-04-27   2.0  WinSern    INC0210466 Swap position for weight and cube                    */
+/* 2018-04-02   2.1  Ung        WMS-3845                                                        */
+/*                              Change ExtendedInfoSP for SKU QTY to SKU only                   */
+/*                              Add ExtendedValidateSP at screen 1                              */
+/*                              Add CustomCartonNo                                              */
+/*                              Add PrePackIndicator                                            */
+/* 2018-09-18   2.2 James       WMS-6320 Change SerialNoCapture config                          */
+/*                              Allow svalue 3 only (james02)                                   */
+/* 2018-09-28   2.3 Gan         Performance                                                     */
+/* 2018-10-17   2.4 James       WMS-6654 Add ExtendedUpdateSP@ step7 (james03)                  */
+/* 2019-03-13   2.5 Ung         WMS-8134 Add bulk serial no                                     */
+/*                              Add data capture                                                */
+/* 2019-05-14   2.6 Ung         WMS-9050 Add multi SKU barcode                                  */
+/*                              Add DefaultWeight                                               */
+/* 2019-08-01   2.7 James       WMS-10030 - Fix DecodeSP output wrong                           */
+/*                              variable (james04)                                              */
+/*                              Add ext validate/update sp @ step 4                             */
+/* 2019-09-03   2.8 LZG         INC0841202 - Allow multiple disabled                            */
+/*                              options (ZG01)                                                  */
+/* 2019-09-25   2.9 James       WMS-10434 Add param to rdt_serialno(james15)                    */
+/* 2019-09-30   3.0 Ung         WMS-10729 Add DefaultPrintLabelOption                           */
+/*                              Add ExtendedUpdateSP at print label screen                      */
+/*                              Migrate DataCapture to DataCaptureSP                            */
+/* 2019-10-01   3.1 James       WMS-10570 Display qty based on UOM (james16)                    */
+/* 2019-11-04   3.2 James       WMS-10890 Add ExtInfo @ screen 1 (james17)                      */
+/*                              Add show pickslipno if config turn on                           */
+/* 2020-01-15   3.3 James       WMS-11706 Fix decode qty (james18)                              */
+/* 2019-10-03   3.4 Ung         WMS-10717 Add DefaultPrintPackListOption                        */
+/* 2020-02-18   3.5 James       WMS-12052 Add DisableQTYFieldSP (james19)                       */
+/* 2020-08-04   3.6 Chermaine   WMS-14497 Set DefaultQty @scn3 (cc01)                           */
+/* 2020-07-29   3.7 Chermaine   WMS-14153 Add packinfo.qty at scn4 (cc02)                       */
+/* 2020-12-08   3.8 Chermaine   WMS-15727 Add DisableQTYFieldSP at scn3 (cc03)                  */
+/* 2021-01-06   3.9 James       WMS-15989 Add Length, Weight, Height (james20)                  */
+/* 2021-03-09   4.0 Chermaine   WMS-12426 Add rdtIsValidFormat in scn4 (cc04)                   */
+/* 2021-03-24   4.1 James       WMS-16439 Enhance DefaultOption (james21)                       */
+/* 2021-05-09   4.2 YeeKung     WMS-16963 Default cartontype(yeekung01)                         */
+/* 2021-06-09   4.3 LZG         INC1527070 - Extended variable length (ZG02)                    */
+/* 2021-06-22   4.4 LZG         JSM-5211 - Corrected @cFieldAttr (ZG03)                         */
+/* 2021-08-30   4.5 YeeKung     WMS-17656 add flow thourgh screen (yeekung02)                   */
+/* 2021-10-21   4.6 James       WMS-18152 Add ExtendedValidateSP to                             */
+/*                              print packing list step (james22)                               */
+/* 2021-12-15   4.7 SYCHUA      JSM-39973 - Bug Fix: Swap position correctly                    */
+/*                              for cube and weight (SY01)                                      */
+/* 2021-12-13   4.8 Chermaine   WMS-18503 Able to go serialNo scn                               */
+/*                              after capturePackInfo scn (cc05)                                */
+/* 2021-11-13   4.9 YeeKung     WMS-18323 Add data capture label (yeekung03)                    */
+/* 2022-02-18   5.0 Ung         WMS-18900 Support 1 carton 1 PackDetail                         */
+/* 2023-03-09   5.1 Ung         WMS-21830 Add FlowThruScreen for print label (SValue=5)         */
+/*                              Rename FlowThruScr    (SValue=1) to FlowThruScreen (SValue=2)   */
+/*                              Rename FlowThruCtnScn (SValue=1) to FlowThruScreen (SValue=4)   */
+/************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
-   @nMobile    int,
-   @nErrNo     int  OUTPUT,
-   @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 VARCHAR max
+   @nMobile    INT,
+   @nErrNo     INT           OUTPUT,
+   @cErrMsg    NVARCHAR( 20) OUTPUT
 )
 AS
 
@@ -90,8 +93,6 @@ DECLARE
    @cCurrLOC       NVARCHAR( 10),
    @cSQL           NVARCHAR( MAX),
    @cSQLParam      NVARCHAR( MAX),
-   @cDataWindow    NVARCHAR( 50),
-   @cTargetDB      NVARCHAR( 20),
    @cUCCNo         NVARCHAR( 20),
    @cType          NVARCHAR( 10),
    @cPrintPackList NVARCHAR( 1),
@@ -102,52 +103,52 @@ DECLARE
    @nMoreSNO       INT,
    @nBulkSNO       INT,
    @nBulkSNOQTY    INT,
-   @tVar           VariableTable
+   @tVar                VariableTable, 
+   @tVarDisableQTYField VARIABLETABLE
 
 -- RDT.RDTMobRec variables
 DECLARE
-   @nFunc          INT,
-   @nScn           INT,
-   @nStep          INT,
-   @cLangCode      NVARCHAR( 3),
-   @nInputKey      INT,
-   @nMenu          INT,
-   @cFlowThruScn   NVARCHAR( 1), --(yeekung02)
-   @cFlowThruCtnScn NVARCHAR( 1), --(yeekung02)
+   @nFunc            INT,
+   @nScn             INT,
+   @nStep            INT,
+   @cLangCode        NVARCHAR( 3),
+   @nInputKey        INT,
+   @nMenu            INT,
+   @cFlowThruScreen  NVARCHAR( 1), 
 
-   @cFacility      NVARCHAR( 5),
-   @cStorerKey     NVARCHAR( 15),
-   @cUserName      NVARCHAR( 18),
-   @cPaperPrinter  NVARCHAR( 10),
-   @cLabelPrinter  NVARCHAR( 10),
+   @cFacility        NVARCHAR( 5),
+   @cStorerKey       NVARCHAR( 15),
+   @cUserName        NVARCHAR( 18),
+   @cPaperPrinter    NVARCHAR( 10),
+   @cLabelPrinter    NVARCHAR( 10),
 
-   @cPickSlipNo    NVARCHAR( 10),
-   @cSKU           NVARCHAR( 20),
-   @nQTY           INT,
-   @cSKUDescr      NVARCHAR( 60),
-   @nFromScn       INT,
-   @nFromStep      INT,
+   @cPickSlipNo      NVARCHAR( 10),
+   @cSKU             NVARCHAR( 20),
+   @nQTY             INT,
+   @cSKUDescr        NVARCHAR( 60),
+   @nFromScn         INT,
+   @nFromStep        INT,
 
-   @cPackDtlRefNo  NVARCHAR( 20),
-   @cPackDtlRefNo2 NVARCHAR( 20),
-   @cLabelNo       NVARCHAR( 20),
-   @cCartonType    NVARCHAR( 10),
-   @cCube          NVARCHAR( 10),
-   @cWeight        NVARCHAR( 10),
-   @cRefNo         NVARCHAR( 20),
-   @cLabelLine     NVARCHAR( 5),
-   @cPackDtlDropID NVARCHAR( 20),
-   @cUCCCounter    NVARCHAR( 5),
-
-   @nCartonNo      INT,
-   @nCartonSKU     INT,
-   @nCartonQTY     INT,
-   @nTotalCarton   INT,
-   @nTotalPick     INT,
-   @nTotalPack     INT,
-   @nTotalShort    INT,
-   @nPackedQTY     INT,
-   @nEnter         INT, --(cc01)  
+   @cPackDtlRefNo    NVARCHAR( 20),
+   @cPackDtlRefNo2   NVARCHAR( 20),
+   @cLabelNo         NVARCHAR( 20),
+   @cCartonType      NVARCHAR( 10),
+   @cCube            NVARCHAR( 10),
+   @cWeight          NVARCHAR( 10),
+   @cRefNo           NVARCHAR( 20),
+   @cLabelLine       NVARCHAR( 5),
+   @cPackDtlDropID   NVARCHAR( 20),
+   @cUCCCounter      NVARCHAR( 5),
+                     
+   @nCartonNo        INT,
+   @nCartonSKU       INT,
+   @nCartonQTY       INT,
+   @nTotalCarton     INT,
+   @nTotalPick       INT,
+   @nTotalPack       INT,
+   @nTotalShort      INT,
+   @nPackedQTY       INT,
+   @nEnter           INT, --(cc01)  
 
    @cDefaultPrintLabelOption     NVARCHAR( 1),
    @cDefaultPrintPackListOption  NVARCHAR( 1),
@@ -197,7 +198,6 @@ DECLARE
    @cShowPickSlipNo     NVARCHAR( 1),
    @cDisableQTYFieldSP  NVARCHAR(20),
    @cDefaultQTY         NVARCHAR( 1), --(cc01)
-   @tVarDisableQTYField VARIABLETABLE,
    @cLength             NVARCHAR( 10), -- (james20)
    @cWidth              NVARCHAR( 10), -- (james20)
    @cHeight             NVARCHAR( 10), -- (james20)
@@ -246,35 +246,35 @@ SELECT
    @nFromStep        = V_FromStep,
    @cPUOM            = V_UOM,
 
-   @cPackDtlRefNo    = V_String1,
-   @cPackDtlRefNo2   = V_String2,
-   @cLabelNo         = V_String3,
-   @cCartonType      = V_String4,
-   @cCube            = V_String5,
-   @cWeight          = V_String6,
-   @cRefNo           = V_String7,
-   @cLabelLine       = V_String8,
-   @cPackDtlDropID   = V_String9,
-   @cUCCCounter      = V_String10,
-   @cMUOM_Desc       = V_String11,
-   @cPUOM_Desc       = V_String12,
-   @cDisableQTYFieldSP = V_String13,
-   @cFlowThruScn     = V_String14,  --(yeekung02)
+   @cPackDtlRefNo       = V_String1,
+   @cPackDtlRefNo2      = V_String2,
+   @cLabelNo            = V_String3,
+   @cCartonType         = V_String4,
+   @cCube               = V_String5,
+   @cWeight             = V_String6,
+   @cRefNo              = V_String7,
+   @cLabelLine          = V_String8,
+   @cPackDtlDropID      = V_String9,
+   @cUCCCounter         = V_String10,
+   @cMUOM_Desc          = V_String11,
+   @cPUOM_Desc          = V_String12,
+   @cDisableQTYFieldSP  = V_String13,
+   @cFlowThruScreen     = V_String14,
 
-   @nCartonNo        = V_CartonNo,
-   @nCartonSKU       = V_Integer1,
-   @nCartonQTY       = V_Integer2,
-   @nTotalCarton     = V_Integer3,
-   @nTotalPick       = V_Integer4,
-   @nTotalPack       = V_Integer5,
-   @nTotalShort      = V_Integer6,
-   @nPackedQTY       = V_Integer7,
-   @nPUOM_Div        = V_Integer8,
-   @nPQTY            = V_Integer9,
-   @nMQTY            = V_Integer10,
-   @nEnter           = V_Integer11,  --(cc01)  
+   @nCartonNo           = V_CartonNo,
+   @nCartonSKU          = V_Integer1,
+   @nCartonQTY          = V_Integer2,
+   @nTotalCarton        = V_Integer3,
+   @nTotalPick          = V_Integer4,
+   @nTotalPack          = V_Integer5,
+   @nTotalShort         = V_Integer6,
+   @nPackedQTY          = V_Integer7,
+   @nPUOM_Div           = V_Integer8,
+   @nPQTY               = V_Integer9,
+   @nMQTY               = V_Integer10,
+   @nEnter              = V_Integer11,  --(cc01)  
 
-   @cShowPickSlipNo  = V_String15,
+   @cShowPickSlipNo     = V_String15,
    @cDefaultPrintLabelOption    = V_String16,
    @cDefaultPrintPackListOption = V_String17,
    @cDefaultWeight      = V_String18,
@@ -309,7 +309,6 @@ SELECT
    @cMultiSKUBarcode    = V_String47,
    @cDefaultQTY         = V_String48, --(cc01)
    @cDefaultcartontype  = V_String49,
-   @cFlowThruCtnScn     = V_String50,  --(yeekung02)
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
@@ -354,6 +353,9 @@ Step_0. Func = 838
 ********************************************************************************/
 Step_0:
 BEGIN
+   -- Get default UOM
+   SELECT @cPUOM = DefaultUOM FROM rdt.rdtUser WITH (NOLOCK) WHERE UserName = @cUserName
+   
    -- Get storer configure
    SET @cAllowCubeZero = rdt.rdtGetConfig( @nFunc, 'AllowCubeZero', @cStorerKey)
    SET @cAllowWeightZero = rdt.rdtGetConfig( @nFunc, 'AllowWeightZero', @cStorerKey)
@@ -362,6 +364,7 @@ BEGIN
    SET @cDefaultWeight = rdt.RDTGetConfig( @nFunc, 'DefaultWeight', @cStorerKey)
    SET @cDisableOption = rdt.rdtGetConfig( @nFunc, 'DisableOption', @cStorerKey)
    SET @cDisableQTYField = rdt.rdtGetConfig( @nFunc, 'DisableQTYField', @cStorerKey)
+   SET @cFlowThruScreen = rdt.RDTGetConfig( @nFunc, 'FlowThruScreen', @cStorerKey)
    SET @cMultiSKUBarcode = rdt.RDTGetConfig( @nFunc, 'MultiSKUBarcode', @cStorerKey)
    SET @cSerialNoCapture = rdt.RDTGetConfig( @nFunc, 'SerialNoCapture', @cStorerKey)
 
@@ -377,6 +380,9 @@ BEGIN
    SET @cDecodeSP = rdt.rdtGetConfig( @nFunc, 'DecodeSP', @cStorerKey)
    IF @cDecodeSP = '0'
       SET @cDecodeSP = ''
+   SET @cDefaultcartontype=rdt.RDTGetConfig( @nFunc, 'DefaultCartonType', @cStorerKey)  --(cc01)
+   IF @cDefaultcartontype = '0'
+      SET @cDefaultcartontype = ''
    SET @cDefaultOption = rdt.rdtGetConfig( @nFunc, 'DefaultOption', @cStorerKey)
    IF @cDefaultOption = '0'
       SET @cDefaultOption = ''
@@ -386,6 +392,12 @@ BEGIN
    SET @cDefaultPrintPackListOption = rdt.rdtGetConfig( @nFunc, 'DefaultPrintPackListOption', @cStorerKey)
    IF @cDefaultPrintPackListOption = '0'
       SET @cDefaultPrintPackListOption = ''
+   SET @cDefaultQTY = rdt.RDTGetConfig( @nFunc, 'DefaultQTY', @cStorerKey)  --(cc01)
+   IF @cDefaultQTY = '0'
+      SET @cDefaultQTY = ''
+   SET @cDisableQTYFieldSP = rdt.RDTGetConfig( @nFunc, 'DisableQTYFieldSP', @cStorerKey)
+   IF @cDisableQTYFieldSP = '0'
+      SET @cDisableQTYFieldSP = ''
    SET @cExtendedValidateSP = rdt.rdtGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)
    IF @cExtendedValidateSP = '0'
       SET @cExtendedValidateSP = ''
@@ -403,24 +415,6 @@ BEGIN
       SET @cShipLabel = ''
    SET @cShowPickSlipNo = rdt.RDTGetConfig( @nFunc, 'ShowPickSlipNo', @cStorerKey)
 
-   -- Get default UOM
-   SELECT @cPUOM = DefaultUOM FROM rdt.rdtUser WITH (NOLOCK) WHERE UserName = @cUserName
-
-   SET @cDisableQTYFieldSP = rdt.RDTGetConfig( @nFunc, 'DisableQTYFieldSP', @cStorerKey)
-   IF @cDisableQTYFieldSP = '0'
-      SET @cDisableQTYFieldSP = ''
-
-   SET @cDefaultQTY = rdt.RDTGetConfig( @nFunc, 'DefaultQTY', @cStorerKey)  --(cc01)
-      IF @cDefaultQTY = '0'
-         SET @cDefaultQTY = ''
-
-   SET @cDefaultcartontype=rdt.RDTGetConfig( @nFunc, 'DefaultCartonType', @cStorerKey)  --(cc01)
-   IF @cDefaultcartontype = '0'
-      SET @cDefaultcartontype = ''
-
-      -- (yeekung02)
-   SET @cFlowThruScn = rdt.RDTGetConfig( @nFunc, 'FlowThruScn', @cStorerKey)
-   SET @cFlowThruCtnScn = rdt.RDTGetConfig( @nFunc, 'FlowThruCtnScn', @cStorerKey)
 
    -- EventLog
    EXEC RDT.rdt_STD_EventLog
@@ -773,12 +767,12 @@ BEGIN
       SET @cOutField08 = CAST( @nCartonQTY AS NVARCHAR(5))
       SET @cOutField09 = @cDefaultOption
 
-      IF @cFlowThruScn='1'
+      IF EXISTS( SELECT 1 FROM STRING_SPLIT( @cFlowThruScreen, ',') WHERE TRIM( value) = '2') -- Statistic screen 
       BEGIN
-         SET @cInField09='1'
+         SET @cInField09 = '1' -- Option
          SET @nScn = @nScn + 1
          SET @nStep = @nStep + 1
-         GOTO step_2
+         GOTO Step_2
       END
 
       -- Go to statistic screen
@@ -2523,16 +2517,15 @@ BEGIN
             IF @cFieldAttr02 = '' AND @cOutField02 = '0' EXEC rdt.rdtSetFocusField @nMobile, 2 ELSE
             IF @cFieldAttr03 = '' AND @cOutField03 = '0' EXEC rdt.rdtSetFocusField @nMobile, 3 ELSE
             IF @cFieldAttr04 = '' AND @cOutField04 = ''  EXEC rdt.rdtSetFocusField @nMobile, 4 ELSE
-            IF @cFieldAttr05 = '' AND @cOutField05 = '0'  EXEC rdt.rdtSetFocusField @nMobile, 5 ELSE
-            IF @cFieldAttr06 = '' AND @cOutField06 = '0'  EXEC rdt.rdtSetFocusField @nMobile, 6 ELSE
-            IF @cFieldAttr07 = '' AND @cOutField07 = '0'  EXEC rdt.rdtSetFocusField @nMobile, 7 --ELSE
-
+            IF @cFieldAttr05 = '' AND @cOutField05 = '0' EXEC rdt.rdtSetFocusField @nMobile, 5 ELSE
+            IF @cFieldAttr06 = '' AND @cOutField06 = '0' EXEC rdt.rdtSetFocusField @nMobile, 6 ELSE
+            IF @cFieldAttr07 = '' AND @cOutField07 = '0' EXEC rdt.rdtSetFocusField @nMobile, 7 
 
             -- Go to next screen
             SET @nScn = @nScn + 1
             SET @nStep = @nStep + 1
 
-            IF @cFlowThruCtnScn='1'
+            IF EXISTS( SELECT 1 FROM STRING_SPLIT( @cFlowThruScreen, ',') WHERE TRIM( value) = '4') -- PackInfo screen
             BEGIN
                SET @cInField01 = CASE WHEN ISNULL(@cCartonType ,'') ='' AND ISNULL(@cDefaultcartontype,'')<>''  THEN @cDefaultcartontype ELSE @cCartonType end
                SET @nInputKey='1'
@@ -2555,7 +2548,15 @@ BEGIN
             SET @nScn = @nScn + 2
             SET @nStep = @nStep + 2
 
-            GOTO Quit
+            -- Flow thru
+            IF EXISTS( SELECT 1 FROM STRING_SPLIT( @cFlowThruScreen, ',') WHERE TRIM( value) = '5') -- Print label screen
+            BEGIN
+               SET @cInField01 = @cDefaultPrintLabelOption --Option
+               SET @nInputKey = 1 -- ENTER
+               GOTO Step_5
+            END
+            ELSE
+               GOTO Quit
          END
       END
 
@@ -2605,6 +2606,7 @@ BEGIN
       SET @nStep = @nStep - 1
    END
    GOTO Quit
+   
    Step_3_Fail:
    BEGIN
       SET @cOutField03 = '' -- SKU
@@ -3056,7 +3058,7 @@ BEGIN
                ,@cPackDtlDropID
                ,@nCartonNo    OUTPUT
                ,@cLabelNo     OUTPUT
-              ,@cCustomNo    OUTPUT
+               ,@cCustomNo    OUTPUT
                ,@cCustomID    OUTPUT
                ,@nCartonSKU   OUTPUT
                ,@nCartonQTY   OUTPUT
@@ -3086,12 +3088,12 @@ BEGIN
             SET @cFieldAttr03 = '' -- Cube
             SET @cFieldAttr04 = '' -- RefNo
 
-            IF @cFlowThruScn='1'
+            IF EXISTS( SELECT 1 FROM STRING_SPLIT( @cFlowThruScreen, ',') WHERE TRIM( value) = '2') -- Statistic screen
             BEGIN
-               SET @nInputKey='0'
+               SET @nInputKey = '0' -- ESC
                SET @nScn = @nScn - 2
                SET @nStep = @nStep - 2
-               GOTO step_2
+               GOTO Step_2
             END
 
             -- Go to statistic screen
@@ -3236,6 +3238,17 @@ BEGIN
 
             IF @nStep = 3
                SET @cOutField15 = @cExtendedInfo
+         END
+      END
+
+      -- Flow thru
+      IF @nStep = 5 -- Print label screen
+      BEGIN
+         IF EXISTS( SELECT 1 FROM STRING_SPLIT( @cFlowThruScreen, ',') WHERE TRIM( value) = '5') -- Print label screen
+         BEGIN
+            SET @cInField01 = @cDefaultPrintLabelOption --Option
+            SET @nInputKey = 1 -- ENTER
+            GOTO Step_5
          END
       END
    END
@@ -4468,7 +4481,15 @@ BEGIN
          SET @nScn = @nScn - 3
          SET @nStep = @nStep - 3
 
-         GOTO Quit
+         -- Flow thru
+         IF EXISTS( SELECT 1 FROM STRING_SPLIT( @cFlowThruScreen, ',') WHERE TRIM( value) = '5') -- Print label screen
+         BEGIN
+            SET @cInField01 = @cDefaultPrintLabelOption --Option
+            SET @nInputKey = 1 -- ENTER
+            GOTO Step_5
+         END
+         ELSE
+            GOTO Quit
       END
 
       -- Get total UCC
@@ -5190,7 +5211,7 @@ BEGIN
       V_String11     = @cMUOM_Desc,
       V_String12     = @cPUOM_Desc,
       V_String13     = @cDisableQTYFieldSP,
-      V_String14     = @cFlowThruScn,  --(yeekung02)
+      V_String14     = @cFlowThruScreen, 
 
       V_CartonNo     = @nCartonNo,
       V_Integer1     = @nCartonSKU,
@@ -5240,7 +5261,6 @@ BEGIN
       V_String47     = @cMultiSKUBarcode,
       V_String48     = @cDefaultQTY, --(cc01)
       V_String49     = @cDefaultcartontype,
-      V_String50     = @cFlowThruCtnScn,  --(yeekung02)
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
