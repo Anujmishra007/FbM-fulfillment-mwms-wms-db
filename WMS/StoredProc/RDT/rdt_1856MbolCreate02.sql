@@ -99,7 +99,7 @@ BEGIN
          JOIN dbo.Orders O WITH (NOLOCK) ON (LPD.OrderKey = O.OrderKey)
       WHERE LPD.LoadKey = @cLoadKey
          AND (O.SOStatus NOT IN ('0','5') 
-          OR  O.ECOM_PRESALE_FLAG NOT IN ('','PR')))
+          OR  O.ECOM_PRESALE_FLAG NOT IN ('PR')))
    BEGIN
       SET @nErrNo = 189005
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --BadOrderInLoad
@@ -161,7 +161,7 @@ BEGIN
       WHERE LoadKey = @cLoadKey
          AND Status = '5'
          AND SOStatus IN ('0','5') 
-         AND ECOM_PRESALE_FLAG IN ('','PR')
+         AND ECOM_PRESALE_FLAG IN ('PR')
    OPEN @curOrder
    FETCH NEXT FROM @curOrder INTO @cOrderKey, @cExternOrderKey
    WHILE @@FETCH_STATUS = 0
