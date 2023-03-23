@@ -35,6 +35,8 @@ GO
 /* 2022-01-04  Wan04    1.7   Devops Combine Script                     */
 /* 2022-08-19  Wan05    1.8   LFWM-3672 - [CN] LOREAL_New Tab for order */
 /*                            analysis                                  */
+/* 2022-03-13  Wan06    1.9   LFWM-4007 - CN_SCE_Wave_Release add order */
+/*                            parameter                                 */
 /************************************************************************/
 CREATE OR ALTER VIEW V_BuildParm_Columns AS
 SELECT BuildParmType = 'BUILDLOADPARM'
@@ -158,16 +160,16 @@ SELECT BuildParmType = 'BUILDWAVEPARM'
       ,CondType  = 'CONDITION'
       ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
 FROM INFORMATION_SCHEMA.COLUMNS Col
-WHERE Col.TABLE_NAME IN ('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC')
+WHERE Col.TABLE_NAME IN ('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC', 'ORDERDETAIL')       --(Wan06)
 AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'ArchiveCop', 'TrafficCop')
 AND Col.TABLE_NAME + '.' + Col.COLUMN_NAME NOT IN('ORDERINFO.Adddate','ORDERINFO.Orderkey','SKU.AddDate','PICKDETAIL.AddDate','LOC.AddDate')
-UNION ALL
-SELECT BuildParmType = 'BUILDWAVEPARM'
-      ,CondType = 'CONDITION'
-      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
-FROM INFORMATION_SCHEMA.COLUMNS Col
-WHERE Col.TABLE_NAME IN ('ORDERDETAIL')
-AND Col.COLUMN_NAME IN ('StorerKey', 'SKU')
+--UNION ALL                                                                                  --(Wan06)
+--SELECT BuildParmType = 'BUILDWAVEPARM'  
+--      ,CondType = 'CONDITION'
+--      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+--FROM INFORMATION_SCHEMA.COLUMNS Col
+--WHERE Col.TABLE_NAME IN ('ORDERDETAIL')
+--AND Col.COLUMN_NAME IN ('StorerKey', 'SKU')
 UNION ALL
 SELECT BuildParmType = 'BUILDWAVEPARM'
       ,CondType  = 'SORT'
