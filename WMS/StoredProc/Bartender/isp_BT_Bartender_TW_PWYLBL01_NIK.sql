@@ -11,7 +11,8 @@ GO
 /* Modifications log:                                                         */                   
 /*                                                                            */                   
 /* Date       Rev  Author     Purposes                                        */  
-/*29-NOV-2022 1.0  WZPang     Created (WMS-21100)                             */  
+/*29-NOV-2022 1.0  WZPang     Created (WMS-21100)                             */ 
+/*24-MAR-2023 1.1  WZPang     Modify columns                                  */
 /******************************************************************************/                  
                     
 CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_TW_PWYLBL01_NIK]                        
@@ -130,7 +131,7 @@ BEGIN
                             
     
        SET @c_SQLJOIN = +' SELECT DISTINCT 	 CONVERT(VARCHAR, GETDATE(), 111), INV.ToLoc, INV.ToID,SUBSTRING(INV.Sku, 1, 6) + ''-'' + Substring(INV.Sku, 7, 3),Substring(INV.Sku, 10, 5),'+ CHAR(13)	--5                  
-                        +' INV.Qty,'''','''','''','''','+ CHAR(13) --10
+                        +' SUM(INV.Qty),'''','''','''','''','+ CHAR(13) --10     --(WZ01)
                         +' '''','''','''','''','''', '+ CHAR(13) --15     
                         +' '''','''','''','''','''','+ CHAR(13)  --20
                         +' '''','''','''','''','''',' + CHAR(13) --25
@@ -139,12 +140,13 @@ BEGIN
                         +' '''','''','''','''','''','+ CHAR(13) --40 
                         +' '''','''','''','''','''', ' + CHAR(13) --45 
                         +' '''','''','''','''','''',' + CHAR(13) --50
-						+' '''','''','''','''','''',' + CHAR(13) --55
+						      +' '''','''','''','''','''',' + CHAR(13) --55
                         +' '''', '''','''','''','''' ' + CHAR(13) --60               
                         +' FROM InventoryQCDetail INV WITH (NOLOCK)      '  + CHAR(13)
-						+' JOIN InventoryQC WITH (NOLOCK) ON INV.QC_Key = INVENTORYQC.QC_Key ' + CHAR(13)
+						      +' JOIN InventoryQC WITH (NOLOCK) ON INV.QC_Key = INVENTORYQC.QC_Key ' + CHAR(13)
                         +' WHERE INV.QC_Key = @c_Sparm01 '+ CHAR(13)  
-						+' AND INVENTORYQC.FinalizeFlag = ''Y'' '
+						      +' AND INVENTORYQC.FinalizeFlag = ''Y'' '
+                        +' GROUP BY INV.SKU, INV.ToLoc, INV.ToID '
 
 
 
