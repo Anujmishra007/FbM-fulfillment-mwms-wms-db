@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_WaveSplitOrder]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_WaveSplitOrder] 
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,7 +13,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.0                                                    */                                                                                  
+/* PVCS Version: 1.2                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -28,8 +23,10 @@ GO
 /* Date        Author   Ver.  Purposes                                  */  
 /* 2021-02-10  mingle01 1.1   Add Big Outer Begin try/Catch              */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2023-03-17  Wan01    1.2   LFWM-4066-[CN] CartersSplit the not fullly*/
+/*                            allocated Orders issue                    */
 /************************************************************************/                                                                                  
-CREATE PROC [WM].[lsp_WaveSplitOrder]                                                                                                                     
+CREATE OR ALTER PROC [WM].[lsp_WaveSplitOrder]                                                                                                                     
       @c_WaveKey              NVARCHAR(10)
    ,  @b_Success              INT = 1           OUTPUT  
    ,  @n_err                  INT = 0           OUTPUT                                                                                                             
@@ -48,7 +45,7 @@ BEGIN
 
          ,  @n_Cnt               INT = 0
 
-         ,  @c_SplitType         NVARCHAR(10)   = 'WAVE' 
+         --,  @c_SplitType         NVARCHAR(10)   = 'WAVE'        --(Wan01)
 
          ,  @c_Facility          NVARCHAR(5)    = ''
          ,  @c_Storerkey         NVARCHAR(15)   = ''
@@ -107,8 +104,8 @@ BEGIN
          ,  Storerkey   NVARCHAR(15)   NOT NULL DEFAULT ('')
          )
 
-      IF @c_SplitType = 'WAVE'
-      BEGIN
+      --IF @c_SplitType = 'WAVE'             --(Wan01)
+      --BEGIN
          INSERT INTO #tORDERS ( Wavekey, Loadkey, MBOLKey, Orderkey, OrderStatus, Facility, Storerkey )
          SELECT WD.Wavekey
                ,Loadkey = ISNULL(OH.Loadkey,'')
@@ -120,7 +117,7 @@ BEGIN
          FROM WAVEDETAIL WD WITH (NOLOCK)
          JOIN ORDERS     OH WITH (NOLOCK) ON WD.Orderkey = OH.Orderkey
          WHERE WD.Wavekey = @c_Wavekey
-      END
+      --END
 
       SET @c_Status = ''
       SELECT TOP 1 @c_Status = WH.[Status] 
@@ -151,17 +148,17 @@ BEGIN
       END
 
       SET @c_Status = ''
-      SELECT TOP 1 @c_Status = LP.[Status] 
+      SELECT TOP 1 @c_Status = ISNULL(LP.[Status], '0')                          --(Wan01) 
       FROM #tORDERS T
-      JOIN  LOADPLAN LP WITH (NOLOCK) ON T.Loadkey = LP.Loadkey
-      WHERE T.Loadkey <> ''
-      ORDER BY LP.[Status] DESC
+      LEFT OUTER JOIN  LOADPLAN LP WITH (NOLOCK) ON T.Loadkey = LP.Loadkey       --(Wan01)
+      --WHERE T.Loadkey <> ''                                                    --(Wan01)
+      ORDER BY LP.[Status] --DESC                                                --(Wna01)   Do not Split if All shipped
 
       IF @c_Status = '9'
       BEGIN
          SET @n_Continue = 3
          SET @n_Err = 557352
-         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Found closed Loadplan. Splitting of Orders are not allowed. (lsp_WaveSplitOrder)' 
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': All Loadplan are shipped. Splitting of Orders are not allowed. (lsp_WaveSplitOrder)' 
 
          EXEC [WM].[lsp_WriteError_List] 
                @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
@@ -180,17 +177,17 @@ BEGIN
 
       SET @c_Status = ''
       SET @c_FinalizeFlag = 'N'
-      SELECT @c_Status = ISNULL(MAX(MH.[Status]),'0')
-            ,@c_FinalizeFlag = ISNULL(MAX(MH.FinalizeFlag),'N') 
+      SELECT @c_Status = MIN(ISNULL(MH.[Status],'0'))                            --(Wan01)
+            ,@c_FinalizeFlag = ISNULL(MAX(MH.FinalizeFlag),'N')         
       FROM #tORDERS T
-      JOIN  MBOL MH WITH (NOLOCK) ON T.MBOLkey = MH.MBOLKey
-      WHERE T.MBOLkey <> ''
+      LEFT OUTER JOIN  MBOL MH WITH (NOLOCK) ON T.MBOLkey = MH.MBOLKey           --(Wan01)
+      --WHERE T.MBOLkey <> ''                                                    --(Wan01)
 
-      IF @c_Status = '9' OR @c_FinalizeFlag = 'Y'
+      IF @c_Status = '9' --OR @c_FinalizeFlag = 'Y'                              --(Wan01) Do not Split if All shipped
       BEGIN
          SET @n_Continue = 3
          SET @n_Err = 557353
-         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Found Finalized OR closed Ship Ref. Unit. Splitting of Orders are not allowed. (lsp_WaveSplitOrder)' 
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': All Ship Ref. Unit are shipped. Splitting of Orders are not allowed. (lsp_WaveSplitOrder)' 
 
          EXEC [WM].[lsp_WriteError_List] 
                @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
@@ -359,12 +356,16 @@ BEGIN
    END CATCH
    --(mingle01) - END
 EXIT_SP:
-
+   IF (XACT_STATE()) = -1                                         --(Wan01)
+   BEGIN
+      SET @n_Continue=3
+      ROLLBACK TRAN
+   END  
  
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0
-      IF  @@TRANCOUNT = 1 AND @@TRANCOUNT > @n_StartTCnt
+      IF  @n_StartTCnt = 0 AND @@TRANCOUNT > @n_StartTCnt         --(Wan01)
       BEGIN
          ROLLBACK TRAN
       END
