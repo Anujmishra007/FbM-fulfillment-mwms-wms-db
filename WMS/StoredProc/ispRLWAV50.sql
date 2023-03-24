@@ -24,6 +24,7 @@ GO
 /* 12-Apr-2022  WLChooi  1.0  DevOps Combine Script                     */
 /* 23-Feb-2023  WLChooi  1.1  WMS-19079 - Fix FP/PP Calculation (WL01)  */
 /* 27-Feb-2023  WLChooi  1.2  WMS-19079 - Fix ToLoc is blank (WL02)     */
+/* 24-Mar-2023  WLChooi  1.3  Performance Tune (WL03)                   */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV50]
@@ -286,6 +287,8 @@ BEGIN
                            ELSE 'Onsite' END
       FROM CODELKUP CL (NOLOCK)
       WHERE CL.LISTNAME = 'NKEPKTSK' AND CL.Storerkey = @c_Storerkey AND CL.Short = 'Y'
+
+      DECLARE @T_ID TABLE (Storerkey NVARCHAR(15), ID NVARCHAR(50), Pickmethod NVARCHAR(10) )   --WL03
    END
 
    --WHILE @@TRANCOUNT > 0 
@@ -655,11 +658,22 @@ BEGIN
          BEGIN
             SET @c_Pickmethod = 'PP'
          END
-         ELSE IF EXISTS (  SELECT 1
-                           FROM UCC U (NOLOCK)
-                           WHERE U.Storerkey = @c_Storerkey AND U.Id = @c_ID
-                           HAVING COUNT(DISTINCT U.SKU) = 1 AND COUNT(DISTINCT U.qty) = 1) --1 ID 1 SKU, 1 ID 1 Qty
+         --WL03 S
+         ELSE IF EXISTS ( SELECT 1
+                          FROM @T_ID TI
+                          WHERE TI.Storerkey = @c_Storerkey AND TI.Id = @c_ID)
          BEGIN
+            SELECT @c_Pickmethod = TI.Pickmethod 
+            FROM @T_ID TI
+            WHERE TI.Storerkey = @c_Storerkey AND TI.Id = @c_ID
+         END
+         ELSE IF EXISTS (  SELECT 1 
+                           FROM LotxLocxID LLI (NOLOCK)
+                           JOIN UCC U (NOLOCK) ON U.Lot = LLI.Lot AND U.Loc = LLI.Loc  AND U.ID = LLI.ID 
+                           WHERE LLI.Storerkey = @c_Storerkey AND LLI.Id = @c_ID
+                           HAVING COUNT(DISTINCT U.SKU) = 1 AND COUNT(DISTINCT U.qty) = 1 ) --1 ID 1 SKU, 1 ID 1 Qty
+         BEGIN
+         --WL03 E
             --SELECT @n_AvailableQty = SUM(PDW.Qty)
             --FROM PICKDETAIL PDW (NOLOCK)
             --WHERE PDW.Storerkey = @c_Storerkey
@@ -708,6 +722,14 @@ BEGIN
             --BEGIN
             --   SET @c_Pickmethod = 'PP'
             --END
+
+            --WL03 S
+            IF NOT EXISTS (SELECT 1 FROM @T_ID TI WHERE Storerkey = @c_Storerkey AND ID = @c_ID)
+            BEGIN
+               INSERT INTO @T_ID (Storerkey, ID, Pickmethod)
+               SELECT @c_Storerkey, @c_ID, @c_Pickmethod
+            END
+            --WL03 E
          END
 
          --WL01 S
@@ -1017,11 +1039,27 @@ BEGIN
          SET @n_AvailableQty = 0
          SET @n_Casecnt = 0
 
-         IF EXISTS (  SELECT 1
-                      FROM UCC U (NOLOCK)
-                      WHERE U.Storerkey = @c_Storerkey AND U.Id = @c_ID
-                      HAVING COUNT(DISTINCT U.SKU) = 1 AND COUNT(DISTINCT U.qty) = 1) --1 ID 1 SKU, 1 ID 1 Qty
+         --WL03 S
+         --Full Case Area, 1 Loc 1 UCC, ID is blank
+         IF @c_ID = ''
          BEGIN
+            SET @c_Pickmethod = 'PP'
+         END
+         ELSE IF EXISTS ( SELECT 1
+                          FROM @T_ID TI
+                          WHERE TI.Storerkey = @c_Storerkey AND TI.Id = @c_ID)
+         BEGIN
+            SELECT @c_Pickmethod = TI.Pickmethod 
+            FROM @T_ID TI
+            WHERE TI.Storerkey = @c_Storerkey AND TI.Id = @c_ID
+         END
+         ELSE IF EXISTS (  SELECT 1 
+                           FROM LotxLocxID LLI (NOLOCK)
+                           JOIN UCC U (NOLOCK) ON U.Lot = LLI.Lot AND U.Loc = LLI.Loc  AND U.ID = LLI.ID 
+                           WHERE LLI.Storerkey = @c_Storerkey AND LLI.Id = @c_ID
+                           HAVING COUNT(DISTINCT U.SKU) = 1 AND COUNT(DISTINCT U.qty) = 1 ) --1 ID 1 SKU, 1 ID 1 Qty
+         BEGIN
+         --WL03 E
             --SELECT @n_AvailableQty = SUM(PDW.Qty)
             --FROM PICKDETAIL PDW (NOLOCK)
             --WHERE PDW.Storerkey = @c_Storerkey
@@ -1070,6 +1108,14 @@ BEGIN
             --BEGIN
             --   SET @c_Pickmethod = 'PP'
             --END
+
+            --WL03 S
+            IF NOT EXISTS (SELECT 1 FROM @T_ID TI WHERE Storerkey = @c_Storerkey AND ID = @c_ID)
+            BEGIN
+               INSERT INTO @T_ID (Storerkey, ID, Pickmethod)
+               SELECT @c_Storerkey, @c_ID, @c_Pickmethod
+            END
+            --WL03 E
          END
 
          IF @n_Continue IN ( 1, 2 )
