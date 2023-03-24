@@ -25,10 +25,12 @@ GO
 /*                            feature in Adjustment Screen- SCE          */
 /* 2022-02-22  Wan02    1.3   Infinity Loop in Commiting Transaction     */
 /*                            DevOps Combine Script                      */
+/* 2022-12-22  Wan03    1.4   LFWM-3699 - CLONE - [CN]NIKE_TRADE RETURN_ */
+/*                            Suggest PA locP (Pre-finalize)by batch ASN */
 /*************************************************************************/ 
 CREATE OR ALTER PROCEDURE [WM].[lsp_RCMConfigSP_ASN_Wrapper]  
    @c_Storerkey      NVARCHAR(15)
-,  @c_ReceiptKey     NVARCHAR(10) 
+,  @c_ReceiptKey     NVARCHAR(MAX)              --(Wan03) Change to MAX as pass in concatenate receiptkey's, seperate by ,
 ,  @b_Success        INT          = 1   OUTPUT   
 ,  @n_Err            INT          = 0   OUTPUT
 ,  @c_Errmsg         NVARCHAR(255)= ''  OUTPUT
@@ -46,6 +48,7 @@ BEGIN
 
          , @n_Count           INT = 0 
          , @c_RCMConfigSP     NVARCHAR(60) = ''
+         , @c_RCMConfigSP_WM  NVARCHAR(60) = ''         
 
    SET @b_Success = 1
    SET @c_ErrMsg = ''
@@ -78,16 +81,25 @@ BEGIN
       BEGIN TRAN
 
       SELECT @c_RCMConfigSP = RTRIM(CL.Long)
+           , @c_RCMConfigSP_WM = RTRIM(CL.UDF05)                     --(Wan03)        
       FROM CODELKUP CL (NOLOCK)
       WHERE CL.ListName = 'RCMConfig'
       AND   CL.Code = @c_Code
       AND   CL.UDF01= 'receipt'
       AND   CL.Short= 'storedproc'
       AND   CL.Storerkey = @c_Storerkey
-
-      IF @c_RCMConfigSP <> ''
+      
+      IF @c_RCMConfigSP_WM <> ''                                     --(Wan03) - START
       BEGIN
-         IF NOT EXISTS (SELECT 1 FROM sys.objects (NOLOCK) WHERE Object_ID(@c_RCMConfigSP) = object_id AND [Type] = 'P')
+         IF EXISTS (SELECT 1 FROM dbo.sysobjects (NOLOCK) WHERE ID = OBJECT_ID(@c_RCMConfigSP_WM) AND [Type] = 'P')
+         BEGIN
+            SET @c_RCMConfigSP = @c_RCMConfigSP_WM
+         END
+      END                                                            --(Wan03) - END
+      
+      IF @c_RCMConfigSP <> '' AND @c_RCMConfigSP <> @c_RCMConfigSP_WM   --(Wan03)
+      BEGIN
+         IF NOT EXISTS (SELECT 1 FROM dbo.sysobjects (NOLOCK) WHERE ID = OBJECT_ID(@c_RCMConfigSP) AND [Type] = 'P')
          BEGIN
             GOTO EXIT_SP
          END
@@ -109,7 +121,7 @@ BEGIN
          SET @n_Continue = 3
          SET @n_err = 557901
          SET @c_ErrMsg = ERROR_MESSAGE()
-         SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing ASN''s RCMConfig Custom SP' + @c_RCMConfigSP + '. (lsp_RCMConfigSP_ASN_Wrapper)'
+         SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing ASN''s RCMConfig Custom SP:' + @c_RCMConfigSP + '. (lsp_RCMConfigSP_ASN_Wrapper)'
                         + '( ' + @c_errmsg + ' ) |' + @c_RCMConfigSP
       END CATCH    
       
