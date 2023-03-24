@@ -8,40 +8,41 @@ SET QUOTED_IDENTIFIER ON
 GO
 SET CONCAT_NULL_YIELDS_NULL ON
 GO
-/*************************************************************************/    
-/* Stored Procedure: isp_Wrapup_Validation                               */    
-/* Creation Date: 04-dec-2014                                            */    
-/* Copyright: LFL                                                        */    
-/* Written by:                                                           */    
-/*                                                                       */    
-/* Purpose: SOS#326186 - PH - Location Host Warehouse Code Mandatory     */  
-/*                                                                       */    
-/* Called By: n_cst_busobj.ue_wrapup                                     */    
-/*                                                                       */    
-/* PVCS Version: 1.2                                                     */    
-/*                                                                       */    
-/* Version: 7.0                                                          */    
-/*                                                                       */    
-/* Data Modifications:                                                   */    
-/*                                                                       */    
-/* Updates:                                                              */    
-/* Date         Author   Ver  Purposes                                   */   
-/* 09-JUL-2015  YTWan    1.1  SOS#346642 - Project Merlion - Kitting     */  
-/*                            Lottable06 Validation (Wan01)              */  
-/* 23-JUN-2017  Wan02    1.2  WMS-2282-Validation on Work Order          */  
-/* 08-JAN-2018  Wan03    1.3  Merge CN Live DB Version                   */  
-/* 02-OCT-2019  NJOW01   1.4  Remove TempDB.INFORMATION_SCHEMA.Columns   */  
-/* 20-DEC-2018  Wan04    1.4  WM-Move FrontEnd Record Not Found validate */  
-/*                            to SP For'w_userdefine_extended_validation'*/  
-/* 21-AUG-2020  NJOW02   1.5  Fix invalid column error                   */ 
-/* 12-NOV-2020  NJOW03   1.6  INC1339334 - Fix bypassed validation while */ 
-/*                            saving WaveDetail                          */
-/* 11-Jun-2021  NJOW04   1.7  WMS-17231 include inventoryhold validation */
-/* 11-Jun-2021  NJOW04   1.7  DEVOPS Combine script                      */
-/* 15-AUG-2022  Wan05    1.8  LFWM-3669 - VN 每 ADIDAS- WMS-SCE每Adding    */
-/*                            Validation for Location Type of Module     */
-/*                            Assign Pick Location                       */
-/*************************************************************************/  
+/**************************************************************************/    
+/* Stored Procedure: isp_Wrapup_Validation                                */    
+/* Creation Date: 04-dec-2014                                             */    
+/* Copyright: LFL                                                         */    
+/* Written by:                                                            */    
+/*                                                                        */    
+/* Purpose: SOS#326186 - PH - Location Host Warehouse Code Mandatory      */  
+/*                                                                        */    
+/* Called By: n_cst_busobj.ue_wrapup                                      */    
+/*                                                                        */    
+/* PVCS Version: 1.2                                                      */    
+/*                                                                        */    
+/* Version: 7.0                                                           */    
+/*                                                                        */    
+/* Data Modifications:                                                    */    
+/*                                                                        */    
+/* Updates:                                                               */    
+/* Date         Author   Ver  Purposes                                    */   
+/* 09-JUL-2015  YTWan    1.1  SOS#346642 - Project Merlion - Kitting      */  
+/*                            Lottable06 Validation (Wan01)               */  
+/* 23-JUN-2017  Wan02    1.2  WMS-2282-Validation on Work Order           */  
+/* 08-JAN-2018  Wan03    1.3  Merge CN Live DB Version                    */  
+/* 02-OCT-2019  NJOW01   1.4  Remove TempDB.INFORMATION_SCHEMA.Columns    */  
+/* 20-DEC-2018  Wan04    1.4  WM-Move FrontEnd Record Not Found validate  */  
+/*                            to SP For'w_userdefine_extended_validation' */  
+/* 21-AUG-2020  NJOW02   1.5  Fix invalid column error                    */ 
+/* 12-NOV-2020  NJOW03   1.6  INC1339334 - Fix bypassed validation while  */ 
+/*                            saving WaveDetail                           */
+/* 11-Jun-2021  NJOW04   1.7  WMS-17231 include inventoryhold validation  */
+/* 11-Jun-2021  NJOW04   1.7  DEVOPS Combine script                       */
+/* 15-AUG-2022  Wan05    1.8  LFWM-3669 - VN 每 ADIDAS- WMS-SCE每Adding   */
+/*                            Validation for Location Type of Module      */
+/*                            Assign Pick Location                        */
+/* 09-Mar-2023  NJOW05   1.9  LFWM-3608 Performance tuning for XML reading*/ 
+/**************************************************************************/  
 CREATE OR ALTER PROCEDURE [dbo].[isp_Wrapup_Validation]    
       @c_Window            NVARCHAR(60) = ''  
    ,  @c_BusObj            NVARCHAR(30) = ''  
@@ -96,8 +97,12 @@ BEGIN
          , @c_Lot             NVARCHAR(10)
          , @c_Loc             NVARCHAR(10)
          , @c_ID              NVARCHAR(18)
-         , @c_Sku             NVARCHAR(15) 
-  
+         , @c_Sku             NVARCHAR(20) 
+         , @n_XMLHandle          INT                  --NJOW05
+         , @c_SQLSchema_OXML     NVARCHAR(MAX) = N''  --NJOW05
+         , @c_TableColumns_OXML  NVARCHAR(MAX) = N''  --NJOW05              
+         , @c_SQL2               NVARCHAR(MAX) = N''  --NJOW05
+         , @c_XMLToTemp          NVARCHAR(1) = 'N'  --NJOW01
   
    SET @n_err        = 0  
    SET @b_Success   = 1  
@@ -113,19 +118,32 @@ BEGIN
    SET @c_ListName   = ''  
   
   
-   -- Build temp table structure & Insert Data to Temp table (START)  
-   IF OBJECT_ID('tempdb..#VALDN') IS NOT NULL  
+   -- Build temp table structure & Insert Data to Temp table (START)     
+   IF OBJECT_ID('tempdb..#VALDN') IS NOT NULL         
+      AND @c_Window = 'w_userdefine_extended_validation'  --NJOW05
    BEGIN  
       DROP TABLE #VALDN  
    END  
-  
-   CREATE TABLE #VALDN( Rowid  INT NOT NULL IDENTITY(1,1) PRIMARY KEY)  --(Wan03)  
-     
-   CREATE TABLE #SCHEMA (Column_Name NVARCHAR(80), Data_Type NVARCHAR(80)) --NJOW01  
-  
-   IF @c_Window = 'w_userdefine_extended_validation'  
+
+   --NJOW05 S
+   IF OBJECT_ID('tempdb..#SCHEMA') IS NOT NULL         
+      AND @c_Window = 'w_userdefine_extended_validation'  
    BEGIN  
-   
+      DROP TABLE #SCHEMA  
+   END  
+   --NJOW05 E
+       
+   IF OBJECT_ID('tempdb..#VALDN') IS NULL --NJOW05 
+   BEGIN
+      CREATE TABLE #VALDN( Rowid  INT NOT NULL IDENTITY(1,1) PRIMARY KEY)  --(Wan03)  
+      SET @c_XMLToTemp = 'Y'
+   END
+       
+   IF OBJECT_ID('tempdb..#SCHEMA') IS NULL --NJOW05      
+      CREATE TABLE #SCHEMA (Column_Name NVARCHAR(80), Data_Type NVARCHAR(80)) --NJOW01  
+       
+   IF @c_Window = 'w_userdefine_extended_validation'  
+   BEGIN           
       SET @c_ListName = @c_XMLSchemaString   
       SET @c_WhereCondition = @c_XMLDataString  
       IF @c_ListName = ''   
@@ -196,11 +214,76 @@ BEGIN
   
       END  
    END  
-   ELSE  
-   BEGIN  
+   ELSE IF @c_XMLToTemp = 'Y'  --NJOW05
+   BEGIN           	
       SET @x_XMLSchema = CONVERT(XML, @c_XMLSchemaString)  
       SET @x_XMLData = CONVERT(XML, @c_XMLDataString)  
+
+      --NJOW05 S      
+      EXEC sp_xml_preparedocument @n_XMLHandle OUTPUT, @c_XMLSchemaString      
+      DECLARE CUR_SCHEMA CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+         SELECT ColName, DataType 
+         FROM OPENXML (@n_XMLHandle, '/Table/Column',1)  
+         WITH (ColName  NVARCHAR(128),  
+               DataType NVARCHAR(128))
+        
+      OPEN CUR_SCHEMA  
   
+      FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_datatype  
+  
+      WHILE @@FETCH_STATUS <> -1  
+      BEGIN  
+         SET @c_TableName = ''  
+         IF CHARINDEX('.', @c_ColumnName) > 0   
+         BEGIN  
+            SET @c_TableName  = LEFT(@c_ColumnName, CHARINDEX('.', @c_ColumnName))  
+            SET @c_ColumnName = RIGHT(@c_ColumnName, LEN(@c_ColumnName) -LEN(@c_TableName))  
+         END  
+  
+         SET @c_SQLSchema  = @c_SQLSchema + @c_ColumnName + ' ' + @c_datatype + ' NULL, '  
+         SET @c_SQLSchema_OXML  = @c_SQLSchema_OXML + '['+@c_TableName+@c_ColumnName + '] ' + @c_DataType + ', '
+         SET @c_TableColumns = @c_TableColumns + @c_ColumnName + ', '  
+         SET @c_TableColumns_OXML = @c_TableColumns_OXML + '[' + @c_TableName + @c_ColumnName + '], '
+                    
+         --NJOW01  
+         IF CHARINDEX('(', @c_datatype) > 0  
+         BEGIN  
+              SET @c_datatype = LTRIM(RTRIM(LEFT(@c_datatype, CHARINDEX('(', @c_datatype) - 1)))  
+         END  
+           
+         INSERT INTO #SCHEMA (Column_Name, Data_Type)  
+         VALUES (@c_ColumnName, @c_datatype)  
+           
+         FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_datatype  
+      END  
+      CLOSE CUR_SCHEMA  
+      DEALLOCATE CUR_SCHEMA      
+      EXEC sp_xml_removedocument @n_XMLHandle            
+  
+      IF @c_SQLSchema <> ''  
+      BEGIN  
+         SET @c_SQL = N'ALTER TABLE #VALDN  ADD  ' + SUBSTRING(@c_SQLSchema, 1, LEN(@c_SQLSchema) - 1) + ' '  
+  
+         EXEC (@c_SQL)  
+  
+         EXEC sp_xml_preparedocument @n_XMLHandle OUTPUT, @c_XMLDataString
+
+         
+         SET @c_SQL = N' INSERT INTO #VALDN' 
+                     + ' ( ' + SUBSTRING(@c_TableColumns, 1, LEN(@c_TableColumns) - 1) + ' )'
+                     + ' SELECT ' + SUBSTRING(@c_TableColumns_OXML, 1, LEN(@c_TableColumns_OXML) - 1)
+                     + ' FROM  OPENXML (@n_XMLHandle, ''Row'',1) '
+                     + ' WITH (' + SUBSTRING(@c_SQLSchema_OXML, 1, LEN(@c_SQLSchema_OXML) - 1) + ')'
+                        
+         EXEC sp_executeSQl @c_SQL
+                           , N'@n_XMLHandle INT'
+                           , @n_XMLHandle              
+                                                                                               
+         EXEC sp_xml_removedocument @n_XMLHandle            
+      END
+      --NJOW05 E
+  
+      /*
       DECLARE CUR_SCHEMA CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
       SELECT x.value('@ColName', 'NVARCHAR(128)') AS columnname  
             ,x.value('@DataType','NVARCHAR(128)') AS datatype  
@@ -251,7 +334,8 @@ BEGIN
          EXEC sp_executeSQl @c_SQL  
                          , N'@x_XMLData xml'  
                          , @x_XMLData  
-      END  
+      END
+      */  
    END   
   
    -- Build temp table structure & Insert Data to Temp table (END)  
@@ -339,7 +423,6 @@ BEGIN
       WHERE ValidateTable = @c_UpdateTable  
       AND ValidateTable <> ValidationType  
   
-  
       IF @c_CfgValSourceCol = ''  
       BEGIN   
          GOTO QUIT_SP  
@@ -379,12 +462,23 @@ BEGIN
       BEGIN
       	 SET @c_Storerkey = ''
       	 SET @c_Sku = ''
-      	 SELECT TOP 1 @c_Storerkey = Storerkey,
-      	              @c_Sku = Sku,
-      	              @c_Lot = Lot,
-      	              @c_Loc = Loc,
-      	              @c_ID = ID
-      	 FROM #VALDN
+      	 
+      	 --NJOW05 change to Dynamic SQL
+      	 SET @c_SQL = N'
+      	     SELECT TOP 1 @c_Storerkey = Storerkey,
+      	                  @c_Sku = Sku,
+      	                  @c_Lot = Lot,
+      	                  @c_Loc = Loc,
+      	                  @c_ID = ID
+      	     FROM #VALDN'
+
+         EXEC sp_executeSQl @c_SQL  
+                         , N'@c_Storerkey NVARCHAR(15) OUTPUT, @c_Sku NVARCHAR(20) OUTPUT, @c_Lot NVARCHAR(10) OUTPUT, @c_Loc NVARCHAR(10) OUTPUT, @c_ID NVARCHAR(18) OUTPUT'  
+                         , @c_Storerkey OUTPUT
+                         , @c_Sku OUTPUT
+                         , @c_Lot OUTPUT
+                         , @c_Loc OUTPUT
+                         , @c_ID  OUTPUT	 
       	 
       	 IF ISNULL(@c_Storerkey,'') = ''
       	 BEGIN
@@ -418,9 +512,16 @@ BEGIN
       	    END        
       	    ELSE
       	    BEGIN
-      	       UPDATE #VALDN
-      	       SET Storerkey = @c_Storerkey,
-      	           Sku = CASE WHEN ISNULL(@c_Sku,'') <> '' THEN @c_Sku ELSE Sku END      	           
+      	    	 --NJOW05 change to Dynamic SQL
+               SET @c_SQL = N'      	       	    	
+      	           UPDATE #VALDN
+      	           SET Storerkey = @c_Storerkey,
+      	           Sku = CASE WHEN ISNULL(@c_Sku,'') <> '' THEN @c_Sku ELSE Sku END'
+
+               EXEC sp_executeSQl @c_SQL  
+                         , N'@c_Storerkey NVARCHAR(15), @c_Sku NVARCHAR(20)'  
+                         , @c_Storerkey 
+                         , @c_Sku       	           
       	    END
       	 END
       END 
@@ -480,7 +581,7 @@ BEGIN
                     WHEN VALCFG.Storerkey = '' AND VALCFG.Code2 = '' THEN 4                           -- System setup  
                     END  
    END   
-  
+   
    VALIDATE_REC:  
   
    DECLARE CUR_CHK_REQUIRED CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
