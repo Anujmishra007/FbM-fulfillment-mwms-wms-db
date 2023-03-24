@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_ASN_PopulatePOs_Wrapper]')
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-DROP PROCEDURE [WM].[lsp_ASN_PopulatePOs_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -42,10 +37,12 @@ GO
 /*                            sub-stored proc.                          */
 /* 2021-12-21  Wan05    2.0   LFWM-3210 - SCE UAT SG ASN Should Not     */
 /*                            Populate Same POKey+POLinenumber          */
+/* 2023-03-01  Wan06    3.0   LFWM-3874 - [CN] SCE populate all for PO  */
+/*                            population                                */
 /************************************************************************/
-CREATE PROC [WM].[lsp_ASN_PopulatePOs_Wrapper]
+CREATE OR ALTER PROC [WM].[lsp_ASN_PopulatePOs_Wrapper]
       @c_ReceiptKey           NVARCHAR(10)
-   ,  @c_POKeyList            NVARCHAR(4000) = ''  -- PO Keys seperated by '|'
+   ,  @c_POKeyList            NVARCHAR(MAX) = ''   --Wan06-- PO Keys seperated by '|' 
    ,  @c_PopulateType         NVARCHAR(10)   = ''  -- Populate type, '1PO1ASN' if 1 PO to 1 ASN. 'MPO1ASN' if Many PO to 1 ASN
    ,  @b_PopulateFromArchive  INT = 0              -- Pass in 1 if Populate PO from Archive DB
    ,  @b_Success              INT = 1           OUTPUT
@@ -203,7 +200,7 @@ BEGIN
          ,  @c_DefaultRcptLOC          NVARCHAR(30)   = ''
          ,  @c_QCLocation              NVARCHAR(30)   = ''
          ,  @c_DefaultReturnPickFace   NVARCHAR(30)   = ''
-         ,  @c_POKeyListParam          NVARCHAR(4000) = '' --NJOW01
+         ,  @c_POKeyListParam          NVARCHAR(MAX) = '' --NJOW01      --Wan06
 
          ,  @CUR_SCHEMA                CURSOR
          ,  @CUR_INVALIDPO             CURSOR
@@ -460,7 +457,7 @@ BEGIN
 
       --NJOW01
       SET @c_POKeyListParam = ''
-      SET @c_POKeyListParam = RTRIM(ISNULL(CONVERT(VARCHAR(4000),            --2020-09-21
+      SET @c_POKeyListParam = RTRIM(ISNULL(CONVERT(NVARCHAR(MAX),            --Wan06
                                           (  SELECT RTRIM(T.PORefKey) + ','
                                              FROM #tPOs T
                                              ORDER BY T.RowRef
