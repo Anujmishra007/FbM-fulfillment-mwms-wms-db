@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_Wrapup_Validation_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_Wrapup_Validation_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -31,8 +26,9 @@ GO
 /* 2020-11-23 Wan02    1.2   Add Big Outer Begin Try..End Try to enable  */
 /*                           Revert when Sub SP Raise error              */ 
 /* 2021-01-15 Wan03    1.3   Execute Login if @c_UserName<>SUSER_SNAME() */
+/* 2023-03-09 NJOW01   1.4   LFWM-3608 Performance tuning for XML Reading*/
 /*************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_Wrapup_Validation_Wrapper]  
+CREATE OR ALTER PROCEDURE [WM].[lsp_Wrapup_Validation_Wrapper]  
       @c_Module               NVARCHAR(60) = ''
    ,  @c_ControlObject        NVARCHAR(60) = ''
    ,  @c_UpdateTable          NVARCHAR(30)
@@ -56,11 +52,29 @@ BEGIN
    SET ARITHABORT ON
 
    DECLARE @c_SPName    NVARCHAR(50)   = ''
-         , @c_SQL       NVARCHAR(4000) = ''
-         , @c_SQLParms  NVARCHAR(4000) = ''
-         
+         , @c_SQL       NVARCHAR(MAX) = ''
+         , @c_SQLParms  NVARCHAR(4000) = ''         
          , @b_logerror  BIT            = 0   --(Wan02)
-
+         
+   --NJOW01      
+   DECLARE      
+           @c_ReqInPutExtValidate  NVARCHAR(10) = 'Y'         
+         , @c_Storerkey            NVARCHAR(15) = ''   
+         , @n_StorerPos            INT = 0 
+         , @n_StorerEndPos         INT = 0        
+         , @c_StorerTag            NVARCHAR(200) = ''                   
+         , @c_TableColumns         NVARCHAR(MAX) = '' 
+         , @c_ColumnName           NVARCHAR(128) = ''  
+         , @c_DataType             NVARCHAR(128) = ''  
+         , @c_TableName            NVARCHAR(30) = ''   
+         , @c_SQLSchema            NVARCHAR(MAX) = ''           
+         , @x_XMLSchema            XML  
+         , @x_XMLData              XML  
+         , @n_XMLHandle            INT = 0                 
+         , @c_SQLSchema_OXML       NVARCHAR(MAX) = ''  
+         , @c_TableColumns_OXML    NVARCHAR(MAX) = ''  
+         , @c_SQL2                 NVARCHAR(MAX) = ''
+                                   
    SET @n_Err = 0 
    IF SUSER_SNAME() <> @c_UserName       --(Wan03) - START
    BEGIN
@@ -79,6 +93,121 @@ BEGIN
       @n_Continue       INT = 1
    --(Wan02) - START  
    BEGIN TRY
+
+      SET @c_SPName = 'lsp_Validate_' + RTRIM(@c_UpdateTable) + '_Std'
+      
+      --NJOW01 S
+      IF OBJECT_ID('tempdb..#VALDN') IS NOT NULL  
+      BEGIN  
+         DROP TABLE #VALDN  
+      END  
+      IF OBJECT_ID('tempdb..#SCHEMA') IS NOT NULL  
+      BEGIN  
+         DROP TABLE #SCHEMA  
+      END  
+                  
+      IF @c_Module <> 'w_userdefine_extended_validation'
+      BEGIN
+         IF @c_UpdateTable IN('TRANSFER','TRANSFERDETAIL')
+            SET @c_StorerTag = RTRIM(@c_UpdateTable)+'.FromStorerkey="'
+         ELSE 	 
+      	    SET @c_StorerTag = RTRIM(@c_UpdateTable)+'.Storerkey="'
+      	  
+      	 SELECT @n_StorerPos = CHARINDEX(@c_StorerTag , @c_XMLDataString)
+
+      	 IF @n_StorerPos > 0 
+      	    SELECT @n_StorerEndPos = CHARINDEX('"', LEFT(@c_XMLDataString, @n_StorerPos + 100), @n_StorerPos + LEN(@c_StorerTag))
+
+         IF @n_StorerEndPos > 0
+      	    SELECT @c_Storerkey = SUBSTRING(@c_XMLDataString, @n_StorerPos + LEN(@c_StorerTag), @n_StorerEndPos - @n_StorerPos - LEN(@c_StorerTag))
+      	    
+        	IF NOT EXISTS(SELECT TOP 1 1
+                        FROM CODELKUP CL (NOLOCK) 
+                        JOIN CODELIST CLS (NOLOCK) ON CL.UDF01 = CLS.LISTNAME
+                        JOIN CODELKUP CLSD (NOLOCK) ON CLS.ListName = CLSD.Listname
+                        JOIN V_Extended_Validation V ON CLS.ListGroup = V.ValidateTable AND CL.Code = V.ValidationType
+                        WHERE CL.ListName = 'VALDNCFG'
+                        AND V.ValidationType <> V.ValidateTable
+                        AND CLS.ListGroup = @c_UpdateTable
+                        AND CL.Storerkey = @c_Storerkey) 
+            AND @n_StorerEndPos > 0
+         BEGIN
+            SET @c_ReqInPutExtValidate = 'N'
+         END              	 
+
+      	 IF @c_ReqInPutExtValidate = 'Y' 
+      	     OR EXISTS (SELECT 1 FROM sys.Objects (NOLOCK) WHERE Name = @c_SPName AND type = 'P') 
+         BEGIN      
+            CREATE TABLE #VALDN( Rowid  INT NOT NULL IDENTITY(1,1) PRIMARY KEY)  
+            CREATE TABLE #SCHEMA (Column_Name NVARCHAR(80), Data_Type NVARCHAR(80)) 
+            
+            SET @x_XMLSchema = CONVERT(XML, @c_XMLSchemaString)  
+            SET @x_XMLData = CONVERT(XML, @c_XMLDataString)  
+            
+            EXEC sp_xml_preparedocument @n_XMLHandle OUTPUT, @c_XMLSchemaString      
+            DECLARE CUR_SCHEMA CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+               SELECT ColName, DataType 
+               FROM OPENXML (@n_XMLHandle, '/Table/Column',1)  
+               WITH (ColName  NVARCHAR(128),  
+                     DataType NVARCHAR(128))
+              
+            OPEN CUR_SCHEMA  
+            
+            FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_datatype  
+            
+            WHILE @@FETCH_STATUS <> -1  
+            BEGIN  
+               SET @c_TableName = ''  
+               IF CHARINDEX('.', @c_ColumnName) > 0   
+               BEGIN  
+                  SET @c_TableName  = LEFT(@c_ColumnName, CHARINDEX('.', @c_ColumnName))  
+                  SET @c_ColumnName = RIGHT(@c_ColumnName, LEN(@c_ColumnName) -LEN(@c_TableName))  
+               END  
+            
+               SET @c_SQLSchema  = @c_SQLSchema + @c_ColumnName + ' ' + @c_datatype + ' NULL, '  
+               SET @c_SQLSchema_OXML  = @c_SQLSchema_OXML + '['+@c_TableName+@c_ColumnName + '] ' + @c_DataType + ', '
+               SET @c_TableColumns = @c_TableColumns + @c_ColumnName + ', '  
+               SET @c_TableColumns_OXML = @c_TableColumns_OXML + '[' + @c_TableName + @c_ColumnName + '], '
+
+               IF CHARINDEX('(', @c_datatype) > 0  
+               BEGIN  
+                    SET @c_datatype = LTRIM(RTRIM(LEFT(@c_datatype, CHARINDEX('(', @c_datatype) - 1)))  
+               END  
+                 
+               INSERT INTO #SCHEMA (Column_Name, Data_Type)  
+               VALUES (@c_ColumnName, @c_datatype)  
+                                           
+               FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_datatype  
+            END  
+            CLOSE CUR_SCHEMA  
+            DEALLOCATE CUR_SCHEMA      
+            EXEC sp_xml_removedocument @n_XMLHandle            
+
+            IF @c_SQLSchema <> ''  
+            BEGIN  
+               SET @c_SQL = N'ALTER TABLE #VALDN  ADD  ' + SUBSTRING(@c_SQLSchema, 1, LEN(@c_SQLSchema) - 1) + ' '  
+            
+               EXEC (@c_SQL)  
+            
+               EXEC sp_xml_preparedocument @n_XMLHandle OUTPUT, @c_XMLDataString
+            
+               
+               SET @c_SQL = N' INSERT INTO #VALDN' 
+                           + ' ( ' + SUBSTRING(@c_TableColumns, 1, LEN(@c_TableColumns) - 1) + ' )'
+                           + ' SELECT ' + SUBSTRING(@c_TableColumns_OXML, 1, LEN(@c_TableColumns_OXML) - 1)
+                           + ' FROM  OPENXML (@n_XMLHandle, ''Row'',1) '
+                           + ' WITH (' + SUBSTRING(@c_SQLSchema_OXML, 1, LEN(@c_SQLSchema_OXML) - 1) + ')'
+                              
+               EXEC sp_executeSQl @c_SQL
+                                 , N'@n_XMLHandle INT'
+                                 , @n_XMLHandle                  
+                                                 
+               EXEC sp_xml_removedocument @n_XMLHandle                         
+            END
+         END   
+      END   
+      --NJOW02 E
+	  
       IF @c_Module = N'w_userdefine_extended_validation'
       BEGIN
          GOTO CUSTOM_VALIDATE
@@ -93,11 +222,9 @@ BEGIN
             SET @b_Success = 1
             SET @n_Err = 0 
             SET @c_Errmsg = ''
-         
-            SET @c_SPName = 'lsp_Validate_' + RTRIM(@c_UpdateTable) + '_Std'
-
+                     
             IF EXISTS (SELECT 1 FROM sys.Objects (NOLOCK) WHERE Name = @c_SPName AND type = 'P')
-            BEGIN 
+            BEGIN                      
                SET @c_SQL = N'EXEC WM.' + @c_SPName
                           + ' @c_XMLSchemaString   = @c_XMLSchemaString'
                           + ',@c_XMLDataString     = @c_XMLDataString'
@@ -151,13 +278,14 @@ BEGIN
             END
          END -- @c_UpdateTable = 'RECEIPT'
       END -- @n_Continue IN (1,2)
-
+     
       CUSTOM_VALIDATE:        
-      IF @n_Continue IN (1,2)
+      IF @n_Continue IN (1,2) AND @c_ReqInPutExtValidate = 'Y' --NJOW01                                                                                  
       BEGIN
          BEGIN TRY      
          SET @b_Success = 1
-         EXEC isp_Wrapup_Validation
+                           
+         EXEC isp_Wrapup_Validation         
              @c_Window          = @c_Module          
             ,@c_BusObj          = @c_ControlObject          
             ,@c_UpdateTable     = @c_UpdateTable     
@@ -165,15 +293,15 @@ BEGIN
             ,@c_XMLDataString   = @c_XMLDataString   
             ,@b_Success         = @b_Success  OUTPUT       
             ,@n_Err             = @n_Err      OUTPUT       
-            ,@c_Errmsg          = @c_Errmsg   OUTPUT  
+            ,@c_Errmsg          = @c_Errmsg   OUTPUT              
          END TRY
 
          BEGIN CATCH
             SET @n_err = 553801
-            SET @c_ErrMsg = ERROR_MESSAGE()
+            SET @c_ErrMsg = ERROR_MESSAGE()            
             SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing isp_Wrapup_Validation. (lsp_Wrapup_Validation_Wrapper)'
                            + '( ' + @c_errmsg + ' )'
-            SET @b_logerror = 1                       --(Wan02)
+            SET @b_logerror = 1                       --(Wan02)            
          END CATCH    
                       
          IF @b_success = 0 OR @n_Err <> 0        
@@ -194,6 +322,17 @@ BEGIN
    END CATCH --(Wan02) - END
         
    EXIT_SP:  
+   
+   --NJOW01 S
+   IF OBJECT_ID('tempdb..#VALDN') IS NOT NULL  
+   BEGIN  
+      DROP TABLE #VALDN  
+   END     
+   IF OBJECT_ID('tempdb..#SCHEMA') IS NOT NULL  
+   BEGIN  
+      DROP TABLE #SCHEMA  
+   END  
+   --NJOW01 E
 
    SET @b_success = 0         --(Wan01)
    IF @n_Continue IN (1,2)

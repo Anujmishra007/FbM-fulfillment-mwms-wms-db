@@ -2,34 +2,35 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-/*************************************************************************/  
-/* Stored Procedure: lsp_Validate_ReceiptDetail_Std                      */  
-/* Creation Date: 18-JAN-2019                                            */  
-/* Copyright: LFL                                                        */  
-/* Written by: Wan                                                       */  
-/*                                                                       */  
-/* Purpose:                                                              */  
-/*                                                                       */  
-/* Called By:                                                            */  
-/*                                                                       */  
-/*                                                                       */  
-/* Version: 1.5                                                          */  
-/*                                                                       */  
-/* Data Modifications:                                                   */  
-/*                                                                       */  
-/* Updates:                                                              */  
-/* Date        Author   Ver   Purposes                                   */ 
-/* 2020-12-04  Wan01    1.1   LFWM-2410 - UAT  Philippines  PH SCE No    */
-/*                            Prompt For Entering Expired Stocks         */
-/* 2021-02-25  Wan02    1.2   Add Big Outer Try/Catch                    */  
-/*                            -Fix Error Msg and Error #                 */  
-/* 2021-04-25  Wan03    1.3   LFWM-3505 Storerconfig:                    */
-/*                            DisAllowDuplicateIdsOnWSRcpt SCE Enhancement*/
+/***************************************************************************/  
+/* Stored Procedure: lsp_Validate_ReceiptDetail_Std                        */  
+/* Creation Date: 18-JAN-2019                                              */  
+/* Copyright: LFL                                                          */  
+/* Written by: Wan                                                         */  
+/*                                                                         */  
+/* Purpose:                                                                */  
+/*                                                                         */  
+/* Called By:                                                              */  
+/*                                                                         */  
+/*                                                                         */  
+/* Version: 1.5                                                            */  
+/*                                                                         */  
+/* Data Modifications:                                                     */  
+/*                                                                         */  
+/* Updates:                                                                */  
+/* Date        Author   Ver   Purposes                                     */ 
+/* 2020-12-04  Wan01    1.1   LFWM-2410 - UAT  Philippines  PH SCE No      */
+/*                            Prompt For Entering Expired Stocks           */
+/* 2021-02-25  Wan02    1.2   Add Big Outer Try/Catch                      */  
+/*                            -Fix Error Msg and Error #                   */  
+/* 2021-04-25  Wan03    1.3   LFWM-3505 Storerconfig:                      */
+/*                            DisAllowDuplicateIdsOnWSRcpt SCE Enhancement */
 /* 2022-09-19  Wan04    1.4   LFWM-3760 - PH - SCE Returns Validation Allow*/
-/*                            Duplicate ID                                */
-/* 2022-10-13  Wan05    1.5   LFWM-3780 - PH Unilever                    */
-/*                            DisAllowDuplicateIdsOnWSRcpt StorerCFG CR  */
-/*************************************************************************/   
+/*                            Duplicate ID                                 */
+/* 2022-10-13  Wan05    1.5   LFWM-3780 - PH Unilever                      */
+/*                            DisAllowDuplicateIdsOnWSRcpt StorerCFG CR    */
+/* 2023-03-09  NJOW01   1.6   LFWM-3608 performance tuning for XML Reading */
+/***************************************************************************/   
 CREATE OR ALTER PROC [WM].[lsp_Validate_ReceiptDetail_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
 , @c_XMLDataString      NVARCHAR(MAX) 
@@ -105,20 +106,90 @@ BEGIN
 
    ,  @c_CNNikeITF         NVARCHAR(30) = ''
    ,  @c_VLDLotLabelExist  NVARCHAR(30) = ''
+      
+   ,  @n_XMLHandle          INT    --NJOW01
+   ,  @c_SQLSchema_OXML     NVARCHAR(MAX) = N''  --NJOW01
+   ,  @c_TableColumns_OXML  NVARCHAR(MAX) = N''  --NJOW01
+
    -- (Wan01) - END
 
    --(Wan02) - START
    BEGIN TRY
-      IF OBJECT_ID('tempdb..#RECEIPTDETAIL') IS NOT NULL
+      /*  --NJOW01 Removed
+      IF OBJECT_ID('tempdb..#RECEIPTDETAIL') IS NOT NULL  
       BEGIN
          DROP TABLE #RECEIPTDETAIL
       END
+      */
 
+      --NJOW01 S      
+      IF OBJECT_ID('tempdb..#VALDN') IS NULL
+      BEGIN
+         CREATE TABLE #VALDN( Rowid  INT NOT NULL IDENTITY(1,1) )   
+         
+         SET @x_XMLSchema = CONVERT(XML, @c_XMLSchemaString)
+         SET @x_XMLData = CONVERT(XML, @c_XMLDataString)
+         
+         EXEC sp_xml_preparedocument @n_XMLHandle OUTPUT, @c_XMLSchemaString      
+         DECLARE CUR_SCHEMA CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT ColName, DataType 
+            FROM OPENXML (@n_XMLHandle, '/Table/Column',1)  
+            WITH (ColName  NVARCHAR(128),  
+                  DataType NVARCHAR(128))
+                                    
+         OPEN CUR_SCHEMA
+         
+         FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_DataType
+         
+         WHILE @@FETCH_STATUS <> -1
+         BEGIN
+            SET @c_TableName = ''
+            IF CHARINDEX('.', @c_ColumnName) > 0 
+            BEGIN
+               SET @c_TableName  = LEFT(@c_ColumnName, CHARINDEX('.', @c_ColumnName))
+               SET @c_ColumnName = RIGHT(@c_ColumnName, LEN(@c_ColumnName) -LEN(@c_TableName))
+            END
+         
+            SET @c_SQLSchema  = @c_SQLSchema + @c_ColumnName + ' ' + @c_DataType + ' NULL, '
+            SET @c_SQLSchema_OXML  = @c_SQLSchema_OXML + '['+@c_TableName+@c_ColumnName + '] ' + @c_DataType + ', '
+            SET @c_TableColumns = @c_TableColumns + @c_ColumnName + ', '
+            SET @c_TableColumns_OXML = @c_TableColumns_OXML + '[' + @c_TableName + @c_ColumnName + '], '
+               
+            FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_DataType
+         END
+         CLOSE CUR_SCHEMA
+         DEALLOCATE CUR_SCHEMA
+         EXEC sp_xml_removedocument @n_XMLHandle    
+                       
+         IF LEN(@c_SQLSchema) > 0 
+         BEGIN
+            SET @c_SQL = N'ALTER TABLE #VALDN  ADD  ' + SUBSTRING(@c_SQLSchema, 1, LEN(@c_SQLSchema) - 1) + ' '
+               
+            EXEC (@c_SQL)
+         
+            EXEC sp_xml_preparedocument @n_XMLHandle OUTPUT, @c_XMLDataString
+         
+            SET @c_SQL = N' INSERT INTO #VALDN' 
+                        + ' ( ' + SUBSTRING(@c_TableColumns, 1, LEN(@c_TableColumns) - 1) + ' )'
+                        + ' SELECT ' + SUBSTRING(@c_TableColumns_OXML, 1, LEN(@c_TableColumns_OXML) - 1)
+                        + ' FROM  OPENXML (@n_XMLHandle, ''Row'',1) '
+                        + ' WITH (' + SUBSTRING(@c_SQLSchema_OXML, 1, LEN(@c_SQLSchema_OXML) - 1) + ')'
+                           
+            EXEC sp_executeSQl @c_SQL
+                              , N'@n_XMLHandle INT'
+                              , @n_XMLHandle                                     
+            
+            EXEC sp_xml_removedocument @n_XMLHandle                         
+         END
+      END
+      --NJOW01 E      
+      
+      /*
       CREATE TABLE #RECEIPTDETAIL( Rowid  INT NOT NULL IDENTITY(1,1) )   
-
+      
       SET @x_XMLSchema = CONVERT(XML, @c_XMLSchemaString)
       SET @x_XMLData = CONVERT(XML, @c_XMLDataString)
-
+      
       DECLARE CUR_SCHEMA CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT x.value('@ColName', 'NVARCHAR(128)') AS columnname
             ,x.value('@DataType','NVARCHAR(128)') AS datatype
@@ -145,25 +216,24 @@ BEGIN
       END
       CLOSE CUR_SCHEMA
       DEALLOCATE CUR_SCHEMA
-          
-          
+                    
       IF LEN(@c_SQLSchema) > 0 
       BEGIN
          SET @c_SQL = N'ALTER TABLE #RECEIPTDETAIL  ADD  ' + SUBSTRING(@c_SQLSchema, 1, LEN(@c_SQLSchema) - 1) + ' '
             
          EXEC (@c_SQL)
-
+         
          SET @c_SQL = N' INSERT INTO #RECEIPTDETAIL' --+  @c_UpdateTable 
                      + ' ( ' + SUBSTRING(@c_TableColumns, 1, LEN(@c_TableColumns) - 1) + ' )'
                      + ' SELECT ' + SUBSTRING(@c_SQLData, 1, LEN(@c_SQLData) - 1) 
-                     + ' FROM @x_XMLData.nodes(''Row'') TempXML (x) '  
-            
+                     + ' FROM @x_XMLData.nodes(''Row'') TempXML (x) '
+                                                      
          EXEC sp_executeSQl @c_SQL
                            , N'@x_XMLData xml'
                            , @x_XMLData
-         
       END
-
+      */
+      
       DECLARE 
             @c_ReceiptKey                    NVARCHAR(10) = ''
          ,  @c_ReceiptLineNo                 NVARCHAR(5)  = ''
@@ -206,7 +276,7 @@ BEGIN
          ,  @dt_Lottable15  = RD.Lottable15     --(Wan01)
          ,  @c_ToID          = ISNULL(RD.ToID,'')              --(Wan03)
          ,  @n_BeforeReceivedQty = RD.BeforeReceivedQty        --(Wan05)
-      FROM  #RECEIPTDETAIL RD  
+      FROM  #VALDN RD  --NJOW01
 
       SELECT TOP 1 
             @c_Facility = RTRIM(R.Facility)
@@ -265,7 +335,8 @@ BEGIN
       SELECT @c_VLDLotLabelExist = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'ValidateLotLabelExist')
 
       SET @n_Cnt = 1
-      WHILE @n_Cnt <= 15
+      WHILE @n_Cnt <= 15 
+            AND (@c_VLDLotLabelExist = '1' OR @c_Lottable03Label IN('LOGL_WHSE','SUB-INV'))  --NJOW01
       BEGIN
          SET @c_LottableValue= CASE @n_Cnt WHEN 1  THEN @c_Lottable01
                                            WHEN 2  THEN @c_Lottable02
@@ -374,7 +445,7 @@ BEGIN
       --(Wan01) - END
       
       --(Wan03) - START
-      IF @c_ToID <> ''
+      IF @c_ToID <> '' 
       BEGIN
          --(Wan04) - START
          SELECT @c_DisAllowDuplicateIdsOnWSRcpt = fgr.Authority
@@ -472,7 +543,7 @@ BEGIN
    END CATCH
    --(Wan02) - END
    EXIT_SP:
-   
+
    IF @n_Continue = 3
    BEGIN
       SET @b_Success = 0 
