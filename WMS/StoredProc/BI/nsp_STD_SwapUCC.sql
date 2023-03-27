@@ -63,7 +63,7 @@ DECLARE @Stmt NVARCHAR(MAX) = '' -- for dynamic SQL only
 		FROM 
 		  BI.V_SWAPUCC AL1 (nolock) 
 		WHERE 
-			  AL1.UCC IN ('''+@PARAM_GENERIC_NewUCC+''') 
+			  AL1.UCC IN ('''+@Param_Generic_UCC+''') 
 			  OR AL1.NewUCC IN ('''+@PARAM_GENERIC_NewUCC+''')
 
 		'
