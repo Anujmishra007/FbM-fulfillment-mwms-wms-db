@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ispRLWAV39]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[ispRLWAV39]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -27,10 +24,11 @@ GO
 /*                           to display error message. (SY01)               */
 /* 06-Sep-2021 NJOW01   1.1  WMS-17783 replenish extra qty for full case or */
 /*                           zero balance after picked.                     */
-/* 24-Sep-2021 NJOW     1.`  DEPVOP Script Combine                          */
+/* 24-Sep-2021 NJOW     1.2  DEPVOP Script Combine                          */
+/* 08-Mar-2023 NJOW02   1.3  WMS-21920 Replen one carton to zero pick loc   */
 /****************************************************************************/   
 
-CREATE PROCEDURE [dbo].[ispRLWAV39]      
+CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV39]      
   @c_wavekey      NVARCHAR(10)  
  ,@b_Success      int        OUTPUT  
  ,@n_err          int        OUTPUT  
@@ -82,6 +80,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV39]
             ,@c_FondReplenishmentkey NVARCHAR(10) 
             ,@n_TopUpQty             INT
             ,@c_LotPick              NVARCHAR(10) --NJOW01
+            ,@c_Prev_Toloc           NVARCHAR(10)='' --NJOW02
                                          
     SET @c_SourceType = 'ispRLWAV39'    
 
@@ -416,13 +415,31 @@ CREATE PROCEDURE [dbo].[ispRLWAV39]
           GROUP BY RP.Storerkey, RP.Sku, RP.FromLoc, RP.Toloc, PACK.Casecnt, PACK.Packkey,  PACK.PackUOM3, LA.Lottable01
           HAVING SUM(RP.Qty) % CAST(PACK.Casecnt AS INT) = 0   --full case only. if partial case will have extra replen for full case at next step
                  AND SUM(RP.Qty) = SUM(RP.OriginalQty)   --picked all
-          
+          ORDER BY RP.ToLoc --NJOW02
+                  
        OPEN cur_replen
        
        FETCH FROM cur_replen INTO @c_Storerkey, @c_Sku, @c_FromLoc, @c_ToLOC, @n_Qty, @n_Casecnt, @c_PackKey, @c_PackUOM, @c_Lottable01
        
        WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
-       BEGIN       	       	         	
+       BEGIN       	    
+       	  --NJOW02 S   	     
+       	  IF @c_ToLoc = @c_Prev_ToLoc  -- one pick only replen extra one case
+       	     GOTO NEXT_REP
+       	            	     
+       	  IF EXISTS(SELECT 1 
+       	            FROM REPLENISHMENT RP (NOLOCK)        
+                    JOIN SKU (NOLOCK) ON RP.Storerkey = SKU.Storerkey AND RP.Sku = SKU.Sku 
+                    JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey
+                    WHERE RP.Wavekey = @c_Wavekey
+                    AND RP.Confirmed = 'N'
+                    AND RP.OriginalFromLoc = @c_SourceType
+                    AND PACK.Casecnt > 0
+                    AND RP.ToLoc = @c_ToLoc
+                    AND RP.Qty % CAST(PACK.Casecnt AS INT) > 0)  --replen carton have remain qty after picked
+       	     GOTO NEXT_REP      
+       	  --NJOW02 E    	     
+                              	         	
        	  DECLARE cur_LocQtyAvai CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
        	     SELECT LLI.Lot, LLI.Id, LLI.Loc, 
        	            LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked - LLI.QtyReplen AS QtyAvailable 
@@ -445,7 +462,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV39]
        	     AND LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked - LLI.QtyReplen > 0
        	     ORDER BY CASE WHEN LLI.Loc = @c_FromLoc THEN 1 ELSE 2 END,  --find from same loc first 
        	              LA.Lottable05, LA.Lot, LOC.Logicallocation, LOC.Loc
-       	
+           	                 	                    	
           OPEN cur_LocQtyAvai
        
           FETCH FROM cur_LocQtyAvai INTO  @c_Lot, @c_ID, @c_FromLoc2, @n_QtyAvailable
@@ -474,7 +491,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV39]
           	 AND Confirmed = 'N'
           	 AND Wavekey = @c_Wavekey
              AND OriginalFromLoc = @c_SourceType
-          	           	 
+          	 
           	 IF ISNULL(@c_FondReplenishmentkey,'') <> '' 
           	 BEGIN
           	 	  UPDATE REPLENISHMENT WITH (ROWLOCK)
@@ -494,7 +511,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV39]
                 END                	 	  
           	 END
           	 ELSE
-          	 BEGIN
+          	 BEGIN          	 	  
                 SET @c_ReplenishmentKey = ''          	 	
                 EXECUTE nspg_getkey
                    'REPLENISHKEY'
@@ -539,6 +556,10 @@ CREATE PROCEDURE [dbo].[ispRLWAV39]
           END       	
           CLOSE cur_LocQtyAvai
           DEALLOCATE cur_LocQtyAvai
+          
+          NEXT_REP:
+          
+          SET @c_Prev_ToLoc = @c_ToLoc  --NJOW02
           
           FETCH FROM cur_replen INTO @c_Storerkey, @c_Sku, @c_FromLoc, @c_ToLOC, @n_Qty, @n_Casecnt, @c_PackKey, @c_PackUOM, @c_Lottable01          
        END        
