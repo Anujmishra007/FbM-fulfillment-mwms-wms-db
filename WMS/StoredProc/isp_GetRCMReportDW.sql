@@ -13,7 +13,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.2                                                    */
+/* PVCS Version: 1.4                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -28,6 +28,7 @@ GO
 /*                            inserting TraceInfo (WL01)                */
 /* 2023-03-21  WLChooi  1.3   Fixed Initialize @c_PB_Datawindow to blank*/
 /*                            (WL02)                                    */
+/* 2023-03-27  WLChooi  1.4   Bug Fix - Extend Length (WL03)            */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_GetRCMReportDW]
            @c_ShortAppName          NVARCHAR(30)
@@ -75,7 +76,7 @@ BEGIN
 
          , @c_RCMUsingUserID        NVARCHAR(10) = ''
          , @c_WorkStation           NVARCHAR(30) = ''
-         , @c_PB_Datawindow_DF      NVARCHAR(30) = @c_PB_Datawindow
+         , @c_PB_Datawindow_DF      NVARCHAR(40) = @c_PB_Datawindow   --WL03
 
          , @dt_sysdate              DATETIME     = GETDATE()
 
