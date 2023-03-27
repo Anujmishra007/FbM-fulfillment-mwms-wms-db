@@ -27,6 +27,7 @@ GO
 /* 03-Sep-2020 WLChooi  1.3   Configure which browser to use (WL03)     */
 /* 12-Jan-2023 WLChooi  1.4   WMS-21438 Add PARAM_WMS_c_Username (WL04) */
 /* 12-Jan-2023 WLChooi  1.4   DevOps Combine Script                     */
+/* 21-Mar-2023 WLChooi  1.5   Cater for Exceed Packing (WL05)           */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[isp_GetJReportURL]
            @c_Storerkey      NVARCHAR(15) = ''
@@ -160,10 +161,24 @@ BEGIN
       AND StorerKey = @c_Storerkey
       AND ComputerName = @c_ComputerName
 
+      --WL05 S
+      --For Exceed Packing app
+      IF ISNULL(@c_JReportFilename,'') = ''
+      BEGIN
+         SELECT   @c_JReportCatalog   = JReportCatalog
+                , @c_JReportFilename  = JReportFilename
+                , @c_JReportFlag      = JReportFlag
+         FROM RCMREPORT (NOLOCK)
+         WHERE ReportType = @c_ReportType
+         AND StorerKey = @c_Storerkey
+         AND ComputerName = 'PACKING'   --@c_ShortAppName
+      END
+      --WL05 E
+
       IF ISNULL(@c_JReportCatalog,'') = ''
       BEGIN
          SELECT @c_JReportCatalog = NSQLDescrip
-   FROM NSQLCONFIG (NOLOCK)
+         FROM NSQLCONFIG (NOLOCK)
          WHERE ConfigKey = 'JReportDefaultCatalog'
       END
 
