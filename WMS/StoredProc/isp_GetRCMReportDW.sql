@@ -1,12 +1,8 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_GetRCMReportDW]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[isp_GetRCMReportDW]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /************************************************************************/
 /* Stored Proc: isp_GetRCMReportDW                                      */
 /* Creation Date: 2021-12-07                                            */
@@ -30,12 +26,14 @@ GO
 /* 2022-01-25  Wan01    1.1   Fixed Get RCMUsingUserID config setting   */
 /* 2022-02-10  WLChooi  1.2   Fixed Datawindow Name being truncated when*/
 /*                            inserting TraceInfo (WL01)                */
+/* 2023-03-21  WLChooi  1.3   Fixed Initialize @c_PB_Datawindow to blank*/
+/*                            (WL02)                                    */
 /************************************************************************/
-CREATE PROC isp_GetRCMReportDW
-           @c_ShortAppName          NVARCHAR(30) 
+CREATE OR ALTER PROC [dbo].[isp_GetRCMReportDW]
+           @c_ShortAppName          NVARCHAR(30)
          , @c_ComputerName          NVARCHAR(30)
-         , @c_Storerkey             NVARCHAR(15)  
-         , @c_ReportType            NVARCHAR(10)  
+         , @c_Storerkey             NVARCHAR(15)
+         , @c_ReportType            NVARCHAR(10)
          , @n_SetupIsRequired       INT          = 1
          , @c_PB_Datawindow         NVARCHAR(40) = '' OUTPUT
          , @c_Rpt_Printer           NVARCHAR(100)= '' OUTPUT
@@ -60,7 +58,7 @@ CREATE PROC isp_GetRCMReportDW
          , @c_ExtendParmDefault9    NVARCHAR(30) = '' OUTPUT
          , @c_ExtendParmDefault10   NVARCHAR(30) = '' OUTPUT
          , @c_AutoPrint             NVARCHAR(10) = '' OUTPUT
-         , @c_JReportFlag           NVARCHAR(10) = '' OUTPUT    
+         , @c_JReportFlag           NVARCHAR(10) = '' OUTPUT
          , @b_Success               INT          = 1  OUTPUT
          , @n_Err                   INT          = 0  OUTPUT
          , @c_ErrMsg                NVARCHAR(255)= '' OUTPUT
@@ -71,14 +69,14 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE  
+   DECLARE
            @n_StartTCnt             INT = @@TRANCOUNT
          , @n_Continue              INT = 1
 
          , @c_RCMUsingUserID        NVARCHAR(10) = ''
          , @c_WorkStation           NVARCHAR(30) = ''
          , @c_PB_Datawindow_DF      NVARCHAR(30) = @c_PB_Datawindow
-         
+
          , @dt_sysdate              DATETIME     = GETDATE()
 
          , @c_DW1                   NVARCHAR(20) = ''   --WL01
@@ -88,7 +86,9 @@ BEGIN
    SET @c_errmsg   = ''
 
    SET @c_WorkStation = @c_Computername
-   
+
+   SET @c_PB_Datawindow = ''   --WL02
+
    SELECT @c_RCMUsingUserID = fgr.authority FROM dbo.fnc_GetRight2('', @c_Storerkey, '', 'RCMUsingUserID') AS fgr
 
    IF @c_RCMUsingUserID = '' --'0'              --(Wan01)
@@ -99,87 +99,87 @@ BEGIN
       AND Code = @c_ReportType
       AND Storerkey = @c_Storerkey
    END
-   
+
    IF @c_RCMUsingUserID = '1'
    BEGIN
       SET @c_Computername = SUSER_SNAME()
    END
-   
-   SELECT TOP 1 
+
+   SELECT TOP 1
          @c_PB_Datawindow      = rr.PB_Datawindow
       ,  @c_Rpt_Printer        = rr.Rpt_Printer
       ,  @c_ExtendParmName1    = ISNULL(rr.ExtendParmName1,'')
-      ,  @c_ExtendParmName2    = ISNULL(rr.ExtendParmName2,'')   
+      ,  @c_ExtendParmName2    = ISNULL(rr.ExtendParmName2,'')
       ,  @c_ExtendParmName3    = ISNULL(rr.ExtendParmName3,'')
       ,  @c_ExtendParmName4    = ISNULL(rr.ExtendParmName4,'')
       ,  @c_ExtendParmName5    = ISNULL(rr.ExtendParmName5,'')
       ,  @c_ExtendParmName6    = ISNULL(rr.ExtendParmName6 ,'')
-      ,  @c_ExtendParmName7    = ISNULL(rr.ExtendParmName7 ,'')   
+      ,  @c_ExtendParmName7    = ISNULL(rr.ExtendParmName7 ,'')
       ,  @c_ExtendParmName8    = ISNULL(rr.ExtendParmName8 ,'')
       ,  @c_ExtendParmName9    = ISNULL(rr.ExtendParmName9 ,'')
-      ,  @c_ExtendParmName10   = ISNULL(rr.ExtendParmName10,'')      
-      ,  @c_ExtendParmDefault1 = ISNULL(rr.ExtendParmDefault1,'')   
-      ,  @c_ExtendParmDefault2 = ISNULL(rr.ExtendParmDefault2,'')   
-      ,  @c_ExtendParmDefault3 = ISNULL(rr.ExtendParmDefault3,'')   
-      ,  @c_ExtendParmDefault4 = ISNULL(rr.ExtendParmDefault4,'')    
+      ,  @c_ExtendParmName10   = ISNULL(rr.ExtendParmName10,'')
+      ,  @c_ExtendParmDefault1 = ISNULL(rr.ExtendParmDefault1,'')
+      ,  @c_ExtendParmDefault2 = ISNULL(rr.ExtendParmDefault2,'')
+      ,  @c_ExtendParmDefault3 = ISNULL(rr.ExtendParmDefault3,'')
+      ,  @c_ExtendParmDefault4 = ISNULL(rr.ExtendParmDefault4,'')
       ,  @c_ExtendParmDefault5 = ISNULL(rr.ExtendParmDefault5,'')
-      ,  @c_ExtendParmDefault6 = ISNULL(rr.ExtendParmDefault6,'')   
-      ,  @c_ExtendParmDefault7 = ISNULL(rr.ExtendParmDefault7,'')   
-      ,  @c_ExtendParmDefault8 = ISNULL(rr.ExtendParmDefault8,'')   
-      ,  @c_ExtendParmDefault9 = ISNULL(rr.ExtendParmDefault9,'')    
-      ,  @c_ExtendParmDefault10= ISNULL(rr.ExtendParmDefault10,'')      
-      ,  @c_AutoPrint          = rr.AutoPrint  
-      ,  @c_JReportFlag        = ISNULL(rr.JReportFlag,'')                   
+      ,  @c_ExtendParmDefault6 = ISNULL(rr.ExtendParmDefault6,'')
+      ,  @c_ExtendParmDefault7 = ISNULL(rr.ExtendParmDefault7,'')
+      ,  @c_ExtendParmDefault8 = ISNULL(rr.ExtendParmDefault8,'')
+      ,  @c_ExtendParmDefault9 = ISNULL(rr.ExtendParmDefault9,'')
+      ,  @c_ExtendParmDefault10= ISNULL(rr.ExtendParmDefault10,'')
+      ,  @c_AutoPrint          = rr.AutoPrint
+      ,  @c_JReportFlag        = ISNULL(rr.JReportFlag,'')
    FROM dbo.RCMReport AS rr WITH (NOLOCK)
    WHERE rr.ComputerName = @c_Computername
    AND rr.StorerKey = @c_Storerkey
    AND rr.ReportType= @c_ReportType
-   
+
    IF @c_PB_Datawindow = ''
    BEGIN
-      SELECT TOP 1 
+      SELECT TOP 1
             @c_PB_Datawindow      = rr.PB_Datawindow
          ,  @c_Rpt_Printer        = rr.Rpt_Printer
          ,  @c_ExtendParmName1    = ISNULL(rr.ExtendParmName1,'')
-         ,  @c_ExtendParmName2    = ISNULL(rr.ExtendParmName2,'')   
+         ,  @c_ExtendParmName2    = ISNULL(rr.ExtendParmName2,'')
          ,  @c_ExtendParmName3    = ISNULL(rr.ExtendParmName3,'')
          ,  @c_ExtendParmName4    = ISNULL(rr.ExtendParmName4,'')
          ,  @c_ExtendParmName5    = ISNULL(rr.ExtendParmName5,'')
          ,  @c_ExtendParmName6    = ISNULL(rr.ExtendParmName6 ,'')
-         ,  @c_ExtendParmName7    = ISNULL(rr.ExtendParmName7 ,'')   
+         ,  @c_ExtendParmName7    = ISNULL(rr.ExtendParmName7 ,'')
          ,  @c_ExtendParmName8    = ISNULL(rr.ExtendParmName8 ,'')
          ,  @c_ExtendParmName9    = ISNULL(rr.ExtendParmName9 ,'')
-         ,  @c_ExtendParmName10   = ISNULL(rr.ExtendParmName10,'')      
-         ,  @c_ExtendParmDefault1 = ISNULL(rr.ExtendParmDefault1,'')   
-         ,  @c_ExtendParmDefault2 = ISNULL(rr.ExtendParmDefault2,'')   
-         ,  @c_ExtendParmDefault3 = ISNULL(rr.ExtendParmDefault3,'')   
-         ,  @c_ExtendParmDefault4 = ISNULL(rr.ExtendParmDefault4,'')    
+         ,  @c_ExtendParmName10   = ISNULL(rr.ExtendParmName10,'')
+         ,  @c_ExtendParmDefault1 = ISNULL(rr.ExtendParmDefault1,'')
+         ,  @c_ExtendParmDefault2 = ISNULL(rr.ExtendParmDefault2,'')
+         ,  @c_ExtendParmDefault3 = ISNULL(rr.ExtendParmDefault3,'')
+         ,  @c_ExtendParmDefault4 = ISNULL(rr.ExtendParmDefault4,'')
          ,  @c_ExtendParmDefault5 = ISNULL(rr.ExtendParmDefault5,'')
-         ,  @c_ExtendParmDefault6 = ISNULL(rr.ExtendParmDefault6,'')   
-         ,  @c_ExtendParmDefault7 = ISNULL(rr.ExtendParmDefault7,'')   
-         ,  @c_ExtendParmDefault8 = ISNULL(rr.ExtendParmDefault8,'')   
-         ,  @c_ExtendParmDefault9 = ISNULL(rr.ExtendParmDefault9,'')    
-         ,  @c_ExtendParmDefault10= ISNULL(rr.ExtendParmDefault10,'')      
-         ,  @c_AutoPrint          = rr.AutoPrint  
-         ,  @c_JReportFlag        = ISNULL(rr.JReportFlag,'')                   
+         ,  @c_ExtendParmDefault6 = ISNULL(rr.ExtendParmDefault6,'')
+         ,  @c_ExtendParmDefault7 = ISNULL(rr.ExtendParmDefault7,'')
+         ,  @c_ExtendParmDefault8 = ISNULL(rr.ExtendParmDefault8,'')
+         ,  @c_ExtendParmDefault9 = ISNULL(rr.ExtendParmDefault9,'')
+         ,  @c_ExtendParmDefault10= ISNULL(rr.ExtendParmDefault10,'')
+         ,  @c_AutoPrint          = rr.AutoPrint
+         ,  @c_JReportFlag        = ISNULL(rr.JReportFlag,'')
       FROM dbo.RCMReport AS rr WITH (NOLOCK)
       WHERE rr.ComputerName = @c_ShortAppName
       AND rr.StorerKey = @c_Storerkey
       AND rr.ReportType= @c_ReportType
    END
-   
+
    IF @c_PB_Datawindow = '' AND @c_PB_Datawindow_DF <> ''
    BEGIN
       SET @c_PB_Datawindow = @c_PB_Datawindow_DF
    END
-   
+
    IF @n_SetupIsRequired = 1 AND @c_PB_Datawindow = ''
    BEGIN
       SET @n_Continue = 3
       SET @n_Err = 68910
-      SET @c_ErrMsg = 'NSQL' +CONVERT(CHAR(5), @n_Err) + ': RCM Report Type ('''+ @c_ReportType + ''') Not Found.'   
+      SET @c_ErrMsg = 'NSQL' +CONVERT(CHAR(5), @n_Err) + ': RCM Report Type ('''+ @c_ReportType + ''') Not Found.'
    END
-   
+
    IF @c_JReportFlag = 'JREPORT' AND @c_PB_Datawindow <> ''
    BEGIN
       SET @c_PB_Datawindow = ''
@@ -213,28 +213,28 @@ QUIT_SP:
 
    EXEC dbo.isp_InsertTraceInfo
          @c_TraceCode = N'RCMREPORT4WM'
-       , @c_TraceName = N'RCMREPORT4WM'                
+       , @c_TraceName = N'RCMREPORT4WM'
        , @c_StartTime = @dt_sysdate
        , @c_EndTime   = @dt_sysdate
-       , @c_Step1 = @c_Computername                  
-       , @c_Step2 = @c_Storerkey                   
-       , @c_Step3 = @c_ReportType                  
-       , @c_Step4 = @c_JReportFlag                  
-       , @c_Step5 = N''                   
-       , @c_Col1  = @c_DW1   --WL01                 
-       , @c_Col2  = @c_DW2   --WL01                   
-       , @c_Col3  = N''                    
-       , @c_Col4  = N''                    
-       , @c_Col5  = N''                    
-       , @b_Success = @b_Success    
-       , @n_Err     = @n_Err              
-       , @c_ErrMsg  = @c_ErrMsg     
-          
+       , @c_Step1 = @c_Computername
+       , @c_Step2 = @c_Storerkey
+       , @c_Step3 = @c_ReportType
+       , @c_Step4 = @c_JReportFlag
+       , @c_Step5 = N''
+       , @c_Col1  = @c_DW1   --WL01
+       , @c_Col2  = @c_DW2   --WL01
+       , @c_Col3  = N''
+       , @c_Col4  = N''
+       , @c_Col5  = N''
+       , @b_Success = @b_Success
+       , @n_Err     = @n_Err
+       , @c_ErrMsg  = @c_ErrMsg
+
    WHILE @@TRANCOUNT < @n_StartTCnt
    BEGIN
       BEGIN TRAN
    END
 END -- procedure
 GO
-GRANT EXECUTE ON [dbo].[isp_GetRCMReportDW] TO nSQL 
+GRANT EXECUTE ON  [dbo].[isp_GetRCMReportDW] TO [NSQL]
 GO
