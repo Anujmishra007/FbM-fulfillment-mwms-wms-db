@@ -63,7 +63,7 @@ BEGIN
             INSERT INTO @tUCC (UCCNo, Qty)
             SELECT UCC.UCCNo, ISNULL( SUM( UCC.QTY), 0)
             FROM rdt.rdtMoveUCCLog L WITH (NOLOCK)
-               JOIN dbo.UCC WITH (NOLOCK) ON (L.UCCNo = UCC.UCCNo AND L.StorerKey = @cStorerKey AND L.AddWho = SUSER_SNAME())
+               JOIN dbo.UCC WITH (NOLOCK) ON (L.UCCNo = UCC.UCCNo AND L.StorerKey = UCC.StorerKey AND L.AddWho = SUSER_SNAME())
             WHERE L.StorerKey = @cStorerKey
                AND L.AddWho = SUSER_SNAME()
             GROUP BY UCC.UCCNo
