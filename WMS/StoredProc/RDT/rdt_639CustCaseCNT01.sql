@@ -5,22 +5,20 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /******************************************************************************/
-/* Store procedure: rdt_639ExtInfo01                                          */
+/* Store procedure: rdt_639CustCaseCNT01                                      */
 /* Copyright      : LF Logistics                                              */
 /*                                                                            */
 /* Purpose: Show sku packkey                                                  */
 /*                                                                            */
 /* Date         Author    Ver.  Purposes                                      */
-/* 2020-02-21   James     1.0   WMS-12070. Created                            */
-/* 2023-02-17   Ung       1.1   WMS-21506 Add AfterStep, Lottables param      */
+/* 2023-03-08   Ung       1.0   WMS-21506 Created                             */
 /******************************************************************************/
 
-CREATE OR ALTER PROCEDURE [RDT].[rdt_639ExtInfo01]
+CREATE OR ALTER PROCEDURE [RDT].[rdt_639CustCaseCNT01]
    @nMobile         INT,
    @nFunc           INT,
    @cLangCode       NVARCHAR(3),
    @nStep           INT,
-   @nAfterStep      INT,
    @nInputKey       INT,
    @cStorerKey      NVARCHAR(15),
    @cFacility       NVARCHAR(5),
@@ -46,8 +44,9 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_639ExtInfo01]
    @dLottable13     DATETIME,
    @dLottable14     DATETIME,
    @dLottable15     DATETIME,
-   @tExtInfoVar     VariableTable READONLY,
-   @cExtendedInfo   NVARCHAR( 20) OUTPUT
+   @nCaseCNT        INT          OUTPUT,
+   @nErrNo          INT          OUTPUT, 
+   @cErrMsg         NVARCHAR(20) OUTPUT 
 AS
 BEGIN
    SET NOCOUNT ON
@@ -55,23 +54,40 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @cPackKey    NVARCHAR( 10)
-
-   IF @nStep IN ( 5, 6) -- SKU, QTY
+   IF @nFunc = 639 -- Move to UCC V7
    BEGIN
-      IF @nInputKey = 1 -- ESC
+      SELECT TOP 1 
+         @nCaseCNT = TRY_CONVERT( INT, UDF03) -- Could be Prepack QTY, not master QTY
+      FROM dbo.RFPutaway WITH (NOLOCK)
+      WHERE FromLOC = @cFromLOC
+         AND FromID = @cFromID
+         AND StorerKey = @cStorerKey
+         AND SKU = @cSKU
+         AND TRY_CONVERT( INT, UDF03) IS NOT NULL
+         
+      IF @@ROWCOUNT > 0
       BEGIN
-         SELECT @cPackKey = PackKey
+         -- Get SKU info
+         DECLARE @cPrePackIndicator NVARCHAR( 20)
+         DECLARE @nPackQtyIndicator INT
+         SELECT
+            @cPrePackIndicator = LEFT( PrePackIndicator, 20),
+            @nPackQtyIndicator = ISNULL( PackQtyIndicator, 0)
          FROM dbo.SKU WITH (NOLOCK)
          WHERE StorerKey = @cStorerKey
-         AND   Sku = @cSKU
-
-         SET @cExtendedInfo = 'PACKKEY: ' + @cPackKey
+            AND SKU = @cSKU
+            
+         -- Prepack SKU
+         IF @cPrePackIndicator = '2' AND @nPackQtyIndicator > 1
+            SET @nCaseCNT = @nCaseCNT * @nPackQtyIndicator
+         
+         -- Update it earlier, so ExtendedInfoSP could retrieve it immediately, before parent module write to MobRec. 
+         UPDATE rdt.rdtMobRec SET
+            EditDate = GETDATE(),
+            V_Integer10 = @nCaseCNT
+         WHERE Mobile = @nMobile
       END
    END
-
-Quit:
-
 END
 GO
 
@@ -80,5 +96,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXEC ON [RDT].[rdt_639ExtInfo01] TO NSQL
+GRANT EXEC ON [RDT].[rdt_639CustCaseCNT01] TO NSQL
 GO
