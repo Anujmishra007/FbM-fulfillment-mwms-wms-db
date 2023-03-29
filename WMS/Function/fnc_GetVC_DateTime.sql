@@ -1,4 +1,8 @@
-﻿SET ANSI_NULLS OFF
+﻿IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[fnc_GetVC_DateTime]')  AND type in (N'FN', N'IF', N'TF', N'FS', N'FT')) 
+DROP FUNCTION [dbo].[fnc_GetVC_DateTime]
+GO
+
+SET ANSI_NULLS OFF
 GO
 
 SET QUOTED_IDENTIFIER OFF
@@ -23,7 +27,7 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /***************************************************************************/ 
-CREATE OR ALTER FUNCTION [dbo].[fnc_GetVC_DateTime] 
+CREATE FUNCTION [dbo].[fnc_GetVC_DateTime] 
   ( 
     @d_Date          DATETIME, 
     @c_LanguageCode  NVARCHAR(10)
