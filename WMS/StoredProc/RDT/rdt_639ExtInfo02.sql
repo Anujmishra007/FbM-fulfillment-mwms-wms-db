@@ -5,17 +5,16 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /******************************************************************************/
-/* Store procedure: rdt_639ExtInfo01                                          */
+/* Store procedure: rdt_639ExtInfo02                                          */
 /* Copyright      : LF Logistics                                              */
 /*                                                                            */
 /* Purpose: Show sku packkey                                                  */
 /*                                                                            */
 /* Date         Author    Ver.  Purposes                                      */
-/* 2020-02-21   James     1.0   WMS-12070. Created                            */
-/* 2023-02-17   Ung       1.1   WMS-21506 Add AfterStep, Lottables param      */
+/* 2023-01-25   Ung       1.0   WMS-21506 Created                             */
 /******************************************************************************/
 
-CREATE OR ALTER PROCEDURE [RDT].[rdt_639ExtInfo01]
+CREATE OR ALTER PROCEDURE [RDT].[rdt_639ExtInfo02]
    @nMobile         INT,
    @nFunc           INT,
    @cLangCode       NVARCHAR(3),
@@ -55,23 +54,36 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @cPackKey    NVARCHAR( 10)
-
-   IF @nStep IN ( 5, 6) -- SKU, QTY
+   IF @nFunc = 639 -- Move to UCC V7
    BEGIN
-      IF @nInputKey = 1 -- ESC
+      IF @nAfterStep = 6 -- QTY
       BEGIN
-         SELECT @cPackKey = PackKey
-         FROM dbo.SKU WITH (NOLOCK)
-         WHERE StorerKey = @cStorerKey
-         AND   Sku = @cSKU
+         -- IF @nInputKey = 1 -- ENTER
+         BEGIN
+            -- Get session info
+            DECLARE @nCaseCNT INT
+            SELECT @nCaseCNT = V_Integer10 FROM rdt.rdtMobRec WITH (NOLOCK) WHERE Mobile = @nMobile
 
-         SET @cExtendedInfo = 'PACKKEY: ' + @cPackKey
+            -- Get SKU info
+            DECLARE @cPrePackIndicator NVARCHAR( 20)
+            DECLARE @nPackQtyIndicator INT
+            SELECT
+               @cPrePackIndicator = LEFT( PrePackIndicator, 20),
+               @nPackQtyIndicator = ISNULL( PackQtyIndicator, 0)
+            FROM dbo.SKU WITH (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+               AND SKU = @cSKU
+               
+            -- Prepack SKU
+            IF @cPrePackIndicator = '2' AND @nPackQtyIndicator > 1
+               SET @nCaseCNT = @nCaseCNT / @nPackQtyIndicator
+
+            DECLARE @cMsg NVARCHAR( 20)
+            SET @cMsg = rdt.rdtgetmessage( 195901, @cLangCode, 'DSP') --FULL UCC: 
+            SET @cExtendedInfo = RTRIM( @cMsg) + ' ' + CAST( @nCaseCNT AS NVARCHAR( 5))
+         END
       END
    END
-
-Quit:
-
 END
 GO
 
@@ -80,5 +92,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXEC ON [RDT].[rdt_639ExtInfo01] TO NSQL
+GRANT EXEC ON [RDT].[rdt_639ExtInfo02] TO NSQL
 GO

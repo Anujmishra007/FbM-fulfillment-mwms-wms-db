@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'rdt.rdt_MoveToUCC_GetTask_V7') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_MoveToUCC_GetTask_V7
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -15,9 +12,10 @@ GO
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
 /* 2020-02-17 1.0  James      WMS-11360. Created                        */
+/* 2023-03-10 1.1  Ung        WMS-21506 Fix MoveToUCCGetTaskSP          */
 /************************************************************************/
 
-CREATE PROC rdt.rdt_MoveToUCC_GetTask_V7 (
+CREATE OR ALTER PROC rdt.rdt_MoveToUCC_GetTask_V7 (
    @nMobile         INT, 
    @nFunc           INT, 
    @cLangCode       NVARCHAR(3), 
@@ -106,11 +104,11 @@ AS
    BEGIN
       SET @cSQL = 'EXEC rdt.' + RTRIM( @cMoveToUCCGetTaskSP) +
          ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility, @cType, @cToLoc, @cToID, @cFromLoc, @cFromID, @cUCC, ' + 
-         ' @cSKU        OUTPUT,  @nQTY        OUTPUT, @cLot        OUTPUT, @cLottableCode OUTPUT, ' + 
+         ' @cSKU        OUTPUT,  @nQTY        OUTPUT, @nTotalRec   OUTPUT, @cLottableCode OUTPUT, ' + 
          ' @cLottable01 OUTPUT,  @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT, ' + 
          ' @cLottable06 OUTPUT,  @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT, ' +
          ' @cLottable11 OUTPUT,  @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT, ' +
-         ' @tExtGetTask,  @nErrNo   OUTPUT, @cErrMsg  OUTPUT '
+         ' @tExtGetTask,         @nErrNo      OUTPUT, @cErrMsg     OUTPUT'
 
       SET @cSQLParam =
          ' @nMobile         INT, ' +
@@ -151,11 +149,11 @@ AS
 
       EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
          @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility, @cType, @cToLoc, @cToID, @cFromLoc, @cFromID, @cUCC, 
-         @cSKU OUTPUT,  @nQTY OUTPUT, @nTotalRec   OUTPUT, @cLottableCode OUTPUT, 
+         @cSKU        OUTPUT,  @nQTY        OUTPUT, @nTotalRec   OUTPUT, @cLottableCode OUTPUT, 
          @cLottable01 OUTPUT,  @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT,  
          @cLottable06 OUTPUT,  @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT, 
          @cLottable11 OUTPUT,  @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT, 
-         @tExtGetTask,  @nErrNo   OUTPUT, @cErrMsg  OUTPUT 
+         @tExtGetTask,         @nErrNo      OUTPUT, @cErrMsg     OUTPUT 
 
       GOTO Quit
    END
