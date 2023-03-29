@@ -12,6 +12,7 @@ GO
 /* 06-08-2019 1.0  Ung      WMS-18742 Based on rdt_PTLCart_Assign_Totes02     */
 /*                          change OrderKey to LoadKey                        */
 /* 10-06-2022 1.1  yeekung  WMS-19875 Add Validate for cartID(yeekung01)      */
+/* 16-12-2022 1.2  yeekung  WMS-21239 Add Validate for loadkey(yeekung02)      */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_PTLCart_Assign_Totes03_Lottable (
@@ -249,7 +250,7 @@ BEGIN
             -- AND TD.Status = '0'
             AND TD.LoadKey = @cLoadKey
       END
-   
+
       -- Check tote have task
       /*
       IF @cPickZone = ''
@@ -319,6 +320,31 @@ BEGIN
          SET @cOutField05 = ''
          GOTO Quit
       END
+
+      IF EXISTS (SELECT 1
+         FROM  pickdetail PD WITH (NOLOCK) 
+            JOIN Orders O WITH (NOLOCK) ON (PD.Orderkey = O.Orderkey)
+         WHERE O.StorerKey = @cStorerKey 
+               AND PD.Dropid= @cToteID
+               AND PD.status < '5')
+      BEGIN
+         IF EXISTS (SELECT 1
+         FROM  pickdetail PD WITH (NOLOCK) 
+            JOIN Orders O WITH (NOLOCK) ON (PD.Orderkey = O.Orderkey)
+         WHERE O.StorerKey = @cStorerKey 
+               AND PD.Dropid= @cToteID
+               AND PD.status < '5'
+               AND O.LoadKey <> @cLoadKey)
+         BEGIN
+
+            SET @nErrNo = 181760
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LoadNotSorted
+            EXEC rdt.rdtSetFocusField @nMobile, 5 -- ToteID
+            SET @cOutField05 = ''
+            GOTO Quit
+         END
+      END
+   
       
       -- Get position not yet assign
       SET @cPosition = ''
