@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdt_839Confirm04]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_839Confirm04]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -15,8 +11,10 @@ GO
 /* 2018-09-04 1.0  Ung        WMS-6238 Created                                */
 /* 2019-02-27 1.1  James      WMS-5057 Add lottable params (james01)          */
 /* 2020-12-14 1.2  Chermaine  WMS-15814 Add eventLog (cc01)                   */
+/* 2021-12-20 1.3  James      WMS-18004 Stamp wording Bal when user choose    */
+/*                            balance pick later to unpicked line (james01)   */
 /******************************************************************************/
-CREATE PROC [RDT].[rdt_839Confirm04](
+CREATE OR ALTER PROC [RDT].[rdt_839Confirm04](
     @nMobile        INT
    ,@nFunc          INT
    ,@cLangCode      NVARCHAR( 3)
@@ -67,7 +65,9 @@ BEGIN
    DECLARE @nQTY_PD        INT
    DECLARE @bSuccess       INT
    DECLARE @curPD          CURSOR
-
+   DECLARE @curBal         CURSOR
+   DECLARE @cOption        NVARCHAR( 1)
+   
    DECLARE @tOrders TABLE
    (
       OrderKey NVARCHAR( 10) NOT NULL, 
@@ -164,6 +164,7 @@ BEGIN
          UPDATE dbo.PickDetail WITH (ROWLOCK) SET
             Status = @cPickConfirmStatus,
             DropID = @cDropID,
+            CaseID = '',
             EditDate = GETDATE(),
             EditWho  = SUSER_SNAME()
          WHERE PickDetailKey = @cPickDetailKey
@@ -184,6 +185,7 @@ BEGIN
          UPDATE dbo.PickDetail WITH (ROWLOCK) SET
             Status = @cPickConfirmStatus,
             DropID = @cDropID,
+            CaseID = '',
             EditDate = GETDATE(),
             EditWho  = SUSER_SNAME()
          WHERE PickDetailKey = @cPickDetailKey
@@ -307,6 +309,7 @@ BEGIN
             UPDATE dbo.PickDetail WITH (ROWLOCK) SET
                Status = @cPickConfirmStatus,
                DropID = @cDropID,
+               CaseID = '',
                EditDate = GETDATE(),
                EditWho  = SUSER_SNAME()
             WHERE PickDetailKey = @cPickDetailKey
