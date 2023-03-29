@@ -14,6 +14,7 @@ EXECUTE rdt.rdtAddScn 4641, 'ENG'
    ,@cLine04 = ''
    ,@cLine05 = 'DROPID:'
    ,@cLine06 = '%20i03'
+   ,@cLine13 = '%20d15' --WMS-18004 ExtendedInfo
    ,@cLine14 = '%e'
    ,@nFunc = 839
 
