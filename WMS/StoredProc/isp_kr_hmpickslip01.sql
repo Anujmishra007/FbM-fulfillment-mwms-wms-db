@@ -1,7 +1,8 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_kr_hmpickslip01]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_kr_hmpickslip01]
-GO   
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+
 /******************************************************************************/      
 /* Store Procedure: isp_kr_hmpickslip01                                       */      
 /* Creation Date: 08-NOV-2018                                                 */      
@@ -14,20 +15,21 @@ GO
 /*                                                                            */      
 /* Called By:  r_kr_hmpickslip01                                              */      
 /*                                                                            */      
-/* PVCS Version: 1.0                                                          */      
+/* PVCS Version: 1.2                                                          */      
 /*                                                                            */      
 /* Version: 1.0                                                               */      
 /*                                                                            */      
 /* Data Modifications:                                                        */      
 /*                                                                            */      
 /* Updates:                                                                   */      
-/* Date        Author    Ver.  Purposes                                       */  
-/* 22-05-2019  WLCHOOI   1.1   WMS-9065 - Add storerkey, loadkeyfrom and      */ 
-/*                                        loadkeyto as input parameters(WL01) */   
-/* 10-06-2019  WLCHOOI   1.2   WMS-9314 - Add Total allocated qty column(WL02)*/ 
+/* Date         Author    Ver. Purposes                                       */  
+/* 22-05-2019   WLCHOOI   1.0  WMS-9065 - Add storerkey, loadkeyfrom and      */ 
+/*                                       loadkeyto as input parameters(WL01)  */   
+/* 10-06-2019   WLCHOOI   1.1  WMS-9314 - Add Total allocated qty column(WL02)*/
+/* 29-Mar-2023  WLCHOOI   1.2  Performance Tune & Merge KRLocal ver. (WL03)   */ 
 /******************************************************************************/      
      
-CREATE PROC isp_kr_hmpickslip01 
+CREATE OR ALTER PROC [dbo].[isp_kr_hmpickslip01]    
      @c_storerkey     NVARCHAR(15) --WL01
    , @c_route         NVARCHAR(10)       
    , @c_loadkeyFrom   NVARCHAR(10)     
@@ -89,6 +91,7 @@ BEGIN
    ,  SKUDESCR            NVARCHAR(90)      
    ,  PutawayZone         NVARCHAR(20)    
    ,  TotalAllocQty       INT  --WL02
+   ,  Notes2              NVARCHAR(250)   --WL03
    )
 
    CREATE TABLE #Temp1      
@@ -111,7 +114,14 @@ BEGIN
    ,  Notes               NVARCHAR(50)
    ,  PutawayZone         NVARCHAR(20)   
    ,  TotalAllocQty       INT --WL02
-   )     
+   ,  Notes2              NVARCHAR(250)   --WL03
+   )  
+   
+   --WL03 S
+   CREATE NONCLUSTERED INDEX IDX_HM_Label1 ON #HM_Label1 (OrderKey)
+   CREATE NONCLUSTERED INDEX IDX_Temp1 ON #Temp1 (OrderKey)
+   CREATE NONCLUSTERED INDEX IDX_Temp2 ON #Temp2 (OrderKey)
+   --WL03 E
    
    --WL01 Start     
    DECLARE cur_Loadkey CURSOR FAST_FORWARD READ_ONLY FOR
@@ -155,10 +165,12 @@ BEGIN
                ,c.PutawayZone as PutawayZone     
                --,(SELECT SUM(Qty) FROM PICKDETAIL PD (NOLOCK) JOIN ORDERS ORD (NOLOCK) ON ORD.OrderKey = PD.OrderKey WHERE ORD.LOADKEY = @c_loadkey) AS TotalQty
                ,(SELECT SUM(QtyAllocated) FROM ORDERDETAIL OD (NOLOCK) JOIN ORDERS ORD (NOLOCK) ON ORD.OrderKey = OD.OrderKey WHERE ORD.LOADKEY = @c_loadkey) AS TotalAllocQty--WL02
+               ,e.Notes2   --WL03
          FROM ORDERS      a WITH (NOLOCK)      
          JOIN PICKDETAIL  b WITH (NOLOCK) on a.OrderKey = b.OrderKey      
          JOIN LOC         c WITH (NOLOCK) on b.Loc = c.Loc      
-         JOIN ORDERDETAIL d WITH (NOLOCK) on b.OrderKey = d.OrderKey and b.OrderLineNumber = d.OrderLineNumber      
+         JOIN ORDERDETAIL d WITH (NOLOCK) on b.OrderKey = d.OrderKey and b.OrderLineNumber = d.OrderLineNumber     
+         JOIN KRWMS..SKU         e WITH (NOLOCK) on e.Sku = b.Sku AND e.StorerKey = b.Storerkey   --WL03
          WHERE a.Storerkey = @c_storerkey       
          AND a.LoadKey = @c_loadkey      
          GROUP BY a.OrderKey      
@@ -171,6 +183,7 @@ BEGIN
                ,  RTRIM(ISNULL(d.UserDefine02,''))      
                ,  RTRIM(ISNULL(b.Notes,''))      
                ,  c.PutawayZone    
+               ,  e.Notes2   --WL03
          ORDER BY a.Orderkey, b.Sku      
       END
 
@@ -182,8 +195,8 @@ BEGIN
                ,t2.Qty       
          FROM #TEMP1 AS t1       
          JOIN #TEMP2 AS t2 ON t1.orderkey = t2.orderkey      
-         ORDER BY t2.Putawayzone  
-               ,  t2.LogicalLocation      
+         ORDER BY --t2.Putawayzone   --WL03  
+                  t2.LogicalLocation      
                ,  t2.Loc      
                ,  t2.SKU      
                ,  t1.OrderKey      
@@ -213,6 +226,7 @@ BEGIN
                   ,  SKUDESCR      
                   ,  PutawayZone
                   ,  TotalAllocQty    --WL02
+                  ,  Notes2   --WL03
                   )       
            
                SELECT       
@@ -230,6 +244,7 @@ BEGIN
                   ,  t2.SKUDESCR        
                   ,  t2.PutawayZone   
                   ,  t2.TotalAllocQty --WL02
+                  ,  t2.Notes2   --WL03
                FROM #TEMP1 AS t1       
                JOIN #TEMP2 AS t2 ON t1.orderkey = t2.orderkey      
                WHERE RowNum = @n_RowNum      
@@ -290,7 +305,7 @@ BEGIN
     --WL01 End
 
    SELECT      
-         OrderNo      
+         CAST((OrderNo - 1) / 20 + 1 AS NVARCHAR) + '-' + CAST((OrderNo - 1) % 20 + 1 AS NVARCHAR) AS OrderNo   --WL03      
       ,  OrderKey      
       ,  LogicalLocation      
       ,  SUBSTRING(SKU,1,7) + ' '+SUBSTRING(SKU,8,3) + ' ' + SUBSTRING(SKU,12,2) as SKU       
@@ -304,6 +319,7 @@ BEGIN
       ,  SKUDESCR       
       ,  PutawayZone
       ,  TotalAllocQty  --WL02
+      ,  Notes2   --WL03
    FROM #HM_Label1(nolock)      
    --ORDER BY LineNumber    
    ORDER BY Loadkey, LogicalLocation, Loc, SKU, OrderKey ASC
@@ -316,5 +332,5 @@ BEGIN
       
 END   
 GO
-GRANT EXECUTE ON [dbo].[isp_kr_hmpickslip01] TO nSQL 
+GRANT EXECUTE ON [dbo].[isp_kr_hmpickslip01] TO [nSQL] 
 GO   
