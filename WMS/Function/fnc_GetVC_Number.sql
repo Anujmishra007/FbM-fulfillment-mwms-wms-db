@@ -1,13 +1,11 @@
-﻿IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[fnc_GetVC_Number]')  AND type in (N'FN', N'IF', N'TF', N'FS', N'FT')) 
-DROP FUNCTION [dbo].[fnc_GetVC_Number]
-GO
+﻿
 SET ANSI_NULLS OFF
 GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
 
-CREATE FUNCTION [dbo].[fnc_GetVC_Number] 
+CREATE OR ALTER FUNCTION [dbo].[fnc_GetVC_Number] 
   ( 
     @n_number        INT, 
     @c_LanguageCode  NVARCHAR(10)
