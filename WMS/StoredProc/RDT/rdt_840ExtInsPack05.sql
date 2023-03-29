@@ -23,6 +23,9 @@ GO
 /*                              (james01)                               */
 /* 2022-07-05   James     1.3   WMS-20115 Get TrackNo by orders.        */
 /*                              ordergroup (james02)                    */
+/* 2022-10-03   James     1.4   WMS-20920 Add new category for getting  */
+/*                              new tracking no (james03)               */
+/* 2023-02-13   James     1.5   WMS-21691 Track# assign enhance(james04)*/
 /************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_840ExtInsPack05] (
@@ -237,46 +240,77 @@ BEGIN
                FROM dbo.PackDetail WITH (NOLOCK)
                WHERE PickSlipNo = @cPickSlipNo
                
-               IF CAST( @cDefEcomCartonCnt AS INT) - @nCurrentCtnNo < 2
+               IF ( CAST( @cDefEcomCartonCnt AS INT) - @nCurrentCtnNo < 2) OR @cDefEcomCartonCnt is NULL
                BEGIN
-                  IF @cECOM_Platform = 'DY'
-            		   SET @cTableName = 'WSCRPKADDDY'
-            	   ELSE IF @cECOM_Platform = 'JD'
-            		   SET @cTableName = 'WSCRPKADDJD'
-            	   ELSE
-            		   SET @cTableName = 'WSCRPKADDCN'
+               	-- commented (james04)
+                --  IF @cECOM_Platform = 'DY'
+            		  -- SET @cTableName = 'WSCRPKADDDY'
+            	   --ELSE IF @cECOM_Platform = 'JD'
+            		  -- SET @cTableName = 'WSCRPKADDJD'
+            	   --ELSE IF @cECOM_Platform = 'TM'
+            		  -- SET @cTableName = 'WSCRPKADDCN'
+                --  ELSE
+                --  	SET @cTableName = 'Other'
+                  
+                  -- (james04)
+                  SELECT @cTableName = Long
+                  FROM dbo.CODELKUP WITH (NOLOCK)
+                  WHERE LISTNAME = 'RDT840TBN'
+                  AND   Short = @cECOM_Platform
+                  AND   Storerkey = @cStorerkey
+                  
+                  IF ISNULL( @cTableName, '') = ''
+                     SET @cTableName = 'Other'
 
-                  SET @nNewCartonNo = @nCartonNo + 1
-                  SET @bSuccess = 1    
-                  EXEC ispGenTransmitLog2    
-                        @c_TableName        = @cTableName    
-                     ,@c_Key1             = @cOrderKey    
-                     ,@c_Key2             = @nNewCartonNo    
-                     ,@c_Key3             = @cStorerkey    
-                     ,@c_TransmitBatch    = ''    
-                     ,@b_Success          = @bSuccess    OUTPUT    
-                     ,@n_err              = @nErrNo      OUTPUT    
-                     ,@c_errmsg           = @cErrMsg     OUTPUT    
-    
-                  IF @bSuccess <> 1    
+                  IF @cTableName <> 'Other'
                   BEGIN
-                     SET @nErrNo = 135461  
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'InsTL2Log Err'  
-                     GOTO RollBackTran    
+                     SET @nNewCartonNo = @nCartonNo + 1
+                     SET @bSuccess = 1    
+                     EXEC ispGenTransmitLog2    
+                         @c_TableName        = @cTableName    
+                        ,@c_Key1             = @cOrderKey    
+                        ,@c_Key2             = @nNewCartonNo    
+                        ,@c_Key3             = @cStorerkey    
+                        ,@c_TransmitBatch    = ''    
+                        ,@b_Success          = @bSuccess    OUTPUT    
+                        ,@n_err              = @nErrNo      OUTPUT    
+                        ,@c_errmsg           = @cErrMsg     OUTPUT    
+    
+                     IF @bSuccess <> 1    
+                     BEGIN
+                        SET @nErrNo = 135461  
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'InsTL2Log Err'  
+                        GOTO RollBackTran    
+                     END
                   END
                END
 
-               SET @cTrackNo = ''  
-               SELECT TOP 1 @cTrackNo = CT.TrackingNo
-               FROM dbo.CartonTrack CT WITH (NOLOCK)
-               WHERE CT.LabelNo = @cOrderKey
-               AND   CT.CarrierName = @cShipperKey
-               AND   ISNULL( CT.CarrierRef2, '') = ''
-               AND   NOT EXISTS ( SELECT 1 FROM dbo.PackDetail PD WITH (NOLOCK)
-                                  WHERE PD.StorerKey = @cStorerkey
-                                  AND   PD.LabelNo = CT.TrackingNo)
-               ORDER BY 1
-               
+               IF @cTableName = 'Other'
+               BEGIN
+                  SET @cTrackNo = ''  
+                  EXEC ispAsgnTNo2  
+                    @c_OrderKey    = @cOrderKey     
+                  , @c_LoadKey     = ''  
+                  , @b_Success     = @bSuccess  OUTPUT        
+                  , @n_Err         = @nErrNo    OUTPUT        
+                  , @c_ErrMsg      = @cErrMsg   OUTPUT        
+                  , @b_ChildFlag   = 1  
+                  , @c_TrackingNo  = @cTrackNo  OUTPUT   
+               END
+               ELSE
+               BEGIN
+                  SET @cTrackNo = ''  
+                  SELECT @cTrackNo = CT.TrackingNo
+                  FROM dbo.CartonTrack CT WITH (NOLOCK)
+                  WHERE CT.LabelNo = @cOrderKey
+                  AND   CT.CarrierName = @cShipperKey
+                  AND   ISNULL( CT.CarrierRef2, '') = ''
+                  AND   CarrierRef1 = @cOrderKey + CAST( @nCurrentCtnNo + 1 AS NVARCHAR( 1))
+                  AND   NOT EXISTS ( SELECT 1 FROM dbo.PackDetail PD WITH (NOLOCK)
+                                     WHERE PD.StorerKey = @cStorerkey
+                                     AND   PD.LabelNo = CT.TrackingNo)
+               END
+                              
                IF ISNULL( @cTrackNo, '') = ''
                BEGIN
                   SET @nErrNo = 135456
@@ -373,9 +407,9 @@ BEGIN
                AND CartonNo = @nCartonNo)
    BEGIN
       INSERT INTO dbo.PACKINFO
-      (PickSlipNo, CartonNo, CartonType, Cube, Weight, RefNo)
+      (PickSlipNo, CartonNo, CartonType, Cube, Weight, RefNo, TrackingNo)
       VALUES
-      (@cPickSlipNo, @nCartonNo, '', 0, 0, @cLabelNo)
+      (@cPickSlipNo, @nCartonNo, '', 0, 0, @cLabelNo, @cTrackNo)
 
       IF @@ERROR <> 0
       BEGIN
