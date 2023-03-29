@@ -241,7 +241,6 @@ BEGIN
        
        
 END    
-SET QUOTED_IDENTIFIER OFF 
 GO
 GRANT EXECUTE ON [dbo].[isp_CartonManifestLabel23_rdt] TO nSQL 
 GO
