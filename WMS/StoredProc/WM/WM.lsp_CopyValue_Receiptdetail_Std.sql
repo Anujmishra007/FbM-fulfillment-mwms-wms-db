@@ -14,13 +14,14 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.0                                                          */  
+/* Version: 1.1                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date       Author   Ver   Purposes                                    */ 
-/* 2023-02-12 Wan      1.0   Created & DevOps Combine Script             */
+/* Date       Author Ver   Purposes                                      */ 
+/* 2023-02-12 Wan    1.0   Created & DevOps Combine Script               */
+/* 2023-03-28 Wan01  1.1   Fixed Update before validation and double update*/
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_CopyValue_Receiptdetail_Std]  
    @c_TableName            NVARCHAR(30) 
@@ -386,56 +387,6 @@ BEGIN
          END  
          
          IF @n_Continue IN (1,2)
-         BEGIN
-            SET @c_SQL = N'UPDATE RECEIPTDETAIL WITH (ROWLOCK)'
-                       + ' SET ' + @c_ColumnName + '= @c_CopyValue'
-                       + IIF(@b_Trafficop_NULL = 0, '', ', Trafficcop = NULL')
-                       + IIF(@c_SQL_LA <> '', @c_SQL_LA, '')
-                       + ' WHERE ReceiptKey = @c_CopyFromKey1'
-                       + ' AND ReceiptLineNumber = @c_ReceiptLineNumber'
-                    
-            SET @c_SQLParms = N'@c_CopyValue          NVARCHAR(MAX)' 
-                            + ',@c_CopyFromKey1       NVARCHAR(30)'
-                            + ',@c_ReceiptLineNumber  NVARCHAR(5)'
-                            + ',@c_Lottable01         NVARCHAR(18)'
-                            + ',@c_Lottable02         NVARCHAR(18)'
-                            + ',@c_Lottable03         NVARCHAR(18)'
-                            + ',@dt_Lottable04        DATETIME'
-                            + ',@dt_Lottable05        DATETIME'
-                            + ',@c_Lottable06         NVARCHAR(30)'
-                            + ',@c_Lottable07         NVARCHAR(30)'
-                            + ',@c_Lottable08         NVARCHAR(30)'
-                            + ',@c_Lottable09         NVARCHAR(30)'
-                            + ',@c_Lottable10         NVARCHAR(30)'
-                            + ',@c_Lottable11         NVARCHAR(30)'
-                            + ',@c_Lottable12         NVARCHAR(30)'
-                            + ',@dt_Lottable13        DATETIME'
-                            + ',@dt_Lottable14        DATETIME'
-                            + ',@dt_Lottable15        DATETIME'
-
-            EXEC sp_ExecuteSQL @c_SQL
-                              ,@c_SQLParms
-                              ,@c_CopyValue          
-                              ,@c_CopyFromKey1  
-                              ,@c_ReceiptLineNumber
-                              ,@c_Lottable01  
-                              ,@c_Lottable02  
-                              ,@c_Lottable03  
-                              ,@dt_Lottable04 
-                              ,@dt_Lottable05 
-                              ,@c_Lottable06  
-                              ,@c_Lottable07  
-                              ,@c_Lottable08  
-                              ,@c_Lottable09  
-                              ,@c_Lottable10  
-                              ,@c_Lottable11  
-                              ,@c_Lottable12  
-                              ,@dt_Lottable13 
-                              ,@dt_Lottable14 
-                              ,@dt_Lottable15 
-         END  
-
-         IF @n_Continue IN (1,2)
          BEGIN         
             EXEC WM.lsp_BuildInputData4Validation 
                @c_WhereClause    = 'Receiptkey = @c_Key1 AND ReceiptLineNumber = @c_Key2'
@@ -536,7 +487,7 @@ BEGIN
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0
-      IF @@TRANCOUNT = 1 AND @@TRANCOUNT > @n_StartTCnt
+      IF @n_StartTCnt = 0 AND @@TRANCOUNT > @n_StartTCnt       --Wan01
       BEGIN
          ROLLBACK TRAN
       END

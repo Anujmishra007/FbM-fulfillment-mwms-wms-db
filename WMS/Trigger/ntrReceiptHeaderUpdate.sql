@@ -1,7 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrReceiptHeaderUpdate]') 
-              and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
-drop trigger [dbo].[ntrReceiptHeaderUpdate]
-GO
+ 
 SET QUOTED_IDENTIFIER OFF
 GO
 
@@ -160,7 +157,7 @@ GO
 /*                                  below it to be executed (CLVN01)           */
 /*******************************************************************************/
 
-ALTER TRIGGER [dbo].[ntrReceiptHeaderUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrReceiptHeaderUpdate]
 ON  [dbo].[RECEIPT]
 FOR UPDATE
 AS

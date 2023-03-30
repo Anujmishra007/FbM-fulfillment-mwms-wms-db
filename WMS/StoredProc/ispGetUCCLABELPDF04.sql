@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispGetUCCLABELPDF04]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[ispGetUCCLABELPDF04]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -19,7 +14,7 @@ GO
 /*                                                                      */
 /* Called By: isp_GetPrint2PDFConfig                                    */
 /*                                                                      */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -29,9 +24,11 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 27-Apr-2021 WLChooi  1.1   WMS-16817 Modify Logic to decide print to */
 /*                            which printer type (WL01)                 */
+/* 23-Feb-2023 WLChooi  1.2   WMS-21836 Option5 store shipperkey (WL02) */
+/* 23-Feb-2023 WLChooi  1.2   DevOps Combine Script                     */
 /************************************************************************/
 
-CREATE PROCEDURE [dbo].[ispGetUCCLABELPDF04]
+CREATE OR ALTER PROCEDURE [dbo].[ispGetUCCLABELPDF04]
        @c_Storerkey     NVARCHAR(15),
        @c_Facility      NVARCHAR(5), 
        @c_Configkey     NVARCHAR(30),
@@ -99,10 +96,11 @@ BEGIN
          , @c_ArchivePath     NVARCHAR(200) = ''
          , @c_TrackingNo      NVARCHAR(30)  = ''
          , @c_Type            NVARCHAR(20)  = ''
-         , @c_Option3         NVARCHAR(50) = '' 
+         , @c_Option5         NVARCHAR(4000) = ''   --WL02
          , @c_GetDefaultPrinter       NVARCHAR(20) = ''
          , @c_GetDefaultPrinter_Paper NVARCHAR(20) = ''
          , @c_Short           NVARCHAR(10) = ''   --WL01
+         , @c_ShipperkeyList  NVARCHAR(4000) = ''   --WL02
           
    --CREATE TABLE #DirPDFTree (
    --   ID INT IDENTITY(1,1),
@@ -133,15 +131,17 @@ BEGIN
    WHERE PACKHEADER.PickSlipNo = @c_Param01 
    --AND ORDERS.status = '5'
 
-   SELECT @c_Option3 = ISNULL(SC.Option3,'')
+   SELECT @c_Option5 = ISNULL(SC.Option5,'')   --WL02
    FROM STORERCONFIG SC (NOLOCK)
    WHERE SC.Storerkey = @c_Storerkey
    AND SC.Configkey = @c_Configkey
 
+   SELECT @c_ShipperkeyList = dbo.fnc_GetParamValueFromString('@c_Shipperkey', @c_Option5, @c_ShipperkeyList)   --WL02
+
    CREATE TABLE #TEMP_Shipperkey (Shipperkey NVARCHAR(15))
 
    INSERT INTO #TEMP_Shipperkey
-   SELECT LTRIM(RTRIM(ColValue)) FROM dbo.fnc_delimsplit (',',@c_Option3) 
+   SELECT LTRIM(RTRIM(ColValue)) FROM dbo.fnc_delimsplit (',',@c_ShipperkeyList)   --WL02
 
    ----IF LTRIM(RTRIM(ISNULL(@c_Type,''))) <> 'IOT'
    ----IF LTRIM(RTRIM(ISNULL(@c_Type,''))) <> 'E'

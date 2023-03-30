@@ -112,6 +112,7 @@ GO
 /* 2022-03-18 6.8  James    WMS-19123 Add CaptureInfoSP to step3 (james48)   */  
 /* 2022-06-15 6.9  James    WMS-19935 Not auto convert weight to kg (james49)*/
 /* 2022-07-19 7.0  James    INC1862140 Add SKUStatus filter (james50)        */
+/* 2022-01-10 7.1  James    WMS-18321 Add config to exclude short (james51)  */  
 /*****************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdtfnc_PackByTrackNo](  
@@ -277,7 +278,9 @@ DECLARE
    @nFromStep              INT,
    @cNotConvertWgt2KG      NVARCHAR( 1),
    @cSKUStatus             NVARCHAR( 10),
-   
+   @cExcludeShortPick      NVARCHAR( 1),  
+   @cPickConfirmStatus     NVARCHAR( 1),  
+      
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),  
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),  
    @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),  
@@ -376,7 +379,9 @@ SELECT
    @cDataCapture        = V_String28,
    @cNotConvertWgt2KG   = V_String29,
    @cSKUStatus          = V_String30, 
-   
+   @cExcludeShortPick   = V_String31,   -- (james51)  
+   @cPickConfirmStatus  = V_String32,   -- (james51)  
+      
    @cRefNo              = V_String41,  -- (james40)  
    @cSerialNoCapture    = V_String42,  
    @cPackSwapLot_SP     = V_String43,  
@@ -549,6 +554,12 @@ BEGIN
    SET @cSKUStatus = rdt.RDTGetConfig( @nFunc, 'SKUStatus', @cStorerkey)    
    IF @cSKUStatus = '0'  
       SET @cSKUStatus = ''  
+
+   -- (james51)  
+   SET @cExcludeShortPick = rdt.RDTGetConfig( @nFunc, 'ExcludeShortPick', @cStorerKey)  
+   SET @cPickConfirmStatus = rdt.RDTGetConfig( @nFunc, 'PickConfirmStatus', @cStorerKey)  
+   IF @cPickConfirmStatus = '0'  
+      SET @cPickConfirmStatus = '5'  
       
    EXEC rdt.rdtSetFocusField @nMobile, 1        
 END  
@@ -993,8 +1004,9 @@ BEGIN
          SET @nExpectedQty = 0  
          SELECT @nExpectedQty = ISNULL(SUM(Qty), 0) FROM PickDetail WITH (NOLOCK)  
          WHERE Orderkey = @cOrderkey  
-         AND Storerkey = @cStorerkey  
-  
+         AND   Storerkey = @cStorerkey  
+         AND  (( @cExcludeShortPick = '1' AND [Status] <> '4') OR ([Status] = @cPickConfirmStatus))  
+           
          SET @nPackedQty = 0  
          SELECT @nPackedQty = ISNULL(SUM(Qty), 0) FROM dbo.PackDetail WITH (NOLOCK)  
          WHERE PickSlipNo = @cPickSlipNo  
@@ -1396,8 +1408,9 @@ BEGIN
       SET @nExpectedQty = 0  
       SELECT @nExpectedQty = ISNULL(SUM(Qty), 0) FROM PickDetail WITH (NOLOCK)  
       WHERE Orderkey = @cOrderkey  
-      AND Storerkey = @cStorerkey  
-  
+      AND   Storerkey = @cStorerkey  
+      AND  (( @cExcludeShortPick = '1' AND [Status] <> '4') OR ([Status] = @cPickConfirmStatus))  
+      
       SET @nPackedQty = 0  
       SELECT @nPackedQty = ISNULL(SUM(Qty), 0) FROM dbo.PackDetail WITH (NOLOCK)  
       WHERE PickSlipNo = @cPickSlipNo  
@@ -1466,7 +1479,8 @@ BEGIN
    BEGIN  
       -- (james13)  
       IF @cExtendedUpdateSP <> '' AND   
-         EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')        BEGIN  
+         EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')        
+      BEGIN  
          SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +  
             ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cOrderKey, @cPickSlipNo, @cTrackNo, @cSKU, @nCartonNo,' +  
             ' @nErrNo OUTPUT, @cErrMsg OUTPUT '  
@@ -2416,9 +2430,10 @@ BEGIN
       SET @nExpectedQty = 0  
       SELECT @nExpectedQty = ISNULL(SUM(Qty), 0) FROM PickDetail WITH (NOLOCK)  
       WHERE Orderkey = @cOrderkey  
-         AND Storerkey = @cStorerkey  
-         AND Status < '9'  
-  
+      AND   Storerkey = @cStorerkey  
+      AND   Status < '9'  
+      AND  (( @cExcludeShortPick = '1' AND [Status] <> '4') OR ([Status] = @cPickConfirmStatus))  
+      
       SET @nPackedQty = 0  
       SELECT @nPackedQty = ISNULL(SUM(Qty), 0) FROM dbo.PackDetail WITH (NOLOCK)  
       WHERE PickSlipNo = @cPickSlipNo  
@@ -2541,9 +2556,10 @@ BEGIN
       SET @nExpectedQty = 0  
       SELECT @nExpectedQty = ISNULL(SUM(Qty), 0) FROM PickDetail WITH (NOLOCK)  
       WHERE Orderkey = @cOrderkey  
-         AND Storerkey = @cStorerkey  
-         AND Status < '9'  
-  
+      AND   Storerkey = @cStorerkey  
+      AND   Status < '9'  
+      AND  (( @cExcludeShortPick = '1' AND [Status] <> '4') OR ([Status] = @cPickConfirmStatus))  
+      
       SET @nPackedQty = 0  
       SELECT @nPackedQty = ISNULL(SUM(Qty), 0) FROM dbo.PackDetail WITH (NOLOCK)  
       WHERE PickSlipNo = @cPickSlipNo  
@@ -3163,9 +3179,10 @@ BEGIN
       SET @nExpectedQty = 0  
       SELECT @nExpectedQty = ISNULL(SUM(Qty), 0) FROM PickDetail WITH (NOLOCK)  
       WHERE Orderkey = @cOrderkey  
-         AND Storerkey = @cStorerkey  
-         AND Status < '9'  
-  
+      AND   Storerkey = @cStorerkey  
+      AND   Status < '9'  
+      AND  (( @cExcludeShortPick = '1' AND [Status] <> '4') OR ([Status] = @cPickConfirmStatus))  
+        
       SET @nPackedQty = 0  
       SELECT @nPackedQty = ISNULL(SUM(Qty), 0) FROM dbo.PackDetail WITH (NOLOCK)  
       WHERE PickSlipNo = @cPickSlipNo  
@@ -4074,8 +4091,9 @@ BEGIN
       SET @nExpectedQty = 0  
       SELECT @nExpectedQty = ISNULL(SUM(Qty), 0) FROM PickDetail WITH (NOLOCK)  
       WHERE Orderkey = @cOrderkey  
-      AND Storerkey = @cStorerkey  
-  
+      AND   Storerkey = @cStorerkey  
+      AND  (( @cExcludeShortPick = '1' AND [Status] <> '4') OR ([Status] = @cPickConfirmStatus))  
+      
       SET @nPackedQty = 0  
       SELECT @nPackedQty = ISNULL(SUM(Qty), 0) FROM dbo.PackDetail WITH (NOLOCK)  
       WHERE PickSlipNo = @cPickSlipNo  
@@ -4198,8 +4216,9 @@ BEGIN
          SET @nExpectedQty = 0    
          SELECT @nExpectedQty = ISNULL(SUM(Qty), 0) FROM PickDetail WITH (NOLOCK)    
          WHERE Orderkey = @cOrderkey    
-         AND Storerkey = @cStorerkey    
-    
+         AND   Storerkey = @cStorerkey    
+         AND  (( @cExcludeShortPick = '1' AND [Status] <> '4') OR ([Status] = @cPickConfirmStatus))  
+         
          SET @nPackedQty = 0    
          SELECT @nPackedQty = ISNULL(SUM(Qty), 0) FROM dbo.PackDetail WITH (NOLOCK)    
          WHERE PickSlipNo = @cPickSlipNo    
@@ -4300,8 +4319,9 @@ BEGIN
    SET @nExpectedQty = 0  
    SELECT @nExpectedQty = ISNULL(SUM(Qty), 0) FROM PickDetail WITH (NOLOCK)  
    WHERE Orderkey = @cOrderkey  
-   AND Storerkey = @cStorerkey  
-  
+   AND   Storerkey = @cStorerkey  
+   AND  (( @cExcludeShortPick = '1' AND [Status] <> '4') OR ([Status] = @cPickConfirmStatus))  
+   
    SET @nPackedQty = 0  
    SELECT @nPackedQty = ISNULL(SUM(Qty), 0) FROM dbo.PackDetail WITH (NOLOCK)  
    WHERE PickSlipNo = @cPickSlipNo  
@@ -4453,8 +4473,9 @@ BEGIN
       SET @nExpectedQty = 0  
       SELECT @nExpectedQty = ISNULL(SUM(Qty), 0) FROM PickDetail WITH (NOLOCK)  
       WHERE Orderkey = @cOrderkey  
-      AND Storerkey = @cStorerkey  
-  
+      AND   Storerkey = @cStorerkey  
+      AND  (( @cExcludeShortPick = '1' AND [Status] <> '4') OR ([Status] = @cPickConfirmStatus))  
+      
       SET @nPackedQty = 0  
       SELECT @nPackedQty = ISNULL(SUM(Qty), 0) FROM dbo.PackDetail WITH (NOLOCK)  
       WHERE PickSlipNo = @cPickSlipNo  
@@ -4657,9 +4678,10 @@ BEGIN
       SET @nExpectedQty = 0  
       SELECT @nExpectedQty = ISNULL(SUM(Qty), 0) FROM PickDetail WITH (NOLOCK)  
       WHERE Orderkey = @cOrderkey  
-         AND Storerkey = @cStorerkey  
-         AND Status < '9'  
-  
+      AND   Storerkey = @cStorerkey  
+      AND   Status < '9'  
+      AND  (( @cExcludeShortPick = '1' AND [Status] <> '4') OR ([Status] = @cPickConfirmStatus))  
+      
       SET @nPackedQty = 0  
       SELECT @nPackedQty = ISNULL(SUM(Qty), 0) FROM dbo.PackDetail WITH (NOLOCK)  
       WHERE PickSlipNo = @cPickSlipNo  
@@ -4759,8 +4781,9 @@ BEGIN
       SET @nExpectedQty = 0  
       SELECT @nExpectedQty = ISNULL(SUM(Qty), 0) FROM PickDetail WITH (NOLOCK)  
       WHERE Orderkey = @cOrderkey  
-      AND Storerkey = @cStorerkey  
-  
+      AND   Storerkey = @cStorerkey  
+      AND  (( @cExcludeShortPick = '1' AND [Status] <> '4') OR ([Status] = @cPickConfirmStatus))  
+      
       SET @nPackedQty = 0  
       SELECT @nPackedQty = ISNULL(SUM(Qty), 0) FROM dbo.PackDetail WITH (NOLOCK)  
       WHERE PickSlipNo = @cPickSlipNo  
@@ -5403,7 +5426,9 @@ BEGIN
        V_String28    = @cDataCapture,
        V_String29    = @cNotConvertWgt2KG,
        V_String30    = @cSKUStatus,
-          
+       V_String31    = @cExcludeShortPick,   -- (james51)  
+       V_String32    = @cPickConfirmStatus,  -- (james51)  
+       
        V_String41    = @cRefNo,  
        V_String42    = @cSerialNoCapture,  
        V_String43    = @cPackSwapLot_SP,  
