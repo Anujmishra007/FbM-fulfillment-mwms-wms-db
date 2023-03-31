@@ -12,6 +12,7 @@ DATE				VER		CREATEDBY   PURPOSE
 07-MAR-2023			1.3		JAM			FINE TUNE. CHANGE SOME TABLES TO INNER JOIN
 09-MAR-2023			1.4		JEFFClidoro		Amend and add table 
 15-MAR-2023			1.5		JEFFClidoro		Remove the RECEIPTDETAIL table and column
+31-MAR-2023			1.7		JEFFClidoro		Changes condition in the 63 column
 ************************************************************************/
 
 CREATE OR ALTER PROC [BI].[nsp_STD_InventoryReport] --NAME OF SP
@@ -134,7 +135,9 @@ S.Price*(LLI.QTY-LLI.QtyAllocated-LLI.QTYPICKED) AS ''59 TOTAL PRICE (AVAIL)'',
 S.Price*LLI.QTY AS ''60 TOTAL PRICE (ONHAND)'',
 S.ShelfLife AS ''61 Shelflife'',
 S.SUSR2 AS ''62 MRSL'',
-(LA.Lottable04 - abs (S.SUSR2)) as ''63 Final Dispatch Date'',
+case when ISNULL(S.SUSR2,'''')='''' then 0
+     when ISNUMERIC(S.SUSR2)= 0 then 0
+     else (LA.Lottable04 - abs (S.SUSR2)) end as ''63 Final Dispatch Date'',
 case when PK.CaseCnt is null then 0
 	when PK.CaseCnt = 0 then 0
 	else LLI.PendingMoveIN / PK.CaseCnt end as ''64 PendindMoveIn CS'', 
