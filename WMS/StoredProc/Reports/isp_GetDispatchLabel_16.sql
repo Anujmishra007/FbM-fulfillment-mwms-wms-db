@@ -14,13 +14,14 @@ GO
 /*                                                                            */                          
 /* PVCS Version: 1.0                                                          */                          
 /*                                                                            */                          
-/* Version: 1.0                                                               */                          
+/* Version: 7.0                                                               */                          
 /*                                                                            */                          
 /* Data Modifications:                                                        */                          
 /*                                                                            */                          
 /* Updates:                                                                   */                          
 /* Date         Author    Ver.  Purposes                                      */  
-/* 13-Feb-2022  Mingle    1.0   DeVops Combine Script                         */           
+/* 13-Feb-2022  Mingle    1.0   DeVops Combine Script                         */  
+/* 28-Mar-2023  NJOW01		1.2   WMS-22083 Rebrand to Maersk                   */         
 /******************************************************************************/                 
               
 CREATE OR ALTER PROC isp_GetDispatchLabel_16                         
@@ -69,7 +70,9 @@ BEGIN
          currentpage = @c_currentpage,          
          totalpage = MBOLDETAIL.totalcartons,          
          EObarcode = CASE WHEN ISNULL(CL.SHORT,'') = 'Y' THEN ORDERS.EXTERNORDERKEY ELSE MBOLDETAIL.OrderKey END,   
-         showRcode = CASE WHEN ISNULL(CL1.SHORT,'') = 'Y' THEN R.code ELSE 'Case or Pallet' END,
+         showRcode = CASE WHEN ISNULL(CL1.SHORT,'') = 'Y' THEN 
+                          CASE WHEN ISNULL(R.UDF01,'') <> '' THEN R.UDF01 ELSE R.code END  --NJOW01
+                     ELSE 'Case or Pallet' END,
          showQRcode = CASE WHEN ISNULL(CL2.SHORT,'') = 'Y' THEN Left(ltrim(rtrim(ORDERS.EXTERNORDERKEY)),15) ELSE '' END,
          extordkey_qrcode = CASE WHEN ISNULL(CL2.SHORT,'') = 'Y' THEN(
                             CASE WHEN orders.storerkey = 'AROMA' AND orders.type = 'E' AND Orders.Shipperkey like '%Kerry%' OR Orders.Route like '%Kerry%' 
