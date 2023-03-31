@@ -21,7 +21,8 @@ GO
 /* Updates:                                                              */  
 /* Date       Author Ver   Purposes                                      */ 
 /* 2023-02-12 Wan    1.0   Created & DevOps Combine Script               */
-/* 2023-03-28 Wan01  1.1   Fixed Update before validation and double update*/
+/* 2023-03-28 Wan01  1.1   Fixed Update before validation and double     */
+/*                         update & Fixed Error #                        */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_CopyValue_Receiptdetail_Std]  
    @c_TableName            NVARCHAR(30) 
@@ -219,12 +220,13 @@ BEGIN
             BEGIN
                SELECT @c_ValidateLotLabelExist = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '','ValidateLotLabelExist')
                
-               IF @c_ValidateLotLabelExist = 1
+               IF @c_ValidateLotLabelExist = '1'                  --Wan01 (2023-03-20)
                BEGIN
                   SET @n_Continue = 3
-                  SET @n_Err = 123456
+                  SET @n_Err = 561401                             --Wan01 (2023-03-20)               
                   SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) 
                                 + ': ' + @c_ColumnName + ' Label Not Yet Setup In SKU: ' + @c_Sku
+                                + ' (lsp_CopyValue_Receiptdetail_Std) |' + @c_ColumnName + '|' + @c_Sku
                END
             END
             
