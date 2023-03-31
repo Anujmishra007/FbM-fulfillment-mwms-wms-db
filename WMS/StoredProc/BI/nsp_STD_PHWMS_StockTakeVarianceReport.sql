@@ -3,7 +3,7 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 /***********************************************************************
-TITLE: STOCKTAKE VARIANCE REPORT (PHWMS)
+TITLE: STOCKTAKE VARIANCE REPORT (PHWMS) https://jiralfl.atlassian.net/browse/WMS-21993
 
 DATE				VER		CREATEDBY   PURPOSE
 14-MAR-2023			1.0		JAM			MIGRATE FROM HYPERION (PHWMS)
@@ -11,9 +11,11 @@ DATE				VER		CREATEDBY   PURPOSE
 -- Test:   EXEC BI.nsp_STD_PHWMS_StockTakeVarianceReport 'ZEROW2W' ,'2022-09-01','2022-10-01'
 
 CREATE OR ALTER   PROC [BI].[nsp_STD_PHWMS_StockTakeVarianceReport] --NAME OF SP
-			@PARAM_GENERIC_CCKEY NVARCHAR(30)=''
-		  , @PARAM_GENERIC_ADDDATEFROM DATETIME=''
-		  , @PARAM_GENERIC_ADDDATETO DATETIME=''
+		  @PARAM_GENERIC_STORERKEY NVARCHAR(30)
+		  ,@PARAM_GENERIC_FACILITY NVARCHAR(30)
+		  ,@PARAM_GENERIC_CCKEY NVARCHAR(30)
+		  , @PARAM_GENERIC_ADDDATEFROM DATETIME
+		  , @PARAM_GENERIC_ADDDATETO DATETIME
 			
 AS
 BEGIN
@@ -22,6 +24,10 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF;
    SET CONCAT_NULL_YIELDS_NULL OFF;
 		
+	IF ISNULL(@PARAM_GENERIC_STORERKEY, '') = ''
+		SET @PARAM_GENERIC_STORERKEY = ''
+	IF ISNULL(@PARAM_GENERIC_FACILITY, '') = ''
+		SET @PARAM_GENERIC_FACILITY = ''
 	IF ISNULL(@PARAM_GENERIC_CCKEY, '') = ''
 		SET @PARAM_GENERIC_CCKEY = ''
 	IF ISNULL(@PARAM_GENERIC_ADDDATEFROM, '') = ''
@@ -36,7 +42,9 @@ BEGIN
        , @Proc      NVARCHAR(128) = ISNULL(OBJECT_NAME(@@PROCID),'')
        , @cParamOut NVARCHAR(4000)= ''
        , @cParamIn  NVARCHAR(4000)= '{ '
-									+ '"PARAM_GENERIC_CCKEY":"'    +@PARAM_GENERIC_CCKEY+'"  '
+									+ '"PARAM_GENERIC_STORERKEY":"'    +@PARAM_GENERIC_STORERKEY+'",'
+									+ '"PARAM_GENERIC_FACILITY":"'    +@PARAM_GENERIC_FACILITY+'",'
+									+ '"PARAM_GENERIC_CCKEY":"'    +@PARAM_GENERIC_CCKEY+'",'
 									+ '"PARAM_GENERIC_ADDDATEFROM":"'+CONVERT(NVARCHAR(19),@PARAM_GENERIC_ADDDATEFROM,121)+'",'
                                     + '"PARAM_GENERIC_ADDDATETO":"'+CONVERT(NVARCHAR(19),@PARAM_GENERIC_ADDDATETO,121)+'"'
 									+ ' }'
@@ -120,15 +128,103 @@ set @Stmt = ' SELECT '+
 			'  CCD.Lottable13_Cnt3  AS ''66Lottable13_Cnt3''  ,  ' +
 			'  CCD.Lottable14_Cnt3  AS ''67Lottable14_Cnt3''  ,  ' +
 			'  CCD.Lottable15_Cnt3 AS ''68Lottable15_Cnt3''    ' +
+			' , SSP.StockTakeKey ' +
+' , SSP.Facility ' +
+' , SSP.StorerKey ' +
+' , SSP.ZoneParm ' +
+' , SSP.AisleParm ' +
+' , SSP.LevelParm ' +
+' , SSP.HostWHCodeParm ' +
+' , SSP.SKUParm ' +
+' , SSP.AgencyParm ' +
+' , SSP.ABCParm ' +
+' , SSP.Protect ' +
+' , SSP.Password ' +
+' , SSP.WithQuantity ' +
+' , SSP.ClearHistory ' +
+' , SSP.EmptyLocation ' +
+' , SSP.LinesPerPage ' +
+' , SSP.FinalizeStage ' +
+' , SSP.PopulateStage ' +
+' , SSP.GroupLottable05 ' +
+' , SSP.AddDate ' +
+' , SSP.AddWho ' +
+' , SSP.EditDate ' +
+' , SSP.EditWho ' +
+' , SSP.AdjReasonCode ' +
+' , SSP.AdjType ' +
+' , SSP.ArchiveCop ' +
+' , SSP.BlankCSheetHideLoc ' +
+' , SSP.BlankCSheetNoOfPage ' +
+' , SSP.SkugroupParm ' +
+' , SSP.ExcludeQtyPicked ' +
+' , SSP.CountType ' +
+' , SSP.ExtendedParm1Field ' +
+' , SSP.ExtendedParm1 ' +
+' , SSP.ExtendedParm2Field ' +
+' , SSP.ExtendedParm2 ' +
+' , SSP.ExtendedParm3Field ' +
+' , SSP.ExtendedParm3 ' +
+' , SSP.ExcludeQtyAllocated ' +
+' , SSP.StrategyKey ' +
+' , SSP.Parameter01 ' +
+' , SSP.Parameter02 ' +
+' , SSP.Parameter03 ' +
+' , SSP.Parameter04 ' +
+' , SSP.Parameter05 ' +
+' , SSP.CountSheetGroupBy01 ' +
+' , SSP.CountSheetGroupBy02 ' +
+' , SSP.CountSheetGroupBy03 ' +
+' , SSP.CountSheetGroupBy04 ' +
+' , SSP.CountSheetGroupBy05 ' +
+' , SSP.CountSheetSortBy01 ' +
+' , SSP.CountSheetSortBy02 ' +
+' , SSP.CountSheetSortBy03 ' +
+' , SSP.CountSheetSortBy04 ' +
+' , SSP.CountSheetSortBy05 ' +
+' , SSP.CountSheetSortBy06 ' +
+' , SSP.CountSheetSortBy07 ' +
+' , SSP.CountSheetSortBy08 ' +
+' , SSP.BlankCSheetLineByMaxPLT ' +
+' , SSP.BlankCSheetDPTRNOnly ' +
+' , SSP.QueryinJSON ' +
+' , SSP.Status ' +
+' , SSP.LocPerPage ' +
+' , CCD.EDITWHO_CNT1 ' +
+' , CCD.EDITWHO_CNT2 ' +
+' , CCD.EDITWHO_CNT3 ' +
+' , CCD.EDITDATE_CNT1 ' +
+' , CCD.EDITDATE_CNT2 ' +
+' , CCD.EDITDATE_CNT3 ' +
+' , CCD.COUNTED_CNT1 ' +
+' , CCD.COUNTED_CNT2 ' +
+' , CCD.COUNTED_CNT3 ' +
+' , CCD.FINALIZEFLAG ' +
+' , CCD.FINALIZEFLAG_CNT2 ' +
+' , CCD.FINALIZEFLAG_CNT3 ' +
+' , CCD.CCDETAILKEY ' +
+' , L.LOCAISLE ' +
 			'FROM    ' +
 			'  BI.V_CCDetail CCD (nolock)  ' +
 			'  JOIN BI.V_StockTakeSheetParameters SSP (nolock) ON (CCD.STORERKEY=SSP.STORERKEY AND CCD.CCKey = SSP.StockTakeKey) ' +
 			'  LEFT JOIN BI.V_SKU S (nolock) ON (CCD.Storerkey = S.StorerKey  AND CCD.Sku = S.Sku) ' +
 			'  LEFT JOIN BI.V_PACK P (nolock) ON (S.PACKKey = P.PackKey) ' +
-			'WHERE    ' +
-			'  ( CCD.CCKey = '''+@PARAM_GENERIC_CCKEY+''' )   ' +
-			'   AND CCD.adddate BETWEEN '''+CONVERT(NVARCHAR(19),@PARAM_GENERIC_ADDDATEFROM,121)+''' ' +
-			'   AND '''+CONVERT(NVARCHAR(19),@PARAM_GENERIC_ADDDATETO,121)+''' ' 
+			'  LEFT OUTER JOIN BI.V_LOC L (nolock) ON (L.LOC = CCD.LOC) ' +
+			'WHERE    ' 
+			IF @PARAM_GENERIC_CCKEY='ALL'
+				BEGIN 
+					SET @Stmt = @Stmt + 'CCD.CCKey IN (SELECT DISTINCT STOCKTAKEKEY FROM BI.V_StockTakeSheetParameters
+					where Storerkey='''+@Param_Generic_Storerkey+'''
+					and  facility='''+@param_Generic_facility +'''
+					and AddDate between '''+CONVERT(NVARCHAR(19),@PARAM_GENERIC_ADDDATEFROM,121)+''' 
+					and '''+CONVERT(NVARCHAR(19),@PARAM_GENERIC_ADDDATETO,121)+''')'
+				END
+			ELSE
+				BEGIN
+					SET @Stmt = @Stmt + ' CCD.CCKey = '''+@PARAM_GENERIC_CCKEY+''' '
+				END
+			SET @Stmt = @Stmt + ' AND CCD.adddate BETWEEN '''+CONVERT(NVARCHAR(19),@PARAM_GENERIC_ADDDATEFROM,121)+''' ' +
+			' AND '''+CONVERT(NVARCHAR(19),@PARAM_GENERIC_ADDDATETO,121)+''' ' 
 
 
 /*************************** FOOTER *******************************/
