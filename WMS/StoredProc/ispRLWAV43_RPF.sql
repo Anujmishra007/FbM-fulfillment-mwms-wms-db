@@ -35,6 +35,8 @@ GO
 /*                            to Taskdetail (RPF, RPT,CPK,ASTCPK)       */  
 /* 2022-10-10  LZG      1.5   JSM-101260 - Fixed infinite looping       */
 /*                            when no DP Loc is found (ZG01)            */
+/* 2023-03-22  Calvin   1.6   JSM-137787 [VN ADIDAS] Update UCC Status to*/
+/*                            3 for RPF Tasks without Pickdetail (CLVN01)*/
 /************************************************************************/  
 CREATE OR ALTER PROC [dbo].[ispRLWAV43_RPF]  
         @c_wavekey      NVARCHAR(10)    
@@ -1533,6 +1535,22 @@ NEXT_LOOP:
          ------------------------------------------------------------------------------------  
          -- Create TaskDetail (END)  
          ------------------------------------------------------------------------------------  
+
+		 --CLVN01 - START--
+		 IF EXISTS( SELECT TOP 1 1 
+		 FROM UCC WITH (NOLOCK)    
+               WHERE SKU = @c_Sku    
+                  AND StorerKey = @c_Storerkey
+				  AND UCCNO = @c_DropID)
+		 BEGIN
+			UPDATE UCC SET STATUS = '3'
+                    ,   EditDate = GETDATE()  
+                    ,   EditWho = SUSER_SNAME()  
+                    ,   TrafficCop = NULL
+			WHERE STORERKEY = @c_Storerkey AND UCCNO = @c_DropID AND SKU = @c_Sku
+		 END
+		 --CLVN01 - END--
+
          SET @n_RemainingQty = @n_RemainingQty - @n_UCCQty  
   
          NEXT_REPLUCC:  
