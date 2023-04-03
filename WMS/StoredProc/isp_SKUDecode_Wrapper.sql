@@ -1,35 +1,33 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_SKUDecode_Wrapper]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_SKUDecode_Wrapper]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
-/************************************************************************/  
-/* Stored Procedure: isp_SKUDecode_Wrapper                              */  
-/* Creation Date: 14-Mar-2011                                           */  
-/* Copyright: IDS                                                       */  
-/* Written by: NJOW                                                     */  
-/*                                                                      */  
-/* Purpose: SOS#208211  - barcode rule in Packing module                */  
-/*                                                                      */  
-/* Called By: Packing (Call ispSKUDC01)                                 */  
-/*                                                                      */  
-/* PVCS Version: 1.0                                                    */  
-/*                                                                      */  
-/* Version: 5.4                                                         */  
-/*                                                                      */  
-/* Data Modifications:                                                  */  
-/*                                                                      */  
-/* Updates:                                                             */  
-/* Date         Author   Ver  Purposes                                  */  
-/* 22-Mar-2011  NJOW     1.0  Fix new sku no value problem if not setup */
-/* 07-Sep-2020  WLChooi  1.1  WMS-14786 - Add new optional parameters   */
-/*                            for decoding (WL01)                       */
-/* 01-Oct-2021  NJOW02   1.2  WMS-18189 add pickslipno parameter        */
-/* 01-Oct-2021  NJOW02   1.2  DEVOPS combine script                     */
-/************************************************************************/   
-CREATE PROCEDURE [dbo].[isp_SKUDecode_Wrapper]
+/*************************************************************************/  
+/* Stored Procedure: isp_SKUDecode_Wrapper                               */  
+/* Creation Date: 14-Mar-2011                                            */  
+/* Copyright: IDS                                                        */  
+/* Written by: NJOW                                                      */  
+/*                                                                       */  
+/* Purpose: SOS#208211  - barcode rule in Packing module                 */  
+/*                                                                       */  
+/* Called By: Packing (Call ispSKUDC01)                                  */  
+/*                                                                       */  
+/* PVCS Version: 1.0                                                     */  
+/*                                                                       */  
+/* Version: 5.4                                                          */  
+/*                                                                       */  
+/* Data Modifications:                                                   */  
+/*                                                                       */  
+/* Updates:                                                              */  
+/* Date         Author   Ver  Purposes                                   */  
+/* 22-Mar-2011  NJOW     1.0  Fix new sku no value problem if not setup  */
+/* 07-Sep-2020  WLChooi  1.1  WMS-14786 - Add new optional parameters    */
+/*                            for decoding (WL01)                        */
+/* 01-Oct-2021  NJOW02   1.2  WMS-18189 add pickslipno parameter         */
+/* 01-Oct-2021  NJOW02   1.2  DEVOPS combine script                      */
+/* 29-Mar-2023	NJOW03   1.3  WMS-21989 add cartonno & UCC parameters    */
+/*************************************************************************/   
+CREATE OR ALTER PROCEDURE [dbo].[isp_SKUDecode_Wrapper]
    @c_Storerkey  NVARCHAR(15),  
    @c_Sku        NVARCHAR(60),
    @c_NewSku     NVARCHAR(60) OUTPUT,   
@@ -39,7 +37,9 @@ CREATE PROCEDURE [dbo].[isp_SKUDecode_Wrapper]
    @c_Code01     NVARCHAR(60) = '' OUTPUT,   --WL01
    @c_Code02     NVARCHAR(60) = '' OUTPUT,   --WL01
    @c_Code03     NVARCHAR(60) = '' OUTPUT,    --WL01
-   @c_PickslipNo NVARCHAR(10) = '' --NJOW02                                          
+   @c_PickslipNo NVARCHAR(10) = '', --NJOW02                                          
+   @n_CartonNo   INT = 0, --NJOW03   
+   @c_UCCNo      NVARCHAR(20) = ''  --Pack by UCC when UCCtoDropID = '1' --NJOW03
 AS  
 BEGIN  
    SET NOCOUNT ON   
@@ -115,11 +115,21 @@ BEGIN
    	  SET @c_SPParam = @c_SPParam + ', @c_PickslipNo=@c_Pickslipno '
    END
 
+   --NJOW03
+   IF EXISTS (SELECT 1
+              FROM sys.parameters AS p
+              JOIN sys.types AS t ON t.user_type_id = p.user_type_id
+              WHERE object_id = OBJECT_ID(RTRIM(@c_SPCode))
+              AND   P.name = N'@n_CartonNo')
+   BEGIN
+   	  SET @c_SPParam = @c_SPParam + ', @n_CartonNo=@n_CartonNo, @c_UCCNo=@c_UCCNo '
+   END
+
    SET @c_SQL = 'EXEC ' + @c_SPCode + @c_SPParam
       
    EXEC sp_executesql @c_SQL, 
         N'@c_StorerKey NVARCHAR(15), @c_Sku NVARCHAR(60), @c_NewSku NVARCHAR(60) OUTPUT, @c_Code01 NVARCHAR(60) OUTPUT, @c_Code02 NVARCHAR(60) OUTPUT, @c_Code03 NVARCHAR(60) OUTPUT, 
-          @b_Success int OUTPUT, @n_Err int OUTPUT, @c_ErrMsg NVARCHAR(250) OUTPUT, @c_Pickslipno NVARCHAR(10)', 
+          @b_Success int OUTPUT, @n_Err int OUTPUT, @c_ErrMsg NVARCHAR(250) OUTPUT, @c_Pickslipno NVARCHAR(10), @n_CartonNo INT, @c_UCCNo NVARCHAR(20)', 
         @c_StorerKey,
         @c_Sku,
         @c_NewSku OUTPUT,
@@ -129,7 +139,9 @@ BEGIN
         @b_Success OUTPUT,                      
         @n_Err OUTPUT, 
         @c_ErrMsg OUTPUT,
-        @c_PickslipNo               
+        @c_PickslipNo,
+        @n_CartonNo,  --NJOW03
+        @c_UCCNo --NJOW03
    --NJOW02 E        
 
    --WL01 START
