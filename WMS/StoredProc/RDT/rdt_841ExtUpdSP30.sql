@@ -14,6 +14,7 @@ GO
 /* Date        Rev  Author   Purposes                                   */    
 /* 2022-08-26  1.0  yeekung  WMS-20618 Created                          */
 /* 2022-12-27  1.1  yeekung  WMS-21356 Add Cube logic(yeekung01)        */
+/* 2023-03-31  1.2  yeekung  WMS-22041 Update rdtmobrec(yeekung02)      */
 /************************************************************************/    
   
 CREATE OR ALTER PROC [RDT].[rdt_841ExtUpdSP30] (    
@@ -1449,6 +1450,10 @@ BEGIN
          CLOSE C_ECOMMLOG1    
          DEALLOCATE C_ECOMMLOG1    
       END    
+
+     UPDATE rdt.RDTMOBREC WITH (ROWLOCK)
+     SET V_OrderKey=@cOrderKeyOut 
+      WHERE Mobile=@nMobile
     
       IF @cPackCfm = 'Y'
       BEGIN

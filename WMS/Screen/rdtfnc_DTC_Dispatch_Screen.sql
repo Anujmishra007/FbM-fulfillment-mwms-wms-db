@@ -1,8 +1,10 @@
 --scn 3910 --- 3919
 
-INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
-VALUES ('841', 'ENG', 'FNC', 'DTC Dispatch', 'rdtfnc_DTC_Dispatch', '0')
-
+IF EXISTS (SELECT 1 FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID=841)
+BEGIN
+   INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
+   VALUES ('841', 'ENG', 'FNC', 'DTC Dispatch', 'rdtfnc_DTC_Dispatch', '0')
+END
 
 -- 2400 = ?? screen
 DELETE rdt.RDTScn WHERE Scn = 3910 AND Lang_Code = 'ENG'
@@ -38,7 +40,6 @@ EXECUTE rdt.rdtAddScn 3911, 'ENG',
    ,@cLine13 = '%20d07'
    ,@cLine14 = '%e'
    ,@nFunc = 841
-
 
 -- 2402 = ?? screen
 --DELETE rdt.RDTScn WHERE Scn = 3912 AND Lang_Code = 'ENG'
@@ -95,14 +96,27 @@ EXECUTE rdt.rdtAddScn 3915, 'ENG',
    ,@cLine03 = 'ORDERKEY: %10d01'
    ,@cLine05 = 'Track No:'
    ,@cLine06 = '%20i02'
+   ,@cLine08 = '%20d03'  --WMS-17410 extInfo
    ,@cLine14 = '%e'
    ,@nFunc = 841
 
---WMS-13131 (yeekung01)
+----WMS-13131 (yeekung01)
+--DELETE rdt.RDTScn WHERE Scn = 3916 AND Lang_Code = 'ENG'
+--EXECUTE rdt.rdtAddScn 3916, 'ENG',
+--    @cLine01 = 'Carton Type'
+--   ,@cLine02 = '%20i07'
+--   ,@cLine14 = '%e'
+--   ,@nFunc = 841
+   
+--WMS-17410 
 DELETE rdt.RDTScn WHERE Scn = 3916 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 3916, 'ENG',
-    @cLine01 = 'Carton Type'
-   ,@cLine03 = '%20i07'
+    @cLine01 = 'CARTON: %10i07'
+   ,@cLine03 = 'CUBE: %10i02'
+   ,@cLine05 = 'WEIGHT: %10i03'
+   ,@cLine07 = 'REF NO:'
+   ,@cLine08 = '%20i04'
+   ,@cLine13 = '%20d08' --WMS-22041
    ,@cLine14 = '%e'
    ,@nFunc = 841
 
