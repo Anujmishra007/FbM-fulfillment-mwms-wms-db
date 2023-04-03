@@ -23,7 +23,9 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 04-Nov-2022  WLChooi 1.1   DevOps Combine Script                        */
-/* 04-Nov-2022  WLChooi 1.1   Performance Tuning (WL01)                    */
+/* 04-Nov-2022  WLChooi 1.1   Performance Tuning (WL01)                    */ 
+/* 22-Mar-2023  NJOW01  1.2   WMS-21989 CN Yonex. Update serialno.sku and  */
+/*                            UCC.Sku from UPC.Sku                         */
 /***************************************************************************/  
 CREATE OR ALTER PROC [dbo].[ispPAKCF12]  
 (     @c_PickSlipNo  NVARCHAR(10)   
@@ -55,6 +57,9 @@ BEGIN
          , @c_DropID          NVARCHAR(20)
          , @n_CartonNo        INT
          , @c_LabelLine       NVARCHAR(5)
+         , @c_PostPackCfgOpt5 NVARCHAR(4000)  --NJOW01
+         , @c_UpdateSerial_UCCSkuFromUPC NVARCHAR(30) --NJOW01
+         , @c_Facility        NVARCHAR(5) --NJOW01
    
    SET @b_Success= 1 
    SET @n_Err    = 0  
@@ -65,7 +70,19 @@ BEGIN
   
    IF @@TRANCOUNT = 0
       BEGIN TRAN
-      	
+
+   --NJOW01 S
+   SELECT @c_Storerkey = O.Storerkey
+         ,@c_Facility = O.Facility
+   FROM PACKHEADER PH (NOLOCK)
+   JOIN ORDERS O (NOLOCK) ON PH.Orderkey = O.Orderkey
+   WHERE PH.PickslipNo = @c_PIckslipno      	
+   
+   SELECT @c_PostPackCfgOpt5 = SC.Option5                            
+   FROM dbo.fnc_GetRight2(@c_Facility, @c_Storerkey, '','PostPackconfirmSP') AS SC
+   
+   SELECT @c_UpdateSerial_UCCSkuFromUPC = dbo.fnc_GetParamValueFromString('@c_UpdateSerial_UCCSkuFromUPC', @c_PostPackCfgOpt5, @c_UpdateSerial_UCCSkuFromUPC)
+   --NJOW01 E
    
    SELECT PD.Storerkey, PD.Sku, PD.DropID, MAX(PD.CartonNo) AS CartonNo, MAX(PD.LabelLine) AS LabelLine     
    INTO #TMP_DROPID
@@ -76,26 +93,87 @@ BEGIN
    GROUP BY PD.Storerkey, PD.Sku, PD.DropID
 
    CREATE INDEX IDX_TMP_DROPID_DropID ON #TMP_DROPID (Storerkey, Sku, DropID)   --WL01
-   
-   DECLARE cur_ORDLINE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-   SELECT O.Orderkey, OD.OrderLineNumber, OD.Storerkey, OD.Sku, SUM(PD.Qty) AS Qty
-   FROM PACKHEADER PH (NOLOCK)
-   JOIN ORDERS O (NOLOCK) ON PH.Orderkey = O.Orderkey
-   JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey      
-   JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku      
-   JOIN PICKDETAIL PD (NOLOCK) ON OD.Orderkey = PD.Orderkey AND OD.OrderLineNumber = PD.OrderLineNumber
-   WHERE PH.Pickslipno = @c_Pickslipno
-   AND SKU.SerialNoCapture IN ('1','3')
-   AND (EXISTS(SELECT 1 FROM SERIALNO SN (NOLOCK)
-              WHERE SN.Orderkey = O.Orderkey
-              AND SN.Storerkey = SKU.Storerkey
-              AND SN.Sku = SKU.Sku)
-        OR EXISTS(SELECT 1 FROM #TMP_DROPID D
-              WHERE D.Storerkey = D.Storerkey
-              AND D.Sku = D.Sku)              
-        )
-   GROUP BY O.Orderkey, OD.OrderLineNumber, OD.Storerkey, OD.Sku
-   ORDER BY OD.Sku, OD.OrderLineNumber
+      
+   --NJOW01 S
+   IF @c_UpdateSerial_UCCSkuFromUPC = 'Y'                   
+   BEGIN
+      DECLARE cur_UCC CURSOR LOCAL FAST_FORWARD READ_ONLY FOR      
+         SELECT DISTINCT Userdefine01, Storerkey
+         FROM SERIALNO (NOLOCK)
+         WHERE Pickslipno = @c_Pickslipno
+         AND Userdefine01 <> ''
+         
+      OPEN cur_UCC  
+
+      FETCH NEXT FROM cur_UCC INTO @c_DropID, @c_Storerkey
+      
+      WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
+      BEGIN      	 
+      	 UPDATE UCC WITH (ROWLOCK)
+      	 SET UCC.Sku = U.Sku,
+      	     UCC.TrafficCop = NULL,
+             UCC.EditDate = GETDATE(),
+             UCC.EditWho = SUSER_SNAME()
+      	 FROM UCC
+      	 CROSS APPLY (SELECT TOP 1 UPC.Sku
+      	              FROM SERIALNO SR (NOLOCK) 
+      	              JOIN UPC (NOLOCK) ON SR.Storerkey = UPC.Storerkey AND SR.Userdefine02 = UPC.Upc
+      	              WHERE SR.Userdefine01 = UCC.UCCNo AND SR.Storerkey = UCC.Storerkey --AND SR.Sku = UCC.Sku
+      	              AND SR.Pickslipno = @c_Pickslipno
+      	              ) U
+      	 WHERE UCC.UccNo = @c_DropID
+      	 AND UCC.Storerkey = @c_Storerkey
+      	 
+         FETCH NEXT FROM cur_UCC INTO @c_DropID, @c_Storerkey
+      END
+      CLOSE cur_UCC
+      DEALLOCATE cur_UCC         
+      
+      DECLARE cur_ORDLINE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT O.Orderkey, OD.OrderLineNumber, OD.Storerkey, OD.Sku, SUM(PD.Qty) AS Qty
+      FROM PACKHEADER PH (NOLOCK)
+      JOIN ORDERS O (NOLOCK) ON PH.Orderkey = O.Orderkey
+      JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey      
+      JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku      
+      JOIN PICKDETAIL PD (NOLOCK) ON OD.Orderkey = PD.Orderkey AND OD.OrderLineNumber = PD.OrderLineNumber
+      WHERE PH.Pickslipno = @c_Pickslipno
+      AND SKU.SerialNoCapture IN ('1','3')
+      AND (EXISTS(SELECT 1 FROM SERIALNO SN (NOLOCK)
+                  LEFT JOIN UPC (NOLOCK) ON SN.Storerkey = UPC.Storerkey AND SN.Userdefine02 = UPC.Upc     
+                  WHERE SN.Orderkey = O.Orderkey
+                  AND SN.Storerkey = SKU.Storerkey
+                  AND (SN.Sku = SKU.Sku
+                       OR UPC.Sku = SKU.Sku)
+                  )
+           OR EXISTS(SELECT 1 FROM #TMP_DROPID D
+                 WHERE D.Storerkey = OD.Storerkey  --NJOW01 fix OD
+                 AND D.Sku = OD.Sku)               --NJOW01 fix OD
+           )
+      GROUP BY O.Orderkey, OD.OrderLineNumber, OD.Storerkey, OD.Sku
+      ORDER BY OD.Sku, OD.OrderLineNumber      
+   END  --NJOW01 E    
+   ELSE 
+   BEGIN   
+      DECLARE cur_ORDLINE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT O.Orderkey, OD.OrderLineNumber, OD.Storerkey, OD.Sku, SUM(PD.Qty) AS Qty
+      FROM PACKHEADER PH (NOLOCK)
+      JOIN ORDERS O (NOLOCK) ON PH.Orderkey = O.Orderkey
+      JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey      
+      JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku      
+      JOIN PICKDETAIL PD (NOLOCK) ON OD.Orderkey = PD.Orderkey AND OD.OrderLineNumber = PD.OrderLineNumber
+      WHERE PH.Pickslipno = @c_Pickslipno
+      AND SKU.SerialNoCapture IN ('1','3')
+      AND (EXISTS(SELECT 1 FROM SERIALNO SN (NOLOCK)
+                 WHERE SN.Orderkey = O.Orderkey
+                 AND SN.Storerkey = SKU.Storerkey
+                 AND SN.Sku = SKU.Sku)
+           OR EXISTS(SELECT 1 FROM #TMP_DROPID D
+                 WHERE D.Storerkey = OD.Storerkey  --NJOW01 fix OD
+                 AND D.Sku = OD.Sku)               --NJOW01 fix OD
+           )
+      GROUP BY O.Orderkey, OD.OrderLineNumber, OD.Storerkey, OD.Sku
+      ORDER BY OD.Sku, OD.OrderLineNumber
+   END
    
    OPEN cur_ORDLINE  
           
@@ -154,12 +232,21 @@ BEGIN
    	    SELECT TOP ' + RTRIM(CAST(@n_Qty AS NVARCHAR)) + ' SR.SerialNokey, ISNULL(TD.DropID,''''), 
    	           CASE WHEN TD.DropID IS NULL THEN CAST(SR.OrderLineNumber AS INT) ELSE ISNULL(TD.CartonNo,0) END, 
    	           ISNULL(TD.LabelLine,'''') 
-   	    FROM SERIALNO SR (NOLOCK)   	       	
-   	    LEFT JOIN #TMP_DROPID TD ON SR.Userdefine01 = TD.DropID AND SR.Storerkey = TD.Storerkey AND SR.Sku = TD.Sku    
-   	    WHERE (SR.Orderkey = @c_Orderkey OR TD.DropID IS NOT NULL)      	           	             
-   	    AND SR.Storerkey = @c_Storerkey 
-   	    AND SR.Sku = @c_Sku
-   	    AND SR.Pickslipno = ''''
+   	    FROM SERIALNO SR (NOLOCK) ' +
+   	    CASE WHEN @c_UpdateSerial_UCCSkuFromUPC = 'Y' THEN  --NJOW01
+   	       ' LEFT JOIN UPC (NOLOCK) ON SR.Storerkey = UPC.Storerkey AND SR.Userdefine02 = UPC.Upc 
+   	         LEFT JOIN #TMP_DROPID TD ON SR.Userdefine01 = TD.DropID AND SR.Storerkey = TD.Storerkey AND (SR.Sku = TD.Sku OR UPC.Sku = TD.Sku) '
+   	    ELSE       	      	    
+   	       ' LEFT JOIN #TMP_DROPID TD ON SR.Userdefine01 = TD.DropID AND SR.Storerkey = TD.Storerkey AND SR.Sku = TD.Sku '
+   	    END +   
+   	  ' WHERE (SR.Orderkey = @c_Orderkey OR TD.DropID IS NOT NULL)
+   	    AND SR.Storerkey = @c_Storerkey ' +
+   	    CASE WHEN @c_UpdateSerial_UCCSkuFromUPC = 'Y' THEN  --NJOW01
+   	       ' AND (SR.Sku = @c_Sku OR UPC.Sku = @c_Sku) '
+   	    ELSE   
+   	       ' AND SR.Sku = @c_Sku '
+   	    END +   	       
+   	  ' AND SR.Pickslipno = ''''
    	    ORDER BY SR.Userdefine01, SR.SerialNokey '
 
       EXEC sp_executesql @c_SQL,
@@ -177,32 +264,52 @@ BEGIN
       
       WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
       BEGIN
-      	  IF @b_Debug = 1
-          BEGIN
-             SELECT  '@c_SerialNoKey=' + RTRIM(@c_SerialNoKey) + ' @c_Dropid=' + RTRIM(@c_DropID) + ' @n_cartonno=' + RTRIM(CAST(@c_DropID AS NVARCHAR)) + ' @c_LabelLine=' + RTRIM(@c_LabelLine) 
-          END
-          
-          IF ISNULL(@c_DropId,'') = ''
-          BEGIN
-          	 SELECT TOP 1 @c_LabelLine = PD.LabelLine
-          	 FROM PACKDETAIL PD (NOLOCK)
-          	 WHERE PD.Pickslipno = @c_Pickslipno
-          	 AND PD.Storerkey = @c_Storerkey
-          	 AND PD.Sku = @c_Sku
-          	 AND PD.CartonNo = @n_CartonNo
-          END
-
-      	  UPDATE SERIALNO WITH (ROWLOCK)
-      	  SET Orderkey = @c_Orderkey
-      	     ,OrderLineNumber = @c_OrderLineNumber
-      	     ,Pickslipno = @c_Pickslipno
-      	     ,CartonNo = @n_CartonNo
-      	     ,Labelline = @c_LabelLine
-      	     ,Status = '6'
-      	     ,TrafficCop = NULL
-              ,EditDate = GETDATE()   --WL01
-              ,EditWho = SUSER_SNAME()   --WL01
-      	  WHERE SerialNokey = @c_SerialNokey
+      	 IF @b_Debug = 1
+         BEGIN
+            SELECT  '@c_SerialNoKey=' + RTRIM(@c_SerialNoKey) + ' @c_Dropid=' + RTRIM(@c_DropID) + ' @n_cartonno=' + RTRIM(CAST(@c_DropID AS NVARCHAR)) + ' @c_LabelLine=' + RTRIM(@c_LabelLine) 
+         END
+         
+         IF ISNULL(@c_DropId,'') = ''
+         BEGIN
+         	 SELECT TOP 1 @c_LabelLine = PD.LabelLine
+         	 FROM PACKDETAIL PD (NOLOCK)
+         	 WHERE PD.Pickslipno = @c_Pickslipno
+         	 AND PD.Storerkey = @c_Storerkey
+         	 AND PD.Sku = @c_Sku
+         	 AND PD.CartonNo = @n_CartonNo
+         END
+         
+         IF @c_UpdateSerial_UCCSkuFromUPC = 'Y'  --NJOW01
+         BEGIN
+      	    UPDATE SERIALNO WITH (ROWLOCK)
+      	    SET SERIALNO.Orderkey = @c_Orderkey
+      	       ,SERIALNO.OrderLineNumber = @c_OrderLineNumber
+      	       ,SERIALNO.Pickslipno = @c_Pickslipno
+      	       ,SERIALNO.CartonNo = @n_CartonNo
+      	       ,SERIALNO.Labelline = @c_LabelLine
+      	       ,SERIALNO.Status = '6'
+      	       ,SERIALNO.TrafficCop = NULL
+               ,SERIALNO.EditDate = GETDATE()   --WL01
+               ,SERIALNO.EditWho = SUSER_SNAME()   --WL01
+               ,SERIALNO.Sku = CASE WHEN UPC.Sku IS NOT NULL THEN UPC.Sku ELSE SERIALNO.Sku END               
+            FROM SERIALNO
+            LEFT JOIN UPC (NOLOCK) ON SERIALNO.Userdefine02 = UPC.Upc AND SERIALNO.Storerkey = UPC.Storerkey
+      	    WHERE SERIALNO.SerialNokey = @c_SerialNokey
+         END
+         ELSE
+         BEGIN
+      	    UPDATE SERIALNO WITH (ROWLOCK)
+      	    SET Orderkey = @c_Orderkey
+      	       ,OrderLineNumber = @c_OrderLineNumber
+      	       ,Pickslipno = @c_Pickslipno
+      	       ,CartonNo = @n_CartonNo
+      	       ,Labelline = @c_LabelLine
+      	       ,Status = '6'
+      	       ,TrafficCop = NULL
+               ,EditDate = GETDATE()   --WL01
+               ,EditWho = SUSER_SNAME()   --WL01
+      	    WHERE SerialNokey = @c_SerialNokey
+      	 END
 
          SET @n_Err = @@ERROR
                              
@@ -222,8 +329,7 @@ BEGIN
    END
    CLOSE cur_ORDLINE
    DEALLOCATE cur_ORDLINE
-                           
-    
+                                  
    QUIT_SP:
 
    IF @n_continue = 3  -- Error Occured - Process And Return
