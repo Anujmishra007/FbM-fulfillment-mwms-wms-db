@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_DynamicPick_PickAndPack_ValidatePickSlip]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_DynamicPick_PickAndPack_ValidatePickSlip]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -26,7 +23,7 @@ GO
 /* 26-Jul-2016 1.3  Ung         SOS375224 Add LoadKey, Zone optional    */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdt_DynamicPick_PickAndPack_ValidatePickSlip] (
+CREATE OR ALTER PROC [RDT].[rdt_DynamicPick_PickAndPack_ValidatePickSlip] (
    @nMobile       INT,             
    @nFunc         INT,             
    @cLangCode     NVARCHAR( 3),    
