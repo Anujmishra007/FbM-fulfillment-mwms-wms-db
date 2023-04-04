@@ -2154,6 +2154,9 @@ BEGIN
                                    
                      --set default Value        
                      SET @cOutField07 = CASE WHEN @cDefaultCtnType <> '' THEN @cDefaultCtnType ELSE '' END        
+                     SET @cOutField02 = ''        
+                     SET @cOutField03 = ''        
+                     SET @cOutField04 = ''           
                                    
                      -- Enable disable field          
                      SET @cFieldAttr07 = CASE WHEN CHARINDEX( 'T', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
@@ -2303,6 +2306,9 @@ BEGIN
                                    
                      --set default Value        
                      SET @cOutField07 = CASE WHEN @cDefaultCtnType <> '' THEN @cDefaultCtnType ELSE '' END        
+                     SET @cOutField02 = ''        
+                     SET @cOutField03 = ''        
+                     SET @cOutField04 = ''          
                                    
                      -- Enable disable field          
                      SET @cFieldAttr07 = CASE WHEN CHARINDEX( 'T', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
@@ -2463,6 +2469,9 @@ BEGIN
                         
                            --set default Value        
                            SET @cOutField07 = CASE WHEN @cDefaultCtnType <> '' THEN @cDefaultCtnType ELSE '' END        
+                           SET @cOutField02 = ''        
+                           SET @cOutField03 = ''        
+                           SET @cOutField04 = ''           
                                    
                            -- Enable disable field          
                            SET @cFieldAttr07 = CASE WHEN CHARINDEX( 'T', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
@@ -2514,6 +2523,9 @@ BEGIN
                                    
                            --set default Value        
                            SET @cOutField07 = CASE WHEN @cDefaultCtnType <> '' THEN @cDefaultCtnType ELSE '' END        
+                           SET @cOutField02 = ''        
+                           SET @cOutField03 = ''        
+                           SET @cOutField04 = ''       
                                    
                            -- Enable disable field          
                            SET @cFieldAttr07 = CASE WHEN CHARINDEX( 'T', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
@@ -2645,6 +2657,9 @@ BEGIN
                                    
                --set default Value        
                SET @cOutField07 = CASE WHEN @cDefaultCtnType <> '' THEN @cDefaultCtnType ELSE '' END        
+               SET @cOutField02 = ''        
+               SET @cOutField03 = ''        
+               SET @cOutField04 = ''         
                                    
                -- Enable disable field          
                SET @cFieldAttr07 = CASE WHEN CHARINDEX( 'T', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
