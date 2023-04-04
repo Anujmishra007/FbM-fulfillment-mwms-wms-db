@@ -364,6 +364,7 @@ BEGIN
       ,  PutawayZone    
       ,  TotalAllocQty
 	  ,  Notes2
+      ,  ('*'+OrderKey+'*') --MS 230404 1.4
   
    --,  Color --Jeffrey Shin 210930  
   
