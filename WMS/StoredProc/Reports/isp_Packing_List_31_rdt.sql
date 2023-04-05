@@ -14,7 +14,7 @@ GO
 /*                                                                            */
 /* Called By:  r_dw_packing_list_31_rdt                                       */
 /*                                                                            */
-/* PVCS Version: 1.4                                                          */
+/* PVCS Version: 1.5                                                          */
 /*                                                                            */
 /* Version: 1.0                                                               */
 /*                                                                            */
@@ -28,6 +28,7 @@ GO
 /* 18-MAY-2022 mingle   1.3   MMS-19552 - Modify logic (ML01)                 */
 /* 16-Mar-2023 WLChooi  1.4   WMS-21976 - Modify mapping (WL01)               */
 /* 16-Mar-2023 WLChooi  1.4   DevOps Combine Script                           */
+/* 29-Mar-2023 WLChooi  1.5   WMS-21976 - Modify mapping (WL02)               */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_Packing_List_31_rdt]
@@ -63,23 +64,24 @@ BEGIN
 
    CREATE TABLE #PACKLIST30
    (
-      c_Contact1  NVARCHAR(30)  NULL
-    , C_Addresses NVARCHAR(200) NULL
-    , OHNotes2    NVARCHAR(200) NULL
-    , OrdAddDate  NVARCHAR(10)  NULL
-    , RptTitle    NVARCHAR(200) NULL
-    , PickLOC     NVARCHAR(10)  NULL
-    , SKUSize     NVARCHAR(10)  NULL
-    , ORDUdef04   NVARCHAR(20)  NULL
-    , MSKU        NVARCHAR(20)  NULL
-    , Pqty        INT
-    , OrderKey    NVARCHAR(10)  NULL
-    , Style       NVARCHAR(20)  NULL
-    , Shipperkey  NVARCHAR(15)  NULL
-    , SDescr      NVARCHAR(150) NULL
-    , ORDUdef01   NVARCHAR(20)  NULL
-    , RecGrp      INT
-    , M_Company   NVARCHAR(45)  NULL --(Wan01)
+      c_Contact1     NVARCHAR(30)  NULL
+    , C_Addresses    NVARCHAR(200) NULL
+    , OHNotes2       NVARCHAR(200) NULL
+    , OrdAddDate     NVARCHAR(10)  NULL
+    , RptTitle       NVARCHAR(200) NULL
+    , PickLOC        NVARCHAR(10)  NULL
+    , SKUSize        NVARCHAR(10)  NULL
+    , ORDUdef04      NVARCHAR(20)  NULL
+    , MSKU           NVARCHAR(20)  NULL
+    , Pqty           INT
+    , OrderKey       NVARCHAR(10)  NULL
+    , Style          NVARCHAR(20)  NULL
+    , Shipperkey     NVARCHAR(15)  NULL
+    , SDescr         NVARCHAR(150) NULL
+    , ORDUdef01      NVARCHAR(20)  NULL
+    , RecGrp         INT
+    , M_Company      NVARCHAR(100) NULL --(Wan01)   --WL02
+    , ExternOrderkey NVARCHAR(50)  NULL   --WL02
    )
 
    /*CS01 Start*/
@@ -99,6 +101,7 @@ BEGIN
 
    INSERT INTO #PACKLIST30 (c_Contact1, C_Addresses, OHNotes2, OrdAddDate, RptTitle, PickLOC, SKUSize, ORDUdef04, MSKU
                           , Pqty, OrderKey, Style, Shipperkey, SDescr, ORDUdef01, RecGrp, M_Company --(Wan01)
+                          , ExternOrderkey   --WL02
    )
    SELECT ISNULL(OH.C_contact1, '')
         , (OH.C_Address2 + OH.C_Address3 + OH.C_Address4)
@@ -124,7 +127,8 @@ BEGIN
         , ISNULL(OH.UserDefine01, '')
         , (ROW_NUMBER() OVER (PARTITION BY PD.OrderKey
                               ORDER BY PD.Loc ASC) - 1) / @n_NoOfLine
-        , M_Company = ISNULL(TRIM(OH.ExternOrderKey), '') --(Wan01)   --WL01
+        , M_Company = ISNULL(TRIM(OH.M_Company), '') --(Wan01)   --WL01   --WL02
+        , ExternOrderKey = ISNULL(TRIM(OH.ExternOrderKey), '')   --WL02
    FROM ORDERS OH WITH (NOLOCK)
    JOIN ORDERDETAIL ORDDET WITH (NOLOCK) ON ORDDET.OrderKey = OH.OrderKey
    JOIN PICKDETAIL PD WITH (NOLOCK) ON PD.OrderKey = OH.OrderKey AND PD.OrderLineNumber = ORDDET.OrderLineNumber
@@ -155,7 +159,8 @@ BEGIN
         , SDescr
         , ORDUdef01
         , RecGrp
-        , UPPER(M_Company) --(Wan01)   --WL01
+        , M_Company = UPPER(M_Company) --(Wan01)   --WL01   --WL02
+        , ExternOrderkey = UPPER(ExternOrderkey)   --WL02
    FROM #PACKLIST30
    ORDER BY PickLOC
 
