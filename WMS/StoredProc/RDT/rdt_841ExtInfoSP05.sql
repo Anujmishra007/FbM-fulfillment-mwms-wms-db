@@ -51,12 +51,12 @@ SET CONCAT_NULL_YIELDS_NULL OFF
       	FROM rdt.RDTMOBREC   (nolock)
          WHERE Mobile = @nMobile
 
-      	SELECT @cCompany = M_Company 
+      	SELECT @cCompany = RIGHT(M_Company,20)   
       	FROM orders (NOLOCK)
       	WHERE storerKey = @cStorerKey
       	AND OrderKey = @cOrderKey
 
-         SET @cExtendedinfo =  @cCompany  
+         SET @cExtendedinfo =  @cCompany 
       END
    END
 
