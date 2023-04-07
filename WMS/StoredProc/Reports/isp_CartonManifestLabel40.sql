@@ -23,7 +23,6 @@ GO
 /* Updates:                                                             */
 /* Date         Author  Ver   Purposes                                  */
 /* 08-FEB-2023  CSCHONG 1.0   Devops Scripts Combine                    */
-/* 29-MAR-2023  CSCHONG 1.1   WMS-22160 revised field logic (CS01)      */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_CartonManifestLabel40] (
@@ -183,7 +182,7 @@ CREATE TABLE #TMPCTNMNF40  (
       od.QtyPicked,
       od.ShippedQty,
       Currency = isnull(clk2.code2,''),
-      ItemValue = 0.00, --convert(numeric(10,2),IsNull(od.UnitPrice,0.00) * (od.QtyPicked + od.ShippedQty)),    --CS01
+      ItemValue = convert(numeric(10,2),IsNull(od.UnitPrice,0.00) * (od.QtyPicked + od.ShippedQty)),
       ItemWeight = Case when sku.stdgrosswgt <> 0 
                   then convert(numeric(10,2), sku.stdgrosswgt * (od.QtyPicked + od.ShippedQty))
                   else convert(numeric(10,2), sku.grosswgt * (od.QtyPicked + od.ShippedQty)) end,
