@@ -31,6 +31,7 @@ GO
 /* 30-NOV-2021 Wan07    1.7   WMS-18322 - [CN]DYSON_Ecompacking_X708_   */
 /*                            Function_CR                               */
 /*                      1.7   DevOps Combine Script                     */
+/* 23-MAR-2023 KY01     1.8   INC2037122 - Bug Fixed                    */  
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_Ecom_GetPackTaskOrders_S]
             @c_TaskBatchNo    NVARCHAR(10)
@@ -309,7 +310,7 @@ BEGIN
       END
       --12-OCT-2016 - END
       --(Wan07) - START
-      IF @c_PackByLA01 <> '' AND @c_InProgOrderkey <> ''
+      IF @c_PackByLA01 <> '' --AND @c_InProgOrderkey <> ''  --KY01  
       BEGIN
          SET @c_Orderkey = @c_InProgOrderkey
          GOTO QUIT_SP
