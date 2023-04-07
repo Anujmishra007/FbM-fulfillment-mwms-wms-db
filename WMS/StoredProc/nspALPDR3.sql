@@ -30,6 +30,8 @@ GO
 /* 21-Jan-2022 NJOW03   1.3   WMS-18820 allow certain B2B consignee     */
 /*                            using B2C alloction flow                  */
 /* 21-Jan-2022 NJOW03   1.3   DEVOPS combine script                     */
+/* 16-Mar-2023 NJOW04   1.4   WMS-22010 - Consignee for B2C Flow by     */
+/*                            codelkup                                  */
 /************************************************************************/    
 CREATE OR ALTER PROC [dbo].[nspALPDR3]        
    @c_DocumentNo NVARCHAR(10),  
@@ -80,7 +82,8 @@ BEGIN
            @c_OrderType          NVARCHAR(10),
            @c_OrderBy            NVARCHAR(2000),
            @c_Condition          NVARCHAR(4000),
-           @c_Consigneekey       NVARCHAR(15) --NJOW03                                
+           @c_Consigneekey       NVARCHAR(15), --NJOW03               
+           @c_ConsigneeForEcom   NVARCHAR(1)   --NJOW04                                       
 
    SET @n_QtyAvailable = 0          
    SET @c_OtherValue = '1' 
@@ -143,10 +146,25 @@ BEGIN
          WHERE O.Orderkey = @c_Orderkey
       END                           
    END
+
+   --NJOW04 S
+   IF EXISTS(SELECT TOP 1 1
+             FROM CODELKUP CL (NOLOCK)
+             WHERE CL.Short = @c_Doctype
+             AND CL.Long = @c_Consigneekey
+             AND CL.Storerkey = @c_Storerkey
+             AND CL.ListName = 'PDACONSIGN')
+   BEGIN
+   	  SET @c_ConsigneeForEcom = 'Y'
+   END
+   ELSE
+      SET @c_ConsigneeForEcom = 'N'
+   --NJOW04 E
    
    IF @c_DocType = 'E' OR 
       (@c_DocType <> 'E' AND @c_OrderType NOT IN('PDATRFB2E'))  --skip if B2C or Not B2B B2E Transfer
-      OR @c_Consigneekey = 'WDW00001' --NJOW03
+      OR @c_ConsigneeForEcom = 'Y' --NJOW04
+      --OR @c_Consigneekey = 'WDW00001' --NJOW03
    BEGIN
        GOTO EXIT_SP
    END   

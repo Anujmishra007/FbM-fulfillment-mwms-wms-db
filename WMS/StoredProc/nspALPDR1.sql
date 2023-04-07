@@ -28,6 +28,8 @@ GO
 /* 21-Jan-2022 NJOW02   1.2   WMS-18820 allow certain B2B consignee     */
 /*                            using B2C alloction flow                  */
 /* 21-Jan-2022 NJOW02   1.2   DEVOPS combine script                     */
+/* 16-Mar-2023 NJOW03   1.3   WMS-22010 - Consignee for B2C Flow by     */
+/*                            codelkup                                  */
 /************************************************************************/    
 CREATE OR ALTER PROC [dbo].[nspALPDR1]        
    @c_DocumentNo NVARCHAR(10),  
@@ -78,7 +80,8 @@ BEGIN
            @c_OrderType          NVARCHAR(10),
            @c_OrderBy            NVARCHAR(2000),
            @c_Condition          NVARCHAR(4000),
-           @c_Consigneekey       NVARCHAR(15) --NJOW02           
+           @c_Consigneekey       NVARCHAR(15), --NJOW02           
+           @c_ConsigneeForEcom   NVARCHAR(1)   --NJOW03
 
    SET @n_QtyAvailable = 0          
    SET @c_OtherValue = '1' 
@@ -142,8 +145,23 @@ BEGIN
       END                           
    END
    
+   --NJOW03 S
+   IF EXISTS(SELECT TOP 1 1
+             FROM CODELKUP CL (NOLOCK)
+             WHERE CL.Short = @c_Doctype
+             AND CL.Long = @c_Consigneekey
+             AND CL.Storerkey = @c_Storerkey
+             AND CL.ListName = 'PDACONSIGN')
+   BEGIN
+   	  SET @c_ConsigneeForEcom = 'Y'
+   END
+   ELSE
+      SET @c_ConsigneeForEcom = 'N'
+   --NJOW03 E
+   
    IF @c_DocType <> 'E'  -- Skip for B2B
-      AND @c_Consigneekey <> 'WDW00001' --this b2b consignee use b2c allocation flow  --NJOW02
+      AND @c_ConsigneeForEcom = 'N'  --NJOW03
+      --AND @c_Consigneekey <> 'WDW00001' --this b2b consignee use b2c allocation flow  --NJOW02
    BEGIN
        GOTO EXIT_SP
    END   
@@ -163,7 +181,10 @@ BEGIN
    END   
    ELSE IF @c_UOM = '7'
    BEGIN
-      SET @c_Condition = RTRIM(@c_Condition) + ' AND LOC.LocationType = ''FASTPICK'' AND LA.Lottable02 = ''ECOM'' '
+   	  IF @c_ConsigneeForEcom = 'Y'  --NJOW03
+         SET @c_Condition = RTRIM(@c_Condition) + ' AND LOC.LocationType = ''FASTPICK'' '
+      ELSE
+         SET @c_Condition = RTRIM(@c_Condition) + ' AND LOC.LocationType = ''FASTPICK'' AND LA.Lottable02 = ''ECOM'' '
    END
   
    SELECT @c_OrderBy = ' ORDER BY CASE WHEN SL.LocationType = ''PICK'' THEN 1 ELSE 2 END, LA.Lottable05, LA.Lot, LOC.LogicalLocation, LOC.Loc '      
