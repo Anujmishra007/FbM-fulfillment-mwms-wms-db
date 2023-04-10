@@ -11,6 +11,7 @@ GO
 /*                                                                      */
 /* Date        Rev  Author      Purposes                                */
 /* 2022-02-21  1.0  Ung         WMS-18939 Created                       */
+/* 2023-03-20  1.1  Ung         WMS-21946 Add SerialNo param            */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_838DecodeSP06]
@@ -30,6 +31,7 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_838DecodeSP06]
    @cPackDtlRefNo2   NVARCHAR( 20)  OUTPUT,
    @cPackDtlUPC      NVARCHAR( 30)  OUTPUT,
    @cPackDtlDropID   NVARCHAR( 20)  OUTPUT,
+   @cSerialNo        NVARCHAR( 30)  OUTPUT,
    @nErrNo           INT            OUTPUT,
    @cErrMsg          NVARCHAR( 20)  OUTPUT
 AS

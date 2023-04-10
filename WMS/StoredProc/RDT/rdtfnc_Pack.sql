@@ -72,6 +72,8 @@ GO
 /* 2023-03-09   5.1 Ung         WMS-21830 Add FlowThruScreen for print label (SValue=5)         */
 /*                              Rename FlowThruScr    (SValue=1) to FlowThruScreen (SValue=2)   */
 /*                              Rename FlowThruCtnScn (SValue=1) to FlowThruScreen (SValue=4)   */
+/* 2023-03-20   5.2 Ung         WMS-21946 Add FlowThruScreen for serial no (SValue=9)           */
+/*                              Decode serial no                                                */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
@@ -98,7 +100,7 @@ DECLARE
    @cPrintPackList NVARCHAR( 1),
    @cCustomID      NVARCHAR( 20),
    @nTotalUCC      INT,
-   @cSerialNo      NVARCHAR( 30),
+   @cSerialNo      NVARCHAR( 30) = '',
    @nSerialQTY     INT,
    @nMoreSNO       INT,
    @nBulkSNO       INT,
@@ -1526,8 +1528,9 @@ BEGIN
                   @cUserDefine02 = @cPackDtlRefNo2 OUTPUT,
                   @cUserDefine03 = @cPackDtlUPC    OUTPUT,
                   @cUserDefine04 = @cPackDtlDropID_Decode OUTPUT,
-                  @nErrNo  = @nErrNo     OUTPUT,
-                  @cErrMsg = @cErrMsg    OUTPUT
+                  @cSerialNo     = @cSerialNo      OUTPUT, 
+                  @nErrNo        = @nErrNo         OUTPUT,
+                  @cErrMsg       = @cErrMsg        OUTPUT
                IF @nErrNo <> 0
                   GOTO Quit
             END
@@ -1537,7 +1540,7 @@ BEGIN
             BEGIN
                SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
                   ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID, @cBarcode, ' +
-                  ' @cSKU OUTPUT, @nQTY OUTPUT, @cPackDtlRefNo OUTPUT, @cPackDtlRefNo2 OUTPUT, @cPackDtlUPC OUTPUT, @cPackDtlDropID OUTPUT, ' +
+                  ' @cSKU OUTPUT, @nQTY OUTPUT, @cPackDtlRefNo OUTPUT, @cPackDtlRefNo2 OUTPUT, @cPackDtlUPC OUTPUT, @cPackDtlDropID OUTPUT, @cSerialNo OUTPUT, ' +
                   ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
                SET @cSQLParam =
                   ' @nMobile        INT,           ' +
@@ -1556,12 +1559,13 @@ BEGIN
                   ' @cPackDtlRefNo2 NVARCHAR( 20)  OUTPUT, ' +
                   ' @cPackDtlUPC    NVARCHAR( 30)  OUTPUT, ' +
                   ' @cPackDtlDropID NVARCHAR( 20)  OUTPUT, ' +
+                  ' @cSerialNo      NVARCHAR( 30)  OUTPUT, ' +
                   ' @nErrNo         INT            OUTPUT, ' +
                   ' @cErrMsg        NVARCHAR( 20)  OUTPUT'
 
                EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                   @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID, @cBarcode,
-                  @cUPC OUTPUT, @nQTY OUTPUT, @cPackDtlRefNo OUTPUT, @cPackDtlRefNo2 OUTPUT, @cPackDtlUPC OUTPUT, @cPackDtlDropID_Decode OUTPUT,
+                  @cUPC OUTPUT, @nQTY OUTPUT, @cPackDtlRefNo OUTPUT, @cPackDtlRefNo2 OUTPUT, @cPackDtlUPC OUTPUT, @cPackDtlDropID_Decode OUTPUT, @cSerialNo OUTPUT, 
                   @nErrNo OUTPUT, @cErrMsg OUTPUT
 
                IF @nErrNo <> 0
@@ -2162,6 +2166,22 @@ BEGIN
             SET @nScn = 4831
             SET @nStep = @nStep + 6
 
+            -- Flow thru
+            IF @cSerialNo <> ''
+            BEGIN
+               IF EXISTS( SELECT 1 FROM STRING_SPLIT( @cFlowThruScreen, ',') WHERE TRIM( value) = '9') -- Serial no screen
+               BEGIN
+                  -- rdt_SerialNo will read from rdtMboRec directly
+                  UPDATE rdt.rdtMobRec SET 
+                     V_Max = @cSerialNo, 
+                     EditDate = GETDATE()
+                  WHERE Mobile = @nMobile
+                  
+                  SET @nInputKey='1'
+                  GOTO Step_9
+               END
+            END
+            
             GOTO Quit
          END
       END

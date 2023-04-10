@@ -10,7 +10,8 @@ GO
 /* Purpose: Decode SKU & Default QTY                                    */
 /*                                                                      */
 /* Date        Rev  Author      Purposes                                */
-/* 2022-07-04  1.  YeeKung     WMS-19593 Add UPC qty (yeekung01)       */
+/* 2022-07-04  1.0  YeeKung     WMS-19593 Add UPC qty (yeekung01)       */
+/* 2023-03-20  1.1  Ung         WMS-21946 Add SerialNo param            */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_838DecodeSP07
@@ -30,6 +31,7 @@ CREATE OR ALTER PROCEDURE rdt.rdt_838DecodeSP07
    @cPackDtlRefNo2   NVARCHAR( 20)  OUTPUT, 
    @cPackDtlUPC      NVARCHAR( 30)  OUTPUT, 
    @cPackDtlDropID   NVARCHAR( 20)  OUTPUT, 
+   @cSerialNo        NVARCHAR( 30)  OUTPUT,
    @nErrNo           INT            OUTPUT, 
    @cErrMsg          NVARCHAR( 20)  OUTPUT
 AS

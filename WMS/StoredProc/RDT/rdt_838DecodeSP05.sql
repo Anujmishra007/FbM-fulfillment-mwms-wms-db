@@ -1,11 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_838DecodeSP05]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_838DecodeSP05]
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF 
-GO
 /************************************************************************/
 /* Store procedure: rdt_838DecodeSP05                                   */
 /* Copyright      : LF Logistics                                        */
@@ -14,26 +11,28 @@ GO
 /*                                                                      */
 /* Date        Rev  Author      Purposes                                */
 /* 2021-05-04  1.0  yeekung     WMS-16963 Created                       */
+/* 2023-03-20  1.1  Ung         WMS-21946 Add SerialNo param            */
 /************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_838DecodeSP05
-   @nMobile          INT,          
-   @nFunc            INT,          
-   @cLangCode        NVARCHAR( 3), 
-   @nStep            INT,          
-   @nInputKey        INT,          
-   @cFacility        NVARCHAR( 5), 
+CREATE OR ALTER PROCEDURE [RDT].[rdt_838DecodeSP05]
+   @nMobile          INT,
+   @nFunc            INT,
+   @cLangCode        NVARCHAR( 3),
+   @nStep            INT,
+   @nInputKey        INT,
+   @cFacility        NVARCHAR( 5),
    @cStorerKey       NVARCHAR( 15),
    @cPickSlipNo      NVARCHAR( 10),
    @cFromDropID      NVARCHAR( 20),
    @cBarcode         NVARCHAR( 60),
-   @cSKU             NVARCHAR( 20)  OUTPUT, 
-   @nQTY             INT            OUTPUT, 
-   @cPackDtlRefNo    NVARCHAR( 20)  OUTPUT, 
-   @cPackDtlRefNo2   NVARCHAR( 20)  OUTPUT, 
-   @cPackDtlUPC      NVARCHAR( 30)  OUTPUT, 
-   @cPackDtlDropID   NVARCHAR( 20)  OUTPUT, 
-   @nErrNo           INT            OUTPUT, 
+   @cSKU             NVARCHAR( 20)  OUTPUT,
+   @nQTY             INT            OUTPUT,
+   @cPackDtlRefNo    NVARCHAR( 20)  OUTPUT,
+   @cPackDtlRefNo2   NVARCHAR( 20)  OUTPUT,
+   @cPackDtlUPC      NVARCHAR( 30)  OUTPUT,
+   @cPackDtlDropID   NVARCHAR( 20)  OUTPUT,
+   @cSerialNo        NVARCHAR( 30)  OUTPUT,
+   @nErrNo           INT            OUTPUT,
    @cErrMsg          NVARCHAR( 20)  OUTPUT
 AS
 BEGIN
@@ -41,9 +40,9 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
-   
-  
-   DECLARE @cSession INT   
+
+
+   DECLARE @cSession INT
    DECLARE @clottable02 NVARCHAR(20)
    DECLARE @cLabelNo NVARCHAR(20)
    DECLARE @clabelSKU NVARCHAR(20)
@@ -78,8 +77,8 @@ BEGIN
          END
       END
 
-      IF NOT EXISTS (SELECT 1 FROM pickheader PH  WITH (NOLOCK)    
-                  JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = PH.OrderKey) 
+      IF NOT EXISTS (SELECT 1 FROM pickheader PH  WITH (NOLOCK)
+                  JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = PH.OrderKey)
                  WHERE ph.PickHeaderKey=@cPickSlipNo
                  AND pd.sku=@cSKU
                  AND pd.storerkey=@cStorerKey)
@@ -88,9 +87,9 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid SKU
          GOTO Quit
       END
-      
-      IF NOT EXISTS (SELECT 1 FROM pickheader PH  WITH (NOLOCK)   
-               JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = PH.OrderKey) 
+
+      IF NOT EXISTS (SELECT 1 FROM pickheader PH  WITH (NOLOCK)
+               JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = PH.OrderKey)
                JOIN lotxlocxid lli (NOLOCK) ON pd.lot=lli.lot AND pd.sku=lli.Sku AND pd.Loc=lli.Loc
                JOIN dbo.LOTATTRIBUTE LA (NOLOCK) ON la.Lot=lli.lot
                WHERE ph.PickHeaderKey=@cPickSlipNo
@@ -127,10 +126,5 @@ Quit:
 
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF 
+GRANT EXECUTE ON  [RDT].[rdt_838DecodeSP05] TO [NSQL]
 GO
-SET ANSI_NULLS ON 
-GO
-GRANT EXECUTE ON rdt.rdt_838DecodeSP05 TO NSQL 
-GO   

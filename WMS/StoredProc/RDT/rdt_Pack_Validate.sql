@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_Pack_Validate]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_Pack_Validate]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -17,9 +14,10 @@ GO
 /* 26-07-2017 1.2  Ung         WMS-2126 Fix SUM without NULL            */
 /* 02-04-2018 1.3  Ung         WMS-3845 Add ValidateSP                  */
 /* 13-09-2019 1.4  Ung         WMS-9050 Add Pick, PackDetail filter     */
+/* 27-03-2023 1.5  Ung         WMS-21946 Add multi PickDetail.Status    */
 /************************************************************************/
 
-CREATE PROC rdt.rdt_Pack_Validate (
+CREATE OR ALTER PROC rdt.rdt_Pack_Validate (
     @nMobile         INT
    ,@nFunc           INT
    ,@cLangCode       NVARCHAR( 3)
@@ -99,7 +97,7 @@ BEGIN
    DECLARE @cOrderKey   NVARCHAR( 10)
    DECLARE @cLoadKey    NVARCHAR( 10)
    DECLARE @cZone       NVARCHAR( 18)
-   DECLARE @cPickStatus NVARCHAR( 1)
+   DECLARE @cPickStatus NVARCHAR( 20)
    DECLARE @nPackQTY    INT
    DECLARE @nPickQTY    INT
 
@@ -122,6 +120,17 @@ BEGIN
    BEGIN
       -- Get PickStatus
       SET @cPickStatus = rdt.rdtGetConfig( @nFunc, 'PickStatus', @cStorerKey)
+      
+      -- Add default PickStatus 5-picked, if not specified
+      IF CHARINDEX( '5', @cPickStatus) = 0
+         SET @cPickStatus += ',5'
+         
+      -- Make PickStatus into comma delimeted, quoted string, in '0','5'... format
+      SELECT @cPickStatus = STRING_AGG( QUOTENAME( a.value, ''''), ',')
+      FROM 
+      (
+         SELECT TRIM( value) value FROM STRING_SPLIT( @cPickStatus, ',') WHERE value <> ''
+      ) a
 
       -- Get pick filter
       SELECT @cPickFilter = ISNULL( Long, '')
@@ -246,7 +255,7 @@ BEGIN
          WHERE RKL.PickSlipNo = @cPickSlipNo
             AND PD.StorerKey = @cStorerKey
             AND PD.SKU = @cSKU
-            AND (PD.Status = '5' OR PD.Status = @cPickStatus)
+            AND PD.Status IN (@cPickStatus) 
             AND (@cFromDropID = '' OR PD.DropID = @cFromDropID)
          */      
          SET @cSQL = 
@@ -256,21 +265,19 @@ BEGIN
             ' WHERE RKL.PickSlipNo = @cPickSlipNo ' + 
                ' AND PD.StorerKey = @cStorerKey ' + 
                ' AND PD.SKU = @cSKU ' + 
-               ' AND (PD.Status = ''5'' OR PD.Status = @cPickStatus) ' + 
+               ' AND PD.Status IN (' + @cPickStatus + ') ' + 
                CASE WHEN @cFromDropID <> '' THEN ' AND PD.DropID = @cFromDropID ' ELSE '' END + 
                CASE WHEN @cPickFilter <> '' THEN @cPickFilter ELSE '' END
          SET @cSQLParam = 
             ' @cPickSlipNo NVARCHAR( 10), ' + 
             ' @cStorerKey  NVARCHAR( 15), ' + 
             ' @cSKU        NVARCHAR( 20), ' + 
-            ' @cPickStatus NVARCHAR( 1),  ' + 
             ' @cFromDropID NVARCHAR( 20), ' + 
             ' @nPickQTY    INT OUTPUT '
          EXEC sp_executeSQL @cSQL, @cSQLParam
             ,@cPickSlipNo = @cPickSlipNo
             ,@cStorerKey  = @cStorerKey
             ,@cSKU        = @cSKU
-            ,@cPickStatus = @cPickStatus
             ,@cFromDropID = @cFromDropID
             ,@nPickQTY    = @nPickQTY OUTPUT
 
@@ -376,7 +383,7 @@ BEGIN
          WHERE PD.OrderKey = @cOrderKey
             AND PD.StorerKey = @cStorerKey
             AND PD.SKU = @cSKU
-            AND (PD.Status = '5' OR PD.Status = @cPickStatus)
+            AND PD.Status IN (@cPickStatus) 
             AND (@cFromDropID = '' OR PD.DropID = @cFromDropID)
          */
          SET @cSQL = 
@@ -385,21 +392,19 @@ BEGIN
             ' WHERE PD.OrderKey = @cOrderKey ' + 
                ' AND PD.StorerKey = @cStorerKey ' + 
                ' AND PD.SKU = @cSKU ' + 
-               ' AND (PD.Status = ''5'' OR PD.Status = @cPickStatus) ' + 
+               ' AND PD.Status IN (' + @cPickStatus + ') ' + 
                CASE WHEN @cFromDropID <> '' THEN ' AND PD.DropID = @cFromDropID ' ELSE '' END + 
                CASE WHEN @cPickFilter <> '' THEN @cPickFilter ELSE '' END
          SET @cSQLParam = 
             ' @cOrderKey   NVARCHAR( 10), ' + 
             ' @cStorerKey  NVARCHAR( 15), ' + 
             ' @cSKU        NVARCHAR( 20), ' + 
-            ' @cPickStatus NVARCHAR( 1),  ' + 
             ' @cFromDropID NVARCHAR( 20), ' + 
             ' @nPickQTY    INT OUTPUT '
          EXEC sp_executeSQL @cSQL, @cSQLParam
             ,@cOrderKey   = @cOrderKey
             ,@cStorerKey  = @cStorerKey
             ,@cSKU        = @cSKU
-            ,@cPickStatus = @cPickStatus
             ,@cFromDropID = @cFromDropID
             ,@nPickQTY    = @nPickQTY OUTPUT
          
@@ -484,7 +489,7 @@ BEGIN
          WHERE LPD.LoadKey = @cLoadKey
             AND PD.StorerKey = @cStorerKey
             AND PD.SKU = @cSKU
-            AND (PD.Status = '5' OR PD.Status = @cPickStatus)
+            AND PD.Status IN (@cPickStatus) 
             AND (@cFromDropID = '' OR PD.DropID = @cFromDropID)
          */
          SET @cSQL = 
@@ -494,21 +499,19 @@ BEGIN
             ' WHERE LPD.LoadKey = @cLoadKey ' +
                ' AND PD.StorerKey = @cStorerKey ' +
                ' AND PD.SKU = @cSKU ' +
-               ' AND (PD.Status = ''5'' OR PD.Status = @cPickStatus) ' + 
+               ' AND PD.Status IN (' + @cPickStatus + ') ' + 
                CASE WHEN @cFromDropID <> '' THEN ' AND PD.DropID = @cFromDropID ' ELSE '' END + 
                CASE WHEN @cPickFilter <> '' THEN @cPickFilter ELSE '' END
          SET @cSQLParam = 
             ' @cLoadKey    NVARCHAR( 10), ' + 
             ' @cStorerKey  NVARCHAR( 15), ' + 
             ' @cSKU        NVARCHAR( 20), ' + 
-            ' @cPickStatus NVARCHAR( 1),  ' + 
             ' @cFromDropID NVARCHAR( 20), ' + 
             ' @nPickQTY    INT OUTPUT '
          EXEC sp_executeSQL @cSQL, @cSQLParam
             ,@cLoadKey    = @cLoadKey
             ,@cStorerKey  = @cStorerKey
             ,@cSKU        = @cSKU
-            ,@cPickStatus = @cPickStatus
             ,@cFromDropID = @cFromDropID
             ,@nPickQTY    = @nPickQTY OUTPUT
          
@@ -586,7 +589,7 @@ BEGIN
          WHERE PD.PickSlipNo = @cPickSlipNo
             AND PD.StorerKey = @cStorerKey
             AND PD.SKU = @cSKU
-            AND (PD.Status = '5' OR PD.Status = @cPickStatus)
+            AND PD.Status IN (@cPickStatus)
             AND (@cFromDropID = '' OR PD.DropID = @cFromDropID)
          */
          SET @cSQL = 
@@ -595,21 +598,19 @@ BEGIN
             ' WHERE PD.PickSlipNo = @cPickSlipNo ' + 
                ' AND PD.StorerKey = @cStorerKey ' + 
                ' AND PD.SKU = @cSKU ' + 
-               ' AND (PD.Status = ''5'' OR PD.Status = @cPickStatus) ' + 
+               ' AND PD.Status IN (' + @cPickStatus + ') ' + 
                CASE WHEN @cFromDropID <> '' THEN ' AND PD.DropID = @cFromDropID ' ELSE '' END + 
                CASE WHEN @cPickFilter <> '' THEN @cPickFilter ELSE '' END
          SET @cSQLParam = 
             ' @cPickSlipNo NVARCHAR( 10), ' + 
             ' @cStorerKey  NVARCHAR( 15), ' + 
             ' @cSKU        NVARCHAR( 20), ' + 
-            ' @cPickStatus NVARCHAR( 1),  ' + 
             ' @cFromDropID NVARCHAR( 20), ' + 
             ' @nPickQTY    INT OUTPUT '
          EXEC sp_executeSQL @cSQL, @cSQLParam
             ,@cPickSlipNo = @cPickSlipNo
             ,@cStorerKey  = @cStorerKey
             ,@cSKU        = @cSKU
-            ,@cPickStatus = @cPickStatus
             ,@cFromDropID = @cFromDropID
             ,@nPickQTY    = @nPickQTY OUTPUT
          

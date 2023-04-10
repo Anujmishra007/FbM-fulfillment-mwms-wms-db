@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'rdt.rdt_Decode') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_Decode
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -25,9 +22,10 @@ GO
 /* 08-10-2018  Ung       1.8   WMS-6040 Fix date convertion                   */
 /* 29-04-2019  Ung       1.9   INC0659351 Fix UPC type should be no setup     */
 /* 24-08-2020  Ung       2.0   WMS-13505 Add UCCNo                            */
+/* 20-03-2023  Ung       2.1   WMS-21946 Add SerialNo                         */
 /******************************************************************************/
 
-CREATE PROC rdt.rdt_Decode (
+CREATE OR ALTER PROC rdt.rdt_Decode (
    @nMobile       INT,
    @nFunc         INT,
    @cLangCode     NVARCHAR( 3),
@@ -64,7 +62,8 @@ CREATE PROC rdt.rdt_Decode (
    @cDebug        NVARCHAR( 1)  = '',
    @cType         NVARCHAR( 10) = '',
    @cDropID       NVARCHAR( 20) = ''   OUTPUT,
-   @cUCCNo        NVARCHAR( 20) = ''   OUTPUT
+   @cUCCNo        NVARCHAR( 20) = ''   OUTPUT, 
+   @cSerialNo     NVARCHAR( 30) = ''   OUTPUT
 ) AS
 BEGIN
    SET NOCOUNT ON
@@ -128,6 +127,7 @@ BEGIN
    DECLARE @cTempUserDefine05 NVARCHAR( 60)
    DECLARE @cTempDropID       NVARCHAR( 20) 
    DECLARE @cTempUCCNo        NVARCHAR( 20) 
+   DECLARE @cTempSerialNo     NVARCHAR( 50) 
    
    -- If function specific DecodeCode not setup, use generic one
    IF @nFunc > 0
@@ -184,6 +184,7 @@ BEGIN
       SET @cTempUserDefine05 = @cUserDefine05
       SET @cTempDropID       = @cDropID
       SET @cTempUCCNo        = @cUCCNo
+      SET @cTempSerialNo     = @cSerialNo
 
       IF @cDebug = '1'
          select @cDecodeCode '@cDecodeCode', @nSequence '@nSequence'
@@ -374,8 +375,9 @@ BEGIN
                IF @cMapTo = 'USERDEFINE03' AND @cUserDefine03 IS NOT NULL SET @cTempUserDefine03 = LEFT( @cString, 60) ELSE
                IF @cMapTo = 'USERDEFINE04' AND @cUserDefine04 IS NOT NULL SET @cTempUserDefine04 = LEFT( @cString, 60) ELSE
                IF @cMapTo = 'USERDEFINE05' AND @cUserDefine05 IS NOT NULL SET @cTempUserDefine05 = LEFT( @cString, 60) ELSE
-               IF @cMapTo = 'DROPID'       AND @cDropID       IS NOT NULL SET @cTempDropID       = LEFT( @cString, 20) 
-               IF @cMapTo = 'UCCNO'        AND @cUCCNo        IS NOT NULL SET @cTempUCCNo        = LEFT( @cString, 20) 
+               IF @cMapTo = 'DROPID'       AND @cDropID       IS NOT NULL SET @cTempDropID       = LEFT( @cString, 20) ELSE
+               IF @cMapTo = 'UCCNO'        AND @cUCCNo        IS NOT NULL SET @cTempUCCNo        = LEFT( @cString, 20) ELSE
+               IF @cMapTo = 'SERIALNO'     AND @cSerialNo     IS NOT NULL SET @cTempSerialNo     = LEFT( @cString, 50) 
             END
          END
          ELSE
@@ -429,6 +431,7 @@ BEGIN
       IF @cUserDefine05 IS NOT NULL SET @cUserDefine05 = @cTempUserDefine05
       IF @cDropID       IS NOT NULL SET @cDropID       = @cTempDropID
       IF @cUCCNo        IS NOT NULL SET @cUCCNo        = @cTempUCCNo
+      IF @cSerialNo     IS NOT NULL SET @cSerialNo     = @cTempSerialNo
    END
    
 Quit:
