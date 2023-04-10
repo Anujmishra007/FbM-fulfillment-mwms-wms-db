@@ -1,6 +1,6 @@
 --scn 3910 --- 3919
 
-IF EXISTS (SELECT 1 FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID=841)
+IF NOT EXISTS (SELECT 1 FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID=841)
 BEGIN
    INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
    VALUES ('841', 'ENG', 'FNC', 'DTC Dispatch', 'rdtfnc_DTC_Dispatch', '0')
