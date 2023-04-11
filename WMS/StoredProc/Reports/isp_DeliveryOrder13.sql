@@ -2,6 +2,8 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
+
 /************************************************************************/    
 /* Store Procedure: isp_DeliveryOrder13                                 */    
 /* Creation Date: 03-JUNE-2021                                          */    
@@ -26,6 +28,8 @@ GO
 /* 08-OCT-2021  CSCHONG 1.0   Devops Scripts combine                    */  
 /* 22-MAR-2022  MINGLE  1.1   Modify sorting logic(ML01)                */
 /* 29-MAR-2022  MINGLE  1.2   Added codelkup(ML02)                      */
+/* 11-APR-2023  Calvin  1.3   JSM-141944 change Size/Qty per row from   */
+/*                            5 to 4 to fit longer sizes (CLVN01)       */
 /************************************************************************/    
     
 CREATE OR ALTER PROC [dbo].[isp_DeliveryOrder13]    
@@ -160,7 +164,7 @@ BEGIN
    SET @c_PrevConsigneekey = ''    
    SET @c_PrevNotes        = ''    
    SET @n_RecCnt           = 1         
-   SET @n_MaxSizeLine      = 5        
+   SET @n_MaxSizeLine      = 4    --(CLVN01)    
    SET @C_PreRPTCode       = ''       
    SET @c_PreExtOrdKey     = ''       
    SET @c_line             = 'N'     
@@ -445,7 +449,7 @@ SELECT  @c_ShowVATLbIText        = ISNULL(MAX(CASE WHEN C.Code = 'ShowVATLbIText
  --MIN(ISNULL(RTRIM(ORDERDETAIL.UserDefine03),'')), MIN(ISNULL(RTRIM(ORDERDETAIL.UserDefine04),''))   
   ORDER BY ISNULL(CODELKUP.code,''),MBOL.MBOLKey,ISNULL(RTRIM(ORDERS.ExternOrderkey),''),  
      ISNULL(RTRIM(ORDERDETAIL.UserDefine02),''),  
-     MIN(ISNULL(RTRIM(ORDERDETAIL.UserDefine03),'')), MIN(ISNULL(RTRIM(ORDERDETAIL.UserDefine04),''))  --ML01  
+     MIN(ISNULL(RTRIM(ORDERDETAIL.UserDefine03),'')), MIN(ISNULL(RTRIM(ORDERDETAIL.UserDefine04),'')),ORDERDETAIL.Style   --ML01  
     
    OPEN C_ORDLINE    
    FETCH NEXT FROM C_ORDLINE INTO @c_ExternOrderkey    
@@ -621,7 +625,7 @@ SELECT  @c_ShowVATLbIText        = ISNULL(MAX(CASE WHEN C.Code = 'ShowVATLbIText
   SET @c_CGSizeQty = @c_CGSizeQty + space(2) +@c_GSizeqty    
   --select @n_RecCnt '@n_RecCnt',@c_SSTYLE '@c_SSTYLE',@C_RPTCode '@C_RPTCode'    
     
-  IF @n_RecCnt%5 <> 0    
+  IF @n_RecCnt%4 <> 0    --(CLVN01)
   BEGIN    
     
    IF  @n_RecCnt =  @c_SizeCnt    
@@ -838,3 +842,5 @@ END
 GO
 GRANT EXECUTE ON  [dbo].[isp_DeliveryOrder13] TO [NSQL]
 GO
+
+
