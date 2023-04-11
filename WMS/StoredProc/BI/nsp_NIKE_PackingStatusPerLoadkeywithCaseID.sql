@@ -8,6 +8,7 @@ TITLE: PH_LogiReport - Customized Reports - OrderProcessing [SP] https://jiralfl
 DATE				VER		CREATEDBY   PURPOSE
 19-FEB-2022			1.0		PCN			CONVERT SCRIPT TO SP 
 2023-03-21			1.2		Crisnah		Change para datatype and filter condition .
+2023-04-11			1.3		Percival	Change para datatype and filter condition .
 ************************************************************************/
 
 CREATE OR ALTER   PROC [BI].[nsp_NIKE_PackingStatusPerLoadkeywithCaseID] --NAME OF SP */		
@@ -27,8 +28,11 @@ BEGIN
     SET @PARAM_GENERIC_Wavekey = ''
   IF ISNULL(@PARAM_GENERIC_Loadkey, '') = ''  
     SET @PARAM_GENERIC_Loadkey = ''
-  IF ISNULL(@PARAM_GENERIC_ExternOrderKey, '') = ''  
+  IF ISNULL(@PARAM_GENERIC_ExternOrderKey, '') = ''  or @PARAM_GENERIC_ExternOrderKey ='ALL'
     SET @PARAM_GENERIC_ExternOrderKey = ''
+
+  -- set @PARAM_GENERIC_ExternOrderKey	= REPLACE(REPLACE(@PARAM_GENERIC_ExternOrderKey			,'[',''),']','')
+  SET @PARAM_GENERIC_ExternOrderKey = REPLACE(REPLACE (TRANSLATE (@PARAM_GENERIC_ExternOrderKey,'[ ]',''' '''),'''',''),',',''',''')
 
    DECLARE @Debug	BIT = 0
 		 , @LogId   INT
@@ -76,12 +80,29 @@ set @Stmt = '
 	WHERE 
 		  AL1.StorerKey = ''NIKEPH'' 
 		  AND AL2.UserDefine09 = '''+@PARAM_GENERIC_Wavekey+''' 
+		  
+'
+
+if isnull(@PARAM_GENERIC_Loadkey,'')<>'' OR isnull(@PARAM_GENERIC_ExternOrderKey,'')<>'' 
+	set @stmt = @stmt + ' 
 		  AND 
-		  (
-      		  AL2.LoadKey = COALESCE(NULLIF(isnull('''+@PARAM_GENERIC_Loadkey+''',''''), ''''),AL2.LoadKey)  
-			  OR 
-			  AL2.ExternOrderKey = COALESCE(NULLIF(isnull('''+@PARAM_GENERIC_ExternOrderKey+''',''''), ''''),AL2.ExternOrderKey) 
-		  )   
+		  (  
+'
+ if isnull(@PARAM_GENERIC_Loadkey,'')<>''
+	set @stmt = @stmt + ' AL2.LoadKey IN ('+@PARAM_GENERIC_Loadkey+')  '
+ 
+ if isnull(@PARAM_GENERIC_Loadkey,'')<>'' and isnull(@PARAM_GENERIC_ExternOrderKey,'')<>'' 
+	set @stmt = @stmt + ' OR '
+
+ if isnull(@PARAM_GENERIC_ExternOrderKey,'')<>''
+	set @stmt = @stmt + 'AL2.ExternOrderKey in ('+@PARAM_GENERIC_ExternOrderKey+') '
+
+if isnull(@PARAM_GENERIC_Loadkey,'')<>'' OR isnull(@PARAM_GENERIC_ExternOrderKey,'')<>'' 
+	set @stmt = @stmt + ' 
+	 )
+'
+
+set @stmt = @stmt + '
 	GROUP BY 
 	  AL2.MBOLKey, 
 	  AL2.UserDefine09, 
