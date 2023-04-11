@@ -29,6 +29,8 @@ GO
 /* 15-Sep-2015  NJOW01    1.2   352837 - update pickslip# to pickdetail */
 /* 11-Oct-2016  TLTING01  1.3   Perfromance Tune                        */
 /* 26-Jan-2108  MCTang    1.3   Enhance Generaic Trigger Interface(MC01)*/
+/* 24-Feb-2023  GHUI      1.4   JSM-131455 -Add filter to fix           */          
+/*                              performance issue                       */  
 /************************************************************************/
 
 CREATE TRIGGER [dbo].[ntrPickHeaderAdd]
@@ -106,7 +108,7 @@ BEGIN
 				, INSERTED.Pickheaderkey
 			 FROM INSERTED 
 			 JOIN ORDERS WITH (NOLOCK) ON (INSERTED.ExternOrderKey = ORDERS.LoadKey)
-			WHERE ISNULL(RTRIM(INSERTED.Orderkey),'') = ''
+			WHERE ISNULL(RTRIM(INSERTED.Orderkey),'') = '' and ISNULL(RTRIM(INSERTED.ExternOrderKey),'')<> ''  --JSM-131455  
 
 	  END 
 	  ELSE
