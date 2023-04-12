@@ -1,11 +1,8 @@
-IF EXISTS ( SELECT * FROM sys.objects WHERE  object_id = OBJECT_ID(N'[RDT].[rdtfnc_UCCReceive2]') AND OBJECTPROPERTY(object_id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [RDT].[rdtfnc_UCCReceive2]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /************************************************************************/
 /* Store procedure: rdtfnc_UCCReceive2                                  */
 /* Copyright      : IDS                                                 */
@@ -17,9 +14,12 @@ GO
 /* Date         Rev  Author   Purposes                                  */
 /* 21-Jun-2017  1.0  James    WMS2212 - Created                         */
 /* 16-Nov-2018  1.1  Gan      Performance tuning                        */
+/* 09-Aug-2021  1.2  James    WMS-17614 Add ExtendedInfoSP (james01)    */
+/* 11-Apr-2023  1.3  James    WMS-22200 Add config not allow SKU in     */
+/*                            carton to be overreceived (james02)       */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_UCCReceive2] (
+CREATE OR ALTER PROC [RDT].[rdtfnc_UCCReceive2] (
    @nMobile    int,
    @nErrNo     int  OUTPUT,
    @cErrMsg    NVARCHAR(125) OUTPUT
@@ -43,14 +43,14 @@ DECLARE
    @cFacility           NVARCHAR( 5),
    @cUserName           NVARCHAR( 18),
    @cSKU                NVARCHAR( 20),
-   @cSQL                NVARCHAR( MAX), 
-   @cSQLParam           NVARCHAR( MAX), 
+   @cSQL                NVARCHAR( MAX),
+   @cSQLParam           NVARCHAR( MAX),
    @cCartonID           NVARCHAR( 20),
    @cPOKey              NVARCHAR( 10),
    @cReceiptKey         NVARCHAR( 10),
    @cToID               NVARCHAR( 18),
    @cToLOC              NVARCHAR( 10),
-   @cChkFacility        NVARCHAR( 5), 
+   @cChkFacility        NVARCHAR( 5),
    @cChkStorerKey       NVARCHAR( 15),
    @cChkReceiptKey      NVARCHAR( 10),
    @cChkPOKey           NVARCHAR( 10),
@@ -58,10 +58,10 @@ DECLARE
    @cUOM                NVARCHAR( 10),
    @cSKUDesc            NVARCHAR( 60),
    @cQTY                NVARCHAR( 10),
-   @cPackQTY            NVARCHAR( 10), 
-   @cPackUOM            NVARCHAR( 10), 
-   @cAllowCtnIDBlank    NVARCHAR( 1), 
-   @cASNStatus          NVARCHAR( 10), 
+   @cPackQTY            NVARCHAR( 10),
+   @cPackUOM            NVARCHAR( 10),
+   @cAllowCtnIDBlank    NVARCHAR( 1),
+   @cASNStatus          NVARCHAR( 10),
    @cDecodeSKUSP        NVARCHAR( 20),
    @cSKUCode            NVARCHAR( 20),
    @cMultiSKUBarcode    NVARCHAR( 1),
@@ -70,8 +70,8 @@ DECLARE
    @cUPC                NVARCHAR( 30),
    @cAuthority          NVARCHAR( 30),
    @cChkLOC             NVARCHAR( 10),
-   @cSKU2Receive        NVARCHAR( 20), 
-   @cSKU2Delete         NVARCHAR( 20), 
+   @cSKU2Receive        NVARCHAR( 20),
+   @cSKU2Delete         NVARCHAR( 20),
    @nQtyExpected        INT,
    @nLogQtyReceived     INT,
    @nSum_QtyReceived    INT,
@@ -109,6 +109,12 @@ DECLARE
    @dLottable14         DATETIME,
    @dLottable15         DATETIME,
 
+   @cExtendedInfo       NVARCHAR( 20),
+   @cExtendedInfoSP     NVARCHAR( 20),
+   @tExtInfoVar         VARIABLETABLE,
+   @cCartonIDOnRcptDetail  NVARCHAR( 1),
+   @cNotAllowCtnQtyOverRcv NVARCHAR( 1),
+   
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
    @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),    @cFieldAttr03 NVARCHAR( 1),
@@ -142,7 +148,7 @@ SELECT
    @cStorerKey  = StorerKey,
    @cFacility   = Facility,
    @cUserName   = UserName,
-   
+
    @nQTY        = V_Integer1,
 
    @cReceiptKey = V_ReceiptKey,
@@ -153,7 +159,7 @@ SELECT
    @cUOM        = V_UOM,
   -- @nQTY        = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_QTY, 5), 0) = 1 THEN LEFT( V_QTY, 5) ELSE 0 END,
    @cSKU        = V_SKU,
-   @cSKUDesc    = V_SKUDescr,    
+   @cSKUDesc    = V_SKUDescr,
 
    @cAllowCtnIDBlank       = V_String1,
    @cDecodeSKUSP           = V_String2,
@@ -165,7 +171,10 @@ SELECT
    @cPromptIfRcvQtyMisMatch= V_String8,
    @cDisableQTYField       = V_String9,
    @cDefaultQTY            = V_String10,
-
+   @cExtendedInfoSP        = V_String11,
+   @cCartonIDOnRcptDetail  = V_String12,
+   @cNotAllowCtnQtyOverRcv = V_String13,
+   
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,  @cFieldAttr03 = FieldAttr03,
@@ -180,7 +189,7 @@ SELECT
    @cInField12 = I_Field12,   @cOutField12 = O_Field12,  @cFieldAttr12 = FieldAttr12,
    @cInField13 = I_Field13,   @cOutField13 = O_Field13,  @cFieldAttr13 = FieldAttr13,
    @cInField14 = I_Field14,   @cOutField14 = O_Field14,  @cFieldAttr14 = FieldAttr14,
-   @cInField15 = I_Field15,   @cOutField15 = O_Field15,  @cFieldAttr15 = FieldAttr15 
+   @cInField15 = I_Field15,   @cOutField15 = O_Field15,  @cFieldAttr15 = FieldAttr15
 
 
 FROM rdt.RDTMOBREC (NOLOCK)
@@ -230,6 +239,15 @@ BEGIN
    SET @cDisableQTYField = rdt.RDTGetConfig( @nFunc, 'DisableQTYField', @cStorerKey)
    SET @cDefaultQTY = rdt.RDTGetConfig( @nFunc, 'DefaultQTY', @cStorerKey)
 
+   SET @cExtendedInfoSP = rdt.rdtGetConfig( @nFunc, 'ExtendedInfoSP', @cStorerKey)
+   IF @cExtendedInfoSP = '0'
+      SET @cExtendedInfoSP = ''
+
+   SET @cCartonIDOnRcptDetail = rdt.rdtGetConfig( @nFunc, 'CartonIDOnRcptDetail', @cStorerKey)
+
+   -- (james02)
+   SET @cNotAllowCtnQtyOverRcv = rdt.rdtGetConfig( @nFunc, 'NotAllowCtnQtyOverRcv', @cStorerKey)
+   
    -- Prep next screen var
    SET @cOutField01 = '' -- CARTON ID
    SET @cOutField02 = '' -- ASN
@@ -239,9 +257,9 @@ BEGIN
    SET @nStep = 1
 
    -- Clear not finish data
-   DECLARE CUR_RCV CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
+   DECLARE CUR_RCV CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
    SELECT RowRef
-   FROM rdt.rdtUCCReceive2Log WITH (NOLOCK) 
+   FROM rdt.rdtUCCReceive2Log WITH (NOLOCK)
    WHERE AddWho = @cUserName
    AND   [Status] = '0'
    OPEN CUR_RCV
@@ -271,8 +289,8 @@ GOTO Quit
 
 /********************************************************************************
 Step 1. Scn = 4950
-   CARTON ID   (field01, input)   
-   ASN         (field02, input)   
+   CARTON ID   (field01, input)
+   ASN         (field02, input)
    LANE        (field03, input)
 ********************************************************************************/
 Step_1:
@@ -284,7 +302,7 @@ BEGIN
       SET @cReceiptKey = @cInField02
       SET @cPOKey = @cInField03
 
-      IF ISNULL( @cCartonID, '') = '' 
+      IF ISNULL( @cCartonID, '') = ''
       BEGIN
          IF @cAllowCtnIDBlank <> '1'
          BEGIN
@@ -322,6 +340,11 @@ BEGIN
             GOTO Step_1_Fail
          END
 
+         IF @cCartonIDOnRcptDetail = '1'
+            SELECT @cCartonID = UserDefine01
+            FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
+            WHERE ReceiptKey = @cReceiptKey
+
          -- Check if carton exists in ASN
          IF ISNULL( @cCartonID, '') = ''
          BEGIN
@@ -340,11 +363,11 @@ BEGIN
              @cASNStatus = R.ASNStatus
       FROM dbo.Receipt R WITH (NOLOCK)
       JOIN dbo.ReceiptDetail RD WITH (NOLOCK) ON R.ReceiptKey  = RD.ReceiptKey
-      WHERE R.UserDefine01 = @cCartonID
+      WHERE (( @cCartonIDOnRcptDetail = '1' AND RD.UserDefine01 = @cCartonID) OR ( R.UserDefine01 = @cCartonID))
       AND   (( @cReceiptKey = '') OR ( R.ReceiptKey = @cReceiptKey))
       AND   (( @cPOKey = '') OR ( R.POKey = @cPOKey))
       AND   RD.StorerKey = @cStorerKey
-      
+
       SET @nRowCount = @@ROWCOUNT
       IF @nRowCount = 0
       BEGIN
@@ -367,8 +390,8 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Diff storer'
          GOTO Step_1_Fail
       END
-      
-      -- Validate ASN status - (CANC) 
+
+      -- Validate ASN status - (CANC)
       IF @cASNStatus = 'CANC'
       BEGIN
          SET @nErrNo = 111508
@@ -385,18 +408,20 @@ BEGIN
       END
 
       -- Check if carton exists in multi ASN
-      IF EXISTS ( SELECT 1 FROM dbo.Receipt WITH (NOLOCK) 
-                  WHERE UserDefine01 = @cCartonID
-                  AND   StorerKey = @cStorerKey
-                  GROUP BY ReceiptKey
-                  HAVING COUNT( ReceiptKey) > 1)
+      IF EXISTS ( SELECT 1
+                  FROM dbo.ReceiptDetail RD WITH (NOLOCK)
+                  JOIN dbo.Receipt R WITH (NOLOCK) ON ( RD.ReceiptKey = R.ReceiptKey)
+                  WHERE (( @cCartonIDOnRcptDetail = '1' AND RD.UserDefine01 = @cCartonID) OR ( R.UserDefine01 = @cCartonID))
+                  AND   R.StorerKey = @cStorerKey
+                  GROUP BY R.ReceiptKey
+                  HAVING COUNT( R.ReceiptKey) > 1)
       BEGIN
          SET @nErrNo = 111510
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ctn Multi ASN
          GOTO Step_1_Fail
       END
 
-      IF ISNULL( @cReceiptKey, '') = '' 
+      IF ISNULL( @cReceiptKey, '') = ''
          SET @cReceiptKey = @cChkReceiptKey
 
       IF ISNULL( @cPOKey, '') = '' OR @cPOKey <> 'NOPO'
@@ -406,12 +431,12 @@ BEGIN
       SET @nSum_QtyExpected = 0
       SELECT @nSum_QtyReceived = ISNULL( SUM( BeforeReceivedQty), 0),
              @nSum_QtyExpected = ISNULL( SUM( QTYExpected), 0)
-      FROM dbo.ReceiptDetail RD WITH (NOLOCK) 
+      FROM dbo.ReceiptDetail RD WITH (NOLOCK)
       JOIN dbo.Receipt R WITH (NOLOCK) ON ( RD.ReceiptKey = R.ReceiptKey)
       WHERE R.ReceiptKey = @cReceiptKey
       AND   (( @cPOKey = '') OR ( R.POKey = @cPOKey))
       AND   R.StorerKey = @cStorerKey
-      AND   R.UserDefine01 = @cCartonID
+      AND   (( @cCartonIDOnRcptDetail = '1' AND RD.UserDefine01 = @cCartonID) OR ( R.UserDefine01 = @cCartonID))
 
       -- Enable / disable QTY
       SET @cFieldAttr08 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END
@@ -437,9 +462,9 @@ BEGIN
    IF @nInputKey = 0 -- Esc or No
    BEGIN
       -- Clear not finish data
-      DECLARE CUR_RCV CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
+      DECLARE CUR_RCV CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
       SELECT RowRef
-      FROM rdt.rdtUCCReceive2Log WITH (NOLOCK) 
+      FROM rdt.rdtUCCReceive2Log WITH (NOLOCK)
       WHERE AddWho = @cUserName
       AND   [Status] = '0'
       OPEN CUR_RCV
@@ -491,7 +516,7 @@ GOTO Quit
 
 
 /********************************************************************************
-Step 2. Scn = 4951. 
+Step 2. Scn = 4951.
    CARTON ID   (field01)
    SKU         (field02, input)
    QTY         (field11, field12, input)
@@ -505,11 +530,11 @@ BEGIN
       --SET @cQTY = @cInField08
       SET @cQTY = CASE WHEN @cFieldAttr08 = 'O' THEN @cOutField08 ELSE @cInField08 END -- QTY
 
-      IF ISNULL( @cInField03, '') = ''  
+      IF ISNULL( @cInField03, '') = ''
       BEGIN
          -- SKU is blank, check if anything received so far
-         IF EXISTS ( SELECT 1 
-                     FROM rdt.rdtUCCReceive2Log WITH (NOLOCK) 
+         IF EXISTS ( SELECT 1
+                     FROM rdt.rdtUCCReceive2Log WITH (NOLOCK)
                      WHERE ReceiptKey = @cReceiptKey
                      AND   (( @cPOKey = '') OR ( POKey = @cPOKey))
                      AND   StorerKey = @cStorerKey
@@ -521,14 +546,14 @@ BEGIN
             SET @nSum_QtyReceived = 0
             SET @nSum_QtyExpected = 0
             SET @cSKU = ''
-            DECLARE CUR_LOOP CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
+            DECLARE CUR_LOOP CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
             SELECT RD.SKU, ISNULL( SUM( BeforeReceivedQty), 0), ISNULL( SUM( QTYExpected), 0)
             FROM dbo.ReceiptDetail RD WITH (NOLOCK)
             JOIN dbo.Receipt R WITH (NOLOCK) ON ( RD.ReceiptKey = R.ReceiptKey)
             WHERE R.ReceiptKey = @cReceiptKey
             AND   (( @cPOKey = '') OR ( R.POKey = @cPOKey))
             AND   R.StorerKey = @cStorerKey
-            AND   R.UserDefine01 = @cCartonID
+            AND   (( @cCartonIDOnRcptDetail = '1' AND RD.UserDefine01 = @cCartonID) OR ( R.UserDefine01 = @cCartonID))
             GROUP BY RD.SKU
             OPEN CUR_LOOP
             FETCH NEXT FROM CUR_LOOP INTO @cSKU, @nSum_QtyReceived, @nSum_QtyExpected
@@ -536,7 +561,7 @@ BEGIN
             BEGIN
 
                SET @nLogQtyReceived = 0
-               IF EXISTS ( SELECT 1 FROM rdt.rdtUCCReceive2Log WITH (NOLOCK) 
+               IF EXISTS ( SELECT 1 FROM rdt.rdtUCCReceive2Log WITH (NOLOCK)
                            WHERE ReceiptKey = @cReceiptKey
                            AND   (( @cPOKey = '') OR ( POKey = @cPOKey))
                            AND   StorerKey = @cStorerKey
@@ -546,7 +571,7 @@ BEGIN
                            AND   SKU = @cSKU)
                BEGIN
                   SELECT @nLogQtyReceived = ISNULL( SUM( QtyReceived), 0)
-                  FROM rdt.rdtUCCReceive2Log WITH (NOLOCK) 
+                  FROM rdt.rdtUCCReceive2Log WITH (NOLOCK)
                   WHERE ReceiptKey = @cReceiptKey
                   AND   (( @cPOKey = '') OR ( POKey = @cPOKey))
                   AND   StorerKey = @cStorerKey
@@ -569,7 +594,7 @@ BEGIN
                   SET @cErrMsg01 = SUBSTRING( rdt.rdtgetmessage( 111526, @cLangCode, 'DSP'), 7, 14)
                   SET @cErrMsg02 = SUBSTRING( rdt.rdtgetmessage( 111527, @cLangCode, 'DSP'), 7, 14)
 
-                  EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, 
+                  EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT,
                   @cErrMsg01, @cErrMsg02, @cErrMsg03, @cErrMsg04, @cErrMsg05
 
                   SET @nErrNo = 0
@@ -583,7 +608,7 @@ BEGIN
 
             SET @nSum_LogQtyReceived = 0
             SELECT @nSum_LogQtyReceived = ISNULL( SUM( QtyReceived), 0)
-            FROM rdt.rdtUCCReceive2Log WITH (NOLOCK) 
+            FROM rdt.rdtUCCReceive2Log WITH (NOLOCK)
             WHERE ReceiptKey = @cReceiptKey
             AND   (( @cPOKey = '') OR ( POKey = @cPOKey))
             AND   StorerKey = @cStorerKey
@@ -623,8 +648,8 @@ BEGIN
          -- Standard decode
          IF @cDecodeSKUSP = '1'
          BEGIN
-            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode, 
-               @cToID       OUTPUT, @cUPC        OUTPUT, @nQTY        OUTPUT, 
+            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
+               @cToID       OUTPUT, @cUPC        OUTPUT, @nQTY        OUTPUT,
                @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT,
                @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT,
                @cLottable11 OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT
@@ -656,7 +681,7 @@ BEGIN
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cCartonID, @cReceiptKey, @cPOKey, @cUPC,
-               @cSKU        OUTPUT, @nQTY        OUTPUT, @cToID       OUTPUT, @cToLOC      OUTPUT, 
+               @cSKU        OUTPUT, @nQTY        OUTPUT, @cToID       OUTPUT, @cToLOC      OUTPUT,
                @nErrNo      OUTPUT, @cErrMsg     OUTPUT
 
             IF @nErrNo <> 0
@@ -745,12 +770,12 @@ BEGIN
          END
       END
 
-      IF NOT EXISTS ( SELECT 1 FROM dbo.ReceiptDetail RD WITH (NOLOCK) 
+      IF NOT EXISTS ( SELECT 1 FROM dbo.ReceiptDetail RD WITH (NOLOCK)
                       JOIN dbo.Receipt R WITH (NOLOCK) ON ( RD.ReceiptKey = R.ReceiptKey)
                       WHERE R.ReceiptKey = @cReceiptKey
                       AND   (( @cPOKey = '') OR ( R.POKey = @cPOKey))
                       AND   R.StorerKey = @cStorerKey
-                      AND   R.UserDefine01 = @cCartonID
+                      AND   (( @cCartonIDOnRcptDetail = '1' AND RD.UserDefine01 = @cCartonID) OR ( R.UserDefine01 = @cCartonID))
                       AND   RD.SKU = @cSKU)
       BEGIN
          SET @nErrNo = 111514
@@ -759,7 +784,7 @@ BEGIN
       END
 
       -- Get sku descr & uom
-      SELECT @cSKUDesc = SKU.DESCR, 
+      SELECT @cSKUDesc = SKU.DESCR,
              @cUOM = Pack.PackUOM3
       FROM dbo.SKU SKU WITH (NOLOCK)
       JOIN dbo.Pack Pack WITH (NOLOCK) ON SKU.PackKey = Pack.PackKey
@@ -774,7 +799,7 @@ BEGIN
       SET @cOutField09 = @cSKU
 
       -- Validate blank QTY
-      IF ISNULL( @cQty, '') = '' 
+      IF ISNULL( @cQty, '') = ''
       BEGIN
          --SET @nErrNo = 111515
          --SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Qty Required
@@ -791,33 +816,65 @@ BEGIN
          GOTO Step_Qty_Fail
       END
 
+      IF @cNotAllowCtnQtyOverRcv = '1'
+      BEGIN
+      	DECLARE @nSKUExpQty     INT = 0
+      	DECLARE @nSKURcvQty     INT = 0
+
+         SELECT @nSKUExpQty = ISNULL( SUM( QTYExpected), 0)
+         FROM dbo.ReceiptDetail RD WITH (NOLOCK)
+         JOIN dbo.Receipt R WITH (NOLOCK) ON ( RD.ReceiptKey = R.ReceiptKey)
+         WHERE R.ReceiptKey = @cReceiptKey
+         AND   (( @cPOKey = '') OR ( R.POKey = @cPOKey))
+         AND   R.StorerKey = @cStorerKey
+         AND   (( @cCartonIDOnRcptDetail = '1' AND RD.UserDefine01 = @cCartonID) OR ( R.UserDefine01 = @cCartonID))
+         AND   RD.SKU = @cSKU
+
+         SELECT @nSKURcvQty = ISNULL( SUM( QtyReceived), 0)
+         FROM rdt.rdtUCCReceive2Log WITH (NOLOCK)
+         WHERE ReceiptKey = ReceiptKey
+         AND   (( @cPOKey = '') OR ( POKey = @cPOKey))
+         AND   SKU = @cSKU
+         AND   UCCNo = @cCartonID
+         AND   StorerKey = @cStorerKey
+         AND   [Status] = '0'
+         AND   AddWho = @cUserName
+
+      	IF ( @nSKURcvQty + CAST( @cQty AS NVARCHAR( 5))) > @nSKUExpQty
+         BEGIN
+            SET @nErrNo = 111529
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU Over Rcv
+            GOTO Step_SKU_Fail
+         END
+      END
+
       SET @nSum_QtyReceived = 0
       SET @nSum_QtyExpected = 0
       SELECT @nSum_QtyReceived = ISNULL( SUM( BeforeReceivedQty), 0),
              @nSum_QtyExpected = ISNULL( SUM( QTYExpected), 0)
-      FROM dbo.ReceiptDetail RD WITH (NOLOCK) 
+      FROM dbo.ReceiptDetail RD WITH (NOLOCK)
       JOIN dbo.Receipt R WITH (NOLOCK) ON ( RD.ReceiptKey = R.ReceiptKey)
       WHERE R.ReceiptKey = @cReceiptKey
       AND   (( @cPOKey = '') OR ( R.POKey = @cPOKey))
       AND   R.StorerKey = @cStorerKey
-      AND   R.UserDefine01 = @cCartonID
+      AND   (( @cCartonIDOnRcptDetail = '1' AND RD.UserDefine01 = @cCartonID) OR ( R.UserDefine01 = @cCartonID))
       --AND   RD.SKU = @cSKU
 
       SET @nQty = CAST( @cQty AS NVARCHAR( 5))
 
-      IF EXISTS ( SELECT 1 FROM rdt.rdtUCCReceive2Log WITH (NOLOCK) 
-                  WHERE ReceiptKey = ReceiptKey 
+      IF EXISTS ( SELECT 1 FROM rdt.rdtUCCReceive2Log WITH (NOLOCK)
+                  WHERE ReceiptKey = ReceiptKey
                   AND   (( @cPOKey = '') OR ( POKey = @cPOKey))
                   AND   SKU = @cSKU
                   AND   StorerKey = @cStorerKey
                   AND   [Status] = '0'
                   AND   AddWho = @cUserName)
       BEGIN
-         UPDATE rdt.rdtUCCReceive2Log WITH (ROWLOCK) SET 
+         UPDATE rdt.rdtUCCReceive2Log WITH (ROWLOCK) SET
             QtyReceived = QtyReceived + @nQTY,
             EditWho = sUSER_sNAME(),
             EditDate = GETDATE()
-         WHERE ReceiptKey = ReceiptKey 
+         WHERE ReceiptKey = ReceiptKey
          AND   (( @cPOKey = '') OR ( POKey = @cPOKey))
          AND   SKU = @cSKU
          AND   StorerKey = @cStorerKey
@@ -834,18 +891,18 @@ BEGIN
       ELSE
       BEGIN
          SELECT @nQtyExpected = ISNULL( SUM( QTYExpected), 0)
-         FROM dbo.ReceiptDetail RD WITH (NOLOCK) 
+         FROM dbo.ReceiptDetail RD WITH (NOLOCK)
          JOIN dbo.Receipt R WITH (NOLOCK) ON ( RD.ReceiptKey = R.ReceiptKey)
          WHERE R.ReceiptKey = @cReceiptKey
          AND   (( @cPOKey = '') OR ( R.POKey = @cPOKey))
          AND   R.StorerKey = @cStorerKey
-         AND   R.UserDefine01 = @cCartonID
+         AND   (( @cCartonIDOnRcptDetail = '1' AND RD.UserDefine01 = @cCartonID) OR ( R.UserDefine01 = @cCartonID))
          AND   RD.SKU = @cSKU
 
-         INSERT INTO rdt.rdtUCCReceive2Log ( ReceiptKey, ReceiptLineNumber, POKey, StorerKey, SKU, UOM, 
+         INSERT INTO rdt.rdtUCCReceive2Log ( ReceiptKey, ReceiptLineNumber, POKey, StorerKey, SKU, UOM,
             QtyExpected, QtyReceived, ToID, ToLOC, UCCNo, Status, AddWho, AddDate, EditWho, EditDate)
          VALUES
-         ( @cReceiptKey, '', @cPOKey, @cStorerKey, @cSKU, @cUOM, 
+         ( @cReceiptKey, '', @cPOKey, @cStorerKey, @cSKU, @cUOM,
             @nQtyExpected, @nQTY, '', '', @cCartonID, '0', @cUserName, GETDATE(), @cUserName, GETDATE())
 
          IF @@ERROR <> 0
@@ -858,13 +915,13 @@ BEGIN
 
       SET @nSum_LogQtyReceived = 0
       SELECT @nSum_LogQtyReceived = ISNULL( SUM( QtyReceived), 0)
-      FROM rdt.rdtUCCReceive2Log WITH (NOLOCK) 
-      WHERE ReceiptKey = ReceiptKey 
+      FROM rdt.rdtUCCReceive2Log WITH (NOLOCK)
+      WHERE ReceiptKey = ReceiptKey
       AND   (( @cPOKey = '') OR ( POKey = @cPOKey))
       AND   StorerKey = @cStorerKey
       AND   [Status] = '0'
       AND   AddWho = @cUserName
-                        
+
       SET @cOutField01 = @cCartonID
       SET @cOutField02 = @cReceiptKey
       SET @cOutField03 = ''
@@ -892,9 +949,72 @@ BEGIN
       SET @cFieldAttr08 = ''
 
       EXEC rdt.rdtSetFocusField @nMobile, 1
-      
+
       SET @nScn  = @nScn - 1
       SET @nStep = @nStep - 1
+   END
+
+   Step_2_Quit:
+   BEGIN
+      -- Extended Info
+      IF @cExtendedInfoSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+         BEGIN
+            SET @cExtendedInfo = ''
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' +
+               ' @cReceiptKey, @cPOKey, @cCartonID, @cSKU, @nQTY, @cToLOC, @cTOID, ' +
+               ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
+               ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
+               ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
+               ' @tExtInfoVar, @cExtendedInfo OUTPUT'
+            SET @cSQLParam =
+               '@nMobile       INT,           ' +
+               '@nFunc         INT,           ' +
+               '@cLangCode     NVARCHAR( 3),  ' +
+               '@nStep         INT,           ' +
+               '@nAfterStep    INT,           ' +
+               '@nInputKey     INT,           ' +
+               '@cFacility     NVARCHAR( 5),  ' +
+               '@cStorerKey    NVARCHAR( 15), ' +
+               '@cReceiptKey   NVARCHAR( 10), ' +
+               '@cPOKey        NVARCHAR( 10), ' +
+               '@cCartonID     NVARCHAR( 20), ' +
+               '@cSKU          NVARCHAR( 20), ' +
+               '@nQTY          INT,           ' +
+               '@cToLOC        NVARCHAR( 10), ' +
+               '@cTOID         NVARCHAR( 18), ' +
+               '@cLottable01   NVARCHAR( 18), ' +
+               '@cLottable02   NVARCHAR( 18), ' +
+               '@cLottable03   NVARCHAR( 18), ' +
+               '@dLottable04   DATETIME,      ' +
+               '@dLottable05   DATETIME,      ' +
+               '@cLottable06   NVARCHAR( 30), ' +
+               '@cLottable07   NVARCHAR( 30), ' +
+               '@cLottable08   NVARCHAR( 30), ' +
+               '@cLottable09   NVARCHAR( 30), ' +
+               '@cLottable10   NVARCHAR( 30), ' +
+               '@cLottable11   NVARCHAR( 30), ' +
+               '@cLottable12   NVARCHAR( 30), ' +
+               '@dLottable13   DATETIME,      ' +
+               '@dLottable14   DATETIME,      ' +
+               '@dLottable15   DATETIME,      ' +
+               '@tExtInfoVar   VariableTable READONLY, ' +
+               '@cExtendedInfo NVARCHAR( 20) OUTPUT '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nStep, @nInputKey, @cFacility, @cStorerKey,
+               @cReceiptKey, @cPOKey, @cCartonID, @cSKU, @nQTY, @cToLOC, @cTOID,
+               @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+               @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+               @tExtInfoVar, @cExtendedInfo OUTPUT
+
+            IF @cExtendedInfo <> ''
+               SET @cOutField15 = @cExtendedInfo
+         END
+      END
    END
    GOTO Quit
 
@@ -975,7 +1095,7 @@ BEGIN
       END
 
      -- Validate compulsary field
-      IF ISNULL( @cToLOC, '') = '' 
+      IF ISNULL( @cToLOC, '') = ''
       BEGIN
          SET @nErrNo = 111519
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need LOC
@@ -1021,9 +1141,9 @@ BEGIN
 
       SET @nNOPOFlag = CASE WHEN @cPOkey = 'NOPO' THEN 1 ELSE 0 END
 
-      DECLARE CUR_RCV CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
+      DECLARE CUR_RCV CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
       SELECT SKU, ISNULL( SUM( QtyReceived), 0)
-      FROM rdt.rdtUCCReceive2Log WITH (NOLOCK) 
+      FROM rdt.rdtUCCReceive2Log WITH (NOLOCK)
       WHERE ReceiptKey = @cReceiptKey
       AND   (( @cPOKey = '') OR ( POKey = @cPOKey))
       AND   StorerKey = @cStorerKey
@@ -1035,26 +1155,26 @@ BEGIN
       FETCH NEXT FROM CUR_RCV INTO @cSKU2Receive, @nQty2Receive
       WHILE @@FETCH_STATUS <> -1
       BEGIN
-         SELECT TOP 1 
-                @cLottable01 = RD.Lottable01, 
-                @cLottable02 = RD.Lottable02, 
-                @cLottable03 = RD.Lottable03, 
-                @dLottable04 = RD.Lottable04, 
-                @cLottable06 = RD.Lottable06, 
-                @cLottable07 = RD.Lottable07, 
-                @cLottable08 = RD.Lottable08, 
-                @cLottable09 = RD.Lottable09, 
-                @cLottable10 = RD.Lottable10, 
-                @cLottable11 = RD.Lottable11, 
-                @cLottable12 = RD.Lottable12, 
-                @dLottable13 = RD.Lottable13, 
-                @dLottable14 = RD.Lottable14, 
-                @dLottable15 = RD.Lottable15 
+         SELECT TOP 1
+                @cLottable01 = RD.Lottable01,
+                @cLottable02 = RD.Lottable02,
+                @cLottable03 = RD.Lottable03,
+                @dLottable04 = RD.Lottable04,
+                @cLottable06 = RD.Lottable06,
+                @cLottable07 = RD.Lottable07,
+                @cLottable08 = RD.Lottable08,
+                @cLottable09 = RD.Lottable09,
+                @cLottable10 = RD.Lottable10,
+                @cLottable11 = RD.Lottable11,
+                @cLottable12 = RD.Lottable12,
+                @dLottable13 = RD.Lottable13,
+                @dLottable14 = RD.Lottable14,
+                @dLottable15 = RD.Lottable15
          FROM dbo.ReceiptDetail RD WITH (NOLOCK)
          JOIN dbo.Receipt R WITH (NOLOCK) ON ( RD.ReceiptKey = R.ReceiptKey)
          WHERE R.StorerKey = @cStorerKey
          AND   R.ReceiptKey = @cReceiptKey
-         AND   R.UserDefine01 = @cCartonID
+         AND   (( @cCartonIDOnRcptDetail = '1' AND RD.UserDefine01 = @cCartonID) OR ( R.UserDefine01 = @cCartonID))
          AND   RD.SKU = @cSKU2Receive
          AND   RD.BeforeReceivedQty > 0
 
@@ -1104,7 +1224,7 @@ BEGIN
          END
          ELSE
          BEGIN
-            UPDATE rdt.rdtUCCReceive2Log WITH (ROWLOCK) SET 
+            UPDATE rdt.rdtUCCReceive2Log WITH (ROWLOCK) SET
                [Status] = '9',
                EditWho = @cUserName,
                EditDate = GETDATE()
@@ -1154,24 +1274,24 @@ BEGIN
       SET @nScn  = @nScn - 2
       SET @nStep = @nStep - 2
    END
-   
+
    IF @nInputKey = 0 -- Esc or No
    BEGIN
       SET @nSum_QtyReceived = 0
       SET @nSum_QtyExpected = 0
       SELECT @nSum_QtyReceived = ISNULL( SUM( BeforeReceivedQty), 0),
              @nSum_QtyExpected = ISNULL( SUM( QTYExpected), 0)
-      FROM dbo.ReceiptDetail RD WITH (NOLOCK) 
+      FROM dbo.ReceiptDetail RD WITH (NOLOCK)
       JOIN dbo.Receipt R WITH (NOLOCK) ON ( RD.ReceiptKey = R.ReceiptKey)
       WHERE R.ReceiptKey = @cReceiptKey
       AND   (( @cPOKey = '') OR ( R.POKey = @cPOKey))
       AND   R.StorerKey = @cStorerKey
-      AND   R.UserDefine01 = @cCartonID
+      AND   (( @cCartonIDOnRcptDetail = '1' AND RD.UserDefine01 = @cCartonID) OR ( R.UserDefine01 = @cCartonID))
 
       SET @nSum_LogQtyReceived = 0
       SELECT @nSum_LogQtyReceived = ISNULL( SUM( QtyReceived), 0)
-      FROM rdt.rdtUCCReceive2Log WITH (NOLOCK) 
-      WHERE ReceiptKey = ReceiptKey 
+      FROM rdt.rdtUCCReceive2Log WITH (NOLOCK)
+      WHERE ReceiptKey = ReceiptKey
       AND   (( @cPOKey = '') OR ( POKey = @cPOKey))
       AND   StorerKey = @cStorerKey
       AND   [Status] = '0'
@@ -1271,17 +1391,17 @@ BEGIN
    SET @nSum_QtyExpected = 0
    SELECT @nSum_QtyReceived = ISNULL( SUM( BeforeReceivedQty), 0),
           @nSum_QtyExpected = ISNULL( SUM( QTYExpected), 0)
-   FROM dbo.ReceiptDetail RD WITH (NOLOCK) 
+   FROM dbo.ReceiptDetail RD WITH (NOLOCK)
    JOIN dbo.Receipt R WITH (NOLOCK) ON ( RD.ReceiptKey = R.ReceiptKey)
    WHERE R.ReceiptKey = @cReceiptKey
    AND   (( @cPOKey = '') OR ( R.POKey = @cPOKey))
    AND   R.StorerKey = @cStorerKey
-   AND   R.UserDefine01 = @cCartonID
+   AND   (( @cCartonIDOnRcptDetail = '1' AND RD.UserDefine01 = @cCartonID) OR ( R.UserDefine01 = @cCartonID))
 
    SET @nSum_LogQtyReceived = 0
    SELECT @nSum_LogQtyReceived = ISNULL( SUM( QtyReceived), 0)
-   FROM rdt.rdtUCCReceive2Log WITH (NOLOCK) 
-   WHERE ReceiptKey = ReceiptKey 
+   FROM rdt.rdtUCCReceive2Log WITH (NOLOCK)
+   WHERE ReceiptKey = ReceiptKey
    AND   (( @cPOKey = '') OR ( POKey = @cPOKey))
    AND   StorerKey = @cStorerKey
    AND   [Status] = '0'
@@ -1297,7 +1417,7 @@ BEGIN
    SET @cOutField07 = ( @nSum_QtyReceived + @nSum_LogQtyReceived)
    SET @cOutField08 = @cQty
    SET @cOutField09 = @cSKU
-      
+
    EXEC rdt.rdtSetFocusField @nMobile, 3 -- SKU
 
    -- Go to SKU QTY screen
@@ -1312,7 +1432,7 @@ Quit. Update back to I/O table, ready to be pick up by JBOSS
 Quit:
 BEGIN
    UPDATE RDTMOBREC WITH (ROWLOCK) SET
-      EditDate = GETDATE(), 
+      EditDate = GETDATE(),
       ErrMsg = @cErrMsg,
       Func   = @nFunc,
       Step   = @nStep,
@@ -1331,7 +1451,7 @@ BEGIN
       --V_QTY        = @nQTY,
       V_SKUDescr   = @cSKUDesc,
       V_SKU        = @cSKU,
-      
+
       V_Integer1   = @nQTY,
 
       V_String1 = @cAllowCtnIDBlank,
@@ -1344,6 +1464,9 @@ BEGIN
       V_String8 = @cPromptIfRcvQtyMisMatch,
       V_String9 = @cDisableQTYField,
       V_String10 = @cDefaultQTY,
+      V_String11 = @cExtendedInfoSP,
+      V_String12 = @cCartonIDOnRcptDetail,
+      V_String13 = @cNotAllowCtnQtyOverRcv,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,
@@ -1368,11 +1491,10 @@ BEGIN
       FieldAttr09  = @cFieldAttr09,   FieldAttr10  = @cFieldAttr10,
       FieldAttr11  = @cFieldAttr11,   FieldAttr12  = @cFieldAttr12,
       FieldAttr13  = @cFieldAttr13,   FieldAttr14  = @cFieldAttr14,
-      FieldAttr15  = @cFieldAttr15                                 
+      FieldAttr15  = @cFieldAttr15
 
    WHERE Mobile = @nMobile
 END
 GO
-
-GRANT EXECUTE ON [RDT].[rdtfnc_UCCReceive2] TO nSQL
+GRANT EXECUTE ON  [RDT].[rdtfnc_UCCReceive2] TO [NSQL]
 GO
