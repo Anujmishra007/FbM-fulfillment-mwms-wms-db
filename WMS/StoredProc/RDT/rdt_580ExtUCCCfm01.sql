@@ -1,7 +1,3 @@
-IF  EXISTS (SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'[RDT].[rdt_580ExtUCCCfm01]') AND OBJECTPROPERTY(id,N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdt_580ExtUCCCfm01]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,9 +13,11 @@ GO
 /* 14-Sep-2018 1.1  Ung         WMS-6291 Pack confirm for all pick slip type  */
 /* 07-Nov-2018 1.2  James       INC0459184 - Filter func id when retrieve     */
 /*                              datawindow (james01)                          */
+/* 26-Aug-2021 1.3  James       WMS-17796 Add ORDSKULBL printing (james02)    */
+/*                              Add rdtReportToPrinter function               */
 /******************************************************************************/
 
-CREATE PROC [RDT].[rdt_580ExtUCCCfm01] (
+CREATE OR ALTER PROC [RDT].[rdt_580ExtUCCCfm01] (
    @nMobile        INT,
    @nFunc          INT, 
 	@cLangCode	    NVARCHAR( 3),
@@ -61,7 +59,11 @@ BEGIN
            @nCartonNo         INT,
            @nUCCQTY           INT,
            @nExpectedQty      INT,
-           @nPackedQty        INT
+           @nPackedQty        INT,
+           @cOrdSkuLbl        NVARCHAR( 10),
+           @tOrdSkuLbl        VARIABLETABLE,
+           @cLabelPrinter1    NVARCHAR( 10),
+           @cLabelPrinter2    NVARCHAR( 10)
 
    DECLARE @fWeight        FLOAT
    DECLARE @fCube          FLOAT
@@ -104,7 +106,7 @@ BEGIN
 
          -- Get PickHeader info
          SELECT
-            @cOrderKey = OrderKey, 
+            --@cOrderKey = OrderKey, 
             @cLoadKey = ExternOrderKey, 
             @cZone = Zone
          FROM dbo.PickHeader WITH (NOLOCK)
@@ -317,7 +319,14 @@ BEGIN
          FROM dbo.PackDetail WITH (NOLOCK) 
          WHERE PickSlipNo = @cPickSlipNo 
          AND   DropID = @cUCC
-            
+
+         SELECT @cLabelPrinter1 = PrinterID
+         FROM rdt.rdtReportToPrinter WITH (NOLOCK)
+         WHERE Function_ID = @nFunc
+         AND   StorerKey = @cStorerKey
+         AND   PrinterGroup = @cLabelPrinter
+         AND   ReportType = 'SHIPPLABEL'
+               
          -- Insert print job
          EXEC RDT.rdt_BuiltPrintJob
             @nMobile,
@@ -325,7 +334,7 @@ BEGIN
             'SHIPPLABEL',       -- ReportType
             'PRINT_SHIPPLABEL', -- PrintJobName
             @cDataWindow,
-            @cLabelPrinter,
+            @cLabelPrinter1,
             @cTargetDB,
             @cLangCode,
             @nErrNo  OUTPUT,
@@ -524,7 +533,64 @@ BEGIN
             END
          END
 
-
+         -- (james02)
+         SET @cOrdSkuLbl = rdt.rdtGetConfig( @nFunc, 'OrdSkuLbl', @cStorerKey)
+         IF @cOrdSkuLbl = '0'  
+            SET @cOrdSkuLbl = ''
+                 
+         IF @cOrdSkuLbl <> ''
+         BEGIN
+            IF EXISTS ( SELECT 1 FROM dbo.ORDERS WITH (NOLOCK)
+                        WHERE OrderKey = @cOrderKey
+                        AND   DocType = 'N')
+            BEGIN
+               SELECT 
+                  @cUCCSKU = SKU, 
+                  @nUCCQTY = SUM( QTY)
+               FROM dbo.UCC WITH (NOLOCK) 
+               WHERE StorerKey = @cStorerKey 
+               AND   UCCNo = @cUCC
+               GROUP BY SKU
+                  
+               IF EXISTS ( SELECT 1 FROM dbo.ORDERDETAIL WITH (NOLOCK)
+                           WHERE OrderKey = @cOrderKey
+                           AND   Sku = @cUCCSKU
+                           AND   ISNULL( ExtendedPrice, 0) > 0 
+                           AND   ISNULL( UnitPrice, 0) > 0)
+               BEGIN
+                  IF EXISTS ( SELECT 1 FROM dbo.CODELKUP C WITH (NOLOCK)           
+                              JOIN dbo.Orders O WITH (NOLOCK) 
+                                 ON (C.Long = O.ConsigneeKey AND C.StorerKey = O.StorerKey)          
+                              WHERE C.ListName = 'NKLABREF'          
+                              AND   O.OrderKey = @cOrderkey          
+                              AND   O.StorerKey = @cStorerKey)  
+                  BEGIN
+                     SELECT @cLabelPrinter2 = PrinterID
+                     FROM rdt.rdtReportToPrinter WITH (NOLOCK)
+                     WHERE Function_ID = @nFunc
+                     AND   StorerKey = @cStorerKey
+                     AND   PrinterGroup = @cLabelPrinter
+                     AND   ReportType = @cOrdSkuLbl                     
+                        
+                     INSERT INTO @tOrdSkuLbl (Variable, Value) VALUES ( '@cStorerKey',    @cStorerKey)
+                     INSERT INTO @tOrdSkuLbl (Variable, Value) VALUES ( '@cSKU',          @cUCCSKU)
+                     INSERT INTO @tOrdSkuLbl (Variable, Value) VALUES ( '@cOrderkey',     @cOrderkey)  
+           
+                     -- Print label  
+                     EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, 0, 1, '', @cStorerKey, @cLabelPrinter2, '',    
+                        @cOrdSkuLbl, -- Report type  
+                        @tOrdSkuLbl, -- Report params  
+                        'rdt_580ExtUCCCfm01',   
+                        @nErrNo  OUTPUT,  
+                        @cErrMsg OUTPUT,   
+                        @nUCCQTY    -- No of copy
+                  
+                     IF @nErrNo <> 0
+                        GOTO RollBackTran
+                  END
+               END
+            END
+         END
          --COMMIT TRAN rdt_580ExtUCCCfm01
 
          -- EventLog
