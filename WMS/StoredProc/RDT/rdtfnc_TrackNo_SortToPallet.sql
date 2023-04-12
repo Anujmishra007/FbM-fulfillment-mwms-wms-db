@@ -23,21 +23,23 @@ GO
 /*                            scan/show pallet key (james04)            */
 /* 2021-11-24   1.5  James    WMS-18315 Add palletkey format check      */
 /*                            to trackno and close pallet scn (james05) */
-/* 2022-01-03   1.6  James    WMS-18616 Fix SKU null error when insert  */  
-/*                            palletdetail record (james06)             */  
+/* 2022-01-03   1.6  James    WMS-18616 Fix SKU null error when insert  */
+/*                            palletdetail record (james06)             */
 /* 2022-02-07   1.7  LZG      JSM-49257 - Cleared @cLabelNo value after */
 /*                            error to fix no error shown bug (ZG01)    */
 /* 2022-02-28   1.8  James    WMS-18350 Add ExtendedUpdateSP to step    */
 /*                            scan trackno pallet key (james07)         */
 /* 2022-04-12   1.9  James    WMS-19218 Add new screen to allow scan to */
 /*                            different pallet id screen (james08)      */
-/* 2022-04-28   2.0  James    WMS-18616 Extend the length of barcode    */  
-/*                            to 100 chars (james07)                    */  
+/* 2022-04-28   2.0  James    WMS-18616 Extend the length of barcode    */
+/*                            to 100 chars (james07)                    */
 /* 2022-08-15   2.1  James    WMS-20033 Add check pallet closed(james08)*/
 /* 2022-08-18   2.2  James    WMS-20561 Chk order status before close   */
 /*                            pallet (james09)                          */
 /* 2022-09-15   2.3  James    WMS-20667 Add Lane (james10)              */
 /*                            Add confirm scan new lane screen          */
+/* 2023-03-28   2.4  James    WMS-21868 Exclude certain order type from */  
+/*                            split lane check (james11)                */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TrackNo_SortToPallet] (
@@ -112,14 +114,14 @@ DECLARE
    @cCube                  NVARCHAR( 10),
    @cWeight                NVARCHAR( 10),
    @cRefNo                 NVARCHAR( 20),
-   @cLength                NVARCHAR( 10), 
-   @cWidth                 NVARCHAR( 10), 
-   @cHeight                NVARCHAR( 10), 
+   @cLength                NVARCHAR( 10),
+   @cWidth                 NVARCHAR( 10),
+   @cHeight                NVARCHAR( 10),
    @cAllowWeightZero       NVARCHAR( 1),
    @cAllowCubeZero         NVARCHAR( 1),
-   @cAllowLengthZero       NVARCHAR( 1), 
-   @cAllowWidthZero        NVARCHAR( 1), 
-   @cAllowHeightZero       NVARCHAR( 1), 
+   @cAllowLengthZero       NVARCHAR( 1),
+   @cAllowWidthZero        NVARCHAR( 1),
+   @cAllowHeightZero       NVARCHAR( 1),
    @fWeight                FLOAT,
    @fLength                FLOAT,
    @fWidth                 FLOAT,
@@ -138,7 +140,7 @@ DECLARE
    @tCreateMBOLVar         VARIABLETABLE,
    @nIsChildLane           INT = 0,
    @nIsOriginalLane        INT = 0,
-   
+
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
    @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),    @cFieldAttr03 NVARCHAR( 1),
@@ -170,7 +172,7 @@ SELECT
    @cOrderKey   = V_OrderKey,
 
    @nPalletValidated       = V_Integer1,
-   
+
    @cLabelNo               = V_String1,
    @cPalletKey             = V_String2,
    @cMBOLKey               = V_String3,
@@ -180,7 +182,7 @@ SELECT
    @cCapturePackInfoSP     = V_String7,
    @cChkPalletOrdStatus    = V_String8,
    @cLane                  = V_String9,
-   
+
    @cDecodeSP              =  V_String20,
    @cExtendedInfoSP        =  V_String21,
    @cExtendedValidateSP    =  V_String22,
@@ -189,7 +191,7 @@ SELECT
    @cSortToPalletNotCreateMBOL   = V_String25,
    @cNotAllowReusePalletKey      = V_String26,
    @cScanPalletToLane            = V_String27,
-   
+
    @cTrackNo               = V_String41,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
@@ -280,13 +282,13 @@ BEGIN
       SET @cCapturePackInfoSP = ''
 
    SET @cSortToPalletNotCreateMBOL = rdt.RDTGetConfig( @nFunc, 'SortToPalletNotCreateMBOL', @cStorerKey)
-   
+
    SET @cNotAllowReusePalletKey = rdt.RDTGetConfig( @nFunc, 'NotAllowReusePalletKey', @cStorerKey)
-   
+
    SET @cChkPalletOrdStatus = rdt.RDTGetConfig( @nFunc, 'ChkPalletOrdStatus', @cStorerKey)
-   
+
    SET @cScanPalletToLane = rdt.RDTGetConfig( @nFunc, 'ScanPalletToLane', @cStorerKey)
-   
+
    -- Initialize value
    SET @cTrackNo = ''
    SET @cOption = ''
@@ -430,8 +432,8 @@ BEGIN
             GOTO Step_TrackNo_Fail
          END
 
-         IF EXISTS ( SELECT 1 FROM dbo.ORDERS WITH (NOLOCK) 
-                     WHERE OrderKey = @cOrderKey 
+         IF EXISTS ( SELECT 1 FROM dbo.ORDERS WITH (NOLOCK)
+                     WHERE OrderKey = @cOrderKey
                      AND   [Status] = '9')
          BEGIN
             SET @nErrNo = 189803
@@ -547,20 +549,20 @@ BEGIN
 
          IF ISNULL( @cMBOLKey, '') <> '' OR ( @cSortToPalletNotCreateMBOL = '1' AND @cPalletKey <> '')
          BEGIN
-      	   IF @cScanPalletToLane = '1'
-      	   BEGIN
+          IF @cScanPalletToLane = '1'
+          BEGIN
                -- Do not allow cartons for an order to scatter across different lane / MBOL
-               IF EXISTS ( SELECT 1 
+               IF EXISTS ( SELECT 1
                            FROM dbo.MBOL M WITH (NOLOCK)
                            JOIN dbo.MBOLDetail MD WITH (NOLOCK) ON ( MD.MBOLKey = M.MBOLKey)
-                           WHERE M.ExternMBOLKey <> @cLane   -- Scanned lane 
+                           WHERE M.ExternMBOLKey <> @cLane   -- Scanned lane
                            AND   MD.OrderKey = @cOrderKey)   -- Decoded from DecodeSP
                BEGIN
                   SET @nErrNo = 189804
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --OrdInOtherLane
                   GOTO Step_TrackNo_Fail
                END
-      	   END
+          END
 
             SET @cOutField01 = @cTrackNo
             SET @cOutField02 = @cOrderKey
@@ -573,36 +575,36 @@ BEGIN
          END
          ELSE
          BEGIN
-      	   SET @cPalletKey = ''
-      	   SET @cLane = ''
+          SET @cPalletKey = ''
+          SET @cLane = ''
             SET @nPalletValidated = 0
 
             -- Prep next screen var
             SET @cOutField01 = @cTrackNo
             SET @cOutField02 = @cOrderKey
             SET @cOutField03 = ''   -- PalletKey
-         
+
             IF @cScanPalletToLane = '1'
             BEGIN
-         	   SELECT @cLane = UserDefine03
-         	   FROM dbo.PALLETDETAIL WITH (NOLOCK)
-         	   WHERE StorerKey = @cStorerKey
-         	   AND   UserDefine01 = @cOrderKey
-         	
-         	   IF ISNULL( @cLane, '') <> ''
-         	      SET @cOutField04 = @cLane
-         	   ELSE
-         		   SET @cOutField04 = '' -- Lane
+             SELECT @cLane = UserDefine03
+             FROM dbo.PALLETDETAIL WITH (NOLOCK)
+             WHERE StorerKey = @cStorerKey
+             AND   UserDefine01 = @cOrderKey
+
+             IF ISNULL( @cLane, '') <> ''
+                SET @cOutField04 = @cLane
+             ELSE
+              SET @cOutField04 = '' -- Lane
 
                SET @cFieldAttr04 = ''
             END
             ELSE
-         	   SET @cFieldAttr04 = 'O'
+             SET @cFieldAttr04 = 'O'
 
             -- Goto scan pallet screen
             SET @nScn  = @nScn_ScanPalletID
             SET @nStep = @nStep_ScanPalletID
-         
+
             EXEC rdt.rdtSetFocusField @nMobile, 3 -- PalletKey
          END
       END
@@ -660,7 +662,7 @@ BEGIN
             SET @cOutField15 = @cExtendedInfo
       END
    END
-   
+
    GOTO Quit
 
    Step_TrackNo_Fail:
@@ -706,36 +708,36 @@ BEGIN
       END
 
       SET @cPallet_Status= ''
-      SELECT @cPallet_Status = [Status] 
-      FROM dbo.Pallet WITH (NOLOCK) 
-      WHERE PalletKey = @cPalletKey 
+      SELECT @cPallet_Status = [Status]
+      FROM dbo.Pallet WITH (NOLOCK)
+      WHERE PalletKey = @cPalletKey
       AND   StorerKey = @cStorerKey
 
       IF @@ROWCOUNT > 0
       BEGIN
          IF @cPallet_Status = @cPalletCloseStatus AND @cNotAllowReusePalletKey = '1'
          BEGIN
-            SET @nErrNo = 189801      
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Pallet In Use       
-            GOTO Step_ScanPalletID_Fail      
+            SET @nErrNo = 189801
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Pallet In Use
+            GOTO Step_ScanPalletID_Fail
          END
       END
-            
+
       -- Check if user is scanning tracking no onto different storer
       SET @cChk_StorerKey = ''
       SELECT TOP 1 @cChk_StorerKey = StorerKey
       FROM dbo.PackDetail WITH (NOLOCK)
       WHERE LabelNo = @cLabelNo
       ORDER BY 1
-      
+
       IF @cChk_StorerKey <> ''
       BEGIN
-      	SET @cPlt_StorerKey = ''
-         SELECT TOP 1 @cPlt_StorerKey = StorerKey 
+       SET @cPlt_StorerKey = ''
+         SELECT TOP 1 @cPlt_StorerKey = StorerKey
          FROM dbo.PALLETDETAIL WITH (NOLOCK)
          WHERE PalletKey = @cPalletKey
          ORDER BY 1
-         
+
          IF @@ROWCOUNT > 0 AND ( @cChk_StorerKey <> @cPlt_StorerKey)
          BEGIN
             SET @nErrNo = 156397
@@ -770,7 +772,7 @@ BEGIN
             IF @cCur_ShipperKey <> @cNew_ShipperKey
             BEGIN
                SET @nErrNo = 156373
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PltDiffShipper
+    SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PltDiffShipper
                GOTO Step_ScanPalletID_Fail
             END
          END
@@ -780,12 +782,12 @@ BEGIN
       BEGIN
          IF ISNULL( @cLane, '') = '' AND @nPalletValidated = 0
          BEGIN
-         	SET @cOutField03 = @cPalletKey
-            SET @nPalletValidated = 1	
+          SET @cOutField03 = @cPalletKey
+            SET @nPalletValidated = 1
             EXEC rdt.rdtSetFocusField @nMobile, 4 -- Lane
             GOTO Quit
          END
-         
+
          IF ISNULL( @cLane, '') = '' AND @nPalletValidated = 1
          BEGIN
             SET @nErrNo = 189805
@@ -800,9 +802,9 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format
             GOTO Step_ScanLane_Fail
          END
-         
+
          -- Check if Lane is closed
-         IF EXISTS ( SELECT 1 FROM dbo.MBOL WITH (NOLOCK) 
+         IF EXISTS ( SELECT 1 FROM dbo.MBOL WITH (NOLOCK)
                      WHERE ExternMBOLKey = @cLane
                      AND   [Status] >= '5')
          BEGIN
@@ -812,13 +814,13 @@ BEGIN
          END
 
          -- Check if pallet is already another to another lane
-         IF EXISTS ( SELECT 1 
+         IF EXISTS ( SELECT 1
                      FROM dbo.PalletDetail PD WITH (NOLOCK)
                      JOIN dbo.PALLET P WITH (NOLOCK) ON ( PD.PalletKey = P.PalletKey)
                      WHERE P.StorerKey = @cStorerKey
                      AND   P.PalletKey = @cPalletKey  -- Scanned pallet ID
                      AND   P.Status < @cPalletCloseStatus
-                     AND   PD.UserDefine03 <> @cLane) -- Scanned lane 
+                     AND   PD.UserDefine03 <> @cLane) -- Scanned lane
          BEGIN
             SET @nErrNo = 189807
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PltInOtherLane
@@ -826,10 +828,10 @@ BEGIN
          END
 
          -- Do not allow cartons for an order to scatter across different lane / MBOL
-         IF EXISTS ( SELECT 1 
+         IF EXISTS ( SELECT 1
                      FROM dbo.MBOL M WITH (NOLOCK)
                      JOIN dbo.MBOLDetail MD WITH (NOLOCK) ON ( MD.MBOLKey = M.MBOLKey)
-                     WHERE M.ExternMBOLKey <> @cLane   -- Scanned lane 
+                     WHERE M.ExternMBOLKey <> @cLane   -- Scanned lane
                      AND   MD.OrderKey = @cOrderKey)   -- Decoded from DecodeSP
          BEGIN
             SET @nErrNo = 189808
@@ -837,26 +839,34 @@ BEGIN
             GOTO Step_ScanLane_Fail
          END
 
-         IF EXISTS ( SELECT 1 
+         IF EXISTS ( SELECT 1
                      FROM dbo.PalletDetail PD WITH (NOLOCK)
                      LEFT JOIN dbo.MBOL M WITH (NOLOCK) ON ( M.ExternMBOLKey = PD.UserDefine03)
                      WHERE PD.StorerKey = @cStorerKey
                      AND   PD.UserDefine03 = @cLane
                      AND   M.MBOLKey IS NULL)
-         BEGIN 
+         BEGIN
             SET @nErrNo = 189818
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --OrdInOtherLane
             GOTO Step_ScanLane_Fail
          END
 
-         IF EXISTS ( SELECT 1 
+         IF EXISTS ( SELECT 1
                      FROM dbo.MBOL WITH (NOLOCK)
                      WHERE ExternMBOLKey = @cLane
                      AND   [STATUS] < '5'
                      AND   ISNULL(UserDefine05, '') <> '')      -- Lane already split
+                     AND NOT EXISTS (  
+                                 SELECT 1 FROM dbo.Codelkup CL WITH (NOLOCK)  
+                                 JOIN dbo.Orders O WITH (NOLOCK) ON O.Type = CL.Code2 AND O.StorerKey = CL.StorerKey   
+                                 WHERE O.OrderKey = @cOrderKey  
+                                 AND CL.ListName = 'LANECONFIG'  
+                                 AND CL.Code = 'SPLNEXCLORD'  
+                                 AND O.StorerKey = @cStorerKey  
+                                 AND CL.Short = '1')  
          BEGIN
             SET @nIsChildLane = 0
-            SELECT @nIsChildLane = 1 
+            SELECT @nIsChildLane = 1
             FROM dbo.MBOL M WITH (NOLOCK)
             JOIN dbo.Orders O WITH (NOLOCK) ON ( O.MBOLKey = M.MBOLKey)
             WHERE O.StorerKey = @cStorerKey
@@ -871,13 +881,13 @@ BEGIN
             END
 
             SET @nIsOriginalLane = 1
-            SELECT @nIsOriginalLane = 0 
+            SELECT @nIsOriginalLane = 0
             FROM dbo.MBOL M WITH (NOLOCK)
             JOIN dbo.Orders O WITH (NOLOCK) ON ( O.MBOLKey = M.MBOLKey)
             WHERE O.StorerKey = @cStorerKey
             AND   O.OrderKey = @cOrderKey
             AND   M.ExternMBOLKey = @cLane
-            
+
             IF @nIsOriginalLane = 1
             BEGIN
                SET @nErrNo = 189820
@@ -923,7 +933,7 @@ BEGIN
          END
       END
 
-      -- Check whether user scanned a new lane 
+      -- Check whether user scanned a new lane
       -- (prevent user accidentally scan other barcode and create new mbol)
       IF @cScanPalletToLane = '1'
       BEGIN
@@ -940,7 +950,7 @@ BEGIN
 
             SET @nScn = @nScn_ConfirmNewLane
             SET @nStep = @nStep_ConfirmNewLane
-            
+
             GOTO Quit
          END
       END
@@ -963,7 +973,7 @@ BEGIN
          @cPalletKey    = @cPalletKey,
          @cMBOLKey      = @cMBOLKey OUTPUT,
          @cLane         = @cLane,
-         @cLabelNo      = @cLabelNo,
+        @cLabelNo      = @cLabelNo,
          @tCreateMBOLVar= @tCreateMBOLVar,
          @nErrNo        = @nErrNo      OUTPUT,
          @cErrMsg       = @cErrMsg     OUTPUT
@@ -1006,7 +1016,7 @@ BEGIN
                GOTO RollBackTran_CreateMbol
          END
       END
-      
+
       COMMIT TRAN rdt_CreateMbol
 
       GOTO Quit_CreateMbol
@@ -1038,7 +1048,7 @@ BEGIN
       SET @cTrackNo = ''
       SET @cOrderKey = ''
       SET @nPalletValidated = 0
-      
+
       -- Prep next screen var
       SET @cOutField01 = '' -- Track No
       SET @cOutField02 = '' -- Option
@@ -1046,7 +1056,7 @@ BEGIN
       EXEC rdt.rdtSetFocusField @nMobile, 1
 
       SET @cFieldAttr04 = ''
-      
+
       SET @nScn = @nScn_TrackNo
       SET @nStep = @nStep_TrackNo
    END
@@ -1127,33 +1137,33 @@ BEGIN
          GOTO Step_ShowPalletID_Fail
       END
 
-      -- Check barcode format  
-      IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'PalletKey', @cPalletKey) = 0  
-      BEGIN  
-         SET @nErrNo = 189813  
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format  
-         GOTO Step_ShowPalletID_Fail  
-      END  
+      -- Check barcode format
+      IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'PalletKey', @cPalletKey) = 0
+      BEGIN
+         SET @nErrNo = 189813
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format
+         GOTO Step_ShowPalletID_Fail
+      END
 
       IF @cSuggPalletKey <> @cPalletKey
       BEGIN
-      	IF @cAllowScanToDiffPallet = '0'
-      	BEGIN
+       IF @cAllowScanToDiffPallet = '0'
+       BEGIN
             SET @nErrNo = 156361
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Pallet Not Match
             GOTO Step_ShowPalletID_Fail
-      	END
-      	ELSE
+       END
+       ELSE
          BEGIN
-         	SET @cOption = ''
-         	
-         	SET @cOutField01 = @cSuggPalletKey
-         	SET @cOutField02 = @cPalletKey
-         	SET @cOutField03 = ''
-         	
+          SET @cOption = ''
+
+          SET @cOutField01 = @cSuggPalletKey
+          SET @cOutField02 = @cPalletKey
+          SET @cOutField03 = ''
+
             SET @nScn = @nScn_ScanDiffPallet
-            SET @nStep = @nStep_ScanDiffPallet 
-            
+            SET @nStep = @nStep_ScanDiffPallet
+
             GOTO Quit
          END
       END
@@ -1177,13 +1187,13 @@ BEGIN
       IF @cScanPalletToLane = '1'
       BEGIN
          -- Check if pallet is already another to another lane
-         IF EXISTS ( SELECT 1 
+         IF EXISTS ( SELECT 1
                      FROM dbo.PalletDetail PD WITH (NOLOCK)
                      JOIN dbo.PALLET P WITH (NOLOCK) ON ( PD.PalletKey = P.PalletKey)
                      WHERE P.StorerKey = @cStorerKey
                      AND   P.PalletKey = @cPalletKey  -- Scanned pallet ID
                      AND   P.Status < @cPalletCloseStatus
-                     AND   PD.UserDefine03 <> @cLane) -- Scanned lane 
+                     AND   PD.UserDefine03 <> @cLane) -- Scanned lane
          BEGIN
             SET @nErrNo = 189809
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PltInOtherLane
@@ -1276,7 +1286,7 @@ BEGIN
                ' @cMBOLKey       NVARCHAR( 10), ' +
                ' @cLane          NVARCHAR( 20), ' +
                ' @tExtUpdateVar  VariableTable READONLY, ' +
-               ' @nErrNo         INT           OUTPUT, ' +
+' @nErrNo         INT           OUTPUT, ' +
                ' @cErrMsg        NVARCHAR( 20) OUTPUT  '
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
@@ -1287,7 +1297,7 @@ BEGIN
                GOTO RollBackTran_CreateMbolDetail
          END
       END
-      
+
       COMMIT TRAN rdt_CreateMbolDetail
 
       GOTO Quit_CreateMbolDetail
@@ -1399,7 +1409,7 @@ BEGIN
       -- Make sure pallet to close belong to login storer
       IF EXISTS ( SELECT 1 FROM dbo.PALLETDETAIL WITH (NOLOCK)
                   WHERE PalletKey = @cPalletKey
-                  AND   StorerKey <> @cStorerKey)  
+                  AND   StorerKey <> @cStorerKey)
       BEGIN
          SET @nErrNo = 156399
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff storerkey
@@ -1409,27 +1419,27 @@ BEGIN
       IF @cSortToPalletNotCreateMBOL = '0'
       BEGIN
          SET @cMBOLKey = ''
-         
-         IF @cScanPalletToLane = '1'  
+
+         IF @cScanPalletToLane = '1'
          BEGIN
-            SELECT @cLane = ISNULL(UserDefine03, '') 
+            SELECT @cLane = ISNULL(UserDefine03, '')
             FROM dbo.PalletDetail PD WITH (NOLOCK)
             JOIN dbo.Pallet P WITH (NOLOCK) ON P.PalletKey = PD.PalletKey
             WHERE P.StorerKey = @cStorerKey
             AND P.PalletKey = @cPalletKey
-            AND P.Status < @cPalletCloseStatus  
-            
-            SELECT @cMBOLKey = MBOLKey  
-            FROM dbo.MBOL WITH (NOLOCK)  
+            AND P.Status < @cPalletCloseStatus
+
+            SELECT @cMBOLKey = MBOLKey
+            FROM dbo.MBOL WITH (NOLOCK)
             WHERE ExternMbolKey = @cLane
-            AND   [Status] = '0'  
-         END 
-         ELSE 
-         BEGIN 
-            SELECT @cMBOLKey = MBOLKey  
-            FROM dbo.MBOL WITH (NOLOCK)  
+            AND   [Status] = '0'
+         END
+         ELSE
+         BEGIN
+            SELECT @cMBOLKey = MBOLKey
+            FROM dbo.MBOL WITH (NOLOCK)
             WHERE ExternMbolKey = @cPalletKey
-            AND   [Status] = '0'  
+            AND   [Status] = '0'
          END
 
          IF ISNULL( @cMBOLKey, '') = ''
@@ -1439,11 +1449,11 @@ BEGIN
             GOTO Step_ClosePallet_Fail
          END
       END
-      
+
       IF @cChkPalletOrdStatus <> '0'
       BEGIN
-         IF EXISTS ( SELECT 1 
-                     FROM dbo.ORDERS WITH (NOLOCK)	
+         IF EXISTS ( SELECT 1
+                     FROM dbo.ORDERS WITH (NOLOCK)
                      WHERE OrderKey IN ( SELECT DISTINCT UserDefine01
                                          FROM dbo.PalletDetail WITH (NOLOCK)
                                          WHERE PalletKey = @cPalletKey
@@ -1457,26 +1467,26 @@ BEGIN
             GOTO Step_ClosePallet_Fail
          END
       END
-      
-      IF @cCapturePackInfoSP <> ''   
-      BEGIN  
-         IF EXISTS( SELECT 1 FROM sys.sysobjects WHERE name = @cCapturePackInfoSP AND type = 'P')  
-         BEGIN  
-            SET @cSQL = 'EXEC rdt.' + RTRIM( @cCapturePackInfoSP) +  
+
+      IF @cCapturePackInfoSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.sysobjects WHERE name = @cCapturePackInfoSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cCapturePackInfoSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cTrackNo, @cOrderKey, @cPalletKey, @cMBOLKey, ' +
                ' @cWeight OUTPUT, @cLength OUTPUT, @cWidth OUTPUT, @cHeight OUTPUT, @cCapturePackInfo OUTPUT, @tCapturePackInfo, ' +
-               ' @nErrNo OUTPUT, @cErrMsg OUTPUT ' 
-  
-            SET @cSQLParam =  
-               '@nMobile            INT,           ' +  
-               '@nFunc              INT,           ' +  
-               '@cLangCode          NVARCHAR( 3),  ' +  
-               '@nStep              INT,           ' +  
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+
+            SET @cSQLParam =
+               '@nMobile            INT,           ' +
+               '@nFunc              INT,           ' +
+               '@cLangCode          NVARCHAR( 3),  ' +
+               '@nStep              INT,           ' +
                '@nInputKey          INT,           ' +
                '@cFacility          NVARCHAR( 5),  ' +
-               '@cStorerkey         NVARCHAR( 15), ' +  
+               '@cStorerkey         NVARCHAR( 15), ' +
                '@cTrackNo           NVARCHAR( 40), ' +
-               '@cOrderKey          NVARCHAR( 10), ' +  
+               '@cOrderKey          NVARCHAR( 10), ' +
                '@cPalletKey         NVARCHAR( 20), ' +
                '@cMBOLKey           NVARCHAR( 10), ' +
                '@cWeight            NVARCHAR( 10) OUTPUT, ' +
@@ -1485,29 +1495,29 @@ BEGIN
                '@cHeight            NVARCHAR( 10) OUTPUT, ' +
                '@cCapturePackInfo   NVARCHAR( 10)  OUTPUT,  ' +
                '@tCapturePackInfo   VariableTable READONLY, ' +
-               '@nErrNo             INT           OUTPUT,  ' +  
-               '@cErrMsg            NVARCHAR( 20) OUTPUT   '  
-  
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
+               '@nErrNo             INT           OUTPUT,  ' +
+               '@cErrMsg            NVARCHAR( 20) OUTPUT   '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                   @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cTrackNo, @cOrderKey, @cPalletKey, @cMBOLKey,
-                  @cWeight OUTPUT, @cLength OUTPUT, @cWidth OUTPUT, @cHeight OUTPUT, @cCapturePackInfo OUTPUT, @tCapturePackInfo, 
-                  @nErrNo OUTPUT, @cErrMsg OUTPUT  
-  
-            IF @nErrNo <> 0  
-               GOTO Step_ClosePallet_Fail  
+                  @cWeight OUTPUT, @cLength OUTPUT, @cWidth OUTPUT, @cHeight OUTPUT, @cCapturePackInfo OUTPUT, @tCapturePackInfo,
+                  @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Step_ClosePallet_Fail
             ELSE
-            	SET @cPackInfo = @cCapturePackInfo
-         END  
-         ELSE  
-         BEGIN  
-            SET @cPackInfo = @cCapturePackInfoSP  
-         END  
-      END  
-      ELSE  
-      BEGIN  
-         SET @cPackInfo = ''  
-      END  
-      
+             SET @cPackInfo = @cCapturePackInfo
+         END
+         ELSE
+         BEGIN
+            SET @cPackInfo = @cCapturePackInfoSP
+         END
+      END
+      ELSE
+      BEGIN
+         SET @cPackInfo = ''
+      END
+
       -- Capture pack info
       IF @cPackInfo <> ''
       BEGIN
@@ -1517,18 +1527,18 @@ BEGIN
          SET @cOutField03 = @cLength
          SET @cOutField04 = @cWidth
          SET @cOutField05 = @cHeight
-         
+
          -- Enable disable field
          SET @cFieldAttr02 = CASE WHEN CHARINDEX( 'W', @cPackInfo) = 0 THEN 'O' ELSE '' END
          SET @cFieldAttr03 = CASE WHEN CHARINDEX( 'L', @cPackInfo) = 0 THEN 'O' ELSE '' END
          SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'D', @cPackInfo) = 0 THEN 'O' ELSE '' END
          SET @cFieldAttr05 = CASE WHEN CHARINDEX( 'H', @cPackInfo) = 0 THEN 'O' ELSE '' END
-         
+
          -- Position cursor
          IF @cFieldAttr02 = '' AND @cOutField02 <> '' EXEC rdt.rdtSetFocusField @nMobile, 2 ELSE
          IF @cFieldAttr03 = '' AND @cOutField03 <> '' EXEC rdt.rdtSetFocusField @nMobile, 3 ELSE
          IF @cFieldAttr04 = '' AND @cOutField04 <> '' EXEC rdt.rdtSetFocusField @nMobile, 4 ELSE
-         IF @cFieldAttr05 = '' AND @cOutField05 <> '' EXEC rdt.rdtSetFocusField @nMobile, 5 
+         IF @cFieldAttr05 = '' AND @cOutField05 <> '' EXEC rdt.rdtSetFocusField @nMobile, 5
 
          -- Go to next screen
          SET @nScn = @nScn_PalletDimension
@@ -1674,7 +1684,7 @@ BEGIN
             SET @cOutField15 = @cExtendedInfo
       END
    END
-   
+
    GOTO Quit
 
    Step_ClosePallet_Fail:
@@ -1695,75 +1705,75 @@ Step_ScanDiffPallet:
 BEGIN
    IF @nInputKey = 1 -- Yes or Send
    BEGIN
-      -- Screen mapping            
-      SET @cOption = @cInField03            
-            
-      -- Validate blank            
-      IF @cOption = ''            
-      BEGIN            
-         SET @nErrNo = 156376            
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Option required            
-         GOTO Step_ScanDiffPallet_Fail            
-      END            
-            
-      -- Validate option            
-      IF @cOption NOT IN ( '1', '2')
-      BEGIN            
-         SET @nErrNo = 156377            
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Option            
-         GOTO Step_ScanDiffPallet_Fail            
-      END            
+      -- Screen mapping
+      SET @cOption = @cInField03
 
-      SET @cPallet_Status= ''  
-      SELECT @cPallet_Status = [Status]   
-      FROM dbo.Pallet WITH (NOLOCK)   
-      WHERE PalletKey = @cPalletKey   
-      AND   StorerKey = @cStorerKey  
-  
-      IF @@ROWCOUNT > 0  
-      BEGIN  
-         IF @cPallet_Status = @cPalletCloseStatus AND @cNotAllowReusePalletKey = '1'  
-         BEGIN  
-            SET @nErrNo = 189814        
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Pallet In Use         
-            GOTO Step_ScanDiffPallet_Fail        
-         END  
-      END  
-              
-      -- Check if user is scanning tracking no onto different storer  
-      SET @cChk_StorerKey = ''  
-      SELECT TOP 1 @cChk_StorerKey = StorerKey  
-      FROM dbo.PackDetail WITH (NOLOCK)  
-      WHERE LabelNo = @cLabelNo  
-      ORDER BY 1  
-        
-      IF @cChk_StorerKey <> ''  
-      BEGIN  
-       SET @cPlt_StorerKey = ''  
-         SELECT TOP 1 @cPlt_StorerKey = StorerKey   
-         FROM dbo.PALLETDETAIL WITH (NOLOCK)  
-         WHERE PalletKey = @cPalletKey  
-         ORDER BY 1  
-           
-         IF @@ROWCOUNT > 0 AND ( @cChk_StorerKey <> @cPlt_StorerKey)  
-         BEGIN  
-            SET @nErrNo = 189815  
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff StorerKey  
-            GOTO Step_ScanDiffPallet_Fail  
-         END  
-      END  
+      -- Validate blank
+      IF @cOption = ''
+      BEGIN
+         SET @nErrNo = 156376
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Option required
+         GOTO Step_ScanDiffPallet_Fail
+      END
+
+      -- Validate option
+      IF @cOption NOT IN ( '1', '2')
+      BEGIN
+         SET @nErrNo = 156377
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Option
+         GOTO Step_ScanDiffPallet_Fail
+      END
+
+      SET @cPallet_Status= ''
+      SELECT @cPallet_Status = [Status]
+      FROM dbo.Pallet WITH (NOLOCK)
+      WHERE PalletKey = @cPalletKey
+      AND   StorerKey = @cStorerKey
+
+      IF @@ROWCOUNT > 0
+      BEGIN
+         IF @cPallet_Status = @cPalletCloseStatus AND @cNotAllowReusePalletKey = '1'
+         BEGIN
+            SET @nErrNo = 189814
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Pallet In Use
+            GOTO Step_ScanDiffPallet_Fail
+         END
+      END
+
+      -- Check if user is scanning tracking no onto different storer
+      SET @cChk_StorerKey = ''
+      SELECT TOP 1 @cChk_StorerKey = StorerKey
+      FROM dbo.PackDetail WITH (NOLOCK)
+      WHERE LabelNo = @cLabelNo
+      ORDER BY 1
+
+      IF @cChk_StorerKey <> ''
+      BEGIN
+       SET @cPlt_StorerKey = ''
+         SELECT TOP 1 @cPlt_StorerKey = StorerKey
+         FROM dbo.PALLETDETAIL WITH (NOLOCK)
+         WHERE PalletKey = @cPalletKey
+         ORDER BY 1
+
+         IF @@ROWCOUNT > 0 AND ( @cChk_StorerKey <> @cPlt_StorerKey)
+         BEGIN
+            SET @nErrNo = 189815
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff StorerKey
+            GOTO Step_ScanDiffPallet_Fail
+         END
+      END
 
       IF @cOption = '2'
-      BEGIN 
-         -- Prep next screen var  
-         SET @cOutField01 = '' -- Track No  
-         SET @cOutField02 = '' -- Option  
-  
-         EXEC rdt.rdtSetFocusField @nMobile, 1  
-         SET @nScn = @nScn_TrackNo  
-         SET @nStep = @nStep_TrackNo  
-         GOTO QUIT 
-      END 
+      BEGIN
+         -- Prep next screen var
+         SET @cOutField01 = '' -- Track No
+         SET @cOutField02 = '' -- Option
+
+         EXEC rdt.rdtSetFocusField @nMobile, 1
+         SET @nScn = @nScn_TrackNo
+         SET @nStep = @nStep_TrackNo
+         GOTO QUIT
+      END
 
       IF @cPalletNotAllowMixShipperKey = '1'
       BEGIN
@@ -1797,30 +1807,30 @@ BEGIN
          END
       END
 
-      IF @cScanPalletToLane = '1'  
-      BEGIN  
-         -- Check if pallet is already another to another lane  
-         IF EXISTS ( SELECT 1   
-                     FROM dbo.PalletDetail PD WITH (NOLOCK)  
-                     JOIN dbo.PALLET P WITH (NOLOCK) ON ( PD.PalletKey = P.PalletKey)  
-                     WHERE P.StorerKey = @cStorerKey  
-                     AND   P.PalletKey = @cPalletKey  -- Scanned pallet ID  
-                     AND   P.Status < @cPalletCloseStatus  
-                     AND   PD.UserDefine03 <> @cLane) -- Scanned lane   
-         BEGIN  
-            SET @nErrNo = 189816  
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PltInOtherLane  
-            GOTO Step_ScanDiffPallet_Fail  
-         END  
+      IF @cScanPalletToLane = '1'
+      BEGIN
+         -- Check if pallet is already another to another lane
+         IF EXISTS ( SELECT 1
+                     FROM dbo.PalletDetail PD WITH (NOLOCK)
+                     JOIN dbo.PALLET P WITH (NOLOCK) ON ( PD.PalletKey = P.PalletKey)
+                     WHERE P.StorerKey = @cStorerKey
+                     AND   P.PalletKey = @cPalletKey  -- Scanned pallet ID
+                     AND   P.Status < @cPalletCloseStatus
+                     AND   PD.UserDefine03 <> @cLane) -- Scanned lane
+         BEGIN
+            SET @nErrNo = 189816
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PltInOtherLane
+            GOTO Step_ScanDiffPallet_Fail
+         END
 
-         IF EXISTS ( SELECT 1 
+         IF EXISTS ( SELECT 1
                      FROM dbo.MBOL WITH (NOLOCK)
                      WHERE ExternMBOLKey = @cLane
                      AND   [STATUS] < '5'
                      AND   ISNULL(UserDefine05, '') <> '')      -- Lane already split
          BEGIN
             SET @nIsChildLane = 0
-            SELECT @nIsChildLane = 1 
+            SELECT @nIsChildLane = 1
             FROM dbo.MBOL M WITH (NOLOCK)
             JOIN dbo.Orders O WITH (NOLOCK) ON ( O.MBOLKey = M.MBOLKey)
             WHERE O.StorerKey = @cStorerKey
@@ -1835,13 +1845,13 @@ BEGIN
             END
 
             SET @nIsOriginalLane = 0
-            SELECT @nIsOriginalLane = 1 
+            SELECT @nIsOriginalLane = 1
             FROM dbo.MBOL M WITH (NOLOCK)
             JOIN dbo.Orders O WITH (NOLOCK) ON ( O.MBOLKey = M.MBOLKey)
             WHERE O.StorerKey = @cStorerKey
             AND   O.OrderKey = @cOrderKey
             AND   M.ExternMBOLKey = @cLane
-            
+
             IF @nIsOriginalLane = 1
             BEGIN
                SET @nErrNo = 189822
@@ -1849,7 +1859,7 @@ BEGIN
                GOTO Step_ScanDiffPallet_Fail
             END
          END
-      END  
+      END
 
       -- Extended validate
       IF @cExtendedValidateSP <> ''
@@ -1948,7 +1958,7 @@ BEGIN
                GOTO RollBack_CreateMbol
          END
       END
-      
+
       COMMIT TRAN rdt_CreateMbol
 
       GOTO Commit_CreateMbol
@@ -2051,7 +2061,7 @@ BEGIN
       SET @cLength         = CASE WHEN @cFieldAttr03 = '' THEN @cInField03 ELSE @cOutField03 END
       SET @cWidth          = CASE WHEN @cFieldAttr04 = '' THEN @cInField04 ELSE @cOutField04 END
       SET @cHeight         = CASE WHEN @cFieldAttr05 = '' THEN @cInField05 ELSE @cOutField05 END
-      
+
       -- Weight
       IF @cFieldAttr02 = ''
       BEGIN
@@ -2092,7 +2102,7 @@ BEGIN
       END
 
       -- Length
-      IF @cFieldAttr03 = ''   
+      IF @cFieldAttr03 = ''
       BEGIN
          -- Check blank
          IF @cLength = ''
@@ -2111,7 +2121,7 @@ BEGIN
 
          IF @nErrNo = 0
          BEGIN
-            SET @nErrNo = 156390
+            SET @nErrNo = 156390              
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Length
             EXEC rdt.rdtSetFocusField @nMobile, 3
             SET @cOutField03 = ''
@@ -2122,7 +2132,7 @@ BEGIN
       END
 
       -- Width
-      IF @cFieldAttr04 = ''   
+      IF @cFieldAttr04 = ''
       BEGIN
          -- Check blank
          IF @cWidth = ''
@@ -2152,7 +2162,7 @@ BEGIN
       END
 
       -- Height
-      IF @cFieldAttr05 = ''   
+      IF @cFieldAttr05 = ''
       BEGIN
          -- Check blank
          IF @cHeight = ''
@@ -2186,11 +2196,11 @@ BEGIN
       BEGIN
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
          BEGIN
-         	INSERT INTO @tExtValidVar (Variable, Value) VALUES ( '@cWeight',     @cWeight)
-         	INSERT INTO @tExtValidVar (Variable, Value) VALUES ( '@cLength',     @cLength)
-         	INSERT INTO @tExtValidVar (Variable, Value) VALUES ( '@cWidth',      @cWidth)
-         	INSERT INTO @tExtValidVar (Variable, Value) VALUES ( '@cHeight',     @cHeight)
-         	
+          INSERT INTO @tExtValidVar (Variable, Value) VALUES ( '@cWeight',     @cWeight)
+          INSERT INTO @tExtValidVar (Variable, Value) VALUES ( '@cLength',     @cLength)
+          INSERT INTO @tExtValidVar (Variable, Value) VALUES ( '@cWidth',      @cWidth)
+          INSERT INTO @tExtValidVar (Variable, Value) VALUES ( '@cHeight',     @cHeight)
+
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
                ' @cTrackNo, @cOrderKey, @cPalletKey, @cMBOLKey, @cLane, @tExtValidVar, ' +
@@ -2226,7 +2236,7 @@ BEGIN
       SET @fLength = ISNULL( CAST( @cLength AS FLOAT), 0)
       SET @fWidth = ISNULL( CAST( @cWidth AS FLOAT), 0)
       SET @fHeight = ISNULL( CAST( @cHeight AS FLOAT), 0)
-      
+
       SET @nTranCount = @@TRANCOUNT
       BEGIN TRAN  -- Begin our own transaction
       SAVE TRAN UpdDimClosePallet -- For rollback or commit only our own transaction
@@ -2267,10 +2277,10 @@ BEGIN
       BEGIN
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
          BEGIN
-         	INSERT INTO @tExtValidVar (Variable, Value) VALUES ( '@cWeight',     @cWeight)
-         	INSERT INTO @tExtValidVar (Variable, Value) VALUES ( '@cLength',     @cLength)
-         	INSERT INTO @tExtValidVar (Variable, Value) VALUES ( '@cWidth',      @cWidth)
-         	INSERT INTO @tExtValidVar (Variable, Value) VALUES ( '@cHeight',     @cHeight)
+          INSERT INTO @tExtValidVar (Variable, Value) VALUES ( '@cWeight',     @cWeight)
+          INSERT INTO @tExtValidVar (Variable, Value) VALUES ( '@cLength',     @cLength)
+          INSERT INTO @tExtValidVar (Variable, Value) VALUES ( '@cWidth',      @cWidth)
+          INSERT INTO @tExtValidVar (Variable, Value) VALUES ( '@cHeight',     @cHeight)
 
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
@@ -2322,7 +2332,7 @@ BEGIN
       SET @cFieldAttr03 = ''
       SET @cFieldAttr04 = ''
       SET @cFieldAttr05 = ''
-      
+
       -- Prep next screen var
       SET @cOutField01 = '' -- Track No
       SET @cOutField02 = '' -- Option
@@ -2335,13 +2345,13 @@ BEGIN
 
    IF @nInputKey = 0 -- ESC
    BEGIN
-   	-- Enable field
-   	SET @cFieldAttr01 = ''
-   	SET @cFieldAttr02 = ''
-   	SET @cFieldAttr03 = ''
-   	SET @cFieldAttr04 = ''
-   	SET @cFieldAttr05 = ''
-   	
+    -- Enable field
+    SET @cFieldAttr01 = ''
+    SET @cFieldAttr02 = ''
+    SET @cFieldAttr03 = ''
+    SET @cFieldAttr04 = ''
+    SET @cFieldAttr05 = ''
+
       -- Initialize value
       SET @cTrackNo = ''
       SET @cOrderKey = ''
@@ -2391,7 +2401,7 @@ BEGIN
    END
 
    GOTO Quit
-   
+
    Step_PalletDim_Fail:
    BEGIN
       SET @cOutField02 = CASE WHEN @cFieldAttr02 = '' THEN '' ELSE @cWeight END
@@ -2403,7 +2413,7 @@ BEGIN
       IF @cFieldAttr02 = '' AND @cOutField02 <> '' EXEC rdt.rdtSetFocusField @nMobile, 2 ELSE
       IF @cFieldAttr03 = '' AND @cOutField03 <> '' EXEC rdt.rdtSetFocusField @nMobile, 3 ELSE
       IF @cFieldAttr04 = '' AND @cOutField04 <> '' EXEC rdt.rdtSetFocusField @nMobile, 4 ELSE
-      IF @cFieldAttr05 = '' AND @cOutField05 <> '' EXEC rdt.rdtSetFocusField @nMobile, 5 
+      IF @cFieldAttr05 = '' AND @cOutField05 <> '' EXEC rdt.rdtSetFocusField @nMobile, 5
    END
 END
 GOTO Quit
@@ -2423,19 +2433,19 @@ BEGIN
       SET @cNewLane = @cInField03
 
       IF @cNewLane = ''
-      BEGIN            
-         SET @nErrNo = 189811            
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need Lane            
-         GOTO Step_ConfirmNewLane_Fail            
-      END  
-      
+      BEGIN
+         SET @nErrNo = 189811
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need Lane
+         GOTO Step_ConfirmNewLane_Fail
+      END
+
       IF @cNewLane <> @cLane
-      BEGIN            
-         SET @nErrNo = 189812            
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff Lane            
-         GOTO Step_ConfirmNewLane_Fail            
-      END  
-      
+      BEGIN
+         SET @nErrNo = 189812
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff Lane
+         GOTO Step_ConfirmNewLane_Fail
+      END
+
       SET @nTranCount = @@TRANCOUNT
       BEGIN TRAN  -- Begin our own transaction
       SAVE TRAN rdt_NewCreateMbol -- For rollback or commit only our own transaction
@@ -2497,7 +2507,7 @@ BEGIN
                GOTO RollBackTran_NewCreateMbol
          END
       END
-      
+
       COMMIT TRAN rdt_NewCreateMbol
 
       GOTO Quit_NewCreateMbol
@@ -2528,13 +2538,13 @@ BEGIN
       SET @cPalletKey = ''
       SET @cLane = ''
       SET @nPalletValidated = 0
-      
+
       -- Prep next screen var
       SET @cOutField01 = @cTrackNo
       SET @cOutField02 = @cOrderKey
       SET @cOutField03 = ''   -- PalletKey
-         
-      IF @cScanPalletToLane = '1'
+
+IF @cScanPalletToLane = '1'
       BEGIN
          SET @cOutField04 = ''   -- Lane
          SET @cFieldAttr04 = ''
@@ -2545,7 +2555,7 @@ BEGIN
       -- Goto scan pallet screen
       SET @nScn  = @nScn_ScanPalletID
       SET @nStep = @nStep_ScanPalletID
-         
+
       EXEC rdt.rdtSetFocusField @nMobile, 3 -- PalletKey
    END
 
@@ -2613,7 +2623,7 @@ BEGIN
       V_OrderKey= @cOrderKey,
 
       V_Integer1  = @nPalletValidated,
-      
+
       V_String1   = @cLabelNo,
       V_String2   = @cPalletKey,
       V_String3   = @cMBOLKey,
@@ -2623,7 +2633,7 @@ BEGIN
       V_String7   = @cCapturePackInfoSP,
       V_String8   = @cChkPalletOrdStatus,
       V_String9   = @cLane,
-      
+
       V_String20 = @cDecodeSP,
       V_String21 = @cExtendedInfoSP,
       V_String22 = @cExtendedValidateSP,
@@ -2632,7 +2642,7 @@ BEGIN
       V_String25 = @cSortToPalletNotCreateMBOL,
       V_String26 = @cNotAllowReusePalletKey,
       V_String27 = @cScanPalletToLane,
-      
+
       V_String41 = @cTrackNo,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01, FieldAttr01  = @cFieldAttr01,
@@ -2659,5 +2669,6 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
+
 GRANT EXECUTE ON [RDT].[rdtfnc_TrackNo_SortToPallet] TO nSQL
 GO
