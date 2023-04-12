@@ -27,5 +27,8 @@ execute rdt.rdtAddMsg 191423, 10, 'PALLETIZED AND      ',   'us_english', 1653
 execute rdt.rdtAddMsg 191424, 10, 'NON PALLETIZED      ',   'us_english', 1653
 execute rdt.rdtAddMsg 191425, 10, 'CUSTOMER IN LANE    ',   'us_english', 1653
 
+-- WMS-21868
+execute rdt.rdtAddMsg 191426, 10, '191426 OrdTypeXMatch',   'us_english', 1653
+
 SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE Message_ID BETWEEN 191401 AND 191450
 
