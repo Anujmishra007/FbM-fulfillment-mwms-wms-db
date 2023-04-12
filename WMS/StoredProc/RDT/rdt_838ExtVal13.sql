@@ -9,6 +9,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author      Purposes                                 */
 /* 2022-07-15 1.0  yeekung   WMS-19593 Created                          */
+/* 2023-03-23 1.1  Ung       WMS-22076 Created                          */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_838ExtVal13 (
@@ -216,6 +217,23 @@ BEGIN
          END
       END    
       
+      IF @nStep = 2 -- Statistics
+      BEGIN
+         IF @nInputKey = 1 -- ENTER
+         BEGIN
+            -- Get user info
+            DECLARE @cUserGroup NVARCHAR( 60)
+            SELECT @cUserGroup = OPSPosition FROM rdt.rdtUser WITH (NOLOCK) WHERE UserName = SUSER_SNAME()
+            
+            -- Check user allowed
+            IF @cUserGroup = 'GROUP1' AND @cOption <> '1'
+            BEGIN
+               SET @nErrNo = 188562
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --OptionNotAllow
+               GOTO Quit
+            END
+         END
+      END
 
       IF @nStep = 3 -- capture pack data
       BEGIN

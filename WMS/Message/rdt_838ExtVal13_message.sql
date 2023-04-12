@@ -9,8 +9,7 @@ execute rdt.rdtAddMsg 188555, 10, '188555DropID NotInPS', 'us_english', 838
 execute rdt.rdtAddMsg 188556, 10, '188556DropID NotInPS', 'us_english', 838
 execute rdt.rdtAddMsg 188557, 10, '188557DropID NotInPS', 'us_english', 838
 execute rdt.rdtAddMsg 188558, 10, '188558DropID NotInPS', 'us_english', 838
-
 execute rdt.rdtAddMsg 188559, 10, 'Packing List',         'us_english', 838
 execute rdt.rdtAddMsg 188560, 10, 'Not Allow To Print',   'us_english', 838
 execute rdt.rdtAddMsg 188561, 10, '188561DuplicateUCC',   'us_english', 838
-
+execute rdt.rdtAddMsg 188562, 10, '188562OptionNotAllow', 'us_english', 838

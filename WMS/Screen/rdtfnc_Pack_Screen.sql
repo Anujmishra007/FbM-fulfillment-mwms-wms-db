@@ -24,7 +24,7 @@ EXECUTE rdt.rdtAddScn 4651, 'ENG'
    ,@cLine08 = '%20d06'
    ,@cLine09 = 'SKU: %04d07 QTY: %05d08'
    ,@cLine10 = ''
-   ,@cLine11 = 'OPTION: %01i09      4=UCC'
+   ,@cLine11 = 'OPTION: %02i09     4=UCC'
    ,@cLine12 = '1=NEW 2=EDT 3=REPACK'
    ,@cLine13 = '%20d15'    -- WMS-10890 ExtInfo
    ,@cLine14 = '%e'
