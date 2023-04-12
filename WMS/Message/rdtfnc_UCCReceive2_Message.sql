@@ -30,4 +30,7 @@ execute rdt.rdtAddMsg 111526, 10, '11526^RECEIVED QTY',     'us_english', 1582
 execute rdt.rdtAddMsg 111527, 10, '11527^MISMATCH',         'us_english', 1582
 execute rdt.rdtAddMsg 111528, 10, '11528^Upd RcvLog Err',   'us_english', 1582
 
+--WMS-22200
+execute rdt.rdtAddMsg 111529, 10, '11529^SKU Over Rcv  ',   'us_english', 1582
+
 select * from rdt.rdtmsg (nolock) where message_id between 111501 and 111550
