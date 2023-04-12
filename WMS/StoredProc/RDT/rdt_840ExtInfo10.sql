@@ -9,6 +9,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
 /* 2023-03-29 1.0  James      WMS-22039. Created                        */
+/* 2023-04-07 1.1  James      Enhance extendedinfo display (james01)    */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_840ExtInfo10 (
@@ -45,7 +46,7 @@ AS
          FROM dbo.Orders WITH (NOLOCK) 
          WHERE OrderKey = @cOrderKey
          
-         SET @cExtendedInfo = @cM_Company
+         SET @cExtendedInfo = RIGHT( @cM_Company, 20)
       END
    END
 GO
