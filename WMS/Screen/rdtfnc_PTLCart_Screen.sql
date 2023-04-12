@@ -87,3 +87,11 @@ EXECUTE rdt.rdtAddScn 4136, 'ENG'
    ,@cLine14 = '%e'
    ,@nFunc = 808
    
+-- 4137 = Verify LOC screen
+DELETE rdt.RDTScn WHERE Scn = 4137 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 4137, 'ENG',
+   @cLine01 = 'LOC: ',
+   @cLine02 = '%15d01',
+   @cLine03 = '%10i02',
+   @cLine14 = '%e', 
+   @nFunc = 808

@@ -36,3 +36,4 @@ execute rdt.rdtAddMsg 53432, 10, '53432^Over max Row  ', 'us_english', 808
 execute rdt.rdtAddMsg 53433, 10, '53433^MultiSKUBarcod', 'us_english', 808
 execute rdt.rdtAddMsg 53434, 10, '53434^Over pick     ', 'us_english', 808
 execute rdt.rdtAddMsg 53435, 10, '53435^QTYScanConfDif', 'us_english', 808
+execute rdt.rdtAddMsg 53436, 10, '53436^Diff LOC      ', 'us_english', 808

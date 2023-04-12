@@ -33,6 +33,7 @@ GO
 /* 2020-08-04 2.6  YeeKung    WMS-14246 Defaultmethod  (yeekung01)            */
 /* 2021-06-24 2.7  GuoHui     JSM-5377 Retain step 3 when AllowSkipTask.      */
 /* 2022-06-24 2.8  Ung        WMS-20046 Add piece scan                        */
+/* 2023-04-04 2.9  Ung        WMS-22075 Add VerifyLOC                         */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PTLCart] (
@@ -146,31 +147,23 @@ DECLARE
    @cDecodeSP              NVARCHAR( 20),
    @cDefaultMethod         NVARCHAR( 1), 
    @cVerifyPiece           NVARCHAR( 1),
+   @cVerifyLOC             NVARCHAR( 1),
 
-   @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
-   @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
-   @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),
-   @cInField04 NVARCHAR( 60),   @cOutField04 NVARCHAR( 60),
-   @cInField05 NVARCHAR( 60),   @cOutField05 NVARCHAR( 60),
-   @cInField06 NVARCHAR( 60),   @cOutField06 NVARCHAR( 60),
-   @cInField07 NVARCHAR( 60),   @cOutField07 NVARCHAR( 60),
-   @cInField08 NVARCHAR( 60),   @cOutField08 NVARCHAR( 60),
-   @cInField09 NVARCHAR( 60),   @cOutField09 NVARCHAR( 60),
-   @cInField10 NVARCHAR( 60),   @cOutField10 NVARCHAR( 60),
-   @cInField11 NVARCHAR( 60),   @cOutField11 NVARCHAR( 60),
-   @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),
-   @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60),
-   @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),
-   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),
-
-   @cFieldAttr01 NVARCHAR( 1), @cFieldAttr02 NVARCHAR( 1),
-   @cFieldAttr03 NVARCHAR( 1), @cFieldAttr04 NVARCHAR( 1),
-   @cFieldAttr05 NVARCHAR( 1), @cFieldAttr06 NVARCHAR( 1),
-   @cFieldAttr07 NVARCHAR( 1), @cFieldAttr08 NVARCHAR( 1),
-   @cFieldAttr09 NVARCHAR( 1), @cFieldAttr10 NVARCHAR( 1),
-   @cFieldAttr11 NVARCHAR( 1), @cFieldAttr12 NVARCHAR( 1),
-   @cFieldAttr13 NVARCHAR( 1), @cFieldAttr14 NVARCHAR( 1),
-   @cFieldAttr15 NVARCHAR( 1)
+   @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
+   @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
+   @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),    @cFieldAttr03 NVARCHAR( 1),
+   @cInField04 NVARCHAR( 60),   @cOutField04 NVARCHAR( 60),    @cFieldAttr04 NVARCHAR( 1),
+   @cInField05 NVARCHAR( 60),   @cOutField05 NVARCHAR( 60),    @cFieldAttr05 NVARCHAR( 1),
+   @cInField06 NVARCHAR( 60),   @cOutField06 NVARCHAR( 60),    @cFieldAttr06 NVARCHAR( 1),
+   @cInField07 NVARCHAR( 60),   @cOutField07 NVARCHAR( 60),    @cFieldAttr07 NVARCHAR( 1),
+   @cInField08 NVARCHAR( 60),   @cOutField08 NVARCHAR( 60),    @cFieldAttr08 NVARCHAR( 1),
+   @cInField09 NVARCHAR( 60),   @cOutField09 NVARCHAR( 60),    @cFieldAttr09 NVARCHAR( 1),
+   @cInField10 NVARCHAR( 60),   @cOutField10 NVARCHAR( 60),    @cFieldAttr10 NVARCHAR( 1),
+   @cInField11 NVARCHAR( 60),   @cOutField11 NVARCHAR( 60),    @cFieldAttr11 NVARCHAR( 1),
+   @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),    @cFieldAttr12 NVARCHAR( 1),
+   @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60),    @cFieldAttr13 NVARCHAR( 1),
+   @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),    @cFieldAttr14 NVARCHAR( 1),
+   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),    @cFieldAttr15 NVARCHAR( 1)
 
 -- Load RDT.RDTMobRec
 SELECT
@@ -246,47 +239,63 @@ SELECT
    @cDecodeSP           = V_String29,
    @cDefaultMethod      = V_String30,--(yeekung01)
    @cVerifyPiece        = V_String31,
+   @cVerifyLOC          = V_String32,
 
-   @cInField01 = I_Field01,   @cOutField01 = O_Field01,
-   @cInField02 = I_Field02,   @cOutField02 = O_Field02,
-   @cInField03 = I_Field03,   @cOutField03 = O_Field03,
-   @cInField04 = I_Field04,   @cOutField04 = O_Field04,
-   @cInField05 = I_Field05,   @cOutField05 = O_Field05,
-   @cInField06 = I_Field06,   @cOutField06 = O_Field06,
-   @cInField07 = I_Field07,   @cOutField07 = O_Field07,
-   @cInField08 = I_Field08,   @cOutField08 = O_Field08,
-   @cInField09 = I_Field09,   @cOutField09 = O_Field09,
-   @cInField10 = I_Field10,   @cOutField10 = O_Field10,
-   @cInField11 = I_Field11,   @cOutField11 = O_Field11,
-   @cInField12 = I_Field12,   @cOutField12 = O_Field12,
-   @cInField13 = I_Field13,   @cOutField13 = O_Field13,
-   @cInField14 = I_Field14,   @cOutField14 = O_Field14,
-   @cInField15 = I_Field15,   @cOutField15 = O_Field15,
-
-   @cFieldAttr01  = FieldAttr01,    @cFieldAttr02   = FieldAttr02,
-   @cFieldAttr03 =  FieldAttr03,    @cFieldAttr04   = FieldAttr04,
-   @cFieldAttr05 =  FieldAttr05,    @cFieldAttr06   = FieldAttr06,
-   @cFieldAttr07 =  FieldAttr07,    @cFieldAttr08   = FieldAttr08,
-   @cFieldAttr09 =  FieldAttr09,    @cFieldAttr10   = FieldAttr10,
-   @cFieldAttr11 =  FieldAttr11,    @cFieldAttr12   = FieldAttr12,
-   @cFieldAttr13 =  FieldAttr13,    @cFieldAttr14   = FieldAttr14,
-   @cFieldAttr15 =  FieldAttr15
+   @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01  = FieldAttr01,
+   @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02  = FieldAttr02,
+   @cInField03 = I_Field03,   @cOutField03 = O_Field03,  @cFieldAttr03  = FieldAttr03,
+   @cInField04 = I_Field04,   @cOutField04 = O_Field04,  @cFieldAttr04  = FieldAttr04,
+   @cInField05 = I_Field05,   @cOutField05 = O_Field05,  @cFieldAttr05  = FieldAttr05,
+   @cInField06 = I_Field06,   @cOutField06 = O_Field06,  @cFieldAttr06  = FieldAttr06,
+   @cInField07 = I_Field07,   @cOutField07 = O_Field07,  @cFieldAttr07  = FieldAttr07,
+   @cInField08 = I_Field08,   @cOutField08 = O_Field08,  @cFieldAttr08  = FieldAttr08,
+   @cInField09 = I_Field09,   @cOutField09 = O_Field09,  @cFieldAttr09  = FieldAttr09,
+   @cInField10 = I_Field10,   @cOutField10 = O_Field10,  @cFieldAttr10  = FieldAttr10,
+   @cInField11 = I_Field11,   @cOutField11 = O_Field11,  @cFieldAttr11  = FieldAttr11,
+   @cInField12 = I_Field12,   @cOutField12 = O_Field12,  @cFieldAttr12  = FieldAttr12,
+   @cInField13 = I_Field13,   @cOutField13 = O_Field13,  @cFieldAttr13  = FieldAttr13,
+   @cInField14 = I_Field14,   @cOutField14 = O_Field14,  @cFieldAttr14  = FieldAttr14,
+   @cInField15 = I_Field15,   @cOutField15 = O_Field15,  @cFieldAttr15  = FieldAttr15
 
 FROM rdt.rdtMobRec (NOLOCK)
 WHERE Mobile = @nMobile
 
+-- Screen constant
+DECLARE
+   @nStep_CartID        INT,  @nScn_CartID         INT,
+   @nStep_Assign        INT,  @nScn_Assign         INT,
+   @nStep_SKU           INT,  @nScn_SKU            INT,
+   @nStep_Matrix        INT,  @nScn_Matrix         INT,
+   @nStep_CloseTote     INT,  @nScn_CloseTote      INT,
+   @nStep_NewTote       INT,  @nScn_NewTote        INT,
+   @nStep_Unassign      INT,  @nScn_Unassign       INT,
+   @nStep_MultiSKU      INT,  @nScn_MultiSKU       INT,
+   @nStep_VerifyLOC     INT,  @nScn_VerifyLOC      INT
+
+SELECT
+   @nStep_CartID        = 1,  @nScn_CartID         = 4130,
+   @nStep_Assign        = 2,  @nScn_Assign         = 4131,
+   @nStep_SKU           = 3,  @nScn_SKU            = 4132,
+   @nStep_Matrix        = 4,  @nScn_Matrix         = 4133,
+   @nStep_CloseTote     = 5,  @nScn_CloseTote      = 4134,
+   @nStep_NewTote       = 6,  @nScn_NewTote        = 4135,
+   @nStep_Unassign      = 7,  @nScn_Unassign       = 4136,
+   @nStep_MultiSKU      = 8,  @nScn_MultiSKU       = 3570,
+   @nStep_VerifyLOC     = 9,  @nScn_VerifyLOC      = 4137
+
 IF @nFunc = 808  -- PTL Cart
 BEGIN
    -- Redirect to respective screen
-   IF @nStep = 0 GOTO Step_0   -- PTL Cart
-   IF @nStep = 1 GOTO Step_1   -- Scn = 4130. CartID, PickZone, Method
-   IF @nStep = 2 GOTO Step_2   -- Scn = 4131. Dynamic assign
-   IF @nStep = 3 GOTO Step_3   -- Scn = 4132. SKU
-   IF @nStep = 4 GOTO Step_4   -- Scn = 4133. Matrix
-   IF @nStep = 5 GOTO Step_5   -- Scn = 4134. Close tote, QTY
-   IF @nStep = 6 GOTO Step_6   -- Scn = 4135. New tote
-   IF @nStep = 7 GOTO Step_7   -- Scn = 4136. Unassign cart?
-   IF @nStep = 8 GOTO Step_8   -- Scn = 3570. Multi SKU Barocde
+   IF @nStep = 0 GOTO Step_Start       -- PTL Cart
+   IF @nStep = 1 GOTO Step_CartID      -- Scn = 4130. CartID, PickZone, Method
+   IF @nStep = 2 GOTO Step_Assign      -- Scn = 4131. Dynamic assign
+   IF @nStep = 3 GOTO Step_SKU         -- Scn = 4132. SKU
+   IF @nStep = 4 GOTO Step_Matrix      -- Scn = 4133. Matrix
+   IF @nStep = 5 GOTO Step_CloseTote   -- Scn = 4134. Close tote, QTY
+   IF @nStep = 6 GOTO Step_NewTote     -- Scn = 4135. New tote
+   IF @nStep = 7 GOTO Step_Unassign    -- Scn = 4136. Unassign cart?
+   IF @nStep = 8 GOTO Step_MultiSKU    -- Scn = 3570. Multi SKU Barocde
+   IF @nStep = 9 GOTO Step_VerifyLOC   -- Scn = 4137. Verify LOC
 END
 RETURN -- Do nothing if incorrect step
 
@@ -294,7 +303,7 @@ RETURN -- Do nothing if incorrect step
 /********************************************************************************
 Step 0. func = 810. Menu
 ********************************************************************************/
-Step_0:
+Step_Start:
 BEGIN
    -- Get storer config
    SET @cAllowSkipTask = rdt.rdtGetConfig( @nFunc, 'AllowSkipTask', @cStorerKey)
@@ -303,6 +312,7 @@ BEGIN
    SET @cMultiSKUBarcode = rdt.RDTGetConfig( @nFunc, 'MultiSKUBarcode', @cStorerKey)
    SET @cPassOnCart = rdt.rdtGetConfig( @nFunc, 'PassOnCart', @cStorerKey)
    SET @cPTLPKZoneReq = rdt.rdtGetConfig( @nFunc, 'PTLPicKZoneReq', @cStorerKey)
+   SET @cVerifyLOC = rdt.RDTGetConfig( @nFunc, 'VerifyLOC', @cStorerKey)
    SET @cVerifyPiece = rdt.rdtGetConfig( @nFunc, 'VerifyPiece', @cStorerKey)
    
    SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerKey)
@@ -379,8 +389,8 @@ BEGIN
    SET @cOutField06 = CASE WHEN @cRow = '0' THEN '' ELSE @cRow END -- Row
 
    -- Set the entry point
-   SET @nScn = 4130
-   SET @nStep = 1
+   SET @nScn = @nScn_CartID
+   SET @nStep = @nStep_CartID
 
    EXEC rdt.rdtSetFocusField @nMobile, 1
 END
@@ -396,7 +406,7 @@ Step 1. Scn = 4130.
    Col      (Field05, input)
    Row      (Field06, input)
 ********************************************************************************/
-Step_1:
+Step_CartID:
 BEGIN
    IF @nInputKey = 1 --ENTER
    BEGIN
@@ -628,7 +638,7 @@ BEGIN
       IF @nErrNo <> 0
          GOTO Quit
 
-      SET @nStep = @nStep + 1
+      SET @nStep = @nStep_Assign
    END
 
    IF @nInputKey = 0
@@ -657,7 +667,7 @@ GOTO QUIT
 /********************************************************************************
 Step 2. Scn = 4131. Dynamic assign
 ********************************************************************************/
-Step_2:
+Step_Assign:
 BEGIN
    IF @nInputKey = 1 --ENTER
    BEGIN
@@ -794,6 +804,29 @@ BEGIN
       IF @nErrNo <> 0
          GOTO Quit
 
+      -- Get LOC desc
+      IF @cLocShowDescr = '1'
+      BEGIN
+         SELECT @cLocDescr = LEFT( ISNULL( Descr, ''), 15)
+         FROM dbo.LOC WITH (NOLOCK)
+         WHERE Facility = @cFacility
+            AND LOC = @cLOC
+         IF @cLocDescr = ''
+            SET @cLocDescr = @cLOC
+      END
+
+      -- Verify LOC
+      IF @cVerifyLOC = '1'
+      BEGIN
+         SET @cOutField01 = CASE WHEN @cLocShowDescr = '1' THEN @cLocDescr ELSE @cLOC END
+         SET @cOutField02 = '' -- LOC
+         
+         SET @nStep = @nStep_VerifyLOC
+         SET @nScn = @nScn_VerifyLOC
+         
+         GOTO Quit
+      END
+
       -- Dynamic lottable
       EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'DISPLAY', 'POPULATE', 4, 8,
          @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
@@ -817,16 +850,6 @@ BEGIN
          '',      -- SourceKey
          @nFunc   -- SourceType
 
-      -- Get LOC desc
-      IF @cLocShowDescr = '1'
-      BEGIN
-         SELECT @cLocDescr = LEFT( ISNULL( Descr, ''), 15)
-         FROM dbo.LOC WITH (NOLOCK)
-         WHERE Facility = @cFacility
-            AND LOC = @cLOC
-         IF @cLocDescr = ''
-            SET @cLocDescr = @cLOC
-      END
       SET @nPieceQTY = 0
       SET @nMatrixQTY = @nTotalQTY
 
@@ -842,8 +865,8 @@ BEGIN
       SET @cOutField15 = '' -- ExtendedInfo
 
       -- Go to SKU screen
-      SET @nScn = 4132
-      SET @nStep = @nStep + 1
+      SET @nScn = @nScn_SKU
+      SET @nStep = @nStep_SKU
 
       -- Extended info
       IF @cExtendedInfoSP <> ''
@@ -886,7 +909,7 @@ BEGIN
                ' @cErrMsg        NVARCHAR( 20) OUTPUT  '
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, 2, @nStep, @nInputKey, @cFacility, @cStorerKey,
+               @nMobile, @nFunc, @cLangCode, @nStep_Assign, @nStep, @nInputKey, @cFacility, @cStorerKey,
                @cLight, @cDPLKey, @cCartID, @cPickZone, @cMethod, @cLOC, @cSKU, @cToteID, @nQTY, @cNewToteID,
                @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
                @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
@@ -910,8 +933,8 @@ BEGIN
          SET @cOutfield01 = '' -- Option
 
          -- Go to unassign cart screen
-         SET @nScn = 4131 + 5
-         SET @nStep = @nStep + 5
+         SET @nScn = @nScn_Unassign
+         SET @nStep = @nStep_Unassign
       END
       ELSE
       BEGIN
@@ -953,8 +976,8 @@ BEGIN
             EXEC rdt.rdtSetFocusField @nMobile, 2 -- PickZone
 
          -- Go to cart screen
-         SET @nScn = 4131 - 1
-         SET @nStep = @nStep - 1
+         SET @nScn = @nScn_CartID
+         SET @nStep = @nStep_CartID
       END
    END
 END
@@ -970,7 +993,7 @@ Step 3. Scn = 4132. SKU screen
    TotalPOS (Field06)
    TotalQTY (Field07)
 ********************************************************************************/
-Step_3:
+Step_SKU:
 BEGIN
    IF @nInputKey = 1 --ENTER
    BEGIN
@@ -1015,7 +1038,7 @@ BEGIN
             ,@cLottable11   OUTPUT, @cLottable12  OUTPUT, @dLottable13  OUTPUT, @dLottable14  OUTPUT, @dLottable15  OUTPUT
 
          IF @nErrNo <> 0 -- No More Task!
-            GOTO Step_3_Fail
+            GOTO Step_SKU_Fail
 
          -- Dynamic lottable
          EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'DISPLAY', 'POPULATE', 4, 8,
@@ -1105,7 +1128,7 @@ BEGIN
                   ' @cErrMsg        NVARCHAR( 20)  OUTPUT    '
 
                EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                  @nMobile, @nFunc, @cLangCode, 3, @nStep, @nInputKey, @cFacility, @cStorerKey,
+                  @nMobile, @nFunc, @cLangCode, @nStep_SKU, @nStep, @nInputKey, @cFacility, @cStorerKey,
                   @cLight, @cDPLKey, @cCartID, @cPickZone, @cMethod, @cLOC, @cSKU, @cToteID, @nQTY, @cNewToteID,
                   @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
                   @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
@@ -1170,7 +1193,7 @@ BEGIN
                   ,@c_ErrMsg     = @cErrMsg     OUTPUT
 
                IF @nErrNo <> 0
-                  GOTO Step_3_Fail
+                  GOTO Step_SKU_Fail
 
                SET @cActSKU = @c_oFieled01
             END
@@ -1191,7 +1214,7 @@ BEGIN
          BEGIN
             SET @nErrNo = 53410
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid SKU
-            GOTO Step_3_Fail
+            GOTO Step_SKU_Fail
          END
 
          -- (james06)
@@ -1230,8 +1253,8 @@ BEGIN
                BEGIN
                   -- Go to Multi SKU screen
                   SET @nFromScn = @nScn
-                  SET @nScn = 3570
-                  SET @nStep = @nStep + 5
+                  SET @nScn = @nScn_MultiSKU
+                  SET @nStep = @nStep_MultiSKU
                   GOTO Quit
                END
                IF @nErrNo = -1 -- Found in Doc, skip multi SKU screen
@@ -1244,7 +1267,7 @@ BEGIN
             BEGIN
                SET @nErrNo = 53433
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MultiSKUBarcod
-               GOTO Step_3_Fail
+               GOTO Step_SKU_Fail
             END
 
          END
@@ -1260,7 +1283,7 @@ BEGIN
          BEGIN
             SET @nErrNo = 53411
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid SKU
-            GOTO Step_3_Fail
+            GOTO Step_SKU_Fail
          END
 
          -- Check SKU match
@@ -1273,7 +1296,7 @@ BEGIN
                EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', @cErrMsg
                SET @cErrMsg = ''
             END
-            GOTO Step_3_Fail
+            GOTO Step_SKU_Fail
          END
       END
       
@@ -1285,7 +1308,7 @@ BEGIN
          BEGIN
             SET @nErrNo = 53434
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Over pick
-            GOTO Step_3_Fail
+            GOTO Step_SKU_Fail
          END
          
          -- Top up QTY
@@ -1317,7 +1340,7 @@ BEGIN
          ,@cMethod
 
       IF @nErrNo <> 0
-         GOTO Step_3_Fail
+         GOTO Step_SKU_Fail
 
       -- Prepare next screen var
       SET @cOutField01 = @cResult01
@@ -1333,8 +1356,8 @@ BEGIN
       SET @cOutField11 = '' -- Option
 
       -- Go to matrix screen
-      SET @nScn = @nScn + 1
-      SET @nStep = @nStep + 1
+      SET @nScn = @nScn_Matrix
+      SET @nStep = @nStep_Matrix
    END
 
    IF @nInputKey = 0
@@ -1363,7 +1386,7 @@ BEGIN
       IF @nErrNo <> 0
          GOTO Quit
 
-      SET @nStep = @nStep - 1
+      SET @nStep = @nStep_Assign
 
       -- Extended info
       IF @cExtendedInfoSP <> ''
@@ -1423,7 +1446,7 @@ BEGIN
    END
    GOTO Quit
 
-   Step_3_Fail:
+   Step_SKU_Fail:
    BEGIN
       SET @cOutField03 = '' -- SKU
    END
@@ -1445,7 +1468,7 @@ Step 4. Scn = 4133. Maxtrix screen
    Result10 (field10)
    Option   (field11, input)
 ********************************************************************************/
-Step_4:
+Step_Matrix:
 BEGIN
    IF @nInputKey = 1
    BEGIN
@@ -1485,8 +1508,8 @@ BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 1 --ToteID
 
          -- Go to close tote screen
-         SET @nScn = @nScn + 1
-         SET @nStep = @nStep + 1
+         SET @nScn = @nScn_CloseTote
+         SET @nStep = @nStep_CloseTote
 
          GOTO Quit
       END
@@ -1642,6 +1665,7 @@ BEGIN
       END
 
       -- Get next task
+      DECLARE @cCurrentLOC NVARCHAR( 10) = @cLOC
       EXEC rdt.rdt_PTLCart_GetTask @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'LOC'
          ,@cLight
          ,@cCartID
@@ -1740,7 +1764,7 @@ BEGIN
                      ' @cErrMsg        NVARCHAR( 20) OUTPUT  '
 
                   EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                     @nMobile, @nFunc, @cLangCode, 4, 1, @nInputKey, @cFacility, @cStorerKey,
+                     @nMobile, @nFunc, @cLangCode, @nStep_Matrix, @nStep_CartID, @nInputKey, @cFacility, @cStorerKey,
                      @cLight, @cDPLKey, @cCartID, @cPickZone, @cMethod, @cLOC, @cSKU, @cToteID, @nQTY, @cNewToteID,
                      @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
                      @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
@@ -1779,9 +1803,36 @@ BEGIN
                EXEC rdt.rdtSetFocusField @nMobile, 2 --PickZone
 
             -- Go to CartID screen
-            SET @nScn = @nScn - 3
-            SET @nStep = @nStep - 3
+            SET @nScn = @nScn_CartID
+            SET @nStep = @nStep_CartID
 
+            GOTO Quit
+         END
+      END
+
+      -- Get LOC desc
+      IF @cLocShowDescr = '1'
+      BEGIN
+         SELECT @cLocDescr = LEFT( ISNULL( Descr, ''), 15)
+         FROM dbo.LOC WITH (NOLOCK)
+         WHERE Facility = @cFacility
+            AND LOC = @cLOC
+         IF @cLocDescr = ''
+            SET @cLocDescr = @cLOC
+      END
+
+      -- Verify LOC
+      IF @cVerifyLOC = '1'
+      BEGIN
+         -- Different LOC
+         IF @cLOC <> @cCurrentLOC
+         BEGIN
+            SET @cOutField01 = CASE WHEN @cLocShowDescr = '1' THEN @cLocDescr ELSE @cLOC END
+            SET @cOutField02 = '' -- LOC
+            
+            SET @nStep = @nStep_VerifyLOC
+            SET @nScn = @nScn_VerifyLOC
+            
             GOTO Quit
          END
       END
@@ -1809,16 +1860,6 @@ BEGIN
          '',      -- SourceKey
          @nFunc   -- SourceType
 
-      -- Get LOC desc
-      IF @cLocShowDescr = '1'
-      BEGIN
-         SELECT @cLocDescr = LEFT( ISNULL( Descr, ''), 15)
-         FROM dbo.LOC WITH (NOLOCK)
-         WHERE Facility = @cFacility
-            AND LOC = @cLOC
-         IF @cLocDescr = ''
-            SET @cLocDescr = @cLOC
-      END
       SET @nPieceQTY = 0
       SET @nMatrixQTY = @nTotalQTY
 
@@ -1834,8 +1875,8 @@ BEGIN
       SET @cOutField15 = '' -- ExtendedInfo
 
       -- Go to SKU screen
-      SET @nScn = @nScn - 1
-      SET @nStep = @nStep - 1
+      SET @nScn = @nScn_SKU
+      SET @nStep = @nStep_SKU
    END
 
    IF @nInputKey = 0
@@ -1918,8 +1959,8 @@ BEGIN
       SET @cOutField15 = '' -- ExtendedInfo
 
       -- Back to SKU Screen
-      SET @nScn = @nScn - 1
-      SET @nStep = @nStep - 1
+      SET @nScn = @nScn_SKU
+      SET @nStep = @nStep_SKU
 
       -- Using lights
       IF @cLight = '1'
@@ -1998,7 +2039,7 @@ BEGIN
       END
    END
 
-Step_4_Quit:
+Step_Matrix_Quit:
    -- Extended info
    IF @cExtendedInfoSP <> ''
    BEGIN
@@ -2040,7 +2081,7 @@ Step_4_Quit:
             ' @cErrMsg        NVARCHAR( 20) OUTPUT  '
 
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-            @nMobile, @nFunc, @cLangCode, 4, @nStep, @nInputKey, @cFacility, @cStorerKey,
+            @nMobile, @nFunc, @cLangCode, @nStep_Matrix, @nStep, @nInputKey, @cFacility, @cStorerKey,
             @cLight, @cDPLKey, @cCartID, @cPickZone, @cMethod, @cLOC, @cSKU, @cToteID, @nQTY, @cNewToteID,
             @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
             @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
@@ -2063,7 +2104,7 @@ Step 5. Scn = 4134. Old tote screen
    ToteID   (field01, input)
    QTY      (field02, input)
 ********************************************************************************/
-Step_5:
+Step_CloseTote:
 BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
@@ -2230,8 +2271,8 @@ BEGIN
                SET @cOutField01 = '' -- New tote
 
                -- Go to new tote screen
-               SET @nScn = @nScn + 1
-               SET @nStep = @nStep + 1
+               SET @nScn = @nScn_NewTote
+               SET @nStep = @nStep_NewTote
 
                GOTO Quit
             END
@@ -2242,8 +2283,8 @@ BEGIN
             SET @cOutField01 = '' -- New tote
 
             -- Go to new tote screen
-            SET @nScn = @nScn + 1
-            SET @nStep = @nStep + 1
+            SET @nScn = @nScn_NewTote
+            SET @nStep = @nStep_NewTote
 
             GOTO Quit
          END
@@ -2310,8 +2351,8 @@ BEGIN
    SET @cFieldAttr02 = '' -- QTY
 
    -- Go to matrix screen
-   SET @nScn = @nScn - 1
-   SET @nStep = @nStep - 1
+   SET @nScn = @nScn_Matrix
+   SET @nStep = @nStep_Matrix
 END
 GOTO QUIT
 
@@ -2320,7 +2361,7 @@ GOTO QUIT
 Step 6. Scn = 4135. New tote screen
    New ToteID   (field01, input)
 ********************************************************************************/
-Step_6:
+Step_NewTote:
 BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
@@ -2452,8 +2493,8 @@ BEGIN
       SET @cFieldAttr02 = '' -- QTY
 
       -- Go to matrix screen
-      SET @nScn = @nScn - 2
-      SET @nStep = @nStep - 2
+      SET @nScn = @nScn_Matrix
+      SET @nStep = @nStep_Matrix
    END
 
    IF @nInputKey = 0 -- ESC
@@ -2473,9 +2514,9 @@ BEGIN
       ELSE
          EXEC rdt.rdtSetFocusField @nMobile, 2 -- QTY
 
-      -- Go to old cart screen
-      SET @nScn = @nScn - 1
-      SET @nStep = @nStep - 1
+      -- Go to old tote screen
+      SET @nScn = @nScn_CloseTote
+      SET @nStep = @nStep_CloseTote
    END
 END
 GOTO QUIT
@@ -2488,7 +2529,7 @@ Step 7. Scn = 4136. Unassign cart screen
    9 = NO
    Option   (field01, input)
 ********************************************************************************/
-Step_7:
+Step_Unassign:
 BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
@@ -2561,8 +2602,8 @@ BEGIN
             EXEC rdt.rdtSetFocusField @nMobile, 2 -- PickZone
 
          -- Go to cart screen
-         SET @nScn = @nScn - 6
-         SET @nStep = @nStep - 6
+         SET @nScn = @nScn_CartID
+         SET @nStep = @nStep_CartID
 
          GOTO Quit
       END
@@ -2593,9 +2634,10 @@ BEGIN
       GOTO Quit
 
    -- Go to assign screen
-   SET @nStep = @nStep - 5
+   SET @nStep = @nStep_Assign
 END
 GOTO QUIT
+
 
 /********************************************************************************
 Step 8. Screen = 3570. Multi SKU
@@ -2610,7 +2652,7 @@ Step 8. Screen = 3570. Multi SKU
    SKUDesc2    (Field09)
    Option      (Field10, input)
 ********************************************************************************/
-Step_8:
+Step_MultiSKU:
 BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
@@ -2669,10 +2711,179 @@ BEGIN
 
    -- Go to SKU QTY screen
    SET @nScn = @nFromScn
-   SET @nStep = @nStep - 5
+   SET @nStep = @nStep_SKU
 
 END
 GOTO Quit
+
+
+/********************************************************************************
+Scn = 4137. Verify LOC
+   LOC   (field01)
+   LOC   (field02, input)
+********************************************************************************/
+Step_VerifyLOC:
+BEGIN
+   IF @nInputKey = 1 -- ENTER
+   BEGIN
+      DECLARE @cChkLOC NVARCHAR( 10)
+      
+      -- Screen mapping
+      SET @cChkLOC = @cInField02
+
+      -- Check LOC      
+      IF @cLOC <> @cChkLOC      
+      BEGIN      
+         SET @nErrNo = 53436      
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff LOC      
+         GOTO Step_VerifyLOC_Fail      
+      END      
+
+      -- Dynamic lottable
+      EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'DISPLAY', 'POPULATE', 4, 8,
+         @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
+         @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
+         @cInField03  OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,
+         @cInField04  OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,
+         @cInField05  OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,
+         @cInField06  OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT,
+         @cInField07  OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT,
+         @cInField08  OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT,
+         @cInField09  OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT,
+         @cInField10  OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT,
+         @cInField11  OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
+         @cInField12  OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
+         @cInField13  OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
+         @cInField14  OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
+         @cInField15  OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
+         @nMorePage   OUTPUT,
+         @nErrNo      OUTPUT,
+         @cErrMsg     OUTPUT,
+         '',      -- SourceKey
+         @nFunc   -- SourceType
+
+      -- Get LOC desc
+      IF @cLocShowDescr = '1'
+      BEGIN
+         SELECT @cLocDescr = LEFT( ISNULL( Descr, ''), 15)
+         FROM dbo.LOC WITH (NOLOCK)
+         WHERE Facility = @cFacility
+            AND LOC = @cLOC
+         IF @cLocDescr = ''
+            SET @cLocDescr = @cLOC
+      END
+      SET @nPieceQTY = 0
+      SET @nMatrixQTY = @nTotalQTY
+
+      -- Prepare next screen var
+      SET @cOutField01 = CASE WHEN @cLocShowDescr = '1' THEN @cLocDescr ELSE @cLOC END
+      SET @cOutField02 = @cSKU
+      SET @cOutField03 = '' -- SKU
+      SET @cOutField04 = SUBSTRING( @cSKUDescr, 1, 20)
+      SET @cOutField05 = SUBSTRING( @cSKUDescr, 21, 20)
+      SET @cOutField06 = CAST( @nTotalPOS AS NVARCHAR(5))
+      SET @cOutField07 = CAST( @nTotalQTY AS NVARCHAR(5))
+      SET @cOutField12 = CASE WHEN @cVerifyPiece = '1' THEN CAST( @nPieceQTY AS NVARCHAR(3)) ELSE '' END
+      SET @cOutField15 = '' -- ExtendedInfo
+
+      -- Goto SKU screen
+      SET @nScn = @nScn_SKU
+      SET @nStep = @nStep_SKU
+   END
+
+   IF @nInputKey = 0 -- ESC
+   BEGIN
+      -- Dynamic assign
+      EXEC rdt.rdt_PTLCart_Assign @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+         @cCartID, @cPickZone, @cMethod, @cPickSeq, @cDPLKey, 'POPULATE-IN',
+         @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,
+         @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,
+         @cInField03  OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,
+         @cInField04  OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,
+         @cInField05  OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,
+         @cInField06  OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,
+         @cInField07  OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,
+         @cInField08  OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,
+         @cInField09  OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,
+         @cInField10  OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,
+         @cInField11  OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,
+         @cInField12  OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,
+         @cInField13  OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,
+         @cInField14  OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,
+         @cInField15  OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,
+         @nScn        OUTPUT,
+         @nErrNo      OUTPUT,
+         @cErrMsg     OUTPUT
+      IF @nErrNo <> 0
+         GOTO Quit
+
+      SET @nStep = @nStep_Assign
+   END
+
+   -- Extended info
+   IF @cExtendedInfoSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedInfoSP AND type = 'P')
+      BEGIN
+         SET @cExtendedInfo = ''
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' +
+            ' @cLight, @cDPLKey, @cCartID, @cPickZone, @cMethod, @cLOC, @cSKU, @cToteID, @nQTY, @cNewToteID, ' +
+            ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
+            ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
+            ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
+            ' @tVar, @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+         SET @cSQLParam =
+            ' @nMobile        INT,           ' +
+            ' @nFunc          INT,           ' +
+            ' @cLangCode      NVARCHAR( 3),  ' +
+            ' @nStep          INT,           ' +
+            ' @nAfterStep     INT,           ' +
+            ' @nInputKey      INT,           ' +
+            ' @cFacility      NVARCHAR( 5),  ' +
+            ' @cStorerKey     NVARCHAR( 15), ' +
+            ' @cLight         NVARCHAR( 1),  ' +
+            ' @cDPLKey        NVARCHAR( 10), ' +
+            ' @cCartID        NVARCHAR( 10), ' +
+            ' @cPickZone      NVARCHAR( 10), ' +
+            ' @cMethod        NVARCHAR( 10), ' +
+            ' @cLOC           NVARCHAR( 10), ' +
+            ' @cSKU           NVARCHAR( 20), ' +
+            ' @cToteID        NVARCHAR( 20), ' +
+            ' @nQTY           INT,           ' +
+            ' @cNewToteID     NVARCHAR( 20), ' +
+            ' @cLottable01    NVARCHAR( 18), @cLottable02 NVARCHAR( 18), @cLottable03 NVARCHAR( 18), @dLottable04 DATETIME,      @dLottable05 DATETIME,      ' +
+            ' @cLottable06    NVARCHAR( 30), @cLottable07 NVARCHAR( 30), @cLottable08 NVARCHAR( 30), @cLottable09 NVARCHAR( 30), @cLottable10 NVARCHAR( 30), ' +
+            ' @cLottable11    NVARCHAR( 30), @cLottable12 NVARCHAR( 30), @dLottable13 DATETIME,      @dLottable14 DATETIME,      @dLottable15 DATETIME,      ' +
+            ' @tVar           VariableTable  READONLY, ' +
+            ' @cExtendedInfo  NVARCHAR( 20) OUTPUT, ' +
+            ' @nErrNo         INT           OUTPUT, ' +
+            ' @cErrMsg        NVARCHAR( 20) OUTPUT  '
+
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @nMobile, @nFunc, @cLangCode, @nStep_VerifyLOC, @nStep, @nInputKey, @cFacility, @cStorerKey,
+            @cLight, @cDPLKey, @cCartID, @cPickZone, @cMethod, @cLOC, @cSKU, @cToteID, @nQTY, @cNewToteID,
+            @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+            @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+            @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+            @tVar, @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+         IF @nErrNo <> 0
+            GOTO Quit
+
+         --IF @nStep = 3 -- SKU
+         --   SET @cOutField15 = @cExtendedInfo
+      END
+   END
+   GOTO Quit
+
+   Step_VerifyLOC_Fail:
+   BEGIN
+      SET @cOutField02 = '' -- LOC
+   END
+END
+GOTO Quit
+
 
 /********************************************************************************
 Quit. Update back to I/O table, ready to be pick up by JBOSS
@@ -2751,31 +2962,24 @@ BEGIN
       V_String29 = @cDecodeSP,
       V_String30 = @cDefaultMethod, --(yeekung01)
       V_String31 = @cVerifyPiece,
+      V_String32 = @cVerifyLOC, 
 
-      I_Field01 = @cInField01,  O_Field01 = @cOutField01,
-      I_Field02 = @cInField02,  O_Field02 = @cOutField02,
-      I_Field03 = @cInField03,  O_Field03 = @cOutField03,
-      I_Field04 = @cInField04,  O_Field04 = @cOutField04,
-      I_Field05 = @cInField05,  O_Field05 = @cOutField05,
-      I_Field06 = @cInField06,  O_Field06 = @cOutField06,
-      I_Field07 = @cInField07,  O_Field07 = @cOutField07,
-      I_Field08 = @cInField08,  O_Field08 = @cOutField08,
-      I_Field09 = @cInField09,  O_Field09 = @cOutField09,
-      I_Field10 = @cInField10,  O_Field10 = @cOutField10,
-      I_Field11 = @cInField11,  O_Field11 = @cOutField11,
-      I_Field12 = @cInField12,  O_Field12 = @cOutField12,
-      I_Field13 = @cInField13,  O_Field13 = @cOutField13,
-      I_Field14 = @cInField14,  O_Field14 = @cOutField14,
-      I_Field15 = @cInField15,  O_Field15 = @cOutField15,
-
-      FieldAttr01  = @cFieldAttr01,   FieldAttr02  = @cFieldAttr02,
-      FieldAttr03  = @cFieldAttr03,   FieldAttr04  = @cFieldAttr04,
-      FieldAttr05  = @cFieldAttr05,   FieldAttr06  = @cFieldAttr06,
-      FieldAttr07  = @cFieldAttr07,   FieldAttr08  = @cFieldAttr08,
-      FieldAttr09  = @cFieldAttr09,   FieldAttr10  = @cFieldAttr10,
-      FieldAttr11  = @cFieldAttr11,   FieldAttr12  = @cFieldAttr12,
-      FieldAttr13  = @cFieldAttr13,   FieldAttr14  = @cFieldAttr14,
-      FieldAttr15  = @cFieldAttr15
+      I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
+      I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
+      I_Field03 = @cInField03,  O_Field03 = @cOutField03,   FieldAttr03  = @cFieldAttr03,
+      I_Field04 = @cInField04,  O_Field04 = @cOutField04,   FieldAttr04  = @cFieldAttr04,
+      I_Field05 = @cInField05,  O_Field05 = @cOutField05,   FieldAttr05  = @cFieldAttr05,
+      I_Field06 = @cInField06,  O_Field06 = @cOutField06,   FieldAttr06  = @cFieldAttr06,
+      I_Field07 = @cInField07,  O_Field07 = @cOutField07,   FieldAttr07  = @cFieldAttr07,
+      I_Field08 = @cInField08,  O_Field08 = @cOutField08,   FieldAttr08  = @cFieldAttr08,
+      I_Field09 = @cInField09,  O_Field09 = @cOutField09,   FieldAttr09  = @cFieldAttr09,
+      I_Field10 = @cInField10,  O_Field10 = @cOutField10,   FieldAttr10  = @cFieldAttr10,
+      I_Field11 = @cInField11,  O_Field11 = @cOutField11,   FieldAttr11  = @cFieldAttr11,
+      I_Field12 = @cInField12,  O_Field12 = @cOutField12,   FieldAttr12  = @cFieldAttr12,
+      I_Field13 = @cInField13,  O_Field13 = @cOutField13,   FieldAttr13  = @cFieldAttr13,
+      I_Field14 = @cInField14,  O_Field14 = @cOutField14,   FieldAttr14  = @cFieldAttr14,
+      I_Field15 = @cInField15,  O_Field15 = @cOutField15,   FieldAttr15  = @cFieldAttr15
+      
    WHERE Mobile = @nMobile
 END
 
