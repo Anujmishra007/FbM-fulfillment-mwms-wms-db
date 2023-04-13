@@ -3,33 +3,33 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/*****************************************************************************************/
-/* Stored Procedure: isp_RPT_RP_REPLENISHONDEMAND_002                                    */
-/* Creation Date: 09-Mar-2023                                                            */
-/* Copyright: LFL                                                                        */
-/* Written by: WLChooi                                                                   */
-/*                                                                                       */
-/* Purpose: WMS-21903 - NIKEMY, NIKESG Replenishment Report                              */
-/*          Copy and modify from isp_ReplenishOnDemand_rpt                               */
-/*                                                                                       */
-/* Called By: Report                                                                     */
-/*                                                                                       */
-/* PVCS Version: 1.0                                                                     */
-/*                                                                                       */
-/* Version: 5.4                                                                          */
-/*                                                                                       */
-/* Data Modifications:                                                                   */
-/*                                                                                       */
-/* Updates:                                                                              */
-/* Date         Author   Ver  Purposes                                                   */
-/* 09-Mar-2023  WLChooi  v1.0  DevOps Combine Script                                     */
-/* 15-MAR-2023  Nicole	 v1.1  Create SQL	https://jiralfl.atlassian.net/browse/WMS-22016 */
-/* 27-MAR-2023  Nicole	 v1.1  Modify SQL	https://jiralfl.atlassian.net/browse/WMS-22016 */
-/* 30-MAR-2023  Nicole	 v1.2  Modify SQL	https://jiralfl.atlassian.net/browse/WMS-22016 */
-/*****************************************************************************************/
-
+/****************************************************************************************/
+/* Stored Procedure: isp_RPT_RP_REPLENISHONDEMAND_002                                   */
+/* Creation Date: 09-Mar-2023                                                           */
+/* Copyright: LFL                                                                       */
+/* Written by: WLChooi                                                                  */
+/*                                                                                      */
+/* Purpose: WMS-21903 - NIKEMY, NIKESG Replenishment Report                             */
+/*          Copy and modify from isp_ReplenishOnDemand_rpt                              */
+/*                                                                                      */
+/* Called By: Report                                                                    */
+/*                                                                                      */
+/* PVCS Version: 1.0                                                                    */
+/*                                                                                      */
+/* Version: 5.4                                                                         */
+/*                                                                                      */
+/* Data Modifications:                                                                  */
+/*                                                                                      */
+/* Updates:                                                                             */
+/* Date         Author   Ver  Purposes                                                  */
+/* 09-Mar-2023  WLChooi  1.0  DevOps Combine Script                                     */
+/* 15-MAR-2023  Nicole  v1.1  Create SQL https://jiralfl.atlassian.net/browse/WMS-22016 */  
+/* 27-MAR-2023  Nicole  v1.2  Modify SQL https://jiralfl.atlassian.net/browse/WMS-22016 */  
+/* 30-MAR-2023  Nicole  v1.3  Modify SQL https://jiralfl.atlassian.net/browse/WMS-22016 */
+/* 07-APR-2023  Nicole  v1.4  Modify SQL https://jiralfl.atlassian.net/browse/WMS-22016 */ 
+/****************************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[isp_RPT_RP_REPLENISHONDEMAND_002]
-(  
+(
    @c_Storerkey     NVARCHAR(15)
  , @dt_deliveryfrom DATETIME
  , @dt_deliveryto   DATETIME
@@ -192,11 +192,12 @@ BEGIN
 	SET QTYtoReplen = OrderQTY - PFAvail
 	WHERE (OrderQTY - PFAvail) > 0
 
+
 	--DELETE THOSE DONOT NEED TO REPLEN    
 	IF ISNULL(@c_EmptyPickLOC, 'N') = 'N'
 	BEGIN
 		DELETE #Demand
-		WHERE QTYtoReplen = 0 OR ISNULL(ToLOC, '') = ''
+		WHERE QTYtoReplen = 0 --OR ISNULL(ToLOC, '') = ''		--COMMENT IN v1.3
 	END
 	ELSE
 	BEGIN
@@ -213,7 +214,7 @@ BEGIN
 	SELECT LLI.StorerKey
 		, LLI.Sku
 		, LLI.Loc
-		, LLI.Id
+		, LLI.ID
 		, LLI.Qty
 		, L.Lottable01
 		, L.Lottable02
@@ -254,8 +255,9 @@ BEGIN
 			SET @c_PrevSKU = @c_SKU  
 			SET @n_GetQTYtoReplen = @n_QTYtoReplen  
 		END
-  
-		--For LOCLevel = '1'
+
+
+		--For LOCLevel = '1' (BULK PICK FACE)
 		IF ISNULL(@c_FromLOC, '') = ''
 		BEGIN
 			DELETE FROM @T_TEMP
@@ -297,8 +299,9 @@ BEGIN
 				, L.Lottable03
 				, LOC.LocLevel
 		END  
-  
-		--For LOCLevel > 1  
+
+
+		--For LOCLevel > 1	(BULK LOC)
 		IF NOT EXISTS (SELECT 1 FROM @T_TEMP)  
 		BEGIN
 			DELETE FROM @T_TEMP
@@ -340,7 +343,52 @@ BEGIN
 				, L.Lottable03
 				, LOC.LocLevel
 		END
-  
+
+
+		--For LOCLevel = 0	(STAGING)			--ADD IN v1.3
+		IF NOT EXISTS (SELECT 1 FROM @T_TEMP)  
+		BEGIN
+			DELETE FROM @T_TEMP
+
+			INSERT INTO @T_TEMP
+			SELECT LLI.Loc
+				, LLI.ID
+				, SUM(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked) AS Qty
+				, L.Lottable01
+				, L.Lottable02
+				, L.Lottable03
+				, LOC.LocLevel
+				, LLI.Loc + LLI.ID + LLI.Lot
+			FROM LOTxLOCxID LLI (NOLOCK)
+			INNER JOIN SKUxLOC SL (NOLOCK) ON (LLI.StorerKey = SL.StorerKey AND LLI.Sku = SL.Sku AND LLI.Loc = SL.Loc)
+			INNER JOIN LOC (NOLOCK) ON (SL.Loc = LOC.Loc)
+			INNER JOIN LOTATTRIBUTE L (NOLOCK) ON (L.Lot = LLI.Lot)
+			WHERE SL.StorerKey = @c_Storerkey
+			AND SL.Sku = @c_SKU
+			AND SL.LocationType NOT IN ('PICK', 'CASE')
+			AND (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked) > 0
+			AND LOC.LocationFlag NOT IN ('HOLD', 'DAMAGE')
+			AND LOC.Status <> 'HOLD'
+			AND (L.Lottable01 = @c_Lottable01 OR ISNULL(@c_Lottable01, '') = '')
+			AND (L.Lottable02 = @c_Lottable02 OR ISNULL(@c_Lottable02, '') = '')
+			AND (L.Lottable03 = @c_Lottable03 OR ISNULL(@c_Lottable03, '') = '')
+			AND LOC.Facility = @c_Facility
+			AND LOC.LocationType = 'OTHER'
+			AND LOC.Loc IN ('NIKEMY', 'NIKESG', 'UNPICKMY', 'UNPICKSG')
+			AND LOC.LocLevel = 0
+			AND (LLI.Loc + LLI.Id + LLI.Lot) NOT IN (SELECT DISTINCT L.FromLLI FROM #Replen L )  
+			GROUP BY LLI.Loc
+				, LLI.ID
+				, LLI.Lot
+				, LLI.Loc
+				, LLI.ID
+				, L.Lottable01
+				, L.Lottable02
+				, L.Lottable03
+				, LOC.LocLevel
+		END
+		
+
 		IF ISNULL(@c_FromLOC, '') = ''
 		BEGIN
 			SELECT TOP 1 @n_QtyA = MIN(QTY - @n_QTYtoReplen)
@@ -366,7 +414,8 @@ BEGIN
 			HAVING MIN(QTY - @n_QTYtoReplen) >= 0
 			ORDER BY MIN(QTY - @n_QTYtoReplen)
 		END
-  
+
+
 		IF ISNULL(@c_FromLOC, '') = ''
 		BEGIN
 			SELECT TOP 1 @n_QtyB = MIN(@n_QTYtoReplen - QTY)
@@ -392,7 +441,8 @@ BEGIN
 			HAVING MIN(@n_QTYtoReplen - QTY) >= 0
 			ORDER BY MIN(@n_QTYtoReplen - QTY)
 		END
-  
+		
+
 		IF @n_QTYAvail IS NULL
 			FETCH NEXT FROM cur_Demand
 			INTO @c_Storerkey
@@ -402,8 +452,8 @@ BEGIN
 		BEGIN
 			IF @n_QTYtoReplen <= @n_QTYAvail
 			BEGIN
-				INSERT INTO #Replen (StorerKey, Sku, Loc, Id, Qty, Lottable01, Lottable02, Lottable03, LocType, FromLLI, QtyToRepl)
-				VALUES (@c_Storerkey, @c_SKU, UPPER(@c_FromLOC), @c_FromID, @n_QTYtoReplen, @c_GetLottable01, @c_GetLottable02, @c_GetLottable03, @c_LocType, @c_FromLLI, @n_GetQTYtoReplen)		--UPDATE IN v1.3
+				INSERT INTO #Replen (StorerKey, Sku, Loc, ID, Qty, Lottable01, Lottable02, Lottable03, LocType, FromLLI, QtyToRepl)
+				VALUES (@c_Storerkey, @c_SKU, UPPER(@c_FromLOC), @c_FromID, @n_QTYtoReplen, @c_GetLottable01, @c_GetLottable02, @c_GetLottable03, @c_LocType, @c_FromLLI, @n_GetQTYtoReplen)		--UPDATE IN v1.2
 				--VALUES (@c_Storerkey, @c_SKU, UPPER(@c_FromLOC), @c_FromID, @n_QTYAvail, @c_GetLottable01, @c_GetLottable02, @c_GetLottable03, @c_LocType, @c_FromLLI, @n_GetQTYtoReplen)
 
 				FETCH NEXT FROM cur_Demand
@@ -413,7 +463,7 @@ BEGIN
 			END
 			ELSE  
 			BEGIN  
-				INSERT INTO #Replen (StorerKey, Sku, Loc, Id, Qty, Lottable01, Lottable02, Lottable03, LocType, FromLLI, QtyToRepl)
+				INSERT INTO #Replen (StorerKey, Sku, Loc, ID, Qty, Lottable01, Lottable02, Lottable03, LocType, FromLLI, QtyToRepl)
 				VALUES (@c_Storerkey, @c_SKU, UPPER(@c_FromLOC), @c_FromID, @n_QTYAvail, @c_GetLottable01, @c_GetLottable02, @c_GetLottable03, @c_LocType, @c_FromLLI, @n_GetQTYtoReplen)
 				SET @n_QTYtoReplen = @n_QTYtoReplen - @n_QTYAvail
 			END
@@ -426,11 +476,11 @@ BEGIN
 		, D.Sku
 		, D.Descr
 		, D.PackUOM3
-		, D.ToLoc
-		--, D.QtyToReplen	--ORDER QTY
-		, R.Loc
+		, ToLoc = UPPER(D.ToLoc)	--UPDATE IN v1.3
+		, D.QtyToReplen				--ADD IN v1.3		--ORDER QTY
+		, Loc = UPPER(R.Loc)		--UPDATE IN v1.3
 		, R.ID
-		, R.Qty				--QtyToReplen
+		, Qty = ISNULL(R.Qty, 0)	--UPDATE IN v1.3	--QtyToReplen
 		, R.Lottable01
 		, R.Lottable02
 		, R.Lottable03
