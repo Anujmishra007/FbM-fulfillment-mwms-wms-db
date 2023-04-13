@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: Wave                                                      */
 /*                                                                      */
-/* GitLab Version: 1.2                                                  */
+/* GitLab Version: 1.4                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -25,6 +25,7 @@ GO
 /* 23-Feb-2023  WLChooi  1.1  WMS-19079 - Fix FP/PP Calculation (WL01)  */
 /* 27-Feb-2023  WLChooi  1.2  WMS-19079 - Fix ToLoc is blank (WL02)     */
 /* 24-Mar-2023  WLChooi  1.3  Performance Tune (WL03)                   */
+/* 11-Apr-2023  WLChooi  1.4  WMS-19079 - Change empty loc logic (WL05) */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV50]
@@ -489,7 +490,7 @@ BEGIN
             GROUP BY LLI.Loc
                    , L.PickZone
                    , L.PutawayZone
-            HAVING SUM(LLI.Qty + LLI.PendingMoveIN) > 0
+            HAVING SUM(LLI.Qty + LLI.PendingMoveIN - LLI.QtyPicked) > 0   --WL05
 
             INSERT INTO #EXCLUDELOC (LOC, Putawayzone)
             SELECT E.LOC
@@ -548,7 +549,7 @@ BEGIN
             GROUP BY LLI.Loc
                    , L.PickZone
                    , L.PutawayZone
-            HAVING SUM(LLI.Qty + LLI.PendingMoveIN) > 0
+            HAVING SUM(LLI.Qty + LLI.PendingMoveIN - LLI.QtyPicked) > 0   --WL05
 
             INSERT INTO #SAFETYSTOCK_EXCLUDELOC (LOC, Pickzone, Putawayzone)
             SELECT E.LOC
@@ -702,6 +703,15 @@ BEGIN
                BEGIN
                   SET @c_Pickmethod = 'PP'
                END
+               ELSE IF EXISTS (SELECT 1   --WL05 S
+                               FROM PICKDETAIL PD (NOLOCK)
+                               JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = PD.OrderKey
+                               WHERE PD.Storerkey = @c_Storerkey
+                               AND PD.ID = @c_ID
+                               HAVING COUNT(DISTINCT OH.UserDefine09) > 1)   --Multi Wave allocate same ID
+               BEGIN
+                  SET @c_Pickmethod = 'PP'
+               END   --WL05 E
                ELSE
                BEGIN
                   SET @c_Pickmethod = 'FP'
@@ -1088,6 +1098,15 @@ BEGIN
                BEGIN
                   SET @c_Pickmethod = 'PP'
                END
+               ELSE IF EXISTS (SELECT 1   --WL05 S
+                               FROM PICKDETAIL PD (NOLOCK)
+                               JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = PD.OrderKey
+                               WHERE PD.Storerkey = @c_Storerkey
+                               AND PD.ID = @c_ID
+                               HAVING COUNT(DISTINCT OH.UserDefine09) > 1)   --Multi Wave allocate same ID
+               BEGIN
+                  SET @c_Pickmethod = 'PP'
+               END   --WL05 E
                ELSE
                BEGIN
                   SET @c_Pickmethod = 'FP'
