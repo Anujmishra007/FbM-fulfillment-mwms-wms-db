@@ -15,6 +15,8 @@ CREATE OR ALTER   PROC [BI].[nsp_NIKE_PackingStatusPerLoadkeywithCaseID] --NAME 
 			@PARAM_GENERIC_Wavekey NVARCHAR(50) 
 			, @PARAM_GENERIC_Loadkey NVARCHAR(50) 
 			, @PARAM_GENERIC_ExternOrderKey NVARCHAR(50) 
+			,@PARAM_GENERIC_STARTDATE DATETIME			--REQUIRED
+			,@PARAM_GENERIC_ENDDATE DATETIME			--REQUIRED
 			
 AS
 BEGIN
@@ -24,15 +26,21 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF;
 
 	
-  IF ISNULL(@PARAM_GENERIC_Wavekey, '') = ''  
+  IF ISNULL(@PARAM_GENERIC_Wavekey, '') = ''  or @PARAM_GENERIC_Wavekey = 'ALL'
     SET @PARAM_GENERIC_Wavekey = ''
   IF ISNULL(@PARAM_GENERIC_Loadkey, '') = ''  
     SET @PARAM_GENERIC_Loadkey = ''
   IF ISNULL(@PARAM_GENERIC_ExternOrderKey, '') = ''  or @PARAM_GENERIC_ExternOrderKey ='ALL'
     SET @PARAM_GENERIC_ExternOrderKey = ''
+  IF ISNULL(@PARAM_GENERIC_STARTDATE, '') = ''
+    SET @PARAM_GENERIC_STARTDATE = getdate()
+  IF ISNULL(@PARAM_GENERIC_ENDDATE, '') = ''
+	SET @PARAM_GENERIC_ENDDATE = dateadd(hour,-1,getdate())
 
+  SET @PARAM_GENERIC_Wavekey = REPLACE(REPLACE (TRANSLATE (@PARAM_GENERIC_Wavekey,'[ ]',''''''''),'''',''),',',''',''')
+	
   -- set @PARAM_GENERIC_ExternOrderKey	= REPLACE(REPLACE(@PARAM_GENERIC_ExternOrderKey			,'[',''),']','')
-  SET @PARAM_GENERIC_ExternOrderKey = REPLACE(REPLACE (TRANSLATE (@PARAM_GENERIC_ExternOrderKey,'[ ]',''' '''),'''',''),',',''',''')
+  SET @PARAM_GENERIC_ExternOrderKey = REPLACE(REPLACE (TRANSLATE (@PARAM_GENERIC_ExternOrderKey,'[ ]',''''''''),'''',''),',',''',''')
 
    DECLARE @Debug	BIT = 0
 		 , @LogId   INT
@@ -42,7 +50,9 @@ BEGIN
        , @cParamIn  NVARCHAR(4000)= '{  '
 									+ '"PARAM_GENERIC_Wavekey":"'    +@PARAM_GENERIC_Wavekey+'", ' 
 									+ '"PARAM_GENERIC_Loadkey":"'    +@PARAM_GENERIC_Loadkey+'", '
-									+ '"PARAM_GENERIC_ExternOrderKey":"'    +@PARAM_GENERIC_ExternOrderKey+'" '
+									+ '"PARAM_GENERIC_ExternOrderKey":"'    +@PARAM_GENERIC_ExternOrderKey+'", '
+									+ '"PARAM_GENERIC_STARTDATE":"'    +CONVERT(VARCHAR,@PARAM_GENERIC_STARTDATE,120)+'",  '
+									+ '"PARAM_GENERIC_ENDDATE":"'    +CONVERT(VARCHAR,@PARAM_GENERIC_ENDDATE,120)+'"  '
                                     + ' }'  
 
    EXEC BI.dspExecInit @ClientId = 'NIKEPH'
@@ -77,29 +87,34 @@ set @Stmt = '
 	  BI.V_ORDERS AL2 (NOLOCK)
 	  JOIN BI.V_PackHeader AL1 (NOLOCK) on (AL1.StorerKey = AL2.StorerKey AND AL1.OrderKey = AL2.OrderKey AND AL1.LoadKey = AL2.LoadKey)  
 	  JOIN BI.V_PICKDETAIL AL3 (NOLOCK) on (AL2.Storerkey = AL3.StorerKey AND AL2.OrderKey = AL3.OrderKey AND AL2.UserDefine09 = AL3.WaveKey AND AL1.PickSlipNo = AL3.PickSlipNo )
+	  JOIN BI.V_WAVE AL4 (NOLOCK) on (AL2.UserDefine09 = AL4.Wavekey)
+	 		
 	WHERE 
 		  AL1.StorerKey = ''NIKEPH'' 
-		  AND AL2.UserDefine09 = '''+@PARAM_GENERIC_Wavekey+''' 
-		  
-'
+		  AND AL4.AddDate BETWEEN '''+convert(nvarchar,@PARAM_GENERIC_STARTDATE,120)+''' AND '''+convert(nvarchar,@PARAM_GENERIC_ENDDATE,120) +'''  '
+
+if isnull(@PARAM_GENERIC_Wavekey,'')<>''
+	set @stmt = @stmt + ' AND AL2.UserDefine09 IN ('''+@PARAM_GENERIC_Wavekey+''')  '
+
+ 
 
 if isnull(@PARAM_GENERIC_Loadkey,'')<>'' OR isnull(@PARAM_GENERIC_ExternOrderKey,'')<>'' 
 	set @stmt = @stmt + ' 
 		  AND 
-		  (  
+		     (  
 '
  if isnull(@PARAM_GENERIC_Loadkey,'')<>''
-	set @stmt = @stmt + ' AL2.LoadKey IN ('+@PARAM_GENERIC_Loadkey+')  '
+	set @stmt = @stmt + ' AL2.LoadKey IN ('''+@PARAM_GENERIC_Loadkey+''')  '
  
  if isnull(@PARAM_GENERIC_Loadkey,'')<>'' and isnull(@PARAM_GENERIC_ExternOrderKey,'')<>'' 
 	set @stmt = @stmt + ' OR '
 
  if isnull(@PARAM_GENERIC_ExternOrderKey,'')<>''
-	set @stmt = @stmt + 'AL2.ExternOrderKey in ('+@PARAM_GENERIC_ExternOrderKey+') '
+	set @stmt = @stmt + 'AL2.ExternOrderKey in ('''+@PARAM_GENERIC_ExternOrderKey+''') '
 
 if isnull(@PARAM_GENERIC_Loadkey,'')<>'' OR isnull(@PARAM_GENERIC_ExternOrderKey,'')<>'' 
 	set @stmt = @stmt + ' 
-	 )
+	         )
 '
 
 set @stmt = @stmt + '
@@ -138,7 +153,7 @@ EXEC AS LOGIN ='JReportUserPH'
 
 SELECT SUSER_SNAME()
 
-EXEC BI.nsp_NIKE_PackingStatusPerLoadkeywithCaseID '0000325141' ,'0006054687','0676213810' 
+EXEC BI.nsp_NIKE_PackingStatusPerLoadkeywithCaseID '' ,'','' ,'2022-04-02','2023-04-11'
 EXEC BI.nsp_NIKE_PackingStatusPerLoadkeywithCaseID '','',''
 EXEC BI.nsp_NIKE_PackingStatusPerLoadkeywithCaseID NULL,NULL,NULL
 
