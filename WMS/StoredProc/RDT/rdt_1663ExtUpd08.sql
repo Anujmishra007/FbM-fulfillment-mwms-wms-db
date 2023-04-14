@@ -10,6 +10,7 @@ GO
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
 /* 2022-03-24 1.0  Ung      WMS-19221 Created (base on rdt_1663ExtUpd01)      */
+/* 2023-04-14 1.1  ZG       INC2056448 Add-On ISNULL (ZG01)                   */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1663ExtUpd08](
@@ -98,8 +99,8 @@ BEGIN
                
                -- Update MBOL             
                UPDATE dbo.MBOLDetail SET
-                   Cube     = Cube + @nCube, 
-                   Weight   = Weight + @nWeight, 
+                   Cube     = Cube + ISNULL(@nCube, 0),      --ZG01 
+                   Weight   = Weight + ISNULL(@nWeight, 0),  --ZG01 
                    EditWho  = SUSER_SNAME(),
                    EditDate = GETDATE(), 
                    TrafficCop = NULL -- ntrMBOLDetailUpdate could configure to update cube, weight
