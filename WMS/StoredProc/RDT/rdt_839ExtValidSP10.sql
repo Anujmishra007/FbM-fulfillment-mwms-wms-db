@@ -10,9 +10,10 @@ GO
 /* Modifications log:                                                   */  
 /*                                                                      */  
 /* Date       Rev  Author     Purposes                                  */  
-/* 2021-12-20 1.0  James      WMS-18004. Created                        */  
+/* 2021-12-20 1.0  James      WMS-18004. Created                        */
+/* 2023-04-17 1.1  James      Add PackData1~3 param (james01)           */
 /************************************************************************/  
-CREATE OR ALTER PROC rdt.rdt_839ExtValidSP10 (  
+CREATE OR ALTER PROC rdt.rdt_839ExtValidSP07 (  
    @nMobile      INT,           
    @nFunc        INT,           
    @cLangCode    NVARCHAR( 3),  
@@ -26,7 +27,10 @@ CREATE OR ALTER PROC rdt.rdt_839ExtValidSP10 (
    @cDropID      NVARCHAR( 20), 
    @cLOC         NVARCHAR( 10), 
    @cSKU         NVARCHAR( 20), 
-   @nQTY         INT,           
+   @nQTY         INT, 
+   @cPackData1   NVARCHAR( 30),
+   @cPackData2   NVARCHAR( 30),
+   @cPackData3   NVARCHAR( 30),                 
    @nErrNo       INT           OUTPUT, 
    @cErrMsg      NVARCHAR(250) OUTPUT  
 )  
