@@ -25,7 +25,7 @@ GO
 /*                                                                      */
 /* Called By: ntrMBOLHeaderUpdate                                       */
 /*                                                                      */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -33,8 +33,9 @@ GO
 /*                                                                      */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author  Ver. Purposes                                   */
+/* Date         Author   Ver. Purposes                                  */
 /* 17-Mar-2022  WLChooi  1.0  DevOps Combine Script                     */
+/* 10-Feb-2023  WLChooi  1.1  WMS-21752 - Map Lottable08 (WL01)         */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[ispPopulateTOASN_EAT] 
@@ -65,7 +66,8 @@ BEGIN
    DECLARE @c_Lottable02         NVARCHAR(18),
            @c_Lottable03         NVARCHAR(18),
            @d_Lottable04         DATETIME,
-           @n_ShippedQty         INT
+           @n_ShippedQty         INT,
+           @c_Lottable08         NVARCHAR(50)   --WL01
             
    DECLARE @c_NewReceiptKey      NVARCHAR(10),
            @c_FoundReceiptKey    NVARCHAR(10),
@@ -254,18 +256,20 @@ BEGIN
                      SELECT SUM(ISNULL(PICKDETAIL.Qty,0)) AS Qty,
                             ISNULL(LOTATTRIBUTE.Lottable02,''),
                             ISNULL(LOTATTRIBUTE.Lottable03,''),
-                            LOTATTRIBUTE.Lottable04
+                            LOTATTRIBUTE.Lottable04,
+                            ISNULL(LOTATTRIBUTE.Lottable08,'')   --WL01
                      FROM PICKDETAIL   WITH (NOLOCK) 
                      JOIN LotAttribute WITH (NOLOCK) ON (PickDetail.LOT = LotAttribute.LOT)
                      WHERE (PICKDETAIL.OrderKey = @c_OrderKey AND
                            PICKDETAIL.OrderLineNumber = @c_OrderLine)
                      GROUP BY PICKDETAIL.StorerKey, PICKDETAIL.SKU,  LOTATTRIBUTE.Lottable02, 
-                              LOTATTRIBUTE.Lottable03, LOTATTRIBUTE.Lottable04
+                              LOTATTRIBUTE.Lottable03, LOTATTRIBUTE.Lottable04,
+                              LOTATTRIBUTE.Lottable08   --WL01
                  
                   OPEN PICK_CUR
                    
                   FETCH NEXT FROM PICK_CUR
-                     INTO @n_QtyReceived, @c_Lottable02, @c_Lottable03, @d_Lottable04 
+                     INTO @n_QtyReceived, @c_Lottable02, @c_Lottable03, @d_Lottable04, @c_Lottable08   --WL01
                  
                   WHILE @@FETCH_STATUS <> -1
                   BEGIN
@@ -279,20 +283,20 @@ BEGIN
                                                 QtyExpected,            QtyReceived,            PutawayLoc,
                                                 UOM,                    PackKey,                ToLoc,
                                                 Lottable01,             Lottable02,             
-                                                Lottable03,             Lottable04,     
+                                                Lottable03,             Lottable04,             Lottable08,   --WL01     
                                                 BeforeReceivedQty,      FinalizeFlag,           ID)                                                   
                                         VALUES (@c_NewReceiptKey,       @c_ReceiptLine,         @c_ExternReceiptkey,   
                                                 @c_ExternOrderLine,     @c_ToStorerKey,         @c_SKU,
                                                 @n_QtyReceived,         0,                      @c_PutawayLoc,               
                                                 @c_UOM,                 @c_Packkey,             @c_Toloc,
                                                 @c_ID,                  @c_Lottable02,
-                                                @c_Lottable03,          @d_Lottable04,       
+                                                @c_Lottable03,          @d_Lottable04,          @c_Lottable08,   --WL01       
                                                 0,                      'N',                    @c_ID )  
                                                                   
                      SELECT @n_LineNo = @n_LineNo + 1
                  
                      FETCH NEXT FROM PICK_CUR
-                        INTO @n_QtyReceived, @c_Lottable02, @c_Lottable03, @d_Lottable04 
+                        INTO @n_QtyReceived, @c_Lottable02, @c_Lottable03, @d_Lottable04, @c_Lottable08   --WL01
                   END -- WHILE @@FETCH_STATUS <> -1
                   CLOSE PICK_CUR
                   DEALLOCATE PICK_CUR
