@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: Wave                                                      */
 /*                                                                      */
-/* GitLab Version: 1.4                                                  */
+/* GitLab Version: 1.5                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -26,6 +26,9 @@ GO
 /* 27-Feb-2023  WLChooi  1.2  WMS-19079 - Fix ToLoc is blank (WL02)     */
 /* 24-Mar-2023  WLChooi  1.3  Performance Tune (WL03)                   */
 /* 11-Apr-2023  WLChooi  1.4  WMS-19079 - Change empty loc logic (WL05) */
+/* 02-Mar-2023  WLChooi  1.5  WMS-19079 - Add new logic to generate     */
+/*                            Case ID by SKU.PackQtyIndicator and fixed */
+/*                            FP/PP Calculation by Wave (WL04)          */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV50]
@@ -112,6 +115,7 @@ BEGIN
          , @dt_StartTime          DATETIME        
          , @dt_EndTime            DATETIME    
          , @c_PrevTaskType        NVARCHAR(10)
+         , @n_MaxQty              INT   --WL04
 
    SET @b_Debug = @n_err
 
@@ -288,8 +292,15 @@ BEGIN
                            ELSE 'Onsite' END
       FROM CODELKUP CL (NOLOCK)
       WHERE CL.LISTNAME = 'NKEPKTSK' AND CL.Storerkey = @c_Storerkey AND CL.Short = 'Y'
-
+		  
       DECLARE @T_ID TABLE (Storerkey NVARCHAR(15), ID NVARCHAR(50), Pickmethod NVARCHAR(10) )   --WL03
+		  
+      --WL04 S
+      DECLARE @T_Numbers TABLE (
+         RowID           INT NOT NULL IDENTITY(1,1) PRIMARY KEY,
+         Dummy           NVARCHAR(1)
+      )
+      --WL04 E
    END
 
    --WHILE @@TRANCOUNT > 0 
@@ -1067,7 +1078,7 @@ BEGIN
                            FROM LotxLocxID LLI (NOLOCK)
                            JOIN UCC U (NOLOCK) ON U.Lot = LLI.Lot AND U.Loc = LLI.Loc  AND U.ID = LLI.ID 
                            WHERE LLI.Storerkey = @c_Storerkey AND LLI.Id = @c_ID
-                           HAVING COUNT(DISTINCT U.SKU) = 1 AND COUNT(DISTINCT U.qty) = 1 ) --1 ID 1 SKU, 1 ID 1 Qty
+                           HAVING COUNT(DISTINCT U.SKU) = 1 AND COUNT(DISTINCT U.qty) = 1) --1 ID 1 SKU, 1 ID 1 Qty
          BEGIN
          --WL03 E
             --SELECT @n_AvailableQty = SUM(PDW.Qty)
@@ -1135,6 +1146,7 @@ BEGIN
                SELECT @c_Storerkey, @c_ID, @c_Pickmethod
             END
             --WL03 E
+
          END
 
          IF @n_Continue IN ( 1, 2 )
@@ -2045,14 +2057,32 @@ BEGIN
                --> DPP
                SELECT OH.Loadkey, PD.SKU, '' AS Loc, L.PickZone, S.SKUGroup
                     , SUM(PD.Qty) AS QtyRequired
-                    , MAX(TC.PEMaxQty) AS PEMaxQty
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN MAX(TC.PEMaxQty) ELSE 0 END AS MaxQty
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN CAST(SUM(PD.Qty) / MAX(TC.PEMaxQty) AS INT) ELSE 0 END AS WHOLES 
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN SUM(PD.Qty) % MAX(TC.PEMaxQty) ELSE SUM(PD.Qty) END AS PARTIALS
+                    , CASE WHEN MAX(S.PackQtyIndicator) > 1 AND MAX(S.PackQtyIndicator) <= MAX(TC.PEMaxQty)   --WL04 S 
+                           THEN CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator)
+                           ELSE MAX(TC.PEMaxQty) 
+                           END AS PEMaxQty
+                    , CASE WHEN MAX(S.PackQtyIndicator) > 1 AND MAX(S.PackQtyIndicator) <= MAX(TC.PEMaxQty)
+                           THEN CASE WHEN SUM(PD.Qty) > CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) 
+                                     THEN CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) ELSE 0 END
+                           ELSE CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN MAX(TC.PEMaxQty) ELSE 0 END
+                           END AS MaxQty
+                    , CASE WHEN MAX(S.PackQtyIndicator) > 1 AND MAX(S.PackQtyIndicator) <= MAX(TC.PEMaxQty)
+                           THEN CASE WHEN SUM(PD.Qty) > CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) 
+                                     THEN CAST(SUM(PD.Qty) / ( CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) ) AS INT) 
+                                     ELSE 0 END
+                           ELSE CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN CAST(SUM(PD.Qty) / MAX(TC.PEMaxQty) AS INT) ELSE 0 END
+                           END AS WHOLES 
+                    , CASE WHEN MAX(S.PackQtyIndicator) > 1 AND MAX(S.PackQtyIndicator) <= MAX(TC.PEMaxQty)
+                           THEN CASE WHEN SUM(PD.Qty) > CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) 
+                                     THEN SUM(PD.Qty) % ( CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) ) 
+                                     ELSE SUM(PD.Qty) END
+                           ELSE CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN SUM(PD.Qty) % MAX(TC.PEMaxQty) ELSE SUM(PD.Qty) END
+                           END AS PARTIALS   --WL04 E
                     , 'RPF_1' AS TaskType
-               FROM WAVEDETAIL WD (NOLOCK)
-               JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = WD.OrderKey
-               JOIN #PickDetail_WIP PD (NOLOCK) ON PD.OrderKey = OH.OrderKey
+               --FROM WAVEDETAIL WD (NOLOCK)   --WL04 S
+               --JOIN #PickDetail_WIP PD (NOLOCK) ON PD.OrderKey = OH.OrderKey
+               FROM #PickDetail_WIP PD (NOLOCK)
+               JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = PD.OrderKey   --WL04 E
                JOIN SKU S (NOLOCK) ON S.Storerkey = PD.Storerkey AND S.SKU = PD.SKU
                JOIN TASKDETAIL TD (NOLOCK) ON TD.TaskDetailKey = PD.TaskDetailKey
                JOIN LOC L (NOLOCK) ON TD.ToLoc = L.Loc
@@ -2062,48 +2092,40 @@ BEGIN
                WHERE ISNULL(PD.CaseID,'') = ''
                AND ISNULL(PD.TaskDetailKey,'') <> ''
                AND (PD.UOM = '2' AND PD.PickMethod = 'C')
-               AND WD.WaveKey = @c_Wavekey
+               AND PD.WaveKey = @c_Wavekey
                AND TD.TaskType = 'RPF'
                AND ISNULL(TD.ToLoc,'') <> ''
                GROUP BY OH.Loadkey, PD.SKU, L.PickZone, S.SKUGroup
-               /*UNION ALL
-               --Loadkey + SKU + Pickzone (Pickdetail.UOM = 2 AND Pickmethod = C) 
-               --> Packstation
-               SELECT OH.Loadkey, PD.SKU, '' AS Loc, L.PickZone, S.SKUGroup
-                    , SUM(PD.Qty) AS QtyRequired
-                    , MAX(TC.PEMaxQty) AS PEMaxQty
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN MAX(TC.PEMaxQty) ELSE 0 END AS MaxQty
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN CAST(SUM(PD.Qty) / MAX(TC.PEMaxQty) AS INT) ELSE 0 END AS WHOLES 
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN SUM(PD.Qty) % MAX(TC.PEMaxQty) ELSE SUM(PD.Qty) END AS PARTIALS
-                    , 'RPF_1A' AS TaskType
-               FROM WAVEDETAIL WD (NOLOCK)
-               JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = WD.OrderKey
-               JOIN #PickDetail_WIP PD (NOLOCK) ON PD.OrderKey = OH.OrderKey
-               JOIN SKU S (NOLOCK) ON S.Storerkey = PD.Storerkey AND S.SKU = PD.SKU
-               JOIN TASKDETAIL TD (NOLOCK) ON TD.TaskDetailKey = PD.TaskDetailKey
-               JOIN LOC L (NOLOCK) ON PD.Loc = L.Loc
-               CROSS APPLY (SELECT TOP 1 PEMaxQty
-                            FROM #TMP_CODELKUP (NOLOCK)
-                            WHERE Pickzone = L.Pickzone AND SKUGroup = S.SKUGroup) AS TC
-               WHERE ISNULL(PD.CaseID,'') = ''
-               AND ISNULL(PD.TaskDetailKey,'') <> ''
-               AND (PD.UOM = '2' AND PD.PickMethod = 'C')
-               AND WD.WaveKey = @c_Wavekey
-               AND TD.TaskType = 'RPF'
-               AND ISNULL(TD.FinalLoc,'') = ''
-               GROUP BY OH.Loadkey, PD.SKU, L.PickZone, S.SKUGROUP*/
                UNION ALL
                --Loadkey + SKU + ToLoc.Pickzone (Pickdetail.UOM = 6 AND LocationRoom = HIGHBAY)
                SELECT OH.Loadkey, PD.SKU, '' AS Loc, L.PickZone, S.SKUGroup
                     , SUM(PD.Qty) AS QtyRequired
-                    , MAX(TC.PEMaxQty) AS PEMaxQty
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN MAX(TC.PEMaxQty) ELSE 0 END AS MaxQty
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN CAST(SUM(PD.Qty) / MAX(TC.PEMaxQty) AS INT) ELSE 0 END AS WHOLES 
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN SUM(PD.Qty) % MAX(TC.PEMaxQty) ELSE SUM(PD.Qty) END AS PARTIALS
+                    , CASE WHEN MAX(S.PackQtyIndicator) > 1 AND MAX(S.PackQtyIndicator) <= MAX(TC.PEMaxQty)   --WL04 S 
+                           THEN CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator)
+                           ELSE MAX(TC.PEMaxQty) 
+                           END AS PEMaxQty
+                    , CASE WHEN MAX(S.PackQtyIndicator) > 1 AND MAX(S.PackQtyIndicator) <= MAX(TC.PEMaxQty)
+                           THEN CASE WHEN SUM(PD.Qty) > CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) 
+                                     THEN CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) ELSE 0 END
+                           ELSE CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN MAX(TC.PEMaxQty) ELSE 0 END
+                           END AS MaxQty
+                    , CASE WHEN MAX(S.PackQtyIndicator) > 1 AND MAX(S.PackQtyIndicator) <= MAX(TC.PEMaxQty)
+                           THEN CASE WHEN SUM(PD.Qty) > CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) 
+                                     THEN CAST(SUM(PD.Qty) / ( CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) ) AS INT) 
+                                     ELSE 0 END
+                           ELSE CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN CAST(SUM(PD.Qty) / MAX(TC.PEMaxQty) AS INT) ELSE 0 END
+                           END AS WHOLES 
+                    , CASE WHEN MAX(S.PackQtyIndicator) > 1 AND MAX(S.PackQtyIndicator) <= MAX(TC.PEMaxQty)
+                           THEN CASE WHEN SUM(PD.Qty) > CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) 
+                                     THEN SUM(PD.Qty) % ( CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) ) 
+                                     ELSE SUM(PD.Qty) END
+                           ELSE CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN SUM(PD.Qty) % MAX(TC.PEMaxQty) ELSE SUM(PD.Qty) END
+                           END AS PARTIALS   --WL04 E
                     , 'RPF_1' AS TaskType
-               FROM WAVEDETAIL WD (NOLOCK)
-               JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = WD.OrderKey
-               JOIN #PickDetail_WIP PD (NOLOCK) ON PD.OrderKey = OH.OrderKey
+               --FROM WAVEDETAIL WD (NOLOCK)   --WL04 S
+               --JOIN #PickDetail_WIP PD (NOLOCK) ON PD.OrderKey = OH.OrderKey
+               FROM #PickDetail_WIP PD (NOLOCK)
+               JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = PD.OrderKey   --WL04 E
                JOIN SKU S (NOLOCK) ON S.Storerkey = PD.Storerkey AND S.SKU = PD.SKU
                JOIN TASKDETAIL TD (NOLOCK) ON TD.TaskDetailKey = PD.TaskDetailKey
                JOIN LOC L (NOLOCK) ON TD.ToLoc = L.Loc
@@ -2113,7 +2135,7 @@ BEGIN
                WHERE ISNULL(PD.CaseID,'') = '' 
                AND ISNULL(PD.TaskDetailKey,'') <> ''
                AND PD.UOM = '6'
-               AND WD.WaveKey = @c_Wavekey
+               AND PD.WaveKey = @c_Wavekey   --WL04
                AND TD.TaskType = 'RPF'
                AND ISNULL(TD.ToLoc,'') <> ''
                GROUP BY OH.Loadkey, PD.SKU, L.PickZone, S.SKUGroup
@@ -2121,14 +2143,32 @@ BEGIN
                --Loadkey + SKU + Pickzone (Pickdetail.UOM = 6 AND LocationRoom <> HIGHBAY)
                SELECT OH.Loadkey, PD.SKU, '' AS Loc, L.PickZone, S.SKUGroup
                     , SUM(PD.Qty) AS QtyRequired
-                    , MAX(TC.PEMaxQty) AS PEMaxQty
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN MAX(TC.PEMaxQty) ELSE 0 END AS MaxQty
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN CAST(SUM(PD.Qty) / MAX(TC.PEMaxQty) AS INT) ELSE 0 END AS WHOLES 
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN SUM(PD.Qty) % MAX(TC.PEMaxQty) ELSE SUM(PD.Qty) END AS PARTIALS
+                    , CASE WHEN MAX(S.PackQtyIndicator) > 1 AND MAX(S.PackQtyIndicator) <= MAX(TC.PEMaxQty)   --WL04 S 
+                           THEN CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator)
+                           ELSE MAX(TC.PEMaxQty) 
+                           END AS PEMaxQty
+                    , CASE WHEN MAX(S.PackQtyIndicator) > 1 AND MAX(S.PackQtyIndicator) <= MAX(TC.PEMaxQty)
+                           THEN CASE WHEN SUM(PD.Qty) > CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) 
+                                     THEN CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) ELSE 0 END
+                           ELSE CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN MAX(TC.PEMaxQty) ELSE 0 END
+                           END AS MaxQty
+                    , CASE WHEN MAX(S.PackQtyIndicator) > 1 AND MAX(S.PackQtyIndicator) <= MAX(TC.PEMaxQty)
+                           THEN CASE WHEN SUM(PD.Qty) > CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) 
+                                     THEN CAST(SUM(PD.Qty) / ( CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) ) AS INT) 
+                                     ELSE 0 END
+                           ELSE CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN CAST(SUM(PD.Qty) / MAX(TC.PEMaxQty) AS INT) ELSE 0 END
+                           END AS WHOLES 
+                    , CASE WHEN MAX(S.PackQtyIndicator) > 1 AND MAX(S.PackQtyIndicator) <= MAX(TC.PEMaxQty)
+                           THEN CASE WHEN SUM(PD.Qty) > CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) 
+                                     THEN SUM(PD.Qty) % ( CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) ) 
+                                     ELSE SUM(PD.Qty) END
+                           ELSE CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN SUM(PD.Qty) % MAX(TC.PEMaxQty) ELSE SUM(PD.Qty) END
+                           END AS PARTIALS   --WL04 E
                     , 'NA_1' AS TaskType
-               FROM WAVEDETAIL WD (NOLOCK)
-               JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = WD.OrderKey
-               JOIN #PickDetail_WIP PD (NOLOCK) ON PD.OrderKey = OH.OrderKey
+               --FROM WAVEDETAIL WD (NOLOCK)   --WL04 S
+               --JOIN #PickDetail_WIP PD (NOLOCK) ON PD.OrderKey = OH.OrderKey
+               FROM #PickDetail_WIP PD (NOLOCK)
+               JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = PD.OrderKey   --WL04 E
                JOIN SKU S (NOLOCK) ON S.Storerkey = PD.Storerkey AND S.SKU = PD.SKU
                JOIN LOC L (NOLOCK) ON PD.LOC = L.Loc
                CROSS APPLY (SELECT TOP 1 PEMaxQty
@@ -2137,7 +2177,7 @@ BEGIN
                WHERE ISNULL(PD.CaseID,'') = '' 
                AND ISNULL(PD.TaskDetailKey,'') = ''
                AND PD.UOM = '6'
-               AND WD.WaveKey = @c_Wavekey
+               AND PD.WaveKey = @c_Wavekey   --WL04
                GROUP BY OH.Loadkey, PD.SKU, L.PickZone, S.SKUGroup
             )
             ,CTE2 AS 
@@ -2224,15 +2264,33 @@ BEGIN
                --> DPP
                SELECT OH.Loadkey, PD.SKU, '' AS Loc, L.PickZone, S.SKUGroup
                     , SUM(PD.Qty) AS QtyRequired
-                    , MAX(TC.PEMaxQty) AS PEMaxQty
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN MAX(TC.PEMaxQty) ELSE 0 END AS MaxQty
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN CAST(SUM(PD.Qty) / MAX(TC.PEMaxQty) AS INT) ELSE 0 END AS WHOLES 
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN SUM(PD.Qty) % MAX(TC.PEMaxQty) ELSE SUM(PD.Qty) END AS PARTIALS
+                    , CASE WHEN MAX(S.PackQtyIndicator) > 1 AND MAX(S.PackQtyIndicator) <= MAX(TC.PEMaxQty)   --WL04 S 
+                           THEN CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator)
+                           ELSE MAX(TC.PEMaxQty) 
+                           END AS PEMaxQty
+                    , CASE WHEN MAX(S.PackQtyIndicator) > 1 AND MAX(S.PackQtyIndicator) <= MAX(TC.PEMaxQty)
+                           THEN CASE WHEN SUM(PD.Qty) > CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) 
+                                     THEN CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) ELSE 0 END
+                           ELSE CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN MAX(TC.PEMaxQty) ELSE 0 END
+                           END AS MaxQty
+                    , CASE WHEN MAX(S.PackQtyIndicator) > 1 AND MAX(S.PackQtyIndicator) <= MAX(TC.PEMaxQty)
+                           THEN CASE WHEN SUM(PD.Qty) > CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) 
+                                     THEN CAST(SUM(PD.Qty) / ( CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) ) AS INT) 
+                                     ELSE 0 END
+                           ELSE CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN CAST(SUM(PD.Qty) / MAX(TC.PEMaxQty) AS INT) ELSE 0 END
+                           END AS WHOLES 
+                    , CASE WHEN MAX(S.PackQtyIndicator) > 1 AND MAX(S.PackQtyIndicator) <= MAX(TC.PEMaxQty)
+                           THEN CASE WHEN SUM(PD.Qty) > CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) 
+                                     THEN SUM(PD.Qty) % ( CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) ) 
+                                     ELSE SUM(PD.Qty) END
+                           ELSE CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN SUM(PD.Qty) % MAX(TC.PEMaxQty) ELSE SUM(PD.Qty) END
+                           END AS PARTIALS   --WL04 E
                     , 'RPF_2' AS TaskType
                     , S.itemclass
-               FROM WAVEDETAIL WD (NOLOCK)
-               JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = WD.OrderKey
-               JOIN #PickDetail_WIP PD (NOLOCK) ON PD.OrderKey = OH.OrderKey
+               --FROM WAVEDETAIL WD (NOLOCK)   --WL04 S
+               --JOIN #PickDetail_WIP PD (NOLOCK) ON PD.OrderKey = OH.OrderKey
+               FROM #PickDetail_WIP PD (NOLOCK)
+               JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = PD.OrderKey   --WL04 E
                JOIN SKU S (NOLOCK) ON S.Storerkey = PD.Storerkey AND S.SKU = PD.SKU
                JOIN TASKDETAIL TD (NOLOCK) ON TD.TaskDetailKey = PD.TaskDetailKey
                JOIN LOC L (NOLOCK) ON TD.ToLoc = L.Loc
@@ -2242,50 +2300,41 @@ BEGIN
                WHERE ISNULL(PD.CaseID,'') = ''
                AND ISNULL(PD.TaskDetailKey,'') <> ''
                AND (PD.UOM = '2' AND PD.PickMethod = 'C')
-               AND WD.WaveKey = @c_Wavekey
+               AND PD.WaveKey = @c_Wavekey   --WL04
                AND TD.TaskType = 'RPF'
                AND ISNULL(TD.ToLoc,'') <> ''
                GROUP BY OH.Loadkey, PD.SKU, L.PickZone, S.SKUGroup, S.itemclass
-               /*UNION ALL
-               --Loadkey + SKU + Pickzone + Itemclass (Pickdetail.UOM = 2 AND Pickmethod = C)
-               --> Packstation
-               SELECT OH.Loadkey, PD.SKU, '' AS Loc, L.PickZone, S.SKUGroup
-                    , SUM(PD.Qty) AS QtyRequired
-                    , MAX(TC.PEMaxQty) AS PEMaxQty
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN MAX(TC.PEMaxQty) ELSE 0 END AS MaxQty
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN CAST(SUM(PD.Qty) / MAX(TC.PEMaxQty) AS INT) ELSE 0 END AS WHOLES 
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN SUM(PD.Qty) % MAX(TC.PEMaxQty) ELSE SUM(PD.Qty) END AS PARTIALS
-                    , 'RPF_2A' AS TaskType
-                    , S.itemclass
-               FROM WAVEDETAIL WD (NOLOCK)
-               JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = WD.OrderKey
-               JOIN #PickDetail_WIP PD (NOLOCK) ON PD.OrderKey = OH.OrderKey
-               JOIN SKU S (NOLOCK) ON S.Storerkey = PD.Storerkey AND S.SKU = PD.SKU
-               JOIN TASKDETAIL TD (NOLOCK) ON TD.TaskDetailKey = PD.TaskDetailKey
-               JOIN LOC L (NOLOCK) ON PD.Loc = L.Loc
-               CROSS APPLY (SELECT TOP 1 PEMaxQty
-                            FROM #TMP_CODELKUP (NOLOCK)
-                            WHERE Pickzone = L.Pickzone AND SKUGroup = S.SKUGroup) AS TC
-               WHERE ISNULL(PD.CaseID,'') = ''
-               AND ISNULL(PD.TaskDetailKey,'') <> ''
-               AND (PD.UOM = '2' AND PD.PickMethod = 'C')
-               AND WD.WaveKey = @c_Wavekey
-               AND TD.TaskType = 'RPF'
-               AND ISNULL(TD.FinalLoc,'') = ''
-               GROUP BY OH.Loadkey, PD.SKU, L.PickZone, S.SKUGroup, S.itemclass*/
                UNION ALL
                --Loadkey + SKU + Pickzone + Itemclass (Pickdetail.UOM = 6 AND LocationRoom = HIGHBAY)
                SELECT OH.Loadkey, PD.SKU, '' AS Loc, L.PickZone, S.SKUGroup
                     , SUM(PD.Qty) AS QtyRequired
-                    , MAX(TC.PEMaxQty) AS PEMaxQty
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN MAX(TC.PEMaxQty) ELSE 0 END AS MaxQty
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN CAST(SUM(PD.Qty) / MAX(TC.PEMaxQty) AS INT) ELSE 0 END AS WHOLES 
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN SUM(PD.Qty) % MAX(TC.PEMaxQty) ELSE SUM(PD.Qty) END AS PARTIALS
+                    , CASE WHEN MAX(S.PackQtyIndicator) > 1 AND MAX(S.PackQtyIndicator) <= MAX(TC.PEMaxQty)   --WL04 S 
+                           THEN CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator)
+                           ELSE MAX(TC.PEMaxQty) 
+                           END AS PEMaxQty
+                    , CASE WHEN MAX(S.PackQtyIndicator) > 1 AND MAX(S.PackQtyIndicator) <= MAX(TC.PEMaxQty)
+                           THEN CASE WHEN SUM(PD.Qty) > CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) 
+                                     THEN CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) ELSE 0 END
+                           ELSE CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN MAX(TC.PEMaxQty) ELSE 0 END
+                           END AS MaxQty
+                    , CASE WHEN MAX(S.PackQtyIndicator) > 1 AND MAX(S.PackQtyIndicator) <= MAX(TC.PEMaxQty)
+                           THEN CASE WHEN SUM(PD.Qty) > CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) 
+                                     THEN CAST(SUM(PD.Qty) / ( CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) ) AS INT) 
+                                     ELSE 0 END
+                           ELSE CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN CAST(SUM(PD.Qty) / MAX(TC.PEMaxQty) AS INT) ELSE 0 END
+                           END AS WHOLES 
+                    , CASE WHEN MAX(S.PackQtyIndicator) > 1 AND MAX(S.PackQtyIndicator) <= MAX(TC.PEMaxQty)
+                           THEN CASE WHEN SUM(PD.Qty) > CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) 
+                                     THEN SUM(PD.Qty) % ( CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) ) 
+                                     ELSE SUM(PD.Qty) END
+                           ELSE CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN SUM(PD.Qty) % MAX(TC.PEMaxQty) ELSE SUM(PD.Qty) END
+                           END AS PARTIALS   --WL04 E
                     , 'RPF_2' AS TaskType
                     , S.itemclass
-               FROM WAVEDETAIL WD (NOLOCK)
-               JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = WD.OrderKey
-               JOIN #PickDetail_WIP PD (NOLOCK) ON PD.OrderKey = OH.OrderKey
+               --FROM WAVEDETAIL WD (NOLOCK)   --WL04 S
+               --JOIN #PickDetail_WIP PD (NOLOCK) ON PD.OrderKey = OH.OrderKey
+               FROM #PickDetail_WIP PD (NOLOCK)
+               JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = PD.OrderKey   --WL04 E
                JOIN SKU S (NOLOCK) ON S.Storerkey = PD.Storerkey AND S.SKU = PD.SKU
                JOIN TASKDETAIL TD (NOLOCK) ON TD.TaskDetailKey = PD.TaskDetailKey
                JOIN LOC L (NOLOCK) ON TD.ToLoc = L.Loc
@@ -2295,7 +2344,7 @@ BEGIN
                WHERE ISNULL(PD.CaseID,'') = '' 
                AND ISNULL(PD.TaskDetailKey,'') <> ''
                AND PD.UOM = '6'
-               AND WD.WaveKey = @c_Wavekey
+               AND PD.WaveKey = @c_Wavekey   --WL04
                AND TD.TaskType = 'RPF'
                AND ISNULL(TD.ToLoc,'') <> ''
                GROUP BY OH.Loadkey, PD.SKU, L.PickZone, S.SKUGroup, S.itemclass
@@ -2303,15 +2352,33 @@ BEGIN
                --Loadkey + SKU + Pickzone + Itemclass (Pickdetail.UOM = 6 AND LocationRoom <> HIGHBAY)
                SELECT OH.Loadkey, PD.SKU, '' AS Loc, L.PickZone, S.SKUGroup
                     , SUM(PD.Qty) AS QtyRequired
-                    , MAX(TC.PEMaxQty) AS PEMaxQty
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN MAX(TC.PEMaxQty) ELSE 0 END AS MaxQty
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN CAST(SUM(PD.Qty) / MAX(TC.PEMaxQty) AS INT) ELSE 0 END AS WHOLES 
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN SUM(PD.Qty) % MAX(TC.PEMaxQty) ELSE SUM(PD.Qty) END AS PARTIALS
+                    , CASE WHEN MAX(S.PackQtyIndicator) > 1 AND MAX(S.PackQtyIndicator) <= MAX(TC.PEMaxQty)   --WL04 S 
+                           THEN CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator)
+                           ELSE MAX(TC.PEMaxQty) 
+                           END AS PEMaxQty
+                    , CASE WHEN MAX(S.PackQtyIndicator) > 1 AND MAX(S.PackQtyIndicator) <= MAX(TC.PEMaxQty)
+                           THEN CASE WHEN SUM(PD.Qty) > CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) 
+                                     THEN CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) ELSE 0 END
+                           ELSE CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN MAX(TC.PEMaxQty) ELSE 0 END
+                           END AS MaxQty
+                    , CASE WHEN MAX(S.PackQtyIndicator) > 1 AND MAX(S.PackQtyIndicator) <= MAX(TC.PEMaxQty)
+                           THEN CASE WHEN SUM(PD.Qty) > CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) 
+                                     THEN CAST(SUM(PD.Qty) / ( CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) ) AS INT) 
+                                     ELSE 0 END
+                           ELSE CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN CAST(SUM(PD.Qty) / MAX(TC.PEMaxQty) AS INT) ELSE 0 END
+                           END AS WHOLES 
+                    , CASE WHEN MAX(S.PackQtyIndicator) > 1 AND MAX(S.PackQtyIndicator) <= MAX(TC.PEMaxQty)
+                           THEN CASE WHEN SUM(PD.Qty) > CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) 
+                                     THEN SUM(PD.Qty) % ( CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator) ) 
+                                     ELSE SUM(PD.Qty) END
+                           ELSE CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN SUM(PD.Qty) % MAX(TC.PEMaxQty) ELSE SUM(PD.Qty) END
+                           END AS PARTIALS   --WL04 E
                     , 'NA_2' AS TaskType
                     , S.itemclass
-               FROM WAVEDETAIL WD (NOLOCK)
-               JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = WD.OrderKey
-               JOIN #PickDetail_WIP PD (NOLOCK) ON PD.OrderKey = OH.OrderKey
+               --FROM WAVEDETAIL WD (NOLOCK)   --WL04 S
+               --JOIN #PickDetail_WIP PD (NOLOCK) ON PD.OrderKey = OH.OrderKey
+               FROM #PickDetail_WIP PD (NOLOCK)
+               JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = PD.OrderKey   --WL04 E
                JOIN SKU S (NOLOCK) ON S.Storerkey = PD.Storerkey AND S.SKU = PD.SKU
                JOIN LOC L (NOLOCK) ON PD.LOC = L.Loc
                CROSS APPLY (SELECT TOP 1 PEMaxQty
@@ -2320,7 +2387,7 @@ BEGIN
                WHERE ISNULL(PD.CaseID,'') = '' 
                AND ISNULL(PD.TaskDetailKey,'') = ''
                AND PD.UOM = '6'
-               AND WD.WaveKey = @c_Wavekey
+               AND PD.WaveKey = @c_Wavekey   --WL04
                GROUP BY OH.Loadkey, PD.SKU, L.PickZone, S.SKUGroup, S.itemclass
             )
             ,CTE2 AS 
@@ -2401,22 +2468,37 @@ BEGIN
       SET @c_TaskDetailKey = ''
       SET @c_PrevTaskType = ''
 
+      --WL04 S
+      SELECT @n_MaxQty = SUM(QTY)
+      FROM #PickDetail_WIP PDW (NOLOCK)
+      WHERE WaveKey = @c_Wavekey
+
+      WHILE @n_MaxQty > 0
+      BEGIN
+         INSERT INTO @T_Numbers (Dummy)
+         VALUES (NULL -- Dummy - nvarchar(1)
+            )
+         SET @n_MaxQty = @n_MaxQty - 1
+      END
+
       --Loadkey + Pickzone
       DECLARE cur_GenCaseID_3 CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-         WITH CTE1 AS
+         WITH t1 AS
             (
                --Loadkey + Pickzone (Pickdetail.UOM = 2 AND Pickmethod = C)
                --> DPP
                SELECT OH.Loadkey, L.PickZone, S.SKUGroup
                     , SUM(PD.Qty) AS QtyRequired
-                    , MAX(TC.PEMaxQty) AS PEMaxQty
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN MAX(TC.PEMaxQty) ELSE 0 END AS MaxQty
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN CAST(SUM(PD.Qty) / MAX(TC.PEMaxQty) AS INT) ELSE 0 END AS WHOLES 
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN SUM(PD.Qty) % MAX(TC.PEMaxQty) ELSE SUM(PD.Qty) END AS PARTIALS
-                    , 'RPF_3' AS TaskType
-               FROM WAVEDETAIL WD (NOLOCK)
-               JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = WD.OrderKey
-               JOIN #PickDetail_WIP PD (NOLOCK) ON PD.OrderKey = OH.OrderKey
+                    , CASE WHEN MAX(S.PackQtyIndicator) > 1 AND MAX(S.PackQtyIndicator) <= MAX(TC.PEMaxQty)   --WL04 S 
+                           THEN CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator)
+                           ELSE MAX(TC.PEMaxQty) 
+                           END AS PEMaxQty
+                    , 'RPF_3' AS TaskType, PD.SKU
+                    , MAX(S.PackQtyIndicator) AS PackQtyIndicator
+               --FROM WAVEDETAIL WD (NOLOCK)   --WL04 S
+               --JOIN #PickDetail_WIP PD (NOLOCK) ON PD.OrderKey = OH.OrderKey
+               FROM #PickDetail_WIP PD (NOLOCK)
+               JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = PD.OrderKey   --WL04 E
                JOIN SKU S (NOLOCK) ON S.Storerkey = PD.Storerkey AND S.SKU = PD.SKU
                JOIN TASKDETAIL TD (NOLOCK) ON TD.TaskDetailKey = PD.TaskDetailKey
                JOIN LOC L (NOLOCK) ON TD.ToLoc = L.Loc
@@ -2426,22 +2508,24 @@ BEGIN
                WHERE ISNULL(PD.CaseID,'') = ''
                AND ISNULL(PD.TaskDetailKey,'') <> ''
                AND (PD.UOM = '2' AND PD.PickMethod = 'C')
-               AND WD.WaveKey = @c_Wavekey
+               AND PD.WaveKey = @c_Wavekey   --WL04
                AND TD.TaskType = 'RPF'
                AND ISNULL(TD.ToLoc,'') <> ''
-               GROUP BY OH.Loadkey, L.PickZone, S.SKUGroup
+               GROUP BY OH.Loadkey, L.PickZone, S.SKUGroup, S.PackQtyIndicator, PD.SKU   --WL04
                UNION ALL
                --Loadkey + Pickzone (Pickdetail.UOM = 6 AND LocationRoom = HIGHBAY)
                SELECT OH.Loadkey, L.PickZone, S.SKUGroup
                     , SUM(PD.Qty) AS QtyRequired
-                    , MAX(TC.PEMaxQty) AS PEMaxQty
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN MAX(TC.PEMaxQty) ELSE 0 END AS MaxQty
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN CAST(SUM(PD.Qty) / MAX(TC.PEMaxQty) AS INT) ELSE 0 END AS WHOLES 
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN SUM(PD.Qty) % MAX(TC.PEMaxQty) ELSE SUM(PD.Qty) END AS PARTIALS
-                    , 'RPF_3' AS TaskType
-               FROM WAVEDETAIL WD (NOLOCK)
-               JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = WD.OrderKey
-               JOIN #PickDetail_WIP PD (NOLOCK) ON PD.OrderKey = OH.OrderKey
+                    , CASE WHEN MAX(S.PackQtyIndicator) > 1 AND MAX(S.PackQtyIndicator) <= MAX(TC.PEMaxQty)   --WL04 S 
+                           THEN CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator)
+                           ELSE MAX(TC.PEMaxQty) 
+                           END AS PEMaxQty
+                    , 'RPF_3' AS TaskType, PD.SKU
+                    , MAX(S.PackQtyIndicator) AS PackQtyIndicator
+               --FROM WAVEDETAIL WD (NOLOCK)   --WL04 S
+               --JOIN #PickDetail_WIP PD (NOLOCK) ON PD.OrderKey = OH.OrderKey
+               FROM #PickDetail_WIP PD (NOLOCK)
+               JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = PD.OrderKey   --WL04 E
                JOIN SKU S (NOLOCK) ON S.Storerkey = PD.Storerkey AND S.SKU = PD.SKU
                JOIN TASKDETAIL TD (NOLOCK) ON TD.TaskDetailKey = PD.TaskDetailKey
                JOIN LOC L (NOLOCK) ON TD.ToLoc = L.Loc
@@ -2451,22 +2535,24 @@ BEGIN
                WHERE ISNULL(PD.CaseID,'') = '' 
                AND ISNULL(PD.TaskDetailKey,'') <> ''
                AND PD.UOM = '6'
-               AND WD.WaveKey = @c_Wavekey
+               AND PD.WaveKey = @c_Wavekey   --WL04
                AND TD.TaskType = 'RPF'
                AND ISNULL(TD.ToLoc,'') <> ''
-               GROUP BY OH.Loadkey, L.PickZone, S.SKUGroup
+               GROUP BY OH.Loadkey, L.PickZone, S.SKUGroup, S.PackQtyIndicator, PD.SKU   --WL04
                UNION ALL
                --Loadkey + Pickzone (Pickdetail.UOM = 6 AND LocationRoom <> HIGHBAY)
                SELECT OH.Loadkey, L.PickZone, S.SKUGroup
                     , SUM(PD.Qty) AS QtyRequired
-                    , MAX(TC.PEMaxQty) AS PEMaxQty
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN MAX(TC.PEMaxQty) ELSE 0 END AS MaxQty
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN CAST(SUM(PD.Qty) / MAX(TC.PEMaxQty) AS INT) ELSE 0 END AS WHOLES 
-                    , CASE WHEN SUM(PD.Qty) > MAX(TC.PEMaxQty) THEN SUM(PD.Qty) % MAX(TC.PEMaxQty) ELSE SUM(PD.Qty) END AS PARTIALS
-                    , 'NA_3' AS TaskType
-               FROM WAVEDETAIL WD (NOLOCK)
-               JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = WD.OrderKey
-               JOIN #PickDetail_WIP PD (NOLOCK) ON PD.OrderKey = OH.OrderKey
+                    , CASE WHEN MAX(S.PackQtyIndicator) > 1 AND MAX(S.PackQtyIndicator) <= MAX(TC.PEMaxQty)   --WL04 S 
+                           THEN CAST(MAX(TC.PEMaxQty) / MAX(S.PackQtyIndicator) AS INT) * MAX(S.PackQtyIndicator)
+                           ELSE MAX(TC.PEMaxQty) 
+                           END AS PEMaxQty
+                    , 'NA_3' AS TaskType, PD.SKU
+                    , MAX(S.PackQtyIndicator) AS PackQtyIndicator
+               --FROM WAVEDETAIL WD (NOLOCK)   --WL04 S
+               --JOIN #PickDetail_WIP PD (NOLOCK) ON PD.OrderKey = OH.OrderKey
+               FROM #PickDetail_WIP PD (NOLOCK)
+               JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = PD.OrderKey   --WL04 E
                JOIN SKU S (NOLOCK) ON S.Storerkey = PD.Storerkey AND S.SKU = PD.SKU
                JOIN LOC L (NOLOCK) ON PD.LOC = L.Loc
                CROSS APPLY (SELECT TOP 1 PEMaxQty
@@ -2475,34 +2561,57 @@ BEGIN
                WHERE ISNULL(PD.CaseID,'') = '' 
                AND ISNULL(PD.TaskDetailKey,'') = ''
                AND PD.UOM = '6'
-               AND WD.WaveKey = @c_Wavekey
-               GROUP BY OH.Loadkey, L.PickZone, S.SKUGroup
+               AND PD.WaveKey = @c_Wavekey   --WL04
+               GROUP BY OH.Loadkey, L.PickZone, S.SKUGroup, S.PackQtyIndicator, PD.SKU   --WL04
             )
-            ,CTE2 AS 
+            ,t2 AS 
             (
-                SELECT Loadkey, PickZone, SKUGroup, Tasktype, PEMaxQty, MaxQty, WHOLES, 'BASE ' AS Remark
-                FROM CTE1
-                UNION ALL
-                SELECT Loadkey, PickZone, SKUGroup, TaskType, PEMaxQty, MaxQty, WHOLES - 1, 'RECUR' AS Remark
-                FROM CTE2 
-                WHERE WHOLES > 1
+                --SELECT Loadkey, PickZone, SKUGroup, Tasktype, SKU, PEMaxQty, MaxQty, WHOLES, 'BASE ' AS Remark
+                --FROM CTE1
+                --UNION ALL
+                --SELECT Loadkey, PickZone, SKUGroup, TaskType, SKU, PEMaxQty, MaxQty, WHOLES - 1, 'RECUR' AS Remark
+                --FROM CTE2 
+                --WHERE WHOLES > 1
+                SELECT ROW_NUMBER() OVER (ORDER BY TN.RowID) AS Val FROM @T_Numbers TN
             )
-            SELECT Loadkey, PickZone, SKUGroup, TaskType, PEMaxQty, MaxQty AS QuantityRequired 
-            FROM CTE2
-            WHERE MaxQty > 0
-            UNION ALL
-            SELECT Loadkey, PickZone, SKUGroup, TaskType, PEMaxQty, PARTIALS AS QuantityRequired 
-            FROM CTE1 
-            WHERE PARTIALS > 0
-            ORDER BY Loadkey ASC, Pickzone ASC, TaskType ASC, QuantityRequired DESC
+            --SELECT Loadkey, PickZone, SKUGroup, TaskType, SKU, PEMaxQty, MaxQty AS QuantityRequired 
+            --FROM CTE2
+            --WHERE MaxQty > 0
+            --UNION ALL
+            --SELECT Loadkey, PickZone, SKUGroup, TaskType, SKU, PEMaxQty, PARTIALS AS QuantityRequired 
+            --FROM CTE1 
+            --WHERE PARTIALS > 0
+            --ORDER BY Loadkey ASC, Pickzone ASC, TaskType ASC, SKU ASC, QuantityRequired DESC
+            SELECT t1.Loadkey, t1.Pickzone, t1.SKUGroup, t1.TaskType, t1.SKU, t1.PEMaxQty, t1.PackQtyIndicator
+            FROM t1, t2
+            WHERE t1.QtyRequired / t1.PackQtyIndicator >= t2.Val
+            ORDER BY t1.Loadkey, t1.Pickzone, t1.TaskType, t1.SKU, t1.QtyRequired DESC
             OPTION (MAXRECURSION 0)
+            --WL04 E
 
       OPEN cur_GenCaseID_3  
-      FETCH NEXT FROM cur_GenCaseID_3 INTO @c_Loadkey, @c_PickZone, @c_SKUGroup, @c_TaskType, @n_PEMaxQty, @n_Qty
+      FETCH NEXT FROM cur_GenCaseID_3 INTO @c_Loadkey, @c_PickZone, @c_SKUGroup, @c_TaskType, @c_SKU, @n_PEMaxQty, @n_Qty
       
       WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1,2) 
       BEGIN
          SET @c_CaseID = ''
+
+         --WL04 S
+         --Get existing CaseID that still can fit in
+         SELECT TOP 1 @c_CaseID = CaseID
+                    , @n_AvailableQty = SUM(TC.Qty) + @n_Qty
+         FROM #TMP_CASEID TC
+         WHERE TC.Loadkey = @c_Loadkey
+         AND TC.Pickzone = @c_Pickzone
+         AND TC.SKUGroup = @c_SKUGroup
+         AND TC.LocRoom = @c_TaskType
+         GROUP BY CaseID
+         HAVING SUM(TC.Qty) + @n_Qty <= @n_PEMaxQty
+         ORDER BY CaseID
+
+         IF ISNULL(@c_CaseID,'') <> ''
+            SET @c_SeqNo = @c_CaseID
+         --WL04 E
 
          IF ( (@c_Loadkey <> @c_PrevLoadkey) OR
               (@c_Pickzone <> @c_PrevPickzone) OR
@@ -2533,6 +2642,7 @@ BEGIN
             AND TC.LocRoom = @c_TaskType
             GROUP BY CaseID
             HAVING SUM(TC.Qty) + @n_Qty <= @n_PEMaxQty
+            ORDER BY CaseID   --WL04
 
             IF ISNULL(@c_CaseID,'') = ''
             BEGIN
@@ -2557,14 +2667,14 @@ BEGIN
 
          INSERT INTO #TMP_CASEID(Loadkey, SKU, LOC, Pickzone, Qty, ItemClass, LocRoom, CaseID, [Status], SKUGroup
                                , Taskdetailkey)
-         SELECT @c_Loadkey, '', '', @c_Pickzone, @n_Qty, '', @c_TaskType 
+         SELECT @c_Loadkey, @c_SKU, '', @c_Pickzone, @n_Qty, '', @c_TaskType 
               , @c_CaseID, CASE WHEN @n_Qty >= @n_PEMaxQty THEN 'FULL' ELSE 'PARTIAL' END, @c_SKUGroup, ''
 
          SET @c_PrevLoadkey = @c_Loadkey
          SET @c_PrevPickzone = @c_Pickzone
          SET @c_PrevTaskType = @c_TaskType
 
-         FETCH NEXT FROM cur_GenCaseID_3 INTO @c_Loadkey, @c_PickZone, @c_SKUGroup, @c_TaskType, @n_PEMaxQty, @n_Qty
+         FETCH NEXT FROM cur_GenCaseID_3 INTO @c_Loadkey, @c_PickZone, @c_SKUGroup, @c_TaskType, @c_SKU, @n_PEMaxQty, @n_Qty
       END
       CLOSE cur_GenCaseID_3  
       DEALLOCATE cur_GenCaseID_3
@@ -2588,7 +2698,9 @@ BEGIN
    SET @dt_StartTime = GETDATE()
 
    IF @b_Debug = 2
-      SELECT * FROM #TMP_CASEID
+      SELECT T.*, SKU.PackQtyIndicator FROM #TMP_CASEID T
+      LEFT JOIN SKU (NOLOCK) ON T.SKU = SKU.SKU AND SKU.StorerKey = 'NIKECN'
+      ORDER BY T.CASEID, T.Loadkey, T.Pickzone, T.SKU   --WL04
 
    GOTO CONTINUE_SP
 
