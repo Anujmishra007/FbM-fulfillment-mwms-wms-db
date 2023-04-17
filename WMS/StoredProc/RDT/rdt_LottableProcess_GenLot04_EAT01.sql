@@ -1,6 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdt_LottableProcess_GenLot04_EAT01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_LottableProcess_GenLot04_EAT01]
-GO
+
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -16,9 +14,10 @@ GO
 /* Date         Author    Ver.  Purposes                                      */
 /* 29-11-2015   ChewKP    1.0   WMS-3551 Created                              */
 /* 25-03-2020   James     1.1   WMS-12614 Change lot03, 04 retrival (james01) */
+/* 14-04-2022   YeeKung   1.2   WMS-19436 Add new Change (yeekung01)          */
 /******************************************************************************/
 
-CREATE PROCEDURE [RDT].[rdt_LottableProcess_GenLot04_EAT01]
+CREATE OR ALTER PROCEDURE [RDT].[rdt_LottableProcess_GenLot04_EAT01]
     @nMobile          INT
    ,@nFunc            INT
    ,@cLangCode        NVARCHAR( 3)
@@ -127,22 +126,26 @@ BEGIN
          DECLARE @cM1      NVARCHAR( 1)
          DECLARE @cM2      NVARCHAR( 2) = ''
          DECLARE @cYY      NVARCHAR( 4)
-      
+
+         IF RDT.rdtIsValidQTY( SUBSTRING( @cLottable02Value, 2, 2), 1) <> 1    
+         BEGIN      
+            SET @nErrNo = 150152      
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format      
+            GOTO Quit      
+         END      
+
          SET @nY1 = LEFT ( YEAR( GETDATE()), 2 )
 
-         IF LEN( @cLottable02Value) = 7
+         IF LEN( @cLottable02Value) >= 7
             SET @nY2 = SUBSTRING( @cLottable02Value, 2, 2)
-
-         IF LEN( @cLottable02Value) = 8
-            SET @nY2 = SUBSTRING( @cLottable02Value, 3, 2)
 
          SET @cYY = CAST( @nY1 AS NVARCHAR( 2)) + CAST( @nY2 AS NVARCHAR( 2))
 
-         IF LEN( @cLottable02Value) = 7
+         IF LEN( @cLottable02Value) >= 7
             SET @cM1 = SUBSTRING( @cLottable02Value, 4, 1)
       
-         IF LEN( @cLottable02Value) = 8
-            SET @cM1 = SUBSTRING( @cLottable02Value, 5, 1)
+         --IF LEN( @cLottable02Value) = 8
+         --   SET @cM1 = SUBSTRING( @cLottable02Value, 5, 1)
 
          IF RDT.rdtIsValidQTY( @cM1, 1) = 1
             SET @cM2 = '0' + @cM1
@@ -160,12 +163,20 @@ BEGIN
          BEGIN
             SET @nErrNo = 150151
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid Month
+            SET @dLottable04 = CONVERT( NVARCHAR(10), '1911/01/01', 112)
             GOTO Quit
          END
       
          SET @cManufactureDate = @cYY + '/' + @cM2 + '/01'
          SET @cLottable03 = @cManufactureDate
       END
+
+      IF rdt.rdtIsValidDate(@cManufactureDate) = 0    
+      BEGIN      
+         SET @nErrNo = 155056      
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format      
+         GOTO Quit      
+      END 
 
       -- Get Shelf life info
       SELECT @nShelfLife = ShelfLife
