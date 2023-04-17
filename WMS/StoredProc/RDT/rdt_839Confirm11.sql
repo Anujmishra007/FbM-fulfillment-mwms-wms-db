@@ -4,52 +4,49 @@ GO
 SET ANSI_NULLS OFF
 GO  
 /******************************************************************************/  
-/* Store procedure: rdt_839Confirm05                                          */  
+/* Store procedure: rdt_839Confirm11                                          */  
 /* Copyright      : LF Logistics                                              */  
 /*                                                                            */  
 /* Date       Rev  Author     Purposes                                        */  
-/* 2019-08-15 1.0  James      WMS-10172 Created                               */ 
-/* 2020-09-02 1.1  James      WMS-14949 Stamp channel id (james01)            */
-/* 2021-09-27 1.2  James      WMS-18027 Add update orders status (james02)    */
-/* 2022-04-20 1.3  YeeKung    WMS-19311 Add Data capture (yeekung01)          */
+/* 2022-04-16 1.0  YeeKung     WMS-19311 Created                              */
 /******************************************************************************/  
   
-CREATE OR ALTER PROC rdt.rdt_839Confirm05 (  
-    @nMobile         INT  
-   ,@nFunc           INT  
-   ,@cLangCode       NVARCHAR( 3)  
-   ,@nStep           INT  
-   ,@nInputKey       INT  
-   ,@cFacility       NVARCHAR( 5)  
-   ,@cStorerKey      NVARCHAR( 15)  
-   ,@cType           NVARCHAR( 10) -- CONFIRM/SHORT/CLOSE  
-   ,@cPickSlipNo     NVARCHAR( 10)  
-   ,@cPickZone       NVARCHAR( 10)  
-   ,@cDropID         NVARCHAR( 20)  
-   ,@cLOC            NVARCHAR( 10)  
-   ,@cSKU            NVARCHAR( 20)  
-   ,@nQTY            INT  
-   ,@cLottableCode   NVARCHAR( 30)  
-   ,@cLottable01     NVARCHAR( 18)    
-   ,@cLottable02     NVARCHAR( 18)    
-   ,@cLottable03     NVARCHAR( 18)    
-   ,@dLottable04     DATETIME    
-   ,@dLottable05     DATETIME    
-   ,@cLottable06     NVARCHAR( 30)   
-   ,@cLottable07     NVARCHAR( 30)   
-   ,@cLottable08     NVARCHAR( 30)   
-   ,@cLottable09     NVARCHAR( 30)   
-   ,@cLottable10     NVARCHAR( 30)   
-   ,@cLottable11     NVARCHAR( 30)  
-   ,@cLottable12     NVARCHAR( 30)  
-   ,@dLottable13     DATETIME  
-   ,@dLottable14     DATETIME  
-   ,@dLottable15     DATETIME
-   ,@cPackData1      NVARCHAR( 30)
-   ,@cPackData2      NVARCHAR( 30)
-   ,@cPackData3      NVARCHAR( 30)  
-   ,@nErrNo          INT           OUTPUT  
-   ,@cErrMsg         NVARCHAR(250) OUTPUT  
+CREATE OR ALTER PROC rdt.rdt_839Confirm11 (  
+   @nMobile       INT,             
+   @nFunc         INT,             
+   @cLangCode     NVARCHAR( 3),    
+   @nStep         INT,             
+   @nInputKey     INT,             
+   @cFacility     NVARCHAR( 5) ,   
+   @cStorerKey    NVARCHAR( 15),   
+   @cType         NVARCHAR( 10),   
+   @cPickSlipNo   NVARCHAR( 10),   
+   @cPickZone     NVARCHAR( 1),    
+   @cDropID       NVARCHAR( 20),   
+   @cLOC          NVARCHAR( 10),   
+   @cSKU          NVARCHAR( 20),   
+   @nQTY          INT,             
+   @cLottableCode NVARCHAR( 30),   
+   @cLottable01   NVARCHAR( 18),     
+   @cLottable02   NVARCHAR( 18),     
+   @cLottable03   NVARCHAR( 18),     
+   @dLottable04   DATETIME,  
+   @dLottable05   DATETIME,  
+   @cLottable06   NVARCHAR( 30),    
+   @cLottable07   NVARCHAR( 30),    
+   @cLottable08   NVARCHAR( 30),    
+   @cLottable09   NVARCHAR( 30),    
+   @cLottable10   NVARCHAR( 30),    
+   @cLottable11   NVARCHAR( 30),   
+   @cLottable12   NVARCHAR( 30),   
+   @dLottable13   DATETIME,  
+   @dLottable14   DATETIME,  
+   @dLottable15   DATETIME,  
+   @cPackData1    NVARCHAR( 30),
+   @cPackData2    NVARCHAR( 30),
+   @cPackData3    NVARCHAR( 30),
+   @nErrNo        INT           OUTPUT,   
+   @cErrMsg       NVARCHAR(250) OUTPUT    
 )  
 AS  
 BEGIN  
@@ -58,45 +55,46 @@ BEGIN
    SET ANSI_NULLS OFF  
    SET CONCAT_NULL_YIELDS_NULL OFF  
   
-   DECLARE @cSQL        NVARCHAR( MAX)  
-   DECLARE @cSQLParam   NVARCHAR( MAX)  
-   DECLARE @nTranCount  INT  
-   DECLARE @cOrderKey      NVARCHAR( 10)  
-   DECLARE @cLoadKey       NVARCHAR( 10)  
-   DECLARE @cZone          NVARCHAR( 18)  
-   DECLARE @cPickDetailKey NVARCHAR( 18)  
-   DECLARE @cPickConfirmStatus NVARCHAR( 1)  
-   DECLARE @nQTY_Bal       INT  
-   DECLARE @nQTY_PD        INT  
-   DECLARE @bSuccess       INT  
-   DECLARE @curPD          CURSOR  
-   DECLARE @cWhere         NVARCHAR( MAX)  
-   DECLARE @cTempID        NVARCHAR( 20)
-   DECLARE @cID            NVARCHAR( 18)
-   DECLARE @nChannel_ID    BIGINT
-   DECLARE @cUpdOrdStatus  NVARCHAR( 1)
-   DECLARE @cTempOrderKey  NVARCHAR( 10)
-   DECLARE @cTempOrderLineNumber NVARCHAR( 5)
-   
-   DECLARE @tPickDetailKey TABLE ( PickDetailKey  NVARCHAR( 10))
-   
-   SET @cTempID = ''
-   SELECT @cTempID = ISNULL( O_Field12, '')
-   FROM RDT.RDTMOBREC WITH (NOLOCK)
-   WHERE Mobile = @nMobile
-   -- ID     : 99999999
-   SET @cID = RTRIM( LTRIM( SUBSTRING( @cTempID, CHARINDEX( ':', @cTempID) + 1, 18)))
+   DECLARE @nTranCount           INT  
+   DECLARE @cOrderKey            NVARCHAR( 10)  
+   DECLARE @cLoadKey             NVARCHAR( 10)  
+   DECLARE @cZone                NVARCHAR( 18)  
+   DECLARE @cPickDetailKey       NVARCHAR( 18)  
+   DECLARE @cPickConfirmStatus   NVARCHAR( 1)  
+   DECLARE @cRoute               NVARCHAR( 20)  
+   DECLARE @cOrderRefNo          NVARCHAR( 18)
+   DECLARE @cConsigneekey        NVARCHAR( 15)
+   DECLARE @cLabelNo             NVARCHAR( 20)
+   DECLARE @cLabelLine           NVARCHAR( 5)
+   DECLARE @nQTY_Bal             INT  
+   DECLARE @nQTY_PD              INT  
+   DECLARE @bSuccess             INT  
+   DECLARE @nPackQty             INT
+   DECLARE @nTotalPickedQty      INT
+   DECLARE @nTotalPackedQty      INT
+   DECLARE @nCartonNo            INT
+   DECLARE @nPackCfm             INT = 0
+   DECLARE @curPD                CURSOR  
+   DECLARE @curPrint             CURSOR
+   DECLARE @cWhere               NVARCHAR( MAX)  
+   DECLARE @cSQL                 NVARCHAR( MAX)
+   DECLARE @cSQLParam            NVARCHAR( MAX)
+   DECLARE @cPackConfirm         NVARCHAR( 1)
+   DECLARE @cDocType             NVARCHAR( 1)
+   DECLARE @curPDtl              CURSOR 
+
    SET @cOrderKey = ''  
    SET @cLoadKey = ''  
    SET @cZone = ''  
-  
+
    -- Get storer config  
    SET @cPickConfirmStatus = rdt.RDTGetConfig( @nFunc, 'PickConfirmStatus', @cStorerKey)  
    IF @cPickConfirmStatus = '0'  
       SET @cPickConfirmStatus = '5'  
+
+   -- Get storer config  
+   SET @cPackConfirm = rdt.RDTGetConfig( @nFunc, 'PackConfirm', @cStorerKey)  
   
-   SET @cUpdOrdStatus = rdt.RDTGetConfig( @nFunc, 'UpdOrdStatus', @cStorerKey)
-   
    -- For calculation  
    SET @nQTY_Bal = @nQTY  
   
@@ -130,7 +128,6 @@ BEGIN
          '   AND PD.QTY > 0 ' +  
          '   AND PD.Status <> ''4'' ' +  
          '   AND PD.Status < @cPickConfirmStatus ' +  
-           CASE WHEN @cID = '' THEN '' ELSE ' AND PD.ID = @cID ' END +  
            CASE WHEN @cWhere = '' THEN '' ELSE ' AND ' + @cWhere END  
   
    -- Discrete PickSlip  
@@ -146,7 +143,6 @@ BEGIN
          '    AND PD.QTY > 0 ' +  
          '    AND PD.Status <> ''4'' ' +  
          '    AND PD.Status < @cPickConfirmStatus ' +  
-           CASE WHEN @cID = '' THEN '' ELSE ' AND PD.ID = @cID ' END +  
            CASE WHEN @cWhere = '' THEN '' ELSE ' AND ' + @cWhere END  
   
    -- Conso PickSlip  
@@ -163,7 +159,6 @@ BEGIN
          '    AND PD.QTY > 0 ' +  
          '    AND PD.Status <> ''4'' ' +  
          '    AND PD.Status < @cPickConfirmStatus ' +  
-           CASE WHEN @cID = '' THEN '' ELSE ' AND PD.ID = @cID ' END +  
            CASE WHEN @cWhere = '' THEN '' ELSE ' AND ' + @cWhere END  
   
    -- Custom PickSlip  
@@ -179,7 +174,6 @@ BEGIN
          '    AND PD.QTY > 0 ' +  
          '    AND PD.Status <> ''4'' ' +  
          '    AND PD.Status < @cPickConfirmStatus ' +  
-           CASE WHEN @cID = '' THEN '' ELSE ' AND PD.ID = @cID ' END +  
            CASE WHEN @cWhere = '' THEN '' ELSE ' AND ' + @cWhere END  
   
    -- Open cursor  
@@ -196,7 +190,6 @@ BEGIN
       ' @cLOC        NVARCHAR( 10), ' +   
       ' @cDropID     NVARCHAR( 20), ' +    
       ' @cSKU        NVARCHAR( 20), ' +   
-      ' @cID         NVARCHAR( 18), ' +   
       ' @cPickConfirmStatus NVARCHAR( 1), ' +   
       ' @cLottable01 NVARCHAR( 18), ' +   
       ' @cLottable02 NVARCHAR( 18), ' +   
@@ -214,7 +207,7 @@ BEGIN
       ' @dLottable14 DATETIME,      ' +   
       ' @dLottable15 DATETIME       '  
   
-   EXEC sp_ExecuteSQL @cSQL, @cSQLParam, @curPD OUTPUT, @cPickSlipNo, @cOrderKey, @cLoadKey, @cLOC, @cDropID, @cSKU, @cID, @cPickConfirmStatus,   
+   EXEC sp_ExecuteSQL @cSQL, @cSQLParam, @curPD OUTPUT, @cPickSlipNo, @cOrderKey, @cLoadKey, @cLOC, @cDropID, @cSKU, @cPickConfirmStatus,   
       @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,  
       @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,  
       @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15  
@@ -222,7 +215,7 @@ BEGIN
    -- Handling transaction  
    SET @nTranCount = @@TRANCOUNT  
    BEGIN TRAN  -- Begin our own transaction  
-   SAVE TRAN rdt_PickPiece_Confirm -- For rollback or commit only our own transaction  
+   SAVE TRAN rdt_839Confirm11 -- For rollback or commit only our own transaction  
   
    -- Loop PickDetail  
    FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD  
@@ -240,7 +233,7 @@ BEGIN
          WHERE PickDetailKey = @cPickDetailKey  
          IF @@ERROR <> 0  
          BEGIN  
-            SET @nErrNo = 143201  
+            SET @nErrNo = 186201  
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail  
             GOTO RollBackTran  
          END  
@@ -260,7 +253,7 @@ BEGIN
          WHERE PickDetailKey = @cPickDetailKey  
          IF @@ERROR <> 0  
          BEGIN  
-            SET @nErrNo = 143202  
+            SET @nErrNo = 186202  
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail  
             GOTO RollBackTran  
          END  
@@ -286,7 +279,7 @@ BEGIN
                WHERE PickDetailKey = @cPickDetailKey  
                IF @@ERROR <> 0  
                BEGIN  
-                  SET @nErrNo = 143203  
+                  SET @nErrNo = 186202  
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail  
                   GOTO RollBackTran  
                END  
@@ -306,7 +299,7 @@ BEGIN
                @cErrMsg           OUTPUT  
             IF @bSuccess <> 1  
             BEGIN  
-               SET @nErrNo = 143204  
+               SET @nErrNo = 186204  
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- nspg_GetKey  
                GOTO RollBackTran  
             END  
@@ -317,18 +310,26 @@ BEGIN
                UOMQTY, QTYMoved, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, CartonType,  
                ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,  
                EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes,  
-               PickDetailKey, Status, QTY, TrafficCop, OptimizeCop, Channel_ID)  
+               PickDetailKey,  
+               Status,  
+               QTY,  
+               TrafficCop,  
+               OptimizeCop)  
             SELECT  
                CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot, StorerKey, SKU, AltSku, UOM,  
                UOMQTY, QTYMoved, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup,  
                CartonType, ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,  
                EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes,  
-               @cNewPickDetailKey, Status, @nQTY_PD - @nQTY_Bal, NULL, '1', Channel_ID  -- (james01)
+               @cNewPickDetailKey,  
+               Status,  
+               @nQTY_PD - @nQTY_Bal, -- QTY  
+               NULL, -- TrafficCop  
+               '1'   -- OptimizeCop  
             FROM dbo.PickDetail WITH (NOLOCK)  
             WHERE PickDetailKey = @cPickDetailKey  
             IF @@ERROR <> 0  
             BEGIN  
-               SET @nErrNo = 143205  
+               SET @nErrNo = 186205  
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- INS PKDtl Fail  
                GOTO RollBackTran  
             END  
@@ -343,7 +344,7 @@ BEGIN
                WHERE PickDetailKey = @cPickDetailKey  
                IF @@ERROR <> 0  
                BEGIN  
-                  SET @nErrNo = 143206  
+                  SET @nErrNo = 186206  
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- INS RefKeyFail  
                   GOTO RollBackTran  
                END  
@@ -358,7 +359,7 @@ BEGIN
             WHERE PickDetailKey = @cPickDetailKey  
             IF @@ERROR <> 0  
             BEGIN  
-               SET @nErrNo = 143207  
+               SET @nErrNo = 186207  
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail  
                GOTO RollBackTran  
             END  
@@ -372,7 +373,7 @@ BEGIN
             WHERE PickDetailKey = @cPickDetailKey  
             IF @@ERROR <> 0  
             BEGIN  
-               SET @nErrNo = 143208  
+               SET @nErrNo = 186208  
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail  
                GOTO RollBackTran  
             END  
@@ -390,7 +391,7 @@ BEGIN
                WHERE PickDetailKey = @cNewPickDetailKey
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 143209
+                  SET @nErrNo = 186209
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
                   GOTO RollBackTran
                END
@@ -400,74 +401,252 @@ BEGIN
          END  
       END  
   
-      INSERT INTO @tPickDetailKey (PickDetailKey) VALUES (@cPickDetailKey)
-      
       FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD  
    END  
-   
-   IF @cUpdOrdStatus = '1'
-   BEGIN
-      DECLARE @curUpdOrdStatus  CURSOR
-      DECLARE @curUpdOrdDtlStatus   CURSOR
-      
-      SET @curUpdOrdStatus = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-      SELECT DISTINCT OrderKey
-      FROM @tPickDetailKey t
-      JOIN dbo.PickDetail PD WITH (NOLOCK) ON ( t.PickDetailKey = PD.PickDetailKey)
-      OPEN @curUpdOrdStatus
-      FETCH NEXT FROM @curUpdOrdStatus INTO @cTempOrderKey
-      WHILE @@FETCH_STATUS = 0
-      BEGIN
-         IF NOT EXISTS ( SELECT 1 FROM dbo.PickDetail WITH (NOLOCK)
-                         WHERE OrderKey = @cTempOrderKey
-                         AND   Qty > 0
-                         AND   [Status] <> '4'
-                         AND   [Status] < @cPickConfirmStatus )
-         BEGIN
-            SET @curUpdOrdDtlStatus = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-            SELECT OrderLineNumber
-            FROM dbo.ORDERDETAIL WITH (NOLOCK)
-            WHERE OrderKey = @cTempOrderKey
-            OPEN @curUpdOrdDtlStatus
-            FETCH NEXT FROM @curUpdOrdDtlStatus INTO @cTempOrderLineNumber
-            WHILE @@FETCH_STATUS = 0
-            BEGIN
-               UPDATE dbo.ORDERDETAIL SET 
-                  STATUS = @cPickConfirmStatus,
-                  EditWho = SUSER_SNAME(),
-                  EditDate = GETDATE()
-               WHERE OrderKey = @cTempOrderKey
-               AND   OrderLineNumber = @cTempOrderLineNumber
-               
-               IF @@ERROR <> 0
-               BEGIN
-                  SET @nErrNo = 143210
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD OrdDtl Fail
-                  GOTO RollBackTran
-               END
-               
-               FETCH NEXT FROM @curUpdOrdDtlStatus INTO @cTempOrderLineNumber
-            END
 
-            UPDATE dbo.ORDERS SET 
-               STATUS = @cPickConfirmStatus,
-               EditWho = SUSER_SNAME(),
-               EditDate = GETDATE()
-            WHERE OrderKey = @cTempOrderKey
-               
+   IF ISNULL(@cOrderKey,'') =''
+   BEGIN
+      -- Get orderkey
+      SELECT @cOrderKey = OrderKey
+      FROM dbo.pickdetail WITH (NOLOCK)  
+      WHERE pickslipno = @cPickSlipNo
+         AND storerkey=@cstorerkey
+
+      SELECT @cDocType =DocType
+      FROM ORDERS (NOLOCK)
+      WHERE Orderkey=@cOrderKey
+      AND storerkey=@cstorerkey
+   END
+
+   IF @cDocType<>'E'
+   BEGIN
+
+      SET @nPackQty = @nQty 
+
+      -- Prevent overpacked
+      SET @nTotalPickedQty = 0 
+      SELECT @nTotalPickedQty = ISNULL(SUM(QTY), 0) 
+      FROM dbo.PickDetail WITH (NOLOCK)
+      WHERE StorerKey = @cStorerKey
+      AND   OrderKey = @cOrderKey
+      AND   SKU = @cSKU
+      AND   [STATUS] <= @cPickConfirmStatus 
+
+      SET @nTotalPackedQty = 0 
+      SELECT @nTotalPackedQty = ISNULL(SUM(QTY), 0) 
+      FROM dbo.PackDetail WITH (NOLOCK)
+      WHERE StorerKey = @cStorerKey
+      AND   PickSlipNo = @cPickSlipNo
+      AND   SKU = @cSKU
+            
+      IF (@nTotalPackedQty + @nPackQty) > @nTotalPickedQty 
+      BEGIN
+         SET @nErrNo = 186210
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'SKU Overpacked'
+         GOTO RollBackTran
+      END
+            
+      -- Same DropID + PickSlipNo will group SKU into a carton. 1 carton could be multi sku
+      IF NOT EXISTS (SELECT 1 FROM dbo.PackDetail WITH (NOLOCK) 
+                     WHERE StorerKey = @cStorerKey
+                     AND   PickSlipNo = @cPickSlipNo
+                     AND   DropID = @cDropID
+                     AND   lottablevalue=@cPackData1)
+      BEGIN
+         IF NOT EXISTS (SELECT 1 FROM dbo.PackHeader WITH (NOLOCK) WHERE Pickslipno = @cPickSlipNo)
+         BEGIN
+   
+            INSERT INTO dbo.PackHeader
+            ( OrderKey,  Loadkey, StorerKey, PickSlipNo)
+            VALUES
+            ( @cOrderKey, @cLoadKey, @cStorerKey, @cPickSlipNo)
+
             IF @@ERROR <> 0
             BEGIN
-               SET @nErrNo = 143211
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD OrdHdr Fail
+               SET @nErrNo = 186211
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'InsPHdrFail'
+               GOTO RollBackTran
+            END 
+         END
+
+         SET @nCartonNo = 0
+         SET @cLabelNo = ''
+
+         EXECUTE dbo.nsp_GenLabelNo
+            '',
+            @cStorerKey,
+            @c_labelno     = @cLabelNo    OUTPUT,
+            @n_cartonno    = @nCartonNo   OUTPUT,
+            @c_button      = '',
+            @b_success     = @bSuccess    OUTPUT,
+            @n_err         = @nErrNo      OUTPUT,
+            @c_errmsg      = @cErrMsg     OUTPUT
+
+         IF @bSuccess <> 1
+         BEGIN
+            SET @nErrNo = 186212
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'GenLabelFail'
+            GOTO RollBackTran
+         END
+
+         SELECT TOP 1 @cPickDetailKey=pickdetailkey
+         FROM pickdetail (Nolock)
+         where orderkey=@cOrderKey
+            AND storerkey=@cstorerkey
+            AND sku=@csku
+            AND status=@cPickConfirmStatus
+         order by editdate desc;
+
+         INSERT INTO dbo.PackDetail
+            (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, Refno, AddWho, AddDate, EditWho, EditDate, DropID,lottablevalue)
+         VALUES
+            (@cPickSlipNo, 0, @cLabelNo, '00000', @cStorerKey, @cSku, @nPackQty,
+            @cPickDetailKey, 'rdt.' + sUser_sName(), GETDATE(), 'rdt.' + sUser_sName(), GETDATE(), @cDropID,@cPackData1)
+
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 186213
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'InsPackDtlFail'
+            GOTO RollBackTran
+         END 
+      END -- DropID not exists
+      ELSE
+      BEGIN
+         IF NOT EXISTS (SELECT 1 FROM dbo.PackDetail WITH (NOLOCK) 
+         WHERE StorerKey = @cStorerKey
+         AND   PickSlipNo = @cPickSlipNo
+         AND   DropID = @cDropID
+         AND   SKU = @cSKU)
+         BEGIN
+            SET @nCartonNo = 0
+            SET @cLabelNo = ''
+
+            SELECT @nCartonNo = CartonNo, @cLabelNo = LabelNo 
+            FROM dbo.PackDetail WITH (NOLOCK)
+            WHERE Pickslipno = @cPickSlipNo
+            AND   StorerKey = @cStorerKey
+            AND   DropID = @cDropID
+
+            SELECT TOP 1 @cPickDetailKey=pickdetailkey
+            FROM pickdetail (Nolock)
+            where orderkey=@cOrderKey
+               AND storerkey=@cstorerkey
+               AND sku=@csku
+               AND status=@cPickConfirmStatus
+            order by editdate desc;
+
+            SELECT @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
+            FROM dbo.PackDetail WITH (NOLOCK)
+            WHERE Pickslipno = @cPickSlipNo
+            AND   CartonNo = @nCartonNo
+            AND   DropID = @cDropID
+
+            INSERT INTO dbo.PackDetail
+               (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, Refno, AddWho, AddDate, EditWho, EditDate, DropID,LOTTABLEVALUE)
+            VALUES
+               (@cPickSlipNo, @nCartonNo, @cLabelNo, @cLabelLine, @cStorerKey, @cSku, @nPackQty,
+               @cPickDetailKey, 'rdt.' + sUser_sName(), GETDATE(), 'rdt.' + sUser_sName(), GETDATE(), @cDropID,@cPackData1)
+
+            IF @@ERROR <> 0
+            BEGIN
+               SET @nErrNo = 186214
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'InsPackDtlFail'
+               GOTO RollBackTran
+            END 
+         END   -- DropID exists but SKU not exists (insert new line with same cartonno)
+         ELSE
+         BEGIN
+            UPDATE dbo.PackDetail WITH (ROWLOCK) SET
+               QTY = QTY + @nPackQty,
+               EditWho = SUSER_SNAME(),
+               EditDate = GETDATE()
+            WHERE StorerKey = @cStorerKey
+            AND   PickSlipNo = @cPickSlipNo
+            AND   DropID = @cDropID
+            AND   SKU = @cSKU
+
+            IF @@ERROR <> 0
+            BEGIN
+               SET @nErrNo = 186215
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UpdPackDtlFail'
                GOTO RollBackTran
             END
-            
+
+            SELECT TOP 1 @cLabelNo = LabelNo 
+            FROM dbo.PackDetail WITH (NOLOCK)
+            WHERE Pickslipno = @cPickSlipNo
+            AND   StorerKey = @cStorerKey
+            AND   DropID = @cDropID
+            AND   SKU = @cSKU
+            ORDER BY 1
+         END   -- DropID exists and SKU exists (update qty only)
+      END
+
+      -- Check pick = pack then pack confirm
+      SET @nTotalPickedQty = 0 
+      SELECT @nTotalPickedQty = ISNULL(SUM(QTY), 0) 
+      FROM dbo.PickDetail WITH (NOLOCK)
+      WHERE StorerKey = @cStorerKey
+      AND   OrderKey = @cOrderKey
+      AND   QTY > 0
+      AND   [STATUS] <> '4' 
+      AND   [STATUS] < '9'
+
+      SET @nTotalPackedQty = 0 
+      SELECT @nTotalPackedQty = ISNULL(SUM(QTY), 0) 
+      FROM dbo.PackDetail WITH (NOLOCK)
+      WHERE StorerKey = @cStorerKey
+      AND   PickSlipNo = @cPickSlipNo
+
+      IF @nTotalPickedQty = @nTotalPackedQty
+      BEGIN
+         DECLARE @cLottablevalue NVARCHAR(20)
+          
+         SET @curPDtl = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT LPD.refno,
+                LPD.labelno,
+                LPD.Lottablevalue
+         FROM dbo.PackDetail LPD WITH (NOLOCK)     
+         WHERE pickslipno= @cPickSlipNo   
+
+         OPEN @curPDtl
+         -- Loop PickDetail    
+         FETCH NEXT FROM @curPDtl INTO @cPickDetailKey,@cLabelNo,@cLottablevalue  
+         WHILE @@FETCH_STATUS = 0    
+         BEGIN  
+            UPDATE PICKDETAIL
+            set dropid=@cLabelNo,
+                altsku= @cLottablevalue
+            WHERE pickdetailkey=@cPickDetailKey
+
+            IF @@ERROR <> 0
+            BEGIN        
+               SET @nErrNo = 186216        
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PackCfm Fail    
+               GOTO RollBackTran  
+            END 
+
+            FETCH NEXT FROM @curPDtl INTO @cPickDetailKey,@cLabelNo,@cLottablevalue 
          END
-         FETCH NEXT FROM @curUpdOrdStatus INTO @cTempOrderKey
+         CLOSE @curPDtl
+         DEALLOCATE @curPDtl
+
+         UPDATE dbo.PACKHEADER SET 
+            [STATUS] = '9' 
+         WHERE PickSlipNo = @cPickSlipNo
+
+         IF @@ERROR <> 0
+         BEGIN        
+            SET @nErrNo = 186216        
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PackCfm Fail    
+            GOTO RollBackTran  
+         END 
+         
+         SET @nPackCfm = 1
       END
    END
    
-   COMMIT TRAN rdt_PickPiece_Confirm  
+   COMMIT TRAN rdt_839Confirm11  
   
    DECLARE @cUserName NVARCHAR( 18)  
    SET @cUserName = SUSER_SNAME()  
@@ -485,17 +664,14 @@ BEGIN
       @cRefNo1       = @cType,  
       @cPickSlipNo   = @cPickSlipNo,  
       @cPickZone     = @cPickZone,   
-      @cDropID       = @cDropID,
-      @cID           = @cID
-  
+      @cDropID       = @cDropID  
    GOTO Quit  
   
 RollBackTran:  
-   ROLLBACK TRAN rdt_PickPiece_Confirm -- Only rollback change made here  
+   ROLLBACK TRAN rdt_839Confirm11 -- Only rollback change made here  
 Quit:  
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
       COMMIT TRAN  
---INSERT INTO TraceInfo (TraceName, TimeIn, Col1, Col2, Col3, Col4, Col5) VALUES ('839', GETDATE(), @cID, @cOrderKey, @cLoc, @cSKU, @cPickConfirmStatus)
 END  
 GO
 
@@ -504,5 +680,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON RDT.rdt_839Confirm05 TO NSQL
+GRANT EXECUTE ON RDT.rdt_839Confirm11 TO NSQL
 GO

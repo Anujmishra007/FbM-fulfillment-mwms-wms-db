@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdt_839Confirm09]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdt_839Confirm09]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -11,10 +8,11 @@ GO
 /* Copyright      : LF Logistics                                              */    
 /*                                                                            */    
 /* Date       Rev  Author     Purposes                                        */    
-/* 2021-10-28 1.0  James      WMS-18174. Created                              */    
+/* 2021-10-28 1.0  James      WMS-18174. Created                              */ 
+/* 2022-04-20 1.1  YeeKung    WMS-19311 Add Data capture (yeekung01)          */
 /******************************************************************************/    
     
-CREATE PROC rdt.rdt_839Confirm09 (    
+CREATE OR ALTER PROC rdt.rdt_839Confirm09 (    
    @nMobile       INT,               
    @nFunc         INT,               
    @cLangCode     NVARCHAR( 3),      
@@ -44,7 +42,10 @@ CREATE PROC rdt.rdt_839Confirm09 (
    @cLottable12   NVARCHAR( 30),     
    @dLottable13   DATETIME,    
    @dLottable14   DATETIME,    
-   @dLottable15   DATETIME,    
+   @dLottable15   DATETIME,
+   @cPackData1    NVARCHAR( 30),
+   @cPackData2    NVARCHAR( 30),
+   @cPackData3    NVARCHAR( 30),      
    @nErrNo        INT           OUTPUT,     
    @cErrMsg       NVARCHAR(250) OUTPUT      
 )    

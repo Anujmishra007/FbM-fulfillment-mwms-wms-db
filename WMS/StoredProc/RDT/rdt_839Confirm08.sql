@@ -1,6 +1,3 @@
-IF EXISTS ( SELECT * FROM sys.objects WHERE  object_id = OBJECT_ID(N'[RDT].[rdt_839Confirm08]') 
-            AND OBJECTPROPERTY(object_id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [RDT].[rdt_839Confirm08]
 
 GO
 
@@ -14,10 +11,11 @@ GO
 /* Copyright      : LF Logistics                                              */    
 /*                                                                            */    
 /* Date       Rev  Author     Purposes                                        */    
-/* 27-08-2021 1.0  YeeKung    WMS17489 Created                                */    
+/* 27-08-2021 1.0  YeeKung    WMS17489 Created                                */
+/* 20-04-2022 1.1  YeeKung    WMS-19311 Add Data capture (yeekung01)          */
 /******************************************************************************/    
     
-CREATE PROC rdt. rdt_839Confirm08 (    
+CREATE OR ALTER PROC rdt. rdt_839Confirm08 (    
     @nMobile         INT    
    ,@nFunc           INT    
    ,@cLangCode       NVARCHAR( 3)    
@@ -47,7 +45,10 @@ CREATE PROC rdt. rdt_839Confirm08 (
    ,@cLottable12     NVARCHAR( 30)    
    ,@dLottable13     DATETIME    
    ,@dLottable14     DATETIME    
-   ,@dLottable15     DATETIME    
+   ,@dLottable15     DATETIME
+   ,@cPackData1      NVARCHAR( 30)
+   ,@cPackData2      NVARCHAR( 30)
+   ,@cPackData3      NVARCHAR( 30)       
    ,@nErrNo          INT           OUTPUT    
    ,@cErrMsg         NVARCHAR(250) OUTPUT    
 )    

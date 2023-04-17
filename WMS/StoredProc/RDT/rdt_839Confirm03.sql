@@ -1,6 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_839Confirm03]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_839Confirm03]
-GO
+
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -13,9 +11,10 @@ GO
 /*                                                                            */
 /* Date       Rev  Author     Purposes                                        */
 /* 26-06-2018 1.0  James      WMS5057 Created                                 */
+/* 20-04-2022 1.1  YeeKung    WMS-19311 Add Data capture (yeekung01)          */
 /******************************************************************************/
 
-CREATE PROC rdt.rdt_839Confirm03 (
+CREATE OR ALTER PROC rdt.rdt_839Confirm03 (
     @nMobile         INT
    ,@nFunc           INT
    ,@cLangCode       NVARCHAR( 3)
@@ -46,6 +45,9 @@ CREATE PROC rdt.rdt_839Confirm03 (
    ,@dLottable13     DATETIME
    ,@dLottable14     DATETIME
    ,@dLottable15     DATETIME
+   ,@cPackData1      NVARCHAR( 30)
+   ,@cPackData2      NVARCHAR( 30)
+   ,@cPackData3      NVARCHAR( 30)
    ,@nErrNo          INT           OUTPUT
    ,@cErrMsg         NVARCHAR(250) OUTPUT
 )

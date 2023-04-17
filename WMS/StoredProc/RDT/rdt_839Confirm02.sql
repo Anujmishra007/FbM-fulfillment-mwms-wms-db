@@ -1,6 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[RDT].[rdt_839Confirm02]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [RDT].[rdt_839Confirm02]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -15,8 +12,9 @@ GO
 /* Date       Rev  Author  Purposes                                        */  
 /* 2018-04-30 1.0  ChewKP  WMS-4542 Created                                */  
 /* 2021-06-30 1.1  James   WMS-17406 Add rdt_STD_EventLog (james01)        */
+/* 2022-04-20 1.2  YeeKung WMS-19311 Add Data capture (yeekung01)          */
 /***************************************************************************/  
-CREATE PROC [RDT].[rdt_839Confirm02](  
+CREATE OR ALTER PROC [RDT].[rdt_839Confirm02](  
    @nMobile       INT,             
    @nFunc         INT,             
    @cLangCode     NVARCHAR( 3),    
@@ -47,6 +45,9 @@ CREATE PROC [RDT].[rdt_839Confirm02](
    @dLottable13   DATETIME,  
    @dLottable14   DATETIME,  
    @dLottable15   DATETIME,  
+   @cPackData1    NVARCHAR( 30),
+   @cPackData2    NVARCHAR( 30),
+   @cPackData3    NVARCHAR( 30),
    @nErrNo        INT           OUTPUT,   
    @cErrMsg       NVARCHAR(250) OUTPUT    
      

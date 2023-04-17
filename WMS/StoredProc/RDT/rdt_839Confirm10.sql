@@ -9,6 +9,7 @@ GO
 /*                                                                            */  
 /* Date       Rev  Author     Purposes                                        */  
 /* 2021-04-26 1.0  yeekung    WMS-16839 Created                               */ 
+/* 2022-04-20 1.1  YeeKung    WMS-19311 Add Data capture (yeekung01)          */
 /******************************************************************************/  
   
 CREATE OR ALTER PROC rdt.rdt_839Confirm10 (  
@@ -41,7 +42,10 @@ CREATE OR ALTER PROC rdt.rdt_839Confirm10 (
    ,@cLottable12     NVARCHAR( 30)  
    ,@dLottable13     DATETIME  
    ,@dLottable14     DATETIME  
-   ,@dLottable15     DATETIME  
+   ,@dLottable15     DATETIME
+   ,@cPackData1      NVARCHAR( 30)
+   ,@cPackData2      NVARCHAR( 30)
+   ,@cPackData3      NVARCHAR( 30)    
    ,@nErrNo          INT           OUTPUT  
    ,@cErrMsg         NVARCHAR(250) OUTPUT  
 )  

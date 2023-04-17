@@ -13,6 +13,7 @@ GO
 /* 2020-12-14 1.2  Chermaine  WMS-15814 Add eventLog (cc01)                   */
 /* 2021-12-20 1.3  James      WMS-18004 Stamp wording Bal when user choose    */
 /*                            balance pick later to unpicked line (james01)   */
+/* 20-04-2022 1.4  YeeKung    WMS-19311 Add Data capture (yeekung01)          */
 /******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_839Confirm04](
     @nMobile        INT
@@ -44,7 +45,10 @@ CREATE OR ALTER PROC [RDT].[rdt_839Confirm04](
    ,@cLottable12     NVARCHAR( 30)
    ,@dLottable13     DATETIME
    ,@dLottable14     DATETIME
-   ,@dLottable15     DATETIME   
+   ,@dLottable15     DATETIME  
+   ,@cPackData1      NVARCHAR( 30)
+   ,@cPackData2      NVARCHAR( 30)
+   ,@cPackData3      NVARCHAR( 30)   
    ,@nErrNo         INT           OUTPUT
    ,@cErrMsg        NVARCHAR(250) OUTPUT
 ) AS
