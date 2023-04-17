@@ -1,11 +1,8 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[RDT].[rdt_PalletReceive_Confirm]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdt_PalletReceive_Confirm]
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /******************************************************************************/
 /* Store procedure: rdt_PalletReceive_Confirm                                 */
@@ -15,9 +12,10 @@ GO
 /*                                                                            */
 /* Date       Rev  Author     Purposes                                        */
 /* 2015-08-18 1.0  Ung        SOS347636 Created                               */
+/* 2023-03-28 1.1  James      WMS-21934 Add DefaultToLoc config (james01)     */
 /******************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_PalletReceive_Confirm (
+CREATE OR ALTER PROCEDURE [RDT].[rdt_PalletReceive_Confirm] (
    @nFunc          INT,
    @nMobile        INT,
    @cLangCode      NVARCHAR(  3),
@@ -36,7 +34,7 @@ CREATE PROCEDURE rdt.rdt_PalletReceive_Confirm (
 
    DECLARE @cSQL         NVARCHAR( MAX)
    DECLARE @cSQLParam    NVARCHAR( MAX)
-   
+
    DECLARE @cToLOC       NVARCHAR( 10)
    DECLARE @cSKU         NVARCHAR( 20)
    DECLARE @cUOM         NVARCHAR( 10)
@@ -57,12 +55,17 @@ CREATE PROCEDURE rdt.rdt_PalletReceive_Confirm (
    DECLARE @dLottable14  DATETIME
    DECLARE @dLottable15  DATETIME
    DECLARE @cReceiptLineNumberOutput NVARCHAR( 5)
+   DECLARE @cDefaultToLoc  NVARCHAR( 10)
    
    -- Get storer config
    DECLARE @cRcptConfirmSP NVARCHAR( 20)
    SET @cRcptConfirmSP = rdt.RDTGetConfig( @nFunc, 'ReceiptConfirm_SP', @cStorerKey)
    IF @cRcptConfirmSP = '0'
       SET @cRcptConfirmSP = ''
+
+   SET @cDefaultToLoc = rdt.RDTGetConfig( @nFunc, 'DefaultToLoc', @cStorerKey)
+   IF @cDefaultToLoc = '0'
+      SET @cDefaultToLoc = ''
 
    -- Custom receiving logic
    IF @cRcptConfirmSP <> ''
@@ -80,20 +83,20 @@ CREATE PROCEDURE rdt.rdt_PalletReceive_Confirm (
          '@nErrNo       INT           OUTPUT, ' +
          '@cErrMsg      NVARCHAR( 20) OUTPUT  '
       EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-         @nFunc, @nMobile, @cLangCode, @cStorerKey, @cFacility, @cReceiptKey, @cToID, @nErrNo OUTPUT, @cErrMsg OUTPUT 
+         @nFunc, @nMobile, @cLangCode, @cStorerKey, @cFacility, @cReceiptKey, @cToID, @nErrNo OUTPUT, @cErrMsg OUTPUT
       GOTO Quit
    END
-   
+
    -- Handling transaction
    DECLARE @nTranCount INT
    SET @nTranCount = @@TRANCOUNT
    BEGIN TRAN  -- Begin our own transaction
    SAVE TRAN rdt_PalletReceive_Confirm -- For rollback or commit only our own transaction
-   
+
    DECLARE @curReceipt CURSOR
    SET @curReceipt = CURSOR FOR
-      SELECT 
-         ToLOC, SKU, QTYExpected, 
+      SELECT
+         ToLOC, SKU, QTYExpected,
          Lottable01, Lottable02, Lottable03, Lottable04, Lottable05,
          Lottable06, Lottable07, Lottable08, Lottable09, Lottable10,
          Lottable11, Lottable12, Lottable13, Lottable14, Lottable15
@@ -103,20 +106,22 @@ CREATE PROCEDURE rdt.rdt_PalletReceive_Confirm (
          AND BeforeReceivedQTY = 0
       ORDER BY ReceiptLineNumber
    OPEN @curReceipt
-   FETCH NEXT FROM @curReceipt INTO @cToLOC, @cSKU, @nQTY, 
-      @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, 
-      @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, 
-      @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15 
-   
+   FETCH NEXT FROM @curReceipt INTO @cToLOC, @cSKU, @nQTY,
+      @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+      @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+      @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15
+
    WHILE @@FETCH_STATUS = 0
    BEGIN
+   	IF @cDefaultToLoc <> '' SET @cToLOC = @cDefaultToLoc
+   	
       -- Get SKU info
-      SELECT @cUOM = Pack.PackUOM3 
-      FROM SKU WITH (NOLOCK) 
+      SELECT @cUOM = Pack.PackUOM3
+      FROM SKU WITH (NOLOCK)
          JOIN Pack WITH (NOLOCK) ON (SKU.PackKey = Pack.PackKey)
-      WHERE StorerKey = @cStorerKey 
+      WHERE StorerKey = @cStorerKey
          AND SKU = @cSKU
-   
+
       EXEC rdt.rdt_Receive_V7
          @nFunc         = @nFunc,
          @nMobile       = @nMobile,
@@ -153,31 +158,25 @@ CREATE PROCEDURE rdt.rdt_PalletReceive_Confirm (
          @dLottable15   = @dLottable15,
          @nNOPOFlag     = 1,
          @cConditionCode = 'OK',
-         @cSubreasonCode = '', 
+         @cSubreasonCode = '',
          @cReceiptLineNumberOutput = @cReceiptLineNumberOutput OUTPUT
       IF @nErrNo <> 0
          GOTO RollBackTran
-            
-      FETCH NEXT FROM @curReceipt INTO @cToLOC, @cSKU, @nQTY, 
-         @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, 
-         @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, 
-         @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15 
+
+      FETCH NEXT FROM @curReceipt INTO @cToLOC, @cSKU, @nQTY,
+         @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+         @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+         @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15
    END
 
 GOTO Quit
 
-RollBackTran:  
-   ROLLBACK TRAN rdt_PalletReceive_Confirm 
-Fail:  
-Quit:  
-   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
-      COMMIT TRAN  
+RollBackTran:
+   ROLLBACK TRAN rdt_PalletReceive_Confirm
+Fail:
+Quit:
+   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+      COMMIT TRAN
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXEC ON RDT.rdt_PalletReceive_Confirm TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_PalletReceive_Confirm] TO [NSQL]
 GO

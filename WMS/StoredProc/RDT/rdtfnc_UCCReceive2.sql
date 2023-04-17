@@ -17,6 +17,7 @@ GO
 /* 09-Aug-2021  1.2  James    WMS-17614 Add ExtendedInfoSP (james01)    */
 /* 11-Apr-2023  1.3  James    WMS-22200 Add config not allow SKU in     */
 /*                            carton to be overreceived (james02)       */
+/* 17-Apr-2023  1.4  James    Bug fix on lottable receiving (james03)   */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_UCCReceive2] (
@@ -1176,7 +1177,7 @@ BEGIN
          AND   R.ReceiptKey = @cReceiptKey
          AND   (( @cCartonIDOnRcptDetail = '1' AND RD.UserDefine01 = @cCartonID) OR ( R.UserDefine01 = @cCartonID))
          AND   RD.SKU = @cSKU2Receive
-         AND   RD.BeforeReceivedQty > 0
+         --AND   RD.BeforeReceivedQty > 0 (james03)
 
          EXEC rdt.rdt_UCCReceive2_Confirm
             @nFunc         = @nFunc,

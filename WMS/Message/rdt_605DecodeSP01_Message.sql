@@ -1,0 +1,6 @@
+--rdt_605DecodeSP01
+execute rdt.rdtDropMsg 198251 , 198300
+
+execute rdt.rdtAddMsg 198251, 10, '198251 Stamp PID Err', 'us_english', 605
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 198251 AND 198300
