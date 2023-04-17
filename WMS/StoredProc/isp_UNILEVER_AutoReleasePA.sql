@@ -14,7 +14,7 @@ GO
 /* Called By: SQL Backend Job every 5 minutes                              */
 /*                                                                         */
 /*                                                                         */
-/* PVCS Version: 1.2                                                       */
+/* PVCS Version: 1.3                                                       */
 /*                                                                         */
 /* Version: 7.0                                                            */
 /*                                                                         */
@@ -27,6 +27,7 @@ GO
 /*                            label (WL01)                                 */
 /* 01-Mar-2023  WLChooi 1.2   WMS-21739 Filter out old ASN and skip print  */
 /*                            if user not found (WL02)                     */
+/* 22-Mar-2023  WLChooi 1.3   WMS-21739 Continue despite error (WL03)      */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_UNILEVER_AutoReleasePA]
 AS
@@ -90,12 +91,15 @@ BEGIN
                                 @n_err               = @n_err      OUTPUT,        
                                 @c_errmsg            = @c_errmsg   OUTPUT,
                                 @c_ReceiptLineNumber = @c_ReceiptLineNumber
-
+         
+         --WL03 S
          IF @b_Success <> 1
          BEGIN
-            SELECT @n_continue = 3
-            GOTO QUIT_SP
+            --SELECT @n_continue = 3
+            --GOTO QUIT_SP
+            GOTO NEXT_LOOP
          END  
+         --WL03 E
 
          --WL02 S
          IF NOT EXISTS (SELECT 1
