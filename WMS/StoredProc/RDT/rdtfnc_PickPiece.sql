@@ -5308,5 +5308,13 @@ BEGIN
 
    WHERE Mobile = @nMobile
 END
+GO    
 
+SET QUOTED_IDENTIFIER OFF  
+GO
+SET ANSI_NULLS ON
+GO
+
+GRANT EXECUTE ON  rdt.rdtfnc_PickPiece TO NSQL
+GO
 
