@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: Wave                                                      */ 
 /*                                                                      */
-/* GitLab Version: 1.5                                                  */
+/* GitLab Version: 1.6                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -27,6 +27,7 @@ GO
 /* 15-Jul-2022  WLChooi  1.3  WMS-19669 - Fix update Pickslipno (WL03)  */
 /* 16-Aug-2022  WLChooi  1.4  WMS-19669 - Enhance Logic (WL04)          */
 /* 17-Oct-2022  WLChooi  1.5  WMS-19669 - Enhance Logic for CSOS (WL05) */
+/* 29-Mar-2023  WLChooi  1.6  WMS-22098 - Add Logic for CSOS (WL06)     */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV53]      
@@ -86,7 +87,8 @@ BEGIN
          , @n_CSRMaxOrderPerBatch   INT
          , @c_UserName              NVARCHAR(250)
          , @n_PABookingKey          INT
-         , @c_CallFrom              NVARCHAR(20)           
+         , @c_CallFrom              NVARCHAR(20)   
+         , @c_PrevBatchNo           NVARCHAR(10)   --WL06
    
    DECLARE @n_CurrCnt         INT
          , @c_LocType         NVARCHAR(50)
@@ -174,6 +176,13 @@ BEGIN
    )
    --WL05 E
 
+   --WL06 S
+   DECLARE @T_Numbers TABLE (
+      RowID           INT NOT NULL IDENTITY(1,1) PRIMARY KEY,
+      Dummy           NVARCHAR(1)
+   )
+   --WL06 E
+
    SET @b_Debug = @n_err
    SET @c_UserName = SUSER_SNAME()
    SET @n_PABookingKey = 0
@@ -225,7 +234,7 @@ BEGIN
    IF @@TRANCOUNT = 0
       BEGIN TRAN
    
-   IF (@n_continue = 1 or @n_continue = 2)
+   IF (@n_continue = 1 OR @n_continue = 2)
    BEGIN 
       IF OBJECT_ID('#PickDetail_WIP') IS NOT NULL
       BEGIN 
@@ -234,33 +243,33 @@ BEGIN
 
       CREATE TABLE #PickDetail_WIP
       (  
-         [PickDetailKey]         [nvarchar](18)    NOT NULL PRIMARY KEY  
-      ,  [CaseID]                [nvarchar](20)    NOT NULL DEFAULT (' ')  
-      ,  [PickHeaderKey]         [nvarchar](18)    NOT NULL  
-      ,  [OrderKey]              [nvarchar](10)    NOT NULL  
-      ,  [OrderLineNumber]       [nvarchar](5)     NOT NULL  
-      ,  [Lot]                   [nvarchar](10)    NOT NULL  
-      ,  [Storerkey]             [nvarchar](15)    NOT NULL  
-      ,  [Sku]                   [nvarchar](20)    NOT NULL  
-      ,  [AltSku]                [nvarchar](20)    NOT NULL    DEFAULT (' ')  
-      ,  [UOM]                   [nvarchar](10)    NOT NULL    DEFAULT (' ')  
-      ,  [UOMQty]                [int]             NOT NULL    DEFAULT ((0))  
-      ,  [Qty]                   [int]             NOT NULL    DEFAULT ((0))  
-      ,  [QtyMoved]              [int]             NOT NULL    DEFAULT ((0))  
-      ,  [Status]                [nvarchar](10)    NOT NULL    DEFAULT ('0')  
-      ,  [DropID]                [nvarchar](20)    NOT NULL    DEFAULT ('')  
-      ,  [Loc]                   [nvarchar](10)    NOT NULL    DEFAULT ('UNKNOWN')  
-      ,  [ID]                    [nvarchar](18)    NOT NULL    DEFAULT (' ')  
-      ,  [PackKey]               [nvarchar](10)    NULL        DEFAULT (' ')  
-      ,  [UpdateSource]          [nvarchar](10)    NULL        DEFAULT ('0')  
-      ,  [CartonGroup]           [nvarchar](10)    NULL  
-      ,  [CartonType]            [nvarchar](10)    NULL  
-      ,  [ToLoc]                 [nvarchar](10)    NULL        DEFAULT (' ')  
-      ,  [DoReplenish]           [nvarchar](1)     NULL        DEFAULT ('N')  
-      ,  [ReplenishZone]         [nvarchar](10)    NULL        DEFAULT (' ')  
-      ,  [DoCartonize]           [nvarchar](1)     NULL        DEFAULT ('N')  
-      ,  [PickMethod]            [nvarchar](1)     NOT NULL    DEFAULT (' ')  
-      ,  [WaveKey]               [nvarchar](10)    NOT NULL    DEFAULT (' ')  
+         [PickDetailKey]         [NVARCHAR](18)    NOT NULL PRIMARY KEY  
+      ,  [CaseID]                [NVARCHAR](20)    NOT NULL DEFAULT (' ')  
+      ,  [PickHeaderKey]         [NVARCHAR](18)    NOT NULL  
+      ,  [OrderKey]              [NVARCHAR](10)    NOT NULL  
+      ,  [OrderLineNumber]       [NVARCHAR](5)     NOT NULL  
+      ,  [Lot]                   [NVARCHAR](10)    NOT NULL  
+      ,  [Storerkey]             [NVARCHAR](15)    NOT NULL  
+      ,  [Sku]                   [NVARCHAR](20)    NOT NULL  
+      ,  [AltSku]                [NVARCHAR](20)    NOT NULL    DEFAULT (' ')  
+      ,  [UOM]                   [NVARCHAR](10)    NOT NULL    DEFAULT (' ')  
+      ,  [UOMQty]                [INT]             NOT NULL    DEFAULT ((0))  
+      ,  [Qty]                   [INT]             NOT NULL    DEFAULT ((0))  
+      ,  [QtyMoved]              [INT]             NOT NULL    DEFAULT ((0))  
+      ,  [Status]                [NVARCHAR](10)    NOT NULL    DEFAULT ('0')  
+      ,  [DropID]                [NVARCHAR](20)    NOT NULL    DEFAULT ('')  
+      ,  [Loc]                   [NVARCHAR](10)    NOT NULL    DEFAULT ('UNKNOWN')  
+      ,  [ID]                    [NVARCHAR](18)    NOT NULL    DEFAULT (' ')  
+      ,  [PackKey]               [NVARCHAR](10)    NULL        DEFAULT (' ')  
+      ,  [UpdateSource]          [NVARCHAR](10)    NULL        DEFAULT ('0')  
+      ,  [CartonGroup]           [NVARCHAR](10)    NULL  
+      ,  [CartonType]            [NVARCHAR](10)    NULL  
+      ,  [ToLoc]                 [NVARCHAR](10)    NULL        DEFAULT (' ')  
+      ,  [DoReplenish]           [NVARCHAR](1)     NULL        DEFAULT ('N')  
+      ,  [ReplenishZone]         [NVARCHAR](10)    NULL        DEFAULT (' ')  
+      ,  [DoCartonize]           [NVARCHAR](1)     NULL        DEFAULT ('N')  
+      ,  [PickMethod]            [NVARCHAR](1)     NOT NULL    DEFAULT (' ')  
+      ,  [WaveKey]               [NVARCHAR](10)    NOT NULL    DEFAULT (' ')  
       ,  [EffectiveDate]         [datetime]        NOT NULL    DEFAULT (getdate())  
       ,  [AddDate]               [datetime]        NOT NULL    DEFAULT (getdate())  
       ,  [AddWho]                [nvarchar](128)   NOT NULL    DEFAULT (suser_sname())  
@@ -325,7 +334,8 @@ BEGIN
              #PickDetail_WIP.Wavekey         = @c_Wavekey,   
              #PickDetail_WIP.EditWho         = SUSER_SNAME(),  
              #PickDetail_WIP.EditDate        = GETDATE(),     
-             #PickDetail_WIP.TrafficCop      = NULL  
+             #PickDetail_WIP.TrafficCop      = NULL,
+             #PickDetail_WIP.CaseID          = ''   --WL06
          WHERE #PickDetail_WIP.Pickdetailkey = @c_curPickdetailkey
           
          SELECT @n_err = @@ERROR  
@@ -1001,38 +1011,39 @@ BEGIN
 
          SET @n_CartonNo = 1
          SET @n_Qty = 0
-
+         */
+         --WL06 S
          --UOM 6,7, ALL Loc (Case Shuttle and Pick)
          ;WITH CTE AS (
             SELECT PDW.SKU
-                 , CASE WHEN ISNULL(CL.Long,'') <> '' THEN 'CS' ELSE 'NonCS' END AS LocType   --CS - Case Shuttle
+                 --, CASE WHEN ISNULL(CL.Long,'') <> '' THEN 'CS' ELSE 'NonCS' END AS LocType   --CS - Case Shuttle   --WL06
+                 , '' AS LocType   --WL06
                  , S.SUSR4
-                 , CASE WHEN C1.Short IN ('SHOES', 'CLOTH') THEN C1.Short
-                        WHEN ISNULL(C1.Short,'') = '' THEN ''
-                        ELSE 'ERROR' END AS ProductType
+                 , ISNULL(C1.Short,'') AS ProductType
                  , PK.CaseCnt
                  , SUM(PDW.Qty) AS Qty
                  , SUM(S.STDCUBE * PDW.Qty) AS CBM
                  , PDW.Loc
                  , PDW.OrderKey
             FROM #PickDetail_WIP PDW
-            LEFT JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'CSDEFLOC'
-                                          AND CL.Storerkey = PDW.Storerkey
-                                          AND CL.Long = PDW.Loc
+            --LEFT JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'CSDEFLOC'       --WL06
+            --                              AND CL.Storerkey = PDW.Storerkey   --WL06
+            --                              AND CL.Long = PDW.Loc              --WL06
             JOIN SKU S (NOLOCK) ON S.StorerKey = PDW.Storerkey
                                AND S.SKU = PDW.SKU
             LEFT JOIN CODELKUP C1 (NOLOCK) ON C1.LISTNAME = 'CBPRODUCT'
                                           AND C1.Code = S.BUSR2
                                           AND C1.Storerkey = PDW.StorerKey
-            CROSS APPLY (SELECT TOP 1 P.Casecnt 
+            CROSS APPLY (SELECT MIN(P.Casecnt) AS Casecnt
                          FROM PACK P (NOLOCK)
                          WHERE P.PackKey = S.PACKKey) PK
             WHERE PDW.UOM IN ('6','7')
-            --AND C1.Short IN ('SHOES', 'CLOTH')
+            AND C1.Short LIKE '%SHOES%'   --Shoes only
             AND PDW.Status = '0'
             AND PDW.WIP_RefNo = @c_SourceType
+            AND PDW.CaseID IN ('', 'SORTED')
             GROUP BY PDW.Sku, S.SUSR4
-                   , CASE WHEN ISNULL(CL.Long,'') <> '' THEN 'CS' ELSE 'NonCS' END
+                   --, CASE WHEN ISNULL(CL.Long,'') <> '' THEN 'CS' ELSE 'NonCS' END   --WL06
                    , C1.Short
                    , PK.CaseCnt
                    , PDW.Loc
@@ -1047,38 +1058,8 @@ BEGIN
                 , CTE.OrderKey
                 , CTE.SKU
 
-         SET @c_SKU = ''
-         SELECT TOP 1 @c_SKU = SKU
-         FROM #TMP_SUSR4
-         WHERE ProductType = 'ERROR'
-
-         IF ISNULL(@c_SKU,'') <> ''
-         BEGIN
-            SET @n_continue = 3  
-            SET @n_Err = 63070   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
-            SET @c_errmsg = 'NSQL' + CONVERT(char(5),@n_err)   
-                          + ': Product Type NOT IN (SHOES, CLOTH) for SKU ' + TRIM(@c_SKU) + '. (ispRLWAV53) ( SQLSvr MESSAGE='   
-                          + @c_errmsg + ' ) ' 
-            GOTO QUIT_SP 
-         END
-
-         SET @c_SKU = ''
-         SELECT TOP 1 @c_SKU = SKU
-         FROM #TMP_SUSR4
-         WHERE ProductType = ''
-
-         IF ISNULL(@c_SKU,'') <> ''
-         BEGIN
-            SET @n_continue = 3  
-            SET @n_Err = 63075   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
-            SET @c_errmsg = 'NSQL' + CONVERT(char(5),@n_err)   
-                              + ': Missing Product Type for SKU ' + TRIM(@c_SKU) + '. (ispRLWAV53) ( SQLSvr MESSAGE='   
-                              + @c_errmsg + ' ) ' 
-            GOTO QUIT_SP 
-         END
-
          SET @c_BatchNo = ''
-         SET @n_CartonNo = 1
+         SET @n_CartonNo = 0   --WL06
          SET @c_PrevOrderkey = ''
 
          DECLARE CUR_SUSR4 CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -1092,16 +1073,11 @@ BEGIN
          
          WHILE @@FETCH_STATUS <> -1
          BEGIN
-            SELECT @n_Casecnt = TS.CaseCnt
+            SELECT @n_Casecnt = MIN(TS.CaseCnt)
             FROM #TMP_SUSR4 TS
             WHERE TS.SUSR4 = @c_SUSR4
 
             DECLARE CUR_PRECTN_CSOS_6_7 CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-            --SELECT TS.LocType, SUM(TS.Qty)
-            --FROM #TMP_SUSR4 TS
-            --WHERE TS.SUSR4 = @c_SUSR4
-            --GROUP BY TS.LocType
-            --ORDER BY TS.LocType
             WITH CTE1 AS
             (
                SELECT TS.LocType
@@ -1171,16 +1147,16 @@ BEGIN
 
                IF @n_Qty = @n_Casecnt
                BEGIN
+                  SET @n_CartonNo = @n_CartonNo + 1   --WL06
+
                   INSERT INTO #TMP_CZ (CartonNo, SKU, SUSR4, LocType, CaseCnt, Qty, CBM, CtnType, BatchNo, OrderKey)
                   SELECT @n_CartonNo, '', @c_SUSR4, @c_LocType, @n_Casecnt, @n_Qty, 0, 'FULL', @c_BatchNo, @c_Orderkey
-
-                  SET @n_CartonNo = @n_CartonNo + 1
                END
-               ELSE
-               BEGIN
-                  INSERT INTO #TMP_CZ (CartonNo, SKU, SUSR4, LocType, CaseCnt, Qty, CBM, CtnType, BatchNo, OrderKey)
-                  SELECT 0, '', @c_SUSR4, @c_LocType, @n_Casecnt, @n_Qty, 0, 'PARTIAL', '', @c_Orderkey
-               END
+               --ELSE
+               --BEGIN
+               --   INSERT INTO #TMP_CZ (CartonNo, SKU, SUSR4, LocType, CaseCnt, Qty, CBM, CtnType, BatchNo, OrderKey)
+               --   SELECT 0, '', @c_SUSR4, @c_LocType, @n_Casecnt, @n_Qty, 0, 'PARTIAL', '', @c_Orderkey
+               --END
 
                SET @c_PrevOrderkey = @c_Orderkey
 
@@ -1197,10 +1173,12 @@ BEGIN
          SET @c_CallFrom = 'FULL_CTN'
          GOTO UPD_PD
          FULL_CTN:
-         */
+         --WL06 E
+
          SET @n_TotalCBM = 0.00
-         SET @n_CartonNo = 0
+         --SET @n_CartonNo = 0   --WL06
          SET @c_CallFrom = 'LOOSE_CTN'
+         SET @c_PrevBatchNo = @c_BatchNo   --WL06
          SET @c_BatchNo = ''
          SET @c_Orderkey = ''
          SET @c_PrevOrderkey = ''
@@ -1213,6 +1191,14 @@ BEGIN
          AND PDW.UOM IN ('6','7')
          AND PDW.[Status] = '0'
          AND PDW.WIP_RefNo = @c_SourceType
+
+         WHILE @n_Cnt > 0
+         BEGIN
+            INSERT INTO @T_Numbers (Dummy)
+            VALUES (NULL -- Dummy - nvarchar(1)
+               )
+            SET @n_Cnt = @n_Cnt - 1
+         END
 
          DECLARE CUR_PRECTN_CSOS_LOOSE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          --SELECT PDW.OrderKey, PDW.SKU, SUM(PDW.Qty) AS Qty, SUM(S.STDCUBE * PDW.Qty) AS CBM, PDW.PickDetailKey
@@ -1241,13 +1227,14 @@ BEGIN
                 --, PDW.OrderKey
 
          WITH t1 AS ( SELECT PDW.OrderKey, PDW.SKU, SUM(PDW.Qty) AS Qty, S.STDCUBE AS CBM
-                           , CASE WHEN ISNULL(CL.Long,'') <> '' THEN 'CS' ELSE 'NonCS' END AS LocType   --CS - Case Shuttle
+                           --, CASE WHEN ISNULL(CL.Long,'') <> '' THEN 'CS' ELSE 'NonCS' END AS LocType   --CS - Case Shuttle   --WL06
+                           , '' AS LocType   --WL06
                            , ISNULL(C1.Short,'') AS ProductType, S.SUSR4
                       FROM #PickDetail_WIP PDW WITH (NOLOCK)
                       JOIN SKU S WITH (NOLOCK) ON PDW.SKU = S.SKU AND PDW.Storerkey = S.StorerKey
-                      LEFT JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'CSDEFLOC'
-                                                    AND CL.Storerkey = PDW.Storerkey
-                                                    AND CL.Long = PDW.Loc
+                      --LEFT JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'CSDEFLOC'       --WL06
+                      --                              AND CL.Storerkey = PDW.Storerkey   --WL06
+                      --                              AND CL.Long = PDW.Loc              --WL06
                       LEFT JOIN CODELKUP C1 (NOLOCK) ON C1.LISTNAME = 'CBPRODUCT'
                                                     AND C1.Code = S.BUSR2
                                                     AND C1.Storerkey = S.StorerKey
@@ -1256,15 +1243,16 @@ BEGIN
                       AND PDW.[Status] = '0'
                       AND PDW.WIP_RefNo = @c_SourceType
                       GROUP BY PDW.SKU, PDW.OrderKey, PDW.PickDetailKey, S.STDCUBE
-                             , CASE WHEN ISNULL(CL.Long,'') <> '' THEN 'CS' ELSE 'NonCS' END
+                             --, CASE WHEN ISNULL(CL.Long,'') <> '' THEN 'CS' ELSE 'NonCS' END   --WL06
                              , ISNULL(C1.Short,'')
                              , S.SUSR4
          ),
-            t2 AS ( SELECT TOP (@n_Cnt) ROW_NUMBER() OVER (ORDER BY ID) AS Val FROM sysobjects (NOLOCK)  )
+            t2 AS ( SELECT ROW_NUMBER() OVER (ORDER BY TN.RowID) AS Val FROM @T_Numbers TN  )   --WL06
          SELECT t1.OrderKey, t1.SKU, '1' AS Qty, t1.CBM, '', t1.LocType, t1.ProductType
          FROM t1, t2
          WHERE t1.Qty >= t2.Val 
          ORDER BY t1.OrderKey, t1.LocType, t1.ProductType, t1.SUSR4, t1.SKU
+         OPTION (MAXRECURSION 0)
 
          OPEN CUR_PRECTN_CSOS_LOOSE
          
@@ -1360,8 +1348,15 @@ BEGIN
                   END
                END
                
-               IF (@n_CartonNo > @n_CSOSMaxCarton) OR @c_BatchNo = ''
+               --WL06 S
+               IF @c_BatchNo = ''
                BEGIN
+                  SET @c_BatchNo = IIF(ISNULL(@c_PrevBatchNo,'') = '','',@c_PrevBatchNo)
+               END
+               --WL06 E
+
+               IF (@n_CartonNo > @n_CSOSMaxCarton) OR @c_BatchNo = ''
+               BEGIN  
                   SET @c_BatchNo = ''
 
                   EXECUTE nspg_getkey  
@@ -1793,12 +1788,14 @@ BEGIN
             CLOSE CUR_UPD
             DEALLOCATE CUR_UPD
 
-            --IF @c_CallFrom = 'FULL_CTN'
-            --BEGIN
-            --   --SELECT * FROM #TMP_CZ WHERE CtnType = 'FULL'
-            --   DELETE FROM #TMP_CZ WHERE CtnType = 'FULL'
-            --   GOTO FULL_CTN
-            --END
+            --WL06 S
+            IF @c_CallFrom = 'FULL_CTN'
+            BEGIN
+               --SELECT * FROM #TMP_CZ WHERE CtnType = 'FULL'
+               DELETE FROM #TMP_CZ WHERE CtnType = 'FULL'
+               GOTO FULL_CTN
+            END
+            --WL06 E
          END
          --SELECT * FROM #TMP_CZ WHERE CtnType = 'loose'
 

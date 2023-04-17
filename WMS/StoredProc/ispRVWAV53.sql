@@ -42,17 +42,17 @@ BEGIN
            @n_debug           INT,
            @n_cnt             INT,
            @c_Pickdetailkey   NVARCHAR(10),
-           @c_UCCNo           NVARCHAR(50)
+           @c_UCCNo           NVARCHAR(50),
+           @c_Pickslipno      NVARCHAR(10)
            
    SELECT @n_starttcnt = @@TRANCOUNT , @n_continue=1, @b_success=0,@n_err=0,@c_errmsg='',@n_cnt=0, @n_debug = 0
 
    ----reject if wave not yet release      
    IF @n_continue = 1 OR @n_continue = 2
    BEGIN
-     IF NOT EXISTS (SELECT 1 FROM TASKDETAIL TD (NOLOCK) 
-                    WHERE TD.Wavekey = @c_Wavekey
-                    AND TD.Sourcetype IN ('ispRLWAV53') 
-                    AND TD.Tasktype IN ('RPF')) 
+     IF NOT EXISTS (SELECT 1 FROM WAVE W (NOLOCK) 
+                    WHERE W.Wavekey = @c_Wavekey
+                    AND W.TMReleaseFlag IN ('Y')) 
      BEGIN
         SELECT @n_continue = 3  
         SELECT @n_err = 63115  
@@ -72,6 +72,20 @@ BEGIN
          SELECT @n_continue = 3  
          SELECT @n_err = 63120  
          SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Some Tasks have been started. Not allow to Reverse Wave Released (ispRVWAV53)'       
+      END                 
+   END
+
+   ----Reject if pack confirmed
+   IF @n_continue = 1 OR @n_continue = 2
+   BEGIN
+      IF EXISTS (SELECT 1 FROM WAVEDETAIL WD (NOLOCK) 
+                 JOIN PACKHEADER PH (NOLOCK) ON PH.OrderKey = WD.OrderKey
+                 WHERE WD.Wavekey = @c_Wavekey
+                 AND PH.[Status] = '9' )
+      BEGIN
+         SELECT @n_continue = 3  
+         SELECT @n_err = 63121  
+         SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Some orders were pack confirmed. Not allow to Reverse Wave Released (ispRVWAV53)'       
       END                 
    END
      
@@ -156,10 +170,72 @@ BEGIN
         SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 63135   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
         SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Pickdetail Table Failed. (ispRVWAV53)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
       END          
-   END        
+   END   
+   
+   --Delete pack data
+   IF @n_continue = 1 OR @n_continue = 2  
+   BEGIN 
+      DECLARE CUR_LOOP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT DISTINCT PH.Pickheaderkey
+      FROM PICKHEADER PH (NOLOCK) 
+      JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = PH.OrderKey
+      JOIN PICKDETAIL PD (NOLOCK) ON PD.OrderKey = PH.OrderKey
+      JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'CSDEFLOC' 
+                               AND CL.Storerkey = PD.Storerkey 
+                               AND CL.Code = OH.Facility
+                               AND CL.Long = PD.Loc
+      WHERE PH.WaveKey = @c_Wavekey AND PD.UOM = '2'
+
+      OPEN CUR_LOOP
+
+      FETCH NEXT FROM CUR_LOOP INTO @c_Pickslipno
+
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+         DELETE FROM PACKDETAIL WHERE PickSlipNo = @c_Pickslipno
+
+         SELECT @n_err = @@ERROR
+
+         IF @n_err <> 0 
+         BEGIN
+           SELECT @n_continue = 3  
+           SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 63136   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+           SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Delete Packdetail Failed. (ispRVWAV53)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+           GOTO RETURN_SP
+         END      
+         
+         DELETE FROM PACKHEADER WHERE PickSlipNo = @c_Pickslipno
+
+         SELECT @n_err = @@ERROR
+
+         IF @n_err <> 0 
+         BEGIN
+           SELECT @n_continue = 3  
+           SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 63136   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+           SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Delete Packheader Failed. (ispRVWAV53)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
+           GOTO RETURN_SP
+         END   
+
+         DELETE FROM PICKHEADER WHERE PickHeaderKey = @c_Pickslipno
+
+         SELECT @n_err = @@ERROR
+
+         IF @n_err <> 0 
+         BEGIN
+           SELECT @n_continue = 3  
+           SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 63136   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+           SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Delete Pickheader Failed. (ispRVWAV53)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
+           GOTO RETURN_SP
+         END   
+
+         FETCH NEXT FROM CUR_LOOP INTO @c_Pickslipno
+      END
+      CLOSE CUR_LOOP
+      DEALLOCATE CUR_LOOP
+   END
    
    -----Reverse wave status------
-   IF @n_continue = 1 or @n_continue = 2  
+   IF @n_continue = 1 OR @n_continue = 2  
    BEGIN  
       UPDATE WAVE 
       SET TMReleaseFlag = 'N'            
@@ -184,6 +260,12 @@ RETURN_SP:
    BEGIN
       CLOSE CUR_UCC           
       DEALLOCATE CUR_UCC      
+   END 
+
+   IF (SELECT CURSOR_STATUS('LOCAL','CUR_LOOP')) >=0 
+   BEGIN
+      CLOSE CUR_LOOP           
+      DEALLOCATE CUR_LOOP      
    END 
 
    WHILE @@TRANCOUNT < @n_StartTCnt
