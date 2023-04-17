@@ -56,7 +56,6 @@ GO
 /*                               Add ExtendedValidateSP to step 5 (james09)   */
 /* 2023-04-17   4.5  James       Fix missing Packdata param (james10)         */
 /*                               Removed duplicate ExtendedInfosp @ step1     */
-/* 2023-04-04   4.6  YeeKung     JSM-140598 bal pick later swap  (yeekun07)   */
 /******************************************************************************/          
           
 create   PROC [RDT].[rdtfnc_PickPiece] (          

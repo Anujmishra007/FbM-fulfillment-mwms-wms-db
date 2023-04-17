@@ -4,6 +4,7 @@ GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
+
   
 /******************************************************************************/  
 /* Store procedure:  rdt_839Confirm06                                         */  
@@ -12,11 +13,9 @@ GO
 /* Date       Rev  Author     Purposes                                        */  
 /* 17-06-2020 1.0  YeeKung    WMS13795 Created                                */
 /* 20-04-2022 1.1  YeeKung    WMS-19311 Add Data capture (yeekung01)          */
-/* 16-01-2023 1.2  Calvin     JSM-123639 Stamp Channel_ID (CLVN01)            */
-/* 04-04-2023 1.3  YeeKung    JSM-140598 Add blocking status 4 (yeekun02)     */
 /******************************************************************************/  
   
-CREATE OR ALTER PROC [RDT].[rdt_839Confirm06] (  
+CREATE OR ALTER PROC rdt. rdt_839Confirm06 (  
     @nMobile         INT  
    ,@nFunc           INT  
    ,@cLangCode       NVARCHAR( 3)  
@@ -294,7 +293,7 @@ BEGIN
          BEGIN -- Have balance, need to split    
     
             -- Get new PickDetailkey    
-            DECLARE @cNewPickDetailKey NVARCHAR( 10)   
+            DECLARE @cNewPickDetailKey NVARCHAR( 10)    
             EXECUTE dbo.nspg_GetKey    
                'PICKDETAILKEY',    
                10 ,    
@@ -319,8 +318,7 @@ BEGIN
                Status,    
                QTY,    
                TrafficCop,    
-               OptimizeCop,
-			   Channel_ID)    --(CLVN01)
+               OptimizeCop)    
             SELECT    
                CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot, StorerKey, SKU, AltSku, UOM,    
                UOMQTY, QTYMoved, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup,    
@@ -330,8 +328,7 @@ BEGIN
                Status,    
                @nQTY_PD - @nQTY_Bal, -- QTY    
                NULL, -- TrafficCop    
-               '1',   -- OptimizeCop   
-			   Channel_ID  --(CLVN01)			  
+               '1'   -- OptimizeCop    
             FROM dbo.PickDetail WITH (NOLOCK)    
             WHERE PickDetailKey = @cPickDetailKey    
             IF @@ERROR <> 0    
@@ -426,29 +423,21 @@ BEGIN
       WHERE OrderKey = @cPD_OrderKey   
          AND DocType ='E'
 
-
       IF (ISNULL(@cStatus,'')<>'' AND @cStatus <3 )
       BEGIN
-         IF NOT EXISTS (SELECT 1
-               FROM Pickdetail (NOLOCK)
-               WHERE Orderkey  = @cPD_OrderKey
-               AND Storerkey = @cStorerKey
-               AND Status IN ('0', '4')) 
-         BEGIN
-            UPDATE Orders  WITH (ROWLOCK)
-            SET  
-               Status = '3',    
-               EditDate = GETDATE(),   
-               EditWho = SUSER_SNAME()  
-            WHERE OrderKey = @cPD_OrderKey  
-            SET @nErrNo = @@ERROR   
-            IF @nErrNo <> 0  
-            BEGIN  
-               SET @nErrNo = 128760  
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD Order Fail  
-               GOTO RollbackTran  
-            END  
-         END
+         UPDATE Orders  WITH (ROWLOCK)
+         SET  
+            Status = '3',    
+            EditDate = GETDATE(),   
+            EditWho = SUSER_SNAME()  
+         WHERE OrderKey = @cPD_OrderKey  
+         SET @nErrNo = @@ERROR   
+         IF @nErrNo <> 0  
+         BEGIN  
+            SET @nErrNo = 128760  
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD Order Fail  
+            GOTO RollbackTran  
+         END  
       END
 
       FETCH NEXT FROM @curOrder INTO @cPD_OrderKey  
@@ -492,4 +481,3 @@ GO
 
 GRANT EXECUTE ON  rdt.rdt_839Confirm06 TO NSQL
 GO
-
