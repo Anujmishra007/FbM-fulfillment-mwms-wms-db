@@ -2481,7 +2481,7 @@ BEGIN
         
                EXEC sp_ExecuteSQL @cSQL, @cSQLParam,        
                   @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,        
-    @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSKU, @nQTY,         
+    					@cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSKU, @nQTY,         
                   @cExtDescr1 OUTPUT, @cExtDescr2 OUTPUT        
             END        
          END        
@@ -2830,7 +2830,7 @@ BEGIN
         -- Get task in current LOC                  
          SET @cSKUValidated = '0'                  
          SET @nActQTY = 0                  
-         EXEC rdt.rdt_PickPiece_GetTask @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'NEXTSKU'                  
+         EXEC rdt.rdt_PickPiece_GetTask @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'BALPICK'                     
             ,@cPickSlipNo                  
             ,@cPickZone                  
             ,4          
@@ -2967,7 +2967,7 @@ BEGIN
          SET @nActQTY = 0          
          SET @cSuggSKU = @cCurrSKU          
          SET @cSkippedSKU = @cCurrSKU          
-        	EXEC rdt.rdt_PickPiece_GetTask @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'BALPICK'           
+         EXEC rdt.rdt_PickPiece_GetTask @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'NEXTSKU'          
             ,@cPickSlipNo          
             ,@cPickZone          
             ,4          
@@ -5287,7 +5287,7 @@ BEGIN
       V_string42     = @cPackData2,  
       V_String43     = @cPackData3,  
       V_String44     = @cDataCaptureSP,  
- V_String45     = @cSKUDataCapture,      
+ 		V_String45     = @cSKUDataCapture,      
               
       I_Field01 = '',  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,          
       I_Field02 = '',  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,          
@@ -5307,5 +5307,14 @@ BEGIN
           
    WHERE Mobile = @nMobile          
 END   
+GO    
+
+SET QUOTED_IDENTIFIER OFF  
+GO
+SET ANSI_NULLS ON
+GO
+
+GRANT EXECUTE ON  rdt.rdtfnc_PickPiece TO NSQL
+GO
 
 
