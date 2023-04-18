@@ -25,6 +25,8 @@ GO
 /* Date         Author    Ver.  Purposes                                */
 /* 03-JAN-2023  CSCHONG   1.1   Devops Scripts Combine & WMS-21392 (CS01)*/
 /* 09-MAR-2023  CSCHONG   1.2   WMS-21876 add new field (CS02)           */
+/* 18-APR-2023  WZPANG    1.3   WMS-22268 Modify group by part of       */
+/*                                        PACKDETAIL                    */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_Return_Note03_rdt]  (
@@ -399,9 +401,14 @@ BEGIN
    JOIN ORDERS      OH  WITH (NOLOCK) ON (OD.Orderkey = OH.Orderkey)
    JOIN SKU S WITH (NOLOCK) ON s.storerkey = OD.storerkey AND S.sku = OD.sku
   -- JOIN PICKDETAIL PD (NOLOCK) ON (PD.ORDERKEY = OD.ORDERKEY AND PD.SKU = OD.SKU AND PD.ORDERLINENUMBER = OD.ORDERLINENUMBER)
-  CROSS APPLY (SELECT pd.orderkey AS orderkey,pd.sku AS sku,SUM(pd.qty) AS qty 
-               FROM dbo.PICKDETAIL pd WITH (NOLOCK) WHERE pd.OrderKey = OD.ORDERKEY AND PD.SKU = OD.SKU AND PD.ORDERLINENUMBER = OD.ORDERLINENUMBER 
-                GROUP BY pd.orderkey,pd.sku ) AS pd
+  --CROSS APPLY (SELECT pd.orderkey AS orderkey,pd.sku AS sku,SUM(pd.qty) AS qty 
+  --             FROM dbo.PICKDETAIL pd WITH (NOLOCK) WHERE pd.OrderKey = OD.ORDERKEY AND PD.SKU = OD.SKU AND PD.ORDERLINENUMBER = OD.ORDERLINENUMBER 
+  --              GROUP BY pd.orderkey,pd.sku ) AS pd
+   CROSS APPLY (SELECT PD.ORDERKEY AS ORDERKEY , PD.SKU AS SKU , SUM(PD.QTY) AS QTY
+   FROM DBO.PICKDETAIL AS PD WITH(NOLOCK)
+   WHERE PD.ORDERKEY = OD.ORDERKEY AND PD.SKU = OD.SKU
+       /*AND PD.ORDERLINENUMBER = OD.ORDERLINENUMBER*/
+   GROUP BY PD.ORDERKEY , PD.SKU ) AS PD
    LEFT JOIN CODELKUP C WITH (NOLOCK) ON C.listname = 'RTNENCONST' AND C.UDF02 = @c_Facility AND C.storerkey = OH.Storerkey
    WHERE OH.Orderkey = @c_Orderkey
    AND OH.C_ISOCntryCode = @c_C_ISOCntryCode
