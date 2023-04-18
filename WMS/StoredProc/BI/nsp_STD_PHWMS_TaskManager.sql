@@ -3,7 +3,7 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 /***********************************************************************
-	TITLE: TASK MANAGER REPORT (PHWMS)
+	TITLE: TASK MANAGER REPORT (PHWMS) https://jiralfl.atlassian.net/browse/WMS-21993
 
 DATE				VER		CREATEDBY   PURPOSE
 14-MAR-2023			1.0		JAM			MIGRATE FROM HYPERION (PHWMS)
@@ -26,7 +26,7 @@ BEGIN
 	IF ISNULL(@PARAM_GENERIC_StorerKey, '') = ''
 		SET @PARAM_GENERIC_StorerKey = ''
 
-	SET @PARAM_GENERIC_TASKTYPE = REPLACE(REPLACE (TRANSLATE (@PARAM_GENERIC_TASKTYPE,'[ ]',''' '''),'''',''),',',''',''')
+	SET @PARAM_GENERIC_TASKTYPE = REPLACE(REPLACE (TRANSLATE (@PARAM_GENERIC_TASKTYPE,'[ ]',''' '''),'''',''),', ',''',''')
 
    DECLARE @Debug	BIT = 0
 		 , @LogId   INT
@@ -110,7 +110,10 @@ case when P.Pallet>0 then T.Systemqty /P.Pallet else 0 end    AS ''52ReleasedQty
 case when P.Pallet>0 then T.Qty/P.Pallet else 0 end           AS ''53ConfirmedQty_PL'',
 S.Stdcube * T.Qty											  AS ''54TotalCBM'',
 LP.Externloadkey											  AS ''55Externloadkey''
-
+,L.Locationtype [FromLocType]
+,L2.Locationtype [ToLocType]
+,L.Locaisle [FromLocaisle]
+,L2.Locaisle [ToLocaisle]
 '
 
 SET @stmt = @stmt + '
@@ -118,6 +121,7 @@ SET @stmt = @stmt + '
 FROM 
 BI.V_TASKDETAIL T
 JOIN BI.V_LOC L ON (T.FROMLOC = L.LOC)
+JOIN BI.V_LOC L2 ON (T.TOLOC = L2.LOC)
 LEFT OUTER JOIN BI.V_RDTUser R WITH (NOLOCK) ON (R.USERNAME = T.USERKEY)
 LEFT OUTER JOIN BI.V_SKU S ON  (S.SKU = T.SKU AND S.STORERKEY = T.STORERKEY)
 LEFT OUTER JOIN BI.V_PACK P ON (S.PACKKEY = P.PACKKEY)
@@ -132,7 +136,6 @@ WHERE
 ((T.ADDDATE BETWEEN ''' +CONVERT(NVARCHAR(19),@PARAM_GENERIC_ADDDATEFROM,121)+''' 
 AND '''+CONVERT(NVARCHAR(19),@PARAM_GENERIC_ADDDATETO	,121)+''') 
 AND T.Storerkey = '''+@Param_Generic_Storerkey+'''
-AND T.TaskType = '''+@PARAM_GENERIC_TASKTYPE+'''
 AND T.TaskType IN ('''+@PARAM_GENERIC_TASKTYPE+''')
 AND L.Facility= '''+@PARAM_GENERIC_FACILITY+''')
 '
@@ -196,6 +199,10 @@ case when P.Pallet>0 then T.Systemqty /P.Pallet else 0 end  ,
 case when P.Pallet>0 then T.Qty/P.Pallet else 0 end  ,
 S.Stdcube * T.Qty,
 LP.Externloadkey
+,L.Locationtype
+,L2.Locationtype
+,L.Locaisle
+,L2.Locaisle
 
 ORDER BY  27,  38,  49
 
