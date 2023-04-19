@@ -91,6 +91,7 @@ GO
 /*                            Score value (SY01)                        */
 /* 21-Jul-2022  WLChooi 3.7   WMS-20271 - Remove SKU.BUSR7 filter (WL01)*/
 /* 14-Jul-2022  WLChooi 3.8   WMS-20707 - Extend @c_rptprocess (WL02)   */
+/* 16-Mar-2023  NJOW13  3.9   WMS-21961 Allow configure orders sorting  */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispOrderBatching]
@@ -154,6 +155,10 @@ BEGIN
    ,  @n_GroupNo                   INT          --NJOW12
    ,  @n_PrevGroupNo               INT          --NJOW12
    ,  @c_ByUOM                     NVARCHAR(10) --WL02
+   ,  @c_OrdBatchConfig            NVARCHAR(30)=''   --NJOW13       
+   ,  @c_OrdBatchConfig_Opt5       NVARCHAR(MAX)=''  --NJOW13
+   ,  @c_OrderSorting              NVARCHAR(2000)='' --NJOW13 
+   ,  @c_IsCustomOrdSort           NVARCHAR(1)='N'   --NJOW13
 
    --NJOW11
    DECLARE
@@ -480,6 +485,30 @@ BEGIN
       SET @n_MaxBatchQty = SUBSTRING(@c_updatepick,3,3)
       SET @c_updatepick = LEFT(@c_updatepick,1)
    END
+  
+   --NJOW13 S
+   SET @c_OrdBatchConfig = ''
+   SET @c_OrdBatchConfig_Opt5 = ''              
+   SET @c_OrderSorting = ''
+   EXEC nspGetRight
+        @c_Facility  = @c_Facility
+      , @c_StorerKey = @c_StorerKey
+      , @c_sku       = NULL
+      , @c_ConfigKey = 'OrdBatchConfig'
+      , @b_Success   = @b_Success             OUTPUT
+      , @c_authority = @c_OrdBatchConfig      OUTPUT
+      , @n_err       = @n_err                 OUTPUT
+      , @c_errmsg    = @c_errmsg              OUTPUT
+      , @c_Option5   = @c_OrdBatchConfig_Opt5 OUTPUT
+                                                                        
+   IF @c_OrdBatchConfig = '1'
+   BEGIN
+      SELECT @c_OrderSorting = RTRIM(dbo.fnc_GetParamValueFromString('@c_OrderSorting', @c_OrdBatchConfig_Opt5, @c_OrderSorting))
+         
+      IF ISNULL(@c_OrderSorting,'') <> ''  
+         SET @c_IsCustomOrdSort = 'Y'     
+   END
+   --NJOW13 E
 
    SET @c_SQL= N'SELECT DISTINCT'
              + ' PD.PickDetailKey'
@@ -903,61 +932,146 @@ BEGIN
       BEGIN
          IF @c_Mode = '9' --NJOW04  single order
          BEGIN
-          IF @c_OrdBatchM9LocNotSplitBth = '1'
-          BEGIN
-              --NJOW09
-              SET @c_CurrLoc = ''
-              SELECT TOP 1
-                     @c_OrderKey = O.OrderKey,
-                     @c_CurrLoc = MIN(O.Loc)
-              FROM #OrderTable O
-              JOIN LOC L (NOLOCK) ON O.Loc = L.Loc
-              GROUP BY O.Orderkey
-              ORDER BY MIN(L.LogicalLocation), MIN(O.Loc), O.OrderKey
-
-              /*SET @c_CurrLocType = ''
-              SELECT TOP 1
-                     @c_OrderKey = O.OrderKey,
-                     @c_CurrLoc = MIN(O.Loc),
-                     @c_CurrLocType = MIN(ISNULL(SL.LocationType,''))
-              FROM #OrderTable O
-              JOIN PICKDETAIL PD (NOLOCK) ON O.Orderkey = PD.Orderkey
-              JOIN LOC L (NOLOCK) ON O.Loc = L.Loc
-              LEFT JOIN SKUXLOC SL (NOLOCK) ON L.Loc = SL.Loc AND PD.Storerkey = SL.Storerkey AND PD.Sku = SL.Sku AND SL.LocationType IN('PICK','CASE')
-              GROUP BY O.Orderkey
-              ORDER BY MIN(L.LogicalLocation), MIN(O.Loc), O.OrderKey*/
-          END
-          ELSE IF @c_OrdBatchM9Lot2SplitBth = '1'  --NJOW12
-          BEGIN
-              SET @n_GroupNo = 0
-              SELECT TOP 1
-                     @c_OrderKey = O.OrderKey,
-                     @n_GroupNo = MIN(G.GroupNo)
-              FROM #OrderTable O
-              JOIN PICKDETAIL PD (NOLOCK) ON O.Orderkey = PD.Orderkey
-              JOIN LOTATTRIBUTE LA (NOLOCK) ON PD.Lot = LA.Lot
-              JOIN #SkuLot2Grouping G (NOLOCK) ON PD.Sku = G.Sku AND LA.Lottable02 = G.Lottable02
-              JOIN LOC L (NOLOCK) ON O.Loc = L.Loc
-              GROUP BY O.Orderkey
-              ORDER BY MIN(G.GroupNo), MIN(L.LogicalLocation), MIN(O.Loc), O.OrderKey
-
-              IF ISNULL(@n_GroupNo, 0) <> ISNULL(@n_PrevGroupNo,0) AND @n_PrevGroupNo <> 0 -- close current batch and process this order again in next batch
-              BEGIN
-                SET @n_PrevGroupNo = @n_GroupNo
-                 GOTO CloseBatch
-              END
-              SET @n_PrevGroupNo = @n_GroupNo
-          END
-          ELSE
-          BEGIN
+           IF @c_OrdBatchM9LocNotSplitBth = '1'
+           BEGIN
+               --NJOW09
+               SET @c_CurrLoc = ''
+               /*
+               SELECT TOP 1
+                      @c_OrderKey = O.OrderKey,
+                      @c_CurrLoc = MIN(O.Loc)
+               FROM #OrderTable O
+               JOIN LOC L (NOLOCK) ON O.Loc = L.Loc
+               GROUP BY O.Orderkey
+               ORDER BY MIN(L.LogicalLocation), MIN(O.Loc), O.OrderKey
+               */
+               
+               --NJOW13 S
+               SET @c_SQL = N'SELECT TOP 1
+                         @c_OrderKey = ORDERS.OrderKey,
+                         @c_CurrLoc = MIN(LOC.Loc)
+                  FROM #OrderTable O 
+                  JOIN ORDERS (NOLOCK) ON O.Orderkey = ORDERS.Orderkey
+                  JOIN LOC (NOLOCK) ON O.Loc = LOC.Loc
+                  GROUP BY ORDERS.Orderkey ' +
+                  CASE WHEN @c_IsCustomOrdSort = 'Y' THEN
+                     ' ORDER BY ' + @c_OrderSorting 
+                  ELSE    
+                     ' ORDER BY MIN(LOC.LogicalLocation), MIN(LOC.Loc), ORDERS.OrderKey'
+                  END
+               
+               EXEC sp_executesql @c_SQL
+                   ,  N'@c_Orderkey NVARCHAR(10) OUTPUT, @c_CurrLoc NVARCHAR(10) OUTPUT'
+                   ,  @c_Orderkey OUTPUT
+                   ,  @c_CurrLoc OUTPUT               
+               --NJOW13 E    
+           
+               /*SET @c_CurrLocType = ''
+               SELECT TOP 1
+                      @c_OrderKey = O.OrderKey,
+                      @c_CurrLoc = MIN(O.Loc),
+                      @c_CurrLocType = MIN(ISNULL(SL.LocationType,''))
+               FROM #OrderTable O
+               JOIN PICKDETAIL PD (NOLOCK) ON O.Orderkey = PD.Orderkey
+               JOIN LOC L (NOLOCK) ON O.Loc = L.Loc
+               LEFT JOIN SKUXLOC SL (NOLOCK) ON L.Loc = SL.Loc AND PD.Storerkey = SL.Storerkey AND PD.Sku = SL.Sku AND SL.LocationType IN('PICK','CASE')
+               GROUP BY O.Orderkey
+               ORDER BY MIN(L.LogicalLocation), MIN(O.Loc), O.OrderKey*/
+           END
+           ELSE IF @c_OrdBatchM9Lot2SplitBth = '1'  --NJOW12
+           BEGIN
+               SET @n_GroupNo = 0
+               /*
+               SELECT TOP 1
+                      @c_OrderKey = O.OrderKey,
+                      @n_GroupNo = MIN(G.GroupNo)
+               FROM #OrderTable O
+               JOIN PICKDETAIL PD (NOLOCK) ON O.Orderkey = PD.Orderkey
+               JOIN LOTATTRIBUTE LA (NOLOCK) ON PD.Lot = LA.Lot
+               JOIN #SkuLot2Grouping G (NOLOCK) ON PD.Sku = G.Sku AND LA.Lottable02 = G.Lottable02
+               JOIN LOC L (NOLOCK) ON O.Loc = L.Loc
+               GROUP BY O.Orderkey
+               ORDER BY MIN(G.GroupNo), MIN(L.LogicalLocation), MIN(O.Loc), O.OrderKey
+               */
+               
+               --NJOW13 S
+               SET @c_SQL = N'SELECT TOP 1
+                         @c_OrderKey = ORDERS.OrderKey,
+                         @n_GroupNo = MIN(G.GroupNo)
+                   FROM #OrderTable O 
+                   JOIN ORDERS (NOLOCK) ON O.Orderkey = ORDERS.Orderkey
+                   JOIN PICKDETAIL PD (NOLOCK) ON ORDERS.Orderkey = PD.Orderkey
+                   JOIN LOTATTRIBUTE LA (NOLOCK) ON PD.Lot = LA.Lot
+                   JOIN #SkuLot2Grouping G (NOLOCK) ON PD.Sku = G.Sku AND LA.Lottable02 = G.Lottable02
+                   JOIN LOC (NOLOCK) ON O.Loc = LOC.Loc
+                   GROUP BY ORDERS.Orderkey ' +
+                   CASE WHEN @c_IsCustomOrdSort = 'Y' THEN
+                      ' ORDER BY MIN(G.GroupNo),' + @c_OrderSorting 
+                   ELSE    
+                      ' ORDER BY MIN(G.GroupNo), MIN(LOC.LogicalLocation), MIN(LOC.Loc), ORDERS.OrderKey'
+                   END
+               
+               EXEC sp_executesql @c_SQL
+                   ,  N'@c_Orderkey NVARCHAR(10) OUTPUT, @n_GroupNo INT OUTPUT'
+                   ,  @c_Orderkey OUTPUT
+                   ,  @n_GroupNo OUTPUT       
+               --NJOW13 E                           
+           
+               IF ISNULL(@n_GroupNo, 0) <> ISNULL(@n_PrevGroupNo,0) AND @n_PrevGroupNo <> 0 -- close current batch and process this order again in next batch
+               BEGIN
+                 SET @n_PrevGroupNo = @n_GroupNo
+                  GOTO CloseBatch
+               END
+               SET @n_PrevGroupNo = @n_GroupNo
+           END
+           ELSE
+           BEGIN
+              /*
               SELECT TOP 1
                      @c_OrderKey = O.OrderKey
               FROM #OrderTable O
               JOIN LOC L (NOLOCK) ON O.Loc = L.Loc
               GROUP BY O.Orderkey
               ORDER BY MIN(L.LogicalLocation), MIN(O.Loc), O.OrderKey --NJOW09
+              */
+
+              --NJOW13 S
+              SET @c_SQL = N'SELECT TOP 1
+                        @c_OrderKey = ORDERS.OrderKey
+                 FROM #OrderTable O 
+                 JOIN ORDERS (NOLOCK) ON O.Orderkey = ORDERS.Orderkey
+                 JOIN LOC (NOLOCK) ON O.Loc = LOC.Loc
+                 GROUP BY ORDERS.Orderkey ' +
+                 CASE WHEN @c_IsCustomOrdSort = 'Y' THEN
+                    ' ORDER BY ' + @c_OrderSorting 
+                 ELSE    
+                    ' ORDER BY MIN(LOC.LogicalLocation), MIN(LOC.Loc), ORDERS.OrderKey'
+                 END   
+              
+              EXEC sp_executesql @c_SQL
+                  ,  N'@c_Orderkey NVARCHAR(10) OUTPUT'
+                  ,  @c_Orderkey OUTPUT
+              --NJOW13 E                             
            END
          END
+         ELSE IF @c_IsCustomOrdSort = 'Y' --NJOW13
+         BEGIN
+            SET @c_SQL = N'SELECT TOP 1
+                      @c_OrderKey = ORDERS.OrderKey
+               FROM #OrderTable O 
+               JOIN ORDERS (NOLOCK) ON O.Orderkey = ORDERS.Orderkey
+               JOIN LOC (NOLOCK) ON O.Loc = LOC.Loc
+               GROUP BY ORDERS.Orderkey ' +
+               CASE WHEN @c_IsCustomOrdSort = 'Y' THEN
+                  ' ORDER BY ' + @c_OrderSorting 
+               ELSE    
+                  ' ORDER BY MIN(LOC.LogicalLocation), MIN(LOC.Loc), ORDERS.OrderKey'
+               END
+            
+            EXEC sp_executesql @c_SQL
+                ,  N'@c_Orderkey NVARCHAR(10) OUTPUT'
+                ,  @c_Orderkey OUTPUT
+         END 
          ELSE IF @n_Counter = 1
          BEGIN
             -- Clear Diff field for each new batch (Chee01)
@@ -1096,13 +1210,33 @@ BEGIN
          BEGIN
             SET @c_NextLoc = ''
             SET @n_NextLocOrdCnt = 0
+            
+            /*
             SELECT TOP 1
                    @c_NextLoc = MIN(O.Loc)
             FROM #OrderTable O
             JOIN LOC L (NOLOCK) ON O.Loc = L.Loc
             GROUP BY O.Orderkey
-            ORDER BY MIN(L.LogicalLocation), MIN(O.Loc), O.OrderKey
-
+            ORDER BY MIN(L.LogicalLocation), MIN(O.Loc), O.OrderKey*/
+            
+            --NJOW13 S               
+            SET @c_SQL = N'SELECT TOP 1
+                      @c_NextLoc = MIN(LOC.Loc)
+               FROM #OrderTable O 
+               JOIN ORDERS (NOLOCK) ON O.Orderkey = ORDERS.Orderkey
+               JOIN LOC (NOLOCK) ON O.Loc = LOC.Loc
+               GROUP BY ORDERS.Orderkey ' +
+               CASE WHEN @c_IsCustomOrdSort = 'Y' THEN
+                  ' ORDER BY ' + @c_OrderSorting 
+               ELSE    
+                  ' ORDER BY MIN(LOC.LogicalLocation), MIN(LOC.Loc), ORDERS.OrderKey'
+               END   
+            
+            EXEC sp_executesql @c_SQL
+                ,  N'@c_NextLoc NVARCHAR(10) OUTPUT'
+                ,  @c_NextLoc OUTPUT               
+            --NJOW13 E    
+                                               
             IF @c_Currloc <> @c_NextLoc
             BEGIN
                SELECT @n_NextLocOrdCnt = COUNT(1)
