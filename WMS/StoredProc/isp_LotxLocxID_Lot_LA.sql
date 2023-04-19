@@ -12,38 +12,43 @@ GO
 /*        :                                                             */
 /* Called By:  d_dddw_lotxlocxid_lot_la                                 */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.4                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author    Ver Purposes                                  */
-/* 15-Mar-2018  SWT01     1.1 Assign Column Name to Result              */
-/* 27-Oct-2020  WLChooi   1.2 WMS-15498 - Add Lottable01-05 (WL01)      */
-/* 26-Nov-2021  Mingle    1.3 WMS-18349 - Add Status (ML01)             */
-/* 26-Nov-2021  Mingle    1.3 DevOps Combine Script                     */ 
+/* Date        Author   Ver   Purposes                                  */
+/* 15-Mar-2018 SWT01    1.1   Assign Column Name to Result              */
+/* 27-Oct-2020 WLChooi  1.2   WMS-15498 - Add Lottable01-05 (WL01)      */
+/* 26-Nov-2021 Mingle    1.3 WMS-18349 - Add Status (ML01)             */
+/* 26-Nov-2021 Mingle   1.3   DevOps Combine Script                     */
+/* 31-Mar-2023 Wan01    1.4   LFWM-4059 - PROD CN Pick Management LOT   */
+/*                            sorting and filter of all the detail fields*/
+/*                            is invalid, like Lottable03               */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_LotxLocxID_Lot_LA] 
-            @c_StorerKey   NVARCHAR(15)
-          , @c_SKU         NVARCHAR(20)
-          , @c_Facility    NVARCHAR(5) 
-          , @c_Lottable01  NVARCHAR(18) = ''
-          , @c_Lottable02  NVARCHAR(18) = ''
-          , @c_Lottable03  NVARCHAR(18) = ''
-          , @d_Lottable04  DATETIME  = NULL   
-          , @d_Lottable05  DATETIME  = NULL   
-          , @c_lottable06  NVARCHAR(30) = '' 
-          , @c_lottable07  NVARCHAR(30) = '' 
-          , @c_lottable08  NVARCHAR(30) = '' 
-          , @c_lottable09  NVARCHAR(30) = '' 
-          , @c_lottable10  NVARCHAR(30) = '' 
-          , @c_lottable11  NVARCHAR(30) = '' 
-          , @c_lottable12  NVARCHAR(30) = '' 
-          , @d_lottable13  DATETIME = NULL   
-          , @d_lottable14  DATETIME = NULL   
-          , @d_lottable15  DATETIME = NULL   
+   @c_StorerKey         NVARCHAR(15)
+ , @c_SKU               NVARCHAR(20)
+ , @c_Facility          NVARCHAR(5) 
+ , @c_Lottable01        NVARCHAR(18) = ''
+ , @c_Lottable02        NVARCHAR(18) = ''
+ , @c_Lottable03        NVARCHAR(18) = ''
+ , @d_Lottable04        DATETIME  = NULL   
+ , @d_Lottable05        DATETIME  = NULL   
+ , @c_lottable06        NVARCHAR(30) = '' 
+ , @c_lottable07        NVARCHAR(30) = '' 
+ , @c_lottable08        NVARCHAR(30) = '' 
+ , @c_lottable09        NVARCHAR(30) = '' 
+ , @c_lottable10        NVARCHAR(30) = '' 
+ , @c_lottable11        NVARCHAR(30) = '' 
+ , @c_lottable12        NVARCHAR(30) = '' 
+ , @d_lottable13        DATETIME = NULL   
+ , @d_lottable14        DATETIME = NULL   
+ , @d_lottable15        DATETIME = NULL   
+,  @c_SearchCondition   NVARCHAR(MAX)  = ''  --(Wan03) Search Condition from Actual WHERE result 
+,  @c_SortPreference    NVARCHAR(MAX)  = ''  --(Wan03) Only sort column. Multiple Sort Columns are seperated to be , (comma)
 
 AS
 BEGIN
@@ -60,6 +65,23 @@ BEGIN
          , @c_ForceLAList     NVARCHAR(1000) 
          , @c_LAConditions    NVARCHAR(4000)
          , @c_SQL             NVARCHAR(MAX)
+         
+            
+   IF OBJECT_ID('tempdb..#ReturnResult','u') IS NOT NULL          --(Wan03) - START
+   BEGIN
+      DROP TABLE #ReturnResult 
+   END
+   
+   CREATE TABLE #ReturnResult                    
+         (  Lot               NVARCHAR(10)   NOT NULL DEFAULT('')
+         ,  [Status]          NVARCHAR(10)   NOT NULL DEFAULT('')
+         ,  QtyAvailable      INT            NOT NULL DEFAULT(0)
+         ,  Lottable01        NVARCHAR(18)   NOT NULL DEFAULT('')
+         ,  Lottable02        NVARCHAR(18)   NOT NULL DEFAULT('')
+         ,  Lottable03        NVARCHAR(18)   NOT NULL DEFAULT('')
+         ,  Lottable04        NVARCHAR(24)   NULL   
+         ,  Lottable05        NVARCHAR(24)   NULL                       
+         )                                                        --(Wan03) - END
    
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
@@ -125,7 +147,9 @@ BEGIN
    
    SET @c_SQL  = N' SELECT LOTxLOCxID.Lot'   
                +       ' , SUM(LOTxLOCxID.Qty - LOTxLOCxID.QtyAllocated- LOTxLOCxID.QtyPicked) AS QtyAvailable ' -- SWT01
-               +       ' , LOTATTRIBUTE.Lottable01, LOTATTRIBUTE.Lottable02, LOTATTRIBUTE.Lottable03, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable05'   --WL01
+               +       ' , LOTATTRIBUTE.Lottable01, LOTATTRIBUTE.Lottable02, LOTATTRIBUTE.Lottable03'
+               +       ' , CONVERT(NVARCHAR(24),LOTATTRIBUTE.Lottable04,121) AS Lottable04' --(Wan03)
+               +       ' , CONVERT(NVARCHAR(24),LOTATTRIBUTE.Lottable05,121) AS Lottable05' --(Wan03) --WL01
                +       ' , CASE WHEN (LOT.Status = ''HOLD'') THEN ''HOLD (LOT)'' '    --START ML01
                +       '        WHEN (LOC.LocationFlag = ''HOLD'' OR LOC.LocationFlag = ''DAMAGE'') THEN ''HOLD (LOC)'' '
                +       '        WHEN (LOC.Status = ''HOLD'') THEN ''HOLD (LOC)''  '
@@ -149,6 +173,8 @@ BEGIN
                +       '         WHEN (ID.Status = ''HOLD'') THEN ''HOLD (ID)'' '
                +       '         ELSE ''OK'' END '                                     --END ML01
 
+   INSERT INTO #ReturnResult                    --(Wan03)
+      (Lot, QtyAvailable, Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, [Status])  
    EXEC SP_ExecuteSQL @c_SQL
                ,N'@c_Storerkey  NVARCHAR(15)
                  ,@c_Sku         NVARCHAR(20)    
@@ -187,8 +213,41 @@ BEGIN
                , @d_lottable14 
                , @d_lottable15 
 
+   --(Wan03) - START
+   IF @c_SearchCondition <> ''
+   BEGIN
+      SET @c_SearchCondition =  ' WHERE ' + @c_SearchCondition
+   END
+         
+   SET @c_SortPreference = ISNULL(@c_SortPreference,'')           
+   IF @c_SortPreference = ''
+   BEGIN
+      SET @c_SortPreference = N' ORDER BY Lot ASC'
+   END
+   ELSE 
+   BEGIN
+      SET @c_SortPreference = N' ORDER BY ' +  @c_SortPreference 
+   END
+   
+   SET @c_SQL  = N'SELECT Lot'
+               + ', QtyAvailable'
+               + ', Lottable01'  
+               + ', Lottable02'   
+               + ', Lottable03'   
+               + ', Lottable04 = CONVERT(DATETIME, Lottable04)'  
+               + ', Lottable05 = CONVERT(DATETIME, Lottable05)' 
+               + ', [Status]'                                                                                            
+               + ' FROM #ReturnResult' 
+               + @c_SearchCondition
+               + @c_SortPreference  
+                    
+   EXEC sp_ExecuteSQL @c_SQL
+   --(Wan03) - END         
    QUIT:
-
+   IF OBJECT_ID('tempdb..#ReturnResult','u') IS NOT NULL          --(Wan03) - START
+   BEGIN
+      DROP TABLE #ReturnResult 
+   END                                                            --(Wan03) - END
 END -- procedure
 GO
 
