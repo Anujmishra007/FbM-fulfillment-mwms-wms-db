@@ -33,6 +33,9 @@ GO
 /*                            with stuck on 'submitted'                 */
 /* 2022-12-16  Wan07    1.7   LFWM-3892 - [CN] UAT Converse-Wave Control*/
 /*                            - Allocation issue                        */
+/* 2023-04-11  Wan08    1.8   LFWM-4179 - PROD CN  Wave Control Allocate*/
+/*                            single thread only support by storerkey,  */
+/*                            not able to split by facility             */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_WaveAllocation]                                                                                                                     
       @c_WaveKey              NVARCHAR(10)
@@ -683,9 +686,21 @@ BEGIN
       FROM  dbo.QCmd_TransmitlogConfig qcfg WITH (NOLOCK)  
       WHERE qcfg.TableName      = 'MANUALALLOC'
       AND   qcfg.[App_Name]     = 'WMS'  
-      --AND   qcfg.StorerKey      = 'ALL'                                  --(Wan05)
-      ORDER BY CASE WHEN qcfg.StorerKey = @c_Storerkey THEN 1              --(Wan05)
-                    WHEN qcfg.StorerKey = 'ALL' THEN 2 ELSE 3              --(Wan05)
+      AND   qcfg.StorerKey      IN ( @c_Storerkey, 'ALL')                  --(Wan08)(Wan05)
+      AND   qcfg.Facility       IN ( @c_Facility,  'ALL', '')              --(Wan08)(Wan05)      
+      ORDER BY CASE WHEN qcfg.StorerKey = @c_Storerkey AND                 --(Wan08)(Wan05)   
+                         qcfg.Facility  = @c_Facility                      --(Wan08)
+                    THEN 1                                                 --(Wan05)
+                    WHEN qcfg.StorerKey = @c_Storerkey AND                 --(Wan08)(Wan05)   
+                         qcfg.Facility  IN ( 'ALL', '')                    --(Wan08)
+                    THEN 2                                                 --(Wan08)(Wan05)  
+                    WHEN qcfg.StorerKey = 'ALL' AND                        --(Wan08)(Wan05)   
+                         qcfg.Facility  = @c_Facility                      --(Wan08)
+                    THEN 6                                                 --(Wan08)(Wan05)  
+                    WHEN qcfg.StorerKey = 'ALL' AND                        --(Wan08)    
+                         qcfg.Facility  IN ( 'ALL', '')                    --(Wan08)
+                    THEN 7                                                 --(Wan08)     
+                    ELSE 9                                                 --(Wan08)(Wan05)
                     END                                                    --(Wan05)
             , qcfg.RowRefNo                                                --(Wan05)
       
