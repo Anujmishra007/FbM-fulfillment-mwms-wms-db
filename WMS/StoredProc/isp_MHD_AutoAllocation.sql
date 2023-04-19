@@ -25,7 +25,9 @@ GO
 /* 04-APR-2022  NJOW01  1.0   DEVOPS Combine Script                        */          
 /* 27-JUL-2022  NJOW02  1.1   WMS-20340 auto-allocate based on delivery    */
 /*                            date                                         */
-/* 09-SEP-2022  CHONGCS 1.2   WMS-20585 add auto print (CS01)              */
+/* 09-SEP-2022  CHONGCS 1.2   WMS-20585 add auto print (CS01)              */ 
+/* 22-MAR-2023  NJOW03  1.3   WMS-22052 specific consignee must allocate   */
+/*                            min qty by innerpack                         */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_MHD_AutoAllocation]
 AS
@@ -68,7 +70,9 @@ BEGIN
            ,@n_NoOfDeliveryDay    INT = 0--NJOW02
            ,@n_DayCnt             INT = 0 --NJOW02
            ,@c_DELNOTE_DW         NVARCHAR(50)    --CS01
-           ,@c_DNPRNUserName      NVARCHAR(128)   --CS01 
+           ,@c_DNPRNUserName      NVARCHAR(128)   --CS01           
+           ,@c_OrderLineNumber    NVARCHAR(5) --NJOW03
+           ,@n_LooseQty           INT --NJOW03
 
    SELECT @b_Success=1, @n_Err=0, @c_ErrMsg='', @n_Continue = 1, @n_StartTranCount=@@TRANCOUNT
    
@@ -169,32 +173,76 @@ BEGIN
    
    IF @n_continue IN(1,2)
    BEGIN
-      DECLARE CUR_ORD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR      
-        SELECT TM.Orderkey, O.Facility, O.Loadkey
+      DECLARE CUR_ORD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR    
+        SELECT TM.Orderkey, O.Facility, O.Loadkey, O.Consigneekey
         FROM #TMP_ORD TM
         JOIN ORDERS O (NOLOCK) ON TM.Orderkey = O.Orderkey
         ORDER BY TM.RowID
       
       OPEN CUR_ORD
       
-      FETCH NEXT FROM CUR_ORD INTO @c_Orderkey, @c_Facility, @c_Loadkey
+      FETCH NEXT FROM CUR_ORD INTO @c_Orderkey, @c_Facility, @c_Loadkey, @c_Consigneekey
       
       WHILE @@FETCH_STATUS <> -1  AND @n_continue IN(1,2)
-      BEGIN                             
-           --update batch no to order                   
-           UPDATE ORDERS WITH (ROWLOCK)
-           SET Userdefine01 = @c_BatchNo,
-               Trafficcop = NULL
-           WHERE Orderkey = @c_Orderkey
-           
-           SET @n_err = @@ERROR
-           
-           IF @n_err <> 0
-           BEGIN
-              SELECT @n_continue = 3
-             SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 63200
-             SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Order Table Failed! (isp_MHD_AutoAllocation)' + ' ( '
-                            + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+      BEGIN        
+      	 --NJOW03 S         	
+      	 IF @c_Consigneekey = '0003205382'
+      	 BEGIN
+      	 	  DECLARE CUR_LOOSE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR    
+      	 	     SELECT OD.OrderLineNumber, OD.OpenQty % CAST(PACK.InnerPack AS INT) AS LooseQty
+      	 	     FROM ORDERDETAIL OD (NOLOCK)
+      	 	     JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku
+      	 	     JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey
+      	 	     WHERE OD.Orderkey = @c_Orderkey
+      	 	     AND OD.OpenQty % CAST(PACK.InnerPack AS INT) > 0
+      	 	     AND OD.QtyAllocated + OD.QtyPicked = 0
+      	 	     AND FLOOR(PACK.InnerPack) > 0
+      	 	     ORDER BY OD.OrderLineNumber
+
+            OPEN CUR_LOOSE
+      
+            FETCH NEXT FROM CUR_LOOSE INTO @c_OrderLineNumber, @n_LooseQty
+
+            WHILE @@FETCH_STATUS <> -1  AND @n_continue IN(1,2)
+            BEGIN            
+            	 UPDATE ORDERDETAIL WITH (ROWLOCK)
+            	 SET OpenQty = OpenQty - @n_LooseQty,
+            	     Userdefine10 = CAST(@n_LooseQty AS NVARCHAR),
+            	     Userdefine09 = 'LOOSE'
+            	 WHERE Orderkey = @c_Orderkey
+            	 AND OrderLineNumber = @c_OrderLineNumber    
+
+               SET @n_err = @@ERROR
+               
+               IF @n_err <> 0
+               BEGIN
+                  SELECT @n_continue = 3
+                  SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 63200
+                  SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Orderdetail Table Failed! (isp_MHD_AutoAllocation)' + ' ( '
+                                 + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+               END            
+            	 
+               FETCH NEXT FROM CUR_LOOSE INTO @c_OrderLineNumber, @n_LooseQty            	     	
+            END     
+            CLOSE CUR_LOOSE
+            DEALLOCATE CUR_LOOSE 	 	           	 	     
+      	 END
+      	 --NJOW03 E
+      	        	       	
+         --update batch no to order                   
+         UPDATE ORDERS WITH (ROWLOCK)
+         SET Userdefine01 = @c_BatchNo,
+             Trafficcop = NULL
+         WHERE Orderkey = @c_Orderkey
+         
+         SET @n_err = @@ERROR
+         
+         IF @n_err <> 0
+         BEGIN
+            SELECT @n_continue = 3
+            SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 63210
+            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Order Table Failed! (isp_MHD_AutoAllocation)' + ' ( '
+                           + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
          END            
                
          EXEC nsp_orderprocessing_wrapper
@@ -205,7 +253,48 @@ BEGIN
             @c_tblprefix= '',
             @c_Extendparms = '',
             @c_StrategykeyParm = ''
-            
+
+      	 --NJOW03 S         	
+      	 IF @c_Consigneekey = '0003205382'
+      	 BEGIN
+      	 	  DECLARE CUR_LOOSE2 CURSOR LOCAL FAST_FORWARD READ_ONLY FOR    
+      	 	     SELECT OD.OrderLineNumber, CAST(OD.Userdefine10 AS INT)
+      	 	     FROM ORDERDETAIL OD (NOLOCK)
+      	 	     WHERE OD.Orderkey = @c_Orderkey
+      	 	     AND OD.Userdefine09 = 'LOOSE'
+      	 	     AND ISNUMERIC(OD.Userdefine10) = 1
+      	 	     ORDER BY OD.OrderLineNumber
+
+            OPEN CUR_LOOSE2
+      
+            FETCH NEXT FROM CUR_LOOSE2 INTO @c_OrderLineNumber, @n_LooseQty
+
+            WHILE @@FETCH_STATUS <> -1  AND @n_continue IN(1,2)
+            BEGIN            
+            	 UPDATE ORDERDETAIL WITH (ROWLOCK)
+            	 SET OpenQty = OpenQty + @n_LooseQty,
+            	     Userdefine10 = '',
+            	     Userdefine09 = ''
+            	 WHERE Orderkey = @c_Orderkey
+            	 AND OrderLineNumber = @c_OrderLineNumber    
+
+               SET @n_err = @@ERROR
+               
+               IF @n_err <> 0
+               BEGIN
+                  SELECT @n_continue = 3
+                  SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 63220
+                  SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Orderdetail Table Failed! (isp_MHD_AutoAllocation)' + ' ( '
+                                 + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+               END            
+            	 
+               FETCH NEXT FROM CUR_LOOSE2 INTO @c_OrderLineNumber, @n_LooseQty            	     	
+            END     
+            CLOSE CUR_LOOSE2
+            DEALLOCATE CUR_LOOSE2 	 	           	 	     
+      	 END
+      	 --NJOW03 E            
+             
          SET @c_OrderStatus = '0'
          SELECT @c_OrderStatus = Status
          FROM ORDERS(NOLOCK)
@@ -237,7 +326,7 @@ BEGIN
               IF @n_err <> 0
               BEGIN
                  SELECT @n_continue = 3
-               SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 63200
+               SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 63230
                SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Insert LoadPlan Table Failed! (isp_MHD_AutoAllocation)' + ' ( '
                               + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
             END            
@@ -299,7 +388,7 @@ BEGIN
                SET @n_continue = 3        
          END
                      
-         FETCH NEXT FROM CUR_ORD INTO @c_Orderkey, @c_Facility, @c_Loadkey
+         FETCH NEXT FROM CUR_ORD INTO @c_Orderkey, @c_Facility, @c_Loadkey, @c_Consigneekey
       END         
       CLOSE CUR_ORD
       DEALLOCATE CUR_ORD
