@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispPreAL02]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispPreAL02]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -31,8 +26,9 @@ GO
 /* 04-APR-2021 NJOW02   1.3   WMS-16523 change sorting                   */
 /* 04-OCT-2021 WLChooi  1.4   DevOps Combine Script                      */
 /* 04-OCT-2021 WLChooi  1.5   WMS-18082 - Change sorting (WL01)          */
+/* 29-MAR-2023 NJOW03   1.6   WMS-22107 - Change sorting                 */
 /*************************************************************************/
-CREATE PROC dbo.ispPreAL02                      
+CREATE OR ALTER PROC dbo.ispPreAL02                      
            @c_OrderKey NVARCHAR(10) 
          , @c_LoadKey  NVARCHAR(10)    
          , @b_Success  INT    OUTPUT  
@@ -348,7 +344,8 @@ BEGIN
                +   CASE WHEN @c_Consigneekey NOT IN('PMS1') THEN ', LOTXLOCXID.Loc, LOTXLOCXID.ID ' ELSE ' ' END --NJOW02
                + CASE WHEN @c_Consigneekey = 'PMS' THEN  --NJOW01 
                --+ ' ORDER BY LOTATTRIBUTE.Lottable06 DESC, ISNULL(SKU.BUSR5,''''), LOTATTRIBUTE.Lottable15, LOTATTRIBUTE.Lottable05, LOTATTRIBUTE.Lottable02, LOTxLOCxID.Lot ' ELSE 
-                 ' ORDER BY LOTATTRIBUTE.Lottable06 DESC, ISNULL(SKU.BUSR5,''''), LOTATTRIBUTE.Lottable15, LOTATTRIBUTE.Lottable05,  ' --NJOW02
+               --' ORDER BY LOTATTRIBUTE.Lottable06 DESC, ISNULL(SKU.BUSR5,''''), LOTATTRIBUTE.Lottable15, LOTATTRIBUTE.Lottable05,  ' --NJOW02  --NJOW03 Remove
+                 ' ORDER BY ISNULL(SKU.BUSR5,''''), LOTATTRIBUTE.Lottable15, LOTATTRIBUTE.Lottable06 DESC, LOTATTRIBUTE.Lottable05,  ' --NJOW03
                +         '  LOTATTRIBUTE.Lottable02, '  --WL01
                +         '  CASE WHEN PACK.Casecnt > 0 THEN CASE WHEN SUM(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) % CAST(PACK.Casecnt AS INT) = 0 THEN 1 ELSE 2 END ELSE 3 END,' --NJOW02
                +         '  MIN(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED), ' + --NJOW02
@@ -356,16 +353,18 @@ BEGIN
                +         '  LOTxLOCxID.Lot '   --WL01
                        -- ' MIN(LOTxLOCxID.Qty - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyPicked), LOTATTRIBUTE.Lottable02, LOTxLOCxID.Lot '  --NJOW02
                       WHEN @c_Consigneekey = 'PMS1' THEN  --NJOW02
-                 ' ORDER BY LOTATTRIBUTE.Lottable06 DESC'
-               +        ',  ISNULL(SKU.BUSR5,'''')'  
-               +        ',  LOTATTRIBUTE.Lottable15'
+               --  ' ORDER BY LOTATTRIBUTE.Lottable06 DESC' --NJOW03 Remove
+               +        ' ORDER BY ISNULL(SKU.BUSR5,'''')'  
+               +        ',  LOTATTRIBUTE.Lottable15'  
+               +        ',  LOTATTRIBUTE.Lottable06 DESC'  --NJOW03
                +        ',  LOTATTRIBUTE.Lottable05'  --NJOW02
                +        ',  LOTATTRIBUTE.Lottable02'  --WL01
                +        ',  MIN(LOTxLOCxID.Qty - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyPicked) ' --NJOW02           
                  ELSE                
-                 ' ORDER BY LOTATTRIBUTE.Lottable06 DESC'
-               +        ',  ISNULL(SKU.BUSR5,'''')'  
-               +        ',  LOTATTRIBUTE.Lottable15'
+               --  ' ORDER BY LOTATTRIBUTE.Lottable06 DESC' --NJOW03 Remove
+               + ' ORDER BY ISNULL(SKU.BUSR5,'''')'  
+               +        ',  LOTATTRIBUTE.Lottable15'  
+               +        ',  LOTATTRIBUTE.Lottable06 DESC'  --NJOW03
                +        ',  LOTATTRIBUTE.Lottable05'  --NJOW02
                +        ',  LOTATTRIBUTE.Lottable02'  --WL01
                +        ',  CASE WHEN PACK.CaseCnt > 0 THEN '
