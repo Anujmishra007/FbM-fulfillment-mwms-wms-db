@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.4                                                    */                                                                                  
+/* PVCS Version: 1.5                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -33,10 +33,12 @@ GO
 /*                            populates wrong Lottable03                */
 /* 2022-08-23  Wan05    1.4   LFWM-3701 - PH SCE UAT -Trade Return issue*/
 /*                            (Populate Via Order)                      */
+/* 2023-04-14  Wan06    1.5   LFWM-4192 - SCEUATSGPopulate Carrierkey   */
+/*                            from Orders in Trade Return               */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_ASN_PopulateSOs_Wrapper]                                                                                                                     
       @c_ReceiptKey           NVARCHAR(10)         
-   ,  @c_OrderKeyList         NVARCHAR(4000) = ''  -- Order Keys seperated by '|' if multiple orders to populate
+   ,  @c_OrderKeyList         NVARCHAR(MAX) = ''   --(Wan06) -- Order Keys seperated by '|' if multiple orders to populate
    ,  @b_Success              INT = 1           OUTPUT  
    ,  @n_err                  INT = 0           OUTPUT                                                                                                             
    ,  @c_ErrMsg               NVARCHAR(255)= '' OUTPUT   
@@ -64,8 +66,8 @@ BEGIN
 
          ,  @n_ReceiptLineNumber       INT = 0
 
-         ,  @c_SQL                     NVARCHAR(4000) = ''
-         ,  @c_SQL1                    NVARCHAR(4000) = ''
+         ,  @c_SQL                     NVARCHAR(MAX)  = ''           --(Wan06)
+         ,  @c_SQL1                    NVARCHAR(MAX)  = ''           --(Wan06)
          ,  @c_SQLParms                NVARCHAR(4000) = ''
 
          ,  @c_SQLSchema               NVARCHAR(4000) = ''
@@ -73,7 +75,7 @@ BEGIN
          ,  @c_TableColumns            NVARCHAR(4000) = ''
          ,  @c_Table                   NVARCHAR(60) = ''
          
-         ,  @c_TempTableName           NVARCHAR(50) = ''          --(Wan03) 
+         ,  @c_TempTableName           NVARCHAR(50) = ''             --(Wan03) 
 
          ,  @c_TableName               NVARCHAR(50)   = 'RECEIPTDETAIL'
          ,  @c_SourceType              NVARCHAR(50)   = 'lsp_ASN_PopulateSOs_Wrapper'
@@ -90,6 +92,7 @@ BEGIN
          ,  @c_Rectype                 NVARCHAR(10)   = ''
          ,  @c_WarehouseReference      NVARCHAR(18)   = ''
          ,  @c_Carrierkey              NVARCHAR(15)   = ''
+         ,  @c_CarrierName             NVARCHAR(45)   = ''           --(Wan06)       
          ,  @c_CarrierAddress1         NVARCHAR(45)   = ''
          ,  @c_CarrierAddress2         NVARCHAR(45)   = ''
          ,  @c_CarrierCity             NVARCHAR(45)   = ''
@@ -250,6 +253,7 @@ BEGIN
             ,@c_Rectype  = RH.RecType
             ,@c_WarehouseReference = ISNULL(RH.WarehouseReference,'')
             ,@c_Carrierkey      = ISNULL(RH.Carrierkey,'')
+            ,@c_CarrierName     = ISNULL(RH.CarrierName,'')             --(Wan06)
             ,@c_CarrierAddress1 = ISNULL(RH.CarrierAddress1,'')
             ,@c_CarrierAddress2 = ISNULL(RH.CarrierAddress2,'')
             ,@c_CarrierCity     = ISNULL(RH.CarrierCity,'')
@@ -586,9 +590,17 @@ BEGIN
          BEGIN
             IF @c_GenConsignee2Carrierkey = '1'  
             BEGIN
-               IF @c_Consigneekey <> ''
-               BEGIN
-                  SELECT @c_Carrierkey      = @c_Consigneekey
+               --IF @c_Consigneekey <> ''                                        --(Wan06) - START
+               --BEGIN
+                  SET @c_Carrierkey = @c_Consigneekey  
+                  SET @c_CarrierName     = ''                                      
+                  SET @c_CarrierAddress1 = ''
+                  SET @c_CarrierAddress2 = ''
+                  SET @c_CarrierCity     = ''
+                  SET @c_CarrierState    = ''
+                  SET @c_CarrierZip      = ''                        
+                  SELECT 
+                         @c_CarrierName     = ISNULL(ST.Company,'')               
                      ,   @c_CarrierAddress1 = ISNULL(ST.Address1,'')
                      ,   @c_CarrierAddress2 = ISNULL(ST.Address2,'')
                      ,   @c_CarrierCity     = ISNULL(ST.City,'')
@@ -596,7 +608,7 @@ BEGIN
                      ,   @c_CarrierZip      = ISNULL(ST.Zip,'')
                   FROM STORER ST WITH (NOLOCK)
                   WHERE ST.Storerkey = @c_Consigneekey 
-               END
+               --END                                                             --(Wan06) - END 
             END
             ELSE
             BEGIN
@@ -623,6 +635,7 @@ BEGIN
                , DocType  
                , WarehouseReference  
                , Carrierkey   
+               , CarrierName                                         --(Wan06)
                , CarrierAddress1   
                , CarrierAddress2   
                , CarrierCity   
@@ -649,6 +662,7 @@ BEGIN
                , DocType   = @c_Doctype  
                , WarehouseReference = @c_WarehouseReference   
                , Carrierkey         = @c_Carrierkey 
+               , CarrierName        = @c_CarrierName                 --(Wan06)
                , CarrierAddress1    = @c_CarrierAddress1
                , CarrierAddress2    = @c_CarrierAddress2
                , CarrierCity        = @c_CarrierCity
@@ -672,7 +686,8 @@ BEGIN
          BEGIN
             UPDATE #tRECEIPT 
                SET  ExternReceiptkey   = @c_ExternReceiptkey
-                  , Carrierkey         = @c_Carrierkey 
+                  , Carrierkey         = @c_Carrierkey
+                  , CarrierName        = @c_CarrierName              --(Wan06) 
                   , CarrierAddress1    = @c_CarrierAddress1
                   , CarrierAddress2    = @c_CarrierAddress2
                   , CarrierCity        = @c_CarrierCity
@@ -1210,6 +1225,7 @@ BEGIN
          UPDATE RECEIPT 
             SET ExternReceiptKey = T.ExternReceiptKey
                ,CarrierKey       = T.Carrierkey
+               , CarrierName     = T.CarrierName                     --(Wan06) 
                ,CarrierAddress1  = T.CarrierAddress1
                ,CarrierAddress2  = T.CarrierAddress2
                ,CarrierCity      = T.CarrierCity
@@ -1421,10 +1437,40 @@ BEGIN
       GOTO EXIT_SP
    END CATCH   --(Wan01) - END
 EXIT_SP:
+   IF OBJECT_ID('tempdb..#tRECEIPT', 'U') IS NOT NULL                --(Wan06) - START
+   BEGIN
+      DROP TABLE #tRECEIPT
+   END  
+
+   IF OBJECT_ID('tempdb..#tRECEIPTDETAIL', 'U') IS NOT NULL
+   BEGIN
+      DROP TABLE #tRECEIPTDETAIL
+   END 
+
+   IF OBJECT_ID('tempdb..#tORDERS', 'U') IS NOT NULL
+   BEGIN
+      DROP TABLE #tORDERS
+   END  
+
+   IF OBJECT_ID('tempdb..#tORDERDETAIL', 'U') IS NOT NULL
+   BEGIN
+      DROP TABLE #tORDERDETAIL
+   END 
+   
+   IF OBJECT_ID('tempdb..#tPICKDETAIL', 'U') IS NOT NULL
+   BEGIN
+      DROP TABLE #tPICKDETAIL
+   END   
+
+   IF OBJECT_ID('tempdb..#tLOTATTRIBUTE', 'U') IS NOT NULL
+   BEGIN
+      DROP TABLE #tLOTATTRIBUTE
+   END                                                               --(Wan06) - START
+   
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0
-      IF  @@TRANCOUNT = 1 AND @@TRANCOUNT > @n_StartTCnt
+      IF @n_StartTCnt = 0 AND @@TRANCOUNT > @n_StartTCnt             --(Wan06)
       BEGIN
          ROLLBACK TRAN
       END
