@@ -28,6 +28,7 @@ GO
 /*                          Add config @cGotoUCCIDScn                            */
 /*                          Add UCCID step_13 (cc02)                             */
 /* 2022-07-19 2.0  Ung      WMS-20246 Add standard Decode                        */
+/* 2023-03-28 2.1  James    JSM-138949 - Bug fix on MultiSKUBarcode (james05)    */
 /*********************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_ConReceive] (
@@ -224,7 +225,7 @@ SELECT
    @cPUOM_Desc          = V_String11,
    @cDefaultReceiveQty  = V_String12,
    @cFlowThruQtyScreen  = V_String13,
-
+   
    @cColumnName         = V_String21,
    @cDefaultToLOC       = V_String22,
    @cCheckPLTID         = V_String23,
@@ -245,7 +246,8 @@ SELECT
    @cReceiveDefaultToLoc= V_String38,  --(james03)
    @cGotoUccIDScn       = V_String39,  --(cc02)
    @cBarcode            = V_String41,  --(cc02)
-
+   @cColumnName         = V_String42,
+   
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,
@@ -352,6 +354,8 @@ BEGIN
    IF @cGotoUccIDScn = '0'
       SET @cGotoUccIDScn = ''
 
+   SET @cColumnName = rdt.RDTGetConfig( @nFunc, 'RefNoLookupColumn', @cStorerKey)
+   
    -- EventLog
    EXEC RDT.rdt_STD_EventLog
       @cActionType = '1', -- Sign-in
@@ -1083,6 +1087,9 @@ BEGIN
 
             IF @nErrNo = 0 -- Populate multi SKU screen
             BEGIN
+               SET @cDataType = ''
+               SELECT @cDataType = DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Receipt' AND COLUMN_NAME = @cColumnName
+
             	SET @cSQL =
             	'SELECT DISTINCT sku ' +
                'FROM receiptDetail WITH (NOLOCK) ' +
@@ -4059,6 +4066,7 @@ BEGIN
       V_String38   = @cReceiveDefaultToLoc,
       V_String39   = @cGotoUccIDScn,   --(cc02)
       V_String41   = @cBarcode,        --(cc02)
+      V_String42   = @cColumnName,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,
@@ -4094,6 +4102,5 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-
-GRANT EXEC ON RDT.rdtfnc_ConReceive TO NSQL
+GRANT EXECUTE ON RDT.rdtfnc_ConReceive TO NSQL
 GO
