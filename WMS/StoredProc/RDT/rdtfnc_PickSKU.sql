@@ -31,6 +31,7 @@ GO
 /* 2022-12-30   2.4  Calvin     JSM-119684 Reset Pickzone Variable (CLVN01)      */
 /* 2022-11-24   2.5  Ung        WMS-21032 Fix ExtendedInfoSP at LOC screen       */
 /*                              Add DefaultQTY                                   */
+/* 2023-03-15   2.6  YeeKung    WMS-21872 Fix Bug (yeekung05)                    */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdtfnc_PickSKU (
@@ -353,7 +354,7 @@ GOTO Quit
 
 /************************************************************************************
 Scn = 4690. PickSlipNo screen
-   PSNO    (field01)
+ PSNO    (field01)
 ************************************************************************************/
 Step_PickSlipNo:
 BEGIN
@@ -1163,12 +1164,12 @@ BEGIN
                   ' @nStep        INT,             ' +
                   ' @nInputKey    INT,             ' +
                   ' @cStorerKey   NVARCHAR( 15),   ' +
-                  ' @cFieldName   NVARCHAR( 10),   ' +
                   ' @cFacility    NVARCHAR( 20),   ' +
                   ' @cLOC         NVARCHAR( 10),   ' +
                   ' @cDropid      NVARCHAR( 20),   ' +
                   ' @cpickslipno  NVARCHAR( 20),   ' +
                   ' @cBarcode     NVARCHAR( 60),   ' +
+                  ' @cFieldName   NVARCHAR( 10),   ' +
                   ' @cUPC         NVARCHAR( 20)  OUTPUT, ' +
                   ' @cSKU         NVARCHAR( 20)  OUTPUT, ' +
                   ' @nQTY         INT            OUTPUT, ' +
@@ -1191,8 +1192,8 @@ BEGIN
                   ' @cErrMsg      NVARCHAR( 20)  OUTPUT'
 
                EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey,@cFacility,@cLoc,@cDropid,@cpickslipno, @cUPC, 'SKU',
-                  @cUPC           OUTPUT, @cSKU           OUTPUT, @nTaskQTY       OUTPUT,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey,@cFacility,@cLoc,@cDropid,@cpickslipno, @cBarcode, 'SKU', --(yeekung05)
+                  @cUPC           OUTPUT, @cSKU           OUTPUT, @cDefaultQTY       OUTPUT,
                   @cChkLottable01 OUTPUT, @cChkLottable02 OUTPUT, @cChkLottable03 OUTPUT, @dChkLottable04 OUTPUT, @dChkLottable05 OUTPUT,
                   @cChkLottable06 OUTPUT, @cChkLottable07 OUTPUT, @cChkLottable08 OUTPUT, @cChkLottable09 OUTPUT, @cChkLottable10 OUTPUT,
                   @cChkLottable11 OUTPUT, @cChkLottable12 OUTPUT, @dChkLottable13 OUTPUT, @dChkLottable14 OUTPUT, @dChkLottable15 OUTPUT,
@@ -1456,7 +1457,7 @@ BEGIN
             '@nStep         INT,           ' +
             '@nAfterStep    INT,           ' +
             '@nInputKey     INT,           ' +
-            '@cFacility     NVARCHAR( 5),  ' +
+    '@cFacility     NVARCHAR( 5),  ' +
             '@cStorerKey    NVARCHAR( 15), ' +
             '@cPickSlipNo   NVARCHAR( 10), ' +
             '@cPickZone     NVARCHAR( 10), ' +
@@ -1647,7 +1648,7 @@ BEGIN
          SET @nStep = @nStep_ShortPick
 
          SET @cOutField01 = '' -- Option
-         GOTO Quit
+       GOTO Quit
       END
 
       -- To LOC
@@ -2096,7 +2097,7 @@ Scn = 4695. Confirm Short Pick?
 Step_ShortPick:
 BEGIN
    IF @nInputKey = 1 -- ENTER
-   BEGIN
+BEGIN
       -- Screen mapping
       SET @cOption = @cInField01
 
@@ -2490,7 +2491,7 @@ BEGIN
                '@cPickZone     NVARCHAR( 10), ' +      
                '@cLOC          NVARCHAR( 10), ' +      
                '@cDropID       NVARCHAR( 20), ' +      
-               '@cSKU          NVARCHAR( 20), ' +      
+               '@cSKU       NVARCHAR( 20), ' +      
                '@cLottable01   NVARCHAR( 18), ' +      
                '@cLottable02   NVARCHAR( 18), ' +      
                '@cLottable03   NVARCHAR( 18), ' +      
@@ -2639,7 +2640,7 @@ BEGIN
             '@cDropID       NVARCHAR( 20), ' +
             '@cSKU          NVARCHAR( 20), ' +
             '@cLottable01   NVARCHAR( 18), ' +
-            '@cLottable02   NVARCHAR( 18), ' +
+          '@cLottable02   NVARCHAR( 18), ' +
             '@cLottable03   NVARCHAR( 18), ' +
             '@dLottable04   DATETIME,      ' +
             '@dLottable05   DATETIME,      ' +
