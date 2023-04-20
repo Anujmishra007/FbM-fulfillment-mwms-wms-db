@@ -1,7 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[RDT].[rdt_Receive_ReceiptSerialNo]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdt_Receive_ReceiptSerialNo]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -14,9 +10,10 @@ GO
 /* Date       Rev  Author      Purposes                                       */
 /* 2018-08-01 1.0  Ung         WMS-5722 Receive Serial No by batch            */
 /* 2019-08-08 1.1  Ung         INC0807312 Renumber error no                   */
+/* 2023-03-29 1.2  James       WMS-21943 Add UCCNo param and column (james01) */
 /******************************************************************************/
 
-CREATE PROCEDURE [RDT].[rdt_Receive_ReceiptSerialNo] (
+CREATE OR ALTER PROCEDURE [RDT].[rdt_Receive_ReceiptSerialNo] (
    @nFunc               INT,
    @nMobile             INT,
    @cLangCode           NVARCHAR( 3),
@@ -28,7 +25,8 @@ CREATE PROCEDURE [RDT].[rdt_Receive_ReceiptSerialNo] (
    @cSerialNo           NVARCHAR( 30), 
    @nSerialQTY          INT, 
    @nErrNo              INT           OUTPUT,
-   @cErrMsg             NVARCHAR( 20) OUTPUT
+   @cErrMsg             NVARCHAR( 20) OUTPUT,
+   @cUCCNo              NVARCHAR( 20) = ''
 ) AS
 BEGIN
    SET NOCOUNT ON
@@ -65,8 +63,8 @@ BEGIN
       SAVE TRAN rdt_Receive_ReceiptSerialNo -- For rollback or commit only our own transaction
       
       -- Insert ReceiptSerialNo 
-      INSERT INTO ReceiptSerialNo (ReceiptKey, ReceiptLineNumber, StorerKey, SKU, SerialNo, QTYExpected, QTY)
-      VALUES (@cReceiptKey, @cReceiptLineNumber, @cStorerKey, @cSKU, @cSerialNo, @nSerialQTY, @nSerialQTY)
+      INSERT INTO ReceiptSerialNo (ReceiptKey, ReceiptLineNumber, StorerKey, SKU, SerialNo, QTYExpected, QTY, UCCNo)
+      VALUES (@cReceiptKey, @cReceiptLineNumber, @cStorerKey, @cSKU, @cSerialNo, @nSerialQTY, @nSerialQTY, @cUCCNo)
       IF @@ERROR <> 0
       BEGIN
          SET @nErrNo = 142751
