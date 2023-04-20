@@ -2,32 +2,36 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-/*************************************************************************/  
-/* Stored Procedure: WM.lsp_Validate_AdjustmentDetail_Std                */  
-/* Creation Date: 30-JUL-2018                                            */  
-/* Copyright: LFL                                                        */  
-/* Written by: Wan                                                       */  
-/*                                                                       */  
-/* Purpose:                                                              */  
-/*                                                                       */  
-/* Called By:                                                            */  
-/*                                                                       */  
-/*                                                                       */  
-/* Version: 1.1                                                          */  
-/*                                                                       */  
-/* Data Modifications:                                                   */  
-/*                                                                       */  
-/* Updates:                                                              */  
-/* Date        Author   Ver   Purposes                                   */ 
-/* 2020-03-03  Wan01    1.1   Validate Lot                               */
-/* 2020-08-24  Wan02    1.2   LFWM-2296 - UAT[CN] SKE_ADJ_Lottable05     */
-/* 2021-02-10  mingle01 1.2   Add Big Outer Begin try/Catch              */
-/* 2021-04-23  Wan03    1.3   LFWM-2569 - UAT - TW  Finalize Adjustment  */
-/*                            Alert                                      */
-/* 2022-06-14  Wan04    1.2   LFWM-3501 - PROD & UAT - GIT SCE Adjustment*/
-/*                            Issue                                      */
-/* 2022-06-14  Wan04    1.2   DevObj Combine script                      */
-/*************************************************************************/   
+/**************************************************************************/  
+/* Stored Procedure: WM.lsp_Validate_AdjustmentDetail_Std                 */  
+/* Creation Date: 30-JUL-2018                                             */  
+/* Copyright: LFL                                                         */  
+/* Written by: Wan                                                        */  
+/*                                                                        */  
+/* Purpose:                                                               */  
+/*                                                                        */  
+/* Called By:                                                             */  
+/*                                                                        */  
+/*                                                                        */  
+/* Version: 1.4                                                           */  
+/*                                                                        */  
+/* Data Modifications:                                                    */  
+/*                                                                        */  
+/* Updates:                                                               */  
+/* Date        Author   Ver   Purposes                                    */ 
+/* 2020-03-03  Wan01    1.1   Validate Lot                                */
+/* 2020-08-24  Wan02    1.2   LFWM-2296 - UAT[CN] SKE_ADJ_Lottable05      */
+/* 2021-02-10  mingle01 1.2   Add Big Outer Begin try/Catch               */
+/* 2021-04-23  Wan03    1.3   LFWM-2569 - UAT - TW  Finalize Adjustment   */
+/*                            Alert                                       */
+/* 2022-06-14  Wan04    1.2   LFWM-3501 - PROD & UAT - GIT SCE Adjustment */
+/*                            Issue                                       */
+/* 2022-06-14  Wan04    1.2   DevObj Combine script                       */
+/* 2023-03-14  NJOW01   1.3   LFWM-3608 performance tuning for XML Reading*/
+/* 2023-04-12  Wan05    1.4   LFWM-4145-[CN] Prod  Mannings Channel column*/
+/*                            need to be limited by the settings in       */
+/*                            CODELKUP in Inventory Adjustment screen     */
+/**************************************************************************/   
 CREATE OR ALTER PROC [WM].[lsp_Validate_AdjustmentDetail_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
 , @c_XMLDataString      NVARCHAR(MAX) 
@@ -58,14 +62,82 @@ BEGIN
    ,  @c_SQLSchema         NVARCHAR(MAX) = N''
    ,  @c_SQLData           NVARCHAR(MAX) = N''   
    ,  @n_Continue          INT = 1 
+   ,  @n_XMLHandle         INT                  --NJOW01
+   ,  @c_SQLSchema_OXML    NVARCHAR(MAX) = N''  --NJOW01
+   ,  @c_TableColumns_OXML NVARCHAR(MAX) = N''  --NJOW01
 
    --(mingle01) - START
    BEGIN TRY
+        /* --NJOW01 Removed
       IF OBJECT_ID('tempdb..#ADJUSTMENTDETAIL') IS NOT NULL
       BEGIN
          DROP TABLE #ADJUSTMENTDETAIL
       END
+      */
+      
+      --NJOW01 S      
+      IF OBJECT_ID('tempdb..#VALDN') IS NULL
+      BEGIN
+         CREATE TABLE #VALDN( Rowid  INT NOT NULL IDENTITY(1,1) )   
+         
+         SET @x_XMLSchema = CONVERT(XML, @c_XMLSchemaString)
+         SET @x_XMLData = CONVERT(XML, @c_XMLDataString)
+         
+         EXEC sp_xml_preparedocument @n_XMLHandle OUTPUT, @c_XMLSchemaString      
+         DECLARE CUR_SCHEMA CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT ColName, DataType 
+            FROM OPENXML (@n_XMLHandle, '/Table/Column',1)  
+            WITH (ColName  NVARCHAR(128),  
+                  DataType NVARCHAR(128))
+                                    
+         OPEN CUR_SCHEMA
+         
+         FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_DataType
+         
+         WHILE @@FETCH_STATUS <> -1
+         BEGIN
+            SET @c_TableName = ''
+            IF CHARINDEX('.', @c_ColumnName) > 0 
+            BEGIN
+               SET @c_TableName  = LEFT(@c_ColumnName, CHARINDEX('.', @c_ColumnName))
+               SET @c_ColumnName = RIGHT(@c_ColumnName, LEN(@c_ColumnName) -LEN(@c_TableName))
+            END
+         
+            SET @c_SQLSchema  = @c_SQLSchema + @c_ColumnName + ' ' + @c_DataType + ' NULL, '
+            SET @c_SQLSchema_OXML  = @c_SQLSchema_OXML + '['+@c_TableName+@c_ColumnName + '] ' + @c_DataType + ', '
+            SET @c_TableColumns = @c_TableColumns + @c_ColumnName + ', '
+            SET @c_TableColumns_OXML = @c_TableColumns_OXML + '[' + @c_TableName + @c_ColumnName + '], '
+               
+            FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_DataType
+         END
+         CLOSE CUR_SCHEMA
+         DEALLOCATE CUR_SCHEMA
+         EXEC sp_xml_removedocument @n_XMLHandle    
+                       
+         IF LEN(@c_SQLSchema) > 0 
+         BEGIN
+            SET @c_SQL = N'ALTER TABLE #VALDN  ADD  ' + SUBSTRING(@c_SQLSchema, 1, LEN(@c_SQLSchema) - 1) + ' '
+               
+            EXEC (@c_SQL)
+         
+            EXEC sp_xml_preparedocument @n_XMLHandle OUTPUT, @c_XMLDataString
+         
+            SET @c_SQL = N' INSERT INTO #VALDN' 
+                        + ' ( ' + SUBSTRING(@c_TableColumns, 1, LEN(@c_TableColumns) - 1) + ' )'
+                        + ' SELECT ' + SUBSTRING(@c_TableColumns_OXML, 1, LEN(@c_TableColumns_OXML) - 1)
+                        + ' FROM  OPENXML (@n_XMLHandle, ''Row'',1) '
+                        + ' WITH (' + SUBSTRING(@c_SQLSchema_OXML, 1, LEN(@c_SQLSchema_OXML) - 1) + ')'
+                           
+            EXEC sp_executeSQl @c_SQL
+                              , N'@n_XMLHandle INT'
+                              , @n_XMLHandle                                     
+            
+            EXEC sp_xml_removedocument @n_XMLHandle                         
+         END
+      END
+      --NJOW01 E            
 
+      /*
       CREATE TABLE #ADJUSTMENTDETAIL( Rowid  INT NOT NULL IDENTITY(1,1) )   
 
       SET @x_XMLSchema = CONVERT(XML, @c_XMLSchemaString)
@@ -115,6 +187,7 @@ BEGIN
                            , @x_XMLData
          
       END
+      */
 
       DECLARE 
             @c_AdjustmentKey        NVARCHAR(10) = ''
@@ -129,9 +202,10 @@ BEGIN
          ,  @c_UDF05                NVARCHAR(20) = ''
          ,  @c_UCCNo                NVARCHAR(20) = ''
          ,  @c_Packkey              NVARCHAR(10) = ''       --(Wan03)           
-         ,  @c_ReasonCode           NVARCHAR(30) = ''       --(Wan03)  
+         ,  @c_ReasonCode           NVARCHAR(30) = ''       --(Wan03) 
          ,  @n_Qty                  INT          = 0
-
+         ,  @c_Channel              NVARCHAR(20) = ''       --(Wan05)
+         
          ,  @c_LottableLabel        NVARCHAR(20) = ''
          ,  @c_Lottable01Label      NVARCHAR(20) = ''
          ,  @c_Lottable02Label      NVARCHAR(20) = ''
@@ -177,7 +251,8 @@ BEGIN
          ,  @c_AdjStatusControl     NVARCHAR(30) = ''
          ,  @c_VLDLotLabelExist     NVARCHAR(30) = ''
          ,  @c_SkipUDF05UccChkInAdj NVARCHAR(30) = ''
-         ,  @c_AdjAllowZeroQty      NVARCHAR(30) = ''       --(Wan03)  
+         ,  @c_AdjAllowZeroQty      NVARCHAR(30) = ''       --(Wan03)
+         ,  @c_ChannelInventoryMgmt NVARCHAR(30) = ''       --(Wan05)                                                    
 
       SELECT TOP 1 
             @c_AdjustmentKey     = AD.AdjustmentKey
@@ -206,8 +281,9 @@ BEGIN
          ,  @c_UCCNo             = ISNULL(AD.UCCNo,'')
          ,  @c_Packkey           = ISNULL(AD.Packkey,'')       --(Wan03) 
          ,  @c_ReasonCode        = ISNULL(AD.ReasonCode,'')    --(Wan03)  
-         ,  @n_Qty               = ISNULL(AD.Qty,0)            --(Wan03)                                                                 --                                                              -- 
-      FROM  #ADJUSTMENTDETAIL AD  
+         ,  @n_Qty               = ISNULL(AD.Qty,0)            --(Wan03) 
+         ,  @c_Channel           = ad.channel                  --(Wan05)                                                      --                                                              -- 
+      FROM  #VALDN AD  --NJOW01
 
       SELECT TOP 1 
             @c_FinalizedFlag_Del = AD.FinalizedFlag
@@ -313,6 +389,18 @@ BEGIN
             GOTO EXIT_SP
          END
       END
+      
+      SET @c_ChannelInventoryMgmt = '0'                  --(Wan05) - START
+      SELECT @c_ChannelInventoryMgmt = fsgr.Authority
+      FROM dbo.fnc_SelectGetRight(@c_Facility, @c_Storerkey, '', 'ChannelInventoryMgmt') AS fsgr 
+
+      IF @c_ChannelInventoryMgmt = 1 AND @c_Channel = ''
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_Err = 552064
+         SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Channel is required. (lsp_Validate_AdjustmentDetail_Std)'
+         GOTO EXIT_SP
+      END                                                --(Wan05) - END
 
       SELECT @c_Lottable01Label = ISNULL(RTRIM(Lottable01Label),'')
            , @c_Lottable02Label = ISNULL(RTRIM(Lottable02Label),'')
