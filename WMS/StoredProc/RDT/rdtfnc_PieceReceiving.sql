@@ -142,6 +142,7 @@ GO
 /* 2021-10-15 9.3 yeekung    WMS-19640 Add eventlog refno1(yeekung03)   */
 /* 2022-10-04 9.4 yeekung    WMS-21405 Add extendedvalidate step 1      */
 /*                            (yeekung05)                               */
+/* 2023-03-20 9.5 James      WMS-21943 Add Decode into step sku(james25)*/
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_PieceReceiving] (
    @nMobile    INT,
@@ -188,7 +189,7 @@ DECLARE
    @cVerifySKUInfo          NVARCHAR( 20),
    @cOption                 NVARCHAR( 1),
    @cQTY                    NVARCHAR( 10),
-   @cBarcode                NVARCHAR( 60),
+   @cBarcode                NVARCHAR( 120),
    @cSerialNo               NVARCHAR( 30),
    @nSerialQTY              INT,
    @nMoreSNO                INT,
@@ -391,7 +392,7 @@ SELECT
    @cDecodeLottableSP       = V_String41, --(cc02)
    @cSuggestedLocSP         = V_String42, --(cc03)
    @cClosePalletSP          = V_String43, --(cc03)  
-
+   
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,
@@ -1349,7 +1350,7 @@ BEGIN
 
             EXEC dbo.ispLabelNo_Decoding_Wrapper
                 @c_SPName     = @cDecodeLabelNo
-            ,@c_LabelNo    = @cBarcode
+               ,@c_LabelNo    = @cBarcode
                ,@c_Storerkey  = @cStorer
                ,@c_ReceiptKey = ''
                ,@c_POKey      = ''
@@ -1773,7 +1774,7 @@ BEGIN
                ' @nInputKey    INT,           ' +
                ' @cFacility    NVARCHAR( 5),  ' +
                ' @cStorerKey   NVARCHAR( 15), ' +
-               ' @cBarcode     NVARCHAR( 60), ' +
+               ' @cBarcode     NVARCHAR( 120),' +
                ' @cToLOC       NVARCHAR( 10), ' +
                ' @cToID        NVARCHAR( 18), ' +
                ' @cLottable01Value  NVARCHAR( 20), ' +
@@ -2053,7 +2054,7 @@ BEGIN
       SET @cOutField11 = @cSKU -- last SKU
       SET @cOutField12 = @cUOM -- last UOM
       SET @cOutField15 = @cExtendedInfo
-
+      
       SET @cInField05 = @cDefaultPieceRecvQTY
       EXEC rdt.rdtSetFocusField @nMobile, 2 -- SKU
 
@@ -2251,7 +2252,7 @@ BEGIN
       SET @cSKU = @cInField02 -- SKU
       SET @cQTY = @cInField05 -- QTY
       SET @cBarcode = @cInField02
-
+      
       -- Validate SKU
       IF ISNULL( @cSKU,'') = ''
       BEGIN
@@ -2288,57 +2289,101 @@ BEGIN
          END
          ELSE
          BEGIN
-            -- Label decoding
-            IF @cDecodeLabelNo <> ''
+            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')  
+            BEGIN  
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +  
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cBarcode, ' +  
+                  ' @cSKU        OUTPUT, @nQTY        OUTPUT, ' +  
+                  ' @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @cSerialNoCapture OUTPUT, ' +  
+                  ' @nErrNo      OUTPUT, @cErrMsg     OUTPUT'  
+               SET @cSQLParam =  
+                  ' @nMobile           INT,           ' +  
+                  ' @nFunc             INT,           ' +  
+                  ' @cLangCode         NVARCHAR( 3),  ' +  
+                  ' @nStep             INT,           ' +  
+                  ' @nInputKey         INT,           ' +  
+                  ' @cStorerKey        NVARCHAR( 15), ' +  
+                  ' @cReceiptKey       NVARCHAR( 10), ' +  
+                  ' @cPOKey            NVARCHAR( 10), ' +  
+                  ' @cLOC              NVARCHAR( 10), ' +  
+                  ' @cID               NVARCHAR( 18), ' +
+                  ' @cBarcode          NVARCHAR( 120), ' +  
+                  ' @cSKU              NVARCHAR( 20)  OUTPUT, ' +  
+                  ' @nQTY              INT            OUTPUT, ' +  
+                  ' @cLottable01       NVARCHAR( 18)  OUTPUT, ' +  
+                  ' @cLottable02       NVARCHAR( 18)  OUTPUT, ' +  
+                  ' @cLottable03       NVARCHAR( 18)  OUTPUT, ' +  
+                  ' @dLottable04       DATETIME       OUTPUT, ' +  
+                  ' @cSerialNoCapture  NVARCHAR(1)    OUTPUT, ' +
+                  ' @nErrNo            INT            OUTPUT, ' +  
+                  ' @cErrMsg           NVARCHAR( 20)  OUTPUT'  
+  
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cReceiptKey, @cPOKey, @cLOC, @cTOID, @cBarcode,  
+                  @cSKU        OUTPUT, @nQTY        OUTPUT,  
+                  @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @cSerialNoCapture OUTPUT,  
+                  @nErrNo      OUTPUT, @cErrMsg     OUTPUT  
+  
+               IF @nErrNo <> 0  
+                  GOTO Step_5_Fail_SKU  
+
+              IF @nQTY > 0
+                 SET @cQTY = CAST( @nQTY AS NVARCHAR( 5))
+            END  
+            ELSE
             BEGIN
-               SET @c_oFieled01 = @cSKU
-               SET @c_oFieled03 = @cTempLottable06
-               SET @c_oFieled05 = @cQTY
-               SET @c_oFieled07 = @cTempLottable01
-               SET @c_oFieled08 = @cTempLottable02
-               SET @c_oFieled09 = @cTempLottable03
-               SET @c_oFieled10 = @cTempLottable04
-
-               EXEC dbo.ispLabelNo_Decoding_Wrapper
-                   @c_SPName     = @cDecodeLabelNo
-                  ,@c_LabelNo    = @cBarcode --(yeekung01)
-                  ,@c_Storerkey  = @cStorer
-                  ,@c_ReceiptKey = @cReceiptkey
-                  ,@c_POKey      = ''
-                  ,@c_LangCode   = @cLangCode
-                  ,@c_oFieled01  = @c_oFieled01 OUTPUT   -- SKU
-                  ,@c_oFieled02  = @c_oFieled02 OUTPUT   -- STYLE
-                  ,@c_oFieled03  = @c_oFieled03 OUTPUT   -- COLOR
-                  ,@c_oFieled04  = @c_oFieled04 OUTPUT   -- SIZE
-                  ,@c_oFieled05  = @c_oFieled05 OUTPUT   -- QTY
-                  ,@c_oFieled06  = @c_oFieled06 OUTPUT   -- CO#
-                  ,@c_oFieled07  = @c_oFieled07 OUTPUT   -- Lottable01
-                  ,@c_oFieled08  = @c_oFieled08 OUTPUT   -- Lottable02
-                  ,@c_oFieled09  = @c_oFieled09 OUTPUT   -- Lottable03
-                  ,@c_oFieled10  = @c_oFieled10 OUTPUT   -- Lottable04
-                  ,@b_Success    = @b_Success   OUTPUT
-                  ,@n_ErrNo      = @nErrNo     OUTPUT
-                  ,@c_ErrMsg     = @cErrMsg     OUTPUT
-
-               IF ISNULL(@cErrMsg, '') <> ''
+               -- Label decoding
+               IF @cDecodeLabelNo <> ''
                BEGIN
-                  SET @cErrMsg1 = @cErrMsg
-                  SET @nErrNo = 0
-                  EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1
-                  IF @nErrNo = 1
-                     SET @cErrMsg1 = ''
+                  SET @c_oFieled01 = @cSKU
+                  SET @c_oFieled03 = @cTempLottable06
+                  SET @c_oFieled05 = @cQTY
+                  SET @c_oFieled07 = @cTempLottable01
+                  SET @c_oFieled08 = @cTempLottable02
+                  SET @c_oFieled09 = @cTempLottable03
+                  SET @c_oFieled10 = @cTempLottable04
 
-                  GOTO Step_5_Fail_SKU
+                  EXEC dbo.ispLabelNo_Decoding_Wrapper
+                      @c_SPName     = @cDecodeLabelNo
+                     ,@c_LabelNo    = @cBarcode --(yeekung01)
+                     ,@c_Storerkey  = @cStorer
+                     ,@c_ReceiptKey = @cReceiptkey
+                     ,@c_POKey      = ''
+                     ,@c_LangCode   = @cLangCode
+                     ,@c_oFieled01  = @c_oFieled01 OUTPUT   -- SKU
+                     ,@c_oFieled02  = @c_oFieled02 OUTPUT   -- STYLE
+                     ,@c_oFieled03  = @c_oFieled03 OUTPUT   -- COLOR
+                     ,@c_oFieled04  = @c_oFieled04 OUTPUT   -- SIZE
+                     ,@c_oFieled05  = @c_oFieled05 OUTPUT   -- QTY
+                     ,@c_oFieled06  = @c_oFieled06 OUTPUT   -- CO#
+                     ,@c_oFieled07  = @c_oFieled07 OUTPUT   -- Lottable01
+                     ,@c_oFieled08  = @c_oFieled08 OUTPUT   -- Lottable02
+                     ,@c_oFieled09  = @c_oFieled09 OUTPUT   -- Lottable03
+                     ,@c_oFieled10  = @c_oFieled10 OUTPUT   -- Lottable04
+                     ,@b_Success    = @b_Success   OUTPUT
+                     ,@n_ErrNo      = @nErrNo     OUTPUT
+                     ,@c_ErrMsg     = @cErrMsg     OUTPUT
+
+                  IF ISNULL(@cErrMsg, '') <> ''
+                  BEGIN
+                     SET @cErrMsg1 = @cErrMsg
+                     SET @nErrNo = 0
+                     EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1
+                     IF @nErrNo = 1
+                        SET @cErrMsg1 = ''
+
+                     GOTO Step_5_Fail_SKU
+                  END
+
+                  SET @cSKU = @c_oFieled01
+                  SET @cSerialNo = @c_oFieled02 -- (james19)
+                  SET @cTempLottable06 = @c_oFieled03
+                  SET @cQTY = @c_oFieled05
+                  SET @cTempLottable01 = @c_oFieled07
+                  SET @cTempLottable02 = @c_oFieled08
+                  SET @cTempLottable03 = @c_oFieled09
+                  SET @cTempLottable04 = @c_oFieled10
                END
-
-               SET @cSKU = @c_oFieled01
-               SET @cSerialNo = @c_oFieled02 -- (james19)
-               SET @cTempLottable06 = @c_oFieled03
-               SET @cQTY = @c_oFieled05
-               SET @cTempLottable01 = @c_oFieled07
-               SET @cTempLottable02 = @c_oFieled08
-               SET @cTempLottable03 = @c_oFieled09
-               SET @cTempLottable04 = @c_oFieled10
             END
          END
       END
@@ -3029,7 +3074,7 @@ BEGIN
             SET @nFromScn = @nScn
             SET @nScn = 4831
             SET @nStep = @nStep + 4
-
+            
             GOTO Step_5_Quit
          END
       END
@@ -3090,6 +3135,7 @@ BEGIN
 
       IF @nErrNo <> 0
       BEGIN
+      	SET @cSKUValidated = '0'
          ROLLBACK TRAN rdt_PieceReceiving_Confirm
          WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
             COMMIT TRAN
@@ -3134,6 +3180,7 @@ BEGIN
 
          IF @nErrNo <> 0
          BEGIN
+         	SET @cSKUValidated = '0' 
             ROLLBACK TRAN rdt_PieceReceiving_Confirm
             WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
                COMMIT TRAN
@@ -3999,7 +4046,7 @@ BEGIN
          GOTO Step_9_Quit
       END
 
-      IF @nErrNo <> 0
+      IF @nErrNo <> 0 OR @nMoreSNO = 1
          GOTO Quit
 
       DECLARE @nRDQTY INT
@@ -4130,6 +4177,7 @@ BEGIN
       SET @cOutField12 = @cUOM -- last UOM
       SET @cOutField15 = '' -- @cExtendedInfo
 
+      SET @cInField05 = @cDefaultPieceRecvQTY
       EXEC rdt.rdtSetFocusField @nMobile, 2 -- SKU
 
       -- Go to SKU QTY screen
@@ -4453,7 +4501,7 @@ BEGIN
       V_String41   = @cDecodeLottableSP, --(cc02)
       V_String42   = @cSuggestedLocSP, --(cc03)
       V_String43   = @cClosePalletSP,  --(cc03)  
-
+      
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,
       I_Field03 = @cInField03,  O_Field03 = @cOutField03,
