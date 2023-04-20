@@ -170,6 +170,7 @@ GO
 /* 04-Aug-2022  WLChooi   5.5   WMS-20405 - Add ReceiptType 'VFEGRN' (WL01) */
 /* 04-Aug-2022  WLChooi   5.5   DevOps Combine Script                       */
 /* 16-Dec-2022  SPChin    5.6   JSM-99648 - Add Validation of FinalizeFlag  */
+/* 29-Mar-2023  James     5.7   WMS-21943 Add UCCNo to SerialNo (james02)   */
 /****************************************************************************/ 
  
 CREATE OR ALTER TRIGGER [dbo].[ntrReceiptDetailUpdate] 
@@ -2312,16 +2313,17 @@ BEGIN
             DECLARE @c_SerialNo NVARCHAR( 30) 
             DECLARE @n_SerialQTY INT 
             DECLARE @curSNo CURSOR  
- 
+            DECLARE @c_SerialUCCNo  NVARCHAR( 20)
+            
             -- Loop ReceiptSerialNo 
             SET @curSNo = CURSOR FOR 
-               SELECT SerialNo, QTY 
+               SELECT SerialNo, QTY, UCCNo 
                FROM dbo.ReceiptSerialNo WITH (NOLOCK) 
          WHERE ReceiptKey = @c_ReceiptKey   
                   AND ReceiptLineNumber = @c_ReceiptLineNumber 
  
             OPEN @curSNo 
-            FETCH NEXT FROM @curSNo INTO @c_SerialNo, @n_SerialQTY 
+            FETCH NEXT FROM @curSNo INTO @c_SerialNo, @n_SerialQTY, @c_SerialUCCNo 
  
             WHILE @@FETCH_STATUS = 0 
             BEGIN             
@@ -2370,8 +2372,8 @@ BEGIN
                   END 
                    
                   -- Insert SerialNo 
-                  INSERT INTO dbo.SerialNo (SerialNoKey, StorerKey, SKU, SerialNo, QTY, Status, ID, OrderKey, OrderLineNumber) 
-                  VALUES (@c_SerialNoKey, @c_StorerKey, @c_SKU, @c_SerialNo, @n_SerialQTY, '1', @c_ToID, '', '') 
+                  INSERT INTO dbo.SerialNo (SerialNoKey, StorerKey, SKU, SerialNo, QTY, Status, ID, OrderKey, OrderLineNumber, UCCNo) 
+                  VALUES (@c_SerialNoKey, @c_StorerKey, @c_SKU, @c_SerialNo, @n_SerialQTY, '1', @c_ToID, '', '', @c_SerialUCCNo) 
  
                   IF @@ERROR <> 0 
                   BEGIN 
@@ -2399,7 +2401,7 @@ BEGIN
                   SELECT @n_continue = 3 
                END 
     
-               FETCH NEXT FROM @curSNo INTO @c_SerialNo, @n_SerialQTY 
+               FETCH NEXT FROM @curSNo INTO @c_SerialNo, @n_SerialQTY, @c_SerialUCCNo 
             END 
          END          
       END -- FinalizeFlag = 'Y' 
