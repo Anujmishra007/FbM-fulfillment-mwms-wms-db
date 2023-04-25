@@ -42,9 +42,10 @@ GO
 /* 27-Jun-2018 NJOW05   1.5  Fix - include NCHAR                        */
 /* 17-Jul-2018 NJOW06   1.6  WMS-5746 Support field with function       */
 /* 28-Jan-2019 TLTING_ext 1.7 enlarge externorderkey field length       */ 
-/* 20-Mar-2023 NJOW07   1.8  WMS-21962 Allow group by fields of loc     */
-/*                           table for single order. In case the order  */
-/*                           has multiple loc, it take the min loc only */
+/* 20-Mar-2023 NJOW07   1.8  WMS-21962 Allow group by fields of loc and */
+/*                           putaway table for single order. In case the*/
+/*                           order has multiple loc, it take the min loc*/
+/*                           only. Add custom condition for filtering   */
 /* 20-Mar-2023 NJOW07   1.8  DEVOPS Combine Script                      */
 /* 20-Mar-2023 NJOW08   1.9  WMS-22060 Support Max order/qty per build  */
 /*                           and sorting                                */
@@ -98,6 +99,7 @@ BEGIN
            ,@n_OrderCnt            INT --NJOW08
            ,@c_NewLoad             NVARCHAR(1) --NJOW08
            ,@n_CurrOrdQty          INT --NJOW08
+           ,@c_Condition           NVARCHAR(MAX)='' --NJOW07
 
 
  DECLARE @c_ListName NVARCHAR(10)
@@ -191,12 +193,22 @@ BEGIN
     ELSE
        SET @c_Sorting = ' ORDERS.Orderkey '    
     --NJOW08 E
+    
+    --NJOW07 S
+    SELECT TOP 1 @c_Condition = CL.UDF05
+    FROM CODELKUP CL (NOLOCK)
+    WHERE CL.Listname = @c_ListName
+    AND CL.Code = 'CONDITION'      
+    
+    IF ISNULL(@c_Condition,'') <> '' AND LEFT(LTRIM(@c_Condition), 4) <> 'AND '
+       SET @c_Condition = 'AND ' + @c_Condition      
+    --NJOW07 E
 
     DECLARE CUR_CODELKUP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
        SELECT TOP 10 Code, Description, Long
        FROM   CODELKUP WITH (NOLOCK)
        WHERE  ListName = @c_ListName
-       AND Code NOT IN('MAXORDER','MAXQTY','SORTING') --NJOW08   
+       AND Code NOT IN('MAXORDER','MAXQTY','SORTING','CONDITION') --NJOW08   --NJOW07
        ORDER BY Code
 
     OPEN CUR_CODELKUP
@@ -210,8 +222,10 @@ BEGIN
        
        IF CHARINDEX('(', @c_TableColumnName, 1) > 0 --NJOW06 support field name with function
        BEGIN
-       	 IF CHARINDEX('LOC.', @c_TableColumnName, 1) > 0  --NJOW07
+       	  IF CHARINDEX('LOC.', @c_TableColumnName, 1) > 0  --NJOW07
              SELECT @c_TableName = 'LOC'
+          ELSE IF CHARINDEX('PUTAWAYZONE', @c_TableColumnName, 1) > 0 --NJOW07
+             SELECT @c_TableName = 'PUTAWAYZONE' 
           ELSE   
              SELECT @c_TableName = 'ORDERS'
 
@@ -222,7 +236,7 @@ BEGIN
           BEGIN
              SELECT @n_continue = 3
              SELECT @n_err = 63502
-             SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Grouping Only Allow Refer To Orders/Loc Table's Fields. Invalid Table: "+RTRIM(@c_TableColumnName)+" (ispWAVLP02)" --NJOW07
+             SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Grouping Only Allow Refer To Orders/Loc/Putawayzone Table's Fields. Invalid Table: "+RTRIM(@c_TableColumnName)+" (ispWAVLP02)" --NJOW07
              GOTO RETURN_SP
           END
           
@@ -259,11 +273,11 @@ BEGIN
           SET @c_ColumnName = SUBSTRING(@c_TableColumnName,
                               CharIndex('.', @c_TableColumnName) + 1, LEN(@c_TableColumnName) - CharIndex('.', @c_TableColumnName))
           
-          IF ISNULL(RTRIM(@c_TableName), '') NOT IN('ORDERS','LOC') --NJOW07
+          IF ISNULL(RTRIM(@c_TableName), '') NOT IN('ORDERS','LOC', 'PUTAWAYZONE') --NJOW07
           BEGIN
              SELECT @n_continue = 3
              SELECT @n_err = 63520
-             SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Grouping Only Allow Refer To Orders/Loc Table's Fields. Invalid Table: "+RTRIM(@c_TableColumnName)+" (ispWAVLP02)"  --NJOW07
+             SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Grouping Only Allow Refer To Orders/Loc/Putawayzone Table's Fields. Invalid Table: "+RTRIM(@c_TableColumnName)+" (ispWAVLP02)"  --NJOW07
              GOTO RETURN_SP
           END
        END
@@ -358,14 +372,20 @@ BEGIN
       SELECT @c_SQLDYN01 = 'DECLARE cur_LPGroup CURSOR FAST_FORWARD READ_ONLY FOR '
       + ' SELECT ORDERS.Storerkey ' + @c_SQLField
       + ' FROM ORDERS WITH (NOLOCK) '
-      + ' JOIN WaveDetail WD WITH (NOLOCK) ON (ORDERS.OrderKey = WD.OrderKey) '
+      + ' JOIN WAVEDETAIL WITH (NOLOCK) ON (ORDERS.OrderKey = WAVEDETAIL.OrderKey) '
       + ' OUTER APPLY (SELECT TOP 1 LOC.* FROM PICKDETAIL PD
                        JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc 
                        WHERE PD.Orderkey = ORDERS.Orderkey
                        ORDER BY LOC.LogicalLocation, LOC.Loc) AS LOC '  --NJOW07
-      +'  WHERE WD.WaveKey = ''' +  RTRIM(@c_WaveKey) +''''
+      + ' OUTER APPLY (SELECT TOP 1 PZ.* FROM PICKDETAIL PD
+                       JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc 
+                       JOIN PUTAWAYZONE PZ (NOLOCK) ON LOC.Putawayzone = PZ.Putawayzone
+                       WHERE PD.Orderkey = ORDERS.Orderkey
+                       ORDER BY LOC.LogicalLocation, LOC.Loc) AS PUTAWAYZONE '  --NJOW07
+      + ' WHERE WAVEDETAIL.WaveKey = ''' +  RTRIM(@c_WaveKey) +''''
       + ' AND ISNULL(ORDERS.Loadkey,'''') = '''' '
       + ' AND ORDERS.Status NOT IN (''9'',''CANC'') '
+      + RTRIM(ISNULL(@c_Condition,''))  --NJOW07
       + ' GROUP BY ORDERS.Storerkey ' + @c_SQLGroup
       + ' ORDER BY ORDERS.Storerkey ' + @c_SQLGroup
 
@@ -404,15 +424,21 @@ BEGIN
         --NJOW01
          SELECT @c_SQLDYN03 = ' SELECT @c_FoundLoadkey = MAX(ORDERS.Loadkey) '
          + ' FROM ORDERS WITH (NOLOCK) '
-         + ' JOIN WaveDetail WD WITH (NOLOCK) ON (ORDERS.OrderKey = WD.OrderKey) '
+         + ' JOIN WAVEDETAIL WITH (NOLOCK) ON (ORDERS.OrderKey = WAVEDETAIL.OrderKey) '
          + ' OUTER APPLY (SELECT TOP 1 LOC.* FROM PICKDETAIL PD (NOLOCK)
                           JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc 
                           WHERE PD.Orderkey = ORDERS.Orderkey
                           ORDER BY LOC.LogicalLocation, LOC.Loc) AS LOC '  --NJOW07         
+         + ' OUTER APPLY (SELECT TOP 1 PZ.* FROM PICKDETAIL PD
+                          JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc 
+                          JOIN PUTAWAYZONE PZ (NOLOCK) ON LOC.Putawayzone = PZ.Putawayzone
+                          WHERE PD.Orderkey = ORDERS.Orderkey
+                          ORDER BY LOC.LogicalLocation, LOC.Loc) AS PUTAWAYZONE '  --NJOW07
          + ' WHERE ORDERS.StorerKey = @c_StorerKey '
-         + ' AND WD.WaveKey = @c_WaveKey '
+         + ' AND WAVEDETAIL.WaveKey = @c_WaveKey '
          + ' AND ORDERS.Status NOT IN (''9'',''CANC'') '
-         + ' AND ISNULL(ORDERS.Loadkey,'''') <> '''' '
+         + ' AND ISNULL(ORDERS.Loadkey,'''') <> '''' '  
+         + RTRIM(ISNULL(@c_Condition,'')) + ' ' --NJOW07                
          + @c_SQLWhere
 
         EXEC sp_executesql @c_SQLDYN03,
@@ -504,11 +530,16 @@ BEGIN
          SELECT @c_SQLDYN02 = 'DECLARE cur_loadpland CURSOR FAST_FORWARD READ_ONLY FOR '
          + ' SELECT ORDERS.OrderKey '
          + ' FROM ORDERS WITH (NOLOCK) '
-         + ' JOIN WaveDetail WD WITH (NOLOCK) ON (ORDERS.OrderKey = WD.OrderKey) '
+         + ' JOIN WAVEDETAIL WITH (NOLOCK) ON (ORDERS.OrderKey = WAVEDETAIL.OrderKey) '
          + ' OUTER APPLY (SELECT TOP 1 LOC.* FROM PICKDETAIL PD
                           JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc 
                           WHERE PD.Orderkey = ORDERS.Orderkey
                           ORDER BY LOC.LogicalLocation, LOC.Loc) AS LOC '  --NJOW07         
+         + ' OUTER APPLY (SELECT TOP 1 PZ.* FROM PICKDETAIL PD
+                          JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc 
+                          JOIN PUTAWAYZONE PZ (NOLOCK) ON LOC.Putawayzone = PZ.Putawayzone
+                          WHERE PD.Orderkey = ORDERS.Orderkey
+                          ORDER BY LOC.LogicalLocation, LOC.Loc) AS PUTAWAYZONE '  --NJOW07                         
          + CASE WHEN @c_IsCustomSort = 'Y' THEN
             ' OUTER APPLY (SELECT TOP 1 SKU.* FROM ORDERDETAIL OD (NOLOCK)
                            JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.SKu
@@ -519,9 +550,10 @@ BEGIN
                            ORDER BY PD.Pickdetailkey) AS PICKDETAIL '
           ELSE ' ' END +  --NJOW08
          + ' WHERE ORDERS.StorerKey = @c_StorerKey ' +
-         + ' AND WD.WaveKey = @c_WaveKey '
+         + ' AND WAVEDETAIL.WaveKey = @c_WaveKey '
          + ' AND ORDERS.Status NOT IN (''9'',''CANC'') '
          + ' AND ISNULL(ORDERS.Loadkey,'''') = '''' '
+         + RTRIM(ISNULL(@c_Condition,'')) + ' '  --NJOW07         
          + @c_SQLWhere
          + ' ORDER BY ' + @c_Sorting  --NJOW08
 
