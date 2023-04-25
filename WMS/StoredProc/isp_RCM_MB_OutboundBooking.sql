@@ -32,6 +32,8 @@ GO
 /* Updates:                                                             */
 /* Date         Author    Ver.  Purposes                                */
 /* 28-APR-2022  LZG       1.1   JSM-64372 - Filter by facility (ZG01)   */
+/* 29-MAR-2023  NJOW01    1.2   WMS-22023 Update TMS_Shipment and       */
+/*                              bookingvehicle when create new booking  */
 /************************************************************************/
 
 CREATE  PROCEDURE isp_RCM_MB_OutboundBooking
@@ -186,7 +188,10 @@ BEGIN
          	             LicenseNo = @c_VehicleNo,
          	             DriverName = @c_DriverName,
          	             CarrierKey = @c_ServiceProvider,
-         	             Userdefine10 = 'UPDATED'
+         	             Userdefine10 = 'UPDATED',
+         	             EditWho = SUSER_SNAME(), --NJOW01
+         	             EditDate = GETDATE(), --NJOW01         	             
+         	             Userdefine01 = @c_MBOLKey  --NJOW01         	                      	             
          	         WHERE BookingNo = @n_FindBookingNo
 
                    SET @n_err = @@ERROR
@@ -197,6 +202,27 @@ BEGIN
                       SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 38040   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
                       SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Booking_Out Table Failed. (isp_RCM_MB_OutboundBooking)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
                    END
+                   
+                   --NJOW01 S
+                   UPDATE BOOKINGVEHICLE WITH (ROWLOCK)
+                   SET VehicleType = @c_TruckType,
+         	             LicenseNo = @c_VehicleNo,
+         	             DriverName = @c_DriverName,
+         	             CarrierKey = @c_ServiceProvider,
+         	             TrafficCop = NULL,
+         	             EditWho = SUSER_SNAME(),
+         	             EditDate = GETDATE()         	             
+         	         WHERE BookingNo = @n_FindBookingNo
+
+                   SET @n_err = @@ERROR
+
+                   IF @n_err <> 0
+                   BEGIN
+                      SELECT @n_continue = 3
+                      SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 38040   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+                      SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update BOOKINGVEHICLE Table Failed. (isp_RCM_MB_OutboundBooking)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+                   END
+                   --NJOW01 E
          	      END
          	      ELSE
          	      BEGIN
@@ -221,9 +247,9 @@ BEGIN
             SET @n_bookingno = CAST(@c_BookingNo AS INT)
 
             INSERT INTO BOOKING_OUT (BookingNo, MbolKey, LoadKey, BookingDate,
-                        VehicleType, LicenseNo, DriverName, Carrierkey, Loc, Facility, Endtime, Duration, ToLoc, ALTReference, Userdefine10)
+                        VehicleType, LicenseNo, DriverName, Carrierkey, Loc, Facility, Endtime, Duration, ToLoc, ALTReference, Userdefine10, Userdefine01)
                  VALUES (@n_BookingNo, @c_Mbolkey, @c_Loadkey, @dt_LoadingDate,
-                         @c_TruckType, @c_vehicleNo, @c_DriverName, @c_ServiceProvider, @c_Loc_Bay, @c_Facility, @dt_Endtime, @dt_Duration, @c_Loc_Bay, @c_OTMShipmentID, @c_BookingExist)
+                         @c_TruckType, @c_vehicleNo, @c_DriverName, @c_ServiceProvider, @c_Loc_Bay, @c_Facility, @dt_Endtime, @dt_Duration, @c_Loc_Bay, @c_OTMShipmentID, @c_BookingExist, @c_Mbolkey) --NJOW01
 
             SET @n_err = @@ERROR
 
@@ -247,6 +273,33 @@ BEGIN
                SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 38060   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
                SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Loadplan Table Failed. (isp_RCM_MB_OutboundBooking)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
             END
+            
+            --NJOW01 S
+            INSERT INTO BOOKINGVEHICLE (BookingNo, VehicleType, LicenseNo, DriverName, CarrierKey)
+            VALUES(@n_BookingNo, @c_TruckType, @c_VehicleNo, @c_DriverName, @c_ServiceProvider)
+
+            SET @n_err = @@ERROR
+
+            IF @n_err <> 0
+            BEGIN
+               SELECT @n_continue = 3
+               SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 38070   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+               SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert BOOKINGVEHICLE Table Failed. (isp_RCM_MB_OutboundBooking)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+            END            
+            
+            UPDATE TMS_SHIPMENT WITH(ROWLOCK)
+            SET BookingNo = @n_BookingNo
+            WHERE ShipmentGID = @c_OTMShipmentID
+
+            SET @n_err = @@ERROR
+
+            IF @n_err <> 0
+            BEGIN
+               SELECT @n_continue = 3
+               SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 38080   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+               SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update TMS_SHIPMENT Table Failed. (isp_RCM_MB_OutboundBooking)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+            END                        
+            --NJOW01 E
          END
 
          FETCH NEXT FROM CUR_MBOL INTO @c_OTMShipmentID, @c_Loadkey, @dt_LoadingDate, @c_TruckType, @c_vehicleNo, @c_DriverName, @c_ServiceProvider, @c_Loc_Bay
@@ -288,7 +341,7 @@ BEGIN
          IF @n_err <> 0
          BEGIN
             SELECT @n_continue = 3
-            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 38070   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 38090   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
             SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Delete Booking_Out Table Failed. (isp_RCM_MB_OutboundBooking)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
          END
       END
