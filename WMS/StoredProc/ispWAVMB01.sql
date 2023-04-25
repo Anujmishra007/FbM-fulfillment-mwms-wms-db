@@ -37,6 +37,7 @@ GO
 /* 07-Mar-2023 WLChooi    1.3  WMS-21905 - Add SkipUpdateMBOLUserdefine */
 /*                             config (WL01)                            */
 /* 07-Mar-2023 WLChooi    1.3  DevOps Combine Script                    */
+/* 14-Apr-2023 NJOW03     1.4  WMS-22311 allow add custom filtering     */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispWAVMB01]
@@ -99,6 +100,7 @@ BEGIN
          , @c_Userdefine09    NVARCHAR(10)   --WL01
          , @c_Option5         NVARCHAR(4000) --WL01
          , @c_SkipUpdateMBOLUserdefine NVARCHAR(10) = 'N'   --WL01
+         , @c_Condition       NVARCHAR(MAX)='' --NJOW03
 
    SELECT @n_StartTranCnt=@@TRANCOUNT, @n_continue = 1, @n_mbolcount = 0
 
@@ -163,10 +165,22 @@ BEGIN
          GOTO RETURN_SP
       END
 
+      --NJOW03 S
+      SELECT TOP 1 @c_Condition = CL.UDF05
+      FROM CODELKUP CL (NOLOCK)
+      WHERE CL.Listname = @c_ListName
+      AND CL.Code = 'CONDITION'        
+      
+      IF ISNULL(@c_Condition,'') <> '' AND LEFT(LTRIM(@c_Condition), 4) <> 'AND '
+         SET @c_Condition = 'AND ' + @c_Condition
+      
+      --NJOW03 E
+
       DECLARE CUR_CODELKUP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT TOP 10 Code, Description, Long
          FROM   CODELKUP WITH (NOLOCK)
          WHERE  ListName = @c_ListName
+         AND Code NOT IN('CONDITION') --NJOW03         
          ORDER BY Code
 
       OPEN CUR_CODELKUP
@@ -276,10 +290,11 @@ BEGIN
       SELECT @c_SQLDYN01 = 'DECLARE cur_MBGroup CURSOR FAST_FORWARD READ_ONLY FOR '
                          + ' SELECT ORDERS.Storerkey ' + @c_SQLField
                          + ' FROM ORDERS WITH (NOLOCK) '
-                         + ' JOIN WaveDetail WD WITH (NOLOCK) ON (ORDERS.OrderKey = WD.OrderKey) '
-                         +'  WHERE WD.WaveKey = ''' +  RTRIM(@c_WaveKey) +''''
+                         + ' JOIN WAVEDETAIL WITH (NOLOCK) ON (ORDERS.OrderKey = WAVEDETAIL.OrderKey) '
+                         +'  WHERE WAVEDETAIL.WaveKey = ''' +  RTRIM(@c_WaveKey) +''''
                          + ' AND ISNULL(ORDERS.MBOLKey,'''') = '''' '
                          + ' AND ORDERS.Status NOT IN (''9'',''CANC'') '
+                         + RTRIM(ISNULL(@c_Condition,''))  --NJOW03                        
                          + ' GROUP BY ORDERS.Storerkey ' + @c_SQLGroup
                          + ' ORDER BY ORDERS.Storerkey ' + @c_SQLGroup
 
@@ -292,11 +307,12 @@ BEGIN
       BEGIN
          SELECT @c_SQLDYN02 = ' SELECT @c_FoundMBOLKey = MAX(ORDERS.MBOLKey) '
                             + ' FROM ORDERS WITH (NOLOCK) '
-                            + ' JOIN WaveDetail WD WITH (NOLOCK) ON (ORDERS.OrderKey = WD.OrderKey) '
+                            + ' JOIN WAVEDETAIL WITH (NOLOCK) ON (ORDERS.OrderKey = WAVEDETAIL.OrderKey) '
                             + ' WHERE  ORDERS.StorerKey = @c_StorerKey '
-                            + ' AND WD.WaveKey = @c_WaveKey '
+                            + ' AND WAVEDETAIL.WaveKey = @c_WaveKey '
                             + ' AND ORDERS.Status NOT IN (''9'',''CANC'') '
                             + ' AND ISNULL(ORDERS.MBOLKey,'''') <> '''' '
+                            + RTRIM(ISNULL(@c_Condition,'')) + ' '  --NJOW03                        
                             + @c_SQLWhere
 
          EXEC sp_executesql @c_SQLDYN02,
@@ -365,11 +381,12 @@ BEGIN
          SELECT @c_SQLDYN03 = 'DECLARE cur_mboldet CURSOR FAST_FORWARD READ_ONLY FOR '
                             + ' SELECT ORDERS.OrderKey '
                             + ' FROM ORDERS WITH (NOLOCK) '
-                            + ' JOIN WaveDetail WD WITH (NOLOCK) ON (ORDERS.OrderKey = WD.OrderKey) '
+                            + ' JOIN WAVEDETAIL WITH (NOLOCK) ON (ORDERS.OrderKey = WAVEDETAIL.OrderKey) '
                             + ' WHERE ORDERS.StorerKey = @c_StorerKey ' +
-                            + ' AND WD.WaveKey = @c_WaveKey '
+                            + ' AND WAVEDETAIL.WaveKey = @c_WaveKey '
                             + ' AND ORDERS.Status NOT IN (''9'',''CANC'') '
                             + ' AND ISNULL(ORDERS.MBOLKey,'''') = '''' '
+                            + RTRIM(ISNULL(@c_Condition,'')) + ' '  --NJOW03                                                    
                             + @c_SQLWhere
                             + ' ORDER BY ORDERS.OrderKey '
 
