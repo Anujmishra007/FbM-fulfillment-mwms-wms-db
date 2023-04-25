@@ -27,6 +27,8 @@ GO
 /* 05-Feb-2023 WLChooi  1.3  WMS-21699 - Add config skip generate pickslip  */
 /*                           for B2C (WL01)                                 */
 /* 05-Feb-2023 WLChooi  1.3  DevOps Combine Script                          */
+/* 20-Apr-2023 NJOW03   1.4  WMS-22373 ANTA allow mutiple pick loc by       */
+/*                           facility. One facility one pick loc only       */
 /****************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV32]
@@ -276,9 +278,14 @@ BEGIN
       FROM WAVEDETAIL WD (NOLOCK)
       JOIN ORDERS O (NOLOCK) ON WD.OrderKey = O.OrderKey
       JOIN ORDERDETAIL OD (NOLOCK) ON O.OrderKey = OD.OrderKey
-      LEFT JOIN SKUxLOC SL (NOLOCK) ON  OD.StorerKey = SL.StorerKey
+      /*LEFT JOIN SKUxLOC SL (NOLOCK) ON  OD.StorerKey = SL.StorerKey
                                     AND OD.Sku = SL.Sku
-                                    AND SL.LocationType IN ( 'PICK', 'CASE' )
+                                    AND SL.LocationType IN ( 'PICK', 'CASE' )*/
+      OUTER APPLY (  SELECT SXL.Loc, SXL.LocationType
+                     FROM SKUxLOC SXL (NOLOCK)
+                     JOIN LOC L (NOLOCK) ON SXL.Loc = L.Loc
+                     WHERE OD.Storerkey = SXL.StorerKey AND OD.Sku = SXL.Sku AND SXL.LocationType IN ( 'PICK', 'CASE' )
+                     AND L.Facility = @c_Facility) SL    --NJOW03                                                                    
       WHERE WD.WaveKey = @c_wavekey
       GROUP BY OD.Sku
       HAVING COUNT(DISTINCT SL.Loc) > 1 OR MAX(SL.LocationType) IS NULL
@@ -289,7 +296,7 @@ BEGIN
          SELECT @n_continue = 3
          SELECT @n_err = 83070
          SELECT @c_errmsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_err) + ': Found Sku: ' + RTRIM(@c_Sku)
-                            + ' has none or multiple pick locations. Every Sku must has one pick location only. (ispRLWAV32)'
+                            + ' has none or multiple pick locations of the facility. Every Sku must has one pick location only. (ispRLWAV32)'  --NJOW03
       END
    END
 
@@ -330,6 +337,7 @@ BEGIN
                      FROM SKUxLOC SXL (NOLOCK)
                      JOIN LOC L (NOLOCK) ON SXL.Loc = L.Loc
                      WHERE PD.Storerkey = SXL.StorerKey AND PD.Sku = SXL.Sku AND SXL.LocationType IN ( 'PICK', 'CASE' )
+                     AND L.Facility = @c_Facility  --NJOW03
                      ORDER BY L.LocationRoom) PLOC
       JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc
       JOIN SKU (NOLOCK) ON PD.Storerkey = SKU.StorerKey AND PD.Sku = SKU.Sku
@@ -543,6 +551,7 @@ BEGIN
                      FROM SKUxLOC SXL (NOLOCK)
                      JOIN LOC L (NOLOCK) ON SXL.Loc = L.Loc
                      WHERE PD.Storerkey = SXL.StorerKey AND PD.Sku = SXL.Sku AND SXL.LocationType IN ( 'PICK', 'CASE' )
+                     AND L.Facility = @c_Facility  --NJOW03                     
                      ORDER BY L.LocationRoom) PLOC
       --JOIN SKUXLOC SL (NOLOCK) ON PD.Storerkey = SL.Storerkey AND PD.Sku = SL.Sku AND SL.LocationType IN('PICK','CASE')   --every sku should setup one pick face
       --JOIN LOC PLOC (NOLOCK) ON SL.Loc = PLOC.Loc  --pick face
@@ -880,6 +889,7 @@ BEGIN
                      FROM SKUxLOC SXL (NOLOCK)
                      JOIN LOC L (NOLOCK) ON SXL.Loc = L.Loc
                      WHERE PD.Storerkey = SXL.StorerKey AND PD.Sku = SXL.Sku AND SXL.LocationType IN ( 'PICK', 'CASE' )
+                     AND L.Facility = @c_Facility  --NJOW03                     
                      ORDER BY L.LocationRoom) PLOC
       --JOIN SKUXLOC SL (NOLOCK) ON PD.Storerkey = SL.Storerkey AND PD.Sku = SL.Sku AND SL.LocationType IN('PICK','CASE')   --every sku should setup one pick face
       --JOIN LOC PLOC (NOLOCK) ON SL.Loc = PLOC.Loc  --pick face
