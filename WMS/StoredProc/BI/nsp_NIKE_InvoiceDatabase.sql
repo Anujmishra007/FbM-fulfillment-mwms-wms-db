@@ -7,14 +7,16 @@ GO
 	TITLE: nsp_NIKE_InvoiceDatabase https://jiralfl.atlassian.net/browse/WMS-22171
 
 DATE				VER		CREATEDBY   PURPOSE
-04-APR-2023			1.0		JAM			MIGRATE FROM HYPERION 
+04-APR-2023		1.0		JAM			MIGRATE FROM HYPERION
+25-APR-2023    1.1      Percival    add date from/to parameters
 ************************************************************************/
 
 CREATE OR ALTER   PROC [BI].[nsp_NIKE_InvoiceDatabase] --NAME OF SP
 			@PARAM_GENERIC_STORERKEY NVARCHAR(30)=''
-			, @PARAM_GENERIC_EXTERNORDERKEY NVARCHAR(10)=''
+			, @PARAM_GENERIC_EXTERNORDERKEY NVARCHAR(4000)=''
 			, @PARAM_MBOL_MBOLKEY NVARCHAR(10)=''
-			
+			,@PARAM_GENERIC_STARTDATE DATETIME			--REQUIRED
+			,@PARAM_GENERIC_ENDDATE DATETIME			--REQUIRED
 
 AS
 BEGIN
@@ -25,6 +27,17 @@ BEGIN
 
 	IF ISNULL(@PARAM_GENERIC_StorerKey, '') = ''
 		SET @PARAM_GENERIC_StorerKey = ''
+	IF ISNULL(@PARAM_GENERIC_EXTERNORDERKEY, '') = ''  or @PARAM_GENERIC_EXTERNORDERKEY ='ALL'
+		SET @PARAM_GENERIC_EXTERNORDERKEY = ''
+	IF ISNULL(@PARAM_MBOL_MBOLKEY, '') = ''
+		SET @PARAM_MBOL_MBOLKEY = ''
+	IF ISNULL(@PARAM_GENERIC_STARTDATE, '') = ''
+		SET @PARAM_GENERIC_STARTDATE = getdate()
+	IF ISNULL(@PARAM_GENERIC_ENDDATE, '') = ''
+		SET @PARAM_GENERIC_ENDDATE = dateadd(hour,-1,getdate())
+
+	SET @PARAM_GENERIC_EXTERNORDERKEY = REPLACE(REPLACE (TRANSLATE (@PARAM_GENERIC_EXTERNORDERKEY,'[ ]',''''''''),'''',''),',',''',''')
+
 
    DECLARE @Debug	BIT = 0
 		 , @LogId   INT
@@ -33,7 +46,9 @@ BEGIN
        , @cParamOut NVARCHAR(4000)= ''
        , @cParamIn  NVARCHAR(4000)= '{  "PARAM_GENERIC_StorerKey":"'    +@PARAM_GENERIC_StorerKey+'", '
                                     + ' "PARAM_GENERIC_EXTERNORDERKEY":"'    +@PARAM_GENERIC_EXTERNORDERKEY+'", '
-									+ ' "PARAM_MBOL_MBOLKEY":"'    +@PARAM_MBOL_MBOLKEY+'" '
+									+ ' "PARAM_MBOL_MBOLKEY":"'    +@PARAM_MBOL_MBOLKEY+'", '
+									+ ' "PARAM_GENERIC_STARTDATE":"'    +CONVERT(VARCHAR,@PARAM_GENERIC_STARTDATE,120)+'",  '
+									+ ' "PARAM_GENERIC_ENDDATE":"'    +CONVERT(VARCHAR,@PARAM_GENERIC_ENDDATE,120)+'"  '
                                     + ' }'
 
    EXEC BI.dspExecInit @ClientId = @PARAM_GENERIC_STORERKEY
@@ -72,8 +87,17 @@ JOIN BI.V_MBOL AL4 (nolock) on AL1.MbolKey = AL4.MbolKey
 WHERE  
     (
       AL2.StorerKey = '''+@PARAM_GENERIC_STORERKEY+'''
-      AND AL2.ExternOrderKey = '''+@PARAM_GENERIC_EXTERNORDERKEY+'''
-      AND AL2.MBOLKey = '''+@PARAM_MBOL_MBOLKEY+'''
+	  AND AL4.EditDate BETWEEN '''+convert(nvarchar,@PARAM_GENERIC_STARTDATE,120)+''' AND '''+convert(nvarchar,@PARAM_GENERIC_ENDDATE,120) +'''  
+
+'
+
+ if isnull(@PARAM_GENERIC_EXTERNORDERKEY,'')<>''
+	set @stmt = @stmt + ' AND AL2.ExternOrderKey in ('''+@PARAM_GENERIC_EXTERNORDERKEY+''') '
+
+ if isnull(@PARAM_MBOL_MBOLKEY,'')<>''
+    set @stmt = @stmt + '  AND AL2.MBOLKey = '''+@PARAM_MBOL_MBOLKEY+'''    '
+
+set @stmt = @stmt + '
     ) 
 GROUP BY 
   AL1.MbolKey, 
@@ -106,9 +130,9 @@ EXEC AS LOGIN ='JReportUserPH'
 
 SELECT SUSER_SNAME()
 
-EXEC BI.nsp_NIKE_InvoiceDatabase 'NIKEPH','0011994821','0011994821'
-EXEC BI.nsp_NIKE_InvoiceDatabase '','',''
-EXEC BI.nsp_NIKE_InvoiceDatabase NULL,NULL,NULL
+EXEC BI.nsp_NIKE_InvoiceDatabase 'NIKEPH','0559620866,TEST072001','','2022-01-01', '2023-01-29'
+EXEC BI.nsp_NIKE_InvoiceDatabase 'NIKEPH','','','2022-01-01', '2023-01-29'
+EXEC BI.nsp_NIKE_InvoiceDatabase NULL,NULL,NULL,NULL,NULL
 
 REVERT
 
