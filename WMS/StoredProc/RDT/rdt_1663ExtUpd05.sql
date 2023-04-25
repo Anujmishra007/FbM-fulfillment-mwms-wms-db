@@ -1,6 +1,3 @@
-if exists (select * from  dbo.sysobjects where id = object_id(N'[rdt].[rdt_1663ExtUpd05]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_1663ExtUpd05]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -13,10 +10,11 @@ GO
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
 /* 2020-01-14 1.1  James    WMS-11523. Created                                */
-/* 2021-10-13 1.2 YeeKung   WMS-18033 Add key2 to 9 (yeekung01)               */ 
+/* 2021-10-13 1.2  YeeKung  WMS-18033 Add key2 to 9 (yeekung01)               */ 
+/* 2023-04-14 1.3  Ung      WMS-22284 Fix TrackOrderWeight SValue             */
 /******************************************************************************/
 
-CREATE PROC [RDT].[rdt_1663ExtUpd05](
+CREATE OR ALTER PROC [RDT].[rdt_1663ExtUpd05](
    @nMobile       INT,
    @nFunc         INT,
    @cLangCode     NVARCHAR( 3),
@@ -164,7 +162,7 @@ BEGIN
                -- (james02)
                -- Update mboldetail.weight here
                -- If config turn off then user will key in weight on the screen
-               IF rdt.rdtGetConfig( @nFunc, 'TrackOrderWeight', @cStorerKey) <> '1' AND 
+               IF rdt.rdtGetConfig( @nFunc, 'TrackOrderWeight', @cStorerKey) = '0' AND 
                   @nStep = 3
                BEGIN
                   SET @nGiftWeight = 0

@@ -21,6 +21,7 @@ GO
 /* 2021-09-23 1.7  James    WMS-17937 Add update cartontype and weight        */
 /*                          into packinfo table                               */
 /* 2022-06-23 1.8  Ung      WMS-19666 Add recheck status                      */
+/* 2023-04-13 1.9  Ung      WMS-22284 Add MBOL accumulate weight, cube        */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_TrackNoToPallet_Confirm] (
@@ -377,8 +378,8 @@ BEGIN
          ,UserDefine05 = CASE WHEN @cTrackCartonType IN ('1', '2') AND @nUseSequence = 10 THEN CAST( UserDefine05 AS INT) + 1 ELSE UserDefine05 END
          ,UserDefine09 = CASE WHEN @cTrackCartonType IN ('1', '2') AND @nUseSequence = 11 THEN CAST( UserDefine09 AS INT) + 1 ELSE UserDefine09 END
          ,UserDefine10 = CASE WHEN @cTrackCartonType IN ('1', '2') AND @nUseSequence = 12 THEN CAST( UserDefine10 AS INT) + 1 ELSE UserDefine10 END
-         ,Cube         = CASE WHEN @cTrackOrderCube = '1' THEN Cube + @nCube ELSE Cube END
-         ,Weight       = CASE WHEN @cTrackOrderWeight = '6' THEN Weight + @nWeight ELSE Weight END -- (james01)
+         ,Cube         = CASE WHEN @cTrackOrderCube > '0' THEN Cube + @nCube ELSE Cube END
+         ,Weight       = CASE WHEN @cTrackOrderWeight > '0' THEN Weight + @nWeight ELSE Weight END
          ,EditWho      = SUSER_SNAME()
          ,EditDate     = GETDATE()
       WHERE MBOLKey = @cMBOLKey
@@ -484,7 +485,12 @@ BEGIN
       @cRefNo1     = @cMBOLKey,
       -- @cRefNo2     = @cLoadKey,
       @cRefNo3     = @cOrderKey,
-      @cTrackingNo = @cTrackNo --(cc01)
+      @cMBOLKey    = @cMBOLKey,
+      @cOrderKey   = @cOrderKey,
+      @cTrackingNo = @cTrackNo, 
+      @cCartonType = @cCartonType, 
+      @fWeight     = @nWeight, 
+      @fCube       = @nCube
    
    GOTO Quit
 
