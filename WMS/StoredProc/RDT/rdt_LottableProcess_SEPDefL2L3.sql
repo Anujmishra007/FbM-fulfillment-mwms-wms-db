@@ -1,7 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = Object_Id(N'[RDT].[rdt_LottableProcess_SEPDefL2L3]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE rdt.rdt_LottableProcess_SEPDefL2L3
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -16,9 +12,11 @@ GO
 /*                                                                        */
 /* Date        Rev  Author      Purposes                                  */
 /* 2020-07-08  1.0  James       WMS13257. Created                         */
+/* 2023-04-18  1.1  James       WMS-22263 Add logic to determine whether  */
+/*                              need default the Lottable03 (james01)     */
 /**************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_LottableProcess_SEPDefL2L3
+CREATE OR ALTER PROCEDURE rdt.rdt_LottableProcess_SEPDefL2L3
     @nMobile          INT
    ,@nFunc            INT
    ,@cLangCode        NVARCHAR( 3)
@@ -69,35 +67,29 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @cYearCode   NVARCHAR(2)
-   DECLARE @cWeekCode   NVARCHAR(2)
-   DECLARE @cDayCode    NVARCHAR(1)
-   DECLARE @nShelfLife  INT
-   DECLARE @nYearNum    INT
-   DECLARE @nWeekNum    INT
-   DECLARE @nDayNum     INT
-   DECLARE @cYear       NVARCHAR(4)
-   DECLARE @cMonth      NVARCHAR(2)
-   DECLARE @cProdDate   NVARCHAR(30)
-   DECLARE @dProdDate   DATETIME
-   DECLARE @cTempLottable02   NVARCHAR( 60)
-   DECLARE @cTempLottable04   NVARCHAR( 60)
-   DECLARE @cTempLottable13   NVARCHAR( 60)
-   DECLARE @cSUSR2            NVARCHAR( 18)
-   DECLARE @cErrMessage       NVARCHAR( 20)
-
+   DECLARE @cLong    NVARCHAR( 250)
+   DECLARE @cShort   NVARCHAR( 10)
    SET @nErrNo = 0
 
-   SELECT TOP 1 @cLottable02 = Lottable02,
-                @cLottable03 = Lottable03
+   SELECT TOP 1 @cLottable02 = Lottable02
    FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
    WHERE ReceiptKey = @cSourceKey
    AND   Sku = @cSKU
    ORDER BY 1 
    
-   IF ISNULL( @cLottable03, '') = ''
-      SET @cLottable03 = 'NA'
-
+   SELECT @cShort = Short,
+          @cLong = Long 
+   FROM dbo.CODELKUP WITH (NOLOCK)
+   WHERE LISTNAME = 'SEPDefL2L3'
+   AND   Code = 'Lottable03'
+   AND   Storerkey = @cStorerKey
+   
+   IF @cShort = '1'
+   BEGIN
+      IF ISNULL( @cLong, '') <> ''
+         SET @cLottable03 = SUBSTRING( @cLong, 1, 18)
+   END
+   
    Quit:
 
 END -- End Procedure
