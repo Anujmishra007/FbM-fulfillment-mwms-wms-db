@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_Pre_Delete_Loadplan_STD]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_Pre_Delete_Loadplan_STD]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,7 +12,7 @@ GO
 /*                                                                      */  
 /* Called By: Orders delete                                             */  
 /*                                                                      */  
-/* PVCS Version: 1.0                                                    */  
+/* PVCS Version: 1.2                                                    */  
 /*                                                                      */  
 /* Version: 8.0                                                         */  
 /*                                                                      */  
@@ -26,8 +21,11 @@ GO
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
 /* 2021-02-08   mingle01 1.1  Add Big Outer Begin try/Catch             */
+/* 2023-01-27   Wan01    1.2  LFWM-3865 - SCE CN  Allow remove allocated*/
+/*                            orders from Load                          */
+/*                            DevOps Combine Script                     */
 /************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_Pre_Delete_Loadplan_STD]
+CREATE OR ALTER PROCEDURE [WM].[lsp_Pre_Delete_Loadplan_STD]
       @c_StorerKey         NVARCHAR(15)
    ,  @c_RefKey1           NVARCHAR(50)  = '' 
    ,  @c_RefKey2           NVARCHAR(50)  = '' 
@@ -46,10 +44,14 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @n_Continue           INT = 1
-         , @n_StartTCnt          INT = @@TRANCOUNT
+   DECLARE @n_Continue              INT = 1
+         , @n_StartTCnt             INT = @@TRANCOUNT
 
-         , @c_LoadKey            NVARCHAR(10) = ''
+         , @c_LoadKey               NVARCHAR(10) = ''
+         , @c_Facility              NVARCHAR(10) = ''             --(Wan01)
+         , @c_LoadStatus            NVARCHAR(10) = ''             --(Wan01)
+         , @c_OrderStatus           NVARCHAR(10) = ''             --(Wan01)
+         , @c_SCENonExceedLoadflow  NVARCHAR(10) = ''             --(Wan01)
    
    SET @n_err=0
    SET @b_success=1
@@ -65,17 +67,37 @@ BEGIN
          GOTO EXIT_SP  
       END
       
-      IF EXISTS(  SELECT 1 
-                  FROM LOADPLAN WITH (NOLOCK)
-                  WHERE Loadkey = @c_Loadkey
-                  AND [Status] > '0' 
-                  )
+      SELECT TOP 1                                                                  --(Wan01) - START
+            @c_Facility   = lp.facility 
+         ,  @c_LoadStatus = lp.[Status]
+         ,  @c_OrderStatus= o.[Status]
+         ,  @c_Storerkey  = o.Storerkey
+      FROM dbo.LoadPlan AS lp WITH (NOLOCK)
+      JOIN dbo.ORDERS AS o WITH (NOLOCK) ON o.LoadKey = lp.LoadKey
+      WHERE lp.Loadkey = @c_Loadkey
+      ORDER BY o.[Status] Desc
+                  
+      SELECT @c_SCENonExceedLoadflow = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'SCENonExceedLoadflow') 
+      
+      --IF EXISTS(  SELECT 1 
+      --            FROM LOADPLAN WITH (NOLOCK)
+      --            WHERE Loadkey = @c_Loadkey
+      --            AND [Status] > '0' 
+      --            )
+      IF @c_LoadStatus > '0' AND @c_SCENonExceedLoadflow = '0'    
       BEGIN
          SET @n_continue = 3
-         SET @n_err = 556951
+         SET @n_err = 556901
          SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': Only Load Plan# With ''Normal'' Status Can Be Deleted. (lsp_Pre_Delete_Loadplan_STD)'   
          GOTO EXIT_SP             
-      END                         
+      END
+      ELSE IF @c_OrderStatus > '2' AND @c_SCENonExceedLoadflow = '1'    
+      BEGIN
+         SET @n_continue = 3
+         SET @n_err = 556902
+         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': Load Plan# is Pick In Progress. Disallow to delete. (lsp_Pre_Delete_Loadplan_STD)'   
+         GOTO EXIT_SP             
+      END                                                                           --(Wan01) - END                       
    END TRY
    
    BEGIN CATCH
