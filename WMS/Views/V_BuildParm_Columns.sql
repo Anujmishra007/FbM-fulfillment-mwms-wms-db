@@ -13,7 +13,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.6                                                    */
+/* PVCS Version: 2.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -37,6 +37,7 @@ GO
 /*                            analysis                                  */
 /* 2022-03-13  Wan06    1.9   LFWM-4007 - CN_SCE_Wave_Release add order */
 /*                            parameter                                 */
+/* 2023-04-17  Wan04    2.0   LFWM-3978-[CN] LULU_OrderParam_Sort by LOC*/
 /************************************************************************/
 CREATE OR ALTER VIEW V_BuildParm_Columns AS
 SELECT BuildParmType = 'BUILDLOADPARM'
@@ -207,6 +208,12 @@ SELECT BuildParmType = 'WAVEBUILDLOAD'                                          
 FROM INFORMATION_SCHEMA.COLUMNS Col
 WHERE Col.TABLE_NAME IN ('ORDERDETAIL')
 AND Col.COLUMN_NAME IN ('SKU')
+UNION ALL                                                                         --(Wan04) - START
+SELECT BuildParmType = 'WAVEBUILDLOAD'                                          
+      ,CondType  = 'SORT'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('LOC')                                                  --(Wan04) - END
 UNION ALL
 SELECT BuildParmType = 'WAVEBUILDLOAD'                                           --(Wan03)
       ,CondType  = 'GROUP'

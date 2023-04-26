@@ -12,7 +12,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.4                                                    */                                                                                  
+/* PVCS Version: 1.5                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -30,6 +30,7 @@ GO
 /* 2022-03-08  Wan03    1.4   WMS-19025 - THA-adidas-Create SP for      */
 /*                            generate LoadPlan By Wave                 */
 /*                            DevOps Combine Script                     */
+/* 2023-04-17  Wan04    1.5   LFWM-3978-[CN] LULU_OrderParam_Sort by LOC*/
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_Wave_BuildLoad]                                                                                                                       
       @c_Wavekey        NVARCHAR(10)  
@@ -94,7 +95,10 @@ AS
          , @n_cnt                      INT            = 0 
          , @n_BuildGroupCnt            INT            = 0       
 
-         , @b_GroupFlag                BIT            = 0          
+         , @b_GroupFlag                BIT            = 0  
+         , @b_JoinLoc                  BIT            = 0               --(Wan04)
+         , @b_JoinPickdetail           BIT            = 0               --(Wan04)
+                                                                         
          , @c_SortBy                   NVARCHAR(2000) = ''                                                                                                                
          , @c_SortSeq                  NVARCHAR(10)   = ''                                                                                                               
          , @c_GroupBySortField         NVARCHAR(2000) = ''                                                                                                                  
@@ -420,7 +424,7 @@ AS
                             CHARINDEX('.', @c_FieldName) + 1, LEN(@c_FieldName) - CHARINDEX('.', @c_FieldName))     
       END-- (Wan03)
                        
-      IF @c_TableName NOT IN ('ORDERS')
+      IF @c_TableName NOT IN ('ORDERS', 'ORDERDETAIL', 'LOC')                       --(Wan04)
       BEGIN
          SET @n_Continue = 3                                                                                                                                     
          SET @n_Err     = 556003                                                                                                                                               
@@ -455,13 +459,17 @@ AS
             SET @c_SortSeq = 'DESC'                                                                                                                             
          ELSE                                                                                                                                                  
             SET @c_SortSeq = ''                                                                                                                                 
-                                                           
-                                                   
-         IF ISNULL(@c_GroupBySortField,'') = ''                                                                                                 
-            SET @c_GroupBySortField = CHAR(13) + @c_FieldName                                                                                                          
-         ELSE                                                                                                                                               
-            SET @c_GroupBySortField = @c_GroupBySortField + CHAR(13) + ', ' +  RTRIM(@c_FieldName)                                                                    
-                                                                                                                                                            
+                                 
+         IF @c_TableName IN ('SKU', 'LOC')                                          --(Wan04) - START                                                                                                                       
+            SET @c_FieldName = 'MIN('+RTRIM(@c_FieldName) + ')'                                                                                                
+         ELSE  
+         BEGIN                                                                      --(Wan04) - END    
+            IF ISNULL(@c_GroupBySortField,'') = ''                                                                                                 
+               SET @c_GroupBySortField = CHAR(13) + @c_FieldName                                                                                                          
+            ELSE                                                                                                                                               
+               SET @c_GroupBySortField = @c_GroupBySortField + CHAR(13) + ', ' +  RTRIM(@c_FieldName)                                                                    
+         END                                                                        --(Wan04)
+                                                                                                                                                               
          IF ISNULL(@c_SortBy,'') = ''                                                                                                                           
             SET @c_SortBy = CHAR(13) + @c_FieldName + ' ' + RTRIM(@c_SortSeq)                                                                                               
          ELSE                                                                                                                                                  
@@ -535,7 +543,12 @@ AS
             SET @b_GroupFlag = 1                                                                                                                            
          END                                                                                                                                                   
       END 
-                                                               
+      
+      IF @c_TableName = 'LOC'                                                       --(Wan04) - START
+      BEGIN 
+         SET @b_JoinPickDetail = 1
+         SET @b_JoinLoc = 1
+      END                                                                           --(Wan04) - END                                      
       FETCH NEXT FROM @CUR_BUILD_SORT INTO @c_FieldName
                                           ,@c_Operator
                                           ,@c_ParmBuildType   
@@ -614,6 +627,13 @@ AS
       + CHAR(13) + 'JOIN ORDERS WITH (NOLOCK) ON WAVEDETAIL.OrderKey = ORDERS.OrderKey'  
       + CHAR(13) + 'JOIN ORDERDETAIL WITH (NOLOCK) ON ORDERS.OrderKey = ORDERDETAIL.OrderKey'  
       + CHAR(13) + 'JOIN SKU WITH (NOLOCK) ON ORDERDETAIL.Storerkey = SKU.Storerkey AND ORDERDETAIL.SKU = SKU.SKU' 
+      --(Wan04) - START
+      + CHAR(13) + CASE WHEN @b_JoinPickdetail = 0 THEN '' ELSE
+                  'JOIN PICKDETAIL WITH (NOLOCK) ON ORDERDETAIL.OrderKey = PICKDETAIL.OrderKey'
+      + CHAR(13) +                             ' AND ORDERDETAIL.OrderLineNumber = PICKDETAIL.OrderLineNumber' 
+                   END 
+      + CHAR(13) + CASE WHEN @b_JoinLoc = 0 THEN '' ELSE 'JOIN LOC WITH (NOLOCK) ON PICKDETAIL.Loc = LOC.LOc' END
+      --(Wan04) - END
       + CHAR(13) + 'WHERE WAVEDETAIL.Wavekey = @c_Wavekey'                          
       + CHAR(13) + 'AND ORDERS.StorerKey = @c_StorerKey'                                                                                           
       + CHAR(13) + 'AND ORDERS.Facility = @c_Facility'                                                                                               
