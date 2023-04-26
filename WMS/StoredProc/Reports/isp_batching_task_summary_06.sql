@@ -1,5 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_batching_task_summary_06]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_batching_task_summary_06]
 GO
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -35,16 +33,20 @@ GO
 /* Date        Author  Ver.  Purposes                                   */
 /* 09-05-2022  KuanYee  1.0   INC1802488-BugFixed                       */
 /*                            Add Stuff() show all PickZone(KY01)       */ 
+/* 17-03-2023  CHONGCS  1.1   Devops Scripts Combine & WMS-21867(CS01)  */
 /************************************************************************/
 
-CREATE PROC [dbo].[isp_batching_task_summary_06] (
-            @c_Loadkey NVARCHAR(10)
-           ,@c_OrderCount NVARCHAR(10) = '9999'
-           ,@c_Pickzone NVARCHAR(1000) = ''
-           ,@c_Mode NVARCHAR(10) = ''  -- 1=Multi-S 4=Multi-M 5=BIG 9=Single
-           ,@c_ReGen NVARCHAR(10) = 'N' --Regnerate flag Y/N   
+CREATE OR ALTER PROC [dbo].[isp_batching_task_summary_06] (
+            @c_Loadkey     NVARCHAR(10)
+           ,@c_OrderCount  NVARCHAR(10) = '9999'
+           ,@c_Pickzone    NVARCHAR(1000) = ''
+           ,@c_Mode        NVARCHAR(10) = ''  -- 1=Multi-S 4=Multi-M 5=BIG 9=Single
+           ,@c_ReGen       NVARCHAR(10) = 'N' --Regnerate flag Y/N   
            ,@c_updatepick  NCHAR(5) = 'N' 
+           ,@c_ZoneType    NVARCHAR(10) = ''
+           ,@c_taskbatchno NVARCHAR(20) = ''
            ,@c_RptType     NVARCHAR(5) = 'H'
+
  )
  AS
  BEGIN
@@ -76,6 +78,20 @@ CREATE PROC [dbo].[isp_batching_task_summary_06] (
     IF ISNULL(@c_PickZone,'') = ''
        SET @c_PickZone = ''
 
+
+CREATE TABLE #TMPBTBYPZ (
+                           taskbatchno     NVARCHAR(20) NULL  DEFAULT(''),
+                           Orderkey        NVARCHAR(20) NULL  DEFAULT(''),
+                           pickzone        NVARCHAR(20) NULL  DEFAULT(''),
+                           Zonetype        NVARCHAR(20) NULL  DEFAULT('')
+)
+
+CREATE TABLE #TMPBTOHSalesman (
+                           taskbatchno     NVARCHAR(20) NULL  DEFAULT(''),
+                           Zonetype        NVARCHAR(20) NULL  DEFAULT(''),
+                           OHSalesman      NVARCHAR(80) NULL  DEFAULT('')
+)
+
 --CREATE TABLE #TMPBatchTASKSUM06 (
 --                                    taskbatchn    NVARCHAR(20) NULL  DEFAULT(''),
 --                                    notes         NVARCHAR(4000) NULL  DEFAULT(''),
@@ -89,7 +105,12 @@ CREATE PROC [dbo].[isp_batching_task_summary_06] (
 --                                    salesman      NVARCHAR(60) NULL  DEFAULT(''), 
 --                                    showcourier   NVARCHAR(10) NULL  DEFAULT(''),
 --                                    shipperkey    NVARCHAR(30) NULL  DEFAULT(''), 
---                                    showloadkeybarcode      NVARCHAR(10) NULL  DEFAULT('')
+--                                    showloadkeybarcode      NVARCHAR(10) NULL  DEFAULT(''),
+--                                    OrderCount              NVARCHAR(10) NULL ,
+--                                    RptMode                 NVARCHAR(10) NULL ,
+--                                    ReGen                   NVARCHAR(10) NULL,
+--                                    updatepick              NVARCHAR(10) NULL,
+--                                    Zonetype                NVARCHAR(10) NULL
 --                                    )
        
 
@@ -294,6 +315,47 @@ IF @c_RptType = 'S' GOTO TYPE_S
 TYPE_H:
     IF @c_OrderBatchBylocdescr = '1'  
     BEGIN
+            INSERT INTO #TMPBTBYPZ
+            (
+                taskbatchno,
+                Orderkey,
+                pickzone,
+                Zonetype
+            )
+            SELECT DISTINCT PT.TaskBatchNo AS TaskBatchNo,PT.Orderkey AS orderkey,LOC.Descr,CASE WHEN LOC.Descr ='AGV' THEN 'AGV' ELSE 'NOAGV' END AS Zonetype
+            FROM ORDERS O (NOLOCK)  
+            JOIN PICKDETAIL PD (NOLOCK) ON O.Orderkey = PD.Orderkey       
+            JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc  
+            JOIN Loadplandetail LPD (NOLOCK) ON LPD.OrderKey = O.orderkey   
+            JOIN dbo.PackTask PT WITH (NOLOCK) ON PT.Orderkey=o.OrderKey
+            WHERE LPD.Loadkey = @c_Loadkey  
+            AND LOC.Descr IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_PickZone)) 
+            AND RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) = @c_Mode
+            GROUP BY PT.TaskBatchNo,LOC.Descr,PT.Orderkey,CASE WHEN LOC.Descr ='AGV' THEN 'AGV' ELSE 'NOAGV' END 
+            ORDER BY PT.TaskBatchNo,LOC.Descr,PT.Orderkey,CASE WHEN LOC.Descr ='AGV' THEN 'AGV' ELSE 'NOAGV' END 
+
+           INSERT INTO #TMPBTOHSalesman
+           (
+               taskbatchno,
+               Zonetype,
+               OHSalesman
+           )
+            SELECT DISTINCT TPLZ.TaskBatchNo AS taskbatchno,TPLZ.Zonetype AS zonetype ,ISNULL(STUFF( (SELECT DISTINCT ',' + oh.salesman 
+                                                                                             FROM #TMPBTBYPZ TPOD WITH (NOLOCK)
+                                                                                             --JOIN dbo.PackTask PT WITH (NOLOCK) ON PT.TaskBatchNo = TPOD.TaskBatchNo
+                                                                                             JOIN LOC L WITH (NOLOCK) ON L.PickZone = TPOD.PickZone  
+                                                                                             JOIN ORDERS OH WITH (NOLOCK) ON OH.OrderKey = TPOD.Orderkey 
+                                                                                             WHERE TPOD.TaskBatchNo = TPLZ.TaskBatchNo
+                                                                                             -- AND   TPOD.PickZone = TPLZ.PickZone
+                                                                                             AND   TPOD.Zonetype = TPLZ.Zonetype
+                                                                                             --AND TPOD.orderkey = TPLZ.orderkey
+                                                                                             FOR XML PATH ('')
+                                                                                             ),1,1,'' ),'') AS OHSalesman
+            FROM #TMPBTBYPZ TPLZ 
+            GROUP BY TPLZ.TaskBatchNo,TPLZ.Zonetype
+            ORDER BY TPLZ.TaskBatchNo,TPLZ.Zonetype
+
+SELECT 1
       --INSERT INTO #TMPBatchTASKSUM06
       --(
       --    taskbatchn,
@@ -323,14 +385,15 @@ TYPE_H:
               COUNT(DISTINCT PD.Orderkey) AS NoOfOrder,
               ISNULL(CL1.Short,'N') AS ShowSalesman,  
               CASE WHEN ISNULL(CL1.Short,'N') = 'N' THEN '' ELSE (SELECT MAX(ISNULL(Orders.Salesman,'')) FROM Orders (NOLOCK) WHERE Orders.Loadkey = LP.Loadkey) END AS Salesman,  
-              ISNULL(CL2.Short,'N') AS ShowSalesman,  
+              ISNULL(CL2.Short,'N') AS showcourier,  
               CASE WHEN ISNULL(CL2.Short,'N') = 'N' THEN '' ELSE (SELECT MAX(ISNULL(Orders.Shipperkey,'')) FROM Orders (NOLOCK) WHERE Orders.Loadkey = LP.Loadkey) END AS Shipperkey,  
               ISNULL(CL3.Short,'N') AS ShowLoadkeyBarcode,   
               @c_OrderCount AS OrderCount,
               --@c_Pickzone AS 
               @c_Mode AS RptMode,
               @c_ReGen AS ReGen,
-              @c_updatepick AS updatepick
+              @c_updatepick AS updatepick,
+              CASE WHEN L.PickZone ='AGV' THEN 'AGV' ELSE 'NOAGV' END AS Zonetype     --CS01
        --INTO #TMPBatchTASKSUM06
        FROM LOADPLANDETAIL LP (NOLOCK)
        JOIN PICKDETAIL PD (NOLOCK) ON LP.orderkey = PD.OrderKey
@@ -355,11 +418,52 @@ TYPE_H:
                 ELSE RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) END,
                 ISNULL(CL1.Short,'N'),  
                 ISNULL(CL2.Short,'N'),  
-                ISNULL(CL3.Short,'N')   
-       ORDER BY L.Descr, PD.NOTES    
+                ISNULL(CL3.Short,'N'),CASE WHEN L.PickZone ='AGV' THEN 'AGV' ELSE 'NOAGV' END    --CS01   
+       ORDER BY PT.TaskBatchNo,L.Descr, PD.NOTES --,CASE WHEN L.PickZone ='AGV' THEN 0 ELSE 1 END     --CS01   
     END               
     ELSE
     BEGIN
+            INSERT INTO #TMPBTBYPZ
+            (
+                taskbatchno,
+                Orderkey,
+                pickzone,
+                Zonetype
+            )
+            SELECT DISTINCT PT.TaskBatchNo AS TaskBatchNo,PT.Orderkey AS orderkey,LOC.pickzone,CASE WHEN Loc.PickZone ='AGV' THEN 'AGV' ELSE 'NOAGV' END AS Zonetype--,o.Salesman
+            FROM ORDERS O (NOLOCK)  
+            JOIN PICKDETAIL PD (NOLOCK) ON O.Orderkey = PD.Orderkey       
+            JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc  
+            JOIN Loadplandetail LPD (NOLOCK) ON LPD.OrderKey = O.orderkey   
+            JOIN dbo.PackTask PT WITH (NOLOCK) ON PT.Orderkey=o.OrderKey
+            WHERE LPD.Loadkey = @c_Loadkey  
+            AND Loc.Pickzone IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_PickZone)) 
+            AND RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) = @c_Mode
+            GROUP BY PT.TaskBatchNo,LOC.pickzone,PT.Orderkey,CASE WHEN Loc.PickZone ='AGV' THEN 'AGV' ELSE 'NOAGV' END 
+            ORDER BY PT.TaskBatchNo,LOC.pickzone,PT.Orderkey,CASE WHEN Loc.PickZone ='AGV' THEN 'AGV' ELSE 'NOAGV' END 
+
+           INSERT INTO #TMPBTOHSalesman
+           (
+               taskbatchno,
+               Zonetype,
+               OHSalesman
+           )
+
+            SELECT DISTINCT TPLZ.TaskBatchNo AS taskbatchno,TPLZ.Zonetype AS zonetype ,ISNULL(STUFF( (SELECT DISTINCT ',' + oh.salesman 
+                                                   FROM #TMPBTBYPZ TPOD WITH (NOLOCK)
+                                                   --JOIN dbo.PackTask PT WITH (NOLOCK) ON PT.TaskBatchNo = TPOD.TaskBatchNo
+                                                   JOIN LOC L WITH (NOLOCK) ON L.PickZone = TPOD.PickZone  
+                                                   JOIN ORDERS OH WITH (NOLOCK) ON OH.OrderKey = TPOD.Orderkey 
+                                                   WHERE TPOD.TaskBatchNo = TPLZ.TaskBatchNo
+                                                   -- AND   TPOD.PickZone = TPLZ.PickZone
+                                                   AND   TPOD.Zonetype = TPLZ.Zonetype
+                                                   --AND TPOD.orderkey = TPLZ.orderkey
+                                                   FOR XML PATH ('')
+                                                   ),1,1,'' ),'') AS OHSalesman
+            FROM #TMPBTBYPZ TPLZ GROUP BY TPLZ.TaskBatchNo,TPLZ.Zonetype
+            ORDER BY TPLZ.TaskBatchNo,TPLZ.Zonetype
+
+
       --       INSERT INTO #TMPBatchTASKSUM06
       --(
       --    taskbatchn,
@@ -387,7 +491,7 @@ TYPE_H:
               ELSE RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) END AS ModeDesc,
               COUNT(DISTINCT PD.Orderkey) AS NoOfOrder,
               ISNULL(CL1.Short,'N') AS ShowSalesman,  
-              CASE WHEN ISNULL(CL1.Short,'N') = 'N' THEN '' ELSE (SELECT MAX(ISNULL(Orders.Salesman,'')) FROM Orders (NOLOCK) WHERE Orders.Loadkey = LP.Loadkey) END AS Salesman,   
+              TSM.OHSalesman AS salesman,--ISNULL(Orders.Salesman,'') AS salesman,--CASE WHEN ISNULL(CL1.Short,'N') = 'N' THEN '' ELSE (SELECT MAX(ISNULL(Orders.Salesman,'')) FROM Orders (NOLOCK) WHERE Orders.Loadkey = LP.Loadkey) END AS Salesman,   
               ISNULL(CL2.Short,'N') AS ShowSalesman,  
               CASE WHEN ISNULL(CL2.Short,'N') = 'N' THEN '' ELSE (SELECT MAX(ISNULL(Orders.Shipperkey,'')) FROM Orders (NOLOCK) WHERE Orders.Loadkey = LP.Loadkey) END AS Shipperkey,   
               ISNULL(CL3.Short,'N') AS ShowLoadkeyBarcode,
@@ -395,11 +499,13 @@ TYPE_H:
               --@c_Pickzone AS 
               @c_Mode AS RptMode,
               @c_ReGen AS ReGen,
-              @c_updatepick AS updatepick  
+              @c_updatepick AS updatepick,
+              CASE WHEN L.PickZone ='AGV' THEN 'AGV' ELSE 'NOAGV' END AS Zonetype     --CS01  
        --INTO #TMPBatchTASKSUM06
        FROM LOADPLANDETAIL LP (NOLOCK)
        JOIN PICKDETAIL PD (NOLOCK) ON LP.orderkey = PD.OrderKey
        JOIN LOC L (NOLOCK) ON PD.Loc = L.Loc
+       JOIN ORDERS (NOLOCK) ON orders.orderkey=LP.OrderKey
        JOIN PACKTASK PT (NOLOCK) ON PD.Orderkey = PT.Orderkey
        LEFT JOIN CODELKUP CL ON RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) = CL.Code AND CL.Listname = 'BATCHMODE' 
        LEFT JOIN Codelkup CL1 (NOLOCK) ON (PD.Storerkey = CL1.Storerkey AND CL1.Code = 'ShowSalesman' 
@@ -408,6 +514,7 @@ TYPE_H:
                                        AND CL2.Listname = 'REPORTCFG' AND CL2.Long = 'r_dw_batching_task_summary_06' AND ISNULL(CL2.Short,'') <> 'N') 
        LEFT JOIN Codelkup CL3 (NOLOCK) ON (PD.Storerkey = CL3.Storerkey AND CL3.Code = 'ShowLoadkeyBarcode' 
                                        AND CL3.Listname = 'REPORTCFG' AND CL3.Long = 'r_dw_batching_task_summary_06' AND ISNULL(CL3.Short,'') <> 'N')  
+       JOIN #TMPBTOHSalesman TSM ON TSM.taskbatchno=PT.TaskBatchNo AND TSM.zonetype = CASE WHEN L.PickZone ='AGV' THEN 'AGV' ELSE 'NOAGV' END
        WHERE LP.Loadkey = @c_Loadkey
        AND L.Pickzone IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_PickZone)) 
        AND RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) = @c_Mode
@@ -420,8 +527,9 @@ TYPE_H:
                 ELSE RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) END,
                 ISNULL(CL1.Short,'N'),  
                 ISNULL(CL2.Short,'N'),  
-                ISNULL(CL3.Short,'N')   
-       ORDER BY L.PickZone, PD.NOTES    
+                ISNULL(CL3.Short,'N'),
+                CASE WHEN L.PickZone ='AGV' THEN 'AGV' ELSE 'NOAGV' END     ,TSM.OHSalesman--ISNULL(Orders.Salesman,'')  --CS01   
+       ORDER BY PT.TaskBatchNo,L.PickZone, PD.NOTES ,CASE WHEN L.PickZone ='AGV' THEN 0 ELSE 1 END     --CS01      
     END
 
        --INSERT INTO #TMPBatchTASKSUM06SRPT
@@ -475,6 +583,7 @@ TYPE_S:
        WHERE LP.Loadkey = @c_Loadkey
       -- AND L.Descr IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_PickZone)) 
        AND RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) = @c_Mode
+       
        GROUP BY PT.TaskBatchNo, 
                 PD.Notes, 
                 LP.Loadkey,
@@ -490,7 +599,28 @@ TYPE_S:
 END
 ELSE
 BEGIN
+    IF @c_ZoneType ='AGV'
+    BEGIN
       SELECT  LP.Loadkey, 
+              COUNT(DISTINCT PD.Sku) AS NoOfSku,
+              SUM(PD.Qty) AS Qty,
+              L.PickZone
+  FROM LOADPLANDETAIL LP (NOLOCK)
+       JOIN PICKDETAIL PD (NOLOCK) ON LP.orderkey = PD.OrderKey
+       JOIN LOC L (NOLOCK) ON PD.Loc = L.Loc
+       JOIN PACKTASK PT (NOLOCK) ON PD.Orderkey = PT.Orderkey
+  WHERE LP.Loadkey = @c_Loadkey
+  AND PT.TaskBatchNo = @c_taskbatchno
+      -- AND L.Pickzone IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_PickZone)) 
+       AND RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) = @c_Mode
+       AND L.PickZone ='AGV'
+       GROUP BY  LP.Loadkey, 
+             -- SUM(PD.Qty), 
+              L.PickZone
+  END
+  ELSE
+  BEGIN
+    SELECT  LP.Loadkey, 
               COUNT(DISTINCT PD.Sku) AS NoOfSku,
               SUM(PD.Qty) AS Qty,
               L.PickZone
@@ -501,9 +631,12 @@ BEGIN
   WHERE LP.Loadkey = @c_Loadkey
       -- AND L.Pickzone IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_PickZone)) 
        AND RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) = @c_Mode
+       AND L.PickZone not IN ('AGV')
+       AND PT.TaskBatchNo = @c_taskbatchno
        GROUP BY  LP.Loadkey, 
              -- SUM(PD.Qty), 
               L.PickZone
+  END
 END
 
    GOTO QUIT 
@@ -513,6 +646,9 @@ Quit:
 
 --DROP TABLE #TMPBatchTASKSUM06
 --DROP TABLE #TMPBatchTASKSUM06SRPT
+
+DROP TABLE #TMPBTBYPZ
+DROP TABLE #TMPBTOHSalesman
 
 
    WHILE @@TRANCOUNT < @n_StartTCnt
