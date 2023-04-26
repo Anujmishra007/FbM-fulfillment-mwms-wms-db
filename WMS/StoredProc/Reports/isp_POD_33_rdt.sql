@@ -19,9 +19,12 @@ GO
 /* Updates:                                                             */
 /* Date         Author    Ver Purposes                                  */
 /* 02-MAR-2023  CSCHONG   1.0 Devops Scripts Combine                    */
+/* 07-APR-2023  CSCHONG   1.1 WMS-22182 add new field (CS01)            */
+/* 20-Apr-2023  CSCHONG   1.2 WMS-22182 change parameter (CS02)         */
 /************************************************************************/
 CREATE OR ALTER PROC isp_POD_33_rdt
-           @c_mbolkey       NVARCHAR(20)
+           --@c_mbolkey       NVARCHAR(20)       --CS02
+             @c_palletid      NVARCHAR(30)       --CS02 
 
 AS
 BEGIN
@@ -60,7 +63,8 @@ BEGIN
       ,  Storerkey      NVARCHAR(20)   NULL  DEFAULT('') 
       ,  C_State        NVARCHAR(18)   NULL  DEFAULT('')    
       ,  MBDWGT         FLOAT    NULL  DEFAULT(0)
-      )
+      ,  MBDCUBE        FLOAT    NULL  DEFAULT(0)          --CS01
+      ) 
 INSERT INTO #TMP_POD33RDT
 (
     PrintDate,
@@ -77,7 +81,7 @@ INSERT INTO #TMP_POD33RDT
     MBWGT,
     Storerkey,
     C_State,
-    MBDWGT
+    MBDWGT,MBDCUBE                  --CS01
 )
    SELECT PrintDate = Convert(NVARCHAR(16),GETDATE(),121)
          ,mb.ExternMbolKey
@@ -94,10 +98,13 @@ INSERT INTO #TMP_POD33RDT
          ,O.storerkey 
          ,c_State      = ISNULL(RTRIM(O.C_State),'')
          ,md.Weight
+         ,md.Cube            --CS01
    FROM dbo.ORDERS o WITH (NOLOCK)
    JOIN dbo.mbol mb WITH (NOLOCK) ON mb.mbolkey = o.MBOLKey
-   JOIN dbo.mboldetail md WITH (NOLOCK) ON md.mbolkey = mb.MbolKey    
-   WHERE o.MBOLKey=@c_mbolkey
+   JOIN dbo.mboldetail md WITH (NOLOCK) ON md.mbolkey = mb.MbolKey  AND md.OrderKey = o.OrderKey  --CS01 
+   JOIN dbo.PALLETDETAIL PLD WITH (NOLOCK) ON PLD.UserDefine01=o.OrderKey                         --CS02 S  
+   --WHERE o.MBOLKey=@c_mbolkey
+   WHERE PLD.PalletKey = @c_palletid                                                              --CS02 E   
    ORDER BY O.Orderkey
 
 
@@ -118,7 +125,8 @@ INSERT INTO #TMP_POD33RDT
    tp.MBWGT,
    tp.Storerkey,
    tp.C_State,
-   tp.MBDWGT
+   tp.MBDWGT,
+    tp.MBDCUBE     --CS01
   FROM #TMP_POD33RDT AS tp
   ORDER BY tp.Orderkey
 
