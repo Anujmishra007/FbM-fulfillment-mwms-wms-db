@@ -11,6 +11,7 @@ GO
 /*                                                                      */
 /* Date         Author    Ver.  Purposes                                */
 /* 2023-01-31   Ung       1.0   WMS-21506 Created                       */
+/* 2023-04-28   Ung       1.1   WMS-21506 Add L12 inaccessible          */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [RDT].[rdt_639Confirm02]
    @nMobile         INT,
@@ -89,6 +90,7 @@ BEGIN
       AND LLI.StorerKey = @cStorerKey
       AND LLI.SKU = @cSKU
       AND LLI.QTY - LLI.QTYAllocated - LLI.QTYPicked - LLI.QTYReplen > 0
+      AND LA.Lottable12 <> 'inaccessible'
 
    /************************************************************************************************
       Create new LOT if not exist
