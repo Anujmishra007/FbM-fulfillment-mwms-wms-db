@@ -14,6 +14,7 @@ GO
 /* 2022-05-07 1.1  Yeekung    WMS-20134 fix pickzone nvarchar 1->10     */
 /*                            (yeekung01)                               */
 /* 2022-04-20 1.2  YeeKung    WMS-19311 Add Data capture (yeekung02)    */
+/* 2023-04-12 1.3  YeeKung    WMS-22169 Fix Bug (yeekung03)             */
 /************************************************************************/  
   
 CREATE OR ALTER PROC rdt.rdt_839ExtInfo02 (  
@@ -27,7 +28,7 @@ CREATE OR ALTER PROC rdt.rdt_839ExtInfo02 (
    @cStorerKey   NVARCHAR( 15), 
    @cType        NVARCHAR( 10), 
    @cPickSlipNo  NVARCHAR( 10), 
-   @cPickZone    NVARCHAR( 10),  --yeekung01
+   @cPickZone    NVARCHAR( 10), --(yeekung01)  
    @cDropID      NVARCHAR( 20), 
    @cLOC         NVARCHAR( 10), 
    @cSKU         NVARCHAR( 20), 
@@ -89,7 +90,7 @@ AS
          END
 
          -- Discrete PickSlip  
-         ELSE IF @cOrderKey <> ''
+         ELSE IF ISNULL(@cOrderKey,'') <> ''
          BEGIN
             SELECT TOP 1 @cID = PD.ID
             FROM dbo.PickDetail PD WITH (NOLOCK)  
@@ -105,7 +106,7 @@ AS
          END
 
          -- Conso PickSlip  
-         ELSE IF @cLoadKey <> '' 
+         ELSE IF ISNULL(@cLoadKey,'') <> '' 
          BEGIN
             SELECT TOP 1 @cID = PD.ID
             FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)   

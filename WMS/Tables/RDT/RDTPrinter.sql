@@ -135,6 +135,26 @@ ALTER TABLE [RDT].[RDTPrinter] ADD CONSTRAINT [PK_RDTPrinter] PRIMARY KEY CLUSTE
 GO
 EXEC sp_addextendedproperty N'MS_Description', 'Trade Partner Printer Device Group', 'SCHEMA', N'RDT', 'TABLE', N'RDTPrinter', 'COLUMN', N'TPPrintergroup'
 GO
+EXEC sp_addextendedproperty N'MS_Description', 'A unique identifier for each printer in the system. This column serves as the primary key for the printer table, and is used to uniquely identify each printer in the system.', 'SCHEMA', N'RDT', 'TABLE', N'RDTPrinter', 'COLUMN', N'PrinterID'
+GO
+EXEC sp_addextendedproperty N'MS_Description', 'Printer Description.', 'SCHEMA', N'RDT', 'TABLE', N'RDTPrinter', 'COLUMN', N'Description'
+GO
+EXEC sp_addextendedproperty N'MS_Description', 'The name of the printer as it appears in the Windows Registry. This column is used to identify the printer on the Windows operating system.', 'SCHEMA', N'RDT', 'TABLE', N'RDTPrinter', 'COLUMN', N'WinPrinter'
+GO
+EXEC sp_addextendedproperty N'MS_Description', 'The date and time when the printer was added to the system. ', 'SCHEMA', N'RDT', 'TABLE', N'RDTPrinter', 'COLUMN', N'AddDate'
+GO
+EXEC sp_addextendedproperty N'MS_Description', 'The username or identifier of the user who added the printer to the system. ', 'SCHEMA', N'RDT', 'TABLE', N'RDTPrinter', 'COLUMN', N'AddWho'
+GO
+EXEC sp_addextendedproperty N'MS_Description', 'The username or identifier of the user who last edited the printer settings.', 'SCHEMA', N'RDT', 'TABLE', N'RDTPrinter', 'COLUMN', N'EditWho'
+GO
+EXEC sp_addextendedproperty N'MS_Description', 'The date and time when the printer was lasted edited the printer setting.', 'SCHEMA', N'RDT', 'TABLE', N'RDTPrinter', 'COLUMN', N'EditDate'
+GO
+EXEC sp_addextendedproperty N'MS_Description', 'A grouping or categorization of RDT printers within the system.', 'SCHEMA', N'RDT', 'TABLE', N'RDTPrinter', 'COLUMN', N'PrinterGroup'
+GO
+EXEC sp_addextendedproperty N'MS_Description', 'A Spooler Group ID which contain IP and Port for spooler server', 'SCHEMA', N'RDT', 'TABLE', N'RDTPrinter', 'COLUMN', N'SpoolerGroup'
+GO
+EXEC sp_addextendedproperty N'MS_Description', 'A grouping or categorization of printers within the SCE system.', 'SCHEMA', N'RDT', 'TABLE', N'RDTPrinter', 'COLUMN', N'SCEPrinterGroup'
+GO
 GRANT SELECT ON  [RDT].[RDTPrinter] TO [JReportRole]
 GO
 GRANT DELETE ON  [RDT].[RDTPrinter] TO [NSQL]
