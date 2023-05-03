@@ -12,6 +12,7 @@ GO
 /* Modifications log:                                                   */
 /* Date        Rev  Author   Purposes                                   */
 /* 2022-10-24  1.0  James    WMS-21041. Created                         */
+/* 2023-02-15  1.1  YeeKung  WMS-21774 Add shiplabel (yeekung01)        */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_841ExtUpdSP31] (
@@ -867,9 +868,21 @@ BEGIN
                   FROM dbo.OrderInfo WITH (NOLOCK)
                   WHERE OrderKey = @cOrderKey
                   
-                  SET @cShipLabel = rdt.RDTGetConfig( @nFunc, 'ShipLabel', @cStorerKey)
-                  IF @cShipLabel = '0'
-                     SET @cShipLabel = ''
+
+                  --(yeekung01)
+                  SELECT @cShipLabel=notes2
+                  FROM codelkup (nolock)
+                  where listname='AsgnTNo'
+                  AND storerkey=@cStorerkey
+                  AND short =@cShipperKey
+                  AND notes = @cfacility
+
+                  IF ISNULL(@cShipLabel,'') =''
+                  BEGIN
+                     SET @cShipLabel = rdt.RDTGetConfig( @nFunc, 'ShipLabel', @cStorerKey)
+                     IF @cShipLabel = '0'
+                        SET @cShipLabel = ''
+                  END
 
                   IF @cOrdType = 'E' AND EXISTS (
                      SELECT 1 FROM dbo.CODELKUP WITH (NOLOCK)
@@ -912,7 +925,7 @@ BEGIN
                      FROM rdt.RDTMOBREC WITH (NOLOCK)
                      WHERE Mobile = @nMobile
 
-                     IF @cC_ISOCntryCode = 'KR' -- Print korean version
+                     IF @cC_ISOCntryCode = 'OTHERS'
                      BEGIN
                         SET @cDelNotes = rdt.RDTGetConfig( @nFunc, 'DelNotes', @cStorerKey)
                         IF @cDelNotes = '0'
@@ -952,7 +965,7 @@ BEGIN
                              @cErrMsg OUTPUT
                         END
                      END
-                     ELSE  -- @cC_ISOCntryCode <> 'KR' Print english version
+                     ELSE
                      BEGIN
                         SET @cDelNotesN = rdt.RDTGetConfig( @nFunc, 'DelNotesN', @cStorerKey)
                         IF @cDelNotesN = '0'
