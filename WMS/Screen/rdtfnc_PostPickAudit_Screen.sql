@@ -92,25 +92,6 @@ EXECUTE rdt.rdtAddScn 819, 'ENG'
    ,@cLine12 = ''
    ,@cLine13 = '%20d13'
    ,@cLine14 = '%e'
-
-
--- WMS-8002
--- 819 Capture data
-DELETE rdt.RDTScn WHERE Scn = 820 AND Lang_Code = 'ENG'
-EXECUTE rdt.rdtAddScn 820, 'ENG'
-   ,@cLine01 = 'Reason Code'
-   ,@cLine02 = '%20i01'
-   ,@cLine03 = ''
-   ,@cLine05 = ''
-   ,@cLine06 = ''
-   ,@cLine07 = ''
-   ,@cLine08 = ''
-   ,@cLine09 = ''
-   ,@cLine10 = ''
-   ,@cLine11 = ''
-   ,@cLine12 = ''
-   ,@cLine13 = '%20d13'
-   ,@cLine14 = '%e'
 -- WMS-17439
 -- 5980 Capture data
 DELETE rdt.RDTScn WHERE Scn = 5980 AND Lang_Code = 'ENG'
