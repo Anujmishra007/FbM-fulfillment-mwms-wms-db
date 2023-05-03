@@ -22,6 +22,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 01-May-2023 NJOW01   1.0   DEVOPS Combine Script                     */
+/* 01-May-2023 NJOW01   1.0   Add serialno Validation                   */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_GetSNFRLBL02]
            @c_Storerkey       NVARCHAR(15)
@@ -62,7 +64,26 @@ BEGIN
    END
    ELSE IF LEN(RTRIM(@c_ScanLabel)) = 24 AND @c_SerialNoCapture IN('1','3')
    BEGIN
-   	  SET @c_SerialNo = @c_ScanLabel
+   	  IF EXISTS(SELECT 1
+   	            FROM SERIALNO (NOLOCK)
+   	            WHERE SerialNo = @c_ScanLabel
+   	            AND Storerkey = @c_Storerkey
+   	            AND Sku = @c_Sku
+   	            AND Status >= 6) OR  
+   	     EXISTS(SELECT 1 
+   	            FROM PACKSERIALNO PS (NOLOCK)
+   	            JOIN PACKHEADER PH (NOLOCK) ON PS.PickslipNo = PH.Pickslipno
+   	            WHERE PS.SerialNo = @c_ScanLabel
+   	            AND PS.Storerkey = @c_storerkey
+   	            AND PS.Sku = @c_Sku
+   	            AND PH.Status = '0') --NJOW01            
+   	  BEGIN
+         SET @n_Continue = 3
+         SET @n_Err = 69020
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': EPC is Packed (isp_GetSNFRLBL02)'   	   	
+   	  END      
+   	  ELSE       	            
+   	     SET @c_SerialNo = @c_ScanLabel
    END
    
 QUIT_SP:
