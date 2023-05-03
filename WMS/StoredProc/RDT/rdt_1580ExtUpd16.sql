@@ -13,6 +13,7 @@ GO
 /* Date        Rev  Author      Purposes                                      */
 /* 2023-03-30  1.0  James       WMS-21943. Created                            */
 /* 2023-04-25  1.1  James       Addhoc fix delete temp serialno (james01)     */
+/* 2023-05-03  1.2  James       WMS-22488 Add reverse serial no (james02)     */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1580ExtUpd16]
@@ -43,10 +44,13 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @nTranCount  INT
-   DECLARE @cReceiptLineNumber NVARCHAR(5)
-   DECLARE @bSuccess    INT
-   DECLARE @nReceiveSerialNoLogKey INT
+   DECLARE @nTranCount              INT
+   DECLARE @cReceiptLineNumber      NVARCHAR(5)
+   DECLARE @bSuccess                INT
+   DECLARE @nReceiveSerialNoLogKey  INT
+   DECLARE @cSerialNoKey            NVARCHAR( 10)
+   DECLARE @curSNo                  CURSOR
+   DECLARE @curRD                   CURSOR
    
    SET @nTranCount = @@TRANCOUNT
 
@@ -74,18 +78,75 @@ BEGIN
                WHERE ReceiveSerialNoLogKey = @nReceiveSerialNoLogKey 
                
                IF @@ERROR <> 0
+               BEGIN
+                  SET @nErrNo = 200551
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Delete SNo ER
                   GOTO RollBackTran
+               END
 
    				FETCH NEXT FROM @curDel INTO @nReceiveSerialNoLogKey
    			END
    		END
    	END
+
       IF @nStep = 10 -- Close pallet
       BEGIN
          IF @nInputKey = 1 -- ENTER
          BEGIN
+         	-- If found serialno in table serialno with status = 9, 
+         	-- update serialno.status = 1 and serialno.UCCNo = '' 
+         	-- when close pallet (Goods return from customer)
+         	IF EXISTS ( SELECT 1
+         	            FROM dbo.SerialNo SN WITH (NOLOCK)
+         	            JOIN dbo.ReceiptSerialNo RSN WITH (NOLOCK) ON ( SN.StorerKey = RSN.StorerKey AND SN.SerialNo = RSN.SerialNo) 
+         	            WHERE RSN.StorerKey = @cStorerKey
+         	            AND   RSN.ReceiptKey = @cReceiptKey
+         	            AND   SN.[Status] = '9'
+         	            AND   EXISTS ( SELECT 1
+         	                           FROM dbo.RECEIPTDETAIL RD WITH (NOLOCK)
+         	                           WHERE RSN.ReceiptKey = RD.ReceiptKey
+         	                           AND   RSN.ReceiptLineNumber = RD.ReceiptLineNumber
+         	                           AND   RD.ToId = @cToID
+         	                           AND   RD.BeforeReceivedQty > 0
+         	                           AND   RD.FinalizeFlag <> 'Y'))
+            BEGIN
+         	   SET @curSNo = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+         	   SELECT SN.SerialNoKey
+         	   FROM dbo.SerialNo SN WITH (NOLOCK)
+         	   JOIN dbo.ReceiptSerialNo RSN WITH (NOLOCK) ON ( SN.StorerKey = RSN.StorerKey AND SN.SerialNo = RSN.SerialNo) 
+         	   WHERE RSN.StorerKey = @cStorerKey
+         	   AND   RSN.ReceiptKey = @cReceiptKey
+         	   AND   SN.[Status] = '9'
+         	   AND   EXISTS ( SELECT 1
+         	                  FROM dbo.RECEIPTDETAIL RD WITH (NOLOCK)
+         	                  WHERE RSN.ReceiptKey = RD.ReceiptKey
+         	                  AND   RSN.ReceiptLineNumber = RD.ReceiptLineNumber
+         	                  AND   RD.ToId = @cToID
+         	                  AND   RD.BeforeReceivedQty > 0
+         	                  AND   RD.FinalizeFlag <> 'Y')
+               OPEN @curSNo
+               FETCH NEXT FROM @curSNo INTO @cSerialNoKey
+               WHILE @@FETCH_STATUS = 0
+               BEGIN
+               	UPDATE dbo.SerialNo SET 
+               	   [STATUS] = '1',
+               	   UCCNo = '', 
+               	   EditWho = SUSER_SNAME(), 
+               	   EditDate = GETDATE()
+               	WHERE SerialNoKey = @cSerialNoKey
+               	
+               	IF @@ERROR <> 0
+                  BEGIN
+                     SET @nErrNo = 200552
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Reverse SNo ER
+                     GOTO RollBackTran
+                  END
+
+               	FETCH NEXT FROM @curSNo INTO @cSerialNoKey
+               END
+            END         	
+
             -- Loop ReceiptDetail of pallet
-            DECLARE @curRD CURSOR
             SET @curRD = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
             SELECT RD.ReceiptLineNumber--, RD.ToLOC, RD.SKU
             FROM dbo.ReceiptDetail RD WITH (NOLOCK)
