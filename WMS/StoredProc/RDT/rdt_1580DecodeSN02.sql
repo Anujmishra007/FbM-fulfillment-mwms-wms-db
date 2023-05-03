@@ -3,6 +3,7 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
+
 /************************************************************************/
 /* Store procedure: rdt_1580DecodeSN02                                  */
 /* Copyright      : LF Logistics                                        */
@@ -12,6 +13,7 @@ GO
 /* Date        Rev  Author       Purposes                               */
 /* 2023-03-27  1.0  James        WMS-21945. Created                     */
 /* 2023-04-25  1.1  James        Addhoc fix check barcode len (james01) */
+/* 2023-05-03  1.2  James        WMS-22488 Enhance serial check(james02)*/
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1580DecodeSN02]
@@ -39,6 +41,7 @@ BEGIN
    DECLARE @cUCC     NVARCHAR( 20)
    DECLARE @nUCCQty  INT = 0
    DECLARE @nRcvQty  INT = 0
+   DECLARE @cStatus  NVARCHAR( 10) = ''
    
    IF LEN( RTRIM( @cBarcode)) <> 24
    BEGIN
@@ -47,13 +50,32 @@ BEGIN
       GOTO Quit
    END
 
-   IF EXISTS ( SELECT 1 
-               FROM dbo.SerialNo WITH (NOLOCK)
-               WHERE StorerKey = @cStorerKey
-               AND   SerialNo = @cBarcode)
+   SELECT @cStatus = [Status] 
+   FROM dbo.SerialNo WITH (NOLOCK)
+   WHERE StorerKey = @cStorerKey
+   AND   SerialNo = @cBarcode
+   
+   IF ISNULL( @cStatus, '') <> ''
    BEGIN
       SET @nErrNo = 198301
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SerialNo Exists
+      GOTO Quit
+   END
+
+   IF @cStatus = '1'
+   BEGIN
+      SET @nErrNo = 198308
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SNo Received
+      GOTO Quit
+   END
+
+   IF EXISTS( SELECT 1
+              FROM dbo.ReceiptSerialNo WITH (NOLOCK)
+              WHERE StorerKey = @cStorerKey
+              AND   SerialNo = @cBarcode) AND ISNULL( @cStatus, '') = ''
+   BEGIN
+      SET @nErrNo = 198309
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SNo Exists
       GOTO Quit
    END
 
@@ -69,7 +91,7 @@ BEGIN
       GOTO Quit
    END
 
-   SELECT @cUCC = I_Field02
+   SELECT @cUCC = V_Barcode
    FROM rdt.RDTMOBREC WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
@@ -131,13 +153,5 @@ Quit:
 
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
 GRANT EXECUTE ON  [RDT].[rdt_1580DecodeSN02] TO [NSQL]
 GO
-
-
