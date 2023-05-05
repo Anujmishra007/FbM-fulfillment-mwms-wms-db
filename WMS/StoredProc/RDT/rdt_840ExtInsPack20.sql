@@ -226,7 +226,9 @@ BEGIN
       		                RTRIM( @cB_Company) + 
       		                '0' + 
       		                CAST( RIGHT( YEAR( GETDATE()), 2) AS NVARCHAR( 2)) + 
-      		                CAST( RIGHT( MONTH( GETDATE()), 2) AS NVARCHAR( 2)) + 
+                            CASE WHEN LEN(MONTH(GETDATE())) = 1 THEN '0' + CAST(MONTH(GETDATE()) AS NVARCHAR(2))
+                            ELSE CAST(MONTH(GETDATE()) AS NVARCHAR(2))
+                            END +
       		                @cNewLabelSeqNo
       	END
       	ELSE
