@@ -1,11 +1,8 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE Object_Id = OBJECT_ID(N'[PTL].[isp_803PTL_Confirm05]') AND Type in (N'P', N'PC'))
-   DROP PROCEDURE [PTL].[isp_803PTL_Confirm05]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 
 /************************************************************************/
 /* Store procedure: isp_803PTL_Confirm05                                */
@@ -15,16 +12,17 @@ GO
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
 /* 23-07-2021 1.0  Chermaine  WMS-17331 Created                         */
+/* 13-12-2022 1.1  YeeKung    WMS-21338 Upd orders status (yeekung01)   */
 /************************************************************************/
 
-CREATE PROC [PTL].[isp_803PTL_Confirm05] (
-   @cIPAddress    NVARCHAR(30), 
+CREATE OR ALTER PROC [PTL].[isp_803PTL_Confirm05] (
+   @cIPAddress    NVARCHAR(30),
    @cPosition     NVARCHAR(20),
-   @cFuncKey      NVARCHAR(2), 
+   @cFuncKey      NVARCHAR(2),
    @nSerialNo     INT,
    @cInputValue   NVARCHAR(20),
-   @nErrNo        INT           OUTPUT,  
-   @cErrMsg       NVARCHAR(125) OUTPUT,  
+   @nErrNo        INT           OUTPUT,
+   @cErrMsg       NVARCHAR(125) OUTPUT,
    @cDebug        NVARCHAR( 1) = ''
 )
 AS
@@ -72,19 +70,19 @@ BEGIN
 
    -- Get light info
    DECLARE @cStorerKey NVARCHAR(15)
-   SELECT TOP 1 
-      @cStation = DeviceID, 
+   SELECT TOP 1
+      @cStation = DeviceID,
       @cStorerKey = StorerKey
-   FROM PTL.LightStatus WITH (NOLOCK) 
-   WHERE IPAddress = @cIPAddress 
-      AND DevicePosition = @cPosition 
-      
-   SELECT TOP 1 
+   FROM PTL.LightStatus WITH (NOLOCK)
+   WHERE IPAddress = @cIPAddress
+      AND DevicePosition = @cPosition
+
+   SELECT TOP 1
       @cLoc = Loc
-   FROM DeviceProfile WITH (NOLOCK) 
-   WHERE IPAddress = @cIPAddress 
-      AND DevicePosition = @cPosition  
-      AND DeviceID = @cStation     
+   FROM DeviceProfile WITH (NOLOCK)
+   WHERE IPAddress = @cIPAddress
+      AND DevicePosition = @cPosition
+      AND DeviceID = @cStation
       AND DeviceType = 'station'
 
    -- Get storer config
@@ -98,8 +96,8 @@ BEGIN
       -- Unassign position if fully sorted
       DELETE rdt.rdtPTLPieceLog
       WHERE Station = @cStation
-         AND IPAddress = @cIPAddress 
-         AND Position = @cPosition 
+         AND IPAddress = @cIPAddress
+         AND Position = @cPosition
       IF @@ERROR <> 0
       BEGIN
          SET @nErrNo = 171751
@@ -128,31 +126,31 @@ BEGIN
    ELSE IF @cInputValue = 'TOTE'
    BEGIN
       -- Check carton ID assigned
-      IF EXISTS( SELECT 1 
+      IF EXISTS( SELECT 1
          FROM rdt.rdtPTLPieceLog WITH (NOLOCK)
          WHERE Station = @cStation
-            AND IPAddress = @cIPAddress 
-            AND Position = @cPosition 
+            AND IPAddress = @cIPAddress
+            AND Position = @cPosition
             AND CartonID = '')
       BEGIN
          -- Relight if not yet assign
          EXEC PTL.isp_PTL_LightUpLoc
             @n_Func           = @nFunc
            ,@n_PTLKey         = 0
-           ,@c_DisplayValue   = 'TOTE' 
-           ,@b_Success        = @bSuccess    OUTPUT    
-           ,@n_Err            = @nErrNo      OUTPUT  
+           ,@c_DisplayValue   = 'TOTE'
+           ,@b_Success        = @bSuccess    OUTPUT
+           ,@n_Err            = @nErrNo      OUTPUT
            ,@c_ErrMsg         = @cErrMsg     OUTPUT
            ,@c_DeviceID       = @cStation
            ,@c_DevicePos      = @cPosition
-           ,@c_DeviceIP       = @cIPAddress  
+           ,@c_DeviceIP       = @cIPAddress
            ,@c_LModMode       = @cLightMode
          IF @nErrNo <> 0
             GOTO Quit
       END
       ELSE
       BEGIN
-         
+
          -- Off all lights
          EXEC PTL.isp_PTL_TerminateModule
              @cStorerKey
@@ -164,19 +162,19 @@ BEGIN
             ,@cErrMsg      OUTPUT
          IF @nErrNo <> 0
             GOTO Quit
-         
-         
-         ---- Relight 
+
+
+         ---- Relight
          --EXEC PTL.isp_PTL_LightUpLoc
          --   @n_Func           = @nFunc
          --  ,@n_PTLKey         = 0
-         --  ,@c_DisplayValue   = '1' 
-         --  ,@b_Success        = @bSuccess    OUTPUT    
-         --  ,@n_Err            = @nErrNo      OUTPUT  
+         --  ,@c_DisplayValue   = '1'
+         --  ,@b_Success        = @bSuccess    OUTPUT
+         --  ,@n_Err            = @nErrNo      OUTPUT
          --  ,@c_ErrMsg         = @cErrMsg     OUTPUT
          --  ,@c_DeviceID       = @cStation
          --  ,@c_DevicePos      = @cPosition
-         --  ,@c_DeviceIP       = @cIPAddress  
+         --  ,@c_DeviceIP       = @cIPAddress
          --  ,@c_LModMode       = @cLightMode
          --IF @nErrNo <> 0
          --   GOTO Quit
@@ -191,9 +189,9 @@ BEGIN
    ELSE IF @cInputValue = '1'
    BEGIN
       -- Get booking info
-      SELECT 
-         @cDropID = DropID, 
-         @cOrderKey = OrderKey, 
+      SELECT
+         @cDropID = DropID,
+         @cOrderKey = OrderKey,
          @cBatchKey = BatchKey,
          @cSKU = SKU,
          @cCartonID = CartonID
@@ -208,20 +206,20 @@ BEGIN
          AND DevicePosition = @cPosition
          AND Func = @nFunc
          AND Status = '1' -- Lighted up
-*/      
+*/
       -- Calc QTY
       IF @cInputValue = ''
          SET @nQTY = 0
       ELSE
          SET @nQTY = CAST( @cInputValue AS INT)
-   
+
       -- For calc balance
       SET @nQTY_Bal = @nQTY
 
       -- Find PickDetail to offset
       SET @cPickDetailKey = ''
-      SELECT TOP 1 
-         @cPickDetailKey = PD.PickDetailKey, 
+      SELECT TOP 1
+         @cPickDetailKey = PD.PickDetailKey,
          @nQTY_PD = QTY
       FROM PickDetail PD WITH (NOLOCK)
          JOIN Orders O WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
@@ -232,29 +230,29 @@ BEGIN
          AND PD.CaseID <> 'SORTED'
          AND PD.QTY > 0
          AND PD.Status <> '4'
-         AND O.Status <> 'CANC' 
+         AND O.Status <> 'CANC'
          AND O.SOStatus <> 'CANC'
-   
+
       -- Check blank
       IF @cPickDetailKey = ''
       BEGIN
          SET @cLightMode = rdt.RDTGetConfig( @nFunc, 'LightModeError', @cStorerKey)
-         
+
          -- Relight up
          EXEC PTL.isp_PTL_LightUpLoc
             @n_Func           = @nFunc
            ,@n_PTLKey         = 0
-           ,@c_DisplayValue   = '1' 
-           ,@b_Success        = @bSuccess    OUTPUT    
-           ,@n_Err            = @nErrNo      OUTPUT  
+           ,@c_DisplayValue   = '1'
+           ,@b_Success        = @bSuccess    OUTPUT
+           ,@n_Err            = @nErrNo      OUTPUT
            ,@c_ErrMsg         = @cErrMsg     OUTPUT
            ,@c_DeviceID       = @cStation
            ,@c_DevicePos      = @cPosition
-           ,@c_DeviceIP       = @cIPAddress  
+           ,@c_DeviceIP       = @cIPAddress
            ,@c_LModMode       = @cLightMode
          IF @nErrNo <> 0
             GOTO Quit
-         
+
          SET @nErrNo = 171752
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- No order
          GOTO Quit
@@ -262,8 +260,8 @@ BEGIN
 
       -- Handling transaction
       BEGIN TRAN  -- Begin our own transaction
-      SAVE TRAN isp_803PTL_Confirm05 -- For rollback or commit only our own transaction   
-      
+      SAVE TRAN isp_803PTL_Confirm05 -- For rollback or commit only our own transaction
+
       UPDATE  PTL.PTLTran WITH (ROWLOCK) SET
          STATUS = '9',
          DropID = @cCartonID
@@ -273,25 +271,25 @@ BEGIN
       AND dropID = @cDropID
       AND OrderKey = @cOrderKey
       AND SKU = @cSKU
-      
-      IF @@ERROR <> ''  
-      BEGIN  
-         SET @nErrNo = 171760  
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo ,@cLangCode ,'DSP') --INS PTL Fail  
-         GOTO RollBackTran  
-      END 
-         
+
+      IF @@ERROR <> ''
+      BEGIN
+         SET @nErrNo = 171760
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo ,@cLangCode ,'DSP') --INS PTL Fail
+         GOTO RollBackTran
+      END
+
       -- Exact match
       IF @nQTY_PD = 1
       BEGIN
       	IF @cCartonID = ''
       	BEGIN
       	   -- Confirm PickDetail
-            UPDATE dbo.PickDetail WITH (ROWLOCK) SET 
+            UPDATE dbo.PickDetail WITH (ROWLOCK) SET
                -- Status = '5',
                CaseID = 'SORTED',
-               EditDate = GETDATE(), 
-               EditWho  = SUSER_SNAME(), 
+               EditDate = GETDATE(),
+               EditWho  = SUSER_SNAME(),
                Trafficcop = NULL
             WHERE PickDetailKey = @cPickDetailKey
             IF @@ERROR <> 0
@@ -304,12 +302,12 @@ BEGIN
       	ELSE
       	BEGIN
       		-- Confirm PickDetail
-            UPDATE dbo.PickDetail WITH (ROWLOCK) SET 
+            UPDATE dbo.PickDetail WITH (ROWLOCK) SET
                -- Status = '5',
                CaseID = 'SORTED',
                dropID = @cCartonID,
-               EditDate = GETDATE(), 
-               EditWho  = SUSER_SNAME(), 
+               EditDate = GETDATE(),
+               EditWho  = SUSER_SNAME(),
                Trafficcop = NULL
             WHERE PickDetailKey = @cPickDetailKey
             IF @@ERROR <> 0
@@ -319,16 +317,16 @@ BEGIN
                GOTO RollBackTran
             END
       	END
-         
+
       END
-      
+
       -- PickDetail have more
    	ELSE IF @nQTY_PD > 1
       BEGIN
          -- Get new PickDetailkey
          DECLARE @cNewPickDetailKey NVARCHAR( 10)
          EXECUTE dbo.nspg_GetKey
-            'PICKDETAILKEY', 
+            'PICKDETAILKEY',
             10 ,
             @cNewPickDetailKey OUTPUT,
             @bSuccess          OUTPUT,
@@ -340,44 +338,44 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- nspg_GetKey
             GOTO RollBackTran
          END
-         
+
          -- Create new a PickDetail to hold the balance
          INSERT INTO dbo.PickDetail (
-            CaseID, PickHeaderKey, OrderKey, OrderLineNumber, LOT, StorerKey, SKU, AltSKU, UOM, 
-            UOMQTY, QTYMoved, Status, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, CartonType, 
+            CaseID, PickHeaderKey, OrderKey, OrderLineNumber, LOT, StorerKey, SKU, AltSKU, UOM,
+            UOMQTY, QTYMoved, Status, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, CartonType,
             ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,
-            EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes, 
-            PickDetailKey, 
-            QTY, 
+            EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes,
+            PickDetailKey,
+            QTY,
             TrafficCop,
             OptimizeCop, Channel_ID)
-         SELECT 
-            CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot, StorerKey, SKU, AltSku, UOM, 
-            UOMQTY, QTYMoved, Status, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, 
+         SELECT
+            CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot, StorerKey, SKU, AltSku, UOM,
+            UOMQTY, QTYMoved, Status, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup,
             CartonType, ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,
-            EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes, 
-            @cNewPickDetailKey, 
+            EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes,
+            @cNewPickDetailKey,
             @nQTY_PD - 1, -- QTY
             NULL, -- TrafficCop
             '1'   -- OptimizeCop
             , Channel_ID
-         FROM dbo.PickDetail WITH (NOLOCK) 
-   		WHERE PickDetailKey = @cPickDetailKey			            
+         FROM dbo.PickDetail WITH (NOLOCK)
+   		WHERE PickDetailKey = @cPickDetailKey
          IF @@ERROR <> 0
          BEGIN
    			SET @nErrNo = 171755
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- INS PKDtl Fail
             GOTO RollBackTran
-         END       
-   
+         END
+
          -- Get RefKeyLookup info
          SELECT
-            @cPickSlipNo = PickSlipNo, 
+            @cPickSlipNo = PickSlipNo,
             @cOrderLineNumber = OrderLineNumber,
             @cLoadkey = Loadkey
-         FROM RefKeyLookup WITH (NOLOCK) 
+         FROM RefKeyLookup WITH (NOLOCK)
          WHERE PickDetailKey = @cPickDetailKey
-   
+
          -- Split RefKeyLookup
          IF @@ROWCOUNT > 0
          BEGIN
@@ -391,17 +389,17 @@ BEGIN
                GOTO RollBackTran
             END
          END
-         
+
          IF @cCartonID = ''
          BEGIN
          	-- Change orginal PickDetail with exact QTY (with TrafficCop)
-            UPDATE dbo.PickDetail WITH (ROWLOCK) SET 
-               QTY = 1, 
-               CaseID = 'SORTED', 
-               EditDate = GETDATE(), 
-               EditWho  = SUSER_SNAME(), 
+            UPDATE dbo.PickDetail WITH (ROWLOCK) SET
+               QTY = 1,
+               CaseID = 'SORTED',
+               EditDate = GETDATE(),
+               EditWho  = SUSER_SNAME(),
                Trafficcop = NULL
-            WHERE PickDetailKey = @cPickDetailKey 
+            WHERE PickDetailKey = @cPickDetailKey
             IF @@ERROR <> 0
             BEGIN
                SET @nErrNo = 171757
@@ -412,14 +410,14 @@ BEGIN
          ELSE
          BEGIN
          	-- Change orginal PickDetail with exact QTY (with TrafficCop)
-            UPDATE dbo.PickDetail WITH (ROWLOCK) SET 
-               QTY = 1, 
-               CaseID = 'SORTED', 
+            UPDATE dbo.PickDetail WITH (ROWLOCK) SET
+               QTY = 1,
+               CaseID = 'SORTED',
                dropID = @cCartonID,
-               EditDate = GETDATE(), 
-               EditWho  = SUSER_SNAME(), 
+               EditDate = GETDATE(),
+               EditWho  = SUSER_SNAME(),
                Trafficcop = NULL
-            WHERE PickDetailKey = @cPickDetailKey 
+            WHERE PickDetailKey = @cPickDetailKey
             IF @@ERROR <> 0
             BEGIN
                SET @nErrNo = 171759
@@ -428,17 +426,43 @@ BEGIN
             END
          END
       END
-      
+
       -- End order if fully sorted
       IF NOT EXISTS( SELECT 1 FROM PickDetail WITH (NOLOCK) WHERE OrderKey = @cOrderKey AND CaseID <> 'SORTED')
       BEGIN
-      	SET @cPackLight = rdt.RDTGetConfig( @nFunc, 'PackLight', @cStorerKey)
-      	
-         SET @cLightMode = rdt.RDTGetConfig( @nFunc, 'LightModeEnd', @cStorerKey)
+           --(yeekung01)
+         UPDATE orders  WITH (ROWLOCK)
+         set status='3'
+         where orderkey=@cOrderKey
+         AND storerkey=@cstorerkey
+
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 171761
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdOrdersFail
+            GOTO RollBackTran
+         END
          
+         --(yeekung01)
+         UPDATE orderdetail  WITH (ROWLOCK)
+         set status='3'
+         where orderkey=@cOrderKey
+         AND storerkey=@cstorerkey
+
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 171762
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdODFail
+            GOTO RollBackTran
+         END
+
+      	SET @cPackLight = rdt.RDTGetConfig( @nFunc, 'PackLight', @cStorerKey)
+
+         SET @cLightMode = rdt.RDTGetConfig( @nFunc, 'LightModeEnd', @cStorerKey)
+
          IF @cPackLight = '1'
          BEGIN
-         	SELECT 
+         	SELECT
          	   @cPosition = DevicePosition,
          	   @cIPAddress = IPAddress
          	FROM deviceProfile WITH (NOLOCK)
@@ -448,17 +472,17 @@ BEGIN
          	AND DeviceType = 'station'
          	AND logicalName = 'Pack'
          END
-         
+
          EXEC PTL.isp_PTL_LightUpLoc
             @n_Func           = @nFunc
            ,@n_PTLKey         = 0
            ,@c_DisplayValue   = 'END'
-           ,@b_Success        = @bSuccess    OUTPUT    
-           ,@n_Err            = @nErrNo      OUTPUT  
+           ,@b_Success        = @bSuccess    OUTPUT
+           ,@n_Err            = @nErrNo      OUTPUT
            ,@c_ErrMsg         = @cErrMsg     OUTPUT
            ,@c_DeviceID       = @cStation
            ,@c_DevicePos      = @cPosition
-           ,@c_DeviceIP       = @cIPAddress  
+           ,@c_DeviceIP       = @cIPAddress
            ,@c_LModMode       = @cLightMode
          IF @nErrNo <> 0
             GOTO RollBackTran
@@ -477,7 +501,7 @@ BEGIN
          IF @nErrNo <> 0
             GOTO Quit
       END
-      
+
       COMMIT TRAN isp_803PTL_Confirm05
       GOTO Quit
    END

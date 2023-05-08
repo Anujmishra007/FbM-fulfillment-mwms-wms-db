@@ -10,6 +10,7 @@ GO
 /*                                                                         */  
 /* Date       Rev  Author     Purposes                                     */  
 /* 09-07-2021 1.0  Chermaine  WMS-17331 Created                            */  
+/* 13-12-2022 1.1  yeekung    WMS-21238 update order status                */  
 /***************************************************************************/  
   
 CREATE OR ALTER PROC rdt.rdt_PTLPiece_Confirm_Order08 (  
@@ -484,6 +485,30 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DEL Log Fail    
          GOTO RollBackTran    
       END    
+
+      UPDATE orders  WITH (ROWLOCK)
+      set status='3'
+      where orderkey=@cOrderKey
+      AND storerkey=@cstorerkey
+
+      IF @@ERROR <> 0
+      BEGIN
+         SET @nErrNo = 175267
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdOrderFail
+         GOTO RollBackTran
+      END
+
+      UPDATE orderdetail  WITH (ROWLOCK)
+      set status='3'
+      where orderkey=@cOrderKey
+      AND storerkey=@cstorerkey
+
+      IF @@ERROR <> 0
+      BEGIN
+         SET @nErrNo = 175267
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdODFail
+         GOTO RollBackTran
+      END
           
       IF @cLight = '1'    
       BEGIN    
