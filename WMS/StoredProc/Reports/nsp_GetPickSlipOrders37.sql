@@ -32,6 +32,7 @@ GO
 /* 28-Jan-2019  TLTING_ext 1.7 enlarge externorderkey field length      */
 /* 10-Jun-2021  Mingle    1.8   add ShowLot02(ML01)                     */
 /* 20-Sep-2022  Mingle    1.9   WMS-20805 modify showlot02 logic(ML02)  */
+/* 11-APR-2023  KuanYee   2.0   JSM-142019 Extend TrfRoom LEN(KY01)  */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[nsp_GetPickSlipOrders37] (@c_loadkey NVARCHAR(10))
@@ -69,7 +70,7 @@ CREATE OR ALTER PROC [dbo].[nsp_GetPickSlipOrders37] (@c_loadkey NVARCHAR(10))
          PostCode         NVARCHAR(15) NULL,
          Route            NVARCHAR(10) NULL,
          Route_Desc       NVARCHAR(60) NULL, -- RouteMaster.Desc
-         TrfRoom          NVARCHAR(5)  NULL, -- LoadPlan.TrfRoom
+         TrfRoom          NVARCHAR(20)  NULL, -- LoadPlan.TrfRoom    --KY01
          Notes1           NVARCHAR(60) NULL,
          Notes2           NVARCHAR(60) NULL,
          LOC              NVARCHAR(10) NULL,
