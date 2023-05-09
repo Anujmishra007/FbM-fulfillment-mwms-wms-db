@@ -1,3 +1,8 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /*********************************************************************************/  
 /* Trigger: ntrFacilityUpdate                                              		*/  
 /* Creation Date:                                                          		*/  
@@ -12,7 +17,7 @@
 /*                                                                         		*/  
 /* Called By: When records Updated                                         		*/  
 /*                                                                         		*/  
-/* PVCS Version: 1.0                                                       		*/  
+/* PVCS Version: 1.4                                                       		*/  
 /*                                                                         		*/  
 /* Version: 5.4                                                            		*/  
 /*                                                                         		*/  
@@ -22,6 +27,9 @@
 /* 26-Jun-2018  NJOW01   		1.1  WMS-5221 disallow update type to PHYSICAL    	*/
 /* 04-Mar-2022  TLTING   		1.2  WMS-19029 prevent bulk update or delete      	*/
 /* 2022-04-12   kelvinongcy	1.3  amend way for control user run batch (kocy01)	*/  
+/* 08-May-2023  WLChooi       1.4  WMS-22471 - not allow update SiteID to blank  */
+/*                                 (WL01)                                        */
+/* 08-May-2023  WLChooi       1.4  DevOps Combine Script                         */
 /*********************************************************************************/  
   
 CREATE OR ALTER TRIGGER [dbo].[ntrFacilityUpdate]  
@@ -39,9 +47,9 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF  
    SET CONCAT_NULL_YIELDS_NULL OFF  
 	
-   DECLARE @b_Success int          -- Populated by calls to stored procedures - was the proc successful?  
-         , @n_err int              -- Error number returned by stored procedure or this trigger  
-         , @n_err2 int             -- For Additional Error Detection  
+   DECLARE @b_Success INT          -- Populated by calls to stored procedures - was the proc successful?  
+         , @n_err INT              -- Error number returned by stored procedure or this trigger  
+         , @n_err2 INT             -- For Additional Error Detection  
          , @c_errmsg NVARCHAR(250)     -- Error message returned by stored procedure or this trigger  
          , @n_continue int                   
          , @n_starttcnt int        -- Holds the current transaction count  
@@ -91,6 +99,15 @@ BEGIN
          SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=67408   -- Should Be Set To The SQL Err message but I don't know how to do so.
          SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Update Failed On Table Facility. Batch Update not allow! (ntrFacilityUpdate)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
    END
+
+   --WL01 S
+   IF EXISTS (SELECT 1 FROM INSERTED WITH (NOLOCK) WHERE TRIM(SiteID) = '')
+   BEGIN      
+      SELECT @n_continue = 3
+      SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=67409   -- Should Be Set To The SQL Err message but I don't know how to do so.
+      SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Update Failed On Table Facility. Not allow updating SiteID to blank! (ntrFacilityUpdate)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
+   END
+   --WL01 E
 
    /* END Added */
   
