@@ -2,6 +2,7 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /******************************************************************************/
 /* Store procedure: rdtfnc_EcomReturn                                         */
 /* Copyright      : LFLogistics                                               */
@@ -52,7 +53,8 @@ GO
 /*                               Add ExtendedValidateSP at cond reason screen */
 /* 2022-08-19   2.6  YeeKung     JSM-88504 Fix ExtInfoSP AfterStep (yeekung01)*/
 /* 2022-10-20   2.7  KokHoe      JSM-103402 Initialize Condition Code (kh01)  */ 
-/* 2022-09-23   2.8  YeeKung     WMS-20820 Extended refno length (yeekung02) */
+/* 2022-09-23   2.8  YeeKung     WMS-20820 Extended refno length (yeekung02)  */
+/* 2023-04-13   2.9  Ung         WMS-22302 Allow ExtInfoSP at SKU to lottables*/
 /******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_EcomReturn](
    @nMobile    INT,
@@ -169,8 +171,8 @@ DECLARE
    @cPreToIDLOC            NVARCHAR( 1),
    @cAllowOverReceive      NVARCHAR( 1),
    @cAutoReceiveNext       NVARCHAR( 1),
-   @cSKULabel              NVARCHAR( 10),
-   @nAfterStep             INT,
+   @cSKULabel              NVARCHAR( 10), 
+   @nAfterStep             INT,  
 
    @cData1                 NVARCHAR( 60),
    @cData2                 NVARCHAR( 60),
@@ -883,7 +885,7 @@ BEGIN
                '@cExtendedInfo NVARCHAR( 20) OUTPUT '
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey,  
                @cReceiptKey, @cRefNo, @cID, @cLOC, @cSKU, @nQTY,
                @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
                @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
@@ -1057,7 +1059,7 @@ BEGIN
                '@cExtendedInfo NVARCHAR( 20) OUTPUT '
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey,  
                @cReceiptKey, @cRefNo, @cID, @cLOC, @cSKU, @nQTY,
                @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
                @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
@@ -1521,7 +1523,7 @@ BEGIN
          SET @nScn = @nScn_Lottables
          SET @nStep = @nStep_Lottables
 
-         GOTO Quit
+         GOTO Step_SKU_Quit
       END
 
       -- Serial No
