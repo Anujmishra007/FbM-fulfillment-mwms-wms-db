@@ -45,6 +45,7 @@ GO
 /*                          Add Loc lookup                              */
 /* 2020-05-04 2.5  Ung      WMS-12637 Add ConfirmSP                     */
 /* 2023-01-20 2.6  Ung      WMS-21577 Add unlimited UCC to move         */
+/* 2023-05-09 2.7  Ung      WMS-22401 Fix UCC DoubleScan                */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Move_UCC] (
@@ -334,34 +335,7 @@ BEGIN
             GOTO Step_1_Fail
          END
       END
-
-      -- Put all UCC into temp table
-      DECLARE @tUCC TABLE (UCC NVARCHAR( 20), i INT)
-      INSERT INTO @tUCC (UCC, i) VALUES (@cInField01, 1)
-      INSERT INTO @tUCC (UCC, i) VALUES (@cInField02, 2)
-      INSERT INTO @tUCC (UCC, i) VALUES (@cInField03, 3)
-      INSERT INTO @tUCC (UCC, i) VALUES (@cInField04, 4)
-      INSERT INTO @tUCC (UCC, i) VALUES (@cInField05, 5)
-      INSERT INTO @tUCC (UCC, i) VALUES (@cInField06, 6)
-      INSERT INTO @tUCC (UCC, i) VALUES (@cInField07, 7)
-      INSERT INTO @tUCC (UCC, i) VALUES (@cInField08, 8)
-      INSERT INTO @tUCC (UCC, i) VALUES (@cInField09, 9)
-
-      -- Validate UCC scanned more than once
-      SELECT @i = MAX( i)
-      FROM @tUCC
-      WHERE UCC <> '' AND UCC IS NOT NULL
-      GROUP BY UCC
-      HAVING COUNT( UCC) > 1
-
-      IF @@ROWCOUNT <> 0
-      BEGIN
-         SET @nErrNo = 60602
-         SET @cErrMsg = rdt.rdtgetmessage( 60602, @cLangCode, 'DSP') --'UCC DoubleScan'
-         EXEC rdt.rdtSetFocusField @nMobile, @i
-         GOTO Step_1_Fail
-      END
-
+      
       -- Validate if anything changed
       IF @cUCC1 <> @cInField01 OR
          @cUCC2 <> @cInField02 OR
@@ -407,6 +381,20 @@ BEGIN
                      @cStorerKey, 
                      '1', -- Received, 
                      @cChkLOC = @cFromLOC
+
+                  IF @nErrNo = 0
+                  BEGIN
+                     -- Check UCC scanned
+                     IF EXISTS( SELECT 1
+                        FROM rdt.rdtMoveUCCLog WITH (NOLOCK)
+                        WHERE StorerKey = @cStorerKey
+                           AND UCCNo = @cInField
+                           AND AddWho = SUSER_SNAME())
+                     BEGIN
+                        SET @nErrNo = 60602
+                        SET @cErrMsg = rdt.rdtgetmessage( 60602, @cLangCode, 'DSP') --'UCC DoubleScan'
+                     END
+                  END
                   
                   IF @nErrNo = 0
                   BEGIN
@@ -466,6 +454,24 @@ BEGIN
                      IF @i = 8 SELECT @cUCC8 = '', @cInField08 = '', @cOutField08 = ''
                      IF @i = 9 SELECT @cUCC9 = '', @cInField09 = '', @cOutField09 = ''
                      EXEC rdt.rdtSetFocusField @nMobile, @i
+                     
+                     -- Remove old value
+                     IF @cUCC <> '' 
+                     BEGIN
+                        DELETE rdt.rdtMoveUCCLog 
+                        WHERE StorerKey = @cStorerKey
+                           AND UCCNo = @cUCC
+                           AND AddWho = SUSER_SNAME()
+                     
+                        SELECT @nTotalUCC = COUNT(1) 
+                        FROM rdt.rdtMoveUCCLog WITH (NOLOCK)
+                        WHERE StorerKey = @cStorerKey
+                           AND AddWho = SUSER_SNAME()
+                           
+                        -- Refresh counter
+                        SET @cOutField13 = CAST( @nTotalUCC AS NVARCHAR( 3))
+                     END
+                     
                      GOTO Step_1_Fail
                   END
                END
