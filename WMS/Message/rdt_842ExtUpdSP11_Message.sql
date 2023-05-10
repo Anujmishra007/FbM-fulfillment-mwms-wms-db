@@ -40,6 +40,9 @@ execute rdt.rdtAddMsg 177136, 10, '177136 UpdEcommFail ', 'us_english', 842
 execute rdt.rdtAddMsg 177137, 10, '177137 UpdEcommFail ', 'us_english', 842
 execute rdt.rdtAddMsg 177138, 10, '177138 PickNotDone  ', 'us_english', 842
 execute rdt.rdtAddMsg 177139, 10, '177139PickNotComplet', 'us_english', 842
-execute rdt.rdtAddMsg 177140, 10, '177139NoRecToProcess', 'us_english', 842
+execute rdt.rdtAddMsg 177140, 10, '177140NoRecToProcess', 'us_english', 842
+
+--WMS-22534
+execute rdt.rdtAddMsg 177141, 10, '177141 Exec ITF Fail', 'us_english', 842
 
 SELECT * FROM rdt.RDTMsg (NOLOCK) WHERE Message_ID BETWEEN 177101 AND 177150	
