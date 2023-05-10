@@ -56,35 +56,58 @@ BEGIN
  USE JOIN TABLES INSTEAD OF COMMA, FOR EASY & READABLE QUERY  
  **********************************************************************/  
   
-set @Stmt = 'SELECT   
-  DISTINCT OD.StorerKey,   
-  SUM (PKD.Qty * SKU.STDCUBE) as ''Ttl Sku CMB'',   
-  OD.UserDefine09 as Wavekey,   
-  OD.ExternOrderKey,   
-  COUNT (DISTINCT PAI.CartonNo) as  ''Total Cartons'',  
-  SUM (PAI.Cube) as ''Total Carton Cube'',   
-  OD.OrderKey   
-  
-FROM   
-BI.V_PackInfo PAI  
-JOIN BI.V_PackHeader PH (nolock) on PH.PickSlipNo = PAI.PickSlipNo  
-JOIN BI.V_ORDERS OD (nolock) on OD.OrderKey = PH.OrderKey and OD.StorerKey = PH.StorerKey  
-JOIN BI.V_PICKDETAIL PKD (nolock) on PKD.Pickslipno=PH.PickslipNO  
-JOIN BI.V_SKU SKU (nolock) on PKD.Storerkey=SKU.Storerkey and PKD.SKU=SKU.SKU   
-WHERE   
-  OD.StorerKey =''NIKEPH'' '  
+ set @stmt =
+ '
+;WITH A (aStorerkey,aUserdefine09,aExternorderkey,aCartonNo,aCube,aOrderkey) as
+(SELECT 
+  DISTINCT O.StorerKey, 
+  O.UserDefine09, 
+  O.ExternOrderKey, 
+  COUNT (DISTINCT PAI.CartonNo), 
+  SUM (PAI.Cube), 
+  O.OrderKey 
+FROM 
+  BI.V_ORDERS O
+  INNER JOIN BI.V_PackHeader PH ON O.StorerKey = PH.StorerKey 
+  AND O.OrderKey = PH.OrderKey 
+ INNER JOIN BI.V_PackInfo PAI ON PH.PickSlipNo = PAI.PickSlipNo
+WHERE 
+O.StorerKey ='''+@PARAM_GENERIC_STORERKEY+''''  
 if isnull(@PARAM_ORDERS_USERDEFINE09,'') <> ''  
- set @stmt = @stmt + ' AND PKD.Wavekey in ('''+@PARAM_ORDERS_USERDEFINE09+''') '  
-  
+ set @stmt = @stmt + ' AND O.Userdefine09 in ('''+@PARAM_ORDERS_USERDEFINE09+''') '  
 if isnull(@PARAM_ORDERS_externORDERKEY,'') <> ''  
- set @stmt = @stmt + ' AND OD.ExternOrderKey in ('''+@PARAM_ORDERS_externORDERKEY+''') '  
-
-set @Stmt = @STMT+'   
-GROUP BY   
-  OD.StorerKey,   
-  OD.UserDefine09,   
-  OD.ExternOrderKey,   
-  OD.OrderKey '  
+ set @stmt = @stmt + ' AND O.ExternOrderKey in ('''+@PARAM_ORDERS_externORDERKEY+''') ' 
+ set @stmt = @stmt + '
+ GROUP BY 
+O.StorerKey, 
+O.UserDefine09, 
+O.ExternOrderKey, 
+O.OrderKey
+)
+, b (bStdCube,bStorerkey,bOrderkey) as
+(SELECT 
+DISTINCT SUM (PD.Qty * S.STDCUBE), 
+PD.Storerkey, 
+PD.OrderKey 
+FROM 
+BI.V_PICKDETAIL PD
+INNER JOIN BI.V_SKU S ON PD.Storerkey = S.StorerKey AND PD.Sku = S.Sku
+INNER JOIN A ON A.aStorerkey=PD.Storerkey AND A.aOrderkey=PD.OrderKey
+GROUP BY 
+PD.Storerkey, 
+PD.OrderKey
+)
+select 
+a.aStorerkey [Storerkey]
+,a.aOrderkey [Orderkey]
+,a.aExternorderkey [ExternOrderkey]
+,a.aUserdefine09 [Wavekey]
+,a.aCartonNo [Total Cartons]
+,a.aCube [Total Carton Cube]
+,b.bStdCube [Ttl Sku CMB]
+from A join b on a.aStorerkey=b.bStorerkey and a.aOrderkey=b.bOrderkey
+'
+ 
   
   
 /*************************** FOOTER *******************************/  
