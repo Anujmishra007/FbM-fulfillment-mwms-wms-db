@@ -13,6 +13,7 @@ GO
 /* Date       Rev  Author     Purposes                                        */
 /* 2023-03-09 1.0  Ung        WMS-21506 Created                               */
 /* 2023-04-28 1.1  Ung        WMS-21506 Add L12 inaccessible                  */
+/* 2023-04-11 1.2  Ung        WMS-22105 Allow SKU to process once Printed     */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_639GetTask01 (
@@ -61,7 +62,7 @@ AS
    SET @nErrNo = 0 -- Require if calling GetTask multiple times (NEXTSKU then NEXTLOC)
    SET @cErrMsg = ''
    
-   SELECT @nQTY = ISNULL( SUM( RF.QTY), 0)
+   SELECT @nQTY = ISNULL( SUM( RF.QTYPrinted), 0)
    FROM dbo.RFPutaway RF WITH (NOLOCK)
       JOIN dbo.LOC WITH (NOLOCK) ON (RF.SuggestedLOC = LOC.LOC)
       JOIN dbo.LOTAttribute LA WITH (NOLOCK) ON (RF.LOT = LA.LOT)
@@ -69,8 +70,7 @@ AS
       AND RF.FromID = @cFromID
       AND RF.StorerKey = @cStorerKey
       AND RF.SKU = @cSKU
-      AND RF.QTY > 0
-      AND RF.QTY = RF.QTYPrinted
+      AND RF.QTYPrinted > 0
       AND LOC.LocationCategory IN ('FP','HP','FC')
       AND LA.Lottable12 <> 'inaccessible'
 

@@ -26,6 +26,8 @@ GO
 /*                          Add MassBuildUCC, SValue=2                        */
 /*                          Add UCCWithDynamicCaseCNT                         */
 /*                          Clean up source                                   */
+/* 2023-03-27 1.5  Ung      WMS-22105 Skip FROM ID, TO ID, if LoseID          */
+/*                          Fix PQTYAvail not shown, when DisableQTYField     */
 /******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_MoveToUCC_V7](
    @nMobile    INT,
@@ -40,6 +42,7 @@ DECLARE
    @cSQLParam           NVARCHAR( MAX),
    @nMorePage           INT,
    @cLoseUCC            NVARCHAR( 1),
+   @cLoseID             NVARCHAR( 1),
    @cOption             NVARCHAR( 1),
    @cBarcode            NVARCHAR( 60),
    @cChkFacility        NVARCHAR( 5),
@@ -392,7 +395,8 @@ BEGIN
       -- Get TOLOC info
       SELECT
          @cChkFacility = Facility,
-         @cLoseUCC = LoseUCC
+         @cLoseUCC = LoseUCC, 
+         @cLoseID = LoseID
       FROM dbo.LOC (NOLOCK)
       WHERE LOC = @cToLoc
 
@@ -419,37 +423,52 @@ BEGIN
          GOTO Step_TOLOC_Fail
       END
 
-      IF @cAutoGenID <> ''
+      IF @cLoseID = '1'
       BEGIN
-         DECLARE @cAutoID NVARCHAR(18)
-         EXEC rdt.rdt_MoveToUCC_AutoGenID @nMobile, @nFunc, @nStep, @nInputKey, @cLangCode, @cStorerKey, @cFacility
-            ,@cAutoGenID
-            ,@cFromLOC
-            ,@cFromID
-            ,@cSKU
-            ,@nQTY
-            ,@cUCC
-            ,@cToID
-            ,@cToLOC
-            ,@cOption
-            ,@cAutoID  OUTPUT
-            ,@nErrNo   OUTPUT
-            ,@cErrMsg  OUTPUT
-         IF @nErrNo <> 0
-            GOTO Step_TOLOC_Fail
+         SET @cToID = ''
+         
+         -- Prep next screen var
+         SET @cOutField01 = @cToLoc
+         SET @cOutField02 = @cToID
+         SET @cOutField03 = @cDefaultFromLOC
 
-         SET @cToID = @cAutoID
+         SET @nScn = @nScn_FROMLOC
+         SET @nStep = @nStep_FROMLOC
       END
       ELSE
-         SET @cToID = ''
+      BEGIN
+         IF @cAutoGenID <> ''
+         BEGIN
+            DECLARE @cAutoID NVARCHAR(18)
+            EXEC rdt.rdt_MoveToUCC_AutoGenID @nMobile, @nFunc, @nStep, @nInputKey, @cLangCode, @cStorerKey, @cFacility
+               ,@cAutoGenID
+               ,@cFromLOC
+               ,@cFromID
+               ,@cSKU
+               ,@nQTY
+               ,@cUCC
+               ,@cToID
+               ,@cToLOC
+               ,@cOption
+               ,@cAutoID  OUTPUT
+               ,@nErrNo   OUTPUT
+               ,@cErrMsg  OUTPUT
+            IF @nErrNo <> 0
+               GOTO Step_TOLOC_Fail
 
-      -- Prep next screen var
-      SET @cOutField01 = @cToLoc
-      SET @cOutField02 = @cToID
+            SET @cToID = @cAutoID
+         END
+         ELSE
+            SET @cToID = ''
 
-      -- Go to next screen
-      SET @nScn = @nScn_TOID
-      SET @nStep = @nStep_TOID
+         -- Prep next screen var
+         SET @cOutField01 = @cToLoc
+         SET @cOutField02 = @cToID
+
+         -- Go to next screen
+         SET @nScn = @nScn_TOID
+         SET @nStep = @nStep_TOID
+      END
    END
 
    IF @nInputKey = 0 -- ESC
@@ -549,7 +568,8 @@ BEGIN
       -- Get FROMLOC info
       SELECT
          @cChkFacility = Facility,
-         @cLoseUCC = LoseUCC
+         @cLoseUCC = LoseUCC, 
+         @cLoseID = LoseID
       FROM dbo.LOC (NOLOCK)
       WHERE LOC = @cFromLoc
 
@@ -644,14 +664,29 @@ BEGIN
          END
       END
 
-      -- Prep next screen var
-      SET @cOutField01 = @cToLOC
-      SET @cOutField02 = @cToID
-      SET @cOutField03 = @cFromLoc
-      SET @cOutField04 = '' --@cFromID
+      IF @cLoseID = '1'
+      BEGIN
+         SET @cFromID = ''
+         
+         -- Prep next screen var
+         SET @cOutField01 = @cFromLoc
+         SET @cOutField02 = @cFromID
+         SET @cOutField03 = ''
 
-      SET @nScn = @nScn_FROMID
-      SET @nStep = @nStep_FROMID
+         SET @nScn = @nScn_SKU
+         SET @nStep = @nStep_SKU
+      END
+      ELSE
+      BEGIN
+         -- Prep next screen var
+         SET @cOutField01 = @cToLOC
+         SET @cOutField02 = @cToID
+         SET @cOutField03 = @cFromLoc
+         SET @cOutField04 = '' --@cFromID
+
+         SET @nScn = @nScn_FROMID
+         SET @nStep = @nStep_FROMID
+      END
    END
 
    IF @nInputKey = 0 -- ESC
@@ -667,14 +702,27 @@ BEGIN
       END
       ELSE
       BEGIN
-         -- Prep next screen var
-         SET @cToID = ''
-         SET @cOutField01 = @cToLoc
-         SET @cOutField02 = ''
+         IF EXISTS( SELECT 1 FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @cToLOC AND LoseID = '1')
+         BEGIN
+            -- Prep next screen var
+            SET @cToLoc = ''
+            SET @cOutField01 = ''
 
-         -- Go to prev screen
-         SET @nScn = @nScn_TOID
-         SET @nStep = @nStep_TOID
+            -- Go to prev screen
+            SET @nScn = @nScn_TOLOC
+            SET @nStep = @nStep_TOLOC
+         END
+         ELSE
+         BEGIN
+            -- Prep next screen var
+            SET @cToID = ''
+            SET @cOutField01 = @cToLoc
+            SET @cOutField02 = ''
+
+            -- Go to prev screen
+            SET @nScn = @nScn_TOID
+            SET @nStep = @nStep_TOID
+         END
       END
    END
    GOTO Quit
@@ -1203,7 +1251,7 @@ BEGIN
       SET @cOutField04 = SUBSTRING(@cSKUDescr, 1, 20)   -- SKU desc 1
       SET @cOutField05 = SUBSTRING(@cSKUDescr, 21, 20)  -- SKU desc 2
       SET @cOutField10 = CAST(@nPUOM_DIV AS NCHAR(6))  + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc
-      SET @cOutField11 = CASE WHEN @cFieldAttr13 = 'O' THEN '' ELSE CAST( @nPQTY_Avail AS NVARCHAR( 5)) END
+      SET @cOutField11 = CASE WHEN @nPQTY_Avail = 0 THEN '' ELSE CAST( @nPQTY_Avail AS NVARCHAR( 5)) END
       SET @cOutField12 = CAST( @nMQTY_Avail AS NVARCHAR( 5))
       SET @cOutField13 = '' -- PQTY
       SET @cOutField14 = CASE WHEN @cDisableQTYField = '1' THEN '' ELSE @cDefaultQTY END -- MQTY
@@ -1217,14 +1265,28 @@ BEGIN
 
    IF @nInputKey = 0 -- ESC
    BEGIN
-      -- Prep next screen var
-      SET @cOutField01 = @cToLOC
-      SET @cOutField02 = @cToID
-      SET @cOutField03 = @cFromLoc
-      SET @cOutField04 = '' --FromID
+      IF EXISTS( SELECT 1 FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @cFromLOC AND LoseID = '1')
+      BEGIN
+         -- Prep next screen var
+         SET @cFromLoc = ''
+         SET @cOutField01 = @cToLoc
+         SET @cOutField02 = @cToID
+         SET @cOutField03 = ''
 
-      SET @nScn = @nScn_FROMID
-      SET @nStep = @nStep_FROMID
+         SET @nScn = @nScn_FROMLOC
+         SET @nStep = @nStep_FROMLOC
+      END
+      ELSE
+      BEGIN
+         -- Prep next screen var
+         SET @cOutField01 = @cToLOC
+         SET @cOutField02 = @cToID
+         SET @cOutField03 = @cFromLoc
+         SET @cOutField04 = '' --FromID
+
+         SET @nScn = @nScn_FROMID
+         SET @nStep = @nStep_FROMID
+      END
    END
 
    Step_SKU_Quit:
@@ -1428,7 +1490,7 @@ BEGIN
          SET @cOutField04 = SUBSTRING(@cSKUDescr, 1, 20)   -- SKU desc 1
          SET @cOutField05 = SUBSTRING(@cSKUDescr, 21, 20)  -- SKU desc 2
          SET @cOutField10 = CAST(@nPUOM_DIV AS NCHAR(6))  + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc
-         SET @cOutField11 = CASE WHEN @cFieldAttr13 = 'O' THEN '' ELSE CAST( @nPQTY_Avail AS NVARCHAR( 5)) END
+         SET @cOutField11 = CASE WHEN @nPQTY_Avail = 0 THEN '' ELSE CAST( @nPQTY_Avail AS NVARCHAR( 5)) END
          SET @cOutField12 = CAST( @nMQTY_Avail AS NVARCHAR( 5))
          SET @cOutField13 = '' -- PQTY
          SET @cOutField14 = CASE WHEN @cDisableQTYField = '1' THEN '' ELSE @cDefaultQTY END -- @nMQTY
@@ -1453,6 +1515,7 @@ BEGIN
          BEGIN
             SET @nErrNo = 148368
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU not same
+            EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', @nErrNo, @cErrMsg
             EXEC rdt.rdtSetFocusField @nMobile, 2 -- SKU
             SET @cOutField11 = ''
             GOTO Quit
@@ -2209,7 +2272,7 @@ BEGIN
       SET @cOutField04 = SUBSTRING(@cSKUDescr, 1, 20)   -- SKU desc 1
       SET @cOutField05 = SUBSTRING(@cSKUDescr, 21, 20)  -- SKU desc 2
       SET @cOutField10 = CAST(@nPUOM_DIV AS NCHAR(6))  + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc
-      SET @cOutField11 = CASE WHEN @cFieldAttr13 = 'O' THEN '' ELSE CAST( @nPQTY_Avail AS NVARCHAR( 5)) END
+      SET @cOutField11 = CASE WHEN @nPQTY_Avail = 0 THEN '' ELSE CAST( @nPQTY_Avail AS NVARCHAR( 5)) END
       SET @cOutField12 = CAST( @nMQTY_Avail AS NVARCHAR( 5))
       SET @cOutField13 = CASE WHEN @cDisableQTYField = '1' THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 5)) END -- PQTY
       SET @cOutField14 = CAST( @nMQTY AS NVARCHAR( 5)) -- MQTY
@@ -2286,7 +2349,8 @@ BEGIN
 
    Step_TOUCC_Fail:
    BEGIN
-      SET @cOutField01 = '' -- UCC
+      IF @nErrNo <> -1 -- -1=Retain UCC
+         SET @cOutField01 = '' -- UCC
    END
 END
 GOTO Quit

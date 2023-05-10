@@ -3,16 +3,17 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/************************************************************************/
-/* Store procedure: rdt_639Confirm02                                    */
-/* Copyright: LF Logistics                                              */
-/*                                                                      */
-/* Modifications log:                                                   */
-/*                                                                      */
-/* Date         Author    Ver.  Purposes                                */
-/* 2023-01-31   Ung       1.0   WMS-21506 Created                       */
-/* 2023-04-28   Ung       1.1   WMS-21506 Add L12 inaccessible          */
-/************************************************************************/
+/******************************************************************************/
+/* Store procedure: rdt_639Confirm02                                          */
+/* Copyright: LF Logistics                                                    */
+/*                                                                            */
+/* Modifications log:                                                         */
+/*                                                                            */
+/* Date         Author    Ver.  Purposes                                      */
+/* 2023-01-31   Ung       1.0   WMS-21506 Created                             */
+/* 2023-04-28   Ung       1.1   WMS-21506 Add L12 inaccessible                */
+/* 2023-04-11   Ung       1.2   WMS-22105 Allow SKU to process once Printed   */
+/******************************************************************************/
 CREATE OR ALTER PROCEDURE [RDT].[rdt_639Confirm02]
    @nMobile         INT,
    @nFunc           INT,
@@ -210,8 +211,7 @@ BEGIN
             AND RF.FromID = @cFromID
             AND RF.StorerKey = @cStorerKey
             AND RF.SKU = @cSKU
-            AND RF.QTY > 0
-            AND RF.QTY = RF.QTYPrinted
+            AND RF.QTYPrinted > 0
             AND LOC.LocationCategory IN ('FP','HP','FC')
          ORDER BY 
             CASE LOC.LocationCategory 

@@ -11,6 +11,7 @@ GO
 /*                                                                            */
 /* Date         Author    Ver.  Purposes                                      */
 /* 2023-03-09   Ung       1.0   WMS-21506 Created                             */
+/* 2023-04-11   Ung       1.1   WMS-22105 Allow SKU to process once Printed   */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_639ExtVal04] (
@@ -91,8 +92,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                   AND RF.FromID = @cFromID
                   AND RF.StorerKey = @cStorerKey
                   AND RF.SKU = @cSKU
-                  AND RF.QTY > 0
-                  AND RF.QTY = RF.QTYPrinted
+                  AND RF.QTYPrinted > 0
                   AND LOC.LocationCategory IN ('FP','HP','FC'))
             BEGIN
                SET @nErrNo = 197702
@@ -125,7 +125,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                SET @cMsg2 = SUSER_SNAME()
                SET @cMsg3 = rdt.rdtgetmessage( 197704, @cLangCode, 'DSP') -- PLEASE RETRY LATER
 
-               EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', @cMsg1,  @cMsg2, '', @cMsg2
+               EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', @cMsg1,  @cMsg2, '', @cMsg3
                SET @nErrNo = -1
                GOTO Quit
             END
