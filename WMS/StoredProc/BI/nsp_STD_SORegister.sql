@@ -10,6 +10,7 @@ GO
 /* 12-JUL-2022     JAM			1.0     For Operations daily report                            */
 /* 07/13/2022      Crisnah      1.1     Migrate also to PHWMS. this is usual daily report from operations*/ 
 /* 03/08/2023      JayCanete    1.2     Add condition https://jiralfl.atlassian.net/browse/WMS-21816 */ 
+/* 11-MAY-2023	   JarekLIM		1.5		Add Column and Add BI.V_DM_STORER	https://jiralfl.atlassian.net/browse/WMS-21816	*/
 /***********************************************************************************************/  
 -- Test EXEC BI.nsp_STD_SORegister 'UNILEVER', 'UMDC', 'EDITDATE','2022-03-17', '2022-03-18','''9'''
  --      EXEC BI.nsp_STD_SORegister NULL, NULL, NULL, NULL
@@ -198,6 +199,9 @@ SELECT
 ,AL10.Editdate	as ''103PackingEditDate''
 , case when AL10.Status = ''9'' then  AL10.Editdate else NULL end as ''104PackConfirmDate''
 ,AL2.IntermodalVehicle
+,AL13.Secondary							as ''106ConsigneeSecondary'' 
+,AL13.Susr4							    as ''107ConsigneeSUSR4''	 
+,AL4.Class							    as ''108SKUClass''
 '
 
  SET @stmt = @stmt + '
@@ -205,14 +209,15 @@ SELECT
  JOIN BI.V_STORER AL3 (NOLOCK) ON (AL3.StorerKey=AL2.StorerKey)
  JOIN BI.V_ORDERDETAIL AL1 (NOLOCK) ON (AL2.OrderKey=AL1.OrderKey)
  JOIN BI.V_SKU AL4 (NOLOCK) ON (AL1.StorerKey=AL4.StorerKey AND AL1.Sku=AL4.Sku) 
- LEFT OUTER JOIN BI.V_CODELKUP AL5 (NOLOCK) ON (AL4.SUSR3=AL5.Code AND AL5.LISTNAME=''PRINCIPAL'') 
  JOIN BI.V_PACK AL6 (NOLOCK) ON (AL4.PACKKey=AL6.PackKey) 
+ LEFT OUTER JOIN BI.V_CODELKUP AL5 (NOLOCK) ON (AL4.SUSR3=AL5.Code AND AL5.LISTNAME=''PRINCIPAL'') 
  LEFT OUTER JOIN BI.V_OrderInfo AL7 (NOLOCK) ON (AL7.Orderkey=AL1.OrderKey)
  LEFT JOIN BI.V_MBOL AL8 (NOLOCK) ON  (AL2.MBOLKey=AL8.MbolKey)						
  LEFT OUTER JOIN BI.V_WAVE AL9 (NOLOCK) ON  (AL2.UserDefine09=AL9.WaveKey)					
  LEFT OUTER JOIN BI.V_PackHeader AL10 (NOLOCK) ON (AL2.OrderKey=AL10.OrderKey)			
  LEFT OUTER JOIN BI.V_PackDetail AL11 (NOLOCK) ON (AL10.PickSlipNo=AL11.PickSlipNo and AL1.Sku=AL11.sku)	
  LEFT OUTER JOIN BI.V_PICKHEADER AL12 (NOLOCK) ON (AL2.OrderKey = AL12.OrderKey) 
+ LEFT JOIN BI.V_STORER AL13 (NOLOCK) ON (AL2.Consigneekey = AL13.Storerkey) 
 
  WHERE ((AL2.StorerKey=  '''+ @Param_Generic_StorerKey +'''
  AND AL2.Facility= '''+ @Param_Generic_Facility +'''
@@ -300,6 +305,9 @@ AND AL2.STATUS IN ('+@Param_Orders_Status+')
 ,AL10.Editdate
 ,AL10.Status
 ,AL2.IntermodalVehicle
+,AL13.Secondary		
+,AL13.Susr4							 
+,AL4.Class
 '
 
 /*************************** FOOTER *******************************/
@@ -318,7 +326,7 @@ GO --*/
 EXECUTE AS LOGIN ='JREPORTUSERPH'
 
 SELECT SUSER_SNAME(), USER_NAME()
-EXEC BI.nsp_STD_SORegister 'UNILEVER', 'UMDC', 'EDITDATE','2023-03-01', '2023-03-05','''9'''
+EXEC BI.nsp_STD_SORegister 'UNILEVER', 'UMDC', 'EDITDATE','2023-05-01','2023-05-10','''9'''
 EXEC BI.nsp_STD_SORegister '','','','','',''
 EXEC BI.nsp_STD_SORegister NULL,NULL,NULL,NULL,NULL,NULL
 
