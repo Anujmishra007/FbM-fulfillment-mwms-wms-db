@@ -44,6 +44,7 @@ GO
 /* 2022-10-13  Wan11    2.3   LFWM-3780 - PH Unilever                      */
 /*                            DisAllowDuplicateIdsOnWSRcpt StorerCFG CR    */
 /* 2022-11-24  Leong01  2.4   Add ISNULL check.                            */
+/* 2023-04-27  Wan12    2.5   LFWM-4181 - SCE ASN Finalize Alert Enhancement*/
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE [WM].[lsp_FinalizeReceipt_Wrapper]
@@ -206,9 +207,9 @@ BEGIN
          , @c_DisAllowDuplicateIdsOnWSRcpt NVARCHAR(10)  = ''     --(Wan08)
          , @c_DisAllowDupIDsOnWSRcpt_Option5 NVARCHAR(1000) = ''  --(Wan10)
          , @c_UniqueIDSkipDocType      NVARCHAR(30) = ''          --(Wan10)
-         , @c_AllowDupWithinPLTCnt     NVARCHAR(30) = 'N'         --(Wan11)
+         , @c_AllowDupWithinPLTCnt     NVARCHAR(30) = 'N'         --(Wan11) 
 
-         , @b_ValidID                  INT          = 0           --(Wan11)
+         , @b_ValidID                  INT          = 0           --(Wan11) 
          , @c_MUID                     NVARCHAR(30)   = ''
          , @c_GenID                    NVARCHAR(30)   = ''
          , @c_RF_Enable                NVARCHAR(30)   = ''
@@ -218,21 +219,21 @@ BEGIN
          , @c_HoldByLottable02         NVARCHAR(30)   = ''
          , @c_AllowASNLot2Rehold       NVARCHAR(30)   = ''
          , @c_FinalizeASNPromptSaveID  NVARCHAR(30)   = ''     --Wan04
-
-         ,  @c_Refkey1                 NVARCHAR(20)   = ''     --(Wan06)
-         ,  @c_Refkey2                 NVARCHAR(20)   = ''     --(Wan06)
-         ,  @c_Refkey3                 NVARCHAR(20)   = ''     --(Wan06)
-         ,  @c_WriteType               NVARCHAR(50)   = ''     --(Wan06)
+            
+         ,  @c_Refkey1                 NVARCHAR(20)   = ''     --(Wan06)               
+         ,  @c_Refkey2                 NVARCHAR(20)   = ''     --(Wan06)               
+         ,  @c_Refkey3                 NVARCHAR(20)   = ''     --(Wan06)               
+         ,  @c_WriteType               NVARCHAR(50)   = ''     --(Wan06)               
          ,  @n_LogWarningNo            INT            = 0      --(Wan06)
-         ,  @n_LogErrNo                INT            = ''     --(Wan06)
+         ,  @n_LogErrNo                INT            = ''     --(Wan06)               
          ,  @c_LogErrMsg               NVARCHAR(255)  = ''     --(Wan06)
 
          , @CUR_RD                     CURSOR
          , @CUR_ERRLIST               CURSOR                  --(Wan06)
-
+         
    --(Wan06) - START
-   DECLARE  @t_WMSErrorList   TABLE
-         (  RowID             INT            IDENTITY(1,1)
+   DECLARE  @t_WMSErrorList   TABLE                                  
+         (  RowID             INT            IDENTITY(1,1) 
          ,  TableName         NVARCHAR(10)   NOT NULL DEFAULT('')
          ,  SourceType        NVARCHAR(50)   NOT NULL DEFAULT('')
          ,  Refkey1           NVARCHAR(20)   NOT NULL DEFAULT('')
@@ -241,10 +242,10 @@ BEGIN
          ,  WriteType         NVARCHAR(50)   NOT NULL DEFAULT('')
          ,  LogWarningNo      INT            NOT NULL DEFAULT(0)
          ,  ErrCode           INT            NOT NULL DEFAULT(0)
-         ,  Errmsg            NVARCHAR(255)  NOT NULL DEFAULT('')
+         ,  Errmsg            NVARCHAR(255)  NOT NULL DEFAULT('')  
          )
    --(Wan06) - END
-
+   
    SET  @n_ErrGroupKey = 0
    SET @n_Err = 0
    IF SUSER_SNAME() <> @c_UserName     --(Wan03)
@@ -353,8 +354,8 @@ BEGIN
                            + '! (lsp_FinalizeReceipt_Wrapper)'
                            + ' |' + @c_ReceiptKey
             --(Wan06) - START
-            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)   
             --EXEC [WM].[lsp_WriteError_List]
             --      @i_iErrGroupKey = @n_ErrGroupKey OUTPUT,
             --      @c_TableName   = @c_TableName,
@@ -393,8 +394,8 @@ BEGIN
                            + ' |' + @c_Facility
 
             --(Wan06) - START
-            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNo, '', 'ERROR', 0, @n_err, @c_errmsg)
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNo, '', 'ERROR', 0, @n_err, @c_errmsg)   
 
             --EXEC [WM].[lsp_WriteError_List]
             --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT,
@@ -410,7 +411,7 @@ BEGIN
             --      @n_err         = @n_err ,
             --      @c_errmsg      = @c_errmsg
             --(Wan06) - END
-
+            
             FETCH NEXT FROM @CUR_RD INTO @c_ReceiptLineNo
          END
          CLOSE @CUR_RD
@@ -439,9 +440,9 @@ BEGIN
                               + ': Error Executing nspGetRight - ShipmentNoConfig. (lsp_FinalizeReceipt_Wrapper)'
                               + ' (' + @c_ErrMsg + ')'
                --(Wan06) - START
-               INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-               VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
-
+               INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+               VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)   
+                             
                --EXEC [WM].[lsp_WriteError_List]
                --      @i_iErrGroupKey = @n_ErrGroupKey OUTPUT,
                --      @c_TableName   = @c_TableName,
@@ -469,7 +470,7 @@ BEGIN
                @c_Facility = @c_Facility
             ,  @c_Storerkey= @c_Storerkey
             ,  @c_Sku      = ''
-            ,  @c_Configkey= 'FinalizeASN_ChekPLTLine'
+            ,  @c_Configkey= 'FinalizeASN_ChkPLTLine'                               --(Wan12)
             ,  @b_Success  = @b_Success         OUTPUT
             ,  @c_Authority= @c_FnzChkPltline   OUTPUT
             ,  @n_Err      = @n_Err             OUTPUT
@@ -481,11 +482,11 @@ BEGIN
             SET @c_ErrMsg  = 'NSQL' + CONVERT(CHAR(6), @n_err)
                            + ': Error Executing nspGetRight - FinalizeASN_ChkPLTLine. (lsp_FinalizeReceipt_Wrapper)'
                            + ' (' + @c_ErrMsg + ')'
-
+                           
             --(Wan06) - START
-            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
-
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)   
+                           
             --EXEC [WM].[lsp_WriteError_List]
             --      @i_iErrGroupKey = @n_ErrGroupKey OUTPUT,
             --      @c_TableName   = @c_TableName,
@@ -526,8 +527,8 @@ BEGIN
                            + ' (' + @c_ErrMsg + ')'
 
             --(Wan06) - START
-            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)   
             --EXEC [WM].[lsp_WriteError_List]
             --      @i_iErrGroupKey = @n_ErrGroupKey OUTPUT,
             --      @c_TableName   = @c_TableName,
@@ -581,8 +582,8 @@ BEGIN
                            + ' (' + @c_ErrMsg + ')'
 
             --(Wan06) - START
-            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)   
             --EXEC [WM].[lsp_WriteError_List]
             --      @i_iErrGroupKey = @n_ErrGroupKey OUTPUT,
             --      @c_TableName   = @c_TableName,
@@ -630,12 +631,12 @@ BEGIN
          IF @c_ShipmentNoCfg = '1'  AND @c_ShipmentNo = ''
          BEGIN
             SET @c_ErrMsg  = 'Shipment Number Empty. Do you still want to proceed finalize?' --JSM-52407
-
+                        
             --(Wan06) - START
             SET @n_WarningNo = 1
-            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
             VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'QUESTION', @n_WarningNo, 0, @c_errmsg)
-            --(Wan06) - END
+            --(Wan06) - END   
          END
 
          SET @c_ReceiptLineNo = ''
@@ -687,7 +688,7 @@ BEGIN
             WHERE S.Storerkey = @c_Storerkey
             AND S.Sku = @c_Sku
 
-            IF @c_FnzChkPltline = '1' AND @c_ToID = ''
+            IF @c_FnzChkPltline = '1' --AND @c_ToID = ''                            --(Wan12)
             BEGIN
                SELECT @n_Pallet = P.Pallet
                FROM PACK P WITH (NOLOCK)
@@ -699,9 +700,9 @@ BEGIN
                                  + '. Continue to Proceed finalize?'
                   --(Wan06) - START
                   SET @n_WarningNo = 1
-                  INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
+                  INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
                   VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNo, '', 'QUESTION', @n_WarningNo, 0, @c_errmsg)
-
+                  
                   --EXEC [WM].[lsp_WriteError_List]
                   --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
                   --   ,  @c_TableName   = @c_TableName
@@ -715,10 +716,10 @@ BEGIN
                   --   ,  @b_Success     = @b_Success   OUTPUT
                   --   ,  @n_err         = @n_err       OUTPUT
                   --   ,  @c_errmsg      = @c_errmsg    OUTPUT
-                  --(Wan06) - END
+                  --(Wan06) - END   
                END
             END
-
+            
             IF @b_ChkShelfLife = 1 AND @n_ShelfLife >= 0 AND DATEDIFF(day, @dt_Lottable04, @dt_Lottable05) < @n_ShelfLife
             BEGIN
                SET @c_ErrMsg  = 'Receipt #: ' + @c_Receiptkey + ' & Line: ' + @c_ReceiptLineNo + ', Sku: ' + @c_Sku
@@ -727,7 +728,7 @@ BEGIN
 
                --(Wan06) - START
                SET @n_WarningNo = 1
-               INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
+               INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
                VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNo, '', 'QUESTION', @n_WarningNo, 0, @c_errmsg)
 
                --EXEC [WM].[lsp_WriteError_List]
@@ -754,7 +755,7 @@ BEGIN
 
                --(Wan06) - START
                SET @n_WarningNo = 1
-               INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
+               INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
                VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNo, '', 'QUESTION', @n_WarningNo, 0, @c_errmsg)
 
                --EXEC [WM].[lsp_WriteError_List]
@@ -780,7 +781,7 @@ BEGIN
 
             --(Wan06) - START
             SET @n_WarningNo = 1
-            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
             VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'QUESTION', @n_WarningNo, 0, @c_errmsg)
             --EXEC [WM].[lsp_WriteError_List]
             --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
@@ -803,7 +804,7 @@ BEGIN
             SET @c_ErrMsg = 'Neither Zero Quantity nor Zero Free Good Qty to Receive. Continue to Proceed finalize Receipt #: ' + @c_Receiptkey + '?'
             --(Wan06) - START
             SET @n_WarningNo = 1
-            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
             VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'QUESTION', @n_WarningNo, 0, @c_errmsg)
             --EXEC [WM].[lsp_WriteError_List]
             --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
@@ -871,7 +872,7 @@ BEGIN
 
                SET @c_ErrMsg = 'Skip Generate Pallet ID for Receipt #: ' + @c_Receiptkey + '?'
                --(Wan06) - START
-               INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
+               INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
                VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'QUESTION', @n_WarningNo, 0, @c_errmsg)
                --EXEC [WM].[lsp_WriteError_List]
                --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
@@ -927,7 +928,7 @@ BEGIN
                         + '. Not Allow To To Finalize. (lsp_FinalizeReceipt_Wrapper)'
 
          --(Wan06) - START
-         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
+         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
          VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
          --EXEC [WM].[lsp_WriteError_List]
          --      @i_iErrGroupKey = @n_ErrGroupKey OUTPUT,
@@ -953,7 +954,7 @@ BEGIN
                         + '! (lsp_FinalizeReceipt_Wrapper)'
 
          --(Wan06) - START
-         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
+         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
          VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
          --EXEC [WM].[lsp_WriteError_List]
          --      @i_iErrGroupKey = @n_ErrGroupKey OUTPUT,
@@ -1009,8 +1010,8 @@ BEGIN
       BEGIN
          SET @n_continue = 3
          --(Wan06) - START
-         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-         VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+         VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)               
          --(Wan06) - END
       END
 
@@ -1053,8 +1054,8 @@ BEGIN
       BEGIN
          SET @n_Continue = 3
          --(Wan06) - START
-         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-         VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+         VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)               
          --(Wan06) - END
       END
 
@@ -1067,8 +1068,8 @@ BEGIN
                         + '. (Receipt UserDefine01)! (lsp_FinalizeReceipt_Wrapper)'
                         + ' |' + @c_ReceiptKey
          --(Wan06) - START
-         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-         VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+         VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)               
          --EXEC [WM].[lsp_WriteError_List]
          --            @i_iErrGroupKey = @n_ErrGroupKey OUTPUT,
          --            @c_TableName   = @c_TableName,
@@ -1124,8 +1125,8 @@ BEGIN
       BEGIN
          SET @n_continue = 3
          --(Wan06) - START
-         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-         VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+         VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)               
          --(Wan06) - END
       END
 
@@ -1137,10 +1138,10 @@ BEGIN
                         + ': Receipt #:' + @c_ReceiptKey + '. Header Reason is required (Receipt UserDefine02)'
                         + '! (lsp_FinalizeReceipt_Wrapper)'
                         + ' |' + @c_ReceiptKey
-
+                        
          --(Wan06) - START
-         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-         VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+         VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)               
          --EXEC [WM].[lsp_WriteError_List]
          --            @i_iErrGroupKey = @n_ErrGroupKey OUTPUT,
          --            @c_TableName   = @c_TableName,
@@ -1195,8 +1196,8 @@ BEGIN
       BEGIN
          SET @n_continue = 3
          --(Wan06) - START
-         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-         VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+         VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)               
          --(Wan06) -END
       END
 
@@ -1204,19 +1205,19 @@ BEGIN
       IF @c_AllowOneASNPerPO = 1
       BEGIN
          DECLARE @c_ReceiptKey2 NVARCHAR(10)
-
+            
          SET @c_ReceiptKey2 = ''
-
+            
          SELECT @c_ReceiptKey2 = ISNULL(TRIM(R2.Receiptkey),'') -- Leong01
-         FROM RECEIPT R WITH (NOLOCK)
-         JOIN RECEIPTDETAIL RD WITH (NOLOCK) ON (R.ReceiptKey = RD.ReceiptKey)
-         JOIN PO PO WITH (NOLOCK) ON (R.ExternReceiptKey = PO.ExternPOKey AND RD.POKey = PO.POKey)
+         FROM RECEIPT R WITH (NOLOCK)              
+         JOIN RECEIPTDETAIL RD WITH (NOLOCK) ON (R.ReceiptKey = RD.ReceiptKey)              
+         JOIN PO PO WITH (NOLOCK) ON (R.ExternReceiptKey = PO.ExternPOKey AND RD.POKey = PO.POKey)  
          LEFT OUTER JOIN RECEIPT R2 WITH (NOLOCK) ON (R2.ExternReceiptKey = PO.ExternPOKey AND
-                                                      R2.StorerKey = R.StorerKey AND
-                                                      R2.Receiptkey <> R.Receiptkey)
-         WHERE R.ReceiptKey = @c_ReceiptKey
+                                                                        R2.StorerKey = R.StorerKey AND
+                                                                        R2.Receiptkey <> R.Receiptkey)                      
+         WHERE R.ReceiptKey = @c_ReceiptKey  
          AND   R.StorerKey = @c_Storerkey
-
+           
          IF @c_ReceiptKey2 <> ''
          BEGIN
             SET @n_continue= 3
@@ -1224,12 +1225,12 @@ BEGIN
             SET @c_ErrMsg  = 'NSQL' + CONVERT(CHAR(6), @n_err)
                            + 'Only Allow One PO For One ASN'
                            + 'ExternPoKey existed in Receipt #:' + @c_ReceiptKey + ' (lsp_FinalizeReceipt_Wrapper) |' + @c_ReceiptKey
-
-            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
+               
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
             VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_Storerkey, '', 'ERROR', 0, @n_err, @c_errmsg)
          END
       END
-      --JSM-56642 End
+      --JSM-56642 End      
 
       IF @c_doctype = 'A'
       BEGIN
@@ -1271,8 +1272,8 @@ BEGIN
          BEGIN
             SET @n_continue = 3
             --(Wan06) - START
-            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)               
             --(Wan06) -END
          END
 
@@ -1287,8 +1288,8 @@ BEGIN
                               + '! (lsp_FinalizeReceipt_Wrapper)'
                               + ' |' + @c_ReceiptKey
                --(Wan06) - START
-               INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-               VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+               INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+               VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)               
                --EXEC [WM].[lsp_WriteError_List]
                --            @i_iErrGroupKey = @n_ErrGroupKey OUTPUT,
                --            @c_TableName   = @c_TableName,
@@ -1343,9 +1344,9 @@ BEGIN
             BEGIN
                SET @n_continue = 3
                --(Wan06) - START
-               INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-               VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
-               --(Wan06) - END
+               INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+               VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)  
+               --(Wan06) - END               
             END
 
             IF @c_UTLITF = '1'
@@ -1359,8 +1360,8 @@ BEGIN
                                  + '! (lsp_FinalizeReceipt_Wrapper)'
                                  + ' |' + @c_ReceiptKey
                   --(Wan06) - START
-                  INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-                  VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+                  INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+                  VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)  
                   --EXEC [WM].[lsp_WriteError_List]
                   --            @i_iErrGroupKey = @n_ErrGroupKey OUTPUT,
                   --            @c_TableName   = @c_TableName,
@@ -1394,8 +1395,8 @@ BEGIN
                            + '. (lsp_FinalizeReceipt_Wrapper)'
                            + ' |' + @c_ReceiptKey
             --(Wan06) - START
-            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)  
             --EXEC [WM].[lsp_WriteError_List]
             --            @i_iErrGroupKey = @n_ErrGroupKey OUTPUT,
             --            @c_TableName   = @c_TableName,
@@ -1424,8 +1425,8 @@ BEGIN
                            + '. Must not be greater than current date. (lsp_FinalizeReceipt_Wrapper)'
                            + ' |' + @c_ReceiptKey
             --(Wan06) - START
-            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)  
             --EXEC [WM].[lsp_WriteError_List]
             --            @i_iErrGroupKey = @n_ErrGroupKey OUTPUT,
             --            @c_TableName   = @c_TableName,
@@ -1483,8 +1484,8 @@ BEGIN
          BEGIN
             SET @n_continue = 3
             --(Wan06) - START
-            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)  
             --(Wan06) - END
          END
 
@@ -1555,8 +1556,8 @@ BEGIN
                                     + '.(lsp_FinalizeReceipt_Wrapper)'
                                     + ' |' + @c_ReceiptKey
                      --(Wan06) - START
-                     INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-                     VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+                     INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+                     VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)  
                      --EXEC [WM].[lsp_WriteError_List]
                      --            @i_iErrGroupKey = @n_ErrGroupKey OUTPUT,
                      --            @c_TableName   = @c_TableName,
@@ -1586,8 +1587,8 @@ BEGIN
                               + '.(lsp_FinalizeReceipt_Wrapper)'
                               + ' |' + @c_ReceiptKey
                --(Wan06) - START
-               INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-               VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+               INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+               VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)  
                --EXEC [WM].[lsp_WriteError_List]
                --            @i_iErrGroupKey = @n_ErrGroupKey OUTPUT,
                --            @c_TableName   = @c_TableName,
@@ -1649,8 +1650,8 @@ BEGIN
       BEGIN
          SET @n_continue = 3
          --(Wan06) - START
-         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-         VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+         VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)  
          --(Wan06) - END
       END
 
@@ -1692,8 +1693,8 @@ BEGIN
       BEGIN
          SET @n_continue = 3
          --(Wan06) - START
-         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-         VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+         VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)  
          --(Wan06) - END
       END
 
@@ -1735,8 +1736,8 @@ BEGIN
       BEGIN
          SET @n_continue = 3
          --(Wan06) - START
-         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-         VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+         VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)                         
          --(Wan06) - END
       END
 
@@ -1791,8 +1792,8 @@ BEGIN
       BEGIN
          SET @n_continue = 3
          --(Wan06) - START
-         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-         VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+         VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg) 
          --(Wan06) - END
       END
 
@@ -1834,20 +1835,20 @@ BEGIN
       BEGIN
          SET @n_continue = 3
          --(Wan06) - START
-         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-         VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+         VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg) 
          --(Wan06) - END
       END
       --(Wan10) - START
       SELECT @c_DisAllowDuplicateIdsOnWSRcpt = fgr.Authority
             ,@c_DisAllowDupIDsOnWSRcpt_Option5 = fgr.Option5
       FROM dbo.fnc_GetRight2( @c_Facility, @c_Storerkey, '', 'DisAllowDuplicateIdsOnWSRcpt') AS fgr      ---(Wan08)
-
+      
       SELECT @c_UniqueIDSkipDocType = dbo.fnc_GetParamValueFromString('@c_UniqueIDSkipDocType', @c_DisAllowDupIDsOnWSRcpt_Option5, @c_UniqueIDSkipDocType)
       IF @c_DisAllowDuplicateIdsOnWSRcpt = '1' AND CHARINDEX(@c_DocType, @c_UniqueIDSkipDocType, 1) > 0
-      BEGIN
+      BEGIN 
          SET @c_DisAllowDuplicateIdsOnWSRcpt = '0'
-      END
+      END 
       -- (Wan10) - END
       --(Wan11) - START
       IF @c_DisAllowDuplicateIdsOnWSRcpt = '1'
@@ -1896,11 +1897,11 @@ BEGIN
                            + '. To Loc is required.'
                            + '.(lsp_FinalizeReceipt_Wrapper)'
                            + ' |' + @c_ReceiptKey + '|'  + @c_ReceiptLineNo
-
+                           
             --(Wan06) - START
-            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNo, '', 'ERROR', 0, @n_err, @c_errmsg)
-            --(Wan06) - END
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNo, '', 'ERROR', 0, @n_err, @c_errmsg) 
+            --(Wan06) - END                          
          END
 
          IF @c_CrossWH <> '1'
@@ -1919,9 +1920,9 @@ BEGIN
                               + '.(lsp_FinalizeReceipt_Wrapper)'
                               + ' |' + @c_ReceiptKey + '|'  + @c_ReceiptLineNo + '|'  + RTRIM(@c_Facility)
                --(Wan06) - START
-               INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-               VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNo, '', 'ERROR', 0, @n_err, @c_errmsg)
-               --(Wan06) - END
+               INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+               VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNo, '', 'ERROR', 0, @n_err, @c_errmsg) 
+               --(Wan06) - END    
             END
          END
 
@@ -1934,9 +1935,9 @@ BEGIN
                            + '. Detail Reason is required. (ReceiptDetail UserDefine03) !'
                            + '.(lsp_FinalizeReceipt_Wrapper)'
             --(Wan06) - START
-            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNo, '', 'ERROR', 0, @n_err, @c_errmsg)
-            --(Wan06) - END
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNo, '', 'ERROR', 0, @n_err, @c_errmsg) 
+            --(Wan06) - END   
          END
 
          IF @c_UCCTracking = '1' AND @c_UCCTrackValue = 'P'
@@ -1950,9 +1951,9 @@ BEGIN
                               + '.(lsp_FinalizeReceipt_Wrapper)'
                               + ' |' + @c_ReceiptKey + '|'  + @c_ReceiptLineNo
                --(Wan06) - START
-               INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-               VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNo, '', 'ERROR', 0, @n_err, @c_errmsg)
-               --(Wan06) - END
+               INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+               VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNo, '', 'ERROR', 0, @n_err, @c_errmsg) 
+               --(Wan06) - END                                 
             END
          END
 
@@ -1977,9 +1978,9 @@ BEGIN
                                  + CONVERT(NVARCHAR(10), @n_TOLPCT)
                                  + '%. (lsp_FinalizeReceipt_Wrapper)'
                   --(Wan06) - START
-                  INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-                  VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNo, '', 'ERROR', 0, @n_err, @c_errmsg)
-                  --(Wan06) - END
+                  INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+                  VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNo, '', 'ERROR', 0, @n_err, @c_errmsg) 
+                  --(Wan06) - END   
                END
                ELSE IF @n_BeforeReceivedQty < @n_QtyExpected * (1 - (@n_TOLPCT * 0.01))
                BEGIN
@@ -1994,21 +1995,21 @@ BEGIN
                                  + ' |' + @c_ReceiptKey + '|'  + @c_ReceiptLineNo + '|'  + @c_Sku
                                  + '|'  + CONVERT(NVARCHAR(10), @n_TOLPCT)
                   --(Wan06) - START
-                  INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-                  VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNo, '', 'ERROR', 0, @n_err, @c_errmsg)
-                  --(Wan06) - END
+                  INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+                  VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNo, '', 'ERROR', 0, @n_err, @c_errmsg) 
+                  --(Wan06) - END                                 
                END
             END
          END
-
+                     
          IF @c_DisAllowDuplicateIdsOnWSRcpt = '1' AND @c_ToID <> ''              --(Wan08)
          BEGIN
-            IF @c_AllowDupWithinPLTCnt = 'N'                                     --(Wan11)
+            IF @c_AllowDupWithinPLTCnt = 'N'                                     --(Wan11) 
             BEGIN
-               IF EXISTS ( SELECT TOP 1 1 FROM dbo.ID AS i WITH (NOLOCK)
+               IF EXISTS ( SELECT TOP 1 1 FROM dbo.ID AS i WITH (NOLOCK) 
                            WHERE i.ID = @c_ToID
                            UNION
-                           SELECT TOP 1 1 FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK)
+                           SELECT TOP 1 1 FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK) 
                            WHERE r.Storerkey = @c_Storerkey
                            AND r.ToID = @c_ToID
                            AND r.FinalizeFlag = 'N'
@@ -2021,10 +2022,10 @@ BEGIN
                   SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Disallow duplicate Movable Unit Id: ' + @c_ToID
                                  + '. Receipt #: ' + @c_Receiptkey + ', Line #: ' + @c_ReceiptLineNo
                                  + '. (lsp_FinalizeReceipt_Wrapper)'
-                                 + ' |' + @c_ReceiptKey + '|'  + @c_ReceiptLineNo
+                                 + ' |' + @c_ReceiptKey + '|'  + @c_ReceiptLineNo 
 
-                  INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-                  VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNo, '', 'ERROR', 0, @n_err, @c_errmsg)
+                  INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+                  VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNo, '', 'ERROR', 0, @n_err, @c_errmsg) 
                END
             END                                                                  --(Wan11) - START
             ELSE
@@ -2038,7 +2039,7 @@ BEGIN
                AND EXISTS (SELECT 1 FROM dbo.RECEIPTDETAIL AS r2 WITH (NOLOCK)
                            WHERE r2.ReceiptKey <> @c_ReceiptKey
                            AND   r2.ToId = r.ToId)
-
+                           
                IF @b_ValidID = 1
                BEGIN
                   SELECT TOP 1 @b_ValidID = IIF(COUNT(DISTINCT r.Sku) > 1 OR SUM(r.BeforeReceivedQty) > MIN(p.Pallet), 0, 1)
@@ -2049,11 +2050,11 @@ BEGIN
                   AND r.ToID = @c_ToID
                   GROUP BY r.ToId
                   ORDER BY IIF(COUNT(DISTINCT r.Sku) > 1 OR SUM(r.BeforeReceivedQty) > MIN(p.Pallet), 0, 1)
-               END
-
+               END 
+               
                IF @b_ValidID = 1
                BEGIN
-                  -- Last & Further check if the Received ID is archived with inventory
+                  -- Last & Further check if the Received ID is archived with inventory 
                   SELECT TOP 1 @b_ValidID = 0
                   FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK)
                   WHERE r.ReceiptKey = @c_ReceiptKey
@@ -2061,13 +2062,13 @@ BEGIN
                   AND EXISTS (SELECT 1 FROM dbo.LOTxLOCxID AS ltlci WITH (NOLOCK)
                               WHERE ltlci.ID = r.ToId
                               AND ltlci.Qty + ltlci.PendingMoveIN > 0
-                              )
+                              )    
                   GROUP BY r.ToId
-                  HAVING MAX(r.FinalizeFlag) = 'N'
-
+                  HAVING MAX(r.FinalizeFlag) = 'N' 
+                  
                   SELECT @b_ValidID '@b_ValidID 3'
                END
-
+                          
                IF @b_ValidID = 0
                BEGIN
                   SET @n_Continue = 3
@@ -2075,10 +2076,10 @@ BEGIN
                   SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Disallow duplicate Movable Unit Id with qty more than Pallet Count: ' + @c_ToID
                                 + '. Receipt #: ' + @c_Receiptkey + ', Line #: ' + @c_ReceiptLineNo
                                 + '. (lsp_FinalizeReceipt_Wrapper)'
-                                + ' |' + @c_ReceiptKey + '|'  + @c_ReceiptLineNo
+                                + ' |' + @c_ReceiptKey + '|'  + @c_ReceiptLineNo 
 
-                  INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-                  VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNo, '', 'ERROR', 0, @n_err, @c_errmsg)
+                  INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+                  VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNo, '', 'ERROR', 0, @n_err, @c_errmsg) 
                END
             END                                                                  --(Wan11) - END
          END                                                                     --(Wan08)
@@ -2151,9 +2152,9 @@ BEGIN
                                     + '%. (lsp_FinalizeReceipt_Wrapper)'
                                     + ' |' + @c_ReceiptKey + '|'  + @c_POKey + '|' + @c_ExternLineNo
                   --(Wan06) - START
-                  INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-                  VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNo, '', 'ERROR', 0, @n_err, @c_errmsg)
-                  --(Wan06) - END
+                  INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+                  VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNo, '', 'ERROR', 0, @n_err, @c_errmsg) 
+                  --(Wan06) - END                                     
                   END
                END
             END
@@ -2281,11 +2282,11 @@ BEGIN
                   SET @c_ErrMsg  = 'NSQL' + CONVERT(CHAR(6), @n_err)
                                  + ': Error Executing nspg_GetKey - ID. (lsp_FinalizeReceipt_Wrapper)'
                                  + ' (' + @c_ErrMsg + ')'
-
+                                 
                   --(Wan06) - START
-                  INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-                  VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNo, '', 'ERROR', 0, @n_err, @c_errmsg)
-                  --(Wan06) - END
+                  INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+                  VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNo, '', 'ERROR', 0, @n_err, @c_errmsg) 
+                  --(Wan06) - END  
                END CATCH
 
                IF @b_success = 0 OR @n_Err <> 0
@@ -2310,8 +2311,8 @@ BEGIN
                      SET @n_err = 550039   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
                      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update RECEIPTDETAIL fail. (lsp_FinalizeReceipt_Wrapper)'
                      --(Wan06) - START
-                     INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-                     VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNo, '', 'ERROR', 0, @n_err, @c_errmsg)
+                     INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+                     VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNo, '', 'ERROR', 0, @n_err, @c_errmsg) 
                      --(Wan06) - END
                      GOTO EXIT_SP
                   END
@@ -2356,10 +2357,10 @@ BEGIN
          IF @b_success = 0 OR @n_Err <> 0
          BEGIN
             --(Wan06) - START
-            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg) 
             --(Wan06) - END
-
+            
             SET @n_Continue = 3
             GOTO EXIT_SP
          END
@@ -2392,8 +2393,8 @@ BEGIN
       BEGIN
          SET @n_continue = 3
          --(Wan06) - START
-         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-         VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+         VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg) 
          --(Wan06) - END
          GOTO EXIT_SP
       END
@@ -2431,8 +2432,8 @@ BEGIN
          BEGIN
             SET @n_Continue = 3
             --(Wan06) - START
-            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg) 
             --(Wan06) - END
             GOTO EXIT_SP
          END
@@ -2468,8 +2469,8 @@ BEGIN
       BEGIN
          SET @n_continue = 3
          --(Wan06) - START
-         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-         VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+         VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg) 
          --(Wan06) - END
          GOTO EXIT_SP
       END
@@ -2500,8 +2501,8 @@ BEGIN
          BEGIN
             SET @n_continue = 3
             --(Wan06) - START
-            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg) 
             --(Wan06) - END
             GOTO EXIT_SP
          END
@@ -2530,8 +2531,8 @@ BEGIN
          BEGIN
             SET @n_continue = 3
             --(Wan06) - START
-            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg) 
             --(Wan06) - END
             GOTO EXIT_SP
          END
@@ -2690,8 +2691,8 @@ BEGIN
                BEGIN
                   SET @n_Continue = 3
                   --(Wan06) - START
-                  INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-                  VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+                  INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+                  VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg) 
                   --(Wan06) - END
                   GOTO EXIT_SP
                END
@@ -2733,8 +2734,8 @@ BEGIN
          BEGIN
             SET @n_Continue = 3
             --(Wan06) - START
-            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg) 
             --(Wan06) - END
             GOTO EXIT_SP
          END
@@ -2748,21 +2749,21 @@ BEGIN
       SET @n_continue = 3
       SET @c_ErrMsg = 'Finalize Receipt fail. (lsp_FinalizeReceipt_Wrapper) ( SQLSvr MESSAGE=' + ISNULL(ERROR_MESSAGE(),'') + ' ) '
       --(Wan06) - START
-      INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-      VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, 0, @c_errmsg)
+      INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+      VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, 0, @c_errmsg) 
       --(Wan06) - END
       GOTO EXIT_SP
    END CATCH
    --(Wan01) - END
 
    EXIT_SP:
-
-   IF (XACT_STATE()) = -1              --(Wan06) - START
+   
+   IF (XACT_STATE()) = -1              --(Wan06) - START  
    BEGIN
       SET @n_continue = 3
       ROLLBACK TRAN
    END                                 --(Wan06) - END
-
+    
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0
@@ -2772,7 +2773,7 @@ BEGIN
       END
       ELSE
       BEGIN
-         WHILE @@TRANCOUNT > @n_StartTCnt
+         WHILE @@TRANCOUNT > @n_StartTCnt                        
          BEGIN
             COMMIT TRAN
          END
@@ -2784,42 +2785,42 @@ BEGIN
    ELSE
    BEGIN
       SET @b_Success = 1
-      WHILE @@TRANCOUNT > @n_StartTCnt
+      WHILE @@TRANCOUNT > @n_StartTCnt                              
       BEGIN
          COMMIT TRAN
       END
    END
-
+   
    --(Wan06) - START
    SET @CUR_ERRLIST = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-   SELECT   twl.TableName
-         ,  twl.SourceType
-         ,  twl.Refkey1
-         ,  twl.Refkey2
-         ,  twl.Refkey3
-         ,  twl.WriteType
-         ,  twl.LogWarningNo
-         ,  twl.ErrCode
-         ,  twl.Errmsg
+   SELECT   twl.TableName         
+         ,  twl.SourceType        
+         ,  twl.Refkey1           
+         ,  twl.Refkey2           
+         ,  twl.Refkey3           
+         ,  twl.WriteType         
+         ,  twl.LogWarningNo      
+         ,  twl.ErrCode           
+         ,  twl.Errmsg               
    FROM @t_WMSErrorList AS twl
    ORDER BY twl.RowID
-
+   
    OPEN @CUR_ERRLIST
-
-   FETCH NEXT FROM @CUR_ERRLIST INTO   @c_TableName
-                                     , @c_SourceType
-                                     , @c_Refkey1
-                                     , @c_Refkey2
-                                     , @c_Refkey3
-                                     , @c_WriteType
-                                     , @n_LogWarningNo
-                                     , @n_LogErrNo
-                                     , @c_LogErrMsg
-
+   
+   FETCH NEXT FROM @CUR_ERRLIST INTO   @c_TableName         
+                                     , @c_SourceType        
+                                     , @c_Refkey1           
+                                     , @c_Refkey2           
+                                     , @c_Refkey3           
+                                     , @c_WriteType         
+                                     , @n_LogWarningNo      
+                                     , @n_LogErrNo           
+                                     , @c_LogErrMsg           
+   
    WHILE @@FETCH_STATUS <> -1
    BEGIN
-      EXEC [WM].[lsp_WriteError_List]
-         @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
+      EXEC [WM].[lsp_WriteError_List] 
+         @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
       ,  @c_TableName   = @c_TableName
       ,  @c_SourceType  = @c_SourceType
       ,  @c_Refkey1     = @c_Refkey1
@@ -2827,31 +2828,31 @@ BEGIN
       ,  @c_Refkey3     = @c_Refkey3
       ,  @n_LogWarningNo= @n_LogWarningNo
       ,  @c_WriteType   = @c_WriteType
-      ,  @n_err2        = @n_LogErrNo
-      ,  @c_errmsg2     = @c_LogErrMsg
-      ,  @b_Success     = @b_Success
-      ,  @n_err         = @n_err
-      ,  @c_errmsg      = @c_errmsg
-
-      FETCH NEXT FROM @CUR_ERRLIST INTO   @c_TableName
-                                        , @c_SourceType
-                                        , @c_Refkey1
-                                        , @c_Refkey2
-                                        , @c_Refkey3
-                                        , @c_WriteType
-                                        , @n_LogWarningNo
-                                        , @n_LogErrNo
-                                        , @c_LogErrmsg
+      ,  @n_err2        = @n_LogErrNo 
+      ,  @c_errmsg2     = @c_LogErrMsg 
+      ,  @b_Success     = @b_Success    
+      ,  @n_err         = @n_err        
+      ,  @c_errmsg      = @c_errmsg         
+     
+      FETCH NEXT FROM @CUR_ERRLIST INTO   @c_TableName         
+                                        , @c_SourceType        
+                                        , @c_Refkey1           
+                                        , @c_Refkey2           
+                                        , @c_Refkey3           
+                                        , @c_WriteType         
+                                        , @n_LogWarningNo      
+                                        , @n_LogErrNo           
+                                        , @c_LogErrmsg     
    END
    CLOSE @CUR_ERRLIST
    DEALLOCATE @CUR_ERRLIST
-
+   
    WHILE @@TRANCOUNT < @n_StartTCnt
    BEGIN
       BEGIN TRAN
    END
    --(Wan06) - END
-
+   
    REVERT
 END -- End Procedure
 GO
