@@ -1,22 +1,22 @@
-/************************************************************************/              
-/* Stored Proc : nspBuildAlterTableString_GENERIC                       */              
-/* Creation Date:  2 August 2016                                        */              
-/* Copyright: IDS                                                       */              
-/* Written by:   JayLim                                                 */                         
-/*                                                                      */              
-/* Data Modifications:                                                  */              
-/*                                                                      */              
-/* Updates:                                                             */              
-/* Date         Author        Purposes                                  */              
-/* 2011-Jul-18  TLTING        Bug fix for new version (tlting01)        */          
-/* 2012-Jun-08  KHLim01       increase storage size for length          */          
-/* 2012-Oct-03  KHLim         Increase storage size & replace xtype     */            
-/* 2014-Feb-10  TLTING        cater Nvarchar(4000) size                 */          
-/* 2014-Nov-10  TLTING        cater Nvarchar(MAX) size                  */          
-/* 2018-Jun-18  TLTING01      bug fix - not trim                        */    
-/* 2020-Oct-06  TLTING02      Not cater uniqueidentifier (SKIP)         */     
-/************************************************************************/              
-  
+/***************************************************************************/
+/* Stored Proc : nspBuildAlterTableString_GENERIC                       	*/
+/* Creation Date:  2 August 2016                                        	*/
+/* Copyright: IDS                                                       	*/
+/* Written by:   JayLim                                                 	*/
+/*                                                                      	*/
+/* Data Modifications:                                                  	*/
+/*                                                                      	*/
+/* Updates:                                                             	*/
+/* Date         Author        Purposes                                  	*/
+/* 2011-Jul-18  TLTING        Bug fix for new version (tlting01)        	*/
+/* 2012-Jun-08  KHLim01       increase storage size for length          	*/
+/* 2012-Oct-03  KHLim         Increase storage size & replace xtype     	*/
+/* 2014-Feb-10  TLTING        cater Nvarchar(4000) size                 	*/
+/* 2014-Nov-10  TLTING        cater Nvarchar(MAX) size                  	*/
+/* 2018-Jun-18  TLTING01      bug fix - not trim                        	*/
+/* 2020-Oct-06  TLTING02      Not cater uniqueidentifier (SKIP)         	*/
+/* 2023-May-15  kelvinongcy   bug fixed - removed hardcoded table (kocy01) */
+/***************************************************************************/              
 CREATE OR ALTER PROCEDURE [dbo].[nspBuildAlterTableString_GENERIC]            
 @c_schema       NVARCHAR(10),        
 @c_copyto_db    NVARCHAR(50),        
@@ -29,11 +29,12 @@ BEGIN
  SET NOCOUNT ON             
  SET ANSI_NULLS OFF          
  SET QUOTED_IDENTIFIER OFF             
- SET CONCAT_NULL_YIELDS_NULL OFF           
- DECLARE        @n_continue int        ,              
-  @n_starttcnt int        , -- Holds the current transaction count            
-  @n_cnt int              , -- Holds @@ROWCOUNT after certain operations            
-  @b_debug int              -- Debug On Or Off            
+ SET CONCAT_NULL_YIELDS_NULL OFF 
+ 
+ DECLARE @n_continue int        ,              
+         @n_starttcnt int        , -- Holds the current transaction count            
+         @n_cnt int              , -- Holds @@ROWCOUNT after certain operations            
+         @b_debug int              -- Debug On Or Off            
              
  DECLARE @n_rowcount          integer                     
  DECLARE @n_nextrow           integer                     
@@ -124,7 +125,8 @@ BEGIN
   SELECT @n_rowcount = count(sys.syscolumns.name)            
   FROM    sys.sysobjects, sys.syscolumns            
   WHERE   sys.sysobjects.id = sys.syscolumns.id            
-  AND     sys.sysobjects.name = RTRIM(@c_tablename)            
+  AND     sys.sysobjects.name = RTRIM(@c_tablename)    
+  
   IF (@n_rowcount <= 0)            
   BEGIN              
    SELECT @n_continue = 3            
@@ -144,7 +146,8 @@ BEGIN
  IF @n_continue = 1 or @n_continue = 2            
  BEGIN              
   DECLARE @b_cursoropen int            
-  SELECT @b_cursoropen = 0            
+  SELECT @b_cursoropen = 0 
+  
   DECLARE CUR_INSERT_BUILD CURSOR LOCAL FAST_FORWARD READ_ONLY for            
   SELECT sys.syscolumns.name, sys.syscolumns.prec,            
    sys.syscolumns.status, sys.syscolumns.usertype,            
@@ -152,13 +155,13 @@ BEGIN
   FROM    sys.sysobjects  , sys.syscolumns, systypes            
   WHERE   sys.sysobjects.id = sys.syscolumns.id AND            
    systypes.xusertype = sys.syscolumns.xusertype AND     --KH01            
-   sys.sysobjects.name =  RTRIM('TCPSocket_OUTLog')        
-   AND sys.sysobjects .id =  OBJECT_ID('TCPSocket_OUTLog')        
+   sys.sysobjects.name =  RTRIM(@c_tablename)        			--kocy01 
+   AND sys.sysobjects .id =  OBJECT_ID(@c_FulltableName) 	--kocy01     
                
   OPEN CUR_INSERT_BUILD            
   SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT            
   IF @n_err <> 0            
-BEGIN              
+  BEGIN              
    SELECT @n_continue = 3            
    SELECT @n_err = 73402            
    SELECT @c_errmsg = CONVERT(char(250),@n_err)            
