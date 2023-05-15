@@ -6,14 +6,14 @@ GO
 /***************************************************************************/  
 /* Stored Proc : isp_AutoInsertWMReport                                    */  
 /* Creation Date: 08-Jun-2022                                              */  
-/* Copyright: LFL                                                          */  
+/* Copyright: MAERSK                                                       */  
 /* Written by: WLChooi                                                     */  
 /*                                                                         */  
 /* Purpose: Auto Insert WMReport & WMReportdetail based on input param     */  
 /*                                                                         */  
 /* Called By:                                                              */  
 /*                                                                         */  
-/* PVCS Version: 1.2                                                       */  
+/* PVCS Version: 1.3                                                       */  
 /*                                                                         */  
 /* Version: 5.4                                                            */  
 /*                                                                         */  
@@ -24,10 +24,11 @@ GO
 /* 08-Jun-2022 WLChooi     1.0   DevOps Combine Script                     */  
 /* 27-Jul-2022 WLChooi     1.1   Enhancement (WL01)                        */
 /* 14-Sep-2022 WLChooi     1.2   Add more fields (WL02)                    */
+/* 15-May-2023 WLChooi     1.3   Extend size (WL03)                        */
 /***************************************************************************/  
   
 CREATE OR ALTER PROC [dbo].[isp_AutoInsertWMReport] (
-        @c_ModuleName            NVARCHAR(20) 
+        @c_ModuleName            NVARCHAR(50)   --WL03
       , @c_ReportType            NVARCHAR(20) 
       , @c_Storerkey             NVARCHAR(15) = ''
       , @c_ReportTitle           NVARCHAR(60) = ''
