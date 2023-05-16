@@ -152,6 +152,7 @@ GROUP BY A.DropID, A.PutAwayZone, A.SKU, A.Descr, A.Qty, A.CaseCnt, A.InnerPack,
    BEGIN  
       BEGIN TRAN  
    END  
-END  GO
+END  
+GO
 GRANT EXECUTE ON [dbo].[nsp_GetPicklabel06_1] TO nSQL 
 GO
