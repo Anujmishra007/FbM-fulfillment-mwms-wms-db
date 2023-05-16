@@ -12,6 +12,7 @@ GO
 /*                                                                            */
 /* Date         Author    Ver.  Purposes                                      */
 /* 2023-02-06   Ung       1.0   WMS-20659 Created                             */
+/* 2023-04-05   Ung       1.1   WMS-22053 Fully short set task status = H     */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1764ExtUpd17
@@ -33,16 +34,21 @@ BEGIN
 
    DECLARE @nTranCount  INT
    
-   DECLARE @cFacility   NVARCHAR( 5)
-   DECLARE @cStorerKey  NVARCHAR( 15)
-   DECLARE @cCaseID     NVARCHAR( 20)
-   DECLARE @cPickMethod NVARCHAR( 10)
-   DECLARE @cStatus     NVARCHAR( 10)
-   DECLARE @cTaskType   NVARCHAR( 10)
-   DECLARE @cTaskKey    NVARCHAR( 10)
-   DECLARE @cRefTaskKey NVARCHAR( 10)
-   DECLARE @cListKey    NVARCHAR( 10)
+   DECLARE @cFacility      NVARCHAR( 5)
+   DECLARE @cStorerKey     NVARCHAR( 15)
+   DECLARE @cCaseID        NVARCHAR( 20)
+   DECLARE @cPickMethod    NVARCHAR( 10)
+   DECLARE @cStatus        NVARCHAR( 10)
+   DECLARE @cTaskType      NVARCHAR( 10)
+   DECLARE @cTaskKey       NVARCHAR( 10)
+   DECLARE @cRefTaskKey    NVARCHAR( 10)
+   DECLARE @cListKey       NVARCHAR( 10)
    DECLARE @cPickDetailKey NVARCHAR( 10)
+   DECLARE @cTransitLOC    NVARCHAR( 10)
+   DECLARE @cFinalLOC      NVARCHAR( 10)
+   DECLARE @cLocationRoom  NVARCHAR( 30)
+   DECLARE @nQTY           INT
+   DECLARE @nUCCQTY        INT
 
    DECLARE @curTask     CURSOR
    DECLARE @curPD       CURSOR
@@ -92,46 +98,79 @@ BEGIN
                WHERE ListKey = @cListKey
                   AND TransitCount = 0
 
-            -- Loop tasks (that going to pack station)
+            -- Loop tasks
             SET @curTask = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-               SELECT T.TaskDetailKey, TD.Status, TD.PickMethod, TD.CaseID
+               SELECT T.TaskDetailKey, TD.Status, TD.PickMethod, TD.CaseID, TD.QTY, TD.TransitLOC, TD.FinalLOC, LOC.LocationRoom
                FROM dbo.TaskDetail TD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (TD.ToLOC = LOC.LOC)
                   JOIN @tTask T ON (TD.TaskDetailKey = T.TaskDetailKey)
-               WHERE LOC.LocationRoom = 'PACKSTATION'
             OPEN @curTask
-            FETCH NEXT FROM @curTask INTO @cTaskKey, @cStatus, @cPickMethod, @cCaseID
+            FETCH NEXT FROM @curTask INTO @cTaskKey, @cStatus, @cPickMethod, @cCaseID, @nQTY, @cTransitLOC, @cFinalLOC, @cLocationRoom
             WHILE @@FETCH_STATUS = 0
             BEGIN
                -- Completed task
                IF @cStatus IN ('9', '3')
                BEGIN
-                  -- Loop PickDetail
-                  SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-                     SELECT PD.PickDetailKey
-                     FROM PickDetail PD WITH (NOLOCK)
-                     WHERE PD.TaskDetailKey = @cTaskKey
-                  OPEN @curPD
-                  FETCH NEXT FROM @curPD INTO @cPickDetailKey
-                  WHILE @@FETCH_STATUS = 0
+                  -- Going to pack station
+                  IF @cLocationRoom = 'PACKSTATION'
                   BEGIN
-                     -- Update PickDetail
-                     UPDATE dbo.PickDetail WITH (ROWLOCK) SET
-                        Status = '5', 
-                        DropID = CASE WHEN @cPickMethod = 'PP' THEN @cCaseID ELSE DropID END, 
-                        EditDate = GETDATE(),
-                        EditWho = 'rdt.' + SUSER_SNAME()
-                     WHERE PickDetailKey = @cPickDetailKey
+                     -- Loop PickDetail
+                     SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+                        SELECT PD.PickDetailKey
+                        FROM PickDetail PD WITH (NOLOCK)
+                        WHERE PD.TaskDetailKey = @cTaskKey
+                     OPEN @curPD
+                     FETCH NEXT FROM @curPD INTO @cPickDetailKey
+                     WHILE @@FETCH_STATUS = 0
+                     BEGIN
+                        -- Update PickDetail
+                        UPDATE dbo.PickDetail WITH (ROWLOCK) SET
+                           Status = '5', 
+                           DropID = CASE WHEN @cPickMethod = 'PP' THEN @cCaseID ELSE DropID END, 
+                           EditDate = GETDATE(),
+                           EditWho = 'rdt.' + SUSER_SNAME()
+                        WHERE PickDetailKey = @cPickDetailKey
+                        IF @@ERROR <> 0
+                        BEGIN
+                           SET @nErrNo = 196051
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
+                           GOTO RollBackTran
+                        END
+                        FETCH NEXT FROM @curPD INTO @cPickDetailKey
+                     END
+                  END
+               
+                  -- Fully short
+                  IF @nQTY = 0
+                  BEGIN
+                     -- Get UCC info
+                     SELECT @nUCCQTY = QTY FROM dbo.UCC WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND UCCNo = @cCaseID
+                     
+                     -- Reset task to Status = H
+                     UPDATE dbo.TaskDetail SET
+                        DropID = '', 
+                        QTY = @nUCCQTY, 
+                        Status = 'H',
+                        ListKey = '', 
+                        UserKey = '', 
+                        ReasonKey = '', 
+                        ToLOC = CASE WHEN @cTransitLOC <> '' THEN @cFinalLOC ELSE ToLOC END, 
+                        TransitLOC = '', 
+                        FinalLOC = '', 
+                        FinalID = '', 
+                        EditWho = SUSER_SNAME(), 
+                        EditDate = GETDATE(), 
+                        TrafficCop = NULL
+                     WHERE TaskDetailKey = @cTaskKey
                      IF @@ERROR <> 0
                      BEGIN
-                        SET @nErrNo = 196051
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
+                        SET @nErrNo = 196052
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD Task Fail
                         GOTO RollBackTran
                      END
-                     FETCH NEXT FROM @curPD INTO @cPickDetailKey
                   END
                END
-               FETCH NEXT FROM @curTask INTO @cTaskKey, @cStatus, @cPickMethod, @cCaseID
+               FETCH NEXT FROM @curTask INTO @cTaskKey, @cStatus, @cPickMethod, @cCaseID, @nQTY, @cTransitLOC, @cFinalLOC, @cLocationRoom
             END
          END
          
@@ -159,7 +198,7 @@ BEGIN
                WHERE TaskDetailKey = @cTaskKey
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 196052
+                  SET @nErrNo = 196053
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD Task Fail
                   GOTO RollBackTran
                END

@@ -13,8 +13,9 @@ GO
 /*                                                                            */
 /* Modifications log:                                                         */
 /*                                                                            */
-/* Date       Rev  Author    Purposes                                         */
-/* 13-02-2023 1.7  Ung       WMS-20659 not generate RPT if go to pack station */
+/* Date       Rev  Author     Purposes                                        */
+/* 13-02-2023 1.0  Ung        WMS-20659 not generate RPT if go to pack station*/
+/* 05-04-2023 1.1  Ung        WMS-22053 Fully short not generate next task    */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1764CreateTask11] (
@@ -227,6 +228,7 @@ BEGIN
             FROM dbo.TaskDetail WITH (NOLOCK)
             WHERE ListKey = @cListKey
                AND TransitCount = 0 -- Original task
+               AND QTY > 0
          OPEN @curRPLog
          FETCH NEXT FROM @curRPLog INTO @cTaskDetailKey, @cStorerKey, @cSKU, @cLOT, @nQTY, @cFinalLOC, @cFinalID, @cCaseID, @cOrgTaskKey, @nUOMQty
          WHILE @@FETCH_STATUS = 0

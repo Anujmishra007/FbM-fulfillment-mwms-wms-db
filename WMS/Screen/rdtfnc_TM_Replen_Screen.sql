@@ -1,5 +1,6 @@
 --Screen Range 2680 - 2699
 
+-- Drop ID
 DELETE rdt.RDTScn WHERE Scn = 2680 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 2680, 'ENG',
     @cLine01 = 'REPLEN FROM      RPF'
@@ -8,9 +9,12 @@ EXECUTE rdt.rdtAddScn 2680, 'ENG',
    ,@cLine04 = ''
    ,@cLine05 = 'DROPID:'
    ,@cLine06 = '%20i01'
+   ,@cLine07 = ''
+   ,@cLine08 = '%20d10'
    ,@cLine14 = '%e'
    ,@nFunc = 1764
 
+-- From LOC
 DELETE rdt.RDTScn WHERE Scn = 2681 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 2681, 'ENG',
     @cLine01 = 'REPLEN FROM      RPF'
@@ -22,10 +26,12 @@ EXECUTE rdt.rdtAddScn 2681, 'ENG',
    ,@cLine07 = 'FROM LOC:'
    ,@cLine08 = '%10d03'
    ,@cLine09 = '%10i04'
-   ,@cLine13 = '%20d15' -- WMS-12417
+   ,@cLine10 = ''
+   ,@cLine11 = '%20d10'
    ,@cLine14 = '%e'
    ,@nFunc = 1764
 
+-- From ID
 DELETE rdt.RDTScn WHERE Scn = 2682 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 2682, 'ENG',
     @cLine01 = 'REPLEN FROM      RPF'
@@ -44,6 +50,7 @@ EXECUTE rdt.rdtAddScn 2682, 'ENG',
    ,@cLine14 = '%e'
    ,@nFunc = 1764
 
+-- SKU, QTY
 DELETE rdt.RDTScn WHERE Scn = 2683 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 2683, 'ENG',
     @cLine01 = 'SKU:'
@@ -62,6 +69,7 @@ EXECUTE rdt.rdtAddScn 2683, 'ENG',
    ,@cLine14 = '%e'
    ,@nFunc = 1764
 
+-- Next task
 DELETE rdt.RDTScn WHERE Scn = 2684 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 2684, 'ENG',
     @cLine01 = 'REPLEN FROM      RPF'
@@ -78,6 +86,7 @@ EXECUTE rdt.rdtAddScn 2684, 'ENG',
    ,@cLine14 = '%e'
    ,@nFunc = 1764
 
+-- To LOC
 DELETE rdt.RDTScn WHERE Scn = 2685 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 2685, 'ENG',
     @cLine01 = 'REPLEN FROM      RPF'
@@ -93,6 +102,7 @@ EXECUTE rdt.rdtAddScn 2685, 'ENG',
    ,@cLine14 = '%e'
    ,@nFunc = 1764
 
+-- Exit
 DELETE rdt.RDTScn WHERE Scn = 2686 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 2686, 'ENG',
     @cLine01 = 'REPLEN FROM      RPF'
@@ -109,6 +119,7 @@ EXECUTE rdt.rdtAddScn 2686, 'ENG',
    ,@cLine14 = '%e'
    ,@nFunc = 1764
 
+-- Short pick
 DELETE rdt.RDTScn WHERE Scn = 2687 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 2687, 'ENG',
     @cLine01 = 'REPLEN FROM      RPF'

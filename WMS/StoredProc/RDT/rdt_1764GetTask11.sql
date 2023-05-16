@@ -11,6 +11,8 @@ GO
 /*                                                                            */
 /* Date        Rev  Author    Purposes                                        */
 /* 05-09-2022  1.0  Ung       WMS-20659 Created (from rdt_1764GetTask08)      */
+/* 28-03-2023  1.1  Ung       WMS-22053 Remove lock by aisle                  */
+/*                            Add OpsPosition                                 */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1764GetTask11] (
@@ -54,6 +56,7 @@ BEGIN
    DECLARE @cFinalLOC         NVARCHAR( 10)
    DECLARE @cFinalPKZone      NVARCHAR( 10)
    DECLARE @cFinalPKZoneInLOC NVARCHAR( 10)
+   DECLARE @cOPSPosition      NVARCHAR( 60)
 
    DECLARE @tLOCAisle TABLE 
    (
@@ -118,21 +121,15 @@ BEGIN
       SET @cPalletFinalZone = @cFinalPKZone
    END
    
+   -- Get user info
+   SELECT @cOPSPosition = OPSPosition
+   FROM rdt.rdtUser WITH (NOLOCK)
+   WHERE UserName = @cUserName
+   
    -- Get next task
    DECLARE @curRPTask CURSOR
    IF @cAreaKey = ''
    BEGIN
-      -- LOCAisle have active task
-      INSERT @tLOCAisle (LOCAisle)
-      SELECT DISTINCT LOC.LOCAisle
-      FROM dbo.TaskDetail T WITH (NOLOCK)
-         JOIN dbo.LOC WITH (NOLOCK) ON (T.FromLOC = LOC.LOC)
-      WHERE LOC.Facility = @cFromFacility
-         AND T.EditWho <> @cUserName
-         AND T.Status > '0'
-         AND T.Status < '9'
-         AND LOC.LocAisle <> ''
-
       SET @curRPTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
          SELECT TOP 1
             TaskDetailKey, TaskType, FromLOC, FromID, StorerKey, SKU, LOT, QTY, ToLOC, ToID
@@ -149,17 +146,13 @@ BEGIN
             AND TaskDetail.GroupKey = CASE WHEN @cGroupKey <> '' THEN @cGroupKey ELSE TaskDetail.GroupKey END
             AND PickZone2.InLOC = CASE WHEN @cPalletFinalLOC <> '' THEN @cPalletFinalLOC ELSE PickZone2.InLOC END
             AND PickZone2.PickZone = CASE WHEN @cPalletFinalZone <> '' THEN @cPalletFinalZone ELSE PickZone2.PickZone END
+            AND LOC2.LocationRoom = @cOPSPosition
             -- Have permission in FromLOC
             AND EXISTS( SELECT 1
                FROM TaskManagerUserDetail TMU WITH (NOLOCK)
                WHERE PermissionType = TaskDetail.TaskType
                   AND TMU.UserKey = @cUserName
                   AND TMU.Permission = '1')
-            -- Exclude LOCAisle have active task
-            AND LOC1.LocAisle <> ''
-            AND NOT EXISTS( SELECT 1
-               FROM @tLOCAisle t
-               WHERE t.LocAisle = LOC1.LocAisle)
          ORDER BY 
              TaskDetail.Priority
             ,CASE WHEN TaskDetail.UserKeyOverRide = @cUserName THEN 1 ELSE 2 END
@@ -174,18 +167,6 @@ BEGIN
    END
    ELSE
    BEGIN
-      -- LOCAisle have active task
-      INSERT @tLOCAisle (LOCAisle)
-      SELECT DISTINCT LOC.LOCAisle
-      FROM dbo.TaskDetail T WITH (NOLOCK)
-         JOIN dbo.LOC WITH (NOLOCK) ON (T.FromLOC = LOC.LOC)
-         JOIN dbo.AreaDetail WITH (NOLOCK) ON (AreaDetail.PutawayZone = LOC.PickZone)
-      WHERE AreaDetail.AreaKey = @cAreaKey
-         AND T.EditWho <> @cUserName
-         AND T.Status > '0'
-         AND T.Status < '9'
-         AND LOC.LocAisle <> ''
-
       SET @curRPTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
          SELECT TOP 1
             TaskDetailKey, TaskType, FromLOC, FromID, StorerKey, SKU, LOT, QTY, ToLOC, ToID
@@ -202,17 +183,13 @@ BEGIN
             AND TaskDetail.GroupKey = CASE WHEN @cGroupKey <> '' THEN @cGroupKey ELSE TaskDetail.GroupKey END
             AND PickZone2.InLOC = CASE WHEN @cPalletFinalLOC <> '' THEN @cPalletFinalLOC ELSE PickZone2.InLOC END
             AND PickZone2.PickZone = CASE WHEN @cPalletFinalZone <> '' THEN @cPalletFinalZone ELSE PickZone2.PickZone END
+            AND LOC2.LocationRoom = @cOPSPosition
             -- Have permission in FromLOC
             AND EXISTS( SELECT 1
                FROM TaskManagerUserDetail TMU WITH (NOLOCK)
                   WHERE PermissionType = TaskDetail.TaskType
                      AND TMU.UserKey = @cUserName
                      AND TMU.Permission = '1')
-            -- Exclude LOCAisle have active task
-            AND LOC1.LocAisle <> ''
-            AND NOT EXISTS( SELECT 1
-               FROM @tLOCAisle t
-               WHERE t.LocAisle = LOC1.LocAisle)
          ORDER BY 
              TaskDetail.Priority
             ,CASE WHEN TaskDetail.UserKeyOverRide = @cUserName THEN 1 ELSE 2 END

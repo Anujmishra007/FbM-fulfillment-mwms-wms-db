@@ -12,6 +12,9 @@ GO
 /*                                                                      */
 /* Date        Author    Ver  Purposes                                  */
 /* 2022-09-07  Ung       1.0  WMS-20658 Created (from nspTTMRP14)       */
+/* 2023-03-28  Ung       1.1  WMS-22053 Remove lock by aisle            */
+/*                            Add GroupKey                              */
+/*                            Add OpsPosition                           */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[nspTTMRP19]
@@ -37,7 +40,6 @@ BEGIN
        @n_starttcnt     INT -- Holds the current transaction count
       ,@n_continue      INT
       ,@b_Success       INT
-      ,@c_LastLOCAisle  NVARCHAR(10)
       ,@c_LangCode      NVARCHAR(3)
       ,@b_SkipTheTask   INT
       ,@cFoundTask      NVARCHAR( 1)
@@ -57,6 +59,7 @@ BEGIN
       ,@cLoadKey        NVARCHAR( 10)
       ,@cPickMethod     NVARCHAR( 10)
       ,@c_FromLOC       NVARCHAR( 10)
+      ,@c_OPSPosition   NVARCHAR( 60)
 
    DECLARE @tLOCAisle TABLE
    (
@@ -70,9 +73,10 @@ BEGIN
       ,@n_err = 0
       ,@c_errmsg = ''
       ,@c_TaskDetailkey = ''
-      ,@c_LastLOCAisle = ''
 
-   SELECT @c_LangCode = DefaultLangCode
+   SELECT 
+      @c_LangCode = DefaultLangCode, 
+      @c_OPSPosition = OPSPosition
    FROM rdt.rdtUser WITH (NOLOCK)
    WHERE UserName = @c_UserID
 
@@ -95,23 +99,8 @@ BEGIN
    IF CURSOR_STATUS( 'global', 'Cursor_RPFTaskCandidates') IN (-1)   -- -1=cursor is closed
       DEALLOCATE Cursor_RPFTaskCandidates
 
-   -- Get Last LOCAisle
-   SELECT @c_LastLOCAisle = LOCAisle FROM LOC WITH (NOLOCK) WHERE LOC = @c_LastLOC
-
    IF @c_AreaKey01 <> ''
    BEGIN
-      -- LOCAisle have active task
-      INSERT @tLOCAisle (LOCAisle)
-      SELECT DISTINCT LOC.LOCAisle
-      FROM dbo.TaskDetail T WITH (NOLOCK)
-         JOIN dbo.LOC WITH (NOLOCK) ON (T.FromLOC = LOC.LOC)
-         JOIN dbo.AreaDetail WITH (NOLOCK) ON (AreaDetail.PutawayZone = LOC.PickZone)
-      WHERE AreaDetail.AreaKey = @c_AreaKey01
-         AND T.EditWho <> @c_UserID
-         AND T.Status > '0'
-         AND T.Status < '9'
-         AND LOC.LocAisle <> ''
-
       DECLARE Cursor_RPFTaskCandidates CURSOR FAST_FORWARD READ_ONLY FOR --Note: global cursor
          SELECT TaskDetailkey
          FROM dbo.TaskDetail WITH (NOLOCK)
@@ -128,11 +117,13 @@ BEGIN
                  AND tmu.UserKey = @c_UserID
                  AND tmu.AreaKey = @c_AreaKey01
                  AND tmu.Permission = '1')
-            -- Exclude LOCAisle have active task
-            AND LOC1.LocAisle <> ''
             AND NOT EXISTS( SELECT 1
-               FROM @tLOCAisle t
-               WHERE t.LocAisle = LOC1.LocAisle)
+               FROM dbo.TaskDetail T1 WITH (NOLOCK)
+               WHERE TaskDetail.GroupKey <> ''
+                  AND T1.GroupKey = TaskDetail.GroupKey
+                  AND T1.Status < '9'
+                  AND T1.UserKey NOT IN (@c_UserID, ''))
+            AND LOC2.LocationRoom = @c_OPSPosition
          ORDER BY
              TaskDetail.Priority
             ,CASE WHEN TaskDetail.UserKeyOverRide = @c_UserID THEN 1 ELSE 2 END
@@ -147,18 +138,6 @@ BEGIN
    END
    ELSE
    BEGIN
-      -- LOCAisle have active task
-      INSERT @tLOCAisle (LOCAisle)
-      SELECT DISTINCT LOC.LOCAisle
-      FROM dbo.TaskDetail T WITH (NOLOCK)
-         JOIN dbo.LOC WITH (NOLOCK) ON (T.FromLOC = LOC.LOC)
-      WHERE LOC.Facility = @c_Facility
-         AND T.EditWho <> @c_UserID
-         AND T.Status > '0'
-         AND T.Status < '9'
-         AND LOC.LocAisle <> ''
-         AND LOC.Facility = @c_Facility
-
       DECLARE Cursor_RPFTaskCandidates CURSOR FAST_FORWARD READ_ONLY FOR --Note: global cursor
          SELECT TaskDetailkey
          FROM dbo.TaskDetail WITH (NOLOCK)
@@ -175,11 +154,13 @@ BEGIN
                  AND tmu.UserKey = @c_UserID
                  AND tmu.AreaKey = AreaDetail.AreaKey
                  AND tmu.Permission = '1')
-            -- Exclude LOCAisle have active task
-            AND LOC1.LocAisle <> ''
             AND NOT EXISTS( SELECT 1
-               FROM @tLOCAisle t
-               WHERE t.LocAisle = LOC1.LocAisle)
+               FROM dbo.TaskDetail T1 WITH (NOLOCK)
+               WHERE TaskDetail.GroupKey <> ''
+                  AND T1.GroupKey = TaskDetail.GroupKey
+                  AND T1.Status < '9'
+                  AND T1.UserKey NOT IN (@c_UserID, ''))
+            AND LOC2.LocationRoom = @c_OPSPosition
          ORDER BY
              TaskDetail.Priority
             ,CASE WHEN TaskDetail.UserKeyOverRide = @c_UserID THEN 1 ELSE 2 END

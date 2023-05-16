@@ -54,6 +54,7 @@ GO
 /* 2022-09-26 3.9  Ung        WMS-20659 Add skip FromID if LoseID             */
 /*                            Add decode base on UPC.UOM                      */
 /*                            Fix full short stuck at SKU screen              */
+/* 2023-04-05 4.0  Ung        WMS-22053 Revise ExtendedInfo                   */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Replen](
@@ -175,30 +176,21 @@ DECLARE
    @bSuccess            INT,
    @cExtendedWCSSP      NVARCHAR( 20),
    
-   @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
-   @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
-   @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),
-   @cInField04 NVARCHAR( 60),   @cOutField04 NVARCHAR( 60),
-   @cInField05 NVARCHAR( 60),   @cOutField05 NVARCHAR( 60),
-   @cInField06 NVARCHAR( 60),   @cOutField06 NVARCHAR( 60),
-   @cInField07 NVARCHAR( 60),   @cOutField07 NVARCHAR( 60),
-   @cInField08 NVARCHAR( 60),   @cOutField08 NVARCHAR( 60),
-   @cInField09 NVARCHAR( 60),   @cOutField09 NVARCHAR( 60),
-   @cInField10 NVARCHAR( 60),   @cOutField10 NVARCHAR( 60),
-   @cInField11 NVARCHAR( 60),   @cOutField11 NVARCHAR( 60),
-   @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),
-   @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60),
-   @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),
-   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),
-
-   @cFieldAttr01 NVARCHAR( 1), @cFieldAttr02 NVARCHAR( 1),
-   @cFieldAttr03 NVARCHAR( 1), @cFieldAttr04 NVARCHAR( 1),
-   @cFieldAttr05 NVARCHAR( 1), @cFieldAttr06 NVARCHAR( 1),
-   @cFieldAttr07 NVARCHAR( 1), @cFieldAttr08 NVARCHAR( 1),
-   @cFieldAttr09 NVARCHAR( 1), @cFieldAttr10 NVARCHAR( 1),
-   @cFieldAttr11 NVARCHAR( 1), @cFieldAttr12 NVARCHAR( 1),
-   @cFieldAttr13 NVARCHAR( 1), @cFieldAttr14 NVARCHAR( 1),
-   @cFieldAttr15 NVARCHAR( 1)
+   @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
+   @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
+   @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),    @cFieldAttr03 NVARCHAR( 1),
+   @cInField04 NVARCHAR( 60),   @cOutField04 NVARCHAR( 60),    @cFieldAttr04 NVARCHAR( 1),
+   @cInField05 NVARCHAR( 60),   @cOutField05 NVARCHAR( 60),    @cFieldAttr05 NVARCHAR( 1),
+   @cInField06 NVARCHAR( 60),   @cOutField06 NVARCHAR( 60),    @cFieldAttr06 NVARCHAR( 1),
+   @cInField07 NVARCHAR( 60),   @cOutField07 NVARCHAR( 60),    @cFieldAttr07 NVARCHAR( 1),
+   @cInField08 NVARCHAR( 60),   @cOutField08 NVARCHAR( 60),    @cFieldAttr08 NVARCHAR( 1),
+   @cInField09 NVARCHAR( 60),   @cOutField09 NVARCHAR( 60),    @cFieldAttr09 NVARCHAR( 1),
+   @cInField10 NVARCHAR( 60),   @cOutField10 NVARCHAR( 60),    @cFieldAttr10 NVARCHAR( 1),
+   @cInField11 NVARCHAR( 60),   @cOutField11 NVARCHAR( 60),    @cFieldAttr11 NVARCHAR( 1),
+   @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),    @cFieldAttr12 NVARCHAR( 1),
+   @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60),    @cFieldAttr13 NVARCHAR( 1),
+   @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),    @cFieldAttr14 NVARCHAR( 1),
+   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),    @cFieldAttr15 NVARCHAR( 1)
 
 -- Getting Mobile information
 SELECT
@@ -285,56 +277,71 @@ SELECT
    @cSwapUCCSP         = V_String43,
    @cExtendedWCSSP     = V_String44,
    
-   @cInField01 = I_Field01,   @cOutField01 = O_Field01,
-   @cInField02 = I_Field02,   @cOutField02 = O_Field02,
-   @cInField03 = I_Field03,   @cOutField03 = O_Field03,
-   @cInField04 = I_Field04,   @cOutField04 = O_Field04,
-   @cInField05 = I_Field05,   @cOutField05 = O_Field05,
-   @cInField06 = I_Field06,   @cOutField06 = O_Field06,
-   @cInField07 = I_Field07,   @cOutField07 = O_Field07,
-   @cInField08 = I_Field08,   @cOutField08 = O_Field08,
-   @cInField09 = I_Field09,   @cOutField09 = O_Field09,
-   @cInField10 = I_Field10,   @cOutField10 = O_Field10,
-   @cInField11 = I_Field11,   @cOutField11 = O_Field11,
-   @cInField12 = I_Field12,   @cOutField12 = O_Field12,
-   @cInField13 = I_Field13,   @cOutField13 = O_Field13,
-   @cInField14 = I_Field14,   @cOutField14 = O_Field14,
-   @cInField15 = I_Field15,   @cOutField15 = O_Field15,
+   @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01  = FieldAttr01,
+   @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02  = FieldAttr02,
+   @cInField03 = I_Field03,   @cOutField03 = O_Field03,  @cFieldAttr03  = FieldAttr03,
+   @cInField04 = I_Field04,   @cOutField04 = O_Field04,  @cFieldAttr04  = FieldAttr04,
+   @cInField05 = I_Field05,   @cOutField05 = O_Field05,  @cFieldAttr05  = FieldAttr05,
+   @cInField06 = I_Field06,   @cOutField06 = O_Field06,  @cFieldAttr06  = FieldAttr06,
+   @cInField07 = I_Field07,   @cOutField07 = O_Field07,  @cFieldAttr07  = FieldAttr07,
+   @cInField08 = I_Field08,   @cOutField08 = O_Field08,  @cFieldAttr08  = FieldAttr08,
+   @cInField09 = I_Field09,   @cOutField09 = O_Field09,  @cFieldAttr09  = FieldAttr09,
+   @cInField10 = I_Field10,   @cOutField10 = O_Field10,  @cFieldAttr10  = FieldAttr10,
+   @cInField11 = I_Field11,   @cOutField11 = O_Field11,  @cFieldAttr11  = FieldAttr11,
+   @cInField12 = I_Field12,   @cOutField12 = O_Field12,  @cFieldAttr12  = FieldAttr12,
+   @cInField13 = I_Field13,   @cOutField13 = O_Field13,  @cFieldAttr13  = FieldAttr13,
+   @cInField14 = I_Field14,   @cOutField14 = O_Field14,  @cFieldAttr14  = FieldAttr14,
+   @cInField15 = I_Field15,   @cOutField15 = O_Field15,  @cFieldAttr15  = FieldAttr15
 
-   @cFieldAttr01  = FieldAttr01,    @cFieldAttr02   = FieldAttr02,
-   @cFieldAttr03 =  FieldAttr03,    @cFieldAttr04   = FieldAttr04,
-   @cFieldAttr05 =  FieldAttr05,    @cFieldAttr06   = FieldAttr06,
-   @cFieldAttr07 =  FieldAttr07,    @cFieldAttr08   = FieldAttr08,
-   @cFieldAttr09 =  FieldAttr09,    @cFieldAttr10   = FieldAttr10,
-   @cFieldAttr11 =  FieldAttr11,    @cFieldAttr12   = FieldAttr12,
-   @cFieldAttr13 =  FieldAttr13,    @cFieldAttr14   = FieldAttr14,
-   @cFieldAttr15 =  FieldAttr15
+FROM rdt.rdtMobRec WITH (NOLOCK)
+WHERE Mobile = @nMobile
 
-FROM   RDT.RDTMOBREC WITH (NOLOCK)
-WHERE  Mobile = @nMobile
+-- Screen constant
+DECLARE
+   @nStep_Start      INT, 
+   @nStep_DropID     INT,  @nScn_DropID      INT,
+   @nStep_FromLOC    INT,  @nScn_FromLOC     INT,
+   @nStep_FromID     INT,  @nScn_FromID      INT,
+   @nStep_SKU        INT,  @nScn_SKU         INT,
+   @nStep_NextTask   INT,  @nScn_NextTask    INT,
+   @nStep_ToLOC      INT,  @nScn_ToLOC       INT,
+   @nStep_Exit       INT,  @nScn_Exit        INT,
+   @nStep_ShortPick  INT,  @nScn_ShortPick   INT,
+   @nStep_Reason     INT,  @nScn_Reason      INT
+
+SELECT
+   @nStep_Start      = 0, 
+   @nStep_DropID     = 1,  @nScn_DropID      = 2680,
+   @nStep_FromLOC    = 2,  @nScn_FromLOC     = 2681,
+   @nStep_FromID     = 3,  @nScn_FromID      = 2682,
+   @nStep_SKU        = 4,  @nScn_SKU         = 2683,
+   @nStep_NextTask   = 5,  @nScn_NextTask    = 2684,
+   @nStep_ToLOC      = 6,  @nScn_ToLOC       = 2685,
+   @nStep_Exit       = 7,  @nScn_Exit        = 2686,
+   @nStep_ShortPick  = 8,  @nScn_ShortPick   = 2687,
+   @nStep_Reason     = 9,  @nScn_Reason      = 2109
 
 -- Redirect to respective screen
 IF @nFunc = 1764
 BEGIN
-   IF @nStep = 0 GOTO Step_0   -- Initialize
-   IF @nStep = 1 GOTO Step_1   -- Scn = 2680 DropID
-   IF @nStep = 2 GOTO Step_2   -- Scn = 2681 FromLOC
-   IF @nStep = 3 GOTO Step_3   -- Scn = 2682 FromID
-   IF @nStep = 4 GOTO Step_4   -- Scn = 2683 SKU, QTY
-   IF @nStep = 5 GOTO Step_5   -- Scn = 2684 Cont next replen task / Close pallet
-   IF @nStep = 6 GOTO Step_6   -- Scn = 2685 To LOC
-   IF @nStep = 7 GOTO Step_7   -- Scn = 2686 Pallet is close. Next task / Exit
-   IF @nStep = 8 GOTO Step_8   -- Scn = 2687 Short pick / Close pallet
-   IF @nStep = 9 GOTO Step_9   -- Scn = 2688 Reason code
+   IF @nStep = 0 GOTO Step_Start       -- Initialize
+   IF @nStep = 1 GOTO Step_DropID      -- Scn = 2680 DropID
+   IF @nStep = 2 GOTO Step_FromLOC     -- Scn = 2681 FromLOC
+   IF @nStep = 3 GOTO Step_FromID      -- Scn = 2682 FromID
+   IF @nStep = 4 GOTO Step_SKU         -- Scn = 2683 SKU, QTY
+   IF @nStep = 5 GOTO Step_NextTask    -- Scn = 2684 Cont next replen task / Close pallet
+   IF @nStep = 6 GOTO Step_ToLOC       -- Scn = 2685 To LOC
+   IF @nStep = 7 GOTO Step_Exit        -- Scn = 2686 Pallet is close. Next task / Exit
+   IF @nStep = 8 GOTO Step_ShortPick   -- Scn = 2687 Short pick / Close pallet
+   IF @nStep = 9 GOTO Step_Reason      -- Scn = 2109 Reason code
 END
-
 RETURN -- Do nothing if incorrect step
 
 
 /********************************************************************************
 Step 0. Initialize
 ********************************************************************************/
-Step_0:
+Step_Start:
 BEGIN
    -- Get task manager data
    SET @cTaskDetailKey  = @cOutField06
@@ -417,7 +424,7 @@ BEGIN
 
    SET @cContinueTask = rdt.RDTGetConfig( @nFunc, 'ContinueALLTaskWithinAisle', @cStorerKey)
 
-	-- (james07)
+   -- (james07)
    SET @cExtendedValidateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)
    IF @cExtendedValidateSP = '0'
       SET @cExtendedValidateSP = ''
@@ -447,7 +454,7 @@ BEGIN
          SET @cDisableQTYField = @cDisableQTYFieldSP
       ELSE
       BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDisableQTYFieldSP AND type = 'P')
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cDisableQTYFieldSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cDisableQTYFieldSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cDisableQTYField OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
@@ -473,7 +480,7 @@ BEGIN
    -- Extended update
    IF @cExtendedUpdateSP <> ''
    BEGIN
-      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')
       BEGIN
          SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
             ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT'
@@ -494,78 +501,26 @@ BEGIN
       END
    END
 
-   -- Sign-in
+   -- Event log
    EXEC RDT.rdt_STD_EventLog
-      @cActionType     = '1', -- Sign in function
+      @cActionType     = '1', -- Sign in
       @cUserID         = @cUserName,
       @nMobileNo       = @nMobile,
       @nFunctionID     = @nFunc,
       @cFacility       = @cFacility,
       @cStorerKey      = @cStorerKey,
       @cLocation       = @cSuggFromLoc,
-      @cToLocation     =  @cSuggToLoc,
+      @cToLocation     = @cSuggToLoc,
       @cID             = @cSuggID,
       @cAreaKey        = @cAreaKey,
       @cTTMStrategyKey = @cTTMStrategyKey,
-      --@cRefNo4         = '',
       @cListKey        = @cListKey,
-      @cTaskdetailKey  = @cTaskdetailKey,
-      @nStep           = @nStep
+      @cTaskdetailKey  = @cTaskdetailKey
 
-   -- Enable all fields
-   SET @cFieldAttr01 = ''
-   SET @cFieldAttr02 = ''
-   SET @cFieldAttr03 = ''
-   SET @cFieldAttr04 = ''
-   SET @cFieldAttr05 = ''
-   SET @cFieldAttr06 = ''
-   SET @cFieldAttr07 = ''
-   SET @cFieldAttr08 = ''
-   SET @cFieldAttr09 = ''
-   SET @cFieldAttr10 = ''
-   SET @cFieldAttr11 = ''
-   SET @cFieldAttr12 = ''
-   SET @cFieldAttr13 = ''
-   SET @cFieldAttr14 = ''
-   SET @cFieldAttr15 = ''
-
-   -- Set the entry point
-   SET @nScn  = 2680
-   SET @nStep = 1
-
-   -- (james04)
-   -- Extended info
-   IF @cExtendedInfoSP <> ''
-   BEGIN
-      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
-      BEGIN
-         SET @cExtendedInfo1 = ''
-         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
-            ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep'
-         SET @cSQLParam =
-            '@nMobile         INT,           ' +
-            '@nFunc           INT,           ' +
-            '@cLangCode       NVARCHAR( 3),  ' +
-            '@nStep           INT,           ' +
-            '@cTaskdetailKey  NVARCHAR( 10), ' +
-            '@cExtendedInfo1  NVARCHAR( 20) OUTPUT, ' +
-            '@nErrNo          INT           OUTPUT, ' +
-            '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
-            '@nAfterStep      INT '
-
-         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-            @nMobile, @nFunc, @cLangCode, @nStep , @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
-
-         IF @cExtendedInfo1 <> ''
-            SET @cOutField15 = @cExtendedInfo1
-      END
-   END
-
- 
-   --(cc01)
+   -- Auto gen Drop ID
    IF @cAutoGenDropID = '1'
    BEGIN
-   	-- Get MBOLKey    
+      -- Get MBOLKey    
       EXECUTE dbo.nspg_GetKey_AlphaSeq    
          'PalletID_AD',    
          10,    
@@ -586,10 +541,10 @@ BEGIN
    BEGIN
       -- Prepare next screen var
       SET @cOutField01 = @cDropID
+      SET @cOutField10 = '' -- ExtendedInfo 
 
-      -- Remain in same screen
-      -- SET @nScn = @nScn + 1
-      -- SET @nStep = @nStep + 1
+      SET @nScn = @nScn_DropID
+      SET @nStep = @nStep_DropID
    END
    ELSE
    BEGIN
@@ -599,10 +554,37 @@ BEGIN
       SET @cOutField01 = @cPickMethod
       SET @cOutField02 = @cDropID
       SET @cOutField03 = @cSuggFromLOC
-      SET @cOutField04 = '' -- FromID
+      SET @cOutField04 = '' -- FromLOC
+      SET @cOutField10 = '' -- ExtendedInfo 
 
-      SET @nScn = @nScn + 1
-      SET @nStep = @nStep + 1
+      SET @nScn = @nScn_FromLOC
+      SET @nStep = @nStep_FromLOC
+   END
+   
+   -- Extended info
+   IF @cExtendedInfoSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedInfoSP AND type = 'P')
+      BEGIN
+         SET @cExtendedInfo1 = ''
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep'
+         SET @cSQLParam =
+            '@nMobile         INT,           ' +
+            '@nFunc           INT,           ' +
+            '@cLangCode       NVARCHAR( 3),  ' +
+            '@nStep           INT,           ' +
+            '@cTaskdetailKey  NVARCHAR( 10), ' +
+            '@cExtendedInfo1  NVARCHAR( 20) OUTPUT, ' +
+            '@nErrNo          INT           OUTPUT, ' +
+            '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
+            '@nAfterStep      INT '
+
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @nMobile, @nFunc, @cLangCode, @nStep_Start, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
+
+         SET @cOutField10 = @cExtendedInfo1
+      END
    END
 END
 GOTO Quit
@@ -611,8 +593,9 @@ GOTO Quit
 /********************************************************************************
 Step 1. Screen = 2680. Please take an empty pallet
     DROPID   (Field01, input)
+    EXTINFO  (Field10)
 ********************************************************************************/
-Step_1:
+Step_DropID:
 BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
@@ -625,7 +608,7 @@ BEGIN
       BEGIN
          SET @nErrNo = 72266
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DropID needed
-         GOTO Step_1_Fail
+         GOTO Step_DropID_Fail
       END
 
       -- (james02)
@@ -634,7 +617,7 @@ BEGIN
       BEGIN
          SET @nErrNo = 72303
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format
-         GOTO Step_1_Fail
+         GOTO Step_DropID_Fail
       END
 
       -- Decode
@@ -651,7 +634,7 @@ BEGIN
          END
 
          -- Customize decode
-         ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
+         ELSE IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cDecodeSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cBarcode, ' +
@@ -677,7 +660,7 @@ BEGIN
          END
 
          IF @nErrNo <> 0
-            GOTO Step_1_Fail
+            GOTO Step_DropID_Fail
       END
 
       -- Check DropID length
@@ -688,7 +671,7 @@ BEGIN
          BEGIN
             SET @nErrNo = 72303
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DropID TooLong
-            GOTO Step_1_Fail
+            GOTO Step_DropID_Fail
          END
       END
 
@@ -700,7 +683,7 @@ BEGIN
       BEGIN
          SET @nErrNo = 72267
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DropID in used
-         GOTO Step_1_Fail
+         GOTO Step_DropID_Fail
       END
 
       -- Check if DropID already exist
@@ -713,7 +696,7 @@ BEGIN
       BEGIN
          SET @nErrNo = 72268
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DropID in used
-         GOTO Step_1_Fail
+         GOTO Step_DropID_Fail
       END
 
       -- Check DropID exist
@@ -721,7 +704,7 @@ BEGIN
       BEGIN
          SET @nErrNo = 72300
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DropID used
-         GOTO Step_1_Fail
+         GOTO Step_DropID_Fail
       END
 
 /*
@@ -737,7 +720,7 @@ BEGIN
             ROLLBACK TRAN
             SET @nErrNo = 72270
         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DelDropIDFail
-            GOTO Step_1_Fail
+            GOTO Step_DropID_Fail
          END
 
          -- Delete used DropID
@@ -747,7 +730,7 @@ BEGIN
             ROLLBACK TRAN
             SET @nErrNo = 72271
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DelDropIDFail
-            GOTO Step_1_Fail
+            GOTO Step_DropID_Fail
          END
       END
 
@@ -756,7 +739,7 @@ BEGIN
       -- Extended update
       IF @cExtendedUpdateSP <> ''
       BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cDropID = @cDropID '
@@ -778,34 +761,6 @@ BEGIN
          END
       END
 
-      -- (james04)
-      -- Extended info
-      IF @cExtendedInfoSP <> ''
-      BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
-         BEGIN
-            SET @cExtendedInfo1 = ''
-            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep'
-            SET @cSQLParam =
-               '@nMobile         INT,           ' +
-               '@nFunc           INT,           ' +
-               '@cLangCode       NVARCHAR( 3),  ' +
-               '@nStep           INT,           ' +
-               '@cTaskdetailKey  NVARCHAR( 10), ' +
-               '@cExtendedInfo1  NVARCHAR( 20) OUTPUT, ' +
-               '@nErrNo          INT           OUTPUT, ' +
-               '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
-               '@nAfterStep      INT '
-
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep , @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, 2
-
-            IF @cExtendedInfo1 <> ''
-               SET @cOutField15 = @cExtendedInfo1
-         END
-      END
-
       SELECT @cLocDescr = SUBSTRING( Descr, 1, 20) FROM dbo.LOC WITH (NOLOCK) WHERE Facility = @cFacility AND LOC = @cSuggFromLOC
       IF ISNULL( @cLocDescr, '') = ''
          SET @cLocDescr = @cSuggFromLOC
@@ -814,21 +769,15 @@ BEGIN
       SET @cOutField01 = @cPickMethod
       SET @cOutField02 = @cDropID
       SET @cOutField03 = CASE WHEN @cLocShowDescr = '1' THEN @cLocDescr ELSE @cSuggFromLOC END
-      SET @cOutField04 = '' -- FromLOC 
+      SET @cOutField04 = '' -- FromLOC
+      SET @cOutField10 = '' -- ExtendedInfo
 
-      SET @nScn = @nScn + 1
-      SET @nStep = @nStep + 1
+      SET @nScn = @nScn_FromLOC
+      SET @nStep = @nStep_FromLOC
    END
 
    IF @nInputKey = 0 -- ESC
    BEGIN
-      /*
-      -- Back to menu
-      SET @nFunc = @nMenu
-      SET @nScn  = @nMenu
-      SET @nStep = 0
-      SET @cOutField01 = '' -- Option
-      */
       -- Go to Reason Code Screen
       SET @cOutField01 = ''
       SET @cOutField02 = ''
@@ -839,13 +788,39 @@ BEGIN
 
       SET @nFromScn = @nScn
       SET @nFromStep = @nStep
-      SET @nScn  = 2109
-      SET @nStep = @nStep + 8 -- Step 9
+      SET @nScn  = @nScn_Reason
+      SET @nStep = @nStep_Reason
 
+   END
+
+   -- Extended info
+   IF @cExtendedInfoSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedInfoSP AND type = 'P')
+      BEGIN
+         SET @cExtendedInfo1 = ''
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep'
+         SET @cSQLParam =
+            '@nMobile         INT,           ' +
+            '@nFunc           INT,           ' +
+            '@cLangCode       NVARCHAR( 3),  ' +
+            '@nStep           INT,           ' +
+            '@cTaskdetailKey  NVARCHAR( 10), ' +
+            '@cExtendedInfo1  NVARCHAR( 20) OUTPUT, ' +
+            '@nErrNo          INT           OUTPUT, ' +
+            '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
+            '@nAfterStep      INT '
+
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @nMobile, @nFunc, @cLangCode, @nStep_DropID, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
+
+         SET @cOutField10 = @cExtendedInfo1
+      END
    END
    GOTO Quit
 
-   Step_1_Fail:
+   Step_DropID_Fail:
    BEGIN
       SET @cDropID = ''
       SET @cOutField01 = '' -- DropID
@@ -860,8 +835,9 @@ Step 2. Screen = 2681. From LOC screen
     DROP ID  (Field02)
     SUGG LOC (Field03)
     FROM LOC (Field04, input)
+    EXTINFO  (Field10)
 ********************************************************************************/
-Step_2:
+Step_FromLOC:
 BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
@@ -873,33 +849,33 @@ BEGIN
       BEGIN
          SET @nErrNo = 72272
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --FromLOC needed
-         GOTO Step_2_Fail
+         GOTO Step_FromLOC_Fail
       END
 
-		-- (james03)        
-		IF @cLOCLookupSP = 1              
-		BEGIN              
-			EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,               
-			   @cFromLOC   OUTPUT,               
-			   @nErrNo     OUTPUT,               
-			   @cErrMsg    OUTPUT              
+      -- (james03)        
+      IF @cLOCLookupSP = 1              
+      BEGIN              
+         EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,               
+            @cFromLOC   OUTPUT,               
+            @nErrNo     OUTPUT,               
+            @cErrMsg    OUTPUT              
 
-			IF @nErrNo <> 0              
-				GOTO Step_2_Fail              
-		END 
+         IF @nErrNo <> 0              
+            GOTO Step_FromLOC_Fail              
+      END 
 
       -- Check if FromLOC match
       IF @cFromLOC <> @cSuggFromLOC
       BEGIN
          SET @nErrNo = 72273
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --FromLOC Diff
-        GOTO Step_2_Fail
+        GOTO Step_FromLOC_Fail
       END
 
       -- Extended update
       IF @cExtendedUpdateSP <> ''
       BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT'
@@ -1009,16 +985,17 @@ BEGIN
          SET @cOutField07 = rdt.rdtFormatDate( @dLottable04)
          SET @cOutField08 = CASE WHEN @cDefaultSKU = '1' THEN @cSuggSKU ELSE '' END -- SKU
          SET @cOutField09 = ''
-         SET @cOutField10 = ''
+         SET @cOutField10 = '' -- ExtendedInfo
          SET @cOutField11 = '1:' + CAST( @nPUOM_Div AS NCHAR( 6)) + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc
          SET @cOutField12 = CASE WHEN (@cPUOM = '6' OR @nPUOM_Div = 0) THEN '' ELSE CAST( @nPQTY_RPL AS NVARCHAR( 5)) END
          SET @cOutField13 = CAST( @nMQTY_RPL AS NVARCHAR( 5))
          SET @cOutField14 = CASE WHEN (@cPUOM = '6' OR @nPUOM_Div = 0) THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 5)) END -- PQTY
          SET @cOutField15 = CAST( @nMQTY AS NVARCHAR( 5)) -- MQTY
+
          EXEC rdt.rdtSetFocusField @nMobile, 8 -- SKU
 
-         SET @nScn = @nScn + 2
-         SET @nStep = @nStep + 2
+         SET @nScn = @nScn_SKU
+         SET @nStep = @nStep_SKU
       END
       ELSE
       BEGIN
@@ -1034,46 +1011,14 @@ BEGIN
          SET @cOutField05 = CASE WHEN @cDefaultFromID = '1' THEN @cSuggID ELSE '' END -- FromID
          SET @cOutField10 = '' -- ExtendedInfo
 
-         SET @nScn = @nScn + 1
-         SET @nStep = @nStep + 1
+         SET @nScn = @nScn_FromID
+         SET @nStep = @nStep_FromID
       END
-      
-      -- Extended info
-      IF @cExtendedInfoSP <> ''
-      BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
-         BEGIN
-            SET @cExtendedInfo1 = ''
-            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep'
-            SET @cSQLParam =
-               '@nMobile         INT,           ' +
-               '@nFunc           INT,           ' +
-               '@cLangCode       NVARCHAR( 3),  ' +
-               '@nStep           INT,           ' +
-               '@cTaskdetailKey  NVARCHAR( 10), ' +
-               '@cExtendedInfo1  NVARCHAR( 20) OUTPUT, ' +
-               '@nErrNo          INT           OUTPUT, ' +
-               '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
-               '@nAfterStep      INT '
 
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, 2, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
-
-            SET @cOutField10 = @cExtendedInfo1
-         END
-      END
    END
 
    IF @nInputKey = 0 -- ESC
    BEGIN
-/*
-      SET @cDropID = ''
-      SET @cOutField01 = '' -- DropID
-
-      SET @nScn  = @nScn - 1
-      SET @nStep = @nStep - 1
-*/
       -- Partial pallet
       IF @cPickMethod = 'PP'
       BEGIN
@@ -1083,35 +1028,65 @@ BEGIN
             -- Prepare prev screen var
             SET @cDropID = ''
             SET @cOutField01 = '' -- DropID
+            SET @cOutField10 = '' -- ExtendedInfo
 
-            SET @nScn  = @nScn - 1
-            SET @nStep = @nStep - 1
-
-            GOTO Quit
+            SET @nScn  = @nScn_DropID
+            SET @nStep = @nStep_DropID
          END
       END
+      ELSE
+      BEGIN
+         -- Go to Reason Code Screen
+         SET @cOutField01 = ''
+         SET @cOutField02 = ''
+         SET @cOutField03 = ''
+         SET @cOutfield04 = ''
+         SET @cOutField05 = ''
+         SET @cOutField09 = ''
+         
+         SET @nFromScn = @nScn
+         SET @nFromStep = @nStep
+         
+         SET @nScn  = @nScn_Reason
+         SET @nStep = @nStep_Reason
+      END
+   END
+      
+   -- Extended info
+   IF @cExtendedInfoSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedInfoSP AND type = 'P')
+      BEGIN
+         SET @cExtendedInfo1 = ''
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep'
+         SET @cSQLParam =
+            '@nMobile         INT,           ' +
+            '@nFunc           INT,           ' +
+            '@cLangCode       NVARCHAR( 3),  ' +
+            '@nStep           INT,           ' +
+            '@cTaskdetailKey  NVARCHAR( 10), ' +
+            '@cExtendedInfo1  NVARCHAR( 20) OUTPUT, ' +
+            '@nErrNo          INT           OUTPUT, ' +
+            '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
+            '@nAfterStep      INT '
 
-      -- Go to Reason Code Screen
-      SET @cOutField01 = ''
-      SET @cOutField02 = ''
-      SET @cOutField03 = ''
-      SET @cOutfield04 = ''
-      SET @cOutField05 = ''
-      SET @cOutField09 = ''
-      SET @nFromScn = @nScn
-      SET @nFromStep = @nStep
-      SET @nScn  = 2109
-      SET @nStep = @nStep + 7 -- Step 9
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @nMobile, @nFunc, @cLangCode, @nStep_FromLOC, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
+
+         SET @cOutField10 = @cExtendedInfo1
+      END
    END
    GOTO Quit
 
-   Step_2_Fail:
+   Step_FromLOC_Fail:
    BEGIN
       SET @cFromLOC = ''
       SET @cOutfield04 = '' -- FromLOC
    END
 END
 GOTO Quit
+
 
 /********************************************************************************
 Step 3. Screen = 2682. FromID screen
@@ -1120,8 +1095,9 @@ Step 3. Screen = 2682. FromID screen
     FROM LOC (Field03)
     SUGG ID  (Field04)
     FROM ID  (Field05, input)
+    EXTINFO  (Field10)
 ********************************************************************************/
-Step_3:
+Step_FromID:
 BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
@@ -1135,7 +1111,7 @@ BEGIN
       BEGIN
          SET @nErrNo = 72274
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --FROM ID needed
-         GOTO Step_3_Fail
+         GOTO Step_FromID_Fail
       END
 */
 
@@ -1153,7 +1129,7 @@ BEGIN
          END
 
          -- Customize decode
-         ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
+         ELSE IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cDecodeSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cBarcode, ' +
@@ -1179,7 +1155,7 @@ BEGIN
          END
 
          IF @nErrNo <> 0
-            GOTO Step_3_Fail
+            GOTO Step_FromID_Fail
       END
 
       -- Check FromID match
@@ -1189,11 +1165,11 @@ BEGIN
          BEGIN
             SET @nErrNo = 72275
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ID not match
-            GOTO Step_3_Fail
+            GOTO Step_FromID_Fail
          END
 
          -- Swap ID
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cSwapTaskSP AND type = 'P')
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cSwapTaskSP AND type = 'P')
          BEGIN
             DECLARE @cNewTaskDetailKey NVARCHAR( 10)
             SET @cNewTaskDetailKey = ''
@@ -1251,14 +1227,14 @@ BEGIN
          BEGIN
             SET @nErrNo = 72297
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --QTYALC/QTYRPL
-            GOTO Step_3_Fail
+            GOTO Step_FromID_Fail
        END
       END
 
       -- Extended update
       IF @cExtendedUpdateSP <> ''
       BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT'
@@ -1284,7 +1260,7 @@ BEGIN
       BEGIN
          -- (james09)
          -- Get custom SuggToLOC
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cSuggToLOCSP AND type = 'P')
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cSuggToLOCSP AND type = 'P')
          BEGIN
             SET @cNewSuggToLOC = ''
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cSuggToLOCSP) +
@@ -1304,7 +1280,7 @@ BEGIN
                @nMobile, @nFunc, @cLangCode, @cUserName, @cTaskDetailKey, @cSuggToLOC, @cNewSuggToLOC OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
             IF @nErrNo <> 0
-               GOTO Step_5_Fail
+               GOTO Step_FromID_Fail
 
             IF @cNewSuggToLOC <> ''   
                SET @cSuggToLOC = @cNewSuggToLOC
@@ -1339,8 +1315,8 @@ BEGIN
          -- Go to ToLOC screen
          SET @nFromScn = @nScn
          SET @nFromStep = @nStep
-         SET @nScn = @nScn + 3
-         SET @nStep = @nStep + 3
+         SET @nScn = @nScn_ToLOC
+         SET @nStep = @nStep_ToLOC
       END
 
       -- Partial pallet
@@ -1430,7 +1406,7 @@ BEGIN
          SET @cOutField07 = rdt.rdtFormatDate( @dLottable04)
          SET @cOutField08 = CASE WHEN @cDefaultSKU = '1' THEN @cSuggSKU ELSE '' END -- SKU
          SET @cOutField09 = ''
-         SET @cOutField10 = ''
+         SET @cOutField10 = '' -- ExtendedInfo
          SET @cOutField11 = '1:' + CAST( @nPUOM_Div AS NCHAR( 6)) + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc
          SET @cOutField12 = CASE WHEN (@cPUOM = '6' OR @nPUOM_Div = 0) THEN '' ELSE CAST( @nPQTY_RPL AS NVARCHAR( 5)) END
          SET @cOutField13 = CAST( @nMQTY_RPL AS NVARCHAR( 5))
@@ -1440,34 +1416,8 @@ BEGIN
 
          SET @nFromScn = @nScn
          SET @nFromStep = @nStep
-         SET @nScn = @nScn + 1
-         SET @nStep = @nStep + 1
-      END
-
-      -- Extended info
-      IF @cExtendedInfoSP <> ''
-      BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
-         BEGIN
-            SET @cExtendedInfo1 = ''
-            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep'
-            SET @cSQLParam =
-               '@nMobile         INT,           ' +
-               '@nFunc           INT,           ' +
-               '@cLangCode       NVARCHAR( 3),  ' +
-               '@nStep           INT,           ' +
-               '@cTaskdetailKey  NVARCHAR( 10), ' +
-               '@cExtendedInfo1  NVARCHAR( 20) OUTPUT, ' +
-               '@nErrNo          INT           OUTPUT, ' +
-               '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
-               '@nAfterStep      INT '
-
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, 3, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
-
-            SET @cOutField10 = @cExtendedInfo1
-         END
+         SET @nScn = @nScn_SKU
+         SET @nStep = @nStep_SKU
       END
    END
 
@@ -1483,13 +1433,40 @@ BEGIN
       SET @cOutField02 = @cDropID
       SET @cOutField03 = CASE WHEN @cLocShowDescr = '1' THEN @cLocDescr ELSE @cSuggFromLOC END
       SET @cOutField04 = '' -- FromLOC
+      SET @cOutField10 = '' -- ExtendedInfo
 
-      SET @nScn = @nScn - 1
-      SET @nStep = @nStep - 1
+      SET @nScn = @nScn_FromLOC
+      SET @nStep = @nStep_FromLOC
+   END
+
+   -- Extended info
+   IF @cExtendedInfoSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedInfoSP AND type = 'P')
+      BEGIN
+         SET @cExtendedInfo1 = ''
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep'
+         SET @cSQLParam =
+            '@nMobile         INT,           ' +
+            '@nFunc           INT,           ' +
+            '@cLangCode       NVARCHAR( 3),  ' +
+            '@nStep           INT,           ' +
+            '@cTaskdetailKey  NVARCHAR( 10), ' +
+            '@cExtendedInfo1  NVARCHAR( 20) OUTPUT, ' +
+            '@nErrNo          INT           OUTPUT, ' +
+            '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
+            '@nAfterStep      INT '
+
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @nMobile, @nFunc, @cLangCode, @nStep_FromID, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
+
+         SET @cOutField10 = @cExtendedInfo1
+      END
    END
    GOTO Quit
 
-   Step_3_Fail:
+   Step_FromID_Fail:
    BEGIN
       SET @cFromID = ''
       SET @cOutField05 = '' -- FromID
@@ -1508,15 +1485,14 @@ Step 4. screen = 2683
     Lottable03 (Field06)
     Lottable04 (Field07)
     SKU/UPC    (Field08, input)
-    UOM ratio  (Field09)
-    PUOM       (Field10)
-    MUOM       (Field11)
+    EXTINFO    (Field10)
+    UOM info   (Field11) -- Ratio, PDesc, MDesc
     PQTY_RPL   (Field12)
     PQTY       (Field13, input)
     MQTY_RPL   (Field14)
     MQTY       (Field15, input)
 ********************************************************************************/
-Step_4:
+Step_SKU:
 BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
@@ -1542,7 +1518,7 @@ BEGIN
          SET @nErrNo = 72276
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Need SKU
          EXEC rdt.rdtSetFocusField @nMobile, 8 -- SKU
-         GOTO Step_4_Fail
+         GOTO Step_SKU_Fail
       END
 
       -- Validate SKU
@@ -1575,7 +1551,7 @@ BEGIN
                   @cType   = 'UPC'
 
                IF @nErrNo <> 0
-                  GOTO Step_4_Fail
+                  GOTO Step_SKU_Fail
                ELSE
                BEGIN
                   SET @cSKU = @cDecodeSKU
@@ -1586,7 +1562,7 @@ BEGIN
             END
 
             -- Customize decode
-            ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
+            ELSE IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cDecodeSP AND type = 'P')
             BEGIN
                SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
                   ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cBarcode, ' +
@@ -1611,7 +1587,7 @@ BEGIN
                   @cFromID OUTPUT, @cDecodeSKU OUTPUT, @nDecodeQTY OUTPUT, @cDropID OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
                IF @nErrNo <> 0
-                  GOTO Step_4_Fail
+                  GOTO Step_SKU_Fail
                ELSE
                BEGIN
                   SET @cSKU = @cDecodeSKU
@@ -1659,7 +1635,7 @@ BEGIN
                      ,@c_ErrMsg     = @cErrMsg     OUTPUT
 
                   IF @nErrNo <> 0
-                     GOTO Step_4_Fail
+                     GOTO Step_SKU_Fail
 
                   SET @cSKU    = ISNULL( @c_oFieled01, '')
                   SET @nUCCQTY = CAST( ISNULL( @c_oFieled05, '') AS INT)
@@ -1728,7 +1704,7 @@ BEGIN
                SET @nErrNo = 72277
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid SKU
                EXEC rdt.rdtSetFocusField @nMobile, 8 -- SKU
-               GOTO Step_4_Fail
+               GOTO Step_SKU_Fail
             END
 
             -- Check multi SKU barcode
@@ -1737,7 +1713,7 @@ BEGIN
                SET @nErrNo = 72278
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- MultiSKUBarCod
                EXEC rdt.rdtSetFocusField @nMobile, 8 -- SKU
-               GOTO Step_4_Fail
+               GOTO Step_SKU_Fail
             END
 
             -- Get SKU code
@@ -1756,7 +1732,7 @@ BEGIN
                SET @nErrNo = 72279
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Different SKU
                EXEC rdt.rdtSetFocusField @nMobile, 8 -- SKU
-               GOTO Step_4_Fail
+               GOTO Step_SKU_Fail
             END
             
             SET @cSuggSKU = @cSKU
@@ -1774,7 +1750,7 @@ BEGIN
          SET @nErrNo = 72280
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid QTY
          EXEC rdt.rdtSetFocusField @nMobile, 14 -- PQTY
-         GOTO Step_4_Fail
+         GOTO Step_SKU_Fail
       END
       SET @nPQTY = CAST( @cPQTY AS INT)
 
@@ -1784,7 +1760,7 @@ BEGIN
          SET @nErrNo = 72281
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid QTY
          EXEC rdt.rdtSetFocusField @nMobile, 15 -- MQTY
-         GOTO Step_4_Fail
+         GOTO Step_SKU_Fail
       END
       SET @nMQTY = CAST( @cMQTY AS INT)
 
@@ -1795,33 +1771,33 @@ BEGIN
       BEGIN
          SET @nErrNo = 72302
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- FullShortNoQTY
-         GOTO Step_4_Fail
+         GOTO Step_SKU_Fail
       END
 
-		-- (james07)
-		IF @cExtendedValidateSP <> ''
-		BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+      -- (james07)
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')
          BEGIN
-	         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
-	            ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT'
-	         SET @cSQLParam =
-	            '@nMobile         INT,        ' +
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile         INT,        ' +
                '@nFunc           INT,        ' +
-	            '@cLangCode       NVARCHAR( 3),   ' +
-	            '@nStep           INT,        ' +
-	            '@cTaskdetailKey  NVARCHAR( 10),  ' +
-	            '@nErrNo          INT OUTPUT, ' +
-	            '@cErrMsg         NVARCHAR( 20) OUTPUT'
+               '@cLangCode       NVARCHAR( 3),   ' +
+               '@nStep           INT,        ' +
+               '@cTaskdetailKey  NVARCHAR( 10),  ' +
+               '@nErrNo          INT OUTPUT, ' +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT'
 
-	         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-	            @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
-	         IF @nErrNo <> 0
-	            GOTO Quit
+            IF @nErrNo <> 0
+               GOTO Quit
          END
       END
-			
+         
       -- Calc total QTY in master UOM
       SET @nQTY = rdt.rdtConvUOMQTY( @cStorerKey, @cSuggSKU, @cPQTY, @cPUOM, 6) -- Convert to QTY in master UOM
       SET @nQTY = @nQTY + @nMQTY
@@ -1882,7 +1858,7 @@ BEGIN
       BEGIN
          SET @nErrNo = 72269
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- QTYAVLNotEnuf
-         GOTO Step_4_Fail
+         GOTO Step_SKU_Fail
       END
       */
       
@@ -1893,7 +1869,7 @@ BEGIN
          BEGIN
             SET @nErrNo = 72301
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Over replenish
-            GOTO Step_4_Fail
+            GOTO Step_SKU_Fail
          END
       END
 
@@ -1948,7 +1924,7 @@ BEGIN
       -- Extended info
       IF @cExtendedInfoSP <> ''
       BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedInfoSP AND type = 'P')
          BEGIN
             SET @cExtendedInfo1 = ''
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
@@ -1965,7 +1941,7 @@ BEGIN
                '@nAfterStep      INT '
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-            @nMobile, @nFunc, @cLangCode, 4, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
+            @nMobile, @nFunc, @cLangCode, @nStep_SKU, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
 
             SET @cOutField10 = @cExtendedInfo1
          END
@@ -2009,8 +1985,8 @@ BEGIN
          SET @cOption = ''
          SET @cOutField01 = '' -- Option
 
-         SET @nScn = @nScn + 4
-         SET @nStep = @nStep + 4
+         SET @nScn = @nScn_ShortPick
+         SET @nStep = @nStep_ShortPick
       END
 
       -- QTY fulfill
@@ -2019,36 +1995,11 @@ BEGIN
          -- Prepare next screen var
          SET @cOption = ''
          SET @cOutField01 = CASE WHEN ISNULL(@cDefaultOption,'')  <> '' THEN @cDefaultOption ELSE '' END -- Option -- (ChewKP02)
+         SET @cOutField10 = '' -- ExtendedInfo
 
-         SET @nScn = @nScn + 1
-         SET @nStep = @nStep + 1
+         SET @nScn = @nScn_NextTask
+         SET @nStep = @nStep_NextTask
      END
-
-      -- Extended info
-      IF @cExtendedInfoSP <> ''
-      BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
-         BEGIN
-            SET @cExtendedInfo1 = ''
-            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep'
-            SET @cSQLParam =
-               '@nMobile         INT,           ' +
-               '@nFunc           INT,           ' +
-               '@cLangCode       NVARCHAR( 3),  ' +
-               '@nStep           INT,           ' +
-               '@cTaskdetailKey  NVARCHAR( 10), ' +
-               '@cExtendedInfo1  NVARCHAR( 20) OUTPUT, ' +
-               '@nErrNo          INT           OUTPUT, ' +
-               '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
-               '@nAfterStep      INT '
-
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, 4, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
-
-            SET @cOutField10 = @cExtendedInfo1
-         END
-      END
    END
 
    IF @nInputKey = 0 -- ESC
@@ -2072,9 +2023,10 @@ BEGIN
          SET @cOutField02 = @cDropID
          SET @cOutField03 = CASE WHEN @cLocShowDescr = '1' THEN @cLocDescr ELSE @cSuggFromLOC END
          SET @cOutField04 = '' -- FromLOC
+         SET @cOutField10 = '' -- ExtendedInfo
 
-         SET @nScn = @nScn - 2
-         SET @nStep = @nStep - 2
+         SET @nScn = @nScn_FromLOC
+         SET @nStep = @nStep_FromLOC
       END
       ELSE
       BEGIN
@@ -2087,50 +2039,51 @@ BEGIN
          SET @cOutField05 = '' -- FromID
          SET @cOutField10 = '' -- ExtendedInfo
 
-         SET @nScn = @nScn - 1
-         SET @nStep = @nStep - 1
+         SET @nScn = @nScn_FromID
+         SET @nStep = @nStep_FromID
       END
+   END
       
-      -- Extended info
-      IF @cExtendedInfoSP <> ''
+   -- Extended info
+   IF @cExtendedInfoSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedInfoSP AND type = 'P')
       BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
-         BEGIN
-            SET @cExtendedInfo1 = ''
-            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep'
-            SET @cSQLParam =
-               '@nMobile         INT,           ' +
-               '@nFunc           INT,           ' +
-               '@cLangCode       NVARCHAR( 3),  ' +
-               '@nStep           INT,           ' +
-               '@cTaskdetailKey  NVARCHAR( 10), ' +
-               '@cExtendedInfo1  NVARCHAR( 20) OUTPUT, ' +
-               '@nErrNo          INT           OUTPUT, ' +
-               '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
-               '@nAfterStep      INT '
+         SET @cExtendedInfo1 = ''
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep'
+         SET @cSQLParam =
+            '@nMobile         INT,           ' +
+            '@nFunc           INT,           ' +
+            '@cLangCode       NVARCHAR( 3),  ' +
+            '@nStep           INT,           ' +
+            '@cTaskdetailKey  NVARCHAR( 10), ' +
+            '@cExtendedInfo1  NVARCHAR( 20) OUTPUT, ' +
+            '@nErrNo          INT           OUTPUT, ' +
+            '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
+            '@nAfterStep      INT '
 
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, 4, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @nMobile, @nFunc, @cLangCode, @nStep_SKU, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
 
-            SET @cOutField10 = @cExtendedInfo1
-         END
+         SET @cOutField10 = @cExtendedInfo1
       END
    END
    GOTO Quit
 
-   Step_4_Fail:
+   Step_SKU_Fail:
 END
 GOTO Quit
 
 
 /********************************************************************************
 Step 5. screen = 2685.
-    1 = Cont Next Replen Task
-    9 = Close Pallet
-    Option (Field01, input)
+    1 = CONT NEXT TASK
+    9 = CLOSE PALLET
+    OPTION  (Field01, input)
+    EXTINFO (Field10)
 ********************************************************************************/
-Step_5:
+Step_NextTask:
 BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
@@ -2142,7 +2095,7 @@ BEGIN
       BEGIN
          SET @nErrNo = 72282
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Option needed
-         GOTO Step_5_Fail
+         GOTO Step_NextTask_Fail
       END
 
       -- Check option is valid
@@ -2150,10 +2103,10 @@ BEGIN
       BEGIN
          SET @nErrNo = 72283
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Option
-         GOTO Step_5_Fail
+         GOTO Step_NextTask_Fail
       END
 
-    -- New replen task
+      -- New replen task
       IF @cOption = '1'
       BEGIN
          -- Confirm current replen task (update TaskDetail to status 5)
@@ -2166,13 +2119,13 @@ BEGIN
             @nErrNo             OUTPUT,
             @cErrMsg            OUTPUT
          IF @nErrNo <> 0
-            GOTO Step_5_Fail
+            GOTO Step_NextTask_Fail
 
          -- Save current task and get new replen task
          SET @cNextTaskDetailKey = ''
 
          -- Get next task
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cGetNextTaskSP AND type = 'P')
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cGetNextTaskSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cGetNextTaskSP) +
                ' @nMobile, @nFunc, @cLangCode, @cUserName, @cAreaKey, @cListKey, @cDropID, @cNextTaskDetailKey OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
@@ -2192,10 +2145,10 @@ BEGIN
                @nMobile, @nFunc, @cLangCode, @cUserName, @cAreaKey, @cListKey, @cDropID, @cNextTaskDetailKey OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
             IF @nErrNo <> 0
-               GOTO Step_5_Fail
+               GOTO Step_NextTask_Fail
          END
          ELSE
-            GOTO Step_5_Fail
+            GOTO Step_NextTask_Fail
 
          SET @cTaskDetailKey = @cNextTaskDetailKey
 /*
@@ -2208,7 +2161,7 @@ BEGIN
             @nErrNo             OUTPUT,
             @cErrMsg            OUTPUT
          IF @nErrNo <> 0
-            GOTO Step_5_Fail
+            GOTO Step_NextTask_Fail
 */
 
          -- Disable QTY field
@@ -2218,11 +2171,11 @@ BEGIN
                SET @cDisableQTYField = @cDisableQTYFieldSP
             ELSE
             BEGIN
-               IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDisableQTYFieldSP AND type = 'P')
+               IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cDisableQTYFieldSP AND type = 'P')
                BEGIN
                   SET @cSQL = 'EXEC rdt.' + RTRIM( @cDisableQTYFieldSP) +
                      ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cDisableQTYField, @nErrNo OUTPUT, @cErrMsg OUTPUT'
-            SET @cSQLParam =
+                  SET @cSQLParam =
                      '@nMobile            INT,  ' +
                      '@nFunc              INT,           ' +
                      '@cLangCode          NVARCHAR( 3),  ' +
@@ -2272,8 +2225,8 @@ BEGIN
             SET @cDropID = ''
             SET @cOutField01 = '' -- @cDropID
 
-            SET @nScn = @nScn - 4
-            SET @nStep = @nStep - 4
+            SET @nScn = @nScn_DropID
+            SET @nStep = @nStep_DropID
          END
 
          -- Go to SKU screen
@@ -2348,7 +2301,7 @@ BEGIN
             SET @cOutField07 = rdt.rdtFormatDate( @dLottable04)
             SET @cOutField08 = '' -- SKU
             SET @cOutField09 = ''
-            SET @cOutField10 = ''
+            SET @cOutField10 = '' -- ExtendedInfo
             SET @cOutField11 = '1:' + CAST( @nPUOM_Div AS NCHAR( 6)) + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc
             SET @cOutField12 = CASE WHEN (@cPUOM = '6' OR @nPUOM_Div = 0) THEN '' ELSE CAST( @nPQTY_RPL AS NVARCHAR( 5)) END
             SET @cOutField13 = CAST( @nMQTY_RPL AS NVARCHAR( 5))
@@ -2356,8 +2309,8 @@ BEGIN
             SET @cOutField15 = '' -- MQTY
             EXEC rdt.rdtSetFocusField @nMobile, 8 -- SKU
 
-            SET @nScn = @nScn - 1
-            SET @nStep = @nStep - 1
+            SET @nScn = @nScn_SKU
+            SET @nStep = @nStep_SKU
          END
 
          -- Go to ID screen
@@ -2370,9 +2323,10 @@ BEGIN
             SET @cOutField03 = CASE WHEN @cLocShowDescr = '1' THEN @cLocDescr ELSE @cSuggFromLOC END
             SET @cOutField04 = @cSuggID
             SET @cOutField05 = '' -- FromID
+            SET @cOutField10 = '' -- ExtendedInfo
 
-            SET @nScn = @nScn - 2
-            SET @nStep = @nStep - 2
+            SET @nScn = @nScn_FromID
+            SET @nStep = @nStep_FromID
          END
 
          -- Go to LOC screen
@@ -2384,9 +2338,10 @@ BEGIN
             SET @cOutField02 = @cDropID
             SET @cOutField03 = CASE WHEN @cLocShowDescr = '1' THEN @cLocDescr ELSE @cSuggFromLOC END
             SET @cOutField04 = '' -- FromLOC
+            SET @cOutField10 = '' -- ExtendedInfo
 
-            SET @nScn = @nScn - 3
-            SET @nStep = @nStep - 3
+            SET @nScn = @nScn_FromLOC
+            SET @nStep = @nStep_FromLOC
          END
       END
 
@@ -2395,7 +2350,7 @@ BEGIN
       BEGIN
          -- (james09)
          -- Get custom SuggToLOC
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cSuggToLOCSP AND type = 'P')
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cSuggToLOCSP AND type = 'P')
          BEGIN
             SET @cNewSuggToLOC = ''
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cSuggToLOCSP) +
@@ -2415,7 +2370,7 @@ BEGIN
                @nMobile, @nFunc, @cLangCode, @cUserName, @cTaskDetailKey, @cSuggToLOC, @cNewSuggToLOC OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
             IF @nErrNo <> 0
-               GOTO Step_5_Fail
+               GOTO Step_NextTask_Fail
 
             IF @cNewSuggToLOC <> ''   
                SET @cSuggToLOC = @cNewSuggToLOC
@@ -2443,40 +2398,14 @@ BEGIN
 
          SET @nFromScn = @nScn
          SET @nFromStep = @nStep
-         SET @nScn = @nScn + 1
-         SET @nStep = @nStep + 1
-      END
-
-      -- Extended info
-      IF @cExtendedInfoSP <> ''
-      BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
-         BEGIN
-            SET @cExtendedInfo1 = ''
-            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep'
-            SET @cSQLParam =
-               '@nMobile         INT,           ' +
-               '@nFunc           INT,           ' +
-               '@cLangCode       NVARCHAR( 3),  ' +
-               '@nStep           INT,           ' +
-               '@cTaskdetailKey  NVARCHAR( 10), ' +
-               '@cExtendedInfo1  NVARCHAR( 20) OUTPUT, ' +
-               '@nErrNo          INT           OUTPUT, ' +
-               '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
-               '@nAfterStep      INT '
-
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, 5, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
-
-            SET @cOutField10 = @cExtendedInfo1
-         END
+         SET @nScn = @nScn_ToLOC
+         SET @nStep = @nStep_ToLOC
       END
 
       -- Extended update
       IF @cExtendedUpdateSP <> ''
       BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep'
@@ -2515,7 +2444,7 @@ BEGIN
       SET @cOutField07 = rdt.rdtFormatDate( @dLottable04)
       SET @cOutField08 = '' -- SKU
       SET @cOutField09 = ''
-      SET @cOutField10 = @cExtendedInfo1
+      SET @cOutField10 = '' --ExtendedInfo
       SET @cOutField11 = '1:' + CAST( @nPUOM_Div AS NCHAR( 6)) + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc
       SET @cOutField12 = CASE WHEN (@cPUOM = '6' OR @nPUOM_Div = 0) THEN '' ELSE CAST( @nPQTY_RPL AS NVARCHAR( 5)) END
       SET @cOutField13 = CAST( @nMQTY_RPL AS NVARCHAR( 5))
@@ -2524,12 +2453,38 @@ BEGIN
       EXEC rdt.rdtSetFocusField @nMobile, 8 -- SKU
 
       -- Go to SKU screen
-      SET @nScn = @nScn - 1
-      SET @nStep = @nStep - 1
+      SET @nScn = @nScn_SKU
+      SET @nStep = @nStep_SKU
+   END
+
+   -- Extended info
+   IF @cExtendedInfoSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedInfoSP AND type = 'P')
+      BEGIN
+         SET @cExtendedInfo1 = ''
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep'
+         SET @cSQLParam =
+            '@nMobile         INT,           ' +
+            '@nFunc           INT,           ' +
+            '@cLangCode       NVARCHAR( 3),  ' +
+            '@nStep           INT,           ' +
+            '@cTaskdetailKey  NVARCHAR( 10), ' +
+            '@cExtendedInfo1  NVARCHAR( 20) OUTPUT, ' +
+            '@nErrNo          INT           OUTPUT, ' +
+            '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
+            '@nAfterStep      INT '
+
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @nMobile, @nFunc, @cLangCode, @nStep_NextTask, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
+
+         SET @cOutField10 = @cExtendedInfo1
+      END
    END
    GOTO Quit
 
-   Step_5_Fail:
+   Step_NextTask_Fail:
    BEGIN
       SET @cOption = ''
       SET @cOutField01 = ''
@@ -2543,8 +2498,9 @@ Step 6. screen = 2686. To LOC screen
     FROM LOC (Field01)
     SUGG LOC (Field02)
     TO LOC   (Field03, input)
+    EXTINFO  (Field10)
 ********************************************************************************/
-Step_6:
+Step_ToLOC:
 BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
@@ -2556,20 +2512,20 @@ BEGIN
       BEGIN
          SET @nErrNo = 72285
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ToLOC needed
-         GOTO Step_6_Fail
+         GOTO Step_ToLOC_Fail
       END
 
-		-- (james03)        
-		IF @cLOCLookupSP = 1              
-		BEGIN              
-			EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,               
-			   @cToLOC     OUTPUT,               
-			   @nErrNo     OUTPUT,               
-			   @cErrMsg    OUTPUT              
+      -- (james03)        
+      IF @cLOCLookupSP = 1              
+      BEGIN              
+         EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,               
+            @cToLOC     OUTPUT,               
+            @nErrNo     OUTPUT,               
+            @cErrMsg    OUTPUT              
 
-			IF @nErrNo <> 0              
-				GOTO Step_6_Fail              
-		END 
+         IF @nErrNo <> 0              
+            GOTO Step_ToLOC_Fail              
+      END 
 
       SET @nIsToLOCDiff = 0
       -- Check if FromLOC match
@@ -2586,7 +2542,7 @@ BEGIN
       BEGIN
          SET @nErrNo = 72286
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ToLOC Diff
-        GOTO Step_6_Fail
+        GOTO Step_ToLOC_Fail
       END
 
       -- Handling transaction
@@ -2629,7 +2585,7 @@ BEGIN
       -- Extended update
       IF @cExtendedUpdateSP <> ''
       BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT'
@@ -2665,7 +2621,7 @@ BEGIN
       -- Extended wcs
       IF @cExtendedWCSSP <> ''
       BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedWCSSP AND type = 'P')
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedWCSSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedWCSSP) +
                ' @nMobile, @nFunc, @cLangCode, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT'
@@ -2683,41 +2639,16 @@ BEGIN
       END
       -- Prepare next screen var
       SET @cOutField01 = @cToLOC
+      SET @cOutField10 = '' -- ExtendedInfo
 
-      SET @nScn = @nScn + 1
-      SET @nStep = @nStep + 1
-
-      -- Extended info
-      IF @cExtendedInfoSP <> ''
-      BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
-         BEGIN
-            SET @cExtendedInfo1 = ''
-            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep'
-            SET @cSQLParam =
-               '@nMobile         INT,           ' +
-               '@nFunc           INT,           ' +
-               '@cLangCode       NVARCHAR( 3),  ' +
-               '@nStep           INT,           ' +
-               '@cTaskdetailKey  NVARCHAR( 10), ' +
-               '@cExtendedInfo1  NVARCHAR( 20) OUTPUT, ' +
-               '@nErrNo          INT           OUTPUT, ' +
-               '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
-               '@nAfterStep      INT '
-
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, 6, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
-
-            SET @cOutField10 = @cExtendedInfo1
-         END
-      END
+      SET @nScn = @nScn_Exit
+      SET @nStep = @nStep_Exit
    END
 
    IF @nInputKey = 0 -- ESC
    BEGIN
       -- Back to FromID screen (full pallet)
-      IF @nFromStep = 3
+      IF @nFromStep = @nStep_FromID
       BEGIN
          SELECT @cLocDescr = SUBSTRING( Descr, 1, 20) FROM dbo.LOC WITH (NOLOCK) WHERE Facility = @cFacility AND LOC = @cSuggFromLOC
          IF ISNULL( @cLocDescr, '') = ''
@@ -2734,55 +2665,55 @@ BEGIN
       END
 
       -- Back to close pallet screen
-      IF @nFromStep = 5
+      IF @nFromStep = @nStep_NextTask
+      BEGIN
+         -- Prepare next screen variable
+         SET @cOption = ''
+         SET @cOutField01 = '' -- Option
+         SET @cOutField10 = '' -- ExtendedInfo
+      END
+
+      -- Back to short pick screen
+      IF @nFromStep = @nStep_ShortPick
       BEGIN
          -- Prepare next screen variable
          SET @cOption = ''
          SET @cOutField01 = '' -- Option
       END
 
-      -- Back to short pick screen
-      IF @nFromStep = 8
-      BEGIN
-         -- Prepare next screen variable
-     SET @cOption = ''
-         SET @cOutField01 = '' -- Option
-      END
-
       -- Back to prev screen
       SET @nScn = @nFromScn
       SET @nStep = @nFromStep
+   END
 
-      -- Extended info
-      IF @cExtendedInfoSP <> ''
+   -- Extended info
+   IF @cExtendedInfoSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedInfoSP AND type = 'P')
       BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
-         BEGIN
-            SET @cExtendedInfo1 = ''
-            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep'
-            SET @cSQLParam =
-               '@nMobile         INT,           ' +
-               '@nFunc           INT,           ' +
-               '@cLangCode       NVARCHAR( 3),  ' +
-               '@nStep           INT,           ' +
-               '@cTaskdetailKey  NVARCHAR( 10), ' +
-               '@cExtendedInfo1  NVARCHAR( 20) OUTPUT, ' +
-               '@nErrNo          INT           OUTPUT, ' +
-               '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
-               '@nAfterStep      INT '
+         SET @cExtendedInfo1 = ''
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep'
+         SET @cSQLParam =
+            '@nMobile         INT,           ' +
+            '@nFunc           INT,           ' +
+            '@cLangCode       NVARCHAR( 3),  ' +
+            '@nStep           INT,           ' +
+            '@cTaskdetailKey  NVARCHAR( 10), ' +
+            '@cExtendedInfo1  NVARCHAR( 20) OUTPUT, ' +
+            '@nErrNo          INT           OUTPUT, ' +
+            '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
+            '@nAfterStep      INT '
 
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, 6, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @nMobile, @nFunc, @cLangCode, @nStep_ToLOC, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
 
-            IF @nStep = 3 -- From ID
-               SET @cOutField10 = @cExtendedInfo1
-         END
+         SET @cOutField10 = @cExtendedInfo1
       END
    END
    GOTO Quit
 
-   Step_6_Fail:
+   Step_ToLOC_Fail:
    BEGIN
     SET @cToLOC = ''
       SET @cOutField03 = '' -- To LOC
@@ -2796,8 +2727,10 @@ Step 7. screen = 2688. Message screen
    Pallet is Close
    ENTER = Next Task
    ESC   = Exit TM
+   LAST LOC (Field01)
+   EXTINFO  (Field10)
 ********************************************************************************/
-Step_7:
+Step_Exit:
 BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
@@ -2877,7 +2810,7 @@ BEGIN
                ,@c_StorerKey     = @cStorerKey
          END
          ELSE
-            GOTO Step_7_Fail
+            GOTO Step_Exit_Fail
       END
 
       -- No task
@@ -2890,8 +2823,7 @@ BEGIN
              @nMobileNo   = @nMobile,
              @nFunctionID = @nFunc,
              @cFacility   = @cFacility,
-             @cStorerKey  = @cStorerKey,
-             @nStep       = @nStep
+             @cStorerKey  = @cStorerKey
 
          -- Go back to Task Manager Main Screen
          SET @cErrMsg = 'No More Task'
@@ -2916,10 +2848,10 @@ BEGIN
       BEGIN
          SET @cTaskDetailKey = @cNextTaskDetailKey
          SET @cTTMTaskType = @cNextTaskType
-   SET @cOutField01 = @cRefKey01
+         SET @cOutField01 = @cRefKey01
          SET @cOutField02 = @cRefKey02
- SET @cOutField03 = @cRefKey03
-   SET @cOutField04 = @cRefKey04
+         SET @cOutField03 = @cRefKey03
+         SET @cOutField04 = @cRefKey04
          SET @cOutField05 = @cRefKey05
          SET @cOutField06 = @cTaskDetailKey
          SET @cOutField07 = @cAreaKey
@@ -2945,7 +2877,7 @@ BEGIN
       BEGIN
          SET @nErrNo = 72287
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- NextTaskFncErr
-         GOTO Step_7_Fail
+         GOTO Step_Exit_Fail
       END
 
       -- Check if screen setup
@@ -2954,7 +2886,7 @@ BEGIN
       BEGIN
          SET @nErrNo = 72288
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NextTaskScnErr
-         GOTO Step_7_Fail
+         GOTO Step_Exit_Fail
       END
 
       -- Logging
@@ -2964,15 +2896,14 @@ BEGIN
          @nMobileNo   = @nMobile,
          @nFunctionID = @nFunc,
          @cFacility   = @cFacility,
-         @cStorerKey  = @cStorerKey,
-         @nStep       = @nStep
+         @cStorerKey  = @cStorerKey
 
       SET @nFunc = @nToFunc
       SET @nScn  = @nToScn
       SET @nStep = @nToStep
 
       IF @cTTMTaskType IN ('RPF', 'RP1')
-         GOTO Step_0
+         GOTO Step_Start
       ELSE
       BEGIN
          SET @cOutField09 = @cTTMTasktype      
@@ -2994,8 +2925,7 @@ BEGIN
        @nMobileNo   = @nMobile,
        @nFunctionID = @nFunc,
        @cFacility   = @cFacility,
-       @cStorerKey  = @cStorerKey,
-       @nStep       = @nStep
+       @cStorerKey  = @cStorerKey
 
       -- Enable field
       SET @cFieldAttr14 = '' -- @nPQTY
@@ -3011,7 +2941,7 @@ BEGIN
    END
    GOTO Quit
 
-   Step_7_Fail:
+   Step_Exit_Fail:
 END
 GOTO Quit
 
@@ -3020,9 +2950,9 @@ GOTO Quit
 Step 8. screen = 2686. Short pick screen
     1 = SHORT PICK
     9 = CLOSE PALLET
-    Option (Field01, input)
+    OPTION (Field01, input)
 ********************************************************************************/
-Step_8:
+Step_ShortPick:
 BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
@@ -3034,14 +2964,14 @@ BEGIN
       BEGIN
          SET @nErrNo = 72290
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Option needed
-         GOTO Step_8_Fail
+         GOTO Step_ShortPick_Fail
       END
       -- Check option is valid
       IF @cOption NOT IN ('1', '9')
       BEGIN
          SET @nErrNo = 72291
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Option
-         GOTO Step_8_Fail
+         GOTO Step_ShortPick_Fail
       END
 
       -- Short pick
@@ -3053,8 +2983,8 @@ BEGIN
          -- Go to reason code screen
          SET @nFromScn = @nScn
          SET @nFromStep = @nStep
-         SET @nScn  = 2109
-         SET @nStep = @nStep + 1 -- Step 10
+         SET @nScn  = @nScn_Reason
+         SET @nStep = @nStep_Reason
       END
 
       -- Close pallet
@@ -3065,7 +2995,7 @@ BEGIN
          BEGIN
             -- (james09)
             -- Get custom SuggToLOC
-            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cSuggToLOCSP AND type = 'P')
+            IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cSuggToLOCSP AND type = 'P')
             BEGIN
                SET @cNewSuggToLOC = ''
                SET @cSQL = 'EXEC rdt.' + RTRIM( @cSuggToLOCSP) +
@@ -3085,7 +3015,7 @@ BEGIN
                   @nMobile, @nFunc, @cLangCode, @cUserName, @cTaskDetailKey, @cSuggToLOC, @cNewSuggToLOC OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
                IF @nErrNo <> 0
-                  GOTO Step_8_Fail
+                  GOTO Step_ShortPick_Fail
 
                IF @cNewSuggToLOC <> ''   
                   SET @cSuggToLOC = @cNewSuggToLOC
@@ -3115,34 +3045,8 @@ BEGIN
             -- Go to To LOC screen
             SET @nFromScn = @nScn
             SET @nFromStep = @nStep
-            SET @nScn  = @nScn - 2
-            SET @nStep = @nStep - 2
-         END
-      END
-
-      -- Extended info
-      IF @cExtendedInfoSP <> ''
-      BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
-         BEGIN
-            SET @cExtendedInfo1 = ''
-            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep'
-            SET @cSQLParam =
-               '@nMobile         INT,           ' +
-               '@nFunc           INT,           ' +
-               '@cLangCode       NVARCHAR( 3),  ' +
-               '@nStep           INT,           ' +
-               '@cTaskdetailKey  NVARCHAR( 10), ' +
-               '@cExtendedInfo1  NVARCHAR( 20) OUTPUT, ' +
-               '@nErrNo          INT           OUTPUT, ' +
-               '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
-               '@nAfterStep      INT '
-
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, 8, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
-
-            SET @cOutField10 = @cExtendedInfo1
+            SET @nScn  = @nScn_ToLOC
+            SET @nStep = @nStep_ToLOC
          END
       END
    END
@@ -3159,7 +3063,7 @@ BEGIN
       SET @cOutField07 = rdt.rdtFormatDate( @dLottable04)
       SET @cOutField08 = '' -- SKU
       SET @cOutField09 = ''
-      SET @cOutField10 = @cExtendedInfo1
+      SET @cOutField10 = '' -- ExtendedInfo
       SET @cOutField11 = '1:' + CAST( @nPUOM_Div AS NCHAR( 6)) + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc
       SET @cOutField12 = CASE WHEN (@cPUOM = '6' OR @nPUOM_Div = 0) THEN '' ELSE CAST( @nPQTY_RPL AS NVARCHAR( 5)) END
       SET @cOutField13 = CAST( @nMQTY_RPL AS NVARCHAR( 5))
@@ -3168,12 +3072,38 @@ BEGIN
       EXEC rdt.rdtSetFocusField @nMobile, 8 -- SKU
 
       -- Go to SKU screen
-      SET @nScn = @nScn - 4
-      SET @nStep = @nStep - 4
+      SET @nScn = @nScn_SKU
+      SET @nStep = @nStep_SKU
+   END
+
+   -- Extended info
+   IF @cExtendedInfoSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedInfoSP AND type = 'P')
+      BEGIN
+         SET @cExtendedInfo1 = ''
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep'
+         SET @cSQLParam =
+            '@nMobile         INT,           ' +
+            '@nFunc           INT,           ' +
+            '@cLangCode       NVARCHAR( 3),  ' +
+            '@nStep           INT,           ' +
+            '@cTaskdetailKey  NVARCHAR( 10), ' +
+            '@cExtendedInfo1  NVARCHAR( 20) OUTPUT, ' +
+            '@nErrNo          INT           OUTPUT, ' +
+            '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
+            '@nAfterStep      INT '
+
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @nMobile, @nFunc, @cLangCode, @nStep_ShortPick, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
+
+         SET @cOutField10 = @cExtendedInfo1
+      END
    END
    GOTO Quit
 
-   Step_8_Fail:
+   Step_ShortPick_Fail:
    BEGIN
       SET @cOption = ''
       SET @cOutField01 = '' -- Option
@@ -3187,7 +3117,7 @@ GOTO Quit
 Step 9. screen = 2109. Reason code screen
      REASON CODE (Field01, input)
 ********************************************************************************/
-Step_9:
+Step_Reason:
 BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
@@ -3200,7 +3130,7 @@ BEGIN
       BEGIN
         SET @nErrNo = 72292
         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Reason needed
-        GOTO Step_9_Fail
+        GOTO Step_Reason_Fail
       END
 
       IF NOT EXISTS( SELECT TOP 1 1
@@ -3212,7 +3142,7 @@ BEGIN
       BEGIN
         SET @nErrNo = 72299
         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Reason
-        GOTO Step_9_Fail
+        GOTO Step_Reason_Fail
       END
 
       -- Update ReasonCode
@@ -3242,10 +3172,10 @@ BEGIN
          ,@c_errmsg        = @cErrMsg        OUTPUT
          ,@c_userposition  = '1' -- 1=at from LOC
       IF @b_Success = 0 OR @nErrNo <> 0
-         GOTO Step_9_Fail
+         GOTO Step_Reason_Fail
 
       -- Confirm (update TaskDetail to status 5)
-      IF @nFromStep = 8 --Short pick
+      IF @nFromStep = @nStep_ShortPick --Short pick
       BEGIN
          EXEC rdt.rdt_TM_Replen_Confirm @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey,
             @cTaskDetailKey,
@@ -3280,7 +3210,7 @@ BEGIN
          BEGIN
             SET @nErrNo = 72293
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsSkipTskFail
-            GOTO Step_9_Fail
+            GOTO Step_Reason_Fail
          END
       END
 
@@ -3302,7 +3232,7 @@ BEGIN
             BEGIN
              SET @nErrNo = 72294
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdTaskdetFail
-               GOTO Step_9_Fail
+               GOTO Step_Reason_Fail
             END
          END
 
@@ -3319,7 +3249,7 @@ BEGIN
             BEGIN
                SET @nErrNo = 72295
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdTaskdetFail
-               GOTO Step_9_Fail
+               GOTO Step_Reason_Fail
             END
          END
 
@@ -3331,7 +3261,7 @@ BEGIN
             BEGIN
                SET @nErrNo = 72296
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DelRPFLogFail
-               GOTO Step_9_Fail
+               GOTO Step_Reason_Fail
             END
          END
       END
@@ -3339,7 +3269,7 @@ BEGIN
       -- Extended update
       IF @cExtendedUpdateSP <> ''
       BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT'
@@ -3364,15 +3294,17 @@ BEGIN
       IF @cContinueProcess = '1'
       BEGIN
          -- Back to DropID screen
-         IF @nFromStep = 1
+         IF @nFromStep = @nStep_DropID
          BEGIN
             SET @cOutField01 = '' -- DropID
-            SET @nScn = @nFromScn
-            SET @nStep = @nFromStep
+            SET @cOutField10 = '' -- ExtendedInfo
+            
+            SET @nScn = @nScn_DropID
+            SET @nStep = @nStep_DropID
          END
 
          -- Back to FromLOC screen
-         IF @nFromStep = 2
+         IF @nFromStep = @nStep_FromLOC
          BEGIN
             SELECT @cLocDescr = SUBSTRING( Descr, 1, 20) FROM dbo.LOC WITH (NOLOCK) WHERE Facility = @cFacility AND LOC = @cSuggFromLOC
             IF ISNULL( @cLocDescr, '') = ''
@@ -3382,17 +3314,21 @@ BEGIN
             SET @cOutField02 = @cDropID
             SET @cOutField03 = CASE WHEN @cLocShowDescr = '1' THEN @cLocDescr ELSE @cSuggFromLOC END
             SET @cOutField04 = '' -- FromLOC
-            SET @nScn = @nFromScn
-            SET @nStep = @nFromStep
+            SET @cOutField10 = '' -- ExtendedInfo
+            
+            SET @nScn = @nScn_FromLOC
+            SET @nStep = @nStep_FromLOC
          END
 
          -- Go to next task screen
-         IF @nFromStep = 8 -- Short pick screen
+         IF @nFromStep = @nStep_ShortPick -- Short pick screen
          BEGIN
             SET @cOption = ''
             SET @cOutField01 = '' -- Option
-            SET @nScn = @nFromScn - 3
-            SET @nStep = @nFromStep - 3
+            SET @cOutField10 = '' -- ExtendedInfo
+            
+            SET @nScn = @nScn_NextTask
+            SET @nStep = @nStep_NextTask
          END
       END
       ELSE
@@ -3402,11 +3338,12 @@ BEGIN
          -- Go to next task/exit TM screen
          IF @cPickMethod = 'FP'
          BEGIN
-            SET @nScn  = CASE WHEN @nFromStep = 1 THEN @nFromScn + 6
-                              WHEN @nFromStep = 2 THEN @nFromScn + 5
-            WHEN @nFromStep = 8 THEN @nFromScn - 1
-                         END
-            SET @nStep = 7
+            -- Prepare next screen var
+            SET @cOutField01 = @cToLOC
+            SET @cOutField10 = '' -- ExtendedInfo
+            
+            SET @nScn = @nScn_Exit
+            SET @nStep = @nStep_Exit
          END
 
          -- Go to next task screen
@@ -3414,11 +3351,8 @@ BEGIN
          BEGIN
             SET @cOption = ''
             SET @cOutField01 = '' -- Option
-            SET @nScn  = CASE WHEN @nFromStep = 1 THEN @nFromScn + 4
-                              WHEN @nFromStep = 2 THEN @nFromScn + 3
-                              WHEN @nFromStep = 8 THEN @nFromScn - 3
-                         END
-            SET @nStep = 5
+            SET @nScn = @nScn_NextTask
+            SET @nStep = @nStep_NextTask
          END
       END
    END
@@ -3426,15 +3360,16 @@ BEGIN
    IF @nInputKey = 0 -- ESC
    BEGIN
       -- Go to DropID screen
-      IF @nFromStep = 1
+      IF @nFromStep = @nStep_DropID
       BEGIN
          -- Prepare next screen variable
          SET @cDropID = ''
          SET @cOutField01 = '' -- DropID
+         SET @cOutField10 = '' -- ExtendedInfo
       END
 
       -- Go to FromLOC screen
-      IF @nFromStep = 2
+      IF @nFromStep = @nStep_FromLOC
       BEGIN
          SELECT @cLocDescr = SUBSTRING( Descr, 1, 20) FROM dbo.LOC WITH (NOLOCK) WHERE Facility = @cFacility AND LOC = @cSuggFromLOC
          IF ISNULL( @cLocDescr, '') = ''
@@ -3446,10 +3381,11 @@ BEGIN
          SET @cOutField02 = @cDropID
          SET @cOutField03 = CASE WHEN @cLocShowDescr = '1' THEN @cLocDescr ELSE @cSuggFromLOC END
          SET @cOutField04 = '' -- FromLOC
+         SET @cOutField10 = '' -- ExtendedInfo
       END
 
       -- Go to short pick screen
-      IF @nFromStep = 8
+      IF @nFromStep = @nStep_ShortPick
       BEGIN
          -- Prepare next screen variable
          SET @cOption = ''
@@ -3460,9 +3396,35 @@ BEGIN
       SET @nScn = @nFromScn
       SET @nStep = @nFromStep
    END
+
+   -- Extended info
+   IF @cExtendedInfoSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedInfoSP AND type = 'P')
+      BEGIN
+         SET @cExtendedInfo1 = ''
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep'
+         SET @cSQLParam =
+            '@nMobile         INT,           ' +
+            '@nFunc           INT,           ' +
+            '@cLangCode       NVARCHAR( 3),  ' +
+            '@nStep           INT,           ' +
+            '@cTaskdetailKey  NVARCHAR( 10), ' +
+            '@cExtendedInfo1  NVARCHAR( 20) OUTPUT, ' +
+            '@nErrNo          INT           OUTPUT, ' +
+            '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
+            '@nAfterStep      INT '
+
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @nMobile, @nFunc, @cLangCode, @nStep_Reason, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
+
+         SET @cOutField10 = @cExtendedInfo1
+      END
+   END
    GOTO Quit
 
-   Step_9_Fail:
+   Step_Reason_Fail:
    BEGIN
       SET @cReasonCode = ''
 
@@ -3478,7 +3440,7 @@ Quit. Update back to I/O table, ready to be pick up by JBOSS
 ********************************************************************************/
 Quit:
 BEGIN
-   UPDATE RDTMOBREC WITH (ROWLOCK) SET
+   UPDATE rdt.rdtMobRec WITH (ROWLOCK) SET
       EditDate     = GETDATE(),
       ErrMsg       = @cErrMsg,
       Func         = @nFunc,
@@ -3488,7 +3450,6 @@ BEGIN
       StorerKey    = @cStorerKey,
       Facility     = @cFacility,
       Printer      = @cPrinter,
-      -- UserName     = @cUserName,
 
       V_TaskDetailKey = @cTaskDetailKey,
       V_SKU        = @cSuggSKU,
@@ -3560,30 +3521,21 @@ BEGIN
       V_FromScn    = @nFromScn,
       V_FromStep   = @nFromStep,
 
-      I_Field01 = @cInField01,  O_Field01 = @cOutField01,
-      I_Field02 = @cInField02,  O_Field02 = @cOutField02,
-      I_Field03 = @cInField03,  O_Field03 = @cOutField03,
-      I_Field04 = @cInField04,  O_Field04 = @cOutField04,
-      I_Field05 = @cInField05,  O_Field05 = @cOutField05,
-      I_Field06 = @cInField06,  O_Field06 = @cOutField06,
-      I_Field07 = @cInField07,  O_Field07 = @cOutField07,
-      I_Field08 = @cInField08,  O_Field08 = @cOutField08,
-      I_Field09 = @cInField09,  O_Field09 = @cOutField09,
-      I_Field10 = @cInField10,  O_Field10 = @cOutField10,
-      I_Field11 = @cInField11,  O_Field11 = @cOutField11,
-      I_Field12 = @cInField12,  O_Field12 = @cOutField12,
-      I_Field13 = @cInField13,  O_Field13 = @cOutField13,
-      I_Field14 = @cInField14,  O_Field14 = @cOutField14,
-      I_Field15 = @cInField15,  O_Field15 = @cOutField15,
-
-      FieldAttr01  = @cFieldAttr01,   FieldAttr02  = @cFieldAttr02,
-      FieldAttr03  = @cFieldAttr03,   FieldAttr04  = @cFieldAttr04,
-      FieldAttr05  = @cFieldAttr05,   FieldAttr06  = @cFieldAttr06,
-      FieldAttr07  = @cFieldAttr07,   FieldAttr08 = @cFieldAttr08,
-      FieldAttr09  = @cFieldAttr09,   FieldAttr10  = @cFieldAttr10,
-      FieldAttr11  = @cFieldAttr11,   FieldAttr12  = @cFieldAttr12,
-      FieldAttr13  = @cFieldAttr13,   FieldAttr14  = @cFieldAttr14,
-      FieldAttr15  = @cFieldAttr15
+      I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
+      I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
+      I_Field03 = @cInField03,  O_Field03 = @cOutField03,   FieldAttr03  = @cFieldAttr03,
+      I_Field04 = @cInField04,  O_Field04 = @cOutField04,   FieldAttr04  = @cFieldAttr04,
+      I_Field05 = @cInField05,  O_Field05 = @cOutField05,   FieldAttr05  = @cFieldAttr05,
+      I_Field06 = @cInField06,  O_Field06 = @cOutField06,   FieldAttr06  = @cFieldAttr06,
+      I_Field07 = @cInField07,  O_Field07 = @cOutField07,   FieldAttr07  = @cFieldAttr07,
+      I_Field08 = @cInField08,  O_Field08 = @cOutField08,   FieldAttr08  = @cFieldAttr08,
+      I_Field09 = @cInField09,  O_Field09 = @cOutField09,   FieldAttr09  = @cFieldAttr09,
+      I_Field10 = @cInField10,  O_Field10 = @cOutField10,   FieldAttr10  = @cFieldAttr10,
+      I_Field11 = @cInField11,  O_Field11 = @cOutField11,   FieldAttr11  = @cFieldAttr11,
+      I_Field12 = @cInField12,  O_Field12 = @cOutField12,   FieldAttr12  = @cFieldAttr12,
+      I_Field13 = @cInField13,  O_Field13 = @cOutField13,   FieldAttr13  = @cFieldAttr13,
+      I_Field14 = @cInField14,  O_Field14 = @cOutField14,   FieldAttr14  = @cFieldAttr14,
+      I_Field15 = @cInField15,  O_Field15 = @cOutField15,   FieldAttr15  = @cFieldAttr15
 
    WHERE Mobile = @nMobile
 
