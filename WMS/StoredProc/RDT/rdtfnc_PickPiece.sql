@@ -58,6 +58,7 @@ GO
 /*                               Removed duplicate ExtendedInfosp @ step1     */
 /* 2022-12-09   4.6  Ung         WMS-21244 Add ExtendedInfoSP step2 ESC       */
 /* 2023-04-04   4.7  YeeKung     JSM-140598 bal pick later swap  (yeekun07)   */
+/* 2023-05-17   4.8  YeeKung     Quick Fix Step (yeekung08)                   */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PickPiece] (
@@ -2210,7 +2211,7 @@ BEGIN
                ',@cErrMsg         NVARCHAR(250) OUTPUT  '
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, 2, @nInputKey, @cFacility, @cStorerKey,
+               @nMobile, @nFunc, @cLangCode,3, @nInputKey, @cFacility, @cStorerKey, --(yeekung08)
                @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggSKU, @nQTY, @cOption, @cLottableCode,
                @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
                @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
@@ -2804,7 +2805,7 @@ BEGIN
                ',@cErrMsg         NVARCHAR(250) OUTPUT     '
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, 2, @nInputKey, @cFacility, @cStorerKey,
+               @nMobile, @nFunc, @cLangCode, 5, @nInputKey, @cFacility, @cStorerKey, --(yeekung08)
                @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggSKU, @nQTY, @cOption, @cLottableCode,
                @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
                @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
@@ -4183,7 +4184,7 @@ BEGIN
                ',@cErrMsg         NVARCHAR(250) OUTPUT     '
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, 2, @nInputKey, @cFacility, @cStorerKey,
+               @nMobile, @nFunc, @cLangCode, 8, @nInputKey, @cFacility, @cStorerKey, --(yeekung08)
                @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggSKU, @nQTY, @cOption, @cLottableCode,
                @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
                @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
