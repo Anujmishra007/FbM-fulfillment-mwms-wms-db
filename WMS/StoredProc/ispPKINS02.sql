@@ -21,6 +21,7 @@ GO
 /* 19-Sep-2022 1.1  NJOW02     WMS-20807 prompt alert for DG product    */
 /* 19-Sep-2022 1.1  NJOW02     DEVOPS Combine Script                    */
 /* 05-Jan-2023 1.2  NJOW03     WMS-21380 Suggest carton type for ecom   */
+/* 26-Apr-2023 1.3  NJOW04     WMS-22448 Change multi logic of >= 3     */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE ispPKINS02
@@ -133,15 +134,15 @@ BEGIN
    	  	    IF EXISTS(SELECT 1 FROM #TMP_SKUREF HAVING SUM(CASE WHEN Division IN('10','30') THEN 1 ELSE 0 END) = 0
    	  	                AND SUM(CASE WHEN Division IN('20') THEN 1 ELSE 0 END) > 0)  --FW only
    	  	    BEGIN
-   	  	       SET @c_CartonType = 'ALBOX'    	   	  	       	
+   	  	       SET @c_CartonType = 'OTHERS' --NJOW04
    	  	    END            
 
    	  	 	  IF EXISTS(SELECT 1 FROM #TMP_SKUREF WHERE Division = '20' HAVING SUM(Qty) = 2) -- 2FW + APP/EQ 
    	  	 	  BEGIN
-   	  	 	     SELECT TOP 1 @c_CartonType = CL.UDF03
+   	  	 	     SELECT TOP 1 @c_CartonType = CL.UDF04 --NJOW04
    	  	 	     FROM #TMP_SKUREF SR 
    	  	 	     JOIN CODELKUP CL (NOLOCK) ON CL.Code = SR.Division AND CL.Short = SR.Size AND CL.Long = SR.Gender AND CL.ListName = 'NPACKAGING' AND CL.Storerkey = @c_Storerkey   	  
-   	  	 	     JOIN CARTONIZATION CZ (NOLOCK) ON CZ.CartonizationGroup = @c_CartonGroup AND CZ.CartonType = CL.UDF03
+   	  	 	     JOIN CARTONIZATION CZ (NOLOCK) ON CZ.CartonizationGroup = @c_CartonGroup AND CZ.CartonType = CL.UDF04
    	  	 	     WHERE SR.Division = '20'  --Get from FW
    	  	 	     ORDER BY (CZ.CartonLength * CZ.CartonWidth * CZ.CartonHeight) DESC
    	  	    END   	  	       	  	      	  	    
