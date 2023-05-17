@@ -58,7 +58,7 @@ GO
 /*                               Removed duplicate ExtendedInfosp @ step1     */
 /* 2022-12-09   4.6  Ung         WMS-21244 Add ExtendedInfoSP step2 ESC       */
 /* 2023-04-04   4.7  YeeKung     JSM-140598 bal pick later swap  (yeekun07)   */
-/* 2023-05-17   4.8  YeeKung     Quick Fix Step (yeekung08)                   */
+/* 2023-05-17   4.8  YeeKung     Fix Extended sp Step (yeekung08)             */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PickPiece] (
@@ -1729,7 +1729,7 @@ BEGIN
                   ',@cErrMsg         NVARCHAR( 20)  OUTPUT  '
 
                EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                  @nMobile, @nFunc, @cLangCode, 2, @nInputKey, @cFacility, @cStorerKey,
+                  @nMobile, @nFunc, @cLangCode,@nStep, @nInputKey, @cFacility, @cStorerKey,
                   @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggSKU, @nQTY, @cOption, @cLottableCode,
                   @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
                   @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
@@ -2262,7 +2262,7 @@ BEGIN
                ' @cErrMsg      NVARCHAR(250) OUTPUT  '
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, 2, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,
+               @nMobile, @nFunc, @cLangCode, 3, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,
                @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggSKU, @nQTY, @nActQty, @nSuggQTY,
                @cPackData1 , @cPackData2,@cPackData3,
                @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
@@ -2315,7 +2315,7 @@ BEGIN
                ' @cErrMsg      NVARCHAR(250) OUTPUT  '
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, 2, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,
+               @nMobile, @nFunc, @cLangCode, 3, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,
                @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggSKU, @nQTY, @nActQty, @nSuggQTY,
                @cPackData1 , @cPackData2,@cPackData3,
                @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
@@ -2483,7 +2483,7 @@ BEGIN
 
                EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                   @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,
-    @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSKU, @nQTY,
+                  @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSKU, @nQTY,
                   @cExtDescr1 OUTPUT, @cExtDescr2 OUTPUT
             END
          END
@@ -2576,50 +2576,50 @@ BEGIN
    -- (ChewKP04)
    IF @cExtendedInfoSP <> ''
    BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
-         BEGIN
-            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, @cType, ' +
-               ' @cPickSlipNo, @cPickZone, @cDropID, @cLOC, @cSKU, @nQTY,  @nActQty, @nSuggQTY,'+
-               ' @cPackData1 , @cPackData2,@cPackData3, ' +
-               ' @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT     '
-            SET @cSQLParam =
-               ' @nMobile      INT,           ' +
-               ' @nFunc        INT,           ' +
-               ' @cLangCode    NVARCHAR( 3),  ' +
-               ' @nStep        INT,           ' +
-               ' @nAfterStep   INT,           ' +
-               ' @nInputKey    INT,           ' +
-               ' @cFacility    NVARCHAR( 5) , ' +
-               ' @cStorerKey   NVARCHAR( 15), ' +
-               ' @cType        NVARCHAR( 10), ' +
-               ' @cPickSlipNo  NVARCHAR( 10), ' +
-               ' @cPickZone    NVARCHAR( 10), ' +
-               ' @cDropID      NVARCHAR( 20), ' +
-               ' @cLOC         NVARCHAR( 10), ' +
-               ' @cSKU         NVARCHAR( 20), ' +
-               ' @nQTY         INT,           ' +
-               ' @nActQty      INT,           ' +
-               ' @nSuggQTY     INT,           ' +
-               ' @cPackData1      NVARCHAR( 30), ' +
-               ' @cPackData2      NVARCHAR( 30), ' +
-               ' @cPackData3      NVARCHAR( 30), ' +
-               ' @cExtendedInfo NVARCHAR(20) OUTPUT,  ' +
-               ' @nErrNo       INT           OUTPUT, ' +
-               ' @cErrMsg      NVARCHAR(250) OUTPUT  '
+      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+      BEGIN
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, @cType, ' +
+            ' @cPickSlipNo, @cPickZone, @cDropID, @cLOC, @cSKU, @nQTY,  @nActQty, @nSuggQTY,'+
+            ' @cPackData1 , @cPackData2,@cPackData3, ' +
+            ' @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT     '
+         SET @cSQLParam =
+            ' @nMobile      INT,           ' +
+            ' @nFunc        INT,           ' +
+            ' @cLangCode    NVARCHAR( 3),  ' +
+            ' @nStep        INT,           ' +
+            ' @nAfterStep   INT,           ' +
+            ' @nInputKey    INT,           ' +
+            ' @cFacility    NVARCHAR( 5) , ' +
+            ' @cStorerKey   NVARCHAR( 15), ' +
+            ' @cType        NVARCHAR( 10), ' +
+            ' @cPickSlipNo  NVARCHAR( 10), ' +
+            ' @cPickZone    NVARCHAR( 10), ' +
+            ' @cDropID      NVARCHAR( 20), ' +
+            ' @cLOC         NVARCHAR( 10), ' +
+            ' @cSKU         NVARCHAR( 20), ' +
+            ' @nQTY         INT,           ' +
+            ' @nActQty      INT,           ' +
+            ' @nSuggQTY     INT,           ' +
+            ' @cPackData1      NVARCHAR( 30), ' +
+            ' @cPackData2      NVARCHAR( 30), ' +
+            ' @cPackData3      NVARCHAR( 30), ' +
+            ' @cExtendedInfo NVARCHAR(20) OUTPUT,  ' +
+            ' @nErrNo       INT           OUTPUT, ' +
+            ' @cErrMsg      NVARCHAR(250) OUTPUT  '
 
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, 2, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,
-               @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggSKU, @nQTY, @nActQty, @nSuggQTY,
-               @cPackData1 , @cPackData2,@cPackData3,
-               @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @nMobile, @nFunc, @cLangCode, 4, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,
+            @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggSKU, @nQTY, @nActQty, @nSuggQTY,
+            @cPackData1 , @cPackData2,@cPackData3,
+            @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
-         IF @nErrNo <> 0
-            GOTO Quit
+      IF @nErrNo <> 0
+         GOTO Quit
 
-         IF @nStep IN (3,9)
-            SET @cOutField12 = @cExtendedInfo
-         END
+      IF @nStep IN (3,9)
+         SET @cOutField12 = @cExtendedInfo
+      END
    END
 
 END
@@ -3080,7 +3080,7 @@ BEGIN
          END
          ELSE
          BEGIN
-SELECT @cLottable01 = '', @cLottable02 = '', @cLottable03 = '',    @dLottable04 = NULL,  @dLottable05 = NULL,
+            SELECT @cLottable01 = '', @cLottable02 = '', @cLottable03 = '',    @dLottable04 = NULL,  @dLottable05 = NULL,
                    @cLottable06 = '', @cLottable07 = '', @cLottable08 = '',    @cLottable09 = '',    @cLottable10 = '',
                    @cLottable11 = '', @cLottable12 = '', @dLottable13 = NULL,  @dLottable14 = NULL,  @dLottable15 = NULL
 
@@ -3188,7 +3188,7 @@ SELECT @cLottable01 = '', @cLottable02 = '', @cLottable03 = '',    @dLottable04 
                            ' @cStorerKey   NVARCHAR( 15), ' +
                            ' @cType        NVARCHAR( 10), ' +
                            ' @cPickSlipNo  NVARCHAR( 10), ' +
-                      ' @cPickZone    NVARCHAR( 10), ' +
+                           ' @cPickZone    NVARCHAR( 10), ' +
                            ' @cDropID      NVARCHAR( 20), ' +
                            ' @cLOC         NVARCHAR( 10), ' +
                            ' @cSKU         NVARCHAR( 20), ' +
@@ -3259,7 +3259,7 @@ SELECT @cLottable01 = '', @cLottable02 = '', @cLottable03 = '',    @dLottable04 
                   ,@cErrMsg          OUTPUT
                   ,@cSuggID          OUTPUT  --(yeekung02)
                IF @nErrNo =  0
-       BEGIN
+               BEGIN
 
                   -- Prepare next screen var
                   SET @cOutField01 = @cPickSlipNo -- '' -- PickSlipNo
@@ -3589,7 +3589,7 @@ SELECT @cLottable01 = '', @cLottable02 = '', @cLottable03 = '',    @dLottable04 
             ' @cErrMsg      NVARCHAR(250) OUTPUT  '
 
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-            @nMobile, @nFunc, @cLangCode, 2, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,
+            @nMobile, @nFunc, @cLangCode, 5, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,
             @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggSKU, @nQTY, @nActQty, @nSuggQTY,
             @cPackData1 , @cPackData2,@cPackData3,
             @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
@@ -3759,7 +3759,7 @@ BEGIN
                SET @cOutField02 = @cSuggSKU
                SET @cOutField03 = CASE WHEN @cExtDescr1 <> '' THEN @cExtDescr1 ELSE rdt.rdtFormatString( @cSKUDescr, 1, 20) END
                SET @cOutField04 = CASE WHEN @cExtDescr2 <> '' THEN @cExtDescr2 ELSE rdt.rdtFormatString( @cSKUDescr, 21, 20) END
-  SET @cOutField05 = '' -- SKU/UPC
+               SET @cOutField05 = '' -- SKU/UPC
                SET @cOutField06 = CAST( @nSuggQTY AS NVARCHAR(6))
                SET @cOutField07 = CASE WHEN @cDefaultQTY = '1' THEN CAST( @nSuggQTY AS NVARCHAR(6))
                                        WHEN @cDefaultPickQTY <> '0' THEN @cDefaultPickQTY
@@ -3859,7 +3859,7 @@ BEGIN
             ' @cErrMsg      NVARCHAR(250) OUTPUT  '
 
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-            @nMobile, @nFunc, @cLangCode, 2, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,
+            @nMobile, @nFunc, @cLangCode, 6, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,
             @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggSKU, @nQTY, @nActQty, @nSuggQTY,
             @cPackData1 , @cPackData2,@cPackData3,
             @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
@@ -3934,7 +3934,7 @@ BEGIN
       -- Dynamic lottable
       EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSuggSKU, @cLottableCode, 'DISPLAY', 'POPULATE', 4, 8,
          @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
-     @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
+         @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
         @cInField03  OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,
          @cInField04  OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,
          @cInField05  OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,
@@ -4064,7 +4064,7 @@ BEGIN
                ' @cErrMsg      NVARCHAR(250) OUTPUT  '
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, 2, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,
+               @nMobile, @nFunc, @cLangCode, 7, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,
                @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggSKU, @nQTY, @nActQty, @nSuggQTY,
                @cPackData1 , @cPackData2,@cPackData3,
                @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
@@ -4216,7 +4216,7 @@ BEGIN
                ' @nInputKey    INT,           ' +
                ' @cFacility    NVARCHAR( 5) , ' +
                ' @cStorerKey   NVARCHAR( 15), ' +
-        ' @cType        NVARCHAR( 10), ' +
+               ' @cType        NVARCHAR( 10), ' +
                ' @cPickSlipNo  NVARCHAR( 10), ' +
                ' @cPickZone    NVARCHAR( 10), ' +
                ' @cDropID      NVARCHAR( 20), ' +
@@ -4233,7 +4233,7 @@ BEGIN
                ' @cErrMsg      NVARCHAR(250) OUTPUT  '
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, 2, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,
+               @nMobile, @nFunc, @cLangCode, 8, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,
                @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggSKU, @nQTY, @nActQty, @nSuggQTY,
                @cPackData1 , @cPackData2,@cPackData3,
                @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
@@ -4520,7 +4520,7 @@ BEGIN
                ' @cErrMsg      NVARCHAR(250) OUTPUT  '
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, 2, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,
+               @nMobile, @nFunc, @cLangCode, 9, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,
                @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggSKU, @nQTY, @nActQty, @nSuggQTY,
                @cPackData1 , @cPackData2,@cPackData3,
                @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
@@ -4735,7 +4735,7 @@ BEGIN
                ' @cErrMsg      NVARCHAR(250) OUTPUT  '
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, 2, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,
+               @nMobile, @nFunc, @cLangCode, 10, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,
                @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggSKU, @nQTY, @nActQty, @nSuggQTY,
                @cPackData1 , @cPackData2,@cPackData3,
                @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
