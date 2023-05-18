@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = Object_Id(N'[RDT].[rdt_LottableProcess_UNIGenL2L4ByL13]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE rdt.rdt_LottableProcess_UNIGenL2L4ByL13
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -19,9 +16,10 @@ GO
 /* 2019-09-20  1.1  James       WMS-10500 Add new validation (james01)    */
 /* 2019-12-02  1.2  James       WMS-11315 Clear lottable value when       */
 /*                              type = PRE (james02)                      */
+/* 2021-04-30  1.3  Chermaine   WMS-16598 Add @barcode len checking (cc01)*/
 /**************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_LottableProcess_UNIGenL2L4ByL13
+CREATE OR ALTER PROCEDURE rdt.rdt_LottableProcess_UNIGenL2L4ByL13
     @nMobile          INT
    ,@nFunc            INT
    ,@cLangCode        NVARCHAR( 3)
@@ -88,17 +86,10 @@ BEGIN
    DECLARE @cTempLottable13   NVARCHAR( 60)
    DECLARE @cSUSR2            NVARCHAR( 18)
    DECLARE @cErrMessage       NVARCHAR( 20)
+   DECLARE @cBarcode          NVARCHAR(MAX) --(cc01)
+   DECLARE @nMaxLen           INT --(cc01)
 
    SET @nErrNo = 0
-
-   IF @cType = 'PRE'
-   BEGIN
-      SET @cLottable02 = ''
-      SET @dLottable04 = ''
-      SET @dLottable13 = ''
-      
-      GOTO Quit
-   END
 
    --SELECT @cTempLottable02 = I_Field04,
    --       @cTempLottable04 = I_Field06,
@@ -106,86 +97,108 @@ BEGIN
    --       @cErrMessage = ErrMsg
    --FROM rdt.RDTMOBREC WITH (NOLOCK)
    --WHERE Mobile = @nMobile
-
-   -- Get SKU info
-   SELECT @nShelfLife = ShelfLife,
-          @cSUSR2 = SUSR2
-   FROM dbo.SKU WITH (NOLOCK) 
-   WHERE StorerKey = @cStorerKey 
-   AND   SKU = @cSKU
-
-   --IF ISNULL( @cTempLottable02, '') <> '' AND ISNULL( @cTempLottable04, '') <> '' AND ISNULL( @cTempLottable13, '') <> ''
-   IF @cLottable02Value <> '' AND ISNULL( @dLottable04Value , 0) <> 0 AND ISNULL( @dLottable13Value , 0) <> 0
-   BEGIN
-      SET @cLottable02 = @cLottable02Value
-      SET @dLottable04 = @dLottable04Value
-      SET @dLottable13 = @dLottable13Value
-
-      GOTO Validate_Lottable
-   END
-
-   -- Check valid shelf life
-   IF ISNULL( @nShelfLife, 0) = 0
-   BEGIN
-      SET @nErrNo = 146651
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Inv ShelfLife
-      GOTO Quit
-   END
    
-   IF @nLottableNo = 13 AND ISNULL( @dLottable13Value, 0) <> 0
+   --(cc01)
+   SELECT @cBarcode = V_max
+   FROM rdt.RDTMOBREC WITH (NOLOCK)
+   WHERE Mobile = @nMobile
+   
+   SELECT @nMaxLen = SUM(MaxLength) 
+   FROM BarcodeConfigDetail WITH (NOLOCK) 
+   WHERE decodeCode = 'UNILEVER_IB01'
+   
+   IF LEN(@cBarcode) < @nMaxLen --(cc01)
    BEGIN
-      SET @dProdDate = CONVERT( DATETIME, @dLottable13Value, 112)
-
-      -- Get year number
-      SET @nYearNum = RIGHT ( YEAR( @dProdDate), 2)
-      SET @cYearCode = CAST( @nYearNum AS NVARCHAR( 2))
-
-      SET DATEFIRST 1   -- set monday to be the ast day of the week
-
-      -- Get week number
-      SET @nWeekNum = DATEPART(wk, @dProdDate)
-      SET @cWeekCode = RIGHT('00'+ISNULL( CAST( @nWeekNum AS NVARCHAR( 2)), ''), 2)
-
-      -- Get day number
-      SET @nDayNum = DATEPART(dw, @dProdDate) 
-      SET @cDayCode = CAST( @nDayNum AS NVARCHAR( 1)) 
-
-      SET @cLottable02 = @cYearCode + @cWeekCode + @cDayCode + '1'
-
-      -- Get expiry date
-      SET @dLottable04 = DATEADD( DAY, @nShelfLife, @dLottable13Value) 
-      SET @dLottable04 = CONVERT( DATETIME, CONVERT( NVARCHAR( 10), @dLottable04, 103), 103) 
-
-      SET @nErrNo = -1  -- Make it display value on screen. next ENTER will proceed next screen
-   END
-
-   Validate_Lottable:
-   IF DATEDIFF( D, @dLottable13Value, @dLottable04) < 0
-   BEGIN
-      SET @nErrNo = 146652
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Inv Prod Date
-      GOTO Quit
-   END
-
-   IF DATEDIFF( D, GETDATE(), @dLottable04) < CAST( @cSUSR2 AS INT)
-   BEGIN
-      -- This error only need prompt once, user press enter again can proceed
-      IF CHARINDEX( 'MRSL', @cErrMessage) = 0 
+   	IF @cType = 'PRE'
       BEGIN
-         SET @nErrNo = 146653
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- SKU below MRSL
+         SET @cLottable02 = ''
+         SET @dLottable04 = ''
+         SET @dLottable13 = ''
+      
+         GOTO Quit
+      END
+   
+   	-- Get SKU info
+      SELECT @nShelfLife = ShelfLife,
+             @cSUSR2 = SUSR2
+      FROM dbo.SKU WITH (NOLOCK) 
+      WHERE StorerKey = @cStorerKey 
+      AND   SKU = @cSKU
+
+      --IF ISNULL( @cTempLottable02, '') <> '' AND ISNULL( @cTempLottable04, '') <> '' AND ISNULL( @cTempLottable13, '') <> ''
+      IF @cLottable02Value <> '' AND ISNULL( @dLottable04Value , 0) <> 0 AND ISNULL( @dLottable13Value , 0) <> 0
+      BEGIN
+         SET @cLottable02 = @cLottable02Value
+         SET @dLottable04 = @dLottable04Value
+         SET @dLottable13 = @dLottable13Value
+
+         GOTO Validate_Lottable
+      END
+
+      -- Check valid shelf life
+      IF ISNULL( @nShelfLife, 0) = 0
+      BEGIN
+         SET @nErrNo = 146651
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Inv ShelfLife
+         GOTO Quit
+      END
+   
+      IF @nLottableNo = 13 AND ISNULL( @dLottable13Value, 0) <> 0
+      BEGIN
+         SET @dProdDate = CONVERT( DATETIME, @dLottable13Value, 112)
+
+         -- Get year number
+         SET @nYearNum = RIGHT ( YEAR( @dProdDate), 2)
+         SET @cYearCode = CAST( @nYearNum AS NVARCHAR( 2))
+
+         SET DATEFIRST 1   -- set monday to be the ast day of the week
+
+         -- Get week number
+         SET @nWeekNum = DATEPART(wk, @dProdDate)
+         SET @cWeekCode = RIGHT('00'+ISNULL( CAST( @nWeekNum AS NVARCHAR( 2)), ''), 2)
+
+         -- Get day number
+         SET @nDayNum = DATEPART(dw, @dProdDate) 
+         SET @cDayCode = CAST( @nDayNum AS NVARCHAR( 1)) 
+
+         SET @cLottable02 = @cYearCode + @cWeekCode + @cDayCode + '1'
+
+         -- Get expiry date
+         SET @dLottable04 = DATEADD( DAY, @nShelfLife, @dLottable13Value) 
+         SET @dLottable04 = CONVERT( DATETIME, CONVERT( NVARCHAR( 10), @dLottable04, 103), 103) 
+
+         SET @nErrNo = -1  -- Make it display value on screen. next ENTER will proceed next screen
+      END
+
+      Validate_Lottable:
+      IF DATEDIFF( D, @dLottable13Value, @dLottable04) < 0
+      BEGIN
+         SET @nErrNo = 146652
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Inv Prod Date
+         GOTO Quit
+      END
+
+      IF DATEDIFF( D, GETDATE(), @dLottable04) < CAST( @cSUSR2 AS INT)
+      BEGIN
+         -- This error only need prompt once, user press enter again can proceed
+         IF CHARINDEX( 'MRSL', @cErrMessage) = 0 
+         BEGIN
+            SET @nErrNo = 146653
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- SKU below MRSL
+            GOTO Quit
+         END
+      END
+
+      IF DATEDIFF( D, @dLottable13Value, GETDATE()) < 0
+      BEGIN
+         SET @nErrNo = 146654
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Inv Prod Date
          GOTO Quit
       END
    END
 
-   IF DATEDIFF( D, @dLottable13Value, GETDATE()) < 0
-   BEGIN
-      SET @nErrNo = 146654
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Inv Prod Date
-      GOTO Quit
-   END
-
    Quit:
+   
 
 END -- End Procedure
 
