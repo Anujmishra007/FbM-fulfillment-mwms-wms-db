@@ -1,14 +1,7 @@
-
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispCTNLBLITF01]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[ispCTNLBLITF01]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
-
 
 /************************************************************************/
 /* Trigger: ispCTNLBLITF01                                              */
@@ -22,7 +15,7 @@ GO
 /* Called By:                                                           */
 /*          :                                                           */
 /*        :                                                             */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.3                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -32,9 +25,11 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 09-Oct-2019 Shong    1.1   Enhancement and Performance Tuning			*/
 /* 04-AUG-2020 CSCHONG  1.2   WMS-14454 - add storerkey filter (CS01)   */
+/* 27-Mar-2023 WLChooi  1.3   WMS-22064 - Print for B2C only (WL01)     */
+/* 27-Mar-2023 WLChooi  1.4   DevOps Combine Script                     */
 /************************************************************************/
 
-CREATE PROCEDURE [dbo].[ispCTNLBLITF01]
+CREATE OR ALTER PROCEDURE [dbo].[ispCTNLBLITF01]
       @c_Pickslipno   NVARCHAR(10)     
   ,   @n_CartonNo_Min INT 
   ,   @n_CartonNo_Max INT 
@@ -114,7 +109,11 @@ BEGIN
    JOIN ORDERS (NOLOCK) ON PACKHEADER.Orderkey = ORDERS.Orderkey
    WHERE PACKHEADER.PickSlipNo = @c_PickSlipNo 
 
-   
+   --WL01 S
+   IF @c_OrdType NOT IN ('B2C')
+      GOTO QUIT_SP
+   --WL01 E
+
    SELECT TOP 1  -- (SWT01)
           @c_FilePath = Long, 
           @c_PrintFilePath = Notes,
