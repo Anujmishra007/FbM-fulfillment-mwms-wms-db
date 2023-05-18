@@ -51,7 +51,7 @@ BEGIN
    BEGIN
       IF @nAfterStep = 5 -- SKU, QTY
       BEGIN
-         SELECT @cExtendedInfo='ID:' + @cToID
+         SELECT @cExtendedInfo=@cReceiptKey+@cToID+@cLottable03
       END
    END
 END
