@@ -13,7 +13,7 @@ GO
 /*                                                                       */
 /* Called By:                                                            */
 /*                                                                       */
-/* PVCS Version: 1.1                                                     */
+/* PVCS Version: 1.0                                                     */
 /*                                                                       */
 /* Version: 5.4                                                          */
 /*                                                                       */
@@ -21,8 +21,6 @@ GO
 /*                                                                       */
 /* Updates:                                                              */
 /* Date         Author   Ver  Purposes                                   */
-/* 01-Feb-2023  WLChooi  1.1  WMS-21583 - Add sorting by LocLevel (WL01) */
-/* 01-Feb-2023  WLChooi  1.1  DevOps Combine Script                      */
 /*************************************************************************/
 CREATE OR ALTER PROC [dbo].[nspPRTW15]
    @c_StorerKey        NVARCHAR(15)
@@ -277,18 +275,12 @@ BEGIN
                       + " AND LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED >= " + @c_UOMBase
                       + @c_Condition
                       + " GROUP BY LOT.StorerKey, LOT.Sku, LOT.Lot, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable05, LOTATTRIBUTE.Lottable06 "
-                      + "        , LOC.LocLevel " --WL01
                       + " HAVING SUM(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) - MIN(LOT.QTYPREALLOCATED) >= "
-                      + @c_UOMBase
-                      + " ORDER BY LOTATTRIBUTE.Lottable04, LOC.LocLevel, LOTATTRIBUTE.Lottable05, LOT.Lot " --WL01
+                      + @c_UOMBase + " ORDER BY LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable05, LOT.Lot "
 
       EXEC (@c_SQL)
    END
 END
-GO
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS OFF
 GO
 GRANT EXECUTE ON [dbo].[nspPRTW15] TO [NSQL]
 GO
