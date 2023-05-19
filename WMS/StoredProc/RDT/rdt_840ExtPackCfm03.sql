@@ -13,6 +13,7 @@ GO
 /*                                                                      */
 /* Date        Rev  Author     Purposes                                 */
 /* 2023-04-12  1.0  James      WMS-22180. Created                       */
+/* 2023-05-18  1.1  James      Remove stamp pickdetail.caseid (james01) */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_840ExtPackCfm03] (
@@ -142,30 +143,30 @@ AS
       END
    END
 
-   SET @ccurUpdPickDtl = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-   SELECT PickDetailKey
-   FROM dbo.PICKDETAIL WITH (NOLOCK)
-   WHERE OrderKey = @cOrderKey
-   ORDER BY 1
-   OPEN @ccurUpdPickDtl
-   FETCH NEXT FROM @ccurUpdPickDtl INTO @cPickDetailKey
-   WHILE @@FETCH_STATUS = 0
-   BEGIN
-   	UPDATE dbo.PICKDETAIL SET 
-   	   CaseID = DropID,
-   	   EditWho = SUSER_SNAME(),
-   	   EditDate = GETDATE()
-   	WHERE PickDetailKey = @cPickDetailKey
+   --SET @ccurUpdPickDtl = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+   --SELECT PickDetailKey
+   --FROM dbo.PICKDETAIL WITH (NOLOCK)
+   --WHERE OrderKey = @cOrderKey
+   --ORDER BY 1
+   --OPEN @ccurUpdPickDtl
+   --FETCH NEXT FROM @ccurUpdPickDtl INTO @cPickDetailKey
+   --WHILE @@FETCH_STATUS = 0
+   --BEGIN
+   --	UPDATE dbo.PICKDETAIL SET 
+   --	   CaseID = DropID,
+   --	   EditWho = SUSER_SNAME(),
+   --	   EditDate = GETDATE()
+   --	WHERE PickDetailKey = @cPickDetailKey
    	
-   	IF @@ERROR <> 0
-      BEGIN
-         SET @nErrNo = 199404
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd CaseId Fail
-         GOTO RollBackTran
-      END
+   --	IF @@ERROR <> 0
+   --   BEGIN
+   --      SET @nErrNo = 199404
+   --      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd CaseId Fail
+   --      GOTO RollBackTran
+   --   END
 
-   	FETCH NEXT FROM @ccurUpdPickDtl INTO @cPickDetailKey
-   END
+   --	FETCH NEXT FROM @ccurUpdPickDtl INTO @cPickDetailKey
+   --END
    
    EXEC [dbo].[isp_Carrier_Middleware_Interface]        
      @c_OrderKey    = @cOrderKey     
