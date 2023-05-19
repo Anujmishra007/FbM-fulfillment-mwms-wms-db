@@ -28,6 +28,7 @@ GO
 /*                            (WL03)                                    */
 /* 2022-07-20   WLChooi   1.4 WMS-20287 - Revise show flag logic (WL04) */
 /* 2022-07-20   WLChooi   1.4 DevOps Combine Script                     */
+/* 2022-11-29   CSCHONG   1.5 WMS-21203 revised field logic (CS01)      */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_UCC_Carton_Label_100]
            @c_Storerkey       NVARCHAR(15)
@@ -50,12 +51,14 @@ BEGIN
          , @n_TotalPackedQty        INT
          , @c_Loadkey               NVARCHAR(10)
          , @c_OnlyPrintNewLayout    NVARCHAR(1) = 'N'
-         , @c_ShowFlag              NVARCHAR(1) = 'Y'   --WL01
+         , @c_ShowFlag              NVARCHAR(1) = 'N'   --WL01     --CS01
          , @c_GetPickslipno         NVARCHAR(10) = ''   --WL01
          , @n_CartonNo              INT = 0             --WL01
          , @n_CountPickzone         INT = 0             --WL01
          , @n_CountCertainPickzone  INT = 0             --WL01
          , @c_ShowDCName            NVARCHAR(10) = 'N'  --WL02   --WL03
+         , @c_consigneekeykey       NVARCHAR(50)        --CS01 
+         , @c_movebarcode           NVARCHAR(1) = 'N'   --CS01
          
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
@@ -107,11 +110,24 @@ BEGIN
    WHERE TP.Loadkey = @c_Loadkey
    AND TP.Pickzone IN ('0','4')   --WL04
 
+
+   --CS01 S
+   SELECT TOP 1 @c_consigneekeykey = ORDERS.consigneekey
+   FROM PACKHEADER WITH (NOLOCK) 
+   JOIN PACKDETAIL WITH (NOLOCK) ON (PACKHEADER.PickSlipNo = PACKDETAIL.PickSlipNo) 
+   JOIN LOADPLANDETAIL LPD WITH (NOLOCK) ON LPD.Loadkey = PACKHEADER.LoadKey
+   JOIN ORDERS WITH (NOLOCK) ON LPD.Orderkey = ORDERS.Orderkey
+    WHERE (PACKHEADER.PickSlipNo= @c_PickSlipNo)
+         AND (PACKHEADER.Storerkey = @c_Storerkey)
+         AND (PACKDETAIL.CartonNo BETWEEN @c_StartCartonNo AND @c_EndCartonNo)
+
+   --CS01 E
+
    IF EXISTS (SELECT 1
               FROM #TMP_Pickzone PZ
               WHERE PZ.LoadKey = @c_Loadkey
               AND PZ.PickZone = '0'   --WL04
-              AND @n_CountPickzone = 1)
+              AND @n_CountPickzone = 1) 
    BEGIN
       SET @c_ShowFlag = 'N'
    END
@@ -141,23 +157,26 @@ BEGIN
               WHERE PZ.LoadKey = @c_Loadkey
               AND PZ.PickZone IN ('0','4')   --WL04
               AND @n_CountPickzone = 2 
-              AND @n_CountPickzone = @n_CountCertainPickzone)
+              AND @n_CountPickzone = @n_CountCertainPickzone) 
    BEGIN
       SET @c_ShowFlag = 'N'
    END
 
+--SELECT @c_ShowFlag '@c_ShowFlag', @c_consigneekeykey '@c_consigneekeykey'
+--SELECT * FROM #TMP_Pickzone
    --WL02 S
+
    IF EXISTS (SELECT 1
               FROM #TMP_Pickzone PZ
               JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'CONSUBDCPZ'
                                        AND CL.Code = PZ.Pickzone
                                        AND CL.Storerkey = @c_Storerkey
                                        AND CL.UDF01 = '1'
-              WHERE PZ.LoadKey = @c_Loadkey) 
+              WHERE PZ.LoadKey = @c_Loadkey)  
    BEGIN
       SET @c_ShowDCName = 'Y'
    END
-   
+
    DECLARE CUR_LOOP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    SELECT DISTINCT PD.Pickslipno, PD.CartonNo
    FROM PACKDETAIL PD (NOLOCK)
@@ -191,9 +210,20 @@ BEGIN
    
    IF @c_EndCartonNo = 'NL'
    BEGIN
-   	SET @c_EndCartonNo = '1'
+      SET @c_EndCartonNo = '1'
       SET @c_OnlyPrintNewLayout = 'Y'
    END
+
+--CS01 S
+IF @c_consigneekeykey ='000000NLGD'
+BEGIN
+   SET @c_ShowDCName ='N'
+   SET @c_ShowFlag = 'N'
+   SET @c_movebarcode ='Y'
+
+END 
+
+--CS01 E
 
    IF ISNULL(@c_Type,'') = ''
    BEGIN
@@ -239,6 +269,7 @@ BEGIN
            , NewLayout     = 'N'
            , VirtualDCName = CASE WHEN @c_ShowDCName = 'N' THEN '' ELSE ISNULL(TD.VirtualDCName,'') END   --WL01   --WL02
            , Flag          = CASE WHEN @c_ShowFlag = 'N' THEN '' ELSE ISNULL(TD.Flag,'')          END   --WL01
+           , Movebarcode   = @c_movebarcode                                                             --CS01
       INTO #TMP_CtnLbl100
       FROM PACKHEADER WITH (NOLOCK) 
       JOIN PACKDETAIL WITH (NOLOCK) ON (PACKHEADER.PickSlipNo = PACKDETAIL.PickSlipNo) 
@@ -268,7 +299,7 @@ BEGIN
              , RIGHT(ISNULL(LTRIM(RTRIM(PACKHEADER.LoadKey)),''),4)
              , CASE WHEN @c_ShowDCName = 'N' THEN '' ELSE ISNULL(TD.VirtualDCName,'') END   --WL01   --WL02
              , CASE WHEN @c_ShowFlag = 'N' THEN '' ELSE ISNULL(TD.Flag,'') END             --WL01
-             
+
       IF (@c_StartCartonNo <> @c_EndCartonNo) OR @c_OnlyPrintNewLayout = 'Y'
       BEGIN
          INSERT INTO #TMP_CtnLbl100
@@ -308,19 +339,24 @@ BEGIN
               , 'Y'
               , VirtualDCName   --WL01
               , Flag            --WL01
+              , Movebarcode   = @c_movebarcode 
          FROM #TMP_CtnLbl100 WITH (NOLOCK) 
       END
+
       
       IF @c_OnlyPrintNewLayout = 'Y'
       BEGIN
+
          SELECT * FROM #TMP_CtnLbl100
          WHERE NewLayout = 'Y'
       END
       ELSE
       BEGIN
+
          SELECT * FROM #TMP_CtnLbl100
          ORDER BY CartonNo
       END
+
    END
 
    IF @c_Type = 'D1'
