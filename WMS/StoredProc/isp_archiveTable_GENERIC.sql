@@ -54,7 +54,9 @@ BEGIN
    DECLARE @b_success               INT,          
            @n_archive_tbl_records   INT,          
            @n_err                   INT,          
-           @c_errmsg                NVARCHAR(255),                   
+           @c_errmsg                NVARCHAR(255),          
+           @local_n_err             INT,          
+           @local_c_errmsg          NVARCHAR(255),          
            @c_alert                 NVARCHAR(255),          
            @n_cnt                   INT  
                  
@@ -82,24 +84,24 @@ BEGIN
    BEGIN  
         
       SELECT @b_success = 1          
-      EXEC dbo.nsp_Build_Archive_Table_Generic          
-            @cSchema,          
-            @cSourceDB,   
-            @cArchiveDB,  
-            @cSrcTableName,     
-            @b_success OUTPUT,          
-            @n_err     OUTPUT,          
-            @c_errmsg  OUTPUT  
+      --EXEC dbo.nsp_Build_Archive_Table_Generic          
+      --      @cSchema,          
+      --      @cSourceDB,   
+      --      @cArchiveDB,  
+      --      @cSrcTableName,     
+      --      @b_success OUTPUT,          
+      --      @n_err     OUTPUT,          
+      --      @c_errmsg  OUTPUT  
               
-      IF NOT @b_success = 1          
-      BEGIN          
-         SELECT @n_continue = 3          
-      END          
+      --IF NOT @b_success = 1          
+      --BEGIN          
+      --   SELECT @n_continue = 3          
+      --END          
          
-      IF (@b_debug = 1)          
-      BEGIN          
-         PRINT 'building alter table string for '+@cSchema+'.'+ @cSrcTableName          
-      END          
+      --IF (@b_debug = 1)          
+      --BEGIN          
+      --   PRINT 'building alter table string for '+@cSchema+'.'+ @cSrcTableName          
+      --END          
           
       EXECUTE dbo.nspBuildAlterTableString_Generic          
             @cSchema,          
@@ -205,18 +207,18 @@ BEGIN
           
          EXEC sp_ExecuteSql @cExecStatements, @cExecStmtArg, @cPKvalue1, @cPKvalue2, @cPKvalue3, @cPKvalue4, @cPKvalue5, @dPKvalue      --(jay01)          
           
-         SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT          
+         SELECT @local_n_err = @@ERROR, @n_cnt = @@ROWCOUNT          
           
          SELECT @n_archive_tbl_records = @n_archive_tbl_records + 1          
           
-         IF @n_err <> 0          
+         IF @local_n_err <> 0          
          BEGIN          
             SELECT @n_continue = 3          
-            SELECT @n_err = 73702          
-            SELECT @c_errmsg = CONVERT(char(5),@n_err)          
-            SELECT @c_errmsg =          
+            SELECT @local_n_err = 73702          
+            SELECT @local_c_errmsg = CONVERT(char(5),@local_n_err)          
+            SELECT @local_c_errmsg =          
                ': Update of Archivecop failed - '+@cSchema+'.' + @cSrcTableName + '. (dbo.isp_ArchiveTable2_Generic) ( ' +          
-               ' SQLSvr MESSAGE = ' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ')'          
+               ' SQLSvr MESSAGE = ' + dbo.fnc_LTrim(dbo.fnc_RTrim(@local_c_errmsg)) + ')'          
           ROLLBACK TRAN          
          END          
          ELSE          
@@ -229,16 +231,33 @@ BEGIN
    END -- WHILE @@FETCH_STATUS <> -1          
    CLOSE C_ITEM          
    DEALLOCATE C_ITEM          
-         
-  
+          
+   IF (@n_continue = 1 OR @n_continue = 2) AND ISNULL(@cSrcTableName, '') <> ''          
+   BEGIN          
+      SELECT @c_alert = 'attempting to archive ' + convert(varchar(9), @n_archive_tbl_records) +          
+                       ' FROM ' +@cSchema+'.'+ @cSrcTableName + ' records'          
+      EXECUTE nspLogAlert          
+         @c_modulename   = 'dbo.isp_ArchiveTable2_Generic',          
+         @c_alertmessage = @c_alert ,          
+         @n_severity     = 0,          
+         @b_success      = @b_success OUTPUT,          
+         @n_err          = @n_err OUTPUT,          
+         @c_errmsg       = @c_errmsg OUTPUT     
+           
+      IF NOT @b_success = 1          
+       BEGIN          
+          SELECT @n_continue = 3          
+       END          
+   END          
+   
+   
    IF (@n_continue = 1 OR @n_continue = 2) AND ISNULL(@cSrcTableName, '') <> ''          
    BEGIN          
       IF (@b_debug = 1)          
       BEGIN          
          PRINT 'building insert for '+@cSchema+'.'+@cSrcTableName          
       END          
-      SELECT @b_success = 1 
-      
+      SELECT @b_success = 1          
       EXEC dbo.nsp_Build_Insert_Generic          
          @cSchema,          
          @cArchiveDB,          
