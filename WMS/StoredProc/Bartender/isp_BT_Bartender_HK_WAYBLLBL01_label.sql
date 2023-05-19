@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_BT_Bartender_HK_WAYBLLBL01_label]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_BT_Bartender_HK_WAYBLLBL01_label]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -19,9 +14,10 @@ GO
 /* 2020-05-28     1.1  CSCHONG    WMS-13496 revised field logic (CS01)        */
 /* 2020-10-05     1.2  CheeMun    INC1315645 - Replace " with '               */     
 /* 2021-07-01     1.3  CSCHONG    WMS-17394 add new field col30 (CS02)        */     
+/* 2023-04-07     1.4  CSCHONG    WMS-22214 add new field col31 (CS03)        */
 /******************************************************************************/              
                 
-CREATE PROC [dbo].[isp_BT_Bartender_HK_WAYBLLBL01_label]                     
+CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_HK_WAYBLLBL01_label]                     
 (  @c_Sparm1            NVARCHAR(250),            
    @c_Sparm2            NVARCHAR(250),            
    @c_Sparm3            NVARCHAR(250),            
@@ -167,7 +163,7 @@ BEGIN
                    + ' '''',case when Orders.CurrencyCode=''TWD'' then ''NTD'' else Orders.currencycode end,'
                    + ' Orders.invoiceamount,convert(nvarchar(10),DATEADD(DAY,1,getdate()),121),'
                    + ' ISNULL(orders.userdefine02,''''),'    --25                                                                  
-                   +' '''','''',orders.Externorderkey,orders.orderkey,OI.EcomOrderID,'''','''','''','''','''', '  --35  --(CS02)
+                   +' '''','''',orders.Externorderkey,orders.orderkey,OI.EcomOrderID,substring(ISNULL(C1.notes2,''''),1,80),'''','''','''','''', '  --35  --(CS02)    --(CS03)
                    +' '''','''','''','''','''','''','''','''','''','''' ,'''','''','''','''','''','   --50
                    +' '''','''','''','''','''','''','''','''','''','''' '                              --60'
                    + ' FROM ORDERS orders WITH (NOLOCK) '
