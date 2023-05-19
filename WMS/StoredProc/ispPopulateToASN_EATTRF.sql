@@ -35,6 +35,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author  Ver.  Purposes                                  */
 /* 23-APR-2022  CSCHONG 1.0   Devops Scripts Combine                    */
+/* 05-MAY-2023  CSCHONG 1.1   WMS-19219 Revised field logic (CS01)      */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[ispPopulateToASN_EATTRF]
@@ -58,7 +59,8 @@ BEGIN
            @c_ID                 NVARCHAR(18),
            @c_ToLoc              NVARCHAR(10),
            @c_Type               NVARCHAR(10),
-           @c_WarehouseReference NVARCHAR(18)
+           @c_WarehouseReference NVARCHAR(18),
+           @c_PUOM3              NVARCHAR(5)                 --CS01
 
    DECLARE @c_Lottable02         NVARCHAR(18),
            @c_Lottable03         NVARCHAR(18),
@@ -136,8 +138,8 @@ BEGIN
 
                IF @b_success = 1
                BEGIN
-                  INSERT INTO RECEIPT (ReceiptKey, ExternReceiptkey, StorerKey, RecType, Facility, DocType)
-                  VALUES (@c_NewReceiptKey, @c_ExternReceiptKey, @c_ToStorerKey, @c_Type, @c_ToFacility, 'R')
+                  INSERT INTO RECEIPT (ReceiptKey, ExternReceiptkey, StorerKey, RecType, Facility, DocType,WarehouseReference)     --CS01 
+                  VALUES (@c_NewReceiptKey, @c_ExternReceiptKey, @c_ToStorerKey, @c_Type, @c_ToFacility, 'R',@c_OrderKey)          --CS01
 
                   SET @n_err = @@Error
 
@@ -190,16 +192,18 @@ BEGIN
             SET ROWCOUNT 1
 
             SELECT @c_SKU        = ORDERDETAIL.SKU,
-                   @c_PackKey    = ORDERDETAIL.PackKey,
+                   @c_PackKey    = sku.PackKey,                                              --CS01
                    @c_UOM        = ORDERDETAIL.UOM,
                    @n_ShippedQty = (ORDERDETAIL.QtyAllocated + ORDERDETAIL.QtyPicked + ORDERDETAIL.SHIPPEDQTY),
                    @c_OrderLine  = ORDERDETAIL.OrderLineNumber,
                    @c_ExternOrderLine = ISNULL(ORDERDETAIL.ExternLineNo,''),
-                   @c_Lottable02 = ISNULL(CODELKUP.UDF01 ,'')
+                   @c_Lottable02 = ISNULL(CODELKUP.UDF01 ,''),
+                   @c_PUOM3      = P.PackUOM3                                                --CS01
                  --  @d_Lottable04 = ORDERDETAIL.Lottable04
             FROM ORDERDETAIL WITH (NOLOCK)
             JOIN ORDERS WITH (NOLOCK) ON (ORDERS.OrderKey = ORDERDETAIL.OrderKey)
             JOIN SKU    WITH (NOLOCK) ON ( SKU.StorerKey = ORDERDETAIL.StorerKey AND SKU.Sku = ORDERDETAIL.Sku )
+            JOIN PACK P WITH (NOLOCK) ON P.PackKey = SKU.PACKKey                                                    --cs01
             LEFT JOIN  CODELKUP WITH (NOLOCK) ON ORDERS.Type = CODELKUP.Code AND CODELKUP.ListName = 'ORDTYP2ASN'
             WHERE ( ORDERDETAIL.QtyAllocated + ORDERDETAIL.QtyPicked + ORDERDETAIL.SHIPPEDQTY > 0 ) AND
                   ( ORDERDETAIL.OrderKey = @c_orderkey ) AND
@@ -251,18 +255,18 @@ BEGIN
                                                 QtyExpected,         QtyReceived,
                                                 UOM,                 PackKey,             ToLoc,
                                                 Lottable02,          Lottable03,           Lottable04,      Lottable05,
-                                                Lottable06,          Lottable08,           BeforeReceivedQty,   FinalizeFlag,        ToID)
+                                                Lottable06,          Lottable08,           BeforeReceivedQty,   FinalizeFlag,ToID)      
                                     VALUES     (@c_NewReceiptKey,    @c_ReceiptLine,      @c_ExternReceiptkey,
                                                 @c_ExternOrderLine,  @c_ToStorerKey,      @c_SKU,
                                                 @n_QtyReceived,      0,
-                                                '',              '',          @c_Toloc,
+                                                @c_PUOM3,            @c_PackKey,          @c_Toloc,                                   --CS01
                                                 @c_Lottable02,       @c_Lottable03,    @d_Lottable04,    @d_Lottable05,
-                                                @c_Lottable06,       @c_Lottable08,    0,                   'N',                 @c_ID)
+                                                @c_Lottable06,       @c_Lottable08,    0,                   'N',                 @c_ID)  
 
                      SELECT @n_LineNo = @n_LineNo + 1
 
                      FETCH NEXT FROM PICK_CUR
-                        INTO @n_QtyReceived, @c_Lottable03,@d_Lottable04, @d_Lottable05, @c_ID, @c_ToLoc,@c_Lottable02,@c_Lottable08
+                        INTO @n_QtyReceived, @c_Lottable03,@d_Lottable04, @d_Lottable05, @c_ID, @c_ToLoc,@c_Lottable06,@c_Lottable08
                   END -- WHILE @@FETCH_STATUS <> -1
                   DEALLOCATE PICK_CUR
                END
