@@ -12,6 +12,7 @@ GO
 /* Date           Rev  Author     Purposes                                    */  
 /* 2022-04-15     1.0  MINGLE     Created (WMS-19440)                         */   
 /* 2022-04-15     1.0  MINGLE     DevOps Combine Script                       */ 
+/* 2023-05-08     1.1  CSCHONG    WMS-22423 add new field (CS01)              */
 /******************************************************************************/              
                 
 CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_Shipper_Label_WAYBILL_AG]                     
@@ -160,7 +161,7 @@ BEGIN
                    + ' '''',CASE WHEN orders.M_Country = ''GBP'' THEN ISNULL(C2.long, '''') ELSE Orders.M_Country END, '
                    + ' ISNULL(orders.userdefine01,''''),convert(nvarchar(10),DATEADD(DAY,1,getdate()),121),'
                    + ' ISNULL(orders.userdefine02,''''),'    --25                                                                  
-                   +' '''','''',orders.Externorderkey,orders.orderkey,orders.notes,orders.notes2,'''','''','''','''', '  --35  
+                   +' '''','''',orders.Externorderkey,orders.orderkey,orders.notes,orders.notes2,ISNULL(ST.B_Phone2,''''),'''','''','''', '  --35     --CS01
                    +' '''','''','''','''','''','''','''','''','''','''' ,'''','''','''','''','''','   --50
                    +' '''','''','''','''','''','''','''','''','''','''' '                              --60'
                    + ' FROM ORDERS orders WITH (NOLOCK) '
@@ -313,24 +314,24 @@ EXIT_SP:
    SET @d_Trace_EndTime = GETDATE()
    SET @c_UserName = SUSER_SNAME()
    
-   EXEC isp_InsertTraceInfo 
-      @c_TraceCode = 'BARTENDER',
-      @c_TraceName = 'isp_BT_Bartender_Shipper_Label_WAYBILL_AG',
-      @c_starttime = @d_Trace_StartTime,
-      @c_endtime = @d_Trace_EndTime,
-      @c_step1 = @c_UserName,
-      @c_step2 = '',
-      @c_step3 = '',
-      @c_step4 = '',
-      @c_step5 = '',
-      @c_col1 = @c_Sparm1, 
-      @c_col2 = @c_Sparm2,
-      @c_col3 = @c_Sparm3,
-      @c_col4 = @c_Sparm4,
-      @c_col5 = @c_Sparm5,
-      @b_Success = 1,
-      @n_Err = 0,
-      @c_ErrMsg = ''            
+   --EXEC isp_InsertTraceInfo 
+   --   @c_TraceCode = 'BARTENDER',
+   --   @c_TraceName = 'isp_BT_Bartender_Shipper_Label_WAYBILL_AG',
+   --   @c_starttime = @d_Trace_StartTime,
+   --   @c_endtime = @d_Trace_EndTime,
+   --   @c_step1 = @c_UserName,
+   --   @c_step2 = '',
+   --   @c_step3 = '',
+   --   @c_step4 = '',
+   --   @c_step5 = '',
+   --   @c_col1 = @c_Sparm1, 
+   --   @c_col2 = @c_Sparm2,
+   --   @c_col3 = @c_Sparm3,
+   --   @c_col4 = @c_Sparm4,
+   --   @c_col5 = @c_Sparm5,
+   --   @b_Success = 1,
+   --   @n_Err = 0,
+   --   @c_ErrMsg = ''            
  
 select * from #result WITH (NOLOCK)
                                 
