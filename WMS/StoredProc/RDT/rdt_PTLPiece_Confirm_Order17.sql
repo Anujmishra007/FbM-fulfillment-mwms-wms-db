@@ -12,7 +12,8 @@ GO
 /* Purpose: Confirm by order                                            */  
 /*                                                                      */  
 /* Date       Rev  Author      Purposes                                 */  
-/* 06-04-2023 1.0  yeekung     WMS-22163 Created                        */   
+/* 06-04-2023 1.0  yeekung     WMS-22163 Created                        */ 
+/* 19-05-2023 1.1  yeekung     WMS-22477 Fix error message (yeekung01)  */
 /************************************************************************/  
   
 CREATE OR ALTER PROC rdt.rdt_PTLPiece_Confirm_Order17 (  
@@ -61,6 +62,8 @@ BEGIN
    DECLARE @cPrintLabelSP     NVARCHAR( 20)  -- (cc01)  
    DECLARE @cErrlightPos      NVARCHAR( 20)
    DECLARE @cDeviceStatus     NVARCHAR(20)
+   DECLARE @nLightErrNo       INT
+   DECLARE @cLightErrMsg      NVARCHAR(20)
 
    -- Handling transaction  
    SET @nTranCount = @@TRANCOUNT  
@@ -346,7 +349,7 @@ BEGIN
    -- @n_Func          = @nFunc
    --,@n_PTLKey        = 0
    --,@b_Success       = 0
-   --,@n_Err           = @nErrNo    
+   --,@n_Err         = @nErrNo    
    --,@c_ErrMsg        = @cErrMsg OUTPUT
    --,@c_DeviceID      = @cStation
    --,@c_DevicePos     = @cDevicePos
@@ -358,8 +361,8 @@ BEGIN
       ,@n_PTLKey         = 0
       ,@c_DisplayValue   = ''
       ,@b_Success        = @bSuccess    OUTPUT
-      ,@n_Err            = @nErrNo      OUTPUT
-      ,@c_ErrMsg         = @cErrMsg     OUTPUT
+      ,@n_Err            = @nLightErrNo OUTPUT
+      ,@c_ErrMsg         = @cLightErrMsg OUTPUT
       ,@c_DeviceID       = @cStation
       ,@c_DevicePos      = @cDevicePos
       ,@c_DeviceIP       = ''
@@ -417,6 +420,7 @@ Quit:
          ,@cErrMsg  OUTPUT    
    END    
 END  
+  
 GO
 
 SET QUOTED_IDENTIFIER OFF
