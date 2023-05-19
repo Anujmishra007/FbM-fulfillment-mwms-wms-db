@@ -114,6 +114,7 @@ LP.Externloadkey											  AS ''55Externloadkey''
 ,L2.Locationtype [ToLocType]
 ,L.Locaisle [FromLocaisle]
 ,L2.Locaisle [ToLocaisle]
+,T.Pickdetailkey, T.Orderkey, T.OrderlineNumber, T.Listkey, T.Wavekey
 '
 
 SET @stmt = @stmt + '
@@ -203,6 +204,7 @@ LP.Externloadkey
 ,L2.Locationtype
 ,L.Locaisle
 ,L2.Locaisle
+,T.Pickdetailkey, T.Orderkey, T.OrderlineNumber, T.Listkey, T.Wavekey
 
 ORDER BY  27,  38,  49
 
