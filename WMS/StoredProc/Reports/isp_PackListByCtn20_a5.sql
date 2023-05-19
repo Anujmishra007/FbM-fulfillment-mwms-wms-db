@@ -23,6 +23,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author    Ver Purposes                                  */
 /* 31-MAR-2023  CSCHONG   1.0 Devops Scripts Combine                    */
+/* 26-APR-2023  CSCHONG   1.1 WMS-22362 revised field mapping (CS01)    */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_PackListByCtn20_a5]
             @c_Pickslipno         NVARCHAR(10),
@@ -74,6 +75,7 @@ BEGIN
         , ISNULL(CLR4.Short,'N') AS ShowPallet
         , ISNULL(CLR5.short,'N') AS showuserdefine01
         , ISNULL(ORDERS.USERDEFINE01,'') as userdefine01
+        , SKU.BUSR1 AS SBUSR1             --CS01
    FROM ORDERS (NOLOCK)
    JOIN LOADPLANDETAIL LPD (NOLOCK) ON LPD.OrderKey = ORDERS.OrderKey
    JOIN PackDetail (NOLOCK) ON ( ORDERS.StorerKey = PackDetail.StorerKey )
@@ -118,6 +120,7 @@ BEGIN
           , ISNULL(CLR4.Short,'N')
           , ISNULL(CLR5.short,'N')
           , ISNULL(ORDERS.USERDEFINE01,'')
+          , SKU.BUSR1               --CS01
    UNION ALL
    SELECT '' as OrderKey
         , '' as ExternOrderKey
@@ -146,6 +149,7 @@ BEGIN
         , ISNULL(CLR4.Short,'N') AS ShowPallet
         , ISNULL(CLR5.short,'N') AS showuserdefine01
         , ISNULL(ORDERS.USERDEFINE01,'') as userdefine01
+        , SKU.BUSR1 AS SBUSR1             --CS01
    FROM PackDetail (NOLOCK)
    JOIN PackHeader (NOLOCK) ON ( PackDetail.PickSlipNo = PackHeader.PickSlipNo )
    JOIN LoadplanDetail (NOLOCK) ON ( Packheader.Loadkey = LoadplanDetail.LoadKey )
@@ -184,6 +188,7 @@ BEGIN
           , ISNULL(CLR4.Short,'N')
           , ISNULL(CLR5.short,'N')
           , ISNULL(ORDERS.USERDEFINE01,'')
+          , SKU.BUSR1           --CS01
 
 QUIT_SP:
 
