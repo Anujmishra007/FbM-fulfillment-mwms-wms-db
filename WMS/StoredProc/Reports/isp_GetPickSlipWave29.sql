@@ -24,9 +24,10 @@ GO
 /* 26-MAR-21    CSCHONG  WMS-15994 fix split line carton issue (CS01)   */
 /* 14-APR-21    MINGLE   WMS-16758 add new mappings(ML01)               */
 /* 31-MAY-21    MINGLE   WMS-17131 add new mappings(ML02)               */
+/* 23-MAY-23    CALVIN   JSM-150842 Adjust Sorting (CLVN01)             */
 /************************************************************************/  
   
-CREATE PROC dbo.isp_GetPickSlipWave29 (  
+ALTER PROC [dbo].[isp_GetPickSlipWave29] (  
 @c_wavekey_type          NVARCHAR(13)  
 )  
 AS  
@@ -754,9 +755,12 @@ QUIT:
       ,  #TMP_PICK.b_City
       ,  #TMP_PICK.b_State
       ,  #TMP_PICK.b_Country  
+	  ,SUBSTRING(#TMP_PICK.LOC, 3, 3), SUBSTRING(#TMP_PICK.LOC, 6, 2), SUBSTRING(#TMP_PICK.LOC, 8, 3)	--(CLVN01)
       --ML02 END
    --CS01 END
-   ORDER BY #TMP_PICK.PickSlipNo,#TMP_PICK.LOCZone,UPPER(#TMP_PICK.LOC),  #TMP_PICK.SKU
+   --ORDER BY #TMP_PICK.PickSlipNo,#TMP_PICK.LOCZone,UPPER(#TMP_PICK.LOC),  #TMP_PICK.SKU	--(CLVN01)
+   --ORDER BY #TMP_PICK.PickSlipNo, UPPER(#TMP_PICK.LOC), #TMP_PICK.LOCZone, #TMP_PICK.SKU	--(CLVN01)
+   ORDER BY #TMP_PICK.PickSlipNo, SUBSTRING(#TMP_PICK.LOC, 3, 3), SUBSTRING(#TMP_PICK.LOC, 6, 2), SUBSTRING(#TMP_PICK.LOC, 8, 3), #TMP_PICK.LOCZone, #TMP_PICK.SKU	--(CLVN01)
      
   --SELECT '1' AS PickSlipNo
   
@@ -774,3 +778,5 @@ END
 GO
 GRANT EXECUTE ON isp_GetPickSlipWave29 TO NSQL
 GO   
+
+
