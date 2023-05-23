@@ -1,5 +1,3 @@
-
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -14,6 +12,8 @@ GO
 /* 12-11-2016 1.1  James    Reset variable (james01)                          */  
 /* 04-05-2017 1.2  Ung      WMS-1856 Add Orders sequence                      */  
 /* 15-05-2021 1.3  YeeKung  WMS-16220 Add assignextupd (yeekung01)            */  
+/* 15-05-2023 1.4  YeeKung  WMS-22584 add storerconfig                        */
+/*                          control based deviceposition                      */
 /******************************************************************************/  
   
 create OR ALTER PROC [RDT].[rdt_PTLPiece_Assign_Batch01] (  
@@ -71,6 +71,11 @@ BEGIN
    SET @cAssignExtUpdSP = rdt.RDTGetConfig( @nFunc, 'AssignExtUpdSP', @cStorerKey)  
    IF @cAssignExtUpdSP = '0'  
       SET @cAssignExtUpdSP = ''  
+
+   DECLARE @cPrePosByDP NVARCHAR( 20) --(yeekung01)  
+   SET @cPrePosByDP = rdt.RDTGetConfig( @nFunc, 'PrePosByDP', @cStorerKey)  
+   IF @cPrePosByDP = '0'  
+      SET @cPrePosByDP = ''  
   
    /***********************************************************************************************  
                              POPULATE  
@@ -160,7 +165,7 @@ BEGIN
                ' @cCurrentSP  NVARCHAR( 60),  ' +   
                ' @tVar        VariableTable READONLY, ' +   
                ' @nErrNo      INT           OUTPUT, ' +   
-   ' @cErrMsg     NVARCHAR(250) OUTPUT  '   
+               ' @cErrMsg     NVARCHAR(250) OUTPUT  '   
                  
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,   
@@ -359,7 +364,7 @@ BEGIN
             ELSE  
             BEGIN  
 
-               IF @cStorerKey='18467'
+               IF @cPrePosByDP ='1'
                BEGIN
                   SELECT @cPosition=DevicePosition
                   FROM dbo.DeviceProfile (NOLOCK)  
