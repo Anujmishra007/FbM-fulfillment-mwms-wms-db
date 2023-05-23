@@ -1,12 +1,8 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_delivery_note40_rpt]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_delivery_note40_rpt]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
-GO    
+GO  
+
 /************************************************************************/    
 /* Stored Proc: isp_delivery_note40_rpt                                 */    
 /* Creation Date: 14-NOV-2019                                           */    
@@ -17,7 +13,7 @@ GO
 /*        :                                                             */    
 /* Called By: r_dw_delivery_note40_rpt                                  */    
 /*          :                                                           */    
-/* PVCS Version: 1.0                                                    */    
+/* PVCS Version: 1.6                                                    */    
 /*                                                                      */    
 /* Version: 7.0                                                         */    
 /*                                                                      */    
@@ -30,9 +26,10 @@ GO
 /* 04-05-2020  WLChooi  1.3   WMS-13213 Change mapping and logic (WL03) */    
 /* 09-07-2020  WLChooi  1.4   WMS-13213 Fix sorting by loadkey (WL04)   */    
 /* 21-08-2021  Mingle   1.5   WMS-17581 Modify logic (ML01)             */ 
-/* 20-12-2021  Mingle   1.5   DevOps Combine Script                     */  
+/* 20-12-2021  Mingle   1.5   DevOps Combine Script                     */ 
+/* 06-Apr-2023 WLChooi  1.6   WMS-22159 Extend Userdefine01 to 50 (C01) */ 
 /************************************************************************/    
-CREATE PROC isp_delivery_note40_rpt    
+CREATE OR ALTER PROC [dbo].[isp_delivery_note40_rpt]    
            @c_Storerkey           NVARCHAR(15)   --WL03    
          , @c_SourcekeyStart      NVARCHAR(10)   --WL03    
          , @c_SourcekeyEnd        NVARCHAR(10)   --WL03    
@@ -93,13 +90,13 @@ BEGIN
          ,  C_City         NVARCHAR(45)    
          ,  ExternOrderkey NVARCHAR(50)    
          ,  MarkforKey     NVARCHAR(15)    
- ,  Notes2         NVARCHAR(250)    
+         ,  Notes2         NVARCHAR(250)    
          ,  OrderDate      NVARCHAR(20)    
          ,  C_State        NVARCHAR(45)    
-         ,  UserDefine01   NVARCHAR(20)    
+         ,  UserDefine01   NVARCHAR(50)   --C01    
          ,  UserDefine02   NVARCHAR(20)    
          ,  UserDefine05   NVARCHAR(20)    
- ,  IncoTerm       NVARCHAR(10)    
+         ,  IncoTerm       NVARCHAR(10)    
          ,  CarrierCharges FLOAT    
          ,  OtherCharges   FLOAT    
          ,  PayableAmount  FLOAT    
@@ -136,7 +133,7 @@ BEGIN
          ,  Notes2         NVARCHAR(250)    
          ,  OrderDate      NVARCHAR(20)    
          ,  C_State        NVARCHAR(45)    
-         ,  UserDefine01   NVARCHAR(20)    
+         ,  UserDefine01   NVARCHAR(50)   --C01    
          ,  UserDefine02   NVARCHAR(20)    
          ,  UserDefine05   NVARCHAR(20)    
          ,  IncoTerm       NVARCHAR(10)    
@@ -239,14 +236,14 @@ BEGIN
              , ISNULL(OH.C_Address1,'') AS C_Address1    
              , LTRIM(RTRIM(ISNULL(OH.C_State,''))) + LTRIM(RTRIM(ISNULL(OH.C_City,''))) + LTRIM(RTRIM(ISNULL(OH.C_Address1,''))) + ' ' +     
                LTRIM(RTRIM(ISNULL(OH.C_Address2,''))) + ' ' + LTRIM(RTRIM(ISNULL(OH.C_Address3,''))) AS C_Addresses  --WL01    
-             , ISNULL(OH.C_Company,'') + N' òî' AS C_Company  --WL01    
+             , ISNULL(OH.C_Company,'') + N' ÔøΩÔøΩ' AS C_Company  --WL01    
              , ISNULL(OH.C_City,'') AS C_City    
              , ISNULL(OH.ExternOrderkey,'') AS ExternOrderkey    
              , ISNULL(OH.MarkforKey,'') AS MarkforKey    
              , ISNULL(OH.Notes2,'') AS Notes2    
-             , CAST(DATEPART(YYYY,ISNULL(OH.OrderDate,'1900/01/01')) AS NVARCHAR(10)) + N'ƒÍ' +     
-               CAST(DATEPART(MM,ISNULL(OH.OrderDate,'1900/01/01')) AS NVARCHAR(10)) + N'‘¬' +    
-               CAST(DATEPART(DD,ISNULL(OH.OrderDate,'1900/01/01')) AS NVARCHAR(10)) + N'»’' AS OrderDate    
+             , CAST(DATEPART(YYYY,ISNULL(OH.OrderDate,'1900/01/01')) AS NVARCHAR(10)) + N'ÔøΩÔøΩ' +     
+               CAST(DATEPART(MM,ISNULL(OH.OrderDate,'1900/01/01')) AS NVARCHAR(10)) + N'ÔøΩÔøΩ' +    
+               CAST(DATEPART(DD,ISNULL(OH.OrderDate,'1900/01/01')) AS NVARCHAR(10)) + N'ÔøΩÔøΩ' AS OrderDate    
              , ISNULL(OH.C_State,'') AS C_State    
              , ISNULL(OH.UserDefine01,'') AS UserDefine01    
              , ISNULL(OH.UserDefine02,'') AS UserDefine02    
@@ -267,115 +264,115 @@ BEGIN
                     ELSE LTRIM(RTRIM(ISNULL(OD.UserDefine01,''))) + LTRIM(RTRIM(ISNULL(OD.UserDefine02,''))) END AS DESCR   --WL03    
              , ISNULL(MAX(CASE WHEN ISNULL(RTRIM(CL.Code),'') = 'A1'    
                                THEN ISNULL(RTRIM(CL.Description),'')    
-                               ELSE N'…Ã∆∑’h√˜'    
+                               ELSE N'ÔøΩÔøΩ∆∑ÔøΩhÔøΩÔøΩ'    
                                END),'') AS A1    
              , ISNULL(MAX(CASE WHEN ISNULL(RTRIM(CL.Code),'') = 'B1'    
                                THEN ISNULL(RTRIM(CL.Description),'')    
-                               ELSE N'•´•È©`'    
+                               ELSE N'ÔøΩÔøΩÔøΩÔøΩ`'    
                                END),'') AS B1    
              , ISNULL(MAX(CASE WHEN ISNULL(RTRIM(CL.Code),'') = 'C1'    
                                THEN ISNULL(RTRIM(CL.Description),'')    
-                               ELSE N'•µ•§•∫'    
+                               ELSE N'ÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩ'    
              END),'') AS C1    
              , ISNULL(MAX(CASE WHEN ISNULL(RTRIM(CL.Code),'') = 'D1'    
                                THEN ISNULL(RTRIM(CL.Description),'')    
-                               ELSE N'…Ã∆∑∑¨∫≈'    
+                               ELSE N'ÔøΩÔøΩ∆∑ÔøΩÔøΩÔøΩÔøΩ'    
                                END),'') AS D1    
              , ISNULL(MAX(CASE WHEN ISNULL(RTRIM(CL.Code),'') = 'E1'    
                                THEN ISNULL(RTRIM(CL.Description),'')    
-                               --ELSE N'ÖgÅ˝:'  --WL02   
-                               ELSE N'ÖgÅ˝ '    --ML01    
+                               --ELSE N'ÔøΩgÔøΩÔøΩ:'  --WL02   
+                               ELSE N'ÔøΩgÔøΩÔøΩ '    --ML01    
                                END),'') AS E1    
              , ISNULL(MAX(CASE WHEN ISNULL(RTRIM(CL.Code),'') = 'F1'    
                                THEN ISNULL(RTRIM(CL.Description),'')    
-                               ELSE N'◊¢Œƒ∑¨∫≈:'    
+                               ELSE N'◊¢ÔøΩƒ∑ÔøΩÔøΩÔøΩ:'    
                                END),'') AS F1    
              , ISNULL(MAX(CASE WHEN ISNULL(RTRIM(CL.Code),'') = 'F2'    
                                THEN ISNULL(RTRIM(CL.Description),'')    
-                               ELSE N'◊¢Œƒ»’:'    
+                               ELSE N'◊¢ÔøΩÔøΩÔøΩÔøΩ:'    
                                END),'') AS F2    
              , ISNULL(MAX(CASE WHEN ISNULL(RTRIM(CL.Code),'') = 'F3'    
                                THEN ISNULL(RTRIM(CL.Description),'')    
-                               ELSE N'÷ßíB§§∑Ω∑®:'    
+                               ELSE N'÷ßÔøΩBÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩ:'    
                                END),'') AS F3    
              , ISNULL(MAX(CASE WHEN ISNULL(RTRIM(CL.Code),'') = 'G1'    
                                THEN ISNULL(RTRIM(CL.Description),'')    
-                               ELSE N'§™øÕòî œ√˚:'    
+                               ELSE N'ÔøΩÔøΩÔøΩÕòÔøΩÔøΩÔøΩÔøΩÔøΩ:'    
                                END),'') AS G1    
              , ISNULL(MAX(CASE WHEN ISNULL(RTRIM(CL.Code),'') = 'G2'    
                                THEN ISNULL(RTRIM(CL.Description),'')    
-                               --ELSE N'§™øÕòî◊°À˘:'    
+                               --ELSE N'ÔøΩÔøΩÔøΩÕòÔøΩ◊°ÔøΩÔøΩ:'    
                                ELSE '' --ML01  
                                END),'') AS G2    
              , ISNULL(MAX(CASE WHEN ISNULL(RTRIM(CL.Code),'') = 'G3'    
                                THEN ISNULL(RTRIM(CL.Description),'')    
-                               --ELSE N'E•·©`•Î:'    
+                               --ELSE N'EÔøΩÔøΩ`ÔøΩÔøΩ:'    
                                ELSE '' --ML01  
                                END),'') AS G3    
              , ISNULL(MAX(CASE WHEN ISNULL(RTRIM(CL.Code),'') = 'H1'    
                                THEN ISNULL(RTRIM(CL.Description),'')    
-                               ELSE N'∫œ”ãΩÓ~(À∞ﬁz)'    
+                               ELSE N'ÔøΩÔøΩ”ãÔøΩÔøΩÔøΩ~(À∞ÔøΩz)'    
                                END),'') AS H1    
              , ISNULL(MAX(CASE WHEN ISNULL(RTRIM(CL.Code),'') = 'H3'    
                                THEN ISNULL(RTRIM(CL.Description),'')    
-                               ELSE N'ÀÕ¡œ(À∞ﬁz)'    
+                               ELSE N'ÔøΩÔøΩÔøΩÔøΩ(À∞ÔøΩz)'    
                                END),'') AS H3    
              , ISNULL(MAX(CASE WHEN ISNULL(RTRIM(CL.Code),'') = 'H5'    
                                THEN ISNULL(RTRIM(CL.Description),'')    
-                               ELSE N'¥˙Ω“˝ìQ ÷ ˝¡œ(À∞ﬁz)'    
+                               ELSE N'ÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩQÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩ(À∞ÔøΩz)'    
                                END),'') AS H5    
              , ISNULL(MAX(CASE WHEN ISNULL(RTRIM(CL.Code),'') = 'H7'    
                                THEN ISNULL(RTRIM(CL.Description),'')    
-                               ELSE N'∏Ó“˝'    
+                               ELSE N'ÔøΩÔøΩÔøΩÔøΩ'    
                                END),'') AS H7    
              , ISNULL(MAX(CASE WHEN ISNULL(RTRIM(CL.Code),'') = 'H9'    
                                THEN ISNULL(RTRIM(CL.Description),'')    
-                               ELSE N'•›•§•Û•»'    
+                               ELSE N'ÔøΩ›•ÔøΩÔøΩÔøΩÔøΩ'    
                                END),'') AS H9    
              , ISNULL(MAX(CASE WHEN ISNULL(RTRIM(CL.Code),'') = 'H11'    
                                THEN ISNULL(RTRIM(CL.Description),'')    
-                               ELSE N'èæòIÜT∏Ó“˝'    
+                               ELSE N'ÔøΩÔøΩÔøΩIÔøΩTÔøΩÔøΩÔøΩÔøΩ'    
                                END),'') AS H11    
              , ISNULL(MAX(CASE WHEN ISNULL(RTRIM(CL.Code),'') = 'H13'    
                                THEN ISNULL(RTRIM(CL.Description),'')    
-                               ELSE N'÷ßíBætÓ~(À∞ﬁz)'    
+                               ELSE N'÷ßÔøΩBÔøΩtÔøΩ~(À∞ÔøΩz)'    
                                END),'') AS H13    
              , ISNULL(MAX(CASE WHEN ISNULL(RTRIM(CL.Code),'') = 'J1'    
                                THEN ISNULL(RTRIM(CL.Description),'')    
-                               ELSE N'§™øÕòî œ√˚:'    
+                               ELSE N'ÔøΩÔøΩÔøΩÕòÔøΩÔøΩÔøΩÔøΩÔøΩ:'    
                                END),'') AS J1    
              , ISNULL(MAX(CASE WHEN ISNULL(RTRIM(CL.Code),'') = 'J3'    
                                THEN ISNULL(RTRIM(CL.Description),'')    
-                               ELSE N'◊¢Œƒ∑¨∫≈:'    
+                               ELSE N'◊¢ÔøΩƒ∑ÔøΩÔøΩÔøΩ:'    
                                END),'') AS J3    
              , ISNULL(MAX(CASE WHEN ISNULL(RTRIM(CL.Code),'') = 'J5'    
                                THEN ISNULL(RTRIM(CL.Description),'')    
-                               ELSE N'◊¢Œƒ»’:'    
+                               ELSE N'◊¢ÔøΩÔøΩÔøΩÔøΩ:'    
                                END),'') AS J5    
              , ISNULL(MAX(CASE WHEN ISNULL(RTRIM(CL.Code),'') = 'J7'    
                                THEN ISNULL(RTRIM(CL.Description),'')    
-                               --ELSE N'E •·©`•Î:'  
+                               --ELSE N'E ÔøΩÔøΩ`ÔøΩÔøΩ:'  
                                ELSE '' --ML01   
                                END),'') AS J7    
              , ISNULL(MAX(CASE WHEN ISNULL(RTRIM(CL.Code),'') = 'K1'    
                              THEN ISNULL(RTRIM(CL.Description),'')    
-                               ELSE N'∑µ∆∑•≥©`•…'    
+                               ELSE N'ÔøΩÔøΩ∆∑ÔøΩÔøΩÔøΩ`ÔøΩÔøΩ'    
                                END),'') AS K1    
              , ISNULL(MAX(CASE WHEN ISNULL(RTRIM(CL.Code),'') = 'M1'    
                                THEN ISNULL(RTRIM(CL.Description),'')    
-                               ELSE N'…Ã∆∑’h√˜'    
+                               ELSE N'ÔøΩÔøΩ∆∑ÔøΩhÔøΩÔøΩ'    
                                END),'') AS M1    
              , ISNULL(MAX(CASE WHEN ISNULL(RTRIM(CL.Code),'') = 'N1'    
                                THEN ISNULL(RTRIM(CL.Description),'')    
-                               ELSE N'•´•È©`'    
+                               ELSE N'ÔøΩÔøΩÔøΩÔøΩ`'    
                                END),'') AS N1    
              , ISNULL(MAX(CASE WHEN ISNULL(RTRIM(CL.Code),'') = 'P1'    
                                THEN ISNULL(RTRIM(CL.Description),'')    
-                               ELSE N'•µ•§•∫'    
+                               ELSE N'ÔøΩÔøΩÔøΩÔøΩÔøΩÔøΩ'    
                                END),'') AS P1    
              , ISNULL(MAX(CASE WHEN ISNULL(RTRIM(CL.Code),'') = 'Q1'    
                                THEN ISNULL(RTRIM(CL.Description),'')    
-                               ELSE N'…Ã∆∑∑¨∫≈'    
+                               ELSE N'ÔøΩÔøΩ∆∑ÔøΩÔøΩÔøΩÔøΩ'    
                                END),'') AS Q1        
              , CASE WHEN SUM(OD.ShippedQty) = 0 AND SUM(OD.QtyAllocated) = 0 AND SUM(OD.QtyPicked) = 0 THEN 'Y' ELSE 'N' END AS ShortPick    
              , OH.Loadkey   --WL04    
@@ -390,14 +387,14 @@ BEGIN
              , ISNULL(OH.C_Address1,'')    
              , LTRIM(RTRIM(ISNULL(OH.C_State,''))) + LTRIM(RTRIM(ISNULL(OH.C_City,''))) + LTRIM(RTRIM(ISNULL(OH.C_Address1,''))) + ' ' +     
                LTRIM(RTRIM(ISNULL(OH.C_Address2,''))) + ' ' + LTRIM(RTRIM(ISNULL(OH.C_Address3,'')))  --WL01    
-             , ISNULL(OH.C_Company,'') + N' òî'  --WL01    
+             , ISNULL(OH.C_Company,'') + N' ÔøΩÔøΩ'  --WL01    
              , ISNULL(OH.C_City,'')    
              , ISNULL(OH.ExternOrderkey,'')     
              , ISNULL(OH.MarkforKey,'')     
              , ISNULL(OH.Notes2,'')     
-             , CAST(DATEPART(YYYY,ISNULL(OH.OrderDate,'1900/01/01')) AS NVARCHAR(10)) + N'ƒÍ' +     
-               CAST(DATEPART(MM,ISNULL(OH.OrderDate,'1900/01/01')) AS NVARCHAR(10)) + N'‘¬' +    
-               CAST(DATEPART(DD,ISNULL(OH.OrderDate,'1900/01/01')) AS NVARCHAR(10)) + N'»’'    
+             , CAST(DATEPART(YYYY,ISNULL(OH.OrderDate,'1900/01/01')) AS NVARCHAR(10)) + N'ÔøΩÔøΩ' +     
+               CAST(DATEPART(MM,ISNULL(OH.OrderDate,'1900/01/01')) AS NVARCHAR(10)) + N'ÔøΩÔøΩ' +    
+               CAST(DATEPART(DD,ISNULL(OH.OrderDate,'1900/01/01')) AS NVARCHAR(10)) + N'ÔøΩÔøΩ'    
              , ISNULL(OH.C_State,'')    
              , ISNULL(OH.UserDefine01,'')    
              , ISNULL(OH.UserDefine02,'')    

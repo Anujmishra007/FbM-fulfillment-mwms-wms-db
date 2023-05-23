@@ -1,10 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_Print_SSCC_CartonLabel_02_UF]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_Print_SSCC_CartonLabel_02_UF]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
+
 /************************************************************************/
 /* Store Procedure: isp_Print_SSCC_CartonLabel_02_UF           		      */
 /* Creation Date: 22-May-2009                                     			*/
@@ -22,7 +20,7 @@ GO
 /*                                                                      */
 /* Usage: Call by dw = r_dw_sscc_cartonlabel_02                         */
 /*                                                                      */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -32,9 +30,11 @@ GO
 /* Date         Author    Ver.  Purposes                                */
 /* 20-0ct-2009  NJOW      1.0   Modify from isp_Print_SSCC_CartonLabel_02*/
 /*                              convert to use universal font code128   */
+/* 06-Apr-2023  WLChooi   1.1   WMS-22159 Extend Userdefine01 to 50 (C01)*/
+/* 06-Apr-2023  WLChooi   1.1   DevOps Combine Script                   */ 
 /************************************************************************/
 
-CREATE PROC isp_Print_SSCC_CartonLabel_02_UF ( 
+CREATE OR ALTER PROC [dbo].[isp_Print_SSCC_CartonLabel_02_UF] ( 
    @cStorerKey    NVARCHAR( 15),
    @cPickSlipNo   NVARCHAR( 10), 
    @cFromCartonNo NVARCHAR( 10),
@@ -52,7 +52,7 @@ BEGIN
          OrderKey                NVARCHAR( 10) NULL,
          CPO                     NVARCHAR( 20) NULL,
          OrderType               NVARCHAR( 10) NULL,
-         OrdUserDefine01         NVARCHAR( 20) NULL,
+         OrdUserDefine01         NVARCHAR( 50) NULL,   --C01
          OrdUserDefine03         NVARCHAR( 20) NULL,
          OrdUserDefine04         NVARCHAR( 20) NULL,
          OrdUserDefine05         NVARCHAR( 20) NULL,
@@ -97,7 +97,7 @@ BEGIN
       @cOrderKey                NVARCHAR( 10),
       @cCPO                     NVARCHAR( 20),
       @cOrderType               NVARCHAR( 10),
-      @cOrdUserDefine01         NVARCHAR( 20),
+      @cOrdUserDefine01         NVARCHAR( 50),   --C01
       @cOrdUserDefine03         NVARCHAR( 20),
       @cOrdUserDefine04         NVARCHAR( 20),
       @cOrdUserDefine05         NVARCHAR( 20),
@@ -416,5 +416,5 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-GRANT EXECUTE ON isp_Print_SSCC_CartonLabel_02_UF TO NSQL
+GRANT EXECUTE ON [dbo].[isp_Print_SSCC_CartonLabel_02_UF] TO NSQL
 GO

@@ -13,7 +13,7 @@ GO
 /*                                                                         */    
 /* Called By: r_dw_autoalloc_partial                                       */    
 /*                                                                         */    
-/* GitLab Version: 1.0                                                     */    
+/* GitLab Version: 1.1                                                     */    
 /*                                                                         */    
 /* Version: 1.0                                                            */    
 /*                                                                         */    
@@ -22,6 +22,7 @@ GO
 /* Updates:                                                                */    
 /* Date         Author  Ver   Purposes                                     */  
 /* 18-Apr-2022  WLChooi 1.0   DevOps Combine Script                        */
+/* 06-Apr-2023  WLChooi 1.1   WMS-22159 Extend Userdefine01 to 50 (C01)    */ 
 /***************************************************************************/        
 CREATE OR ALTER PROC [dbo].[isp_autoalloc_partial] ( 
          @c_StorerKey   NVARCHAR(50)
@@ -51,7 +52,7 @@ BEGIN
                              ExternLineNo NVARCHAR(20) NULL,
                              Sku NVARCHAR(20) NULL,
                              Description NVARCHAR(250) NULL,
-                             Userdefine01 NVARCHAR(20) NULL,
+                             Userdefine01 NVARCHAR(50) NULL,   --C01
                              OrderLineNumber NVARCHAR(5) NULL,
                              ErrMsg NVARCHAR(500) NULL) 
    

@@ -1,33 +1,31 @@
-IF EXISTS (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_packing_list_110_1_rdt]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[isp_packing_list_110_1_rdt]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
  
-/************************************************************************/  
-/* Stored Procedure: isp_packing_list_110_1_rdt                         */  
-/* Creation Date: 16-Aug-2021                                           */  
-/* Copyright: LFL                                                       */  
-/* Written by:                                                          */  
-/*                                                                      */  
-/* Purpose: WMS-17584                                                   */  
-/*                                                                      */  
-/* Called By: report dw = r_dw_packing_list_110_1_rdt                   */  
-/*                                                                      */  
-/* GitLab Version: 1.1                                                  */  
-/*                                                                      */  
-/* Version: 5.4                                                         */  
-/*                                                                      */  
-/* Data Modifications:                                                  */  
-/*                                                                      */  
-/* Updates:                                                             */  
-/* Date         Author    Ver.  Purposes                                */  
-/* 2021-08-16   Mingle    1.0   Created                                 */
-/************************************************************************/  
-CREATE PROC [dbo].[isp_packing_list_110_1_rdt] (  
+/**************************************************************************/  
+/* Stored Procedure: isp_packing_list_110_1_rdt                           */  
+/* Creation Date: 16-Aug-2021                                             */  
+/* Copyright: LFL                                                         */  
+/* Written by:                                                            */  
+/*                                                                        */  
+/* Purpose: WMS-17584                                                     */  
+/*                                                                        */  
+/* Called By: report dw = r_dw_packing_list_110_1_rdt                     */  
+/*                                                                        */  
+/* GitLab Version: 1.1                                                    */  
+/*                                                                        */  
+/* Version: 5.4                                                           */  
+/*                                                                        */  
+/* Data Modifications:                                                    */  
+/*                                                                        */  
+/* Updates:                                                               */  
+/* Date         Author    Ver.  Purposes                                  */  
+/* 2021-08-16   Mingle    1.0   Created                                   */
+/* 06-Apr-2023  WLChooi   1.1   WMS-22159 Extend Userdefine01 to 50 (C01) */
+/* 06-Apr-2023  WLChooi   1.1   DevOps Combine Script                     */ 
+/**************************************************************************/  
+CREATE OR ALTER PROC [dbo].[isp_packing_list_110_1_rdt] (  
       @c_Pickslipno   NVARCHAR(10)  
 )  
 AS  
@@ -90,7 +88,7 @@ BEGIN
    	 , STAddress               NVARCHAR(500) NULL
    	 , STCountry               NVARCHAR(45)  NULL
    	 , C_Country               NVARCHAR(45)  NULL
-   	 , OHUserDefine01          NVARCHAR(20)  NULL
+   	 , OHUserDefine01          NVARCHAR(50)  NULL   --C01
    	 , C_Contact1              NVARCHAR(45)  NULL
    	 , C_Address1              NVARCHAR(45)  NULL
        , C_Address2              NVARCHAR(45)  NULL
@@ -255,6 +253,6 @@ BEGIN
 
 END
 GO
-GRANT EXECUTE ON isp_packing_list_110_1_rdt TO NSQL
+GRANT EXECUTE ON [dbo].[isp_packing_list_110_1_rdt] TO NSQL
 GO
 

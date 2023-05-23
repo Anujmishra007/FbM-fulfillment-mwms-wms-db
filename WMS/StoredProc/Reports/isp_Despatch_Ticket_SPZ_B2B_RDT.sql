@@ -1,35 +1,33 @@
-IF EXISTS (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_Despatch_Ticket_SPZ_B2B_RDT]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[isp_Despatch_Ticket_SPZ_B2B_RDT]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
  
-/************************************************************************/  
-/* Stored Procedure: isp_Despatch_Ticket_SPZ_B2B_RDT                    */  
-/* Creation Date: 04-Nov-2020                                           */  
-/* Copyright: LFL                                                       */  
-/* Written by: WLChooi                                                  */  
-/*                                                                      */  
-/* Purpose: WMS-15452 - SPZ B2B Commercial Invoice                      */  
-/*                                                                      */  
-/* Called By: report dw = r_dw_Despatch_Ticket_SPZ_B2B_rdt              */  
-/*                                                                      */  
-/* GitLab Version: 1.2                                                  */  
-/*                                                                      */  
-/* Version: 5.4                                                         */  
-/*                                                                      */  
-/* Data Modifications:                                                  */  
-/*                                                                      */  
-/* Updates:                                                             */  
-/* Date         Author    Ver.  Purposes                                */  
-/* 2021-01-18   WLChooi   1.1   INC1403544 - Return Blank Result if     */
-/*                              ISOCntryCode = MY (WL01)                */
-/* 2021-06-15   WLChooi   1.2   WMS-17291 - Modify Logic (WL02)         */
-/************************************************************************/  
-CREATE PROC [dbo].[isp_Despatch_Ticket_SPZ_B2B_RDT] (  
+/**************************************************************************/  
+/* Stored Procedure: isp_Despatch_Ticket_SPZ_B2B_RDT                      */  
+/* Creation Date: 04-Nov-2020                                             */  
+/* Copyright: LFL                                                         */  
+/* Written by: WLChooi                                                    */  
+/*                                                                        */  
+/* Purpose: WMS-15452 - SPZ B2B Commercial Invoice                        */  
+/*                                                                        */  
+/* Called By: report dw = r_dw_Despatch_Ticket_SPZ_B2B_rdt                */  
+/*                                                                        */  
+/* GitLab Version: 1.3                                                    */  
+/*                                                                        */  
+/* Version: 5.4                                                           */  
+/*                                                                        */  
+/* Data Modifications:                                                    */  
+/*                                                                        */  
+/* Updates:                                                               */  
+/* Date         Author    Ver.  Purposes                                  */  
+/* 2021-01-18   WLChooi   1.1   INC1403544 - Return Blank Result if       */
+/*                              ISOCntryCode = MY (WL01)                  */
+/* 2021-06-15   WLChooi   1.2   WMS-17291 - Modify Logic (WL02)           */
+/* 06-Apr-2023  WLChooi   1.3   WMS-22159 Extend Userdefine01 to 50 (C01) */ 
+/* 06-Apr-2023  WLChooi   1.3   DevOps Combine Script                     */ 
+/**************************************************************************/  
+CREATE OR ALTER PROC [dbo].[isp_Despatch_Ticket_SPZ_B2B_RDT] (  
       @c_Pickslipno   NVARCHAR(10)  
 )  
 AS  
@@ -129,7 +127,7 @@ BEGIN
    	 , QtyShip                 INT   NULL
    	 , UnitPrice               FLOAT NULL
    	 , ExtdValue               FLOAT NULL
-   	 , OHUserDefine01          NVARCHAR(20) NULL
+   	 , OHUserDefine01          NVARCHAR(50) NULL   --C01
    	 , SUMUnitPricexQtyPicked  FLOAT NULL
    	 , SUMQtyPicked            INT NULL
    	 , AmtInWords              NVARCHAR(1024) NULL
@@ -345,5 +343,5 @@ QUIT_SP:   --WL01
 
 END
 GO
-GRANT EXECUTE ON isp_Despatch_Ticket_SPZ_B2B_RDT TO NSQL
+GRANT EXECUTE ON [dbo].[isp_Despatch_Ticket_SPZ_B2B_RDT] TO NSQL
 GO

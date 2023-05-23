@@ -3,28 +3,30 @@ GO
 SET ANSI_NULLS OFF
 GO
  
-/************************************************************************/  
-/* Stored Procedure: isp_Despatch_Ticket_SPZ_B2C_RDT                    */  
-/* Creation Date: 04-Nov-2020                                           */  
-/* Copyright: LFL                                                       */  
-/* Written by: WLChooi                                                  */  
-/*                                                                      */  
-/* Purpose: WMS-15452 - SPZ B2C Commercial Invoice                      */  
-/*                                                                      */  
-/* Called By: report dw = r_dw_Despatch_Ticket_SPZ_B2C_rdt              */  
-/*                                                                      */  
-/* GitLab Version: 1.1                                                  */  
-/*                                                                      */  
-/* Version: 5.4                                                         */  
-/*                                                                      */  
-/* Data Modifications:                                                  */  
-/*                                                                      */  
-/* Updates:                                                             */  
-/* Date         Author    Ver.  Purposes                                */  
-/* 2021-06-15   WLChooi   1.1   WMS-17291 - Modify Logic and Add new    */
-/*                              column (WL01)                           */
-/* 2023-01-03   mingle    1.2   WMS-21381 - Add new col(ML01)           */
-/************************************************************************/  
+/**************************************************************************/  
+/* Stored Procedure: isp_Despatch_Ticket_SPZ_B2C_RDT                      */  
+/* Creation Date: 04-Nov-2020                                             */  
+/* Copyright: LFL                                                         */  
+/* Written by: WLChooi                                                    */  
+/*                                                                        */  
+/* Purpose: WMS-15452 - SPZ B2C Commercial Invoice                        */  
+/*                                                                        */  
+/* Called By: report dw = r_dw_Despatch_Ticket_SPZ_B2C_rdt                */  
+/*                                                                        */  
+/* GitLab Version: 1.3                                                    */  
+/*                                                                        */  
+/* Version: 5.4                                                           */  
+/*                                                                        */  
+/* Data Modifications:                                                    */  
+/*                                                                        */  
+/* Updates:                                                               */  
+/* Date         Author    Ver.  Purposes                                  */  
+/* 2021-06-15   WLChooi   1.1   WMS-17291 - Modify Logic and Add new      */
+/*                              column (WL01)                             */
+/* 2023-01-03   mingle    1.2   WMS-21381 - Add new col(ML01)             */
+/* 06-Apr-2023  WLChooi   1.3   WMS-22159 Extend Userdefine01 to 50 (C01) */ 
+/* 06-Apr-2023  WLChooi   1.3   DevOps Combine Script                     */ 
+/**************************************************************************/  
 CREATE OR ALTER PROC [dbo].[isp_Despatch_Ticket_SPZ_B2C_RDT] (  
       @c_Pickslipno   NVARCHAR(10)  
 )  
@@ -77,7 +79,7 @@ BEGIN
    	 , STAddress               NVARCHAR(500) NULL
    	 , STCountry               NVARCHAR(45)  NULL
    	 , C_Country               NVARCHAR(45)  NULL
-   	 , OHUserDefine01          NVARCHAR(20)  NULL
+   	 , OHUserDefine01          NVARCHAR(50)  NULL   --C01
    	 , C_Contact1              NVARCHAR(45)  NULL
    	 , C_Address1              NVARCHAR(45)  NULL
        , C_Address2              NVARCHAR(45)  NULL
@@ -217,6 +219,6 @@ BEGIN
 
 END
 GO
-GRANT EXECUTE ON isp_Despatch_Ticket_SPZ_B2C_RDT TO NSQL
+GRANT EXECUTE ON [dbo].[isp_Despatch_Ticket_SPZ_B2C_RDT] TO NSQL
 GO
 

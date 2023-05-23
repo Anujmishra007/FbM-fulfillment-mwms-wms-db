@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_Print_SSCC_CartonLabel_03_uf]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_Print_SSCC_CartonLabel_03_uf]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -36,9 +32,11 @@ GO
 /*                            2) Ensure UserDefine03 & 04 with leading  */
 /*                               zeros if length less than 4            */
 /* 26-Feb-2008  HFLiew        SOS#98666 add new fields                  */
+/* 06-Apr-2023  WLChooi   1.1   WMS-22159 Extend Userdefine01 to 50 (C01)*/
+/* 06-Apr-2023  WLChooi   1.1   DevOps Combine Script                   */ 
 /************************************************************************/
 
-CREATE PROC isp_Print_SSCC_CartonLabel_03_uf ( 
+CREATE OR ALTER PROC [dbo].[isp_Print_SSCC_CartonLabel_03_uf] ( 
    @cStorerKey    NVARCHAR( 15),
    @cPickSlipNo   NVARCHAR( 10), 
    @cFromCartonNo NVARCHAR( 10),
@@ -58,7 +56,7 @@ BEGIN
          OrderKey                NVARCHAR( 10) NULL,
          CPO                     NVARCHAR( 20) NULL,
          OrderType               NVARCHAR( 10) NULL,
-         OrdUserDefine01         NVARCHAR( 20) NULL,
+         OrdUserDefine01         NVARCHAR( 50) NULL,   --C01
          OrdUserDefine02         NVARCHAR( 20) NULL, -- Added by HFLIEW on 26-02-2008 for SOS#98666
          OrdUserDefine03         NVARCHAR( 20) NULL,
          OrdUserDefine04         NVARCHAR( 20) NULL,
@@ -105,7 +103,7 @@ BEGIN
       @cOrderKey                NVARCHAR( 10),
       @cCPO                     NVARCHAR( 20),
       @cOrderType               NVARCHAR( 10),
-      @cOrdUserDefine01         NVARCHAR( 20),
+      @cOrdUserDefine01         NVARCHAR( 50),   --C01
       @cOrdUserDefine02         NVARCHAR( 20), -- Added by HFLIEW on 26-02-2008 for SOS#98666
       @cOrdUserDefine03         NVARCHAR( 20),
       @cOrdUserDefine04         NVARCHAR( 20),
@@ -458,5 +456,5 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-GRANT EXECUTE ON isp_Print_SSCC_CartonLabel_03_uf TO NSQL
+GRANT EXECUTE ON [dbo].[isp_Print_SSCC_CartonLabel_03_uf] TO NSQL
 GO

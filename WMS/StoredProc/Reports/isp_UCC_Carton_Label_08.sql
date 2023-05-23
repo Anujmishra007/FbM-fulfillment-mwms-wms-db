@@ -1,11 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_UCC_Carton_Label_08]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_UCC_Carton_Label_08]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
+
 /************************************************************************/  
 /* Store Procedure:  isp_UCC_Carton_Label_08                            */  
 /* Creation Date: 23-Apr-2009                                           */  
@@ -22,7 +19,7 @@ GO
 /*                                                                      */  
 /* Called By:  r_dw_ucc_carton_label_08                                 */  
 /*                                                                      */  
-/* PVCS Version: 1.2                                                    */  
+/* PVCS Version: 1.4                                                    */  
 /*                                                                      */  
 /* Version: 5.4                                                         */  
 /*                                                                      */  
@@ -35,12 +32,14 @@ GO
 /*								      ORDERDETAIL.UserDefine01 SOS#170330(GOH01)*/		
 /* 30-OCT-2012  YTWan   1.2   SOS#254718:Get Store from Storer.Company  */
 /*                            (Wan01)                                   */
-/* 28-Jan-2019  TLTING_ext 1.3  enlarge externorderkey field length      */
+/* 28-Jan-2019  TLTING_ext 1.3  enlarge externorderkey field length     */
+/* 06-Apr-2023  WLChooi 1.4   WMS-22159 Extend Userdefine01 to 50 (C01) */
+/* 06-Apr-2023  WLChooi 1.4   DevOps Combine Script                     */ 
 /************************************************************************/  
 
 
 
-CREATE PROC dbo.isp_UCC_Carton_Label_08 (
+CREATE OR ALTER PROC [dbo].[isp_UCC_Carton_Label_08] (
       @cStorerKey        NVARCHAR(15) = '',
       @cPickSlipNo       NVARCHAR(15) = '',
       @cStartCartonNo    int = '',
@@ -91,7 +90,7 @@ date           datetime,
 DeliveryDate   datetime,
 AlternateSKu   NVARCHAR(20),
 sValue         NVARCHAR(10),
-Userdefine01   NVARCHAR(20),
+Userdefine01   NVARCHAR(50),   --C01
 UserDefine02   NVARCHAR(20),
 Det_userDefine1 NVARCHAR(18),
 EditWho        NVARCHAR(18),
@@ -229,5 +228,5 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON 
 GO
-GRANT EXECUTE ON isp_UCC_Carton_Label_08 TO NSQL 
+GRANT EXECUTE ON [dbo].[isp_UCC_Carton_Label_08] TO NSQL 
 GO 
