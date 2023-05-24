@@ -1,3 +1,6 @@
+if exists (select * from sys.objects where object_id = object_id(N'[RDT].[rdtfnc_PackInfo]') and OBJECTPROPERTY(object_id, N'IsProcedure') = 1)
+   drop procedure [RDT].[rdtfnc_PackInfo]
+GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -41,10 +44,9 @@ GO
 /* 20-JUL-2020  2.3   Chermaine WMS-14307 Add ExtendedPrintSP (cc02)                   */
 /* 02-Oct-2020  2.4   Chermaine WMS-15387 get codelkup.shot=k then display onlys (cc03)*/
 /* 02-Sep-2021  2.5   James     WMS-17833 Add rdtIsValidRange (james04)                */
-/* 24-May-2023  2.6   Ung       WMS-20606 Fix PackInfLBL report duplicate params       */
 /***************************************************************************************/
 
-CREATE OR ALTER PROC [RDT].[rdtfnc_PackInfo](
+CREATE PROC [RDT].[rdtfnc_PackInfo](
    @nMobile    int,
    @nErrNo     int  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max
@@ -1368,6 +1370,7 @@ BEGIN
             INSERT INTO @tShipLabel (Variable, Value) VALUES 
                ( '@cStorerKey',  @cStorerKey), 
                ( '@cPickSlipNo', @cPickSlipNo), 
+               ( '@nCartonNo',   CAST( @cCartonNo AS NVARCHAR(10))),
                ( '@nCartonNo',   CAST( @cCartonNo AS NVARCHAR(10)))
 
             -- Print label
