@@ -3,7 +3,6 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /***************************************************************************/
 /* Store procedure: rdt_638ExtInfo01                                       */
 /* Purpose: Validate TO ID                                                 */
@@ -13,8 +12,9 @@ GO
 /* Date       Rev  Author     Purposes                                     */
 /* 2021-04-26 1.0  James      WMS-16668 Created                            */
 /* 2021-07-02 1.1  James      WMS-17405 Add @nAfterStep param (james01)    */
-/* 2022-09-23 1.2  YeeKung   WMS-20820 Extended refno length (yeekung01)   */
+/* 2022-09-23 1.2  YeeKung    WMS-20820 Extended refno length (yeekung01)  */
 /* 2023-01-04 1.3  James      WMS-21408 Add item flag popup (james02)      */
+/* 2023-05-11 1.4  Ung        WMS-22302 Fix ExtendedInfoSP AfterStep       */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_638ExtInfo01] (
@@ -77,62 +77,66 @@ AS
    
    IF @nFunc = 638 -- ECOM return
    BEGIN
-      IF @nStep = 3 -- SKU, Qty
+      IF @nAfterStep = 3 -- SKU, Qty
+      BEGIN
+         DECLARE @curSearch CURSOR
+         SET @curSearch = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT Code
+            FROM CodeLKUP WITH (NOLOCK)
+            WHERE ListName = 'REFNOLKUP'
+               AND StorerKey = @cStorerKey
+               AND Code2 = @cFacility
+            ORDER BY Short
+         OPEN @curSearch
+         FETCH NEXT FROM @curSearch INTO @cColumnName
+         WHILE @@FETCH_STATUS = 0
+         BEGIN
+            -- Check column valid
+            IF NOT EXISTS( SELECT 1
+               FROM INFORMATION_SCHEMA.COLUMNS
+               WHERE TABLE_NAME = 'Receipt'
+                  AND COLUMN_NAME = @cColumnName
+                  AND DATA_TYPE = 'nvarchar')
+               GOTO Quit
+
+            SET @cSQL =
+               ' SELECT @nTtl_ASN = COUNT( DISTINCT R.ReceiptKey), @nTtl_Qty = SUM( RD.QtyExpected) ' +
+               ' FROM dbo.Receipt R WITH (NOLOCK) ' +
+               ' JOIN dbo.ReceiptDetail RD WITH (NOLOCK) ON (R.ReceiptKey = RD.ReceiptKey) ' +
+               ' WHERE R.Facility = @cFacility ' +
+                  ' AND R.StorerKey = @cStorerKey ' +
+                  ' AND R.Status <> ''9'' ' +
+                  ' AND R.ASNStatus NOT IN (''CANC'', ''9'') ' +
+                  ' AND R.' + @cColumnName + ' = @cRefNo '
+            SET @cSQLParam =
+               ' @cFacility      NVARCHAR(5),  ' +
+               ' @cStorerKey     NVARCHAR(15), ' +
+               ' @cRefNo         NVARCHAR(20), ' +
+               ' @nTtl_ASN       INT   OUTPUT, ' +
+               ' @nTtl_Qty       INT   OUTPUT  '
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @cFacility,
+               @cStorerKey,
+               @cRefNo,
+               @nTtl_ASN    OUTPUT,
+               @nTtl_Qty    OUTPUT
+
+            SET @cExtendedInfo = 'ASN: ' + CAST( @nTtl_ASN AS NVARCHAR( 2)) + '   QTY: ' + CAST( @nTtl_Qty AS NVARCHAR( 5))
+
+            IF @nTtl_ASN > 0
+               BREAK
+
+            FETCH NEXT FROM @curSearch INTO @cColumnName
+         END
+         CLOSE @curSearch
+         DEALLOCATE @curSearch
+      END
+      
+      IF @nStep = 1 AND  -- ASN
+         @nAfterStep = 3 -- SKU, Qty
       BEGIN
          IF @nInputKey = 1
          BEGIN
-            DECLARE @curSearch CURSOR
-            SET @curSearch = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-               SELECT Code
-               FROM CodeLKUP WITH (NOLOCK)
-               WHERE ListName = 'REFNOLKUP'
-                  AND StorerKey = @cStorerKey
-                  AND Code2 = @cFacility
-               ORDER BY Short
-            OPEN @curSearch
-            FETCH NEXT FROM @curSearch INTO @cColumnName
-            WHILE @@FETCH_STATUS = 0
-            BEGIN
-               -- Check column valid
-               IF NOT EXISTS( SELECT 1
-                  FROM INFORMATION_SCHEMA.COLUMNS
-                  WHERE TABLE_NAME = 'Receipt'
-                     AND COLUMN_NAME = @cColumnName
-                     AND DATA_TYPE = 'nvarchar')
-                  GOTO Quit
-
-               SET @cSQL =
-                  ' SELECT @nTtl_ASN = COUNT( DISTINCT R.ReceiptKey), @nTtl_Qty = SUM( RD.QtyExpected) ' +
-                  ' FROM dbo.Receipt R WITH (NOLOCK) ' +
-                  ' JOIN dbo.ReceiptDetail RD WITH (NOLOCK) ON (R.ReceiptKey = RD.ReceiptKey) ' +
-                  ' WHERE R.Facility = @cFacility ' +
-                     ' AND R.StorerKey = @cStorerKey ' +
-                     ' AND R.Status <> ''9'' ' +
-                     ' AND R.ASNStatus NOT IN (''CANC'', ''9'') ' +
-                     ' AND R.' + @cColumnName + ' = @cRefNo '
-               SET @cSQLParam =
-                  ' @cFacility      NVARCHAR(5),  ' +
-                  ' @cStorerKey     NVARCHAR(15), ' +
-                  ' @cRefNo         NVARCHAR(20), ' +
-                  ' @nTtl_ASN       INT   OUTPUT, ' +
-                  ' @nTtl_Qty       INT   OUTPUT  '
-               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                  @cFacility,
-                  @cStorerKey,
-                  @cRefNo,
-                  @nTtl_ASN    OUTPUT,
-                  @nTtl_Qty    OUTPUT
-
-               SET @cExtendedInfo = 'ASN: ' + CAST( @nTtl_ASN AS NVARCHAR( 2)) + '   QTY: ' + CAST( @nTtl_Qty AS NVARCHAR( 5))
-
-               IF @nTtl_ASN > 0
-                  BREAK
-
-               FETCH NEXT FROM @curSearch INTO @cColumnName
-            END
-            CLOSE @curSearch
-            DEALLOCATE @curSearch
-            
             -- (james02)
             IF OBJECT_ID('tempdb..#ASN') IS NOT NULL
                DROP TABLE #ASN

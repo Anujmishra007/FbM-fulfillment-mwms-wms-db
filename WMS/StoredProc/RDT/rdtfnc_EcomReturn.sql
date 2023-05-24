@@ -55,6 +55,7 @@ GO
 /* 2022-10-20   2.7  KokHoe      JSM-103402 Initialize Condition Code (kh01)  */ 
 /* 2022-09-23   2.8  YeeKung     WMS-20820 Extended refno length (yeekung02)  */
 /* 2023-04-13   2.9  Ung         WMS-22302 Allow ExtInfoSP at SKU to lottables*/
+/*                               Fix ExtendedInfoSP AfterStep                 */
 /******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_EcomReturn](
    @nMobile    INT,
@@ -172,7 +173,6 @@ DECLARE
    @cAllowOverReceive      NVARCHAR( 1),
    @cAutoReceiveNext       NVARCHAR( 1),
    @cSKULabel              NVARCHAR( 10), 
-   @nAfterStep             INT,  
 
    @cData1                 NVARCHAR( 60),
    @cData2                 NVARCHAR( 60),
@@ -885,7 +885,7 @@ BEGIN
                '@cExtendedInfo NVARCHAR( 20) OUTPUT '
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey,  
+               @nMobile, @nFunc, @cLangCode, @nStep_ASNRefNo, @nStep, @nInputKey, @cFacility, @cStorerKey,  
                @cReceiptKey, @cRefNo, @cID, @cLOC, @cSKU, @nQTY,
                @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
                @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
@@ -1059,7 +1059,7 @@ BEGIN
                '@cExtendedInfo NVARCHAR( 20) OUTPUT '
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey,  
+               @nMobile, @nFunc, @cLangCode, @nStep_CaptureData, @nStep, @nInputKey, @cFacility, @cStorerKey,  
                @cReceiptKey, @cRefNo, @cID, @cLOC, @cSKU, @nQTY,
                @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
                @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
@@ -2056,7 +2056,7 @@ BEGIN
                @cData1, @cData2, @cData3, @cData4, @cData5, @cOption, @dArriveDate,
                @tExtInfoVar, @cExtendedInfo OUTPUT
 
-            IF @cExtendedInfo <> ''
+            IF @cExtendedInfo <> '' AND @nStep <> @nStep_Lottables -- Lottable screen uses @cOutField15, cannot overwrite
                SET @cOutField15 = @cExtendedInfo
          END
       END
