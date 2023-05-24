@@ -2056,7 +2056,7 @@ BEGIN
                @cData1, @cData2, @cData3, @cData4, @cData5, @cOption, @dArriveDate,
                @tExtInfoVar, @cExtendedInfo OUTPUT
 
-            IF @cExtendedInfo <> '' AND @nStep <> @nStep_Lottables -- Lottable screen uses @cOutField15, cannot overwrite
+            IF @cExtendedInfo <> ''
                SET @cOutField15 = @cExtendedInfo
          END
       END
