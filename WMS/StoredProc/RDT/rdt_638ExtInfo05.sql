@@ -69,29 +69,32 @@ AS
    BEGIN
       IF @nStep = 3 -- SKU
       BEGIN
-         -- Get SKU info
-         DECLARE @cNotes2 NVARCHAR( MAX)         
-         SELECT @cNotes2 = ISNULL( Notes2, '')
-         FROM dbo.SKU WITH (NOLOCK)
-         WHERE StorerKey = @cStorerKey
-            AND SKU = @cSKU
-         
-         -- Show the VAS info
-         IF @cNotes2 <> ''
+         IF @nInputKey = 1 -- ENTER
          BEGIN
-            DECLARE @cMsg1 NVARCHAR( 20)
-            DECLARE @cMsg2 NVARCHAR( 20)
-            DECLARE @cMsg3 NVARCHAR( 20)
-            DECLARE @cMsg4 NVARCHAR( 20)
-            DECLARE @cMsg5 NVARCHAR( 20)
+            -- Get SKU info
+            DECLARE @cNotes2 NVARCHAR( MAX)         
+            SELECT @cNotes2 = ISNULL( Notes2, '')
+            FROM dbo.SKU WITH (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+               AND SKU = @cSKU
             
-            SET @cMsg1 = rdt.rdtFormatString( @cNotes2, 1, 20)
-            SET @cMsg2 = rdt.rdtFormatString( @cNotes2, 21, 20)
-            SET @cMsg3 = rdt.rdtFormatString( @cNotes2, 41, 20)
-            SET @cMsg4 = rdt.rdtFormatString( @cNotes2, 61, 20)
-            SET @cMsg5 = rdt.rdtFormatString( @cNotes2, 81, 20)
-                                 
-            EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', @cMsg1, @cMsg2, @cMsg3, @cMsg4, @cMsg5
+            -- Show the VAS info
+            IF @cNotes2 <> ''
+            BEGIN
+               DECLARE @cMsg1 NVARCHAR( 20)
+               DECLARE @cMsg2 NVARCHAR( 20)
+               DECLARE @cMsg3 NVARCHAR( 20)
+               DECLARE @cMsg4 NVARCHAR( 20)
+               DECLARE @cMsg5 NVARCHAR( 20)
+               
+               SET @cMsg1 = rdt.rdtFormatString( @cNotes2, 1, 20)
+               SET @cMsg2 = rdt.rdtFormatString( @cNotes2, 21, 20)
+               SET @cMsg3 = rdt.rdtFormatString( @cNotes2, 41, 20)
+               SET @cMsg4 = rdt.rdtFormatString( @cNotes2, 61, 20)
+               SET @cMsg5 = rdt.rdtFormatString( @cNotes2, 81, 20)
+                                    
+               EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', @cMsg1, @cMsg2, @cMsg3, @cMsg4, @cMsg5
+            END
          END
       END
    END
