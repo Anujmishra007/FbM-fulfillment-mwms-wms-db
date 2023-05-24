@@ -79,6 +79,7 @@ GO
 /*2022-11-30 1.51 YeeKung  JSM-114083 Fix for nototeflag keep back to step 1 */
 /*                                    (yeekung06)                            */
 /*2023-03-30 1.52 YeeKung  WMS-22041 Add extendedinfo in ctnscn (yeekung07)  */
+/*2023-05-23 1.53 YeeKung  WMS-22408 Add orderkeyout in ctntype (yeekung08)  */
 /*****************************************************************************/          
 CREATE OR ALTER PROC [RDT].[rdtfnc_DTC_Dispatch](          
    @nMobile    INT,          
@@ -2026,7 +2027,8 @@ BEGIN
                   SET @cOutField02 = ''    
                   SET @cOutField03 = ''    
                   SET @cOutField04 = ''    
-                  SET @cOutField07 = ''    
+                  SET @cOutField07 = ''  
+                  SET @cOrderKey = @cOrderKeyOut  
                          
                   --set default Value        
                   SET @cOutField07 = CASE WHEN @cDefaultCtnType <> '' THEN @cDefaultCtnType ELSE '' END        
@@ -2072,7 +2074,8 @@ BEGIN
         
                      SET @cOrderKey = @cOrderKeyOut          
                   END          
-          
+
+                  SET @cOrderKey = @cOrderKeyOut  
                   SET @cOutField01 = @cOrderKey          
                   SET @cOutfield02 = @cSuggestedTrackNo          
           
@@ -2080,7 +2083,8 @@ BEGIN
                   SET @nStep = @nStep + 4          
                END          
                ELSE          
-               BEGIN          
+               BEGIN       
+                  SET @cOrderKey = @cOrderKeyOut  
                   SET @nTotalScannedQty = @nTotalScannedQty + 1          
             
                   SET @cOutField01 = @cDropIDType          
@@ -2096,8 +2100,9 @@ BEGIN
             ELSE          
             BEGIN          
              
-               SET @nTotalScannedQty = @nTotalScannedQty + 1          
-                            
+               SET @nTotalScannedQty = @nTotalScannedQty + 1     
+               
+               SET @cOrderKey = @cOrderKeyOut              
                SET @cOutField01 = @cDropIDType          
                SET @cOutField02 = @cToteNo --'' --@cSku  -- (Vicky02)          
                SET @cOutField03 = @cOrderKey          
@@ -2150,7 +2155,8 @@ BEGIN
                      SET @cCartonType = ''          
                      SET @cWeight = ''          
                      SET @cCube = ''          
-                     SET @cRefNo = ''          
+                     SET @cRefNo = ''  
+                     SET @cOrderKey = @cOrderKeyOut  
                                    
                      --set default Value        
                      SET @cOutField07 = CASE WHEN @cDefaultCtnType <> '' THEN @cDefaultCtnType ELSE '' END        
@@ -2302,7 +2308,8 @@ BEGIN
                      SET @cCartonType = ''          
                      SET @cWeight = ''          
                      SET @cCube = ''          
-                     SET @cRefNo = ''          
+                     SET @cRefNo = ''  
+                     
                                    
                      --set default Value        
                      SET @cOutField07 = CASE WHEN @cDefaultCtnType <> '' THEN @cDefaultCtnType ELSE '' END        
@@ -2465,7 +2472,8 @@ BEGIN
                            SET @cCartonType = ''          
                            SET @cWeight = ''          
                            SET @cCube = ''          
-                           SET @cRefNo = ''          
+                           SET @cRefNo = ''     
+                           SET @cOrderKey = @cOrderKeyOut  
                         
                            --set default Value        
                            SET @cOutField07 = CASE WHEN @cDefaultCtnType <> '' THEN @cDefaultCtnType ELSE '' END        
@@ -2520,6 +2528,7 @@ BEGIN
                            SET @cWeight = ''          
                            SET @cCube = ''          
                            SET @cRefNo = ''          
+                           SET @cOrderKey = @cOrderKeyOut  
                                    
                            --set default Value        
                            SET @cOutField07 = CASE WHEN @cDefaultCtnType <> '' THEN @cDefaultCtnType ELSE '' END        
@@ -2574,7 +2583,8 @@ BEGIN
             SET @cCartonType = ''          
             SET @cWeight = ''          
             SET @cCube = ''          
-            SET @cRefNo = ''          
+            SET @cRefNo = ''  
+            SET @cOrderKey = @cOrderKeyOut  
                                    
             --set default Value        
             SET @cOutField07 = CASE WHEN @cDefaultCtnType <> '' THEN @cDefaultCtnType ELSE '' END        
@@ -2634,7 +2644,8 @@ BEGIN
                SET @nStep = @nStep + 4          
             END   
             ELSE          
-            BEGIN          
+            BEGIN   
+               SET @cOrderKey = @cOrderKeyOut  
                SET @cOutField01 = @cDropIDType          
                SET @cOutField02 = @cToteNo --'' --@cSku  -- (Vicky02)          
                SET @cOutField03 = @cOrderKey          
@@ -2653,7 +2664,8 @@ BEGIN
                SET @cCartonType = ''          
                SET @cWeight = ''          
                SET @cCube = ''          
-               SET @cRefNo = ''          
+               SET @cRefNo = ''   
+               SET @cOrderKey = @cOrderKeyOut  
                                    
                --set default Value        
                SET @cOutField07 = CASE WHEN @cDefaultCtnType <> '' THEN @cDefaultCtnType ELSE '' END        
