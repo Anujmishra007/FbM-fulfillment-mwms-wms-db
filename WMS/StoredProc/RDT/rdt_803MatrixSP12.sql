@@ -3,7 +3,6 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /************************************************************************/
 /* Store procedure: rdt_803MatrixSP12                                   */
 /* Copyright      : LF Logistics                                        */
@@ -12,7 +11,7 @@ GO
 /* 06-04-2023 1.0  yeekung     WMS-22163 Created                        */  
 /************************************************************************/
 
-CREATE OR ALTER PROC [RDT].[rdt_803MatrixSP12] (
+CREATE or ALTER   PROC [RDT].[rdt_803MatrixSP12] (
     @nMobile    INT
    ,@nFunc      INT
    ,@cLangCode  NVARCHAR( 3)
@@ -62,6 +61,7 @@ BEGIN
    DECLARE @cDeviceStatus NVARCHAR(20)
    DECLARE @bSuccess INT
    DECLARE @cDeviceID NVARCHAR(20)
+   DECLARE @c_DeviceModel NVARCHAR(20) = ''
 
    SET @cCR = CHAR( 13)
    SET @cLF = CHAR( 10)
@@ -80,16 +80,16 @@ BEGIN
    FROM RDT.RDTMOBREC (NOLOCK)
    WHERE MOBILE = @nMobile
 
-   IF ISNULL(@cDeviceID,'') = ''
+   IF ISNULL(@cDeviceID,'') <> ''
    BEGIN
       -- Get logical name
       SET @cLogicalName = @cPosition
-      SELECT @cLogicalName = LogicalName
+      SELECT @cLogicalName = LogicalName,
+             @cIPAddress =  IPAddress
       FROM DeviceProfile WITH (NOLOCK)
       WHERE DeviceType = 'STATION'
          AND DeviceID = @cStation
          AND DeviceID <> ''
-         AND IPAddress = @cIPAddress
          AND DevicePosition = @cPosition
 
       -- Get ASCII art
@@ -126,7 +126,7 @@ BEGIN
             --print @cResult
 
             -- Map to output
-            IF @i = 1  SET @cResult01 = @cResult ELSE
+            IF @i = 1 SET @cResult01 = @cResult ELSE
             IF @i = 2  SET @cResult02 = @cResult ELSE
             IF @i = 3  SET @cResult03 = @cResult ELSE
             IF @i = 4  SET @cResult04 = @cResult ELSE
@@ -174,21 +174,193 @@ BEGIN
          SET @cResult09 = '*** COMPLETED ***'
       END
 
-      EXEC PTL.isp_PTL_LightUpLoc
-         @n_Func           = @nFunc
-         ,@n_PTLKey         = 0
-         ,@c_DisplayValue   = ''
-         ,@b_Success        = @bSuccess    OUTPUT
-         ,@n_Err            = @nErrNo      OUTPUT
-         ,@c_ErrMsg         = @cErrMsg     OUTPUT
-         ,@c_DeviceID       = @cStation
-         ,@c_DevicePos      = @cLogicalName
-         ,@c_DeviceIP       = ''
-         ,@c_LModMode       = 1
-         ,@c_DeviceModel    = 'TMS'
 
-      IF @nErrNo<>0
-         GOTO QUIt
+      IF @cLight ='1'
+      BEGIN
+
+         IF ISNULL(@cIPAddress,'') =''
+            SET @c_DeviceModel = 'TMS'
+         ELSE
+            SET @c_DeviceModel = 'LIGHT'
+
+
+         DECLARE @cLightMode  NVARCHAR(4)
+         DECLARE @cLightModeEND  NVARCHAR(4)
+               -- Get light setting
+         SET @cLightMode = rdt.RDTGetConfig( @nFunc, 'LightMode', @cStorerKey)
+
+         SET @cLightModeEND = rdt.RDTGetConfig( @nFunc, 'LightModeEND', @cStorerKey)
+
+
+         IF @c_DeviceModel = 'LIGHT'
+         BEGIN
+
+            -- Off all lights
+            EXEC PTL.isp_PTL_TerminateModule
+                @cStorerKey
+               ,@nFunc
+               ,@cStation
+               ,'STATION'
+               ,@bSuccess    OUTPUT
+               ,@nErrNo       OUTPUT
+               ,@cErrMsg      OUTPUT
+            IF @nErrNo <> 0
+               GOTO Quit
+
+         END
+
+         IF @cDisplay = ''
+         BEGIN
+            SET @cDisplay = '1'
+         END
+         ELSE
+         BEGIN
+            SET @cLightMode = @cLightModeEND
+         END
+
+
+         EXEC PTL.isp_PTL_LightUpLoc
+            @n_Func           = @nFunc
+            ,@n_PTLKey         = 0
+            ,@c_DisplayValue   = @cDisplay
+            ,@b_Success        = @bSuccess    OUTPUT
+            ,@n_Err            = @nErrNo      OUTPUT
+            ,@c_ErrMsg         = @cErrMsg     OUTPUT
+            ,@c_DeviceID       = @cStation
+            ,@c_DevicePos      = @cLogicalName
+            ,@c_DeviceIP       = @cIPAddress
+            ,@c_LModMode       = @cLightMode
+            ,@c_DeviceModel    = @c_DeviceModel
+
+         IF @nErrNo<>0
+            GOTO QUIt
+      END
+   END
+   ELSE
+   BEGIN
+      /***********************************************************************************************
+
+                                                Stardard Matrix
+
+      ***********************************************************************************************/
+   
+
+   
+      SET @cCR = CHAR( 10)
+      SET @cLF = CHAR( 13)
+      SET @cResult01 = ''
+      SET @cResult02 = ''
+      SET @cResult03 = ''
+      SET @cResult04 = ''
+      SET @cResult05 = ''
+      SET @cResult06 = ''
+      SET @cResult07 = ''
+      SET @cResult08 = ''
+      SET @cResult09 = ''
+      SET @cResult10 = ''
+
+      -- Get logical name
+      SET @cLogicalName = @cPosition 
+      SELECT @cLogicalName = LogicalName
+      FROM DeviceProfile WITH (NOLOCK)
+      WHERE DeviceType = 'STATION'
+         AND DeviceID = @cStation
+         AND DeviceID <> ''
+         AND IPAddress = @cIPAddress
+         AND DevicePosition = @cPosition
+
+      -- Get ASCII art
+      SET @cASCII = ''
+      SELECT TOP 1 
+         @cASCII = ISNULL( Notes, '') 
+      FROM CodeLKUP WITH (NOLOCK)
+      WHERE ListName = 'PTLASCII'
+         AND Code = @cLogicalName
+         AND (StorerKey = @cStorerKey OR StorerKey = '')
+      ORDER BY StorerKey DESC
+
+      -- Format ASCII art
+      IF @cASCII = ''
+      BEGIN
+         IF @cLogicalName = ''
+            SET @cResult01 = @cPosition
+         ELSE
+        SET @cResult01 = @cLogicalName
+      END
+      ELSE
+      BEGIN
+         SET @nStart = 1
+         SET @i = 1
+         SET @nEnd = CHARINDEX( @cLF, @cASCII)  -- Find delimeter
+         SET @nLen = @nEnd
+         WHILE @nLen > 0
+         BEGIN
+            SET @cResult = SUBSTRING( @cASCII, @nStart, @nLen) -- Abstract field
+            SET @cResult = REPLACE( @cResult, @cLF, '')        -- Remove line break
+            SET @cResult = REPLACE( @cResult, @cCR, '')        -- Remove line break
+   
+            --select @cResult '@cResult', @nStart '@nStart', @nEnd '@nEnd', @nLen '@nLen', @i '@i'
+            --print @cResult 
+      
+            -- Map to output
+            IF @i = 1  SET @cResult01 = @cResult ELSE
+            IF @i = 2  SET @cResult02 = @cResult ELSE
+            IF @i = 3  SET @cResult03 = @cResult ELSE
+            IF @i = 4  SET @cResult04 = @cResult ELSE
+            IF @i = 5  SET @cResult05 = @cResult ELSE
+            IF @i = 6  SET @cResult06 = @cResult ELSE
+            IF @i = 7  SET @cResult07 = @cResult ELSE
+            IF @i = 8  SET @cResult08 = @cResult ELSE
+            IF @i = 9  SET @cResult09 = @cResult ELSE
+            IF @i = 10 SET @cResult10 = @cResult
+      
+            IF @nEnd = 0                                       -- No more delimeter
+               BREAK
+   
+            SET @i = @i + 1                                    -- Next field
+            SET @nStart = @nEnd + 1                            -- Next field starting position
+            SET @nEnd = CHARINDEX( @cLF, @cASCII, @nStart)     -- Find next delimeter
+            IF @nEnd > 0
+               SET @nLen = @nEnd - @nStart
+            ELSE
+               SET @nLen = LEN( @cASCII)
+         END
+      END
+   
+      IF @cLight = '1'
+      BEGIN
+         -- Get light setting
+         SET @cLightMode = rdt.RDTGetConfig( @nFunc, 'LightMode', @cStorerKey)
+
+         -- Off all lights
+         EXEC PTL.isp_PTL_TerminateModule
+             @cStorerKey
+            ,@nFunc
+            ,@cStation
+            ,'STATION'
+            ,@bSuccess    OUTPUT
+            ,@nErrNo       OUTPUT
+            ,@cErrMsg      OUTPUT
+         IF @nErrNo <> 0
+            GOTO Quit
+      
+         IF @cDisplay = ''
+            SET @cDisplay = '1'
+      
+         EXEC PTL.isp_PTL_LightUpLoc
+            @n_Func           = @nFunc
+           ,@n_PTLKey         = 0
+           ,@c_DisplayValue   = @cDisplay 
+           ,@b_Success        = @bSuccess    OUTPUT    
+           ,@n_Err            = @nErrNo      OUTPUT  
+           ,@c_ErrMsg         = @cErrMsg     OUTPUT
+           ,@c_DeviceID       = @cStation
+           ,@c_DevicePos      = @cPosition
+           ,@c_DeviceIP       = @cIPAddress  
+           ,@c_LModMode       = @cLightMode
+         IF @nErrNo <> 0
+            GOTO Quit
+      END
    END
 
 
