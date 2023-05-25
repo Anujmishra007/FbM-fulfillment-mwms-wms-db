@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispALVF006]')
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-DROP PROCEDURE [dbo].[ispALVF006]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,16 +13,17 @@ GO
 /*                                                                      */    
 /* Called By:                                                           */    
 /*                                                                      */    
-/* PVCS Version: 1.0                                                    */    
+/* PVCS Version: 1.1                                                    */    
 /*                                                                      */    
-/* Version: 1.0                                                         */    
+/* Version: 1.1                                                         */    
 /*                                                                      */    
 /* Data Modifications:                                                  */    
 /*                                                                      */    
 /* Updates:                                                             */    
-/* Date         Author        Purposes                                  */    
+/* Date        Author   Ver.  Purposes                                  */ 
+/* 2023-05-16  Wan01    1.1   SVT Performance Tune & DevOps Combine Script*/    
 /************************************************************************/    
-CREATE  PROC [dbo].[ispALVF006] 
+CREATE OR ALTER PROC [dbo].[ispALVF006] 
    @c_WaveKey    NVARCHAR(10),  
    @c_Facility   NVARCHAR(5),     
    @c_StorerKey  NVARCHAR(15),     
@@ -69,12 +65,19 @@ BEGIN
    IF ISNULL(@c_WaveType,'') = ''
    BEGIN
       -- GET FROM ORDERS
-      SELECT TOP 1 @c_WaveType = CODELKUP.Short
-      FROM WAVEDETAIL WD WITH (NOLOCK) 
-      JOIN ORDERS O WITH (NOLOCK) ON (WD.OrderKey = O.OrderKey)
-      JOIN CODELKUP WITH (NOLOCK) ON (CODELKUP.Code = O.OrderGroup)
-      WHERE WD.WaveKey = @c_WaveKey 
-        AND CODELKUP.Listname = @c_ListName
+      --SELECT TOP 1 @c_WaveType = CODELKUP.Short                                   --Wan01 2022-05-16 Performance Tune  
+      --FROM WAVEDETAIL WD WITH (NOLOCK) 
+      --JOIN ORDERS O WITH (NOLOCK) ON (WD.OrderKey = O.OrderKey)
+      --JOIN CODELKUP WITH (NOLOCK) ON (CODELKUP.Code = O.OrderGroup)
+      --WHERE WD.WaveKey = @c_WaveKey 
+      --  AND CODELKUP.Listname = @c_ListName
+      
+      SELECT TOP 1 @c_WaveType = CODELKUP.Short          
+      FROM ORDERS O WITH (NOLOCK) 
+      JOIN CODELKUP WITH (NOLOCK) ON (CODELKUP.Code = O.OrderGroup  AND CODELKUP.Listname = @c_ListName)
+      WHERE O.OrderKey IN ( SELECT TOP 1 Orderkey from WAVEDETAIL WD WITH (NOLOCK)
+                            WHERE WD.WaveKey = @c_WaveKey 
+                            AND WD.OrderKey <> '' )                                 --Wan01 2022-05-16 Performance Tune  
    END
 
    -- IF NORMAL WAVE, GET FROM DDP LOCATION

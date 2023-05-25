@@ -6,7 +6,7 @@ GO
 /************************************************************************/
 /* Stored Procedure: isp_tw_return_list_eat                             */
 /* Creation Date: 05-Apr-2023                                           */
-/* Copyright: LFL                                                       */
+/* Copyright: MAERSK                                                    */
 /* Written by: WLChooi                                                  */
 /*                                                                      */
 /* Purpose: WMS-22146 - [TW]EAT_ViewReport ReturnList_IDST058_CR        */
@@ -14,7 +14,7 @@ GO
 /*                                                                      */
 /* Called By: r_dw_tw_return_list_eat                                   */
 /*                                                                      */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -22,7 +22,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
-/* 05-Apr-2023  WLChooi  1.0   DevOps Combine Script                    */
+/* 05-Apr-2023  WLChooi  1.0  DevOps Combine Script                     */
+/* 25-May-2023  WLChooi  1.1  WMS-22146 - Modify column (WL01)          */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_tw_return_list_eat]
@@ -99,7 +100,7 @@ BEGIN
         , RH.EffectiveDate
         , RD.Sku
         , SKU.DESCR
-        , SKU.ShelfLife / 375 AS Y
+        , (SKU.ShelfLife / 365) AS Y   --WL01
         , SKU.SKUGROUP
         , '' --BOM.ComponentSku
         , 0 --BOM.Qty
@@ -136,7 +137,7 @@ BEGIN
           , RH.EffectiveDate
           , RD.Sku
           , SKU.DESCR
-          , SKU.ShelfLife / 375
+          , (SKU.ShelfLife / 365)   --WL01
           , SKU.SKUGROUP
           , RH.StorerKey
           , ISNULL(TRIM(SKU.RetailSKU),'')
