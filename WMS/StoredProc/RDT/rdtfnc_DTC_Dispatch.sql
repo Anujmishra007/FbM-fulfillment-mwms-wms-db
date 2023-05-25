@@ -45,7 +45,7 @@ GO
 /*2018-09-13 1.23 ChewKP   WMS-6213 Add DefaultCursor (chewKP11)             */          
 /*2018-11-16 1.25 James    Add check if sku blank (james05)                  */          
 /*2018-12-04 1.26 James    WMS-7147 Add custom get orders sp (james06)       */          
-/*2019-01-10 1.27 ChewKP   WMS-7607 DTC allow without DropID (ChewKP12)      */          
+/*2019-01-10 1.27 ChewKP   WMS-7607 DTC allow without DropID (ChewKP12)      */        
 /*2019-07-25 1.28 James    WMS-9971/9880 Add new order type (james07)   */          
 /*2019-10-07 1.29 James    Perfomance tuning (james08)     */          
 /*2020-02-24 1.30 James    WMS-11634 Add ExtendedValidateSP for LoadKey/  */        
@@ -81,7 +81,7 @@ GO
 /*2023-03-30 1.52 YeeKung  WMS-22041 Add extendedinfo in ctnscn (yeekung07)  */
 /*2023-05-23 1.53 YeeKung  WMS-22408 Add orderkeyout in ctntype (yeekung08)  */
 /*****************************************************************************/          
-CREATE OR ALTER PROC [RDT].[rdtfnc_DTC_Dispatch](          
+CREATE OR ALTER  PROC [RDT].[rdtfnc_DTC_Dispatch](          
    @nMobile    INT,          
    @nErrNo     INT  OUTPUT,          
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max          
@@ -263,7 +263,7 @@ SELECT
    @cOrderKey        = V_OrderKey,          
    @cLoadKey         = V_LoadKey,          
           
-   @cToteno             = V_String1,          
+   @cToteno             = V_String1,      
    @cDropIDType         = V_String2,          
    @cDefaultCtnType     = V_String3,        
    @cSku                = V_String4,          
@@ -337,7 +337,7 @@ IF @nFunc = 841
 BEGIN          
    IF @nStep = 0 GOTO Step_0   -- Menu. Func = 814          
    IF @nStep = 1 GOTO Step_1   -- Scn = 3910  ToteNo          
-   IF @nStep = 2 GOTO Step_2   -- Scn = 3911  Singles/Doubles Order Sku          
+   IF @nStep = 2 GOTO Step_2 -- Scn = 3911  Singles/Doubles Order Sku          
    --IF @nStep = 3 GOTO Step_3   -- Scn = 3912  Multis Order SKU          
    IF @nStep = 3 GOTO Step_3   -- Scn = 3912  ReasonCode          
    IF @nStep = 4 GOTO Step_4   -- Scn = 3913  Multi ToteNo          
@@ -426,7 +426,7 @@ BEGIN
    SET @cSKUStatus  = ''          
    SET @cSKUStatus = rdt.RDTGetConfig( @nFunc, 'SKUStatus', @cStorerkey)            
    IF @cSKUStatus = '0'          
-      SET @cSKUStatus = ''          
+     SET @cSKUStatus = ''          
           
    SET @cGetOrders_SP = rdt.RDTGetConfig( @nFunc, 'GetOrders_SP', @cStorerkey)            
    IF @cGetOrders_SP = '0'          
@@ -672,7 +672,7 @@ BEGIN
                SET @cSQL = 'EXEC rdt.' + RTRIM(@cExtendedValidateSP) +          
                   ' @nMobile, @nFunc, @cLangCode, @nStep, @cStorerKey, @cToteno, @cSKU, @cPickSlipNo, @cSerialNo, @nSerialQTY, @nErrNo OUTPUT, @cErrMsg OUTPUT '          
                SET @cSQLParam =          
-                  '@nMobile        INT, ' +          
+          '@nMobile        INT, ' +          
                   '@nFunc          INT, ' +          
                   '@cLangCode      NVARCHAR( 3),  ' +          
                   '@nStep          INT, ' +          
@@ -1311,7 +1311,7 @@ BEGIN
                END  
   
                -- Customize decode  
-               ELSE IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cDecodeSP AND type = 'P')  
+      ELSE IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cDecodeSP AND type = 'P')  
                BEGIN  
                   SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +  
                      ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +  
@@ -1398,7 +1398,7 @@ BEGIN
          GOTO Step_2_Fail          
       END          
           
-      -- Check multi SKU barcode          
+   -- Check multi SKU barcode          
       IF @nSKUCnt > 1          
       BEGIN          
          SET @nErrNo = 90460          
@@ -1472,7 +1472,7 @@ BEGIN
                      ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cRefNo, @cToteNo, @cWaveKey, @cLoadKey, @cSKU, @cDropIDType, @cUserName,       
                        @cOrderkey OUTPUT,@nErrNo OUTPUT, @cErrMsg OUTPUT'                        
                   SET @cSQLParam =        
-                     '@nMobile        INT, ' +        
+  '@nMobile        INT, ' +        
                      '@nFunc          INT, ' +        
                      '@cLangCode      NVARCHAR( 3),  ' +       
                      '@nStep          NVARCHAR( 18), ' +       
@@ -1667,7 +1667,7 @@ BEGIN
                SET @cErrMsg3 = 'FOR ORDERKEY:'          
                SET @cErrMsg4 = @cOrderKey          
                SET @cErrMsg5 = ''          
-            END          
+           END          
                       
             EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT,          
                @nErrNo, @cErrMsg, @cErrMsg3, @cErrMsg4, @cErrMsg5          
@@ -1810,7 +1810,7 @@ BEGIN
                ('@cRefNo',       @cRefNo),         
                ('@cWaveKey',     @cWaveKey),        
                ('@cLoadKey',     @cLoadKey),         
-               ('@cOption',      @cOption)               
+               ('@cOption',    @cOption)               
                             
              SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +                            
                 ' @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, @cToteNo, @cSKU, @nStep, @cPickSlipNo, @cOrderKey, @cTrackNo, @cTrackNoFlag OUTPUT, @cOrderKeyOut OUTPUT,         
@@ -1952,17 +1952,33 @@ BEGIN
                         
                    
             IF @cGenPackDetail = '1'          
-            BEGIN          
-               -- Check total packed & unshipped qty          
-               SELECT @nSKU_Packed_TTL = ISNULL(SUM(PD.QTY), 0)          
-               FROM dbo.Packdetail PD WITH (NOLOCK)          
-               JOIN dbo.PackHeader PH WITH (NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo          
-               JOIN dbo.Orders O WITH (NOLOCK) ON PH.StorerKey = O.StorerKey AND PH.OrderKey = O.OrderKey          
-               JOIN DROPID DI WITH (NOLOCK) ON PD.DROPID = DI.DROPID AND DI.LOADKEY = O.LOADKEY          
-               WHERE O.StorerKey = @cStorerKey          
-                  AND O.Status <> '9'           
-                  AND O.SOStatus NOT IN ('9', 'CANC', 'PENDPACK', 'PENDCANC' , 'HOLD')          
-                  AND PD.DropID = @cToteNo          
+            BEGIN 
+                         
+               IF @cNotCheckDropIDTable = '1'          
+               BEGIN       
+                  -- Check total packed & unshipped qty          
+                  SELECT @nSKU_Packed_TTL = ISNULL(SUM(PD.QTY), 0)          
+                  FROM dbo.Packdetail PD WITH (NOLOCK)          
+                  JOIN dbo.PackHeader PH WITH (NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo          
+                  JOIN dbo.Orders O WITH (NOLOCK) ON PH.StorerKey = O.StorerKey AND PH.OrderKey = O.OrderKey
+                  WHERE O.StorerKey = @cStorerKey          
+                     AND O.Status <> '9'           
+                     AND O.SOStatus NOT IN ('9', 'CANC', 'PENDPACK', 'PENDCANC' , 'HOLD')          
+                     AND PD.DropID = @cToteNo    
+               END
+               ELSE
+               BEGIN
+                   -- Check total packed & unshipped qty          
+                  SELECT @nSKU_Packed_TTL = ISNULL(SUM(PD.QTY), 0)          
+                  FROM dbo.Packdetail PD WITH (NOLOCK)          
+                  JOIN dbo.PackHeader PH WITH (NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo          
+                  JOIN dbo.Orders O WITH (NOLOCK) ON PH.StorerKey = O.StorerKey AND PH.OrderKey = O.OrderKey 
+                  JOIN DROPID DI WITH (NOLOCK) ON PD.DROPID = DI.DROPID AND DI.LOADKEY = O.LOADKEY          
+                  WHERE O.StorerKey = @cStorerKey          
+                     AND O.Status <> '9'           
+                     AND O.SOStatus NOT IN ('9', 'CANC', 'PENDPACK', 'PENDCANC' , 'HOLD')          
+                     AND PD.DropID = @cToteNo   
+               END
             END          
             ELSE          
             BEGIN          
@@ -2389,7 +2405,7 @@ BEGIN
                   --   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DelEcommLogFail          
                   --   GOTO Step_2_Fail          
                   --END          
-                            
+                  
                   SET @nTotalPickedQty = 0           
                   SET @nTotalScannedQty = 0           
           
@@ -2447,7 +2463,7 @@ BEGIN
                         SET @nRefCount = 1          
           
                         SELECT @nTotalPickedQty  = Count(O.OrderKey),           
-                               @nTotalScannedQty = SUM(CASE WHEN O.Status = '5' THEN 1 ELSE 0 END)          
+           @nTotalScannedQty = SUM(CASE WHEN O.Status = '5' THEN 1 ELSE 0 END)          
                         FROM dbo.WaveDetail WD WITH (NOLOCK)          
                         INNER JOIN dbo.Orders O WITH (NOLOCK) ON O.OrderKey = WD.OrderKey          
                         WHERE WD.WaveKey = @cWaveKey          
@@ -2508,7 +2524,7 @@ BEGIN
                         SET @cDropIDType  = ''          
                         SET @cOrderkey    = ''          
                         SET @cSku         = ''          
-                                  
+                
                         SET @cLoadKey    = ''           
                         SET @cWaveKey    = ''           
                         SET @cOutField02 = ''           
@@ -2578,7 +2594,7 @@ BEGIN
                  
          --(cc01)        
          IF @cScanCTSCN <> ''                      
-         BEGIN                  
+    BEGIN                  
             -- Get PackInfo          
             SET @cCartonType = ''          
             SET @cWeight = ''          
@@ -2659,7 +2675,7 @@ BEGIN
          BEGIN          
           --(cc01)        
             IF @cScanCTSCN <> ''                      
-            BEGIN                  
+            BEGIN   
                -- Get PackInfo          
                SET @cCartonType = ''          
                SET @cWeight = ''          
@@ -2822,7 +2838,7 @@ GOTO Quit
 --            @cPrinter_Paper = @cPrinter_Paper,  -- (Vicky01)          
 --            @cPrevOrderkey = @cOrderkey,         --(Kc03)          
 --            @nFunc         = @nFunc,            --(Kc06)          
---            @cFacility     = @cFacility,        --(Kc06)          
+--        @cFacility     = @cFacility,        --(Kc06)          
 --            @cUserName     = @cUserName         --(Kc06)          
 --          
 --         IF @nErrno <> 0          
@@ -3080,7 +3096,7 @@ BEGIN
             GOTO Step_3_Fail          
          END          
           
-         FETCH NEXT FROM CUR_UPD INTO @nRowRef          
+         FETCH NEXT FROM CUR_UPD INTO @nRowRef      
       END          
       CLOSE CUR_UPD          
       DEALLOCATE CUR_UPD          
@@ -3271,7 +3287,7 @@ BEGIN
          INSERT INTO rdt.rdtECOMMLog(Mobile, ToteNo, Orderkey, Sku, DropIDType, ExpectedQty, ScannedQty, AddWho, AddDate, EditWho, EditDate)          
           
          SELECT @nMobile, @cToteNo, PK.Orderkey, PK.SKU, @cDropIDType, SUM(PK.Qty), 0, @cUserName, GETDATE(), @cUserName, GETDATE()          
-         FROM dbo.PICKDETAIL PK WITH (NOLOCK)          
+         FROM dbo.PICKDETAIL PK WITH (NOLOCK)   
          JOIN dbo.Orders O WITH (NOLOCK) ON O.Orderkey = PK.Orderkey          
          WHERE PK.DROPID = @cToteNo          
            --AND PK.Status = '5' -- (ChewKP04)          
@@ -3368,7 +3384,7 @@ Step 5. screen = 3914
 Step_5:          
 BEGIN          
    IF @nInputKey = 1 OR @nInputKey = 0 -- ENTER/ESC          
-   BEGIN          
+   BEGIN       
       /****************************          
        Prepare Next Screen          
      ****************************/          
@@ -3465,7 +3481,7 @@ BEGIN
       IF @cExtendedUpdateSP <> ''            
       BEGIN            
             
-          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')            
+          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')    
           BEGIN            
              SET @cTrackNoFlag = '0'            
              SET @cOrderKeyOut = ''            
@@ -3929,7 +3945,7 @@ BEGIN
                 '@cUserName      NVARCHAR( 18), ' +                            
                 '@cFacility      NVARCHAR( 5),  ' +                         
                 '@cStorerKey     NVARCHAR( 15), ' +                            
-                '@cToteNo        NVARCHAR( 20), ' +                            
+                '@cToteNo        NVARCHAR( 20), ' +                    
                 '@cSKU           NVARCHAR( 20), ' +                            
                 '@nStep          INT,           ' +                            
                 '@cPickSlipNo    NVARCHAR( 10), ' +                            
@@ -4052,7 +4068,7 @@ BEGIN
                SET @cInField07 =''                             
                                                   
                SET @nScn = @nScn - 6                      
-               SET @nStep = @nStep - 6                          
+               SET @nStep = @nStep - 6                       
             END                      
             ELSE                      
             BEGIN                      
@@ -4267,7 +4283,7 @@ BEGIN
             SET @cOrderKeyOut = ''            
             
             INSERT INTO @tExtUpd (Variable, Value) VALUES         
-            ('@cCube',        @cCube),        
+            ('@cCube',        @cCube),     
             ('@cWeight',      @cWeight),        
             ('@cRefNo',       @cRefNo),         
             ('@cWaveKey',     @cWaveKey),        
@@ -4333,7 +4349,7 @@ BEGIN
                         
    Step_7_Fail:                          
    BEGIN                          
-      SET @cOutField07 = ''                 
+  SET @cOutField07 = ''                 
       SET @cCartonType=''                         
    END                          
                           
@@ -4399,7 +4415,7 @@ BEGIN
                '@nStep          INT, ' +            
                '@cStorerKey     NVARCHAR( 15), ' +        
                '@cToteno        NVARCHAR( 20), ' +            
-               '@cSKU           NVARCHAR( 20), ' +            
+               '@cSKU           NVARCHAR( 20), ' +           
                '@cPickSlipNo    NVARCHAR( 10), ' +            
                '@cSerialNo      NVARCHAR( 30), ' +               
                '@nSerialQTY     INT,           ' +           
@@ -4665,7 +4681,7 @@ BEGIN
                SET @nScn = @nPrevScn - 4            
                SET @nStep = @nStep -4           
             END            
-         END            
+         END    
          ELSE            
          BEGIN            
             --(Kc05)            
@@ -4739,7 +4755,7 @@ BEGIN
                         AND OrderKey = @cOrderKeyOut            
                      ELSE        
                         SELECT @cSuggestedTrackNo = TrackingNo            
-                        FROM dbo.Orders WITH (NOLOCK)            
+                   FROM dbo.Orders WITH (NOLOCK)            
                         WHERE StorerKey = @cStorerKey            
                         AND OrderKey = @cOrderKeyOut            
                              
@@ -4818,7 +4834,7 @@ BEGIN
                   WHILE @@FETCH_STATUS <> -1            
                   BEGIN            
             
-                     DELETE FROM RDT.rdtECOMMLOG WITH (ROWLOCK) WHERE RowRef = @nRowRef            
+              DELETE FROM RDT.rdtECOMMLOG WITH (ROWLOCK) WHERE RowRef = @nRowRef            
                      IF @@ERROR <> 0            
                      BEGIN            
                         CLOSE CUR_DEL            
@@ -4949,7 +4965,7 @@ BEGIN
                         SET @nRefCount = 1            
             
                         SELECT @nTotalPickedQty  = Count(O.OrderKey),             
-                               @nTotalScannedQty = SUM(CASE WHEN O.Status = '5' THEN 1 ELSE 0 END)         
+    @nTotalScannedQty = SUM(CASE WHEN O.Status = '5' THEN 1 ELSE 0 END)         
                         FROM dbo.WaveDetail WD WITH (NOLOCK)            
                         INNER JOIN dbo.Orders O WITH (NOLOCK) ON O.OrderKey = WD.OrderKey            
                         WHERE WD.WaveKey = @cWaveKey            
@@ -5011,7 +5027,7 @@ BEGIN
                         SET @cOutField03 = ''             
                                     
                      
-                        SET @nScn = @nPrevScn - 1            
+             SET @nScn = @nPrevScn - 1            
                         SET @nStep = @nStep - 7          
                      END            
                      ELSE            
@@ -5084,7 +5100,7 @@ BEGIN
            --set default Value        
             SET @cOutField07 = ''        
                                    
-            -- Enable disable field          
+           -- Enable disable field          
             SET @cFieldAttr07 = CASE WHEN CHARINDEX( 'T', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
             SET @cFieldAttr02 = CASE WHEN CHARINDEX( 'C', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
             SET @cFieldAttr03 = CASE WHEN CHARINDEX( 'W', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
@@ -5162,7 +5178,7 @@ BEGIN
                SET @cWeight = ''          
                SET @cCube = ''          
                SET @cRefNo = ''          
-                                   
+                                 
                --set default Value        
                SET @cOutField07 = ''        
                                    
@@ -5339,6 +5355,7 @@ BEGIN
    WHERE Mobile = @nMobile          
           
 END     
+GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
