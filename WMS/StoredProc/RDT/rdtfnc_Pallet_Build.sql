@@ -29,6 +29,7 @@ GO
 /* 2022-04-20 2.1  Ung      WMS-19340 Expand DropID to 20 chars               */
 /* 2021-11-16 2.2  YeeKung  WMS-18255 Add Defaultloc (yeekung02)              */
 /* 2023-02-19 2.3  YeeKung  WMS-21738 Extended UCCNo length (yeekung03)       */
+/* 2023-02-14 2.4  James    WMS-21690 Add cfg no mix orders pallet (james04)  */
 /******************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdtfnc_Pallet_Build](
@@ -105,6 +106,9 @@ DECLARE
    @nAfterStep                INT,
    @nAfterScn                 INT,
    @cDefaultLoc               NVARCHAR(20),
+   @nTranCount                INT,
+   @cPalletNoMixOrderKey      NVARCHAR( 1),
+   @nOrdCnt                   INT = 0,
    
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -145,6 +149,8 @@ SELECT
    @cPrinter         = Printer,
    @cUserName        = UserName,
 
+   @nTotalUCCCount   = V_Integer1,
+
    @cOrderkey        = V_Orderkey,
    @cDropID          = V_String1,
    @cUCCNo           = V_String2,
@@ -153,7 +159,7 @@ SELECT
    @cSkipDropLoc     = V_string7, -- (ChewKP01)
    @cExtendedValidateSP = V_String8, -- (ChewKP01)
    @cExtendedUpdateSP   = V_String9, -- (ChewKP01)
-   @nTotalUCCCount      = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String10, 5), 0) = 1 THEN LEFT( V_String10, 5) ELSE 0 END,   -- (ChewKP01)
+   @cPalletNoMixOrderKey = V_String10,
    @cPalletCriteria     = V_String11,
    @cParam1             = V_String12,
    @cParam2             = V_String13,
@@ -285,6 +291,9 @@ BEGIN
    SET @cCapturePalletInfoSP = rdt.RDTGetConfig( @nFunc, 'CapturePalletInfoSP', @cStorerKey)
    IF @cCapturePalletInfoSP = '0'
       SET @cCapturePalletInfoSP = ''
+
+   -- (james04)
+   SET @cPalletNoMixOrderKey = rdt.RDTGetConfig( @nFunc, 'PalletNoMixOrderKey', @cStorerKey)
 
    -- initialise all variable
    SET @cDropID = ''
@@ -858,7 +867,9 @@ BEGIN
 
       IF @cPltBuildNotInsDropID = '0'
       BEGIN
-         BEGIN TRAN
+         SET @nTranCount = @@TRANCOUNT    
+         BEGIN TRAN  -- Begin our own transaction    
+         SAVE TRAN InsDropId -- For rollback or commit only our own transaction    
 
          -- Create DropID
          IF NOT EXISTS (SELECT 1 FROM dbo.DROPID WITH (NOLOCK) WHERE DropID = @cDropID)
@@ -873,8 +884,7 @@ BEGIN
             BEGIN
                SET @nErrNo = 69202
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins DROPIDFail
-               ROLLBACK TRAN
-               GOTO QUIT
+               GOTO RollBackTran_InsDropId
             END
          END
 
@@ -884,11 +894,80 @@ BEGIN
          BEGIN
             SET @nErrNo = 69203
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins DPDtl Fail
-            ROLLBACK TRAN
-            GOTO QUIT
+            GOTO RollBackTran_InsDropId
          END
 
-         COMMIT TRAN
+         -- (james04)
+         IF @cPalletNoMixOrderKey = '1'
+         BEGIN
+         	SET @nOrdCnt = 0
+         	
+         	IF @cCheckPickDetailDropID = '1'
+         	BEGIN
+         		SELECT @nOrdCnt = COUNT( DISTINCT PD.OrderKey)
+         		FROM dbo.PickDetail PD WITH (NOLOCK)
+         		WHERE Storerkey = @cStorerKey
+         		AND   EXISTS ( SELECT 1 
+         		               FROM dbo.DropIDDetail DD WITH (NOLOCK)
+         		               JOIN dbo.Dropid D WITH (NOLOCK) ON ( DD.Dropid = D.Dropid)
+         		               WHERE D.Dropid = @cDropID
+         		               AND   D.Droploc = @cDropLOC
+         		               AND   D.[Status] = '0'
+         		               AND   D.DropIDType = 'B'
+         		               AND   PD.DropID = DD.ChildId)
+         	END
+         	ELSE
+         	BEGIN
+         		IF @cCheckPackDetailDropID = '1'
+         		BEGIN
+         		   SELECT @nOrdCnt = COUNT( DISTINCT PH.OrderKey)
+         		   FROM dbo.PackDetail PD WITH (NOLOCK)
+         		   JOIN dbo.PackHeader PH WITH (NOLOCK) ON ( PD.PickSlipNo = PH.PickSlipNo)
+         		   WHERE PD.Storerkey = @cStorerKey
+         		   AND   EXISTS ( SELECT 1 
+         		                  FROM dbo.DropIDDetail DD WITH (NOLOCK)
+         		                  JOIN dbo.Dropid D WITH (NOLOCK) ON ( DD.Dropid = D.Dropid)
+         		                  WHERE D.Dropid = @cDropID
+         		                  AND   D.Droploc = @cDropLOC
+         		                  AND   D.[Status] = '0'
+         		                  AND   D.DropIDType = 'B'
+         		                  AND   PD.DropID = DD.ChildId)
+         		END
+         		ELSE
+         		BEGIN
+         		   SELECT @nOrdCnt = COUNT( DISTINCT PH.OrderKey)
+         		   FROM dbo.PackDetail PD WITH (NOLOCK)
+         		   JOIN dbo.PackHeader PH WITH (NOLOCK) ON ( PD.PickSlipNo = PH.PickSlipNo)
+         		   WHERE PD.Storerkey = @cStorerKey
+         		   AND   EXISTS ( SELECT 1 
+         		                  FROM dbo.DropIDDetail DD WITH (NOLOCK)
+         		                  JOIN dbo.Dropid D WITH (NOLOCK) ON ( DD.Dropid = D.Dropid)
+         		                  WHERE D.Dropid = @cDropID
+         		                  AND   D.Droploc = @cDropLOC
+         		                  AND   D.[Status] = '0'
+         		                  AND   D.DropIDType = 'B'
+         		                  AND   PD.LabelNo = DD.ChildId)
+         		END
+         	END
+
+         	IF @nOrdCnt > 1
+         	BEGIN
+               SET @nErrNo = 69212
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Plt Mix Orders
+               GOTO RollBackTran_InsDropId
+            END
+         END
+         
+         COMMIT TRAN InsDropId    
+    
+         GOTO Quit_InsDropId    
+    
+         RollBackTran_InsDropId:    
+            ROLLBACK TRAN -- Only rollback change made here    
+
+         Quit_InsDropId:    
+            WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started    
+               COMMIT TRAN    
       END
 
       IF @cExtendedUpdateSP <> ''
@@ -1706,6 +1785,8 @@ BEGIN
       Facility      = @cFacility,
       Printer       = @cPrinter,
 
+      V_Integer1    = @nTotalUCCCount,
+
       V_Orderkey    = @cOrderkey,
       V_String1     = @cDropID,
       V_String2     = @cUCCNo,
@@ -1714,7 +1795,7 @@ BEGIN
       V_String7     = @cSkipDropLoc,
       V_String8     = @cExtendedValidateSP,
       V_String9     = @cExtendedUpdateSP,
-      V_String10    = @nTotalUCCCount,
+      V_String10    = @cPalletNoMixOrderKey,
       V_String11    = @cPalletCriteria,
       V_String12    = @cParam1,
       V_String13    = @cParam2,
