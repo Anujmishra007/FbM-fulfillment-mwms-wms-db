@@ -2,7 +2,7 @@ CREATE TABLE [dbo].[UCC]
 (
 [UCCNo] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 [Storerkey] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[ExternKey] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+[ExternKey] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 [SKU] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 [qty] [int] NULL,
 [Sourcekey] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
@@ -123,3 +123,10 @@ EXEC sp_addextendedproperty N'MS_Description', 'User defined03 - can be used to 
 GO
 EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying Wave.', 'SCHEMA', N'dbo', 'TABLE', N'UCC', 'COLUMN', N'WaveKey'
 GO
+
+
+/*
+alter table UCC 
+alter column ExternKey nvarchar(50)
+
+*/
