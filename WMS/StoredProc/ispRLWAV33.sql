@@ -13,7 +13,7 @@ GO
 /*                                                                          */      
 /* Called By: Wave                                                          */      
 /*                                                                          */      
-/* PVCS Version: 1.2                                                        */      
+/* PVCS Version: 1.5                                                        */      
 /*                                                                          */      
 /* Version: 7.0                                                             */      
 /*                                                                          */      
@@ -27,6 +27,7 @@ GO
 /* 2021-12-22   TWL      1.3  Make changes to remove TaskDetailKey (TWL01)  */  
 /* 2023-04-25   WLChooi  1.4  WMS-22396 - Add Lot filter (WL03)             */
 /* 2023-04-25   WLChooi  1.4  DevOps Combine Script                         */
+/* 2023-05-24   WLChooi  1.5  JSM-151698 - Add filter for B2B (WL04)        */
 /****************************************************************************/       
     
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV33]          
@@ -83,7 +84,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV33]
             ,@n_Pallet              INT    
             ,@n_MaxPallet           INT    
             ,@c_ToLoc_P             NVARCHAR(50)    
-            ,@c_SQL             NVARCHAR(MAX)    
+            ,@c_SQL                 NVARCHAR(MAX)    
             ,@c_Loadkey             NVARCHAR(10)    
             ,@c_Orderkey            NVARCHAR(10)    
             ,@c_LocationGroup       NVARCHAR(10)    
@@ -267,7 +268,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV33]
    IF @n_continue = 1 OR @n_continue = 2    
    BEGIN    
       --Retrieve all lot of the wave from pick loc    
-  SELECT DISTINCT LLI.Lot                 
+      SELECT DISTINCT LLI.Lot                 
       INTO #TMP_WavePICKLOT    
       FROM PICKDETAIL PD (NOLOCK)    
       JOIN SKUXLOC SXL (NOLOCK) ON PD.Storerkey = SXL.Storerkey AND PD.Sku = SXL.Sku AND PD.Loc = SXL.Loc    
@@ -290,7 +291,8 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV33]
       WHERE SL.LocationType IN ('PICK','CASE')      
       AND LLI.Storerkey = @c_Storerkey    
       AND LOC.Facility = @c_Facility      
-      AND LOC.LocationCategory = 'PICK'        
+      AND LOC.LocationCategory = 'PICK' 
+      AND LOC.LocationGroup = 'N'   --WL04
       GROUP BY LLI.Storerkey, LLI.Sku, LLI.Lot, LLI.Loc, LLI.Id, PACK.CaseCnt     
       HAVING SUM(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked + LLI.PendingMoveIn) < 0  --overallocate    
       ORDER BY MAX(LOTT.Lottable05)    
@@ -347,7 +349,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV33]
                 ,@c_UOM                   = @c_UOM         
                 ,@n_UOMQty                = 1          
                 ,@n_Qty                   = @n_Qty          
-             ,@c_FromLoc               = @c_Fromloc          
+                ,@c_FromLoc               = @c_Fromloc          
                 ,@c_FromID                = @c_ID         
                 ,@c_ToLoc                 = @c_ToLoc           
                 ,@c_ToID                  = @c_ID           
@@ -430,7 +432,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV33]
          DECLARE cur_BulkPallet CURSOR LOCAL FAST_FORWARD READ_ONLY FOR     
          SELECT LLI.Lot, LLI.Loc, LLI.Id, LLI.Qty     
          FROM LOTXLOCXID LLI (NOLOCK)              
-   JOIN SKUXLOC SL (NOLOCK) ON LLI.Storerkey = SL.Storerkey AND LLI.Sku = SL.Sku AND LLI.Loc = SL.Loc    
+         JOIN SKUXLOC SL (NOLOCK) ON LLI.Storerkey = SL.Storerkey AND LLI.Sku = SL.Sku AND LLI.Loc = SL.Loc    
          JOIN LOC (NOLOCK) ON LLI.Loc = LOC.Loc    
          JOIN SKU (NOLOCK) ON SKU.Storerkey = LLI.Storerkey AND SKU.SKU = LLI.SKU    
          JOIN PACK (NOLOCK) ON PACK.Packkey = SKU.Packkey    
@@ -612,7 +614,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV33]
                  ,@c_Loadkey               = @c_Loadkey      
                  ,@c_Groupkey              = @c_Orderkey    
                  ,@c_AreaKey               = '?F'  -- ?F=Get from location areakey       
-  ,@c_LinkTaskToPick        = 'WIP' -- WIP=Update taskdetailkey to pickdetail_wip      
+                 ,@c_LinkTaskToPick        = 'WIP' -- WIP=Update taskdetailkey to pickdetail_wip      
                  ,@c_LinkTaskToPick_SQL    = @c_LinkTaskToPick_SQL        
                  ,@c_WIP_RefNo             = @c_SourceType      
                  ,@b_Success               = @b_Success OUTPUT      
@@ -689,7 +691,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV33]
                  ,@c_FromID                = @c_ID     --WL01      
                  ,@c_ToLoc                 = @c_ToLoc_P             
                  ,@c_LogicalToLoc          = @c_ToLoc_P       
-             --,@c_ToID                  = @c_ID             
+                 --,@c_ToID                  = @c_ID             
                  ,@c_PickMethod            = @c_PickMethod      
                  ,@c_Priority              = @c_Priority           
                  ,@c_SourcePriority        = @c_SourcePriority            
@@ -978,7 +980,7 @@ RETURN_SP:
             COMMIT TRAN      
          END      
       END      
-      execute nsp_logerror @n_err, @c_errmsg, "ispRLWAV33"      
+      EXECUTE nsp_logerror @n_err, @c_errmsg, "ispRLWAV33"      
       RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012      
       RETURN      
    END      
