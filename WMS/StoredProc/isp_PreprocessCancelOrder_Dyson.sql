@@ -20,8 +20,9 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author        Purposes                                  */
-/* 10-05-2023   TLTING        Initial Version                           */
+/* Date         Author   Ver  Purposes                                  */
+/* 10-05-2023   TLTING   1.0  Initial Version                           */
+/* 26-05-2023   TLTING01 1.1  add Orders status filtering               */
 /************************************************************************/
 
 CREATE OR ALTER  PROC [dbo].[isp_PreprocessCancelOrder_Dyson]   
@@ -48,7 +49,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
    , @c_SOstatus           Nvarchar (10) = ''  
    , @c_WorkOrderKey       Nvarchar(10) = ''  
    , @c_PreWorkOrderKey    Nvarchar(10) = ''  
-   , @c_WorkOrderLineNumber Nvarchar(5) = ''  
+   , @c_WorkOrderLineNumber Nvarchar(5) = '00000'  
    , @c_externOrderKey     nvarchar(50)  
    , @c_UserDefine01       Nvarchar(20)  
    , @c_TotalOriginalQty    INT  
@@ -62,13 +63,14 @@ SET CONCAT_NULL_YIELDS_NULL OFF
    FOR                    
    SELECT W.WorkOrderKey, O.Orderkey, O.Status, O.SOstatus , O.ExternOrderKey, O.UserDefine01  
    FROM Orders O (nolock)     
-   JOIN workorder W (nolock)    on o.userdefine01= w.WkOrdUdef8  and o.storerkey=w.storerkey  
-   WHERE o.storerkey = @c_Storerkey   
-   AND w.status = '0'     
+   JOIN workorder W (nolock)    on O.userdefine01= W.WkOrdUdef8  and O.storerkey=W.storerkey  
+   WHERE O.storerkey = @c_Storerkey   
+   AND W.status = '0'
+   AND O.Status <= '5'   --tlting01
    AND not exists ( Select 1   
       FROM workorderdetail (nolock) wd    
-      WHERE o.storerkey=wd.storerkey and o.ExternOrderKey=wd.WkOrdUdef1 )  
-   Order by W.WorkOrderKey, o.Orderkey  
+      WHERE O.storerkey=wd.storerkey and O.ExternOrderKey=wd.WkOrdUdef1 )  
+   Order by W.WorkOrderKey, O.Orderkey  
      
    OPEN CUR_OrderItem       
    FETCH NEXT FROM CUR_OrderItem INTO @c_WorkOrderKey, @c_Orderkey, @c_Status , @c_SOstatus , @c_externOrderKey, @c_UserDefine01  
