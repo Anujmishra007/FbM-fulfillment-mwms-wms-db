@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: Wave                                                      */ 
 /*                                                                      */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
 /* 25-Aug-2022  WLChooi  1.0  DevOps Combine Script                     */
+/* 20-Feb-2023  WLChooi  1.1  WMS-20606 Modify B2B gen pickslip (WL01)  */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV55]      
@@ -389,6 +390,7 @@ BEGIN
       JOIN LOC L WITH (NOLOCK) ON PDW.Loc = L.Loc 
       JOIN ORDERS OH WITH (NOLOCK) ON OH.OrderKey = PDW.OrderKey
       WHERE ISNULL(RefKeyLookup.PickSlipNo, '') = ''
+      AND OH.DocType = 'E'   --WL01
       ORDER BY L.PickZone
              , PDW.PickDetailKey
 
@@ -582,6 +584,29 @@ BEGIN
                GOTO QUIT_SP
             END
          END
+
+         --WL01 S
+         IF EXISTS (SELECT 1
+                    FROM ORDERS (NOLOCK)
+                    WHERE Orderkey = @c_GetWDOrdKey
+                    AND DocType = 'N')
+         BEGIN
+            UPDATE #PickDetail_WIP
+            SET PickSlipNo = @c_Pickslipno
+            WHERE OrderKey = @c_GetWDOrdKey
+
+            SELECT @n_err = @@ERROR
+
+            IF @n_err <> 0
+            BEGIN
+               SELECT @n_Continue = 3
+               SELECT @n_err = 81013
+               SELECT @c_errmsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_err)
+                                 + ': Update #TMP_PICK Failed. (ispRLWAV55)'
+               GOTO QUIT_SP
+            END
+         END
+         --WL01 E
 
          IF @b_Debug = 0
          BEGIN
