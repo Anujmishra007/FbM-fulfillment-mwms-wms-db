@@ -28,3 +28,6 @@ execute rdt.rdtAddMsg 69209, 10, '69209^Invalid Option', 'us_english', 1641
 --(yeekung01)
 execute rdt.rdtAddMsg 69210, 10, '69210^Option req', 'us_english', 1641
 execute rdt.rdtAddMsg 69211, 10, '69211^Invalid Option', 'us_english', 1641
+
+-- WMS-21690
+execute rdt.rdtAddMsg 69212, 10, '69212^Plt Mix Orders', 'us_english', 1641
