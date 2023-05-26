@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_WM_PrintJob_Reprint]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_WM_PrintJob_Reprint]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,7 +12,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 8.0                                                         */
 /*                                                                      */
@@ -27,8 +22,11 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2021-02-10  mingle01 1.1   Add Big Outer Begin try/Catch              */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2023-05-02  Wan01    1.2   LFWM-3913 - Ship Reference Enhancement -  */
+/*                            Print Interface Document                  */
+/*                            DevOps Combine Script                     */
 /************************************************************************/
-CREATE PROC [WM].[lsp_WM_PrintJob_Reprint]
+CREATE OR ALTER PROC [WM].[lsp_WM_PrintJob_Reprint]
            @n_JobID     INT
          , @b_Success   INT            OUTPUT
          , @n_Err       INT            OUTPUT
@@ -69,10 +67,12 @@ BEGIN
          , @c_Parm18                NVARCHAR(60)      = ''
          , @c_Parm19                NVARCHAR(60)      = ''
          , @c_Parm20                NVARCHAR(60)      = ''
-         , @c_Printer             NVARCHAR(30)      = ''
+         , @c_Printer               NVARCHAR(30)      = ''
          , @n_NoOfCopy              INT               = 1
-         , @c_PrintData             NVARCHAR(4000)    = ''
+         , @c_PrintData             NVARCHAR(MAX)     = ''                          --(Wan01)
          , @c_JobType               NVARCHAR(30)      = ''  
+         , @b_SCEPreview            BIT               = 0                           --(Wan01)
+         , @c_ReportLineNo          NVARCHAR(5)       = ''                          --(Wan01)
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
@@ -145,53 +145,95 @@ BEGIN
          ,  @c_Printer   = Printer
          ,  @n_Noofcopy  = Noofcopy                  
          ,  @c_PrintData = PrintData             
-         ,  @c_JobType   = JobType         
+         ,  @c_JobType   = JobType   
+         ,  @b_SCEPreview= IIF(PDFPreview= 'Y', 1,0)                                --(Wan01)
+         ,  @c_ReportLineNo = ReportLineNo                                          --(Wan01)                                    
       FROM RDT.RDTPRINTJOB_LOG WITH(NOLOCK)
       WHERE JobID = @n_JobID
 
       BEGIN TRY
-         EXEC  isp_PrintToRDTSpooler                      
-               @c_ReportType     = @c_ReportID         
-            ,  @c_Storerkey      = @c_Storerkey           
-            ,  @n_Noofparam      = @n_Noofparms           
-            ,  @c_Param01        = @c_Parm1             
-            ,  @c_Param02        = @c_Parm2             
-            ,  @c_Param03        = @c_Parm3             
-            ,  @c_Param04        = @c_Parm4             
-            ,  @c_Param05        = @c_Parm5           
-            ,  @c_Param06        = @c_Parm6             
-            ,  @c_Param07        = @c_Parm7            
-            ,  @c_Param08        = @c_Parm8             
-            ,  @c_Param09        = @c_Parm9             
-            ,  @c_Param10        = @c_Parm10             
-            ,  @n_Noofcopy       = @n_Noofcopy            
-            ,  @c_UserName       = @c_UserName           
-            ,  @c_Facility       = ''            
-            ,  @c_PrinterID      = @c_Printer           
-            ,  @c_Datawindow     = @c_ReportTemplate          
-            ,  @c_IsPaperPrinter = 'Y'      
-            ,  @c_JobType        = @c_JobType         
-            ,  @c_PrintData      = @c_PrintData        
-            ,  @b_success        = @b_success   OUTPUT    
-            ,  @n_err            = @n_err       OUTPUT    
-            ,  @c_errmsg         = @c_errmsg    OUTPUT 
-            ,  @n_Function_ID    = 999    -- Print From WMS Setup
-            ,  @b_PrintFromWM    = 1
-            ,  @c_Param11        = @c_Parm11             
-            ,  @c_Param12        = @c_Parm12             
-            ,  @c_Param13        = @c_Parm13             
-            ,  @c_Param14        = @c_Parm14             
-            ,  @c_Param15        = @c_Parm15           
-            ,  @c_Param16        = @c_Parm16             
-            ,  @c_Param17        = @c_Parm17            
-            ,  @c_Param18        = @c_Parm18             
-            ,  @c_Param19        = @c_Parm19             
-            ,  @c_Param20        = @c_Parm20   
+         --EXEC  isp_PrintToRDTSpooler                      
+         --      @c_ReportType     = @c_ReportID         
+         --   ,  @c_Storerkey      = @c_Storerkey           
+         --   ,  @n_Noofparam      = @n_Noofparms           
+         --   ,  @c_Param01        = @c_Parm1             
+         --   ,  @c_Param02        = @c_Parm2             
+         --   ,  @c_Param03        = @c_Parm3             
+         --   ,  @c_Param04        = @c_Parm4             
+         --   ,  @c_Param05        = @c_Parm5           
+         --   ,  @c_Param06        = @c_Parm6             
+         --   ,  @c_Param07        = @c_Parm7            
+         --   ,  @c_Param08        = @c_Parm8             
+         --   ,  @c_Param09        = @c_Parm9             
+         --   ,  @c_Param10        = @c_Parm10             
+         --   ,  @n_Noofcopy       = @n_Noofcopy            
+         --   ,  @c_UserName       = @c_UserName           
+         --   ,  @c_Facility       = ''            
+         --   ,  @c_PrinterID      = @c_Printer           
+         --   ,  @c_Datawindow     = @c_ReportTemplate          
+         --   ,  @c_IsPaperPrinter = 'Y'      
+         --   ,  @c_JobType        = @c_JobType         
+         --   ,  @c_PrintData      = @c_PrintData        
+         --   ,  @b_success        = @b_success   OUTPUT    
+         --   ,  @n_err            = @n_err       OUTPUT    
+         --   ,  @c_errmsg         = @c_errmsg    OUTPUT 
+         --   ,  @n_Function_ID    = 999    -- Print From WMS Setup
+         --   ,  @b_PrintFromWM    = 1
+         --   ,  @c_Param11        = @c_Parm11             
+         --   ,  @c_Param12        = @c_Parm12             
+         --   ,  @c_Param13        = @c_Parm13             
+         --   ,  @c_Param14        = @c_Parm14             
+         --   ,  @c_Param15        = @c_Parm15           
+         --   ,  @c_Param16        = @c_Parm16             
+         --   ,  @c_Param17        = @c_Parm17            
+         --   ,  @c_Param18        = @c_Parm18             
+         --   ,  @c_Param19        = @c_Parm19             
+         --   ,  @c_Param20        = @c_Parm20  
+         --   
+         EXEC [WM].[lsp_WM_SendPrintJobToProcessApp] 
+               @c_ReportID       = @c_ReportID      
+            ,  @c_ReportLineNo   = @c_ReportLineNo 
+            ,  @c_Storerkey      = @c_Storerkey     
+            ,  @c_Facility       = ''      
+            ,  @n_NoOfParms      = @n_NoOfParms     
+            ,  @c_Parm1          = @c_Parm1             
+            ,  @c_Parm2          = @c_Parm2             
+            ,  @c_Parm3          = @c_Parm3             
+            ,  @c_Parm4          = @c_Parm4             
+            ,  @c_Parm5          = @c_Parm5           
+            ,  @c_Parm6          = @c_Parm6             
+            ,  @c_Parm7          = @c_Parm7            
+            ,  @c_Parm8          = @c_Parm8             
+            ,  @c_Parm9          = @c_Parm9             
+            ,  @c_Parm10         = @c_Parm10  
+            ,  @c_Parm11         = @c_Parm11             
+            ,  @c_Parm12         = @c_Parm12             
+            ,  @c_Parm13         = @c_Parm13             
+            ,  @c_Parm14         = @c_Parm14             
+            ,  @c_Parm15         = @c_Parm15           
+            ,  @c_Parm16         = @c_Parm16             
+            ,  @c_Parm17         = @c_Parm17            
+            ,  @c_Parm18         = @c_Parm18             
+            ,  @c_Parm19         = @c_Parm19             
+            ,  @c_Parm20         = @c_Parm20           
+            ,  @n_Noofcopy       = @n_Noofcopy       
+            ,  @c_PrinterID      = @c_Printer       
+            ,  @c_IsPaperPrinter = 'Y' 
+            ,  @c_ReportTemplate = @c_ReportTemplate
+            ,  @c_PrintData      = @c_PrintData    
+            ,  @c_PrintType      = @c_JobType      
+            ,  @c_UserName       = @c_UserName       
+            ,  @b_SCEPreView     = @b_SCEPreView       
+            ,  @n_JobID          = @n_JobID           OUTPUT   
+            ,  @b_success        = @b_success         OUTPUT 
+            ,  @n_err            = @n_err             OUTPUT 
+            ,  @c_errmsg         = @c_errmsg          OUTPUT
+         --(Wan01) - END   
       END TRY
       BEGIN CATCH
          SET @n_err = 553002
          SET @c_ErrMsg = ERROR_MESSAGE()
-         SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing isp_PrintToRDTSpooler. (lsp_WM_PrintJob_Reprint)'
+         SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing lsp_WM_SendPrintJobToProcessApp. (lsp_WM_PrintJob_Reprint)'
                         + '( ' + @c_errmsg + ' )'
       END CATCH
          

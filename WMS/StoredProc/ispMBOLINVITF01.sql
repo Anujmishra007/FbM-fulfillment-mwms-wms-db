@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispMBOLINVITF01]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispMBOLINVITF01]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -28,9 +23,12 @@ GO
 /*                                                                      */    
 /* Updates:                                                             */    
 /* Date        Author   Ver   Purposes                                  */    
-/* 27-May-2020 CSCHONG  1.1   WMS-13469 add filter (CS01)               */  
+/* 27-May-2020 CSCHONG  1.1   WMS-13469 add filter (CS01)               */ 
+/* 2023-04-20  Wan01    1.1   LFWM-3913-Ship Reference Enhancement-Print*/
+/*                            Interface Document                        */
+/*                            DevOps Combine Script                     */
 /************************************************************************/    
-CREATE PROCEDURE [dbo].[ispMBOLINVITF01]    
+CREATE OR ALTER PROCEDURE [dbo].[ispMBOLINVITF01]    
       @c_Parm01      NVARCHAR(50)         
   ,   @c_Parm02      NVARCHAR(50)=''    
   ,   @c_Parm03      NVARCHAR(50)=''    
@@ -38,8 +36,8 @@ CREATE PROCEDURE [dbo].[ispMBOLINVITF01]
   ,   @c_Parm05      NVARCHAR(50)=''    
   ,   @b_Success     INT  = 1 OUTPUT      
   ,   @n_Err         INT  = 0 OUTPUT      
-  ,   @c_ErrMsg      NVARCHAR(255) = '' OUTPUT    
-       
+  ,   @c_ErrMsg      NVARCHAR(255) = '' OUTPUT
+  ,   @c_PrinterID   NVARCHAR(30)  = ''                                             --(Wan01)     
 AS      
 BEGIN      
    SET NOCOUNT ON       
@@ -79,8 +77,8 @@ BEGIN
          , @n_starttcnt       INT    
          , @c_JobID           NVARCHAR(10)     
          , @c_PrintData       NVARCHAR(MAX)     
-         , @c_userid          NVARCHAR(20)     
-         , @c_PrinterID       NVARCHAR(20)       
+         , @c_userid          NVARCHAR(128)                                         --(Wan01) 
+         --, @c_PrinterID       NVARCHAR(20)                                        --(Wan01)     
          , @c_Storerkey       NVARCHAR(20)     
          , @c_ExternReason    NVARCHAR(50)    
          , @c_PrintFlag       NVARCHAR(10)    
@@ -138,12 +136,15 @@ BEGIN
          ,Depth            SMALLINT    
          ,FileFlag         BIT -- 0=folder 1=file    
       )    
-   END     
-          
-   SELECT TOP 1 @c_Facility = DefaultFacility    
-               ,@c_PrinterID = DefaultPrinter    
-   FROM RDT.RDTUser (NOLOCK)       
-   WHERE UserName = @c_userid    
+   END   
+     
+   IF @c_PrinterID = ''                                                             --(Wan01) 
+   BEGIN     
+      SELECT TOP 1 @c_Facility = DefaultFacility    
+                  ,@c_PrinterID = DefaultPrinter    
+      FROM RDT.RDTUser (NOLOCK)       
+      WHERE UserName = @c_userid    
+   END                                                                              --(Wan01) 
     
    SET @c_SpoolerGroup = ''    
    SELECT @c_WinPrinter = WinPrinter      
@@ -177,7 +178,7 @@ BEGIN
    BEGIN    
       SET @c_PrinterName =  @c_WinPrinter     
    END          
-       
+    
    SET ANSI_NULLS ON      
    SET ANSI_WARNINGS ON      
     

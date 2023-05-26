@@ -1,13 +1,7 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_PrintInterface_Report]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[isp_PrintInterface_Report]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
-
 
 /***************************************************************************/  
 /* Stored Procedure: isp_PrintInterface_Report                             */  
@@ -28,9 +22,12 @@ GO
 /* Data Modifications:                                                     */  
 /*                                                                         */  
 /* Updates:                                                                */  
-/* Date           Ver    Author   Purposes                                 */  
+/* Date        Author   Ver   Purposes                                     */ 
+/* 2023-04-20  Wan01    1.1   LFWM-3913-Ship Reference Enhancement-Print   */
+/*                            Interface Document                           */
+/*                            DevOps Combine Script                        */
 /***************************************************************************/    
-CREATE PROC [dbo].[isp_PrintInterface_Report]    
+CREATE OR ALTER PROC [dbo].[isp_PrintInterface_Report]    
 (     @c_Parm01      NVARCHAR(50)     
   ,   @c_Parm02      NVARCHAR(50) = ''
   ,   @c_Parm03      NVARCHAR(50) = ''
@@ -38,7 +35,8 @@ CREATE PROC [dbo].[isp_PrintInterface_Report]
   ,   @c_Parm05      NVARCHAR(50) = ''
   ,   @b_Success     INT           OUTPUT  
   ,   @n_Err         INT           OUTPUT  
-  ,   @c_ErrMsg      NVARCHAR(255) OUTPUT     
+  ,   @c_ErrMsg      NVARCHAR(255) OUTPUT
+  ,   @c_PrinterID   NVARCHAR(30) = ''                                              --(Wan01)    
 )    
 AS    
 BEGIN    
@@ -116,10 +114,15 @@ BEGIN
             GOTO QUIT_SP  
       END        
             
-      SET @c_SQL = 'EXEC ' + @c_SPCode + ' @c_Parm01=@c_Parm01, @c_Parm02=@c_Parm02, @c_Parm03=@c_Parm03,@c_Parm04=@c_Parm04, @c_Parm05=@c_Parm05, @b_Success=@b_SuccessP OUTPUT, @n_Err=@n_ErrP OUTPUT, @c_ErrMsg=@c_ErrMsgP OUTPUT '  
+      SET @c_SQL = 'EXEC ' + @c_SPCode 
+                 + ' @c_Parm01=@c_Parm01, @c_Parm02=@c_Parm02, @c_Parm03=@c_Parm03,@c_Parm04=@c_Parm04,@c_Parm05=@c_Parm05,'
+                 + ' @b_Success=@b_SuccessP OUTPUT, @n_Err=@n_ErrP OUTPUT,'
+                 + ' @c_ErrMsg=@c_ErrMsgP OUTPUT, @c_PrinterID=@c_PrinterID '       --(Wan01)  
       
       EXEC sp_executesql @c_SQL   
-          ,N'@c_Parm01 NVARCHAR(50), @c_Parm02 NVARCHAR(50), @c_Parm03 NVARCHAR(50),@c_Parm04 NVARCHAR(50), @c_Parm05 NVARCHAR(50),@b_SuccessP INT OUTPUT, @n_ErrP INT OUTPUT, @c_ErrMsgP NVARCHAR(255) OUTPUT '   
+          ,N'@c_Parm01 NVARCHAR(50), @c_Parm02 NVARCHAR(50), @c_Parm03 NVARCHAR(50),@c_Parm04 NVARCHAR(50), @c_Parm05 NVARCHAR(50),
+             @b_SuccessP INT OUTPUT, @n_ErrP INT OUTPUT, @c_ErrMsgP NVARCHAR(255) OUTPUT,
+             @c_PrinterID NVARCHAR(30) '                                            --(Wan01)        
           ,@c_Parm01       
           ,@c_Parm02
           ,@c_Parm03
@@ -127,7 +130,8 @@ BEGIN
           ,@c_Parm05
           ,@b_Success      OUTPUT  
           ,@n_Err          OUTPUT  
-          ,@c_ErrMsg       OUTPUT           
+          ,@c_ErrMsg       OUTPUT   
+          ,@c_PrinterID                                                             --(Wan01)              
 
        IF @b_Success <> 1
        BEGIN
