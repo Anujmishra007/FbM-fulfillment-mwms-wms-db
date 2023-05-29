@@ -12,6 +12,9 @@ GO
 /* 04-05-2017 1.1  Ung      WMS-1856 Fix sum with null                        */
 /* 05-12-2017 1.2  Ung      WMS-3568 Add UpdateStatus                         */
 /* 03-06-2022 1.3  Ung      WMS-19779 Add variance report                     */
+/* 23-05-2023 1.4  Ung      WMS-22520 Add method level config                 */
+/*                          LabelPrinterAsStaton                              */
+/*                          PaperPrinterAsStaton                              */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_803ExtUpd01 (
@@ -150,6 +153,22 @@ BEGIN
                   SET @cVarianceReport = ''
                IF @cVarianceReport <> ''
                BEGIN
+                  DECLARE @cLabelPrinter NVARCHAR( 10)
+                  DECLARE @cPaperPrinter NVARCHAR( 10)
+                  
+                  -- Get session info
+                  SELECT 
+                     @cLabelPrinter = Printer, 
+                     @cPaperPrinter = Printer_Paper
+                  FROM rdt.rdtMobRec WITH (NOLOCK)
+                  WHERE Mobile = @nMobile
+                  
+                  -- Method level config
+                  IF rdt.rdt_PTLPiece_GetConfig( @nFunc, 'LabelPrinterAsStaton', @cStorerKey, @cMethod) = '1'
+                     SET @cLabelPrinter = @cStation
+                  IF rdt.rdt_PTLPiece_GetConfig( @nFunc, 'PaperPrinterAsStaton', @cStorerKey, @cMethod) = '1'
+                     SET @cPaperPrinter = @cStation
+                  
                   -- Common params
                   DECLARE @tVarianceReport AS VariableTable
                   INSERT INTO @tVarianceReport (Variable, Value) VALUES
@@ -159,7 +178,7 @@ BEGIN
                      ( '@cMethod',     @cMethod)
 
                   -- Print label
-                  EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cStation, @cStation,  -- @cLabelPrinter, @cPaperPrinter,
+                  EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
                      @cVarianceReport, -- Report type
                      @tVarianceReport, -- Report params
                      'rdt_803ExtUpd01',
