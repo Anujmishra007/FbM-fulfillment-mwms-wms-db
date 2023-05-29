@@ -31,10 +31,12 @@ GO
 /*                                                                      */    
 /* Updates:                                                             */    
 /* Date         Author     Purposes                                     */    
-/* 2023-03-01   CHONGCS   Devops Scripts Combine                        */                      
+/* 2023-03-01   CHONGCS   Devops Scripts Combine                        */       
+/* 2023-05-17   CHONGCS   WMS-22497 pagenumber by orderkey (CS01)       */                  
 /************************************************************************/    
-CREATE   PROC dbo.isp_RPT_RP_LP_PLIST_001 ( @c_loadKey         NVARCHAR(10) = '',  
-                                            @c_orderkey        NVARCHAR(10) = ''  
+CREATE OR ALTER  PROC dbo.isp_RPT_RP_LP_PLIST_001 ( 
+                                            @c_loadKey     NVARCHAR(10) = '',  
+                                            @c_orderkey    NVARCHAR(10) = ''  
   
 )    
  AS    
@@ -50,7 +52,15 @@ BEGIN
          ,  @n_StartTCnt      INT    
     
          ,  @c_SQL            NVARCHAR(MAX)    
-         ,  @c_Storerkey      NVARCHAR(15)    
+         ,  @c_Storerkey      NVARCHAR(15) 
+         ,  @n_NoOfLine       INT           --CS01   
+         ,  @n_RowNum         INT           --CS01   
+         ,  @n_initialflag    INT = 1       --CS01
+         ,  @n_TTLPage        INT = 1       --CS01 
+         ,  @n_ctnord         INT = 1       --CS01
+         ,  @c_ChgGrp         NVARCHAR(1) = 'N'   --CS01 
+         ,  @n_PgGroup        INT            --CS01   
+         ,  @c_PrevOrderKey   NVARCHAR(10)   --CS01 
        
     
    SET @n_StartTCnt = @@TRANCOUNT    
@@ -61,6 +71,7 @@ DECLARE    @c_Type        NVARCHAR(1) = '1'
   
   
 SET @c_RetVal = ''     
+SET @n_NoOfLine = 5     --CS01
   
   
                SELECT TOP 1 @c_Storerkey = O.StorerKey  
@@ -77,7 +88,97 @@ EXEC [dbo].[isp_GetCompanyInfo]
       ,  @c_RetVal     = @c_RetVal           OUTPUT        
          
 END    
+
+   CREATE TABLE #temp_PLIST_001    
+   (          
+      LoadKey            NVARCHAR(10),        
+      OrderKey           NVARCHAR(10),     
+      OrderKey_Barcode   NVARCHAR(10) NULL,     
+      externorderkey     NVARCHAR(50) NULL,    
+      InvoiceNo          NVARCHAR(20) NULL,     
+      DeliveryDate       NVARCHAR(10) NULL,      
+      ConsigneeKey       NVARCHAR(45) NULL,    
+      Company            NVARCHAR(100) NULL,      
+      Addr1              NVARCHAR(45) NULL,        
+      Addr2              NVARCHAR(45) NULL,        
+      Addr3              NVARCHAR(45) NULL,  
+      PostCode           NVARCHAR(45) NULL,
+      ROUTE              NVARCHAR(10) NULL, 
+      Route_Desc         NVARCHAR(60) NULL,      
+      TrfRoom            NVARCHAR(10) NULL,  
+      Notes1             NVARCHAR(200) NULL, 
+      Notes2             NVARCHAR(200) NULL, 
+      CarrierKey         NVARCHAR(45) NULL, 
+      VehicleNo          NVARCHAR(45) NULL,
+      SKU                NVARCHAR(20),        
+      SkuDesc            NVARCHAR(60),     
+      SUSR3              NVARCHAR(18) NULL,  
+      OrderQty           INT,    
+      UOM                NVARCHAR(10) NULL, 
+      PACKKEY            NVARCHAR(10) NULL, 
+      Location           NVARCHAR(10) NULL,   
+      FamilyGroup        NVARCHAR(30) NULL, 
+      Box                NVARCHAR(30) NULL, 
+      Powers             NVARCHAR(20) NULL,  
+      CYC                NVARCHAR(30) NULL,  
+      Axis               NVARCHAR(10) NULL, 
+      Type               NVARCHAR(10) NULL, 
+      OHAddDate          NVARCHAR(10) NULL, 
+      Retailsku          NVARCHAR(20) NULL,    
+      ORDGRP             NVARCHAR(20) NULL,     
+      Logo               NVARCHAR(255) NULL,   
+      skugroup           NVARCHAR(10) NULL,      
+      skugrpbarcode      NVARCHAR(20) NULL,  
+      RowNum             INT, 
+      PgGroup            INT,        
+      TTLPAGE            INT                   
+   )   
      
+ INSERT INTO #temp_PLIST_001
+ (
+     LoadKey,
+     OrderKey,
+     OrderKey_Barcode,
+     externorderkey,
+     InvoiceNo,
+     DeliveryDate,
+     ConsigneeKey,
+     Company,
+     Addr1,
+     Addr2,
+     Addr3,
+     PostCode,
+     ROUTE,
+     Route_Desc,
+     TrfRoom,
+     Notes1,
+     Notes2,
+     CarrierKey,
+     VehicleNo,
+     SKU,
+     SkuDesc,
+     SUSR3,
+     OrderQty,
+     UOM,
+     PACKKEY,
+     Location,
+     FamilyGroup,
+     Box,
+     Powers,
+     CYC,
+     Axis,
+     Type,
+     OHAddDate,
+     Retailsku,
+     ORDGRP,
+     Logo,
+     skugroup,
+     skugrpbarcode,
+     RowNum,
+     PgGroup,
+     TTLPAGE
+ )
+ 
          SELECT   O.LoadKey,  
                   O.Orderkey,  
                   OrderKey_Barcode =  O.Orderkey ,   
@@ -114,7 +215,13 @@ END
                   S.RETAILSKU, ISNULL(O.OrderGroup,'') AS ORDGRP,  
                   ISNULL(@c_Retval,'')    AS Logo,  
                   S.SKUGROUP AS skugroup,  
-                  CASE WHEN  S.SKUGROUP <>'Rx' THEN  S.RETAILSKU ELSE '' END AS skugrpbarcode   
+                  CASE WHEN  S.SKUGROUP <>'Rx' THEN  S.RETAILSKU ELSE '' END AS skugrpbarcode,
+                 (ROW_NUMBER() OVER (PARTITION BY O.Orderkey  ORDER BY O.LoadKey,   --CS01
+                      O.OrderKey,  
+                      IsNull(INV.Loc, ''),  
+                      S.BUSR10,S.Size,S.Measurement,  
+         CASE WHEN ISNULL(S.Style,'') <> '' AND ISNUMERIC(S.Style) = 1 THEN CAST(RTRIM(S.Style) AS DECIMAL(10,2)) ELSE 0.00 END desc,  
+                      s.SKUGROUP DESC  ))  AS RowNum   ,1,1
             FROM dbo.ORDERS O WITH (NOLOCK)  INNER JOIN dbo.V_ORDERDETAIL OD WITH (NOLOCK) ON (OD.STORERKEY = O.StorerKey and OD.Orderkey = O.Orderkey)    
             INNER JOIN dbo.Sku S WITH (NOLOCK) ON (S.StorerKey = OD.StorerKey AND S.Sku = OD.Sku)    
             INNER JOIN dbo.Pack P WITH (NOLOCK) ON (P.PackKey = S.PackKey)   
@@ -129,6 +236,7 @@ END
             Group By LLID.StorerKey, LLID.SKU) INV ON INV.StorerKey = O.StorerKey and INV.SKU = OD.SKU  
             --WHERE (O.LoadKey LIKE '%' + @c_LoadKey or O.OrderKey LIKE '%' + @c_OrderKey)  
             WHERE (O.LoadKey = @c_LoadKey or O.OrderKey = @c_OrderKey)  
+            --AND O.OrderKey = CASE WHEN ISNULL(@c_OrderKey,'') <> '' THEN @c_OrderKey ELSE O.OrderKey END
             GROUP BY O.LoadKey,   
                   O.OrderKey,  
                    O.ExternOrderKey,   
@@ -166,6 +274,139 @@ END
                       S.BUSR10,S.Size,S.Measurement,  
          CASE WHEN ISNULL(S.Style,'') <> '' AND ISNUMERIC(S.Style) = 1 THEN CAST(RTRIM(S.Style) AS DECIMAL(10,2)) ELSE 0.00 END desc,  
                       s.SKUGROUP DESC  
+
+
+  --CS01 S
+   SELECT @c_PrevOrderKey = N''
+   SELECT @n_PgGroup = 1  
+   SET    @n_TTLPAGE = 1
+   SET    @c_ChgGrp  = 'N'
+
+ DECLARE Page_cur CURSOR LOCAL FAST_FORWARD READ_ONLY FOR    
+   SELECT OrderKey,RowNum   
+   FROM #temp_PLIST_001 (NOLOCK)    
+   WHERE LoadKey = @c_LoadKey   
+   ORDER BY OrderKey    
+    
+   OPEN Page_cur    
+    
+   FETCH NEXT FROM Page_cur    
+   INTO  @c_orderkey,@n_RowNum    
+    
+   WHILE (@@FETCH_STATUS <> -1)    
+   BEGIN    
+      IF @c_PrevOrderKey = '' 
+      BEGIN 
+             SET @c_PrevOrderKey = @c_orderkey
+      END 
+    
+      IF (@c_orderkey <> @c_PrevOrderKey)   
+      BEGIN    
+             SET  @n_PgGroup = 1 
+             SET  @n_initialflag =  1
+      END    
+
+      SELECT @n_ctnord = COUNT(orderkey)
+      FROM #temp_PLIST_001
+      WHERE orderkey = @c_orderkey
+
+      IF @n_RowNum%@n_NoOfLine = 0 
+      BEGIN
+          SET  @c_ChgGrp = 'Y' --@n_PgGroup = @n_PgGroup + 1
+      END
+      ELSE 
+      BEGIN
+          SET  @c_ChgGrp = 'N' 
+      END
+
+
+     IF (@n_ctnord/@n_NoOfLine) = 0
+     BEGIN
+         SET @n_TTLPAGE = 1
+     END
+     ELSE
+     BEGIN
+           IF @n_ctnord%@n_NoOfLine = 0
+           BEGIN
+                SET @n_TTLPAGE = (@n_ctnord/@n_NoOfLine) 
+           END  
+           ELSE
+           BEGIN
+                SET @n_TTLPAGE = (@n_ctnord/@n_NoOfLine) + 1
+           END     
+     END
+ 
+      UPDATE #temp_PLIST_001   
+      SET pgGroup = @n_PgGroup
+          ,TTLPAGE = @n_TTLPAGE
+      WHERE orderkey = @c_orderkey AND RowNum = @n_RowNum
+
+
+     IF @c_ChgGrp = 'Y'
+     BEGIN
+       SET @n_PgGroup = @n_PgGroup + 1  
+     END
+
+      SELECT @c_PrevOrderKey = @c_orderkey   
+      SELECT @n_initialflag = @n_initialflag + 1
+ 
+      FETCH NEXT FROM Page_cur    
+      INTO @c_orderkey ,@n_RowNum     
+   END    
+   CLOSE Page_cur    
+   DEALLOCATE Page_cur  
+
+
+
+    SELECT LoadKey,
+           OrderKey,
+           OrderKey_Barcode,
+           externorderkey,
+           InvoiceNo,
+           DeliveryDate,
+           ConsigneeKey,
+           Company,
+           Addr1,
+           Addr2,
+           Addr3,
+           PostCode,
+           ROUTE,
+           Route_Desc,
+           TrfRoom,
+           Notes1,
+           Notes2,
+           CarrierKey,
+           VehicleNo,
+           SKU,
+           SkuDesc,
+           SUSR3,
+           OrderQty,
+           UOM,
+           PACKKEY,
+           Location,
+           FamilyGroup,
+           Box,
+           Powers,
+           CYC,
+           Axis,
+           Type,
+           OHAddDate,
+           Retailsku,
+           ORDGRP,
+           Logo,
+           skugroup,
+           skugrpbarcode,
+           RowNum,
+           PgGroup,
+           TTLPAGE
+    FROM #temp_PLIST_001
+    ORDER BY LoadKey,   
+             OrderKey,  
+             Location,  
+             FamilyGroup,CYC,Axis,  
+             CASE WHEN ISNULL(Powers,'') <> '' AND ISNUMERIC(Powers) = 1 THEN CAST(RTRIM(Powers) AS DECIMAL(10,2)) ELSE 0.00 END desc,  
+             SKUGROUP DESC 
+   --CS01 E
  QUIT_SP:    
     
    WHILE @@TRANCOUNT < @n_StartTCnt    
