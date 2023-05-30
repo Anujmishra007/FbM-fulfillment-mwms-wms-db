@@ -23,6 +23,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver. Purposes                                  */
 /* 21-Nov-2022  WLChooi  1.0  DevOps Combine Script                     */
+/* 26-May-2023  WLChooi  1.1  WMS-21195 - Fix Sorting (WL01)            */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTN_019]
@@ -70,6 +71,7 @@ BEGIN
          , @n_MaxRec         INT
          , @n_CurrentRec     INT
          , @n_MaxLineno      INT
+         , @c_HDR            NVARCHAR(1) = 'N'   --WL01
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
@@ -82,21 +84,13 @@ BEGIN
    SET @n_LastPage = 0
    SET @n_ReqLine = 1
 
+   --WL01 S
    IF LEFT(ISNULL(@c_Loadkey,''), 1) = 'H'
    BEGIN
       SET @c_Loadkey = SUBSTRING(@c_Loadkey, 2, 10)
-
-      SELECT DISTINCT LoadPlanDetail.LoadKey
-                    , LoadPlanDetail.OrderKey
-      FROM LoadPlanDetail WITH (NOLOCK)
-      WHERE LoadPlanDetail.LoadKey = @c_Loadkey
-      AND   LoadPlanDetail.OrderKey >= CASE WHEN ISNULL(@c_OrderkeyFrom, '') = '' THEN LoadPlanDetail.OrderKey
-                                            ELSE @c_OrderkeyFrom END
-      AND   LoadPlanDetail.OrderKey <= CASE WHEN ISNULL(@c_OrderkeyTo, '') = '' THEN LoadPlanDetail.OrderKey
-                                            ELSE @c_OrderkeyTo END
-      
-      GOTO EXIT_SP
+      SET @c_HDR = 'Y'
    END
+   --WL01 E
 
    IF @c_OrderkeyFrom = NULL
       SET @c_OrderkeyFrom = ''
@@ -576,7 +570,7 @@ BEGIN
       WHERE PickSlipNo NOT IN (  SELECT DISTINCT PickSlipNo
                                  FROM #TMP_PCK88TW_Final ) AND PickSlipNo = @c_PSNo
       ORDER BY Loc
-             , SKU
+             , SYCOLORSZ   --SKU   --WL01
 
       FETCH NEXT FROM CUR_PSNO
       INTO @n_rowid
@@ -585,14 +579,26 @@ BEGIN
    CLOSE CUR_PSNO
    DEALLOCATE CUR_PSNO
 
+   --WL01 S
+   IF @c_HDR = 'Y'
+   BEGIN
+      SELECT @c_Loadkey AS Loadkey, 
+             (SELECT TOP 1 Orderkey FROM #TMP_PCK88TW_Final WHERE Pickslipno = T.Pickslipno) AS Orderkey
+      FROM #UniquePSNO T
+      ORDER BY T.rowid
+      
+      GOTO EXIT_SP
+   END
+   --WL01 E
+
    IF ISNULL(@c_PreGenRptData, '') = ''
    BEGIN
       SELECT *
       FROM #TMP_PCK88TW_Final AS tp
-      ORDER BY PickSlipNo
-             , CASE WHEN SKU = '' THEN 2
-                    ELSE 1 END
-             , tp.Pageno
+      ORDER BY tp.rowid   --PickSlipNo       --WL01
+             --, CASE WHEN SKU = '' THEN 2   --WL01
+             --       ELSE 1 END             --WL01
+             --, tp.Pageno                   --WL01
    END
 
    EXIT_SP:
@@ -600,5 +606,5 @@ END
 GO
 GRANT EXECUTE ON [dbo].[isp_RPT_LP_PLISTN_019] TO NSQL
 GO
-GRANT EXECUTE ON [dbo].[isp_RPT_LP_PLISTN_019] TO JReportRole
+GRANT EXECUTE ON [dbo].[isp_RPT_LP_PLISTN_019] TO LogiReportRoleWM
 GO
