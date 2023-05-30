@@ -1,0 +1,6 @@
+--rdt_1856ExtUpd01
+execute rdt.rdtDropMsg 198351 , 198400
+
+execute rdt.rdtAddMsg 198351, 10, '198351 UPD MBOL Err ', 'us_english', 1856
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 198351 AND 198400
