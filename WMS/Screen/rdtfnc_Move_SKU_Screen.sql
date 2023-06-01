@@ -25,7 +25,7 @@ EXECUTE rdt.rdtAddScn 1032, 'ENG',
    @cLine02 = 'FROM ID:',
    @cLine03 = '%18d02',
    @cLine04 = 'SKU/UPC:',
-   @cLine05 = '%60i03',
+   @cLine05 = '%120iV_Barcode',   --WMS-22175
    @cLine14 = '%e',
    @nFunc = 513
    
