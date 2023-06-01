@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdt_1580RcptCfm15]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_1580RcptCfm15]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -13,8 +9,9 @@ GO
 /*                                                                         */
 /* Date       Rev  Author  Purposes                                        */
 /* 2019-10-29 1.0  James   WMS-5467 Created                                */
+/* 2023-04-13 1.1  James   WMS-21975 Change I_Field02->V_Barcode (james01) */
 /***************************************************************************/
-CREATE PROC [RDT].[rdt_1580RcptCfm15](
+CREATE OR ALTER PROC [RDT].[rdt_1580RcptCfm15](
    @nFunc          INT,
    @nMobile        INT,
    @cLangCode      NVARCHAR( 3),
@@ -61,7 +58,7 @@ BEGIN
    DECLARE @nBeforeReceivedQty_Total   INT
    DECLARE @cReceivingTypeNotAllowOverRcpt  NVARCHAR( 20)
    
-   SELECT @cInField02 = I_Field02
+   SELECT @cInField02 = r.V_Barcode
    FROM RDT.RDTMOBREC AS r WITH (NOLOCK)
    WHERE r.Mobile = @nMobile
    
