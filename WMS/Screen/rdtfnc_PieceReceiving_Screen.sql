@@ -7,7 +7,7 @@ EXECUTE rdt.rdtAddScn 1750, 'ENG',
    ,@cLine04 = 'REF NO:'
    ,@cLine05 = '%20i03'
    ,@cLine14 = '%e'
- 
+
 -- 1751 = LOC screen
 DELETE rdt.RDTScn WHERE Scn = 1751 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 1751, 'ENG',
@@ -49,7 +49,7 @@ EXECUTE rdt.rdtAddScn 1754, 'ENG',
     @cLine01 = 'TO ID:'
    ,@cLine02 = '%20d01'
    ,@cLine03 = 'SKU/UPC:'
-   ,@cLine04 = '%60i02' -- WMS-16653
+   ,@cLine04 = '%120iV_Barcode' -- WMS-16653/WMS-21975
    ,@cLine05 = '%20d11' 	
    ,@cLine06 = '%20d03'
    ,@cLine07 = '%20d04'
