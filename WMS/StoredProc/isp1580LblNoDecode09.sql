@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp1580LblNoDecode09]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [dbo].[isp1580LblNoDecode09]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -16,9 +12,10 @@ GO
 /*                                                                            */  
 /* Date        Author    Ver.  Purposes                                       */  
 /* 2021-03-31  James     1.0   WMS-16653 Created                              */ 
+/* 2023-04-13  James     1.1   WMS-21975 Change I_Field02->V_Barcode (james01)*/
 /******************************************************************************/  
   
-CREATE PROCEDURE [dbo].[isp1580LblNoDecode09] (  
+CREATE OR ALTER PROCEDURE [dbo].[isp1580LblNoDecode09] (  
    @c_LabelNo          NVARCHAR(60),        
    @c_Storerkey        NVARCHAR(15),        
    @c_ReceiptKey       NVARCHAR(10),        
@@ -58,7 +55,7 @@ BEGIN
    SELECT @n_Func = Func,       
           @n_Step = Step,      
           @n_InputKey = InputKey,
-          @c_LabelNo = I_Field02  
+          @c_LabelNo = V_Barcode  
    FROM rdt.rdtMobRec WITH (NOLOCK)       
    WHERE UserName = sUser_sName()      
 
