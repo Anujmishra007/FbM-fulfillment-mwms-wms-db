@@ -26,7 +26,7 @@ EXECUTE rdt.rdtAddScn 4642, 'ENG'
    ,@cLine03 = '%20d03'
    ,@cLine04 = '%20d04'
    ,@cLine05 = 'SKU/UPC:'
-   ,@cLine06 = '%30i05'
+   ,@cLine06 = '%120iV_Barcode'  -- WMS-22147
    ,@cLine07 = '%20d08'    -- Lottablenn (WMS5057)
    ,@cLine08 = '%20d09'    -- Lottablenn (WMS5057)
    ,@cLine09 = '%20d10'    -- Lottablenn (WMS5057)
