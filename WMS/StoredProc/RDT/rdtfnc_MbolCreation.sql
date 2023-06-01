@@ -18,6 +18,7 @@ GO
 /* 2022-12-15   1.3  James    WMS-21350 Allow create mbol with header      */
 /*                            only (james03)                               */
 /* 2022-12-22   1.4  yeekung  JSM-118875 blank mbolkey (yeekung01)         */
+/* 2023-03-27   1.5  James    WMS-22063 Add ExtUpdSP to step 4 (james04)   */
 /***************************************************************************/      
       
 CREATE OR ALTER PROC [RDT].[rdtfnc_MbolCreation](      
@@ -81,7 +82,8 @@ DECLARE
    @cRefnoLabel3        NVARCHAR( 20),    
    @cColumnName         NVARCHAR( 20), 
    @cBlankMBOL          NVARCHAR( 20), --(yeekung01)
-       
+   @nTranCount          INT,
+   
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),  @cFieldAttr01 NVARCHAR( 1),      
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),  @cFieldAttr02 NVARCHAR( 1),      
    @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),  @cFieldAttr03 NVARCHAR( 1),      
@@ -631,6 +633,7 @@ BEGIN
       -- Capture ASN Info    
       IF @cCaptureInfoSP <> ''    
       BEGIN    
+      	SET @nErrNo = 0
          EXEC rdt.rdt_MbolCreation_CaptureInfo @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'DISPLAY',     
             @cMBOLKey, @cOrderkey, @cLoadKey, @cRefNo1, @cRefNo2, @cRefNo3,     
             @cData1, @cData2, @cData3, @cData4, @cData5,     
@@ -652,16 +655,24 @@ BEGIN
             @tCaptureVar,     
             @nErrNo  OUTPUT,     
             @cErrMsg OUTPUT    
-         IF @nErrNo <> 0    
+
+         IF @nErrNo > 0    
             GOTO Quit    
     
-         -- Go to next screen    
-         SET @nScn = @nScn_CaptureData    
-         SET @nStep = @nStep_CaptureData    
+         IF @nErrNo = 0
+         BEGIN
+            -- Go to next screen    
+            SET @nScn = @nScn_CaptureData    
+            SET @nStep = @nStep_CaptureData    
     
-         GOTO Quit    
+            GOTO Quit
+         END
+         
+         -- IF @nErrNo = -1
+         --    no need show capture info screen
       END    
-    
+      
+      SET @nErrNo = 0
       EXEC rdt.rdt_MbolCreation    
           @nMobile      = @nMobile    
          ,@nFunc        = @nFunc    
@@ -699,6 +710,17 @@ BEGIN
           
       IF @cMbolCriteria <> ''    
       BEGIN    
+         -- Enable / disable field    
+         SET @cFieldAttr06 = CASE WHEN @cRefnoLabel1 = '' THEN 'O' ELSE '' END    
+         SET @cFieldAttr08 = CASE WHEN @cRefnoLabel2 = '' THEN 'O' ELSE '' END    
+         SET @cFieldAttr10 = CASE WHEN @cRefnoLabel3 = '' THEN 'O' ELSE '' END    
+    
+         -- Clear optional in field    
+         SET @cInField06 = ''    
+         SET @cInField08 = ''    
+         SET @cInField10 = ''    
+    
+         -- Prepare next screen var    
          SET @cOutField05 = @cRefnoLabel1    
          SET @cOutField06 = ''    
          SET @cOutField07 = @cRefnoLabel2    
@@ -735,7 +757,6 @@ BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 6    
     
       -- Reset variable    
-      SET @cMBOLKey = ''    
       SET @cOrderKey = ''      
       SET @cLoadKey = ''    
       SET @cRefNo1 = ''    
@@ -907,15 +928,16 @@ BEGIN
          SET @nScn = @nScn_Scan      
          SET @nStep = @nStep_Scan      
       END    
-          
-      -- Extended validate      
+
+      -- Extended Update      
       IF @cExtendedUpdateSP <> ''      
       BEGIN      
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')      
          BEGIN      
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +      
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +       
-               ' @cOrderKey, @cLoadKey, @cRefNo, @tExtUpdate, @nErrNo OUTPUT, @cErrMsg OUTPUT '      
+               ' @cMBOLKey, @cOrderKey, @cLoadKey, @cRefNo1, @cRefNo2, @cRefNo3, @tExtUpdate, ' +     
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '                
       
             SET @cSQLParam =      
                ' @nMobile        INT,           ' +      
@@ -936,8 +958,8 @@ BEGIN
                ' @cErrMsg        NVARCHAR( 20) OUTPUT  '      
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,      
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,       
-               @cMBOLKey, @cOrderKey, @cLoadKey, @cRefNo1, @cRefNo2, @cRefNo3, @tExtUpdate,     
-               @nErrNo OUTPUT, @cErrMsg OUTPUT      
+               @cMBOLKey, @cOrderKey, @cLoadKey, @cRefNo1, @cRefNo2, @cRefNo3, @tExtUpdate, 
+               @nErrNo OUTPUT, @cErrMsg OUTPUT 
       
             IF @nErrNo <> 0       
             BEGIN    
@@ -954,21 +976,19 @@ BEGIN
    IF @nInputKey = 0 -- ESC      
    BEGIN      
       -- Prepare next screen var      
-      SET @cOutField01 = @cFacility      
-      SET @cOutField02 = @cMBOLKey       
-      SET @cOutField03 = ''    
-      SET @cOutField04 = ''    
-      SET @cOutField05 = @cRefnoLabel1    
-      SET @cOutField06 = ''     
-      SET @cOutField07 = @cRefnoLabel2    
-      SET @cOutField08 = ''    
-      SET @cOutField09 = @cRefnoLabel3    
-      SET @cOutField10 = ''    
-      SET @cOutField15 = @nOrderCnt      
+      SET @cOutField01 = @cFacility    
+      SET @cFieldAttr01 = CASE WHEN @cLockFacility = '1' THEN 'O' ELSE '' END    
+    
+      SET @cMBOLKey = ''    
+      SET @cOrderKey = ''    
+      SET @cLoadKey = ''    
+      SET @cRefNo1 = ''    
+      SET @cRefNo2 = ''    
+      SET @cRefNo3 = ''    
     
       -- Go to next screen      
-      SET @nScn = @nScn_Scan      
-      SET @nStep = @nStep_Scan      
+      SET @nScn = @nScn_Facility      
+      SET @nStep = @nStep_Facility      
    END      
    GOTO Quit      
       
@@ -1032,13 +1052,12 @@ BEGIN
       IF @nErrNo <> 0    
          GOTO Quit    
     
-      -- Enable field    
-      SET @cFieldAttr02 = ''    
-      SET @cFieldAttr04 = ''    
-      SET @cFieldAttr06 = ''    
-      SET @cFieldAttr08 = ''    
-      SET @cFieldAttr10 = ''    
-    
+      -- Handling transaction
+      SET @nTranCount = @@TRANCOUNT
+      BEGIN TRAN  -- Begin our own transaction
+      SAVE TRAN MbolCreation_CapData -- For rollback or commit only our own transaction
+      
+      SET @nErrNo = 0
       EXEC rdt.rdt_MbolCreation    
           @nMobile      = @nMobile    
          ,@nFunc        = @nFunc    
@@ -1058,8 +1077,65 @@ BEGIN
          ,@cErrMsg      = @cErrMsg     OUTPUT    
     
       IF @nErrNo <> 0    
-         GOTO Step_Scan_Fail    
-    
+         GOTO RollBackTran_CapData    
+
+      -- Extended Update      
+      IF @cExtendedUpdateSP <> ''      
+      BEGIN      
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')      
+         BEGIN      
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +      
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +       
+               ' @cMBOLKey, @cOrderKey, @cLoadKey, @cRefNo1, @cRefNo2, @cRefNo3, @tExtUpdate, ' +     
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '                
+      
+            SET @cSQLParam =      
+               ' @nMobile        INT,           ' +      
+               ' @nFunc          INT,           ' +      
+               ' @cLangCode      NVARCHAR( 3),  ' +      
+               ' @nStep          INT,           ' +      
+               ' @nInputKey      INT,           ' +      
+               ' @cFacility      NVARCHAR( 5),  ' +      
+               ' @cStorerKey     NVARCHAR( 15), ' +      
+               ' @cMBOLKey       NVARCHAR( 10), ' +    
+               ' @cOrderKey      NVARCHAR( 10), ' +      
+               ' @cLoadKey       NVARCHAR( 10), ' +      
+               ' @cRefNo1        NVARCHAR( 20), ' +      
+               ' @cRefNo2        NVARCHAR( 20), ' +   
+               ' @cRefNo3        NVARCHAR( 20), ' +    
+               ' @tExtUpdate     VariableTable READONLY, ' +       
+               ' @nErrNo         INT           OUTPUT, ' +      
+               ' @cErrMsg        NVARCHAR( 20) OUTPUT  '      
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,      
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,       
+               @cMBOLKey, @cOrderKey, @cLoadKey, @cRefNo1, @cRefNo2, @cRefNo3, @tExtUpdate, 
+               @nErrNo OUTPUT, @cErrMsg OUTPUT 
+      
+            IF @nErrNo <> 0       
+               GOTO Quit_CapData
+         END      
+      END      
+
+      COMMIT TRAN MbolCreation_CapData -- Only commit change made here
+      GOTO Quit_CapData
+
+      RollBackTran_CapData:
+         ROLLBACK TRAN MbolCreation_CapData -- Only rollback change made here
+
+      Quit_CapData:
+         WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+            COMMIT TRAN
+
+      IF @nErrNo <> 0
+         GOTO Step_CaptureData_Quit
+
+      -- Enable field    
+      SET @cFieldAttr02 = ''    
+      SET @cFieldAttr04 = ''    
+      SET @cFieldAttr06 = ''    
+      SET @cFieldAttr08 = ''    
+      SET @cFieldAttr10 = ''    
+
       SELECT @nOrderCnt = COUNT( 1)    
       FROM dbo.MBOLDETAIL WITH (NOLOCK)    
       WHERE MbolKey = @cMBOLKey    
@@ -1073,12 +1149,23 @@ BEGIN
 
       IF @cMbolCriteria <> ''
       BEGIN
-         SET @cOutField05 = @cRefnoLabel1
-         SET @cOutField06 = ''
-         SET @cOutField07 = @cRefnoLabel2
-         SET @cOutField08 = ''
-         SET @cOutField09 = @cRefnoLabel3
-         SET @cOutField10 = ''
+         -- Enable / disable field    
+         SET @cFieldAttr06 = CASE WHEN @cRefnoLabel1 = '' THEN 'O' ELSE '' END    
+         SET @cFieldAttr08 = CASE WHEN @cRefnoLabel2 = '' THEN 'O' ELSE '' END    
+         SET @cFieldAttr10 = CASE WHEN @cRefnoLabel3 = '' THEN 'O' ELSE '' END    
+    
+         -- Clear optional in field    
+         SET @cInField06 = ''    
+         SET @cInField08 = ''    
+         SET @cInField10 = ''    
+    
+         -- Prepare next screen var    
+         SET @cOutField05 = @cRefnoLabel1    
+         SET @cOutField06 = ''    
+         SET @cOutField07 = @cRefnoLabel2    
+         SET @cOutField08 = ''    
+         SET @cOutField09 = @cRefnoLabel3    
+         SET @cOutField10 = ''    
       END
       ELSE
       BEGIN
