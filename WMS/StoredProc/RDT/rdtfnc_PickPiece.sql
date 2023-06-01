@@ -1,8 +1,9 @@
-
+   
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
-GO
+GO    
+
 
 /******************************************************************************/
 /* Store procedure: rdtfnc_PickPiece                                          */
@@ -59,6 +60,8 @@ GO
 /* 2022-12-09   4.6  Ung         WMS-21244 Add ExtendedInfoSP step2 ESC       */
 /* 2023-04-04   4.7  YeeKung     JSM-140598 bal pick later swap  (yeekun07)   */
 /* 2023-05-17   4.8  YeeKung     Fix Extended sp Step (yeekung08)             */
+/* 2023-04-10   4.9  James       WMS-22147 Add V_Barcode to sku step for      */
+/*                               sku input (james11)                          */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PickPiece] (
@@ -123,7 +126,7 @@ DECLARE
    @cPickConfirmStatus  NVARCHAR( 1),
    @cAutoScanOut        NVARCHAR( 1),
    @cType               NVARCHAR( 10),
-   @cBarcode            NVARCHAR( 60),
+   @cBarcode            NVARCHAR( MAX),
    @cUPC                NVARCHAR( 30),
    @cSKU                NVARCHAR( 20),
    @cQTY                NVARCHAR( 6),
@@ -214,7 +217,8 @@ SELECT
    @cSuggSKU         = V_SKU,
    @cSKUDescr        = V_SKUDescr,
    @nSuggQTY         = V_QTY,
-
+   @cBarcode         = V_Barcode,
+   
    @cLottable01      = V_Lottable01,
    @cLottable02      = V_Lottable02,
    @cLottable03      = V_Lottable03,
@@ -650,7 +654,7 @@ BEGIN
             GOTO Step_1_Fail
          END
       END
-
+      
       -- Prepare next screen var
       SET @cOutField01 = @cPickSlipNo
       SET @cOutField02 = '' --PickZone
@@ -1065,6 +1069,7 @@ BEGIN
          ELSE
             SET @cOutField07= CASE WHEN @cDefaultQTY = '1' THEN @nSuggQTY ELSE '' END
 
+         SET @cBarcode = ''
 
          -- Go to SKU QTY screen
          SET @nScn = @nScn + 1
@@ -1257,11 +1262,14 @@ Step_3:
 BEGIN
    IF @nInputKey = 1 -- Yes or Send
    BEGIN
-      -- Screen mapping
-      SET @cBarcode = @cInField05 -- SKU
-      SET @cUPC = LEFT( @cInField05, 30)
-      SET @cQTY = CASE WHEN @cFieldAttr07 = 'O' THEN @cOutField07 ELSE @cInField07 END
-      SET @cCurrSKU = @cOutField02
+      -- Screen mapping          
+      --SET @cBarcode = @cInField05 -- SKU          
+      --SET @cUPC = LEFT( @cInField05, 30)
+      
+      SET @cBarcode = SUBSTRING( @cBarcode, 1, 2000)
+      SET @cUPC = SUBSTRING( @cBarcode, 1, 30)        
+      SET @cQTY = CASE WHEN @cFieldAttr07 = 'O' THEN @cOutField07 ELSE @cInField07 END          
+      SET @cCurrSKU = @cOutField02          
 
       -- Retain value
       SET @cOutField07 = CASE WHEN @cFieldAttr07 = 'O' THEN @cOutField07 ELSE @cInField07 END -- MQTY
@@ -1362,7 +1370,7 @@ BEGIN
                      ' @nInputKey    INT,           ' +
                      ' @cFacility    NVARCHAR( 5),  ' +
                      ' @cStorerKey   NVARCHAR( 15), ' +
-                     ' @cBarcode     NVARCHAR( 60), ' +
+                     ' @cBarcode     NVARCHAR( MAX), ' +
                      ' @cPickSlipNo  NVARCHAR( 10), ' +
                      ' @cPickZone    NVARCHAR( 10), ' +
                      ' @cDropID      NVARCHAR( 20), ' +
@@ -1595,7 +1603,8 @@ BEGIN
       IF @cBarcode NOT IN ( '', '99')
       BEGIN
          SET @cOutField05 = '' -- SKU
-
+         SET @cBarcode = ''
+         
          IF @cDisableQTYField = '1'
          BEGIN
             EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
@@ -1947,7 +1956,9 @@ BEGIN
                SET @cOutField07= CASE WHEN @cDefaultPickQTY <> '0' THEN @cDefaultPickQTY ELSE @nActQTY END
             ELSE
                SET @cOutField07= CASE WHEN @cDefaultQTY = '1' THEN @nSuggQTY ELSE '' END
-
+            
+            SET @cBarcode = ''
+            
             EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
          END
          ELSE
@@ -2095,7 +2106,9 @@ BEGIN
                                             ELSE @nActQTY END -- QTY
                   ELSE
                      SET @cOutField07= CASE WHEN @cDefaultQTY = '1' THEN @nSuggQTY ELSE '' END
-
+                  
+                  SET @cBarcode = ''
+                  
                   EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
                END
             END
@@ -2368,6 +2381,7 @@ BEGIN
    Step_3_Fail:
    BEGIN
       SET @cOutField05 = '' -- SKU
+      SET @cBarcode = ''
    END
 END
 GOTO Quit
@@ -2511,7 +2525,8 @@ BEGIN
                                     ELSE @nActQTY END -- QTY
          ELSE
             SET @cOutField07= CASE WHEN @cDefaultQTY = '1' THEN @nSuggQTY ELSE '' END
-
+         
+         SET @cBarcode = ''
 
          -- Go to SKU QTY screen
          SET @nScn = @nScn - 1
@@ -2949,6 +2964,8 @@ BEGIN
             ELSE
                SET @cOutField07= CASE WHEN @cDefaultQTY = '1' THEN @nSuggQTY ELSE '' END
 
+            SET @cBarcode = ''
+            
             -- Go to SKU QTY screen
             SET @nScn = @nScn - 2
             SET @nStep = @nStep - 2
@@ -3071,6 +3088,8 @@ BEGIN
             ELSE
                SET @cOutField07= CASE WHEN @cDefaultQTY = '1' THEN @nSuggQTY ELSE '' END
 
+            SET @cBarcode = ''
+            
             EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
 
             -- Go to SKU QTY screen
@@ -3226,6 +3245,7 @@ BEGIN
                   ELSE
                      SET @cOutField07= CASE WHEN @cDefaultQTY = '1' THEN @nSuggQTY ELSE '' END
 
+                  SET @cBarcode = ''
 
                   EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
 
@@ -3461,6 +3481,8 @@ BEGIN
             ELSE
                SET @cOutField07= CASE WHEN @cDefaultQTY = '1' THEN @nSuggQTY ELSE '' END
 
+               SET @cBarcode = ''
+               
                EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
 
                -- Go to SKU QTY screen
@@ -3543,6 +3565,8 @@ BEGIN
    -- Disable QTY field
    SET @cFieldAttr07 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END -- QTY
 
+   SET @cBarcode = ''
+   
    IF @cFieldAttr07 = 'O'
       EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
    ELSE
@@ -3764,8 +3788,10 @@ BEGIN
                SET @cOutField07 = CASE WHEN @cDefaultQTY = '1' THEN CAST( @nSuggQTY AS NVARCHAR(6))
                                        WHEN @cDefaultPickQTY <> '0' THEN @cDefaultPickQTY
                                        ELSE '' END -- QTY
-            SET @cOutField13 =LTRIM(CAST(@nBalQty AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6))
+               SET @cOutField13 =LTRIM(CAST(@nBalQty AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6))
 
+               SET @cBarcode = ''
+               
                EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
 
                -- Disable QTY field
@@ -3800,7 +3826,8 @@ BEGIN
       SET @cOutField07 = CASE WHEN @cDefaultQTY = '1' THEN CAST( @nSuggQTY AS NVARCHAR(6))
                               WHEN @cDefaultPickQTY <> '0' THEN @cDefaultPickQTY
                               ELSE '' END -- QTY
-
+      SET @cBarcode = ''
+      
       -- Disable QTY field
       SET @cFieldAttr07 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END -- QTY
     SET @cOutField13 =LTRIM(CAST(@nBalQty AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6))
@@ -4014,6 +4041,8 @@ BEGIN
                                  WHEN @cDefaultPickQTY <> '0' THEN @cDefaultPickQTY
                                  ELSE '' END -- QTY
 
+         SET @cBarcode = ''
+         
          EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
 
          -- Disable QTY field
@@ -4302,7 +4331,8 @@ BEGIN
          SET @cOutField07 = CASE WHEN @cDefaultQTY = '1' THEN CAST( @nSuggQTY AS NVARCHAR(6))
                                  WHEN @cDefaultPickQTY <> '0' THEN @cDefaultPickQTY
                                  ELSE '' END -- QTY
-
+         SET @cBarcode = ''
+         
          -- Disable QTY field
          SET @cFieldAttr07 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END -- QTY
 
@@ -4338,6 +4368,8 @@ BEGIN
                               WHEN @cDefaultPickQTY <> '0' THEN @cDefaultPickQTY
                               ELSE @nActQTY END -- QTY
 
+      SET @cBarcode = CASE WHEN @cDefaultSKU='1' THEN @cSuggSKU ELSE '' END
+      
       -- Disable QTY field
       SET @cFieldAttr07 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END -- QTY
 
@@ -4472,7 +4504,9 @@ BEGIN
       SET @cOutField07 = CASE WHEN @cDefaultQTY = '1' THEN CAST( @nSuggQTY AS NVARCHAR(6))
                               WHEN @cDefaultPickQTY <> '0' THEN @cDefaultPickQTY
                               ELSE '' END -- QTY
-
+      
+      SET @cBarcode = CASE WHEN @cDefaultSKU='1' THEN @cSuggSKU ELSE '' END
+      
       -- Disable QTY field
       SET @cFieldAttr07 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END -- QTY
 
@@ -4688,6 +4722,8 @@ BEGIN
                            ELSE '' END -- QTY
    SET @cOutField13 = LTRIM(CAST(@nBalQty AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6))
 
+   SET @cBarcode = @cSuggSKU
+   
    EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
 
    -- Disable QTY field
@@ -4958,6 +4994,8 @@ BEGIN
          ELSE
             SET @cOutField07= CASE WHEN @cDefaultQTY = '1' THEN @nSuggQTY ELSE '' END
 
+         SET @cBarcode = ''
+         
          EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
 
          -- Go to SKU screen
@@ -5111,6 +5149,8 @@ BEGIN
                ELSE
                   SET @cOutField07= CASE WHEN @cDefaultQTY = '1' THEN @nSuggQTY ELSE '' END
 
+               SET @cBarcode = ''
+               
                EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
             END
          END
@@ -5195,6 +5235,8 @@ BEGIN
       ELSE
          EXEC rdt.rdtSetFocusField @nMobile, 7 -- QTY
 
+      SET @cBarcode = ''
+      
       -- Go to SKU QTY screen
       SET @nScn = @nScn - 7
       SET @nStep = @nStep - 8
@@ -5226,7 +5268,8 @@ BEGIN
       V_SKU          = @cSuggSKU,
       V_SKUDescr     = @cSKUDescr,
       V_QTY          = @nSuggQTY,
-
+      V_Barcode      = @cBarcode, 
+      
       V_FromStep     = @nFromStep,
       V_FromScn      = @nFromScn,
 
@@ -5309,13 +5352,12 @@ BEGIN
 
    WHERE Mobile = @nMobile
 END
-GO    
+GO
 
-SET QUOTED_IDENTIFIER OFF  
+SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON  rdt.rdtfnc_PickPiece TO NSQL
+GRANT EXECUTE ON RDT.rdtfnc_PickPiece TO NSQL
 GO
-
