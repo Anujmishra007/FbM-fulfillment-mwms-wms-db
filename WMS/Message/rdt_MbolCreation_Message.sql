@@ -16,4 +16,7 @@ execute rdt.rdtAddMsg 172156, 10, '172156UPDCTNCOUNT ER',   'us_english', 1856
 execute rdt.rdtAddMsg 172157, 10, '172157 nspg_getkey  ',   'us_english', 1856
 execute rdt.rdtAddMsg 172158, 10, '172158 INS MBOL Err ',   'us_english', 1856
 
+--WMS-22063
+execute rdt.rdtAddMsg 172159, 10, '172159 ORD X PICKED ',   'us_english', 1856
+
 SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 172151 AND 172200	
