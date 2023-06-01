@@ -15,6 +15,7 @@ GO
 /* Date        Rev  Author     Purposes                                    */
 /* 2021-06-21  1.0  Chermaine  WMS-17254.Created (dup rdt_1841PrePltSort01)*/
 /* 2022-02-15  1.1  yeekung    Performance Tune (yeekung01)                */
+/* 2023-02-21  1.2  James      WMS-21735 Add new position logic (james01)  */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1841PrePltSort03] (
@@ -159,13 +160,25 @@ AS
          AND   UCCNo = @cUCC
          AND   [Status] = '0' -- not received
          ORDER BY ucc.Userdefined06 desc
-               
-         IF (@cUdf08 IN ('HV') OR @cUdf09 = '1') AND @cUdf06 = '1' 
-            SET @cCode = '004' --QC-F
-         ELSE IF (@cUdf08 IN ('HV') OR @cUdf09 = '1')
-            SET @cCode = '001' --QC
+
+         IF @cUdf08 IN ('', 'HV') AND @cUdf06 = '1' AND @cUdf07 = '1' AND @cUdf09 = '1'
+            SET @cCode = '0014' --QC-FM
+         ELSE IF @cUdf08 IN ('', 'HV') AND @cUdf07 = '1' AND @cUdf09 = '1'
+            SET @cCode = '0013' --QC-M
+         ELSE IF @cUdf08 IN ('', 'HV') AND @cUdf06 = '1' AND @cUdf07 = '1'
+            SET @cCode = '0015' --F-M
          ELSE IF (@cUdf08 IN ('BL') AND @cUdf09 = '') AND @cUdf06 = '1' 
             SET @cCode = '006' --BL-F
+         ELSE IF @cUdf06 = '1' AND @cUdf07 = '1' AND @cUdf09 = '1'   -- (james01)
+            SET @cCode = '0014' --QC-FM
+         ELSE IF (@cUdf08 IN ('HV') OR @cUdf09 = '1') AND @cUdf06 = '1' 
+            SET @cCode = '004' --QC-F
+         ELSE IF @cUdf07 = '1' AND @cUdf09 = '1'   -- (james01)
+            SET @cCode = '0013' --QC-M
+         ELSE IF @cUdf06 = '1' AND @cUdf07 = '1'   -- (james01)
+            SET @cCode = '0015' --F-M
+         ELSE IF (@cUdf08 IN ('HV') OR @cUdf09 = '1')
+            SET @cCode = '001' --QC
          ELSE IF (@cUdf08 IN ('BL') AND @cUdf09 = '')
             SET @cCode = '005'--BL
          ELSE IF @cUdf06 = '1' AND @cUdf08 = '' AND @cUdf09 = ''
