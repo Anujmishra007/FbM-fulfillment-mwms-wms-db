@@ -34,7 +34,7 @@ EXECUTE rdt.rdtAddScn 4033, 'ENG'
    ,@cLine02 = '%18d01'
    ,@cLine03 = ''
    ,@cLine04 = 'SKU/UPC:'
-   ,@cLine05 = '%100iV_MAX'
+   ,@cLine05 = '%100iV_Max'   -- Change V_MAX->V_Max
    ,@cLine06 = ''
    ,@cLine07 = '%20d03'
    ,@cLine08 = '%20d04'

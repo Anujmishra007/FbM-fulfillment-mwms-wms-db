@@ -24,7 +24,7 @@ EXECUTE rdt.rdtAddScn 5701, 'ENG'
    ,@cLine03 = 'SKU/UPC:'
    ,@cLine04 = '%60i02'
    ,@cLine05 = 'CHILD TRACKING ID:'
-   ,@cLine06 = '%60iV_MAX'
+   ,@cLine06 = '%60iV_Max' -- Change V_MAX->V_Max
    ,@cLine13 = '%20d15'
    ,@cLine14 = '%e'
    ,@nFunc = 642
