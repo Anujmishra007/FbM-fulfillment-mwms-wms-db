@@ -13,7 +13,7 @@ GO
 /*                                                                       */
 /* Called By:                                                            */
 /*                                                                       */
-/* PVCS Version: 1.4                                                     */
+/* PVCS Version: 1.5                                                     */
 /*                                                                       */
 /* Version: 5.4                                                          */
 /*                                                                       */
@@ -28,6 +28,7 @@ GO
 /*                            DevOps Combine Script                      */
 /* 10-11-2022   Wan02    1.4  LFWM-3840-UAT Philippines Unilever Release */
 /*                            Wave Validation (LPRELTASKWITHBOOKING)     */
+/* 22-03-2023   WLChooi  1.5  WMS-21950 - Group By Lottable03 (WL01)     */
 /*************************************************************************/
 CREATE OR ALTER PROC [dbo].[nspLPRTSK4]
    @c_LoadKey     NVARCHAR(10),
@@ -73,6 +74,11 @@ BEGIN
          ,  @c_Option5_LPRelTaskWBk NVARCHAR(4000) = ''
          ,  @c_BkNoFromTMSShipment  NVARCHAR(10)   = 'N'
          ,  @n_BookingNo            INT            = 0
+         ,  @c_Authority            NVARCHAR(30)   = ''   --WL01
+         ,  @c_GroupkeyByAreaLot3   NVARCHAR(10)   = 'N'  --WL01
+         ,  @c_Option5              NVARCHAR(4000) = ''   --WL01
+         ,  @c_Lottable03           NVARCHAR(50)   = ''   --WL01
+         ,  @c_PrevLottable03       NVARCHAR(50)   = ''   --WL01
    
    IF OBJECT_ID('tempdb..#BookLoad','u') IS NOT NULL
    BEGIN
@@ -191,6 +197,36 @@ BEGIN
         END
    END
 
+   --WL01 S
+   IF (@n_continue = 1 OR @n_continue = 2)
+   BEGIN
+      EXECUTE nspGetRight                                
+         @c_Facility  = @c_Facility,                     
+         @c_StorerKey = @c_StorerKey,                    
+         @c_sku       = '',
+         @c_ConfigKey = 'ReleasePickTaskCode',
+         @b_Success   = @b_Success   OUTPUT,             
+         @c_authority = @c_Authority OUTPUT,             
+         @n_err       = @n_Err       OUTPUT,             
+         @c_errmsg    = @c_Errmsg    OUTPUT,                           
+         @c_Option5   = @c_Option5 OUTPUT
+      
+      IF NOT @b_success = 1
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_ErrMsg = CONVERT(CHAR(250), @n_err), @n_err = 81000
+         SELECT @c_ErrMsg = 'NSQL'+CONVERT(CHAR(5), @n_err) + ': Execute nspGetRight Failed (nspLPRTSK4)' +
+                            ' ( ' + ' SQLSvr MESSAGE= '+ @c_ErrMsg + ' ) '
+         GOTO Quit_SP
+      END
+
+      IF @c_Authority = 'nspLPRTSK4'
+      BEGIN
+         SELECT @c_GroupkeyByAreaLot3 = dbo.fnc_GetParamValueFromString('@c_GroupkeyByAreaLot3', @c_Option5, @c_GroupkeyByAreaLot3) 
+      END
+   END
+   --WL01 E
+
    IF (@n_continue = 1 OR @n_continue = 2)
    BEGIN
        SELECT LLI.Storerkey, LLI.Loc, LLI.ID, SUM(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked) AS QtyAvailable
@@ -231,7 +267,8 @@ BEGIN
                MAX(O.Door) AS ToLoc,
                AD.Areakey, 
                BO.BookingDate,
-               SUM(PD.Qty) * SKU.Stdcube AS TotalCBM  --NJOW01
+               SUM(PD.Qty) * SKU.Stdcube AS TotalCBM,  --NJOW01
+               CASE WHEN @c_GroupkeyByAreaLot3 = 'Y' THEN LA.Lottable03 ELSE '' END   --WL01
         FROM LOADPLAN L (NOLOCK)
         JOIN LOADPLANDETAIL LD (NOLOCK) ON L.Loadkey = LD.Loadkey
         JOIN ORDERS O (NOLOCK) ON LD.Orderkey = O.Orderkey
@@ -244,6 +281,7 @@ BEGIN
         LEFT JOIN #LOCXID_QTYAVAILABLE LI (NOLOCK) ON PD.Storerkey = LI.Storerkey AND PD.Loc = LI.Loc AND PD.Id = LI.Id
         LEFT JOIN #BookLoad AS bl ON bl.LoadKey = L.LoadKey                                              --(Wan01) 
         LEFT JOIN BOOKING_OUT BO (NOLOCK) ON bl.BookingNo = BO.BookingNo AND ISNULL(L.BookingNo,0) <> 0  --(Wan01)
+        JOIN LOTATTRIBUTE LA (NOLOCK) ON LA.Lot = PD.Lot   --WL01
         WHERE L.Loadkey = @c_Loadkey
         AND O.Storerkey = @c_Storerkey
         AND ISNULL(PD.Taskdetailkey,'') = ''
@@ -258,14 +296,15 @@ BEGIN
                                   'FPK'
                              ELSE 'FCP' END,
                  BO.BookingDate, LOC.LogicalLocation, AD.Areakey,  
-                 SKU.Stdcube --NJOW01
+                 SKU.Stdcube, --NJOW01
+                 CASE WHEN @c_GroupkeyByAreaLot3 = 'Y' THEN LA.Lottable03 ELSE '' END   --WL01
         ORDER BY PD.Storerkey, MAX(AD.Areakey), LOC.LogicalLocation, PD.Loc, PD.Sku, PD.Lot
 
         OPEN cur_PickDetail
 
         FETCH NEXT FROM cur_PickDetail INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID, @n_Qty, @c_UOM,
                                             @c_PickMethod, @c_TaskType, @c_ToLoc, @c_Areakey, @dt_BookingDate,
-                                            @n_TotalCBM --NJOW01
+                                            @n_TotalCBM, @c_Lottable03 --NJOW01   --WL01
 
         SET @n_CBMAvailable = @n_CBM_Limit --NJOW01
         SET @c_Prev_Areakey = '*START*' --NJOW01
@@ -278,6 +317,7 @@ BEGIN
            IF @c_TaskType = 'FCP'
            BEGIN
               IF @c_Areakey <> @c_Prev_Areakey OR @n_CBMAvailable < @n_TotalCBM
+               OR (@c_Lottable03 <> @c_PrevLottable03 AND @c_GroupkeyByAreaLot3 = 'Y')   --WL01
               BEGIN
                  SELECT @n_CBMAvailable = @n_CBM_Limit
 
@@ -301,6 +341,7 @@ BEGIN
               SELECT @n_CBMAvailable = @n_CBMAvailable - @n_TotalCBM
               SELECT @c_Prev_Areakey = @c_AreaKey
               SELECT @c_TMGroupKey_Insert = @c_TMGroupKey
+              SELECT @c_PrevLottable03 = @c_Lottable03   --WL01
            END
            ELSE
               SELECT @c_TMGroupKey_Insert = ''
@@ -427,7 +468,7 @@ BEGIN
 
            FETCH NEXT FROM cur_PickDetail INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID, @n_Qty, @c_UOM,
                                                @c_PickMethod, @c_TaskType, @c_ToLoc, @c_Areakey, @dt_BookingDate,
-                                               @n_TotalCBM --NJOW01
+                                               @n_TotalCBM, @c_Lottable03 --NJOW01   --WL01
         END
         CLOSE cur_PickDetail
         DEALLOCATE cur_PickDetail
