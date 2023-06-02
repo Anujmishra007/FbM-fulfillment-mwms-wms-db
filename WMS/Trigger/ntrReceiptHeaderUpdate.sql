@@ -155,6 +155,8 @@ GO
 /* 27-Aug-2021  TLTING05     2.1    Extend ExternReceiptKey field length       */
 /* 22-Mar-2023  CalvinKhor   2.2    Comment 'CONTINUE' as it prevents the logic*/
 /*                                  below it to be executed (CLVN01)           */
+/* 18-MAY-2023  NJOW03       2.3    WMS-22532 add config to disallow close asn */
+/*                                  before finalize                            */
 /*******************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrReceiptHeaderUpdate]
@@ -226,6 +228,7 @@ BEGIN
           , @c_MarkASNLockdown   Nvarchar(1)  = '0'   --TLTING04
           , @c_CloseASNStatusUpdFinalizeDate NVARCHAR(30) --NJOW02
           , @c_ASNSkipStatusUpdate NVARCHAR(30)   --WL02
+          , @c_DisallowCloseASNB4Finalize NVARCHAR(30) --NJOW03
           
 
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
@@ -310,6 +313,50 @@ BEGIN
             DROP TABLE #DELETED
       END
    END   
+   
+   --NJOW03
+   IF (@n_continue=1 or @n_continue=2) AND UPDATE(ASNStatus)
+   BEGIN
+      SELECT @c_Storerkey = Storerkey, @c_Facility = Facility
+      FROM INSERTED
+
+      SELECT @b_success = 0
+      
+      EXECUTE nspGetRight 
+         @c_Facility = @c_facility, -- facility
+         @c_StorerKey = @c_StorerKey,  -- Storerkey
+         @c_sku = null,          -- Sku
+         @c_ConfigKey = 'DisallowCloseASNB4Finalize',        -- Configkey
+         @b_Success = @b_success     OUTPUT,
+         @c_authority = @c_DisallowCloseASNB4Finalize OUTPUT,
+         @n_err = @n_err         OUTPUT,
+         @c_errmsg = @c_errmsg   OUTPUT
+         
+      IF @b_success <> 1
+      BEGIN
+         SELECT @n_continue = 3, @c_errmsg = 'ntrReceiptHeaderUpdate' + dbo.fnc_RTrim(@c_errmsg)
+         SELECT @n_err = 60201
+      END      
+      
+      IF @c_DisallowCloseASNB4Finalize = '1'
+      BEGIN
+         IF EXISTS(SELECT 1 
+                   FROM INSERTED I 
+                   JOIN DELETED D ON I.Receiptkey = D.Receiptkey
+                   WHERE I.ASNStatus <> D.ASNStatus
+                   AND I.ASNStatus = '9'
+                   AND EXISTS(SELECT 1 
+                              FROM RECEIPTDETAIL RD (NOLOCK)
+                              WHERE RD.Receiptkey = I.Receiptkey
+                              AND RD.FinalizeFlag <> 'Y'
+                              AND RD.QtyExpected + RD.BeforeReceivedQty > 0))
+         BEGIN
+            SELECT @n_continue = 3
+            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=60200 --63800   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Not allow to close asn before finalize. (ntrReceiptHeaderUpdate)'         	
+         END                    
+      END      
+   END
 
    IF @n_continue=1 or @n_continue=2
    BEGIN
