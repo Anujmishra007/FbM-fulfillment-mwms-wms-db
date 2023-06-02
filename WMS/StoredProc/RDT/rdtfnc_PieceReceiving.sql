@@ -148,6 +148,8 @@ GO
 /* 2023-05-23 9.7 James      WMS-21975 Add V_Barcode to sku step for    */
 /*                           sku input. Add config go back To ID after  */
 /*                           each received (james27)                    */
+/* 2023-05-11 9.8 Ung        WMS-22366 Fix MultiSKUBarcode with Add SKU */
+/*                           in ASN should always prompt, not auto select*/
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_PieceReceiving] (
    @nMobile    INT,
@@ -2458,6 +2460,16 @@ BEGIN
       BEGIN
          IF @cMultiSKUBarcode IN ('1', '2')
          BEGIN
+            DECLARE @cDocType NVARCHAR( 30) = ''
+            DECLARE @cDocNo   NVARCHAR( 20) = ''
+            
+            IF rdt.RDTGetConfig( @nFunc, 'ReceiveByPieceCheckSKUInASN', @cStorer) = '1' OR -- 1=On,  means check SKU in ASN
+               rdt.RDTGetConfig( @nFunc, 'SkipCheckingSKUNotInASN', @cStorer) = '0'        -- 0=Off, means check SKU in ASN
+            BEGIN
+               SET @cDocType = 'ASN'
+               SET @cDocNo = @cReceiptKey
+            END
+            
             EXEC rdt.rdt_MultiSKUBarcode @nMobile, @nFunc, @cLangCode,
                @cInField01 OUTPUT,  @cOutField01 OUTPUT,
                @cInField02 OUTPUT,  @cOutField02 OUTPUT,
@@ -2480,8 +2492,8 @@ BEGIN
                @cSKU     OUTPUT,
                @nErrNo   OUTPUT,
                @cErrMsg  OUTPUT,
-               'ASN',    -- DocType  
-               @cReceiptKey  
+               @cDocType, 
+               @cDocNo  
 
             IF @nErrNo = 0 -- Populate multi SKU screen
             BEGIN
