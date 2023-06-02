@@ -28,6 +28,7 @@ GO
 /* 2018-10-03   Ung      2.1  INC0383981 V_Field need case sensitive in XML   */   
 /* 2018-09-25   Ung      2.2  WMS-6410 Add field 16-20                        */
 /* 2023-04-11   James    2.3  WMS-22147 Support V_Barcode (james01)           */  
+/* 2023-06-02   James    2.4  Change V_MAX to V_Max (james02)                 */  
 /******************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdtSetMobColRetAction] (  
@@ -257,7 +258,7 @@ BEGIN
       I_Field18 = ISNULL( Rw.value('(input[@id="I_Field18"]/@value)[1]','nvarchar(60)'), I_Field18), 
       I_Field19 = ISNULL( Rw.value('(input[@id="I_Field19"]/@value)[1]','nvarchar(60)'), I_Field19), 
       I_Field20 = ISNULL( Rw.value('(input[@id="I_Field20"]/@value)[1]','nvarchar(60)'), I_Field20),       
-      V_MAX = ISNULL( Rw.value('(input[@id="V_MAX"]/@value)[1]','nvarchar(max)'), V_MAX),
+      V_Max = ISNULL( Rw.value('(input[@id="V_Max"]/@value)[1]','nvarchar(max)'), V_Max),
       V_Barcode = ISNULL( Rw.value('(input[@id="V_Barcode"]/@value)[1]','nvarchar(max)'), V_Barcode)  
    FROM rdt.rdtMobRec r   
       JOIN @xInMessage.nodes('/fromRDT') AS A(Rw) ON (1=1)  
