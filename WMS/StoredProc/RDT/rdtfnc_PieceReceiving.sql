@@ -150,6 +150,7 @@ GO
 /*                           each received (james27)                    */
 /* 2023-05-11 9.8 Ung        WMS-22366 Fix MultiSKUBarcode with Add SKU */
 /*                           in ASN should always prompt, not auto select*/
+/* 2023-06-03 9.9 James      Bug fix on V_Barcode input (james28)       */
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_PieceReceiving] (
    @nMobile    INT,
@@ -2267,10 +2268,10 @@ BEGIN
    IF @nInputKey = 1 -- Yes or Send
    BEGIN
       -- Screen mapping
-      --SET @cSKU = @cInField02 -- SKU
       SET @cQTY = @cInField05 -- QTY
       SET @cBarcode = SUBSTRING( @cBarcode, 1, 2000)
-      SET @cSKU = CASE WHEN @cSKUValidated = 0 THEN SUBSTRING( @cBarcode, 1, 20) ELSE @cSKU END -- SKU
+      SET @cSKU = @cBarcode -- SKU
+      --SET @cSKU = @cInField02 -- SKU
 
       -- Validate SKU
       IF ISNULL( @cSKU,'') = ''
