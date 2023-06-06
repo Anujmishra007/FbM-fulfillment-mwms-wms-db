@@ -1,11 +1,8 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE Object_Id = OBJECT_ID(N'[RDT].[rdt_PTLPiece_Matrix]') AND Type in (N'P', N'PC'))
-   DROP PROCEDURE [RDT].[rdt_PTLPiece_Matrix]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 
 /************************************************************************/
 /* Store procedure: rdt_PTLPiece_Matrix                                 */
@@ -13,19 +10,20 @@ GO
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
 /* 25-04-2016 1.0  Ung      SOS368861 Created                           */
+/* 09-05-2023 1.1  Ung      WMS-21609 Add UDF03 as MatrixSP             */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdt_PTLPiece_Matrix] (
+CREATE OR ALTER PROC [RDT].[rdt_PTLPiece_Matrix] (
     @nMobile    INT
    ,@nFunc      INT
    ,@cLangCode  NVARCHAR( 3)
-   ,@nStep      INT 
+   ,@nStep      INT
    ,@nInputKey  INT
    ,@cFacility  NVARCHAR( 5)
    ,@cStorerKey NVARCHAR( 15)
    ,@cLight     NVARCHAR( 1)
-   ,@cStation   NVARCHAR( 10)  
-   ,@cMethod    NVARCHAR( 1)  
+   ,@cStation   NVARCHAR( 10)
+   ,@cMethod    NVARCHAR( 1)
    ,@cSKU       NVARCHAR( 20)
    ,@cIPAddress NVARCHAR( 40)
    ,@cPosition  NVARCHAR( 10)
@@ -58,19 +56,29 @@ BEGIN
                                              Customize Matrix
 
    ***********************************************************************************************/
+   -- Get method info
+   DECLARE @cStationMatrixSP SYSNAME
+   SET @cStationMatrixSP = ''
+   SELECT @cStationMatrixSP = ISNULL( UDF03, '')
+   FROM CodeLKUP WITH (NOLOCK)
+   WHERE ListName = 'PTLPiece'
+      AND Code = @cMethod
+      AND StorerKey = @cStorerKey
 
    -- Get storer configure
-   DECLARE @cCartMatrixSP NVARCHAR(20)
-   SET @cCartMatrixSP = rdt.RDTGetConfig( @nFunc, 'StationMatrixSP', @cStorerKey)
-   IF @cCartMatrixSP = '0'
-      SET @cCartMatrixSP = ''
-
-   -- Custom cart matrix
-   IF @cCartMatrixSP <> ''
+   IF @cStationMatrixSP = ''
    BEGIN
-      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cCartMatrixSP AND type = 'P')
+      SET @cStationMatrixSP = rdt.RDTGetConfig( @nFunc, 'StationMatrixSP', @cStorerKey)
+      IF @cStationMatrixSP = '0'
+         SET @cStationMatrixSP = ''
+   END
+   
+   -- Custom cart matrix
+   IF @cStationMatrixSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cStationMatrixSP AND type = 'P')
       BEGIN
-         SET @cSQL = 'EXEC rdt.' + RTRIM( @cCartMatrixSP) +
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cStationMatrixSP) +
             ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
             ' @cLight, @cStation, @cMethod, @cSKU, @cIPAddress, @cPosition, @cDisplay, @nErrNo OUTPUT, @cErrMsg OUTPUT, ' +
             ' @cResult01 OUTPUT, @cResult02 OUTPUT, @cResult03 OUTPUT, @cResult04 OUTPUT, @cResult05 OUTPUT, ' +
@@ -83,15 +91,15 @@ BEGIN
             ' @nInputKey  INT,           ' +
             ' @cFacility  NVARCHAR( 5),  ' +
             ' @cStorerKey NVARCHAR( 15), ' +
-            ' @cLight     NVARCHAR( 1),  ' + 
-            ' @cStation   NVARCHAR( 10), ' +  
-            ' @cMethod    NVARCHAR( 1),  ' + 
+            ' @cLight     NVARCHAR( 1),  ' +
+            ' @cStation   NVARCHAR( 10), ' +
+            ' @cMethod    NVARCHAR( 1),  ' +
             ' @cSKU       NVARCHAR( 20), ' +
             ' @cIPAddress NVARCHAR( 40), ' +
             ' @cPosition  NVARCHAR( 10), ' +
             ' @cDisplay   NVARCHAR( 5),  ' +
             ' @nErrNo     INT            OUTPUT, ' +
-            ' @cErrMsg    NVARCHAR( 20)  OUTPUT, ' + 
+            ' @cErrMsg    NVARCHAR( 20)  OUTPUT, ' +
             ' @cResult01  NVARCHAR( 20)  OUTPUT, ' +
             ' @cResult02  NVARCHAR( 20)  OUTPUT, ' +
             ' @cResult03  NVARCHAR( 20)  OUTPUT, ' +
@@ -105,7 +113,7 @@ BEGIN
 
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
             @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
-            @cLight, @cStation, @cMethod, @cSKU, @cIPAddress, @cPosition, @cDisplay, @nErrNo OUTPUT, @cErrMsg OUTPUT, 
+            @cLight, @cStation, @cMethod, @cSKU, @cIPAddress, @cPosition, @cDisplay, @nErrNo OUTPUT, @cErrMsg OUTPUT,
             @cResult01 OUTPUT, @cResult02 OUTPUT, @cResult03 OUTPUT, @cResult04 OUTPUT, @cResult05 OUTPUT,
             @cResult06 OUTPUT, @cResult07 OUTPUT, @cResult08 OUTPUT, @cResult09 OUTPUT, @cResult10 OUTPUT
 
@@ -119,17 +127,17 @@ BEGIN
                                              Stardard Matrix
 
    ***********************************************************************************************/
-   
+
    DECLARE @i        INT
-   DECLARE @nStart   INT 
-   DECLARE @nEnd     INT 
+   DECLARE @nStart   INT
+   DECLARE @nEnd     INT
    DECLARE @nLen     INT
    DECLARE @cCR      NVARCHAR( 1)
    DECLARE @cLF      NVARCHAR( 1)
    DECLARE @cASCII   NVARCHAR( 4000)
    DECLARE @cResult  NVARCHAR( 20)
    DECLARE @cLogicalName NVARCHAR( 10)
-   
+
    SET @cCR = CHAR( 13)
    SET @cLF = CHAR( 10)
    SET @cResult01 = ''
@@ -144,7 +152,7 @@ BEGIN
    SET @cResult10 = ''
 
    -- Get logical name
-   SET @cLogicalName = @cPosition 
+   SET @cLogicalName = @cPosition
    SELECT @cLogicalName = LogicalName
    FROM DeviceProfile WITH (NOLOCK)
    WHERE DeviceType = 'STATION'
@@ -155,8 +163,8 @@ BEGIN
 
    -- Get ASCII art
    SET @cASCII = ''
-   SELECT TOP 1 
-      @cASCII = ISNULL( Notes, '') 
+   SELECT TOP 1
+      @cASCII = ISNULL( Notes, '')
    FROM CodeLKUP WITH (NOLOCK)
    WHERE ListName = 'PTLASCII'
       AND Code = @cLogicalName
@@ -182,10 +190,10 @@ BEGIN
          SET @cResult = SUBSTRING( @cASCII, @nStart, @nLen) -- Abstract field
          SET @cResult = REPLACE( @cResult, @cLF, '')        -- Remove line break
          SET @cResult = REPLACE( @cResult, @cCR, '')        -- Remove line break
-   
+
          --select @cResult '@cResult', @nStart '@nStart', @nEnd '@nEnd', @nLen '@nLen', @i '@i'
-         --print @cResult 
-      
+         --print @cResult
+
          -- Map to output
          IF @i = 1  SET @cResult01 = @cResult ELSE
          IF @i = 2  SET @cResult02 = @cResult ELSE
@@ -197,10 +205,10 @@ BEGIN
          IF @i = 8  SET @cResult08 = @cResult ELSE
          IF @i = 9  SET @cResult09 = @cResult ELSE
          IF @i = 10 SET @cResult10 = @cResult
-      
+
          IF @nEnd = 0                                       -- No more delimeter
             BREAK
-   
+
          SET @i = @i + 1                                    -- Next field
          SET @nStart = @nEnd + 1                            -- Next field starting position
          SET @nEnd = CHARINDEX( @cLF, @cASCII, @nStart)     -- Find next delimeter
@@ -210,7 +218,7 @@ BEGIN
             SET @nLen = LEN( @cASCII)
       END
    END
-   
+
    IF @cLight = '1'
    BEGIN
       DECLARE @bSuccess    INT
@@ -230,20 +238,20 @@ BEGIN
          ,@cErrMsg      OUTPUT
       IF @nErrNo <> 0
          GOTO Quit
-      
+
       IF @cDisplay = ''
          SET @cDisplay = '1'
-      
+
       EXEC PTL.isp_PTL_LightUpLoc
          @n_Func           = @nFunc
         ,@n_PTLKey         = 0
-        ,@c_DisplayValue   = @cDisplay 
-        ,@b_Success        = @bSuccess    OUTPUT    
-        ,@n_Err            = @nErrNo      OUTPUT  
+        ,@c_DisplayValue   = @cDisplay
+        ,@b_Success        = @bSuccess    OUTPUT
+        ,@n_Err            = @nErrNo      OUTPUT
         ,@c_ErrMsg         = @cErrMsg     OUTPUT
         ,@c_DeviceID       = @cStation
         ,@c_DevicePos      = @cPosition
-        ,@c_DeviceIP       = @cIPAddress  
+        ,@c_DeviceIP       = @cIPAddress
         ,@c_LModMode       = @cLightMode
       IF @nErrNo <> 0
          GOTO Quit
@@ -253,12 +261,5 @@ Quit:
 
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
+GRANT EXECUTE ON  [RDT].[rdt_PTLPiece_Matrix] TO [NSQL]
 GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON RDT.rdt_PTLPiece_Matrix TO NSQL
-GO
-
