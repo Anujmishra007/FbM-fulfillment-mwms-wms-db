@@ -22,7 +22,7 @@ EXECUTE rdt.rdtAddScn 4831, 'ENG',
    ,@cLine04 = '%20d03' 	
    ,@cLine05 = '' 	
    ,@cLine06 = 'SERIAL NO:' 	
-   ,@cLine07 = '%1000iV_MAX'
+   ,@cLine07 = '%1000iV_Max'  -- Change V_MAX->V_Max
    ,@cLine08 = '' 	
    ,@cLine09 = 'SCAN/TOTAL: %08d05'
    ,@cLine14 = '%e'

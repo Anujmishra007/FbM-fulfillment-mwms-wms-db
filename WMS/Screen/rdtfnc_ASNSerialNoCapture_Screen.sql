@@ -50,7 +50,7 @@ EXECUTE rdt.rdtAddScn 5735, 'ENG',
    @cLine01 = 'Carton SN:',
    @cLine02 = '%20d05',
    @cLine03 = 'BOTTLE SN:',
-   @cLine04 = '%100iV_MAX',
+   @cLine04 = '%100iV_Max',   -- Change V_MAX->V_Max
    @cLine06 = 'Bot SN SCANNED:',
    @cLine07 = '%02d06 / %02d07 ',
    @cLine14 = '%e',

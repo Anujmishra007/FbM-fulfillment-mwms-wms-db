@@ -38,7 +38,7 @@ EXECUTE rdt.rdtAddScn 5722, 'ENG'
    ,@cLine04 = '%20d03'
    ,@cLine05 = '%20d04'
    ,@cLine07 = 'CHILD TRACKING ID:'
-   ,@cLine08 = '%60iV_MAX'
+   ,@cLine08 = '%60iV_Max' -- Change V_MAX->V_Max
    ,@cLine10 = 'PACK QTY: %05d06'
    ,@cLine11 = 'CASE QTY: %10d07'
    ,@cLine12 = 'SKU QTY:  %10d08'

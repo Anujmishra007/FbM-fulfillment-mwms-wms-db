@@ -21,7 +21,7 @@ EXECUTE rdt.rdtAddScn 3021, 'ENG',
    ,@cLine04 = 'ORDERKEY:'    -- (ChewKP01)
    ,@cLine05 = '%10d04'       -- (ChewKP01)
    ,@cLine07 = 'SERIALNO:'
-   ,@cLine08 = '%200iV_MAX'    -- (ChewKP01)
+   ,@cLine08 = '%200iV_Max'    -- (ChewKP01) Change V_MAX->V_Max
    ,@cLine10 = 'COUNT: %05d03'
    ,@cLine11 = '%20d05'       -- (ChewKP02) ExtendedInfo
    ,@cLine14 = '%e'

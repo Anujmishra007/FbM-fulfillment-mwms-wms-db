@@ -2,7 +2,7 @@
 DELETE rdt.RDTScn WHERE Scn = 2060 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 2060, 'ENG',
     @cLine01 = 'MUID:'
-   ,@cLine02 = '%100iV_MAX' -- SOS372493/WMS4127
+   ,@cLine02 = '%100iV_Max' -- SOS372493/WMS4127 Change V_MAX->V_Max
    ,@cLine13 = 'ENTER = Next Page'
    ,@cLine14 = '%e'
    ,@nFunc   = 864

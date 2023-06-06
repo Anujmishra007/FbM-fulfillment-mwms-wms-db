@@ -24,7 +24,7 @@ EXECUTE rdt.rdtAddScn 5381, 'ENG'
    ,@cLine07 = 'CASE ID:'
    ,@cLine08 = '%20i03'
    ,@cLine10 = 'SERIAL NO:'
-   ,@cLine11 = '%1000iV_MAX'
+   ,@cLine11 = '%1000iV_Max'  -- Change V_MAX->V_Max
    ,@cLine13 = '%20d15'
    ,@cLine14 = '%e'
    ,@nFunc = 833
