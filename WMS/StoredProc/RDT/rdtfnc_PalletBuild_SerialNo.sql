@@ -1,7 +1,3 @@
-if exists (select * from sys.objects where object_id = object_id(N'[rdt].[rdtfnc_PalletBuild_SerialNo]') and OBJECTPROPERTY(object_id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdtfnc_PalletBuild_SerialNo]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -18,9 +14,10 @@ GO
 /* Date         Rev  Author   Purposes                                     */
 /* 2019-01-14   1.0  James    WMS7505. Created                             */
 /* 2019-05-17   1.1  James    Enhancement                                  */
+/* 2023-06-06   1.1  James    Addhoc fix. Change V_MAX to V_Max (james01)  */
 /***************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_PalletBuild_SerialNo](
+CREATE OR ALTER PROC [RDT].[rdtfnc_PalletBuild_SerialNo](
    @nMobile    int,
    @nErrNo     int  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max
@@ -579,7 +576,7 @@ BEGIN
             SET @cOutField03 = @cInField03
             SET @cOutField04 = ''
             SET @cMax = ''
-            EXEC rdt.rdtSetFocusField @nMobile, V_MAX
+            EXEC rdt.rdtSetFocusField @nMobile, V_Max
             GOTO Quit  
          END
       END
@@ -647,7 +644,7 @@ BEGIN
                SET @cOutField03 = @cInField03
                SET @cOutField04 = ''
                SET @cMax = ''
-               EXEC rdt.rdtSetFocusField @nMobile, V_MAX
+               EXEC rdt.rdtSetFocusField @nMobile, V_Max
             END
 
             GOTO Quit  

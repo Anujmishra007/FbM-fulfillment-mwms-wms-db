@@ -1,7 +1,3 @@
-if exists (select * from sys.objects where object_id = object_id(N'[rdt].[rdtfnc_SortationByTrackingID_Reversal]') and OBJECTPROPERTY(object_id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdtfnc_SortationByTrackingID_Reversal]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -17,9 +13,10 @@ GO
 /*                                                                         */
 /* Date         Rev  Author   Purposes                                     */
 /* 2020-03-12   1.0  James    WMS-12380 Created                            */
+/* 2023-06-06   1.1  James    Addhoc fix. Change V_MAX to V_Max (james01)  */
 /***************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_SortationByTrackingID_Reversal](
+CREATE OR ALTER PROC [RDT].[rdtfnc_SortationByTrackingID_Reversal](
    @nMobile    int,
    @nErrNo     int  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max
@@ -121,7 +118,7 @@ SELECT
    @nFromScn         = V_FromScn,
    @cSKUDescr        = V_SKUDescr,
    
-   @cMax             = V_MAX,
+   @cMax             = V_Max,
 
    @nSKUValidated       = V_Integer1,
       
@@ -609,7 +606,7 @@ BEGIN
          BEGIN
             SET @nSKUValidated = 1
             SET @cOutField02 = @cBarcode
-            EXEC rdt.rdtSetFocusField @nMobile, V_MAX
+            EXEC rdt.rdtSetFocusField @nMobile, V_Max
             GOTO Quit
          END
       END
@@ -621,7 +618,7 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Need Child ID
          SET @cOutField02 = @cBarcode
          SET @cOutField03 = ''
-         EXEC rdt.rdtSetFocusField @nMobile, V_MAX
+         EXEC rdt.rdtSetFocusField @nMobile, V_Max
          GOTO Quit
       END
 
@@ -633,7 +630,7 @@ BEGIN
          SET @cMax = ''
          SET @cOutField02 = @cBarcode
          SET @cOutField03 = ''
-         EXEC rdt.rdtSetFocusField @nMobile, V_MAX
+         EXEC rdt.rdtSetFocusField @nMobile, V_Max
          GOTO Quit
       END      
 
@@ -647,7 +644,7 @@ BEGIN
          SET @cMax = ''
          SET @cOutField02 = @cBarcode
          SET @cOutField03 = ''
-         EXEC rdt.rdtSetFocusField @nMobile, V_MAX
+         EXEC rdt.rdtSetFocusField @nMobile, V_Max
          GOTO Quit
       END     
 
@@ -868,7 +865,7 @@ BEGIN
       V_FromScn  = @nFromScn,
       V_SKUDescr = @cSKUDescr,
       
-      V_MAX      = @cMax,
+      V_Max      = @cMax,
       
       V_Integer1 = @nSKUValidated,
       
