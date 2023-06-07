@@ -32,6 +32,8 @@ GO
 /* 2020-12-18  Wan02    1.1   Add Big Outer Begin Try..End Try to enable */
 /*                            Revert when SP Raise error                 */
 /* 2021-01-15  Wan03    1.2   Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2023-04-20  BeeTin   1.3   JSM-131854 - Extended @c_id length         */    
+/*                            to NVARCHAR(36)                            */   
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_KitToExplodeBOM_Wrapper]  
    @c_KITKey               NVARCHAR(10)
@@ -63,7 +65,8 @@ BEGIN
          , @c_Sku                NVARCHAR(20)   = ''
          , @c_Lot                NVARCHAR(10)   = ''
          , @c_Loc                NVARCHAR(10)   = ''
-         , @c_ID                 NVARCHAR(10)   = ''
+         --, @c_ID                 NVARCHAR(10)   = ''    
+         , @c_ID                 NVARCHAR(36)   = ''  --JSM-131854   
          , @c_Lottable01         NVARCHAR(18)   = ''         
          , @c_Lottable02         NVARCHAR(18)   = ''         
          , @c_Lottable03         NVARCHAR(18)   = ''         
