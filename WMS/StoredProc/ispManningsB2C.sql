@@ -18,7 +18,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -26,6 +26,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 28-Apr-2023 WLChooi  1.1   WMS-22438 - Support new process (WL01)    */
+/* 28-Apr-2023 WLChooi  1.1   DevOps Combine Script                     */
 /************************************************************************/
 CREATE PROC ispManningsB2C
      @c_WaveKey                     NVARCHAR(10)
@@ -90,13 +92,13 @@ BEGIN
    FROM WAVE WITH (NOLOCK)
    WHERE Wavekey = @c_Wavekey
 
-   IF @c_WaveType NOT IN ('MANB2B','MANB2C')
+   IF @c_WaveType NOT IN ('MANB2B','MANB2C','MANLQ')   --WL01
    BEGIN
       SET @n_Err = 82010
       SET @n_Continue = 3
       SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0))  
                     + ': Invalid Wave Piece Pick Task Dispatch Method'
-                    + '. Must Be MANB2B or MANB2C (ispManningsB2C)'
+                    + '. Must Be MANB2B or MANB2C or MANLQ (ispManningsB2C)'   --WL01
       GOTO QUIT_SP
    END
 
