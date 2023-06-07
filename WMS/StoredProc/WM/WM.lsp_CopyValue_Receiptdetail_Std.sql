@@ -14,7 +14,7 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.1                                                          */  
+/* Version: 1.2                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
@@ -23,6 +23,7 @@ GO
 /* 2023-02-12 Wan    1.0   Created & DevOps Combine Script               */
 /* 2023-03-28 Wan01  1.1   Fixed Update before validation and double     */
 /*                         update & Fixed Error #                        */
+/* 2023-05-12 Wan02  1.2   Fix Where Clause Issue-Mulitple From Tables   */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_CopyValue_Receiptdetail_Std]  
    @c_TableName            NVARCHAR(30) 
@@ -30,7 +31,7 @@ CREATE OR ALTER PROCEDURE [WM].[lsp_CopyValue_Receiptdetail_Std]
 ,  @c_CopyFromKey1         NVARCHAR(30)    
 ,  @c_CopyFromKey2         NVARCHAR(30)   = ''
 ,  @c_CopyFromKey3         NVARCHAR(30)   = ''
-,  @c_SearchCondition      NVARCHAR(MAX)  = ''
+,  @c_SearchSQL            NVARCHAR(MAX)  = ''                                      --(Wan02)
 ,  @b_Success              INT            = 1   OUTPUT    
 ,  @n_Err                  INT            = 0   OUTPUT
 ,  @c_Errmsg               NVARCHAR(255)  = ''  OUTPUT

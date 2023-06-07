@@ -14,13 +14,15 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.0                                                          */  
+/* Version: 1.1                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date       Author   Ver   Purposes                                    */ 
 /* 2023-02-12 Wan      1.0   Created & DevOps Combine Script             */
+/* 2023-05-22 Wan01    1.1   LFWM-3964: Fix Where Clause Issue- SP SQL   */
+/*                           vary from SQL search button                 */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_CopyValue_Wrapper]  
    @c_TableName            NVARCHAR(50)         --TableName To Copy From and To
@@ -28,7 +30,7 @@ CREATE OR ALTER PROCEDURE [WM].[lsp_CopyValue_Wrapper]
 ,  @c_CopyFromKey1         NVARCHAR(30)         --Copy Column Value from record's Primarykey 1
 ,  @c_CopyFromKey2         NVARCHAR(30)   = ''  --Copy Column Value from record's Primarykey 2 if any
 ,  @c_CopyFromKey3         NVARCHAR(30)   = ''  --Copy Column Value from record's Primarykey 3 if any
-,  @c_SearchCondition      NVARCHAR(MAX)  = ''  --Search Condition For Copy from Master Table and To
+,  @c_SearchSQL            NVARCHAR(MAX)  = ''  --Search SQL For Copy from Master Table and To  --Wan01
 ,  @b_Success              INT            = 1   OUTPUT    
 ,  @n_Err                  INT            = 0   OUTPUT
 ,  @c_Errmsg               NVARCHAR(255)  = ''  OUTPUT
@@ -85,7 +87,8 @@ BEGIN
                  + ',@c_CopyFromKey1= @c_CopyFromKey1'
                  + ',@c_CopyFromKey2= @c_CopyFromKey2'
                  + ',@c_CopyFromKey3= @c_CopyFromKey3'
-                 + ',@c_SearchCondition=@c_SearchCondition'
+                 + ',@c_SearchSQL   = @c_SearchSQL'                                 --(Wan01)        
+                 --+ ',@c_SearchCondition=@c_SearchCondition'                       --(Wan01)               
                  + ',@b_Success     = @b_Success   OUTPUT'    
                  + ',@n_Err         = @n_Err       OUTPUT'
                  + ',@c_Errmsg      = @c_Errmsg    OUTPUT'
@@ -95,7 +98,8 @@ BEGIN
                       + ',@c_CopyFromKey1    NVARCHAR(30)'
                       + ',@c_CopyFromKey2    NVARCHAR(30)'
                       + ',@c_CopyFromKey3    NVARCHAR(30)'
-                      + ',@c_SearchCondition NVARCHAR(MAX)'
+                      + ',@c_SearchSQL       NVARCHAR(MAX)'                         --(Wan01)                    
+                      --+ ',@c_SearchCondition NVARCHAR(MAX)'                       --(Wan01)
                       + ',@b_Success         INT             OUTPUT'    
                       + ',@n_Err             INT             OUTPUT'
                       + ',@c_Errmsg          NVARCHAR(255)   OUTPUT'
@@ -108,7 +112,8 @@ BEGIN
                         ,@c_CopyFromKey1  
                         ,@c_CopyFromKey2  
                         ,@c_CopyFromKey3 
-                        ,@c_SearchCondition 
+                        ,@c_SearchSQL                                               --(Wan01)                    
+                        --,@c_SearchCondition                                       --(Wan01)
                         ,@b_Success       OUTPUT    
                         ,@n_Err           OUTPUT
                         ,@c_Errmsg        OUTPUT

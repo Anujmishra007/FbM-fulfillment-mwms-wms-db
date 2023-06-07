@@ -13,7 +13,7 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.3                                                          */  
+/* Version: 1.5                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
@@ -27,6 +27,7 @@ GO
 /*                           Revert when Sub SP Raise error              */ 
 /* 2021-01-15 Wan03    1.3   Execute Login if @c_UserName<>SUSER_SNAME() */
 /* 2023-03-09 NJOW01   1.4   LFWM-3608 Performance tuning for XML Reading*/
+/* 2023-05-18 Wan04    1.5   LFWM-4116 Performance tuning                */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_Wrapup_Validation_Wrapper]  
       @c_Module               NVARCHAR(60) = ''
@@ -51,30 +52,32 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL ON
    SET ARITHABORT ON
 
-   DECLARE @c_SPName    NVARCHAR(50)   = ''
-         , @c_SQL       NVARCHAR(MAX) = ''
-         , @c_SQLParms  NVARCHAR(4000) = ''         
-         , @b_logerror  BIT            = 0   --(Wan02)
+   DECLARE @c_SPName                NVARCHAR(50)   = ''
+         , @c_SQL                   NVARCHAR(MAX)  = ''
+         , @c_SQLParms              NVARCHAR(4000) = ''         
+         , @b_logerror              BIT            = 0   --(Wan02)
+         
+         , @b_CallFromSP            BIT            = 0   --(Wan04) 
          
    --NJOW01      
    DECLARE      
-           @c_ReqInPutExtValidate  NVARCHAR(10) = 'Y'         
-         , @c_Storerkey            NVARCHAR(15) = ''   
-         , @n_StorerPos            INT = 0 
-         , @n_StorerEndPos         INT = 0        
-         , @c_StorerTag            NVARCHAR(200) = ''                   
-         , @c_TableColumns         NVARCHAR(MAX) = '' 
-         , @c_ColumnName           NVARCHAR(128) = ''  
-         , @c_DataType             NVARCHAR(128) = ''  
-         , @c_TableName            NVARCHAR(30) = ''   
-         , @c_SQLSchema            NVARCHAR(MAX) = ''           
-         , @x_XMLSchema            XML  
-         , @x_XMLData              XML  
-         , @n_XMLHandle            INT = 0                 
-         , @c_SQLSchema_OXML       NVARCHAR(MAX) = ''  
-         , @c_TableColumns_OXML    NVARCHAR(MAX) = ''  
-         , @c_SQL2                 NVARCHAR(MAX) = ''
-                                   
+           @c_ReqInPutExtValidate   NVARCHAR(10) = 'Y'         
+         , @c_Storerkey             NVARCHAR(15) = ''   
+         , @n_StorerPos             INT = 0 
+         , @n_StorerEndPos          INT = 0        
+         , @c_StorerTag             NVARCHAR(200) = ''                   
+         , @c_TableColumns          NVARCHAR(MAX) = '' 
+         , @c_ColumnName            NVARCHAR(128) = ''  
+         , @c_DataType              NVARCHAR(128) = ''  
+         , @c_TableName             NVARCHAR(30) = ''   
+         , @c_SQLSchema             NVARCHAR(MAX) = ''           
+         , @x_XMLSchema             XML  
+         , @x_XMLData               XML  
+         , @n_XMLHandle             INT = 0                 
+         , @c_SQLSchema_OXML        NVARCHAR(MAX) = ''  
+         , @c_TableColumns_OXML     NVARCHAR(MAX) = ''  
+         , @c_SQL2                  NVARCHAR(MAX) = ''
+         
    SET @n_Err = 0 
    IF SUSER_SNAME() <> @c_UserName       --(Wan03) - START
    BEGIN
@@ -93,35 +96,56 @@ BEGIN
       @n_Continue       INT = 1
    --(Wan02) - START  
    BEGIN TRY
-
       SET @c_SPName = 'lsp_Validate_' + RTRIM(@c_UpdateTable) + '_Std'
       
+      IF EXISTS (SELECT 1                                                           --(wan04) - START                
+                 FROM dbo.sysobjects (NOLOCK) WHERE ID = OBJECT_ID(@c_ControlObject) AND [Type] = 'P')   
+      BEGIN 
+         SET @b_CallFromSP = 1
+      END 
+     
+      IF @b_CallFromSP = 1 AND LEN(@c_XMLDataString) <> ''
+      BEGIN
+         IF SUBSTRING(@c_XMLDataString, 1, 15) = 'CUSTOM_VALIDATE'
+         BEGIN
+         
+            SET @c_ReqInPutExtValidate = 'Y'
+            GOTO CUSTOM_VALIDATE
+         END 
+         
+         IF SUBSTRING(@c_XMLDataString, 1, 12) = 'STD_VALIDATE'
+         BEGIN
+            SET @c_ReqInPutExtValidate = 'N'
+            GOTO STD_VALIDATE
+         END          
+      END                                                                           --(wan04) - END                         
+      
       --NJOW01 S
-      IF OBJECT_ID('tempdb..#VALDN') IS NOT NULL  
+      IF OBJECT_ID('tempdb..#VALDN') IS NOT NULL AND @b_CallFromSP = 0              --(wan04)  
       BEGIN  
          DROP TABLE #VALDN  
       END  
-      IF OBJECT_ID('tempdb..#SCHEMA') IS NOT NULL  
+      IF OBJECT_ID('tempdb..#SCHEMA') IS NOT NULL AND @b_CallFromSP = 0             --(wan04)  
       BEGIN  
          DROP TABLE #SCHEMA  
       END  
-                  
-      IF @c_Module <> 'w_userdefine_extended_validation'
+      
+      IF @c_Module <> 'w_userdefine_extended_validation' AND @b_CallFromSP = 0      --(wan04) 
       BEGIN
          IF @c_UpdateTable IN('TRANSFER','TRANSFERDETAIL')
             SET @c_StorerTag = RTRIM(@c_UpdateTable)+'.FromStorerkey="'
-         ELSE 	 
-      	    SET @c_StorerTag = RTRIM(@c_UpdateTable)+'.Storerkey="'
-      	  
-      	 SELECT @n_StorerPos = CHARINDEX(@c_StorerTag , @c_XMLDataString)
+         ELSE   
+            SET @c_StorerTag = RTRIM(@c_UpdateTable)+'.Storerkey="'
+           
+         SELECT @n_StorerPos = CHARINDEX(@c_StorerTag , @c_XMLDataString)
 
-      	 IF @n_StorerPos > 0 
-      	    SELECT @n_StorerEndPos = CHARINDEX('"', LEFT(@c_XMLDataString, @n_StorerPos + 100), @n_StorerPos + LEN(@c_StorerTag))
+         IF @n_StorerPos > 0 
+            SELECT @n_StorerEndPos = CHARINDEX('"', LEFT(@c_XMLDataString, @n_StorerPos + 100), @n_StorerPos + LEN(@c_StorerTag))
 
          IF @n_StorerEndPos > 0
-      	    SELECT @c_Storerkey = SUBSTRING(@c_XMLDataString, @n_StorerPos + LEN(@c_StorerTag), @n_StorerEndPos - @n_StorerPos - LEN(@c_StorerTag))
-      	    
-        	IF NOT EXISTS(SELECT TOP 1 1
+            SELECT @c_Storerkey = SUBSTRING(@c_XMLDataString, @n_StorerPos + LEN(@c_StorerTag), @n_StorerEndPos - @n_StorerPos - LEN(@c_StorerTag))
+             
+         IF NOT EXISTS(SELECT TOP 1 1
                         FROM CODELKUP CL (NOLOCK) 
                         JOIN CODELIST CLS (NOLOCK) ON CL.UDF01 = CLS.LISTNAME
                         JOIN CODELKUP CLSD (NOLOCK) ON CLS.ListName = CLSD.Listname
@@ -133,10 +157,10 @@ BEGIN
             AND @n_StorerEndPos > 0
          BEGIN
             SET @c_ReqInPutExtValidate = 'N'
-         END              	 
+         END                
 
-      	 IF @c_ReqInPutExtValidate = 'Y' 
-      	     OR EXISTS (SELECT 1 FROM sys.Objects (NOLOCK) WHERE Name = @c_SPName AND type = 'P') 
+         IF @c_ReqInPutExtValidate = 'Y' 
+              OR EXISTS (SELECT 1 FROM sys.Objects (NOLOCK) WHERE Name = @c_SPName AND type = 'P') 
          BEGIN      
             CREATE TABLE #VALDN( Rowid  INT NOT NULL IDENTITY(1,1) PRIMARY KEY)  
             CREATE TABLE #SCHEMA (Column_Name NVARCHAR(80), Data_Type NVARCHAR(80)) 
@@ -207,13 +231,14 @@ BEGIN
          END   
       END   
       --NJOW02 E
-	  
+     
       IF @c_Module = N'w_userdefine_extended_validation'
       BEGIN
          GOTO CUSTOM_VALIDATE
       END
       -- Getting the Window/object lookup between Exceed and WM system.
-     
+      
+      STD_VALIDATE:                                                                 --(Wan04)
       IF @n_Continue IN (1,2) --AND ( @c_ProceedWithWarning <> 'N' OR (@c_ProceedWithWarning = 'Y' OR @n_WarningNo < 1) )
       BEGIN  
 
@@ -324,11 +349,11 @@ BEGIN
    EXIT_SP:  
    
    --NJOW01 S
-   IF OBJECT_ID('tempdb..#VALDN') IS NOT NULL  
+   IF OBJECT_ID('tempdb..#VALDN') IS NOT NULL AND @b_CallFromSP = 0                 --(wan04)  
    BEGIN  
       DROP TABLE #VALDN  
    END     
-   IF OBJECT_ID('tempdb..#SCHEMA') IS NOT NULL  
+   IF OBJECT_ID('tempdb..#SCHEMA') IS NOT NULL AND @b_CallFromSP = 0                --(wan04)  
    BEGIN  
       DROP TABLE #SCHEMA  
    END  
