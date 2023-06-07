@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: Wave                                                      */ 
 /*                                                                      */
-/* GitLab Version: 1.7                                                  */
+/* GitLab Version: 1.8                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -29,6 +29,7 @@ GO
 /* 17-Oct-2022  WLChooi  1.5  WMS-19669 - Enhance Logic for CSOS (WL05) */
 /* 29-Mar-2023  WLChooi  1.6  WMS-22098 - Add Logic for CSOS (WL06)     */
 /* 20-Apr-2023  WLChooi  1.7  WMS-22098 - Modify Logic for CSOS (WL07)  */
+/* 06-Jun-2023  WLChooi  1.8  Bug Fix for Batchno reset (WL08)          */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV53]      
@@ -93,6 +94,7 @@ BEGIN
          , @n_TotalQty              INT   --WL07
          , @c_GetOrderkey           NVARCHAR(10)   --WL07
          , @n_GetSKUCasecnt         INT   --WL07
+         , @c_ResetBatchNo          NVARCHAR(1) = 'N'   --WL08
    
    DECLARE @n_CurrCnt         INT
          , @c_LocType         NVARCHAR(50)
@@ -1137,8 +1139,9 @@ BEGIN
             SET @n_TotalCBM = 0.00
             --SET @n_CartonNo = 0   --WL06
             SET @c_CallFrom = 'CLOTH'   --WL07
-            SET @c_PrevBatchNo = @c_BatchNo   --WL06
-            SET @c_BatchNo = ''
+            --SET @c_PrevBatchNo = @c_BatchNo   --WL06   --WL08
+            --SET @c_BatchNo = ''   --WL08
+            SET @c_ResetBatchNo = 'Y'   --WL08
             SET @c_Orderkey = ''
             SET @c_PrevOrderkey = ''
             SET @c_PrevLocType = ''
@@ -1177,6 +1180,15 @@ BEGIN
          
             WHILE @@FETCH_STATUS <> -1
             BEGIN
+               --WL08 S
+               IF @c_ResetBatchNo = 'Y'
+               BEGIN
+                  SET @c_PrevBatchNo = @c_BatchNo
+                  SET @c_BatchNo = ''
+                  SET @c_ResetBatchNo = 'N'
+               END
+               --WL08 E
+
                --WL07 S
                --IF CHARINDEX('_', @c_ProductType) > 0
                --   SET @c_ProductType = SUBSTRING(@c_ProductType, CHARINDEX('_', @c_ProductType) + 1, LEN(@c_ProductType))
