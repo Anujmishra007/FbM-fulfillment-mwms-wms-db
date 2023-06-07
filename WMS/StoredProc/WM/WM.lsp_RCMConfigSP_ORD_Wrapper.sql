@@ -7,6 +7,7 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /*************************************************************************/  
 /* Stored Procedure: lsp_RCMConfigSP_ORD_Wrapper                         */  
 /* Creation Date: 2020-06-11                                             */  
@@ -29,8 +30,9 @@ GO
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
 /* 2021-07-05  Wan01    1.2   LFWM-2875 - UAT RG-Create RCM allocation   */
 /*                            feature in Adjustment Screen- SCE          */
+/* 2023-05-19  CLVN01   1.3   JSM-149503 Performance Tuning              */
 /*************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_RCMConfigSP_ORD_Wrapper]  
+ALTER PROCEDURE [WM].[lsp_RCMConfigSP_ORD_Wrapper]  
    @c_Storerkey   NVARCHAR(15)
 ,  @c_OrderKey    NVARCHAR(10) 
 ,  @b_Success     INT          = 1   OUTPUT   
@@ -131,6 +133,15 @@ BEGIN
    END CATCH
    --(mingle01) - END
    EXIT_SP:
+
+   --(CLVN01) - START      
+   IF (XACT_STATE()) = -1  
+   BEGIN
+      SET @n_Continue = 3 
+      ROLLBACK TRAN
+   END  
+   --(CLVN01) – END
+
    
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
@@ -168,5 +179,3 @@ END
 GO
 GRANT EXECUTE ON [WM].[lsp_RCMConfigSP_ORD_Wrapper] TO nSQL 
 GO
-
-
