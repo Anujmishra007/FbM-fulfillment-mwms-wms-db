@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_TRF_PopulateUCC_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_TRF_PopulateUCC_Wrapper] 
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,7 +12,7 @@ GO
 /*                                                                      */
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.1                                                    */                                                                                  
+/* PVCS Version: 1.2                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -27,10 +22,14 @@ GO
 /* Date        Author   Ver.  Purposes                                  */
 /* 2021-01-15  Wan01    1.1   Add Big Outer Begin try/Catch             */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/  
+/* 2023-05-03  Wan02    1.2   LFWM-4072 - [CN] PROD_Mannings Populate   */
+/*                            Transfer By UCC function needs to be fixed*/
+/*                            in Transfer screen                        */
+/*                            DevOps Combine Script                     */
 /************************************************************************/                                                                                  
-CREATE PROC [WM].[lsp_TRF_PopulateUCC_Wrapper]                                                                                                                     
+CREATE OR ALTER PROC [WM].[lsp_TRF_PopulateUCC_Wrapper]                                                                                                                     
       @c_TransferKey          NVARCHAR(10)         
-   ,  @c_UCC_RowRef_List      NVARCHAR(4000) = ''  -- UCC_Row_Ref seperated by '|'
+   ,  @c_UCC_RowRef_List      NVARCHAR(MAX) = ''  -- UCC_Row_Ref seperated by '|'   
    ,  @b_Success              INT = 1           OUTPUT  
    ,  @n_err                  INT = 0           OUTPUT                                                                                                             
    ,  @c_ErrMsg               NVARCHAR(255)= '' OUTPUT
@@ -80,6 +79,7 @@ BEGIN
          ,  @dt_FromLottable13            DATETIME       = NULL
          ,  @dt_FromLottable14            DATETIME       = NULL
          ,  @dt_FromLottable15            DATETIME       = NULL
+         ,  @n_FromQty                    INT            = 0                        --(Wan02)
          ,  @c_ToSku                      NVARCHAR(20)   = ''                
          ,  @c_ToPackkey                  NVARCHAR(10)   = ''
          ,  @c_ToUOM                      NVARCHAR(10)   = ''
@@ -102,6 +102,7 @@ BEGIN
          ,  @c_ListName                   NVARCHAR(10)   = ''
          ,  @c_SPName                     NVARCHAR(60)   = ''
          ,  @c_UDF01                      NVARCHAR(60)   = ''
+         ,  @c_ToLot                      NVARCHAR(20)   = ''                       --(Wan02)
          ,  @c_ToLottableLabel            NVARCHAR(20)   = ''
          ,  @c_ToLottable01Label          NVARCHAR(20)   = ''
          ,  @c_ToLottable02Label          NVARCHAR(20)   = ''
@@ -149,7 +150,12 @@ BEGIN
          ,  @c_ToLottable12ReturnValue    NVARCHAR(30)   = ''
          ,  @dt_ToLottable13ReturnValue   DATETIME       = NULL
          ,  @dt_ToLottable14ReturnValue   DATETIME       = NULL
-         ,  @dt_ToLottable15ReturnValue   DATETIME       = NULL                
+         ,  @dt_ToLottable15ReturnValue   DATETIME       = NULL 
+         ,  @n_ToQty                      INT            = 0                        --(Wan02)
+         
+         ,  @c_Channel_From               NVARCHAR(20)   = ''                       --(Wan02)
+         ,  @c_Channel_To                 NVARCHAR(20)   = ''                       --(Wan02)
+
          
          ,  @c_TableName                  NVARCHAR(50)   = 'TRANSFERDETAIL'
          ,  @c_SourceType                 NVARCHAR(50)   = 'lsp_TRF_PopulateUCC_Wrapper'
@@ -157,6 +163,9 @@ BEGIN
          ,  @c_SourceKey                  NVARCHAR(50)   = ''
          ,  @c_SourceType_LARule          NVARCHAR(50)   = 'TRANSFER'
 
+         ,  @c_ChannelInventoryMgmt_From  NVARCHAR(10)   = ''                       --(Wan02)   
+         ,  @c_ChannelInventoryMgmt_To    NVARCHAR(10)   = ''                       --(Wan02)
+         
    SET @b_Success = 1
    SET @n_Err     = 0
                
@@ -186,7 +195,12 @@ BEGIN
             ,@c_ToStorerkey  = TH.ToStorerkey
       FROM TRANSFER TH WITH (NOLOCK)
       WHERE TH.TransferKey = @c_TransferKey
-
+      
+      --(Wan02) - START
+      SELECT @c_ChannelInventoryMgmt_From = fsgr.Authority FROM dbo.fnc_SelectGetRight (@c_FromFacility, @c_FromStorerkey,'','ChannelInventoryMgmt') AS fsgr
+      SELECT @c_ChannelInventoryMgmt_To   = fsgr.Authority FROM dbo.fnc_SelectGetRight (@c_ToFacility, @c_ToStorerkey,'','ChannelInventoryMgmt') AS fsgr
+      --(Wan02) - END
+      
       /*-------------------------------------------------------*/
       /* BUILD TEMP TABLES & INSERT DATA - START               */
       /*-------------------------------------------------------*/
@@ -223,6 +237,7 @@ BEGIN
              @n_UCC_RowRef = UCC.UCC_RowRef
             ,@c_FromSku    = UCC.Sku
             ,@c_FromLot    = UCC.Lot
+            ,@n_FromQty    = UCC.Qty                                                --(Wan02)
          FROM #tUCC t
          JOIN UCC UCC WITH (NOLOCK) ON t.UCC_RowRef = UCC.UCC_RowRef
          WHERE UCC.UCC_RowRef > @n_UCC_RowRef
@@ -459,7 +474,8 @@ BEGIN
                WHERE CL.ListName = @c_ListName
                AND CL.Code = @c_ToLottableLabel
                AND CL.Short IN ('PRE', 'BOTH')  
-               AND ((CL.Storerkey = @c_ToStorerkey AND @c_ToStorerkey <> '') OR (CL.Storerkey = ''))
+               --AND ((CL.Storerkey = @c_ToStorerkey AND @c_ToStorerkey <> '') OR (CL.Storerkey = ''))
+               AND  CL.Storerkey IN ( @c_ToStorerkey, '')
                ORDER BY CL.Storerkey DESC    
             END  
 
@@ -574,6 +590,59 @@ BEGIN
             SET @n_Cnt = @n_Cnt + 1 
          END
    
+         IF @c_ChannelInventoryMgmt_From = '1'                                      --(Wan02) - START
+         BEGIN
+            SELECT @c_Channel_From = fsci.Channel
+            FROM dbo.fnc_SelectChannelInv(@c_FromFacility, @c_FromStorerkey, @c_FromSku, @c_Channel_From
+                                         ,@c_FromLot, @n_FromQty
+                                          ) AS fsci
+         END
+         
+         IF @c_ChannelInventoryMgmt_To = '1'
+         BEGIN
+            EXEC dbo.nsp_LotLookup
+                  @c_StorerKey  = @c_ToStorerKey                 
+              ,   @c_Sku        = @c_ToSku                       
+              ,   @c_Lottable01 = @c_ToLottable01
+              ,   @c_Lottable02 = @c_ToLottable02
+              ,   @c_Lottable03 = @c_ToLottable03
+              ,   @c_Lottable04 = @dt_ToLottable04
+              ,   @c_Lottable05 = @dt_ToLottable05
+              ,   @c_Lottable06 = @c_ToLottable06
+              ,   @c_Lottable07 = @c_ToLottable07
+              ,   @c_Lottable08 = @c_ToLottable08
+              ,   @c_Lottable09 = @c_ToLottable09
+              ,   @c_Lottable10 = @c_ToLottable10
+              ,   @c_Lottable11 = @c_ToLottable11
+              ,   @c_Lottable12 = @c_ToLottable12
+              ,   @c_Lottable13 = @dt_ToLottable13
+              ,   @c_Lottable14 = @dt_ToLottable14
+              ,   @c_Lottable15 = @dt_ToLottable15
+              ,   @c_Lot        = @c_ToLot         OUTPUT
+              ,   @b_Success    = @b_Success       OUTPUT
+              ,   @n_err        = @n_err           OUTPUT
+              ,   @c_errmsg     = @c_errmsg        OUTPUT
+              ,   @b_resultset  = 0    
+                                
+            SET @n_ToQty = @n_FromQty
+            SELECT @c_Channel_To = fsci.Channel
+            FROM dbo.fnc_SelectChannelInv(@c_ToFacility, @c_ToStorerkey, @c_ToSku, @c_Channel_To
+                                         ,@c_ToLot, @n_ToQty
+                                         ) AS fsci
+            
+            IF @c_Channel_To = ''
+            BEGIN
+               SELECT TOP 1 @c_Channel_To = c.Code
+               FROM dbo.CODELKUP AS c WITH (NOLOCK)
+               WHERE c.ListName = 'Channel'
+               AND c.Storerkey IN ('', @c_ToStorerkey)
+               ORDER BY CASE WHEN c.Storerkey = @c_ToStorerkey THEN 1
+                             ELSE 9
+                             END
+                     ,  c.Code               
+            END
+         END                                                                        --(Wan02) - END   
+                
          SET @c_TransferLineNumber = RIGHT( '00000' + CONVERT(NVARCHAR(5), CONVERT(INT, @c_TransferLineNumber) + 1), 5 )
          BEGIN TRY
             INSERT INTO TRANSFERDETAIL
@@ -626,7 +695,9 @@ BEGIN
                   ,  ToLottable14
                   ,  ToLottable15
                   ,  UserDefine01 
-                  ,  UserDefine02   
+                  ,  UserDefine02 
+                  ,  FromChannel                                                    --(Wan02)
+                  ,  ToChannel                                                      --(Wan02)
                   )
             SELECT   @c_TransferKey
                   ,  @c_TransferLineNumber
@@ -677,7 +748,9 @@ BEGIN
                   ,  @dt_ToLottable14
                   ,  @dt_ToLottable15
                   ,  UCC.UCCNo
-                  ,  UCC.UCCNo  
+                  ,  UCC.UCCNo
+                  ,  @c_Channel_From                                                --(Wan02)
+                  ,  @c_Channel_To                                                  --(Wan02)  
             FROM UCC WITH (NOLOCK)
             WHERE UCC_RowRef = @n_UCC_RowRef
          END TRY
@@ -721,6 +794,12 @@ BEGIN
       GOTO EXIT_SP   
    END CATCH                              --(Wan01) - END 
 EXIT_SP:
+   IF (XACT_STATE()) = -1                 --(Wan02) - START
+   BEGIN
+      SET @n_Continue = 3 
+      ROLLBACK TRAN
+   END                                    --(Wan02) - END
+   
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0
