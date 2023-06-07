@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispManningsB2C]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispManningsB2C]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -29,7 +24,7 @@ GO
 /* 28-Apr-2023 WLChooi  1.1   WMS-22438 - Support new process (WL01)    */
 /* 28-Apr-2023 WLChooi  1.1   DevOps Combine Script                     */
 /************************************************************************/
-CREATE PROC ispManningsB2C
+CREATE OR ALTER PROC [dbo].[ispManningsB2C]
      @c_WaveKey                     NVARCHAR(10)
    , @c_UOM                         NVARCHAR(10)
    , @c_LocationTypeOverride        NVARCHAR(10)
