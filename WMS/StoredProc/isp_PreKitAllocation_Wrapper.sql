@@ -1,12 +1,8 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_PreKitAllocation_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_PreKitAllocation_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /************************************************************************/
 /* Stored Proc: isp_PreKitAllocation_Wrapper                            */
 /* Creation Date: 22-AUG-2019                                           */
@@ -26,8 +22,10 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 22-Mar-2023 WLChooi  1.0   WMS-21261 - Remove ErrMsg (WL01)          */
+/* 22-Mar-2023 WLChooi  1.0   DevOps Combine Script                     */
 /************************************************************************/
-CREATE PROC isp_PreKitAllocation_Wrapper
+CREATE OR ALTER PROC [dbo].[isp_PreKitAllocation_Wrapper]
            @c_KitKey          NVARCHAR(10)
          , @b_Success         INT            OUTPUT
          , @n_Err             INT            OUTPUT
@@ -111,9 +109,11 @@ BEGIN
    IF @b_Success = 0
    BEGIN
       SET @n_Continue = 3
-      SET @n_Err = 61010
-      SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err)  
-                  + ': Error Executing ' + RTRIM(@c_SPCode)+ '. (isp_PreKitAllocation_Wrapper)'  
+      --WL01 S
+      --SET @n_Err = 61010   
+      --SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err)  
+      --            + ': Error Executing ' + RTRIM(@c_SPCode)+ '. (isp_PreKitAllocation_Wrapper)'  
+      --WL01 E
       GOTO QUIT_SP
    END
 
@@ -147,5 +147,5 @@ QUIT_SP:
    END             
 END -- procedure
 GO
-GRANT EXECUTE ON [dbo].[isp_PreKitAllocation_Wrapper] TO nSQL 
+GRANT EXECUTE ON [dbo].[isp_PreKitAllocation_Wrapper] TO [nSQL]
 GO
