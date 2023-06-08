@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_Pack_PackConfirm]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_Pack_PackConfirm]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -18,9 +15,10 @@ GO
 /* 01-11-2017 1.3  Ung         WMS-3326 Add DEFAULT_PACKINFO            */  
 /* 09-04-2018 1.4  Ung         WMS-3845 Add PackConfirmSP               */  
 /* 14-09-2020 1.5  Chermaine   WMS-14253 Add isnull (cc01)              */
+/* 03-06-2023 1.6  Ung         WMS-22608 Add multi PickDetail.Status    */
 /************************************************************************/  
   
-Create PROC rdt.rdt_Pack_PackConfirm (  
+CREATE OR ALTER PROC rdt.rdt_Pack_PackConfirm (  
     @nMobile      INT  
    ,@nFunc        INT  
    ,@cLangCode    NVARCHAR( 3)  
@@ -95,8 +93,8 @@ BEGIN
    DECLARE @cZone     NVARCHAR( 18)  
    DECLARE @nPackQTY  INT  
    DECLARE @nPickQTY  INT  
-   DECLARE @cPickStatus  NVARCHAR(1)  
-   DECLARE @cPackConfirm NVARCHAR(1)  
+   DECLARE @cPickStatus  NVARCHAR( 20)  
+   DECLARE @cPackConfirm NVARCHAR( 1)  
   
    SET @cOrderKey = ''  
    SET @cLoadKey = ''  
@@ -111,7 +109,7 @@ BEGIN
   
    -- Storer config  
    SET @cPickStatus = rdt.rdtGetConfig( @nFunc, 'PickStatus', @cStorerKey)  
-  
+
    -- Get PickHeader info  
    SELECT TOP 1  
       @cOrderKey = OrderKey,  
@@ -134,7 +132,7 @@ BEGIN
          WHERE RKL.PickSlipNo = @cPickSlipNo  
             AND PD.Status < '5'  
             AND PD.QTY > 0  
-            AND (PD.Status = '4' OR PD.Status <> @cPickStatus))  -- Short or not yet pick  
+            AND (PD.Status = '4' OR CHARINDEX( PD.Status, @cPickStatus) = 0))  -- Short or not yet pick  
          SET @cPackConfirm = 'N'  
       ELSE  
          SET @cPackConfirm = 'Y'  
@@ -161,7 +159,7 @@ BEGIN
          WHERE PD.OrderKey = @cOrderKey  
             AND PD.Status < '5'  
             AND PD.QTY > 0  
-            AND (PD.Status = '4' OR PD.Status <> @cPickStatus))  -- Short or not yet pick  
+            AND (PD.Status = '4' OR CHARINDEX( PD.Status, @cPickStatus) = 0))  -- Short or not yet pick  
          SET @cPackConfirm = 'N'  
       ELSE  
          SET @cPackConfirm = 'Y'  
@@ -188,7 +186,7 @@ BEGIN
          WHERE LPD.LoadKey = @cLoadKey  
             AND PD.Status < '5'  
             AND PD.QTY > 0  
-            AND (PD.Status = '4' OR PD.Status <> @cPickStatus))  -- Short or not yet pick  
+            AND (PD.Status = '4' OR CHARINDEX( PD.Status, @cPickStatus) = 0))  -- Short or not yet pick  
          SET @cPackConfirm = 'N'  
       ELSE  
          SET @cPackConfirm = 'Y'  
@@ -215,7 +213,7 @@ BEGIN
          WHERE PD.PickSlipNo = @cPickSlipNo  
             AND PD.Status < '5'  
             AND PD.QTY > 0  
-            AND (PD.Status = '4' OR PD.Status <> @cPickStatus))  -- Short or not yet pick  
+            AND (PD.Status = '4' OR CHARINDEX( PD.Status, @cPickStatus) = 0))  -- Short or not yet pick  
          SET @cPackConfirm = 'N'  
       ELSE  
          SET @cPackConfirm = 'Y'  
