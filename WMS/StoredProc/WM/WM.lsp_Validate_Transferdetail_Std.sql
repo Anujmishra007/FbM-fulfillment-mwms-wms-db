@@ -1,32 +1,30 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_Validate_TransferDetail_Std]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [WM].[lsp_Validate_TransferDetail_Std]
-GO
-
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-/*************************************************************************/  
-/* Stored Procedure: lsp_Validate_TransferDetail_Std                     */  
-/* Creation Date: 30-JUL-2018                                            */  
-/* Copyright: LFL                                                        */  
-/* Written by: Wan                                                       */  
-/*                                                                       */  
-/* Purpose:                                                              */  
-/*                                                                       */  
-/* Called By:                                                            */  
-/*                                                                       */  
-/*                                                                       */  
-/* Version: 1.0                                                          */  
-/*                                                                       */  
-/* Data Modifications:                                                   */  
-/*                                                                       */  
-/* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */ 
-/* 2021-02-10   mingle01 1.1  Add Big Outer Begin try/Catch              */
-/*************************************************************************/   
-CREATE PROC [WM].[lsp_Validate_TransferDetail_Std] (
+/**************************************************************************/  
+/* Stored Procedure: lsp_Validate_TransferDetail_Std                      */  
+/* Creation Date: 30-JUL-2018                                             */  
+/* Copyright: LFL                                                         */  
+/* Written by: Wan                                                        */  
+/*                                                                        */  
+/* Purpose:                                                               */  
+/*                                                                        */  
+/* Called By:                                                             */  
+/*                                                                        */  
+/*                                                                        */  
+/* Version: 1.3                                                           */  
+/*                                                                        */  
+/* Data Modifications:                                                    */  
+/*                                                                        */  
+/* Updates:                                                               */  
+/* Date         Author   Ver  Purposes                                    */ 
+/* 2021-02-10   mingle01 1.1  Add Big Outer Begin try/Catch               */
+/* 2023-03-09   NJOW01   1.2  LFWM-3608 performance tuning for XML Reading*/
+/* 2023-05-23   Wan01    1.3  LFWM-3608 performance tuning, Skip Validation*/
+/*                            Trafficcop IS NOT NULL                      */
+/**************************************************************************/   
+CREATE OR ALTER PROC [WM].[lsp_Validate_TransferDetail_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
 , @c_XMLDataString      NVARCHAR(MAX) 
 , @b_Success            INT OUTPUT
@@ -56,19 +54,87 @@ BEGIN
    ,  @c_SQLSchema         NVARCHAR(MAX) = N''
    ,  @c_SQLData           NVARCHAR(MAX) = N''   
    ,  @n_Continue          INT = 1 
-
+   ,  @n_XMLHandle         INT    --NJOW01
+   ,  @c_SQLSchema_OXML    NVARCHAR(MAX) = N''  --NJOW01
+   ,  @c_TableColumns_OXML NVARCHAR(MAX) = N''  --NJOW01
+   
    --(mingle01) - START
    BEGIN TRY
+      /*  --NJOW01 Removed
       IF OBJECT_ID('tempdb..#TRANSFERDETAIL') IS NOT NULL
       BEGIN
          DROP TABLE #TRANSFERDETAIL
       END
+      */
 
+      --NJOW01 S
+      IF OBJECT_ID('tempdb..#VALDN') IS NULL
+      BEGIN
+         CREATE TABLE #VALDN( Rowid  INT NOT NULL IDENTITY(1,1) )   
+         
+         SET @x_XMLSchema = CONVERT(XML, @c_XMLSchemaString)
+         SET @x_XMLData = CONVERT(XML, @c_XMLDataString)
+         
+         EXEC sp_xml_preparedocument @n_XMLHandle OUTPUT, @c_XMLSchemaString            
+         DECLARE CUR_SCHEMA CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT ColName, DataType 
+            FROM OPENXML (@n_XMLHandle, '/Table/Column',1)  
+            WITH (ColName  NVARCHAR(128),  
+                  DataType NVARCHAR(128))
+            
+         OPEN CUR_SCHEMA
+         
+         FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_DataType
+         
+         WHILE @@FETCH_STATUS <> -1
+         BEGIN
+            SET @c_TableName = ''
+            IF CHARINDEX('.', @c_ColumnName) > 0 
+            BEGIN
+               SET @c_TableName  = LEFT(@c_ColumnName, CHARINDEX('.', @c_ColumnName))
+               SET @c_ColumnName = RIGHT(@c_ColumnName, LEN(@c_ColumnName) -LEN(@c_TableName))
+            END
+         
+            SET @c_SQLSchema  = @c_SQLSchema + @c_ColumnName + ' ' + @c_DataType + ' NULL, '
+            SET @c_SQLSchema_OXML  = @c_SQLSchema_OXML + '['+@c_TableName+@c_ColumnName + '] ' + @c_DataType + ', '         
+            SET @c_TableColumns = @c_TableColumns + @c_ColumnName + ', '
+            SET @c_TableColumns_OXML = @c_TableColumns_OXML + '[' + @c_TableName + @c_ColumnName + '], '
+                        
+            FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_DataType
+         END
+         CLOSE CUR_SCHEMA
+         DEALLOCATE CUR_SCHEMA
+         EXEC sp_xml_removedocument @n_XMLHandle              
+             
+         IF LEN(@c_SQLSchema) > 0 
+         BEGIN
+            SET @c_SQL = N'ALTER TABLE #VALDN  ADD  ' + SUBSTRING(@c_SQLSchema, 1, LEN(@c_SQLSchema) - 1) + ' '
+               
+            EXEC (@c_SQL)
+         
+            EXEC sp_xml_preparedocument @n_XMLHandle OUTPUT, @c_XMLDataString
+         
+            SET @c_SQL = N' INSERT INTO #VALDN' 
+                        + ' ( ' + SUBSTRING(@c_TableColumns, 1, LEN(@c_TableColumns) - 1) + ' )'
+                        + ' SELECT ' + SUBSTRING(@c_TableColumns_OXML, 1, LEN(@c_TableColumns_OXML) - 1)
+                        + ' FROM  OPENXML (@n_XMLHandle, ''Row'',1) '
+                        + ' WITH (' + SUBSTRING(@c_SQLSchema_OXML, 1, LEN(@c_SQLSchema_OXML) - 1) + ')'
+                           
+            EXEC sp_executeSQl @c_SQL
+                              , N'@n_XMLHandle INT'
+                              , @n_XMLHandle                                     
+            
+            EXEC sp_xml_removedocument @n_XMLHandle                                  
+         END  
+      END
+      --NJOW01 E
+      
+      /*      
       CREATE TABLE #TRANSFERDETAIL( Rowid  INT NOT NULL IDENTITY(1,1) )   
-
+      
       SET @x_XMLSchema = CONVERT(XML, @c_XMLSchemaString)
       SET @x_XMLData = CONVERT(XML, @c_XMLDataString)
-
+      
       DECLARE CUR_SCHEMA CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT x.value('@ColName', 'NVARCHAR(128)') AS columnname
             ,x.value('@DataType','NVARCHAR(128)') AS datatype
@@ -113,6 +179,7 @@ BEGIN
                            , @x_XMLData
          
       END
+      */
 
       DECLARE 
             @c_ToFacility           NVARCHAR(5)  = ''
@@ -176,6 +243,23 @@ BEGIN
          ,  @c_CheckTrfQtyDiff      NVARCHAR(30) = ''
          ,  @c_UCCTracking          NVARCHAR(30) = ''
 
+      IF EXISTS ( SELECT 1                                                          --(Wan01) - START
+                 FROM tempdb.INFORMATION_SCHEMA.COLUMNS c 
+                 JOIN tempdb.dbo.SysObjects AS s ON s.[name] = c.TABLE_NAME 
+                 WHERE s.id = OBJECT_ID('tempdb..#VALDN')                     
+                 AND   c.[COLUMN_NAME] = 'TrafficCop' 
+                 )
+      BEGIN
+         SET @n_ExistsCnt = 0
+         SET @c_SQL = N'SELECT @n_ExistsCnt=1 FROM #VALDN AD WHERE ad.TrafficCop IS NULL'
+         
+         EXEC sp_ExecuteSQL @c_SQL, N'@n_ExistsCnt INT OUTPUT', @n_ExistsCnt OUTPUT
+         
+         IF @n_ExistsCnt = 0
+         BEGIN
+            GOTO EXIT_SP
+         END
+      END                                                                           --(Wan01) - END
 
       SELECT TOP 1 
             @c_TransferKey     = TFD.TransferKey
@@ -201,7 +285,7 @@ BEGIN
          ,  @dt_ToLottable13   = TFD.ToLottable13
          ,  @dt_ToLottable14   = TFD.ToLottable14
          ,  @dt_ToLottable15   = TFD.ToLottable15
-      FROM  #TRANSFERDETAIL TFD  
+      FROM  #VALDN TFD  --NJOW01
 
       IF @n_FromQty = 0 AND @n_ToQty = 0
       BEGIN
