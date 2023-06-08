@@ -5,14 +5,14 @@ GO
 /************************************************************************/                                                                                  
 /* Store Procedure: lsp_Wave_BuildLoad                                  */                                                                                  
 /* Creation Date:                                                       */                                                                                  
-/* Copyright: LFL                                                       */                                                                                  
+/* Copyright: Maersk                                                    */                                                                                  
 /* Written by: Wan                                                      */                                                                                  
 /*                                                                      */                                                                                  
 /* Purpose: WM - Wave Creation                                          */                                                                                  
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.5                                                    */                                                                                  
+/* PVCS Version: 1.6                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -31,6 +31,8 @@ GO
 /*                            generate LoadPlan By Wave                 */
 /*                            DevOps Combine Script                     */
 /* 2023-04-17  Wan04    1.5   LFWM-3978-[CN] LULU_OrderParam_Sort by LOC*/
+/* 2023-05-22  Wan06    1.6   LFWM-4274 - CN UAT Generate Load Info into*/
+/*                            BuildLoadLog Table                        */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_Wave_BuildLoad]                                                                                                                       
       @c_Wavekey        NVARCHAR(10)  
@@ -78,6 +80,8 @@ AS
          , @c_RestrictionValue03       NVARCHAR(10) = ''
          , @c_RestrictionValue04       NVARCHAR(10) = '' 
          , @c_RestrictionValue05       NVARCHAR(10) = ''
+         
+         , @c_BuildParmGroup           NVARCHAR(30)   = ''              --(Wan06)                               
                                                   
          , @c_BuildParmKey             NVARCHAR(10)   = ''
          , @c_ParmBuildType            NVARCHAR(10)   = ''
@@ -132,7 +136,10 @@ AS
          --, @n_LoadPalletCnt            INT            = 0   
          --, @n_LoadCaseCnt              INT            = 0   
          --, @n_CustCnt                  INT            = 0  
-         --, @n_RdsCnt                   INT            = 0                 
+         --, @n_RdsCnt                   INT            = 0    
+         
+         , @n_BatchNo                  INT            = 0                           --(Wan06)              
+                      
          , @n_OrderCnt                 INT            = 0
          , @n_LoadCnt                  INT            = 0
          , @n_MaxOrders                INT            = 0
@@ -245,10 +252,12 @@ AS
    SET @b_Success = 1                                                                                                                                           
 
    SET @n_Cnt = 0
-   SELECT @n_Cnt = 1
+   SELECT TOP 1                                                                     --(Wan06)  
+          @n_Cnt = 1
          ,@c_BuildKeyFacility = BPCFG.Facility
          ,@c_BuildKeyStorerkey= BPCFG.Storerkey
-         ,@c_BuildParmKey = BP.BuildParmKey  
+         ,@c_BuildParmKey = BP.BuildParmKey 
+         ,@c_BuildParmGroup = BP.ParmGroup                                          --(Wan06)       
    FROM BUILDPARM BP WITH (NOLOCK)   
    JOIN BUILDPARMGROUPCFG BPCFG WITH (NOLOCK) ON BP.ParmGroup = BPCFG.ParmGroup
                                              AND BPCFG.[Type] = 'WaveBuildLoad'
@@ -818,6 +827,37 @@ START_BUILDLOAD:
    SET @n_TotalOrderCnt= 0   
    SET @n_TotalOpenQty = 0   
    SET @c_Loadkey      = '' 
+   
+   IF @n_BatchNo = 0                                                                --(Wan06) - START      
+   BEGIN
+      SET @d_StartTime = GETDATE()  
+      INSERT INTO BUILDLOADLOG
+         (  Facility
+         ,  Storerkey
+         ,  BuildParmGroup
+         ,  BuildParmCode
+         ,  BuildParmString
+         ,  Duration
+         ,  UDF01
+         ,  AddWho
+         ,  AddDate
+         ,  Wavekey             
+         )                                                
+      VALUES 
+         (  @c_Facility
+         ,  @c_StorerKey
+         ,  @c_BuildParmGroup
+         ,  @c_BuildParmKey
+         ,  @c_SQL
+         ,  N'00:00:00.000'
+         ,  @@SPID
+         ,  @c_UserName
+         ,  @d_StartTime
+         ,  @c_Wavekey         
+         )
+         
+      SET @n_BatchNo = @@IDENTITY
+   END                                                                              --(Wan06) - END
                                                                                                                                                         
    SET @CUR_BUILDLOAD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    SELECT RNum, OpenQty, OrderKey, [Weight], [Cube]
@@ -984,10 +1024,10 @@ START_BUILDLOAD:
          GOTO EXIT_SP     
       END CATCH 
 
-      WHILE @@TRANCOUNT > 0
-      BEGIN 
-         COMMIT TRAN    
-      END
+      --WHILE @@TRANCOUNT > 0                                                       --(Wan06) - START
+      --BEGIN 
+      --   COMMIT TRAN    
+      --END                                                                         --(Wan06) - END
 
       SET @n_TotalWeight  = @n_TotalWeight + @n_Weight
       SET @n_TotalCube    = @n_TotalCube + @n_Cube
@@ -1009,6 +1049,46 @@ START_BUILDLOAD:
       END
 
       FETCH NEXT FROM @CUR_BUILDLOAD INTO  @n_Num, @n_OpenQty, @c_Orderkey, @n_Weight, @n_Cube
+      
+      IF @c_Loadkey = '' OR @@FETCH_STATUS = -1                                     --(Wan06) - START                                                               
+      BEGIN
+         SET @d_EndTime = GETDATE()
+         INSERT INTO BUILDLOADDETAILLOG
+            (  Loadkey
+            ,  Storerkey
+            ,  BatchNo
+            ,  TotalOrderCnt
+            ,  TotalOrderQty
+            ,  UDF01
+            ,  UDF02
+            ,  UDF03
+            ,  UDF04
+            ,  UDF05
+            ,  AddWho
+            ,  AddDate
+            ,  Duration
+            )  
+         VALUES
+            (
+               @c_BuildLoadKey
+            ,  @c_Storerkey
+            ,  @n_BatchNo
+            ,  @n_OrderCnt
+            ,  @n_TotalOpenQty
+            ,  ''
+            ,  ''
+            ,  ''
+            ,  ''
+            ,  ''
+            ,  @c_UserName
+            ,  @d_StartTime
+            ,  CONVERT(CHAR(12),@d_EndTime - @d_StartTime ,114)
+            )
+      END
+      WHILE @@TRANCOUNT > 0
+      BEGIN 
+         COMMIT TRAN    
+      END                                                                           --(Wan06) - END
 
    END -- WHILE(@@FETCH_STATUS <> -1)                                                                                                                                           
    CLOSE @CUR_BUILDLOAD
@@ -1020,7 +1100,18 @@ START_BUILDLOAD:
    END
 
  END_BUILDLOAD:                                                                                                                                              
-                  
+   IF @n_BatchNo > 0                                                                --(Wan06) - START
+   BEGIN
+      UPDATE BuildLoadLog
+      SET  Duration = CONVERT(CHAR(12), @d_EndTime - @d_StartTime, 114)    
+         , TotalLoadCnt = @n_LoadCnt
+         , UDF01    = ''
+         , [Status] = '9'
+         , EditDate = @d_EndTime
+         , EditWho  = @c_UserName
+         , Trafficcop = NULL
+      WHERE BatchNo = @n_BatchNo   
+   END                                                                              --(Wan06) - END                   
    IF @b_debug = 2                                                                                                                                              
    BEGIN                                                                                                                                                       
       SET @d_EndTime_Debug = GETDATE()                                                    
@@ -1041,11 +1132,19 @@ START_BUILDLOAD:
 
    END TRY  
   
-   BEGIN CATCH      
+   BEGIN CATCH    
+      SET @n_Continue = 3                                                           --(Wan06)
+      SET @c_ErrMsg = ERROR_MESSAGE()                                               --(Wan06)  
       GOTO EXIT_SP  
    END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch
              --                                                                                                                                                             
-EXIT_SP:    
+EXIT_SP: 
+   IF CURSOR_STATUS( 'GLOBAL', 'CUR_LOADGRP') in (0 , 1)                            --(Wan06) - START
+   BEGIN
+      CLOSE CUR_LOADGRP
+      DEALLOCATE CUR_LOADGRP
+   END                                                                              --(Wan06) - END
+      
    IF @n_Continue = 3                                                                                                                                            
    BEGIN                                                                                                                                                       
       SET @b_Success = 0                                                                                                                                         
