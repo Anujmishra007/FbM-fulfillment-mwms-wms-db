@@ -28,6 +28,7 @@ GO
 /*                            storerconfig GenUCCLabelNoConfig          */
 /* 08-Aug-2022  WLChooi  1.5  WMS-20446 - Add Packconfirm logic (WL01)  */
 /* 08-Aug-2022  WLChooi  1.5  DevOps Combine Script                     */
+/* 02-Jun-2023  NJOW03   1.6  WMS-22727 insert packinfo table           */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispLPPK05]
@@ -57,7 +58,11 @@ BEGIN
            @nPS_count   INT,
            @cBatch_LabelNo NVARCHAR(20),
            @nBatch_LabelNo BIGINT,           
-           @nLabelNo_count INT
+           @nLabelNo_count INT,
+           @cDocType NVARCHAR(1), --NJOW03
+           @cECOM_SINGLE_Flag NVARCHAR(1), --NJOW03
+           @cTrackingNo NVARCHAR(40), --NJOW03
+           @nCartonNo INT --NJOW03
            
    DECLARE @cGenUCCLabelNoConfig NVARCHAR(10),
            @cIdentifier    NVARCHAR(2),
@@ -328,13 +333,15 @@ BEGIN
    BEGIN TRAN
    
    DECLARE CUR_ORDER CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-   SELECT OrderKey   
-   FROM   LoadplanDetail (NOLOCK)  
-   WHERE  loadkey = @cLoadKey   
+   SELECT O.OrderKey, 
+          O.Doctype, O.ECOM_SINGLE_Flag, O.TrackingNo    --NJOW03   
+   FROM   LoadplanDetail LPD (NOLOCK)  
+   JOIN   Orders O (NOLOCK) ON LPD.Orderkey = O.Orderkey
+   WHERE  LPD.loadkey = @cLoadKey   
   
    OPEN CUR_ORDER  
   
-   FETCH NEXT FROM CUR_ORDER INTO @cOrderKey   
+   FETCH NEXT FROM CUR_ORDER INTO @cOrderKey, @cDocType, @cECOM_SINGLE_Flag, @cTrackingNo --NJOW03   
   
    WHILE @@FETCH_STATUS <> -1  
    BEGIN  
@@ -496,16 +503,58 @@ BEGIN
             SELECT @cErrMsg = 'NSQL'+CONVERT(char(5),@nErr)+': Error Insert PackDetail Table (ispLPPK05)' 
             GOTO QUIT_SP
          END
-                           
+                                             
          FETCH NEXT FROM CUR_PICKDETAIL INTO @cStorerKey, @cSKU, @nQty  
       END  
       CLOSE CUR_PICKDETAIL  
       DEALLOCATE CUR_PICKDETAIL      
+      
+      --NJOW03 S
+      IF @cDiscreteOrConso = 'D' AND @cECOM_SINGLE_Flag = 'S' AND @cDocType = 'E'
+      BEGIN         
+         DECLARE CUR_PACK CURSOR LOCAL FAST_FORWARD READ_ONLY FOR        	
+            SELECT PD.CartonNo, SUM(PD.Qty)
+            FROM PACKHEADER PH (NOLOCK) 
+            JOIN PACKDETAIL PD (NOLOCK) ON PH.Pickslipno = PD.Pickslipno
+            LEFT JOIN PACKINFO PAI (NOLOCK) ON PH.Pickslipno = PAI.Pickslipno AND PD.CartonNo = PAI.CartonNo
+            WHERE PH.Pickslipno = @cPickSlipNo
+            GROUP BY PD.CartonNo
+        
+         OPEN CUR_PACK  
+     
+         FETCH NEXT FROM CUR_PACK INTO @nCartonNo, @nQty
+      
+         WHILE @@FETCH_STATUS = 0 AND @nContinue IN(1,2)
+         BEGIN           
+         	  IF EXISTS(SELECT 1 
+         	            FROM PACKINFO(NOLOCK)
+         	            WHERE Pickslipno = @cPickslipno
+         	            AND CartonNo = @nCartonNo)
+         	  BEGIN
+         	     UPDATE PACKINFO 
+         	     SET Qty = @nQty,
+         	         TrackingNo = @cTrackingNo,
+         	         TrafficCop = NULL
+         	     WHERE Pickslipno = @cPickslipno
+         	     AND CartonNo = @nCartonNo
+         	  END
+         	  ELSE   
+         	  BEGIN             
+         	     INSERT INTO PACKINFO (PickSlipNo, CartonNo, Weight, Cube, Qty, TrackingNo)
+         	     VALUES (@cPickslipNo, @nCartonNo, 0, 0, @nQty, @cTrackingNo)
+         	  END         	 
+         	   
+            FETCH NEXT FROM CUR_PACK INTO @nCartonNo, @nQty         	       
+         END
+         CLOSE CUR_PACK
+         DEALLOCATE CUR_PACK               	
+      END
+      --NJOW03 E      
         
       SKIP_ORDER:
 
       --WL01 S
-      IF @c_AutoPackConfirm = 'Y' AND @cDiscreteOrConso = 'D'
+      IF @c_AutoPackConfirm = 'Y' AND @cDiscreteOrConso = 'D' 
       BEGIN
          UPDATE PACKHEADER WITH (ROWLOCK) 
          SET [Status] = '9'
@@ -540,7 +589,7 @@ BEGIN
       END
       --WL01 E
         
-      FETCH NEXT FROM CUR_ORDER INTO @cOrderKey      
+      FETCH NEXT FROM CUR_ORDER INTO @cOrderKey, @cDocType, @cECOM_SINGLE_Flag, @cTrackingNo --NJOW03      
    END   
    CLOSE CUR_ORDER  
    DEALLOCATE CUR_ORDER 
