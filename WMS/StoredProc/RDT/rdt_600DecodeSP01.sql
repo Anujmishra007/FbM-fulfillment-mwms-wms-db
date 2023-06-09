@@ -1,11 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'rdt.rdt_600DecodeSP01') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_600DecodeSP01
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /******************************************************************************/
 /* Store procedure: rdt_600DecodeSP01                                         */
@@ -16,9 +13,11 @@ GO
 /* Date        Author    Ver.  Purposes                                       */
 /* 23-11-2015  Ung       1.0   SOS357362 Created                              */
 /* 17-05-2016  Ung       1.1   SOS370261 Add scan SKU code                    */
+/* 05-05-2023  YeeKung   1.2   WMS-22369 Add output for barcode in decodesp   */
+/*                            (yeekung01)                                     */
 /******************************************************************************/
 
-CREATE PROC rdt.rdt_600DecodeSP01 (
+CREATE OR ALTER PROC [RDT].[rdt_600DecodeSP01] (
    @nMobile      INT,
    @nFunc        INT,
    @cLangCode    NVARCHAR( 3),
@@ -28,7 +27,7 @@ CREATE PROC rdt.rdt_600DecodeSP01 (
    @cReceiptKey  NVARCHAR( 10),
    @cPOKey       NVARCHAR( 10),
    @cLOC         NVARCHAR( 10),
-   @cBarcode     NVARCHAR( 60),
+   @cBarcode     NVARCHAR( 2000)  OUTPUT,
    @cFieldName   NVARCHAR( 10),
    @cID          NVARCHAR( 18)  OUTPUT,
    @cSKU         NVARCHAR( 20)  OUTPUT,
@@ -68,8 +67,8 @@ BEGIN
                -- SKU
                IF LEN( @cBarcode) <= 12
                BEGIN
-                  SELECT TOP 1 
-                     @cSKU = SKU, 
+                  SELECT TOP 1
+                     @cSKU = SKU,
                      @nQTY = CASE WHEN QTYExpected > BeforeReceivedQTY THEN QTYExpected - BeforeReceivedQTY ELSE 0 END,
                      @cLottable01 = Lottable01,
                      @cLottable02 = Lottable02,
@@ -92,7 +91,7 @@ BEGIN
                      AND BeforeReceivedQTY = 0
                   ORDER BY ReceiptLineNumber
                END
-               
+
                -- SSCC
                IF LEN( @cBarcode) > 12
                BEGIN
@@ -101,14 +100,14 @@ BEGIN
                   DECLARE @cShort NVARCHAR( 10)
                   DECLARE @cLong  NVARCHAR( 250)
                   DECLARE @cUDF01 NVARCHAR( 60)
-               
+
                   -- Get SSCC decode rule (SOS 361419)
-                  SELECT 
+                  SELECT
                      @cCode = Code,                -- Prefix of barcode
-                     @cShort = ISNULL( Short, 0),  -- Lenght of string to take, after the prefix 
-                     @cLong = ISNULL( Long, ''),   -- String indicate don't need to decode (not used) 
+                     @cShort = ISNULL( Short, 0),  -- Lenght of string to take, after the prefix
+                     @cLong = ISNULL( Long, ''),   -- String indicate don't need to decode (not used)
                      @cUDF01 = ISNULL( UDF01, '')  -- Prefix of actual string after decode
-                  FROM dbo.CodeLKUP WITH (NOLOCK) 
+                  FROM dbo.CodeLKUP WITH (NOLOCK)
                   WHERE ListName = 'SSCCDECODE'
                      AND StorerKey = @cStorerKey
 
@@ -127,7 +126,7 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Prefix
                      GOTO Quit
                   END
-                  
+
                   -- Check valid length
                   IF rdt.rdtIsValidQty( @cShort, 1) = 0
                   BEGIN
@@ -135,10 +134,10 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Length
                      GOTO Quit
                   END
-                  
+
                   -- Get actual string
                   SET @cSSCC = SUBSTRING( @cBarcode, LEN( @cCode) + 1, CAST( @cShort AS INT))
-                  
+
                   -- Check valid length
                   IF LEN( @cSSCC) <> @cShort
                   BEGIN
@@ -146,15 +145,15 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid length
                      GOTO Quit
                   END
-               
+
                   -- Check actual string prefix
                   IF @cUDF01 <> SUBSTRING( @cSSCC, 1, LEN( @cUDF01))
                   BEGIN
                      SET @nErrNo = 96105
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid prefix
                      GOTO Quit
-                  END      
-                  
+                  END
+
                   -- Check actual string is numeric
                   DECLARE @i INT
                   DECLARE @c NVARCHAR(1)
@@ -169,15 +168,15 @@ BEGIN
                         GOTO Quit
                      END
                      SET @i = @i + 1
-                  END   
-                  
+                  END
+
                   -- Get SSCC row
                   DECLARE @nRowCount INT
                   SELECT @nRowCount = COUNT( 1)
                   FROM ReceiptDetail WITH (NOLOCK)
                   WHERE ReceiptKey = @cReceiptKey
                      AND Lottable09 = @cSSCC
-   
+
                   -- Check valid SSCC
                   IF @nRowCount = 0
                   BEGIN
@@ -193,10 +192,10 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MultiLine SSCC
                      GOTO Quit
                   END
-                  
+
                   IF @nRowCount = 1
-                     SELECT 
-                        @cSKU = SKU, 
+                     SELECT
+                        @cSKU = SKU,
                         @nQTY = CASE WHEN QTYExpected > BeforeReceivedQTY THEN QTYExpected - BeforeReceivedQTY ELSE 0 END,
                         @cLottable01 = Lottable01,
                         @cLottable02 = Lottable02,
@@ -226,11 +225,5 @@ Quit:
 
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON rdt.rdt_600DecodeSP01 TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_600DecodeSP01] TO [NSQL]
 GO

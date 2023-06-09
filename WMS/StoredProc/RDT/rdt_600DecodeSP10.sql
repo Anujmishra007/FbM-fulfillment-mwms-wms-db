@@ -17,9 +17,11 @@ GO
 /* 02-06-2022  Ung       1.2   WMS-19808 Map case SSCC to ReceiptDetail       */
 /* 29-08-2022  Ung       1.3   WMS-20644 Add SSCC pallet with multi lines     */
 /* 14-09-2022  Ung       1.4   WMS-20760 Add pallet with non SSCC SKU         */
+/* 05-05-2023  YeeKung   1.5   WMS-22369 Add output for barcode in decodesp   */
+/*                            (yeekung01)                                     */
 /******************************************************************************/
 
-CREATE OR ALTER PROC rdt.rdt_600DecodeSP10 (
+CREATE OR ALTER PROC [RDT].[rdt_600DecodeSP10] (
    @nMobile      INT,
    @nFunc        INT,
    @cLangCode    NVARCHAR( 3),
@@ -29,7 +31,7 @@ CREATE OR ALTER PROC rdt.rdt_600DecodeSP10 (
    @cReceiptKey  NVARCHAR( 10),
    @cPOKey       NVARCHAR( 10),
    @cLOC         NVARCHAR( 10),
-   @cBarcode     NVARCHAR( 60),
+   @cBarcode     NVARCHAR( 2000)  OUTPUT,
    @cFieldName   NVARCHAR( 10),
    @cID          NVARCHAR( 18)  OUTPUT,
    @cSKU         NVARCHAR( 20)  OUTPUT,

@@ -12,9 +12,11 @@ GO
 /*                                                                            */
 /* Date        Author    Ver.  Purposes                                       */
 /* 2022-07-26  Yeekung   1.0   WMS-20273 Created                              */
+/* 05-05-2023  YeeKung   1.1   WMS-22369 Add output for barcode in decodesp   */
+/*                            (yeekung01)                                     */
 /******************************************************************************/
 
-CREATE OR ALTER PROC rdt.rdt_600DecodeSP14 (
+CREATE OR ALTER PROC [RDT].[rdt_600DecodeSP14] (
    @nMobile      INT,
    @nFunc        INT,
    @cLangCode    NVARCHAR( 3),
@@ -24,7 +26,7 @@ CREATE OR ALTER PROC rdt.rdt_600DecodeSP14 (
    @cReceiptKey  NVARCHAR( 10),
    @cPOKey       NVARCHAR( 10),
    @cLOC         NVARCHAR( 10),
-   @cBarcode     NVARCHAR( 60),
+   @cBarcode     NVARCHAR( 2000)  OUTPUT,
    @cFieldName   NVARCHAR( 10),
    @cID          NVARCHAR( 18)  OUTPUT,
    @cSKU         NVARCHAR( 20)  OUTPUT,

@@ -1,11 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'rdt.rdt_600DecodeSP07') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_600DecodeSP07
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /******************************************************************************/
 /* Store procedure: rdt_600DecodeSP07                                         */
@@ -15,9 +12,11 @@ GO
 /*                                                                            */
 /* Date        Author    Ver.  Purposes                                       */
 /* 06-01-2021  Chermaine 1.0   WMS-15955 Created                              */
+/* 05-05-2023  YeeKung   1.1   WMS-22369 Add output for barcode in decodesp   */
+/*                            (yeekung01)                                     */
 /******************************************************************************/
 
-CREATE PROC rdt.rdt_600DecodeSP07 (
+CREATE OR ALTER PROC [RDT].[rdt_600DecodeSP07] (
    @nMobile      INT,
    @nFunc        INT,
    @cLangCode    NVARCHAR( 3),
@@ -27,7 +26,7 @@ CREATE PROC rdt.rdt_600DecodeSP07 (
    @cReceiptKey  NVARCHAR( 10),
    @cPOKey       NVARCHAR( 10),
    @cLOC         NVARCHAR( 10),
-   @cBarcode     NVARCHAR( 60),
+   @cBarcode     NVARCHAR( 2000)  OUTPUT,
    @cFieldName   NVARCHAR( 10),
    @cID          NVARCHAR( 18)  OUTPUT,
    @cSKU         NVARCHAR( 20)  OUTPUT,
@@ -55,7 +54,7 @@ BEGIN
    SET ANSI_NULLS OFF
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
-   
+
    DECLARE @cUPC        Nvarchar( 30)
    DECLARE @cScanQty    NVARCHAR( 5)
 
@@ -71,16 +70,16 @@ BEGIN
             	--G128 barcode start with 02 space
             	IF @cBarcode LIKE '02%'
             	BEGIN
-            		SET @cScanQty = RIGHT(@cBarcode , CHARINDEX ('73' ,REVERSE(@cBarcode))-1)   
+            		SET @cScanQty = RIGHT(@cBarcode , CHARINDEX ('73' ,REVERSE(@cBarcode))-1)
             		SET @cUPC = SUBSTRING(@cBarcode,3,LEN(@cBarcode)-LEN(@cScanQty)-4)
             	END
             	ELSE
             	BEGIN
             		--normal upc barcode
             		SET @cUPC = @cBarcode
-            		
+
             		--SELECT TOP 1
-            		--   @nQTY =P.Qty 
+            		--   @nQTY =P.Qty
             		--FROM UPC U WITH (NOLOCK)
             		--JOIN PACK P WITH (NOLOCK) ON (U.Uom = P.PackUOM3 AND U.PackKey = P.PackKey)
             		--WHERE U.UPC = @cUPC
@@ -96,11 +95,5 @@ Quit:
 
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON rdt.rdt_600DecodeSP07 TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_600DecodeSP07] TO [NSQL]
 GO

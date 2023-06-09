@@ -1,11 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'rdt.rdt_600DecodeSP05') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_600DecodeSP05
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /******************************************************************************/
 /* Store procedure: rdt_600DecodeSP05                                         */
@@ -15,9 +12,11 @@ GO
 /*                                                                            */
 /* Date        Author    Ver.  Purposes                                       */
 /* 19-02-2018  James     1.0   WMS-7837 Created                               */
+/* 05-05-2023  YeeKung   1.1   WMS-22369 Add output for barcode in decodesp   */
+/*                            (yeekung01)                                     */
 /******************************************************************************/
 
-CREATE PROC rdt.rdt_600DecodeSP05 (
+CREATE OR ALTER PROC [RDT].[rdt_600DecodeSP05] (
    @nMobile      INT,
    @nFunc        INT,
    @cLangCode    NVARCHAR( 3),
@@ -27,7 +26,7 @@ CREATE PROC rdt.rdt_600DecodeSP05 (
    @cReceiptKey  NVARCHAR( 10),
    @cPOKey       NVARCHAR( 10),
    @cLOC         NVARCHAR( 10),
-   @cBarcode     NVARCHAR( 60),
+   @cBarcode     NVARCHAR( 2000)  OUTPUT,
    @cFieldName   NVARCHAR( 10),
    @cID          NVARCHAR( 18)  OUTPUT,
    @cSKU         NVARCHAR( 20)  OUTPUT,
@@ -85,8 +84,8 @@ BEGIN
                BEGIN
                   -- Get lookup field data type
                   SET @cDataType = ''
-                  SELECT @cDataType = DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS 
-                  WHERE TABLE_NAME = 'ReceiptDetail' 
+                  SELECT @cDataType = DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+                  WHERE TABLE_NAME = 'ReceiptDetail'
                   AND   COLUMN_NAME = @cColumnName
 
                   IF @cDataType <> ''
@@ -113,7 +112,7 @@ BEGIN
                END
 
                SET @cStartSQL = '
-               SELECT TOP 1 @cSKU = SKU 
+               SELECT TOP 1 @cSKU = SKU
                FROM dbo.ReceiptDetail WITH (NOLOCK)
                WHERE ReceiptKey = @cReceiptKey'
 
@@ -131,7 +130,7 @@ BEGIN
                                  ,@cExecArguments
                                  ,@cReceiptKey
                                  ,@cSKU         OUTPUT
-               
+
             END
          END
       END
@@ -141,11 +140,5 @@ Quit:
 
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON rdt.rdt_600DecodeSP05 TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_600DecodeSP05] TO [NSQL]
 GO

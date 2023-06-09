@@ -1,11 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'rdt.rdt_600DecodeSP02') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_600DecodeSP02
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /******************************************************************************/
 /* Store procedure: rdt_600DecodeSP02                                         */
@@ -15,9 +12,11 @@ GO
 /*                                                                            */
 /* Date        Author    Ver.  Purposes                                       */
 /* 13-10-2016  ChewKP    1.0   WMS-512 Created                                */
+/* 05-05-2023  YeeKung   1.1   WMS-22369 Add output for barcode in decodesp   */
+/*                            (yeekung01)                                     */
 /******************************************************************************/
 
-CREATE PROC rdt.rdt_600DecodeSP02 (
+CREATE OR ALTER PROC [RDT].[rdt_600DecodeSP02] (
    @nMobile      INT,
    @nFunc        INT,
    @cLangCode    NVARCHAR( 3),
@@ -27,7 +26,7 @@ CREATE PROC rdt.rdt_600DecodeSP02 (
    @cReceiptKey  NVARCHAR( 10),
    @cPOKey       NVARCHAR( 10),
    @cLOC         NVARCHAR( 10),
-   @cBarcode     NVARCHAR( 60),
+   @cBarcode     NVARCHAR( 2000)  OUTPUT,
    @cFieldName   NVARCHAR( 10),
    @cID          NVARCHAR( 18)  OUTPUT,
    @cSKU         NVARCHAR( 20)  OUTPUT,
@@ -55,10 +54,10 @@ BEGIN
    SET ANSI_NULLS OFF
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
-   
+
    DECLARE @nSCount INT
           ,@nBarcodeLength INT
-          
+
 
    IF @nFunc = 600 -- Normal receiving
    BEGIN
@@ -68,8 +67,8 @@ BEGIN
          BEGIN
             IF @cBarcode <> ''
             BEGIN
-               SET @nSCount = CHARINDEX( 'S', @cBarcode ) 
-               
+               SET @nSCount = CHARINDEX( 'S', @cBarcode )
+
                IF ISNULL(@nSCount,0 )  = 0
                BEGIN
                     SET @nErrNo = 104851
@@ -78,48 +77,48 @@ BEGIN
                END
                ELSE
                BEGIN
-                   SET @nBarcodeLength = LEN(@cBarcode) 
-                   SET @cSKU = SUBSTRING(@cBarcode, 2, 6) 
-                   SET @cLottable02 = SUBSTRING(@cBarcode, 9 , @nBarcodeLength  ) --RIGHT (@cBarcode, @nBarcodeLength - @nSCount ) 
+                   SET @nBarcodeLength = LEN(@cBarcode)
+                   SET @cSKU = SUBSTRING(@cBarcode, 2, 6)
+                   SET @cLottable02 = SUBSTRING(@cBarcode, 9 , @nBarcodeLength  ) --RIGHT (@cBarcode, @nBarcodeLength - @nSCount )
 
-                  
-                   --INSERT INTO TRACEINFO ( TracEName , TimeIN , Col1, col2, col3, col4, col5  ) 
+
+                   --INSERT INTO TRACEINFO ( TracEName , TimeIN , Col1, col2, col3, col4, col5  )
                    --VALUES ( 'rdt_600DecodeSP02' , getdate() , @cBarcode, @nBarcodeLength , @cSKU , @cLottable02, @nQty )
 
-                   IF EXISTS ( SELECT 1 FROM dbo.ReceiptDetail WITH (NOLOCK) 
+                   IF EXISTS ( SELECT 1 FROM dbo.ReceiptDetail WITH (NOLOCK)
                                WHERE StorerKey = @cStorerKey
                                AND ReceiptKey = @cReceiptKey
                                AND SKU = @cSKU
                                AND Lottable02 = @cLottable02
-                               AND BeforeReceivedQty > 0  ) 
+                               AND BeforeReceivedQty > 0  )
                    BEGIN
                        SET @nErrNo = 104852
                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --BarcodeExist
                        GOTO Quit
                    END
-                   
-                   IF EXISTS ( SELECT 1 FROM dbo.LotxLocxID LLI WITH (NOLOCK) 
-                               INNER JOIN dbo.Lot Lot WITH (NOLOCK) ON Lot.Lot = LLI.Lot 
+
+                   IF EXISTS ( SELECT 1 FROM dbo.LotxLocxID LLI WITH (NOLOCK)
+                               INNER JOIN dbo.Lot Lot WITH (NOLOCK) ON Lot.Lot = LLI.Lot
                                INNER JOIN dbo.LotAttribute LA WITH (NOLOCK) ON LA.Lot = Lot.Lot
                                WHERE LLI.StorerKey = @cStorerKey
                                AND LLI.SKU = @cSKU
-                               AND LA.Lottable02 = @cLottable02 ) 
+                               AND LA.Lottable02 = @cLottable02 )
                    BEGIN
                        SET @nErrNo = 104853
                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --BarcodeExist
                        GOTO Quit
                    END
-                   
-                   SELECT @nQty = Short 
-                   FROM dbo.Codelkup WITH (NOLOCK) 
+
+                   SELECT @nQty = Short
+                   FROM dbo.Codelkup WITH (NOLOCK)
                    WHERE ListName = 'RDT-600'
                    AND StorerKey = @cStorerKey
-                   AND Code = 'Qty' 
+                   AND Code = 'Qty'
 
 
-                   
+
                END
-            END    
+            END
          END
       END
    END
@@ -128,11 +127,5 @@ Quit:
 
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON rdt.rdt_600DecodeSP02 TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_600DecodeSP02] TO [NSQL]
 GO

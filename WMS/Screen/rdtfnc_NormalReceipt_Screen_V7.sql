@@ -34,10 +34,11 @@ EXECUTE rdt.rdtAddScn 4033, 'ENG'
    ,@cLine02 = '%18d01'
    ,@cLine03 = ''
    ,@cLine04 = 'SKU/UPC:'
-   ,@cLine05 = '%100iV_Max'   -- Change V_MAX->V_Max
+   ,@cLine05 = '%1000iV_Max' -- WMS-22369
    ,@cLine06 = ''
    ,@cLine07 = '%20d03'
    ,@cLine08 = '%20d04'
+   ,@cLine13 = '%20d05'
    ,@cLine14 = '%e'
    ,@nFunc = 600
 
@@ -143,5 +144,18 @@ EXECUTE rdt.rdtAddScn 4041, 'ENG'
    ,@cLine05 = ''
    ,@cLine06 = 'FINAL LOC:'
    ,@cLine07 = '%10i02'
+   ,@cLine14 = '%e'
+   ,@nFunc = 600
+
+-- 4042 Close Pallet
+DELETE rdt.RDTScn WHERE Scn = 4042 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 4042, 'ENG'
+   ,@cLine01 = ''
+   ,@cLine02 = 'Close Pallet?'
+   ,@cLine03 = ''
+   ,@cLine04 = '1 = YES'
+   ,@cLine05 = '2 = NO'
+   ,@cLine06 = ''
+   ,@cLine07 = 'OPTION: %01i01'
    ,@cLine14 = '%e'
    ,@nFunc = 600

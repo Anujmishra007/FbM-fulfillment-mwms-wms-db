@@ -1,11 +1,9 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'rdt.rdt_600DecodeSP03') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_600DecodeSP03
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
+
 
 /******************************************************************************/
 /* Store procedure: rdt_600DecodeSP03                                         */
@@ -19,9 +17,11 @@ GO
 /* 11-06-2019  Ung       1.2   WMS-6040 Remove hardcode facility              */
 /* 07-08-2019  James     1.3   WMS-10133 Add decode Lottable04 (james01)      */
 /* 18-05-2020  Ung       1.4   WMS-13279 Add decode SKUCode                   */
+/* 05-05-2023  YeeKung   1.5   WMS-22369 Add output for barcode in decodesp   */
+/*                            (yeekung01)                                     */
 /******************************************************************************/
 
-CREATE PROC rdt.rdt_600DecodeSP03 (
+CREATE OR ALTER PROC [RDT].[rdt_600DecodeSP03] (
    @nMobile      INT,
    @nFunc        INT,
    @cLangCode    NVARCHAR( 3),
@@ -31,7 +31,7 @@ CREATE PROC rdt.rdt_600DecodeSP03 (
    @cReceiptKey  NVARCHAR( 10),
    @cPOKey       NVARCHAR( 10),
    @cLOC         NVARCHAR( 10),
-   @cBarcode     NVARCHAR( 60),
+   @cBarcode     NVARCHAR( 2000)  OUTPUT,
    @cFieldName   NVARCHAR( 10),
    @cID          NVARCHAR( 18)  OUTPUT,
    @cSKU         NVARCHAR( 20)  OUTPUT,
@@ -77,27 +77,27 @@ BEGIN
 
                -- Get session info
                SELECT @cFacility = Facility FROM Receipt WITH (NOLOCK) WHERE ReceiptKey = @cReceiptKey
-               
+
                -- IF @cFacility = '3101B'
-               BEGIN          
-                  /* 
-                     Format: 
+               BEGIN
+                  /*
+                     Format:
                      Total 9 fields. Delimeter is comma
-                     
+
                      E.g. 1092020009,14003632,20162104V,480,DZ,480,PAC,18852001128516,1103-0000012420
-                  
+
                      Field    Description    Type     MaxLenght   MapTo
-                     1	      Orderno		   FIXED	   10	         
+                     1	      Orderno		   FIXED	   10
                      2	      CerebosSKU		FIXED	   8	         Lottable06
                      3	      Batchnumber	   VARIABLE	14	         Lottable02, Lottable03 (first 8 char in YYYYMMDD)
-                     4	      		         VARIABLE	8	         
-                     5	      		         VARIABLE	3	         
+                     4	      		         VARIABLE	8
+                     5	      		         VARIABLE	3
                      6	      QTY		      VARIABLE	8	         QTY
                      7	      UOM		      VARIABLE	3	         UOM
                      8	      CartonBarcode	VARIABLE	15	         UPC
-                     9                       VARIABLE 
+                     9                       VARIABLE
                   */
-                  
+
                   DECLARE @cTempLottable06 NVARCHAR( 30)
                   DECLARE @cTempLottable02 NVARCHAR( 18)
                   DECLARE @cTempLottable03 NVARCHAR( 18)
@@ -112,7 +112,7 @@ BEGIN
                   DECLARE @cYear           NVARCHAR( 4)
                   DECLARE @cMonth          NVARCHAR( 2)
                   DECLARE @cDay            NVARCHAR( 2)
-                  
+
                   SET @cTempLottable06 = ''
                   SET @cTempLottable02 = ''
                   SET @cTempLottable03 = ''
@@ -122,7 +122,7 @@ BEGIN
                   SET @cRetailSKU = ''
                   SET @cTempSKU = ''
                   SET @nRatio = 0
-                  
+
                   -- Lottable06
                   SET @cTempLottable06 = rdt.rdtGetParsedString( @cBarcode, 2, ',')
                   IF LEN( @cTempLottable06) <> 8
@@ -131,7 +131,7 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid L06
                      GOTO Quit
                   END
-                  
+
                   -- Lottable02
                   SET @cTempLottable02 = rdt.rdtGetParsedString( @cBarcode, 3, ',')
                   --IF LEN( @cTempLottable02) <> 8 AND LEN( @cTempLottable02) <> 9
@@ -153,7 +153,7 @@ BEGIN
                   END
 
                   -- Lottable03
-                  SET @cTempLottable03 = 
+                  SET @cTempLottable03 =
                      SUBSTRING( @cTempLottable02, 7, 2) + -- DD
                      SUBSTRING( @cTempLottable02, 5, 2) + -- MM
                      SUBSTRING( @cTempLottable02, 1, 4)   -- YYYY
@@ -166,7 +166,7 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid QTY
                      GOTO Quit
                   END
-                  
+
                   -- RetailSKU
                   SET @cRetailSKU = rdt.rdtGetParsedString( @cBarcode, 8, ',')
                   IF @cRetailSKU = ''
@@ -175,19 +175,19 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid UPC
                      GOTO Quit
                   END
-               
+
                   SELECT DISTINCT
                      @cTempSKU = SKU.SKU,
                      @cPackKey = SKU.PackKey
                   FROM ReceiptDetail RD WITH (NOLOCK)
                      JOIN SKU WITH (NOLOCK) ON (RD.StorerKey = SKU.StorerKey AND RD.SKU = SKU.SKU)
                   WHERE RD.ReceiptKey = @cReceiptKey
-                     AND SKU.StorerKey = @cStorerKey 
-                     AND SKU.RetailSKU = @cRetailSKU 
+                     AND SKU.StorerKey = @cStorerKey
+                     AND SKU.RetailSKU = @cRetailSKU
                      AND SKU.ManufacturerSKU = @cTempLottable06
 
                   SET @nRowCount = @@ROWCOUNT
-                  
+
                   IF @nRowCount = 0
                   BEGIN
                      SET @nErrNo = 105558
@@ -207,9 +207,9 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid UOM
                      GOTO Quit
                   END
-                  
+
                   -- Convert QTY base on UOM
-                  SELECT @nRatio = 
+                  SELECT @nRatio =
                      CASE @cUOM
                         WHEN PackUOM4 THEN Pallet
                         WHEN PackUOM1 THEN CaseCnt
@@ -238,7 +238,7 @@ BEGIN
                   SET @cMonth = SUBSTRING( @cTempLottable04, 5, 2)
                   SET @cDay = SUBSTRING( @cTempLottable04, 7, 2)
                   SET @cTempLottable04 = RTRIM( @cDay) + RTRIM( @cMonth) + RTRIM( @cYear)
-                  --INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, col2, col3, col4) VALUES 
+                  --INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, col2, col3, col4) VALUES
                   --('rdt_600DecodeSP03', GETDATE(), @cTempLottable04, @cYear, @cMonth, @cDay)
                   IF rdt.rdtIsValidDate(@cTempLottable04) = 1 --valid date
                      SET @dLottable04 = rdt.rdtConvertToDate( @cTempLottable04)

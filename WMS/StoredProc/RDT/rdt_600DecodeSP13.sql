@@ -11,10 +11,12 @@ GO
 /* Purpose: Extended putaway                                                  */
 /*                                                                            */
 /* Date        Author    Ver.  Purposes                                       */
-/* 07-06-2022  yeekung 1.0   WMS-18007 Created                              */
+/* 07-06-2022  yeekung   1.0   WMS-18007 Created                              */
+/* 05-05-2023  YeeKung   1.1   WMS-22369 Add output for barcode in decodesp   */
+/*                            (yeekung01)                                     */
 /******************************************************************************/
 
-CREATE OR ALTER PROC rdt.rdt_600DecodeSP13 (
+CREATE OR ALTER PROC [RDT].[rdt_600DecodeSP13] (
    @nMobile      INT,
    @nFunc        INT,
    @cLangCode    NVARCHAR( 3),
@@ -24,7 +26,7 @@ CREATE OR ALTER PROC rdt.rdt_600DecodeSP13 (
    @cReceiptKey  NVARCHAR( 10),
    @cPOKey       NVARCHAR( 10),
    @cLOC         NVARCHAR( 10),
-   @cBarcode     NVARCHAR( 60),
+   @cBarcode     NVARCHAR( 2000)  OUTPUT,
    @cFieldName   NVARCHAR( 10),
    @cID          NVARCHAR( 18)  OUTPUT,
    @cSKU         NVARCHAR( 20)  OUTPUT,
@@ -93,7 +95,7 @@ BEGIN
                	
                	IF NOT EXISTS (SELECT 1 FROM SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND sku = @cSku AND LOTTABLE09LABEL <> 'SSCC')
                	BEGIN
-               		SET @nErrNo = 189651  
+               		SET @nErrNo = 176601  
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ScanPlTSSCC 
                      GOTO Quit
                	END
@@ -110,7 +112,7 @@ BEGIN
                		   
                		   IF EXISTS (SELECT 1 FROM SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU AND LOTTABLE09LABEL <> 'SSCC')
                		   BEGIN
-               		      SET @nErrNo = 189653  
+               		      SET @nErrNo = 176603  
                            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- PltSSCCNotReq 
                            GOTO Quit
                		   END
@@ -123,7 +125,7 @@ BEGIN
                		                  AND RD.Lottable09 = @cPalleSSCC 
                		                  AND RD.FinalizeFlag <> 'Y')
                         BEGIN
-                     	   SET @nErrNo = 189652  
+                     	   SET @nErrNo = 176602  
                            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- PalletSSCCErr 
                            GOTO Quit
                         END    
@@ -143,7 +145,7 @@ BEGIN
                		      
                		      IF EXISTS (SELECT 1 FROM SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU AND LOTTABLE09LABEL <> 'SSCC')
                		      BEGIN
-               		         SET @nErrNo = 189653  
+               		         SET @nErrNo = 176603  
                               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- PltSSCCNotReq 
                               GOTO Quit
                		      END
@@ -151,9 +153,9 @@ BEGIN
                	   END
                	   ELSE
                	   BEGIN
-               		   SET @nErrNo = 189654  
+               		   SET @nErrNo = 176604  
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- PalletSSCCErr 
-                        --SET @nErrNo = 189655 
+                        --SET @nErrNo = 176605 
                         --SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ScanCaseSSCC 
                         GOTO Quit
                	   END
@@ -165,7 +167,7 @@ BEGIN
                   	BEGIN
                   		IF LEN(RIGHT(@cBarcode,LEN(@cBarcode)-(PATINDEX ('95%',@cBarcode)+1))) <> 18
                   	   BEGIN
-                  		   SET @nErrNo = 189656 
+                  		   SET @nErrNo = 176606 
                            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- CaseSSCCErr
                            GOTO Quit
                   	   END
@@ -178,7 +180,7 @@ BEGIN
                		                  AND storerKey = @cStorerKey
                		                  AND STATUS = '0' )
                         BEGIN
-                     	   SET @nErrNo = 189657  
+                     	   SET @nErrNo = 176607  
                            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- CaseSSCCErr 
                            GOTO Quit
                         END   
@@ -195,7 +197,7 @@ BEGIN
                   	END 
                   	ELSE
                   	BEGIN
-                  		SET @nErrNo = 189658  
+                  		SET @nErrNo = 176608  
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- PalletSSCCErr 
                         GOTO Quit
                   	END

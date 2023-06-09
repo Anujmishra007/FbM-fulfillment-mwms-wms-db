@@ -1,11 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'rdt.rdt_600DecodeSP04') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_600DecodeSP04
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /******************************************************************************/
 /* Store procedure: rdt_600DecodeSP04                                         */
@@ -15,9 +12,11 @@ GO
 /*                                                                            */
 /* Date        Author    Ver.  Purposes                                       */
 /* 26-10-2018  James     1.0   WMS-6623 Created                               */
+/* 05-05-2023  YeeKung   1.1   WMS-22369 Add output for barcode in decodesp   */
+/*                            (yeekung01)                                     */
 /******************************************************************************/
 
-CREATE PROC rdt.rdt_600DecodeSP04 (
+CREATE OR ALTER PROC [RDT].[rdt_600DecodeSP04] (
    @nMobile      INT,
    @nFunc        INT,
    @cLangCode    NVARCHAR( 3),
@@ -27,7 +26,7 @@ CREATE PROC rdt.rdt_600DecodeSP04 (
    @cReceiptKey  NVARCHAR( 10),
    @cPOKey       NVARCHAR( 10),
    @cLOC         NVARCHAR( 10),
-   @cBarcode     NVARCHAR( 60),
+   @cBarcode     NVARCHAR( 2000)  OUTPUT,
    @cFieldName   NVARCHAR( 10),
    @cID          NVARCHAR( 18)  OUTPUT,
    @cSKU         NVARCHAR( 20)  OUTPUT,
@@ -106,7 +105,7 @@ BEGIN
             SET @nQTY = CAST( RIGHT( @cBarcode, 4) AS INT)
             --SET @cLottable02 = @cBUSR5
             SET @cTempLottable06 = @cLottable06
-            
+
             SELECT @cTempSKU = SKU
             FROM dbo.SKU WITH (NOLOCK)
             WHERE StorerKey = @cStorerKey
@@ -130,11 +129,11 @@ BEGIN
                GOTO Quit
             END
 
-            SELECT TOP 1 @cLottable02 = Lottable02 
-            FROM dbo.RECEIPTDETAIL WITH (NOLOCK) 
+            SELECT TOP 1 @cLottable02 = Lottable02
+            FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
             WHERE ReceiptKey = @cReceiptKey
             AND   SKU = @cTempSKU
-            
+
             IF ISNULL( @cLottable02, '') = ''
             BEGIN
                SET @nErrNo = 130853
@@ -157,11 +156,5 @@ Quit:
 
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON rdt.rdt_600DecodeSP04 TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_600DecodeSP04] TO [NSQL]
 GO

@@ -1,11 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'rdt.rdt_600DecodeSP08') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_600DecodeSP08
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /******************************************************************************/
 /* Store procedure: rdt_600DecodeSP08                                         */
@@ -15,9 +12,11 @@ GO
 /*                                                                            */
 /* Date        Author    Ver.  Purposes                                       */
 /* 01-02-2021  Chermaine 1.0   WMS-16136 Created                              */
+/* 05-05-2023  YeeKung   1.1   WMS-22369 Add output for barcode in decodesp   */
+/*                            (yeekung01)                                     */
 /******************************************************************************/
 
-CREATE PROC rdt.rdt_600DecodeSP08 (
+CREATE OR ALTER PROC [RDT].[rdt_600DecodeSP08] (
    @nMobile      INT,
    @nFunc        INT,
    @cLangCode    NVARCHAR( 3),
@@ -27,7 +26,7 @@ CREATE PROC rdt.rdt_600DecodeSP08 (
    @cReceiptKey  NVARCHAR( 10),
    @cPOKey       NVARCHAR( 10),
    @cLOC         NVARCHAR( 10),
-   @cBarcode     NVARCHAR( 60),
+   @cBarcode     NVARCHAR( 2000)  OUTPUT,
    @cFieldName   NVARCHAR( 10),
    @cID          NVARCHAR( 18)  OUTPUT,
    @cSKU         NVARCHAR( 20)  OUTPUT,
@@ -70,7 +69,7 @@ BEGIN
                	/*
 	                  E.g.:
 	                  93300012249    4057828337241015
-	      
+
 	                  Len:
 	                  11 = PO
 	                  4  = blank
@@ -79,18 +78,18 @@ BEGIN
 	               */
 	               SET @cSKU = SUBSTRING( @cBarcode, 16, 13)
 	               SET @nQTY = RIGHT( @cBarcode,3)
-               END 
-               
+               END
+
                IF LEN( @cBarcode) = 16 --UPC
                BEGIN
 	               SET @cSKU = @cBarcode
-	               
+
 	               SELECT @nQTY = P.caseCnt
-                  FROM Pack P WITH (NOLOCK) 
+                  FROM Pack P WITH (NOLOCK)
                   JOIN UPC U WITH (NOLOCK) ON P.PackKey = U.PackKey
                   WHERE U.UPC = @cSKU
                   AND U.StorerKey = @cStorerKey
-               END  
+               END
             END
          END
       END
@@ -100,11 +99,5 @@ Quit:
 
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON rdt.rdt_600DecodeSP08 TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_600DecodeSP08] TO [NSQL]
 GO

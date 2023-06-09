@@ -1,10 +1,8 @@
-
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /******************************************************************************/
 /* Store procedure: rdt_600DecodeSP11                                         */
@@ -15,9 +13,11 @@ GO
 /* Date        Author    Ver.  Purposes                                       */
 /* 2021-10-21  James     1.0   WMS-18181 Created                              */
 /* 2021-12-30  Chermaine 1.1   WMS-18586 Add expDate decode logic (cc01)      */
+/* 05-05-2023  YeeKung   1.2   WMS-22369 Add output for barcode in decodesp   */
+/*                            (yeekung01)                                     */
 /******************************************************************************/
 
-CREATE OR ALTER PROC rdt.rdt_600DecodeSP11 (
+CREATE OR ALTER PROC [RDT].[rdt_600DecodeSP11] (
    @nMobile      INT,
    @nFunc        INT,
    @cLangCode    NVARCHAR( 3),
@@ -27,7 +27,7 @@ CREATE OR ALTER PROC rdt.rdt_600DecodeSP11 (
    @cReceiptKey  NVARCHAR( 10),
    @cPOKey       NVARCHAR( 10),
    @cLOC         NVARCHAR( 10),
-   @cBarcode     NVARCHAR( 60),
+   @cBarcode     NVARCHAR( 2000)  OUTPUT,
    @cFieldName   NVARCHAR( 10),
    @cID          NVARCHAR( 18)  OUTPUT,
    @cSKU         NVARCHAR( 20)  OUTPUT,
@@ -63,11 +63,9 @@ BEGIN
    DECLARE @nEnd           INT
    DECLARE @nSKUCnt        INT
    DECLARE @bSuccess       INT
-   DECLARE @cSeparator     NVARCHAR( 100)
+   DECLARE @cSeparator     NVARCHAR( 2)
    DECLARE @cSeparator2     NVARCHAR( 2)
-   DECLARE @cSeparator3     INT
 
-   
    IF @nFunc = 600 -- Normal receiving
    BEGIN
       IF @nStep = 4 -- SKU
@@ -76,62 +74,37 @@ BEGIN
          BEGIN
             IF @cBarcode <> ''
             BEGIN
-               SET @nSKUCnt = 0  
-               EXEC [RDT].[rdt_GETSKUCNT]  
-                  @cStorerKey  = @cStorerKey,  
-                  @cSKU        = @cBarcode,  
-                  @nSKUCnt     = @nSKUCnt       OUTPUT,  
-                  @bSuccess    = @bSuccess      OUTPUT,  
-                  @nErr        = @nErrNo        OUTPUT,  
-                  @cErrMsg     = @cErrMsg       OUTPUT  
-  
-               IF @nSKUCnt >= 1  
-               BEGIN  
-                  SET @cSKU =  @cBarcode  
-                  GOTO Quit  
-               END  
+            	IF LEN(@cBarcode) > 24
+            	BEGIN
+            		--(cc01)
+            		--SET @cSeparator = SUBSTRING( @cBarcode, 25, 2)
+            		SET @cExpDate = SUBSTRING( @cBarcode, 19, 4) + '-01-' + SUBSTRING( @cBarcode, 23, 2)
+            		SET @dLottable04 = rdt.RDTFORMATDATE(@cExpDate)
 
-					IF SUBSTRING( @cBarcode, 17, 2) ='17'
-					BEGIN
-            		IF LEN(@cBarcode) > 24
-            		BEGIN
-            			--(cc01)
-            			SET @cSeparator = SUBSTRING( @cBarcode, 25, 20)  
-            			SET @cExpDate = SUBSTRING( @cBarcode, 19, 4) + '-01-' + SUBSTRING( @cBarcode, 23, 2) 
-            			SET @dLottable04 = rdt.RDTFORMATDATE(@cExpDate)
-                     
-                     SET @cSeparator3 =  CHARINDEX('37', @cSeparator)
+                  IF SUBSTRING( @cBarcode, 25, 2) <> '11'
+                     SET @cLot01 =  SUBSTRING( @cBarcode, 27, 4)
+            	END
+            	ELSE
+            	BEGIN
+            		--SET @cSeparator = SUBSTRING( @cBarcode, 17, 2)
 
-                     SET @cSeparator3=@cSeparator3-3
-            		 
-							IF SUBSTRING( @cBarcode, 25, 2) <> '11'
-								SET @cLot01 =  SUBSTRING( @cBarcode, 27, @cSeparator3) 
-            		END
-            		ELSE
-            		BEGIN
-            			--SET @cSeparator = SUBSTRING( @cBarcode, 17, 2)
-            		
-            			IF SUBSTRING( @cBarcode, 17, 2) <> '11'
-								SET @cLot01 = SUBSTRING( @cBarcode, 19, 18)
-						END
-					END
-					ELSE
-					BEGIN
-						IF SUBSTRING( @cBarcode, 17, 2) in( '11','10','21')
-							SET @cLot01 = SUBSTRING( @cBarcode, 19, 18)
-					END
-               
+            		IF SUBSTRING( @cBarcode, 17, 2) <> '11'
+                     SET @cLot01 = SUBSTRING( @cBarcode, 19, 18)
+               END
+
                --IF @cSeparator NOT IN ('21', '10')
                --BEGIN
                --   SET @cSKU = @cBarcode
                --   GOTO Quit
                --END
-               
-               --Sample barcode 010704543208200521280419 OR 010704543208200510280419  
-               --Sample barcode 010704543205519317202211101821371 --(cc01)             
-               SET @cRetailSKU = SUBSTRING( @cBarcode, 3, 14)   
-               
-               IF @cRetailSKU <> '' 
+
+               --Sample barcode 010704543208200521280419 OR 010704543208200510280419
+               --Sample barcode 010704543205519317202211101821371 --(cc01)
+               SET @cRetailSKU = SUBSTRING( @cBarcode, 3, 14)
+
+
+
+               IF @cRetailSKU <> ''
                BEGIN
                   SET @nSKUCnt = 0
                   EXEC [RDT].[rdt_GETSKUCNT]
@@ -158,33 +131,17 @@ BEGIN
 
                   IF @cLot01 <> ''
                   BEGIN
-                     IF  SUBSTRING( @cBarcode, 17, 2) ='17'
+                     IF NOT EXISTS ( SELECT 1 FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
+                                     WHERE ReceiptKey = @cReceiptKey
+                                     AND   Sku = @cRetailSKU
+                                     AND   Lottable01 = @cLot01)
                      BEGIN
-                        IF NOT EXISTS ( SELECT 1 FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
-                                        WHERE ReceiptKey = @cReceiptKey
-                                        AND   Sku = @cRetailSKU
-                                        AND   Lottable01 = @cLot01) and SUBSTRING( @cBarcode, 25, 2) in( '10')
-                        BEGIN
-                           SET @nErrNo =  177402
-                           SET @cErrMsg = @cLot01--rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Lot01
-                           GOTO Quit
-                        END
-                     END
-                     ELSE
-                     BEGIN
-
-                        IF NOT EXISTS ( SELECT 1 FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
-                                        WHERE ReceiptKey = @cReceiptKey
-                                        AND   Sku = @cRetailSKU
-                                        AND   Lottable01 = @cLot01) and SUBSTRING( @cBarcode, 17, 2) in( '10','21')
-                        BEGIN
-                           SET @nErrNo =  177402
-                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Lot01
-                           GOTO Quit
-                        END
+                        SET @nErrNo =  177402
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Lot01
+                        GOTO Quit
                      END
                   END
-                     
+
                   SET @cSKU = @cRetailSKU
                   SET @cLottable01 = @cLot01
                   INSERT INTO traceinfo (tracename, timein, Col1, Col2, col3) VALUES ('123', GETDATE(), @cSKU, @cLottable01, @dLottable04)
