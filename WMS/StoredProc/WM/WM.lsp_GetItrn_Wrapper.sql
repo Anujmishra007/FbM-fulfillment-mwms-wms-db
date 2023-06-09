@@ -13,7 +13,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.3                                                    */
+/* PVCS Version: 1.5                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -36,6 +36,8 @@ GO
 /* 2023-02-10  LZG      1.4   LFWM-3938 (ZG01):                         */
 /*                            1. Join LotAttribute for lottable values  */
 /*                            2. Join Pack for UOMQty calculation       */
+/* 2023-05-24  Wan04    1.5   LFWM-4283 - PROD - PH Alcon - SCE Inventory*/   
+/*                            Transaction Module                        */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_GetItrn_Wrapper]
    @c_WhereClause       NVARCHAR(MAX)                 --Contain WHERE for eg. WHERE ITRN.Storerkey = ''NIKEPH''
@@ -201,21 +203,21 @@ BEGIN
                     -- +', ITRN.LOTTABLE13'
                     -- +', ITRN.LOTTABLE14'
                     -- +', ITRN.LOTTABLE15'
-                    +', LA.LOTTABLE01'       --(ZG01)
-                    +', LA.LOTTABLE02'
-                    +', LA.LOTTABLE03'
-                    +', LA.LOTTABLE04'
-                    +', LA.LOTTABLE05'
-                    +', LA.LOTTABLE06'
-                    +', LA.LOTTABLE07'
-                    +', LA.LOTTABLE08'
-                    +', LA.LOTTABLE09'
-                    +', LA.LOTTABLE10'
-                    +', LA.LOTTABLE11'
-                    +', LA.LOTTABLE12'
-                    +', LA.LOTTABLE13'
-                    +', LA.LOTTABLE14'
-                    +', LA.LOTTABLE15'
+                    +', LotAttribute.LOTTABLE01'       --(ZG01)                     --(Wan04)
+                    +', LotAttribute.LOTTABLE02'                                    --(Wan04)
+                    +', LotAttribute.LOTTABLE03'                                    --(Wan04)
+                    +', LotAttribute.LOTTABLE04'                                    --(Wan04)
+                    +', LotAttribute.LOTTABLE05'                                    --(Wan04)
+                    +', LotAttribute.LOTTABLE06'                                    --(Wan04)
+                    +', LotAttribute.LOTTABLE07'                                    --(Wan04)
+                    +', LotAttribute.LOTTABLE08'                                    --(Wan04)
+                    +', LotAttribute.LOTTABLE09'                                    --(Wan04)
+                    +', LotAttribute.LOTTABLE10'                                    --(Wan04)
+                    +', LotAttribute.LOTTABLE11'                                    --(Wan04)
+                    +', LotAttribute.LOTTABLE12'                                    --(Wan04)
+                    +', LotAttribute.LOTTABLE13'                                    --(Wan04)
+                    +', LotAttribute.LOTTABLE14'                                    --(Wan04)
+                    +', LotAttribute.LOTTABLE15'                                    --(Wan04)
                     +', ITRN.Lot'
                     +', ITRN.PackKey'
                     --+', ITRN.UOMQty'                   --(ZG01)
@@ -238,11 +240,11 @@ BEGIN
                     +', ITRN.Channel'
                     +', ITRN.Channel_ID'
                     + ' FROM ' + IIF(@b_GetArchiveDB = 0, '', @c_DBName) + 'dbo.ITRN WITH (NOLOCK)'         --(Wan02)
-                    + ' JOIN dbo.LotAttribute LA WITH (NOLOCK) ON LA.Lot = ITRN.Lot'                        --(ZG01)
+                    + ' JOIN dbo.LotAttribute WITH (NOLOCK) ON LotAttribute.Lot = ITRN.Lot'                           --(Wan04)--(ZG01)
                     + ' JOIN dbo.SKU SKU WITH (NOLOCK) ON SKU.Storerkey = ITRN.Storerkey AND SKU.Sku = ITRN.Sku'
                     + ' JOIN dbo.PACK WITH (NOLOCK) ON PACK.PackKey = SKU.PackKey'                          --(ZG01)
                     + ' JOIN dbo.LOC TOLOC WITH (NOLOCK) ON TOLOC.Loc = ITRN.ToLoc'
-                    + ' LEFT OUTER JOIN dbo.LOC FROMLOC WITH (NOLOCK)  ON FROMLOC.Loc = ITRN.FromLoc'             --LFWM-3555
+                    + ' LEFT OUTER JOIN dbo.LOC FROMLOC WITH (NOLOCK)  ON FROMLOC.Loc = ITRN.FromLoc'       --LFWM-3555
                     + ' ' + @c_WhereClause
                     + ' ORDER BY ITRN.adddate DESC'
                     + ' OPTION(RECOMPILE) '
@@ -674,10 +676,11 @@ BEGIN
                   +', ITRN.ExternReferenceType'
                   +', ITRN.Remarks'
                   +', ITRN.Rowfocusindicatorcol'
-                  + ' FROM #TMP_ITRN ITRN'
-                  + ' JOIN dbo.SKU SKU WITH (NOLOCK) ON SKU.Storerkey = ITRN.Storerkey AND SKU.Sku = ITRN.Sku'
-                  + ' JOIN dbo.LOC TOLOC WITH (NOLOCK) ON TOLOC.Loc = ITRN.ToLoc'
-                  + ' LEFT OUTER JOIN dbo.LOC FROMLOC WITH (NOLOCK)  ON FROMLOC.Loc = ITRN.FromLoc'
+                  + ' FROM #TMP_ITRN AS ITRN'
+                  + ' JOIN #TMP_ITRN AS LotAttribute ON LotAttribute.RowID = ITRN.RowID'      --(Wan04)   
+                  + ' JOIN #TMP_ITRN AS SKU ON SKU.RowID = ITRN.RowID'                        --(Wan04)
+                  + ' JOIN #TMP_ITRN AS TOLOC ON TOLOC.RowID = ITRN.RowID'                    --(Wan04)
+                  + ' JOIN #TMP_ITRN AS FROMLOC ON FROMLOC.RowID = ITRN.RowID'                --(Wan04)
                   + ' ' + @c_SearchCondition             --(Wan03)
                   + @c_SortPreference
 
