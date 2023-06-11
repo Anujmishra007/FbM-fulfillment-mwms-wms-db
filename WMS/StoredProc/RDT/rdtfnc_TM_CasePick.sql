@@ -24,6 +24,7 @@ GO
 /* 2020-02-21 1.7  YeeKung    WMS-12082 Add ExtendedValidate(yeekung01)       */
 /* 2019-05-14 1.8  James      WMS-9920 Add MultiSKUBarcode (james01)          */
 /* 2022-09-09 1.9  YeeKung    WMS-20712 Add overwritetoloc (Yeekung02)        */   
+/* 2023-03-24 2.0  Ung        WMS-22020 Add dynamic lottable                  */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CasePick](
@@ -56,7 +57,8 @@ DECLARE
    @cPQTY               NVARCHAR( 5),
    @cMQTY               NVARCHAR( 5),
    @cSQL                NVARCHAR(MAX),
-   @cSQLParam           NVARCHAR(MAX)
+   @cSQLParam           NVARCHAR(MAX),
+   @nMorePage           INT
 
 -- Define variable on mobrec
 DECLARE
@@ -78,10 +80,21 @@ DECLARE
    @cSuggFromLOC        NVARCHAR(10),
    @cSuggID             NVARCHAR(18),
    @cPUOM               NVARCHAR( 1), -- Prefer UOM
-   @cLottable01         NVARCHAR(18),
-   @cLottable02         NVARCHAR(18),
-   @cLottable03         NVARCHAR(18),
+   @cLottable01         NVARCHAR( 18),
+   @cLottable02         NVARCHAR( 18),
+   @cLottable03         NVARCHAR( 18),
    @dLottable04         DATETIME,
+   @dLottable05         DATETIME,
+   @cLottable06         NVARCHAR( 30),
+   @cLottable07         NVARCHAR( 30),
+   @cLottable08         NVARCHAR( 30),
+   @cLottable09         NVARCHAR( 30),
+   @cLottable10         NVARCHAR( 30),
+   @cLottable11         NVARCHAR( 30),
+   @cLottable12         NVARCHAR( 30),
+   @dLottable13         DATETIME,
+   @dLottable14         DATETIME,
+   @dLottable15         DATETIME,
 
    @cTaskDetailKey      NVARCHAR(10),
    @cTaskStorer         NVARCHAR(15),
@@ -104,6 +117,7 @@ DECLARE
    @nQTY                INT,
    @nFromStep           INT,
    @nFromScn            INT,
+   @cLottableCode       NVARCHAR( 20),
    @cDecodeLabelNo      NVARCHAR( 20),
    @cExtendedUpdateSP   NVARCHAR( 20),
    @cDefaultToLOC       NVARCHAR( 10),
@@ -128,30 +142,21 @@ DECLARE
    @cRefKey05           NVARCHAR(20),
    @cMultiSKUBarcode    NVARCHAR( 1),  -- (james01)
 
-   @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
-   @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
-   @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),
-   @cInField04 NVARCHAR( 60),   @cOutField04 NVARCHAR( 60),
-   @cInField05 NVARCHAR( 60),   @cOutField05 NVARCHAR( 60),
-   @cInField06 NVARCHAR( 60),   @cOutField06 NVARCHAR( 60),
-   @cInField07 NVARCHAR( 60),   @cOutField07 NVARCHAR( 60),
-   @cInField08 NVARCHAR( 60),   @cOutField08 NVARCHAR( 60),
-   @cInField09 NVARCHAR( 60),   @cOutField09 NVARCHAR( 60),
-   @cInField10 NVARCHAR( 60),   @cOutField10 NVARCHAR( 60),
-   @cInField11 NVARCHAR( 60),   @cOutField11 NVARCHAR( 60),
-   @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),
-   @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60),
-   @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),
-   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),
-
-   @cFieldAttr01 NVARCHAR( 1), @cFieldAttr02 NVARCHAR( 1),
-   @cFieldAttr03 NVARCHAR( 1), @cFieldAttr04 NVARCHAR( 1),
-   @cFieldAttr05 NVARCHAR( 1), @cFieldAttr06 NVARCHAR( 1),
-   @cFieldAttr07 NVARCHAR( 1), @cFieldAttr08 NVARCHAR( 1),
-   @cFieldAttr09 NVARCHAR( 1), @cFieldAttr10 NVARCHAR( 1),
-   @cFieldAttr11 NVARCHAR( 1), @cFieldAttr12 NVARCHAR( 1),
-   @cFieldAttr13 NVARCHAR( 1), @cFieldAttr14 NVARCHAR( 1),
-   @cFieldAttr15 NVARCHAR( 1)
+   @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
+   @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
+   @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),    @cFieldAttr03 NVARCHAR( 1),
+   @cInField04 NVARCHAR( 60),   @cOutField04 NVARCHAR( 60),    @cFieldAttr04 NVARCHAR( 1),
+   @cInField05 NVARCHAR( 60),   @cOutField05 NVARCHAR( 60),    @cFieldAttr05 NVARCHAR( 1),
+   @cInField06 NVARCHAR( 60),   @cOutField06 NVARCHAR( 60),    @cFieldAttr06 NVARCHAR( 1),
+   @cInField07 NVARCHAR( 60),   @cOutField07 NVARCHAR( 60),    @cFieldAttr07 NVARCHAR( 1),
+   @cInField08 NVARCHAR( 60),   @cOutField08 NVARCHAR( 60),    @cFieldAttr08 NVARCHAR( 1),
+   @cInField09 NVARCHAR( 60),   @cOutField09 NVARCHAR( 60),    @cFieldAttr09 NVARCHAR( 1),
+   @cInField10 NVARCHAR( 60),   @cOutField10 NVARCHAR( 60),    @cFieldAttr10 NVARCHAR( 1),
+   @cInField11 NVARCHAR( 60),   @cOutField11 NVARCHAR( 60),    @cFieldAttr11 NVARCHAR( 1),
+   @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),    @cFieldAttr12 NVARCHAR( 1),
+   @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60),    @cFieldAttr13 NVARCHAR( 1),
+   @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),    @cFieldAttr14 NVARCHAR( 1),
+   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),    @cFieldAttr15 NVARCHAR( 1)
 
 -- Getting Mobile information
 SELECT
@@ -178,6 +183,17 @@ SELECT
    @cLottable02     = V_Lottable02,
    @cLottable03     = V_Lottable03,
    @dLottable04     = V_Lottable04,
+   @dLottable05     = V_Lottable05,
+   @cLottable06     = V_Lottable06,
+   @cLottable07     = V_Lottable07,
+   @cLottable08     = V_Lottable08,
+   @cLottable09     = V_Lottable09,
+   @cLottable10     = V_Lottable10,
+   @cLottable11     = V_Lottable11,
+   @cLottable12     = V_Lottable12,
+   @dLottable13     = V_Lottable13,
+   @dLottable14     = V_Lottable14,
+   @dLottable15     = V_Lottable15,
    @nQTY            = V_QTY,
    @nPQTY           = V_PQTY,
    @nMQTY           = V_MQTY,
@@ -200,6 +216,7 @@ SELECT
    @cMUOM_Desc         = V_String10,
    @cPUOM_Desc         = V_String11,
    @cMultiSKUBarcode   = V_String12,
+   @cLottableCode      = V_String13,
 
    @cLOCLookupSP       = V_String19,
    @cSwapUCCSP         = V_String20,
@@ -225,30 +242,21 @@ SELECT
    @cRefKey05          = V_String39,
    @cOverwriteToLOC    = V_String40, 
 
-   @cInField01 = I_Field01,   @cOutField01 = O_Field01,
-   @cInField02 = I_Field02,   @cOutField02 = O_Field02,
-   @cInField03 = I_Field03,   @cOutField03 = O_Field03,
-   @cInField04 = I_Field04,   @cOutField04 = O_Field04,
-   @cInField05 = I_Field05,   @cOutField05 = O_Field05,
-   @cInField06 = I_Field06,   @cOutField06 = O_Field06,
-   @cInField07 = I_Field07,   @cOutField07 = O_Field07,
-   @cInField08 = I_Field08,   @cOutField08 = O_Field08,
-   @cInField09 = I_Field09,   @cOutField09 = O_Field09,
-   @cInField10 = I_Field10,   @cOutField10 = O_Field10,
-   @cInField11 = I_Field11,   @cOutField11 = O_Field11,
-   @cInField12 = I_Field12,   @cOutField12 = O_Field12,
-   @cInField13 = I_Field13,   @cOutField13 = O_Field13,
-   @cInField14 = I_Field14,   @cOutField14 = O_Field14,
-   @cInField15 = I_Field15,   @cOutField15 = O_Field15,
-
-   @cFieldAttr01  = FieldAttr01,    @cFieldAttr02   = FieldAttr02,
-   @cFieldAttr03 =  FieldAttr03,    @cFieldAttr04   = FieldAttr04,
-   @cFieldAttr05 =  FieldAttr05,    @cFieldAttr06   = FieldAttr06,
-   @cFieldAttr07 =  FieldAttr07,    @cFieldAttr08   = FieldAttr08,
-   @cFieldAttr09 =  FieldAttr09,    @cFieldAttr10   = FieldAttr10,
-   @cFieldAttr11 =  FieldAttr11,    @cFieldAttr12   = FieldAttr12,
-   @cFieldAttr13 =  FieldAttr13,    @cFieldAttr14   = FieldAttr14,
-   @cFieldAttr15 =  FieldAttr15
+   @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01  = FieldAttr01,
+   @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02  = FieldAttr02,
+   @cInField03 = I_Field03,   @cOutField03 = O_Field03,  @cFieldAttr03  = FieldAttr03,
+   @cInField04 = I_Field04,   @cOutField04 = O_Field04,  @cFieldAttr04  = FieldAttr04,
+   @cInField05 = I_Field05,   @cOutField05 = O_Field05,  @cFieldAttr05  = FieldAttr05,
+   @cInField06 = I_Field06,   @cOutField06 = O_Field06,  @cFieldAttr06  = FieldAttr06,
+   @cInField07 = I_Field07,   @cOutField07 = O_Field07,  @cFieldAttr07  = FieldAttr07,
+   @cInField08 = I_Field08,   @cOutField08 = O_Field08,  @cFieldAttr08  = FieldAttr08,
+   @cInField09 = I_Field09,   @cOutField09 = O_Field09,  @cFieldAttr09  = FieldAttr09,
+   @cInField10 = I_Field10,   @cOutField10 = O_Field10,  @cFieldAttr10  = FieldAttr10,
+   @cInField11 = I_Field11,   @cOutField11 = O_Field11,  @cFieldAttr11  = FieldAttr11,
+   @cInField12 = I_Field12,   @cOutField12 = O_Field12,  @cFieldAttr12  = FieldAttr12,
+   @cInField13 = I_Field13,   @cOutField13 = O_Field13,  @cFieldAttr13  = FieldAttr13,
+   @cInField14 = I_Field14,   @cOutField14 = O_Field14,  @cFieldAttr14  = FieldAttr14,
+   @cInField15 = I_Field15,   @cOutField15 = O_Field15,  @cFieldAttr15  = FieldAttr15
 
 FROM   RDT.RDTMOBREC WITH (NOLOCK)
 WHERE  Mobile = @nMobile
@@ -1009,6 +1017,7 @@ BEGIN
          -- Get SKU info
          SELECT
             @cSKUDesc = S.Descr,
+            @cLottableCode = S.LottableCode, 
             @cMUOM_Desc = Pack.PackUOM3,
             @cPUOM_Desc =
                CASE @cPUOM
@@ -1033,19 +1042,53 @@ BEGIN
          WHERE StorerKey = @cStorerKey
             AND SKU = @cSuggSKU
 
-         SET @cLottable01 = ''
-         SET @cLottable02 = ''
-         SET @cLottable03 = ''
-         SET @dLottable04 = NULL
+         SELECT 
+            @cLottable01 = '', @cLottable02 = '', @cLottable03 = '',    @dLottable04 = NULL,  @dLottable05 = NULL,
+            @cLottable06 = '', @cLottable07 = '', @cLottable08 = '',    @cLottable09 = '',    @cLottable10 = '',
+            @cLottable11 = '', @cLottable12 = '', @dLottable13 = NULL,  @dLottable14 = NULL,  @dLottable15 = NULL
 
          -- Get lottable
          SELECT
             @cLottable01 = LA.Lottable01,
             @cLottable02 = LA.Lottable02,
             @cLottable03 = LA.Lottable03,
-            @dLottable04 = LA.Lottable04
+            @dLottable04 = LA.Lottable04,
+            @dLottable05 = LA.Lottable05,
+            @cLottable06 = LA.Lottable06,
+            @cLottable07 = LA.Lottable07,
+            @cLottable08 = LA.Lottable08,
+            @cLottable09 = LA.Lottable09,
+            @cLottable10 = LA.Lottable10,
+            @cLottable11 = LA.Lottable11,
+            @cLottable12 = LA.Lottable12,
+            @dLottable13 = LA.Lottable13,
+            @dLottable14 = LA.Lottable14,
+            @dLottable15 = LA.Lottable15
          FROM dbo.LOTAttribute LA WITH (NOLOCK)
          WHERE LOT = @cSuggLOT
+
+         -- Dynamic lottable
+         EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'DISPLAY', 'POPULATE', 4, 4,
+            @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
+            @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
+            @cInField03  OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,
+            @cInField04  OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,
+            @cInField05  OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,
+            @cInField06  OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT,
+            @cInField07  OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT,
+            @cInField08  OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT,
+            @cInField09  OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT,
+            @cInField10  OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT,
+            @cInField11  OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
+            @cInField12  OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
+            @cInField13  OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
+            @cInField14  OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
+            @cInField15  OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
+            @nMorePage   OUTPUT,
+            @nErrNo      OUTPUT,
+            @cErrMsg     OUTPUT,
+            '',      -- SourceKey
+            @nFunc   -- SourceType
 
          -- Restore scanned carton QTY
          DECLARE @nCartonQTY INT
@@ -1089,10 +1132,6 @@ BEGIN
          SET @cOutField01 = @cSuggSKU
          SET @cOutField02 = SUBSTRING( @cSKUDesc, 1, 20)
          SET @cOutField03 = SUBSTRING( @cSKUDesc, 21, 20)
-         SET @cOutField04 = @cLottable01
-         SET @cOutField05 = @cLottable02
-         SET @cOutField06 = @cLottable03
-         SET @cOutField07 = rdt.rdtFormatDate( @dLottable04)
          SET @cOutField08 = '' -- SKU
          SET @cOutField09 = ''
          SET @cOutField10 = ''
@@ -1806,6 +1845,7 @@ BEGIN
             -- Get SKU info
             SELECT
                @cSKUDesc = S.Descr,
+               @cLottableCode = S.LottableCode, 
                @cMUOM_Desc = Pack.PackUOM3,
                @cPUOM_Desc =
                   CASE @cPUOM
@@ -1830,19 +1870,53 @@ BEGIN
             WHERE StorerKey = @cStorerKey
                AND SKU = @cSuggSKU
 
-            SET @cLottable01 = ''
-            SET @cLottable02 = ''
-            SET @cLottable03 = ''
-            SET @dLottable04 = NULL
+            SELECT 
+               @cLottable01 = '', @cLottable02 = '', @cLottable03 = '',    @dLottable04 = NULL,  @dLottable05 = NULL,
+               @cLottable06 = '', @cLottable07 = '', @cLottable08 = '',    @cLottable09 = '',    @cLottable10 = '',
+               @cLottable11 = '', @cLottable12 = '', @dLottable13 = NULL,  @dLottable14 = NULL,  @dLottable15 = NULL
 
             -- Get lottable
             SELECT
                @cLottable01 = LA.Lottable01,
                @cLottable02 = LA.Lottable02,
                @cLottable03 = LA.Lottable03,
-               @dLottable04 = LA.Lottable04
+               @dLottable04 = LA.Lottable04,
+               @dLottable05 = LA.Lottable05,
+               @cLottable06 = LA.Lottable06,
+               @cLottable07 = LA.Lottable07,
+               @cLottable08 = LA.Lottable08,
+               @cLottable09 = LA.Lottable09,
+               @cLottable10 = LA.Lottable10,
+               @cLottable11 = LA.Lottable11,
+               @cLottable12 = LA.Lottable12,
+               @dLottable13 = LA.Lottable13,
+               @dLottable14 = LA.Lottable14,
+               @dLottable15 = LA.Lottable15
             FROM dbo.LOTAttribute LA WITH (NOLOCK)
             WHERE LOT = @cSuggLOT
+
+         -- Dynamic lottable
+         EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'DISPLAY', 'POPULATE', 4, 4,
+            @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
+            @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
+            @cInField03  OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,
+            @cInField04  OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,
+            @cInField05  OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,
+            @cInField06  OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT,
+            @cInField07  OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT,
+            @cInField08  OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT,
+            @cInField09  OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT,
+            @cInField10  OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT,
+            @cInField11  OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
+            @cInField12  OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
+            @cInField13  OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
+            @cInField14  OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
+            @cInField15  OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
+            @nMorePage   OUTPUT,
+            @nErrNo      OUTPUT,
+            @cErrMsg     OUTPUT,
+            '',      -- SourceKey
+            @nFunc   -- SourceType
 
             -- Disable QTY field
             SET @cFieldAttr14 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END -- PQTY
@@ -1868,10 +1942,6 @@ BEGIN
             SET @cOutField01 = @cSuggSKU
             SET @cOutField02 = SUBSTRING( @cSKUDesc, 1, 20)
             SET @cOutField03 = SUBSTRING( @cSKUDesc, 21, 20)
-            SET @cOutField04 = @cLottable01
-            SET @cOutField05 = @cLottable02
-            SET @cOutField06 = @cLottable03
-            SET @cOutField07 = rdt.rdtFormatDate( @dLottable04)
             SET @cOutField08 = '' -- SKU
             SET @cOutField09 = ''
             SET @cOutField10 = ''
@@ -1993,14 +2063,33 @@ BEGIN
       IF EXISTS( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE TaskDetailKey = @cTaskDetailKey AND Status IN ('5', '0', 'X'))
          GOTO Quit
 
+      -- Dynamic lottable
+      EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'DISPLAY', 'POPULATE', 4, 4,
+         @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
+         @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
+         @cInField03  OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,
+         @cInField04  OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,
+         @cInField05  OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,
+         @cInField06  OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT,
+         @cInField07  OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT,
+         @cInField08  OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT,
+         @cInField09  OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT,
+         @cInField10  OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT,
+         @cInField11  OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
+         @cInField12  OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
+         @cInField13  OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
+         @cInField14  OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
+         @cInField15  OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
+         @nMorePage   OUTPUT,
+         @nErrNo      OUTPUT,
+         @cErrMsg     OUTPUT,
+         '',      -- SourceKey
+         @nFunc   -- SourceType
+
       -- Prepare next screen variable
       SET @cOutField01 = @cSuggSKU
       SET @cOutField02 = SUBSTRING( @cSKUDesc, 1, 20)
       SET @cOutField03 = SUBSTRING( @cSKUDesc, 21, 20)
-      SET @cOutField04 = @cLottable01
-      SET @cOutField05 = @cLottable02
-      SET @cOutField06 = @cLottable03
-      SET @cOutField07 = rdt.rdtFormatDate( @dLottable04)
       SET @cOutField08 = '' -- SKU
       SET @cOutField09 = ''
       SET @cOutField10 = @cExtendedInfo1
@@ -2472,14 +2561,33 @@ BEGIN
 
    IF @nInputKey = 0 -- ESC
    BEGIN
+      -- Dynamic lottable
+      EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'DISPLAY', 'POPULATE', 4, 4,
+         @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
+         @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
+         @cInField03  OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,
+         @cInField04  OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,
+         @cInField05  OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,
+         @cInField06  OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT,
+         @cInField07  OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT,
+         @cInField08  OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT,
+         @cInField09  OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT,
+         @cInField10  OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT,
+         @cInField11  OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
+         @cInField12  OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
+         @cInField13  OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
+         @cInField14  OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
+         @cInField15  OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
+         @nMorePage   OUTPUT,
+         @nErrNo      OUTPUT,
+         @cErrMsg     OUTPUT,
+         '',      -- SourceKey
+         @nFunc   -- SourceType
+      
       -- Prepare next screen variable
       SET @cOutField01 = @cSuggSKU
       SET @cOutField02 = SUBSTRING( @cSKUDesc, 1, 20)
       SET @cOutField03 = SUBSTRING( @cSKUDesc, 21, 20)
-      SET @cOutField04 = @cLottable01
-      SET @cOutField05 = @cLottable02
-      SET @cOutField06 = @cLottable03
-      SET @cOutField07 = rdt.rdtFormatDate( @dLottable04)
       SET @cOutField08 = '' -- SKU
       SET @cOutField09 = ''
       SET @cOutField10 = @cExtendedInfo1
@@ -2848,6 +2956,17 @@ BEGIN
       V_Lottable02 = @cLottable02,
       V_Lottable03 = @cLottable03,
       V_Lottable04 = @dLottable04,
+      V_Lottable05 = @dLottable05,
+      V_Lottable06 = @cLottable06,
+      V_Lottable07 = @cLottable07,
+      V_Lottable08 = @cLottable08,
+      V_Lottable09 = @cLottable09,
+      V_Lottable10 = @cLottable10,
+      V_Lottable11 = @cLottable11,
+      V_Lottable12 = @cLottable12,
+      V_Lottable13 = @dLottable13,
+      V_Lottable14 = @dLottable14,
+      V_Lottable15 = @dLottable15,
       V_QTY        = @nQTY,
       V_PQTY       = @nPQTY,
       V_MQTY       = @nMQTY,
@@ -2870,6 +2989,7 @@ BEGIN
       V_String10   = @cMUOM_Desc,
       V_String11   = @cPUOM_Desc,
       V_String12   = @cMultiSKUBarcode,
+      V_String13   = @cLottableCode,
 
       V_String19   = @cLOCLookupSP,
       V_String20   = @cSwapUCCSP,
@@ -2895,30 +3015,21 @@ BEGIN
       V_String39   = @cRefKey05,
       V_String40   = @cOverwriteToLOC,   
 
-      I_Field01 = @cInField01,  O_Field01 = @cOutField01,
-      I_Field02 = @cInField02,  O_Field02 = @cOutField02,
-      I_Field03 = @cInField03,  O_Field03 = @cOutField03,
-      I_Field04 = @cInField04,  O_Field04 = @cOutField04,
-      I_Field05 = @cInField05,  O_Field05 = @cOutField05,
-      I_Field06 = @cInField06,  O_Field06 = @cOutField06,
-      I_Field07 = @cInField07,  O_Field07 = @cOutField07,
-      I_Field08 = @cInField08,  O_Field08 = @cOutField08,
-      I_Field09 = @cInField09,  O_Field09 = @cOutField09,
-      I_Field10 = @cInField10,  O_Field10 = @cOutField10,
-      I_Field11 = @cInField11,  O_Field11 = @cOutField11,
-      I_Field12 = @cInField12,  O_Field12 = @cOutField12,
-      I_Field13 = @cInField13,  O_Field13 = @cOutField13,
-      I_Field14 = @cInField14,  O_Field14 = @cOutField14,
-      I_Field15 = @cInField15,  O_Field15 = @cOutField15,
-
-      FieldAttr01  = @cFieldAttr01,   FieldAttr02  = @cFieldAttr02,
-      FieldAttr03  = @cFieldAttr03,   FieldAttr04  = @cFieldAttr04,
-      FieldAttr05  = @cFieldAttr05,   FieldAttr06  = @cFieldAttr06,
-      FieldAttr07  = @cFieldAttr07,   FieldAttr08  = @cFieldAttr08,
-      FieldAttr09  = @cFieldAttr09,   FieldAttr10  = @cFieldAttr10,
-      FieldAttr11  = @cFieldAttr11,   FieldAttr12  = @cFieldAttr12,
-      FieldAttr13  = @cFieldAttr13,   FieldAttr14  = @cFieldAttr14,
-      FieldAttr15  = @cFieldAttr15
+      I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
+      I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
+      I_Field03 = @cInField03,  O_Field03 = @cOutField03,   FieldAttr03  = @cFieldAttr03,
+      I_Field04 = @cInField04,  O_Field04 = @cOutField04,   FieldAttr04  = @cFieldAttr04,
+      I_Field05 = @cInField05,  O_Field05 = @cOutField05,   FieldAttr05  = @cFieldAttr05,
+      I_Field06 = @cInField06,  O_Field06 = @cOutField06,   FieldAttr06  = @cFieldAttr06,
+      I_Field07 = @cInField07,  O_Field07 = @cOutField07,   FieldAttr07  = @cFieldAttr07,
+      I_Field08 = @cInField08,  O_Field08 = @cOutField08,   FieldAttr08  = @cFieldAttr08,
+      I_Field09 = @cInField09,  O_Field09 = @cOutField09,   FieldAttr09  = @cFieldAttr09,
+      I_Field10 = @cInField10,  O_Field10 = @cOutField10,   FieldAttr10  = @cFieldAttr10,
+      I_Field11 = @cInField11,  O_Field11 = @cOutField11,   FieldAttr11  = @cFieldAttr11,
+      I_Field12 = @cInField12,  O_Field12 = @cOutField12,   FieldAttr12  = @cFieldAttr12,
+      I_Field13 = @cInField13,  O_Field13 = @cOutField13,   FieldAttr13  = @cFieldAttr13,
+      I_Field14 = @cInField14,  O_Field14 = @cOutField14,   FieldAttr14  = @cFieldAttr14,
+      I_Field15 = @cInField15,  O_Field15 = @cOutField15,   FieldAttr15  = @cFieldAttr15
 
    WHERE Mobile = @nMobile
 
