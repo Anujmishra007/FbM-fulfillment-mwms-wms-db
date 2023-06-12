@@ -1,10 +1,8 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[RDT].[rdt_1641ExtValidSP09]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdt_1641ExtValidSP09]
-GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
+
 /******************************************************************************/
 /* Store procedure: rdt_1641ExtValidSP09                                      */
 /* Purpose: Validate Pallet DropID                                            */
@@ -14,10 +12,12 @@ GO
 /* Date       Rev  Author   Purposes                                          */
 /* 2016-11-04 1.0  James    WMS-11071. Created                                */
 /* 2020-01-17 1.1  James    WMS-11855 Ecom orders enhancement (james01)       */  
-/* 2020-03-24 1.2  James    WMS-12641 Ecom orders enhancement (james02)      */  
+/* 2020-03-24 1.2  James    WMS-12641 Ecom orders enhancement (james02)       */  
+/* 2020-03-24 1.2  James    WMS-22458 Add tracking no (M_Address1)            */ 
+/*                          validation (james03)                              */  
 /******************************************************************************/
 
-CREATE PROC rdt.rdt_1641ExtValidSP09 (
+CREATE OR ALTER PROC rdt.rdt_1641ExtValidSP09 (
    @nMobile      INT,
    @nFunc        INT,
    @cLangCode    NVARCHAR(3),
@@ -72,6 +72,13 @@ BEGIN
            @cOrders_M_Company   NVARCHAR( 45) = '',
            @cShipperKey       NVARCHAR( 15) = ''
 
+   DECLARE @cTrackOrderKey    NVARCHAR( 10) = ''
+   DECLARE @cTrackShipperKey  NVARCHAR( 15) = ''
+   DECLARE @cTrackCountry     NVARCHAR( 30) = ''
+   DECLARE @cPalletOrderKey   NVARCHAR( 10) = ''
+   DECLARE @cPalletShipperKey NVARCHAR( 15) = ''
+   DECLARE @cPalletCountry    NVARCHAR( 30) = ''
+
 
    SET @nDebug = 0
    
@@ -97,85 +104,87 @@ BEGIN
    BEGIN
       IF @nInputKey = 1 -- ENTER
       BEGIN
-         SELECT TOP 1 @cOrderKey = OrderKey
-         FROM dbo.PackHeader AS ph WITH (NOLOCK)
-         JOIN dbo.PackDetail AS pd WITH (NOLOCK) ON ( ph.PickSlipNo = pd.PickSlipNo)
-         WHERE pd.StorerKey = @cStorerKey
-         AND   pd.LabelNo = @cUCCNo
-         ORDER BY 1
+      	SELECT 
+      	   @cTrackOrderKey = OrderKey,
+      	   @cTrackShipperKey = ShipperKey, 
+      	   @cTrackCountry = C_Country
+      	FROM dbo.ORDERS WITH (NOLOCK)
+      	WHERE StorerKey = @cStorerKey
+      	AND   M_Address1 = @cUCCNo
          
-         IF @@ROWCOUNT = 0
+         IF @cTrackOrderKey <> ''
          BEGIN
-            SET @nErrNo = 145802
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Inv carton id
-            GOTO Quit               
-         END
-                  
-         SELECT @cConsigneeKey = ConsigneeKey, 
-                @cOrderGroup = OrderGroup, 
-                @cC_ISOCntryCode = C_ISOCntryCode,
-                @cOrders_M_Company = M_Company,
-                @cShipperKey = o.ShipperKey
-         FROM dbo.ORDERS AS o WITH (NOLOCK)
-         WHERE o.OrderKey = @cOrderKey
-         
-         -- Check if case id scanned before
-         IF EXISTS ( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK)
-                     WHERE StorerKey = @cStorerKey
-                     AND   CaseID = @cUCCNo
-                     AND   PalletKey = @cDropID
-                     AND  [Status] < '9')
-         BEGIN
-            SET @nErrNo = 145804
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- carton scan b4
-            GOTO Quit               
-         END
+            SELECT TOP 1 @cPalletOrderKey = UserDefine02
+            FROM dbo.PALLETDETAIL WITH (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+            AND   PalletKey = @cDropID
+            AND  [Status] < '9'
+            ORDER BY 1
 
-         -- Check if case scanned to other pallet before no matter the status
-         IF EXISTS ( SELECT 1 FROM dbo.PALLETDETAIL WITH (NOLOCK)
-                     WHERE StorerKey = @cStorerKey
-                     AND   CaseID = @cUCCNo
-                     AND   PalletKey <> @cDropID)
-         BEGIN
-            SET @nErrNo = 145805
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ctn in other plt
-            GOTO Quit               
-         END
+      	   SELECT 
+      	      @cPalletShipperKey = ShipperKey, 
+      	      @cPalletCountry = C_Country
+      	   FROM dbo.ORDERS WITH (NOLOCK)
+      	   WHERE OrderKey = @cPalletOrderKey
 
-         -- Existing route
-         SELECT TOP 1 @cCurRoute = UserDefine01
-         FROM dbo.PalletDetail WITH (NOLOCK)
-         WHERE StorerKey = @cStorerKey
-         AND   PalletKey = @cDropID
-         AND   [Status] < '9'
-
-         IF @cOrderGroup <> 'ECOM'
-         BEGIN
-            SELECT @cSUSR1 = SUSR1 
-            FROM dbo.Storer WITH (NOLOCK)
-            WHERE StorerKey = @cConsigneeKey
-            AND  [TYPE] = '2'
-         
-            IF ISNULL( @cSUSR1, '') = '' 
+            IF @cPalletOrderKey <> ''
             BEGIN
-               SET @nErrNo = 145803
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- SUSR1 Blank
-               GOTO Quit               
-            END
-         
-            -- Not 1st time scan carton
-            IF ISNULL( @cCurRoute, '') <> ''
-            BEGIN
-               IF ISNULL( @cCurRoute, '') <> ISNULL( @cSUSR1, '')
+            	IF ( @cPalletShipperKey <> @cTrackShipperKey) OR 
+            	   ( @cPalletCountry <> @cTrackCountry)
                BEGIN
-                  SET @nErrNo = 145806
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Wrong route
+                  SET @nErrNo = 145812
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Plt Mix Orders
                   GOTO Quit               
                END
             END
          END
-         ELSE  -- Ecom
-         BEGIN
+      	ELSE
+      	BEGIN
+            SELECT TOP 1 @cOrderKey = OrderKey
+            FROM dbo.PackHeader AS ph WITH (NOLOCK)
+            JOIN dbo.PackDetail AS pd WITH (NOLOCK) ON ( ph.PickSlipNo = pd.PickSlipNo)
+            WHERE pd.StorerKey = @cStorerKey
+            AND   pd.LabelNo = @cUCCNo
+            ORDER BY 1
+         
+            IF @@ROWCOUNT = 0
+            BEGIN
+               SET @nErrNo = 145802
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Inv carton id
+               GOTO Quit               
+            END
+                  
+            SELECT @cConsigneeKey = ConsigneeKey, 
+                   @cOrderGroup = OrderGroup, 
+                   @cC_ISOCntryCode = C_ISOCntryCode,
+                   @cOrders_M_Company = M_Company,
+                   @cShipperKey = o.ShipperKey
+            FROM dbo.ORDERS AS o WITH (NOLOCK)
+            WHERE o.OrderKey = @cOrderKey
+         
+            -- Check if case id scanned before
+            IF EXISTS ( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK)
+                        WHERE StorerKey = @cStorerKey
+                        AND   CaseID = @cUCCNo
+                        AND   PalletKey = @cDropID
+                        AND  [Status] < '9')
+            BEGIN
+               SET @nErrNo = 145804
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- carton scan b4
+               GOTO Quit               
+            END
+
+            -- Check if case scanned to other pallet before no matter the status
+            IF EXISTS ( SELECT 1 FROM dbo.PALLETDETAIL WITH (NOLOCK)
+                        WHERE StorerKey = @cStorerKey
+                        AND   CaseID = @cUCCNo
+                        AND   PalletKey <> @cDropID)
+            BEGIN
+               SET @nErrNo = 145805
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ctn in other plt
+               GOTO Quit               
+            END
+
             -- Existing route
             SELECT TOP 1 @cCurRoute = UserDefine01
             FROM dbo.PalletDetail WITH (NOLOCK)
@@ -183,21 +192,56 @@ BEGIN
             AND   PalletKey = @cDropID
             AND   [Status] < '9'
 
-            -- Not 1st time scan carton
-            IF ISNULL( @cCurRoute, '') <> ''
+            IF @cOrderGroup <> 'ECOM'
             BEGIN
-               SET @cUserDefine01 = SUBSTRING( RTRIM( @cC_ISOCntryCode) + 
-                                    RTRIM( @cOrders_M_Company) + 
-                                    RTRIM( @cShipperKey), 1, 30)
-
-               IF ISNULL( @cCurRoute, '') <> ISNULL( @cUserDefine01, '')
+               SELECT @cSUSR1 = SUSR1 
+               FROM dbo.Storer WITH (NOLOCK)
+               WHERE StorerKey = @cConsigneeKey
+               AND  [TYPE] = '2'
+         
+               IF ISNULL( @cSUSR1, '') = '' 
                BEGIN
-                  SET @nErrNo = 145811
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Wrong route
+                  SET @nErrNo = 145803
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- SUSR1 Blank
                   GOTO Quit               
                END
+         
+               -- Not 1st time scan carton
+               IF ISNULL( @cCurRoute, '') <> ''
+               BEGIN
+                  IF ISNULL( @cCurRoute, '') <> ISNULL( @cSUSR1, '')
+                  BEGIN
+                     SET @nErrNo = 145806
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Wrong route
+                     GOTO Quit               
+                  END
+               END
             END
+            ELSE  -- Ecom
+            BEGIN
+               -- Existing route
+               SELECT TOP 1 @cCurRoute = UserDefine01
+               FROM dbo.PalletDetail WITH (NOLOCK)
+               WHERE StorerKey = @cStorerKey
+               AND   PalletKey = @cDropID
+               AND   [Status] < '9'
 
+               -- Not 1st time scan carton
+               IF ISNULL( @cCurRoute, '') <> ''
+               BEGIN
+                  SET @cUserDefine01 = SUBSTRING( RTRIM( @cC_ISOCntryCode) + 
+                                       RTRIM( @cOrders_M_Company) + 
+                                       RTRIM( @cShipperKey), 1, 30)
+
+                  IF ISNULL( @cCurRoute, '') <> ISNULL( @cUserDefine01, '')
+                  BEGIN
+                     SET @nErrNo = 145811
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Wrong route
+                     GOTO Quit               
+                  END
+               END
+
+            END
          END
       END
    END
