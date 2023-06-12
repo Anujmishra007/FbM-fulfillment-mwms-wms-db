@@ -1,10 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ispRLWAV11]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[ispRLWAV11]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
+
 /*************************************************************************/  
 /* Stored Procedure: ispRLWAV11                                          */  
 /* Creation Date: 03-Oct-2017                                            */  
@@ -15,7 +13,7 @@ GO
 /*                                                                       */  
 /* Called By: wave                                                       */  
 /*                                                                       */  
-/* PVCS Version: 1.1                                                     */  
+/* PVCS Version: 1.6                                                     */  
 /*                                                                       */  
 /* Version: 7.0                                                          */  
 /*                                                                       */  
@@ -30,9 +28,9 @@ GO
 /*                            Station (WL03)                             */
 /* 30-04-2021  WLChooi  1.5   WMS-16849 - Fix UOM 2 Stamp Taskdetailkey  */
 /*                            to Pickdetail table (WL04)                 */
+/* 31-May-2023 WLChooi  1.6   WMS-22701 - Add new logic (WL05)           */
 /*************************************************************************/   
-
-CREATE PROCEDURE [dbo].[ispRLWAV11]      
+CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV11]      
   @c_wavekey      NVARCHAR(10)  
  ,@b_Success      int        OUTPUT  
  ,@n_err          int        OUTPUT  
@@ -100,6 +98,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
             ,@c_WaveType  NVARCHAR(36)  --WL01
             ,@c_PTSStatus  NVARCHAR(10) --WL01
             ,@c_PTLWavekey NVARCHAR(10) --WL01 
+            ,@c_OrderGroup NVARCHAR(50)   --WL05
+            ,@c_UserDefine10 NVARCHAR(50) --WL05
               
     SET @c_SourceType = 'ispRLWAV11'    
     SET @c_Priority = '9'
@@ -176,12 +176,27 @@ CREATE PROCEDURE [dbo].[ispRLWAV11]
                      @c_DispatchCasePickMethod = W.DispatchCasePickMethod,
                      @c_Userdefine02 = W.UserDefine02,
                      @c_Userdefine03 = W.UserDefine03,
-                     @c_WaveType = W.WaveType   --WL01 --Use Wavetype = PTS to distinguish PTS order --Wholesale(Discrete) Retail(Conso)                    
+                     @c_WaveType = W.WaveType,   --WL01 --Use Wavetype = PTS to distinguish PTS order --Wholesale(Discrete) Retail(Conso)  
+                     @c_OrderGroup = O.OrderGroup,   --WL05
+                     @c_UserDefine10 = ISNULL(O.UserDefine10,'')   --WL05
         FROM WAVE W (NOLOCK)
         JOIN WAVEDETAIL WD(NOLOCK) ON W.Wavekey = WD.Wavekey
         JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
         JOIN CODELKUP CL (NOLOCK) ON O.OrderGroup = CL.Code AND O.Storerkey = CL.Storerkey AND CL.Listname = 'ORDERGROUP' 
         AND W.Wavekey = @c_Wavekey 
+
+        --WL05 S
+        IF @c_OrderGroup = 'W'
+        BEGIN
+           SELECT TOP 1 @c_Short = CL.Short
+                      , @c_UDF02 = CL.UDF02
+           FROM CODELKUP CL (NOLOCK)
+           WHERE CL.Code = @c_OrderGroup 
+           AND CL.Storerkey = @c_Storerkey 
+           AND CL.Listname = 'ORDERGROUP' 
+           AND CL.code2 = @c_UserDefine10
+         END
+        --WL05 E
         
         IF @c_UDF02 NOT IN('C','D')
         BEGIN
