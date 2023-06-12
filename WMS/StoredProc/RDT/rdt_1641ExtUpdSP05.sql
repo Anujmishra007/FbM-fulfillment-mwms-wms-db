@@ -20,6 +20,8 @@ GO
 /* 2020-03-24  1.2  James    WMS-12641 Ecom orders enhancement (james02)*/
 /* 2020-08-10  1.3  YeeKung  WMS-14625 Reopen Pallet (yeekung01)        */
 /* 2023-02-10  1.4  YeeKung   WMS21378 Add UCC column (yeekung02)       */
+/* 2023-05-10  1.5  James    WMS-22458 Add tracking no scan (M_Address1)*/
+/*                           to build pallet (james03)                  */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1641ExtUpdSP05] (
@@ -58,9 +60,12 @@ BEGIN
             @cC_ISOCntryCode NVARCHAR( 10) = '',
             @cUserDefine01   NVARCHAR( 30) = '',
             @cOrders_M_Company   NVARCHAR( 45) = '',
-            @cShipperKey      NVARCHAR( 15) = ''
-
-
+            @cShipperKey      NVARCHAR( 15) = '',
+            @cExternOrderKey  NVARCHAR( 50) = ''
+            
+   DECLARE @cTrackOrderKey    NVARCHAR( 10) = ''
+   DECLARE @curPD             CURSOR
+               
    SELECT @nStep = Step,
           @nInputKey = InputKey
    FROM RDT.RDTMobRec WITH (NOLOCK)
@@ -116,32 +121,22 @@ BEGIN
             END
          END
 
-         -- Insert PalletDetail
-         DECLARE CUR_PalletDetail CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-         SELECT PickSlipNo, SKU, ISNULL( SUM( Qty), 0)
-         FROM dbo.PackDetail WITH (NOLOCK)
+         SELECT @cTrackOrderKey = OrderKey
+         FROM dbo.ORDERS WITH (NOLOCK)
          WHERE StorerKey = @cStorerKey
-         AND   LabelNo = @cUCCNo
-         GROUP BY PickSlipNo, SKU
-         OPEN CUR_PalletDetail
-         FETCH NEXT FROM CUR_PalletDetail INTO @cPickSlipNo, @cSKU, @nPD_Qty
-         WHILE @@FETCH_STATUS <> -1
+         AND   M_Address1 = @cUCCNo
+         AND   [Status] < '9'
+         
+         IF @cTrackOrderKey <> ''
          BEGIN
-            -- (james01)
-            --if orders.ordergroup = �ECOM�, insert orders.ISOcntrycode
-            --into palletdetail.udf01 when user scan carton label number
-
-            SELECT @cOrderKey = OrderKey
-            FROM dbo.PackHeader WITH (NOLOCK)
-            WHERE PickSlipNo = @cPickSlipNo
-
             SELECT @cConsigneeKey = ConsigneeKey,
                    @cOrderGroup = OrderGroup,
                    @cC_ISOCntryCode = C_ISOCntryCode,
                    @cOrders_M_Company = M_Company,
-                   @cShipperKey = ShipperKey
+                   @cShipperKey = ShipperKey,
+                   @cExternOrderKey = ExternOrderKey
             FROM dbo.ORDERS WITH (NOLOCK)
-            WHERE OrderKey = @cOrderKey
+            WHERE OrderKey = @cTrackOrderKey
 
             IF @cOrderGroup = 'ECOM'
                SET @cUserDefine01 = SUBSTRING( RTRIM( @cC_ISOCntryCode) +
@@ -155,25 +150,102 @@ BEGIN
 
                SET @cUserDefine01 = @cSUSR1
             END
-
-            INSERT INTO dbo.PalletDetail
-            (PalletKey, PalletLineNumber, CaseId, StorerKey, Sku, Qty, UserDefine01, UserDefine02)
-            VALUES
-            (@cDropID, 0, @cUCCNo, @cStorerKey, @cSKU, @nPD_Qty, @cUserDefine01, @cOrderKey)
-
-            IF @@ERROR <> 0
+            
+            SET @curPD = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+            SELECT SKU, ISNULL( SUM( Qty), 0)
+            FROM dbo.PICKDETAIL WITH (NOLOCK)
+            WHERE OrderKey = @cTrackOrderKey
+            GROUP BY SKU
+            OPEN @curPD
+            FETCH NEXT FROM @curPD INTO @cSKU, @nPD_Qty
+            WHILE @@FETCH_STATUS = 0
             BEGIN
-               SET @nErrNo = 145654
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsPLTDetFail
-               CLOSE CUR_PalletDetail
-               DEALLOCATE CUR_PalletDetail
-               GOTO RollBackTran
-            END
+               -- PalletDetail.CaseId = ExternOrderKey + '1' or PackDetail.LabelNo
+               -- 1 Orders 1 Carton only
+               SELECT TOP 1 @cCaseID = PD.LabelNo
+               FROM dbo.PackDetail PD WITH (NOLOCK)
+               JOIN dbo.PackHeader PH WITH (NOLOCK) ON ( PD.PickSlipNo = PH.PickSlipNo)
+               WHERE PH.OrderKey =  @cTrackOrderKey
+               AND   PH.StorerKey = @cStorerKey
+               AND   PD.SKU = @cSKU
+               ORDER BY 1
+            
+               INSERT INTO dbo.PalletDetail
+               (PalletKey, PalletLineNumber, CaseId, StorerKey, Sku, Qty, UserDefine01, UserDefine02)
+               VALUES
+               (@cDropID, 0, @cCaseID, @cStorerKey, @cSKU, @nPD_Qty, @cUserDefine01, @cTrackOrderKey)
 
+               IF @@ERROR <> 0
+               BEGIN
+                  SET @nErrNo = 145662
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsPLTDetFail
+                  GOTO RollBackTran
+               END
+
+               FETCH NEXT FROM @curPD INTO @cSKU, @nPD_Qty
+            END
+         END   
+         ELSE
+            BEGIN
+            -- Insert PalletDetail
+            DECLARE CUR_PalletDetail CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+            SELECT PickSlipNo, SKU, ISNULL( SUM( Qty), 0)
+            FROM dbo.PackDetail WITH (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+            AND   LabelNo = @cUCCNo
+            GROUP BY PickSlipNo, SKU
+            OPEN CUR_PalletDetail
             FETCH NEXT FROM CUR_PalletDetail INTO @cPickSlipNo, @cSKU, @nPD_Qty
+            WHILE @@FETCH_STATUS <> -1
+            BEGIN
+               -- (james01)
+               --if orders.ordergroup = �ECOM�, insert orders.ISOcntrycode
+               --into palletdetail.udf01 when user scan carton label number
+
+               SELECT @cOrderKey = OrderKey
+               FROM dbo.PackHeader WITH (NOLOCK)
+               WHERE PickSlipNo = @cPickSlipNo
+
+               SELECT @cConsigneeKey = ConsigneeKey,
+                      @cOrderGroup = OrderGroup,
+                      @cC_ISOCntryCode = C_ISOCntryCode,
+                      @cOrders_M_Company = M_Company,
+                      @cShipperKey = ShipperKey
+               FROM dbo.ORDERS WITH (NOLOCK)
+               WHERE OrderKey = @cOrderKey
+
+               IF @cOrderGroup = 'ECOM'
+                  SET @cUserDefine01 = SUBSTRING( RTRIM( @cC_ISOCntryCode) +
+                                       RTRIM( @cOrders_M_Company) +
+                                       RTRIM( @cShipperKey), 1, 30)
+               ELSE
+               BEGIN
+                  SELECT @cSUSR1 = SUSR1
+                  FROM dbo.Storer WITH (NOLOCK)
+                  WHERE StorerKey = @cConsigneeKey
+
+                  SET @cUserDefine01 = @cSUSR1
+               END
+
+               INSERT INTO dbo.PalletDetail
+               (PalletKey, PalletLineNumber, CaseId, StorerKey, Sku, Qty, UserDefine01, UserDefine02)
+               VALUES
+               (@cDropID, 0, @cUCCNo, @cStorerKey, @cSKU, @nPD_Qty, @cUserDefine01, @cOrderKey)
+
+               IF @@ERROR <> 0
+               BEGIN
+                  SET @nErrNo = 145654
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsPLTDetFail
+                  CLOSE CUR_PalletDetail
+                  DEALLOCATE CUR_PalletDetail
+                  GOTO RollBackTran
+               END
+
+               FETCH NEXT FROM CUR_PalletDetail INTO @cPickSlipNo, @cSKU, @nPD_Qty
+            END
+            CLOSE CUR_PalletDetail
+            DEALLOCATE CUR_PalletDetail
          END
-         CLOSE CUR_PalletDetail
-         DEALLOCATE CUR_PalletDetail
       END
    END
 
