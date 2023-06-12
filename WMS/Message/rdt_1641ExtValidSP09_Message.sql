@@ -15,4 +15,7 @@ execute rdt.rdtAddMsg 145810, 10, '45810^Inv route code',   'us_english', 1641
 --WMS-11855
 execute rdt.rdtAddMsg 145811, 10, '45811^Wrong Route',      'us_english', 1641
 
+--WMS-22458
+execute rdt.rdtAddMsg 145812, 10, '45812^Plt Mix Orders',   'us_english', 1641
+
 SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 145801 AND 145850
