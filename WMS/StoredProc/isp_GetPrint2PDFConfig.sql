@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_GetPrint2PDFConfig]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[isp_GetPrint2PDFConfig]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -11,7 +6,7 @@ GO
 /***************************************************************************/  
 /* Stored Procedure: isp_GetPrint2PDFConfig                                */  
 /* Creation Date: 22-Oct-2019                                              */  
-/* Copyright: LFL                                                          */  
+/* Copyright: MAERSK                                                       */  
 /* Written by:                                                             */  
 /*                                                                         */  
 /* Purpose: Print to PDF  (ispGet<Module>PDFXX)                            */                                 
@@ -19,7 +14,7 @@ GO
 /* Called By:                                                              */  
 /*                                                                         */  
 /*                                                                         */  
-/* PVCS Version: 1.6                                                       */  
+/* PVCS Version: 1.7                                                       */  
 /*                                                                         */  
 /* Version: 7.0                                                            */  
 /*                                                                         */  
@@ -38,8 +33,10 @@ GO
 /* 04-10-2021     1.5    WLChooi  DevOps Combine Script                    */
 /* 04-10-2021     1.6    WLChooi  WMS-18094 - Add Function to Print From   */
 /*                                MBOL Screen (WL05)                       */
+/* 28-Apr-2023    1.7    WLChooi  WMS-22460 - Allow custom dimension for   */
+/*                                shipperkey (WL06)                        */
 /***************************************************************************/    
-CREATE PROC [dbo].[isp_GetPrint2PDFConfig]    
+CREATE OR ALTER PROC [dbo].[isp_GetPrint2PDFConfig]    
 (     
       @c_Storerkey     NVARCHAR(15),
       @c_Facility      NVARCHAR(5), 
@@ -170,6 +167,10 @@ BEGIN
 
    DECLARE @c_ContinuePrintIfFail NVARCHAR(10) = 'N'   --WL04
 
+   DECLARE @c_GetDimensionFrShipperkey NVARCHAR(10)  = 'N'   --WL06
+         , @c_Shipperkey               NVARCHAR(250) = ''    --WL06
+         , @c_uDimension               NVARCHAR(250) = ''    --WL06
+
    --WL03 S
    IF @n_Err = 1
    BEGIN
@@ -242,7 +243,14 @@ BEGIN
    SELECT @c_ContinuePrintIfFail = dbo.fnc_GetParamValueFromString('@c_ContinuePrintIfFail'
                                                                   , @c_Option5
                                                                   , @c_ContinuePrintIfFail)
-      
+    
+   --WL06 S
+   SELECT @c_GetDimensionFrShipperkey = dbo.fnc_GetParamValueFromString('@c_GetDimensionFrShipperkey'
+                                                                       , @c_Option5
+                                                                       , @c_GetDimensionFrShipperkey)
+   
+   --WL06 E
+
    IF @c_FromModule IN ('PACKING', 'PACKING_AUTO')   --WL03
    BEGIN
       SELECT @c_GetOrderkey = Orderkey
@@ -399,6 +407,47 @@ BEGIN
       IF @b_InValid = 1
          GOTO QUIT_SP  
    END
+
+   --WL06 S
+   IF @c_GetDimensionFrShipperkey = 'Y'
+   BEGIN
+      SET @c_SQL = 'SELECT TOP 1 @c_Shipperkey = ISNULL(ORDERS.Shipperkey,'''') '
+      SET @c_SQL = @c_SQL + @c_SQLFrom
+      SET @c_ExecArguments = N'   @c_Param01           NVARCHAR(80) 
+                                , @c_Param02           NVARCHAR(80) 
+                                , @c_Param03           NVARCHAR(80) 
+                                , @c_Param04           NVARCHAR(80) 
+                                , @c_Param05           NVARCHAR(80) 
+                                , @c_Shipperkey        NVARCHAR(50) OUTPUT '     
+                                                   
+      EXEC sp_ExecuteSql     @c_SQL
+                           , @c_ExecArguments
+                           , @c_Param01
+                           , @c_Param02
+                           , @c_Param03
+                           , @c_Param04
+                           , @c_Param05
+                           , @c_Shipperkey OUTPUT
+
+      SET @c_Shipperkey = '@u_DIM_' + TRIM(@c_Shipperkey)
+
+      SET @c_SQL = 'SELECT @c_uDimension = dbo.fnc_GetParamValueFromString('''+ @c_Shipperkey + ''', @c_Option5, '''') '
+
+      SET @c_ExecArguments = N'  @c_Option5           NVARCHAR(MAX) 
+                               , @c_uDimension        NVARCHAR(250) OUTPUT '     
+                                                   
+      EXEC sp_ExecuteSql @c_SQL
+                       , @c_ExecArguments
+                       , @c_Option5
+                       , @c_uDimension OUTPUT
+
+      IF ISNULL(@c_uDimension,'') <> ''
+      BEGIN
+         SET @c_Dimension = @c_uDimension
+      END
+   END
+   --WL06 E
+
    --SELECT * FROM #TMP_Validation
    IF(@n_continue = 1 OR @n_continue = 2)
    BEGIN
@@ -998,7 +1047,5 @@ QUIT_SP:
    END   
 END 
 GO
-
-GRANT EXECUTE ON [dbo].[isp_GetPrint2PDFConfig] TO NSQL
+GRANT EXECUTE ON [dbo].[isp_GetPrint2PDFConfig] TO [NSQL]
 GO
-
