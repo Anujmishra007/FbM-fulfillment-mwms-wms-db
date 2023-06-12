@@ -15,4 +15,7 @@ execute rdt.rdtAddMsg 145659, 10, '45659^UpdPltDtFail', 'us_english', 1641
 execute rdt.rdtAddMsg 145660, 10, '45660^UpdPltFail', 'us_english', 1641
 execute rdt.rdtAddMsg 145661, 10, '45661^PltShipped', 'us_english', 1641
 
+--WMS-22458
+execute rdt.rdtAddMsg 145662, 10, '45662^Ins PLTDet Err', 'us_english', 1641
+
 SELECT * FROM RDT.RDTMsg WITH (NOLOCK) WHERE Message_ID BETWEEN 145651 AND 145700
