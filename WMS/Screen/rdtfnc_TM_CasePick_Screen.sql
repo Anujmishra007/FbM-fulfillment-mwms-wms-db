@@ -1,5 +1,10 @@
---Screen Range 4020 - 4029
+IF NOT EXISTS ( SELECT 1 FROM RDT.RDTMsg (NOLOCK) WHERE Message_ID = 1812 AND Lang_Code = 'ENG' AND Message_Type = 'FNC')
+BEGIN
+   INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
+   VALUES (1812, 'ENG', 'FNC', 'TM Case Pick', 'rdtfnc_TM_CasePick', '4')
+END
 
+-- Drop ID
 DELETE rdt.RDTScn WHERE Scn = 4020 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4020, 'ENG',
     @cLine01 = 'PICK CASE        FCP'
@@ -11,6 +16,7 @@ EXECUTE rdt.rdtAddScn 4020, 'ENG',
    ,@cLine14 = '%e'
    ,@nFunc = 1812
 
+-- From LOC
 DELETE rdt.RDTScn WHERE Scn = 4021 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4021, 'ENG',
     @cLine01 = 'PICK CASE        FCP'
@@ -29,6 +35,7 @@ EXECUTE rdt.rdtAddScn 4021, 'ENG',
    ,@cLine14 = '%e'
    ,@nFunc = 1812
 
+-- From ID
 DELETE rdt.RDTScn WHERE Scn = 4022 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4022, 'ENG',
     @cLine01 = 'PICK CASE        FCP'
@@ -47,16 +54,17 @@ EXECUTE rdt.rdtAddScn 4022, 'ENG',
    ,@cLine14 = '%e'
    ,@nFunc = 1812
 
+-- SKU, QTY
 DELETE rdt.RDTScn WHERE Scn = 4023 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4023, 'ENG',
     @cLine01 = 'SKU:'
    ,@cLine02 = '%20d01'
    ,@cLine03 = '%20d02'
    ,@cLine04 = '%20d03'
-   ,@cLine05 = '1 %18d04'
-   ,@cLine06 = '2 %18d05'
-   ,@cLine07 = '3 %18d06'
-   ,@cLine08 = '4 %10d07'
+   ,@cLine05 = '%20d04'
+   ,@cLine06 = '%20d05'
+   ,@cLine07 = '%20d06'
+   ,@cLine08 = '%20d07'
    ,@cLine09 = '%20d10'
    ,@cLine10 = '%32i08'
    ,@cLine11 = '%20d11'
@@ -65,6 +73,7 @@ EXECUTE rdt.rdtAddScn 4023, 'ENG',
    ,@cLine14 = '%e'
    ,@nFunc = 1812
 
+-- Option
 DELETE rdt.RDTScn WHERE Scn = 4024 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4024, 'ENG',
     @cLine01 = 'PICK CASE        FCP'
@@ -77,6 +86,7 @@ EXECUTE rdt.rdtAddScn 4024, 'ENG',
    ,@cLine14 = '%e'
    ,@nFunc = 1812
 
+-- To LOC
 DELETE rdt.RDTScn WHERE Scn = 4025 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4025, 'ENG',
     @cLine01 = 'PICK CASE        FCP'
@@ -92,6 +102,7 @@ EXECUTE rdt.rdtAddScn 4025, 'ENG',
    ,@cLine14 = '%e'
    ,@nFunc = 1812
 
+-- Message
 DELETE rdt.RDTScn WHERE Scn = 4026 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4026, 'ENG',
     @cLine01 = 'PICK CASE        FCP'
@@ -109,6 +120,7 @@ EXECUTE rdt.rdtAddScn 4026, 'ENG',
    ,@cLine14 = '%e'
    ,@nFunc = 1812
 
+-- Short
 DELETE rdt.RDTScn WHERE Scn = 4027 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4027, 'ENG',
     @cLine01 = 'PICK CASE        FCP'
