@@ -406,6 +406,14 @@ SELECT 'WORKORDERDetInputValidation' AS ValidationType,
        'WORKORDERDETAIL.Storerkey' AS CfgValSourceCol,
        'isp_Wrapup_Validation' AS ValidationSP,
        '' AS IsConso
+UNION ALL --WMS-21757
+SELECT 'UnAllocateExtendedValidation' as ValidateType,
+       'UnAllocation Extended Validation' AS ValidationDesc,
+       'UnAllocateExtendedValidation' AS ValidateTable,
+       'Storer' AS ValidateBy,
+       '' AS CfgValSourceCol,
+       'isp_UnAllocate_ExtendedValidation' AS ValidationSP,
+       '' AS IsConso
 
 
 GO

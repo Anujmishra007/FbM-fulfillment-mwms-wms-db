@@ -295,6 +295,12 @@ SELECT 'WORKORDERDetInputValidation' AS ValidationType,
 FROM INFORMATION_SCHEMA.COLUMNS Col
 WHERE Col.TABLE_NAME IN ('WORKORDERDETAIL','SKU')
 AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'AddDate', 'ArchiveCop', 'TrafficCop','TimeStamp')
+UNION ALL --WMS-21757
+SELECT 'UnAllocateExtendedValidation' as ValidateType,
+       UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME) AS ColumnName
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('ORDERS','ORDERDETAIL','SKU','PACK','PICKDETAIL','LOTATTRIBUTE','LOT','LOC','ID','SKUxLOC','LOTxLOCxID')
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'AddDate', 'ArchiveCop', 'TrafficCop','TimeStamp')
 
 GO
 GRANT SELECT ON [dbo].[V_ExtendedValidationColumn] TO NSQL
