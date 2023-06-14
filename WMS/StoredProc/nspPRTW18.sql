@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspPRTW18]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[nspPRTW18]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -23,8 +20,10 @@ GO
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */ 
+/* 20-ARP-2023  NJOW01   1.0  WMS-22321 allow filter empty lottable02    */
+/*                            configure by codelkup                      */
 /*************************************************************************/   
-CREATE  PROC [dbo].[nspPRTW18]    
+CREATE OR ALTER PROC [dbo].[nspPRTW18]    
    @c_StorerKey NVARCHAR(15) ,    
    @c_SKU NVARCHAR(20) ,    
    @c_LOT NVARCHAR(10) ,    
@@ -146,6 +145,19 @@ BEGIN
         BEGIN  
             SELECT @c_Condition = RTRIM(@c_Condition) + " AND Lotattribute.Lottable02 = N'" + RTRIM(@c_Lottable02) + "' "  
         END    
+        ELSE
+        BEGIN --NJOW01
+         	  IF EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK)
+         	             WHERE CL.Storerkey = @c_Storerkey
+         	             AND CL.Code = 'NOFILTEREMPTYLOT2'
+         	             AND CL.Listname = 'PKCODECFG'
+         	             AND CL.Long = 'nspPRTW18'
+         	             AND ISNULL(CL.Short,'') = 'N') 
+         	  BEGIN              
+               SELECT @c_Condition = RTRIM(@c_Condition) + ' AND Lotattribute.Lottable02 = '''' '
+            END        		
+        END        
+        
         IF ISNULL(RTRIM(@c_Lottable03), '') <> ''  
         BEGIN  
             SELECT @c_Condition = RTRIM(@c_Condition) + " AND Lotattribute.Lottable03 = N'" + RTRIM(ISNULL(@c_Lottable03,'')) + "' "  
