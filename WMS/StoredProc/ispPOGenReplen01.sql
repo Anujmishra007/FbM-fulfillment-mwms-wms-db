@@ -6,30 +6,33 @@ GO
 SET ANSI_NULLS OFF 
 GO
 
-/************************************************************************/       
-/* Stored Proc: ispPOGenReplen01                                        */       
-/* Creation Date: 13-JAN-2018                                           */       
-/* Copyright: LF Logistics                                              */       
-/* Written by: Wan                                                      */       
-/*                                                                      */       
-/* Purpose: WMS-5218 - [CN] UA Relocation Phase II - Exceed Generate    */       
-/*          and Confirm Replenishment(B2C)                              */        
-/*                                                                      */        
-/* Called By: ispPostGenEOrderReplenWrapper                             */       
-/*          :                                                           */       
-/* PVCS Version: 1.2                                                    */       
-/*                                                                      */       
-/* Version: 7.0                                                         */       
-/*                                                                      */       
-/* Data Modifications:                                                  */       
-/*                                                                      */       
-/* Updates:                                                             */       
-/* Date        Author   Ver   Purposes                                  */       
-/* 07-Apr-2019 NJOW01   1.0   Cater for WCS configuration               */      
-/* 23-Mar-2020 LZG      1.1   Added StorerKey filter (ZG01)             */    
-/* 03-Jun-2023 NJOW02   1.2   Fix drop id not update due to pickdetial  */
-/*                            qty groping with pickslipno               */
-/************************************************************************/       
+/**************************************************************************/       
+/* Stored Proc: ispPOGenReplen01                                          */       
+/* Creation Date: 13-JAN-2018                                             */       
+/* Copyright: LF Logistics                                                */       
+/* Written by: Wan                                                        */       
+/*                                                                        */       
+/* Purpose: WMS-5218 - [CN] UA Relocation Phase II - Exceed Generate      */       
+/*          and Confirm Replenishment(B2C)                                */        
+/*                                                                        */        
+/* Called By: ispPostGenEOrderReplenWrapper                               */       
+/*          :                                                             */       
+/* PVCS Version: 1.2                                                      */       
+/*                                                                        */       
+/* Version: 7.0                                                           */       
+/*                                                                        */       
+/* Data Modifications:                                                    */       
+/*                                                                        */       
+/* Updates:                                                               */       
+/* Date        Author   Ver   Purposes                                    */       
+/* 07-Apr-2019 NJOW01   1.0   Cater for WCS configuration                 */      
+/* 23-Mar-2020 LZG      1.1   Added StorerKey filter (ZG01)               */    
+/* 03-Jun-2023 NJOW02   1.2   Fix drop id not update due to pickdetial    */
+/*                            qty groping with pickslipno                 */
+/* 14-Jun-2023 NJOW03   1.3   WMS-22845 Send to WCS failed not to rollback*/
+/*                            the updated ucc and pickdetail and continue */
+/*                            next ucc. WCS issue will fix later sperately*/
+/**************************************************************************/       
 CREATE   PROC [dbo].[ispPOGenReplen01]       
            @c_ReplenishmentGroup NVARCHAR(10)        
          , @b_Success            INT            OUTPUT       
@@ -425,7 +428,7 @@ BEGIN
                    
             IF @n_Err <> 0       
             BEGIN       
-               SET @n_Continue = 3       
+               --SET @n_Continue = 3   --NJOW03 Removed
                SET @n_Err = 62360       
                SET @c_ErrMsg = 'NSQL' +CONVERT(CHAR(5), @n_Err) + ': Error Executing rdt_GenericSendMsg. (ispPOGenReplen01)'       
                               + '( ' + @c_ErrMsg + ' )'       
