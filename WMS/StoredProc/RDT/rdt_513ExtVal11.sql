@@ -9,6 +9,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
 /* 2022-08-23 1.0  YeeKung   WMS-19594 Created                          */
+/* 2023-06-09 1.1  YeeKung   WMS-22752 Add PopUp Scn (yeekung01)        */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_513ExtVal11] (
@@ -37,7 +38,6 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 
 DECLARE @nMQTY INT
 DECLARE @cDefaultUOM   NVARCHAR(5)
-
 
    IF @nStep = 4 -- QTY
    BEGIN
@@ -77,6 +77,8 @@ DECLARE @cDefaultUOM   NVARCHAR(5)
             BEGIN
                SET @nErrNo = 190202
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff LOC
+               --(yeekung01)
+               EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo, @cErrMsg, @cErrMsg
                GOTO QUIT
             END
          END

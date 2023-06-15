@@ -14,6 +14,7 @@ GO
 /* 2019-07-31   Ung       1.1   WMS-9941 Add QTYPrinted                       */
 /* 2021-06-01   James     1.2   WMS-17130 Deduce QTYPrinted                   */
 /* 2022-01-03   Ung       1.3   Fix error no                                  */
+/* 2023-06-09   YeeKung   1.4   WMS-22752 Add PopUp errmsg (yeekung01)        */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_513Confirm02]
@@ -186,7 +187,10 @@ BEGIN
    GOTO Quit
 
 RollBackTran:
+BEGIN
    ROLLBACK TRAN rdt_513Confirm02 -- Only rollback change made here
+   EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo, @cErrMsg, @cErrMsg
+END
 Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
       COMMIT TRAN
