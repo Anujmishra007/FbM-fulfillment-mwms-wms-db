@@ -1,23 +1,21 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_PTLStation_Confirm_ToteIDSKU06]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_PTLStation_Confirm_ToteIDSKU06]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
 
-/******************************************************************************/
-/* Store procedure: rdt_PTLStation_Confirm_ToteIDSKU06                        */
-/* Copyright      : LF Logistics                                              */
-/*                                                                            */
-/* Purpose: Close working batch                                               */
-/*                                                                            */
-/* Date       Rev Author      Purposes                                        */
-/* 03-08-2021 1.0 yeekung     WMS-17625 Created                               */
-/******************************************************************************/
+/************************************************************************************/
+/* Store procedure: rdt_PTLStation_Confirm_ToteIDSKU06                              */
+/* Copyright      : LF Logistics                                                    */
+/*                                                                                  */
+/* Purpose: Close working batch                                                     */
+/*                                                                                  */
+/* Date       Rev Author      Purposes                                              */
+/* 03-08-2021 1.0 yeekung     WMS-17625 Created                                     */
+/* 22-05-2023 1.1 Ung         WMS-22553 Migrate to isp_Carrier_Middleware_Interface */
+/************************************************************************************/
 
-CREATE PROC rdt.rdt_PTLStation_Confirm_ToteIDSKU06 (
+CREATE OR ALTER PROC rdt.rdt_PTLStation_Confirm_ToteIDSKU06 (
     @nMobile      INT
    ,@nFunc        INT
    ,@cLangCode    NVARCHAR( 3)
@@ -400,6 +398,7 @@ BEGIN
       
                   IF @nPackQTY = @nPickQTY
                   BEGIN
+                     /*
                      EXEC dbo.ispGenTransmitLog2  
                      'WSCRSOREQILS'  -- TableName  
                      , @cOrderKey   -- Key1  
@@ -433,7 +432,24 @@ BEGIN
 
                       IF @nErrNo<>''
                         GOTO RollBackTran
-
+                     */
+                     
+                     EXEC isp_Carrier_Middleware_Interface
+                         @cOrderKey
+                        ,''
+                        ,@nFunc
+                        ,@nCartonNo
+                        ,@nStep
+                        ,@bSuccess  OUTPUT
+                        ,@nErrNo    OUTPUT
+                        ,@cErrMsg   OUTPUT
+                     IF @bSuccess = 0
+                     BEGIN
+                        SET @nErrNo = 173032
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ShipLabel fail
+                        GOTO RollBackTran
+                     END
+                     
                      -- Pack confirm
                      UPDATE PackHeader WITH (ROWLOCK)
                      SET 
@@ -1027,8 +1043,8 @@ BEGIN
       
                   IF @nPackQTY = @nPickQTY
                   BEGIN
-
-                    EXEC dbo.ispGenTransmitLog2  
+                     /*
+                     EXEC dbo.ispGenTransmitLog2  
                      'WSCRSOREQILS'  -- TableName  
                      , @cOrderKey   -- Key1  
                      , @cCartonID   -- Key2  
@@ -1061,6 +1077,23 @@ BEGIN
 
                       IF @nErrNo<>''
                         GOTO RollBackTran
+                     */
+
+                     EXEC isp_Carrier_Middleware_Interface
+                         @cOrderKey
+                        ,''
+                        ,@nFunc
+                        ,@nCartonNo
+                        ,@nStep
+                        ,@bSuccess  OUTPUT
+                        ,@nErrNo    OUTPUT
+                        ,@cErrMsg   OUTPUT
+                     IF @bSuccess = 0
+                     BEGIN
+                        SET @nErrNo = 173033
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ShipLabel fail
+                        GOTO RollBackTran
+                     END
 
                      -- Pack confirm
                      UPDATE PackHeader SET 

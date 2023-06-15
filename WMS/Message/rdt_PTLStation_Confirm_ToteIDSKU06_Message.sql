@@ -32,3 +32,5 @@ execute rdt.rdtAddMsg 173028, 10, '173028UpdLogFail', 'us_english', 805
 execute rdt.rdtAddMsg 173029, 10, '173029UdPTLFail', 'us_english', 805
 execute rdt.rdtAddMsg 173030, 10, '173030PKDtlChanged','us_english', 805
 execute rdt.rdtAddMsg 173031, 10, '173031UpdPkDtlFail', 'us_english', 805
+execute rdt.rdtAddMsg 173032, 10, '173032ShipLabel fail', 'us_english', 805
+execute rdt.rdtAddMsg 173033, 10, '173033ShipLabel fail', 'us_english', 805
