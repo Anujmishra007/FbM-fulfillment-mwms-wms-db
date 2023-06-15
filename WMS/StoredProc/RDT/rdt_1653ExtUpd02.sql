@@ -3,23 +3,24 @@ GO
 SET ANSI_NULLS OFF
 GO    
 
-/************************************************************************/    
-/* Store procedure: rdt_1653ExtUpd02                                    */    
-/* Copyright      : IDS                                                 */    
-/*                                                                      */    
-/* Called from: rdtfnc_TrackNo_SortToPallet                             */    
-/*                                                                      */    
-/* Purpose: Insert into Transmitlog2 table                              */    
-/*                                                                      */    
-/* Modifications log:                                                   */    
-/* Date        Rev  Author   Purposes                                   */    
-/* 2021-08-05  1.0  James    WMS-17486. Created                         */  
-/* 2021-08-25  1.1  James    WMS-17773 Extend TrackNo to 40 chars       */
-/* 2021-11-15  1.2  James    WMS-18115 Delete rdtecomlog when           */
-/*                           close plt (james01)                        */
-/* 2022-09-15  1.3  James    WMS-20667 Add Lane (james01)               */
-/* 2022-10-26  1.4  James    WMS-19711 Delete short pick line (james02) */
-/************************************************************************/    
+/************************************************************************************/    
+/* Store procedure: rdt_1653ExtUpd02                                                */    
+/* Copyright      : IDS                                                             */    
+/*                                                                                  */    
+/* Called from: rdtfnc_TrackNo_SortToPallet                                         */    
+/*                                                                                  */    
+/* Purpose: Insert into Transmitlog2 table                                          */    
+/*                                                                                  */    
+/* Modifications log:                                                               */    
+/* Date        Rev  Author   Purposes                                               */    
+/* 2021-08-05  1.0  James    WMS-17486. Created                                     */  
+/* 2021-08-25  1.1  James    WMS-17773 Extend TrackNo to 40 chars                   */
+/* 2021-11-15  1.2  James    WMS-18115 Delete rdtecomlog when                       */
+/*                           close plt (james01)                                    */
+/* 2022-09-15  1.3  James    WMS-20667 Add Lane (james01)                           */
+/* 2022-10-26  1.4  James    WMS-19711 Delete short pick line (james02)             */
+/* 2023-05-22  1.5  Ung      WMS-22554 Migrate to isp_Carrier_Middleware_Interface  */
+/************************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdt_1653ExtUpd02] (    
    @nMobile        INT,
@@ -86,6 +87,7 @@ BEGIN
    BEGIN
       IF @nInputKey = 1
       BEGIN
+         /*
          -- Insert transmitlog2 here
          EXECUTE ispGenTransmitLog2 
             @c_TableName      = 'WSCRSOCLOSEILS', 
@@ -101,6 +103,22 @@ BEGIN
          BEGIN
             SET @nErrNo = 173051
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Insert TL2 Err
+            GOTO RollBackTran
+         END*/
+         
+         EXEC isp_Carrier_Middleware_Interface
+             '' -- @cOrderKey
+            ,@cMBOLKey
+            ,@nFunc
+            ,'' -- @nCartonNo
+            ,@nStep
+            ,@bSuccess  OUTPUT
+            ,@nErrNo    OUTPUT
+            ,@cErrMsg   OUTPUT
+         IF @bSuccess = 0
+         BEGIN
+            SET @nErrNo = 173053
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ShipLabel fail
             GOTO RollBackTran
          END
 
