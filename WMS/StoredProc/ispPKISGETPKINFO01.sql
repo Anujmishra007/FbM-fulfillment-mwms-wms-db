@@ -14,7 +14,7 @@ GO
 /* Called By: isp_PackIsCapturePackInfo_Wrapper                         */
 /*            Storerconfig: PackIsCapturePackInfo_SP                    */
 /*                                                                      */  
-/* GitLab Version: 1.0                                                  */  
+/* GitLab Version: 1.1                                                  */  
 /*                                                                      */  
 /* Version: 7.0                                                         */  
 /*                                                                      */  
@@ -23,6 +23,7 @@ GO
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
 /* 17-Feb-2022  WLChooi  1.0  DevOps Combine Script                     */
+/* 09-Jun-2023  WLChooi  1.1  WMS-22798 Change to Codelkup.Notes (WL01) */
 /************************************************************************/   
 CREATE OR ALTER PROCEDURE [dbo].[ispPKISGETPKINFO01]
    @c_Pickslipno        NVARCHAR(10),
@@ -40,7 +41,7 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF  
    
    DECLARE @n_continue     INT,
-           @c_CSGNKeyList  NVARCHAR(250) = ''
+           @c_CSGNKeyList  NVARCHAR(MAX) = ''
    
    SELECT @c_Storerkey = OH.Storerkey
    FROM ORDERS OH (NOLOCK)
@@ -48,7 +49,7 @@ BEGIN
    JOIN STORER ST (NOLOCK) ON OH.ConsigneeKey = ST.Storerkey 
    WHERE PH.PickHeaderKey = @c_Pickslipno
 
-   SELECT TOP 1 @c_CSGNKeyList = ISNULL(CODELKUP.Long,'')
+   SELECT TOP 1 @c_CSGNKeyList = ISNULL(CODELKUP.Notes,'')   --WL01
    FROM CODELKUP (NOLOCK)
    WHERE CODELKUP.LISTNAME = 'PRESCONFIG' AND CODELKUP.Code = 'WEIGHT'
    AND CODELKUP.Storerkey = @c_Storerkey
