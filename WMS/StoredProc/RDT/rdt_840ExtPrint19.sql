@@ -12,6 +12,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
 /* 2022-03-10 1.0  yeekung    WMS-19132. Created                        */
+/* 2023-05-10 1.1  James      WMS-22422 Print invoice enhance (james01) */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_840ExtPrint19] (
@@ -51,7 +52,9 @@ AS
 
    DECLARE @tShippLabel    VariableTable
    DECLARE @tPrtInvoice    VariableTable
-   DECLARE @tPrtInvoice01  VariableTable
+   DECLARE @cNewPprPrinter NVARCHAR(20)
+   DECLARE @curInvoice     CURSOR
+   DECLARE @cPrtInvoiceCfg NVARCHAR( 20)
    
    SELECT @cLabelPrinter = Printer,
           @cPaperPrinter = Printer_Paper,
@@ -75,7 +78,7 @@ AS
          IF @nExpectedQty > @nPackedQty
             GOTO Quit
 
-         SET @cShippLabel = rdt.RDTGetConfig( @nFunc, 'SHIPPLABEL', @cStorerkey)  
+         SET @cShippLabel = rdt.RDTGetConfig( @nFunc, 'SHIPPLBL', @cStorerkey)  
          IF @cShippLabel = '0'  
             SET @cShippLabel = ''  
 
@@ -113,46 +116,58 @@ AS
             END  
          END
 
-         SET @cPrtInvoice = rdt.RDTGetConfig( @nFunc, 'PrtInvoice', @cStorerkey)  
-         IF @cPrtInvoice = '0'  
-            SET @cPrtInvoice = ''  
+         SELECT @cNewPprPrinter = code
+         FROM  codelkup WITH (NOLOCK) 
+         where storerkey=@cStorerKey 
+            AND listname='PRTDefPDF'
+            AND code2= @cFacility
 
-         IF @cPrtInvoice <> ''
+         SET @curInvoice = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
+         SELECT ConfigKey
+         FROM rdt.StorerConfig WITH (NOLOCK)
+         WHERE Function_ID = @nFunc
+         AND   StorerKey = @cStorerkey
+         AND   ConfigKey LIKE 'PrtInvoice%'
+         ORDER BY 1
+         OPEN @curInvoice
+         FETCH NEXT FROM @curInvoice INTO @cPrtInvoiceCfg
+         WHILE @@FETCH_STATUS = 0
          BEGIN
-            INSERT INTO @tPrtInvoice (Variable, Value) VALUES ( '@cOrderkey',     @cOrderkey)  
+            SET @cPrtInvoice = rdt.RDTGetConfig( @nFunc, @cPrtInvoiceCfg, @cStorerkey)  
+            IF @cPrtInvoice = '0'  
+               SET @cPrtInvoice = ''  
+
+            IF @cPrtInvoice <> ''
+            BEGIN
+               DELETE FROM @tPrtInvoice
+
+               IF CHARINDEX( 'PDF', @cPrtInvoice) = 0
+               BEGIN
+                  INSERT INTO @tPrtInvoice (Variable, Value) VALUES ( '@cOrderkey',     @cOrderkey)  
            
-            -- Print label  
-            EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, 0, 1, '', @cStorerKey, '', @cPaperPrinter,  
-               @cPrtInvoice, -- Report type  
-               @tPrtInvoice, -- Report params  
-               'rdt_840ExtPrint19',   
-               @nErrNo  OUTPUT,  
-               @cErrMsg OUTPUT  
-         END
-
-         SET @cPrtInvoice01 = rdt.RDTGetConfig( @nFunc, 'PrtInvoice01', @cStorerkey)  
-         IF @cPrtInvoice01 = '0'  
-            SET @cPrtInvoice01 = ''  
-
-         IF @cPrtInvoice01 <> ''
-         BEGIN
-            DECLARE @cNewPprPrinter NVARCHAR(20)
-
-            SELECT @cNewPprPrinter = code
-            FROM  codelkup WITH (NOLOCK) 
-            where storerkey=@cStorerKey 
-               AND listname='PRTDefPDF'
-               AND code2= @cFacility
-
-            INSERT INTO @tPrtInvoice01 (Variable, Value) VALUES ( '@cOrderkey',     @cOrderkey)  
+                  -- Print label  
+                  EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, 0, 1, '', @cStorerKey, '', @cPaperPrinter,  
+                     @cPrtInvoice, -- Report type  
+                     @tPrtInvoice, -- Report params  
+                     'rdt_840ExtPrint19',   
+                     @nErrNo  OUTPUT,  
+                     @cErrMsg OUTPUT  
+               END
+               ELSE
+               BEGIN
+                  INSERT INTO @tPrtInvoice (Variable, Value) VALUES ( '@cOrderkey',     @cOrderkey)  
            
-            -- Print label  
-            EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, 0, 1, '', @cStorerKey, '', @cNewPprPrinter,  
-               @cPrtInvoice01, -- Report type  
-               @tPrtInvoice01, -- Report params  
-               'rdt_840ExtPrint19',   
-               @nErrNo  OUTPUT,  
-               @cErrMsg OUTPUT  
+                  -- Print label  
+                  EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, 0, 1, '', @cStorerKey, '', @cNewPprPrinter,  
+                     @cPrtInvoice, -- Report type  
+                     @tPrtInvoice, -- Report params  
+                     'rdt_840ExtPrint19',   
+                     @nErrNo  OUTPUT,  
+                     @cErrMsg OUTPUT  
+               END
+            END
+
+         	FETCH NEXT FROM @curInvoice INTO @cPrtInvoiceCfg
          END
       END   -- IF @nStep = 4
    END   -- @nInputKey = 1
