@@ -1,8 +1,5 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_Synchronize_WM_Users]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_Synchronize_WM_Users]
-GO
-
+ 
+/****** Object:  StoredProcedure [WM].[lsp_Synchronize_WM_Users]    Script Date: 5/18/2023 6:40:10 AM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -19,17 +16,18 @@ GO
 /* 03-05-2018  1.0  TLTING      enlarge variable length                 */  
 /* 14-08-2018  1.1  TLTING01    bug fix                                 */ 
 /* 10-11-2020  1.2  SHONG       Create User to Archive DB               */
+/* 18-05-2023  1.3  TLTING      Set ANSI ON                             */
 /************************************************************************/
-CREATE PROCEDURE [WM].[lsp_Synchronize_WM_Users]
+Create OR ALTER   PROCEDURE [WM].[lsp_Synchronize_WM_Users]
    @c_User_Name       NVARCHAR(100) = '',   
    @n_Err             INT ='' OUTPUT,    
    @c_ErrMsg          NVARCHAR(125) = '' OUTPUT  
 AS  
 BEGIN  
    SET NOCOUNT ON  
-   SET QUOTED_IDENTIFIER OFF  
-   SET ANSI_NULLS OFF  
-   SET CONCAT_NULL_YIELDS_NULL OFF  
+   --SET QUOTED_IDENTIFIER OFF  
+   --SET ANSI_NULLS OFF  
+   --SET CONCAT_NULL_YIELDS_NULL OFF  
   
    DECLARE @n_USER_TYPE                  INT  
           ,@c_LDAP_DOMAIN                NVARCHAR(50)  
@@ -142,8 +140,11 @@ BEGIN
             EXEC sp_executesql @c_SQL              
          END CATCH
       END 
-            
-
+      IF @n_SYNC_ERROR_NO <> 0
+	  BEGIN
+			PRINT @c_SQL
+			PRINT @c_SYNC_ERROR_MESSAGE
+		END
       --SET @c_SQL = 'EXEC sp_addrolemember N''NSQL'', N''' + @c_WMS_USER_NAME + ''''  
       --EXEC sp_executesql @c_SQL                   
            
@@ -205,6 +206,4 @@ BEGIN
 END -- Procedure   
                                  
 --nsprights
-GO
-GRANT EXECUTE ON [WM].[lsp_Synchronize_WM_Users] TO nSQL 
 GO
