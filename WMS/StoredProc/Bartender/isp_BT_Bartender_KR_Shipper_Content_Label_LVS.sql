@@ -250,7 +250,7 @@ DECLARE
      CREATE TABLE [#CartonContent] (                       
       [ID]          [INT] IDENTITY(1,1) NOT NULL,            
       [OrderKey]    [NVARCHAR] (10) NULL,                                      
-      [ORDSku]      [NCHAR] (20) NULL,    
+      [ORDSku]      [NCHAR] (40) NULL,    
       [SDESCR]      [NVARCHAR](60) NULL,                             
       [TTLPICKQTY]  [INT] NULL,            
       [Retrieve]    [NVARCHAR] (1) default 'N')                 
