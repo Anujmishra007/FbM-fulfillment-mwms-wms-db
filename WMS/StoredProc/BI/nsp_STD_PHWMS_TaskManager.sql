@@ -16,6 +16,8 @@ CREATE OR ALTER   PROC [BI].[nsp_STD_PHWMS_TaskManager] --NAME OF SP
 			, @PARAM_GENERIC_ADDDATEFROM DATETIME		
 			, @PARAM_GENERIC_ADDDATETO DATETIME			
 			, @PARAM_GENERIC_TASKTYPE NVARCHAR (500)		-- EXTEND CHARACTERS DUE TO MULTIPLE VALUE TYPE
+			, @PARAM_TMREPORT_STATUS NVARCHAR (100) -- EXTEND CHARACTERS DUE TO MULTIPLE VALUE TYPE
+
 AS
 BEGIN
  SET NOCOUNT ON;  -- keeps the output generated to a minimum 
@@ -27,6 +29,7 @@ BEGIN
 		SET @PARAM_GENERIC_StorerKey = ''
 
 	SET @PARAM_GENERIC_TASKTYPE = REPLACE(REPLACE (TRANSLATE (@PARAM_GENERIC_TASKTYPE,'[ ]',''' '''),'''',''),', ',''',''')
+	SET @PARAM_TMREPORT_STATUS = REPLACE(REPLACE (TRANSLATE (@PARAM_TMREPORT_STATUS,'[ ]',''' '''),'''',''),', ',''',''')
 
    DECLARE @Debug	BIT = 0
 		 , @LogId   INT
@@ -36,6 +39,7 @@ BEGIN
        , @cParamIn  NVARCHAR(4000)= CONCAT('{ "PARAM_GENERIC_StorerKey":"'    ,@PARAM_GENERIC_StorerKey,'"'
                                     , ', "PARAM_GENERIC_FACILITY":"'    ,@PARAM_GENERIC_FACILITY,'"'
 									         , ', "PARAM_GENERIC_TASKTYPE":"'    ,@PARAM_GENERIC_TASKTYPE,'"'
+									         , ', "PARAM_TMREPORT_STATUS":"'    ,@PARAM_TMREPORT_STATUS,'"'
                                     , ', "PARAM_GENERIC_ADDDATEFROM":"',CONVERT(NVARCHAR(19),@PARAM_GENERIC_ADDDATEFROM,121),'"'
                                     , ', "PARAM_GENERIC_ADDDATETO":"',CONVERT(NVARCHAR(19),@PARAM_GENERIC_ADDDATETO,121),'"'
                                     , ' }')
@@ -138,6 +142,7 @@ WHERE
 AND '''+CONVERT(NVARCHAR(19),@PARAM_GENERIC_ADDDATETO	,121)+''') 
 AND T.Storerkey = '''+@Param_Generic_Storerkey+'''
 AND T.TaskType IN ('''+@PARAM_GENERIC_TASKTYPE+''')
+AND T.STATUS IN ('''+@PARAM_TMREPORT_STATUS+''')
 AND L.Facility= '''+@PARAM_GENERIC_FACILITY+''')
 '
 SET @stmt = CONCAT(@stmt , '
