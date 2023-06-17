@@ -2,7 +2,7 @@
 --rdt_760ExtUpdSP02
 -- 98501 - 98550
 
-exec rdt.rdtDropMsg 98501 - 98550
+exec rdt.rdtDropMsg 98501 , 98550
 -- **********************************************
 GO
 DECLARE @nFunc INT

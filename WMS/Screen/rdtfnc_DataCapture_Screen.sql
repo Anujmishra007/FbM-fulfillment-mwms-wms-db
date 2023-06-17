@@ -1,7 +1,7 @@
 -- 1020 = ?? screen
 DELETE rdt.RDTScn WHERE Scn = 1020 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 1020, 'ENG',
-    @cLine01 = 'LOC: %10iV_LOC'
+    @cLine01 = 'LOC: %10iV_Loc'
    ,@cLine02 = 'ID:'
    ,@cLine03 = '%18iV_ID'
    ,@cLine04 = ''
