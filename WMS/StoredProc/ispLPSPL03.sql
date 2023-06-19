@@ -23,7 +23,7 @@ GO
 /*                                                                      */
 /* Called By:  RMC Split Load Plan                                      */
 /*                                                                      */
-/* GitLab Version: 1.1                                                  */
+/* GitLab Version: 1.2                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -33,6 +33,8 @@ GO
 /* Date        Author   Ver  Purposes                                   */
 /* 24-Jun-2022 WLChooi  1.0  DevOps Combine Script                      */
 /* 14-Jul-2022 WLChooi  1.1  Logic Fix - No need split if all PICK(WL01)*/
+/* 15-Jun-2023 WLChooi  1.2  JSM-156769 Fix missing loadkey in BuildLoad*/
+/*                           screen (WL02)                              */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispLPSPL03]
       @c_LoadKey NVARCHAR(10),
@@ -94,6 +96,7 @@ BEGIN
          , @c_NewBatchno         NVARCHAR(10)
          , @n_TotalOrderCnt      INT
          , @n_TotalOrderQty      INT
+         , @n_TotalLoadCnt       INT   --WL02
 
    CREATE TABLE #TMP_LocType (
       Loadkey   NVARCHAR(10),
@@ -472,16 +475,16 @@ BEGIN
                   ,LOADPLAN.Load_Userdef2            = OL.Load_Userdef2           
                   ,LOADPLAN.lpuserdefdate01          = OL.lpuserdefdate01         
                   ,LOADPLAN.FinalizeFlag             = OL.FinalizeFlag            
-                  ,LOADPLAN.UserDefine01             = CASE WHEN ISNULL(@c_Field01,'') <> '' THEN @c_Field01 ELSE OL.UserDefine01 END            
-                  ,LOADPLAN.UserDefine02             = CASE WHEN ISNULL(@c_Field02,'') <> '' THEN @c_Field02 ELSE OL.UserDefine02 END            
-                  ,LOADPLAN.UserDefine03             = CASE WHEN ISNULL(@c_Field03,'') <> '' THEN @c_Field03 ELSE OL.UserDefine03 END            
-                  ,LOADPLAN.UserDefine04             = CASE WHEN ISNULL(@c_Field04,'') <> '' THEN @c_Field04 ELSE OL.UserDefine04 END            
-                  ,LOADPLAN.UserDefine05             = CASE WHEN ISNULL(@c_Field05,'') <> '' THEN @c_Field05 ELSE OL.UserDefine05 END            
-                  ,LOADPLAN.UserDefine06             = CASE WHEN ISNULL(@c_Field06,'') <> '' THEN @c_Field06 ELSE OL.UserDefine06 END            
-                  ,LOADPLAN.UserDefine07             = CASE WHEN ISNULL(@c_Field07,'') <> '' THEN @c_Field07 ELSE OL.UserDefine07 END            
-                  ,LOADPLAN.UserDefine08             = CASE WHEN ISNULL(@c_Field08,'') <> '' THEN @c_Field08 ELSE OL.UserDefine08 END            
-                  ,LOADPLAN.UserDefine09             = CASE WHEN ISNULL(@c_Field09,'') <> '' THEN @c_Field09 ELSE OL.UserDefine09 END            
-                  ,LOADPLAN.UserDefine10             = CASE WHEN ISNULL(@c_Field10,'') <> '' THEN @c_Field10 ELSE OL.UserDefine10 END   
+                  ,LOADPLAN.UserDefine01             = OL.UserDefine01   --WL02            
+                  ,LOADPLAN.UserDefine02             = OL.UserDefine02   --WL02            
+                  ,LOADPLAN.UserDefine03             = OL.UserDefine03   --WL02            
+                  ,LOADPLAN.UserDefine04             = OL.UserDefine04   --WL02            
+                  ,LOADPLAN.UserDefine05             = OL.UserDefine05   --WL02            
+                  ,LOADPLAN.UserDefine06             = OL.UserDefine06   --WL02            
+                  ,LOADPLAN.UserDefine07             = OL.UserDefine07   --WL02            
+                  ,LOADPLAN.UserDefine08             = OL.UserDefine08   --WL02            
+                  ,LOADPLAN.UserDefine09             = OL.UserDefine09   --WL02            
+                  ,LOADPLAN.UserDefine10             = OL.UserDefine10   --WL02   
                   ,LOADPLAN.ExternLoadKey            = @c_Loadkey
                   ,LOADPLAN.Priority                 = OL.Priority                
                   ,LOADPLAN.DispatchPalletPickMethod = OL.DispatchPalletPickMethod
@@ -548,16 +551,16 @@ BEGIN
              ,LOADPLAN.Load_Userdef2            = OL.Load_Userdef2           
              ,LOADPLAN.lpuserdefdate01          = OL.lpuserdefdate01         
              ,LOADPLAN.FinalizeFlag             = OL.FinalizeFlag            
-             ,LOADPLAN.UserDefine01             = CASE WHEN ISNULL(@c_Field01,'') <> '' THEN @c_Field01 ELSE OL.UserDefine01 END            
-             ,LOADPLAN.UserDefine02             = CASE WHEN ISNULL(@c_Field02,'') <> '' THEN @c_Field02 ELSE OL.UserDefine02 END            
-             ,LOADPLAN.UserDefine03             = CASE WHEN ISNULL(@c_Field03,'') <> '' THEN @c_Field03 ELSE OL.UserDefine03 END            
-             ,LOADPLAN.UserDefine04             = CASE WHEN ISNULL(@c_Field04,'') <> '' THEN @c_Field04 ELSE OL.UserDefine04 END            
-             ,LOADPLAN.UserDefine05             = CASE WHEN ISNULL(@c_Field05,'') <> '' THEN @c_Field05 ELSE OL.UserDefine05 END            
-             ,LOADPLAN.UserDefine06             = CASE WHEN ISNULL(@c_Field06,'') <> '' THEN @c_Field06 ELSE OL.UserDefine06 END            
-             ,LOADPLAN.UserDefine07             = CASE WHEN ISNULL(@c_Field07,'') <> '' THEN @c_Field07 ELSE OL.UserDefine07 END            
-             ,LOADPLAN.UserDefine08             = CASE WHEN ISNULL(@c_Field08,'') <> '' THEN @c_Field08 ELSE OL.UserDefine08 END            
-             ,LOADPLAN.UserDefine09             = CASE WHEN ISNULL(@c_Field09,'') <> '' THEN @c_Field09 ELSE OL.UserDefine09 END            
-             ,LOADPLAN.UserDefine10             = CASE WHEN ISNULL(@c_Field10,'') <> '' THEN @c_Field10 ELSE OL.UserDefine10 END   
+             ,LOADPLAN.UserDefine01             = OL.UserDefine01   --WL02            
+             ,LOADPLAN.UserDefine02             = OL.UserDefine02   --WL02            
+             ,LOADPLAN.UserDefine03             = OL.UserDefine03   --WL02            
+             ,LOADPLAN.UserDefine04             = OL.UserDefine04   --WL02            
+             ,LOADPLAN.UserDefine05             = OL.UserDefine05   --WL02            
+             ,LOADPLAN.UserDefine06             = OL.UserDefine06   --WL02            
+             ,LOADPLAN.UserDefine07             = OL.UserDefine07   --WL02            
+             ,LOADPLAN.UserDefine08             = OL.UserDefine08   --WL02            
+             ,LOADPLAN.UserDefine09             = OL.UserDefine09   --WL02            
+             ,LOADPLAN.UserDefine10             = OL.UserDefine10   --WL02   
              ,LOADPLAN.ExternLoadKey            = @c_Loadkey
              ,LOADPLAN.Priority                 = OL.Priority                
              ,LOADPLAN.DispatchPalletPickMethod = OL.DispatchPalletPickMethod
@@ -611,14 +614,46 @@ BEGIN
    --END
    --WL01 E
 
-   --Delete Parent Load from BuildLoadLog and BuildLoadDetailLog table AND add Child load into these 2 tables
+   --Update BuildLoadLog and BuildLoadDetailLog table
    IF (@n_continue = 1 OR @n_continue = 2) AND EXISTS (SELECT 1 FROM #TMP_LocType TLT WHERE TLT.LocType = 'PICK')
-   BEGIN
+   BEGIN 
+      --WL02 S
+      --Get Batchno for parent Loadkey
       SELECT @c_Batchno = BatchNo
       FROM BuildLoadDetailLog (NOLOCK)
       WHERE Loadkey = @c_LoadKey AND Storerkey = @c_Storerkey
 
+      --Save BuildLoadDetailLog for parent Loadkey
+      SELECT TOP 1
+             Storerkey, Loadkey, Duration, TotalOrderCnt, TotalOrderQty,
+             UDF01, UDF02, UDF03, UDF04, UDF05,
+             Addwho, Adddate, EditWho, EditDate
+      INTO #TMP_BuildLoadDetailLog
+      FROM BuildLoadDetailLog (NOLOCK)
+      WHERE BatchNo = @c_Batchno 
+      AND Storerkey = @c_Storerkey
+      AND Loadkey = @c_Loadkey
+
+      --Delete Parent Load from BuildLoadDetailLog table
+      DELETE FROM BuildLoadDetailLog
+      WHERE BatchNo = @c_Batchno 
+      AND Storerkey = @c_Storerkey
+      AND Loadkey = @c_Loadkey
+
+      --Get TotalLoadCnt for current BatchNo after removing parent load
+      SELECT @n_TotalLoadCnt = COUNT(DISTINCT Loadkey)
+      FROM BuildLoadDetailLog (NOLOCK)
+      WHERE BatchNo = @c_Batchno 
+      AND Storerkey = @c_Storerkey
+
+      UPDATE BuildLoadLog WITH (ROWLOCK)
+      SET TotalLoadCnt = @n_TotalLoadCnt
+        , UDF05 = 'ispLPSPL03'
+      WHERE BatchNo = @c_Batchno 
+      AND Storerkey = @c_Storerkey 
+
       --Store Parent BuildLoadLog and BuildLoadDetailLog Load Info into temp table
+      /*
       SELECT Facility, Storerkey, BuildParmGroup, BuildParmCode, BuildParmString, Duration, TotalLoadCnt,
              UDF01, UDF02, UDF03, UDF04, UDF05, [Status],
              Addwho, Adddate, EditWho, EditDate
@@ -633,7 +668,7 @@ BEGIN
       INTO #TMP_BuildLoadDetailLog
       FROM BuildLoadDetailLog (NOLOCK)
       WHERE BatchNo = @c_Batchno
-
+      
       --Delete Parent Load from BuildLoadLog and BuildLoadDetailLog table
       DELETE FROM BuildLoadDetailLog
       WHERE BatchNo = @c_Batchno AND Storerkey = @c_Storerkey
@@ -655,7 +690,8 @@ BEGIN
          SELECT @n_continue = 3
          SELECT @n_err = 61565
          SELECT @c_errmsg='NSQL'+CONVERT(CHAR(5),@n_err)+': Delete BuildLoadLog Table Failed. (ispLPSPL03)'
-      END   
+      END*/
+      --WL02 E
 
       DECLARE CUR_LocType CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT DISTINCT Loadkey, LocType
@@ -667,26 +703,43 @@ BEGIN
 
       WHILE @@FETCH_STATUS <> -1
       BEGIN
-         INSERT INTO BuildLoadLog (Facility, Storerkey, BuildParmGroup, BuildParmCode, BuildParmString, Duration, TotalLoadCnt,
-                                   UDF01, UDF02, UDF03, UDF04, UDF05, Status,
-                                   Addwho, Adddate, EditWho, EditDate)
-         SELECT Facility, Storerkey, BuildParmGroup, BuildParmCode,
-                BuildParmString, Duration, TotalLoadCnt,
-                UDF01, UDF02, UDF03, UDF04, 
-                CASE WHEN @c_GetLocType = 'PICK' THEN 'ispLPSPL03_PICK' ELSE 'ispLPSPL03' END, 
-                [Status],
-                Addwho, Adddate, EditWho, EditDate
-         FROM #TMP_BuildLoadLog
+         --1 Load 1 BatchNo
+         SET @c_NewBatchno = ''   --WL02
 
-         SELECT @c_NewBatchno = SCOPE_IDENTITY()
-
-         SET @n_err = @@ERROR
-         IF @n_err <> 0  
+         --For new load - need to insert BuildLoadLog
+         IF @c_GetLocType = 'PICK'   --WL02
          BEGIN
-            SELECT @n_continue = 3
-            SELECT @n_err = 61562
-            SELECT @c_errmsg='NSQL'+CONVERT(CHAR(5),@n_err)+': INSERT BuildLoadLog Table Failed. (ispLPSPL03)'
-         END   
+            INSERT INTO BuildLoadLog (Facility, Storerkey, BuildParmGroup, BuildParmCode, BuildParmString, Duration, TotalLoadCnt,
+                                      UDF01, UDF02, UDF03, UDF04, UDF05, Status,
+                                      Addwho, Adddate, EditWho, EditDate)
+            SELECT TOP 1   --WL02
+                   Facility, Storerkey, BuildParmGroup, BuildParmCode,
+                   BuildParmString, Duration, 1,   --WL02
+                   UDF01, UDF02, UDF03, UDF04, 
+                   'ispLPSPL03_PICK',   --WL02 
+                   [Status],
+                   Addwho, Adddate, EditWho, EditDate
+            FROM BuildLoadLog (NOLOCK)     --WL02
+            WHERE BatchNo = @c_Batchno     --WL02
+            AND Storerkey = @c_Storerkey   --WL02
+
+            SELECT @c_NewBatchno = SCOPE_IDENTITY()
+
+            SET @n_err = @@ERROR
+            IF @n_err <> 0  
+            BEGIN
+               SELECT @n_continue = 3
+               SELECT @n_err = 61562
+               SELECT @c_errmsg='NSQL'+CONVERT(CHAR(5),@n_err)+': INSERT BuildLoadLog Table Failed. (ispLPSPL03)'
+            END   
+         END
+
+         --WL02 S
+         IF @c_NewBatchno = ''
+         BEGIN
+            SET @c_NewBatchno = @c_Batchno
+         END
+         --WL02 E
 
          SELECT @n_TotalOrderCnt = OrderCnt
          FROM Loadplan (NOLOCK)
@@ -786,6 +839,10 @@ RETURN_SP:
 
    IF OBJECT_ID('tempdb..#TMP_BuildLoadLog') IS NOT NULL
       DROP TABLE #TMP_BuildLoadLog
+
+   --WL02
+   IF OBJECT_ID('tempdb..#TMP_LocType') IS NOT NULL  
+      DROP TABLE #TMP_LocType
 
    IF @n_continue=3 -- Error Occured - Process And Return
    BEGIN
