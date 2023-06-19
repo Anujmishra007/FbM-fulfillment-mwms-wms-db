@@ -51,7 +51,11 @@ BEGIN
    BEGIN
       IF @nAfterStep = 5 -- SKU, QTY
       BEGIN
-         SELECT @cExtendedInfo=@cReceiptKey+@cToID+@cLottable03
+         SELECT @cExtendedInfo= SUM(beforereceivedqty)
+         FROM RECeiptdetail (NOLOCK)
+         WHERE receiptkey =@cReceiptKey
+            AND TOID = @cToID
+            AND Lottable03 = @cLottable03
       END
    END
 END
