@@ -9,6 +9,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author    Purposes                                   */
 /* 23-Mar-2023 1.0  yeekung   WMS-21873 Created                         */
+/* 02-Jun-2023 1.1  yeekung   WMS-22683 Add loc (yeekung01)             */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_RCM_ORD_MNC] (
@@ -140,6 +141,7 @@ BEGIN
                WHERE OrderKey = @c_OrderKey
                   AND OrderLineNumber = @cOrderLineNumber
                   AND SKU = @cSKU
+                  AND Loc = @cLOC
 
                -- Calc QTY for PickDetail (smallest of the 3 QTY)
                SET @nQTY = @nQTY_Log
