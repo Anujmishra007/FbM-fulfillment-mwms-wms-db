@@ -17,7 +17,7 @@ GO
 /*                                                                      */
 /* Called By: ntrMBOLHeaderUpdate                                       */
 /*                                                                      */
-/* PVCS Version: 1.5                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -28,6 +28,7 @@ GO
 /* Date         Author  Ver. Purposes                                   */
 /* 01-Dec-2022  CSCHONG  1.0  Devops Scripts Combine                    */
 /* 25-Apr-2023  CSCHONG  1.1  WMs-21178 fix auto generate asn issue(CS01)*/
+/* 15-Jun-2023  WLChooi  1.2  WMS-22835 - Modify Column (WL01)          */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[ispPopulateTOASN_hasbro]
@@ -193,8 +194,8 @@ BEGIN
 
             IF @b_success = 1
             BEGIN
-               INSERT INTO RECEIPT (ReceiptKey, ExternReceiptKey, StorerKey, ReceiptGroup, Facility,RecType,DocType, carriername, UserDefine01,UserDefine02,userdefine10,POKey)
-               VALUES (@c_NewReceiptKey, @c_ExternReceiptKey, @c_getStorerkey, '',@c_facility,@c_Rectype,'A','','','','',@c_pokey)
+               INSERT INTO RECEIPT (ReceiptKey, ExternReceiptKey, StorerKey, ReceiptGroup, Facility,RecType,DocType, carriername, UserDefine01,UserDefine02,userdefine10,POKey, MBOLKey)   --WL01
+               VALUES (@c_NewReceiptKey, @c_ExternReceiptKey, @c_getStorerkey, '',@c_facility,@c_Rectype,'A','','','','','',@c_Getmbolkey)   --WL01
 
                   SET @n_err = @@Error
 
@@ -266,22 +267,15 @@ BEGIN
          IF @n_QtyReceived IS NULL
             SELECT @n_QtyReceived = 0
 
-         INSERT INTO RECEIPTDETAIL (ReceiptKey,          ReceiptLineNumber,   ExternReceiptKey,ExternLineNo,
-                                    StorerKey,           SKU,AltSku,POKey,ExternPoKey,
-                                    QtyExpected,         QtyReceived,UserDefine01,
-                                    ToLoc,
-                                    Lottable01,          Lottable02,          Lottable03,       Lottable04,       Lottable05,
-                                    Lottable06,          Lottable07,          Lottable08,       Lottable09,       Lottable10,
-                                    Lottable11,          Lottable12,          Lottable13,       Lottable14,       Lottable15,
-                                    BeforeReceivedQty,   Toid,                Tolot,            Channel,          Packkey,  UOM)
-                     VALUES        (@c_NewReceiptKey,    @c_ReceiptLine,      @c_ExternReceiptKey,@c_ODExtLineNo,
-                                    @c_getStorerkey,        @c_SKU,@c_AltSKU,@c_Getmbolkey,@c_OrderKey,
-                                    ISNULL(@n_QtyReceived,0),   0,@c_Dropid,
-                                    '',
-                                    '',       '',       @c_Lottable03,    NULL,    NULL,
-                                    '',       @c_Lottable07,       @c_Lottable08,    '',    '',
-                                    '',       '',       NULL,    NULL,    NULL,
-                                    ISNULL(@n_QtyReceived,0), '',        '',         '',       @c_PackKey,@c_UOM)
+         INSERT INTO RECEIPTDETAIL (ReceiptKey, ReceiptLineNumber, ExternReceiptKey, ExternLineNo, StorerKey, Sku, AltSku, POKey
+                                  , ExternPoKey, QtyExpected, QtyReceived, UserDefine01, ToLoc, Lottable01, Lottable02
+                                  , Lottable03, Lottable04, Lottable05, Lottable06, Lottable07, Lottable08, Lottable09
+                                  , Lottable10, Lottable11, Lottable12, Lottable13, Lottable14, Lottable15, BeforeReceivedQty
+                                  , ToId, ToLot, Channel, PackKey, UOM)
+         VALUES (@c_NewReceiptKey, @c_ReceiptLine, @c_ExternReceiptKey, @c_ODExtLineNo, @c_getStorerkey, @c_SKU, @c_AltSKU
+               , '', @c_OrderKey, ISNULL(@n_QtyReceived, 0), 0, @c_Dropid, '', '', '', @c_Lottable03, NULL, NULL, ''   --WL01
+               , @c_Lottable07, @c_Lottable08, '', '', '', '', NULL, NULL, NULL, ISNULL(@n_QtyReceived, 0), '', '', ''
+               , @c_PackKey, @c_UOM)
 
          FETCH NEXT FROM PICK_CUR
             INTO @n_QtyReceived, @c_Lottable03,@c_ODExtLineNo,@c_AltSKU,@c_Lottable07, @c_Lottable08,@c_UOM,@c_PackKey,
