@@ -3,60 +3,61 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/******************************************************************************/
-/* Store procedure: rdtfnc_EcomReturn                                         */
-/* Copyright      : LFLogistics                                               */
-/*                                                                            */
-/* Purpose: Ecomm Trade Return                                                */
-/*                                                                            */
-/* Modifications log:                                                         */
-/*                                                                            */
-/* Date         Rev  Author      Purposes                                     */
-/* 2019-11-14   1.0  James       WMS-10952. Created                           */
-/* 2020-02-27   1.1  YeeKung     INC1056974 Fix @cPreToIDLOC  (yeekung01)     */
-/* 2020-03-18   1.2  YeeKung     WMS-12465 Fix the ecom return default loc    */
-/*                               (yeekung02)                                  */
-/* 2020-07-20   1.3  YeeKung     WMS-14241 Add default cursor(yeekung03)      */
-/* 2020-06-17   1.4  Ung         WMS-13555 clean up source                    */
-/*                               Revise ReceiptConfirm_SP                     */
-/*                               Revise Finalize ASN screen                   */
-/*                               Revise CaptureReceiptInfoSP                  */
-/*                               Remove POKey, StorerGroup                    */
-/*                               Change PreToIDScreenSP to PreToIDLOC         */
-/*                               Change ReturnDefaultToLOC to DefaultToLOC    */
-/*                               Add ArriveDate                               */
-/*                               Add RefNo multi columns lookup               */
-/*                               Add RefNoSKULookup                           */
-/*                               Add ExtendedPutawaySP                        */
-/*                               Add AllowOverReceive                         */
-/*                               Add FinalizeASN. Auto option                 */
-/*                               Add AutoReceiveNext                          */
-/* 2020-08-26   1.5  Ung         WMS-14617 Add SKULabel                       */
-/*                               Remove save tran for finalize ASN due to some*/
-/*                               Exceed logic involve cross DB trans          */
-/*                               Default ConditionCode = OK                   */
-/* 2020-09-30   1.6  Ung         WMS-14691 Add DisableToIDField               */
-/*                               Add serial no                                */
-/* 2021-01-04   1.7  Ung         WMS-15939 Add DispStyleColorSize             */
-/* 2021-03-11   1.8  Ung         WMS-16521 Fix RCV QTY not refresh on 1st QTY */
-/* 2021-03-26   1.9  James       WMS-16614 Add StdEventLog to step1 (james01) */
-/* 2021-03-26   2.0  James       WMS-16506 Add check ASNStatus (james02)      */
-/* 2021-04-15   2.1  James       WMS-16668 Add RefNo param to finalize        */
-/*                               sub sp (james03)                             */
-/*                               Add ExtendedInfoSP to step sku               */
-/* 2021-05-06   2.2  James       WMS-16735 Add capture receiptdetail info     */
-/*                               screen (james04)                             */
-/* 2021-05-24   2.3  James       Add AfterStep param into ExtInfoSP (james05) */
-/*                               Remove StdEventLog at step 1                 */
-/* 2021-01-12   2.4  Ung         WMS-15663 Add ConditionCode, SubReasonCode   */
-/* 2021-07-08   2.5  Ung         WMS-17458 Fix ConditionCode, SubReasonCode   */
-/*                               Add ExtendedValidateSP at cond reason screen */
-/* 2022-08-19   2.6  YeeKung     JSM-88504 Fix ExtInfoSP AfterStep (yeekung01)*/
-/* 2022-10-20   2.7  KokHoe      JSM-103402 Initialize Condition Code (kh01)  */ 
-/* 2022-09-23   2.8  YeeKung     WMS-20820 Extended refno length (yeekung02)  */
-/* 2023-04-13   2.9  Ung         WMS-22302 Allow ExtInfoSP at SKU to lottables*/
-/*                               Fix ExtendedInfoSP AfterStep                 */
-/******************************************************************************/
+/***************************************************************************************************/
+/* Store procedure: rdtfnc_EcomReturn                                                              */
+/* Copyright      : LFLogistics                                                                    */
+/*                                                                                                 */
+/* Purpose: Ecomm Trade Return                                                                     */
+/*                                                                                                 */
+/* Modifications log:                                                                              */
+/*                                                                                                 */
+/* Date         Rev  Author      Purposes                                                          */
+/* 2019-11-14   1.0  James       WMS-10952. Created                                                */
+/* 2020-02-27   1.1  YeeKung     INC1056974 Fix @cPreToIDLOC  (yeekung01)                          */
+/* 2020-03-18   1.2  YeeKung     WMS-12465 Fix the ecom return default loc                         */
+/*                               (yeekung02)                                                       */
+/* 2020-07-20   1.3  YeeKung     WMS-14241 Add default cursor(yeekung03)                           */
+/* 2020-06-17   1.4  Ung         WMS-13555 clean up source                                         */
+/*                               Revise ReceiptConfirm_SP                                          */
+/*                               Revise Finalize ASN screen                                        */
+/*                               Revise CaptureReceiptInfoSP                                       */
+/*                               Remove POKey, StorerGroup                                         */
+/*                               Change PreToIDScreenSP to PreToIDLOC                              */
+/*                               Change ReturnDefaultToLOC to DefaultToLOC                         */
+/*                               Add ArriveDate                                                    */
+/*                               Add RefNo multi columns lookup                                    */
+/*                               Add RefNoSKULookup                                                */
+/*                               Add ExtendedPutawaySP                                             */
+/*                               Add AllowOverReceive                                              */
+/*                               Add FinalizeASN. Auto option                                      */
+/*                               Add AutoReceiveNext                                               */
+/* 2020-08-26   1.5  Ung         WMS-14617 Add SKULabel                                            */
+/*                               Remove save tran for finalize ASN due to some                     */
+/*                               Exceed logic involve cross DB trans                               */
+/*                               Default ConditionCode = OK                                        */
+/* 2020-09-30   1.6  Ung         WMS-14691 Add DisableToIDField                                    */
+/*                               Add serial no                                                     */
+/* 2021-01-04   1.7  Ung         WMS-15939 Add DispStyleColorSize                                  */
+/* 2021-03-11   1.8  Ung         WMS-16521 Fix RCV QTY not refresh on 1st QTY                      */
+/* 2021-03-26   1.9  James       WMS-16614 Add StdEventLog to step1 (james01)                      */
+/* 2021-03-26   2.0  James       WMS-16506 Add check ASNStatus (james02)                           */
+/* 2021-04-15   2.1  James       WMS-16668 Add RefNo param to finalize                             */
+/*                               sub sp (james03)                                                  */
+/*                               Add ExtendedInfoSP to step sku                                    */
+/* 2021-05-06   2.2  James       WMS-16735 Add capture receiptdetail info                          */
+/*                               screen (james04)                                                  */
+/* 2021-05-24   2.3  James       Add AfterStep param into ExtInfoSP (james05)                      */
+/*                               Remove StdEventLog at step 1                                      */
+/* 2021-01-12   2.4  Ung         WMS-15663 Add ConditionCode, SubReasonCode                        */
+/* 2021-07-08   2.5  Ung         WMS-17458 Fix ConditionCode, SubReasonCode                        */
+/*                               Add ExtendedValidateSP at cond reason screen                      */
+/* 2022-08-19   2.6  YeeKung     JSM-88504 Fix ExtInfoSP AfterStep (yeekung01)                     */
+/* 2022-10-20   2.7  KokHoe      JSM-103402 Initialize Condition Code (kh01)                       */ 
+/* 2022-09-23   2.8  YeeKung     WMS-20820 Extended refno length (yeekung02)                       */
+/* 2023-04-13   2.9  Ung         WMS-22302 Allow ExtInfoSP at SKU to lottables                     */
+/*                               Fix ExtendedInfoSP AfterStep                                      */
+/* 2023-03-24   3.0  Ung         WMS-22017 Add RefNoSKULookup to FinalizeASN screen                */
+/***************************************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_EcomReturn](
    @nMobile    INT,
    @nErrNo     INT           OUTPUT,
@@ -885,7 +886,7 @@ BEGIN
                '@cExtendedInfo NVARCHAR( 20) OUTPUT '
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep_ASNRefNo, @nStep, @nInputKey, @cFacility, @cStorerKey,  
+               @nMobile, @nFunc, @cLangCode, @nStep_ASNRefNo, @nStep, @nInputKey, @cFacility, @cStorerKey,
                @cReceiptKey, @cRefNo, @cID, @cLOC, @cSKU, @nQTY,
                @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
                @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
@@ -1059,7 +1060,7 @@ BEGIN
                '@cExtendedInfo NVARCHAR( 20) OUTPUT '
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep_CaptureData, @nStep, @nInputKey, @cFacility, @cStorerKey,  
+               @nMobile, @nFunc, @cLangCode, @nStep_CaptureData, @nStep, @nInputKey, @cFacility, @cStorerKey,
                @cReceiptKey, @cRefNo, @cID, @cLOC, @cSKU, @nQTY,
                @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
                @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
@@ -3680,14 +3681,14 @@ BEGIN
          END
       END
 
+      -- Handling transaction
+      SET @nTranCount = @@TRANCOUNT
+      BEGIN TRAN  -- Begin our own transaction
+      -- Cross DB trans will hit "Cannot promote the transaction to a distributed transaction because there is an active save point in this transaction."
+      -- SAVE TRAN Step_FinalizeASN -- For rollback or commit only our own transaction
+
       IF @cOption = '1' -- Yes
       BEGIN
-         -- Handling transaction
-         SET @nTranCount = @@TRANCOUNT
-         BEGIN TRAN  -- Begin our own transaction
-         -- Cross DB trans will hit "Cannot promote the transaction to a distributed transaction because there is an active save point in this transaction."
-         -- SAVE TRAN Step_FinalizeASN -- For rollback or commit only our own transaction
-
          -- Finalize ASN
          EXEC rdt.rdt_EcomReturn_Finalize
             @nFunc         = @nFunc,
@@ -3710,177 +3711,131 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
             GOTO Quit
          END
-
-         -- Extended update
-         IF @cExtendedUpdateSP <> ''
-         BEGIN
-            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
-            BEGIN
-               SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
-                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
-                  ' @cReceiptKey, @cRefNo, @cID, @cLOC, @cSKU, @nQTY, ' +
-                  ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
-                  ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
-                  ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
-                  ' @cData1, @cData2, @cData3, @cData4, @cData5, @cOption, @dArriveDate, ' +
-                  ' @tExtUpdateVar, @nErrNo OUTPUT, @cErrMsg OUTPUT '
-               SET @cSQLParam =
-                  '@nMobile       INT,           ' +
-                  '@nFunc         INT,           ' +
-                  '@cLangCode     NVARCHAR( 3),  ' +
-                  '@nStep         INT,           ' +
-                  '@nInputKey     INT,           ' +
-                  '@cFacility     NVARCHAR( 5),  ' +
-                  '@cStorerKey    NVARCHAR( 15), ' +
-                  '@cReceiptKey   NVARCHAR( 10), ' +
-                  '@cRefNo        NVARCHAR( 60), ' +
-                  '@cID           NVARCHAR( 18), ' +
-                  '@cLOC          NVARCHAR( 10), ' +
-                  '@cSKU          NVARCHAR( 20), ' +
-                  '@nQTY          INT,           ' +
-                  '@cLottable01   NVARCHAR( 18), ' +
-                  '@cLottable02   NVARCHAR( 18), ' +
-                  '@cLottable03   NVARCHAR( 18), ' +
-                  '@dLottable04   DATETIME,      ' +
-                  '@dLottable05   DATETIME,      ' +
-                  '@cLottable06   NVARCHAR( 30), ' +
-                  '@cLottable07   NVARCHAR( 30), ' +
-                  '@cLottable08   NVARCHAR( 30), ' +
-                  '@cLottable09   NVARCHAR( 30), ' +
-                  '@cLottable10   NVARCHAR( 30), ' +
-                  '@cLottable11   NVARCHAR( 30), ' +
-                  '@cLottable12   NVARCHAR( 30), ' +
-                  '@dLottable13   DATETIME,      ' +
-                  '@dLottable14   DATETIME,      ' +
-                  '@dLottable15   DATETIME,      ' +
-                  '@cData1        NVARCHAR( 60), ' +
-                  '@cData2        NVARCHAR( 60), ' +
-                  '@cData3        NVARCHAR( 60), ' +
-                  '@cData4        NVARCHAR( 60), ' +
-                  '@cData5        NVARCHAR( 60), ' +
-                  '@cOption       NVARCHAR( 1),  ' +
-                  '@dArriveDate   DATETIME,      ' +
-                  '@tExtUpdateVar VariableTable READONLY, ' +
-                  '@nErrNo        INT           OUTPUT,   ' +
-                  '@cErrMsg       NVARCHAR( 20) OUTPUT    '
-
-               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
-                  @cReceiptKey, @cRefNo, @cID, @cLOC, @cSKU, @nQTY,
-                  @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
-                  @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
-                  @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
-                  @cData1, @cData2, @cData3, @cData4, @cData5, @cOption, @dArriveDate,
-                  @tExtUpdateVar, @nErrNo OUTPUT, @cErrMsg OUTPUT
-
-               IF @nErrNo <> 0
-               BEGIN
-                  ROLLBACK TRAN -- Step_FinalizeASN
-                  WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-                     COMMIT TRAN
-                  GOTO Quit
-               END
-            END
-         END
-
-         COMMIT TRAN -- Step_FinalizeASN
-         WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-            COMMIT TRAN
-
-         -- Prepare next screen var
-         SET @cOutField01 = '' -- @cRefNo
-         SET @cOutField02 = '' -- @cReceiptKey
-
-         EXEC rdt.rdtSetFocusField @nMobile, 1
-
-         -- Go to next screen
-         SET @nScn = @nScn_ASNRefNo
-         SET @nStep = @nStep_ASNRefNo
-
-         GOTO Quit
       END
-
-      IF @cOption = '9' -- No
+      
+      -- Extended update
+      IF @cExtendedUpdateSP <> ''
       BEGIN
-         -- Extended update
-         IF @cExtendedUpdateSP <> ''
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
          BEGIN
-            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+               ' @cReceiptKey, @cRefNo, @cID, @cLOC, @cSKU, @nQTY, ' +
+               ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
+               ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
+               ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
+               ' @cData1, @cData2, @cData3, @cData4, @cData5, @cOption, @dArriveDate, ' +
+               ' @tExtUpdateVar, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+               '@nMobile       INT,           ' +
+               '@nFunc         INT,           ' +
+               '@cLangCode     NVARCHAR( 3),  ' +
+               '@nStep         INT,           ' +
+               '@nInputKey     INT,           ' +
+               '@cFacility     NVARCHAR( 5),  ' +
+               '@cStorerKey    NVARCHAR( 15), ' +
+               '@cReceiptKey   NVARCHAR( 10), ' +
+               '@cRefNo        NVARCHAR( 60), ' +
+               '@cID           NVARCHAR( 18), ' +
+               '@cLOC          NVARCHAR( 10), ' +
+               '@cSKU          NVARCHAR( 20), ' +
+               '@nQTY          INT,           ' +
+               '@cLottable01   NVARCHAR( 18), ' +
+               '@cLottable02   NVARCHAR( 18), ' +
+               '@cLottable03   NVARCHAR( 18), ' +
+               '@dLottable04   DATETIME,      ' +
+               '@dLottable05   DATETIME,      ' +
+               '@cLottable06   NVARCHAR( 30), ' +
+               '@cLottable07   NVARCHAR( 30), ' +
+               '@cLottable08   NVARCHAR( 30), ' +
+               '@cLottable09   NVARCHAR( 30), ' +
+               '@cLottable10   NVARCHAR( 30), ' +
+               '@cLottable11   NVARCHAR( 30), ' +
+               '@cLottable12   NVARCHAR( 30), ' +
+               '@dLottable13   DATETIME,      ' +
+               '@dLottable14   DATETIME,      ' +
+               '@dLottable15   DATETIME,      ' +
+               '@cData1        NVARCHAR( 60), ' +
+               '@cData2        NVARCHAR( 60), ' +
+               '@cData3        NVARCHAR( 60), ' +
+               '@cData4        NVARCHAR( 60), ' +
+               '@cData5        NVARCHAR( 60), ' +
+               '@cOption       NVARCHAR( 1),  ' +
+               '@dArriveDate   DATETIME,      ' +
+               '@tExtUpdateVar VariableTable READONLY, ' +
+               '@nErrNo        INT           OUTPUT,   ' +
+               '@cErrMsg       NVARCHAR( 20) OUTPUT    '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+               @cReceiptKey, @cRefNo, @cID, @cLOC, @cSKU, @nQTY,
+               @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+               @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+               @cData1, @cData2, @cData3, @cData4, @cData5, @cOption, @dArriveDate,
+               @tExtUpdateVar, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
             BEGIN
-               SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
-                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
-                  ' @cReceiptKey, @cRefNo, @cID, @cLOC, @cSKU, @nQTY, ' +
-                  ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
-                  ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
-                  ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
-                  ' @cData1, @cData2, @cData3, @cData4, @cData5, @cOption, @dArriveDate, ' +
-                  ' @tExtUpdateVar, @nErrNo OUTPUT, @cErrMsg OUTPUT '
-               SET @cSQLParam =
-                  '@nMobile       INT,           ' +
-                  '@nFunc         INT,           ' +
-                  '@cLangCode     NVARCHAR( 3),  ' +
-                  '@nStep         INT,           ' +
-                  '@nInputKey     INT,           ' +
-                  '@cFacility     NVARCHAR( 5),  ' +
-                  '@cStorerKey    NVARCHAR( 15), ' +
-                  '@cReceiptKey   NVARCHAR( 10), ' +
-                  '@cRefNo        NVARCHAR( 60), ' +
-                  '@cID           NVARCHAR( 18), ' +
-                  '@cLOC          NVARCHAR( 10), ' +
-                  '@cSKU          NVARCHAR( 20), ' +
-                  '@nQTY          INT,           ' +
-                  '@cLottable01   NVARCHAR( 18), ' +
-                  '@cLottable02   NVARCHAR( 18), ' +
-                  '@cLottable03   NVARCHAR( 18), ' +
-                  '@dLottable04   DATETIME,      ' +
-                  '@dLottable05   DATETIME,      ' +
-                  '@cLottable06   NVARCHAR( 30), ' +
-                  '@cLottable07   NVARCHAR( 30), ' +
-                  '@cLottable08   NVARCHAR( 30), ' +
-                  '@cLottable09   NVARCHAR( 30), ' +
-                  '@cLottable10   NVARCHAR( 30), ' +
-                  '@cLottable11   NVARCHAR( 30), ' +
-                  '@cLottable12   NVARCHAR( 30), ' +
-                  '@dLottable13   DATETIME,      ' +
-                  '@dLottable14   DATETIME,      ' +
-                  '@dLottable15   DATETIME,      ' +
-                  '@cData1        NVARCHAR( 60), ' +
-                  '@cData2        NVARCHAR( 60), ' +
-                  '@cData3        NVARCHAR( 60), ' +
-                  '@cData4        NVARCHAR( 60), ' +
-                  '@cData5        NVARCHAR( 60), ' +
-                  '@cOption       NVARCHAR( 1),  ' +
-                  '@dArriveDate   DATETIME,      ' +
-                  '@tExtUpdateVar VariableTable READONLY, ' +
-                  '@nErrNo        INT           OUTPUT,   ' +
-                  '@cErrMsg       NVARCHAR( 20) OUTPUT    '
-
-               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
-                  @cReceiptKey, @cRefNo, @cID, @cLOC, @cSKU, @nQTY,
-                  @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
-                  @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
-                  @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
-                  @cData1, @cData2, @cData3, @cData4, @cData5, @cOption, @dArriveDate,
-                  @tExtUpdateVar, @nErrNo OUTPUT, @cErrMsg OUTPUT
-
-               IF @nErrNo <> 0
-                  GOTO Step_FinalizeASN_Fail
+               ROLLBACK TRAN -- Step_FinalizeASN
+               WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                  COMMIT TRAN
+               GOTO Quit
             END
          END
-
-         -- Prepare next screen var
-         SET @cOutField01 = '' -- @cRefNo
-         SET @cOutField02 = '' -- @cReceiptKey
-
-         EXEC rdt.rdtSetFocusField @nMobile, 1
-
-         -- Set the entry point
-         SET @nScn = @nScn_ASNRefNo
-         SET @nStep = @nStep_ASNRefNo
-
-         GOTO Quit
       END
+
+      COMMIT TRAN -- Step_FinalizeASN
+      WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+         COMMIT TRAN
+
+      -- Lookup ASN by RefNo + SKU
+      IF @cRefNoSKULookup = '1' AND @cRefNo <> ''
+      BEGIN
+         SET @cReceiptKey = ''
+         SET @nBalQTY = 0
+         EXEC rdt.rdt_EcomReturn_RefNoLookup @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
+            ,@cSKU         = '' -- @cSKU
+            ,@cRefNo       = @cRefNo      OUTPUT
+            ,@cReceiptKey  = @cReceiptKey OUTPUT
+            ,@nBalQTY      = @nBalQTY     OUTPUT
+            ,@nErrNo       = 0  -- @nErrNo      OUTPUT -- ASN could all finalized, returned error
+            ,@cErrMsg      = '' -- @cErrMsg     OUTPUT
+
+         IF @nBalQTY > 0
+         BEGIN
+            -- Get statistic
+            SET @nTotalQTYExp = 0
+            SET @nTotalQTYRcv = 0
+
+            -- Prepare next screen var
+            SET @cOutField01 = @cReceiptKey
+            SET @cOutField02 = @cRefNo
+            SET @cOutField03 = '' -- SKU
+            SET @cOutField04 = '' -- Desc1
+            SET @cOutField05 = '' -- Desc2
+            SET @cOutField06 = CAST( @nTotalQTYExp AS NVARCHAR(10))
+            SET @cOutField07 = CAST( @nTotalQTYRcv AS NVARCHAR(10))
+
+            EXEC rdt.rdtSetFocusField @nMobile, 3 -- SKU
+
+            -- Go to next screen
+            SET @nScn = @nScn_SKU
+            SET @nStep = @nStep_SKU
+
+            GOTO Step_FinalizeASN_Quit
+         END
+      END
+
+      -- Prepare next screen var
+      SET @cOutField01 = '' -- @cRefNo
+      SET @cOutField02 = '' -- @cReceiptKey
+
+      EXEC rdt.rdtSetFocusField @nMobile, 1
+
+      -- Go to next screen
+      SET @nScn = @nScn_ASNRefNo
+      SET @nStep = @nStep_ASNRefNo
    END
 
    IF @nInputKey = 0 -- ESC
@@ -6079,7 +6034,7 @@ BEGIN
       V_String5    = @cReceiptLineNumber,
       V_String7    = @cOption,
       V_String8    = @cCaptureReceiptDetailInfoSP,
-   	  V_String9    = @cConditionCode,
+      V_String9    = @cConditionCode,
       V_String10   = @cSubreasonCode,
 
       V_String16   = @cCaptureConditionReason,
@@ -6113,7 +6068,6 @@ BEGIN
       V_String43   = @cData3,
       V_String44   = @cData4,
       V_String45   = @cData5,
-
 
       V_String46   = @cDtlData1,
       V_String47   = @cDtlData2,
