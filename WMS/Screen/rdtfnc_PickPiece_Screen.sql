@@ -2,6 +2,7 @@
 DELETE rdt.RDTScn WHERE Scn = 4640 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4640, 'ENG'
    ,@cLine01 = 'PSNO: %10i01'
+   ,@cLine13 = '%20d12'    -- WMS-22439
    ,@cLine14 = '%e'
    ,@nFunc = 839
 

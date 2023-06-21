@@ -62,6 +62,8 @@ GO
 /* 2023-05-17   4.8  YeeKung     Fix Extended sp Step (yeekung08)             */
 /* 2023-04-10   4.9  James       WMS-22147 Add V_Barcode to sku step for      */
 /*                               sku input (james11)                          */
+/* 2023-06-19   5.0  YeeKung     WMS-22439 Add Extendedinfo to Scereen 1      */
+/*                               (yeekung08)                                  */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PickPiece] (
@@ -2283,7 +2285,7 @@ BEGIN
             IF @nErrNo <> 0
                GOTO Step_3_Fail
 
-            IF @nStep IN (3,9)
+            IF @nStep IN (1,3,9)
                SET @cOutField12 = @cExtendedInfo
          END
       END

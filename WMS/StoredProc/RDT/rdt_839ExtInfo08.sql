@@ -12,6 +12,7 @@ GO
 /* Date       Rev  Author     Purposes                                  */    
 /* 2021-09-23 1.0  James      WMS-18004. Created                        */ 
 /* 2022-04-20 1.1  YeeKung    WMS-19311 Add Data capture (yeekung01)    */
+/* 2023-05-18 1.2  yeekung    WMS-22439 add step 3                      */
 /************************************************************************/    
     
 CREATE OR ALTER PROC rdt.rdt_839ExtInfo08 (    
@@ -50,6 +51,16 @@ AS
    DECLARE @cECOM_SINGLE_FLAG    NVARCHAR(1) = ''  
    DECLARE @cTempPKZone NVARCHAR( 20) = ''  
    DECLARE @cPKZone     NVARCHAR( 10) = ''  
+   DECLARE @nTtlOrder   INT 
+
+   DECLARE @tPD TABLE   (
+       PickSlipNo    NVARCHAR( 10),
+       OrderKey      NVARCHAR( 10),
+       Counter       INT,
+       TotalCounter  INT,
+       pickqty       INT,
+       sku           NVARCHAR(20)
+   )
      
    SET @cExtendedInfo = ''  
      
@@ -93,6 +104,77 @@ AS
          SET @cExtendedInfo = 'TYPE:' + @cECOM_SINGLE_FLAG + ' ZONE:' + @cTempPKZone  
       END  
    END  
+
+   IF @nAfterStep in  (1,3) -- PickSlip
+   BEGIN
+      
+      DECLARE @nCounter INT
+      DECLARE @nTotalCounter INT
+      DECLARE @cUsername NVARCHAR(20)
+      DECLARE @cBatch NVARCHAR(20)
+      DECLARE @cPrevCounter INT
+
+      SELECT @cUsername = username,
+            @cBatch = V_barcode,
+            @cPrevCounter = V_Integer1 + 1
+      FROM RDT.RDTMobrec (nolock)
+      where mobile = @nMobile
+
+      INSERT @tPD (PickSlipNo,OrderKey, Counter)
+      SELECT DISTINCT Pickslipno,orderkey,dense_rank() OVER (ORDER BY orderkey) AS ID
+      FROM Pickdetail(nolock)
+      WHERE  Pickslipno=@cPickSlipNo  
+         AND Storerkey = @cStorerKey
+      GROUP BY pickslipno,orderkey
+
+      SELECT @nTotalCounter = Count(DISTINCT orderkey) 
+      FROM pickdetail(nolock) 
+      WHERE  Pickslipno=@cPickSlipNo  
+         AND Storerkey = @cStorerKey
+
+      DECLARE @nPDQty INT
+      DECLARE @curPD CURSOR 
+      SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT PD.orderkey, SUM(PD.QTY) 
+      FROM Pickdetail PD (nolock)
+      WHERE  Pickslipno=@cPickSlipNo  
+         AND Storerkey = @cStorerKey
+         AND SKu = SUBSTRING(@cBatch,3,13)
+      GROUP BY orderkey
+      ORDER by orderkey
+      OPEN @curPD  
+      FETCH NEXT FROM @curPD INTO @cOrderkey,@nPDQty
+      WHILE @@FETCH_STATUS = 0  
+      BEGIN
+         IF @cPrevCounter <= @nPDQty
+         BEGIN
+            BREAK;
+         END
+         ELSE
+            SET @cPrevCounter = @cPrevCounter - @nPDQty
+
+         FETCH NEXT FROM @curPD INTO @cOrderkey,@nPDQty
+      END
+
+      SELECT  @nCounter = Counter
+      FROM @tPD  PD
+      WHERE PickSlipNo = @cPickSlipNo
+         AND orderkey = @cOrderKey
+
+   
+      IF ISNULL(SUBSTRING(@cBatch,3,13),'')<>''
+      BEGIN
+         IF (@nTotalCounter/2 > = @nCounter)
+         BEGIN
+            SET @cExtendedInfo = 'A' + ' '+ @cOrderKey
+         END
+         ELSE
+         BEGIN
+            SET @cExtendedInfo = 'B' + ' '+ @cOrderKey
+         END
+
+      END
+   END
     
 QUIT:  
 GO
