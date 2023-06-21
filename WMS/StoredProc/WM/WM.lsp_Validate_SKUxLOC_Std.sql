@@ -1,3 +1,8 @@
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_Validate_SkuxLoc_Std]') 
+AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
+DROP PROCEDURE [WM].[lsp_Validate_SkuxLoc_Std]
+GO
+
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -24,9 +29,8 @@ GO
 /*                            Location - Single Pick Face Per SKU        */
 /*                            Validation Failed                          */
 /* 2022-01-25  Wan01    1.2   DevOps Combine Script                      */
-/* 2023-03-14  NJOW01   1.3  LFWM-3608 performance tuning for XML Reading*/
 /*************************************************************************/   
-CREATE OR ALTER PROC [WM].[lsp_Validate_SkuxLoc_Std] (
+CREATE PROC [WM].[lsp_Validate_SkuxLoc_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
 , @c_XMLDataString      NVARCHAR(MAX) 
 , @b_Success            INT OUTPUT
@@ -56,92 +60,18 @@ BEGIN
    ,  @c_SQLSchema            NVARCHAR(MAX) = N''
    ,  @c_SQLData              NVARCHAR(MAX) = N''   
    ,  @n_Continue             INT = 1 
-   ,  @n_Count                INT = 1   
-   ,  @c_SinglePickFacePerSKU NVARCHAR(10) = '' --(Wan01)
-   ,  @n_XMLHandle         INT                  --NJOW01
-   ,  @c_SQLSchema_OXML    NVARCHAR(MAX) = N''  --NJOW01
-   ,  @c_TableColumns_OXML NVARCHAR(MAX) = N''  --NJOW01
+
+   ,  @n_Count                INT = 1
+   
+   ,  @c_SinglePickFacePerSKU NVARCHAR(10) = ''             --(Wan01)
    
    --(mingle01) - START
    BEGIN TRY
-      /*  --NJOW01 Removed    
       IF OBJECT_ID('tempdb..#SKUxLOC') IS NOT NULL
       BEGIN
          DROP TABLE #SKUxLOC
       END
-      */
 
-      --NJOW01 S      
-      IF OBJECT_ID('tempdb..#VALDN') IS NULL
-      BEGIN
-         CREATE TABLE #VALDN( Rowid  INT NOT NULL IDENTITY(1,1) )   
-         
-         SET @x_XMLSchema = CONVERT(XML, @c_XMLSchemaString)
-         SET @x_XMLData = CONVERT(XML, @c_XMLDataString)
-         
-         EXEC sp_xml_preparedocument @n_XMLHandle OUTPUT, @c_XMLSchemaString      
-         DECLARE CUR_SCHEMA CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-            SELECT ColName, DataType 
-            FROM OPENXML (@n_XMLHandle, '/Table/Column',1)  
-            WITH (ColName  NVARCHAR(128),  
-                  DataType NVARCHAR(128))
-                                    
-         OPEN CUR_SCHEMA
-         
-         FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_DataType
-         
-         WHILE @@FETCH_STATUS <> -1
-         BEGIN
-            SET @c_TableName = ''
-            IF CHARINDEX('.', @c_ColumnName) > 0 
-            BEGIN
-               SET @c_TableName  = LEFT(@c_ColumnName, CHARINDEX('.', @c_ColumnName))
-               SET @c_ColumnName = RIGHT(@c_ColumnName, LEN(@c_ColumnName) -LEN(@c_TableName))
-            END
-         
-            SET @c_SQLSchema  = @c_SQLSchema + @c_ColumnName + ' ' + @c_DataType + ' NULL, '
-            SET @c_SQLSchema_OXML  = @c_SQLSchema_OXML + '['+@c_TableName+@c_ColumnName + '] ' + @c_DataType + ', '
-            SET @c_TableColumns = @c_TableColumns + @c_ColumnName + ', '
-            SET @c_TableColumns_OXML = @c_TableColumns_OXML + '[' + @c_TableName + @c_ColumnName + '], '
-               
-            FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_DataType
-         END
-         CLOSE CUR_SCHEMA
-         DEALLOCATE CUR_SCHEMA
-         EXEC sp_xml_removedocument @n_XMLHandle    
-                       
-         IF LEN(@c_SQLSchema) > 0 
-         BEGIN
-            SET @c_SQL = N'ALTER TABLE #VALDN  ADD  ' + SUBSTRING(@c_SQLSchema, 1, LEN(@c_SQLSchema) - 1) + ' '
-               
-            EXEC (@c_SQL)
-         
-            INSERT_REC:
-            EXEC sp_xml_preparedocument @n_XMLHandle OUTPUT, @c_XMLDataString
-         
-            SET @c_SQL = N' INSERT INTO #VALDN' 
-                        + ' ( ' + SUBSTRING(@c_TableColumns, 1, LEN(@c_TableColumns) - 1) + ' )'
-                        + ' SELECT ' + SUBSTRING(@c_TableColumns_OXML, 1, LEN(@c_TableColumns_OXML) - 1)
-                        + ' FROM  OPENXML (@n_XMLHandle, ''Row'',1) '
-                        + ' WITH (' + SUBSTRING(@c_SQLSchema_OXML, 1, LEN(@c_SQLSchema_OXML) - 1) + ')'
-                           
-            EXEC sp_executeSQl @c_SQL
-                              , N'@n_XMLHandle INT'
-                              , @n_XMLHandle                                     
-            
-            EXEC sp_xml_removedocument @n_XMLHandle                       
-            
-            IF ISNULL(@c_XMLDataString_Prev,'') <> ''
-            BEGIN
-               SET @c_XMLDataString = @c_XMLDataString_Prev
-               SET @c_XMLDataString_Prev = ''
-               GOTO INSERT_REC
-            END              
-         END
-      END
-      --NJOW01 E      
-      
-      /*
       CREATE TABLE #SKUxLOC( Rowid  INT NOT NULL IDENTITY(1,1) )   
 
       SET @x_XMLSchema = CONVERT(XML, @c_XMLSchemaString)
@@ -198,7 +128,6 @@ BEGIN
             GOTO INSERT_REC
          END
       END
-      */
 
       DECLARE 
             @c_Storerkey         NVARCHAR(15) = ''
@@ -216,7 +145,7 @@ BEGIN
          ,  @c_Sku        = SL.Sku
          ,  @c_Loc        = SL.Loc 
          ,  @c_LocType    = SL.LocationType
-      FROM  #VALDN SL  --NJOW01
+      FROM  #SKUxLOC SL  
       ORDER BY RowId 
 
       --(Wan01) - START
@@ -273,7 +202,7 @@ BEGIN
 
       SET @n_Count = 0
       SELECT @n_Count = 1
-      FROM  #VALDN SL  --NJOW01
+      FROM  #SKUxLOC SL 
       GROUP BY SL.Storerkey
             ,  SL.Sku
             ,  SL.Loc  
