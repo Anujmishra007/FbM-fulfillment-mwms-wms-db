@@ -1,11 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_838ValidateSP01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_838ValidateSP01]
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /************************************************************************/
 /* Store procedure: rdt_838ValidateSP01                                 */
@@ -15,9 +12,11 @@ GO
 /* 02-04-2018 1.0  Ung         WMS-3845 Created                         */
 /* 13-06-2018 1.1  JihHaur     Slow response when @cFromDropID = ''(JH01)*/
 /* 12-07-2018 1.2  Ung         WMS-5490 Add sorting process             */
+/* 12-06-2023 1.3  yeekung     WMS-22751 Change error message           */
+/*                             Add pop up screen (yeekung01)            */
 /************************************************************************/
 
-CREATE PROC rdt.rdt_838ValidateSP01 (
+CREATE OR ALTER PROC [RDT].[rdt_838ValidateSP01] (
     @nMobile         INT
    ,@nFunc           INT
    ,@cLangCode       NVARCHAR( 3)
@@ -30,7 +29,7 @@ CREATE PROC rdt.rdt_838ValidateSP01 (
    ,@cFromDropID     NVARCHAR( 20)
    ,@cPackDtlDropID  NVARCHAR( 20)
    ,@cSKU            NVARCHAR( 20)
-   ,@nQTY            INT 
+   ,@nQTY            INT
    ,@nCartonNo       INT
    ,@nErrNo          INT   OUTPUT
    ,@cErrMsg         NVARCHAR(250) OUTPUT
@@ -46,12 +45,16 @@ BEGIN
    DECLARE @cLoadKey    NVARCHAR( 10)
    DECLARE @cZone       NVARCHAR( 18)
    DECLARE @cPickStatus NVARCHAR( 1)
+   DECLARE @cErrMsg1    NVARCHAR(20)
    DECLARE @nPackQTY    INT
    DECLARE @nPickQTY    INT
+      
+   DECLARE @nMsgQErrNo     INT
+   DECLARE @nMsgQErrMsg    NVARCHAR( 20)
 
-   DECLARE @tPickZone TABLE 
+   DECLARE @tPickZone TABLE
    (
-      PickZone NVARCHAR( 10) PRIMARY KEY CLUSTERED
+      PickZone NVARCHAR( 10)
    )
 
    SET @cOrderKey = ''
@@ -59,7 +62,7 @@ BEGIN
    SET @cZone = ''
    SET @nPackQTY = 0
    SET @nPickQTY = 0
-   
+
    -- Get PickHeader info
    SELECT TOP 1
       @cOrderKey = OrderKey,
@@ -67,7 +70,7 @@ BEGIN
       @cZone = Zone
    FROM dbo.PickHeader WITH (NOLOCK)
    WHERE PickHeaderKey = @cPickSlipNo
-   
+
    INSERT INTO @tPickZone (PickZone)
    SELECT Code2
    FROM dbo.CodelkUp WITH (NOLOCK)
@@ -88,14 +91,14 @@ BEGIN
 
       -- Calc pack QTY
       SET @nPackQTY = 0
-      SELECT @nPackQTY = ISNULL( SUM( QTY), 0) 
-      FROM PackDetail WITH (NOLOCK) 
+      SELECT @nPackQTY = ISNULL( SUM( QTY), 0)
+      FROM PackDetail WITH (NOLOCK)
       WHERE PickSlipNo = @cPickSlipNo
          AND StorerKey = @cStorerKey
          AND SKU = @cSKU
          AND RefNo = @cPackDtlDropID -- Site
          AND DropID = @cFromDropID
-         
+
       -- Add QTY
       SET @nPackQTY = @nPackQTY + @nQTY
    END
@@ -105,10 +108,10 @@ BEGIN
    BEGIN
       IF @cType = 'PickSlipNo'
       BEGIN
-         -- Check PickSlipNo valid 
+         -- Check PickSlipNo valid
          IF NOT EXISTS( SELECT TOP 1 1 FROM dbo.RefKeyLookup RKL WITH (NOLOCK) WHERE RKL.PickSlipNo = @cPickSlipNo)
          BEGIN
-            SET @nErrNo = 100351
+            SET @nErrNo = 202551
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid PSNO
             GOTO Quit
          END
@@ -120,15 +123,15 @@ BEGIN
             WHERE RKL.PickSlipNo = @cPickSlipNo
                AND O.StorerKey <> @cStorerKey)
          BEGIN
-            SET @nErrNo = 100352
+            SET @nErrNo = 202552
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff storer
             GOTO Quit
          END
       END
-      
+
       ELSE IF @cType = 'SKU'
       BEGIN
-         IF @cFromDropID = '' 
+         IF @cFromDropID = ''
          BEGIN
             -- Check SKU in PickSlipNo
             IF NOT EXISTS( SELECT TOP 1 1
@@ -141,8 +144,9 @@ BEGIN
                   AND PD.SKU = @cSKU
                   AND PD.QTY > 0)
             BEGIN
-               SET @nErrNo = 100353
+               SET @nErrNo = 202553
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU NotIn PSNO
+               EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo, @cErrMsg, @cErrMsg
                GOTO Quit
             END
          END
@@ -160,13 +164,14 @@ BEGIN
                   AND PD.QTY > 0
                   AND PD.DropID = @cFromDropID)
             BEGIN
-               SET @nErrNo = 100369
+               SET @nErrNo = 202569
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKUNotInDropID
+               EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo, @cErrMsg, @cErrMsg
                GOTO Quit
             END
          END
       END
-      
+
       ELSE IF @cType = 'QTY'
       BEGIN
          SELECT @nPickQTY = ISNULL( SUM( QTY), 0)
@@ -179,10 +184,10 @@ BEGIN
             AND PD.SKU = @cSKU
             AND PD.Status >= @cPickStatus
             AND PD.DropID = @cFromDropID
-      
+
          IF @nPackQTY > @nPickQTY
          BEGIN
-            SET @nErrNo = 100354
+            SET @nErrNo = 202554
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Over pack
             GOTO Quit
          END
@@ -199,41 +204,41 @@ BEGIN
          DECLARE @cChkSOStatus  NVARCHAR( 10)
 
          -- Get Order info
-         SELECT 
-            @cChkStorerKey = StorerKey, 
-            @cChkStatus = Status, 
+         SELECT
+            @cChkStorerKey = StorerKey,
+            @cChkStatus = Status,
             @cChkSOStatus = SOStatus
          FROM dbo.Orders WITH (NOLOCK)
          WHERE OrderKey = @cOrderKey
-         
-         -- Check PickSlipNo valid 
+
+         -- Check PickSlipNo valid
          IF @@ROWCOUNT = 0
          BEGIN
-            SET @nErrNo = 100355
+            SET @nErrNo = 202555
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid PSNO
             GOTO Quit
          END
-         
+
          -- Check storer
          IF @cChkStorerKey <> @cStorerKey
          BEGIN
-            SET @nErrNo = 100357
+            SET @nErrNo = 202557
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff storer
             GOTO Quit
          END
-         
+
          -- Check order shipped
          IF @cChkStatus > '5'
          BEGIN
-            SET @nErrNo = 100356
+            SET @nErrNo = 202556
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Order shipped
             GOTO Quit
          END
-         
+
          -- Check order cancel
          IF @cChkSOStatus = 'CANC'
          BEGIN
-            SET @nErrNo = 100368
+            SET @nErrNo = 202568
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Order CANCEL
             GOTO Quit
          END
@@ -241,11 +246,11 @@ BEGIN
 
       ELSE IF @cType = 'SKU'
       BEGIN
-         IF @cFromDropID = '' 
+         IF @cFromDropID = ''
          BEGIN
             -- Check SKU in PickSlipNo
             IF NOT EXISTS( SELECT TOP 1 1
-               FROM dbo.PickDetail PD WITH (NOLOCK) 
+               FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (PD.LOC = LOC.LOC)
                   JOIN @tPickZone t ON (LOC.PickZone = t.PickZone)
                WHERE PD.OrderKey = @cOrderKey
@@ -253,7 +258,7 @@ BEGIN
                   AND PD.SKU = @cSKU
                   AND PD.QTY > 0)
             BEGIN
-               SET @nErrNo = 100358
+               SET @nErrNo = 202558
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU NotIn PSNO
                GOTO Quit
             END
@@ -262,7 +267,7 @@ BEGIN
          BEGIN
             -- Check SKU in PickSlipNo
             IF NOT EXISTS( SELECT TOP 1 1
-               FROM dbo.PickDetail PD WITH (NOLOCK) 
+               FROM dbo.PickDetail PD WITH (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (PD.LOC = LOC.LOC)
                   JOIN @tPickZone t ON (LOC.PickZone = t.PickZone)
                WHERE PD.OrderKey = @cOrderKey
@@ -271,17 +276,17 @@ BEGIN
                   AND PD.QTY > 0
                   AND PD.DropID = @cFromDropID)
             BEGIN
-               SET @nErrNo = 100370
+               SET @nErrNo = 202570
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKUNotInDropID
                GOTO Quit
             END
          END
       END
-      
+
       ELSE IF @cType = 'QTY'
       BEGIN
          SELECT @nPickQTY = ISNULL( SUM( QTY), 0)
-         FROM dbo.PickDetail PD WITH (NOLOCK) 
+         FROM dbo.PickDetail PD WITH (NOLOCK)
             JOIN dbo.LOC WITH (NOLOCK) ON (PD.LOC = LOC.LOC)
             JOIN @tPickZone t ON (LOC.PickZone = t.PickZone)
          WHERE PD.OrderKey = @cOrderKey
@@ -292,13 +297,13 @@ BEGIN
 
          IF @nPackQTY > @nPickQTY
          BEGIN
-            SET @nErrNo = 100359
+            SET @nErrNo = 202559
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Over pack
             GOTO Quit
          END
       END
    END
-               
+
    -- Conso PickSlip
    ELSE IF @cLoadKey <> ''
    BEGIN
@@ -307,32 +312,32 @@ BEGIN
          -- Check PickSlip valid
          IF NOT EXISTS( SELECT TOP 1 1 FROM dbo.LoadPlanDetail LPD WITH (NOLOCK) WHERE LPD.LoadKey = @cLoadKey)
          BEGIN
-            SET @nErrNo = 100360
+            SET @nErrNo = 202560
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid PSNO
             GOTO Quit
          END
-        
+
          -- Check diff storer
-         IF EXISTS( SELECT TOP 1 1 
-            FROM dbo.LoadPlanDetail LPD WITH (NOLOCK) 
-               JOIN dbo.Orders O (NOLOCK) ON (LPD.OrderKey = O.OrderKey)    
+         IF EXISTS( SELECT TOP 1 1
+            FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
+               JOIN dbo.Orders O (NOLOCK) ON (LPD.OrderKey = O.OrderKey)
             WHERE LPD.LoadKey = @cLoadKey
                AND O.StorerKey <> @cStorerKey)
          BEGIN
-            SET @nErrNo = 100361
+            SET @nErrNo = 202561
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff storer
             GOTO Quit
          END
       END
-      
+
       ELSE IF @cType = 'SKU'
       BEGIN
-         IF @cFromDropID = '' 
+         IF @cFromDropID = ''
          BEGIN
             -- Check SKU in PickSlipNo
-            IF NOT EXISTS( SELECT TOP 1 1 
-               FROM dbo.LoadPlanDetail LPD WITH (NOLOCK) 
-                  JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
+            IF NOT EXISTS( SELECT TOP 1 1
+               FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
+                  JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (PD.LOC = LOC.LOC)
                   JOIN @tPickZone t ON (LOC.PickZone = t.PickZone)
                WHERE LPD.LoadKey = @cLoadKey
@@ -340,7 +345,7 @@ BEGIN
                   AND PD.SKU = @cSKU
                   AND PD.QTY > 0)
             BEGIN
-               SET @nErrNo = 100362
+               SET @nErrNo = 202562
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU NotIn PSNO
                GOTO Quit
             END
@@ -348,9 +353,9 @@ BEGIN
          ELSE
          BEGIN
             -- Check SKU in PickSlipNo
-            IF NOT EXISTS( SELECT TOP 1 1 
-               FROM dbo.LoadPlanDetail LPD WITH (NOLOCK) 
-                  JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
+            IF NOT EXISTS( SELECT TOP 1 1
+               FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
+                  JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
                   JOIN dbo.LOC WITH (NOLOCK) ON (PD.LOC = LOC.LOC)
                   JOIN @tPickZone t ON (LOC.PickZone = t.PickZone)
                WHERE LPD.LoadKey = @cLoadKey
@@ -359,20 +364,20 @@ BEGIN
                   AND PD.QTY > 0
                   AND PD.DropID = @cFromDropID)
             BEGIN
-               SET @nErrNo = 100371
+               SET @nErrNo = 202571
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKUNotInDropID
                GOTO Quit
             END
          END
       END
-      
+
       ELSE IF @cType = 'QTY'
       BEGIN
          IF @cFromDropID = ''  --(JH01)
 			   BEGIN
 			      SELECT @nPickQTY = ISNULL( SUM( QTY), 0)
-            FROM dbo.LoadPlanDetail LPD WITH (NOLOCK) 
-            JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
+            FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
+            JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
             JOIN dbo.LOC WITH (NOLOCK) ON (PD.LOC = LOC.LOC)
             JOIN @tPickZone t ON (LOC.PickZone = t.PickZone)
             WHERE LPD.LoadKey = @cLoadKey
@@ -384,8 +389,8 @@ BEGIN
 			   ELSE
 			   BEGIN
 			      SELECT @nPickQTY = ISNULL( SUM( QTY), 0)
-            FROM dbo.LoadPlanDetail LPD WITH (NOLOCK) 
-            JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
+            FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
+            JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
             JOIN dbo.LOC WITH (NOLOCK) ON (PD.LOC = LOC.LOC)
             JOIN @tPickZone t ON (LOC.PickZone = t.PickZone)
             WHERE LPD.LoadKey = @cLoadKey
@@ -397,22 +402,22 @@ BEGIN
 
          IF @nPackQTY > @nPickQTY
          BEGIN
-            SET @nErrNo = 100363
+            SET @nErrNo = 202563
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Over pack
             GOTO Quit
          END
       END
    END
-   
+
    -- Custom PickSlip
    ELSE
    BEGIN
       IF @cType = 'PickSlipNo'
       BEGIN
-         -- Check PickSlip valid 
+         -- Check PickSlip valid
          IF NOT EXISTS( SELECT 1 FROM PickDetail WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo)
          BEGIN
-            SET @nErrNo = 100364
+            SET @nErrNo = 202564
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid PSNO
             GOTO Quit
          END
@@ -420,7 +425,7 @@ BEGIN
          -- Check diff storer
          IF EXISTS( SELECT 1 FROM PickDetail WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND StorerKey <> @cStorerKey)
          BEGIN
-            SET @nErrNo = 100365
+            SET @nErrNo = 202565
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff storer
             GOTO Quit
          END
@@ -428,11 +433,11 @@ BEGIN
 
       ELSE IF @cType = 'SKU'
       BEGIN
-         IF @cFromDropID = '' 
+         IF @cFromDropID = ''
          BEGIN
             -- Check SKU in PickSlipNo
-            IF NOT EXISTS( SELECT TOP 1 1 
-               FROM dbo.PickDetail PD (NOLOCK) 
+            IF NOT EXISTS( SELECT TOP 1 1
+               FROM dbo.PickDetail PD (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (PD.LOC = LOC.LOC)
                   JOIN @tPickZone t ON (LOC.PickZone = t.PickZone)
                WHERE PD.PickSlipNo = @cPickSlipNo
@@ -440,7 +445,7 @@ BEGIN
                   AND PD.SKU = @cSKU
                   AND PD.QTY > 0)
             BEGIN
-               SET @nErrNo = 100366
+               SET @nErrNo = 202566
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU NotIn PSNO
                GOTO Quit
             END
@@ -448,8 +453,8 @@ BEGIN
          ELSE
          BEGIN
             -- Check SKU in PickSlipNo
-            IF NOT EXISTS( SELECT TOP 1 1 
-               FROM dbo.PickDetail PD (NOLOCK) 
+            IF NOT EXISTS( SELECT TOP 1 1
+               FROM dbo.PickDetail PD (NOLOCK)
                   JOIN dbo.LOC WITH (NOLOCK) ON (PD.LOC = LOC.LOC)
                   JOIN @tPickZone t ON (LOC.PickZone = t.PickZone)
                WHERE PD.PickSlipNo = @cPickSlipNo
@@ -458,17 +463,17 @@ BEGIN
                   AND PD.QTY > 0
                   AND PD.DropID = @cFromDropID)
             BEGIN
-               SET @nErrNo = 100372
+               SET @nErrNo = 202572
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKUNotInDropID
                GOTO Quit
             END
          END
       END
-      
+
       ELSE IF @cType = 'QTY'
       BEGIN
          SELECT @nPickQTY = ISNULL( SUM( QTY), 0)
-         FROM dbo.PickDetail PD (NOLOCK) 
+         FROM dbo.PickDetail PD (NOLOCK)
             JOIN dbo.LOC WITH (NOLOCK) ON (PD.LOC = LOC.LOC)
             JOIN @tPickZone t ON (LOC.PickZone = t.PickZone)
          WHERE PD.PickSlipNo = @cPickSlipNo
@@ -479,7 +484,7 @@ BEGIN
 
          IF @nPackQTY > @nPickQTY
          BEGIN
-            SET @nErrNo = 100367
+            SET @nErrNo = 202567
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Over pack
             GOTO Quit
          END
@@ -487,14 +492,20 @@ BEGIN
    END
 
 Quit:
+BEGIN
+   IF rdt.RDTGetConfig( @nFunc, 'ShowErrMsgInNewScn', @cStorerkey) = '1'
+   BEGIN
+      IF @nErrNo > 0 AND @nErrNo <> 1  -- Not from prev msgqueue
+      BEGIN
+         SET @cErrMsg1 = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+         EXEC rdt.rdtInsertMsgQueue @nMobile, @nMsgQErrNo OUTPUT, @nMsgQErrMsg OUTPUT, @cErrMsg1
+         IF @nMsgQErrNo = 1
+            SET @cErrMsg1 = ''
+      END
+   END
+END
 
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON RDT.rdt_838ValidateSP01 TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_838ValidateSP01] TO [NSQL]
 GO

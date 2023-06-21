@@ -1,4 +1,6 @@
 
+
+
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -69,13 +71,14 @@ GO
 /*                              after capturePackInfo scn (cc05)                                */
 /* 2021-11-13   4.9 YeeKung     WMS-18323 Add data capture label (yeekung03)                    */
 /* 2022-02-18   5.0 Ung         WMS-18900 Support 1 carton 1 PackDetail                         */
-/* 2023-03-09   5.1 Ung         WMS-21830 Add FlowThruScreen for print label (SValue=5)         */
+/* 2023-03-09   5.1 Ung         WMS-21938 Add FlowThruScreen for print label (SValue=5)         */
 /*                              Rename FlowThruScr    (SValue=1) to FlowThruScreen (SValue=2)   */
 /*                              Rename FlowThruCtnScn (SValue=1) to FlowThruScreen (SValue=4)   */
 /* 2023-03-20   5.2 Ung         WMS-21946 Add FlowThruScreen for serial no (SValue=9)           */
 /*                              Decode serial no                                                */
 /* 2023-03-23   5.3 Ung         WMS-22076 Expand Option field to detact scan barcode            */
 /*                              Add ExtendedValidateSP at screen 2 (statistic)                  */
+/* 2023-06-14   5.4 YeeKung     WMS-22751 Add Popup Message (yeekung01)                         */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
@@ -2684,6 +2687,11 @@ BEGIN
    
    Step_3_Fail:
    BEGIN
+      IF rdt.RDTGetConfig( @nFunc, 'ShowErrMsgInNewScn', @cStorerkey) = '1'
+      BEGIN
+         EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg
+      END
+
       SET @cOutField03 = '' -- SKU
       EXEC rdt.rdtSetFocusField @nMobile, 3 -- SKU
       SET @cOutField08=''
