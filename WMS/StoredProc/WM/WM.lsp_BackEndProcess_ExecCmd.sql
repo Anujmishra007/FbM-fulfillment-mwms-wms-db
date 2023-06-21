@@ -5,7 +5,7 @@ GO
 /************************************************************************/                                                                                  
 /* Store Procedure: WM.[lsp_BackEndProcess_ExecCmd]                     */                                                                                  
 /* Creation Date: 2023-02-24                                            */                                                                                  
-/* Copyright: LFL                                                       */                                                                                  
+/* Copyright: Maersk                                                    */                                                                                  
 /* Written by: Wan                                                      */                                                                                  
 /*                                                                      */                                                                                  
 /* Purpose: LFWM-3699 - CLONE - [CN]NIKE_TRADE RETURN_Suggest PA loc    */
@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */ 
 /* 2023-02-24  Wan01    1.0   Created & DevOps Combine Script.          */
+/* 2023-05-12  Wan02    1.1   LFWM-4184 - PROD - CN  Lululemon ECOM     */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_BackEndProcess_ExecCmd]                                                                                                                     
    @c_Storerkey   NVARCHAR(15)   = ''
@@ -127,6 +128,7 @@ BEGIN
          END 
       END TRY
       BEGIN CATCH
+         SET @n_Continue = 3                                                        --Wan02
          IF (XACT_STATE()) = -1                                     
          BEGIN
             ROLLBACK TRAN

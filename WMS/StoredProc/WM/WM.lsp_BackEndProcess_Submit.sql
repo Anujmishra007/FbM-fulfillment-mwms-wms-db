@@ -12,7 +12,7 @@ GO
 /*                                                                      */                                                                                  
 /* Purpose: LFWM-3699 - CLONE - [CN]NIKE_TRADE RETURN_Suggest PA loc    */
 /*        : (Pre-finalize)by batch ASN                                  */                                                                               
-/* PVCS Version: 1.0                                                    */                                                                                  
+/* PVCS Version: 1.1                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -21,6 +21,8 @@ GO
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */  
 /* 2022-12-12  Wan      1.0   Created & DevOps Combine Script           */
+/* 2023-04-11  Wan01    1.1   LFWM-4153 - UAT - CN  All Generating Ecom */
+/*                            Replenishment                             */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_BackEndProcess_Submit]                                                                                                                     
    @c_Storerkey            NVARCHAR(10)
@@ -29,8 +31,8 @@ CREATE OR ALTER PROC [WM].[lsp_BackEndProcess_Submit]
 ,  @c_DocumentKey2         NVARCHAR(30)   = ''      
 ,  @c_DocumentKey3         NVARCHAR(30)   = ''      
 ,  @c_ProcessType          NVARCHAR(30)       
-,  @c_SourceType           NVARCHAR(30)      
-,  @c_CallType             NVARCHAR(30)
+,  @c_SourceType           NVARCHAR(50)               --(Wan01) fix to follow table column length      
+,  @c_CallType             NVARCHAR(50)               --(Wan01) fix to follow table column length
 ,  @c_RefKey1              NVARCHAR(30)   = ''      
 ,  @c_RefKey2              NVARCHAR(30)   = ''      
 ,  @c_RefKey3              NVARCHAR(30)   = ''   

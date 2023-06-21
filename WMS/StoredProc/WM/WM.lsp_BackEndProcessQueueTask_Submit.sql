@@ -12,7 +12,7 @@ GO
 /*                                                                      */                                                                                  
 /* Purpose: LFWM-3699 - CLONE - [CN]NIKE_TRADE RETURN_Suggest PA loc    */
 /*        : (Pre-finalize)by batch ASN                                  */                                                                                 
-/* PVCS Version: 1.0                                                    */                                                                                  
+/* PVCS Version: 1.1                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -21,6 +21,8 @@ GO
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */  
 /* 2022-12-12  Wan      1.0   Created & DevOps Combine Script           */
+/* 2023-04-11  Wan01    1.1   LFWM-4153 - UAT - CN  All Generating Ecom */
+/*                            Replenishment                             */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_BackEndProcessQueueTask_Submit]                                                                                                                     
    @c_Storerkey   NVARCHAR(15) = ''
@@ -103,10 +105,11 @@ BEGIN
             FROM  dbo.QCmd_TransmitlogConfig qcfg WITH (NOLOCK)  
             WHERE qcfg.TableName      = 'BackEndProcessQueue'
             AND   qcfg.[App_Name]     = 'WMS'  
-
+            AND   qcfg.DataStream     = @c_ProcessType               --Wan01  Fixed to get rec by processtype 
+            AND   qcfg.StorerKey IN (@c_Storerkey, 'ALL')
             ORDER BY CASE WHEN qcfg.StorerKey = @c_Storerkey THEN 1              
-                           WHEN qcfg.StorerKey = 'ALL' THEN 2 ELSE 3              
-                           END                                                    
+                          WHEN qcfg.StorerKey = 'ALL' THEN 2 ELSE 3              
+                          END                                                    
                   , qcfg.RowRefNo                                                
             
             IF @c_IP = '' OR @c_PORT = ''
