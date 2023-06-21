@@ -11,7 +11,8 @@ GO
 /* Modifications log:                                                      */              
 /*                                                                         */              
 /* Date       Rev  Author   Purposes                                       */              
-/* 2022-03-25 1.0  yeekung    WMS-18920 Created                            */                            
+/* 2022-03-25 1.0  yeekung    WMS-18920 Created                            */  
+/* 2023-04-25 1.1  yeekung   WMS-22395 Add storerconfig altref (yeekung01) */
 /***************************************************************************/              
               
 CREATE OR ALTER PROC rdt.rdt_AT_ReleaseDoc (              
@@ -65,6 +66,7 @@ AS
            @cMenuOption  NVARCHAR(1),           
            @cLicenseNo   NVARCHAR(30)
    DECLARE @cGroup       NVARCHAR(20)
+   DECLARE @cScnAltRef   NVARCHAR(20)
    
    SET @cDoorBooking= rdt.RDTGetConfig( @nFunc, 'DoorBooking', @cStorerKey)
    
@@ -73,9 +75,9 @@ AS
    FROM rdt.rdtmobrec (NOLOCK) 
    where mobile=@nMobile
 
-   SELECT @cUserName=username
-   FROM rdt.rdtmobrec (NOLOCK) 
-   where mobile=@nMobile
+   SET @cScnAltRef = rdt.RDTGetConfig( @nFunc, 'BOScnALTRef', @cStorerKey)
+   IF ISNULL(@cScnAltRef,'') in (0,'')
+      SET @cScnAltRef =''
 
    IF  @nStep =1    
    BEGIN            
@@ -98,7 +100,8 @@ AS
       BEGIN
          IF NOT EXISTS(SELECT 1
                         FROM BOOKING_OUT (NOLOCK)
-                        WHERE bookingno=@cRefNo1
+                        WHERE BookingNo = CASE WHEN ISNULL(@cScnAltRef,'')='' THEN @cRefNo1 ELSE bookingno END
+                           AND AltReference =CASE WHEN ISNULL(@cScnAltRef,'')='' THEN AltReference ELSE @cRefNo1 END --yeekung01
                         AND facility=@cFacility)
          BEGIN
             SET @nErrNo = 185201
@@ -108,7 +111,8 @@ AS
 
          SELECT @cBookStatus=status
          FROM BOOKING_OUT (NOLOCK)
-         WHERE bookingno=@cRefNo1
+         WHERE BookingNo = CASE WHEN ISNULL(@cScnAltRef,'')='' THEN @cRefNo1 ELSE bookingno END
+            AND AltReference =CASE WHEN ISNULL(@cScnAltRef,'')='' THEN AltReference ELSE @cRefNo1 END --yeekung01
          
          IF NOT EXISTS (SELECT 1
                         FROM CODELKUP (NOLOCK)
@@ -145,7 +149,8 @@ AS
                   @cOutField08 = Loc,
                   @cOutField09 = 'Status'
          FROM BOOKING_OUT (NOLOCK)
-         WHERE bookingno=@cRefNo1
+         WHERE BookingNo = CASE WHEN ISNULL(@cScnAltRef,'')='' THEN @cRefNo1 ELSE bookingno END
+            AND AltReference =CASE WHEN ISNULL(@cScnAltRef,'')='' THEN AltReference ELSE @cRefNo1 END --yeekung01
 
          SET @nStep= @nStep+1
          SET @nScn= @nScn+1
@@ -208,7 +213,8 @@ AS
          SELECT   @cOutField01 = 'Appt No:',
                   @cOutField02 = bookingno
          FROM BOOKING_OUT (NOLOCK)
-         WHERE bookingno=@cRefNo1
+         WHERE BookingNo = CASE WHEN ISNULL(@cScnAltRef,'')='' THEN @cRefNo1 ELSE bookingno END
+            AND AltReference =CASE WHEN ISNULL(@cScnAltRef,'')='' THEN AltReference ELSE @cRefNo1 END --yeekung01
 
          SELECT   @cOutField03 = 'Driver Name:',
                   @cOutField04 =  DriverName,
@@ -260,7 +266,8 @@ AS
 
             SELECT @cBookStatus=status
             FROM BOOKING_OUT (NOLOCK)
-            WHERE bookingno=@cRefNo1
+            WHERE BookingNo = CASE WHEN ISNULL(@cScnAltRef,'')='' THEN @cRefNo1 ELSE bookingno END
+               AND AltReference =CASE WHEN ISNULL(@cScnAltRef,'')='' THEN AltReference ELSE @cRefNo1 END --yeekung01
 
             SELECT @cNewStatus=code ,@cLong=long
             FROM CODELKUP (NOLOCK)
@@ -283,7 +290,8 @@ AS
             SET drivername=@cInput01,
                   licenseno=@cInput02,
                   status = @cNewStatus
-            WHERE BOOKINGNO=@cRefNo1
+            WHERE BookingNo = CASE WHEN ISNULL(@cScnAltRef,'')='' THEN @cRefNo1 ELSE bookingno END
+               AND AltReference =CASE WHEN ISNULL(@cScnAltRef,'')='' THEN AltReference ELSE @cRefNo1 END --yeekung01
 
             IF @@ERROR<>0
             BEGIN
@@ -388,7 +396,8 @@ AS
                   @cOutField09 = 'Status',
                   @cOutField10 = @cOutField11
          FROM BOOKING_OUT (NOLOCK)
-         WHERE bookingno=@cRefNo1
+         WHERE BookingNo = CASE WHEN ISNULL(@cScnAltRef,'')='' THEN @cRefNo1 ELSE bookingno END
+            AND AltReference =CASE WHEN ISNULL(@cScnAltRef,'')='' THEN AltReference ELSE @cRefNo1 END --yeekung01
       END
       GOTO QUIT
    END 
