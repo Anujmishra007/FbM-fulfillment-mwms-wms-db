@@ -1,35 +1,31 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_Validate_KitDetail_Std]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [WM].[lsp_Validate_KitDetail_Std]
-GO
-
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-/*************************************************************************/  
-/* Stored Procedure: lsp_Validate_KitDetail_Std                          */  
-/* Creation Date: 20-JAN-2020                                            */  
-/* Copyright: LFL                                                        */  
-/* Written by: Wan                                                       */  
-/*                                                                       */  
-/* Purpose:                                                              */  
-/*                                                                       */  
-/* Called By:                                                            */  
-/*                                                                       */  
-/*                                                                       */  
-/* Version: 1.0                                                          */  
-/*                                                                       */  
-/* Data Modifications:                                                   */  
-/*                                                                       */  
-/* Updates:                                                              */  
-/* Date        Author   Ver   Purposes                                   */ 
-/* 2020-06-25  Wan01    1.1   LFWM-2153 - UAT CNKitting Module shows     */
-/*                            lottable is required                       */
-/* 2021-01-04  Wan02    1.2   LFWM-2448 - UAT - TW  Validation while     */
-/*                            creating new kitting                       */
-/*************************************************************************/   
-CREATE PROC [WM].[lsp_Validate_KitDetail_Std] (
+/**************************************************************************/  
+/* Stored Procedure: lsp_Validate_KitDetail_Std                           */  
+/* Creation Date: 20-JAN-2020                                             */  
+/* Copyright: LFL                                                         */  
+/* Written by: Wan                                                        */  
+/*                                                                        */  
+/* Purpose:                                                               */  
+/*                                                                        */  
+/* Called By:                                                             */  
+/*                                                                        */  
+/*                                                                        */  
+/* Version: 1.0                                                           */  
+/*                                                                        */  
+/* Data Modifications:                                                    */  
+/*                                                                        */  
+/* Updates:                                                               */  
+/* Date        Author   Ver   Purposes                                    */ 
+/* 2020-06-25  Wan01    1.1   LFWM-2153 - UAT CNKitting Module shows      */
+/*                            lottable is required                        */
+/* 2021-01-04  Wan02    1.2   LFWM-2448 - UAT - TW  Validation while      */
+/*                            creating new kitting                        */
+/* 2023-03-14  NJOW01   1.3   LFWM-3608 performance tuning for XML Reading*/
+/**************************************************************************/   
+CREATE OR ALTER PROC [WM].[lsp_Validate_KitDetail_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
 , @c_XMLDataString      NVARCHAR(MAX) 
 , @b_Success            INT OUTPUT
@@ -59,12 +55,80 @@ BEGIN
    ,  @c_SQLSchema         NVARCHAR(MAX) = N''
    ,  @c_SQLData           NVARCHAR(MAX) = N''   
    ,  @n_Continue          INT = 1 
+   ,  @n_XMLHandle         INT                  --NJOW01
+   ,  @c_SQLSchema_OXML    NVARCHAR(MAX) = N''  --NJOW01
+   ,  @c_TableColumns_OXML NVARCHAR(MAX) = N''  --NJOW01
 
+   /*  --NJOW01 Removed
    IF OBJECT_ID('tempdb..#KITDETAIL') IS NOT NULL
    BEGIN
       DROP TABLE #KITDETAIL
    END
+   */
 
+   --NJOW01 S      
+   IF OBJECT_ID('tempdb..#VALDN') IS NULL
+   BEGIN
+      CREATE TABLE #VALDN( Rowid  INT NOT NULL IDENTITY(1,1) )   
+      
+      SET @x_XMLSchema = CONVERT(XML, @c_XMLSchemaString)
+      SET @x_XMLData = CONVERT(XML, @c_XMLDataString)
+      
+      EXEC sp_xml_preparedocument @n_XMLHandle OUTPUT, @c_XMLSchemaString      
+      DECLARE CUR_SCHEMA CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT ColName, DataType 
+         FROM OPENXML (@n_XMLHandle, '/Table/Column',1)  
+         WITH (ColName  NVARCHAR(128),  
+               DataType NVARCHAR(128))
+                                 
+      OPEN CUR_SCHEMA
+      
+      FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_DataType
+      
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+         SET @c_TableName = ''
+         IF CHARINDEX('.', @c_ColumnName) > 0 
+         BEGIN
+            SET @c_TableName  = LEFT(@c_ColumnName, CHARINDEX('.', @c_ColumnName))
+            SET @c_ColumnName = RIGHT(@c_ColumnName, LEN(@c_ColumnName) -LEN(@c_TableName))
+         END
+      
+         SET @c_SQLSchema  = @c_SQLSchema + @c_ColumnName + ' ' + @c_DataType + ' NULL, '
+         SET @c_SQLSchema_OXML  = @c_SQLSchema_OXML + '['+@c_TableName+@c_ColumnName + '] ' + @c_DataType + ', '
+         SET @c_TableColumns = @c_TableColumns + @c_ColumnName + ', '
+         SET @c_TableColumns_OXML = @c_TableColumns_OXML + '[' + @c_TableName + @c_ColumnName + '], '
+            
+         FETCH NEXT FROM CUR_SCHEMA INTO @c_ColumnName, @c_DataType
+      END
+      CLOSE CUR_SCHEMA
+      DEALLOCATE CUR_SCHEMA
+      EXEC sp_xml_removedocument @n_XMLHandle    
+                    
+      IF LEN(@c_SQLSchema) > 0 
+      BEGIN
+         SET @c_SQL = N'ALTER TABLE #VALDN  ADD  ' + SUBSTRING(@c_SQLSchema, 1, LEN(@c_SQLSchema) - 1) + ' '
+            
+         EXEC (@c_SQL)
+      
+         EXEC sp_xml_preparedocument @n_XMLHandle OUTPUT, @c_XMLDataString
+      
+         SET @c_SQL = N' INSERT INTO #VALDN' 
+                     + ' ( ' + SUBSTRING(@c_TableColumns, 1, LEN(@c_TableColumns) - 1) + ' )'
+                     + ' SELECT ' + SUBSTRING(@c_TableColumns_OXML, 1, LEN(@c_TableColumns_OXML) - 1)
+                     + ' FROM  OPENXML (@n_XMLHandle, ''Row'',1) '
+                     + ' WITH (' + SUBSTRING(@c_SQLSchema_OXML, 1, LEN(@c_SQLSchema_OXML) - 1) + ')'
+                        
+         EXEC sp_executeSQl @c_SQL
+                           , N'@n_XMLHandle INT'
+                           , @n_XMLHandle                                     
+         
+         EXEC sp_xml_removedocument @n_XMLHandle                         
+      END
+   END
+   --NJOW01 E      
+
+   /*
    CREATE TABLE #KITDETAIL( Rowid  INT NOT NULL IDENTITY(1,1) )   
 
    SET @x_XMLSchema = CONVERT(XML, @c_XMLSchemaString)
@@ -113,6 +177,7 @@ BEGIN
                         , @x_XMLData
       
    END
+   */
 
    DECLARE 
          @c_Facility             NVARCHAR(5)  = ''
@@ -189,7 +254,7 @@ BEGIN
       ,  @dt_Lottable13 = KD.Lottable13
       ,  @dt_Lottable14 = KD.Lottable14
       ,  @dt_Lottable15 = KD.Lottable15
-   FROM  #KITDETAIL KD  
+   FROM  #VALDN KD   --NJOW01
 
    --(Wan02) - START
    SET @n_CheckLottables = 0
@@ -200,7 +265,7 @@ BEGIN
             )
    BEGIN
       SET @n_CheckLottables = 1
-   END   	
+   END      
    --(Wan02) - END  
        
    IF @n_CheckLottables = 1      --(Wan02) - START
