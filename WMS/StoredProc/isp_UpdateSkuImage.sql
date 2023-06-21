@@ -1,6 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_UpdateSkuImage]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_UpdateSkuImage]
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -32,8 +29,11 @@ GO
 /*                            Display (Backend)                         */
 /* 08-JUL-2022  NJOW02  1.3   Add sku image file upload logging         */
 /* 08-JUL-2022  NJOW02  1.3   DEVOPS Combine script                     */
+/* 08-JUN-2023  Wan02   1.4   LFWM-4273 - PROD & UAT - TH UQNMD - SCE   */
+/*                            Image Upload-not show photo after uploaded*/
+/*                            - Fix: Extend @c_Sku to 20 Chars          */
 /************************************************************************/
-CREATE PROCEDURE [dbo].[isp_UpdateSkuImage]
+CREATE OR ALTER PROCEDURE [dbo].[isp_UpdateSkuImage]
    @c_storerkey NVARCHAR(15),
    @b_success   INT OUTPUT,
    @n_err       INT OUTPUT,
@@ -56,7 +56,7 @@ BEGIN
            @c_SkuImageFileTo     NVARCHAR(200),
            @c_NSQLValue NVARCHAR(30),
            @c_ImageFile NVARCHAR(255),
-           @c_Sku NVARCHAR(15),
+           @c_Sku NVARCHAR(20),                                                     --(Wan02)
            @c_FileExt NVARCHAR(3),
            @c_ToSubFolder NVARCHAR(200),
            @c_Lastsubfolder NVARCHAR(200),
