@@ -13,7 +13,7 @@ GO
 /* Called By:                                                             */  
 /*                                                                        */  
 /*                                                                        */  
-/* Version: 1.4                                                           */  
+/* Version: 1.5                                                           */  
 /*                                                                        */  
 /* Data Modifications:                                                    */  
 /*                                                                        */  
@@ -31,6 +31,8 @@ GO
 /* 2023-04-12  Wan05    1.4   LFWM-4145-[CN] Prod  Mannings Channel column*/
 /*                            need to be limited by the settings in       */
 /*                            CODELKUP in Inventory Adjustment screen     */
+/* 2023-05-18  Wan06    1.5   LFWM-4116 - [CN]CONVERSE_ADJ_'Copy value to */
+/*                            support all details in one Adjustmentkey    */
 /**************************************************************************/   
 CREATE OR ALTER PROC [WM].[lsp_Validate_AdjustmentDetail_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
@@ -252,8 +254,26 @@ BEGIN
          ,  @c_VLDLotLabelExist     NVARCHAR(30) = ''
          ,  @c_SkipUDF05UccChkInAdj NVARCHAR(30) = ''
          ,  @c_AdjAllowZeroQty      NVARCHAR(30) = ''       --(Wan03)
-         ,  @c_ChannelInventoryMgmt NVARCHAR(30) = ''       --(Wan05)                                                    
-
+         ,  @c_ChannelInventoryMgmt NVARCHAR(30) = ''       --(Wan05)  
+         
+      IF EXISTS ( SELECT 1                                                          --(Wan06) - START
+                 FROM tempdb.INFORMATION_SCHEMA.COLUMNS c 
+                 JOIN tempdb.dbo.SysObjects AS s ON s.[name] = c.TABLE_NAME 
+                 WHERE s.id = OBJECT_ID('tempdb..#VALDN')                     
+                 AND   c.[COLUMN_NAME] = 'TrafficCop' 
+                 )
+      BEGIN
+         SET @n_ExistsCnt = 0
+         SET @c_SQL = N'SELECT @n_ExistsCnt=1 FROM #VALDN AD WHERE ad.TrafficCop IS NULL'
+         
+         EXEC sp_ExecuteSQL @c_SQL, N'@n_ExistsCnt INT OUTPUT', @n_ExistsCnt OUTPUT
+         
+         IF @n_ExistsCnt = 0
+         BEGIN
+            GOTO EXIT_SP
+         END
+      END                                                                           --(Wan06) - END
+  
       SELECT TOP 1 
             @c_AdjustmentKey     = AD.AdjustmentKey
          ,  @c_AdjustmentLineNo  = AD.AdjustmentLineNumber
@@ -282,9 +302,9 @@ BEGIN
          ,  @c_Packkey           = ISNULL(AD.Packkey,'')       --(Wan03) 
          ,  @c_ReasonCode        = ISNULL(AD.ReasonCode,'')    --(Wan03)  
          ,  @n_Qty               = ISNULL(AD.Qty,0)            --(Wan03) 
-         ,  @c_Channel           = ad.channel                  --(Wan05)                                                      --                                                              -- 
+         ,  @c_Channel           = ad.channel                  --(Wan05)  
       FROM  #VALDN AD  --NJOW01
-
+      
       SELECT TOP 1 
             @c_FinalizedFlag_Del = AD.FinalizedFlag
       FROM  ADJUSTMENTDETAIL AD WITH (NOLOCK)
