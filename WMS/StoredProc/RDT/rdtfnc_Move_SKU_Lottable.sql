@@ -41,6 +41,7 @@ GO
 /* 2021-04-07 2.7  chermain WMS-16638 Add @cDecodeLabelNo (cc01)        */
 /* 2022-07-27 2.8  Ung      WMS-20274 Add TOLOC at success move screen  */
 /* 2022-08-04 2.9  Ung      WMS-16638 Fix @cToLOC not reset             */
+/* 2023-06-14 3.0  James    WMS-22793 Add BackToScreen config (james02) */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Move_SKU_Lottable] (
@@ -156,7 +157,8 @@ DECLARE  @cLottable01_Code    NVARCHAR( 20),
          @cStoredProd         NVARCHAR( 250),
          @nCountLot           INT,
 -- SOS#81879 (End)
-
+         @cBackToScreen       NVARCHAR( 10), 
+         
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
    @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),
@@ -216,6 +218,7 @@ SELECT
    @cSearchLottable04 = V_String7,
    @cPUOM_Desc        = V_String8, -- Pref UOM desc
    @cMUOM_Desc        = V_String9, -- Master UOM desc
+   @cBackToScreen     = V_String10,
    @cToLOC            = V_String17,
    @cToID             = V_String18,
    @cLottable01_Code  = V_String19, -- SOS#81879
@@ -308,6 +311,8 @@ BEGIN
    SET @cDecodeLabelNo = rdt.RDTGetConfig( @nFunc, 'DecodeLabelNo', @cStorerKey)    --(cc01)
    IF @cDecodeLabelNo = '0'
       SET @cDecodeLabelNo = ''
+
+   SET @cBackToScreen = rdt.RDTGetConfig( @nFunc, 'BackToScreen', @cStorerKey)
 
    -- EventLog
    EXEC RDT.rdt_STD_EventLog
@@ -1862,14 +1867,6 @@ Step 8. scn = 1047. Message screen
 ********************************************************************************/
 Step_8:
 BEGIN
-   -- Go back to 1st screen
-   SET @nScn  = @nScn - 7
-   SET @nStep = @nStep - 7
-
-   -- Prep next screen var
-   SET @cFromLOC = ''
-   SET @cOutField01 = '' -- FromLOC
-
    SET @cFieldAttr01 = ''
    SET @cFieldAttr02 = ''
    SET @cFieldAttr03 = ''
@@ -1885,6 +1882,39 @@ BEGIN
    SET @cFieldAttr13 = ''
    SET @cFieldAttr14 = ''
    SET @cFieldAttr15 = ''
+
+   IF EXISTS( SELECT 1 FROM STRING_SPLIT( @cBackToScreen, ',') WHERE TRIM( value) = '3') -- SKU screen 
+   BEGIN
+      -- Prep next screen var
+      SET @cOutField01 = @cFromLOC
+      SET @cOutField02 = @cFromID
+      SET @cOutField03 = '' --@cSKU
+
+      -- Go to SKU screen
+      SET @nScn  = @nScn - 5
+      SET @nStep = @nStep - 5
+   END
+   ELSE IF EXISTS( SELECT 1 FROM STRING_SPLIT( @cBackToScreen, ',') WHERE TRIM( value) = '2') -- From ID screen
+   BEGIN
+      -- Prep next screen var
+      SET @cFromID = ''
+      SET @cOutField01 = @cFromLOC
+      SET @cOutField02 = '' --@cFromID
+
+      -- Go to From ID screen
+      SET @nScn  = @nScn - 6
+      SET @nStep = @nStep - 6
+   END
+   ELSE
+   BEGIN
+      -- Go back to 1st screen
+      SET @nScn  = @nScn - 7
+      SET @nStep = @nStep - 7
+
+      -- Prep next screen var
+      SET @cFromLOC = ''
+      SET @cOutField01 = '' -- FromLOC
+   END
 END
 GOTO Quit
 
@@ -2033,6 +2063,7 @@ BEGIN
       V_String7  = @cSearchLottable04,
       V_String8  = @cPUOM_Desc,
       V_String9  = @cMUOM_Desc,
+      V_String10 = @cBackToScreen,
       V_String17 = @cToLOC,
       V_String18 = @cToID,
       V_String19 = @cLottable01_Code, -- SOS#81879
