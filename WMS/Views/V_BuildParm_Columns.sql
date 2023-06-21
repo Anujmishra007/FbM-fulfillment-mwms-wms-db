@@ -37,7 +37,8 @@ GO
 /*                            analysis                                  */
 /* 2022-03-13  Wan06    1.9   LFWM-4007 - CN_SCE_Wave_Release add order */
 /*                            parameter                                 */
-/* 2023-04-17  Wan04    2.0   LFWM-3978-[CN] LULU_OrderParam_Sort by LOC*/
+/* 2023-04-17  Wan07    2.0   LFWM-3978-[CN] LULU_OrderParam_Sort by LOC*/
+/* 2023-05-26  Wan08    2.1   LFWM-4297 - PROD - CN WaveParm_Sort by LOC*/
 /************************************************************************/
 CREATE OR ALTER VIEW V_BuildParm_Columns AS
 SELECT BuildParmType = 'BUILDLOADPARM'
@@ -176,13 +177,13 @@ SELECT BuildParmType = 'BUILDWAVEPARM'
       ,CondType  = 'SORT'
       ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
 FROM INFORMATION_SCHEMA.COLUMNS Col
-WHERE Col.TABLE_NAME IN ('ORDERDETAIL', 'ORDERS', 'ORDERINFO')                      --(Wan04) - START
+WHERE Col.TABLE_NAME IN ('ORDERDETAIL', 'ORDERS', 'ORDERINFO', 'PICKDETAIL')        --(Wan08)--(Wan04) - START
 --AND Col.COLUMN_NAME IN ('SKU')
 AND Col.COLUMN_NAME NOT IN ('EditWho', 'AddWho', 'ArchiveCop', 'TrafficCop')
 UNION ALL
 SELECT BuildParmType = 'BUILDWAVEPARM'
       ,CondType  = 'SORT'
-      ,FieldName = 'Sku_Total_OpenQty'                                              --(Wan04) - END
+      ,FieldName = 'Sku_Total_OpenQty'                                                       --(Wan04) - END
 UNION ALL
 SELECT BuildParmType = 'BUILDWAVEPARM'
       ,CondType  = 'GROUP'
@@ -208,12 +209,12 @@ SELECT BuildParmType = 'WAVEBUILDLOAD'                                          
 FROM INFORMATION_SCHEMA.COLUMNS Col
 WHERE Col.TABLE_NAME IN ('ORDERDETAIL')
 AND Col.COLUMN_NAME IN ('SKU')
-UNION ALL                                                                         --(Wan04) - START
+UNION ALL                                                                         --(Wan07) - START
 SELECT BuildParmType = 'WAVEBUILDLOAD'                                          
       ,CondType  = 'SORT'
       ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
 FROM INFORMATION_SCHEMA.COLUMNS Col
-WHERE Col.TABLE_NAME IN ('LOC')                                                  --(Wan04) - END
+WHERE Col.TABLE_NAME IN ('LOC')                                                  --(Wan07) - END
 UNION ALL
 SELECT BuildParmType = 'WAVEBUILDLOAD'                                           --(Wan03)
       ,CondType  = 'GROUP'

@@ -4,7 +4,7 @@ SET QUOTED_IDENTIFIER OFF
 GO   
 /************************************************************************/                                                                                  
 /* Store Procedure: lsp_Build_Wave                                      */                                                                                  
-/* Creation Date:                                                       */                                                                                  
+/* Creation Date:                                                       */                                                                                 
 /* Copyright: LFL                                                       */                                                                                  
 /* Written by: Wan                                                      */                                                                                  
 /*                                                                      */                                                                                  
@@ -12,7 +12,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 2.6                                                    */                                                                                  
+/* PVCS Version: 2.7                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -53,6 +53,10 @@ GO
 /*                            due to rebuild using same batchno         */ 
 /* 2023-03-20  Wan13    2.6   LFWM-4085 - UAT -CN  Build Wave error     */
 /*                            parameters not tally                      */
+/* 2023-05-17  Wan14    2.7   LFWM-4244 - PROD-CN SCE Wave BuildGenerate*/
+/*                            Load                                      */
+/* 2023-05-26  Wan15    2.7   LFWM-4297 - PROD - CN WaveParm_Sort by LOC*/
+/* 2023-05-31  Wan16    2.8   LFWM-4288 - TW UAT SCE Build Wave Parameter*/
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_Build_Wave]                                                                                                                       
       @c_BuildParmKey      NVARCHAR(10)                                                                                                                    
@@ -82,6 +86,9 @@ AS
    DECLARE @n_CondLevel                INT            = 0
          , @n_PreCondLevel             INT            = 0                                                                                                                 
          , @n_CurrCondLevel            INT            = 0
+         
+         , @n_BuildWaveDetailLog_From  BIGINT         = 0                           --(Wan14)
+         , @n_BuildWaveDetailLog_To    BIGINT         = 0                           --(Wan14)
                                               
          , @b_DeleteTmpOrders          BIT            = 0
 
@@ -94,7 +101,8 @@ AS
                           
          , @n_cnt                      INT            = 0 
          , @n_BuildGroupCnt            INT            = 0    
-                                                                                    
+                                             
+         , @n_MaxSKUInWave             INT            = 0                           --(Wan16)                                                                              
          , @n_NoOfSKUInOrder           INT            = 0
          , @n_MaxWaveOrders            INT            = 0                                                                                                               
          , @n_MaxOpenQty               INT            = 0
@@ -184,6 +192,7 @@ AS
          , @n_TotalOrders              INT            = 0                                                                                                                 
          , @n_TotalOpenQty             INT            = 0
          , @n_TotalOrderCnt            INT            = 0
+         , @n_ToBeSkuInWave            INT            = 0                           --(Wan16)
          , @n_Weight                   FLOAT          = 0.00
          , @n_Cube                     FLOAT          = 0.00
          , @n_TotalWeight              FLOAT          = 0.00
@@ -434,8 +443,30 @@ AS
                             + CAST(@n_NoOfSKUInOrder AS NVARCHAR)
          END
          SET @n_idx = @n_idx + 1
-      END
 
+         IF @c_Restriction Like '9_MaxSkuPerWave'                                   --(Wan16) - START
+         BEGIN
+            SET @n_MaxSkuInWave = @c_RestrictionValue  
+            IF @c_BuildWaveType = ''
+            BEGIN
+               SET @n_MaxSkuInWave = @c_RestrictionBuildValue  
+            END
+            
+            IF @c_SQLHaving = '' 
+            BEGIN
+               SET @c_SQLHaving = ' HAVING '
+            END
+            ELSE
+            BEGIN
+               SET @c_SQLHaving = @c_SQLHaving + ' AND '
+            END
+
+            SET @c_SQLHaving= @c_SQLHaving + 'COUNT(DISTINCT ORDERDETAIL.SKU)' 
+                            + ' <= ' 
+                            + CAST(@n_MaxSkuInWave AS NVARCHAR)
+         END                                                                        --(Wan16) - END
+         SET @n_idx = @n_idx + 1
+      END
       --------------------------------------------------
       -- Get Build Wave By Sorting & Grouping Condition
       --------------------------------------------------
@@ -513,7 +544,7 @@ AS
             ELSE                                                                                                                                                  
                SET @c_SortSeq = ''                                                                                                                                 
                                                            
-            IF @c_TableName = 'ORDERDETAIL'                                                                                                                        
+            IF @c_TableName IN ( 'ORDERDETAIL', 'PICKDETAIL' )                      --(Wan15)                                                                                                                      
                SET @c_FieldName = 'MIN('+RTRIM(@c_FieldName) + ')'                                                                                                
             ELSE  
             BEGIN                                                     
@@ -1404,6 +1435,28 @@ AS
             GOTO EXIT_SP
          END
 
+         IF @n_MaxSkuInWave > 0                                                     --(Wan16) - START
+         BEGIN
+            SELECT @n_ToBeSkuInWave = COUNT(w.Sku) 
+            FROM (
+                     SELECT o.Sku
+                     FROM dbo.WAVEDETAIL AS w (NOLOCK)
+                     JOIN dbo.ORDERDETAIL AS o (NOLOCK) ON o.OrderKey = w.OrderKey
+                     WHERE w.WaveKey = @c_WaveKey
+                     UNION
+                     SELECT o.Sku
+                     FROM dbo.ORDERDETAIL AS o (NOLOCK) 
+                     WHERE o.OrderKey = @c_Orderkey
+                  ) w   
+                  
+            IF @n_ToBeSkuInWave > @n_MaxSkuInWave
+            BEGIN
+               SET @c_WaveKey = ''
+               SET @n_FetchOrderStatus = -1
+               GOTO INSERT_DETLOG               
+            END
+         END                                                                        --(Wan16) - END
+         
          --(Wan06) - START
          IF @n_TotalOpenQty + @n_OpenQty > @n_MaxOpenQty AND @n_MaxOpenQty > 0
          BEGIN
@@ -1573,6 +1626,12 @@ AS
                   ,  @d_StartTime
                   ,  CONVERT(CHAR(12),@d_EndTime - @d_StartTime ,114)
                   )
+                  
+               SET @n_BuildWaveDetailLog_To = @@IDENTITY                            --(Wan14) - START                        
+               IF @n_BuildWaveDetailLog_From = 0 
+               BEGIN 
+                  SET @n_BuildWaveDetailLog_From = @n_BuildWaveDetailLog_To
+               END                                                                  --(Wan14) - END
             END TRY
                                                                                                                                            
             BEGIN CATCH                                                                                                                                                      
@@ -1780,8 +1839,20 @@ EXIT_SP:
                   BEGIN TRAN
                END
             END                                                                                                                                                                                         
-                                                                                                                                       
          END CATCH     
+         
+         IF @n_BuildWaveDetailLog_From > 0 AND @n_BuildWaveDetailLog_To > 0         --Wan14 - START   
+         BEGIN
+            SET @b_Success = 1                                                             
+            EXEC WM.lsp_Build_Wave_Post
+               @n_BatchNo                 = @n_BatchNo
+            ,  @n_BuildWaveDetailLog_From = @n_BuildWaveDetailLog_From  
+            ,  @n_BuildWaveDetailLog_To   = @n_BuildWaveDetailLog_To 
+            ,  @b_Success                 = @b_Success  OUTPUT  
+            ,  @n_err                     = @n_err      OUTPUT                                                                                                             
+            ,  @c_ErrMsg                  = @c_ErrMsg   OUTPUT 
+            ,  @b_debug                   = @b_debug                                    
+         END                                                                        --Wan14 - END 
       END
    END                                                                                                                                                       
   

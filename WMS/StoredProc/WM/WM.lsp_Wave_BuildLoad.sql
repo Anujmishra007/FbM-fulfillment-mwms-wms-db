@@ -12,7 +12,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.6                                                    */                                                                                  
+/* PVCS Version: 1.7                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -31,6 +31,8 @@ GO
 /*                            generate LoadPlan By Wave                 */
 /*                            DevOps Combine Script                     */
 /* 2023-04-17  Wan04    1.5   LFWM-3978-[CN] LULU_OrderParam_Sort by LOC*/
+/* 2023-05-17  Wan05    1.7   LFWM-4244 - PROD-CN SCE Wave BuildGenerate*/
+/*                            Load                                      */
 /* 2023-05-22  Wan06    1.6   LFWM-4274 - CN UAT Generate Load Info into*/
 /*                            BuildLoadLog Table                        */
 /************************************************************************/                                                                                  
@@ -42,7 +44,8 @@ CREATE OR ALTER PROC [WM].[lsp_Wave_BuildLoad]
    ,  @n_err            INT            = 0  OUTPUT                                                                                                             
    ,  @c_ErrMsg         NVARCHAR(255)  = '' OUTPUT 
    ,  @c_UserName       NVARCHAR(128)   = ''              
-   ,  @b_debug          INT            = 0                                                                                                                              
+   ,  @b_debug          INT            = 0  
+   ,  @c_WaveBuildLoadParmkey NVARCHAR(10)   = ''                                         --Wan05                                                                                                                                
 AS                                                                                                                                                          
    SET NOCOUNT ON                                                                                                                                           
    SET ANSI_NULLS OFF                                                                                                                                       
@@ -249,21 +252,44 @@ AS
   
    SET @n_err = 0                                                                                                                                              
    SET @c_ErrMsg = ''                                                                                                                                         
-   SET @b_Success = 1                                                                                                                                           
+   SET @b_Success = 1
+   SET @c_WaveBuildLoadParmkey = ISNULL(@c_WaveBuildLoadParmkey,'')                 --(Wan05)                                                                                                                                            
 
    SET @n_Cnt = 0
-   SELECT TOP 1                                                                     --(Wan06)  
-          @n_Cnt = 1
-         ,@c_BuildKeyFacility = BPCFG.Facility
-         ,@c_BuildKeyStorerkey= BPCFG.Storerkey
-         ,@c_BuildParmKey = BP.BuildParmKey 
-         ,@c_BuildParmGroup = BP.ParmGroup                                          --(Wan06)       
-   FROM BUILDPARM BP WITH (NOLOCK)   
-   JOIN BUILDPARMGROUPCFG BPCFG WITH (NOLOCK) ON BP.ParmGroup = BPCFG.ParmGroup
-                                             AND BPCFG.[Type] = 'WaveBuildLoad'
-   WHERE BPCFG.Facility = @c_Facility
-   AND   BPCFG.Storerkey= @c_Storerkey
-   ORDER BY BP.BuildParmKey
+   SET @c_SQL = N'SELECT TOP 1 '                                                    --(Wan05) - START
+              + '  @n_Cnt = 1'
+              + ' ,@c_BuildKeyFacility = BPCFG.Facility'
+              + ' ,@c_BuildKeyStorerkey= BPCFG.Storerkey'
+              + ' ,@c_BuildParmKey = BP.BuildParmKey' 
+              + ' ,@c_BuildParmGroup = BP.ParmGroup'                                --(Wan06) 
+              + ' FROM BUILDPARM BP WITH (NOLOCK)'    
+              + ' JOIN BUILDPARMGROUPCFG BPCFG WITH (NOLOCK) ON BP.ParmGroup = BPCFG.ParmGroup'
+              +                                           ' AND BPCFG.[Type] = ''WaveBuildLoad'''
+              + ' WHERE BPCFG.Facility = @c_Facility'
+              + ' AND   BPCFG.Storerkey= @c_Storerkey'
+              + CASE WHEN @c_WaveBuildLoadParmkey = ''  THEN ''  
+                     ELSE ' AND BP.BuildParmKey = @c_WaveBuildLoadParmkey' END
+              + ' ORDER BY BP.BuildParmKey'
+
+   SET @c_SQLParms = N'@n_Cnt                   INT          OUTPUT '
+                   + ',@c_BuildKeyFacility      NVARCHAR(5)  OUTPUT '
+                   + ',@c_BuildKeyStorerkey     NVARCHAR(15) OUTPUT '
+                   + ',@c_BuildParmKey          NVARCHAR(10) OUTPUT ' 
+                   + ',@c_BuildParmGroup        NVARCHAR(30) OUTPUT '               --(Wan06) 
+                   + ',@c_Facility              NVARCHAR(5)  '
+                   + ',@c_Storerkey             NVARCHAR(15) ' 
+                   + ',@c_WaveBuildLoadParmkey  NVARCHAR(10) '                    
+   
+   EXEC sp_ExecuteSQL @c_SQL 
+                   ,  @c_SQLParms
+                   ,  @n_Cnt                    OUTPUT
+                   ,  @c_BuildKeyFacility       OUTPUT
+                   ,  @c_BuildKeyStorerkey      OUTPUT
+                   ,  @c_BuildParmKey           OUTPUT 
+                   ,  @c_BuildParmGroup         OUTPUT                              --(Wan06) 
+                   ,  @c_Facility              
+                   ,  @c_Storerkey             
+                   ,  @c_WaveBuildLoadParmkey                                       --(Wan05) - END 
 
    IF @n_Cnt = 0
    BEGIN
