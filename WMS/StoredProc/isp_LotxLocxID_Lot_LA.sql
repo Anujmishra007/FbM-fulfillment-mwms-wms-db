@@ -27,6 +27,9 @@ GO
 /* 31-Mar-2023 Wan01    1.4   LFWM-4059 - PROD CN Pick Management LOT   */
 /*                            sorting and filter of all the detail fields*/
 /*                            is invalid, like Lottable03               */
+/* 09-May-2023 CheeMunSim    1.5   LFWM-4286 - UAT & PROD CN Pick Management LOT   */
+/*                                 enable values for columns from lottable06       */
+/*                                 to lottable15       */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_LotxLocxID_Lot_LA] 
    @c_StorerKey         NVARCHAR(15)
@@ -80,7 +83,17 @@ BEGIN
          ,  Lottable02        NVARCHAR(18)   NOT NULL DEFAULT('')
          ,  Lottable03        NVARCHAR(18)   NOT NULL DEFAULT('')
          ,  Lottable04        NVARCHAR(24)   NULL   
-         ,  Lottable05        NVARCHAR(24)   NULL                       
+         ,  Lottable05        NVARCHAR(24)   NULL        
+         ,  Lottable06        NVARCHAR(30)   NOT NULL DEFAULT('') --(CheeMunSim) - 1.5 START
+         ,  Lottable07        NVARCHAR(30)   NOT NULL DEFAULT('')
+         ,  Lottable08        NVARCHAR(30)   NOT NULL DEFAULT('')
+         ,  Lottable09        NVARCHAR(30)   NOT NULL DEFAULT('')
+         ,  Lottable10        NVARCHAR(30)   NOT NULL DEFAULT('')
+         ,  Lottable11        NVARCHAR(30)   NOT NULL DEFAULT('')
+         ,  Lottable12        NVARCHAR(30)   NOT NULL DEFAULT('')
+         ,  Lottable13        NVARCHAR(24)   NULL
+         ,  Lottable14        NVARCHAR(24)   NULL
+         ,  Lottable15        NVARCHAR(24)   NULL		 		  --(CheeMunSim) - 1.5 END		 
          )                                                        --(Wan03) - END
    
    SET @n_StartTCnt = @@TRANCOUNT
@@ -155,6 +168,12 @@ BEGIN
                +       '        WHEN (LOC.Status = ''HOLD'') THEN ''HOLD (LOC)''  '
                +       '        WHEN (ID.Status = ''HOLD'') THEN ''HOLD (ID)'' '
                +       '        ELSE ''OK'' END as Status '                           --END ML01
+			   			   +       ' , LOTATTRIBUTE.Lottable06, LOTATTRIBUTE.Lottable07, LOTATTRIBUTE.Lottable08' --(CheeMunSim) 1.5
+			   +       ' , LOTATTRIBUTE.Lottable09, LOTATTRIBUTE.Lottable10, LOTATTRIBUTE.Lottable11' --(CheeMunSim) 1.5
+			   +       ' , LOTATTRIBUTE.Lottable12'													  --(CheeMunSim) 1.5
+               +       ' , CONVERT(NVARCHAR(24),LOTATTRIBUTE.Lottable13,121) AS Lottable13' 		  --(CheeMunSim) 1.5
+			   +       ' , CONVERT(NVARCHAR(24),LOTATTRIBUTE.Lottable14,121) AS Lottable14' 		  --(CheeMunSim) 1.5
+			   +       ' , CONVERT(NVARCHAR(24),LOTATTRIBUTE.Lottable15,121) AS Lottable15' 		  --(CheeMunSim) 1.5
                +  ' FROM LOTxLOCxID WITH (NOLOCK)'
                +  ' JOIN LOTATTRIBUTE WITH (NOLOCK) ON (LOTxLOCxID.Lot = LOTATTRIBUTE.Lot)'
                +  ' JOIN LOC WITH (NOLOCK) ON (LOTxLOCxID.Loc = LOC.Loc)'
@@ -172,9 +191,11 @@ BEGIN
                +       '         WHEN (LOC.Status = ''HOLD'') THEN ''HOLD (LOC)''  '
                +       '         WHEN (ID.Status = ''HOLD'') THEN ''HOLD (ID)'' '
                +       '         ELSE ''OK'' END '                                     --END ML01
+			   +       '   ,LOTATTRIBUTE.Lottable06, LOTATTRIBUTE.Lottable07, LOTATTRIBUTE.Lottable08, LOTATTRIBUTE.Lottable09, LOTATTRIBUTE.Lottable10'   --(CheeMunSim) 1.5
+			   +       '   ,LOTATTRIBUTE.Lottable11, LOTATTRIBUTE.Lottable12, LOTATTRIBUTE.Lottable13, LOTATTRIBUTE.Lottable14, LOTATTRIBUTE.Lottable15'   --(CheeMunSim) 1.5
 
    INSERT INTO #ReturnResult                    --(Wan03)
-      (Lot, QtyAvailable, Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, [Status])  
+      (Lot, QtyAvailable, Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, [Status], Lottable06, Lottable07, Lottable08, Lottable09, Lottable10, Lottable11, Lottable12, Lottable13, Lottable14, Lottable15) --(CheeMunSim) 1.5  
    EXEC SP_ExecuteSQL @c_SQL
                ,N'@c_Storerkey  NVARCHAR(15)
                  ,@c_Sku         NVARCHAR(20)    
@@ -236,7 +257,17 @@ BEGIN
                + ', Lottable03'   
                + ', Lottable04 = CONVERT(DATETIME, Lottable04)'  
                + ', Lottable05 = CONVERT(DATETIME, Lottable05)' 
-               + ', [Status]'                                                                                            
+               + ', [Status]'  
+               + ', Lottable06'									--(CheeMunSim) 1.5
+               + ', Lottable07'									--(CheeMunSim) 1.5
+               + ', Lottable08'									--(CheeMunSim) 1.5
+               + ', Lottable09'									--(CheeMunSim) 1.5
+               + ', Lottable10'									--(CheeMunSim) 1.5		
+               + ', Lottable11'									--(CheeMunSim) 1.5
+               + ', Lottable12'									--(CheeMunSim) 1.5
+               + ', Lottable13 = CONVERT(DATETIME, Lottable13)' --(CheeMunSim) 1.5 
+               + ', Lottable14 = CONVERT(DATETIME, Lottable14)' --(CheeMunSim) 1.5
+               + ', Lottable15 = CONVERT(DATETIME, Lottable15)' --(CheeMunSim) 1.5				   
                + ' FROM #ReturnResult' 
                + @c_SearchCondition
                + @c_SortPreference  
