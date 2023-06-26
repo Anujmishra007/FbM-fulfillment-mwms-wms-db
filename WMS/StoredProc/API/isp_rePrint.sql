@@ -1,11 +1,8 @@
+
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-
-/****** Object:  StoredProcedure [API].[isp_rePrint]    Script Date: 6/3/2020 5:02:23 PM ******/
-
-
 
 /******************************************************************************/
 /* Store procedure: isp_rePrint                                               */
@@ -16,7 +13,7 @@ GO
 /* 2021-08-17   1.1  Chermaine  TPS-623 use pass in b2b pickslipNo (cc01)     */
 /* 2021-09-05   1.2  Chermaine  TPS-11 ErrMsg add to rdtmsg (cc02)            */
 /* 2021-12-08   1.3  Chermaine  TPS-600 Split Print button (cc03)             */
-/* 2022-04-15   1.4  YeeKung    Add LblPrinter/PPr Printer in web (yeekung01) */
+/* 2023-05-30   1.4  yeekung  TPS-708 All print all config                    */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_rePrint] (
@@ -89,15 +86,12 @@ DECLARE
    @nPrintPackList      NVARCHAR( 1),
    @cSQL                NVARCHAR( MAX)
 
-DECLARE @cLabelPrinter NVARCHAR ( 30)
-DECLARE @cPaperPrinter NVARCHAR ( 30)
-
 SET @nPrintPackList = 'N'
 
 --decode json
 select @cStorerKey = StorerKey, @cFacility = Facility,@nFunc = Func,@cUserName = UserName,@cLangCode = LangCode
 ,@cScanNo = ScanNo,@nCartonNo = CartonNo, @cType = ctype,  @cWorkstation = Workstation, @cOrderKeyPrint = OrderKey
-,@PrinterType = PrinterType,@cLabelPrinter=LabelPrinter,@cPaperPrinter = PaperPrinter  --(cc03)
+,@PrinterType = PrinterType  --(cc03)
    FROM OPENJSON(@json)
    WITH (
 	   StorerKey      NVARCHAR( 30),
@@ -110,9 +104,7 @@ select @cStorerKey = StorerKey, @cFacility = Facility,@nFunc = Func,@cUserName =
       cType          NVARCHAR( 30),
       Workstation    NVARCHAR( 30),
       OrderKey       NVARCHAR( 10),
-      PrinterType    NVARCHAR( 10),
-      LabelPrinter   NVARCHAR( 20),
-      PaperPrinter   NVARCHAR( 20)
+      PrinterType    NVARCHAR( 10)
    )
 
    --SELECT @cUserName AS cUserNameb4
@@ -166,65 +158,186 @@ END
 
 SELECT @cPickSlipNo AS picksliNo, @nPrintPackList '@nPrintPackList'
 
--- Common params ofr printing
-DECLARE @tShipLabel AS VariableTable
-INSERT INTO @tShipLabel (Variable, Value) VALUES
-   ( '@c_StorerKey',     @cStorerKey),
-   ( '@c_PickSlipNo',    @cPickSlipNo),
-   ( '@c_StartCartonNo', CAST( @nCartonNo AS NVARCHAR(10))),
-   ( '@c_EndCartonNo',   CAST( @nCartonNo AS NVARCHAR(10)))
 
 --lookup printer
-
+DECLARE @cLabelPrinter NVARCHAR ( 30)
+DECLARE @cPaperPrinter NVARCHAR ( 30)
 DECLARE @cLabelJobID   NVARCHAR ( 30)
 DECLARE @cPackingJobID NVARCHAR ( 30)
+DECLARE @curPrint      CURSOR
+DECLARE @cPrintAllLbl  NVARCHAR( 30)
+-- Common params ofr printing
+DECLARE @tShipLabel AS VariableTable
 
 set @cLabelJobID = ''
 set @cPackingJobID = ''
-IF ISNULL(@cWorkstation,'') <>''
+SELECT @cPaperPrinter = PrinterID FROM api.AppPrinter WITH (NOLOCK) WHERE Workstation = @cWorkstation AND printerType = 'Paper'
+SELECT @cLabelPrinter = PrinterID FROM api.AppPrinter WITH (NOLOCK) WHERE Workstation = @cWorkstation AND printerType = 'Label'
+
+SELECT @cPrintAllLbl=1 FROM storerConfig WITH (NOLOCK) WHERE storerKey = @cStorerKey AND configKey = 'TPS-PrintAllLbl' AND sValue = '1'
+
+
+IF ISNULL(@cPrintAllLbl,'') <> ''
 BEGIN
-   SELECT @cPaperPrinter = PrinterID FROM api.AppPrinter WITH (NOLOCK) WHERE Workstation = @cWorkstation AND printerType = 'Paper'
-   SELECT @cLabelPrinter = PrinterID FROM api.AppPrinter WITH (NOLOCK) WHERE Workstation = @cWorkstation AND printerType = 'Label'
+   --Close: packDetail  
+   SET @curPrint = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+   SELECT  cartonno 
+   FROM packdetail WITH (NOLOCK) 
+   WHERE pickslipno = @cPickSlipNo
+      AND storerKey = @cStorerKey
+   group by cartonno
+   order by CAST(cartonno AS  INT)
+   OPEN @curPrint  
+   FETCH NEXT FROM @curPrint INTO @nCartonNo  
+   WHILE @@FETCH_STATUS <> -1  
+   BEGIN  
+
+      select @cStorerKey,@cPickSlipNo,@nCartonNo
+
+      INSERT INTO @tShipLabel (Variable, Value) VALUES
+         ( '@c_StorerKey',     @cStorerKey),
+         ( '@c_PickSlipNo',    @cPickSlipNo),
+         ( '@c_StartCartonNo', CAST( @nCartonNo AS NVARCHAR(10))),
+         ( '@c_EndCartonNo',   CAST( @nCartonNo AS NVARCHAR(10)))
+
+
+      IF @PrinterType = 'Label' --(cc03)
+      BEGIN
+         -- Print label
+         IF EXISTS (select TOP 1 1 FROM rdt.rdtReport WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND reportType ='TPSHIPPLBL')
+         BEGIN
+	         IF ISNULL(@cLabelPrinter,'') = ''
+	         BEGIN
+		         SET @b_Success = 0
+                  SET @n_Err = 175625
+                  SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Label Printer setup not done. Please setup the Label Printer. Function : isp_rePrint'
+
+                  GOTO EXIT_SP
+	         END
+	         ELSE
+	         BEGIN
+		         EXEC API.isp_Print @cLangCode, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
+               'TPSHIPPLBL', -- Report type
+               @tShipLabel, -- Report params
+               'API.isp_RePrint', --source Type
+               @n_Err  OUTPUT,
+               @c_ErrMsg OUTPUT,
+               '1', --noOfCopy
+               '', --@cPrintCommand
+               @nJobID OUTPUT,
+               @cUsername
+
+               set @cLabelJobID = @nJobID
+
+               IF @n_Err <> 0
+               BEGIN
+                  SET @b_Success = 0
+                  SET @n_Err = @n_Err
+                  SET @c_ErrMsg = @c_ErrMsg
+                  GOTO EXIT_SP
+               END
+	         END
+         END
+      END
+
+      delete @tShipLabel
+
+      FETCH NEXT FROM @curPrint INTO @nCartonNo  
+   END
+   CLOSE @curPrint
+   DEALLOCATE  @curPrint
 END
-
-IF @PrinterType = 'Label' --(cc03)
+ELSE
 BEGIN
-   -- Print label
-   IF EXISTS (select TOP 1 1 FROM rdt.rdtReport WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND reportType ='TPSHIPPLBL')
+   IF ISNULL(@cOrderKeyPrint,'') = ''
    BEGIN
-	   IF ISNULL(@cLabelPrinter,'') = ''
+	   --b2b
+	   IF @cType <> 'pickslip' --(cc01)
 	   BEGIN
-		   SET @b_Success = 0
-            SET @n_Err = 175625
-            SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Label Printer setup not done. Please setup the Label Printer. Function : isp_rePrint'
-
-            GOTO EXIT_SP
+		   SELECT @cPickSlipNo = PickSlipNo FROM api.appSection WITH (NOLOCK) WHERE userID = @cOriUserName AND scanNo = @cScanNo
 	   END
 	   ELSE
 	   BEGIN
-		   EXEC API.isp_Print @cLangCode, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
-         'TPSHIPPLBL', -- Report type
-         @tShipLabel, -- Report params
-         'API.isp_RePrint', --source Type
-         @n_Err  OUTPUT,
-         @c_ErrMsg OUTPUT,
-         '1', --noOfCopy
-         '', --@cPrintCommand
-         @nJobID OUTPUT,
-         @cUsername
+		   SET @cPickSlipNo = @cScanNo
+	   END
 
-         set @cLabelJobID = @nJobID
-
-         IF @n_Err <> 0
-         BEGIN
-            SET @b_Success = 0
-            SET @n_Err = @n_Err
-            SET @c_ErrMsg = @c_ErrMsg
-            GOTO EXIT_SP
-         END
+	   IF EXISTS (SELECT TOP 1 1 FROM packHeader WHERE pickslipNo = @cPickSlipNo AND STATUS = 9)
+	   BEGIN
+		   SET @nPrintPackList = 'Y'
 	   END
    END
+   ELSE
+   BEGIN
+	   --b2c
+	   SELECT @cPickSlipNo = PickSlipNo FROM packHeader WITH (NOLOCK) WHERE orderkey = @cOrderKeyPrint AND storerKey = @cStorerKey
+	   IF EXISTS (SELECT TOP 1 1 FROM packHeader WHERE pickslipNo = @cPickSlipNo AND orderKey = @cOrderKeyPrint AND STATUS = 9)
+	   BEGIN
+		   SET @nPrintPackList = 'Y'
+	   END
+   END
+
+   SELECT @cPickSlipNo AS picksliNo, @nPrintPackList '@nPrintPackList'
+
+
+   INSERT INTO @tShipLabel (Variable, Value) VALUES
+      ( '@c_StorerKey',     @cStorerKey),
+      ( '@c_PickSlipNo',    @cPickSlipNo),
+      ( '@c_StartCartonNo', CAST( @nCartonNo AS NVARCHAR(10))),
+      ( '@c_EndCartonNo',   CAST( @nCartonNo AS NVARCHAR(10)))
+
+   set @cLabelJobID = ''
+   set @cPackingJobID = ''
+   SELECT @cPaperPrinter = PrinterID FROM api.AppPrinter WITH (NOLOCK) WHERE Workstation = @cWorkstation AND printerType = 'Paper'
+   SELECT @cLabelPrinter = PrinterID FROM api.AppPrinter WITH (NOLOCK) WHERE Workstation = @cWorkstation AND printerType = 'Label'
+
+   IF @PrinterType = 'Label' --(cc03)
+   BEGIN
+      -- Print label
+      IF EXISTS (select TOP 1 1 FROM rdt.rdtReport WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND reportType ='TPSHIPPLBL')
+      BEGIN
+	      IF ISNULL(@cLabelPrinter,'') = ''
+	      BEGIN
+		      SET @b_Success = 0
+               SET @n_Err = 175625
+               SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Label Printer setup not done. Please setup the Label Printer. Function : isp_rePrint'
+
+               GOTO EXIT_SP
+	      END
+	      ELSE
+	      BEGIN
+		      EXEC API.isp_Print @cLangCode, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
+            'TPSHIPPLBL', -- Report type
+            @tShipLabel, -- Report params
+            'API.isp_RePrint', --source Type
+            @n_Err  OUTPUT,
+            @c_ErrMsg OUTPUT,
+            '1', --noOfCopy
+            '', --@cPrintCommand
+            @nJobID OUTPUT,
+            @cUsername
+
+            set @cLabelJobID = @nJobID
+
+            IF @n_Err <> 0
+            BEGIN
+               SET @b_Success = 0
+               SET @n_Err = @n_Err
+               SET @c_ErrMsg = @c_ErrMsg
+               GOTO EXIT_SP
+            END
+	      END
+      END
+   END
 END
+
+-- Common params ofr printing
+DECLARE @tPackList AS VariableTable
+INSERT INTO @tPackList (Variable, Value) VALUES
+( '@c_StorerKey',     @cStorerKey),
+( '@c_PickSlipNo',    @cPickSlipNo),
+( '@c_StartCartonNo', CAST( @nCartonNo AS NVARCHAR(10))),
+( '@c_EndCartonNo',   CAST( @nCartonNo AS NVARCHAR(10)))
+
 IF @PrinterType = 'Paper' --(cc03)
 BEGIN
 	IF @nPrintPackList = 'Y'
@@ -243,7 +356,7 @@ BEGIN
 	      BEGIN
 		      EXEC API.isp_Print @cLangCode, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
             'TPPACKLIST', -- Report type
-            @tShipLabel, -- Report params
+            @tPackList, -- Report params
             'API.isp_RePrint', --source Type
             @n_Err  OUTPUT,
             @c_ErrMsg OUTPUT,
@@ -287,3 +400,58 @@ GO
 GRANT EXECUTE ON api.isp_rePrint TO NSQL
 GO
 
+
+IF @PrinterType = 'Paper' --(cc03)
+BEGIN
+	IF @nPrintPackList = 'Y'
+   BEGIN
+      IF EXISTS (select TOP 1 1 FROM rdt.rdtReport WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND reportType ='TPPACKLIST')
+      BEGIN
+	      IF ISNULL(@cPaperPrinter,'') = ''
+	      BEGIN
+		      SET @b_Success = 0
+            SET @n_Err = 175626
+            SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Paper Printer setup not done. Please setup the Paper Printer. Function : isp_rePrint'
+
+            GOTO EXIT_SP
+	      END
+	      ELSE
+	      BEGIN
+		      EXEC API.isp_Print @cLangCode, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
+            'TPPACKLIST', -- Report type
+ @tShipLabel, -- Report params
+            'API.isp_RePrint', --source Type
+            @n_Err  OUTPUT,
+            @c_ErrMsg OUTPUT,
+            '1', --noOfCopy
+            '', --@cPrintCommand
+            @nJobID OUTPUT,
+            @cUsername
+
+            SET @cPackingJobID = @nJobID
+
+            IF @n_Err <> 0
+            BEGIN
+               SET @b_Success = 0
+               SET @n_Err = @n_Err
+               SET @c_ErrMsg = @c_ErrMsg
+               GOTO EXIT_SP
+            END
+	      END
+      END
+   END
+END
+
+--set @cPackingJobID = 'test123'
+SET @b_Success = 1
+SET @jResult = (select @cLabelJobID as LabelJobID, @cPackingJobID as PackingJobID FOR JSON PATH )
+SET @n_Err = 0
+SET @c_ErrMsg = ''
+GOTO EXIT_SP
+
+
+
+EXIT_SP:
+REVERT
+
+END
