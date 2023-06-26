@@ -2,7 +2,6 @@ SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
-
 /************************************************************************/  
 /* Stored Proc: ispBatPA04                                              */  
 /* Creation Date: 05-AUG-2022                                           */  
@@ -23,6 +22,7 @@ GO
 /* Updates:                                                             */  
 /* Date        Author   Ver   Purposes                                  */  
 /* 05-Aug-2022 NJOW     1.0   DEVOPS combine script                     */  
+/* 26-Jun-2023 JS       1.1   fix logic for FP/HP's max/min carton      */  
 /************************************************************************/  
 CREATE OR ALTER PROC [dbo].[ispBatPA04]  
            @c_ReceiptKey     NVARCHAR(MAX)  
@@ -528,6 +528,7 @@ BEGIN
             PRINT '@n_MezzanineB=' + CAST(@n_MezzanineB AS NVARCHAR) + ' @n_MezzanineS=' + CAST(@n_MezzanineS AS NVARCHAR) + ' @n_MezzanineM=' + CAST(@n_MezzanineM AS NVARCHAR)  
             PRINT '@n_MezzanineX=' + CAST(@n_MezzanineX AS NVARCHAR) + ' @n_MezzanineY=' + CAST(@n_MezzanineY AS NVARCHAR) + ' @n_MezzanineZ=' + CAST(@n_MezzanineZ AS NVARCHAR)  
             PRINT '@n_SafetyStockSum=' + CAST(@n_SafetyStockSum AS NVARCHAR) + ' @n_SafetyStockLimit=' + CAST(@n_SafetyStockLimit AS NVARCHAR) + ' @c_MostEmptyLocPickZone=' + @c_MostEmptyLocPickZone  
+			PRINT '@n_SafetyStockPALocScore=' + CAST(@n_SafetyStockPALocScore AS NVARCHAR) + ' @c_SafetyStockPALocZone=' + CAST(@c_SafetyStockPALocZone AS NVARCHAR) 
          END  
       END  
               
@@ -566,6 +567,7 @@ BEGIN
               --Find same sku  
               IF @c_SuggestLoc = ''  
               BEGIN  
+
                  SELECT TOP 1 @n_RowID = RowID,  
                         @n_SafetyStockPALocQty = CASE WHEN TPA.LocationCategory = 'MezzanineB' THEN @n_MezzanineB   
                                                       WHEN TPA.LocationCategory = 'MezzanineS' THEN @n_MezzanineS   
@@ -663,19 +665,19 @@ BEGIN
                     --   SET @n_SuggestQty = @n_SafetyStockPALocQty   
 					
                     IF @n_SkuQtyRemaining < @n_SafetyStockPAQty  
-					          BEGIN
-					             IF @n_SkuQtyRemaining > @n_SafetyStockPALocQty
-					                SET @n_SuggestQty = @n_SafetyStockPALocQty  
-					             ELSE
-					                SET @n_SuggestQty = @n_SkuQtyRemaining  
-					          END                              
+					   BEGIN
+					      IF @n_SkuQtyRemaining > @n_SafetyStockPALocQty
+					         SET @n_SuggestQty = @n_SafetyStockPALocQty  
+					      ELSE
+					         SET @n_SuggestQty = @n_SkuQtyRemaining  
+					   END                              
                     ELSE 
-					          BEGIN
-					             IF @n_SafetyStockPAQty > @n_SafetyStockPALocQty
-					                SET @n_SuggestQty = @n_SafetyStockPALocQty  
-					             ELSE
-					                SET @n_SuggestQty = @n_SafetyStockPAQty       
-					          END	  
+					   BEGIN
+					      IF @n_SafetyStockPAQty > @n_SafetyStockPALocQty
+					         SET @n_SuggestQty = @n_SafetyStockPALocQty  
+					      ELSE
+					         SET @n_SuggestQty = @n_SafetyStockPAQty       
+					   END	  
                  END                          
   
                  IF @b_debug = 1  
@@ -717,19 +719,19 @@ BEGIN
                     --   SET @n_SuggestQty = @n_SafetyStockPALocQty   
 					
                     IF @n_SkuQtyRemaining < @n_SafetyStockPAQty  
-					          BEGIN
-					             IF @n_SkuQtyRemaining > @n_SafetyStockPALocQty
-					                SET @n_SuggestQty = @n_SafetyStockPALocQty  
-					             ELSE
-					                SET @n_SuggestQty = @n_SkuQtyRemaining  
-					          END
+					   BEGIN
+					      IF @n_SkuQtyRemaining > @n_SafetyStockPALocQty
+					         SET @n_SuggestQty = @n_SafetyStockPALocQty  
+					      ELSE
+					         SET @n_SuggestQty = @n_SkuQtyRemaining  
+					   END
                     ELSE 
-					          BEGIN
-					             IF @n_SafetyStockPAQty > @n_SafetyStockPALocQty
-					                SET @n_SuggestQty = @n_SafetyStockPALocQty  
-					             ELSE
-					                SET @n_SuggestQty = @n_SafetyStockPAQty       
-					          END	  
+					   BEGIN
+					      IF @n_SafetyStockPAQty > @n_SafetyStockPALocQty
+					         SET @n_SuggestQty = @n_SafetyStockPALocQty  
+					      ELSE
+					         SET @n_SuggestQty = @n_SafetyStockPAQty       
+					   END	  
                  END                
                             
                  IF @b_debug = 1  
@@ -876,13 +878,13 @@ BEGIN
                   IF @c_HBStockPALoc <> ''
                   BEGIN
                   	 --SELECT @n_HBStockPALocQty = FLOOR(@n_HB_PACarton / @n_HP_CartonCnt) 
-					           SELECT @n_HBStockPALocQty = FLOOR(@n_HB_PACarton / @n_FP_CartonCnt) * @n_FP_CartonCnt  --JS shoube be max multi FP*max HP Cartcnt
+					 SELECT @n_HBStockPALocQty = FLOOR(@n_HB_PACarton / @n_FP_CartonCnt) * @n_FP_CartonCnt  --JS shoube be max multi FP*max HP Cartcnt
                   	 
                   	 IF (@n_HB_PACarton - @n_HBStockPALocQty) >= @n_HP_CartonCnt
-					           BEGIN
-					              SET @n_HBStockPALocQty = @n_HBStockPALocQty + @n_HP_CartonCnt  --JS should be all max FP + min FP
-						            --SET @n_HBStockPALocQty = @n_HB_PACarton  
-					           END
+					    BEGIN
+					       --SET @n_HBStockPALocQty = @n_HBStockPALocQty + @n_HP_CartonCnt  --JS should be all max FP + min FP  --JS ver 1.1 
+						   SET @n_HBStockPALocQty = @n_HB_PACarton  --JS ver 1.1 left qty more than HP, should be @n_HBStockPALocQty + (@n_HB_PACarton - @n_HBStockPALocQty), then = @n_HB_PACarton
+					    END
                   END                                    
                     
                   IF @n_HBStockPALocQty > 0  
@@ -938,13 +940,13 @@ BEGIN
                   IF @c_HBStockPALoc <> ''
                   BEGIN
                   	 --SELECT @n_HBStockPALocQty = FLOOR(@n_HB_PACarton / @n_HP_CartonCnt) 
-					           SELECT @n_HBStockPALocQty = FLOOR(@n_HB_PACarton / @n_FP_CartonCnt) * @n_FP_CartonCnt  --JS shoube be max multi HP*max FP Cartoncnt
+					 SELECT @n_HBStockPALocQty = FLOOR(@n_HB_PACarton / @n_FP_CartonCnt) * @n_FP_CartonCnt  --JS shoube be max multi HP*max FP Cartoncnt
 										 
                   	 IF (@n_HB_PACarton - @n_HBStockPALocQty) >= @n_HP_CartonCnt
-					           BEGIN 
-                  	    SET @n_HBStockPALocQty = @n_HBStockPALocQty + @n_HP_CartonCnt  --JS should be all max HP + min HP
-                        --SET @n_HBStockPALocQty = @n_HB_PACarton  
-					           END
+					 BEGIN 
+                  	    --SET @n_HBStockPALocQty = @n_HBStockPALocQty + @n_HP_CartonCnt  --JS should be all max HP + min HP  --JS ver 1.1
+                        SET @n_HBStockPALocQty = @n_HB_PACarton  --JS ver 1.1 left qty more than HP, should be @n_HBStockPALocQty + (@n_HB_PACarton - @n_HBStockPALocQty), then = @n_HB_PACarton  
+					 END
                   END                                    
                     
                   IF @n_HBStockPALocQty > 0  
@@ -1298,7 +1300,7 @@ BEGIN
          IF EXISTS(SELECT 1 FROM LOC (NOLOCK) WHERE Loc = @c_SuggestLoc AND LocationRoom  = 'HIGHBAY') --if highbay skip RFPUTAWAY
             AND @c_ASNType = 'CASE'
             GOTO NEXT_LOC
-
+         
          WHILE @n_PAToLocQty > 0  
          BEGIN     
             SELECT TOP 1  
@@ -1685,3 +1687,5 @@ END -- procedure
 GO
 GRANT EXECUTE ON [dbo].[ispBatPA04] TO nSQL 
 GO
+
+
