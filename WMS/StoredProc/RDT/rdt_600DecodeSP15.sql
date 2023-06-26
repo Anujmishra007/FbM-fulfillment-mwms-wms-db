@@ -64,9 +64,11 @@ BEGIN
       BEGIN
          IF @nInputKey = 1 -- ENTER
          BEGIN
-            SELECT @2DBarcode = V_max
+            SELECT @2DBarcode = V_MAX
             FROM RDT.RDTMOBREC
             WHERE mobile = @nMobile
+
+ 
              
             DECLARE @tUCCtbl Table 
             ( 
@@ -91,7 +93,7 @@ BEGIN
 
                IF @cPatindex <>0
                BEGIN
-                  SET @2DBarcode = replace(@2DBarcode,substring(@2DBarcode,@cPatindex,1),'')  
+                  SET @2DBarcode = replace(@2DBarcode,substring(@2DBarcode,@cPatindex,1),' ')  
                END
                ELSE
                   BREAK

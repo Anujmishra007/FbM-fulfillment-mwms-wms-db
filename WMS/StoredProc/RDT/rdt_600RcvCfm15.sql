@@ -104,7 +104,7 @@ BEGIN
 
          IF @cPatindex <>0
          BEGIN
-            SET @cBarcode = replace(@cBarcode,substring(@cBarcode,@cPatindex,1),'')  
+            SET @cBarcode = replace(@cBarcode,substring(@cBarcode,@cPatindex,1),' ')  
          END
          ELSE
             BREAK
