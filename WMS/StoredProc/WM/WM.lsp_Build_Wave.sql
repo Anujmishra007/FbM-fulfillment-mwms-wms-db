@@ -1,7 +1,9 @@
-SET ANSI_NULLS OFF
+SET ANSI_NULLS ON
 GO
-SET QUOTED_IDENTIFIER OFF
-GO   
+
+SET QUOTED_IDENTIFIER ON
+GO
+
 /************************************************************************/                                                                                  
 /* Store Procedure: lsp_Build_Wave                                      */                                                                                  
 /* Creation Date:                                                       */                                                                                 
@@ -57,8 +59,9 @@ GO
 /*                            Load                                      */
 /* 2023-05-26  Wan15    2.7   LFWM-4297 - PROD - CN WaveParm_Sort by LOC*/
 /* 2023-05-31  Wan16    2.8   LFWM-4288 - TW UAT SCE Build Wave Parameter*/
+/* 2023-06-26  CF01     2.9   Reduce increment to only by one           */
 /************************************************************************/                                                                                  
-CREATE OR ALTER PROC [WM].[lsp_Build_Wave]                                                                                                                       
+ALTER   PROC [WM].[lsp_Build_Wave]                                                                                                                       
       @c_BuildParmKey      NVARCHAR(10)                                                                                                                    
    ,  @c_Facility          NVARCHAR(5)                                                                                                                     
    ,  @c_StorerKey         NVARCHAR(15)  
@@ -442,7 +445,7 @@ AS
                             + ' ' 
                             + CAST(@n_NoOfSKUInOrder AS NVARCHAR)
          END
-         SET @n_idx = @n_idx + 1
+         --SET @n_idx = @n_idx + 1                                                  --(CF01)
 
          IF @c_Restriction Like '9_MaxSkuPerWave'                                   --(Wan16) - START
          BEGIN
@@ -1870,7 +1873,5 @@ EXIT_SP:
    END                                                                                                                                                         
 -- End Procedure
 GO
-GRANT EXECUTE ON [WM].[lsp_Build_Wave] TO nSQL 
-GO        
 
 
