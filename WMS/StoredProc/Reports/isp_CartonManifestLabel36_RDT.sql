@@ -26,8 +26,9 @@ GO
 /* 28-JUL-2021  CSCHONG       WMS-17587 fix dupliacte qty issue (CS03)  */
 /* 24-JAN-2022  MINGLE        WMS-18724 add new field(ML01)             */
 /* 24-JAN-2022  MINGLE        DevOps Combine Script                     */
-/* 28-OCT-2022  MINGLE        WMS-21093 add new mappings (ML02)			*/
-/* 09-DEC-2022  MINGLE        WMS-21328 modify logic (ML03)			      */
+/* 28-OCT-2022  MINGLE        WMS-21093 add new mappings (ML02)         */
+/* 09-DEC-2022  MINGLE        WMS-21328 modify logic (ML03)             */
+/* 26-MAY-2023  CSCHONG       WMS-22605 add new field (CS04)            */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_CartonManifestLabel36_RDT] (
       @c_Orderkey      NVARCHAR(10) 
@@ -46,6 +47,8 @@ BEGIN
          , @c_DeliveryMode NVARCHAR(30)
          , @n_CAMT         FLOAT
          , @c_editdate     NVARCHAR(50)
+         , @c_SPCNotes1    NVARCHAR(35)   --CS01 
+         , @c_SPCNotes2    NVARCHAR(35)   --CS01 
 
    SET @n_IsRDT     = 0
    SET @n_StartTCnt = @@TRANCOUNT
@@ -84,10 +87,18 @@ BEGIN
   FROM dbo.OrderInfo OIF WITH (NOLOCK) 
   WHERE OIF.Orderkey = @c_Orderkey
 
+----CS04 S
+--   SELECT TOP 1 @c_SPCNotes1 = SUBSTRING(c.long,0,35)
+--               ,@c_SPCNotes2 = SUBSTRING(c.Notes,0,35)
+--   FROM dbo.CODELKUP C WITH (NOLOCK)
+--   WHERE C.LISTNAME ='SHIPMETHOD'
+--   AND  ISNULL(C.notes,'') <> ''   AND ISNULL(C.long,'') <> '' 
+----CS04 E
+
  SELECT     Orderkey = ORDERS.Orderkey
          ,  ConsigneeKey = ISNULL(RTRIM(ORDERS.ConsigneeKey),'') 
          --,  C_Company  = ISNULL(RTRIM(ORDERS.C_Company),'') 
-			,  C_Company  = CASE WHEN STORER.SUSR5 = 'FOM' THEN ISNULL(RTRIM(ORDERS.C_Contact1),'') ELSE ISNULL(RTRIM(ORDERS.C_Company),'') END	--ML03 
+         ,  C_Company  = CASE WHEN STORER.SUSR5 = 'FOM' THEN ISNULL(RTRIM(ORDERS.C_Contact1),'') ELSE ISNULL(RTRIM(ORDERS.C_Company),'') END --ML03 
          ,  F_Address1 = ISNULL(RTRIM(FA.notes),'')  
          ,  C_Address1 = ISNULL(RTRIM(ORDERS.C_ADDRESS1),'')      
          ,  C_Address2 = ISNULL(RTRIM(ORDERS.C_ADDRESS2),'') 
@@ -98,7 +109,7 @@ BEGIN
          ,  c_phone1      = ISNULL(RTRIM(ORDERS.c_phone1),'')   
          ,  Trackingno    = ISNULL(RTRIM(ORDERS.trackingno),'')  
          --,  ExternOrderkey = ISNULL(RTRIM(ORDERS.ExternOrderkey),'') 
-			,  ExternOrderkey  = CASE WHEN STORER.SUSR5 = 'FOM' THEN ISNULL(RTRIM(ORDERS.M_Company),'') ELSE ISNULL(RTRIM(ORDERS.ExternOrderkey),'') END	--ML03 
+         ,  ExternOrderkey  = CASE WHEN STORER.SUSR5 = 'FOM' THEN ISNULL(RTRIM(ORDERS.M_Company),'') ELSE ISNULL(RTRIM(ORDERS.ExternOrderkey),'') END --ML03 
          ,  ZCUDF02    = ISNULL(RTRIM(SHPC.UDF03),'')                      --CS01
          ,  ZCUDF03    = ISNULL(RTRIM(ZC.UDF03),'')  
          ,  ZCUDF04    = ISNULL(RTRIM(ZC.UDF04),'')  
@@ -123,8 +134,10 @@ BEGIN
          ,  VOLWGT = CAST((PACKHEADER.TOTCTNCUBE/3500) AS DECIMAL(10,7))
          ,  editdate = CONVERT(VARCHAR(50),Packheader.editdate,101) + ' ' + FORMAT(Packheader.editdate,'hh:mm:ss tt')   --ML01
          ,  LBC = CASE WHEN SHPC.Code = 'PHSDLBC' THEN 'No automatic RTS' ELSE '' END   --ML01
-         , Packheader.editdate   --ML01 
-			,  FA.Notes2	--ML02
+         ,  Packheader.editdate   --ML01 
+         ,  FA.Notes2   --ML02
+         ,  SUBSTRING(SHPC.long,0,35) AS Text01    --CS04
+         ,  SUBSTRING(SHPC.Notes,0,35) AS Text02    --CS04 
    FROM  PACKDETAIL  WITH (NOLOCK) 
    JOIN  PACKHEADER  WITH (NOLOCK)  ON (PACKDETAIL.PickSlipNo = PACKHEADER.PickSlipNo)
    JOIN  ORDERS      WITH (NOLOCK)  ON (PACKHEADER.Orderkey = ORDERS.Orderkey)
@@ -135,7 +148,7 @@ BEGIN
    JOIN  SKU         WITH (NOLOCK)  ON (PACKDETAIL.Storerkey = SKU.Storerkey)
                                    AND (PACKDETAIL.Sku = SKU.Sku)
    JOIN  PACK        WITH (NOLOCK)  ON (SKU.Packkey = PACK.Packkey)
-	JOIN  STORER	   WITH (NOLOCK)  ON (STORER.StorerKey = ORDERS.StorerKey)	--ML03
+   JOIN  STORER      WITH (NOLOCK)  ON (STORER.StorerKey = ORDERS.StorerKey)  --ML03
    LEFT JOIN  ORDERINFO OIF WITH (NOLOCK)  ON (OIF.OrderKey = ORDERS.Orderkey)
    LEFT JOIN  CODELKUP FA WITH (NOLOCK)  ON (FA.ListName = 'BRANCHCODE') 
                                          AND(FA.short = ORDERS.Facility)
@@ -156,7 +169,7 @@ BEGIN
    GROUP BY ORDERS.Orderkey
          ,  ISNULL(RTRIM(ORDERS.ConsigneeKey),'')
          --,  ISNULL(RTRIM(ORDERS.C_Company),'')
-			,  CASE WHEN STORER.SUSR5 = 'FOM' THEN ISNULL(RTRIM(ORDERS.C_Contact1),'') ELSE ISNULL(RTRIM(ORDERS.C_Company),'') END	--ML03 
+         ,  CASE WHEN STORER.SUSR5 = 'FOM' THEN ISNULL(RTRIM(ORDERS.C_Contact1),'') ELSE ISNULL(RTRIM(ORDERS.C_Company),'') END  --ML03 
          ,  ISNULL(RTRIM(FA.notes),'') 
          ,  ISNULL(RTRIM(ORDERS.C_ADDRESS1),'')     
          ,  ISNULL(RTRIM(ORDERS.C_ADDRESS2),'')
@@ -167,7 +180,7 @@ BEGIN
          ,  ISNULL(RTRIM(ORDERS.c_phone1),'') 
          ,  ISNULL(RTRIM(ORDERS.trackingno),'')   
          --,  ISNULL(RTRIM(ORDERS.ExternOrderkey),'')  
-			,  CASE WHEN STORER.SUSR5 = 'FOM' THEN ISNULL(RTRIM(ORDERS.M_Company),'') ELSE ISNULL(RTRIM(ORDERS.ExternOrderkey),'') END	--ML03
+         ,  CASE WHEN STORER.SUSR5 = 'FOM' THEN ISNULL(RTRIM(ORDERS.M_Company),'') ELSE ISNULL(RTRIM(ORDERS.ExternOrderkey),'') END --ML03
         -- ,  ISNULL(RTRIM(ZC.UDF02),'')      --CS01
          ,  ISNULL(RTRIM(SHPC.UDF03),'')       --CS01 
          ,  ISNULL(RTRIM(ZC.UDF03),'')   
@@ -191,7 +204,9 @@ BEGIN
          , ISNULL(RTRIM(ORDERS.C_State),'') 
          , CASE WHEN SHPC.Code = 'PHSDLBC' THEN 'No automatic RTS' ELSE '' END   --ML01
          , Packheader.editdate   --ML01
-			,  FA.Notes2	--ML02
+         ,  FA.Notes2   --ML02
+         , SUBSTRING(SHPC.Notes,0,35)   --CS04
+         , SUBSTRING(SHPC.long,0,35)    --CS04
 
    WHILE @@TRANCOUNT < @n_StartTCnt
    BEGIN
