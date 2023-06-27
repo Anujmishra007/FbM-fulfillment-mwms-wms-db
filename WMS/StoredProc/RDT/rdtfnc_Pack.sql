@@ -1931,7 +1931,7 @@ BEGIN
          SET @nErrNo = 100209
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid QTY
          EXEC rdt.rdtSetFocusField @nMobile, 8 -- QTY
-         GOTO Quit
+         GOTO Step_3_QTY_Fail
       END
 
       -- Validate PQTY
@@ -1940,7 +1940,7 @@ BEGIN
          SET @nErrNo = 100238
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid QTY
          EXEC rdt.rdtSetFocusField @nMobile, 14 -- QTY
-         GOTO Quit
+         GOTO Step_3_QTY_Fail
       END
 
       -- Get QTY
@@ -1993,7 +1993,7 @@ BEGIN
       IF @nErrNo <> 0
       BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 8 -- QTY
-         GOTO Quit
+         GOTO Step_3_QTY_Fail
       END
 
       -- Check blank QTY
@@ -2005,7 +2005,7 @@ BEGIN
             EXEC rdt.rdtSetFocusField @nMobile, 3 -- SKU
          ELSE
             EXEC rdt.rdtSetFocusField @nMobile, 8 -- QTY
-         GOTO Quit
+         GOTO Step_3_QTY_Fail
       END
 
       -- Extended validate
@@ -2057,7 +2057,7 @@ BEGIN
                @nErrNo OUTPUT, @cErrMsg OUTPUT
 
             IF @nErrNo <> 0
-               GOTO Quit
+               GOTO Step_3_QTY_Fail
          END
       END
 
@@ -2697,6 +2697,20 @@ BEGIN
       SET @cOutField08=''
       SET @cInField08=''
    END
+   GOTO Quit
+
+   Step_3_QTY_Fail:
+   BEGIN
+      IF rdt.RDTGetConfig( @nFunc, 'ShowErrMsgInNewScn', @cStorerkey) = '1'
+      BEGIN
+         EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg
+      END
+
+      SET @cOutField08 = CASE WHEN @cFieldAttr08 = 'O' THEN @cOutField08 ELSE '' END -- PQTY
+      SET @cOutField14 = CASE WHEN @cFieldAttr14 = 'O' THEN @cOutField14 ELSE '' END -- MQTY
+   END
+   GOTO Quit
+
 END
 GOTO Quit
 

@@ -12,8 +12,6 @@ GO
 /* 02-04-2018 1.0  Ung         WMS-3845 Created                         */
 /* 13-06-2018 1.1  JihHaur     Slow response when @cFromDropID = ''(JH01)*/
 /* 12-07-2018 1.2  Ung         WMS-5490 Add sorting process             */
-/* 12-06-2023 1.3  yeekung     WMS-22751 Change error message           */
-/*                             Add pop up screen (yeekung01)            */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_838ValidateSP01] (
@@ -146,7 +144,6 @@ BEGIN
             BEGIN
                SET @nErrNo = 202553
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU NotIn PSNO
-               EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo, @cErrMsg, @cErrMsg
                GOTO Quit
             END
          END
@@ -166,7 +163,6 @@ BEGIN
             BEGIN
                SET @nErrNo = 202569
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKUNotInDropID
-               EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo, @cErrMsg, @cErrMsg
                GOTO Quit
             END
          END
@@ -492,18 +488,6 @@ BEGIN
    END
 
 Quit:
-BEGIN
-   IF rdt.RDTGetConfig( @nFunc, 'ShowErrMsgInNewScn', @cStorerkey) = '1'
-   BEGIN
-      IF @nErrNo > 0 AND @nErrNo <> 1  -- Not from prev msgqueue
-      BEGIN
-         SET @cErrMsg1 = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-         EXEC rdt.rdtInsertMsgQueue @nMobile, @nMsgQErrNo OUTPUT, @nMsgQErrMsg OUTPUT, @cErrMsg1
-         IF @nMsgQErrNo = 1
-            SET @cErrMsg1 = ''
-      END
-   END
-END
 
 END
 GO
