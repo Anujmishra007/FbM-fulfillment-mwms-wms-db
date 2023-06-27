@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author    Ver Purposes                                  */
 /* 28-DEC-2022  CSCHONG   1.0 Devops Scripts Combine                    */
+/* 26-MAY-2023  CSCHONG   1.1 WMS-22552 add new field (CS01)            */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_PackListBySku27]
@@ -82,6 +83,7 @@ BEGIN
          , @c_ExecArguments nvarchar(MAX)
          , @c_output_Field  NVARCHAR(60)
          , @sql             nvarchar(max)
+         , @c_dropid        NVARCHAR(20)    --CS01
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue  = 1
@@ -153,6 +155,15 @@ BEGIN
    JOIN PackHeader PH WITH (NOLOCK) ON PH.OrderKey = ORD.OrderKey
    JOIN CODELKUP CL2 WITH (NOLOCK) ON CL2.LISTNAME = 'RPTLogo' AND CL2.Storerkey = ORD.storerkey AND CL2.Code = ORD.OrderGroup
    WHERE PH.PickSlipNo = @c_pickslipno
+
+
+   --CS01 S
+
+    SELECT TOP 1 @c_dropid = PD.DropID
+    FROM dbo.PackDetail PD WITH (NOLOCK)
+    WHERE PD.PickSlipNo=@c_pickslipno 
+
+   --CS01 E
 
    INSERT INTO #TMP_PCKBYSKU27_1
       ( Loadkey
@@ -399,6 +410,7 @@ SELECT
             , ODUDF10
             , storerkey
             , OTHSKU
+            , @c_dropid AS Dropid     --CS01
       FROM #TMP_PCKBYSKU27
       ORDER BY OIPlatform,PickSlipNo,Orderkey,PLOC
       ELSE 
@@ -430,6 +442,7 @@ SELECT
             , ODUDF10
             , storerkey
             , OTHSKU
+            , @c_dropid AS Dropid     --CS01
       FROM #TMP_PCKBYSKU27
       ORDER BY PickSlipNo,Orderkey,PLOC
 
