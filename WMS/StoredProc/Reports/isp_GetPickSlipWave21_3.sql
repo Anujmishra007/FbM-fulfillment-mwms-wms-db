@@ -24,6 +24,7 @@ GO
 /* 13-NOV-2021 MINGLE   1.1   WMS-18334-Add new field (ML01)            */
 /* 29-NOV-2021 Mingle   1.1   DevOps Combine Script                     */
 /* 03-JAN-2023 CHONGCS  1.2   WMS-21357 (CS01)                          */
+/* 01-JUN-2023 CHONGCS  1.3   WMS-22661 revised field logic(CS02)       */
 /************************************************************************/
 CREATE OR ALTER PROC isp_GetPickSlipWave21_3
            @c_WaveKey   NVARCHAR(10)
@@ -40,14 +41,14 @@ BEGIN
 
    SET @n_StartTCnt = @@TRANCOUNT
 
-   SELECT ORDERS.Route, 
+   SELECT '' AS [route],--ORDERS.Route,    --CS01
       Wave.AddDate, 
       WAVE.WaveKey, 
       PICKDETAIL.LOC, 
       PICKDETAIL.SKU,  
       SKU.DESCR,  
       PACK.CaseCnt, 
-      PICKDETAIL.Qty, 
+      SUM(PICKDETAIL.Qty),        --CS02
       LOC.LogicalLocation,
       LOTATTRIBUTE.Lottable02, 
       CASE WHEN ISNULL(SC.Svalue,'') = '1' AND SKU.Sku <> SKU.RetailSku AND ISNULL(SKU.RetailSku,'') <> '' THEN 
@@ -77,6 +78,26 @@ BEGIN
    AND 1 = CASE WHEN ISNULL(C1.short,'') <> '' AND ISNULL(C.code,'') <> '' 
                      AND C.code=LOC.LocationCategory AND LOC.LocLevel>CONVERT(INT,C.UDF02) THEN 1       --CS01
                 WHEN ISNULL(C1.short,'N') = 'N'THEN 1 ELSE 0 END
+  --CS02 S
+  GROUP BY  
+           --ORDERS.Route,     --CS01
+            Wave.AddDate, 
+            WAVE.WaveKey, 
+            PICKDETAIL.LOC, 
+            PICKDETAIL.SKU,  
+            SKU.DESCR,  
+            PACK.CaseCnt, 
+            LOC.LogicalLocation,
+            LOTATTRIBUTE.Lottable02, 
+            CASE WHEN ISNULL(SC.Svalue,'') = '1' AND SKU.Sku <> SKU.RetailSku AND ISNULL(SKU.RetailSku,'') <> '' THEN 
+                     ISNULL(SKU.RetailSku,'')
+            ELSE '' END ,
+            convert(nvarchar(10),LOTATTRIBUTE.Lottable04,126),
+            CASE WHEN ISNULL(C2.Short,'N') = 'Y' THEN LOC.Putawayzone ELSE '' END ,
+            ISNULL(C2.Short,'N') ,  
+            PACK.InnerPack, 
+            SKU.ALTSKU 
+  --CS02 E
    ORDER BY  LOC.LogicalLocation,PICKDETAIL.LOC, 
       PICKDETAIL.SKU, LOTATTRIBUTE.Lottable02 ,convert(nvarchar(10),LOTATTRIBUTE.Lottable04,126) 
 
