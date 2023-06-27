@@ -23,6 +23,8 @@ GO
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */ 
 /* 2023-02-24  Wan01    1.0   Created & DevOps Combine Script.          */
+/* 2023-04-20  NJOW01   1.1   WMS-22388 Include Calloff PA and determine*/
+/*                            the execution by warehouserefernece='Y'   */
 /************************************************************************/ 
 CREATE OR ALTER PROC [WM].[lsp_ASN_RCM_NikeSECPA] 
    @c_ReceiptKey     NVARCHAR(MAX)              
@@ -48,6 +50,8 @@ BEGIN
          , @c_SourceType         NVARCHAR(50)  = 'lsp_ASN_RCM_NikeSECPA'
          , @c_CallType           NVARCHAR(50)  = ''
          , @c_ExecCmd            NVARCHAR(MAX) = ''   
+         , @c_WarehouseReference NVARCHAR(18)  = '' --NJOW01
+         , @n_Cnt                INT           = 0  --NJOW01
   
    SET @n_StartTCnt = @@TRANCOUNT  
    SET @n_Continue = 1  
@@ -80,12 +84,50 @@ BEGIN
          SET @c_DocumentKey1 = @c_DocumentKey1 + ' (1st key of multikey)'
       END
       
-      SET @c_CallType = 'ispBatPA03'
-      SET @c_ExecCmd = 'dbo.ispBatPA03'
-                     + ' @c_ReceiptKey = ''' + @c_Receiptkey + ''''
-                     + ',@b_Success = @b_Success OUTPUT'
-                     + ',@n_Err = @n_Err OUTPUT'
-                     + ',@c_ErrMsg = @c_Errmsg OUTPUT'
+      --NJOW01 S
+      SELECT @c_WarehouseReference = MAX(R.WarehouseReference),
+             @n_Cnt = COUNT(DISTINCT ISNULL(R.WarehouseReference,''))
+      FROM RECEIPT R (NOLOCK)
+      WHERE R.Receiptkey IN (SELECT Value FROM STRING_SPLIT(@c_ReceiptKey, ','))   
+      
+      IF @c_WarehouseReference IS NULL
+         SET @c_WarehouseReference = ''
+      
+      IF @n_Cnt > 1
+      BEGIN                                                                                	
+         SET @n_continue = 3  
+         SET @n_Err = 561601 
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Not allow to select the ASN with multiple Warehousereference values.'
+                       + ' (lsp_ASN_RCM_NikeSECPA)'  
+         GOTO EXIT_SP   
+      END      
+      ELSE IF @c_WarehouseReference NOT IN ('','Y')
+      BEGIN
+         SET @n_continue = 3  
+         SET @n_Err = 561602 
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Warehousereference value must be Y or blank.'
+                       + ' (lsp_ASN_RCM_NikeSECPA)'  
+         GOTO EXIT_SP         	
+      END
+      ELSE IF @c_WarehouseReference = 'Y'  --Calloff PA
+      BEGIN
+         SET @c_CallType = 'ispBatPA04'
+         SET @c_ExecCmd = 'dbo.ispBatPA04'
+                        + ' @c_ReceiptKey = ''' + @c_Receiptkey + ''''
+                        + ',@b_Success = @b_Success OUTPUT'
+                        + ',@n_Err = @n_Err OUTPUT'
+                        + ',@c_ErrMsg = @c_Errmsg OUTPUT'
+                                          
+      END  --NJOW01 E
+      ELSE 
+      BEGIN
+         SET @c_CallType = 'ispBatPA03'
+         SET @c_ExecCmd = 'dbo.ispBatPA03'
+                        + ' @c_ReceiptKey = ''' + @c_Receiptkey + ''''
+                        + ',@b_Success = @b_Success OUTPUT'
+                        + ',@n_Err = @n_Err OUTPUT'
+                        + ',@c_ErrMsg = @c_Errmsg OUTPUT'
+      END                     
     
       EXEC [WM].[lsp_BackEndProcess_Submit]                                                                                                                     
             @c_Storerkey      = @c_Storerkey
