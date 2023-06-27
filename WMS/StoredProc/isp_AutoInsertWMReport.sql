@@ -13,7 +13,7 @@ GO
 /*                                                                         */  
 /* Called By:                                                              */  
 /*                                                                         */  
-/* PVCS Version: 1.3                                                       */  
+/* PVCS Version: 1.4                                                       */  
 /*                                                                         */  
 /* Version: 5.4                                                            */  
 /*                                                                         */  
@@ -25,6 +25,7 @@ GO
 /* 27-Jul-2022 WLChooi     1.1   Enhancement (WL01)                        */
 /* 14-Sep-2022 WLChooi     1.2   Add more fields (WL02)                    */
 /* 15-May-2023 WLChooi     1.3   Extend size (WL03)                        */
+/* 26-Jun-2023 WLChooi     1.4   Update ReportTemplate (WL04)              */
 /***************************************************************************/  
   
 CREATE OR ALTER PROC [dbo].[isp_AutoInsertWMReport] (
@@ -196,12 +197,57 @@ BEGIN
          ORDER BY ReportLineNo DESC 
       END
 
-      IF NOT EXISTS (  SELECT 1  
-                       FROM WMREPORTDETAIL WITH (NOLOCK)  
-                       WHERE ReportID = @c_ReportID  
-                       AND  Storerkey = @c_Storerkey  
-                       AND ReportTemplate = @c_TemplateName
-                       AND ReportLineDesc = @c_ReportLineDesc
+      --WL04 S
+      IF EXISTS ( SELECT 1  
+                  FROM WMREPORTDETAIL WITH (NOLOCK)  
+                  WHERE ReportID = @c_ReportID  
+                  AND Storerkey = @c_Storerkey
+                  AND PrintType = 'LOGIReport' )
+      BEGIN
+         SELECT @n_CurrentRow =  WMREPORTDETAIL.RowID
+         FROM WMREPORTDETAIL WITH (NOLOCK)  
+         WHERE ReportID = @c_ReportID  
+         AND  Storerkey = @c_Storerkey  
+      
+         UPDATE dbo.WMREPORTDETAIL
+         SET    Storerkey        = @c_Storerkey
+              , PrintType        = @c_PrintType
+              , ReportTemplate   = @c_TemplateName
+              , ReportCatalog    = @c_ReportCatalog
+              , PrePrintSP       = @c_PrePrintSP
+              , PreGenRptDataSP  = @c_PreGenRptData
+              , ReportParmName1  = @c_ReportParmName1 
+              , ReportParmName2  = @c_ReportParmName2 
+              , ReportParmName3  = @c_ReportParmName3 
+              , ReportParmName4  = @c_ReportParmName4 
+              , ReportParmName5  = @c_ReportParmName5 
+              , ReportParmName6  = @c_ReportParmName6 
+              , ReportParmName7  = @c_ReportParmName7 
+              , ReportParmName8  = @c_ReportParmName8 
+              , ReportParmName9  = @c_ReportParmName9 
+              , ReportParmName10 = @c_ReportParmName10
+              , ReportParmName11 = @c_ReportParmName11
+              , ReportParmName12 = @c_ReportParmName12
+              , ReportParmName13 = @c_ReportParmName13
+              , ReportParmName14 = @c_ReportParmName14
+              , ReportParmName15 = @c_ReportParmName15
+              , ReportParmName16 = @c_ReportParmName16
+              , ReportParmName17 = @c_ReportParmName17
+              , ReportParmName18 = @c_ReportParmName18
+              , ReportParmName19 = @c_ReportParmName19
+              , ReportParmName20 = @c_ReportParmName20
+              , ReportLineDesc   = @c_ReportLineDesc
+         WHERE RowID = @n_CurrentRow
+         
+         SET @c_WMDETFlag = 'U'
+      END
+      --WL04 E
+      ELSE IF NOT EXISTS (  SELECT 1  
+                            FROM WMREPORTDETAIL WITH (NOLOCK)  
+                            WHERE ReportID = @c_ReportID  
+                            AND  Storerkey = @c_Storerkey  
+                            AND ReportTemplate = @c_TemplateName
+                            AND ReportLineDesc = @c_ReportLineDesc
       ) AND @c_CreateDetail = 'Y'
       BEGIN
          SELECT @c_ReportTitle = MAX(ReportTitle)
@@ -297,7 +343,7 @@ BEGIN
               , ReportParmName20 = @c_ReportParmName20
               , ReportLineDesc   = @c_ReportLineDesc
          WHERE RowID = @n_CurrentRow
-
+         
          SET @c_WMDETFlag = 'U'
       END
    END
@@ -323,5 +369,5 @@ BEGIN
 
 END  
 GO			
-GRANT EXECUTE ON [dbo].[isp_AutoInsertWMReport] to NSQL
+GRANT EXECUTE ON [dbo].[isp_AutoInsertWMReport] TO [NSQL]
 GO
