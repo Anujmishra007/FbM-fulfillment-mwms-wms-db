@@ -11,7 +11,7 @@ GO
 /*                                                                      */    
 /* Purpose: Convert to Logi Report - r_dw_print_wave_pickslip_21_3  (TW)*/      
 /*                                                                      */        
-/* Called By: RPT_WV_PLIST_WAVE_013_3										      */        
+/* Called By: RPT_WV_PLIST_WAVE_013_3                                   */        
 /*                                                                      */        
 /* PVCS Version: 1.0                                                    */        
 /*                                                                      */        
@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */        
 /* Date         Author   Ver  Purposes                                  */
 /* 24-AUG-2022  WZPang   1.0  DevOps Combine Script                     */     
+/* 01-JUN-2023  CHONGCS  1.1  WMS-22661 revised field logic(CS01)       */
 /************************************************************************/        
 CREATE OR ALTER PROC [dbo].[isp_RPT_WV_PLIST_WAVE_013_3] (
       @c_WaveKey   NVARCHAR(10)
@@ -44,14 +45,14 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_WV_PLIST_WAVE_013_3] (
    SET @n_StartTCnt = @@TRANCOUNT  
    
    IF ISNULL(@c_PreGenRptData,'') = ''
-   SELECT ORDERS.Route,   
+   SELECT '' AS [route],--ORDERS.Route,    --CS01 
           Wave.AddDate,   
           WAVE.WaveKey,   
           PICKDETAIL.LOC,   
           PICKDETAIL.SKU,    
           SKU.DESCR,    
           PACK.CaseCnt,   
-          PICKDETAIL.Qty,   
+          SUM(PICKDETAIL.Qty),                 --CS01   
           LOC.LogicalLocation,  
           LOTATTRIBUTE.Lottable02,   
           CASE WHEN ISNULL(SC.Svalue,'') = '1' AND SKU.Sku <> SKU.RetailSku AND ISNULL(SKU.RetailSku,'') <> '' THEN   
@@ -81,6 +82,26 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_WV_PLIST_WAVE_013_3] (
                      AND 1 = CASE WHEN ISNULL(C1.short,'') <> '' AND ISNULL(C.code,'') <> ''   
                      AND C.code=LOC.LocationCategory AND LOC.LocLevel>CONVERT(INT,C.UDF02) THEN 1         
         WHEN ISNULL(C1.short,'N') = 'N'THEN 1 ELSE 0 END  
+ --CS01 S
+  GROUP BY  
+            --ORDERS.Route,        --CS01
+            Wave.AddDate, 
+            WAVE.WaveKey, 
+            PICKDETAIL.LOC, 
+            PICKDETAIL.SKU,  
+            SKU.DESCR,  
+            PACK.CaseCnt, 
+            LOC.LogicalLocation,
+            LOTATTRIBUTE.Lottable02, 
+            CASE WHEN ISNULL(SC.Svalue,'') = '1' AND SKU.Sku <> SKU.RetailSku AND ISNULL(SKU.RetailSku,'') <> '' THEN 
+                     ISNULL(SKU.RetailSku,'')
+            ELSE '' END ,
+            convert(nvarchar(10),LOTATTRIBUTE.Lottable04,126),
+            CASE WHEN ISNULL(C2.Short,'N') = 'Y' THEN LOC.Putawayzone ELSE '' END ,
+            ISNULL(C2.Short,'N') ,  
+            PACK.InnerPack, 
+            SKU.ALTSKU 
+  --CS01 E
    ORDER BY  LOC.LogicalLocation,PICKDETAIL.LOC,   
              PICKDETAIL.SKU, LOTATTRIBUTE.Lottable02 ,convert(nvarchar(10),LOTATTRIBUTE.Lottable04,126)   
   
@@ -90,5 +111,5 @@ END -- procedure
 GO
 GRANT EXECUTE ON [dbo].[isp_RPT_WV_PLIST_WAVE_013_3] TO nSQL 
 GO
-GRANT EXECUTE ON [dbo].[isp_RPT_WV_PLIST_WAVE_013_3] TO JReportRole
+GRANT EXECUTE ON [dbo].[isp_RPT_WV_PLIST_WAVE_013_3] TO LogiReportRoleWM 
 GO
