@@ -1,55 +1,53 @@
-IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[isp_GetPickSlipWave_23]') AND type in (N'P', N'PC'))
-   DROP PROCEDURE [dbo].[isp_GetPickSlipWave_23]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/************************************************************************/  
-/* Store Procedure: isp_GetPickSlipWave_23                              */  
-/* Creation Date: 02-Jun-2020                                           */  
-/* Copyright: LFL                                                       */  
-/* Written by: WLChooi                                                  */  
-/*                                                                      */  
-/* Purpose: WMS-13575 - JP_Desigual_B2B Consolidate Picking List        */  
-/*                                                                      */  
-/* Input Parameters: @c_LoadKey  - (Wavekey)                            */  
-/*                                                                      */  
-/* Output Parameters: None                                              */  
-/*                                                                      */  
-/* Return Status: Report                                                */  
-/*                                                                      */  
-/* Usage:                                                               */  
-/*                                                                      */  
-/* Local Variables:                                                     */  
-/*                                                                      */  
-/* Called By: r_dw_print_wave_pickslip_23                               */  
-/*                                                                      */  
-/* GitLab Version: 1.0                                                  */  
-/*                                                                      */  
-/* Version: 5.4                                                         */  
-/*                                                                      */  
-/* Data Modifications:                                                  */  
-/*                                                                      */  
-/* Updates:                                                             */  
-/* Date         Author    Ver.  Purposes                                */  
-/* 28-Dec-2020  CSCHONG   1.1   WMS-15909 add new field (CS01)          */
-/************************************************************************/  
-  
-CREATE PROC [dbo].[isp_GetPickSlipWave_23]
-            (@c_WaveKey NVARCHAR(10), @c_Type NVARCHAR(10) = '')  
-AS  
-BEGIN
-   SET NOCOUNT ON  
-   SET ANSI_NULLS OFF  
-   SET QUOTED_IDENTIFIER OFF  
-   SET CONCAT_NULL_YIELDS_NULL OFF  
 
-   DECLARE @n_StartTranCnt   INT  
+/************************************************************************/
+/* Store Procedure: isp_GetPickSlipWave_23                              */
+/* Creation Date: 02-Jun-2020                                           */
+/* Copyright: LFL                                                       */
+/* Written by: WLChooi                                                  */
+/*                                                                      */
+/* Purpose: WMS-13575 - JP_Desigual_B2B Consolidate Picking List        */
+/*                                                                      */
+/* Input Parameters: @c_LoadKey  - (Wavekey)                            */
+/*                                                                      */
+/* Output Parameters: None                                              */
+/*                                                                      */
+/* Return Status: Report                                                */
+/*                                                                      */
+/* Usage:                                                               */
+/*                                                                      */
+/* Local Variables:                                                     */
+/*                                                                      */
+/* Called By: r_dw_print_wave_pickslip_23                               */
+/*                                                                      */
+/* GitLab Version: 1.0                                                  */
+/*                                                                      */
+/* Version: 5.4                                                         */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date         Author    Ver.  Purposes                                */
+/* 28-Dec-2020  CSCHONG   1.1   WMS-15909 add new field (CS01)          */
+/* 20-Jun-2023  CSCHONG   1.2   Devops Scripts Combine & WMS-22794 (CS02)*/
+/************************************************************************/
+
+CREATE OR ALTER PROC [dbo].[isp_GetPickSlipWave_23]
+            (@c_WaveKey NVARCHAR(10), @c_Type NVARCHAR(10) = '')
+AS
+BEGIN
+   SET NOCOUNT ON
+   SET ANSI_NULLS OFF
+   SET QUOTED_IDENTIFIER OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
+
+   DECLARE @n_StartTranCnt   INT
          , @n_continue       INT
-         , @n_err            INT 
+         , @n_err            INT
          , @b_Success        INT
          , @c_errmsg         NVARCHAR(255)
          , @c_PickHeaderKey  NVARCHAR(10)
@@ -59,8 +57,8 @@ BEGIN
          , @n_TTLQTY         INT                --CS01
          , @c_VASCode        NVARCHAR(20)       --CS01
 
-   SET @n_StartTranCnt  = @@TRANCOUNT  
-   SET @n_Continue      = 1 
+   SET @n_StartTranCnt  = @@TRANCOUNT
+   SET @n_Continue      = 1
    SET @n_err           = 0
    SET @b_Success       = 1
    SET @c_errmsg        = ''
@@ -70,7 +68,7 @@ BEGIN
    SET @n_TTLQTY        = 1                   --CS01
 
    IF ISNULL(@c_Type,'') = '' SET @c_Type = ''
-   
+
    IF @c_Type = 'H'
    BEGIN
       SELECT '1', @c_WaveKey
@@ -83,7 +81,7 @@ BEGIN
          RowID      INT NOT NULL identity(1,1),
          Orderkey   NVARCHAR(100)
       )
-      
+
       CREATE TABLE #TMP_STG2 (
          RowID      INT NOT NULL identity(1,1),
          Orderkey   NVARCHAR(100)
@@ -97,7 +95,7 @@ BEGIN
          ExtOrdKey  NVARCHAR(50),
          VASCODE    NVARCHAR(2500),
          OHNotes    NVARCHAR(2500)
- 
+
       )
       --CS01 END
 
@@ -106,24 +104,24 @@ BEGIN
       FROM WAVEDETAIL (NOLOCK)
       WHERE Wavekey = @c_Wavekey --IN ('0000000021','0000000022','0000000027','0000000031','0000000032','0000000033','0000000034','0000000037')
       ORDER BY LTRIM(RTRIM(Orderkey))
-      
+
       --WHILE(EXISTS(SELECT 1 FROM #TMP_STG1) )
       --BEGIN
       --   INSERT #TMP_STG2
       --   SELECT CAST(STUFF((SELECT TOP 3 ',' + RTRIM(a.Orderkey) FROM #TMP_STG1 a ORDER BY RowID FOR XML PATH('')),1,1,'' ) AS NVARCHAR(250)) AS Orderkey
-      
+
       --   DELETE TOP (3) FROM #TMP_STG1
       --END
 
        SET @c_VASCode = ''
 
-       SELECT TOP 1 @c_VASCode = RTRIM(OD.userdefine01) + '-' + RTRIM(OD.Userdefine02) + '-' + RTRIM(OD.notes)
+       SELECT TOP 1 @c_VASCode = RTRIM(OH.BuyerPO)--RTRIM(OD.userdefine01) + '-' + RTRIM(OD.Userdefine02) + '-' + RTRIM(OD.notes)   --CS02
        FROM  #TMP_STG1 STG1
        JOIN ORDERS OH WITH (NOLOCK) ON OH.Orderkey = STG1.Orderkey
        JOIN ORDERDETAIL OD WITH (NOLOCK) ON OD.Orderkey = OH.OrderKey
 
-      SELECT DISTINCT LTRIM(RTRIM(STG1.Orderkey)) AS Orderkey, OH.ExternOrderKey as ExtOrdkey,OH.Notes AS OHNotes , @c_VASCode as VASCODE,@c_WaveKey as wavekey
-                     , 'Ext Order Key : ' as extordkeyfield , 'Address Code : ' as Addcodefield, 'VAS Code : ' as vascodefield
+      SELECT DISTINCT LTRIM(RTRIM(STG1.Orderkey)) AS Orderkey, OH.ExternOrderKey as ExtOrdkey,OH.userdefine03 AS OHNotes , @c_VASCode as VASCODE,@c_WaveKey as wavekey  --CS02
+                     , 'Ext Order Key : ' as extordkeyfield , 'Address Code : ' as Addcodefield, 'Buyer PO : ' as vascodefield     --CS02
       FROM #TMP_STG1 STG1
       JOIN ORDERS OH WITH (NOLOCK) ON OH.Orderkey = STG1.Orderkey
       --JOIN ORDERDETAIL OD WITH (NOLOCK) ON OD.Orderkey = OH.OrderKey
@@ -134,7 +132,7 @@ BEGIN
 
    CREATE TABLE #TEMP_Load (
       Loadkey       NVARCHAR(10),
-      Pickheaderkey NVARCHAR(10), 
+      Pickheaderkey NVARCHAR(10),
       PrintedFlag   NVARCHAR(1)
    )
 
@@ -146,8 +144,8 @@ BEGIN
    WHERE WD.Wavekey = @c_WaveKey
 
    --CS01 START
-   
-   
+
+
    SELECT @n_CtnOrder  = COUNT(DISTINCT Orderkey)
    FROM WAVEDETAIL WITH (NOLOCK)
    WHERE wavekey = @c_WaveKey
@@ -159,34 +157,34 @@ BEGIN
    INNER JOIN PickDetail WITH (NOLOCK) ON  (PickDetail.OrderKey = LoadPlanDetail.OrderKey)
    INNER JOIN WAVEDETAIL WD WITH (NOLOCK) ON (WD.Orderkey = Pickdetail.Orderkey)
    WHERE  WD.WaveKey = @c_Wavekey
-   AND    PickDetail.QTY > 0 
+   AND    PickDetail.QTY > 0
 
    --CS01 END
 
-   BEGIN TRAN 
+   BEGIN TRAN
 
    IF EXISTS (SELECT TOP 1 1 FROM #TEMP_Load WHERE PrintedFlag = 'Y')
    BEGIN
       SET @c_PrintedFlag = 'Y'
-      
-      DECLARE CUR_PSLIP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+
+      DECLARE CUR_PSLIP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT DISTINCT Loadkey, Pickheaderkey FROM #TEMP_Load
 
-      OPEN CUR_PSLIP  
-     
+      OPEN CUR_PSLIP
+
       FETCH NEXT FROM CUR_PSLIP INTO @c_Loadkey, @c_Pickheaderkey
 
-      WHILE @@FETCH_STATUS <> -1  
+      WHILE @@FETCH_STATUS <> -1
       BEGIN
-         UPDATE PICKHEADER WITH (ROWLOCK)  
-         SET PickType = '1'  
-            ,EditWho = SUSER_NAME()  
-            ,EditDate= GETDATE()  
-            ,TrafficCop = NULL  
-         FROM PICKHEADER  
-         WHERE PickHeaderKey = @c_PickHeaderKey 
+         UPDATE PICKHEADER WITH (ROWLOCK)
+         SET PickType = '1'
+            ,EditWho = SUSER_NAME()
+            ,EditDate= GETDATE()
+            ,TrafficCop = NULL
+         FROM PICKHEADER
+         WHERE PickHeaderKey = @c_PickHeaderKey
 
-         FETCH NEXT FROM CUR_PSLIP INTO @c_Loadkey, @c_Pickheaderkey 
+         FETCH NEXT FROM CUR_PSLIP INTO @c_Loadkey, @c_Pickheaderkey
       END
    END
    ELSE
@@ -201,39 +199,39 @@ BEGIN
 
       IF @n_Err <> 0
       BEGIN
-         SET @n_continue = 3  
-         SET @n_err = 63400  
+         SET @n_continue = 3
+         SET @n_err = 63400
          SET @c_errmsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err)+
                        + ': Create Pickslip Failed. (isp_GetPickSlipWave_23)'
          GOTO QUIT_SP
       END
    END
 
-   IF @n_err <> 0   
-   BEGIN  
-      SELECT @n_continue = 3  
-      IF @@TRANCOUNT >= 1  
-      BEGIN  
-         ROLLBACK TRAN  
-      END  
-   END  
-   ELSE 
-   BEGIN  
-      IF @@TRANCOUNT > 0   
-      BEGIN  
-         COMMIT TRAN  
-      END  
-      ELSE 
-      BEGIN  
-         SELECT @n_continue = 3  
-         ROLLBACK TRAN  
-      END  
-   END  
+   IF @n_err <> 0
+   BEGIN
+      SELECT @n_continue = 3
+      IF @@TRANCOUNT >= 1
+      BEGIN
+         ROLLBACK TRAN
+      END
+   END
+   ELSE
+   BEGIN
+      IF @@TRANCOUNT > 0
+      BEGIN
+         COMMIT TRAN
+      END
+      ELSE
+      BEGIN
+         SELECT @n_continue = 3
+         ROLLBACK TRAN
+      END
+   END
 
    --0000020943
 
-   /* Start Modification */ 
-   -- Use Zone as a UOM Picked 1 - Pallet, 2 - Case, 6 - Each, 7 - Consolidated pick list , 8 - By Order  
+   /* Start Modification */
+   -- Use Zone as a UOM Picked 1 - Pallet, 2 - Case, 6 - Each, 7 - Consolidated pick list , 8 - By Order
 
    /*IF NOT EXISTS(
                  SELECT PickHeaderKey
@@ -242,35 +240,35 @@ BEGIN
                  AND    Zone = '7'
                 )
    BEGIN
-      SET @b_success = 0 
+      SET @b_success = 0
 
-      EXECUTE nspg_GetKey 
+      EXECUTE nspg_GetKey
             'PICKSLIP'
           , 9
           , @c_PickHeaderKey  OUTPUT
           , @b_success        OUTPUT
           , @n_err            OUTPUT
-          , @c_errmsg         OUTPUT  
+          , @c_errmsg         OUTPUT
 
       IF @b_success<>1
       BEGIN
          SET @n_continue = 3
          GOTO QUIT_SP
-      END  
-        
-      SET @c_PickHeaderKey = 'P' + @c_PickHeaderKey  
+      END
+
+      SET @c_PickHeaderKey = 'P' + @c_PickHeaderKey
 
       INSERT INTO PICKHEADER
         (PickHeaderKey ,ExternOrderKey,PickType,Zone)
       VALUES
-        (@c_PickHeaderKey,@c_LoadKey,'1','7')  
+        (@c_PickHeaderKey,@c_LoadKey,'1','7')
 
-      SET @n_err = @@ERROR  
+      SET @n_err = @@ERROR
 
       IF @n_err<>0
       BEGIN
-         SET @n_continue = 3  
-         SET @n_err = 63501  
+         SET @n_continue = 3
+         SET @n_err = 63501
          SET @c_errmsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err)+
                        + ': Insert Into PICKHEADER Failed. (isp_GetPickSlipWave_23)'
          GOTO QUIT_SP
@@ -284,13 +282,13 @@ BEGIN
       AND    Zone = '7'
 
       SET @c_PrintedFlag = 'Y'
-   END  
+   END
 
    IF ISNULL(RTRIM(@c_PickHeaderKey) ,'')=''
    BEGIN
-      SET @n_continue = 3  
-      SET @n_err = 63502  
-      SET @c_errmsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err) 
+      SET @n_continue = 3
+      SET @n_err = 63502
+      SET @c_errmsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err)
                    + ': Get LoadKey Failed. (isp_GetPickSlipWave_23)'
       GOTO QUIT_SP
    END  */
@@ -309,10 +307,10 @@ BEGIN
         , ISNULL(RTRIM(SKU.Descr),'')
         , ISNULL(RTRIM(SKU.AltSku),'')
         , ISNULL(RTRIM(SKU.ManufacturerSKU),'')
-        , ISNULL(SKU.StdCube,0.0) 
-        , ISNULL(SKU.StdGrossWgt,0.0) 
-        , ISNULL(PACK.CaseCnt,0.0) 
-        , ISNULL(PACK.InnerPack,0.0) 
+        , ISNULL(SKU.StdCube,0.0)
+        , ISNULL(SKU.StdGrossWgt,0.0)
+        , ISNULL(PACK.CaseCnt,0.0)
+        , ISNULL(PACK.InnerPack,0.0)
         , CASE IsDate(LotAttribute.Lottable01) WHEN 1 THEN CONVERT( Datetime, LotAttribute.Lottable01)
                                                ELSE NULL
                                                END
@@ -328,6 +326,7 @@ BEGIN
         , ISNULL(RTRIM(LoadPlan.Loadkey),'') as Loadkey
         , @n_CtnOrder AS TTLORD
         , @n_TTLQTY AS PTTLQTY
+        , ISNULL(PACK.qty,0.0) AS Packqty            --CS02
    FROM PickHeader WITH (NOLOCK)
    INNER JOIN LoadPlan WITH (NOLOCK) ON  (LoadPlan.LoadKey = PICKHEADER.ExternOrderKey)
    INNER JOIN LoadPlanDetail WITH (NOLOCK) ON  (LoadPlanDetail.LoadKey = LoadPlan.LoadKey)
@@ -340,7 +339,7 @@ BEGIN
    INNER JOIN PutawayZone Z WITH (NOLOCK) ON  (Z.PutawayZone = L.PutawayZone)
    INNER JOIN WAVEDETAIL WD WITH (NOLOCK) ON (WD.Orderkey = Pickdetail.Orderkey)
    WHERE  WD.WaveKey = @c_Wavekey
-   AND    PickDetail.QTY > 0 
+   AND    PickDetail.QTY > 0
    ORDER BY ISNULL(RTRIM(LoadPlan.Loadkey),'')
           , UPPER(ISNULL(RTRIM(L.PickZone),''))   --ISNULL(RTRIM(L.PutawayZone),'')
           , ISNULL(RTRIM(PickDetail.Loc),'')
@@ -359,21 +358,20 @@ QUIT_SP:
 
    IF @n_continue=3 -- Error Occured - Process And Return
    BEGIN
-      EXECUTE nsp_logerror @n_err, @c_errmsg, 'isp_GetPickSlipWave_23' 
-      RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012 
+      EXECUTE nsp_logerror @n_err, @c_errmsg, 'isp_GetPickSlipWave_23'
+      RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
       RETURN
    END
    ELSE
    BEGIN
-      SET @b_success = 1  
+      SET @b_success = 1
       WHILE @@TRANCOUNT > @n_StartTranCnt
       BEGIN
          COMMIT TRAN
-      END 
+      END
       RETURN
    END
-END /* main procedure */  
+END /* main procedure */
 GO
-
-GRANT EXECUTE ON isp_GetPickSlipWave_23 TO NSQL
+GRANT EXECUTE ON  [dbo].[isp_GetPickSlipWave_23] TO [NSQL]
 GO
