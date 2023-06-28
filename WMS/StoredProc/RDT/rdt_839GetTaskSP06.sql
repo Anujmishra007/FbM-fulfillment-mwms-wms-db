@@ -3720,10 +3720,14 @@ END
          AND LISTNAME='RefColLkup'
 
         SET @cSQL =             
-          '    SELECT @cSKUDescr = ' + @cNotes +
+         '    SELECT @cSKUDescr = ' + @cNotes +
          '    FROM dbo.'+@cTable + ' WITH (NOLOCK)' +
-         '    WHERE storerkey=@cStorerkey ' +            
-         '       AND ' + @cColumnName + '= @c' + @cColumnName             
+         '    WHERE storerkey=@cStorerkey ' +  
+         '       AND  sku = @cSKU         ' +
+         CASE WHEN ISNULL (@cColumnName,'') <>'' THEN 
+         '       AND ' + @cColumnName + '= @c' + @cColumnName 
+         ELSE '' END
+
 
          SET @cSQLParam =          
             '@cOrderKey   NVARCHAR( 10) , ' +      
