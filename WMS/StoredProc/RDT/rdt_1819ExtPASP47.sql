@@ -43,6 +43,16 @@ BEGIN
    
    DECLARE @nTranCount  INT
 
+
+   Select TOP 1
+         @CLottable02 = LA.Lottable02,
+         @CSKU = LLI.SKU
+    from Loc LOC (Nolock)  
+    JOIN lotxlocxID LLI (nolock) ON LOC.loc = lli.loc 
+    Join [dbo].[LOTATTRIBUTE] LA (nolock) on LLi.Lot = LA.Lot and lli.Storerkey = LA.Storerkey 
+    Where   LLI.ID =@cID
+      AND LLI.LOC = @cFromLOC
+
 	--Find a location of minimum QTY of inventory in the location with the same SKU & Batch (Lottable02) in the same putaway zone.
 	Select top 1 @LocOfMinQty =  LOC.LOC ,
 				@cPAZone = LOC.Putawayzone,  
@@ -77,7 +87,7 @@ BEGIN
 		   And Loc.Status = 'OK'  
 		   AND LLI.LOC       <> @cFromLOC 
       group by LLI.LOC,Cl.Code, Loc.PALogicalLoc
-      HAVING SUM(LLI.qty) = 0
+      HAVING SUM(ISNULL(LLI.qty,0)) = 0
 	   Order by Cl.Code, Loc.PALogicalLoc ASC 
    end
    else IF ISNULL(@LocOfMinQty,'') <> ''
@@ -123,7 +133,7 @@ BEGIN
 				   And Loc.Status = 'OK'  
 				   AND LLI.LOC       <> @cFromLOC 
             group by LLI.LOC,Cl.Code, Loc.PALogicalLoc
-            HAVING SUM(LLI.qty) = 0
+             HAVING SUM(ISNULL(LLI.qty,0)) = 0
 	         Order by Cl.Code, Loc.PALogicalLoc ASC 
 		   END 
 	   end
