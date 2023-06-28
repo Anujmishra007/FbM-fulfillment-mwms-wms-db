@@ -52,6 +52,7 @@ GO
 /* 2022-01-24 3.4  Ung        WMS-18776 Add Carton type                 */
 /* 2022-11-23 3.5  James      WMS-21207 Add ExtUpdSp at step 1 (james09)*/
 /* 2023-02-20 3.6  Ung        WMS-21436 Fix UCC screen ExtVal sequence  */
+/* 2023-06-19 3.7  YeeKung    WMS-22768 Add Extvalidsp at step1(yeekung01)*/
 /************************************************************************/
 CREATE OR ALTER PROC rdt.rdtfnc_UCCInboundReceive (
    @nMobile    INT,
@@ -638,6 +639,76 @@ BEGIN
                   AND RD.ExternReceiptKey <> ''
          END
       END
+
+      --(yeekung01)
+      IF @cExtendedValidateSP <> ''
+	   BEGIN
+	      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cExecStatements = N'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+                                    ' @nMobile                 ' +
+	                                 ' , @nFunc                 ' +
+	                                 ' , @cLangCode             ' +
+	                                 ' , @nStep                 ' +
+	                                 ' , @cStorerKey            ' +
+	                                 ' , @cFacility             ' +
+                                    ' , @cReceiptKey1          ' +
+                                    ' , @cReceiptKey2          ' +
+                                    ' , @cReceiptKey3          ' +
+                                    ' , @cReceiptKey4          ' +
+                                    ' , @cReceiptKey5          ' +
+                                    ' , @cLoc                  ' +
+                                    ' , @cID                   ' +
+                                    ' , @cUCC                  ' +
+                                    ' , @nErrNo       OUTPUT   ' +
+                                    ' , @cErrMSG      OUTPUT   '
+
+
+            SET @cExecArguments =
+                      N'@nMobile     INT, ' +
+	                    '@nFunc       INT, ' +
+	                    '@cLangCode   NVARCHAR(3), ' +
+	                    '@nStep       INT, ' +
+	                    '@cStorerKey  NVARCHAR(15), ' +
+	                    '@cFacility   NVARCHAR(5), '  +
+                       '@cReceiptKey1 NVARCHAR(20),          ' +
+                       '@cReceiptKey2 NVARCHAR(20),          ' +
+                       '@cReceiptKey3 NVARCHAR(20),          ' +
+                       '@cReceiptKey4 NVARCHAR(20),          ' +
+                       '@cReceiptKey5 NVARCHAR(20),          ' +
+                       '@cLoc        NVARCHAR(20),           ' +
+                       '@cID         NVARCHAR(18),           ' +
+                       '@cUCC        NVARCHAR(20),           ' +
+                       '@nErrNo      INT  OUTPUT,            ' +
+                       '@cErrMsg     NVARCHAR(1024) OUTPUT  '
+
+
+            EXEC sp_executesql @cExecStatements, @cExecArguments,
+                                @nMobile
+                              , @nFunc
+                              , @cLangCode
+                              , @nStep
+                              , @cStorerKey
+                              , @cFacility
+                              , @cReceiptKey1
+                              , @cReceiptKey2
+                              , @cReceiptKey3
+                              , @cReceiptKey4
+                              , @cReceiptKey5
+                              , @cLoc
+                              , @cID
+                              , @cUCC
+                              , @nErrNo       OUTPUT
+                              , @cErrMSG      OUTPUT
+
+
+           IF @nErrNo <> 0
+           BEGIN
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+               GOTO Step_1_Fail
+           END
+         END
+	   END
 
       IF @cExtendedUpdateSP <> ''        
       BEGIN        

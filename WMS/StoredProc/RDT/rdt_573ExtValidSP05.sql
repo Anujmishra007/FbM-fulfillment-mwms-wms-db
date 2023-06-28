@@ -1,89 +1,86 @@
-
+SET ANSI_NULLS OFF
+GO
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF
-GO  
 
-/************************************************************************/  
-/* Store procedure: rdt_573ExtValidSP05                                 */  
-/* Copyright: LF Logistics                                              */  
-/*                                                                      */  
-/* Modifications log:                                                   */  
-/*                                                                      */  
-/* Date       Rev  Author     Purposes                                  */  
-/* 2022-02-10 1.0  Ung        WMS-18907 Created                         */  
-/************************************************************************/  
-  
-CREATE OR ALTER PROC rdt.rdt_573ExtValidSP05 (  
-   @nMobile       INT, 
-   @nFunc         INT, 
-   @cLangCode     NVARCHAR(3), 
-   @nStep         INT, 
-   @cStorerKey    NVARCHAR(15),
-   @cFacility     NVARCHAR(5), 
-   @cReceiptKey1  NVARCHAR(20),          
-   @cReceiptKey2  NVARCHAR(20),          
-   @cReceiptKey3  NVARCHAR(20),          
-   @cReceiptKey4  NVARCHAR(20),          
-   @cReceiptKey5  NVARCHAR(20),          
-   @cLoc          NVARCHAR(20),           
-   @cID           NVARCHAR(18),           
-   @cUCC          NVARCHAR(20),           
-   @nErrNo        INT          OUTPUT,            
-   @cErrMsg       NVARCHAR(20) OUTPUT
-)  
-AS  
-   SET NOCOUNT ON    
-   SET QUOTED_IDENTIFIER OFF    
-   SET ANSI_NULLS OFF    
-   SET CONCAT_NULL_YIELDS_NULL OFF    
-   
-   IF @nFunc = 573 -- UCC inbound receiving
+/************************************************************************/
+/* Store procedure: rdt_573ExtValidSP05                                 */
+/* Purpose: Validate  UCC                                               */
+/*                                                                      */
+/* Modifications log:                                                   */
+/*                                                                      */
+/* Date       Rev  Author     Purposes                                  */
+/* 2023-06-19 1.0  YeeKung    WMS-22768  Created                        */
+/************************************************************************/
+
+CREATE OR ALTER PROC rdt.rdt_573ExtValidSP05 (
+   @nMobile     INT,
+   @nFunc       INT,
+   @cLangCode   NVARCHAR(3),
+   @nStep       INT,
+   @cStorerKey  NVARCHAR(15),
+   @cFacility   NVARCHAR(5),
+   @cReceiptKey1 NVARCHAR(20),
+   @cReceiptKey2 NVARCHAR(20),
+   @cReceiptKey3 NVARCHAR(20),
+   @cReceiptKey4 NVARCHAR(20),
+   @cReceiptKey5 NVARCHAR(20),
+   @cLoc        NVARCHAR(20),
+   @cID         NVARCHAR(18),
+   @cUCC        NVARCHAR(20),
+   @nErrNo      INT  OUTPUT,
+   @cErrMsg     NVARCHAR(1024) OUTPUT
+)
+AS
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
+
+   DECLARE @nInputKey  INT
+   DECLARE @cPO        NVARCHAR( 18) = ''
+   DECLARE @cUCC_PO    NVARCHAR( 18) = ''
+
+   SET @nErrNo = 0
+
+   SELECT @nInputKey = InputKey
+   FROM RDT.RDTMOBREC WITH (NOLOCK)
+   WHERE Mobile = @nMobile
+
+   IF @nStep = 1
    BEGIN
-      IF @nStep = 4 -- UCC
+      IF @nInputKey = 1
       BEGIN
-         -- Get session info
-         DECLARE @nInputKey INT 
-         SELECT @nInputKey = InputKey FROM rdt.rdtMobRec WITH (NOLOCK) WHERE Mobile = @nMobile
-
-         IF @nInputKey = 1 -- ENTER
+         IF  EXISTS ( SELECT 1 FROM RECEIPT R WITH (NOLOCK)
+                         JOIN rdt.rdtConReceiveLog CRL WITH (NOLOCK) ON ( R.ReceiptKey = CRL.ReceiptKey)
+                         WHERE R.RECType = 'UARESERVED'
+                         AND   CRL.Mobile = @nMobile)
          BEGIN
-            DECLARE @nSTDGrossWGT FLOAT
-            DECLARE @nSTDCube     FLOAT
-            DECLARE @cMsg1        NVARCHAR( 20) = ''
-            DECLARE @cMsg2        NVARCHAR( 20) = ''
-            
-            -- Get SKU info
-            SELECT 
-               @nSTDGrossWGT = SKU.STDGrossWGT, 
-               @nSTDCube = SKU.STDCube
-            FROM dbo.ReceiptDetail RD WITH (NOLOCK)
-               JOIN dbo.SKU SKU WITH (NOLOCK) ON ( RD.StorerKey = SKU.StorerKey AND RD.SKU = SKU.SKU)
-            WHERE RD.Userdefine01 = @cUCC
+            DECLARE  @cLine01 NVARCHAR(20),
+                     @cLine02 NVARCHAR(20),
+                     @cLine03 NVARCHAR(20)
 
-            -- Check weight
-            IF ISNULL( @nSTDGrossWGT, 0) = 0
-               SET @cMsg1 = rdt.rdtgetmessage( 182051, @cLangCode, 'DSP') -- SETUP Weight
-            
-            -- Check cube
-            IF ISNULL( @nSTDCube, 0) = 0
-               SET @cMsg2 = rdt.rdtgetmessage( 182052, @cLangCode, 'DSP') -- SETUP Cubic
+            SELECT TOP 1 @cReceiptKey1 =R.receiptkey  
+            FROM RECEIPT R WITH (NOLOCK)
+            JOIN rdt.rdtConReceiveLog CRL WITH (NOLOCK) ON ( R.ReceiptKey = CRL.ReceiptKey)
+            WHERE R.RECType = 'UARESERVED'
+            AND   CRL.Mobile = @nMobile
 
-            -- Warning only, can continue scan
-            IF @cMsg1 <> '' OR @cMsg2 <> ''
-               EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', @cMsg1, @cMsg2
+            SET @cLine01 = 'ASN' +@cReceiptKey1
+            SET @cLine02 = 'IS PTO'
+            SET @cLine03 = 'Please double check'
+
+            EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT,      
+            @cLine01, @cLine02, @cLine03,'',     
+            '', '', '', '', '',      
+            '', '', '','',''      
+            SET @nErrNo = 0   
          END
       END
    END
-   
-Quit:  
 
+QUIT:
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
+GRANT EXECUTE ON RDT.rdt_573ExtValidSP05 TO NSQL
 GO
 
-GRANT EXEC ON RDT.rdt_573ExtValidSP05 TO NSQL
-GO
