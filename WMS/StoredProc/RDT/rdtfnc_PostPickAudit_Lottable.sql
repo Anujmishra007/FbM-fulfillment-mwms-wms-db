@@ -1,11 +1,8 @@
-if exists (SELECT * FROM sys.objects WHERE object_id = object_id(N'[rdt].[rdtfnc_PostPickAudit_Lottable]') AND OBJECTPROPERTY(object_id, N'IsProcedure') = 1)
-	drop procedure [rdt].[rdtfnc_PostPickAudit_Lottable]
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /******************************************************************************/
 /* Store procedure: rdtfnc_PostPickAudit_Lottable                             */
@@ -18,9 +15,10 @@ GO
 /* 2019-07-08   1.3  James      WMS9387-Add MultiSKUBarcode screen (james02)  */
 /* 2019-11-28   1.4  Chermaine  WMS-11218 show total and                      */
 /*                              counted quantity per sku (cc01)               */
+/* 2023-06-09   1.5  YeeKung    WMS-22746 Add eventlog (yeekung01)            */
 /******************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_PostPickAudit_Lottable] (
+CREATE OR ALTER PROC [RDT].[rdtfnc_PostPickAudit_Lottable] (
    @nMobile    INT,
    @nErrNo     INT          OUTPUT,
    @cErrMsg    NVARCHAR(20) OUTPUT
@@ -36,13 +34,13 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 DECLARE
    @b_success      INT,
    @cErrMsg1       NVARCHAR( 20),
-   @nTranCount     INT, 
-   @nRowRef        INT, 
+   @nTranCount     INT,
+   @nRowRef        INT,
    @nMorePage      INT,
-   @cSQL           NVARCHAR( MAX), 
-   @cSQLParam      NVARCHAR( MAX), 
+   @cSQL           NVARCHAR( MAX),
+   @cSQLParam      NVARCHAR( MAX),
    @tVar           VariableTable
-   
+
 -- RDT.RDTMobRec variables
 DECLARE
    @nFunc          INT,
@@ -62,24 +60,24 @@ DECLARE
    @cDropID        NVARCHAR( 18),
    @cSKU           NVARCHAR( 20),
    @cDescr         NVARCHAR( 60),
-   @cPUOM          NVARCHAR( 1), 
+   @cPUOM          NVARCHAR( 1),
    @nQTY           INT,
 
-   @cLottable01    NVARCHAR( 18), 
-   @cLottable02    NVARCHAR( 18), 
-   @cLottable03    NVARCHAR( 18), 
-   @dLottable04    DATETIME,      
-   @dLottable05    DATETIME,      
-   @cLottable06    NVARCHAR( 30), 
-   @cLottable07    NVARCHAR( 30), 
-   @cLottable08    NVARCHAR( 30), 
-   @cLottable09    NVARCHAR( 30), 
-   @cLottable10    NVARCHAR( 30), 
-   @cLottable11    NVARCHAR( 30), 
-   @cLottable12    NVARCHAR( 30), 
-   @dLottable13    DATETIME,      
-   @dLottable14    DATETIME,      
-   @dLottable15    DATETIME,    
+   @cLottable01    NVARCHAR( 18),
+   @cLottable02    NVARCHAR( 18),
+   @cLottable03    NVARCHAR( 18),
+   @dLottable04    DATETIME,
+   @dLottable05    DATETIME,
+   @cLottable06    NVARCHAR( 30),
+   @cLottable07    NVARCHAR( 30),
+   @cLottable08    NVARCHAR( 30),
+   @cLottable09    NVARCHAR( 30),
+   @cLottable10    NVARCHAR( 30),
+   @cLottable11    NVARCHAR( 30),
+   @cLottable12    NVARCHAR( 30),
+   @dLottable13    DATETIME,
+   @dLottable14    DATETIME,
+   @dLottable15    DATETIME,
 
    @cRefNo         NVARCHAR( 10),
    @cSourceKey     NVARCHAR( 15),
@@ -87,13 +85,13 @@ DECLARE
 
    @cPUOM_Desc     NVARCHAR( 5),
    @cMUOM_Desc     NVARCHAR( 5),
-   @nPUOM_Div      INT, 
-   @cQTY_PPA       NVARCHAR( 10), 
-   @cQTY_CHK       NVARCHAR( 10), 
-   @cCHK_SKU       NVARCHAR( 10), 
-   @cCHK_QTY       NVARCHAR( 10), 
-   @cPPA_SKU       NVARCHAR( 10), 
-   @cPPA_QTY       NVARCHAR( 10), 
+   @nPUOM_Div      INT,
+   @cQTY_PPA       NVARCHAR( 10),
+   @cQTY_CHK       NVARCHAR( 10),
+   @cCHK_SKU       NVARCHAR( 10),
+   @cCHK_QTY       NVARCHAR( 10),
+   @cPPA_SKU       NVARCHAR( 10),
+   @cPPA_QTY       NVARCHAR( 10),
 
    @cExtendedValidateSP              NVARCHAR( 20),
    @cExtendedUpdateSP                NVARCHAR( 20),
@@ -115,20 +113,20 @@ DECLARE
    @nFromScn       INT,
    @nFromStep      INT,
 
-   @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),  @cFieldAttr01 NVARCHAR( 1), 
-   @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),  @cFieldAttr02 NVARCHAR( 1), 
-   @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),  @cFieldAttr03 NVARCHAR( 1), 
-   @cInField04 NVARCHAR( 60),   @cOutField04 NVARCHAR( 60),  @cFieldAttr04 NVARCHAR( 1), 
-   @cInField05 NVARCHAR( 60),   @cOutField05 NVARCHAR( 60),  @cFieldAttr05 NVARCHAR( 1), 
-   @cInField06 NVARCHAR( 60),   @cOutField06 NVARCHAR( 60),  @cFieldAttr06 NVARCHAR( 1), 
-   @cInField07 NVARCHAR( 60),   @cOutField07 NVARCHAR( 60),  @cFieldAttr07 NVARCHAR( 1), 
-   @cInField08 NVARCHAR( 60),   @cOutField08 NVARCHAR( 60),  @cFieldAttr08 NVARCHAR( 1), 
-   @cInField09 NVARCHAR( 60),   @cOutField09 NVARCHAR( 60),  @cFieldAttr09 NVARCHAR( 1), 
-   @cInField10 NVARCHAR( 60),   @cOutField10 NVARCHAR( 60),  @cFieldAttr10 NVARCHAR( 1), 
-   @cInField11 NVARCHAR( 60),   @cOutField11 NVARCHAR( 60),  @cFieldAttr11 NVARCHAR( 1), 
-   @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),  @cFieldAttr12 NVARCHAR( 1), 
-   @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60),  @cFieldAttr13 NVARCHAR( 1), 
-   @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),  @cFieldAttr14 NVARCHAR( 1), 
+   @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),  @cFieldAttr01 NVARCHAR( 1),
+   @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),  @cFieldAttr02 NVARCHAR( 1),
+   @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),  @cFieldAttr03 NVARCHAR( 1),
+   @cInField04 NVARCHAR( 60),   @cOutField04 NVARCHAR( 60),  @cFieldAttr04 NVARCHAR( 1),
+   @cInField05 NVARCHAR( 60),   @cOutField05 NVARCHAR( 60),  @cFieldAttr05 NVARCHAR( 1),
+   @cInField06 NVARCHAR( 60),   @cOutField06 NVARCHAR( 60),  @cFieldAttr06 NVARCHAR( 1),
+   @cInField07 NVARCHAR( 60),   @cOutField07 NVARCHAR( 60),  @cFieldAttr07 NVARCHAR( 1),
+   @cInField08 NVARCHAR( 60),   @cOutField08 NVARCHAR( 60),  @cFieldAttr08 NVARCHAR( 1),
+   @cInField09 NVARCHAR( 60),   @cOutField09 NVARCHAR( 60),  @cFieldAttr09 NVARCHAR( 1),
+   @cInField10 NVARCHAR( 60),   @cOutField10 NVARCHAR( 60),  @cFieldAttr10 NVARCHAR( 1),
+   @cInField11 NVARCHAR( 60),   @cOutField11 NVARCHAR( 60),  @cFieldAttr11 NVARCHAR( 1),
+   @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),  @cFieldAttr12 NVARCHAR( 1),
+   @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60),  @cFieldAttr13 NVARCHAR( 1),
+   @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),  @cFieldAttr14 NVARCHAR( 1),
    @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),  @cFieldAttr15 NVARCHAR( 1)
 
 -- Getting Mobile information
@@ -176,48 +174,48 @@ SELECT
    @nExtPUOM_Div     = V_Integer1,
    @nFromScn         = V_FromScn,
    @nFromStep        = V_FromStep,
-   
+
    @cPUOM_Desc       = V_String11,
    @cMUOM_Desc       = V_String12,
-   @cQTY_PPA         = V_String14, 
-   @cQTY_CHK         = V_String15, 
+   @cQTY_PPA         = V_String14,
+   @cQTY_CHK         = V_String15,
    @cCHK_SKU         = V_String16,
    @cCHK_QTY         = V_String17,
    @cPPA_SKU         = V_String18,
    @cPPA_QTY         = V_String19,
-   
+
    @nPUOM_Div        = V_PUOM_Div,
 
-   @cExtendedValidateSP = V_String21,  
-   @cExtendedUpdateSP   = V_String22,  
-   @cExtendedInfoSP     = V_String23,  
-   @cExtendedInfo       = V_String24,  
+   @cExtendedValidateSP = V_String21,
+   @cExtendedUpdateSP   = V_String22,
+   @cExtendedInfoSP     = V_String23,
+   @cExtendedInfo       = V_String24,
    @cDecodeSP           = V_String25,
    @cDefaultCursor      = V_String26,
    @cDefaultQTY         = V_String27,
    @cPPACartonIDByPickDetailCaseID = V_String28,
    @cSkipChkPSlipMustScanOut       = V_String29,
-   @cAllowSKUNotInPickList         = V_String30, 
+   @cAllowSKUNotInPickList         = V_String30,
    @cAllowLottableNotInPickList    = V_String31,
    @cAllowExcessQTY                = V_String32,
    @cExtendedUOMSP      = V_String33,
 
    @cLottableCode       = V_String41,
 
-   @cInField01 = I_Field01,   @cOutField01 = O_Field01,   @cFieldAttr01 = FieldAttr01, 
-   @cInField02 = I_Field02,   @cOutField02 = O_Field02,   @cFieldAttr02 = FieldAttr02, 
-   @cInField03 = I_Field03,   @cOutField03 = O_Field03,   @cFieldAttr03 = FieldAttr03, 
-   @cInField04 = I_Field04,   @cOutField04 = O_Field04,   @cFieldAttr04 = FieldAttr04, 
-   @cInField05 = I_Field05,   @cOutField05 = O_Field05,   @cFieldAttr05 = FieldAttr05, 
-   @cInField06 = I_Field06,   @cOutField06 = O_Field06,   @cFieldAttr06 = FieldAttr06, 
-   @cInField07 = I_Field07,   @cOutField07 = O_Field07,   @cFieldAttr07 = FieldAttr07, 
-   @cInField08 = I_Field08,   @cOutField08 = O_Field08,   @cFieldAttr08 = FieldAttr08, 
-   @cInField09 = I_Field09,   @cOutField09 = O_Field09,   @cFieldAttr09 = FieldAttr09, 
-   @cInField10 = I_Field10,   @cOutField10 = O_Field10,   @cFieldAttr10 = FieldAttr10, 
-   @cInField11 = I_Field11,   @cOutField11 = O_Field11,   @cFieldAttr11 = FieldAttr11, 
-   @cInField12 = I_Field12,   @cOutField12 = O_Field12,   @cFieldAttr12 = FieldAttr12, 
-   @cInField13 = I_Field13,   @cOutField13 = O_Field13,   @cFieldAttr13 = FieldAttr13, 
-   @cInField14 = I_Field14,   @cOutField14 = O_Field14,   @cFieldAttr14 = FieldAttr14, 
+   @cInField01 = I_Field01,   @cOutField01 = O_Field01,   @cFieldAttr01 = FieldAttr01,
+   @cInField02 = I_Field02,   @cOutField02 = O_Field02,   @cFieldAttr02 = FieldAttr02,
+   @cInField03 = I_Field03,   @cOutField03 = O_Field03,   @cFieldAttr03 = FieldAttr03,
+   @cInField04 = I_Field04,   @cOutField04 = O_Field04,   @cFieldAttr04 = FieldAttr04,
+   @cInField05 = I_Field05,   @cOutField05 = O_Field05,   @cFieldAttr05 = FieldAttr05,
+   @cInField06 = I_Field06,   @cOutField06 = O_Field06,   @cFieldAttr06 = FieldAttr06,
+   @cInField07 = I_Field07,   @cOutField07 = O_Field07,   @cFieldAttr07 = FieldAttr07,
+   @cInField08 = I_Field08,   @cOutField08 = O_Field08,   @cFieldAttr08 = FieldAttr08,
+   @cInField09 = I_Field09,   @cOutField09 = O_Field09,   @cFieldAttr09 = FieldAttr09,
+   @cInField10 = I_Field10,   @cOutField10 = O_Field10,   @cFieldAttr10 = FieldAttr10,
+   @cInField11 = I_Field11,   @cOutField11 = O_Field11,   @cFieldAttr11 = FieldAttr11,
+   @cInField12 = I_Field12,   @cOutField12 = O_Field12,   @cFieldAttr12 = FieldAttr12,
+   @cInField13 = I_Field13,   @cOutField13 = O_Field13,   @cFieldAttr13 = FieldAttr13,
+   @cInField14 = I_Field14,   @cOutField14 = O_Field14,   @cFieldAttr14 = FieldAttr14,
    @cInField15 = I_Field15,   @cOutField15 = O_Field15,   @cFieldAttr15 = FieldAttr15
 
 FROM rdt.rdtMobRec WITH (NOLOCK)
@@ -273,7 +271,7 @@ BEGIN
    SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerKey)
    IF @cDecodeSP = '0'
       SET @cDecodeSP = ''
-   SET @cDefaultQTY = rdt.RDTGetConfig( @nFunc, 'DefaultQTY', @cStorerKey) 
+   SET @cDefaultQTY = rdt.RDTGetConfig( @nFunc, 'DefaultQTY', @cStorerKey)
    IF @cDefaultQTY = '0'
       SET @cDefaultQTY = ''
    SET @cExtendedInfoSP = rdt.RDTGetConfig( @nFunc, 'ExtendedInfoSP', @cStorerKey)
@@ -425,7 +423,7 @@ BEGIN
       BEGIN
          -- Get pickheader info
          DECLARE @cChkPickSlipNo NVARCHAR(10)
-         SELECT 
+         SELECT
             @cChkPickSlipNo = PickHeaderKey
          FROM dbo.PickHeader WITH (NOLOCK)
          WHERE PickHeaderKey = @cPickSlipNo
@@ -591,7 +589,7 @@ BEGIN
                GOTO Criteria_Fail
             END
          END
-         
+
          SET @cSourceKey = @cDropID
       END
 
@@ -677,35 +675,35 @@ BEGIN
          -- Standard decode
          IF @cDecodeSP = '1'
          BEGIN
-            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode, 
-               @cUPC          = @cUPC          OUTPUT, 
-               @nQTY          = @nQTY          OUTPUT, 
-               @cLottable01   = @cLottable01   OUTPUT, 
-               @cLottable02   = @cLottable02   OUTPUT, 
-               @cLottable03   = @cLottable03   OUTPUT, 
-               @dLottable04   = @dLottable04   OUTPUT, 
+            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
+               @cUPC          = @cUPC          OUTPUT,
+               @nQTY          = @nQTY          OUTPUT,
+               @cLottable01   = @cLottable01   OUTPUT,
+               @cLottable02   = @cLottable02   OUTPUT,
+               @cLottable03   = @cLottable03   OUTPUT,
+               @dLottable04   = @dLottable04   OUTPUT,
                @dLottable05   = @dLottable05   OUTPUT,
-               @cLottable06   = @cLottable06   OUTPUT, 
-               @cLottable07   = @cLottable07   OUTPUT, 
-               @cLottable08   = @cLottable08   OUTPUT, 
-               @cLottable09   = @cLottable09   OUTPUT, 
+               @cLottable06   = @cLottable06   OUTPUT,
+               @cLottable07   = @cLottable07   OUTPUT,
+               @cLottable08   = @cLottable08   OUTPUT,
+               @cLottable09   = @cLottable09   OUTPUT,
                @cLottable10   = @cLottable10   OUTPUT,
-               @cLottable11   = @cLottable11   OUTPUT, 
-               @cLottable12   = @cLottable12   OUTPUT, 
-               @dLottable13   = @dLottable13   OUTPUT, 
-               @dLottable14   = @dLottable14   OUTPUT, 
+               @cLottable11   = @cLottable11   OUTPUT,
+               @cLottable12   = @cLottable12   OUTPUT,
+               @dLottable13   = @dLottable13   OUTPUT,
+               @dLottable14   = @dLottable14   OUTPUT,
                @dLottable15   = @dLottable15   OUTPUT,
-               @nErrNo        = @nErrNo        OUTPUT, 
+               @nErrNo        = @nErrNo        OUTPUT,
                @cErrMsg       = @cErrMsg       OUTPUT
          END
-         
+
          -- Customize decode
          ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cBarcode, ' +
                ' @cRefno         OUTPUT, @cPickSlipNo    OUTPUT, @cLoadKey       OUTPUT, @cOrderKey      OUTPUT, @cDropID        OUTPUT, ' +
-               ' @cUPC           OUTPUT, @nQTY           OUTPUT, ' + 
+               ' @cUPC           OUTPUT, @nQTY           OUTPUT, ' +
                ' @cLottable01    OUTPUT, @cLottable02    OUTPUT, @cLottable03    OUTPUT, @dLottable04    OUTPUT, @dLottable05    OUTPUT, ' +
                ' @cLottable06    OUTPUT, @cLottable07    OUTPUT, @cLottable08    OUTPUT, @cLottable09    OUTPUT, @cLottable10    OUTPUT, ' +
                ' @cLottable11    OUTPUT, @cLottable12    OUTPUT, @dLottable13    OUTPUT, @dLottable14    OUTPUT, @dLottable15    OUTPUT, ' +
@@ -723,8 +721,8 @@ BEGIN
                ' @cLoadKey       NVARCHAR( 10)  OUTPUT, ' +
                ' @cOrderKey      NVARCHAR( 10)  OUTPUT, ' +
                ' @cDropID        NVARCHAR( 20)  OUTPUT, ' +
-               ' @cUPC           NVARCHAR( 20)  OUTPUT, ' + 
-               ' @nQTY           INT            OUTPUT, ' + 
+               ' @cUPC           NVARCHAR( 20)  OUTPUT, ' +
+               ' @nQTY           INT            OUTPUT, ' +
                ' @cLottable01    NVARCHAR( 18)  OUTPUT, ' +
                ' @cLottable02    NVARCHAR( 18)  OUTPUT, ' +
                ' @cLottable03    NVARCHAR( 18)  OUTPUT, ' +
@@ -744,9 +742,9 @@ BEGIN
                ' @cErrMsg        NVARCHAR( 20)  OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cBarcode, 
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cBarcode,
                @cRefno        OUTPUT, @cPickSlipNo    OUTPUT, @cLoadKey       OUTPUT, @cOrderKey      OUTPUT, @cDropID        OUTPUT,
-               @cUPC          OUTPUT, @nQTY           OUTPUT, 
+               @cUPC          OUTPUT, @nQTY           OUTPUT,
                @cLottable01   OUTPUT, @cLottable02    OUTPUT, @cLottable03    OUTPUT, @dLottable04    OUTPUT, @dLottable05    OUTPUT,
                @cLottable06   OUTPUT, @cLottable07    OUTPUT, @cLottable08    OUTPUT, @cLottable09    OUTPUT, @cLottable10    OUTPUT,
                @cLottable11   OUTPUT, @cLottable12    OUTPUT, @dLottable13    OUTPUT, @dLottable14    OUTPUT, @dLottable15    OUTPUT,
@@ -768,7 +766,7 @@ BEGIN
       BEGIN
          SET @nErrNo = 121968
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid SKU
-         GOTO SKU_Fail  
+         GOTO SKU_Fail
       END
 
       -- Check multi SKU barcode
@@ -817,7 +815,7 @@ BEGIN
          BEGIN
             SET @nErrNo = 121969
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- MultiSKUBarcod
-            GOTO SKU_Fail  
+            GOTO SKU_Fail
          END
       END
 
@@ -872,11 +870,11 @@ BEGIN
          IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUOMSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUOMSP) +
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType, ' + 
-               ' @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cSKU, @nQTY, @nRowRef, ' + 
-               ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' + 
-               ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' + 
-               ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' + 
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType, ' +
+               ' @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cSKU, @nQTY, @nRowRef, ' +
+               ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
+               ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
+               ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
                ' @cPUOM, @nExtPUOM_Div OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '
             SET @cSQLParam =
                ' @nMobile         INT,           ' +
@@ -887,64 +885,64 @@ BEGIN
                ' @cFacility       NVARCHAR( 5),  ' +
                ' @cStorerKey      NVARCHAR( 15), ' +
                ' @cType           NVARCHAR( 10), ' +
-               ' @cRefNo          NVARCHAR( 10), ' + 
-               ' @cPickSlipNo     NVARCHAR( 10), ' + 
-               ' @cLoadKey        NVARCHAR( 10), ' +  
-               ' @cOrderKey       NVARCHAR( 10), ' +  
-               ' @cDropID         NVARCHAR( 20), ' +  
-               ' @cSKU            NVARCHAR( 20), ' +  
-               ' @nQTY            INT,           ' +  
-               ' @nRowRef         INT,           ' + 
-               ' @cLottable01     NVARCHAR( 18), ' + 
-               ' @cLottable02     NVARCHAR( 18), ' + 
-               ' @cLottable03     NVARCHAR( 18), ' + 
-               ' @dLottable04     DATETIME,      ' + 
-               ' @dLottable05     DATETIME,      ' + 
-               ' @cLottable06     NVARCHAR( 30), ' + 
-               ' @cLottable07     NVARCHAR( 30), ' + 
-               ' @cLottable08     NVARCHAR( 30), ' + 
-               ' @cLottable09     NVARCHAR( 30), ' + 
-               ' @cLottable10     NVARCHAR( 30), ' + 
-               ' @cLottable11     NVARCHAR( 30), ' + 
-               ' @cLottable12     NVARCHAR( 30), ' + 
-               ' @dLottable13     DATETIME,      ' + 
-               ' @dLottable14     DATETIME,      ' + 
-               ' @dLottable15     DATETIME,      ' + 
-               ' @cPUOM           NVARCHAR( 1),  ' + 
-               ' @nExtPUOM_Div    INT          OUTPUT, ' + 
-               ' @nErrNo          INT          OUTPUT, ' + 
+               ' @cRefNo          NVARCHAR( 10), ' +
+               ' @cPickSlipNo     NVARCHAR( 10), ' +
+               ' @cLoadKey        NVARCHAR( 10), ' +
+               ' @cOrderKey       NVARCHAR( 10), ' +
+               ' @cDropID         NVARCHAR( 20), ' +
+               ' @cSKU            NVARCHAR( 20), ' +
+               ' @nQTY            INT,           ' +
+               ' @nRowRef         INT,           ' +
+               ' @cLottable01     NVARCHAR( 18), ' +
+               ' @cLottable02     NVARCHAR( 18), ' +
+               ' @cLottable03     NVARCHAR( 18), ' +
+               ' @dLottable04     DATETIME,      ' +
+               ' @dLottable05     DATETIME,      ' +
+               ' @cLottable06     NVARCHAR( 30), ' +
+               ' @cLottable07     NVARCHAR( 30), ' +
+               ' @cLottable08     NVARCHAR( 30), ' +
+               ' @cLottable09     NVARCHAR( 30), ' +
+               ' @cLottable10     NVARCHAR( 30), ' +
+               ' @cLottable11     NVARCHAR( 30), ' +
+               ' @cLottable12     NVARCHAR( 30), ' +
+               ' @dLottable13     DATETIME,      ' +
+               ' @dLottable14     DATETIME,      ' +
+               ' @dLottable15     DATETIME,      ' +
+               ' @cPUOM           NVARCHAR( 1),  ' +
+               ' @nExtPUOM_Div    INT          OUTPUT, ' +
+               ' @nErrNo          INT          OUTPUT, ' +
                ' @cErrMsg         NVARCHAR(20) OUTPUT  '
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType, 
-               @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cSKU, @nQTY, @nRowRef, 
-               @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, 
-               @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, 
-               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, 
-               @cPUOM, @nExtPUOM_Div OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT 
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,
+               @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cSKU, @nQTY, @nRowRef,
+               @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+               @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+               @cPUOM, @nExtPUOM_Div OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
             IF @nErrNo <> 0
                GOTO SKU_Fail
          END
       END
 
-      SELECT @cType = 'SKU', @nQTY = 0, @nRowRef = 0, @cQTY_PPA = '0', @cQTY_CHK = '0', 
-         @cLottable01 = '', @cLottable02 = '', @cLottable03 = '',   @dLottable04 = NULL, @dLottable05 = NULL, 
-         @cLottable06 = '', @cLottable07 = '', @cLottable08 = '',   @cLottable09 = '',   @cLottable10 = '', 
-         @cLottable11 = '', @cLottable12 = '', @dLottable13 = NULL, @dLottable14 = NULL, @dLottable15 = NULL 
+      SELECT @cType = 'SKU', @nQTY = 0, @nRowRef = 0, @cQTY_PPA = '0', @cQTY_CHK = '0',
+         @cLottable01 = '', @cLottable02 = '', @cLottable03 = '',   @dLottable04 = NULL, @dLottable05 = NULL,
+         @cLottable06 = '', @cLottable07 = '', @cLottable08 = '',   @cLottable09 = '',   @cLottable10 = '',
+         @cLottable11 = '', @cLottable12 = '', @dLottable13 = NULL, @dLottable14 = NULL, @dLottable15 = NULL
 
       -- Check SKU not in pick list
       IF @cAllowSKUNotInPickList <> '1'
       BEGIN
          -- Get PPA
-         EXECUTE rdt.rdt_PostPickAudit_Lottable_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'CHECK', @cType, 
-            @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cSKU, @cDescr, @nQTY, @cLottableCode, 
-            @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, 
-            @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, 
-            @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, 
-            @nRowRef    OUTPUT, 
-            @cQTY_PPA   OUTPUT, 
-            @cQTY_CHK   OUTPUT, 
-            @nErrNo     OUTPUT, 
+         EXECUTE rdt.rdt_PostPickAudit_Lottable_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'CHECK', @cType,
+            @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cSKU, @cDescr, @nQTY, @cLottableCode,
+            @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+            @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+            @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+            @nRowRef    OUTPUT,
+            @cQTY_PPA   OUTPUT,
+            @cQTY_CHK   OUTPUT,
+            @nErrNo     OUTPUT,
             @cErrMsg    OUTPUT
          IF @nErrNo <> 0
             GOTO SKU_Fail
@@ -960,7 +958,7 @@ BEGIN
       END
 
       -- Dynamic lottable
-      EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'CAPTURE', 'POPULATE', 5, 1, 
+      EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'CAPTURE', 'POPULATE', 5, 1,
          @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
          @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
          @cInField03  OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,
@@ -994,15 +992,15 @@ BEGIN
       END
 
       -- Insert PPA
-      EXECUTE rdt.rdt_PostPickAudit_Lottable_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'INSERT', @cType, 
-         @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cSKU, @cDescr, @nQTY, @cLottableCode, 
-         @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, 
-         @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, 
-         @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, 
-         @nRowRef    OUTPUT, 
-         @cQTY_PPA   OUTPUT, 
-         @cQTY_CHK   OUTPUT, 
-         @nErrNo     OUTPUT, 
+      EXECUTE rdt.rdt_PostPickAudit_Lottable_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'INSERT', @cType,
+         @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cSKU, @cDescr, @nQTY, @cLottableCode,
+         @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+         @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+         @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+         @nRowRef    OUTPUT,
+         @cQTY_PPA   OUTPUT,
+         @cQTY_CHK   OUTPUT,
+         @nErrNo     OUTPUT,
          @cErrMsg    OUTPUT
       IF @nErrNo <> 0
          GOTO SKU_Fail
@@ -1014,7 +1012,7 @@ BEGIN
          SET @cPUOM_Desc = ''
          SET @cFieldAttr11 = 'O'
       END
-      
+
        -- Prepare QTY screen var
       SET @cOutField01 = @cSKU
       SET @cOutField02 = SUBSTRING( @cDescr, 1, 20)  -- SKU desc 1
@@ -1055,15 +1053,15 @@ BEGIN
    BEGIN
       DECLARE @cSKUStat NVARCHAR( 20)
       DECLARE @cQTYStat NVARCHAR( 20)
-      
+
       SET @cCHK_SKU = '0'
       SET @cCHK_QTY = '0'
       SET @cPPA_SKU = '0'
       SET @cPPA_QTY = '0'
 
       -- Get statistic
-      EXECUTE rdt.rdt_PostPickAudit_Lottable_GetStat @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
-         @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, 
+      EXECUTE rdt.rdt_PostPickAudit_Lottable_GetStat @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+         @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID,
          @nCSKU = @cCHK_SKU OUTPUT,
          @nCQTY = @cCHK_QTY OUTPUT,
          @nPSKU = @cPPA_SKU OUTPUT,
@@ -1075,7 +1073,7 @@ BEGIN
 
       -- Get status
       DECLARE @cPickStatus NVARCHAR(20)
-      IF @cPPA_SKU = @cCHK_SKU AND 
+      IF @cPPA_SKU = @cCHK_SKU AND
          @cPPA_QTY = @cCHK_QTY
       BEGIN
          SET @nErrNo = 121972
@@ -1128,7 +1126,7 @@ BEGIN
    IF @nInputKey = 1 -- Yes or Send
    BEGIN
       -- Dynamic lottable
-      EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'CAPTURE', 'CHECK', 5, 1, 
+      EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'CAPTURE', 'CHECK', 5, 1,
          @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
          @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
          @cInField03  OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,
@@ -1160,23 +1158,23 @@ BEGIN
 
       -- Check lottable not in pick list
       IF @cAllowLottableNotInPickList <> '1' --Not allow
-      BEGIN         
+      BEGIN
          -- Get PPA
-         SET @nRowRef = 0 
+         SET @nRowRef = 0
          SET @cQTY_PPA = '0'
-         EXECUTE rdt.rdt_PostPickAudit_Lottable_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'CHECK', @cType, 
-            @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cSKU, @cDescr, @nQTY, @cLottableCode, 
-            @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, 
-            @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, 
-            @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, 
-            @nRowRef    OUTPUT, 
-            @cQTY_PPA   OUTPUT, 
-            @cQTY_CHK   OUTPUT, 
-            @nErrNo     OUTPUT, 
+         EXECUTE rdt.rdt_PostPickAudit_Lottable_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'CHECK', @cType,
+            @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cSKU, @cDescr, @nQTY, @cLottableCode,
+            @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+            @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+            @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+            @nRowRef    OUTPUT,
+            @cQTY_PPA   OUTPUT,
+            @cQTY_CHK   OUTPUT,
+            @nErrNo     OUTPUT,
             @cErrMsg    OUTPUT
          IF @nErrNo <> 0
             GOTO Quit
-         
+
          IF @nRowRef = 0 AND @cQTY_PPA = '0'
          BEGIN
             SET @nErrNo = 121974
@@ -1188,15 +1186,15 @@ BEGIN
       END
 
       -- Insert PPA
-      EXECUTE rdt.rdt_PostPickAudit_Lottable_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'INSERT', @cType, 
-         @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cSKU, @cDescr, @nQTY, @cLottableCode, 
-         @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, 
-         @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, 
-         @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, 
-         @nRowRef    OUTPUT, 
-         @cQTY_PPA   OUTPUT, 
-         @cQTY_CHK   OUTPUT, 
-         @nErrNo     OUTPUT, 
+      EXECUTE rdt.rdt_PostPickAudit_Lottable_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'INSERT', @cType,
+         @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cSKU, @cDescr, @nQTY, @cLottableCode,
+         @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+         @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+         @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+         @nRowRef    OUTPUT,
+         @cQTY_PPA   OUTPUT,
+         @cQTY_CHK   OUTPUT,
+         @nErrNo     OUTPUT,
          @cErrMsg    OUTPUT
       IF @nErrNo <> 0
          GOTO Quit
@@ -1207,9 +1205,9 @@ BEGIN
       SET @cFieldAttr06 = ''
       SET @cFieldAttr08 = ''
       SET @cFieldAttr10 = ''
-      
+
       -- Dynamic lottable
-      EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'DISPLAY', 'POPULATE', 4, 4, 
+      EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'DISPLAY', 'POPULATE', 4, 4,
          @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
          @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
          @cInField03  OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,
@@ -1255,7 +1253,7 @@ BEGIN
                '@cLangCode    NVARCHAR( 3),  ' +
                '@nStep        INT,           ' +
                '@nInputKey    INT,           ' +
-               '@cFacility    NVARCHAR( 5),  ' + 
+               '@cFacility    NVARCHAR( 5),  ' +
                '@cStorerKey   NVARCHAR( 15), ' +
                '@cRefNo       NVARCHAR( 10), ' +
                '@cPickSlipNo  NVARCHAR( 10), ' +
@@ -1269,7 +1267,7 @@ BEGIN
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cSKU, @cExtendedInfo OUTPUT
          END
       END
-      
+
       -- Prepare QTY screen var
       SET @cOutField01 = @cSKU
       SET @cOutField02 = SUBSTRING( @cDescr, 1, 20)  -- SKU desc 1
@@ -1310,7 +1308,7 @@ BEGIN
    IF @nInputKey = 0 -- Esc or No
    BEGIN
       -- Dynamic lottable
-      EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'CAPTURE', 'POPULATE', 5, 1, 
+      EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'CAPTURE', 'POPULATE', 5, 1,
          @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
          @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
          @cInField03  OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,
@@ -1381,7 +1379,7 @@ BEGIN
    BEGIN
       DECLARE @cMQTY NVARCHAR(5), @nMQTY INT
       DECLARE @cPQTY NVARCHAR(5), @nPQTY INT
-      
+
       -- Screen mapping
       SET @cPQTY = CASE WHEN @cFieldAttr11 = 'O' THEN @cOutField11 ELSE @cInField11 END
       SET @cMQTY = @cInField12
@@ -1438,22 +1436,22 @@ BEGIN
       IF @cAllowExcessQTY <> '1'
       BEGIN
          -- Get PPA
-         SET @nRowRef = 0 
+         SET @nRowRef = 0
          SET @cQTY_PPA = '0'
          SET @cQTY_CHK = '0'
-         EXECUTE rdt.rdt_PostPickAudit_Lottable_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'CHECK', @cType, 
-            @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cSKU, @cDescr, @nQTY, @cLottableCode, 
-            @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, 
-            @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, 
-            @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, 
-            @nRowRef    OUTPUT, 
-            @cQTY_PPA   OUTPUT, 
-            @cQTY_CHK   OUTPUT, 
-            @nErrNo     OUTPUT, 
+         EXECUTE rdt.rdt_PostPickAudit_Lottable_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'CHECK', @cType,
+            @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cSKU, @cDescr, @nQTY, @cLottableCode,
+            @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+            @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+            @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+            @nRowRef    OUTPUT,
+            @cQTY_PPA   OUTPUT,
+            @cQTY_CHK   OUTPUT,
+            @nErrNo     OUTPUT,
             @cErrMsg    OUTPUT
          IF @nErrNo <> 0
             GOTO Quit
-         
+
          -- Exclude new SKU / lottable, which is always excess
          IF CAST( @cQTY_PPA AS INT) > 0
          BEGIN
@@ -1472,23 +1470,23 @@ BEGIN
       SET @nTranCount = @@TRANCOUNT
       BEGIN TRAN  -- Begin our own transaction
       SAVE TRAN rdtfnc_PostPickAudit_Lottable -- For rollback or commit only our own transaction
-      
+
       -- Update PPA
-      EXECUTE rdt.rdt_PostPickAudit_Lottable_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'UPDATE', @cType, 
-         @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cSKU, @cDescr, @nQTY, @cLottableCode, 
-         @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, 
-         @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, 
-         @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, 
-         @nRowRef    OUTPUT, 
-         @cQTY_PPA   OUTPUT, 
-         @cQTY_CHK   OUTPUT, 
-         @nErrNo     OUTPUT, 
+      EXECUTE rdt.rdt_PostPickAudit_Lottable_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'UPDATE', @cType,
+         @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cSKU, @cDescr, @nQTY, @cLottableCode,
+         @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+         @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+         @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+         @nRowRef    OUTPUT,
+         @cQTY_PPA   OUTPUT,
+         @cQTY_CHK   OUTPUT,
+         @nErrNo     OUTPUT,
          @cErrMsg    OUTPUT
       IF @nErrNo <> 0
       BEGIN
          ROLLBACK TRAN rdtfnc_PostPickAudit_Lottable
          WHILE @@TRANCOUNT > @nTranCount
-            COMMIT TRAN 
+            COMMIT TRAN
          GOTO Quit
       END
 
@@ -1498,12 +1496,12 @@ BEGIN
          IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType, ' + 
-               ' @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cSKU, @nQTY, @cLottableCode, ' + 
-               ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' + 
-               ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' + 
-               ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' + 
-               ' @nRowRef, @cQTY_PPA, @cQTY_CHK, @cCHK_SKU, @cCHK_QTY, @cPPA_SKU, @cPPA_QTY, ' + 
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType, ' +
+               ' @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cSKU, @nQTY, @cLottableCode, ' +
+               ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
+               ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
+               ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
+               ' @nRowRef, @cQTY_PPA, @cQTY_CHK, @cCHK_SKU, @cCHK_QTY, @cPPA_SKU, @cPPA_QTY, ' +
                ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
             SET @cSQLParam =
                ' @nMobile         INT,           ' +
@@ -1514,52 +1512,52 @@ BEGIN
                ' @cFacility       NVARCHAR( 5),  ' +
                ' @cStorerKey      NVARCHAR( 15), ' +
                ' @cType           NVARCHAR( 10), ' +
-               ' @cRefNo          NVARCHAR( 10), ' + 
-               ' @cPickSlipNo     NVARCHAR( 10), ' + 
-               ' @cLoadKey        NVARCHAR( 10), ' +  
-               ' @cOrderKey       NVARCHAR( 10), ' +  
-               ' @cDropID         NVARCHAR( 20), ' +  
-               ' @cSKU            NVARCHAR( 20), ' +  
-               ' @nQTY            INT,           ' +  
+               ' @cRefNo          NVARCHAR( 10), ' +
+               ' @cPickSlipNo     NVARCHAR( 10), ' +
+               ' @cLoadKey        NVARCHAR( 10), ' +
+               ' @cOrderKey       NVARCHAR( 10), ' +
+               ' @cDropID         NVARCHAR( 20), ' +
+               ' @cSKU            NVARCHAR( 20), ' +
+               ' @nQTY            INT,           ' +
                ' @cLottableCode   NVARCHAR( 30), ' +
-               ' @cLottable01     NVARCHAR( 18), ' + 
-               ' @cLottable02     NVARCHAR( 18), ' + 
-               ' @cLottable03     NVARCHAR( 18), ' + 
-               ' @dLottable04     DATETIME,      ' + 
-               ' @dLottable05     DATETIME,      ' + 
-               ' @cLottable06     NVARCHAR( 30), ' + 
-               ' @cLottable07     NVARCHAR( 30), ' + 
-               ' @cLottable08     NVARCHAR( 30), ' + 
-               ' @cLottable09     NVARCHAR( 30), ' + 
-               ' @cLottable10     NVARCHAR( 30), ' + 
-               ' @cLottable11     NVARCHAR( 30), ' + 
-               ' @cLottable12     NVARCHAR( 30), ' + 
-               ' @dLottable13     DATETIME,      ' + 
-               ' @dLottable14     DATETIME,      ' + 
-               ' @dLottable15     DATETIME,      ' + 
-               ' @nRowRef         INT,           ' + 
-               ' @cQTY_PPA        NVARCHAR( 10), ' + 
+               ' @cLottable01     NVARCHAR( 18), ' +
+               ' @cLottable02     NVARCHAR( 18), ' +
+               ' @cLottable03     NVARCHAR( 18), ' +
+               ' @dLottable04     DATETIME,      ' +
+               ' @dLottable05     DATETIME,      ' +
+               ' @cLottable06     NVARCHAR( 30), ' +
+               ' @cLottable07     NVARCHAR( 30), ' +
+               ' @cLottable08     NVARCHAR( 30), ' +
+               ' @cLottable09     NVARCHAR( 30), ' +
+               ' @cLottable10     NVARCHAR( 30), ' +
+               ' @cLottable11     NVARCHAR( 30), ' +
+               ' @cLottable12     NVARCHAR( 30), ' +
+               ' @dLottable13     DATETIME,      ' +
+               ' @dLottable14     DATETIME,      ' +
+               ' @dLottable15     DATETIME,      ' +
+               ' @nRowRef         INT,           ' +
+               ' @cQTY_PPA        NVARCHAR( 10), ' +
                ' @cQTY_CHK        NVARCHAR( 10), ' +
                ' @cCHK_SKU        NVARCHAR( 10), ' +
                ' @cCHK_QTY        NVARCHAR( 10), ' +
                ' @cPPA_SKU        NVARCHAR( 10), ' +
                ' @cPPA_QTY        NVARCHAR( 10), ' +
-               ' @nErrNo          INT          OUTPUT, ' + 
+               ' @nErrNo          INT          OUTPUT, ' +
                ' @cErrMsg         NVARCHAR(20) OUTPUT  '
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType, 
-               @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cSKU, @nQTY, @cLottableCode, 
-               @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, 
-               @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, 
-               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, 
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,
+               @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cSKU, @nQTY, @cLottableCode,
+               @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+               @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
                @nRowRef, @cQTY_PPA, @cQTY_CHK, @cCHK_SKU, @cCHK_QTY, @cPPA_SKU, @cPPA_QTY,
-               @nErrNo OUTPUT, @cErrMsg OUTPUT 
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
 
             IF @nErrNo <> 0
             BEGIN
                ROLLBACK TRAN rdtfnc_PostPickAudit_Lottable
                WHILE @@TRANCOUNT > @nTranCount
-                  COMMIT TRAN 
+                  COMMIT TRAN
                GOTO Quit
             END
          END
@@ -1567,7 +1565,39 @@ BEGIN
 
       COMMIT TRAN rdtfnc_PostPickAudit_Lottable
       WHILE @@TRANCOUNT > @nTranCount
-         COMMIT TRAN 
+         COMMIT TRAN
+
+      -- EventLog (yeekung01)
+      EXEC RDT.rdt_STD_EventLog
+         @cActionType = '4', -- pack
+         @cUserID     = @cUserName,
+         @nMobileNo   = @nMobile,
+         @nFunctionID = @nFunc,
+         @cFacility   = @cFacility,
+         @cStorerKey  = @cStorerKey,
+         @nStep       = @nStep,
+         @cRefNo1     = @cRefNo,
+         @cPickSlipNo = @cPickSlipNo,
+         @cLoadKey    = @cLoadKey,
+         @cOrderKey   = @cOrderKey,
+         @cCartonID   = @cDropID, 
+         @cSKU        = @cSKU,
+         @nQty        = @nQTY,
+         @cLottable01 = @cLottable01 ,
+         @cLottable02 = @cLottable02 ,
+         @cLottable03 = @cLottable03 ,
+         @dLottable04 = @dLottable04 ,
+         @dLottable05 = @dLottable05 ,
+         @cLottable06 = @cLottable06 ,
+         @cLottable07 = @cLottable07 ,
+         @cLottable08 = @cLottable08 ,
+         @cLottable09 = @cLottable09 ,
+         @cLottable10 = @cLottable10 ,
+         @cLottable11 = @cLottable11 ,
+         @cLottable12 = @cLottable12 ,
+         @dLottable13 = @dLottable13 ,
+         @dLottable14 = @dLottable14 ,
+         @dLottable15 = @dLottable15
 
       SET @cOutField01 = @cRefNo
       SET @cOutField02 = @cPickSlipNo
@@ -1586,7 +1616,7 @@ BEGIN
    IF @nInputKey = 0 -- ESC
    BEGIN
       -- Dynamic lottable
-      EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'CAPTURE', 'POPULATE', 5, 1, 
+      EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'CAPTURE', 'POPULATE', 5, 1,
          @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
          @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
          @cInField03  OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,
@@ -1649,12 +1679,12 @@ BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')
       BEGIN
          SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
-            ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType, ' + 
-            ' @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cSKU, @nQTY, @cLottableCode, ' + 
-            ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' + 
-            ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' + 
-            ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' + 
-            ' @nRowRef, @cQTY_PPA, @cQTY_CHK, @cCHK_SKU, @cCHK_QTY, @cPPA_SKU, @cPPA_QTY, ' + 
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType, ' +
+            ' @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cSKU, @nQTY, @cLottableCode, ' +
+            ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
+            ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
+            ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
+            ' @nRowRef, @cQTY_PPA, @cQTY_CHK, @cCHK_SKU, @cCHK_QTY, @cPPA_SKU, @cPPA_QTY, ' +
             ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
          SET @cSQLParam =
             ' @nMobile         INT,           ' +
@@ -1665,46 +1695,46 @@ BEGIN
             ' @cFacility       NVARCHAR( 5),  ' +
             ' @cStorerKey      NVARCHAR( 15), ' +
             ' @cType           NVARCHAR( 10), ' +
-            ' @cRefNo          NVARCHAR( 10), ' + 
-            ' @cPickSlipNo     NVARCHAR( 10), ' + 
-            ' @cLoadKey        NVARCHAR( 10), ' +  
-            ' @cOrderKey       NVARCHAR( 10), ' +  
-            ' @cDropID         NVARCHAR( 20), ' +  
-            ' @cSKU            NVARCHAR( 20), ' +  
-            ' @nQTY            INT,           ' +  
+            ' @cRefNo          NVARCHAR( 10), ' +
+            ' @cPickSlipNo     NVARCHAR( 10), ' +
+            ' @cLoadKey        NVARCHAR( 10), ' +
+            ' @cOrderKey       NVARCHAR( 10), ' +
+            ' @cDropID         NVARCHAR( 20), ' +
+            ' @cSKU            NVARCHAR( 20), ' +
+            ' @nQTY            INT,           ' +
             ' @cLottableCode   NVARCHAR( 30), ' +
-            ' @cLottable01     NVARCHAR( 18), ' + 
-            ' @cLottable02     NVARCHAR( 18), ' + 
-            ' @cLottable03     NVARCHAR( 18), ' + 
-            ' @dLottable04     DATETIME,      ' + 
-            ' @dLottable05     DATETIME,      ' + 
-            ' @cLottable06     NVARCHAR( 30), ' + 
-            ' @cLottable07     NVARCHAR( 30), ' + 
-            ' @cLottable08     NVARCHAR( 30), ' + 
-            ' @cLottable09     NVARCHAR( 30), ' + 
-            ' @cLottable10     NVARCHAR( 30), ' + 
-            ' @cLottable11     NVARCHAR( 30), ' + 
-            ' @cLottable12     NVARCHAR( 30), ' + 
-            ' @dLottable13     DATETIME,      ' + 
-            ' @dLottable14     DATETIME,      ' + 
-            ' @dLottable15     DATETIME,      ' + 
-            ' @nRowRef         INT,           ' + 
-            ' @cQTY_PPA        NVARCHAR( 10), ' + 
+            ' @cLottable01     NVARCHAR( 18), ' +
+            ' @cLottable02     NVARCHAR( 18), ' +
+            ' @cLottable03     NVARCHAR( 18), ' +
+            ' @dLottable04     DATETIME,      ' +
+            ' @dLottable05     DATETIME,      ' +
+            ' @cLottable06     NVARCHAR( 30), ' +
+            ' @cLottable07     NVARCHAR( 30), ' +
+            ' @cLottable08     NVARCHAR( 30), ' +
+            ' @cLottable09     NVARCHAR( 30), ' +
+            ' @cLottable10     NVARCHAR( 30), ' +
+            ' @cLottable11     NVARCHAR( 30), ' +
+            ' @cLottable12     NVARCHAR( 30), ' +
+            ' @dLottable13     DATETIME,      ' +
+            ' @dLottable14     DATETIME,      ' +
+            ' @dLottable15     DATETIME,      ' +
+            ' @nRowRef         INT,           ' +
+            ' @cQTY_PPA        NVARCHAR( 10), ' +
             ' @cQTY_CHK        NVARCHAR( 10), ' +
             ' @cCHK_SKU        NVARCHAR( 10), ' +
             ' @cCHK_QTY        NVARCHAR( 10), ' +
             ' @cPPA_SKU        NVARCHAR( 10), ' +
             ' @cPPA_QTY        NVARCHAR( 10), ' +
-            ' @nErrNo          INT          OUTPUT, ' + 
+            ' @nErrNo          INT          OUTPUT, ' +
             ' @cErrMsg         NVARCHAR(20) OUTPUT  '
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-            @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType, 
-            @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cSKU, @nQTY, @cLottableCode, 
-            @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, 
-            @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, 
-            @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, 
+            @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,
+            @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cSKU, @nQTY, @cLottableCode,
+            @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+            @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+            @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
             @nRowRef, @cQTY_PPA, @cQTY_CHK, @cCHK_SKU, @cCHK_QTY, @cPPA_SKU, @cPPA_QTY,
-            @nErrNo OUTPUT, @cErrMsg OUTPUT 
+            @nErrNo OUTPUT, @cErrMsg OUTPUT
 
          IF @nErrNo <> 0
             GOTO Quit
@@ -1712,11 +1742,11 @@ BEGIN
    END
 
    -- Prepare next screen var
-   SET @cOutField01 = '' -- RefNo     
+   SET @cOutField01 = '' -- RefNo
    SET @cOutField02 = '' -- PickSlipNo
-   SET @cOutField03 = '' -- LoadKey   
-   SET @cOutField04 = '' -- OrderKey  
-   SET @cOutField05 = '' -- DropID    
+   SET @cOutField03 = '' -- LoadKey
+   SET @cOutField04 = '' -- OrderKey
+   SET @cOutField05 = '' -- DropID
 
    IF @cRefNo      <> '' EXEC rdt.rdtSetFocusField @nMobile, 1 ELSE -- RefNo
    IF @cPickSlipNo <> '' EXEC rdt.rdtSetFocusField @nMobile, 2 ELSE -- PickSlipNo
@@ -1798,7 +1828,7 @@ Quit. Update back to I/O table, ready to be pick up by JBOSS
 Quit:
 BEGIN
    UPDATE rdt.RDTMOBREC WITH (ROWLOCK) SET
-      EditDate = GETDATE(), 
+      EditDate = GETDATE(),
       ErrMsg = @cErrMsg,
       Func   = @nFunc,
       Step   = @nStep,
@@ -1843,13 +1873,13 @@ BEGIN
 
       V_String11 = @cPUOM_Desc,
       V_String12 = @cMUOM_Desc,
-      V_String14 = @cQTY_PPA, 
-      V_String15 = @cQTY_CHK, 
+      V_String14 = @cQTY_PPA,
+      V_String15 = @cQTY_CHK,
       V_String16 = @cCHK_SKU,
       V_String17 = @cCHK_QTY,
       V_String18 = @cPPA_SKU,
       V_String19 = @cPPA_QTY,
-      
+
       V_PUOM_Div = @nPUOM_Div,
 
       V_String21 = @cExtendedValidateSP,
@@ -1861,8 +1891,8 @@ BEGIN
       V_String27 = @cDefaultQTY,
       V_String28 = @cPPACartonIDByPickDetailCaseID,
       V_String29 = @cSkipChkPSlipMustScanOut,
-      V_String30 = @cAllowSKUNotInPickList, 
-      V_String31 = @cAllowLottableNotInPickList, 
+      V_String30 = @cAllowSKUNotInPickList,
+      V_String31 = @cAllowLottableNotInPickList,
       V_String32 = @cAllowExcessQTY,
       V_String33 = @cExtendedUOMSP,
 
@@ -1887,9 +1917,5 @@ BEGIN
    WHERE Mobile = @nMobile
 END
 GO
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-GRANT EXECUTE ON [RDT].[rdtfnc_PostPickAudit_Lottable] TO nSQL
+GRANT EXECUTE ON  [RDT].[rdtfnc_PostPickAudit_Lottable] TO [NSQL]
 GO
