@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */    
 /* Date         Author  Rev   Purposes                                  */ 
 /* 10-FEB-2022  CSCHONG 1.0   Devops Scripts Combine                    */
+/* 31-MAY-2023  NJOW01  1.1   WMS-22704 modify @c_CountryOTH value      */
 /************************************************************************/    
 CREATE OR ALTER PROC [dbo].[ispPOA22]      
      @c_OrderKey    NVARCHAR(10) = ''   
@@ -162,6 +163,7 @@ DECLARE   @c_Country                 NVARCHAR(45)
 
               IF @c_susr5 LIKE 'FORM%' AND  CHARINDEX(@c_Country,@c_susr5) > 0 
               BEGIN
+              	  SET @c_CountryOTH = 'N'  --NJOW01
                   -- SELECT @c_Country '@c_Country', @c_susr5 'susr5', @c_lottable11 'lot11'
                   IF @c_lottable11 = 'VN'
                   BEGIN
