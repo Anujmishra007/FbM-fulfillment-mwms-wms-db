@@ -13,6 +13,7 @@ GO
 /*                                                                      */
 /* Date         Rev  Author   Purposes                                  */
 /* 2022-09-15   1.0  James    WMS-20667. Created                        */
+/* 2022-12-01   1.1  AAY      Auto MBOL Patch                           */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TrackNo_SortToPallet_CloseLane] (
@@ -533,12 +534,13 @@ BEGIN
       BEGIN TRAN  -- Begin our own transaction
       SAVE TRAN rdt_ShipMbol -- For rollback or commit only our own transaction
 
-      UPDATE dbo.Mbol SET   
-         [Status] = '5',   
-         ValidatedFlag = 'Y',  
-         EditDate = GETDATE(),  
-         EditWho = SUSER_SNAME()  
-      WHERE MbolKey = @cMBOLKey  
+      UPDATE dbo.Mbol SET     
+         [Status] = '7',     
+         ValidatedFlag = 'Y',    
+         EditDate = GETDATE(),    
+         EditWho = SUSER_SNAME()    
+      WHERE MbolKey = @cMBOLKey    
+      AND Status <= '5' -- AAY Auto MBOL Patch 2022-12-01  
                     
       IF @@ERROR <> 0  
       BEGIN          
@@ -915,12 +917,13 @@ BEGIN
       BEGIN TRAN  -- Begin our own transaction
       SAVE TRAN rdt_ShipNewMbol -- For rollback or commit only our own transaction
 
-      UPDATE dbo.Mbol SET   
-         [Status] = '5',   
-         ValidatedFlag = 'Y',  
-         EditDate = GETDATE(),  
-         EditWho = SUSER_SNAME()  
-      WHERE MbolKey = @cMBOLKey  
+      UPDATE dbo.Mbol SET     
+         [Status] = '7',     
+         ValidatedFlag = 'Y',    
+         EditDate = GETDATE(),    
+         EditWho = SUSER_SNAME()    
+      WHERE MbolKey = @cMBOLKey    
+      AND Status <= '5' -- AAY Auto MBOL Patch 2022-12-01  
                     
       IF @@ERROR <> 0  
       BEGIN          
