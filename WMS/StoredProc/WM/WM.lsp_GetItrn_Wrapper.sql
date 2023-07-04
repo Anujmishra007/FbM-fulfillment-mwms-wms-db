@@ -13,7 +13,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.5                                                    */
+/* PVCS Version: 1.6                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -38,6 +38,7 @@ GO
 /*                            2. Join Pack for UOMQty calculation       */
 /* 2023-05-24  Wan04    1.5   LFWM-4283 - PROD - PH Alcon - SCE Inventory*/   
 /*                            Transaction Module                        */
+/* 2023-06-14  SPChin   1.6   JSM-156017 - Bug Fixed                    */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_GetItrn_Wrapper]
    @c_WhereClause       NVARCHAR(MAX)                 --Contain WHERE for eg. WHERE ITRN.Storerkey = ''NIKEPH''
@@ -677,10 +678,10 @@ BEGIN
                   +', ITRN.Remarks'
                   +', ITRN.Rowfocusindicatorcol'
                   + ' FROM #TMP_ITRN AS ITRN'
-                  + ' JOIN #TMP_ITRN AS LotAttribute ON LotAttribute.RowID = ITRN.RowID'      --(Wan04)   
-                  + ' JOIN #TMP_ITRN AS SKU ON SKU.RowID = ITRN.RowID'                        --(Wan04)
-                  + ' JOIN #TMP_ITRN AS TOLOC ON TOLOC.RowID = ITRN.RowID'                    --(Wan04)
-                  + ' JOIN #TMP_ITRN AS FROMLOC ON FROMLOC.RowID = ITRN.RowID'                --(Wan04)
+                  + ' JOIN #TMP_ITRN AS LotAttribute ON LotAttribute.RowID = ITRN.RowID'      			--(Wan04)   
+                  + ' JOIN #TMP_ITRN AS SKU ON SKU.RowID = ITRN.RowID'                        			--(Wan04)
+                  + ' JOIN dbo.LOC TOLOC WITH (NOLOCK) ON TOLOC.Loc = ITRN.ToLoc'             			--JSM-156017 --(Wan04)	
+                  + ' LEFT OUTER JOIN dbo.LOC FROMLOC WITH (NOLOCK) ON FROMLOC.Loc = ITRN.FromLoc'	--JSM-156017 --(Wan04)	
                   + ' ' + @c_SearchCondition             --(Wan03)
                   + @c_SortPreference
 
