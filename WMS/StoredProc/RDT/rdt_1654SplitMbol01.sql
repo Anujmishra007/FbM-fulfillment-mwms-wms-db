@@ -14,6 +14,8 @@ GO
 /* Modifications log:                                                   */    
 /* Date        Rev  Author   Purposes                                   */    
 /* 2022-10-25  1.0  LZG      WMS-20667. Created                         */  
+/* 2023-03-02  1.1  James    WMS-21679 Add new externmbolkey naming rule*/
+/*                           when split lane (james01)                  */
 /************************************************************************/    
 CREATE OR ALTER PROC [RDT].[rdt_1654SplitMbol01] (    
    @nMobile        INT,
@@ -190,10 +192,24 @@ BEGIN
              --WHERE StorerKey = @cStorerKey
              --AND M.UserDefine05 = @cMBOLKey
              --AND DATEDIFF(MONTH, M.EditDate, GETDATE()) <= 1
-         
-             SELECT @cNewLane = ExternMBOLKey + '|' + CAST(@nCount AS NVARCHAR)
-             FROM dbo.MBOL WITH (NOLOCK)
-             WHERE MBOLKey = @cMBOLKey
+            
+             -- (james01)
+             IF EXISTS ( SELECT 1 
+                         FROM dbo.CODELKUP CL WITH (NOLOCK)
+                         JOIN dbo.ORDERS O WITH (NOLOCK) ON ( O.Type = CL.Code2 AND O.StorerKey = CL.StorerKey)
+                         JOIN dbo.MBOL M WITH (NOLOCK) ON ( M.MBOLKey = O.MBOLKey)
+                         WHERE M.ExternMBOLKey = @cLane
+                         AND   CL.ListName = 'LANECONFIG'
+                         AND   CL.StorerKey = @cStorerKey
+                         AND   CL.Code = 'LANEGENTIMESTAMP'
+                         AND   CL.Short = '1')
+                SELECT @cNewLane = ExternMBOLKey + '|' + FORMAT(GETDATE(), 'yyMMddHHmmss')
+                FROM dbo.MBOL WITH (NOLOCK)
+                WHERE MBOLKey = @cMBOLKey
+             ELSE
+                SELECT @cNewLane = ExternMBOLKey + '|' + CAST(@nCount AS NVARCHAR)
+                FROM dbo.MBOL WITH (NOLOCK)
+                WHERE MBOLKey = @cMBOLKey
          
              EXECUTE nspg_GetKey  
                  'MBOL',  
