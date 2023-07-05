@@ -22,6 +22,7 @@ GO
 /* 19-Sep-2022 1.1  NJOW02     DEVOPS Combine Script                    */
 /* 05-Jan-2023 1.2  NJOW03     WMS-21380 Suggest carton type for ecom   */
 /* 26-Apr-2023 1.3  NJOW04     WMS-22448 Change multi logic of >= 3     */
+/* 29-Jun-2023 1.4  NJOW05     WMS-22945 add sku alert for 1BOXRemoveUCC*/
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE ispPKINS02
@@ -188,6 +189,10 @@ BEGIN
       BEGIN
          SET @c_PackInstruction = 'Paste DG Label' 
       END         
+      ELSE IF @c_OrderGroup = 'SINGLE' AND @c_ProductModel = '1BOXRemoveUCC'  --NJOW05
+      BEGIN 
+      	 SET @c_PackInstruction = '1 BOX SKU. Remove UCC' 
+      END
       --NJOW02 E
 
       /*
