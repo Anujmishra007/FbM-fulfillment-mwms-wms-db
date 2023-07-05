@@ -12,8 +12,9 @@ GO
 /* Modifications log:                                                   */    
 /*                                                                      */    
 /* Date       Rev  Author     Purposes                                  */    
-/* 2021-10-28 1.0  James      WMS-18174. Created                        */ 
-/* 2022-04-20 1.1  YeeKung    WMS-19311 Add Data capture (yeekung01)    */
+/* 2021-10-28 1.0  James      WMS-18174. Created                        */    
+/* 2022-03-11 1.1  yeekung    WMS-19157 Add duplicate dropid (yeekung01)*/
+/* 2022-04-20 1.2  YeeKung    WMS-19311 Add Data capture (yeekung01)    */
 /************************************************************************/    
 CREATE OR ALTER PROC rdt.rdt_839ExtValidSP09 (    
    @nMobile      INT,             
@@ -29,10 +30,10 @@ CREATE OR ALTER PROC rdt.rdt_839ExtValidSP09 (
    @cDropID      NVARCHAR( 20),   
    @cLOC         NVARCHAR( 10),   
    @cSKU         NVARCHAR( 20),   
-   @nQTY         INT,   
+   @nQTY         INT,           
    @cPackData1   NVARCHAR( 30),
    @cPackData2   NVARCHAR( 30),
-   @cPackData3   NVARCHAR( 30),   
+   @cPackData3   NVARCHAR( 30),     
    @nErrNo       INT           OUTPUT,   
    @cErrMsg      NVARCHAR(250) OUTPUT    
 )    
@@ -49,6 +50,7 @@ BEGIN
    DECLARE @cOrdType          NVARCHAR( 10) = ''  
    DECLARE @cWaveKey          NVARCHAR( 10) = ''  
    DECLARE @cDocType          NVARCHAR( 1) = ''  
+   DECLARE @cLabelNo          NVARCHAR( 20) = ''  
      
    SET @nErrNo          = 0  
    SET @cErrMSG         = ''  
@@ -107,6 +109,25 @@ BEGIN
                GOTO QUIT      
             END    
          END  
+
+         IF EXISTS (SELECT 1 FROM PACKDETAIL (NOLOCK)
+                    WHERE dropid=@cDropID
+                    AND storerkey=@cStorerKey)
+         BEGIN
+            SELECT @cLabelNo=LabelNo 
+            FROM PACKDETAIL (NOLOCK)
+            WHERE dropid=@cDropID
+            AND storerkey=@cStorerKey
+
+            IF EXISTS (SELECT 1 FROM UCC (NOLOCK)
+                       WHERE storerkey=@cStorerkey
+                       AND UCCNo=@cLabelNo)
+            BEGIN      
+               SET @nErrNo = 178104              
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'DropID In Use'              
+               GOTO QUIT      
+            END 
+         END
       END  
    END  
 END    
