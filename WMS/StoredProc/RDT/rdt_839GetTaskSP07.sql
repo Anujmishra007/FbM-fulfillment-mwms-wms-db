@@ -4,13 +4,14 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/************************************************************************/
-/* Store procedure: rdt_839GetTaskSP07                                  */
-/* Copyright      : LF Logistics                                        */
-/*                                                                      */
-/* Date       Rev  Author      Purposes                                 */
-/* 09-12-2022 1.0  Ung         WMS-21244 base on rdt_PickPiece_GetTask  */
-/************************************************************************/
+/***************************************************************************************************/
+/* Store procedure: rdt_839GetTaskSP07                                                             */
+/* Copyright      : LF Logistics                                                                   */
+/*                                                                                                 */
+/* Date       Rev  Author      Purposes                                                            */
+/* 09-12-2022 1.0  Ung         WMS-21244 base on rdt_PickPiece_GetTask                             */
+/* 25-05-2023 1.1  Ung         WMS-22391 NEXTLOC no task, loop back skipped LOC, if there is any   */
+/***************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_839GetTaskSP07] (
     @nMobile          INT
@@ -175,7 +176,8 @@ BEGIN
       SET @cSQLCommonWhere = 
          ' WHERE LPD.LoadKey = @cLoadKey ' + 
             ' AND PD.QTY > 0 ' + 
-            ' AND PD.Status <> ''4'' '
+            ' AND PD.Status <> ''4'' ' + 
+            ' AND PD.Status < @cPickConfirmStatus '
    END
    
    -- Custom PickSlip
@@ -676,6 +678,8 @@ BEGIN
    /***********************************************************************************************
                                               Get next LOC
    ***********************************************************************************************/
+NextLOC: -- For loop back to skipped LOC, after reach last LOC
+
    IF @cType = 'NEXTLOC'
    BEGIN
       -- Get picker initial sequence, if already picking
@@ -742,8 +746,16 @@ BEGIN
 
       -- No suggest LOC
       IF @cSuggLOC = ''
-         GOTO Quit
-
+      BEGIN
+         IF @cLOC = ''
+            GOTO Quit
+         ELSE
+         BEGIN
+            SET @cLOC = '' -- For Loop back to skipped LOC
+            GOTO NextLOC
+         END
+      END
+      
       -- Lock aisle
       IF @cSuggLOC <> ''
       BEGIN
