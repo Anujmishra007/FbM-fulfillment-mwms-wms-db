@@ -13,7 +13,7 @@ GO
 /*        :                                                             */
 /* Called By: RPT_WV_PLIST_WAVE_020                                     */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -22,10 +22,14 @@ GO
 /* Updates:                                                             */
 /* Date         Author    Ver Purposes                                  */
 /* 02-May-2023  WLChooi   1.0 DevOps Combine Script                     */
+/* 27-Jun-2023  WLChooi   1.1 WMS-22363 - Use PreGenRptData (WL01)      */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_RPT_WV_PLIST_WAVE_020]
-(@c_Wavekey NVARCHAR(10))
+(
+   @c_Wavekey       NVARCHAR(10)
+ , @c_PreGenRptData NVARCHAR(10) = ''   --WL01
+)
 AS
 BEGIN
    SET NOCOUNT ON
@@ -86,8 +90,8 @@ BEGIN
    SET @c_recgroup = 1
 
 
-   CREATE TABLE #TMP_PCK_2  
-   ( 
+   CREATE TABLE #TMP_PCK_2
+   (
       WaveKey NVARCHAR(10) NOT NULL
     , a1      INT
     , a2      INT
@@ -100,10 +104,10 @@ BEGIN
     , PickSlipNo      NVARCHAR(10) NOT NULL
     , Storerkey       NVARCHAR(15) NOT NULL
     , Wavekey         NVARCHAR(10) NOT NULL
-    , Wavedetailkey   NVARCHAR(10) NOT NULL  
+    , Wavedetailkey   NVARCHAR(10) NOT NULL
     , RowID           INT          NOT NULL IDENTITY(1, 1) PRIMARY KEY
     , PLOC            NVARCHAR(10) NOT NULL
-    , OrderLineNumber NVARCHAR(5)  NULL 
+    , OrderLineNumber NVARCHAR(5)  NULL
    )
 
    CREATE TABLE #TMP_PICK
@@ -128,10 +132,12 @@ BEGIN
     , ReferenceId   NVARCHAR(20)  NULL
     , SSIZE         NVARCHAR(10)  NULL
     , QRCode        NVARCHAR(250) NULL
-    , Wavedetailkey NVARCHAR(10)  NULL    
-    , a1            INT    
-    , a2            INT    
+    , Wavedetailkey NVARCHAR(10)  NULL
+    , a1            INT
+    , a2            INT
    )
+
+   SELECT @c_PreGenRptData = IIF(ISNULL(@c_PreGenRptData,'') IN ('','0'),'',@c_PreGenRptData)   --WL01
 
    SET @c_Facility = N''
    SELECT @c_Facility = OH.Facility
@@ -154,7 +160,7 @@ BEGIN
         , ISNULL(TRIM(PICKHEADER.PickHeaderKey), '')
         , ORDERS.StorerKey
         , WAVEDETAIL.WaveKey
-        , WAVEDETAIL.WaveDetailKey    
+        , WAVEDETAIL.WaveDetailKey
         , PID.Loc
         , OD.OrderLineNumber
    FROM WAVEDETAIL WITH (NOLOCK)
@@ -162,165 +168,101 @@ BEGIN
    JOIN LoadPlanDetail WITH (NOLOCK) ON (LoadPlanDetail.OrderKey = ORDERS.OrderKey)
    LEFT JOIN PICKHEADER WITH (NOLOCK) ON  (LoadPlanDetail.LoadKey = PICKHEADER.ExternOrderKey)
                                       AND (LoadPlanDetail.OrderKey = PICKHEADER.OrderKey)
-   JOIN ORDERDETAIL OD (NOLOCK) ON OD.OrderKey = ORDERS.OrderKey 
+   JOIN ORDERDETAIL OD (NOLOCK) ON OD.OrderKey = ORDERS.OrderKey
    JOIN PICKDETAIL PID (NOLOCK) ON  PID.OrderKey = OD.OrderKey
                                 AND PID.Sku = OD.Sku
-                                AND PID.OrderLineNumber = OD.OrderLineNumber    
+                                AND PID.OrderLineNumber = OD.OrderLineNumber
    WHERE WAVEDETAIL.WaveKey = @c_Wavekey
    GROUP BY LoadPlanDetail.LoadKey
           , LoadPlanDetail.OrderKey
           , ISNULL(TRIM(PICKHEADER.PickHeaderKey), '')
           , ORDERS.StorerKey
           , WAVEDETAIL.WaveKey
-          , WAVEDETAIL.WaveDetailKey    
+          , WAVEDETAIL.WaveDetailKey
           , PID.Loc
           , OD.OrderLineNumber
    ORDER BY WAVEDETAIL.WaveDetailKey
 
-   INSERT INTO #TMP_PCK_2 (WaveKey, a1, a2) 
+   INSERT INTO #TMP_PCK_2 (WaveKey, a1, a2)
    SELECT Wavekey
-        , COUNT(DISTINCT Wavedetailkey)  
-        , COUNT(Wavedetailkey)  
-   FROM #TMP_PCK_1 WITH (NOLOCK)  
+        , COUNT(DISTINCT Wavedetailkey)
+        , COUNT(Wavedetailkey)
+   FROM #TMP_PCK_1 WITH (NOLOCK)
    GROUP BY Wavekey
 
-   BEGIN TRAN
-   -- Uses PickType as a Printed Flag          
-   UPDATE PICKHEADER WITH (ROWLOCK)
-   SET PickType = '1'
-     , EditWho = SUSER_NAME()
-     , EditDate = GETDATE()
-     , TrafficCop = NULL
-   FROM PICKHEADER
-   JOIN #TMP_PCK_1 ON (PICKHEADER.PickHeaderKey = #TMP_PCK_1.PickSlipNo)
-   WHERE #TMP_PCK_1.PickSlipNo <> ''
-
-   SET @n_Err = @@ERROR
-   IF @n_Err <> 0
+   IF @c_PreGenRptData = 'Y'   --WL01
    BEGIN
-      SET @n_Continue = 3
-      GOTO QUIT_SP
-   END
+      BEGIN TRAN
+      -- Uses PickType as a Printed Flag          
+      UPDATE PICKHEADER WITH (ROWLOCK)
+      SET PickType = '1'
+        , EditWho = SUSER_NAME()
+        , EditDate = GETDATE()
+        , TrafficCop = NULL
+      FROM PICKHEADER
+      JOIN #TMP_PCK_1 ON (PICKHEADER.PickHeaderKey = #TMP_PCK_1.PickSlipNo)
+      WHERE #TMP_PCK_1.PickSlipNo <> ''
 
-   WHILE @@TRANCOUNT > 0
-   BEGIN
-      COMMIT TRAN
-   END
-
-   SET @n_NoOfReqPSlip = 0
-
-   SELECT @n_NoOfReqPSlip = COUNT(1)
-   FROM #TMP_PCK_1
-   WHERE PickSlipNo = ''
-
-   IF @n_NoOfReqPSlip > 0
-   BEGIN
-      EXECUTE nspg_GetKey 'PICKSLIP'
-                        , 9
-                        , @c_PickSlipNo OUTPUT
-                        , @b_Success OUTPUT
-                        , @n_Err OUTPUT
-                        , @c_Errmsg OUTPUT
-                        , 0
-                        , @n_NoOfReqPSlip
-
-      IF @b_Success <> 1
+      SET @n_Err = @@ERROR
+      IF @n_Err <> 0
       BEGIN
          SET @n_Continue = 3
          GOTO QUIT_SP
       END
 
-      DECLARE CUR_PSLIP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT Loadkey
-           , Orderkey
+      WHILE @@TRANCOUNT > 0
+      BEGIN
+         COMMIT TRAN
+      END
+
+      SET @n_NoOfReqPSlip = 0
+
+      SELECT @n_NoOfReqPSlip = COUNT(1)
       FROM #TMP_PCK_1
       WHERE PickSlipNo = ''
-      GROUP BY Loadkey
-             , Orderkey
-             , RowID
-      ORDER BY RowID
 
-      OPEN CUR_PSLIP
-
-      FETCH NEXT FROM CUR_PSLIP
-      INTO @c_Loadkey
-         , @c_Orderkey
-
-      WHILE @@FETCH_STATUS <> -1
+      IF @n_NoOfReqPSlip > 0
       BEGIN
+         EXECUTE nspg_GetKey 'PICKSLIP'
+                           , 9
+                           , @c_PickSlipNo OUTPUT
+                           , @b_Success OUTPUT
+                           , @n_Err OUTPUT
+                           , @c_Errmsg OUTPUT
+                           , 0
+                           , @n_NoOfReqPSlip
 
-         SET @c_PickHeaderKey = N'P' + @c_PickSlipNo
-
-         BEGIN TRAN
-
-         INSERT INTO PICKHEADER (PickHeaderKey, OrderKey, ExternOrderKey, PickType, Zone, TrafficCop)
-         VALUES (@c_PickHeaderKey, @c_Orderkey, @c_Loadkey, '0', '3', NULL)
-
-         SET @n_Err = @@ERROR
-         IF @n_Err <> 0
+         IF @b_Success <> 1
          BEGIN
             SET @n_Continue = 3
             GOTO QUIT_SP
          END
 
-         UPDATE #TMP_PCK_1
-         SET PickSlipNo = @c_PickHeaderKey
-         WHERE Loadkey = @c_Loadkey AND Orderkey = @c_Orderkey
+         DECLARE CUR_PSLIP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT Loadkey
+              , Orderkey
+         FROM #TMP_PCK_1
+         WHERE PickSlipNo = ''
+         GROUP BY Loadkey
+                , Orderkey
+                , RowID
+         ORDER BY RowID
 
-         WHILE @@TRANCOUNT > 0
-         BEGIN
-            COMMIT TRAN
-         END
+         OPEN CUR_PSLIP
 
-         SET @c_PickSlipNo = RIGHT('000000000' + CONVERT(NVARCHAR(9), CONVERT(INT, @c_PickSlipNo) + 1), 9)
          FETCH NEXT FROM CUR_PSLIP
          INTO @c_Loadkey
             , @c_Orderkey
-      END
-      CLOSE CUR_PSLIP
-      DEALLOCATE CUR_PSLIP
-   END
 
-   DECLARE CUR_PSNO CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-   SELECT PickSlipNo
-        , Orderkey
-        , Storerkey
-   FROM #TMP_PCK_1
-   ORDER BY PickSlipNo
-
-   OPEN CUR_PSNO
-
-   FETCH NEXT FROM CUR_PSNO
-   INTO @c_PickSlipNo
-      , @c_Orderkey
-      , @c_Storerkey
-   WHILE @@FETCH_STATUS <> -1
-   BEGIN
-      SET @c_AutoScanIn = N'0'
-      EXEC nspGetRight @c_Facility = @c_Facility
-                     , @c_StorerKey = @c_Storerkey
-                     , @c_sku = ''
-                     , @c_ConfigKey = 'AutoScanIn'
-                     , @b_Success = @b_Success OUTPUT
-                     , @c_authority = @c_AutoScanIn OUTPUT
-                     , @n_err = @n_Err OUTPUT
-                     , @c_errmsg = @c_Errmsg OUTPUT
-
-      IF @b_Success = 0
-      BEGIN
-         SET @n_Continue = 3
-         GOTO QUIT_SP
-      END
-
-      BEGIN TRAN
-      IF @c_AutoScanIn = '1'
-      BEGIN
-         IF NOT EXISTS (  SELECT 1
-                          FROM PickingInfo WITH (NOLOCK)
-                          WHERE PickSlipNo = @c_PickSlipNo)
+         WHILE @@FETCH_STATUS <> -1
          BEGIN
-            INSERT INTO PickingInfo (PickSlipNo, ScanInDate, PickerID, ScanOutDate)
-            VALUES (@c_PickSlipNo, GETDATE(), SUSER_NAME(), NULL)
+
+            SET @c_PickHeaderKey = N'P' + @c_PickSlipNo
+
+            BEGIN TRAN
+
+            INSERT INTO PICKHEADER (PickHeaderKey, OrderKey, ExternOrderKey, PickType, Zone, TrafficCop)
+            VALUES (@c_PickHeaderKey, @c_Orderkey, @c_Loadkey, '0', '3', NULL)
 
             SET @n_Err = @@ERROR
             IF @n_Err <> 0
@@ -328,20 +270,87 @@ BEGIN
                SET @n_Continue = 3
                GOTO QUIT_SP
             END
-         END
-      END
 
-      WHILE @@TRANCOUNT > 0
-      BEGIN
-         COMMIT TRAN
+            UPDATE #TMP_PCK_1
+            SET PickSlipNo = @c_PickHeaderKey
+            WHERE Loadkey = @c_Loadkey AND Orderkey = @c_Orderkey
+
+            WHILE @@TRANCOUNT > 0
+            BEGIN
+               COMMIT TRAN
+            END
+
+            SET @c_PickSlipNo = RIGHT('000000000' + CONVERT(NVARCHAR(9), CONVERT(INT, @c_PickSlipNo) + 1), 9)
+            FETCH NEXT FROM CUR_PSLIP
+            INTO @c_Loadkey
+               , @c_Orderkey
+         END
+         CLOSE CUR_PSLIP
+         DEALLOCATE CUR_PSLIP
       END
+   
+      DECLARE CUR_PSNO CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT PickSlipNo
+           , Orderkey
+           , Storerkey
+      FROM #TMP_PCK_1
+      ORDER BY PickSlipNo
+
+      OPEN CUR_PSNO
+
       FETCH NEXT FROM CUR_PSNO
       INTO @c_PickSlipNo
          , @c_Orderkey
          , @c_Storerkey
-   END
-   CLOSE CUR_PSNO
-   DEALLOCATE CUR_PSNO
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+         SET @c_AutoScanIn = N'0'
+         EXEC nspGetRight @c_Facility = @c_Facility
+                        , @c_StorerKey = @c_Storerkey
+                        , @c_sku = ''
+                        , @c_ConfigKey = 'AutoScanIn'
+                        , @b_Success = @b_Success OUTPUT
+                        , @c_authority = @c_AutoScanIn OUTPUT
+                        , @n_err = @n_Err OUTPUT
+                        , @c_errmsg = @c_Errmsg OUTPUT
+
+         IF @b_Success = 0
+         BEGIN
+            SET @n_Continue = 3
+            GOTO QUIT_SP
+         END
+
+         BEGIN TRAN
+         IF @c_AutoScanIn = '1'
+         BEGIN
+            IF NOT EXISTS (  SELECT 1
+                             FROM PickingInfo WITH (NOLOCK)
+                             WHERE PickSlipNo = @c_PickSlipNo)
+            BEGIN
+               INSERT INTO PickingInfo (PickSlipNo, ScanInDate, PickerID, ScanOutDate)
+               VALUES (@c_PickSlipNo, GETDATE(), SUSER_NAME(), NULL)
+
+               SET @n_Err = @@ERROR
+               IF @n_Err <> 0
+               BEGIN
+                  SET @n_Continue = 3
+                  GOTO QUIT_SP
+               END
+            END
+         END
+
+         WHILE @@TRANCOUNT > 0
+         BEGIN
+            COMMIT TRAN
+         END
+         FETCH NEXT FROM CUR_PSNO
+         INTO @c_PickSlipNo
+            , @c_Orderkey
+            , @c_Storerkey
+      END
+      CLOSE CUR_PSNO
+      DEALLOCATE CUR_PSNO
+   END   --WL01
 
    QUIT_SP:
 
@@ -373,7 +382,7 @@ BEGIN
 
    INSERT INTO #TMP_PICK (Orderkey, OrdDate, PickSlipNo, OIPlatform, EditDate, Contact1, SKU, RetailSKU, Notes, Qty
                         , CUDF01, RPTLOGO, EcomOrdID, PLOC, SDESCR, Notes2, ReferenceId, SSIZE, QRCode, Wavedetailkey
-                        , a1, a2)  
+                        , a1, a2)
    SELECT OS.OrderKey
         , OS.OrderDate
         , t.PickSlipNo
@@ -394,13 +403,12 @@ BEGIN
         , SKU.Size
         , ISNULL(@c_QRCode, '') AS QRCode
         , t.Wavedetailkey
-        , t2.a1    
-        , t2.a2    
+        , t2.a1
+        , t2.a2
    FROM #TMP_PCK_1 t
    JOIN ORDERS OS (NOLOCK) ON t.Orderkey = OS.OrderKey
    LEFT JOIN OrderInfo OI (NOLOCK) ON OS.OrderKey = OI.OrderKey
-   JOIN ORDERDETAIL OD (NOLOCK) ON  OD.OrderKey = t.OrderKey  
-                                AND t.OrderLineNumber = OD.OrderLineNumber
+   JOIN ORDERDETAIL OD (NOLOCK) ON OD.OrderKey = t.Orderkey AND t.OrderLineNumber = OD.OrderLineNumber
    JOIN PICKDETAIL PID (NOLOCK) ON  PID.OrderKey = OD.OrderKey
                                 AND PID.Sku = OD.Sku
                                 AND PID.OrderLineNumber = OD.OrderLineNumber
@@ -408,18 +416,18 @@ BEGIN
    LEFT JOIN CODELKUP CL1 (NOLOCK) ON  OS.StorerKey = CL1.Storerkey
                                    AND CL1.LISTNAME = 'ECDLMODE'
                                    AND CL1.Code = OS.ShipperKey
-                                   AND CL1.code2 = ''     
+                                   AND CL1.code2 = ''
    LEFT JOIN CODELKUP CL2 (NOLOCK) ON  OS.StorerKey = CL2.Storerkey
                                    AND CL2.LISTNAME = 'PLATFORM'
                                    AND CL2.Code = OI.Platform
    LEFT JOIN CODELKUP CL3 (NOLOCK) ON  OS.StorerKey = CL3.Storerkey
                                    AND CL3.LISTNAME = 'REPORTCFG'
                                    AND CL3.Code = OI.Platform
-                                   AND CL3.code2 = '01'      
+                                   AND CL3.code2 = '01'
    LEFT JOIN CODELKUP CL4 (NOLOCK) ON  OS.StorerKey = CL4.Storerkey
                                    AND CL4.LISTNAME = 'REPORTCFG'
                                    AND CL4.Code = OI.Platform
-                                   AND CL4.code2 = '02'   
+                                   AND CL4.code2 = '02'
    LEFT JOIN #TMP_PCK_2 t2 (NOLOCK) ON t.Wavekey = t2.WaveKey
    WHERE t.Wavekey = @c_Wavekey
    GROUP BY OS.OrderKey
@@ -439,42 +447,45 @@ BEGIN
           , ISNULL(OI.ReferenceId, '')
           , SKU.Size
           , t.RowID
-          , t.Wavedetailkey 
+          , t.Wavedetailkey
           , t2.a1
-          , t2.a2 
+          , t2.a2
    ORDER BY t.RowID
           , PID.Loc
 
-   SELECT Orderkey
-        , OrdDate
-        , PickSlipNo
-        , OIPlatform
-        , EditDate
-        , Contact1
-        , SKU
-        , RetailSKU
-        , Notes
-        , Qty
-        , CUDF01
-        , RPTLOGO
-        , EcomOrdID
-        , PLOC
-        , SDESCR
-        , Notes2
-        , ReferenceId
-        , SSIZE
-        , QRCode
-        , RecNo = (ROW_NUMBER() OVER (PARTITION BY Orderkey
-                                      ORDER BY rowid
-                                             , PLOC
-                                             , SKU))
-        , Wavedetailkey 
-        , RowID = CASE WHEN a1 = a2 THEN 0
-                       ELSE rowid END  
-   FROM #TMP_PICK
-   ORDER BY RowID
-          , PLOC
-          , SKU
+   IF @c_PreGenRptData = ''   --WL01
+   BEGIN
+      SELECT Orderkey
+           , OrdDate
+           , PickSlipNo
+           , OIPlatform
+           , EditDate
+           , Contact1
+           , SKU
+           , RetailSKU
+           , Notes
+           , Qty
+           , CUDF01
+           , RPTLOGO
+           , EcomOrdID
+           , PLOC
+           , SDESCR
+           , Notes2
+           , ReferenceId
+           , SSIZE
+           , QRCode
+           , RecNo = (ROW_NUMBER() OVER (PARTITION BY Orderkey
+                                         ORDER BY rowid
+                                                , PLOC
+                                                , SKU))
+           , Wavedetailkey
+           , RowID = CASE WHEN a1 = a2 THEN 0
+                          ELSE rowid END
+      FROM #TMP_PICK
+      ORDER BY RowID
+             , PLOC
+             , SKU
+   END   --WL01
 
    QUIT_RESULT:
 END -- procedure   
