@@ -24,6 +24,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 29-MAR-2023 NJOW     1.0   DEVOPS combine scirpt                     */
+/* 03-JUL-2023 NJOW01   1.1   WMS-23012 Fix over pack serial no issue   */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE dbo.ispSKUDC10
@@ -57,7 +58,9 @@ BEGIN
          , @c_ADAllowInsertExistingSerialNo NVARCHAR(30) = ''
          , @c_ADAllowInsertExistingSerialNo_Opt1 NVARCHAR(50) = ''
          , @c_SerialNoKey  NVARCHAR(10) = ''
-
+         , @n_SkuOrdQty    INT = 0      --NJOW01
+         , @n_SkuPackSerialCnt INT = 0  --NJOW01
+         
    SELECT @b_success = 1, @n_err = 0, @c_errmsg = ''   
    
    SELECT @c_Orderkey = Orderkey
@@ -141,7 +144,33 @@ BEGIN
       SELECT @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Invalid Serial#: ' + RTRIM(ISNULL(@c_Sku,'')) + ' (ispSKUDC10)'     
       GOTO QUIT_SP   	  
    END   
-
+    
+   --NJOW01 S 
+   IF ISNULL(@c_UCCNo,'') = ''
+   BEGIN
+      SELECT @n_SkuPackSerialCnt = COUNT(DISTINCT SR.SerialNo)   
+      FROM SERIALNO SR (NOLOCK)
+      JOIN UPC (NOLOCK) ON SR.Userdefine02 = UPC.Upc AND SR.Storerkey = UPC.Storerkey
+      JOIN SKU (NOLOCK) ON UPC.Storerkey = SKU.Storerkey AND UPC.Sku = SKU.Sku
+      WHERE SR.Pickslipno = @c_PickSlipno
+      AND SKU.Storerkey = @c_Storerkey
+      AND SKU.Sku = @c_TempSku       	 
+      
+      SELECT @n_SkuOrdQty = SUM(Qty) 
+      FROM PICKDETAIL(NOLOCK)
+      WHERE Orderkey = @c_Orderkey
+      AND Sku = @c_TempSku
+      
+      IF @n_SkuOrdQty < (@n_SkuPackSerialCnt + 1) AND @n_SkuOrdQty > 0
+      BEGIN
+         SELECT @n_Continue = 3
+         SELECT @n_Err = 83040
+         SELECT @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Over packed for the Serial#: ' + RTRIM(ISNULL(@c_Sku,'')) + ' Of Sku: ' + RTRIM(ISNULL(@c_TempSku,'')) + ' (ispSKUDC10)'     
+      	 GOTO QUIT_SP 
+      END
+   END
+   --NJOW01 E
+   
    SELECT @c_ADAllowInsertExistingSerialNo = SC.Authority,
           @c_ADAllowInsertExistingSerialNo_Opt1 = SC.Option1
    FROM dbo.fnc_GetRight2('',@c_Storerkey,'','ADAllowInsertExistingSerialNo') AS SC
@@ -169,7 +198,7 @@ BEGIN
       	 IF @n_Err <> 0
       	 BEGIN      	       	 	
             SELECT @n_Continue = 3
-            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 83040
+            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 83050
             SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update UCC table failed. (ispSKUDC10)' + ' ( ' + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '
             GOTO QUIT_SP   	  
       	 END   	  	
@@ -185,14 +214,14 @@ BEGIN
       IF @c_ADAllowInsertExistingSerialNo = '1' AND @c_ADAllowInsertExistingSerialNo_Opt1 = 'NotAllowInsertNewSerialNo' AND ISNULL(@c_SerialNoKey,'') = ''
       BEGIN   	  
          SELECT @n_Continue = 3
-         SELECT @n_Err = 83050
+         SELECT @n_Err = 83060
          SELECT @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Serial# not found: ' + RTRIM(ISNULL(@c_SerialNo,'')) + ' (ispSKUDC10)'     
          GOTO QUIT_SP   	  
       END                   
       ELSE IF @c_ADAllowInsertExistingSerialNo <> '1' AND ISNULL(@c_SerialNoKey,'') <> ''  
       BEGIN
          SELECT @n_Continue = 3
-         SELECT @n_Err = 83060
+         SELECT @n_Err = 83070
          SELECT @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Serial# already exists: ' + RTRIM(ISNULL(@c_SerialNo,'')) + ' (ispSKUDC10)'     
          GOTO QUIT_SP   	  
       END
@@ -216,7 +245,7 @@ BEGIN
       	 IF @n_Err <> 0
       	 BEGIN      	       	 	
             SELECT @n_Continue = 3
-            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 83070
+            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 83080
             SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update SERIALNO table failed. (ispSKUDC10)' + ' ( ' + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '
             GOTO QUIT_SP   	  
       	 END
@@ -247,7 +276,7 @@ BEGIN
       	 IF @n_Err <> 0
       	 BEGIN      	       	 	
             SELECT @n_Continue = 3
-            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 83080
+            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 83090
             SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Insert SERIALNO table failed. (ispSKUDC10)' + ' ( ' + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '
             GOTO QUIT_SP   	  
       	 END
@@ -273,7 +302,7 @@ BEGIN
       	    IF @n_Err <> 0
       	    BEGIN      	       	 	
                SELECT @n_Continue = 3
-               SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 83090
+               SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 83100
                SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update SERIALNO table failed. (ispSKUDC10)' + ' ( ' + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '
                GOTO QUIT_SP   	  
       	    END         	
@@ -304,7 +333,7 @@ BEGIN
       	    IF @n_Err <> 0
       	    BEGIN      	       	 	
                SELECT @n_Continue = 3
-               SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 83100
+               SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 83110
                SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Insert SERIALNO table failed. (ispSKUDC10)' + ' ( ' + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '
                GOTO QUIT_SP   	  
       	    END         	
