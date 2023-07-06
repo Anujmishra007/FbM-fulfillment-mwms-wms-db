@@ -1,0 +1,82 @@
+: CN UAT : CNWMS 
+--  BI.V_ReceiptSerialno.sql 
+Msg 2714, Level 16, State 3, Server WVSHWMSMADBUT01, Procedure V_ReceiptSerialno, Line 9
+There is already an object named 'V_ReceiptSerialno' in the database.
+----------------------------------------------------------------------------- 
+: CN UAT : CNWMS_HM1 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
+: CN UAT : CNWMS_HM2 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
+: AU UAT : AUWMS 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
+: DU UAT : DUWMS 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
+: HK UAT : HKWMS 
+--  BI.V_ReceiptSerialno.sql 
+Msg 2714, Level 16, State 3, Server WVWSWMSMYDBUT01, Procedure V_ReceiptSerialno, Line 9
+There is already an object named 'V_ReceiptSerialno' in the database.
+----------------------------------------------------------------------------- 
+: ID UAT : IDWMS 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS_HM1 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS_HM2 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS 
+--  BI.V_ReceiptSerialno.sql 
+Msg 2714, Level 16, State 3, Server WVWSWMSKRDBUT01, Procedure V_ReceiptSerialno, Line 9
+There is already an object named 'V_ReceiptSerialno' in the database.
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS_HM1 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS_HM2 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS_HM1 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS_HM2 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
+: MY UAT : MYWMS 
+--  BI.V_ReceiptSerialno.sql 
+Msg 2714, Level 16, State 3, Server WVWSWMSMYDBUT01, Procedure V_ReceiptSerialno, Line 9
+There is already an object named 'V_ReceiptSerialno' in the database.
+----------------------------------------------------------------------------- 
+: PH UAT : PHWMS 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
+: SG UAT : SGWMS 
+--  BI.V_ReceiptSerialno.sql 
+Msg 2714, Level 16, State 3, Server WVWSWMSMYDBUT01, Procedure V_ReceiptSerialno, Line 9
+There is already an object named 'V_ReceiptSerialno' in the database.
+----------------------------------------------------------------------------- 
+: TH UAT : THWMS 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
+: TH UAT : THWMS_NIKE 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
+: TW UAT : TWWMS 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
+: TW UAT : TWWMS_NSC 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
+: VN UAT : VNWMS 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 

@@ -1,0 +1,67 @@
+: CN LIVE : CNWMS 
+--  BI.V_ReceiptSerialno.sql 
+Msg 2714, Level 16, State 3, Server WPSHWMSMADBPD01, Procedure V_ReceiptSerialno, Line 9
+There is already an object named 'V_ReceiptSerialno' in the database.
+----------------------------------------------------------------------------- 
+: CN LIVE : HNM 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
+: CN LIVE : NKE 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
+: CN LIVE : SKE 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
+: CN LIVE : UAM 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
+: CN LIVE : SEP 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
+: AUWMS 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
+: DUWMS 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
+: HK HKWMS 
+--  BI.V_ReceiptSerialno.sql 
+Msg 2714, Level 16, State 3, Server WVWSWMSHKDBPD01, Procedure V_ReceiptSerialno, Line 9
+There is already an object named 'V_ReceiptSerialno' in the database.
+----------------------------------------------------------------------------- 
+: IN LIVE : INWMS 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
+: ID LIVE : IDWMS 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
+: JP LIVE : JPWMS 
+--  BI.V_ReceiptSerialno.sql 
+Msg 2714, Level 16, State 3, Server WVWSWMSKRDBPD01, Procedure V_ReceiptSerialno, Line 9
+There is already an object named 'V_ReceiptSerialno' in the database.
+----------------------------------------------------------------------------- 
+: KR LIVE : KRWMS 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
+: MY LIVE : MYWMS 
+--  BI.V_ReceiptSerialno.sql 
+Msg 2714, Level 16, State 3, Server WVWSWMSMYDBPD01, Procedure V_ReceiptSerialno, Line 9
+There is already an object named 'V_ReceiptSerialno' in the database.
+----------------------------------------------------------------------------- 
+: PH LIVE : PHWMS 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
+: SG LIVE : SGWMS 
+--  BI.V_ReceiptSerialno.sql 
+Msg 2714, Level 16, State 3, Server WVWSWMSSGDBPD01, Procedure V_ReceiptSerialno, Line 9
+There is already an object named 'V_ReceiptSerialno' in the database.
+----------------------------------------------------------------------------- 
+: TH LIVE : THWMS 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
+: TW LIVE : TWWMS 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
+: VN LIVE : VNWMS 
+--  BI.V_ReceiptSerialno.sql 
+----------------------------------------------------------------------------- 
