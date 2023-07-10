@@ -19,6 +19,7 @@ GO
 /* 16-10-2019  1.5  James       WMS-10860 Add move to dropid (james01)  */  
 /* 22-12-2020  1.6  YeeKung     WMS-15995 Add PickZone (yeekung01)      */
 /* 24-05-2022  1.7  YeeKung     Add Close Cursor (yeekung02)            */
+/* 10-07-2023  1.8  YeeKUng     JSM-162074 Fix Join bug (yeekung03)     */ 
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_PickSKU_Confirm
@@ -208,7 +209,7 @@ BEGIN
          ' SELECT PD.PickDetailKey, PD.QTY ' + 
          ' FROM dbo.RefKeyLookup RKL WITH (NOLOCK)' + 
             ' JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)' + 
-            ' JOIN dbo.Loc LOC WITH (NOLOCK) ON (PD.LOC=PD.LOC)'+
+            ' JOIN dbo.Loc LOC WITH (NOLOCK) ON (LOC.LOC=PD.LOC)'+ --(yeekung03)
             ' JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' + 
          ' WHERE RKL.PickSlipNo = @cPickSlipNo ' + 
             ' AND PD.LOC = @cLOC ' + 
