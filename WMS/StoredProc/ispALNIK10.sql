@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver. Purposes                                  */
 /* 14-APR-2022  NJOW     1.0  DEVOPS combine script                     */
+/* 03-JUL-2023  NJOW01   1.1  WMS-22522 Change loc search logic         */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispALNIK10]
    @c_WaveKey    NVARCHAR(10),   
@@ -74,7 +75,8 @@ BEGIN
            @n_AllocatedQty     INT = 0,
            @c_ZoneGroup        NVARCHAR(20) = '',
            @c_LocationTypeOverRideStripe NVARCHAR(10) = '',
-           @c_UOMByLoad        NVARCHAR(20) = ''                                                                                                                                   
+           @c_UOMByLoad        NVARCHAR(20) = '',                                                                                                                                   
+           @c_FistFindLoc      NVARCHAR(10)  --NJOW01
   
    DECLARE @c_key1        NVARCHAR(10),    
            @c_key2        NVARCHAR(5),    
@@ -316,10 +318,13 @@ BEGIN
 
       SET @n_QtyLeftToFulfill = FLOOR(@n_QtyLeftToFulfill / @n_UOMBase) * @n_UOMBase
 
+      SET @c_FistFindLoc = 'Y' --NJOW01
+
       WHILE @n_QtyLeftToFulfill > 0  
       BEGIN
       	 SELECT @c_Loc = ''
-      	  
+      	 
+      	 /* 
       	 SELECT TOP 1 @c_Loc = INV.Loc 
          FROM #TMP_INV INV
          GROUP BY INV.Loc
@@ -333,8 +338,30 @@ BEGIN
             GROUP BY INV.Loc
             HAVING SUM(INV.Qty) < @n_QtyLeftToFulfill
             ORDER BY SUM(INV.Qty) DESC, MIN(INV.RowID)
-         END        
+         END
+         */
+
+         --NJOW01 S
+         IF @c_FistFindLoc = 'Y'  --Only first time need to check loc qty = qtylefttofulfill
+         BEGIN         
+      	    SELECT TOP 1 @c_Loc = INV.Loc 
+            FROM #TMP_INV INV
+            GROUP BY INV.Loc
+            HAVING SUM(INV.Qty) = @n_QtyLeftToFulfill
+            ORDER BY MIN(INV.RowID)
+
+            SET @c_FistFindLoc = 'N'            
+         END
          
+         IF ISNULL(@c_Loc,'') = ''
+         BEGIN
+      	    SELECT TOP 1 @c_Loc = INV.Loc 
+            FROM #TMP_INV INV
+            GROUP BY INV.Loc
+            ORDER BY SUM(INV.Qty), MIN(INV.RowID)
+         END
+         --NJOW01 E
+                          
          IF ISNULL(@c_Loc,'') = ''
             BREAK   
                    
