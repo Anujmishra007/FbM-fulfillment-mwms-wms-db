@@ -67,9 +67,9 @@ BEGIN
          ( KIT.Storerkey BETWEEN @c_Storerkey_Start AND @c_Storerkey_End ) AND
          ( KIT.EffectiveDate BETWEEN @c_EffectiveDate_Start AND @c_EffectiveDate_End )
 
-END[NSQL]
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_RP_KITTING_SUMMARY_002] TO [NSQL]
+END
 GO
 GRANT EXECUTE ON [dbo].[isp_RPT_RP_KITTING_SUMMARY_002] TO [LogiReportRoleWM]
+GO
+GRANT EXECUTE ON [dbo].[isp_RPT_RP_KITTING_SUMMARY_002] TO [JReportRole]
 GO
