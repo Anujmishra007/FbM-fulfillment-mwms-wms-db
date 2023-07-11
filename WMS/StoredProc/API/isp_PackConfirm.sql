@@ -29,6 +29,7 @@ GO
 /* 2023-03-20   2.5  YeeKung    TPS-678 add new error message (yeekung04)        */
 /* 2023-03-20   2.6  YeeKung    TPS-687 add order info into packheader (yeekung05)*/
 /* 2023-04-12   2.7  YeeKung    TPS-700 DefaultcartonType (yeekung06)             */
+/* 2023-07-11   2.8  YeeKung    TPS-756 Substring orderrefno 18 chars (yeekung08) */
 /*********************************************************************************/  
   
 CREATE OR ALTER PROC [API].[isp_PackConfirm] (  
@@ -485,11 +486,14 @@ BEGIN
 
       --(yeekung05)
    SELECT @cRoute          = ISNULL(Route,''),
-          @cOrderRefNo     = ISNULL(ExternOrderkey,''),
-          @cConsigneekey   = ISNULL(Consigneekey,'')
+            @cOrderRefNo     = ISNULL(ExternOrderkey,''),
+            @cConsigneekey   = ISNULL(Consigneekey,'')
    FROM ORDERS (NOLOCK)
    WHERE Orderkey = @cOrderkey
       AND Storerkey = @cStorerKey
+
+   IF ISNULL(@cOrderRefNo,'') = ''
+      SET @cOrderRefNo = LEFT(@cOrderRefNo,18)
 
    INSERT INTO dbo.PackHeader (PickSlipNo, StorerKey, OrderKey, LoadKey, AddWho, AddDate,Route,OrderRefNo,ConsigneeKey)  
    VALUES (@cPickSlipNo, @cStorerKey, @cOrderKey, @cLoadKey, SUSER_NAME(), GETDATE(),@cRoute,@cOrderRefNo,@cConsigneekey)  
