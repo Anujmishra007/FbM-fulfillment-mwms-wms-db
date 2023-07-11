@@ -63,11 +63,13 @@ BEGIN
    FROM KIT (NOLOCK)
    JOIN KITDETAIL (NOLOCK) ON (KIT.KITKey = KITDETAIL.KITKey)
    JOIN SKU (NOLOCK) ON (KITDETAIL.StorerKey = SKU.StorerKey) AND (KITDETAIL.Sku = SKU.Sku)
-   WHERE ( KIT.KITKey BETWEEN @c_Kitkey_Start AND @c_Kitkey_End ) AND         ( KIT.Storerkey BETWEEN @c_Storerkey_Start AND @c_Storerkey_End ) AND         ( KIT.EffectiveDate BETWEEN @c_EffectiveDate_Start AND @c_EffectiveDate_End )
+   WHERE ( KIT.KITKey BETWEEN @c_Kitkey_Start AND @c_Kitkey_End ) AND
+         ( KIT.Storerkey BETWEEN @c_Storerkey_Start AND @c_Storerkey_End ) AND
+         ( KIT.EffectiveDate BETWEEN @c_EffectiveDate_Start AND @c_EffectiveDate_End )
 
-END
+END[NSQL]
 GO
 GRANT EXECUTE ON [dbo].[isp_RPT_RP_KITTING_SUMMARY_002] TO [NSQL]
 GO
-GRANT EXECUTE ON [dbo].[isp_RPT_RP_KITTING_SUMMARY_002] TO [JReportRole]
+GRANT EXECUTE ON [dbo].[isp_RPT_RP_KITTING_SUMMARY_002] TO [LogiReportRoleWM]
 GO

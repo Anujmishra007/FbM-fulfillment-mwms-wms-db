@@ -9,7 +9,7 @@ GO
 /* Copyright: LF Logistics                                                 */    
 /* Written by: WZPang                                                      */    
 /*                                                                         */    
-/* Purpose: WMS-21912 - [ID] Diversey – LoadSheet                          */     
+/* Purpose: WMS-21912 - [ID] Diversey ï¿½ LoadSheet                          */     
 /*                                                                         */      
 /* Called By: RPT_LP_LOADSHEET_008                                         */      
 /*                                                                         */      

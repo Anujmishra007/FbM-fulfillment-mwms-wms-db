@@ -74,7 +74,7 @@ BEGIN
 
 END -- procedure
 GO
-GRANT EXECUTE ON  [dbo].[isp_RPT_WV_PLIST_WAVE_003_3] TO [JReportRole]
+GRANT EXECUTE ON  [dbo].[isp_RPT_WV_PLIST_WAVE_003_3] TO [LogiReportRoleWM]
 GO
 GRANT EXECUTE ON  [dbo].[isp_RPT_WV_PLIST_WAVE_003_3] TO [NSQL]
 GO

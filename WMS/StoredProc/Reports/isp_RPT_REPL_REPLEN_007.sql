@@ -711,7 +711,7 @@ BEGIN
       ORDER BY LOC.PutawayZone, R.Priority
 END
 GO
-GRANT EXECUTE ON  [dbo].[isp_RPT_REPL_REPLEN_007] TO [JReportRole]
+GRANT EXECUTE ON  [dbo].[isp_RPT_REPL_REPLEN_007] TO [LogiReportRoleWM]
 GO
 GRANT EXECUTE ON  [dbo].[isp_RPT_REPL_REPLEN_007] TO [NSQL]
 GO

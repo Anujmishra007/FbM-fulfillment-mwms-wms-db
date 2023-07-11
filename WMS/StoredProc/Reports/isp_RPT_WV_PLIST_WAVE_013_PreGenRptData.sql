@@ -51,7 +51,7 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_WV_PLIST_WAVE_013_PreGenRptData] (
 
 END -- procedure    
 GO
-GRANT EXECUTE ON [dbo].[isp_RPT_WV_PLIST_WAVE_013_PreGenRptData] TO nSQL 
+GRANT EXECUTE ON [dbo].[isp_RPT_WV_PLIST_WAVE_013_PreGenRptData] TO [NSQL] 
 GO
-GRANT EXECUTE ON [dbo].[isp_RPT_WV_PLIST_WAVE_013_PreGenRptData] TO JReportRole
+GRANT EXECUTE ON [dbo].[isp_RPT_WV_PLIST_WAVE_013_PreGenRptData] TO LogiReportRoleWM
 GO

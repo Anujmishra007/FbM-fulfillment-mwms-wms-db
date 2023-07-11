@@ -8,7 +8,7 @@ GO
 /* Copyright: IDS                                                       */    
 /* Written by: CSCHONG                                                  */    
 /*                                                                      */    
-/* Purpose:WMS-21847 SG – MNC – Non MTO Picking Slip                    */  
+/* Purpose:WMS-21847 SG ï¿½ MNC ï¿½ Non MTO Picking Slip                    */  
 /*                                                                      */    
 /* Input Parameters:  @c_loadKey  - loadkey                             */    
 /*                    @c_orderkey - orderkey                            */   
@@ -442,7 +442,7 @@ END
     
 END    
 GO
-GRANT EXECUTE ON [isp_RPT_RP_LP_PLIST_001]  TO NSQL
+GRANT EXECUTE ON [isp_RPT_RP_LP_PLIST_001]  TO [NSQL]
 GO  
 GRANT EXECUTE ON [isp_RPT_RP_LP_PLIST_001] TO LogiReportRoleWM 
 GO   

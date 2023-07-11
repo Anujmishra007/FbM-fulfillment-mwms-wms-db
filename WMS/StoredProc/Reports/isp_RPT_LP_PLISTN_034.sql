@@ -9,7 +9,7 @@ GO
 /* Copyright: LF Logistics                                                 */    
 /* Written by: WZPang                                                      */    
 /*                                                                         */    
-/* Purpose: WMS-21913 - [ID] Diversey – LoadSheet                          */         
+/* Purpose: WMS-21913 - [ID] Diversey ï¿½ LoadSheet                          */         
 /*                                                                         */      
 /* Called By: RPT_LP_PLISTN_034                                            */      
 /*                                                                         */      
@@ -498,7 +498,7 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTN_034] (
    END    
 END    
 GO
-GRANT EXECUTE ON [dbo].[isp_RPT_LP_PLISTN_034] TO nSQL 
+GRANT EXECUTE ON [dbo].[isp_RPT_LP_PLISTN_034] TO [NSQL] 
 GO
-GRANT EXECUTE ON [dbo].[isp_RPT_LP_PLISTN_034] TO JReportRole 
+GRANT EXECUTE ON [dbo].[isp_RPT_LP_PLISTN_034] TO LogiReportRoleWM 
 GO

@@ -206,7 +206,7 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTC_001_2]
    /* End Return Statement */
 END -- Procedure
 GO
-GRANT EXECUTE ON  [dbo].[isp_RPT_LP_PLISTC_001_2] TO [JReportRole]
+GRANT EXECUTE ON  [dbo].[isp_RPT_LP_PLISTC_001_2] TO [LogiReportRoleWM]
 GO
 GRANT EXECUTE ON  [dbo].[isp_RPT_LP_PLISTC_001_2] TO [NSQL]
 GO

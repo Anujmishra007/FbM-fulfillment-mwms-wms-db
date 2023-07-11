@@ -8,7 +8,7 @@ GO
 /*	Copyright: LFL																			 */	 
 /*	Written by:	CSCHONG																	 */	 
 /*																								 */	 
-/*	Purpose:	WMS-21846-SG û	MNC û	MTO Picking	Slip								 */	 
+/*	Purpose:	WMS-21846-SG ï¿½	MNC ï¿½	MTO Picking	Slip								 */	 
 /*																								 */	 
 /*	Called By: RPT_LP_PLISTN_030														 */	 
 /*																								 */	 

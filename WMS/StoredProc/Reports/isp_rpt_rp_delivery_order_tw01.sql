@@ -73,7 +73,7 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-GRANT EXECUTE ON [isp_rpt_rp_delivery_order_tw01]  TO NSQL
+GRANT EXECUTE ON [isp_rpt_rp_delivery_order_tw01]  TO [NSQL]
 GO  
-GRANT EXECUTE ON [isp_rpt_rp_delivery_order_tw01] TO JReportRole 
+GRANT EXECUTE ON [isp_rpt_rp_delivery_order_tw01] TO LogiReportRoleWM 
 GO

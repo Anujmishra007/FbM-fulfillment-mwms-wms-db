@@ -8,7 +8,7 @@ GO
 /* Copyright: LFL                                                       */  
 /* Written by: CHONGCS                                                  */  
 /*                                                                      */  
-/* Purpose: WMS-20694 - IDûPUMA-Wave Pick Slip (New Format )            */  
+/* Purpose: WMS-20694 - IDï¿½PUMA-Wave Pick Slip (New Format )            */  
 /*                                                                      */  
 /* Called By: RPT_WV_PLIST_WAVE_015                                     */  
 /*                                                                      */  
@@ -125,7 +125,7 @@ SELECT TOP 1 @c_storerkey = ORD.StorerKey
      
 END -- procedure  
 GO
-GRANT EXECUTE ON [dbo].[isp_RPT_WV_PLIST_WAVE_015] TO nSQL 
+GRANT EXECUTE ON [dbo].[isp_RPT_WV_PLIST_WAVE_015] TO [NSQL] 
 GO
-GRANT EXECUTE ON [dbo].[isp_RPT_WV_PLIST_WAVE_015] TO JReportRole 
+GRANT EXECUTE ON [dbo].[isp_RPT_WV_PLIST_WAVE_015] TO LogiReportRoleWM 
 GO
