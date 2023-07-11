@@ -64,5 +64,3 @@ END
 GO
 GRANT EXECUTE ON [dbo].[isp_pickslip_rpt_puma_rdt] TO [NSQL]
 GO
-GRANT EXECUTE ON [dbo].[isp_pickslip_rpt_puma_rdt] TO [JReportRole]
-GO
