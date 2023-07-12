@@ -28,6 +28,7 @@ GO
 /* 29-OCT-2021 CSCHONG  1.3   Devops Scripts combine                    */
 /* 29-OCT-2021 CSCHONG  1.4   WMS-18211 revised field logic (CS03)      */
 /* 22-MAR-2021 CSCHONG  1.5   WMS-21937 add new printing (CS04)         */
+/* 04-JUL-2023 WinSern  1.6   JSM-160568 @n_QueueID INT to BIGINT (ws01)*/   
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[ispPKBT04]
    @c_printerid  NVARCHAR(50) = '',
@@ -85,7 +86,7 @@ BEGIN
          , @c_Facility        NVARCHAR(5)
          , @c_Application     NVARCHAR(30)
          , @n_JobID           INT
-         , @n_QueueID         INT
+         , @n_QueueID         BIGINT				--(ws01)
          , @n_starttcnt       INT
          , @c_JobID           NVARCHAR(10)
          , @c_PrintData       NVARCHAR(MAX)
