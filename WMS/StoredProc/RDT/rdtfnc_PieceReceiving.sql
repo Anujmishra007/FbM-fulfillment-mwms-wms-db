@@ -5,152 +5,154 @@ SET ANSI_NULLS OFF
 GO
 
 /************************************************************************/
-/* Store procedure: rdtfnc_PieceReceiving                               */
-/* Copyright      : LF Logistics                                        */
-/*                                                                      */
-/* Purpose: Lookup qualified ReceiptDetail lines to receive in the QTY  */
-/*                                                                      */
-/* Modifications log:                                                   */
-/*                                                                      */
-/* Date       Rev  Author    Purposes                                   */
-/* 2007-03-20 1.0  Liew      Create                                     */
-/*            1.2  Shong     Allow Return Type SOS# 111224              */
-/*            1.3  Shong     Support Retail SKU SOS# 111756             */
-/* 2009-02-05 1.4  James     SOS128415 - Change declaration of @cQty    */
-/*                           from NVARCHAR(2) to NVARCHAR(5) (james01)  */
-/* 2008-11-03 1.5  Vicky     Remove XML part of code that is used to    */
-/*                           make field invisible and replace with new  */
-/*                           code (Vicky02)                             */
-/* 2009-02-11 1.6  Rick Liew SOS128806 - Change declaration of          */
-/*                           @cTotalCarton,@cTotalQty,@cTempTotalQty    */
-/*                           @cCartonCnt from NVARCHAR(2) to NVARCHAR(5)*/
-/* 2009-05-07 1.7  Vicky     SOS#135894 - Add checking to not allow     */
-/*                           receiving of SKU more than ExpectedQty     */
-/*                           (Vicky03)                                  */
-/* 2009-05-22 1.8  Vicky     SOS#137402 - Display Long message in next  */
-/*                           screen instead of bottom of the screen and */
-/*                           Default Qty when QTY field is not disabled */
-/*                           (Vicky04)                                  */
-/* 2009-07-06 1.9  Vicky     Add in EventLog (Vicky06)                  */
-/* 2010-12-22 2.0  ChewKP    Bug Fixes (ChewKP01)                       */
-/* 2010-01-13 2.1  ChewKP    SOS#202440 Display Qty Received and Qty    */
-/*                           Expected (ChewKP02)                        */
-/* 2011-08-03 2.2  Ung       SOS222874:                                 */
-/*                           Print pallet label                         */
-/*                           Support QTY in decimal                     */
-/*                           Support POST lottable processing           */
-/*                           Implement storer configuration:            */
-/*                              AutoGenID                               */
-/*                              ReceiveByPieceCheckIDInASN              */
-/*                              ReceiveByPieceDefLottableByID           */
-/*                           SOS222875: Print carton label              */
-/*                           Clean up source                            */
-/* 2011-11-24 2.3 Ung        SOS230666: Chg ReceivingPOKeyDefaultValue  */
-/*                           to function level                          */
-/*                           Implement storer config SkipLottable0X     */
-/* 2012-03-12 2.4 Ung        SOS222875 Add different pallet label       */
-/*                           Fix datawindow > 20 chars, truncate error  */
-/* 2012-04-04 2.5 Ung        SOS240680 AutoGenID support configurable SP*/
-/* 2012-03-23 2.6 Ung        SOS239384 Add SKU decodelabelNo            */
-/* 2012-09-04 2.7 Ung        SOS254312 Add ExtendedInfoSP               */
-/* 2012-11-21 2.8 James      Bug fix (james02)                          */
-/* 2012-11-14 2.9 Ung        SOS261921 Add ConvertQTYSP                 */
-/* 2013-01-10 3.0 James      Use CLR type regular expression (james03)  */
-/* 2013-04-25 3.1 Ung        SOS276721 Fix UPC allow 30 chars (ung01)   */
-/* 2013-04-30 3.2 Ung        SOS276703 Add VerifySKU                    */
-/* 2013-05-07 3.3 Ung        SOS275121 Add MultiSKUBarcode              */
-/* 2013-04-09 3.4 James      SOS275027 Add ExtendedUpdateSP (james04)   */
-/* 2013-06-07 3.5 Ung        SOS273208:                                 */
-/*                           Add ExternReceiptKey                       */
-/*                           Fix POST lottable SourceKey not set (ung02)*/
-/*                           AutoGenID add parameter                    */
-/*                           Add SKULabelSP                             */
-/* 2013-06-07 3.6 Ung        SOS293944 Change MultiSKUBarcode check     */
-/* 2014-02-13 3.7 SPChin     SOS303238 Bug Fixed                        */
-/* 2014-04-24 3.8 Ung        SOS308961 PRE POST codelkup with StorerKey */
-/* 2014-01-22 3.9 ChewKP     SOS#292548 Bug Fixes (ChewKP03)            */
-/* 2014-04-09 4.0 Ung        SOS307644 Add auto match SKU in Doc        */
-/* 2014-07-30 4.1 Ung        SOS316652 Add ExtendedValidateSP           */
-/* 2014-04-09 4.2 Ung        SOS301005 DecodeLabelNo return L01-L04     */
-/* 2014-07-21 4.3 James      SOS315958 - Add ExtendedInfoSP to screen 7 */
-/*                           Add ExtendedValidateSP to screen 3(james05)*/
-/* 2015-01-02 4.4 Ung        SOS328774 ExtendedUpdateSP add param       */
-/*                           Migrate to rdt_VerifySKU                   */
-/* 2015-03-19 4.5 James      SOS333459 - Store VerifySKUInfo output into*/
-/*                           V_String (james06)                         */
-/* 2015-06-18 4.6 James      Cater for skip lottable scenario (james07) */
-/* 2016-04-21 4.7 James      SOS367156 - Add receive confirm wrapper    */
-/*                           (james08)                                  */
-/* 2016-03-01 4.9 ChewKP     SOS#364495 - Add ExtendedValidateSP pass in*/
-/*                           Qty parameter (ChewKP04)                   */
-/* 2016-05-03 5.0 ChewKP     SOS#368773 - Add Parameter (ChewKP05)      */
-/* 2016-08-16 5.1 Ung        SOS375486 Add RDT format for TO ID         */
-/* 2016-09-30 5.2 Ung        Performance tuning                         */
-/* 2016-11-02 5.3 Ung        Fix recompile due to date format different */
-/* 2017-05-05 5.4 Ung        WMS-1817 Add serial no                     */
-/* 2017-10-05 5.5 James      WMS-2584 Add filter facility, function_id  */
-/*                           for SKULABEL retrieve (james10)            */
-/* 2017-10-05 5.6 James      WMS-1895 Add ExtValid into step 4 (james09)*/
-/* 2017-01-22 5.7 James      WMS-3791 Change ExtASN lookup into config  */
-/*                           (james10)                                  */
-/* 2018-04-25 5.8 Ung        WMS-4333 Fix UOMDiv not initialize         */
-/* 2018-04-03 5.9 ChewKP     WMS-4126 Fixes (ChewKP06)                  */
-/* 2018-06-07 6.0 James      WMS-5313 Add decode for ToID & SKU         */
-/* 2018-08-01 6.1 Ung        WMS-5722 Add bulk serial no                */
-/* 2018-09-18 6.2 James      WMS-6326 Change SerialNoCapture config     */
-/*                           Allow svalue 1 or 2 only (james12)         */
-/* 2018-12-28 6.3 TungGH     Fix @cTOID not shown problem               */
-/* 2018-09-28 6.4 Ung        INC0406771 Fix bulk serial no              */
-/* 2018-10-29 6.5 Gan        Performance tuning                         */
-/* 2019-01-03 6.6 James      Allow >18 char pass to TOID decode(james13)*/
-/* 2019-03-07 6.7 YeeKung    WMS-8253 Add loc prefix (yeekung01)        */
-/* 2019-04-18 6.8 Ung        WMS-8718 Add retain lottable on top of     */
-/*                           ReceiveByPieceDefLottableByID              */
-/* 2019-06-11 6.9 Ung        Fix QTY field scan barcode runtime error   */
-/* 2019-03-07 7.0 James      WMS-8104-Add flow lottable screen (james14)*/
-/* 2019-08-13 7.1 James      INC0815024-Bug fix on sku decode (james15) */
-/* 2019-09-25 7.2 James      WMS-10434 Add param 2 rdt_serialno(james16)*/
-/* 2019-10-02 7.3 KimMun     INC0879172 - Allow QTY field have 7 digits */
-/* 2019-11-28 7.4 Grick      INC0951754 - POFlag Cater Blank QTY (G01)  */
-/* 2019-11-29 7.5 James      WMS-11215 - Enhance serial no receive. When*/
-/*                           return -1 goto sku scn to continue(james17)*/
-/* 2020-03-09 7.6 James      WMS-5467 Add extupdsp @ scn 5 (james18)    */
-/* 2020-05-10 7.7 James      WMS-9550-Add decode serial no to custom    */
-/*                           decode label (james19)                     */
-/* 2020-05-05 7.8 Ung        WMS-13066 Pallet label with func, facility */
-/* 2020-08-18 7.9 Ung        WMS-14788 Add FlowThruScreen               */
-/* 2021-01-12 8.0 James      WMS-16029 Fix date format for extvalid     */
-/*                           at step 4 (james20)                        */
-/* 2021-01-13 8.1 Chermaine  WMS-15775 Add config after confirmReceive  */
-/*                           back to lottable screen (cc01)             */
-/* 2021-03-31 8.2 James      WMS-16653 - Add Lottable06 decode (james21)*/
-/* 2021-04-01 8.3 James      WMS-16727 Auto go back scn1 when ASN       */
-/*                           finish receive (no over receive) (james22) */
-/* 2021-01-15 8.4 Chermaine  WMS-16015 Add DecodeLottableSP config      */
-/*                           in scn4 and ExtValSP config in scn2(cc02)  */
-/* 2021-06-01 8.6 Leong      INC1512999 - Reset variable                */  
-/* 2021-06-09 8.5 Chermaine  WMS-16328 Add SuggestLoc in scn1 (cc03)    */  
-/*                           and Add ClosePallet SP                     */  
-/* 2021-10-15 8.7 James      WMS-18022 Add eventlog to serial no step   */
-/*                           Add new field into eventlog (james23)      */
-/* 2022-02-24 8.8 Ung        WMS-18950 Add RDT format for Lottable01..4 */
-/* 2022-05-19 8.9 Ung        WMS-19667 Migrate to new ExtendedInfoSP    */
-/* 2019-04-16 9.0 MT         Add missing nBulkSNOQTY in line 2576       */
-/* 2020-12-07 9.1 YeeKung    Change params in decodesku   (yeekung02)   */  
-/* 2022-09-02 9.2 James      WMS-20639 Change rdt_GetSKU output         */
-/*                           UPC Qty (james24)                          */
-/* 2021-10-15 9.3 yeekung    WMS-19640 Add eventlog refno1(yeekung03)   */
-/* 2022-10-04 9.4 yeekung    WMS-21405 Add extendedvalidate step 1      */
-/*                            (yeekung05)                               */
-/* 2023-03-20 9.5 James      WMS-21943 Add Decode into step sku(james25)*/
-/* 2023-04-25 9.6 James      Addhoc fix add extendedupdatesp to step    */
-/*                           serial no (james26)                        */
-/* 2023-05-23 9.7 James      WMS-21975 Add V_Barcode to sku step for    */
-/*                           sku input. Add config go back To ID after  */
-/*                           each received (james27)                    */
-/* 2023-05-11 9.8 Ung        WMS-22366 Fix MultiSKUBarcode with Add SKU */
-/*                           in ASN should always prompt, not auto select*/
-/* 2023-06-03 9.9 James      Bug fix on V_Barcode input (james28)       */
+/* Store procedure: rdtfnc_PieceReceiving                                */
+/* Copyright      : Maersk                                               */
+/*                                                                       */
+/* Purpose: Lookup qualified ReceiptDetail lines to receive in the QTY   */
+/*                                                                       */
+/* Modifications log:                                                    */
+/*                                                                       */
+/* Date       Rev   Author    Purposes                                   */
+/* 2007-03-20 1.0   Liew      Create                                     */
+/*            1.2   Shong     Allow Return Type SOS# 111224              */
+/*            1.3   Shong     Support Retail SKU SOS# 111756             */
+/* 2009-02-05 1.4   James     SOS128415 - Change declaration of @cQty    */
+/*                            from NVARCHAR(2) to NVARCHAR(5) (james01)  */
+/* 2008-11-03 1.5   Vicky     Remove XML part of code that is used to    */
+/*                            make field invisible and replace with new  */
+/*                            code (Vicky02)                             */
+/* 2009-02-11 1.6   Rick Liew SOS128806 - Change declaration of          */
+/*                            @cTotalCarton,@cTotalQty,@cTempTotalQty    */
+/*                            @cCartonCnt from NVARCHAR(2) to NVARCHAR(5)*/
+/* 2009-05-07 1.7   Vicky     SOS#135894 - Add checking to not allow     */
+/*                            receiving of SKU more than ExpectedQty     */
+/*                            (Vicky03)                                  */
+/* 2009-05-22 1.8   Vicky     SOS#137402 - Display Long message in next  */
+/*                            screen instead of bottom of the screen and */
+/*                            Default Qty when QTY field is not disabled */
+/*                            (Vicky04)                                  */
+/* 2009-07-06 1.9   Vicky     Add in EventLog (Vicky06)                  */
+/* 2010-12-22 2.0   ChewKP    Bug Fixes (ChewKP01)                       */
+/* 2010-01-13 2.1   ChewKP    SOS#202440 Display Qty Received and Qty    */
+/*                            Expected (ChewKP02)                        */
+/* 2011-08-03 2.2   Ung       SOS222874:                                 */
+/*                            Print pallet label                         */
+/*                            Support QTY in decimal                     */
+/*                            Support POST lottable processing           */
+/*                            Implement storer configuration:            */
+/*                               AutoGenID                               */
+/*                               ReceiveByPieceCheckIDInASN              */
+/*                               ReceiveByPieceDefLottableByID           */
+/*                            SOS222875: Print carton label              */
+/*                            Clean up source                            */
+/* 2011-11-24 2.3  Ung        SOS230666: Chg ReceivingPOKeyDefaultValue  */
+/*                            to function level                          */
+/*                            Implement storer config SkipLottable0X     */
+/* 2012-03-12 2.4  Ung        SOS222875 Add different pallet label       */
+/*                            Fix datawindow > 20 chars, truncate error  */
+/* 2012-04-04 2.5  Ung        SOS240680 AutoGenID support configurable SP*/
+/* 2012-03-23 2.6  Ung        SOS239384 Add SKU decodelabelNo            */
+/* 2012-09-04 2.7  Ung        SOS254312 Add ExtendedInfoSP               */
+/* 2012-11-21 2.8  James      Bug fix (james02)                          */
+/* 2012-11-14 2.9  Ung        SOS261921 Add ConvertQTYSP                 */
+/* 2013-01-10 3.0  James      Use CLR type regular expression (james03)  */
+/* 2013-04-25 3.1  Ung        SOS276721 Fix UPC allow 30 chars (ung01)   */
+/* 2013-04-30 3.2  Ung        SOS276703 Add VerifySKU                    */
+/* 2013-05-07 3.3  Ung        SOS275121 Add MultiSKUBarcode              */
+/* 2013-04-09 3.4  James      SOS275027 Add ExtendedUpdateSP (james04)   */
+/* 2013-06-07 3.5  Ung        SOS273208:                                 */
+/*                            Add ExternReceiptKey                       */
+/*                            Fix POST lottable SourceKey not set (ung02)*/
+/*                            AutoGenID add parameter                    */
+/*                            Add SKULabelSP                             */
+/* 2013-06-07 3.6  Ung        SOS293944 Change MultiSKUBarcode check     */
+/* 2014-02-13 3.7  SPChin     SOS303238 Bug Fixed                        */
+/* 2014-04-24 3.8  Ung        SOS308961 PRE POST codelkup with StorerKey */
+/* 2014-01-22 3.9  ChewKP     SOS#292548 Bug Fixes (ChewKP03)            */
+/* 2014-04-09 4.0  Ung        SOS307644 Add auto match SKU in Doc        */
+/* 2014-07-30 4.1  Ung        SOS316652 Add ExtendedValidateSP           */
+/* 2014-04-09 4.2  Ung        SOS301005 DecodeLabelNo return L01-L04     */
+/* 2014-07-21 4.3  James      SOS315958 - Add ExtendedInfoSP to screen 7 */
+/*                            Add ExtendedValidateSP to screen 3(james05)*/
+/* 2015-01-02 4.4  Ung        SOS328774 ExtendedUpdateSP add param       */
+/*                            Migrate to rdt_VerifySKU                   */
+/* 2015-03-19 4.5  James      SOS333459 - Store VerifySKUInfo output into*/
+/*                            V_String (james06)                         */
+/* 2015-06-18 4.6  James      Cater for skip lottable scenario (james07) */
+/* 2016-04-21 4.7  James      SOS367156 - Add receive confirm wrapper    */
+/*                            (james08)                                  */
+/* 2016-03-01 4.9  ChewKP     SOS#364495 - Add ExtendedValidateSP pass in*/
+/*                            Qty parameter (ChewKP04)                   */
+/* 2016-05-03 5.0  ChewKP     SOS#368773 - Add Parameter (ChewKP05)      */
+/* 2016-08-16 5.1  Ung        SOS375486 Add RDT format for TO ID         */
+/* 2016-09-30 5.2  Ung        Performance tuning                         */
+/* 2016-11-02 5.3  Ung        Fix recompile due to date format different */
+/* 2017-05-05 5.4  Ung        WMS-1817 Add serial no                     */
+/* 2017-10-05 5.5  James      WMS-2584 Add filter facility, function_id  */
+/*                            for SKULABEL retrieve (james10)            */
+/* 2017-10-05 5.6  James      WMS-1895 Add ExtValid into step 4 (james09)*/
+/* 2017-01-22 5.7  James      WMS-3791 Change ExtASN lookup into config  */
+/*                            (james10)                                  */
+/* 2018-04-25 5.8  Ung        WMS-4333 Fix UOMDiv not initialize         */
+/* 2018-04-03 5.9  ChewKP     WMS-4126 Fixes (ChewKP06)                  */
+/* 2018-06-07 6.0  James      WMS-5313 Add decode for ToID & SKU         */
+/* 2018-08-01 6.1  Ung        WMS-5722 Add bulk serial no                */
+/* 2018-09-18 6.2  James      WMS-6326 Change SerialNoCapture config     */
+/*                            Allow svalue 1 or 2 only (james12)         */
+/* 2018-12-28 6.3  TungGH     Fix @cTOID not shown problem               */
+/* 2018-09-28 6.4  Ung        INC0406771 Fix bulk serial no              */
+/* 2018-10-29 6.5  Gan        Performance tuning                         */
+/* 2019-01-03 6.6  James      Allow >18 char pass to TOID decode(james13)*/
+/* 2019-03-07 6.7  YeeKung    WMS-8253 Add loc prefix (yeekung01)        */
+/* 2019-04-18 6.8  Ung        WMS-8718 Add retain lottable on top of     */
+/*                            ReceiveByPieceDefLottableByID              */
+/* 2019-06-11 6.9  Ung        Fix QTY field scan barcode runtime error   */
+/* 2019-03-07 7.0  James      WMS-8104-Add flow lottable screen (james14)*/
+/* 2019-08-13 7.1  James      INC0815024-Bug fix on sku decode (james15) */
+/* 2019-09-25 7.2  James      WMS-10434 Add param 2 rdt_serialno(james16)*/
+/* 2019-10-02 7.3  KimMun     INC0879172 - Allow QTY field have 7 digits */
+/* 2019-11-28 7.4  Grick      INC0951754 - POFlag Cater Blank QTY (G01)  */
+/* 2019-11-29 7.5  James      WMS-11215 - Enhance serial no receive. When*/
+/*                            return -1 goto sku scn to continue(james17)*/
+/* 2020-03-09 7.6  James      WMS-5467 Add extupdsp @ scn 5 (james18)    */
+/* 2020-05-10 7.7  James      WMS-9550-Add decode serial no to custom    */
+/*                            decode label (james19)                     */
+/* 2020-05-05 7.8  Ung        WMS-13066 Pallet label with func, facility */
+/* 2020-08-18 7.9  Ung        WMS-14788 Add FlowThruScreen               */
+/* 2021-01-12 8.0  James      WMS-16029 Fix date format for extvalid     */
+/*                            at step 4 (james20)                        */
+/* 2021-01-13 8.1  Chermaine  WMS-15775 Add config after confirmReceive  */
+/*                            back to lottable screen (cc01)             */
+/* 2021-03-31 8.2  James      WMS-16653 - Add Lottable06 decode (james21)*/
+/* 2021-04-01 8.3  James      WMS-16727 Auto go back scn1 when ASN       */
+/*                            finish receive (no over receive) (james22) */
+/* 2021-01-15 8.4  Chermaine  WMS-16015 Add DecodeLottableSP config      */
+/*                            in scn4 and ExtValSP config in scn2(cc02)  */
+/* 2021-06-01 8.6  Leong      INC1512999 - Reset variable                */  
+/* 2021-06-09 8.5  Chermaine  WMS-16328 Add SuggestLoc in scn1 (cc03)    */  
+/*                            and Add ClosePallet SP                     */  
+/* 2021-10-15 8.7  James      WMS-18022 Add eventlog to serial no step   */
+/*                            Add new field into eventlog (james23)      */
+/* 2022-02-24 8.8  Ung        WMS-18950 Add RDT format for Lottable01..4 */
+/* 2022-05-19 8.9  Ung        WMS-19667 Migrate to new ExtendedInfoSP    */
+/* 2019-04-16 9.0  MT         Add missing nBulkSNOQTY in line 2576       */
+/* 2020-12-07 9.1  YeeKung    Change params in decodesku   (yeekung02)   */  
+/* 2022-09-02 9.2  James      WMS-20639 Change rdt_GetSKU output         */
+/*                            UPC Qty (james24)                          */
+/* 2021-10-15 9.3  yeekung    WMS-19640 Add eventlog refno1(yeekung03)   */
+/* 2022-10-04 9.4  yeekung    WMS-21405 Add extendedvalidate step 1      */
+/*                             (yeekung05)                               */
+/* 2023-03-20 9.5  James      WMS-21943 Add Decode into step sku(james25)*/
+/* 2023-04-25 9.6  James      Addhoc fix add extendedupdatesp to step    */
+/*                            serial no (james26)                        */
+/* 2023-05-23 9.7  James      WMS-21975 Add V_Barcode to sku step for    */
+/*                            sku input. Add config go back To ID after  */
+/*                            each received (james27)                    */
+/* 2023-05-11 9.8  Ung        WMS-22366 Fix MultiSKUBarcode with Add SKU */
+/*                            in ASN should always prompt, not auto select*/
+/* 2023-06-03 9.9  James      Bug fix on V_Barcode input (james28)       */
+/* 2023-06-13 10.0 James      WMS-22739 Fix Lottable04 conversion issue  */
+/*                            when run DecodeSP (james29)                */
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_PieceReceiving] (
    @nMobile    INT,
@@ -2343,7 +2345,7 @@ BEGIN
                   @cSKU        OUTPUT, @nQTY        OUTPUT,  
                   @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @cSerialNoCapture OUTPUT,  
                   @nErrNo      OUTPUT, @cErrMsg     OUTPUT  
-  
+
                IF @nErrNo <> 0  
                   GOTO Step_5_Fail_SKU  
 
@@ -2353,7 +2355,7 @@ BEGIN
                SET @cTempLottable01 = CASE WHEN ISNULL( @cLottable01, '') <> '' THEN @cLottable01 ELSE @cTempLottable01 END
                SET @cTempLottable02 = CASE WHEN ISNULL( @cLottable02, '') <> '' THEN @cLottable02 ELSE @cTempLottable02 END
                SET @cTempLottable03 = CASE WHEN ISNULL( @cLottable03, '') <> '' THEN @cLottable03 ELSE @cTempLottable03 END
-               SET @cTempLottable04 = CASE WHEN ISNULL( @dLottable04, '') <> '' THEN CONVERT(NVARCHAR(50), @dLottable04, 120) ELSE @cTempLottable04 END
+               SET @cTempLottable04 = CASE WHEN ISNULL( @dLottable04, '') <> '' THEN @dLottable04 ELSE @cTempLottable04 END
             END  
             ELSE
             BEGIN
