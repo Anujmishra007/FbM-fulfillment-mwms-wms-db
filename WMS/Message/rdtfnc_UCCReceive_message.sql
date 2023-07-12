@@ -63,3 +63,6 @@ execute rdt.rdtAddMsg 63172, 10, '63172^Invalid Format',   'us_english', 898
 
 -- WMS-19453
 execute rdt.rdtAddMsg 63173, 10, '63173^Invalid Format',   'us_english', 898
+
+-- WMS-22928
+execute rdt.rdtAddMsg 63174, 10, '63174^Invalid Qty   ',   'us_english', 898

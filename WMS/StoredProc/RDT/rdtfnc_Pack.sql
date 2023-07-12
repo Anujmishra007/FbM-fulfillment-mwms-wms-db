@@ -79,6 +79,7 @@ GO
 /* 2023-03-23   5.3 Ung         WMS-22076 Expand Option field to detact scan barcode            */
 /*                              Add ExtendedValidateSP at screen 2 (statistic)                  */
 /* 2023-06-14   5.4 YeeKung     WMS-22751 Add Popup Message (yeekung01)                         */
+/* 2023-06-28   5.5 Ung         WMS-22741 Remove rdt_Decode error                               */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
@@ -1587,10 +1588,8 @@ BEGIN
                   @cUserDefine03 = @cPackDtlUPC    OUTPUT,
                   @cUserDefine04 = @cPackDtlDropID_Decode OUTPUT,
                   @cSerialNo     = @cSerialNo      OUTPUT,
-                  @nErrNo  = @nErrNo     OUTPUT,
-                  @cErrMsg = @cErrMsg    OUTPUT
-               IF @nErrNo <> 0
-                  GOTO Quit
+                  @nErrNo        = 0, --@nErrNo     OUTPUT,
+                  @cErrMsg       = '' --@cErrMsg    OUTPUT
             END
 
             -- Customize decode
