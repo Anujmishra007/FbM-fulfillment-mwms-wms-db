@@ -15,6 +15,7 @@ GO
 /* 23-05-2023 1.4  Ung      WMS-22520 Add method level config                 */
 /*                          LabelPrinterAsStaton                              */
 /*                          PaperPrinterAsStaton                              */
+/* 10-06-2023 1.5  Ung      WMS-22706 Add CheckLightNotPress                  */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_803ExtUpd01 (
@@ -64,13 +65,36 @@ BEGIN
             DECLARE @cMsg10    NVARCHAR(20)
             DECLARE @cUpdateCaseID  NVARCHAR( 1)
             DECLARE @cUpdateStatus  NVARCHAR( 1)
+            DECLARE @cCheckLightNotPress NVARCHAR( 1)
 
             -- Storer config
+            SET @cCheckLightNotPress = rdt.rdt_PTLPiece_GetConfig( @nFunc, 'CheckLightNotPress', @cStorerKey, @cMethod)
             SET @cUpdateCaseID = rdt.RDTGetConfig( @nFunc, 'UpdateCaseID', @cStorerKey)    
             SET @cUpdateStatus = rdt.RDTGetConfig( @nFunc, 'UpdateStatus', @cStorerKey)
             IF @cUpdateStatus NOT IN ('0', '3', '5')
-               SET @cUpdateStatus = '0'
-                         
+               SET @cUpdateStatus = '0'            
+            
+            -- Check light not press
+            IF @cCheckLightNotPress = '1'
+            BEGIN
+               -- Use light
+               IF EXISTS( SELECT 1 FROM rdt.rdtMobRec WITH (NOLOCK) WHERE Mobile = @nMobile AND V_String24 = '1')
+               BEGIN
+                  -- Light on
+                  IF EXISTS( SELECT 1 
+                     FROM PTL.PTLTran WITH (NOLOCK)
+                     WHERE DeviceID = @cStation
+                        AND DevicePosition IN (
+                           SELECT Position FROM rdt.rdtPTLPieceLog WITH (NOLOCK) WHERE Station = @cStation)
+                        AND LightUp = '1')
+                  BEGIN
+                     SET @cMsg = rdt.rdtgetmessage( 99507, @cLangCode, 'DSP') --LIGHT NOT PRESS
+                     EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', @cMsg
+                     GOTO Quit
+                  END
+               END
+            END
+            
             SET @i = 1
             SET @cMsg = ''
             SET @cMsg01 = ''
