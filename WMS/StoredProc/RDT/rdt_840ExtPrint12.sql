@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'rdt.rdt_840ExtPrint12') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_840ExtPrint12
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -15,9 +11,10 @@ GO
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
 /* 2020-07-05 1.0  James      WMS-13913. Created                        */
+/* 2022-10-19 1.1  James      WMS-20992 Add print carton DN (james01)   */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdt_840ExtPrint12] (
+CREATE OR ALTER PROC [RDT].[rdt_840ExtPrint12] (
    @nMobile     INT,
    @nFunc       INT, 
    @cLangCode   NVARCHAR( 3), 
@@ -48,7 +45,8 @@ AS
            @cPackList         NVARCHAR( 10),
            @cFacility         NVARCHAR( 5),
            @cLoadKey          NVARCHAR( 10),
-           @cLabelNo          NVARCHAR( 20)
+           @cLabelNo          NVARCHAR( 20),
+           @cCartonDN         NVARCHAR( 10)
 
    SELECT @cLabelPrinter = Printer,
           @cPaperPrinter = Printer_Paper,
@@ -105,65 +103,74 @@ AS
             FROM RDT.RDTMOBREC WITH (NOLOCK)
             WHERE Mobile = @nMobile
 
-         IF @nCartonNo = 1
-         BEGIN
-            IF NOT EXISTS ( SELECT 1
-                           FROM dbo.TRANSMITLOG2 WITH (NOLOCK)
-                           WHERE tablename = 'WSCRSOADDMP'
-                           AND   key1 = @cOrderKey
-                           AND   key2 = @nCartonNo
-                           AND   key3 = @cStorerkey)
-            BEGIN
-               SELECT @cLabelNo = LabelNo
-               FROM dbo.PackDetail WITH (NOLOCK)
-               WHERE PickSlipNo = @cPickSlipNo
-               AND   CartonNo = @nCartonNo
+         SELECT @cLabelNo = LabelNo
+         FROM dbo.PackDetail WITH (NOLOCK)
+         WHERE PickSlipNo = @cPickSlipNo
+         AND   CartonNo = @nCartonNo
                   
-               SET @cShipLabel = rdt.RDTGetConfig( @nFunc, 'SHIPZPLLBL', @cStorerKey)  
-               IF @cShipLabel = '0'  
-                  SET @cShipLabel = ''  
+         SET @cShipLabel = rdt.RDTGetConfig( @nFunc, 'SHIPZPLLBL', @cStorerKey)  
+         IF @cShipLabel = '0'  
+            SET @cShipLabel = ''  
                
-               IF @cShipLabel <> ''
-               BEGIN
-                  DECLARE @tShipLabel AS VariableTable  
-                  INSERT INTO @tShipLabel (Variable, Value) VALUES ( '@cLabelNo',     @cLabelNo)  
-                  INSERT INTO @tShipLabel (Variable, Value) VALUES ( '@cOrderKey',    @cOrderKey)  
+         IF @cShipLabel <> ''
+         BEGIN
+            DECLARE @tShipLabel AS VariableTable  
+            INSERT INTO @tShipLabel (Variable, Value) VALUES ( '@cLabelNo',     @cLabelNo)  
+            INSERT INTO @tShipLabel (Variable, Value) VALUES ( '@cOrderKey',    @cOrderKey)  
    
-                  -- Print label  
-                  EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, '',   
-                     @cShipLabel, -- Report type  
-                     @tShipLabel, -- Report params  
-                     'rdt_840ExtPrint12',   
-                     @nErrNo  OUTPUT,  
-                     @cErrMsg OUTPUT   
+            -- Print label  
+            EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, '',   
+               @cShipLabel, -- Report type  
+               @tShipLabel, -- Report params  
+               'rdt_840ExtPrint12',   
+               @nErrNo  OUTPUT,  
+               @cErrMsg OUTPUT   
   
-                  IF @nErrNo <> 0  
-                     GOTO Quit                   
-               END
-
-               SET @cReturnLabel = rdt.RDTGetConfig( @nFunc, 'RTNZPLLBL', @cStorerKey)  
-               IF @cReturnLabel = '0'  
-                  SET @cReturnLabel = ''  
-               
-               IF @cReturnLabel <> ''
-               BEGIN
-                  DECLARE @tReturnLabel AS VariableTable  
-                  INSERT INTO @tReturnLabel (Variable, Value) VALUES ( '@cLabelNo',     @cLabelNo)  
-                  INSERT INTO @tReturnLabel (Variable, Value) VALUES ( '@cOrderKey',    @cOrderKey)  
-   
-                  -- Print label  
-                  EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, '',   
-                     @cReturnLabel, -- Report type  
-                     @tReturnLabel, -- Report params  
-                     'rdt_840ExtPrint12',   
-                     @nErrNo  OUTPUT,  
-                     @cErrMsg OUTPUT   
-  
-                  IF @nErrNo <> 0  
-                     GOTO Quit                   
-               END
-            END
+            IF @nErrNo <> 0  
+               GOTO Quit                   
          END
+
+         SET @cReturnLabel = rdt.RDTGetConfig( @nFunc, 'RTNZPLLBL', @cStorerKey)  
+         IF @cReturnLabel = '0'  
+            SET @cReturnLabel = ''  
+               
+         IF @cReturnLabel <> ''
+         BEGIN
+            DECLARE @tReturnLabel AS VariableTable  
+            INSERT INTO @tReturnLabel (Variable, Value) VALUES ( '@cLabelNo',     @cLabelNo)  
+            INSERT INTO @tReturnLabel (Variable, Value) VALUES ( '@cOrderKey',    @cOrderKey)  
+   
+            -- Print label  
+            EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, '',   
+               @cReturnLabel, -- Report type  
+               @tReturnLabel, -- Report params  
+               'rdt_840ExtPrint12',   
+               @nErrNo  OUTPUT,  
+               @cErrMsg OUTPUT   
+  
+            IF @nErrNo <> 0  
+               GOTO Quit                   
+         END
+
+         SET @cCartonDN = rdt.RDTGetConfig( @nFunc, 'CARTONDN', @cStorerKey)  
+         IF @cCartonDN = '0'  
+            SET @cCartonDN = ''  
+
+         IF @cCartonDN <> ''
+         BEGIN
+            DECLARE @tCartonDN AS VariableTable
+            INSERT INTO @tCartonDN (Variable, Value) VALUES ( '@cLabelNo',    @cLabelNo)
+            INSERT INTO @tCartonDN (Variable, Value) VALUES ( '@cOrderKey',   @cOrderKey)
+
+            -- Print label
+            EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, '', @cPaperPrinter, 
+               @cCartonDN, -- Report type
+               @tCartonDN, -- Report params
+               'rdt_840ExtPrint12', 
+               @nErrNo  OUTPUT,
+               @cErrMsg OUTPUT 
+         END
+         
             
       END   -- IF @nStep = 4
    END   -- @nInputKey = 1
