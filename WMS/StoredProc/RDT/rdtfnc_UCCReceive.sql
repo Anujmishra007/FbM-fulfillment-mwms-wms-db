@@ -55,6 +55,7 @@ GO
 /* 2021-10-15 3.7  yeekung  WMS-19671 Add eventlog refno2(yeekung02)       */
 /* 2022-09-08 3.8  yeekung  WMS-20650 Add extendeinfo instep3(yeekung03)   */
 /* 2020-05-04 3.9  YeeKung WMS-11867 Add verifySKU (yeekung01)             */
+/* 2022-04-12 4.0  James   WMS-22928 Add RDTFormat for UCC Qty (james03)   */
 /***************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_UCCReceive](
    @nMobile    INT,
@@ -3039,6 +3040,15 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage(63146, @cLangCode, 'DSP') --Invalid Qty
          GOTO Step_9_Fail
       END
+
+      -- Check barcode format  
+      IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'QTY', @cQty) = 0  
+      BEGIN  
+         SET @nErrNo = 63174  
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Qty  
+         GOTO Step_9_Fail  
+      END  
+
       SET @nQTY = CAST( @cQTY AS INT)
 
       --if UCCWithDynamicCaseCnt is setup = 0, casecnt must equal with qty
