@@ -25,6 +25,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 06-DEC-2022 CSCHONG  1.3   Devops Scripts combine                    */
 /* 10-Apr-2023 WLChooi  1.1   WMS-22255 - Filter by Shipperkey (WL01)   */
+/* 04-JUL-2023 WinSern  1.2   JSM-160585 @n_QueueID INT to BIGINT (ws01)*/
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[ispPKBT12]
    @c_printerid NVARCHAR(50)  = ''
@@ -85,7 +86,7 @@ BEGIN
          , @c_Facility        NVARCHAR(5)
          , @c_Application     NVARCHAR(30)
          , @n_JobID           INT
-         , @n_QueueID         INT
+         , @n_QueueID         BIGINT			--(ws01)
          , @n_starttcnt       INT
          , @c_JobID           NVARCHAR(10)
          , @c_PrintData       NVARCHAR(MAX)
