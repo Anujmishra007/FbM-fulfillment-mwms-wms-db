@@ -13,6 +13,7 @@ GO
 /* Date        Author   Ver.  Purposes                                        */  
 /* 27-07-2020  YeeKung  1.0   WMS-14409 Created                               */  
 /* 08-09-2022  Ung      1.1   WMS-20348 Expand RefNo to 60 chars              */
+/* 06-06-2023  YeeKung  1.2   WMS-22699 Add criteria (yeekung01)              */
 /******************************************************************************/  
   
 CREATE OR ALTER PROCEDURE [RDT].[rdt_608RefNoLKUP06]  
@@ -109,7 +110,7 @@ BEGIN
                ' AND ASNStatus <> ''CANC'' ' +   
                CASE WHEN @cDataType IN ('int', 'float')   
                     THEN ' AND ISNULL( ' + @cColumnName + ', 0) = @cRefNo '   
-                    ELSE ' AND ISNULL( ' + @cColumnName + ', '''') = @cRefNo '   
+                    ELSE ' AND ISNULL( ' + @cColumnName + ', '''')  like ''' + @cRefNo+ '%'''
                END +   
                CASE WHEN @cStorerGroup = ''   
                     THEN ' AND StorerKey = @cStorerKey '   
@@ -136,7 +137,10 @@ BEGIN
             @cReceiptKey OUTPUT,   
             @nRowCount   OUTPUT,   
             @nErrNo      OUTPUT  
-     
+
+            print  @cSQL
+           select @cSQL
+
          IF @nErrNo <> 0  
             GOTO Quit  
      
