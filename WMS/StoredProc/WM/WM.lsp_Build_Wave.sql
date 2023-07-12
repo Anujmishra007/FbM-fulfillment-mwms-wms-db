@@ -3,7 +3,6 @@ GO
 
 SET QUOTED_IDENTIFIER ON
 GO
-
 /************************************************************************/                                                                                  
 /* Store Procedure: lsp_Build_Wave                                      */                                                                                  
 /* Creation Date:                                                       */                                                                                 
@@ -61,7 +60,7 @@ GO
 /* 2023-05-31  Wan16    2.8   LFWM-4288 - TW UAT SCE Build Wave Parameter*/
 /* 2023-06-26  CF01     2.9   Reduce increment to only by one           */
 /************************************************************************/                                                                                  
-ALTER   PROC [WM].[lsp_Build_Wave]                                                                                                                       
+CREATE OR ALTER PROC [WM].[lsp_Build_Wave]                                                                                                                       
       @c_BuildParmKey      NVARCHAR(10)                                                                                                                    
    ,  @c_Facility          NVARCHAR(5)                                                                                                                     
    ,  @c_StorerKey         NVARCHAR(15)  
@@ -1872,6 +1871,6 @@ EXIT_SP:
       PRINT '@c_ErrMsg = ' + @c_ErrMsg                                                                                                                        
    END                                                                                                                                                         
 -- End Procedure
-GO
 
+GO
 
