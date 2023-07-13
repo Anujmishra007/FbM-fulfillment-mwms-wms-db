@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author  Ver   Purposes                                  */
 /* 30-Jan-2023  WLChooi  1.0  DevOps Combine Script                     */
+/* 28-Jun-2023  CSCHONG  1.1  WMS-22915 support print by Wave (CS01)    */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_pickslip_rpt_puma_rdt] @c_Orderkey NVARCHAR(10)
 AS
@@ -31,7 +32,8 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF;
 
-   WITH CTE AS
+
+  WITH CTE AS
    (
       SELECT OH.OrderKey
            , TRIM(ISNULL(OH.ExternOrderKey, '')) AS ExternOrderKey
@@ -41,12 +43,29 @@ BEGIN
       FROM ORDERS OH (NOLOCK)
       JOIN PICKDETAIL PD (NOLOCK) ON PD.OrderKey = OH.OrderKey
       JOIN LOC L (NOLOCK) ON L.Loc = PD.Loc
-      WHERE OH.OrderKey = @c_Orderkey
+      --JOIN #TMPWAVEORD TORD ON TORD.ORDERKEY = oh.OrderKey AND TORD.WAVEKEY = OH.UserDefine09             --
+     WHERE OH.OrderKey = @c_Orderkey
       GROUP BY OH.OrderKey
              , OH.ExternOrderKey
              , OH.UserDefine09
              , ISNULL(L.PickZone, '')
              , ISNULL(PD.PickSlipNo, '')
+ UNION  --CS01 S
+SELECT OH.OrderKey
+           , TRIM(ISNULL(OH.ExternOrderKey, '')) AS ExternOrderKey
+           , OH.UserDefine09 AS Wavekey
+           , TRIM(ISNULL(L.PickZone, '')) AS PickZone
+           , ISNULL(PD.PickSlipNo, '') AS PickSlipNo
+      FROM ORDERS OH (NOLOCK)
+      JOIN PICKDETAIL PD (NOLOCK) ON PD.OrderKey = OH.OrderKey
+      JOIN LOC L (NOLOCK) ON L.Loc = PD.Loc
+      --JOIN #TMPWAVEORD TORD ON TORD.ORDERKEY = oh.OrderKey AND TORD.WAVEKEY = OH.UserDefine09             --
+     WHERE OH.UserDefine09 = @c_Orderkey
+      GROUP BY OH.OrderKey
+             , OH.ExternOrderKey
+             , OH.UserDefine09
+             , ISNULL(L.PickZone, '')
+             , ISNULL(PD.PickSlipNo, '')  --CS01 E
    )
    SELECT CTE.OrderKey
         , CTE.ExternOrderKey
@@ -56,11 +75,20 @@ BEGIN
         , TRIM(CTE.OrderKey) + TRIM(CTE.ExternOrderKey) + TRIM(CTE.Wavekey) + 
           TRIM(CTE.PickZone) + TRIM(CTE.PickSlipNo) AS Group1
    FROM CTE
-   ORDER BY CTE.OrderKey
-          , CTE.Wavekey
+   ORDER BY CTE.Wavekey     --CS01
+          , CTE.OrderKey
+         -- , CTE.Wavekey   --CS01 
           , CTE.PickZone
-          , CTE.PickSlipNo
+          , CTE.PickSlipNo 
+
+
+
+   IF OBJECT_ID('tempdb..#TMPWAVEORD') IS NOT NULL
+      DROP TABLE #TMPWAVEORD
+
 END
 GO
 GRANT EXECUTE ON [dbo].[isp_pickslip_rpt_puma_rdt] TO [NSQL]
+GO
+GRANT EXECUTE ON [dbo].[isp_pickslip_rpt_puma_rdt] TO [JReportRole]
 GO
