@@ -78,6 +78,8 @@ GO
 /* 2022-12-06 4.8  James    WMS-21272 Add DecodeSP, retrieve lot using        */
 /*                          lottable returned (james14)                       */
 /* 2022-12-09 4.9  James    WMS-21307 Add ExtendedInfoSP step 1 & 5 (james14) */
+/* 2023-06-28 5.0  Ung      WMS-22741 Remove rdt_Decode error                 */
+/*                          Add L01-04 to rdt_Decode                          */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_PutawayBySKU] (
@@ -408,12 +410,9 @@ BEGIN
       BEGIN
          EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility, @cBarcode,
             @cID     = @cID     OUTPUT,
-            @nErrNo  = @nErrNo  OUTPUT,
-            @cErrMsg = @cErrMsg OUTPUT,
+            @nErrNo  = 0,  --@nErrNo     OUTPUT,
+            @cErrMsg = '', --@cErrMsg    OUTPUT
             @cType   = 'ID'
-
-         IF @nErrNo <> 0
-      GOTO Quit
       END
       ELSE
       BEGIN
@@ -810,27 +809,29 @@ BEGIN
       -- Decode
       IF @cDecodeSP <> ''
       BEGIN
+      	SET @cDecodeLottable01 = ''
+      	SET @cDecodeLottable02 = ''
+      	SET @cDecodeLottable03 = ''
+      	SET @dDecodeLottable04 = ''
+         	
          -- Standard decode
          IF @cDecodeSP = '1'
          BEGIN
             EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility, @cBarcode,
-               @cUPC    = @cSKU    OUTPUT,
-               @nQTY    = @nQTY    OUTPUT,
-               @nErrNo  = @nErrNo  OUTPUT,
-               @cErrMsg = @cErrMsg OUTPUT,
-               @cType   = 'UPC'
-
-            IF @nErrNo <> 0
-               GOTO Quit
+               @cUPC        = @cSKU              OUTPUT,
+               @nQTY        = @nQTY              OUTPUT,
+               @cLottable01 = @cDecodeLottable01 OUTPUT, 
+               @cLottable02 = @cDecodeLottable02 OUTPUT, 
+               @cLottable03 = @cDecodeLottable03 OUTPUT, 
+               @dLottable04 = @dDecodeLottable04 OUTPUT,
+               @nErrNo      = 0,  --@nErrNo      OUTPUT,
+               @cErrMsg     = '', --@cErrMsg     OUTPUT
+               @cType       = 'UPC'
          END
+         
          -- Customize decode    
          ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')    
          BEGIN    
-         	SET @cDecodeLottable01 = ''
-         	SET @cDecodeLottable02 = ''
-         	SET @cDecodeLottable03 = ''
-         	SET @dDecodeLottable04 = ''
-
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +    
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cBarcode, ' +    
                ' @cID, @cUCC, @cLOC, @cSKU OUTPUT, @nQTY OUTPUT, ' + 
