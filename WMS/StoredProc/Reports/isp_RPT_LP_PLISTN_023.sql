@@ -23,6 +23,7 @@ GO
 /* Date         Author  Ver   Purposes                                   */
 /* 25-Jan-2023  WLChooi  1.0  DevOps Combine Script                      */
 /* 29-MAY-2023  CSCHONG  1.1  WMS-22544 add new field (CS01)             */
+/* 19-JUN-2023  CSCHONG  1.2  WMS-22544 add pageno (CS02)                */
 /*************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTN_023]
@@ -90,11 +91,23 @@ BEGIN
          , @c_areakey            NVARCHAR(10)
          , @c_skugroup           NVARCHAR(10)
 
-   DECLARE @c_PrevOrderKey NVARCHAR(10)
-         , @n_Pallets      INT
-         , @n_Cartons      INT
-         , @n_Eaches       INT
-         , @n_UOMQty       INT
+   DECLARE @c_PrevOrderKey       NVARCHAR(10)
+         , @n_Pallets            INT
+         , @n_Cartons            INT
+         , @n_Eaches             INT
+         , @n_UOMQty             INT
+         , @n_TTLPAGE            INT = 1               --CS02 S
+         , @n_Maxline            INT = 13              --CS02  
+         , @c_RptPage            NVARCHAR(50) = ''     --CS02
+         , @c_GetPickslipno      NVARCHAR(20)
+         , @c_GetLoadkey         NVARCHAR(20)
+         , @c_GetOrderkey        NVARCHAR(20)
+         , @c_GetRptGrp          NVARCHAR(5)       
+         , @c_Getshowfullroute   NVARCHAR(10)
+         , @n_TTLQty             INT
+         , @n_GTTLQty            INT
+         , @n_MinPageNo          INT     
+         , @n_MaxPageNo          INT                    --CS02 E
 
    IF ISNULL(@c_PreGenRptData, '') IN ( '0', '' )
       SET @c_PreGenRptData = ''
@@ -161,6 +174,77 @@ BEGIN
     , UnitPrice      FLOAT                --CS01 S        
    )
 
+
+   --CS02 S
+
+ CREATE TABLE #TEMP_PICK78_final
+   (
+      PickSlipNo     NVARCHAR(10) NULL
+    , LoadKey        NVARCHAR(10)
+    , OrderKey       NVARCHAR(10)
+    , ConsigneeKey   NVARCHAR(15)
+    , Company        NVARCHAR(45)
+    , Addr1          NVARCHAR(45) NULL
+    , Addr2          NVARCHAR(45) NULL
+    , Addr3          NVARCHAR(45) NULL
+    , PostCode       NVARCHAR(15) NULL
+    , Route          NVARCHAR(10) NULL
+    , Route_Desc     NVARCHAR(60) NULL
+    , TrfRoom        NVARCHAR(5)  NULL
+    , Notes1         NVARCHAR(60) NULL
+    , Notes2         NVARCHAR(60) NULL
+    , LOC            NVARCHAR(10) NULL
+    , ID             NVARCHAR(18) NULL
+    , SKU            NVARCHAR(20)
+    , SkuDesc        NVARCHAR(60)
+    , Qty            INT
+    , TempQty1       INT
+    , TempQty2       INT
+    , PrintedFlag    NVARCHAR(1)  NULL
+    , Zone           NVARCHAR(1)
+    , PgGroup        INT
+    , RowNum         INT
+    , Lot            NVARCHAR(10)
+    , Carrierkey     NVARCHAR(60) NULL
+    , VehicleNo      NVARCHAR(10) NULL
+    , Lottable02     NVARCHAR(18) NULL
+    , Lottable04     DATETIME     NULL
+    , packpallet     INT
+    , packcasecnt    INT
+    , packinner      INT
+    , packeaches     INT
+    , externorderkey NVARCHAR(30) NULL
+    , LogicalLoc     NVARCHAR(18) NULL
+    , Areakey        NVARCHAR(10) NULL
+    , UOM            NVARCHAR(10)
+    , Pallet_cal     INT
+    , Cartons_cal    INT
+    , inner_cal      INT
+    , Each_cal       INT
+    , Total_cal      INT
+    , DeliveryDate   DATETIME     NULL
+    , RetailSku      NVARCHAR(20) NULL
+    , BuyerPO        NVARCHAR(20) NULL
+    , InvoiceNo      NVARCHAR(10) NULL
+    , OrderDate      DATETIME     NULL
+    , Susr4          NVARCHAR(18) NULL
+    , vat            NVARCHAR(18) NULL
+    , OVAS           NVARCHAR(30) NULL
+    , SKUGROUP       NVARCHAR(10) NULL
+    , ContainerType  NVARCHAR(20) NULL
+    , RptGrp         NVARCHAR(1)  NULL
+    , ShowFullRoute  NVARCHAR(10) NULL
+    , ShowUnitPrice  NVARCHAR(1)  NULL    --CS01 S
+    , PriceTitle     NVARCHAR(10) NULL
+    , UnitPrice      FLOAT                   
+    , PageNo         INT
+    , TTLPage        INT                  
+    --, TTLQty         INT
+    , GTTLQty        INT                  --CS01 E       
+   )
+
+   --CS02 E
+
    INSERT INTO #TEMP_PICK78 (PickSlipNo, LoadKey, OrderKey, ConsigneeKey, Company, Addr1, Addr2, PgGroup, Addr3
                            , PostCode, Route, Route_Desc, TrfRoom, Notes1, RowNum, Notes2, LOC, ID, SKU, SkuDesc, Qty
                            , TempQty1, TempQty2, PrintedFlag, Zone, Lot, Carrierkey, VehicleNo, Lottable02, Lottable04
@@ -169,7 +253,7 @@ BEGIN
                            , InvoiceNo, OrderDate, Susr4, vat, OVAS, SKUGROUP, ContainerType, RptGrp, ShowFullRoute
                            , ShowUnitPrice,PriceTitle,UnitPrice)                       --CS01
    SELECT (  SELECT PickHeaderKey
-             FROM PICKHEADER
+             FROM PICKHEADER (NOLOCK)
              WHERE ExternOrderKey = @c_Loadkey AND OrderKey = PICKDETAIL.OrderKey AND Zone = '3')
         , @c_Loadkey AS LoadKey
         , PICKDETAIL.OrderKey
@@ -297,7 +381,7 @@ BEGIN
                  ELSE '2' END
           , ISNULL(CL.Short, 'N')
           , ISNULL(CL1.Short, 'N')                   --CS01  S
-       --   , ORDERDETAIL.unitprice                      --CS01 E
+       --   , ORDERDETAIL.unitprice                  --CS01 E
 
    UPDATE #TEMP_PICK78
    SET Cartons_cal = CASE packcasecnt
@@ -313,6 +397,11 @@ BEGIN
 
    UPDATE #TEMP_PICK78
    SET Each_cal = Total_cal - (packcasecnt * Cartons_cal) - (packinner * inner_cal)
+
+   IF @c_PreGenRptData = '' AND EXISTS (SELECT 1 FROM #TEMP_PICK78 WHERE PickSlipNo IS NULL)
+   BEGIN
+       SET @c_PreGenRptData = 'Y'
+   END
 
    IF @c_PreGenRptData = 'Y'
    BEGIN
@@ -378,6 +467,7 @@ BEGIN
          WHERE PickSlipNo IS NULL
          GROUP BY LoadKey
                 , OrderKey
+
          UPDATE #TEMP_PICK78
          SET PickSlipNo = PICKHEADER.PickHeaderKey
          FROM PICKHEADER (NOLOCK)
@@ -388,6 +478,8 @@ BEGIN
       END
    END
 
+       SET @c_PreGenRptData = '' 
+
    GOTO SUCCESS
 
    FAILURE:
@@ -396,16 +488,146 @@ BEGIN
    SUCCESS:
    IF ISNULL(@c_PreGenRptData,'') = ''
    BEGIN
-      SELECT *
-      FROM #TEMP_PICK78
+        
+       --CS02 S
+
+        INSERT INTO #TEMP_PICK78_final
+      (
+          PickSlipNo,
+          LoadKey,
+          OrderKey,
+          ConsigneeKey,
+          Company,
+          Addr1,
+          Addr2,
+          Addr3,
+          PostCode,
+          Route,
+          Route_Desc,
+          TrfRoom,
+          Notes1,
+          Notes2,
+          LOC,
+          ID,
+          SKU,
+          SkuDesc,
+          Qty,
+          TempQty1,
+          TempQty2,
+          PrintedFlag,
+          Zone,
+          PgGroup,
+          RowNum,
+          Lot,
+          Carrierkey,
+          VehicleNo,
+          Lottable02,
+          Lottable04,
+          packpallet,
+          packcasecnt,
+          packinner,
+          packeaches,
+          externorderkey,
+          LogicalLoc,
+          Areakey,
+          UOM,
+          Pallet_cal,
+          Cartons_cal,
+          inner_cal,
+          Each_cal,
+          Total_cal,
+          DeliveryDate,
+          RetailSku,
+          BuyerPO,
+          InvoiceNo,
+          OrderDate,
+          Susr4,
+          vat,
+          OVAS,
+          SKUGROUP,
+          ContainerType,
+          RptGrp,
+          ShowFullRoute,
+          ShowUnitPrice,
+          PriceTitle,
+          UnitPrice,
+          PageNo,
+          TTLPage,
+          GTTLQty 
+      )
+     SELECT P78.*,(Row_Number() OVER (PARTITION BY loadkey,orderkey,rptgrp,ShowFullRoute ORDER BY loadkey,orderkey,rptgrp,ShowFullRoute) - 1 ) / @n_MaxLine + 1 AS pageno,0,0
+     FROM #TEMP_PICK78 P78
+
+
+     DECLARE CUR_RptPageLoop CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+     SELECT DISTINCT PickSlipNo,LoadKey,OrderKey,RptGrp,ShowFullRoute
+     FROM #TEMP_PICK78_final
+
+      OPEN CUR_RptPageLoop
+
+      FETCH NEXT FROM CUR_RptPageLoop INTO @c_GetPickslipno,@c_GetLoadkey,@c_GetOrderkey,@c_GetRptGrp,@c_Getshowfullroute
+
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+
+      SET @n_MinPageNo = 0
+      SET @n_MaxPageNo = 0
+      SET @c_RptPage = ''
+
+      SELECT @n_MinPageNo = MIN(PageNo)
+            ,@n_MaxPageNo = MAX(PageNo)
+            ,@n_GTTLQty   = SUM(Qty)
+      FROM #TEMP_PICK78_final
+      WHERE PickSlipNo = @c_GetPickslipno
+      AND   loadkey = @c_GetLoadkey
+      AND OrderKey = @c_GetOrderkey
+      AND RptGrp = @c_GetRptGrp
+      AND ShowFullRoute = @c_Getshowfullroute
+
+
+      SET @c_RptPage = 'Page ' + CAST(@n_MinPageNo AS NVARCHAR(5)) + ' of '  + CAST(@n_MaxPageNo AS NVARCHAR(5))
+
+      UPDATE #TEMP_PICK78_final
+      SET TTLPage = @n_MaxPageNo
+          ,GTTLQty = @n_GTTLQty
+    --     ,RptPage = @c_RptPage
+      WHERE PickSlipNo = @c_GetPickslipno
+      AND   loadkey = @c_GetLoadkey
+      AND OrderKey = @c_GetOrderkey
+      AND RptGrp = @c_GetRptGrp
+      AND ShowFullRoute = @c_Getshowfullroute
+
+
+      FETCH NEXT FROM CUR_RptPageLoop INTO @c_GetPickslipno,@c_GetLoadkey,@c_GetOrderkey,@c_GetRptGrp,@c_Getshowfullroute
+ 
+      END -- While
+      CLOSE CUR_RptPageLoop
+      DEALLOCATE CUR_RptPageLoop
+
+       --CS02 E
+
+   SELECT P78F.*,P78GT.TTLQty
+   FROM #TEMP_PICK78_final P78F
+   CROSS APPLY (SELECT P78.LoadKey,P78.OrderKey,P78.RptGrp,P78.Areakey,SUM(QTY) AS TTLQty
+                FROM #TEMP_PICK78 P78 
+                WHERE P78.LoadKey = P78F.LoadKey AND P78.OrderKey = P78F.OrderKey
+                      AND P78.RptGrp = P78F.RptGrp AND P78.Areakey = P78F.Areakey
+                GROUP BY P78.LoadKey,P78.OrderKey,P78.RptGrp,P78.Areakey) AS P78GT 
    END
 
    QUIT_SP:
    IF OBJECT_ID('tempdb..#TEMP_PICK78') IS NOT NULL
       DELETE FROM #TEMP_PICK78
+
+   --CS02 S
+
+   IF OBJECT_ID('tempdb..#TEMP_PICK78_final') IS NOT NULL
+      DELETE FROM #TEMP_PICK78_final
+   --CS02 E
+
 END
 GO
 GRANT EXECUTE ON [dbo].[isp_RPT_LP_PLISTN_023] TO [NSQL]
 GO
-GRANT EXECUTE ON [dbo].[isp_RPT_LP_PLISTN_023] TO [LogiReportRoleWM]
+GRANT EXECUTE ON [dbo].[isp_RPT_LP_PLISTN_023] TO [JReportRole]
 GO
