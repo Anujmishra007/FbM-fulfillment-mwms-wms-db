@@ -36,6 +36,7 @@ GO
 /* 15-MAY-2020  CSCHONG   1.3   WMS-13335 revised sorting rule (CS03)   */    
 /* 24-MAY-2023  NJOW01    1.4   WMS-22662 revised mapping               */
 /* 24-MAY-2023  NJOW01    1.4   DEVOPS Combine Script                   */
+/* 07-Jul-2023  NJOW02    1.5   WMS-23041 revised mapping               */
 /************************************************************************/  
 CREATE OR ALTER PROCEDURE ispPopulateTOASN_KFMY   
     @c_OrderKey NVARCHAR(10)  
@@ -306,7 +307,7 @@ AS
                            @c_ExternOrderLine, @c_RecStorerkey,     @c_SKU,                     
                            ISNULL(@n_QtyReceived,0),   0,                 
                             @c_UOM,           @c_Packkey, '','UR',                                            --(CS02)        
-                            @c_getlottable03,   @c_Lottable02, @d_Lottable04,      
+                            @c_Lottable02, @c_getlottable03, @d_Lottable04,      --NJOW02
                             @c_getlottable06,@c_ConsigneeKey, 
                             @c_ExternReceiptKey, @c_UserDefine01, @c_UserDefine02, @c_UserDefine04)  --NJOW01
       
