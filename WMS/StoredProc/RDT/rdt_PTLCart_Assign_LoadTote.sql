@@ -1,6 +1,3 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE Object_Id = OBJECT_ID(N'[RDT].[rdt_PTLCart_Assign_LoadTote]') AND Type in (N'P', N'PC'))
-   DROP PROCEDURE rdt.rdt_PTLCart_Assign_LoadTote
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -14,9 +11,11 @@ GO
 /* Date       Rev  Author   Purposes                                          */
 /* 19-10-2017 1.0  Ung      WMS-3250 Created                                  */
 /* 26-01-2018 1.1  Ung      Change to PTL.Schema                              */
+/* 01-06-2023 1.2  Ung      WMS-22464 Add dynamic lottable                    */
+/*                          Add PickConfirmStatus                             */
 /******************************************************************************/
 
-CREATE PROC rdt.rdt_PTLCart_Assign_LoadTote (
+CREATE OR ALTER PROC rdt.rdt_PTLCart_Assign_LoadTote (
    @nMobile          INT, 
    @nFunc            INT, 
    @cLangCode        NVARCHAR( 3), 
@@ -56,12 +55,39 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
+   DECLARE @cSQL        NVARCHAR( MAX)
+   DECLARE @cSQLParam   NVARCHAR( MAX)
    DECLARE @nTranCount  INT
    DECLARE @nTotalTote  INT
 
-   DECLARE @cLoadKey NVARCHAR(10)
-   DECLARE @cPosition   NVARCHAR(10)
-   DECLARE @cToteID     NVARCHAR(20)
+   DECLARE @cLoadKey       NVARCHAR( 10)
+   DECLARE @cPosition      NVARCHAR( 10)
+   DECLARE @cToteID        NVARCHAR( 20)
+   DECLARE @cPickConfirmStatus NVARCHAR( 1)  
+
+   DECLARE @cLottableCode  NVARCHAR( 30)
+   DECLARE @cLottable01    NVARCHAR( 18)
+   DECLARE @cLottable02    NVARCHAR( 18)
+   DECLARE @cLottable03    NVARCHAR( 18)
+   DECLARE @dLottable04    DATETIME
+   DECLARE @dLottable05    DATETIME
+   DECLARE @cLottable06    NVARCHAR( 30)
+   DECLARE @cLottable07    NVARCHAR( 30)
+   DECLARE @cLottable08    NVARCHAR( 30)
+   DECLARE @cLottable09    NVARCHAR( 30)
+   DECLARE @cLottable10    NVARCHAR( 30)
+   DECLARE @cLottable11    NVARCHAR( 30)
+   DECLARE @cLottable12    NVARCHAR( 30)
+   DECLARE @dLottable13    DATETIME
+   DECLARE @dLottable14    DATETIME
+   DECLARE @dLottable15    DATETIME
+   
+   DECLARE @cSelect        NVARCHAR( MAX)
+   DECLARE @cFrom          NVARCHAR( MAX)
+   DECLARE @cWhere1        NVARCHAR( MAX)
+   DECLARE @cWhere2        NVARCHAR( MAX)
+   DECLARE @cGroupBy       NVARCHAR( MAX)
+   DECLARE @cOrderBy       NVARCHAR( MAX)
 
    SET @nTranCount = @@TRANCOUNT
       
@@ -151,6 +177,11 @@ BEGIN
          GOTO Quit
       END
 
+      -- Storer configure (method level)
+      SET @cPickConfirmStatus = rdt.rdt_PTLCart_GetConfig( @nFunc, 'PickConfirmStatus', @cStorerKey, @cMethod)  
+      IF @cPickConfirmStatus = '0'
+         SET @cPickConfirmStatus = '5'
+
       -- Check load in Zone
       SET @nErrNo = 1
       IF @cPickZone = '' 
@@ -159,7 +190,8 @@ BEGIN
             JOIN Orders O WITH (NOLOCK) ON (LPD.OrderKey = O.OrderKey)
             JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
          WHERE LPD.Loadkey = @cLoadKey
-            AND PD.Status < '4'
+            AND PD.Status <> '4'
+            AND PD.Status < @cPickConfirmStatus
             AND PD.QTY > 0
             AND O.Status <> 'CANC' 
             AND O.SOStatus <> 'CANC'
@@ -170,7 +202,8 @@ BEGIN
             JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
             JOIN LOC WITH (NOLOCK) ON (PD.LOC = LOC.LOC)
          WHERE LPD.Loadkey = @cLoadKey
-            AND PD.Status < '4'
+            AND PD.Status <> '4'
+            AND PD.Status < @cPickConfirmStatus
             AND PD.QTY > 0
             AND O.Status <> 'CANC' 
             AND O.SOStatus <> 'CANC'
@@ -278,7 +311,8 @@ BEGIN
                JOIN Orders O WITH (NOLOCK) ON (LPD.OrderKey = O.OrderKey)
                JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
             WHERE LPD.Loadkey = @cLoadKey
-               AND PD.Status < '4'
+               AND PD.Status <> '4'
+               AND PD.Status < @cPickConfirmStatus
                AND PD.QTY > 0
                AND O.Status <> 'CANC' 
                AND O.SOStatus <> 'CANC'
@@ -291,7 +325,8 @@ BEGIN
                JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
                JOIN LOC WITH (NOLOCK) ON (PD.LOC = LOC.LOC)
             WHERE LPD.Loadkey = @cLoadKey
-               AND PD.Status < '4'
+               AND PD.Status <> '4'               
+               AND PD.Status < @cPickConfirmStatus
                AND PD.QTY > 0
                AND O.Status <> 'CANC' 
                AND O.SOStatus <> 'CANC'
@@ -302,19 +337,85 @@ BEGIN
       FETCH NEXT FROM @curPD INTO @cLOC, @cSKU, @nQTY
       WHILE @@FETCH_STATUS = 0
       BEGIN
-         INSERT INTO PTL.PTLTran (
-            IPAddress, DeviceID, DevicePosition, Status, PTLType, 
-            DeviceProfileLogKey, DropID, SourceKey, Storerkey, SKU, LOC, ExpectedQTY, QTY)
-         VALUES (
-            @cIPAddress, @cCartID, @cPosition, '0', 'CART',
-            @cDPLKey, '', @cLoadKey, @cStorerKey, @cSKU, @cLOC, @nQTY, 0)
-   
-         IF @@ERROR <> ''
+         -- Get SKU info
+         SELECT @cLottableCode = LottableCode FROM SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU
+         
+         SET @cSelect = ''
+         
+         -- Dynamic lottable
+         IF @cLottableCode <> ''
+            EXEC rdt.rdt_Lottable_GetNextSQL @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 4, @cLottableCode, 'LA', 
+               @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+               @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+               @cSelect  OUTPUT,
+               @cWhere1  OUTPUT,
+               @cWhere2  OUTPUT,
+               @cGroupBy OUTPUT,
+               @cOrderBy OUTPUT,
+               @nErrNo   OUTPUT,
+               @cErrMsg  OUTPUT
+            
+         -- By lottables
+         IF @cSelect <> ''
          BEGIN
-            SET @nErrNo = 115959
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo ,@cLangCode ,'DSP') --INS PTL Fail
-            GOTO RollBackTran
+            SET @cSQL = 
+               ' INSERT INTO PTL.PTLTran ( ' + 
+                  ' IPAddress, DeviceID, DevicePosition, Status, PTLType, ' + 
+                  ' DeviceProfileLogKey, DropID, SourceKey, Storerkey, SKU, LOC, ExpectedQTY, QTY, ' + @cGroupBy + ') ' + 
+               ' SELECT ' + 
+                  ' @cIPAddress, @cCartID, @cPosition, ''0'', ''CART'', ' + 
+                  ' @cDPLKey, '''', @cLoadKey, @cStorerKey, @cSKU, @cLOC, ISNULL( SUM( PD.QTY), 0), 0, ' + @cGroupBy + 
+                  ' FROM LoadPlanDetail LPD WITH (NOLOCK) ' + 
+                     ' JOIN Orders O WITH (NOLOCK) ON (LPD.OrderKey = O.OrderKey) ' + 
+                     ' JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey) ' + 
+                     ' JOIN LOC WITH (NOLOCK) ON (PD.LOC = LOC.LOC) ' + 
+                     ' JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' + 
+                  ' WHERE LPD.Loadkey = @cLoadKey ' + 
+                     ' AND PD.LOC = @cLOC ' + 
+                     ' AND PD.SKU = @cSKU ' + 
+                     ' AND PD.Status <> ''4'' ' + 
+                     ' AND PD.Status < @cPickConfirmStatus ' + 
+                     ' AND PD.QTY > 0' + 
+                     ' AND O.Status <> ''CANC''' + 
+                     ' AND O.SOStatus <> ''CANC''' + 
+                     CASE WHEN @cPickZone = '' THEN '' ELSE ' AND LOC.PickZone = @cPickZone ' END + 
+                  ' GROUP BY ' + @cGroupBy + 
+                  ' ORDER BY ' + @cOrderBy 
+
+            SET @cSQLParam = 
+               '@cIPAddress  NVARCHAR( 40),  ' + 
+               '@cCartID     NVARCHAR( 10),  ' + 
+               '@cPosition   NVARCHAR( 10),  ' + 
+               '@cDPLKey     NVARCHAR( 10),  ' + 
+               '@cPickZone   NVARCHAR( 10),  ' +  
+               '@cLoadKey    NVARCHAR( 10),  ' +  
+               '@cLOC        NVARCHAR( 10),  ' +  
+               '@cStorerKey  NVARCHAR( 15),  ' +  
+               '@cSKU        NVARCHAR( 20),  ' +
+               '@cGroupBy    NVARCHAR( MAX), ' +
+               '@cPickConfirmStatus NVARCHAR( 1) ' 
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam, 
+               @cIPAddress, @cCartID, @cPosition, @cDPLKey, @cPickZone, @cLoadKey, @cLOC, @cStorerKey, @cSKU, @cGroupBy, @cPickConfirmStatus
          END
+         ELSE
+         BEGIN
+            INSERT INTO PTL.PTLTran (
+               IPAddress, DeviceID, DevicePosition, Status, PTLType, 
+               DeviceProfileLogKey, DropID, SourceKey, Storerkey, SKU, LOC, ExpectedQTY, QTY)
+            VALUES (
+               @cIPAddress, @cCartID, @cPosition, '0', 'CART',
+               @cDPLKey, '', @cLoadKey, @cStorerKey, @cSKU, @cLOC, @nQTY, 0)
+   
+            IF @@ERROR <> ''
+            BEGIN
+               SET @nErrNo = 115959
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo ,@cLangCode ,'DSP') --INS PTL Fail
+               GOTO RollBackTran
+            END
+         END
+
          FETCH NEXT FROM @curPD INTO @cLOC, @cSKU, @nQTY
       END
 
