@@ -1,0 +1,12 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
+
+CREATE  VIEW [BI].[V_ChannelInv] AS  
+SELECT *
+FROM dbo.V_ChannelInv (nolock)
+GO
+GRANT SELECT ON  [BI].[V_ChannelInv] TO [JReportRole]
+GO

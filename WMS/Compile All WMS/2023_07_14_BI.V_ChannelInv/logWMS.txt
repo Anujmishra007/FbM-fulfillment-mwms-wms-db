@@ -1,0 +1,75 @@
+: CN LIVE : CNWMS 
+--  BI.V_ChannelInv.sql 
+Msg 2714, Level 16, State 3, Server WPSHWMSMADBPD01, Procedure V_ChannelInv, Line 3
+There is already an object named 'V_ChannelInv' in the database.
+----------------------------------------------------------------------------- 
+: CN LIVE : HNM 
+--  BI.V_ChannelInv.sql 
+Msg 2714, Level 16, State 3, Server WVSHWMSHMDBPD01, Procedure V_ChannelInv, Line 3
+There is already an object named 'V_ChannelInv' in the database.
+----------------------------------------------------------------------------- 
+: CN LIVE : NKE 
+--  BI.V_ChannelInv.sql 
+Msg 2714, Level 16, State 3, Server WVSHWMSNKDBPD01, Procedure V_ChannelInv, Line 3
+There is already an object named 'V_ChannelInv' in the database.
+----------------------------------------------------------------------------- 
+: CN LIVE : SKE 
+--  BI.V_ChannelInv.sql 
+Msg 2714, Level 16, State 3, Server WVSHWMSSKDBPD01, Procedure V_ChannelInv, Line 3
+There is already an object named 'V_ChannelInv' in the database.
+----------------------------------------------------------------------------- 
+: CN LIVE : UAM 
+--  BI.V_ChannelInv.sql 
+Msg 2714, Level 16, State 3, Server WVSHWMSUADBPD01, Procedure V_ChannelInv, Line 3
+There is already an object named 'V_ChannelInv' in the database.
+----------------------------------------------------------------------------- 
+: CN LIVE : SEP 
+--  BI.V_ChannelInv.sql 
+Msg 2714, Level 16, State 3, Server VMACWMSVIPDBPD1, Procedure V_ChannelInv, Line 3
+There is already an object named 'V_ChannelInv' in the database.
+----------------------------------------------------------------------------- 
+: AUWMS 
+--  BI.V_ChannelInv.sql 
+----------------------------------------------------------------------------- 
+: DUWMS 
+--  BI.V_ChannelInv.sql 
+----------------------------------------------------------------------------- 
+: HK HKWMS 
+--  BI.V_ChannelInv.sql 
+Msg 2714, Level 16, State 3, Server WVWSWMSHKDBPD01, Procedure V_ChannelInv, Line 3
+There is already an object named 'V_ChannelInv' in the database.
+----------------------------------------------------------------------------- 
+: IN LIVE : INWMS 
+--  BI.V_ChannelInv.sql 
+----------------------------------------------------------------------------- 
+: ID LIVE : IDWMS 
+--  BI.V_ChannelInv.sql 
+----------------------------------------------------------------------------- 
+: JP LIVE : JPWMS 
+--  BI.V_ChannelInv.sql 
+----------------------------------------------------------------------------- 
+: KR LIVE : KRWMS 
+--  BI.V_ChannelInv.sql 
+----------------------------------------------------------------------------- 
+: MY LIVE : MYWMS 
+--  BI.V_ChannelInv.sql 
+Msg 2714, Level 16, State 3, Server WVWSWMSMYDBPD01, Procedure V_ChannelInv, Line 3
+There is already an object named 'V_ChannelInv' in the database.
+----------------------------------------------------------------------------- 
+: PH LIVE : PHWMS 
+--  BI.V_ChannelInv.sql 
+----------------------------------------------------------------------------- 
+: SG LIVE : SGWMS 
+--  BI.V_ChannelInv.sql 
+Msg 2714, Level 16, State 3, Server WVWSWMSSGDBPD01, Procedure V_ChannelInv, Line 3
+There is already an object named 'V_ChannelInv' in the database.
+----------------------------------------------------------------------------- 
+: TH LIVE : THWMS 
+--  BI.V_ChannelInv.sql 
+----------------------------------------------------------------------------- 
+: TW LIVE : TWWMS 
+--  BI.V_ChannelInv.sql 
+----------------------------------------------------------------------------- 
+: VN LIVE : VNWMS 
+--  BI.V_ChannelInv.sql 
+----------------------------------------------------------------------------- 

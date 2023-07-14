@@ -1,0 +1,154 @@
+: CN UAT : CNWMS 
+--  BI.V_ChannelInv.sql 
+Msg 2714, Level 16, State 3, Server WVSHWMSMADBUT01, Procedure V_ChannelInv, Line 3
+There is already an object named 'V_ChannelInv' in the database.
+Msg 15151, Level 16, State 1, Server WVSHWMSMADBUT01, Line 1
+Cannot find the user 'HyperionAdmin', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: CN UAT : CNWMS_HM1 
+--  BI.V_ChannelInv.sql 
+Msg 2714, Level 16, State 3, Server WVSHWMSMADBUT01, Procedure V_ChannelInv, Line 3
+There is already an object named 'V_ChannelInv' in the database.
+Msg 15151, Level 16, State 1, Server WVSHWMSMADBUT01, Line 1
+Cannot find the user 'HyperionAdmin', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: CN UAT : CNWMS_HM2 
+--  BI.V_ChannelInv.sql 
+Msg 208, Level 16, State 1, Server WVSHWMSMADBUT01, Procedure V_ChannelInv, Line 5
+Invalid object name 'dbo.V_ChannelInv'.
+Msg 15151, Level 16, State 1, Server WVSHWMSMADBUT01, Line 1
+Cannot find the user 'HyperionAdmin', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: AU UAT : AUWMS 
+--  BI.V_ChannelInv.sql 
+Msg 15151, Level 16, State 1, Server WVWSWMSAUDBUT01, Line 1
+Cannot find the user 'HyperionAdmin', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: DU UAT : DUWMS 
+--  BI.V_ChannelInv.sql 
+----------------------------------------------------------------------------- 
+: HK UAT : HKWMS 
+--  BI.V_ChannelInv.sql 
+Msg 2714, Level 16, State 3, Server WVWSWMSMYDBUT01, Procedure V_ChannelInv, Line 3
+There is already an object named 'V_ChannelInv' in the database.
+Msg 15151, Level 16, State 1, Server WVWSWMSMYDBUT01, Line 1
+Cannot find the user 'HyperionAdmin', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: ID UAT : IDWMS 
+--  BI.V_ChannelInv.sql 
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS 
+--  BI.V_ChannelInv.sql 
+Msg 208, Level 16, State 1, Server WVWSWMSINDBUT01, Procedure V_ChannelInv, Line 5
+Invalid object name 'dbo.V_ChannelInv'.
+Msg 15151, Level 16, State 1, Server WVWSWMSINDBUT01, Line 1
+Cannot find the object 'V_ChannelInv', because it does not exist or you do not have permission.
+Msg 15151, Level 16, State 1, Server WVWSWMSINDBUT01, Line 1
+Cannot find the object 'V_ChannelInv', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS_HM1 
+--  BI.V_ChannelInv.sql 
+Msg 208, Level 16, State 1, Server WVWSWMSINDBUT01, Procedure V_ChannelInv, Line 5
+Invalid object name 'dbo.V_ChannelInv'.
+Msg 15151, Level 16, State 1, Server WVWSWMSINDBUT01, Line 1
+Cannot find the object 'V_ChannelInv', because it does not exist or you do not have permission.
+Msg 15151, Level 16, State 1, Server WVWSWMSINDBUT01, Line 1
+Cannot find the object 'V_ChannelInv', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS_HM2 
+--  BI.V_ChannelInv.sql 
+Msg 208, Level 16, State 1, Server WVWSWMSINDBUT01, Procedure V_ChannelInv, Line 5
+Invalid object name 'dbo.V_ChannelInv'.
+Msg 15151, Level 16, State 1, Server WVWSWMSINDBUT01, Line 1
+Cannot find the object 'V_ChannelInv', because it does not exist or you do not have permission.
+Msg 15151, Level 16, State 1, Server WVWSWMSINDBUT01, Line 1
+Cannot find the object 'V_ChannelInv', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS 
+--  BI.V_ChannelInv.sql 
+Msg 15151, Level 16, State 1, Server WVWSWMSKRDBUT01, Line 1
+Cannot find the user 'HyperionAdmin', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS_HM1 
+--  BI.V_ChannelInv.sql 
+Msg 208, Level 16, State 1, Server WVWSWMSKRDBUT01, Procedure V_ChannelInv, Line 5
+Invalid object name 'dbo.V_ChannelInv'.
+Msg 15151, Level 16, State 1, Server WVWSWMSKRDBUT01, Line 1
+Cannot find the object 'V_ChannelInv', because it does not exist or you do not have permission.
+Msg 15151, Level 16, State 1, Server WVWSWMSKRDBUT01, Line 1
+Cannot find the object 'V_ChannelInv', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS_HM2 
+--  BI.V_ChannelInv.sql 
+Msg 208, Level 16, State 1, Server WVWSWMSKRDBUT01, Procedure V_ChannelInv, Line 5
+Invalid object name 'dbo.V_ChannelInv'.
+Msg 15151, Level 16, State 1, Server WVWSWMSKRDBUT01, Line 1
+Cannot find the object 'V_ChannelInv', because it does not exist or you do not have permission.
+Msg 15151, Level 16, State 1, Server WVWSWMSKRDBUT01, Line 1
+Cannot find the object 'V_ChannelInv', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS 
+--  BI.V_ChannelInv.sql 
+Msg 15151, Level 16, State 1, Server WVWSWMSKRDBUT01, Line 1
+Cannot find the user 'HyperionAdmin', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS_HM1 
+--  BI.V_ChannelInv.sql 
+Msg 208, Level 16, State 1, Server WVWSWMSKRDBUT01, Procedure V_ChannelInv, Line 5
+Invalid object name 'dbo.V_ChannelInv'.
+Msg 15151, Level 16, State 1, Server WVWSWMSKRDBUT01, Line 1
+Cannot find the object 'V_ChannelInv', because it does not exist or you do not have permission.
+Msg 15151, Level 16, State 1, Server WVWSWMSKRDBUT01, Line 1
+Cannot find the object 'V_ChannelInv', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS_HM2 
+--  BI.V_ChannelInv.sql 
+Msg 208, Level 16, State 1, Server WVWSWMSKRDBUT01, Procedure V_ChannelInv, Line 5
+Invalid object name 'dbo.V_ChannelInv'.
+Msg 15151, Level 16, State 1, Server WVWSWMSKRDBUT01, Line 1
+Cannot find the object 'V_ChannelInv', because it does not exist or you do not have permission.
+Msg 15151, Level 16, State 1, Server WVWSWMSKRDBUT01, Line 1
+Cannot find the object 'V_ChannelInv', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: MY UAT : MYWMS 
+--  BI.V_ChannelInv.sql 
+Msg 2714, Level 16, State 3, Server WVWSWMSMYDBUT01, Procedure V_ChannelInv, Line 3
+There is already an object named 'V_ChannelInv' in the database.
+Msg 15151, Level 16, State 1, Server WVWSWMSMYDBUT01, Line 1
+Cannot find the user 'HyperionAdmin', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: PH UAT : PHWMS 
+--  BI.V_ChannelInv.sql 
+Msg 15151, Level 16, State 1, Server WVWSWMSMYDBUT01, Line 1
+Cannot find the user 'HyperionAdmin', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: SG UAT : SGWMS 
+--  BI.V_ChannelInv.sql 
+Msg 2714, Level 16, State 3, Server WVWSWMSMYDBUT01, Procedure V_ChannelInv, Line 3
+There is already an object named 'V_ChannelInv' in the database.
+Msg 15151, Level 16, State 1, Server WVWSWMSMYDBUT01, Line 1
+Cannot find the user 'HyperionAdmin', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: TH UAT : THWMS 
+--  BI.V_ChannelInv.sql 
+Msg 15151, Level 16, State 1, Server WVWSWMSTHDBUT01, Line 1
+Cannot find the user 'HyperionAdmin', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: TH UAT : THWMS_NIKE 
+--  BI.V_ChannelInv.sql 
+Msg 15151, Level 16, State 1, Server WVWSWMSTHDBUT01, Line 1
+Cannot find the user 'HyperionAdmin', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: TW UAT : TWWMS 
+--  BI.V_ChannelInv.sql 
+----------------------------------------------------------------------------- 
+: TW UAT : TWWMS_NSC 
+--  BI.V_ChannelInv.sql 
+Msg 15151, Level 16, State 1, Server WVWSWMSMYDBUT01, Line 1
+Cannot find the user 'HyperionAdmin', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: VN UAT : VNWMS 
+--  BI.V_ChannelInv.sql 
+Msg 15151, Level 16, State 1, Server WVWSWMSTHDBUT01, Line 1
+Cannot find the user 'HyperionAdmin', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
