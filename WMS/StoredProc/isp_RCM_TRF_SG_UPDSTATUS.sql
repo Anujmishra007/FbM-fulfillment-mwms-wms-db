@@ -11,7 +11,7 @@ GO
 /*                                                                      */
 /* Purpose: WMS-22937 - SG - Multi Storer - Transfer Finalization       */
 /*                                                                      */
-/* Called By: Transfer Dymaic RCM configure at listname 'RCMConfig'     */
+/* Called By: Transfer Dynamic RCM configure at listname 'RCMConfig'    */
 /*                                                                      */
 /* Parameters:                                                          */
 /*                                                                      */
@@ -24,6 +24,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author    Ver.  Purposes                                */
 /* 07-Jul-2023  WLChooi   1.0   DevOps Scripts Combine                  */
+/* 14-Jul-2023  WLChooi   1.1   Bug Fix for WMS-22937 (WL01)            */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[isp_RCM_TRF_SG_UPDSTATUS]
    @c_Transferkey NVARCHAR(10)
@@ -73,7 +74,8 @@ BEGIN
                   WHERE LISTNAME = 'TRRCM_AUTH'
                   AND Short = 'UNFINZ'
                   AND Storerkey = @c_Storerkey
-                  AND Code LIKE '%' + @c_Username + '%' )
+                  --AND Code LIKE '%' + @c_Username + '%' )   --WL01
+                  AND @c_Username LIKE '%' + Code + '%' )   --WL01
       BEGIN
          SET @n_Authorised = 1
       END
