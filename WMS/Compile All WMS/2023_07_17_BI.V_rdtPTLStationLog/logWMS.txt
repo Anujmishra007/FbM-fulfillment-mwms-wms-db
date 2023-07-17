@@ -1,0 +1,63 @@
+: CN LIVE : CNWMS 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: CN LIVE : HNM 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: CN LIVE : NKE 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: CN LIVE : SKE 
+--  V_rdtPTLStationLog.sql 
+Msg 15151, Level 16, State 1, Server WVSHWMSSKDBPD01, Line 1
+Cannot find the object 'V_rdtPTLStationLog', because it does not exist or you do not have permission.
+----------------------------------------------------------------------------- 
+: CN LIVE : UAM 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: CN LIVE : SEP 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: AUWMS 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: DUWMS 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: HK HKWMS 
+--  V_rdtPTLStationLog.sql 
+Msg 2714, Level 16, State 3, Server WVWSWMSHKDBPD01, Procedure V_rdtPTLStationLog, Line 12
+There is already an object named 'V_rdtPTLStationLog' in the database.
+----------------------------------------------------------------------------- 
+: IN LIVE : INWMS 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: ID LIVE : IDWMS 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: JP LIVE : JPWMS 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: KR LIVE : KRWMS 
+--  V_rdtPTLStationLog.sql 
+Msg 2714, Level 16, State 3, Server WVWSWMSKRDBPD01, Procedure V_rdtPTLStationLog, Line 12
+There is already an object named 'V_rdtPTLStationLog' in the database.
+----------------------------------------------------------------------------- 
+: MY LIVE : MYWMS 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: PH LIVE : PHWMS 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: SG LIVE : SGWMS 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: TH LIVE : THWMS 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: TW LIVE : TWWMS 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: VN LIVE : VNWMS 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 

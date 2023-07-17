@@ -1,0 +1,80 @@
+: CN UAT : CNWMS 
+--  V_rdtPTLStationLog.sql 
+Msg 2714, Level 16, State 3, Server WVSHWMSMADBUT01, Procedure V_rdtPTLStationLog, Line 12
+There is already an object named 'V_rdtPTLStationLog' in the database.
+----------------------------------------------------------------------------- 
+: CN UAT : CNWMS_HM1 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: CN UAT : CNWMS_HM2 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: AU UAT : AUWMS 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: DU UAT : DUWMS 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: HK UAT : HKWMS 
+--  V_rdtPTLStationLog.sql 
+Msg 2714, Level 16, State 3, Server WVWSWMSMYDBUT01, Procedure V_rdtPTLStationLog, Line 12
+There is already an object named 'V_rdtPTLStationLog' in the database.
+----------------------------------------------------------------------------- 
+: ID UAT : IDWMS 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS_HM1 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: IN UAT : INWMS_HM2 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS_HM1 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: JP UAT : JPWMS_HM2 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS 
+--  V_rdtPTLStationLog.sql 
+Msg 2714, Level 16, State 3, Server WVWSWMSKRDBUT01, Procedure V_rdtPTLStationLog, Line 12
+There is already an object named 'V_rdtPTLStationLog' in the database.
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS_HM1 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: KR UAT : KRWMS_HM2 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: MY UAT : MYWMS 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: PH UAT : PHWMS 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: SG UAT : SGWMS 
+--  V_rdtPTLStationLog.sql 
+Msg 2714, Level 16, State 3, Server WVWSWMSMYDBUT01, Procedure V_rdtPTLStationLog, Line 12
+There is already an object named 'V_rdtPTLStationLog' in the database.
+----------------------------------------------------------------------------- 
+: TH UAT : THWMS 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: TH UAT : THWMS_NIKE 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: TW UAT : TWWMS 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: TW UAT : TWWMS_NSC 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
+: VN UAT : VNWMS 
+--  V_rdtPTLStationLog.sql 
+----------------------------------------------------------------------------- 
