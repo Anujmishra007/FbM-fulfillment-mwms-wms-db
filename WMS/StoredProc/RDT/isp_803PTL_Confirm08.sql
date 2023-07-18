@@ -16,6 +16,7 @@ GO
 /* 03-06-2022 1.1  Ung        WMS-19779 Change codelkup to printer group      */
 /* 23-11-2022 1.2  yeekung    Add error trigger                               */
 /* 22-12-2022 1.3  yeekung    WMS-21394 Add udf02 as loc (yeekung02)          */
+/* 22-06-2023 1.4  yeekung    WMS-22930 Tune performance (yeekung03)          */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [PTL].[isp_803PTL_Confirm08] (
@@ -697,6 +698,10 @@ BEGIN CATCH
 
    SET @nSPErrNo = @nErrNo
    SET @cSPErrMSG = @cErrMsg
+
+      -- Check error that cause trans become uncommitable, that need to rollback
+   IF XACT_STATE() = -1 --(yeekung03)
+      ROLLBACK TRAN
 
    IF isnull(@cInputValue,'')=''
       SET @cInputValue='1'
