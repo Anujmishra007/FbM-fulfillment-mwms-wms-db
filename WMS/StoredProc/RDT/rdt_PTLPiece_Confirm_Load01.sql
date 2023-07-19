@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_PTLPiece_Confirm_Load01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_PTLPiece_Confirm_Load01]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -15,9 +11,11 @@ GO
 /*                                                                      */
 /* Date       Rev  Author      Purposes                                 */
 /* 2020-01-16 1.0  James       WMS-11427. Created                       */
+/* 2023-06-06 1.2  James       WMS-22665 Enhance the way to lookup      */
+/*                             device name instead of hardcoded(james01)*/
 /************************************************************************/
 
-CREATE PROC rdt.rdt_PTLPiece_Confirm_Load01 (
+CREATE OR ALTER PROC rdt.rdt_PTLPiece_Confirm_Load01 (
     @nMobile      INT
    ,@nFunc        INT
    ,@cLangCode    NVARCHAR( 3)
@@ -67,7 +65,11 @@ BEGIN
    DECLARE @cLogicalName      NVARCHAR( 10)    
    DECLARE @nQty              INT
    DECLARE @cDropID           NVARCHAR( 20)
-      
+   DECLARE @cPrefix           NVARCHAR( 10)
+   DECLARE @nPosStart         INT
+   DECLARE @nPosLength        INT
+   DECLARE @nCustomPrefix     INT = 0
+   
    SET @cDisplay = '' 
    SET @nQty = 1  -- Piece scanning
    SET @cNewDropID = ''
@@ -107,15 +109,38 @@ BEGIN
       SELECT @cOrderKey = OrderKey
       FROM dbo.PICKDETAIL WITH (NOLOCK)
       WHERE PickDetailKey = @cPickDetailKey
-      
-      -- 1 cart only allow 1 orderkey
-      SELECT TOP 1 @cNewDropID = DropID
-      FROM dbo.PICKDETAIL WITH (NOLOCK)
-      WHERE Storerkey = @cStorerKey
-      AND   OrderKey = @cOrderKey
-      AND   DropID LIKE 'CART%'
-      ORDER BY DropID DESC
 
+      SELECT 
+         @cPrefix = Code,
+         @nPosStart = Short,
+         @nPosLength = Long
+      FROM dbo.CODELKUP WITH (NOLOCK) 
+      WHERE LISTNAME = 'PTLPREFMAP' 
+      AND   Storerkey = @cStorerKey
+      AND   code2 = @nFunc
+
+      IF @cPrefix <> '' AND CAST( @nPosStart AS INT) > 0 AND CAST( @nPosLength AS INT) > 0
+      BEGIN
+      	SET @nCustomPrefix = 1
+      	
+         SELECT TOP 1 @cNewDropID = DropID    
+         FROM dbo.PICKDETAIL WITH (NOLOCK)    
+         WHERE Storerkey = @cStorerKey
+         AND   OrderKey = @cOrderKey    
+         AND   DropID LIKE RTRIM( @cPrefix) + '%'    
+         ORDER BY 1 DESC
+      END
+      ELSE
+      BEGIN
+         -- 1 cart only allow 1 orderkey
+         SELECT TOP 1 @cNewDropID = DropID
+         FROM dbo.PICKDETAIL WITH (NOLOCK)
+         WHERE Storerkey = @cStorerKey
+         AND   OrderKey = @cOrderKey
+         AND   DropID LIKE 'CART%'
+         ORDER BY DropID DESC
+      END
+      
       IF ISNULL( @cNewDropID, '') = ''
       BEGIN
          -- Get logical name    
@@ -132,7 +157,10 @@ BEGIN
       END
       ELSE
       BEGIN
-         SET @cPosition = SUBSTRING( @cNewDropID, 6, 2)
+      	IF @nCustomPrefix = 1
+      	   SET @cPosition = SUBSTRING( @cNewDropID, @nPosStart, @nPosLength)
+      	ELSE
+            SET @cPosition = SUBSTRING( @cNewDropID, 6, 2)
       END
       
       -- Exact match
