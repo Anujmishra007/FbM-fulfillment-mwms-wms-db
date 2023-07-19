@@ -18,7 +18,7 @@ EXECUTE rdt.rdtAddScn 3120, 'ENG',
    ,@cLine09 = 'REF NO:'   -- WMS-15906
    ,@cLine10 = '%40i03'
    ,@cLine14 = '%e'
-   
+   ,@nFunc = 840
  
 -- 3121 = ?? screen
 DELETE rdt.RDTScn WHERE Scn = 3121 AND Lang_Code = 'ENG'
@@ -29,7 +29,8 @@ EXECUTE rdt.rdtAddScn 3121, 'ENG',
    ,@cLine05 = 'TRACK NO:'
    ,@cLine06 = '%18i02'
    ,@cLine14 = '%e'
-
+   ,@nFunc = 840
+   
 -- 3122 = ?? screen
 DELETE rdt.RDTScn WHERE Scn = 3122 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 3122, 'ENG',
@@ -47,7 +48,8 @@ EXECUTE rdt.rdtAddScn 3122, 'ENG',
    ,@cLine12 = ''
    ,@cLine13 = '%20d15'
    ,@cLine14 = '%e'
-
+   ,@nFunc = 840
+   
 /* -- For CN only SOS320585
    UPDATE rdt.rdtScnDetail SET TextColor = 'yellow' WHERE Scn = 3122 AND FieldNo = 15
 */
@@ -67,6 +69,7 @@ EXECUTE rdt.rdtAddScn 3123, 'ENG',
    ,@cLine12 = '%10i05    KG'
    ,@cLine13 = '%20d15' -- WMS-13913
    ,@cLine14 = '%e'
+   ,@nFunc = 840
    
 -- 3124 = ?? screen
 DELETE rdt.RDTScn WHERE Scn = 3124 AND Lang_Code = 'ENG'
@@ -79,7 +82,8 @@ EXECUTE rdt.rdtAddScn 3124, 'ENG',
    ,@cLine05 = 'Press ENTER'
    ,@cLine06 = 'For next Pick&Pack'
    ,@cLine14 = '%e'   
-
+   ,@nFunc = 840
+   
 -- 3125 used by Multi sku screen
 
 -- WMS13965
@@ -93,7 +97,24 @@ EXECUTE rdt.rdtAddScn 3126, 'ENG',
    ,@cLine05 = '2 = NO'
    ,@cLine07 = 'OPTION: %01i01'
    ,@cLine14 = '%e'   
-
+   ,@nFunc = 840
+   
+--WMS-22084 - Capture Info
+DELETE rdt.RDTScn WHERE Scn = 3127 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 3127, 'ENG'
+   ,@cLine01 = '%20d01'
+   ,@cLine02 = '%20i02'
+   ,@cLine03 = '%20d03'
+   ,@cLine04 = '%20i04'
+   ,@cLine05 = '%20d05'
+   ,@cLine06 = '%20i06'
+   ,@cLine07 = '%20d07'
+   ,@cLine08 = '%20i08'
+   ,@cLine09 = '%20d09'
+   ,@cLine10 = '%20i10'
+   ,@cLine14 = '%e'
+   ,@nFunc = 840
+   
 -- update rdt.rdtscn with function id   
 UPDATE RDT.RDTSCN SET FUNC = 840 WHERE SCN BETWEEN 3120 AND 3129
    
