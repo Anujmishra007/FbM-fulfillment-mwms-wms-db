@@ -6,12 +6,13 @@ GO
 
 /******************************************************************************/
 /* Store procedure: rdt_1584RcvCfm01                                          */
-/* Copyright: LF Logistics                                                    */
+/* Copyright: Maersk                                                          */
 /*                                                                            */
 /* Purpose: Receive using SSCC                                                */
 /*                                                                            */
 /* Date        Author    Ver.  Purposes                                       */
 /* 2023-03-02  Ung       1.0   WMS-21709 Created                              */
+/* 2023-07-12  Ung       1.1   WMS-23064 Save ASRS pallet to UCC.UserDefine04 */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_1584RcvCfm01 (
@@ -221,7 +222,7 @@ BEGIN
    	         Receiptkey = @cReceiptKey,
    	         ReceiptLineNumber = @cReceiptLineNumberOutput,
    	         Status = '1', 
-   	         UserDefined03 = @cID, 
+   	         UserDefined04 = @cID, 
    	         EditDate = GETDATE(), 
    	         EditWho = SUSER_NAME()
    	      WHERE Storerkey = @cStorerKey
