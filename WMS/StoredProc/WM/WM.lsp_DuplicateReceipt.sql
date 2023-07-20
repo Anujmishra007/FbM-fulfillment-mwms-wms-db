@@ -1,32 +1,30 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_DuplicateReceipt]')
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-DROP PROCEDURE [WM].[lsp_DuplicateReceipt]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/************************************************************************/
-/* Store procedure: WMS                                                 */
-/* Copyright      : LFLogistics                                         */
-/* Written by:                                                          */                                                                                  
-/*                                                                      */                                                                                  
-/* Purpose: Dynamic lottable                                            */
-/*                                                                      */                                                                                  
-/* Called By: SCE                                                       */                                                                                  
-/*          :                                                           */                                                                                  
-/* PVCS Version: 1.3                                                    */                                                                                  
-/*                                                                      */                                                                                  
-/* Version: 8.0                                                         */                                                                                  
-/*                                                                      */                                                                                  
-/* Date        Author   Rev   Purposes                                  */
-/* 7-Feb-2018  SHONG    1.1   Bug Fixing                                */
-/* 28-Dec-2020 SWT01    1.2   Adding Begin Try/Catch                    */
-/* 15-JAN-2021 Wan01    1.3   Add Big Outer Begin try/Catch             */
+/*************************************************************************/
+/* Store procedure: WMS                                                  */
+/* Copyright      : LFLogistics                                          */
+/* Written by:                                                           */                                                                                  
+/*                                                                       */                                                                                  
+/* Purpose: Dynamic lottable                                             */
+/*                                                                       */                                                                                  
+/* Called By: SCE                                                        */                                                                                  
+/*          :                                                            */                                                                                  
+/* PVCS Version: 1.3                                                     */                                                                                  
+/*                                                                       */                                                                                  
+/* Version: 8.0                                                          */                                                                                  
+/*                                                                       */                                                                                  
+/* Date        Author   Rev   Purposes                                   */
+/* 7-Feb-2018  SHONG    1.1   Bug Fixing                                 */
+/* 28-Dec-2020 SWT01    1.2   Adding Begin Try/Catch                     */
+/* 15-JAN-2021 Wan01    1.3   Add Big Outer Begin try/Catch              */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
-/************************************************************************/
-CREATE PROCEDURE [WM].[lsp_DuplicateReceipt]
+/* 3-MAR-2023  NJOW01   1.4   WMS-21889 add validation to check finalize */
+/*                            status.                                    */
+/* 3-MAR-2023  NJOW01   1.4   DEVOPS Combine Script                      */
+/*************************************************************************/
+CREATE OR ALTER PROCEDURE [WM].[lsp_DuplicateReceipt]
    @c_ReceiptKey  NVARCHAR(10)
   ,@c_IncludeFinalizedItem CHAR(1) = 'N'
    ,@c_NewReceiptKey NVARCHAR(10) ='' OUTPUT
@@ -36,26 +34,82 @@ CREATE PROCEDURE [WM].[lsp_DuplicateReceipt]
    ,@c_UserName NVARCHAR(128)=''
 AS
 BEGIN
-    SET NOCOUNT ON
-    SET QUOTED_IDENTIFIER OFF
-    SET ANSI_NULLS OFF
-    SET CONCAT_NULL_YIELDS_NULL OFF
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
-    SET @b_Success = 1
+   SET @b_Success = 1
+   SET @n_Err = 0                  
+   
+   DECLARE @c_StorerKey             NVARCHAR(15) = ''
+         ,@c_Sku                   NVARCHAR(20) = ''
+         ,@c_UOM                   NVARCHAR(10) = ''
+         ,@c_PackKey               NVARCHAR(10) = ''
+         ,@n_BeforeReceivedQty     INT          = 0
+         ,@n_QtyExpected           INT          = 0
+         ,@c_Facility              NVARCHAR(15) = ''
+         ,@c_CustomisedSplitLine   NVARCHAR(30) = ''
+         ,@n_PalletCnt             INT = 0
+         ,@b_ZeroExpected          BIT = 0
+         ,@b_ByExpected            BIT = 0
+         ,@n_QtyToBeSplitted       INT = 0
+         ,@n_RemainQty             INT = 0
+         ,@c_LastReceiveLineNo     NVARCHAR(5) = ''
+         ,@c_NextReceiveLineNo     NVARCHAR(5) = ''
+         ,@n_RemainingQtyExpected  INT = 0
+         ,@n_RemainQtyReceived     INT = 0
+         ,@n_InsertBeforeReceivedQty INT = 0
+         ,@n_InsertQtyExpected       INT = 0
+         ,@c_ReceiptLineNumber NVARCHAR(5)=''
+         ,@c_AllowDuplicateFinalizeASNOnly NVARCHAR(30) = '' --NJOW01
+         ,@c_AllowDuplicateFinalizeASNOnly_OPT5 NVARCHAR(4000) = '' --NJOW01
+         ,@c_AllowDuplicateZeroQty NVARCHAR(10) = '' --NJOW01
+         --,@c_NewReceiptKey           NVARCHAR(10) = ''
 
-    --EXECUTE AS LOGIN=@c_UserName
-    SET @n_Err = 0
-    
-    IF SUSER_SNAME() <> @c_UserName       --(Wan01) - START
-    BEGIN
-       EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+   --NJOW01 S
+   SELECT @c_Storerkey = Storerkey,
+          @c_Facility = Facility
+   FROM RECEIPT (NOLOCK)
+   WHERE Receiptkey = @c_Receiptkey
+   
+   SELECT @c_AllowDuplicateFinalizeASNOnly = SC.Authority,
+          @c_AllowDuplicateFinalizeASNOnly_OPT5 = SC.Option5
+   FROM dbo.fnc_GetRight2(@c_Facility, @c_Storerkey,'','AllowDuplicateFinalizeASNOnly') AS SC
+   
+   SELECT @c_AllowDuplicateZeroQty = dbo.fnc_GetParamValueFromString('@c_AllowDuplicateZeroQty', @c_AllowDuplicateFinalizeASNOnly_OPT5, @c_AllowDuplicateZeroQty)
+   
+   IF @c_AllowDuplicateFinalizeASNOnly = '1'
+   BEGIN
+      IF NOT EXISTS (SELECT 1 
+                     FROM RECEIPT R (NOLOCK)
+                     JOIN RECEIPTDETAIL RD (NOLOCK) ON R.Receiptkey = RD.Receiptkey
+                     WHERE R.Receiptkey = @c_Receiptkey
+                     AND (RD.FinalizeFlag = 'Y' OR R.ASNStatus = '9'))
+      BEGIN
+         SET @b_Success = 0
+         SET @n_Err = 550602
+         SET @c_ErrMsg = 'Cannot duplicate from Receipt# ' + @c_ReceiptKey +
+               ': ASN Is Not Finalized (AllowDuplicateFinalizeASNOnly).'
+         GOTO EXIT_SP      	
+      END      
+      ELSE
+         SET @c_IncludeFinalizedItem = 'Y'
+   END
+   --NJOW01 E
 
-       IF @n_Err <> 0
-       BEGIN
-         GOTO EXIT_SP
-       END
+   --EXECUTE AS LOGIN=@c_UserName
+   
+   IF SUSER_SNAME() <> @c_UserName       --(Wan01) - START
+   BEGIN
+      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
 
-       EXECUTE AS LOGIN = @c_UserName
+      IF @n_Err <> 0
+      BEGIN
+        GOTO EXIT_SP
+      END
+
+      EXECUTE AS LOGIN = @c_UserName
    END  
                                      --(Wan01) - END
    BEGIN TRY -- SWT01 - Begin Outer Begin Try
@@ -63,7 +117,9 @@ BEGIN
       IF NOT EXISTS(
       SELECT 1 FROM RECEIPTDETAIL RD WITH (NOLOCK)
       WHERE ReceiptKey = @c_ReceiptKey
-      AND   ((RD.QtyExpected - RD.QtyReceived) > 0)
+      AND   ((RD.QtyExpected - RD.QtyReceived) > 0 
+             OR (@c_AllowDuplicateZeroQty = 'Y' AND RD.QtyExpected = 0 AND RD.QtyReceived = 0)  --NJOW01
+            )
       AND   RD.FinalizeFlag = CASE WHEN @c_IncludeFinalizedItem = 'Y'
                                        THEN RD.FinalizeFlag
                                     ELSE 'N'
@@ -75,28 +131,6 @@ BEGIN
                ': No receipt line items with more Quantity Expected than Quantity Received.'
          GOTO EXIT_SP
       END
-
-      DECLARE @c_StorerKey             NVARCHAR(15) = ''
-            ,@c_Sku                   NVARCHAR(20) = ''
-            ,@c_UOM                   NVARCHAR(10) = ''
-            ,@c_PackKey               NVARCHAR(10) = ''
-            ,@n_BeforeReceivedQty     INT          = 0
-            ,@n_QtyExpected           INT          = 0
-            ,@c_Facility              NVARCHAR(15) = ''
-            ,@c_CustomisedSplitLine   NVARCHAR(30) = ''
-            ,@n_PalletCnt             INT = 0
-            ,@b_ZeroExpected          BIT = 0
-            ,@b_ByExpected            BIT = 0
-            ,@n_QtyToBeSplitted       INT = 0
-            ,@n_RemainQty             INT = 0
-            ,@c_LastReceiveLineNo     NVARCHAR(5) = ''
-            ,@c_NextReceiveLineNo     NVARCHAR(5) = ''
-            ,@n_RemainingQtyExpected  INT = 0
-            ,@n_RemainQtyReceived     INT = 0
-            ,@n_InsertBeforeReceivedQty INT = 0
-            ,@n_InsertQtyExpected       INT = 0
-            ,@c_ReceiptLineNumber NVARCHAR(5)=''
-            --,@c_NewReceiptKey           NVARCHAR(10) = ''
 
       SET @c_NewReceiptKey = ''
       EXEC nspg_GetKey
@@ -213,7 +247,9 @@ BEGIN
          SELECT ReceiptLineNumber
          FROM RECEIPTDETAIL WITH (NOLOCK)
          WHERE ReceiptKey = @c_ReceiptKey
-         AND   QtyExpected > QtyReceived
+         AND   (QtyExpected > QtyReceived
+                OR (@c_AllowDuplicateZeroQty = 'Y' AND QtyExpected = 0 AND QtyReceived = 0)  --NJOW01         
+               )
          ORDER BY ReceiptLineNumber
 
          OPEN CUR_RECEIPT_DET
@@ -283,7 +319,9 @@ BEGIN
                FROM RECEIPTDETAIL AS r WITH(NOLOCK)
                WHERE r.ReceiptKey = @c_ReceiptKey
                AND   r.ReceiptLineNumber = @c_ReceiptLineNumber
-               AND   r.QtyExpected > r.QtyReceived
+               AND   (r.QtyExpected > r.QtyReceived
+                     OR (@c_AllowDuplicateZeroQty = 'Y' AND r.QtyExpected = 0 AND r.QtyReceived = 0)  --NJOW01                        
+                     )
                AND   r.FinalizeFlag =
                                  CASE WHEN @c_IncludeFinalizedItem = 'Y'
                                           THEN FinalizeFlag
