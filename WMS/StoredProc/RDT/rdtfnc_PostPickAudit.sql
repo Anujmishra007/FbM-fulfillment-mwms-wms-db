@@ -88,6 +88,7 @@ GO
 /* 13-12-2022 5.9 Yeekung     WMS-20944 fix nvarchar(5)->6  (yeekung07) */
 /* 07-02-2022 6.0 YeeKung     WMS-21562 customize refno to support      */
 /*                            trackingno  (yeekung08)                   */
+/* 30-05-2023 6.1 James       WMS-22322 Enhance Qty convertion (james13)*/
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PostPickAudit] (
@@ -227,6 +228,7 @@ DECLARE
    @cPPADefaultPQTY                 NVARCHAR( 1),
    @cExtendedRefNoSP                NVARCHAR(20),
    @cMultiColScan                   NVARCHAR(20),
+   @nDecodeQty                      INT,
    
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
@@ -2716,6 +2718,14 @@ BEGIN
          WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
             COMMIT TRAN
 
+      IF @nPUOM_Div > 0
+      BEGIN
+         SET @nPQTY = rdt.rdtConvUOMQTY( @cStorer, @cSKU, @cMQTY, 6, @cPUOM)
+         
+         IF @cMQTY%@nPUOM_Div = 0
+            SET @nMQTY = 0
+      END
+
       -- Top up check QTY
       SET @nPQTY_CHK = @nPQTY_CHK + @nPQTY
       SET @nMQTY_CHK = @nMQTY_CHK + @nMQTY
@@ -3550,6 +3560,12 @@ BEGIN
    WHERE SKU.StorerKey = @cStorer
       AND SKU.SKU = @cSKU
 
+   SET @nQTY_PPA  = 0    
+   SET @nQTY_CHK  = 0    
+   SET @nMQTY_CHK = 0    
+   SET @nQTY_PPA  = 0    
+   SET @nPQTY_PPA = 0    
+   SET @nMQTY_PPA = 0    
 
    -- Convert QTY
    IF @cConvertQTYSP <> '' AND EXISTS( SELECT TOP 1 1 FROM dbo.sysobjects WHERE name = @cConvertQTYSP AND type = 'P')
