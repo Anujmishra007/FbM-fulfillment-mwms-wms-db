@@ -1,6 +1,3 @@
-if exists (select * from  dbo.sysobjects where id = object_id(N'[rdt].[rdt_1663ExtVal09]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_1663ExtVal09]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -16,7 +13,7 @@ GO
 /* 2020-03-27 1.0  James    WMS-12611 Created                                 */
 /******************************************************************************/
 
-CREATE PROC [RDT].[rdt_1663ExtVal09](
+CREATE OR ALTER PROC [RDT].[rdt_1663ExtVal09](
    @nMobile       INT,
    @nFunc         INT,
    @cLangCode     NVARCHAR( 3),
@@ -193,11 +190,12 @@ DECLARE @cORDType       NVARCHAR( 10),
 Quit:
 
 END
+  
 GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-GRANT EXECUTE ON RDT.rdt_1663ExtVal09 TO NSQL
+GRANT EXECUTE ON RDT.rdt_1663ExtVal24 TO NSQL
 GO
