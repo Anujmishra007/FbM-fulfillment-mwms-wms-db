@@ -56,7 +56,8 @@ EXECUTE rdt.rdtAddScn 5683, 'ENG'
    ,@cLine04 = 'CARTON ID:'
    ,@cLine05 = '%20d02'
    ,@cLine06 = '%20i03'
-   ,@cLine07 = '%20d04' -- WMS-17429
+   ,@cLine07 = '%20d06' -- WMS-22212
+   ,@cLine08 = '%20d04' -- WMS-17429
    ,@cLine14 = '%e'
    ,@nFunc = 640
 
@@ -64,7 +65,7 @@ EXECUTE rdt.rdtAddScn 5683, 'ENG'
 DELETE rdt.RDTScn WHERE Scn = 5684 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 5684, 'ENG'
    ,@cLine01 = 'CLUSTER PICKING  CPK'
-   ,@cLine02 = '%20d09' -- WMS-17429
+   ,@cLine02 = '%20d13' -- WMS-17429/WMS-22212
    ,@cLine03 = 'CARTON ID:'
    ,@cLine04 = '%20d01'
    ,@cLine05 = 'SKU/UPC'
@@ -72,9 +73,10 @@ EXECUTE rdt.rdtAddScn 5684, 'ENG'
    ,@cLine07 = '%20d03'
    ,@cLine08 = '%20d04'
    ,@cLine09 = '%20i05'
-   ,@cLine10 = ''
-   ,@cLine11 = 'PICK QTY: %03i06'
-   ,@cLine12 = 'PICKED/TOTAL: %03d07 / %03d08'
+   ,@cLine10 = '%07d06 %05d09  %05d10'   -- WMS-22212
+   ,@cLine11 = 'QTY: %07i11 %07i12'       -- WMS-22212
+   ,@cLine12 = 'PICKED/TOTAL:%03d07 /%03d08'
+   ,@cLine13 = '%20d15' -- WMS-22212
    ,@cLine14 = '%e'
    ,@nFunc = 640
 
@@ -140,5 +142,6 @@ EXECUTE rdt.rdtAddScn 5689, 'ENG'
    ,@cLine05 = '%20d02'
    ,@cLine06 = '%20i03'
    ,@cLine07 = '%20d04' 
+   ,@cLine08 = '%20d06'
    ,@cLine14 = '%e'
    ,@nFunc = 640   
