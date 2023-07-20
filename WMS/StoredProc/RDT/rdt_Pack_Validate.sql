@@ -15,6 +15,7 @@ GO
 /* 02-04-2018 1.3  Ung         WMS-3845 Add ValidateSP                  */
 /* 13-09-2019 1.4  Ung         WMS-9050 Add Pick, PackDetail filter     */
 /* 27-03-2023 1.5  Ung         WMS-21946 Add multi PickDetail.Status    */
+/* 13-07-2023 1.6  Ung         WMS-23050 Change error message to popup  */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_Pack_Validate (
@@ -224,6 +225,8 @@ BEGIN
             BEGIN
                SET @nErrNo = 100353
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU NotIn PSNO
+               EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', @nErrNo, @cErrMsg
+               SET @cErrMsg = ''
                GOTO Quit
             END
          END
@@ -241,6 +244,8 @@ BEGIN
             BEGIN
                SET @nErrNo = 100369
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKUNotInDropID
+               EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', @nErrNo, @cErrMsg
+               SET @cErrMsg = ''
                GOTO Quit
             END
          END
@@ -285,6 +290,8 @@ BEGIN
          BEGIN
             SET @nErrNo = 100354
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Over pack
+            EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', @nErrNo, @cErrMsg
+            SET @cErrMsg = ''
             GOTO Quit
          END
       END
@@ -354,6 +361,8 @@ BEGIN
             BEGIN
                SET @nErrNo = 100358
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU NotIn PSNO
+               EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', @nErrNo, @cErrMsg
+               SET @cErrMsg = ''
                GOTO Quit
             END
          END
@@ -370,6 +379,8 @@ BEGIN
             BEGIN
                SET @nErrNo = 100370
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKUNotInDropID
+               EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', @nErrNo, @cErrMsg
+               SET @cErrMsg = ''
                GOTO Quit
             END
          END
@@ -412,6 +423,8 @@ BEGIN
          BEGIN
             SET @nErrNo = 100359
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Over pack
+            EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', @nErrNo, @cErrMsg
+            SET @cErrMsg = ''
             GOTO Quit
          END
       END
@@ -458,6 +471,8 @@ BEGIN
             BEGIN
                SET @nErrNo = 100362
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU NotIn PSNO
+               EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', @nErrNo, @cErrMsg
+               SET @cErrMsg = ''
                GOTO Quit
             END
          END
@@ -475,6 +490,8 @@ BEGIN
             BEGIN
                SET @nErrNo = 100371
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKUNotInDropID
+               EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', @nErrNo, @cErrMsg
+               SET @cErrMsg = ''
                GOTO Quit
             END
          END
@@ -519,6 +536,8 @@ BEGIN
          BEGIN
             SET @nErrNo = 100363
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Over pack
+            EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', @nErrNo, @cErrMsg
+            SET @cErrMsg = ''
             GOTO Quit
          END
       END
@@ -560,6 +579,8 @@ BEGIN
             BEGIN
                SET @nErrNo = 100366
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU NotIn PSNO
+               EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', @nErrNo, @cErrMsg
+               SET @cErrMsg = ''
                GOTO Quit
             END
          END
@@ -576,6 +597,8 @@ BEGIN
             BEGIN
                SET @nErrNo = 100372
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKUNotInDropID
+               EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', @nErrNo, @cErrMsg
+               SET @cErrMsg = ''
                GOTO Quit
             END
          END
@@ -618,6 +641,8 @@ BEGIN
          BEGIN
             SET @nErrNo = 100367
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Over pack
+            EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', @nErrNo, @cErrMsg
+            SET @cErrMsg = ''
             GOTO Quit
          END
       END
