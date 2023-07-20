@@ -1,4 +1,4 @@
-/****** Object:  StoredProcedure [BI].[nsp_STD_SORegister]    Script Date: 6/15/2023 3:55:25 PM ******/
+/****** Object:  StoredProcedure [BI].[nsp_STD_SORegister]    Script Date: 7/20/2023 2:22:38 PM ******/
 SET ANSI_NULLS OFF
 GO
 
@@ -6,23 +6,20 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /***********************************************************************************************/  
---PH_JReport - SORegister - Stored Procedure (DATAMART) https://jiralfl.atlassian.net/browse/WMS-17685
-/* Updates:  https://jiralfl.atlassian.net/browse/WMS-19253				
-			 https://jiralfl.atlassian.net/browse/WMS-19276			
-			 https://jiralfl.atlassian.net/browse/WMS-19967									   */  
-/* Date            Author      Ver.    Purposes                                                */  
-/* 06-Aug-2021     gywong       1.0     Created                                                */
-/* 18-Mar-2022     gywong       1.1     Modified                                               */
-/* 21-Mar-2022     gywong       1.2     Modified  (add additional column)                      */
-/* 14-Jun-2022	   gywong		1.3		Added new parameters								   */
-/* 15-MAR-2023	   JarekLIM		1.4		Added new parameters	https://jiralfl.atlassian.net/browse/WMS-21816	*/
-/* 11-MAY-2023	   JarekLIM		1.5		Add Column and Add BI.V_DM_STORER						*/
-/* 15-JUNE-2023	   JarekLIM		1.6		Add Column AL13.Customergroupcode	https://jiralfl.atlassian.net/browse/WMS-22848	*/
-/***********************************************************************************************/ 
+--PH_JReport - SORegister - Stored Procedure (PHWMS) https://jiralfl.atlassian.net/browse/WMS-20217
+/* Updates:                                                                                    */  
+/* Date            Author		Ver.    Purposes                                                */  
+/* 12-JUL-2022     JAM			1.0     For Operations daily report                            */
+/* 07/13/2022      Crisnah      1.1     Migrate also to PHWMS. this is usual daily report from operations*/ 
+/* 03/08/2023      JayCanete    1.2     Add condition https://jiralfl.atlassian.net/browse/WMS-21816 */ 
+/* 11-MAY-2023	   JarekLIM		1.5		Add Column and Add BI.V_DM_STORER	https://jiralfl.atlassian.net/browse/WMS-21816	*/
+/* 15-June-2023	   JarekLIM		1.6		Add Column Customergroupcode	https://jiralfl.atlassian.net/browse/WMS-22848	*/
+/* 20-JULY-2023	   CRISNAH		1.7		PH_LogiReport - Alter Stored Procedure - SORegister - 14Jun2023	https://jiralfl.atlassian.net/browse/WMS-22848	*/
+/***********************************************************************************************/  
 -- Test EXEC BI.nsp_STD_SORegister 'UNILEVER', 'UMDC', 'EDITDATE','2022-03-17', '2022-03-18','''9'''
  --      EXEC BI.nsp_STD_SORegister NULL, NULL, NULL, NULL
  --      EXEC BI.nsp_STD_SORegister '', '', '', ''
-CREATE OR ALTER             PROC [BI].[nsp_STD_SORegister]
+CREATE OR ALTER                 PROC [BI].[nsp_STD_SORegister]
      @Param_Generic_StorerKey NVARCHAR(50) 
     ,@Param_Generic_Facility NVARCHAR(50) 
 	, @Param_Orders_DateDataType NVARCHAR(50)=''
@@ -43,34 +40,35 @@ BEGIN
 		SET @Param_Orders_Status = '''0'''
 
 	IF (SELECT COUNT(COLUMN_NAME) FROM INFORMATION_SCHEMA.COLUMNS 
-		WHERE TABLE_NAME = 'V_DM_ORDERS' and data_type='datetime' 
+		WHERE TABLE_NAME = 'V_ORDERS' and data_type='datetime' 
 		AND COLUMN_NAME=@Param_Orders_DateDataType) = 0
 	BEGIN SET @Param_Orders_DateDataType = 'ADDDATE' END	
 
 		SET @Param_Orders_Status = REPLACE(REPLACE(@Param_Orders_Status,'[',''),']','')
 
-   DECLARE @Debug	BIT = 0
+   DECLARE  @Debug	BIT = 0
 		 , @LogId   INT
-       , @Schema    NVARCHAR(128) = ISNULL(OBJECT_SCHEMA_NAME(@@PROCID),'')
-       , @Proc      NVARCHAR(128) = ISNULL(OBJECT_NAME(@@PROCID),'')
-       , @cParamOut NVARCHAR(4000)= ''
-	   , @cParamIn  NVARCHAR(4000)= '{ "Param_Generic_StorerKey":"'  +@Param_Generic_StorerKey+'"'
+         , @Schema    NVARCHAR(128) = ISNULL(OBJECT_SCHEMA_NAME(@@PROCID),'')
+         , @Proc      NVARCHAR(128) = ISNULL(OBJECT_NAME(@@PROCID),'') --NAME OF SP
+         , @cParamOut NVARCHAR(4000)= ''
+			, @cParamIn  NVARCHAR(4000)= '{ "Param_Generic_StorerKey":"'  +@Param_Generic_StorerKey+'"'
                                     + ',"Param_Generic_Facility":"'    +@Param_Generic_Facility+'"'
 									+ ' "Param_Orders_DateDataType ":"'    +@Param_Orders_DateDataType +'", '
                                     + ' "Param_Generic_StartDate":"'+CONVERT(NVARCHAR(19),@Param_Generic_StartDate,121)+'",'
 									+ ' "Param_Generic_EndDate":"'+CONVERT(NVARCHAR(19),@Param_Generic_EndDate,121)+'", '
-                                    --+ ' "Param_Orders_AddDateStart":"'+CONVERT(NVARCHAR(19),@Param_Orders_AddDateStart,121)+'",'
-									--+ ' "Param_Orders_AddDateEnd":"'+CONVERT(NVARCHAR(19),@Param_Orders_AddDateEnd,121)+'", '
 									+ ' "Param_Orders_Status":"'    +@Param_Orders_Status+'" '
                                     + ' }'
 
-   EXEC BI.dspExecInit @ClientId = @PARAM_GENERIC_STORERKEY
+   EXEC BI.dspExecInit @ClientId = @PARAM_GENERIC_StorerKey
    , @Proc = @Proc
    , @ParamIn = @cParamIn
    , @LogId = @LogId OUTPUT
    , @Debug = @Debug OUTPUT
    , @Schema = @Schema;
-	DECLARE @Stmt NVARCHAR(MAX) = '' -- for dynamic SQL only
+
+DECLARE @Stmt NVARCHAR(MAX) = '' -- for dynamic SQL only
+	
+/****** START YOUR SELECT STATEMENT HERE USE @Stmt FOR DYNAMIC SQL ******/
 
       SET @Stmt ='
 SELECT 
@@ -188,7 +186,7 @@ SELECT
 ,AL8.ExternMbolKey			AS  ''87PalletKey''			
 ,AL8.UserDefine05				AS  ''88ContainerKey''		
 ,AL9.Descr						AS  ''89WaveDescription''	
-,''''				   AS  ''90CartonID''			
+,AL2.M_Company				   AS  ''90CartonID''			
 
 ,SUM(AL1.ShippedQty)			AS  ''91ShippedQty_PC''	
 ,SUM(AL1.ShippedQty/NULLIF(AL6.CaseCnt,0))			AS  ''92ShippedQty_CS''			
@@ -207,28 +205,28 @@ SELECT
 ,AL2.IntermodalVehicle
 ,AL13.Secondary							as ''106ConsigneeSecondary'' 
 ,AL13.Susr4							    as ''107ConsigneeSUSR4''	 
-,AL4.Class							    as ''108SKUClass''
-,AL13.Customergroupcode
+,MAX(AL4.Class)							    as ''108SKUClass''
+,AL13.MarketSegment	   AS  ''109ConsigneeMarketSegment''
+,AL13.Customergroupcode as ''Customergroupcode''
 '
 
  SET @stmt = @stmt + '
- FROM BI.V_DM_ORDERS AL2 (NOLOCK)
- JOIN BI.V_DM_STORER AL3 (NOLOCK) ON (AL3.StorerKey=AL2.StorerKey)
- JOIN BI.V_DM_ORDERDETAIL AL1 (NOLOCK) ON (AL2.OrderKey=AL1.OrderKey)
- JOIN BI.V_DM_SKU AL4 (NOLOCK) ON (AL1.StorerKey=AL4.StorerKey AND AL1.Sku=AL4.Sku) 
- JOIN BI.V_DM_PACK AL6 (NOLOCK) ON (AL4.PACKKey=AL6.PackKey) 
- LEFT JOIN BI.V_DM_CODELKUP AL5 (NOLOCK) ON (AL4.SUSR3=AL5.Code AND AL5.LISTNAME=''PRINCIPAL'') 
- LEFT JOIN BI.V_DM_OrderInfo AL7 (NOLOCK) ON (AL7.Orderkey=AL1.OrderKey)
- LEFT JOIN BI.V_DM_MBOL AL8 (NOLOCK) ON (AL2.MBOLKey=AL8.MbolKey)						
- LEFT JOIN BI.V_DM_WAVE AL9 (NOLOCK) ON (AL2.UserDefine09=AL9.WaveKey)					
- LEFT JOIN BI.V_DM_PackHeader AL10 (NOLOCK) ON (AL2.OrderKey=AL10.OrderKey AND AL2.Storerkey = AL10.Storerkey)			
- LEFT JOIN BI.V_DM_PackDetail AL11 (NOLOCK) ON (AL10.PickSlipNo=AL11.PickSlipNo and AL1.Sku=AL11.sku)	
- LEFT JOIN BI.V_DM_PICKHEADER AL12 (NOLOCK) ON (AL2.OrderKey = AL12.OrderKey)
- LEFT JOIN BI.V_DM_STORER AL13 (NOLOCK) ON (AL2.Consigneekey = AL13.Storerkey) 
+ FROM BI.V_ORDERS AL2 (NOLOCK)
+ JOIN BI.V_STORER AL3 (NOLOCK) ON (AL3.StorerKey=AL2.StorerKey)
+ JOIN BI.V_ORDERDETAIL AL1 (NOLOCK) ON (AL2.OrderKey=AL1.OrderKey)
+ JOIN BI.V_SKU AL4 (NOLOCK) ON (AL1.StorerKey=AL4.StorerKey AND AL1.Sku=AL4.Sku) 
+ JOIN BI.V_PACK AL6 (NOLOCK) ON (AL4.PACKKey=AL6.PackKey) 
+ LEFT OUTER JOIN BI.V_CODELKUP AL5 (NOLOCK) ON (AL4.SUSR3=AL5.Code AND AL5.LISTNAME=''PRINCIPAL'') 
+ LEFT OUTER JOIN BI.V_OrderInfo AL7 (NOLOCK) ON (AL7.Orderkey=AL1.OrderKey)
+ LEFT JOIN BI.V_MBOL AL8 (NOLOCK) ON  (AL2.MBOLKey=AL8.MbolKey)						
+ LEFT OUTER JOIN BI.V_WAVE AL9 (NOLOCK) ON  (AL2.UserDefine09=AL9.WaveKey)					
+ LEFT OUTER JOIN BI.V_PackHeader AL10 (NOLOCK) ON (AL2.OrderKey=AL10.OrderKey AND AL2.Storerkey = AL10.Storerkey)			
+ -- LEFT OUTER JOIN BI.V_PackDetail AL11 (NOLOCK) ON (AL10.PickSlipNo=AL11.PickSlipNo and AL1.Sku=AL11.sku)	
+ LEFT OUTER JOIN BI.V_PICKHEADER AL12 (NOLOCK) ON (AL2.OrderKey = AL12.OrderKey) 
+ LEFT JOIN BI.V_STORER AL13 (NOLOCK) ON (AL2.Consigneekey = AL13.Storerkey) 
 
  WHERE ((AL2.StorerKey=  '''+ @Param_Generic_StorerKey +'''
  AND AL2.Facility= '''+ @Param_Generic_Facility +'''
- AND AL1.'+@Param_Orders_DateDataType+' >= '''+CONVERT(char(19),@Param_Generic_StartDate,121) +'''  
  AND AL2.'+@Param_Orders_DateDataType+' >= '''+CONVERT(char(19),@Param_Generic_StartDate,121) +'''   
  AND AL2.'+@Param_Orders_DateDataType+' <=  '''+ CONVERT(char(19),@Param_Generic_EndDate,121) +'''))   
 AND AL2.STATUS IN ('+@Param_Orders_Status+') 
@@ -306,8 +304,9 @@ AND AL2.STATUS IN ('+@Param_Orders_Status+')
 , AL8.ExternMbolKey		
 , AL9.Descr					
 , AL8.UserDefine05		
-, AL9.Descr					
--- , AL11.LabelNo	
+, AL9.Descr	
+, AL2.M_Company
+--, AL11.LabelNo		
 -- ,AL12.Pickheaderkey
 ,AL10.Adddate
 ,AL10.Editdate
@@ -315,15 +314,17 @@ AND AL2.STATUS IN ('+@Param_Orders_Status+')
 ,AL2.IntermodalVehicle
 ,AL13.Secondary		
 ,AL13.Susr4							 
-,AL4.Class,AL13.Customergroupcode
+-- ,AL4.Class
+,AL13.MarketSegment	
+,AL13.Customergroupcode
 
 '
 
 /*************************** FOOTER *******************************/
-
-   EXEC BI.dspExecStmt @Stmt = @Stmt
+   EXEC BI.dspExecStmt @Stmt = @stmt
    , @LogId = @LogId
    , @Debug = @Debug;
+
 
 END -- Procedure 
 
@@ -337,7 +338,7 @@ GO --*/
 EXECUTE AS LOGIN ='JREPORTUSERPH'
 
 SELECT SUSER_SNAME(), USER_NAME()
-EXEC BI.nsp_STD_SORegister 'UNILEVER', 'UMDC', 'EDITDATE','2023-06-01', '2023-06-15','''9'''
+EXEC BI.nsp_STD_SORegister 'PH02', 'IDC','EditDate', '2022-07-01', '2023-07-13','''9'''
 EXEC BI.nsp_STD_SORegister '','','','','',''
 EXEC BI.nsp_STD_SORegister NULL,NULL,NULL,NULL,NULL,NULL
 
