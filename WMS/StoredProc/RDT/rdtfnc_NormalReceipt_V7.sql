@@ -42,6 +42,8 @@ GO
 /* 2022-08-04 3.7  YeeKung  WMS-20273 Add ExtendedupdateSP in step 4 (yeekung05)  */
 /* 2023-05-05 3.8  YeeKung  WMS-22369 Add output for barcode in decodesp (yeekung06)*/
 /*									 Add Close Pallet	scn										   */
+/* 2023-04-27 3.9  James    WMS-22265 Enhance DefaultToLocSP (james07)           */
+/*                          Add ExtendedValidateSP to step 1                     */
 /*********************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_NormalReceipt_V7] (
@@ -167,7 +169,8 @@ DECLARE
    @nBulkSNOQTY         INT,
    @cScanBarcode        NVARCHAR( 2000),  --(cc01)
    @cClosePallet        NVARCHAR( 20), --(yeekung06)
-
+   @cDefaultToLocSP     NVARCHAR( 20),
+   
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
    @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),
@@ -801,6 +804,100 @@ BEGIN
          SET @cCheckIDInUse = ''
 
       SET @cFlowThruScreen = rdt.RDTGetConfig( @nFunc, 'FlowThruScreen', @cStorerKey)
+
+      SET @cDefaultToLOCSP = rdt.RDTGetConfig( @nFunc, 'DefaultToLOCSP', @cStorerKey)
+
+      -- Extended validate
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cSKU, ' +
+               ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
+               ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
+               ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
+               ' @nQTY, @cReasonCode, @cSuggToLOC, @cFinalLOC, @cReceiptLineNumber, ' +
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile      INT,           ' +
+               '@nFunc        INT,           ' +
+               '@cLangCode    NVARCHAR( 3),  ' +
+               '@nStep        INT,           ' +
+               '@nInputKey    INT,           ' +
+               '@cFacility    NVARCHAR( 5),  ' +
+               '@cStorerKey   NVARCHAR( 15), ' +
+               '@cReceiptKey  NVARCHAR( 10), ' +
+               '@cPOKey       NVARCHAR( 10), ' +
+               '@cLOC         NVARCHAR( 10), ' +
+               '@cID          NVARCHAR( 18), ' +
+               '@cSKU         NVARCHAR( 20), ' +
+               '@cLottable01  NVARCHAR( 18), ' +
+               '@cLottable02  NVARCHAR( 18), ' +
+               '@cLottable03  NVARCHAR( 18), ' +
+               '@dLottable04  DATETIME,      ' +
+               '@dLottable05  DATETIME,      ' +
+               '@cLottable06  NVARCHAR( 30), ' +
+               '@cLottable07  NVARCHAR( 30), ' +
+               '@cLottable08  NVARCHAR( 30), ' +
+               '@cLottable09  NVARCHAR( 30), ' +
+               '@cLottable10  NVARCHAR( 30), ' +
+               '@cLottable11  NVARCHAR( 30), ' +
+               '@cLottable12  NVARCHAR( 30), ' +
+               '@dLottable13  DATETIME,      ' +
+               '@dLottable14  DATETIME,      ' +
+               '@dLottable15  DATETIME,      ' +
+               '@nQTY         INT,           ' +
+               '@cReasonCode  NVARCHAR( 10), ' +
+               '@cSuggToLOC   NVARCHAR( 10), ' +
+               '@cFinalLOC    NVARCHAR( 10), ' +
+               '@cReceiptLineNumber NVARCHAR( 10), ' +
+               '@nErrNo             INT            OUTPUT, ' +
+               '@cErrMsg            NVARCHAR( 20)  OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cSKU,
+               @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+               @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+               @nQTY, @cReasonCode, @cSuggToLOC, @cFinalLOC, @cReceiptLineNumber,
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Step_1_Fail
+         END
+      END
+
+      -- (james07)
+      IF @cDefaultToLOCSP <> '' AND
+         EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDefaultToLOCSP AND type = 'P')
+      BEGIN
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cDefaultToLOCSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, ' +
+               ' @cDefaultToLOC OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,           ' +
+               '@nInputKey       INT,           ' +
+               '@cFacility       NVARCHAR( 5),  ' +
+               '@cStorerKey      NVARCHAR( 15), ' +
+               '@cReceiptKey     NVARCHAR( 10), ' +
+               '@cPOKey          NVARCHAR( 10), ' +
+               '@cDefaultToLOC   NVARCHAR( 10)  OUTPUT, ' +
+               '@nErrNo          INT            OUTPUT, ' +
+               '@cErrMsg         NVARCHAR( 20)  OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, 
+               @cDefaultToLOC OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Step_1_Fail
+         END
+      END
 
       -- DefaultToLOC, by facility
       IF @cDefaultToLOC = ''
