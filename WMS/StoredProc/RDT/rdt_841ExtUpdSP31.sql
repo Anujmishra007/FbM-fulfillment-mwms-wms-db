@@ -13,6 +13,7 @@ GO
 /* Date        Rev  Author   Purposes                                   */
 /* 2022-10-24  1.0  James    WMS-21041. Created                         */
 /* 2023-02-15  1.1  YeeKung  WMS-21774 Add shiplabel (yeekung01)        */
+/* 2023-06-15  1.2  YeeKung   WMS-22632 Add ZPL shiplabel print(yeekung02)*/
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_841ExtUpdSP31] (
@@ -82,6 +83,9 @@ BEGIN
           ,@cShowTrackNoScn   NVARCHAR(1)
           ,@nRowRef           INT
           ,@cPickDetailKey    NVARCHAR(10)
+          ,@cSHIPZPLLBL       NVARCHAR(20)
+
+   DECLARE @tSHIPZPLLBL    VariableTable
 
 
    SET @nErrNo   = 0
@@ -1098,6 +1102,29 @@ BEGIN
                    @cLabelNo
                END
 
+               IF @cShipperKey = 'FEDEX'
+               BEGIN
+                  SET @cSHIPZPLLBL = rdt.RDTGetConfig( @nFunc, 'SHIPZPLLBL', @cStorerKey)  
+                  IF @cSHIPZPLLBL = '0'  
+                     SET @cSHIPZPLLBL = ''  
+         	
+         	      IF @cSHIPZPLLBL <> ''
+         	      BEGIN
+                     INSERT INTO @tSHIPZPLLBL (Variable, Value) VALUES ( '@cOrderKey',   @cOrderkey)
+               
+                     -- Print label
+                     EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, 1, @cFacility, @cStorerkey, @cLabelPrinter, '',
+                        @cSHIPZPLLBL, -- Report type
+                        @tSHIPZPLLBL, -- Report params
+                        'rdt_841ExtUpdSP31',
+                        @nErrNo  OUTPUT,
+                        @cErrMsg OUTPUT
+
+                     IF @nErrNo <> 0
+                        GOTO Quit
+                  END
+               END
+
                SET @nTotalPickQty = 0
                SET @cOrderKeyOut = @cOrderkey
 
@@ -1372,6 +1399,29 @@ BEGIN
                       @cErrMsg OUTPUT,
                       @cOrderkey,
                       @cLabelNo
+                  END
+
+                  IF @cShipperKey = 'FEDEX'
+                  BEGIN
+                     SET @cSHIPZPLLBL = rdt.RDTGetConfig( @nFunc, 'SHIPZPLLBL', @cStorerKey)  
+                     IF @cSHIPZPLLBL = '0'  
+                        SET @cSHIPZPLLBL = ''  
+         	
+         	         IF @cSHIPZPLLBL <> ''
+         	         BEGIN
+                        INSERT INTO @tSHIPZPLLBL (Variable, Value) VALUES ( '@cOrderKey',   @cOrderkey)
+               
+                        -- Print label
+                        EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, 1, @cFacility, @cStorerkey, @cLabelPrinter, '',
+                           @cSHIPZPLLBL, -- Report type
+                           @tSHIPZPLLBL, -- Report params
+                           'rdt_841ExtUpdSP31',
+                           @nErrNo  OUTPUT,
+                           @cErrMsg OUTPUT
+
+                        IF @nErrNo <> 0
+                           GOTO Quit
+                     END
                   END
                END
             END
