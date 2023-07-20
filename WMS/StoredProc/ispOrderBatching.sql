@@ -92,6 +92,7 @@ GO
 /* 21-Jul-2022  WLChooi 3.7   WMS-20271 - Remove SKU.BUSR7 filter (WL01)*/
 /* 14-Jul-2022  WLChooi 3.8   WMS-20707 - Extend @c_rptprocess (WL02)   */
 /* 16-Mar-2023  NJOW13  3.9   WMS-21961 Allow configure orders sorting  */
+/* 12-Jun-2023  WinSern 4.0   Add Status<'3'when update pickdetail(ws01)*/     
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispOrderBatching]
@@ -1299,7 +1300,7 @@ BEGIN
                             END
                   , TrafficCop = NULL
                   , PickSlipNo = @c_BatchCode  --NJOW04
-                  , [Status]   = CASE WHEN @c_updatepick = 'Y' THEN '3' ELSE [Status] END  --(Wan03)
+                  , [Status]   = CASE WHEN @c_updatepick = 'Y' AND [Status] < '3' THEN '3' ELSE [Status] END  --(Wan03)       --(ws01)
                   , EditWho    = SUSER_SNAME()
                   , EditDate   = GETDATE()
                     WHERE PICKDETAIL.Pickdetailkey = @c_Pickdetailkey
@@ -1427,7 +1428,7 @@ BEGIN
                          END
                , TrafficCop = NULL
                , PickSlipNo = @c_BatchCode  --NJOW04
-               , [Status]   = CASE WHEN @c_updatepick = 'Y' THEN '3' ELSE [Status] END  --(Wan03)
+               , [Status]   = CASE WHEN @c_updatepick = 'Y' AND [Status] < '3' THEN '3' ELSE [Status] END  --(Wan03)    --(ws01)
                , EditWho    = SUSER_SNAME()
                , EditDate   = GETDATE()
                WHERE PICKDETAIL.Pickdetailkey = @c_Pickdetailkey

@@ -38,12 +38,22 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    SELECT KITDETAIL.Sku,
-          KITDETAIL.ExpectedQty / @n_ExpectedQty AS ComponentQty
-   FROM KITDETAIL (NOLOCK), KIT (NOLOCK)
+          KITDETAIL.ExpectedQty / @n_ExpectedQty AS ComponentQty,
+          BILLOFMATERIAL.ComponentSku,          --WZ01         
+          BILLOFMATERIAL.Qty,                   --WZ01
+          BILLOFMATERIAL.Notes                  --WZ01
+   FROM KITDETAIL (NOLOCK) 
+   JOIN KIT (NOLOCK) ON (KIT.KITKey = KITDETAIL.KITKey)
+   JOIN BILLOFMATERIAL (NOLOCK) ON (KITDETAIL.Sku = BILLOFMATERIAL.Sku)     --WZ01
    WHERE ( KITDETAIL.KitKey = KIT.kitKey )
-	AND	( KITDETAIL.[Type] = 'F' )
+	AND	( KITDETAIL.[Type] = 'T' )
 	AND   ( KIT.[Status]     < '9' )
 	AND   ( KIT.Kitkey       = @c_KITKey )
+   GROUP BY KITDETAIL.Sku,                            --WZ01
+            KITDETAIL.ExpectedQty / @n_ExpectedQty,   --WZ01
+            BILLOFMATERIAL.ComponentSku,              --WZ01         
+            BILLOFMATERIAL.Qty,                       --WZ01
+            BILLOFMATERIAL.Notes                      --WZ01
 
 END
 GO
