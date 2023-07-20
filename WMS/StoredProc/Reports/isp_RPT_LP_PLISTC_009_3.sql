@@ -75,7 +75,7 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTC_009_3] (
          LOC.Putawayzone,  
          LOC.LogicalLocation
      --ORDER BY LOC.Putawayzone,CASE WHEN ISNULL(loc.LogicalLocation,'') = '' THEN 0 ELSE 1 END, Loc.LogicalLocation, PICKDETAIL.Loc,PICKDETAIL.Sku    
-     ORDER BY Loc.LogicalLocation
+     ORDER BY Loc.LogicalLocation, PICKDETAIL.Loc
     
   
   
@@ -83,8 +83,8 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTC_009_3] (
 
 END -- procedure    
 GO
-GRANT EXECUTE ON [dbo].[isp_RPT_LP_PLISTC_009_3] TO [NSQL] 
+GRANT EXECUTE ON [dbo].[isp_RPT_LP_PLISTC_009_3] TO nSQL 
 GO
-GRANT EXECUTE ON [dbo].[isp_RPT_LP_PLISTC_009_3] TO LogiReportRoleWM
+GRANT EXECUTE ON [dbo].[isp_RPT_LP_PLISTC_009_3] TO JReportRole
 GO
 

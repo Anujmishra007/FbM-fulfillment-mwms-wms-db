@@ -21,7 +21,8 @@ GO
 /*                                                                      */        
 /* Updates:                                                             */        
 /* Date         Author   Ver  Purposes                                  */
-/* 01-DEC-2022  WZPang   1.0  DevOps Combine Script                     */     
+/* 01-DEC-2022  WZPang   1.0  DevOps Combine Script                     */
+/* 17-MAY-2023  WZPang   1.1  WMS-22397 - Change Sorting                */
 /************************************************************************/        
 CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTN_022] (
       @c_Loadkey       NVARCHAR(10)  
@@ -704,7 +705,7 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTN_022] (
    BEGIN  
       SELECT PickSlipNo  
            , LoadKey  
-           , OrderKey  
+           , #temp_pick.OrderKey                --WZ01 
            , ConsigneeKey  
            , Company  
            , Addr1  
@@ -765,8 +766,10 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTN_022] (
                   ELSE 0 END AS EA  
            , ShowCustomFormula  
            , LogicalLoc  
-      FROM #temp_pick 
-	   ORDER BY ExternOrderKey 
+      FROM #temp_pick
+      LEFT JOIN WAVEDETAIL (NOLOCK) ON #temp_pick.Orderkey = WaVEDETAIL.OrderKey          --WZ01
+	   ORDER BY WAVEDETAIL.WaveDetailKey, LogicalLoc, Loc                                             --WZ01
+	   --ORDER BY ExternOrderKey, LogicalLoc, Loc                                          --WZ01
         
    END  
   
@@ -785,7 +788,7 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTN_022] (
       
 END -- procedure    
 GO
-GRANT EXECUTE ON [dbo].[isp_RPT_LP_PLISTN_022] TO [NSQL] 
+GRANT EXECUTE ON [dbo].[isp_RPT_LP_PLISTN_022] TO nSQL 
 GO
-GRANT EXECUTE ON [dbo].[isp_RPT_LP_PLISTN_022] TO LogiReportRoleWM
+GRANT EXECUTE ON [dbo].[isp_RPT_LP_PLISTN_022] TO JReportRole
 GO
