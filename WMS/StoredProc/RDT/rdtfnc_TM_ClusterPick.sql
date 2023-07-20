@@ -1,12 +1,7 @@
-if exists (select * from sys.objects where object_id = object_id(N'[rdt].[rdtfnc_TM_ClusterPick]') and OBJECTPROPERTY(object_id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdtfnc_TM_ClusterPick]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
-
   
 /***************************************************************************/  
 /* Store procedure: rdtfnc_TM_ClusterPick                                  */  
@@ -25,9 +20,12 @@ GO
 /* 2021-08-26   1.3  James    WMS-17689 Add skip step 1 & 2 (james02)      */
 /* 2022-05-17   1.4  James    WMS-19545 Fix skip task not getting new task */
 /*                            issue (james03)                              */
+/* 2023-04-19   1.5  James    WMS-22212 Allow blank suggested cart id and  */
+/*                            assign cart id to the available groupkey     */
+/*                            Allow different UOM qty input (james04)      */
 /***************************************************************************/  
   
-CREATE PROC [RDT].[rdtfnc_TM_ClusterPick](  
+CREATE OR ALTER PROC [RDT].[rdtfnc_TM_ClusterPick](  
    @nMobile    int,  
    @nErrNo     int  OUTPUT,  
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max  
@@ -141,6 +139,21 @@ DECLARE
    @cNewCartonID        NVARCHAR( 20),
    @cConfirmToLoc       NVARCHAR( 1),
    @cCurrentSuggLoc     NVARCHAR( 10),
+   @cAssignGroupKeyWhenNoSuggCartId    NVARCHAR( 1),
+   @cScanDevicePosition NVARCHAR( 1),
+   @cSuggDPosition      NVARCHAR( 20),
+   @cDPosition          NVARCHAR( 20),
+   @cPUOM               NVARCHAR(  1),
+   @cPUOM_Desc          NCHAR( 5),
+   @cMUOM_Desc          NCHAR( 5),
+   @nPUOM_Div           INT,
+   @nPQTY               INT,
+   @nMQTY               INT,
+   @nPQtyCursor         INT,
+   @cSkipToLoc          NVARCHAR( 1),
+   @nAfterStep          INT,
+   @curRelTask          CURSOR,
+   @cRelTaskKey         NVARCHAR( 10),
    
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),  @cFieldAttr01 NVARCHAR( 1),  
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),  @cFieldAttr02 NVARCHAR( 1),  
@@ -177,11 +190,16 @@ SELECT
    @cSKU             = V_SKU,  
    @cSKUDescr        = V_SKUDescr,  
    @cTaskDetailKey   = V_TaskDetailKey,  
-  
+   @cPUOM            = V_UOM,
+   
    @nSuggQty       = V_Integer1,  
    @nPickedQty     = V_Integer2,  
    @nActQTY        = V_Integer3,  
-        
+   @nPUOM_Div      = V_Integer4,
+   @nPQTY          = V_Integer5,
+   @nMQTY          = V_Integer6,
+   @nPQtyCursor    = V_Integer7,
+   
    @cExtendedUpdateSP   = V_String1,  
    @cExtendedValidateSP = V_String2,  
    @cExtendedInfoSP     = V_String3,  
@@ -209,7 +227,10 @@ SELECT
    @cFlowThruStepCartID = V_String25,
    @cFlowThruStepMatrix = V_String26,
    @cConfirmToLoc       = V_String27,
-   
+   @cAssignGroupKeyWhenNoSuggCartId = V_String28,
+   @cScanDevicePosition = V_String29,
+   @cSuggDPosition      = V_String30,
+   @cDPosition          = V_String31,
    @cAreakey            = V_String32,    
    @cTTMStrategykey     = V_String33,    
    @cTTMTaskType        = V_String34,    
@@ -218,7 +239,10 @@ SELECT
    @cRefKey03           = V_String37,    
    @cRefKey04           = V_String38,    
    @cRefKey05           = V_String39,    
-     
+   @cMUOM_Desc          = V_String40,
+   @cPUOM_Desc          = V_String41,
+   @cSkipToLoc          = V_String42,
+   
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,  
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,  
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,  @cFieldAttr03 = FieldAttr03,  
@@ -341,6 +365,15 @@ BEGIN
    
    SET @cFlowThruStepMatrix = rdt.RDTGetConfig( @nFunc, 'FlowThruStepMatrix', @cStorerKey)
 
+   -- (james04)
+   SET @cAssignGroupKeyWhenNoSuggCartId = rdt.RDTGetConfig( @nFunc, 'AssignGroupKeyWhenNoSuggCartId', @cStorerKey)
+   
+   SET @cScanDevicePosition = rdt.RDTGetConfig( @nFunc, 'ScanDevicePosition', @cStorerKey)
+   
+   SET @nPQtyCursor = rdt.RDTGetConfig( @nFunc, 'PQtyCursor', @cStorerKey)
+   
+   SET @cSkipToLoc = rdt.RDTGetConfig( @nFunc, 'SkipToLoc', @cStorerKey)
+   
    -- Get task info    
    SELECT    
       @cTTMTaskType = TaskType,    
@@ -352,7 +385,7 @@ BEGIN
       @cCartPickMethod = PickMethod  
    FROM dbo.TaskDetail WITH (NOLOCK)    
    WHERE TaskDetailKey = @cTaskDetailKey    
-  
+   
    -- Prepare next screen var  
    SET @cOutField01 = @cSuggCartId  
    SET @cOutField02 = ''   
@@ -413,6 +446,75 @@ BEGIN
             GOTO Step_CartID_Fail  
          END  
       END  
+      ELSE
+      BEGIN
+      	IF @cAssignGroupKeyWhenNoSuggCartId <> '1'
+         BEGIN  
+            SET @nErrNo = 148930  
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Assign Cart Id  
+            GOTO Step_CartID_Fail  
+         END 
+         ELSE
+         BEGIN
+         	IF NOT EXISTS ( SELECT 1
+         	                FROM dbo.DeviceProfile WITH (NOLOCK)
+         	                WHERE DeviceID = @cCartID
+         	                AND   DeviceType = 'CART'
+         	                AND   StorerKey = @cStorerKey)
+            BEGIN  
+               SET @nErrNo = 148931  
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid CartId  
+               GOTO Step_CartID_Fail  
+            END 
+            -- Assign user enter cart id to taskdetail
+            DECLARE @cAssignTaskKey    NVARCHAR( 10)
+            DECLARE @curAssignCartId   CURSOR
+            
+            -- Handling transaction            
+            SET @nTranCount = @@TRANCOUNT            
+            BEGIN TRAN  -- Begin our own transaction            
+            SAVE TRAN AssignCartID -- For rollback or commit only our own transaction            
+
+            SET @curAssignCartID = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+            SELECT TaskDetailKey
+            FROM dbo.TaskDetail WITH (NOLOCK)
+            WHERE Storerkey = @cStorerKey
+            AND   TaskType = 'CPK'
+            AND   Groupkey = @cGroupKey
+            AND   UserKey = @cUserName
+            AND   [Status] = '3'
+            ORDER BY 1
+            OPEN @curAssignCartID
+            FETCH NEXT FROM @curAssignCartID INTO @cAssignTaskKey
+            WHILE @@FETCH_STATUS = 0
+            BEGIN
+            	UPDATE dbo.TaskDetail SET 
+            	   DeviceID = @cCartID,
+            	   EditWho = @cUserName,
+            	   EditDate = GETDATE()
+            	WHERE TaskDetailKey = @cAssignTaskKey
+            	
+            	IF @@ERROR <> 0
+               BEGIN  
+                  SET @nErrNo = 148932  
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Assign Cart Er
+                  ROLLBACK TRAN AssignCartID            
+                  WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started            
+                     COMMIT TRAN            
+                  BREAK            
+               END 
+            	
+            	FETCH NEXT FROM @curAssignCartID INTO @cAssignTaskKey
+            END
+            
+            IF @nErrNo <> 0
+               GOTO Step_CartID_Fail
+
+            COMMIT TRAN AssignCartID -- Only commit change made here            
+            WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started            
+               COMMIT TRAN           
+         END
+      END
       /*
       -- Temp check for mismatch case qty between taskdetail and pickdetail 
       DECLARE @tTask TABLE
@@ -483,7 +585,46 @@ BEGIN
                GOTO Step_CartID_Fail  
          END  
       END  
+
+      -- Extended update  
+      IF @cExtendedUpdateSP <> ''  
+      BEGIN  
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')  
+         BEGIN  
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +  
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +   
+               ' @cGroupKey, @cTaskDetailKey, @cCartId, @cFromLoc, @cCartonId, @cSKU, @nQty, @cOption, ' +  
+               ' @tExtUpdate, @nErrNo OUTPUT, @cErrMsg OUTPUT '  
   
+            SET @cSQLParam =  
+               ' @nMobile        INT,           ' +  
+               ' @nFunc          INT,           ' +  
+               ' @cLangCode      NVARCHAR( 3),  ' +  
+               ' @nStep          INT,           ' +  
+               ' @nInputKey      INT,           ' +  
+               ' @cFacility      NVARCHAR( 5),  ' +  
+               ' @cStorerKey     NVARCHAR( 15), ' +  
+               ' @cGroupKey      NVARCHAR( 10), ' +  
+               ' @cTaskDetailKey NVARCHAR( 10), ' +  
+               ' @cCartId        NVARCHAR( 10), ' +  
+               ' @cFromLoc       NVARCHAR( 10), ' +  
+               ' @cCartonId      NVARCHAR( 20), ' +  
+               ' @cSKU           NVARCHAR( 20), ' +  
+               ' @nQty           INT,           ' +  
+               ' @cOption        NVARCHAR( 1), ' +  
+               ' @tExtUpdate     VariableTable READONLY, ' +   
+               ' @nErrNo         INT           OUTPUT, ' +  
+               ' @cErrMsg        NVARCHAR( 20) OUTPUT  '  
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,   
+               @cGroupKey, @cTaskDetailKey, @cCartId, @cFromLoc, @cCartonId, @cSKU, @nQty, @cOption,   
+               @tExtUpdate, @nErrNo OUTPUT, @cErrMsg OUTPUT  
+  
+            IF @nErrNo <> 0   
+               GOTO Step_CartID_Fail  
+         END  
+      END          
+      
       -- Draw matrix     
       SET @nNextPage = 0      
       EXEC rdt.rdt_TM_ClusterPick_Matrix   
@@ -636,7 +777,7 @@ BEGIN
   
       IF @nErrNo <> 0  
          GOTO Quit  
-  
+
       -- Prepare next screen var  
       SET @cOutField01 = @cSuggFromLOC   
       SET @cOutField02 = ''   
@@ -718,14 +859,20 @@ BEGIN
       
       IF @nErrNo <> 0      
          GOTO Step_CartID_Fail      
+
+      IF @cScanDevicePosition = '1'
+         SELECT @cSuggDPosition = DropID
+         FROM dbo.TaskDetail WITH (NOLOCK)
+         WHERE TaskDetailKey = @cTaskDetailKey
          
       -- Prepare next screen var  
       SET @cOutField01 = @cFromLoc   
-      SET @cOutField02 = @cSuggCartonID  
+      SET @cOutField02 = @cSuggCartonID
       SET @cOutField03 = ''
-      SET @cOutField04 = @cPosition   
+      SET @cOutField04 = @cPosition
       SET @cOutField05 = @cCartPickMethod
-      
+      SET @cOutField06 = @cSuggDPosition
+            
       -- Go to next screen  
       SET @nScn = @nScn_CartonId  
       SET @nStep = @nStep_CartonId  
@@ -765,9 +912,10 @@ BEGIN
    BEGIN  
       -- Screen mapping  
       SET @cCartonID = @cInField03  
+      SET @cDPosition = @cInField03
   
       -- Validate blank  
-      IF ISNULL( @cCartonID, '') = ''  
+      IF ISNULL( @cCartonID, '') = '' AND ISNULL( @cDPosition, '') = ''
       BEGIN  
          SET @nErrNo = 148905  
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need Case Id  
@@ -775,13 +923,19 @@ BEGIN
       END  
   
       -- Validate option  
-      IF @cCartonID <> @cSuggCartonID  
+      IF ( @cScanDevicePosition = '1' AND @cDPosition <> @cSuggDPosition) OR 
+         ( @cScanDevicePosition = '0' AND @cCartonID <> @cSuggCartonID)  
       BEGIN  
          SET @nErrNo = 148906  
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --CaseIdNotMatch  
          GOTO Step_CartonID_Fail  
       END  
-  
+
+      -- user scan device position instead of carton id
+      -- Use back system assigned carton id
+      IF @cScanDevicePosition = '1'
+         SET @cCartonID = @cSuggCartonID
+
       -- Disable QTY field  
       IF @cDisableQTYFieldSP <> ''  
       BEGIN  
@@ -850,11 +1004,51 @@ BEGIN
          END  
       END  
         
-      SELECT @cSKUDescr = DESCR  
-      FROM dbo.SKU WITH (NOLOCK)  
-      WHERE StorerKey = @cStorerKey  
-      AND   SKU = @cSuggSKU  
-        
+      -- Get SKU info
+      SELECT
+         @cSKUDescr = IsNULL( DescR, ''),
+         @cMUOM_Desc = Pack.PackUOM3,
+         @cPUOM_Desc =
+            CASE @cPUOM
+               WHEN '2' THEN Pack.PackUOM1 -- Case
+               WHEN '3' THEN Pack.PackUOM2 -- Inner pack
+               WHEN '6' THEN Pack.PackUOM3 -- Master unit
+               WHEN '1' THEN Pack.PackUOM4 -- Pallet
+               WHEN '4' THEN Pack.PackUOM8 -- Other unit 1
+               WHEN '5' THEN Pack.PackUOM9 -- Other unit 2
+            END,
+            @nPUOM_Div = CAST( IsNULL(
+            CASE @cPUOM
+               WHEN '2' THEN Pack.CaseCNT
+               WHEN '3' THEN Pack.InnerPack
+               WHEN '6' THEN Pack.QTY
+               WHEN '1' THEN Pack.Pallet
+               WHEN '4' THEN Pack.OtherUnit1
+               WHEN '5' THEN Pack.OtherUnit2
+            END, 1) AS INT)
+      FROM dbo.SKU SKU WITH (NOLOCK)
+         INNER JOIN dbo.Pack Pack WITH (NOLOCK) ON (SKU.PackKey = Pack.PackKey)
+      WHERE SKU.StorerKey = @cStorerKey
+         AND SKU.SKU = @cSuggSKU
+
+      SET @nQTY = CASE WHEN CAST( @cDefaultQTY AS INT) > 0 THEN CAST( @cDefaultQTY AS INT) ELSE 0 END
+      
+      -- Convert to prefer UOM QTY
+      IF @cPUOM = '6' OR -- When preferred UOM = master unit
+         @nPUOM_Div = 0  -- UOM not setup
+      BEGIN
+         SET @cPUOM_Desc = ''
+         SET @nPQTY = 0
+         SET @nMQTY = @nQTY
+         SET @cFieldAttr11 = 'O' -- @nPQTY
+      END
+      ELSE
+      BEGIN
+         SET @nPQTY = @nQTY / @nPUOM_Div -- Calc QTY in preferred UOM
+         SET @nMQTY = @nQTY % @nPUOM_Div -- Calc the remaining in master unit
+         SET @cFieldAttr11 = '' -- @nPQTY
+      END
+         
       SELECT @nSuggQty = ISNULL( SUM( Qty), 0)  
       FROM dbo.PICKDETAIL WITH (NOLOCK)  
       WHERE StorerKey = @cStorerKey  
@@ -870,23 +1064,27 @@ BEGIN
       AND   Sku = @cSuggSKU  
       AND   CaseID = @cCartonID  
       AND   [Status] = @cPickConfirmStatus  
-        
+      
       -- Prepare next screen var  
       SET @cOutField01 = @cCartonID  
       SET @cOutField02 = @cSuggSKU  
       SET @cOutField03 = SUBSTRING( @cSKUDescr, 1, 20)  
       SET @cOutField04 = SUBSTRING( @cSKUDescr, 21, 20)  
       SET @cOutField05 = ''   -- SKU/UPC  
-      SET @cOutField06 = CASE WHEN @cDefaultQTY = '0' THEN '' ELSE @cDefaultQTY END -- QTY  
-      SET @cOutField07 = @nPickedQty  
-      SET @cOutField08 = @nSuggQty  
-      SET @cOutField09 = @cCartPickMethod
+      SET @cOutField06 = '1:' + CASE WHEN @nPUOM_Div > 99999 THEN '*' ELSE CAST( @nPUOM_Div AS NCHAR( 5)) END
+      SET @cOutField07 = rdt.rdtRightAlign( RTRIM( CAST( @nPickedQty AS NVARCHAR( 3))), 3)  
+      SET @cOutField08 = CAST( @nSuggQty AS NVARCHAR( 3))  
+      SET @cOutField09 = rdt.rdtRightAlign( @cPUOM_Desc, 5)
+      SET @cOutField10 = rdt.rdtRightAlign( @cMUOM_Desc, 5)
+      SET @cOutField11 = CASE WHEN @nPQTY = 0 OR @cFieldAttr11 = 'O' THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 7)) END -- PQTY
+      SET @cOutField12 = CASE WHEN @nMQTY = 0 THEN '' ELSE CAST( @nMQTY AS NVARCHAR( 7)) END -- MQTY
+      SET @cOutField13 = @cCartPickMethod
       
-      -- Enable field  
-      IF @cDisableQTYField = '1'  
-         SET @cFieldAttr06 = 'O'  
-      ELSE  
-         SET @cFieldAttr06 = ''  
+      ---- Enable field  
+      --IF @cDisableQTYField = '1'  
+      --   SET @cFieldAttr06 = 'O'  
+      --ELSE  
+      --   SET @cFieldAttr06 = ''  
   
       EXEC rdt.rdtSetFocusField @nMobile, 5  
   
@@ -909,6 +1107,48 @@ BEGIN
       SET @nScn = @nScn_Loc  
       SET @nStep = @nStep_Loc  
    END  
+
+   -- Extended info  
+   IF @cExtendedInfoSP <> ''  
+   BEGIN  
+      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')  
+      BEGIN  
+      	SET @cExtendedInfo = ''
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +  
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' +   
+            ' @cGroupKey, @cTaskDetailKey, @cCartId, @cFromLoc, @cCartonId, @cSKU, @nQty, @cOption, ' +  
+            ' @tExtInfo, @cExtendedInfo OUTPUT '  
+  
+         SET @cSQLParam =  
+            ' @nMobile        INT,           ' +  
+            ' @nFunc          INT,           ' +  
+            ' @cLangCode      NVARCHAR( 3),  ' +  
+            ' @nStep          INT,           ' +  
+            ' @nAfterStep     INT,           ' +
+            ' @nInputKey      INT,           ' +  
+            ' @cFacility      NVARCHAR( 5),  ' +  
+            ' @cStorerKey     NVARCHAR( 15), ' +  
+            ' @cGroupKey      NVARCHAR( 10), ' +  
+            ' @cTaskDetailKey NVARCHAR( 10), ' +  
+            ' @cCartId        NVARCHAR( 10), ' +  
+            ' @cFromLoc       NVARCHAR( 10), ' +  
+            ' @cCartonId      NVARCHAR( 20), ' +  
+            ' @cSKU           NVARCHAR( 20), ' +  
+            ' @nQty           INT,           ' +  
+            ' @cOption        NVARCHAR( 1), ' +  
+            ' @tExtInfo       VariableTable READONLY, ' +   
+            ' @cExtendedInfo  NVARCHAR( 20) OUTPUT  '   
+                 
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
+            @nMobile, @nFunc, @cLangCode, @nStep_CartonId, @nStep, @nInputKey, @cFacility, @cStorerKey,   
+            @cGroupKey, @cTaskDetailKey, @cCartId, @cFromLoc, @cCartonId, @cSKU, @nQty, @cOption,   
+            @tExtInfo, @cExtendedInfo OUTPUT  
+            
+            IF @cExtendedInfo <> ''
+               SET @cOutField15 = @cExtendedInfo
+      END  
+   END          
+
    GOTO Quit  
   
    Step_CartonID_Fail:  
@@ -934,15 +1174,50 @@ Step_SKUQTY:
 BEGIN    
    IF @nInputKey = 1 -- Yes or Send    
    BEGIN   
+      DECLARE @cPQTY       NVARCHAR( 7)
+      DECLARE @cMQTY       NVARCHAR( 7)
+      
       -- Screen mapping    
       SET @cBarcode = ''  
       SET @cBarcode = @cInField05 -- SKU    
       SET @cUPC = LEFT( @cInField05, 30)    
-      SET @cQTY = CASE WHEN @cFieldAttr06 = 'O' THEN @cOutField06 ELSE @cInField06 END    
-    
+      --SET @cQTY = CASE WHEN @cFieldAttr06 = 'O' THEN @cOutField06 ELSE @cInField06 END    
+
+      SET @cPQTY = CASE WHEN @cFieldAttr11 = 'O' THEN @cOutField11 ELSE @cInField11 END
+      SET @cMQTY = CASE WHEN @cFieldAttr12 = 'O' THEN @cOutField12 ELSE @cInField12 END
+          
       -- Retain value    
-      SET @cOutField06 = CASE WHEN @cFieldAttr06 = 'O' THEN @cOutField06 ELSE @cInField06 END -- MQTY    
-  
+      --SET @cOutField06 = CASE WHEN @cFieldAttr06 = 'O' THEN @cOutField06 ELSE @cInField06 END -- MQTY    
+      SET @cOutField11 = CASE WHEN @cFieldAttr11 = 'O' THEN @cOutField11 ELSE @cInField11 END -- PQTY
+      SET @cOutField12 = CASE WHEN @cFieldAttr12 = 'O' THEN @cOutField12 ELSE @cInField12 END -- MQTY
+
+      -- Validate PQTY
+      IF @cPQTY <> '' AND RDT.rdtIsValidQTY( @cPQTY, 0) = 0
+      BEGIN
+         SET @nErrNo = 59427
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid QTY
+         EXEC rdt.rdtSetFocusField @nMobile, 11 -- PQTY
+         GOTO Step_SKUQTY_Fail
+      END
+      SET @nPQTY = CAST( @cPQTY AS INT)
+
+      -- Validate MQTY
+      IF @cMQTY <> '' AND RDT.rdtIsValidQTY( @cMQTY, 0) = 0
+      BEGIN
+         SET @nErrNo = 59428
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid QTY
+         EXEC rdt.rdtSetFocusField @nMobile, 12 -- MQTY
+         GOTO Step_SKUQTY_Fail
+      END
+      SET @nMQTY = CAST( @cMQTY AS INT)
+
+      -- Calc total QTY in master UOM
+      SET @nQTY = rdt.rdtConvUOMQTY( @cStorerKey, @cSKU, @cPQTY, @cPUOM, 6) -- Convert to QTY in master UOM
+      SET @cQTY = @nQTY + @nMQTY
+      
+      IF ISNULL( @cQTY, '') = '' OR CAST( @cQTY AS INT) = 0
+         SET @cQTY = ''
+         
       SET @cSKU = ''    
       SET @nQTY = 0    
         
@@ -981,7 +1256,7 @@ BEGIN
          BEGIN    
             SET @cSKUValidated = '99'    
             SET @cQTY = '0'    
-            SET @cOutField06 = '0'    
+            --SET @cOutField06 = '0'    
          END    
          ELSE    
          BEGIN    
@@ -1116,6 +1391,7 @@ BEGIN
       BEGIN    
          SET @nErrNo = 148913    
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Over pick    
+         --SET @cErrMsg = CAST( @nActQTY AS NVARCHAR( 3)) + '|' + CAST( @nQTY AS NVARCHAR( 3)) + '|' + CAST( @nSuggQTY AS NVARCHAR( 3))    
          EXEC rdt.rdtSetFocusField @nMobile, 6 -- QTY    
          GOTO Step_SKUQTY_Fail    
       END   
@@ -1165,9 +1441,32 @@ BEGIN
       -- SKU scanned, remain in current screen    
       IF @cBarcode <> ''  AND @cBarcode <> '99'  
       BEGIN    
+         SET @nQTY = CASE WHEN CAST( @cDefaultQTY AS INT) > 0 THEN CAST( @cDefaultQTY AS INT) ELSE 0 END
+      
+         -- Convert to prefer UOM QTY
+         IF @cPUOM = '6' OR -- When preferred UOM = master unit
+            @nPUOM_Div = 0  -- UOM not setup
+         BEGIN
+            SET @cPUOM_Desc = ''
+            SET @nPQTY = 0
+            SET @nMQTY = @nQTY
+            SET @cFieldAttr11 = 'O' -- @nPQTY
+         END
+         ELSE
+         BEGIN
+            SET @nPQTY = @nQTY / @nPUOM_Div -- Calc QTY in preferred UOM
+            SET @nMQTY = @nQTY % @nPUOM_Div -- Calc the remaining in master unit
+            SET @cFieldAttr11 = '' -- @nPQTY
+         END
+
          SET @cOutField05 = '' -- SKU    
-         SET @cOutField06 = CASE WHEN @cDefaultQTY = '0' THEN '' ELSE @cDefaultQTY END -- QTY  
-         SET @cOutField07 = @nActQTY  
+         --SET @cOutField06 = CASE WHEN @cDefaultQTY = '0' THEN '' ELSE @cDefaultQTY END -- QTY  
+         SET @cOutField07 = rdt.rdtRightAlign( RTRIM( CAST( @nActQTY AS NVARCHAR( 3))), 3)  
+         SET @cOutField08 = CAST( @nSuggQty AS NVARCHAR( 3))  
+         SET @cOutField11 = CASE WHEN @nPQTY = 0 OR @cFieldAttr11 = 'O' THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 7)) END -- PQTY
+         SET @cOutField12 = CASE WHEN @nMQTY = 0 THEN '' ELSE CAST( @nMQTY AS NVARCHAR( 7)) END -- MQTY
+
+         --SET @cOutField07 = @nActQTY  
          SET @cSKUValidated = '1'  
            
          IF @cDisableQTYField = '1'    
@@ -1179,7 +1478,12 @@ BEGIN
          ELSE    
          BEGIN    
             IF @cDefaultQTY = '0'
-               EXEC rdt.rdtSetFocusField @nMobile, 6 -- MQTY    
+            BEGIN
+               IF @nPQtyCursor = 1
+                  EXEC rdt.rdtSetFocusField @nMobile, 11 -- PQTY    
+               ELSE
+               	EXEC rdt.rdtSetFocusField @nMobile, 12 -- MQTY    
+            END
             ELSE
                EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
                
@@ -1193,8 +1497,9 @@ BEGIN
       -- QTY short    
       IF @nActQTY < @nSuggQTY    
       BEGIN    
-         SET @nActQTY = @nActQTY - @nQTY  
-  
+         IF @cDisableQTYField = '1'
+            SET @nActQTY = @nActQTY - @nQTY
+
          -- Prepare next screen var    
          SET @cOption = ''    
          SET @cOutField01 = '' -- Option    
@@ -1256,20 +1561,58 @@ BEGIN
   
          IF @nErrNo = 0    
          BEGIN    
-            SELECT @cSKUDescr = DESCR  
-            FROM dbo.SKU WITH (NOLOCK)  
-            WHERE StorerKey = @cStorerKey  
-            AND   SKU = @cSuggSKU  
-  
-            -- ZG01 (Start)
+            -- Get SKU info
+            SELECT
+               @cSKUDescr = IsNULL( DescR, ''),
+               @cMUOM_Desc = Pack.PackUOM3,
+               @cPUOM_Desc =
+                  CASE @cPUOM
+                     WHEN '2' THEN Pack.PackUOM1 -- Case
+                     WHEN '3' THEN Pack.PackUOM2 -- Inner pack
+                     WHEN '6' THEN Pack.PackUOM3 -- Master unit
+                     WHEN '1' THEN Pack.PackUOM4 -- Pallet
+                     WHEN '4' THEN Pack.PackUOM8 -- Other unit 1
+                     WHEN '5' THEN Pack.PackUOM9 -- Other unit 2
+                  END,
+                  @nPUOM_Div = CAST( IsNULL(
+                  CASE @cPUOM
+                     WHEN '2' THEN Pack.CaseCNT
+                     WHEN '3' THEN Pack.InnerPack
+                     WHEN '6' THEN Pack.QTY
+                     WHEN '1' THEN Pack.Pallet
+                     WHEN '4' THEN Pack.OtherUnit1
+                     WHEN '5' THEN Pack.OtherUnit2
+                  END, 1) AS INT)
+            FROM dbo.SKU SKU WITH (NOLOCK)
+               INNER JOIN dbo.Pack Pack WITH (NOLOCK) ON (SKU.PackKey = Pack.PackKey)
+            WHERE SKU.StorerKey = @cStorerKey
+               AND SKU.SKU = @cSKU
+
+            SET @nQTY = CASE WHEN CAST( @cDefaultQTY AS INT) > 0 THEN CAST( @cDefaultQTY AS INT) ELSE 0 END
+      
+            -- Convert to prefer UOM QTY
+            IF @cPUOM = '6' OR -- When preferred UOM = master unit
+               @nPUOM_Div = 0  -- UOM not setup
+            BEGIN
+               SET @cPUOM_Desc = ''
+               SET @nPQTY = 0
+               SET @nMQTY = @nQTY
+               SET @cFieldAttr11 = 'O' -- @nPQTY
+            END
+            ELSE
+            BEGIN
+               SET @nPQTY = @nQTY / @nPUOM_Div -- Calc QTY in preferred UOM
+               SET @nMQTY = @nQTY % @nPUOM_Div -- Calc the remaining in master unit
+               SET @cFieldAttr11 = '' -- @nPQTY
+            END
+         
             SELECT @nSuggQty = ISNULL( SUM( Qty), 0)  
             FROM dbo.PICKDETAIL WITH (NOLOCK)  
             WHERE StorerKey = @cStorerKey  
             AND   Loc = @cFromLoc  
             AND   Sku = @cSuggSKU  
             AND   CaseID = @cCartonID  
-            AND   [Status] < @cPickConfirmStatus
-            -- ZG01 (End)
+            AND   [Status] < @cPickConfirmStatus  
   
             SELECT @nPickedQty = ISNULL( SUM( Qty), 0)  
             FROM dbo.PICKDETAIL WITH (NOLOCK)  
@@ -1279,17 +1622,25 @@ BEGIN
             AND   CaseID = @cCartonID  
             AND   [Status] = @cPickConfirmStatus  
         
-            -- Prepare SKU QTY screen var  
+            -- Prepare next screen var  
             SET @cOutField01 = @cCartonID  
             SET @cOutField02 = @cSuggSKU  
             SET @cOutField03 = SUBSTRING( @cSKUDescr, 1, 20)  
             SET @cOutField04 = SUBSTRING( @cSKUDescr, 21, 20)  
             SET @cOutField05 = ''   -- SKU/UPC  
-            SET @cOutField06 = CASE WHEN @cDefaultQTY = '0' THEN '' ELSE @cDefaultQTY END -- QTY  
+            SET @cOutField06 = '1:' + CASE WHEN @nPUOM_Div > 99999 THEN '*' ELSE CAST( @nPUOM_Div AS NCHAR( 5)) END
             SET @cOutField07 = @nPickedQty  
             SET @cOutField08 = @nSuggQty  
-            SET @cOutField09 = @cCartPickMethod
-            
+            SET @cOutField09 = rdt.rdtRightAlign( @cPUOM_Desc, 5)
+            SET @cOutField10 = rdt.rdtRightAlign( @cMUOM_Desc, 5)
+            SET @cOutField11 = CASE WHEN @nPQTY = 0 OR @cFieldAttr11 = 'O' THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 7)) END -- PQTY
+            SET @cOutField12 = CASE WHEN @nMQTY = 0 THEN '' ELSE CAST( @nMQTY AS NVARCHAR( 7)) END -- MQTY
+            SET @cOutField13 = @cCartPickMethod
+            SELECT @cSKUDescr = DESCR  
+            FROM dbo.SKU WITH (NOLOCK)  
+            WHERE StorerKey = @cStorerKey  
+            AND   SKU = @cSuggSKU  
+  
             EXEC rdt.rdtSetFocusField @nMobile, 5  
          END    
          ELSE    
@@ -1376,13 +1727,19 @@ BEGIN
                AND   Sku = @cSuggSKU  
                AND   Caseid = @cSuggCartonID  
                ORDER BY 1  
-  
+
+               IF @cScanDevicePosition = '1'
+                  SELECT @cSuggDPosition = DropID
+                  FROM dbo.TaskDetail WITH (NOLOCK)
+                  WHERE TaskDetailKey = @cTaskDetailKey
+
                -- Prepare next screen var  
                SET @cOutField01 = @cSuggFromLOC   
                SET @cOutField02 = @cSuggCartonID  
                SET @cOutField03 = ''   
                SET @cOutField04 = @cPosition
                SET @cOutField05 = @cCartPickMethod
+               SET @cOutField06 = @cSuggDPosition
 
                -- Go to next screen  
                SET @nScn = @nScn_CartonId  
@@ -1597,45 +1954,6 @@ BEGIN
       IF CAST( @cQTY AS INT) > 0 -- Qty field already have value, this is consider picked
          SET @cSKUValidated = 0
 
-      -- Extended info  
-      IF @cExtendedInfoSP <> ''  
-      BEGIN  
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')  
-         BEGIN  
-            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +  
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +   
-               ' @cGroupKey, @cTaskDetailKey, @cCartId, @cFromLoc, @cCartonId, @cSKU, @nQty, @cOption, ' +  
-               ' @tExtInfo, @cExtendedInfo OUTPUT '  
-  
-            SET @cSQLParam =  
-               ' @nMobile        INT,           ' +  
-               ' @nFunc          INT,           ' +  
-               ' @cLangCode      NVARCHAR( 3),  ' +  
-               ' @nStep          INT,           ' +  
-               ' @nInputKey      INT,           ' +  
-               ' @cFacility      NVARCHAR( 5),  ' +  
-               ' @cStorerKey     NVARCHAR( 15), ' +  
-               ' @cGroupKey      NVARCHAR( 10), ' +  
-               ' @cTaskDetailKey NVARCHAR( 10), ' +  
-               ' @cCartId        NVARCHAR( 10), ' +  
-               ' @cFromLoc       NVARCHAR( 10), ' +  
-               ' @cCartonId      NVARCHAR( 20), ' +  
-               ' @cSKU           NVARCHAR( 20), ' +  
-               ' @nQty           INT,           ' +  
-               ' @cOption        NVARCHAR( 1), ' +  
-               ' @tExtInfo       VariableTable READONLY, ' +   
-               ' @cExtendedInfo  NVARCHAR( 20) OUTPUT  '   
-                 
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,   
-               @cGroupKey, @cTaskDetailKey, @cCartId, @cFromLoc, @cCartonId, @cSKU, @nQty, @cOption,   
-               @tExtInfo, @cExtendedInfo OUTPUT  
-  
-            IF @nErrNo <> 0   
-               GOTO Step_SKUQTY_Fail  
-         END  
-      END          
-      
       IF @cConfirmToLoc = '0' AND @cOutField02 = @cSuggToLOC AND @nStep = @nStep_ToLoc
       BEGIN
          SET @cInField02 = @cOutField02
@@ -1645,56 +1963,65 @@ BEGIN
     
    IF @nInputKey = 0 -- ESC    
    BEGIN    
-      -- Extended info  
-      IF @cExtendedInfoSP <> ''  
-      BEGIN  
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')  
-         BEGIN  
-            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +  
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +   
-               ' @cGroupKey, @cTaskDetailKey, @cFromLoc, @cCartonId, @cSKU, @nQty, @cOption, ' +  
-               ' @tExtInfo, @cExtendedInfo OUTPUT '  
-  
-            SET @cSQLParam =  
-               ' @nMobile        INT,           ' +  
-               ' @nFunc          INT,           ' +  
-               ' @cLangCode      NVARCHAR( 3),  ' +  
-               ' @nStep          INT,           ' +  
-               ' @nInputKey      INT,           ' +  
-               ' @cFacility      NVARCHAR( 5),  ' +  
-               ' @cStorerKey     NVARCHAR( 15), ' +  
-               ' @cGroupKey      NVARCHAR( 10), ' +  
-               ' @cTaskDetailKey NVARCHAR( 10), ' +  
-               ' @cCartId        NVARCHAR( 10), ' +  
-               ' @cFromLoc       NVARCHAR( 10), ' +  
-               ' @cCartonId      NVARCHAR( 20), ' +  
-               ' @cSKU           NVARCHAR( 20), ' +  
-               ' @nQty           INT,           ' +  
-               ' @cOption        NVARCHAR( 1), ' +  
-               ' @tExtInfo       VariableTable READONLY, ' +   
-               ' @cExtendedInfo  NVARCHAR( 20) OUTPUT  '   
-                 
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,   
-               @cGroupKey, @cTaskDetailKey, @cFromLoc, @cCartonId, @cSKU, @nQty, @cOption,   
-               @tExtInfo, @cExtendedInfo OUTPUT  
-  
-            IF @nErrNo <> 0   
-               GOTO Step_SKUQTY_Fail  
-         END  
-      END          
-    
+      IF @cScanDevicePosition = '1'
+         SELECT @cSuggDPosition = DropID
+         FROM dbo.TaskDetail WITH (NOLOCK)
+         WHERE TaskDetailKey = @cTaskDetailKey
+
       -- Prepare next screen var  
       SET @cOutField01 = @cFromLoc   
       SET @cOutField02 = @cSuggCartonID  
       SET @cOutField03 = ''   
       SET @cOutField04 = @cPosition
       SET @cOutField05 = @cCartPickMethod
-      
+      SET @cOutField06 = @cSuggDPosition
+
       -- Go to next screen  
       SET @nScn = @nScn_CartonId  
       SET @nStep = @nStep_CartonId   
    END    
+
+   -- Extended info  
+   IF @cExtendedInfoSP <> ''  
+   BEGIN  
+      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')  
+      BEGIN  
+      	SET @cExtendedInfo = ''
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +  
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' +   
+            ' @cGroupKey, @cTaskDetailKey, @cCartId, @cFromLoc, @cCartonId, @cSKU, @nQty, @cOption, ' +  
+            ' @tExtInfo, @cExtendedInfo OUTPUT '  
+  
+         SET @cSQLParam =  
+            ' @nMobile        INT,           ' +  
+            ' @nFunc          INT,           ' +  
+            ' @cLangCode      NVARCHAR( 3),  ' +  
+            ' @nStep          INT,           ' +  
+            ' @nAfterStep     INT,           ' +
+            ' @nInputKey      INT,           ' +  
+            ' @cFacility      NVARCHAR( 5),  ' +  
+            ' @cStorerKey     NVARCHAR( 15), ' +  
+            ' @cGroupKey      NVARCHAR( 10), ' +  
+            ' @cTaskDetailKey NVARCHAR( 10), ' +  
+            ' @cCartId        NVARCHAR( 10), ' +  
+            ' @cFromLoc       NVARCHAR( 10), ' +  
+            ' @cCartonId      NVARCHAR( 20), ' +  
+            ' @cSKU           NVARCHAR( 20), ' +  
+            ' @nQty           INT,           ' +  
+            ' @cOption        NVARCHAR( 1), ' +  
+            ' @tExtInfo       VariableTable READONLY, ' +   
+            ' @cExtendedInfo  NVARCHAR( 20) OUTPUT  '   
+                 
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
+            @nMobile, @nFunc, @cLangCode, @nStep_SKUQTY, @nStep, @nInputKey, @cFacility, @cStorerKey,   
+            @cGroupKey, @cTaskDetailKey, @cCartId, @cFromLoc, @cCartonId, @cSKU, @nQty, @cOption,   
+            @tExtInfo, @cExtendedInfo OUTPUT  
+            
+            IF @cExtendedInfo <> ''
+               SET @cOutField15 = @cExtendedInfo
+      END  
+   END          
+
    GOTO Quit    
     
    Step_SKUQTY_Fail:    
@@ -2042,11 +2369,58 @@ BEGIN
   
          IF @nErrNo = 0  
          BEGIN                   
-            -- Prepare SKU QTY screen var    
-            SELECT @cSKUDescr = DESCR  
-            FROM dbo.SKU WITH (NOLOCK)  
+            -- Get SKU info
+            SELECT
+               @cSKUDescr = IsNULL( DescR, ''),
+               @cMUOM_Desc = Pack.PackUOM3,
+               @cPUOM_Desc =
+                  CASE @cPUOM
+                     WHEN '2' THEN Pack.PackUOM1 -- Case
+                     WHEN '3' THEN Pack.PackUOM2 -- Inner pack
+                     WHEN '6' THEN Pack.PackUOM3 -- Master unit
+                     WHEN '1' THEN Pack.PackUOM4 -- Pallet
+                     WHEN '4' THEN Pack.PackUOM8 -- Other unit 1
+                     WHEN '5' THEN Pack.PackUOM9 -- Other unit 2
+                  END,
+                  @nPUOM_Div = CAST( IsNULL(
+                  CASE @cPUOM
+                     WHEN '2' THEN Pack.CaseCNT
+                     WHEN '3' THEN Pack.InnerPack
+                     WHEN '6' THEN Pack.QTY
+                     WHEN '1' THEN Pack.Pallet
+                     WHEN '4' THEN Pack.OtherUnit1
+                     WHEN '5' THEN Pack.OtherUnit2
+                  END, 1) AS INT)
+            FROM dbo.SKU SKU WITH (NOLOCK)
+               INNER JOIN dbo.Pack Pack WITH (NOLOCK) ON (SKU.PackKey = Pack.PackKey)
+            WHERE SKU.StorerKey = @cStorerKey
+               AND SKU.SKU = @cSuggSKU
+
+            SET @nQTY = CASE WHEN CAST( @cDefaultQTY AS INT) > 0 THEN CAST( @cDefaultQTY AS INT) ELSE 0 END
+      
+            -- Convert to prefer UOM QTY
+            IF @cPUOM = '6' OR -- When preferred UOM = master unit
+               @nPUOM_Div = 0  -- UOM not setup
+            BEGIN
+               SET @cPUOM_Desc = ''
+               SET @nPQTY = 0
+               SET @nMQTY = @nQTY
+               SET @cFieldAttr11 = 'O' -- @nPQTY
+            END
+            ELSE
+            BEGIN
+               SET @nPQTY = @nQTY / @nPUOM_Div -- Calc QTY in preferred UOM
+               SET @nMQTY = @nQTY % @nPUOM_Div -- Calc the remaining in master unit
+               SET @cFieldAttr11 = '' -- @nPQTY
+            END
+         
+            SELECT @nSuggQty = ISNULL( SUM( Qty), 0)  
+            FROM dbo.PICKDETAIL WITH (NOLOCK)  
             WHERE StorerKey = @cStorerKey  
-            AND   SKU = @cSuggSKU  
+            AND   Loc = @cFromLoc  
+            AND   Sku = @cSuggSKU  
+            AND   CaseID = @cCartonID  
+            AND   [Status] < @cPickConfirmStatus  
   
             SELECT @nPickedQty = ISNULL( SUM( Qty), 0)  
             FROM dbo.PICKDETAIL WITH (NOLOCK)  
@@ -2062,30 +2436,23 @@ BEGIN
             SET @cOutField03 = SUBSTRING( @cSKUDescr, 1, 20)  
             SET @cOutField04 = SUBSTRING( @cSKUDescr, 21, 20)  
             SET @cOutField05 = ''   -- SKU/UPC  
-            SET @cOutField06 = CASE WHEN @cDefaultQTY = '0' THEN '' ELSE @cDefaultQTY END -- QTY  
+            SET @cOutField06 = '1:' + CASE WHEN @nPUOM_Div > 99999 THEN '*' ELSE CAST( @nPUOM_Div AS NCHAR( 5)) END
             SET @cOutField07 = @nPickedQty  
             SET @cOutField08 = @nSuggQty  
-            SET @cOutField09 = @cCartPickMethod
-            
-            -- Enable field  
-            IF @cDisableQTYField = '1'  
-            BEGIN  
-               SET @cFieldAttr06 = 'O'  
-               SET @cOutField06 = CASE WHEN @cDefaultQTY = '0' THEN '1' ELSE @cDefaultQTY END  
-            END  
-            ELSE  
-               SET @cFieldAttr06 = ''  
+            SET @cOutField09 = rdt.rdtRightAlign( @cPUOM_Desc, 5)
+            SET @cOutField10 = rdt.rdtRightAlign( @cMUOM_Desc, 5)
+            SET @cOutField11 = CASE WHEN @nPQTY = 0 OR @cFieldAttr11 = 'O' THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 7)) END -- PQTY
+            SET @cOutField12 = CASE WHEN @nMQTY = 0 THEN '' ELSE CAST( @nMQTY AS NVARCHAR( 7)) END -- MQTY
+            SET @cOutField13 = @cCartPickMethod
   
-  
+            SET @nActQTY = 0
             SET @cSKUValidated = '0'  
-  
+            
             EXEC rdt.rdtSetFocusField @nMobile, 5  
   
             -- Go to next screen  
             SET @nScn = @nScn_SKUQTY  
             SET @nStep = @nStep_SKUQTY  
-  
-            GOTO Quit    
          END    
          ELSE    
          BEGIN    
@@ -2123,7 +2490,8 @@ BEGIN
             BEGIN  
                SELECT TOP 1   
                   @cTaskDetailKey = TaskDetailKey,  
-                  @cFromLoc = FromLoc  
+                  @cFromLoc = FromLoc,
+                  @cSuggDPosition = DropID
                FROM dbo.TaskDetail WITH (NOLOCK)  
                WHERE Storerkey = @cStorerKey  
                AND   TaskType = 'CPK'  
@@ -2141,6 +2509,7 @@ BEGIN
                SET @cOutField03 = ''   
                SET @cOutField04 = @cPosition
                SET @cOutField05 = @cCartPickMethod
+               SET @cOutField06 = @cSuggDPosition
                
                SET @cErrMsg = ''  
                  
@@ -2287,6 +2656,47 @@ BEGIN
       SET @nScn = @nScn_SKUQTY  
       SET @nStep = @nStep_SKUQTY  
    END       
+
+   -- Extended info  
+   IF @cExtendedInfoSP <> ''  
+   BEGIN  
+      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')  
+      BEGIN  
+      	SET @cExtendedInfo = ''
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +  
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' +   
+            ' @cGroupKey, @cTaskDetailKey, @cCartId, @cFromLoc, @cCartonId, @cSKU, @nQty, @cOption, ' +  
+            ' @tExtInfo, @cExtendedInfo OUTPUT '  
+  
+         SET @cSQLParam =  
+            ' @nMobile        INT,           ' +  
+            ' @nFunc          INT,           ' +  
+            ' @cLangCode      NVARCHAR( 3),  ' +  
+            ' @nStep          INT,           ' +  
+            ' @nAfterStep     INT,           ' +
+            ' @nInputKey      INT,           ' +  
+            ' @cFacility      NVARCHAR( 5),  ' +  
+            ' @cStorerKey     NVARCHAR( 15), ' +  
+            ' @cGroupKey      NVARCHAR( 10), ' +  
+            ' @cTaskDetailKey NVARCHAR( 10), ' +  
+            ' @cCartId        NVARCHAR( 10), ' +  
+            ' @cFromLoc       NVARCHAR( 10), ' +  
+            ' @cCartonId      NVARCHAR( 20), ' +  
+            ' @cSKU           NVARCHAR( 20), ' +  
+            ' @nQty           INT,           ' +  
+            ' @cOption        NVARCHAR( 1), ' +  
+            ' @tExtInfo       VariableTable READONLY, ' +   
+            ' @cExtendedInfo  NVARCHAR( 20) OUTPUT  '   
+                 
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
+            @nMobile, @nFunc, @cLangCode, @nStep_CartonId, @nStep, @nInputKey, @cFacility, @cStorerKey,   
+            @cGroupKey, @cTaskDetailKey, @cCartId, @cFromLoc, @cCartonId, @cSKU, @nQty, @cOption,   
+            @tExtInfo, @cExtendedInfo OUTPUT  
+            
+            IF @cExtendedInfo <> ''
+               SET @cOutField15 = @cExtendedInfo
+      END  
+   END          
    GOTO Quit            
             
    Step_Option_Fail:            
@@ -2389,20 +2799,58 @@ BEGIN
   
       IF @nErrNo = 0    
       BEGIN    
-         SELECT @cSKUDescr = DESCR  
-         FROM dbo.SKU WITH (NOLOCK)  
-         WHERE StorerKey = @cStorerKey  
-         AND   SKU = @cSuggSKU  
-  
-         -- ZG01 (Start)
+         -- Get SKU info
+         SELECT
+            @cSKUDescr = IsNULL( DescR, ''),
+            @cMUOM_Desc = Pack.PackUOM3,
+            @cPUOM_Desc =
+               CASE @cPUOM
+                  WHEN '2' THEN Pack.PackUOM1 -- Case
+                  WHEN '3' THEN Pack.PackUOM2 -- Inner pack
+                  WHEN '6' THEN Pack.PackUOM3 -- Master unit
+                  WHEN '1' THEN Pack.PackUOM4 -- Pallet
+                  WHEN '4' THEN Pack.PackUOM8 -- Other unit 1
+                  WHEN '5' THEN Pack.PackUOM9 -- Other unit 2
+               END,
+               @nPUOM_Div = CAST( IsNULL(
+               CASE @cPUOM
+                  WHEN '2' THEN Pack.CaseCNT
+                  WHEN '3' THEN Pack.InnerPack
+                  WHEN '6' THEN Pack.QTY
+                  WHEN '1' THEN Pack.Pallet
+                  WHEN '4' THEN Pack.OtherUnit1
+                  WHEN '5' THEN Pack.OtherUnit2
+               END, 1) AS INT)
+         FROM dbo.SKU SKU WITH (NOLOCK)
+            INNER JOIN dbo.Pack Pack WITH (NOLOCK) ON (SKU.PackKey = Pack.PackKey)
+         WHERE SKU.StorerKey = @cStorerKey
+            AND SKU.SKU = @cSKU
+
+         SET @nQTY = CASE WHEN CAST( @cDefaultQTY AS INT) > 0 THEN CAST( @cDefaultQTY AS INT) ELSE 0 END
+      
+         -- Convert to prefer UOM QTY
+         IF @cPUOM = '6' OR -- When preferred UOM = master unit
+            @nPUOM_Div = 0  -- UOM not setup
+         BEGIN
+            SET @cPUOM_Desc = ''
+            SET @nPQTY = 0
+            SET @nMQTY = @nQTY
+            SET @cFieldAttr11 = 'O' -- @nPQTY
+         END
+         ELSE
+         BEGIN
+            SET @nPQTY = @nQTY / @nPUOM_Div -- Calc QTY in preferred UOM
+            SET @nMQTY = @nQTY % @nPUOM_Div -- Calc the remaining in master unit
+            SET @cFieldAttr11 = '' -- @nPQTY
+         END
+         
          SELECT @nSuggQty = ISNULL( SUM( Qty), 0)  
          FROM dbo.PICKDETAIL WITH (NOLOCK)  
          WHERE StorerKey = @cStorerKey  
          AND   Loc = @cFromLoc  
          AND   Sku = @cSuggSKU  
          AND   CaseID = @cCartonID  
-         AND   [Status] < @cPickConfirmStatus
-         -- ZG01 (End)
+         AND   [Status] < @cPickConfirmStatus  
   
          SELECT @nPickedQty = ISNULL( SUM( Qty), 0)  
          FROM dbo.PICKDETAIL WITH (NOLOCK)  
@@ -2412,17 +2860,21 @@ BEGIN
          AND   CaseID = @cCartonID  
          AND   [Status] = @cPickConfirmStatus  
         
-         -- Prepare SKU QTY screen var  
+         -- Prepare next screen var  
          SET @cOutField01 = @cCartonID  
          SET @cOutField02 = @cSuggSKU  
          SET @cOutField03 = SUBSTRING( @cSKUDescr, 1, 20)  
          SET @cOutField04 = SUBSTRING( @cSKUDescr, 21, 20)  
          SET @cOutField05 = ''   -- SKU/UPC  
-         SET @cOutField06 = CASE WHEN @cDefaultQTY = '0' THEN '' ELSE @cDefaultQTY END -- QTY  
+         SET @cOutField06 = '1:' + CASE WHEN @nPUOM_Div > 99999 THEN '*' ELSE CAST( @nPUOM_Div AS NCHAR( 5)) END
          SET @cOutField07 = @nPickedQty  
          SET @cOutField08 = @nSuggQty  
-         SET @cOutField09 = @cCartPickMethod
-            
+         SET @cOutField09 = rdt.rdtRightAlign( @cPUOM_Desc, 5)
+         SET @cOutField10 = rdt.rdtRightAlign( @cMUOM_Desc, 5)
+         SET @cOutField11 = CASE WHEN @nPQTY = 0 OR @cFieldAttr11 = 'O' THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 7)) END -- PQTY
+         SET @cOutField12 = CASE WHEN @nMQTY = 0 THEN '' ELSE CAST( @nMQTY AS NVARCHAR( 7)) END -- MQTY
+         SET @cOutField13 = @cCartPickMethod
+         
          EXEC rdt.rdtSetFocusField @nMobile, 5  
       END    
       ELSE    
@@ -2489,7 +2941,8 @@ BEGIN
                SET @cOutField03 = ''
                SET @cOutField04 = @cPosition   
                SET @cOutField05 = @cCartPickMethod
-      
+               SET @cOutField06 = @cSuggDPosition
+               
                -- Go to next screen  
                SET @nScn = @nScn_ConfirmCartonId  
                SET @nStep = @nStep_ConfirmCartonId  
@@ -2498,7 +2951,8 @@ BEGIN
             
             SELECT TOP 1   
                @cTaskDetailKey = TaskDetailKey,  
-               @cFromLoc = FromLoc  
+               @cFromLoc = FromLoc,
+               @cSuggDPosition = DropID  
             FROM dbo.TaskDetail WITH (NOLOCK)  
             WHERE Storerkey = @cStorerKey  
             AND   TaskType = 'CPK'  
@@ -2516,7 +2970,8 @@ BEGIN
             SET @cOutField03 = ''   
             SET @cOutField04 = @cPosition
             SET @cOutField05 = @cCartPickMethod
-
+            SET @cOutField06 = @cSuggDPosition
+            
             -- Go to next screen  
             SET @nScn = @nScn_CartonId  
             SET @nStep = @nStep_CartonId  
@@ -2585,7 +3040,8 @@ BEGIN
                   SET @cOutField03 = ''
                   SET @cOutField04 = @cPosition   
                   SET @cOutField05 = @cCartPickMethod
-      
+                  SET @cOutField06 = @cSuggDPosition
+                  
                   -- Go to next screen  
                   SET @nScn = @nScn_ConfirmCartonId  
                   SET @nStep = @nStep_ConfirmCartonId  
@@ -2791,109 +3247,111 @@ BEGIN
       SET @cSuggToLOC = @cOutField01  
       SET @cToLOC = @cInField02    
   
-    
-      -- Check blank FromLOC    
-      IF @cToLOC = ''    
-      BEGIN    
-         SET @nErrNo = 148918    
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ToLOC needed    
-         GOTO Step_ToLoc_Fail    
-      END    
-    
-      -- Check if FromLOC match    
-      IF @cToLOC <> @cSuggToLOC  AND ISNULL( @cSuggToLOC, '') <> ''  
-      BEGIN    
-         IF @cOverwriteToLOC = '0'    
-         BEGIN    
-            SET @nErrNo = 148919    
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ToLOC Diff    
-            GOTO Step_ToLoc_Fail    
-         END    
-             
-         -- Check ToLOC valid    
-         IF NOT EXISTS( SELECT 1 FROM LOC WITH (NOLOCK) WHERE LOC = @cToLOC)    
-         BEGIN    
-            SET @nErrNo = 148920    
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid LOC    
-            GOTO Step_ToLoc_Fail    
-         END    
-      END    
-
-      -- Handling transaction            
-      SET @nTranCount = @@TRANCOUNT            
-      BEGIN TRAN  -- Begin our own transaction            
-      SAVE TRAN Step_ConfirmToLoc -- For rollback or commit only our own transaction            
-            
-      SET @nErrNo = 0  
-      EXEC rdt.rdt_TM_ClusterPick_ConfirmToLoc   
-          @nMobile         = @nMobile,    
-          @nFunc           = @nFunc,    
-          @cLangCode       = @cLangCode,    
-          @nStep           = @nStep,    
-          @nInputKey       = @nInputKey,    
-          @cFacility       = @cFacility,    
-          @cStorerKey      = @cStorerKey,    
-          @cTaskDetailKey  = @cTaskDetailKey,    
-          @cToLOC          = @cToLOC,    
-          @tConfirm        = @tConfirm,  
-          @nErrNo          = @nErrNo     OUTPUT,    
-          @cErrMsg         = @cErrMsg    OUTPUT    
-  
-      IF @nErrNo <> 0  
+      IF @cSkipToLoc = '0'
       BEGIN
-         ROLLBACK TRAN Step_ConfirmToLoc            
-         WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started            
-            COMMIT TRAN            
-         GOTO Step_ToLoc_Fail            
-      END
+         -- Check blank FromLOC    
+         IF @cToLOC = ''    
+         BEGIN    
+            SET @nErrNo = 148918    
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ToLOC needed    
+            GOTO Step_ToLoc_Fail    
+         END    
+    
+         -- Check if FromLOC match    
+         IF @cToLOC <> @cSuggToLOC  AND ISNULL( @cSuggToLOC, '') <> ''  
+         BEGIN    
+            IF @cOverwriteToLOC = '0'    
+            BEGIN    
+               SET @nErrNo = 148919    
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ToLOC Diff    
+               GOTO Step_ToLoc_Fail    
+            END    
+             
+            -- Check ToLOC valid    
+            IF NOT EXISTS( SELECT 1 FROM LOC WITH (NOLOCK) WHERE LOC = @cToLOC)    
+            BEGIN    
+               SET @nErrNo = 148920    
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid LOC    
+               GOTO Step_ToLoc_Fail    
+            END    
+         END    
 
-      -- Extended update  
-      IF @cExtendedUpdateSP <> ''  
-      BEGIN  
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')  
+         -- Handling transaction            
+         SET @nTranCount = @@TRANCOUNT            
+         BEGIN TRAN  -- Begin our own transaction            
+         SAVE TRAN Step_ConfirmToLoc -- For rollback or commit only our own transaction            
+            
+         SET @nErrNo = 0  
+         EXEC rdt.rdt_TM_ClusterPick_ConfirmToLoc   
+             @nMobile         = @nMobile,    
+             @nFunc           = @nFunc,    
+             @cLangCode       = @cLangCode,    
+             @nStep           = @nStep,    
+             @nInputKey       = @nInputKey,    
+             @cFacility       = @cFacility,    
+             @cStorerKey      = @cStorerKey,    
+             @cTaskDetailKey  = @cTaskDetailKey,    
+             @cToLOC          = @cToLOC,    
+             @tConfirm        = @tConfirm,  
+             @nErrNo          = @nErrNo     OUTPUT,    
+             @cErrMsg         = @cErrMsg    OUTPUT    
+  
+         IF @nErrNo <> 0  
+         BEGIN
+            ROLLBACK TRAN Step_ConfirmToLoc            
+            WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started            
+               COMMIT TRAN            
+            GOTO Step_ToLoc_Fail            
+         END
+
+         -- Extended update  
+         IF @cExtendedUpdateSP <> ''  
          BEGIN  
-            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +  
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +   
-               ' @cGroupKey, @cTaskDetailKey, @cCartId, @cFromLoc, @cCartonId, @cSKU, @nQty, @cOption, ' +  
-               ' @tExtUpdate, @nErrNo OUTPUT, @cErrMsg OUTPUT '  
+            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')  
+            BEGIN  
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +  
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +   
+                  ' @cGroupKey, @cTaskDetailKey, @cCartId, @cFromLoc, @cCartonId, @cSKU, @nQty, @cOption, ' +  
+                  ' @tExtUpdate, @nErrNo OUTPUT, @cErrMsg OUTPUT '  
   
-            SET @cSQLParam =  
-               ' @nMobile        INT,           ' +  
-               ' @nFunc          INT,           ' +  
-               ' @cLangCode      NVARCHAR( 3),  ' +  
-               ' @nStep          INT,           ' +  
-               ' @nInputKey      INT,           ' +  
-               ' @cFacility      NVARCHAR( 5),  ' +  
-               ' @cStorerKey     NVARCHAR( 15), ' +  
-               ' @cGroupKey      NVARCHAR( 10), ' +  
-               ' @cTaskDetailKey NVARCHAR( 10), ' +  
-               ' @cCartId        NVARCHAR( 10), ' +  
-               ' @cFromLoc       NVARCHAR( 10), ' +  
-               ' @cCartonId      NVARCHAR( 20), ' +  
-               ' @cSKU           NVARCHAR( 20), ' +  
-               ' @nQty           INT,           ' +  
-               ' @cOption        NVARCHAR( 1), ' +  
-               ' @tExtUpdate     VariableTable READONLY, ' +   
-               ' @nErrNo         INT           OUTPUT, ' +  
-               ' @cErrMsg        NVARCHAR( 20) OUTPUT  '  
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,   
-               @cGroupKey, @cTaskDetailKey, @cCartId, @cFromLoc, @cCartonId, @cSKU, @nQty, @cOption,   
-               @tExtUpdate, @nErrNo OUTPUT, @cErrMsg OUTPUT  
+               SET @cSQLParam =  
+                  ' @nMobile        INT,           ' +  
+                  ' @nFunc          INT,           ' +  
+                  ' @cLangCode      NVARCHAR( 3),  ' +  
+                  ' @nStep          INT,           ' +  
+                  ' @nInputKey      INT,           ' +  
+                  ' @cFacility      NVARCHAR( 5),  ' +  
+                  ' @cStorerKey     NVARCHAR( 15), ' +  
+                  ' @cGroupKey      NVARCHAR( 10), ' +  
+                  ' @cTaskDetailKey NVARCHAR( 10), ' +  
+                  ' @cCartId        NVARCHAR( 10), ' +  
+                  ' @cFromLoc       NVARCHAR( 10), ' +  
+                  ' @cCartonId      NVARCHAR( 20), ' +  
+                  ' @cSKU           NVARCHAR( 20), ' +  
+                  ' @nQty           INT,           ' +  
+                  ' @cOption        NVARCHAR( 1), ' +  
+                  ' @tExtUpdate     VariableTable READONLY, ' +   
+                  ' @nErrNo         INT           OUTPUT, ' +  
+                  ' @cErrMsg        NVARCHAR( 20) OUTPUT  '  
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,   
+                  @cGroupKey, @cTaskDetailKey, @cCartId, @cFromLoc, @cCartonId, @cSKU, @nQty, @cOption,   
+                  @tExtUpdate, @nErrNo OUTPUT, @cErrMsg OUTPUT  
   
-            IF @nErrNo > 0   
-            BEGIN
-               ROLLBACK TRAN Step_ConfirmToLoc            
-               WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started            
-                  COMMIT TRAN            
-               GOTO Step_ToLoc_Fail            
-            END
-         END  
-      END          
+               IF @nErrNo > 0   
+               BEGIN
+                  ROLLBACK TRAN Step_ConfirmToLoc            
+                  WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started            
+                     COMMIT TRAN            
+                  GOTO Step_ToLoc_Fail            
+               END
+            END  
+         END          
 
-      COMMIT TRAN Step_ConfirmToLoc -- Only commit change made here            
-      WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started            
-         COMMIT TRAN           
+         COMMIT TRAN Step_ConfirmToLoc -- Only commit change made here            
+         WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started            
+            COMMIT TRAN           
+      END
 
       -- Last check point on previous skip/not pick loc
       --Get task for next loc  
@@ -3276,7 +3734,7 @@ BEGIN
             WHERE TaskDetailKey = @cTaskDetailKey    
             IF @@ERROR <> 0    
             BEGIN    
-             SET @nErrNo = 148925    
+               SET @nErrNo = 148925    
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdTaskdetFail    
                GOTO Step_ReasonCode_Fail    
             END    
@@ -3443,6 +3901,38 @@ BEGIN
       END    
       ELSE    
       BEGIN    
+      	-- For those assigned deviceid, dropid when start picking need clear deviceid, dropid 
+      	IF @cAssignGroupKeyWhenNoSuggCartId = '1'
+      	BEGIN
+      	   SET @curRelTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+      	   SELECT TaskDetailKey
+      	   FROM dbo.TaskDetail WITH (NOLOCK)
+            WHERE Storerkey = @cStorerKey
+   		   AND   TaskType = 'CPK'
+   		   AND   Groupkey = @cGroupKey
+   		   AND   [Status] < '5'
+   		   OPEN @curRelTask
+   		   FETCH NEXT FROM @curRelTask INTO @cRelTaskKey
+   		   WHILE @@FETCH_STATUS = 0
+   		   BEGIN
+   			   UPDATE TaskDetail SET 
+   			      DeviceID = '', 
+   			      DropID = '', 
+   			      EditWho = @cUserName, 
+   			      EditDate = GETDATE()
+   			   WHERE TaskDetailKey = @cRelTaskKey
+
+               IF @@ERROR <> 0    
+               BEGIN    
+                  SET @nErrNo = 148934    
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdTaskdetFail    
+                  GOTO Step_ReasonCode_Fail    
+               END    
+            
+   			   FETCH NEXT FROM @curRelTask INTO @cRelTaskKey
+   		   END
+      	END
+      	
          -- Setup RDT storer config ContProcNotUpdTaskStatus, to avoid nspRFRSN01 set TaskDetail.Status = '9', when ContinueProcess <> 1    
     
          -- Go to next task/exit TM screen    
@@ -3561,14 +4051,20 @@ BEGIN
       
          IF @nErrNo <> 0      
             GOTO Step_ConfirmCartonID_Fail      
-            
+           
+          IF @cScanDevicePosition = '1'
+             SELECT @cSuggDPosition = DropId
+             FROM dbo.TaskDetail WITH (NOLOCK)
+             WHERE TaskDetailKey = @cTaskDetailKey
+             
          -- Prepare next screen var  
          SET @cOutField01 = @cSuggFromLOC   
          SET @cOutField02 = @cSuggCartonID  
          SET @cOutField03 = ''   
          SET @cOutField04 = @cPosition
          SET @cOutField05 = @cCartPickMethod
-
+         SET @cOutField06 = @cSuggDPosition
+         
          -- Go to next screen  
          SET @nScn = @nScn_CartonId  
          SET @nStep = @nStep_CartonId  
@@ -3659,11 +4155,16 @@ BEGIN
       V_QTY      = @nQty,  
       V_Loc      = @cFromLoc,  
       V_CaseID   = @cCartonID,  
-  
+      V_UOM      = @cPUOM,
+      
       V_Integer1 = @nSuggQty,  
       V_Integer2 = @nPickedQty,  
       V_Integer3 = @nActQTY,  
-        
+      V_Integer4 = @nPUOM_Div,
+      V_Integer5 = @nPQTY,
+      V_Integer6 = @nMQTY,
+      V_Integer7 = @nPQtyCursor,
+
       V_String1  = @cExtendedUpdateSP,  
       V_String2  = @cExtendedValidateSP,  
       V_String3  = @cExtendedInfoSP,  
@@ -3691,7 +4192,11 @@ BEGIN
       V_String25 = @cFlowThruStepCartID,
       V_String26 = @cFlowThruStepMatrix,
       V_String27 = @cConfirmToLoc,
-
+      V_String28 = @cAssignGroupKeyWhenNoSuggCartId,
+      V_String29 = @cScanDevicePosition,
+      V_String30 = @cSuggDPosition,
+      V_String31 = @cDPosition,
+         
       V_TaskDetailKey = @cTaskDetailKey,  
               
       V_String32   = @cAreakey,    
@@ -3702,7 +4207,10 @@ BEGIN
       V_String37   = @cRefKey03,    
       V_String38   = @cRefKey04,    
       V_String39   = @cRefKey05,    
-  
+      V_String40   = @cMUOM_Desc,
+      V_String41   = @cPUOM_Desc,
+      V_String42   = @cSkipToLoc,
+      
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,  
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,  
       I_Field03 = @cInField03,  O_Field03 = @cOutField03,   FieldAttr03  = @cFieldAttr03,  
