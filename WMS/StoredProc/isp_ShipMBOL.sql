@@ -74,6 +74,7 @@ GO
 /*                        -When SCE SP issue BEGIN TRAN for Shipment    */
 /* 20-SEP-2022  NJOW02    WMS-20699 Update MBOL Carrierkey to POD PODDEF06*/
 /* 20-SEP-2022  NJOW02    DEVOPS Combine Script                         */
+/* 17-May-2023  WLChooi   WMS-22541 - Add PreMBOLShipSP (WL02)          */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[isp_ShipMBOL]
@@ -291,6 +292,28 @@ BEGIN -- main
       END
 
    END -- 00A
+
+   --WL02 S
+   IF @n_continue = 1 OR @n_continue = 2
+   BEGIN
+      SET @b_Success = 0
+
+      EXECUTE dbo.ispPreMBOLShipWrapper
+              @c_MBOLKey = @c_MBOLKey
+            , @b_Success = @b_Success     OUTPUT
+            , @n_Err     = @n_err         OUTPUT
+            , @c_ErrMsg  = @c_errmsg      OUTPUT
+            , @b_debug   = 0
+
+      IF @n_err <> 0
+      BEGIN
+         SET @n_continue= 3
+         SET @b_Success = 0
+         SET @n_err  = 60546
+         SET @c_errmsg = 'Execute ispPreMBOLShipWrapper Failed'
+      END
+   END
+   --WL02 E
 
    IF @n_continue = 1 OR @n_continue=2
    BEGIN -- 01
