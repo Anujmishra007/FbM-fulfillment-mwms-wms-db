@@ -23,6 +23,7 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 21-Jan-2022  WLChooi 1.0   DevOps Combine Script                        */
+/* 14-Apr-2023  WZPang  1.1   WMS-21810 - Modify Columns                   */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_RPT_KIT_POPUPKITRP_001]
@@ -40,7 +41,8 @@ BEGIN
           KITDETAIL.StorerKey,
           KITDETAIL.Sku,
           KITDETAIL.ExpectedQty,
-          KIT.CustomerRefNo,
+          KIT.ExternKitKey,      --(WZ01)
+          --KIT.CustomerRefNo,
           PACK.Casecnt,
           SKU.Busr6,
           SKU.Busr7
@@ -48,7 +50,7 @@ BEGIN
    JOIN KITDETAIL (NOLOCK) ON (KIT.KITKey = KITDETAIL.KITKey)
    JOIN ( SELECT Kitkey, SUM(ExpectedQty) FromSkuQty
           FROM KITDETAIL (NOLOCK)
-          WHERE   (KITDETAIL.[Type] = 'F' )
+          WHERE   (KITDETAIL.[Type] = 'T' )
           GROUP BY Kitkey ) KDF ON (KITDETAIL.Kitkey = KDF.Kitkey)
    JOIN SKU (NOLOCK) ON (KITDETAIL.Storerkey = SKU.Storerkey)
                     AND (KITDETAIL.Sku = SKU.Sku)
