@@ -12,6 +12,7 @@ GO
 /* Date        Rev  Author     Purposes                                         */                     
 /* 22-Jun-2023 1.0  WLChooi    Created (UWP-1977)                               */  
 /* 22-Jun-2023 1.0  WLChooi    DevOps Combine Script                            */  
+/* 20-Jul-2023 1.1  WLChooi    UWP-1977 - Logic change (WL01)                   */
 /********************************************************************************/                    
                       
 CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_TUR_UCCLBTUR01_TE]                          
@@ -274,7 +275,7 @@ BEGIN
                   + N'      , S.Company AS cust_name ' + CHAR(13)  
                   + N'      , ISNULL(@c_CAddr1,'''') AS cust_addr ' + CHAR(13)  
                   + N'      , O.ExternOrderKey AS Desp_note_no ' + CHAR(13)  
-                  + N'      , C.Long AS TEC_part_no ' + CHAR(13)  
+                  + N'      , C.UDF03 AS TEC_part_no ' + CHAR(13)   --WL01
                   + N'      , PD.Qty ' + CHAR(13)  
                   + N'      , OD.Lottable01 AS Batch ' + CHAR(13)  
                   + N'      , CONCAT(''CARTON '', ROW_NUMBER() OVER (ORDER BY PD.CartonNo), '' of '', COUNT(*) OVER ()) AS box_cnt ' + CHAR(13)   --10  
@@ -294,7 +295,7 @@ BEGIN
                   + N' JOIN PackHeader PH (NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo ' + CHAR(13)  
                   + @c_JoinStatement + CHAR(13)  
                   + N' JOIN ORDERDETAIL OD ON O.OrderKey = OD.OrderKey ' + CHAR(13)  
-                  + N' LEFT JOIN CODELKUP C (NOLOCK) ON OD.Sku = C.[Description] AND OD.StorerKey = C.Storerkey AND O.ConsigneeKey = C.Code ' + CHAR(13)  
+                  + N' LEFT JOIN CODELKUP C (NOLOCK) ON OD.Sku = C.[UDF02] AND OD.StorerKey = C.Storerkey AND O.ConsigneeKey = C.UDF01 ' + CHAR(13)   --WL01
                   + N' JOIN FACILITY F (NOLOCK) ON O.Facility = F.Facility ' + CHAR(13)  
                   + N' LEFT JOIN STORER S (NOLOCK) ON O.ConsigneeKey = S.StorerKey ' + CHAR(13)  
                   + N' WHERE PD.PickSlipNo = @c_Sparm01 ' + CHAR(13)  
