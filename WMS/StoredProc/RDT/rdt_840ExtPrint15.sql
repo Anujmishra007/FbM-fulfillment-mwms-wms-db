@@ -13,6 +13,7 @@ GO
 /* Date       Rev  Author     Purposes                                  */
 /* 2021-01-04 1.0  James      WMS-15988. Created                        */
 /* 2023-02-15 1.1  YeeKung    WMS-21751 Add shiplabel logic (yeekung01) */
+/* 2023-05-31 1.2  James      WMS-22632 Add ZPL shiplabel print(james01)*/
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_840ExtPrint15] (
@@ -43,10 +44,14 @@ AS
            @cFacility         NVARCHAR( 5),
            @cDocType          NVARCHAR( 1),
            @cShippLabel       NVARCHAR( 10),
-           @cShipperKey       NVARCHAR( 15)
+           @cShipperKey       NVARCHAR( 15),
+           @cSHIPZPLLBL       NVARCHAR( 10),
+           @nPickQty          INT = 0,
+           @nPackQty          INT = 0           
 
    DECLARE @tShippLabel    VariableTable
-
+   DECLARE @tSHIPZPLLBL    VariableTable
+   
    SELECT @cLabelPrinter = Printer,
           @cFacility = Facility,
           @cUserName = UserName
@@ -98,10 +103,50 @@ AS
                  @cErrMsg OUTPUT
             END
          END
+
+         SELECT @nPickQty = ISNULL( SUM( QTY), 0)
+         FROM dbo.PickDetail WITH (NOLOCK)
+         WHERE OrderKey = @cOrderKey 
+         AND   StorerKey = @cStorerkey
+
+         SELECT @nPackQty = ISNULL( SUM( QTY), 0)
+         FROM dbo.PackDetail WITH (NOLOCK) 
+         WHERE StorerKey = @cStorerkey
+         AND   PickSlipNo = @cPickSlipNo
+
+         -- Pack completed
+         IF @nPickQty = @nPackQty
+         BEGIN
+            SET @cSHIPZPLLBL = rdt.RDTGetConfig( @nFunc, 'SHIPZPLLBL', @cStorerKey)  
+            IF @cSHIPZPLLBL = '0'  
+               SET @cSHIPZPLLBL = ''  
+         	
+         	IF @cSHIPZPLLBL <> ''
+         	BEGIN
+               INSERT INTO @tSHIPZPLLBL (Variable, Value) VALUES ( '@cOrderKey',   @cOrderKey)
+               
+               -- Print label
+               EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, '',
+                  @cSHIPZPLLBL, -- Report type
+                  @tSHIPZPLLBL, -- Report params
+                  'rdt_840ExtPrint15',
+                  @nErrNo  OUTPUT,
+                  @cErrMsg OUTPUT
+
+               IF @nErrNo <> 0
+                  GOTO Quit
+            END
+         END
       END   -- IF @nStep = 4
    END   -- @nInputKey = 1
 
 Quit:
 GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
 GRANT EXECUTE ON  [RDT].[rdt_840ExtPrint15] TO [NSQL]
 GO
