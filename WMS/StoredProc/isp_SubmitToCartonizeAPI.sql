@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_SubmitToCartonizeAPI]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_SubmitToCartonizeAPI]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -30,13 +25,17 @@ GO
 /* 2021-04-27  Wan02    1.2   Standardize #OptimizeItemToPack Temp Table*/
 /*                            Use at isp_SubmitToCartonizeAPI           */
 /* 2021-09-27  Wan02    1.2   DevOps Combine Script                     */
+/* 2023-04-19  NJOW01   1.3   WMS-22210 Support set algorithm to the    */
+/*                            cartonization API. Item position can fix  */
+/*                            to by Length, Width or height             */ 
 /************************************************************************/
-CREATE PROC isp_SubmitToCartonizeAPI
+CREATE OR ALTER PROC isp_SubmitToCartonizeAPI
            @c_CartonGroup        NVARCHAR(10) 
          , @c_CartonType         NVARCHAR(10) 
+         , @c_Algorithm          NVARCHAR(30)   = '' --NJOW01 Algorithm code - Length, Width or height  
          , @b_Success            INT            = 1 OUTPUT
          , @n_Err                INT            = 0 OUTPUT
-         , @c_ErrMsg             NVARCHAR(255)  = ''OUTPUT
+         , @c_ErrMsg             NVARCHAR(255)  = ''OUTPUT         
          , @b_Debug              INT            = 0
 AS
 BEGIN
@@ -195,12 +194,14 @@ DECLARE
       GOTO QUIT_SP  
    END
 
- 
    SET @c_RequestString = '{' + 
+      CASE WHEN ISNULL(@c_Algorithm,'') <> '' THEN  --NJOW01
+          '"Algorithm":"' + RTRIM(@c_Algorithm) + '",' 
+           ELSE '' END +
       SUBSTRING(@c_ContainerString, 2, LEN(@c_ContainerString) - 2) + 
       ',' +
       SUBSTRING(@c_PackItemString, 2, LEN(@c_PackItemString) - 2) +
-      '}'
+      '}'   	  
  
    IF @b_Debug = 1
       PRINT '@c_RequestString >>' + @c_RequestString 
