@@ -14,6 +14,8 @@ GO
 /* 2021-01-04 1.0  James      WMS-15988. Created                        */
 /* 2023-02-15 1.1  YeeKung    WMS-21751 Add shiplabel logic (yeekung01) */
 /* 2023-05-31 1.2  James      WMS-22632 Add ZPL shiplabel print(james01)*/
+/* 2023-07-21 1.3  James      Addhoc fix. Only ShipperKey = FEDEX can   */
+/*                            print label SHIPZPLLBL (james02)          */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_840ExtPrint15] (
@@ -121,7 +123,7 @@ AS
             IF @cSHIPZPLLBL = '0'  
                SET @cSHIPZPLLBL = ''  
          	
-         	IF @cSHIPZPLLBL <> ''
+         	IF @cSHIPZPLLBL <> '' AND @cShipperKey = 'FEDEX'
          	BEGIN
                INSERT INTO @tSHIPZPLLBL (Variable, Value) VALUES ( '@cOrderKey',   @cOrderKey)
                
