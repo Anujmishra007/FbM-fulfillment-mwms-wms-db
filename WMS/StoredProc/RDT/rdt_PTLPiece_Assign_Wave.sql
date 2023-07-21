@@ -1,11 +1,8 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE Object_Id = OBJECT_ID(N'[RDT].[rdt_PTLPiece_Assign_Wave]') AND Type in (N'P', N'PC'))
-   DROP PROCEDURE rdt.rdt_PTLPiece_Assign_Wave
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 
 /******************************************************************************/
 /* Store procedure: rdt_PTLPiece_Assign_Wave                                  */
@@ -13,36 +10,37 @@ GO
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
 /* 22-04-2021 1.0  yeekung  WMS-16875 Created                                 */
+/* 20-07-2023 1.1  yeekung  WMS-23039 Add order by orderkey (yeekung01)       */
 /******************************************************************************/
 
-CREATE PROC rdt.rdt_PTLPiece_Assign_Wave (
-   @nMobile          INT, 
-   @nFunc            INT, 
-   @cLangCode        NVARCHAR( 3), 
-   @nStep            INT, 
-   @nInputKey        INT, 
-   @cFacility        NVARCHAR( 5), 
-   @cStorerKey       NVARCHAR( 15),  
-   @cStation         NVARCHAR( 10),  
+CREATE OR ALTER PROC [RDT].[rdt_PTLPiece_Assign_Wave] (
+   @nMobile          INT,
+   @nFunc            INT,
+   @cLangCode        NVARCHAR( 3),
+   @nStep            INT,
+   @nInputKey        INT,
+   @cFacility        NVARCHAR( 5),
+   @cStorerKey       NVARCHAR( 15),
+   @cStation         NVARCHAR( 10),
    @cMethod          NVARCHAR( 1),
    @cType            NVARCHAR( 15), --POPULATE-IN/POPULATE-OUT/CHECK
-   @cInField01       NVARCHAR( 60) OUTPUT,  @cOutField01 NVARCHAR( 60) OUTPUT,  @cFieldAttr01 NVARCHAR( 1) OUTPUT,   
-   @cInField02       NVARCHAR( 60) OUTPUT,  @cOutField02 NVARCHAR( 60) OUTPUT,  @cFieldAttr02 NVARCHAR( 1) OUTPUT,   
-   @cInField03       NVARCHAR( 60) OUTPUT,  @cOutField03 NVARCHAR( 60) OUTPUT,  @cFieldAttr03 NVARCHAR( 1) OUTPUT,   
-   @cInField04       NVARCHAR( 60) OUTPUT,  @cOutField04 NVARCHAR( 60) OUTPUT,  @cFieldAttr04 NVARCHAR( 1) OUTPUT,   
-   @cInField05       NVARCHAR( 60) OUTPUT,  @cOutField05 NVARCHAR( 60) OUTPUT,  @cFieldAttr05 NVARCHAR( 1) OUTPUT,   
-   @cInField06       NVARCHAR( 60) OUTPUT,  @cOutField06 NVARCHAR( 60) OUTPUT,  @cFieldAttr06 NVARCHAR( 1) OUTPUT,  
-   @cInField07       NVARCHAR( 60) OUTPUT,  @cOutField07 NVARCHAR( 60) OUTPUT,  @cFieldAttr07 NVARCHAR( 1) OUTPUT,  
-   @cInField08       NVARCHAR( 60) OUTPUT,  @cOutField08 NVARCHAR( 60) OUTPUT,  @cFieldAttr08 NVARCHAR( 1) OUTPUT,  
-   @cInField09       NVARCHAR( 60) OUTPUT,  @cOutField09 NVARCHAR( 60) OUTPUT,  @cFieldAttr09 NVARCHAR( 1) OUTPUT,  
-   @cInField10       NVARCHAR( 60) OUTPUT,  @cOutField10 NVARCHAR( 60) OUTPUT,  @cFieldAttr10 NVARCHAR( 1) OUTPUT,  
-   @cInField11       NVARCHAR( 60) OUTPUT,  @cOutField11 NVARCHAR( 60) OUTPUT,  @cFieldAttr11 NVARCHAR( 1) OUTPUT, 
-   @cInField12       NVARCHAR( 60) OUTPUT,  @cOutField12 NVARCHAR( 60) OUTPUT,  @cFieldAttr12 NVARCHAR( 1) OUTPUT, 
-   @cInField13       NVARCHAR( 60) OUTPUT,  @cOutField13 NVARCHAR( 60) OUTPUT,  @cFieldAttr13 NVARCHAR( 1) OUTPUT, 
-   @cInField14       NVARCHAR( 60) OUTPUT,  @cOutField14 NVARCHAR( 60) OUTPUT,  @cFieldAttr14 NVARCHAR( 1) OUTPUT, 
-   @cInField15       NVARCHAR( 60) OUTPUT,  @cOutField15 NVARCHAR( 60) OUTPUT,  @cFieldAttr15 NVARCHAR( 1) OUTPUT, 
+   @cInField01       NVARCHAR( 60) OUTPUT,  @cOutField01 NVARCHAR( 60) OUTPUT,  @cFieldAttr01 NVARCHAR( 1) OUTPUT,
+   @cInField02       NVARCHAR( 60) OUTPUT,  @cOutField02 NVARCHAR( 60) OUTPUT,  @cFieldAttr02 NVARCHAR( 1) OUTPUT,
+   @cInField03       NVARCHAR( 60) OUTPUT,  @cOutField03 NVARCHAR( 60) OUTPUT,  @cFieldAttr03 NVARCHAR( 1) OUTPUT,
+   @cInField04       NVARCHAR( 60) OUTPUT,  @cOutField04 NVARCHAR( 60) OUTPUT,  @cFieldAttr04 NVARCHAR( 1) OUTPUT,
+   @cInField05       NVARCHAR( 60) OUTPUT,  @cOutField05 NVARCHAR( 60) OUTPUT,  @cFieldAttr05 NVARCHAR( 1) OUTPUT,
+   @cInField06       NVARCHAR( 60) OUTPUT,  @cOutField06 NVARCHAR( 60) OUTPUT,  @cFieldAttr06 NVARCHAR( 1) OUTPUT,
+   @cInField07       NVARCHAR( 60) OUTPUT,  @cOutField07 NVARCHAR( 60) OUTPUT,  @cFieldAttr07 NVARCHAR( 1) OUTPUT,
+   @cInField08       NVARCHAR( 60) OUTPUT,  @cOutField08 NVARCHAR( 60) OUTPUT,  @cFieldAttr08 NVARCHAR( 1) OUTPUT,
+   @cInField09       NVARCHAR( 60) OUTPUT,  @cOutField09 NVARCHAR( 60) OUTPUT,  @cFieldAttr09 NVARCHAR( 1) OUTPUT,
+   @cInField10       NVARCHAR( 60) OUTPUT,  @cOutField10 NVARCHAR( 60) OUTPUT,  @cFieldAttr10 NVARCHAR( 1) OUTPUT,
+   @cInField11       NVARCHAR( 60) OUTPUT,  @cOutField11 NVARCHAR( 60) OUTPUT,  @cFieldAttr11 NVARCHAR( 1) OUTPUT,
+   @cInField12       NVARCHAR( 60) OUTPUT,  @cOutField12 NVARCHAR( 60) OUTPUT,  @cFieldAttr12 NVARCHAR( 1) OUTPUT,
+   @cInField13       NVARCHAR( 60) OUTPUT,  @cOutField13 NVARCHAR( 60) OUTPUT,  @cFieldAttr13 NVARCHAR( 1) OUTPUT,
+   @cInField14       NVARCHAR( 60) OUTPUT,  @cOutField14 NVARCHAR( 60) OUTPUT,  @cFieldAttr14 NVARCHAR( 1) OUTPUT,
+   @cInField15       NVARCHAR( 60) OUTPUT,  @cOutField15 NVARCHAR( 60) OUTPUT,  @cFieldAttr15 NVARCHAR( 1) OUTPUT,
    @nScn             INT           OUTPUT,
-   @nErrNo           INT           OUTPUT, 
+   @nErrNo           INT           OUTPUT,
    @cErrMsg          NVARCHAR( 20) OUTPUT
 )
 AS
@@ -58,19 +56,19 @@ BEGIN
    DECLARE @cIPAddress     NVARCHAR(40)
    DECLARE @cPosition      NVARCHAR(10)
    DECLARE @tVar           VariableTable
-   
+
    DECLARE @cDynamicSlot   NVARCHAR( 1)
    DECLARE @cWaveKey       NVARCHAR(10)
    DECLARE @cOrderKey      NVARCHAR(10)
    DECLARE @cCartonID      NVARCHAR(20)
    DECLARE @nTotalOrder    INT
    DECLARE @nTotalCarton   INT
-   
+
    SET @nTranCount = @@TRANCOUNT
-   
+
    -- Storer configure
    SET @cDynamicSlot = rdt.RDTGetConfig( @nFunc, 'DynamicSlot', @cStorerKey)
-   
+
    /***********************************************************************************************
                                                 POPULATE
    ***********************************************************************************************/
@@ -79,9 +77,9 @@ BEGIN
       -- Get assign info
       SET @cWaveKey = ''
       SELECT @cWaveKey = WaveKey
-      FROM rdt.rdtPTLPieceLog WITH (NOLOCK) 
+      FROM rdt.rdtPTLPieceLog WITH (NOLOCK)
       WHERE Station = @cStation
-        
+
 		-- Prepare next screen var
 		SET @cOutField01 = @cWaveKey
 
@@ -94,19 +92,19 @@ BEGIN
 
    	   EXEC rdt.rdtSetFocusField @nMobile, 1 -- WaveKey
       END
-     
-		
+
+
 		-- Go to wave, carton screen
 		SET @nScn = 4607
    END
-      
+
    IF @cType = 'POPULATE-OUT'
    BEGIN
       SET @cFieldAttr01 = '' -- WaveKey
-      
+
 		-- Go to station screen
    END
-   
+
    /***********************************************************************************************
                                                  CHECK
    ***********************************************************************************************/
@@ -114,19 +112,19 @@ BEGIN
    BEGIN
       -- Screen mapping
       SET @cWaveKey = CASE WHEN @cFieldAttr01 = '' THEN @cInField01 ELSE @cOutField01 END
-      
+
       -- WaveKey enable
       IF @cFieldAttr01 = ''
       BEGIN
    		-- Check blank
-   		IF @cWaveKey = '' 
+   		IF @cWaveKey = ''
          BEGIN
             SET @nErrNo = 168101
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need WaveKey
             EXEC rdt.rdtSetFocusField @nMobile, 1 -- WaveKey
             GOTO Quit
          END
-         
+
          -- Check wave valid
          IF NOT EXISTS( SELECT 1 FROM WaveDetail WITH (NOLOCK) WHERE WaveKey = @cWaveKey)
          BEGIN
@@ -135,7 +133,7 @@ BEGIN
             SET @cOutField01 = ''
             GOTO Quit
          END
-   
+
          -- Check wave assigned
          IF EXISTS( SELECT 1
             FROM rdt.rdtPTLPieceLog WITH (NOLOCK)
@@ -147,10 +145,10 @@ BEGIN
             SET @cOutField01 = ''
             GOTO Quit
          END
-   
+
          -- Check wave belong to login storer
-         IF EXISTS( SELECT 1 
-            FROM WaveDetail WD WITH (NOLOCK) 
+         IF EXISTS( SELECT 1
+            FROM WaveDetail WD WITH (NOLOCK)
                JOIN Orders O WITH (NOLOCK) ON (O.OrderKey = WD.OrderKey)
             WHERE WD.WaveKey = @cWaveKey
                AND O.StorerKey <> @cStorerKey)
@@ -160,12 +158,12 @@ BEGIN
             SET @cOutField01 = ''
             GOTO Quit
          END
-         
+
          -- Check pick not completed
          IF rdt.RDTGetConfig( @nFunc, 'CheckPickCompleted', @cStorerKey) = '1'
          BEGIN
-            IF EXISTS( SELECT 1 
-               FROM WaveDetail WD WITH (NOLOCK) 
+            IF EXISTS( SELECT 1
+               FROM WaveDetail WD WITH (NOLOCK)
                   JOIN Orders O WITH (NOLOCK) ON (O.OrderKey = WD.OrderKey)
                   JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
                WHERE WD.WaveKey = @cWaveKey
@@ -180,8 +178,8 @@ BEGIN
          END
 
          -- Save assign
-         UPDATE rdt.rdtMobRec SET 
-            V_WaveKey = @cWaveKey, 
+         UPDATE rdt.rdtMobRec SET
+            V_WaveKey = @cWaveKey,
             EditDate = GETDATE()
          WHERE Mobile = @nMobile
          IF @@ERROR <> 0
@@ -193,24 +191,24 @@ BEGIN
 
          -- Get station info
          DECLARE @nTotalPos INT
-         SELECT @nTotalPos = COUNT(1) 
-         FROM DeviceProfile WITH (NOLOCK) 
-         WHERE DeviceType = 'STATION' 
-            AND DeviceID = @cStation 
-   
+         SELECT @nTotalPos = COUNT(1)
+         FROM DeviceProfile WITH (NOLOCK)
+         WHERE DeviceType = 'STATION'
+            AND DeviceID = @cStation
+
          -- Get total orders
-         SELECT @nTotalOrder = COUNT( DISTINCT O.OrderKey) 
-         FROM WaveDetail WD WITH (NOLOCK) 
+         SELECT @nTotalOrder = COUNT( DISTINCT O.OrderKey)
+         FROM WaveDetail WD WITH (NOLOCK)
             JOIN Orders O WITH (NOLOCK) ON (O.OrderKey = WD.OrderKey)
             JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
          WHERE WD.WaveKey = @cWaveKey
             AND PD.QTY > 0
             AND PD.Status <> '4'
-            AND O.Status <> 'CANC' 
+            AND O.Status <> 'CANC'
             AND O.SOStatus <> 'CANC'
-      
+
          -- Check order fit in station
-         IF @nTotalOrder > @nTotalPos 
+         IF @nTotalOrder > @nTotalPos
          BEGIN
             SET @nErrNo = 168107
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Not enuf Pos
@@ -221,20 +219,21 @@ BEGIN
          -- Handling transaction
          BEGIN TRAN  -- Begin our own transaction
          SAVE TRAN rdt_PTLPiece_Assign -- For rollback or commit only our own transaction
-            
+
          -- Loop orders
          DECLARE @cPreassignPos NVARCHAR(10)
          DECLARE @curOrder CURSOR
          SET @curOrder = CURSOR FOR
             SELECT DISTINCT O.OrderKey
-            FROM WaveDetail WD WITH (NOLOCK) 
+            FROM WaveDetail WD WITH (NOLOCK)
                JOIN Orders O WITH (NOLOCK) ON (O.OrderKey = WD.OrderKey)
                JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
             WHERE WD.WaveKey = @cWaveKey
                AND PD.QTY > 0
                AND PD.Status <> '4'
-               AND O.Status <> 'CANC' 
+               AND O.Status <> 'CANC'
                AND O.SOStatus <> 'CANC'
+            ORDER BY O.OrderKey --(yeekung01)
          OPEN @curOrder
          FETCH NEXT FROM @curOrder INTO @cOrderKey
          WHILE @@FETCH_STATUS = 0
@@ -248,7 +247,7 @@ BEGIN
                SET @cIPAddress = ''
                SET @cPosition = ''
                SELECT TOP 1
-                  @cIPAddress = DP.IPAddress, 
+                  @cIPAddress = DP.IPAddress,
                   @cPosition = DP.DevicePosition
                FROM dbo.DeviceProfile DP WITH (NOLOCK)
                WHERE DP.DeviceType = 'STATION'
@@ -258,7 +257,7 @@ BEGIN
                      WHERE Log.Station = @cStation
                         AND Log.Position = DP.DevicePosition)
                ORDER BY DP.LogicalPos, DP.DevicePosition
-      
+
                -- Save assign
                INSERT rdt.rdtPTLPieceLog (Station, IPAddress, Position, WaveKey, OrderKey)
                VALUES (@cStation, @cIPAddress, @cPosition, @cWaveKey, @cOrderKey)
@@ -269,24 +268,24 @@ BEGIN
                   GOTO RollBackTran
                END
             END
-      
+
             FETCH NEXT FROM @curOrder INTO @cOrderKey
          END
-      
+
          COMMIT TRAN rdt_PTLPiece_Assign
 
          -- Get carton not yet assign
          SET @cOrderKey = ''
          SET @cPosition = ''
-         SELECT TOP 1 
-            @cOrderKey = OrderKey, 
-            @cPosition = Position, 
+         SELECT TOP 1
+            @cOrderKey = OrderKey,
+            @cPosition = Position,
             @cCartonID = ''
          FROM rdt.rdtPTLPieceLog WITH (NOLOCK)
          WHERE Station = @cStation
             AND CartonID = ''
-         ORDER BY RowRef 
-         
+         ORDER BY RowRef
+
          SET @cFieldAttr01 = '' -- BatchKey
 
          GOTO Quit
@@ -306,11 +305,5 @@ Quit:
 
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON rdt.rdt_PTLPiece_Assign_Wave TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_PTLPiece_Assign_Wave] TO [NSQL]
 GO
