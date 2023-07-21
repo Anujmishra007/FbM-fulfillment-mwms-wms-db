@@ -14,7 +14,7 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.2                                                          */  
+/* Version: 1.3                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
@@ -24,6 +24,7 @@ GO
 /* 2023-03-28 Wan01  1.1   Fixed Update before validation and double     */
 /*                         update & Fixed Error #                        */
 /* 2023-05-12 Wan02  1.2   Fix Where Clause Issue-Mulitple From Tables   */
+/* 2023-06-13 Wan03  1.3   LFWM-4249-SCE PH Copy value to all row (ASN)Bug*/
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_CopyValue_Receiptdetail_Std]  
    @c_TableName            NVARCHAR(30) 
@@ -44,6 +45,9 @@ BEGIN
 
    DECLARE @n_StartTCnt             INT            = @@TRANCOUNT
          , @n_Continue              INT            = 1
+         , @c_InsertFromSQL         NVARCHAR(MAX)  = ''                             --(Wan03)
+         , @c_InsertParms           NVARCHAR(4000) = ''                             --(Wan03)
+         , @c_WhereClause           NVARCHAR(MAX)  = ''                             --(Wan03)
            
          , @c_SQL                   NVARCHAR(4000) = ''
          , @c_SQLParms              NVARCHAR(4000) = ''
@@ -51,6 +55,7 @@ BEGIN
          
          , @c_CopyValue             NVARCHAR(4000) = ''
          , @b_Trafficop_NULL        BIT            = 1
+         , @c_TrafficCop            NVARCHAR(1)    = 'S'                            --(Wan03)
          , @c_UserName              NVARCHAR(128)  = SUSER_SNAME()
                   
          , @c_SPName                NVARCHAR(60)   = ''
@@ -142,25 +147,100 @@ BEGIN
       AND r.FinalizeFlag <> 'Y'
       ORDER BY r.ReceiptLineNumber
 
+      IF OBJECT_ID('tempdb..#VALDN','u') IS NOT NULL                                --(Wan03) - START 
+      BEGIN
+         DROP TABLE #VALDN 
+      END
+      
+      CREATE TABLE #VALDN (Rowid  INT NOT NULL IDENTITY(1,1) PRIMARY KEY)
+ 
+      IF OBJECT_ID('tempdb..SCHEMA','u') IS NOT NULL 
+      BEGIN
+         DROP TABLE #SCHEMA
+      END
+      
+      CREATE TABLE #SCHEMA (Column_Name NVARCHAR(80), Data_Type NVARCHAR(80))  
+      
+      EXEC [WM].[lsp_BuildInsertFromSQL]
+         @c_WhereClause       = @c_WhereClause    
+      ,  @c_TempTable         = '#VALDN'       
+      ,  @c_SchemaTable       = '#SCHEMA'         
+      ,  @c_BuildFromTable    = '#INPUTDATA' 
+      ,  @c_UserName          = @c_UserName 
+      ,  @b_Success           = @b_Success         OUTPUT    
+      ,  @n_Err               = @n_Err             OUTPUT
+      ,  @c_Errmsg            = @c_Errmsg          OUTPUT
+      ,  @c_InsertFromSQL     = @c_InsertFromSQL   OUTPUT
+      
+      IF @b_Success = 0
+      BEGIN
+         SET @n_Continue = 3
+         GOTO EXIT_SP
+      END 
+     
+      IF EXISTS(  SELECT TOP 1 1
+                  FROM CODELKUP CL (NOLOCK) 
+                  JOIN CODELIST CLS (NOLOCK) ON CL.UDF01 = CLS.LISTNAME
+                  JOIN CODELKUP CLSD (NOLOCK) ON CLS.ListName = CLSD.Listname
+                  JOIN V_Extended_Validation V ON CLS.ListGroup = V.ValidateTable AND CL.Code = V.ValidationType
+                  WHERE CL.ListName = 'VALDNCFG'
+                  AND V.ValidationType <> V.ValidateTable
+                  AND CLS.ListGroup = 'ReceiptDetail'
+                  AND CL.Storerkey = @c_Storerkey
+               ) 
+      BEGIN 
+         EXEC sp_ExecuteSQL @c_InsertFromSQL
+                           ,@c_InsertParms
+                                 
+         IF @@ERROR <> 0
+         BEGIN
+            SET @n_Continue = 3
+            GOTO EXIT_SP 
+         END
+           
+         EXEC [WM].[lsp_Wrapup_Validation_Wrapper]    
+            @c_Module            = 'Receipt'  
+         ,  @c_ControlObject     = 'WM.lsp_CopyValue_Receiptdetail_Std'  
+         ,  @c_UpdateTable       = 'ReceiptDetail'  
+         ,  @c_XMLSchemaString   = ''   
+         ,  @c_XMLDataString     = 'CUSTOM_VALIDATE'     
+         ,  @b_Success           = @b_Success   OUTPUT          
+         ,  @n_Err               = @n_Err       OUTPUT          
+         ,  @c_Errmsg            = @c_Errmsg    OUTPUT  
+         ,  @c_UserName          = @c_UserName  
+           
+         IF @b_Success = 0  
+         BEGIN  
+            SET @n_Continue = 3 
+            GOTO EXIT_SP 
+         END 
+      END
+
+      SET @c_WhereClause = N'Receiptkey = @c_Key1 AND ReceiptLineNumber = @c_Key2'
+      SET @c_InsertParms = N'@c_Key1 NVARCHAR(30)'
+                         + ',@c_Key2 NVARCHAR(30)'
+   
+      SET @c_InsertFromSQL = @c_InsertFromSQL + ' WHERE ' + @c_WhereClause          --(Wan03) - END                        
+
       SET @c_SQL = N'DECLARE CUR_SELECT CURSOR FAST_FORWARD READ_ONLY FOR'
                  + ' SELECT i.ReceiptLineNumber'
                  + ' , i.Storerkey'  
                  + ' , i.Sku'   
-                 + ' , i.Lottable01' 
-                 + ' , i.Lottable02'  
-                 + ' , i.Lottable03' 
-                 + ' , i.Lottable04'  
-                 + ' , i.Lottable05' 
-                 + ' , i.Lottable06'  
-                 + ' , i.Lottable07' 
-                 + ' , i.Lottable08' 
-                 + ' , i.Lottable09' 
-                 + ' , i.Lottable10' 
-                 + ' , i.Lottable11' 
-                 + ' , i.Lottable12'  
-                 + ' , i.Lottable13' 
-                 + ' , i.Lottable14'  
-                 + ' , i.Lottable15'                                                                                                                                                        
+                 --+ ' , i.Lottable01' 
+                 --+ ' , i.Lottable02'  
+                 --+ ' , i.Lottable03' 
+                 --+ ' , i.Lottable04'  
+                 --+ ' , i.Lottable05' 
+                 --+ ' , i.Lottable06'  
+                 --+ ' , i.Lottable07' 
+                 --+ ' , i.Lottable08' 
+                 --+ ' , i.Lottable09' 
+                 --+ ' , i.Lottable10' 
+                 --+ ' , i.Lottable11' 
+                 --+ ' , i.Lottable12'  
+                 --+ ' , i.Lottable13' 
+                 --+ ' , i.Lottable14'  
+                 --+ ' , i.Lottable15'                                                                                                                                                        
                  + ' FROM #INPUTDATA as i WITH (NOLOCK)'
                  + ' WHERE i.ReceiptKey = @c_CopyFromKey1'
                  + ' AND i.' + @c_ColumnName + ' NOT IN ( @c_CopyValue )'
@@ -179,9 +259,9 @@ BEGIN
       
       FETCH NEXT FROM CUR_SELECT INTO 
             @c_ReceiptLineNumber, @c_Storerkey, @c_Sku
-         ,  @c_Lottable01Value, @c_Lottable02Value, @c_Lottable03Value, @dt_Lottable04Value, @dt_Lottable05Value
-         ,  @c_Lottable06Value, @c_Lottable07Value, @c_Lottable08Value, @c_Lottable09Value, @c_Lottable10Value 
-         ,  @c_Lottable11Value, @c_Lottable12Value, @dt_Lottable13Value, @dt_Lottable14Value, @dt_Lottable15Value 
+         --,  @c_Lottable01Value, @c_Lottable02Value, @c_Lottable03Value, @dt_Lottable04Value, @dt_Lottable05Value
+         --,  @c_Lottable06Value, @c_Lottable07Value, @c_Lottable08Value, @c_Lottable09Value, @c_Lottable10Value 
+         --,  @c_Lottable11Value, @c_Lottable12Value, @dt_Lottable13Value, @dt_Lottable14Value, @dt_Lottable15Value 
 
       WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1, 2)
       BEGIN
@@ -249,6 +329,22 @@ BEGIN
                IF @c_ColumnName = 'Lottable14' SET @dt_Lottable14Value= @c_CopyValue  
                IF @c_ColumnName = 'Lottable15' SET @dt_Lottable15Value= @c_CopyValue
                
+               SET @c_Lottable01 = ''                                               --(Wan03)
+               SET @c_Lottable02 = ''                                               --(Wan03)
+               SET @c_Lottable03 = ''                                               --(Wan03)
+               SET @dt_Lottable04= NULL                                             --(Wan03)
+               SET @dt_Lottable05= NULL                                             --(Wan03)
+               SET @c_Lottable06 = ''                                               --(Wan03)
+               SET @c_Lottable07 = ''                                               --(Wan03)
+               SET @c_Lottable08 = ''                                               --(Wan03)
+               SET @c_Lottable09 = ''                                               --(Wan03)
+               SET @c_Lottable10 = ''                                               --(Wan03)
+               SET @c_Lottable11 = ''                                               --(Wan03)
+               SET @c_Lottable12 = ''                                               --(Wan03)
+               SET @dt_Lottable13= NULL                                             --(Wan03)
+               SET @dt_Lottable14= NULL                                             --(Wan03)
+               SET @dt_Lottable15= NULL                                             --(Wan03)
+               
                EXEC WM.lspLottableRule_Wrapper
                   @c_SPName    = ''                           
                ,  @c_Listname  = @c_ColumnName
@@ -305,36 +401,46 @@ BEGIN
                IF @n_Continue IN (1,2)
                BEGIN
                   SET @c_SQL_LA = ''
-                  IF @c_Lottable01 <> @c_Lottable01Value  AND @c_ColumnName <> 'Lottable01' 
+                  IF @c_Lottable01 <> ''  AND @c_ColumnName <> 'Lottable01'         --(Wan03) - START
                      SET @c_SQL_LA = @c_SQL_LA + ', Lottable01 = @c_Lottable01'
-                  IF @c_Lottable02 <> @c_Lottable02Value  AND @c_ColumnName <> 'Lottable02' 
+                  IF @c_Lottable02 <> ''  AND @c_ColumnName <> 'Lottable02' 
                      SET @c_SQL_LA = @c_SQL_LA + ', Lottable02 = @c_Lottable02'
-                  IF @c_Lottable03 <> @c_Lottable03Value  AND @c_ColumnName <> 'Lottable03' 
+                  IF @c_Lottable03 <> ''  AND @c_ColumnName <> 'Lottable03' 
                      SET @c_SQL_LA = @c_SQL_LA + ', Lottable03 = @c_Lottable03'
-                  IF @dt_Lottable04<> @dt_Lottable04Value AND @c_ColumnName <> 'Lottable04' 
+                  IF @dt_Lottable04 IS NOT NULL AND 
+                     CONVERT(NVARCHAR(10),@dt_Lottable04,121) <> '1900-01-01' AND 
+                     @c_ColumnName <> 'Lottable04' 
                      SET @c_SQL_LA = @c_SQL_LA + ', Lottable04 = @dt_Lottable04'
-                  IF @dt_Lottable05<> @dt_Lottable05Value AND @c_ColumnName <> 'Lottable05' 
+                  IF @dt_Lottable05 IS NOT NULL AND 
+                     CONVERT(NVARCHAR(10),@dt_Lottable05,121) <> '1900-01-01' AND
+                     @c_ColumnName <> 'Lottable05' 
                      SET @c_SQL_LA = @c_SQL_LA + ', Lottable05 = @dt_Lottable05'
-                  IF @c_Lottable06 <> @c_Lottable06Value  AND @c_ColumnName <> 'Lottable06' 
+                  IF @c_Lottable06 <> ''  AND @c_ColumnName <> 'Lottable06' 
                      SET @c_SQL_LA = @c_SQL_LA + ', Lottable06 = @c_Lottable06'
-                  IF @c_Lottable07 <> @c_Lottable07Value  AND @c_ColumnName <> 'Lottable07' 
+                  IF @c_Lottable07 <> ''  AND @c_ColumnName <> 'Lottable07' 
                      SET @c_SQL_LA = @c_SQL_LA + ', Lottable07 = @c_Lottable07'
-                  IF @c_Lottable08 <> @c_Lottable08Value  AND @c_ColumnName <> 'Lottable08' 
+                  IF @c_Lottable08 <> ''  AND @c_ColumnName <> 'Lottable08' 
                      SET @c_SQL_LA = @c_SQL_LA + ', Lottable08 = @c_Lottable08'
-                  IF @c_Lottable09 <> @c_Lottable09Value  AND @c_ColumnName <> 'Lottable09' 
+                  IF @c_Lottable09 <> ''  AND @c_ColumnName <> 'Lottable09' 
                      SET @c_SQL_LA = @c_SQL_LA + ', Lottable09 = @c_Lottable09'
-                  IF @c_Lottable10 <> @c_Lottable10Value  AND @c_ColumnName <> 'Lottable10' 
+                  IF @c_Lottable10 <> ''  AND @c_ColumnName <> 'Lottable10' 
                      SET @c_SQL_LA = @c_SQL_LA + ', Lottable10 = @c_Lottable10'           
-                  IF @c_Lottable11 <> @c_Lottable11Value  AND @c_ColumnName <> 'Lottable11' 
+                  IF @c_Lottable11 <> ''  AND @c_ColumnName <> 'Lottable11' 
                      SET @c_SQL_LA = @c_SQL_LA + ', Lottable11 = @c_Lottable11'
-                  IF @c_Lottable12 <> @c_Lottable12Value  AND @c_ColumnName <> 'Lottable12' 
+                  IF @c_Lottable12 <> ''  AND @c_ColumnName <> 'Lottable12' 
                      SET @c_SQL_LA = @c_SQL_LA + ', Lottable12 = @c_Lottable12'
-                  IF @dt_Lottable13<> @dt_Lottable13Value AND @c_ColumnName <> 'Lottable13' 
+                  IF @dt_Lottable13 IS NOT NULL AND 
+                     CONVERT(NVARCHAR(10),@dt_Lottable13,121) <> '1900-01-01' AND 
+                     @c_ColumnName <> 'Lottable13' 
                      SET @c_SQL_LA = @c_SQL_LA + ', Lottable13 = @dt_Lottable13'
-                  IF @dt_Lottable14<> @dt_Lottable14Value AND @c_ColumnName <> 'Lottable14' 
+                  IF @dt_Lottable14 IS NOT NULL AND 
+                     CONVERT(NVARCHAR(10),@dt_Lottable14,121) <> '1900-01-01' AND 
+                     @c_ColumnName <> 'Lottable14' 
                      SET @c_SQL_LA = @c_SQL_LA + ', Lottable14 = @dt_Lottable14'
-                  IF @dt_Lottable15<> @dt_Lottable15Value AND @c_ColumnName <> 'Lottable15' 
-                     SET @c_SQL_LA = @c_SQL_LA + ', Lottable15 = @dt_Lottable15'
+                  IF @dt_Lottable15 IS NOT NULL AND 
+                     CONVERT(NVARCHAR(10),@dt_Lottable15,121) <> '1900-01-01' AND 
+                     @c_ColumnName <> 'Lottable15' 
+                     SET @c_SQL_LA = @c_SQL_LA + ', Lottable15 = @dt_Lottable15'    --(Wan05) - END
                END                 
             END
          END
@@ -387,20 +493,56 @@ BEGIN
                               ,@dt_Lottable13 
                               ,@dt_Lottable14 
                               ,@dt_Lottable15 
+                              
+            SET @c_TrafficCop = 'S'                                                 --(Wan01) - START
+            IF @c_SQL_LA <> '' 
+            BEGIN
+               SET @c_TrafficCop = NULL
+            END   
+            UPDATE #INPUTDATA  
+               SET TrafficCop  = @c_TrafficCop           
+            WHERE Receiptkey = @c_CopyFromKey1
+            AND ReceiptLineNumber = @c_ReceiptLineNumber   
          END  
-         
+ 
+         IF @n_Continue IN (1,2)                   
+         BEGIN         
+            TRUNCATE TABLE #VALDN;
+
+            EXEC sp_ExecuteSQL @c_InsertFromSQL
+                              ,@c_InsertParms
+                              ,@c_CopyFromKey1
+                              ,@c_ReceiptLineNumber 
+                                 
+            IF @@ERROR <> 0
+            BEGIN
+               SET @n_Continue = 3
+            END    
+         END 
+        
          IF @n_Continue IN (1,2)
          BEGIN         
-            EXEC WM.lsp_BuildInputData4Validation 
-               @c_WhereClause    = 'Receiptkey = @c_Key1 AND ReceiptLineNumber = @c_Key2'
-            ,  @c_Key1           = @c_CopyFromKey1
-            ,  @c_Key2           = @c_ReceiptLineNumber
-            ,  @c_Key3           = ''
-            ,  @c_UpdateTable    = @c_TableName
-            ,  @b_Success        = @b_Success  OUTPUT    
-            ,  @n_Err            = @n_Err      OUTPUT
-            ,  @c_Errmsg         = @c_Errmsg   OUTPUT
+            --EXEC WM.lsp_BuildInputData4Validation                                 
+            --   @c_WhereClause    = 'Receiptkey = @c_Key1 AND ReceiptLineNumber = @c_Key2'
+            --,  @c_Key1           = @c_CopyFromKey1
+            --,  @c_Key2           = @c_ReceiptLineNumber
+            --,  @c_Key3           = ''
+            --,  @c_UpdateTable    = @c_TableName
+            --,  @b_Success        = @b_Success  OUTPUT    
+            --,  @n_Err            = @n_Err      OUTPUT
+            --,  @c_Errmsg         = @c_Errmsg   OUTPUT
          
+            EXEC [WM].[lsp_Wrapup_Validation_Wrapper]    
+                  @c_Module            = 'Receipt'  
+               ,  @c_ControlObject     = 'WM.lsp_CopyValue_Receiptdetail_Std'  
+               ,  @c_UpdateTable       = 'RECEIPTDETAIL'  
+               ,  @c_XMLSchemaString   = ''   
+               ,  @c_XMLDataString     = 'STD_VALIDATE'     
+               ,  @b_Success           = @b_Success   OUTPUT          
+               ,  @n_Err               = @n_Err       OUTPUT          
+               ,  @c_Errmsg            = @c_Errmsg    OUTPUT  
+               ,  @c_UserName          = @c_UserName                                --(Wan03) - END
+             
             IF @b_Success = 0
             BEGIN
                SET @n_Continue = 3
@@ -453,9 +595,9 @@ BEGIN
          END               
          FETCH NEXT FROM CUR_SELECT INTO 
                @c_ReceiptLineNumber, @c_Storerkey, @c_Sku
-            ,  @c_Lottable01Value, @c_Lottable02Value, @c_Lottable03Value, @dt_Lottable04Value, @dt_Lottable05Value
-            ,  @c_Lottable06Value, @c_Lottable07Value, @c_Lottable08Value, @c_Lottable09Value, @c_Lottable10Value 
-            ,  @c_Lottable11Value, @c_Lottable12Value, @dt_Lottable13Value, @dt_Lottable14Value, @dt_Lottable15Value 
+            --,  @c_Lottable01Value, @c_Lottable02Value, @c_Lottable03Value, @dt_Lottable04Value, @dt_Lottable05Value
+            --,  @c_Lottable06Value, @c_Lottable07Value, @c_Lottable08Value, @c_Lottable09Value, @c_Lottable10Value 
+            --,  @c_Lottable11Value, @c_Lottable12Value, @dt_Lottable13Value, @dt_Lottable14Value, @dt_Lottable15Value 
 
       END
       CLOSE CUR_SELECT
@@ -481,11 +623,21 @@ BEGIN
       DROP TABLE #INPUTDATA 
    END 
       
+   IF OBJECT_ID('tempdb..#VALDN','u') IS NOT NULL 
+   BEGIN
+      DROP TABLE #VALDN 
+   END
+         
+   IF OBJECT_ID('tempdb..SCHEMA','u') IS NOT NULL                                   --(Wan03) - START
+   BEGIN
+      DROP TABLE #SCHEMA
+   END
+      
    IF CURSOR_STATUS('GLOBAL', 'CUR_SELECT') IN (0 , 1) 
    BEGIN
       CLOSE CUR_SELECT
       DEALLOCATE CUR_SELECT
-   END
+   END                                                                              --(Wan03) - END
    
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN

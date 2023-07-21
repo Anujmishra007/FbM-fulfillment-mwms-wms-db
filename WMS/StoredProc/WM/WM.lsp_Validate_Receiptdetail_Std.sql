@@ -30,6 +30,7 @@ GO
 /* 2022-10-13  Wan05    1.5   LFWM-3780 - PH Unilever                      */
 /*                            DisAllowDuplicateIdsOnWSRcpt StorerCFG CR    */
 /* 2023-03-09  NJOW01   1.6   LFWM-3608 performance tuning for XML Reading */
+/* 2023-06-13  Wan06    1.7   LFWM-4249-SCE PH Copy value to all row (ASN)Bug*/
 /***************************************************************************/   
 CREATE OR ALTER PROC [WM].[lsp_Validate_ReceiptDetail_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
@@ -253,6 +254,23 @@ BEGIN
          ,  @n_BeforeReceivedQty             FLOAT        = 0.00           --(Wan05)
          ,  @b_ValidID                       INT          = 0              --(Wan05)  
 
+      IF EXISTS ( SELECT 1                                                          --(Wan06) - START
+                 FROM tempdb.INFORMATION_SCHEMA.COLUMNS c 
+                 JOIN tempdb.dbo.SysObjects AS s ON s.[name] = c.TABLE_NAME 
+                 WHERE s.id = OBJECT_ID('tempdb..#VALDN')                     
+                 AND   c.[COLUMN_NAME] = 'TrafficCop' 
+                 )
+      BEGIN
+         SET @n_ExistsCnt = 0
+         SET @c_SQL = N'SELECT @n_ExistsCnt=1 FROM #VALDN AD WHERE ad.TrafficCop IS NULL'
+         
+         EXEC sp_ExecuteSQL @c_SQL, N'@n_ExistsCnt INT OUTPUT', @n_ExistsCnt OUTPUT
+         
+         IF @n_ExistsCnt = 0
+         BEGIN
+            GOTO EXIT_SP
+         END
+      END                                                                           --(Wan06) - END
       SELECT TOP 1 
             @c_ReceiptKey   = RD.ReceiptKey
          ,  @c_ReceiptLineNo= RD.ReceiptLineNumber
