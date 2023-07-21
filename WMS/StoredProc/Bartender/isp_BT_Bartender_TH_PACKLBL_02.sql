@@ -12,6 +12,7 @@ GO
 /* Date        Rev  Author     Purposes                                       */
 /* 13-Jul-2023 1.0  WLChooi    Created (WMS-23071)                            */
 /* 13-Jul-2023 1.0  WLChooi    DevOps Combine Script                          */
+/* 21-Jul-2023 1.1  WLChooi    WMS-23071 - Bug Fix (WL01)                     */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_TH_PACKLBL_02]
@@ -437,29 +438,29 @@ BEGIN
         , Col11
         , Col12
         , Col13
-        , Col14 = FORMAT(CAST(Col14 AS NUMERIC(20,2)), '##,###,##0.00')
+        , Col14 = CASE WHEN ISNUMERIC(Col14) = 1 THEN FORMAT(CAST(Col14 AS NUMERIC(20,2)), '##,###,##0.00') ELSE Col14 END   --WL01
         , Col15
         , Col16
-        , Col17 = FORMAT(CAST(Col17 AS NUMERIC(20,2)), '##,###,##0.00')
+        , Col17 = CASE WHEN ISNUMERIC(Col17) = 1 THEN FORMAT(CAST(Col17 AS NUMERIC(20,2)), '##,###,##0.00') ELSE Col17 END   --WL01
         , Col18
         , Col19
-        , Col20 = FORMAT(CAST(Col20 AS NUMERIC(20,2)), '##,###,##0.00')
+        , Col20 = CASE WHEN ISNUMERIC(Col20) = 1 THEN FORMAT(CAST(Col20 AS NUMERIC(20,2)), '##,###,##0.00') ELSE Col20 END   --WL01
         , Col21
         , Col22
-        , Col23 = FORMAT(CAST(Col23 AS NUMERIC(20,2)), '##,###,##0.00')
+        , Col23 = CASE WHEN ISNUMERIC(Col23) = 1 THEN FORMAT(CAST(Col23 AS NUMERIC(20,2)), '##,###,##0.00') ELSE Col23 END   --WL01
         , Col24
         , Col25
-        , Col26 = FORMAT(CAST(Col26 AS NUMERIC(20,2)), '##,###,##0.00')
+        , Col26 = CASE WHEN ISNUMERIC(Col26) = 1 THEN FORMAT(CAST(Col26 AS NUMERIC(20,2)), '##,###,##0.00') ELSE Col26 END   --WL01
         , Col27
         , Col28
-        , Col29 = FORMAT(CAST(Col29 AS NUMERIC(20,2)), '##,###,##0.00')
+        , Col29 = CASE WHEN ISNUMERIC(Col29) = 1 THEN FORMAT(CAST(Col29 AS NUMERIC(20,2)), '##,###,##0.00') ELSE Col29 END   --WL01
         , Col30
         , Col31
-        , Col32 = FORMAT(CAST(Col32 AS NUMERIC(20,2)), '##,###,##0.00')
+        , Col32 = CASE WHEN ISNUMERIC(Col32) = 1 THEN FORMAT(CAST(Col32 AS NUMERIC(20,2)), '##,###,##0.00') ELSE Col32 END   --WL01
         , Col33
         , Col34
-        , Col35 = FORMAT(CAST(Col35 AS NUMERIC(20,2)), '##,###,##0.00') 
-        , Col36 = FORMAT(CAST(Col36 AS NUMERIC(20,2)), '##,###,##0.00')
+        , Col35 = CASE WHEN ISNUMERIC(Col35) = 1 THEN FORMAT(CAST(Col35 AS NUMERIC(20,2)), '##,###,##0.00') ELSE Col35 END   --WL01
+        , Col36 = CASE WHEN ISNUMERIC(Col36) = 1 THEN FORMAT(CAST(Col36 AS NUMERIC(20,2)), '##,###,##0.00') ELSE Col36 END   --WL01
         , Col37
         , Col38
         , Col39
