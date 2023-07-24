@@ -1,7 +1,3 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'ispPreAllocateWaveProcessing' AND type = 'P')
-   DROP PROC ispPreAllocateWaveProcessing
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -62,8 +58,13 @@ GO
 /*                            Preallocate data from pickcode            */ 
 /* 03-Jul-2020  CheeMun 3.0   INC1192122 - Initialize ChannelID = 0     */  
 /* 01-Dec-2020  NJOW08  3.1   WMS-15746 get channel hold qty by config  */  
+/* 27-SEP-2022  NJOW09  3.2   WMS-20812 Pass in additional parameters to*/
+/*                            isp_ChannelAllocGetHoldQty_Wrapper.       */                                
+/*                            Pass in PreAllocateStrategyKey and        */
+/*                            PreAllocateStrategyLineNumber to pickcode */
+/* 27-SEP-2022  NJOW09  3.2   DEVOPS Combine Script                     */
 /************************************************************************/  
-CREATE PROC  [dbo].[ispPreAllocateWaveProcessing]  
+CREATE OR ALTER PROC  [dbo].[ispPreAllocateWaveProcessing]  
                @c_WaveKey      NVARCHAR(10)  
 ,              @c_oprun        NVARCHAR(9)  
 ,              @b_Success      INT            OUTPUT  
@@ -1117,8 +1118,10 @@ BEGIN
                   END*/ 
                   WHEN '@n_UOMBase'    THEN '@n_UOMBase = ' + RTRIM(CONVERT(VARCHAR(10),@n_PackQty))   
                   WHEN '@n_QtyLeftToFulfill' THEN '@n_QtyLeftToFulfill = ' + RTRIM(CONVERT(VARCHAR(10),@n_QtyLeftToFulfill))  
+                  WHEN '@c_PreAllocateStrategyKey' THEN ',@c_PreAllocateStrategyKey = N''' + RTRIM(@c_aPreAllocateStrategyKey) + ''''  --NJOW09
+                  WHEN '@c_PreAllocateStrategyLineNumber' THEN ',@c_PreAllocateStrategyLineNumber = N''' + RTRIM(@c_sCurrentLineNumber) + ''''  --NJOW09                  
                END -- CASE  
-  
+    
             FETCH NEXT FROM Cur_Parameters INTO @c_ParameterName, @n_OrdinalPosition  
          END -- WHILE   
          CLOSE Cur_Parameters  
@@ -1268,12 +1271,19 @@ BEGIN
                         @c_Lot = @c_sLOT,
                         @c_Channel = @c_Channel,
                         @n_Channel_ID = @n_Channel_ID,   
+                        @n_AllocateQty = @n_QtyAvailable, --NJOW09
+                        @n_QtyLeftToFulFill = @n_QtyLeftToFulfill, --NJOW09    
                         @c_SourceKey = @c_Wavekey,
                         @c_SourceType = 'ispPreAllocateWaveProcessing', 
                         @n_ChannelHoldQty = @n_ChannelHoldQty OUTPUT,
                         @b_Success = @b_Success OUTPUT,
                         @n_Err = @n_Err OUTPUT, 
                         @c_ErrMsg = @c_ErrMsg OUTPUT
+                        
+                     IF @b_success <> 1
+                     BEGIN
+                        SET @n_continue = 3                                                                                
+                     END                                             
                      --NJOW08 E   
                                                                   
                      /*--(Wan05) - START 
