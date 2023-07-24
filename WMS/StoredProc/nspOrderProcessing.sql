@@ -113,6 +113,8 @@ GO
 /*                            AllocateStrategyLineNumber to pickcode.   */
 /*                            Othervalue(loctype) enhancements.         */
 /*                            Add custom sp config to update OPORDERLINES*/
+/* 27-SEP-2022  NJOW21   4.3  WMS-20812 Pass in additional parameters to*/
+/*                            isp_ChannelAllocGetHoldQty_Wrapper        */                                
 /************************************************************************/  
   
 CREATE OR ALTER PROC [dbo].[nspOrderProcessing]  
@@ -2320,6 +2322,8 @@ BEGIN
                                        @c_Lot = @c_aLOT,
                                        @c_Channel = @c_Channel,
                                        @n_Channel_ID = @n_Channel_ID,   
+                                       @n_AllocateQty = @n_cQtyAvailable, --NJOW21
+                                       @n_QtyLeftToFulFill = @n_aQtyLeftToFulfill, --NJOW21
                                        @c_SourceKey = @c_SourceKey,
                                        @c_SourceType = @c_SourceType, 
                                        @n_ChannelHoldQty = @n_ChannelHoldQty OUTPUT,
