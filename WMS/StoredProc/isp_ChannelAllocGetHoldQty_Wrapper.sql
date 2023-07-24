@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_ChannelAllocGetHoldQty_Wrapper]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_ChannelAllocGetHoldQty_Wrapper]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -25,20 +22,24 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
+/* 27-SEP-2022  NJOW01   1.0  WMS-20812 add parameters                  */
+/* 27-SEP-2022  NJOW01   1.0  DEVOPS Combine Script                     */
 /************************************************************************/   
-CREATE PROCEDURE [dbo].[isp_ChannelAllocGetHoldQty_Wrapper]    
-   @c_StorerKey      NVARCHAR(15), 
-   @c_Sku            NVARCHAR(20),  
-   @c_Facility       NVARCHAR(5),           
-   @c_Lot            NVARCHAR(10),
-   @c_Channel        NVARCHAR(20),
-   @n_Channel_ID     BIGINT = 0,   
-   @c_SourceKey      NVARCHAR(30) = '',
-   @c_SourceType     NVARCHAR(50) = '', 
-   @n_ChannelHoldQty INT      OUTPUT,
-   @b_Success        INT      OUTPUT,
-   @n_Err            INT      OUTPUT, 
-   @c_ErrMsg         NVARCHAR(250) OUTPUT
+CREATE OR ALTER PROCEDURE [dbo].[isp_ChannelAllocGetHoldQty_Wrapper]    
+   @c_StorerKey        NVARCHAR(15), 
+   @c_Sku              NVARCHAR(20),  
+   @c_Facility         NVARCHAR(5),           
+   @c_Lot              NVARCHAR(10),
+   @c_Channel          NVARCHAR(20),
+   @n_Channel_ID       BIGINT = 0,   
+   @n_AllocateQty      INT = 0, --NJOW01        
+   @n_QtyLeftToFulFill INT = 0, --NJOW01                                                                   
+   @c_SourceKey        NVARCHAR(30) = '',
+   @c_SourceType       NVARCHAR(50) = '', 
+   @n_ChannelHoldQty   INT      OUTPUT,
+   @b_Success          INT      OUTPUT,
+   @n_Err              INT      OUTPUT, 
+   @c_ErrMsg           NVARCHAR(250) OUTPUT
 AS  
 BEGIN  
    SET NOCOUNT ON   
@@ -91,11 +92,11 @@ BEGIN
        GOTO QUIT_SP
    END
          
-   SET @c_SQL = 'EXEC ' + @c_SPCode + ' @c_Storerkey=@c_Storerkey, @c_Sku=@c_Sku, @c_Facility=@c_Facility, @c_Lot=@c_Lot, @c_Channel=@c_Channel, @n_Channel_ID=@n_Channel_ID, ' +
-                '@c_Sourcekey=@c_Sourcekey, @c_Sourcetype=@c_Sourcetype, @n_ChannelHoldQty=@n_ChannelHoldQty OUTPUT, @b_Success=@b_Success OUTPUT, @n_Err=@n_Err OUTPUT, @c_Errmsg=@c_Errmsg OUTPUT'
+   SET @c_SQL = 'EXEC ' + @c_SPCode + ' @c_Storerkey=@c_Storerkey, @c_Sku=@c_Sku, @c_Facility=@c_Facility, @c_Lot=@c_Lot, @c_Channel=@c_Channel, @n_Channel_ID=@n_Channel_ID, @n_AllocateQty=@n_AllocateQty, ' +
+                '@n_QtyLeftToFulFill=@n_QtyLeftToFulFill, @c_Sourcekey=@c_Sourcekey, @c_Sourcetype=@c_Sourcetype, @n_ChannelHoldQty=@n_ChannelHoldQty OUTPUT, @b_Success=@b_Success OUTPUT, @n_Err=@n_Err OUTPUT, @c_Errmsg=@c_Errmsg OUTPUT'
 
    EXEC sp_executesql @c_SQL,
-        N'@c_StorerKey NVARCHAR(15), @c_Sku NVARCHAR(20), @c_Facility NVARCHAR(5), @c_Lot NVARCHAR(10), @c_Channel NVARCHAR(20), @n_Channel_ID BIGINT, @c_Sourcekey NVARCHAR(30),
+        N'@c_StorerKey NVARCHAR(15), @c_Sku NVARCHAR(20), @c_Facility NVARCHAR(5), @c_Lot NVARCHAR(10), @c_Channel NVARCHAR(20), @n_Channel_ID BIGINT, @n_AllocateQty INT, @n_QtyLeftToFulFill INT, @c_Sourcekey NVARCHAR(30),
           @c_SourceType NVARCHAR(50), @n_ChannelHoldQty INT OUTPUT, @b_Success INT OUTPUT, @n_Err INT OUTPUT, @c_ErrMsg NVARCHAR(250) OUTPUT',   
         @c_StorerKey,
         @c_Sku,
@@ -103,6 +104,8 @@ BEGIN
         @c_Lot,
         @c_Channel,
         @n_Channel_ID,
+        @n_AllocateQty, --NJOW01
+        @n_QtyLeftToFulFill, --NJOW01
         @c_Sourcekey,
         @c_Sourcetype,
         @n_ChannelHoldQty OUTPUT,
