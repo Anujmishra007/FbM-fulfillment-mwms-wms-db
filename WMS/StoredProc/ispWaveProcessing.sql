@@ -101,6 +101,8 @@ GO
 /* 21-Apr-2022  NJOW27  4.8   DEVOPS Combine script                     */
 /* 18-MAY-2022  NJOW28  4.9   WMS-19173 UCC allocation not allow partial*/
 /*                            UCC if the channel insufficient stock     */
+/* 27-SEP-2022  NJOW29  5.0   WMS-20812 Pass in additional parameters to*/
+/*                            isp_ChannelAllocGetHoldQty_Wrapper        */            
 /************************************************************************/      
   
 CREATE OR ALTER PROC [dbo].[ispWaveProcessing]        
@@ -1976,6 +1978,8 @@ BEGIN
                                     @c_Lot = @c_aLOT,  
                                     @c_Channel = @c_Channel,  
                                     @n_Channel_ID = @n_Channel_ID,     
+                                    @n_AllocateQty = @n_cQtyAvailable, --NJOW29       
+                                    @n_QtyLeftToFulFill = @n_aQtyLeftToFulfill, --NJOW29                                                                                                     
                                     @c_SourceKey = @c_Wavekey,  
                                     @c_SourceType = 'ispWaveProcessing',   
                                     @n_ChannelHoldQty = @n_ChannelHoldQty OUTPUT,  
