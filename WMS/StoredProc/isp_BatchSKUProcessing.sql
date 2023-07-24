@@ -54,6 +54,10 @@ GO
 /* 21-Dec-2021	NJOW03  3.0   WMS-18620 Allow configure order sorting   */
 /*                            by orderdate                              */
 /* 12-Dec-2021  NJOW03  3.0   DEVOPS combine script                     */
+/* 27-SEP-2022  NJOW04  3.1   WMS-20812 Pass in additional parameters to*/
+/*                            isp_ChannelAllocGetHoldQty_Wrapper.       */           
+/*                            Pass in AllocateStrategyKey and           */
+/*                            AllocateStrategyLineNumber to pickcode    */                     
 /************************************************************************/  
 CREATE PROC [dbo].[isp_BatchSKUProcessing]  
      @n_AllocBatchNo  BIGINT  
@@ -1326,6 +1330,26 @@ BEGIN
                                          
                   SELECT @n_CursorCandidates_Open = 0  
                   SELECT @c_EndString = '@n_uombase =' + CONVERT(VARCHAR(10),@n_cPackQty) + ',' + '@n_qtylefttofulfill=' +CONVERT(VARCHAR(10), @n_aQtyLeftToFulfill)  
+                  
+                  --NJOW04 S
+                  IF EXISTS(SELECT 1    
+                            FROM sys.parameters AS p    
+                            JOIN sys.types AS t ON t.user_type_id = p.user_type_id    
+                            WHERE object_id = OBJECT_ID(@c_sAllocatePickCode)    
+                            AND   P.name = N'@c_AllocateStrategyKey')    
+                  BEGIN    
+                     SELECT @c_EndString = RTRIM(@c_EndString) + ',@c_AllocateStrategyKey = N''' +RTRIM(@c_aStrategyKey) + ''''                     	
+                  END	                  
+                  
+                  IF EXISTS(SELECT 1    
+                            FROM sys.parameters AS p    
+                            JOIN sys.types AS t ON t.user_type_id = p.user_type_id    
+                            WHERE object_id = OBJECT_ID(@c_sAllocatePickCode)    
+                            AND   P.name = N'@c_AllocateStrategyLineNumber')    
+                  BEGIN    
+                     SELECT @c_EndString = RTRIM(@c_EndString) + ',@c_AllocateStrategyLineNumber = N''' +RTRIM(@c_sCurrentLineNumber) + ''''                     	
+                  END	     
+                  --NJOW04 E                                 	                  
   
                   SELECT @c_OtherParms = ''                 
   
@@ -1344,15 +1368,14 @@ BEGIN
                      END  
                      ELSE  
                      BEGIN  
-                     IF @c_Orderinfo4Allocation = '1' --NJOW07  
-                         BEGIN  
-                            
+                        IF @c_Orderinfo4Allocation = '1' --NJOW07  
+                        BEGIN                              
                            SET @c_SQLExecute =   
-                                @c_sAllocatePickCode + ' '   
-                                + '@c_lot = N''' + RTRIM(@c_aLOT) + '''' + ','   
-                                + '@c_uom = N''' + RTRIM(@c_aUOM) + '''' + ','  
-                                + '@c_HostWHCode = N''' + RTRIM(@c_HostWHCode) + '''' + ','   
-                                + '@c_Facility = N''' + RTRIM(@c_aFacility) + '''' + ',' + RTRIM(@c_EndString) + ',@c_OtherParms = N''' +RTRIM(@c_OtherParms) + ''''  
+                               @c_sAllocatePickCode + ' '   
+                               + '@c_lot = N''' + RTRIM(@c_aLOT) + '''' + ','   
+                               + '@c_uom = N''' + RTRIM(@c_aUOM) + '''' + ','  
+                               + '@c_HostWHCode = N''' + RTRIM(@c_HostWHCode) + '''' + ','   
+                               + '@c_Facility = N''' + RTRIM(@c_aFacility) + '''' + ',' + RTRIM(@c_EndString) + ',@c_OtherParms = N''' +RTRIM(@c_OtherParms) + ''''  
                           
                            EXEC(@c_SQLExecute)  
                         END  
@@ -1427,7 +1450,7 @@ BEGIN
   
                         OPEN Cur_Parameters  
                         FETCH NEXT FROM Cur_Parameters INTO @c_ParameterName, @n_OrdinalPosition  
-                   WHILE @@FETCH_STATUS <> -1  
+                        WHILE @@FETCH_STATUS <> -1  
                         BEGIN  
                            IF @n_OrdinalPosition = 1  
                               SET @c_SQLExecute = RTRIM(@c_SQLExecute) + ' ' +RTRIM(@c_ParameterName) + ' = N''' + CONVERT(VARCHAR(10), @n_AllocBatchNo)   + ''''    
@@ -1459,6 +1482,8 @@ BEGIN
                                     WHEN '@c_HostWHCode' THEN ',@c_HostWHCode = N''' + RTRIM(@c_HostWHCode) + ''''   
                                     WHEN '@n_UOMBase'   THEN ',@n_UOMBase=''' + CONVERT(VARCHAR(10),@n_cPackQty) + ''''  
                                     WHEN '@n_QtyLeftToFulfill' THEN ',@n_QtyLeftToFulfill=''' + CONVERT(VARCHAR(10), @n_aQtyLeftToFulfill) + ''''  
+                                    WHEN '@c_AllocateStrategyKey' THEN ',@c_AllocateStrategyKey = N''' + RTRIM(@c_aStrategyKey) + ''''  --NJOW04
+                                    WHEN '@c_AllocateStrategyLineNumber' THEN ',@c_AllocateStrategyLineNumber = N''' + RTRIM(@c_sCurrentLineNumber) + ''''  --NJOW04                                                                     
                                  END   
                                --  + '''' + ',' + RTRIM(@c_EndString)  
                            END  
@@ -1720,12 +1745,19 @@ BEGIN
                                     @c_Lot = @c_aLOT,
                                     @c_Channel = @c_Channel,
                                     @n_Channel_ID = @n_Channel_ID,   
+                                    @n_AllocateQty = @n_cQtyAvailable, --NJOW04                                                                                                                                    
+                                    @n_QtyLeftToFulFill = @n_aQtyLeftToFulfill, --NJOW04       
                                     @c_SourceKey = @n_AllocBatchNo,
                                     @c_SourceType = 'isp_BatchSkuProcessing', 
                                     @n_ChannelHoldQty = @n_ChannelHoldQty OUTPUT,
                                     @b_Success = @b_Success OUTPUT,
                                     @n_Err = @n_Err OUTPUT, 
                                     @c_ErrMsg = @c_ErrMsg OUTPUT
+                                    
+                                 IF @b_success <> 1
+                                 BEGIN
+                                    SET @n_continue = 3                                                                                
+                                 END                                                                                                                                    
                                  --NJOW01 E   
                  
                                  /*(Wan03) - START  
