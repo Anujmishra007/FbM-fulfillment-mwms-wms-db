@@ -92,8 +92,16 @@ BEGIN
 
    IF @c_Format = 'json'
    BEGIN
-      SET @c_XMLRequestString = MASTER.dbo.fnc_JSON2XML(@c_RequestString, '')
-      
+
+      SET @c_XMLRequestString = (
+      SELECT * FROM OPENJSON(@c_RequestString,'$.Request')
+      WITH (
+         [FirstName]             NVARCHAR(100),
+         [LastName]              NVARCHAR(100)
+      )
+      FOR XML PATH('Request')
+      )
+           
       -- Convert special HTML character to normal character 
       IF CHARINDEX(N'&#', @c_XMLRequestString, 1) > 0 
       BEGIN
@@ -164,7 +172,14 @@ BEGIN
 
    IF @c_Format = 'json'
    BEGIN
-      SET @c_ResponseString = master.dbo.fnc_XML2JSON(@c_ResponseString, 0)
+
+      SET @c_ResponseString = ISNULL(RTRIM(
+                              ( 
+                                 SELECT JSON_QUERY(
+                                 (SELECT ('Your full name is ' + @c_FirstName + " " + @c_LastName) AS [Message] 
+                                 FOR JSON PATH, WITHOUT_ARRAY_WRAPPER)) AS 'Response' 
+                                 FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+                              ) ), '') 
    END
 
    QUIT:
