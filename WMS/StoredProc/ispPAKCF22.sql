@@ -22,6 +22,7 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 15-MAY-2023  NJOW    1.0   DevOps Combine Script                        */
+/* 25-Jul-2023  NJOW01  1.1   Fix set archivecop = null                    */
 /***************************************************************************/  
 CREATE OR ALTER PROC [dbo].[ispPAKCF22]  
 (     @c_PickSlipNo  NVARCHAR(10)   
@@ -61,7 +62,7 @@ BEGIN
    	  BEGIN
    	     UPDATE PACKDETAIL WITH (ROWLOCK)
    	     SET RefNo = @c_TrackingNo,
-   	         ArchiveCop = '9'
+   	         ArchiveCop = NULL  --NJOW01
    	     WHERE PickslipNo = @c_PickSlipNo
    	     
    	     SET @n_err = @@ERROR
