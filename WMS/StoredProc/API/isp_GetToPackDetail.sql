@@ -26,8 +26,10 @@ GO
 /* 2022-05-18   2.5  YeeKung    WMS-19689 Add lower (yeekung01)                  */
 /* 2022-07-19   2.6  YeeKung    TPS-648 Add UCC (yeekung02)                      */
 /* 2023-02-10   2.7  yeekung    TPS-661 Add Packheaderstatus (yeekung01)         */
-/* 2023-02-28   2.8  YeeKung    TPS-557 Add otherunit2 (yeekung04)               */
+/* 2023-02-28   2.8  YeeKung    TPS-557 Add otherunit2/removeskuserialnocapture  */
+/*                               (yeekung04)                                     */
 /* 2023-03-14   2.9  YeeKung    TPS-681 remove UCC (yeekung05)                   */
+/* 2023-06-06   3.0  YeeKung    TPS-684 Add Loadkey (yeekung06)                  */
 /*********************************************************************************/  
   
 CREATE  OR ALTER PROC [API].[isp_GetToPackDetail] (  
@@ -667,7 +669,7 @@ BEGIN
          ISNULL(SUM(PH.QtyToPack),0) AS PackedQty  
       , case when isnull(SKU.PackQtyIndicator,0) = 0 then 1 else isnull(SKU.PackQtyIndicator,0) end  
       ,'''' AS Img,SKU.EcomCartonType ' +  
-      ', CASE WHEN SKU.SUSR4 = ''AD'' AND sku.SerialNoCapture IN (''1'',''3'') THEN ''1'' ELSE ''0'' END AS AD  --(cc12)--(cc13) 
+      ', CASE WHEN SKU.SUSR4 = ''AD'' THEN ''1'' ELSE ''0'' END AS AD  --(cc12)--(cc13) 
       , SUM(Pack.otherunit2) '--(cc12)--(cc13)  
   
 END  
@@ -680,7 +682,7 @@ BEGIN
           ISNULL(SUM(PH.QtyToPack),0)  AS PackedQty 
       ,case when isnull(SKU.PackQtyIndicator,0) = 0 then 1 else isnull(SKU.PackQtyIndicator,0) end  
       ,'''' AS Img,SKU.EcomCartonType ' +  
-      ', CASE WHEN SKU.SUSR4 = ''AD'' AND sku.SerialNoCapture IN (''1'',''3'') THEN ''1'' ELSE ''0'' END AS AD 
+      ', CASE WHEN SKU.SUSR4 = ''AD''  THEN ''1'' ELSE ''0'' END AS AD 
       , SUM(Pack.otherunit2)'--(cc12)--(cc13)  
   
 END  
@@ -695,7 +697,7 @@ SET @cSQLFrom =
    WHERE SKU.storerKey = ''' +@cStorerKey+ '''  
    GROUP BY PICK.SKU,SKU.descr,SKU.RetailSKU, SKU.ManufacturerSKU,SKU.ALTSKU,SKU.PackQtyIndicator,sku.WEIGHT,sku.[CUBE],  
    SKU.EcomCartonType,sku.StdGrossWgt,sku.StdCube,pick.QtyToPack ' +  
-   ',SKU.SUSR4,sku.SerialNoCapture,pick.pickslipno '  --(cc12)  
+   ',SKU.SUSR4,pick.pickslipno '  --(cc12)  
   
   
 SET @cSQLCobine = @cSQLMainSelect+@cSQLDymWgtSelect+@cSQLDynamicSelect+@cSQLFrom+@cSQLGropBy  
@@ -707,9 +709,13 @@ EXEC (@cSQLCobine)
 
 EXEC (@cSQLCobine)  
 
-select * from #pickSKUDetail
+--select * from #pickSKUDetail
 
-select @cSQLCobine
+--select 'test1'
+
+--select * from @packSKUDetail
+
+--select @cSQLCobine
 
   
 ----(cc14)  
@@ -731,9 +737,9 @@ select @cSQLCobine
 --get img  
 
 DECLARE @nTTlQTYPack INT
+DECLARE @nPackQty INT
 
-SELECT @nTTlQTYPack = SUM(QtyToPack) FROM @packSKUDetail WHERE QtyToPack<0
-  
+SELECT @nTTlQTYPack = SUM(QtyToPack), @nPackQty = SUM(PackedQty) FROM @packSKUDetail
 IF EXISTS (SELECT 1 FROM @packSKUDetail WHERE QtyToPack<0)  
 BEGIN  
     SET @n_Err = 175684  
@@ -749,6 +755,8 @@ BEGIN
    WHERE PickSlipNo = @cPickSlipNo 
       AND storerkey=@cStorerKey
 END
+  
+DECLARE @cImageURL NVARCHAR(MAX)
   
 DECLARE @SkuImg TABLE (  
    storerKey   NVARCHAR( 20),  
@@ -766,8 +774,7 @@ OPEN curMsg;
 FETCH NEXT FROM curMsg INTO @cSku  
 WHILE @@FETCH_STATUS = 0  
    BEGIN  
-      --default Img, cause sp still point to MYWMS  
-      INSERT INTO @SkuImg  
+
       EXEC [API].[isp_Get_SKU_Image_UR]  
          --exec rdt.[Get_SKU_Image_URL_test]  
          --EXEC [MYWMS].[WM].[lsp_WM_Get_SKU_Image_URL]  
@@ -777,14 +784,18 @@ WHILE @@FETCH_STATUS = 0
          , @b_Success        OUTPUT  
          , @n_err            OUTPUT  
          , @c_ErrMsg         OUTPUT  
-  
+         , @cImageURL        OUTPUT
+
+       --default Img, cause sp still point to MYWMS  
+      INSERT INTO @SkuImg  (storerKey,SKU,ImageURL)
+      values(@cstorerkey,@cSku,@cImageURL)
       --EXEC [MYWMS].[WM].[lsp_WM_Get_SKU_Image_URL]  
       -- @c_Storerkey = 'NIKEMY'  
       --,@c_SKU = @cSku  
       --, @c_UserName = @cUserName  
       --,@c_ReturnType ='PARAM'  
       --,@c_ReturnURL = @SkuImgURL OUTPUT  
-  
+
       --INSERT INTO @SkuImg  
       --VALUES(@cSku,@SkuImgURL)  
   
@@ -1053,7 +1064,7 @@ SELECT * FROM @LottableDropList
 SET @b_Success = 1  
 ----SET @jResult = (SELECT * FROM @packSKUDetail FOR JSON AUTO, INCLUDE_NULL_VALUES)  
   
-SET @jResult = (SELECT MAX(PD.CartonNo) AS MaxCartonNo,(SELECT COUNT(CartonStatus)AS HoldStatus from packInfo WITH (NOLOCK) WHERE pickslipno=@cPickSlipNo AND cartonStatus = 'Hold') AS HoldStatus ,  
+SET @jResult = (SELECT MAX(PD.CartonNo) AS MaxCartonNo, (SELECT COUNT(CartonStatus)AS HoldStatus from packInfo WITH (NOLOCK) WHERE pickslipno=@cPickSlipNo AND cartonStatus = 'Hold') AS HoldStatus ,  
 @cDynamicRightName1 AS DynamicRightName1,@cDynamicRightValue1 AS DynamicRightValue1,@skipCartonize AS skipCartonize,@navCtnScn AS navCtnScn  
 ,@hidePackedSku AS hidePackedSku,@EcomSingle AS EcomSingle, @cPrintAfterPack AS PrintAfterPack, @cDefaultCartonType AS DefaultCartonType  
 ,@cOrderKey AS OrderKey, @cCtryCode AS CtryCode, @cPickSlipNo AS PickslipNo, @cDropID AS DropID, @cWorkInstruction AS WorkInstruction--(cc06)  
@@ -1061,6 +1072,7 @@ SET @jResult = (SELECT MAX(PD.CartonNo) AS MaxCartonNo,(SELECT COUNT(CartonStatu
 ,@cDecodeSP AS DecodeSP,@cADBarcode AS ADBarcode --(cc12) 
 ,@cGetUCC AS GetUCC --(yeekung01)
 ,@cPackQtyIndicatorFlag AS PackQtyIndicatorFlag --(cc14)  
+,@cLoadkey AS Loadkey --(yeekung06)
 ,CASE WHEN ISNULL(@cAutoDefaultLot,'') <> '' THEN '1' ELSE '0' END AS lottableEnable --(cc08)  
 ,(SELECT Option1 AS Option1_title,Option2 AS Option2_mandatory  
 ,Option3 AS Option3_sp, Option4 AS Option4, Option5 AS Option5_regexp  
@@ -1073,7 +1085,8 @@ SET @jResult = (SELECT MAX(PD.CartonNo) AS MaxCartonNo,(SELECT COUNT(CartonStatu
 , ISNULL((SELECT L.lottable FROM @LottableDropList L WHERE P.SKU = L.SKU FOR JSON PATH), '[]') AS Lottable  , @cStatus AS status
 FROM @packSKUDetail p  
 FOR JSON AUTO, INCLUDE_NULL_VALUES ) AS Details,  
- @nTTlQTYPack AS TTLQTYPack
+ (@nTTlQTYPack+@nPackQty) AS TTLQTYPack,
+ @nPackQty AS PackedQTY
 FROM #pickSKUDetail PSKU  WITH (NOLOCK)  
 LEFT JOIN PackDetail PD WITH (NOLOCK) ON (PSKU.pickslipno = PD.pickslipNo)  
 --WHERE PD.PickSlipNo = @cPickSlipNo  
