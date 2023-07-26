@@ -14,6 +14,7 @@ GO
 /* Date       Rev  Author  Purposes                                        */
 /* 2021-02-02 1.0  YeeKung WMS-16294 Created                               */
 /* 2022-09-23 1.1  YeeKung WMS-20820 Extended refno length (yeekung01)     */
+/* 2023-07-20 1.2  YeeKung WMS-23153 Add Eventlog (yeekung02)              */
 /***************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_638RcvCfm07](
    @nFunc          INT,
@@ -208,6 +209,37 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdRcptDetFail
          GOTO RollBackTran
       END
+
+   -- EventLog (yeekung02)
+   EXEC RDT.rdt_STD_EventLog
+      @cActionType   = '2', -- Receiving
+      @nMobileNo     = @nMobile,
+      @nFunctionID   = @nFunc,
+      @cFacility     = @cFacility,
+      @cStorerKey    = @cStorerKey,
+      @cReceiptKey   = @cReceiptKey,
+      @cRefNo1       = @cRefNo,
+      @cLocation     = @cToLOC,
+      @cID           = @cToID,
+      @cSKU          = @cSKUCode,
+      @cUOM          = @cSKUUOM,
+      @nQTY          = @nSKUQTY,
+      @cLottable01   = @cLottable01,
+      @cLottable02   = @cLottable02,
+      @cLottable03   = @cLottable03,
+      @dLottable04   = @dLottable04,
+      @dLottable05   = @dLottable05,
+      @cLottable06   = @cLottable06,
+      @cLottable07   = @cLottable07,
+      @cLottable08   = @cLottable08,
+      @cLottable09   = @cLottable09,
+      @cLottable10   = @cLottable10,
+      @cLottable11   = @cLottable11,
+      @cLottable12   = @cLottable12,
+      @dLottable13   = @dLottable13,
+      @dLottable14   = @dLottable14,
+      @dLottable15   = @dLottable15,
+      @cSerialNo     = @cSerialNo
 
    COMMIT TRAN rdt_638RcvCfm07
    GOTO Quit

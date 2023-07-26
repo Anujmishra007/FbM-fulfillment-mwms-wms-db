@@ -17,6 +17,7 @@ GO
 /* 2020-11-24 1.2  Ung     WMS-14691 Add serial no params                  */
 /* 2020-03-18 1.3  YeeKung WMS-12488 Add On update lot11,lot07(yeekung01)  */
 /* 2022-09-23 1.4  YeeKung WMS-20820 Extended refno length (yeekung01)     */
+/* 2023-07-20 1.5  YeeKung WMS-23153 Add Eventlog (yeekung02)              */
 /***************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_638RcvCfm02](
    @nFunc          INT,
@@ -198,6 +199,38 @@ BEGIN
       AND ReceiptKey = @cReceiptKey 
       and ReceiptLineNumber=@cReceiptLineNumber
    END
+
+
+   -- EventLog (yeekung02)
+   EXEC RDT.rdt_STD_EventLog
+      @cActionType   = '2', -- Receiving
+      @nMobileNo     = @nMobile,
+      @nFunctionID   = @nFunc,
+      @cFacility     = @cFacility,
+      @cStorerKey    = @cStorerKey,
+      @cReceiptKey   = @cReceiptKey,
+      @cRefNo1       = @cRefNo,
+      @cLocation     = @cToLOC,
+      @cID           = @cToID,
+      @cSKU          = @cSKUCode,
+      @cUOM          = @cSKUUOM,
+      @nQTY          = @nSKUQTY,
+      @cLottable01   = @cLottable01,
+      @cLottable02   = @cLottable02,
+      @cLottable03   = @cLottable03,
+      @dLottable04   = @dLottable04,
+      @dLottable05   = @dLottable05,
+      @cLottable06   = @cLottable06,
+      @cLottable07   = @cLottable07,
+      @cLottable08   = @cLottable08,
+      @cLottable09   = @cLottable09,
+      @cLottable10   = @cLottable10,
+      @cLottable11   = @cLottable11,
+      @cLottable12   = @cLottable12,
+      @dLottable13   = @dLottable13,
+      @dLottable14   = @dLottable14,
+      @dLottable15   = @dLottable15,
+      @cSerialNo     = @cSerialNo
 
    COMMIT TRAN rdt_638RcvCfm02
    GOTO Quit
