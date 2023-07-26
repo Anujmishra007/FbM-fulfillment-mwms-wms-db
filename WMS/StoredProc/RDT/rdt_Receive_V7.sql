@@ -1,7 +1,3 @@
-IF EXISTS ( SELECT * FROM sys.objects WHERE  object_id = OBJECT_ID(N'[RDT].[rdt_Receive_V7]') AND OBJECTPROPERTY(object_id ,N'IsProcedure') = 1 ) 
-	DROP PROCEDURE [RDT].[rdt_Receive_V7]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -81,10 +77,11 @@ GO
 /*                              for Allow_OverReceipt (cc01)                  */  
 /* 2021-02-22 4.9  Ung         WMS-15663 Not overwrite SubReasonCode          */  
 /* 2021-10-20 5.0  YeeKung    JSM-26589 extended exterenreceiptkey 20->100    */  
-/*                            (yeekung02)                                     */  
+/*                            (yeekung02)                                     */
+/* 2023-05-10 5.1  WinSern    JSM-142212 add 'Order By RowRef' (ws01)         */
 /******************************************************************************/  
   
-CREATE PROCEDURE rdt.rdt_Receive_V7 (  
+CREATE OR ALTER PROCEDURE [RDT].[rdt_Receive_V7] (  
    @nFunc          INT,  
    @nMobile        INT,  
    @cLangCode      NVARCHAR( 3),  
@@ -2287,6 +2284,7 @@ SET @curRD = CURSOR FOR
    FROM @tRD  
    WHERE QTYExpected <> Org_QTYExpected  
       OR BeforeReceivedQTY <> Org_BeforeReceivedQTY  
+	  Order By RowRef      --(ws01)
 OPEN @curRD  
 FETCH NEXT FROM @curRD INTO @nRowRef,  
       @cOrg_ReceiptLineNumber, @cReceiptLineNumber,  
@@ -3058,11 +3056,5 @@ Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
       COMMIT TRAN  
 GO
-
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-GRANT EXECUTE ON [rdt].[rdt_Receive_V7] TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_Receive_V7] TO [NSQL]
 GO
