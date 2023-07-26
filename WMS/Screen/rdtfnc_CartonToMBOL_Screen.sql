@@ -10,6 +10,9 @@ DELETE rdt.RDTScn WHERE Scn = 6240 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 6240, 'ENG'
    ,@cLine01 = 'MBOLKEY:'
    ,@cLine02 = '%10i01'
+   ,@cLine03 = ''
+   ,@cLine04 = 'REFNO:'
+   ,@cLine05 = '%20i02'
    ,@cLine14 = '%e'
    ,@nFunc = 1863
 
@@ -53,5 +56,19 @@ EXECUTE rdt.rdtAddScn 6243, 'ENG'
    ,@cLine06 = '2 = NO'
    ,@cLine07 = ''
    ,@cLine08 = 'OPTION: %02i02'
+   ,@cLine14 = '%e'
+   ,@nFunc = 1863
+
+-- 6244 = Pack info screen
+DELETE rdt.RDTScn WHERE Scn = 6244 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6244, 'ENG'
+   ,@cLine01 = 'CARTON: %10i01'
+   ,@cLine02 = 'WEIGHT: %10i02'
+   ,@cLine03 = 'CUBE:   %10i03'
+   ,@cLine04 = 'REF NO:'
+   ,@cLine05 = '%20i04'
+   ,@cLine06 = 'LENGTH: %10i05'  -- WMS-15989
+   ,@cLine07 = 'WIDTH:  %10i06'  -- WMS-15989
+   ,@cLine08 = 'HEIGHT: %10i07'  -- WMS-15989
    ,@cLine14 = '%e'
    ,@nFunc = 1863
