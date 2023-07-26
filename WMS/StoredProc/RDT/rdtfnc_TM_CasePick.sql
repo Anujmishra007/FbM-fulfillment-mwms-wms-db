@@ -25,6 +25,8 @@ GO
 /* 2019-05-14 1.8  James      WMS-9920 Add MultiSKUBarcode (james01)          */
 /* 2022-09-09 1.9  YeeKung    WMS-20712 Add overwritetoloc (Yeekung02)        */   
 /* 2023-03-24 2.0  Ung        WMS-22020 Add dynamic lottable                  */
+/* 2023-05-16 2.1  Ung        WMS-22435 Add DecodeSP                          */
+/*                            Expand SKU field to max                         */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CasePick](
@@ -117,6 +119,7 @@ DECLARE
    @nQTY                INT,
    @nFromStep           INT,
    @nFromScn            INT,
+   @cBarcode            NVARCHAR( MAX),
    @cLottableCode       NVARCHAR( 20),
    @cDecodeLabelNo      NVARCHAR( 20),
    @cExtendedUpdateSP   NVARCHAR( 20),
@@ -131,6 +134,7 @@ DECLARE
    @cExtendedValidateSP NVARCHAR(20),
    @cSwapUCCSP          NVARCHAR(20),
    @cLOCLookupSP        NVARCHAR(20),
+   @cDecodeSP           NVARCHAR(20), 
 
    @cAreaKey            NVARCHAR(10),
    @cTTMStrategykey     NVARCHAR(10),
@@ -173,6 +177,7 @@ SELECT
    @cStorerKey      = StorerKey,
 
    @cTaskDetailKey  = V_TaskDetailKey,
+   @cBarcode        = V_Barcode,
    @cSuggSKU        = V_SKU,
    @cSKUDesc        = V_SKUDescr,
    @cSuggLOT        = V_LOT,
@@ -218,6 +223,7 @@ SELECT
    @cMultiSKUBarcode   = V_String12,
    @cLottableCode      = V_String13,
 
+   @cDecodeSP          = V_String18,
    @cLOCLookupSP       = V_String19,
    @cSwapUCCSP         = V_String20,
    @cDecodeLabelNo     = V_String21,
@@ -325,6 +331,9 @@ BEGIN
    SET @cDecodeLabelNo = rdt.RDTGetConfig( @nFunc, 'DecodeLabelNo', @cStorerKey)
    IF @cDecodeLabelNo = '0'
       SET @cDecodeLabelNo = ''
+   SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerKey)
+   IF @cDecodeSP = '0'
+      SET @cDecodeSP = ''
    SET @cExtendedValidateSP = rdt.rdtGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)
    IF @cExtendedValidateSP = '0'
       SET @cExtendedValidateSP = ''
@@ -1132,7 +1141,7 @@ BEGIN
          SET @cOutField01 = @cSuggSKU
          SET @cOutField02 = SUBSTRING( @cSKUDesc, 1, 20)
          SET @cOutField03 = SUBSTRING( @cSKUDesc, 21, 20)
-         SET @cOutField08 = '' -- SKU
+         SET @cBarcode    = '' -- SKU
          SET @cOutField09 = ''
          SET @cOutField10 = ''
          SET @cOutField11 = '1:' + CAST( @nPUOM_Div AS NCHAR( 6)) + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc
@@ -1140,7 +1149,7 @@ BEGIN
          SET @cOutField13 = CAST( @nMQTY_RPL AS NVARCHAR( 5))
          SET @cOutField14 = CASE WHEN (@cPUOM = '6' OR @nPUOM_Div = 0) THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 5)) END -- PQTY
          SET @cOutField15 = CAST( @nMQTY AS NVARCHAR( 5)) -- MQTY
-         EXEC rdt.rdtSetFocusField @nMobile, 8 -- SKU
+         EXEC rdt.rdtSetFocusField @nMobile, 'V_Barcode' -- SKU
 
          SET @nFromScn = @nScn
          SET @nFromStep = @nStep
@@ -1247,14 +1256,14 @@ Step_4:
 BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
-      DECLARE @cLabelNo NVARCHAR( 32)
+      DECLARE @cLabelNo NVARCHAR( 60)
       DECLARE @nUCCQTY  INT
 
       SET @nUCCQTY = 0
 
       -- Screen mapping
-      SET @cLabelNo = @cInField08
-      SET @cSKU = @cInField08
+      SET @cLabelNo = LEFT( @cBarcode, 60) -- @cInField08
+      SET @cSKU = LEFT( @cBarcode, 20) --@cInField08
       SET @cPQTY = CASE WHEN @cFieldAttr14 = 'O' THEN @cOutField14 ELSE @cInField14 END
       SET @cMQTY = CASE WHEN @cFieldAttr15 = 'O' THEN @cOutField15 ELSE @cInField15 END
 
@@ -1267,7 +1276,7 @@ BEGIN
       BEGIN
          SET @nErrNo = 51361
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Need SKU
-         EXEC rdt.rdtSetFocusField @nMobile, 8 -- SKU
+         EXEC rdt.rdtSetFocusField @nMobile, 'V_Barcode' -- SKU
          GOTO Step_4_Fail
       END
 
@@ -1284,48 +1293,116 @@ BEGIN
          END
          ELSE
          BEGIN
-            -- Decode label
-            IF @cDecodeLabelNo <> ''
+            DECLARE @cDecodeSKU  NVARCHAR( 20)
+            DECLARE @nDecodeQTY  INT
+            
+            SET @cDecodeSKU = @cSKU
+            SET @nDecodeQTY = @nUCCQTY
+            
+            -- Standard decode
+            IF @cDecodeSP = '1'
             BEGIN
-               DECLARE
-                  @c_oFieled01 NVARCHAR(20), @c_oFieled02 NVARCHAR(20),
-                  @c_oFieled03 NVARCHAR(20), @c_oFieled04 NVARCHAR(20),
-                  @c_oFieled05 NVARCHAR(20), @c_oFieled06 NVARCHAR(20),
-                  @c_oFieled07 NVARCHAR(20), @c_oFieled08 NVARCHAR(20),
-                  @c_oFieled09 NVARCHAR(20), @c_oFieled10 NVARCHAR(20)
-
-               SET @c_oFieled09 = @cDropID
-               SET @c_oFieled10 = @cTaskDetailKey
-
-               SET @cErrMsg = ''
-               SET @nErrNo = 0
-               EXEC dbo.ispLabelNo_Decoding_Wrapper
-                   @c_SPName     = @cDecodeLabelNo
-                  ,@c_LabelNo    = @cLabelNo
-                  ,@c_Storerkey  = @cStorerKey
-                  ,@c_ReceiptKey = ''
-                  ,@c_POKey      = ''
-                  ,@c_LangCode   = @cLangCode
-                  ,@c_oFieled01  = @c_oFieled01 OUTPUT   -- SKU
-                  ,@c_oFieled02  = @c_oFieled02 OUTPUT   -- STYLE
-                  ,@c_oFieled03  = @c_oFieled03 OUTPUT   -- COLOR
-                  ,@c_oFieled04  = @c_oFieled04 OUTPUT   -- SIZE
-                  ,@c_oFieled05  = @c_oFieled05 OUTPUT   -- QTY
-                  ,@c_oFieled06  = @c_oFieled06 OUTPUT   -- LOT
-                  ,@c_oFieled07  = @c_oFieled07 OUTPUT   -- Label Type
-                  ,@c_oFieled08  = @c_oFieled08 OUTPUT   -- UCC
-                  ,@c_oFieled09  = @c_oFieled09 OUTPUT
-                  ,@c_oFieled10  = @c_oFieled10 OUTPUT
-                  ,@b_Success    = @b_Success   OUTPUT
-                  ,@n_ErrNo      = @nErrNo      OUTPUT
-                  ,@c_ErrMsg     = @cErrMsg     OUTPUT
+               EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
+                  @cUPC    = @cDecodeSKU  OUTPUT,
+                  @nQTY    = @nDecodeQTY  OUTPUT,
+                  @nErrNo  = @nErrNo      OUTPUT,
+                  @cErrMsg = @cErrMsg     OUTPUT,
+                  @cType   = 'UPC'
 
                IF @nErrNo <> 0
                   GOTO Step_4_Fail
+               ELSE
+               BEGIN
+                  SET @cSKU = @cDecodeSKU
 
-               SET @cSKU    = ISNULL( @c_oFieled01, '')
-               SET @nUCCQTY = CAST( ISNULL( @c_oFieled05, '') AS INT)
-               SET @cUCC    = ISNULL( @c_oFieled08, '')
+                  IF ISNULL( @nDecodeQTY, 0) <> 0
+                     SET @nUCCQTY = CAST( @nDecodeQTY AS NVARCHAR( 5))
+               END
+            END
+
+            -- Customize decode
+            ELSE IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cDecodeSP AND type = 'P')
+            BEGIN
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cTaskdetailKey, @cBarcode, ' +
+                  ' @cFromID OUTPUT, @cSKU OUTPUT, @nQTY OUTPUT, @cUCC OUTPUT, @cDropID OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+               SET @cSQLParam =
+                  ' @nMobile        INT,           ' +
+                  ' @nFunc          INT,           ' +
+                  ' @cLangCode      NVARCHAR( 3),  ' +
+                  ' @nStep          INT,           ' +
+                  ' @nInputKey      INT,           ' +
+                  ' @cFacility      NVARCHAR( 5),  ' +
+                  ' @cStorerKey     NVARCHAR( 15), ' +
+                  ' @cTaskdetailKey NVARCHAR( 10),  ' +
+                  ' @cBarcode       NVARCHAR( MAX), ' +
+                  ' @cFromID        NVARCHAR( 18)  OUTPUT, ' +
+                  ' @cSKU           NVARCHAR( 20)  OUTPUT, ' +
+                  ' @nQTY           INT            OUTPUT, ' +
+                  ' @cUCC           NVARCHAR( 20)  OUTPUT, ' +
+                  ' @cDropID        NVARCHAR( 20)  OUTPUT, ' +
+                  ' @nErrNo         INT            OUTPUT, ' +
+                  ' @cErrMsg        NVARCHAR( 20)  OUTPUT  '
+
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cTaskdetailKey, @cBarcode,
+                  @cFromID OUTPUT, @cDecodeSKU OUTPUT, @nDecodeQTY OUTPUT, @cUCC OUTPUT, @cDropID OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+               IF @nErrNo <> 0
+                  GOTO Step_4_Fail
+               ELSE
+               BEGIN
+                  SET @cSKU = @cDecodeSKU
+
+                  IF ISNULL( @nDecodeQTY, 0) <> 0
+                     SET @nUCCQTY = CAST( @nDecodeQTY AS NVARCHAR( 5))
+               END
+            END
+            ELSE
+            BEGIN
+               -- Decode label
+               IF @cDecodeLabelNo <> ''
+               BEGIN
+                  DECLARE
+                     @c_oFieled01 NVARCHAR(20), @c_oFieled02 NVARCHAR(20),
+                     @c_oFieled03 NVARCHAR(20), @c_oFieled04 NVARCHAR(20),
+                     @c_oFieled05 NVARCHAR(20), @c_oFieled06 NVARCHAR(20),
+                     @c_oFieled07 NVARCHAR(20), @c_oFieled08 NVARCHAR(20),
+                     @c_oFieled09 NVARCHAR(20), @c_oFieled10 NVARCHAR(20)
+
+                  SET @c_oFieled09 = @cDropID
+                  SET @c_oFieled10 = @cTaskDetailKey
+
+                  SET @cErrMsg = ''
+                  SET @nErrNo = 0
+                  EXEC dbo.ispLabelNo_Decoding_Wrapper
+                      @c_SPName     = @cDecodeLabelNo
+                     ,@c_LabelNo    = @cLabelNo
+                     ,@c_Storerkey  = @cStorerKey
+                     ,@c_ReceiptKey = ''
+                     ,@c_POKey      = ''
+                     ,@c_LangCode   = @cLangCode
+                     ,@c_oFieled01  = @c_oFieled01 OUTPUT   -- SKU
+                     ,@c_oFieled02  = @c_oFieled02 OUTPUT   -- STYLE
+                     ,@c_oFieled03  = @c_oFieled03 OUTPUT   -- COLOR
+                     ,@c_oFieled04  = @c_oFieled04 OUTPUT   -- SIZE
+                     ,@c_oFieled05  = @c_oFieled05 OUTPUT   -- QTY
+                     ,@c_oFieled06  = @c_oFieled06 OUTPUT   -- LOT
+                     ,@c_oFieled07  = @c_oFieled07 OUTPUT   -- Label Type
+                     ,@c_oFieled08  = @c_oFieled08 OUTPUT   -- UCC
+                     ,@c_oFieled09  = @c_oFieled09 OUTPUT
+                     ,@c_oFieled10  = @c_oFieled10 OUTPUT
+                     ,@b_Success    = @b_Success   OUTPUT
+                     ,@n_ErrNo      = @nErrNo      OUTPUT
+                     ,@c_ErrMsg     = @cErrMsg     OUTPUT
+
+                  IF @nErrNo <> 0
+                     GOTO Step_4_Fail
+
+                  SET @cSKU    = ISNULL( @c_oFieled01, '')
+                  SET @nUCCQTY = CAST( ISNULL( @c_oFieled05, '') AS INT)
+                  SET @cUCC    = ISNULL( @c_oFieled08, '')
+               END
             END
 
             -- Swap UCC (must be same FromLOC, FromID, SKU, QTY)
@@ -1334,7 +1411,7 @@ BEGIN
                IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cSwapUCCSP AND type = 'P')
                BEGIN
                   SET @cSQL = 'EXEC rdt.' + RTRIM( @cSwapUCCSP) +
-                     ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @@cLabelNo, ' +
+                     ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cLabelNo, ' +
                      ' @cSKU OUTPUT, @cUCC OUTPUT, @nUCCQTY OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
                   SET @cSQLParam =
                      '@nMobile            INT,           ' +
@@ -1343,7 +1420,7 @@ BEGIN
                      '@nStep              INT,           ' +
                      '@nInputKey          INT,           ' +
                      '@cTaskdetailKey     NVARCHAR( 10), ' +
-                     '@@cLabelNo          NVARCHAR( 60), ' +
+                     '@cLabelNo           NVARCHAR( 60), ' +
                      '@cSKU               NVARCHAR( 20)  OUTPUT, ' +
                      '@cUCC               NVARCHAR( 20)  OUTPUT, ' +
                      '@nUCCQTY            INT            OUTPUT, ' +
@@ -1381,7 +1458,7 @@ BEGIN
             BEGIN
                SET @nErrNo = 51362
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid SKU
-               EXEC rdt.rdtSetFocusField @nMobile, 8 -- SKU
+               EXEC rdt.rdtSetFocusField @nMobile, 'V_Barcode' -- SKU
                GOTO Step_4_Fail
             END
 
@@ -1422,14 +1499,14 @@ BEGIN
                   IF @nErrNo <> 0
                   BEGIN
                      GOTO Step_4_Fail
-                     EXEC rdt.rdtSetFocusField @nMobile, 8 -- SKU
+                     EXEC rdt.rdtSetFocusField @nMobile, 'V_Barcode' -- SKU
                   END
                END
                ELSE
                BEGIN
                   SET @nErrNo = 51363
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- MultiSKUBarCod
-                  EXEC rdt.rdtSetFocusField @nMobile, 8 -- SKU
+                  EXEC rdt.rdtSetFocusField @nMobile, 'V_Barcode' -- SKU
                   GOTO Step_4_Fail
                END
             END
@@ -1447,7 +1524,7 @@ BEGIN
             BEGIN
                SET @nErrNo = 51364
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Different SKU
-               EXEC rdt.rdtSetFocusField @nMobile, 8 -- SKU
+               EXEC rdt.rdtSetFocusField @nMobile, 'V_Barcode' -- SKU
                GOTO Step_4_Fail
             END
 
@@ -1600,10 +1677,10 @@ BEGIN
       -- SKU scanned, remain in current screen
       IF @cLabelNo <> ''
       BEGIN
-         SET @cOutField09 = '' -- SKU
+         SET @cBarcode = '' -- SKU
 
          IF @cDisableQTYField = '1'
-            EXEC rdt.rdtSetFocusField @nMobile, 8 -- SKU
+            EXEC rdt.rdtSetFocusField @nMobile, 'V_Barcode' -- SKU
          ELSE
          BEGIN
             IF @cFieldAttr14 = ''
@@ -1684,6 +1761,8 @@ BEGIN
    GOTO Quit
 
    Step_4_Fail:
+      SET @cBarcode = ''
+      EXEC rdt.rdtSetFocusField @nMobile, 'V_Barcode'
 END
 GOTO Quit
 
@@ -1942,7 +2021,7 @@ BEGIN
             SET @cOutField01 = @cSuggSKU
             SET @cOutField02 = SUBSTRING( @cSKUDesc, 1, 20)
             SET @cOutField03 = SUBSTRING( @cSKUDesc, 21, 20)
-            SET @cOutField08 = '' -- SKU
+            SET @cBarcode    = '' -- SKU
             SET @cOutField09 = ''
             SET @cOutField10 = ''
             SET @cOutField11 = '1:' + CAST( @nPUOM_Div AS NCHAR( 6)) + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc
@@ -1950,7 +2029,7 @@ BEGIN
             SET @cOutField13 = CAST( @nMQTY_RPL AS NVARCHAR( 5))
             SET @cOutField14 = '' -- PQTY
             SET @cOutField15 = '' -- MQTY
-            EXEC rdt.rdtSetFocusField @nMobile, 8 -- SKU
+            EXEC rdt.rdtSetFocusField @nMobile, 'V_Barcode' -- SKU
 
             SET @nScn = @nScn - 1
             SET @nStep = @nStep - 1
@@ -2090,7 +2169,7 @@ BEGIN
       SET @cOutField01 = @cSuggSKU
       SET @cOutField02 = SUBSTRING( @cSKUDesc, 1, 20)
       SET @cOutField03 = SUBSTRING( @cSKUDesc, 21, 20)
-      SET @cOutField08 = '' -- SKU
+      SET @cBarcode    = '' -- SKU
       SET @cOutField09 = ''
       SET @cOutField10 = @cExtendedInfo1
       SET @cOutField11 = '1:' + CAST( @nPUOM_Div AS NCHAR( 6)) + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc
@@ -2098,7 +2177,7 @@ BEGIN
       SET @cOutField13 = CAST( @nMQTY_RPL AS NVARCHAR( 5))
       SET @cOutField14 = CASE WHEN (@cPUOM = '6' OR @nPUOM_Div = 0) THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 5)) END
       SET @cOutField15 = CAST( @nMQTY AS NVARCHAR( 5))
-      EXEC rdt.rdtSetFocusField @nMobile, 8 -- SKU
+      EXEC rdt.rdtSetFocusField @nMobile, 'V_Barcode' -- SKU
 
       -- Go to SKU screen
       SET @nScn = @nScn - 1
@@ -2588,7 +2667,7 @@ BEGIN
       SET @cOutField01 = @cSuggSKU
       SET @cOutField02 = SUBSTRING( @cSKUDesc, 1, 20)
       SET @cOutField03 = SUBSTRING( @cSKUDesc, 21, 20)
-      SET @cOutField08 = '' -- SKU
+      SET @cBarcode    = '' -- SKU
       SET @cOutField09 = ''
       SET @cOutField10 = @cExtendedInfo1
       SET @cOutField11 = '1:' + CAST( @nPUOM_Div AS NCHAR( 6)) + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc
@@ -2596,7 +2675,7 @@ BEGIN
       SET @cOutField13 = CAST( @nMQTY_RPL AS NVARCHAR( 5))
       SET @cOutField14 = CASE WHEN (@cPUOM = '6' OR @nPUOM_Div = 0) THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 5)) END
       SET @cOutField15 = CAST( @nMQTY AS NVARCHAR( 5))
-      EXEC rdt.rdtSetFocusField @nMobile, 8 -- SKU
+      EXEC rdt.rdtSetFocusField @nMobile, 'V_Barcode' -- SKU
 
       -- Go to SKU screen
       SET @nScn = @nScn - 4
@@ -2976,6 +3055,7 @@ BEGIN
       V_PUOM_Div   = @nPUOM_Div,
       V_FromScn    = @nFromScn,
       V_FromStep   = @nFromStep,
+      V_Barcode    = @cBarcode, 
 
       V_String1    = @cAreaKey,
       V_String2    = @cTaskStorer,
@@ -2991,6 +3071,7 @@ BEGIN
       V_String12   = @cMultiSKUBarcode,
       V_String13   = @cLottableCode,
 
+      V_String18   = @cDecodeSP,
       V_String19   = @cLOCLookupSP,
       V_String20   = @cSwapUCCSP,
       V_String21   = @cDecodeLabelNo,

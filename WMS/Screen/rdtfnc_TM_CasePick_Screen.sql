@@ -54,7 +54,7 @@ EXECUTE rdt.rdtAddScn 4022, 'ENG',
    ,@cLine14 = '%e'
    ,@nFunc = 1812
 
--- SKU, QTY
+-- SKU
 DELETE rdt.RDTScn WHERE Scn = 4023 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4023, 'ENG',
     @cLine01 = 'SKU:'
@@ -66,14 +66,14 @@ EXECUTE rdt.rdtAddScn 4023, 'ENG',
    ,@cLine07 = '%20d06'
    ,@cLine08 = '%20d07'
    ,@cLine09 = '%20d10'
-   ,@cLine10 = '%32i08'
+   ,@cLine10 = '%200iV_Barcode'
    ,@cLine11 = '%20d11'
    ,@cLine12 = 'PK  QTY: %05d12 %05d13'
    ,@cLine13 = 'ACT QTY: %05i14 %05i15'
    ,@cLine14 = '%e'
    ,@nFunc = 1812
 
--- Option
+-- Close pallet
 DELETE rdt.RDTScn WHERE Scn = 4024 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4024, 'ENG',
     @cLine01 = 'PICK CASE        FCP'
@@ -102,7 +102,7 @@ EXECUTE rdt.rdtAddScn 4025, 'ENG',
    ,@cLine14 = '%e'
    ,@nFunc = 1812
 
--- Message
+-- Exit TM
 DELETE rdt.RDTScn WHERE Scn = 4026 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4026, 'ENG',
     @cLine01 = 'PICK CASE        FCP'
@@ -120,7 +120,7 @@ EXECUTE rdt.rdtAddScn 4026, 'ENG',
    ,@cLine14 = '%e'
    ,@nFunc = 1812
 
--- Short
+-- Short pick
 DELETE rdt.RDTScn WHERE Scn = 4027 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4027, 'ENG',
     @cLine01 = 'PICK CASE        FCP'
