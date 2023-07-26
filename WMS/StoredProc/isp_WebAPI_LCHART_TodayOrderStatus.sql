@@ -106,7 +106,16 @@ BEGIN
   
    IF @c_Format = 'json'  
    BEGIN  
-      SET @c_XMLRequestString = MASTER.dbo.fnc_JSON2XML(@c_RequestString, '')  
+
+      SET @c_XMLRequestString = (
+         SELECT * FROM OPENJSON(@c_RequestString,'$.Request.Data')
+         WITH (
+            [ColumnName]          NVARCHAR(60),
+            [ColumnValue]         NVARCHAR(60),
+            [OperationType]       NVARCHAR(15)
+         )
+         FOR XML PATH('Data'), ROOT('Request')
+      )
         
       -- Convert special HTML character to normal character   
       IF CHARINDEX(N'&#', @c_XMLRequestString, 1) > 0   
@@ -179,22 +188,24 @@ BEGIN
   
       IF @c_Format = 'json'  
       BEGIN  
-         SET @c_ExecStatements = N';WITH XMLNAMESPACES (''http://james.newtonking.com/projects/json'' as json)'  
-                               + ' SELECT @c_ResponseString = ISNULL(RTRIM(( SELECT '  
-                               + ' ''true'' AS [@json:Array], StorerKey '  
-                               + '       ,[Status]=CASE [Status] WHEN ''0'' THEN ''0 - NORMAL'' '  
-                               + '               WHEN ''1'' THEN ''1 - PARTIALLY ALLOCATED'' '  
-                               + '               WHEN ''2'' THEN ''2 - FULLY ALLOCATED'' '  
-                               + '               WHEN ''3'' THEN ''3 - IN PROCESS'' '  
-                               + '               WHEN ''5'' THEN ''5 - PICKED'' '  
-                               + '               WHEN ''9'' THEN ''9 - SHIPPED'' '  
-                               + '               WHEN ''CANC'' THEN ''CANC - CANCEL'' '  
-                               + '                          ELSE ''X-UNDEFINED'' END '  
-                               + '       ,COUNT(1) As ''Total'' '  
-                               + ' FROM dbo.ORDERS with (NOLOCK) '  
-                               + ISNULL(RTRIM(@c_FullCondition), '')  
-                               + ' GROUP BY StorerKey, [Status] '  
-                               + ' FOR XML PATH (''Event''), ROOT(''Events''))), '''')'   
+         SET @c_ExecStatements = --N';WITH XMLNAMESPACES (''http://james.newtonking.com/projects/json'' as json)'
+                               N' SELECT @c_ResponseString = ISNULL(RTRIM(( SELECT '
+                               --+ ' ''true'' AS [@json:Array], StorerKey '
+                               + ' StorerKey '
+                               + '       ,[Status]=CASE [Status] WHEN ''0'' THEN ''0 - NORMAL'' '
+                               + '               WHEN ''1'' THEN ''1 - PARTIALLY ALLOCATED'' '
+                               + '               WHEN ''2'' THEN ''2 - FULLY ALLOCATED'' '
+                               + '               WHEN ''3'' THEN ''3 - IN PROCESS'' '
+                               + '               WHEN ''5'' THEN ''5 - PICKED'' '
+                               + '               WHEN ''9'' THEN ''9 - SHIPPED'' '
+                               + '               WHEN ''CANC'' THEN ''CANC - CANCEL'' '
+                               + '                          ELSE ''X-UNDEFINED'' END '
+                               + '       ,CONVERT(NVARCHAR(20),COUNT(1)) As ''Total'' '
+                               + ' FROM dbo.ORDERS with (NOLOCK) '
+                               + ISNULL(RTRIM(@c_FullCondition), '')
+                               + ' GROUP BY StorerKey, [Status] '
+                               + ' FOR JSON PATH, ROOT(''Event''))), '''')' 
+                               --+ ' FOR XML PATH (''Event''), ROOT(''Events''))), '''')'  
   
          SET @c_ExecArguments = N'@c_ResponseString NVARCHAR(MAX) OUTPUT'  
   
@@ -204,8 +215,7 @@ BEGIN
          END  
   
          EXECUTE sp_ExecuteSql @c_ExecStatements, @c_ExecArguments, @c_ResponseString OUTPUT  
-  
-         SET @c_ResponseString = master.dbo.fnc_XML2JSON(@c_ResponseString, 1)  
+   
       END  
       ELSE   
       BEGIN  

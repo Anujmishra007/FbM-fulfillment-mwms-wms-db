@@ -83,7 +83,14 @@ BEGIN
   
    IF @c_Format = 'json'  
    BEGIN  
-      SET @c_XMLRequestString = MASTER.dbo.fnc_JSON2XML(@c_RequestString, '')  
+
+      SET @c_XMLRequestString = (
+         SELECT * FROM OPENJSON(@c_RequestString,'$.Request')
+         WITH (
+            [Action]          NVARCHAR(15)
+         )
+         FOR XML PATH('Request')
+      )     
         
       -- Convert special HTML character to normal character   
       IF CHARINDEX(N'&#', @c_XMLRequestString, 1) > 0   
@@ -124,41 +131,73 @@ BEGIN
          GOTO QUIT  
       END  
   
-      IF @c_Action = 'GetStorerList'  
-      BEGIN  
-         SET @c_ExecStatements = CASE WHEN @c_Format = 'json'   
-                                  THEN ';WITH XMLNAMESPACES (''http://james.newtonking.com/projects/json'' as json) ' END  
-                               + ' SELECT @c_ResponseString = ISNULL(RTRIM(CONVERT(NVARCHAR(MAX),( '  
-                               + ' SELECT '  
-                               + CASE WHEN @c_Format = 'json'   
-                                  THEN ' ''true'' AS [@json:Array], ' ELSE '' END  
-                               + ' cdlkup.Code, '  
-                               + ' ( '  
-                               + '   SELECT '  
-                               + CASE WHEN @c_Format = 'json'  THEN ' ''true'' AS [@json:Array], ' END   
-                               + '   cdlkup2.StorerKey, cdlkup2.UDF01 '  
-                               + '   FROM dbo.Codelkup cdlkup2 WITH (NOLOCK)  '  
-                               + '   WHERE cdlkup2.Listname = @c_ListNameGTPStorer '  
-                               + '   AND cdlkup2.Code = cdlkup.Code '  
-                               + '   FOR XML PATH(''Storer''), TYPE '  
-                               + ' ) '  
-                               + ' FROM dbo.Codelkup cdlkup WITH (NOLOCK) '  
-                               + ' WHERE cdlkup.Listname = @c_ListNameGTPStorer '  
-                               + ' GROUP BY cdlkup.Code '   
-                               + ' FOR XML PATH (''StorerGroup''), type'  
-                               + CASE WHEN @c_Format = 'json'  
-                                  THEN ', ROOT(''Root'') ' END  
-                               + ' ))), '''')'  
-  
-         SET @c_ExecArguments = ' @c_ListNameGTPStorer NVARCHAR(15), @c_ResponseString NVARCHAR(MAX) OUTPUT'  
-  
-         EXEC sp_ExecuteSql @c_ExecStatements  
-                          , @c_ExecArguments  
-                          , @c_ListNameGTPStorer  
-                          , @c_ResponseString OUTPUT  
-  
-         SET @c_ResponseString = IIF(@c_Format = 'json', master.dbo.fnc_XML2JSON(@c_ResponseString, 1), @c_ResponseString)  
-      END  
+      IF @c_Action = 'GetStorerList'
+      BEGIN
+         IF @c_Format = 'json'
+         BEGIN
+            SET @c_ExecStatements = N' SELECT @c_ResponseString = ISNULL(RTRIM(CONVERT(NVARCHAR(MAX),( '
+                               + ' SELECT '
+                               + ' cdlkup.Code, '
+                               + ' ( '
+                               + '   SELECT '
+                               + '   cdlkup2.StorerKey, NULLIF(cdlkup2.UDF01,'''') AS UDF01 '
+                               + '   FROM dbo.Codelkup cdlkup2 WITH (NOLOCK)  '
+                               + '   WHERE cdlkup2.Listname = @c_ListNameGTPStorer '
+                               + '   AND cdlkup2.Code = cdlkup.Code '
+                               + '   FOR JSON PATH, INCLUDE_NULL_VALUES '
+                               + ' )Storer  '
+                               + ' FROM dbo.Codelkup cdlkup WITH (NOLOCK) '
+                               + ' WHERE cdlkup.Listname = @c_ListNameGTPStorer '
+                               + ' GROUP BY cdlkup.Code ' 
+                               + ' FOR JSON PATH, ROOT(''StorerGroup'')'
+                               + ' ))), '''')'
+
+            SET @c_ExecArguments = ' @c_ListNameGTPStorer NVARCHAR(15), @c_ResponseString NVARCHAR(MAX) OUTPUT'
+
+            IF @b_Debug = 1
+            BEGIN
+               PRINT '@c_ExecStatements = ' + @c_ExecStatements
+            END
+
+
+            EXEC sp_ExecuteSql @c_ExecStatements
+                             , @c_ExecArguments
+                             , @c_ListNameGTPStorer
+                             , @c_ResponseString OUTPUT
+
+         END
+         ELSE
+         BEGIN
+            SET @c_ExecStatements = N' SELECT @c_ResponseString = ISNULL(RTRIM(CONVERT(NVARCHAR(MAX),( '
+                               + ' SELECT '
+                               + ' cdlkup.Code, '
+                               + ' ( '
+                               + '   SELECT '
+                               + '   cdlkup2.StorerKey, cdlkup2.UDF01 '
+                               + '   FROM dbo.Codelkup cdlkup2 WITH (NOLOCK)  '
+                               + '   WHERE cdlkup2.Listname = @c_ListNameGTPStorer '
+                               + '   AND cdlkup2.Code = cdlkup.Code '
+                               + '   FOR XML PATH(''Storer''), TYPE '
+                               + ' ) '
+                               + ' FROM dbo.Codelkup cdlkup WITH (NOLOCK) '
+                               + ' WHERE cdlkup.Listname = @c_ListNameGTPStorer '
+                               + ' GROUP BY cdlkup.Code ' 
+                               + ' FOR XML PATH (''StorerGroup''), type'
+                               + ' ))), '''')'
+
+               SET @c_ExecArguments = ' @c_ListNameGTPStorer NVARCHAR(15), @c_ResponseString NVARCHAR(MAX) OUTPUT'
+
+               IF @b_Debug = 1
+               BEGIN
+                  PRINT '@c_ExecStatements = ' + @c_ExecStatements
+               END
+
+               EXEC sp_ExecuteSql @c_ExecStatements
+                                , @c_ExecArguments
+                                , @c_ListNameGTPStorer
+                                , @c_ResponseString OUTPUT
+         END         
+      END
   
       IF @b_Debug = 1  
       BEGIN  

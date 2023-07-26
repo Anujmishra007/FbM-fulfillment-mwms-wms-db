@@ -1,13 +1,7 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspPreAllocateLoadProcessing]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[nspPreAllocateLoadProcessing]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
-
-
 /************************************************************************/  
 /* Stored Proc: nspPreAllocateLoadProcessing                            */  
 /* Creation Date: 07-Oct-2009                                           */  
@@ -59,16 +53,21 @@ GO
 /* 08-OCT-2019  Wan05   2.9   WMS - 9914 [MY] JDSPORTSMY - Channel      */  
 /*                            Inventory Ignore QtyOnHold - CR           */   
 /* 08-OCT-2019  Wan06   2.9   Fixed to Get Channel If there is candidate*/  
-/*             in Cursor                                 */  
+/*                            in Cursor                                 */  
 /* 21-Nov-2019  TLTING02 3.0  Dynamic SQL - cache issue                 */   
 /* 08-Jan-2020  NJOW06  3.1   WMS-10420 add strategykey parameter       */ 
 /* 12-Feb-2020  Wan07   3.2   SQLBindParm. Create Temp table to Store   */
 /*                            Preallocate data from pickcode            */ 
 /* 03-Jul-2020  CheeMun 3.3   INC1192122 - Initialize ChannelID = 0     */    
 /* 01-Dec-2020  NJOW07  3.4   WMS-15746 get channel hold qty by config  */  
+/* 27-SEP-2022  NJOW08  3.5   WMS-20812 Pass in additional parameters to*/
+/*                            isp_ChannelAllocGetHoldQty_Wrapper.       */                                
+/*                            Pass in PreAllocateStrategyKey and        */
+/*                            PreAllocateStrategyLineNumber to pickcode */
+/* 27-SEP-2022  NJOW08  3.5   DEVOPS Combine Script                     */
 /************************************************************************/  
   
-CREATE PROC  [dbo].[nspPreAllocateLoadProcessing]  
+CREATE OR ALTER PROC  [dbo].[nspPreAllocateLoadProcessing]  
                @c_LoadKey      NVARCHAR(10)  
 ,              @c_oprun        NVARCHAR(9)  
 ,              @b_Success      INT        OUTPUT  
@@ -1163,8 +1162,10 @@ BEGIN
                                             END*/    
                   WHEN '@n_UOMBase'    THEN '@n_UOMBase = ' + RTRIM(CONVERT(VARCHAR(10),@n_PackQty))  
                   WHEN '@n_QtyLeftToFulfill' THEN '@n_QtyLeftToFulfill = ' + RTRIM(CONVERT(VARCHAR(10),@n_QtyLeftToFulfill))  
+                  WHEN '@c_PreAllocateStrategyKey' THEN ',@c_PreAllocateStrategyKey = N''' + RTRIM(@c_aPreAllocateStrategyKey) + ''''  --NJOW08
+                  WHEN '@c_PreAllocateStrategyLineNumber' THEN ',@c_PreAllocateStrategyLineNumber = N''' + RTRIM(@c_sCurrentLineNumber) + ''''  --NJOW08
                END  
-  
+              
             FETCH NEXT FROM Cur_Parameters INTO @c_ParameterName, @n_OrdinalPosition  
          END  
          CLOSE Cur_Parameters  
@@ -1313,12 +1314,19 @@ BEGIN
                         @c_Lot = @c_sLOT,
                         @c_Channel = @c_Channel,
                         @n_Channel_ID = @n_Channel_ID,   
+                        @n_AllocateQty = @n_QtyAvailable, --NJOW08   
+                        @n_QtyLeftToFulFill = @n_QtyLeftToFulfill, --NJOW08                                                    
                         @c_SourceKey = @c_Loadkey,
                         @c_SourceType = 'nspPreAllocateLoadProcessing', 
                         @n_ChannelHoldQty = @n_ChannelHoldQty OUTPUT,
                         @b_Success = @b_Success OUTPUT,
                         @n_Err = @n_Err OUTPUT, 
                         @c_ErrMsg = @c_ErrMsg OUTPUT
+
+                     IF @b_success <> 1
+                     BEGIN
+                        SET @n_continue = 3                                                                                
+                     END                                             
                      --NJOW07 E   
                                                       
                      /*(Wan05) - START  
@@ -1374,11 +1382,11 @@ BEGIN
                          GROUP BY LOT.StorerKey, LOT.SKU, LOT.LOT, Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, LOC.Facility  
                          HAVING SUM(LOTxLOCxID.Qty) - SUM(LOTxLOCxID.QtyAllocated) - SUM(LOTxLOCxID.QtyPicked) - MIN(ISNULL(p.QtyPreallocated, 0)) > 0)  
                      BEGIN  
-        PRINT '**** Check Stock Balance **** '  
+                        PRINT '**** Check Stock Balance **** '  
                         SELECT LOC.Facility, LOT.SKU, LOT.LOT,  
                                QtyAvailable = SUM(LOTxLOCxID.Qty) - SUM(LOTxLOCxID.QtyAllocated) - SUM(LOTxLOCxID.QtyPicked) - MIN(ISNULL(p.QtyPreallocated, 0)),  
                                Lottable01, Lottable02, Lottable03, CONVERT(VARCHAR(10), Lottable04, 112) AS Lottable04,  
-                  CONVERT(VARCHAR(10), Lottable05, 112) AS Lottable05  
+                               CONVERT(VARCHAR(10), Lottable05, 112) AS Lottable05  
                          FROM LOTxLOCxID (NOLOCK)  
                          JOIN LOT (NOLOCK) ON LOTxLOCxID.LOT = LOT.LOT  
                          JOIN LotAttribute (NOLOCK) ON LOTxLOCxID.LOT = LotAttribute.LOT  

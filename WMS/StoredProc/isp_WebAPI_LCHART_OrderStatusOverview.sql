@@ -95,7 +95,16 @@ BEGIN
   
    IF @c_Format = 'json'  
    BEGIN  
-      SET @c_XMLRequestString = MASTER.dbo.fnc_JSON2XML(@c_RequestString, '')  
+
+      SET @c_XMLRequestString = (
+         SELECT * FROM OPENJSON(@c_RequestString,'$.Request.Data')
+         WITH (
+            [ColumnName]          NVARCHAR(60),
+            [ColumnValue]         NVARCHAR(60),
+            [OperationType]       NVARCHAR(15)
+         )
+         FOR XML PATH('Data'), ROOT('Request')
+      )
         
       -- Convert special HTML character to normal character   
       IF CHARINDEX(N'&#', @c_XMLRequestString, 1) > 0   
@@ -168,38 +177,40 @@ BEGIN
   
       IF @c_Format = 'json'  
       BEGIN  
-         SET @c_ExecStatements = N';WITH XMLNAMESPACES (''http://james.newtonking.com/projects/json'' as json)'  
-                               + ' SELECT @c_ResponseString = ISNULL(RTRIM(( '  
-                               + ' SELECT ''true'' AS [@json:Array], '  
-                               + ' a.StorerKey, a.OrderStatus, a.TotalOrders '  
-                               + ' FROM ( '  
-                               + ' SELECT StorerKey '  
-                               + '       ,''Added'' AS ''OrderStatus'' '  
-                               + '       ,COUNT(1) AS ''TotalOrders'' '  
-                               + ' FROM dbo.ORDERS with (nolock) '  
-                               + ISNULL(RTRIM(@c_FullCondition), '')  
-                               + ' GROUP BY StorerKey '  
-                               + ' UNION ALL '  
-                               + ' SELECT StorerKey '  
-                               + '       ,''Shipped'' AS ''OrderStatus'' '  
-                               + '       ,COUNT(1) AS ''TotalOrders'' '  
-                               + ' FROM dbo.ORDERS with (nolock) '  
-                               + ISNULL(RTRIM(@c_FullCondition), '')  
-                               + CASE WHEN ISNULL(RTRIM(@c_FullCondition), '') = '' THEN ' WHERE ' ELSE ' AND ' END  
-                               + ' Status =  ''9'' '  
-                               + ' GROUP BY StorerKey '  
-                               + ' UNION ALL '  
-                               + ' SELECT StorerKey '  
-                               + '       ,''Orders Outstanding'' AS ''OrderStatus'' '  
-                               + '       ,COUNT(1) AS ''TotalOrders'' '  
-                               + ' FROM dbo.ORDERS with (nolock) '  
-                               + ISNULL(RTRIM(@c_FullCondition), '')  
-                               + CASE WHEN ISNULL(RTRIM(@c_FullCondition), '') = '' THEN ' WHERE ' ELSE ' AND ' END  
-                               + ' Status <> ''9'' '  
-                               + ' GROUP BY StorerKey '  
-                               + ' ) a '  
-                               + ' FOR XML PATH (''Event''), ROOT(''Events'') '  
-                               + ' )), '''')'   
+         SET @c_ExecStatements = --N';WITH XMLNAMESPACES (''http://james.newtonking.com/projects/json'' as json)'
+                               N' SELECT @c_ResponseString = ISNULL(RTRIM(( '
+                               + ' SELECT '
+                               --+ ' a.StorerKey, a.OrderStatus, a.TotalOrders '
+                               + ' a.StorerKey, a.OrderStatus, CONVERT(NVARCHAR(20), a.TotalOrders) as TotalOrders '
+                               + ' FROM ( '
+                               + ' SELECT StorerKey '
+                               + '       ,''Added'' AS ''OrderStatus'' '
+                               + '       ,COUNT(1) AS ''TotalOrders'' '
+                               + ' FROM dbo.ORDERS with (nolock) '
+                               + ISNULL(RTRIM(@c_FullCondition), '')
+                               + ' GROUP BY StorerKey '
+                               + ' UNION ALL '
+                               + ' SELECT StorerKey '
+                               + '       ,''Shipped'' AS ''OrderStatus'' '
+                               + '       ,COUNT(1) AS ''TotalOrders'' '
+                               + ' FROM dbo.ORDERS with (nolock) '
+                               + ISNULL(RTRIM(@c_FullCondition), '')
+                               + CASE WHEN ISNULL(RTRIM(@c_FullCondition), '') = '' THEN ' WHERE ' ELSE ' AND ' END
+                               + ' Status =  ''9'' '
+                               + ' GROUP BY StorerKey '
+                               + ' UNION ALL '
+                               + ' SELECT StorerKey '
+                               + '       ,''Orders Outstanding'' AS ''OrderStatus'' '
+                               + '       ,COUNT(1) AS ''TotalOrders'' '
+                               + ' FROM dbo.ORDERS with (nolock) '
+                               + ISNULL(RTRIM(@c_FullCondition), '')
+                               + CASE WHEN ISNULL(RTRIM(@c_FullCondition), '') = '' THEN ' WHERE ' ELSE ' AND ' END
+                               + ' Status <> ''9'' '
+                               + ' GROUP BY StorerKey '
+                               + ' ) a '
+                               + ' FOR JSON PATH, ROOT(''Event'') '
+                               --+ ' FOR XML PATH (''Event''), ROOT(''Events'') '
+                               + ' )), '''')' 
   
          SET @c_ExecArguments = N'@c_ResponseString NVARCHAR(MAX) OUTPUT'  
   
@@ -209,8 +220,7 @@ BEGIN
          END  
   
          EXECUTE sp_ExecuteSql @c_ExecStatements, @c_ExecArguments, @c_ResponseString OUTPUT  
-  
-         SET @c_ResponseString = master.dbo.fnc_XML2JSON(@c_ResponseString, 1)  
+
       END  
       ELSE   
       BEGIN  
@@ -220,33 +230,33 @@ BEGIN
          --                      + ISNULL(RTRIM(@c_FullCondition), '')  
          --                      + ' FOR XML PATH (''Event''), ROOT(''Events''))), '''')'  
            
-         SET @c_ExecStatements = N'SET @c_ResponseString = ISNULL(RTRIM(( '  
-                               + ' SELECT @c_ResponseString = ISNULL(RTRIM(( '  
-                               + ' SELECT a.StorerKey, a.OrderStatus, a.TotalOrders '  
-                               + ' FROM ( '  
-                               + ' SELECT StorerKey '  
-                               + '       ,''Added'' AS ''OrderStatus'' '  
-                               + '       ,COUNT(1) AS ''TotalOrders'' '  
-                               + ' FROM dbo.ORDERS with (nolock) '  
-                               + ISNULL(RTRIM(@c_FullCondition), '')  
-                               + ' GROUP BY StorerKey '  
-                               + ' UNION ALL '  
-                               + ' SELECT StorerKey '  
-                               + '       ,''Shipped'' AS ''OrderStatus'' '  
-                               + '       ,COUNT(1) AS ''TotalOrders'' '  
-                               + ' FROM dbo.ORDERS with (nolock) '  
-                               + ISNULL(RTRIM(@c_FullCondition), '')  
-                               + ' GROUP BY StorerKey '  
-                               + ' UNION ALL '  
-                               + ' SELECT StorerKey '  
-                               + '       ,''Orders Outstanding'' AS ''OrderStatus'' '  
-                               + '       ,COUNT(1) AS ''TotalOrders'' '  
-                               + ' FROM dbo.ORDERS with (nolock) '  
-                               + ISNULL(RTRIM(@c_FullCondition), '')  
-                               + ' GROUP BY StorerKey '  
-                               + ' ) a '  
-                               + ' FOR XML PATH (''Event''), ROOT(''Events'') '  
-                               + ' )), '''')'  
+         SET @c_ExecStatements = --N'SET @c_ResponseString = ISNULL(RTRIM(( '
+                               N' SELECT @c_ResponseString = ISNULL(RTRIM(( '
+                               + ' SELECT a.StorerKey, a.OrderStatus, a.TotalOrders '
+                               + ' FROM ( '
+                               + ' SELECT StorerKey '
+                               + '       ,''Added'' AS ''OrderStatus'' '
+                               + '       ,COUNT(1) AS ''TotalOrders'' '
+                               + ' FROM dbo.ORDERS with (nolock) '
+                               + ISNULL(RTRIM(@c_FullCondition), '')
+                               + ' GROUP BY StorerKey '
+                               + ' UNION ALL '
+                               + ' SELECT StorerKey '
+                               + '       ,''Shipped'' AS ''OrderStatus'' '
+                               + '       ,COUNT(1) AS ''TotalOrders'' '
+                               + ' FROM dbo.ORDERS with (nolock) '
+                               + ISNULL(RTRIM(@c_FullCondition), '')
+                               + ' GROUP BY StorerKey '
+                               + ' UNION ALL '
+                               + ' SELECT StorerKey '
+                               + '       ,''Orders Outstanding'' AS ''OrderStatus'' '
+                               + '       ,COUNT(1) AS ''TotalOrders'' '
+                               + ' FROM dbo.ORDERS with (nolock) '
+                               + ISNULL(RTRIM(@c_FullCondition), '')
+                               + ' GROUP BY StorerKey '
+                               + ' ) a '
+                               + ' FOR XML PATH (''Event''), ROOT(''Events'') '
+                               + ' )), '''')' 
   
          SET @c_ExecArguments = N'@c_ResponseString NVARCHAR(MAX) OUTPUT'  
   

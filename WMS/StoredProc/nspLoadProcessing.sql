@@ -112,6 +112,9 @@ GO
 /*                            qtyreplen and use ucc.status instead.     */  
 /*                            storerconfig: uccallocation               */     
 /*                            Add custom sp config to update OPORDERLINES*/
+/* 27-SEP-2022  NJOW26  4.0   WMS-20812 Pass in additional parameters to*/
+/*                            isp_ChannelAllocGetHoldQty_Wrapper        */             
+/* 27-SEP-2022  NJOW26  4.0   DEVOPS Combine script                     */                   
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[nspLoadProcessing]
      @c_LoadKey NVARCHAR(10)
@@ -2057,6 +2060,8 @@ BEGIN
                                     @c_Lot = @c_aLOT,
                                     @c_Channel = @c_Channel,
                                     @n_Channel_ID = @n_Channel_ID,
+                                    @n_AllocateQty = @n_cQtyAvailable, --NJOW26                                    
+                                    @n_QtyLeftToFulFill = @n_aQtyLeftToFulfill, --NJOW26
                                     @c_SourceKey = @c_Loadkey,
                                     @c_SourceType = 'nspLoadProcessing',
                                     @n_ChannelHoldQty = @n_ChannelHoldQty OUTPUT,

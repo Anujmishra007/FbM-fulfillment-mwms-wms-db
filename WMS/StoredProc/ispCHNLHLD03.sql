@@ -26,21 +26,25 @@ GO
 /* Updates:                                                             */    
 /* Date        Author   Ver   Purposes                                  */   
 /* 2021-09-03  Wan      1.0   Created.                                  */ 
+/* 27-SEP-2022  NJOW01   1.0  WMS-20812 add parameters                  */
+/* 27-SEP-2022  NJOW01   1.0  DEVOPS Combine Script                     */
 /************************************************************************/  
   
 CREATE PROC dbo.ispCHNLHLD03     
-      @c_StorerKey      NVARCHAR(15)   
-   ,  @c_Sku            NVARCHAR(20)    
-   ,  @c_Facility       NVARCHAR(5)            
-   ,  @c_Lot            NVARCHAR(10)  
-   ,  @c_Channel        NVARCHAR(20)  
-   ,  @n_Channel_ID     BIGINT = 0     
-   ,  @c_SourceKey      NVARCHAR(30) = ''  
-   ,  @c_SourceType     NVARCHAR(50) = ''  
-   ,  @n_ChannelHoldQty INT      OUTPUT  
-   ,  @b_Success        INT      OUTPUT  
-   ,  @n_Err            INT      OUTPUT   
-   ,  @c_ErrMsg         NVARCHAR(250) OUTPUT      
+      @c_StorerKey        NVARCHAR(15)   
+   ,  @c_Sku              NVARCHAR(20)    
+   ,  @c_Facility         NVARCHAR(5)            
+   ,  @c_Lot              NVARCHAR(10)  
+   ,  @c_Channel          NVARCHAR(20)  
+   ,  @n_Channel_ID       BIGINT = 0     
+   ,  @n_AllocateQty      INT = 0  --NJOW01                   
+   ,  @n_QtyLeftToFulFill INT = 0  --NJOW01                                                           
+   ,  @c_SourceKey        NVARCHAR(30) = ''  
+   ,  @c_SourceType       NVARCHAR(50) = ''  
+   ,  @n_ChannelHoldQty   INT      OUTPUT  
+   ,  @b_Success          INT      OUTPUT  
+   ,  @n_Err              INT      OUTPUT   
+   ,  @c_ErrMsg           NVARCHAR(250) OUTPUT      
 AS     
 BEGIN    
    SET NOCOUNT ON    

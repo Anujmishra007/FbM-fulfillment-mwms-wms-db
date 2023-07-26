@@ -42,6 +42,10 @@ GO
 /* 04-Jan-2022	NJOW02  2.3   WMS-18620 Allow configure order sorting   */
 /*                            by orderdate                              */
 /* 04-Jan-2022  NJOW02  2.3   DEVOPS combine script                     */
+/* 27-SEP-2022  NJOW03  2.4   WMS-20812 Pass in additional parameters to*/
+/*                            isp_ChannelAllocGetHoldQty_Wrapper.       */     
+/*                            Pass in PreAllocateStrategyKey and        */
+/*                            PreAllocateStrategyLineNumber to pickcode */                           
 /************************************************************************/
 CREATE PROC  [dbo].[isp_BatchSKUPreProcessing]
    @n_AllocBatchNo BIGINT
@@ -1009,8 +1013,10 @@ BEGIN
                                             RTRIM(@c_aOrderKey) + RTRIM(@c_aOrderLineNumber) + ''' ' 
                   WHEN '@n_UOMBase'    THEN '@n_UOMBase = ' + RTRIM(CONVERT(VARCHAR(10),@n_PackQty)) 
                   WHEN '@n_QtyLeftToFulfill' THEN '@n_QtyLeftToFulfill = ' + RTRIM(CONVERT(VARCHAR(10),@n_QtyLeftToFulfill))
+                  WHEN '@c_PreAllocateStrategyKey' THEN ',@c_PreAllocateStrategyKey = N''' + RTRIM(@c_aPreAllocateStrategyKey) + ''''  --NJOW03
+                  WHEN '@c_PreAllocateStrategyLineNumber' THEN ',@c_PreAllocateStrategyLineNumber = N''' + RTRIM(@c_sCurrentLineNumber) + ''''  --NJOW03
                END 
-
+            
             FETCH NEXT FROM Cur_Parameters INTO @c_ParameterName, @n_OrdinalPosition
          END 
          CLOSE Cur_Parameters
@@ -1219,12 +1225,19 @@ BEGIN
                         @c_Lot = @c_sLOT,
                         @c_Channel = @c_Channel,
                         @n_Channel_ID = @n_Channel_ID,   
+                        @n_AllocateQty = @n_QtyAvailable, --NJOW03  
+                        @n_QtyLeftToFulFill = @n_QtyLeftToFulfill, --NJOW03                                                                                                                             
                         @c_SourceKey = @n_AllocBatchNo,
                         @c_SourceType = 'isp_BatchSkuPreProcessing', 
                         @n_ChannelHoldQty = @n_ChannelHoldQty OUTPUT,
                         @b_Success = @b_Success OUTPUT,
                         @n_Err = @n_Err OUTPUT, 
                         @c_ErrMsg = @c_ErrMsg OUTPUT
+                        
+                     IF @b_success <> 1
+                     BEGIN
+                        SET @n_continue = 3                                                                                
+                     END                                                                                                
                      --NJOW01 E   
                
                      /*--(Wan04) - START

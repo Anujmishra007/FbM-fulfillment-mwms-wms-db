@@ -130,7 +130,16 @@ BEGIN
   
    IF @c_Format = 'json'  
    BEGIN  
-      SET @c_XMLRequestString = MASTER.dbo.fnc_JSON2XML(@c_RequestString, '')  
+
+      SET @c_XMLRequestString = (
+         SELECT * FROM OPENJSON(@c_RequestString,'$.Request.Data')
+         WITH (
+            [ColumnName]          NVARCHAR(60),
+            [ColumnValue]         NVARCHAR(60),
+            [OperationType]       NVARCHAR(15)
+         )
+         FOR XML PATH('Data'), ROOT('Request')
+      )  
         
       -- Convert special HTML character to normal character   
       IF CHARINDEX(N'&#', @c_XMLRequestString, 1) > 0   
@@ -203,16 +212,19 @@ BEGIN
   
       IF @c_Format = 'json'  
       BEGIN  
-         SET @c_ExecStatements = N';WITH XMLNAMESPACES (''http://james.newtonking.com/projects/json'' as json)'  
-                               + ' SELECT @c_ResponseString = ISNULL(RTRIM(( '  
-                               + ' SELECT ''true'' AS [@json:Array], '  
-                               --+ ' CONVERT(VARCHAR(8), [Date], 3) AS [Date], [CBM_Received], '  
-                               + ' [Date], [CBM_Received], '  
-                               + '     [CBM_Shipped], [Received_Shipment], [Shipped_Shipment] '  
-                               + ' FROM #LCHART_WAREHOUSEACTIVITIES '  
-                               + ISNULL(RTRIM(@c_FullCondition), '')  
-                               + ' FOR XML PATH (''Event''), ROOT(''Events'') '  
-                               + ' )), '''')'   
+         SET @c_ExecStatements = --N';WITH XMLNAMESPACES (''http://james.newtonking.com/projects/json'' as json)'
+                               N' SELECT @c_ResponseString = ISNULL(RTRIM(( '
+                               + ' SELECT  '
+                               --+ ' CONVERT(VARCHAR(8), [Date], 3) AS [Date], [CBM_Received], '
+                               + ' [Date], CONVERT(NVARCHAR(20),[CBM_Received]) AS CBM_Received, '
+                               + '     CONVERT(NVARCHAR(20),[CBM_Shipped]) AS CBM_Shipped, '
+                               + '     CONVERT(NVARCHAR(20),[Received_Shipment]) AS Received_Shipment, '
+                               + '     CONVERT(NVARCHAR(20),[Shipped_Shipment]) AS Shipped_Shipment  '
+                               + ' FROM #LCHART_WAREHOUSEACTIVITIES '
+                               + ISNULL(RTRIM(@c_FullCondition), '')
+                               + ' FOR JSON PATH, ROOT(''Event'') '
+                               --+ ' FOR XML PATH (''Event''), ROOT(''Events'') '
+                               + ' )), '''')'  
   
          SET @c_ExecArguments = N'@c_ResponseString NVARCHAR(MAX) OUTPUT'  
   
@@ -222,8 +234,7 @@ BEGIN
          END  
   
          EXECUTE sp_ExecuteSql @c_ExecStatements, @c_ExecArguments, @c_ResponseString OUTPUT  
-  
-         SET @c_ResponseString = master.dbo.fnc_XML2JSON(@c_ResponseString, 1)  
+
       END  
       ELSE   
       BEGIN  
@@ -233,14 +244,14 @@ BEGIN
          --                      + ISNULL(RTRIM(@c_FullCondition), '')  
          --                      + ' FOR XML PATH (''Event''), ROOT(''Events''))), '''')'  
            
-         SET @c_ExecStatements = N'SET @c_ResponseString = ISNULL(RTRIM(( '  
-                               + ' SELECT @c_ResponseString = ISNULL(RTRIM(( '  
-                               + ' SELECT [Date], [CBM_Received], '  
-                               + '     [CBM_Shipped], [Received_Shipment], [Shipped_Shipment] '  
-                               + ' FROM #LCHART_WAREHOUSEACTIVITIES '  
-                               + ISNULL(RTRIM(@c_FullCondition), '')  
-                               + ' FOR XML PATH (''Event''), ROOT(''Events'') '  
-                               + ' )), '''')'  
+         SET @c_ExecStatements = --N'SET @c_ResponseString = ISNULL(RTRIM(( '
+                               N' SELECT @c_ResponseString = ISNULL(RTRIM(( '
+                               + ' SELECT [Date], [CBM_Received], '
+                               + '     [CBM_Shipped], [Received_Shipment], [Shipped_Shipment] '
+                               + ' FROM #LCHART_WAREHOUSEACTIVITIES '
+                               + ISNULL(RTRIM(@c_FullCondition), '')
+                               + ' FOR XML PATH (''Event''), ROOT(''Events'') '
+                               + ' )), '''')'
   
          SET @c_ExecArguments = N'@c_ResponseString NVARCHAR(MAX) OUTPUT'  
   

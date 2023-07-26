@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspPreAllocateOrderProcessing]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[nspPreAllocateOrderProcessing]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -95,8 +91,15 @@ GO
 /*                         Preallocate data from pickcode               */ 
 /* 03-Jul-2020  CheeMun    INC1192122 - Initialize ChannelID = 0        */ 
 /* 01-Dec-2020  NJOW06     WMS-15746 get channel hold qty by config     */  
+/* 23-Jun-2022  WLChooi    DevOps Combine Script                        */
+/* 23-Jun-2022  WLChooi    Bug Fix - Add Strategykey into #OPORDERLINES */
+/*                         (WL01)                                       */
+/* 27-SEP-2022  NJOW07     WMS-20812 Pass in additional parameters to   */
+/*                         isp_ChannelAllocGetHoldQty_Wrapper.          */                                
+/*                         Pass in PreAllocateStrategyKey and           */
+/*                         PreAllocateStrategyLineNumber to pickcode    */
 /************************************************************************/
-CREATE PROC  [dbo].[nspPreAllocateOrderProcessing]
+CREATE OR ALTER PROC  [dbo].[nspPreAllocateOrderProcessing]
                @c_orderkey     NVARCHAR(10)
 ,              @c_oskey        NVARCHAR(10)
 ,              @c_oprun        NVARCHAR(9)
@@ -662,7 +665,8 @@ BEGIN
       Facility                NVARCHAR(5) NULL,
       MinShelfLife            INT NULL,
       UOM                     NVARCHAR(10) NULL,
-      Channel                 NVARCHAR(20) NULL 
+      Channel                 NVARCHAR(20) NULL,
+      StrategyKey             NVARCHAR(10) NULL   --WL01      
    )
 
    SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
@@ -1800,6 +1804,8 @@ BEGIN
          WHEN '@c_OtherParms' THEN '@c_OtherParms= N''' + RTRIM(@c_aOrderKey) + RTRIM(@c_aOrderLineNumber) + 'O'' '  --NJOW05  
          WHEN '@n_UOMBase'    THEN '@n_UOMBase = ' + RTRIM(CONVERT(VARCHAR(10),@n_PackQty))
          WHEN '@n_QtyLeftToFulfill' THEN '@n_QtyLeftToFulfill = ' + RTRIM(CONVERT(VARCHAR(10),@n_QtyLeftToFulfill))
+         WHEN '@c_PreAllocateStrategyKey' THEN ',@c_PreAllocateStrategyKey = N''' + RTRIM(@c_APreAllocateStrategyKey) + ''''  --NJOW07
+         WHEN '@c_PreAllocateStrategyLineNumber' THEN ',@c_PreAllocateStrategyLineNumber = N''' + RTRIM(@c_sCurrentLineNumber) + ''''  --NJOW07               
       END
 
    FETCH NEXT FROM Cur_Parameters INTO @c_ParameterName, @n_OrdinalPosition
@@ -1976,12 +1982,19 @@ BEGIN
                      @c_Lot = @c_sLOT,
                      @c_Channel = @c_Channel,
                      @n_Channel_ID = @n_Channel_ID,   
+                     @n_AllocateQty = @n_QtyAvailable, --NJOW07     
+                     @n_QtyLeftToFulFill = @n_QtyLeftToFulfill, --NJOW07                                           
                      @c_SourceKey = @c_SourceKey,
                      @c_SourceType = @c_SourceType, 
                      @n_ChannelHoldQty = @n_ChannelHoldQty OUTPUT,
                      @b_Success = @b_Success OUTPUT,
                      @n_Err = @n_Err OUTPUT, 
                      @c_ErrMsg = @c_ErrMsg OUTPUT
+                                    
+                  IF @b_success <> 1
+                  BEGIN
+                     SET @n_continue = 3                                                                                
+                  END                     
                   --NJOW06 E   
                    
                   /*--(Wan06) - START

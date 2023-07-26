@@ -81,7 +81,14 @@ BEGIN
   
    IF @c_Format = 'json'  
    BEGIN  
-      SET @c_XMLRequestString = MASTER.dbo.fnc_JSON2XML(@c_RequestString, '')  
+
+      SET @c_XMLRequestString = (
+         SELECT * FROM OPENJSON(@c_RequestString,'$.Request')
+         WITH (
+            [StorerKey]          NVARCHAR(15)
+         )
+         FOR XML PATH('Request')
+      )
         
       -- Convert special HTML character to normal character   
       IF CHARINDEX(N'&#', @c_XMLRequestString, 1) > 0   
@@ -135,25 +142,27 @@ BEGIN
   
       IF @c_Format = 'json'  
       BEGIN  
-         ;WITH XMLNAMESPACES ('http://james.newtonking.com/projects/json' as json)  
-         --SELECT @c_ResponseString = ISNULL(RTRIM(CONVERT(NVARCHAR(MAX),(  
-         --                        SELECT 'true' AS [@json:Array], [Name], [StorerKey], [RDLCFileName]  
-         --                        FROM [dbo].[LCHART_Chart_DET] WITH (NOLOCK)  
-         --                        FOR XML PATH ('Chart'), ROOT('Charts')))), '')  
-         SELECT @c_ResponseString = ISNULL(RTRIM(CONVERT(NVARCHAR(MAX),(  
-                                       SELECT 'true' AS [@json:Array], ChartName, RDLC, URL,  
-                                       (  
-                                          SELECT 'true' AS [@json:Array], DET.[Param], DET.DataType  
-                                                , DET.Label, DET.OperationType  
-                                          FROM [dbo].[LEAF_Chart_DET] DET WITH (NOLOCK)  
-                                          WHERE DET.ChartName = HDR.ChartName  
-                                          FOR XML PATH('Params'), TYPE  
-                                       )   
-                                       FROM [dbo].[LEAF_Chart_HDR] HDR WITH (NOLOCK)  
-                                       FOR XML PATH ('Charts'), type, ROOT('Root')  
-                                    ))), '')  
-  
-         SET @c_ResponseString = master.dbo.fnc_XML2JSON(@c_ResponseString, 1)  
+         --;WITH XMLNAMESPACES ('http://james.newtonking.com/projects/json' as json)
+         --SELECT @c_ResponseString = ISNULL(RTRIM(CONVERT(NVARCHAR(MAX),(
+         --                        SELECT 'true' AS [@json:Array], [Name], [StorerKey], [RDLCFileName]
+         --                        FROM [dbo].[LCHART_Chart_DET] WITH (NOLOCK)
+         --                        FOR XML PATH ('Chart'), ROOT('Charts')))), '')
+         SELECT @c_ResponseString = ISNULL(RTRIM(CONVERT(NVARCHAR(MAX),(
+                                       SELECT ChartName, RDLC, URL,
+                                       (
+                                          SELECT DET.[Param], DET.DataType
+                                                , DET.Label, DET.OperationType
+                                          FROM [dbo].[LEAF_Chart_DET] DET WITH (NOLOCK)
+                                          WHERE DET.ChartName = HDR.ChartName
+                                          FOR JSON PATH, INCLUDE_NULL_VALUES
+                                       ) Params
+                                       FROM [dbo].[LEAF_Chart_HDR] HDR WITH (NOLOCK)
+                                       FOR JSON PATH, ROOT('Charts')
+                                    ))), '')
+         
+         --remove escaped character
+         SET @c_ResponseString = REPLACE(@c_ResponseString,'\/','/')
+
       END  
       ELSE   
       BEGIN  
