@@ -22,6 +22,7 @@ GO
 /* Updates:                                                              */  
 /* Date         Author   Ver.  Purposes                                  */  
 /* 28-APR-2023  NJOW     1.0   DevOps Combine Script                     */
+/* 07-JUL-2023  NJOW01   1.1   WMS-23043 Cater for multi-lot full pallet */
 /*************************************************************************/   
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV59]      
@@ -196,19 +197,55 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV59]
    IF @n_continue = 1 OR @n_continue = 2
    BEGIN
       UPDATE #PICKDETAIL_WIP WITH (ROWLOCK) 
-      SET #PICKDETAIL_WIP.TaskdetailKey = ''      
+      SET #PICKDETAIL_WIP.TaskdetailKey = ''
+   END
+   
+   --Find single order full pallet with multiple lots and update from uom 2 to uom 1
+   IF @n_continue = 1 OR @n_continue = 2  --NJOW01
+   BEGIN
+   	  DECLARE CUR_FULLPLT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+   	     SELECT PD.Loc, PD.ID
+   	     FROM #PickDetail_WIP PD
+   	     JOIN SKU (NOLOCK) ON PD.Storerkey = SKU.Storerkey AND PD.Sku = SKU.Sku
+   	     JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey
+   	     WHERE PD.UOM <> '1'
+   	     AND PD.ID <> ''
+   	     GROUP BY PD.Loc, PD.ID
+   	     HAVING COUNT(DISTINCT PD.Sku) = 1 AND COUNT(DISTINCT PD.Orderkey) = 1 
+   	            AND MAX(PACK.Pallet) = SUM(PD.Qty)	  
+
+      OPEN CUR_FULLPLT  
+      
+      FETCH NEXT FROM CUR_FULLPLT INTO @c_FromLoc, @c_ID
+      
+      WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
+      BEGIN      
+      	 UPDATE #PickDetail_WIP 
+      	 SET UOM = '1',
+      	     CartonType = 'MULTILOT' 
+      	 WHERE Loc = @c_FromLoc
+      	 AND ID = @c_ID
+      	
+         FETCH NEXT FROM CUR_FULLPLT INTO @c_FromLoc, @c_ID      	
+      END
+      CLOSE CUR_FULLPLT
+      DEALLOCATE CUR_FULLPLT                  	       	          
    END
 
    --Generate FPK and CPK tasks
    IF @n_continue = 1 OR @n_continue = 2   
    BEGIN             
       DECLARE cur_pick CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-         SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, SUM(PD.Qty) AS Qty,  
+         SELECT PD.Storerkey, PD.Sku, 
+                CASE WHEN PD.UOM = '1' AND PD.CartonType = 'MULTILOT' THEN '' ELSE PD.Lot END AS Lot, --NJOW01
+                PD.Loc, PD.ID, SUM(PD.Qty) AS Qty,  
                 PD.UOM, SUM(PD.UOMQty) AS UOMQty, MAX(O.Loadkey)
          FROM #PickDetail_WIP PD (NOLOCK) 
          JOIN ORDERS O (NOLOCK) ON PD.Orderkey = O.Orderkey
-         GROUP BY PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, PD.UOM
-         ORDER BY PD.UOM, PD.Loc, PD.Sku, PD.Lot 
+         GROUP BY PD.Storerkey, PD.Sku, 
+                  CASE WHEN PD.UOM = '1' AND PD.CartonType = 'MULTILOT' THEN '' ELSE PD.Lot END, --NJOW01
+                  PD.Loc, PD.ID, PD.UOM
+         ORDER BY PD.UOM, PD.Loc, PD.Sku, CASE WHEN PD.UOM = '1' AND PD.CartonType = 'MULTILOT' THEN '' ELSE PD.Lot END  --NJOW01
       
       OPEN cur_pick  
       
