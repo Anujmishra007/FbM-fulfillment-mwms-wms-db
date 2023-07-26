@@ -18,7 +18,7 @@ GO
 /* 2022-03-31  1.2  Ung       WMS-19340 Add shipping label              */  
 /* 2022-05-26  1.3  James     WMS-19695 Change pallet label printing    */
 /*                            logic (james01)                           */
-/* 2023-02-10  1.4  YeeKung   WMS21378 Add UCC column (yeekung02)       */
+/* 2023-02-10  1.1  YeeKung  WMS-21738 Add UCC column (yeekung01)        */
 /************************************************************************/      
       
 CREATE OR ALTER PROC [RDT].[rdt_1641ExtUpdSP06] (      

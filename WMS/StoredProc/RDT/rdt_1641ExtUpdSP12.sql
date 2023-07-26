@@ -17,7 +17,7 @@ GO
 /* 2021-11-05  1.0  Chermaine WMS-18186 Created                         */
 /* 2022-05-20  1.1  YeeKung   WMS-19685 Left country,2 (yeekung01)      */
 /* 2022-12-01  1.2  YeeKung   WMS-21215 Add userdefine10(yeekung02)     */
-/* 2023-02-10  1.3  YeeKung   WMS-21378 Add UCC column (yeekung03)       */
+/* 2023-02-10  1.3  YeeKung  WMS-21738 Add UCC column (yeekung01)        */
 /************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_1641ExtUpdSP12] (  

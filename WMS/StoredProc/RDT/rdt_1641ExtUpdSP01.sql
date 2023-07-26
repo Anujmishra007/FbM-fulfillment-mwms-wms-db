@@ -12,7 +12,7 @@ GO
 /* Modifications log:                                                   */
 /* Date        Rev  Author   Purposes                                   */
 /* 2014-02-27  1.0  ChewKP   Created                                    */
-/* 2023-02-10  1.1  YeeKung  WMS21378 Add UCC column (yeekung02)        */
+/* 2023-02-10  1.1  YeeKung  WMS-21738 Add UCC column (yeekung01)        */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1641ExtUpdSP01] (

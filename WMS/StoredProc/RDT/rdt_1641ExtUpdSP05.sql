@@ -19,7 +19,7 @@ GO
 /* 2020-01-17  1.1  James    WMS-11855 Ecom orders enhancement (james01)*/
 /* 2020-03-24  1.2  James    WMS-12641 Ecom orders enhancement (james02)*/
 /* 2020-08-10  1.3  YeeKung  WMS-14625 Reopen Pallet (yeekung01)        */
-/* 2023-02-10  1.4  YeeKung   WMS21378 Add UCC column (yeekung02)       */
+/* 2023-02-10  1.4  YeeKung  WMS-21738 Add UCC column (yeekung02)       */
 /* 2023-05-10  1.5  James    WMS-22458 Add tracking no scan (M_Address1)*/
 /*                           to build pallet (james03)                  */
 /************************************************************************/

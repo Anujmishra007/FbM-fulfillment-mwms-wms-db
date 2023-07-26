@@ -14,7 +14,7 @@ GO
 /* Modifications log:                                                   */    
 /* Date        Rev  Author   Purposes                                   */    
 /* 2021-08-01  1.0  YeeKung  WMS-17111 Created                          */  
-/* 2023-02-10  1.1  YeeKung   WMS-21378 Add UCC column (yeekung01)       */
+/* 2023-02-10  1.1  YeeKung  WMS-21738 Add UCC column (yeekung01)        */
 /************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdt_1641ExtUpdSP11] (    

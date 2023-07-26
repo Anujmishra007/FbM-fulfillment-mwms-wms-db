@@ -15,7 +15,7 @@ GO
 /* Date        Rev  Author   Purposes                                   */
 /* 2019-08-10  1.0  YeeKung   WMS10083 Created                          */
 /* 2020-07-09  1.1  YeeKung   WMS14187 update UD03(yeekung01)           */
-/* 2023-02-10  1.2  YeeKung   WMS21378 Add UCC column (yeekung02)       */
+/* 2023-02-10  1.2  YeeKung  WMS-21738 Add UCC column (yeekung01)        */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1641ExtUpdSP04] (
