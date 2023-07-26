@@ -27,7 +27,9 @@ GO
 /*                                                                      */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author     Purposes                                     */
+/* Date         Author  Ver.  Purposes                                  */
+/* 20-JUL-2023  NJOW01  1.0   WMS-23138 Change mbolkey mapping          */
+/* 20-JUL-2023  NJOW01  1.0   DEVOPS Combine Script                     */
 /************************************************************************/
 
 CREATE PROCEDURE ispPopulateTOASN_Fanatics 
@@ -112,7 +114,7 @@ AS
              @c_mbolkey  = MBOL.MBOLKey,
              @c_ExternLineNo = ORDERDETAIL.ExternLineNo,  
              @c_AltSKU  = ORDERDETAIL.AltSKU,
-			 @c_PackKey = ORDERDETAIL.PackKey,   
+			       @c_PackKey = ORDERDETAIL.PackKey,   
              @c_UOM     = ORDERDETAIL.UOM,   
              @n_ShippedQty = (ORDERDETAIL.QtyAllocated + ORDERDETAIL.QtyPicked + ORDERDETAIL.SHIPPEDQTY)
       FROM   ORDERS (NOLOCK)
@@ -293,15 +295,15 @@ AS
                                              Lottable01,          Lottable02,          Lottable03,       Lottable04,       Lottable05,
                                              Lottable06,          Lottable07,          Lottable08,       Lottable09,       Lottable10,
                                              Lottable11,          Lottable12,          Lottable13,       Lottable14,       Lottable15,
-                                             BeforeReceivedQty,   ExternPoKey,         UserDefine01)
+                                             BeforeReceivedQty,   ExternPoKey,         UserDefine01,     Userdefine02)
                               VALUES        (@c_NewReceiptKey,    @c_ReceiptLine,      @c_ExternReceiptKey,
-                                             @c_ExternLineNo,     @c_StorerKey,        @c_mbolkey,       @c_SKU,
+                                             @c_ExternLineNo,     @c_StorerKey,        '',      				 @c_SKU,  --NJOW01
                                              @c_AltSKU,           ISNULL(@n_QtyReceived,0),   0,               -- ONG01 
                                              @c_UOM,              @c_Packkey,          @c_loclast,
                                              @c_Lottable01,       @c_Lottable02,       @c_Lottable03,    @d_Lottable04,    @d_Lottable05, 
                                              @c_Lottable06,       @c_Lottable07,       @c_Lottable08,    @c_Lottable09,    @c_Lottable10,
                                              @c_Lottable11,       @c_Lottable12,       @d_Lottable13,    @d_Lottable14,    @d_Lottable15,
-                                             0,                   @c_OrderKey,         @c_Dropid)
+                                             0,                   @c_OrderKey,         @c_Dropid,				 @c_mbolkey) --NJOW01
                                              
    
                   SELECT @n_LineNo = @n_LineNo + 1
