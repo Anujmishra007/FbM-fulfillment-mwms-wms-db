@@ -492,7 +492,7 @@ BEGIN
    WHERE Orderkey = @cOrderkey
       AND Storerkey = @cStorerKey
 
-   IF ISNULL(@cOrderRefNo,'') = ''
+   IF ISNULL(@cOrderRefNo,'') <> ''
       SET @cOrderRefNo = LEFT(@cOrderRefNo,18)
 
    INSERT INTO dbo.PackHeader (PickSlipNo, StorerKey, OrderKey, LoadKey, AddWho, AddDate,Route,OrderRefNo,ConsigneeKey)  
