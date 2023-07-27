@@ -49,3 +49,7 @@ execute rdt.rdtAddMsg 179445, 10, '179445UpdPickInfoFail',         'us_english',
 execute rdt.rdtAddMsg 179446, 10, '179446OrdersPendcanc',         'us_english', 841
 execute rdt.rdtAddMsg 179447, 10, '179447OrdersPendcanc',         'us_english', 841
 
+-- WMS-23011
+execute rdt.rdtAddMsg 179448, 10, '179448DelEcomLogFail',         'us_english', 841
+execute rdt.rdtAddMsg 179449, 10, 'ELECTRONIC ITEMS    ',         'us_english', 841
+execute rdt.rdtAddMsg 179450, 10, 'PLS USE BOX         ',         'us_english', 841
