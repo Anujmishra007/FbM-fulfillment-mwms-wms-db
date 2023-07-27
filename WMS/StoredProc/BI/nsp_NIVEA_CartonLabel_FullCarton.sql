@@ -37,7 +37,7 @@ GO
 --nsp_NIVEA_CartonLabel_FullCarton '1', '3003476890-7'    
 --nsp_NIVEA_CartonLabel_FullCarton '1', '3003476890-8'  
 
-CREATE PROCEDURE [BI].[nsp_NIVEA_CartonLabel_FullCarton]    
+CREATE OR ALTER PROCEDURE [BI].[nsp_NIVEA_CartonLabel_FullCarton]    
 @type int ,  
 @Externkey NVARchar(30)   
   
