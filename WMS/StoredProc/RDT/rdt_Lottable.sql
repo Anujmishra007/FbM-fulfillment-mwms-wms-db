@@ -1,7 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = Object_Id(N'[RDT].[rdt_Lottable]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE rdt.rdt_Lottable
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -24,9 +20,10 @@ GO
 /* 05-11-2019  1.5  Ung         INC0896693 Fix disable lottable not capture   */
 /* 08-12-2020  1.6  Ung         WMS-14691 Fix hidden field not clear          */
 /*                              Fix validation fail cursor on next field      */
+/* 08/02-2017  1.7  Ung         WMS-1000 Add VERIFY                           */
 /******************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_Lottable
+CREATE OR ALTER PROCEDURE rdt.rdt_Lottable
    @nMobile          INT, 
    @nFunc            INT, 
    @cLangCode        NVARCHAR( 3), 
@@ -1261,7 +1258,291 @@ BEGIN
       IF @nCursorPos IS NOT NULL
          EXEC rdt.rdtSetFocusField @nMobile, @nCursorPos
    END
+
+   /********************************************************************************************
    
+                                                VERIFY
+                                                
+   ********************************************************************************************/
+   IF @cScreenType = 'VERIFY'
+   BEGIN  
+      /********************************************************************************************
+                                            Validate lottable
+      ********************************************************************************************/
+      -- Get lottable start, end sequence of the page
+      IF @cAction = 'CHECK' AND  -- Validation
+         @nInputKey = 1 AND      -- ENTER
+         @nScn = 3990            -- Lottable screen
+      BEGIN
+         SET @nPOS = CHARINDEX( ',', @cOutField15)                                     -- Delimeter position
+         SET @nFirstSeq = SUBSTRING( @cOutField15, 1, @nPOS-1)                         -- First lottable sequence of the page
+         SET @nLastSeq = SUBSTRING( @cOutField15, @nPOS+1, LEN( @cOutField15) - @nPOS) -- Last lottable sequence of the page
+
+         -- Take-in PRE value
+         IF @cAction = 'CHECK' AND @nInputKey = 1 -- ENTER
+         BEGIN
+            -- Get the dynamic lottable in the sequence range
+            INSERT INTO @tLC (LottableNo, Visible, Editable, Required, Sequence, Description, FormatSP) 
+            SELECT TOP 5
+               LottableNo, Visible, Editable, Required, Sequence, Description, FormatSP
+            FROM rdt.rdtLottableCode WITH (NOLOCK)
+            WHERE LottableCode = @cLottableCode
+               AND Function_ID = @nFunc
+               AND StorerKey = @cStorerKey
+               AND Verify = '1'
+               AND Sequence BETWEEN @nFirstSeq AND @nLastSeq
+            ORDER BY Sequence
+   
+            -- Get dynamic lottable input
+            SET @nCount = 1
+            SET @nRemainInCurrentScreen = 0
+            SET @curLC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+               SELECT LottableNo, Sequence, FormatSP
+               FROM @tLC
+               ORDER BY Sequence
+            OPEN @curLC
+            FETCH NEXT FROM @curLC INTO @nLottableNo, @nSequence, @cFormatSP
+            WHILE @@FETCH_STATUS = 0
+            BEGIN
+               -- Get input value
+               IF @nCount = 1 SELECT @cLottable = @cInField02 ELSE 
+               IF @nCount = 2 SELECT @cLottable = @cInField04 ELSE 
+               IF @nCount = 3 SELECT @cLottable = @cInField06 ELSE 
+               IF @nCount = 4 SELECT @cLottable = @cInField08 ELSE 
+               IF @nCount = 5 SELECT @cLottable = @cInField10
+
+               IF @cFormatSP <> ''
+               BEGIN
+                  EXEC rdt.rdt_Lottable_Format @nMobile, @nFunc, @cLangCode, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, @nLottableNo, @cFormatSP, 
+                     @cLottable  OUTPUT, 
+                     @nErrNo     OUTPUT, 
+                     @cErrMsg    OUTPUT
+
+                  IF @nErrNo <> 0
+                  BEGIN
+                     SET @nCursorPos = @nCount * 2
+                     EXEC rdt.rdtSetFocusField @nMobile, @nCursorPos
+                        
+                     IF @nErrNo = -1  -- Remain in current screen
+                     BEGIN
+                        SET @nErrNo = 0
+                        SET @nRemainInCurrentScreen = 1
+                     END
+                     ELSE
+                     BEGIN
+                        SET @nMorePage = 0
+                        GOTO Quit
+                     END
+                  END
+               END
+
+               -- Check date lottable
+               IF @nLottableNo IN (4, 5, 13, 14, 15)
+               BEGIN
+                  IF @cLottable <> '' AND RDT.rdtIsValidDate( @cLottable) = 0
+                  BEGIN
+                     SET @nErrNo = 92318
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Date
+                     SET @nCursorPos = @nCount * 2
+                     EXEC rdt.rdtSetFocusField @nMobile, @nCursorPos
+                        
+                     SET @nMorePage = 0
+                     GOTO Quit
+                  END
+               END
+
+               -- Verify lottable
+               IF @nLottableNo =  1 BEGIN IF @cLottable01 <> @cLottable                        SET @nErrNo = 92323 END ELSE 
+               IF @nLottableNo =  2 BEGIN IF @cLottable02 <> @cLottable                        SET @nErrNo = 92323 END ELSE 
+               IF @nLottableNo =  3 BEGIN IF @cLottable03 <> @cLottable                        SET @nErrNo = 92323 END ELSE 
+               IF @nLottableNo =  4 BEGIN IF @dLottable04 <> rdt.rdtConvertToDate( @cLottable) SET @nErrNo = 92323 END ELSE 
+               IF @nLottableNo =  5 BEGIN IF @dLottable05 <> rdt.rdtConvertToDate( @cLottable) SET @nErrNo = 92323 END ELSE 
+               IF @nLottableNo =  6 BEGIN IF @cLottable06 <> @cLottable                        SET @nErrNo = 92323 END ELSE 
+               IF @nLottableNo =  7 BEGIN IF @cLottable07 <> @cLottable                        SET @nErrNo = 92323 END ELSE 
+               IF @nLottableNo =  8 BEGIN IF @cLottable08 <> @cLottable                        SET @nErrNo = 92323 END ELSE 
+               IF @nLottableNo =  9 BEGIN IF @cLottable09 <> @cLottable                        SET @nErrNo = 92323 END ELSE 
+               IF @nLottableNo = 10 BEGIN IF @cLottable10 <> @cLottable                        SET @nErrNo = 92323 END ELSE 
+               IF @nLottableNo = 11 BEGIN IF @cLottable11 <> @cLottable                        SET @nErrNo = 92323 END ELSE 
+               IF @nLottableNo = 12 BEGIN IF @cLottable12 <> @cLottable                        SET @nErrNo = 92323 END ELSE 
+               IF @nLottableNo = 13 BEGIN IF @dLottable13 <> rdt.rdtConvertToDate( @cLottable) SET @nErrNo = 92323 END ELSE 
+               IF @nLottableNo = 14 BEGIN IF @dLottable14 <> rdt.rdtConvertToDate( @cLottable) SET @nErrNo = 92323 END ELSE 
+               IF @nLottableNo = 15 BEGIN IF @dLottable15 <> rdt.rdtConvertToDate( @cLottable) SET @nErrNo = 92323 END 
+
+               IF @nErrNo = 92323
+               BEGIN
+                  SET @cErrMsg = RTRIM( rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')) + RIGHT( '0' + CAST( @nLottableNo AS NVARCHAR(2)), 2) --DiffLottable99
+                  SET @nCursorPos = @nCount * 2
+                  EXEC rdt.rdtSetFocusField @nMobile, @nCursorPos
+                     
+                  SET @nMorePage = 0
+                  GOTO Quit
+               END
+               
+               -- Output to screen
+               IF @nCount = 1 SELECT @cOutField02 = @cLottable ELSE 
+               IF @nCount = 2 SELECT @cOutField04 = @cLottable ELSE 
+               IF @nCount = 3 SELECT @cOutField06 = @cLottable ELSE 
+               IF @nCount = 4 SELECT @cOutField08 = @cLottable ELSE 
+               IF @nCount = 5 SELECT @cOutField10 = @cLottable
+               
+               SET @nCount = @nCount + 1
+               FETCH NEXT FROM @curLC INTO @nLottableNo, @nSequence, @cFormatSP
+            END
+            IF @nRemainInCurrentScreen = 1
+            BEGIN
+               SET @nErrNo = -1
+               SET @nMorePage = 0
+               GOTO Quit
+            END  
+
+            -- Clear dynamic lottable
+            DELETE @tLC
+         END
+      END
+
+      /********************************************************************************************
+                                             Get next lottable
+      ********************************************************************************************/
+      IF @cAction = 'CHECK'
+      BEGIN
+         -- Insert lottable to show
+         IF @nInputKey = 1 -- ENTER
+            INSERT INTO @tLC (LottableNo, Visible, Editable, Required, Sequence, Description, FormatSP) 
+            SELECT TOP 5 
+               LottableNo, Visible, Editable, Required, Sequence, Description, FormatSP
+            FROM rdt.rdtLottableCode WITH (NOLOCK)
+            WHERE LottableCode = @cLottableCode
+               AND Function_ID = @nFunc
+               AND StorerKey = @cStorerKey
+               AND Verify = '1'
+               AND Sequence > @nLastSeq
+            ORDER BY Sequence
+         ELSE
+            INSERT INTO @tLC (LottableNo, Visible, Editable, Required, Sequence, Description, FormatSP) 
+            SELECT TOP 5
+               LottableNo, Visible, Editable, Required, Sequence, Description, FormatSP
+            FROM rdt.rdtLottableCode WITH (NOLOCK)
+            WHERE LottableCode = @cLottableCode
+               AND Function_ID = @nFunc
+               AND StorerKey = @cStorerKey
+               AND Verify = '1'
+               AND Sequence < @nFirstSeq
+            ORDER BY Sequence DESC
+      END
+   
+      IF @cAction = 'POPULATE'
+      BEGIN
+         IF @nInputKey = 1 -- ENTER
+         BEGIN
+            INSERT INTO @tLC (LottableNo, Visible, Editable, Required, Sequence, Description, FormatSP) 
+            SELECT TOP 5
+               LottableNo, Visible, Editable, Required, Sequence, Description, FormatSP
+            FROM rdt.rdtLottableCode WITH (NOLOCK)
+            WHERE LottableCode = @cLottableCode
+               AND Function_ID = @nFunc
+               AND StorerKey = @cStorerKey
+               AND Verify = '1'
+            ORDER BY Sequence
+         END
+         ELSE
+         BEGIN
+            IF @nScn = 3990
+               INSERT INTO @tLC (LottableNo, Visible, Editable, Required, Sequence, Description, FormatSP) 
+               SELECT TOP 5
+                  LottableNo, Visible, Editable, Required, Sequence, Description, FormatSP
+               FROM rdt.rdtLottableCode WITH (NOLOCK)
+               WHERE LottableCode = @cLottableCode
+                  AND Function_ID = @nFunc
+                  AND StorerKey = @cStorerKey
+                  AND Verify = '1'
+                  AND Sequence < @nFirstSeq
+               ORDER BY Sequence DESC
+            ELSE
+            BEGIN
+               INSERT INTO @tLC (LottableNo, Visible, Editable, Required, Sequence, Description, FormatSP) 
+               SELECT LottableNo, Visible, Editable, Required, Sequence, Description, FormatSP
+               FROM rdt.rdtLottableCode WITH (NOLOCK)
+               WHERE LottableCode = @cLottableCode
+                  AND Function_ID = @nFunc
+                  AND StorerKey = @cStorerKey
+                  AND Verify = '1'
+               ORDER BY Sequence
+               SET @nRowCount = @@ROWCOUNT
+   
+               -- Multi pages
+               WHILE @nRowCount > 5
+               BEGIN
+                  -- Delete lottable page except for last page
+                  DELETE @tLC WHERE RowRef IN (SELECT TOP 5 RowRef FROM @tLC ORDER BY Sequence)
+                  SELECT @nRowCount = COUNT(1) FROM @tLC
+               END
+            END
+         END
+      END
+
+      /********************************************************************************************
+                                             Show next lottable 
+      ********************************************************************************************/
+      IF NOT EXISTS( SELECT TOP 1 1 FROM @tLC)
+      BEGIN
+         SET @nMorePage = 0 -- No more dynamic lottable page
+         GOTO Quit -- Nothing to show
+      END
+      ELSE         
+      BEGIN
+         SET @nFirstSeq = NULL
+         SET @curLC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT LottableNo, Sequence, Editable, Description
+            FROM @tLC
+            ORDER BY Sequence
+         OPEN @curLC
+         FETCH NEXT FROM @curLC INTO @nLottableNo, @nSequence, @cEditable, @cDesc
+      
+         -- Loop 5 lottable position on screen (some could be blank)
+         SET @nCursorPos = 0
+         SET @nCount = 1
+         WHILE @nCount <= 5
+         BEGIN
+            -- Lottable available to show on this position
+            IF @@FETCH_STATUS = 0
+            BEGIN
+               SET @cFieldAttr = '' 
+                  
+               IF @nFirstSeq IS NULL
+                  SET @nFirstSeq = @nSequence
+               SET @nLastSeq = @nSequence
+            END
+            ELSE
+               -- No lottable for this position
+               SELECT @cDesc = '', @cFieldAttr = 'O'
+            
+            -- Output to screen
+            IF @nCount = 1 SELECT @cOutField01 = @cDesc, @cOutField02 = '', @cInField02 = '', @cFieldAttr02 = @cFieldAttr ELSE 
+            IF @nCount = 2 SELECT @cOutField03 = @cDesc, @cOutField04 = '', @cInField04 = '', @cFieldAttr04 = @cFieldAttr ELSE 
+            IF @nCount = 3 SELECT @cOutField05 = @cDesc, @cOutField06 = '', @cInField06 = '', @cFieldAttr06 = @cFieldAttr ELSE 
+            IF @nCount = 4 SELECT @cOutField07 = @cDesc, @cOutField08 = '', @cInField08 = '', @cFieldAttr08 = @cFieldAttr ELSE 
+            IF @nCount = 5 SELECT @cOutField09 = @cDesc, @cOutField10 = '', @cInField10 = '', @cFieldAttr10 = @cFieldAttr
+   
+            -- Calc cursor position
+            IF @nCursorPos = 0                           -- Not save before
+               IF @cFieldAttr = ''                       -- Lottable field with blank value
+                  SET @nCursorPos = @nCount * 2
+            
+            SET @nCount = @nCount + 1
+            FETCH NEXT FROM @curLC INTO @nLottableNo, @nSequence, @cEditable, @cDesc
+         END
+   
+         -- Position cursor
+         IF @nCursorPos <> 0
+            EXEC rdt.rdtSetFocusField @nMobile, @nCursorPos
+
+         -- Save sequence range of the page into hidden field
+         SET @cOutField15 = CAST( @nFirstSeq AS NVARCHAR(2)) + ',' + CAST( @nLastSeq AS NVARCHAR(2))
+
+         SET @nMorePage = 1 -- Next dynamic lottable page
+      END
+   END
+      
 Quit:
 
 END -- End Procedure
