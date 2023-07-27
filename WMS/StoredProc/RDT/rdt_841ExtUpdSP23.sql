@@ -19,6 +19,7 @@ GO
 /*                            (yeekung01)                               */ 
 /* 2022-06-24  1.3  yeekung  JSM-76518 Fix bugs (yeekung01)             */
 /* 2022-07-26  1.4  yeekung  WMS-20327 supprt Pd.status='3'(yeekung02)  */
+/* 2023-07-06  1.5  James    WMS-23011 Add FragileChk (james01)         */
 /************************************************************************/    
   
 CREATE OR ALTER  PROC [RDT].[rdt_841ExtUpdSP23] (    
@@ -96,7 +97,9 @@ BEGIN
           ,@cErrMsg01         NVARCHAR( 20)  -- (james03)
           ,@cSUSR3            NVARCHAR( 18) = ''   -- (james03)   
           ,@cType             NVARCHAR(10) 
-    
+          ,@cErrMsg02         NVARCHAR( 20)  -- (james01)
+          ,@cFragileCHK       NVARCHAR( 1)   -- (james01)
+          
    SET @nErrNo   = 0    
    SET @cErrMsg  = ''    
    SET @cWCS     = ''    
@@ -123,7 +126,10 @@ BEGIN
     
    SET @cGenPackDetail  = ''    
    SET @cGenPackDetail = rdt.RDTGetConfig( @nFunc, 'GenPackDetail', @cStorerkey)    
-    
+   
+   -- (james01)
+   SET @cFragileCHK= rdt.RDTGetConfig( @nFunc, 'FragileCHK', @cStorerkey)
+   
    IF @nStep = 2    
    BEGIN    
       SET @cGenLabelNoSP = rdt.RDTGetConfig( @nFunc, 'GenLabelNo', @cStorerkey)    
@@ -1463,7 +1469,7 @@ BEGIN
       JOIN dbo.SKU SKU WITH (NOLOCK) ON ( OD.StorerKey = SKU.StorerKey AND OD.Sku = SKU.Sku)
       WHERE OD.OrderKey = @cOrderKey
       AND   OD.StorerKey = @cStorerkey
-      AND   SKU.SUSR3 IN ('1', '3')
+      AND   SKU.SUSR3 IN ('1', '2', '3')
          
       IF @cSUSR3 = '1'
       BEGIN
@@ -1471,6 +1477,18 @@ BEGIN
          SET @cErrMsg01 = rdt.rdtgetmessage( 179443, @cLangCode, 'DSP') -- PLS USE BOX
 
          EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg01
+         SET @nErrNo = 0   -- Prompt alert message and continue
+         GOTO Quit
+      END
+
+      IF @cSUSR3 = '2' AND @cFragileCHK = '1'
+      BEGIN
+         SET @cErrMsg01 = ''
+         SET @cErrMsg02 = ''
+         SET @cErrMsg01 = rdt.rdtgetmessage( 179449, @cLangCode, 'DSP') -- ELECTRONIC ITEMS
+         SET @cErrMsg02 = rdt.rdtgetmessage( 179450, @cLangCode, 'DSP') -- PLS USE BOX
+
+         EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg01, @cErrMsg02
          SET @nErrNo = 0   -- Prompt alert message and continue
          GOTO Quit
       END
