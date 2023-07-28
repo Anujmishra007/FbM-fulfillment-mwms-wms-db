@@ -1,7 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[nsp_ReplenishmentRpt_BatchRefill_09]') and objectproperty(id, N'IsProcedure') = 1)
-DROP PROC [dbo].[nsp_ReplenishmentRpt_BatchRefill_09]
-GO
-/****** Object:  StoredProcedure [dbo].[nsp_ReplenishmentRpt_BatchRefill_09]    Script Date: 04/08/2009 16:02:14 ******/
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -37,8 +33,10 @@ GO
 /* 21-Mar-2012 KHLim01 1.5   Reduce blocking                            */
 /* 05-MAR-2018 Wan01   1.6   WM - Add Functype                          */
 /* 05-OCT-2018 CZTENG01 1.7  WM - Add ReplGrp                           */
+/* 16-Jun-2023 WLChooi 1.8   WMS-22796 - Prevent same LOC, ID replen to */
+/*                           same Pick Loc (WL01)                       */
 /************************************************************************/
-CREATE PROC  [dbo].[nsp_ReplenishmentRpt_BatchRefill_09]
+CREATE OR ALTER PROC  [dbo].[nsp_ReplenishmentRpt_BatchRefill_09]
                @c_zone01      NVARCHAR(10)
 ,              @c_zone02      NVARCHAR(10)
 ,              @c_zone03      NVARCHAR(10)
@@ -610,7 +608,14 @@ BEGIN
                            AND LOTxLOCxID.LOC <> @c_CurrentLOC
                            AND LOT.LOT = LotxLocxID.Lot        -- ONG01
                            AND Lot.Status <> 'HOLD'            -- ONG01
-                        
+                           --WL01 S
+                           AND NOT EXISTS ( SELECT 1   
+                                            FROM  #REPLENISHMENT  
+                                            WHERE #REPLENISHMENT.Lot     = LOTxLOCxID.LOT  
+                                            AND   #REPLENISHMENT.FromLoc = LOTxLOCxID.LOC  
+                                            AND   #REPLENISHMENT.ID      = LOTxLOCxID.ID  
+                                            GROUP BY #REPLENISHMENT.Lot, #REPLENISHMENT.FromLoc, #REPLENISHMENT.ID ) 
+                           --WL01 E
                            ORDER BY LOTxLOCxID.LOC
                            IF @@ROWCOUNT = 0
                            BEGIN
@@ -651,7 +656,15 @@ BEGIN
                               AND LOTxLOCxID.qtyexpected = 0 -- make sure we aren't going to try to pull from a Location that needs stuff to satisfy existing demAND
                               AND LOTxLOCxID.LOC <> @c_CurrentLOC
                               AND LOT.LOT = LotxLocxID.Lot        -- ONG01
-                              AND Lot.Status <> 'HOLD'            -- ONG01                           
+                              AND Lot.Status <> 'HOLD'            -- ONG01  
+                              --WL01 S
+                              AND NOT EXISTS ( SELECT 1   
+                                               FROM  #REPLENISHMENT  
+                                               WHERE #REPLENISHMENT.Lot     = LOTxLOCxID.LOT  
+                                               AND   #REPLENISHMENT.FromLoc = LOTxLOCxID.LOC  
+                                               AND   #REPLENISHMENT.ID      = LOTxLOCxID.ID  
+                                               GROUP BY #REPLENISHMENT.Lot, #REPLENISHMENT.FromLoc, #REPLENISHMENT.ID ) 
+                              --WL01 E
                               ORDER BY ID DESC
                               IF @@ROWCOUNT = 0
                               BEGIN
@@ -1107,10 +1120,5 @@ BEGIN
 END
 -- end procedure
 GO
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF 
-GO
-
-GRANT EXECUTE ON nsp_ReplenishmentRpt_BatchRefill_09 to nSQL
+GRANT EXECUTE ON [dbo].[nsp_ReplenishmentRpt_BatchRefill_09] TO [nSQL]
 GO
