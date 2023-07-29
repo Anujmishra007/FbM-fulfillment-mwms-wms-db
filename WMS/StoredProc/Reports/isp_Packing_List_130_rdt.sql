@@ -187,5 +187,5 @@ END
 GO
 GRANT EXECUTE ON [dbo].[isp_Packing_List_130_rdt] TO nSQL 
 GO
-
-sp_helptext isp_Packing_List_130_rdt
+ 
+ 

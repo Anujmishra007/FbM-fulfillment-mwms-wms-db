@@ -422,5 +422,4 @@ END
 GO
 GRANT EXECUTE ON nsp_GetPickSlipOrders35 TO NSQL
 GO
-
-EXEC nsp_GetPickSlipOrders35 '0002113405' 
+ 

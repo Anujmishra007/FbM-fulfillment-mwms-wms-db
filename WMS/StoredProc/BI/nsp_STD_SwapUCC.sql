@@ -76,7 +76,7 @@ END -- Procedure
 go
 
 GRANT EXEC ON BI.nsp_STD_SwapUCC TO JReportRole --NAME OF SP
-GO --*/
+GO  
 
 /*
 EXECUTE AS LOGIN ='JREPORTUSERPH'

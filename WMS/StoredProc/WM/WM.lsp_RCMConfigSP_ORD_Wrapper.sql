@@ -1,7 +1,4 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_RCMConfigSP_ORD_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_RCMConfigSP_ORD_Wrapper]
-GO
+ 
 
 SET ANSI_NULLS OFF
 GO
@@ -32,7 +29,7 @@ GO
 /*                            feature in Adjustment Screen- SCE          */
 /* 2023-05-19  CLVN01   1.3   JSM-149503 Performance Tuning              */
 /*************************************************************************/   
-ALTER PROCEDURE [WM].[lsp_RCMConfigSP_ORD_Wrapper]  
+CREATE OR ALTER PROCEDURE [WM].[lsp_RCMConfigSP_ORD_Wrapper]  
    @c_Storerkey   NVARCHAR(15)
 ,  @c_OrderKey    NVARCHAR(10) 
 ,  @b_Success     INT          = 1   OUTPUT   

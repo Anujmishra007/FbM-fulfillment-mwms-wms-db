@@ -51,5 +51,3 @@ END -- procedure
 GO
 GRANT EXECUTE ON [dbo].[isp_Packing_List_103_main] TO nSQL 
 GO
-
-sp_helptext 'isp_Packing_List_103_main'

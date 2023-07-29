@@ -40,7 +40,7 @@ GO
 /* 16/01/2023  Calvin   1.1   JSM-124978 Fix Pickzone variable (CLVN01)         */
 /********************************************************************************/  
   
-ALTER PROC [dbo].[isp_batching_task_pickslip_03] (  
+CREATE OR ALTER PROC [dbo].[isp_batching_task_pickslip_03] (  
             @c_Loadkey NVARCHAR(10)  
            ,@c_OrderCount NVARCHAR(10) = '9999'  
            ,@c_TaskBatchNo NVARCHAR(10) = ''  

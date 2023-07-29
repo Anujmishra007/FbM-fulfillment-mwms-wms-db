@@ -251,5 +251,4 @@ GO
             
 GRANT EXECUTE ON isp_warrant_receipt_03 TO NSQL
 GO          
-
-EXEC isp_warrant_receipt_03 '0011325907'
+ 
