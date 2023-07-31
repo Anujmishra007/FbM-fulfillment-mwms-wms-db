@@ -30,7 +30,8 @@ GO
 /* 2021-04-14   WLChooi  1.1  WMS-16817 - Add new column and modify     */  
 /*                            logic (WL01)                              */   
 /* 2023-03-17   CHONGCS  1.2  Devops Scripts Combine & WMS-21924(CS01)  */  
-/* 2023-06-12   KuanYee  1.3  JSM-155706 AddOn CodeLkup filter(KY01)     */
+/* 2023-06-12   KuanYee  1.3  JSM-155706 AddOn CodeLkup filter(KY01)    */
+/* 2023-07-26   CHONGCS  1.4  WMS-23045 revised field logic (CS02)      */
 /************************************************************************/  
   
 CREATE OR ALTER PROC [dbo].[isp_CartonManifestLabel23a_rdt] (  
@@ -224,8 +225,8 @@ BEGIN
   
    SET @c_Ordtype = ''  
   
-   SELECT @c_CustPO         = CASE WHEN C.udf01 = 'W' THEN ISNULL(RTRIM(ORD.Userdefine03),'')  
-                              ELSE ISNULL(RTRIM(ORD.Userdefine01),'') END  
+   SELECT @c_CustPO         = ISNULL(RTRIM(ORD.Userdefine03),'') --CASE WHEN C.udf01 = 'W' THEN ISNULL(RTRIM(ORD.Userdefine03),'')     --CS02 S
+                              --ELSE ISNULL(RTRIM(ORD.Userdefine01),'') END                                                             --CS02 E
          --WL01 S  
          --,@c_ExternOrderkey = CASE WHEN C.udf01 = 'W' THEN ISNULL(RTRIM(ORD.ExternOrderkey),'')  
          --                     ELSE ISNULL(RTRIM(ORD.loadkey),'') END  
