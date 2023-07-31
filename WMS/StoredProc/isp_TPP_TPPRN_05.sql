@@ -25,6 +25,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author  Ver. Purposes                                   */
 /* 08-APR-2022  CSCHONG 1.0  Devops scripts combine                     */
+/* 22-JUL-2023  CSCHONG 1.1  WMS-23026 add filter on print job task(CS01)*/
 /************************************************************************/ 
 
 CREATE OR ALTER PROC [dbo].[isp_TPP_TPPRN_05] (
@@ -107,6 +108,7 @@ BEGIN
           ,@c_PrnServerPort NVARCHAR(10) = ''
           ,@c_jsoncmd       NVARCHAR(MAX)
           ,@c_CloseContent  NVARCHAR(4000) = ''
+          ,@c_JobStatus     NVARCHAR(10)     --CS01
 
    
    SELECT @n_starttcnt = @@TRANCOUNT, @n_continue = 1, @b_success = 1, @n_err = 0
@@ -120,9 +122,17 @@ BEGIN
                @c_Parm01=Parm01, @c_Parm02=Parm02, @c_Parm03=Parm03, @c_Parm04=Parm04, @c_Parm05=Parm05, 
                @c_Parm06=Parm06, @c_Parm07=Parm07, @c_Parm08=Parm08, @c_Parm09=Parm09, @c_Parm10=Parm10,        
                @c_UDF01=UDF01, @c_UDF02=UDF02, @c_UDF03=UDF03, @c_UDF04=UDF04, @c_UDF05=UDF05, @c_SourceType=SourceType,
-               @c_Platform=Platform 
+               @c_Platform=Platform ,@c_JobStatus = Status   --CS01
         FROM TPPRINTJOB (NOLOCK)
-        WHERE JobNo = @n_JobNo                                                 
+        WHERE JobNo = @n_JobNo               
+      --  AND Status <> '9'        --CS01            
+
+       --CS01 start
+       IF @c_JobStatus = '9'
+       BEGIN
+          GOTO EXIT_SP
+       END  
+       -- CS01 end                        
         
        IF @c_KeyFieldName = 'ORDERKEY'
         BEGIN

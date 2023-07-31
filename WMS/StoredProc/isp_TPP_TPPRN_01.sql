@@ -1,5 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_TPP_TPPRN_01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_TPP_TPPRN_01]
 GO
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -30,9 +28,10 @@ GO
 /* 14-OCT-2021  CSCHONG 1.1  Devops scripts combine (CS02)              */
 /* 14-OCT-2021  CSCHONG 1.2  WMS-18125 revised print cmd logic (CS02)   */
 /* 08-NOV-2021  CSCHONG 1.3  WMS-18125 revised print cmd logic (CS03)   */
+/* 22-JUL-2023  CSCHONG 1.4  WMS-23026 add filter on print job task(CS04)*/
 /************************************************************************/ 
 
-CREATE  PROC [dbo].[isp_TPP_TPPRN_01] (
+CREATE OR ALTER PROC [dbo].[isp_TPP_TPPRN_01] (
    @n_JobNo             BIGINT
    --@b_success           INT OUTPUT,
    --@n_err               INT OUTPUT,
@@ -113,6 +112,7 @@ BEGIN
           ,@c_PrnServerPort NVARCHAR(10) = ''
           ,@c_jsoncmd       NVARCHAR(MAX)
           ,@c_CloseContent  NVARCHAR(4000) = ''
+          ,@c_JobStatus     NVARCHAR(10)     --CS04
 
 --CS01 END
    
@@ -127,9 +127,17 @@ BEGIN
                @c_Parm01=Parm01, @c_Parm02=Parm02, @c_Parm03=Parm03, @c_Parm04=Parm04, @c_Parm05=Parm05, 
                @c_Parm06=Parm06, @c_Parm07=Parm07, @c_Parm08=Parm08, @c_Parm09=Parm09, @c_Parm10=Parm10,        
                @c_UDF01=UDF01, @c_UDF02=UDF02, @c_UDF03=UDF03, @c_UDF04=UDF04, @c_UDF05=UDF05, @c_SourceType=SourceType,
-               @c_Platform=Platform 
+               @c_Platform=Platform ,@c_JobStatus = Status   --CS04
         FROM TPPRINTJOB (NOLOCK)
-        WHERE JobNo = @n_JobNo                                                 
+        WHERE JobNo = @n_JobNo     
+       -- AND Status <> '9'        --CS04             
+
+       --CS04 start
+       IF @c_JobStatus = '9'
+       BEGIN
+          GOTO EXIT_SP
+       END  
+       -- CS04 end                          
         
        IF @c_KeyFieldName = 'ORDERKEY'
         BEGIN
