@@ -1,11 +1,8 @@
-IF EXISTS (SELECT name FROM   dbo.sysobjects WHERE  name = N'isp_Receiving_Label_05_rdt' AND type = 'P')
-    DROP PROCEDURE isp_Receiving_Label_05_rdt
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF 
-GO
 
 /***************************************************************************/
 /* Store Procedure: isp_Receiving_Label_05_rdt                             */
@@ -27,51 +24,53 @@ GO
 /* Updates:                                                                */
 /* Date         Author    Ver.  Purposes                                   */
 /* 2021-04-28   WLChooi   1.1   WMS-16533 - Add ExternPOKey (WL01)         */
+/* 2023-05-23   CSCHONG   1.2   WMS-22518 revised field format (CS01)      */
+/* 2023-06-22   CSCHONG   1.3   WMS-22518 revised field format (CS02)      */
 /***************************************************************************/
-CREATE PROC [dbo].[isp_Receiving_Label_05_rdt]
-         @c_ReceiptKey        NVARCHAR(10) 
+CREATE OR ALTER PROC [dbo].[isp_Receiving_Label_05_rdt]
+         @c_ReceiptKey        NVARCHAR(10)
        , @c_ToID              NVARCHAR(18)
 AS
-BEGIN 
-   SET NOCOUNT ON      
-   SET ANSI_NULLS OFF      
-   SET QUOTED_IDENTIFIER OFF      
-   SET CONCAT_NULL_YIELDS_NULL OFF  
+BEGIN
+   SET NOCOUNT ON
+   SET ANSI_NULLS OFF
+   SET QUOTED_IDENTIFIER OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
-   SELECT RECEIPTDETAIL.ReceiptKey,  
-          RECEIPTDETAIL.ReceiptLineNumber,  
-          RECEIPTDETAIL.StorerKey,   
+   SELECT RECEIPTDETAIL.ReceiptKey,
+          RECEIPTDETAIL.ReceiptLineNumber,
+          RECEIPTDETAIL.StorerKey,
           CASE WHEN ISNULL(CLR2.Code,'') <> '' THEN SKU.AltSku ELSE RECEIPTDETAIL.Sku END AS RECEIPTDETAIL_SKU,
-          RECEIPTDETAIL.ToLoc,   
-          ISNULL(RECEIPTDETAIL.PutawayLoc,'') AS PutawayLoc,   
-          RECEIPTDETAIL.Lottable01,   
-          RECEIPTDETAIL.Lottable02,   
-          RECEIPTDETAIL.Lottable03,   
-          RECEIPTDETAIL.Lottable04,   
-          RECEIPTDETAIL.Lottable05,   
-          (SELECT SUM( RD1.QtyExpected) FROM RECEIPTDETAIL RD1 (NOLOCK) WHERE RD1.ReceiptKey = @c_Receiptkey and RD1.ReceiptLineNumber = RECEIPTDETAIL.ReceiptLineNumber) QtyExpected, 
-          (SELECT SUM( RD2.QtyReceived) FROM RECEIPTDETAIL RD2 (NOLOCK) WHERE RD2.ReceiptKey = @c_Receiptkey and RD2.ReceiptLineNumber = RECEIPTDETAIL.ReceiptLineNumber) QtyReceived, 
-          (SELECT SUM( RD3.BeforeReceivedQty) FROM RECEIPTDETAIL RD3 (NOLOCK) WHERE RD3.ReceiptKey = @c_Receiptkey and RD3.ReceiptLineNumber = RECEIPTDETAIL.ReceiptLineNumber) BeforeReceivedQty, 
+          RECEIPTDETAIL.ToLoc,
+          ISNULL(RECEIPTDETAIL.PutawayLoc,'') AS PutawayLoc,
+          RECEIPTDETAIL.Lottable01,
+          CASE WHEN ISNULL(CLR6.Short,'N') ='Y' THEN '' ELSE RECEIPTDETAIL.Lottable02 END AS Lottable02,
+          CASE WHEN ISNULL(CLR6.Short,'N') ='Y' THEN '' ELSE RECEIPTDETAIL.Lottable03 END AS Lottable03,
+          CASE WHEN ISNULL(CLR6.Short,'N') ='Y' THEN '' ELSE CONVERT(NVARCHAR(10),RECEIPTDETAIL.Lottable04,103) END AS Lottable04,
+          CASE WHEN ISNULL(CLR6.Short,'N') ='Y' THEN '' ELSE CONVERT(NVARCHAR(10),RECEIPTDETAIL.Lottable05,103) END AS Lottable05,
+          (SELECT SUM( RD1.QtyExpected) FROM RECEIPTDETAIL RD1 (NOLOCK) WHERE RD1.ReceiptKey = @c_Receiptkey and RD1.ReceiptLineNumber = RECEIPTDETAIL.ReceiptLineNumber) QtyExpected,
+          (SELECT SUM( RD2.QtyReceived) FROM RECEIPTDETAIL RD2 (NOLOCK) WHERE RD2.ReceiptKey = @c_Receiptkey and RD2.ReceiptLineNumber = RECEIPTDETAIL.ReceiptLineNumber) QtyReceived,
+          (SELECT SUM( RD3.BeforeReceivedQty) FROM RECEIPTDETAIL RD3 (NOLOCK) WHERE RD3.ReceiptKey = @c_Receiptkey and RD3.ReceiptLineNumber = RECEIPTDETAIL.ReceiptLineNumber) BeforeReceivedQty,
           RECEIPTDETAIL.TOID,
-          RECEIPTDETAIL.POKey,  
-          SKU.DESCR,   
+          RECEIPTDETAIL.POKey,
+          SKU.DESCR,
           SKU.Lottable01Label,
           SKU.Lottable02Label,
           SKU.Lottable03Label,
           CASE WHEN ISNULL(CLR.Code,'') <> '' THEN
                CLR.Description ELSE SKU.Lottable04Label END AS Lottable04Label,
           SKU.Lottable05Label,
-          PACK.CaseCnt,   
-          PACK.Qty,   
-          PACK.PalletTI,   
-          PACK.PalletHI, 
+          PACK.CaseCnt,
+          PACK.Qty,
+          PACK.PalletTI,
+          PACK.PalletHI,
           PACK.PackDescr,
-          Loc.Putawayzone, 
+          Loc.Putawayzone,
           Sku.Putawayzone,
           LOC.Facility,
-          Loc_b.Putawayzone, 
+          Loc_b.Putawayzone,
           (SELECT COUNT( DISTINCT RD1.Lottable01) FROM RECEIPTDETAIL RD1 (NOLOCK) WHERE RD1.ReceiptKey = @c_Receiptkey and RD1.ReceiptLineNumber = RECEIPTDETAIL.ReceiptLineNumber) NoOfCases,
-          CASE 
+          CASE
             WHEN RECEIPTDETAIL.UOM = PACK.PackUOM3 THEN PACK.Qty
             WHEN RECEIPTDETAIL.UOM = PACK.PackUOM1 THEN PACK.CaseCnt
             WHEN RECEIPTDETAIL.UOM = PACK.PackUOM2 THEN PACK.Innerpack
@@ -90,27 +89,34 @@ BEGIN
           ISNULL(CLR5.Short,'N') AS ShowLott06,
           RECEIPTDETAIL.Lottable06,
           SKU.LOTTABLE06LABEL,
-          (SELECT MAX(ExternPOKey) FROM PO (NOLOCK) WHERE POKey = RECEIPTDETAIL.POKey) AS ExternPOKey   --WL01
-   FROM RECEIPTDETAIL (NOLOCK)    
-   JOIN SKU (NOLOCK) ON SKU.StorerKey = RECEIPTDETAIL.StorerKey 
+          (SELECT MAX(ExternPOKey) FROM PO (NOLOCK) WHERE POKey = RECEIPTDETAIL.POKey) AS ExternPOKey,   --WL01
+          ISNULL(CLR6.Short,'N') AS ShowLott040506,     --CS01 S
+          CASE WHEN ISNULL(CLR6.Short,'N') ='N' THEN '' ELSE CONVERT(NVARCHAR(10),RECEIPTDETAIL.Lottable04,103) END AS Lott04,
+          CASE WHEN ISNULL(CLR6.Short,'N') ='N' THEN '' ELSE CONVERT(NVARCHAR(10),RECEIPTDETAIL.Lottable05,103) END AS Lott05,
+          CASE WHEN ISNULL(CLR6.Short,'N') ='N' THEN '' ELSE RECEIPTDETAIL.Lottable06 END AS Lott06,       --CS01 E
+          CASE WHEN ISNULL(CLR6.Short,'N') ='N' THEN '' ELSE RECEIPTDETAIL.Lottable02 END AS Lott02,       --CS02
+          CASE WHEN ISNULL(CLR6.Short,'N') ='N' THEN '' ELSE RECEIPTDETAIL.Lottable03 END AS Lott03        --CS02  
+   FROM RECEIPTDETAIL (NOLOCK)
+   JOIN SKU (NOLOCK) ON SKU.StorerKey = RECEIPTDETAIL.StorerKey
                     AND SKU.Sku = RECEIPTDETAIL.Sku
    LEFT JOIN LOC (NOLOCK) ON RECEIPTDETAIL.ToLoc = LOC.Loc
-   LEFT JOIN LOC LOC_b (NOLOCK) ON RECEIPTDETAIL.PutawayLoc = LOC_b.Loc  
-   LEFT JOIN Codelkup CLR (NOLOCK) ON (RECEIPTDETAIL.Storerkey = CLR.Storerkey AND CLR.Code = 'LOT04Label' 
+   LEFT JOIN LOC LOC_b (NOLOCK) ON RECEIPTDETAIL.PutawayLoc = LOC_b.Loc
+   LEFT JOIN Codelkup CLR (NOLOCK) ON (RECEIPTDETAIL.Storerkey = CLR.Storerkey AND CLR.Code = 'LOT04Label'
                                    AND CLR.Listname = 'REPORTCFG' AND CLR.Long = 'r_dw_receivinglabel05_rdt' AND ISNULL(CLR.Short,'') <> 'N')
-   LEFT JOIN Codelkup CLR2 (NOLOCK) ON (RECEIPTDETAIL.Storerkey = CLR2.Storerkey AND CLR2.Code = 'MultiOwner' 
+   LEFT JOIN Codelkup CLR2 (NOLOCK) ON (RECEIPTDETAIL.Storerkey = CLR2.Storerkey AND CLR2.Code = 'MultiOwner'
                                     AND CLR2.Listname = 'REPORTCFG' AND CLR2.Long = 'r_dw_receivinglabel05_rdt' AND ISNULL(CLR2.Short,'') <> 'N')
    LEFT JOIN Codelkup CLR3 (NOLOCK) ON (CLR3.Listname = 'SINOWNER' AND LOC.HostWHCode = CLR3.Code AND CLR3.Storerkey = RECEIPTDETAIL.Storerkey)
-   LEFT JOIN Codelkup CLR4 (NOLOCK) ON (RECEIPTDETAIL.Storerkey = CLR4.Storerkey AND CLR4.Code = 'ShowBarcode' 
+   LEFT JOIN Codelkup CLR4 (NOLOCK) ON (RECEIPTDETAIL.Storerkey = CLR4.Storerkey AND CLR4.Code = 'ShowBarcode'
                                     AND CLR4.Listname = 'REPORTCFG' AND CLR4.Long = 'r_dw_receivinglabel05_rdt' AND ISNULL(CLR4.Short,'') <> 'N')
-   LEFT JOIN Codelkup CLR5 (NOLOCK) ON (RECEIPTDETAIL.Storerkey = CLR5.Storerkey AND CLR5.Code = 'ShowLott06' 
+   LEFT JOIN Codelkup CLR5 (NOLOCK) ON (RECEIPTDETAIL.Storerkey = CLR5.Storerkey AND CLR5.Code = 'ShowLott06'
                                     AND CLR5.Listname = 'REPORTCFG' AND CLR5.Long = 'r_dw_receivinglabel05_rdt' AND ISNULL(CLR5.Short,'') <> 'N')
+   LEFT JOIN Codelkup CLR6 (NOLOCK) ON (RECEIPTDETAIL.Storerkey = CLR6.Storerkey AND CLR6.Code = 'palletbarcodelottable'                              --CS01
+                                    AND CLR6.Listname = 'REPORTCFG' AND CLR6.Long = 'r_dw_receivinglabel05_rdt' AND ISNULL(CLR6.Short,'') <> 'N')
    JOIN PACK (NOLOCK) ON SKU.PACKKey = PACK.PackKey
    WHERE ( RECEIPTDETAIL.ReceiptKey = @c_ReceiptKey ) AND
          ( RECEIPTDETAIL.ToID = @c_ToID)
 
 END
 GO
-GRANT EXECUTE ON isp_Receiving_Label_05_rdt TO NSQL
+GRANT EXECUTE ON  [dbo].[isp_Receiving_Label_05_rdt] TO [NSQL]
 GO
-  
