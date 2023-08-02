@@ -15,6 +15,7 @@ GO
 /* 2021-10-28   1.0  Chermaine   WMS-18161. Created                     */    
 /* 2022-03-04   1.1  yeekung     WMS-19074  New PA stragey (yeekung01)  */    
 /* 2022-12-05   1.2  YeeKung     WMS-19662 Add Requirement(yeekung02)   */
+/* 2023-04-17   1.3  yeekung     WMS-22279  New PA Strategy (yeekung03) */
 /************************************************************************/      
       
 CREATE OR ALTER PROC [rdt].[rdt_523ExtPA43] (      
@@ -42,11 +43,12 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF      
          
    DECLARE @cHostWHCode    NVARCHAR(10)      
-   DECLARE @cPutawayZone   NVARCHAR(10)      
+   DECLARE @cPutawayZone   NVARCHAR(10) 
+   DECLARE @cStyle         NVARCHAR(20)
          
          
    SELECT @cHostWHCode = HostWHCode FROM Loc WITH (NOLOCK) WHERE facility = @cFacility AND loc = @cLOC      
-   SELECT @cPutawayZone = PutawayZone FROM SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND sku = @cSKU      
+   SELECT @cPutawayZone = PutawayZone,@cStyle = style FROM SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND sku = @cSKU     
          
    IF EXISTS (SELECT 1       
               FROM codelkup WITH (NOLOCK)       
@@ -109,25 +111,25 @@ BEGIN
       JOIN dbo.LOC LOC WITH (NOLOCK) ON (LOC.LOC = SL.LOC AND LOC.Facility = @cFacility)  
       JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK) ON ( LOC.loc = LLI.LOC AND SL.SKU=LLI.SKU AND LLI.storerkey=SL.Storerkey)    
       WHERE SL.StorerKey = @cStorerKey    
-      AND SL.SKU = @cSKU          
-      AND LOC.LocationType IN('PICK','DYNPPICK')          
-      AND LLI.QTY >0  
+         AND SL.SKU = @cSKU          
+         AND LOC.LocationType IN('PICK','DYNPPICK')          
+         AND LLI.QTY >0  
       order by LLI.qty desc;  
   
       IF @cSuggestedLOC = ''      
       BEGIN    
-         --HomeLOC        
-         SELECT TOP 1              
-            @cSuggestedLOC = PD.Loc            
-         FROM dbo.pickdetail PD WITH (NOLOCK)      
-         JOIN dbo.orderdetail OD WITH (NOLOCK) ON (PD.orderkey=OD.orderkey and pd.OrderLineNumber=OD.OrderLineNumber and pd.Storerkey=OD.StorerKey)    
-         JOIN dbo.LOC LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC AND LOC.Facility = @cFacility)    
-         WHERE PD.StorerKey = @cStorerKey      
-         AND PD.SKU = @cSKU            
-         AND LOC.LocationType IN('PICK','DYNPPICK')    
-         AND PD.Status ='9'    
-         order by pd.EditDate desc;    
-        
+          --HomeLOC      
+         SELECT TOP 1            
+            @cSuggestedLOC = LOC.LOC          
+         FROM  dbo.LOC LOC WITH (NOLOCK) 
+         JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK) ON ( LOC.loc = LLI.LOC ) 
+         JOIN dbo.SKU SKU  WITH (NOLOCK) ON (LLI.SKU=SKU.SKU AND LLI.storerkey=SKU.Storerkey) 
+         WHERE SKU.StorerKey = @cStorerKey              
+            AND LOC.LocationType IN('PICK','DYNPPICK')          
+            AND SKU.Style = @cStyle
+            AND LLI.QTY >0  
+         order by LLI.qty desc;  
+
          IF @cSuggestedLOC = ''        
          BEGIN        
             --No HomeLoc Setup, Suggest location as the Sku PutawayZone        
