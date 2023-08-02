@@ -27,9 +27,10 @@ GO
 /* Updates:                                                             */    
 /* Date         Author  Rev   Purposes                                  */    
 /* 28-May-2020  TLTING  1.0   Initital                                  */   
+/* 01-Aug-2023  gywong  1.1   CR https://jiralfl.atlassian.net/browse/WMS-22862 */   
 /************************************************************************/  
 
-CREATE PROC [dbo].[isp_DysonGenTransZO] (
+CREATE OR ALTER PROC [dbo].[isp_DysonGenTransZO] (
    @c_storerkey NVARCHAR(18) = 'DYSON'
 )
 AS 
@@ -41,19 +42,38 @@ SET ANSI_NULLS OFF
 SET CONCAT_NULL_YIELDS_NULL OFF  
 
 DECLARE  @c_orderkey  NVARCHAR(10) = '', 
-      @c_tablename NVARCHAR(30)
-
+      @c_tablename NVARCHAR(30),
+	  @c_udf03 NVARCHAR(30)
 
 --SET  @c_storerkey = 'DYSON'
-SET @c_tablename = 'WSCRSOADDZO'
+--SET @c_tablename = 'WSCRSOADDZO'
 
- 
+SELECT  @c_udf03 = c.UDF03
+FROM dbo.orders o (NOLOCK)
+JOIN dbo.CODELKUP  c (NOLOCK) ON o.ECOM_Platform = c.Short 
+WHERE c.LISTNAME = 'DYSONSTORE'
+
+ IF @c_udf03 IS NULL 
+ BEGIN 
+  SET @c_tablename = 'WSCRSOADDZO'
+ END
+ ELSE IF  @c_udf03 = ''
+  BEGIN
+  SET @c_tablename = 'WSCRSOADDZO'
+  END
+
+  ELSE 
+  BEGIN
+  SET @c_tablename = @c_udf03
+  END 
+
+
 IF EXISTS (  SELECT 1 
              FROM orders a (NOLOCK) 
              WHERE a.storerkey = @c_storerkey 
              AND a.doctype = 'E' 
              AND a.status NOT IN ('9', 'CANC')
-             AND a.userdefine04 = '' 
+             AND a.TrackingNo = '' 
              AND a.shipperkey = 'ZTO'
              AND NOT EXISTS ( SELECT 1 FROM Transmitlog2 c(NOLOCK) 
                      WHERE c.key3 = a.storerkey  
