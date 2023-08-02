@@ -23,6 +23,7 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 15-Dec-2022  WLChooi 1.0   DevOps Combine Script                        */
+/* 15-Jun-2023  NJOW01  1.1   WMS-22851 create transmitlog2 after allocate */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispPOALKIT02]
 (
@@ -147,6 +148,39 @@ BEGIN
     , ExternLineNo      NVARCHAR(10) NULL
    )
 
+   --NJOW01
+   IF @n_Continue IN(1,2)
+   BEGIN   	  
+      IF EXISTS(SELECT 1
+                FROM KIT (NOLOCK)
+                WHERE Kitkey = @c_Kitkey
+                AND Status IN('1','2'))
+      OR EXISTS(SELECT 1 
+   	            FROM KITDETAIL (NOLOCK)
+   	            WHERE Kitkey = @c_Kitkey
+   	            AND Type = 'F'
+   	            AND Lot <> '' 
+   	            AND Lot IS NOT NULL)   	              
+      BEGIN
+      	 SELECT @c_Storerkey = Storerkey
+      	 FROM KIT (NOLOCK)
+      	 WHERE Kitkey = @c_KitKey
+      	 
+         EXEC ispGenTransmitLog2
+               @c_TableName      = 'WSKALLOCLOG'  
+              ,@c_Key1           = @C_Kitkey
+              ,@c_Key2           = ''  
+              ,@c_Key3           = @c_Storerkey  
+              ,@c_TransmitBatch  = ''
+              ,@b_Success        = @b_Success  OUTPUT
+              ,@n_err            = @n_Err      OUTPUT
+              ,@c_errmsg         = @c_ErrMsg   OUTPUT      	
+          
+          IF @b_Success = 0
+             SELECT @n_Continue  = 3          	  
+      END                                
+   END
+
    IF @n_Continue IN ( 1, 2 )
    BEGIN
       SELECT TOP 1 @c_ParentSku = KT.Sku
@@ -164,7 +198,7 @@ BEGIN
          SELECT @c_ErrMsg = 'NSQL' + CONVERT(VARCHAR(5), @n_Err) + ': BOM Sku not found for the kit. (ispPOALKIT02)'
       END
    END
-
+   
    IF @n_Continue IN ( 1, 2 )
    BEGIN
       INSERT INTO @T_KIT (KITKey, KitLineNumber, SKU, ExpectedQty, Lottable02, Lottable04, KITType, PartitionIndex, BOMQty, BOMParentQty)
