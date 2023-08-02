@@ -12,6 +12,8 @@ GO
 /* Date       Rev  Author     Purposes                                  */
 /* 2020-07-05 1.0  James      WMS-13913. Created                        */
 /* 2022-10-19 1.1  James      WMS-20992 Add print carton DN (james01)   */
+/* 2023-07-26 1.2  James      WMS-23151 Skip label printing if label    */
+/*                            alreadt printed (james02)                 */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_840ExtPrint12] (
@@ -46,7 +48,8 @@ AS
            @cFacility         NVARCHAR( 5),
            @cLoadKey          NVARCHAR( 10),
            @cLabelNo          NVARCHAR( 20),
-           @cCartonDN         NVARCHAR( 10)
+           @cCartonDN         NVARCHAR( 10),
+           @nSkiZplPrint      INT = 0
 
    SELECT @cLabelPrinter = Printer,
           @cPaperPrinter = Printer_Paper,
@@ -97,11 +100,19 @@ AS
                   GOTO Quit                   
             END  
          END  
-         
+
          IF ISNULL( @nCartonNo, 0) = 0
             SELECT @nCartonNo = V_Cartonno
             FROM RDT.RDTMOBREC WITH (NOLOCK)
             WHERE Mobile = @nMobile
+
+         IF EXISTS ( SELECT 1
+                     FROM dbo.TRANSMITLOG2 WITH (NOLOCK)
+                     WHERE TableName = 'WSCRSOADDMP'
+                     AND   key1 = @cOrderKey
+                     AND   key2 = @nCartonNo
+                     AND   key3 = @cStorerkey)
+            SET @nSkiZplPrint = 1
 
          SELECT @cLabelNo = LabelNo
          FROM dbo.PackDetail WITH (NOLOCK)
@@ -112,7 +123,7 @@ AS
          IF @cShipLabel = '0'  
             SET @cShipLabel = ''  
                
-         IF @cShipLabel <> ''
+         IF @cShipLabel <> '' AND @nSkiZplPrint = 0
          BEGIN
             DECLARE @tShipLabel AS VariableTable  
             INSERT INTO @tShipLabel (Variable, Value) VALUES ( '@cLabelNo',     @cLabelNo)  
@@ -134,7 +145,7 @@ AS
          IF @cReturnLabel = '0'  
             SET @cReturnLabel = ''  
                
-         IF @cReturnLabel <> ''
+         IF @cReturnLabel <> '' AND @nSkiZplPrint = 0
          BEGIN
             DECLARE @tReturnLabel AS VariableTable  
             INSERT INTO @tReturnLabel (Variable, Value) VALUES ( '@cLabelNo',     @cLabelNo)  
