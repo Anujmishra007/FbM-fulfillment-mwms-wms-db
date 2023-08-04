@@ -29,6 +29,7 @@ GO
 /* 01-Dec-2022  CSCHONG  1.0  Devops Scripts Combine                    */
 /* 25-Apr-2023  CSCHONG  1.1  WMs-21178 fix auto generate asn issue(CS01)*/
 /* 15-Jun-2023  WLChooi  1.2  WMS-22835 - Modify Column (WL01)          */
+/* 01-Aug-2023  NJOW01   1.3  WMS-23264	Change lottable02 mapping       */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[ispPopulateTOASN_hasbro]
@@ -233,7 +234,8 @@ BEGIN
                  ISNULL(LOTATTRIBUTE.Lottable08,''),
                  P.PackUOM3,P.PackKey,
                  PICKDETAIL.SKU,
-                 PICKDETAIL.dropID
+                 PICKDETAIL.dropID,
+                 LOTATTRIBUTE.Lottable02  --NJOW01
           FROM PICKDETAIL (NOLOCK)
           JOIN dbo.ORDERDETAIL OD WITH (NOLOCK) ON OD.OrderKey = Pickdetail.orderkey AND OD.OrderLineNumber=Pickdetail.orderlinenumber
                                              AND OD.StorerKey =Pickdetail.storerkey AND OD.sku = Pickdetail.sku
@@ -243,12 +245,12 @@ BEGIN
           WHERE PICKDETAIL.OrderKey = @c_OrderKey
           GROUP BY  LOTATTRIBUTE.Lottable03,LOTATTRIBUTE.Lottable07, LOTATTRIBUTE.Lottable08,
                    PICKDETAIL.SKU,PICKDETAIL.dropID,OD.ExternLineNo,
-                   OD.AltSku,P.PackUOM3,P.PackKey
+                   OD.AltSku,P.PackUOM3,P.PackKey, LOTATTRIBUTE.Lottable02 --NJOW01
 
       OPEN PICK_CUR
 
       FETCH NEXT FROM PICK_CUR INTO @n_QtyReceived, @c_Lottable03,@c_ODExtLineNo,@c_AltSKU,@c_Lottable07, @c_Lottable08,@c_UOM,@c_PackKey,
-                                    @c_sku,@c_dropid
+                                    @c_sku,@c_dropid, @c_Lottable02  --NJOW01 
 
       WHILE @@FETCH_STATUS <> -1
       BEGIN
@@ -273,13 +275,13 @@ BEGIN
                                   , Lottable10, Lottable11, Lottable12, Lottable13, Lottable14, Lottable15, BeforeReceivedQty
                                   , ToId, ToLot, Channel, PackKey, UOM)
          VALUES (@c_NewReceiptKey, @c_ReceiptLine, @c_ExternReceiptKey, @c_ODExtLineNo, @c_getStorerkey, @c_SKU, @c_AltSKU
-               , '', @c_OrderKey, ISNULL(@n_QtyReceived, 0), 0, @c_Dropid, '', '', '', @c_Lottable03, NULL, NULL, ''   --WL01
+               , '', @c_OrderKey, ISNULL(@n_QtyReceived, 0), 0, @c_Dropid, '', '', @c_Lottable02, @c_Lottable03, NULL, NULL, ''   --WL01  --NJOW01
                , @c_Lottable07, @c_Lottable08, '', '', '', '', NULL, NULL, NULL, ISNULL(@n_QtyReceived, 0), '', '', ''
                , @c_PackKey, @c_UOM)
 
          FETCH NEXT FROM PICK_CUR
             INTO @n_QtyReceived, @c_Lottable03,@c_ODExtLineNo,@c_AltSKU,@c_Lottable07, @c_Lottable08,@c_UOM,@c_PackKey,
-                                    @c_sku,@c_dropid
+                                    @c_sku,@c_dropid, @c_Lottable02 --NJOW01
       END -- WHILE @@FETCH_STATUS <> -1
       CLOSE PICK_CUR
       DEALLOCATE PICK_CUR
