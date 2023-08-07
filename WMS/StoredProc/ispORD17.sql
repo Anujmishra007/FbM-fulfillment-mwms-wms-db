@@ -20,7 +20,9 @@ GO
 /*                                                                      */
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
-/* 20230202 	ian(1.0) 1.0  amend storerky to storerkey				      */		
+/* 02-FEB-2020	ian(1.0) 1.0  amend storerky to storerkey				        */		
+/* 20-JUL-2023  NJOW01   1.1  WMS-23140 add filter condition by codelkup*/
+/* 20-JUL-2023  NJOW01   1.1  DEVOPS Combine Script                     */
 /************************************************************************/
 
 CREATE OR ALTER PROC ispORD17   
@@ -38,7 +40,8 @@ BEGIN
 
    DECLARE @n_Continue        INT,
            @n_StartTCnt       INT,
-           @c_DupExternOrderkey NVARCHAR(50) = ''
+           @c_DupExternOrderkey NVARCHAR(50) = '',
+           @c_DSGOrdType        NVARCHAR(15)            
            
    SELECT @n_Continue = 1, @n_StartTCnt = @@TRANCOUNT, @n_Err = 0, @c_ErrMsg = '', @b_Success = 1
 
@@ -52,16 +55,47 @@ BEGIN
 
    IF @c_Action IN('INSERT','UPDATE')
    BEGIN      
+   	  --NJOW01 S
+   	  CREATE TABLE #TMP_DSGORD (ExternOrderkey NVARCHAR(50))
+   	   
+   	  DECLARE CUR_DSGORD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+   	     SELECT Short
+   	     FROM CODELKUP (NOLOCK)
+   	     WHERE ListName = 'DSGORDTYPE'
+   	     AND Storerkey = @c_Storerkey   	     
+   	           
+      OPEN CUR_DSGORD  
+      
+      FETCH NEXT FROM CUR_DSGORD INTO @c_DSGOrdType
+      
+      WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
+      BEGIN      
+      	 SET @c_DSGOrdType = '%' + RTRIM(LTRIM(@c_DSGOrdType)) + '%'
+      	 
+      	 INSERT INTO #TMP_DSGORD (ExternOrderkey)
+      	 SELECT O.ExternOrderkey
+         FROM #INSERTED I 
+         JOIN ORDERS O (NOLOCK) ON I.Orderkey = O.Orderkey
+         WHERE O.Storerkey = @c_Storerkey
+         AND O.ExternOrderkey LIKE @c_DSGOrdType
+         AND O.ExternOrderkey <> ''
+      	       	       	 
+         FETCH NEXT FROM CUR_DSGORD INTO @c_DSGOrdType     		  
+      END
+      CLOSE CUR_DSGORD      
+      DEALLOCATE CUR_DSGORD
+      --NJOW01 E
+         	     	
       SELECT TOP 1 @c_DupExternOrderkey = O.ExternOrderkey
       FROM #INSERTED I 
       JOIN ORDERS O (NOLOCK) ON I.Orderkey = O.Orderkey
       LEFT JOIN ORDERS O2 (NOLOCK) ON O.ExternOrderkey = O2.ExternOrderkey AND O.Storerkey = O2.Storerkey AND O.Orderkey <> O2.Orderkey   --ian1.0
       WHERE O.Storerkey = @c_Storerkey
-      AND O.ExternOrderkey NOT LIKE '%SY%'
+      AND O.ExternOrderkey NOT IN (SELECT ExternOrderkey FROM #TMP_DSGORD)  --NJOW01
+      --AND O.ExternOrderkey NOT LIKE '%SY%'
       AND O2.ExternOrderkey IS NOT NULL
       AND O.ExternOrderkey <> ''
-      ORDER BY O.ExternOrderkey
-      
+      ORDER BY O.ExternOrderkey      
       
       IF ISNULL(@c_DupExternOrderkey,'') <> '' 
       BEGIN 
@@ -70,7 +104,6 @@ BEGIN
          SELECT @c_ErrMsg = CONVERT(CHAR(5), @n_Err) + ': Reject. Duplicate External Order# found ''' + RTRIM(@c_DupExternOrderkey) + ''' (ispORD17)' 
          GOTO QUIT_SP 
       END 
-
    END            
             	    
    QUIT_SP:
