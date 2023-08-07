@@ -25,7 +25,7 @@ EXECUTE rdt.rdtAddScn 2881, 'ENG',
    ,@cLine07 = ''
    ,@cLine08 = 'SKU/UPC/LPN:'
    ,@cLine09 = '%20d04'
-   ,@cLine10 = '%32i05'
+   ,@cLine10 = '%100i05'   --wms23078
    ,@cLine11 = '%20d06'
    ,@cLine12 = '%20d07'
    ,@cLine13 = '%20d15'    -- ExtendedInfo WMS-21307
