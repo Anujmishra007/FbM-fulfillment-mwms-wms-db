@@ -5,12 +5,13 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
-/* Store procedure: rdt_DynamicPick_PickUCC_Confirm                     */
+/* Store procedure: rdt_DynamicPick_PickUCC_Confirm                  */
 /*                                                                      */
 /* Modifications log:                                                   */
 /*                                                                      */
 /* Date        Rev  Author      Purposes                                */
 /* 20-03-2022 1.0  yeekung  WMS-19154. Created                          */ 
+/* 04-11-2022 1.1  yeekung  WMS-20487 Change orderkey (yeekung01)       */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_DynamicPick_PickUCC_Confirm] (
@@ -66,7 +67,7 @@ BEGIN
       -- Update PickDetail
       UPDATE dbo.PickDetail WITH (ROWLOCK) SET 
          Status = '4'
-      WHERE PickSlipNo = @cPickSlipNO
+      WHERE orderkey=@cOrderKey  --(yeekung01)
          AND dropid=@cUccNo
       IF @@ERROR <> 0
       BEGIN
@@ -82,7 +83,7 @@ BEGIN
       -- Update PickDetail
       UPDATE dbo.PickDetail WITH (ROWLOCK) SET 
          Status = '5'
-      WHERE PickSlipNo = @cPickSlipNO
+      WHERE orderkey=@cOrderKey --(yeekung01)
         AND dropid=@cuccno
       IF @@ERROR <> 0
       BEGIN
