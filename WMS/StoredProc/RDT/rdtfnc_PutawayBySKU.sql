@@ -80,6 +80,7 @@ GO
 /* 2022-12-09 4.9  James    WMS-21307 Add ExtendedInfoSP step 1 & 5 (james14) */
 /* 2023-06-28 5.0  Ung      WMS-22741 Remove rdt_Decode error                 */
 /*                          Add L01-04 to rdt_Decode                          */
+/* 2023-08-08 5.1  YeeKung  JSM-168921 ADD Rowcount  (yeekung04)              */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_PutawayBySKU] (
@@ -1047,6 +1048,7 @@ BEGIN
       -- Get LOT
       SET @cLOT = ''
       IF @cUCC <> ''
+      BEGIN
          SELECT
             @cLOT = LOT,
             @cLOC = LOC
@@ -1055,6 +1057,9 @@ BEGIN
             AND StorerKey = @cStorer
             AND SKU = @cSKU
             AND Status = '1'
+
+         SET @nRowCount = @@ROWCOUNT --yeekung04
+      END
       ELSE
       BEGIN
       	SET @cSQLSelect = ''
@@ -1109,7 +1114,7 @@ BEGIN
     	END
 
       -- Check SKU on ID
-      IF @@ROWCOUNT = 0
+      IF @nRowCount = 0
       BEGIN
          SET @nErrNo = 73865
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- SKUNotOnID/UCC
