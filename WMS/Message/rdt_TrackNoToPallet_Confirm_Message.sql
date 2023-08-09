@@ -13,3 +13,6 @@ execute rdt.rdtAddMsg 111307, 10, '111307 Upd CtnTyp Er', 'us_english', 1663
 execute rdt.rdtAddMsg 111308, 10, '111308 Upd Weight Er', 'us_english', 1663
 execute rdt.rdtAddMsg 111309, 10, '111309 Upd Cube Er  ', 'us_english', 1663
 
+--WMS-23006
+execute rdt.rdtAddMsg 111310, 10, '111310 InsPackInfoEr', 'us_english', 1663
+execute rdt.rdtAddMsg 111311, 10, '111311 Upd TrackNoEr', 'us_english', 1663
