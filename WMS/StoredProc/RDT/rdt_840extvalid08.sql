@@ -1,32 +1,32 @@
-if exists (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'rdt.rdt_840ExtValid08') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_840ExtValid08
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
+
 /************************************************************************/
-/* Store procedure: rdt_840ExtValid08                                  */
-/* Purpose: Validate the sostatus                                      */
-/*          Change from rdt_840ExtValid05                              */
+/* Store procedure: rdt_840ExtValid08                                   */
+/* Purpose: Validate the sostatus                                       */
+/*          Change from rdt_840ExtValid05                               */
 /*                                                                      */
 /* Modifications log:                                                   */
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
 /* 2020-05-11 1.0  YeeKung    WMS-13323 Created                         */
-/* 2021-04-01 1.1  YeeKung    WMS-16717 Add serialno and serialqty      */
-/*                            Params (yeekung01)                        */
-/* 2021-04-16 1.2  James      WMS-16024 Standarized use of TrackingNo   */
+/* 2021-04-16 1.1  James      WMS-16024 Standarized use of TrackingNo   */
 /*                            (james01)                                 */
+/* 2021-04-01 1.2  YeeKung    WMS-16717 Add serialno and serialqty      */
+/*                            Params (yeekung01)                        */
+/* 2023-07-27 1.3  James      WMS-23192 Add orders status check in      */
+/*                            step 1, 3, & 4 (james02)                  */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdt_840ExtValid08] (
+CREATE OR ALTER PROC [RDT].[rdt_840ExtValid08] (
    @nMobile                   INT,
    @nFunc                     INT,
    @cLangCode                 NVARCHAR( 3),
    @nStep                     INT,
-   @nInputKey                 INT, 
+   @nInputKey                 INT,
    @cStorerkey                NVARCHAR( 15),
    @cOrderKey                 NVARCHAR( 10),
    @cPickSlipNo               NVARCHAR( 10),
@@ -35,10 +35,10 @@ CREATE PROC [RDT].[rdt_840ExtValid08] (
    @nCartonNo                 INT,
    @cCtnType                  NVARCHAR( 10),
    @cCtnWeight                NVARCHAR( 10),
-   @cSerialNo                 NVARCHAR( 30), 
-   @nSerialQTY                INT,   
+   @cSerialNo                 NVARCHAR( 30),
+   @nSerialQTY                INT,
    @nErrNo                    INT           OUTPUT,
-   @cErrMsg                   NVARCHAR( 20) OUTPUT 
+   @cErrMsg                   NVARCHAR( 20) OUTPUT
 )
 AS
 
@@ -73,9 +73,9 @@ AS
             GOTO Fail
          END
 
-         IF EXISTS (SELECT 1 FROM dbo.PickDetail PD WITH (NOLOCK)          
-                     JOIN dbo.Orders O WITH (NOLOCK) ON O.Orderkey = PD.Orderkey      
-                     JOIN dbo.Loc L WITH (NOLOCK) ON L.Loc = PD.Loc   
+         IF EXISTS (SELECT 1 FROM dbo.PickDetail PD WITH (NOLOCK)
+                     JOIN dbo.Orders O WITH (NOLOCK) ON O.Orderkey = PD.Orderkey
+                     JOIN dbo.Loc L WITH (NOLOCK) ON L.Loc = PD.Loc
                      WHERE PD.OrderKey = @cOrderKey
                      AND O.SOStatus IN ( 'PENDPACK', 'HOLD','PENDCANC') )
          BEGIN
@@ -83,9 +83,9 @@ AS
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'INV Orders'
             GOTO Fail
          END
-      END   
+      END
    END
-   
+
    IF @nStep = 2
    BEGIN
       IF @nInputKey = 1
@@ -96,10 +96,10 @@ AS
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'No Track No'
             GOTO Fail
          END
-                  
+
          --SELECT @cOrd_TrackingNo = UserDefine04
          SELECT @cOrd_TrackingNo = TrackingNo   -- (james01)
-         FROM dbo.Orders WITH (NOLOCK) 
+         FROM dbo.Orders WITH (NOLOCK)
          WHERE OrderKey = @cOrderkey
          AND   StorerKey = @cStorerKey
 
@@ -112,13 +112,21 @@ AS
       END
    END
 
+   IF @nStep IN ( 1, 3, 4)
+   BEGIN
+   	IF @nInputKey = 1
+   	BEGIN
+         IF EXISTS (SELECT 1 FROM dbo.ORDERS WITH (NOLOCK)
+                     WHERE OrderKey = @cOrderKey
+                     AND   (SOStatus IN ( 'PENDPACK', 'HOLD','PENDCANC') OR [STATUS] = 'CANC'))
+         BEGIN
+            SET @nErrNo = 152055
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'INV Orders'
+            GOTO Fail
+         END
+   	END
+   END
 Fail:
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON rdt.rdt_840ExtValid08 TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_840ExtValid08] TO [NSQL]
 GO
