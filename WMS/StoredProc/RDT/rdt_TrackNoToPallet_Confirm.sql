@@ -22,6 +22,7 @@ GO
 /*                          into packinfo table                               */
 /* 2022-06-23 1.8  Ung      WMS-19666 Add recheck status                      */
 /* 2023-04-13 1.9  Ung      WMS-22284 Add MBOL accumulate weight, cube        */
+/* 2023-07-27 2.0  James    WMS-23006 Insert PackInfo if not exists (james03) */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_TrackNoToPallet_Confirm] (
@@ -193,7 +194,8 @@ BEGIN
    DECLARE @nCube          FLOAT
    DECLARE @nUseSequence   INT
    DECLARE @cLoadKey       NVARCHAR(10)
-      
+   DECLARE @nIsPackInfoExists INT = 1
+   
    SET @nWeight = 0
    SET @nCube = 0 
 
@@ -395,11 +397,13 @@ BEGIN
    DECLARE @cPackInfoWeight      NVARCHAR( 1)
    DECLARE @cPackInfoCube        NVARCHAR( 1)
    DECLARE @nCartonNo            INT
+   DECLARE @cPackInfoTrackNo     NVARCHAR( 1)
    
    SET @cPackInfoCartonType = rdt.RDTGetConfig( @nFunc, 'PackInfoCartonType', @cStorerKey)
    SET @cPackInfoWeight = rdt.RDTGetConfig( @nFunc, 'PackInfoWeight', @cStorerKey)
    SET @cPackInfoCube = rdt.RDTGetConfig( @nFunc, 'PackInfoCube', @cStorerKey)
-
+   SET @cPackInfoTrackNo = rdt.RDTGetConfig( @nFunc, 'PackInfoTrackNo', @cStorerKey)
+   
    IF ISNULL( @cPickSlipNo, '') = ''
       SELECT @cPickSlipNo = PickSlipNo FROM PackHeader WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND OrderKey = @cOrderKey
    
@@ -417,58 +421,110 @@ BEGIN
       WHERE PH.PickSlipNo = @cPickSlipNo
       AND   O.TrackingNo = @cTrackNo
       ORDER BY 1
+      
+      IF NOT EXISTS ( SELECT 1 
+                     FROM dbo.PackInfo WITH (NOLOCK)
+                     WHERE PickSlipNo = @cPickSlipNo
+                     AND   CartonNo = @nCartonNo)
+          SET @nIsPackInfoExists = 0                   
+   END
+   ELSE
+   	SET @nIsPackInfoExists = 1
+
+   IF @nIsPackInfoExists = 0
+   BEGIN
+   	IF ISNULL( @nCartonNo, 0) > 0
+   	BEGIN
+   	   INSERT INTO dbo.PackInfo
+   	   ( PickSlipNo, CartonNo, [Weight], [Cube], Qty, AddDate, AddWho, EditDate, EditWho, 
+           CartonType, TrackingNo) VALUES
+         ( @cPickSlipNo, @nCartonNo, @nWeight, @nCube, 0, GETDATE(), SUSER_SNAME(), GETDATE(), SUSER_SNAME(),
+           @cCartonType, @cTrackNo)
+        
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 111310
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsPackInfoEr
+         END
+      END
+   END
+   ELSE
+   BEGIN
+      IF @nCartonNo > 0
+      BEGIN
+         IF CAST( @cTrackCartonType AS INT) > 0 AND @cPackInfoCartonType = '1'
+         BEGIN
+            UPDATE dbo.PackInfo SET
+               CartonType = @cCartonType,
+               EditWho = SUSER_SNAME(),
+               EditDate = GETDATE()
+            WHERE PickSlipNo = @cPickSlipNo
+            AND   CartonNo = @nCartonNo
+      
+            IF @@ERROR <> 0
+            BEGIN
+               SET @nErrNo = 111307
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD CtnTyp Err
+            END
+         END
+      
+         IF CAST( @cTrackOrderWeight AS INT) > 0 AND @cPackInfoWeight = '1'
+         BEGIN
+            UPDATE dbo.PackInfo SET 
+               [Weight] = @nWeight,
+               EditWho = SUSER_SNAME(),
+               EditDate = GETDATE()
+            WHERE PickSlipNo = @cPickSlipNo
+            AND   CartonNo = @nCartonNo
+      
+            IF @@ERROR <> 0
+            BEGIN
+               SET @nErrNo = 111308
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Weight Err
+            END
+         END
+      
+         IF CAST( @cTrackOrderCube AS INT) > 0 AND @cPackInfoCube = '1'
+         BEGIN
+            UPDATE dbo.PackInfo SET 
+               [Cube] = @nCube,
+               EditWho = SUSER_SNAME(),
+               EditDate = GETDATE()
+            WHERE PickSlipNo = @cPickSlipNo
+            AND   CartonNo = @nCartonNo
+      
+            IF @@ERROR <> 0
+            BEGIN
+               SET @nErrNo = 111309
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Cube Err
+            END
+         END
+
+         IF @cPackInfoTrackNo = '1'
+         BEGIN
+         	IF EXISTS ( SELECT 1 
+         	            FROM dbo.PackInfo WITH (NOLOCK)
+         	            WHERE PickSlipNo = @cPickSlipNo
+         	            AND   CartonNo = @nCartonNo
+         	            AND   ISNULL( TrackingNo, '') = '')
+            BEGIN
+               UPDATE dbo.PackInfo SET
+                  TrackingNo = @cTrackNo,
+                  EditWho = SUSER_SNAME(),
+                  EditDate = GETDATE()
+               WHERE PickSlipNo = @cPickSlipNo
+               AND   CartonNo = @nCartonNo
+      
+               IF @@ERROR <> 0
+               BEGIN
+                  SET @nErrNo = 111311
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD TrackNo Err
+               END
+            END
+         END
+      END 
    END
    
-   IF @nCartonNo > 0
-   BEGIN
-      IF CAST( @cTrackCartonType AS INT) > 0 AND @cPackInfoCartonType = '1'
-      BEGIN
-         UPDATE dbo.PackInfo SET
-            CartonType = @cCartonType,
-            EditWho = SUSER_SNAME(),
-            EditDate = GETDATE()
-         WHERE PickSlipNo = @cPickSlipNo
-         AND   CartonNo = @nCartonNo
-      
-         IF @@ERROR <> 0
-         BEGIN
-            SET @nErrNo = 111307
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD CtnTyp Err
-         END
-      END
-      
-      IF CAST( @cTrackOrderWeight AS INT) > 0 AND @cPackInfoWeight = '1'
-      BEGIN
-         UPDATE dbo.PackInfo SET 
-            [Weight] = @nWeight,
-            EditWho = SUSER_SNAME(),
-            EditDate = GETDATE()
-         WHERE PickSlipNo = @cPickSlipNo
-         AND   CartonNo = @nCartonNo
-      
-         IF @@ERROR <> 0
-         BEGIN
-            SET @nErrNo = 111308
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Weight Err
-         END
-      END
-      
-      IF CAST( @cTrackOrderCube AS INT) > 0 AND @cPackInfoCube = '1'
-      BEGIN
-         UPDATE dbo.PackInfo SET 
-            [Cube] = @nCube,
-            EditWho = SUSER_SNAME(),
-            EditDate = GETDATE()
-         WHERE PickSlipNo = @cPickSlipNo
-         AND   CartonNo = @nCartonNo
-      
-         IF @@ERROR <> 0
-         BEGIN
-            SET @nErrNo = 111309
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Cube Err
-         END
-      END
-   END 
    COMMIT TRAN rdt_TrackNoToPallet_Confirm
 
    DECLARE @cUserName NVARCHAR(10)
