@@ -23,6 +23,9 @@ GO
 /*                                                                       */
 /* Updates:                                                              */
 /* Date         Author   Ver  Purposes                                   */
+/* 2022-07-22   Michael  1.1  WMS-20311 SAP S4 upgrade - Add new fields  */
+/*                            GOH, CITIE, Lbl_ItemGroup                  */
+/* 2023-01-30   Michael  1.2  WMS-21659 Change KPIStartDateTime logic    */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_picking_control_list_02] (
@@ -82,6 +85,8 @@ BEGIN
                                 ELSE 0
                            END
         , PD_Qty         = ORD.PD_Qty
+        , GOH            = ORD.GOH
+        , CITIE          = ORD.CITIE
 
    INTO #TEMP_ORDERDETAIL
 
@@ -134,6 +139,8 @@ BEGIN
            , OH_Status      = ISNULL( RTRIM( OH.Status ), '' )
            , PD_Status      = ISNULL( RTRIM( PD.Status ), '' )
            , PD_Qty         = ISNULL( PD.Qty, 0 )
+           , GOH            = CASE WHEN SKU.Packkey='TB-GOH' THEN 'Y' ELSE '' END
+           , CITIE          = CASE WHEN SKU.BUSR8='Y' THEN 'Y' ELSE '' END
 
       FROM dbo.ORDERS      OH (NOLOCK)
       JOIN dbo.ORDERDETAIL OD (NOLOCK) ON OH.OrderKey=OD.OrderKey
@@ -216,17 +223,19 @@ BEGIN
         , ShortAllocate  = ORD.ShortAllocate
         , PPDP_CTN       = ORD.PPDP_CTN
         , PutawayZone    = ORD.PutawayZone
-        , Putawayzones   = CAST( (
+        , Putawayzones   = ISNULL( RTRIM( CAST( (
                             SELECT TOP 5
                                    CONVERT(NCHAR(10),Putawayzone)
-                                 + CONVERT(NCHAR(10),ISNULL(SUM(FCP_Qty ),0))
-                                 + CONVERT(NCHAR(10),ISNULL(SUM(PP_Qty  ),0))
-                                 + CONVERT(NCHAR(10),ISNULL(SUM(Replen_Qty),0))
+                                 + CONVERT(NCHAR(10),ISNULL(FORMAT(SUM(FCP_Qty)   ,'#'),''))
+                                 + CONVERT(NCHAR(10),ISNULL(FORMAT(SUM(PP_Qty)    ,'#'),''))
+                                 + CONVERT(NCHAR(10),ISNULL(FORMAT(SUM(Replen_Qty),'#'),''))
                             FROM #TEMP_ORDERDETAIL
-                            WHERE Orderkey=ORD.Orderkey GROUP BY Putawayzone ORDER BY 1
-                            FOR XML PATH('') ) AS NVARCHAR(200) )
+                            WHERE Orderkey=ORD.Orderkey GROUP BY Putawayzone HAVING ISNULL(SUM(FCP_Qty),0)>0 OR ISNULL(SUM(PP_Qty),0)>0 OR ISNULL(SUM(Replen_Qty),0)>0 ORDER BY 1
+                            FOR XML PATH('') ) AS NVARCHAR(200) ) ), '')
         , Company        = RTRIM( ST.Company )
-        , KPIStartDateTime = DATEADD(d, CASE WHEN DATEPART(hour,OH.AddDate)<(CASE WHEN OH.Type='TB-RTNOR' THEN 11 ELSE 10 END) THEN 0 ELSE 1 END, OH.AddDate)
+        , KPIStartDateTime = DATEADD(d, CASE WHEN FORMAT(OH.AddDate,'HH:mm') < ISNULL( (select top 1 b.ColValue
+                                  from dbo.fnc_DelimSplit(RptCfg5.Delim,RptCfg5.Notes) a, dbo.fnc_DelimSplit(RptCfg5.Delim,RptCfg5.Notes2) b
+                                  where a.SeqNo=b.SeqNo and a.ColValue=OH.Type), ISNULL(RptCfg5.DftValue,'10:00') ) THEN 0 ELSE 1 END, OH.AddDate )
         , VAS            = CAST( ISNULL( (select top 1 b.ColValue
                                   from dbo.fnc_DelimSplit(RptCfg2.Delim,RptCfg2.Notes) a, dbo.fnc_DelimSplit(RptCfg2.Delim,RptCfg2.Notes2) b
                                   where a.SeqNo=b.SeqNo and a.ColValue=OH.Consigneekey)
@@ -251,6 +260,11 @@ BEGIN
         , InterfaceDate  = OH.AddDate
         , ShowFields     = RptCfg4.ShowFields
         , datawindow     = @cDataWidnow
+        , GOH            = ORD.GOH
+        , CITIE          = ORD.CITIE
+        , Lbl_ItemGroup  = CAST( RTRIM( (select top 1 b.ColValue
+                                  from dbo.fnc_DelimSplit(RptCfg3.Delim,RptCfg3.Notes) a, dbo.fnc_DelimSplit(RptCfg3.Delim,RptCfg3.Notes2) b
+                                  where a.SeqNo=b.SeqNo and a.ColValue='T_ItemGroup') ) AS NVARCHAR(50))
 
    FROM #TEMP_ORDERDETAIL ORD
    LEFT OUTER JOIN dbo.ORDERS      OH (NOLOCK) ON ORD.OrderKey=OH.OrderKey
@@ -284,6 +298,13 @@ BEGIN
         FROM dbo.CodeLkup (NOLOCK) WHERE Listname='REPORTCFG' AND Code='SHOWFIELD' AND Long=@cDataWidnow AND Short='Y'
    ) RptCfg4
    ON RptCfg4.Storerkey=OH.Storerkey AND RptCfg4.SeqNo=1
+
+   LEFT JOIN (
+      SELECT Storerkey, Notes = RTRIM(Notes), Notes2 = RTRIM(Notes2), Delim = LTRIM(RTRIM(UDF01)), DftValue = TRIM(UDF03)
+           , SeqNo=ROW_NUMBER() OVER(PARTITION BY Storerkey ORDER BY Code2)
+        FROM dbo.CodeLkup (NOLOCK) WHERE Listname='REPORTCFG' AND Code='MAPCODE' AND Long=@cDataWidnow AND Short='Y' AND UDF02='KPIStartDateTime'
+   ) RptCfg5
+   ON RptCfg5.Storerkey=ORD.Storerkey AND RptCfg5.SeqNo=1
 
    ORDER BY Wavekey, Type, ConsigneeKey, ExternOrderKey, ItemGroup, Lottable02, Sku
 
