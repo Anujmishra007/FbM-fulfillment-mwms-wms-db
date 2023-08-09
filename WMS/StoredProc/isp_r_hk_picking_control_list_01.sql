@@ -29,11 +29,13 @@ GO
 /* 08/12/2021   ML       1.3  WMS-18543 Add MAPFIELD: DocNumber          */
 /*                            MAPVALUE: T_DocNumber                      */
 /* 23/03/2022   ML       1.4  Add NULL to Temp Table                     */
+/* 08/02/2023   ML       1.5  WMS-18543 Add parm @as_putawayzone         */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_picking_control_list_01] (
        @as_storerkey      NVARCHAR(18)
      , @as_wavekey        NVARCHAR(18)
+     , @as_putawayzone    NVARCHAR(MAX) = ''
 )
 AS
 BEGIN
@@ -52,10 +54,17 @@ BEGIN
    [SQLJOIN]
 */
 
+   IF OBJECT_ID('tempdb..#TEMP_PUTAWAYZONE') IS NOT NULL
+      DROP TABLE #TEMP_PUTAWAYZONE
    IF OBJECT_ID('tempdb..#TEMP_FINALORDERKEY') IS NOT NULL
       DROP TABLE #TEMP_FINALORDERKEY
    IF OBJECT_ID('tempdb..#TEMP_ORDET') IS NOT NULL
       DROP TABLE #TEMP_ORDET
+
+   SELECT DISTINCT PutawayZone = TRIM(value)
+   INTO #TEMP_PUTAWAYZONE
+   FROM STRING_SPLIT(@as_putawayzone,',')
+   WHERE value<>''
 
    DECLARE @c_DataWidnow         NVARCHAR(40)
          , @n_StartTCnt          INT
@@ -81,6 +90,7 @@ BEGIN
       SET @b_FromRCMRpt  = 1
       SET @as_wavekey    = @as_storerkey
       SET @as_storerkey  = CHAR(9)
+      SET @as_putawayzone = ''
 
       DECLARE C_STORERKEY CURSOR FAST_FORWARD READ_ONLY FOR
       SELECT DISTINCT Storerkey
@@ -305,6 +315,10 @@ BEGIN
           +' LEFT JOIN dbo.LOC       LOC (NOLOCK) ON PD.Loc=LOC.Loc'
           + CASE WHEN ISNULL(@c_JoinClause,'')='' THEN '' ELSE ' ' + ISNULL(LTRIM(RTRIM(@c_JoinClause)),'') END
           +' WHERE FOK.Storerkey=@c_Storerkey'
+
+      IF ISNULL(@as_putawayzone,'')<>''
+         SET @c_ExecStatements = @c_ExecStatements
+          +' AND EXISTS(SELECT TOP 1 1 FROM #TEMP_PUTAWAYZONE WHERE PutawayZone=LOC.PutawayZone)'
 
       SET @c_ExecArguments = N'@c_Storerkey NVARCHAR(15)'
 
