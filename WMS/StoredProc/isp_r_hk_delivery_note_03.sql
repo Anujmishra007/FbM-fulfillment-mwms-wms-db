@@ -36,6 +36,8 @@ GO
 /* 23/06/2020   ML       1.9  Add Total_Doc_Amount                       */
 /* 08/07/2020   ML       1.10 Add new fields                             */
 /* 23/03/2022   ML       1.11 Add NULL to Temp Table                     */
+/* 28/11/2022   ML       1.12 Fix decimal Qty issue                      */
+/* 21/03/2023   ML       1.13 Add ShowField: AllowOrderStatus<5          */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_delivery_note_03] (
@@ -87,7 +89,7 @@ BEGIN
       TermsNCond1_Bold, TermsNCond1_Italic, TermsNCond2_Bold, TermsNCond2_Italic,
       LineGrouping_Separateline,
       BoldDeliveryDate, BoldDocNumber, BoldLFLRefNo, BoldReferenceNo, BoldReferenceNo2, BoldReferenceNo3, BoldReferenceNo4, BoldReferenceNo5,
-      PrintByOrder, WaterMark, DescrAutoHeight, LineRemarkAutoHeight, SumAmount, Total_Doc_Amount
+      PrintByOrder, WaterMark, DescrAutoHeight, LineRemarkAutoHeight, SumAmount, Total_Doc_Amount, AllowOrderStatus<5
    [SQLJOIN]
 */
 
@@ -238,7 +240,7 @@ BEGIN
       , LineRef2         NVARCHAR(500)  NULL
       , LineRef3         NVARCHAR(500)  NULL
       , Unitprice        MONEY          NULL
-      , Qty              INT            NULL
+      , Qty              FLOAT          NULL
       , Discount         FLOAT          NULL
       , Amount           MONEY          NULL
       , GrossAmount      MONEY          NULL
@@ -314,7 +316,13 @@ BEGIN
                          +       ', Storerkey  = MAX( OH.Storerkey )'
                          +   ' FROM dbo.ORDERS        OH (NOLOCK)'
                          +   ' JOIN dbo.PICKHEADER PIKHD (NOLOCK) ON OH.Orderkey = PIKHD.Orderkey AND OH.Orderkey<>'''''
-                         +  ' WHERE OH.Status >= ''5'' AND OH.Status <= ''9'''
+                         +   ' LEFT JOIN ('
+                         +      ' SELECT Storerkey, ShowFields = LTRIM(RTRIM(UDF01)) + LOWER(LTRIM(RTRIM(Notes))) + LTRIM(RTRIM(UDF01))'
+                         +            ', SeqNo=ROW_NUMBER() OVER(PARTITION BY Storerkey ORDER BY Code2)'
+                         +        ' FROM dbo.CodeLkup (NOLOCK) WHERE Listname=''REPORTCFG'' AND Code=''SHOWFIELD'' AND Long=@c_DataWidnow AND Short=''Y'''
+                         +   ' ) RptCfg ON RptCfg.Storerkey=OH.Storerkey AND RptCfg.SeqNo=1'
+                         +  ' WHERE OH.Status >= CASE WHEN RptCfg.ShowFields LIKE ''%,AllowOrderStatus<5,%'' THEN ''0'' ELSE ''5'' END AND OH.Status <= ''9'''
+
    IF (ISNULL(@as_wavekey,'')<>'' OR ISNULL(@as_loadkey,'')<>'' OR @n_PickslipNoCnt>0 OR @n_ExternOrderkeyCnt>0 OR @n_OrderkeyCnt>0)
    BEGIN
       IF ISNULL(@as_storerkey,'')<>CHAR(9) AND ISNULL(@as_storerkey,'')<>''
@@ -359,7 +367,7 @@ BEGIN
                          +            ', SeqNo=ROW_NUMBER() OVER(PARTITION BY Storerkey ORDER BY Code2)'
                          +        ' FROM dbo.CodeLkup (NOLOCK) WHERE Listname=''REPORTCFG'' AND Code=''SHOWFIELD'' AND Long=@c_DataWidnow AND Short=''Y'''
                          +   ' ) RptCfg ON RptCfg.Storerkey=OH.Storerkey AND RptCfg.SeqNo=1'
-                         +  ' WHERE OH.Status >= ''5'' AND OH.Status <= ''9'''
+                         +  ' WHERE OH.Status >= CASE WHEN RptCfg.ShowFields LIKE ''%,AllowOrderStatus<5,%'' THEN ''0'' ELSE ''5'' END AND OH.Status <= ''9'''
                          +    ' AND OH.Loadkey<>'''''
                          +    ' AND FOK.Orderkey IS NULL'
    IF (ISNULL(@as_wavekey,'')<>'' OR ISNULL(@as_loadkey,'')<>'' OR @n_PickslipNoCnt>0 OR @n_ExternOrderkeyCnt>0 OR @n_OrderkeyCnt>0)
