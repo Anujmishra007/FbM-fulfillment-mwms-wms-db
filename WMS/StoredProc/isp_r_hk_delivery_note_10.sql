@@ -34,6 +34,7 @@ GO
 /*                   N_*_CompanyStamp, N_Height_LineHeading                 */
 /*      3 ShowField: LineRef4-9, Signature, CompanyStamp, AllowOrderStatus<5*/
 /* 23/03/2022   ML       1.5  Add NULL to Temp Table                        */
+/* 28/11/2022   ML       1.6  Fix decimal Qty issue                         */
 /****************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_delivery_note_10] (
@@ -258,7 +259,7 @@ BEGIN
       , LineRef8         NVARCHAR(500)  NULL
       , LineRef9         NVARCHAR(500)  NULL
       , Unitprice        MONEY          NULL
-      , Qty              INT            NULL
+      , Qty              FLOAT          NULL
       , Discount         FLOAT          NULL
       , Amount           MONEY          NULL
       , GrossAmount      MONEY          NULL
