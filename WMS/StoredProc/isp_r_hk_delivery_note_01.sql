@@ -35,6 +35,8 @@ GO
 /* 19/04/2021   ML       1.9  Performance tuning                         */
 /* 04/11/2021   ML       1.10 Add SizeSeq logic for handling Size 99-99  */
 /* 23/03/2022   ML       1.11 Add NULL to Temp Table                     */
+/* 28/11/2022   ML       1.12 Fix decimal Qty issue                      */
+/* 21/03/2023   ML       1.13 Add ShowField: AllowOrderStatus<5          */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_delivery_note_01] (
@@ -85,7 +87,7 @@ BEGIN
       LineNo, ChineseDescr, LineRef1, LineRef2, LineRef3, ChineseLineRemark, UOM, UnitPrice, Discount, Amount, GrossAmount, TotalAmount
       LineGrouping_Separateline
       BoldDeliveryDate, BoldDocNumber, BoldLFLRefNo, BoldReferenceNo, BoldReferenceNo2, BoldReferenceNo3, BoldReferenceNo4, BoldReferenceNo5
-      PrintByOrder, WaterMark
+      PrintByOrder, WaterMark, AllowOrderStatus<5
    [SQLJOIN]
 */
 
@@ -263,7 +265,7 @@ BEGIN
       , LineRef2        NVARCHAR(500)  NULL
       , LineRef3        NVARCHAR(500)  NULL
       , Unitprice       FLOAT          NULL
-      , Qty             INT            NULL
+      , Qty             FLOAT          NULL
       , Discount        FLOAT          NULL
       , Amount          FLOAT          NULL
       , GrossAmount     FLOAT          NULL
@@ -315,53 +317,110 @@ BEGIN
 
 
    -- Final Orderkey, PickslipNo List
-   SELECT Orderkey       = OH.Orderkey
-        , PickslipNo     = MAX( PIKHD.PickheaderKey )
-        , Loadkey        = MAX( OH.Loadkey )
-        , ConsolPick     = 'N'
-        , DocKey         = MAX( OH.Orderkey )
-        , Storerkey      = MAX( OH.Storerkey )
-     INTO #TEMP_FINALORDERKEY
-     FROM dbo.ORDERS        OH (NOLOCK)
-     JOIN dbo.PICKHEADER PIKHD (NOLOCK) ON OH.Orderkey = PIKHD.Orderkey AND OH.Orderkey<>''
-    WHERE OH.Status >= '5' AND OH.Status <= '9'
-      AND ( @as_storerkey = CHAR(9) OR OH.Storerkey = @as_storerkey )
-      AND ( @as_wavekey<>'' OR @as_loadkey<>'' OR @n_PickslipNoCnt>0 OR @n_ExternOrderkeyCnt>0 OR @n_OrderkeyCnt>0 )
-      AND ( ISNULL(@as_wavekey,'')='' OR (@as_wavekey<>'' AND OH.Userdefine09 = @as_wavekey ) )
-      AND ( ISNULL(@as_loadkey,'')='' OR (@as_loadkey<>'' AND OH.LoadKey = @as_loadkey ) )
-      AND (@n_PickslipNoCnt=0 OR PIKHD.PickheaderKey IN (SELECT ColValue FROM #TEMP_PICKSLIPNO) )
-      AND (@n_ExternOrderkeyCnt=0 OR OH.ExternOrderKey IN (SELECT ColValue FROM #TEMP_EXTERNORDERKEY ) )
-      AND (@n_OrderkeyCnt=0 OR OH.OrderKey IN (SELECT ColValue FROM #TEMP_ORDERKEY ) )
-    GROUP BY OH.Orderkey
+   CREATE TABLE #TEMP_FINALORDERKEY (
+        Orderkey         NVARCHAR(10)  NULL
+      , PickslipNo       NVARCHAR(10)  NULL
+      , Loadkey          NVARCHAR(10)  NULL
+      , ConsolPick       NVARCHAR(1)   NULL
+      , DocKey           NVARCHAR(10)  NULL
+      , Storerkey        NVARCHAR(15)  NULL
+   )
+   SET @c_ExecArguments = N'@as_storerkey NVARCHAR(15)'
+                        + ',@as_wavekey NVARCHAR(10)'
+                        + ',@as_loadkey NVARCHAR(10)'
+                        + ',@c_DataWidnow NVARCHAR(40)'
 
-   INSERT INTO #TEMP_FINALORDERKEY
-   SELECT Orderkey       = OH.Orderkey
-        , PickslipNo     = MAX( PIKHD.PickheaderKey )
-        , Loadkey        = MAX( OH.Loadkey )
-        , ConsolPick     = MAX( CASE WHEN RptCfg.ShowFields LIKE '%,PrintByOrder,%' OR ISNULL(OH.Userdefine09,'')='' THEN 'N' ELSE 'Y' END )
-        , DocKey         = MAX( CASE WHEN RptCfg.ShowFields LIKE '%,PrintByOrder,%' OR ISNULL(OH.Userdefine09,'')='' THEN OH.Orderkey ELSE OH.Loadkey END )
-        , Storerkey      = MAX( OH.Storerkey )
-     FROM dbo.ORDERS        OH (NOLOCK)
-     JOIN dbo.PICKHEADER PIKHD (NOLOCK) ON OH.Loadkey = PIKHD.ExternOrderkey AND ISNULL(PIKHD.Orderkey,'')=''
-     LEFT JOIN #TEMP_FINALORDERKEY  FOK ON OH.Orderkey = FOK.Orderkey
-     LEFT JOIN (
-        SELECT Storerkey, ShowFields = LTRIM(RTRIM(UDF01)) + LOWER(LTRIM(RTRIM(Notes))) + LTRIM(RTRIM(UDF01))
-             , SeqNo=ROW_NUMBER() OVER(PARTITION BY Storerkey ORDER BY Code2)
-          FROM dbo.CodeLkup (NOLOCK) WHERE Listname='REPORTCFG' AND Code='SHOWFIELD' AND Long=@c_DataWidnow AND Short='Y'
-     ) RptCfg
-     ON RptCfg.Storerkey=OH.Storerkey AND RptCfg.SeqNo=1
-    WHERE OH.Loadkey<>''
-      AND OH.Status >= '5' AND OH.Status <= '9'
-      AND ( @as_storerkey = CHAR(9) OR OH.Storerkey = @as_storerkey )
-      AND ( @as_wavekey<>'' OR @as_loadkey<>'' OR @n_PickslipNoCnt>0 OR @n_ExternOrderkeyCnt>0 OR @n_OrderkeyCnt>0 )
-      AND ( ISNULL(@as_wavekey,'')='' OR (@as_wavekey<>'' AND OH.Userdefine09 = @as_wavekey ) )
-      AND ( ISNULL(@as_loadkey,'')='' OR (@as_loadkey<>'' AND OH.LoadKey = @as_loadkey ) )
-      AND (@n_PickslipNoCnt=0 OR PIKHD.PickheaderKey IN (SELECT ColValue FROM #TEMP_PICKSLIPNO) )
-      AND (@n_ExternOrderkeyCnt=0 OR OH.ExternOrderKey IN (SELECT ColValue FROM #TEMP_EXTERNORDERKEY ) )
-      AND (@n_OrderkeyCnt=0 OR OH.OrderKey IN (SELECT ColValue FROM #TEMP_ORDERKEY ) )
-      AND FOK.Orderkey IS NULL
-    GROUP BY OH.Orderkey
+   -- Discrete Orders
+   SET @c_ExecStatements = N'INSERT INTO #TEMP_FINALORDERKEY'
+                         + ' SELECT Orderkey   = OH.Orderkey'
+                         +       ', PickslipNo = MAX( PIKHD.PickheaderKey )'
+                         +       ', Loadkey    = MAX( OH.Loadkey )'
+                         +       ', ConsolPick = ''N'''
+                         +       ', DocKey     = MAX( OH.Orderkey )'
+                         +       ', Storerkey  = MAX( OH.Storerkey )'
+                         +   ' FROM dbo.ORDERS        OH (NOLOCK)'
+                         +   ' JOIN dbo.PICKHEADER PIKHD (NOLOCK) ON OH.Orderkey = PIKHD.Orderkey AND OH.Orderkey<>'''''
+                         +   ' LEFT JOIN ('
+                         +      ' SELECT Storerkey, ShowFields = LTRIM(RTRIM(UDF01)) + LOWER(LTRIM(RTRIM(Notes))) + LTRIM(RTRIM(UDF01))'
+                         +            ', SeqNo=ROW_NUMBER() OVER(PARTITION BY Storerkey ORDER BY Code2)'
+                         +        ' FROM dbo.CodeLkup (NOLOCK) WHERE Listname=''REPORTCFG'' AND Code=''SHOWFIELD'' AND Long=@c_DataWidnow AND Short=''Y'''
+                         +   ' ) RptCfg ON RptCfg.Storerkey=OH.Storerkey AND RptCfg.SeqNo=1'
+                         +  ' WHERE OH.Status >= CASE WHEN RptCfg.ShowFields LIKE ''%,AllowOrderStatus<5,%'' THEN ''0'' ELSE ''5'' END AND OH.Status <= ''9'''
 
+   IF (ISNULL(@as_wavekey,'')<>'' OR ISNULL(@as_loadkey,'')<>'' OR @n_PickslipNoCnt>0 OR @n_ExternOrderkeyCnt>0 OR @n_OrderkeyCnt>0)
+   BEGIN
+      IF ISNULL(@as_storerkey,'')<>CHAR(9) AND ISNULL(@as_storerkey,'')<>''
+         SET @c_ExecStatements += ' AND OH.Storerkey = @as_storerkey'
+      IF ISNULL(@as_wavekey,'')<>''
+         SET @c_ExecStatements += ' AND OH.Userdefine09 = @as_wavekey'
+      IF ISNULL(@as_loadkey,'')<>''
+         SET @c_ExecStatements += ' AND OH.LoadKey = @as_loadkey'
+      IF @n_PickslipNoCnt>0
+         SET @c_ExecStatements += ' AND PIKHD.PickheaderKey IN (SELECT ColValue FROM #TEMP_PICKSLIPNO)'
+      IF @n_ExternOrderkeyCnt>0
+         SET @c_ExecStatements += ' AND OH.ExternOrderKey IN (SELECT ColValue FROM #TEMP_EXTERNORDERKEY)'
+      IF @n_OrderkeyCnt>0
+         SET @c_ExecStatements += ' AND OH.OrderKey IN (SELECT ColValue FROM #TEMP_ORDERKEY)'
+   END
+   ELSE
+   BEGIN
+      SET @c_ExecStatements += ' AND (1=2)'
+   END
+   SET @c_ExecStatements += ' GROUP BY OH.Orderkey'
+
+   EXEC sp_ExecuteSql @c_ExecStatements
+                    , @c_ExecArguments
+                    , @as_storerkey
+                    , @as_wavekey
+                    , @as_loadkey
+                    , @c_DataWidnow
+
+   -- Consol Orders
+   SET @c_ExecStatements = N'INSERT INTO #TEMP_FINALORDERKEY'
+                         + ' SELECT Orderkey   = OH.Orderkey'
+                         +       ', PickslipNo = MAX( PIKHD.PickheaderKey )'
+                         +       ', Loadkey    = MAX( OH.Loadkey )'
+                         +       ', ConsolPick = MAX( CASE WHEN RptCfg.ShowFields LIKE ''%,PrintByOrder,%'' OR ISNULL(OH.Userdefine09,'''')='''' THEN ''N'' ELSE ''Y'' END )'
+                         +       ', DocKey     = MAX( CASE WHEN RptCfg.ShowFields LIKE ''%,PrintByOrder,%'' OR ISNULL(OH.Userdefine09,'''')='''' THEN OH.Orderkey ELSE OH.Loadkey END )'
+                         +       ', Storerkey  = MAX( OH.Storerkey )'
+                         +   ' FROM dbo.ORDERS        OH (NOLOCK)'
+                         +   ' JOIN dbo.PICKHEADER PIKHD (NOLOCK) ON OH.Loadkey = PIKHD.ExternOrderkey AND ISNULL(PIKHD.Orderkey,'''')='''''
+                         +   ' LEFT JOIN #TEMP_FINALORDERKEY  FOK ON OH.Orderkey = FOK.Orderkey'
+                         +   ' LEFT JOIN ('
+                         +      ' SELECT Storerkey, ShowFields = LTRIM(RTRIM(UDF01)) + LOWER(LTRIM(RTRIM(Notes))) + LTRIM(RTRIM(UDF01))'
+                         +            ', SeqNo=ROW_NUMBER() OVER(PARTITION BY Storerkey ORDER BY Code2)'
+                         +        ' FROM dbo.CodeLkup (NOLOCK) WHERE Listname=''REPORTCFG'' AND Code=''SHOWFIELD'' AND Long=@c_DataWidnow AND Short=''Y'''
+                         +   ' ) RptCfg ON RptCfg.Storerkey=OH.Storerkey AND RptCfg.SeqNo=1'
+                         +  ' WHERE OH.Status >= CASE WHEN RptCfg.ShowFields LIKE ''%,AllowOrderStatus<5,%'' THEN ''0'' ELSE ''5'' END AND OH.Status <= ''9'''
+                         +    ' AND OH.Loadkey<>'''''
+                         +    ' AND FOK.Orderkey IS NULL'
+   IF (ISNULL(@as_wavekey,'')<>'' OR ISNULL(@as_loadkey,'')<>'' OR @n_PickslipNoCnt>0 OR @n_ExternOrderkeyCnt>0 OR @n_OrderkeyCnt>0)
+   BEGIN
+      IF ISNULL(@as_storerkey,'')<>CHAR(9) AND ISNULL(@as_storerkey,'')<>''
+         SET @c_ExecStatements += ' AND OH.Storerkey = @as_storerkey'
+      IF ISNULL(@as_wavekey,'')<>''
+         SET @c_ExecStatements += ' AND OH.Userdefine09 = @as_wavekey'
+      IF ISNULL(@as_loadkey,'')<>''
+         SET @c_ExecStatements += ' AND OH.LoadKey = @as_loadkey'
+      IF @n_PickslipNoCnt>0
+         SET @c_ExecStatements += ' AND PIKHD.PickheaderKey IN (SELECT ColValue FROM #TEMP_PICKSLIPNO)'
+      IF @n_ExternOrderkeyCnt>0
+         SET @c_ExecStatements += ' AND OH.ExternOrderKey IN (SELECT ColValue FROM #TEMP_EXTERNORDERKEY)'
+      IF @n_OrderkeyCnt>0
+         SET @c_ExecStatements += ' AND OH.OrderKey IN (SELECT ColValue FROM #TEMP_ORDERKEY)'
+   END
+   ELSE
+   BEGIN
+      SET @c_ExecStatements += ' AND (1=2)'
+   END
+   SET @c_ExecStatements += ' GROUP BY OH.Orderkey'
+
+   EXEC sp_ExecuteSql @c_ExecStatements
+                    , @c_ExecArguments
+                    , @as_storerkey
+                    , @as_wavekey
+                    , @as_loadkey
+                    , @c_DataWidnow
 
    SELECT DISTINCT
           PickslipNo     = FOK.PickslipNo
