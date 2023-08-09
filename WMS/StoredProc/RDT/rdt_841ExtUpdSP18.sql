@@ -1,6 +1,3 @@
-if exists (select * from sys.objects where object_id = object_id(N'[RDT].[rdt_841ExtUpdSP18]') and OBJECTPROPERTY(object_id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_841ExtUpdSP18]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
