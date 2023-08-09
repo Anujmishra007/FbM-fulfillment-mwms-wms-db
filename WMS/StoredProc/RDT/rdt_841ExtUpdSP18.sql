@@ -15,7 +15,7 @@ GO
 /* 2021-07-27  1.1  Chermain WMS-17410 Add VariableTable Param (cc01)   */
 /************************************************************************/        
       
-CREATE PROC [RDT].[rdt_841ExtUpdSP18] (        
+CREATE OR ALTER PROC [RDT].[rdt_841ExtUpdSP18] (        
    @nMobile       INT,  
    @nFunc         INT,  
    @cLangCode     NVARCHAR( 3),  
