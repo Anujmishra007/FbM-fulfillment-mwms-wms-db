@@ -26,7 +26,9 @@ GO
 /*                                                                      */    
 /* Updates:                                                             */    
 /* Date         Author  Ver.  Purposes                                  */    
-/* 01-Sep-2021  NJOWO2  1.1   WMS-17852 add shipperkey for filtering    */
+/* 01-Sep-2021  NJOW02  1.1   WMS-17852 add shipperkey for filtering    */
+/* 07-Jul-2023  NJOW03  1.2   WMS-23034 Modify loc sorting              */
+/* 07-Jul-2023  NJOW03  1.2   DEVOPS Combine Script                     */
 /************************************************************************/    
 CREATE  PROC [dbo].[nspALPVH3B]        
    @c_DocumentNo NVARCHAR(10),  
@@ -120,7 +122,7 @@ BEGIN
    AND Consigneefor = @c_Storerkey
          
    --SET @c_SortBy = 'ORDER BY LOTATTRIBUTE.Lottable02 DESC, LOTATTRIBUTE.Lottable01, LOC.LogicalLocation, LOC.LOC'   
-   SET @c_SortBy = 'ORDER BY LOTATTRIBUTE.Lottable01, LOC.LogicalLocation, LOC.LOC'   
+   SET @c_SortBy = 'ORDER BY LOTATTRIBUTE.Lottable05, LOTATTRIBUTE.Lottable01, LOC.LogicalLocation, LOC.LOC'   --NJOW03
       
    SET @c_Cond = ''   
    SELECT @c_Cond = ISNULL(Notes,''),
@@ -333,14 +335,16 @@ BEGIN
                       
    WHILE @n_QtyLeftToFulfill > 0
    BEGIN
-      SELECT TOP 1 @c_Loc = LOC, @n_LocQtyAvailable = SUM(Qty)
-      FROM #TMP_INV      
-      GROUP BY LOC	
-      ORDER BY CASE WHEN SUM(Qty) = @n_TotalOrderQty THEN 1 
-                    WHEN SUM(Qty) > @n_TotalOrderQty THEN 2
-                    ELSE 3 END,
-               MIN(RowID)
-      
+      SELECT TOP 1 @c_Loc = TI.LOC, @n_LocQtyAvailable = SUM(TI.Qty)
+      FROM #TMP_INV TI
+      JOIN LOTATTRIBUTE LA (NOLOCK) ON TI.Lot = LA.Lot     --NJOW03 
+      GROUP BY TI.LOC	
+      ORDER BY MIN(LA.Lottable05), --NJOW03
+               CASE WHEN SUM(TI.Qty) < @n_TotalOrderQty THEN 1  --NJOW03
+                    WHEN SUM(TI.Qty) = @n_TotalOrderQty THEN 2  --NJOW03
+               ELSE 3 END,
+               MIN(TI.RowID)
+                  
       IF @@ROWCOUNT = 0
          BREAK
           
