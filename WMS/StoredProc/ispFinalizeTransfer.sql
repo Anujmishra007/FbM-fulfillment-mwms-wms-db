@@ -60,6 +60,8 @@ GO
 /* 10-Feb-2023  NJOW04    3.3 WMS-21722 Allow check nomixlottable for all */
 /*                            commingle sku in a loc.                     */
 /* 10-Feb-2023  NJOW04    3.3 DEVOPS Combine Script                       */
+/* 07-Aug-2023  NJOW05    3.4 INC2128003 fix transfer error by adding     */
+/*                            lot,loc,id and channel validation           */
 /**************************************************************************/
 
 CREATE OR ALTER PROC ispFinalizeTransfer
@@ -152,6 +154,11 @@ BEGIN
          /* KC01 - end */
          , @c_FromSkuStatus            NVARCHAR(10) -- IN00051925
          , @c_ToSkuStatus              NVARCHAR(10) -- IN00051925
+         , @c_ChannelInventoryMgmt     NVARCHAR(30) --NJOW05            
+         , @n_Channel_ID               BIGINT --NJOW05
+         , @cFromChannel               NVARCHAR(20) --NJOW05
+         , @cToChannel                 NVARCHAR(20) --NJOW05
+         , @n_ChannelAvailableQty      INT --NJOW05
 
    --XXXXXXX--
    SET @nStartTranCount = @@TRANCOUNT
@@ -496,7 +503,112 @@ BEGIN
          SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+':Quantity Withdrawal More Then Quantity Avaliable (ispFinalizeTransfer)'
          GOTO Quit_Proc
       END
+      
+      --NJOW05
+      IF EXISTS(SELECT 1 
+                FROM #tTransferDet TD 
+                LEFT JOIN LOTxLOCxID LLI WITH (NOLOCK) ON TD.LOT = LLI.LOT AND
+                          TD.LOC = LLI.LOC AND TD.ID = LLI.ID
+                WHERE LLI.Lot IS NULL)
+      BEGIN
+         SET @nContinue = 3
+         SET @n_err = 80010
+         SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': From Lot + Location + ID Not found at the inventory (ispFinalizeTransfer)'
+         GOTO Quit_Proc
+      END                        
    END
+   
+   --NJOW05 S
+   IF @nContinue = 1 OR @nContinue = 2
+   BEGIN
+      SET @b_success = 0
+      Execute nspGetRight2                                        
+           @c_Facility                                          
+         , @cFromStorerKey            -- Storer                   
+         , ''                         -- Sku                      
+         , 'ChannelInventoryMgmt'     -- ConfigKey                
+         , @b_success                 OUTPUT                      
+         , @c_ChannelInventoryMgmt    OUTPUT                      
+         , @n_Err                     OUTPUT                      
+         , @c_ErrMsg                  OUTPUT                      
+            
+      IF @b_success <> 1
+      BEGIN
+         SET @nContinue = 3
+         SET @n_err = 80020
+         SET @c_errmsg =  'NSQL' + CONVERT(CHAR(5), ISNULL(RTrim(@n_err),0))
+                       + ' Retrieve of Right (c_ChannelInventoryMgmt) Failed (ispFinalizeTransfer) ( '
+                       + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '
+         GOTO Quit_Proc
+      END   
+      
+      IF @c_ChannelInventoryMgmt = '1'
+      BEGIN
+         DECLARE CUR_TRFCHANNEL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR       
+            SELECT TransferLineNumber, FromLOT, FromSku, FromChannel, FromQTY, ToChannel
+            FROM TRANSFERDETAIL (NOLOCK)
+            WHERE TransferKey = @c_Transferkey                                                                     
+            AND TransferLineNumber = CASE WHEN @c_TransferLineNumber = '' THEN TransferLineNumber  
+                                          ELSE @c_TransferLineNumber END             
+            AND Status < '9'             
+            AND FromChannel <> ''
+            AND FromChannel IS NOT NULL
+            ORDER BY TransferLineNumber
+
+         OPEN CUR_TRFCHANNEL
+         
+         FETCH NEXT FROM CUR_TRFCHANNEL INTO @cTransferLineNumber, @cFromLOT, @cFromSKU, @cFromChannel, @nFromQty, @cToChannel       
+         
+         WHILE @@FETCH_STATUS = 0 AND @nContinue IN (1,2)
+         BEGIN         	
+            SET @n_Channel_ID = 0
+            SET @n_ChannelAvailableQty = 0
+            
+            EXEC isp_ChannelGetID
+                    @c_StorerKey   = @cFromStorerKey
+                   ,@c_Sku         = @cFromSKU
+                   ,@c_Facility    = @c_Facility
+                   ,@c_Channel     = @cFromChannel
+                   ,@c_LOT         = @cFromLOT
+                   ,@n_Channel_ID  = @n_Channel_ID OUTPUT
+                   ,@b_Success     = @b_Success OUTPUT
+                   ,@n_ErrNo       = @n_Err     OUTPUT
+                   ,@c_ErrMsg      = @c_ErrMsg  OUTPUT      	
+            
+            IF ISNULL(@n_Channel_ID,0) = 0
+            BEGIN
+               SET @nContinue = 3
+               SET @n_err = 80030
+               SET @c_errmsg =  'NSQL' + CONVERT(CHAR(5), ISNULL(RTrim(@n_err),0))
+                             + ' Unable find from Channel inventory at transfer line ' + @cTransferLineNumber + ' (ispFinalizeTransfer) ( '
+                             + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '            	
+            END
+            ELSE
+            BEGIN
+               SELECT @n_ChannelAvailableQty = (Qty - QtyAllocated - QtyOnHold)
+               FROM CHANNELINV (NOLOCK)
+               WHERE Channel_ID = @n_Channel_ID
+               
+               IF @n_ChannelAvailableQty < @nFromQty
+               BEGIN
+                  SET @nContinue = 3
+                  SET @n_err = 80040
+                  SET @c_errmsg =  'NSQL' + CONVERT(CHAR(5), ISNULL(RTrim(@n_err),0))
+                                + ' Insufficient from Channel inventory qty at transfer line ' + @cTransferLineNumber + ' (ispFinalizeTransfer) ( '
+                                + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '            	                  
+               END                           	
+            END
+            	  
+            FETCH NEXT FROM CUR_TRFCHANNEL INTO @cTransferLineNumber, @cFromLOT, @cFromSKU, @cFromChannel, @nFromQty, @cToChannel       
+         END
+         CLOSE CUR_TRFCHANNEL
+         DEALLOCATE CUR_TRFCHANNEL      	      
+         
+         IF @nContinue = 3
+            GOTO Quit_Proc         	
+      END      
+   END
+   --NJOW05 E
 
    ---NJOW01 Start
      IF @nContinue = 1 OR @nContinue = 2
