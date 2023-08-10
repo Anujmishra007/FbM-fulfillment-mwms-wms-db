@@ -3,6 +3,8 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
+
+
 /************************************************************************/
 /* Store procedure: isp_RCM_ORD_MNC                                     */
 /* Copyright      : LFLogistics                                         */
@@ -10,9 +12,10 @@ GO
 /* Date       Rev  Author    Purposes                                   */
 /* 23-Mar-2023 1.0  yeekung   WMS-21873 Created                         */
 /* 02-Jun-2023 1.1  yeekung   WMS-22683 Add loc (yeekung01)             */
+/* 02-Aug-2023 1.2  Calvin    JSM-167907 Add Lot as Condition (CLVN01)  */
 /************************************************************************/
 
-CREATE OR ALTER PROC [dbo].[isp_RCM_ORD_MNC] (
+CREATE OR ALTER   PROC [dbo].[isp_RCM_ORD_MNC] (
    @c_OrderKey NVARCHAR(10),
    @b_success INT           OUTPUT,
    @n_err    INT           OUTPUT,
@@ -142,6 +145,7 @@ BEGIN
                   AND OrderLineNumber = @cOrderLineNumber
                   AND SKU = @cSKU
                   AND Loc = @cLOC
+				  AND LOT = @cLOT	--(CLVN01)
 
                -- Calc QTY for PickDetail (smallest of the 3 QTY)
                SET @nQTY = @nQTY_Log
@@ -315,6 +319,9 @@ QUIT_SP:
    END
 
 END
+
 GO
 GRANT EXECUTE ON  [dbo].[isp_RCM_ORD_MNC] TO [NSQL]
 GO
+
+
