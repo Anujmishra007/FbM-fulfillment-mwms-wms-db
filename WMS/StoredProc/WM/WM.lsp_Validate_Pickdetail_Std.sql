@@ -13,7 +13,7 @@ GO
 /* Called By:                                                             */  
 /*                                                                        */  
 /*                                                                        */  
-/* Version: 1.0                                                           */  
+/* Version: 1.3                                                           */  
 /*                                                                        */  
 /* Data Modifications:                                                    */  
 /*                                                                        */  
@@ -21,6 +21,8 @@ GO
 /* Date         Author   Ver  Purposes                                    */ 
 /* 2021-02-10   mingle01 1.1  Add Big Outer Begin try/Catch               */
 /* 2023-03-14   NJOW01   1.2  LFWM-3608 performance tuning for XML Reading*/
+/* 2023-07-11   Wan01    1.3  LFWM-4131 -PROD - CN Pick Management channel*/
+/*                            id bug                                      */
 /**************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_Validate_Pickdetail_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
@@ -180,11 +182,15 @@ BEGIN
       */
 
       DECLARE 
-            @c_OrderKey    NVARCHAR(10) = ''
-         ,  @c_Lot         NVARCHAR(10) = ''
-         ,  @c_Loc         NVARCHAR(15) = ''
-         ,  @c_ID          NVARCHAR(15) = ''        
-         ,  @n_Qty         INT = 0 
+            @c_OrderKey          NVARCHAR(10) = ''
+         ,  @c_Lot               NVARCHAR(10) = ''
+         ,  @c_Loc               NVARCHAR(10) = ''
+         ,  @c_ID                NVARCHAR(18) = ''        
+         ,  @n_Qty               INT          = 0 
+         
+         ,  @c_OrderLineNumber   NVARCHAR(5) = ''                                   --(Wan01)
+         ,  @c_Sku               NVARCHAR(20)= ''                                   --(Wan01)
+         ,  @c_Sku_OD            NVARCHAR(20)= ''                                   --(Wan01)
 
             
       SELECT  
@@ -193,11 +199,56 @@ BEGIN
          ,  @c_Loc = PD.Loc 
          ,  @c_ID  = PD.ID
          ,  @n_Qty = PD.Qty 
+         ,  @c_OrderLineNumber = PD.OrderLineNumber                                 --(Wan01)
+         ,  @c_Sku = PD.Sku                                                         --(Wan01)
       FROM  #VALDN PD  --NJOW01
       
       SET @b_Success = 1
       SET @n_Err = 0 
       SET @c_Errmsg = ''
+      
+      IF @c_Orderkey <> '' AND @c_OrderLineNumber <> ''                             --(Wan01)
+      BEGIN
+         SELECT @c_Sku_OD = o.Sku FROM dbo.ORDERDETAIL AS o (NOLOCK) 
+         WHERE o.OrderKey = @c_OrderKey AND o.OrderLineNumber = @c_OrderLineNumber
+         
+         IF @c_Sku_OD = ''
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 561851
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6),@n_Err) + ':Order Line #: ' + @c_OrderLineNumber
+                          + ' Not Found. (lsp_Validate_Pickdetail_Std) |' + @c_OrderLineNumber
+            GOTO EXIT_SP
+         END
+         
+         IF @c_Sku <> @c_Sku_OD 
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 561852
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6),@n_Err) + ':Sku: ' + @c_Sku
+                          + ' not belong to Order Line #: ' + @c_OrderLineNumber
+                          + '. (lsp_Validate_Pickdetail_Std) |' + @c_Sku + '|' + @c_OrderLineNumber
+            GOTO EXIT_SP
+         END
+      END 
+      
+      IF @c_Lot <> '' AND @c_Loc <> '' 
+      BEGIN
+         IF NOT EXISTS (SELECT 1 FROM dbo.LOTxLOCxID AS ltlci (NOLOCK) 
+                        WHERE ltlci.Lot = @c_Lot
+                        AND ltlci.Loc = @c_Loc
+                        AND ltlci.Id = @c_ID
+         )
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 561853
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6),@n_Err) + ': Invalid Inventory Found'
+                          + '. Lot: ' + @c_Lot + ', Loc: ' + @c_Loc + ', ID: ' + @c_ID
+                          + '. (lsp_Validate_Pickdetail_Std) |' + @c_Lot + '|' + @c_Loc + '|' + @c_ID
+            GOTO EXIT_SP         
+         END 
+      END                                                                           --(Wan01) - END
+      
 
       EXEC isp_ValidatePickdetail
             @c_OrderKey          = @c_OrderKey   
