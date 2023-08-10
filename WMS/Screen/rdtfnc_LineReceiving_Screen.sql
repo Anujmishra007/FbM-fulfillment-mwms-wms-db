@@ -76,3 +76,13 @@ EXECUTE rdt.rdtAddScn 3986, 'ENG'
    ,@cLine06 = 'receive next line'
    ,@cLine14 = '%e'
    ,@nFunc = 537
+   
+-- 3987 = Message screen
+DELETE rdt.RDTScn WHERE Scn = 3987 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 3987, 'ENG'
+   ,@cLine01 = ''
+   ,@cLine02 = 'DATA:'
+   ,@cLine03 = '%200iV_Barcode'
+   ,@cLine04 = ''
+   ,@cLine14 = '%e'
+   ,@nFunc = 537
