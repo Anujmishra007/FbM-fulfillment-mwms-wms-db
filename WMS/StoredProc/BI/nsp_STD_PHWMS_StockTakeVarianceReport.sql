@@ -7,6 +7,7 @@ TITLE: STOCKTAKE VARIANCE REPORT (PHWMS) https://jiralfl.atlassian.net/browse/WM
 
 DATE				VER		CREATEDBY   PURPOSE
 14-MAR-2023			1.0		JAM			MIGRATE FROM HYPERION (PHWMS)
+11-AUG-2023			1.4		Crisnah	    Change JOIN TO LEFT JOIN https://jiralfl.atlassian.net/browse/WMS-23267
 ************************************************************************/
 -- Test:   EXEC BI.nsp_STD_PHWMS_StockTakeVarianceReport 'ZEROW2W' ,'2022-09-01','2022-10-01'
 
@@ -208,8 +209,8 @@ set @Stmt = ' SELECT '+
 			'  BI.V_CCDetail CCD (nolock)  ' +
 			'  JOIN BI.V_StockTakeSheetParameters SSP (nolock) ON (CCD.STORERKEY=SSP.STORERKEY AND CCD.CCKey = SSP.StockTakeKey) ' +
 			'  LEFT JOIN BI.V_SKU S (nolock) ON (CCD.Storerkey = S.StorerKey  AND CCD.Sku = S.Sku) ' +
-			'  LEFT JOIN BI.V_PACK P (nolock) ON (S.PACKKey = P.PackKey) ' +
-			'  LEFT OUTER JOIN BI.V_LOC L (nolock) ON (L.LOC = CCD.LOC) ' +
+			'  JOIN BI.V_PACK P (nolock) ON (S.PACKKey = P.PackKey) ' +
+			'  LEFT JOIN BI.V_LOC L (nolock) ON (L.LOC = CCD.LOC) ' +
 			'WHERE    ' 
 			IF @PARAM_GENERIC_CCKEY='ALL'
 				BEGIN 
