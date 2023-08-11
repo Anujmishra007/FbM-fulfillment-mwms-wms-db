@@ -38,29 +38,11 @@ SET ANSI_NULLS OFF
 SET CONCAT_NULL_YIELDS_NULL OFF    
   
 DECLARE  @c_orderkey  NVARCHAR(10) = '',   
-      @c_tablename NVARCHAR(30)  
+      @c_tablename NVARCHAR(30),  
+	  @c_udf03 NVARCHAR(30)= ''
 
---SET  @c_storerkey = 'DYSON'  
---SET @c_tablename = 'WSCRSOADDZO'  
-
-   DECLARE Tablename_cur CURSOR LOCAL FAST_FORWARD READ_ONLY FOR    
-
-   
-   SELECT DISTINCT a.Tablename FROM(
-   SELECT  Tablename = ( CASE WHEN c.UDF03 IS NULL  THEN 'WSCRSOADDZO'
-						WHEN c.udf03 = '' THEN 'WSCRSOADDZO'
-						ELSE c.UDF03 END ) 
-	FROM dbo.orders o (NOLOCK)
-	JOIN dbo.CODELKUP  c (NOLOCK) ON o.ECOM_Platform = c.Short 
-	WHERE c.LISTNAME = 'DYSONSTORE'
-	AND o.StorerKey = @c_storerkey 
-	) AS a
-
-   OPEN Tablename_cur     
-   FETCH NEXT FROM Tablename_cur INTO @c_tablename
-   
-   WHILE @@FETCH_STATUS <> -1    
-   BEGIN    
+--SET  @c_storerkey = 'DYSON'
+--SET @c_tablename = 'WSCRSOADDZO'
 
 
   
@@ -75,7 +57,7 @@ IF EXISTS (  SELECT 1
              AND NOT EXISTS ( SELECT 1 FROM Transmitlog2 c(NOLOCK)   
                      WHERE c.key3 = a.storerkey    
                      AND c.key1 = a.orderkey   
-                     AND c.tablename = @c_tablename   )           
+                      )           
                      )  
 BEGIN  
    DECLARE OrdItems_cur CURSOR LOCAL FAST_FORWARD READ_ONLY FOR   
@@ -90,13 +72,33 @@ BEGIN
     AND NOT EXISTS ( SELECT 1 FROM Transmitlog2 c(NOLOCK)   
             WHERE c.key3 = a.storerkey    
             AND c.key1 = a.orderkey   
-            AND c.tablename = @c_tablename   )  
+             )  
   
     OPEN OrdItems_cur  
   
     FETCH NEXT FROM OrdItems_cur INTO @c_orderkey   
     WHILE @@FETCH_STATUS=0  
-    BEGIN         
+    BEGIN   
+		
+		SELECT  @c_udf03 = c.UDF03
+	FROM dbo.orders o (NOLOCK)
+	JOIN dbo.CODELKUP  c (NOLOCK) ON o.ECOM_Platform = c.Short AND o.OrderKey = @c_orderkey
+	WHERE c.LISTNAME = 'DYSONSTORE'
+
+	 IF @c_udf03 IS NULL 
+	 BEGIN 
+	  SET @c_tablename = 'WSCRSOADDZO'
+	 END
+	 ELSE IF  @c_udf03 = ''
+	  BEGIN
+	  SET @c_tablename = 'WSCRSOADDZO'
+	  END
+
+	  ELSE 
+	  BEGIN
+	  SET @c_tablename = @c_udf03
+	  END 
+
   
        EXEC ispGenTransmitLog2 @c_tablename, @c_orderkey, '0', @c_storerkey, '', 0, 0,''   
                                     
@@ -106,13 +108,6 @@ BEGIN
    CLOSE OrdItems_cur   
    DEALLOCATE OrdItems_cur  
 END   
-
-     FETCH NEXT FROM Tablename_cur INTO @c_tablename  
-   END    
-    
-   CLOSE Tablename_cur    
-   DEALLOCATE Tablename_cur    
-
    
 END  
 GO
