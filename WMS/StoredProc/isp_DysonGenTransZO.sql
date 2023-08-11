@@ -56,7 +56,8 @@ IF EXISTS (  SELECT 1
              AND a.shipperkey = 'ZTO'  
              AND NOT EXISTS ( SELECT 1 FROM Transmitlog2 c(NOLOCK)   
                      WHERE c.key3 = a.storerkey    
-                     AND c.key1 = a.orderkey   
+                     AND c.key1 = a.orderkey
+					 AND c.transmitflag IN ('0','1')
                       )           
                      )  
 BEGIN  
@@ -71,7 +72,8 @@ BEGIN
     AND a.shipperkey = 'ZTO'  
     AND NOT EXISTS ( SELECT 1 FROM Transmitlog2 c(NOLOCK)   
             WHERE c.key3 = a.storerkey    
-            AND c.key1 = a.orderkey   
+            AND c.key1 = a.orderkey
+			AND c.transmitflag IN ('0','1')
              )  
   
     OPEN OrdItems_cur  
