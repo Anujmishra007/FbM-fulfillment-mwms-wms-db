@@ -24,6 +24,10 @@ execute rdt.rdtAddMsg 133416, 10, '33416^UPDSOSTATUS ER',    'us_english', 840
 execute rdt.rdtAddMsg 133417, 10, '33417^ONLY 1 CARTON',     'us_english', 840
 execute rdt.rdtAddMsg 133418, 10, '33418^X FINISH PACK',     'us_english', 840
 
+-- WMS-21803
+execute rdt.rdtAddMsg 133419, 10, 'AWAIT REVISED INV  ',     'us_english', 840
+execute rdt.rdtAddMsg 133420, 10, '133420 DEL PKDT ERR',     'us_english', 840
+
 select * from rdt.rdtmsg (nolock) where message_id between 133401 and 133450
 
 
