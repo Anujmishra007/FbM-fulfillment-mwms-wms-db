@@ -39,6 +39,7 @@ GO
 /*                          chars and decode (james03)                        */
 /* 2020-09-08 2.7  YeeKung  WMS-15056 Add Extendedvalidatesp(yeekung01)       */
 /* 2023-05-08 2.8  Ung      WMS-22422 Add DefaultCartonTypeSP                 */
+/* 2023-07-14 2.9  James    WMS-23121 Extend TrackingNo to 40 chars (james04) */
 /******************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdtfnc_TrackNoToPallet](
@@ -86,7 +87,7 @@ DECLARE
 
    @cPalletKey          NVARCHAR(20),
    @cMBOLKey            NVARCHAR(10),
-   @cTrackNo            NVARCHAR(20),
+   @cTrackNo            NVARCHAR(40),
    @cWeight             NVARCHAR(10),
    @cCartonType         NVARCHAR(10),
    @cUseSequence        NVARCHAR(10),
@@ -149,7 +150,6 @@ SELECT
 
    @cPalletKey          = V_String1,
    @cMBOLKey            = V_String2,
-   @cTrackNo            = V_String3,
    @cWeight             = V_String4,
    @cCartonType         = V_String5,
    @cUseSequence        = V_String6,
@@ -175,7 +175,8 @@ SELECT
    @cDefaultCartonTypeSP         = V_String36,
    
    @cTrackNoBarcode     = V_String41,
-
+   @cTrackNo            = V_String42,
+   
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,  @cFieldAttr03 = FieldAttr03,
@@ -794,7 +795,7 @@ BEGIN
             END
 
             -- (james03)
-            SET @cTrackNo = LEFT( @cTrackNoBarcode, 20)
+            SET @cTrackNo = LEFT( @cTrackNoBarcode, 40)
          END
       END
 
@@ -1980,7 +1981,6 @@ BEGIN
 
       V_String1  = @cPalletKey,
       V_String2  = @cMBOLKey,
-      V_String3  = @cTrackNo,
       V_String4  = @cWeight,
       V_String5  = @cCartonType,
       V_String6  = @cUseSequence,
@@ -2006,7 +2006,8 @@ BEGIN
       V_String36 = @cDefaultCartonTypeSP,
       
       V_String41 = @cTrackNoBarcode,
-
+      V_String42 = @cTrackNo,
+      
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
       I_Field03 = @cInField03,  O_Field03 = @cOutField03,   FieldAttr03  = @cFieldAttr03,
