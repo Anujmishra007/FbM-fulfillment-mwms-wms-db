@@ -30,7 +30,7 @@ EXECUTE rdt.rdtAddScn 4932, 'ENG'
    ,@cLine05 = '%10d02'
    ,@cLine06 = ''
    ,@cLine07 = 'TRACK NO:'
-   ,@cLine08 = '%30i03' -- WMS-12486 Extend to 30 chars
+   ,@cLine08 = '%40i03' -- WMS-23121 Extend to 40 chars
    ,@cLine09 = ''
    ,@cLine10 = 'TOTAL TRACK NO:'
    ,@cLine11 = '%05d04'
