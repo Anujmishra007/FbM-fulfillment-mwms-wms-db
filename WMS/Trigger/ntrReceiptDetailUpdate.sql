@@ -171,6 +171,7 @@ GO
 /* 04-Aug-2022  WLChooi   5.5   DevOps Combine Script                       */
 /* 16-Dec-2022  SPChin    5.6   JSM-99648 - Add Validation of FinalizeFlag  */
 /* 29-Mar-2023  James     5.7   WMS-21943 Add UCCNo to SerialNo (james02)   */
+/* 03-Aug-2023  NJOW14    5.8   WMS-23298 Update lot to serialno            */
 /****************************************************************************/ 
  
 CREATE OR ALTER TRIGGER [dbo].[ntrReceiptDetailUpdate] 
@@ -274,6 +275,7 @@ DECLARE @c_PODLottable01       NVARCHAR(18)
       , @c_Userdefine08                   NVARCHAR(30) --NJOW09
       , @c_Userdefine09                   NVARCHAR(30) --NJOW09
       , @c_Userdefine10                   NVARCHAR(30) --NJOW09
+      , @c_ASNFizUpdLotToSerialNo         NVARCHAR(30) --NJOW14
 
 --NJOW11      
 DECLARE @c_AltSku                         NVARCHAR(20)
@@ -2314,15 +2316,44 @@ BEGIN
             DECLARE @n_SerialQTY INT 
             DECLARE @curSNo CURSOR  
             DECLARE @c_SerialUCCNo  NVARCHAR( 20)
+
+            --NJOW14 S
+            SELECT @b_success = 0          
+            SELECT @c_ASNFizUpdLotToSerialNo = ''
+            EXECUTE nspGetRight @c_Facility,  -- facility 
+                  @c_StorerKey,           -- Storerkey 
+                  '',                     -- Sku 
+                  'ASNFizUpdLotToSerialNo',   -- Configkey 
+                  @b_success                  output, 
+                  @c_ASNFizUpdLotToSerialNo   output, 
+                  @n_err                      output, 
+                  @c_errmsg                   output 
+                   
+            IF @b_success <> 1 
+            BEGIN 
+               SELECT @n_continue = 3, @c_errmsg = 'ntrReceiptDetailUpdate' + dbo.fnc_RTrim(@c_errmsg) 
+               SELECT @n_err = 60084 
+               BREAK 
+            END 
+
+            IF @c_ASNFizUpdLotToSerialNo = '1'
+            BEGIN
+               SELECT TOP 1 @c_LOT = Lot                                           
+               FROM ITRN WITH (NOLOCK)                                             
+               WHERE SourceType = @c_SourceType -- 'ntrReceiptDetailUpdate'        
+               AND SourceKey  = @c_SourceKey -- ReceiptKey + ReceiptLineNumber               	
+            END      
+            --NJOW14 E            
             
             -- Loop ReceiptSerialNo 
             SET @curSNo = CURSOR FOR 
                SELECT SerialNo, QTY, UCCNo 
                FROM dbo.ReceiptSerialNo WITH (NOLOCK) 
-         WHERE ReceiptKey = @c_ReceiptKey   
-                  AND ReceiptLineNumber = @c_ReceiptLineNumber 
+               WHERE ReceiptKey = @c_ReceiptKey   
+               AND ReceiptLineNumber = @c_ReceiptLineNumber 
  
             OPEN @curSNo 
+            
             FETCH NEXT FROM @curSNo INTO @c_SerialNo, @n_SerialQTY, @c_SerialUCCNo 
  
             WHILE @@FETCH_STATUS = 0 
@@ -2332,18 +2363,19 @@ BEGIN
                SELECT @c_SerialNoKey = SerialNoKey  
                FROM dbo.SerialNo (NOLOCK) 
                WHERE SerialNo = @c_SerialNo 
-                  AND StorerKey = @c_StorerKey 
-                  AND SKU = @c_SKU 
+               AND StorerKey = @c_StorerKey 
+               AND SKU = @c_SKU 
  
                IF @c_SerialNoKey <> '' 
                BEGIN 
                   -- Update SerialNo (for return) 
-                  UPDATE dbo.SerialNo WITH (ROWLOCK) SET 
-                     QTY = @n_SerialQTY, 
-                     Status = '1', --1=Received 
-                     ID = @c_ToID,  
-                     EditDate = GETDATE(),   
-                     EditWho = SUSER_SNAME() 
+                  UPDATE dbo.SerialNo WITH (ROWLOCK) 
+                  SET QTY = @n_SerialQTY, 
+                      Status = '1', --1=Received 
+                      ID = @c_ToID,  
+                      EditDate = GETDATE(),   
+                      EditWho = SUSER_SNAME(),
+                      Lot = CASE WHEN @c_ASNFizUpdLotToSerialNo = '1' THEN @c_Lot ELSE Lot END --NJOW14
                   WHERE SerialNoKey = @c_SerialNoKey 
  
                   IF @@ERROR <> 0 
@@ -2372,8 +2404,16 @@ BEGIN
                   END 
                    
                   -- Insert SerialNo 
-                  INSERT INTO dbo.SerialNo (SerialNoKey, StorerKey, SKU, SerialNo, QTY, Status, ID, OrderKey, OrderLineNumber, UCCNo) 
-                  VALUES (@c_SerialNoKey, @c_StorerKey, @c_SKU, @c_SerialNo, @n_SerialQTY, '1', @c_ToID, '', '', @c_SerialUCCNo) 
+                  IF @c_ASNFizUpdLotToSerialNo = '1' --NJOW14
+                  BEGIN
+                     INSERT INTO dbo.SerialNo (SerialNoKey, StorerKey, SKU, SerialNo, QTY, Status, ID, OrderKey, OrderLineNumber, UCCNo, Lot) 
+                     VALUES (@c_SerialNoKey, @c_StorerKey, @c_SKU, @c_SerialNo, @n_SerialQTY, '1', @c_ToID, '', '', @c_SerialUCCNo, @c_Lot) 
+                  END
+                  ELSE
+                  BEGIN
+                     INSERT INTO dbo.SerialNo (SerialNoKey, StorerKey, SKU, SerialNo, QTY, Status, ID, OrderKey, OrderLineNumber, UCCNo) 
+                     VALUES (@c_SerialNoKey, @c_StorerKey, @c_SKU, @c_SerialNo, @n_SerialQTY, '1', @c_ToID, '', '', @c_SerialUCCNo) 
+                  END
  
                   IF @@ERROR <> 0 
                   BEGIN 
