@@ -64,6 +64,7 @@ GO
 /*                               sku input (james11)                          */
 /* 2023-06-19   5.0  YeeKung     WMS-22439 Add Extendedinfo to Scereen 1      */
 /*                               (yeekung08)                                  */
+/* 2023-05-22   5.1  Ung         WMS-22578 Remove rdt_Decode error for SKU    */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PickPiece] (
@@ -1349,8 +1350,8 @@ BEGIN
                      @dLottable13 = @dChkLottable13 OUTPUT,
                      @dLottable14 = @dChkLottable14 OUTPUT,
                      @dLottable15 = @dChkLottable15 OUTPUT,
-                     @nErrNo      = @nErrNo  OUTPUT,
-                     @cErrMsg     = @cErrMsg OUTPUT,
+                     -- @nErrNo      = @nErrNo  OUTPUT,
+                     -- @cErrMsg     = @cErrMsg OUTPUT,
                      @cType       = 'UPC'
                END
                -- Customize decode
@@ -1563,7 +1564,7 @@ BEGIN
       BEGIN
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
          BEGIN
-    SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType, ' +
                ' @cPickSlipNo, @cPickZone, @cDropID, @cLOC, @cSKU, @nQTY,@cPackData1, @cPackData2, @cPackData3,' +
                ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
@@ -1631,7 +1632,8 @@ BEGIN
             GOTO Quit_Step3
          END
       END
-  -- Get SKU info
+      
+      -- Get SKU info
       SELECT
          @cSKUDataCapture = DataCapture
       FROM SKU WITH (NOLOCK)
