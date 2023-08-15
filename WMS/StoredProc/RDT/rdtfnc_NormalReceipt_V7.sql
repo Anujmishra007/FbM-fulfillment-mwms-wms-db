@@ -43,6 +43,7 @@ GO
 /* 2023-04-27 3.8  James    WMS-22265 Enhance DefaultToLocSP (james07)           */
 /*                          Add ExtendedValidateSP to step 1                     */
 /* 2023-05-05 3.9  YeeKung  WMS-22369 Add output for barcode in decodesp (yeekung06)*/
+/* 2023-06-03 4.0  Ung      WMS-22650 Add DispStyleColorSize                     */
 /*********************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_NormalReceipt_V7] (
@@ -84,7 +85,7 @@ DECLARE
    @cStorerKey   NVARCHAR( 15),
    @cFacility    NVARCHAR( 5),
 
-   @cPUOM   NVARCHAR(  1),
+   @cPUOM        NVARCHAR(  1),
    @cReceiptKey  NVARCHAR( 10),
    @cPOKey       NVARCHAR( 10),
    @cLOC         NVARCHAR( 20),
@@ -127,6 +128,7 @@ DECLARE
    @nFromScn            INT,
    @nPABookingKey       INT,
 
+   @cDispStyleColorSize NVARCHAR( 1),
    @cPOKeyDefaultValue  NVARCHAR( 10),
    @cDefaultToLOC       NVARCHAR( 20),
    @cCheckPLTID         NVARCHAR( 1),
@@ -170,30 +172,21 @@ DECLARE
    @cDefaultToLocSP     NVARCHAR( 20),
    @cClosePallet        NVARCHAR( 20), --(yeekung06)
    
-   @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
-   @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
-   @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),
-   @cInField04 NVARCHAR( 60),   @cOutField04 NVARCHAR( 60),
-   @cInField05 NVARCHAR( 60),   @cOutField05 NVARCHAR( 60),
-   @cInField06 NVARCHAR( 60),   @cOutField06 NVARCHAR( 60),
-   @cInField07 NVARCHAR( 60),   @cOutField07 NVARCHAR( 60),
-   @cInField08 NVARCHAR( 60),   @cOutField08 NVARCHAR( 60),
-   @cInField09 NVARCHAR( 60),   @cOutField09 NVARCHAR( 60),
-   @cInField10 NVARCHAR( 60),   @cOutField10 NVARCHAR( 60),
-   @cInField11 NVARCHAR( 60),   @cOutField11 NVARCHAR( 60),
-   @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),
-   @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60),
-   @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),
-   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),
-
-   @cFieldAttr01 NVARCHAR( 1), @cFieldAttr02 NVARCHAR( 1),
-   @cFieldAttr03 NVARCHAR( 1), @cFieldAttr04 NVARCHAR( 1),
-   @cFieldAttr05 NVARCHAR( 1), @cFieldAttr06 NVARCHAR( 1),
-   @cFieldAttr07 NVARCHAR( 1), @cFieldAttr08 NVARCHAR( 1),
-   @cFieldAttr09 NVARCHAR( 1), @cFieldAttr10 NVARCHAR( 1),
-   @cFieldAttr11 NVARCHAR( 1), @cFieldAttr12 NVARCHAR( 1),
-   @cFieldAttr13 NVARCHAR( 1), @cFieldAttr14 NVARCHAR( 1),
-   @cFieldAttr15 NVARCHAR( 1)
+   @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
+   @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
+   @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),    @cFieldAttr03 NVARCHAR( 1),
+   @cInField04 NVARCHAR( 60),   @cOutField04 NVARCHAR( 60),    @cFieldAttr04 NVARCHAR( 1),
+   @cInField05 NVARCHAR( 60),   @cOutField05 NVARCHAR( 60),    @cFieldAttr05 NVARCHAR( 1),
+   @cInField06 NVARCHAR( 60),   @cOutField06 NVARCHAR( 60),    @cFieldAttr06 NVARCHAR( 1),
+   @cInField07 NVARCHAR( 60),   @cOutField07 NVARCHAR( 60),    @cFieldAttr07 NVARCHAR( 1),
+   @cInField08 NVARCHAR( 60),   @cOutField08 NVARCHAR( 60),    @cFieldAttr08 NVARCHAR( 1), 
+   @cInField09 NVARCHAR( 60),   @cOutField09 NVARCHAR( 60),    @cFieldAttr09 NVARCHAR( 1),
+   @cInField10 NVARCHAR( 60),   @cOutField10 NVARCHAR( 60),    @cFieldAttr10 NVARCHAR( 1),
+   @cInField11 NVARCHAR( 60),   @cOutField11 NVARCHAR( 60),    @cFieldAttr11 NVARCHAR( 1),
+   @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),    @cFieldAttr12 NVARCHAR( 1),
+   @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60),    @cFieldAttr13 NVARCHAR( 1),
+   @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),    @cFieldAttr14 NVARCHAR( 1),
+   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),    @cFieldAttr15 NVARCHAR( 1)
 
 -- Load RDT.RDTMobRec
 SELECT
@@ -218,7 +211,6 @@ SELECT
    @cID         = V_ID,
    @cSKU        = V_SKU,
    @cSKUDesc    = V_SKUDescr,
-   @nQTY        = V_QTY,
    @cLottable01 = V_Lottable01,
    @cLottable02 = V_Lottable02,
    @cLottable03 = V_Lottable03,
@@ -247,13 +239,15 @@ SELECT
    @cFlowThruScreen     = V_String9,
    @cMUOM_Desc          = V_String10,
    @cPUOM_Desc          = V_String11,
-   @nPUOM_Div           = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String12, 5), 0) = 1 THEN LEFT( V_String12, 5) ELSE 0 END,
-   @nPQTY               = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String13, 7), 0) = 1 THEN LEFT( V_String13, 7) ELSE 0 END,
-   @nMQTY               = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String14, 7), 0) = 1 THEN LEFT( V_String14, 7) ELSE 0 END,
-   @nQTY                = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String15, 7), 0) = 1 THEN LEFT( V_String15, 7) ELSE 0 END,
-   @nFromScn            = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String16, 5), 0) = 1 THEN LEFT( V_String16, 5) ELSE 0 END,
-   @nPABookingKey       = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String17, 10), 0) = 1 THEN LEFT( V_String17, 10) ELSE 0 END,
+   
+   @nPUOM_Div           = V_PUOM_Div,
+   @nPQTY               = V_PQTY,
+   @nMQTY               = V_MQTY,
+   @nQTY                = V_QTY,
+   @nFromScn            = V_FromScn,
+   @nPABookingKey       = V_Integer1,
 
+   @cDispStyleColorSize = V_String20,
    @cPOKeyDefaultValue  = V_String21,
    @cDefaultToLOC       = V_String22,
    @cCheckPLTID         = V_String23,
@@ -279,30 +273,21 @@ SELECT
    @cScanBarcode        = V_String43, --(cc01)
    @cClosePallet        = V_String44, --(yeekung06)
 
-   @cInField01 = I_Field01,   @cOutField01 = O_Field01,
-   @cInField02 = I_Field02,   @cOutField02 = O_Field02,
-   @cInField03 = I_Field03,   @cOutField03 = O_Field03,
-   @cInField04 = I_Field04,   @cOutField04 = O_Field04,
-   @cInField05 = I_Field05,   @cOutField05 = O_Field05,
-   @cInField06 = I_Field06,   @cOutField06 = O_Field06,
-   @cInField07 = I_Field07,   @cOutField07 = O_Field07,
-   @cInField08 = I_Field08,   @cOutField08 = O_Field08,
-   @cInField09 = I_Field09,   @cOutField09 = O_Field09,
-   @cInField10 = I_Field10,   @cOutField10 = O_Field10,
-   @cInField11 = I_Field11,   @cOutField11 = O_Field11,
-   @cInField12 = I_Field12,   @cOutField12 = O_Field12,
-   @cInField13 = I_Field13,   @cOutField13 = O_Field13,
-   @cInField14 = I_Field14,   @cOutField14 = O_Field14,
-   @cInField15 = I_Field15,   @cOutField15 = O_Field15,
-
-   @cFieldAttr01 = FieldAttr01,    @cFieldAttr02 = FieldAttr02,
-   @cFieldAttr03 = FieldAttr03,    @cFieldAttr04 = FieldAttr04,
-   @cFieldAttr05 = FieldAttr05,    @cFieldAttr06 = FieldAttr06,
-   @cFieldAttr07 = FieldAttr07,    @cFieldAttr08 = FieldAttr08,
-   @cFieldAttr09 = FieldAttr09,    @cFieldAttr10 = FieldAttr10,
-   @cFieldAttr11 = FieldAttr11,    @cFieldAttr12 = FieldAttr12,
-   @cFieldAttr13 = FieldAttr13,    @cFieldAttr14 = FieldAttr14,
-   @cFieldAttr15 = FieldAttr15
+   @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
+   @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
+   @cInField03 = I_Field03,   @cOutField03 = O_Field03,  @cFieldAttr03 = FieldAttr03,
+   @cInField04 = I_Field04,   @cOutField04 = O_Field04,  @cFieldAttr04 = FieldAttr04,
+   @cInField05 = I_Field05,   @cOutField05 = O_Field05,  @cFieldAttr05 = FieldAttr05,
+   @cInField06 = I_Field06,   @cOutField06 = O_Field06,  @cFieldAttr06 = FieldAttr06,
+   @cInField07 = I_Field07,   @cOutField07 = O_Field07,  @cFieldAttr07 = FieldAttr07,
+   @cInField08 = I_Field08,   @cOutField08 = O_Field08,  @cFieldAttr08 = FieldAttr08,
+   @cInField09 = I_Field09,   @cOutField09 = O_Field09,  @cFieldAttr09 = FieldAttr09,
+   @cInField10 = I_Field10,   @cOutField10 = O_Field10,  @cFieldAttr10 = FieldAttr10,
+   @cInField11 = I_Field11,   @cOutField11 = O_Field11,  @cFieldAttr11 = FieldAttr11,
+   @cInField12 = I_Field12,   @cOutField12 = O_Field12,  @cFieldAttr12 = FieldAttr12,
+   @cInField13 = I_Field13,   @cOutField13 = O_Field13,  @cFieldAttr13 = FieldAttr13,
+   @cInField14 = I_Field14,   @cOutField14 = O_Field14,  @cFieldAttr14 = FieldAttr14,
+   @cInField15 = I_Field15,   @cOutField15 = O_Field15,  @cFieldAttr15 = FieldAttr15
 
 FROM RDT.RDTMOBREC WITH (NOLOCK)
 WHERE Mobile = @nMobile
@@ -340,19 +325,10 @@ BEGIN
    SELECT @cPUOM = DefaultUOM FROM rdt.rdtUser WITH (NOLOCK) WHERE UserName = @cUserName
 
    -- Get storer config
+   -- NOTE: this module support StorerGroup. So all store config is retrieved after getting ASN (except the below one which need to use immediately)
    SET @cPOKeyDefaultValue = rdt.RDTGetConfig( @nFunc, 'ReceivingPOKeyDefaultValue', @cStorerKey)
    IF @cPOKeyDefaultValue = '0'
       SET @cPOKeyDefaultValue = ''
-
-   SET @cPalletLabel = rdt.RDTGetConfig( @nFunc, 'PalletLabel', @cStorerKey)
-   IF @cPalletLabel = '0'
-      SET @cPalletLabel = ''
-
-  -- Get Loc Prefix
-   SET @cLOCLookUPSP = rdt.rdtGetConfig(@nFunc,'LOCLookupSP',@cStorerKey)
-   SET @cMultiSKUBarcode = rdt.RDTGetConfig( @nFunc, 'MultiSKUBarcode', @cStorerKey)
-   SET @cSerialNoCapture = rdt.RDTGetConfig( @nFunc, 'SerialNoCapture', @cStorerKey)
-   SET @cClosePallet = rdt.RDTGetConfig( @nFunc, 'ClosePallet', @cStorerKey)
 
    -- EventLog
    EXEC RDT.rdt_STD_EventLog
@@ -671,7 +647,7 @@ BEGIN
                   SET @cOutField02 = ''
                   SET @cPOKey = ''
                   EXEC rdt.rdtSetFocusField @nMobile, 2
-        GOTO Quit
+                  GOTO Quit
                END
             END
          END
@@ -766,16 +742,27 @@ BEGIN
       END
 
       -- Get storer config
-      SET @cCheckPLTID = rdt.RDTGetConfig( @nFunc, 'CheckPLTID', @cStorerKey)
       SET @cAutoGenID = rdt.RDTGetConfig( @nFunc, 'AutoGenID', @cStorerKey)
       SET @cAddSKUtoASN = rdt.RDTGetConfig( @nFunc, 'RDTAddSKUtoASN', @cStorerKey)
+      SET @cCheckPLTID = rdt.RDTGetConfig( @nFunc, 'CheckPLTID', @cStorerKey)
+      SET @cClosePallet = rdt.RDTGetConfig( @nFunc, 'ClosePallet', @cStorerKey)
+      SET @cDefaultToLOCSP = rdt.RDTGetConfig( @nFunc, 'DefaultToLOCSP', @cStorerKey)
+      SET @cDispStyleColorSize = rdt.RDTGetConfig( @nFunc, 'DispStyleColorSize', @cStorerKey)
+      SET @cFlowThruScreen = rdt.RDTGetConfig( @nFunc, 'FlowThruScreen', @cStorerKey)
+      SET @cLOCLookUPSP = rdt.rdtGetConfig(@nFunc,'LOCLookupSP',@cStorerKey)
+      SET @cMultiSKUBarcode = rdt.RDTGetConfig( @nFunc, 'MultiSKUBarcode', @cStorerKey)
+      SET @cSerialNoCapture = rdt.RDTGetConfig( @nFunc, 'SerialNoCapture', @cStorerKey)
       SET @cVerifySKU = rdt.RDTGetConfig( @nFunc, 'VerifySKU', @cStorerKey)
+
+      SET @cCheckIDInUse = rdt.RDTGetConfig( @nFunc, 'CheckIDInUse', @cStorerKey)
+      IF @cCheckIDInUse = '0'
+         SET @cCheckIDInUse = ''
+      SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerKey)
+      IF @cDecodeSP = '0'
+         SET @cDecodeSP = ''
       SET @cDefaultToLOC = rdt.RDTGetConfig( @nFunc, 'ReceiveDefaultToLoc', @cStorerKey)
       IF @cDefaultToLOC = '0'
          SET @cDefaultToLOC = ''
-      SET @cRcptConfirmSP = rdt.RDTGetConfig( @nFunc, 'ReceiptConfirm_SP', @cStorerKey)
-      IF @cRcptConfirmSP = '0'
-         SET @cRcptConfirmSP = ''
       SET @cExtendedValidateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)
       IF @cExtendedValidateSP = '0'
          SET @cExtendedValidateSP = ''
@@ -785,31 +772,26 @@ BEGIN
       SET @cExtendedUpdateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorerKey)
       IF @cExtendedUpdateSP = '0'
          SET @cExtendedUpdateSP = ''
-      SET @cPalletRecvSP = rdt.RDTGetConfig( @nFunc, 'PalletRecvSP', @cStorerKey)
-      IF @cPalletRecvSP = '0'
-         SET @cPalletRecvSP = ''
       SET @cGetReceiveInfoSP = rdt.RDTGetConfig( @nFunc, 'GetReceiveInfoSP', @cStorerKey)
       IF @cGetReceiveInfoSP = '0'
          SET @cGetReceiveInfoSP = ''
-      SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerKey)
-      IF @cDecodeSP = '0'
-         SET @cDecodeSP = ''
+      SET @cPalletRecvSP = rdt.RDTGetConfig( @nFunc, 'PalletRecvSP', @cStorerKey)
+      IF @cPalletRecvSP = '0'
+         SET @cPalletRecvSP = ''
+      SET @cPalletLabel = rdt.RDTGetConfig( @nFunc, 'PalletLabel', @cStorerKey)
+      IF @cPalletLabel = '0'
+         SET @cPalletLabel = ''
       SET @cPutawaySP = rdt.RDTGetConfig( @nFunc, 'PutawaySP', @cStorerKey)
       IF @cPutawaySP = '0'
          SET @cPutawaySP = ''
-      -- (james02)
-      SET @cCheckIDInUse = rdt.RDTGetConfig( @nFunc, 'CheckIDInUse', @cStorerKey)
-      IF @cCheckIDInUse = '0'
-         SET @cCheckIDInUse = ''
-
-      SET @cFlowThruScreen = rdt.RDTGetConfig( @nFunc, 'FlowThruScreen', @cStorerKey)
-
-      SET @cDefaultToLOCSP = rdt.RDTGetConfig( @nFunc, 'DefaultToLOCSP', @cStorerKey)
+      SET @cRcptConfirmSP = rdt.RDTGetConfig( @nFunc, 'ReceiptConfirm_SP', @cStorerKey)
+      IF @cRcptConfirmSP = '0'
+         SET @cRcptConfirmSP = ''
 
       -- Extended validate
       IF @cExtendedValidateSP <> ''
       BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cSKU, ' +
@@ -869,7 +851,7 @@ BEGIN
 
       -- (james07)
       IF @cDefaultToLOCSP <> '' AND
-         EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDefaultToLOCSP AND type = 'P')
+         EXISTS( SELECT 1 FROM sys.objects WHERE name = @cDefaultToLOCSP AND type = 'P')
       BEGIN
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cDefaultToLOCSP) +
@@ -931,7 +913,6 @@ BEGIN
          @cPOKey      = @cPOKey,
          @cRefNo1     = @cRefNo
 
-
       -- Prepare next screen var
       SET @cOutField01 = @cReceiptKey
       SET @cOutField02 = @cPOKey
@@ -966,7 +947,7 @@ BEGIN
    BEGIN
       -- Reset this screen var
       SET @cOutField01 = '' -- ReceiptKey
-  SET @cOutField02 = '' -- POKey
+      SET @cOutField02 = '' -- POKey
       SET @cReceiptKey = ''
       SET @cPOKey = ''
    END
@@ -1122,7 +1103,7 @@ BEGIN
       BEGIN
          IF @cDecodeSP <> ''
          BEGIN
-            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
+            IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cDecodeSP AND type = 'P')
             BEGIN
                SELECT @cSKU = '', @nQTY = 0,
                   @cLottable01 = '', @cLottable02 = '', @cLottable03 = '', @dLottable04 = 0,  @dLottable05 = 0,
@@ -1246,7 +1227,7 @@ BEGIN
       -- Extended validate
       IF @cExtendedValidateSP <> ''
       BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cSKU, ' +
@@ -1320,7 +1301,7 @@ BEGIN
        -- Extended validate
       IF @cExtendedUpdateSP <> '' --(yeekung05)
       BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cSKU, ' +
@@ -1356,7 +1337,7 @@ BEGIN
                '@cLottable12  NVARCHAR( 30), ' +
                '@dLottable13  DATETIME,      ' +
                '@dLottable14  DATETIME,      ' +
-        '@dLottable15  DATETIME,      ' +
+               '@dLottable15  DATETIME,      ' +
                '@nQTY         INT,           ' +
                '@cReasonCode  NVARCHAR( 10), ' +
                '@cSuggToLOC   NVARCHAR( 10), ' +
@@ -1460,7 +1441,7 @@ BEGIN
          END
 
          -- Customize decode
-         ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
+         ELSE IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cDecodeSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cBarcode OUTPUT, @cFieldName, ' +
@@ -1545,14 +1526,13 @@ BEGIN
       -- Check SKU
 
       EXEC RDT.rdt_GetSKUCNT
-      @cStorerKey  = @cStorerKey
-      ,@cSKU        = @cUPC
-      ,@nSKUCnt     = @nSKUCnt   OUTPUT
-      ,@bSuccess    = @bSuccess  OUTPUT
-      ,@nErr        = @nErrNo    OUTPUT
-      ,@cErrMsg     = @cErrMsg   OUTPUT
-      ,@cSKUStatus  = 'ACTIVE'
-
+          @cStorerKey  = @cStorerKey
+         ,@cSKU        = @cUPC
+         ,@nSKUCnt     = @nSKUCnt   OUTPUT
+         ,@bSuccess    = @bSuccess  OUTPUT
+         ,@nErr        = @nErrNo    OUTPUT
+         ,@cErrMsg     = @cErrMsg   OUTPUT
+         ,@cSKUStatus  = 'ACTIVE'
 
       IF @nSKUCnt = 0
       BEGIN
@@ -1564,12 +1544,12 @@ BEGIN
       IF @nSKUCnt = 1
       BEGIN
          EXEC [RDT].[rdt_GETSKU]
-         @cStorerKey  = @cStorerKey
-         ,@cSKU        = @cUPC          OUTPUT
-         ,@bSuccess    = @b_Success     OUTPUT
-         ,@nErr        = @nErrNo        OUTPUT
-         ,@cErrMsg     = @cErrMsg       OUTPUT
-         ,@cSKUStatus  = 'ACTIVE' -- (james06)
+             @cStorerKey  = @cStorerKey
+            ,@cSKU        = @cUPC          OUTPUT
+            ,@bSuccess    = @b_Success     OUTPUT
+            ,@nErr        = @nErrNo        OUTPUT
+            ,@cErrMsg     = @cErrMsg       OUTPUT
+            ,@cSKUStatus  = 'ACTIVE' -- (james06)
 
          SET @cSKU = @cUPC
       END
@@ -1641,34 +1621,34 @@ BEGIN
                END
 
                -- Not allow over receive, by DocType (follow Exceed way in ntrReceiptDetailUpdate)
-               IF NOT(@cAllow_OverReceipt IN ('0', '') OR                   -- Not allow for all doc type
-                (@cAllow_OverReceipt = '2' AND @cDocType <> 'R') OR   -- Not allow, except return (means only return is allow)
-                  (@cAllow_OverReceipt = '3' AND @cDocType <> 'A') OR   -- Not allow, except normal (means only normal is allow)
-                  (@cAllow_OverReceipt = '4' AND @cDocType <> 'X') )     -- Not allow, except xdock  (means only xdoc   is allow)
+               IF NOT(@cAllow_OverReceipt IN ('0', '') OR                  -- Not allow for all doc type
+                     (@cAllow_OverReceipt = '2' AND @cDocType <> 'R') OR   -- Not allow, except return (means only return is allow)
+                     (@cAllow_OverReceipt = '3' AND @cDocType <> 'A') OR   -- Not allow, except normal (means only normal is allow)
+                     (@cAllow_OverReceipt = '4' AND @cDocType <> 'X') )    -- Not allow, except xdock  (means only xdoc   is allow)
                   AND (rdt.RDTGetConfig( @nFunc, 'SkipCheckingSKUNotInASN', @cStorerKey) = '1')  -- SKUNotinASN
                BEGIN
                   EXEC rdt.rdt_MultiSKUBarcode @nMobile, @nFunc, @cLangCode,
-                  @cInField01 OUTPUT,  @cOutField01 OUTPUT,
-                  @cInField02 OUTPUT,  @cOutField02 OUTPUT,
-                  @cInField03 OUTPUT,  @cOutField03 OUTPUT,
-                  @cInField04 OUTPUT,  @cOutField04 OUTPUT,
-                  @cInField05 OUTPUT,  @cOutField05 OUTPUT,
-                  @cInField06 OUTPUT,  @cOutField06 OUTPUT,
-                  @cInField07 OUTPUT,  @cOutField07 OUTPUT,
-                  @cInField08 OUTPUT,  @cOutField08 OUTPUT,
-                  @cInField09 OUTPUT,  @cOutField09 OUTPUT,
-                  @cInField10 OUTPUT,  @cOutField10 OUTPUT,
-                  @cInField11 OUTPUT,  @cOutField11 OUTPUT,
-                  @cInField12 OUTPUT,  @cOutField12 OUTPUT,
-                  @cInField13 OUTPUT,  @cOutField13 OUTPUT,
-                  @cInField14 OUTPUT,  @cOutField14 OUTPUT,
-                  @cInField15 OUTPUT,  @cOutField15 OUTPUT,
-                  'POPULATE',
-                  @cMultiSKUBarcode,
-                  @cStorerKey,
-                  @cUPC     OUTPUT,
-                  @nErrNo   OUTPUT,
-                  @cErrMsg  OUTPUT
+                     @cInField01 OUTPUT,  @cOutField01 OUTPUT,
+                     @cInField02 OUTPUT,  @cOutField02 OUTPUT,
+                     @cInField03 OUTPUT,  @cOutField03 OUTPUT,
+                     @cInField04 OUTPUT,  @cOutField04 OUTPUT,
+                     @cInField05 OUTPUT,  @cOutField05 OUTPUT,
+                     @cInField06 OUTPUT,  @cOutField06 OUTPUT,
+                     @cInField07 OUTPUT,  @cOutField07 OUTPUT,
+                     @cInField08 OUTPUT,  @cOutField08 OUTPUT,
+                     @cInField09 OUTPUT,  @cOutField09 OUTPUT,
+                     @cInField10 OUTPUT,  @cOutField10 OUTPUT,
+                     @cInField11 OUTPUT,  @cOutField11 OUTPUT,
+                     @cInField12 OUTPUT,  @cOutField12 OUTPUT,
+                     @cInField13 OUTPUT,  @cOutField13 OUTPUT,
+                     @cInField14 OUTPUT,  @cOutField14 OUTPUT,
+                     @cInField15 OUTPUT,  @cOutField15 OUTPUT,
+                     'POPULATE',
+                     @cMultiSKUBarcode,
+                     @cStorerKey,
+                     @cUPC     OUTPUT,
+                     @nErrNo   OUTPUT,
+                     @cErrMsg  OUTPUT
 
                   IF @nErrNo = 0 -- Populate multi SKU screen
                   BEGIN
@@ -1705,13 +1685,18 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MultiSKUBarcod
             GOTO Step_4_Fail
          END
-
       END
 
       -- Get SKU info
       SET @cSKUDesc = ''
       SELECT
-         @cSKUDesc = ISNULL( DescR, ''),
+         @cSKUDesc = 
+            CASE WHEN @cDispStyleColorSize = '0'
+                 THEN ISNULL( DescR, '')
+                 ELSE CAST( Style AS NCHAR(20)) +
+                      CAST( Color AS NCHAR(10)) +
+                      CAST( Size  AS NCHAR(10))
+            END,
          @cLottableCode = LottableCode
       FROM dbo.SKU WITH (NOLOCK)
       WHERE StorerKey = @cStorerKey
@@ -1808,7 +1793,7 @@ BEGIN
       END
       ELSE
       BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cGetReceiveInfoSP AND type = 'P')
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cGetReceiveInfoSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cGetReceiveInfoSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, ' +
@@ -1864,7 +1849,7 @@ BEGIN
       -- Extended validate
       IF @cExtendedValidateSP <> ''
       BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cSKU, ' +
@@ -1967,13 +1952,19 @@ BEGIN
          -- Go to dynamic lottable screen
          SET @nFromScn = @nScn
          SET @nScn = 3990
-    SET @nStep = @nStep + 1
+         SET @nStep = @nStep + 1
       END
       ELSE
       BEGIN
          -- Get SKU info
          SELECT
-            @cSKUDesc = IsNULL( DescR, ''),
+            @cSKUDesc = 
+               CASE WHEN @cDispStyleColorSize = '0'
+                    THEN ISNULL( DescR, '')
+                    ELSE CAST( Style AS NCHAR(20)) +
+                         CAST( Color AS NCHAR(10)) +
+                         CAST( Size  AS NCHAR(10))
+               END,
             @cIVAS = IsNULL( IVAS, ''),
             @cLottableCode = LottableCode,
             @cMUOM_Desc = Pack.PackUOM3,
@@ -2039,7 +2030,7 @@ BEGIN
          -- Extended info
          IF @cExtendedInfoSP <> ''
          BEGIN
-            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+            IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedInfoSP AND type = 'P')
             BEGIN
                SET @cExtendedInfo = ''
                SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
@@ -2109,7 +2100,7 @@ BEGIN
       -- Extended validate
       IF @cExtendedUpdateSP <> '' --(yeekung05)
       BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cSKU, ' +
@@ -2278,7 +2269,7 @@ BEGIN
 
       IF @cGetReceiveInfoSP <> ''
       BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cGetReceiveInfoSP AND type = 'P')
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cGetReceiveInfoSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cGetReceiveInfoSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, ' +
@@ -2340,7 +2331,13 @@ BEGIN
 
       -- Get SKU info
       SELECT
-         @cSKUDesc = IsNULL( DescR, ''),
+         @cSKUDesc = 
+            CASE WHEN @cDispStyleColorSize = '0'
+                 THEN ISNULL( DescR, '')
+                 ELSE CAST( Style AS NCHAR(20)) +
+                      CAST( Color AS NCHAR(10)) +
+                      CAST( Size  AS NCHAR(10))
+            END,
          @cIVAS = IsNULL( IVAS, ''),
          @cLottableCode = LottableCode,
          @cMUOM_Desc = Pack.PackUOM3,
@@ -2406,7 +2403,7 @@ BEGIN
       -- Extended info
       IF @cExtendedInfoSP <> ''
       BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedInfoSP AND type = 'P')
          BEGIN
             SET @cExtendedInfo = ''
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
@@ -2595,7 +2592,7 @@ BEGIN
       -- Extended validate
       IF @cExtendedValidateSP <> ''
       BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cSKU, ' +
@@ -2811,7 +2808,7 @@ BEGIN
       -- Extended validate
       IF @cExtendedUpdateSP <> ''
       BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cSKU, ' +
@@ -2999,7 +2996,7 @@ BEGIN
       SET @cPalletRecv = '1'
    ELSE
    BEGIN
-      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cPalletRecvSP AND type = 'P')
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cPalletRecvSP AND type = 'P')
       BEGIN
          SET @cSQL = 'EXEC rdt.' + RTRIM( @cPalletRecvSP) +
             ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cSKU, @nQTY, ' +
@@ -3054,7 +3051,7 @@ BEGIN
       SET @cPutaway = @cPutawaySP
    ELSE
    BEGIN
-      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cPutawaySP AND type = 'P')
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cPutawaySP AND type = 'P')
       BEGIN
          SET @cSQL = 'EXEC rdt.' + RTRIM( @cPutawaySP) +
             ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cSKU, @nQTY, ' +
@@ -3171,7 +3168,7 @@ BEGIN
     -- Extended info
    IF @cExtendedInfoSP <> ''
    BEGIN
-      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedInfoSP AND type = 'P')
       BEGIN
          SET @cExtendedInfo = ''
          SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
@@ -3312,7 +3309,13 @@ BEGIN
          BEGIN
             -- Get SKU info
             SELECT
-               @cSKUDesc = IsNULL( DescR, ''),
+               @cSKUDesc = 
+                  CASE WHEN @cDispStyleColorSize = '0'
+                       THEN ISNULL( DescR, '')
+                       ELSE CAST( Style AS NCHAR(20)) +
+                            CAST( Color AS NCHAR(10)) +
+                            CAST( Size  AS NCHAR(10))
+                  END,
                @cIVAS = IsNULL( IVAS, ''),
                @cLottableCode = LottableCode,
                @cMUOM_Desc = Pack.PackUOM3,
@@ -3532,7 +3535,6 @@ BEGIN
       END
       ELSE
       BEGIN
-
          -- Prepare next screen
          SET @cOutField01 = @cID
          SET @cMax = '' -- SKU
@@ -3778,7 +3780,7 @@ BEGIN
       -- Extended validate
       IF @cExtendedUpdateSP <> ''
       BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cSKU, ' +
@@ -3962,15 +3964,24 @@ BEGIN
       END
 
       -- Get SKU info
-      SELECT @cSKUDesc = Descr FROM dbo.SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU
+      SELECT @cSKUDesc = 
+         CASE WHEN @cDispStyleColorSize = '0'
+              THEN ISNULL( DescR, '')
+              ELSE CAST( Style AS NCHAR(20)) +
+                   CAST( Color AS NCHAR(10)) +
+                   CAST( Size  AS NCHAR(10))
+         END
+      FROM dbo.SKU WITH (NOLOCK) 
+      WHERE StorerKey = @cStorerKey 
+         AND SKU = @cSKU
    END
 
    -- Init next screen var
    SET @cOutField01 = @cID
    SET @cScanBarcode = @cMax --(cc01)
    SET @cMax = @cSKU -- SKU
-   SET @cOutField03 = SUBSTRING( @cSKUDesc,  1, 20) -- SKUDesc1
-   SET @cOutField04 = SUBSTRING( @cSKUDesc, 21, 20) -- SKUDesc2
+   SET @cOutField03 = rdt.rdtFormatString( @cSKUDesc,  1, 20) -- SKUDesc1
+   SET @cOutField04 = rdt.rdtFormatString( @cSKUDesc, 21, 20) -- SKUDesc2
 
    -- Go to SKU QTY screen
    SET @nScn = @nFromScn
@@ -4122,7 +4133,7 @@ BEGIN
             @dLottable04   = @dLottable04,
             @dLottable05   = NULL,
             @cLottable06   = @cLottable06,
-      @cLottable07   = @cLottable07,
+            @cLottable07   = @cLottable07,
             @cLottable08   = @cLottable08,
             @cLottable09   = @cLottable09,
             @cLottable10   = @cLottable10,
@@ -4139,7 +4150,6 @@ BEGIN
             @nSerialQTY     = @nSerialQTY,
             @nBulkSNO       = @nBulkSNO,
             @nBulkSNOQTY    = @nBulkSNOQTY
-
       END
 
       IF @nErrNo <> 0
@@ -4148,7 +4158,7 @@ BEGIN
       -- Extended validate
       IF @cExtendedUpdateSP <> ''
       BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cSKU, ' +
@@ -4254,7 +4264,13 @@ BEGIN
    BEGIN
        -- Get SKU info
       SELECT
-         @cSKUDesc = IsNULL( DescR, ''),
+         @cSKUDesc = 
+            CASE WHEN @cDispStyleColorSize = '0'
+                 THEN ISNULL( DescR, '')
+                 ELSE CAST( Style AS NCHAR(20)) +
+                      CAST( Color AS NCHAR(10)) +
+                      CAST( Size  AS NCHAR(10))
+            END,
          @cIVAS = IsNULL( IVAS, ''),
          @cLottableCode = LottableCode,
          @cMUOM_Desc = Pack.PackUOM3,
@@ -4320,7 +4336,7 @@ BEGIN
       -- Extended info
       IF @cExtendedInfoSP <> ''
       BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedInfoSP AND type = 'P')
          BEGIN
             SET @cExtendedInfo = ''
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
@@ -4380,7 +4396,7 @@ BEGIN
                GOTO Step_3_Fail
 
             SET @cOutField15 = @cExtendedInfo
-   END
+         END
       END
    END
 END
@@ -4421,7 +4437,7 @@ BEGIN
          -- Extended update
          IF @cExtendedUpdateSP <> ''
          BEGIN
-            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+            IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')
             BEGIN
                SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
                   ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cSKU, ' +
@@ -4575,13 +4591,15 @@ BEGIN
       V_String9    = @cFlowThruScreen,
       V_String10   = @cMUOM_Desc,
       V_String11   = @cPUOM_Desc,
-      V_String12   = @nPUOM_Div ,
-      V_String13   = @nPQTY,
-      V_String14   = @nMQTY,
-      V_String15   = @nQTY,
-      V_String16   = @nFromScn,
-      V_String17   = @nPABookingKey,
+      
+      V_PUOM_Div   = @nPUOM_Div ,
+      V_PQTY       = @nPQTY,
+      V_MQTY       = @nMQTY,
+      V_QTY        = @nQTY,
+      V_FromScn    = @nFromScn,
+      V_Integer1   = @nPABookingKey,
 
+      V_String20   = @cDispStyleColorSize,
       V_String21   = @cPOKeyDefaultValue,
       V_String22   = @cDefaultToLOC,
       V_String23   = @cCheckPLTID,
@@ -4607,30 +4625,21 @@ BEGIN
       V_String43   = @cScanBarcode,   --(cc01)
       V_String44   = @cClosePallet, --(yeekung06)
 
-      I_Field01 = @cInField01,  O_Field01 = @cOutField01,
-      I_Field02 = @cInField02,  O_Field02 = @cOutField02,
-      I_Field03 = @cInField03,  O_Field03 = @cOutField03,
-      I_Field04 = @cInField04,  O_Field04 = @cOutField04,
-      I_Field05 = @cInField05,  O_Field05 = @cOutField05,
-      I_Field06 = @cInField06,  O_Field06 = @cOutField06,
-      I_Field07 = @cInField07,  O_Field07 = @cOutField07,
-      I_Field08 = @cInField08,  O_Field08 = @cOutField08,
-      I_Field09 = @cInField09,  O_Field09 = @cOutField09,
-      I_Field10 = @cInField10,  O_Field10 = @cOutField10,
-      I_Field11 = @cInField11,  O_Field11 = @cOutField11,
-      I_Field12 = @cInField12,  O_Field12 = @cOutField12,
-      I_Field13 = @cInField13,  O_Field13 = @cOutField13,
-      I_Field14 = @cInField14,  O_Field14 = @cOutField14,
-      I_Field15 = @cInField15,  O_Field15 = @cOutField15,
-
-      FieldAttr01  = @cFieldAttr01,   FieldAttr02  = @cFieldAttr02,
-      FieldAttr03  = @cFieldAttr03,   FieldAttr04  = @cFieldAttr04,
-      FieldAttr05  = @cFieldAttr05,   FieldAttr06  = @cFieldAttr06,
-      FieldAttr07  = @cFieldAttr07,   FieldAttr08  = @cFieldAttr08,
-      FieldAttr09  = @cFieldAttr09,   FieldAttr10  = @cFieldAttr10,
-      FieldAttr11  = @cFieldAttr11,   FieldAttr12  = @cFieldAttr12,
-      FieldAttr13  = @cFieldAttr13,   FieldAttr14  = @cFieldAttr14,
-      FieldAttr15  = @cFieldAttr15
+      I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
+      I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
+      I_Field03 = @cInField03,  O_Field03 = @cOutField03,   FieldAttr03  = @cFieldAttr03,
+      I_Field04 = @cInField04,  O_Field04 = @cOutField04,   FieldAttr04  = @cFieldAttr04,
+      I_Field05 = @cInField05,  O_Field05 = @cOutField05,   FieldAttr05  = @cFieldAttr05,
+      I_Field06 = @cInField06,  O_Field06 = @cOutField06,   FieldAttr06  = @cFieldAttr06,
+      I_Field07 = @cInField07,  O_Field07 = @cOutField07,   FieldAttr07  = @cFieldAttr07,
+      I_Field08 = @cInField08,  O_Field08 = @cOutField08,   FieldAttr08  = @cFieldAttr08,
+      I_Field09 = @cInField09,  O_Field09 = @cOutField09,   FieldAttr09  = @cFieldAttr09,
+      I_Field10 = @cInField10,  O_Field10 = @cOutField10,   FieldAttr10  = @cFieldAttr10,
+      I_Field11 = @cInField11,  O_Field11 = @cOutField11,   FieldAttr11  = @cFieldAttr11,
+      I_Field12 = @cInField12,  O_Field12 = @cOutField12,   FieldAttr12  = @cFieldAttr12,
+      I_Field13 = @cInField13,  O_Field13 = @cOutField13,   FieldAttr13  = @cFieldAttr13,
+      I_Field14 = @cInField14,  O_Field14 = @cOutField14,   FieldAttr14  = @cFieldAttr14,
+      I_Field15 = @cInField15,  O_Field15 = @cOutField15,   FieldAttr15  = @cFieldAttr15 
 
    WHERE Mobile = @nMobile
 END
