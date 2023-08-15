@@ -17,6 +17,7 @@ GO
 /* 2020-09-14 1.3  YeeKung     WMS-15011 Add balance control (yeekung01)*/   
 /* 2020-08-20 1.4  YeeKung     WMS-14630 Add suggID(yeekung02)          */   
 /* 2022-03-11 1.5  YeeKung    WMS-19062 Fix Closetype (yeekung03)       */  
+/* 28-07-2023 1.6  Ung        WMS-23002 Add serial no                   */
 /************************************************************************/      
       
 CREATE OR ALTER PROC rdt.rdt_839GetTaskSP01 (      
@@ -56,7 +57,8 @@ CREATE OR ALTER PROC rdt.rdt_839GetTaskSP01 (
   @cErrMsg          NVARCHAR(250) OUTPUT,  
   @cSuggID          NVARCHAR(20)  OUTPUT, --(yeekung02)  
   @nTtlBalQty      INT            OUTPUT, --(yeekung01)  
-  @nBalQty         INT            OUTPUT  --(yeekung01)     
+  @nBalQty         INT            OUTPUT, --(yeekung01)  
+  @cSKUSerialNoCapture NVARCHAR(1) OUTPUT   
 )      
 AS      
     

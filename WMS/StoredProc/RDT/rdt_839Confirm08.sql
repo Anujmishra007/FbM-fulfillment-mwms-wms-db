@@ -8,11 +8,12 @@ GO
       
 /******************************************************************************/    
 /* Store procedure:  rdt_839Confirm08                                         */    
-/* Copyright      : LF Logistics                                              */    
+/* Copyright      : Maersk                                                    */    
 /*                                                                            */    
 /* Date       Rev  Author     Purposes                                        */    
 /* 27-08-2021 1.0  YeeKung    WMS17489 Created                                */
 /* 20-04-2022 1.1  YeeKung    WMS-19311 Add Data capture (yeekung01)          */
+/* 25-07-2023 1.2  Ung        WMS-23002 Add serial no                         */ 
 /******************************************************************************/    
     
 CREATE OR ALTER PROC rdt. rdt_839Confirm08 (    
@@ -48,7 +49,12 @@ CREATE OR ALTER PROC rdt. rdt_839Confirm08 (
    ,@dLottable15     DATETIME
    ,@cPackData1      NVARCHAR( 30)
    ,@cPackData2      NVARCHAR( 30)
-   ,@cPackData3      NVARCHAR( 30)       
+   ,@cPackData3      NVARCHAR( 30)     
+   ,@cID             NVARCHAR( 18)
+   ,@cSerialNo       NVARCHAR( 30)
+   ,@nSerialQTY      INT
+   ,@nBulkSNO        INT
+   ,@nBulkSNOQTY     INT  
    ,@nErrNo          INT           OUTPUT    
    ,@cErrMsg         NVARCHAR(250) OUTPUT    
 )    

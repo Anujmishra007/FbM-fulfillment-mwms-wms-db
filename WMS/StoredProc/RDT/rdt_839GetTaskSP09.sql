@@ -4,7 +4,9 @@ GO
 SET ANSI_NULLS OFF
 GO
 /************************************************************************/      
-/* Store procedure: rdt_839GetTaskSP09                                  */      
+/* Store procedure: rdt_839GetTaskSP09                                  */  
+/* Copyright      : Maersk                                              */
+/*                                                                      */ 
 /* Purpose: Doctype = N Order by sku, logicallocation, loc              */      
 /*          Doctype <> N Order by logicallocation, loc, sku             */      
 /*          05->09 (support nextloc)                                    */  
@@ -12,7 +14,8 @@ GO
 /* Modifications log:                                                   */      
 /*                                                                      */      
 /* Date       Rev  Author     Purposes                                  */      
-/* 2023-04-20   yeekung   1.0   WMS-22219 Created                       */
+/* 2023-04-20 1.0  yeekung    WMS-22219 Created                         */
+/* 2023-07-28 1.1  Ung        WMS-23002 Add serial no                   */
 /************************************************************************/      
       
 CREATE OR ALTER PROC [RDT].[rdt_839GetTaskSP09] (      
@@ -52,7 +55,8 @@ CREATE OR ALTER PROC [RDT].[rdt_839GetTaskSP09] (
   @cErrMsg          NVARCHAR(250) OUTPUT,  
   @cSuggID          NVARCHAR(20)  OUTPUT,   
   @nTtlBalQty      INT            OUTPUT,   
-  @nBalQty         INT            OUTPUT    
+  @nBalQty         INT            OUTPUT, 
+  @cSKUSerialNoCapture NVARCHAR(1) OUTPUT
 )      
 AS      
     

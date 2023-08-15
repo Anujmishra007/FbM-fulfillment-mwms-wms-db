@@ -12,6 +12,7 @@ GO
 /* Date       Rev  Author     Purposes                                  */      
 /* 2018-01-19 1.0  James      WMS-15993 Created                         */   
 /* 2022-03-11 1.1  YeeKung    WMS-19062 Fix Closetype (yeekung01)       */  
+/* 2023-07-28 1.2  Ung        WMS-23002 Add serial no                   */
 /************************************************************************/      
       
 CREATE OR ALTER PROC rdt.rdt_839GetTaskSP03 (      
@@ -51,7 +52,8 @@ CREATE OR ALTER PROC rdt.rdt_839GetTaskSP03 (
   @cErrMsg          NVARCHAR(250) OUTPUT,  
   @cSuggID          NVARCHAR(20)  OUTPUT,   
   @nTtlBalQty      INT            OUTPUT,   
-  @nBalQty         INT            OUTPUT    
+  @nBalQty         INT            OUTPUT, 
+  @cSKUSerialNoCapture NVARCHAR(1) OUTPUT
 )      
 AS      
     

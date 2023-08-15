@@ -1,12 +1,8 @@
-IF EXISTS (SELECT name FROM sysobjects WHERE name = 'rdt_SerialNo' AND type = 'P')
-   DROP PROC rdt.rdt_SerialNo
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
-
 
 /************************************************************************/
 /* Store procedure: rdt_SerialNo                                        */
@@ -22,10 +18,11 @@ GO
 /* 28-09-2018  1.3  Ung          INC0406771 Fix bulk serial no          */
 /* 25-09-2019  1.4  James        WMS-10434 Add new param (james02)      */
 /* 18-08-2020  1.5  Ung          WMS-14788 Add force 1D barcode screen  */
-/* 24-04-2020  1.6  YeeKung      WMS-12885 Add ExtUpdSerialNo(yeekung01)*/  
+/* 24-04-2020  1.6  YeeKung      WMS-12885 Add ExtUpdSerialNo(yeekung01)*/
+/* 29-07-2023  1.7  Ung          WNS-23002 Add Scan param               */
 /************************************************************************/
 
-CREATE PROCEDURE [RDT].[rdt_SerialNo]
+CREATE OR ALTER PROCEDURE [RDT].[rdt_SerialNo]
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -62,7 +59,8 @@ CREATE PROCEDURE [RDT].[rdt_SerialNo]
    @nScn             INT = 0, 
    @nBulkSNO         INT = 0       OUTPUT, 
    @nBulkSNOQTY      INT = 0       OUTPUT,
-   @cSerialCaptureType  NVARCHAR( 1) = ''
+   @cSerialCaptureType  NVARCHAR( 1) = '', 
+   @nScan            INT = 0       OUTPUT
 AS
 BEGIN
    SET NOCOUNT ON
@@ -74,7 +72,6 @@ BEGIN
    DECLARE @cSQL              NVARCHAR( MAX)
    DECLARE @cSQLParam         NVARCHAR( MAX)
    DECLARE @cBarcode          NVARCHAR( MAX)
-   DECLARE @nScan             INT
    DECLARE @nTotal            INT
    DECLARE @cRetailSKU        NVARCHAR( 20)
    DECLARE @cAltSKU           NVARCHAR( 20)
@@ -110,8 +107,6 @@ BEGIN
       -- Check need serial no capture
       IF @cSerialNoCapture NOT IN ('1', '2', '3')
          GOTO Quit
-
-      SET @nScan = 0
 
 		-- Prepare next screen var
 		SET @cOutField01 = @cSKU

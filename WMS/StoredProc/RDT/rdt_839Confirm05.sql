@@ -5,13 +5,14 @@ SET ANSI_NULLS OFF
 GO  
 /******************************************************************************/  
 /* Store procedure: rdt_839Confirm05                                          */  
-/* Copyright      : LF Logistics                                              */  
+/* Copyright      : Maersk                                                    */  
 /*                                                                            */  
 /* Date       Rev  Author     Purposes                                        */  
 /* 2019-08-15 1.0  James      WMS-10172 Created                               */ 
 /* 2020-09-02 1.1  James      WMS-14949 Stamp channel id (james01)            */
 /* 2021-09-27 1.2  James      WMS-18027 Add update orders status (james02)    */
 /* 2022-04-20 1.3  YeeKung    WMS-19311 Add Data capture (yeekung01)          */
+/* 2023-07-25 1.4  Ung        WMS-23002 Add serial no                         */
 /******************************************************************************/  
   
 CREATE OR ALTER PROC rdt.rdt_839Confirm05 (  
@@ -48,6 +49,11 @@ CREATE OR ALTER PROC rdt.rdt_839Confirm05 (
    ,@cPackData1      NVARCHAR( 30)
    ,@cPackData2      NVARCHAR( 30)
    ,@cPackData3      NVARCHAR( 30)  
+   ,@cID             NVARCHAR( 18)
+   ,@cSerialNo       NVARCHAR( 30)
+   ,@nSerialQTY      INT
+   ,@nBulkSNO        INT
+   ,@nBulkSNOQTY     INT
    ,@nErrNo          INT           OUTPUT  
    ,@cErrMsg         NVARCHAR(250) OUTPUT  
 )  

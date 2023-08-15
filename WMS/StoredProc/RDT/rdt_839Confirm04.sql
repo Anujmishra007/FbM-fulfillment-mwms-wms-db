@@ -13,23 +13,24 @@ GO
 /* 2020-12-14 1.2  Chermaine  WMS-15814 Add eventLog (cc01)                   */
 /* 2021-12-20 1.3  James      WMS-18004 Stamp wording Bal when user choose    */
 /*                            balance pick later to unpicked line (james01)   */
-/* 20-04-2022 1.4  YeeKung    WMS-19311 Add Data capture (yeekung01)          */
+/* 2022-04-20 1.4  YeeKung    WMS-19311 Add Data capture (yeekung01)          */
+/* 2023-07-25 1.5  Ung        WMS-23002 Add serial no                         */
 /******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_839Confirm04](
-    @nMobile        INT
-   ,@nFunc          INT
-   ,@cLangCode      NVARCHAR( 3)
-   ,@nStep          INT
-   ,@nInputKey      INT
-   ,@cFacility      NVARCHAR( 5)
-   ,@cStorerKey     NVARCHAR( 15)
-   ,@cType          NVARCHAR( 10)
-   ,@cPickSlipNo    NVARCHAR( 10)
-   ,@cPickZone      NVARCHAR( 1)
-   ,@cDropID        NVARCHAR( 20)
-   ,@cLOC           NVARCHAR( 10)
-   ,@cSKU           NVARCHAR( 20)
-   ,@nQTY           INT
+    @nMobile         INT
+   ,@nFunc           INT
+   ,@cLangCode       NVARCHAR( 3)
+   ,@nStep           INT
+   ,@nInputKey       INT
+   ,@cFacility       NVARCHAR( 5)
+   ,@cStorerKey      NVARCHAR( 15)
+   ,@cType           NVARCHAR( 10)
+   ,@cPickSlipNo     NVARCHAR( 10)
+   ,@cPickZone       NVARCHAR( 1)
+   ,@cDropID         NVARCHAR( 20)
+   ,@cLOC            NVARCHAR( 10)
+   ,@cSKU            NVARCHAR( 20)
+   ,@nQTY            INT
    ,@cLottableCode   NVARCHAR( 30)
    ,@cLottable01     NVARCHAR( 18)  
    ,@cLottable02     NVARCHAR( 18)  
@@ -49,8 +50,13 @@ CREATE OR ALTER PROC [RDT].[rdt_839Confirm04](
    ,@cPackData1      NVARCHAR( 30)
    ,@cPackData2      NVARCHAR( 30)
    ,@cPackData3      NVARCHAR( 30)   
-   ,@nErrNo         INT           OUTPUT
-   ,@cErrMsg        NVARCHAR(250) OUTPUT
+   ,@cID             NVARCHAR( 18)   
+   ,@cSerialNo       NVARCHAR( 30)
+   ,@nSerialQTY      INT
+   ,@nBulkSNO        INT
+   ,@nBulkSNOQTY     INT
+   ,@nErrNo          INT           OUTPUT
+   ,@cErrMsg         NVARCHAR(250) OUTPUT
 ) AS
 BEGIN
    SET NOCOUNT ON

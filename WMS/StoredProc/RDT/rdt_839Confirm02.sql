@@ -7,12 +7,13 @@ GO
 
 /***************************************************************************/  
 /* Store procedure: rdt_839Confirm02                                       */  
-/* Copyright      : LF Logistics                                           */  
+/* Copyright      : Maersk                                                 */  
 /*                                                                         */  
 /* Date       Rev  Author  Purposes                                        */  
 /* 2018-04-30 1.0  ChewKP  WMS-4542 Created                                */  
 /* 2021-06-30 1.1  James   WMS-17406 Add rdt_STD_EventLog (james01)        */
 /* 2022-04-20 1.2  YeeKung WMS-19311 Add Data capture (yeekung01)          */
+/* 2023-07-25 1.3  Ung     WMS-23002 Add serial no                         */
 /***************************************************************************/  
 CREATE OR ALTER PROC [RDT].[rdt_839Confirm02](  
    @nMobile       INT,             
@@ -48,6 +49,11 @@ CREATE OR ALTER PROC [RDT].[rdt_839Confirm02](
    @cPackData1    NVARCHAR( 30),
    @cPackData2    NVARCHAR( 30),
    @cPackData3    NVARCHAR( 30),
+   @cID           NVARCHAR( 18),
+   @cSerialNo     NVARCHAR( 30),
+   @nSerialQTY    INT,
+   @nBulkSNO      INT,
+   @nBulkSNOQTY   INT,
    @nErrNo        INT           OUTPUT,   
    @cErrMsg       NVARCHAR(250) OUTPUT    
      

@@ -11,6 +11,7 @@ GO
 /* Date       Rev  Author      Purposes                                                            */
 /* 09-12-2022 1.0  Ung         WMS-21244 base on rdt_PickPiece_GetTask                             */
 /* 25-05-2023 1.1  Ung         WMS-22391 NEXTLOC no task, loop back skipped LOC, if there is any   */
+/* 28-07-2023 1.2  Ung         WMS-23002 Add serial no                                             */
 /***************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_839GetTaskSP07] (
@@ -51,6 +52,7 @@ CREATE OR ALTER PROC [RDT].[rdt_839GetTaskSP07] (
    ,@cSuggID          NVARCHAR(20)  OUTPUT --(yeekung03)
    ,@nTtlBalQty       INT           OUTPUT
    ,@nBalQty          INT           OUTPUT
+   ,@cSKUSerialNoCapture NVARCHAR(1) OUTPUT
 )
 AS
 BEGIN

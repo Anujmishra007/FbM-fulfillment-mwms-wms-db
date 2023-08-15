@@ -7,13 +7,14 @@ GO
   
 /******************************************************************************/  
 /* Store procedure:  rdt_839Confirm06                                         */  
-/* Copyright      : LF Logistics                                              */  
+/* Copyright      : Maersk                                                    */  
 /*                                                                            */  
 /* Date       Rev  Author     Purposes                                        */  
 /* 17-06-2020 1.0  YeeKung    WMS13795 Created                                */
 /* 20-04-2022 1.1  YeeKung    WMS-19311 Add Data capture (yeekung01)          */
 /* 16-01-2023 1.2  Calvin     JSM-123639 Stamp Channel_ID (CLVN01)            */
 /* 04-04-2023 1.3  YeeKung    JSM-140598 Add blocking status 4 (yeekun02)     */
+/* 25-07-2023 1.4  Ung        WMS-23002 Add serial no                         */ 
 /******************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_839Confirm06] (  
@@ -50,6 +51,11 @@ CREATE OR ALTER PROC [RDT].[rdt_839Confirm06] (
    ,@cPackData1      NVARCHAR( 30)
    ,@cPackData2      NVARCHAR( 30)
    ,@cPackData3      NVARCHAR( 30)   
+   ,@cID             NVARCHAR( 18)
+   ,@cSerialNo       NVARCHAR( 30)
+   ,@nSerialQTY      INT
+   ,@nBulkSNO        INT
+   ,@nBulkSNOQTY     INT
    ,@nErrNo          INT           OUTPUT  
    ,@cErrMsg         NVARCHAR(250) OUTPUT  
 )  

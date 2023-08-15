@@ -5,10 +5,11 @@ SET ANSI_NULLS OFF
 GO  
 /******************************************************************************/  
 /* Store procedure: rdt_839Confirm11                                          */  
-/* Copyright      : LF Logistics                                              */  
+/* Copyright      : Maersk                                                    */  
 /*                                                                            */  
 /* Date       Rev  Author     Purposes                                        */  
-/* 2022-04-16 1.0  YeeKung     WMS-19311 Created                              */
+/* 2022-04-16 1.0  YeeKung    WMS-19311 Created                               */
+/* 2023-07-25 1.1  Ung        WMS-23002 Add serial no                         */
 /******************************************************************************/  
   
 CREATE OR ALTER PROC rdt.rdt_839Confirm11 (  
@@ -45,6 +46,11 @@ CREATE OR ALTER PROC rdt.rdt_839Confirm11 (
    @cPackData1    NVARCHAR( 30),
    @cPackData2    NVARCHAR( 30),
    @cPackData3    NVARCHAR( 30),
+   @cID           NVARCHAR( 18),
+   @cSerialNo     NVARCHAR( 30),
+   @nSerialQTY    INT,
+   @nBulkSNO      INT,
+   @nBulkSNOQTY   INT, 
    @nErrNo        INT           OUTPUT,   
    @cErrMsg       NVARCHAR(250) OUTPUT    
 )  

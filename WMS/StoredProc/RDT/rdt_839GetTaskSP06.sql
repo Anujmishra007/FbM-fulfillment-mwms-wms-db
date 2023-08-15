@@ -4,12 +4,15 @@ SET QUOTED_IDENTIFIER OFF
 GO
 /************************************************************************/    
 /* Store procedure: rdt_839GetTaskSP06                                  */    
+/* Copyright      : Maersk                                              */
+/*                                                                      */
 /* Purpose:                                                             */    
 /*                                                                      */    
 /* Modifications log:                                                   */    
 /*                                                                      */    
 /* Date       Rev  Author     Purposes                                  */    
 /* 19-07-2022 1.0  YeeKung     WMS-20239 Add DisExtValue                */  
+/* 28-07-2023 1.1  Ung         WMS-23002 Add serial no                  */
 /************************************************************************/    
     
 CREATE OR ALTER PROC rdt.rdt_839GetTaskSP06 (    
@@ -49,7 +52,8 @@ CREATE OR ALTER PROC rdt.rdt_839GetTaskSP06 (
   @cErrMsg          NVARCHAR(250) OUTPUT,
   @cSuggID          NVARCHAR(20)  OUTPUT, --(yeekung02)
   @nTtlBalQty      INT            OUTPUT, --(yeekung01)
-  @nBalQty         INT            OUTPUT  --(yeekung01)   
+  @nBalQty         INT            OUTPUT, --(yeekung01)   
+  @cSKUSerialNoCapture NVARCHAR(1) OUTPUT
 )    
 AS    
   

@@ -1,61 +1,60 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdt_839GetTask01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_839GetTask01]
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF 
-GO
 
 /************************************************************************/
 /* Store procedure: rdt_839GetTask01                                    */
-/* Copyright      : LF Logistics                                        */
+/* Copyright      : Maersk                                              */
 /*                                                                      */
 /* Date       Rev  Author      Purposes                                 */
 /* 26-06-2018 1.0  James       WMS5057 Created                          */
-/* 21-01-2020 1.1  James       WMS-11654 Add bal pick later opt(james01)*/ 
-/* 2020-09-14 1.2  YeeKung     WMS-15011 Add balance control (yeekung01)*/ 
-/* 2020-08-20 1.3  YeeKung     WMS-14630 Add suggID(yeekung02)          */ 
+/* 21-01-2020 1.1  James       WMS-11654 Add bal pick later opt(james01)*/
+/* 2020-09-14 1.2  YeeKung     WMS-15011 Add balance control (yeekung01)*/
+/* 2020-08-20 1.3  YeeKung     WMS-14630 Add suggID(yeekung02)          */
+/* 2023-07-28 1.4  Ung         WMS-23002 Add serial no                  */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdt_839GetTask01] (
-   @nMobile          INT,            
-   @nFunc            INT,            
-   @cLangCode        NVARCHAR( 3),   
-   @nStep            INT,            
-   @nInputKey        INT,            
-   @cFacility        NVARCHAR( 5) ,  
-   @cStorerKey       NVARCHAR( 15),  
-   @cType            NVARCHAR( 10),  
-   @cPickSlipNo      NVARCHAR( 10),  
-   @cPickZone        NVARCHAR( 10),   
+CREATE OR ALTER PROC [RDT].[rdt_839GetTask01] (
+   @nMobile          INT,
+   @nFunc            INT,
+   @cLangCode        NVARCHAR( 3),
+   @nStep            INT,
+   @nInputKey        INT,
+   @cFacility        NVARCHAR( 5) ,
+   @cStorerKey       NVARCHAR( 15),
+   @cType            NVARCHAR( 10),
+   @cPickSlipNo      NVARCHAR( 10),
+   @cPickZone        NVARCHAR( 10),
    @nLottableOnPage  INT,
-   @cLOC             NVARCHAR( 10) OUTPUT,  
-   @cSKU             NVARCHAR( 20) OUTPUT,  
-   @cSKUDescr        NVARCHAR( 60) OUTPUT,  
-   @nQTY             INT           OUTPUT,  
-   @cDisableQTYField NVARCHAR( 1)  OUTPUT,      
-   @cLottableCode    NVARCHAR( 30) OUTPUT,  
-   @cLottable01      NVARCHAR( 18) OUTPUT,   
-   @cLottable02      NVARCHAR( 18) OUTPUT,   
-   @cLottable03      NVARCHAR( 18) OUTPUT,   
-   @dLottable04      DATETIME      OUTPUT,   
-   @dLottable05      DATETIME      OUTPUT,   
-   @cLottable06      NVARCHAR( 30) OUTPUT,  
-   @cLottable07      NVARCHAR( 30) OUTPUT,  
-   @cLottable08      NVARCHAR( 30) OUTPUT,  
-   @cLottable09      NVARCHAR( 30) OUTPUT,  
-   @cLottable10      NVARCHAR( 30) OUTPUT,  
-   @cLottable11      NVARCHAR( 30) OUTPUT,  
-   @cLottable12      NVARCHAR( 30) OUTPUT,  
-   @dLottable13      DATETIME      OUTPUT,  
-   @dLottable14      DATETIME      OUTPUT,  
-   @dLottable15      DATETIME      OUTPUT, 
-   @nErrNo           INT           OUTPUT,  
+   @cLOC             NVARCHAR( 10) OUTPUT,
+   @cSKU             NVARCHAR( 20) OUTPUT,
+   @cSKUDescr        NVARCHAR( 60) OUTPUT,
+   @nQTY             INT           OUTPUT,
+   @cDisableQTYField NVARCHAR( 1)  OUTPUT,
+   @cLottableCode    NVARCHAR( 30) OUTPUT,
+   @cLottable01      NVARCHAR( 18) OUTPUT,
+   @cLottable02      NVARCHAR( 18) OUTPUT,
+   @cLottable03      NVARCHAR( 18) OUTPUT,
+   @dLottable04      DATETIME      OUTPUT,
+   @dLottable05      DATETIME      OUTPUT,
+   @cLottable06      NVARCHAR( 30) OUTPUT,
+   @cLottable07      NVARCHAR( 30) OUTPUT,
+   @cLottable08      NVARCHAR( 30) OUTPUT,
+   @cLottable09      NVARCHAR( 30) OUTPUT,
+   @cLottable10      NVARCHAR( 30) OUTPUT,
+   @cLottable11      NVARCHAR( 30) OUTPUT,
+   @cLottable12      NVARCHAR( 30) OUTPUT,
+   @dLottable13      DATETIME      OUTPUT,
+   @dLottable14      DATETIME      OUTPUT,
+   @dLottable15      DATETIME      OUTPUT,
+   @nErrNo           INT           OUTPUT,
    @cErrMsg          NVARCHAR(250) OUTPUT,
    @cSuggID          NVARCHAR(20)  OUTPUT, --(yeekung02)
-   @nTtlBalQty      INT            OUTPUT, --(yeekung01)
-   @nBalQty         INT            OUTPUT  --(yeekung01)   
+   @nTtlBalQty       INT           OUTPUT, --(yeekung01)
+   @nBalQty          INT           OUTPUT, --(yeekung01)
+   @cSKUSerialNoCapture NVARCHAR(1) OUTPUT
 )
 AS
 BEGIN
@@ -70,9 +69,9 @@ BEGIN
    DECLARE @cTempSKU        NCHAR( 20)
    DECLARE @cTempLOC    NVARCHAR( 10)
    DECLARE @nTempQTY        INT
-   DECLARE @cTempLottable01 NVARCHAR( 18) 
-   DECLARE @cTempLottable02 NVARCHAR( 18) 
-   DECLARE @cTempLottable03 NVARCHAR( 18) 
+   DECLARE @cTempLottable01 NVARCHAR( 18)
+   DECLARE @cTempLottable02 NVARCHAR( 18)
+   DECLARE @cTempLottable03 NVARCHAR( 18)
    DECLARE @dTempLottable04 DATETIME
    DECLARE @dTempLottable05 DATETIME
    DECLARE @cTempLottable06 NVARCHAR( 30)
@@ -112,13 +111,13 @@ BEGIN
    SET @dTempLottable13 = @dLottable13
    SET @dTempLottable14 = @dLottable14
    SET @dTempLottable15 = @dLottable15
-   SET @cTempLottableCode = @cLottableCode 
+   SET @cTempLottableCode = @cLottableCode
 
    IF @cTempSKU = ''
-      SET @cGetNextSKU = 'Y' 
-   ELSE 
-      SET @cGetNextSKU = 'N' 
-         
+      SET @cGetNextSKU = 'Y'
+   ELSE
+      SET @cGetNextSKU = 'N'
+
    DECLARE @cOrderKey   NVARCHAR( 10)
    DECLARE @cLoadKey    NVARCHAR( 10)
    DECLARE @cZone       NVARCHAR( 18)
@@ -161,7 +160,7 @@ BEGIN
    BEGIN
       IF @cPickZone = ''
          SELECT TOP 1
-            @cTempLOC = LOC.LOC, 
+            @cTempLOC = LOC.LOC,
             @cTempSKU = PD.SKU
          FROM dbo.PickDetail PD WITH (NOLOCK)
             JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
@@ -175,7 +174,7 @@ BEGIN
          ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU
       ELSE
          SELECT TOP 1
-            @cTempLOC = LOC.LOC, 
+            @cTempLOC = LOC.LOC,
             @cTempSKU = PD.SKU
          FROM dbo.PickDetail PD WITH (NOLOCK)
             JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
@@ -188,18 +187,18 @@ BEGIN
             OR  (LOC.LogicalLocation = @cCurrLogicalLOC AND LOC.LOC > @cCurrLOC))
          GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU
          ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.SKU
-      
+
 
       -- Get SKU info
-      SELECT 
+      SELECT
          @cTempLottableCode = LottableCode
       FROM dbo.SKU WITH (NOLOCK)
       WHERE StorerKey = @cStorerKey
          AND SKU = @cTempSKU
 
       SET @cGetNextSKU = 'N'
-      
-      
+
+
       /************************************** Get QTY and lottables *********************************/
       DECLARE @cSelect  NVARCHAR( MAX)
       DECLARE @cFrom    NVARCHAR( MAX)
@@ -207,11 +206,11 @@ BEGIN
       DECLARE @cWhere2  NVARCHAR( MAX)
       DECLARE @cGroupBy NVARCHAR( MAX)
       DECLARE @cOrderBy NVARCHAR( MAX)
-      
+
       SET @nTempQTY = 0
-      
+
       -- Get lottable filter
-      EXEC rdt.rdt_Lottable_GetNextSQL @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 4, @cTempLottableCode, 'LA', 
+      EXEC rdt.rdt_Lottable_GetNextSQL @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 4, @cTempLottableCode, 'LA',
          @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
          @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
          @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
@@ -223,13 +222,13 @@ BEGIN
          @nErrNo   OUTPUT,
          @cErrMsg  OUTPUT
 
-        
+
       --IF EXISTS ( SELECT 1
-      --            from dbo.PICKDETAIL PD WITH (NOLOCK) 
+      --            from dbo.PICKDETAIL PD WITH (NOLOCK)
       --            JOIN dbo.LOTATTRIBUTE LA WITH (NOLOCK) ON PD.Lot = LA.Lot
       --            WHERE Pickslipno = @cPickSlipNo
       --            AND   PD.Sku = @cTempSKU and PD.Loc = @cTempLOC
-      --            AND   RTRIM(LA.Lottable01 + LA.Lottable02 + LA.Lottable03 + LA.Lottable03 + 
+      --            AND   RTRIM(LA.Lottable01 + LA.Lottable02 + LA.Lottable03 + LA.Lottable03 +
       --                  CONVERT( NCHAR( 10), ISNULL( LA.Lottable04, 0), 120)) = '1900-01-01')
       --            --AND   LTRIM( RTRIM( @cWhere1))= '1900-01-01')
       --BEGIN
@@ -249,18 +248,18 @@ BEGIN
          ' AND   PD.Loc = @cLOC ' +
          ' AND   LTRIM( RTRIM( ' + @cWhere1 + ')) = ''1900-01-01'' '
 
-      SET @cSQLParam = 
-         '@cPickSlipNo NVARCHAR( 10) , ' +  
-         '@cLOC        NVARCHAR( 10) , ' +  
-         '@cSKU        NVARCHAR( 20) , ' +  
-         '@cWhere1     NVARCHAR( 1000), ' + 
-         '@nRowCount        INT           OUTPUT ' 
+      SET @cSQLParam =
+         '@cPickSlipNo NVARCHAR( 10) , ' +
+         '@cLOC        NVARCHAR( 10) , ' +
+         '@cSKU        NVARCHAR( 20) , ' +
+         '@cWhere1     NVARCHAR( 1000), ' +
+         '@nRowCount        INT           OUTPUT '
 
-      EXEC sp_ExecuteSQL @cSQL, @cSQLParam, 
-         @cPickSlipNo = @cPickSlipNo,  
-         @cLOC        = @cTempLOC,  
-         @cSKU        = @cTempSKU,  
-         @cWhere1     = @cWhere1, 
+      EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+         @cPickSlipNo = @cPickSlipNo,
+         @cLOC        = @cTempLOC,
+         @cSKU        = @cTempSKU,
+         @cWhere1     = @cWhere1,
          @nRowCount   = @nRowCount OUTPUT
 
       -- If not lottable value, no need filter by lottable
@@ -275,78 +274,78 @@ BEGIN
       END
       */
       SET @cSQL = ''
-      SET @cSQL = 
-      '    SELECT @nQTY = ISNULL( SUM( PD.QTY), 0) ' + 
-      CASE WHEN @cSelect = '' THEN '' ELSE ', ' + @cSelect END + 
-      '    FROM dbo.PickDetail PD WITH (NOLOCK) ' + 
-      '       JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' + 
-      '       JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' + 
-      '    WHERE PD.PickSlipNo = @cPickSlipNo ' + 
-      '    AND PD.QTY > 0 ' + 
-      '    AND PD.Status <> ''4'' ' + 
-      '    AND PD.Status < @cStatus ' + 
-      '    AND LOC.LOC = @cLOC ' + 
-      '    AND PD.SKU = @cSKU ' + 
-      CASE WHEN @cPickZone = '' THEN '' ELSE '    AND LOC.PickZone = @cPickZone ' END + 
-      --CASE WHEN @cWhere1 = '' THEN '' ELSE ' AND ' + @cWhere1 END + 
+      SET @cSQL =
+      '    SELECT @nQTY = ISNULL( SUM( PD.QTY), 0) ' +
+      CASE WHEN @cSelect = '' THEN '' ELSE ', ' + @cSelect END +
+      '    FROM dbo.PickDetail PD WITH (NOLOCK) ' +
+      '       JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
+      '       JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+      '    WHERE PD.PickSlipNo = @cPickSlipNo ' +
+      '    AND PD.QTY > 0 ' +
+      '    AND PD.Status <> ''4'' ' +
+      '    AND PD.Status < @cStatus ' +
+      '    AND LOC.LOC = @cLOC ' +
+      '    AND PD.SKU = @cSKU ' +
+      CASE WHEN @cPickZone = '' THEN '' ELSE '    AND LOC.PickZone = @cPickZone ' END +
+      --CASE WHEN @cWhere1 = '' THEN '' ELSE ' AND ' + @cWhere1 END +
       --CASE WHEN @cWhere2 = '' THEN '' ELSE ' > '   + @cWhere2 END +
       CASE WHEN @cGroupBy = '' THEN '' ELSE ' GROUP BY ' + @cGroupBy END +
-      CASE WHEN @cOrderBy = '' THEN '' ELSE ' ORDER BY ' + @cOrderBy END 
+      CASE WHEN @cOrderBy = '' THEN '' ELSE ' ORDER BY ' + @cOrderBy END
 
-      SET @cSQLParam = 
-         '@cPickSlipNo NVARCHAR( 10) , ' +  
-         '@cOrderKey   NVARCHAR( 10) , ' +  
-         '@cLoadKey    NVARCHAR( 10) , ' +  
-         '@cLOC        NVARCHAR( 10) , ' +  
-         '@cSKU        NVARCHAR( 20) , ' +  
-         '@cStatus     NVARCHAR( 1)  , ' + 
-         '@cPickZone   NVARCHAR( 10) , ' + 
-         '@nQTY        INT           OUTPUT, ' + 
-         '@cLottable01 NVARCHAR( 18) OUTPUT, ' +  
-         '@cLottable02 NVARCHAR( 18) OUTPUT, ' +  
-         '@cLottable03 NVARCHAR( 18) OUTPUT, ' +  
-         '@dLottable04 DATETIME      OUTPUT, ' +  
-         '@dLottable05 DATETIME      OUTPUT, ' +  
-         '@cLottable06 NVARCHAR( 30) OUTPUT, ' + 
-         '@cLottable07 NVARCHAR( 30) OUTPUT, ' + 
-         '@cLottable08 NVARCHAR( 30) OUTPUT, ' + 
-         '@cLottable09 NVARCHAR( 30) OUTPUT, ' + 
-         '@cLottable10 NVARCHAR( 30) OUTPUT, ' + 
-         '@cLottable11 NVARCHAR( 30) OUTPUT, ' + 
-         '@cLottable12 NVARCHAR( 30) OUTPUT, ' + 
-         '@dLottable13 DATETIME      OUTPUT, ' + 
-         '@dLottable14 DATETIME      OUTPUT, ' + 
+      SET @cSQLParam =
+         '@cPickSlipNo NVARCHAR( 10) , ' +
+         '@cOrderKey   NVARCHAR( 10) , ' +
+         '@cLoadKey    NVARCHAR( 10) , ' +
+         '@cLOC        NVARCHAR( 10) , ' +
+         '@cSKU        NVARCHAR( 20) , ' +
+         '@cStatus     NVARCHAR( 1)  , ' +
+         '@cPickZone   NVARCHAR( 10) , ' +
+         '@nQTY        INT           OUTPUT, ' +
+         '@cLottable01 NVARCHAR( 18) OUTPUT, ' +
+         '@cLottable02 NVARCHAR( 18) OUTPUT, ' +
+         '@cLottable03 NVARCHAR( 18) OUTPUT, ' +
+         '@dLottable04 DATETIME      OUTPUT, ' +
+         '@dLottable05 DATETIME      OUTPUT, ' +
+         '@cLottable06 NVARCHAR( 30) OUTPUT, ' +
+         '@cLottable07 NVARCHAR( 30) OUTPUT, ' +
+         '@cLottable08 NVARCHAR( 30) OUTPUT, ' +
+         '@cLottable09 NVARCHAR( 30) OUTPUT, ' +
+         '@cLottable10 NVARCHAR( 30) OUTPUT, ' +
+         '@cLottable11 NVARCHAR( 30) OUTPUT, ' +
+         '@cLottable12 NVARCHAR( 30) OUTPUT, ' +
+         '@dLottable13 DATETIME      OUTPUT, ' +
+         '@dLottable14 DATETIME      OUTPUT, ' +
          '@dLottable15 DATETIME      OUTPUT  '
 
-      EXEC sp_ExecuteSQL @cSQL, @cSQLParam, 
-         @cPickSlipNo = @cPickSlipNo,  
-         @cOrderKey   = @cOrderKey,  
-         @cLoadKey    = @cLoadKey,  
-         @cLOC        = @cTempLOC,  
-         @cSKU        = @cTempSKU,  
-         @cStatus     = @cPickConfirmStatus, 
+      EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+         @cPickSlipNo = @cPickSlipNo,
+         @cOrderKey   = @cOrderKey,
+         @cLoadKey    = @cLoadKey,
+         @cLOC        = @cTempLOC,
+         @cSKU        = @cTempSKU,
+         @cStatus     = @cPickConfirmStatus,
          @cPickZone   = @cPickZone,
-         @nQTY        = @nTempQTY        OUTPUT,  
-         @cLottable01 = @cTempLottable01 OUTPUT,   
-         @cLottable02 = @cTempLottable02 OUTPUT,   
-         @cLottable03 = @cTempLottable03 OUTPUT,   
-         @dLottable04 = @dTempLottable04 OUTPUT,   
-         @dLottable05 = @dTempLottable05 OUTPUT,   
-         @cLottable06 = @cTempLottable06 OUTPUT,  
-         @cLottable07 = @cTempLottable07 OUTPUT,  
-         @cLottable08 = @cTempLottable08 OUTPUT,  
-         @cLottable09 = @cTempLottable09 OUTPUT,  
-         @cLottable10 = @cTempLottable10 OUTPUT,  
-         @cLottable11 = @cTempLottable11 OUTPUT,  
-         @cLottable12 = @cTempLottable12 OUTPUT,  
-         @dLottable13 = @dTempLottable13 OUTPUT,  
-         @dLottable14 = @dTempLottable14 OUTPUT,  
-         @dLottable15 = @dTempLottable15 OUTPUT  
+         @nQTY        = @nTempQTY        OUTPUT,
+         @cLottable01 = @cTempLottable01 OUTPUT,
+         @cLottable02 = @cTempLottable02 OUTPUT,
+         @cLottable03 = @cTempLottable03 OUTPUT,
+         @dLottable04 = @dTempLottable04 OUTPUT,
+         @dLottable05 = @dTempLottable05 OUTPUT,
+         @cLottable06 = @cTempLottable06 OUTPUT,
+         @cLottable07 = @cTempLottable07 OUTPUT,
+         @cLottable08 = @cTempLottable08 OUTPUT,
+         @cLottable09 = @cTempLottable09 OUTPUT,
+         @cLottable10 = @cTempLottable10 OUTPUT,
+         @cLottable11 = @cTempLottable11 OUTPUT,
+         @cLottable12 = @cTempLottable12 OUTPUT,
+         @dLottable13 = @dTempLottable13 OUTPUT,
+         @dLottable14 = @dTempLottable14 OUTPUT,
+         @dLottable15 = @dTempLottable15 OUTPUT
    END
    /***********************************************************************************************
                                               Get next SKU
    ***********************************************************************************************/
-   ELSE IF @cType IN ( 'NEXTSKU', 'BALPICK') 
+   ELSE IF @cType IN ( 'NEXTSKU', 'BALPICK')
    BEGIN
       SET @cSuggLOC = @cCurrLOC
 
@@ -360,7 +359,7 @@ BEGIN
             AND PD.Status <> '4'
             AND PD.Status < @cPickConfirmStatus
             AND LOC.LOC = @cCurrLOC
-            AND (( @cType = 'BALPICK' AND PD.SKU > @cCurrSKU) OR 
+            AND (( @cType = 'BALPICK' AND PD.SKU > @cCurrSKU) OR
                  ( @cType = 'NEXTSKU' AND PD.SKU = PD.SKU))
             GROUP BY PD.StorerKey, PD.SKU
             ORDER BY PD.StorerKey, PD.SKU
@@ -375,26 +374,26 @@ BEGIN
             AND PD.Status <> '4'
             AND PD.Status < @cPickConfirmStatus
             AND LOC.LOC = @cCurrLOC
-            AND (( @cType = 'BALPICK' AND PD.SKU > @cCurrSKU) OR 
+            AND (( @cType = 'BALPICK' AND PD.SKU > @cCurrSKU) OR
                  ( @cType = 'NEXTSKU' AND PD.SKU = PD.SKU))
             GROUP BY PD.StorerKey, PD.SKU
             ORDER BY PD.StorerKey, PD.SKU
 
       -- Get SKU info
-      SELECT 
+      SELECT
          @cTempLottableCode = LottableCode
       FROM dbo.SKU WITH (NOLOCK)
       WHERE StorerKey = @cStorerKey
          AND SKU = @cTempSKU
 
       SET @cGetNextSKU = 'N'
-      
-      
+
+
       /************************************** Get QTY and lottables *********************************/
       SET @nTempQTY = 0
-      
+
       -- Get lottable filter
-      EXEC rdt.rdt_Lottable_GetNextSQL @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 4, @cTempLottableCode, 'LA', 
+      EXEC rdt.rdt_Lottable_GetNextSQL @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 4, @cTempLottableCode, 'LA',
          @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
          @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
          @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
@@ -405,7 +404,7 @@ BEGIN
          @cOrderBy OUTPUT,
          @nErrNo   OUTPUT,
          @cErrMsg  OUTPUT
-         
+
       SET @nRowCount = 0
       SET @cSQL = ''
       SET @cSQL = '
@@ -417,18 +416,18 @@ BEGIN
          ' AND   PD.Loc = @cLOC ' +
          ' AND   LTRIM( RTRIM( ' + @cWhere1 + ')) = ''1900-01-01'' '
 
-      SET @cSQLParam = 
-         '@cPickSlipNo NVARCHAR( 10) , ' +  
-         '@cLOC        NVARCHAR( 10) , ' +  
-         '@cSKU        NVARCHAR( 20) , ' +  
-         '@cWhere1     NVARCHAR( 1000), ' + 
-         '@nRowCount        INT           OUTPUT ' 
+      SET @cSQLParam =
+         '@cPickSlipNo NVARCHAR( 10) , ' +
+         '@cLOC        NVARCHAR( 10) , ' +
+         '@cSKU        NVARCHAR( 20) , ' +
+         '@cWhere1     NVARCHAR( 1000), ' +
+         '@nRowCount        INT           OUTPUT '
 
-      EXEC sp_ExecuteSQL @cSQL, @cSQLParam, 
-         @cPickSlipNo = @cPickSlipNo,  
-         @cLOC        = @cTempLOC,  
-         @cSKU        = @cTempSKU,  
-         @cWhere1     = @cWhere1, 
+      EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+         @cPickSlipNo = @cPickSlipNo,
+         @cLOC        = @cTempLOC,
+         @cSKU        = @cTempSKU,
+         @cWhere1     = @cWhere1,
          @nRowCount   = @nRowCount OUTPUT
 
       -- If not lottable value, no need filter by lottable
@@ -437,7 +436,7 @@ BEGIN
          SET @cWhere1 = ''
          SET @cWhere2 = ''
       END
-      
+
 
       IF ISNULL( @cWhere2, '') = '' OR @cWhere2 = '1900-01-01'
          SET @cWhere2 = ''''
@@ -450,74 +449,74 @@ BEGIN
       END
 
 
-      SET @cSQL = 
+      SET @cSQL =
       '    SELECT @nQTY = ISNULL( SUM( PD.QTY), 0) ' +
-      CASE WHEN @cSelect = '' THEN '' ELSE ', ' + @cSelect END + 
+      CASE WHEN @cSelect = '' THEN '' ELSE ', ' + @cSelect END +
       '    FROM dbo.PickDetail PD WITH (NOLOCK) ' +
       '       JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
-      '       JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' + 
+      '       JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
       '    WHERE PD.PickSlipNo = @cPickSlipNo ' +
       '       AND PD.QTY > 0 ' +
       '       AND PD.Status <> ''4'' ' +
       '       AND PD.Status < @cStatus ' +
       '       AND LOC.LOC = @cLOC ' +
       '       AND PD.SKU = @cSKU ' +
-      CASE WHEN @cPickZone = '' THEN '' ELSE '    AND LOC.PickZone = @cPickZone ' END + 
-      CASE WHEN @cWhere1 = '' THEN '' ELSE ' AND ' + @cWhere1 END + 
+      CASE WHEN @cPickZone = '' THEN '' ELSE '    AND LOC.PickZone = @cPickZone ' END +
+      CASE WHEN @cWhere1 = '' THEN '' ELSE ' AND ' + @cWhere1 END +
       CASE WHEN @cWhere2 = '' THEN '' ELSE ' > '   + @cWhere2 END +
       CASE WHEN @cGroupBy = '' THEN '' ELSE ' GROUP BY ' + @cGroupBy END +
-      CASE WHEN @cOrderBy = '' THEN '' ELSE ' ORDER BY ' + @cOrderBy END 
-      
+      CASE WHEN @cOrderBy = '' THEN '' ELSE ' ORDER BY ' + @cOrderBy END
 
-      SET @cSQLParam = 
-         '@cPickSlipNo NVARCHAR( 10) , ' +  
-         '@cOrderKey   NVARCHAR( 10) , ' +  
-         '@cLoadKey    NVARCHAR( 10) , ' +  
-         '@cLOC        NVARCHAR( 10) , ' +  
-         '@cSKU        NVARCHAR( 20) , ' +  
-         '@cStatus     NVARCHAR( 1)  , ' + 
-         '@cPickZone   NVARCHAR( 10) , ' + 
-         '@nQTY        INT           OUTPUT, ' + 
-         '@cLottable01 NVARCHAR( 18) OUTPUT, ' +  
-         '@cLottable02 NVARCHAR( 18) OUTPUT, ' +  
-         '@cLottable03 NVARCHAR( 18) OUTPUT, ' +  
-         '@dLottable04 DATETIME      OUTPUT, ' +  
-         '@dLottable05 DATETIME      OUTPUT, ' +  
-         '@cLottable06 NVARCHAR( 30) OUTPUT, ' + 
-         '@cLottable07 NVARCHAR( 30) OUTPUT, ' + 
-         '@cLottable08 NVARCHAR( 30) OUTPUT, ' + 
-         '@cLottable09 NVARCHAR( 30) OUTPUT, ' + 
-         '@cLottable10 NVARCHAR( 30) OUTPUT, ' + 
-         '@cLottable11 NVARCHAR( 30) OUTPUT, ' + 
-         '@cLottable12 NVARCHAR( 30) OUTPUT, ' + 
-         '@dLottable13 DATETIME      OUTPUT, ' + 
-         '@dLottable14 DATETIME      OUTPUT, ' + 
+
+      SET @cSQLParam =
+         '@cPickSlipNo NVARCHAR( 10) , ' +
+         '@cOrderKey   NVARCHAR( 10) , ' +
+         '@cLoadKey    NVARCHAR( 10) , ' +
+         '@cLOC        NVARCHAR( 10) , ' +
+         '@cSKU        NVARCHAR( 20) , ' +
+         '@cStatus     NVARCHAR( 1)  , ' +
+         '@cPickZone   NVARCHAR( 10) , ' +
+         '@nQTY        INT           OUTPUT, ' +
+         '@cLottable01 NVARCHAR( 18) OUTPUT, ' +
+         '@cLottable02 NVARCHAR( 18) OUTPUT, ' +
+         '@cLottable03 NVARCHAR( 18) OUTPUT, ' +
+         '@dLottable04 DATETIME      OUTPUT, ' +
+         '@dLottable05 DATETIME      OUTPUT, ' +
+         '@cLottable06 NVARCHAR( 30) OUTPUT, ' +
+         '@cLottable07 NVARCHAR( 30) OUTPUT, ' +
+         '@cLottable08 NVARCHAR( 30) OUTPUT, ' +
+         '@cLottable09 NVARCHAR( 30) OUTPUT, ' +
+         '@cLottable10 NVARCHAR( 30) OUTPUT, ' +
+         '@cLottable11 NVARCHAR( 30) OUTPUT, ' +
+         '@cLottable12 NVARCHAR( 30) OUTPUT, ' +
+         '@dLottable13 DATETIME      OUTPUT, ' +
+         '@dLottable14 DATETIME      OUTPUT, ' +
          '@dLottable15 DATETIME      OUTPUT  '
 
-      EXEC sp_ExecuteSQL @cSQL, @cSQLParam, 
-         @cPickSlipNo = @cPickSlipNo,  
-         @cOrderKey   = @cOrderKey,  
-         @cLoadKey    = @cLoadKey,  
-         @cLOC        = @cTempLOC,  
-         @cSKU        = @cTempSKU,  
-         @cStatus     = @cPickConfirmStatus, 
+      EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+         @cPickSlipNo = @cPickSlipNo,
+         @cOrderKey   = @cOrderKey,
+         @cLoadKey    = @cLoadKey,
+         @cLOC        = @cTempLOC,
+         @cSKU        = @cTempSKU,
+         @cStatus     = @cPickConfirmStatus,
          @cPickZone   = @cPickZone,
-         @nQTY        = @nTempQTY        OUTPUT,  
-         @cLottable01 = @cTempLottable01 OUTPUT,   
-         @cLottable02 = @cTempLottable02 OUTPUT,   
-         @cLottable03 = @cTempLottable03 OUTPUT,   
-         @dLottable04 = @dTempLottable04 OUTPUT,   
-         @dLottable05 = @dTempLottable05 OUTPUT,   
-         @cLottable06 = @cTempLottable06 OUTPUT,  
-         @cLottable07 = @cTempLottable07 OUTPUT,  
-         @cLottable08 = @cTempLottable08 OUTPUT,  
-         @cLottable09 = @cTempLottable09 OUTPUT,  
-         @cLottable10 = @cTempLottable10 OUTPUT,  
-         @cLottable11 = @cTempLottable11 OUTPUT,  
-         @cLottable12 = @cTempLottable12 OUTPUT,  
-         @dLottable13 = @dTempLottable13 OUTPUT,  
-         @dLottable14 = @dTempLottable14 OUTPUT,  
-         @dLottable15 = @dTempLottable15 OUTPUT  
+         @nQTY        = @nTempQTY        OUTPUT,
+         @cLottable01 = @cTempLottable01 OUTPUT,
+         @cLottable02 = @cTempLottable02 OUTPUT,
+         @cLottable03 = @cTempLottable03 OUTPUT,
+         @dLottable04 = @dTempLottable04 OUTPUT,
+         @dLottable05 = @dTempLottable05 OUTPUT,
+         @cLottable06 = @cTempLottable06 OUTPUT,
+         @cLottable07 = @cTempLottable07 OUTPUT,
+         @cLottable08 = @cTempLottable08 OUTPUT,
+         @cLottable09 = @cTempLottable09 OUTPUT,
+         @cLottable10 = @cTempLottable10 OUTPUT,
+         @cLottable11 = @cTempLottable11 OUTPUT,
+         @cLottable12 = @cTempLottable12 OUTPUT,
+         @dLottable13 = @dTempLottable13 OUTPUT,
+         @dLottable14 = @dTempLottable14 OUTPUT,
+         @dLottable15 = @dTempLottable15 OUTPUT
    END
 
 
@@ -535,7 +534,7 @@ BEGIN
       -- Assign to actual
       SET @cSuggSKU = @cTempSKU
       SET @cSuggLOC = @cTempLOC
-      SET @nSuggQTY = @nTempQTY 
+      SET @nSuggQTY = @nTempQTY
       SET @cLottable01 = @cTempLottable01
       SET @cLottable02 = @cTempLottable02
       SET @cLottable03 = @cTempLottable03
@@ -556,21 +555,21 @@ BEGIN
       SET @cLOC = @cSuggLOC
       SET @cSKU = @cSuggSKU
       SET @nQTY = @nSuggQTY
-      
+
       -- Get SKU description
       DECLARE @cDispStyleColorSize  NVARCHAR( 20)
       SET @cDispStyleColorSize = rdt.RDTGetConfig( @nFunc, 'DispStyleColorSize', @cStorerKey)
-      
+
       IF @cDispStyleColorSize = '0'
          SELECT @cSKUDescr = Descr FROM SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU
-      
+
       ELSE IF @cDispStyleColorSize = '1'
-         SELECT @cSKUDescr = 
-            CAST( Style AS NCHAR(20)) + 
-            CAST( Color AS NCHAR(10)) + 
-            CAST( Size  AS NCHAR(10)) 
-         FROM SKU WITH (NOLOCK) 
-         WHERE StorerKey = @cStorerKey 
+         SELECT @cSKUDescr =
+            CAST( Style AS NCHAR(20)) +
+            CAST( Color AS NCHAR(10)) +
+            CAST( Size  AS NCHAR(10))
+         FROM SKU WITH (NOLOCK)
+         WHERE StorerKey = @cStorerKey
             AND SKU = @cSKU
 
       -- Get DisableQTYField
@@ -594,14 +593,14 @@ BEGIN
                '@cLangCode        NVARCHAR( 3),  ' +
                '@nStep            INT,           ' +
                '@nInputKey        INT,           ' +
-               '@cFacility        NVARCHAR( 5),  ' + 
+               '@cFacility        NVARCHAR( 5),  ' +
                '@cStorerKey       NVARCHAR( 15), ' +
                '@cPickSlipNo      NVARCHAR( 10), ' +
                '@cPickZone        NVARCHAR( 10), ' +
                '@cLOC             NVARCHAR( 10), ' +
                '@cSKU             NVARCHAR( 20), ' +
                '@nQTY             INT,           ' +
-               '@cDisableQTYField NVARCHAR( 1)  OUTPUT, ' + 
+               '@cDisableQTYField NVARCHAR( 1)  OUTPUT, ' +
                '@nErrNo           INT           OUTPUT, ' +
                '@cErrMsg          NVARCHAR( 20) OUTPUT  '
 
@@ -611,17 +610,10 @@ BEGIN
          END
       END
    END
-   
+
 Quit:
 
 END
 GO
-
-
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS ON 
-GO
-
-GRANT EXECUTE ON RDT.rdt_839GetTask01 TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_839GetTask01] TO [NSQL]
 GO

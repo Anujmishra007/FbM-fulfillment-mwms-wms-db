@@ -7,7 +7,7 @@ GO
 
 /***************************************************************************/
 /* Store procedure: rdt_839Confirm01                                       */
-/* Copyright      : LF Logistics                                           */
+/* Copyright      : Maersk                                                 */
 /*                                                                         */
 /* Date       Rev  Author  Purposes                                        */
 /* 2018-03-06 1.0  ChewKP  WMS-4093 Created                                */
@@ -15,43 +15,49 @@ GO
 /* 2018-10-18 1.2  ChewKP  WMS-5156 Standardize SP                         */
 /* 2019-07-11 1.3  James   WMS-9683 Add StdEventLog (james02)              */
 /* 2022-04-20 1.4  YeeKung WMS-19311 Add Data capture (yeekung01)          */
+/* 2023-07-25 1.5  Ung     WMS-23002 Add serial no                         */
 /***************************************************************************/
 CREATE OR ALTER  PROC [RDT].[rdt_839Confirm01](
- @nMobile        INT,               
- @nFunc          INT,               
- @cLangCode      NVARCHAR( 3),      
- @nStep          INT,               
- @nInputKey      INT,               
- @cFacility      NVARCHAR( 5) ,     
- @cStorerKey     NVARCHAR( 15),     
- @cType          NVARCHAR( 10),     
- @cPickSlipNo    NVARCHAR( 10),     
- @cPickZone      NVARCHAR( 1),      
- @cDropID        NVARCHAR( 20),     
- @cLOC           NVARCHAR( 10),    
- @cSKU           NVARCHAR( 20),     
- @nQTY           INT,               
- @cLottableCode  NVARCHAR( 20),      
- @cLottable01    NVARCHAR( 18),     
- @cLottable02    NVARCHAR( 18),     
- @cLottable03    NVARCHAR( 18),     
- @dLottable04    DATETIME,          
- @dLottable05    DATETIME,          
- @cLottable06    NVARCHAR( 30),     
- @cLottable07    NVARCHAR( 30),     
- @cLottable08    NVARCHAR( 30),     
- @cLottable09    NVARCHAR( 30),     
- @cLottable10    NVARCHAR( 30),     
- @cLottable11    NVARCHAR( 30),     
- @cLottable12    NVARCHAR( 30),     
- @dLottable13    DATETIME,          
- @dLottable14    DATETIME,          
- @dLottable15    DATETIME, 
- @cPackData1     NVARCHAR( 30),
- @cPackData2     NVARCHAR( 30),
- @cPackData3     NVARCHAR( 30),
- @nErrNo         INT           OUTPUT,    
- @cErrMsg        NVARCHAR(250) OUTPUT   
+   @nMobile        INT,
+   @nFunc          INT,
+   @cLangCode      NVARCHAR( 3),
+   @nStep          INT,
+   @nInputKey      INT,
+   @cFacility      NVARCHAR( 5) ,
+   @cStorerKey     NVARCHAR( 15),
+   @cType          NVARCHAR( 10),
+   @cPickSlipNo    NVARCHAR( 10),
+   @cPickZone      NVARCHAR( 1),
+   @cDropID        NVARCHAR( 20),
+   @cLOC           NVARCHAR( 10),
+   @cSKU           NVARCHAR( 20),
+   @nQTY           INT,
+   @cLottableCode  NVARCHAR( 20),
+   @cLottable01    NVARCHAR( 18),
+   @cLottable02    NVARCHAR( 18),
+   @cLottable03    NVARCHAR( 18),
+   @dLottable04    DATETIME,
+   @dLottable05    DATETIME,
+   @cLottable06    NVARCHAR( 30),
+   @cLottable07    NVARCHAR( 30),
+   @cLottable08    NVARCHAR( 30),
+   @cLottable09    NVARCHAR( 30),
+   @cLottable10    NVARCHAR( 30),
+   @cLottable11    NVARCHAR( 30),
+   @cLottable12    NVARCHAR( 30),
+   @dLottable13    DATETIME,
+   @dLottable14    DATETIME,
+   @dLottable15    DATETIME,
+   @cPackData1     NVARCHAR( 30),
+   @cPackData2     NVARCHAR( 30),
+   @cPackData3     NVARCHAR( 30),
+   @cID            NVARCHAR( 18),
+   @cSerialNo      NVARCHAR( 30),
+   @nSerialQTY     INT,
+   @nBulkSNO       INT,
+   @nBulkSNOQTY    INT,
+   @nErrNo         INT           OUTPUT,
+   @cErrMsg        NVARCHAR(250) OUTPUT  
    
 ) AS
 BEGIN
