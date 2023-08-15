@@ -1,10 +1,6 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdt_MoveToID_Confirm]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_MoveToID_Confirm]
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
@@ -17,21 +13,26 @@ GO
 /* 2017-07-25 1.1  Ung        Fix bug                                   */
 /* 2018-03-07 1.2  ChewKP     WMS-4190 (ChewKP01)                       */
 /* 2020-01-15 1.3  YeeKung    INC1008653 Fix rdtMoveToIDLog(yeekung01)  */
+/* 2023-07-29 1.4  Ung        WMS-23069 Add serial no                   */
 /************************************************************************/
 
-CREATE PROC rdt.rdt_MoveToID_Confirm (
-   @nMobile    INT,
-   @nFunc      INT,
-   @cLangCode  NVARCHAR( 3),
-   @cType      NVARCHAR( 1),   --Y=Confirm, N=Undo
-   @cStorerKey NVARCHAR( 15),
-   @cToID      NVARCHAR( 18),
-   @cFromLOC   NVARCHAR( 10),
-   @cSKU       NVARCHAR( 20),
-   @cUCC       NVARCHAR( 20),
-   @nQTY       INT,
-   @nErrNo     INT       OUTPUT,
-   @cErrMsg    NVARCHAR( 20) OUTPUT
+CREATE OR ALTER PROC [RDT].[rdt_MoveToID_Confirm] (
+   @nMobile       INT,
+   @nFunc         INT,
+   @cLangCode     NVARCHAR( 3),
+   @cType         NVARCHAR( 1),   --Y=Confirm, N=Undo
+   @cStorerKey    NVARCHAR( 15),
+   @cToID         NVARCHAR( 18),
+   @cFromLOC      NVARCHAR( 10),
+   @cSKU          NVARCHAR( 20),
+   @cUCC          NVARCHAR( 20) = '',
+   @nQTY          INT,
+   @cSerialNo     NVARCHAR( 30) = '',
+   @nSerialQTY    INT = 0,
+   @nBulkSNO      INT = 0,
+   @nBulkSNOQTY   INT = 0,
+   @nErrNo        INT           OUTPUT,
+   @cErrMsg       NVARCHAR( 20) OUTPUT
 )
 AS
 
@@ -56,15 +57,36 @@ AS
    IF @cType = 'Y' -- Confirm
    BEGIN
       SET @nQTYBal = @nQTY
-
-      -- Loop rdtMoveToIDLog
-      SET @curLLI = CURSOR FOR
-         SELECT LOT, LOC, ID, SKU, QTY - QTYAllocated - QTYPicked - (CASE WHEN QtyReplen < 0 THEN 0 ELSE QtyReplen END)
-         FROM dbo.LOTxLOCxID WITH (NOLOCK)
+      
+      -- Open cursor
+      IF @cSerialNo <> ''
+      BEGIN
+         DECLARE @cSerialID NVARCHAR( 18) = ''
+         SELECT @cSerialID = ID
+         FROM dbo.SerialNo WITH (NOLOCK)
          WHERE StorerKey = @cStorerKey
             AND SKU = @cSKU
-            AND LOC = @cFromLOC
-            AND QTY - QTYAllocated - QTYPicked - (CASE WHEN QtyReplen < 0 THEN 0 ELSE QtyReplen END) > 0
+            AND SerialNo = @cSerialNo
+
+         SET @curLLI = CURSOR FOR
+            SELECT LOT, LOC, ID, SKU, QTY - QTYAllocated - QTYPicked - (CASE WHEN QtyReplen < 0 THEN 0 ELSE QtyReplen END)
+            FROM dbo.LOTxLOCxID WITH (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+               AND SKU = @cSKU
+               AND LOC = @cFromLOC
+               AND ID = @cSerialID
+               AND QTY - QTYAllocated - QTYPicked - (CASE WHEN QtyReplen < 0 THEN 0 ELSE QtyReplen END) > 0
+      END
+      ELSE
+         SET @curLLI = CURSOR FOR
+            SELECT LOT, LOC, ID, SKU, QTY - QTYAllocated - QTYPicked - (CASE WHEN QtyReplen < 0 THEN 0 ELSE QtyReplen END)
+            FROM dbo.LOTxLOCxID WITH (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+               AND SKU = @cSKU
+               AND LOC = @cFromLOC
+               AND QTY - QTYAllocated - QTYPicked - (CASE WHEN QtyReplen < 0 THEN 0 ELSE QtyReplen END) > 0
+
+      -- Loop rdtMoveToIDLog
       OPEN @curLLI
       FETCH NEXT FROM @curLLI INTO @cFromLOT, @cFromLOC, @cFromID, @cSKU, @nQTYAvail
       WHILE @@FETCH_STATUS = 0
@@ -92,7 +114,8 @@ AS
             GOTO RollBackTran
          END
 
-         IF ISNULL(@cUCC,'')  = ''
+         -- SKU, QTY
+         IF @cUCC = '' AND @cSerialNo = ''
          BEGIN
             -- Update Log
             IF EXISTS( SELECT 1 FROM rdt.rdtMoveToIDLog WITH (NOLOCK)
@@ -128,7 +151,9 @@ AS
                END
             END
          END
-         ELSE
+         
+         -- UCC
+         ELSE IF @cUCC <> ''
          BEGIN
             INSERT INTO rdt.rdtMoveToIDLog (StorerKey, ToID, FromLOT, FromLOC, FromID, SKU, QTY, UCC)
             VALUES (@cStorerKey, @cToID, @cFromLOT, @cFromLOC, @cFromID, @cSKU, @nQTYMove, @cUCC )
@@ -139,6 +164,20 @@ AS
                GOTO RollBackTran
             END
          END
+         
+         -- Serial no
+         ELSE IF @cSerialNo <> ''
+         BEGIN
+            INSERT INTO rdt.rdtMoveToIDLog (StorerKey, ToID, FromLOT, FromLOC, FromID, SKU, QTY, SerialNo)
+            VALUES (@cStorerKey, @cToID, @cFromLOT, @cFromLOC, @cFromID, @cSKU, @nSerialQTY, @cSerialNo)
+            IF @@ERROR <> 0
+            BEGIN
+               SET @nErrNo = 79008
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS Log Fail
+               GOTO RollBackTran
+            END
+         END
+         
          SET @nQTYBal = @nQTYBal - @nQTYMove
          IF @nQTYBal = 0
             BREAK
@@ -207,11 +246,5 @@ Quit:
    WHILE @@TRANCOUNT > @nTranCount
       COMMIT TRAN
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON RDT.rdt_MoveToID_Confirm TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_MoveToID_Confirm] TO [NSQL]
 GO

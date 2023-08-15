@@ -1,4 +1,3 @@
-
 -- rdtfnc_MoveToID
 execute rdt.rdtDropMsg 78901, 78950
 
@@ -23,4 +22,5 @@ execute rdt.rdtAddMsg 78918, 10, '78918^ToLOC needed  ', 'us_english', 534
 execute rdt.rdtAddMsg 78919, 10, '78919^Invalid LOC   ', 'us_english', 534
 execute rdt.rdtAddMsg 78920, 10, '78920^Diff facility ', 'us_english', 534
 execute rdt.rdtAddMsg 78921, 10, '78921^MultiSKUBarcod', 'us_english', 534
-execute rdt.rdtAddMsg 78922, 10, '78922^DecodeError', 'us_english', 534
+execute rdt.rdtAddMsg 78922, 10, '78922^Decode Error  ', 'us_english', 534
+execute rdt.rdtAddMsg 78923, 10, '78923^Decode Error  ', 'us_english', 534
