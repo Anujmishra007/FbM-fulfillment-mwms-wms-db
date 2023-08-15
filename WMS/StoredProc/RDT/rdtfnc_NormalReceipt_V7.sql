@@ -40,10 +40,9 @@ GO
 /* 2022-06-29 3.5  James    JSM-77967 Add skustatus for rdt_GetSKU (james06)     */
 /* 2022-08-29 3.6  Ung      WMS-20644 Add @cGetReceiveInfoSP to lottable screen  */
 /* 2022-08-04 3.7  YeeKung  WMS-20273 Add ExtendedupdateSP in step 4 (yeekung05)  */
-/* 2023-05-05 3.8  YeeKung  WMS-22369 Add output for barcode in decodesp (yeekung06)*/
-/*									 Add Close Pallet	scn										   */
-/* 2023-04-27 3.9  James    WMS-22265 Enhance DefaultToLocSP (james07)           */
+/* 2023-04-27 3.8  James    WMS-22265 Enhance DefaultToLocSP (james07)           */
 /*                          Add ExtendedValidateSP to step 1                     */
+/* 2023-05-05 3.9  YeeKung  WMS-22369 Add output for barcode in decodesp (yeekung06)*/
 /*********************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_NormalReceipt_V7] (
@@ -168,8 +167,8 @@ DECLARE
    @nBulkSNO            INT,
    @nBulkSNOQTY         INT,
    @cScanBarcode        NVARCHAR( 2000),  --(cc01)
-   @cClosePallet        NVARCHAR( 20), --(yeekung06)
    @cDefaultToLocSP     NVARCHAR( 20),
+   @cClosePallet        NVARCHAR( 20), --(yeekung06)
    
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -569,7 +568,7 @@ BEGIN
                SET @cOutField01 = '' -- ReceiptKey
                SET @cOutField02 = '' -- POKey
                SET @cReceiptKey = ''
-               SET @cPOKey = ''
+            SET @cPOKey = ''
                EXEC rdt.rdtSetFocusField @nMobile, 1
                GOTO Quit
             END
@@ -672,7 +671,7 @@ BEGIN
                   SET @cOutField02 = ''
                   SET @cPOKey = ''
                   EXEC rdt.rdtSetFocusField @nMobile, 2
-                  GOTO Quit
+        GOTO Quit
                END
             END
          END
@@ -967,7 +966,7 @@ BEGIN
    BEGIN
       -- Reset this screen var
       SET @cOutField01 = '' -- ReceiptKey
-      SET @cOutField02 = '' -- POKey
+  SET @cOutField02 = '' -- POKey
       SET @cReceiptKey = ''
       SET @cPOKey = ''
    END
@@ -1357,7 +1356,7 @@ BEGIN
                '@cLottable12  NVARCHAR( 30), ' +
                '@dLottable13  DATETIME,      ' +
                '@dLottable14  DATETIME,      ' +
-               '@dLottable15  DATETIME,      ' +
+        '@dLottable15  DATETIME,      ' +
                '@nQTY         INT,           ' +
                '@cReasonCode  NVARCHAR( 10), ' +
                '@cSuggToLOC   NVARCHAR( 10), ' +
@@ -1464,7 +1463,7 @@ BEGIN
          ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cBarcode, @cFieldName, ' +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cBarcode OUTPUT, @cFieldName, ' +
                ' @cID         OUTPUT, @cSKU        OUTPUT, @nQTY        OUTPUT, ' +
                ' @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT, ' +
                ' @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT, ' +
@@ -1480,7 +1479,7 @@ BEGIN
                ' @cReceiptKey  NVARCHAR( 10),   ' +
                ' @cPOKey       NVARCHAR( 10),   ' +
                ' @cLOC         NVARCHAR( 10),   ' +
-               ' @cBarcode     NVARCHAR( 2000), ' +
+               ' @cBarcode     NVARCHAR( 2000) OUTPUT, ' +
                ' @cFieldName   NVARCHAR( 10),   ' +
                ' @cID          NVARCHAR( 18)  OUTPUT, ' +
                ' @cSKU         NVARCHAR( 20)  OUTPUT, ' +
@@ -1504,7 +1503,7 @@ BEGIN
                ' @cErrMsg      NVARCHAR( 20)  OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cSKUBarcode, 'SKU',
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cSKUBarcode OUTPUT, 'SKU',
                @cID         OUTPUT, @cSKU        OUTPUT, @nQTY        OUTPUT,
                @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT,
                @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT,
@@ -1643,7 +1642,7 @@ BEGIN
 
                -- Not allow over receive, by DocType (follow Exceed way in ntrReceiptDetailUpdate)
                IF NOT(@cAllow_OverReceipt IN ('0', '') OR                   -- Not allow for all doc type
-                  (@cAllow_OverReceipt = '2' AND @cDocType <> 'R') OR   -- Not allow, except return (means only return is allow)
+                (@cAllow_OverReceipt = '2' AND @cDocType <> 'R') OR   -- Not allow, except return (means only return is allow)
                   (@cAllow_OverReceipt = '3' AND @cDocType <> 'A') OR   -- Not allow, except normal (means only normal is allow)
                   (@cAllow_OverReceipt = '4' AND @cDocType <> 'X') )     -- Not allow, except xdock  (means only xdoc   is allow)
                   AND (rdt.RDTGetConfig( @nFunc, 'SkipCheckingSKUNotInASN', @cStorerKey) = '1')  -- SKUNotinASN
@@ -1968,7 +1967,7 @@ BEGIN
          -- Go to dynamic lottable screen
          SET @nFromScn = @nScn
          SET @nScn = 3990
-         SET @nStep = @nStep + 1
+    SET @nStep = @nStep + 1
       END
       ELSE
       BEGIN
@@ -2167,7 +2166,7 @@ BEGIN
          IF @nErrno<>0
             GOTO QUIT
       END
-      
+
       IF @cClosePallet ='1'
       BEGIN
          -- Prepare next screen var
@@ -2995,7 +2994,7 @@ Step 7. scn = 4036. Message screen
 Step_7:
 BEGIN
    -- Check receive pallet
-SET @cPalletRecv = ''    --(AL01)
+   SET @cPalletRecv = ''    --(AL01)
    IF @cPalletRecvSP = '1'
       SET @cPalletRecv = '1'
    ELSE
@@ -3168,7 +3167,7 @@ SET @cPalletRecv = ''    --(AL01)
       SET @nScn = @nScn - 3
       SET @nStep = @nStep - 3
    END
-   
+
     -- Extended info
    IF @cExtendedInfoSP <> ''
    BEGIN
@@ -3234,6 +3233,7 @@ SET @cPalletRecv = ''    --(AL01)
          SET @cOutField05 = @cExtendedInfo
       END
    END
+
    -- Reset data
    SELECT @cSKU = '', @nQTY = 0,
       @cLottable01 = '', @cLottable02 = '', @cLottable03 = '',    @dLottable04 = NULL, @dLottable05 = NULL,
@@ -3825,7 +3825,7 @@ BEGIN
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cSKU,
-               @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+              @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
                @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
                @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
                @nQTY, @cReasonCode, @cSuggToLOC, @cFinalLOC, @cReceiptLineNumber,
@@ -4122,7 +4122,7 @@ BEGIN
             @dLottable04   = @dLottable04,
             @dLottable05   = NULL,
             @cLottable06   = @cLottable06,
-            @cLottable07   = @cLottable07,
+      @cLottable07   = @cLottable07,
             @cLottable08   = @cLottable08,
             @cLottable09   = @cLottable09,
             @cLottable10   = @cLottable10,
@@ -4386,6 +4386,7 @@ BEGIN
 END
 GOTO Quit
 
+
 /********************************************************************************
 Step 15. Scn = 4042. Message
    Close Pallet?
@@ -4521,6 +4522,7 @@ BEGIN
    END
 END
 GOTO Quit
+
 /********************************************************************************
 Quit. Update back to I/O table, ready to be pick up by JBOSS
 ********************************************************************************/
