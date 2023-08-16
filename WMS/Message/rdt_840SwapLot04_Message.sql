@@ -42,4 +42,11 @@ execute rdt.rdtAddMsg 169738, 10, '169738 GenTLog3 Fail', 'us_english', 840
 execute rdt.rdtAddMsg 169739, 10, '169739 SWAP LOT FAIL', 'us_english', 840      -- ZG01
 execute rdt.rdtAddMsg 169740, 10, '169740 SWAP LOT FAIL', 'us_english', 840      -- ZG01
 
+--WMS-21295
+execute rdt.rdtAddMsg 169741, 10, '169741IT69 not match', 'us_english', 840
+execute rdt.rdtAddMsg 169742, 10, '169742IT69 not match', 'us_english', 840
+execute rdt.rdtAddMsg 169743, 10, '169743GET LABEL Fail', 'us_english', 840
+execute rdt.rdtAddMsg 169744, 10, '169744 INSPKDET Fail', 'us_english', 840
+execute rdt.rdtAddMsg 169745, 10, '169745 INSPKDET Fail', 'us_english', 840
+
 SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 169701 AND 169750

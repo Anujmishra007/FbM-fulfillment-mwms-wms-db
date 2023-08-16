@@ -1,7 +1,3 @@
-IF EXISTS (SELECT * FROM sys.objects WHERE object_Id = Object_Id(N'[rdt].[rdt_840SwapLot04]') AND OBJECTPROPERTY(object_Id, N'IsProcedure') = 1)
-   DROP PROCEDURE [rdt].[rdt_840SwapLot04]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -25,9 +21,13 @@ GO
 /* 2021-10-07  1.2  James       WMS-16847 Change logic to determine     */
 /*                              Move orders type (james01)              */
 /* 2022-04-12  1.3  LZG         JSM-60539 -Catered for move order (ZG02)*/
+/* 2022-12-05  1.4  James       WMS-21295 Swap lot validation (james02) */
+/*                              Add move order type specific packing    */
+/* 2022-12-09  1.5  LZG         JSM-113110 - Replaced '-' in Lottable02 */  
+/*                              check (ZG03)                            */  
 /************************************************************************/
 
-CREATE PROC [RDT].[rdt_840SwapLot04] (
+CREATE OR ALTER PROC [RDT].[rdt_840SwapLot04] (
    @n_Mobile         INT,
    @c_Storerkey      NVARCHAR( 15),
    @c_OrderKey       NVARCHAR( 10),
@@ -83,7 +83,7 @@ BEGIN
            @n_InputKey              INT,
            @c_SQLStatement          NVARCHAR(2000),
            @c_SQLParms              NVARCHAR(2000),
-   @c_GenLabelNo_SP         NVARCHAR( 20),
+           @c_GenLabelNo_SP         NVARCHAR( 20),
            @c_TargetOrderKey        NVARCHAR( 10),
            @c_TargetLOC             NVARCHAR( 10),
            @c_NewLoc                NVARCHAR( 10),
@@ -161,11 +161,38 @@ BEGIN
                       AND   PD.QtyMoved < PD.QTY
                       AND   LA.Lottable02 = @c_Lottable02)
       BEGIN
-     SET @n_ErrNo = 169705
+      SET @n_ErrNo = 169705
          SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --'Invalid Label'
          GOTO Quit_WithoutTran
       END
 
+      --(james02)
+      -- Get sum of picked Qty by Lottable02
+      DECLARE @n_PickL2Sum INT = 0, @n_PackL2Sum INT = 0, @c_ScannedL2 NVARCHAR(18) = ''    
+      SET @c_ScannedL2 = STUFF(RIGHT(@c_Barcode, 14), 13, 0, '-')     
+    
+      SELECT @n_PickL2Sum = SUM(PD.Qty) FROM dbo.PickDetail PD WITH (NOLOCK)        
+      JOIN dbo.LotAttribute LA WITH (NOLOCK) ON LA.Lot = PD.Lot AND LA.StorerKey = PD.StorerKey        
+      WHERE PD.Orderkey = @c_Orderkey        
+      AND   PD.Storerkey = @c_StorerKey        
+      AND   PD.[Status] < '9'        
+      AND   PD.SKU = @c_SKU        
+      AND   LA.Lottable02 = @c_ScannedL2      
+              
+      -- Get sum of packed Qty plus the scanned Qty by Lottable02        
+      SELECT @n_PackL2Sum = SUM(Qty) FROM dbo.PackDetail WITH (NOLOCK)        
+      WHERE PickSlipNo = @c_PickSlipNo         
+      AND   Storerkey = @c_StorerKey        
+      AND   SKU = @c_SKU        
+      AND   RIGHT(UPC, 14) = REPLACE(@c_ScannedL2, '-', '')       
+          
+      IF ISNULL(@n_PackL2Sum, 0) + 1 > ISNULL(@n_PickL2Sum, 0)        
+      BEGIN        
+         SET @n_ErrNo = 169741        
+         SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') -- IT69 not match        
+         GOTO Quit_WithoutTran        
+      END         
+      
       IF EXISTS ( SELECT 1 FROM dbo.CODELKUP C WITH (NOLOCK)
                    JOIN dbo.Orders O WITH (NOLOCK) ON (C.Code = O.Type AND C.StorerKey = O.StorerKey)
                    WHERE C.ListName = 'HMORDTYPE'
@@ -185,8 +212,26 @@ BEGIN
             DECLARE @c_Scan_L12 NVARCHAR( 30)
 
             SET @c_Carton_L12 = SUBSTRING( @c_UPC, 22, 6)
-            SET @c_Scan_L12 = substring( @c_Lottable02, 7, 6)
-                                -- Check different lottable12 (HMOrderNumber)
+            --SET @c_Scan_L12 = REPLACE(substring( @c_Lottable02, 7, 6), '-', '')  -- ZG03  
+            
+            -- Check different lottable12 (HMOrderNumber)
+            DECLARE @c_Long      NVARCHAR( 100)
+            DECLARE @c_SQL       NVARCHAR( MAX)
+            DECLARE @c_SQLParam  NVARCHAR( MAX)
+            
+            SELECT @c_Long = Long 
+            FROM dbo.CODELKUP WITH (NOLOCK) 
+            WHERE LISTNAME = 'HMCTNRULES' 
+            AND   Storerkey = @c_Storerkey
+            
+            SET @c_SQL = 'SET @c_Scan_L12 = REPLACE(' + @c_Long + ', ''-'', '''')'
+            
+            SET @c_SQLParam = 
+               '@c_Lottable02  NVARCHAR( 18), ' + 
+               '@c_Scan_L12    NVARCHAR( 30) OUTPUT '
+                
+            EXEC sp_ExecuteSQL @c_SQL, @c_SQLParam, @c_Lottable02, @c_Scan_L12 OUTPUT
+               
             IF @c_Carton_L12 <> @c_Scan_L12
             BEGIN
                SET @n_ErrNo = 169706
@@ -357,7 +402,7 @@ BEGIN
                      TrafficCop = NULL
                   WHERE PickDetailKey = @c_TargetPickDetailKey
 
-    IF @@ERROR <> 0
+                  IF @@ERROR <> 0
                   BEGIN
                      SET @n_ErrNo = 169710
                      SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --Swap Lot Fail
@@ -407,7 +452,7 @@ BEGIN
                   WHERE PickDetailKey = @c_TargetPickDetailKey
 
                   IF @@ERROR <> 0
-              BEGIN
+                  BEGIN
                      SET @n_ErrNo = 169712
                      SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --Swap Lot Fail
                      EXEC rdt.rdtSetFocusField @n_Mobile, 6
@@ -518,6 +563,36 @@ BEGIN
       END
    END   -- End of @n_Swap = 1
 
+   -- (james02)
+   -- If this carton already packed
+   -- Check only same lottable02 can pack into same carton (apply for move orders only)
+   IF EXISTS ( SELECT 1 FROM dbo.CODELKUP C WITH (NOLOCK)
+                  JOIN dbo.Orders O WITH (NOLOCK) ON (C.Code = O.Type AND C.StorerKey = O.StorerKey)
+                  WHERE C.ListName = 'HMORDTYPE'
+                  AND   C.Short = 'M' 
+                  AND   O.OrderKey = @c_Orderkey
+                  AND   O.StorerKey = @c_StorerKey)
+   BEGIN
+      IF EXISTS ( SELECT 1 FROM dbo.PackDetail WITH (NOLOCK)
+                  WHERE PickSlipNo = @c_PickSlipNo
+                  AND   CartonNo = @n_CartonNo
+                  GROUP BY CartonNo
+                  HAVING ISNULL( SUM( Qty), 0) > 0)
+      BEGIN
+         IF NOT EXISTS ( SELECT 1
+                         FROM dbo.PackDetail WITH (NOLOCK)        
+                         WHERE PickSlipNo = @c_PickSlipNo         
+                         AND   Storerkey = @c_StorerKey
+                         AND   CartonNo = @n_CartonNo        
+                         AND   RIGHT(UPC, 14) = REPLACE(STUFF(RIGHT(@c_Barcode, 14), 13, 0, '-'), '-', ''))       
+         BEGIN
+            SET @n_ErrNo = 169742        
+            SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') -- IT69 not match        
+            GOTO RollBackTran        
+         END
+      END
+   END
+      
    -- Insert pack here
    IF EXISTS (SELECT 1 FROM rdt.rdtTrackLog WITH (NOLOCK)
     WHERE PickSlipNo = @c_PickSlipNo
@@ -615,23 +690,20 @@ BEGIN
    END
    ELSE     -- Insert new PackDetail
    BEGIN
-      -- Check if same carton exists before. Diff sku can scan into same carton
-      IF NOT EXISTS (SELECT 1 FROM dbo.PackDetail WITH (NOLOCK)
-                 WHERE StorerKey = @c_Storerkey
-                 AND PickSlipNo = @c_PickSlipNo
-                 AND CartonNo = @n_CartonNo)
+   	-- Move orders packing
+      IF EXISTS ( SELECT 1 FROM dbo.CODELKUP C WITH (NOLOCK)
+                     JOIN dbo.Orders O WITH (NOLOCK) ON (C.Code = O.Type AND C.StorerKey = O.StorerKey)
+                     WHERE C.ListName = 'HMORDTYPE'
+                     AND   C.Short = 'M' 
+                     AND   O.OrderKey = @c_Orderkey
+                     AND   O.StorerKey = @c_StorerKey)
       BEGIN
-         /*IF @n_CartonNo = 1 AND @n_SwapLot = 1
+         -- Check if same lottable02 exists before. Diff sku can scan into same carton
+         IF NOT EXISTS (SELECT 1 FROM dbo.PackDetail WITH (NOLOCK)
+                    WHERE StorerKey = @c_Storerkey
+                    AND   PickSlipNo = @c_PickSlipNo
+                    AND   RIGHT(UPC, 14) = REPLACE(STUFF(RIGHT(@c_Barcode, 14), 13, 0, '-'), '-', ''))
          BEGIN
-            SELECT TOP 1 @c_LabelNo = CaseID
-            FROM dbo.PICKDETAIL WITH (NOLOCK)
-            WHERE Storerkey = @c_Storerkey
-            AND   OrderKey = @c_OrderKey
-            AND   Sku = @c_SKU
-            ORDER BY 1
-         END
-         ELSE
-         BEGIN*/
             SET @c_GenLabelNo_SP = rdt.RDTGetConfig( @n_Func, 'PackByTrackNoGenLabelNo_SP', @c_Storerkey)
             IF @c_GenLabelNo_SP NOT IN ('', '0') AND
                EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @c_GenLabelNo_SP AND type = 'P')
@@ -679,61 +751,187 @@ BEGIN
 
                IF @b_Success <> 1
                BEGIN
-                  SET @n_ErrNo = 169720
+                  SET @n_ErrNo = 169743
                   SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --'GET LABEL Fail'
                   EXEC rdt.rdtSetFocusField @n_Mobile, 6
                   GOTO RollBackTran
                END
             END
-         --END
 
-         -- CartonNo = 0 & LabelLine = '0000', trigger will auto assign
-         INSERT INTO dbo.PackDetail
-            (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, Refno, AddWho, AddDate, EditWho, EditDate, DropID, UPC)
-         VALUES
-            (@c_PickSlipNo, 0, @c_LabelNo, '00000', @c_Storerkey, @c_SKU, @nPack_QTY,
-            '', 'rdt.' + sUser_sName(), GETDATE(), 'rdt.' + sUser_sName(), GETDATE(), '', @c_Barcode)
+            -- CartonNo = 0 & LabelLine = '0000', trigger will auto assign
+            INSERT INTO dbo.PackDetail
+               (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, Refno, AddWho, AddDate, EditWho, EditDate, DropID, UPC)
+            VALUES
+               (@c_PickSlipNo, 0, @c_LabelNo, '00000', @c_Storerkey, @c_SKU, @nPack_QTY,
+               '', 'rdt.' + sUser_sName(), GETDATE(), 'rdt.' + sUser_sName(), GETDATE(), '', @c_Barcode)
 
-         IF @@ERROR <> 0
+            IF @@ERROR <> 0
+            BEGIN
+               SET @n_ErrNo = 169744
+               SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --'INSPKDET Failed'
+               EXEC rdt.rdtSetFocusField @n_Mobile, 6
+               GOTO RollBackTran
+            END
+         END
+         ELSE
          BEGIN
-            SET @n_ErrNo = 169721
-            SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --'INSPKDET Failed'
-            EXEC rdt.rdtSetFocusField @n_Mobile, 6
-            GOTO RollBackTran
+            SET @c_CurLabelNo = ''
+            SET @c_CurLabelLine = ''
+
+            SELECT TOP 1 
+               @n_CartonNo = CartonNo, 
+               @c_CurLabelNo = LabelNo 
+            FROM dbo.PackDetail WITH (NOLOCK)
+            WHERE StorerKey = @c_Storerkey
+            AND   PickSlipNo = @c_PickSlipNo
+            AND   RIGHT(UPC, 14) = REPLACE(STUFF(RIGHT(@c_Barcode, 14), 13, 0, '-'), '-', '')
+            
+            SELECT @c_CurLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
+            FROM PACKDETAIL WITH (NOLOCK)
+            WHERE StorerKey = @c_Storerkey
+            AND PickSlipNo = @c_PickSlipNo
+            AND CartonNo = @n_CartonNo
+
+            -- need to use the existing labelno
+            INSERT INTO dbo.PackDetail
+               (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, Refno, AddWho, AddDate, EditWho, EditDate, DropID, UPC)
+            VALUES
+               (@c_PickSlipNo, @n_CartonNo, @c_CurLabelNo, @c_CurLabelLine, @c_Storerkey, @c_SKU, @nPack_QTY,
+               '', 'rdt.' + sUser_sName(), GETDATE(), 'rdt.' + sUser_sName(), GETDATE(), '', @c_Barcode)
+
+            IF @@ERROR <> 0
+            BEGIN
+               SET @n_ErrNo = 169745
+               SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --'INSPKDET Failed'
+               EXEC rdt.rdtSetFocusField @n_Mobile, 6
+               GOTO RollBackTran
+            END
+
+            SET @c_LabelNo = @c_CurLabelNo
          END
       END
-      ELSE
+   	ELSE  -- Non move orders packing
       BEGIN
-         SET @c_CurLabelNo = ''
-         SET @c_CurLabelLine = ''
-
-         SELECT TOP 1 @c_CurLabelNo = LabelNo FROM dbo.PackDetail WITH (NOLOCK)
-         WHERE StorerKey = @c_Storerkey
-         AND PickSlipNo = @c_PickSlipNo
-         AND CartonNo = @n_CartonNo
-
-         SELECT @c_CurLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
-         FROM PACKDETAIL WITH (NOLOCK)
-         WHERE StorerKey = @c_Storerkey
-         AND PickSlipNo = @c_PickSlipNo
-         AND CartonNo = @n_CartonNo
-
-         -- need to use the existing labelno
-         INSERT INTO dbo.PackDetail
-            (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, Refno, AddWho, AddDate, EditWho, EditDate, DropID, UPC)
-         VALUES
-            (@c_PickSlipNo, @n_CartonNo, @c_CurLabelNo, @c_CurLabelLine, @c_Storerkey, @c_SKU, @nPack_QTY,
-            '', 'rdt.' + sUser_sName(), GETDATE(), 'rdt.' + sUser_sName(), GETDATE(), '', @c_Barcode)
-
-         IF @@ERROR <> 0
+         -- Check if same carton exists before. Diff sku can scan into same carton
+         IF NOT EXISTS (SELECT 1 FROM dbo.PackDetail WITH (NOLOCK)
+                    WHERE StorerKey = @c_Storerkey
+                    AND PickSlipNo = @c_PickSlipNo
+                    AND CartonNo = @n_CartonNo)
          BEGIN
-            SET @n_ErrNo = 169722
-            SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --'INSPKDET Failed'
-            EXEC rdt.rdtSetFocusField @n_Mobile, 6
-            GOTO RollBackTran
-         END
+            /*IF @n_CartonNo = 1 AND @n_SwapLot = 1
+            BEGIN
+               SELECT TOP 1 @c_LabelNo = CaseID
+               FROM dbo.PICKDETAIL WITH (NOLOCK)
+               WHERE Storerkey = @c_Storerkey
+               AND   OrderKey = @c_OrderKey
+               AND   Sku = @c_SKU
+               ORDER BY 1
+            END
+            ELSE
+            BEGIN*/
+               SET @c_GenLabelNo_SP = rdt.RDTGetConfig( @n_Func, 'PackByTrackNoGenLabelNo_SP', @c_Storerkey)
+               IF @c_GenLabelNo_SP NOT IN ('', '0') AND
+                  EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @c_GenLabelNo_SP AND type = 'P')
+               BEGIN
+                  SET @n_ErrNo = 0
+                  SET @c_SQLStatement = 'EXEC rdt.' + RTRIM( @c_GenLabelNo_SP) +
+                     ' @nMobile, @nFunc, @c_LangCode, @nStep, @nInputKey, @c_Storerkey, @c_OrderKey, @cPickSlipNo, ' +
+                     ' @cTrackNo, @c_SKU, @cLabelNo OUTPUT, @nCartonNo OUTPUT, @n_ErrNo OUTPUT, @c_ErrMsg OUTPUT '
+                  SET @c_SQLParms =
+                     '@nMobile                   INT,           ' +
+                     '@nFunc                     INT,           ' +
+                     '@c_LangCode                 NVARCHAR( 3),  ' +
+                     '@nStep                     INT,           ' +
+                     '@nInputKey          INT,           ' +
+                     '@c_Storerkey                NVARCHAR( 15), ' +
+                     '@c_OrderKey                 NVARCHAR( 10), ' +
+                     '@cPickSlipNo               NVARCHAR( 10), ' +
+                     '@cTrackNo                  NVARCHAR( 20), ' +
+                     '@c_SKU                      NVARCHAR( 20), ' +
+                     '@cLabelNo                  NVARCHAR( 20) OUTPUT, ' +
+                     '@nCartonNo                 INT           OUTPUT, ' +
+                     '@n_ErrNo                    INT           OUTPUT, ' +
+                     '@c_ErrMsg                   NVARCHAR( 20) OUTPUT  '
 
-         SET @c_LabelNo = @c_CurLabelNo
+                  EXEC sp_ExecuteSQL @c_SQLStatement, @c_SQLParms,
+                     @n_Mobile, @n_Func, @c_LangCode, @n_Step, @n_InputKey, @c_Storerkey, @c_OrderKey, @c_PickSlipNo,
+                     @c_TrackNo, @c_SKU, @c_LabelNo OUTPUT, @n_CartonNo OUTPUT, @n_ErrNo OUTPUT, @c_ErrMsg OUTPUT
+
+                  IF @n_ErrNo <> 0
+                  BEGIN
+                     SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP')
+                     EXEC rdt.rdtSetFocusField @n_Mobile, 6
+                     GOTO RollBackTran
+                  END
+               END
+               ELSE
+               BEGIN
+                  -- Get new LabelNo
+                  EXECUTE isp_GenUCCLabelNo
+                           @c_Storerkey,
+                           @c_LabelNo    OUTPUT,
+                           @b_Success     OUTPUT,
+                           @n_ErrNo       OUTPUT,
+                           @c_ErrMsg      OUTPUT
+
+                  IF @b_Success <> 1
+                  BEGIN
+                     SET @n_ErrNo = 169720
+                     SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --'GET LABEL Fail'
+                     EXEC rdt.rdtSetFocusField @n_Mobile, 6
+                     GOTO RollBackTran
+                  END
+               END
+            --END
+
+            -- CartonNo = 0 & LabelLine = '0000', trigger will auto assign
+            INSERT INTO dbo.PackDetail
+               (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, Refno, AddWho, AddDate, EditWho, EditDate, DropID, UPC)
+            VALUES
+               (@c_PickSlipNo, 0, @c_LabelNo, '00000', @c_Storerkey, @c_SKU, @nPack_QTY,
+               '', 'rdt.' + sUser_sName(), GETDATE(), 'rdt.' + sUser_sName(), GETDATE(), '', @c_Barcode)
+
+            IF @@ERROR <> 0
+            BEGIN
+               SET @n_ErrNo = 169721
+               SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --'INSPKDET Failed'
+               EXEC rdt.rdtSetFocusField @n_Mobile, 6
+               GOTO RollBackTran
+            END
+         END
+         ELSE
+         BEGIN
+            SET @c_CurLabelNo = ''
+            SET @c_CurLabelLine = ''
+
+            SELECT TOP 1 @c_CurLabelNo = LabelNo FROM dbo.PackDetail WITH (NOLOCK)
+            WHERE StorerKey = @c_Storerkey
+            AND PickSlipNo = @c_PickSlipNo
+            AND CartonNo = @n_CartonNo
+
+            SELECT @c_CurLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
+            FROM PACKDETAIL WITH (NOLOCK)
+            WHERE StorerKey = @c_Storerkey
+            AND PickSlipNo = @c_PickSlipNo
+            AND CartonNo = @n_CartonNo
+
+            -- need to use the existing labelno
+            INSERT INTO dbo.PackDetail
+               (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, Refno, AddWho, AddDate, EditWho, EditDate, DropID, UPC)
+            VALUES
+               (@c_PickSlipNo, @n_CartonNo, @c_CurLabelNo, @c_CurLabelLine, @c_Storerkey, @c_SKU, @nPack_QTY,
+               '', 'rdt.' + sUser_sName(), GETDATE(), 'rdt.' + sUser_sName(), GETDATE(), '', @c_Barcode)
+
+            IF @@ERROR <> 0
+            BEGIN
+               SET @n_ErrNo = 169722
+               SET @c_ErrMsg = rdt.rdtgetmessage( @n_ErrNo, @c_LangCode, 'DSP') --'INSPKDET Failed'
+               EXEC rdt.rdtSetFocusField @n_Mobile, 6
+               GOTO RollBackTran
+            END
+
+            SET @c_LabelNo = @c_CurLabelNo
+         END
       END
    END
 

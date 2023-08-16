@@ -1,11 +1,8 @@
-IF EXISTS (SELECT name FROM sysobjects WHERE name = 'rdt_600RcvFilter03' AND type = 'P')
-   DROP PROC rdt.rdt_600RcvFilter03
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF 
-GO
 
 /************************************************************************/
 /* Store procedure: rdt_600RcvFilter03                                  */
@@ -17,9 +14,10 @@ GO
 /*                                                                      */
 /* Date        Rev  Author      Purposes                                */
 /* 21-02-2019  1.0  James       WMS7837 Created                         */
+/* 16-08-2023  1.1  YeeKung     WMS-23201 Fix mobile   (yeekung01)      */              
 /************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_600RcvFilter03
+CREATE OR ALTER PROCEDURE [RDT].[rdt_600RcvFilter03]
    @nMobile     INT,
    @nFunc       INT,
    @cLangCode   NVARCHAR(  3),
@@ -34,7 +32,7 @@ CREATE PROCEDURE rdt.rdt_600RcvFilter03
    @cLottable02 NVARCHAR( 18),
    @cLottable03 NVARCHAR( 18),
    @dLottable04 DATETIME,
-   @dLottable05 DATETIME,    
+   @dLottable05 DATETIME,
    @cLottable06 NVARCHAR( 30),
    @cLottable07 NVARCHAR( 30),
    @cLottable08 NVARCHAR( 30),
@@ -63,7 +61,7 @@ BEGIN
 
    SELECT @cStorerKey = StorerKey
    FROM rdt.RDTMOBREC WITH (NOLOCK)
-   WHERE Func = @nFunc
+   WHERE mobile = @nMobile    --(yeekung01)
 
    SELECT TOP 1 @cColumnName = Code
    FROM dbo.CodeLkUp WITH (NOLOCK)
@@ -75,8 +73,8 @@ BEGIN
    IF @cColumnName <> ''
    BEGIN
       SET @cDataType = ''
-      SELECT @cDataType = DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS 
-      WHERE TABLE_NAME = 'ReceiptDetail' 
+      SELECT @cDataType = DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_NAME = 'ReceiptDetail'
       AND   COLUMN_NAME = @cColumnName
 
       IF @cDataType = 'nvarchar'
@@ -100,11 +98,5 @@ QUIT:
 END -- End Procedure
 
 GO
-
-GRANT EXECUTE ON rdt.rdt_600RcvFilter03 TO NSQL 
-GO   
-
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS ON 
+GRANT EXECUTE ON  [RDT].[rdt_600RcvFilter03] TO [NSQL]
 GO

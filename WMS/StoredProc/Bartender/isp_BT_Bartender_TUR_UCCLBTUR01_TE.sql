@@ -13,6 +13,7 @@ GO
 /* 22-Jun-2023 1.0  WLChooi    Created (UWP-1977)                               */  
 /* 22-Jun-2023 1.0  WLChooi    DevOps Combine Script                            */  
 /* 20-Jul-2023 1.1  WLChooi    UWP-1977 - Logic change (WL01)                   */
+/* 07-AUG-2023 1.2  CE         UWP-1977 - Logic change (CE01)                   */
 /********************************************************************************/                    
                       
 CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_TUR_UCCLBTUR01_TE]                          
@@ -277,9 +278,9 @@ BEGIN
                   + N'      , O.ExternOrderKey AS Desp_note_no ' + CHAR(13)  
                   + N'      , C.UDF03 AS TEC_part_no ' + CHAR(13)   --WL01
                   + N'      , PD.Qty ' + CHAR(13)  
-                  + N'      , OD.Lottable01 AS Batch ' + CHAR(13)  
+                  + N'      , LA.Lottable01 AS Batch ' + CHAR(13)   --CE01  
                   + N'      , CONCAT(''CARTON '', ROW_NUMBER() OVER (ORDER BY PD.CartonNo), '' of '', COUNT(*) OVER ()) AS box_cnt ' + CHAR(13)   --10  
-                  + N'      , ISNULL(OD.Sku,'''') ' + CHAR(13)  
+                  + N'      , ISNULL(PD.Sku,'''') ' + CHAR(13)   --CE01 
                   + N'      , ISNULL(@c_FAddr2,'''') AS wh_addr1 ' + CHAR(13) 
                   + N'      , ISNULL(@c_FAddr3,'''') AS wh_addr2 ' + CHAR(13)                    
                   + N'      , ISNULL(@c_FAddr4,'''') AS wh_addr3 ' + CHAR(13)
@@ -294,13 +295,15 @@ BEGIN
                   + N' FROM PackDetail PD (NOLOCK) ' + CHAR(13)  
                   + N' JOIN PackHeader PH (NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo ' + CHAR(13)  
                   + @c_JoinStatement + CHAR(13)  
-                  + N' JOIN ORDERDETAIL OD ON O.OrderKey = OD.OrderKey ' + CHAR(13)  
-                  + N' LEFT JOIN CODELKUP C (NOLOCK) ON OD.Sku = C.[UDF02] AND OD.StorerKey = C.Storerkey AND O.ConsigneeKey = C.UDF01 ' + CHAR(13)   --WL01
+                  --+ N' JOIN ORDERDETAIL OD ON O.OrderKey = OD.OrderKey ' + CHAR(13) --CE01
+                  + N' JOIN PICKDETAIL PKD (NOLOCK) ON PH.OrderKey = PKD.Orderkey and PD.Sku = PKD.Sku and PKD.DropID = PD.DropID ' + CHAR(13) --CE01
+                  + N' JOIN LOTATTRIBUTE LA (NOLOCK) ON PKD.Lot = LA.Lot ' + CHAR(13) --CE01
+                  + N' LEFT JOIN CODELKUP C (NOLOCK) ON PD.Sku = C.UDF02 AND PD.StorerKey = C.Storerkey AND O.ConsigneeKey = C.UDF01 ' + CHAR(13)   --WL01   --CE01
                   + N' JOIN FACILITY F (NOLOCK) ON O.Facility = F.Facility ' + CHAR(13)  
                   + N' LEFT JOIN STORER S (NOLOCK) ON O.ConsigneeKey = S.StorerKey ' + CHAR(13)  
                   + N' WHERE PD.PickSlipNo = @c_Sparm01 ' + CHAR(13)  
                   + N' AND PD.CartonNo >= CONVERT(INT,@c_Sparm02) AND PD.CartonNo <= CONVERT(INT,@c_Sparm03) '   + CHAR(13)     
-                  + @c_Sorting                  
+                  + @c_Sorting              
   
    IF @b_debug=1            
    BEGIN            

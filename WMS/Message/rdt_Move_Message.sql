@@ -49,3 +49,6 @@ execute rdt.rdtAddMsg 60545, 10, '60545 QTYReplnNoEnuf', 'us_english'
 execute rdt.rdtAddMsg 60546, 10, '60546 Bad QTYReplen ', 'us_english'
 execute rdt.rdtAddMsg 60547, 10, '60547 QTYRepln>Avail', 'us_english'
 execute rdt.rdtAddMsg 60548, 10, '60548 PDUCCQTY>MVQTY', 'us_english'
+
+--WMS-21437
+execute rdt.rdtAddMsg 60549, 10, '60549 Over MaxSKU   ', 'us_english'

@@ -62,6 +62,7 @@ GO
 /* 2021-09-03 4.0  CikFun   JSM- Change @cOutField08 as blank; @cOutField09  */  
 /*         						as defaultqty         										*/  
 /* 2021-11-21 4.1  YeeKung  WMS-18333 Add Multiskubarcode (yeekung02)        */ 
+/* 2023-08-16 4.2  James    WMS-23420 Enhance ConfirmLOC logic (james14)     */
 /*****************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdtfnc_SimpleCC](    
@@ -2532,7 +2533,7 @@ BEGIN
          GOTO Quit    
       END    
           
-      IF @cConfirmLOCCounted = '1'    
+      IF @cConfirmLOCCounted > '0'    
       BEGIN    
          SET @nVariance = 0    
              
@@ -2569,7 +2570,8 @@ BEGIN
     
              
          -- Variance found    
-         IF @nVariance = 1    
+         -- Or config turn on with svalue = 2 (always go to confirm loc screen)
+         IF @nVariance = 1 OR @cConfirmLOCCounted = '2'   
          BEGIN    
             SET @cOutField01 = '' -- Option    
                 
@@ -4513,7 +4515,7 @@ BEGIN
     
    IF @nInputKey = 0 -- ESC    
    BEGIN    
-      IF @cConfirmLOCCounted = '1'    
+      IF @cConfirmLOCCounted > '0'    
       BEGIN    
          SET @nVariance = 0    
              
@@ -4549,7 +4551,8 @@ BEGIN
             HAVING SUM( SystemQTY) <> SUM( QTY_Cnt3)    
     
          -- Variance found    
-         IF @nVariance = 1    
+         -- Or config turn on with svalue = 2 (always go to confirm loc screen)
+         IF @nVariance = 1 OR @cConfirmLOCCounted = '2'   
          BEGIN    
             SET @cOutField01 = '' -- Option    
                 

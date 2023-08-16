@@ -5,7 +5,7 @@ GO
   
 /************************************************************************/  
 /* Store procedure: rdt_640ExtUpd02                                     */  
-/* Copyright      : LF Logistics                                        */
+/* Copyright      : MAERSK                                              */
 /*                                                                      */
 /* Purpose: Display workorder related msg and update workorder.status   */  
 /*                                                                      */  
@@ -13,6 +13,8 @@ GO
 /*                                                                      */  
 /* Date         Author    Ver.  Purposes                                */  
 /* 2022-10-21   James     1.0   WMS-20989 Created                       */  
+/* 2023-08-01   James     1.1   WMS-23232 Update PackDetail.EditDate    */
+/*                              same as TaskDetail.EditDate (james01)   */
 /************************************************************************/  
   
 CREATE OR ALTER PROCEDURE rdt.rdt_640ExtUpd02  
@@ -69,6 +71,16 @@ BEGIN
    DECLARE @cErrMsg8          NVARCHAR( 20)
    DECLARE @cErrMsg9          NVARCHAR( 20)
    DECLARE @n                 INT = 1
+   DECLARE @cOrderKey         NVARCHAR( 10)
+   DECLARE @cPickSlipNo       NVARCHAR( 10)
+   DECLARE @cLabelNo          NVARCHAR( 20)
+   DECLARE @cLabelLine        NVARCHAR( 5)
+   DECLARE @nCartonNo         INT
+   DECLARE @cUpdPackDtl       CURSOR
+   DECLARE @cEditWho          NVARCHAR( 18)
+   DECLARE @dEditDate         DATETIME
+   DECLARE @curUpd            CURSOR
+   DECLARE @cTaskKey          NVARCHAR( 10)
    
    SELECT 
       @cUserName = UserName, 
@@ -85,6 +97,64 @@ BEGIN
    BEGIN
       IF @nInputKey = 1
       BEGIN
+      	--INSERT INTO TRACEINFO(TraceName, TimeIn, Col1, Col2, Col3) VALUES ('640', GETDATE(), @cStorerKey, @cGroupKey, SUSER_SNAME())
+      	SET @curUpd = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+      	SELECT TaskDetailKey
+      	FROM dbo.TaskDetail WITH (NOLOCK)
+      	WHERE StorerKey = @cStorerKey
+      	AND   TaskType = 'CPK'
+      	AND   Groupkey = @cGroupKey
+      	AND   [Status] = '9'
+      	OPEN @curUpd
+      	FETCH NEXT FROM @curUpd INTO @cTaskKey
+      	WHILE @@FETCH_STATUS = 0
+      	BEGIN
+      	   SELECT @cOrderKey = OrderKey
+      	   FROM dbo.PICKDETAIL WITH (NOLOCK)
+      	   WHERE TaskDetailKey = @cTaskKey
+      	
+      	   SELECT @cPickSlipNo = PickSlipNo
+      	   FROM dbo.PackHeader WITH (NOLOCK)
+      	   WHERE OrderKey = @cOrderKey
+      	
+      	   SELECT 
+      	      @cLabelNo = Caseid,
+      	      @cEditWho = EditWho, 
+      	      @dEditDate = EditDate
+      	   FROM dbo.TaskDetail WITH (NOLOCK)
+      	   WHERE TaskDetailKey = @cTaskKey
+      	
+      	   SET @cUpdPackDtl = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+      	   SELECT CartonNo, LabelLine
+      	   FROM dbo.PackDetail WITH (NOLOCK)
+      	   WHERE PickSlipNo = @cPickSlipNo
+      	   AND   LabelNo = @cLabelNo
+      	   ORDER BY 1, 2
+      	   OPEN @cUpdPackDtl
+      	   FETCH NEXT FROM @cUpdPackDtl INTO @nCartonNo, @cLabelLine
+      	   WHILE @@FETCH_STATUS = 0
+      	   BEGIN
+      	      UPDATE dbo.PackDetail SET 
+      	         EditWho = @cEditWho,
+      	         EditDate = @dEditDate
+      	      WHERE PickSlipNo = @cPickSlipNo
+      	      AND   CartonNo = @nCartonNo
+      	      AND   LabelNo = @cLabelNo
+      	      AND   LabelLine = @cLabelLine
+      	   
+      	      IF @@ERROR <> 0
+               BEGIN          
+                  SET @nErrNo = 193253          
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Upd PackDtl Err          
+                  GOTO RollBackTran          
+               END
+               
+      	      FETCH NEXT FROM @cUpdPackDtl INTO @nCartonNo, @cLabelLine	
+      	   END
+      	   
+      	   FETCH NEXT FROM @curUpd INTO @cTaskKey
+      	END
+      	
          SELECT @cWaveKey = WaveKey
          FROM dbo.TaskDetail WITH (NOLOCK)
          WHERE TaskDetailKey = @cTaskDetailKey
