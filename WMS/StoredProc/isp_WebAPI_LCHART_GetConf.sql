@@ -30,12 +30,13 @@ GO
 /*                                                                      */  
 /* PVCS Version: 1.0                                                    */  
 /*                                                                      */  
-/* Version: 1.0                                                         */  
+/* Version: 1.1                                                         */  
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date        Author   Purposes              */  
+/* Date        Author   Purposes
+2023-08-16              Remove fnc_JSON2XML                             */
 /************************************************************************/      
 CREATE PROC [dbo].[isp_WebAPI_LCHART_GetConf](  
      @b_Debug           INT            = 0  
