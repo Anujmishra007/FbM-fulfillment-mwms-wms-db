@@ -573,6 +573,8 @@ BEGIN
    		                   AND   Sku = @cSKU
    		                   AND   (QTY - QTYPicked > 0 OR PendingMoveIn > 0))
    	         SET @nIsSKUExists = 1   		                
+   	      ELSE
+   	      	SET @nIsSKUExists = -1  -- exclude the sku which already exists in toloc
    	   END
          ELSE  -- Move by Loc/Id
          BEGIN
@@ -601,7 +603,7 @@ BEGIN
          AND   LLI.StorerKey = @cStorerKey
          AND   (LLI.QTY - LLI.QTYPicked > 0 OR LLI.PendingMoveIn > 0)
          	
-         IF @nMaxSKU <= ( @nSKUCnt + @nIsSKUExists)
+         IF @nMaxSKU < ( @nSKUCnt + @nIsSKUExists)
          BEGIN    
             SET @nErrNo = 60549    
             SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --Over MaxSku    
