@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispMBRTK08]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispMBRTK08]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -37,9 +32,10 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver  Purposes                                   */
 /*2019-08-05   WLChooi  1.1  Fixed Table Linkage (WL01)                 */
+/*2023-08-17   KuanYee  1.2  INC2141212 Add-On StorerKey filter (KY01)  */
 /************************************************************************/
 
-CREATE PROC [dbo].[ispMBRTK08]
+CREATE OR ALTER PROC [dbo].[ispMBRTK08]
    @c_MbolKey NVARCHAR(10),
    @b_Success int OUTPUT,
    @n_err     int OUTPUT,
@@ -152,7 +148,7 @@ BEGIN
       JOIN CONTAINERDETAIL CD (NOLOCK) ON C.ContainerKey = CD.Containerkey
       JOIN PALLET P (NOLOCK) ON CD.Palletkey = P.Palletkey
       JOIN PALLETDETAIL PD (NOLOCK) ON P.Palletkey = PD.Palletkey
-      JOIN PACKDETAIL PDET (NOLOCK) ON PD.CaseID = PDET.LabelNo
+      JOIN PACKDETAIL PDET (NOLOCK) ON PD.CaseID = PDET.LabelNo AND PD.STORERKEY = PDET.STORERKEY     --KY01
       JOIN PACKHEADER PH (NOLOCK) ON PH.Pickslipno = PDET.Pickslipno
       WHERE C.Mbolkey = @c_Mbolkey )
 
@@ -278,7 +274,6 @@ BEGIN
    END
    RETURN
 END
-
 GO
-GRANT EXECUTE ON [dbo].[ispMBRTK08] TO nSQL 
+GRANT EXECUTE ON [dbo].[ispMBRTK08] to [nSQL]
 GO
