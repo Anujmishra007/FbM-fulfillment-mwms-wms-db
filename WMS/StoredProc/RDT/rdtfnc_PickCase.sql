@@ -12,6 +12,7 @@ GO
 /* 2018-11-05   1.0  ChewKP      WMS-6666  Created                            */
 /* 2022-08-17   1.1  Ung         WMS-20525 Add UCC                            */
 /* 2022-12-09   1.2  Ung         WMS-21275 Fix AllowSkipLOC                   */
+/* 2023-08-16   1.3  Ung         WMS-23142 Enable suggest SKU, descr          */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PickCase] (
@@ -622,9 +623,9 @@ BEGIN
       BEGIN
          -- Prepare next screen var
          SET @cOutField01 = @cSuggLOC
-         SET @cOutField02 = ''--@cSuggSKU
-         SET @cOutField03 = ''--rdt.rdtFormatString( @cSKUDescr, 1, 20)
-         SET @cOutField04 = ''--rdt.rdtFormatString( @cSKUDescr, 21, 20)
+         SET @cOutField02 = @cSuggSKU
+         SET @cOutField03 = rdt.rdtFormatString( @cSKUDescr, 1, 20)
+         SET @cOutField04 = rdt.rdtFormatString( @cSKUDescr, 21, 20)
          SET @cOutField05 = '' -- SKU
          SET @cOutField06 = CAST (@nSuggQTY AS NVARCHAR(5))
          SET @cOutField07 = CAST (@nTotalQty  AS NVARCHAR(5)) -- QTY
@@ -1004,9 +1005,9 @@ BEGIN
 
          -- Prepare SKU QTY screen var
          SET @cOutField01 = @cSuggLOC
-         SET @cOutField02 = ''--@cSuggSKU
-         SET @cOutField03 = ''--rdt.rdtFormatString( @cSKUDescr, 1, 20)
-         SET @cOutField04 = ''--rdt.rdtFormatString( @cSKUDescr, 21, 20)
+         SET @cOutField02 = @cSuggSKU
+         SET @cOutField03 = rdt.rdtFormatString( @cSKUDescr, 1, 20)
+         SET @cOutField04 = rdt.rdtFormatString( @cSKUDescr, 21, 20)
          SET @cOutField05 = '' -- SKU/UPC
          SET @cOutField06 = CAST (@nSuggQTY AS NVARCHAR(5))
          SET @cOutField07 = CAST (@nTotalQty AS NVARCHAR(5)) -- QTY
@@ -1096,9 +1097,9 @@ BEGIN
 
                   -- Prepare SKU QTY screen var
                   SET @cOutField01 = @cSuggLOC
-                  SET @cOutField02 = ''--@cSuggSKU
-                  SET @cOutField03 = ''--rdt.rdtFormatString( @cSKUDescr, 1, 20)
-                  SET @cOutField04 = ''--rdt.rdtFormatString( @cSKUDescr, 21, 20)
+                  SET @cOutField02 = @cSuggSKU
+                  SET @cOutField03 = rdt.rdtFormatString( @cSKUDescr, 1, 20)
+                  SET @cOutField04 = rdt.rdtFormatString( @cSKUDescr, 21, 20)
                   SET @cOutField05 = '' -- SKU/UPC
                   SET @cOutField06 = CAST (@nSuggQTY AS NVARCHAR(5))
                   SET @cOutField07 = CAST (@nTotalQty AS NVARCHAR(5))-- QTY
@@ -1308,9 +1309,9 @@ BEGIN
          BEGIN
             -- Prepare SKU QTY screen var
             SET @cOutField01 = @cSuggLOC
-            SET @cOutField02 = ''--@cSuggSKU
-            SET @cOutField03 = ''--rdt.rdtFormatString( @cSKUDescr, 1, 20)
-            SET @cOutField04 = ''--rdt.rdtFormatString( @cSKUDescr, 21, 20)
+            SET @cOutField02 = @cSuggSKU
+            SET @cOutField03 = rdt.rdtFormatString( @cSKUDescr, 1, 20)
+            SET @cOutField04 = rdt.rdtFormatString( @cSKUDescr, 21, 20)
             SET @cOutField05 = '' -- SKU/UPC
             SET @cOutField06 = CAST (@nSuggQTY AS NVARCHAR(5))
             SET @cOutField07 = CAST (@nTotalQty AS NVARCHAR(5)) -- QTY
@@ -1465,9 +1466,9 @@ BEGIN
             BEGIN
                -- Prepare SKU QTY screen var
                SET @cOutField01 = @cSuggLOC
-               SET @cOutField02 = ''--@cSuggSKU
-               SET @cOutField03 = ''--rdt.rdtFormatString( @cSKUDescr, 1, 20)
-               SET @cOutField04 = ''--rdt.rdtFormatString( @cSKUDescr, 21, 20)
+               SET @cOutField02 = @cSuggSKU
+               SET @cOutField03 = rdt.rdtFormatString( @cSKUDescr, 1, 20)
+               SET @cOutField04 = rdt.rdtFormatString( @cSKUDescr, 21, 20)
                SET @cOutField05 = '' -- SKU/UPC
                SET @cOutField06 = CAST (@nSuggQTY AS NVARCHAR(5))
                SET @cOutField07 = CAST (@nTotalQty AS NVARCHAR(5))-- QTY
@@ -1498,9 +1499,9 @@ BEGIN
    BEGIN
       -- Prepare SKU QTY screen var
       SET @cOutField01 = @cSuggLOC
-      SET @cOutField02 = ''--@cSuggSKU
-      SET @cOutField03 = ''--rdt.rdtFormatString( @cSKUDescr, 1, 20)
-      SET @cOutField04 = ''--rdt.rdtFormatString( @cSKUDescr, 21, 20)
+      SET @cOutField02 = @cSuggSKU
+      SET @cOutField03 = rdt.rdtFormatString( @cSKUDescr, 1, 20)
+      SET @cOutField04 = rdt.rdtFormatString( @cSKUDescr, 21, 20)
       SET @cOutField05 = '' -- SKU/UPC
       SET @cOutField06 = CAST (@nSuggQTY AS NVARCHAR(5))
       SET @cOutField07 = CAST (@nTotalQty AS NVARCHAR(5)) -- QTY
@@ -1588,9 +1589,9 @@ BEGIN
 
       -- Prepare SKU QTY screen var
       SET @cOutField01 = @cSuggLOC
-      SET @cOutField02 = ''--@cSuggSKU
-      SET @cOutField03 = ''--rdt.rdtFormatString( @cSKUDescr, 1, 20)
-      SET @cOutField04 = ''--rdt.rdtFormatString( @cSKUDescr, 21, 20)
+      SET @cOutField02 = @cSuggSKU
+      SET @cOutField03 = rdt.rdtFormatString( @cSKUDescr, 1, 20)
+      SET @cOutField04 = rdt.rdtFormatString( @cSKUDescr, 21, 20)
       SET @cOutField05 = '' -- SKU/UPC
       SET @cOutField06 = CAST (@nSuggQTY AS NVARCHAR(5))
       SET @cOutField07 = CAST (@nTotalQty AS NVARCHAR(5)) -- QTY
