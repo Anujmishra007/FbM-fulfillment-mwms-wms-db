@@ -23,7 +23,7 @@ EXECUTE rdt.rdtAddScn 4592, 'ENG'
    ,@cLine08 = '%20d08'
    ,@cLine09 = '%20d09'
    ,@cLine10 = 'SKU/UPC:'
-   ,@cLine11 = '%30i11'
+   ,@cLine11 = '%60i11' -- WMS-23379
    ,@cLine12 = 'LAST POS: %05d12'
    ,@cLine13 = 'OPTION: %01i13 9=CLOSE'
    ,@cLine14 = '%e'
