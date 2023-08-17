@@ -1,12 +1,8 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_RFID_GetLAAttrib01]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_RFID_GetLAAttrib01]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /************************************************************************/
 /* Stored Proc: isp_RFID_GetLAAttrib01                                  */
 /* Creation Date: 2021-03-19                                            */
@@ -17,7 +13,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -28,8 +24,10 @@ GO
 /* 2021-03-19  Wan      1.0   Created                                   */
 /* 2021-07-06  WLChooi  1.1   WMS-17404 - Add Output Parameters and get */
 /*                            suggested LOC (WL01)                      */
+/* 17-Aug-2023 WLChooi  1.2   Performance Tuning (WL02)                 */
+/* 17-Aug-2023 WLChooi  1.2   DevOps Combine Script                     */
 /************************************************************************/
-CREATE PROC isp_RFID_GetLAAttrib01
+CREATE OR ALTER PROC [dbo].[isp_RFID_GetLAAttrib01]
       @c_Receiptkey              NVARCHAR(10) = ''   --WL01
    ,  @c_StorerKey               NVARCHAR(15)   
    ,  @c_SKU                     NVARCHAR(20) = ''  
@@ -110,6 +108,15 @@ BEGIN
       SET @c_Lottable02Value = 'NON'
    END
 
+   --WL02 S
+   IF ISNULL(@c_Storerkey,'') = ''
+   BEGIN
+      SELECT TOP 1 @c_Storerkey = R.Storerkey
+      FROM RECEIPT R (NOLOCK)
+      WHERE R.ReceiptKey = @c_Receiptkey
+   END
+   --WL02 E
+
    SELECT @c_SuggestedToLoc = ISNULL(NIKESugLoc.Short,'')
    FROM RECEIPT R (NOLOCK)
    JOIN RECEIPTDETAIL RD (NOLOCK) ON R.ReceiptKey = RD.ReceiptKey
@@ -125,6 +132,7 @@ BEGIN
                                     AND NIKESoldTo.Long  = NIKESugLoc.Long
    WHERE R.ReceiptKey = @c_ReceiptKey
    AND RD.SKU = @c_SKU
+   AND RD.Storerkey = @c_Storerkey   --WL02
    AND NIKESugLoc.UDF01 = @c_Lottable01Value
    AND O2Reason.Code = @c_Lottable02Value
 
@@ -144,5 +152,5 @@ QUIT_SP:
 
 END -- procedure
 GO
-GRANT EXECUTE ON [dbo].[isp_RFID_GetLAAttrib01] TO nSQL 
+GRANT EXECUTE ON [dbo].[isp_RFID_GetLAAttrib01] TO [nSQL] 
 GO
