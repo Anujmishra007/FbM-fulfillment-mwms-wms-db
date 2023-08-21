@@ -30,6 +30,7 @@ GO
 /* 29-Mar-2023  WLChooi  1.6  WMS-22098 - Add Logic for CSOS (WL06)     */
 /* 20-Apr-2023  WLChooi  1.7  WMS-22098 - Modify Logic for CSOS (WL07)  */
 /* 06-Jun-2023  WLChooi  1.8  Bug Fix for Batchno reset (WL08)          */
+/* 09-Aug-2023  WLChooi  1.9  WMS-23340 - Change PK From Codelkup (WL09)*/
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV53]      
@@ -95,6 +96,8 @@ BEGIN
          , @c_GetOrderkey           NVARCHAR(10)   --WL07
          , @n_GetSKUCasecnt         INT   --WL07
          , @c_ResetBatchNo          NVARCHAR(1) = 'N'   --WL08
+         , @n_OldCaseCnt            INT   --WL09
+         , @n_NewCasecnt            INT   --WL09
    
    DECLARE @n_CurrCnt         INT
          , @c_LocType         NVARCHAR(50)
@@ -942,6 +945,51 @@ BEGIN
          SET @c_BatchNo = ''
          SET @n_CartonNo = 0   --WL06
          SET @c_PrevOrderkey = ''
+
+         --WL09 S
+         --Check Casecnt and replace if necessary
+         DECLARE CUR_PK CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT TS.RowID, C2.Code, CASE WHEN ISNUMERIC(C2.Short) = 1 THEN C2.Short ELSE NULL END
+         FROM #TMP_SUSR4 TS
+         JOIN CODELKUP C2 (NOLOCK) ON C2.LISTNAME = 'CBPCPKVL'
+                                  AND C2.Code = TS.CaseCnt
+                                  AND C2.Storerkey = @c_Storerkey
+         
+         OPEN CUR_PK
+
+         FETCH NEXT FROM CUR_PK INTO @n_RowID, @n_OldCaseCnt, @n_NewCasecnt
+
+         WHILE @@FETCH_STATUS <> -1
+         BEGIN
+            IF @n_NewCasecnt IS NULL 
+            BEGIN  
+               SET @n_continue = 3  
+               SET @n_Err = 63115   -- Should Be Set To The SQL Errmessage but I don't know how to do so. 
+               SET @c_errmsg = 'NSQL' + CONVERT(char(5),@n_err)   
+                                 + ': Codelkup.Short is not numeric value. (ispRLWAV53) ( SQLSvr MESSAGE='   
+                                   + @c_errmsg + ' ) ' 
+               GOTO QUIT_SP                     
+            END
+
+            IF @n_NewCasecnt > @n_OldCaseCnt
+            BEGIN  
+               SET @n_continue = 3  
+               SET @n_Err = 63120   -- Should Be Set To The SQL Errmessage but I don't know how to do so. 
+               SET @c_errmsg = 'NSQL' + CONVERT(char(5),@n_err)   
+                                 + ': Codelkup.Short > PK Value. (ispRLWAV53) ( SQLSvr MESSAGE='   
+                                   + @c_errmsg + ' ) ' 
+               GOTO QUIT_SP                     
+            END
+
+            UPDATE #TMP_SUSR4
+            SET CaseCnt = @n_NewCasecnt
+            WHERE RowID = @n_RowID
+
+            FETCH NEXT FROM CUR_PK INTO @n_RowID, @n_OldCaseCnt, @n_NewCasecnt
+         END
+         CLOSE CUR_PK
+         DEALLOCATE CUR_PK
+         --WL09 E
 
          --WL07 S - Add a big outer cursor, loop by orderkey
          DECLARE CUR_ORD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -1828,6 +1876,14 @@ BEGIN
       DEALLOCATE CUR_ORD    
    END 
    --WL07 E
+
+   --WL09 S
+   IF (SELECT CURSOR_STATUS('LOCAL','CUR_PK')) >=0 
+   BEGIN
+      CLOSE CUR_PK   
+      DEALLOCATE CUR_PK    
+   END 
+   --WL09 E
 
    WHILE @@TRANCOUNT < @n_StartTranCnt
       BEGIN TRAN
