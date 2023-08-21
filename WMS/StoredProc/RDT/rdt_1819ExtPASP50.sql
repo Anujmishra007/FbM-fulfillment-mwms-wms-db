@@ -55,9 +55,11 @@ BEGIN
    WHERE LOC.Facility = @cFacility 
       AND Loc.LOC <> @cFromLOC
       AND LLI.SKU = @cSKU
+      AND LLI.Storerkey = @cStorerkey
+      AND LOC.locationtype <>'STAGING'
    GROUP BY LLI.LOC
    HAVING SUM(LLI.qty -LLI.qtyallocated-LLI.qtypicked) > 0
-   ORDER BY MAX(LOT.lottable05) , SUM(LLI.qty -LLI.qtyallocated-LLI.qtypicked),LLI.LOC
+   ORDER BY MIN(LOC.LoseID),MAX(LOT.lottable05) , SUM(LLI.qty -LLI.qtyallocated-LLI.qtypicked),LLI.LOC
 
    IF ISNULL(@cSuggLOC,'') =''
    BEGIN
@@ -70,9 +72,11 @@ BEGIN
       WHERE LOC.Facility = @cFacility 
          AND Loc.LOC <> @cFromLOC
          AND SKU.itemclass = @cItemClass
+         AND LLI.Storerkey = @cStorerkey
+         AND LOC.locationtype <>'STAGING'
       GROUP BY LLI.LOC
       HAVING SUM(LLI.qty -LLI.qtyallocated-LLI.qtypicked) > 0
-      ORDER BY MAX(LOT.lottable05) , SUM(LLI.qty -LLI.qtyallocated-LLI.qtypicked),LLI.LOC
+      ORDER BY MAX(LOT.lottable05) , SUM(LLI.qty -LLI.qtyallocated-LLI.qtypicked),LLI.LOC 
 
       IF ISNULL(@cSuggLOC,'') =''
       BEGIN
@@ -81,6 +85,7 @@ BEGIN
             LEFT OUTER JOIN LOTxLOCxID LLI WITH (NOLOCK) ON ( LOC.loc = LLI.LOC  AND LLI.STORERKEY = @cStorerKey)     
          WHERE  LOC.Facility = @cFacility 
             AND Loc.LOC <> @cFromLOC
+            AND LOC.locationtype <>'STAGING'
             AND LOC.Putawayzone  IN (SELECT LONG
                                      FROM CODELKUP (NOLOCK)
                                      WHERE StorerKey = @cStorerkey
