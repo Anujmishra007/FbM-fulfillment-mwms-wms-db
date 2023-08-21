@@ -32,6 +32,7 @@ GO
 /* 25-08-2021  WLChooi  1.5   WMS-17812 - Set Priority to 4 (WL01)         */ 
 /* 21-Mar-2022 NJOW05   1.6   WMS-19267 if facility=UABJ gen pickslip only */
 /* 21-Mar-2022 NJOW05   1.6   DEVOPS Combine script                        */
+/* 02-Aug-2023 NJOW06   1.7   WMS-23269 add UAGZ facility filtering        */
 /***************************************************************************/   
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV16]      
@@ -139,7 +140,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV16]
               JOIN WAVEDETAIL WD(NOLOCK) ON W.Wavekey = WD.Wavekey
               JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
               AND W.Wavekey = @c_Wavekey
-              AND O.Facility = 'UABJ')
+              AND O.Facility IN ('UABJ','UAGZ')) --NJOW06
      BEGIN               
         EXEC isp_CreatePickSlip
                   @c_Wavekey = @c_Wavekey
