@@ -48,54 +48,94 @@ BEGIN
    WHERE ID = @cID
       AND LLI.Storerkey = @cStorerKey
 
-   SELECT TOP 1 @cSuggLOC = LLI.LOC
-   FROM LOTXLOCXID LLI (NOLOCK)
-      JOIN LOC LOC (NOLOCK) ON LOC.LOC =LLI.LOC
-      JOIN LOtattribute LOT (NOLOCK) ON LOT.lot =LLI.lot AND LLI.sku = LOT.SKU AND LLI.StorerKey = LOT.StorerKey
-   WHERE LOC.Facility = @cFacility 
-      AND Loc.LOC <> @cFromLOC
-      AND LLI.SKU = @cSKU
-      AND LLI.Storerkey = @cStorerkey
-      AND LOC.locationtype <>'STAGING'
-   GROUP BY LLI.LOC
-   HAVING SUM(LLI.qty -LLI.qtyallocated-LLI.qtypicked) > 0
-   ORDER BY MIN(LOC.LoseID),MAX(LOT.lottable05) , SUM(LLI.qty -LLI.qtyallocated-LLI.qtypicked),LLI.LOC
-
-   IF ISNULL(@cSuggLOC,'') =''
+   IF @cBusr7 = '20'
    BEGIN
-      
       SELECT TOP 1 @cSuggLOC = LLI.LOC
       FROM LOTXLOCXID LLI (NOLOCK)
          JOIN LOC LOC (NOLOCK) ON LOC.LOC =LLI.LOC
          JOIN LOtattribute LOT (NOLOCK) ON LOT.lot =LLI.lot AND LLI.sku = LOT.SKU AND LLI.StorerKey = LOT.StorerKey
-         JOIN SKU SKU (NOLOCK) ON SKU.SKU =LLI.SKU AND LLI.StorerKey = LOT.StorerKey
       WHERE LOC.Facility = @cFacility 
          AND Loc.LOC <> @cFromLOC
-         AND SKU.itemclass = @cItemClass
+         AND LLI.SKU = @cSKU
          AND LLI.Storerkey = @cStorerkey
          AND LOC.locationtype <>'STAGING'
+         AND LOC.LoseID = '0'
       GROUP BY LLI.LOC
       HAVING SUM(LLI.qty -LLI.qtyallocated-LLI.qtypicked) > 0
-      ORDER BY MAX(LOT.lottable05) , SUM(LLI.qty -LLI.qtyallocated-LLI.qtypicked),LLI.LOC 
+      ORDER BY MAX(LOT.lottable05) , SUM(LLI.qty -LLI.qtyallocated-LLI.qtypicked),LLI.LOC
 
       IF ISNULL(@cSuggLOC,'') =''
       BEGIN
-         SELECT TOP 1 @cSuggLOC = LOC.LOC
-         FROM dbo.LOC LOC       
-            LEFT OUTER JOIN LOTxLOCxID LLI WITH (NOLOCK) ON ( LOC.loc = LLI.LOC  AND LLI.STORERKEY = @cStorerKey)     
-         WHERE  LOC.Facility = @cFacility 
+      
+         SELECT TOP 1 @cSuggLOC = LLI.LOC
+         FROM LOTXLOCXID LLI (NOLOCK)
+            JOIN LOC LOC (NOLOCK) ON LOC.LOC =LLI.LOC
+            JOIN LOtattribute LOT (NOLOCK) ON LOT.lot =LLI.lot AND LLI.sku = LOT.SKU AND LLI.StorerKey = LOT.StorerKey
+            JOIN SKU SKU (NOLOCK) ON SKU.SKU =LLI.SKU AND LLI.StorerKey = LOT.StorerKey
+         WHERE LOC.Facility = @cFacility 
             AND Loc.LOC <> @cFromLOC
+            AND SKU.itemclass = @cItemClass
+            AND LLI.Storerkey = @cStorerkey
             AND LOC.locationtype <>'STAGING'
-            AND LOC.Putawayzone  IN (SELECT LONG
-                                     FROM CODELKUP (NOLOCK)
-                                     WHERE StorerKey = @cStorerkey
-                                       AND SHORT =  LEFT(@cSKU,1)
-                                       AND Code = @cBusr7)
-         GROUP BY LOC.LOC,LOC.LogicalLocation
-          HAVING SUM( ISNULL( LLI.QTY, 0) - ISNULL( LLI.QtyAllocated,0) - ISNULL( LLI.QTYPicked, 0)) = 0    
-         ORDER BY LOC.LOC,LOC.LogicalLocation
+            AND LOC.LoseID = '0'
+         GROUP BY LLI.LOC
+         HAVING SUM(LLI.qty -LLI.qtyallocated-LLI.qtypicked) > 0
+         ORDER BY MAX(LOT.lottable05) , SUM(LLI.qty -LLI.qtyallocated-LLI.qtypicked),LLI.LOC
       END
-   END         
+   END
+   ELSE
+   BEGIN
+      SELECT TOP 1 @cSuggLOC = LLI.LOC
+      FROM LOTXLOCXID LLI (NOLOCK)
+         JOIN LOC LOC (NOLOCK) ON LOC.LOC =LLI.LOC
+         JOIN LOtattribute LOT (NOLOCK) ON LOT.lot =LLI.lot AND LLI.sku = LOT.SKU AND LLI.StorerKey = LOT.StorerKey
+      WHERE LOC.Facility = @cFacility 
+         AND Loc.LOC <> @cFromLOC
+         AND LLI.SKU = @cSKU
+         AND LLI.Storerkey = @cStorerkey
+         AND LOC.locationtype <>'STAGING'
+         AND LOC.LoseID = '1'
+      GROUP BY LLI.LOC
+      HAVING SUM(LLI.qty -LLI.qtyallocated-LLI.qtypicked) > 0
+      ORDER BY MAX(LOT.lottable05) , SUM(LLI.qty -LLI.qtyallocated-LLI.qtypicked),LLI.LOC
+
+      IF ISNULL(@cSuggLOC,'') =''
+      BEGIN
+      
+         SELECT TOP 1 @cSuggLOC = LLI.LOC
+         FROM LOTXLOCXID LLI (NOLOCK)
+            JOIN LOC LOC (NOLOCK) ON LOC.LOC =LLI.LOC
+            JOIN LOtattribute LOT (NOLOCK) ON LOT.lot =LLI.lot AND LLI.sku = LOT.SKU AND LLI.StorerKey = LOT.StorerKey
+            JOIN SKU SKU (NOLOCK) ON SKU.SKU =LLI.SKU AND LLI.StorerKey = LOT.StorerKey
+         WHERE LOC.Facility = @cFacility 
+            AND Loc.LOC <> @cFromLOC
+            AND SKU.itemclass = @cItemClass
+            AND LLI.Storerkey = @cStorerkey
+            AND LOC.locationtype <>'STAGING'
+            AND LOC.LoseID = '1'
+         GROUP BY LLI.LOC
+         HAVING SUM(LLI.qty -LLI.qtyallocated-LLI.qtypicked) > 0
+         ORDER BY MAX(LOT.lottable05) , SUM(LLI.qty -LLI.qtyallocated-LLI.qtypicked),LLI.LOC
+      END
+   END
+
+   IF ISNULL(@cSuggLOC,'') =''
+   BEGIN
+      SELECT TOP 1 @cSuggLOC = LOC.LOC
+      FROM dbo.LOC LOC       
+         LEFT OUTER JOIN LOTxLOCxID LLI WITH (NOLOCK) ON ( LOC.loc = LLI.LOC  AND LLI.STORERKEY = @cStorerKey)     
+      WHERE  LOC.Facility = @cFacility 
+         AND Loc.LOC <> @cFromLOC
+         AND LOC.locationtype <>'STAGING'
+         AND LOC.Putawayzone  IN (SELECT LONG
+                                    FROM CODELKUP (NOLOCK)
+                                    WHERE StorerKey = @cStorerkey
+                                    AND SHORT =  LEFT(@cSKU,1)
+                                    AND Code = @cBusr7)
+      GROUP BY LOC.LOC,LOC.LogicalLocation
+         HAVING SUM( ISNULL( LLI.QTY, 0) - ISNULL( LLI.QtyAllocated,0) - ISNULL( LLI.QTYPicked, 0)) = 0    
+      ORDER BY LOC.LOC,LOC.LogicalLocation
+   END       
         
    IF ISNULL( @cSuggLOC, '') <> ''        
    BEGIN        
