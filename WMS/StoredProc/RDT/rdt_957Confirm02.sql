@@ -3,13 +3,14 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/******************************************************************************/
-/* Store procedure: rdt_957Confirm02                                          */
-/* Copyright      : LF Logistics                                              */
-/*                                                                            */
-/* Date       Rev  Author     Purposes                                        */
-/* 19-08-2022 1.0  Ung        WMS-20525 Created                               */
-/******************************************************************************/
+/***************************************************************************************************/
+/* Store procedure: rdt_957Confirm02                                                               */
+/* Copyright      : LF Logistics                                                                   */
+/*                                                                                                 */
+/* Date       Rev  Author     Purposes                                                             */
+/* 19-08-2022 1.0  Ung        WMS-20525 Created                                                    */
+/* 23-08-2023 1.1  Ung        WMS-23295 Fix event log not include exact matched UCC                */
+/***************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_957Confirm02] (
     @nMobile      INT
@@ -330,9 +331,8 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD UCC Fail
          GOTO RollBackTran
       END
-      
-      COMMIT TRAN rdt_957Confirm02
-      GOTO Quit
+
+      GOTO CommitTran
    END
 
    -- Get randomly 1 carton on own pickslip (match LOC, ID, SKU, QTY, optional match LOT)
@@ -1102,6 +1102,7 @@ BEGIN
       END
    END
 
+CommitTran:
    EXEC RDT.rdt_STD_EventLog
       @cActionType   = '3', -- Picking
       @nMobileNo     = @nMobile,
@@ -1115,7 +1116,6 @@ BEGIN
       @cPickZone     = @cPickZone,
       @cDropID       = @cDropID
 
-CommitTran:
    -- Log UCC swap
    IF @cTaskUCCNo <> @cActUCCNo
    BEGIN
