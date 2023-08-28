@@ -14,6 +14,7 @@ GO
 /* 22-Jun-2023 1.0  WLChooi    DevOps Combine Script                            */  
 /* 20-Jul-2023 1.1  WLChooi    UWP-1977 - Logic change (WL01)                   */
 /* 07-AUG-2023 1.2  CE         UWP-1977 - Logic change (CE01)                   */
+/* 22-AUG-2023 1.3  CE         UWP-1977 - Logic change (CE02)                   */
 /********************************************************************************/                    
                       
 CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_TUR_UCCLBTUR01_TE]                          
@@ -82,7 +83,8 @@ BEGIN
       @c_CCity           NVARCHAR(100),
       @c_CState          NVARCHAR(100),
       @c_CCountry        NVARCHAR(100),
-      @c_CZip            NVARCHAR(100)
+      @c_CZip            NVARCHAR(100),
+      @n_PackSize        INT   --CE02
         
   DECLARE  @d_Trace_StartTime   DATETIME,       
            @d_Trace_EndTime     DATETIME,      
@@ -291,7 +293,7 @@ BEGIN
                   + N'      , '''', '''', '''', '''', '''', '''', '''', '''', '''', '''' ' + CHAR(13)   --30  
                   + N'      , '''', '''', '''', '''', '''', '''', '''', '''', '''', '''' ' + CHAR(13)   --40  
                   + N'      , '''', '''', '''', '''', '''', '''', '''', '''', '''', '''' ' + CHAR(13)   --50  
-                  + N'      , '''', '''', '''', '''', '''', '''', '''', '''', '''', PD.Pickslipno ' + CHAR(13)   --60  
+                  + N'      , '''', '''', '''', '''', '''', '''', '''', '''', P.Casecnt, PD.Pickslipno ' + CHAR(13)   --60   --CE02
                   + N' FROM PackDetail PD (NOLOCK) ' + CHAR(13)  
                   + N' JOIN PackHeader PH (NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo ' + CHAR(13)  
                   + @c_JoinStatement + CHAR(13)  
@@ -301,6 +303,8 @@ BEGIN
                   + N' LEFT JOIN CODELKUP C (NOLOCK) ON PD.Sku = C.UDF02 AND PD.StorerKey = C.Storerkey AND O.ConsigneeKey = C.UDF01 ' + CHAR(13)   --WL01   --CE01
                   + N' JOIN FACILITY F (NOLOCK) ON O.Facility = F.Facility ' + CHAR(13)  
                   + N' LEFT JOIN STORER S (NOLOCK) ON O.ConsigneeKey = S.StorerKey ' + CHAR(13)  
+                  + N' JOIN SKU (NOLOCK) ON SKU.Storerkey = PD.Storerkey AND SKU.SKU = PD.SKU ' + CHAR(13)   --CE02
+                  + N' JOIN PACK P (NOLOCK) ON P.Packkey = SKU.Packkey '   --CE02
                   + N' WHERE PD.PickSlipNo = @c_Sparm01 ' + CHAR(13)  
                   + N' AND PD.CartonNo >= CONVERT(INT,@c_Sparm02) AND PD.CartonNo <= CONVERT(INT,@c_Sparm03) '   + CHAR(13)     
                   + @c_Sorting              
@@ -355,8 +359,27 @@ BEGIN
    END          
   
 QUIT_SP:    
-   SELECT * FROM #Result (NOLOCK)         
-   ORDER BY ID       
+   --CE02 S
+   --SELECT * FROM #Result (NOLOCK)         
+   --ORDER BY ID
+   SET @n_PackSize = 0
+
+   SELECT TOP 1 @n_PackSize = CASE WHEN ISNUMERIC(R.Col59) = 1 THEN CONVERT(INT, R.Col59) ELSE 0 END
+   FROM #Result R (NOLOCK)
+
+   SELECT 
+      ID,Col01,Col02,Col03,Col04,Col05,Col06,Col07, qty as Col08, --Col08
+      Col09,Col10,Col11,Col12,Col13,Col14,Col15,
+      Col16,Col17,Col18,Col19,Col20,Col21,Col22,Col23,Col24,Col25,Col26,Col27,Col28,Col29,Col30,
+      Col31,Col32,Col33,Col34,Col35,Col36,Col37,Col38,Col39,Col40,Col41,Col42,Col43,Col44,Col45,
+      Col46,Col47,Col48,Col49,Col50,Col51,Col52,Col53,Col54,Col55,Col56,Col57,Col58,Col59,Col60 
+   FROM(
+         SELECT *
+         FROM #Result (NOLOCK)  
+         OUTER APPLY (SELECT TOP((#Result.Col08 + @n_PackSize - 1 ) / @n_PackSize) @n_PackSize qty FROM syscolumns) X
+      --ORDER BY ID 
+    ) ret
+   --CE02 E   
 END -- procedure     
 GO
 GRANT EXECUTE ON [dbo].[isp_BT_Bartender_TUR_UCCLBTUR01_TE] TO [NSQL] 
