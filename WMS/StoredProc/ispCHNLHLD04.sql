@@ -22,6 +22,11 @@ GO
 /*                                                                      */
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
+/* 07-AUG-2023  NJOW01   1.0  WMS-23339 TH calculate channel hold qty by*/
+/*                            loc category configure at codelkup.       */ 
+/* 07-AUG-2023  NJOW01   1.0  DEVOPS Combine Script                     */
+/* 16-AUG-2023  NJOW02   1.1  WMS-23436 support create channel transfer */
+/*                            document                                  */
 /************************************************************************/
 
 CREATE OR ALTER PROC ispCHNLHLD04   
@@ -74,6 +79,7 @@ BEGIN
           ,@c_TrfChannelTo            NVARCHAR(200)='ECOM'
           ,@c_Authority               NVARCHAR(30) 
           ,@c_Option5                 NVARCHAR(4000)
+          ,@c_GetCHNHoldQtyByLoc      NVARCHAR(30)  --NJOW01
                                
    SET @n_ChannelHoldQty = 0   
       
@@ -83,11 +89,30 @@ BEGIN
    
    SELECT @c_TrfChannelFrom = dbo.fnc_GetParamValueFromString('@c_TrfChannelFrom', @c_Option5, @c_TrfChannelFrom)
    SELECT @c_TrfChannelTo = dbo.fnc_GetParamValueFromString('@c_TrfChannelTo', @c_Option5, @c_TrfChannelTo)
+   SELECT @c_GetCHNHoldQtyByLoc = dbo.fnc_GetParamValueFromString('@c_GetCHNHoldQtyByLoc', @c_Option5, @c_GetCHNHoldQtyByLoc)  --NJOW01
+   SELECT @c_GenChannelTransferDoc = dbo.fnc_GetParamValueFromString('@c_GenChannelTransferDoc', @c_Option5, @c_GenChannelTransferDoc)  --NJOW02
    
    SELECT @c_ChannelInventoryMgmt = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'ChannelInventoryMgmt') 
    
-   IF NOT EXISTS(SELECT 1 FROM dbo.fnc_DelimSplit(',', @c_TrfChannelTo) WHERE colvalue = ISNULL(@c_Channel,''))  
-      OR @c_ChannelInventoryMgmt <> '1' OR @n_Channel_ID = 0 
+   IF @c_ChannelInventoryMgmt <> '1' OR @n_Channel_ID = 0 
+      GOTO QUIT_SP
+
+   --NJOW01 
+   IF @c_GetCHNHoldQtyByLoc = 'Y'
+   BEGIN   	     	  
+   	  SELECT @n_ChannelHoldQty = SUM(SL.Qty)
+   	  FROM SKUXLOC SL (NOLOCK)
+   	  JOIN LOC (NOLOCK) ON SL.Loc = LOC.Loc
+   	  JOIN CODELKUP CL (NOLOCK) ON LOC.LocationCategory = CL.Code AND CL.ListName = 'CNLOCAT' AND SL.Storerkey = CL.Storerkey
+   	                               AND CL.Short = @c_Channel
+   	  WHERE SL.Storerkey = @c_Storerkey
+   	  AND SL.Sku = @c_Sku
+   	  AND LOC.Facility = @c_Facility
+   	  
+   	  SET @n_ChannelHoldQty = ISNULL(@n_ChannelHoldQty,0)   	  
+   END
+      
+   IF NOT EXISTS(SELECT 1 FROM dbo.fnc_DelimSplit(',', @c_TrfChannelTo) WHERE colvalue = ISNULL(@c_Channel,''))        
       GOTO QUIT_SP
       
    SELECT TOP 1 @c_Trf_Channel = F.ColValue   
