@@ -43,6 +43,7 @@ GO
 /* 2022-09-08   3.0  Ung        WMS-20348 Expand RefNo to 60 chars            */
 /* 2022-03-09   3.1  James      WMS-18962 Add @cBarcode to V_String (james06) */
 /* 2023-01-16   3.2  Ung        WMS-21532 Add auto finalize                   */
+/* 2023-08-17   3.3  Ung        WMS-23172 Add rdt_Decode                      */
 /******************************************************************************/  
 CREATE OR ALTER PROC [RDT].[rdtfnc_PieceReturn](  
    @nMobile    int,  
@@ -1754,6 +1755,16 @@ BEGIN
       -- Decode  
       IF @cDecodeSKUSP <> ''  
       BEGIN  
+         IF @cDecodeSKUSP = '1'
+         BEGIN
+            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
+                  @cID         OUTPUT, @cSKU        OUTPUT, @nQTY        OUTPUT,
+                  @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT,
+                  @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT,
+                  @cLottable11 OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT
+                  -- @nErrNo   OUTPUT, @cErrMsg     OUTPUT
+         END
+         
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSKUSP AND type = 'P')  
          BEGIN  
             DECLARE @nUCCQTY  INT  
