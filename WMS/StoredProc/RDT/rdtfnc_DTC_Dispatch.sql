@@ -80,6 +80,7 @@ GO
 /*                                    (yeekung06)                            */
 /*2023-03-30 1.52 YeeKung  WMS-22041 Add extendedinfo in ctnscn (yeekung07)  */
 /*2023-05-23 1.53 YeeKung  WMS-22408 Add orderkeyout in ctntype (yeekung08)  */
+/*2023-07-21 1.54 YeeKung  WMS-22755 Fix the serialno bug fix (yeekung09)    */
 /*****************************************************************************/          
 CREATE OR ALTER  PROC [RDT].[rdtfnc_DTC_Dispatch](          
    @nMobile    INT,          
@@ -4660,8 +4661,8 @@ BEGIN
                   SET @cOutField05 = @nTotalPickedQty            
                   SET @cOutField06 = @nTotalScannedQty           
           
-                  SET @nScn = @nPrevScn             
-                  SET @nStep = @nStep -4          
+                  SET @nScn = @nPrevScn            
+                  SET @nStep = @nStep -6      --(yeekung09)   
                   SET @cOutField07 = @cExtendedinfo                
                END            
             END            
@@ -4678,8 +4679,8 @@ BEGIN
                SET @cOutField06 = @nTotalScannedQty          
                SET @cOutField07 = @cExtendedinfo               
                                  
-               SET @nScn = @nPrevScn - 4            
-               SET @nStep = @nStep -4           
+               SET @nScn = @nPrevScn            
+               SET @nStep = @nStep -6       
             END            
          END    
          ELSE            
@@ -4965,7 +4966,7 @@ BEGIN
                         SET @nRefCount = 1            
             
                         SELECT @nTotalPickedQty  = Count(O.OrderKey),             
-    @nTotalScannedQty = SUM(CASE WHEN O.Status = '5' THEN 1 ELSE 0 END)         
+                               @nTotalScannedQty = SUM(CASE WHEN O.Status = '5' THEN 1 ELSE 0 END)         
                         FROM dbo.WaveDetail WD WITH (NOLOCK)            
                         INNER JOIN dbo.Orders O WITH (NOLOCK) ON O.OrderKey = WD.OrderKey            
                         WHERE WD.WaveKey = @cWaveKey            
@@ -4983,7 +4984,7 @@ BEGIN
             
                      IF @nRefCount = 0 -- No More PickDetail Go to Screen 1             
                      BEGIN            
-           --(cc01)        
+                        --(cc01)        
                         IF @cScanCTSCN <> ''                      
                         BEGIN                  
                            -- Get PackInfo          
@@ -5027,7 +5028,7 @@ BEGIN
                         SET @cOutField03 = ''             
                                     
                      
-             SET @nScn = @nPrevScn - 1            
+                        SET @nScn = @nPrevScn - 1            
                         SET @nStep = @nStep - 7          
                      END            
                      ELSE            
@@ -5077,9 +5078,7 @@ BEGIN
                         SET @nStep = @nStep -6               
                      END            
                                  
-                  END            
-                              
-                              
+                  END                      
                END            
                              
             END            
@@ -5104,7 +5103,7 @@ BEGIN
             SET @cFieldAttr07 = CASE WHEN CHARINDEX( 'T', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
             SET @cFieldAttr02 = CASE WHEN CHARINDEX( 'C', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
             SET @cFieldAttr03 = CASE WHEN CHARINDEX( 'W', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
-         SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
+            SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cScanCTSCN) = 0 THEN 'O' ELSE '' END          
             SET @cFieldAttr08 = '' -- QTY          
                 
             -- Position cursor          
