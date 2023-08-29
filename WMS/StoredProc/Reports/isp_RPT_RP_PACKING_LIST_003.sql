@@ -14,13 +14,14 @@ GO
 /*                                                                         */
 /* Called By: RPT_RP_PACKING_LIST_003                                      */
 /*                                                                         */
-/* GitHub Version: 1.0                                                     */
+/* GitHub Version: 1.1                                                     */
 /*                                                                         */
 /* Data Modifications:                                                     */
 /*                                                                         */
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 23-Aug-2023  WLChooi 1.0   DevOps Combine Script                        */
+/* 28-Aug-2023  WLChooi 1.1   WMS-23493 - Change default column title(WL01)*/
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_RPT_RP_PACKING_LIST_003]
 (@c_Orderkey NVARCHAR(10))
@@ -74,7 +75,7 @@ BEGIN
    AND CL.Long = 'RPT_RP_PACKING_LIST_003'
 
    IF ISNULL(@c_Title,'') = ''
-      SET @c_Title = 'Carton No|NAOS PO No.|Item Code|Description|QTY'
+      SET @c_Title = 'Carton No|Sephora PO No.|Item Code|Description|QTY'   --WL01
 
    SELECT @c_Title_1 = ISNULL(MAX(CASE WHEN SeqNo = 1 THEN ColValue ELSE '' END), 0)
         , @c_Title_2 = ISNULL(MAX(CASE WHEN SeqNo = 2 THEN ColValue ELSE '' END), 0)
