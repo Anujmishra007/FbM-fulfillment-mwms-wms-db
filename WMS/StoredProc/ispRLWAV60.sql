@@ -22,6 +22,7 @@ GO
 /* Updates:                                                              */  
 /* Date         Author   Ver.  Purposes                                  */  
 /* 19-MAY-2023  NJOW     1.0   DevOps Combine Script                     */
+/* 22-AUG-2023  NJOW01   1.1   WMS-23496 Change pickmethod to PP         */
 /*************************************************************************/   
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV60]      
@@ -318,12 +319,12 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV60]
          SET @c_PTSLoc = ''
          SET @c_ToLoc = ''
          SET @c_TaskType = 'RPF'
-         SET @c_PickMethod = '?'
+         --SET @c_PickMethod = '?' --NJOW01 Removed
 
          IF @c_UOM = '2' AND @c_ConsoDisc = 'D'
          BEGIN
             SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND PICKDETAIL.PickMethod <> ''C''  '      
-            SET @c_PickMethod = 'FP'
+            --SET @c_PickMethod = 'FP' --NJOW01 Removed
             --SET @c_ToLoc = @c_DispatchCasePickMethod
          END
          ELSE
