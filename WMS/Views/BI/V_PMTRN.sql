@@ -1,16 +1,31 @@
-SET ANSI_NULLS OFF
-GO
 SET QUOTED_IDENTIFIER OFF
 GO
-
---https://jiralfl.atlassian.net/browse/WMS-13190
-CREATE OR ALTER VIEW [BI].[V_PMTRN]
+SET ANSI_NULLS OFF
+GO
+/***************************************************************************/
+/* Purpose: [ID] WMS Add View to BI Schema for Jreport                     */
+/* https://jiralfl.atlassian.net/browse/WMS-23513                          */
+/* Creation Date: 28-AUG-2023                                              */
+/*                                                                         */
+/* Updates:                                                                */
+/* Date         Author		 Ver.  Purposes                                 */
+/* 28-AUG-2023  ZiWei       1.0   Created                                  */
+/***************************************************************************/
+CREATE OR ALTER VIEW [BI].[V_PMTRN] 
 AS
-SELECT *
-FROM dbo.PMTRN WITH (NOLOCK)
+SELECT * FROM DBO.PMTRN WITH (NOLOCK)
 GO
 
-GRANT SELECT ON BI.V_PMTRN TO [JREPORTROLE]
+--GRANT SELECT ON  [BI].[V_PMTRN] TO [HyperionAdmin]
+--GO
+GRANT SELECT ON  [BI].[V_PMTRN] TO [JReportRole]
 GO
+/*
+EXEC AS LOGIN = 'tabrpt'
+EXEC AS LOGIN = 'JREPORTUSERID'
 
+SELECT SUSER_SNAME()
 
+SELECT TOP 999 * FROM BI.V_PMTRN
+revert;
+*/
