@@ -23,6 +23,7 @@ GO
 /* Date         Author  Ver   Purposes                                  */
 /* 04-NOV-2022  WZPang  1.0   DevOps Combine Script                     */
 /* 01-FEB-2023  WZPang  1.1   Update SP                                 */
+/* 27-JUL-2023  CSCHONG 1.2   WMS-23110 revised and add new field (CS01)*/
 /************************************************************************/    
 CREATE OR ALTER PROC [dbo].[isp_RPT_ASN_TALLYSHT_022](    
             @c_Receiptkey     NVARCHAR(10)    
@@ -59,7 +60,10 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_ASN_TALLYSHT_022](
          , '' AS TotalVarianceQty          
          , CASE WHEN RECEIPT.ProcessType = 'F' THEN 'Fully Inspection'   WHEN RECEIPT.ProcessType = 'P' Then 'Partial Inspection' ELSE '' END  AS ProcessType            
          , CODELKUP.Short        
-         , RECEIPTDETAIL.ToId        
+         , RECEIPTDETAIL.ToId    
+         , SUBSTRING(RECEIPT.WarehouseReference,1,10) AS WHREF01    --CS01
+         , RECEIPT.Signatory             --CS01
+         , SUBSTRING(RECEIPT.WarehouseReference,11,10) AS WHREF02   --CS01
     FROM RECEIPT (NOLOCK)              
     JOIN RECEIPTDETAIL WITH (NOLOCK) ON (RECEIPT.ReceiptKey = RECEIPTDETAIL.Receiptkey)              
     JOIN SKU WITH (NOLOCK) ON (SKU.SKU = RECEIPTDETAIL.SKU and SKU.Storerkey = RECEIPT.Storerkey )              
@@ -88,5 +92,5 @@ END -- procedure
 GO
 GRANT EXECUTE ON [dbo].[isp_RPT_ASN_TALLYSHT_022] TO [NSQL] 
 GO
-GRANT EXECUTE ON [dbo].[isp_RPT_ASN_TALLYSHT_022] TO LogiReportRoleWM
+GRANT EXECUTE ON [dbo].[isp_RPT_ASN_TALLYSHT_022] TO [LogiReportRoleWM]
 GO
