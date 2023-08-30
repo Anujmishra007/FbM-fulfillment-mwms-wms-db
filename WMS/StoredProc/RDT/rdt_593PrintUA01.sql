@@ -15,6 +15,7 @@ GO
 /* 2020-01-03 1.3  James    WMS-11661 Stamp pickdtl.dropid=labelno(james02)*/
 /* 2022-09-15 1.4  yeekung  WMS-20794 Add reporttype (yeekung01)           */
 /* 2022-11-23 1.5  yeekung  WMS-21213 Add Shiplabel (yeekung02)            */
+/* 2023-08-09 1.6  yeekung  WMS-23130 Add Carton content lbl (yeekung03)   */
 /***************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdt_593PrintUA01] (
@@ -893,7 +894,7 @@ AS
           AND Loc = @cShipRouteLoc
 
           SELECT @cWCSStation = Short
-     FROM dbo.Codelkup WITH (NOLOCK)
+          FROM dbo.Codelkup WITH (NOLOCK)
           WHERE ListName = 'WCSSTATION'
           AND StorerKey = @cStorerKey
           AND Code = @cPutawayZone
@@ -948,9 +949,9 @@ AS
          --INSERT INTO @tOutBoundList (Variable, Value) VALUES ( '@nCartonStart', @nCartonStart)
          --INSERT INTO @tOutBoundList (Variable, Value) VALUES ( '@nCartonEnd',   @nCartonEnd)
          --INSERT INTO @tOutBoundList (Variable, Value) VALUES ( '@cTemplateCode',   @cTemplateCode)
-
+         
+         
          INSERT INTO @tOutBoundList (Variable, Value) VALUES ( '@cDropid',  @cParam1)
-
 
          -- Print label
          EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, 0, 1, '', @cStorerKey, @cLabelPrinter, '',
@@ -959,6 +960,21 @@ AS
             'rdt_593PrintUA01',
             @nErrNo  OUTPUT,
             @cErrMsg OUTPUT
+
+         DELETE FROM @tOutBoundList
+         
+         INSERT INTO @tOutBoundList (Variable, Value) VALUES ( '@cPickslipNo',  @cPickSlipNo)
+         INSERT INTO @tOutBoundList (Variable, Value) VALUES ( '@cUCCNO',  @cUCCNO)
+
+         -- Print label
+         EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, 0, 1, '', @cStorerKey, @cLabelPrinter, '',
+            'CTNRPTUA', -- Report type
+            @tOutBoundList, -- Report params
+            'rdt_593PrintUA01',
+            @nErrNo  OUTPUT,
+            @cErrMsg OUTPUT
+
+
       END
 
 
@@ -1101,10 +1117,7 @@ Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
       COMMIT TRAN rdt_593PrintUA01
    EXEC rdt.rdtSetFocusField @nMobile, @nFocusParam
-GO
-SET ANSI_NULLS OFF
-GO
-SET QUOTED_IDENTIFIER OFF
-GO
+
+GO 
 GRANT EXECUTE ON  [RDT].[rdt_593PrintUA01] TO [NSQL]
 GO
