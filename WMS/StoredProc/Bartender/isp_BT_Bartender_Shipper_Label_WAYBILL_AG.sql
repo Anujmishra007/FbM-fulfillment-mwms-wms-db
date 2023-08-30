@@ -13,6 +13,7 @@ GO
 /* 2022-04-15     1.0  MINGLE     Created (WMS-19440)                         */   
 /* 2022-04-15     1.0  MINGLE     DevOps Combine Script                       */ 
 /* 2023-05-08     1.1  CSCHONG    WMS-22423 add new field (CS01)              */
+/* 2023-08-01     1.2  CSCHONG    WMS-23148 add new field (CS02)              */
 /******************************************************************************/              
                 
 CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_Shipper_Label_WAYBILL_AG]                     
@@ -161,7 +162,7 @@ BEGIN
                    + ' '''',CASE WHEN orders.M_Country = ''GBP'' THEN ISNULL(C2.long, '''') ELSE Orders.M_Country END, '
                    + ' ISNULL(orders.userdefine01,''''),convert(nvarchar(10),DATEADD(DAY,1,getdate()),121),'
                    + ' ISNULL(orders.userdefine02,''''),'    --25                                                                  
-                   +' '''','''',orders.Externorderkey,orders.orderkey,orders.notes,orders.notes2,ISNULL(ST.B_Phone2,''''),'''','''','''', '  --35     --CS01
+                   +' '''','''',orders.Externorderkey,orders.orderkey,orders.notes,orders.notes2,ISNULL(ST.B_Phone2,''''),ISNULL(orders.c_phone1,''''),'''','''', '  --35     --CS01 --CS02
                    +' '''','''','''','''','''','''','''','''','''','''' ,'''','''','''','''','''','   --50
                    +' '''','''','''','''','''','''','''','''','''','''' '                              --60'
                    + ' FROM ORDERS orders WITH (NOLOCK) '
