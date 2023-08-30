@@ -12,6 +12,7 @@ GO
 /*                                                                         */
 /* Date       Rev  Author     Purposes                                     */
 /* 2023-04-13 1.0  yeekung    WMS-22165 Created                            */
+/* 2023-07-20 1.1  yeekung    WMS-23139 Add Total carton (yeekung01)       */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_727Inquiry20] (
@@ -58,6 +59,7 @@ BEGIN
    DECLARE @cOrderkey   NVARCHAR(20)
    DECLARE @cArea       NVARCHAR(20)
    DECLARE @nTtlOty     INT
+   DECLARE @nTtlCtn     INT
    DECLARE @cStatus     NVARCHAR(20)
    DEclare @cCurStorerkey NVARCHAR(20)
 
@@ -131,6 +133,15 @@ BEGIN
             AND Storerkey = @cCurStorerkey
             AND  STATUS < '5'
 
+
+         --(yeekung01)
+         SELECT @nTtlCtn = count(distinct DropID) 
+         FROM Pickdetail PD  (nolock) 
+            JOIN Orders O (NOLOCK) ON PD.Orderkey =O.Orderkey 
+         WHERE PD.Storerkey=@cCurStorerkey
+            AND Userdefine09=@cWavekey
+
+
          SELECT @nTtlOty = SUM(PD.QTY)
          FROM PICKDETAIL PD (nolock)
          where DropID = @cTote
@@ -159,6 +170,9 @@ BEGIN
          BEGIN
             SET @c_oFieled09 = 'Picked' 
          END
+
+         SET @c_oFieled10 = 'TTC:' + + CAST (@nTtlCtn AS NVARCHAR(5))          --(yeekung01)
+
          SET @nNextPage = - 1  
 
       END
@@ -204,12 +218,19 @@ BEGIN
          SELECT @cSortStaion = userdefine01
          FROM Wave (nolock)
          WHERE Wavekey = @cWavekey
-
+         
          SELECT @nTtlOrder = COUNT(DISTINCT Pickdetail.Orderkey)
          FROM PICKDETAIL (nolock)
          where DropID = @cTote
             AND Storerkey = @cCurStorerkey
             AND  STATUS < '5'
+
+         --(yeekung01)
+         SELECT @nTtlCtn = count(distinct DropID) 
+         FROM Pickdetail PD  (nolock) 
+            JOIN Orders O (NOLOCK) ON PD.Orderkey =O.Orderkey 
+         WHERE PD.Storerkey=@cCurStorerkey
+            AND Userdefine09=@cWavekey
 
          SELECT @nTtlOty = SUM(PD.QTY)
          FROM PICKDETAIL PD (nolock)
@@ -239,6 +260,9 @@ BEGIN
          BEGIN
             SET @c_oFieled09 = 'Picked' 
          END
+
+         SET @c_oFieled10 = 'TTC:' + + CAST (@nTtlCtn AS NVARCHAR(5))          --(yeekung01)
+
          SET @nNextPage = - 1  
 
       END
