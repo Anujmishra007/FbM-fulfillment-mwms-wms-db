@@ -9,6 +9,7 @@ GO
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
 /* 2023-01-10 1.0  yeekung  WMS-21497 Created                                 */
+/* 2023-08-29 1.1  yeekung  JSM-168168 Add left 10 character labelno          */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1663ExtVal22](
@@ -58,7 +59,7 @@ BEGIN
             SELECT TOP 1 @cOtherSalesman = O.Salesman 
             FROM PalletDetail PD WITH (NOLOCK)
                JOIN CartonTrack CT WITH (NOLOCK) ON (PD.StorerKey = @cStorerKey AND PD.CaseID = CT.TrackingNo)
-               JOIN Orders O WITH (NOLOCK) ON (CT.LabelNo = O.OrderKey AND CT.CarrierName = O.ShipperKey)
+               JOIN Orders O WITH (NOLOCK) ON (LEFT(CT.LabelNo,10) = O.OrderKey AND CT.CarrierName = O.ShipperKey)
             WHERE PD.PalletKey = @cPalletKey
             SET @nRowCount = @@ROWCOUNT
 
@@ -81,7 +82,7 @@ BEGIN
             -- Get other carton in order
             SELECT @cOtherTrackNo = TrackingNo
             FROM CartonTrack WITH (NOLOCK)
-            WHERE LabelNo = @cOrderKey
+            WHERE LEFT(LabelNo,10) = @cOrderKey
                AND CarrierName = @cShipperKey
                AND TrackingNo <> @cTrackNo
             SET @nRowCount = @@ROWCOUNT
@@ -115,7 +116,7 @@ BEGIN
                      AND CaseID IN (
                         SELECT TrackingNo
                         FROM CartonTrack WITH (NOLOCK)
-                        WHERE LabelNo = @cOrderKey
+                        WHERE LEFT(LabelNo,10) = @cOrderKey
                            AND CarrierName = @cShipperKey)
                      AND PalletKey <> @cPalletKey)
                BEGIN
@@ -144,13 +145,13 @@ BEGIN
                SELECT DISTINCT O.OrderKey, O.ShipperKey
                FROM PalletDetail PD WITH (NOLOCK)
                   JOIN CartonTrack CT WITH (NOLOCK) ON (PD.StorerKey = @cStorerKey AND PD.CaseID = CT.TrackingNo)
-                  JOIN Orders O WITH (NOLOCK) ON (CT.LabelNo = O.OrderKey AND CT.CarrierName = O.ShipperKey)
+                  JOIN Orders O WITH (NOLOCK) ON (LEFT(CT.LabelNo,10) = O.OrderKey AND CT.CarrierName = O.ShipperKey)
                WHERE PD.PalletKey = @cPalletKey
 
                -- Get all orders track no
                SELECT @nOrderTrackNo = COUNT(1)
                FROM CartonTrack CT WITH (NOLOCK)
-                  JOIN @tOrders O ON (CT.LabelNo = O.OrderKey AND CT.CarrierName = O.ShipperKey)
+                  JOIN @tOrders O ON (LEFT(CT.LabelNo,10)  = O.OrderKey AND CT.CarrierName = O.ShipperKey)
 
                -- Check all track no scanned
                IF @nPalletTrackNo <> @nOrderTrackNo

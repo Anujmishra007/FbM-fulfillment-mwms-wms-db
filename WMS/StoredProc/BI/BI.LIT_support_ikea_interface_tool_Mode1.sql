@@ -17,6 +17,8 @@ GO
 /* 2022-07-04   IVANYI      1.3             SHIPINTERFACE CHANGED                       */
 /* 2022-07-06   IVANYI      1.4             ADD CSM RETRIGGER AND CODE OPTIMIZATION     */
 /* 2023-04-10   Tyrion      1.5             Split Procedure by @Mode                    */
+/* 2023-05-22   Tyrion      1.6             change select * to detail column as   Jreport */
+/*                                          doesn't support result with diff columns      */   
 /****************************************************************************************/
 --EXEC [BI].[LIT_support_ikea_interface_tool_Mode1] '0017655792
 --0017653345
@@ -74,13 +76,14 @@ CREATE TABLE #ORDERLIST(C_ORDERKEY NVARCHAR(10))
 
 --IF @MODE = 1 --滑道号查询模式 --remove mode Tyrion
    BEGIN
+--    Tyrion 1.6
       IF ISNULL(@ORDERSWORD,'')=''
          BEGIN
-            SELECT N'请输入单号'
+            SELECT N'请输入单号','','','','','','','','',''
          END
       ELSE IF LEN(@ORDERSWORD)%10<>0
          BEGIN
-            SELECT N'请检查单号数量和位数是否正确'
+            SELECT N'请检查单号数量和位数是否正确','','','','','','','','',''
          END
       ELSE
          BEGIN
@@ -90,8 +93,21 @@ CREATE TABLE #ORDERLIST(C_ORDERKEY NVARCHAR(10))
                   VALUES (SUBSTRING(@ORDERSWORD,0,11))
                   SET @ORDERSWORD=SUBSTRING(@ORDERSWORD,11,LEN(@ORDERSWORD)-10)
                END
-            SELECT * FROM BI.V_ORDERINFO(NOLOCK)WHERE ORDERKEY IN (SELECT DISTINCT C_ORDERKEY FROM #ORDERLIST(NOLOCK))
-         END
+--   SELECT * FROM BI.V_ORDERINFO(NOLOCK)WHERE ORDERKEY IN (SELECT DISTINCT C_ORDERKEY FROM #ORDERLIST(NOLOCK))
+--    Tyrion 1.6
+         SELECT [OrderKey]
+              ,[OrderInfo01]
+              ,[OrderInfo02]
+              ,[OrderInfo03]
+              ,[OrderInfo04]
+              ,[OrderInfo05]
+              ,[OrderInfo06]
+              ,[OrderInfo07]
+              ,[OrderInfo08]
+              ,[OrderInfo09]
+              ,[OrderInfo10]
+           FROM [BI].[V_OrderInfo] WHERE ORDERKEY IN (SELECT DISTINCT C_ORDERKEY FROM #ORDERLIST(NOLOCK))
+       END
    END
 -------------------------------------------------------------------------------------
 IF DATENAME(WEEKDAY,GETDATE())='MONDAY'--CALCULATION OF USAGE TIMES IVANYI 2022-07-18

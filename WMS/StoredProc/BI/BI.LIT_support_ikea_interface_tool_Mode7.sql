@@ -17,6 +17,7 @@ GO
 /* 2022-07-04   IVANYI      1.3             SHIPINTERFACE CHANGED                       */
 /* 2022-07-06   IVANYI      1.4             ADD CSM RETRIGGER AND CODE OPTIMIZATION     */
 /* 2023-04-10   Tyrion      1.5             Split Procedure by @Mode                    */
+/* 2023-05-22   Tyrion      1.6             change errmsg col to fit tmp table columns  */
 /****************************************************************************************/
 --EXEC [BI].[LIT_support_ikea_interface_tool_Mode7] '0017653344
 --0017653345
@@ -78,12 +79,14 @@ CREATE TABLE #ORDERLIST(C_ORDERKEY NVARCHAR(10))
 
       IF ISNULL(@ORDERSWORD,'')=''
          BEGIN
-            SELECT N'请输入单号'
+--Tyrion1.6  
+            SELECT N'请输入单号',''
             GOTO QUIT_SP
          END
       ELSE IF LEN(@ORDERSWORD)%10<>0
          BEGIN
-            SELECT N'请检查单号数量和位数是否正确,是否包含了多余的空格'
+--Tyrion1.6  
+            SELECT N'请检查单号数量和位数是否正确,是否包含了多余的空格',''
             GOTO QUIT_SP
          END
       ELSE

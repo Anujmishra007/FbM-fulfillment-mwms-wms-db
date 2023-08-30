@@ -1,17 +1,20 @@
+/****** Object:  StoredProcedure [BI].[nsp_STD_PHWMS_StockTakeVarianceReport]    Script Date: 8/22/2023 2:25:06 PM ******/
 SET ANSI_NULLS OFF
 GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /***********************************************************************
 TITLE: STOCKTAKE VARIANCE REPORT (PHWMS) https://jiralfl.atlassian.net/browse/WMS-21993
 
 DATE				VER		CREATEDBY   PURPOSE
 14-MAR-2023			1.0		JAM			MIGRATE FROM HYPERION (PHWMS)
-11-AUG-2023			1.4		Crisnah	    Change JOIN TO LEFT JOIN https://jiralfl.atlassian.net/browse/WMS-23267
+22-Aug_2023			1.1		Crisnah		Change from Join to left join https://jiralfl.atlassian.net/browse/WMS-23267
 ************************************************************************/
 -- Test:   EXEC BI.nsp_STD_PHWMS_StockTakeVarianceReport 'ZEROW2W' ,'2022-09-01','2022-10-01'
 
-CREATE OR ALTER   PROC [BI].[nsp_STD_PHWMS_StockTakeVarianceReport] --NAME OF SP
+CREATE  OR ALTER  PROC [BI].[nsp_STD_PHWMS_StockTakeVarianceReport] --NAME OF SP
 		  @PARAM_GENERIC_STORERKEY NVARCHAR(30)
 		  ,@PARAM_GENERIC_FACILITY NVARCHAR(30)
 		  ,@PARAM_GENERIC_CCKEY NVARCHAR(30)
@@ -207,9 +210,9 @@ set @Stmt = ' SELECT '+
 ' , L.LOCAISLE ' +
 			'FROM    ' +
 			'  BI.V_CCDetail CCD (nolock)  ' +
-			'  JOIN BI.V_StockTakeSheetParameters SSP (nolock) ON (CCD.STORERKEY=SSP.STORERKEY AND CCD.CCKey = SSP.StockTakeKey) ' +
+			'  JOIN BI.V_StockTakeSheetParameters SSP (nolock) ON (CCD.CCKey = SSP.StockTakeKey) ' +
 			'  LEFT JOIN BI.V_SKU S (nolock) ON (CCD.Storerkey = S.StorerKey  AND CCD.Sku = S.Sku) ' +
-			'  JOIN BI.V_PACK P (nolock) ON (S.PACKKey = P.PackKey) ' +
+			'  LEFT JOIN BI.V_PACK P (nolock) ON (S.PACKKey = P.PackKey) ' +
 			'  LEFT JOIN BI.V_LOC L (nolock) ON (L.LOC = CCD.LOC) ' +
 			'WHERE    ' 
 			IF @PARAM_GENERIC_CCKEY='ALL'
@@ -237,19 +240,22 @@ EXEC BI.dspExecStmt @Stmt = @Stmt
 END
 GO
 
-GRANT EXEC ON BI.nsp_STD_PHWMS_StockTakeVarianceReport TO JReportRole --NAME OF SP
+GRANT EXECUTE ON [BI].[nsp_STD_PHWMS_StockTakeVarianceReport] TO [JReportRole] AS [dbo]
 GO
+
 /*
 EXECUTE AS LOGIN ='JREPORTUSERPH'
 
 SELECT SUSER_SNAME(), USER_NAME()
 
-EXEC BI.nsp_STD_PHWMS_StockTakeVarianceReport 'ZEROW2W' ,'2022-09-01','2022-10-01'
+EXEC BI.nsp_STD_PHWMS_StockTakeVarianceReport 'P550','VAS20','340841','2023-03-01','2023-03-27'
 EXEC BI.nsp_STD_PHWMS_StockTakeVarianceReport '','',''
 EXEC BI.nsp_STD_PHWMS_StockTakeVarianceReport NULL,NULL,NULL
+exec bi.nsp_STD_PHWMS_StockTakeVarianceReport 'UNILEVER','UMDC','TEST01','',''
 
 REVERT
 
 SELECT TOP 99 * FROM ExecutionLog ORDER BY 1 DESC
 
 */
+
