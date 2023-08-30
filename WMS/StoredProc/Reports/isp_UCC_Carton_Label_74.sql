@@ -1,7 +1,3 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'isp_UCC_Carton_Label_74' AND type = 'P')
-   DROP PROC isp_UCC_Carton_Label_74
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -34,11 +30,13 @@ GO
 /* 2019-04-01   WLCHOOI  1.2  WMS-8452 New Barcode (WL01)               */                
 /* 2019-04-29   WLCHOOI  1.3  WMS-8452 - Add new condition (WL02)       */                
 /* 2019-12-13   KuanYee  1.4  INC0967625 - Add Border (KY01)            */   
-/* 2021-02-05   CSCHONG  1.5  WMS-16224 revised field mapping (CS01)    */            
+/* 2021-02-05   CSCHONG  1.5  WMS-16224 revised field mapping (CS01)    */      
+/* 2023-01-05   MINGLE   1.6  WMS-21448 add new fields(ML01)            */ 
+/* 2023-07-04   CSCHONG  1.7  Devops Scripts Combine & WMS-22888 (CS02) */
 /************************************************************************/                
                 
-CREATE PROC [dbo].[isp_UCC_Carton_Label_74] (                
-         @c_StorerKey      NVARCHAR(20),                 
+CREATE OR ALTER PROC [dbo].[isp_UCC_Carton_Label_74] (                
+           @c_StorerKey      NVARCHAR(20),                 
            @c_PickSlipNo     NVARCHAR(20),                
            @c_StartCartonNo  NVARCHAR(20),                
            @c_EndCartonNo    NVARCHAR(20)                
@@ -123,7 +121,12 @@ CREATE TABLE #TMP_LCartonLABEL74 (
           PageNo          INT,                
           Con_Add4        NVARCHAR(45),                
           Con_City        NVARCHAR(45) NULL,                
-          pdLabelno       NVARCHAR(20) NULL)                       
+          pdLabelno       NVARCHAR(20) NULL,
+          PDDropID        NVARCHAR(20) NULL,	--ML01   
+          ShowDropID	     NVARCHAR(5)  NULL,	--ML01
+          BuyerPO         NVARCHAR(20) NULL  --CS02
+
+			 )
                           
 CREATE TABLE #TMP_LCartonLABEL74_1                 
          (rowid           int NOT NULL identity(1,1) PRIMARY KEY,                
@@ -145,14 +148,17 @@ CREATE TABLE #TMP_LCartonLABEL74_1
           Con_City        NVARCHAR(45) NULL,                
           pdLabelno       NVARCHAR(20) NULL,                 
           recgroup        INT NULL,                 
-          ShowNo          NVARCHAR(1)                
+          ShowNo          NVARCHAR(1),
+          PDDropID	     NVARCHAR(20) NULL,	--ML01
+          ShowDropID	     NVARCHAR(5)  NULL,	--ML01
+          BuyerPO         NVARCHAR(20) NULL  --CS02
           )                   
                 
                           
                           
    INSERT INTO #TMP_LCartonLABEL74(ST_Company, PickSlipNo, LoadKey,OrdExtOrdKey,Consigneekey,cartonno,            
                                    Con_Company,Con_Add1,SKUStyle,SKUSize,PDQty,Con_Add2,Con_Add3,PageNo,                
-                                   Con_Add4,Con_city,pdLabelno )                   
+                                   Con_Add4,Con_city,pdLabelno,PDDropID,ShowDropID,BuyerPO )	--ML01     --CS02              
    SELECT DISTINCT ST.company                
          ,  PAH.Pickslipno                
          ,  PAH.loadkey                
@@ -175,7 +181,10 @@ CREATE TABLE #TMP_LCartonLABEL74_1
                  ,CAST(CL.LONG AS INT)-LEN(CL.UDF01))            --WL01                
             WHEN ISNULL(CL.SHORT,'N') = 'Y' AND CAST(CL.LONG AS INT) = 0  AND ORDERS.type<>'IC'  THEN --WL02     --CS01           
             CL.UDF01 + PADET.LABELNO                                          --WL02                
-            ELSE PADET.labelno END                                            --WL01                                      
+            ELSE PADET.labelno END                                            --WL01 
+         ,  PADET.DropID	--ML01
+         ,  ISNULL(CL1.SHORT,'') AS ShowDropID	--ML01
+         , CASE WHEN ORDERS.type='IC' THEN ORDERS.buyerpo ELSE '' END     --CS02
    FROM PACKHEADER PAH WITH (NOLOCK)                
    JOIN PACKDETAIL PADET WITH (NOLOCK) ON PAH.Pickslipno = PADET.Pickslipno                
    JOIN ORDERS     WITH (NOLOCK) ON ORDERS.loadkey=PAH.loadkey                
@@ -185,7 +194,8 @@ CREATE TABLE #TMP_LCartonLABEL74_1
    --LEFT JOIN CODELKUP CL WITH (NOLOCK) ON (CL.LISTNAME = 'BARCODELEN' AND CL.STORERKEY = ORDERS.STORERKEY AND CL.CODE = 'SUPERHUB') --WL01                
    OUTER APPLY (SELECT TOP 1 CL.SHORT, CL.LONG, CL.UDF01, CL.UDF02, CL.UDF03, CL.CODE2 FROM             --WL02                
                 CODELKUP CL WITH (NOLOCK) WHERE (CL.LISTNAME = 'BARCODELEN' AND CL.STORERKEY = ORDERS.STORERKEY AND CL.CODE = 'SUPERHUB' AND                
-                (CL.CODE2 = ORDERS.FACILITY OR CL.CODE2 = '') ) ORDER BY CASE WHEN CL.CODE2 = '' THEN 2 ELSE 1 END ) AS CL                      
+                (CL.CODE2 = ORDERS.FACILITY OR CL.CODE2 = '') ) ORDER BY CASE WHEN CL.CODE2 = '' THEN 2 ELSE 1 END ) AS CL 
+   LEFT JOIN CODELKUP CL1(NOLOCK) ON CL1.LISTNAME = 'REPORTCFG' AND CL1.Storerkey = PAH.StorerKey AND CL1.LONG = 'r_dw_ucc_carton_label_74'	--ML01
    WHERE PAH.Pickslipno = @c_PickSlipNo                
    AND   PAH.Storerkey = @c_StorerKey                
    AND PADET.cartonno >= CAST(@c_StartCartonNo as INT) AND PADET.CartonNo <=  CAST(@c_EndCartonNo as INT)                
@@ -224,7 +234,7 @@ CREATE TABLE #TMP_LCartonLABEL74_1
         (ST_Company,PickSlipNo, loadkey,OrdExtOrdKey,Consigneekey,cartonno,                
                                    Con_Company,Con_Add1,SKUStyle,SKUSize,PDQty,Con_Add2,Con_Add3,PageNo,                
                                    Con_Add4,Con_city,pdLabelno,       
-                                   recgroup, ShowNo)                
+                                   recgroup, ShowNo,PDDropID,ShowDropID,BuyerPO)	--ML01  --CS02              
         SELECT ST_Company,PickSlipNo            
                ,loadkey                
                ,@c_getExternOrdkey                
@@ -233,7 +243,7 @@ CREATE TABLE #TMP_LCartonLABEL74_1
                ,Con_Company,Con_Add1,SKUStyle,SKUSize,PDQty,Con_Add2,Con_Add3,PageNo,                
                Con_Add4,Con_city,pdlabelno,       
                (Row_Number() OVER (PARTITION BY PickSlipNo, CartonNo ORDER BY PickSlipNo,CartonNo Asc)-1)/@n_MaxLineno+1 AS recgroup                
-                ,'Y'                
+                ,'Y',PDDropID,ShowDropID,BuyerPO	--ML01         --CS02     
         FROM  #TMP_LCartonLABEL74                
         WHERE PickSlipNo = @c_PickSlipNo                
         AND cartonno = @n_cartonno                
@@ -252,10 +262,10 @@ CREATE TABLE #TMP_LCartonLABEL74_1
       INSERT INTO #TMP_LCartonLABEL74_1                 
       (ST_Company, PickSlipNo, loadkey,OrdExtOrdKey,Consigneekey,cartonno,                
                                    Con_Company,Con_Add1,SKUStyle,SKUSize,PDQty,Con_Add2,Con_Add3,PageNo,                
-                                   Con_Add4,Con_city,pdLabelno, ShowNo)                
+                                   Con_Add4,Con_city,pdLabelno, ShowNo,PDDropID,ShowDropID,BuyerPO)	--ML01   --CS02               
       SELECT TOP 1 ST_Company,PickSlipNo, loadkey,@c_getExternOrdkey,Consigneekey,cartonno,                
                                    Con_Company,Con_Add1,'','',0,Con_Add2,Con_Add3,PageNo,                
-                                   Con_Add4,Con_city,pdLabelno, 'N'                 
+                                   Con_Add4,Con_city,pdLabelno, 'N',PDDropID,ShowDropID,BuyerPO	--ML01   --CS02              
       FROM #TMP_LCartonLABEL74_1                 
         WHERE PickSlipNo = @c_PickSlipNo                
         AND cartonno = @n_cartonno                
@@ -273,7 +283,7 @@ END
                 
   SELECT ST_Company,loadkey,OrdExtOrdKey,Consigneekey,cartonno,                
                                    Con_Company,Con_Add1,SKUStyle,SKUSize,PDQty,Con_Add2,Con_Add3,PageNo,                
-                                   Con_Add4,Con_city,pdLabelno, ShowNo                
+                                   Con_Add4,Con_city,pdLabelno, ShowNo,PDDropID,ShowDropID,BuyerPO	--ML01   --CS02             
   FROM #TMP_LCartonLABEL74_1                 
   ORDER BY LoadKey, CARTONNO, CASE WHEN ISNULL(SKUStyle,'') = '' THEN 1 ELSE 0 END, SKUStyle,SKUSize                 
 --KY01 (END)                 
@@ -282,6 +292,6 @@ QUIT_RESULT:
                 
 END 
 GO 
-
 GRANT EXECUTE ON isp_UCC_Carton_Label_74 TO NSQL 
 GO
+
