@@ -9,7 +9,9 @@ GO
 /* Modifications log:                                                         */                   
 /*                                                                            */                   
 /* Date       Rev  Author     Purposes                                        */   
-/* 2023-04-18 1.0  CSCHONG    Devops Scripts Combine & Created (WMS-21802)    */                
+/* 2023-04-18 1.0  CSCHONG    Devops Scripts Combine & Created (WMS-21802)    */   
+/* 2023-06-22 1.1  CSCHONG    WMS-21802 Fix ttlpage issue (CS01)              */       
+/* 2023-08-21 1.2  CSCHONG    WMS-23388 revised field mapping (CS02)          */      
 /******************************************************************************/                  
                     
 CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_ID_CTNMANFEST_01]                        
@@ -266,7 +268,8 @@ INSERT INTO #Result
 )
 
         SELECT DISTINCT RTRIM(SUBSTRING(ORDERS.consigneekey,5,45)),ISNULL(RTRIM(ORDERS.C_Company),''),ISNULL(RTRIM(ORDERS.C_ADDRESS1),''),
-                         SUBSTRING(ISNULL(RTRIM(ORDERS.C_ADDRESS2),'')+ISNULL(RTRIM(ORDERS.C_City),'')+ISNULL(RTRIM(ORDERS.C_Zip),''),1,80),ISNULL(RTRIM(ORDERS.ExternOrderkey),''),+ CHAR(13)+      --5        
+                         ISNULL(RTRIM(ORDERS.C_ADDRESS2),''),--+ISNULL(RTRIM(ORDERS.C_City),'')+ISNULL(RTRIM(ORDERS.C_Zip),''),1,80),
+                         ISNULL(RTRIM(ORDERS.ExternOrderkey),''),+ CHAR(13)+      --5        --CS02
                          ISNULL(RTRIM(ORDERS.ExternOrderkey),''),ISNULL(RTRIM(ORDERS.userdefine05),''),ISNULL(RTRIM(ORDERS.userdefine10),''),ISNULL(RTRIM(PACKDETAIL.DropID),''),ISNULL(RTRIM(PACKDETAIL.DropID),''),     --10    
                          CAST(PACKDETAIL.CartonNo AS NVARCHAR(10)), CASE WHEN PACKHEADER.Status = '9' THEN CAST(PACKHEADER.TTLCNTS AS NVARCHAR(5)) ELSE '' END,'','','',     --15    
                         '','','','','',     --20         
@@ -274,7 +277,8 @@ INSERT INTO #Result
                        '','','','','','','','','','',  --30    
                         '','','','','','','','','','',   --40         
                         '','','','','','','','','','',  --50         
-                        '','','','','','','','','',PACKHEADER.Orderkey   --60                        
+                        '','','','',ISNULL(RTRIM(ORDERS.M_State),''),ISNULL(RTRIM(ORDERS.C_ADDRESS3),''),ISNULL(RTRIM(ORDERS.C_ADDRESS4),''),    --57
+                        SUBSTRING(ISNULL(RTRIM(ORDERS.C_City),'')+ISNULL(RTRIM(ORDERS.C_Zip),''),1,80),'',PACKHEADER.Orderkey   --60            --CS02            
             FROM  PACKDETAIL  WITH (NOLOCK)
             JOIN  PACKHEADER  WITH (NOLOCK)  ON (PACKDETAIL.PickSlipNo = PACKHEADER.PickSlipNo)
             JOIN  ORDERS      WITH (NOLOCK)  ON (PACKHEADER.Orderkey = ORDERS.Orderkey)
@@ -397,7 +401,7 @@ INSERT INTO #TEMPSKU
 
 
 
-      SET @n_TTLpage =  FLOOR(@n_CntRec / @n_MaxLine )  
+      SET @n_TTLpage =  FLOOR(@n_CntRec / @n_MaxLine )  + CASE WHEN @n_CntRec % @n_MaxLine > 0 THEN 1 ELSE 0 END  --CS01
 
      --SELECT @n_intFlag '@n_intFlag', @n_CntRec '@n_CntRec', @n_TTLpage '@n_TTLpage'
         
@@ -557,7 +561,7 @@ INSERT INTO #TEMPSKU
                    '','','','','', '','','','','',                
                    '','','','','', '','','','','',                   
                    '','','','','', '','','','','',                 
-                   '','','','','', '','','','',''  
+                   '','','','',Col55, Col56,Col57,Col58,'',Col60      --CS02  
      FROM  #Result   
   
      
