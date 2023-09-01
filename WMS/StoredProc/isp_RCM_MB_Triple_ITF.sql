@@ -1,7 +1,3 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'isp_RCM_MB_Triple_ITF' AND type = 'P')
-   DROP PROC isp_RCM_MB_Triple_ITF
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -27,9 +23,11 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author    Ver.  Purposes                                */
+/* 23-May-2023  NJOW01    1.0   WMS-22652 allow configure tablename     */
+/* 23-May-2023  NJOW01    1.0   DEVOPS Combine Script                   */ 
 /************************************************************************/
 
-CREATE  PROCEDURE isp_RCM_MB_Triple_ITF
+CREATE OR ALTER PROCEDURE isp_RCM_MB_Triple_ITF
    @c_Mbolkey NVARCHAR(10),   
    @b_success  int OUTPUT,
    @n_err      int OUTPUT,
@@ -47,7 +45,9 @@ BEGIN
            @n_starttcnt int
            
    DECLARE @c_Facility NVARCHAR(5),
-           @c_storerkey NVARCHAR(15)
+           @c_storerkey NVARCHAR(15),
+           @c_Notes2    NVARCHAR(2000)='',
+           @c_TableName NVARCHAR(30)=''
               
    SELECT @n_Continue = 1, @b_success = 1, @n_starttcnt=@@TRANCOUNT, @c_errmsg='', @n_err=0 
    
@@ -56,7 +56,20 @@ BEGIN
    FROM ORDERS (NOLOCK)
    WHERE Mbolkey = @c_Mbolkey    
 
-   EXEC dbo.ispGenTransmitLog3 'MBOLTNLOG', @c_Mbolkey, '', @c_StorerKey, ''  
+   --NJOW01 S  
+   SELECT @c_Notes2 = Notes2
+   FROM CODELKUP (NOLOCK)
+   WHERE ListName = 'RCMCONFIG'
+   AND Storerkey = @c_Storerkey
+   AND Long = 'isp_RCM_MB_Triple_ITF'
+   AND Short = 'STOREDPROC'
+   AND UDF01 = 'MBOL'
+
+   SET @c_TableName = 'MBOLTNLOG'
+   SELECT @c_TableName = dbo.fnc_GetParamValueFromString('@c_TableName', @c_Notes2, @c_TableName)         
+   --NJOW01 E
+
+   EXEC dbo.ispGenTransmitLog3 @c_TableName, @c_Mbolkey, '', @c_StorerKey, ''  --NJOW01
         , @b_success OUTPUT  
         , @n_err OUTPUT  
         , @c_errmsg OUTPUT  
