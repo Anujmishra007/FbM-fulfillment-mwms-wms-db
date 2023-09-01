@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nspALMAST1]')
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-DROP PROCEDURE [dbo].[nspALMAST1]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -34,8 +29,10 @@ GO
 /*                            B2C Single Order                          */
 /* 11-May-2020 Wan01    1.1   Dynamic SQL review, impact SQL cache log  */  
 /* 13-JUL-2020 CSCHONG  1.2   WMS-14154 - revised sorting (CS01)        */
+/* 09-AUG-2023 NJOW02   1.3   WMS-23349 Remove lottable05 from sorting  */
 /************************************************************************/    
-CREATE  PROC [dbo].[nspALMAST1]        
+
+CREATE OR ALTER PROC [dbo].[nspALMAST1]        
    @c_DocumentNo NVARCHAR(10),  
    @c_Facility   NVARCHAR(5),     
    @c_StorerKey  NVARCHAR(15),     
@@ -199,7 +196,7 @@ BEGIN
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable15 ,112) <> '19000101' AND @d_Lottable15 IS NOT NULL THEN ' AND LA.Lottable15 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable15, 106)) ' ELSE ' ' END +
       ' ORDER BY CASE WHEN LOC.LocationCategory = ''Mezzanine'' THEN 1 WHEN LOC.LocationCategory = ''PND'' THEN 2 WHEN LOC.LocationCategory = ''VNA'' THEN 3 ELSE 4 END, ' +   
                       CASE WHEN @c_UOM = '7' THEN ' CASE WHEN LOTxLOCxID.QtyReplen > 0 THEN 1 ELSE 2 END, ' ELSE '' END  +   --if VNA or PND allocate loc with qtyreplen first
-                      ' LA.Lottable04, QTYAVAILABLE, LA.Lottable05, LOC.LogicalLocation, LOC.LOC '                           --CS01
+                      ' LA.Lottable04, QTYAVAILABLE, LOC.LogicalLocation, LOC.LOC '  --CS01 --NJOW02
 
    SET @c_SQLParm =  N'@c_Facility   NVARCHAR(5),  @c_StorerKey  NVARCHAR(15), @c_SKU NVARCHAR(20), @n_QtyLeftToFulfill INT, @n_UOMBase INT, ' +
                       '@c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18), @d_Lottable04 DATETIME, @d_Lottable05 DATETIME, ' +
