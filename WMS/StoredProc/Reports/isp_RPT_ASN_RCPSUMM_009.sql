@@ -12,7 +12,7 @@ GO
 /*                                                                       */
 /* Called By: RPT_ASN_RCPSUMM_009                                        */
 /*                                                                       */
-/* GitLab Version: 1.0                                                   */
+/* GitLab Version: 1.1                                                   */
 /*                                                                       */
 /* Version: 7.0                                                          */
 /*                                                                       */
@@ -21,6 +21,7 @@ GO
 /* Updates:                                                              */
 /* Date        Author  Ver   Purposes                                    */
 /* 08-May-2023 WZPang  1.0   DevOps Combine Script                       */
+/* 29-Aug-2023 WLChooi 1.1   UWP-7322 - Show UDF04 (WL01)                */
 /*************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_RPT_ASN_RCPSUMM_009]
@@ -62,21 +63,22 @@ BEGIN
         , RECEIPTDETAIL.QtyExpected    
         , RECEIPTDETAIL.ConditionCode
         , LOTXLOCXID.Loc
+        , ShowUDF04 = ISNULL(CL.Short,'N')   --WL01 S
+        , Userdefine04 = ISNULL(RECEIPT.Userdefine04,'')
    FROM RECEIPTDETAIL (NOLOCK)
-      , RECEIPT (NOLOCK)
-      , STORER (NOLOCK)
-      , PACK (NOLOCK)
-      , LOC (NOLOCK)
-      , SKU (NOLOCK)
-      , LOTXLOCXID (NOLOCK)
-   WHERE (SKU.StorerKey = RECEIPTDETAIL.StorerKey)
-   AND   (SKU.Sku = RECEIPTDETAIL.Sku)
-   AND   (SKU.PACKKey = PACK.PackKey)
-   AND   (RECEIPTDETAIL.StorerKey = STORER.StorerKey)
-   AND   (LOC.Loc = RECEIPTDETAIL.ToLoc)
-   AND   (RECEIPT.ReceiptKey = RECEIPTDETAIL.ReceiptKey)
-   AND   (RECEIPT.ReceiptKey = @c_Receiptkey)
-   AND   (LOTXLOCXID.Id = RECEIPTDETAIL.ToId AND LOTXLOCXID.Qty > 0)
+   JOIN RECEIPT (NOLOCK) ON (RECEIPT.ReceiptKey = RECEIPTDETAIL.ReceiptKey)
+   JOIN STORER (NOLOCK) ON (RECEIPT.StorerKey = STORER.StorerKey)
+   JOIN SKU (NOLOCK) ON (SKU.StorerKey = RECEIPTDETAIL.StorerKey) AND (SKU.Sku = RECEIPTDETAIL.Sku)
+   JOIN PACK (NOLOCK) ON (SKU.PACKKey = PACK.PackKey)
+   JOIN LOC (NOLOCK) ON (LOC.Loc = RECEIPTDETAIL.ToLoc)
+   JOIN LOTXLOCXID (NOLOCK) ON (LOTXLOCXID.Id = RECEIPTDETAIL.ToId)
+   LEFT JOIN CODELKUP CL (NOLOCK) ON CL.Listname = 'REPORTCFG' 
+                                 AND CL.Storerkey = RECEIPT.Storerkey 
+                                 AND CL.Code = 'ShowUDF04' 
+                                 AND CL.Long = 'RPT_ASN_RCPSUMM_009' 
+                                 AND CL.Short = 'Y'
+   WHERE (RECEIPT.ReceiptKey = @c_Receiptkey)
+   AND (LOTXLOCXID.Qty > 0)   --WL01 E
    GROUP BY RECEIPTDETAIL.Sku
           , RECEIPTDETAIL.QtyReceived
           , RECEIPTDETAIL.EditDate
@@ -104,6 +106,8 @@ BEGIN
           , RECEIPTDETAIL.QtyExpected    
           , RECEIPTDETAIL.ConditionCode
           , LOTXLOCXID.Loc
+          , ISNULL(CL.Short,'N')   --WL01
+          , ISNULL(RECEIPT.Userdefine04,'')   --WL01
 
 END
 GO
