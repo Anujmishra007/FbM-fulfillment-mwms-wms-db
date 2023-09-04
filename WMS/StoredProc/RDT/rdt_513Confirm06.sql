@@ -227,7 +227,7 @@ BEGIN
                         UserDefine06, UserDefine07, UserDefine08, UserDefine09, UserDefine10)
                      VALUES (
                         @cTransferKey, @cTransferLineNumber, 
-                        @cStorerKey, @cSKU, @cToLOC, @cLLI_LOT, @cLLI_ID, @nQTY_Move, @cPackkey, @cUOM,
+                        @cStorerKey, @cSKU, @cFromLOC, @cLLI_LOT, @cLLI_ID, @nQTY_Move, @cPackkey, @cUOM,
                         @cToLottable01, @cToLottable02, @cToLottable03, @dToLottable04, @dToLottable05,
                         @cToLottable06, @cToLottable07, @cToLottable08, @cToLottable09, @cToLottable10,
                         @cToLottable11, @cToLottable12, @dToLottable13, @dToLottable14, @dToLottable15,
