@@ -1,24 +1,20 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE Object_Id = OBJECT_ID(N'[RDT].[rdt_805MatrixSP05]') AND Type in (N'P', N'PC'))
-   DROP PROCEDURE [RDT].[rdt_805MatrixSP05]
-GO
 
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-
-
   
 /************************************************************************/  
 /* Store procedure: rdt_805MatrixSP05                                   */  
-/* Copyright      : LF Logistics                                        */  
+/* Copyright      : Mearsk                                              */  
 /*                                                                      */  
 /* Date       Rev  Author   Purposes                                    */  
 /* 03-08-2021 1.0  YeeKung    WMS-17625 created                         */  
 /* 26-11-2021 1.1  James      Perf tuning (james01)                     */  
+/* 16-06-2023 1.2  Ung        WMS-22703 Add Method param                */
 /************************************************************************/  
   
-create PROC [RDT].[rdt_805MatrixSP05] (  
+CREATE OR ALTER PROC [RDT].[rdt_805MatrixSP05] (  
     @nMobile    INT  
    ,@nFunc      INT  
    ,@cLangCode  NVARCHAR( 3)  
@@ -32,6 +28,7 @@ create PROC [RDT].[rdt_805MatrixSP05] (
    ,@cStation3  NVARCHAR( 10)    
    ,@cStation4  NVARCHAR( 10)    
    ,@cStation5  NVARCHAR( 10)    
+   ,@cMethod    NVARCHAR( 1)
    ,@cScanID    NVARCHAR( 20)  
    ,@cSKU       NVARCHAR( 20)  
    ,@nErrNo     INT            OUTPUT  

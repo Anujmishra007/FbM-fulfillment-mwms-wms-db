@@ -3,7 +3,6 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /************************************************************************/
 /* Store procedure: rdt_PTLStation_Matrix                               */
 /* Copyright      : LF Logistics                                        */
@@ -15,6 +14,8 @@ GO
 /* 04-04-2019 1.3  Ung      INC0645616 Fix not light up, if lights are  */
 /*                          more than matrix                            */
 /* 19-10-2022 1.4  Ung      WMS-21024 Fix IPAddress not setup           */
+/* 16-06-2023 1.5  Ung      WMS-22703 Add MatrixSP as UDF05             */
+/*                          Add Method param                            */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_PTLStation_Matrix] (
@@ -31,6 +32,7 @@ CREATE OR ALTER PROC [RDT].[rdt_PTLStation_Matrix] (
    ,@cStation3  NVARCHAR( 10)
    ,@cStation4  NVARCHAR( 10)
    ,@cStation5  NVARCHAR( 10)
+   ,@cMethod    NVARCHAR( 1)
    ,@cScanID    NVARCHAR( 20)
    ,@cSKU       NVARCHAR( 20)
    ,@nErrNo     INT            OUTPUT
@@ -62,21 +64,31 @@ BEGIN
                                              Customize Matrix
 
    ***********************************************************************************************/
+   -- Get method info
+   DECLARE @cStationtMatrixSP SYSNAME
+   SET @cStationtMatrixSP = ''
+   SELECT @cStationtMatrixSP = ISNULL( UDF05, '')
+   FROM CodeLKUP WITH (NOLOCK)
+   WHERE ListName = 'PTLMethod'
+      AND Code = @cMethod
+      AND StorerKey = @cStorerKey
 
    -- Get storer configure
-   DECLARE @cCartMatrixSP NVARCHAR(20)
-   SET @cCartMatrixSP = rdt.RDTGetConfig( @nFunc, 'StationMatrixSP', @cStorerKey)
-   IF @cCartMatrixSP = '0'
-      SET @cCartMatrixSP = ''
-
-   -- Custom cart matrix
-   IF @cCartMatrixSP <> ''
+   IF @cStationtMatrixSP = ''
    BEGIN
-      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cCartMatrixSP AND type = 'P')
+      SET @cStationtMatrixSP = rdt.RDTGetConfig( @nFunc, 'StationMatrixSP', @cStorerKey)
+      IF @cStationtMatrixSP = '0'
+         SET @cStationtMatrixSP = ''
+   END
+   
+   -- Custom matrix
+   IF @cStationtMatrixSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cStationtMatrixSP AND type = 'P')
       BEGIN
-         SET @cSQL = 'EXEC rdt.' + RTRIM( @cCartMatrixSP) +
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cStationtMatrixSP) +
             ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
-            ' @cLight, @cStation1, @cStation2, @cStation3, @cStation4, @cStation5, @cScanID, @cSKU, @nErrNo OUTPUT, @cErrMsg OUTPUT, ' +
+            ' @cLight, @cStation1, @cStation2, @cStation3, @cStation4, @cStation5, @cMethod, @cScanID, @cSKU, @nErrNo OUTPUT, @cErrMsg OUTPUT, ' +
             ' @cResult01 OUTPUT, @cResult02 OUTPUT, @cResult03 OUTPUT, @cResult04 OUTPUT, @cResult05 OUTPUT, ' +
             ' @cResult06 OUTPUT, @cResult07 OUTPUT, @cResult08 OUTPUT, @cResult09 OUTPUT, @cResult10 OUTPUT, ' +
             ' @nNextPage OUTPUT'
@@ -94,6 +106,7 @@ BEGIN
             ' @cStation3  NVARCHAR( 10), ' +
             ' @cStation4  NVARCHAR( 10), ' +
             ' @cStation5  NVARCHAR( 10), ' +
+            ' @cMethod    NVARCHAR( 1),  ' + 
             ' @cScanID    NVARCHAR( 20), ' +
             ' @cSKU       NVARCHAR( 20), ' +
             ' @nErrNo     INT            OUTPUT, ' +
@@ -112,7 +125,7 @@ BEGIN
 
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
             @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
-            @cLight, @cStation1, @cStation2, @cStation3, @cStation4, @cStation5, @cScanID, @cSKU, @nErrNo OUTPUT, @cErrMsg OUTPUT,
+            @cLight, @cStation1, @cStation2, @cStation3, @cStation4, @cStation5, @cMethod, @cScanID, @cSKU, @nErrNo OUTPUT, @cErrMsg OUTPUT,
             @cResult01 OUTPUT, @cResult02 OUTPUT, @cResult03 OUTPUT, @cResult04 OUTPUT, @cResult05 OUTPUT,
             @cResult06 OUTPUT, @cResult07 OUTPUT, @cResult08 OUTPUT, @cResult09 OUTPUT, @cResult10 OUTPUT,
             @nNextPage OUTPUT

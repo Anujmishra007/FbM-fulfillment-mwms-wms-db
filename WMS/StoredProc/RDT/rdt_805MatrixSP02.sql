@@ -1,22 +1,19 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE Object_Id = OBJECT_ID(N'[RDT].[rdt_805MatrixSP02]') AND Type in (N'P', N'PC'))
-   DROP PROCEDURE [RDT].[rdt_805MatrixSP02]
-GO
 
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /************************************************************************/
 /* Store procedure: rdt_805MatrixSP02                                   */
-/* Copyright      : LF Logistics                                        */
+/* Copyright      : Mearsk                                              */
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
 /* 20-02-2018 1.0  ChewKP   WMS-3962 Created                            */
+/* 16-06-2023 1.1  Ung      WMS-22703 Add Method param                  */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdt_805MatrixSP02] (
+CREATE OR ALTER PROC [RDT].[rdt_805MatrixSP02] (
     @nMobile    INT
    ,@nFunc      INT
    ,@cLangCode  NVARCHAR( 3)
@@ -30,6 +27,7 @@ CREATE PROC [RDT].[rdt_805MatrixSP02] (
    ,@cStation3  NVARCHAR( 10)  
    ,@cStation4  NVARCHAR( 10)  
    ,@cStation5  NVARCHAR( 10)  
+   ,@cMethod    NVARCHAR( 1)
    ,@cScanID    NVARCHAR( 20)
    ,@cSKU       NVARCHAR( 20)
    ,@nErrNo     INT            OUTPUT
@@ -73,7 +71,6 @@ BEGIN
           ,@nSumqty     INT
           ,@cWaveKey    NVARCHAR(10) 
           ,@nMultiOrder INT
-          ,@cMethod     NVARCHAR(1) 
           ,@cCartonID   NVARCHAR(20)  
           ,@nCount      INT
 
