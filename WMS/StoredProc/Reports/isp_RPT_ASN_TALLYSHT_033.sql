@@ -9,7 +9,7 @@ GO
 /* Copyright: MAERSK                                                       */
 /* Written by: WLChooi                                                     */
 /*                                                                         */
-/* Purpose: UWP-6567 Add new fields on LOGI Report TALLY SHEET             */
+/* Purpose: UWP-6566 Add new fields on LOGI Report TALLY SHEET             */
 /*          https://maersk-tools.atlassian.net/browse/UWP-6566             */
 /*                                                                         */
 /* Called By: RPT_ASN_TALLYSHT_033                                         */
@@ -228,7 +228,7 @@ BEGIN
         , (  SELECT MAX(SKUGROUP)
              FROM SKU (NOLOCK)
              WHERE StorerKey = RECEIPT.StorerKey AND Sku = RECEIPTDETAIL.Sku) AS SKUGroup
-        , SN.SerialNo
+        , SN.SerialNo AS SerialNoKey
         , SN.Lot
    FROM RECEIPT WITH (NOLOCK)
    JOIN RECEIPTDETAIL WITH (NOLOCK) ON (RECEIPT.ReceiptKey = RECEIPTDETAIL.ReceiptKey)
