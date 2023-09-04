@@ -25,6 +25,8 @@ GO
 /* 15-Jan-2021 Wan01    1.1   Execute Login if @c_UserName<>SUSER_SNAME()*/
 /* 31-Jan-2023 Wan02    1.2   LFWM-3911 - CN-SCE-Kitting-CalculateConsumptionbyBOM*/
 /*                            DevOps Combine Script                      */
+/* 21-Jul-2023 NJOW01   1.3   WMS-23149 - allow update consumption by    */
+/*                            matching kitlineno to externlineno         */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_Kit_Calc_Consumption_BOM]  (
    @c_StorerKey      NVARCHAR(15), 
@@ -49,18 +51,20 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF                                                                                                                                               
    SET CONCAT_NULL_YIELDS_NULL OFF                                                                 --(Wan02) - END
 
-   DECLARE @n_Continue        INT = '1'         
-         , @n_Count           INT = 0 
-         , @c_ComponentSku    NVARCHAR(20) = '' 
-         , @n_ComponentQty    INT = 0 
-         , @n_ParentQty       INT = 0 
-         , @n_Remainder       INT = 0
-         , @n_BOMQty          INT = 0  
-         , @c_NewKitLineNo    NVARCHAR(5)  = ''
-         , @c_PackKey         NVARCHAR(10) = ''
-         , @c_UOM             NVARCHAR(10) = ''
-         
-         , @c_ToType          NVARCHAR(10) = ''                                                    --(Wan02) - START 
+   DECLARE @n_Continue                   INT = '1'         
+         , @n_Count                      INT = 0 
+         , @c_ComponentSku               NVARCHAR(20) = '' 
+         , @n_ComponentQty               INT = 0 
+         , @n_ParentQty                  INT = 0 
+         , @n_Remainder                  INT = 0
+         , @n_BOMQty                     INT = 0  
+         , @c_NewKitLineNo               NVARCHAR(5)  = ''
+         , @c_PackKey                    NVARCHAR(10) = ''
+         , @c_UOM                        NVARCHAR(10) = ''         
+         , @c_ToType                     NVARCHAR(10) = ''                                        --(Wan02) - START 
+         , @c_ToKitLineNumber            NVARCHAR(5)   --NJOW01    
+         , @c_Facility                   NVARCHAR(5)   --NJOW01  
+         , @c_KitCalConsumBOMByLineMatch NVARCHAR(30)=''  --NJOW01
          
    SET @b_Success = 1
    SET @c_ErrMsg = ''
@@ -86,16 +90,18 @@ BEGIN
               @n_FromCompleteQty INT = 0,
               @n_ToExpectedQty   INT = 0,
               @n_ToCompleteQty   INT = 0,
-              @n_RemainingQty    INT = 0,
-              @n_ShortQty        INT = 0 
+              @n_RemainingQty    INT = 0
+              --@n_ShortQty        INT = 0 
               
       SET @c_ToType = IIF(@c_Type = 'T', 'F', 'T')                                                 --(Wan02)                           
               
       SELECT @c_StorerKey = KD.StorerKey, 
              @c_FromSKU   = KD.Sku,
              @n_FromExpectedQty = KD.ExpectedQty,
-             @n_FromCompleteQty = KD.Qty 
-      FROM KITDETAIL AS KD WITH (NOLOCK)
+             @n_FromCompleteQty = KD.Qty,
+             @c_Facility = K.Facility --NJOW01
+      FROM KIT AS K WITH (NOLOCK)
+      JOIN KITDETAIL AS KD WITH (NOLOCK) ON K.Kitkey = KD.Kitkey
       WHERE KD.KITKey = @c_KitKey 
       AND   KD.KITLineNumber = @c_KitLineNumber 
       AND   KD.[Type] = @c_Type                                                                    --(Wan02)
@@ -141,6 +147,8 @@ BEGIN
          [Type]        NVARCHAR(5), 
          Qty           INT )
          
+      SELECT @c_KitCalConsumBOMByLineMatch = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'KitCalConsumBOMByLineMatch')    --NJOW01
+         
       DECLARE CUR_COMPONENTS CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT ComponentSku, Qty 
       FROM BillOfMaterial WITH (NOLOCK)
@@ -158,36 +166,41 @@ BEGIN
          SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + 
                ': BOM Sku not found (lsp_Kit_Calc_Consumption_BOM)'                
          GOTO EXIT_SP         
-      END                                                                                          --(Wan02) - END
-                                                  
+      END                                             
+      --(Wan02) - END
+                                                        
       WHILE @@FETCH_STATUS = 0
       BEGIN   
          SET @n_RemainingQty = @n_ComponentQty * @n_FromCompleteQty
-         SET @n_ShortQty = 0 
-    
+         --SET @n_ShortQty = 0 
+                                 
          DECLARE CUR_SOURCE_KITDETAIL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         SELECT KITLineNumber, ExpectedQty 
-         FROM KITDETAIL WITH (NOLOCK)
-         WHERE KITKey = @c_KitKey 
-         AND   [Type] = @c_ToType                                                                  --(Wan02)
-         AND   [Status] <> '9' 
-         AND   Sku = @c_ComponentSku 
+            SELECT KITLineNumber, ExpectedQty
+            FROM KITDETAIL WITH (NOLOCK)
+            WHERE KITKey = @c_KitKey 
+            AND   [Type] = @c_ToType                                                                  --(Wan02)
+            AND   [Status] <> '9' 
+            AND   Sku = @c_ComponentSku       
+            AND   ExternLineNo = CASE WHEN @c_KitCalConsumBOMByLineMatch = '1' THEN 
+                                        @c_KitLineNumber
+                                 ELSE ExternLineNo END  
+            ORDER BY KITLineNumber   
    
          OPEN CUR_SOURCE_KITDETAIL
    
-         FETCH FROM CUR_SOURCE_KITDETAIL INTO @c_KitLineNumber, @n_ToExpectedQty
+         FETCH FROM CUR_SOURCE_KITDETAIL INTO @c_ToKitLineNumber, @n_ToExpectedQty
    
          WHILE @@FETCH_STATUS = 0 
          BEGIN         
-            IF @n_RemainingQty=0
-               SET @n_ToCompleteQty = @n_RemainingQty - @n_ToExpectedQty                           --(Wan02)
+            IF @n_RemainingQty = 0
+               SET @n_ToCompleteQty = 0 --= @n_RemainingQty - @n_ToExpectedQty                           --(Wan02)  --NJOW01
             ELSE 
-            IF (@n_RemainingQty < 0) AND (@n_ToExpectedQty > @n_RemainingQty)
-            BEGIN
-                SET @n_ShortQty = @n_ToExpectedQty + @n_RemainingQty  
-                SET @n_ToCompleteQty = @n_ShortQty
-            END
-            ELSE 
+            --IF (@n_RemainingQty < 0) AND (@n_ToExpectedQty > @n_RemainingQty)   --NJOW01 Removed
+            --BEGIN
+                --SET @n_ShortQty = @n_ToExpectedQty + @n_RemainingQty  
+                --SET @n_ToCompleteQty = @n_ShortQty
+            --END
+            --ELSE 
             IF @n_RemainingQty > 0
             BEGIN
                 IF @n_RemainingQty >= @n_ToExpectedQty
@@ -200,24 +213,25 @@ BEGIN
             END
  
             SET @n_RemainingQty = @n_RemainingQty - @n_ToCompleteQty
-               
+           
             INSERT INTO #KIT_BOM_DETAIL
             (  KitKey, KitLineNumber, [Type], Qty )
             VALUES
             (
                @c_KitKey,
-               @c_KitLineNumber,
+               @c_ToKitLineNumber,
                @c_ToType,                                                                          --(Wan02)
                @n_ToCompleteQty
             )
             
-            FETCH FROM CUR_SOURCE_KITDETAIL INTO @c_KitLineNumber, @n_ToExpectedQty 
+            FETCH FROM CUR_SOURCE_KITDETAIL INTO @c_ToKitLineNumber, @n_ToExpectedQty 
          END   
          CLOSE CUR_SOURCE_KITDETAIL
-         DEALLOCATE CUR_SOURCE_KITDETAIL
-   
-         IF EXISTS(SELECT 1 FROM #KIT_BOM_DETAIL AS kbd WITH(NOLOCK)
-                   WHERE kbd.Qty < 0 )
+         DEALLOCATE CUR_SOURCE_KITDETAIL                              
+         
+         --IF EXISTS(SELECT 1 FROM #KIT_BOM_DETAIL AS kbd WITH(NOLOCK)
+         --          WHERE kbd.Qty < 0 )  --NJOW01 Removed
+         IF @n_RemainingQty > 0  --NJOW01
          BEGIN
             SET @n_continue = 3  
             SET @n_Err = 552454 
