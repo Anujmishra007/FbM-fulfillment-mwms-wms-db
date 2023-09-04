@@ -25,6 +25,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
 /* 21-Oct-2022  WLChooi  1.0  DevOps Combine Script                     */
+/* 01-Aut-2023  NJOW01   1.1  WMS-23255 Validate scan-in by config      */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispWAVRL08] 
@@ -52,6 +53,9 @@ BEGIN
          , @c_DocType        NVARCHAR(1)
          , @c_Trmlogkey      NVARCHAR(10)
          , @c_TransmitBatch  NVARCHAR(50) = ''
+         , @c_ValidateScanIn NVARCHAR(30) = '' --NJOW01
+         , @c_Authority      NVARCHAR(30) = '' --NJOW01
+         , @c_ValScanIn_Opt5 NVARCHAR(1000) = '' --NJOW01
 
    IF @n_err = 1
       SET @b_debug = 1
@@ -74,7 +78,31 @@ BEGIN
   
    ------Validation--------
    IF @n_continue = 1 OR @n_continue = 2
-   BEGIN          
+   BEGIN 
+   	  --NJOW01 S         
+   	  SELECT @c_Authority = SC.Authority,
+             @c_ValScanIn_Opt5 = SC.Option5
+      FROM dbo.fnc_GetRight2(@c_Facility, @c_Storerkey,'','WaveReleaseToWCS_SP') AS SC
+      
+      SELECT @c_ValidateScanIn = dbo.fnc_GetParamValueFromString('@c_ValidateScanIn', @c_ValScanIn_Opt5, @c_ValidateScanIn)      
+      
+      IF @c_Authority = 'ispWAVRL08' AND @c_ValidateScanIn = 'Y'
+      BEGIN
+         IF EXISTS(SELECT 1 
+                   FROM WAVEDETAIL WD (NOLOCK)
+                   JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
+                   WHERE WD.Wavekey = @c_Wavekey
+                   AND O.Status < '3')
+         BEGIN
+            SELECT @n_continue = 3  
+            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 67100   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+            SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Release Failed. Wave not yet picking in progress. Please Scan In. (ispWAVRL08)' 
+                             + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '           
+            GOTO RETURN_SP         	
+         END          
+      END
+      --NJOW01 E
+   	    	
       IF @c_UserDefine02 = 'GRS Send'
       BEGIN
          SELECT @n_continue = 3  

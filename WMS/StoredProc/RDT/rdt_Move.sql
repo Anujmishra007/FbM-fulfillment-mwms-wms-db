@@ -68,6 +68,7 @@ GO
 /* 2021-02-18 4.1  James    WMS-16020 Add WaveKey (james03)             */    
 /* 2022-03-11 4.2  TLTING01 Perfromance tune - Force Order              */ 
 /* 2023-01-09 4.3  James    WMS-21437 Add ToLoc MaxSKU check (james04)  */
+/* 2023-07-24 4.4  Ung      WMS-22703 Fix move by SKU, MOveQTYAlloc     */
 /************************************************************************/    
     
 CREATE OR ALTER  PROCEDURE [RDT].[rdt_Move] (    
@@ -553,8 +554,8 @@ BEGIN
                AND   Facility = @cFacility
                AND   CommingleSKU = '1')
    BEGIN
-   	SELECT @nMaxSKU = MaxSKU
-   	FROM dbo.LOC WITH (NOLOCK)
+      SELECT @nMaxSKU = MaxSKU
+      FROM dbo.LOC WITH (NOLOCK)
       WHERE LOC = @cToLOC
       AND   Facility = @cFacility
       AND   CommingleSKU = '1'
@@ -562,37 +563,37 @@ BEGIN
       -- Only check if MaxSku setup
       IF @nMaxSKU > 0
       BEGIN
-      	-- Move by Sku
-   	   IF @cSKU IS NOT NULL
-   	   BEGIN
-   		   -- Sku to move in not exists in ToLoc, MaxSku checking need + 1 
-   		   IF NOT EXISTS ( SELECT 1 
-   		                   FROM dbo.LOTxLOCxID WITH (NOLOCK)
-   		                   WHERE StorerKey = @cStorerKey
-   		                   AND   Loc = @cToLOC
-   		                   AND   Sku = @cSKU
-   		                   AND   (QTY - QTYPicked > 0 OR PendingMoveIn > 0))
-   	         SET @nIsSKUExists = 1   		                
-   	      ELSE
-   	      	SET @nIsSKUExists = -1  -- exclude the sku which already exists in toloc
-   	   END
+         -- Move by Sku
+         IF @cSKU IS NOT NULL
+         BEGIN
+            -- Sku to move in not exists in ToLoc, MaxSku checking need + 1 
+            IF NOT EXISTS ( SELECT 1 
+                            FROM dbo.LOTxLOCxID WITH (NOLOCK)
+                            WHERE StorerKey = @cStorerKey
+                            AND   Loc = @cToLOC
+                            AND   Sku = @cSKU
+                            AND   (QTY - QTYPicked > 0 OR PendingMoveIn > 0))
+               SET @nIsSKUExists = 1                         
+            ELSE
+               SET @nIsSKUExists = -1  -- exclude the sku which already exists in toloc
+         END
          ELSE  -- Move by Loc/Id
          BEGIN
             SELECT @nIsSKUExists = COUNT( DISTINCT LLI.Sku)
             FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
             JOIN dbo.LOC LOC WITH (NOLOCK) ON ( LLI.Loc = LOC.Loc)
-   		   WHERE LLI.StorerKey = @cStorerKey
-   		   AND   (LLI.QTY - LLI.QTYPicked > 0 OR LLI.PendingMoveIn > 0)
-   		   AND   (( @cFromID IS NULL AND LLI.Id = LLI.Id) OR ( @cFromID IS NOT NULL AND LLI.Id = @cFromID))
-   		   AND   LOC.Facility = @cFacility
-   		   AND   LOC.Loc = @cFromLOC
-   		   AND   NOT EXISTS ( SELECT 1 FROM dbo.LOTxLOCxID LLI2 WITH (NOLOCK)
+            WHERE LLI.StorerKey = @cStorerKey
+            AND   (LLI.QTY - LLI.QTYPicked > 0 OR LLI.PendingMoveIn > 0)
+            AND   (( @cFromID IS NULL AND LLI.Id = LLI.Id) OR ( @cFromID IS NOT NULL AND LLI.Id = @cFromID))
+            AND   LOC.Facility = @cFacility
+            AND   LOC.Loc = @cFromLOC
+            AND   NOT EXISTS ( SELECT 1 FROM dbo.LOTxLOCxID LLI2 WITH (NOLOCK)
                   JOIN dbo.LOC LOC2 WITH (NOLOCK) ON ( LLI.Loc = LOC.Loc)
-   		         WHERE LLI2.StorerKey = @cStorerKey
-   		         AND   (LLI2.QTY - LLI2.QTYPicked > 0 OR LLI2.PendingMoveIn > 0)
-   		         AND   LOC2.Facility = @cFacility
-   		         AND   LOC2.Loc = @cToLOC
-   		         AND   LLI.Sku = LLI2.Sku)
+                  WHERE LLI2.StorerKey = @cStorerKey
+                  AND   (LLI2.QTY - LLI2.QTYPicked > 0 OR LLI2.PendingMoveIn > 0)
+                  AND   LOC2.Facility = @cFacility
+                  AND   LOC2.Loc = @cToLOC
+                  AND   LLI.Sku = LLI2.Sku)
          END
          
          SELECT @nSKUCnt = COUNT( DISTINCT SKU)
@@ -602,7 +603,7 @@ BEGIN
          AND   LOC.Facility = @cFacility
          AND   LLI.StorerKey = @cStorerKey
          AND   (LLI.QTY - LLI.QTYPicked > 0 OR LLI.PendingMoveIn > 0)
-         	
+            
          IF @nMaxSKU < ( @nSKUCnt + @nIsSKUExists)
          BEGIN    
             SET @nErrNo = 60549    
@@ -1071,6 +1072,7 @@ BEGIN
          ' SELECT @nPD_Alloc = ISNULL( SUM( QTY), 0) ' +    
          ' FROM dbo.PickDetail PD (NOLOCK) ' +    
      ' WHERE StorerKey = @cStorerKey ' +    
+            ' AND SKU = @cSKU ' + 
             ' AND LOC = @cFromLOC ' +    
             CASE WHEN @cFromID  IS NULL THEN '' ELSE ' AND ID  = @cFromID  ' END +     
             CASE WHEN @cFromLOT IS NULL THEN '' ELSE ' AND LOT = @cFromLOT ' END +     
@@ -1079,6 +1081,7 @@ BEGIN
             @cSQL -- TaskDetailKey/OrderKey/CaseID/DropID    
       SET @cSQLParam =     
          ' @cStorerKey     NVARCHAR(15), ' +     
+         ' @cSKU           NVARCHAR(20), ' +     
          ' @cFromLOC       NVARCHAR(10), ' +     
          ' @cFromID        NVARCHAR(18), ' +     
          ' @cFromLOT       NVARCHAR(10), ' +     
@@ -1088,7 +1091,7 @@ BEGIN
          ' @cDropID        NVARCHAR(20), ' +     
          ' @cWaveKey       NVARCHAR(10), ' +  
          ' @nPD_Alloc      INT OUTPUT    '     
-      EXEC sp_ExecuteSQL @cSQL, @cSQLParam, @cStorerKey, @cFromLOC, @cFromID, @cFromLOT,      
+      EXEC sp_ExecuteSQL @cSQL, @cSQLParam, @cStorerKey, @cSKU, @cFromLOC, @cFromID, @cFromLOT, 
          @cTaskDetailKey,     
          @cOrderKey,     
          @cCaseID,     
@@ -1193,11 +1196,13 @@ BEGIN
             ' AND LOC = @cFromLOC ' +    
             CASE WHEN @cFromID  IS NULL THEN '' ELSE ' AND ID  = @cFromID  ' END +     
             CASE WHEN @cFromLOT IS NULL THEN '' ELSE ' AND LOT = @cFromLOT ' END +     
+            ' AND SKU = @cSKU ' + 
             ' AND Status = ''5'' ' +     
             ' AND QTY > 0 ' +     
             @cSQL -- TaskDetailKey/OrderKey/CaseID/DropID    
       SET @cSQLParam =     
          ' @cStorerKey     NVARCHAR(15), ' +     
+         ' @cSKU           NVARCHAR(20), ' +    
          ' @cFromLOC       NVARCHAR(10), ' +     
          ' @cFromID        NVARCHAR(18), ' +     
          ' @cFromLOT       NVARCHAR(10), ' +     
@@ -1206,7 +1211,7 @@ BEGIN
          ' @cCaseID        NVARCHAR(20), ' +     
          ' @cDropID        NVARCHAR(20), ' +     
          ' @nPD_Pick       INT OUTPUT    '     
-      EXEC sp_ExecuteSQL @cSQL, @cSQLParam, @cStorerKey, @cFromLOC, @cFromID, @cFromLOT,      
+      EXEC sp_ExecuteSQL @cSQL, @cSQLParam, @cStorerKey, @cSKU, @cFromLOC, @cFromID, @cFromLOT,      
          @cTaskDetailKey,     
          @cOrderKey,     
          @cCaseID,     

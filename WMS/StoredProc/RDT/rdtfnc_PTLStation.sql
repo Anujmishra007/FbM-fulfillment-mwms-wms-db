@@ -35,6 +35,7 @@ GO
 /*                            station(yeekung01)                              */
 /* 15-11-2022 2.8  Ung        WMS-21024 Adjust ExtendedInfoSP at SKU screen   */
 /*                            Clear QTY field when ESC to SKU screen          */
+/* 16-06-2023 2.9  Ung        WMS-22703 Add MatrixSP Method param             */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PTLStation] (
@@ -1056,6 +1057,7 @@ BEGIN
          ,@cStation3
          ,@cStation4
          ,@cStation5
+         ,@cMethod
          ,@cScanID
          ,@cSKU
          ,@nErrNo     OUTPUT
@@ -1277,6 +1279,7 @@ BEGIN
          ,@cStation3
          ,@cStation4
          ,@cStation5
+         ,@cMethod
          ,@cScanID
          ,@cSKU
          ,@nErrNo     OUTPUT
@@ -1532,6 +1535,7 @@ BEGIN
          ,@cStation3
          ,@cStation4
          ,@cStation5
+         ,@cMethod
          ,@cScanID
          ,@cSKU
          ,@nErrNo     OUTPUT
@@ -1913,6 +1917,7 @@ BEGIN
       ,@cStation3
       ,@cStation4
       ,@cStation5
+      ,@cMethod
       ,@cScanID
       ,@cSKU
       ,@nErrNo     OUTPUT
@@ -2301,6 +2306,7 @@ BEGIN
       ,@cStation3
       ,@cStation4
       ,@cStation5
+      ,@cMethod
       ,@cScanID
       ,@cSKU
       ,@nErrNo     OUTPUT
@@ -2481,6 +2487,7 @@ BEGIN
         ,@cStation3
         ,@cStation4
         ,@cStation5
+        ,@cMethod
         ,@cScanID
         ,@cSKU
         ,@nErrNo     OUTPUT

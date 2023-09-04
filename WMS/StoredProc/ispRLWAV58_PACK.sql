@@ -22,6 +22,8 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 18-APR-2023 NJOW     1.0   DEVOPS Combine Script                     */
+/* 29-AUG-2023 NJOW01   1.1   WMS-22210  Add item lenght & height       */ 
+/*                            validation                                */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispRLWAV58_PACK]
            @c_Wavekey                 NVARCHAR(10)
@@ -378,6 +380,51 @@ BEGIN
                 WHERE Listname = 'WebService'
                 AND Code = 'Cartonization')
          SET @c_CartonItemPosFitCheck = 'N'          
+      
+      --NJOW01 S   
+      IF @c_CartonItemPosFitCheck = 'Y'
+      BEGIN
+         SET @c_Sku = ''
+         SELECT TOP 1 @c_Sku = SD.Sku
+         FROM #ORDERSKU OS
+         JOIN #SKUDIM SD ON OS.Storerkey = SD.Storerkey AND OS.Sku = SD.Sku
+         OUTER APPLY (SELECT TOP 1 CZ.CartonType
+                      FROM #CARTONIZATION CZ
+                      WHERE CZ.CartonLength >= SD.CN_Length
+                      AND CZ.CartonHeight >= SD.CN_Height) CTN
+         WHERE CTN.CartonType IS NULL             
+         AND OS.UOM = '2'
+         ORDER BY SD.Sku
+         
+         IF ISNULL(@c_Sku,'') <> ''
+         BEGIN
+            SET @n_continue = 3
+            SET @n_Err = 82032
+            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Unable find any carton type can fit Lenght and Height of Sku ' + RTRIM(@c_Sku) + ' (By Carton). (ispRLWAV58_PACK)'   	
+            GOTO QUIT_SP 	
+         END       
+         
+         SET @c_Sku = ''
+         SELECT TOP 1 @c_Sku = SD.Sku
+         FROM #ORDERSKU OS
+         JOIN #SKUDIM SD ON OS.Storerkey = SD.Storerkey AND OS.Sku = SD.Sku
+         OUTER APPLY (SELECT TOP 1 CZ.CartonType
+                      FROM #CARTONIZATION CZ
+                      WHERE CZ.CartonLength >= SD.EA_Length
+                      AND CZ.CartonHeight >= SD.EA_Height) CTN
+         WHERE CTN.CartonType IS NULL             
+         AND OS.UOM <> '2'
+         ORDER BY SD.Sku
+         
+         IF ISNULL(@c_Sku,'') <> ''
+         BEGIN
+            SET @n_continue = 3
+            SET @n_Err = 82034
+            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Unable find any carton type can fit Lenght and Height of Sku ' + RTRIM(@c_Sku) + ' (By Piece). (ispRLWAV58_PACK)'   	
+            GOTO QUIT_SP 	
+         END                
+      END   	                 
+      --NJOW01 E             
    END
 
    --Build carton
@@ -468,7 +515,7 @@ BEGIN
       	 	    END
       	 	    
       	 	    --Validate the carton at lease can fit 1 qty of the sku
-      	 	    IF @c_UOM = 2 
+      	 	    IF @c_UOM = '2' 
       	      BEGIN
       	         IF NOT EXISTS(SELECT 1 FROM #CARTONIZATION WHERE Cube >= @n_CN_Cube)
       	         BEGIN
@@ -476,7 +523,7 @@ BEGIN
                     SET @n_Err = 82040
                     SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': No Carton type can fit full case Sku ' + RTRIM(@c_Sku) + '.(ispRLWAV58_PACK)'
                     BREAK
-      	         END      	         
+      	         END           	         
       	      END
       	      ELSE
       	      BEGIN
@@ -530,6 +577,9 @@ BEGIN
       	 	    IF @c_CartonItemOptimize <> 'Y'
       	 	       BREAK --if current item cannot fit current carton open new carton and not search for other/next item. 
       	   END
+      	 	 
+      	 	 IF @n_continue = 3  --NJOW01
+      	 	    BREAK
       	 	 
       	 	 IF @n_QtyCanPack = 0  --carton full 
       	 	 BEGIN

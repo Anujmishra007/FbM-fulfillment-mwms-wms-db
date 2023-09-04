@@ -4,16 +4,16 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
-/* Stored Procedure: isp_RPT_LP_POPUPLIST_002                           */
+/* Stored Procedure: isp_RPT_LP_POPUPPLIST_002                          */
 /* Creation Date: 19-MAY-2022                                           */
 /* Copyright: MAERSK                                                    */
 /* Written by: WZPang                                                   */
 /*                                                                      */
 /* Purpose: WMS-23271 - Convert to LogiReport-r_dw_print_pickorder52(MY)*/
 /*                                                                      */
-/* Called By: RPT_LP_POPUPLIST_002										         */
+/* Called By: RPT_LP_POPUPPLIST_002                                     */
 /*                                                                      */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
 /* 19-May-2022  WZPang   1.0  DevOps Combine Script                     */
+/* 24-Aug-2023  WLChooi  1.1  UWP-6883 - Bug Fix (WL01)                 */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_RPT_LP_POPUPPLIST_002]
 (@c_Loadkey NVARCHAR(10))
@@ -233,7 +234,7 @@ BEGIN
              NVARCHAR(10)
            , CASE WHEN ORDERS.DocType = 'E' OR ISNULL(ORDERS.UserDefine03, '') = '' THEN
                      ISNULL(ORDERS.DeliveryDate, '19000101')
-                  ELSE CAST(ORDERS.UserDefine03 AS DATETIME)END
+                  ELSE IIF(ISDATE(ORDERS.UserDefine03) = 1, CAST(ORDERS.UserDefine03 AS DATETIME), '19000101') END   --WL01
            , 103)       
         , CASE WHEN ISNULL(SKU.RETAILSKU, '') = '' THEN ISNULL(SKU.ALTSKU, '')
                ELSE SKU.RETAILSKU END AS RetailSku
@@ -302,7 +303,7 @@ BEGIN
                NVARCHAR(10)
              , CASE WHEN ORDERS.DocType = 'E' OR ISNULL(ORDERS.UserDefine03, '') = '' THEN
                        ISNULL(ORDERS.DeliveryDate, '19000101')
-                    ELSE CAST(ORDERS.UserDefine03 AS DATETIME)END
+                    ELSE IIF(ISDATE(ORDERS.UserDefine03) = 1, CAST(ORDERS.UserDefine03 AS DATETIME), '19000101') END   --WL01
              , 103)
           , CASE WHEN ISNULL(SKU.RETAILSKU, '') = '' THEN ISNULL(SKU.ALTSKU, '')
                  ELSE SKU.RETAILSKU END

@@ -22,6 +22,7 @@ GO
 /* 15-12-2018 1.4  TLTING01  Missing nolock                             */
 /* 20-03-2019 1.5  Ung       WMS-8058 UCCNo on PickDetail.DropID        */
 /* 09-09-2022 1.6  yeekung   WMS-20712 Add Toloc (yeekung01)            */
+/* 28-08-2023 1.7  Ung       WMS-22681 Add Channel                      */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_TM_CasePick_Confirm] (
@@ -302,7 +303,8 @@ IF @nDebug = 1
                Status,
                QTY,
                TrafficCop,
-               OptimizeCop)
+               OptimizeCop,
+               Channel_ID)
             SELECT
                CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot, StorerKey, SKU, AltSku, UOM, UOMQTY, QTYMoved,
                DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, CartonType, ToLoc, DoReplenish, ReplenishZone,
@@ -311,7 +313,8 @@ IF @nDebug = 1
                Status,
                @nQTY_PD - @nPickQty, -- QTY
                NULL, --TrafficCop
-               '1'   --OptimizeCop
+               '1',  --OptimizeCop
+               Channel_ID
             FROM dbo.PickDetail WITH (NOLOCK)
             WHERE PickDetailKey = @cPickDetailKey
             IF @@ERROR <> 0
