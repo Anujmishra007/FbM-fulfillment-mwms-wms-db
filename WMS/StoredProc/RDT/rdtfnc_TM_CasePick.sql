@@ -27,6 +27,7 @@ GO
 /* 2023-03-24 2.0  Ung        WMS-22020 Add dynamic lottable                  */
 /* 2023-05-16 2.1  Ung        WMS-22435 Add DecodeSP                          */
 /*                            Expand SKU field to max                         */
+/* 2023-06-20 2.2  Ung        WMS-22834 Add DispStyleColorSize                */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CasePick](
@@ -135,6 +136,7 @@ DECLARE
    @cSwapUCCSP          NVARCHAR(20),
    @cLOCLookupSP        NVARCHAR(20),
    @cDecodeSP           NVARCHAR(20), 
+   @cDispStyleColorSize NVARCHAR( 1),
 
    @cAreaKey            NVARCHAR(10),
    @cTTMStrategykey     NVARCHAR(10),
@@ -223,6 +225,7 @@ SELECT
    @cMultiSKUBarcode   = V_String12,
    @cLottableCode      = V_String13,
 
+   @cDispStyleColorSize= V_String17,
    @cDecodeSP          = V_String18,
    @cLOCLookupSP       = V_String19,
    @cSwapUCCSP         = V_String20,
@@ -324,6 +327,7 @@ BEGIN
 
    -- Get storer configure
    SET @cDefaultFromID = rdt.rdtGetConfig( @nFunc, 'DefaultFromID', @cStorerKey)
+   SET @cDispStyleColorSize = rdt.RDTGetConfig( @nFunc, 'DispStyleColorSize', @cStorerKey)
    SET @cLOCLookupSP = rdt.RDTGetConfig( @nFunc, 'LOCLookupSP', @cStorerKey)
    SET @cMoveQTYAlloc = rdt.RDTGetConfig( @nFunc, 'MoveQTYAlloc', @cStorerKey)
    SET @cOverwriteToLOC = rdt.rdtGetConfig( @nFunc, 'OverwriteToLOC', @cStorerKey) --(yeekung02)
@@ -1025,7 +1029,13 @@ BEGIN
       BEGIN
          -- Get SKU info
          SELECT
-            @cSKUDesc = S.Descr,
+            @cSKUDesc = 
+               CASE WHEN @cDispStyleColorSize = '0'
+                    THEN ISNULL( S.Descr, '')
+                    ELSE CAST( S.Style AS NCHAR(20)) +
+                         CAST( S.Color AS NCHAR(10)) +
+                         CAST( S.Size  AS NCHAR(10))
+               END,
             @cLottableCode = S.LottableCode, 
             @cMUOM_Desc = Pack.PackUOM3,
             @cPUOM_Desc =
@@ -1923,7 +1933,13 @@ BEGIN
 
             -- Get SKU info
             SELECT
-               @cSKUDesc = S.Descr,
+               @cSKUDesc = 
+                  CASE WHEN @cDispStyleColorSize = '0'
+                       THEN ISNULL( S.Descr, '')
+                       ELSE CAST( S.Style AS NCHAR(20)) +
+                            CAST( S.Color AS NCHAR(10)) +
+                            CAST( S.Size  AS NCHAR(10))
+                  END,
                @cLottableCode = S.LottableCode, 
                @cMUOM_Desc = Pack.PackUOM3,
                @cPUOM_Desc =
@@ -3071,7 +3087,8 @@ BEGIN
       V_String12   = @cMultiSKUBarcode,
       V_String13   = @cLottableCode,
 
-      V_String18   = @cDecodeSP,
+      V_String17   = @cDispStyleColorSize,
+      V_String18   = @cDecodeSP, 
       V_String19   = @cLOCLookupSP,
       V_String20   = @cSwapUCCSP,
       V_String21   = @cDecodeLabelNo,
