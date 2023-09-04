@@ -53,6 +53,8 @@ GO
 /* 2022-11-23 3.5  James      WMS-21207 Add ExtUpdSp at step 1 (james09)*/
 /* 2023-02-20 3.6  Ung        WMS-21436 Fix UCC screen ExtVal sequence  */
 /* 2023-06-19 3.7  YeeKung    WMS-22768 Add Extvalidsp at step1(yeekung01)*/
+/* 2023-09-04 3.8  James      Ad hoc fix - Change rdt_Decode variable   */
+/*                            from UCC -> UCCNO (james10)               */
 /************************************************************************/
 CREATE OR ALTER PROC rdt.rdtfnc_UCCInboundReceive (
    @nMobile    INT,
@@ -1366,10 +1368,10 @@ BEGIN
          IF @cDecodeSP = '1'
          BEGIN
             EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
-               @cUCC    = @cUCC     OUTPUT,
+               @cUCCNo  = @cUCC    OUTPUT,
                @nErrNo  = @nErrNo  OUTPUT,
                @cErrMsg = @cErrMsg OUTPUT,
-               @cType   = 'UCC'
+               @cType   = 'UCCNO'
          END
 
          -- Customize decode
