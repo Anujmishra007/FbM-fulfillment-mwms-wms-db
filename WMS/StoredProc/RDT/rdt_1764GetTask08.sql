@@ -319,7 +319,7 @@ BEGIN
          ,TrafficCop = NULL
       WHERE TaskDetailKey = @cNewTaskKey
 	AND Status = '0'  /*JH01*/
-   IF @@ERROR <> 0
+   IF @@ERROR <> 0 OR @@ROWCOUNT <> 1  /*JH01 add OR @@ROWCOUNT <> 1*/ 
    BEGIN
       SET @nErrNo = 143404
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdTaskDtlFail
