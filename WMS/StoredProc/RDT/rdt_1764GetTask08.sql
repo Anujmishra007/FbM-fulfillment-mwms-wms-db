@@ -11,6 +11,7 @@ GO
 /* Date        Rev  Author    Purposes                                        */
 /* 16-08-2011  1.0  Ung       WMS-10161 Created (from rdt_TMRPFTask_ANF)      */
 /* 03-03-2022  1.1  Ung       WMS-19012 Add UserKeyOverRide                   */
+/* 18-07-2023  1.2  JihHaur   JSM-162577 Avoid 2 user took same taskdetail(JH01)*/
 /******************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1764GetTask08] (
@@ -300,6 +301,7 @@ BEGIN
          ,EditWho    = @cUserName
          ,TrafficCop = NULL
       WHERE TaskDetailKey = @cNewTaskKey
+	AND Status = '0'  /*JH01*/
    ELSE
       UPDATE TaskDetail WITH (ROWLOCK) SET
           Status     = '3'
@@ -316,6 +318,7 @@ BEGIN
          ,EditWho    = @cUserName
          ,TrafficCop = NULL
       WHERE TaskDetailKey = @cNewTaskKey
+	AND Status = '0'  /*JH01*/
    IF @@ERROR <> 0
    BEGIN
       SET @nErrNo = 143404
