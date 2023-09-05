@@ -80,6 +80,7 @@ GO
 /*                              Add ExtendedValidateSP at screen 2 (statistic)                  */
 /* 2023-06-14   5.4 YeeKung     WMS-22751 Add Popup Message (yeekung01)                         */
 /* 2023-06-28   5.5 Ung         WMS-22741 Remove rdt_Decode error                               */
+/* 2023-07-04   5.6 Ung         WMS-22913 Add ExtendedUpdateSP at step 2 ESC                    */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
@@ -1262,6 +1263,57 @@ BEGIN
             ,@cErrMsg        OUTPUT
          -- IF @nErrNo <> 0
          --    GOTO Quit
+      END
+
+      -- Extended update
+      IF @cExtendedUpdateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID, ' +
+               ' @nCartonNo, @cLabelNo, @cSKU, @nQTY, @cUCCNo, @cCartonType, @cCube, @cWeight, @cRefNo, @cSerialNo, @nSerialQTY, @cOption, ' +
+               ' @cPackDtlRefNo, @cPackDtlRefNo2, @cPackDtlUPC, @cPackDtlDropID, @cPackData1, @cPackData2, @cPackData3, ' +
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,           ' +
+               '@nInputKey       INT,           ' +
+               '@cFacility       NVARCHAR( 5),  ' +
+               '@cStorerKey      NVARCHAR( 15), ' +
+               '@cPickSlipNo     NVARCHAR( 10), ' +
+               '@cFromDropID     NVARCHAR( 20), ' +
+               '@nCartonNo       INT,           ' +
+               '@cLabelNo        NVARCHAR( 20), ' +
+               '@cSKU            NVARCHAR( 20), ' +
+               '@nQTY            INT,           ' +
+               '@cUCCNo          NVARCHAR( 20), ' +
+               '@cCartonType     NVARCHAR( 10), ' +
+               '@cCube           NVARCHAR( 10), ' +
+               '@cWeight         NVARCHAR( 10), ' +
+               '@cRefNo          NVARCHAR( 20), ' +
+               '@cSerialNo       NVARCHAR( 30), ' +
+               '@nSerialQTY      INT,           ' +
+               '@cOption         NVARCHAR( 1),  ' +
+               '@cPackDtlRefNo   NVARCHAR( 20), ' +
+               '@cPackDtlRefNo2  NVARCHAR( 20), ' +
+               '@cPackDtlUPC     NVARCHAR( 30), ' +
+               '@cPackDtlDropID  NVARCHAR( 20), ' +
+               '@cPackData1      NVARCHAR( 30), ' +
+               '@cPackData2      NVARCHAR( 30), ' +
+               '@cPackData3      NVARCHAR( 30), ' +
+               '@nErrNo          INT            OUTPUT, ' +
+               '@cErrMsg         NVARCHAR( 20)  OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID,
+               @nCartonNo, @cLabelNo, @cSKU, @nQTY, @cUCCNo, @cCartonType, @cCube, @cWeight, @cRefNo, @cSerialNo, @nSerialQTY, @cOption,
+               @cPackDtlRefNo, @cPackDtlRefNo2, @cPackDtlUPC, @cPackDtlDropID, @cPackData1, @cPackData2, @cPackData3,
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+         END
       END
 
       IF EXISTS( SELECT 1 FROM PackHeader WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND Status = '9') OR @cPrintPackList = 'Y'
