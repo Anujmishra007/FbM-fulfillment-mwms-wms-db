@@ -14,6 +14,8 @@ GO
 /* 2021-07-07  1.0  Chermaine WMS-17365 Created                         */      
 /* 2022-02-21  1.1  James     WMS-18699 Add sorting priority (james01)  */
 /* 2022-04-26  1.2  James     Add missing Print Export Label (james02)  */
+/* 2023-08-04  1.3  JihHaur   JSM-168373 Avoid 1 case ID with different */
+/*                            groupkey assigned (JH01)                  */   
 /************************************************************************/      
     
 CREATE OR ALTER PROC [RDT].[rdt_646ExtPrint01] (      
@@ -323,7 +325,8 @@ BEGIN
                      EditDate = GETDATE(),  
                      EditWho = @cUserID,  
                      GroupKey = @cGroupKey  
-                  WHERE TaskDetailKey = @cTaskDetailKey  
+                  WHERE TaskDetailKey = @cTaskDetailKey
+                  AND   GroupKey = '' /*JH01*/
            
                   IF @@ERROR <> 0  
                   BEGIN  
