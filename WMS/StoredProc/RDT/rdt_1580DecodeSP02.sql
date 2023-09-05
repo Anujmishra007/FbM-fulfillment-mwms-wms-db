@@ -90,7 +90,7 @@ BEGIN
             SET @CBinary = rdt.rdt_ConvertHexToBinary(trim(@cBarcode))
 
             SET @cAltSKU = rdt.rdt_ConvertBinaryToDec(SUBSTRING(@CBinary,15,24))
-            SET @cAltSKU = @cAltSKU +  CAST (rdt.rdt_ConvertBinaryToDec(SUBSTRING(@CBinary,39,20)) AS NVARCHAR(60))
+            SET @cAltSKU = @cAltSKU +  RIGHT ('0000'+ CAST (rdt.rdt_ConvertBinaryToDec(SUBSTRING(@CBinary,39,20)) AS NVARCHAR(60)),5)
 
             SELECT @cSKU = sku
             FROM SKU (NOLOCK)
