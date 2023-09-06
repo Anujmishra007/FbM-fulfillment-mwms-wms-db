@@ -13,6 +13,7 @@ GO
 /*                                                                            */
 /* Date         Rev  Author     Purposes                                      */
 /* 2020-07-20   1.0  Ung        WMS-22017 base on rdt_638RefNoLookup01        */
+/* 2023-09-02   1.1  Ung        WMS-23480 Add CANC status                     */
 /******************************************************************************/
 CREATE OR ALTER PROC rdt.rdt_638RefNoLKUP10(
     @nMobile      INT
@@ -71,6 +72,7 @@ BEGIN
          ' WHERE R.Facility = @cFacility ' + 
             ' AND R.StorerKey = @cStorerKey ' + 
             ' AND R.Status <> ''9'' ' + 
+            ' AND R.ASNStatus <> ''CANC'' ' +
             ' AND R.UserDefine09 <> ''E''  ' + 
             ' AND R.' + @cColumnName + ' = @cRefNo ' + 
             CASE WHEN @cReceiptKey = '' 
@@ -152,6 +154,7 @@ BEGIN
          ' WHERE R.Facility = @cFacility ' + 
             ' AND R.StorerKey = @cStorerKey ' + 
             ' AND R.Status <> ''9'' ' + 
+            ' AND R.ASNStatus <> ''CANC'' ' +
             ' AND R.UserDefine09 <> ''E'' ' + 
             ' AND R.' + @cColumnName + ' = @cRefNo '
       SET @cSQLParam =
