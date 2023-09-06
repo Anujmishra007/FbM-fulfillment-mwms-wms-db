@@ -157,6 +157,10 @@ GO
 /*                                  below it to be executed (CLVN01)           */
 /* 18-MAY-2023  NJOW03       2.3    WMS-22532 add config to disallow close asn */
 /*                                  before finalize                            */
+/* 03-AUG-2023  NJOW04       2.4    WMS-22772 When close ASN (ASNStatus=9) with*/
+/*                                  partial received qty and status=9, prevent */
+/*                                  reverse both status to 0 due to openqty > 0*/
+/* 03-AUT-2023  NJOW04       2.5    DEVOPS Combine Script                      */
 /*******************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrReceiptHeaderUpdate]
@@ -654,7 +658,9 @@ BEGIN
       AND INSERTED.ReceiptKey = DELETED.ReceiptKey
       AND INSERTED.OpenQty > 0
       AND DELETED.Status = '9'
-      AND DELETED.ASNStatus <> '9'
+      --AND DELETED.ASNStatus <> '9'           
+      AND INSERTED.ASNStatus <> '9' --NJOW04
+      
    
       SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
       IF @n_err <> 0
