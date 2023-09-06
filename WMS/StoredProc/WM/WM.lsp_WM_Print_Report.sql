@@ -13,7 +13,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.8                                                    */
+/* PVCS Version: 2.0                                                    */
 /*                                                                      */
 /* Version: 8.0                                                         */
 /*                                                                      */
@@ -42,6 +42,7 @@ GO
 /* 2023-02-27  Wan06    1.8   LFWM-3913 - Ship Reference Enhancement    */
 /*                            Print Interface Document                  */
 /*                            DevOps Combine Script                     */
+/* 2023-07-14  WLChooi  2.0   WMS-22860 - Add PostPrintSP (WL03)        */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_WM_Print_Report]
            @c_ModuleID           NVARCHAR(30)
@@ -203,6 +204,7 @@ BEGIN
          , @c_SQLParms              NVARCHAR(MAX)
 
          , @c_PreGenRptData_SP      NVARCHAR(50)      = ''  --(Wan05)
+         , @c_PostPrintSP           NVARCHAR(50)      = ''  --WL03
          
          , @CUR_GROUP               CURSOR
          , @CUR_PARM                CURSOR
@@ -456,6 +458,7 @@ BEGIN
              ,CriteriaMatching05 = ISNULL(RTRIM(WMRD.CriteriaMatching05),'')
              ,PreprintSP         = ISNULL(RTRIM(WMRD.PreprintSP),'')
              ,PreGenRptData_SP   = ISNULL(RTRIM(WMRD.PreGenRptDataSP),'')     --(Wan05)
+             ,PostPrintSP        = ISNULL(RTRIM(WMRD.PostPrintSP),'')                              --WL03
       FROM dbo.WMREPORT       WMR  WITH (NOLOCK)
       JOIN dbo.WMREPORTDETAIL WMRD WITH (NOLOCK) ON (WMR.ReportID = WMRD.ReportID)
       JOIN WM.fnc_Get_WMReportDetail (@c_ReportID, @c_Storerkey, @c_Facility, @c_UserName, @c_ComputerName, 'N') MD
@@ -481,6 +484,7 @@ BEGIN
                                     , @c_CriteriaMatching05
                                     , @c_PreprintSP
                                     , @c_PreGenRptData_SP                        --(Wan05)
+                                    , @c_PostPrintSP                             --WL03
       WHILE @@FETCH_STATUS <> -1
       BEGIN
          --(Wan01) - START
@@ -1096,6 +1100,130 @@ BEGIN
          END
 
          NEXT_REC:
+         --WL03 S
+         IF @b_ContinuePrint = 1 AND @c_PostPrintSP <> ''
+         BEGIN
+            IF EXISTS (SELECT 1 FROM sysobjects o WHERE id = OBJECT_ID(@c_PostPrintSP)  AND TYPE = 'P')
+            BEGIN
+               SET @c_SQL  = 'EXECUTE ' + @c_PostPrintSP 
+                           + ' @n_WMReportRowID = @n_RowID'
+                           + ',@c_UserName      = @c_UserName '
+                           + ',@c_Parm1         = @c_Parm1           OUTPUT '              
+                           + ',@c_Parm2         = @c_Parm2           OUTPUT '              
+                           + ',@c_Parm3         = @c_Parm3           OUTPUT '              
+                           + ',@c_Parm4         = @c_Parm4           OUTPUT '              
+                           + ',@c_Parm5         = @c_Parm5           OUTPUT '              
+                           + ',@c_Parm6         = @c_Parm6           OUTPUT '              
+                           + ',@c_Parm7         = @c_Parm7           OUTPUT '              
+                           + ',@c_Parm8         = @c_Parm8           OUTPUT '              
+                           + ',@c_Parm9         = @c_Parm9           OUTPUT '              
+                           + ',@c_Parm10        = @c_Parm10          OUTPUT '              
+                           + ',@c_Parm11        = @c_Parm11          OUTPUT '              
+                           + ',@c_Parm12        = @c_Parm12          OUTPUT '              
+                           + ',@c_Parm13        = @c_Parm13          OUTPUT '              
+                           + ',@c_Parm14        = @c_Parm14          OUTPUT '              
+                           + ',@c_Parm15        = @c_Parm15          OUTPUT '              
+                           + ',@c_Parm16        = @c_Parm16          OUTPUT '              
+                           + ',@c_Parm17        = @c_Parm17          OUTPUT '              
+                           + ',@c_Parm18        = @c_Parm18          OUTPUT '              
+                           + ',@c_Parm19        = @c_Parm19          OUTPUT '              
+                           + ',@c_Parm20        = @c_Parm20          OUTPUT '  
+                           + ',@n_Noofparms     = @n_Noofparms       OUTPUT '              
+                           + ',@b_ContinuePrint = @b_ContinuePrint   OUTPUT '    --1/0     
+                           + ',@n_NoOfCopy      = @n_NoOfCopy        OUTPUT '              
+                           + ',@c_PrinterID     = @c_Printer         OUTPUT '              
+                           + ',@c_PrintData     = @c_PrintData       OUTPUT '  
+                           + ',@b_Success       = @b_Success         OUTPUT '
+                           + ',@n_Err           = @n_Err             OUTPUT '
+                           + ',@c_ErrMsg        = @c_ErrMsg          OUTPUT ' 
+                           + ',@c_PrintSource   = @c_PrintSource '  
+                           + ',@b_SCEPreView    = @b_SCEPreView  '
+                           + ',@n_JobID         = @n_JobID           OUTPUT '
+
+                 SET @c_SQLParms= N'@n_RowID       BIGINT '
+                              + ',@c_UserName      NVARCHAR(128) '          
+                              + ',@c_Parm1         NVARCHAR(60)   OUTPUT '           
+                              + ',@c_Parm2         NVARCHAR(60)   OUTPUT '           
+                              + ',@c_Parm3         NVARCHAR(60)   OUTPUT '           
+                              + ',@c_Parm4         NVARCHAR(60)   OUTPUT '           
+                              + ',@c_Parm5         NVARCHAR(60)   OUTPUT '           
+                              + ',@c_Parm6         NVARCHAR(60)   OUTPUT '           
+                              + ',@c_Parm7         NVARCHAR(60)   OUTPUT '           
+                              + ',@c_Parm8         NVARCHAR(60)   OUTPUT '           
+                              + ',@c_Parm9         NVARCHAR(60)   OUTPUT '           
+                              + ',@c_Parm10        NVARCHAR(60)   OUTPUT '           
+                              + ',@c_Parm11        NVARCHAR(60)   OUTPUT '           
+                              + ',@c_Parm12        NVARCHAR(60)   OUTPUT '           
+                              + ',@c_Parm13        NVARCHAR(60)   OUTPUT '           
+                              + ',@c_Parm14        NVARCHAR(60)   OUTPUT '           
+                              + ',@c_Parm15        NVARCHAR(60)   OUTPUT '           
+                              + ',@c_Parm16        NVARCHAR(60)   OUTPUT '           
+                              + ',@c_Parm17        NVARCHAR(60)   OUTPUT '           
+                              + ',@c_Parm18        NVARCHAR(60)   OUTPUT '           
+                              + ',@c_Parm19        NVARCHAR(60)   OUTPUT '           
+                              + ',@c_Parm20        NVARCHAR(60)   OUTPUT ' 
+                              + ',@n_Noofparms     INT            OUTPUT '            
+                              + ',@b_ContinuePrint BIT            OUTPUT '    --1/0  
+                              + ',@n_NoOfCopy      INT            OUTPUT '           
+                              + ',@c_Printer       NVARCHAR(30)   OUTPUT '           
+                              + ',@c_PrintData     NVARCHAR(4000) OUTPUT '  
+                              + ',@b_Success       INT            OUTPUT '
+                              + ',@n_Err           INT            OUTPUT '
+                              + ',@c_ErrMsg        NVARCHAR(255)  OUTPUT ' 
+                              + ',@c_PrintSource   NVARCHAR(10) '  
+                              + ',@b_SCEPreView    INT '
+                              + ',@n_JobID         INT            OUTPUT '                                       
+ 
+               EXEC sp_ExecuteSQL @c_SQL
+                                 ,@c_SQLParms
+                                 ,@n_RowID 
+                                 ,@c_UserName
+                                 ,@c_Parm1         OUTPUT           
+                                 ,@c_Parm2         OUTPUT            
+                                 ,@c_Parm3         OUTPUT          
+                                 ,@c_Parm4         OUTPUT         
+                                 ,@c_Parm5         OUTPUT          
+                                 ,@c_Parm6         OUTPUT            
+                                 ,@c_Parm7         OUTPUT          
+                                 ,@c_Parm8         OUTPUT            
+                                 ,@c_Parm9         OUTPUT            
+                                 ,@c_Parm10        OUTPUT
+                                 ,@c_Parm11        OUTPUT           
+                                 ,@c_Parm12        OUTPUT            
+                                 ,@c_Parm13        OUTPUT          
+                                 ,@c_Parm14        OUTPUT         
+                                 ,@c_Parm15        OUTPUT          
+                                 ,@c_Parm16        OUTPUT            
+                                 ,@c_Parm17        OUTPUT          
+                                 ,@c_Parm18        OUTPUT            
+                                 ,@c_Parm19        OUTPUT            
+                                 ,@c_Parm20        OUTPUT
+                                 ,@n_Noofparms     OUTPUT
+                                 ,@b_ContinuePrint OUTPUT      --1/0
+                                 ,@n_NoOfCopy      OUTPUT
+                                 ,@c_Printer       OUTPUT
+                                 ,@c_PrintData     OUTPUT
+                                 ,@b_Success       OUTPUT 
+                                 ,@n_Err           OUTPUT  
+                                 ,@c_ErrMsg        OUTPUT  
+                                 ,@c_PrintSource      
+                                 ,@b_SCEPreView
+                                 ,@n_JobID        OUTPUT
+               IF @b_Success <> 1
+               
+               BEGIN
+                  SET @n_Continue=3 
+                  SET @n_Err    = 552657
+                  SET @c_Errmsg = 'NSQL' + CONVERT(NCHAR(6), @n_Err) 
+                                 + ': Error Executing Post-Print SP:' + RTRIM(@c_PostPrintSP) 
+                                 + ' (lsp_WM_Print_Report) ( ' + @c_errmsg + ' )' 
+                                 + ' |' + RTRIM(@c_PostPrintSP) 
+                  GOTO EXIT_SP 
+               END
+            END     
+         END
+         --WL03 E
+
          SET @c_PrintGroup_Last = @c_PrintGroup
 
          FETCH NEXT FROM @CUR_GROUP INTO @n_RowID
@@ -1110,6 +1238,7 @@ BEGIN
                                        , @c_CriteriaMatching05
                                        , @c_PreprintSP
                                        , @c_PreGenRptData_SP                        --(Wan05)
+                                       , @c_PostPrintSP                             --WL03
       END 
       CLOSE @CUR_GROUP
       DEALLOCATE @CUR_GROUP
