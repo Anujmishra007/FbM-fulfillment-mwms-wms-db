@@ -18,6 +18,7 @@ GO
 /* 2022-12-15   1.3  James      WMS-21350 Create mbol with header (james02)   */
 /* 2023-03-27   1.4  James      WMS-22063 Add orders status check (james03)   */
 /*                              Add Update packinfo into mboldetail           */
+/* 2023-09-06   1.5  James      WMS-23500 Remove hardcoded remark (james04)   */
 /******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_MbolCreation](
     @nMobile      INT
@@ -265,8 +266,11 @@ BEGIN
          GOTO RollBackTran
       END
 
-      INSERT INTO MBOL (MBOLKey, ExternMBOLKey, Facility, STATUS, Remarks) VALUES 
-      (@cMBOLKey, '', @cFacility, '0', 'rdt_MbolCreation')    
+      INSERT INTO MBOL (MBOLKey, ExternMBOLKey, Facility, STATUS, Remarks, 
+                        AddWho, AddDate, EditWho, EditDate) VALUES 
+                        (@cMBOLKey, '', @cFacility, '0', '', 
+                        LEFT( 'rdt.' + SUSER_SNAME(), 18), GETDATE(),     
+                        LEFT( 'rdt.' + SUSER_SNAME(), 18), GETDATE())
 
       IF @@ERROR <> 0
       BEGIN
@@ -443,8 +447,11 @@ BEGIN
             GOTO RollBackTran
          END
 
-         INSERT INTO MBOL (MBOLKey, ExternMBOLKey, Facility, STATUS, Remarks) VALUES 
-         (@cMBOLKey, '', @cFacility, '0', 'rdt_MbolCreation')    
+      INSERT INTO MBOL (MBOLKey, ExternMBOLKey, Facility, STATUS, Remarks, 
+                        AddWho, AddDate, EditWho, EditDate) VALUES 
+                        (@cMBOLKey, '', @cFacility, '0', '', 
+                        LEFT( 'rdt.' + SUSER_SNAME(), 18), GETDATE(),     
+                        LEFT( 'rdt.' + SUSER_SNAME(), 18), GETDATE())
 
          IF @@ERROR <> 0
          BEGIN
