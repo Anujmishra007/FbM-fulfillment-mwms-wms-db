@@ -87,7 +87,7 @@ AS
                   AND R.ASNStatus <> 'CANC'  
                   AND R.ReceiptGroup = 'ECOM'  
                   AND R.Userdefine02 = @cRefNo 
-                  AND RD.SKU = @cSKU
+                  -- AND RD.SKU = @cSKU  
                   
                SET @cExtendedInfo = 'ASN SKU: ' + CAST( @nQTYReceived AS NVARCHAR(5)) + '/' + CAST( @nQTYExpected AS NVARCHAR(5))
             END
