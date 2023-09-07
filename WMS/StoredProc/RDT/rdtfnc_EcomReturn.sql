@@ -57,6 +57,7 @@ GO
 /* 2023-04-13   2.9  Ung         WMS-22302 Allow ExtInfoSP at SKU to lottables                     */
 /*                               Fix ExtendedInfoSP AfterStep                                      */
 /* 2023-03-24   3.0  Ung         WMS-22017 Add RefNoSKULookup to FinalizeASN screen                */
+/* 2023-09-07   3.1  YeeKung     WMS-23459 Remove goto quit on sku screen (yeekung02)              */
 /***************************************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_EcomReturn](
    @nMobile    INT,
@@ -2426,8 +2427,6 @@ BEGIN
          -- Go to next screen
          SET @nScn = @nScn_SKU
          SET @nStep = @nStep_SKU
-
-         GOTO Quit
       END
       ELSE
       BEGIN
