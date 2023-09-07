@@ -30,6 +30,7 @@ GO
 /* 2021-07-19  Wan01    1.1   Fixed. Continue Next Record               */
 /* 2021-07-23  Wan02    1.1   Fixed. Middle East UOM = '2'              */
 /* 2021-08-12  Wan03    1.2   Performance Tune                          */ 
+/* 2023-09-07  Michael  1.3   Extend #TMPALLOC.ID len to 18 (ML01)      */
 /************************************************************************/
 CREATE PROC dbo.ispLuLuLC7
      @c_WaveKey                     NVARCHAR(10)
@@ -134,7 +135,8 @@ BEGIN
       RowRef            INT            IDENTITY(1,1) PRIMARY KEY
    ,  lot               NVARCHAR(10)   NOT NULL DEFAULT('')
    ,  loc               NVARCHAR(10)   NOT NULL DEFAULT('')
-   ,  id                NVARCHAR(10)   NOT NULL DEFAULT('')
+--(ML01)   ,  id                NVARCHAR(10)   NOT NULL DEFAULT('')
+   ,  id                NVARCHAR(18)   NOT NULL DEFAULT('')       --(ML01)
    ,  qtyavailable      INT            NOT NULL DEFAULT(0)
    ,  Orderkey          NVARCHAR(10)   NOT NULL DEFAULT('')  
    ,  OrderLineNumber   NVARCHAR(5)    NOT NULL DEFAULT('')
