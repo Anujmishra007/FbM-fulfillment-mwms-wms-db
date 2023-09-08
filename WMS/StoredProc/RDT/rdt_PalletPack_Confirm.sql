@@ -1,11 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_PalletPack_Confirm]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [RDT].[rdt_PalletPack_Confirm]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
+
 /************************************************************************/
 /* Store procedure: rdt_PalletPack_Confirm                              */
 /* Copyright      : IDS                                                 */
@@ -21,9 +18,11 @@ GO
 /* 26-07-2021  1.3  James       WMS-17549 Add config                    */
 /*                              AssignPackLabelToOrd (james03)          */
 /* 16-11-2021  1.4  James       Fix duplicate palletdetail (james04)    */
+/* 13-06-2023  1.5  James       WMS-22790 Update PalletDetail.Loc with  */
+/*                              storerconfig (james05)                  */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdt_PalletPack_Confirm] (
+CREATE OR ALTER PROC [RDT].[rdt_PalletPack_Confirm] (
    @nMobile       INT,
    @nFunc         INT,
    @cLangCode     NVARCHAR( 3),
@@ -92,6 +91,8 @@ BEGIN
    DECLARE @cUCC_SKU       NVARCHAR( 20)
    DECLARE @nUCC_QTY       INT
    DECLARE @cCurLabelNo    NVARCHAR( 20)
+   DECLARE @cUpdPalletDetailLoc  NVARCHAR( 10)
+   DECLARE @cLoc           NVARCHAR( 10)
    
    SET @nErrNo = 0
    SET @cPrintPackList = 'N'
@@ -129,12 +130,17 @@ BEGIN
    SET @cGenPalletDetail = rdt.RDTGetConfig( @nFunc, 'GenPalletDetail', @cStorerKey)
    SET @cCartonCountCfg = rdt.RDTGetConfig( @nFunc, 'CartonCountCfg', @cStorerKey)
    
+   -- (james05)
+   SET @cUpdPalletDetailLoc = rdt.RDTGetConfig( @nFunc, 'UpdPalletDetailLoc', @cStorerKey)
+   IF @cUpdPalletDetailLoc = '0'
+      SET @cUpdPalletDetailLoc = ''
+
    -- Variable mapping
    SELECT @cPalletID = Value FROM @tPackCfm WHERE Variable = '@cPltValue'
    SELECT @cCartonCount = Value FROM @tPackCfm WHERE Variable = '@cCartonCount'
    SELECT @cPackByPickDetailDropID = Value FROM @tPackCfm WHERE Variable = '@cPackByPickDetailDropID'
    SELECT @cPackByPickDetailID = Value FROM @tPackCfm WHERE Variable = '@cPackByPickDetailID'
-
+ 
    -- Extended putaway
    IF @cExtendedPackCfmSP <> ''
    BEGIN
@@ -483,6 +489,8 @@ BEGIN
 
                   IF @cGenPalletDetail = '1'
                   BEGIN
+                     SET @cLoc = CASE WHEN @cUpdPalletDetailLoc = '0' THEN '' ELSE @cUpdPalletDetailLoc END
+                        
                      IF NOT EXISTS ( SELECT 1 FROM dbo.Pallet WITH (NOLOCK) 
                                      WHERE PalletKey = @cPalletID)
                      BEGIN
@@ -496,8 +504,8 @@ BEGIN
                            GOTO RollBackTran
                         END
 
-                        INSERT INTO dbo.PalletDetail (PalletKey, PalletLineNumber, CaseId, Sku, Qty, StorerKey, Status) VALUES 
-                        (@cPalletID, '0', @cLabelNo, @cUCC_SKU, @nUCC_QTY, @cStorerKey, '0')
+                        INSERT INTO dbo.PalletDetail (PalletKey, PalletLineNumber, CaseId, Sku, Qty, StorerKey, STATUS, Loc) VALUES 
+                        (@cPalletID, '0', @cLabelNo, @cUCC_SKU, @nUCC_QTY, @cStorerKey, '0', @cLoc)
 
                         IF @@ERROR <> 0
                         BEGIN
@@ -514,8 +522,8 @@ BEGIN
                               AND   CaseID = @cLabelNo
                               AND   Sku = @cUCC_SKU)
                         BEGIN
-                           INSERT INTO dbo.PalletDetail (PalletKey, PalletLineNumber, CaseId, Sku, Qty, StorerKey, Status) VALUES 
-                           (@cPalletID, '0', @cLabelNo, @cUCC_SKU, @nUCC_QTY, @cStorerKey, '0')
+                           INSERT INTO dbo.PalletDetail (PalletKey, PalletLineNumber, CaseId, Sku, Qty, StorerKey, STATUS, Loc) VALUES 
+                           (@cPalletID, '0', @cLabelNo, @cUCC_SKU, @nUCC_QTY, @cStorerKey, '0', @cLoc)
 
                            IF @@ERROR <> 0 
                            BEGIN
