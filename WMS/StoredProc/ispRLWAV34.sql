@@ -1,31 +1,30 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ispRLWAV34]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [dbo].[ispRLWAV34]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
-/*************************************************************************/    
-/* Stored Procedure: ispRLWAV34                                          */    
-/* Creation Date: 14-May-2020                                            */    
-/* Copyright: LFL                                                        */    
-/* Written by: WLChooi                                                   */    
-/*                                                                       */    
-/* Purpose: WMS-13198 - [CN] Sephora Release Wave                        */    
-/*                                                                       */    
-/* Called By: wave                                                       */    
-/*                                                                       */    
-/* PVCS Version: 1.0                                                     */    
-/*                                                                       */    
-/* Version: 5.4                                                          */    
-/*                                                                       */    
-/* Data Modifications:                                                   */    
-/*                                                                       */    
-/* Updates:                                                              */    
-/* Date         Author   Ver  Purposes                                   */    
-/*************************************************************************/     
 
-CREATE PROCEDURE [dbo].[ispRLWAV34]        
+/*************************************************************************/
+/* Stored Procedure: ispRLWAV34                                          */
+/* Creation Date: 14-May-2020                                            */
+/* Copyright: LFL                                                        */
+/* Written by: WLChooi                                                   */
+/*                                                                       */
+/* Purpose: WMS-13198 - [CN] Sephora Release Wave                        */
+/*                                                                       */
+/* Called By: wave                                                       */
+/*                                                                       */
+/* PVCS Version: 1.1                                                     */
+/*                                                                       */
+/* Version: 5.4                                                          */
+/*                                                                       */
+/* Data Modifications:                                                   */
+/*                                                                       */
+/* Updates:                                                              */
+/* Date         Author   Ver  Purposes                                   */
+/* 04-Sep-2023  WLChooi  1.1  WMS-23555 - Add validation (WL01)          */
+/* 04-Sep-2023  WLChooi  1.1  DevOps Combine Script                      */ 
+/*************************************************************************/     
+CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV34]        
   @c_wavekey      NVARCHAR(10)    
  ,@b_Success      int        OUTPUT    
  ,@n_err          int        OUTPUT    
@@ -188,7 +187,33 @@ CREATE PROCEDURE [dbo].[ispRLWAV34]
          SELECT @n_continue = 3    
          SELECT @n_err = 81050    
          SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Release is not allowed. Some orders of this Wave are started picking (ispRLWAV34)'           
-      END                   
+      END   
+      
+      --WL01 S
+      IF EXISTS ( SELECT 1 
+                  FROM WAVEDETAIL WD(NOLOCK)  
+                  JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey  
+                  WHERE WD.Wavekey = @c_Wavekey
+                  AND O.DocType = 'E'
+                  HAVING MIN(O.[Status]) < '2')
+      BEGIN
+         SELECT @n_continue = 3    
+         SELECT @n_err = 81090    
+         SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Release is not allowed. Found B2C Orders with Status < 2 (ispRLWAV34)' 
+      END
+
+      IF EXISTS ( SELECT 1 
+                  FROM WAVEDETAIL WD(NOLOCK)  
+                  JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey  
+                  WHERE WD.Wavekey = @c_Wavekey
+                  AND O.DocType = 'N'
+                  HAVING MIN(O.[Status]) = '0')
+      BEGIN
+         SELECT @n_continue = 3    
+         SELECT @n_err = 81095    
+         SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Release is not allowed. Found B2B Orders with Status = 0 (ispRLWAV34)' 
+      END
+      --WL01 E
    END   
 
    BEGIN TRAN  
@@ -964,5 +989,5 @@ INSERT_TASKS:
 
 END --sp end  
 GO
-GRANT EXECUTE ON ispRLWAV34 TO NSQL
+GRANT EXECUTE ON [dbo].[ispRLWAV34] TO NSQL
 GO

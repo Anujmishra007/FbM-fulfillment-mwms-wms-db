@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* GitLab Version: 1.2                                                   */    
+/* GitLab Version: 1.3                                                   */    
 /*                                                                       */    
 /* Version: 5.4                                                          */    
 /*                                                                       */    
@@ -25,6 +25,7 @@ GO
 /* 2021-12-16   WLChooi  1.1  WMS-17722 Change Message02 & Message03 and */
 /*                            bug fix (WL01)                             */
 /* 2022-02-07   WLChooi  1.2  WMS-18856 Change DPP Loc Assign Logic(WL02)*/
+/* 04-Sep-2023  WLChooi  1.3  WMS-23555 - Add validation (WL03)          */
 /*************************************************************************/     
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV46]        
@@ -240,7 +241,33 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV46]
          SELECT @n_continue = 3    
          SELECT @n_err = 81050    
          SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Release is not allowed. Some orders of this Wave are started picking (ispRLWAV46)'           
-      END                   
+      END  
+      
+      --WL03 S
+      IF EXISTS ( SELECT 1 
+                  FROM WAVEDETAIL WD(NOLOCK)  
+                  JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey  
+                  WHERE WD.Wavekey = @c_Wavekey
+                  AND O.DocType = 'E'
+                  HAVING MIN(O.[Status]) < '2')
+      BEGIN
+         SELECT @n_continue = 3    
+         SELECT @n_err = 81095  
+         SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Release is not allowed. Found B2C Orders with Status < 2 (ispRLWAV46)' 
+      END
+
+      IF EXISTS ( SELECT 1 
+                  FROM WAVEDETAIL WD(NOLOCK)  
+                  JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey  
+                  WHERE WD.Wavekey = @c_Wavekey
+                  AND O.DocType = 'N'
+                  HAVING MIN(O.[Status]) = '0')
+      BEGIN
+         SELECT @n_continue = 3    
+         SELECT @n_err = 81100    
+         SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Release is not allowed. Found B2B Orders with Status = 0 (ispRLWAV46)' 
+      END
+      --WL03 E
    END   
    
    --Create Temporary Tables  
