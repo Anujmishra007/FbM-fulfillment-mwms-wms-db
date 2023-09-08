@@ -53,6 +53,8 @@ BEGIN
    DECLARE @cDiscrepancyLabel        NVARCHAR( 20)  
    DECLARE @cShipLabel               NVARCHAR( 10)  
    DECLARE @cUserName                NVARCHAR( 128)  
+   DECLARE @nPDQTY         INT
+   DECLARE @nPPAQTY         INT
      
    SELECT   
       @cFacility = Facility,   
@@ -67,47 +69,58 @@ BEGIN
 
       IF @nStep = 3 -- SKU
       BEGIN  
-
-         IF NOT EXISTS (SELECT 1
-                        FROM pickdetail PD (nolock)
-                        LEFT JOIN rdt.rdtppa PPA (NOLOCK) ON PD.sku = PPA.SKU and PD.Storerkey = PPA.StorerKey
-                        where PD.dropid= @cDropID
-                        and PD.Storerkey = @cStorerKey
-                        GROUP BY PD.SKU
-                        HAVING SUM(PD.QTY) <> SUM(ISNULL(PPA.CQty,0)))
+         IF @nInputKey ='1'
          BEGIN
+         
+            SELECT @nPDQTY = SUM(PD.QTY)
+            FROM pickdetail PD (nolock)
+            where PD.dropid= @cDropID
+               and PD.Storerkey = @cStorerKey
+               AND PD.Status <=9
 
-            DECLARE @cCartonManifest NVARCHAR(20)
-            SET @cCartonManifest = rdt.RDTGetConfig( @nFunc, 'CartonManifest', @cStorerKey)
-            IF @cCartonManifest = '0'
-               SET @cCartonManifest = ''
+            SELECT @nPPAQTY = SUM(ISNULL(PPA.CQty,0))
+            FROM  rdt.rdtppa PPA (NOLOCK)
+            WHERE PPA.dropid= @cDropID
+               AND PPA.Storerkey = @cStorerKey
 
-            -- Carton manifest
-            IF @cCartonManifest <> ''
+            IF ISNULL(@nPPAQTY,'')  IN ('',0)
+               SET @nPPAQTY = 0
+
+            IF @nPPAQTY = @nPDQTY
             BEGIN
 
-               -- Get session info
-               SELECT
-                  @cPaperPrinter = Printer_Paper,
-                  @cLabelPrinter = Printer
-               FROM rdt.rdtMobRec WITH (NOLOCK)
-               WHERE Mobile = @nMobile
+               DECLARE @cCartonManifest NVARCHAR(20)
+               SET @cCartonManifest = rdt.RDTGetConfig( @nFunc, 'CartonManifest', @cStorerKey)
+               IF @cCartonManifest = '0'
+                  SET @cCartonManifest = ''
 
-               DECLARE @tCartonManifest AS VariableTable
-               INSERT INTO @tCartonManifest (Variable, Value) VALUES
-                  ( '@cStorerKey',    @cStorerKey),
-                  ( '@cDropID',      @cDropID)
+               -- Carton manifest
+               IF @cCartonManifest <> ''
+               BEGIN
 
-               -- Print Carton manifest
-               EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
-                  @cCartonManifest, -- Report type
-                  @tCartonManifest, -- Report params
-                  'rdt_855ExtUpd10',
-                  @nErrNo  OUTPUT,
-                  @cErrMsg OUTPUT
+                  -- Get session info
+                  SELECT
+                     @cPaperPrinter = Printer_Paper,
+                     @cLabelPrinter = Printer
+                  FROM rdt.rdtMobRec WITH (NOLOCK)
+                  WHERE Mobile = @nMobile
 
-               IF @nErrNo <> 0
-                  GOTO QUIT
+                  DECLARE @tCartonManifest AS VariableTable
+                  INSERT INTO @tCartonManifest (Variable, Value) VALUES
+                     ( '@cStorerKey',    @cStorerKey),
+                     ( '@cDropID',      @cDropID)
+
+                  -- Print Carton manifest
+                  EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
+                     @cCartonManifest, -- Report type
+                     @tCartonManifest, -- Report params
+                     'rdt_855ExtUpd10',
+                     @nErrNo  OUTPUT,
+                     @cErrMsg OUTPUT
+
+                  IF @nErrNo <> 0
+                     GOTO QUIT
+               END
             END
          END
       END  
