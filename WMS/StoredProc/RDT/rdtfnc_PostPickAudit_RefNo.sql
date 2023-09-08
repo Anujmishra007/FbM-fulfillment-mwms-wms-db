@@ -1,23 +1,22 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = Object_Id(N'[RDT].[rdtfnc_PostPickAudit_RefNo]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdtfnc_PostPickAudit_RefNo]
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /*********************************************************************************/
 /* Store procedure: rdtfnc_PostPickAudit_RefNo                                   */
-/* Copyright      : LFLogistics                                                  */
+/* Copyright      : Maersk                                                       */
 /*                                                                               */
 /* Purpose: PPA                                                                  */
 /*                                                                               */
 /* Date       Rev  Author   Purposes                                             */
 /* 2016-10-06 1.0  James    WMS344 Created                                       */
+/* 2018-10-22 1.1  Gan      Performance tuning                                   */
+/* 2023-05-24 1.1  James    WMS-22527 Add DisableQTYField (james01)              */
 /*********************************************************************************/
 
-CREATE PROCEDURE [RDT].[rdtfnc_PostPickAudit_RefNo] (
+CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_PostPickAudit_RefNo] (
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR( 20) OUTPUT
@@ -55,7 +54,7 @@ DECLARE
    @cStorerGroup NVARCHAR( 20),
    @cStorerKey   NVARCHAR( 15),
    @cFacility    NVARCHAR( 5),
-   @cID          NVARCHAR( 18), 
+   @cID          NVARCHAR( 18),
 
    @cPUOM        NVARCHAR(  1),
    @cSKU         NVARCHAR( 20),
@@ -75,11 +74,11 @@ DECLARE
    @dLottable13  DATETIME,
    @dLottable14  DATETIME,
    @dLottable15  DATETIME,
-   @cUserDefine01       NVARCHAR( 60),  
-   @cUserDefine02       NVARCHAR( 60),  
-   @cUserDefine03       NVARCHAR( 60),  
-   @cUserDefine04       NVARCHAR( 60),  
-   @cUserDefine05       NVARCHAR( 60),  
+   @cUserDefine01       NVARCHAR( 60),
+   @cUserDefine02       NVARCHAR( 60),
+   @cUserDefine03       NVARCHAR( 60),
+   @cUserDefine04       NVARCHAR( 60),
+   @cUserDefine05       NVARCHAR( 60),
    @cDecodeSP           NVARCHAR( 20),
    @cOrderKey           NVARCHAR( 10),
    @cPickSlipNo         NVARCHAR( 10),
@@ -113,6 +112,10 @@ DECLARE
    @nTTL_AllocatedQty   INT,
    @nRowRef             INT,
 
+   @cDisableQTYField    NVARCHAR( 1),
+   @cDisableQTYFieldSP  NVARCHAR(20),
+   @tVarDisableQTYField VARIABLETABLE,
+   
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
    @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),
@@ -147,7 +150,7 @@ SELECT
    @nMenu      = Menu,
    @cLangCode  = Lang_code,
 
-   @cStorerGroup = StorerGroup, 
+   @cStorerGroup = StorerGroup,
    @cFacility  = Facility,
    @cPrinter   = Printer,
    @cUserName  = UserName,
@@ -177,20 +180,29 @@ SELECT
    @dLottable14 = V_Lottable14,
    @dLottable15 = V_Lottable15,
 
+   @nPUOM_Div  = V_PUOM_Div,
+   @nPQTY      = V_PQTY,
+   @nMQTY      = V_MQTY,
+
+   @nQTY        = V_Integer1,
+   @nTTL_PPAQTY = V_Integer2,
+
    @cRefNo              = V_String1,
    @cMUOM_Desc          = V_String2,
    @cPUOM_Desc          = V_String3,
-   @nPUOM_Div           = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String4, 5), 0) = 1 THEN LEFT( V_String4, 5) ELSE 0 END,
-   @nPQTY               = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String5, 5), 0) = 1 THEN LEFT( V_String5, 5) ELSE 0 END,
-   @nMQTY               = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String6, 5), 0) = 1 THEN LEFT( V_String6, 5) ELSE 0 END,
-   @nQTY                = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String7, 5), 0) = 1 THEN LEFT( V_String7, 5) ELSE 0 END,
-   @nTTL_PPAQTY         = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String8, 5), 0) = 1 THEN LEFT( V_String8, 5) ELSE 0 END,
+   @cDisableQTYField    = V_String4,
+   @cDisableQTYFieldSP  = V_String5,
+  -- @nPUOM_Div           = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String4, 5), 0) = 1 THEN LEFT( V_String4, 5) ELSE 0 END,
+  -- @nPQTY               = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String5, 5), 0) = 1 THEN LEFT( V_String5, 5) ELSE 0 END,
+  -- @nMQTY               = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String6, 5), 0) = 1 THEN LEFT( V_String6, 5) ELSE 0 END,
+  -- @nQTY                = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String7, 5), 0) = 1 THEN LEFT( V_String7, 5) ELSE 0 END,
+  -- @nTTL_PPAQTY         = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String8, 5), 0) = 1 THEN LEFT( V_String8, 5) ELSE 0 END,
    @cDecodeSP           = V_String9,
-   @cMUOM_Desc          = V_String10,
-   @cPUOM_Desc          = V_String11,
-   @nPUOM_Div           = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String12, 5), 0) = 1 THEN LEFT( V_String12, 5) ELSE 0 END,
-   @nPQTY               = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String13, 7), 0) = 1 THEN LEFT( V_String13, 7) ELSE 0 END,
-   @nMQTY               = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String14, 7), 0) = 1 THEN LEFT( V_String14, 7) ELSE 0 END,
+   --@cMUOM_Desc          = V_String10,
+   --@cPUOM_Desc          = V_String11,
+   --@nPUOM_Div           = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String12, 5), 0) = 1 THEN LEFT( V_String12, 5) ELSE 0 END,
+   --@nPQTY               = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String13, 7), 0) = 1 THEN LEFT( V_String13, 7) ELSE 0 END,
+   --@nMQTY               = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String14, 7), 0) = 1 THEN LEFT( V_String14, 7) ELSE 0 END,
    @cPPADefaultQTY      = V_String15,
    @cDisAllowOverAllocQty = V_String16,
 
@@ -256,6 +268,13 @@ BEGIN
    IF rdt.rdtIsValidQty( @cDisAllowOverAllocQty, 0) = 0
       SET @cDisAllowOverAllocQty = '0'
 
+   -- (james01)
+   SET @cDisableQTYField = rdt.rdtGetConfig( @nFunc, 'DisableQTYField', @cStorerKey)
+
+   SET @cDisableQTYFieldSP = rdt.RDTGetConfig( @nFunc, 'DisableQTYFieldSP', @cStorerKey)
+   IF @cDisableQTYFieldSP = '0'
+      SET @cDisableQTYFieldSP = ''
+
    -- EventLog
    EXEC RDT.rdt_STD_EventLog
       @cActionType = '1', -- Sign-in
@@ -263,7 +282,8 @@ BEGIN
       @nMobileNo   = @nMobile,
       @nFunctionID = @nFunc,
       @cFacility   = @cFacility,
-      @cStorerKey  = @cStorerKey
+      @cStorerKey  = @cStorerKey,
+      @nStep       = @nStep
 
    -- Prepare next screen var
    SET @cOutField01 = '' -- REFNO
@@ -300,8 +320,8 @@ BEGIN
       -- Standard decode
       IF @cDecodeSP = '1'
       BEGIN
-         EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode, 
-            @cID           OUTPUT, @cUPC           OUTPUT, @nQTY           OUTPUT, 
+         EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
+            @cID           OUTPUT, @cUPC           OUTPUT, @nQTY           OUTPUT,
             @cLottable01   OUTPUT, @cLottable02    OUTPUT, @cLottable03    OUTPUT, @dLottable04    OUTPUT, @dLottable05    OUTPUT,
             @cLottable06   OUTPUT, @cLottable07    OUTPUT, @cLottable08    OUTPUT, @cLottable09    OUTPUT, @cLottable10    OUTPUT,
             @cLottable11   OUTPUT, @cLottable12    OUTPUT, @dLottable13    OUTPUT, @dLottable14    OUTPUT, @dLottable15    OUTPUT,
@@ -310,7 +330,7 @@ BEGIN
 
             SET @cRefNo = @cUserDefine01
       END
-         
+
       -- Customize decode
       ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
       BEGIN
@@ -320,7 +340,7 @@ BEGIN
             ' @cLottable01    OUTPUT, @cLottable02    OUTPUT, @cLottable03    OUTPUT, @dLottable04    OUTPUT, @dLottable05    OUTPUT, ' +
             ' @cLottable06    OUTPUT, @cLottable07    OUTPUT, @cLottable08    OUTPUT, @cLottable09    OUTPUT, @cLottable10    OUTPUT, ' +
             ' @cLottable11    OUTPUT, @cLottable12    OUTPUT, @dLottable13    OUTPUT, @dLottable14    OUTPUT, @dLottable15    OUTPUT, ' +
-            ' @cUserDefine01  OUTPUT, @cUserDefine02  OUTPUT, @cUserDefine03  OUTPUT, @cUserDefine04  OUTPUT, @cUserDefine05  OUTPUT, ' + 
+            ' @cUserDefine01  OUTPUT, @cUserDefine02  OUTPUT, @cUserDefine03  OUTPUT, @cUserDefine04  OUTPUT, @cUserDefine05  OUTPUT, ' +
             ' @nErrNo         OUTPUT, @cErrMsg        OUTPUT'
          SET @cSQLParam =
             ' @nMobile        INT,           ' +
@@ -358,7 +378,7 @@ BEGIN
             ' @cErrMsg        NVARCHAR( 20)  OUTPUT'
 
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-            @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cBarcode, 
+            @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cBarcode,
             @cRefNo        OUTPUT, @cStore         OUTPUT, @cUPC           OUTPUT, @nQTY           OUTPUT,
             @cLottable01   OUTPUT, @cLottable02    OUTPUT, @cLottable03    OUTPUT, @dLottable04    OUTPUT, @dLottable05    OUTPUT,
             @cLottable06   OUTPUT, @cLottable07    OUTPUT, @cLottable08    OUTPUT, @cLottable09    OUTPUT, @cLottable10    OUTPUT,
@@ -371,7 +391,7 @@ BEGIN
       END
 
       -- Validate externorderkey
-      IF NOT EXISTS ( SELECT 1 FROM dbo.OrderDetail WITH (NOLOCK) 
+      IF NOT EXISTS ( SELECT 1 FROM dbo.OrderDetail WITH (NOLOCK)
                       WHERE StorerKey = @cStorerKey
                       AND   ExternOrderKey = @cRefNo
                       AND   [Status] < '9')
@@ -405,19 +425,19 @@ BEGIN
          -- Generate pickslip no
          IF ISNULL( @cPickSlipNo, '') = ''
          BEGIN
-            EXECUTE nspg_GetKey 
+            EXECUTE nspg_GetKey
                 @KeyName      = 'PICKSLIP'
                ,@fieldlength  = 9
                ,@keystring    = @cPickSlipNo OUTPUT
                ,@b_Success    = @bSuccess    OUTPUT
                ,@n_err        = @nErrNo      OUTPUT
-               ,@c_errmsg     = @cErrMsg     OUTPUT  
-     
+               ,@c_errmsg     = @cErrMsg     OUTPUT
+
             IF @bSuccess <> 1
             BEGIN
                ROLLBACK TRAN Step1_Update
                WHILE @@TRANCOUNT > @nTranCount
-                  COMMIT TRAN 
+                  COMMIT TRAN
 
                CLOSE CUR_LOOP
                DEALLOCATE CUR_LOOP
@@ -425,19 +445,19 @@ BEGIN
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'GetPKSlip Fail'
                GOTO Step_1_Fail
             END
-         
-            SET @cPickSlipNo = 'P' + @cPickSlipNo  
+
+            SET @cPickSlipNo = 'P' + @cPickSlipNo
 
             INSERT INTO dbo.PICKHEADER
               (PickHeaderKey ,OrderKey, Zone)
             VALUES
-              (@cPickSlipNo, @cOrderKey, '3')  
+              (@cPickSlipNo, @cOrderKey, '3')
 
             IF @@ERROR <> 0
             BEGIN
                ROLLBACK TRAN Step1_Update
                WHILE @@TRANCOUNT > @nTranCount
-                  COMMIT TRAN 
+                  COMMIT TRAN
 
                CLOSE CUR_LOOP
                DEALLOCATE CUR_LOOP
@@ -454,12 +474,12 @@ BEGIN
             (PickSlipNo, ScanInDate, PickerID, ScanOutDate, AddWho)
             VALUES
             (@cPickSlipNo, GETDATE(), @cUserName, NULL, @cUserName)
-            
+
             IF @@ERROR <> 0
             BEGIN
                ROLLBACK TRAN Step1_Update
                WHILE @@TRANCOUNT > @nTranCount
-                  COMMIT TRAN 
+                  COMMIT TRAN
 
                CLOSE CUR_LOOP
                DEALLOCATE CUR_LOOP
@@ -475,26 +495,26 @@ BEGIN
       DEALLOCATE CUR_LOOP
 
       COMMIT TRAN Step1_Update
-      WHILE @@TRANCOUNT > @nTranCount 
-            COMMIT TRAN 
+      WHILE @@TRANCOUNT > @nTranCount
+            COMMIT TRAN
 
       SELECT TOP 1 @cStore = O.ConsigneeKey
-      FROM dbo.OrderDetail OD WITH (NOLOCK) 
+      FROM dbo.OrderDetail OD WITH (NOLOCK)
       JOIN dbo.Orders O WITH (NOLOCK) ON (OD.OrderKey = O.OrderKey)
       WHERE OD.StorerKey = @cStorerKey
       AND   OD.ExternOrderKey = @cRefNo
       AND   OD.Status < '9'
 
-      SELECT @nTTL_SHPSKU = COUNT( DISTINCT SKU), 
+      SELECT @nTTL_SHPSKU = COUNT( DISTINCT SKU),
              @nTTL_SHPQTY = ISNULL( SUM( ShippedQty), 0)
-      FROM dbo.OrderDetail WITH (NOLOCK) 
+      FROM dbo.OrderDetail WITH (NOLOCK)
       WHERE StorerKey = @cStorerKey
       AND   ExternOrderKey = @cRefNo
       AND   Status = '9'
 
-      SELECT @nTTL_SKU = COUNT( DISTINCT SKU), 
+      SELECT @nTTL_SKU = COUNT( DISTINCT SKU),
              @nTTL_Qty = ISNULL( SUM( QtyAllocated), 0)
-      FROM dbo.OrderDetail WITH (NOLOCK) 
+      FROM dbo.OrderDetail WITH (NOLOCK)
       WHERE StorerKey = @cStorerKey
       AND   ExternOrderKey = @cRefNo
       AND   Status < '9'
@@ -505,7 +525,7 @@ BEGIN
       FROM rdt.rdtPPA WITH (NOLOCK)
       WHERE StorerKey = @cStorerKey
       AND   RefKey = @cRefNo
-      
+
       -- Prepare next screen var
       SET @cOutField01 = @cRefNo
       SET @cOutField02 = @cStore
@@ -527,7 +547,8 @@ BEGIN
          @nMobileNo   = @nMobile,
          @nFunctionID = @nFunc,
          @cFacility   = @cFacility,
-         @cStorerKey  = @cStorerKey
+         @cStorerKey  = @cStorerKey,
+         @nStep       = @nStep
 
       -- Back to menu
       SET @nFunc = @nMenu
@@ -571,8 +592,8 @@ BEGIN
       SET @cOutField08 = ''
       SET @cOutField09 = ''
       SET @cOutField10 = ''
-      SET @cOutField11 = '' 
-      SET @cOutField12 = '' 
+      SET @cOutField11 = ''
+      SET @cOutField12 = ''
 
       -- Go to SKU screen
       SET @nScn = @nScn + 1
@@ -617,8 +638,8 @@ BEGIN
       -- Standard decode
       IF @cDecodeSP = '1'
       BEGIN
-         EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode, 
-            @cID           OUTPUT, @cUPC           OUTPUT, @nQTY           OUTPUT, 
+         EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
+            @cID           OUTPUT, @cUPC           OUTPUT, @nQTY           OUTPUT,
             @cLottable01   OUTPUT, @cLottable02    OUTPUT, @cLottable03    OUTPUT, @dLottable04    OUTPUT, @dLottable05    OUTPUT,
             @cLottable06   OUTPUT, @cLottable07    OUTPUT, @cLottable08    OUTPUT, @cLottable09    OUTPUT, @cLottable10    OUTPUT,
             @cLottable11   OUTPUT, @cLottable12    OUTPUT, @dLottable13    OUTPUT, @dLottable14    OUTPUT, @dLottable15    OUTPUT,
@@ -630,7 +651,7 @@ BEGIN
 
          SET @cSKU = @cUPC
       END
-         
+
       -- Customize decode
       ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
       BEGIN
@@ -640,7 +661,7 @@ BEGIN
             ' @cLottable01    OUTPUT, @cLottable02    OUTPUT, @cLottable03    OUTPUT, @dLottable04    OUTPUT, @dLottable05    OUTPUT, ' +
             ' @cLottable06    OUTPUT, @cLottable07    OUTPUT, @cLottable08    OUTPUT, @cLottable09    OUTPUT, @cLottable10    OUTPUT, ' +
             ' @cLottable11    OUTPUT, @cLottable12    OUTPUT, @dLottable13    OUTPUT, @dLottable14    OUTPUT, @dLottable15    OUTPUT, ' +
-            ' @cUserDefine01  OUTPUT, @cUserDefine02  OUTPUT, @cUserDefine03  OUTPUT, @cUserDefine04  OUTPUT, @cUserDefine05  OUTPUT, ' + 
+            ' @cUserDefine01  OUTPUT, @cUserDefine02  OUTPUT, @cUserDefine03  OUTPUT, @cUserDefine04  OUTPUT, @cUserDefine05  OUTPUT, ' +
             ' @nErrNo         OUTPUT, @cErrMsg        OUTPUT'
          SET @cSQLParam =
             ' @nMobile        INT,           ' +
@@ -678,7 +699,7 @@ BEGIN
             ' @cErrMsg        NVARCHAR( 20)  OUTPUT'
 
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-            @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cBarcode, 
+            @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cBarcode,
             @cRefNo        OUTPUT, @cStore         OUTPUT, @cUPC           OUTPUT, @nQTY           OUTPUT,
             @cLottable01   OUTPUT, @cLottable02    OUTPUT, @cLottable03    OUTPUT, @dLottable04    OUTPUT, @dLottable05    OUTPUT,
             @cLottable06   OUTPUT, @cLottable07    OUTPUT, @cLottable08    OUTPUT, @cLottable09    OUTPUT, @cLottable10    OUTPUT,
@@ -728,7 +749,7 @@ BEGIN
       END
 
       IF NOT EXISTS ( SELECT 1
-                      FROM dbo.OrderDetail WITH (NOLOCK) 
+                      FROM dbo.OrderDetail WITH (NOLOCK)
                       WHERE StorerKey = @cStorerKey
                       AND   ExternOrderKey = @cRefNo
                       AND   Status < '9'
@@ -740,7 +761,7 @@ BEGIN
       END
 
       IF NOT EXISTS ( SELECT 1
-                      FROM dbo.OrderDetail WITH (NOLOCK) 
+                      FROM dbo.OrderDetail WITH (NOLOCK)
                       WHERE StorerKey = @cStorerKey
                       AND   ExternOrderKey = @cRefNo
                       AND   Status < '9'
@@ -760,12 +781,51 @@ BEGIN
       AND   SKU = @cSKU
 
       SELECT @nTTL_ORDQTY = ISNULL( SUM( OriginalQTY), 0)
-      FROM dbo.OrderDetail WITH (NOLOCK) 
+      FROM dbo.OrderDetail WITH (NOLOCK)
       WHERE StorerKey = @cStorerKey
       AND   ExternOrderKey = @cRefNo
       AND   Status < '9'
       AND   SKU = @cSKU
 
+      -- Disable QTY field
+      IF @cDisableQTYFieldSP <> ''
+      BEGIN
+         IF @cDisableQTYFieldSP = '1'
+         BEGIN
+            SET @cDisableQTYField = @cDisableQTYFieldSP
+         END
+         ELSE
+         BEGIN
+            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDisableQTYFieldSP AND type = 'P')
+            BEGIN
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cDisableQTYFieldSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cRefNo, @cSKU, @nQty, ' +
+               ' @tVarDisableQTYField, @cDisableQTYField OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+               SET @cSQLParam =
+               ' @nMobile        INT,           ' +
+               ' @nFunc          INT,           ' +
+               ' @cLangCode      NVARCHAR( 3),  ' +
+               ' @nStep          INT,           ' +
+               ' @nInputKey      INT,           ' +
+               ' @cStorerKey     NVARCHAR( 15), ' +
+               ' @cRefNo         NVARCHAR( 20), ' +
+               ' @cSKU           NVARCHAR( 20), ' +
+               ' @nQTY           INT          , ' +
+                '@tVarDisableQTYField VariableTable READONLY, ' +
+               ' @cDisableQTYField   NVARCHAR( 1)   OUTPUT, ' +
+               ' @nErrNo             INT            OUTPUT, ' +
+               ' @cErrMsg            NVARCHAR( 20)  OUTPUT'
+
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cRefNo, @cSKU, @nQty, 
+                  @tVarDisableQTYField, @cDisableQTYField OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT 
+
+               IF @nErrNo <> 0
+                  GOTO Quit
+            END
+         END
+      END
+      
       -- Get SKU info
       SELECT
          @cSKUDesc = IsNULL( DescR, ''),
@@ -828,16 +888,19 @@ BEGIN
       SET @cOutField06 = rdt.rdtRightAlign( @cMUOM_Desc, 5)
       SET @cOutField07 = CASE WHEN @nPQTY = 0 OR @cFieldAttr07 = 'O' THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 5)) END -- PQTY
       SET @cOutField08 = CASE WHEN @nMQTY = 0 THEN '' ELSE CAST( @nMQTY AS NVARCHAR( 5)) END -- MQTY
-      SET @cOutField09 = CASE WHEN @nPPPAQTY = 0 OR @cFieldAttr09 = 'O' THEN '' ELSE CAST( @nPPPAQTY AS NVARCHAR( 5)) END -- PPPAQTY 
-      SET @cOutField10 = CASE WHEN @nMPPAQTY = 0 THEN '' ELSE CAST( @nMPPAQTY AS NVARCHAR( 5)) END -- MPPAQTY 
-      SET @cOutField11 = CASE WHEN @nPORDQTY = 0 OR @cFieldAttr11 = 'O' THEN '' ELSE CAST( @nPORDQTY AS NVARCHAR( 5)) END -- PORDQTY 
-      SET @cOutField12 = CASE WHEN @nMORDQTY = 0 THEN '' ELSE CAST( @nMORDQTY AS NVARCHAR( 5)) END -- MORDQTY 
+      SET @cOutField09 = CASE WHEN @nPPPAQTY = 0 OR @cFieldAttr09 = 'O' THEN '' ELSE CAST( @nPPPAQTY AS NVARCHAR( 5)) END -- PPPAQTY
+      SET @cOutField10 = CASE WHEN @nMPPAQTY = 0 THEN '' ELSE CAST( @nMPPAQTY AS NVARCHAR( 5)) END -- MPPAQTY
+      SET @cOutField11 = CASE WHEN @nPORDQTY = 0 OR @cFieldAttr11 = 'O' THEN '' ELSE CAST( @nPORDQTY AS NVARCHAR( 5)) END -- PORDQTY
+      SET @cOutField12 = CASE WHEN @nMORDQTY = 0 THEN '' ELSE CAST( @nMORDQTY AS NVARCHAR( 5)) END -- MORDQTY
 
 
       IF @cFieldAttr07 = ''
       BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 7 -- PQTY
          SET @cOutField07 = CASE WHEN ISNULL( @cPPADefaultQTY, '0') = 0 THEN '' ELSE @cPPADefaultQTY END
+         
+         -- Enable/Diable field
+         SET @cFieldAttr07 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END
       END
       ELSE
       BEGIN
@@ -845,22 +908,25 @@ BEGIN
          SET @cOutField08 = CASE WHEN ISNULL( @cPPADefaultQTY, '0') = 0 THEN '' ELSE @cPPADefaultQTY END
       END
 
+      -- Enable/Disable field
+      SET @cFieldAttr08 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END
+         
       SET @nScn = @nScn + 1
       SET @nStep = @nStep + 1
    END
 
    IF @nInputKey = 0 -- Esc or No
    BEGIN
-      SELECT @nTTL_SHPSKU = COUNT( DISTINCT SKU), 
+      SELECT @nTTL_SHPSKU = COUNT( DISTINCT SKU),
              @nTTL_SHPQTY = ISNULL( SUM( ShippedQty), 0)
-      FROM dbo.OrderDetail WITH (NOLOCK) 
+      FROM dbo.OrderDetail WITH (NOLOCK)
       WHERE StorerKey = @cStorerKey
       AND   ExternOrderKey = @cRefNo
       AND   Status = '9'
 
-      SELECT @nTTL_SKU = COUNT( DISTINCT SKU), 
+      SELECT @nTTL_SKU = COUNT( DISTINCT SKU),
              @nTTL_Qty = ISNULL( SUM( QtyAllocated), 0)
-      FROM dbo.OrderDetail WITH (NOLOCK) 
+      FROM dbo.OrderDetail WITH (NOLOCK)
       WHERE StorerKey = @cStorerKey
       AND   ExternOrderKey = @cRefNo
       AND   Status < '9'
@@ -943,14 +1009,14 @@ BEGIN
       SET @nQTY = @nQTY + @nMQTY
 
       SELECT @nTTL_AllocatedQty = ISNULL( SUM( QtyAllocated), 0)
-      FROM dbo.OrderDetail OD WITH (NOLOCK) 
+      FROM dbo.OrderDetail OD WITH (NOLOCK)
       JOIN dbo.Orders O WITH (NOLOCK) ON (OD.OrderKey = O.OrderKey)
       WHERE OD.StorerKey = @cStorerKey
       AND   OD.ExternOrderKey = @cRefNo
       AND   OD.Status < '9'
       AND   OD.SKU = @cSKU
 
-      IF @cDisAllowOverAllocQty = '1' AND 
+      IF @cDisAllowOverAllocQty = '1' AND
          (@nQTY + @nTTL_PPAQTY) > @nTTL_AllocatedQty
       BEGIN
          SET @nErrNo = 104759
@@ -986,7 +1052,7 @@ BEGIN
          BEGIN
             ROLLBACK TRAN Step4_Update
             WHILE @@TRANCOUNT > @nTranCount
-               COMMIT TRAN 
+               COMMIT TRAN
 
             SET @nErrNo = 104760
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Fail INS PPA
@@ -1005,7 +1071,7 @@ BEGIN
          BEGIN
             ROLLBACK TRAN Step4_Update
             WHILE @@TRANCOUNT > @nTranCount
-               COMMIT TRAN 
+               COMMIT TRAN
 
             SET @nErrNo = 104761
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Fail UPD PPA
@@ -1015,7 +1081,7 @@ BEGIN
 
       SET @nTTL_PPAQTY = 0
       SELECT @nTTL_PPAQTY = ISNULL( SUM( CQTY), 0)
-      FROM rdt.rdtPPA WITH (NOLOCK) 
+      FROM rdt.rdtPPA WITH (NOLOCK)
       WHERE RefKey = @cRefNo
 
       SET @nTTL_AllocatedQty = 0
@@ -1028,8 +1094,8 @@ BEGIN
       -- If all sku qtyallocated has been scanned then proceed with scan out
       IF @nTTL_PPAQTY >= @nTTL_AllocatedQty
       BEGIN
-         DECLARE CUR_LOOP CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
-         SELECT DISTINCT OrderKey 
+         DECLARE CUR_LOOP CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+         SELECT DISTINCT OrderKey
          FROM dbo.OrderDetail WITH (NOLOCK)
          WHERE StorerKey = @cStorerKey
          AND   ExternOrderKey = @cRefNo
@@ -1048,7 +1114,7 @@ BEGIN
                         WHERE PickSlipNo = @cPickSlipNo
                         AND   ISNULL( ScanOutDate, '') = '')
             BEGIN
-               UPDATE dbo.PickingInfo WITH (ROWLOCK) SET 
+               UPDATE dbo.PickingInfo WITH (ROWLOCK) SET
                   ScanOutDate = GETDATE()
                WHERE PickSlipNo = @cPickSlipNo
 
@@ -1056,7 +1122,7 @@ BEGIN
                BEGIN
                   ROLLBACK TRAN Step4_Update
                   WHILE @@TRANCOUNT > @nTranCount
-                     COMMIT TRAN 
+                     COMMIT TRAN
 
                   CLOSE CUR_LOOP
                   DEALLOCATE CUR_LOOP
@@ -1073,8 +1139,8 @@ BEGIN
       END
 
       COMMIT TRAN Step4_Update
-      WHILE @@TRANCOUNT > @nTranCount 
-            COMMIT TRAN 
+      WHILE @@TRANCOUNT > @nTranCount
+            COMMIT TRAN
 
       -- EventLog
       EXEC RDT.rdt_STD_EventLog
@@ -1090,20 +1156,21 @@ BEGIN
          @nQTY          = @nQTY,
          @cRefNo1       = @cRefNo,
          @cLottable01   = @cLottable01,
-         @cLottable02   = @cLottable02, 
-         @cLottable03   = @cLottable03, 
-         @dLottable04   = @dLottable04, 
-         @dLottable05   = @dLottable05, 
-         @cLottable06   = @cLottable06, 
-         @cLottable07   = @cLottable07, 
-         @cLottable08   = @cLottable08, 
-         @cLottable09   = @cLottable09, 
-         @cLottable10   = @cLottable10, 
-         @cLottable11   = @cLottable11, 
-         @cLottable12   = @cLottable12, 
-         @dLottable13   = @dLottable13, 
-         @dLottable14   = @dLottable14, 
-         @dLottable15   = @dLottable15  
+         @cLottable02   = @cLottable02,
+         @cLottable03   = @cLottable03,
+         @dLottable04   = @dLottable04,
+         @dLottable05   = @dLottable05,
+         @cLottable06   = @cLottable06,
+         @cLottable07   = @cLottable07,
+         @cLottable08   = @cLottable08,
+         @cLottable09   = @cLottable09,
+         @cLottable10   = @cLottable10,
+         @cLottable11   = @cLottable11,
+         @cLottable12   = @cLottable12,
+         @dLottable13   = @dLottable13,
+         @dLottable14   = @dLottable14,
+         @dLottable15   = @dLottable15,
+         @nStep         = @nStep
 
 
       -- Go back to SKU screen
@@ -1124,7 +1191,9 @@ BEGIN
       SET @cOutField11 = ''
       SET @cOutField12 = ''
 
-
+      -- Enable field (james01)
+      SET @cFieldAttr07 = ''
+      SET @cFieldAttr08 = ''
    END
 
    IF @nInputKey = 0 -- Esc or No
@@ -1174,7 +1243,7 @@ BEGIN
       Facility     = @cFacility,
       Printer      = @cPrinter,
 
-      V_StorerKey    = @cStorerKey, 
+      V_StorerKey    = @cStorerKey,
       V_ConsigneeKey = @cStore,
       V_UOM          = @cPUOM,
       V_SKU          = @cSKU,
@@ -1198,21 +1267,30 @@ BEGIN
       V_Lottable14   = @dLottable14,
       V_Lottable15   = @dLottable15,
 
+      V_PUOM_Div  = @nPUOM_Div,
+      V_PQTY      = @nPQTY,
+      V_MQTY      = @nMQTY,
+
+      V_Integer1  = @nQTY,
+      V_Integer2  = @nTTL_PPAQTY,
+
       V_String1   = @cRefNo,
-      V_String2   = @cMUOM_Desc,
-      V_String3   = @cPUOM_Desc,
-      V_String4   = @nPUOM_Div ,
-      V_String5   = @nPQTY,
-      V_String6   = @nMQTY,
-      V_String7   = @nQTY,
-      V_String8   = @nTTL_PPAQTY,
+      V_String4   = @cDisableQTYField,
+      V_String5   = @cDisableQTYFieldSP,
+      --V_String2   = @cMUOM_Desc,
+      --V_String3   = @cPUOM_Desc,
+      --V_String4   = @nPUOM_Div ,
+      --V_String5   = @nPQTY,
+      --V_String6   = @nMQTY,
+      --V_String7   = @nQTY,
+      --V_String8   = @nTTL_PPAQTY,
       V_String9   = @cDecodeSP,
 
       V_String10  = @cMUOM_Desc,
       V_String11  = @cPUOM_Desc,
-      V_String12  = @nPUOM_Div ,
-      V_String13  = @nPQTY,
-      V_String14  = @nMQTY,
+      --V_String12  = @nPUOM_Div ,
+      --V_String13  = @nPQTY,
+      --V_String14  = @nMQTY,
       V_String15  = @cPPADefaultQTY,
       V_String16  = @cDisAllowOverAllocQty,
 
@@ -1244,11 +1322,5 @@ BEGIN
    WHERE Mobile = @nMobile
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXEC ON RDT.rdtfnc_PostPickAudit_RefNo TO NSQL
+GRANT EXECUTE ON  [RDT].[rdtfnc_PostPickAudit_RefNo] TO [NSQL]
 GO
