@@ -24,6 +24,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
 /* 20-Jun-2023  NJOW     1.0  DevOps Combine Script                     */
+/* 09-Sep-2023  NJOW01   1.1  Fix - remove update to lottable02         */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[ispREC09]
    @c_Action    NVARCHAR(10)
@@ -138,7 +139,7 @@ BEGIN
             	  
             	  UPDATE RECEIPTDETAIL WITH (ROWLOCK)
             	  SET UserDefine01 = ToID,
-            	      Lottable02 = ToID,
+            	      --Lottable02 = ToID,  --NJOW01
             	      Trafficcop = NULL 
             	  WHERE Receiptkey = @c_Receiptkey
             	  AND ReceiptLineNumber = @c_ReceiptLineNumber    
