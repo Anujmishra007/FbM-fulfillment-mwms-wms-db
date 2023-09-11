@@ -122,17 +122,17 @@ AS
             GOTO Quit
          END
 
-         IF EXISTS ( SELECT 1 FROM rdt.rdtDataCapture (NOLOCK)
-                     WHERE Storerkey = @cStorerKey
-                        AND facility = @cFacility
-                        AND V_SKU = @cSKU
-                        AND SerialNo = @cSerialNo)
-         BEGIN
-            SET @nErrNo = 205355
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DuplicateSNo
-            EXEC rdt.rdtSetFocusField @nMobile, 4 -- ID
-            GOTO Quit
-         END
+         --IF EXISTS ( SELECT 1 FROM rdt.rdtDataCapture (NOLOCK)
+         --            WHERE Storerkey = @cStorerKey
+         --               AND facility = @cFacility
+         --               AND V_SKU = @cSKU
+         --               AND SerialNo = @cSerialNo)
+         --BEGIN
+         --   SET @nErrNo = 205355
+         --   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DuplicateSNo
+         --   EXEC rdt.rdtSetFocusField @nMobile, 4 -- ID
+         --   GOTO Quit
+         --END
       	
          INSERT INTO rdt.rdtDataCapture( StorerKey, Facility, V_SKU, serialno, V_String1,V_String2, AddWho, AddDate) VALUES 
          ( @cStorerKey, @cFacility, @cSKU, @cSerialNo, @cTrackingNo, '706', @cUserName, GETDATE())
