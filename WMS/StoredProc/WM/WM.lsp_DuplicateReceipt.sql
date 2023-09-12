@@ -20,9 +20,11 @@ GO
 /* 28-Dec-2020 SWT01    1.2   Adding Begin Try/Catch                     */
 /* 15-JAN-2021 Wan01    1.3   Add Big Outer Begin try/Catch              */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
-/* 3-MAR-2023  NJOW01   1.4   WMS-21889 add validation to check finalize */
+/* 03-MAR-2023 NJOW01   1.4   WMS-21889 add validation to check finalize */
 /*                            status.                                    */
-/* 3-MAR-2023  NJOW01   1.4   DEVOPS Combine Script                      */
+/* 03-MAR-2023 NJOW01   1.4   DEVOPS Combine Script                      */
+/* 01-AUG-2023 NJOW02   1.5   WMS-21889 Copy adjustedqty to a new split  */
+/*                            if qtyexpected+qtyreceived=0               */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [WM].[lsp_DuplicateReceipt]
    @c_ReceiptKey  NVARCHAR(10)
@@ -294,7 +296,12 @@ BEGIN
                @c_NewReceiptKey,    @c_NextReceiveLineNo,   ExternReceiptKey,
                ExternLineNo,        StorerKey,              POKey,
                Sku,                 AltSku,                 Id,
-               [Status]='0',        DateReceived,           [QtyExpected]=(QtyExpected - QtyReceived),
+               [Status]='0',        DateReceived,           
+               [QtyExpected] = CASE WHEN @c_AllowDuplicateZeroQty = 'Y' AND r.QtyExpected = 0 AND r.QtyReceived = 0 AND r.QtyAdjusted < 0 THEN --NJOW02
+                                       ABS(r.QtyAdjusted)
+                                    ELSE
+                                      (QtyExpected - QtyReceived)
+                               END,
                QtyAdjusted=0,       QtyReceived=0,          UOM,
                PackKey,             VesselKey,              VoyageKey,
                XdockKey,            ContainerKey,           ToLoc,
