@@ -9,6 +9,7 @@ GO
 /*                                                                            */
 /* Date         Rev  Author   Purposes                                        */
 /* 2023-07-17   1.0  Ung      WMS-22678 Created                               */
+/* 2023-08-11   1.1  Ung      WMS-22678 Change checking to MBOL level         */
 /******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_1863ExtVal01](
    @nMobile        INT,
@@ -56,83 +57,91 @@ BEGIN
       BEGIN
          IF @nInputKey = 0 -- ESC
          BEGIN
-            IF @cOrderKey <> ''
+            DECLARE @nTotalCarton INT = 0
+            DECLARE @nTotalScan   INT = 0
+
+            DECLARE @cCartonIDSP NVARCHAR( 20)
+            SET @cCartonIDSP = rdt.RDTGetConfig( @nFunc, 'CartonIDSP', @cStorerKey)
+            IF @cCartonIDSP = '0'
+               SET @cCartonIDSP = ''
+            IF @cCartonIDSP = ''
+               SET @cCartonIDSP = 'L' -- L=LabenNo
+
+            -- Check carton ID (PackDetail.LabelNo)
+            IF @nTotalCarton = 0 AND CHARINDEX( 'L', @cCartonIDSP) > 0 -- L=LabelNo
             BEGIN
-               DECLARE @nTotalCarton INT = 0
-               DECLARE @nTotalScan   INT = 0
+               -- Discrete pack
+               SELECT @nTotalCarton = COUNT( DISTINCT PD.LabelNo)
+               FROM dbo.Orders O WITH (NOLOCK)
+                  JOIN dbo.PackHeader PH WITH (NOLOCK) ON (O.OrderKey = PH.OrderKey)
+                  JOIN dbo.PackDetail PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)
+               WHERE O.MBOLKey = @cMBOLKey
 
-               DECLARE @cCartonIDSP NVARCHAR( 20)
-               SET @cCartonIDSP = rdt.RDTGetConfig( @nFunc, 'CartonIDSP', @cStorerKey)
-               IF @cCartonIDSP = '0'
-                  SET @cCartonIDSP = ''
-               IF @cCartonIDSP = ''
-                  SET @cCartonIDSP = 'L' -- L=LabenNo
+               -- Conso pack
+               SELECT @nTotalCarton = @nTotalCarton + COUNT( DISTINCT PD.LabelNo)
+               FROM dbo.Orders O WITH (NOLOCK)
+                  JOIN dbo.LoadPlanDetail LPD WITH (NOLOCK) ON (O.OrderKey = LPD.OrderKey)
+                  JOIN dbo.PackHeader PH WITH (NOLOCK) ON (LPD.LoadKey = PH.LoadKey AND PH.OrderKey = '')
+                  JOIN dbo.PackDetail PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)
+               WHERE O.MBOLKey = @cMBOLKey
+            END
 
-               IF @cPickSlipNo <> ''
-               BEGIN
-                  -- Check carton ID (PackDetail.LabelNo)
-                  IF @nTotalCarton = 0 AND CHARINDEX( 'L', @cCartonIDSP) > 0 -- L=LabelNo
-                  BEGIN
-                     -- Get total carton
-                     SELECT @nTotalCarton = COUNT( DISTINCT PD.LabelNo)
-                     FROM dbo.PackHeader PH WITH (NOLOCK)
-                        JOIN dbo.PackDetail PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)
-                     WHERE PH.PickSlipNo = @cPickSlipNo
-                 END
+            -- Check carton ID (PackDetail.DropID)
+            IF @nTotalCarton = 0 AND CHARINDEX( 'D2', @cCartonIDSP) > 0 -- D2=PackDetail.DropID
+            BEGIN
+               -- Discrete pack
+               SELECT @nTotalCarton = COUNT( DISTINCT PD.DropID)
+               FROM dbo.Orders O WITH (NOLOCK)
+                  JOIN dbo.PackHeader PH WITH (NOLOCK) ON (O.OrderKey = PH.OrderKey)
+                  JOIN dbo.PackDetail PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)
+               WHERE O.MBOLKey = @cMBOLKey
 
-                  -- Check carton ID (PackDetail.DropID)
-                  IF @nTotalCarton = 0 AND CHARINDEX( 'D2', @cCartonIDSP) > 0 -- D2=PackDetail.DropID
-                  BEGIN
-                     -- Get total carton
-                     SELECT @nTotalCarton = COUNT( DISTINCT PD.DropID)
-                     FROM dbo.PackHeader PH WITH (NOLOCK)
-                        JOIN dbo.PackDetail PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)
-                     WHERE PH.PickSlipNo = @cPickSlipNo
-                  END
-                  
-                  -- Get total scanned
-                  SELECT @nTotalScan = COUNT( 1) FROM rdt.rdtCartonToMBOLLog WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo
-               END
+               -- Conso pack
+               SELECT @nTotalCarton = @nTotalCarton + COUNT( DISTINCT PD.DropID)
+               FROM dbo.Orders O WITH (NOLOCK)
+                  JOIN dbo.LoadPlanDetail LPD WITH (NOLOCK) ON (O.OrderKey = LPD.OrderKey)
+                  JOIN dbo.PackHeader PH WITH (NOLOCK) ON (LPD.LoadKey = PH.LoadKey AND PH.OrderKey = '')
+                  JOIN dbo.PackDetail PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)
+               WHERE O.MBOLKey = @cMBOLKey
+            END
+            
+            -- Check carton ID (PickDetail.CaseID)
+            IF @nTotalCarton = 0 AND CHARINDEX( 'C', @cCartonIDSP) > 0 -- C=CaseID
+            BEGIN
+               -- Get total carton
+               SELECT @nTotalCarton = COUNT( DISTINCT PD.CaseID)
+               FROM dbo.Orders O WITH (NOLOCK)
+                  JOIN dbo.PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
+               WHERE O.MBOLKey = @cMBOLKey
+                  AND PD.CaseID <> ''
+                  AND PD.QTY > 0
+                  AND PD.Status <> '4'
+            END
 
-               IF @cOrderKey <> ''
-               BEGIN
-                  -- Check carton ID (PickDetail.CaseID)
-                  IF @nTotalCarton = 0 AND CHARINDEX( 'C', @cCartonIDSP) > 0 -- C=CaseID
-                  BEGIN
-                     -- Get total carton
-                     SELECT @nTotalCarton = COUNT( DISTINCT CaseID)
-                     FROM dbo.PickDetail WITH (NOLOCK)
-                     WHERE OrderKey = @cOrderKey
-                        AND CaseID <> ''
-                        AND QTY > 0
-                        AND Status <> '4'
-                  END
+            -- Check carton ID (PickDetail.DropID)
+            IF @nTotalCarton = 0 AND CHARINDEX( 'D1', @cCartonIDSP) > 0 -- D1=PickDetail.DropID
+            BEGIN
+               -- Get total carton
+               SELECT @nTotalCarton = COUNT( DISTINCT PD.DropID)
+               FROM dbo.Orders O WITH (NOLOCK)
+                  JOIN dbo.PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
+               WHERE O.MBOLKey = @cMBOLKey
+                  AND PD.DropID <> ''
+                  AND PD.QTY > 0
+                  AND PD.Status <> '4'
+            END
 
-                  -- Check carton ID (PickDetail.DropID)
-                  IF @nTotalCarton = 0 AND CHARINDEX( 'D1', @cCartonIDSP) > 0 -- D1=PickDetail.DropID
-                  BEGIN
-                     -- Get total carton
-                     SELECT @nTotalCarton = COUNT( DISTINCT DropID)
-                     FROM dbo.PickDetail WITH (NOLOCK)
-                     WHERE OrderKey = @cOrderKey
-                        AND DropID <> ''
-                        AND QTY > 0
-                        AND Status <> '4'
-                  END
-
-                  -- Get total scanned
-                  SELECT @nTotalScan = COUNT( 1) FROM rdt.rdtCartonToMBOLLog WITH (NOLOCK) WHERE OrderKey = @cOrderKey
-               END
-               
-               -- Check not all carton scanned
-               IF @nTotalCarton > 0 AND @nTotalScan < @nTotalCarton
-               BEGIN
-                  SET @nErrNo = 203851
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NOT ALL SCANNED
-                  EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', @nErrNo, @cErrMsg
-                  SET @cErrMsg = ''
-                  SET @nErrNo = 0
-               END
+            -- Get total scanned
+            SELECT @nTotalScan = COUNT( 1) FROM rdt.rdtCartonToMBOLLog WITH (NOLOCK) WHERE MBOLKey = @cMBOLKey
+            
+            -- Check not all carton scanned
+            IF @nTotalCarton > 0 AND @nTotalScan < @nTotalCarton
+            BEGIN
+               SET @nErrNo = 203851
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NOT ALL SCANNED
+               EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', @nErrNo, @cErrMsg
+               SET @cErrMsg = ''
+               SET @nErrNo = 0
             END
          END
       END

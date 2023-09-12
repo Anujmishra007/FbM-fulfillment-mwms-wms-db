@@ -37,7 +37,7 @@ CREATE OR ALTER PROC [RDT].[rdt_CartonToMBOL_Confirm](
    ,@nErrNo          INT            OUTPUT
    ,@cErrMsg         NVARCHAR( 20)  OUTPUT
    ,@cCartonType     NVARCHAR( 10) = ''  
-   ,@cUseSequence    NVARCHAR( 10) = '' 
+   ,@nUseSequence    INT = 0 
    ,@cWeight         NVARCHAR( 10) = '' 
    ,@cCube           NVARCHAR( 10) = '' 
    ,@cPackInfoRefNo  NVARCHAR( 20) = ''
@@ -74,7 +74,7 @@ BEGIN
             ' @cMBOLKey, @cRefNo, @cOrderKey, @cCartonID, @cSKU, @cPickSlipNo, @nCartonNo, ' + 
             ' @cData1, @cData2, @cData3, @cData4, @cData5, @tConfirmVar, ' +
             ' @nTotalCarton OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, ' + 
-            ' @cCartonType, @cUseSequence, @cWeight, @cCube, @cPackInfoRefNo, @cLength, @cWidth, @cHeight '
+            ' @cCartonType, @nUseSequence, @cWeight, @cCube, @cPackInfoRefNo, @cLength, @cWidth, @cHeight '
          SET @cSQLParam =
             '  @nMobile         INT            ' + 
             ' ,@nFunc           INT            ' + 
@@ -100,7 +100,7 @@ BEGIN
             ' ,@nErrNo          INT            OUTPUT   ' + 
             ' ,@cErrMsg         NVARCHAR( 20)  OUTPUT   ' + 
             ' ,@cCartonType     NVARCHAR( 10) ' + 
-            ' ,@cUseSequence    NVARCHAR( 10) ' + 
+            ' ,@nUseSequence    INT           ' + 
             ' ,@cWeight         NVARCHAR( 10) ' + 
             ' ,@cCube           NVARCHAR( 10) ' + 
             ' ,@cPackInfoRefNo  NVARCHAR( 20) ' + 
@@ -113,7 +113,7 @@ BEGIN
             @cMBOLKey, @cRefNo, @cOrderKey, @cCartonID, @cSKU, @cPickSlipNo, @nCartonNo, 
             @cData1, @cData2, @cData3, @cData4, @cData5, @tConfirmVar, 
             @nTotalCarton OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, 
-            @cCartonType, @cUseSequence, @cWeight, @cCube, @cPackInfoRefNo, @cLength, @cWidth, @cHeight
+            @cCartonType, @nUseSequence, @cWeight, @cCube, @cPackInfoRefNo, @cLength, @cWidth, @cHeight
 
          GOTO Quit
       END
@@ -131,36 +131,21 @@ BEGIN
    -- MBOL detail
    IF NOT EXISTS( SELECT 1 FROM dbo.MBOLDetail WITH (NOLOCK) WHERE MBOLKey = @cMBOLKey AND OrderKey = @cOrderKey)
    BEGIN
-      /*
       DECLARE 
-         @nCtnCnt1 INT, 
-         @nCtnCnt2 INT, 
-         @nCtnCnt3 INT, 
-         @nCtnCnt4 INT, 
-         @nCtnCnt5 INT, 
-         @cUDF01   NVARCHAR(20), 
-         @cUDF02   NVARCHAR(20), 
-         @cUDF03   NVARCHAR(20), 
-         @cUDF04   NVARCHAR(20), 
-         @cUDF05   NVARCHAR(20), 
-         @cUDF09   NVARCHAR(10), 
-         @cUDF10   NVARCHAR(10)
+         @nCtnCnt1 INT = 0, 
+         @nCtnCnt2 INT = 0, 
+         @nCtnCnt3 INT = 0, 
+         @nCtnCnt4 INT = 0, 
+         @nCtnCnt5 INT = 0, 
+         @cUDF01   NVARCHAR(20) = '', 
+         @cUDF02   NVARCHAR(20) = '', 
+         @cUDF03   NVARCHAR(20) = '', 
+         @cUDF04   NVARCHAR(20) = '', 
+         @cUDF05   NVARCHAR(20) = '', 
+         @cUDF09   NVARCHAR(10) = '', 
+         @cUDF10   NVARCHAR(10) = ''
       
-      SELECT 
-         @nCtnCnt1 = '', 
-         @nCtnCnt2 = '', 
-         @nCtnCnt3 = '', 
-         @nCtnCnt4 = '', 
-         @nCtnCnt5 = '', 
-         @cUDF01 = '', 
-         @cUDF02 = '', 
-         @cUDF03 = '', 
-         @cUDF04 = '', 
-         @cUDF05 = '', 
-         @cUDF09 = '', 
-         @cUDF10 = ''
-      
-      IF @cTrackCartonType <> ''  -- IN ('1', '2')
+      IF @cCartonType <> ''
       BEGIN
          IF @nUseSequence = 1  SET @nCtnCnt1 = 1 ELSE
          IF @nUseSequence = 2  SET @nCtnCnt2 = 1 ELSE
@@ -175,16 +160,16 @@ BEGIN
          IF @nUseSequence = 11 SET @cUDF09 = '1' ELSE
          IF @nUseSequence = 12 SET @cUDF10 = '1' 
       END
-      */
+      
       DECLARE @cLoadKey NVARCHAR( 10)
       SELECT @cLoadKey = LoadKey FROM dbo.Orders WITH (NOLOCK) WHERE OrderKey = @cOrderKey
       
       INSERT INTO dbo.MBOLDetail 
-         (MBOLKey, MBOLLineNumber, OrderKey, LoadKey, AddWho, AddDate, EditWho, EditDate, Weight, Cube) 
-          -- CtnCnt1, CtnCnt2, CtnCnt3, CtnCnt4, CtnCnt5, UserDefine01, UserDefine02, UserDefine03, UserDefine04, UserDefine05, UserDefine09, UserDefine10)
+         (MBOLKey, MBOLLineNumber, OrderKey, LoadKey, AddWho, AddDate, EditWho, EditDate, Weight, Cube, 
+          CtnCnt1, CtnCnt2, CtnCnt3, CtnCnt4, CtnCnt5, UserDefine01, UserDefine02, UserDefine03, UserDefine04, UserDefine05, UserDefine09, UserDefine10)
       VALUES 
-         (@cMBOLKey, '00000', @cOrderKey, @cLoadKey, 'rdt.' + SUSER_SNAME(), GETDATE(), 'rdt.' + SUSER_SNAME(), GETDATE(), @cWeight, @cCube) 
-          -- @nCtnCnt1, @nCtnCnt2, @nCtnCnt3, @nCtnCnt4, @nCtnCnt5, @cUDF01, @cUDF02, @cUDF03, @cUDF04, @cUDF05, @cUDF09, @cUDF10)
+         (@cMBOLKey, '00000', @cOrderKey, @cLoadKey, 'rdt.' + SUSER_SNAME(), GETDATE(), 'rdt.' + SUSER_SNAME(), GETDATE(), @cWeight, @cCube, 
+          @nCtnCnt1, @nCtnCnt2, @nCtnCnt3, @nCtnCnt4, @nCtnCnt5, @cUDF01, @cUDF02, @cUDF03, @cUDF04, @cUDF05, @cUDF09, @cUDF10)
       IF @@ERROR <> 0
       BEGIN
          SET @nErrNo = 198901
@@ -195,21 +180,19 @@ BEGIN
    ELSE
    BEGIN
       UPDATE dbo.MBOLDetail SET
-         /*
-          CtnCnt1      = CASE WHEN @cTrackCartonType IN ('1', '2') AND @nUseSequence = 1  THEN CtnCnt1 + 1 ELSE CtnCnt1 END
-         ,CtnCnt2      = CASE WHEN @cTrackCartonType IN ('1', '2') AND @nUseSequence = 2  THEN CtnCnt2 + 1 ELSE CtnCnt2 END
-         ,CtnCnt3      = CASE WHEN @cTrackCartonType IN ('1', '2') AND @nUseSequence = 3  THEN CtnCnt3 + 1 ELSE CtnCnt3 END
-         ,CtnCnt4      = CASE WHEN @cTrackCartonType IN ('1', '2') AND @nUseSequence = 4  THEN CtnCnt4 + 1 ELSE CtnCnt4 END
-         ,CtnCnt5      = CASE WHEN @cTrackCartonType IN ('1', '2') AND @nUseSequence = 5  THEN CtnCnt5 + 1 ELSE CtnCnt5 END
-         ,UserDefine01 = CASE WHEN @cTrackCartonType IN ('1', '2') AND @nUseSequence = 6  THEN CAST( UserDefine01 AS INT) + 1 ELSE UserDefine01 END
-         ,UserDefine02 = CASE WHEN @cTrackCartonType IN ('1', '2') AND @nUseSequence = 7  THEN CAST( UserDefine02 AS INT) + 1 ELSE UserDefine02 END
-         ,UserDefine03 = CASE WHEN @cTrackCartonType IN ('1', '2') AND @nUseSequence = 8  THEN CAST( UserDefine03 AS INT) + 1 ELSE UserDefine03 END
-         ,UserDefine04 = CASE WHEN @cTrackCartonType IN ('1', '2') AND @nUseSequence = 9  THEN CAST( UserDefine04 AS INT) + 1 ELSE UserDefine04 END
-         ,UserDefine05 = CASE WHEN @cTrackCartonType IN ('1', '2') AND @nUseSequence = 10 THEN CAST( UserDefine05 AS INT) + 1 ELSE UserDefine05 END
-         ,UserDefine09 = CASE WHEN @cTrackCartonType IN ('1', '2') AND @nUseSequence = 11 THEN CAST( UserDefine09 AS INT) + 1 ELSE UserDefine09 END
-         ,UserDefine10 = CASE WHEN @cTrackCartonType IN ('1', '2') AND @nUseSequence = 12 THEN CAST( UserDefine10 AS INT) + 1 ELSE UserDefine10 END
-         */
-          Cube         = CASE WHEN @cCube <> '' THEN Cube + CAST( @cCube AS FLOAT) ELSE Cube END
+          CtnCnt1      = CASE WHEN @cCartonType <> '' AND @nUseSequence = 1  THEN CtnCnt1 + 1 ELSE CtnCnt1 END
+         ,CtnCnt2      = CASE WHEN @cCartonType <> '' AND @nUseSequence = 2  THEN CtnCnt2 + 1 ELSE CtnCnt2 END
+         ,CtnCnt3      = CASE WHEN @cCartonType <> '' AND @nUseSequence = 3  THEN CtnCnt3 + 1 ELSE CtnCnt3 END
+         ,CtnCnt4      = CASE WHEN @cCartonType <> '' AND @nUseSequence = 4  THEN CtnCnt4 + 1 ELSE CtnCnt4 END
+         ,CtnCnt5      = CASE WHEN @cCartonType <> '' AND @nUseSequence = 5  THEN CtnCnt5 + 1 ELSE CtnCnt5 END
+         ,UserDefine01 = CASE WHEN @cCartonType <> '' AND @nUseSequence = 6  THEN CAST( UserDefine01 AS INT) + 1 ELSE UserDefine01 END
+         ,UserDefine02 = CASE WHEN @cCartonType <> '' AND @nUseSequence = 7  THEN CAST( UserDefine02 AS INT) + 1 ELSE UserDefine02 END
+         ,UserDefine03 = CASE WHEN @cCartonType <> '' AND @nUseSequence = 8  THEN CAST( UserDefine03 AS INT) + 1 ELSE UserDefine03 END
+         ,UserDefine04 = CASE WHEN @cCartonType <> '' AND @nUseSequence = 9  THEN CAST( UserDefine04 AS INT) + 1 ELSE UserDefine04 END
+         ,UserDefine05 = CASE WHEN @cCartonType <> '' AND @nUseSequence = 10 THEN CAST( UserDefine05 AS INT) + 1 ELSE UserDefine05 END
+         ,UserDefine09 = CASE WHEN @cCartonType <> '' AND @nUseSequence = 11 THEN CAST( UserDefine09 AS INT) + 1 ELSE UserDefine09 END
+         ,UserDefine10 = CASE WHEN @cCartonType <> '' AND @nUseSequence = 12 THEN CAST( UserDefine10 AS INT) + 1 ELSE UserDefine10 END
+         ,Cube         = CASE WHEN @cCube <> '' THEN Cube + CAST( @cCube AS FLOAT) ELSE Cube END
          ,Weight       = CASE WHEN @cWeight <> '' THEN Weight + CAST( @cWeight AS FLOAT) ELSE Weight END
          ,EditWho      = SUSER_SNAME()
          ,EditDate     = GETDATE()

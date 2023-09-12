@@ -19,6 +19,7 @@ GO
 /*                            Add rdtCartonToMBOLLog                       */
 /*                            Add CloseMBOL                                */
 /*                            Add RefNo                                    */
+/*                            Add TrackCartonType                          */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_CartonToMBOL] (
@@ -66,7 +67,6 @@ DECLARE
    @cRefNo              NVARCHAR( 20),
    @cCartonID           NVARCHAR( 20),
    @cCartonType         NVARCHAR( 10),
-   @cUseSequence        NVARCHAR( 10),
    @cPackInfoRefNo      NVARCHAR( 20),
    @cCube               NVARCHAR( 10),
    @cWeight             NVARCHAR( 10),
@@ -91,6 +91,7 @@ DECLARE
    @cAllowWidthZero     NVARCHAR( 1),
    @cAllowHeightZero    NVARCHAR( 1),
    @cCloseMBOL          NVARCHAR( 1),
+   @cTrackCartonType    NVARCHAR( 1),
    
    @cData1              NVARCHAR( 60),
    @cData2              NVARCHAR( 60),
@@ -100,6 +101,7 @@ DECLARE
 
    @nCartonNo           INT,
    @nTotalCarton        INT,
+   @nUseSequence        INT,
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),  @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),  @cFieldAttr02 NVARCHAR( 1),
@@ -140,7 +142,6 @@ SELECT
    @cRefNo              = V_String2,
    @cCartonID           = V_String3,
    @cCartonType         = V_String4,
-   @cUseSequence        = V_String5, 
    @cCube               = V_String6,
    @cWeight             = V_String7,
    @cPackInfoRefNo      = V_String8,
@@ -165,6 +166,7 @@ SELECT
    @cAllowWidthZero     = V_String35,
    @cAllowHeightZero    = V_String36,
    @cCloseMBOL          = V_String37,
+   @cTrackCartonType    = V_String38,
 
    @cData1              = V_String41,
    @cData2              = V_String42,
@@ -174,6 +176,7 @@ SELECT
 
    @nCartonNo           = V_CartonNo,
    @nTotalCarton        = V_Integer1,
+   @nUseSequence        = V_Integer2, 
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
@@ -775,6 +778,7 @@ BEGIN
       SET @cAllowHeightZero = rdt.rdtGetConfig( @nFunc, 'AllowHeightZero', @cStorerKey)
       SET @cCloseMBOL = rdt.RDTGetConfig( @nFunc, 'CloseMBOL', @cStorerKey)
       SET @cDefaultWeight = rdt.RDTGetConfig( @nFunc, 'DefaultWeight', @cStorerKey)
+      SET @cTrackCartonType = rdt.rdtGetConfig( @nFunc, 'TrackCartonType', @cStorerKey)
 
       SET @cCapturePackInfoSP = rdt.RDTGetConfig( @nFunc, 'CapturePackInfoSP', @cStorerKey)
       IF @cCapturePackInfoSP = '0'
@@ -801,7 +805,7 @@ BEGIN
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
                ' @cMBOLKey, @cRefNo, @cOrderKey, @cCartonID, @cSKU, @cPickSlipNo, @nCartonNo, ' + 
                ' @cData1, @cData2, @cData3, @cData4, @cData5, @cOption, ' + 
-               ' @cCartonType, @cUseSequence, @cCube, @cWeight, @cPackInfoRefNo, @cLength, @cWidth, @cHeight, ' +
+               ' @cCartonType, @nUseSequence, @cCube, @cWeight, @cPackInfoRefNo, @cLength, @cWidth, @cHeight, ' +
                ' @tExtValVar, @nErrNo OUTPUT, @cErrMsg OUTPUT '
 
             SET @cSQLParam =
@@ -826,7 +830,7 @@ BEGIN
                ' @cData5         NVARCHAR( 20), ' +
                ' @cOption        NVARCHAR( 2),  ' +
                ' @cCartonType    NVARCHAR( 10), ' +
-               ' @cUseSequence   NVARCHAR( 10), ' + 
+               ' @nUseSequence   INT,           ' + 
                ' @cCube          NVARCHAR( 10), ' +
                ' @cWeight        NVARCHAR( 10), ' +
                ' @cPackInfoRefNo NVARCHAR( 20), ' + 
@@ -840,7 +844,7 @@ BEGIN
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
                @cMBOLKey, @cRefNo, @cOrderKey, @cCartonID, @cSKU, @cPickSlipNo, @nCartonNo, 
                @cData1, @cData2, @cData3, @cData4, @cData5, @cOption, 
-               @cCartonType, @cUseSequence, @cCube, @cWeight, @cPackInfoRefNo, @cLength, @cWidth, @cHeight, 
+               @cCartonType, @nUseSequence, @cCube, @cWeight, @cPackInfoRefNo, @cLength, @cWidth, @cHeight, 
                @tExtValVar, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
             IF @nErrNo <> 0
@@ -970,6 +974,23 @@ BEGIN
          GOTO Quit
       END
 
+      -- Capture carton type (backend auto take from PackInfo.CartonType)
+      SET @cCartonType = ''
+      SET @nUseSequence = 0
+      IF @cTrackCartonType = '5'
+      BEGIN
+         IF @cPickSlipNo <> '' AND @nCartonNo > 0
+         BEGIN
+            -- Get carton info
+            SELECT @cCartonType = CartonType FROM dbo.PackInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo
+            SELECT @nUseSequence = UseSequence
+            FROM dbo.Cartonization WITH (NOLOCK)
+               JOIN dbo.Storer WITH (NOLOCK) ON (Storer.CartonGroup = Cartonization.CartonizationGroup)
+            WHERE Storer.StorerKey = @cStorerKey
+               AND Cartonization.CartonType = @cCartonType
+         END
+      END 
+
       -- Confirm
       EXEC rdt.rdt_CartonToMBOL_Confirm
           @nMobile      = @nMobile
@@ -995,6 +1016,8 @@ BEGIN
          ,@nTotalCarton = @nTotalCarton OUTPUT
          ,@nErrNo       = @nErrNo       OUTPUT
          ,@cErrMsg      = @cErrMsg      OUTPUT
+         ,@cCartonType  = @cCartonType  
+         ,@nUseSequence = @nUseSequence
       IF @nErrNo <> 0
          GOTO Step_Carton_Fail
 
@@ -1015,7 +1038,7 @@ BEGIN
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
                ' @cMBOLKey, @cRefNo, @cOrderKey, @cCartonID, @cSKU, @cPickSlipNo, @nCartonNo, ' + 
                ' @cData1, @cData2, @cData3, @cData4, @cData5, @cOption, ' + 
-               ' @cCartonType, @cUseSequence, @cCube, @cWeight, @cPackInfoRefNo, @cLength, @cWidth, @cHeight, ' +
+               ' @cCartonType, @nUseSequence, @cCube, @cWeight, @cPackInfoRefNo, @cLength, @cWidth, @cHeight, ' +
                ' @tExtValVar, @nErrNo OUTPUT, @cErrMsg OUTPUT '
 
             SET @cSQLParam =
@@ -1040,7 +1063,7 @@ BEGIN
                ' @cData5         NVARCHAR( 20), ' +
                ' @cOption        NVARCHAR( 2),  ' +
                ' @cCartonType    NVARCHAR( 10), ' +
-               ' @cUseSequence   NVARCHAR( 10), ' + 
+               ' @nUseSequence   INT,           ' + 
                ' @cCube          NVARCHAR( 10), ' +
                ' @cWeight        NVARCHAR( 10), ' +
                ' @cPackInfoRefNo NVARCHAR( 20), ' + 
@@ -1054,7 +1077,7 @@ BEGIN
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
                @cMBOLKey, @cRefNo, @cOrderKey, @cCartonID, @cSKU, @cPickSlipNo, @nCartonNo, 
                @cData1, @cData2, @cData3, @cData4, @cData5, @cOption, 
-               @cCartonType, @cUseSequence, @cCube, @cWeight, @cPackInfoRefNo, @cLength, @cWidth, @cHeight, 
+               @cCartonType, @nUseSequence, @cCube, @cWeight, @cPackInfoRefNo, @cLength, @cWidth, @cHeight, 
                @tExtValVar, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
             IF @nErrNo <> 0
@@ -1204,7 +1227,9 @@ BEGIN
 
          -- Get default cube
          DECLARE @nDefaultCube FLOAT
-         SELECT @nDefaultCube = [Cube]
+         SELECT 
+            @nDefaultCube = [Cube], 
+            @nUseSequence = UseSequence
          FROM Cartonization WITH (NOLOCK)
             INNER JOIN Storer WITH (NOLOCK) ON (Storer.CartonGroup = Cartonization.CartonizationGroup)
          WHERE Storer.StorerKey = @cStorerKey
@@ -1463,7 +1488,7 @@ BEGIN
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
                ' @cMBOLKey, @cRefNo, @cOrderKey, @cCartonID, @cSKU, @cPickSlipNo, @nCartonNo, ' + 
                ' @cData1, @cData2, @cData3, @cData4, @cData5, @cOption, ' + 
-               ' @cCartonType, @cUseSequence, @cCube, @cWeight, @cPackInfoRefNo, @cLength, @cWidth, @cHeight, ' +
+               ' @cCartonType, @nUseSequence, @cCube, @cWeight, @cPackInfoRefNo, @cLength, @cWidth, @cHeight, ' +
                ' @tExtValVar, @nErrNo OUTPUT, @cErrMsg OUTPUT '
 
             SET @cSQLParam =
@@ -1488,7 +1513,7 @@ BEGIN
                ' @cData5         NVARCHAR( 20), ' +
                ' @cOption        NVARCHAR( 2),  ' +
                ' @cCartonType    NVARCHAR( 10), ' +
-               ' @cUseSequence   NVARCHAR( 10), ' + 
+               ' @nUseSequence   INT,           ' + 
                ' @cCube          NVARCHAR( 10), ' +
                ' @cWeight        NVARCHAR( 10), ' +
                ' @cPackInfoRefNo NVARCHAR( 20), ' + 
@@ -1502,13 +1527,28 @@ BEGIN
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
                @cMBOLKey, @cRefNo, @cOrderKey, @cCartonID, @cSKU, @cPickSlipNo, @nCartonNo, 
                @cData1, @cData2, @cData3, @cData4, @cData5, @cOption, 
-               @cCartonType, @cUseSequence, @cCube, @cWeight, @cPackInfoRefNo, @cLength, @cWidth, @cHeight, 
+               @cCartonType, @nUseSequence, @cCube, @cWeight, @cPackInfoRefNo, @cLength, @cWidth, @cHeight, 
                @tExtValVar, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
             IF @nErrNo <> 0
                GOTO Quit
          END
       END
+
+      -- Capture carton type (backend auto take from PackInfo.CartonType)
+      IF @cTrackCartonType = '5' AND @cCartonType = ''
+      BEGIN
+         IF @cPickSlipNo <> '' AND @nCartonNo > 0
+         BEGIN
+            -- Get carton info
+            SELECT @cCartonType = CartonType FROM dbo.PackInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo
+            SELECT @nUseSequence = UseSequence
+            FROM dbo.Cartonization WITH (NOLOCK)
+               JOIN dbo.Storer WITH (NOLOCK) ON (Storer.CartonGroup = Cartonization.CartonizationGroup)
+            WHERE Storer.StorerKey = @cStorerKey
+               AND Cartonization.CartonType = @cCartonType
+         END
+      END 
 
       -- Confirm
       EXEC rdt.rdt_CartonToMBOL_Confirm
@@ -1536,7 +1576,7 @@ BEGIN
          ,@nErrNo          = @nErrNo       OUTPUT
          ,@cErrMsg         = @cErrMsg      OUTPUT
          ,@cCartonType     = @cCartonType  
-         ,@cUseSequence    = @cUseSequence
+         ,@nUseSequence    = @nUseSequence
          ,@cWeight         = @cWeight
          ,@cCube           = @cCube
          ,@cPackInfoRefNo  = @cPackInfoRefNo
@@ -1610,7 +1650,6 @@ BEGIN
       V_String2  = @cRefNo,
       V_String3  = @cCartonID,
       V_String4  = @cCartonType,
-      V_String5  = @cUseSequence, 
       V_String6  = @cCube,
       V_String7  = @cWeight,
       V_String8  = @cPackInfoRefNo,
@@ -1635,6 +1674,7 @@ BEGIN
       V_String35 = @cAllowWidthZero,
       V_String36 = @cAllowHeightZero,
       V_String37 = @cCloseMBOL,
+      V_String38 = @cTrackCartonType,
 
       V_String41 = @cData1,
       V_String42 = @cData2,
@@ -1644,6 +1684,7 @@ BEGIN
 
       V_CartonNo = @nCartonNo,
       V_Integer1 = @nTotalCarton,
+      V_Integer2 = @nUseSequence, 
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
