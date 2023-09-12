@@ -88,7 +88,7 @@ BEGIN
       	            WHERE CC.Storerkey = @cStorerKey
       	            AND   CC.Loc = @cLoc
       	            AND   CC.SystemQty <> CC.Qty
-      	            AND   CC.[Status] IN ( '2', '4')
+      	            --AND   CC.[Status] IN ( '2', '4')
       	            AND   CC.CCSheetNo = @cTaskDetailKey
       	            AND   EXISTS ( SELECT 1
       	                           FROM dbo.TaskDetail TD WITH (NOLOCK)
