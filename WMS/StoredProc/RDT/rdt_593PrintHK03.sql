@@ -17,8 +17,9 @@ GO
 /* 2021-07-12 1.0  ML         Copy from rdt_593PrintHK01 v1.6                 */
 /*                            for new Parameters version of RDT Fn593         */
 /* 2021-07-28 1.1  ML         1. Check Codelkup.Short has 'V' before createing*/
-/*                               Temp table @tVar                             */
+/*                               Temp table #tVar                             */
 /*                            2. Add ErrLog for Try..Catch statement          */
+/* 2022-08-09 1.2  ML         Fix @cFocusField no effect issue                */
 /******************************************************************************/
 
 CREATE PROC rdt.rdt_593PrintHK03 (
@@ -343,9 +344,10 @@ BEGIN
             ELSE
             BEGIN
                SET @nErrNo = 172204
-               SET @cErrMsg = CASE WHEN ISNULL(@cMsgText,'')<>'' THEN @cMsgText
-                                   ELSE rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Data Not Found
-                              END
+-- v1.2               SET @cErrMsg = CASE WHEN ISNULL(@cMsgText,'')<>'' THEN @cMsgText
+-- v1.2                                   ELSE rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Data Not Found
+-- v1.2                              END
+               SET @cErrMsg = CASE WHEN @cMsgText='_' THEN '' ELSE ISNULL(@cMsgText,'') END   -- v1.2
                BREAK
             END
          END
@@ -677,6 +679,7 @@ BEGIN
 
    -- Focus next empty field
    IF CHARINDEX('R', @cShort)>=1 OR @cShort<>''
+      AND ISNULL(@cFocusField,'')=''  -- V1.2
    BEGIN
       SET @nTemp = CASE WHEN @cFieldAttr02='' AND (@cParam1Value='' OR CHARINDEX('1',@cShort)=0) THEN 2
                         WHEN @cFieldAttr04='' AND (@cParam2Value='' OR CHARINDEX('2',@cShort)=0) THEN 4
