@@ -36,7 +36,8 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
-/* 10-Nov-2021  NJOW    1.0  DEVOPS combine script                      */
+/* 10-Nov-2021  NJOW     1.0  DEVOPS combine script                     */
+/* 04-Sep-2023  NJOW01   1.1  WMS-23577 change logic                    */
 /************************************************************************/  
 
 CREATE PROC ispPARL07 
@@ -71,6 +72,7 @@ BEGIN
          , @c_LocBay          NVARCHAR(10) 
          , @c_PALogicalLoc    NVARCHAR(10)
          , @n_PAQty           INT
+         , @n_QtyAvailable    INT  --NJOW01
            
    SET @n_StartTCnt     =  @@TRANCOUNT
    SET @n_continue      = 1
@@ -103,13 +105,15 @@ BEGIN
                           Sku NVARCHAR(20),
                           Qty INT,
                           PendingMoveIn INT,
+                          QtyAllocated INT,
                           LocFloor NVARCHAR(3) NULL,
                           LocBay NVARCHAR(10) NULL,
                           PALogicalLoc NVARCHAR(10) NULL)
                     
-   INSERT INTO #TMP_LOC (Loc, Sku, Qty, PendingMoveIn, LocFloor, LocBay, PALogicalLoc)
+   INSERT INTO #TMP_LOC (Loc, Sku, Qty, PendingMoveIn, QtyAllocated, LocFloor, LocBay, PALogicalLoc)  --NJOW01
    	  SELECT LOC.Loc, ISNULL(LLI.Sku,''), SUM(ISNULL(LLI.Qty,0) - ISNULL(LLI.QtyAllocated,0) - ISNULL(LLI.QtyPicked,0)) AS Qty, 
    	         0, ---SUM(ISNULL(LLI.PendingMoveIn,0)) AS PendingMoveIn,
+   	         SUM(ISNULL(LLI.QtyAllocated,0)),  --NJOW01
    	         LOC.[Floor], LOC.LocBay, LOC.PALogicalLoc
    	  FROM LOC (NOLOCK)
    	  LEFT JOIN LOTXLOCXID LLI (NOLOCK) ON LOC.Loc = LLI.Loc AND (LLI.Qty - LLI.QtyPicked) > 0 AND LLI.Storerkey = @c_Storerkey
@@ -158,14 +162,15 @@ BEGIN
 
    WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)               
    BEGIN      
-      SELECT @c_LocFloor = '', @c_LocBay = '', @c_PALogicalLoc = '', @c_SuggestLoc = '', @n_PAQty = 0
+      SELECT @c_LocFloor = '', @c_LocBay = '', @c_PALogicalLoc = '', @c_SuggestLoc = '', @n_PAQty = 0, @n_QtyAvailable = 0
          	  
       --Find available loc with same sku
-      SELECT TOP 1 @c_SuggestLoc = Loc
+      SELECT TOP 1 @c_SuggestLoc = Loc,
+                   @n_QtyAvailable = Qty  --NJOW01
       FROM #TMP_LOC
       WHERE Sku = @c_Sku
-      AND Qty + PendingMoveIn > 0
-      ORDER BY LocFloor, LocBay, Qty+PendingMoveIn, PALogicalLoc
+      AND Qty + PendingMoveIn + QtyAllocated > 0    --NJOW01
+      ORDER BY LocFloor, LocBay, Qty+PendingMoveIn+QtyAllocated, PALogicalLoc   --NJOW01
       
       /*--Find empty loc near same sku
       SELECT TOP 1 @c_LocFloor = LocFloor, @c_LocBay = LocBay, @c_PALogicalLoc = PALogicalLoc
@@ -185,14 +190,18 @@ BEGIN
       	  ORDER BY LocFloor, LocBay, PALogicalLoc
       END*/
       
-      --Find any empty loc
+      --Find any empty loc      
       IF ISNULL(@c_SuggestLoc,'') = ''
       BEGIN
-      	  SELECT TOP 1 @c_SuggestLoc = Loc 
+      	  SET @c_SuggestLoc = 'NOFRIEND'  --NJOW01
+      	  /*  --NJOW01 Removed
+      	  SELECT TOP 1 @c_SuggestLoc = Loc,
+                       @n_QtyAvailable = Qty  --NJOW01      	   
       	  FROM #TMP_LOC
       	  WHERE Qty + PendingMoveIn = 0
       	  ORDER BY LocFloor, LocBay, PALogicalLoc
-      END
+      	  */
+      END      
 
       --Unable find any empty loc
       IF ISNULL(@c_SuggestLoc,'') = ''
@@ -272,6 +281,7 @@ BEGIN
                   ,  Message01                
                   ,  Message02
                   ,  Message03
+                  ,  SystemQty  --NJOW01
                 )  
          VALUES (    @c_TaskdetailKey
                   ,  @c_Storerkey
@@ -292,7 +302,13 @@ BEGIN
                   ,  'R'           
                   ,  @c_ToID
                   ,  CAST(@n_PAQty AS NVARCHAR)
+                  ,  @n_QtyAvailable  --NJOW01
                 )
+                
+         UPDATE TASKDETAIL WITH (ROWLOCK)
+         SET QtyReplen = @n_QtyAvailable,
+             TrafficCop = NULL
+         WHERE Taskdetailkey = @c_TaskdetailKey
                   
          SET @n_NoOfTasks = @n_NoOfTasks + 1             
       END      	
