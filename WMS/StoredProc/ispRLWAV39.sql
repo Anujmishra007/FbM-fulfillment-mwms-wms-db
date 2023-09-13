@@ -26,6 +26,7 @@ GO
 /*                           zero balance after picked.                     */
 /* 24-Sep-2021 NJOW     1.2  DEPVOP Script Combine                          */
 /* 08-Mar-2023 NJOW02   1.3  WMS-21920 Replen one carton to zero pick loc   */
+/* 13-Sep-2023 NJOW03   1.4  Fix top up partial carton not working          */
 /****************************************************************************/   
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV39]      
@@ -701,7 +702,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV39]
           AND RP.OriginalFromLoc = @c_SourceType
           AND PACK.Casecnt > 0
           GROUP BY RP.Storerkey, RP.Sku, RP.FromLoc, RP.Toloc, PACK.Casecnt, PACK.Packkey,  PACK.PackUOM3, LA.Lottable01
-          HAVING  SUM(RP.Qty) % @n_CaseCnt > 0
+          HAVING  SUM(RP.Qty) % CAST(PACK.Casecnt AS INT) > 0  --NJOW03
                            
        OPEN cur_replen
        
