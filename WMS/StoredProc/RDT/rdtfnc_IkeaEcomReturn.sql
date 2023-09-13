@@ -13,6 +13,7 @@ GO
 /*                                                                                                 */
 /* Date         Rev  Author      Purposes                                                          */
 /* 2023-07-21   1.0  James       WMS-22912. Created                                                */
+/* 2023-09-13   1.1  James       Adhoc fix rdt_Decode used invalid type (james01)                  */
 /***************************************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_IkeaEcomReturn](
    @nMobile    INT,
@@ -736,7 +737,7 @@ BEGIN
                @nQTY          = @nQTY        OUTPUT,
                @nErrNo        = @nErrNo      OUTPUT, 
                @cErrMsg       = @cErrMsg     OUTPUT,
-               @cType         = 'SKU'
+               @cType         = 'UPC'
          END
 
          IF @nQTY > 0  
