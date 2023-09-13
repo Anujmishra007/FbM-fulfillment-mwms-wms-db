@@ -11,12 +11,12 @@ GO
 /* Date         Author		 Ver.  Purposes                                 */
 /* 06-Sept-2023  ZiWei       1.0   Created                                  */
 /***************************************************************************/
-CREATE VIEW [BI].[V_WSDT_GENERIC_LBL_HDR_LOG]
+CREATE VIEW [BI].[V_DTS_WSDT_GENERIC_LBL_HDR_LOG]
 AS
 SELECT * FROM [dbo].[WSDT_GENERIC_LBL_HDR_LOG] WITH (NOLOCK)
 GO
 
-GRANT SELECT ON  [BI].[V_WSDT_GENERIC_LBL_HDR_LOG] TO [JReportRole]
+GRANT SELECT ON  [BI].[V_DTS_WSDT_GENERIC_LBL_HDR_LOG] TO [JReportRole]
 GO
 
 /*
@@ -24,6 +24,6 @@ EXEC AS LOGIN ='JReportUserTH'
 
 SELECT SUSER_SNAME()
 
-SELECT TOP 999 * FROM BI.V_WSDT_GENERIC_LBL_HDR_LOG
+SELECT TOP 999 * FROM BI.V_DTS_WSDT_GENERIC_LBL_HDR_LOG
 */
 
