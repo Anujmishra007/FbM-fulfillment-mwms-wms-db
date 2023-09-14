@@ -20,6 +20,7 @@ GO
 /* 22-12-2020  1.6  YeeKung     WMS-15995 Add PickZone (yeekung01)      */
 /* 24-05-2022  1.7  YeeKung     Add Close Cursor (yeekung02)            */
 /* 10-07-2023  1.8  YeeKUng     JSM-162074 Fix Join bug (yeekung03)     */ 
+/* 18-06-2023  1.9  Ung         WMS-22819 Add UpdatePackDetail          */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_PickSKU_Confirm
@@ -148,7 +149,6 @@ BEGIN
    DECLARE @cLoadKey       NVARCHAR( 10)
    DECLARE @cZone          NVARCHAR( 18)
    DECLARE @cPickDetailKey NVARCHAR( 18)
-   DECLARE @cVerifyID      NVARCHAR( 1)
    DECLARE @cPickConfirmStatus NVARCHAR( 1)
    DECLARE @cShortStatus   NVARCHAR( 1)
    DECLARE @cSourceType    NVARCHAR( 30)
@@ -161,8 +161,11 @@ BEGIN
    DECLARE @nQTY_PD        INT
    DECLARE @cWhere         NVARCHAR( MAX)
    DECLARE @curPD          CURSOR
-   DECLARE @cMoveToDropID  NVARCHAR( 1)   -- (james01)
    DECLARE @cToID          NVARCHAR( 18)
+
+   DECLARE @cMoveToDropID     NVARCHAR( 1)
+   DECLARE @cUpdatePackDetail NVARCHAR( 1)
+   DECLARE @cVerifyID         NVARCHAR( 1)
 
    SET @cSourceType = 'rdt_PickSKU_Confirm'
    SET @cOrderKey = ''
@@ -176,12 +179,13 @@ BEGIN
       SET @cShortStatus = '0'
    
    -- Get storer config
+   SET @cMoveToDropID = rdt.RDTGetConfig( @nFunc, 'MoveToDropID', @cStorerKey)
+   SET @cUpdatePackDetail = rdt.RDTGetConfig( @nFunc, 'UpdatePackDetail', @cStorerKey) 
+   SET @cVerifyID = rdt.RDTGetConfig( @nFunc, 'VerifyID', @cStorerKey)
+
    SET @cPickConfirmStatus = rdt.RDTGetConfig( @nFunc, 'PickConfirmStatus', @cStorerKey)
    IF @cPickConfirmStatus = '0'
       SET @cPickConfirmStatus = '5'
-   SET @cVerifyID = rdt.RDTGetConfig( @nFunc, 'VerifyID', @cStorerKey)
-
-   SET @cMoveToDropID = rdt.RDTGetConfig( @nFunc, 'MoveToDropID', @cStorerKey)
 
    -- For calculation
    SET @nQTY_Bal = @nQTY
@@ -218,7 +222,7 @@ BEGIN
             ' AND PD.QTY > 0' + 
             ' AND PD.Status <> ''4''' + 
             ' AND PD.Status < @cPickConfirmStatus ' + 
-            CASE WHEN @cPickZone <>'' THEN ' AND LOC.PickZone=@cPickZone ' ELSE '' END + 
+            CASE WHEN @cPickZone <>'' THEN ' AND LOC.PickZone = @cPickZone ' ELSE '' END + 
             CASE WHEN @cWhere = '' THEN '' ELSE ' AND ' + @cWhere END
 
    -- Discrete PickSlip
@@ -235,7 +239,7 @@ BEGIN
             ' AND PD.QTY > 0' + 
             ' AND PD.Status <> ''4''' + 
             ' AND PD.Status < @cPickConfirmStatus ' + 
-            CASE WHEN @cPickZone <>'' THEN ' AND LOC.PickZone=@cPickZone ' ELSE '' END + 
+            CASE WHEN @cPickZone <>'' THEN ' AND LOC.PickZone = @cPickZone ' ELSE '' END + 
             CASE WHEN @cWhere = '' THEN '' ELSE ' AND ' + @cWhere END
 
    -- Conso PickSlip
@@ -253,7 +257,7 @@ BEGIN
             ' AND PD.QTY > 0' + 
             ' AND PD.Status <> ''4''' + 
             ' AND PD.Status < @cPickConfirmStatus ' + 
-            CASE WHEN @cPickZone <>'' THEN ' AND LOC.PickZone=@cPickZone ' ELSE '' END + 
+            CASE WHEN @cPickZone <>'' THEN ' AND LOC.PickZone = @cPickZone ' ELSE '' END + 
             CASE WHEN @cWhere = '' THEN '' ELSE ' AND ' + @cWhere END
 
    -- Custom PickSlip
@@ -270,7 +274,7 @@ BEGIN
             ' AND PD.QTY > 0' + 
             ' AND PD.Status <> ''4''' + 
             ' AND PD.Status < @cPickConfirmStatus ' + 
-            CASE WHEN @cPickZone <>'' THEN ' AND LOC.PickZone=@cPickZone ' ELSE '' END + 
+            CASE WHEN @cPickZone <>'' THEN ' AND LOC.PickZone = @cPickZone ' ELSE '' END + 
             CASE WHEN @cWhere = '' THEN '' ELSE ' AND ' + @cWhere END
 
    -- Open cursor
@@ -305,7 +309,7 @@ BEGIN
       ' @dLottable14 DATETIME,      ' + 
       ' @dLottable15 DATETIME       ' 
 
-   EXEC sp_ExecuteSQL @cSQL, @cSQLParam, @curPD OUTPUT, @cPickSlipNo, @cOrderKey, @cLoadKey,@cPickZone, @cLOC, @cID, @cSKU, @cPickConfirmStatus, 
+   EXEC sp_ExecuteSQL @cSQL, @cSQLParam, @curPD OUTPUT, @cPickSlipNo, @cOrderKey, @cLoadKey, @cPickZone, @cLOC, @cID, @cSKU, @cPickConfirmStatus, 
       @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
       @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
       @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15
@@ -574,24 +578,148 @@ BEGIN
 
       FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD
    END
-
+   
    CLOSE @curPD  --(yeekung02)
    DEALLOCATE @curPD
    
-	 -- (yeekung01) EventLog - picksku      
-	 EXEC RDT.rdt_STD_EventLog      
-		 @cActionType   = '3', -- Picking      
-		 @cUserID       = @cUserName,      
-		 @nMobileNo     = @nMobile,      
-		 @nFunctionID   = @nFunc,     
-		 @cFacility     = @cFacility,      
-		 @cStorerKey    = @cStorerkey,      
-		 @cLocation     = @cLOC,      
-		 @cSKU          = @cSKU ,      
-		 @cUOM          = @cPackUOM3,      
-		 @nQTY          = @nQTY,      
-		 @cRefNo1       = @cOrderKey,      
-		 @cRefNo2       = @cPickSlipNo  
+   /***********************************************************************************************
+                                             PackDetail
+   ***********************************************************************************************/
+   IF @cUpdatePackDetail = '1' AND @cDropID <> '' -- 1 drop ID = 1 carton
+   BEGIN
+      DECLARE @nCartonNo   INT = 0
+      DECLARE @cLabelLine  NVARCHAR(5) = ''
+      DECLARE @cNewLine    NVARCHAR(1) = 'N'
+      
+      -- PackHeader
+      IF NOT EXISTS( SELECT 1 FROM dbo.PackHeader WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo)
+      BEGIN
+         DECLARE @cConsigneeKey NVARCHAR( 15) = ''
+         IF @cOrderKey <> ''
+            SELECT @cConsigneeKey = ConsigneeKey FROM dbo.Orders WITH (NOLOCK) WHERE OrderKey = @cOrderKey
+
+         INSERT INTO dbo.PackHeader (PickSlipNo, StorerKey, OrderKey, ConsigneeKey, LoadKey)
+         VALUES (@cPickSlipNo, @cStorerKey, @cOrderKey, @cConsigneeKey, @cLoadKey)
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 102010
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSPHdrFail
+            GOTO RollBackTran
+         END
+      END
+      
+      -- Get CartonNo, LabelLine
+      BEGIN
+         SELECT 
+            @nCartonNo = CartonNo, 
+            @cLabelLine = LabelLine
+         FROM dbo.PackDetail WITH (NOLOCK) 
+         WHERE PickSlipNo = @cPickSlipNo 
+            AND LabelNo = @cDropID
+            AND SKU = @cSKU
+         
+         IF @cLabelLine = ''
+         BEGIN
+            SELECT @nCartonNo = CartonNo
+            FROM dbo.PackDetail WITH (NOLOCK) 
+            WHERE PickSlipNo = @cPickSlipNo 
+               AND LabelNo = @cDropID 
+         
+            IF @nCartonNo = 0
+               SET @cLabelLine = '00000'
+            ELSE
+               SELECT @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5) 
+               FROM dbo.PackDetail (NOLOCK)
+               WHERE Pickslipno = @cPickSlipNo
+                  AND LabelNo = @cDropID
+
+            SET @cNewLine = 'Y'
+         END
+      END
+      
+      -- PackDetail
+      IF @cNewLine = 'Y'
+      BEGIN
+         -- Insert PackDetail
+         INSERT INTO dbo.PackDetail
+            (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, 
+            AddWho, AddDate, EditWho, EditDate)
+         VALUES
+            (@cPickSlipNo, @nCartonNo, @cDropID, @cLabelLine, @cStorerKey, @cSKU, @nQTY, 
+            'rdt.' + SUSER_SNAME(), GETDATE(), 'rdt.' + SUSER_SNAME(), GETDATE())
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 102011
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSPackDtlFail
+            GOTO RollBackTran
+         END
+      END
+      ELSE
+      BEGIN
+         -- Update Packdetail
+         UPDATE dbo.PackDetail WITH (ROWLOCK) SET   
+            SKU = @cSKU, 
+            QTY = QTY + @nQTY, 
+            EditWho = 'rdt.' + SUSER_SNAME(), 
+            EditDate = GETDATE(), 
+            ArchiveCop = NULL
+         WHERE PickSlipNo = @cPickSlipNo
+            AND CartonNo = @nCartonNo
+            AND LabelNo = @cDropID
+            AND LabelLine = @cLabelLine
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 102012
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDPackDtlFail
+            GOTO RollBackTran
+         END
+      END
+
+      -- PackInfo
+      IF NOT EXISTS (SELECT 1 FROM dbo.PackInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo)
+      BEGIN
+         INSERT INTO dbo.PackInfo (PickslipNo, CartonNo, QTY)
+         VALUES (@cPickSlipNo, @nCartonNo, @nQTY)
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 102013
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSPackInfFail
+            GOTO RollBackTran
+         END
+      END
+      ELSE
+      BEGIN
+         UPDATE dbo.PackInfo SET
+            QTY = QTY + @nQTY, 
+            EditDate = GETDATE(), 
+            EditWho = SUSER_SNAME(), 
+            TrafficCop = NULL
+         WHERE PickSlipNo = @cPickSlipNo
+            AND CartonNo = @nCartonNo
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 102014
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDPackInfFail
+            GOTO RollBackTran
+         END
+      END
+   END
+   
+   -- EventLog
+   EXEC RDT.rdt_STD_EventLog      
+      @cActionType   = '3', -- Picking      
+      @nMobileNo     = @nMobile,      
+      @nFunctionID   = @nFunc,     
+      @cFacility     = @cFacility,      
+      @cStorerKey    = @cStorerkey,      
+      @cPickSlipNo   = @cPickSlipNo, 
+      @cLocation     = @cLOC,      
+      @cSKU          = @cSKU ,      
+      @cUOM          = @cPackUOM3,      
+      @nQTY          = @nQTY,      
+      @cOrderKey     = @cOrderKey,
+      @cRefNo1       = @cOrderKey,  -- Retain for backward compatible      
+      @cRefNo2       = @cPickSlipNo -- Retain For backward compatible 
  
    COMMIT TRAN rdt_PickSKU_Confirm
    GOTO Quit
