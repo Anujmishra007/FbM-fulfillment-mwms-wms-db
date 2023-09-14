@@ -29,6 +29,7 @@ GO
 /* 2022-07-20   WLChooi   1.4 WMS-20287 - Revise show flag logic (WL04) */
 /* 2022-07-20   WLChooi   1.4 DevOps Combine Script                     */
 /* 2022-11-29   CSCHONG   1.5 WMS-21203 revised field logic (CS01)      */
+/* 2023-09-05   WLChooi   1.6 WMS-23520 - Add dummy line (WL05)         */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_UCC_Carton_Label_100]
            @c_Storerkey       NVARCHAR(15)
@@ -93,6 +94,21 @@ BEGIN
       Loadkey       NVARCHAR(10)
     , Pickzone      NVARCHAR(20)
    )
+
+   --WL05 S
+   DECLARE @T_DUMMY TABLE ( 
+      RowID       INT NOT NULL IDENTITY(1,1)
+    , Cartonno    INT
+    , Style       NVARCHAR(50) NULL
+    , Color       NVARCHAR(50) NULL
+    , Size        NVARCHAR(50) NULL
+    , Qty         INT NULL
+   )
+
+   DECLARE @n_MaxRec       INT = 0
+         , @n_CurrentRec   INT = 0
+         , @n_MaxLineno    INT = 7
+   --WL05 E
 
    INSERT INTO #TMP_Pickzone(Loadkey, Pickzone)
    SELECT DISTINCT LPD.LoadKey, CONVERT(NVARCHAR, L.LocLevel)   --WL04
@@ -162,8 +178,8 @@ BEGIN
       SET @c_ShowFlag = 'N'
    END
 
---SELECT @c_ShowFlag '@c_ShowFlag', @c_consigneekeykey '@c_consigneekeykey'
---SELECT * FROM #TMP_Pickzone
+   --SELECT @c_ShowFlag '@c_ShowFlag', @c_consigneekeykey '@c_consigneekeykey'
+   --SELECT * FROM #TMP_Pickzone
    --WL02 S
 
    IF EXISTS (SELECT 1
@@ -214,16 +230,16 @@ BEGIN
       SET @c_OnlyPrintNewLayout = 'Y'
    END
 
---CS01 S
-IF @c_consigneekeykey ='000000NLGD'
-BEGIN
-   SET @c_ShowDCName ='N'
-   SET @c_ShowFlag = 'N'
-   SET @c_movebarcode ='Y'
+   --CS01 S
+   IF @c_consigneekeykey ='000000NLGD'
+   BEGIN
+      SET @c_ShowDCName ='N'
+      SET @c_ShowFlag = 'N'
+      SET @c_movebarcode ='Y'
+   
+   END 
 
-END 
-
---CS01 E
+   --CS01 E
 
    IF ISNULL(@c_Type,'') = ''
    BEGIN
@@ -361,21 +377,74 @@ END
 
    IF @c_Type = 'D1'
    BEGIN
-      SELECT PackDetail.CartonNo as Cartonno
-           , SKU.Style as style
-           , SKU.Color as color
-           , CASE WHEN ISNULL(C.short,'')='Y' THEN 
-             CASE WHEN sku.measurement IN ('','U') THEN SKU.Size ELSE ISNULL(sku.measurement,'') END
-                  ELSE SKU.Size END [Size]
-           , PackDetail.Qty as qty
-      FROM PackDetail WITH (NOLOCK) 
-      JOIN SKU WITH (NOLOCK) ON (Sku.Storerkey = PackDetail.Storerkey)  
-                                AND (Sku.Sku = PackDetail.Sku)
-      LEFT JOIN CODELKUP C WITH (nolock) ON C.Storerkey = PackDetail.Storerkey
-                                        AND C.listname = 'REPORTCFG' and C.Code = 'GetSkuMeasurement'
-                                        AND C.Long = 'r_dw_ucc_carton_label_100'
-      WHERE (PackDetail.PickSlipNo = @c_PickSlipNo)
-        AND (PackDetail.CartonNo = @c_StartCartonNo)
+      --WL05 S
+      SELECT TOP 1 @c_consigneekeykey = ORDERS.ConsigneeKey
+      FROM PACKHEADER (NOLOCK)
+      JOIN LOADPLANDETAIL (NOLOCK) ON LoadPlanDetail.LoadKey = PackHeader.LoadKey
+      JOIN ORDERS (NOLOCK) ON ORDERS.OrderKey = LoadPlanDetail.OrderKey
+      WHERE PACKHEADER.PickSlipNo = @c_PickSlipNo
+
+      IF @c_consigneekeykey = '000000NLGD'
+      BEGIN
+         INSERT INTO @T_DUMMY   
+         SELECT PackDetail.CartonNo as Cartonno
+              , SKU.Style as style
+              , SKU.Color as color
+              , CASE WHEN ISNULL(C.short,'')='Y' THEN 
+                CASE WHEN sku.measurement IN ('','U') THEN SKU.Size ELSE ISNULL(sku.measurement,'') END
+                     ELSE SKU.Size END [Size]
+              , PackDetail.Qty as qty
+         FROM PackDetail WITH (NOLOCK) 
+         JOIN SKU WITH (NOLOCK) ON (Sku.Storerkey = PackDetail.Storerkey)  
+                                   AND (Sku.Sku = PackDetail.Sku)
+         LEFT JOIN CODELKUP C WITH (nolock) ON C.Storerkey = PackDetail.Storerkey
+                                           AND C.listname = 'REPORTCFG' and C.Code = 'GetSkuMeasurement'
+                                           AND C.Long = 'r_dw_ucc_carton_label_100'
+         WHERE (PackDetail.PickSlipNo = @c_PickSlipNo)
+           AND (PackDetail.CartonNo = @c_StartCartonNo)
+
+         SELECT @n_MaxRec = COUNT(RowID)                 
+         FROM @T_DUMMY                 
+                
+         SET @n_CurrentRec = @n_MaxRec % @n_MaxLineno                
+                   
+         WHILE(@n_MaxRec % @n_MaxLineno <> 0 AND @n_CurrentRec < @n_MaxLineno)             
+         BEGIN
+            INSERT INTO @T_DUMMY (Cartonno, Style, Color, Size, Qty)
+            SELECT TOP 1 TD.CartonNo, NULL, NULL, NULL, NULL
+            FROM @T_DUMMY TD
+            WHERE TD.Cartonno = @c_StartCartonNo
+
+            SET @n_CurrentRec = @n_CurrentRec + 1 
+         END
+
+         SELECT Cartonno
+              , Style
+              , Color
+              , Size
+              , Qty
+         FROM @T_DUMMY
+         ORDER BY RowID
+      END
+      ELSE
+      BEGIN
+         SELECT PackDetail.CartonNo as Cartonno
+              , SKU.Style as style
+              , SKU.Color as color
+              , CASE WHEN ISNULL(C.short,'')='Y' THEN 
+                CASE WHEN sku.measurement IN ('','U') THEN SKU.Size ELSE ISNULL(sku.measurement,'') END
+                     ELSE SKU.Size END [Size]
+              , PackDetail.Qty as qty
+         FROM PackDetail WITH (NOLOCK) 
+         JOIN SKU WITH (NOLOCK) ON (Sku.Storerkey = PackDetail.Storerkey)  
+                                   AND (Sku.Sku = PackDetail.Sku)
+         LEFT JOIN CODELKUP C WITH (nolock) ON C.Storerkey = PackDetail.Storerkey
+                                           AND C.listname = 'REPORTCFG' and C.Code = 'GetSkuMeasurement'
+                                           AND C.Long = 'r_dw_ucc_carton_label_100'
+         WHERE (PackDetail.PickSlipNo = @c_PickSlipNo)
+           AND (PackDetail.CartonNo = @c_StartCartonNo)
+      END
+      --WL05 E
    END
    
    IF @c_Type = 'D2'
