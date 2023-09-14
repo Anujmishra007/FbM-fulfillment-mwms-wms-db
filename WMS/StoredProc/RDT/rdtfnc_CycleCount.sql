@@ -5,7 +5,7 @@ GO
 
 /************************************************************************/
 /* Store procedure: rdtfnc_CycleCount                                   */
-/* Copyright      : IDS                                                 */
+/* Copyright      : MAERSK                                              */
 /*                                                                      */
 /* Purpose: Cycle Count for:                                            */
 /*          1. UCC                                                      */
@@ -140,6 +140,7 @@ GO
 /*                           Add config step 17 must key in qty         */
 /* 07-Dec-2022 5.5  James    WMS-21288 Extend SKU length, add output    */
 /*                           Qty for decodesp (james31)                 */
+/* 05-Sep-2023 5.6  James    WMS-23451 Add standard UCC decode (james32)*/
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_CycleCount] (
    @nMobile    INT,
@@ -393,7 +394,8 @@ DECLARE  @cLottable01_Code    NVARCHAR( 20),
 
 DECLARE
    @cDecodeSP           NVARCHAR( 20),
-   @cBarcode            NVARCHAR( 60),
+   @cIDBarcode          NVARCHAR( 60),
+   @cBarcode            NVARCHAR( MAX),
    @cUPC                NVARCHAR( 30),
    @cFromID             NVARCHAR( 18),
    @cToLOC              NVARCHAR( 10),
@@ -2888,9 +2890,9 @@ BEGIN
       BEGIN
          IF @cDecodeSP = '1'
          BEGIN
-            SET @cBarcode = @cInField07
+            SET @cIDBarcode = @cInField07
 
-            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility, @cBarcode,
+            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility, @cIDBarcode,
                @cID     = @cID_In      OUTPUT,
                @cType   = 'ID'
          END
@@ -2908,15 +2910,15 @@ BEGIN
                ' @cUserDefine01  OUTPUT, @cUserDefine02  OUTPUT, @cUserDefine03  OUTPUT, @cUserDefine04  OUTPUT, @cUserDefine05  OUTPUT, ' +
                ' @nErrNo      OUTPUT, @cErrMsg     OUTPUT'
             SET @cSQLParam =
-               ' @nMobile        INT,           ' +
-               ' @nFunc          INT,           ' +
-               ' @cLangCode      NVARCHAR( 3),  ' +
-               ' @nStep          INT,           ' +
-               ' @nInputKey      INT,           ' +
-               ' @cStorerKey     NVARCHAR( 15), ' +
-               ' @cCCRefNo       NVARCHAR( 10), ' +
-               ' @cCCSheetNo     NVARCHAR( 10), ' +
-               ' @cBarcode       NVARCHAR( 60), ' +
+               ' @nMobile        INT,              ' +
+               ' @nFunc          INT,              ' +
+               ' @cLangCode      NVARCHAR( 3),     ' +
+               ' @nStep          INT,              ' +
+               ' @nInputKey      INT,              ' +
+               ' @cStorerKey     NVARCHAR( 15),    ' +
+               ' @cCCRefNo       NVARCHAR( 10),    ' +
+               ' @cCCSheetNo     NVARCHAR( 10),    ' +
+               ' @cBarcode       NVARCHAR( MAX),   ' +
                ' @cLOC           NVARCHAR( 10)  OUTPUT, ' +
                ' @cID            NVARCHAR( 18)  OUTPUT, ' +
                ' @cUCC           NVARCHAR( 20)  OUTPUT, ' +
@@ -2946,7 +2948,7 @@ BEGIN
                ' @cErrMsg        NVARCHAR( 20)  OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cCheckStorer, @cCCRefNo, @cCCSheetNo, @cBarcode,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cCheckStorer, @cCCRefNo, @cCCSheetNo, @cIDBarcode,
                @cLOC          OUTPUT, @cID_In         OUTPUT, @cUCC           OUTPUT, @cUPC           OUTPUT, @nQTY           OUTPUT,
                @cLottable01   OUTPUT, @cLottable02    OUTPUT, @cLottable03    OUTPUT, @dLottable04    OUTPUT, @dLottable05    OUTPUT,
                @cLottable06   OUTPUT, @cLottable07    OUTPUT, @cLottable08    OUTPUT, @cLottable09    OUTPUT, @cLottable10    OUTPUT,
@@ -3754,12 +3756,84 @@ BEGIN
    IF @nInputKey = 1 -- Yes or Send
    BEGIN
       -- Screen mapping
-      SET @cUCC = @cInField01
+      SET @cUCC = LEFT( @cBarcode, 20) -- @cInField01
       SET @cOptAction = @cInField12
 
       -- Retain the key-in value
       SET @cOutField01 = @cUCC
       SET @cOutField12 = @cOptAction
+
+      IF ISNULL(@cDecodeSP,'') <> ''
+      BEGIN
+         IF @cDecodeSP = '1'  
+         BEGIN  
+            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility, @cBarcode, 
+               @cUCCNo  = @cUCC    OUTPUT,   
+               @nErrNo  = @nErrNo  OUTPUT,   
+               @cErrMsg = @cErrMsg OUTPUT,  
+               @cType   = 'UCCNo'  
+  
+            -- Decode is optional, allow some barcode to pass thru
+            SET @nErrNo = 0
+         END
+         ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cCCRefNo, @cCCSheetNo, @cBarcode, ' +
+               ' @cLOC           OUTPUT, @cID            OUTPUT, @cUCC           OUTPUT, @cUPC           OUTPUT, @nQTY           OUTPUT, ' +
+               ' @cLottable01    OUTPUT, @cLottable02    OUTPUT, @cLottable03    OUTPUT, @dLottable04    OUTPUT, @dLottable05    OUTPUT, ' +
+               ' @cLottable06    OUTPUT, @cLottable07    OUTPUT, @cLottable08    OUTPUT, @cLottable09    OUTPUT, @cLottable10    OUTPUT, ' +
+               ' @cLottable11    OUTPUT, @cLottable12    OUTPUT, @dLottable13    OUTPUT, @dLottable14    OUTPUT, @dLottable15    OUTPUT, ' +
+               ' @cUserDefine01  OUTPUT, @cUserDefine02  OUTPUT, @cUserDefine03  OUTPUT, @cUserDefine04  OUTPUT, @cUserDefine05  OUTPUT, ' +
+               ' @nErrNo      OUTPUT, @cErrMsg     OUTPUT'
+            SET @cSQLParam =
+               ' @nMobile        INT,              ' +
+               ' @nFunc          INT,              ' +
+               ' @cLangCode      NVARCHAR( 3),     ' +
+               ' @nStep          INT,              ' +
+               ' @nInputKey      INT,              ' +
+               ' @cStorerKey     NVARCHAR( 15),    ' +
+               ' @cCCRefNo       NVARCHAR( 10),    ' +
+               ' @cCCSheetNo     NVARCHAR( 10),    ' +
+               ' @cBarcode       NVARCHAR( MAX),   ' +
+               ' @cLOC           NVARCHAR( 10)  OUTPUT, ' +
+               ' @cID            NVARCHAR( 18)  OUTPUT, ' +
+               ' @cUCC           NVARCHAR( 20)  OUTPUT, ' +
+               ' @cUPC           NVARCHAR( 20)  OUTPUT, ' +
+               ' @nQTY           INT            OUTPUT, ' +
+               ' @cLottable01    NVARCHAR( 18)  OUTPUT, ' +
+               ' @cLottable02    NVARCHAR( 18)  OUTPUT, ' +
+               ' @cLottable03    NVARCHAR( 18)  OUTPUT, ' +
+               ' @dLottable04    DATETIME       OUTPUT, ' +
+               ' @dLottable05    DATETIME       OUTPUT, ' +
+               ' @cLottable06    NVARCHAR( 30)  OUTPUT, ' +
+               ' @cLottable07    NVARCHAR( 30)  OUTPUT, ' +
+               ' @cLottable08    NVARCHAR( 30)  OUTPUT, ' +
+               ' @cLottable09    NVARCHAR( 30)  OUTPUT, ' +
+               ' @cLottable10    NVARCHAR( 30)  OUTPUT, ' +
+               ' @cLottable11    NVARCHAR( 30)  OUTPUT, ' +
+               ' @cLottable12    NVARCHAR( 30)  OUTPUT, ' +
+               ' @dLottable13    DATETIME       OUTPUT, ' +
+               ' @dLottable14    DATETIME       OUTPUT, ' +
+               ' @dLottable15    DATETIME       OUTPUT, ' +
+               ' @cUserDefine01  NVARCHAR( 60)  OUTPUT, ' +
+               ' @cUserDefine02  NVARCHAR( 60)  OUTPUT, ' +
+               ' @cUserDefine03  NVARCHAR( 60)  OUTPUT, ' +
+               ' @cUserDefine04  NVARCHAR( 60)  OUTPUT, ' +
+               ' @cUserDefine05  NVARCHAR( 60)  OUTPUT, ' +
+               ' @nErrNo         INT            OUTPUT, ' +
+               ' @cErrMsg        NVARCHAR( 20)  OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cCheckStorer, @cCCRefNo, @cCCSheetNo, @cBarcode,
+               @cLOC          OUTPUT, @cID            OUTPUT, @cUCC           OUTPUT, @cUPC           OUTPUT, @nQTY           OUTPUT,
+               @cLottable01   OUTPUT, @cLottable02    OUTPUT, @cLottable03    OUTPUT, @dLottable04    OUTPUT, @dLottable05    OUTPUT,
+               @cLottable06   OUTPUT, @cLottable07    OUTPUT, @cLottable08    OUTPUT, @cLottable09    OUTPUT, @cLottable10    OUTPUT,
+               @cLottable11   OUTPUT, @cLottable12    OUTPUT, @dLottable13    OUTPUT, @dLottable14    OUTPUT, @dLottable15    OUTPUT,
+               @cUserDefine01 OUTPUT, @cUserDefine02  OUTPUT, @cUserDefine03  OUTPUT, @cUserDefine04  OUTPUT, @cUserDefine05  OUTPUT,
+               @nErrNo        OUTPUT, @cErrMsg        OUTPUT
+         END
+      END
 
       -- Option: 1=ADD
       IF @cOptAction <> '' AND @cOptAction IS NOT NULL
