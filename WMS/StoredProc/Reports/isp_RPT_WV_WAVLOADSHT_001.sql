@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: RPT_WV_WAVLOADSHT_001                                     */
 /*                                                                      */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver. Purposes                                  */
 /* 03-Jul-2023  WLChooi  1.0  DevOps Combine Script                     */
+/* 14-Sep-2023  WLChooi  1.1  WMS-22840 - Fix duplicate QTY (WL01)      */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_RPT_WV_WAVLOADSHT_001]
    @c_Wavekey          NVARCHAR(10)
@@ -40,16 +41,35 @@ BEGIN
          , @n_err       INT
          , @c_Storerkey NVARCHAR(15)
 
+   --WL01 S
+   DECLARE @T_OD AS TABLE (
+         Loadkey     NVARCHAR(10) NULL
+       , Storerkey   NVARCHAR(15) NULL
+       , SKU         NVARCHAR(20) NULL
+       , OriginalQty INT          NULL
+   )
+
+   INSERT INTO @T_OD (Loadkey, Storerkey, SKU, OriginalQty)
+   SELECT ORDERS.LoadKey, ORDERDETAIL.StorerKey, ORDERDETAIL.SKU
+        , SUM(ORDERDETAIL.OriginalQty)
+   FROM WAVEDETAIL (NOLOCK)
+   JOIN ORDERS (NOLOCK) ON ORDERS.OrderKey = WAVEDETAIL.OrderKey
+   JOIN ORDERDETAIL (NOLOCK) ON ORDERS.OrderKey = ORDERDETAIL.OrderKey
+   WHERE WAVEDETAIL.WaveKey = @c_Wavekey
+   GROUP BY ORDERS.LoadKey, ORDERDETAIL.StorerKey, ORDERDETAIL.SKU
+   --WL01 E
+
    SELECT R.Storerkey
         , R.WaveKey
         , OH.LoadKey
         , R.Sku
         , ISNULL(S.DESCR,'') AS SDESCR
-        , SUM(OD.OriginalQty) AS Qty
+        , OD.OriginalQty AS Qty   --WL01
    FROM REPLENISHMENT R (NOLOCK)
    JOIN WAVEDETAIL WD (NOLOCK) ON R.Wavekey = WD.WaveKey
    JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = WD.OrderKey
-   JOIN ORDERDETAIL OD (NOLOCK) ON OH.Orderkey = OD.Orderkey AND OD.Sku = R.SKU AND OD.StorerKey = R.Storerkey
+   JOIN LOADPLANDETAIL LPD (NOLOCK) ON LPD.OrderKey = OH.OrderKey   --WL01
+   JOIN @T_OD OD ON OD.Loadkey = LPD.LoadKey AND OD.SKU = R.Sku AND OD.Storerkey = R.Storerkey   --WL01
    JOIN SKU S (NOLOCK) ON S.StorerKey = R.Storerkey AND S.Sku = R.Sku
    WHERE WD.WaveKey = @c_Wavekey
    GROUP BY R.Storerkey
@@ -57,6 +77,7 @@ BEGIN
           , OH.LoadKey
           , R.Sku
           , S.DESCR
+          , OD.OriginalQty   --WL01
    ORDER BY R.Storerkey
           , R.WaveKey
           , OH.LoadKey
