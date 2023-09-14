@@ -63,6 +63,7 @@ GO
 /*         						as defaultqty         										*/  
 /* 2021-11-21 4.1  YeeKung  WMS-18333 Add Multiskubarcode (yeekung02)        */ 
 /* 2023-08-16 4.2  James    WMS-23420 Enhance ConfirmLOC logic (james14)     */
+/* 2023-08-15 4.3  James    WMS-23277 For DecodeSP no output error (james15) */
 /*****************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdtfnc_SimpleCC](    
@@ -211,7 +212,8 @@ DECLARE
    @nPUOM_Div              INT,       
    @nPQTY                  INT,    
    @nMQTY                  INT,    
-    
+   @nDecodeQty             INT,
+   
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    
    @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),    
@@ -1996,17 +1998,44 @@ BEGIN
          BEGIN    
             SET @cBarcode = @cInSKU    
             SET @cUPC = SUBSTRING( @cInSKU, 1, 30)    
+            SET @nQty = CASE WHEN ISNULL(@cDefaultQTY, '') = '' OR @cDefaultQTY = '0' THEN '1' ELSE @cDefaultQTY END            
             SET @nErrNo = 0 
     
             -- Standard decode    
             IF @cDecodeSP = '1'    
-               EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,    
-                  @cID           OUTPUT, @cUPC           OUTPUT, @nQTY           OUTPUT,    
-                  @cLottable01   OUTPUT, @cLottable02    OUTPUT, @cLottable03    OUTPUT, @dLottable04 OUTPUT, @dLottable05    OUTPUT,    
-                  @cLottable06   OUTPUT, @cLottable07    OUTPUT, @cLottable08    OUTPUT, @cLottable09    OUTPUT, @cLottable10    OUTPUT,    
-                  @cLottable11   OUTPUT, @cLottable12    OUTPUT, @dLottable13    OUTPUT, @dLottable14    OUTPUT, @dLottable15    OUTPUT,    
-                  @cUserDefine01 OUTPUT, @cUserDefine02  OUTPUT, @cUserDefine03  OUTPUT, @cUserDefine04  OUTPUT, @cUserDefine05  OUTPUT,    
-                  @nErrNo        OUTPUT, @cErrMsg        OUTPUT, @cType = 'UPC'     -- (james10)    
+               EXEC rdt.rdt_Decode
+                  @nMobile       = @nMobile,      
+                  @nFunc         = @nFunc,        
+                  @cLangCode     = @cLangCode,    
+                  @nStep         = @nStep,        
+                  @nInputKey     = @nInputKey,    
+                  @cStorerKey    = @cStorerKey,   
+                  @cFacility     = @cFacility,    
+                  @cBarcode      = @cBarcode,     
+                  @cID           = @cID           OUTPUT,          
+                  @cUPC          = @cUPC          OUTPUT,         
+                  @nQTY          = @nQTY          OUTPUT,         
+                  @cLottable01   = @cLottable01   OUTPUT,  
+                  @cLottable02   = @cLottable02   OUTPUT,  
+                  @cLottable03   = @cLottable03   OUTPUT,  
+                  @dLottable04   = @dLottable04   OUTPUT,    
+                  @dLottable05   = @dLottable05   OUTPUT,   
+                  @cLottable06   = @cLottable06   OUTPUT,
+                  @cLottable07   = @cLottable07   OUTPUT,
+                  @cLottable08   = @cLottable08   OUTPUT,
+                  @cLottable09   = @cLottable09   OUTPUT,
+                  @cLottable10   = @cLottable10   OUTPUT,
+                  @cLottable11   = @cLottable11   OUTPUT,
+                  @cLottable12   = @cLottable12   OUTPUT,
+                  @dLottable13   = @dLottable13   OUTPUT,
+                  @dLottable14   = @dLottable14   OUTPUT,
+                  @dLottable15   = @dLottable15   OUTPUT,
+                  @cUserDefine01 = @cUserDefine01 OUTPUT,
+                  @cUserDefine02 = @cUserDefine02 OUTPUT,
+                  @cUserDefine03 = @cUserDefine03 OUTPUT,
+                  @cUserDefine04 = @cUserDefine04 OUTPUT,
+                  @cUserDefine05 = @cUserDefine05 OUTPUT,
+                  @cType = 'UPC'        
     
             -- Customize decode    
             ELSE IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cDecodeSP AND type = 'P')    
@@ -2073,7 +2102,7 @@ BEGIN
                SET @cSKU = @cUPC    
     
                IF ISNULL( @nQty, 0) <> 0    
-                  SET @nInQty = CAST( @nQty AS NVARCHAR( 5))    
+                  SET @nInQty = @nQty    
             END    
          END   -- End for DecodeSP   
          
@@ -2173,9 +2202,11 @@ BEGIN
     
       -- If qty decoded is blank/null then take qty from screen    
       --SET @nInQty = CASE WHEN ISNULL( @nQty, 0) = 0 THEN @nInQty ELSE @nQty END    
-    
-      SET @nInQty = rdt.rdtConvUOMQTY( @cStorerKey, @cSKU, @nPQTY, @cPUOM, 6) -- Convert to QTY in master UOM       
-      SET @nInQty = @nInQTY + @nMQTY        
+      IF @cDecodeSP = ''
+      BEGIN
+         SET @nInQty = rdt.rdtConvUOMQTY( @cStorerKey, @cSKU, @nPQTY, @cPUOM, 6) -- Convert to QTY in master UOM       
+         SET @nInQty = @nInQTY + @nMQTY        
+      END
     
       -- Check full short with QTY    
       IF @cSKUValidated = '99' AND ( (@nInQty <> '0' AND @nInQty <> ''))    
