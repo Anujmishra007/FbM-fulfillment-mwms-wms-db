@@ -100,7 +100,7 @@ EXECUTE rdt.rdtAddScn 667, 'ENG'
 DELETE rdt.RDTScn WHERE Scn = 668 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 668, 'ENG', 
    @cLine01 = 'UCC:           %05d11',			-- No. of Ctn scanned / Total Ctn per LOC
-   @cLine02 = '%20i01',
+   @cLine02 = '%200iV_Barcode',  -- WMS-23451 Change to use V_Barcode
    @cLine03 = 'SKU:      QTY: %05d05',
    @cLine04 = '%20d02',
    @cLine05 = '%20d03',
@@ -184,7 +184,7 @@ EXECUTE rdt.rdtAddScn 673, 'ENG',
    @cLine02 = 'ID:',
    @cLine03 = '%18d02',
    @cLine04 = 'SKU/UPC:',
-   @cLine05 = '%60i03',  -- WMS-21288 Extend length
+   @cLine05 = '%30i03',
    @cLine14 = '%e'
 
 -- Screen 12   
