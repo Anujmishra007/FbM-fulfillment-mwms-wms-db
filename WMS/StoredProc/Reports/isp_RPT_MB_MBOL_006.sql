@@ -39,7 +39,7 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_MB_MBOL_006] (
          , MBOL.Vessel
          , MBOL.PlaceOfLoadingQualifier
          , MBOL.PlaceOfDischarge
-         , MBOL.PlaceOfLoading
+         --, MBOL.PlaceOfLoading
          , MBOL.CarrierKey
          , MBOL.VoyageNumber
          , MBOL.ContainerNo
@@ -54,7 +54,8 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_MB_MBOL_006] (
          , ORDERS.ExternOrderKey
          , ORDERDETAIL.Lottable03
          , ORDERS.UserDefine09
-         , PICKDETAIL.PickSlipNo
+         --, PICKDETAIL.PickSlipNo
+         , PACKDETAIL.PickSlipNo
          --, (SELECT PAD.LabelNo
          --   FROM PACKDETAIL PAD (NOLOCK)
          --   JOIN PICKDETAIL PKD (NOLOCK) ON PAD.PickSlipNo = PKD.PickSlipNo
@@ -63,7 +64,8 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_MB_MBOL_006] (
          --   WHERE MBOL.MbolKey = @c_Mbolkey) AS PalletID
          , PACKDETAIL.LabelNo AS PalletID
          , STORER.Company
-         , CASE WHEN ISNULL(STT.RefNo,'') = '' THEN 'N' ELSE 'Y' END AS Scanned 
+         , CASE WHEN ISNULL(STT.URNNo,'') = '' THEN 'N' ELSE 'Y' END AS Scanned 
+         , STT.Door
    FROM MBOL (NOLOCK)
    JOIN MBOLDETAIL (NOLOCK) ON MBOL.MbolKey = MBOLDETAIL.MbolKey
    JOIN ORDERS (NOLOCK) ON MBOLDETAIL.OrderKey = ORDERS.OrderKey
@@ -72,14 +74,14 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_MB_MBOL_006] (
    JOIN STORER (NOLOCK) ON ORDERDETAIL.StorerKey = STORER.StorerKey
    JOIN PACKHEADER (NOLOCK) ON MBOLDETAIL.OrderKey = PACKHEADER.OrderKey
    JOIN PACKDETAIL (NOLOCK) ON PACKHEADER.PickSlipNo = PACKDETAIL.PickSlipNo
-   LEFT OUTER JOIN RDT.RDTSCANTOTRUCK STT (NOLOCK) ON STT.MBOLKey = ORDERS.MBOLKey AND STT.RefNo = PICKDETAIL.ID
+   LEFT OUTER JOIN RDT.RDTSCANTOTRUCK STT (NOLOCK) ON STT.MBOLKey = ORDERS.MBOLKey AND STT.URNNo = PACKDETAIL.LabelNo
    WHERE MBOL.MbolKey = @c_Mbolkey
    GROUP BY MBOL.MbolKey
          , MBOL.BookingReference
          , MBOL.Vessel
          , MBOL.PlaceOfLoadingQualifier
          , MBOL.PlaceOfDischarge
-         , MBOL.PlaceOfLoading
+         --, MBOL.PlaceOfLoading
          , MBOL.CarrierKey
          , MBOL.VoyageNumber
          , MBOL.ContainerNo
@@ -88,10 +90,12 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_MB_MBOL_006] (
          , ORDERS.ExternOrderKey
          , ORDERDETAIL.Lottable03
          , ORDERS.UserDefine09
-         , PICKDETAIL.PickSlipNo
+         --, PICKDETAIL.PickSlipNo
+         , PACKDETAIL.PickSlipNo
          , PACKDETAIL.LabelNo
          , STORER.Company
-         , STT.RefNo
+         , STT.URNNo
+         , STT.Door
 
 END -- procedure    
 GO
