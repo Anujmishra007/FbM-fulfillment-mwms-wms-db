@@ -29,8 +29,8 @@ GO
 /* 2023-03-20   2.5  YeeKung    TPS-678 add new error message (yeekung04)        */
 /* 2023-03-20   2.6  YeeKung    TPS-687 add order info into packheader (yeekung05)*/
 /* 2023-04-12   2.7  YeeKung    TPS-700 DefaultcartonType (yeekung06)             */
-/* 2023-07-11   2.8  YeeKung    TPS-756 Substring orderrefno 18 chars (yeekung08) */
-/* 2023-09-12   2.9  YeeKung    TPS-791 resetting the packinfo (yeekung09)        */
+/* 2023-07-11   2.8  YeeKung    TPS-756 Substring orderrefno 18 chars (yeekung07) */
+/* 2023-09-12   2.9  YeeKung    TPS-791 resetting the packinfo (yeekung08)        */
 /*********************************************************************************/  
   
 CREATE OR ALTER PROC [API].[isp_PackConfirm] (  
