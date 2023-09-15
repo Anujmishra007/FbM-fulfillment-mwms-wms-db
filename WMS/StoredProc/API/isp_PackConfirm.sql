@@ -30,6 +30,7 @@ GO
 /* 2023-03-20   2.6  YeeKung    TPS-687 add order info into packheader (yeekung05)*/
 /* 2023-04-12   2.7  YeeKung    TPS-700 DefaultcartonType (yeekung06)             */
 /* 2023-07-11   2.8  YeeKung    TPS-756 Substring orderrefno 18 chars (yeekung08) */
+/* 2023-09-12   2.9  YeeKung    TPS-791 resetting the packinfo (yeekung09)        */
 /*********************************************************************************/  
   
 CREATE OR ALTER PROC [API].[isp_PackConfirm] (  
@@ -506,139 +507,6 @@ BEGIN
       GOTO RollBackTran  
    END  
 END 
-
-
-  
--- Close: PackInfo  
-DECLARE @cWeightItf INT  
-  
-SET @cWeightItf = 0  
-  
-IF (@fCartonWeight > 0 OR @fCartonCube > 0)   
-BEGIN  
-   IF @fCartonWeight > 30   
-   BEGIN  
-      SET @cWeightItf = 1  
-   END  
-   
- --SELECT 'update cartonWeight'  
-   IF NOT EXISTS (SELECT 1 FROM dbo.PackInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo)  
-   BEGIN  
-      INSERT INTO dbo.PackInfo (PickslipNo, CartonNo, QTY, Weight, Cube, CartonType,CartonStatus, AddWho,AddDate,EditWho,EditDate)  
-      VALUES (@cPickSlipNo, @nCartonNo, @nPackQtyCarton, @fCartonWeight, @fCartonCube, @cCartonType,'Closed',SUSER_NAME(),GETDATE(),SUSER_NAME(),GETDATE())  
-     
-      IF @@ERROR <> 0  
-      BEGIN    
-         SET @b_Success = 0    
-         SET @n_Err = 1000008    
-         SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Fail to insert into PackInfo. Function : isp_PackConfirm'  
-         GOTO RollBackTran  
-      END  
-   END  
-   ELSE  
-   BEGIN  
-      UPDATE dbo.PackInfo WITH (ROWLOCK) SET   
-         Qty = @nPackQtyCarton,  
-         CartonType = @cCartonType,  
-         Weight = @fCartonWeight,  
-         [Cube] = @fCartonCube,  
-         EditDate = GETDATE(),   
-         EditWho = SUSER_NAME(),   
-         TrafficCop = NULL,  
-         cartonStatus = 'Closed'  
-      WHERE PickSlipNo = @cPickSlipNo  
-         AND CartonNo = @nCartonNo  
-        
-      IF @@ERROR <> 0  
-      BEGIN        
-         SET @b_Success = 0    
-         SET @n_Err = 1000009    
-         SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Fail to update into PackInfo. Function : isp_PackConfirm'  
-         GOTO RollBackTran  
-      END  
-   END  
-END  
-ELSE  
-BEGIN  
- --SELECT 'update skuWeight'  
-   DECLARE @ttlWeight FLOAT  
-   DECLARE @ttlCube   FLOAT  
-   
-   IF @ttlWeight > 30   
-   BEGIN  
-      SET @cWeightItf = 1  
-   END  
-   
-   SELECT @ttlWeight = SUM(WEIGHT),@ttlCube = SUM(CUBE) FROM @CloseCartonList GROUP BY SKU,QTY,lottableVal  
-   IF NOT EXISTS (SELECT 1 FROM dbo.PackInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo)  
-   BEGIN  
-      INSERT INTO dbo.PackInfo (PickslipNo, CartonNo, QTY, Weight, Cube, CartonType,CartonStatus, AddWho,AddDate,EditWho,EditDate)  
-      VALUES (@cPickSlipNo, @nCartonNo, @nPackQtyCarton, @ttlWeight, @ttlCube, @cCartonType,'Closed',SUSER_NAME(),GETDATE(),SUSER_NAME(),GETDATE())  
-     
-      IF @@ERROR <> 0  
-      BEGIN    
-         SET @b_Success = 0    
-         SET @n_Err = 1000010    
-         SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Fail to insert into PackInfo. Function : isp_PackConfirm'  
-         GOTO RollBackTran  
-      END  
-   END  
-   ELSE  
-   BEGIN  
-      UPDATE dbo.PackInfo WITH (ROWLOCK) SET   
-         QTY = @nPackQtyCarton,  
-         CartonType = @cCartonType,  
-         Weight = @ttlWeight,  
-         [Cube] = @ttlCube,  
-         EditDate = GETDATE(),   
-         EditWho = SUSER_NAME(),   
-         TrafficCop = NULL,  
-         cartonStatus = 'Closed'  
-      WHERE PickSlipNo = @cPickSlipNo  
-         AND CartonNo = @nCartonNo  
-        
-      IF @@ERROR <> 0  
-      BEGIN        
-         SET @b_Success = 0    
-         SET @n_Err = 1000011    
-         SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Fail to update into PackInfo. Function : isp_PackConfirm'  
-  
-         GOTO RollBackTran  
-      END  
-   END  
-END  
-  
---DECLARE @cSQL NVARCHAR (MAX)  
---DECLARE @cSQLParam NVARCHAR(MAX)  
-DECLARE @cPrintCartonLabelByITF INT  
-  
-SET @cPrintCartonLabelByITF = 0  
---check weight >30 and hav config  
-IF EXISTS (SELECT TOP 1 1 FROM storerConfig WITH (NOLOCK) WHERE configkey ='PrintCartonLabelByITF' AND storerKey = @cStorerKey AND sValue = 1)  
-BEGIN  
-   SET @cPrintCartonLabelByITF = 1  
-END  
-  
-IF @cWeightItf = 1 AND @cPrintCartonLabelByITF = 1  
-BEGIN  
-SET @cSQL = 'EXEC isp_PrintCartonLabel_Interface @c_Pickslipno=@cPickSlipNo, @n_CartonNo_Min=@nCartonNoMin, @n_CartonNo_Max=@nCartonNoMax, @b_Success=@b_Success OUTPUT, @n_Err=@n_Err OUTPUT, @c_ErrMsg=@c_ErrMsg OUTPUT '      
-          
-EXEC sp_executesql @cSQL       
-   ,N'@cPickSlipNo NVARCHAR(10), @nCartonNoMin INT, @nCartonNoMax INT, @b_Success INT OUTPUT, @n_Err INT OUTPUT, @c_ErrMsg NVARCHAR(255) OUTPUT '       
-   ,@cPickSlipNo           
-   ,@nCartonNo    
-   ,@nCartonNo    
-   ,@b_Success      OUTPUT      
-   ,@n_Err          OUTPUT      
-   ,@c_ErrMsg       OUTPUT      
-           
---SELECT @b_Success AS b_Success, @n_Err AS n_Err, @c_ErrMsg AS c_ErrMsg  
-     
-IF @n_Err > 0  
-   BEGIN  
-      GOTO RollBackTran  
-   END     
-END  
   
 --Close: packDetail  
 SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
@@ -836,6 +704,140 @@ BEGIN
        
    FETCH NEXT FROM @curPD INTO @cSKU,@nQTY,@cWeight,@cCube,@cLottableVal  
 END  
+
+-- Close: PackInfo  
+DECLARE @cWeightItf INT  
+  
+SET @cWeightItf = 0  
+  
+IF (@fCartonWeight > 0 OR @fCartonCube > 0)   
+BEGIN  
+   IF @fCartonWeight > 30   
+   BEGIN  
+      SET @cWeightItf = 1  
+   END  
+   
+ --SELECT 'update cartonWeight'  
+   IF NOT EXISTS (SELECT 1 FROM dbo.PackInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo)  
+   BEGIN  
+      INSERT INTO dbo.PackInfo (PickslipNo, CartonNo, QTY, Weight, Cube, CartonType,CartonStatus, AddWho,AddDate,EditWho,EditDate)  
+      VALUES (@cPickSlipNo, @nCartonNo, @nPackQtyCarton, @fCartonWeight, @fCartonCube, @cCartonType,'Closed',SUSER_NAME(),GETDATE(),SUSER_NAME(),GETDATE())  
+     
+      IF @@ERROR <> 0  
+      BEGIN    
+         SET @b_Success = 0    
+         SET @n_Err = 1000008    
+         SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Fail to insert into PackInfo. Function : isp_PackConfirm'  
+         GOTO RollBackTran  
+      END  
+   END  
+   ELSE  
+   BEGIN  
+      UPDATE dbo.PackInfo WITH (ROWLOCK) SET   
+         Qty = @nPackQtyCarton,  
+         CartonType = @cCartonType,  
+         Weight = @fCartonWeight,  
+         [Cube] = @fCartonCube,  
+         EditDate = GETDATE(),   
+         EditWho = SUSER_NAME(),   
+         TrafficCop = NULL,  
+         cartonStatus = 'Closed'  
+      WHERE PickSlipNo = @cPickSlipNo  
+         AND CartonNo = @nCartonNo  
+        
+      IF @@ERROR <> 0  
+      BEGIN        
+         SET @b_Success = 0    
+         SET @n_Err = 1000009    
+         SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Fail to update into PackInfo. Function : isp_PackConfirm'  
+         GOTO RollBackTran  
+      END  
+   END  
+END  
+ELSE  
+BEGIN  
+ --SELECT 'update skuWeight'  
+   DECLARE @ttlWeight FLOAT  
+   DECLARE @ttlCube   FLOAT  
+   
+   IF @ttlWeight > 30   
+   BEGIN  
+      SET @cWeightItf = 1  
+   END  
+   
+   SELECT @ttlWeight = SUM(WEIGHT),@ttlCube = SUM(CUBE) FROM @CloseCartonList GROUP BY SKU,QTY,lottableVal  
+   IF NOT EXISTS (SELECT 1 FROM dbo.PackInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo)  
+   BEGIN  
+      INSERT INTO dbo.PackInfo (PickslipNo, CartonNo, QTY, Weight, Cube, CartonType,CartonStatus, AddWho,AddDate,EditWho,EditDate)  
+      VALUES (@cPickSlipNo, @nCartonNo, @nPackQtyCarton, @ttlWeight, @ttlCube, @cCartonType,'Closed',SUSER_NAME(),GETDATE(),SUSER_NAME(),GETDATE())  
+     
+      IF @@ERROR <> 0  
+      BEGIN    
+         SET @b_Success = 0    
+         SET @n_Err = 1000010    
+         SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Fail to insert into PackInfo. Function : isp_PackConfirm'  
+         GOTO RollBackTran  
+      END  
+   END  
+   ELSE  
+   BEGIN  
+      UPDATE dbo.PackInfo WITH (ROWLOCK) SET   
+         QTY = @nPackQtyCarton,  
+         CartonType = @cCartonType,  
+         Weight = @ttlWeight,  
+         [Cube] = @ttlCube,  
+         EditDate = GETDATE(),   
+         EditWho = SUSER_NAME(),   
+         TrafficCop = NULL,  
+         cartonStatus = 'Closed'  
+      WHERE PickSlipNo = @cPickSlipNo  
+         AND CartonNo = @nCartonNo  
+        
+      IF @@ERROR <> 0  
+      BEGIN        
+         SET @b_Success = 0    
+         SET @n_Err = 1000011    
+         SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Fail to update into PackInfo. Function : isp_PackConfirm'  
+  
+         GOTO RollBackTran  
+      END  
+   END  
+END  
+
+--DECLARE @cSQL NVARCHAR (MAX)  
+--DECLARE @cSQLParam NVARCHAR(MAX)  
+DECLARE @cPrintCartonLabelByITF INT  
+  
+SET @cPrintCartonLabelByITF = 0  
+--check weight >30 and hav config  
+IF EXISTS (SELECT TOP 1 1 FROM storerConfig WITH (NOLOCK) WHERE configkey ='PrintCartonLabelByITF' AND storerKey = @cStorerKey AND sValue = 1)  
+BEGIN  
+   SET @cPrintCartonLabelByITF = 1  
+END  
+  
+IF @cWeightItf = 1 AND @cPrintCartonLabelByITF = 1  
+BEGIN  
+SET @cSQL = 'EXEC isp_PrintCartonLabel_Interface @c_Pickslipno=@cPickSlipNo, @n_CartonNo_Min=@nCartonNoMin, @n_CartonNo_Max=@nCartonNoMax, @b_Success=@b_Success OUTPUT, @n_Err=@n_Err OUTPUT, @c_ErrMsg=@c_ErrMsg OUTPUT '      
+          
+EXEC sp_executesql @cSQL       
+   ,N'@cPickSlipNo NVARCHAR(10), @nCartonNoMin INT, @nCartonNoMax INT, @b_Success INT OUTPUT, @n_Err INT OUTPUT, @c_ErrMsg NVARCHAR(255) OUTPUT '       
+   ,@cPickSlipNo           
+   ,@nCartonNo    
+   ,@nCartonNo    
+   ,@b_Success      OUTPUT      
+   ,@n_Err          OUTPUT      
+   ,@c_ErrMsg       OUTPUT      
+           
+--SELECT @b_Success AS b_Success, @n_Err AS n_Err, @c_ErrMsg AS c_ErrMsg  
+     
+IF @n_Err > 0  
+   BEGIN  
+      GOTO RollBackTran  
+   END     
+END  
+  
+
+
    --@cpickslipNo = PickslipNo, @cDropID = DropID,  @cOrderKey=OrderKey, @cLoadKey = LoadKey, @cZone = Zone, @EcomSingle = EcomSingle  
 -- Extended validate  --(cc09)  
 SELECT @cExtendedUpdateSP = svalue FROM storerConfig WITH (NOLOCK) WHERE storerKey = @cStorerKey AND configKey = 'TPSExtUpdSP'  
