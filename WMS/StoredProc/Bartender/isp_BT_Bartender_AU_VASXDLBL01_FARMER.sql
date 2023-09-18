@@ -12,6 +12,7 @@ GO
 /* Date        Rev  Author     Purposes                                       */    
 /* 27-Mar-2023 1.0  WLChooi    Created (WMS-21983)                            */    
 /* 27-Mar-2023 1.0  WLChooi    DevOps Combine Script                          */    
+/* 27-Jul-2023 1.1  WLChooi    WMS-23221 - Logic Change (WL01)                */
 /******************************************************************************/    
     
 CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_AU_VASXDLBL01_FARMER]
@@ -118,6 +119,35 @@ BEGIN
     , [Col60] [NVARCHAR](80) NULL    
    )    
 
+   --WL01 S
+   DECLARE @c_C_Country NVARCHAR(100) = ''
+         , @c_C_ISOCntryCode NVARCHAR(100) = ''
+         , @c_M_Zip NVARCHAR(100) = ''
+         , @c_M_State NVARCHAR(100) = ''
+
+   SELECT @c_C_Country = OH.C_Country
+        , @c_C_ISOCntryCode = OH.C_ISOCntryCode
+        , @c_M_Zip = OH.M_Zip
+   FROM PACKDETAIL PD (NOLOCK)
+   JOIN PACKHEADER PH (NOLOCK) ON PH.PickSlipNo = PD.PickSlipNo
+   JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = PH.OrderKey
+   WHERE PD.StorerKey = @c_Sparm1 AND PD.LabelNo = @c_Sparm2
+
+   SELECT @c_M_State = CASE WHEN @c_C_Country = 'AU' OR @c_C_ISOCntryCode = 'AU' THEN CASE WHEN @c_M_Zip LIKE '3%' THEN 'VIC'
+                                                                                           WHEN @c_M_Zip LIKE '4%' THEN 'QLD'
+                                                                                           WHEN @c_M_Zip LIKE '5%' THEN 'SA'
+                                                                                           WHEN @c_M_Zip LIKE '0%' THEN 'NT'
+                                                                                           WHEN @c_M_Zip LIKE '6%' THEN 'WA'
+                                                                                           WHEN @c_M_Zip LIKE '7%' THEN 'TAS'
+                                                                                           WHEN ((@c_M_Zip >= '2600' AND @c_M_Zip <= '2618') 
+                                                                                              OR (@c_M_Zip >= '2900' AND @c_M_Zip <= '2920')) THEN 'ACT'
+                                                                                           ELSE 'NSW' 
+                                                                                           END
+                            WHEN @c_C_Country = 'NZ' OR @c_C_ISOCntryCode = 'NZ' THEN CASE WHEN LEFT(TRIM(ISNULL(@c_M_Zip,'')),1) IN ('7','8','9') THEN 'SI'
+                                                                                           ELSE 'NI'
+                                                                                           END
+                       END
+   --WL01 E
    SET @c_SQLJOIN = N' SELECT DISTINCT ' + CHAR(13)
                   + N'        '''', ST.StorerKey, OH.ShipperKey, ISNULL(TRIM(ST.Address1),''''),  ' + CHAR(13)   --4
                   + N'        LEFT(TRIM(ISNULL(ST.City,'''')) + '','' + TRIM(ISNULL(ST.[State],'''')) + '','' + TRIM(ISNULL(ST.Zip,'''')), 80), ' + CHAR(13)   --5
@@ -126,13 +156,14 @@ BEGIN
                   + N'        LEFT(TRIM(ISNULL(OH.C_City,'''')) + '','' + TRIM(ISNULL(OH.C_State,'''')) + '','' + TRIM(ISNULL(OH.C_Zip,'''')), 80), ' + CHAR(13)   --13
                   + N'        '''', '''', TRIM(ISNULL(OH.C_Country,'''')), TRIM(PD.LottableValue), RIGHT(''0000'' + TRIM(ISNULL(OH.Userdefine05,'''')), 4), '   --18
                   + N'        TRIM(ISNULL(OH.M_Company,'''')), TRIM(ISNULL(OH.M_Address1,'''')), ' + CHAR(13) --20
-                  + N'        '''', LEFT(TRIM(ISNULL(OH.M_City,'''')) + '','' + TRIM(ISNULL(OH.M_State,'''')), 80), '''', TRIM(ISNULL(OH.M_Zip,'''')), ' + CHAR(13)   --24
+                  + N'        '''', LEFT(TRIM(ISNULL(OH.M_City,'''')) + '','' + TRIM(@c_M_State), 80), '''', TRIM(ISNULL(OH.M_Zip,'''')), ' + CHAR(13)   --WL01   --24
                   + N'        TRIM(ISNULL(OH.BuyerPO,'''')), ' + CHAR(13) --25
                   + N'        TRIM(ISNULL(OH.UserDefine01,'''')), '''', CONVERT(NVARCHAR(10), ISNULL(OH.UserDefine06,''19000101''), 103), '''', ' + CHAR(13)   --29
                   + N'        CASE WHEN ISDATE(OH.UserDefine07) = 1 THEN ''ADV'' + FORMAT(OH.UserDefine07, ''ddMM'') ' + CHAR(13)
                   + N'                                              ELSE '''' END, ' + CHAR(13)   --30
                   + N'        ''554'' + TRIM(ISNULL(OH.C_Zip, '''')), ' + CHAR(13)   --31
-                  + N'        RIGHT(TRIM(PD.LottableValue), 18), OH.TrackingNo, '''', '''', '''', '''', '''', '''', '''', ' + CHAR(13) --40
+                  + N'        RIGHT(TRIM(PD.LottableValue), 18), OH.TrackingNo, ''036'' + TRIM(ISNULL(OH.C_Zip, '''')), RIGHT(''0000'' + TRIM(ISNULL(OH.Userdefine04,'''')), 4), ' + CHAR(13)   --WL01
+                  + N'        '''', '''', '''', '''', '''', ' + CHAR(13) --40
                   + N'        '''', '''', '''', '''', '''', '''', '''', '''', '''', '''', ' + CHAR(13) --50
                   + N'        '''', '''', '''', '''', '''', '''', '''', '''', PD.Storerkey, PD.LabelNo  ' + CHAR(13) --60
                   + N' FROM PackDetail PD (NOLOCK) ' + CHAR(13)
@@ -160,7 +191,8 @@ BEGIN
                         + N' ,@c_Sparm2         NVARCHAR(80)'    
                         + N' ,@c_Sparm3         NVARCHAR(80)'     
                         + N' ,@c_Sparm4         NVARCHAR(80)'    
-                        + N' ,@c_Sparm5         NVARCHAR(80)'    
+                        + N' ,@c_Sparm5         NVARCHAR(80)'
+                        + N' ,@c_M_State        NVARCHAR(80)'   --WL01
     
    EXEC sp_executesql @c_SQL    
                     , @c_ExecArguments    
@@ -169,6 +201,7 @@ BEGIN
                     , @c_Sparm3    
                     , @c_Sparm4    
                     , @c_Sparm5    
+                    , @c_M_State   --WL01
 
    EXIT_SP:    
     
