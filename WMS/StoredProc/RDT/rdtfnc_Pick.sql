@@ -64,6 +64,7 @@ GO
 /*                   James      Add ID output to swap id sp                   */
 /* 2020-03-17   3.6  James      WMS-12504 Add auto scan in pickslip (james15) */
 /* 2022-03-09   3.7  yeekung    WMS-18588 Add Extendedvalidate (yeekung01)    */
+/* 2022-05-19   3.8  Ung        WMS-22486 Add pick pallet with UCC            */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pick] (
@@ -268,7 +269,7 @@ SELECT
    @cSwapIDSP             = V_String26,
    @cDecodeSP             = V_String27,
    @cPickDontShowLot02    = V_String28,
-   @cDefaultToPickQty     = V_String29,  
+   @cDefaultToPickQty     = V_String29,
    @cBarcode              = V_String41,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
@@ -384,12 +385,12 @@ BEGIN
    IF @cDecodeSP = '0'
       SET @cDecodeSP = ''
 
-   SET @cPickDontShowLot02 = rdt.RDTGetConfig( @nFunc, 'PickDontShowLot02', @cStorer)   
+   SET @cPickDontShowLot02 = rdt.RDTGetConfig( @nFunc, 'PickDontShowLot02', @cStorer)
 
-   SET @cDefaultToPickQty = rdt.RDTGetConfig( @nFunc, 'DefaultToPickQty', @cStorer)   
+   SET @cDefaultToPickQty = rdt.RDTGetConfig( @nFunc, 'DefaultToPickQty', @cStorer)
 
    SET @cAutoScanIn = rdt.rdtGetConfig( @nFunc, 'AutoScanIn', @cStorer) -- (james15)
-      
+
    -- Set pick type
    SET @cPickType =
       CASE @nFunc
@@ -408,12 +409,14 @@ BEGIN
    END
 
    -- Check if pick pallet in ucc warehouse
+   /*
    IF @cPickType = 'P' AND @cUCCStorerConfig = '1'
    BEGIN
       SET @nErrNo = 62602
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- CantPickUCC PL
       GOTO Step_Start_Fail
    END
+   */
 
     -- (Vicky06) EventLog - Sign In Function
     EXEC RDT.rdt_STD_EventLog
@@ -619,8 +622,8 @@ BEGIN
             ELSE
             BEGIN
                UPDATE dbo.PickingInfo SET
-                  ScanInDate = GETDATE(), 
-                  PickerID = SUSER_SNAME(), 
+                  ScanInDate = GETDATE(),
+                  PickerID = SUSER_SNAME(),
                   EditWho = SUSER_SNAME()
                WHERE PickSlipNo = @cPickSlipNo
                IF @@ERROR <> 0
@@ -1406,7 +1409,7 @@ BEGIN
 
             IF @nErrNo <> 0
                GOTO SKU_Fail
-               
+
             IF @cSKU <> ''
                SET @cUPC = @cSKU
          END
@@ -4532,7 +4535,7 @@ BEGIN
       V_Integer8     = @nMstQTY,
       V_Integer9     = @nActPQty,
       V_Integer10    = @nActMQty,
-   
+
 
       V_String1      = @cAutoScanIn,
       V_String6      = @cUOMDesc,
@@ -4553,7 +4556,7 @@ BEGIN
       V_String26     = @cSwapIDSP,
       V_String27     = @cDecodeSP,
       V_String28     = @cPickDontShowLot02,
-      V_String29     = @cDefaultToPickQty,  
+      V_String29     = @cDefaultToPickQty,
       V_String41     = @cBarcode,
 
       I_Field01 = '',  O_Field01 = @cOutField01,
