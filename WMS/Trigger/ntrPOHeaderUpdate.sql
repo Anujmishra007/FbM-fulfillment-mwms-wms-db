@@ -3,10 +3,6 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-IF EXISTS (SELECT name FROM sysobjects WHERE name = 'ntrPOHeaderUpdate' AND type = 'TR')
-DROP TRIGGER ntrPOHeaderUpdate
-GO
-  
 /************************************************************************/  
 /* Trigger:  ntrPOHeaderUpdate                                          */  
 /* Creation Date:                                                       */  
@@ -68,9 +64,10 @@ GO
 /*                        using ITFTriggerConfig.                       */  
 /*                        - Moved existing trigger points to perform in */  
 /*                          sub-sp isp_ITF_ntrPO. - (YokeBeen02)        */  
+/* 24-May-2023  WLChooi   WMS-22565 - Enhance UPDATEEXTPO (WL01)        */
 /************************************************************************/  
   
-CREATE TRIGGER ntrPOHeaderUpdate  
+CREATE OR ALTER TRIGGER ntrPOHeaderUpdate  
 ON  PO  
 FOR UPDATE  
 AS  
@@ -109,7 +106,15 @@ BEGIN
          , @c_Proceed               NVARCHAR(1)     -- (YokeBeen02)  
          , @c_COLUMN_NAME           VARCHAR(50)     -- (YokeBeen02)   
          , @c_ColumnsUpdated        VARCHAR(1000)   -- (YokeBeen02)  
-         , @b_ColumnsUpdated        VARBINARY(1000) -- (YokeBeen02)  
+         , @b_ColumnsUpdated        VARBINARY(1000) -- (YokeBeen02) 
+         , @c_Option1               NVARCHAR(50) = ''   --WL01
+         , @c_Option2               NVARCHAR(50) = ''   --WL01
+         , @c_Option3               NVARCHAR(50) = ''   --WL01
+         , @c_Option4               NVARCHAR(50) = ''   --WL01
+         , @c_Option5               NVARCHAR(MAX) = ''  --WL01
+         , @c_IncludePOType         NVARCHAR(1000)  --WL01
+         , @c_POType                NVARCHAR(50)    --WL01
+         , @c_NoUPDATEEXTPO         NVARCHAR(10) = ''   --WL01
   
    SET @c_StatusUpdated = 'N'                -- (YokeBeen02)  
    SET @c_ExternStatusUpdated = 'N'          -- (YokeBeen02)  
@@ -405,7 +410,12 @@ BEGIN
                  @b_success    output,  
                  @c_extpo      output,  
                  @n_err        output,  
-                 @c_errmsg     output  
+                 @c_errmsg     output,
+                 @c_Option1    OUTPUT,  --WL01
+                 @c_Option2    OUTPUT,  --WL01
+                 @c_Option3    OUTPUT,  --WL01
+                 @c_Option4    OUTPUT,  --WL01
+                 @c_Option5    OUTPUT   --WL01
   
          IF @b_success <> 1  
          BEGIN  
@@ -413,6 +423,29 @@ BEGIN
          END  
          ELSE IF @c_extpo = '1'  
          BEGIN  
+            --WL01 S
+            SET @c_NoUPDATEEXTPO = ''
+
+            IF ISNULL(@c_Option5,'') <> ''
+            BEGIN
+               SELECT @c_IncludePOType = dbo.fnc_GetParamValueFromString('@c_IncludePOType', @c_Option5, @c_IncludePOType) 
+
+               IF ISNULL(@c_IncludePOType,'') <> ''
+               BEGIN
+                  SELECT @c_POType = POType
+                  FROM Inserted
+                  WHERE POKey = @c_POKey
+
+                  IF NOT EXISTS ( SELECT 1
+                                  FROM dbo.fnc_DelimSplit(',', @c_IncludePOType) FDS 
+                                  WHERE FDS.ColValue = @c_POType)
+                  BEGIN
+                     SET @c_NoUPDATEEXTPO = 'Y'
+                  END
+               END
+            END
+            --WL01 E
+
                -- tlting01  
             IF NOT EXISTS ( SELECT 1 FROM  PODETAIL WITH (NOLOCK)  
                  WHERE PODETAIL.pokey = @c_POKey  
@@ -420,7 +453,7 @@ BEGIN
                  --AND (SELECT SUM(qtyreceived)  --SOS222461  
                  AND (SELECT SUM(CAST(qtyreceived AS BIGINT))  --SOS222461  
                  FROM  PODETAIL WITH (NOLOCK)  
-                 WHERE PODETAIL.pokey = @c_POKey ) > 0  
+                 WHERE PODETAIL.pokey = @c_POKey ) > 0 AND ISNULL(@c_NoUPDATEEXTPO,'') = ''   --WL01
 --            (SELECT SUM(qtyreceived)  
 --                  FROM  PODETAIL WITH (NOLOCK)  
 --                 WHERE PODETAIL.pokey = @c_POKey ) > 0  
@@ -428,9 +461,10 @@ BEGIN
             BEGIN  
                SET @c_StatusUpdated = 'Y'       -- (YokeBeen02)  
                SET @c_ExternStatusUpdated = 'Y' -- (YokeBeen02)  
-  
+               
                UPDATE PO WITH (ROWLOCK)  
-                  SET status = '9', externstatus = '9'                  WHERE POKey = @c_POKey  
+               SET status = '9', externstatus = '9'
+               WHERE POKey = @c_POKey  
   
                SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT  
                IF @n_err <> 0  
@@ -440,7 +474,7 @@ BEGIN
                   SELECT @c_errmsg = 'NSQL' + CONVERT(CHAR(5),ISNULL(dbo.fnc_RTrim(@n_err),0))  
                                    + ': Update Failed On Table PO. (ntrPOHeaderUpdate)' + ' ( '  
                                    + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '  
-               END  
+               END
             END  
          END -- IF @c_extpo = '1'  
   
