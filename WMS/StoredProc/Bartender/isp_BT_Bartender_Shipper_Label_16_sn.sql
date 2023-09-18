@@ -13,6 +13,7 @@ GO
 /* 2021-08-30 1.0  CSCHONG    WMS-17789 (Created)                             */  
 /* 2022-11-30 1.1  WLChooi    WMS-21251 - Mask Customer Details (WL01)        */
 /* 2022-11-30 1.1  WLChooi    DevOps Combine Script                           */
+/* 2023-09-08 1.2  WLChooi    WMS-23596 - Mask C_Address (WL02)               */
 /******************************************************************************/  
   
 CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_Shipper_Label_16_sn]  
@@ -93,11 +94,11 @@ BEGIN
           @c_Col39             NVARCHAR(80),  
           @n_Getcol39          FLOAT,  
           @c_GetStorerKey      NVARCHAR(20),  
-          @c_DocType    NVARCHAR(10),  
+          @c_DocType           NVARCHAR(10),  
           @c_OHUdef01          NVARCHAR(20),  
           @c_Condition1        NVARCHAR(150),  
           @c_Condition2        NVARCHAR(150)  
-         ,@n_Id             INT  
+         ,@n_Id                INT  
          ,@c_Col45             NVARCHAR(80)  
          ,@c_col11             NVARCHAR(80)  
          ,@c_col57             NVARCHAR(80)  
@@ -106,20 +107,20 @@ BEGIN
          ,@c_col58             NVARCHAR(80)  
          ,@c_col60             NVARCHAR(80)  
   
-   DECLARE @d_Trace_StartTime   DATETIME,  
+   DECLARE @d_Trace_StartTime DATETIME,  
            @d_Trace_EndTime    DATETIME,  
            @c_Trace_ModuleName NVARCHAR(20),  
            @d_Trace_Step1      DATETIME,  
            @c_Trace_Step1      NVARCHAR(20),  
            @c_UserName         NVARCHAR(20)  
   
-    DECLARE   @d_starttime    datetime,  
-              @d_endtime      datetime,  
-              @d_Step1        datetime,  
-              @d_Step2        datetime,  
-              @d_Step3        datetime,  
-              @d_Step4        datetime,  
-              @d_Step5        datetime,  
+    DECLARE   @d_starttime    DATETIME,  
+              @d_endtime      DATETIME,  
+              @d_Step1        DATETIME,  
+              @d_Step2        DATETIME,  
+              @d_Step3        DATETIME,  
+              @d_Step4        DATETIME,  
+              @d_Step5        DATETIME,  
               @c_Col1         NVARCHAR(20),  
               @c_Col2         NVARCHAR(20),  
               @c_Col3         NVARCHAR(20),  
@@ -267,9 +268,9 @@ BEGIN
                     +' ORDIF.OrderInfo04,ORDIF.OrderInfo05,ORDIF.OrderInfo01,ORDIF.OrderInfo06,SUBSTRING(ORD.Notes, 1, 80),ORD.Orderkey,ORD.StorerKey,STO.State,' + CHAR(13) +  --16  
                     +' STO.City,STO.Zip,ORDIF.OrderInfo09,ORDIF.OrderInfo07,ORDIF.OrderInfo10,ORD.Consigneekey,ORD.c_Company,' + CHAR(13) + --23
                     +' ISNULL(CONVERT(nvarchar, DecryptByKey(D.C_Address1)),''''), ' + CHAR(13) +
-                    +' ISNULL(CONVERT(nvarchar, DecryptByKey(D.C_Address2)),''''), ' + CHAR(13) +
-                    +' ISNULL(CONVERT(nvarchar, DecryptByKey(D.C_Address3)),''''), ' + CHAR(13) +
-                    +' ISNULL(CONVERT(nvarchar, DecryptByKey(D.C_Address4)),''''), ' + CHAR(13) +
+                    +' REPLICATE(''*'', LEN(ISNULL(CONVERT(nvarchar, DecryptByKey(D.C_Address2)),''''))), ' + CHAR(13) +   --WL02
+                    +' REPLICATE(''*'', LEN(ISNULL(CONVERT(nvarchar, DecryptByKey(D.C_Address3)),''''))), ' + CHAR(13) +   --WL02
+                    +' REPLICATE(''*'', LEN(ISNULL(CONVERT(nvarchar, DecryptByKey(D.C_Address4)),''''))), ' + CHAR(13) +   --WL02
                     +' ISNULL(CONVERT(nvarchar, DecryptByKey(D.C_State)),''''), ' + CHAR(13) +
                     +' ISNULL(CONVERT(nvarchar, DecryptByKey(D.C_City)),''''), ' + CHAR(13) +
                     +' ISNULL(CONVERT(nvarchar, DecryptByKey(D.C_Zip)),''''), ' + CHAR(13) +

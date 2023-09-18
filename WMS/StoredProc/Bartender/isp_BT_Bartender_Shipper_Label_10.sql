@@ -19,6 +19,7 @@ GO
 /* 2020-07-13 1.6  WLChooi    WMS-14185 - Add column level decryption (WL02)  */
 /* 2022-11-30 1.7  WLChooi    WMS-21251 - Mask Customer Details (WL03)        */
 /* 2022-11-30 1.7  WLChooi    DevOps Combine Script                           */
+/* 2023-09-08 1.8  WLChooi    WMS-23596 - Mask C_Address (WL04)               */
 /******************************************************************************/  
   
 CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_Shipper_Label_10]  
@@ -112,20 +113,20 @@ BEGIN
          ,@c_Str2              NVARCHAR(20)  
          ,@n_StartLine         INT  
   
-   DECLARE @d_Trace_StartTime   DATETIME,  
+   DECLARE @d_Trace_StartTime  DATETIME,  
            @d_Trace_EndTime    DATETIME,  
            @c_Trace_ModuleName NVARCHAR(20),  
            @d_Trace_Step1      DATETIME,  
            @c_Trace_Step1      NVARCHAR(20),  
            @c_UserName         NVARCHAR(20)  
    
-   DECLARE   @d_starttime    datetime,  
-             @d_endtime      datetime,  
-             @d_Step1        datetime,  
-             @d_Step2        datetime,  
-             @d_Step3        datetime,  
-             @d_Step4        datetime,  
-             @d_Step5        datetime,  
+   DECLARE   @d_starttime    DATETIME,  
+             @d_endtime      DATETIME,  
+             @d_Step1        DATETIME,  
+             @d_Step2        DATETIME,  
+             @d_Step3        DATETIME,  
+             @d_Step4        DATETIME,  
+             @d_Step5        DATETIME,  
              @c_Col1         NVARCHAR(20),  
              @c_Col2         NVARCHAR(20),  
              @c_Col3         NVARCHAR(20),  
@@ -301,9 +302,9 @@ BEGIN
                     +' ORDIF.orderinfo04,ORDIF.orderinfo05,''1'',ORDIF.orderinfo06,SUBSTRING(ORD.Notes, 1, 80),'''',ORD.StorerKey,STO.State,' +  CHAR(13) +  --16
                     +' STO.City,STO.Zip,ORDIF.orderinfo09,ORDIF.orderinfo07,ORDIF.orderinfo08,ORD.Consigneekey,ORD.c_Company,'+ CHAR(13) +  --23
                     +' ISNULL(CONVERT(nvarchar, DecryptByKey(D.C_Address1)),''''), ' + CHAR(13) +
-                    +' ISNULL(CONVERT(nvarchar, DecryptByKey(D.C_Address2)),''''), ' + CHAR(13) +
-                    +' ISNULL(CONVERT(nvarchar, DecryptByKey(D.C_Address3)),''''), ' + CHAR(13) +
-                    +' ISNULL(CONVERT(nvarchar, DecryptByKey(D.C_Address4)),''''), ' + CHAR(13) +
+                    +' REPLICATE(''*'', LEN(ISNULL(CONVERT(nvarchar, DecryptByKey(D.C_Address2)),''''))), ' + CHAR(13) +   --WL04
+                    +' REPLICATE(''*'', LEN(ISNULL(CONVERT(nvarchar, DecryptByKey(D.C_Address3)),''''))), ' + CHAR(13) +   --WL04
+                    +' REPLICATE(''*'', LEN(ISNULL(CONVERT(nvarchar, DecryptByKey(D.C_Address4)),''''))), ' + CHAR(13) +   --WL04
                     +' ISNULL(CONVERT(nvarchar, DecryptByKey(D.C_State)),''''), ' + CHAR(13) +
                     +' ISNULL(CONVERT(nvarchar, DecryptByKey(D.C_City)),''''), ' + CHAR(13) +
                     +' ISNULL(CONVERT(nvarchar, DecryptByKey(D.C_Zip)),''''), ' + CHAR(13) +
