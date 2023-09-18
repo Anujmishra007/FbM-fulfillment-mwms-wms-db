@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: report dw = r_dw_packing_list_by_sku33_rdt                */
 /*                                                                      */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver.  Purposes                                 */
 /* 27-Apr-2023  WLChooi  1.0   DevOps Combine Script                    */
+/* 03-Aug-2023  WLChooi  1.1   WMS-23219 - Logic change (WL01)          */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_PackListBySku33_rdt]
@@ -52,6 +53,26 @@ BEGIN
          , @c_AddrType     NVARCHAR(10) = N'C'
          , @c_Country      NVARCHAR(100) = N''
 
+   --WL01 S
+   DECLARE @c_SQLExec         NVARCHAR(MAX) = ''
+         , @c_ExecArguments   NVARCHAR(MAX) = ''
+         , @c_SQL             NVARCHAR(MAX) = ''
+         , @c_B_State_Repl    NVARCHAR(4000) = ''
+         , @c_B_Country_Repl  NVARCHAR(4000) = ''
+         , @c_C_Country_Repl  NVARCHAR(4000) = ''
+         , @c_CustomAddr      NVARCHAR(1) = 'N'
+         , @c_B_Addr_L1       NVARCHAR(4000) = ''
+         , @c_B_Addr_L2       NVARCHAR(4000) = ''
+         , @c_B_Addr_L3       NVARCHAR(4000) = ''
+         , @c_B_Addr_L4       NVARCHAR(4000) = ''
+         , @c_B_Addr_L5       NVARCHAR(4000) = ''
+         , @c_S_Addr_L1       NVARCHAR(4000) = ''
+         , @c_S_Addr_L2       NVARCHAR(4000) = ''
+         , @c_S_Addr_L3       NVARCHAR(4000) = ''
+         , @c_S_Addr_L4       NVARCHAR(4000) = ''
+         , @c_S_Addr_L5       NVARCHAR(4000) = ''
+   --WL01 E
+
    SELECT @c_Orderkey  = ORDERS.Orderkey
         , @c_Type      = ORDERS.[Type]
         , @c_BillToKey = ORDERS.BillToKey
@@ -61,24 +82,195 @@ BEGIN
    JOIN ORDERS (NOLOCK) ON ORDERS.OrderKey = PACKHEADER.OrderKey
    WHERE Pickslipno = @c_Pickslipno
 
+   ----WL01 S
+   --IF @c_Type <> 'B2C'
+   --BEGIN
+   --   IF NOT EXISTS ( SELECT TOP 1 1
+   --                   FROM CODELKUP (NOLOCK) 
+   --                   WHERE LISTNAME = 'LVPLSTBADD' AND Storerkey = @c_Storerkey 
+   --                   AND Code = @c_BillToKey )
+   --   BEGIN
+   --      SET @c_AddrType = 'C'
+   --   END
+   --   ELSE
+   --   BEGIN
+   --      SET @c_AddrType = 'B'
+   --   END
+   --END
+   --ELSE
+   --BEGIN
+   --   SET @c_AddrType = 'C'
+   --END
+
+   CREATE TABLE #T_ADDR (
+        Addr_L1  NVARCHAR(500) NULL
+      , Addr_L2  NVARCHAR(500) NULL
+      , Addr_L3  NVARCHAR(500) NULL
+      , Addr_L4  NVARCHAR(500) NULL
+      , Addr_L5  NVARCHAR(500) NULL
+      , AddrType NVARCHAR(10)  NULL)
+
    IF @c_Type <> 'B2C'
    BEGIN
-      IF NOT EXISTS ( SELECT TOP 1 1
-                      FROM CODELKUP (NOLOCK) 
-                      WHERE LISTNAME = 'LVPLSTBADD' AND Storerkey = @c_Storerkey 
-                      AND Code = @c_BillToKey )
-      BEGIN
-         SET @c_AddrType = 'C'
-      END
-      ELSE
-      BEGIN
-         SET @c_AddrType = 'B'
-      END
+      --Bill To Addr - START
+      SELECT @c_SQL = STUFF((SELECT TOP 5 ',' + TRIM(Long) FROM CODELKUP (NOLOCK) WHERE LISTNAME = 'LVSPLB2BB' ORDER BY CAST(Code AS INT) FOR XML PATH('')),1,1,'' )
+
+      SELECT @c_SQL = REPLACE(@c_SQL,'B_ISOCntryCode','IIF(ISNULL(CL.Code,'''') = '''', ISNULL(ORDERS.B_ISOCntryCode,''''), ISNULL(CL.Long,'''')) ')
+
+      SELECT @c_SQL = ' INSERT INTO #T_ADDR SELECT ' + @c_SQL + ', ''B'' ' + CHAR(13)
+                    + ' FROM ORDERS (NOLOCK) ' + CHAR(13)
+                    + ' LEFT JOIN CODELKUP CL (NOLOCK) ON CL.Listname = ''LVSPLCC'' AND CL.Storerkey = ORDERS.Storerkey ' + CHAR(13)
+                    + '                               AND CL.Code = ORDERS.B_ISOCntryCode ' + CHAR(13)
+                    + ' WHERE Orderkey = @c_Orderkey '
+
+      SELECT @c_B_State_Repl = 'CASE WHEN ISNULL(B_State, '''') = '''' 
+                                     THEN CASE WHEN B_Country = ''AU'' OR B_ISOCntryCode = ''AU'' THEN CASE WHEN B_Zip LIKE ''3%'' THEN ''VIC''
+                                                                                                            WHEN B_Zip LIKE ''4%'' THEN ''QLD''
+                                                                                                            WHEN B_Zip LIKE ''5%'' THEN ''SA''
+                                                                                                            WHEN B_Zip LIKE ''0%'' THEN ''NT''
+                                                                                                            WHEN B_Zip LIKE ''6%'' THEN ''WA''
+                                                                                                            WHEN B_Zip LIKE ''7%'' THEN ''TAS''
+                                                                                                            WHEN ((B_Zip >= ''2600'' AND B_Zip <= ''2618'') 
+                                                                                                               OR (B_Zip >= ''2900'' AND B_Zip <= ''2920'')) THEN ''ACT''
+                                                                                                            ELSE ''NSW'' 
+                                                                                                            END
+                                               WHEN B_Country = ''NZ'' OR B_ISOCntryCode = ''NZ'' THEN CASE WHEN LEFT(TRIM(ISNULL(B_Zip,'''')),1) IN (''7'',''8'',''9'') THEN ''SI''
+                                                                                                            ELSE ''NI''
+                                                                                                            END
+                                          END
+                                     ELSE ISNULL(B_State, '''') END '
+
+      SELECT @c_SQL = REPLACE(@c_SQL,'B_STATE',@c_B_State_Repl)
+
+      SET @c_B_Country_Repl = 'CASE WHEN ISNULL(B_Country, '''') = '''' THEN ISNULL(B_ISOCntryCode, '''') ELSE ISNULL(B_Country, '''') END '
+
+      SELECT @c_SQL = REPLACE(@c_SQL,'B_Country',@c_B_Country_Repl)
+
+      SELECT @c_C_Country_Repl = 'CASE C_Country WHEN ''AU'' THEN ''Australia'' 
+                                                 WHEN ''NZ'' THEN ''New Zealand'' 
+                                                 WHEN ''HK'' THEN ''Hong Kong'' 
+                                                 WHEN ''KR'' THEN ''South Korea'' ELSE C_Country END'
+      
+      SELECT @c_SQL = REPLACE(@c_SQL,'C_Country',@c_C_Country_Repl)
+
+      SET @c_ExecArguments = N'  @c_Orderkey         NVARCHAR(10)'     
+
+      EXEC sp_executesql @c_SQL    
+                       , @c_ExecArguments    
+                       , @c_Orderkey    
+      --Bill To Addr - END
+
+      --Ship To Addr - START
+      SELECT @c_SQL = STUFF((SELECT TOP 5 ',' + TRIM(Long) FROM CODELKUP (NOLOCK) WHERE LISTNAME = 'LVSPLB2BS' ORDER BY CAST(Code AS INT) FOR XML PATH('')),1,1,'' )
+      SELECT @c_SQL = ' INSERT INTO #T_ADDR SELECT ' + @c_SQL + ', ''S'' FROM ORDERS (NOLOCK) WHERE Orderkey = @c_Orderkey '
+      
+      SELECT @c_B_State_Repl = 'CASE WHEN ISNULL(B_State, '''') = '''' 
+                                     THEN CASE WHEN B_Country = ''AU'' OR B_ISOCntryCode = ''AU'' THEN CASE WHEN B_Zip LIKE ''3%'' THEN ''VIC''
+                                                                                                            WHEN B_Zip LIKE ''4%'' THEN ''QLD''
+                                                                                                            WHEN B_Zip LIKE ''5%'' THEN ''SA''
+                                                                                                            WHEN B_Zip LIKE ''0%'' THEN ''NT''
+                                                                                                            WHEN B_Zip LIKE ''6%'' THEN ''WA''
+                                                                                                            WHEN B_Zip LIKE ''7%'' THEN ''TAS''
+                                                                                                            WHEN ((B_Zip >= ''2600'' AND B_Zip <= ''2618'') 
+                                                                                                               OR (B_Zip >= ''2900'' AND B_Zip <= ''2920'')) THEN ''ACT''
+                                                                                                            ELSE ''NSW'' 
+                                                                                                            END
+                                               WHEN B_Country = ''NZ'' OR B_ISOCntryCode = ''NZ'' THEN CASE WHEN LEFT(TRIM(ISNULL(B_Zip,'''')),1) IN (''7'',''8'',''9'') THEN ''SI''
+                                                                                                            ELSE ''NI''
+                                                                                                            END
+                                          END
+                                     ELSE ISNULL(B_State, '''') END '
+
+      SELECT @c_SQL = REPLACE(@c_SQL,'B_STATE',@c_B_State_Repl)
+
+      SET @c_B_Country_Repl = 'CASE WHEN ISNULL(B_Country, '''') = '''' THEN ISNULL(B_ISOCntryCode, '''') ELSE ISNULL(B_Country, '''') END '
+
+      SELECT @c_SQL = REPLACE(@c_SQL,'B_Country',@c_B_Country_Repl)
+
+      SELECT @c_C_Country_Repl = 'CASE C_Country WHEN ''AU'' THEN ''Australia'' 
+                                                 WHEN ''NZ'' THEN ''New Zealand'' 
+                                                 WHEN ''HK'' THEN ''Hong Kong'' 
+                                                 WHEN ''KR'' THEN ''South Korea'' ELSE C_Country END'
+      
+      SELECT @c_SQL = REPLACE(@c_SQL,'C_Country',@c_C_Country_Repl)
+
+      SET @c_ExecArguments = N'  @c_Orderkey         NVARCHAR(10)'     
+       
+      EXEC sp_executesql @c_SQL    
+                       , @c_ExecArguments    
+                       , @c_Orderkey    
+      --Ship To Addr - END
    END
    ELSE
    BEGIN
-      SET @c_AddrType = 'C'
+      --Bill To Addr - START
+      SELECT @c_SQL = STUFF((SELECT TOP 5 ',' + TRIM(Long) FROM CODELKUP (NOLOCK) WHERE LISTNAME = 'LVSPLB2BS' ORDER BY CAST(Code AS INT) FOR XML PATH('')),1,1,'' )
+
+      SELECT @c_SQL = REPLACE(@c_SQL,'B_ISOCntryCode','IIF(ISNULL(CL.Code,'''') = '''', ISNULL(ORDERS.B_ISOCntryCode,''''), ISNULL(CL.Long,'''')) ')
+
+      SELECT @c_SQL = ' INSERT INTO #T_ADDR SELECT ' + @c_SQL + ', ''B'' ' + CHAR(13)
+                    + ' FROM ORDERS (NOLOCK) ' + CHAR(13)
+                    + ' LEFT JOIN CODELKUP CL (NOLOCK) ON CL.Listname = ''LVSPLCC'' AND CL.Storerkey = ORDERS.Storerkey ' + CHAR(13)
+                    + '                               AND CL.Code = ORDERS.B_ISOCntryCode ' + CHAR(13)
+                    + ' WHERE Orderkey = @c_Orderkey '
+
+      SET @c_B_Country_Repl = 'CASE WHEN ISNULL(B_Country, '''') = '''' THEN ISNULL(B_ISOCntryCode, '''') ELSE ISNULL(B_Country, '''') END '
+
+      SELECT @c_SQL = REPLACE(@c_SQL,'B_Country',@c_B_Country_Repl)
+
+      SELECT @c_C_Country_Repl = 'CASE C_Country WHEN ''AU'' THEN ''Australia'' 
+                                                 WHEN ''NZ'' THEN ''New Zealand'' 
+                                                 WHEN ''HK'' THEN ''Hong Kong'' 
+                                                 WHEN ''KR'' THEN ''South Korea'' ELSE C_Country END'
+      
+      SELECT @c_SQL = REPLACE(@c_SQL,'C_Country',@c_C_Country_Repl)
+
+      SET @c_ExecArguments = N'  @c_Orderkey         NVARCHAR(10)'     
+       
+      EXEC sp_executesql @c_SQL    
+                       , @c_ExecArguments    
+                       , @c_Orderkey    
+      --Bill To Addr - END
+
+      --Ship To Addr - START
+      SELECT @c_SQL = STUFF((SELECT TOP 5 ',' + TRIM(Long) FROM CODELKUP (NOLOCK) WHERE LISTNAME = 'LVSPLB2C' ORDER BY CAST(Code AS INT) FOR XML PATH('')),1,1,'' )
+      SELECT @c_SQL = ' INSERT INTO #T_ADDR SELECT ' + @c_SQL + ', ''S'' FROM ORDERS (NOLOCK) WHERE Orderkey = @c_Orderkey '
+
+      SET @c_B_Country_Repl = 'CASE WHEN ISNULL(B_Country, '''') = '''' THEN ISNULL(B_ISOCntryCode, '''') ELSE ISNULL(B_Country, '''') END '
+
+      SELECT @c_SQL = REPLACE(@c_SQL,'B_Country',@c_B_Country_Repl)
+
+      SELECT @c_C_Country_Repl = 'CASE C_Country WHEN ''AU'' THEN ''Australia'' 
+                                                 WHEN ''NZ'' THEN ''New Zealand'' 
+                                                 WHEN ''HK'' THEN ''Hong Kong'' 
+                                                 WHEN ''KR'' THEN ''South Korea'' ELSE C_Country END'
+      
+      SELECT @c_SQL = REPLACE(@c_SQL,'C_Country',@c_C_Country_Repl)
+
+      SET @c_ExecArguments = N'  @c_Orderkey         NVARCHAR(10)'     
+       
+      EXEC sp_executesql @c_SQL    
+                       , @c_ExecArguments    
+                       , @c_Orderkey 
+      --Ship To Addr - END
    END
+
+   SELECT @c_B_Addr_L1 = T.Addr_L1
+        , @c_B_Addr_L2 = T.Addr_L2
+        , @c_B_Addr_L3 = T.Addr_L3
+        , @c_B_Addr_L4 = T.Addr_L4
+        , @c_B_Addr_L5 = T.Addr_L5
+   FROM #T_ADDR T
+   WHERE T.AddrType = 'B'
+
+   SELECT @c_S_Addr_L1 = T.Addr_L1
+        , @c_S_Addr_L2 = T.Addr_L2
+        , @c_S_Addr_L3 = T.Addr_L3
+        , @c_S_Addr_L4 = T.Addr_L4
+        , @c_S_Addr_L5 = T.Addr_L5
+   FROM #T_ADDR T
+   WHERE T.AddrType = 'S'
+   --WL01 E
 
    CREATE TABLE #T_ORD
    (
@@ -167,17 +359,17 @@ BEGIN
                      , BuyerPO, ORDAddDate, C_Company, SKU, DESCR, Size, Style, MANUFACTURERSKU, OriginalQty, Storerkey
                      , C_Contact1, C_Address4
                      , B_Company, B_Address1, B_City, B_State, B_Zip, B_Country, B_Contact1, B_Address2, [Type])
-   SELECT ISNULL(OH.C_Address1, '')
-        , ISNULL(OH.C_City, '')
-        , ISNULL(OH.C_State, '')
-        , ISNULL(OH.C_Zip, '')
-        , ISNULL(OH.C_Country, '')
+   SELECT ''--ISNULL(OH.C_Address1, '')   --WL01 S
+        , ''--ISNULL(OH.C_City, '')
+        , ''--ISNULL(OH.C_State, '')
+        , ''--ISNULL(OH.C_Zip, '')
+        , ''--ISNULL(OH.C_Country, '')   --WL01 E
         , ISNULL(TRIM(OH.ExternOrderKey), '')
         , CONVERT(NVARCHAR(10), ISNULL(OH.EffectiveDate, '19000101'), 104)
         , ISNULL(OH.ConsigneeKey, '')
         , ISNULL(OH.BuyerPO, '')
         , CONVERT(NVARCHAR(10), OH.AddDate, 104)
-        , ISNULL(OH.C_Company, '')
+        , ''--ISNULL(OH.C_Company, '')   --WL01
         , TRIM(S.Sku)
         , ISNULL(S.DESCR, '')
         , ISNULL(S.Size, '')
@@ -185,83 +377,83 @@ BEGIN
         , ISNULL(S.MANUFACTURERSKU, '')
         , SUM(OD.OriginalQty) AS OriginalQty
         , OH.StorerKey
-        , ISNULL(OH.C_Contact1, '')
-        , ISNULL(OH.C_Address4, '')
-        , CASE WHEN @c_AddrType = 'B' THEN ISNULL(OH.B_Company, '') ELSE ISNULL(OH.C_Company, '') END
-        , CASE WHEN @c_AddrType = 'B' THEN ISNULL(OH.B_Address1, '') ELSE ISNULL(OH.C_Address1, '') END
-        , CASE WHEN @c_AddrType = 'B' THEN ISNULL(OH.B_City, '') ELSE ISNULL(OH.C_City, '') END
-        , CASE WHEN @c_AddrType = 'B' THEN CASE WHEN ISNULL(OH.B_State, '') = '' 
-                                                THEN CASE WHEN OH.B_Country = 'AU' OR OH.B_ISOCntryCode = 'AU' THEN CASE WHEN OH.B_Zip LIKE '3%' THEN 'VIC'
-                                                                                                                         WHEN OH.B_Zip LIKE '4%' THEN 'QLD'
-                                                                                                                         WHEN OH.B_Zip LIKE '5%' THEN 'SA'
-                                                                                                                         WHEN OH.B_Zip LIKE '0%' THEN 'NT'
-                                                                                                                         WHEN OH.B_Zip LIKE '6%' THEN 'WA'
-                                                                                                                         WHEN OH.B_Zip LIKE '7%' THEN 'TAS'
-                                                                                                                         WHEN ((OH.B_Zip >= '2600' AND OH.B_Zip <= '2618') 
-                                                                                                                            OR (OH.B_Zip >= '2900' AND OH.B_Zip <= '2920')) THEN 'ACT'
-                                                                                                                         ELSE 'NSW' 
-                                                                                                                         END
-                                                          WHEN OH.B_Country = 'NZ' OR OH.B_ISOCntryCode = 'NZ' THEN CASE WHEN LEFT(TRIM(ISNULL(OH.B_Zip,'')),1) IN ('7','8','9') THEN 'SI'
-                                                                                                                         ELSE 'NI'
-                                                                                                                         END
-                                                     END
-                                                ELSE ISNULL(OH.B_State, '') END ELSE ISNULL(OH.C_State, '') END
-        , CASE WHEN @c_AddrType = 'B' THEN ISNULL(OH.B_Zip, '') ELSE ISNULL(OH.C_Zip, '') END
-        , CASE WHEN @c_AddrType = 'B' THEN CASE WHEN ISNULL(OH.B_Country, '') = '' 
-                                                THEN ISNULL(OH.B_ISOCntryCode, '') 
-                                                ELSE ISNULL(OH.B_Country, '') END ELSE ISNULL(OH.C_Country, '') END
-        , CASE WHEN @c_AddrType = 'B' THEN ISNULL(OH.B_Contact1, '') ELSE ISNULL(OH.C_Contact1, '') END
-        , CASE WHEN @c_AddrType = 'B' THEN ISNULL(OH.B_Address2, '') ELSE ISNULL(OH.C_Address4, '') END
+        , ''--ISNULL(OH.C_Contact1, '')   --WL01 S
+        , ''--ISNULL(OH.C_Address4, '')
+        , ''--CASE WHEN @c_AddrType = 'B' THEN ISNULL(OH.B_Company, '') ELSE ISNULL(OH.C_Company, '') END
+        , ''--CASE WHEN @c_AddrType = 'B' THEN ISNULL(OH.B_Address1, '') ELSE ISNULL(OH.C_Address1, '') END
+        , ''--CASE WHEN @c_AddrType = 'B' THEN ISNULL(OH.B_City, '') ELSE ISNULL(OH.C_City, '') END
+        , ''--CASE WHEN @c_AddrType = 'B' THEN CASE WHEN ISNULL(OH.B_State, '') = '' 
+          --                                      THEN CASE WHEN OH.B_Country = 'AU' OR OH.B_ISOCntryCode = 'AU' THEN CASE WHEN OH.B_Zip LIKE '3%' THEN 'VIC'
+          --                                                                                                               WHEN OH.B_Zip LIKE '4%' THEN 'QLD'
+          --                                                                                                               WHEN OH.B_Zip LIKE '5%' THEN 'SA'
+          --                                                                                                               WHEN OH.B_Zip LIKE '0%' THEN 'NT'
+          --                                                                                                               WHEN OH.B_Zip LIKE '6%' THEN 'WA'
+          --                                                                                                               WHEN OH.B_Zip LIKE '7%' THEN 'TAS'
+          --                                                                                                               WHEN ((OH.B_Zip >= '2600' AND OH.B_Zip <= '2618') 
+          --                                                                                                                  OR (OH.B_Zip >= '2900' AND OH.B_Zip <= '2920')) THEN 'ACT'
+          --                                                                                                               ELSE 'NSW' 
+          --                                                                                                               END
+          --                                                WHEN OH.B_Country = 'NZ' OR OH.B_ISOCntryCode = 'NZ' THEN CASE WHEN LEFT(TRIM(ISNULL(OH.B_Zip,'')),1) IN ('7','8','9') THEN 'SI'
+          --                                                                                                               ELSE 'NI'
+          --                                                                                                               END
+          --                                           END
+          --                                      ELSE ISNULL(OH.B_State, '') END ELSE ISNULL(OH.C_State, '') END
+        , ''--CASE WHEN @c_AddrType = 'B' THEN ISNULL(OH.B_Zip, '') ELSE ISNULL(OH.C_Zip, '') END
+        , ''--CASE WHEN @c_AddrType = 'B' THEN CASE WHEN ISNULL(OH.B_Country, '') = '' 
+          --                                      THEN ISNULL(OH.B_ISOCntryCode, '') 
+          --                                      ELSE ISNULL(OH.B_Country, '') END ELSE ISNULL(OH.C_Country, '') END
+        , ''--CASE WHEN @c_AddrType = 'B' THEN ISNULL(OH.B_Contact1, '') ELSE ISNULL(OH.C_Contact1, '') END
+        , ''--CASE WHEN @c_AddrType = 'B' THEN ISNULL(OH.B_Address2, '') ELSE ISNULL(OH.C_Address4, '') END   --WL01 E
         , OH.[Type]
    FROM PackHeader PH (NOLOCK)
    JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = PH.OrderKey
    JOIN ORDERDETAIL OD (NOLOCK) ON OD.OrderKey = OH.OrderKey
    JOIN SKU S (NOLOCK) ON S.StorerKey = OD.StorerKey AND S.Sku = OD.Sku
    WHERE PH.PickSlipNo = @c_Pickslipno
-   GROUP BY CASE WHEN @c_AddrType = 'B' THEN ISNULL(OH.B_Address1, '') ELSE ISNULL(OH.C_Address1, '') END
-          , CASE WHEN @c_AddrType = 'B' THEN ISNULL(OH.B_City, '') ELSE ISNULL(OH.C_City, '') END
-          , CASE WHEN @c_AddrType = 'B' THEN CASE WHEN ISNULL(OH.B_State, '') = '' 
-                                                  THEN CASE WHEN OH.B_Country = 'AU' OR OH.B_ISOCntryCode = 'AU' THEN CASE WHEN OH.B_Zip LIKE '3%' THEN 'VIC'
-                                                                                                                           WHEN OH.B_Zip LIKE '4%' THEN 'QLD'
-                                                                                                                           WHEN OH.B_Zip LIKE '5%' THEN 'SA'
-                                                                                                                           WHEN OH.B_Zip LIKE '0%' THEN 'NT'
-                                                                                                                           WHEN OH.B_Zip LIKE '6%' THEN 'WA'
-                                                                                                                           WHEN OH.B_Zip LIKE '7%' THEN 'TAS'
-                                                                                                                           WHEN ((OH.B_Zip >= '2600' AND OH.B_Zip <= '2618') 
-                                                                                                                              OR (OH.B_Zip >= '2900' AND OH.B_Zip <= '2920')) THEN 'ACT'
-                                                                                                                           ELSE 'NSW' 
-                                                                                                                           END
-                                                            WHEN OH.B_Country = 'NZ' OR OH.B_ISOCntryCode = 'NZ' THEN CASE WHEN LEFT(TRIM(ISNULL(OH.B_Zip,'')),1) IN ('7','8','9') THEN 'SI'
-                                                                                                                           ELSE 'NI'
-                                                                                                                           END
-                                                       END
-                                                  ELSE ISNULL(OH.B_State, '') END ELSE ISNULL(OH.C_State, '') END
-          , CASE WHEN @c_AddrType = 'B' THEN ISNULL(OH.B_Zip, '') ELSE ISNULL(OH.C_Zip, '') END
-          , CASE WHEN @c_AddrType = 'B' THEN CASE WHEN ISNULL(OH.B_Country, '') = '' 
-                                                  THEN ISNULL(OH.B_ISOCntryCode, '') 
-                                                  ELSE ISNULL(OH.B_Country, '') END ELSE ISNULL(OH.C_Country, '') END
-          , ISNULL(TRIM(OH.ExternOrderKey), '')
+   --GROUP BY CASE WHEN @c_AddrType = 'B' THEN ISNULL(OH.B_Address1, '') ELSE ISNULL(OH.C_Address1, '') END   --WL01 S
+   --       , CASE WHEN @c_AddrType = 'B' THEN ISNULL(OH.B_City, '') ELSE ISNULL(OH.C_City, '') END
+   --       , CASE WHEN @c_AddrType = 'B' THEN CASE WHEN ISNULL(OH.B_State, '') = '' 
+   --                                               THEN CASE WHEN OH.B_Country = 'AU' OR OH.B_ISOCntryCode = 'AU' THEN CASE WHEN OH.B_Zip LIKE '3%' THEN 'VIC'
+   --                                                                                                                        WHEN OH.B_Zip LIKE '4%' THEN 'QLD'
+   --                                                                                                                        WHEN OH.B_Zip LIKE '5%' THEN 'SA'
+   --                                                                                                                        WHEN OH.B_Zip LIKE '0%' THEN 'NT'
+   --                                                                                                                        WHEN OH.B_Zip LIKE '6%' THEN 'WA'
+   --                                                                                                                        WHEN OH.B_Zip LIKE '7%' THEN 'TAS'
+   --                                                                                                                        WHEN ((OH.B_Zip >= '2600' AND OH.B_Zip <= '2618') 
+   --                                                                                                                           OR (OH.B_Zip >= '2900' AND OH.B_Zip <= '2920')) THEN 'ACT'
+   --                                                                                                                        ELSE 'NSW' 
+   --                                                                                                                        END
+   --                                                         WHEN OH.B_Country = 'NZ' OR OH.B_ISOCntryCode = 'NZ' THEN CASE WHEN LEFT(TRIM(ISNULL(OH.B_Zip,'')),1) IN ('7','8','9') THEN 'SI'
+   --                                                                                                                        ELSE 'NI'
+   --                                                                                                                        END
+   --                                                    END
+   --                                               ELSE ISNULL(OH.B_State, '') END ELSE ISNULL(OH.C_State, '') END
+   --       , CASE WHEN @c_AddrType = 'B' THEN ISNULL(OH.B_Zip, '') ELSE ISNULL(OH.C_Zip, '') END
+   --       , CASE WHEN @c_AddrType = 'B' THEN CASE WHEN ISNULL(OH.B_Country, '') = '' 
+   --                                               THEN ISNULL(OH.B_ISOCntryCode, '') 
+   --                                               ELSE ISNULL(OH.B_Country, '') END ELSE ISNULL(OH.C_Country, '') END   --WL01 E
+   GROUP BY ISNULL(TRIM(OH.ExternOrderKey), '')
           , CONVERT(NVARCHAR(10), ISNULL(OH.EffectiveDate, '19000101'), 104)
           , ISNULL(OH.ConsigneeKey, '')
           , ISNULL(OH.BuyerPO, '')
           , CONVERT(NVARCHAR(10), OH.AddDate, 104)
-          , CASE WHEN @c_AddrType = 'B' THEN ISNULL(OH.B_Company, '') ELSE ISNULL(OH.C_Company, '') END
+          --, CASE WHEN @c_AddrType = 'B' THEN ISNULL(OH.B_Company, '') ELSE ISNULL(OH.C_Company, '') END   --WL01
           , TRIM(S.Sku)
           , ISNULL(S.DESCR, '')
           , ISNULL(S.Size, '')
           , ISNULL(S.Style, '')
           , ISNULL(S.MANUFACTURERSKU, '')
           , OH.StorerKey
-          , CASE WHEN @c_AddrType = 'B' THEN ISNULL(OH.B_Contact1, '') ELSE ISNULL(OH.C_Contact1, '') END
-          , CASE WHEN @c_AddrType = 'B' THEN ISNULL(OH.B_Address2, '') ELSE ISNULL(OH.C_Address4, '') END
-          , ISNULL(OH.C_Address1, '')
-          , ISNULL(OH.C_City, '')
-          , ISNULL(OH.C_State, '')
-          , ISNULL(OH.C_Zip, '')
-          , ISNULL(OH.C_Country, '')
-          , ISNULL(OH.C_Company, '')
-          , ISNULL(OH.C_Contact1, '')
-          , ISNULL(OH.C_Address4, '')
+          --, CASE WHEN @c_AddrType = 'B' THEN ISNULL(OH.B_Contact1, '') ELSE ISNULL(OH.C_Contact1, '') END   --WL01 S
+          --, CASE WHEN @c_AddrType = 'B' THEN ISNULL(OH.B_Address2, '') ELSE ISNULL(OH.C_Address4, '') END
+          --, ISNULL(OH.C_Address1, '')
+          --, ISNULL(OH.C_City, '')
+          --, ISNULL(OH.C_State, '')
+          --, ISNULL(OH.C_Zip, '')
+          --, ISNULL(OH.C_Country, '')
+          --, ISNULL(OH.C_Company, '')
+          --, ISNULL(OH.C_Contact1, '')
+          --, ISNULL(OH.C_Address4, '')   --WL01 E
           , OH.[Type]
 
    --NZ PACKING LIST
@@ -269,7 +461,7 @@ BEGIN
                 FROM #T_ORD TOR (NOLOCK)
                 JOIN CODELKUP CL (NOLOCK) ON  CL.LISTNAME = 'PCKLISTNZ'
                                           AND CL.Storerkey = TOR.Storerkey
-                                          AND CL.Code = TOR.C_Country
+                                          AND CL.Code = @C_Country   --WL01
                                           AND CL.UDF01 <> TOR.[Type] )
    BEGIN
       SET @c_Country_TXT = N'New Zealand: '
@@ -308,6 +500,7 @@ BEGIN
       SET @c_Email_TXT = N'CUSTOMERCARE@LEVIS.COM.AU'
       SET @c_Remark_TXT = N''
       SET @c_FOOTER2_TXT = N'Level 7, 11 Eastern Rd. SOUTH MELBOURNE, Victoria 3205      Telephone: 61 03 9864 0501 '
+      SET @c_CustomAddr = 'Y'   --WL01
    END
 
    IF EXISTS (  SELECT 1
@@ -337,6 +530,7 @@ BEGIN
 
       SET @c_Remark_TXT = N''
       SET @c_FOOTER2_TXT = N'Level 7, 11 Eastern Rd. SOUTH MELBOURNE, Victoria 3205      Telephone: 61 03 9864 0501 '
+      SET @c_CustomAddr = 'Y'   --WL01
    END
 
    IF EXISTS (  SELECT 1
@@ -366,6 +560,7 @@ BEGIN
 
       SET @c_Remark_TXT = N''
       SET @c_FOOTER2_TXT = N'Level 7, 11 Eastern Rd. SOUTH MELBOURNE, Victoria 3205      Telephone: 61 03 9864 0501 '
+      SET @c_CustomAddr = 'Y'   --WL01
    END
 
    IF EXISTS (  SELECT 1
@@ -399,6 +594,7 @@ BEGIN
       SET @c_Email_TXT = N'NZCUSTOMERCARE@LEVIS.COM.AU'
       SET @c_Remark_TXT = N''
       SET @c_FOOTER2_TXT = N'Level 7, 11 Eastern Rd. SOUTH MELBOURNE, Victoria 3205      Telephone: 61 03 9864 0501 '
+      SET @c_CustomAddr = 'Y'   --WL01
    END
 
    IF EXISTS (  SELECT 1
@@ -463,10 +659,7 @@ BEGIN
            , TRIM(TOR.C_City)
            , TRIM(TOR.C_State)
            , TRIM(TOR.C_Zip)
-           , CASE TOR.C_Country WHEN 'AU' THEN 'Australia' 
-                                WHEN 'NZ' THEN 'New Zealand' 
-                                WHEN 'HK' THEN 'Hong Kong' 
-                                WHEN 'KR' THEN 'South Korea' ELSE TOR.C_Country END
+           , ''   --WL01
            , TOR.ExternOrderKey
            , TOR.EffectiveDate
            , TOR.ConsigneeKey
@@ -517,11 +710,11 @@ BEGIN
    DEALLOCATE CUR_LOOP
 
    SELECT LabelNo
-        , C_Addr_L1 = C_Company + ' ' + C_Contact1
-        , C_Addr_L2 = C_Address1
-        , C_Addr_L3 = CASE WHEN ISNULL(C_Address4,'') = '' THEN C_City + ', ' + C_State + ', ' + C_Zip ELSE C_Address4 END
-        , C_Addr_L4 = CASE WHEN ISNULL(C_Address4,'') = '' THEN C_Country ELSE C_City + ', ' + C_State + ', ' + C_Zip END
-        , C_Addr_L5 = CASE WHEN ISNULL(C_Address4,'') = '' THEN '' ELSE C_Country END 
+        , C_Addr_L1 = CASE WHEN @c_CustomAddr = 'Y' THEN C_Company + ' ' + C_Contact1 ELSE @c_S_Addr_L1 END   --WL01
+        , C_Addr_L2 = CASE WHEN @c_CustomAddr = 'Y' THEN C_Address1 ELSE @c_S_Addr_L2 END   --WL01
+        , C_Addr_L3 = CASE WHEN @c_CustomAddr = 'Y' THEN CASE WHEN ISNULL(C_Address4,'') = '' THEN C_City + ', ' + C_State + ', ' + C_Zip ELSE C_Address4 END ELSE @c_S_Addr_L3 END   --WL01
+        , C_Addr_L4 = CASE WHEN @c_CustomAddr = 'Y' THEN CASE WHEN ISNULL(C_Address4,'') = '' THEN C_Country ELSE C_City + ', ' + C_State + ', ' + C_Zip END ELSE @c_S_Addr_L4 END   --WL01
+        , C_Addr_L5 = CASE WHEN @c_CustomAddr = 'Y' THEN CASE WHEN ISNULL(C_Address4,'') = '' THEN '' ELSE C_Country END ELSE @c_S_Addr_L5 END   --WL01
         , ExternOrderKey
         , EffectiveDate
         , ConsigneeKey
@@ -543,11 +736,11 @@ BEGIN
         , @c_Fax_TXT AS Fax_TXT
         , @c_FOOTER1_TXT AS FOOTER1_TXT
         , @c_FOOTER2_TXT AS FOOTER2_TXT
-        , B_Addr_L1 = B_Company + ' ' + B_Contact1
-        , B_Addr_L2 = B_Address1
-        , B_Addr_L3 = CASE WHEN ISNULL(B_Address2,'') = '' THEN B_City + ', ' + B_State + ', ' + B_Zip ELSE B_Address2 END
-        , B_Addr_L4 = CASE WHEN ISNULL(B_Address2,'') = '' THEN B_Country ELSE B_City + ', ' + B_State + ', ' + B_Zip END
-        , B_Addr_L5 = CASE WHEN ISNULL(B_Address2,'') = '' THEN '' ELSE B_Country END 
+        , B_Addr_L1 = CASE WHEN @c_CustomAddr = 'Y' THEN B_Company + ' ' + B_Contact1 ELSE @c_B_Addr_L1 END   --WL01
+        , B_Addr_L2 = CASE WHEN @c_CustomAddr = 'Y' THEN B_Address1 ELSE @c_B_Addr_L2 END   --WL01
+        , B_Addr_L3 = CASE WHEN @c_CustomAddr = 'Y' THEN CASE WHEN ISNULL(B_Address2,'') = '' THEN B_City + ', ' + B_State + ', ' + B_Zip ELSE B_Address2 END ELSE @c_B_Addr_L3 END   --WL01
+        , B_Addr_L4 = CASE WHEN @c_CustomAddr = 'Y' THEN CASE WHEN ISNULL(B_Address2,'') = '' THEN B_Country ELSE B_City + ', ' + B_State + ', ' + B_Zip END ELSE @c_B_Addr_L4 END   --WL01
+        , B_Addr_L5 = CASE WHEN @c_CustomAddr = 'Y' THEN CASE WHEN ISNULL(B_Address2,'') = '' THEN '' ELSE B_Country END ELSE @c_B_Addr_L5 END   --WL01
         , @c_Email_TXT AS Email_TXT
         , @c_Remark_TXT AS Remark_TXT
    FROM #T_RESULT
