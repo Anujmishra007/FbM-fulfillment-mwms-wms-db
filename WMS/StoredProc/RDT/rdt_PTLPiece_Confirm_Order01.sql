@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_PTLPiece_Confirm_Order01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_PTLPiece_Confirm_Order01]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -19,9 +16,10 @@ GO
 /*                             Add DynamicSlot                          */
 /*                             Add UpdateCaseID, UpdateStatus           */
 /* 15-01-2018 1.2  Ung         WMS-3788 Add AutoScanOut, InsertDropIDSP */
+/* 12-09-2023 1.3  Ung         WMS-23635 Add LOC                        */
 /************************************************************************/
 
-CREATE PROC rdt.rdt_PTLPiece_Confirm_Order01 (
+CREATE OR ALTER PROC rdt.rdt_PTLPiece_Confirm_Order01 (
     @nMobile      INT
    ,@nFunc        INT
    ,@cLangCode    NVARCHAR( 3)
@@ -75,6 +73,7 @@ BEGIN
    DECLARE @cUpdateStatus     NVARCHAR( 1)
    DECLARE @cAutoScanOut      NVARCHAR( 1)
    DECLARE @cInsertDropIDSP   NVARCHAR( 20)
+   DECLARE @cLOC              NVARCHAR( 10)
 
    SET @cDisplay = '' 
 
@@ -146,7 +145,8 @@ BEGIN
          -- Get position not yet assign
          SELECT TOP 1
             @cIPAddress = DP.IPAddress, 
-            @cPosition = DP.DevicePosition
+            @cPosition = DP.DevicePosition, 
+            @cLOC = DP.LOC
          FROM dbo.DeviceProfile DP WITH (NOLOCK)
          WHERE DP.DeviceType = 'STATION'
             AND DP.DeviceID = @cStation
@@ -165,8 +165,8 @@ BEGIN
          END
          
          -- Save assign
-         INSERT rdt.rdtPTLPieceLog (Station, IPAddress, Position, WaveKey, OrderKey, CartonID)
-         VALUES (@cStation, @cIPAddress, @cPosition, @cWaveKey, @cOrderKey, '')
+         INSERT rdt.rdtPTLPieceLog (Station, IPAddress, Position, WaveKey, OrderKey, CartonID, LOC)
+         VALUES (@cStation, @cIPAddress, @cPosition, @cWaveKey, @cOrderKey, '', @cLOC)
          IF @@ERROR <> 0
          BEGIN
             SET @nErrNo = 101253
