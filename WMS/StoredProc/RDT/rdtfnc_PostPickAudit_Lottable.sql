@@ -16,6 +16,7 @@ GO
 /* 2019-11-28   1.4  Chermaine  WMS-11218 show total and                      */
 /*                              counted quantity per sku (cc01)               */
 /* 2023-06-09   1.5  YeeKung    WMS-22746 Add eventlog (yeekung01)            */
+/* 2023-08-30   1.6  Ung        WMS-23087 Fix ExtVal for lottable runtime err */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PostPickAudit_Lottable] (
@@ -863,7 +864,7 @@ BEGIN
          AND SKU.SKU = @cSKU
 
       SET @nExtPUOM_Div = 0
-      insert into traceinfo (tracename, timein, col1) values ('903', getdate(), @cExtendedUOMSP)
+      
       -- Extended UOM (james01)
       IF @cExtendedUOMSP <> ''
       BEGIN
@@ -1125,6 +1126,8 @@ Step_Lottables:
 BEGIN
    IF @nInputKey = 1 -- Yes or Send
    BEGIN
+      DECLARE @cOutField15Backup NVARCHAR( 60) = @cOutField15
+      
       -- Dynamic lottable
       EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'CAPTURE', 'CHECK', 5, 1,
          @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
@@ -1181,7 +1184,7 @@ BEGIN
             SET @cErrMsg1 = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- LOTTABLE NOT IN LIST
             EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, '121974', @cErrMsg1
 
-            GOTO Quit
+            GOTO Step_Lottables_Fail
          END
       END
 
@@ -1197,7 +1200,7 @@ BEGIN
          @nErrNo     OUTPUT,
          @cErrMsg    OUTPUT
       IF @nErrNo <> 0
-         GOTO Quit
+         GOTO Step_Lottables_Fail
 
       -- Enable field
       SET @cFieldAttr02 = '' -- Dynamic lottable 1..5
@@ -1240,7 +1243,6 @@ BEGIN
       --Extended info: show total and counted quantity (cc01)
       IF @cExtendedInfoSP <> ''
       BEGIN
-      	INSERT INTO traceinfo (traceName,col1,col2)VALUES('cc',@cExtendedInfoSP,@cSKU)
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
          BEGIN
             --SET @cExtendedInfo = ''
@@ -1353,6 +1355,11 @@ BEGIN
       SET @nStep = @nStep_SKU
    END
    GOTO Quit
+   
+Step_Lottables_Fail:
+   -- After captured lottable, screen exit and the hidden field (O_Field15) is clear. 
+   -- If any error occur, need to simulate as if still staying in lottable screen, by restoring this hidden field
+   SET @cOutField15 = @cOutField15Backup
 END
 GOTO Quit
 
