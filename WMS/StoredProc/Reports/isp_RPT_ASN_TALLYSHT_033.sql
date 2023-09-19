@@ -21,6 +21,7 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 21-Aug-2023  WLChooi 1.0   DevOps Combine Script                        */
+/* 14-Sep-2023  WLChooi 1.1   UWP-8179 - LEFT JOIN SerialNo table (WL01)   */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_RPT_ASN_TALLYSHT_033]
 (
@@ -251,10 +252,10 @@ BEGIN
                                            AND CL2.Code = 'ShowSKUGroup'
                                            AND CL2.Storerkey = RECEIPT.StorerKey
                                            AND CL2.Long = 'RPT_ASN_TALLYSHT_033')
-   JOIN ReceiptSerialNo RSN WITH (NOLOCK) ON ( RSN.ReceiptKey = RECEIPTDETAIL.ReceiptKey
-                                           AND RSN.ReceiptLineNumber = RECEIPTDETAIL.ReceiptLineNumber)
-   JOIN SERIALNO SN WITH (NOLOCK) ON SN.StorerKey = RSN.Storerkey 
-                                 AND SN.SerialNo = RSN.SerialNo
+   LEFT JOIN ReceiptSerialNo RSN WITH (NOLOCK) ON ( RSN.ReceiptKey = RECEIPTDETAIL.ReceiptKey   --WL01
+                                                AND RSN.ReceiptLineNumber = RECEIPTDETAIL.ReceiptLineNumber)
+   LEFT JOIN SERIALNO SN WITH (NOLOCK) ON SN.StorerKey = RSN.Storerkey   --WL01
+                                      AND SN.SerialNo = RSN.SerialNo
    WHERE (RECEIPT.ReceiptKey = @c_Receiptkey)
 
 END
