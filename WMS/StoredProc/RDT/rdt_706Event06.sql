@@ -4,51 +4,52 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
-/****************************************************************************/    
-/* Store procedure: rdt_706Event06                                          */    
-/*                                                                          */    
-/* Modifications log:                                                       */    
-/*                                                                          */    
-/* Date       Rev  Author    Purposes                                       */    
-/* 2023-08-17 1.0  yeekung   WMS-23281 Created                              */   
-/****************************************************************************/    
-    
-CREATE OR ALTER PROC rdt.rdt_706Event06 (    
-   @nMobile       INT,              
-   @nFunc         INT,              
-   @cLangCode     NVARCHAR( 3),           
-   @nInputKey     INT,              
-   @cFacility     NVARCHAR( 5),     
-   @cStorerKey    NVARCHAR( 15),    
-   @cOption       NVARCHAR( 1),     
-   @cRetainValue  NVARCHAR( 10),    
-   @cTotalCaptr   INT           OUTPUT,          
-   @nStep         INT           OUTPUT,           
-   @nScn          INT           OUTPUT,      
-   @cLabel1       NVARCHAR( 20) OUTPUT,    
-   @cLabel2       NVARCHAR( 20) OUTPUT,    
-   @cLabel3       NVARCHAR( 20) OUTPUT,    
-   @cLabel4       NVARCHAR( 20) OUTPUT,    
-   @cLabel5       NVARCHAR( 20) OUTPUT,    
-   @cValue1       NVARCHAR( 60) OUTPUT,    
-   @cValue2       NVARCHAR( 60) OUTPUT,    
-   @cValue3       NVARCHAR( 60) OUTPUT,    
-   @cValue4       NVARCHAR( 60) OUTPUT,    
-   @cValue5       NVARCHAR( 60) OUTPUT,    
-   @cFieldAttr02  NVARCHAR( 1)  OUTPUT,    
-   @cFieldAttr04  NVARCHAR( 1)  OUTPUT,    
-   @cFieldAttr06  NVARCHAR( 1)  OUTPUT,    
-   @cFieldAttr08  NVARCHAR( 1)  OUTPUT,    
+/****************************************************************************/
+/* Store procedure: rdt_706Event06                                          */
+/*                                                                          */
+/* Modifications log:                                                       */
+/*                                                                          */
+/* Date       Rev  Author    Purposes                                       */
+/* 2023-08-17 1.0  yeekung   WMS-23281 Created                              */
+/* 2023-09-18 1.1  Ung       WMS-23281 Change ListName (other SP is using)  */
+/****************************************************************************/
+
+CREATE OR ALTER PROC rdt.rdt_706Event06 (
+   @nMobile       INT,
+   @nFunc         INT,
+   @cLangCode     NVARCHAR( 3),
+   @nInputKey     INT,
+   @cFacility     NVARCHAR( 5),
+   @cStorerKey    NVARCHAR( 15),
+   @cOption       NVARCHAR( 1),
+   @cRetainValue  NVARCHAR( 10),
+   @cTotalCaptr   INT           OUTPUT,
+   @nStep         INT           OUTPUT,
+   @nScn          INT           OUTPUT,
+   @cLabel1       NVARCHAR( 20) OUTPUT,
+   @cLabel2       NVARCHAR( 20) OUTPUT,
+   @cLabel3       NVARCHAR( 20) OUTPUT,
+   @cLabel4       NVARCHAR( 20) OUTPUT,
+   @cLabel5       NVARCHAR( 20) OUTPUT,
+   @cValue1       NVARCHAR( 60) OUTPUT,
+   @cValue2       NVARCHAR( 60) OUTPUT,
+   @cValue3       NVARCHAR( 60) OUTPUT,
+   @cValue4       NVARCHAR( 60) OUTPUT,
+   @cValue5       NVARCHAR( 60) OUTPUT,
+   @cFieldAttr02  NVARCHAR( 1)  OUTPUT,
+   @cFieldAttr04  NVARCHAR( 1)  OUTPUT,
+   @cFieldAttr06  NVARCHAR( 1)  OUTPUT,
+   @cFieldAttr08  NVARCHAR( 1)  OUTPUT,
    @cFieldAttr10  NVARCHAR( 1)  OUTPUT,
-   @cExtendedinfo NVARCHAR( 20) OUTPUT,    
-   @nErrNo        INT           OUTPUT,    
-   @cErrMsg       NVARCHAR( 20) OUTPUT    
-)    
-AS    
-   SET NOCOUNT ON    
-   SET QUOTED_IDENTIFIER OFF    
-   SET ANSI_NULLS OFF    
-   SET CONCAT_NULL_YIELDS_NULL OFF    
+   @cExtendedinfo NVARCHAR( 20) OUTPUT,
+   @nErrNo        INT           OUTPUT,
+   @cErrMsg       NVARCHAR( 20) OUTPUT
+)
+AS
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @cSerialNo         NVARCHAR( 60)
    DECLARE @cSKU              NVARCHAR( 20)
@@ -57,19 +58,19 @@ AS
    DECLARE @cTableName        NVARCHAR( 20)
    DECLARE @nRowRef           INT
    DECLARE @bSuccess          INT
-   
-   -- Parameter mapping            
+
+   -- Parameter mapping
    SET @cSerialNo = @cValue1
-   SET @cTrackingNo = @cValue2    
-   
+   SET @cTrackingNo = @cValue2
+
    SELECT @cUserName = UserName
    FROM rdt.RDTMOBREC WITH (NOLOCK)
    WHERE Mobile = @nMobile
-   
-   IF @nStep =2     
-   BEGIN     
-      IF @nInputKey='1'        
-      BEGIN     
+
+   IF @nStep =2
+   BEGIN
+      IF @nInputKey='1'
+      BEGIN
 
          IF ISNULL(@cSerialNo,'')=''
          BEGIN
@@ -133,24 +134,23 @@ AS
          --   EXEC rdt.rdtSetFocusField @nMobile, 4 -- ID
          --   GOTO Quit
          --END
-      	
-         INSERT INTO rdt.rdtDataCapture( StorerKey, Facility, V_SKU, serialno, V_String1,V_String2, AddWho, AddDate) VALUES 
+
+         INSERT INTO rdt.rdtDataCapture( StorerKey, Facility, V_SKU, serialno, V_String1,V_String2, AddWho, AddDate) VALUES
          ( @cStorerKey, @cFacility, @cSKU, @cSerialNo, @cTrackingNo, '706', @cUserName, GETDATE())
 
          SELECT @nRowRef = SCOPE_IDENTITY()
 
          IF @@ERROR <> 0
          BEGIN
-            SET @nErrNo = 205356     
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins Rec Fail    
+            SET @nErrNo = 205356
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins Rec Fail
             EXEC rdt.rdtSetFocusField @nMobile, 4
-            GOTO Quit     
+            GOTO Quit
          END
 
-         
          SELECT @cTableName = ISNULL( Long, '')
          FROM dbo.Codelkup WITH (NOLOCK)
-         WHERE ListName = 'RDTINSTL2'
+         WHERE ListName = 'RDTINSTL2A'
             AND StorerKey = @cStorerKey
             AND Code = @cFacility
             AND Code2 = @nFunc
@@ -166,10 +166,10 @@ AS
 
          SET @cValue1 = ''
          SET @cValue2 = ''
-      END    
-   END    
+      END
+   END
 
-   Quit:    
+   Quit:
 GO
 
 SET QUOTED_IDENTIFIER OFF
