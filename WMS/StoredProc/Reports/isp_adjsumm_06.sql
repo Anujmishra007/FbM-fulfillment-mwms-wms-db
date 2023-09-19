@@ -6,13 +6,14 @@ GO
 SET ANSI_NULLS OFF
 GO
 
+
 /************************************************************************/
 /* Store Procedure:  isp_adjsumm_06                                     */
 /* Creation Date:19-AUG-2021                                            */
 /* Copyright: IDS                                                       */
 /* Written by: CSCHONG                                                  */
 /*                                                                      */
-/* Purpose:WMS-17756 SG - iDSMedñ Adjustment Ticket Sheet [CR]          */
+/* Purpose:WMS-17756 SG - iDSMed√ª Adjustment Ticket Sheet [CR]          */
 /*                                                                      */
 /* Input Parameters:  @c_Adjustmentkey  - Adjustnment Key               */
 /*                 ,  @c_UserID                                         */
@@ -35,8 +36,9 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author        Purposes                                  */
+/* 19-sEP-2023  Calvin        JSM-178458 Extend Lott12 field (CLVN01)   */
 /************************************************************************/
-CREATE PROC dbo.isp_adjsumm_06 (
+ALTER PROC [dbo].[isp_adjsumm_06] (
       @c_Adjustmentkey  NVARCHAR(10)
    ,  @c_UserID         NVARCHAR(20))
  AS
@@ -99,7 +101,7 @@ BEGIN
       ,  Facility          NVARCHAR(5)    NULL 
       ,  Lott10            NVARCHAR(30)   NULL
       ,  UserID            NVARCHAR(20)   NULL
-      ,  Lott12            NVARCHAR(18)   NULL
+      ,  Lott12            NVARCHAR(30)   NULL --(CLVN01)
       ,  Lott04            DATETIME       NULL   
       ,  CustomerRefNo     NVARCHAR(10)   NULL
       ,  ADJRemarks        NVARCHAR(200)  NULL
@@ -288,3 +290,5 @@ GO
 
 GRANT EXECUTE ON  isp_adjsumm_06 TO NSQL
 GO
+
+
