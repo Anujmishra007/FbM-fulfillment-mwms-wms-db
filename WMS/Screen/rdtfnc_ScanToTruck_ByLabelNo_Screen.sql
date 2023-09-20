@@ -50,5 +50,8 @@ EXECUTE rdt.rdtAddScn 3433, 'ENG'
    ,@cLine02 = ''
    ,@cLine03 = 'REFNO2:'
    ,@cLine04 = '%40i02'
+   ,@cLine05 = ''
+   ,@cLine06 = ''
+   ,@cLine07 = '%20d15'
    ,@cLine14 = '%e'
    ,@nFunc = 922

@@ -1,6 +1,3 @@
- IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[RDT].[rdtfnc_ScanToTruck_ByLabelNo]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [RDT].[rdtfnc_ScanToTruck_ByLabelNo]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -9,7 +6,7 @@ GO
 
 /************************************************************************/  
 /* Store procedure: rdtfnc_ScanToTruck_ByLabelNo                        */  
-/* Copyright      : IDS                                                 */  
+/* Copyright      : Maersk                                              */  
 /*                                                                      */  
 /* Purpose: Scan LabelNo/DropID to truck by MBOL/Load/Order             */  
 /*                                                                      */  
@@ -60,8 +57,9 @@ GO
 /* 2018-09-24 3.0  James    WMS7751-Remove OD.loadkey (james03)         */  
 /* 2020-11-19 3.1  Chermaine WMS-15680 Add OTMITF config (cc01)         */    
 /* 2020-11-24 3.2  James    WMS-15718 - Add Refno lookup (james04)      */  
+/* 2023-08-07 3.3  Ung      WMS-23190 Add ExtendedInfoSP                */
 /************************************************************************/  
-CREATE PROC [RDT].[rdtfnc_ScanToTruck_ByLabelNo] (  
+CREATE OR ALTER PROC [RDT].[rdtfnc_ScanToTruck_ByLabelNo] (  
    @nMobile    INT,  
    @nErrNo     INT  OUTPUT,  
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max  
@@ -121,35 +119,28 @@ DECLARE
    @cCaptureRefInfo         NVARCHAR(1),  
    @cDoor                   NVARCHAR(10),  
    @cOTMITF                 NVARCHAR(1), -- (cc01)    
+   @cExtendedInfo           NVARCHAR(20),
+   @cExtendedInfoSP         NVARCHAR(20),
    @cRefNo                  NVARCHAR(40),  
    @cRefNum                 NVARCHAR(20),  
    @nRowCount               INT,  
    @n_Err                   INT,  
   
-   @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),  
-   @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),  
-   @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),  
-   @cInField04 NVARCHAR( 60),   @cOutField04 NVARCHAR( 60),  
-   @cInField05 NVARCHAR( 60),   @cOutField05 NVARCHAR( 60),  
-   @cInField06 NVARCHAR( 60),   @cOutField06 NVARCHAR( 60),  
-   @cInField07 NVARCHAR( 60),   @cOutField07 NVARCHAR( 60),  
-   @cInField08 NVARCHAR( 60),   @cOutField08 NVARCHAR( 60),  
-   @cInField09 NVARCHAR( 60),   @cOutField09 NVARCHAR( 60),  
-   @cInField10 NVARCHAR( 60),   @cOutField10 NVARCHAR( 60),  
-   @cInField11 NVARCHAR( 60),   @cOutField11 NVARCHAR( 60),  
-   @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),  
-   @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60),  
-   @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),  
-   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),  
-  
-   @cFieldAttr01 NVARCHAR( 1), @cFieldAttr02 NVARCHAR( 1),  
-   @cFieldAttr03 NVARCHAR( 1), @cFieldAttr04 NVARCHAR( 1),  
-   @cFieldAttr05 NVARCHAR( 1), @cFieldAttr06 NVARCHAR( 1),  
-   @cFieldAttr07 NVARCHAR( 1), @cFieldAttr08 NVARCHAR( 1),  
-   @cFieldAttr09 NVARCHAR( 1), @cFieldAttr10 NVARCHAR( 1),  
-   @cFieldAttr11 NVARCHAR( 1), @cFieldAttr12 NVARCHAR( 1),  
-   @cFieldAttr13 NVARCHAR( 1), @cFieldAttr14 NVARCHAR( 1),  
-   @cFieldAttr15 NVARCHAR( 1)  
+   @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
+   @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
+   @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),    @cFieldAttr03 NVARCHAR( 1),
+   @cInField04 NVARCHAR( 60),   @cOutField04 NVARCHAR( 60),    @cFieldAttr04 NVARCHAR( 1),
+   @cInField05 NVARCHAR( 60),   @cOutField05 NVARCHAR( 60),    @cFieldAttr05 NVARCHAR( 1),
+   @cInField06 NVARCHAR( 60),   @cOutField06 NVARCHAR( 60),    @cFieldAttr06 NVARCHAR( 1),
+   @cInField07 NVARCHAR( 60),   @cOutField07 NVARCHAR( 60),    @cFieldAttr07 NVARCHAR( 1),
+   @cInField08 NVARCHAR( 60),   @cOutField08 NVARCHAR( 60),    @cFieldAttr08 NVARCHAR( 1),
+   @cInField09 NVARCHAR( 60),   @cOutField09 NVARCHAR( 60),    @cFieldAttr09 NVARCHAR( 1),
+   @cInField10 NVARCHAR( 60),   @cOutField10 NVARCHAR( 60),    @cFieldAttr10 NVARCHAR( 1),
+   @cInField11 NVARCHAR( 60),   @cOutField11 NVARCHAR( 60),    @cFieldAttr11 NVARCHAR( 1),
+   @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),    @cFieldAttr12 NVARCHAR( 1),
+   @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60),    @cFieldAttr13 NVARCHAR( 1),
+   @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),    @cFieldAttr14 NVARCHAR( 1),
+   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),    @cFieldAttr15 NVARCHAR( 1)
   
 -- Load RDT.RDTMobRec  
 SELECT  
@@ -191,33 +182,26 @@ SELECT
    @cDoor                   = V_String18,  
    @cRefNo                  = V_String19,  
    @cOTMITF                 = V_String20, --(cc01)    
+   @cExtendedInfo           = V_String22,
+   @cExtendedInfoSP         = V_String23,
   
-   @cInField01 = I_Field01,   @cOutField01 = O_Field01,  
-   @cInField02 = I_Field02,   @cOutField02 = O_Field02,  
-   @cInField03 = I_Field03,   @cOutField03 = O_Field03,  
-   @cInField04 = I_Field04,   @cOutField04 = O_Field04,  
-   @cInField05 = I_Field05,   @cOutField05 = O_Field05,  
-   @cInField06 = I_Field06,   @cOutField06 = O_Field06,  
-   @cInField07 = I_Field07,   @cOutField07 = O_Field07,  
-   @cInField08 = I_Field08,   @cOutField08 = O_Field08,  
-   @cInField09 = I_Field09,   @cOutField09 = O_Field09,  
-   @cInField10 = I_Field10,   @cOutField10 = O_Field10,  
-   @cInField11 = I_Field11,   @cOutField11 = O_Field11,  
-   @cInField12 = I_Field12,   @cOutField12 = O_Field12,  
-   @cInField13 = I_Field13,   @cOutField13 = O_Field13,  
-   @cInField14 = I_Field14,   @cOutField14 = O_Field14,  
-   @cInField15 = I_Field15,   @cOutField15 = O_Field15,  
+   @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
+   @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
+   @cInField03 = I_Field03,   @cOutField03 = O_Field03,  @cFieldAttr03 = FieldAttr03,
+   @cInField04 = I_Field04,   @cOutField04 = O_Field04,  @cFieldAttr04 = FieldAttr04,
+   @cInField05 = I_Field05,   @cOutField05 = O_Field05,  @cFieldAttr05 = FieldAttr05,
+   @cInField06 = I_Field06,   @cOutField06 = O_Field06,  @cFieldAttr06 = FieldAttr06,
+   @cInField07 = I_Field07,   @cOutField07 = O_Field07,  @cFieldAttr07 = FieldAttr07,
+   @cInField08 = I_Field08,   @cOutField08 = O_Field08,  @cFieldAttr08 = FieldAttr08,
+   @cInField09 = I_Field09,   @cOutField09 = O_Field09,  @cFieldAttr09 = FieldAttr09,
+   @cInField10 = I_Field10,   @cOutField10 = O_Field10,  @cFieldAttr10 = FieldAttr10,
+   @cInField11 = I_Field11,   @cOutField11 = O_Field11,  @cFieldAttr11 = FieldAttr11,
+   @cInField12 = I_Field12,   @cOutField12 = O_Field12,  @cFieldAttr12 = FieldAttr12,
+   @cInField13 = I_Field13,   @cOutField13 = O_Field13,  @cFieldAttr13 = FieldAttr13,
+   @cInField14 = I_Field14,   @cOutField14 = O_Field14,  @cFieldAttr14 = FieldAttr14,
+   @cInField15 = I_Field15,   @cOutField15 = O_Field15,  @cFieldAttr15 = FieldAttr15 
   
-   @cFieldAttr01 = FieldAttr01,     @cFieldAttr02   = FieldAttr02,  
-   @cFieldAttr03 =  FieldAttr03,    @cFieldAttr04   = FieldAttr04,  
-   @cFieldAttr05 =  FieldAttr05,    @cFieldAttr06   = FieldAttr06,  
-   @cFieldAttr07 =  FieldAttr07,    @cFieldAttr08   = FieldAttr08,  
-   @cFieldAttr09 =  FieldAttr09,    @cFieldAttr10   = FieldAttr10,  
-   @cFieldAttr11 =  FieldAttr11,    @cFieldAttr12   = FieldAttr12,  
-   @cFieldAttr13 =  FieldAttr13,    @cFieldAttr14   = FieldAttr14,  
-   @cFieldAttr15 =  FieldAttr15  
-  
-FROM RDTMOBREC (NOLOCK)  
+FROM rdt.rdtMobRec WITH (NOLOCK)  
 WHERE Mobile = @nMobile  
   
 -- Redirect to respective screen  
@@ -247,7 +231,10 @@ BEGIN
    SET @cBypassMBOLShippedCheck = rdt.RDTGetConfig( @nFunc, 'BypassMBOLShippedCheck', @cStorerKey)  
    SET @cBypassPackConfirmCheck = rdt.RDTGetConfig( @nFunc, 'BypassPackConfirmCheck', @cStorerKey)  
    SET @cCaptureRefInfo = rdt.RDTGetConfig( @nFunc, 'CaptureRefInfo', @cStorerKey)  
-  
+
+   SET @cExtendedInfoSP = rdt.RDTGetConfig( @nFunc, 'ExtendedInfoSP', @cStorerKey)  
+   IF @cExtendedInfoSP = '0'  
+      SET @cExtendedInfoSP = ''  
    SET @cExtendedValidateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)  
    IF @cExtendedValidateSP = '0'  
       SET @cExtendedValidateSP = ''  
@@ -501,7 +488,7 @@ BEGIN
          ELSE  
          BEGIN  
             -- Lookup field is SP  
-            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cColumnName AND type = 'P')  
+            IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cColumnName AND type = 'P')  
             BEGIN  
                SET @cSQL = 'EXEC rdt.' + RTRIM( @cColumnName) +  
                   ' @nMobile, @nFunc, @cLangCode, @cFacility, @cRefNum, @cMbolKey OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'  
@@ -539,7 +526,7 @@ BEGIN
       -- Extended validate  
       IF @cExtendedValidateSP <> ''  
       BEGIN  
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')  
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')  
          BEGIN  
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +  
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cType, @cMBOLKey, @cLoadKey, @cOrderKey, @cLabelNo, ' +  
@@ -587,7 +574,7 @@ BEGIN
       END  
       ELSE  
       BEGIN  
-  -- Get statistic  
+         -- Get statistic  
          EXEC rdt.rdt_ScanToTruck_ByLabelNo_GetStat @nMobile, @nFunc, @cLangCode, @cStorerKey  
             ,@cType  
             ,@cMBOLKey  
@@ -634,6 +621,50 @@ BEGIN
       SET @nScn  = @nMenu  
       SET @nStep = 0  
       SET @cOutField01 = '' -- Clean up for menu option  
+   END  
+
+   -- Extended info  
+   IF @cExtendedInfoSP <> ''  
+   BEGIN  
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedInfoSP AND type = 'P')  
+      BEGIN
+         SET @cExtendedInfo = ''
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +  
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, @cType, @cMBOLKey, @cLoadKey, @cOrderKey, @cLabelNo, ' +  
+            ' @cPackInfo, @cWeight, @cCube, @cCartonType, @cDoor, @cRefNo, ' + 
+            ' @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '  
+         SET @cSQLParam =  
+            '@nMobile         INT,           ' +  
+            '@nFunc           INT,           ' +  
+            '@cLangCode       NVARCHAR( 3),  ' +  
+            '@nStep           INT,           ' +  
+            '@nAfterStep      INT,           ' +  
+            '@nInputKey       INT,           ' +  
+            '@cFacility       NVARCHAR( 5),  ' +  
+            '@cStorerKey      NVARCHAR( 15), ' +  
+            '@cType           NVARCHAR( 1),  ' +  
+            '@cMBOLKey        NVARCHAR( 10), ' +  
+            '@cLoadKey        NVARCHAR( 10), ' +  
+            '@cOrderKey       NVARCHAR( 10), ' +  
+            '@cLabelNo        NVARCHAR( 20), ' +  
+            '@cPackInfo       NVARCHAR( 3),  ' +  
+            '@cWeight         NVARCHAR( 10), ' +  
+            '@cCube           NVARCHAR( 10), ' +  
+            '@cCartonType     NVARCHAR( 10), ' +  
+            '@cDoor           NVARCHAR( 10), ' +  
+            '@cRefNo          NVARCHAR( 40), ' +  
+            '@cExtendedInfo   NVARCHAR( 20) OUTPUT, ' +  
+            '@nErrNo          INT           OUTPUT, ' +  
+            '@cErrMsg         NVARCHAR( 20) OUTPUT  '  
+
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
+            @nMobile, @nFunc, @cLangCode, 1, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType, @cMBOLKey, @cLoadKey, @cOrderKey, @cLabelNo,  
+            @cPackInfo, @cWeight, @cCube, @cCartonType, @cDoor, @cRefNo, 
+            @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT  
+
+         IF @nStep = 4
+            SET @cOutField15 = @cExtendedInfo
+      END  
    END  
    GOTO Quit  
   
@@ -753,7 +784,7 @@ BEGIN
          ELSE  
             SELECT  
                @cPickSlipNo = PH.PickSlipNo,  
-         @cPackHeaderOrderKey = PH.OrderKey,  
+               @cPackHeaderOrderKey = PH.OrderKey,  
                @cPackHeaderLoadKey = PH.LoadKey,  
                @nCartonNo = PD.CartonNo  
             FROM dbo.PackHeader PH WITH (NOLOCK)  
@@ -982,7 +1013,7 @@ BEGIN
       -- Extended validate  
       IF @cExtendedValidateSP <> ''  
       BEGIN  
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')  
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')  
          BEGIN  
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +  
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cType, @cMBOLKey, @cLoadKey, @cOrderKey, @cLabelNo, ' +  
@@ -1031,7 +1062,7 @@ BEGIN
       -- Extended update  
       IF @cExtendedUpdateSP <> ''  
       BEGIN  
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')  
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')  
          BEGIN  
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +  
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cType, @cMBOLKey, @cLoadKey, @cOrderKey, @cLabelNo, ' +  
@@ -1091,7 +1122,7 @@ BEGIN
          SET @cCube = ''  
          SET @cCartonType = ''  
   
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cCapturePackInfoSP AND type = 'P')  
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cCapturePackInfoSP AND type = 'P')  
          BEGIN  
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cCapturePackInfoSP) +  
                ' @nMobile, @nFunc, @cLangCode, @nStep, @cStorerKey, @cType, @cMBOLKey, @cLoadKey, @cOrderKey, @cLabelNo, @nErrNo OUTPUT, @cErrMsg OUTPUT, ' +  
@@ -1251,7 +1282,7 @@ BEGIN
       -- Go to prev screen  
       SET @nScn  = @nScn - 1  
       SET @nStep = @nStep - 1  
-   END  
+   END
    GOTO Quit  
   
    Step_2_Fail:  
@@ -1324,7 +1355,7 @@ BEGIN
       -- Extended validate  
       IF @cExtendedValidateSP <> ''  
       BEGIN  
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')  
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')  
          BEGIN  
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +  
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cType, @cMBOLKey, @cLoadKey, @cOrderKey, @cLabelNo, ' +  
@@ -1392,7 +1423,7 @@ BEGIN
       -- Extended update  
       IF @cExtendedUpdateSP <> ''  
       BEGIN  
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')  
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')  
          BEGIN  
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +  
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cType, @cMBOLKey, @cLoadKey, @cOrderKey, @cLabelNo, ' +  
@@ -1515,7 +1546,7 @@ BEGIN
       -- Extended validate  
       IF @cExtendedValidateSP <> ''  
       BEGIN  
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')  
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')  
          BEGIN  
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +  
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cType, @cMBOLKey, @cLoadKey, @cOrderKey, @cLabelNo, ' +  
@@ -1643,31 +1674,24 @@ BEGIN
       V_String18 = @cDoor,  
       V_String19 = @cRefNo,  
       V_String20 = @cOTMITF,   --(cc01) 
-  
-      I_Field01 = @cInField01,  O_Field01 = @cOutField01,  
-      I_Field02 = @cInField02,  O_Field02 = @cOutField02,  
-      I_Field03 = @cInField03,  O_Field03 = @cOutField03,  
-      I_Field04 = @cInField04,  O_Field04 = @cOutField04,  
-      I_Field05 = @cInField05,  O_Field05 = @cOutField05,  
-      I_Field06 = @cInField06,  O_Field06 = @cOutField06,  
-      I_Field07 = @cInField07,  O_Field07 = @cOutField07,  
-      I_Field08 = @cInField08,  O_Field08 = @cOutField08,  
-      I_Field09 = @cInField09,  O_Field09 = @cOutField09,  
-      I_Field10 = @cInField10,  O_Field10 = @cOutField10,  
-      I_Field11 = @cInField11,  O_Field11 = @cOutField11,  
-      I_Field12 = @cInField12,  O_Field12 = @cOutField12,  
-      I_Field13 = @cInField13,  O_Field13 = @cOutField13,  
-      I_Field14 = @cInField14,  O_Field14 = @cOutField14,  
-      I_Field15 = @cInField15,  O_Field15 = @cOutField15,  
-  
-      FieldAttr01  = @cFieldAttr01,   FieldAttr02  = @cFieldAttr02,  
-      FieldAttr03  = @cFieldAttr03,   FieldAttr04  = @cFieldAttr04,  
-      FieldAttr05  = @cFieldAttr05,   FieldAttr06  = @cFieldAttr06,  
-      FieldAttr07  = @cFieldAttr07,   FieldAttr08  = @cFieldAttr08,  
-      FieldAttr09  = @cFieldAttr09,   FieldAttr10  = @cFieldAttr10,  
-      FieldAttr11  = @cFieldAttr11,   FieldAttr12  = @cFieldAttr12,  
-      FieldAttr13  = @cFieldAttr13,   FieldAttr14  = @cFieldAttr14,  
-      FieldAttr15  = @cFieldAttr15  
+      V_String22 = @cExtendedInfo,
+      V_String23 = @cExtendedInfoSP,
+
+      I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
+      I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
+      I_Field03 = @cInField03,  O_Field03 = @cOutField03,   FieldAttr03  = @cFieldAttr03,
+      I_Field04 = @cInField04,  O_Field04 = @cOutField04,   FieldAttr04  = @cFieldAttr04,
+      I_Field05 = @cInField05,  O_Field05 = @cOutField05,   FieldAttr05  = @cFieldAttr05,
+      I_Field06 = @cInField06,  O_Field06 = @cOutField06,   FieldAttr06  = @cFieldAttr06,
+      I_Field07 = @cInField07,  O_Field07 = @cOutField07,   FieldAttr07  = @cFieldAttr07,
+      I_Field08 = @cInField08,  O_Field08 = @cOutField08,   FieldAttr08  = @cFieldAttr08,
+      I_Field09 = @cInField09,  O_Field09 = @cOutField09,   FieldAttr09  = @cFieldAttr09,
+      I_Field10 = @cInField10,  O_Field10 = @cOutField10,   FieldAttr10  = @cFieldAttr10,
+      I_Field11 = @cInField11,  O_Field11 = @cOutField11,   FieldAttr11  = @cFieldAttr11,
+      I_Field12 = @cInField12,  O_Field12 = @cOutField12,   FieldAttr12  = @cFieldAttr12,
+      I_Field13 = @cInField13,  O_Field13 = @cOutField13,   FieldAttr13  = @cFieldAttr13,
+      I_Field14 = @cInField14,  O_Field14 = @cOutField14,   FieldAttr14  = @cFieldAttr14,
+      I_Field15 = @cInField15,  O_Field15 = @cOutField15,   FieldAttr15  = @cFieldAttr15  
   
    WHERE Mobile = @nMobile  
 END
