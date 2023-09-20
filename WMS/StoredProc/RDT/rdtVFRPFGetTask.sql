@@ -6,7 +6,7 @@ GO
   
 /************************************************************************/  
 /* Store procedure: rdtVFRPFGetTask                                     */  
-/* Copyright      : IDS                                                 */  
+/* Copyright      : Maersk                                              */  
 /*                                                                      */  
 /* Purpose: Get next replenish task (only for partial pallet)           */  
 /*                                                                      */  
@@ -16,6 +16,8 @@ GO
 /* 12-Jan-2015 1.0  Ung       SOS259759 Created                         */  
 /* 12-Jun-2015 1.1  Ung       SOS343961 Grouping diff wave type diff UOM*/  
 /* 29-Nov-2019 1.2  YeeKung   WMS11247 RPF_Task_Enhancement (yeekung01) */  
+/* 21-May-2019 1.3  Ung       WMS-8537 Fix skip task force close pallet */
+/* 23-Aug-2023 1.4  Ung       WMS-23369 Add UserKeyOverRide             */
 /************************************************************************/  
   
 CREATE OR ALTER PROC [rdt].[rdtVFRPFGetTask] (  
@@ -101,7 +103,7 @@ BEGIN
    DECLARE @curRPTask CURSOR  
    IF @cAreaKey = ''  
       SET @curRPTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR  
-         SELECT TOP 1  
+         SELECT   
             TaskDetailKey, TaskType, FromLOC, FromID, StorerKey, SKU, LOT, QTY, ToLOC, ToID  
          FROM TaskDetail WITH (NOLOCK)  
             INNER JOIN LOC WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC.LOC)  
@@ -109,6 +111,7 @@ BEGIN
          WHERE TaskDetail.TaskType IN ('RPF')  
             AND TaskDetail.PickMethod = 'PP' -- Partial pallet  
             AND TaskDetail.Status = '0'  
+            AND TaskDetail.UserKeyOverRide IN (@cUserName, '')
             AND TaskDetail.WaveKey = @cWaveKey  
             AND   
             (  -- WaveType = L/N/R/E. L=Launch, N=Normal, R=Leisure, E=Ecom  
@@ -124,10 +127,14 @@ BEGIN
                   WHERE PermissionType = TaskDetail.TaskType  
                      AND TMU.UserKey = @cUserName  
                      AND TMU.Permission = '1')  
-         ORDER BY TaskDetail.Priority, LOC.LogicalLocation, LOC.LOC  
+         ORDER BY 
+             TaskDetail.Priority
+            ,CASE WHEN TaskDetail.UserKeyOverRide = @cUserName THEN '0' ELSE '1' END
+            ,LOC.LogicalLocation
+            ,LOC.LOC  
    ELSE  
       SET @curRPTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR  
-         SELECT TOP 1  
+         SELECT 
             TaskDetailKey, TaskType, FromLOC, FromID, StorerKey, SKU, LOT, QTY, ToLOC, ToID  
          FROM TaskDetail WITH (NOLOCK)  
             INNER JOIN LOC WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC.LOC)  
@@ -136,6 +143,7 @@ BEGIN
             AND TaskDetail.TaskType IN ('RPF')  
             AND TaskDetail.PickMethod = 'PP' -- Partial pallet  
             AND TaskDetail.Status = '0'  
+            AND TaskDetail.UserKeyOverRide IN (@cUserName, '')
             AND TaskDetail.WaveKey = @cWaveKey  
             AND   
             (  -- WaveType = L/N/R/E. L=Launch, N=Normal, R=Leisure, E-Ecom  
@@ -151,7 +159,11 @@ BEGIN
                   WHERE PermissionType = TaskDetail.TaskType  
                      AND TMU.UserKey = @cUserName  
                      AND TMU.Permission = '1')  
-         ORDER BY TaskDetail.Priority, LOC.LogicalLocation, LOC.LOC  
+         ORDER BY 
+             TaskDetail.Priority
+            ,CASE WHEN TaskDetail.UserKeyOverRide = @cUserName THEN '0' ELSE '1' END
+            ,LOC.LogicalLocation
+            ,LOC.LOC  
   
    OPEN @curRPTask  
    WHILE (1=1)  

@@ -1,6 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nspTTMRP11]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [dbo].[nspTTMRP11]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -9,16 +6,17 @@ GO
 
 /************************************************************************/
 /* Stored Procedure: nspTTMRP11                                         */
-/* Copyright: IDS                                                       */
+/* Copyright: Maersk                                                    */
 /*                                                                      */
 /* Purpose: TM Replenishment Strategy                                   */
 /*                                                                      */
 /* Modifications log:                                                   */
 /* Date        Author    Ver  Purposes                                  */
 /* 25-02-2019  ChewKP    1.0  WMS-5178. Created                         */
-/* 29-04-2019 ChewKP     1.1  WMS-5178 Get Task by EquipmentProfile     */
+/* 29-04-2019  ChewKP    1.1  WMS-5178 Get Task by EquipmentProfile     */
+/* 23-08-2023  Ung       1.2  WMS-23369 Add UserKeyOverRide             */
 /************************************************************************/
-CREATE PROC [dbo].[nspTTMRP11]
+CREATE OR ALTER PROC [dbo].[nspTTMRP11]
     @c_UserID    NVARCHAR(18)
    ,@c_AreaKey01 NVARCHAR(10)
    ,@c_AreaKey02 NVARCHAR(10)
@@ -94,6 +92,7 @@ BEGIN
             WHERE AreaDetail.AreaKey = @c_AreaKey01
                AND TaskDetail.TaskType IN ('RPF')
                AND TaskDetail.Status = '0'
+               AND TaskDetail.UserKeyOverRide IN (@c_UserID, '')
                AND TaskDetail.Wavekey <> ''
                AND NOT EXISTS( SELECT 1
                   FROM TaskDetail T1 WITH (NOLOCK)
@@ -127,6 +126,7 @@ BEGIN
             WHERE AreaDetail.AreaKey = @c_AreaKey01
                AND TaskDetail.TaskType IN ('RPF')
                AND TaskDetail.Status = '0'
+               AND TaskDetail.UserKeyOverRide IN (@c_UserID, '')
                AND TaskDetail.Wavekey = ''
                AND NOT EXISTS( SELECT 1
                   FROM TaskDetail T1 WITH (NOLOCK)

@@ -1,6 +1,3 @@
-IF EXISTS ( SELECT * FROM sys.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nspTTMRP13]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [dbo].[nspTTMRP13]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -9,15 +6,16 @@ GO
 
 /************************************************************************/
 /* Stored Procedure: nspTTMRP13                                         */
-/* Copyright: IDS                                                       */
+/* Copyright: Maersk                                                    */
 /*                                                                      */
 /* Purpose: TM Replenishment Strategy                                   */
 /*                                                                      */
 /* Modifications log:                                                   */
 /* Date        Author    Ver  Purposes                                  */
 /* 10-10-2018  ChewKP    1.0  WMS-5223. Created                         */
+/* 23-08-2023  Ung       1.1  WMS-23369 Add UserKeyOverRide             */
 /************************************************************************/
-CREATE PROC [dbo].[nspTTMRP13]
+CREATE OR ALTER PROC [dbo].[nspTTMRP13]
     @c_UserID    NVARCHAR(18)
    ,@c_AreaKey01 NVARCHAR(10)
    ,@c_AreaKey02 NVARCHAR(10)
@@ -115,6 +113,7 @@ BEGIN
          WHERE AreaDetail.AreaKey = @c_AreaKey01
             AND TaskDetail.TaskType IN ('RP1')
             AND TaskDetail.Status = '0'
+            AND TaskDetail.UserKeyOverRide IN (@c_UserID, '')
             AND EXISTS( SELECT 1 
                FROM TaskManagerUserDetail tmu WITH (NOLOCK)
                WHERE PermissionType = TaskDetail.TASKTYPE
@@ -133,6 +132,7 @@ BEGIN
             JOIN dbo.AreaDetail WITH (NOLOCK) ON (AreaDetail.PutawayZone = LOC.PutAwayZone)
          WHERE dbo.TaskDetail.TaskType IN ('RP1')
             AND TaskDetail.Status = '0'
+            AND TaskDetail.UserKeyOverRide IN (@c_UserID, '')
             AND EXISTS( SELECT 1 
                FROM TaskManagerUserDetail tmu WITH (NOLOCK)
                WHERE PermissionType = TaskDetail.TASKTYPE

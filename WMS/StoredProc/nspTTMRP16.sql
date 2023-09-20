@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM sys.sysobjects WHERE id = object_id(N'dbo.nspTTMRP16') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC dbo.nspTTMRP16
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -10,16 +7,17 @@ GO
 
 /************************************************************************/
 /* Stored Procedure: nspTTMRP16                                         */
-/* Copyright: IDS                                                       */
+/* Copyright: Maersk                                                    */
 /*                                                                      */
 /* Purpose: TM Replenishment Strategy                                   */
 /*                                                                      */
 /* Modifications log:                                                   */
 /* Date        Author    Ver  Purposes                                  */
 /* 17-07-2020  James     1.0  WMS-14152. Created                        */
-/* 2021-05-18  James     1.1  Perf tune (james01)                       */
+/* 18-05-2021  James     1.1  Perf tune (james01)                       */
+/* 23-08-2023  Ung       1.2  WMS-23369 Add UserKeyOverRide             */
 /************************************************************************/
-CREATE PROC [dbo].[nspTTMRP16]
+CREATE OR ALTER PROC [dbo].[nspTTMRP16]
     @c_UserID    NVARCHAR(18)
    ,@c_AreaKey01 NVARCHAR(10)
    ,@c_AreaKey02 NVARCHAR(10)
@@ -180,6 +178,7 @@ BEGIN
                      WHERE AreaDetail.AreaKey = @c_AreaKey01
                      AND TaskDetail.TaskType IN ('RPF')
                      AND TaskDetail.Status = '0'
+                     AND TaskDetail.UserKeyOverRide IN (@c_UserID, '')
                      AND EXISTS( SELECT 1 
                                  FROM dbo.TaskManagerUserDetail tmu WITH (NOLOCK)
                                  WHERE PermissionType = TaskDetail.TASKTYPE
@@ -197,6 +196,7 @@ BEGIN
                      WHERE AreaDetail.AreaKey = @c_AreaKey01
                      AND TaskDetail.TaskType IN ('RPF')
                      AND TaskDetail.Status = '0'
+                     AND TaskDetail.UserKeyOverRide IN (@c_UserID, '')
                      AND EXISTS( SELECT 1 
                                  FROM dbo.TaskManagerUserDetail tmu WITH (NOLOCK)
                                  WHERE PermissionType = TaskDetail.TASKTYPE
@@ -235,6 +235,7 @@ BEGIN
          WHERE AreaDetail.AreaKey = @c_AreaKey01  
             AND TaskDetail.TaskType IN ('RPF', 'RP1')  
             AND TaskDetail.Status = '0'  
+            AND TaskDetail.UserKeyOverRide IN (@c_UserID, '')
             AND EXISTS( SELECT 1   
                FROM TaskManagerUserDetail tmu WITH (NOLOCK)  
                WHERE PermissionType = TaskDetail.TASKTYPE  
@@ -267,6 +268,7 @@ BEGIN
                      JOIN dbo.AreaDetail AreaDetail WITH (NOLOCK) ON (AreaDetail.PutawayZone = LOC.PutAwayZone)
                      WHERE TaskDetail.TaskType IN ('RPF')
                      AND TaskDetail.Status = '0'
+                     AND TaskDetail.UserKeyOverRide IN (@c_UserID, '')
                      AND EXISTS( SELECT 1 
                                  FROM dbo.TaskManagerUserDetail tmu WITH (NOLOCK)
                                  WHERE PermissionType = TaskDetail.TASKTYPE
@@ -303,6 +305,7 @@ BEGIN
             JOIN dbo.AreaDetail WITH (NOLOCK) ON (AreaDetail.PutawayZone = LOC.PutAwayZone)  
          WHERE TaskDetail.TaskType IN ('RPF', 'RP1')  
             AND TaskDetail.Status = '0'  
+            AND TaskDetail.UserKeyOverRide IN (@c_UserID, '')
             AND EXISTS( SELECT 1   
                FROM TaskManagerUserDetail tmu WITH (NOLOCK)  
                WHERE PermissionType = TaskDetail.TASKTYPE  

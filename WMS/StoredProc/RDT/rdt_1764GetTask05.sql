@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM sys.objects WHERE object_id = object_id(N'[rdt].[rdt_1764GetTask05]') and objectproperty(object_id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdt_1764GetTask05]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -9,7 +6,7 @@ GO
 
 /************************************************************************/
 /* Store procedure: rdt_1764GetTask05                                   */
-/* Copyright      : IDS                                                 */
+/* Copyright      : Maersk                                              */
 /*                                                                      */
 /* Purpose: Get next replenish task (only for partial pallet)           */
 /*                                                                      */
@@ -19,9 +16,10 @@ GO
 /* 16-Oct-2018 1.0  ChewKP    WMS-6505 Create                           */
 /* 21-May-2019 1.1  Ung       WMS-8537 Fix skip task force close pallet */
 /* 24-May-2019 1.2  Ung       WMS-9200 Add lock LOCAisle if VNA         */
+/* 23-Aug-2023 1.3  Ung       WMS-23369 Add UserKeyOverRide             */
 /************************************************************************/
 
-CREATE PROC [rdt].[rdt_1764GetTask05] (
+CREATE OR ALTER PROC [rdt].[rdt_1764GetTask05] (
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -140,6 +138,7 @@ BEGIN
          WHERE TaskDetail.TaskType IN ('RPF')
             AND TaskDetail.PickMethod = 'PP' -- Partial pallet
             AND TaskDetail.Status = '0'
+            AND TaskDetail.UserKeyOverRide IN (@cUserName, '')
             --AND TaskDetail.WaveKey = @cWaveKey
             AND TaskDetail.GroupKey = CASE WHEN @cGroupKey <> '' THEN @cGroupKey ELSE TaskDetail.GroupKey END
             AND TaskDetail.ToLOC = CASE WHEN @cPalletFinalLOC <> '' THEN @cPalletFinalLOC ELSE TaskDetail.ToLOC END
@@ -160,7 +159,11 @@ BEGIN
                   AND LOC1.LocAisle <> ''
                   AND TD.Status > '0' AND TD.Status < '9'
                   AND TD.UserKey <> @cUserName)
-         ORDER BY TaskDetail.Priority, LOC1.LogicalLocation, LOC1.LOC
+         ORDER BY 
+             TaskDetail.Priority
+            ,CASE WHEN TaskDetail.UserKeyOverRide = @cUserName THEN '0' ELSE '1' END
+            ,LOC1.LogicalLocation
+            ,LOC1.LOC
    ELSE
       SET @curRPTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
          SELECT
@@ -174,6 +177,7 @@ BEGIN
             AND TaskDetail.TaskType IN ('RPF')
             AND TaskDetail.PickMethod = 'PP' -- Partial pallet
             AND TaskDetail.Status = '0'
+            AND TaskDetail.UserKeyOverRide IN (@cUserName, '')
             --AND TaskDetail.WaveKey = @cWaveKey
             AND TaskDetail.GroupKey = CASE WHEN @cGroupKey <> '' THEN @cGroupKey ELSE TaskDetail.GroupKey END
             AND TaskDetail.ToLOC = CASE WHEN @cPalletFinalLOC <> '' THEN @cPalletFinalLOC ELSE TaskDetail.ToLOC END
@@ -194,7 +198,11 @@ BEGIN
                   AND LOC1.LocAisle <> ''
                   AND TD.Status > '0' AND TD.Status < '9'
                   AND TD.UserKey <> @cUserName)
-         ORDER BY TaskDetail.Priority, LOC1.LogicalLocation, LOC1.LOC
+         ORDER BY 
+             TaskDetail.Priority
+            ,CASE WHEN TaskDetail.UserKeyOverRide = @cUserName THEN '0' ELSE '1' END
+            ,LOC1.LogicalLocation
+            ,LOC1.LOC
 
    OPEN @curRPTask
    WHILE (1=1)

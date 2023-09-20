@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdt_1764GetTask02]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdt_1764GetTask02]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -9,7 +6,7 @@ GO
 
 /************************************************************************/
 /* Store procedure: rdt_1764GetTask02                                   */
-/* Copyright      : LF Logistics                                        */
+/* Copyright      : Maersk                                              */
 /*                                                                      */
 /* Purpose: Get next replenish task (only for partial pallet)           */
 /*                                                                      */
@@ -17,9 +14,11 @@ GO
 /*                                                                      */
 /* Date        Rev  Author    Purposes                                  */
 /* 06-Jun-2017 1.0  Ung       WMS-2050 Created                          */
+/* 21-May-2019 1.1  Ung       WMS-8537 Fix skip task force close pallet */
+/* 23-Sep-2023 1.2  Ung       WMS-23369 Add UserKeyOverRide             */
 /************************************************************************/
 
-CREATE PROC [rdt].[rdt_1764GetTask02] (
+CREATE OR ALTER PROC [rdt].[rdt_1764GetTask02] (
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -128,7 +127,7 @@ BEGIN
    DECLARE @curRPTask CURSOR
    IF @cAreaKey = ''
       SET @curRPTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-         SELECT TOP 1
+         SELECT 
             TaskDetailKey, TaskType, FromLOC, FromID, StorerKey, SKU, LOT, QTY, ToLOC, ToID
          FROM TaskDetail WITH (NOLOCK)
             INNER JOIN LOC LOC1 WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC1.LOC)
@@ -138,6 +137,7 @@ BEGIN
          WHERE TaskDetail.TaskType IN ('RPF')
             AND TaskDetail.PickMethod = 'PP' -- Partial pallet
             AND TaskDetail.Status = '0'
+            AND TaskDetail.UserKeyOverRide IN (@cUserName, '')
             AND TaskDetail.LoadKey = @cLoadKey
             AND TaskDetail.GroupKey = CASE WHEN @cGroupKey <> '' THEN @cGroupKey ELSE TaskDetail.GroupKey END
             AND TaskDetail.ToLOC = CASE WHEN @cPalletFinalLOC <> '' THEN @cPalletFinalLOC ELSE TaskDetail.ToLOC END
@@ -158,7 +158,7 @@ BEGIN
             --TaskDetail.Priority, LOC1.LogicalLocation, LOC1.LOC
    ELSE
       SET @curRPTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-         SELECT TOP 1
+         SELECT 
             TaskDetailKey, TaskType, FromLOC, FromID, StorerKey, SKU, LOT, QTY, ToLOC, ToID
          FROM TaskDetail WITH (NOLOCK)
             INNER JOIN LOC LOC1 WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC1.LOC)
@@ -169,6 +169,7 @@ BEGIN
             AND TaskDetail.TaskType IN ('RPF')
             AND TaskDetail.PickMethod = 'PP' -- Partial pallet
             AND TaskDetail.Status = '0'
+            AND TaskDetail.UserKeyOverRide IN (@cUserName, '')
             AND TaskDetail.LoadKey = @cLoadKey
             AND TaskDetail.GroupKey = CASE WHEN @cGroupKey <> '' THEN @cGroupKey ELSE TaskDetail.GroupKey END
             AND TaskDetail.ToLOC = CASE WHEN @cPalletFinalLOC <> '' THEN @cPalletFinalLOC ELSE TaskDetail.ToLOC END

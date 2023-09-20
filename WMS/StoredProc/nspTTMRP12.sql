@@ -1,6 +1,3 @@
-IF EXISTS ( SELECT * FROM sys.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nspTTMRP12]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [dbo].[nspTTMRP12]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -9,15 +6,16 @@ GO
 
 /************************************************************************/
 /* Stored Procedure: nspTTMRP12                                         */
-/* Copyright: IDS                                                       */
+/* Copyright: Maersk                                                    */
 /*                                                                      */
 /* Purpose: TM Replenishment Strategy                                   */
 /*                                                                      */
 /* Modifications log:                                                   */
 /* Date        Author    Ver  Purposes                                  */
 /* 10-10-2018  ChewKP    1.0  WMS-5223. Created                         */
+/* 23-08-2023  Ung       1.1  WMS-23369 Add UserKeyOverRide             */
 /************************************************************************/
-CREATE PROC [dbo].[nspTTMRP12]
+CREATE OR ALTER PROC [dbo].[nspTTMRP12]
     @c_UserID    NVARCHAR(18)
    ,@c_AreaKey01 NVARCHAR(10)
    ,@c_AreaKey02 NVARCHAR(10)
@@ -115,6 +113,7 @@ BEGIN
          WHERE AreaDetail.AreaKey = @c_AreaKey01
             AND TaskDetail.TaskType IN ('RPF')
             AND TaskDetail.Status = '0'
+            AND TaskDetail.UserKeyOverRide IN (@c_UserID, '')
             AND NOT EXISTS( SELECT 1
                FROM TaskDetail T1 WITH (NOLOCK)
                WHERE TaskDetail.GroupKey <> '' 
@@ -141,6 +140,7 @@ BEGIN
             JOIN dbo.AreaDetail WITH (NOLOCK) ON (AreaDetail.PutawayZone = LOC.PutAwayZone)
          WHERE dbo.TaskDetail.TaskType IN ('RPF')
             AND TaskDetail.Status = '0'
+            AND TaskDetail.UserKeyOverRide IN (@c_UserID, '')
             AND NOT EXISTS( SELECT 1
                FROM TaskDetail T1 WITH (NOLOCK)
                WHERE TaskDetail.GroupKey <> '' 

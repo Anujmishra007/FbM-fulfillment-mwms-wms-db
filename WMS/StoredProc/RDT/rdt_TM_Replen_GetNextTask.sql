@@ -1,11 +1,8 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdt_TM_Replen_GetNextTask]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdt_TM_Replen_GetNextTask]
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /************************************************************************/
 /* Store procedure: rdt_TM_Replen_GetNextTask                           */
@@ -17,16 +14,18 @@ GO
 /*                                                                      */
 /* Date        Rev  Author    Purposes                                  */
 /* 21-Oct-2011 1.0  Ung       Created                                   */
+/* 21-May-2019 1.1  Ung       WMS-8537 Fix skip task force close pallet */
+/* 23-Aug-2023 1.2  Ung       WMS-23369 Add UserKeyOverRide             */
 /************************************************************************/
 
-CREATE PROC [rdt].[rdt_TM_Replen_GetNextTask] (
+CREATE OR ALTER PROC [RDT].[rdt_TM_Replen_GetNextTask] (
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
    @cUserName        NVARCHAR( 15),
    @cAreaKey         NVARCHAR( 10),
    @cListKey         NVARCHAR( 10),
-   @cDropID          NVARCHAR( 20), 
+   @cDropID          NVARCHAR( 20),
    @cNewTaskKey      NVARCHAR( 10)    OUTPUT,
    @nErrNo           INT          OUTPUT,
    @cErrMsg          NVARCHAR( 20) OUTPUT  -- screen limitation, 20 char max
@@ -66,7 +65,7 @@ BEGIN
 
    -- Get task info
    SELECT TOP 1
-      @cFinalLOC = CASE WHEN FinalLOC = '' THEN ToLOC ELSE FinalLoc END, 
+      @cFinalLOC = CASE WHEN FinalLOC = '' THEN ToLOC ELSE FinalLoc END,
       @cWaveKey = WaveKey
    FROM dbo.TaskDetail WITH (NOLOCK)
    WHERE ListKey = @cListKey
@@ -80,7 +79,7 @@ BEGIN
    WHERE LOC = @cFinalLOC
 
    -- Get order info
-   SELECT TOP 1 
+   SELECT TOP 1
       @cOrderGroup = O.OrderGroup
    FROM dbo.Orders O WITH (NOLOCK)
       JOIN dbo.WaveDetail WD WITH (NOLOCK) ON (O.OrderKey = WD.OrderKey)
@@ -97,7 +96,7 @@ BEGIN
    DECLARE @curRPTask CURSOR
    IF @cAreaKey = ''
       SET @curRPTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-         SELECT TOP 1
+         SELECT
             TaskDetailKey, TaskType, FromLOC, FromID, StorerKey, SKU, LOT, QTY, ToLOC, ToID
          FROM TaskDetail WITH (NOLOCK)
             INNER JOIN LOC WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC.LOC)
@@ -105,6 +104,7 @@ BEGIN
          WHERE TaskDetail.TaskType IN ('RPF')
             AND TaskDetail.PickMethod = 'PP' -- Partial pallet
             AND TaskDetail.Status = '0'
+            AND TaskDetail.UserKeyOverRide IN (@cUserName, '')
             AND TaskDetail.WaveKey = @cWaveKey
             AND TaskDetail.ToLOC = CASE WHEN @cPalletFinalLOC <> '' THEN @cPalletFinalLOC ELSE TaskDetail.ToLOC END
             -- Have permission in FromLOC
@@ -116,7 +116,7 @@ BEGIN
          ORDER BY TaskDetail.Priority, LOC.LogicalLocation, LOC.LOC
    ELSE
       SET @curRPTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-         SELECT TOP 1
+         SELECT
             TaskDetailKey, TaskType, FromLOC, FromID, StorerKey, SKU, LOT, QTY, ToLOC, ToID
          FROM TaskDetail WITH (NOLOCK)
             INNER JOIN LOC WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC.LOC)
@@ -125,6 +125,7 @@ BEGIN
             AND TaskDetail.TaskType IN ('RPF')
             AND TaskDetail.PickMethod = 'PP' -- Partial pallet
             AND TaskDetail.Status = '0'
+            AND TaskDetail.UserKeyOverRide IN (@cUserName, '')
             AND TaskDetail.WaveKey = @cWaveKey
             AND TaskDetail.ToLOC = CASE WHEN @cPalletFinalLOC <> '' THEN @cPalletFinalLOC ELSE TaskDetail.ToLOC END
             -- Have permission in FromLOC
@@ -144,7 +145,7 @@ BEGIN
          SET @cNewTaskKey = ''
          BREAK
       END
-      
+
       -- Get ToLOC info
    	SELECT
    	   @cFacility = Facility,
@@ -243,12 +244,12 @@ BEGIN
    -- Get Transit location from initial task
    DECLARE @cTransitLOC NVARCHAR( 10)
    SELECT @cTransitLOC = TransitLOC
-   FROM dbo.TaskDetail WITH (NOLOCK) 
-   WHERE ListKey = @cListKey 
+   FROM dbo.TaskDetail WITH (NOLOCK)
+   WHERE ListKey = @cListKey
       AND TransitCount = 0 -- initial task
 
    -- Update new task
-   IF @cTransitLOC = '' 
+   IF @cTransitLOC = ''
       UPDATE TaskDetail WITH (ROWLOCK) SET
           Status     = '3'
          ,UserKey    = @cUserName
@@ -284,11 +285,5 @@ Fail:
 
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON [rdt].[rdt_TM_Replen_GetNextTask] TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_TM_Replen_GetNextTask] TO [NSQL]
 GO

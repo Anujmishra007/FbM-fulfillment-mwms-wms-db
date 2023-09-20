@@ -5,7 +5,7 @@ GO
 
 /******************************************************************************/
 /* Store procedure: rdt_1764GetTask11                                         */
-/* Copyright: LF Logistics                                                    */
+/* Copyright: Maersk                                                          */
 /*                                                                            */
 /* Purpose: lock by LOCAisle                                                  */
 /*                                                                            */
@@ -13,6 +13,8 @@ GO
 /* 05-09-2022  1.0  Ung       WMS-20659 Created (from rdt_1764GetTask08)      */
 /* 28-03-2023  1.1  Ung       WMS-22053 Remove lock by aisle                  */
 /*                            Add OpsPosition                                 */
+/* 21-May-2019 1.2  Ung       WMS-8537 Fix skip task force close pallet       */
+/* 23-08-2023  1.3  Ung       WMS-23369 Add UserKeyOverRide                   */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1764GetTask11] (
@@ -131,7 +133,7 @@ BEGIN
    IF @cAreaKey = ''
    BEGIN
       SET @curRPTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-         SELECT TOP 1
+         SELECT 
             TaskDetailKey, TaskType, FromLOC, FromID, StorerKey, SKU, LOT, QTY, ToLOC, ToID
          FROM TaskDetail WITH (NOLOCK)
             JOIN LOC LOC1 WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC1.LOC)
@@ -142,6 +144,7 @@ BEGIN
             AND TaskDetail.TaskType IN ('RPF')
             AND TaskDetail.PickMethod = 'PP' -- Partial pallet
             AND TaskDetail.Status = '0'
+            AND TaskDetail.UserKeyOverRide IN (@cUserName, '')
             AND TaskDetail.WaveKey = @cWaveKey
             AND TaskDetail.GroupKey = CASE WHEN @cGroupKey <> '' THEN @cGroupKey ELSE TaskDetail.GroupKey END
             AND PickZone2.InLOC = CASE WHEN @cPalletFinalLOC <> '' THEN @cPalletFinalLOC ELSE PickZone2.InLOC END
@@ -168,7 +171,7 @@ BEGIN
    ELSE
    BEGIN
       SET @curRPTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-         SELECT TOP 1
+         SELECT 
             TaskDetailKey, TaskType, FromLOC, FromID, StorerKey, SKU, LOT, QTY, ToLOC, ToID
          FROM TaskDetail WITH (NOLOCK)
             JOIN LOC LOC1 WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC1.LOC)
@@ -179,6 +182,7 @@ BEGIN
             AND TaskDetail.TaskType IN ('RPF')
             AND TaskDetail.PickMethod = 'PP' -- Partial pallet
             AND TaskDetail.Status = '0'
+            AND TaskDetail.UserKeyOverRide IN (@cUserName, '')
             AND TaskDetail.WaveKey = @cWaveKey
             AND TaskDetail.GroupKey = CASE WHEN @cGroupKey <> '' THEN @cGroupKey ELSE TaskDetail.GroupKey END
             AND PickZone2.InLOC = CASE WHEN @cPalletFinalLOC <> '' THEN @cPalletFinalLOC ELSE PickZone2.InLOC END

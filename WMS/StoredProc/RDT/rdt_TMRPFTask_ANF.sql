@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdt_TMRPFTask_ANF]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdt_TMRPFTask_ANF]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -9,7 +6,7 @@ GO
 
 /************************************************************************/
 /* Store procedure: rdt_TMRPFTask_ANF                                   */
-/* Copyright      : IDS                                                 */
+/* Copyright      : Maersk                                              */
 /*                                                                      */
 /* Purpose: Get next replenish task (only for partial pallet)           */
 /*                                                                      */
@@ -20,9 +17,11 @@ GO
 /* 11-Mar-2014 1.1  Ung       SOS296465. Update ListKey                 */
 /* 27-Aug-2014 1.2  Ung       SOS314511. Custom grouping task criteria  */
 /* 03-Aug-2016 1.3  Ung       SOS372531. Add GroupKey                   */
+/* 21-May-2019 1.4  Ung       WMS-8537 Fix skip task force close pallet */
+/* 23-Aug-2023 1.5  Ung       WMS-23369 Add UserKeyOverRide             */
 /************************************************************************/
 
-CREATE PROC [rdt].[rdt_TMRPFTask_ANF] (
+CREATE OR ALTER PROC [rdt].[rdt_TMRPFTask_ANF] (
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -131,7 +130,7 @@ BEGIN
    DECLARE @curRPTask CURSOR
    IF @cAreaKey = ''
       SET @curRPTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-         SELECT TOP 1
+         SELECT 
             TaskDetailKey, TaskType, FromLOC, FromID, StorerKey, SKU, LOT, QTY, ToLOC, ToID
          FROM TaskDetail WITH (NOLOCK)
             INNER JOIN LOC LOC1 WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC1.LOC)
@@ -141,6 +140,7 @@ BEGIN
          WHERE TaskDetail.TaskType IN ('RPF')
             AND TaskDetail.PickMethod = 'PP' -- Partial pallet
             AND TaskDetail.Status = '0'
+            AND TaskDetail.UserKeyOverRide IN (@cUserName, '')
             AND TaskDetail.WaveKey = @cWaveKey
             AND TaskDetail.GroupKey = CASE WHEN @cGroupKey <> '' THEN @cGroupKey ELSE TaskDetail.GroupKey END
             AND TaskDetail.ToLOC = CASE WHEN @cPalletFinalLOC <> '' THEN @cPalletFinalLOC ELSE TaskDetail.ToLOC END
@@ -151,10 +151,14 @@ BEGIN
                   WHERE PermissionType = TaskDetail.TaskType
                      AND TMU.UserKey = @cUserName
                      AND TMU.Permission = '1')
-         ORDER BY TaskDetail.Priority, LOC1.LogicalLocation, LOC1.LOC
+         ORDER BY 
+             TaskDetail.Priority
+            ,CASE WHEN TaskDetail.UserKeyOverRide = @cUserName THEN '0' ELSE '1' END
+            ,LOC1.LogicalLocation
+            ,LOC1.LOC
    ELSE
       SET @curRPTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-         SELECT TOP 1
+         SELECT 
             TaskDetailKey, TaskType, FromLOC, FromID, StorerKey, SKU, LOT, QTY, ToLOC, ToID
          FROM TaskDetail WITH (NOLOCK)
             INNER JOIN LOC LOC1 WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC1.LOC)
@@ -165,6 +169,7 @@ BEGIN
             AND TaskDetail.TaskType IN ('RPF')
             AND TaskDetail.PickMethod = 'PP' -- Partial pallet
             AND TaskDetail.Status = '0'
+            AND TaskDetail.UserKeyOverRide IN (@cUserName, '')
             AND TaskDetail.WaveKey = @cWaveKey
             AND TaskDetail.GroupKey = CASE WHEN @cGroupKey <> '' THEN @cGroupKey ELSE TaskDetail.GroupKey END
             AND TaskDetail.ToLOC = CASE WHEN @cPalletFinalLOC <> '' THEN @cPalletFinalLOC ELSE TaskDetail.ToLOC END
@@ -175,7 +180,11 @@ BEGIN
                   WHERE PermissionType = TaskDetail.TaskType
                      AND TMU.UserKey = @cUserName
                      AND TMU.Permission = '1')
-         ORDER BY TaskDetail.Priority, LOC1.LogicalLocation, LOC1.LOC
+         ORDER BY 
+             TaskDetail.Priority
+            ,CASE WHEN TaskDetail.UserKeyOverRide = @cUserName THEN '0' ELSE '1' END
+            ,LOC1.LogicalLocation
+            ,LOC1.LOC
 
    OPEN @curRPTask
    WHILE (1=1)

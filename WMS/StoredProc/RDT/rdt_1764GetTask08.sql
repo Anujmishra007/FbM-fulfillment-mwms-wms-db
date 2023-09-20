@@ -6,12 +6,14 @@ GO
 
 /******************************************************************************/
 /* Store procedure: rdt_1764GetTask08                                         */
-/* Copyright: LF Logistics                                                    */
+/* Copyright: Maersk                                                          */
 /*                                                                            */
 /* Date        Rev  Author    Purposes                                        */
 /* 16-08-2011  1.0  Ung       WMS-10161 Created (from rdt_TMRPFTask_ANF)      */
 /* 03-03-2022  1.1  Ung       WMS-19012 Add UserKeyOverRide                   */
-/* 18-07-2023  1.2  JihHaur   JSM-162577 Avoid 2 user took same taskdetail(JH01)*/
+/* 18-07-2023  1.2  JihHaur   JSM-162577 Avoid 2 user took same taskdetail(JH01)*/  
+/* 21-05-2019  1.3  Ung       WMS-8537 Fix skip task force close pallet       */
+/* 23-08-2023  1.4  Ung       WMS-23369 Add UserKeyOverRide                   */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1764GetTask08] (
@@ -123,7 +125,7 @@ BEGIN
    DECLARE @curRPTask CURSOR
    IF @cAreaKey = ''
       SET @curRPTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-         SELECT TOP 1
+         SELECT 
             TaskDetailKey, TaskType, FromLOC, FromID, StorerKey, SKU, LOT, QTY, ToLOC, ToID
          FROM TaskDetail WITH (NOLOCK)
             INNER JOIN LOC LOC1 WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC1.LOC)
@@ -133,6 +135,7 @@ BEGIN
          WHERE TaskDetail.TaskType IN ('RPF')
             AND TaskDetail.PickMethod = 'PP' -- Partial pallet
             AND TaskDetail.Status = '0'
+            AND TaskDetail.UserKeyOverRide IN (@cUserName, '')
             AND TaskDetail.WaveKey = @cWaveKey
             AND TaskDetail.GroupKey = CASE WHEN @cGroupKey <> '' THEN @cGroupKey ELSE TaskDetail.GroupKey END
             AND TaskDetail.ToLOC = CASE WHEN @cPalletFinalLOC <> '' THEN @cPalletFinalLOC ELSE TaskDetail.ToLOC END
@@ -150,7 +153,7 @@ BEGIN
             ,LOC1.LOC
    ELSE
       SET @curRPTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-         SELECT TOP 1
+         SELECT 
             TaskDetailKey, TaskType, FromLOC, FromID, StorerKey, SKU, LOT, QTY, ToLOC, ToID
          FROM TaskDetail WITH (NOLOCK)
             INNER JOIN LOC LOC1 WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC1.LOC)
@@ -161,6 +164,7 @@ BEGIN
             AND TaskDetail.TaskType IN ('RPF')
             AND TaskDetail.PickMethod = 'PP' -- Partial pallet
             AND TaskDetail.Status = '0'
+            AND TaskDetail.UserKeyOverRide IN (@cUserName, '')
             AND TaskDetail.WaveKey = @cWaveKey
             AND TaskDetail.GroupKey = CASE WHEN @cGroupKey <> '' THEN @cGroupKey ELSE TaskDetail.GroupKey END
             AND TaskDetail.ToLOC = CASE WHEN @cPalletFinalLOC <> '' THEN @cPalletFinalLOC ELSE TaskDetail.ToLOC END
@@ -301,7 +305,7 @@ BEGIN
          ,EditWho    = @cUserName
          ,TrafficCop = NULL
       WHERE TaskDetailKey = @cNewTaskKey
-	AND Status = '0'  /*JH01*/
+      AND Status = '0'  /*JH01*/  
    ELSE
       UPDATE TaskDetail WITH (ROWLOCK) SET
           Status     = '3'
@@ -318,8 +322,8 @@ BEGIN
          ,EditWho    = @cUserName
          ,TrafficCop = NULL
       WHERE TaskDetailKey = @cNewTaskKey
-	AND Status = '0'  /*JH01*/
-   IF @@ERROR <> 0 OR @@ROWCOUNT <> 1  /*JH01 add OR @@ROWCOUNT <> 1*/ 
+      AND Status = '0'  /*JH01*/  
+   IF @@ERROR <> 0 OR @@ROWCOUNT <> 1  /*JH01 add OR @@ROWCOUNT <> 1*/  
    BEGIN
       SET @nErrNo = 143404
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdTaskDtlFail

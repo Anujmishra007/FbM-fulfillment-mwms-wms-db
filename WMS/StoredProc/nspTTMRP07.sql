@@ -1,6 +1,3 @@
-IF EXISTS ( SELECT * FROM sys.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nspTTMRP07]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [dbo].[nspTTMRP07]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -9,7 +6,7 @@ GO
 
 /************************************************************************/
 /* Stored Procedure: nspTTMRP07                                         */
-/* Copyright: IDS                                                       */
+/* Copyright: Maersk                                                    */
 /*                                                                      */
 /* Purpose: TM Replenishment Strategy                                   */
 /*                                                                      */
@@ -17,8 +14,9 @@ GO
 /* Date        Author    Ver  Purposes                                  */
 /* 04-09-2018  ChewKP    1.0  WMS-6178. Created                         */
 /* 26-02-2019  Ung       1.1  WMS-8149 Revert to original transit logic */
+/* 23-08-2023  Ung       1.2  WMS-23369 Add UserKeyOverRide             */
 /************************************************************************/
-CREATE PROC [dbo].[nspTTMRP07]
+CREATE OR ALTER PROC [dbo].[nspTTMRP07]
     @c_UserID    NVARCHAR(18)
    ,@c_AreaKey01 NVARCHAR(10)
    ,@c_AreaKey02 NVARCHAR(10)
@@ -116,6 +114,7 @@ BEGIN
          WHERE AreaDetail.AreaKey = @c_AreaKey01
             AND TaskDetail.TaskType IN ('RPF')
             AND TaskDetail.Status = '0'
+            AND TaskDetail.UserKeyOverRide IN (@c_UserID, '')
             AND NOT EXISTS( SELECT 1
                FROM TaskDetail T1 WITH (NOLOCK)
                WHERE TaskDetail.GroupKey <> '' 
@@ -142,6 +141,7 @@ BEGIN
             JOIN dbo.AreaDetail WITH (NOLOCK) ON (AreaDetail.PutawayZone = LOC.PutAwayZone)
          WHERE dbo.TaskDetail.TaskType IN ('RPF')
             AND TaskDetail.Status = '0'
+            AND TaskDetail.UserKeyOverRide IN (@c_UserID, '')
             AND NOT EXISTS( SELECT 1
                FROM TaskDetail T1 WITH (NOLOCK)
                WHERE TaskDetail.GroupKey <> '' 
