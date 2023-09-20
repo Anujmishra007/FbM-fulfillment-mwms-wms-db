@@ -1,8 +1,7 @@
-SET ANSI_NULLS OFF
-GO
 SET QUOTED_IDENTIFIER OFF
 GO
-
+SET ANSI_NULLS OFF
+GO
 
 /************************************************************************/
 /* Store procedure: rdt_840ExtPackCfm04                                 */
@@ -13,6 +12,8 @@ GO
 /*                                                                      */
 /* Date        Rev  Author     Purposes                                 */
 /* 2023-04-12  1.0  James      WMS-22084. Created                       */
+/* 2023-08-25  1.1  James      Addhoc fix. Remove middleware interface  */
+/*                             trigger (james01)                        */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_840ExtPackCfm04] (
@@ -305,25 +306,25 @@ AS
             FETCH NEXT FROM @curGenZPL INTO @nCartonNo, @cLabelNo
          END
       END
-      ELSE
-      BEGIN
-         EXEC [dbo].[isp_Carrier_Middleware_Interface]        
-              @c_OrderKey    = @cOrderKey     
-            , @c_Mbolkey     = ''  
-            , @c_FunctionID  = @nFunc      
-            , @n_CartonNo    = @nCartonNo  
-            , @n_Step        = @nStep  
-            , @b_Success     = @bSuccess  OUTPUT        
-            , @n_Err         = @nErrNo    OUTPUT        
-            , @c_ErrMsg      = @cErrMsg   OUTPUT    
+      --ELSE (Removed due to same interface trigged during extupdsp james01)
+      --BEGIN
+      --   EXEC [dbo].[isp_Carrier_Middleware_Interface]        
+      --        @c_OrderKey    = @cOrderKey     
+      --      , @c_Mbolkey     = ''  
+      --      , @c_FunctionID  = @nFunc      
+      --      , @n_CartonNo    = @nCartonNo  
+      --      , @n_Step        = @nStep  
+      --      , @b_Success     = @bSuccess  OUTPUT        
+      --      , @n_Err         = @nErrNo    OUTPUT        
+      --      , @c_ErrMsg      = @cErrMsg   OUTPUT    
 
-         IF @bSuccess = 0
-         BEGIN
-            SET @nErrNo = 200758 
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Exec ITF Fail'
-            GOTO RollBackTran
-         END
-      END
+      --   IF @bSuccess = 0
+      --   BEGIN
+      --      SET @nErrNo = 200758 
+      --      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Exec ITF Fail'
+      --      GOTO RollBackTran
+      --   END
+      --END
    END
    
    GOTO Quit
@@ -376,6 +377,5 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-
-GRANT EXECUTE ON  [RDT].[rdt_840ExtPackCfm04] TO [NSQL]
+GRANT EXECUTE ON RDT.rdt_840ExtPackCfm04 TO NSQL
 GO

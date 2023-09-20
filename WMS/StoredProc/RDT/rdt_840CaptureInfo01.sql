@@ -9,6 +9,8 @@ GO
 /*                                                                         */
 /* Date       Rev  Author  Purposes                                        */
 /* 2023-03-31 1.0  James   WMS-22084. Created                              */
+/* 2023-09-06 1.1  James   WMS-23401 Extra validation to determine whether */
+/*                         need capture coo (james01)                      */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_840CaptureInfo01](
@@ -66,9 +68,19 @@ BEGIN
    DECLARE @cDataCapture      NVARCHAR( 1)
    DECLARE @nIsDataCaptureReq INT = 1
    DECLARE @cSKU              NVARCHAR( 20)
+   DECLARE @cOrdType          NVARCHAR( 10)
+   DECLARE @cLottable02       NVARCHAR( 18)
+   DECLARE @nRowCount         INT = 0
+   DECLARE @cDefaultSameCOO   NVARCHAR( 1)
    
    IF @cType = 'DISPLAY'
    BEGIN
+   	SET @cDefaultSameCOO = rdt.RDTGetConfig( @nFunc, 'DEFAULTSAMECOO', @cStorerKey)
+   	  
+   	SELECT @cOrdType = [Type]
+   	FROM dbo.ORDERS WITH (NOLOCK)
+   	WHERE OrderKey = @cOrderKey
+   	
       -- Variable mapping
       SELECT @cDataCapture = Value FROM @tCaptureVar WHERE Variable = '@cDataCapture'
 
@@ -86,11 +98,19 @@ BEGIN
       IF EXISTS ( SELECT 1
                   FROM dbo.ORDERS WITH (NOLOCK)
                   WHERE OrderKey = @cOrderKey
-                  AND   C_Country = 'AU')
+                  AND   C_Country = 'AU') AND
+         NOT EXISTS ( SELECT 1
+                      FROM dbo.CODELKUP WITH (NOLOCK) 
+                      WHERE ListName = 'LVSCOO' 
+                      AND   Code = 'REQAUTYPE'
+                      AND   Short = @cOrdType)
          SET @nIsDataCaptureReq = 0
 
+      -- If config turn on only need check below condition 
+      -- else always prompt COO
+      IF @cDefaultSameCOO = '1' AND
       -- If COO capture before no need prompt
-      IF EXISTS ( SELECT 1
+         EXISTS ( SELECT 1
                   FROM dbo.PackDetail WITH (NOLOCK)
                   WHERE PickSlipNo = @cPickSlipNo
                   AND   SKU = @cSKU
@@ -122,14 +142,14 @@ BEGIN
       SET @cFieldAttr10 = 'O'
 
       SET @curData = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         SELECT Code, Notes, UDF01
+         SELECT Code, Notes, UDF01, Short
          FROM dbo.CodeLKUP WITH (NOLOCK)
          WHERE ListName = 'RDTExtUpd'
             AND Storerkey = @cStorerKey
             AND Code2 = @nFunc
          ORDER BY Code
       OPEN @curData
-      FETCH NEXT FROM @curData INTO @cCode, @cLabel, @cListName
+      FETCH NEXT FROM @curData INTO @cCode, @cLabel, @cListName, @cOption
       WHILE @@FETCH_STATUS = 0
       BEGIN
          IF ISNULL( @cLabel, '') <> ''
@@ -153,6 +173,28 @@ BEGIN
                   AND StorerKey = @cStorerKey
                   AND Code2 = @nFunc
             
+               IF @cLabel LIKE 'COO%'
+               BEGIN
+                  SELECT DISTINCT @cLottable02 = LOTTABLE02 
+                  FROM dbo.LOTATTRIBUTE LA WITH (NOLOCK) 
+                  JOIN dbo.LOTXLOCXID LLI WITH (NOLOCK) ON ( LLI.LOT = LA.LOT) 
+                  WHERE LLI.StorerKey = @cStorerKey
+                  AND   LLI.SKU = @cSKU 
+                  AND   LLI.QTY > 0 
+                  
+                  SET @nRowCount = @@ROWCOUNT
+                  
+                  IF @nRowCount = 1 AND
+                     ISNULL( @cLottable02, '') <> '' AND 
+                     EXISTS( SELECT 1 
+                             FROM dbo.CODELKUP WITH (NOLOCK) 
+                             WHERE LISTNAME = 'LVSCOO'
+                             AND   Code = @cLottable02
+                             AND   Storerkey = @cStorerKey 
+                             AND   LEN( Code) = 2)
+                     SET @cData = @cLottable02
+               END
+               
                -- Set default value
                IF @cData <> ''
                BEGIN
@@ -165,7 +207,7 @@ BEGIN
             END
          END
          
-         FETCH NEXT FROM @curData INTO @cCode, @cLabel, @cListName
+         FETCH NEXT FROM @curData INTO @cCode, @cLabel, @cListName, @cOption
       END
       
       -- Position on 1st empty field

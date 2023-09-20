@@ -1,6 +1,7 @@
-SET QUOTED_IDENTIFIER OFF 
+
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
@@ -16,6 +17,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author    Ver.  Purposes                                */
 /* 2023-03-31   James     1.0   WMS-22084. Created                      */
+/* 2023-04-22   YeeKung   1.1   WMS-22236 Add ZPL method (yeekung01)    */
 /************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_840ExtInsPack19] (
@@ -60,7 +62,6 @@ BEGIN
            @cLoadKey          NVARCHAR( 10),
            @cRoute            NVARCHAR( 10),
            @cConsigneeKey     NVARCHAR( 15), 
-           @cBillToKey        NVARCHAR( 15),
            @cCurLabelNo       NVARCHAR( 20),
            @cCurLabelLine     NVARCHAR( 5), 
            @cPack_LblNo       NVARCHAR( 20), 
@@ -77,7 +78,7 @@ BEGIN
            @cDefEcomCartonCnt INT,
            @nCurrentCtnNo     INT,
            @nNewCartonNo      INT,
-           @cLabelLine        NVARCHAR( 5)
+           @cTrackingNo       NVARCHAR( 20)
 
    DECLARE @b_success         INT,
            @n_err             INT,
@@ -93,15 +94,21 @@ BEGIN
    DECLARE @cC_ISOCntryCode   NVARCHAR( 10)
    DECLARE @cStartNo          NVARCHAR( 10)
    DECLARE @cEndNo            NVARCHAR( 10)
-   DECLARE @cCOO              NVARCHAR( 10) = ''
-   DECLARE @nIsPrintCtnLbl    INT = 0
-   DECLARE @cPreCtnLbl        NVARCHAR( 10)
-   DECLARE @tPreCtnLbl        VariableTable
-   DECLARE @cVASSSCC          NVARCHAR( 10)
-   DECLARE @cLottableValue    NVARCHAR( 60)
-   DECLARE @nCheckDigit       INT
-   DECLARE @cErrMsg1          NVARCHAR( 20)
-   DECLARE @cExternOrderKey   NVARCHAR( 50)
+   DECLARE @cTemplateSP       NVARCHAR( 80)  
+   DECLARE @cTemplate         NVARCHAR( MAX) 
+   DECLARE @cValue01          NVARCHAR( 30)  
+   DECLARE @cValue02          NVARCHAR( 30)  
+   DECLARE @cValue03          NVARCHAR( 30)  
+   DECLARE @cValue04          NVARCHAR( 30)  
+   DECLARE @cValue05          NVARCHAR( 30)  
+   DECLARE @cValue06          NVARCHAR( 30)  
+   DECLARE @cValue07          NVARCHAR( 30)  
+   DECLARE @cValue08          NVARCHAR( 30)  
+   DECLARE @cValue09          NVARCHAR( 30)  
+   DECLARE @cValue10          NVARCHAR( 30)  
+   DECLARE @cPrintData        NVARCHAR( MAX)
+   DECLARE @cSQL              NVARCHAR( MAX)
+   DECLARE @cSQLParam         NVARCHAR( MAX)
    
    SET @nTranCount = @@TRANCOUNT    
 
@@ -110,31 +117,10 @@ BEGIN
 
    SELECT @cUserName = UserName,
           @cFacility = Facility,
-          @cData1    = I_Field02, 
-          @cLabelPrinter = Printer, 
-          @cPaperPrinter = Printer_Paper
+          @cData1    = I_Field02
    FROM rdt.rdtMOBREC WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
-   IF EXISTS ( SELECT 1 
-               FROM dbo.ORDERS O WITH (NOLOCK)
-               WHERE O.OrderKey = @cOrderKey
-               AND   EXISTS ( SELECT 1
-                              FROM dbo.CODELKUP CLK WITH (NOLOCK)
-                              WHERE CLK.LISTNAME = 'STFCART'
-                              AND   CLK.Code = O.ShipperKey
-                              AND   CLK.Storerkey = O.StorerKey)) AND @nCartonNo <> 1
-   BEGIN
-      SET @nErrNo = 0  
-      SET @cErrMsg1 = 'PACK IN 1 CARTON'  
-      EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1  
-      IF @nErrNo = 1 
-         SET @cErrMsg1 = ''  
-      SET @nErrNo = 198762 
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Pack In 1 Ctn'
-      GOTO RollBackTran
-   END
-               
    -- Piece scanning
    SET @nQty = 1
    SET @cLabelNo = ''
@@ -180,12 +166,10 @@ BEGIN
    SELECT @cLoadKey = ISNULL(RTRIM(LoadKey),'')
          , @cRoute = ISNULL(RTRIM(Route),'')
          , @cConsigneeKey = ISNULL(RTRIM(ConsigneeKey),'') 
-         , @cBillToKey = ISNULL(RTRIM(BillToKey),'')
          , @cShipperKey = ShipperKey
          , @cOrdType = [Type]
          , @cC_Country = C_Country
          , @cC_ISOCntryCode = C_ISOCntryCode
-         , @cExternOrderKey = ExternOrderKey
    FROM dbo.Orders WITH (NOLOCK)
    WHERE Orderkey = @cOrderkey
       
@@ -205,12 +189,6 @@ BEGIN
       END
    END
 
-   -- Retrieve VASSSCC
-   SELECT @cVASSSCC = Code
-   FROM dbo.CODELKUP WITH (NOLOCK)
-   WHERE listname = 'VASSSCC'
-   AND   Storerkey = @cStorerkey
-   
    -- Update PackDetail.Qty if it is already exists
    IF EXISTS (SELECT 1 FROM dbo.PackDetail WITH (NOLOCK)
                WHERE StorerKey = @cStorerkey
@@ -300,34 +278,12 @@ BEGIN
             GOTO RollBackTran
          END
 
-         IF @nStep = 9
-            SET @cCOO = SUBSTRING( @cData1, 1, 10)
-
-         -- Check if this sku has already capture COO before
-         -- Capture COO only happened 1 time per sku
-         -- Posible for same sku packed into 2 carton
-         IF @cCOO = ''
-         BEGIN
-            SELECT TOP 1 @cCOO = RefNo
-            FROM dbo.PackDetail WITH (NOLOCK)
-            WHERE PickSlipNo = @cPickSlipNo
-            AND   SKU = @cSKU
-            ORDER BY 1 DESC
-         END
-         
-         SET @cLottableValue = RTRIM( @cVASSSCC) + RIGHT( @cLabelNo, 9)
-
-         SET @nCheckDigit = dbo.fnc_CalcCheckDigit_M10( @cLottableValue, 0)
-
-         SET @cLottableValue = @cLottableValue + CAST( @nCheckDigit AS NVARCHAR( 1))
-
          -- CartonNo = 0 & LabelLine = '0000', trigger will auto assign
          INSERT INTO dbo.PackDetail
-            (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, 
-            Refno, AddWho, AddDate, EditWho, EditDate, DropID, LOTTABLEVALUE)
+            (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, Refno, AddWho, AddDate, EditWho, EditDate, DropID)
          VALUES
             (@cPickSlipNo, 0, @cLabelNo, '00000', @cStorerKey, @cSku, @nQty,
-            ISNULL( @cCOO, ''), 'rdt.' + sUser_sName(), GETDATE(), 'rdt.' + sUser_sName(), GETDATE(), '', @cLottableValue)
+            '', 'rdt.' + sUser_sName(), GETDATE(), 'rdt.' + sUser_sName(), GETDATE(), '')
 
          IF @@ERROR <> 0
          BEGIN
@@ -342,17 +298,13 @@ BEGIN
             AND   LabelNo = @cLabelNo
             AND   StorerKey = @cStorerKey
 
-         SET @nIsPrintCtnLbl = 1
-
          -- Create a dummy label and a cartontrack record
          IF EXISTS ( SELECT 1 
                      FROM dbo.CODELKUP WITH (NOLOCK)
                      WHERE LISTNAME = 'LVSPLTCUST'
-                     AND   Code = @cBillToKey
+                     AND   Code = @cConsigneeKey
                      AND   Short = '1'
-                     AND   Storerkey = @cStorerkey
-                     AND   ISNULL( UDF01, '') <> 'VAS' 
-                     AND ( ISNULL( UDF02, '') IN ( 'BULK', 'OVERSEAS')))          
+                     AND   Storerkey = @cStorerkey)
          BEGIN
          	DECLARE @c_ZPLCode   NVARCHAR( MAX)
          	
@@ -371,56 +323,26 @@ BEGIN
                , @b_success      = @bSuccess    OUTPUT            
                , @n_err          = @nErrNo      OUTPUT                
                , @c_errmsg       = @cErrMsg     OUTPUT                            
-         
-            IF @bSuccess = 0
-            BEGIN
-               SET @nErrNo = 198759
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Exec ITF Fail
-               GOTO RollBackTran
-            END
+         END
+         ELSE
+         BEGIN
+            -- EXEC isp_Carrier_Middleware_Interface @c_OrderKey, @c_Mbolkey, @c_FunctionID,@n_CartonNo,@n_Step, @b_Success output, @n_Err output, @c_ErrMsg output
+            EXEC [dbo].[isp_Carrier_Middleware_Interface]        
+                 @c_OrderKey    = @cOrderKey     
+               , @c_Mbolkey     = ''  
+               , @c_FunctionID  = @nFunc      
+               , @n_CartonNo    = @nNewCarton  
+               , @n_Step        = @nStep  
+               , @b_Success     = @bSuccess  OUTPUT        
+               , @n_Err         = @nErrNo    OUTPUT        
+               , @c_ErrMsg      = @cErrMsg   OUTPUT        
          END
          
-        IF EXISTS ( SELECT 1 
-                     FROM dbo.CODELKUP WITH (NOLOCK)
-                     WHERE LISTNAME = 'LVSPLTCUST'
-                     AND   Code = @cBillToKey
-                     AND   Short = '1'
-                     AND   Storerkey = @cStorerkey
-                     AND   ISNULL( UDF01, '') = 'VAS' 
-                     AND   ISNULL( UDF02, '') = 'BULK')          
+         IF @bSuccess = 0
          BEGIN
-         	IF NOT EXISTS ( SELECT 1 
-         	                FROM dbo.CartonTrack WITH (NOLOCK)
-         	                WHERE TrackingNo = @cLottableValue
-         	                AND   CarrierName = 'INTERNAL'
-         	                AND   Labelno = @cLabelNo
-         	                AND   KeyName = @cStorerkey)
-            BEGIN
-               INSERT INTO dbo.CartonTrack   
-                  (TrackingNo, CarrierName, KeyName, Labelno, UDF03)   
-               VALUES   
-                  (@cLottableValue, 'INTERNAL', @cStorerKey, @cLabelNo, @cExternOrderKey)  
-
-               IF @@ERROR <> 0  
-               BEGIN  
-                  SET @nErrNo = 198763  
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins CtnTrk Er  
-                  GOTO RollBackTran  
-               END  
-            
-               UPDATE dbo.ORDERS SET
-                  TrackingNo = @cExternOrderKey,
-                  EditWho = SUSER_SNAME(),
-                  EditDate = GETDATE()
-               WHERE OrderKey = @cOrderKey
-            
-               IF @@ERROR <> 0  
-               BEGIN  
-                  SET @nErrNo = 198764  
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd Trk# Fail  
-                  GOTO RollBackTran  
-               END  
-            END
+            SET @nErrNo = 198759
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Exec ITF Fail
+            GOTO RollBackTran
          END
       END
       ELSE
@@ -428,47 +350,23 @@ BEGIN
          SET @cCurLabelNo = ''
          SET @cCurLabelLine = ''
 
-         SELECT TOP 1 @cCurLabelNo = LabelNo 
-         FROM dbo.PackDetail WITH (NOLOCK)
+         SELECT TOP 1 @cCurLabelNo = LabelNo FROM dbo.PackDetail WITH (NOLOCK)
          WHERE StorerKey = @cStorerKey
-         AND   PickSlipNo = @cPickSlipNo
-         AND   CartonNo = @nCartonNo
+         AND PickSlipNo = @cPickSlipNo
+         AND CartonNo = @nCartonNo
 
          SELECT @cCurLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
-         FROM dbo.PackDetail WITH (NOLOCK)
+         FROM PACKDETAIL WITH (NOLOCK)
          WHERE StorerKey = @cStorerKey
-         AND   PickSlipNo = @cPickSlipNo
-         AND   CartonNo = @nCartonNo
+         AND PickSlipNo = @cPickSlipNo
+         AND CartonNo = @nCartonNo
 
-         IF @nStep = 9
-            SET @cCOO = SUBSTRING( @cData1, 1, 10)
-         ELSE
-         BEGIN
-            -- Check if this sku has already capture COO before
-            -- Capture COO only happened 1 time per sku
-            -- Posible for same sku packed into 2 carton
-            SELECT TOP 1 @cCOO = RefNo
-            FROM dbo.PackDetail WITH (NOLOCK)
-            WHERE StorerKey = @cStorerKey
-            AND   PickSlipNo = @cPickSlipNo
-            AND   SKU = @cSKU
-            ORDER BY 1
-
-         END
-         
-         SET @cLottableValue = RTRIM( @cVASSSCC) + RIGHT( @cCurLabelNo, 9)
-
-         SET @nCheckDigit = dbo.fnc_CalcCheckDigit_M10( @cLottableValue, 0)
-
-         SET @cLottableValue = @cLottableValue + CAST( @nCheckDigit AS NVARCHAR( 1))
-         
          -- need to use the existing labelno
          INSERT INTO dbo.PackDetail
-            (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, 
-            Refno, AddWho, AddDate, EditWho, EditDate, DropID, LOTTABLEVALUE)
+            (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, Refno, AddWho, AddDate, EditWho, EditDate, DropID)
          VALUES
             (@cPickSlipNo, @nCartonNo, @cCurLabelNo, @cCurLabelLine, @cStorerKey, @cSku, @nQty,
-            ISNULL( @cCOO, ''), 'rdt.' + sUser_sName(), GETDATE(), 'rdt.' + sUser_sName(), GETDATE(), '', @cLottableValue)
+            '', 'rdt.' + sUser_sName(), GETDATE(), 'rdt.' + sUser_sName(), GETDATE(), '')
 
          IF @@ERROR <> 0
          BEGIN
@@ -476,8 +374,60 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'INS PACK Fail'
             GOTO RollBackTran
          END
+      END
+   END
 
-         SET @cLabelNo = @cCurLabelNo
+   -- Capture COO here
+   IF @nStep = 9
+   BEGIN
+      IF @nInputKey = 1
+      BEGIN
+         SELECT TOP 1 
+            @cOrderLineNumber = OrderLineNumber,
+            @nOriginalQty = OriginalQty
+         FROM dbo.ORDERDETAIL WITH (NOLOCK)
+         WHERE OrderKey = @cOrderKey
+         AND   Sku = @cSKU
+         ORDER BY 1
+         
+         SELECT @cRefType = RefType
+         FROM dbo.OrderDetailRef WITH (NOLOCK)
+         WHERE StorerKey = @cStorerKey
+         AND   Orderkey = @cOrderKey
+         AND   RetailSKU = @cSKU
+
+         SET @nRowCount =  @@ROWCOUNT
+         
+         IF @nRowCount = 0
+         BEGIN
+         	INSERT INTO dbo.OrderDetailRef( Orderkey, OrderLineNumber, RetailSKU, BOMQty, RefType, StorerKey, ParentSKU) VALUES 
+         	(@cOrderKey, @cOrderLineNumber, @cSKU, @nOriginalQty, SUBSTRING( @cData1, 1, 10), @cStorerkey, @cLabelNo)
+         	
+         	IF @@ERROR <> 0
+            BEGIN
+               SET @nErrNo = 198761
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'INS COO Fail'
+               GOTO RollBackTran
+            END
+         END
+         ELSE
+         BEGIN
+         	UPDATE dbo.OrderDetailRef SET 
+         	   @cRefType = SUBSTRING( @cData1, 1, 10),
+         	   BOMQty = @nOriginalQty,
+         	   Editwho = SUSER_SNAME(),
+         	   Editdate = GETDATE()
+         	WHERE Orderkey = @cOrderKey
+         	AND   OrderLineNumber = @cOrderLineNumber
+         	AND   RetailSKU = @cSKU
+
+         	IF @@ERROR <> 0
+            BEGIN
+               SET @nErrNo = 198762
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UPD COO Fail'
+               GOTO RollBackTran
+            END
+         END
       END
    END
 
@@ -491,16 +441,16 @@ BEGIN
 
    IF EXISTS ( SELECT 1 
                FROM dbo.STORER WITH (NOLOCK)
-               WHERE StorerKey = @cBillToKey
+               WHERE StorerKey = @cConsigneeKey
                AND   Facility = @cFacility
                AND   [type] = '2'
                AND   LabelPrice = 'Y')
    BEGIN
-   	IF NOT EXISTS ( SELECT 1
-   	            FROM dbo.CODELKUP WITH (NOLOCK)
-   	            WHERE LISTNAME = 'PriceLBL2'
-   	            AND   Code = @cConsigneeKey
-   	            AND   StorerKey = @cStorerkey)
+   	IF EXISTS ( SELECT 1
+   	            FROM dbo.ORDERDETAIL WITH (NOLOCK)
+   	            WHERE OrderKey = @cOrderKey
+   	            AND   Sku = @cSKU
+   	            AND   ISNULL( Tax02, '') = '')
       BEGIN
       	DECLARE @cPriceLabel1   NVARCHAR( 10)
       	DECLARE @tPriceLabel1   VariableTable
@@ -511,22 +461,76 @@ BEGIN
                   
          IF @cPriceLabel1 <> ''
          BEGIN
-            INSERT INTO @tPriceLabel1 (Variable, Value) VALUES ( '@cPickSlipNo',    @cPickSlipNo)
-            INSERT INTO @tPriceLabel1 (Variable, Value) VALUES ( '@cOrderkey',      @cOrderkey)
-            INSERT INTO @tPriceLabel1 (Variable, Value) VALUES ( '@nCartonNo',      @nCartonNo)
-            INSERT INTO @tPriceLabel1 (Variable, Value) VALUES ( '@cLabelNo',       @cLabelNo)
-            INSERT INTO @tPriceLabel1 (Variable, Value) VALUES ( '@cSKU',           @cSKU)
+            -- Get report info  
+            SELECT
+               @cTemplate = ISNULL( PrintTemplate, ''),  
+               @cTemplateSP = ISNULL( PrintTemplateSP, '')
+            FROM rdt.rdtReport WITH (NOLOCK)  
+            WHERE StorerKey = @cStorerKey  
+               AND ReportTYpe = @cPriceLabel1  
+               AND (Function_ID = @nFunc OR Function_ID = 0)  
+            ORDER BY Function_ID DESC  
 
-            -- Print label
-            EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, 0, 1, '', @cStorerKey, @cLabelPrinter, '',
-               @cPriceLabel1, -- Report type
-               @tPriceLabel1, -- Report params
-               'rdt_840ExtInsPack19',
-               @nErrNo  OUTPUT,
-               @cErrMsg OUTPUT
+
+             -- Execute SP to merge data and template, output print data as ZPL code  
+            SET @cSQL = 'EXEC ' + RTRIM( @cTemplateSP) +  
+               ' @nMobile, @nFunc, @cLangCode, @cStorerKey, ' +  
+               ' @cValue01, @cValue02, @cValue03, @cValue04, @cValue05, @cValue06, @cValue07, @cValue08, @cValue09, @cValue10, ' +  
+               ' @cTemplate, @cPrintData OUTPUT, @nErrNo OUTPUT, @cErrMSG OUTPUT '  
+            SET @cSQLParam =  
+               '@nMobile      INT,            ' +  
+               '@nFunc        INT,            ' +  
+               '@cLangCode    NVARCHAR( 3),   ' +  
+               '@cStorerKey   NVARCHAR( 15),  ' +  
+               '@cValue01     NVARCHAR( 20),  ' +  
+               '@cValue02     NVARCHAR( 20),  ' +  
+               '@cValue03     NVARCHAR( 20),  ' +  
+               '@cValue04     NVARCHAR( 20),  ' +  
+               '@cValue05     NVARCHAR( 20),  ' +  
+               '@cValue06     NVARCHAR( 20),  ' +  
+               '@cValue07     NVARCHAR( 20),  ' +  
+               '@cValue08     NVARCHAR( 20),  ' +  
+               '@cValue09     NVARCHAR( 20),  ' +  
+               '@cValue10     NVARCHAR( 20),  ' +  
+               '@cTemplate    NVARCHAR( MAX), ' +  
+               '@cPrintData   NVARCHAR( MAX) OUTPUT, ' +  
+               '@nErrNo       INT            OUTPUT, ' +  
+               '@cErrMsg      NVARCHAR( 20)  OUTPUT  '  
+  
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
+               @nMobile, @nFunc, @cLangCode, @cStorerKey,  
+               @cPickSlipNo, @cOrderkey, @nCartonNo, @cLabelNo, @cSKU, @cValue06, @cValue07, @cValue08, @cValue09, @cValue10,  
+               @cTemplate, @cPrintData OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT  
+  
+            IF @nErrNo <> 0  
+               GOTO Quit  
+
+
+            EXECUTE dbo.isp_PrintZplLabel      
+             @cStorerKey        = @cStorerKey      
+            ,@cLabelNo          = @cOrderKey  --(JH02)    
+            ,@cTrackingNo       = @cTrackingNo      
+            ,@cPrinter          = @cLabelPrinter      
+            ,@nErrNo            = @nErrNo    OUTPUT      
+            ,@cErrMsg           = @cErrMsg   OUTPUT   
+            ,@cPrintMsg         = @cPrintData
+
+            --INSERT INTO @tPriceLabel1 (Variable, Value) VALUES ( '@cPickSlipNo',    @cPickSlipNo)
+            --INSERT INTO @tPriceLabel1 (Variable, Value) VALUES ( '@cOrderkey',      @cOrderkey)
+            --INSERT INTO @tPriceLabel1 (Variable, Value) VALUES ( '@nCartonNo',      @nCartonNo)
+            --INSERT INTO @tPriceLabel1 (Variable, Value) VALUES ( '@cLabelNo',       @cLabelNo)
+            --INSERT INTO @tPriceLabel1 (Variable, Value) VALUES ( '@cSKU',           @cSKU)
+
+            ---- Print label
+            --EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, 0, 1, '', @cStorerKey, @cLabelPrinter, '',
+            --   @cPriceLabel1, -- Report type
+            --   @tPriceLabel1, -- Report params
+            --   'rdt_840ExtInsPack19',
+            --   @nErrNo  OUTPUT,
+            --   @cErrMsg OUTPUT
 
             IF @nErrNo <> 0
-               GOTO Fail
+               GOTO QUIT
          END
       END
       ELSE
@@ -537,58 +541,96 @@ BEGIN
          SET @cPriceLabel2 = rdt.RDTGetConfig( @nFunc, 'PriceLbl02', @cStorerKey)
          IF @cPriceLabel2 = '0'
             SET @cPriceLabel2 = ''
+
                   
          IF @cPriceLabel2 <> ''
          BEGIN
-            INSERT INTO @tPriceLabel2 (Variable, Value) VALUES ( '@cPickSlipNo',    @cPickSlipNo)
-            INSERT INTO @tPriceLabel2 (Variable, Value) VALUES ( '@cOrderkey',      @cOrderkey)
-            INSERT INTO @tPriceLabel2 (Variable, Value) VALUES ( '@nCartonNo',      @nCartonNo)
-            INSERT INTO @tPriceLabel2 (Variable, Value) VALUES ( '@cLabelNo',       @cLabelNo)
-            INSERT INTO @tPriceLabel2 (Variable, Value) VALUES ( '@cSKU',           @cSKU)
+            -- Get report info  
+            SELECT
+               @cTemplate = ISNULL( PrintTemplate, ''),  
+               @cTemplateSP = ISNULL( PrintTemplateSP, '')
+            FROM rdt.rdtReport WITH (NOLOCK)  
+            WHERE StorerKey = @cStorerKey  
+               AND ReportTYpe = @cPriceLabel2  
+               AND (Function_ID = @nFunc OR Function_ID = 0)  
+            ORDER BY Function_ID DESC  
 
-              -- Print label
-            EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, 0, 1, '', @cStorerKey, @cLabelPrinter, '',
-               @cPriceLabel2, -- Report type
-               @tPriceLabel2, -- Report params
-               'rdt_840ExtInsPack19',
-               @nErrNo  OUTPUT,
-               @cErrMsg OUTPUT
 
+             -- Execute SP to merge data and template, output print data as ZPL code  
+            SET @cSQL = 'EXEC ' + RTRIM( @cTemplateSP) +  
+               ' @nMobile, @nFunc, @cLangCode, @cStorerKey, ' +  
+               ' @cValue01, @cValue02, @cValue03, @cValue04, @cValue05, @cValue06, @cValue07, @cValue08, @cValue09, @cValue10, ' +  
+               ' @cTemplate, @cPrintData OUTPUT, @nErrNo OUTPUT, @cErrMSG OUTPUT '  
+            SET @cSQLParam =  
+               '@nMobile      INT,            ' +  
+               '@nFunc        INT,            ' +  
+               '@cLangCode    NVARCHAR( 3),   ' +  
+               '@cStorerKey   NVARCHAR( 15),  ' +  
+               '@cValue01     NVARCHAR( 20),  ' +  
+               '@cValue02     NVARCHAR( 20),  ' +  
+               '@cValue03     NVARCHAR( 20),  ' +  
+               '@cValue04     NVARCHAR( 20),  ' +  
+               '@cValue05     NVARCHAR( 20),  ' +  
+               '@cValue06     NVARCHAR( 20),  ' +  
+               '@cValue07     NVARCHAR( 20),  ' +  
+               '@cValue08     NVARCHAR( 20),  ' +  
+               '@cValue09     NVARCHAR( 20),  ' +  
+               '@cValue10     NVARCHAR( 20),  ' +  
+               '@cTemplate    NVARCHAR( MAX), ' +  
+               '@cPrintData   NVARCHAR( MAX) OUTPUT, ' +  
+               '@nErrNo       INT            OUTPUT, ' +  
+               '@cErrMsg      NVARCHAR( 20)  OUTPUT  '  
+  
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
+               @nMobile, @nFunc, @cLangCode, @cStorerKey,  
+               @cPickSlipNo, @cOrderkey, @nCartonNo, @cLabelNo, @cSKU, @cValue06, @cValue07, @cValue08, @cValue09, @cValue10,  
+               @cTemplate, @cPrintData OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT  
+  
+            IF @nErrNo <> 0  
+               GOTO Quit  
+
+
+            EXECUTE dbo.isp_PrintZplLabel      
+             @cStorerKey        = @cStorerKey      
+            ,@cLabelNo          = @cOrderKey  --(JH02)    
+            ,@cTrackingNo       = @cTrackingNo      
+            ,@cPrinter          = @cLabelPrinter      
+            ,@nErrNo            = @nErrNo    OUTPUT      
+            ,@cErrMsg           = @cErrMsg   OUTPUT   
+            ,@cPrintMsg         = @cPrintData
+
+            
             IF @nErrNo <> 0
-               GOTO Fail
+               GOTO QUIT
+            --INSERT INTO @tPriceLabel2 (Variable, Value) VALUES ( '@cPickSlipNo',    @cPickSlipNo)
+            --INSERT INTO @tPriceLabel2 (Variable, Value) VALUES ( '@cOrderkey',      @cOrderkey)
+            --INSERT INTO @tPriceLabel2 (Variable, Value) VALUES ( '@nCartonNo',      @nCartonNo)
+            --INSERT INTO @tPriceLabel2 (Variable, Value) VALUES ( '@cLabelNo',       @cLabelNo)
+            --INSERT INTO @tPriceLabel2 (Variable, Value) VALUES ( '@cSKU',           @cSKU)
+
+            --  -- Print label
+            --EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, 0, 1, '', @cStorerKey, @cLabelPrinter, '',
+            --   @cPriceLabel2, -- Report type
+            --   @tPriceLabel2, -- Report params
+            --   'rdt_840ExtInsPack19',
+            --   @nErrNo  OUTPUT,
+            --   @cErrMsg OUTPUT
+
+            --IF @nErrNo <> 0
+            --   GOTO Fail
          END
       END
    END
    
-   IF @nIsPrintCtnLbl = 1
-   BEGIN
-      SET @cPreCtnLbl = rdt.RDTGetConfig( @nFunc, 'PreCtnLbl', @cStorerKey)
-      IF @cPreCtnLbl = '0'
-         SET @cPreCtnLbl = ''
-
-      IF @cPreCtnLbl <> ''
-      BEGIN
-         INSERT INTO @tPreCtnLbl (Variable, Value) VALUES ( '@cPickSlipNo',    @cPickSlipNo)
-         INSERT INTO @tPreCtnLbl (Variable, Value) VALUES ( '@cOrderkey',      @cOrderkey)
-         INSERT INTO @tPreCtnLbl (Variable, Value) VALUES ( '@nCartonNo',      @nNewCarton)
-         INSERT INTO @tPreCtnLbl (Variable, Value) VALUES ( '@cLabelNo',       @cLabelNo)
-
-         -- Print label
-         EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, 0, 1, '', @cStorerKey, @cLabelPrinter, '',
-            @cPreCtnLbl, -- Report type
-            @tPreCtnLbl, -- Report params
-            'rdt_840ExtInsPack19',
-            @nErrNo  OUTPUT,
-            @cErrMsg OUTPUT
-      END
-   END
    Fail:
 END
 GO
-SET QUOTED_IDENTIFIER OFF 
+
+SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF 
+SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON rdt.rdt_840ExtInsPack19 to nSQL
+GRANT EXECUTE ON rdt.rdt_840ExtInsPack19 TO NSQL
 GO
+

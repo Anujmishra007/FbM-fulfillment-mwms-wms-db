@@ -3,7 +3,6 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /************************************************************************/
 /* Store procedure: rdt_840ExtPrint26                                   */
 /* Purpose: Print carton label                                          */
@@ -12,6 +11,8 @@ GO
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
 /* 2023-03-31 1.0  James      WMS-22084. Created                        */
+/* 2023-08-25 1.1  James      WMS-23401 Add additional report retrieved */
+/*                            from CODELKUP using BillToKey (james01)   */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_840ExtPrint26] (
@@ -41,6 +42,9 @@ AS
    DECLARE @cShipperKey       NVARCHAR( 15)
    DECLARE @tCartonLbl        VariableTable
    DECLARE @cLabelNo          NVARCHAR( 20)
+   DECLARE @cCartonLbl2       NVARCHAR( 10)
+   DECLARE @cBillToKey        NVARCHAR( 15)
+   DECLARE @cReportType       NVARCHAR( 10)
    
    SELECT @cLabelPrinter = Printer
    FROM RDT.RDTMOBREC WITH (NOLOCK)
@@ -76,10 +80,45 @@ AS
                @nErrNo  OUTPUT,
                @cErrMsg OUTPUT
          END
+
+         SELECT @cBillToKey = BillToKey
+         FROM dbo.ORDERS WITH (NOLOCK)
+         WHERE OrderKey = @cOrderKey
+         
+         SELECT @cReportType = Long
+         FROM dbo.CODELKUP WITH (NOLOCK)
+         WHERE ListName = 'LVSPLTCUST'
+         AND   Code = @cBillToKey
+         AND   Storerkey = @cStorerkey
+         
+         IF EXISTS ( SELECT 1 
+                     FROM rdt.RDTReport WITH (NOLOCK)
+                     WHERE StorerKey = @cStorerkey
+                     AND   ReportType = @cReportType) AND ISNULL( @cReportType, '') <> ''
+         BEGIN
+         	DELETE FROM @tCartonLbl
+            INSERT INTO @tCartonLbl (Variable, Value) VALUES ( '@cPickSlipNo',    @cPickSlipNo)
+            INSERT INTO @tCartonLbl (Variable, Value) VALUES ( '@cOrderkey',      @cOrderkey)
+            INSERT INTO @tCartonLbl (Variable, Value) VALUES ( '@nCartonNo',      @nCartonNo)
+            INSERT INTO @tCartonLbl (Variable, Value) VALUES ( '@cLabelNo',       @cLabelNo)
+
+            -- Print label
+            EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, 0, 1, '', @cStorerKey, @cLabelPrinter, '',
+               @cReportType, -- Report type
+               @tCartonLbl, -- Report params
+               'rdt_840ExtPrint26',
+               @nErrNo  OUTPUT,
+               @cErrMsg OUTPUT
+         END
       END   -- IF @nStep = 4
    END   -- @nInputKey = 1
 
-Quit:
+Quit: 
 GO
-GRANT EXECUTE ON  [RDT].[rdt_840ExtPrint26] TO [NSQL]
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+GRANT EXECUTE ON RDT.rdt_840ExtPrint26 TO NSQL
 GO
