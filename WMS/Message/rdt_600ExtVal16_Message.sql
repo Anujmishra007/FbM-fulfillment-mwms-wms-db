@@ -1,0 +1,7 @@
+--rdt_600ExtVal16
+execute rdt.rdtDropMsg 204701 , 204750
+
+execute rdt.rdtAddMsg 204701, 10, '204701 ID EXISTS    ',   'us_english', 600
+
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 204701 AND 204750
