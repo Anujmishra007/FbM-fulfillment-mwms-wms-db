@@ -1,15 +1,12 @@
-IF EXISTS (SELECT * FROM SYS.OBJECTS WHERE object_id = OBJECT_ID(N'[rdt].[rdtfnc_UCCInquire]') AND OBJECTPROPERTY(object_id, N'IsProcedure') = 1)
-   DROP PROCEDURE [rdt].[rdtfnc_UCCInquire]
-GO
-
-SET QUOTED_IDENTIFIER OFF 
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /************************************************************************/
 /* Store procedure: rdtfnc_UCCInquire                                   */
-/* Copyright      : IDS                                                 */
+/* Copyright      : MAERSK                                              */
 /*                                                                      */
 /* Purpose: UCC Inquiry                                                 */
 /*                                                                      */
@@ -18,17 +15,18 @@ GO
 /* Date        Rev  Author   Purposes                                   */
 /* 16-Feb-2017 1.0  James    WMS1074 - Created                          */
 /* 09-Oct-2018 1.1  Gan      Performance tuning                         */
+/* 11-Sep-2023 1.2  James    WMS-23534 Add custom reference (james01)   */
 /************************************************************************/
 
-CREATE PROC rdt.rdtfnc_UCCInquire (
+CREATE OR ALTER PROC [RDT].[rdtfnc_UCCInquire] (
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR( 1024) OUTPUT
 )
 AS
-   SET NOCOUNT ON   
-   SET QUOTED_IDENTIFIER OFF   
-   SET ANSI_NULLS OFF  
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
 -- Misc variables
@@ -51,14 +49,14 @@ DECLARE
    @cSKU           NVARCHAR( 20),
    @cSKUDescr      NVARCHAR( 60),
    @cUOM           NVARCHAR( 10),   -- Display NVARCHAR(3)
-   @nQTY           NVARCHAR( 5), 
+   @nQTY           NVARCHAR( 5),
 
    @cPackUOM       NVARCHAR( 10),
    @cPPK           NVARCHAR( 5),
 
    @cExtendedUCCInfoSP  NVARCHAR(20),
-   @cSQL                NVARCHAR(1000),   
-   @cSQLParam           NVARCHAR(1000),   
+   @cSQL                NVARCHAR(MAX),
+   @cSQLParam           NVARCHAR(MAX),
    @cExtInfo01          NVARCHAR(20),
    @cExtInfo02          NVARCHAR(20),
    @cExtInfo03          NVARCHAR(20),
@@ -66,7 +64,14 @@ DECLARE
    @cExtInfo05          NVARCHAR(20),
    @cExtInfo06          NVARCHAR(20),
    @cExtInfo07          NVARCHAR(20),
-                     
+   @cValidate           NVARCHAR( 10),
+   @cTableName          NVARCHAR( 20),
+   @cColumnName         NVARCHAR( 30),
+   @cDataType           NVARCHAR( 128),
+   @n_Err               INT,
+   @nMultiSKU           INT = 0,
+   @nRowCount           INT,
+   
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
    @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),
@@ -98,7 +103,7 @@ SELECT
    @cUCC             = V_UCC,
 
    @cExtendedUCCInfoSP  = V_String1,
-   
+
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,
@@ -147,7 +152,7 @@ BEGIN
       @cOutField12   = '',
       @cOutField13   = '',
       @cOutField14   = '',
-      @cOutField15   = '', 
+      @cOutField15   = '',
       @cUCC = ''
 
       SET @cExtendedUCCInfoSP = rdt.RDTGetConfig( @nFunc, 'ExtendedUCCInfoSP', @cStorerkey)
@@ -186,85 +191,152 @@ BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
       -- Screen mapping
-      SET @cUCC = @cInField01      
-      
+      SET @cUCC = @cInField01
+
       -- If UCC and SKU are blank
-      IF ISNULL(@cUCC, '') = '' 
+      IF ISNULL(@cUCC, '') = ''
       BEGIN
          SET @nErrNo = 106101
-         SET @cErrMsg = rdt.rdtgetmessage( 66651, @cLangCode, 'DSP') --'UCC required'
+         SET @cErrMsg = rdt.rdtgetmessage( 106101, @cLangCode, 'DSP') --'UCC required'
          GOTO Step_1_Fail
-      END      
+      END
 
-      DECLARE @nMultiSKU INT
-      SET @nMultiSKU = 0   
-
-      SELECT
-         @cSKU = SKU,
-         @nQTY = Qty
-      FROM dbo.UCC WITH (NOLOCK)
-      WHERE UCCNo = @cUCC
-      AND   StorerKey = @cStorerKey
-
-      IF @@ROWCOUNT = 0
+      SELECT @cValidate = Short
+            ,@cTableName = Long
+            ,@cColumnName = UDF01
+      FROM dbo.CodeLkup WITH (NOLOCK)
+      WHERE ListName = 'UCCINFO'
+      AND Code = '1'
+      AND StorerKey = @cStorerKey
+      
+      IF @cValidate = '1'
       BEGIN
-         SET @nErrNo = 106102
-         SET @cErrMsg = rdt.rdtgetmessage( 66651, @cLangCode, 'DSP') --'Invalid UCC'
-         GOTO Step_1_Fail
-      END      
-      ELSE  --@@ROWCOUNT > 1
+
+         -- Get lookup field data type
+         SET @cDataType = ''
+         SELECT @cDataType = DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = @cTableName AND COLUMN_NAME = @cColumnName
+      
+         IF @cDataType <> ''
+         BEGIN
+            IF @cDataType = 'nvarchar' SET @n_Err = 1                            ELSE
+            IF @cDataType = 'datetime' SET @n_Err = rdt.rdtIsValidDate( @cUCC)   ELSE 
+            IF @cDataType = 'int'      SET @n_Err = rdt.rdtIsInteger( @cUCC)     ELSE 
+            IF @cDataType = 'float'    SET @n_Err = rdt.rdtIsValidQTY( @cUCC, 20)
+                           
+            -- Check data type
+            IF @n_Err = 0
+            BEGIN
+               SET @nErrNo = 106103
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid RefNo
+               EXEC rdt.rdtSetFocusField @nMobile, 3 -- RefNo
+               GOTO Quit
+            END
+
+            SET @cSQL = 
+            ' SELECT TOP 1 @cSKU = SKU ' + 
+            ' FROM dbo.' + @cTableName + ' WITH (NOLOCK) ' + 
+            ' WHERE StorerKey = @cStorerKey ' + 
+               CASE WHEN @cDataType IN ('int', 'float') 
+                    THEN ' AND ISNULL( ' + @cColumnName + ', 0) = @cUCC ' 
+                    ELSE ' AND ISNULL( ' + @cColumnName + ', '''') = @cUCC ' 
+               END + 
+            ' ORDER BY 1 ' + 
+            ' SELECT @nErrNo = @@ERROR, @nRowCount = @@ROWCOUNT ' 
+         SET @cSQLParam =
+            ' @nMobile      INT, ' + 
+            ' @cStorerKey   NVARCHAR(15), ' +
+            ' @cTableName   NVARCHAR(20), ' + 
+            ' @cColumnName  NVARCHAR(30), ' +  
+            ' @cUCC         NVARCHAR(20), ' + 
+            ' @cSKU         NVARCHAR(20) OUTPUT, ' + 
+            ' @nRowCount    INT          OUTPUT, ' + 
+            ' @nErrNo       INT          OUTPUT  '
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam, 
+            @nMobile, 
+            @cStorerKey, 
+            @cTableName,
+            @cColumnName, 
+            @cUCC, 
+            @cSKU        OUTPUT, 
+            @nRowCount   OUTPUT, 
+            @nErrNo      OUTPUT
+         END
+         ELSE
+         BEGIN
+            SET @nErrNo = 106104
+            SET @cErrMsg = rdt.rdtgetmessage( 106104, @cLangCode, 'DSP') --'Invalid Setup'
+            GOTO Step_1_Fail
+         END
+      END
+      ELSE
       BEGIN
-         SELECT @nQTY = ISNULL( SUM( Qty), 0)
+         SELECT
+            @cSKU = SKU,
+            @nQTY = Qty
          FROM dbo.UCC WITH (NOLOCK)
          WHERE UCCNo = @cUCC
          AND   StorerKey = @cStorerKey
 
-         SET @nMultiSKU = 1
-      END
+         IF @@ROWCOUNT = 0
+         BEGIN
+            SET @nErrNo = 106102
+            SET @cErrMsg = rdt.rdtgetmessage( 106102, @cLangCode, 'DSP') --'Invalid UCC'
+            GOTO Step_1_Fail
+         END
+         ELSE  --@@ROWCOUNT > 1
+         BEGIN
+            SELECT @nQTY = ISNULL( SUM( Qty), 0)
+            FROM dbo.UCC WITH (NOLOCK)
+            WHERE UCCNo = @cUCC
+            AND   StorerKey = @cStorerKey
 
-      SELECT 
+            SET @nMultiSKU = 1
+         END
+      END
+      
+      SELECT
          @cSKUDescr = SKU.Descr,
-         @cPPK = CASE WHEN SKU.PrePackIndicator = '2' 
-                     THEN CAST( SKU.PackQtyIndicator AS NVARCHAR( 5)) 
+         @cPPK = CASE WHEN SKU.PrePackIndicator = '2'
+                     THEN CAST( SKU.PackQtyIndicator AS NVARCHAR( 5))
                      ELSE '' END
       FROM dbo.SKU SKU WITH (NOLOCK)
       JOIN dbo.PACK PACK WITH (NOLOCK) ON (SKU.PackKey = PACK.PackKey)
       WHERE SKU.StorerKey = @cStorerKey
       AND   SKU.SKU = @cSKU
 
-      IF @cExtendedUCCInfoSP <> '' AND 
+      IF @cExtendedUCCInfoSP <> '' AND
          EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUCCInfoSP AND type = 'P')
       BEGIN
          SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUCCInfoSP) +
-            ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cUCC, ' + 
-            ' @cExtInfo01 OUTPUT, @cExtInfo02 OUTPUT, @cExtInfo03 OUTPUT, @cExtInfo04 OUTPUT, ' + 
-            ' @cExtInfo05 OUTPUT, @cExtInfo06 OUTPUT, @cExtInfo07 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '    
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cUCC, ' +
+            ' @cExtInfo01 OUTPUT, @cExtInfo02 OUTPUT, @cExtInfo03 OUTPUT, @cExtInfo04 OUTPUT, ' +
+            ' @cExtInfo05 OUTPUT, @cExtInfo06 OUTPUT, @cExtInfo07 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '
 
          SET @cSQLParam =
             '@nMobile      INT,           ' +
             '@nFunc        INT,           ' +
             '@cLangCode    NVARCHAR( 3),  ' +
-            '@nStep        INT,           ' + 
+            '@nStep        INT,           ' +
             '@nInputKey    INT,           ' +
-            '@cStorerKey   NVARCHAR( 15), ' + 
-            '@cUCC         NVARCHAR( 20), ' + 
-            '@cExtInfo01   NVARCHAR( 20)  OUTPUT, ' + 
-            '@cExtInfo02   NVARCHAR( 20)  OUTPUT, ' + 
-            '@cExtInfo03   NVARCHAR( 20)  OUTPUT, ' + 
-            '@cExtInfo04   NVARCHAR( 20)  OUTPUT, ' + 
-            '@cExtInfo05   NVARCHAR( 20)  OUTPUT, ' + 
-            '@cExtInfo06   NVARCHAR( 20)  OUTPUT, ' + 
-            '@cExtInfo07   NVARCHAR( 20)  OUTPUT, ' + 
-            '@nErrNo       INT            OUTPUT, ' + 
-            '@cErrMsg      NVARCHAR( 20)  OUTPUT  ' 
+            '@cStorerKey   NVARCHAR( 15), ' +
+            '@cUCC         NVARCHAR( 20), ' +
+            '@cExtInfo01   NVARCHAR( 20)  OUTPUT, ' +
+            '@cExtInfo02   NVARCHAR( 20)  OUTPUT, ' +
+            '@cExtInfo03   NVARCHAR( 20)  OUTPUT, ' +
+            '@cExtInfo04   NVARCHAR( 20)  OUTPUT, ' +
+            '@cExtInfo05   NVARCHAR( 20)  OUTPUT, ' +
+            '@cExtInfo06   NVARCHAR( 20)  OUTPUT, ' +
+            '@cExtInfo07   NVARCHAR( 20)  OUTPUT, ' +
+            '@nErrNo       INT            OUTPUT, ' +
+            '@cErrMsg      NVARCHAR( 20)  OUTPUT  '
 
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-            @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cUCC, 
-            @cExtInfo01 OUTPUT, @cExtInfo02 OUTPUT, @cExtInfo03 OUTPUT, @cExtInfo04 OUTPUT, 
-            @cExtInfo05 OUTPUT, @cExtInfo06 OUTPUT, @cExtInfo07 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT 
+            @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cUCC,
+            @cExtInfo01 OUTPUT, @cExtInfo02 OUTPUT, @cExtInfo03 OUTPUT, @cExtInfo04 OUTPUT,
+            @cExtInfo05 OUTPUT, @cExtInfo06 OUTPUT, @cExtInfo07 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
       END
 
-      
+
       IF @nMultiSKU = 0
       BEGIN
          SET @cOutField02 = @cSKU
@@ -287,7 +359,7 @@ BEGIN
       SET @cOutField12 = @cExtInfo06
       SET @cOutField13 = @cExtInfo07
 
-      SET @nMultiSKU = 0   
+      SET @nMultiSKU = 0
    END
 
    IF @nInputKey = 0 -- ESC
@@ -330,14 +402,14 @@ BEGIN
    END
 END
 GOTO Quit
-      
+
 /********************************************************************************
 Quit. Update back to I/O table, ready to be pick up by JBOSS
 ********************************************************************************/
 Quit:
 BEGIN
    UPDATE rdt.RDTMOBREC WITH (ROWLOCK) SET
-      EditDate = GETDATE(), 
+      EditDate = GETDATE(),
       ErrMsg = @cErrMsg,
       Func   = @nFunc,
       Step   = @nStep,
@@ -346,7 +418,7 @@ BEGIN
       StorerKey      = @cStorerKey,
       Facility       = @cFacility,
       UserName       = @cUserName,
-      
+
       V_UCC          = @cUCC,
       V_SKU          = @cSKU,
       V_SKUDescr     = @cSKUDescr,
@@ -374,11 +446,5 @@ BEGIN
 
 END
 GO
-
-GRANT EXECUTE ON [rdt].[rdtfnc_UCCInquire] TO NSQL
-GO
-
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS ON 
+GRANT EXECUTE ON  [RDT].[rdtfnc_UCCInquire] TO [NSQL]
 GO
