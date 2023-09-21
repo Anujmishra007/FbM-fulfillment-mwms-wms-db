@@ -10,9 +10,9 @@ GO
 /*                                                                      */    
 /* Purpose: WMS-8049 CN Mast Allocation                                 */
 /*          Full case by load for B2B + B2C(SINGLE) UOM 2               */
-/*         Piece from Mezzanine UOM 6                                  */
+/*         Piece from Mezzanine UOM 6                                   */
 /*          Piece from PND UOM 7                                        */
-/*         Piece from VNA UOM 7                                        */
+/*         Piece from VNA UOM 7                                         */
 /*          SkipPreallocation = '1'                                     */
 /*                                                                      */
 /* Called By: Wave                                                      */    
@@ -30,6 +30,7 @@ GO
 /* 11-May-2020 Wan01    1.1   Dynamic SQL review, impact SQL cache log  */  
 /* 13-JUL-2020 CSCHONG  1.2   WMS-14154 - revised sorting (CS01)        */
 /* 09-AUG-2023 NJOW02   1.3   WMS-23349 Remove lottable05 from sorting  */
+/* 12-SEP-2023 CSCHONG  1.4   Performnace tunning (CS02)                */
 /************************************************************************/    
 
 CREATE OR ALTER PROC [dbo].[nspALMAST1]        
@@ -92,7 +93,7 @@ BEGIN
      
    EXEC isp_Init_Allocate_Candidates         --(Wan01)       
 
-   CREATE TABLE #TMP_LOT (LOT NVARCHAR(10) NULL,
+   CREATE TABLE #TMP_LOT (LOT NVARCHAR(10) NOT NULL Primary Key,   --(CS02)
                           QtyAvailable INT NULL DEFAULT(0))
    
    IF LEN(@c_OtherParms) > 0 
