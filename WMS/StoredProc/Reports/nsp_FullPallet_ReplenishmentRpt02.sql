@@ -32,6 +32,7 @@ GO
 /* 09-Mar-2022  WLChooi    1.6   DevOps Combine Script                     */
 /* 09-Mar-2022  WLChooi    1.6   WMS-19114 Add config to filter Lottable03 */
 /*                               (WL01)                                    */
+/*06-Dec-2022   CHONGCS    1.7   WMS-15511 revised report logic (CS01)     */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[nsp_FullPallet_ReplenishmentRpt02]
@@ -124,7 +125,9 @@ BEGIN
                   PACK.PACKUOM3,
                   ReplenishmentKey,
                   LA.Lottable02,  -- SOS#152090
-                  LA.Lottable04   -- SOS#152090
+                  LA.Lottable04,  -- SOS#152090
+                  LA.Lottable03,  --CS01
+                  @c_ReplGrp as ReplenGrp  --CS01            
          --WL01 S
          FROM REPLENISHMENT R (NOLOCK)
          JOIN SKU (NOLOCK) ON SKU.Sku = R.Sku AND SKU.StorerKey = R.StorerKey
@@ -133,12 +136,24 @@ BEGIN
          JOIN LOTATTRIBUTE LA (NOLOCK) ON LA.LOT = R.LOT
          LEFT JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'REPORTCFG' AND CL.Code = 'NoFilterLott03'
                                        AND CL.Long = 'r_full_pallet_replenishment_report02' AND CL.Storerkey = R.Storerkey
+            --CS01 S
+         LEFT JOIN CODELKUP CL1 (NOLOCK) ON CL1.LISTNAME='DSGLOC' AND CL1.Storerkey = R.Storerkey 
+                                           AND CL1.code2=CASE WHEN ISNULL(@c_ReplGrp,'') <> '' THEN @c_ReplGrp ELSE CL1.code2 END
+                                           AND CL1.code = LA.Lottable03
+            --CS01 E
          WHERE R.confirmed = 'N'
          AND LOC.Facility = @c_zone01
-         AND (R.Replenishmentgroup = @c_ReplGrp OR @c_ReplGrp = 'ALL')
+         --AND (R.Replenishmentgroup = @c_ReplGrp OR @c_ReplGrp = 'ALL')    --CS01
+        AND (R.Replenishmentgroup = CASE WHEN @c_ReplGrp NOT IN ('GT','MT') THEN @c_ReplGrp ELSE R.Replenishmentgroup END  OR @c_ReplGrp = 'ALL')   --CS01
          AND 1 = (CASE WHEN ISNULL(CL.Short,'N') = 'Y' AND LA.Lottable03 NOT IN (SELECT DISTINCT TRIM(ColValue) FROM dbo.fnc_DelimSplit(',', CL.Notes) FDS) THEN 1 
                        WHEN ISNULL(CL.Short,'N') = 'N' THEN 1
                   ELSE 0 END )
+         --CS01 S
+          AND LOC.Floor = CASE WHEN @c_ReplGrp = 'GT' THEN 'GT'          
+                                WHEN @c_ReplGrp = 'MT' THEN 'MT' 
+                         ELSE LOC.Floor END  
+         AND LA.Lottable03 =  CASE WHEN @c_ReplGrp NOT IN ('GT','MT') THEN LA.Lottable03 ELSE CL1.Code END
+        --CS01 E
          --FROM     REPLENISHMENT R ( NOLOCK ),
          --         SKU (NOLOCK),
          --         LOC (NOLOCK),
@@ -174,7 +189,9 @@ BEGIN
                      PACK.PACKUOM3,
                      ReplenishmentKey,
                      LA.Lottable02,  -- SOS#152090
-                     LA.Lottable04   -- SOS#152090
+                     LA.Lottable04,  -- SOS#152090
+                     LA.Lottable03,  --CS01
+                     @c_ReplGrp as ReplenGrp  --CS01 
             --WL01 S
             FROM REPLENISHMENT R (NOLOCK)
             JOIN SKU (NOLOCK) ON SKU.Sku = R.Sku AND SKU.StorerKey = R.StorerKey
@@ -183,13 +200,25 @@ BEGIN
             JOIN LOTATTRIBUTE LA (NOLOCK) ON LA.LOT = R.LOT
             LEFT JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'REPORTCFG' AND CL.Code = 'NoFilterLott03'
                                           AND CL.Long = 'r_full_pallet_replenishment_report02' AND CL.Storerkey = R.Storerkey
+            --CS01 S
+            LEFT JOIN CODELKUP CL1 (NOLOCK) ON CL1.LISTNAME='DSGLOC' AND CL1.Storerkey = R.Storerkey 
+                                           AND CL1.code2=CASE WHEN ISNULL(@c_ReplGrp,'') <> '' THEN @c_ReplGrp ELSE CL1.code2 END
+                                           AND CL1.code = LA.Lottable03
+            --CS01 E
             WHERE R.confirmed = 'N'
             AND LOC.Facility = @c_zone01
             AND R.Storerkey = @c_storerkey
-            AND (R.Replenishmentgroup = @c_ReplGrp OR @c_ReplGrp = 'ALL')
+           --AND (R.Replenishmentgroup = @c_ReplGrp OR @c_ReplGrp = 'ALL')    --CS01
+            AND (R.Replenishmentgroup = CASE WHEN @c_ReplGrp NOT IN ('GT','MT') THEN @c_ReplGrp ELSE R.Replenishmentgroup END  OR @c_ReplGrp = 'ALL')   --CS01
             AND 1 = (CASE WHEN ISNULL(CL.Short,'N') = 'Y' AND LA.Lottable03 NOT IN (SELECT DISTINCT TRIM(ColValue) FROM dbo.fnc_DelimSplit(',', CL.Notes) FDS) THEN 1 
                           WHEN ISNULL(CL.Short,'N') = 'N' THEN 1
                      ELSE 0 END )
+           --CS01 S
+          AND LOC.Floor = CASE WHEN @c_ReplGrp = 'GT' THEN 'GT'          
+                                WHEN @c_ReplGrp = 'MT' THEN 'MT' 
+                         ELSE LOC.Floor END  
+          AND LA.Lottable03 =  CASE WHEN @c_ReplGrp NOT IN ('GT','MT') THEN LA.Lottable03 ELSE CL1.Code END
+          --CS01 E
             --FROM     REPLENISHMENT R ( NOLOCK ),
             --         SKU (NOLOCK),
             --         LOC (NOLOCK),
@@ -230,7 +259,9 @@ BEGIN
                   PACK.PACKUOM3,
                   ReplenishmentKey,
                   LA.Lottable02,  -- SOS#152090
-                  LA.Lottable04   -- SOS#152090
+                  LA.Lottable04,  -- SOS#152090
+                  LA.Lottable03,  --CS01
+                  @c_ReplGrp as ReplenGrp  --CS01 
          --WL01 S
          FROM REPLENISHMENT R (NOLOCK)
          JOIN SKU (NOLOCK) ON SKU.Sku = R.Sku AND SKU.StorerKey = R.StorerKey
@@ -239,16 +270,28 @@ BEGIN
          JOIN LOTATTRIBUTE LA (NOLOCK) ON LA.LOT = R.LOT
          LEFT JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'REPORTCFG' AND CL.Code = 'NoFilterLott03'
                                        AND CL.Long = 'r_full_pallet_replenishment_report02' AND CL.Storerkey = R.Storerkey
+         --CS01 S
+         LEFT JOIN CODELKUP CL1 (NOLOCK) ON CL1.LISTNAME='DSGLOC' AND CL1.Storerkey = R.Storerkey 
+                                           AND CL1.code2=CASE WHEN ISNULL(@c_ReplGrp,'') <> '' THEN @c_ReplGrp ELSE CL1.code2 END
+                                           AND CL1.code = LA.Lottable03
+         --CS01 E
          WHERE R.confirmed = 'N'
          AND LOC.Facility = @c_zone01
          AND LOC.putawayzone IN ( @c_zone02, @c_zone03, @c_zone04,
                                   @c_zone05, @c_zone06, @c_zone07,
                                   @c_zone08, @c_zone09, @c_zone10,
                                   @c_zone11, @c_zone12 )
-         AND (R.Replenishmentgroup = @c_ReplGrp OR @c_ReplGrp = 'ALL')
+         --AND (R.Replenishmentgroup = @c_ReplGrp OR @c_ReplGrp = 'ALL')    --CS01
+         AND (R.Replenishmentgroup = CASE WHEN @c_ReplGrp NOT IN ('GT','MT') THEN @c_ReplGrp ELSE R.Replenishmentgroup END  OR @c_ReplGrp = 'ALL')   --CS01
          AND 1 = (CASE WHEN ISNULL(CL.Short,'N') = 'Y' AND LA.Lottable03 NOT IN (SELECT DISTINCT TRIM(ColValue) FROM dbo.fnc_DelimSplit(',', CL.Notes) FDS) THEN 1 
                        WHEN ISNULL(CL.Short,'N') = 'N' THEN 1
                   ELSE 0 END )
+         --CS01 S
+          AND LOC.Floor = CASE WHEN @c_ReplGrp = 'GT' THEN 'GT'          
+                                WHEN @c_ReplGrp = 'MT' THEN 'MT' 
+                         ELSE LOC.Floor END  
+          AND LA.Lottable03 =  CASE WHEN @c_ReplGrp NOT IN ('GT','MT') THEN LA.Lottable03 ELSE CL1.Code END
+         --CS01 E
          --FROM     REPLENISHMENT R ( NOLOCK ),
          --         SKU (NOLOCK),
          --         LOC (NOLOCK),
@@ -289,7 +332,9 @@ BEGIN
                      PACK.PACKUOM3,
                      ReplenishmentKey,
                      LA.Lottable02,  -- SOS#152090
-                     LA.Lottable04   -- SOS#152090
+                     LA.Lottable04,   -- SOS#152090
+                     LA.Lottable03,  --CS01
+                     @c_ReplGrp as ReplenGrp  --CS01 
             --WL01 S
             FROM REPLENISHMENT R (NOLOCK)
             JOIN SKU (NOLOCK) ON SKU.Sku = R.Sku AND SKU.StorerKey = R.StorerKey
@@ -298,6 +343,11 @@ BEGIN
             JOIN LOTATTRIBUTE LA (NOLOCK) ON LA.LOT = R.LOT
             LEFT JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'REPORTCFG' AND CL.Code = 'NoFilterLott03'
                                           AND CL.Long = 'r_full_pallet_replenishment_report02' AND CL.Storerkey = R.Storerkey
+            --CS01 S
+            LEFT JOIN CODELKUP CL1 (NOLOCK) ON CL1.LISTNAME='DSGLOC' AND CL1.Storerkey = R.Storerkey 
+                                           AND CL1.code2=CASE WHEN ISNULL(@c_ReplGrp,'') <> '' THEN @c_ReplGrp ELSE CL1.code2 END
+                                           AND CL1.code = LA.Lottable03
+            --CS01 E
             WHERE R.confirmed = 'N'
             AND LOC.Facility = @c_zone01
             AND LOC.putawayzone IN ( @c_zone02, @c_zone03, @c_zone04,
@@ -305,10 +355,17 @@ BEGIN
                                      @c_zone08, @c_zone09, @c_zone10,
                                      @c_zone11, @c_zone12 )
             AND R.Storerkey = @c_storerkey
-            AND (R.Replenishmentgroup = @c_ReplGrp OR @c_ReplGrp = 'ALL')
+           --AND (R.Replenishmentgroup = @c_ReplGrp OR @c_ReplGrp = 'ALL')    --CS01
+            AND (R.Replenishmentgroup = CASE WHEN @c_ReplGrp NOT IN ('GT','MT') THEN @c_ReplGrp ELSE R.Replenishmentgroup END  OR @c_ReplGrp = 'ALL')   --CS01
             AND 1 = (CASE WHEN ISNULL(CL.Short,'N') = 'Y' AND LA.Lottable03 NOT IN (SELECT DISTINCT TRIM(ColValue) FROM dbo.fnc_DelimSplit(',', CL.Notes) FDS) THEN 1 
                           WHEN ISNULL(CL.Short,'N') = 'N' THEN 1
                      ELSE 0 END )
+           --CS01 S
+            AND LOC.Floor = CASE WHEN @c_ReplGrp = 'GT' THEN 'GT'          
+                                WHEN @c_ReplGrp = 'MT' THEN 'MT' 
+                         ELSE LOC.Floor END  
+          AND LA.Lottable03 =  CASE WHEN @c_ReplGrp NOT IN ('GT','MT') THEN LA.Lottable03 ELSE CL1.Code END
+          --CS01 E
             --FROM     REPLENISHMENT R ( NOLOCK ),
             --         SKU (NOLOCK),
             --         LOC (NOLOCK),
