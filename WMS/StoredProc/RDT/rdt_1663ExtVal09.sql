@@ -11,9 +11,10 @@ GO
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
 /* 2020-03-27 1.0  James    WMS-12611 Created                                 */
+/* 2023-08-02 1.1  WyeChun	Filter with Orderkey instead of TrackingNo (WC01) */
 /******************************************************************************/
 
-CREATE OR ALTER PROC [RDT].[rdt_1663ExtVal09](
+CREATE OR ALTER   PROC [RDT].[rdt_1663ExtVal09](
    @nMobile       INT,
    @nFunc         INT,
    @cLangCode     NVARCHAR( 3),
@@ -77,13 +78,18 @@ DECLARE @cORDType       NVARCHAR( 10),
       BEGIN
          IF @nInputKey = 1 -- ENTER
          BEGIN
+		    SELECT @cOrderKey = LabelNo 
+            FROM CartonTrack WITH (NOLOCK) 
+            WHERE TrackingNo = @cTrackNo        --WC01 
+			
             SELECT @cNew_OrderKey = OrderKey, 
                    @cNew_Status = [Status],
                    @cNew_ORDType = [Type],
                    @cNew_ShipperKey = ShipperKey
             FROM dbo.Orders WITH (NOLOCK) 
             WHERE StorerKey = @cStorerKey 
-            AND   TrackingNo = @cTrackNo
+            --AND   TrackingNo = @cTrackNo
+            AND   OrderKey = @cOrderKey         --WC01
 
             IF @cNew_Status <> '5'
             BEGIN  
@@ -190,6 +196,8 @@ DECLARE @cORDType       NVARCHAR( 10),
 Quit:
 
 END
+  
+
   
 GO
 
