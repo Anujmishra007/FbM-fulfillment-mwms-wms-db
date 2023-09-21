@@ -25,6 +25,7 @@ GO
 /* Date         Author   Ver  Purposes                                  */
 /* 20-Jun-2023  NJOW     1.0  DevOps Combine Script                     */
 /* 09-Sep-2023  NJOW01   1.1  Fix - remove update to lottable02         */
+/* 21-Sep-2023  NJOW02   1.2  Change default value from IQC4 to IQC5    */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[ispREC09]
    @c_Action    NVARCHAR(10)
@@ -168,7 +169,7 @@ BEGIN
       IF @n_continue IN(1,2)
       BEGIN          	
          DECLARE CUR_REC CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-            SELECT I.Receiptkey, I.Facility, ISNULL(CL.Code,'IQC4')
+            SELECT I.Receiptkey, I.Facility, ISNULL(CL.Code,'IQC5')  --NJOW02
             FROM #INSERTED I
             JOIN #DELETED D (NOLOCK) ON I.Receiptkey = D.Receiptkey
             JOIN RECEIPTDETAIL RD (NOLOCK) ON I.Receiptkey = RD.Receiptkey
@@ -180,7 +181,7 @@ BEGIN
             AND I.Status = '9'
             AND ISNULL(RD.UserDefine05,'') <> '' 
             AND RD.SubReasonCode <> 'Y'
-            GROUP BY I.Receiptkey, I.Facility, ISNULL(CL.Code,'IQC4')         
+            GROUP BY I.Receiptkey, I.Facility, ISNULL(CL.Code,'IQC5')  --NJOW02
          
          OPEN CUR_REC
          
