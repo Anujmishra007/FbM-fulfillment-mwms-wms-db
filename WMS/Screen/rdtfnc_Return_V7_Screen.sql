@@ -1,3 +1,11 @@
+--rdtfnc_Return_V7
+--4270-4279
+
+IF NOT EXISTS ( SELECT 1 FROM RDT.RDTMsg (NOLOCK) WHERE Message_ID = 607 AND Lang_Code = 'ENG' AND Message_Type = 'FNC')
+BEGIN
+   INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
+   VALUES (607, 'ENG', 'FNC', 'RETURN V7', 'rdtfnc_Return_V7', '2')
+END
 
 -- Scn = 4270. ASN, PO
 DELETE rdt.RDTScn WHERE Scn = 4270 AND Lang_Code = 'ENG'
@@ -8,7 +16,8 @@ EXECUTE rdt.rdtAddScn 4270, 'ENG'
    ,@cLine04 = 'REF NO:'
    ,@cLine05 = '%20i03'
    ,@cLine14 = '%e'
-
+   ,@nFunc = 607
+   
 -- Scn = 4271. SKU
 DELETE rdt.RDTScn WHERE Scn = 4271 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4271, 'ENG'
@@ -23,7 +32,8 @@ EXECUTE rdt.rdtAddScn 4271, 'ENG'
    ,@cLine09 = 'ASN QTY: %10d06'
    ,@cLine10 = 'RCV QTY: %10d07'
    ,@cLine14 = '%e'
-
+   ,@nFunc = 607
+   
 -- Scn = 4272. QTY
 DELETE rdt.RDTScn WHERE Scn = 4272 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4272, 'ENG'
@@ -41,6 +51,7 @@ EXECUTE rdt.rdtAddScn 4272, 'ENG'
    ,@cLine12 = ''
    ,@cLine13 = '%20d15'
    ,@cLine14 = '%e'
+   ,@nFunc = 607
    
 -- Scn = 4273. Lottables
 DELETE rdt.RDTScn WHERE Scn = 4273 AND Lang_Code = 'ENG'
@@ -54,6 +65,7 @@ EXECUTE rdt.rdtAddScn 4273, 'ENG'
    ,@cLine07 = '%20d07'
    ,@cLine08 = '%10i08'
    ,@cLine14 = '%e'
+   ,@nFunc = 607
  
 -- Scn = 4274. ID, LOC
 DELETE rdt.RDTScn WHERE Scn = 4274 AND Lang_Code = 'ENG'
@@ -72,3 +84,34 @@ EXECUTE rdt.rdtAddScn 4274, 'ENG'
    ,@cLine12 = ''
    ,@cLine13 = '%20d15'
    ,@cLine14 = '%e'
+   ,@nFunc = 607
+
+--WMS-23005
+-- 4275 = Capture info screen
+DELETE rdt.RDTScn WHERE Scn = 4275 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 4275, 'ENG'
+   ,@cLine01 = '%20d01'
+   ,@cLine02 = '%20i02'
+   ,@cLine03 = '%20d03'
+   ,@cLine04 = '%20i04'
+   ,@cLine05 = '%20d05'
+   ,@cLine06 = '%20i06'
+   ,@cLine07 = '%20d07'
+   ,@cLine08 = '%20i08'
+   ,@cLine09 = '%20d09'
+   ,@cLine10 = '%20i10'
+   ,@cLine14 = '%e'
+   ,@nFunc = 607
+   
+-- 4276 = ToLoc Diff screen
+DELETE rdt.RDTScn WHERE Scn = 4276 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 4276, 'ENG'
+   ,@cLine01 = 'TO LOC NOT MATCH.'
+   ,@cLine02 = 'PROCEED ?'
+   ,@cLine03 = ''
+   ,@cLine04 = '1 = YES'
+   ,@cLine05 = '2 = NO'
+   ,@cLine06 = ''
+   ,@cLine07 = 'OPTION: %01i01'
+   ,@cLine14 = '%e'
+   ,@nFunc = 607   
