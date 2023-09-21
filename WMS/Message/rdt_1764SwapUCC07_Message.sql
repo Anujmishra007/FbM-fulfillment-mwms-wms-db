@@ -52,5 +52,7 @@ execute rdt.rdtAddMsg 166448, 10, '166448MissingPackDtl', 'us_english', 1764
 execute rdt.rdtAddMsg 166449, 10, '166449DUP PackDtl   ', 'us_english', 1764
 execute rdt.rdtAddMsg 166450, 10, '166450MissingPackDtl', 'us_english', 1764
 
+-- WMS-23224
+execute rdt.rdtAddMsg 166451, 10, '166451 Double Scan  ', 'us_english', 1764
 
 select * from rdt.rdtMsg (nolock) where message_id between 166401 and 166450
