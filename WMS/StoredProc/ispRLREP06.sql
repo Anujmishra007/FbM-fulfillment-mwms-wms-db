@@ -13,7 +13,9 @@ GO
 /*          replenishment screen                                           */      
 /*          RDT must enable with QtyReplen and PendingMoveIn control       */
 /*                                                                         */      
-/* Called By:                                                              */      
+/* Called By:                                                              */ 
+/*                                                                         */
+/* PVCS Version: 1.1                                                       */     
 /*                                                                         */      
 /* Version: 7.0                                                            */      
 /*                                                                         */      
@@ -22,6 +24,7 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 06-Sep-2022  WLChooi 1.0   DevOps Combine Script                        */
+/* 14-Sep-2023  WLChooi 1.1   WMS-23636 - Initialize InLoc (WL01)          */
 /***************************************************************************/   
 CREATE OR ALTER PROC [dbo].[ispRLREP06]   
       @c_Facility NVARCHAR(10)='',
@@ -125,6 +128,8 @@ BEGIN
          IF ISNULL(@c_Priority,'') = ''
             SET @c_Priority = '5'
          
+         SET @c_InLoc = ''   --WL01
+
          SELECT @c_InLoc = ISNULL(PZ.InLoc,'')
          FROM LOC L (NOLOCK)
          JOIN PICKZONE PZ (NOLOCK) ON L.PickZone = PZ.PickZone

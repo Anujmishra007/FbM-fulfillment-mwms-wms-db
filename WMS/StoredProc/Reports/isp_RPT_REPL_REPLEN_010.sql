@@ -13,7 +13,7 @@ GO
 /*                                                                         */
 /* Called By: Replenishment Report - RPT_REPL_REPLEN_010                   */
 /*                                                                         */
-/* PVCS Version: 1.0                                                       */
+/* PVCS Version: 1.1                                                       */
 /*                                                                         */
 /* Version: 5.4                                                            */
 /*                                                                         */
@@ -22,6 +22,7 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 06-Sep-2022  WLChooi 1.0   DevOps Combine Script                        */
+/* 13-Sep-2023  WLChooi 1.1   WMS-23636 - Allow replen from CASE Loc (WL01)*/
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_RPT_REPL_REPLEN_010]
                @c_zone01           NVARCHAR(10)
@@ -89,12 +90,14 @@ BEGIN
            @n_UCCQty                    INT,
            @c_UCCNo                     NVARCHAR(20),
            @c_DropID                    NVARCHAR(20),
-           @n_MaxQtyInLoc               INT
+           @n_MaxQtyInLoc               INT,
+           @c_RefNo                     NVARCHAR(50)   --WL01
 
    DECLARE @n_TotalLoc                  INT  
          , @n_TotalQtyReplenInCS        FLOAT
          , @n_TotalQtyReplenInEA        FLOAT
          , @n_TotalFullCasePICK         FLOAT
+         , @c_ReplenFromCaseLoc         NVARCHAR(10)   --WL01
            
    SET @n_continue = 1
 
@@ -128,7 +131,8 @@ BEGIN
          Priority      NVARCHAR(10),
          Packkey       NVARCHAR(10),
          UOM           NVARCHAR(10),
-         DropId        NVARCHAR(20)
+         DropId        NVARCHAR(20),
+         RefNo         NVARCHAR(50)   --WL01
       )
           
       DECLARE Cur_ReplenPickLoc CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -152,7 +156,8 @@ BEGIN
                 SUM(ISNULL(LOTXLOCXID.QtyExpected,0)-ISNULL(LOTXLOCXID.PendingMoveIn,0)),
                 LOC.LocationType,
                 PACK.Packkey,
-                PACK.PACKUOM3
+                PACK.PACKUOM3,
+                ReplenFromCaseLoc = ISNULL(CL.Short,'N')   --WL01
          FROM SKUxLOC (NOLOCK) 
          LEFT JOIN LOTXLOCXID (NOLOCK) ON LOTXLOCXID.Storerkey = SKUxLOC.Storerkey AND LOTXLOCXID.Sku = SKUxLOC.Sku AND LOTXLOCXID.Loc = SKUxLOC.Loc 
          JOIN LOC WITH ( NOLOCK ) ON SKUxLOC.Loc = LOC.Loc 
@@ -160,6 +165,8 @@ BEGIN
                                      SKU.SKU = SKUxLOC.SKU 
          JOIN PACK WITH ( NOLOCK ) ON PACK.PackKey = SKU.PACKKey
          LEFT JOIN V_STORERCONFIG2 SC2 ON SKUXLOC.Storerkey = SC2.Storerkey AND SC2.Configkey = 'REPLEXCLPRODNEAREXPIRY_DAY'  --storerconfig to exclude near expiry stock
+         LEFT JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'REPORTCFG' AND CL.Storerkey = SKUXLOC.Storerkey   --WL01
+                                       AND CL.Long = 'RPT_REPL_REPLEN_010' AND CL.Code = 'ReplenFromCaseLoc'   --WL01
          WHERE LOC.FACILITY = @c_Zone01
          AND (SKUxLOC.Storerkey = @c_Storerkey OR @c_Storerkey = 'ALL')
          AND SKUxLOC.LocationType IN ('PICK') 
@@ -168,7 +175,7 @@ BEGIN
               OR @c_zone02 = 'ALL')
          GROUP BY LOC.Facility, SKUxLOC.StorerKey, SKUxLOC.SKU, SKUxLOC.LOC, SKUxLOC.Qty, SKUxLOC.QtyPicked, SKUxLOC.QtyAllocated,
                   SKUxLOC.QtyAllocated, SKUxLOC.QtyLocationLimit, SKUxLOC.QtyLocationMinimum, SKUxLOC.ReplenishmentPriority, PACK.CaseCnt, SKUxLOC.LocationType,         
-                  PACK.Pallet, SKU.PickCode, SKU.PickCode, SC2.Svalue, LOC.LocationType, PACK.PackKey, PACK.PackUOM3 
+                  PACK.Pallet, SKU.PickCode, SKU.PickCode, SC2.Svalue, LOC.LocationType, PACK.PackKey, PACK.PackUOM3, ISNULL(CL.Short,'N')   --WL01
          HAVING (SKUxLOC.Qty - SKUxLOC.QtyPicked - SKUxLOC.QtyAllocated) + SUM(ISNULL(LOTXLOCXID.PendingMoveIn,0)) <= SKUxLOC.QtyLocationMinimum  --below mininum
                     OR (SUM(IIF(ISNULL(LOTXLOCXID.PendingMoveIn,0) < ISNULL(LOTXLOCXID.QtyExpected,0), 1, 0)) > 0   --some lotxlocxid over allocated
                         AND (SKUxLOC.Qty - SKUxLOC.QtyPicked - SKUxLOC.QtyAllocated) <= SKUxLOC.QtyLocationMinimum)    
@@ -179,7 +186,7 @@ BEGIN
       
       FETCH NEXT FROM Cur_ReplenPickLoc INTO @c_CurrentFacility, @c_CurrentStorerkey, @c_SKU, @c_Loc, @n_Qty, @n_QtyPicked, @n_QtyAllocated, @n_QtyLocationLimit,
                                              @n_QtyLocationMinimum, @c_ReplenishmentPriority, @n_CaseCnt, @n_Pallet, @c_PickCode, @c_LocationType, @c_ReplExclProdNearExpiry,
-                                             @n_QtyExpected, @n_PendingMoveIn, @n_QtyExpectedFinal, @c_LocLocationType, @c_packkey, @c_UOM
+                                             @n_QtyExpected, @n_PendingMoveIn, @n_QtyExpectedFinal, @c_LocLocationType, @c_packkey, @c_UOM, @c_ReplenFromCaseLoc   --WL01
 
       IF @@FETCH_STATUS <> -1  AND ISNULL(@c_ReplGrp,'') IN ('ALL','') 
       BEGIN
@@ -266,7 +273,7 @@ BEGIN
             WHERE  LOTxLOCxID.StorerKey = @c_CurrentStorerkey 
             AND LOTxLOCxID.SKU = @c_SKU 
             AND LOC.LocationFlag = 'NONE' 
-            AND LOC.LocationType = 'OTHER'
+            AND LOC.LocationType = CASE WHEN @c_ReplenFromCaseLoc = 'Y' THEN 'CASE' ELSE 'OTHER' END   --WL01
             AND LOC.Facility = @c_CurrentFacility 
             AND LOC.Status = 'OK' 
             AND LOT.Status = 'OK' 
@@ -324,6 +331,7 @@ BEGIN
             AND ID.Status = 'OK'
             AND SL.Locationtype NOT IN('CASE','PICK') 
             AND (LLI.QTY - LLI.QTYPICKED - LLI.QTYALLOCATED - LLI.QtyReplen) > 0
+            AND LOC.LocationType = CASE WHEN @c_ReplenFromCaseLoc = 'Y' THEN 'CASE' ELSE LOC.LocationType END   --WL01
             ORDER BY U.Qty DESC, LOC.LogicalLocation ASC, LOC.Loc ASC
          
          OPEN CUR_LLI_REPLEN
@@ -340,7 +348,10 @@ BEGIN
             AND Lot = @c_FromLot
             AND Loc = @c_FromLoc
             AND Id = @c_FromID
-            AND Status < '3'     
+            AND Status < '3'   
+            AND NOT EXISTS ( SELECT 1                         --WL01
+                             FROM #REPLENISHMENT R (NOLOCK)   --WL01
+                             WHERE R.DropID = UCC.UCCNo )     --WL01
             ORDER BY Qty DESC
 
             IF @n_UCCQty > 0
@@ -400,6 +411,7 @@ BEGIN
                ,  QtyMoved
                ,  QtyInPickLOC
                ,  DropID
+               ,  RefNo   --WL01
                )
                   VALUES
                (
@@ -416,6 +428,7 @@ BEGIN
                ,  0
                ,  @n_QtyinPickLoc
                ,  @c_UCCNo
+               ,  IIF(@c_ReplenFromCaseLoc = 'Y', @c_UCCNo, '010')   --WL01
                )
                 
                 SET @n_RemainingQty = @n_RemainingQty - @n_QtyToReplen
@@ -437,7 +450,7 @@ BEGIN
              
          FETCH NEXT FROM Cur_ReplenPickLoc INTO @c_CurrentFacility, @c_CurrentStorerkey, @c_SKU, @c_Loc, @n_Qty, @n_QtyPicked, @n_QtyAllocated, @n_QtyLocationLimit,
                                                 @n_QtyLocationMinimum, @c_ReplenishmentPriority, @n_CaseCnt, @n_Pallet, @c_PickCode, @c_LocationType, @c_ReplExclProdNearExpiry,
-                                                @n_QtyExpected, @n_PendingMoveIn, @n_QtyExpectedFinal, @c_LocLocationType, @c_packkey, @c_UOM
+                                                @n_QtyExpected, @n_PendingMoveIn, @n_QtyExpectedFinal, @c_LocLocationType, @c_packkey, @c_UOM, @c_ReplenFromCaseLoc   --WL01
       END              
       CLOSE Cur_ReplenPickLoc
       DEALLOCATE Cur_ReplenPickLoc                                                      
@@ -448,15 +461,18 @@ BEGIN
       DECLARE CUR_REP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT R.FromLoc ,R.Id ,R.ToLoc ,R.Sku ,SUM(R.Qty) ,R.StorerKey
             ,R.Lot, R.PackKey, R.Priority, R.UOM, SUM(R.Qty), R.DropId
+            ,R.RefNo   --WL01
       FROM #REPLENISHMENT R
       GROUP BY R.FromLoc, R.Id, R.ToLoc, R.Sku, R.StorerKey
               ,R.Lot, R.PackKey, R.Priority, R.UOM, R.DropId
+              ,R.RefNo   --WL01
       ORDER BY R.FromLoc        
       
       OPEN CUR_REP
       
       FETCH NEXT FROM CUR_REP INTO @c_FromLOC, @c_FromID, @c_Loc, @c_SKU, @n_Qty, @c_CurrentStorerkey, 
-                                   @c_FromLot, @c_PackKey, @c_Priority, @c_UOM, @n_OriginalQty, @c_DropID
+                                   @c_FromLot, @c_PackKey, @c_Priority, @c_UOM, @n_OriginalQty, @c_DropID,
+                                   @c_RefNo   --WL01
                                    
       WHILE @@FETCH_STATUS <> -1
       BEGIN
@@ -464,9 +480,9 @@ BEGIN
                'REPLENISHKEY'
             ,  10
             ,  @c_ReplenishmentKey  OUTPUT
-            ,   @b_success          OUTPUT
-            ,   @n_err              OUTPUT
-            ,   @c_errmsg           OUTPUT
+            ,  @b_success          OUTPUT
+            ,  @n_err              OUTPUT
+            ,  @c_errmsg           OUTPUT
       
          IF @b_success <> 1
          BEGIN
@@ -508,7 +524,7 @@ BEGIN
             ,  @c_PackKey
             ,  @c_Priority
             ,  'N'
-            ,  '010'  
+            ,  @c_RefNo   --WL01 
             ,  @c_DropID
             ,  @n_Qty
             )
@@ -517,7 +533,8 @@ BEGIN
          END 
       
          FETCH NEXT FROM CUR_REP INTO @c_FromLOC, @c_FromID, @c_Loc, @c_SKU, @n_Qty, @c_CurrentStorerkey, 
-                                      @c_FromLot, @c_PackKey, @c_Priority, @c_UOM, @n_OriginalQty, @c_DropID
+                                      @c_FromLot, @c_PackKey, @c_Priority, @c_UOM, @n_OriginalQty, @c_DropID,
+                                      @c_RefNo   --WL01
       END
       CLOSE CUR_REP
       DEALLOCATE CUR_REP
@@ -531,7 +548,7 @@ BEGIN
    END
 
    SELECT R.FromLoc
-         ,R.Id
+         ,IIF(ISNULL(CL.Short,'N') = 'Y', R.DropID, R.Id) AS Id
          ,R.ToLoc
          ,R.Sku
          ,R.Qty
@@ -546,10 +563,13 @@ BEGIN
          ,R.OriginalQty 
          ,R.ReplenishmentKey
          ,R.ReplenishmentGroup
+         ,ReplenFromCaseLoc = ISNULL(CL.Short,'N')   --WL01
    FROM  REPLENISHMENT R WITH (NOLOCK)
    JOIN  SKU             WITH (NOLOCK) ON (SKU.Sku = R.Sku AND  SKU.StorerKey = R.StorerKey)
    JOIN  LOC             WITH (NOLOCK) ON (LOC.Loc = R.ToLoc)
    JOIN  PACK            WITH (NOLOCK) ON (SKU.PackKey = PACK.PackKey)
+   LEFT JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'REPORTCFG' AND CL.Storerkey = R.Storerkey   --WL01
+                                 AND CL.Long = 'RPT_REPL_REPLEN_010' AND CL.Code = 'ReplenFromCaseLoc'   --WL01
    WHERE LOC.facility = @c_zone01   --R.ReplenishmentGroup = @c_ReplenishmentGroup 
    AND  (R.Storerkey = @c_Storerkey OR @c_Storerkey = 'ALL')
    AND  (LOC.PutawayZone IN (@c_zone02, @c_zone03, @c_zone04, @c_zone05, @c_zone06, @c_zone07, @c_zone08, @c_zone09, @c_zone10, @c_zone11, @c_zone12)
