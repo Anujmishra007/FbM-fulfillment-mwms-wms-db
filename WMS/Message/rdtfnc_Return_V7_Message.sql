@@ -45,3 +45,7 @@ execute rdt.rdtAddMsg 56689, 10, '56689 Cond. Code req', 'us_english', 607
 
 --JSM-25174
 execute rdt.rdtAddMsg 56690, 10, '56690 MultiSKUBarcod', 'us_english', 607
+
+--WMS-23005
+execute rdt.rdtAddMsg 56691, 10, '56691 OptionRequired', 'us_english', 607
+execute rdt.rdtAddMsg 56692, 10, '56692 Invalid Option', 'us_english', 607
