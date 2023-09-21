@@ -69,7 +69,7 @@ BEGIN
    DECLARE @nIsDataCaptureReq INT = 1
    DECLARE @cSKU              NVARCHAR( 20)
    DECLARE @cOrdType          NVARCHAR( 10)
-   DECLARE @cLottable02       NVARCHAR( 18)
+   DECLARE @cLottable01       NVARCHAR( 18)
    DECLARE @nRowCount         INT = 0
    DECLARE @cDefaultSameCOO   NVARCHAR( 1)
    
@@ -161,7 +161,7 @@ BEGIN
             IF @cCode = '5' SELECT @cOutField09 = @cLabel, @cFieldAttr10 = ''
 
             -- Get default value from CodeLKUP
-            IF CHARINDEX( 'L', @cOption) > 0 AND @cListName <> ''
+            IF CHARINDEX( 'L', @cOption) > 0
             BEGIN
                -- Get default value
                SET @cData = ''
@@ -175,7 +175,7 @@ BEGIN
             
                IF @cLabel LIKE 'COO%'
                BEGIN
-                  SELECT DISTINCT @cLottable02 = LOTTABLE02 
+                  SELECT DISTINCT @cLottable01 = LOTTABLE01 
                   FROM dbo.LOTATTRIBUTE LA WITH (NOLOCK) 
                   JOIN dbo.LOTXLOCXID LLI WITH (NOLOCK) ON ( LLI.LOT = LA.LOT) 
                   WHERE LLI.StorerKey = @cStorerKey
@@ -185,14 +185,14 @@ BEGIN
                   SET @nRowCount = @@ROWCOUNT
                   
                   IF @nRowCount = 1 AND
-                     ISNULL( @cLottable02, '') <> '' AND 
+                     ISNULL( @cLottable01, '') <> '' AND 
                      EXISTS( SELECT 1 
                              FROM dbo.CODELKUP WITH (NOLOCK) 
                              WHERE LISTNAME = 'LVSCOO'
-                             AND   Code = @cLottable02
+                             AND   Code = @cLottable01
                              AND   Storerkey = @cStorerKey 
                              AND   LEN( Code) = 2)
-                     SET @cData = @cLottable02
+                     SET @cData = @cLottable01
                END
                
                -- Set default value
