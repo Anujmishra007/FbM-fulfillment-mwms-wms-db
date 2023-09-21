@@ -205,7 +205,8 @@ AS
       AND cartonno IN ( SELECT pd.cartonno
                   FROM packdetail PD(NOLOCK)
                   WHERE PD.Pickslipno = PI.Pickslipno
-                     AND PD.Storerkey = @cStorerKey)
+                     AND PD.Storerkey = @cStorerKey
+                     AND Labelno = @cByRef4)
 
 
    SET @cParams11 = @cByRef4
