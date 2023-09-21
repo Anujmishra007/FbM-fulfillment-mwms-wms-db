@@ -1,10 +1,8 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[RDT].[rdt_DynamicPick_ReplenMove]') AND OBJECTPROPERTY(Id, N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdt_DynamicPick_ReplenMove]
-GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
+
 /************************************************************************/
 /* Store procedure: rdt_DynamicPick_ReplenMove                          */
 /* Copyright      : IDS                                                 */
@@ -31,11 +29,13 @@ GO
 /*                          Manifest Printing (ChewKP02)                */
 /* 2018-01-16 1.9  ChewKP   WMS-3767-Call rdt.rdtPrintJob (ChewKP02)    */
 /* 2020-07-10 2.0  James    WMS-14147 Add replen customsp logic(james03)*/
+/* 2023-07-26 2.1  James    WMS-22615 Fix wrong param seq (james04)     */
+/*                          Add UCC_RowRef as new parameters            */
 /************************************************************************/
 
-CREATE PROC rdt.rdt_DynamicPick_ReplenMove (
-   @nFunc       INT,
+CREATE OR ALTER PROC rdt.rdt_DynamicPick_ReplenMove (
    @nMobile     INT,
+   @nFunc       INT,
    @cLangCode   NVARCHAR( 3),
    @nErrNo      INT          OUTPUT,
    @cErrMsg     NVARCHAR( 20) OUTPUT, -- screen limitation, 20 char max
@@ -52,7 +52,8 @@ CREATE PROC rdt.rdt_DynamicPick_ReplenMove (
    @cFromLOT    NVARCHAR( 10) = NULL, -- Applicable for all 6 types of move
    @c_WaveKey   NVARCHAR( 10),
    @cReplenKey  NVARCHAR( 10),
-   @cLottable02 NVARCHAR( 18)
+   @cLottable02 NVARCHAR( 18), 
+   @nUCC_RowRef INT = 0
 ) AS
 
    SET NOCOUNT ON
@@ -113,12 +114,12 @@ CREATE PROC rdt.rdt_DynamicPick_ReplenMove (
       IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedReplenCfmSP AND type = 'P')
       BEGIN
          SET @cSQLStatement = 'EXEC rdt.' + RTRIM( @cExtendedReplenCfmSP) +
-            ' @nFunc, @nMobile, @cLangCode, @cSourceType, @cStorerKey, @cFacility, ' +
+            ' @nMobile, @nFunc, @cLangCode, @cSourceType, @cStorerKey, @cFacility, ' +
             ' @cFromLOC, @cToLOC, @cFromID, @cToID, @cSKU, @cUCC, @nQTY, @cFromLOT, @cWaveKey, @cReplenKey, ' +  
-            ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nUCC_RowRef'
          SET @cSQLParms =
-            '@nFunc           INT,                  ' +
             '@nMobile         INT,                  ' +
+            '@nFunc           INT,                  ' +
             '@cLangCode       NVARCHAR( 3),         ' +
             '@cSourceType     NVARCHAR( 30),        ' +
             '@cStorerKey      NVARCHAR( 15),        ' +
@@ -138,12 +139,13 @@ CREATE PROC rdt.rdt_DynamicPick_ReplenMove (
             '@cLottable03     NVARCHAR( 18),        ' +
             '@dLottable04     DATETIME,             ' +
             '@nErrNo          INT           OUTPUT, ' +
-            '@cErrMsg         NVARCHAR( 20) OUTPUT  '
+            '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
+            '@nUCC_RowRef     INT '
 
          EXEC sp_ExecuteSQL @cSQLStatement, @cSQLParms,
-            @nFunc, @nMobile, @cLangCode, @cSourceType, @cStorerKey, @cFacility,  
+            @nMobile, @nFunc, @cLangCode, @cSourceType, @cStorerKey, @cFacility,  
             @cFromLOC, @cToLOC, @cFromID, @cToID, @cSKU, @cUCC, @nQTY, @cFromLOT, @c_WaveKey, @cReplenKey, 
-            @cLottable01, @cLottable02, @cLottable03, @dLottable04, @nErrNo OUTPUT, @cErrMsg OUTPUT
+            @cLottable01, @cLottable02, @cLottable03, @dLottable04, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nUCC_RowRef
 
          GOTO Quit
       END
