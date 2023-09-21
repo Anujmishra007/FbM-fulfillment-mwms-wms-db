@@ -14,7 +14,7 @@ GO
 /*                                                                       */            
 /* Called By:                                                            */            
 /*                                                                       */            
-/* GitLab Version: 1.0                                                   */            
+/* GitLab Version: 1.1                                                   */            
 /*                                                                       */            
 /* Version: 7.0                                                          */            
 /*                                                                       */            
@@ -23,6 +23,7 @@ GO
 /* Updates:                                                              */            
 /* Date         Author  Ver.  Purposes                                   */   
 /* 24-Aug-2022  WLChooi 1.0   DevOps Combine Script                      */
+/* 03-Aug-2023  WLChooi 1.1   WMS-22939 - Bug Fix (WL01)                 */
 /*************************************************************************/            
 CREATE OR ALTER PROC [dbo].[nspAL_ID03]
    @c_DocNo      NVARCHAR(10),  
@@ -107,7 +108,7 @@ BEGIN
          SET @c_DiscreteAlloc = 'Y'
       END
 
-      IF ISNULL(@c_key3,'') <> ''   --Wave
+      IF ISNULL(@c_key2,'') = '' AND @c_key3 = 'W'   --Wave   --WL01
       BEGIN
          SET @c_DocType = ''
 
@@ -124,7 +125,7 @@ BEGIN
    CREATE TABLE #TMP_LOT (LOT NVARCHAR(10) NULL,
                           QtyAvailable INT NULL DEFAULT(0)
    )       
-   
+
    --Discrete for B2B, WaveConso for B2C
    IF @c_UOM <> '6' OR (@c_DiscreteAlloc = 'Y' AND @c_DocType = 'E')
       OR (@c_DiscreteAlloc = 'N' AND @c_DocType = 'N')
