@@ -1,6 +1,6 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
     
 /************************************************************************/        
@@ -15,6 +15,8 @@ GO
 /* 2021-11-23  1.1  James    Update PackDetail.DropID = LabelNo(james01)*/      
 /* 2023-05-10  1.2  James    WMS-22534 Add exec middleware (james02)    */    
 /* 2023-06-08  1.3  James    Remove iml trigger (james03)               */  
+/* 2023-09-13  1.4  James    WMS-23588 Add orderkey param into carton   */
+/*                           label printing (james04)                   */
 /************************************************************************/        
 CREATE OR ALTER PROC [RDT].[rdt_842ExtUpdSP11] (        
    @nMobile        INT,        
@@ -84,7 +86,7 @@ BEGIN
           --,@nTTLScannedQty    INT        
           ,@cBatchKey         NVARCHAR(10)        
           ,@cToteOrderKey     NVARCHAR(10)        
- ,@nDropIDCount      INT        
+          ,@nDropIDCount      INT        
           ,@cPickDetailKey    NVARCHAR(10)        
           ,@nQTYBal           INT        
           ,@nPickedQty        INT        
@@ -176,7 +178,7 @@ BEGIN
       OPEN @curDelEcomLog      
       FETCH NEXT FROM @curDelEcomLog INTO @nRowRef      
       WHILE @@FETCH_STATUS = 0      
-   BEGIN      
+      BEGIN      
          UPDATE rdt.rdtECOMMLOG WITH (ROWLOCK)        
          SET Status = '9'        
          , ErrMsg = 'CLEAN UP PACK'         
@@ -637,7 +639,7 @@ BEGIN
             BEGIN        
                UPDATE dbo.PickDetail WITH (ROWLOCK)        
                SET CASEID     = @cLabelNo        
-    ,DropID     = @cLabelNo        
+                  ,DropID     = @cLabelNo        
                   ,TrafficCop = NULL        
                WHERE PickDetailKey = @cPickDetailKey        
         
@@ -670,7 +672,7 @@ BEGIN
             END        
             -- PickDetail have more        
             ELSE IF @nPickedQty >  @nQTYBal        
-          BEGIN        
+            BEGIN        
                -- Get new PickDetailkey        
                DECLARE @cNewPickDetailKey NVARCHAR( 10)        
                EXECUTE dbo.nspg_GetKey        
@@ -717,7 +719,7 @@ BEGIN
                END        
         
                -- Change orginal PickDetail with exact QTY (with TrafficCop)        
-     UPDATE dbo.PickDetail WITH (ROWLOCK) SET        
+               UPDATE dbo.PickDetail WITH (ROWLOCK) SET        
                   QTY = @nQTYBal,        
                   CaseID = @cLabelNo,        
                   DropID = @cLabelNo,        
@@ -857,6 +859,7 @@ BEGIN
                INSERT INTO @tCartonLabel (Variable, Value) VALUES ( '@nToCartonNo', @nCartonNo)          
                INSERT INTO @tCartonLabel (Variable, Value) VALUES ( '@cFromLabelNo', @cLabelNo)           
                INSERT INTO @tCartonLabel (Variable, Value) VALUES ( '@cToLabelNo', @cLabelNo)          
+               INSERT INTO @tCartonLabel (Variable, Value) VALUES ( '@cOrderKey', @cOrderKey)          
                  
                -- Print label          
                EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, 0, 1, '', @cStorerKey, @cLabelPrinter, '',           
@@ -897,7 +900,7 @@ BEGIN
                FROM rdt.rdtECOMMLog WITH (NOLOCK)        
                WHERE ToteNo = @cDropID        
                AND Status IN ('0' , '1', '9' )        
-AND OrderKey = CASE WHEN @cDropIDType = 'SINGLES' THEN OrderKey ELSE @cOrderKey END        
+               AND OrderKey = CASE WHEN @cDropIDType = 'SINGLES' THEN OrderKey ELSE @cOrderKey END        
                AND AddWho = @cUserName        
                AND Mobile = @nMobile        
                AND BatchKey = @cBatchKey        
@@ -992,7 +995,7 @@ AND OrderKey = CASE WHEN @cDropIDType = 'SINGLES' THEN OrderKey ELSE @cOrderKey 
             SET @cTTLScannedQty = @nTotalScannedQty        
          END        
          ELSE        
-BEGIN        
+         BEGIN        
             UPDATE RDT.rdtECOMMLog WITH (ROWLOCK)        
             SET   Status      = '9'    -- completed        
             WHERE ToteNo      = @cDropID        
@@ -1094,7 +1097,8 @@ BEGIN
       SET @fCartonWeight = @fCartonWeight + ( @fSKU_Weight * @nTotalPackedQty)       
       SET @fCartonCube = @fCartonCube + ( @fSKU_Cube * @nTotalPackedQty)      
         
-      IF NOT EXISTS ( SELECT 1 FROM dbo.PackInfo WITH (NOLOCK)                              WHERE PickSlipNo = @cPickSlipNo        
+      IF NOT EXISTS ( SELECT 1 FROM dbo.PackInfo WITH (NOLOCK)                              
+                      WHERE PickSlipNo = @cPickSlipNo        
                       AND CartonNo = @nCartonNo )        
       BEGIN        
          INSERT INTO dbo.PackInfo(      
@@ -1147,9 +1151,10 @@ BEGIN
          INSERT INTO @tCartonLabel (Variable, Value) VALUES ( '@cPickSlipNo', @cPickSlipNo)           
          INSERT INTO @tCartonLabel (Variable, Value) VALUES ( '@nFromCartonNo', @nCartonNo)           
          INSERT INTO @tCartonLabel (Variable, Value) VALUES ( '@nToCartonNo', @nCartonNo)          
-   INSERT INTO @tCartonLabel (Variable, Value) VALUES ( '@cFromLabelNo', @cLabelNo)           
+         INSERT INTO @tCartonLabel (Variable, Value) VALUES ( '@cFromLabelNo', @cLabelNo)           
          INSERT INTO @tCartonLabel (Variable, Value) VALUES ( '@cToLabelNo', @cLabelNo)          
-                 
+         INSERT INTO @tCartonLabel (Variable, Value) VALUES ( '@cOrderKey', @cOrderKey)
+
          -- Print label          
          EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, 0, 1, '', @cStorerKey, @cLabelPrinter, '',           
             @cCartonLabel, -- Report type          
@@ -1623,6 +1628,5 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-
 GRANT EXECUTE ON RDT.rdt_842ExtUpdSP11 TO NSQL
 GO
