@@ -22,7 +22,6 @@ GO
 /* Updates:                                                                 */
 /* Date        Author   Ver  Purposes                                       */
 /* 15-Sep-2023 WLChooi  1.0  DevOps Combine Script                          */
-/* 19-Sep-2023 WLChooi  1.1  WMS-23615 - Add Validation (WL01)              */
 /****************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV65]
@@ -337,12 +336,6 @@ BEGIN
                AND L.Facility = @c_Facility
                AND L.PutawayZone = @c_Putawayzone
                AND ISNULL(LLI.Qty,0) + ISNULL(LLI.PendingMoveIn,0) = 0
-               AND NOT EXISTS ( SELECT 1                            --WL01
-                                FROM REPLENISHMENT RP (NOLOCK)      --WL01
-                                WHERE RP.Storerkey = @c_Storerkey   --WL01
-                                AND RP.SKU <> @c_SKU                --WL01
-                                AND RP.Confirmed = 'N'              --WL01
-                                AND RP.ToLoc = L.Loc )              --WL01
                ORDER BY L.LogicalLocation
             END
          END

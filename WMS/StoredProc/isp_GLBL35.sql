@@ -18,7 +18,7 @@ GO
 /*                                                                      */
 /* Usage: Call from isp_GenLabelNo_Wrapper                              */
 /*                                                                      */
-/* GitLab Version: 1.1                                                  */
+/* GitLab Version: 1.0                                                  */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -27,7 +27,6 @@ GO
 /* Updates:                                                             */
 /* Date         Author  Ver.  Purposes                                  */
 /* 31-Mar-2023  WLChooi 1.0   DevOps Combine Script                     */
-/* 07-Jul-2023  WLChooi 1.1   Bug Fix - Duplicated TrackingNo (WL01)    */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_GLBL35] ( 
          @c_PickSlipNo   NVARCHAR(10)
@@ -88,10 +87,6 @@ BEGIN
       FROM dbo.CartonTrack_Pool CTP (NOLOCK)
       WHERE CTP.KeyName = @c_Keyname
       AND CTP.CarrierName = @c_Shipperkey
-      AND NOT EXISTS (SELECT 1 FROM CartonTrack CT (NOLOCK) --WL01
-                      WHERE CT.TrackingNo = CTP.TrackingNo  --WL01 
-                      AND CT.CarrierName = @c_Shipperkey    --WL01
-                      AND CT.KeyName = @c_Keyname)          --WL01
       ORDER BY CTP.TrackingNo
 
       IF ISNULL(@c_LabelNo,'') = ''
@@ -103,19 +98,7 @@ BEGIN
       END
       ELSE
       BEGIN
-         --WL01 S
          --Add into CartonTrack and delete from CartonTrack_Pool
-         DELETE FROM dbo.CartonTrack_Pool
-         WHERE RowRef = @n_RowRef
-
-         IF @@ERROR <> 0
-         BEGIN
-            SET @n_continue = 3
-            SET @n_err = 60052 
-            SET @c_errmsg = 'NSQL'+CONVERT(char(5),@n_err)+': Error deleting from CartonTrack_Pool for Track# ' + @c_LabelNo + '. (isp_GLBL35)' 
-                          + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
-         END
-
          INSERT INTO dbo.CartonTrack (TrackingNo, CarrierName, KeyName, LabelNo)
          SELECT @c_LabelNo, @c_Shipperkey, @c_Keyname, @c_Sourcekey
 
@@ -126,7 +109,17 @@ BEGIN
             SET @c_errmsg = 'NSQL'+CONVERT(char(5),@n_err)+': Error inserting CartonTrack for Track# ' + @c_LabelNo + '. (isp_GLBL35)' 
                           + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
          END
-         --WL01 E
+
+         DELETE FROM dbo.CartonTrack_Pool
+         WHERE RowRef = @n_RowRef
+
+         IF @@ERROR <> 0
+         BEGIN
+            SET @n_continue = 3
+            SET @n_err = 60052 
+            SET @c_errmsg = 'NSQL'+CONVERT(char(5),@n_err)+': Error deleting from CartonTrack_Pool for Track# ' + @c_LabelNo + '. (isp_GLBL35)' 
+                          + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+         END
       END
    END
    ELSE   --Shipperkey <> SF, generate 10 digits labelno   
