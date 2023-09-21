@@ -81,6 +81,7 @@ GO
 /* 2023-06-28 5.0  Ung      WMS-22741 Remove rdt_Decode error                 */
 /*                          Add L01-04 to rdt_Decode                          */
 /* 2023-08-08 5.1  YeeKung  JSM-168921 ADD Rowcount  (yeekung04)              */
+/* 2023-08-10 5.2  Ung      WMS-23170 Add PieceScan                           */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_PutawayBySKU] (
@@ -153,6 +154,7 @@ DECLARE
    @nRec                INT,
    @nTotalRec           INT,
    @nPABookingKey       INT,
+   @nPieceScanQTY       INT, 
    @nFromScn            INT,   --(yeekung03)
 
    @cPASuggestSKU       NVARCHAR( 1),
@@ -175,8 +177,10 @@ DECLARE
    @cSKUBarcode         NVARCHAR( 20), -- (james11)
    @cSKUVar             NVARCHAR( 20), -- (yeekung04)
    @cSKUDefault         NVARCHAR( 20), --(yeekung04)
+   @cPieceScan          NVARCHAR( 1),
    @cUPC                NVARCHAR( 30),  --(cc01)
    @cFlowThruQtyScn     NVARCHAR( 1),
+   @cPieceScanSKU       NVARCHAR( 20),
    @cDecodeLottable01   NVARCHAR( 18),
    @cDecodeLottable02   NVARCHAR( 18),
    @cDecodeLottable03   NVARCHAR( 18),
@@ -243,6 +247,7 @@ SELECT
    @cQTY_PMoveIn  = V_String9,
    @cSKUBarcode   = V_String11,
    @cFlowThruQtyScn = V_String12,
+   @cPieceScanSKU = V_String13,
 
    @nPUOM_Div     = V_PUOM_Div,
    @nPQTY         = V_PQTY,
@@ -255,6 +260,7 @@ SELECT
    @nRec          = V_Integer5,
    @nTotalRec     = V_Integer6,
    @nPABookingKey = V_Integer7,
+   @nPieceScanQTY = V_Integer8,
 
    @cPASuggestSKU       = V_String20,
    @cPABySKUAndLOT      = V_String21,
@@ -269,12 +275,12 @@ SELECT
    @cDefaultSuggestSKU  = V_String30,
    @cDecodeSP           = V_String31,
    @cSKUStatus          = V_String32, -- (james10)
-   @cLOCLookupSP   = V_String33, -- (yeekung02)
+   @cLOCLookupSP        = V_String33, -- (yeekung02)
    @nFromScn            = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String34, 5), 0) = 1 THEN LEFT( V_String34, 5) ELSE 0 END, --(yekung03)
    @cMultiSKUBarcode    = V_String35, --(yeekung03)
    @cSKUVar             = V_String36,
    @cSKUDefault         = V_String37,
-   --@cUPC                = V_String38,  --(cc01)
+   @cPieceScan          = V_String38,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
@@ -320,19 +326,24 @@ BEGIN
    SELECT @cPUOM = DefaultUOM FROM rdt.rdtUser WITH (NOLOCK) WHERE UserName = @cUserName
 
    -- Get storer configure
+   SET @cDefaultQTY = rdt.RDTGetConfig( @nFunc, 'DefaultQTY', @cStorer)
+   SET @cDefaultSuggestSKU = rdt.RDTGetConfig( @nFunc, 'DefaultSuggestSKU', @cStorer)
+   SET @cFlowThruQtyScn = rdt.RDTGetConfig( @nFunc, 'FlowThruQtyScn', @cStorer)
+   SET @cLOCLookupSP = rdt.rdtGetConfig(@nFunc,'LOCLookupSP',@cStorer)       --(yeekung02)
+   SET @cMultiSKUBarcode = rdt.RDTGetConfig( @nFunc, 'MultiSKUBarcode', @cStorer)    --(yeekung03)
    SET @cPABySKUAndLOT = rdt.RDTGetConfig( @nFunc, 'PutawayBySKUAndLOT', @cStorer)
    SET @cPAMatchQTY = rdt.RDTGetConfig( @nFunc, 'PutawayBySKUMatchQty', @cStorer)
    SET @cPAMatchSuggestLOC = rdt.RDTGetConfig( @nFunc, 'PutawayMatchSuggestLOC', @cStorer)
    SET @cPASuggestSKU = rdt.RDTGetConfig( @nFunc, 'PutawaySuggestSKU', @cStorer)
+   SET @cPieceScan = rdt.RDTGetConfig( @nFunc, 'PieceScan', @cStorer)
    SET @cToLOCLookupSP = rdt.RDTGetConfig( @nFunc, 'PutawayToLOCLookup', @cStorer)
-   SET @cDefaultQTY = rdt.RDTGetConfig( @nFunc, 'DefaultQTY', @cStorer)
-   SET @cDefaultSuggestSKU = rdt.RDTGetConfig( @nFunc, 'DefaultSuggestSKU', @cStorer)
-   SET @cLOCLookupSP = rdt.rdtGetConfig(@nFunc,'LOCLookupSP',@cStorer)       --(yeekung02)
-   SET @cMultiSKUBarcode = rdt.RDTGetConfig( @nFunc, 'MultiSKUBarcode', @cStorer)    --(yeekung03)
 
    SET @cDecodeLabelNo = rdt.RDTGetConfig( @nFunc, 'DecodeLabelNo', @cStorer)
    IF @cDecodeLabelNo = '0'
       SET @cDecodeLabelNo = ''
+   SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorer)
+   IF @cDecodeSP = '0'
+      SET @cDecodeSP = ''
    SET @cExtendedUpdateSP = rdt.rdtGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorer)
    IF @cExtendedUpdateSP = '0'
       SET @cExtendedUpdateSP = ''
@@ -342,20 +353,10 @@ BEGIN
    SET @cExtendedValidateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedValidateSP', @cStorer)
    IF @cExtendedValidateSP = '0'
       SET @cExtendedValidateSP = ''
-
-   SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorer)
-   IF @cDecodeSP = '0'
-      SET @cDecodeSP = ''
-
-   -- (james10)
-   SET @cSKUStatus  = ''
    SET @cSKUStatus = rdt.RDTGetConfig( @nFunc, 'SKUStatus', @cStorer)
    IF @cSKUStatus = '0'
-    SET @cSKUStatus = ''
+      SET @cSKUStatus = ''
 
-   -- (james13)
-   SET @cFlowThruQtyScn = rdt.RDTGetConfig( @nFunc, 'FlowThruQtyScn', @cStorer)
-   
    -- EventLog
    EXEC RDT.rdt_STD_EventLog
       @cActionType = '1', -- Sign-in
@@ -696,6 +697,9 @@ BEGIN
          SET @cSKUDesc = ''
       END
 
+      SET @cPieceScanSKU = ''
+      SET @nPieceScanQTY = 0
+
       -- Prepare next screen variable
       SET @cSKU = ''
       SET @cOutField01 = @cID
@@ -705,6 +709,7 @@ BEGIN
       SET @cOutField05 = @cSKU
       SET @cOutField06 = SUBSTRING( @cSKUDesc, 1, 20)
       SET @cOutField07 = SUBSTRING( @cSKUDesc, 21, 20)
+      SET @cOutField08 = '' -- PieceScanQTY
 
       -- Go to next screen
       SET @nScn = @nScn + 1
@@ -794,17 +799,50 @@ BEGIN
 
       -- Screen mapping
       SET @cLabelNo = @cInField05
-      SET @cSKU = @cInField05
       SET @cBarcode = @cInField05
-      SET @cUPC = @cSKU
+      SET @cUPC = @cInField05
       SET @cSKUBarcode = @cInField05
 
       -- Check SKU blank
       IF @cLabelNo = ''
       BEGIN
-         SET @nErrNo = 73860
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Need SKU
-         GOTO Step_2_Fail
+         -- Piece scan and some QTY scanned
+         IF @cPieceScan = '1' AND @nPieceScanQTY > 0
+         BEGIN
+            SET @nRec = 1
+            SET @cSKU = @cPieceScanSKU
+            
+            SET @cOutField01 = @cSKU
+            SET @cOutField02 = SUBSTRING( @cSKUDesc, 1, 20)
+            SET @cOutField03 = SUBSTRING( @cSKUDesc, 21, 20)
+            SET @cOutField04 = @cLottable01
+            SET @cOutField05 = @cLottable02
+            SET @cOutField06 = @cLottable03
+            SET @cOutField07 = rdt.rdtFormatDate( @dLottable04)
+            SET @cOutField08 = LEFT( '1:' + CAST( @nPUOM_Div AS NVARCHAR( 6)) + SPACE( 7), 7) +
+                               RIGHT( SPACE( 5) + rdt.rdtRightAlign( @cPUOM_Desc, 5), 5) +
+                               RIGHT( SPACE( 5) + rdt.rdtRightAlign( @cMUOM_Desc, 5), 5)
+            SET @cOutField09 = CAST( @nRec AS NVARCHAR( 5)) + '/' + CAST( @nTotalRec AS NVARCHAR( 5))
+            SET @cOutField11 = CASE WHEN @cFieldAttr13 = 'O' THEN '' ELSE CAST( @nPQTY_PWY AS NVARCHAR( 5)) END
+            SET @cOutField12 = CAST( @nMQTY_PWY AS NVARCHAR( 6))
+            SET @cOutField13 = ''
+            SET @cOutField14 = CASE WHEN @cPieceScan = '1' THEN CAST( @nPieceScanQTY AS NVARCHAR( 5))
+                                    WHEN @cDefaultQTY = '1' THEN '1' 
+                                    ELSE '' 
+                               END            
+            
+            -- Go to next screen
+            SET @nScn = @nScn + 1
+            SET @nStep = @nStep + 1
+
+            GOTO Step_2_Quit
+         END
+         ELSE
+         BEGIN
+            SET @nErrNo = 73860
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Need SKU
+            GOTO Step_2_Fail
+         END
       END
 
       -- Decode
@@ -819,7 +857,7 @@ BEGIN
          IF @cDecodeSP = '1'
          BEGIN
             EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility, @cBarcode,
-               @cUPC        = @cSKU              OUTPUT,
+               @cUPC        = @cUPC              OUTPUT,
                @nQTY        = @nQTY              OUTPUT,
                @cLottable01 = @cDecodeLottable01 OUTPUT, 
                @cLottable02 = @cDecodeLottable02 OUTPUT, 
@@ -868,6 +906,8 @@ BEGIN
 
             IF @nErrNo <> 0
                GOTO Quit
+               
+            SET @cUPC = @cSKU
          END
       END    
       ELSE
@@ -908,6 +948,7 @@ BEGIN
                GOTO Step_2_Fail
 
             SET @cSKU = @c_oFieled01
+            SET @cUPC = @c_oFieled01
             SET @cLabelType = @c_oFieled07
             SET @cUCC = @c_oFieled08
             SET @nUCCQTY = CAST(@c_oFieled05 AS INT)
@@ -931,7 +972,7 @@ BEGIN
       DECLARE @nSKUCnt INT
       EXEC rdt.rdt_GETSKUCNT
           @cStorerkey  = @cStorer
-         ,@cSKU        = @cSKU
+         ,@cSKU        = @cUPC
          ,@nSKUCnt     = @nSKUCnt       OUTPUT
          ,@bSuccess    = @b_Success     OUTPUT
          ,@nErr        = @nErrNo        OUTPUT
@@ -952,7 +993,7 @@ BEGIN
          -- (yeekung03)
          IF @cMultiSKUBarcode IN ('1', '2')
          BEGIN
-         --(yeekung04)
+            --(yeekung04)
             IF (@cID<>'')
             BEGIN
                EXEC rdt.rdt_MultiSKUBarcode @nMobile, @nFunc, @cLangCode,
@@ -1031,11 +1072,13 @@ BEGIN
       -- Get SKU code
       EXEC rdt.rdt_GETSKU
           @cStorerkey  = @cStorer
-         ,@cSKU        = @cSKU          OUTPUT
+         ,@cSKU        = @cUPC          OUTPUT
          ,@bSuccess    = @b_Success     OUTPUT
          ,@nErr        = @nErrNo        OUTPUT
          ,@cErrMsg     = @cErrMsg       OUTPUT
          ,@cSKUStatus  = @cSKUStatus
+
+      SET @cSKU = @cUPC
 
       -- Check SKU same as suggested
       IF @cSuggestSKU <> '' AND @cSKU <> @cSuggestSKU
@@ -1156,6 +1199,23 @@ BEGIN
          END
       END
 
+      -- Piece scan
+      IF @cPieceScan = '1' 
+      BEGIN
+         -- First time scan
+         IF @cPieceScanSKU = '' 
+            -- Remember the SKU
+            SET @cPieceScanSKU = @cSKU
+
+         -- Check subsequence SKU scan is different from previous
+         ELSE IF @cPieceScanSKU <> @cSKU
+         BEGIN
+            SET @nErrNo = 73876
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Different SKU
+            GOTO Step_2_Fail
+         END
+      END
+
       -- Get SKU info
       SELECT
             @cSKUDesc = S.Descr,
@@ -1246,11 +1306,77 @@ BEGIN
          SET @nMQTY_PWY = @nQTY_PWY % @nPUOM_Div -- Calc the remaining in master unit
       END
 
-      -- Go to prev screen
+      -- Piece scan
+      IF @cPieceScan = '1'
+      BEGIN
+         -- Increase scan count
+         SET @nPieceScanQTY += 1
+         
+         -- Not fully scan
+         IF @nPieceScanQTY < @nQTY_PWY
+         BEGIN
+            -- Stay at same screen
+            SET @cOutField01 = @cID
+            SET @cOutField02 = @cUCC
+            SET @cOutField03 = @cLOC
+            SET @cOutField04 = @cSuggestSKU
+            SET @cOutField05 = '' -- @cSKU
+            SET @cOutField06 = SUBSTRING( @cSKUDesc, 1, 20)
+            SET @cOutField07 = SUBSTRING( @cSKUDesc, 21, 20)
+            SET @cOutField08 = CAST( @nPieceScanQTY AS NVARCHAR( 5)) + '/' + CAST( @nQTY_PWY AS NVARCHAR( 5))
+
+            GOTO Step_2_Quit
+         END
+      END
+      
+      -- Go to next screen
       SET @nScn = @nScn + 1
       SET @nStep = @nStep + 1
 
-      -- (james12)
+      -- Prepare next screen variable
+      SET @nRec = 1
+      SET @cOutField01 = @cSKU
+      SET @cOutField02 = SUBSTRING( @cSKUDesc, 1, 20)
+      SET @cOutField03 = SUBSTRING( @cSKUDesc, 21, 20)
+      SET @cOutField04 = @cLottable01
+      SET @cOutField05 = @cLottable02
+      SET @cOutField06 = @cLottable03
+      SET @cOutField07 = rdt.rdtFormatDate( @dLottable04)
+      SET @cOutField08 = LEFT( '1:' + CAST( @nPUOM_Div AS NVARCHAR( 6)) + SPACE( 7), 7) +
+                         RIGHT( SPACE( 5) + rdt.rdtRightAlign( @cPUOM_Desc, 5), 5) +
+                         RIGHT( SPACE( 5) + rdt.rdtRightAlign( @cMUOM_Desc, 5), 5)
+      SET @cOutField09 = CAST( @nRec AS NVARCHAR( 5)) + '/' + CAST( @nTotalRec AS NVARCHAR( 5))
+      SET @cOutField11 = CASE WHEN @cFieldAttr13 = 'O' THEN '' ELSE CAST( @nPQTY_PWY AS NVARCHAR( 5)) END
+      SET @cOutField12 = CAST( @nMQTY_PWY AS NVARCHAR( 6))
+      SET @cOutField13 = ''
+      SET @cOutField14 = CASE WHEN @cPieceScan = '1' THEN CAST( @nPieceScanQTY AS NVARCHAR( 5))
+                              WHEN @cDefaultQTY = '1' THEN '1' 
+                              ELSE '' 
+                         END
+   END
+
+   IF @nInputKey = 0 -- Esc or No
+   BEGIN
+      IF @cUCC <> ''
+         EXEC rdt.rdtSetFocusField @nMobile, 2 -- UCC
+      ELSE
+         EXEC rdt.rdtSetFocusField @nMobile, 1 -- ID
+
+      -- Prepare prev screen variable
+      SET @cID = ''
+      SET @cUCC = ''
+      SET @cLOC = ''
+      SET @cOutField01 = '' -- ID
+      SET @cOutField02 = '' -- UCC
+      SET @cOutField03 = '' -- LOC
+
+      -- Go to prev screen
+      SET @nScn = @nScn - 1
+      SET @nStep = @nStep - 1
+   END
+
+   Step_2_Quit:
+   BEGIN
       -- Extended info
       IF @cExtendedInfoSP <> ''
       BEGIN
@@ -1285,50 +1411,16 @@ BEGIN
             SET @cOutfield15 = @cExtendedInfo1
          END
       END
-
-      -- Prepare next screen variable
-      SET @nRec = 1
-      SET @cOutField01 = @cSKU
-      SET @cOutField02 = SUBSTRING( @cSKUDesc, 1, 20)
-      SET @cOutField03 = SUBSTRING( @cSKUDesc, 21, 20)
-      SET @cOutField04 = @cLottable01
-      SET @cOutField05 = @cLottable02
-      SET @cOutField06 = @cLottable03
-      SET @cOutField07 = rdt.rdtFormatDate( @dLottable04)
-      SET @cOutField08 = LEFT( '1:' + CAST( @nPUOM_Div AS NVARCHAR( 6)) + SPACE( 7), 7) +
-                         RIGHT( SPACE( 5) + rdt.rdtRightAlign( @cPUOM_Desc, 5), 5) +
-                         RIGHT( SPACE( 5) + rdt.rdtRightAlign( @cMUOM_Desc, 5), 5)
-      SET @cOutField09 = CAST( @nRec AS NVARCHAR( 5)) + '/' + CAST( @nTotalRec AS NVARCHAR( 5))
-      SET @cOutField11 = CASE WHEN @cFieldAttr13 = 'O' THEN '' ELSE CAST( @nPQTY_PWY AS NVARCHAR( 5)) END
-      SET @cOutField12 = CAST( @nMQTY_PWY AS NVARCHAR( 6))
-      SET @cOutField13 = ''
-      SET @cOutField14 = CASE WHEN @cDefaultQTY = '1' THEN '1' ELSE '' END
-      
-    	IF @cFlowThruQtyScn = '1' AND @cDefaultQTY = '1'
-      BEGIN
-      	SET @cInField14 = @cDefaultQTY
+   
+    	-- Flow thru
+    	IF @cFlowThruQtyScn = '1'
+    	BEGIN
+         SET @cOutField14 = CASE WHEN @cPieceScan = '1' THEN @nPieceScanQTY
+                                 WHEN @cDefaultQTY = '1' THEN '1' 
+                                 ELSE '' 
+                            END
          GOTO Step_3
       END
-   END
-
-   IF @nInputKey = 0 -- Esc or No
-   BEGIN
-      IF @cUCC <> ''
-         EXEC rdt.rdtSetFocusField @nMobile, 2 -- UCC
-      ELSE
-         EXEC rdt.rdtSetFocusField @nMobile, 1 -- ID
-
-      -- Prepare prev screen variable
-      SET @cID = ''
-      SET @cUCC = ''
-      SET @cLOC = ''
-      SET @cOutField01 = '' -- ID
-      SET @cOutField02 = '' -- UCC
-      SET @cOutField03 = '' -- LOC
-
-      -- Go to prev screen
-      SET @nScn = @nScn - 1
-      SET @nStep = @nStep - 1
    END
    GOTO Quit
 
@@ -1618,6 +1710,8 @@ BEGIN
       SET @cFieldAttr13 = '' -- @nPQTY_PWY
 
       -- Prepare prev screen variable
+      SET @cPieceScanSKU = ''
+      SET @nPieceScanQTY = 0
       SET @cSKU = ''
       IF @cPASuggestSKU <> '1' SET @cSKUDesc = ''
 
@@ -1628,6 +1722,7 @@ BEGIN
       SET @cOutField05 = '' -- SKU
       SET @cOutField06 = SUBSTRING( @cSKUDesc, 1, 20)
       SET @cOutField07 = SUBSTRING( @cSKUDesc, 21, 20)
+      SET @cOutField08 = '' -- Piece scan QTY
 
       -- Go to prev screen
       SET @nScn = @nScn - 1
@@ -1654,23 +1749,23 @@ BEGIN
       SET @cFinalLOC = @cInField02
 
       -- Check blank final LOC
-    IF @cFinalLOC = ''
+      IF @cFinalLOC = ''
       BEGIN
          SET @nErrNo = 73877
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Need Final LOC
          GOTO Step_4_Fail
       END
 
-  -- Loc prefix
-  IF @cLOCLookupSP = 1
-  BEGIN
-   EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility,
-   @cFinalLOC   OUTPUT,
-   @nErrNo      OUTPUT,
-   @cErrMsg     OUTPUT
-   IF @nErrNo <> 0
-    GOTO Step_4_Fail
-  END
+      -- Loc prefix
+      IF @cLOCLookupSP = 1
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility,
+            @cFinalLOC   OUTPUT,
+            @nErrNo      OUTPUT,
+            @cErrMsg     OUTPUT
+         IF @nErrNo <> 0
+         GOTO Step_4_Fail
+      END
 
       -- ToLOC lookup
       IF @cToLOCLookupSP <> ''
@@ -2076,6 +2171,9 @@ BEGIN
             SET @cSKUDesc = ''
          END
 
+         SET @cPieceScanSKU = '' 
+         SET @nPieceScanQTY = 0
+
          -- Prepare next screen variable
          SET @cSKU = ''
          SET @cOutField01 = @cID
@@ -2085,6 +2183,7 @@ BEGIN
          SET @cOutField05 = @cSKU
          SET @cOutField06 = SUBSTRING( @cSKUDesc, 1, 20)
          SET @cOutField07 = SUBSTRING( @cSKUDesc, 21, 20)
+         SET @cOutField08 = '' -- PieceScanQTY
 
          -- Go back to SKU screen
          SET @nScn  = @nScn  - 3
@@ -2357,6 +2456,7 @@ BEGIN
    SET @cOutField05 = @cSKU
    SET @cOutField06 = SUBSTRING( @cSKUDesc, 1, 20)
    SET @cOutField07 = SUBSTRING( @cSKUDesc, 21, 20)
+   SET @cOutField08 = '' -- PieceScanQTY
 
    -- Go to SKU screen
    SET @nScn = @nFromScn
@@ -2404,6 +2504,7 @@ BEGIN
       V_String9  = @cQTY_PMoveIn,
       V_String11 = @cSKUBarcode,
       V_String12 = @cFlowThruQtyScn,
+      V_String13 = @cPieceScanSKU,      
 
       V_PUOM_Div = @nPUOM_Div ,
       V_PQTY     = @nPQTY,
@@ -2416,6 +2517,7 @@ BEGIN
       V_Integer5 = @nRec,
       V_Integer6 = @nTotalRec,
       V_Integer7 = @nPABookingKey,
+      V_Integer8 = @nPieceScanQTY,
 
       V_String20 = @cPASuggestSKU,
       V_String21 = @cPABySKUAndLOT,
@@ -2433,7 +2535,7 @@ BEGIN
       V_String33 = @cLOCLookupSP,  -- (yeekung02)
       V_String34 = @nFromScn,    -- (yeekung03)
       V_String35 = @cMultiSKUBarcode, --(yeekung03)
-      --V_String38 = @cUPC,   --(cc01)
+      V_String38 = @cPieceScan,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,

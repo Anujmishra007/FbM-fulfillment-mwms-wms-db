@@ -26,7 +26,7 @@ execute rdt.rdtAddMsg 73872, 10, '73872^QTYPWY NotEnuf', 'us_english', 523
 execute rdt.rdtAddMsg 73873, 10, '73873^ID with UCC   ', 'us_english', 523
 execute rdt.rdtAddMsg 73874, 10, '73874^NoSuitableLOC ', 'us_english', 523
 execute rdt.rdtAddMsg 73875, 10, '73875^NoSuggestedLOC', 'us_english', 523
---execute rdt.rdtAddMsg 73876, 10, '73876^NoSuggestedLOC', 'us_english', 523
+execute rdt.rdtAddMsg 73876, 10, '73876^Different SKU ', 'us_english', 523
 execute rdt.rdtAddMsg 73877, 10, '73877^Need Final LOC', 'us_english', 523
 execute rdt.rdtAddMsg 73878, 10, '73878^Invalid LOC   ', 'us_english', 523
 execute rdt.rdtAddMsg 73879, 10, '73879^Diff facility ', 'us_english', 523
