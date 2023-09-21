@@ -21,6 +21,7 @@ GO
 /* Updates:                                                             */        
 /* Date         Author   Ver  Purposes                                  */
 /* 07-JUL-2023  WZPang   1.0  DevOps Combine Script                     */
+/* 19-SEP-2023  WZPang   1.1  Add Sorting (ORDER BY LEFT(SKU, 8))       */
 /************************************************************************/        
 CREATE OR ALTER PROC [dbo].[isp_RPT_WV_WAVELPDET_001] (
       @c_Wavekey        NVARCHAR(10),  
@@ -462,6 +463,7 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_WV_WAVELPDET_001] (
          , Loadkey
    FROM #temp_pick(NOLOCK)
             GROUP BY Wavekey,  LEFT(SKU, 8), Loadkey, countsku,TotalSku
+            ORDER BY LEFT(SKU, 8)   --WZ01
 
    IF OBJECT_ID('tempdb..#temp_pick') IS NOT NULL  
       DROP TABLE #temp_pick
