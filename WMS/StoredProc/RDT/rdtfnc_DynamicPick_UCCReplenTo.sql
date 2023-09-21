@@ -1,14 +1,10 @@
-IF (objectProperty(object_id('rdt.rdtfnc_DynamicPick_UCCReplenTo'), 'IsProcedure') is not null)
-	DROP PROCEDURE [RDT].[rdtfnc_DynamicPick_UCCReplenTo] 
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
 
 /************************************************************************/
-/* Copyright: IDS                                                       */
+/* Copyright: Maersk                                                    */
 /* Purpose: UCC Replenishment To (Dynamic Pick)	   					      */
 /*                                                                      */
 /* Modifications log:                                                   */
@@ -21,9 +17,10 @@ GO
 /* 2016-09-30 1.3  Ung        Performance tuning                        */
 /* 2018-11-01 1.4  Gan        Performance tuning                        */
 /* 2019-10-09 1.5  Chermaine  WMS-10777 Add EventLog                    */
+/* 2023-05-31 1.6  James      WMS-22615 Add UCCWithMultiSKU (james01)   */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_DynamicPick_UCCReplenTo] (
+CREATE OR ALTER PROC [RDT].[rdtfnc_DynamicPick_UCCReplenTo] (
    @nMobile    int,
    @nErrNo     int  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max
@@ -92,7 +89,7 @@ DECLARE
    @cExtendedValidateSP NVARCHAR(20) , -- (ChewKP01)
    @cExecStatements    NVARCHAR(4000), -- (ChewKP01)
    @cExecArguments     NVARCHAR(4000), -- (ChewKP01)
-   
+   @nUCC_RowRef        INT,
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -607,60 +604,167 @@ GOTO Quit
 
 UCC_Replenish_To_Process:
 BEGIN
-   IF @nReplenDiffLoc = 0
+	DECLARE @nTranCount INT
+	DECLARE @curUCC CURSOR
+   DECLARE @cUCCWithMultiSKU       NVARCHAR( 1)
+   DECLARE @cUCCSKU NVARCHAR( 20)
+   DECLARE @nUCCQty INT
+   DECLARE @cUCCLot NVARCHAR( 10)
+   DECLARE @cUCCLottable02 NVARCHAR( 18)
+   
+   SET @cUCCWithMultiSKU = rdt.RDTGetConfig( @nFunc, 'UCCWithMultiSKU', @cStorerKey)
+   
+   IF @cUCCWithMultiSKU = '1'
    BEGIN
-      EXECUTE rdt.rdt_DynamicPick_ReplenMove 
-         @nFunc       = @nFunc,
-         @nMobile     = @nMobile,
-         @cLangCode   = @cLangCode, 
-         @nErrNo      = @nErrNo OUTPUT,
-         @cErrMsg     = @cErrMsg OUTPUT, -- screen limitation, 20 char max
-         @cSourceType = 'rdtfnc_DynamicPick_UCCReplenTo', 
-         @cStorerKey  = @cStorerKey,
-         @cFacility   = @cFacility, 
-         @cFromLOC    = @cFromLOC, 
-         @cToLOC      = @cToLOC, 
-         @cFromID     = @cFromID, -- NULL means not filter by ID. Blank ID is a valid ID
-         @cToID       = @cFromID, -- NULL means not changing ID. Blank ID is a valid ID
-         @cSKU        = NULL, -- Either SKU or UCC only
-         @cUCC        = @cUCC, -- 
-         @nQTY        = @nQTY,    -- For move by SKU, QTY must have value
-         @cFromLOT    = @cLOT, -- Applicable for all 6 types of move
-         @c_WaveKey   = @c_WaveKey,
-         @cReplenKey  = @cReplenKey,
-         @cLottable02 = @cLottable02
+      SET @nTranCount = @@TRANCOUNT            
+      BEGIN TRAN  -- Begin our own transaction            
+      SAVE TRAN rdt_UCCReplen -- For rollback or commit only our own transaction                  
+      
+      SET @curUCC = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+      SELECT SKU, Qty, Lot, UCC_RowRef 
+      FROM dbo.UCC WITH (NOLOCK) WHERE UCCNo = @cUCC
+      OPEN @curUCC
+      FETCH NEXT FROM @curUCC INTO @cUCCSKU, @nUCCQty, @cUCCLot, @nUCC_RowRef
+      WHILE @@FETCH_STATUS = 0
+      BEGIN
+      	SELECT @cReplenKey = ReplenishmentKey 
+      	FROM dbo.REPLENISHMENT WITH (NOLOCK) 
+      	WHERE RefNo = @cUCC 
+      	AND   Sku = @cUCCSKU 
+      	AND   Lot = @cUCCLot
+      	AND   Confirmed <> 'Y'
+      	
+         IF @nReplenDiffLoc = 0
+         BEGIN
+            EXECUTE rdt.rdt_DynamicPick_ReplenMove 
+               @nMobile     = @nMobile,
+               @nFunc       = @nFunc,
+               @cLangCode   = @cLangCode, 
+               @nErrNo      = @nErrNo OUTPUT,
+               @cErrMsg     = @cErrMsg OUTPUT, -- screen limitation, 20 char max
+               @cSourceType = 'rdtfnc_DynamicPick_UCCReplenTo', 
+               @cStorerKey  = @cStorerKey,
+               @cFacility   = @cFacility, 
+               @cFromLOC    = @cFromLOC, 
+               @cToLOC      = @cToLOC, 
+               @cFromID     = @cFromID, -- NULL means not filter by ID. Blank ID is a valid ID
+               @cToID       = @cFromID, -- NULL means not changing ID. Blank ID is a valid ID
+               @cSKU        = NULL, -- Either SKU or UCC only
+               @cUCC        = @cUCC, -- 
+               @nQTY        = @nUCCQty,    -- For move by SKU, QTY must have value
+               @cFromLOT    = @cUCCLot, -- Applicable for all 6 types of move
+               @c_WaveKey   = @c_WaveKey,
+               @cReplenKey  = @cReplenKey,
+               @cLottable02 = @cLottable02,
+               @nUCC_RowRef = @nUCC_RowRef
+         END
+         ELSE
+         BEGIN
+            EXECUTE rdt.rdt_DynamicPick_ReplenMove 
+               @nMobile     = @nMobile,
+               @nFunc       = @nFunc,
+               @cLangCode   = @cLangCode, 
+               @nErrNo      = @nErrNo OUTPUT,
+               @cErrMsg     = @cErrMsg OUTPUT, -- screen limitation, 20 char max
+               @cSourceType = 'rdtfnc_DynamicPick_UCCReplenTo', 
+               @cStorerKey  = @cStorerKey,
+               @cFacility   = @cFacility, 
+               @cFromLOC    = @cFromLOC, 
+               @cToLOC      = @cToLOC2, 
+               @cFromID     = @cFromID, -- NULL means not filter by ID. Blank ID is a valid ID
+               @cToID       = @cFromID, -- NULL means not changing ID. Blank ID is a valid ID
+               @cSKU        = NULL, -- Either SKU or UCC only
+               @cUCC        = @cUCC, -- 
+               @nQTY        = @nUCCQTY,    -- For move by SKU, QTY must have value
+               @cFromLOT    = @cUCCLot, -- Applicable for all 6 types of move
+               @c_WaveKey   = @c_WaveKey,
+               @cReplenKey  = @cReplenKey,
+               @cLottable02 = @cLottable02,
+               @nUCC_RowRef = @nUCC_RowRef
+         END
+
+         IF @nErrNo <> 0
+         BEGIN
+            GOTO RollBackTran
+         END
+
+      	FETCH NEXT FROM @curUCC INTO @cUCCSKU, @nUCCQty, @cUCCLot, @nUCC_RowRef
+      END
+         
+      COMMIT TRAN rdt_UCCReplen
+
+      GOTO Commit_Tran
+
+      RollBackTran:
+         ROLLBACK TRAN rdt_UCCReplen -- Only rollback change made here
+      Commit_Tran:
+         WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+            COMMIT TRAN
+
+      IF @nErrNo <> 0
+      BEGIN
+         GOTO Step_Replen_To_Fail
+      END
    END
    ELSE
    BEGIN
-      EXECUTE rdt.rdt_DynamicPick_ReplenMove 
-         @nFunc       = @nFunc,
-         @nMobile     = @nMobile,
-         @cLangCode   = @cLangCode, 
-         @nErrNo      = @nErrNo OUTPUT,
-         @cErrMsg     = @cErrMsg OUTPUT, -- screen limitation, 20 char max
-         @cSourceType = 'rdtfnc_DynamicPick_UCCReplenTo', 
-         @cStorerKey  = @cStorerKey,
-         @cFacility   = @cFacility, 
-         @cFromLOC    = @cFromLOC, 
-         @cToLOC      = @cToLOC2, 
-         @cFromID     = @cFromID, -- NULL means not filter by ID. Blank ID is a valid ID
-         @cToID       = @cFromID, -- NULL means not changing ID. Blank ID is a valid ID
-         @cSKU        = NULL, -- Either SKU or UCC only
-         @cUCC        = @cUCC, -- 
-         @nQTY        = @nQTY,    -- For move by SKU, QTY must have value
-         @cFromLOT    = @cLOT, -- Applicable for all 6 types of move
-         @c_WaveKey   = @c_WaveKey,
-         @cReplenKey  = @cReplenKey,
-         @cLottable02 = @cLottable02
+      IF @nReplenDiffLoc = 0
+      BEGIN
+         EXECUTE rdt.rdt_DynamicPick_ReplenMove 
+            @nMobile     = @nMobile,
+            @nFunc       = @nFunc,
+            @cLangCode   = @cLangCode, 
+            @nErrNo      = @nErrNo OUTPUT,
+            @cErrMsg     = @cErrMsg OUTPUT, -- screen limitation, 20 char max
+            @cSourceType = 'rdtfnc_DynamicPick_UCCReplenTo', 
+            @cStorerKey  = @cStorerKey,
+            @cFacility   = @cFacility, 
+            @cFromLOC    = @cFromLOC, 
+            @cToLOC      = @cToLOC, 
+            @cFromID     = @cFromID, -- NULL means not filter by ID. Blank ID is a valid ID
+            @cToID       = @cFromID, -- NULL means not changing ID. Blank ID is a valid ID
+            @cSKU        = NULL, -- Either SKU or UCC only
+            @cUCC        = @cUCC, -- 
+            @nQTY        = @nQTY,    -- For move by SKU, QTY must have value
+            @cFromLOT    = @cLOT, -- Applicable for all 6 types of move
+            @c_WaveKey   = @c_WaveKey,
+            @cReplenKey  = @cReplenKey,
+            @cLottable02 = @cLottable02,
+            @nUCC_RowRef = @nUCC_RowRef
+      END
+      ELSE
+      BEGIN
+         EXECUTE rdt.rdt_DynamicPick_ReplenMove 
+            @nFunc       = @nFunc,
+            @nMobile     = @nMobile,
+            @cLangCode   = @cLangCode, 
+            @nErrNo      = @nErrNo OUTPUT,
+            @cErrMsg     = @cErrMsg OUTPUT, -- screen limitation, 20 char max
+            @cSourceType = 'rdtfnc_DynamicPick_UCCReplenTo', 
+            @cStorerKey  = @cStorerKey,
+            @cFacility   = @cFacility, 
+            @cFromLOC    = @cFromLOC, 
+            @cToLOC      = @cToLOC2, 
+            @cFromID     = @cFromID, -- NULL means not filter by ID. Blank ID is a valid ID
+            @cToID       = @cFromID, -- NULL means not changing ID. Blank ID is a valid ID
+            @cSKU        = NULL, -- Either SKU or UCC only
+            @cUCC        = @cUCC, -- 
+            @nQTY        = @nQTY,    -- For move by SKU, QTY must have value
+            @cFromLOT    = @cLOT, -- Applicable for all 6 types of move
+            @c_WaveKey   = @c_WaveKey,
+            @cReplenKey  = @cReplenKey,
+            @cLottable02 = @cLottable02,
+            @nUCC_RowRef = @nUCC_RowRef
 
-    END
+       END
 
 
-   IF @nErrNo <> 0
-   BEGIN
-      GOTO Step_Replen_To_Fail
+      IF @nErrNo <> 0
+      BEGIN
+         GOTO Step_Replen_To_Fail
+      END
    END
-
+   
    -- EventLog - (cc01)    
    EXEC RDT.rdt_STD_EventLog    
       @cActionType   = '5', -- Replen    
@@ -764,8 +868,3 @@ GO
 
 GRANT EXECUTE ON RDT.rdtfnc_DynamicPick_UCCReplenTo TO NSQL
 GO
-
-
-
-
-
