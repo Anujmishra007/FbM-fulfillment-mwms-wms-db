@@ -12,7 +12,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.7                                                    */                                                                                  
+/* PVCS Version: 1.8                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -20,7 +20,7 @@ GO
 /*                                                                      */                                                                                  
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */  
-/* 28-Dec-2020  SWT01   1.0   Adding Begin Try/Catch                    */
+/* 28-Dec-2020 SWT01    1.0   Adding Begin Try/Catch                    */
 /* 04-Jan-2021 SWT02    1.1   Do not execute login if user already      */
 /*                            changed                                   */
 /* 2021-02-24  Wan01    1.2   Fixed to call lsp_SetUser SP & Quip SP    */
@@ -35,6 +35,8 @@ GO
 /*                            Load                                      */
 /* 2023-05-22  Wan06    1.6   LFWM-4274 - CN UAT Generate Load Info into*/
 /*                            BuildLoadLog Table                        */
+/* 2023-06-23  Wan07    1.8   LFWM-4176 - CN UAT  Split wave into loads */
+/*                            based on customized SP                    */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_Wave_BuildLoad]                                                                                                                       
       @c_Wavekey        NVARCHAR(10)  
@@ -43,7 +45,7 @@ CREATE OR ALTER PROC [WM].[lsp_Wave_BuildLoad]
    ,  @b_Success        INT            = 1  OUTPUT  
    ,  @n_err            INT            = 0  OUTPUT                                                                                                             
    ,  @c_ErrMsg         NVARCHAR(255)  = '' OUTPUT 
-   ,  @c_UserName       NVARCHAR(128)   = ''              
+   ,  @c_UserName       NVARCHAR(128)  = ''              
    ,  @b_debug          INT            = 0  
    ,  @c_WaveBuildLoadParmkey NVARCHAR(10)   = ''                                         --Wan05                                                                                                                                
 AS                                                                                                                                                          
@@ -186,10 +188,27 @@ AS
          , @c_AutoUpdLoadDfStorerStrg  NVARCHAR(1)    = '0'
          , @c_SuperOrderFlag           NVARCHAR(1)    = 'N'
          , @c_DefaultStrategykey       NVARCHAR(1)    = 'N'
+         
+   DECLARE @n_CondLevel                INT            = 1 
+         , @n_PreCondLevel             INT            = 0                                                                                                                   
+         , @n_CurrCondLevel            INT            = 0  
+         , @c_OrAnd                    NVARCHAR(10)   = ''                                                                                                                   
+         , @c_Value                    NVARCHAR(4000) = ''    
+         , @c_SQLCond                  NVARCHAR(MAX)  = '' 
+         , @c_SQLCond_SP               NVARCHAR(MAX)  = ''          
+         , @c_SQLJoinPick              NVARCHAR(500)  = ''             
+         , @c_SQLJoinLoc               NVARCHAR(500)  = ''    
+         , @c_SQLJoinTempOrd           NVARCHAR(500)  = '' 
 
-   DECLARE @CUR_BUILD_SORT             CURSOR
+         , @b_ParmTypeSP               INT            = 0  
+      
+         , @c_SPName                   NVARCHAR(50)   = ''    
+         , @c_SPParms                  NVARCHAR(1000) = ''                            
+
+   DECLARE @CUR_BUILD_COND             CURSOR                                       --(Wan07)
+         , @CUR_BUILD_SORT             CURSOR
          , @CUR_BUILD_SP               CURSOR
-         , @CUR_BUILDLOAD             CURSOR
+         , @CUR_BUILDLOAD              CURSOR
          , @CUR_OD                     CURSOR
 
    SET @b_Success = 1
@@ -219,6 +238,16 @@ AS
    END 
    BEGIN TRY -- SWT01 - Begin Outer Begin Try
    
+   IF OBJECT_ID('tempdb..#TMP_ORDERS','u') IS NOT NULL                              --(Wan07) - START   
+   BEGIN     
+      DROP TABLE #TMP_ORDERS
+   END             
+                                                                                                                         
+   CREATE TABLE #TMP_ORDERS                                                                                                                                      
+   (                                                                                                                                                             
+      OrderKey       NVARCHAR(10) NULL    
+   )                                                                                --(Wan07) - END
+
    CREATE TABLE #tWaveOrder                                                                                                                                    
    (                                           
       RNum              INT PRIMARY KEY                                                                  
@@ -366,6 +395,265 @@ AS
       SET @n_idx = @n_idx + 1
    END
 
+   ------------------------------------------------------  
+   -- Get Wave Gen Load Condition: General  
+   ------------------------------------------------------  
+   SET @CUR_BUILD_COND = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR                    --(Wan07) - START                                                                                        
+   SELECT BPD.ConditionLevel  
+         ,BPD.FieldName  
+         ,BPD.OrAnd  
+         ,BPD.Operator    
+         ,BuildValue = BPD.[Value]   
+   FROM  BUILDPARMDETAIL BPD WITH (NOLOCK)                                                                                                                                 
+   WHERE BPD.BuildParmKey = @c_BuildParmKey                                                                                                                                   
+   AND   BPD.[Type]       = 'CONDITION'                                                                                                                                 
+   ORDER BY BPD.BuildParmLineNo             
+                                                                                                                         
+   OPEN @CUR_BUILD_COND                                                                                                                                      
+                                                                                                                                                              
+   FETCH NEXT FROM @CUR_BUILD_COND INTO @n_CondLevel  
+                                       ,@c_FieldName  
+                                       ,@c_OrAnd  
+                                       ,@c_Operator  
+                                       ,@c_Value                                                                                                     
+   WHILE @@FETCH_STATUS <> -1                                                                                                                                    
+   BEGIN                                                                                                                                                         
+      IF ISNUMERIC(@n_CondLevel) = 1                                                                                                                         
+      BEGIN                                                                                                                                                      
+         IF @n_PreCondLevel=0  
+         BEGIN                                                                                                                                     
+            SET @n_PreCondLevel = @n_CondLevel                                                                                                         
+         END  
+         SET @n_CurrCondLevel =  @n_CondLevel                                                                                                         
+      END                                                                                                                                                        
+                  
+      -- Get Column Type                                                                                                                                         
+      SET @c_TableName = LEFT(@c_FieldName, CHARINDEX('.', @c_FieldName) - 1)                                                                                     
+      SET @c_ColName   = SUBSTRING(@c_FieldName,                                                                                                                  
+                           CHARINDEX('.', @c_FieldName) + 1, LEN(@c_FieldName) - CHARINDEX('.', @c_FieldName))                                                              
+                                                                                                                                                              
+      SET @c_ColType = ''                                                                                                                                         
+      SELECT @c_ColType = DATA_TYPE                                                                                                                               
+      FROM   INFORMATION_SCHEMA.COLUMNS WITH (NOLOCK)                                                                                                                         
+      WHERE  TABLE_NAME = @c_TableName                                                                                                                            
+      AND    COLUMN_NAME = @c_ColName     
+  
+      IF ISNULL(RTRIM(@c_ColType), '') = ''                                                                                                                       
+      BEGIN                                                  
+         SET @n_Continue = 3    
+         SET @n_Err     = 556011                                                                                                                                                 
+         SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err)   
+                        + ': Invalid Condition Column Name: ' + @c_FieldName    
+                        + ' (lsp_Wave_BuildLoad)'      
+                        + '|' + @c_FieldName                                                                                                                                
+         GOTO EXIT_SP                                                                                                                                               
+      END                                                                                                                                                        
+                                                                                                                                                        
+      IF @c_ColType = 'datetime' AND                                                                                                                              
+         ISDATE(@c_Value) <> 1                                                                                                                                    
+      BEGIN                                                                                                                                                      
+         IF @c_Value IN ('today','now', 'startofmonth', 'endofmonth', 'startofyear', 'endofyear')                       
+            OR LEFT(@c_Value,6) IN ('today+', 'today-')                                                                                                    
+         BEGIN                                                                                                                                                   
+            SET @c_Value =   
+                  CASE                                                                                     
+                     WHEN @c_Value = 'today'                                                                                                                       
+                     THEN LEFT(CONVERT(VARCHAR(30), GETDATE(), 120), 10)                                                                             
+                     WHEN LEFT(@c_Value,6) IN ('today+', 'today-') AND ISNUMERIC(SUBSTRING(@c_Value,7,10)) = 1    
+                     THEN LEFT(CONVERT(VARCHAR(30), DATEADD(DAY, CONVERT(INT,SUBSTRING(@c_Value,6,10)),GETDATE()), 120), 10)                   
+                     WHEN @c_Value = 'now'                                                                                                                         
+                     THEN CONVERT(VARCHAR(30), GETDATE(), 120)                                                                                                             
+                     WHEN @c_Value = 'startofmonth'                                                                                                                
+                     THEN CAST(DATEPART(YEAR, GETDATE()) AS VARCHAR(4)) + '-'                                                                        
+                     + ('0' + CAST(DATEPART(MONTH, GETDATE()) AS VARCHAR(2))) + ('-01')                                                           
+                     WHEN @c_Value = 'endofmonth'                                                                                                                  
+                     THEN CONVERT(VARCHAR(30), DATEADD(s,-1,DATEADD(mm, DATEDIFF(m,0,GETDATE())+1,0)), 120)                                          
+                     WHEN @c_Value = 'startofyear'                                                                                                                 
+                     THEN CAST(DATEPART(YEAR, GETDATE()) AS VARCHAR(4)) + '-01-01'                                                                   
+                     WHEN @c_Value = 'endofyear'         
+                     THEN CAST(DATEPART(YEAR, GETDATE()) AS VARCHAR(4)) + '-12-31 23:59:59'                                                          
+                     ELSE LEFT(CONVERT(VARCHAR(30), GETDATE(), 120), 10)                                                                                     
+                     END                                                                                                                                    
+         END                                                                                                                                                     
+         ELSE                                                                               
+         BEGIN                                                                                                                                                   
+            SET @n_Continue = 3  
+            SET @n_Err     = 556012      
+            SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err)   
+                           + ': Invalid Date Format: ' + @c_Value   
+                           + ' (lsp_Wave_BuildLoad)'   
+                              + '|' + @c_Value                                                                                                                                              
+            GOTO EXIT_SP                                                                                                                                            
+         END                                                                                                                                                     
+      END                                                                                            
+                                                                                                                                                              
+      IF @n_PreCondLevel < @n_CurrCondLevel                                                                                                                        
+      BEGIN                                                                                                                                                      
+         SET @c_SQLCond = @c_SQLCond + ' ' + CHAR(13) + ' ' + @c_OrAnd + N' ('                                                             
+         SET @n_PreCondLevel = @n_CurrCondLevel                                                                                                                    
+      END                                                                                                                                                        
+      ELSE IF @n_PreCondLevel > @n_CurrCondLevel                                                                                                                   
+      BEGIN                                                                                                                                                      
+         SET @c_SQLCond = @c_SQLCond + N') '  + CHAR(13) + ' ' + @c_OrAnd                                                                  
+         SET @n_PreCondLevel = @n_CurrCondLevel                                                                                                                    
+      END               
+      ELSE                                                                                                                                                       
+      BEGIN                                                                                                                                                      
+         SET @c_SQLCond = @c_SQLCond + ' ' + CHAR(13) + ' ' + @c_OrAnd                                                                     
+      END                                                                 
+           
+      IF @c_Operator = 'IN SQL'  
+      BEGIN  
+         SET @c_Operator = 'IN'  
+      END  
+
+      IF @c_Operator = 'NOT IN SQL'  
+      BEGIN  
+         SET @c_Operator = 'NOT IN'  
+      END  
+                                                                                                                                                     
+      IF @c_ColType IN ('char', 'nvarchar', 'varchar', 'nchar')                                                                                                       
+         SET @c_SQLCond = @c_SQLCond + ' ' + @c_FieldName + ' ' + @c_Operator +                                                                                   
+               CASE WHEN @c_Operator IN ( 'IN', 'NOT IN') THEN                                                                                                               
+                  CASE WHEN LEFT(RTRIM(LTRIM(@c_Value)),1) <> '(' THEN '(' ELSE '' END +                                                         
+                  RTRIM(LTRIM(@c_Value)) +                                                                                                                        
+                  CASE WHEN RIGHT(RTRIM(LTRIM(@c_Value)),1) <> ')' THEN ') ' ELSE '' END                                                                          
+               ELSE ' N' +                                                                                                                                       
+                  CASE WHEN LEFT(RTRIM(LTRIM(@c_Value)),1) <> '''' THEN '''' ELSE '' END +                                                                        
+                  RTRIM(LTRIM(@c_Value)) +                                          
+                  CASE WHEN RIGHT(RTRIM(LTRIM(@c_Value)),1) <> '''' THEN ''' ' ELSE '' END                                                                        
+               END                                                                                                                                               
+      ELSE IF @c_ColType IN ('float', 'money', 'int', 'decimal', 'numeric', 'tinyint', 'real', 'bigint')                                                          
+         SET @c_SQLCond = @c_SQLCond + ' ' + @c_FieldName + ' ' + @c_Operator  +   
+               CASE   
+               WHEN @c_Operator IN ( 'IN', 'NOT IN')  THEN                                                                                                                           
+                  CASE WHEN LEFT(RTRIM(LTRIM(@c_Value)),1) <> '(' THEN '(' ELSE '' END +                                                                          
+                  RTRIM(LTRIM(@c_Value)) +                                                                                                                        
+                  CASE WHEN RIGHT(RTRIM(LTRIM(@c_Value)),1) <> ')' THEN ') ' ELSE '' END      
+               WHEN @c_Operator IN ( 'LIKE', 'NOT LIKE' ) THEN               
+                  ' N' +                                                                                                                                       
+                  CASE WHEN LEFT(RTRIM(LTRIM(@c_Value)),1) <> '''' THEN '''' ELSE '' END +                                                                        
+                  RTRIM(LTRIM(@c_Value)) +                                          
+                  CASE WHEN RIGHT(RTRIM(LTRIM(@c_Value)),1) <> '''' THEN ''' ' ELSE '' END        
+               ELSE  
+                  RTRIM(@c_Value)      
+               END    
+      ELSE IF @c_ColType IN ('datetime')                                                                                                                          
+         SET @c_SQLCond = @c_SQLCond + ' ' + @c_FieldName + ' ' + @c_Operator + ' '''+ @c_Value + ''' '     
+  
+      IF @c_TableName = 'LOC' AND @c_SQLJoinLoc = ''
+      BEGIN  
+         SET @c_SQLJoinPick = 'JOIN PICKDETAIL (NOLOCK) ON PICKDETAIL.Orderkey = ORDERDETAIL.Orderkey'
+                            + ' AND PICKDETAIL.OrderLineNumber = ORDERDETAIL.OrderLineNumber'          
+         SET @c_SQLJoinLoc  = 'JOIN LOC (NOLOCK) ON LOC.Loc = PICKDETAIL.Loc'
+      END   
+  
+      IF @c_TableName = 'PICKDETAIL' AND @c_SQLJoinPick = '' 
+      BEGIN   
+         SET @c_SQLJoinPick = 'JOIN PICKDETAIL (NOLOCK) ON PICKDETAIL.Orderkey = ORDERDETAIL.Orderkey'
+                            + ' AND PICKDETAIL.OrderLineNumber = ORDERDETAIL.OrderLineNumber'
+      END  
+  
+      FETCH NEXT FROM @CUR_BUILD_COND INTO @n_CondLevel  
+                                          ,@c_FieldName  
+                                          ,@c_OrAnd  
+                                          ,@c_Operator  
+                                          ,@c_Value                                                             
+   END                                                                                                                                                           
+   CLOSE @CUR_BUILD_COND                                                                                                                                     
+   DEALLOCATE @CUR_BUILD_COND                                                                                                                                
+                                                                                                                                                                 
+   WHILE @n_PreCondLevel > 1                                                                                                                               
+   BEGIN                                                                                                                                                         
+      SET @c_SQLCond = @c_SQLCond + N') '                                                                                                                        
+      SET @n_PreCondLevel = @n_PreCondLevel - 1                                                                                                                    
+   END  
+   
+   IF @b_debug = 1
+   BEGIN
+      PRINT '@c_SQLCond: ' + @c_SQLCond  
+   END 
+   ------------------------------------------------------  
+   -- Get Build Wave Custom SP  
+   ------------------------------------------------------  
+   SET @c_SQL = ''                                                                                                                                        
+   SET @CUR_BUILD_SP = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR                                                                                             
+   SELECT BPD.[Value]                                                                                                                                    
+   FROM   BUILDPARMDETAIL BPD WITH (NOLOCK)                                                                                                                                 
+   WHERE  BPD.BuildParmKey = @c_BuildParmKey                                                                                                                                  
+   AND    BPD.[Type] =  'STOREDPROC'                                                                                                                                  
+   ORDER BY BPD.BuildParmLineNo                                                                                                                                                 
+                                                                                                    
+   OPEN @CUR_BUILD_SP                                                                                                                                        
+                                                                                                                                                              
+   FETCH NEXT FROM @CUR_BUILD_SP INTO @c_SQL                                                                                                           
+                                                                                                                                                              
+   WHILE @@FETCH_STATUS <> -1                                                                                                                                    
+   BEGIN                                                                                                                                                         
+      IF @c_SQL <> ''                                                                                                                                      
+      BEGIN                                                                                                                                                      
+         SET @c_SPName = @c_SQL                                                                                                                            
+         SET @n_idx = CHARINDEX(' ',@c_SQL, 1)                                                                                                             
+         IF @n_idx > 0                                                                                                
+         BEGIN                                                                                                                                                   
+            SET @c_SPName = SUBSTRING(@c_SQL,1, @n_idx - 1)                                                                                                
+         END     
+   
+         SET @c_SPParms = ''  
+         SELECT @c_SPParms = STRING_AGG(CONVERT(NVARCHAR(MAX),p.PARAMETER_NAME + '='  
+                                         + CASE WHEN p.PARAMETER_NAME='@c_ParmCodeCond' THEN '@c_SQLCond_SP'  
+                                                WHEN p.PARAMETER_NAME='@c_ParmCode' THEN '@c_BuildParmKey'  
+                                                WHEN p.PARAMETER_NAME='@n_NoOfOrderToRelease' THEN '@n_MaxLoadOrders'   
+                                                ELSE p.PARAMETER_NAME END)  
+                                          , ',' )  
+         WITHIN GROUP (ORDER BY p.ORDINAL_POSITION ASC)  
+         FROM [INFORMATION_SCHEMA].[PARAMETERS] AS p   
+         WHERE p.SPECIFIC_NAME = @c_SPName
+         AND p.PARAMETER_NAME NOT IN ('@c_Parm01', '@c_Parm02','@c_Parm03','@c_Parm04','@c_Parm05'
+                                     ,'@dt_StartDate', '@dt_EndDate'
+                                     )  
+         AND  CHARINDEX(p.PARAMETER_NAME, @c_SQL,1) = 0                             --2023-09-20         
+      END  
+                                                                                                                                                          
+      SET @c_SQL  = RTRIM(@c_SQL)                                                                                                                  
+                  + CASE WHEN CHARINDEX('@',@c_SQL, 1) > 0  THEN ',' ELSE ' ' END   
+                  + @c_SPParms
+                                                                                             
+      SET @c_SQLCond_SP = @c_SQLCond + ' AND ORDERS.Userdefine09 = ''' + @c_Wavekey + ''''
+      
+      SET @c_SQLParms= N'@c_Facility      NVARCHAR(5)'                                                                                                                  
+                     + ',@c_StorerKey     NVARCHAR(15)'    
+                     + ',@c_BuildParmKey  NVARCHAR(10)'                                                                                                                                         
+                     + ',@c_SQLCond_SP    NVARCHAR(MAX)'  
+                     + ',@n_MaxLoadOrders INT'                                                            
+
+      EXEC sp_executesql @c_SQL                                                                                     
+                        ,@c_SQLParms                                                                
+                        ,@c_Facility                                                                                                     
+                        ,@c_StorerKey                                                                                                    
+                        ,@c_BuildParmKey                                                                                                 
+                        ,@c_SQLCond_SP  
+                        ,@n_MaxLoadOrders                                                                 
+  
+      IF @@ERROR <> 0                                                                                                                                         
+      BEGIN                                                                                                                                                   
+         SET @n_Continue = 3     
+         SET @n_Err     = 556013       
+         SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err)   
+                        + ': ERROR Executing Stored Procedure: ' + RTRIM(@c_SPName)  
+                        + ' (lsp_Wave_BuildLoad)'   
+                        + '|' + RTRIM(@c_SPName)                
+         GOTO EXIT_SP                                                                                                                                            
+      END 
+      IF @c_SQLJoinTempOrd = '' 
+      BEGIN                                                                         
+         SET @c_SQLJoinTempOrd = 'JOIN #TMP_ORDERS TMP ON TMP.Orderkey = ORDERS.Orderkey'       
+      END                                                                                                                                              
+      FETCH NEXT FROM @CUR_BUILD_SP INTO @c_SQL                                                                                                        
+   END                                                                                                                                                           
+   CLOSE @CUR_BUILD_SP                                                                                                                                       
+   DEALLOCATE @CUR_BUILD_SP                                                         --(Wan07) - END                                                 
+    
    --------------------------------------------------
    -- Get Build Load By Sorting & Grouping Condition
    --------------------------------------------------
@@ -579,11 +867,13 @@ AS
          END                                                                                                                                                   
       END 
       
-      IF @c_TableName = 'LOC'                                                       --(Wan04) - START
-      BEGIN 
-         SET @b_JoinPickDetail = 1
-         SET @b_JoinLoc = 1
-      END                                                                           --(Wan04) - END                                      
+      IF @c_TableName = 'LOC' AND @c_SQLJoinLoc = ''                                --(Wan07) - START
+      BEGIN  
+         SET @c_SQLJoinPick = 'JOIN PICKDETAIL (NOLOCK) ON PICKDETAIL.Orderkey = ORDERDETAIL.Orderkey'
+                            + ' AND PICKDETAIL.OrderLineNumber = ORDERDETAIL.OrderLineNumber'          
+         SET @c_SQLJoinLoc  = 'JOIN LOC (NOLOCK) ON LOC.Loc = PICKDETAIL.Loc'
+      END                                                                           --(Wan07) - END 
+
       FETCH NEXT FROM @CUR_BUILD_SORT INTO @c_FieldName
                                           ,@c_Operator
                                           ,@c_ParmBuildType   
@@ -662,20 +952,23 @@ AS
       + CHAR(13) + 'JOIN ORDERS WITH (NOLOCK) ON WAVEDETAIL.OrderKey = ORDERS.OrderKey'  
       + CHAR(13) + 'JOIN ORDERDETAIL WITH (NOLOCK) ON ORDERS.OrderKey = ORDERDETAIL.OrderKey'  
       + CHAR(13) + 'JOIN SKU WITH (NOLOCK) ON ORDERDETAIL.Storerkey = SKU.Storerkey AND ORDERDETAIL.SKU = SKU.SKU' 
-      --(Wan04) - START
-      + CHAR(13) + CASE WHEN @b_JoinPickdetail = 0 THEN '' ELSE
-                  'JOIN PICKDETAIL WITH (NOLOCK) ON ORDERDETAIL.OrderKey = PICKDETAIL.OrderKey'
-      + CHAR(13) +                             ' AND ORDERDETAIL.OrderLineNumber = PICKDETAIL.OrderLineNumber' 
-                   END 
-      + CHAR(13) + CASE WHEN @b_JoinLoc = 0 THEN '' ELSE 'JOIN LOC WITH (NOLOCK) ON PICKDETAIL.Loc = LOC.LOc' END
-      --(Wan04) - END
+      --(Wan07) - START
+      + CHAR(13) + @c_SQLJoinPick
+      + CHAR(13) + @c_SQLJoinLoc   
+      + CHAR(13) + @c_SQLJoinTempOrd           
+      --+ CHAR(13) + CASE WHEN @b_JoinPickdetail = 0 THEN '' ELSE
+      --             'JOIN PICKDETAIL WITH (NOLOCK) ON ORDERDETAIL.OrderKey = PICKDETAIL.OrderKey'
+      --+ CHAR(13) +                             ' AND ORDERDETAIL.OrderLineNumber = PICKDETAIL.OrderLineNumber' 
+      --             END 
+      --+ CHAR(13) + CASE WHEN @b_JoinLoc = 0 THEN '' ELSE 'JOIN LOC WITH (NOLOCK) ON PICKDETAIL.Loc = LOC.LOc' END
+      --(Wan07) - END
       + CHAR(13) + 'WHERE WAVEDETAIL.Wavekey = @c_Wavekey'                          
       + CHAR(13) + 'AND ORDERS.StorerKey = @c_StorerKey'                                                                                           
       + CHAR(13) + 'AND ORDERS.Facility = @c_Facility'                                                                                               
       + CHAR(13) + 'AND ORDERS.Status < ''9''' 
       + CHAR(13) + 'AND (ORDERS.Loadkey IS NULL OR ORDERS.Loadkey = '''')'  
  
-   SET @c_SQLWhere = @c_SQLWhere 
+   SET @c_SQLWhere = @c_SQLWhere + @c_SQLCond                                       --(Wan07)
 
    SET @c_SQLGroupBy = CHAR(13) + N'GROUP BY'
                      + CHAR(13) +  'WAVEDETAIL.WaveDetailkey'
@@ -701,6 +994,10 @@ AS
 
    SET @c_SQL = @c_SQL + @c_SQLWhere + @c_SQLBuildByGroupWhere + @c_SQLGroupBy 
 
+   IF @b_debug = 1
+   BEGIN
+      PRINT '@c_SQL: ' + @c_SQL
+   END
 
    IF @c_SQLBuildByGroupWhere <> ''
    BEGIN
@@ -739,6 +1036,10 @@ AS
                               + CHAR(13) + ' GROUP BY ORDERS.Storerkey ' 
                               + CHAR(13) + @c_SQLFieldGroupBy
 
+      IF @b_debug = 1
+      BEGIN
+         PRINT '@c_SQLBuildByGroup: ' + @c_SQLBuildByGroup
+      END
       EXEC SP_EXECUTESQL @c_SQLBuildByGroup 
             , N'@c_StorerKey NVARCHAR(15), @c_Facility NVARCHAR(5), @c_WaveKey NVARCHAR(10)'  
             , @c_StorerKey                                                                                          
@@ -791,7 +1092,11 @@ START_BUILDLOAD:
       PRINT 'Time Cost:' + CONVERT(CHAR(12),@d_EndTime_Debug - @d_StartTime_Debug ,114)                                                                        
       PRINT '--2.Do Execute SQL Statement--'                                                                                                                   
       SET @d_StartTime_Debug = GETDATE()
-   END                                                                                                                                                         
+   END    
+   IF @b_debug = 1
+   BEGIN
+      PRINT 'Build Load @c_SQL: ' + @c_SQL
+   END                                                                                                                                                    
  
    SET @c_SQLParms= N'@c_Field01 NVARCHAR(60), @c_Field02 NVARCHAR(60), @c_Field03 NVARCHAR(60), @c_Field04 NVARCHAR(60)'
                   +', @c_Field05 NVARCHAR(60), @c_Field06 NVARCHAR(60), @c_Field07 NVARCHAR(60), @c_Field08 NVARCHAR(60)'
@@ -1170,7 +1475,12 @@ EXIT_SP:
       CLOSE CUR_LOADGRP
       DEALLOCATE CUR_LOADGRP
    END                                                                              --(Wan06) - END
-      
+   
+   IF OBJECT_ID('tempdb..#TMP_ORDERS','u') IS NOT NULL                              --(Wan07) - START   
+   BEGIN     
+      DROP TABLE #TMP_ORDERS
+   END                                                                              --(Wan07) - END     
+     
    IF @n_Continue = 3                                                                                                                                            
    BEGIN                                                                                                                                                       
       SET @b_Success = 0                                                                                                                                         
