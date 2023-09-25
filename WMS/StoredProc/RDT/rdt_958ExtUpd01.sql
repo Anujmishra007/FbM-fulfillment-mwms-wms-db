@@ -83,6 +83,22 @@ BEGIN
          WHERE S.StorerKey = @cStorerKey
          and cartontype = @cItemClass
 
+         
+         IF ISNULL(@cCartonType,'')=''
+         BEGIN
+           SELECT TOP 1
+               @cCartonType = CartonType,
+               @nCartonWeight = ISNULL( CartonWeight, 0),
+               @nCartonCube = ISNULL( Cube, 0),
+               @nCartonLength = ISNULL( CartonLength, 0),
+               @nCartonWidth  = ISNULL( CartonWidth, 0),
+               @nCartonHeight = ISNULL( CartonHeight, 0)
+            FROM Storer S WITH (NOLOCK)
+               JOIN Cartonization C WITH (NOLOCK) ON (S.CartonGroup = C.CartonizationGroup)
+            WHERE S.StorerKey = @cStorerKey
+            and cartontype = 'CTN'
+         END
+
          SELECT TOP 1 @nCartonNo=cartonno
          FROM PACKDETAIL (NOLOCK)
          WHERE pickslipno=@cPickSlipNo
