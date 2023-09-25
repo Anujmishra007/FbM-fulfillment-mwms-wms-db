@@ -12,7 +12,7 @@ GO
 /*                                                                      */                                                                                    
 /* Called By: SCE                                                       */                                                                                    
 /*          :                                                           */                                                                                    
-/* PVCS Version: 1.0                                                    */                                                                                    
+/* PVCS Version: 1.1                                                    */                                                                                    
 /*                                                                      */                                                                                    
 /* Version: 8.0                                                         */                                                                                    
 /*                                                                      */                                                                                    
@@ -21,6 +21,8 @@ GO
 /* Updates:                                                             */                                                                                    
 /* Date        Author   Ver.  Purposes                                  */    
 /* 2023-05-17  Wan      1.0   Created & DevOps Combine Script           */  
+/* 2023-08-17  Wan01    1.1   LFWM-4416 - UAT CN  Apply to both B2B and */
+/*                            B2C for SCE Build Wave Auto Build Load    */
 /************************************************************************/                                                                                    
 CREATE OR ALTER PROC [WM].[lsp_Build_Wave_Post]                                                                                                                         
    @n_BatchNo                 BIGINT 
@@ -55,9 +57,16 @@ BEGIN
          , @c_ExecCmd                  NVARCHAR(MAX)  = '' 
                                    
          , @c_SCEBuildWaveGenLoad      NVARCHAR(10)   = ''  
-         , @c_BuildWaveGenLoadParmKey  NVARCHAR(30)   = ''  
+         , @c_SCEBuildWaveGenLoad_Op5  NVARCHAR(MAX)  = ''                          --(Wan01) 
+         , @c_BuildWaveGenLoadParmKey  NVARCHAR(2000) = ''                         
+         , @c_AddGenLoadParmKey        NVARCHAR(1000) = ''                          --(Wan01)
                    
-         , @CUR_WAVE                   CURSOR  
+         , @CUR_WAVE                   CURSOR 
+         
+   DECLARE @t_WaveGenLoad              TABLE                                        --(Wan01) - START  
+         (  RowID                      INT   IDENTITY(1,1)  
+         ,  BuildParmKey               NVARCHAR(50) NOT NULL DEFAULT('')  
+         )                                                                          --(Wan01) - END    
            
    SET @b_Success = 1  
    SET @n_Err     = 0  
@@ -70,20 +79,35 @@ BEGIN
 
       SELECT @c_SCEBuildWaveGenLoad  = fsgr.Authority
             ,@c_BuildWaveGenLoadParmKey = ISNULL(fsgr.ConfigOption1,'')
+            ,@c_SCEBuildWaveGenLoad_Op5 = ISNULL(fsgr.ConfigOption5,'')                                        --(Wan01) - START
       FROM dbo.fnc_SelectGetRight(@c_Facility, @c_Storerkey, '', 'SCEBuildWaveGenLoad') AS fsgr 
-        
+
+      SET @c_AddGenLoadParmKey = ''
+      SELECT @c_AddGenLoadParmKey = dbo.fnc_GetParamValueFromString('@c_AddGenLoadParmKey', @c_SCEBuildWaveGenLoad_Op5, @c_AddGenLoadParmKey)
+       
+      IF @c_AddGenLoadParmKey <> '' AND @c_BuildWaveGenLoadParmKey <> ''
+      BEGIN
+         SET @c_BuildWaveGenLoadParmKey = @c_BuildWaveGenLoadParmKey + ',' + @c_AddGenLoadParmKey
+      END                                                                                                     --(Wan01) - END
+              
       IF @c_SCEBuildWaveGenLoad IN ( '', '0' ) OR @c_BuildWaveGenLoadParmKey = ''  
       BEGIN  
          GOTO EXIT_SP   
       END  
         
+      INSERT INTO @t_WaveGenLoad (BuildParmKey)
+      SELECT ss.[value]
+      FROM STRING_SPLIT(@c_BuildWaveGenLoadParmKey,',') AS ss 
+      ORDER BY ss.[value]
+      
       IF NOT EXISTS (SELECT 1   
                      FROM dbo.BUILDPARMGROUPCFG AS b WITH (NOLOCK)         
-                     JOIN dbo.BUILDPARM AS b2 (NOLOCK) ON b2.ParmGroup = b.ParmGroup    
+                     JOIN dbo.BUILDPARM AS b2 (NOLOCK) ON b2.ParmGroup = b.ParmGroup  
+                     JOIN @t_WaveGenLoad AS twgl ON twgl.BuildParmKey = b2.BuildParmKey                        --(Wan01)
                      WHERE b.Facility = @c_Facility  
                      AND b.Storerkey = @c_Storerkey  
                      AND b.[Type] = 'WaveBuildLoad'  
-                     AND b2.BuildParmKey = @c_BuildWaveGenLoadParmKey  
+                     --AND b2.BuildParmKey = @c_BuildWaveGenLoadParmKey                                        --(Wan01)
                      )  
       BEGIN   
          SET @n_Continue = 3  
@@ -119,62 +143,76 @@ BEGIN
            
       WHILE @@FETCH_STATUS <> - 1 AND @n_Continue = 1  
       BEGIN  
-         IF @n_BackEndProcess = 1   
-         BEGIN   
-            SET @c_CallType= 'WM.lsp_Build_Wave_Post'  
-            SET @c_ExecCmd = 'WM.lsp_Wave_BuildLoad'  
-                           + ' @c_Wavekey  = ''' + @c_Wavekey  + ''''  
-                           + ',@c_Facility = ''' + @c_Facility + ''''                                                                                                                    
-                           + ',@c_StorerKey= ''' + @c_StorerKey+ ''''        
-                           + ',@b_Success = @b_Success OUTPUT'  
-                           + ',@n_Err = @n_Err OUTPUT'  
-                           + ',@c_ErrMsg = @c_Errmsg OUTPUT'  
-                           + ',@c_UserName = ''' + @c_UserName + ''''  
-                           + ',@b_debug = 0'    
-                           + ',@c_WaveBuildLoadParmkey  = ''' + @c_BuildWaveGenLoadParmKey + ''''  
-           
-            SET @c_DocumentKey1 = @c_WaveKey  
-   
-            EXEC [WM].[lsp_BackEndProcess_Submit]                                                                                                                       
-               @c_Storerkey      = @c_Storerkey  
-            ,  @c_ModuleID       = 'Wave'   
-            ,  @c_DocumentKey1   = @c_DocumentKey1    
-            ,  @c_DocumentKey2   = ''        
-            ,  @c_DocumentKey3   = ''        
-            ,  @c_ProcessType    = @c_ProcessType     
-            ,  @c_SourceType     = @c_SourceType      
-            ,  @c_CallType       = @c_CallType  
-            ,  @c_RefKey1        = ''        
-            ,  @c_RefKey2        = ''        
-            ,  @c_RefKey3        = ''     
-            ,  @c_ExecCmd        = @c_ExecCmd    
-            ,  @c_StatusMsg      = 'Submitted to BackEndProcessQueue.'  
-            ,  @b_Success        = @b_Success   OUTPUT    
-            ,  @n_err            = @n_err       OUTPUT                                                                                                               
-            ,  @c_ErrMsg         = @c_ErrMsg    OUTPUT    
-            ,  @c_UserName       = ''   
-           
-            IF @b_Success = 0   
-            BEGIN  
-               SET @n_Continue = 3  
-               SET @n_err = 561652  
-               SET @c_ErrMsg = 'NSQL'+ CONVERT(Char(6),@n_err) + ': Error Executing WM.lsp_BackEndProcess_Submit'  
-                     + '. (lsp_Build_Wave_Post) ( ' + @c_ErrMsg + ' )'  
-            END  
-         END  
-         ELSE  
+         SET @c_BuildWaveGenLoadParmKey= ''
+         WHILE 1 = 1                                                                                           --(Wan01) - START 
          BEGIN  
-            EXEC [WM].[lsp_Wave_BuildLoad]                                                                                                                         
-                  @c_Wavekey              = @c_Wavekey           
-               ,  @c_Facility             = @c_Facility                                                                                                                      
-               ,  @c_StorerKey            = @c_StorerKey         
-               ,  @b_Success              = @b_Success         OUTPUT    
-               ,  @n_err                  = @n_err             OUTPUT                                                                                                               
-               ,  @c_ErrMsg               = @c_ErrMsg          OUTPUT   
-               ,  @c_UserName             = @c_UserName                        
-               ,  @b_debug                = @b_debug      
-               ,  @c_WaveBuildLoadParmkey = @c_BuildWaveGenLoadParmKey                    
-         END     
+            SELECT TOP 1 @c_BuildWaveGenLoadParmKey = twgl.BuildParmKey  
+            FROM @t_WaveGenLoad AS twgl  
+            WHERE twgl.BuildParmKey > @c_BuildWaveGenLoadParmKey  
+            ORDER BY twgl.BuildParmKey   
+        
+            IF @@ROWCOUNT = 0   
+            BEGIN  
+               BREAK  
+            END  
+            
+            IF @n_BackEndProcess = 1   
+            BEGIN   
+               SET @c_CallType= 'WM.lsp_Build_Wave_Post'  
+               SET @c_ExecCmd = 'WM.lsp_Wave_BuildLoad'  
+                              + ' @c_Wavekey  = ''' + @c_Wavekey  + ''''  
+                              + ',@c_Facility = ''' + @c_Facility + ''''                                                                                                                    
+                              + ',@c_StorerKey= ''' + @c_StorerKey+ ''''        
+                              + ',@b_Success = @b_Success OUTPUT'  
+                              + ',@n_Err = @n_Err OUTPUT'  
+                              + ',@c_ErrMsg = @c_Errmsg OUTPUT'  
+                              + ',@c_UserName = ''' + @c_UserName + ''''  
+                              + ',@b_debug = 0'    
+                              + ',@c_WaveBuildLoadParmkey  = ''' + @c_BuildWaveGenLoadParmKey + ''''  
+           
+               SET @c_DocumentKey1 = @c_WaveKey  
+   
+               EXEC [WM].[lsp_BackEndProcess_Submit]                                                                                                                       
+                  @c_Storerkey      = @c_Storerkey  
+               ,  @c_ModuleID       = 'Wave'   
+               ,  @c_DocumentKey1   = @c_DocumentKey1    
+               ,  @c_DocumentKey2   = ''        
+               ,  @c_DocumentKey3   = ''        
+               ,  @c_ProcessType    = @c_ProcessType     
+               ,  @c_SourceType     = @c_SourceType      
+               ,  @c_CallType       = @c_CallType  
+               ,  @c_RefKey1        = ''        
+               ,  @c_RefKey2        = ''        
+               ,  @c_RefKey3        = ''     
+               ,  @c_ExecCmd        = @c_ExecCmd    
+               ,  @c_StatusMsg      = 'Submitted to BackEndProcessQueue.'  
+               ,  @b_Success        = @b_Success   OUTPUT    
+               ,  @n_err            = @n_err       OUTPUT                                                                                                               
+               ,  @c_ErrMsg         = @c_ErrMsg    OUTPUT    
+               ,  @c_UserName       = ''   
+           
+               IF @b_Success = 0   
+               BEGIN  
+                  SET @n_Continue = 3  
+                  SET @n_err = 561652  
+                  SET @c_ErrMsg = 'NSQL'+ CONVERT(Char(6),@n_err) + ': Error Executing WM.lsp_BackEndProcess_Submit'  
+                        + '. (lsp_Build_Wave_Post) ( ' + @c_ErrMsg + ' )'  
+               END  
+            END  
+            ELSE  
+            BEGIN  
+               EXEC [WM].[lsp_Wave_BuildLoad]                                                                                                                         
+                     @c_Wavekey              = @c_Wavekey           
+                  ,  @c_Facility             = @c_Facility                                                                                                                      
+                  ,  @c_StorerKey            = @c_StorerKey         
+                  ,  @b_Success              = @b_Success         OUTPUT    
+                  ,  @n_err                  = @n_err             OUTPUT                                                                                                               
+                  ,  @c_ErrMsg               = @c_ErrMsg          OUTPUT   
+                  ,  @c_UserName             = @c_UserName                        
+                  ,  @b_debug                = @b_debug      
+                  ,  @c_WaveBuildLoadParmkey = @c_BuildWaveGenLoadParmKey                    
+            END  
+         END                                                                                                   --(Wan01) - END      
          FETCH NEXT FROM @CUR_WAVE INTO @c_Wavekey              
       END    
    END TRY  

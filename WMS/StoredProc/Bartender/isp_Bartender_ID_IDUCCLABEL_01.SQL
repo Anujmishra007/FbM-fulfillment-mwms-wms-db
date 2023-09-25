@@ -1,24 +1,21 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_Bartender_ID_IDUCCLABEL_01]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_Bartender_ID_IDUCCLABEL_01]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /******************************************************************************/               
 /* Copyright: IDS                                                             */               
 /* Purpose: BarTender Filter by ShipperKey                                    */               
 /*                                                                            */               
 /* Modifications log:                                                         */               
 /*                                                                            */               
-/* Date       Rev  Author     Purposes                                        */               
-/* 2021-08-09 1.0  CSCHONG    Created(WMS-15530)                              */  
-/* 2021-11-01 1.1  CSCHONG    Devops Scripts combine                          */   
+/* Date        Rev  Author     Purposes                                       */               
+/* 2021-08-09  1.0  CSCHONG    Created(WMS-15530)                             */  
+/* 2021-11-01  1.1  CSCHONG    Devops Scripts combine                         */   
+/* 19-Sep-2023 1.2  WLChooi    WMS-23705 - Change Col08 (WL01)                */
 /******************************************************************************/              
                 
-CREATE PROC [dbo].[isp_Bartender_ID_IDUCCLABEL_01]                     
+CREATE OR ALTER PROC [dbo].[isp_Bartender_ID_IDUCCLABEL_01]                     
 (  @c_Sparm1            NVARCHAR(250),            
    @c_Sparm2            NVARCHAR(250),            
    @c_Sparm3            NVARCHAR(250),            
@@ -42,9 +39,8 @@ BEGIN
    DECLARE                    
       @c_SQL             NVARCHAR(4000),            
       @c_SQLJOIN         NVARCHAR(4000)   
-   
 
-  DECLARE @d_Trace_StartTime   DATETIME, 
+   DECLARE @d_Trace_StartTime  DATETIME, 
            @d_Trace_EndTime    DATETIME,
            @c_Trace_ModuleName NVARCHAR(20), 
            @d_Trace_Step1      DATETIME, 
@@ -57,10 +53,9 @@ BEGIN
    SET @c_Trace_ModuleName = ''
       
     -- SET RowNo = 0           
-    SET @c_SQL = ''      
-        
-            
-    CREATE TABLE [#Result] (           
+   SET @c_SQL = ''      
+       
+   CREATE TABLE [#Result] (           
       [ID]    [INT] IDENTITY(1,1) NOT NULL,                          
       [Col01] [NVARCHAR] (80) NULL,            
       [Col02] [NVARCHAR] (80) NULL,            
@@ -122,12 +117,11 @@ BEGIN
       [Col58] [NVARCHAR] (80) NULL,            
       [Col59] [NVARCHAR] (80) NULL,            
       [Col60] [NVARCHAR] (80) NULL           
-     )          
-                
-          
-  SET @c_SQLJOIN = +' SELECT DISTINCT OH.ExternOrderKey ,OI.EcomOrderID,OH.Orderkey,SUM(PD.qty),PD.Cartonno ,'    --5      
+   )          
+      
+   SET @c_SQLJOIN = +' SELECT DISTINCT OH.ExternOrderKey ,OI.EcomOrderID,OH.Orderkey,SUM(PD.qty),PD.Cartonno ,'    --5      
              + CHAR(13) +         
-             +' PH.TTLCNTS,PD.Labelno,CONVERT(NVARCHAR(10),PH.Editdate,103),'''','''','  --10    
+             +' PH.TTLCNTS,PD.Labelno,CONVERT(NVARCHAR(10),OH.AddDate,103),'''','''','  --10   --WL01    
              + CHAR(13) +        
              +''''','''','''','''','''','+ CHAR(13) +     --15   
              +''''','''','''','''','''', '
@@ -143,20 +137,20 @@ BEGIN
              +' JOIN ORDERS OH WITH (NOLOCK) ON OH.Orderkey = PH.Orderkey ' 
              +' JOIN OrderInfo OI WITH (NOLOCK) ON OI.Orderkey = OH.Orderkey' 
              +' WHERE PH.Pickslipno = @c_Sparm1 '    
-             + ' AND PD.cartonno  = @c_Sparm2 '
-             + ' GROUP BY OH.ExternOrderKey ,OI.EcomOrderID,OH.Orderkey,PD.Cartonno,PH.TTLCNTS,PD.Labelno,CONVERT(NVARCHAR(10),PH.Editdate,103) '  
+             +' AND PD.cartonno  = @c_Sparm2 '
+             +' GROUP BY OH.ExternOrderKey,OI.EcomOrderID,OH.Orderkey,PD.Cartonno,PH.TTLCNTS,PD.Labelno,CONVERT(NVARCHAR(10),OH.AddDate,103) '   --WL01
         
-         IF @b_debug=1      
-         BEGIN      
-            PRINT @c_SQLJOIN        
-         END              
+   IF @b_debug=1      
+   BEGIN      
+      PRINT @c_SQLJOIN        
+   END              
             
-  SET @c_SQL='INSERT INTO #Result (Col01,Col02,Col03,Col04,Col05, Col06,Col07,Col08,Col09'  + CHAR(13) +         
+   SET @c_SQL='INSERT INTO #Result (Col01,Col02,Col03,Col04,Col05, Col06,Col07,Col08,Col09'  + CHAR(13) +         
              +',Col10,Col11,Col12,Col13,Col14,Col15,Col16,Col17,Col18,Col19,Col20,Col21,Col22'  + CHAR(13) +         
              +',Col23,Col24,Col25,Col26,Col27,Col28,Col29,Col30,Col31,Col32,Col33,Col34' + CHAR(13) +         
              +',Col35,Col36,Col37,Col38,Col39,Col40,Col41,Col42,Col43,Col44'  + CHAR(13) +         
              +',Col45,Col46,Col47,Col48,Col49,Col50,Col51,Col52,Col53,Col54'+ CHAR(13) +         
-             + ',Col55,Col56,Col57,Col58,Col59,Col60) '        
+             +',Col55,Col56,Col57,Col58,Col59,Col60) '        
   
    SET @c_SQL = @c_SQL + @c_SQLJOIN      
       
@@ -164,22 +158,21 @@ BEGIN
                           + ', @c_Sparm2           NVARCHAR(80) '        
                           + ', @c_Sparm3           NVARCHAR(80)'       
        
-                             
-                             
    EXEC sp_ExecuteSql     @c_SQL         
                         , @c_ExecArguments        
                         , @c_Sparm1        
                         , @c_Sparm2       
                         , @c_Sparm3   
       
-IF @b_debug=1      
-BEGIN        
-   PRINT @c_SQL        
-END      
-IF @b_debug=1      
-BEGIN      
-  SELECT * FROM #Result (nolock)      
-END     
+   IF @b_debug=1      
+   BEGIN        
+      PRINT @c_SQL        
+   END   
+   
+   IF @b_debug=1      
+   BEGIN      
+      SELECT * FROM #Result (nolock)      
+   END     
 
    SET @d_Trace_EndTime = GETDATE()
    SET @c_UserName = SUSER_SNAME()
@@ -203,9 +196,9 @@ END
    --   @n_Err = 0,
    --   @c_ErrMsg = ''            
  
-select * from #result WITH (NOLOCK)
+   SELECT * FROM #result WITH (NOLOCK)
                                 
 END -- procedure
 GO
-GRANT EXECUTE ON [dbo].[isp_Bartender_ID_IDUCCLABEL_01] TO nSQL 
+GRANT EXECUTE ON [dbo].[isp_Bartender_ID_IDUCCLABEL_01] TO [nSQL] 
 GO

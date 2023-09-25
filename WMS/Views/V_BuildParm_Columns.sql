@@ -13,7 +13,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 2.1                                                    */
+/* PVCS Version: 2.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -39,6 +39,8 @@ GO
 /*                            parameter                                 */
 /* 2023-04-17  Wan07    2.0   LFWM-3978-[CN] LULU_OrderParam_Sort by LOC*/
 /* 2023-05-26  Wan08    2.1   LFWM-4297 - PROD - CN WaveParm_Sort by LOC*/
+/* 2023-06-23  Wan09    2.2   LFWM-4176 - CN UAT  Split wave into loads */
+/*                            based on customized SP                    */
 /************************************************************************/
 CREATE OR ALTER VIEW V_BuildParm_Columns AS
 SELECT BuildParmType = 'BUILDLOADPARM'
@@ -203,13 +205,28 @@ AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho','AddDate', 'ArchiveC
                            ,'BatchNo', 'TMSStatus', 'DoorBookStatus', 'ReplenishStatus', 'TMReleaseFlag')
 AND Col.Data_Type IN ('char', 'nvarchar', 'varchar','datetime')
 UNION ALL
+SELECT BuildParmType = 'WAVEBUILDLOAD'                                           --(Wan09) - START
+      ,CondType  = 'CONDITION'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC')      
+AND Col.COLUMN_NAME NOT IN ('EditWho', 'EditDate', 'AddWho', 'ArchiveCop', 'TrafficCop')
+AND Col.TABLE_NAME + '.' + Col.COLUMN_NAME NOT IN('ORDERINFO.Adddate','ORDERINFO.Orderkey','SKU.AddDate','PICKDETAIL.AddDate','LOC.AddDate')
+UNION ALL                                                                        
+SELECT BuildParmType = 'BUILDLOADPARM'
+      ,CondType = 'CONDITION'
+      ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
+FROM INFORMATION_SCHEMA.COLUMNS Col
+WHERE Col.TABLE_NAME IN ('ORDERDETAIL')
+AND Col.COLUMN_NAME IN ('StorerKey', 'SKU')
+UNION ALL                                                                        --(Wan09) - END                                                                                                                      
 SELECT BuildParmType = 'WAVEBUILDLOAD'                                           --(Wan03)
       ,CondType  = 'SORT'
       ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
 FROM INFORMATION_SCHEMA.COLUMNS Col
 WHERE Col.TABLE_NAME IN ('ORDERDETAIL')
 AND Col.COLUMN_NAME IN ('SKU')
-UNION ALL                                                                         --(Wan07) - START
+UNION ALL                                                                        --(Wan07) - START
 SELECT BuildParmType = 'WAVEBUILDLOAD'                                          
       ,CondType  = 'SORT'
       ,FieldName= UPPER(Col.TABLE_NAME + '.' + Col.COLUMN_NAME)
