@@ -16,6 +16,8 @@ GO
 /* 13-09-2019 1.4  Ung         WMS-9050 Add Pick, PackDetail filter     */
 /* 27-03-2023 1.5  Ung         WMS-21946 Add multi PickDetail.Status    */
 /* 13-07-2023 1.6  Ung         WMS-23050 Change error message to popup  */
+/* 15-09-2023 1.7  Ung         WMS-23620 Add PackByFromDropID to fix    */
+/*                             over pack when use FromDropID            */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_Pack_Validate (
@@ -101,6 +103,7 @@ BEGIN
    DECLARE @cPickStatus NVARCHAR( 20)
    DECLARE @nPackQTY    INT
    DECLARE @nPickQTY    INT
+   DECLARE @cPackByFromDropID NVARCHAR( 1)
 
    SET @cOrderKey = ''
    SET @cLoadKey = ''
@@ -119,7 +122,8 @@ BEGIN
    -- Check QTY
    IF @cType = 'QTY'
    BEGIN
-      -- Get PickStatus
+      -- Get storer config
+      SET @cPackByFromDropID = rdt.rdtGetConfig( @nFunc, 'PackByFromDropID', @cStorerKey)
       SET @cPickStatus = rdt.rdtGetConfig( @nFunc, 'PickStatus', @cStorerKey)
       
       -- Add default PickStatus 5-picked, if not specified
@@ -165,7 +169,7 @@ BEGIN
          ' WHERE PD.PickSlipNo = @cPickSlipNo ' + 
             ' AND PD.StorerKey = @cStorerKey ' + 
             ' AND PD.SKU = @cSKU '  + 
-            CASE WHEN @cFromDropID <> '' THEN ' AND PD.DropID = @cFromDropID ' ELSE '' END + 
+            CASE WHEN @cFromDropID <> '' AND @cPackByFromDropID = '1' THEN ' AND PD.DropID = @cFromDropID ' ELSE '' END + 
             CASE WHEN @cPackFilter <> '' THEN @cPackFilter ELSE '' END
       SET @cSQLParam = 
          ' @cPickSlipNo NVARCHAR( 10), ' + 
