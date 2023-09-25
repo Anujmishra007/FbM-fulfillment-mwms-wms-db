@@ -23,6 +23,7 @@ GO
 /* Updates:                                                             */    
 /* Date         Author  Ver.  Purposes                                  */ 
 /* 28-Dec-2021  WLChooi 1.0   DevOps Combine Script                     */
+/* 19-Sep-2023  NJOW01  1.1   WMS-23723 Generate transmitlog2           */
 /************************************************************************/    
 CREATE OR ALTER PROC [dbo].[ispPOA21]      
      @c_OrderKey    NVARCHAR(10) = ''   
@@ -51,7 +52,17 @@ BEGIN
           , @n_ExistCount    INT = 0
           , @c_ExecArguments NVARCHAR(4000)
           , @c_Data          NVARCHAR(250) = '' 
-                                                                                        
+   
+   --NJOW01       
+   DECLARE  @c_option1        NVARCHAR(50)  
+          , @c_option2        NVARCHAR(50)
+          , @c_option3        NVARCHAR(50)
+          , @c_option4        NVARCHAR(50)
+          , @c_option5        NVARCHAR(4000)
+          , @c_authority      NVARCHAR(30)
+          , @c_Key2           NVARCHAR(10)             
+          , @c_GenTranmitlog2 NVARCHAR(5) = 'N'
+                                                                                                  
    SELECT @n_StartTCnt = @@TRANCOUNT , @n_Continue = 1, @b_Success = 1, @n_Err = 0, @c_ErrMsg = ''    
    
    IF @n_Continue IN (1,2)
@@ -86,6 +97,34 @@ BEGIN
       WHERE CL.LISTNAME = 'POSTALLOCA'
       AND CL.CODE = @c_Facility
       AND CL.Storerkey = @c_Storerkey          
+      
+      --NJOW01 S
+      SELECT @b_success = 0
+
+      Execute nspGetRight                                
+       @c_Facility  = @c_facility,                     
+       @c_StorerKey = @c_StorerKey,                    
+       @c_sku       = '',                          
+       @c_ConfigKey = 'PostAllocationSP',     
+       @b_Success   = @b_success   OUTPUT,             
+       @c_authority = @c_authority OUTPUT,             
+       @n_err       = @n_err       OUTPUT,             
+       @c_errmsg    = @c_errmsg    OUTPUT,             
+       @c_Option1   = @c_option1   OUTPUT,  --table name        
+       @c_Option2   = @c_option2   OUTPUT,             
+       @c_Option3   = @c_option3   OUTPUT,               
+       @c_Option4   = @c_option4   OUTPUT,               
+       @c_Option5   = @c_option5   OUTPUT   
+       
+       SELECT @c_GenTranmitlog2 = dbo.fnc_GetParamValueFromString('@c_GenTranmitlog2', @c_option5, @c_GenTranmitlog2)
+       
+       IF ISNULL(@c_Option1,'') = '' AND @c_GenTranmitlog2 = 'Y'
+       BEGIN
+          SELECT @n_Continue = 3                                                                                                                                                              
+          SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 65000   -- Should Be Set To The SQL Errmessage but I don't know how to do so.                                            
+          SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Tablename not Setup at storerconfig.option1 of PostAllocationSP. (ispPOA21)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '                    	
+       END             
+       --NJOW01 E
    END                                        
    
    IF @n_continue IN(1,2)   
@@ -230,6 +269,38 @@ BEGIN
                                     , @c_UDF01
             END
          END
+         
+         IF @c_GenTranmitlog2 = 'Y'
+         BEGIN
+          	SET @c_Key2 = ''
+          	
+          	EXEC dbo.nspg_GetKey                
+                @KeyName = 'ispPOA21'    
+               ,@fieldlength = 10    
+               ,@keystring = @c_Key2 OUTPUT    
+               ,@b_Success = @b_success OUTPUT    
+               ,@n_err = @n_err OUTPUT    
+               ,@c_errmsg = @c_errmsg OUTPUT
+               ,@b_resultset = 0    
+               ,@n_batch     = 1                  
+          
+            EXEC ispGenTransmitLog2                                             
+                 @c_TableName     = @c_Option1,                                        
+                 @c_Key1          = @c_Orderkey,                                        
+                 @c_Key2          = @c_Key2,               
+                 @c_Key3          = @c_Storerkey,                                        
+                 @c_TransmitBatch = 'N',                                        
+                 @b_Success       = @b_Success OUTPUT,                                   
+                 @n_err           = @n_err     OUTPUT,                                   
+                 @c_errmsg        = @c_errmsg  OUTPUT  
+               
+             IF @b_Success <> 1                                                                                                                                                               
+             BEGIN                                                                                                                                                                                  
+                SELECT @n_Continue = 3                                                                                                                                                              
+                SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 65010   -- Should Be Set To The SQL Errmessage but I don't know how to do so.                                            
+                SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Generate Transmitlog2 Failed. (ispPOA21)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '             
+             END           	
+         END         
 
          FETCH NEXT FROM CUR_ORDERKEY INTO @c_Orderkey  
       END
