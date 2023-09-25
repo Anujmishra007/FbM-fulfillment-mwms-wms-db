@@ -11,6 +11,7 @@ GO
 /*                                                                            */
 /* Date        Author    Ver.  Purposes                                       */
 /* 2023-05-04  Yeekung   1.0   WMS-22369 Created                              */
+/* 2023-08-02  YeeKung   1.1   WMS-22921 Update UCC status (yeekung01)        */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_600RcvCfm15 (
@@ -172,15 +173,27 @@ BEGIN
       IF @nErrNo <> 0
          GOTO RollBackTran
 
-      SELECT @cExternReceiptKey = ExternReceiptKey
+      SELECT @cExternReceiptKey = ExternReceiptKey,
+            @cLottable01 = Lottable01,
+            @cLottable02 = Lottable02,
+            @cLottable03 = Lottable03,
+            @cLottable06 = Lottable06,
+            @cLottable07 = Lottable07,
+            @cLottable08 = Lottable08,
+            @cLottable09 = Lottable09
       FROM Receiptdetail (nolock) 
       where receiptkey = @cReceiptKey
          AND storerkey =  @cStorerKey
          AND ReceiptLineNumber = @cReceiptLineNumberOutput
 
       UPDATE ucc WITH (ROWLOCK)
-      SET userdefined09= @cBOX,
-          ExternKey = @cExternReceiptKey
+      SET   userdefined01 = @cLottable01,
+            userdefined02 = @cLottable02,
+            userdefined06 = @cLottable06,
+            userdefined07 = @cLottable06,
+            userdefined08 = @cLottable08,
+            userdefined09 = @cLottable09,
+            ExternKey = @cExternReceiptKey
       where UCCNo=@cUCC
          AND storerkey = @cStorerKey
 

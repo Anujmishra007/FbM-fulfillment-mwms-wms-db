@@ -10,6 +10,7 @@ GO
 /*                                                                            */
 /* Date         Author    Ver.  Purposes                                      */
 /* 25-05-2023  yeekung    1.0   WMS-22369 Created                             */
+/* 26-06-2023  yeekung    1.1   WMS-22921 change count UCC                    */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_600ExtInfo07]
@@ -64,13 +65,14 @@ BEGIN
          DECLARE @nTTlUCC INT
          SELECT 
             @nTTlUCC = Count(*)
-         FROM UCC WITH (NOLOCK)
-         WHERE ReceiptKey = @cReceiptKey
-            AND Storerkey = @cStorerKey
-            AND Status = '1'
+         FROM UCC UCC WITH (NOLOCK) 
+         JOIN   Receipt   R   (Nolock)   ON   UCC.ExternKey   = R.ExternReceiptKey AND R.Storerkey  = UCC.Storerkey 
+         WHERE R.ReceiptKey = @cReceiptKey
+            AND R.Storerkey = @cStorerKey
+            AND UCC.ID = @cID --(yeekung01)
 
          -- Show statistic
-         SET @cExtendedInfo = 'Total UCC:' + CAST (@nTTlUCC AS NVARCHAR(5))
+         SET @cExtendedInfo = 'UCC/ID:' + CAST (@nTTlUCC AS NVARCHAR(5))
       END
    END
 END
