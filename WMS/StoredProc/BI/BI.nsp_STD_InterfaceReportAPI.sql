@@ -11,6 +11,7 @@ DATE				VER		CREATEDBY   PURPOSE
 01-Apr-2022		1.2     gywong			Modified https://jiralfl.atlassian.net/browse/WMS-19292
 01-June-2022    1.3     JarekLim        Added Query column for IT reference checking  https://jiralfl.atlassian.net/browse/WMS-19745
 01-June-2022    1.3     JAM             Added new condition WSC.HTTPSTATUSCODE<>'200'  https://jiralfl.atlassian.net/browse/WMS-22853
+26-Sept-2023    1.4     Crisnah     Added wolinbound_log table for extracting incoming payload https://jiralfl.atlassian.net/browse/WMS-23741
 ************************************************************************/
 -- Test:   EXEC BI.nsp_STD_InterfaceReportAPI 'YLEO','5246','','2021-04-01','2021-10-01'
 -- Test:   EXEC BI.nsp_STD_InterfaceReportAPI '','','','',''
@@ -54,8 +55,9 @@ DECLARE
 	, @C_WSDTCOUNT INTEGER		-- COUNT OF DATA FROM TEMP TABLE LIST
 	, @C_PKEY NVARCHAR(50)		-- PRIMARY/REFERENCE KEY COLUMN NAME EACH TABLE
 	, @C_QRY NVARCHAR(500)		-- QUERY PRINT RESULT
+   , @C_DIR NVARCHAR(500)		-- INBOUND / OUTBOUND
 
-	SET @C_ITFDESCR = (select DESCR from WOL_ItfConfig WITH (NOLOCK) WHERE DATASTREAM=@PARAM_GENERIC_DATASTREAM)
+	(select @C_ITFDESCR=DESCR, @C_DIR=ITFTYPE from WOL_ItfConfig WITH (NOLOCK) WHERE DATASTREAM=@PARAM_GENERIC_DATASTREAM)
 
 	IF DATEDIFF(HOUR,@PARAM_GENERIC_TRANSACTIONDATEFROM,@PARAM_GENERIC_TRANSACTIONDATETO) > 24
 	   BEGIN -- CHECKPOINT: TO LIMIT DATETIME RANGE TO EQUAL OR LESS THAN 24 HRS
@@ -135,36 +137,37 @@ WHILE (@C_CTR <= @C_WSDTCOUNT) -- START LOOP HERE
 	END
 
 -- SELECT * FROM #TMP_WSDTITF
+   SELECT TOP 1 @STMT = ITF_QUERY FROM #TMP_WSDTITF
 
 	 SELECT
 		TW.ITF_TYPE as 'Interface Type'
 		, TW.ITF_DATASTREAM as 'DataStream'
 		, TW.ITF_DIRECTION as 'Header Flag'
 		, TW.ITF_WSDTKEY AS 'WSDTKey'
-		, W.Direction AS 'Direction'
+		, CASE WHEN @C_DIR='I' THEN CASE WHEN ISNULL(WI.Direction,'')='' THEN WI2.Direction ELSE WI.Direction END ELSE WO.Direction END AS 'Direction'
 		, TW.ITF_REFCOLUMN AS 'Reference Column.'
 		, TW.ITF_ORDERNO AS 'Reference No.'
 		, TW.ITF_ORDERGRP AS 'Group ID'
-		, W.BATCHNO AS 'BatchNo.'
-		, CASE WHEN TW.ITF_STATUS='9' THEN 'Successful'
-			WHEN TW.ITF_STATUS='5' THEN 'Error'
-			ELSE 'In-Progress' END AS 'WSDT_Status'
-		, CASE WHEN W.STATUS='9' THEN 'Successful'
-			WHEN W.STATUS='5' THEN 'Error'
-			ELSE 'In-Progress' END AS 'WOL_Status'
+		, CASE WHEN @C_DIR='I' THEN CASE WHEN ISNULL(WI.BATCHNO,'')='' THEN WI2.BATCHNO ELSE WI.BATCHNO END ELSE WO.BATCHNO END AS 'BatchNo.'
+		, TW.ITF_STATUS AS 'WSDT_Status'
+		, CASE WHEN @C_DIR='I' THEN CASE WHEN ISNULL(WI.STATUS,'')='' THEN WI2.STATUS ELSE WI.STATUS END ELSE WO.STATUS END AS 'WOL_Status'
 		, TW.ITF_TRANSACTIONDATE AS 'Transaction Date'
 		, TW.ITF_ERRMSG as 'Error Msg'
 		, WSC.WSC_RESPONSESTRING as 'WSC_ResponseString'
-		, W.WSDATA as 'Payload' 
+		, CASE WHEN @C_DIR='I' THEN CASE WHEN ISNULL(WI.WSDATA,'')='' THEN WI2.WSDATA ELSE WI.WSDATA END ELSE WO.WSDATA END as 'Payload' 
 		, TW.ITF_QUERY AS 'QUERY'
 	FROM #TMP_WSDTITF TW WITH (nolock) 
-	LEFT JOIN BI.V_DTS_woloutbound_log W WITH (NOLOCK) 
-	ON W.wsdtkey=TW.ITF_WSDTKEY AND W.datastream=TW.ITF_DATASTREAM 
+	LEFT JOIN BI.V_DTS_woloutbound_log WO WITH (NOLOCK) 
+	ON WO.wsdtkey=TW.ITF_WSDTKEY AND WO.datastream=TW.ITF_DATASTREAM 
+	LEFT JOIN BI.V_DTS_wolINbound_log WI WITH (NOLOCK) 
+	ON WI.wsdtkey=TW.ITF_WSDTKEY AND WI.datastream=TW.ITF_DATASTREAM 
+	LEFT JOIN BI.V_DTS_wolINbound_log WI2 WITH (NOLOCK) 
+	ON WI2.BATCHNO=TW.ITF_BATCHNO AND WI2.datastream=TW.ITF_DATASTREAM 
 	LEFT JOIN BI.V_DTS_WSC_ResponseLog WSC WITH (NOLOCK) 
-	ON TW.ITF_DATASTREAM=WSC.datastream AND TW.ITF_WSDTKEY=WSC.wsdtkey
-	--AND TW.ITF_BATCHNO=WSC.BATCHNO --REMOVE
+	ON TW.ITF_DATASTREAM=WSC.datastream AND TW.ITF_WSDTKEY=WSC.wsdtkey --AND TW.ITF_BATCHNO=WSC.BATCHNO --REMOVE
+										  
 	AND WSC.HTTPSTATUSCODE<>'200' --GET RESULT ONLY IF NOT SUCCESSFUL
-	ORDER BY W.AddDate DESC
+	ORDER BY 12
 
    
 SET @nRowCnt = @@ROWCOUNT;
@@ -185,7 +188,7 @@ GO
 EXEC AS LOGIN = 'JREPORTUSERPH'
 
 SELECT SUSER_SNAME()
-EXEC BI.nsp_STD_InterfaceReportAPI 'YLEO','5246','','2023-06-01','2023-06-18'
+EXEC BI.nsp_STD_InterfaceReportAPI 'ADIDAS','4898','IP_LZ_APH0005003','',''
 
 
 REVERT;
