@@ -1,12 +1,7 @@
-IF  EXISTS (SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'[RDT].[rdt_DynamicPick_PickAndPack_GetStat]') AND OBJECTPROPERTY(id,N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdt_DynamicPick_PickAndPack_GetStat]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-
 /************************************************************************/
 /* Store procedure: rdt_DynamicPick_PickAndPack_GetStat                 */
 /* Copyright      : LFLogistics                                         */
@@ -15,9 +10,10 @@ GO
 /*                                                                      */
 /* Date        Rev  Author      Purposes                                */
 /* 01-Aug-2016 1.0  Ung         SOS375224 Created                       */
+/* 07-Sep-2023 1.1  Michael     WMS-22459 - AU ADIDAS RDT950 (ML01)     */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdt_DynamicPick_PickAndPack_GetStat] (
+CREATE OR ALTER PROC [RDT].[rdt_DynamicPick_PickAndPack_GetStat] (
    @nMobile       INT,
    @nFunc         INT,
    @cLangCode     NVARCHAR( 3),
@@ -99,7 +95,8 @@ BEGIN
       SET @cSQL = @cSQL + ' AND PD.Status < ''3'' '
 
    IF @cType = 'TOTAL'
-      SET @cSQL = @cSQL + ' AND PD.Status <= ''3'' '
+--(ML01)      SET @cSQL = @cSQL + ' AND PD.Status <= ''3'' '
+      SET @cSQL = @cSQL + ' AND PD.Status <= ''5'' AND PD.Status<>''4'' '    --(ML01)
 
    EXEC sp_ExecuteSQL @cSQL, @cSQLParam, 
       @cPickSlipNo = @cPickSlipNo, 
@@ -118,4 +115,3 @@ GO
 
 GRANT EXECUTE ON rdt.rdt_DynamicPick_PickAndPack_GetStat to nSQL
 GO
-
