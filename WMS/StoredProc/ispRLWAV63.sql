@@ -22,6 +22,7 @@ GO
 /* Updates:                                                              */
 /* Date         Author   Ver  Purposes                                   */
 /* 14-Jun-2023  WLChooi  1.0  DevOps Combine Script                      */
+/* 21-Sep-2023  WLChooi  1.1  WMS-22786 - Fix missing taskdetailkey(WL01)*/
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV63]
    @c_Wavekey NVARCHAR(10)
@@ -247,6 +248,7 @@ BEGIN
                  + N'      , MAX(PICKDETAIL.UOM) ' + CHAR(13)
                  + N'      , SUM(PICKDETAIL.UOMQty) AS UOMQty ' + CHAR(13)
                  + N'      , ORDERS.LoadKey ' + CHAR(13)
+                 + N'      , PICKDETAIL.ID ' + CHAR(13)   --WL01
                  + N' FROM WAVEDETAIL (NOLOCK) ' + CHAR(13)
                  + N' JOIN WAVE (NOLOCK) ON WAVEDETAIL.WaveKey = WAVE.WaveKey ' + CHAR(13)
                  + N' JOIN ORDERS (NOLOCK) ON WAVEDETAIL.OrderKey = ORDERS.OrderKey ' + CHAR(13)
@@ -264,6 +266,7 @@ BEGIN
                  + N'        , LOC.PickZone ' + CHAR(13)
                  + N'        , LOC.LogicalLocation ' + CHAR(13)
                  + N'        , ORDERS.LoadKey ' + CHAR(13)
+                 + N'        , PICKDETAIL.ID ' + CHAR(13)   --WL01
                  + N' ORDER BY ' + @c_SortingSeq_FCP
 
       EXEC sp_executesql @c_SQL,
@@ -283,11 +286,12 @@ BEGIN
          , @c_UOM
          , @n_UOMQty
          , @c_Loadkey
+         , @c_ID   --WL01
 
       WHILE @@FETCH_STATUS = 0 AND @n_continue IN ( 1, 2 )
       BEGIN
          SET @c_ToLoc = N''
-         SET @c_ID = N''
+         --SET @c_ID = N''   --WL01
 
          SELECT TOP 1 @c_ToLoc = ISNULL(LP.TRFRoom, '')
          FROM LOADPLAN LP (NOLOCK)
@@ -351,6 +355,7 @@ BEGIN
             , @c_UOM
             , @n_UOMQty
             , @c_Loadkey
+            , @c_ID   --WL01
       END
       CLOSE CUR_PICK
       DEALLOCATE CUR_PICK
