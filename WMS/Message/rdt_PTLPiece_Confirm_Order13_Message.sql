@@ -18,6 +18,6 @@ execute rdt.rdtAddMsg 187813, 10, '187813^UPD PLog Fail', 'us_english', 803
 execute rdt.rdtAddMsg 187814, 10, '187814^INS PTL Fail ', 'us_english', 803
 execute rdt.rdtAddMsg 187815, 10, '187815^DEL LOG Fail ', 'us_english', 803
 execute rdt.rdtAddMsg 187816, 10, '187816^OderCompleted', 'us_english', 803
-
+execute rdt.rdtAddMsg 187817, 10, '187817^UPD Ord Fail ', 'us_english', 803
 
 SELECT * FROM rdt.rdtMsg (NOLOCK) WHERE Message_ID BETWEEN 187801 and 187850

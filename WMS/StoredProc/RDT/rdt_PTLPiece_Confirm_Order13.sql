@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_PTLPiece_Confirm_Order13]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_PTLPiece_Confirm_Order13]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -15,9 +12,10 @@ GO
 /*                                                                         */
 /* Date       Rev  Author     Purposes                                     */
 /* 09-07-2021 1.0  Chermaine  WMS-17331 Created                            */
+/* 21-09-2022 1.1  Ung        WMS-23738 Orders.Status = 3 when finish sort */
 /***************************************************************************/
 
-CREATE PROC rdt.rdt_PTLPiece_Confirm_Order13 (
+CREATE OR ALTER PROC rdt.rdt_PTLPiece_Confirm_Order13 (
     @nMobile      INT
    ,@nFunc        INT
    ,@cLangCode    NVARCHAR( 3)
@@ -463,7 +461,20 @@ BEGIN
          AND PD.Status <> '4'  
          AND O.Status <> 'CANC'   
          AND O.SOStatus <> 'CANC')  
-   BEGIN  
+   BEGIN
+      -- Update order status to trigger getting shipping label
+      UPDATE dbo.Orders SET
+         Status = '3', 
+         EditDate = GETDATE(), 
+         EditWho = SUSER_SNAME()
+      WHERE OrderKey = @cOrderKey
+      IF @@ERROR <> 0  
+      BEGIN  
+         SET @nErrNo = 187817  
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD Ord Fail  
+         GOTO RollBackTran  
+      END
+      
       DELETE rdt.rdtPTLPieceLog  
       WHERE Station = @cStation  
          AND OrderKey = @cOrderKey  
