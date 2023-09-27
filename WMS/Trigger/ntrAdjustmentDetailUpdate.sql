@@ -54,6 +54,8 @@ GO
 /* 06-Feb-2018  SWT02        2.1    Added Channel Management Logic             */
 /* 23-JUL-2019  Wan05        2.2    WMS-9872 - CN_NIKESDC_Exceed_Channel       */      
 /* 10-May-2022  NJOW02       2.3    Add validation to ensure finalize correctly*/
+/* 18-Aug-2023  NJOW03       2.4    WMS-23479 Support multi-sku ucc adjustment */
+/* 18-Aug-2023  NJOW03       2.4    DEVOPS Combine Script                      */
 /*******************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrAdjustmentDetailUpdate]
@@ -584,7 +586,8 @@ BEGIN
                IF @c_ADJ_UCCNo <> ''
                BEGIN
                   IF NOT EXISTS (SELECT 1 FROM UCC WITH (NOLOCK)
-                                  WHERE StorerKey = @c_ADJ_StorerKey AND UCCNo = @c_ADJ_UCCNo)
+                                  WHERE StorerKey = @c_ADJ_StorerKey AND UCCNo = @c_ADJ_UCCNo
+                                   AND Sku = @c_ADJ_Sku) --NJOW03
                   BEGIN
                      INSERT INTO UCC (UCCNo, Storerkey, ExternKey, SKU, qty, Sourcekey,
                                       Sourcetype, Status, Lot, Loc, Id)
