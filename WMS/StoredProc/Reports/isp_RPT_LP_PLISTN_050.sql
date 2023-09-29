@@ -21,6 +21,7 @@ GO
 /* Updates:                                                             */        
 /* Date         Author   Ver  Purposes                                  */
 /* 16-JUN-2023  WZPang   1.0  DevOps Combine Script                     */
+/* 27-SEP-2023  WZPang   1.1  Edit Columns (WZ01)                       */
 /************************************************************************/        
 CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTN_050] (
       @c_Loadkey NVARCHAR(10)    
@@ -147,23 +148,28 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTN_050] (
             CASE WHEN pack.pallet = 0 then 0  
                  ELSE CASE WHEN (Sum(pickdetail.qty) % CAST(pack.pallet AS INT)) > 0 THEN 0  
                            ELSE 1 END  
-            END , -- Vicky  
+            END ,  
          ISNULL((SELECT DISTINCT 'Y' FROM PickHeader (NOLOCK) WHERE ExternOrderKey = @c_LoadKey AND Zone = '3'), 'N') AS PrintedFlag,  
          '3' Zone,  
-         Pickdetail.Lot,  
+         --Pickdetail.Lot,  --WZ01
+         '' AS Lot,         --WZ01
          '' CarrierKey,  
          '' AS VehicleNo,  
-         SUBSTRING(LotAttribute.Lottable02, 1,10),    --KY01  
-         ISNULL(LotAttribute.Lottable04, '19000101') Lottable04,  
-         ISNULL(LotAttribute.Lottable05, '19000101') Lottable05,  
+         --SUBSTRING(LotAttribute.Lottable02, 1,10),                --WZ01
+         --ISNULL(LotAttribute.Lottable04, '19000101') Lottable04,  --WZ01 
+         --ISNULL(LotAttribute.Lottable05, '19000101') Lottable05,  --WZ01
+         '' AS Lottable02,
+         '19000101' AS Lottable04,
+         '19000101' AS Lottable05,
          PACK.Pallet,  
          PACK.CaseCnt,  
          Orders.ExternOrderKey AS ExternOrderKey,  
          ISNULL(LOC.LogicalLocation, '') AS LogicalLocation,  
          ISNULL(AreaDetail.AreaKey, '00') AS Areakey,               
-           ISNULL (CONVERT(NVARCHAR(10), Orders.DeliveryDate, 103), ''),  
+         ISNULL (CONVERT(NVARCHAR(10), Orders.DeliveryDate, 103), ''),  
          SUBSTRING(LotAttribute.Lottable03, 1, 18), 
-         SUBSTRING(LotAttribute.Lottable01, 1, 18),                                       
+         --SUBSTRING(LotAttribute.Lottable01, 1, 18),               --WZ01 
+         '' AS Lottable01,                                          --WZ01
          CASE WHEN ISNULL(SC.Svalue,'0') = '1' THEN  
               Sku.Altsku  
          ELSE 'NOSHOW' END AS ALTSKU,
@@ -184,8 +190,7 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTN_050] (
    JOIN LOC WITH (NOLOCK, INDEX (PKLOC)) ON (LOC.LOC = PICKDETAIL.LOC)  
    LEFT OUTER JOIN AreaDetail (NOLOCK) ON (LOC.PutawayZone = AreaDetail.PutawayZone)  
    LEFT OUTER JOIN StorerConfig SC (NOLOCK) ON (Orders.Storerkey = SC.Storerkey AND SC.Configkey = 'PICKORD01_SHOWALTSKU')    
-   WHERE PickDetail.Status >= '0'  
-     AND LoadPlanDetail.LoadKey = @c_LoadKey  
+   WHERE PickDetail.Status >= '0' AND LoadPlanDetail.LoadKey = @c_LoadKey  
    GROUP BY Orders.OrderKey,  
             StorerConfig.sValue,  
             Orders.CONSIGNEEKEY,  
@@ -207,10 +212,11 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTN_050] (
             PickDetail.Loc,  
             PickDetail.Sku,  
             ISNULL(Sku.Descr,''),  
-            Pickdetail.Lot,  
-            SUBSTRING(LotAttribute.Lottable02, 1, 10),    
-            ISNULL(LotAttribute.Lottable04, '19000101'),  
-            ISNULL(LotAttribute.Lottable05, '19000101'),  
+            --Pickdetail.Lot,                               --WZ01
+            --SUBSTRING(LotAttribute.Lottable02, 1, 10),    --WZ01
+            --ISNULL(LotAttribute.Lottable02,''),           --WZ01
+            --ISNULL(LotAttribute.Lottable04, '19000101'),  --WZ01
+            --ISNULL(LotAttribute.Lottable05, '19000101'),  --WZ01
             PACK.Pallet,  
             PACK.CaseCnt,  
             Orders.ExternOrderKey,  
@@ -218,7 +224,7 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTN_050] (
             ISNULL(AreaDetail.AreaKey, '00'),      
             ISNULL(CONVERT(NVARCHAR(10), Orders.DeliveryDate, 103), ''),      
             SUBSTRING(LotAttribute.Lottable03, 1, 18), 
-            SUBSTRING(LotAttribute.Lottable01, 1, 18), 
+            --ISNULL(LotAttribute.Lottable01, ''),          --WZ01
             CASE WHEN ISNULL(SC.Svalue,'0') = '1' THEN 
                  Sku.Altsku  
             ELSE 'NOSHOW' END  ,
@@ -345,7 +351,7 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTN_050] (
            , LOC  
            , SKU  
            , SkuDesc  
-           , Qty  
+           , SUM(Qty)      --WZ01
            , TempQty1  
            , TempQty2  
            , PrintedFlag  
@@ -371,7 +377,51 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTN_050] (
            , CASE WHEN @n_ShowCustOrderBarCode = 1 THEN ExternOrderkey ELSE '' END   AS ExternOrderkey_bc
            , StdCube
            , SKUWeight
-      FROM #TEMP_PICK  
+      FROM #TEMP_PICK 
+      --(WZ01) Start
+      GROUP BY PickSlipNo     
+           , LoadKey  
+           , OrderKey  
+           , ConsigneeKey  
+           , Company  
+           , Addr1  
+           , Addr2  
+           , Addr3  
+           , PostCode  
+           , Route  
+           , Route_Desc  
+           , TrfRoom  
+           , Notes1  
+           , Notes2  
+           , LOC  
+           , SKU  
+           , SkuDesc
+           , TempQty1  
+           , TempQty2  
+           , PrintedFlag  
+           , Zone  
+           , PgGroup  
+           , RowNum  
+           , Lot  
+           , Carrierkey  
+           , VehicleNo  
+           , Lottable02  
+           , Lottable04  
+           , Lottable05  
+           , packpallet  
+           , packcasecnt  
+           , externorderkey  
+           , LogicalLoc  
+           , Areakey  
+           , UOM  
+           , DeliveryDate  
+           , Lottable03  
+           , Lottable01  
+           , Altsku  
+           , CASE WHEN @n_ShowCustOrderBarCode = 1 THEN ExternOrderkey ELSE '' END
+           , StdCube
+           , SKUWeight
+      --(WZ01) End
       ORDER BY CASE WHEN @n_SortByNotesCustOrd = 1 THEN Notes1 + Notes2 ELSE '' END  
              , CASE WHEN @n_SortByNotesCustOrd = 1 THEN ExternOrderkey  ELSE '' END  
              , Company  
