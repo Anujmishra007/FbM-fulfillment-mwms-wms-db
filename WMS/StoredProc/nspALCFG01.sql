@@ -4,6 +4,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 
+
 /***************************************************************************/
 /* Stored Procedure: nspALCFG01                                            */
 /* Creation Date: 18-APR-2018                                              */
@@ -37,6 +38,7 @@ GO
 /* 18-Nov-2022 NJOW08   1.8  WMS-21206 Add force allocate lottable by      */
 /*                           by config include empty lottable filterring   */
 /* 29-Sep-2023 CLVN01   1.9  JSM-54130 Add AllocateStrategyKey to condition*/
+/* 29-Sep-2023 CLVN01   1.9  JSM-54130 Fix Syntax Error                    */
 /***************************************************************************/
 
 ALTER   PROC [dbo].[nspALCFG01]
@@ -1139,7 +1141,8 @@ BEGIN
                               " JOIN SKU (NOLOCK) ON (LOTxLOCxID.Storerkey =  SKU.Storerkey AND SKU.Sku =  SKUXLOC.Sku) " +
                               " JOIN STORER (NOLOCK) ON (LOTxLOCxID.Storerkey =  STORER.Storerkey) " +
                               " JOIN PACK (NOLOCK) ON (SKU.Packkey = PACK.Packkey) " +
-                              " WHERE LOTxLOCxID.Storerkey = @c_Storerkey) " +
+                              --" WHERE LOTxLOCxID.Storerkey = @c_Storerkey) " +	--(CLVN01)
+							  --" WHERE LOTxLOCxID.Storerkey = @c_Storerkey " +	    --(CLVN01)
                               " AND LOTxLOCxID.Sku = @c_Sku " +
                               " AND LOC.Facility = @c_Facility " +
                               CASE WHEN @c_AllocateQtyReplenFlag = 'Y' THEN
@@ -1211,5 +1214,4 @@ END
 GO
 GRANT EXECUTE ON  [dbo].[nspALCFG01] TO [NSQL]
 GO
-
 
