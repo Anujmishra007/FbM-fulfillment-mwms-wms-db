@@ -23,6 +23,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
 /* 25-May-2023  WLChooi  1.0  DevOps Combine Script                     */
+/* 27-Jul-2023  WLChooi  1.1  WMS-22697 - Logic change (WL01)           */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[ispORD21]
    @c_Action    NVARCHAR(10)
@@ -77,6 +78,7 @@ BEGIN
          , @c_Address1        NVARCHAR(100)
          , @c_SOStatus_DEL    NVARCHAR(50)
          , @c_Status_DEL      NVARCHAR(50)
+         , @c_VAT             NVARCHAR(50)
 
    SELECT @n_Continue = 1
         , @n_StartTCnt = @@TRANCOUNT
@@ -169,6 +171,7 @@ BEGIN
                  , @c_RoutingTool     = ISNULL(RoutingTool,'')
                  , @c_C_State         = ISNULL(C_State,'')
                  , @c_Notes           = ISNULL(Notes,'')
+                 , @c_VAT             = ISNULL(C_VAT,'')
             FROM ORDERS (NOLOCK)
             WHERE Orderkey = @c_Orderkey_HDR
          END
@@ -236,6 +239,7 @@ BEGIN
            , Notes            = CASE WHEN ISNULL(@c_Notes,'') <> ''           THEN @c_Notes           ELSE Notes           END
            , C_State          = CASE WHEN ISNULL(@c_C_State,'') <> ''         THEN @c_C_State         ELSE C_State         END
            , SOStatus         = CASE WHEN SOStatus <> '0' THEN '0' ELSE SOStatus END
+           , C_VAT            = CASE WHEN ISNULL(@c_VAT,'') <> '' THEN @c_VAT ELSE C_VAT END
            , TrafficCop       = NULL
            , ArchiveCop       = NULL
            , EditDate         = GETDATE()
@@ -266,11 +270,14 @@ BEGIN
       IF @c_Action IN ( 'INSERT' ) AND ISNULL(@c_Shipperkey,'') = '' AND @c_SOStatus <> 'NoDinFile'
       BEGIN
          UPDATE O WITH (ROWLOCK)
-         SET O.Shipperkey = ISNULL(CLK.Short,'')
+         SET O.Shipperkey = CASE WHEN ISNULL(CL1.Short,'') = '' THEN ISNULL(CLK.Short,'') ELSE ISNULL(CL1.Short,'') END   --WL01
          FROM ORDERS O
-         JOIN CODELKUP CLK (NOLOCK) ON O.STORERKEY = CLK.Storerkey
-                                   AND O.C_COUNTRY = CLK.Code AND O.[TYPE] = CLK.code2 
-                                   AND CLK.LISTNAME = 'OHSHPKMAP'
+         LEFT JOIN CODELKUP CLK (NOLOCK) ON O.STORERKEY = CLK.Storerkey
+                                        AND O.C_COUNTRY = CLK.Code AND O.[TYPE] = CLK.code2 
+                                        AND CLK.LISTNAME = 'OHSHPKMAP'
+         LEFT JOIN CODELKUP CL1 (NOLOCK) ON O.STORERKEY = CL1.Storerkey                          --WL01
+                                        AND O.C_COUNTRY = CL1.Code AND O.BillToKey = CL1.code2   --WL01
+                                        AND CL1.LISTNAME = 'OHSHPKMAP'                           --WL01
          WHERE O.OrderKey = @c_Orderkey
 
          IF @@ERROR <> 0
