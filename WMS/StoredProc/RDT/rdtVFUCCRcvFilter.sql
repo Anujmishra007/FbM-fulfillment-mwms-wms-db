@@ -1,29 +1,24 @@
-IF EXISTS (SELECT name FROM sysobjects WHERE name = 'rdtVFUCCRcvFilter' AND type = 'P')
-   DROP PROC rdt.rdtVFUCCRcvFilter
-GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
-/************************************************************************/
-/* Store procedure: rdtVFUCCRcvFilter                                   */
-/* Copyright      : IDS                                                 */
-/*                                                                      */
-/* Purpose: Check UCC scan to ID have same SKU, QTY, L02                */
-/*                                                                      */
-/* Called from:                                                         */
-/*                                                                      */
-/* Exceed version: 5.4                                                  */
-/*                                                                      */
-/* Modifications log:                                                   */
-/*                                                                      */
-/* Date        Rev  Author      Purposes                                */
-/* 12-09-2012  1.0  Ung         SOS255639 Created                       */
-/* 26-02-2014  1.1  Ung         SOS303821 Add ExternReceiptKey          */ 
-/************************************************************************/
 
-CREATE PROCEDURE rdt.rdtVFUCCRcvFilter
+/***************************************************************************************************/
+/* Store procedure: rdtVFUCCRcvFilter                                                              */
+/* Copyright      : Maersk                                                                         */
+/*                                                                                                 */
+/* Purpose: Link ReceiptDetail with UCC                                                            */
+/*                                                                                                 */
+/* Modifications log:                                                                              */
+/*                                                                                                 */
+/* Date        Rev  Author      Purposes                                                           */
+/* 12-09-2012  1.0  Ung         SOS255639 Created                                                  */
+/* 26-02-2014  1.1  Ung         SOS303821 Add ExternReceiptKey                                     */ 
+/* 22-08-2023  1.2  Ung         WMS-23484 Support multi SKU UCC, same SKU multiple records         */
+/***************************************************************************************************/
+
+CREATE OR ALTER PROCEDURE rdt.rdtVFUCCRcvFilter
     @nMobile     INT
    ,@nFunc       INT
    ,@cLangCode   NVARCHAR(  3)
@@ -58,14 +53,16 @@ BEGIN
    -- Get UCC info
    SET @cUserDefined03 = ''
    SET @cExterKey = ''
-   SELECT 
+   SELECT TOP 1 
       @cUserDefined03 = UserDefined03, 
       @cExterKey = ExternKey
    FROM dbo.UCC WITH (NOLOCK) 
    WHERE UCCNo = @cUCC 
       AND StorerKey = @cStorerKey 
       AND SKU = @cSKU
-   
+      AND Status = '0'
+   ORDER BY UCC_RowRef
+
    -- Build custom SQL
    IF @cExterKey <> ''
       SET @cCustomSQL = @cCustomSQL + ' AND ExternReceiptKey = ''' + RTRIM( @cExterKey) + '''' 
