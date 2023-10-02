@@ -669,7 +669,7 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_862PickCfm06] (
    BEGIN
       SELECT 
          @nPD_Qty = SUM( PD.Qty), 
-         @fWeight = @fCartonWeight + SUM( SKU.Weight * PD.QTY)
+         @fWeight = @fCartonWeight + SUM( SKU.Weight * 1000 * PD.QTY)
       FROM dbo.PackDetail PD WITH (NOLOCK)
          JOIN dbo.SKU WITH (NOLOCK) ON (PD.StorerKey = SKU.StorerKey AND PD.SKU = SKU.SKU)
       WHERE PickSlipNo = @cPickSlipNo
