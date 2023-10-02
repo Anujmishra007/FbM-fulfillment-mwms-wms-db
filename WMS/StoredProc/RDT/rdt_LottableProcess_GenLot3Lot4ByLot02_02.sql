@@ -11,6 +11,7 @@ GO
 /*                                                                            */
 /* Date         Author    Ver.  Purposes                                      */
 /* 09-Aug-2022  Ung       1.0   WMS-20425 Created                             */
+/* 07-Sep-2023  Ung       1.1   WMS-23431 Add group D logic                   */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_LottableProcess_GenLot3Lot4ByLot02_02]
@@ -64,6 +65,8 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    BEGIN TRY
+      DECLARE @nLen INT = LEN( @cLottable02Value)
+
       -- Remove space, dash
       SET @cLottable02Value = REPLACE( @cLottable02Value, ' ', '')
       SET @cLottable02Value = REPLACE( @cLottable02Value, '-', '')
@@ -74,8 +77,18 @@ BEGIN
          DECLARE @cYear  NVARCHAR( 2)
          DECLARE @cMonth NVARCHAR( 2)
          DECLARE @cDay   NVARCHAR( 2) = '01'
-         DECLARE @nLen   INT = LEN( @cLottable02Value)
-         
+         DECLARE @cCurrentYear NVARCHAR(1)
+         DECLARE @dLottable03Value DATE
+         DECLARE @cLottable04Value NVARCHAR(10)
+         DECLARE @nShelfLife INT = 0
+
+         -- Get SKU info
+         SELECT @nShelfLife = ISNULL( ShelfLife, 0)
+         FROM dbo.SKU WITH (NOLOCK) 
+         WHERE StorerKey = @cStorerKey 
+            AND SKU = @cSKU
+
+         -- Logic group B
          IF @nLen = 4
          BEGIN
             SET @cMonth = SUBSTRING( @cLottable02Value, 3, 1)
@@ -99,17 +112,31 @@ BEGIN
                   ELSE ''
                END
                
-            -- Convert year to 2 digits
-            SELECT @cYear = '2' + @cYear 
-         
-            DECLARE @nCurrentYear INT = YEAR( GETDATE())
-            DECLARE @nInputYear INT = CAST( '20' + @cYear AS INT)
+            -- Get current year digit
+            SET @cCurrentYear = RIGHT( FORMAT( GETDATE(), 'yy'), 1)
+
+            -- If the year digit in the data scanned, is same as current year, then take current year
+            -- If more than current year, then taken as year in previous decade
+            IF @cYear <= @cCurrentYear
+               SET @cYear = LEFT( FORMAT( GETDATE(), 'yy'), 1) + @cYear    -- Current decade
             
-            -- Check future date
-            IF @nInputYear > @nCurrentYear
-               RAISERROR (189551, 16, 1) 
+            ELSE IF @cYear > @cCurrentYear
+               SET @cYear = LEFT( FORMAT( YEAR( GETDATE()) - 10, 'yy'), 1) + @cYear   -- Previous decade
+
+            -- Calc L03
+            SET @cLottable03Value = @cMonth + '/' + @cDay + '/' + @cYear
+            SET @dLottable03Value = CONVERT( DATETIME, @cLottable03Value, 1) -- 1 = mm/dd/yy
+            
+            -- Calc L04
+            SET @dLottable04Value = DATEADD( dd, @nShelfLife, @dLottable03Value)
+            SET @dLottable04Value = CONVERT( DATETIME, CAST( MONTH( @dLottable04Value) AS NVARCHAR(2)) + '/01/' + CAST( YEAR( @dLottable04Value) AS NVARCHAR(4)), 101) -- 101 = mm/dd/yyyy, set 1st day of month
+
+            -- Output
+            SELECT @cLottable03 = @cLottable03Value
+            SELECT @dLottable04 = @dLottable04Value
          END
 
+         -- Logic group C
          ELSE IF @nLen = 6
          BEGIN
             DECLARE @cWeek NVARCHAR( 2)
@@ -120,37 +147,87 @@ BEGIN
             SET @dDate = CONVERT( DATETIME, '01/01/' + @cYear, 1) -- 1 = mm/dd/yy
             SET @dDate = DATEADD( wk, CAST( @cWeek AS INT) - 1, @dDate)
             SET @cMonth = DATEPART( mm, @dDate)
+
+            -- Calc L03
+            SET @cLottable03Value = @cMonth + '/' + @cDay + '/' + @cYear
+            SET @dLottable03Value = CONVERT( DATETIME, @cLottable03Value, 1) -- 1 = mm/dd/yy
+            
+            -- Calc L04
+            SET @dLottable04Value = DATEADD( dd, @nShelfLife, @dLottable03Value)
+            SET @dLottable04Value = CONVERT( DATETIME, CAST( MONTH( @dLottable04Value) AS NVARCHAR(2)) + '/01/' + CAST( YEAR( @dLottable04Value) AS NVARCHAR(4)), 101) -- 101 = mm/dd/yyyy, set 1st day of month
+
+            -- Output
+            SET @cLottable03 = @cLottable03Value
+            SET @dLottable04 = @dLottable04Value
          END
 
-         ELSE IF @nLen > 6
+         -- Logic group D
+         ELSE IF @nLen = 7 AND LEFT( @cLottable02Value, 1) LIKE '[0-9]'
+         BEGIN
+            SET @cMonth = SUBSTRING( @cLottable02Value, 2, 1)
+            SET @cYear = SUBSTRING( @cLottable02Value, 3, 1)
+            
+            -- Convert month to 2 digits
+            SELECT @cMonth = 
+               CASE @cMonth 
+                  WHEN 'A' THEN '01'
+                  WHEN 'B' THEN '02'
+                  WHEN 'C' THEN '03'
+                  WHEN 'D' THEN '04'
+                  WHEN 'E' THEN '05'
+                  WHEN 'F' THEN '06'
+                  WHEN 'G' THEN '07'
+                  WHEN 'H' THEN '08'
+                  WHEN 'I' THEN '09'
+                  WHEN 'J' THEN '10'
+                  WHEN 'K' THEN '11'
+                  WHEN 'L' THEN '12'
+                  ELSE ''
+               END
+            
+            -- Get current year digit
+            SET @cCurrentYear = RIGHT( FORMAT( GETDATE(), 'yy'), 1)
+
+            -- If the year digit in the data scanned, is same as current year or less then current year, it is automatically taken as year in next decade
+            IF @cYear <= @cCurrentYear
+               SET @cYear = LEFT( FORMAT( YEAR( GETDATE()) + 10, 'yy'), 1) + @cYear   -- Next decade
+            ELSE
+               SET @cYear = LEFT( FORMAT( GETDATE(), 'yy'), 1) + @cYear    -- Current decade
+
+            -- Calc L04
+            SET @cLottable04Value = @cMonth + '/' + @cDay + '/' + @cYear
+            SET @dLottable04Value = CONVERT( DATETIME, @cLottable04Value, 1) -- 1 = mm/dd/yy    
+            SET @dLottable04Value = EOMONTH( @dLottable04Value) -- last day of month
+
+            -- Calc L03
+            SET @dLottable03Value = DATEADD( dd, -@nShelfLife, @dLottable04Value)
+            SET @dLottable03Value = CONVERT( DATETIME, CAST( MONTH( @dLottable03Value) AS NVARCHAR(2)) + '/01/' + CAST( YEAR( @dLottable03Value) AS NVARCHAR(4)), 101) -- 101 = mm/dd/yyyy, set 1st day of month
+
+            -- Output
+            SET @cLottable03 = CONVERT( NVARCHAR( 8), @dLottable03Value, 1)  -- 1 = mm/dd/yy
+            SET @dLottable04 = @dLottable04Value
+         END
+
+         -- Logic group A
+         ELSE
          BEGIN
             SET @cMonth = SUBSTRING( @cLottable02Value, 4, 2)
             SET @cYear = SUBSTRING( @cLottable02Value, 6, 2)
             
             SET @cYear = CAST( @cYear AS INT) - 10
-         END
          
-         -- Calc L03
-         DECLARE @dLottable03Value DATETIME
-         SET @cLottable03Value = @cMonth + '/' + @cDay + '/' + @cYear
-         SET @dLottable03Value = CONVERT( DATETIME, @cLottable03Value, 1) -- 1 = mm/dd/yy
-         
-         -- Get SKU info
-         DECLARE @nShelfLife INT = 0
-         SELECT @nShelfLife = ISNULL( ShelfLife, 0)
-         FROM dbo.SKU WITH (NOLOCK) 
-         WHERE StorerKey = @cStorerKey 
-            AND SKU = @cSKU
-         
-         -- Calc L04
-         SELECT @dLottable04Value = DATEADD( dd, @nShelfLife, @dLottable03Value)
-   
-         -- Set 1st day of month
-         SELECT @dLottable04Value = CONVERT( DATETIME, CAST( MONTH( @dLottable04Value) AS NVARCHAR(2)) + '/01/' + CAST( YEAR( @dLottable04Value) AS NVARCHAR(4)), 101) -- 101 = mm/dd/yyyy
+            -- Calc L03
+            SET @cLottable03Value = @cMonth + '/' + @cDay + '/' + @cYear
+            SET @dLottable03Value = CONVERT( DATETIME, @cLottable03Value, 1) -- 1 = mm/dd/yy
+            
+            -- Calc L04
+            SET @dLottable04Value = DATEADD( dd, @nShelfLife, @dLottable03Value)
+            SET @dLottable04Value = CONVERT( DATETIME, CAST( MONTH( @dLottable04Value) AS NVARCHAR(2)) + '/01/' + CAST( YEAR( @dLottable04Value) AS NVARCHAR(4)), 101) -- 101 = mm/dd/yyyy, set 1st day of month
 
-         -- Output
-         SELECT @cLottable03 = @cLottable03Value
-         SELECT @dLottable04 = @dLottable04Value
+            -- Output
+            SET @cLottable03 = @cLottable03Value
+            SET @dLottable04 = @dLottable04Value
+         END
       END
    END TRY
    BEGIN CATCH
