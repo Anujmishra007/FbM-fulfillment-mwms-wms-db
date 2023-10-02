@@ -18,7 +18,7 @@ GO
 /* 03-03-2022 1.3  CalvinK   JSM-54986 Fixed Rollback Tran bug when inv is not enough (CLVN01) */
 /***********************************************************************************************/  
   
-ALTER PROC [dbo].[isp_RCM_ORD_CPV] (  
+CREATE PROC [dbo].[isp_RCM_ORD_CPV] (  
    @c_OrderKey NVARCHAR(10),   
    @b_success INT           OUTPUT,   
    @n_err    INT           OUTPUT,  
