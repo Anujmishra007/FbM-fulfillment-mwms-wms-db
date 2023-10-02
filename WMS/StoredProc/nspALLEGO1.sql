@@ -28,6 +28,8 @@ GO
 /*                                                                      */    
 /* Updates:                                                             */    
 /* Date         Author  Ver.  Purposes                                  */    
+/* 18-Jul-2023  NJOW01  1.0   WMS-23109 - Add config to allow allocate  */
+/*                            piece qty more than a case at shelving loc*/
 /************************************************************************/    
 
 CREATE  PROC [dbo].[nspALLEGO1]        
@@ -273,8 +275,17 @@ BEGIN
       END
    END
    
-   IF @c_UOM IN('6','7') AND @n_QtyLeftToFulfill >= @n_CaseCnt  --if more than a case do not allocatin from pick
-      GOTO EXIT_SP    
+   IF NOT EXISTS(SELECT 1 
+                 FROM CODELKUP (NOLOCK)
+                 WHERE ListName = 'PKCODECFG'
+                 AND Code = 'AllowPickAllocCase'
+                 AND Short <> 'N'
+                 AND Long = 'nspALLEGO1'
+                 AND Storerkey = @c_Storerkey) --NJOW01
+   BEGIN             
+      IF @c_UOM IN('6','7') AND @n_QtyLeftToFulfill >= @n_CaseCnt  --if more than a case do not allocatin from pick
+         GOTO EXIT_SP    
+   END
       
    SET @c_SQL = N'   
       DECLARE CURSOR_AVAILABLE CURSOR FAST_FORWARD READ_ONLY FOR
