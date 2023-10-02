@@ -7,17 +7,18 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/************************************************************************/  
-/* Store procedure: isp_RCM_ORD_CPV                                     */  
-/* Copyright      : LFLogistics                                         */  
-/*                                                                      */  
-/* Date       Rev  Author    Purposes                                   */  
-/* 12-06-2018 1.0  Ung       WMS-5368 Created                           */  
-/* 07-03-2019 1.1  ChewKP    Changes                                    */
-/* 11-03-2019 1.2  ChewKP    Fixes                                      */
-/************************************************************************/  
+/***********************************************************************************************/  
+/* Store procedure: isp_RCM_ORD_CPV                                                            */  
+/* Copyright      : LFLogistics                                                                */  
+/*                                                                                             */  
+/* Date       Rev  Author    Purposes                                                          */  
+/* 12-06-2018 1.0  Ung       WMS-5368 Created                                                  */  
+/* 07-03-2019 1.1  ChewKP    Changes                                                           */
+/* 11-03-2019 1.2  ChewKP    Fixes                                                             */
+/* 03-03-2022 1.3  CalvinK   JSM-54986 Fixed Rollback Tran bug when inv is not enough (CLVN01) */
+/***********************************************************************************************/  
   
-CREATE PROC [dbo].[isp_RCM_ORD_CPV] (  
+ALTER PROC [dbo].[isp_RCM_ORD_CPV] (  
    @c_OrderKey NVARCHAR(10),   
    @b_success INT           OUTPUT,   
    @n_err    INT           OUTPUT,  
@@ -33,6 +34,7 @@ BEGIN
    DECLARE @bSuccess          INT = 0  
    DECLARE @nErrNo            INT = 0  
    DECLARE @cErrMsg           NVARCHAR (255) = ''  
+   DECLARE @BeforePickDet     INT = 0				--(CLVN01)
                                 
    DECLARE @nTranCount        INT  
    DECLARE @nRowRef           INT  
@@ -105,7 +107,8 @@ BEGIN
   
                IF @nQTY_ORD = 0  
                BEGIN  
-                  SET @cErrMsg = 'No suitable order line'  
+                  SET @cErrMsg = 'No suitable order line'
+				  SET @BeforePickDet = 1					--(CLVN01)
                   SET @nQTY_Log = 0  
                END  
             END  
@@ -133,9 +136,15 @@ BEGIN
                IF @nQTY_LLI = 0  
                BEGIN  
                   SET @cErrMsg = 'No avail stock. SKU: '  + @cSKU + ' Lottable07: ' + @cLottable07 + ' Lottable08: ' + @cLottable08
+				  SET @BeforePickDet = 1				--(CLVN01)
                   SET @nQTY_Log = 0  
                END  
             END  
+
+			IF @cErrMsg = ''
+			BEGIN
+				SET @BeforePickDet = 0
+			END
               
             IF @cErrMsg = ''  
             BEGIN  
@@ -218,17 +227,34 @@ BEGIN
             END  
             ELSE  
             BEGIN  
-               ROLLBACK TRAN rdt_Alloc  
-               WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
+			--(CLVN01) START--
+			   IF @BeforePickDet = 1
+			   BEGIN
+			      WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
+                  COMMIT TRAN  
+
+				  -- Log error
+				  UPDATE rdt.rdtCPVOrderLog SET  
+                  Remark = @cErrMsg  
+                  WHERE RowRef = @nRowRef   
+               
+                  SET @nQTY_Log = 0
+			   END
+			   ELSE
+			   BEGIN
+                  ROLLBACK TRAN rdt_Alloc  
+                  WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
                   COMMIT TRAN  
                  
-               -- Log error  
-               UPDATE rdt.rdtCPVOrderLog SET  
+                  -- Log error  
+                  UPDATE rdt.rdtCPVOrderLog SET  
                   Remark = @cErrMsg  
-               WHERE RowRef = @nRowRef   
+                  WHERE RowRef = @nRowRef   
                
                     
-               SET @nQTY_Log = 0  
+                  SET @nQTY_Log = 0  
+			   END
+			   --(CLVN01) END--
             END  
          END  
          FETCH NEXT FROM @curLog INTO @nRowRef, @cStorerKey, @cSKU, @nQTY_Log, @cBarcode, @cLottable07, @cLottable08  
@@ -321,7 +347,9 @@ QUIT_SP:
       END    
    END    
   
-END
+END  
 GO
 GRANT EXECUTE ON [dbo].[isp_RCM_ORD_CPV] TO nSQL 
 GO
+
+
