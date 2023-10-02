@@ -351,5 +351,3 @@ END
 GO
 GRANT EXECUTE ON [dbo].[isp_RCM_ORD_CPV] TO nSQL 
 GO
-
-
