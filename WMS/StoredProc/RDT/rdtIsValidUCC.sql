@@ -1,11 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdtIsValidUCC]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdtIsValidUCC]
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF 
-GO
 
 /************************************************************************/
 /* Store procedure: rdtIsValidUCC                                       */
@@ -26,19 +23,20 @@ GO
 /* Date       Rev  Author   Purposes                                    */
 /* 2006-07-12 1.0  UngDH    Created                                     */
 /* 2014-02-06 1.1  Ung      SOS296465 Move QTYAlloc with UCC.Status=3   */
+/* 2023-06-01 1.2  Ung      WMS-22561 Add UCCWithMultiSKU               */
 /************************************************************************/
 
-CREATE  PROCEDURE rdt.rdtIsValidUCC (
-   @cLangCode  NVARCHAR( 3), 
+CREATE OR ALTER PROCEDURE [RDT].[rdtIsValidUCC] (
+   @cLangCode  NVARCHAR( 3),
    @nErrNo     INT          OUTPUT,
    @cErrMsg    NVARCHAR( 20) OUTPUT, -- screen limitation, 20 char max
    @cUCC       NVARCHAR( 20),   -- Compulsory
    @cStorerKey NVARCHAR( 15),   -- Compulsory
    @cStatus    NVARCHAR( 10),   -- Compulsory
    @cChkSKU    NVARCHAR( 20)    = NULL,
-   @nChkQTY    INT          = NULL, 
-   @cChkLOT    NVARCHAR( 10)    = NULL, 
-   @cChkLOC    NVARCHAR( 10)    = NULL, 
+   @nChkQTY    INT          = NULL,
+   @cChkLOT    NVARCHAR( 10)    = NULL,
+   @cChkLOC    NVARCHAR( 10)    = NULL,
    @cChkID     NVARCHAR( 18)    = NULL
 ) AS
 SET NOCOUNT ON
@@ -83,7 +81,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
       @cUCCStorer = StorerKey,
       @cUCCSKU = SKU,
       @cUCCStatus = Status,
-      @cUCCLOT = LOT, 
+      @cUCCLOT = LOT,
       @cUCCLOC = LOC,
       @cUCCID = [ID],
       @nUCCQTY = QTY
@@ -92,7 +90,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
       AND UCCNo = @cUCC
       AND CHARINDEX( Status, @cStatus) > 0
 
-   SET @nRowCount = @@ROWCOUNT 
+   SET @nRowCount = @@ROWCOUNT
 
    -- Validate UCC exist
    IF @nRowCount = 0
@@ -104,13 +102,16 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 
    IF @nRowCount > 1
    BEGIN
-      SET @nErrNo = 60665
-      SET @cErrMsg = rdt.rdtgetmessage( 60665, @cLangCode, 'DSP') --'Multi UCC rec'
-      GOTO Fail
+      IF rdt.rdtGetConfig( 0, 'UCCWithMultiSKU', @cStorerKey) <> '1' -- 1=Multi SKU UCC
+      BEGIN
+         SET @nErrNo = 60665
+         SET @cErrMsg = rdt.rdtgetmessage( 60665, @cLangCode, 'DSP') --'Multi UCC rec'
+         GOTO Fail
+      END
    END
 
    -- Validate SKU
-   IF (@cChkSKU IS NOT NULL) AND 
+   IF (@cChkSKU IS NOT NULL) AND
       (@cUCCSKU <> @cChkSKU)
    BEGIN
       SET @nErrNo = 60666
@@ -119,16 +120,16 @@ SET CONCAT_NULL_YIELDS_NULL OFF
    END
 
    -- Validate LOT
-   IF (@cChkLOT IS NOT NULL) AND 
+   IF (@cChkLOT IS NOT NULL) AND
       (@cUCCLOT <> @cChkLOT)
    BEGIN
       SET @nErrNo = 60667
       SET @cErrMsg = rdt.rdtgetmessage( 60667, @cLangCode, 'DSP') --'UCC LOT Diff'
       GOTO Fail
    END
-   
+
    -- Validate LOC
-   IF (@cChkLOC IS NOT NULL) AND 
+   IF (@cChkLOC IS NOT NULL) AND
       (@cUCCLOC <> @cChkLOC)
    BEGIN
       SET @nErrNo = 60668
@@ -137,14 +138,14 @@ SET CONCAT_NULL_YIELDS_NULL OFF
    END
 
    -- Validate ID
-   IF (@cChkID IS NOT NULL) AND 
+   IF (@cChkID IS NOT NULL) AND
       (@cUCCID <> @cChkID)
    BEGIN
       SET @nErrNo = 60669
       SET @cErrMsg = rdt.rdtgetmessage( 60669, @cLangCode, 'DSP') --'UCC ID Diff'
       GOTO Fail
    END
-   
+
    -- Validate case count
    IF @nChkQTY IS NOT NULL
    BEGIN
@@ -155,7 +156,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
          SET @cErrMsg = rdt.rdtgetmessage( 60671, @cLangCode, 'DSP') --'Invalid UCCQTY'
          GOTO Fail
       END
-      
+
       -- If UCC's case count is fixed (i.e. NOT dynamic), check the case count
       IF rdt.rdtGetConfig( 0, 'UCCWithDynamicCaseCNT', @cStorerKey) <> '1' -- 1=Dynamic CaseCNT
       BEGIN
@@ -173,7 +174,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
             SET @cErrMsg = rdt.rdtgetmessage( 60670, @cLangCode, 'DSP') --'Setup CaseCnt'
             GOTO Fail
          END
-      
+
          IF @nUCCQTY <> @nCaseCnt
          BEGIN
             SET @nErrNo = 60672
@@ -185,11 +186,5 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 Fail:
 
 GO
-
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS ON 
-GO
-
-GRANT EXECUTE ON RDT.rdtIsValidUCC TO NSQL
+GRANT EXECUTE ON  [RDT].[rdtIsValidUCC] TO [NSQL]
 GO
