@@ -55,6 +55,7 @@ GO
 /* 2023-06-19 3.7  YeeKung    WMS-22768 Add Extvalidsp at step1(yeekung01)*/
 /* 2023-09-04 3.8  James      Ad hoc fix - Change rdt_Decode variable   */
 /*                            from UCC -> UCCNO (james10)               */
+/* 2023-07-26 3.9  YeeKung    WMS-23108 Add DefaultToLOCSP (yeekung02)  */
 /************************************************************************/
 CREATE OR ALTER PROC rdt.rdtfnc_UCCInboundReceive (
    @nMobile    INT,
@@ -114,6 +115,7 @@ DECLARE
 
    @cBypassASNBlankCheck   NVARCHAR( 1),   -- (james02)
    @cDefaultToLoc          NVARCHAR( 10),  -- (james03)
+   @cDefaultToLocSP        NVARCHAR( 20),  -- (yeekung02)
    @cUCCRcvSkipUpdTOID     NVARCHAR( 1),   -- (james03)
 
    @cDefaultReceiptDetailLoc  NVARCHAR(1), -- (ChewKP03)
@@ -754,10 +756,80 @@ BEGIN
       
       -- (james03)
       SET @cDefaultToLoc = ''
-      SET @cDefaultToLoc = rdt.RDTGetConfig( @nFunc, 'ReceiveDefaultToLoc', @cStorerKey) -- Parse in Function
-      IF @cDefaultToLoc = '0'
+      SET @cDefaultToLocSP = rdt.RDTGetConfig( @nFunc, 'ReceiveDefaultToLoc', @cStorerKey) -- Parse in Function (yeekung02)
+      IF @cDefaultToLocSP = '0'
       BEGIN
          SET @cDefaultToLoc = ''
+      END
+      ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDefaultToLocSP AND type = 'P') --(yeekung02)
+      BEGIN
+         SET @cExecStatements = N'EXEC rdt.' + RTRIM( @cDefaultToLocSP) +
+                              ' @nMobile                 ' +
+	                           ' , @nFunc                 ' +
+	                           ' , @cLangCode             ' +
+	                           ' , @nStep                 ' +
+	                           ' , @cStorerKey            ' +
+	                           ' , @cFacility             ' +
+                              ' , @cReceiptKey1          ' +
+                              ' , @cReceiptKey2          ' +
+                              ' , @cReceiptKey3          ' +
+                              ' , @cReceiptKey4          ' +
+                              ' , @cReceiptKey5          ' +
+                              ' , @cLoc                  ' +
+                              ' , @cID                   ' +
+                              ' , @cUCC                  ' +
+                              ' , @cDefaultToLoc OUTPUT  ' +
+                              ' , @nErrNo       OUTPUT   ' +
+                              ' , @cErrMSG      OUTPUT   '
+
+
+         SET @cExecArguments =
+                     N'@nMobile     INT, ' +
+	                  '@nFunc       INT, ' +
+	                  '@cLangCode   NVARCHAR(3), ' +
+	                  '@nStep       INT, ' +
+	                  '@cStorerKey  NVARCHAR(15), ' +
+	                  '@cFacility   NVARCHAR(5), '  +
+                     '@cReceiptKey1 NVARCHAR(20),          ' +
+                     '@cReceiptKey2 NVARCHAR(20),          ' +
+                     '@cReceiptKey3 NVARCHAR(20),          ' +
+                     '@cReceiptKey4 NVARCHAR(20),          ' +
+                     '@cReceiptKey5 NVARCHAR(20),          ' +
+                     '@cLoc        NVARCHAR(20),           ' +
+                     '@cID         NVARCHAR(18),           ' +
+                     '@cUCC        NVARCHAR(20),           ' +
+                     '@cDefaultToLoc NVARCHAR(20) OUTPUT,  ' +  
+                     '@nErrNo      INT  OUTPUT,            ' +
+                     '@cErrMsg     NVARCHAR(1024) OUTPUT   '
+
+
+         EXEC sp_executesql @cExecStatements, @cExecArguments,
+                              @nMobile
+                           , @nFunc
+                           , @cLangCode
+                           , @nStep
+                           , @cStorerKey
+                           , @cFacility
+                           , @cReceiptKey1
+                           , @cReceiptKey2
+                           , @cReceiptKey3
+                           , @cReceiptKey4
+                           , @cReceiptKey5
+                           , @cLoc
+                           , @cID
+                           , @cUCC
+                           , @cDefaultToLoc OUTPUT
+                           , @nErrNo       OUTPUT
+                           , @cErrMSG      OUTPUT
+         IF @nErrNo <> 0
+         BEGIN
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+            GOTO Step_2_Fail
+         END
+      END
+      ELSE
+      BEGIN
+         SET @cDefaultToLoc = @cDefaultToLocSP
       END
 
       -- Prepare next screen var
@@ -978,12 +1050,85 @@ BEGIN
    Step_2_Fail:
    BEGIN
       -- (james03)
+      -- (james03)
       SET @cDefaultToLoc = ''
-      SET @cDefaultToLoc = rdt.RDTGetConfig( @nFunc, 'ReceiveDefaultToLoc', @cStorerKey) -- Parse in Function
-      IF @cDefaultToLoc = '0'
+      SET @cDefaultToLocSP = rdt.RDTGetConfig( @nFunc, 'ReceiveDefaultToLoc', @cStorerKey) -- Parse in Function (yeekung02)
+      IF @cDefaultToLocSP = '0'
       BEGIN
          SET @cDefaultToLoc = ''
       END
+      ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDefaultToLocSP AND type = 'P') --(yeekung02)
+      BEGIN
+         SET @cExecStatements = N'EXEC rdt.' + RTRIM( @cDefaultToLocSP) +
+                     ' @nMobile                 ' +
+	                  ' , @nFunc                 ' +
+	                  ' , @cLangCode             ' +
+	                  ' , @nStep                 ' +
+	                  ' , @cStorerKey            ' +
+	                  ' , @cFacility             ' +
+                     ' , @cReceiptKey1          ' +
+                     ' , @cReceiptKey2          ' +
+                     ' , @cReceiptKey3          ' +
+                     ' , @cReceiptKey4          ' +
+                     ' , @cReceiptKey5          ' +
+                     ' , @cLoc                  ' +
+                     ' , @cID                   ' +
+                     ' , @cUCC                  ' +
+                     ' , @cDefaultToLoc OUTPUT  ' +
+                     ' , @nErrNo       OUTPUT   ' +
+                     ' , @cErrMSG      OUTPUT   '
+
+
+         SET @cExecArguments =
+                     N'@nMobile     INT, ' +
+	                  '@nFunc       INT, ' +
+	                  '@cLangCode   NVARCHAR(3), ' +
+	                  '@nStep       INT, ' +
+	                  '@cStorerKey  NVARCHAR(15), ' +
+	                  '@cFacility   NVARCHAR(5), '  +
+                     '@cReceiptKey1 NVARCHAR(20),          ' +
+                     '@cReceiptKey2 NVARCHAR(20),          ' +
+                     '@cReceiptKey3 NVARCHAR(20),          ' +
+                     '@cReceiptKey4 NVARCHAR(20),          ' +
+                     '@cReceiptKey5 NVARCHAR(20),          ' +
+                     '@cLoc        NVARCHAR(20),           ' +
+                     '@cID         NVARCHAR(18),           ' +
+                     '@cUCC        NVARCHAR(20),           ' +
+                     '@cDefaultToLoc NVARCHAR(20) OUTPUT,  ' +  
+                     '@nErrNo      INT  OUTPUT,            ' +
+                     '@cErrMsg     NVARCHAR(1024) OUTPUT   '
+
+
+         EXEC sp_executesql @cExecStatements, @cExecArguments,
+                              @nMobile
+                           , @nFunc
+                           , @cLangCode
+                           , @nStep
+                           , @cStorerKey
+                           , @cFacility
+                           , @cReceiptKey1
+                           , @cReceiptKey2
+                           , @cReceiptKey3
+                           , @cReceiptKey4
+                           , @cReceiptKey5
+                           , @cLoc
+                           , @cID
+                           , @cUCC
+                           , @cDefaultToLoc OUTPUT
+                           , @nErrNo       OUTPUT
+                           , @cErrMSG      OUTPUT
+
+         IF @nErrNo <> 0
+         BEGIN
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+            GOTO Step_2_Fail
+         END
+      END
+      ELSE
+      BEGIN
+         SET @cDefaultToLoc = @cDefaultToLocSP
+      END
+
 
       -- Reset this screen var
       SET @cLOC = ''
@@ -1302,10 +1447,81 @@ BEGIN
    BEGIN
       -- (james03)
       SET @cDefaultToLoc = ''
-      SET @cDefaultToLoc = rdt.RDTGetConfig( @nFunc, 'ReceiveDefaultToLoc', @cStorerKey) -- Parse in Function
-      IF @cDefaultToLoc = '0'
+      SET @cDefaultToLocSP = rdt.RDTGetConfig( @nFunc, 'ReceiveDefaultToLoc', @cStorerKey) -- Parse in Function (yeekung02)
+      IF @cDefaultToLocSP = '0'
       BEGIN
          SET @cDefaultToLoc = ''
+      END
+      ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDefaultToLocSP AND type = 'P') --(yeekung02)
+      BEGIN
+         SET @cExecStatements = N'EXEC rdt.' + RTRIM( @cDefaultToLocSP) +
+                     ' @nMobile                 ' +
+	                  ' , @nFunc                 ' +
+	                  ' , @cLangCode             ' +
+	                  ' , @nStep                 ' +
+	                  ' , @cStorerKey            ' +
+	                  ' , @cFacility             ' +
+                     ' , @cReceiptKey1          ' +
+                     ' , @cReceiptKey2          ' +
+                     ' , @cReceiptKey3          ' +
+                     ' , @cReceiptKey4          ' +
+                     ' , @cReceiptKey5          ' +
+                     ' , @cLoc                  ' +
+                     ' , @cID                   ' +
+                     ' , @cUCC                  ' +
+                     ' , @cDefaultToLoc OUTPUT  ' +
+                     ' , @nErrNo       OUTPUT   ' +
+                     ' , @cErrMSG      OUTPUT   '
+
+
+         SET @cExecArguments =
+                     N'@nMobile     INT, ' +
+	                  '@nFunc       INT, ' +
+	                  '@cLangCode   NVARCHAR(3), ' +
+	                  '@nStep       INT, ' +
+	                  '@cStorerKey  NVARCHAR(15), ' +
+	                  '@cFacility   NVARCHAR(5), '  +
+                     '@cReceiptKey1 NVARCHAR(20),          ' +
+                     '@cReceiptKey2 NVARCHAR(20),          ' +
+                     '@cReceiptKey3 NVARCHAR(20),          ' +
+                     '@cReceiptKey4 NVARCHAR(20),          ' +
+                     '@cReceiptKey5 NVARCHAR(20),          ' +
+                     '@cLoc        NVARCHAR(20),           ' +
+                     '@cID         NVARCHAR(18),           ' +
+                     '@cUCC        NVARCHAR(20),           ' +
+                     '@cDefaultToLoc NVARCHAR(20) OUTPUT,  ' +  
+                     '@nErrNo      INT  OUTPUT,            ' +
+                     '@cErrMsg     NVARCHAR(1024) OUTPUT   '
+
+
+         EXEC sp_executesql @cExecStatements, @cExecArguments,
+                              @nMobile
+                           , @nFunc
+                           , @cLangCode
+                           , @nStep
+                           , @cStorerKey
+                           , @cFacility
+                           , @cReceiptKey1
+                           , @cReceiptKey2
+                           , @cReceiptKey3
+                           , @cReceiptKey4
+                           , @cReceiptKey5
+                           , @cLoc
+                           , @cID
+                           , @cUCC
+                           , @cDefaultToLoc OUTPUT
+                           , @nErrNo       OUTPUT
+                           , @cErrMSG      OUTPUT
+
+         IF @nErrNo <> 0
+         BEGIN
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+            GOTO Step_3_Fail
+         END
+      END
+      ELSE
+      BEGIN
+         SET @cDefaultToLoc = @cDefaultToLocSP
       END
 
       -- Prepare prev screen var
