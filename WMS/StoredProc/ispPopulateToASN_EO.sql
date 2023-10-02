@@ -1,6 +1,3 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'ispPopulateToASN_EO' AND type = 'P')
-   DROP PROC ispPopulateToASN_EO
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -38,10 +35,11 @@ GO
 /*											  to prevent duplicate records		            	*/
 /* 29.Feb.2012  GTGOH     SOS#237799 - Console with ispPopulateToASN_E  */
 /*                        (GOH01)                                       */
-/* 22.Aug.2018  NJOW01    WMS-6054 SG-CPV change mapping                */ 
+/* 22.Aug.2018  NJOW01    WMS-6054 SG-CPV change mapping                */
+/* 18.Sep.2023  NJOW02    WMS-23682 add mapping Appointment_No          */  
 /************************************************************************/
 
-CREATE PROCEDURE ispPopulateToASN_EO 
+CREATE OR ALTER PROCEDURE ispPopulateToASN_EO 
    @c_OrderKey NVARCHAR(10)
 AS
 BEGIN
@@ -113,9 +111,9 @@ BEGIN
 	         IF @b_success = 1
 	         BEGIN
 	            INSERT INTO RECEIPT (ReceiptKey, ExternReceiptKey, WarehouseReference, StorerKey, CarrierName, 
-	                                 POKey, BilledContainerQty, EffectiveDate, ReceiptDate, Facility, RecType, DOCTYPE, ASNReason) --NJOW01
+	                                 POKey, BilledContainerQty, EffectiveDate, ReceiptDate, Facility, RecType, DOCTYPE, ASNReason, Appointment_No) --NJOW01  NJOW02
 	            VALUES (@c_NewReceiptKey, @c_ExternReceiptKey, @c_warehousereference, @c_StorerKey, @c_CarrierName,
-	                    @c_POKey, @n_ShippedQty, @d_EffectiveDate, @d_ReceiptDate, @c_Facility, 'GRN', 'R', 'CPV-RPL')	--GOH01
+	                    @c_POKey, @n_ShippedQty, @d_EffectiveDate, @d_ReceiptDate, @c_Facility, 'GRN', 'R', 'CPV-RPL', CAST(@n_ShippedQty AS NVARCHAR))	--GOH01 NJOW02
 --GOH01	                    @c_POKey, @n_ShippedQty, @d_EffectiveDate, @d_ReceiptDate, @c_Facility, 'GER', 'R')
 	         END
 	         ELSE
