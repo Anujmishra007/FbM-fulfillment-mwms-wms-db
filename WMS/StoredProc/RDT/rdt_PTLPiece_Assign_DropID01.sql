@@ -258,7 +258,7 @@ BEGIN
          SET @nRowCOUNT=@@ROWCOUNT /*(JH01)*/
 
          -- Check if this dropid had assigned with position before    
-         IF @nRowCOUNT = 0 -- /*(JH01)*/   @@ROWCOUNT = 0       
+         IF @nRowCOUNT = 0  /*(JH01)   @@ROWCOUNT = 0  */
          BEGIN    
          	SELECT 
          	   @cPrefix = Code,
