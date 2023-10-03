@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: RPT_LP_POPUPPLIST_002                                     */
 /*                                                                      */
-/* PVCS Version: 1.2                                                    */
+/* PVCS Version: 1.3                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -24,6 +24,7 @@ GO
 /* 19-May-2022  WZPang   1.0  DevOps Combine Script                     */
 /* 24-Aug-2023  WLChooi  1.1  UWP-6883 - Bug Fix (WL01)                 */
 /* 15-Sep-2023  WLChooi  1.2  WMS-23640 - Show Style & Size (WL02)      */
+/* 26-Sep-2023  WLChooi  1.3  UWP-8577 - Show ExtField04 (WL03)         */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_RPT_LP_POPUPPLIST_002]
 (@c_Loadkey NVARCHAR(10))
@@ -174,6 +175,7 @@ BEGIN
     , ExtendRouteDescLength NVARCHAR(10)
     , Logo                  NVARCHAR(50)
     , SKUTitle              NVARCHAR(50)   --WL02
+    , SKUGroupTitle         NVARCHAR(50)   --WL03
    )
 
    INSERT INTO #TEMP_PICK (PickSlipNo, LoadKey, OrderKey, ConsigneeKey, Company, Addr1, Addr2, PgGroup, Addr3, PostCode
@@ -182,7 +184,7 @@ BEGIN
                          , packcasecnt, packinner, packeaches, externorderkey, LogicalLoc, Areakey, UOM, Pallet_cal
                          , Cartons_cal, inner_cal, Each_cal, Total_cal, DeliveryDate, RetailSku, BuyerPO, InvoiceNo
                          , OrderDate, Susr4, vat, OVAS, SKUGROUP, ContainerType, Pickzone, Priority
-                         , ExtendRouteDescLength, Logo, SKUTitle)   --WL02
+                         , ExtendRouteDescLength, Logo, SKUTitle, SKUGroupTitle)   --WL02   --WL03
    SELECT RefKeyLookup.Pickslipno
         , @c_Loadkey AS LoadKey
         , PICKDETAIL.OrderKey
@@ -246,7 +248,7 @@ BEGIN
         , SKU.SUSR4
         , st.VAT
         , SKU.OVAS
-        , SKU.SKUGROUP
+        , IIF(ISNULL(CL3.Short, 'N') = 'Y', SIF.ExtendedField04, SKU.SKUGROUP) AS SKUGROUP   --WL03
         , ORDERS.ContainerType
         , LOC.Pickzone
         , CASE WHEN ISNULL(CODELKUP.Long, '') = '' THEN ORDERS.Priority
@@ -254,6 +256,7 @@ BEGIN
         , ISNULL(CL1.Short, 'N') AS ExtendRouteDescLength
         , ISNULL(@c_RetVal, '') AS Logo
         , IIF(ISNULL(CL2.Short, 'N') = 'Y', 'Style - Size', 'Sku') AS SKUTitle   --WL02
+        , IIF(ISNULL(CL3.Short, 'N') = 'Y', 'ExtendedField04', 'SKU Group') AS SKUGroupTitle   --WL03
    FROM PICKDETAIL (NOLOCK)
    JOIN ORDERS (NOLOCK) ON PICKDETAIL.OrderKey = ORDERS.OrderKey
    JOIN LOTATTRIBUTE (NOLOCK) ON PICKDETAIL.Lot = LOTATTRIBUTE.Lot
@@ -277,6 +280,11 @@ BEGIN
                                         AND CL2.Code = 'ShowStyleSize'           --WL02
                                         AND CL2.Storerkey = ORDERS.StorerKey     --WL02
                                         AND CL2.Long = 'RPT_LP_POPUPPLIST_002'   --WL02
+   LEFT JOIN CODELKUP CL3 WITH (NOLOCK) ON  CL3.LISTNAME = 'REPORTCFG'           --WL03
+                                        AND CL3.Code = 'ShowExtField04'          --WL03
+                                        AND CL3.Storerkey = ORDERS.StorerKey     --WL03
+                                        AND CL3.Long = 'RPT_LP_POPUPPLIST_002'   --WL03
+   LEFT JOIN SKUINFO SIF WITH (NOLOCK) ON SKU.StorerKey = SIF.Storerkey AND SKU.SKU = SIF.SKU   --WL03
    WHERE PICKDETAIL.Status < '5' AND LoadPlanDetail.LoadKey = @c_Loadkey
    GROUP BY RefKeyLookup.Pickslipno
           , PICKDETAIL.OrderKey
@@ -320,13 +328,14 @@ BEGIN
           , SKU.SUSR4
           , st.VAT
           , SKU.OVAS
-          , SKU.SKUGROUP
+          , IIF(ISNULL(CL3.Short, 'N') = 'Y', SIF.ExtendedField04, SKU.SKUGROUP)   --WL03
           , ORDERS.ContainerType
           , LOC.Pickzone
           , CASE WHEN ISNULL(CODELKUP.Long, '') = '' THEN ORDERS.Priority
                  ELSE CODELKUP.Long END
           , ISNULL(CL1.Short, 'N')
           , IIF(ISNULL(CL2.Short, 'N') = 'Y', 'Style - Size', 'Sku')   --WL02
+          , IIF(ISNULL(CL3.Short, 'N') = 'Y', 'ExtendedField04', 'SKU Group')   --WL03
 
    UPDATE #TEMP_PICK
    SET Cartons_cal = CASE packcasecnt
@@ -602,6 +611,7 @@ BEGIN
                                                                  , LOC
                                                                  , SKU ) THEN 'N' ELSE 'Y' END AS FillWholePage
          , SKUTitle   --WL02
+         , SKUGroupTitle   --WL03
    FROM #TEMP_PICK
    ORDER BY Company
           , OrderKey
