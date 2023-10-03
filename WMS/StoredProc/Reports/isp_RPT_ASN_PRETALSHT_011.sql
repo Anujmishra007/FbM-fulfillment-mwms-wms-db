@@ -14,7 +14,7 @@ GO
 /*                                                                         */
 /* Called By: RPT_ASN_PRETALSHT_011                                        */
 /*                                                                         */
-/* GitLab Version: 1.0                                                     */
+/* GitLab Version: 1.1                                                     */
 /*                                                                         */
 /* Version: 1.0                                                            */
 /*                                                                         */
@@ -23,6 +23,7 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 03-May-2023  WZPang  1.0   DevOps Combine Script                        */
+/* 26-Sep-2023  WLChooi 1.1   UWP-8576 - Show ExternPOKey (WL01)           */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_RPT_ASN_PRETALSHT_011]
@@ -36,8 +37,8 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @n_continue INT = 1, @n_err INT = 0, @c_errmsg NVARCHAR(255) = '', @b_Success INT = 1
-           , @n_StartTCnt INT = @@TRANCOUNT, @c_GetReceiptKey NVARCHAR(10), @c_GetUserDefine03 NVARCHAR(30)
-           , @c_GetUserDefine07 DATETIME
+         , @n_StartTCnt INT = @@TRANCOUNT, @c_GetReceiptKey NVARCHAR(10), @c_GetUserDefine03 NVARCHAR(30)
+         , @c_GetUserDefine07 DATETIME
 
    CREATE TABLE #ITEMCLASS(
    RECEIPTKEY         NVARCHAR(10),
@@ -69,7 +70,7 @@ BEGIN
           RECEIPTDETAIL.FreeGoodQtyExpected,
           RECEIPTDETAIL.Lottable01,
           RECEIPTDETAIL.Lottable02,
-          RECEIPTDETAIL.Lottable03,
+          Lottable03 = IIF(ISNULL(CL.Short, 'N') = 'Y', RECEIPTDETAIL.ExternPOKey, RECEIPTDETAIL.Lottable03),   --WL01
           RECEIPTDETAIL.Lottable04,
           RECEIPTDETAIL.QtyReceived,   
           PRINCIPAL = SKU.SUSR3,
@@ -89,7 +90,8 @@ BEGIN
           RECEIPT.Weight,
           RECEIPT.Cube,
           RECEIPT.UserDefine01,
-          RECEIPT.UserDefine03
+          RECEIPT.UserDefine03,
+          Lottable03Title = IIF(ISNULL(CL.Short, 'N') = 'Y', 'ExternPOKey', 'Lottable03')   --WL01
     FROM RECEIPT (NOLOCK)
     JOIN RECEIPTDETAIL (NOLOCK) ON RECEIPT.ReceiptKey = RECEIPTDETAIL.ReceiptKey
     JOIN SKU (NOLOCK) ON SKU.StorerKey = RECEIPTDETAIL.StorerKey AND SKU.Sku = RECEIPTDETAIL.Sku
@@ -97,6 +99,8 @@ BEGIN
     JOIN PACK (NOLOCK) ON PACK.PackKey = SKU.PackKey
     LEFT OUTER JOIN CODELKUP (NOLOCK) ON SKU.SUSR3 = CODELKUP.CODE AND CODELKUP.LISTNAME = 'PRINCIPAL'
     JOIN #ITEMCLASS t ON t.ReceiptKey = RECEIPT.Receiptkey
+    LEFT JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'REPORTCFG' AND CL.Long = 'RPT_ASN_PRETALSHT_011'   --WL01 
+                                  AND CL.Storerkey = RECEIPT.Storerkey AND CL.Code = 'ShowExtPOKey'   --WL01
     
 
    IF @n_Continue=3  -- Error Occured - Process And Return
