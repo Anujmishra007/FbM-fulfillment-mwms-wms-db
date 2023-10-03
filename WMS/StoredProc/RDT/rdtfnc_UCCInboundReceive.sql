@@ -56,6 +56,7 @@ GO
 /* 2023-09-04 3.8  James      Ad hoc fix - Change rdt_Decode variable   */
 /*                            from UCC -> UCCNO (james10)               */
 /* 2023-07-26 3.9  YeeKung    WMS-23108 Add DefaultToLOCSP (yeekung02)  */
+/* 2023-10-03 4.0  JihHaur    JSM-181441 reset @cTrackCartonType (JH01) */
 /************************************************************************/
 CREATE OR ALTER PROC rdt.rdtfnc_UCCInboundReceive (
    @nMobile    INT,
@@ -301,7 +302,8 @@ BEGIN
    SET @cUCC = ''
    SET @cQTY = ''
    SET @cTotalUCC = ''
-
+   SET @cTrackCartonType = ''  /*(JH01)*/
+	
    -- Init screen
    SET @cOutField01 = '' -- ReceiptKey1
    SET @cOutField02 = '' -- ReceiptKey2
