@@ -13,6 +13,8 @@ GO
 /* 2021-11-26 1.2  James    Perf tuning (james01)                             */  
 /* 2023-06-06 1.3  James    WMS-22665 Enhance the way to lookup device name   */
 /*                          instead of hardcoded (james02)                    */
+/* 2023-10-03 1.4  JihHaur  JSM-181474 bugfix for same orders but different   */
+/*                          dropid (JH01)                                     */
 /******************************************************************************/      
       
 CREATE OR ALTER PROC [RDT].[rdt_PTLPiece_Assign_DropID01] (      
@@ -253,8 +255,10 @@ BEGIN
          AND   Method = @cMethod    
          ORDER BY 1    
              
+         SET @nRowCOUNT=@@ROWCOUNT /*(JH01)*/
+
          -- Check if this dropid had assigned with position before    
-         IF @@ROWCOUNT = 0    
+         IF @nRowCOUNT = 0 -- /*(JH01)*/   @@ROWCOUNT = 0       
          BEGIN    
          	SELECT 
          	   @cPrefix = Code,
