@@ -689,3 +689,5 @@ END -- procedure
 GO
 GRANT EXECUTE ON [dbo].[isp_RPT_WV_PLIST_WAVE_008] TO [NSQL]
 GO
+GRANT EXECUTE ON [dbo].[isp_RPT_WV_PLIST_WAVE_008] TO [LogiReportRoleWM]
+GO
