@@ -3,32 +3,33 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/************************************************************************/
-/* Stored Proc: isp_UCC_Carton_Label_102                                */
-/* Creation Date: 11-MAR-2021                                           */
-/* Copyright: LF Logistics                                              */
-/* Written by: CSCHONG                                                  */
-/*                                                                      */
-/* Purpose: WMS-16377-[MY]-Carton Label Modification-[CR]               */
-/*                                                                      */
-/*        :                                                             */
-/* Called By: r_dw_ucc_carton_label_102                                 */
-/*          :                                                           */
-/* PVCS Version: 1.5                                                    */
-/*                                                                      */
-/* Version: 7.0                                                         */
-/*                                                                      */
-/* Data Modifications:                                                  */
-/*                                                                      */
-/* Updates:                                                             */
-/* Date        Author   Ver   Purposes                                  */
-/* 23-SEP-2021 CSCHONG  1.1   Fix TTLCTN nto show (CS01)                */
-/* 17-DEC-2021 MINGLE   1.2   Add buyerpo and reportcfg to control(ML01)*/
-/* 17-DEC-2021 Mingle   1.2   DevOps Combine Script                     */
-/* 10-JAN-2023 Nicholas 1.3   WMS-21540 ADD in TrackingNo (NL01)        */
-/* 07-APR-2023 CSCHONG  1.4   WMS-22241 add new field  (CS02)           */
-/* 15-JUN-2023 Nicholas 1.5   WMS-22859 add labelno logic (NL02)        */
-/************************************************************************/
+/***************************************************************************/
+/* Stored Proc: isp_UCC_Carton_Label_102                                   */
+/* Creation Date: 11-MAR-2021                                              */
+/* Copyright: LF Logistics                                                 */
+/* Written by: CSCHONG                                                     */
+/*                                                                         */
+/* Purpose: WMS-16377-[MY]-Carton Label Modification-[CR]                  */
+/*                                                                         */
+/*        :                                                                */
+/* Called By: r_dw_ucc_carton_label_102                                    */
+/*          :                                                              */
+/* PVCS Version: 1.5                                                       */
+/*                                                                         */
+/* Version: 7.0                                                            */
+/*                                                                         */
+/* Data Modifications:                                                     */
+/*                                                                         */
+/* Updates:                                                                */
+/* Date        Author   Ver   Purposes                                     */
+/* 23-SEP-2021 CSCHONG  1.1   Fix TTLCTN nto show (CS01)                   */
+/* 17-DEC-2021 MINGLE   1.2   Add buyerpo and reportcfg to control(ML01)   */
+/* 17-DEC-2021 Mingle   1.2   DevOps Combine Script                        */
+/* 10-JAN-2023 Nicholas 1.3   WMS-21540 ADD in TrackingNo (NL01)           */
+/* 07-APR-2023 CSCHONG  1.4   WMS-22241 add new field  (CS02)              */
+/* 15-JUN-2023 Nicholas 1.5   WMS-22859 add labelno logic (NL02)           */
+/* 27-SEP-2023 Nicholas 1.6   WMS-23795 add platform, add new logic (NL03) */
+/***************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_UCC_Carton_Label_102]
    @c_StorerKey     NVARCHAR(15)
  , @c_PickSlipNo    NVARCHAR(10)
@@ -98,12 +99,12 @@ BEGIN
     , cartonno         INT           NULL
     , TTLCtn           INT           NULL
     , SKUStyle         NVARCHAR(30)  NULL
-    --SKUSize         NVARCHAR(10) NULL,    
-    --PDQty           INT,    
+    --SKUSize          NVARCHAR(10) NULL,    
+    --PDQty            INT,    
     , Facility         NVARCHAR(10)  NULL
     , TTLQTY           INT
     , loadkey          NVARCHAR(20)  NULL
-    , ExternPOKey      NVARCHAR(20)  NULL
+    , ExternPOKey      NVARCHAR(80)  NULL --NL03
     , OHRoute          NVARCHAR(20)  NULL
     , DropID           NVARCHAR(40)  NULL --NL02    
     , ST_Address1      NVARCHAR(45)  NULL
@@ -120,7 +121,7 @@ BEGIN
     , SKUSize          NVARCHAR(10)  NULL
     , OHNotes          NVARCHAR(250) NULL
     , HIDEFIELD        NVARCHAR(5)   NULL
-    , BuyerPO          NVARCHAR(20)  NULL
+    , BuyerPO          NVARCHAR(80)  NULL --NL03
     , showPOorPOKEY    NVARCHAR(5)   NULL
     , TrackingNo       NVARCHAR(80)  NULL --NL01     
     , sstyletitle      NVARCHAR(30)  NULL --CS02  
@@ -128,6 +129,8 @@ BEGIN
     , Sdescr           NVARCHAR(60)  NULL --CS02  
     , Sbusr1           NVARCHAR(30)  NULL --CS02  
     , showskudescbusr1 NVARCHAR(5)   NULL
+    , PlatformName     NVARCHAR(60)  NULL --NL03
+    , b_company        NVARCHAR(200)  NULL --NL03
    ) --CS02   
 
    CREATE TABLE #TMP_LCartonLBL102Date
@@ -147,7 +150,8 @@ BEGIN
                                  , ExternPOKey, ST_Address1, ST_Address2, ST_Address3, ST_City, ST_State, ST_Zip
                                  , DropID, cartonno, SKUStyle, TTLCtn, RecGrp, Pickslipno, ST_Company, Labelno
                                  , HIDETTLCTN, SKUSize, OHNotes, HIDEFIELD, BuyerPO, showPOorPOKEY, TrackingNo
-                                 , sstyletitle, sstyle, Sdescr, Sbusr1, showskudescbusr1) --CS02  
+                                 , sstyletitle, sstyle, Sdescr, Sbusr1, showskudescbusr1   --CS02
+                                 , PlatformName, b_company) --NL03
    SELECT DISTINCT OH.StorerKey
                  , OH.ExternOrderKey
                  , OH.LoadKey
@@ -156,12 +160,12 @@ BEGIN
                  , OH.Facility
                  , SUM(PD.Qty)
                  , OH.ExternPOKey
-                 , ST.Address1
-                 , ST.Address2
-                 , ST.Address3
-                 , ST.City
-                 , ST.State
-                 , ST.Zip
+                 , CASE WHEN MAX(IsNull(CLR8.short,'')) = 'Y' THEN IsNull(OH.C_Address1,'') ELSE ST.Address1 END --NL03
+                 , CASE WHEN MAX(IsNull(CLR8.short,'')) = 'Y' THEN IsNull(OH.C_Address2,'') ELSE ST.Address2 END --NL03
+                 , CASE WHEN MAX(IsNull(CLR8.short,'')) = 'Y' THEN IsNull(OH.C_Address3,'') ELSE ST.Address3 END --NL03
+                 , CASE WHEN MAX(IsNull(CLR8.short,'')) = 'Y' THEN IsNull(OH.C_city,'') ELSE ST.City END --NL03
+                 , CASE WHEN MAX(IsNull(CLR8.short,'')) = 'Y' THEN IsNull(OH.c_state,'') ELSE ST.State END --NL03
+                 , CASE WHEN MAX(IsNull(CLR8.short,'')) = 'Y' THEN IsNull(OH.c_zip,'') ELSE ST.Zip END --NL03
                  , PD.DropID
                  , PD.CartonNo
                  , PD.SKU
@@ -172,7 +176,7 @@ BEGIN
                                              , CartonNo
                                              , PD.SKU) / @n_Maxline + 1 AS recgrp
                  , PH.PickSlipNo
-                 , ST.Company
+                 , CASE WHEN MAX(IsNull(CLR8.short,'')) = 'Y' THEN IsNull(OH.C_company,'') ELSE ST.Company END --NL03
                  , CASE WHEN MAX(CLR6.Short) = '1' THEN MAX(OH.OrderKey)
                         WHEN MAX(CLR6.Short) = '2' THEN OH.ExternOrderKey
                         ELSE PD.LabelNo END --NL02
@@ -193,6 +197,10 @@ BEGIN
                  , ISNULL(S.DESCR, '')
                  , ISNULL(S.BUSR1, '')
                  , ISNULL(CLR5.Short, '0') --CS02  
+                 , CASE WHEN MAX(CLR7.Short) = '1' THEN MAX(OI.Platform) --NL03
+                        WHEN MAX(CLR7.Short) = '2' THEN MAX(OH.ECOM_Platform) --NL03
+                   ELSE '' END --NL03
+                 , OH.B_COMPANY --NL03
    FROM ORDERS OH WITH (NOLOCK)
    --JOIN ORDERDETAIL OD WITH (NOLOCK)     
    JOIN PackHeader PH WITH (NOLOCK) ON PH.OrderKey = OH.OrderKey
@@ -220,13 +228,22 @@ BEGIN
    LEFT OUTER JOIN CODELKUP CLR4 (NOLOCK) ON (  OH.StorerKey = CLR4.Storerkey AND CLR4.Code = 'SHOWSKUSTYLE' --CS02   
                                           AND   CLR4.LISTNAME = 'REPORTCFG' AND CLR4.Long = 'r_dw_ucc_carton_label_102') --CS02  
    LEFT OUTER JOIN CODELKUP CLR5 (NOLOCK) ON (   OH.StorerKey = CLR5.Storerkey
-                                             AND CLR5.Code = 'SHOWSKUDESCBUSR1' --CS02   
+                                          AND    CLR5.Code = 'SHOWSKUDESCBUSR1' --CS02   
                                           AND    CLR5.LISTNAME = 'REPORTCFG'
                                           AND    CLR5.Long = 'r_dw_ucc_carton_label_102') --CS02  
    LEFT OUTER JOIN CODELKUP CLR6 (NOLOCK) ON (   OH.StorerKey = CLR6.Storerkey
-                                             AND CLR6.Code = 'showOrderHideLBL' --NL02   
+                                          AND    CLR6.Code = 'showOrderHideLBL' --NL02   
                                           AND    CLR6.LISTNAME = 'REPORTCFG'
                                           AND    CLR6.Long = 'r_dw_ucc_carton_label_102') --NL02  
+   LEFT OUTER JOIN ORDERINFO OI (NOLOCK) ON OH.ORDERKEY = OI.ORDERKEY --NL03 
+   LEFT OUTER JOIN CODELKUP CLR7 (NOLOCK) ON (   OH.StorerKey = CLR7.Storerkey --NL03 
+                                          AND    CLR7.Code = 'SHOWPLATFORM' --NL03   
+                                          AND    CLR7.LISTNAME = 'REPORTCFG' --NL03 
+                                          AND    CLR7.Long = 'r_dw_ucc_carton_label_102') --NL03  
+   LEFT OUTER JOIN CODELKUP CLR8 (NOLOCK) ON (   OH.StorerKey = CLR8.Storerkey --NL03 
+                                          AND    CLR8.Code = 'SHOWORDERADD' --NL03   
+                                          AND    CLR8.LISTNAME = 'REPORTCFG' --NL03 
+                                          AND    CLR8.Long = 'r_dw_ucc_carton_label_102') --NL03  
    WHERE PH.PickSlipNo = @c_getpickslipno
    AND   OH.StorerKey = @c_StorerKey
    AND   PD.CartonNo >= CASE WHEN @c_StartCartonNo <> '' THEN CAST(@c_StartCartonNo AS INT)
@@ -265,11 +282,19 @@ BEGIN
           , ISNULL(S.DESCR, '')
           , ISNULL(S.BUSR1, '')
           , ISNULL(CLR5.Short, '0') --CS02  
+          , OH.B_COMPANY --NL03
+          , OH.C_Address1 --NL03
+          , OH.C_Address2 --NL03
+          , OH.C_Address3 --NL03
+          , OH.C_Address4 --NL03
+          , OH.C_city --NL03
+          , OH.C_state --NL03
+          , OH.C_zip --NL03
+          , OH.C_company --NL03
    ORDER BY PH.PickSlipNo
           , OH.ExternOrderKey
           , PD.CartonNo
           , PD.SKU
-
 
    INSERT INTO #TMP_LCartonLBL102Date (Storerkey, OrdExtOrdKey, ODD_Date, OAD_Date, ODD, OAD, SLA)
    SELECT DISTINCT OH.StorerKey
@@ -336,6 +361,8 @@ BEGIN
         , a.Sdescr
         , a.Sbusr1
         , a.showskudescbusr1 --CS02  
+        , a.PlatformName --NL03
+        , a.b_company --NL03
    FROM #TMP_LCartonLBL102 a
    JOIN #TMP_LCartonLBL102Date b ON b.Storerkey = a.Storerkey AND b.OrdExtOrdKey = a.OrdExtOrdKey
    WHERE a.Pickslipno = @c_getpickslipno
