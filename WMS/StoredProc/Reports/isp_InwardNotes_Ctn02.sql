@@ -26,9 +26,10 @@ GO
 /* 26-JUN-2017  CSCHONG   1.2   WMS-5388 - Add new report config (CS01) */  
 /* 10-NOV-2020  WLChooi   1.3   WMS-15646 - Add new report config (WL01)*/  
 /* 09-MAY-2022  MINGLE    1.4   WMS-19556 - Add new logic (ML01)        */  
+/* 05-OCT-2023  CALVIN    1.5   JSM-181870 Expand ADDWHO (CLVN01)       */
 /************************************************************************/  
   
-CREATE OR ALTER PROC [dbo].[isp_InwardNotes_Ctn02] (@c_ReceiptKeyStart NVARCHAR(10)  
+CREATE OR ALTER   PROC [dbo].[isp_InwardNotes_Ctn02] (@c_ReceiptKeyStart NVARCHAR(10)  
                                       ,@c_ReceiptkeyEnd  NVARCHAR(10)  
                                       ,@c_Storerkey     NVARCHAR(10))  
 AS  
@@ -52,7 +53,7 @@ BEGIN
           CarrierReference    NVARCHAR(18) NULL,  
           StorerKey           NVARCHAR(15) NULL,  
           CarrierName         NVARCHAR(30) NULL,  
-          AddWho              NVARCHAR(18) NULL,  
+          AddWho              NVARCHAR(128) NULL,  --(CLVN01)
           ReceiptDate         DATETIME NULL,  
           Sku                 NVARCHAR(20)  NULL,  
           Lottable02          NVARCHAR(18) NULL,  
@@ -211,4 +212,3 @@ END
 GO
 GRANT EXECUTE ON  [dbo].[isp_InwardNotes_Ctn02] TO [NSQL]
 GO
-
