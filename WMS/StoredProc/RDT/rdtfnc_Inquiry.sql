@@ -64,6 +64,8 @@ GO
 /* 2021-06-09 4.0  YeeKung    WMS-17216 Add LOCLookUP (yeekung03)       */ 
 /* 2022-05-18 4.1  Ung        WMS-19661 Add MultiSKUBarcode             */
 /* 2022-11-01 4.2  James      WMS-20940-Extend variable langth (james11)*/
+/* 2023-10-02 4.3  YeeKung    WMS-23810 Add DispStyleColorSize          */
+/*                           (yeekung04)                                */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Inquiry] (
@@ -178,6 +180,7 @@ DECLARE
    @cExtendedInfoSP     NVARCHAR( 20),    --(yeekung02)
    @cExtendedInfo       NVARCHAR( 20),     --(yeekung02)
    @cLOCLookUP          NVARCHAR(20),  --(yeekung03)
+   @cDispStyleColorSize  NVARCHAR( 20), --(yeekung04)
 
  -- (james04)
    @c_oFieled01 NVARCHAR(20), @c_oFieled02 NVARCHAR(20),
@@ -282,7 +285,8 @@ SELECT
    @cDecodeSP              = V_String26,
    @cExtendedInfoSP        = V_String27,  --(yeekung02)
    @cExtendedInfo          = V_String28,  --(yeekung02)
-   @cLOCLookUP             = V_String29,  --(yeekung03)  
+   @cLOCLookUP             = V_String29,  --(yeekung03) 
+   @cDispStyleColorSize    = V_String30, --(yeekung04)
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -374,7 +378,9 @@ BEGIN
 
    SET @cLOCLookUP = rdt.rdtGetConfig( @nFunc, 'LOCLookUPSP', @cStorerKey)        
    IF @cLOCLookUP = '0'              
-      SET @cLOCLookUP = ''              
+      SET @cLOCLookUP = ''         
+   
+   SET @cDispStyleColorSize = rdt.RDTGetConfig( @nFunc, 'DispStyleColorSize', @cStorerKey)    
      
     
    -- EventLog - Sign In Function
@@ -940,7 +946,10 @@ BEGIN
             @cLOC = LLI.LOC,
             @cID = LLI.ID,
             @cSKU = LLI.SKU,
-            @cSKUDescr = SKU.Descr,
+            @cSKUDescr = CASE WHEN @cDispStyleColorSize='0' THEN SKU.Descr
+                         ELSE    CAST( Style AS NCHAR(20)) +       
+                                 CAST( Color AS NCHAR(10)) +       
+                                 CAST( Size  AS NCHAR(10))  END   ,
             @cLottableCode = SKU.LottableCode,
             @cMUOM_Desc = Pack.PackUOM3,
             @cPUOM_Desc =
@@ -1039,7 +1048,10 @@ BEGIN
             @cLOC = LLI.LOC,
             @cID = LLI.ID,
             @cSKU = LLI.SKU,
-            @cSKUDescr = SKU.Descr,
+            @cSKUDescr = CASE WHEN @cDispStyleColorSize='0' THEN SKU.Descr
+                         ELSE    CAST( Style AS NCHAR(20)) +       
+                                 CAST( Color AS NCHAR(10)) +       
+                                 CAST( Size  AS NCHAR(10))  END   ,
             @cLottableCode = SKU.LottableCode,
             @cMUOM_Desc = Pack.PackUOM3,
             @cPUOM_Desc =
@@ -1138,7 +1150,10 @@ BEGIN
             @cLOC = LLI.LOC,
             @cID = LLI.ID,
             @cSKU = LLI.SKU,
-            @cSKUDescr = SKU.Descr,
+            @cSKUDescr = CASE WHEN @cDispStyleColorSize='0' THEN SKU.Descr
+                         ELSE    CAST( Style AS NCHAR(20)) +       
+                                 CAST( Color AS NCHAR(10)) +       
+                                 CAST( Size  AS NCHAR(10))  END   ,
             @cLottableCode = SKU.LottableCode,
             @cMUOM_Desc = Pack.PackUOM3,
             @cPUOM_Desc =
@@ -1657,7 +1672,10 @@ BEGIN
             @cLOC = LLI.LOC,
             @cID = LLI.[ID],
             @cSKU = LLI.SKU,
-            @cSKUDescr = SKU.Descr,
+            @cSKUDescr = CASE WHEN @cDispStyleColorSize='0' THEN SKU.Descr
+                         ELSE    CAST( Style AS NCHAR(20)) +       
+                                 CAST( Color AS NCHAR(10)) +       
+                                 CAST( Size  AS NCHAR(10))  END   ,
             @cLottableCode = SKU.LottableCode,
             @cMUOM_Desc = Pack.PackUOM3,
             @cPUOM_Desc =
@@ -1757,7 +1775,10 @@ BEGIN
             @cLOC = LLI.LOC,
             @cID = LLI.[ID],
             @cSKU = LLI.SKU,
-            @cSKUDescr = SKU.Descr,
+            @cSKUDescr = CASE WHEN @cDispStyleColorSize='0' THEN SKU.Descr
+                         ELSE    CAST( Style AS NCHAR(20)) +       
+                                 CAST( Color AS NCHAR(10)) +       
+                                 CAST( Size  AS NCHAR(10))  END   ,
             @cLottableCode = SKU.LottableCode,
             @cMUOM_Desc = Pack.PackUOM3,
             @cPUOM_Desc =
@@ -1857,7 +1878,10 @@ BEGIN
             @cLOC = LLI.LOC,
             @cID = LLI.[ID],
             @cSKU = LLI.SKU,
-            @cSKUDescr = SKU.Descr,
+            @cSKUDescr = CASE WHEN @cDispStyleColorSize='0' THEN SKU.Descr
+                         ELSE    CAST( Style AS NCHAR(20)) +       
+                                 CAST( Color AS NCHAR(10)) +       
+                                 CAST( Size  AS NCHAR(10))  END   ,
             @cLottableCode = SKU.LottableCode,
             @cMUOM_Desc = Pack.PackUOM3,
             @cPUOM_Desc =
@@ -2321,6 +2345,8 @@ BEGIN
       V_String26 = @cDecodeSP,
       V_String27 = @cExtendedInfoSP,         --(yeekung02)
       V_String28 = @cExtendedInfo,           --(yeekung02)
+      V_String29 = @cLOCLookUP,
+      V_String30 = @cDispStyleColorSize,     --(yeekung04)
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,
