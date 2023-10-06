@@ -13,7 +13,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 2.1                                                    */
+/* PVCS Version: 1.8                                                    */
 /*                                                                      */
 /* Version: 8.0                                                         */
 /*                                                                      */
@@ -39,8 +39,12 @@ GO
 /* 2022-07-06  WLChooi  1.6   Fixed. Move PRINT_START Label to before   */
 /*                            PreGenRptDataSP (WL01)                    */
 /* 2022-10-14  WLChooi  1.7   Fixed. Extend Char Size for RowID (WL02)  */
-/* 2023-02-27  Wan06    1.8   LFWM-3913 - Ship Reference Enhancement    */
+/* 2023-02-27  Wan06    1.8   LFWM-3913 - Ship Reference Enhancement ?  */
 /*                            Print Interface Document                  */
+/* 2022-02-27  Wan07    1.9   LFWM-3967-SCE UAT Reports-Report Configuration*/
+/*                            Add fields to Details                     */
+/* 2023-07-07  Wan08    1.9   PAC-15:Ecom Packing | Print Packing Report*/
+/*                            - Backend                                 */
 /*                            DevOps Combine Script                     */
 /* 2023-07-14  WLChooi  2.0   WMS-22860 - Add PostPrintSP (WL03)        */
 /* 2023-09-05  WLChooi  2.1   LFWM-4454 - Enhance Pre/Post Print STD SP */
@@ -82,6 +86,7 @@ CREATE OR ALTER PROC [WM].[lsp_WM_Print_Report]
          , @c_PrintSource        NVARCHAR(10)   = 'WMReport' --Wan01  1: Report, 2: JReport 
          , @b_SCEPreView         INT            = 0          --(Wan03) -- 1:If call from Preview Button and not JREport
          , @c_JobIDs             NVARCHAR(50)   = '' OUTPUT  --(Wan03) -- May return multiple jobs ID.JobID seperate by '|'
+--         , @c_AutoPrint          NVARCHAR(1)    = 'N'        --(Wan07)
 AS
 BEGIN
    SET NOCOUNT ON
@@ -94,53 +99,53 @@ BEGIN
          , @n_Continue              INT 
          , @n_FunctionID            INT
 
-         , @n_NoOfKeyFieldParms     INT
+         , @n_NoOfKeyFieldParms     INT   
          , @n_NoOfParms             INT
-         , @c_Parm1                 NVARCHAR(60)      = ''
-         , @c_Parm2                 NVARCHAR(60)      = ''
-         , @c_Parm3                 NVARCHAR(60)      = ''
-         , @c_Parm4                 NVARCHAR(60)      = ''
-         , @c_Parm5                 NVARCHAR(60)      = ''
-         , @c_Parm6                 NVARCHAR(60)      = ''
-         , @c_Parm7                 NVARCHAR(60)      = ''
-         , @c_Parm8                 NVARCHAR(60)      = ''
-         , @c_Parm9                 NVARCHAR(60)      = ''
-         , @c_Parm10                NVARCHAR(60)      = ''
-         , @c_Parm11                NVARCHAR(60)      = ''
-         , @c_Parm12                NVARCHAR(60)      = ''
-         , @c_Parm13                NVARCHAR(60)      = ''
-         , @c_Parm14                NVARCHAR(60)      = ''
-         , @c_Parm15                NVARCHAR(60)      = ''
-         , @c_Parm16                NVARCHAR(60)      = ''
-         , @c_Parm17                NVARCHAR(60)      = ''
-         , @c_Parm18                NVARCHAR(60)      = ''
-         , @c_Parm19                NVARCHAR(60)      = ''
-         , @c_Parm20                NVARCHAR(60)      = ''
-         , @c_Parm                  NVARCHAR(60)      = ''
-         , @c_Parms                 NVARCHAR(500)     = ''
-         , @c_ParmLabel1            NVARCHAR(60)      = ''
-         , @c_ParmLabel2            NVARCHAR(60)      = ''
-         , @c_ParmLabel3            NVARCHAR(60)      = ''
-         , @c_ParmLabel4            NVARCHAR(60)      = ''
-         , @c_ParmLabel5            NVARCHAR(60)      = ''
-         , @c_ParmLabel6            NVARCHAR(60)      = ''
-         , @c_ParmLabel7            NVARCHAR(60)      = ''
-         , @c_ParmLabel8            NVARCHAR(60)      = ''
-         , @c_ParmLabel9            NVARCHAR(60)      = ''
-         , @c_ParmLabel10           NVARCHAR(60)      = ''
-         , @c_ParmLabel11           NVARCHAR(60)      = ''
-         , @c_ParmLabel12           NVARCHAR(60)      = ''
-         , @c_ParmLabel13           NVARCHAR(60)      = ''
-         , @c_ParmLabel14           NVARCHAR(60)      = ''
-         , @c_ParmLabel15           NVARCHAR(60)      = ''
-         , @c_ParmLabel16           NVARCHAR(60)      = ''
-         , @c_ParmLabel17           NVARCHAR(60)      = ''
-         , @c_ParmLabel18           NVARCHAR(60)      = ''
-         , @c_ParmLabel19           NVARCHAR(60)      = ''
-         , @c_ParmLabel20           NVARCHAR(60)      = ''
-         , @c_ParmLabel             NVARCHAR(60)      = ''
+         , @c_Parm1                 NVARCHAR(60)      = '' 
+         , @c_Parm2                 NVARCHAR(60)      = '' 
+         , @c_Parm3                 NVARCHAR(60)      = '' 
+         , @c_Parm4                 NVARCHAR(60)      = '' 
+         , @c_Parm5                 NVARCHAR(60)      = '' 
+         , @c_Parm6                 NVARCHAR(60)      = '' 
+         , @c_Parm7                 NVARCHAR(60)      = '' 
+         , @c_Parm8                 NVARCHAR(60)      = '' 
+         , @c_Parm9                 NVARCHAR(60)      = '' 
+         , @c_Parm10                NVARCHAR(60)      = '' 
+         , @c_Parm11                NVARCHAR(60)      = '' 
+         , @c_Parm12                NVARCHAR(60)      = '' 
+         , @c_Parm13                NVARCHAR(60)      = '' 
+         , @c_Parm14                NVARCHAR(60)      = '' 
+         , @c_Parm15                NVARCHAR(60)      = '' 
+         , @c_Parm16                NVARCHAR(60)      = '' 
+         , @c_Parm17                NVARCHAR(60)      = '' 
+         , @c_Parm18                NVARCHAR(60)      = '' 
+         , @c_Parm19                NVARCHAR(60)      = '' 
+         , @c_Parm20                NVARCHAR(60)      = ''  
+         , @c_Parm                  NVARCHAR(60)      = '' 
+         , @c_Parms                 NVARCHAR(500)     = '' 
+         , @c_ParmLabel1            NVARCHAR(60)      = '' 
+         , @c_ParmLabel2            NVARCHAR(60)      = '' 
+         , @c_ParmLabel3            NVARCHAR(60)      = '' 
+         , @c_ParmLabel4            NVARCHAR(60)      = '' 
+         , @c_ParmLabel5            NVARCHAR(60)      = '' 
+         , @c_ParmLabel6            NVARCHAR(60)      = '' 
+         , @c_ParmLabel7            NVARCHAR(60)      = '' 
+         , @c_ParmLabel8            NVARCHAR(60)      = '' 
+         , @c_ParmLabel9            NVARCHAR(60)      = '' 
+         , @c_ParmLabel10           NVARCHAR(60)      = '' 
+         , @c_ParmLabel11           NVARCHAR(60)      = '' 
+         , @c_ParmLabel12           NVARCHAR(60)      = '' 
+         , @c_ParmLabel13           NVARCHAR(60)      = '' 
+         , @c_ParmLabel14           NVARCHAR(60)      = '' 
+         , @c_ParmLabel15           NVARCHAR(60)      = '' 
+         , @c_ParmLabel16           NVARCHAR(60)      = '' 
+         , @c_ParmLabel17           NVARCHAR(60)      = '' 
+         , @c_ParmLabel18           NVARCHAR(60)      = '' 
+         , @c_ParmLabel19           NVARCHAR(60)      = '' 
+         , @c_ParmLabel20           NVARCHAR(60)      = ''  
+         , @c_ParmLabel             NVARCHAR(60)      = '' 
 
-         , @c_KeyParms              NVARCHAR(500)     = '' 
+         , @c_KeyParms              NVARCHAR(500)     = ''
          , @c_KeyLableParms         NVARCHAR(500)     = ''
          , @c_KeyParm               NVARCHAR(60)      = ''
          , @c_ParmValue             NVARCHAR(60)      = ''
@@ -183,15 +188,16 @@ BEGIN
          , @c_CriteriaMatching02    NVARCHAR(100)     = ''
          , @c_CriteriaMatching03    NVARCHAR(100)     = ''
          , @c_CriteriaMatching04    NVARCHAR(100)     = ''
-         , @c_CriteriaMatching05    NVARCHAR(100)     = ''   
+         , @c_CriteriaMatching05    NVARCHAR(MAX)     = ''              --(Wan07)  
          , @c_PreprintSP            NVARCHAR(50)      = ''  
          , @c_PrintData             NVARCHAR(4000)    = ''
          , @c_JobType               NVARCHAR(30)      = ''  
          
-         , @n_JobID                 INT               = 0   --(Wan03)
+         , @n_JobID                 INT               = 0               --(Wan03)
 
          , @c_PrinterGroup          NVARCHAR(10)      = ''
          , @c_Printer               NVARCHAR(30)      = ''
+         , @c_DefaultPrinterID      NVARCHAR(30)      = ''              --(Wan08)  
 
          , @n_StartPosK             INT = 0
          , @n_StopPosK              INT = 1
@@ -208,6 +214,8 @@ BEGIN
          , @c_PreGenRptData_SP      NVARCHAR(50)      = ''  --(Wan05)
          , @c_PostPrintSP           NVARCHAR(50)      = ''  --WL03
          , @c_PrintSP_STD           NVARCHAR(50)      = ''  --WL04
+         
+         , @b_PrintNextOnFail       INT               = 0   --(Wan07)
          
          , @CUR_GROUP               CURSOR
          , @CUR_PARM                CURSOR
@@ -460,8 +468,12 @@ BEGIN
              ,CriteriaMatching04 = ISNULL(RTRIM(WMRD.CriteriaMatching04),'')
              ,CriteriaMatching05 = ISNULL(RTRIM(WMRD.CriteriaMatching05),'')
              ,PreprintSP         = ISNULL(RTRIM(WMRD.PreprintSP),'')
-             ,PreGenRptData_SP   = ISNULL(RTRIM(WMRD.PreGenRptDataSP),'')     --(Wan05)
+             ,PreGenRptData_SP   = ISNULL(RTRIM(WMRD.PreGenRptDataSP),'')      --(Wan05)
              ,PostPrintSP        = ISNULL(RTRIM(WMRD.PostPrintSP),'')                              --WL03
+             ,DefaultPrinterID   = ISNULL(RTRIM(WMRD.DefaultPrinterID),'')                         --(Wan08) Packing to get this default to display on screen
+             ,IsPaperPrinter     = IIF(RTRIM(WMRD.IsPaperPrinter)='',@c_IsPaperPrinter             --(Wan08)
+                                      ,RTRIM(WMRD.IsPaperPrinter))                                 --(Wan08)
+             ,PrintNextOnFail    = ISNULL(RTRIM(WMRD.PrintNextOnFail),0)                           --(Wan08)
              ,PrintSP_STD        = 'WM.lsp_' + TRIM(@c_ModuleID) + '_' + ISNULL(TRIM(WMR.ReportType),'') + '_Print_'   --WL04
       FROM dbo.WMREPORT       WMR  WITH (NOLOCK)
       JOIN dbo.WMREPORTDETAIL WMRD WITH (NOLOCK) ON (WMR.ReportID = WMRD.ReportID)
@@ -489,6 +501,9 @@ BEGIN
                                     , @c_PreprintSP
                                     , @c_PreGenRptData_SP                        --(Wan05)
                                     , @c_PostPrintSP                             --WL03
+                                    , @c_DefaultPrinterID                        --(Wan08)
+                                    , @c_IsPaperPrinter                          --(Wan08)
+                                    , @b_PrintNextOnFail                         --(Wan08)   
                                     , @c_PrintSP_STD                             --WL04
       WHILE @@FETCH_STATUS <> -1
       BEGIN
@@ -548,7 +563,7 @@ BEGIN
 
          IF @c_SQLWhere <> ''
          BEGIN
-            SET @c_SQL = @c_SQLPrint + @c_SQLWhere
+            SET @c_SQL = @c_SQLPrint + ' AND ' + @c_SQLWhere                        --(Wan07)
 
             SET @b_ContinuePrint = 0
 
@@ -605,7 +620,12 @@ BEGIN
          
             --GOTO PRINT_START   --WL01
          END
- 
+         
+         IF @c_PrinterID = '' AND @c_DefaultPrinterID <> ''                         --(Wan08)
+         BEGIN
+            SET @c_PrinterID = @c_DefaultPrinterID
+         END
+        
          --(Wan04) - Start Move UP 
          SET @c_Printer = @c_PrinterID
          IF @c_PrinterID <> '' AND @c_PrintType NOT IN ( 'JReport', 'LogiReport')   
@@ -648,6 +668,7 @@ BEGIN
             END
          END
          --(Wan04) - END Move UP 
+
          --WL04 S
          IF ISNULL(@c_PrintSP_STD,'') <> ''
          BEGIN
@@ -1001,146 +1022,157 @@ BEGIN
          --PRINT_START:   --WL01
          IF @c_PrintType IN ( 'JReport', 'LogiReport')   --Wan02
          BEGIN
-            EXEC WM.lsp_WM_Get_WebReport_URL
-               @c_ReportID    = @c_ReportID
-            ,  @n_DetailRowID = @n_RowID
-            ,  @c_Parm1       = @c_Parm1           
-            ,  @c_Parm2       = @c_Parm2           
-            ,  @c_Parm3       = @c_Parm3           
-            ,  @c_Parm4       = @c_Parm4           
-            ,  @c_Parm5       = @c_Parm5           
-            ,  @c_Parm6       = @c_Parm6           
-            ,  @c_Parm7       = @c_Parm7           
-            ,  @c_Parm8       = @c_Parm8           
-            ,  @c_Parm9       = @c_Parm9           
-            ,  @c_Parm10      = @c_Parm10          
-            ,  @c_Parm11      = @c_Parm11          
-            ,  @c_Parm12      = @c_Parm12          
-            ,  @c_Parm13      = @c_Parm13          
-            ,  @c_Parm14      = @c_Parm14          
-            ,  @c_Parm15      = @c_Parm15          
-            ,  @c_Parm16      = @c_Parm16          
-            ,  @c_Parm17      = @c_Parm17          
-            ,  @c_Parm18      = @c_Parm18          
-            ,  @c_Parm19      = @c_Parm19          
-            ,  @c_Parm20      = @c_Parm20          
-            ,  @c_ReturnURL   = @c_ReturnURL OUTPUT
-            ,  @b_Success     = @b_Success   OUTPUT  
-            ,  @n_err         = @n_err       OUTPUT                                                                                                             
-            ,  @c_ErrMsg      = @c_ErrMsg    OUTPUT
-
-            IF @b_Success = 0 
+            SET @c_ReturnURL = ''                                                   --(Wan08) - START
+            --EXEC WM.lsp_WM_Get_WebReport_URL
+            --,  @c_ReportID    = @c_ReportID
+            --,  @n_DetailRowID = @n_RowID
+            EXEC [WM].[lsp_WM_Print_WebReport_Wrapper]
+               @n_WMReportRowID  = @n_RowID 
+            ,  @c_Storerkey      = @c_Storerkey     
+            ,  @c_Facility       = @c_Facility      
+            ,  @c_UserName       = @c_UserName      
+            ,  @n_Noofcopy       = @n_Noofcopy                                                       
+            ,  @c_PrinterID      = @c_PrinterID     
+            ,  @c_IsPaperPrinter = @c_IsPaperPrinter
+            ,  @n_Noofparms      = @n_Noofparms     
+            ,  @c_Parm1          = @c_Parm1           
+            ,  @c_Parm2          = @c_Parm2           
+            ,  @c_Parm3          = @c_Parm3           
+            ,  @c_Parm4          = @c_Parm4           
+            ,  @c_Parm5          = @c_Parm5           
+            ,  @c_Parm6          = @c_Parm6           
+            ,  @c_Parm7          = @c_Parm7           
+            ,  @c_Parm8          = @c_Parm8           
+            ,  @c_Parm9          = @c_Parm9           
+            ,  @c_Parm10         = @c_Parm10          
+            ,  @c_Parm11         = @c_Parm11          
+            ,  @c_Parm12         = @c_Parm12          
+            ,  @c_Parm13         = @c_Parm13          
+            ,  @c_Parm14         = @c_Parm14          
+            ,  @c_Parm15         = @c_Parm15          
+            ,  @c_Parm16         = @c_Parm16          
+            ,  @c_Parm17         = @c_Parm17          
+            ,  @c_Parm18         = @c_Parm18          
+            ,  @c_Parm19         = @c_Parm19          
+            ,  @c_Parm20         = @c_Parm20    
+            ,  @c_ReturnURL      = @c_ReturnURL OUTPUT      
+            ,  @b_Success        = @b_Success   OUTPUT  
+            ,  @n_err            = @n_err       OUTPUT                                                                                                             
+            ,  @c_ErrMsg         = @c_ErrMsg    OUTPUT
+            
+            IF @b_Success = 0 AND @b_PrintNextOnFail = 0                            --(Wan08)
             BEGIN
                SET @n_Continue = 3                 --(Wan05)
                SET @n_err = 552656
                --SET @c_ErrMsg = ERROR_MESSAGE()   --(Wan05)
-               SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing lsp_WM_Get_ModuleReport_URL. (lsp_WM_Print_Report)'
+               SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing lsp_WM_Print_WebReport_Wrapper. (lsp_WM_Print_Report)'
                              + '( ' + @c_errmsg + ' )'
                GOTO EXIT_SP
             END
-   
-            INSERT INTO @RPTURL (ReportID, DetailRowID, REPORT_URL)
-            VALUES (@c_ReportID, @n_RowID, @c_ReturnURL)
+            
+            IF @c_ReturnURL <> ''
+            BEGIN
+               INSERT INTO @RPTURL (ReportID, DetailRowID, REPORT_URL)
+               VALUES (@c_ReportID, @n_RowID, @c_ReturnURL)
+            END                                                                     --(Wan08) - END
 
             GOTO NEXT_REC
          END
          --(Wan01) - END  
 
-         IF @c_PrintMethod = 'BARTENDER' OR @c_PrintType = 'BARTENDER'
+         IF @c_PrintType = 'BARTENDER'                                              --(Wan07) - START
          BEGIN
-            SET @c_IsPaperPrinter = 'N'
+         --   SET @c_IsPaperPrinter = 'N'
 
-            IF @c_ModuleID = 'PACKING'
-            BEGIN
-               BEGIN TRY
-                  EXEC isp_packing_bartender_print
-                     @c_PrinterID    = @c_Printer
-                  ,  @c_LabelType    = @c_ReportTemplate
-                  ,  @c_Userid       = @c_UserName
-                  ,  @c_Parm01       = @c_Parm1
-                  ,  @c_Parm02       = @c_Parm2
-                  ,  @c_Parm03       = @c_Parm3
-                  ,  @c_Parm04       = @c_Parm4
-                  ,  @c_Parm05       = @c_Parm5
-                  ,  @c_Parm06       = @c_Parm6
-                  ,  @c_Parm07       = @c_Parm7
-                  ,  @c_Parm08       = @c_Parm8
-                  ,  @c_Parm09       = @c_Parm9
-                  ,  @c_Parm10       = @c_Parm10
-                  ,  @c_Storerkey    = @c_Storerkey
-                  ,  @c_NoOfCopy     = @n_NoOfCopy
-                  ,  @c_SubType      = '' --@c_ReportID
-                  ,  @b_Success      = @b_Success
-                  ,  @n_err          = @n_err         OUTPUT  
-                  ,  @c_errmsg       = @c_errmsg      OUTPUT
-               END TRY
-               BEGIN CATCH   
-                  SET @n_Err = 552653
-                  SET @c_ErrMsg = ERROR_MESSAGE()
-                  SET @c_ErrMsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ':Error Executing isp_packing_bartender_print. (lsp_WM_Print_Report)'
-                                + ' ( ' + @c_errmsg + ' )' 
-               END CATCH
+         --   IF @c_ModuleID = 'PACKING'
+         --   BEGIN
+         --      BEGIN TRY
+         --         EXEC isp_packing_bartender_print
+         --            @c_PrinterID    = @c_Printer
+         --         ,  @c_LabelType    = @c_ReportTemplate
+         --         ,  @c_Userid       = @c_UserName
+         --         ,  @c_Parm01       = @c_Parm1
+         --         ,  @c_Parm02       = @c_Parm2
+         --         ,  @c_Parm03       = @c_Parm3
+         --         ,  @c_Parm04       = @c_Parm4
+         --         ,  @c_Parm05       = @c_Parm5
+         --         ,  @c_Parm06       = @c_Parm6
+         --         ,  @c_Parm07       = @c_Parm7
+         --         ,  @c_Parm08       = @c_Parm8
+         --         ,  @c_Parm09       = @c_Parm9
+         --         ,  @c_Parm10       = @c_Parm10
+         --         ,  @c_Storerkey    = @c_Storerkey
+         --         ,  @c_NoOfCopy     = @n_NoOfCopy
+         --         ,  @c_SubType      = '' --@c_ReportID
+         --         ,  @b_Success      = @b_Success
+         --         ,  @n_err          = @n_err         OUTPUT  
+         --         ,  @c_errmsg       = @c_errmsg      OUTPUT
+         --      END TRY
+         --      BEGIN CATCH   
+         --         SET @n_Err = 552653
+         --         SET @c_ErrMsg = ERROR_MESSAGE()
+         --         SET @c_ErrMsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ':Error Executing isp_packing_bartender_print. (lsp_WM_Print_Report)'
+         --                       + ' ( ' + @c_errmsg + ' )' 
+         --      END CATCH
 
-               IF @b_Success = 0 OR @n_Err <> 0
-               BEGIN
-                  SET @n_Continue = 3
-                  SET @c_errmsg = @c_errmsg
-                  GOTO EXIT_SP
-               END
+         --      IF @b_Success = 0 OR @n_Err <> 0
+         --      BEGIN
+         --         SET @n_Continue = 3
+         --         SET @c_errmsg = @c_errmsg
+         --         GOTO EXIT_SP
+         --      END
 
-               IF @b_Success = 2 -- Report Has been Printed and stop to print to next template for the same group
-               BEGIN
-                  BREAK
-               END
+         --      IF @b_Success = 2 -- Report Has been Printed and stop to print to next template for the same group
+         --      BEGIN
+         --         BREAK
+         --      END
 
-               GOTO NEXT_REC         
-            END
+         --      GOTO NEXT_REC         
+         --   END
+            
+            --BEGIN TRY
+            --  EXEC isp_BT_GenBartenderCommand
+            --      @cPrinterID       = @c_PrinterID
+            --   ,  @c_LabelType      = @c_ReportTemplate
+            --   ,  @c_Userid         = @c_UserName
+            --   ,  @c_Parm01         = @c_Parm1
+            --   ,  @c_Parm02         = @c_Parm2
+            --   ,  @c_Parm03         = @c_Parm3
+            --   ,  @c_Parm04         = @c_Parm4
+            --   ,  @c_Parm05         = @c_Parm5
+            --   ,  @c_Parm06         = @c_Parm6
+            --   ,  @c_Parm07         = @c_Parm7
+            --   ,  @c_Parm08         = @c_Parm8
+            --   ,  @c_Parm09         = @c_Parm9
+            --   ,  @c_Parm10         = @c_Parm10
+            --   ,  @c_Storerkey      = @c_Storerkey
+            --   ,  @c_NoCopy         = @n_NoOfCopy
+            --   ,  @c_Returnresult   ='N'   
+            --   ,  @n_err            = @n_err          OUTPUT  
+            --   ,  @c_errmsg         = @c_errmsg       OUTPUT 
+            --   ,  @c_QCmdSubmitFlag = @c_QCmdSubmitFlag  
 
-            BEGIN TRY
-               EXEC isp_BT_GenBartenderCommand
-                     @cPrinterID     = @c_Printer
-                  ,  @c_LabelType    = @c_ReportTemplate
-                  ,  @c_Userid       = @c_UserName
-                  ,  @c_Parm01       = @c_Parm1
-                  ,  @c_Parm02       = @c_Parm2
-                  ,  @c_Parm03       = @c_Parm3
-                  ,  @c_Parm04       = @c_Parm4
-                  ,  @c_Parm05       = @c_Parm5
-                  ,  @c_Parm06       = @c_Parm6
-                  ,  @c_Parm07       = @c_Parm7
-                  ,  @c_Parm08       = @c_Parm8
-                  ,  @c_Parm09       = @c_Parm9
-                  ,  @c_Parm10       = @c_Parm10
-                  ,  @c_Storerkey    = @c_Storerkey
-                  ,  @c_NoCopy       = @n_NoOfCopy
-                  ,  @n_err          = @n_err         OUTPUT  
-                  ,  @c_errmsg       = @c_errmsg      OUTPUT  
-            END TRY
-            BEGIN CATCH
-               SET @n_Err = 552654
-               SET @c_ErrMsg = ERROR_MESSAGE()
-               SET @c_ErrMsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ':Error Executing isp_BT_GenBartenderCommand. (lsp_WM_Print_Report)'
-                             + ' ( ' + @c_errmsg + ' )' 
-            END CATCH
+            --END TRY
+            --BEGIN CATCH
+            --   SET @n_Err = 552654
+            --   SET @c_ErrMsg = ERROR_MESSAGE()
+            --   SET @c_ErrMsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ':Error Executing isp_BT_GenBartenderCommand. (lsp_WM_Print_Report)'
+            --                  + ' ( ' + @c_errmsg + ' )' 
+            --END CATCH
 
-            IF @n_Err <> 0 
-            BEGIN
-               SET @n_Continue = 3
-               SET @c_errmsg = @c_errmsg
-               GOTO EXIT_SP
-            END
-      
-            GOTO NEXT_REC
-         END
-         
-         --(Wan06) - START
-         IF @c_PrintType IN ('ITFDOC')
-         BEGIN
-            EXEC [WM].[lsp_WM_Print_ITFDoc_Wrapper]
+            --IF @n_Err <> 0 
+            --BEGIN
+            --   SET @n_Continue = 3
+            --   SET @c_errmsg = @c_errmsg
+            --   GOTO EXIT_SP
+            --END
+            
+            EXEC [WM].[lsp_WM_Print_Bartender_Wrapper]
                @n_WMReportRowID  = @n_RowID 
             ,  @c_Storerkey      = @c_Storerkey     
             ,  @c_Facility       = @c_Facility      
-            ,  @c_UserName       = @c_UserName             
+            ,  @c_UserName       = @c_UserName  
+            ,  @n_Noofcopy       = @n_Noofcopy
             ,  @c_PrinterID      = @c_Printer     
             ,  @c_IsPaperPrinter = @c_IsPaperPrinter
             ,  @n_Noofparms      = @n_Noofparms     
@@ -1168,7 +1200,52 @@ BEGIN
             ,  @n_Err            = @n_Err             OUTPUT
             ,  @c_ErrMsg         = @c_ErrMsg          OUTPUT
             
-            IF @b_Success = 0 
+            IF @b_Success = 0 AND @b_PrintNextOnFail = 0                            --(Wan08)
+            BEGIN
+               SET @n_Continue = 3
+               GOTO EXIT_SP
+            END                                                                     --(Wan07) - END
+      
+            GOTO NEXT_REC
+         END
+         
+         --(Wan06) - START
+         IF @c_PrintType IN ('ITFDOC')
+         BEGIN
+            EXEC [WM].[lsp_WM_Print_ITFDoc_Wrapper]
+               @n_WMReportRowID  = @n_RowID 
+            ,  @c_Storerkey      = @c_Storerkey     
+            ,  @c_Facility       = @c_Facility      
+            ,  @c_UserName       = @c_UserName
+            ,  @n_Noofcopy       = @n_Noofcopy                                      --(Wan07)            
+            ,  @c_PrinterID      = @c_Printer     
+            ,  @c_IsPaperPrinter = @c_IsPaperPrinter
+            ,  @n_Noofparms      = @n_Noofparms     
+            ,  @c_Parm1          = @c_Parm1         
+            ,  @c_Parm2          = @c_Parm2         
+            ,  @c_Parm3          = @c_Parm3         
+            ,  @c_Parm4          = @c_Parm4         
+            ,  @c_Parm5          = @c_Parm5         
+            ,  @c_Parm6          = @c_Parm6         
+            ,  @c_Parm7          = @c_Parm7         
+            ,  @c_Parm8          = @c_Parm8         
+            ,  @c_Parm9          = @c_Parm9         
+            ,  @c_Parm10         = @c_Parm10               
+            ,  @c_Parm11         = @c_Parm11        
+            ,  @c_Parm12         = @c_Parm12        
+            ,  @c_Parm13         = @c_Parm13        
+            ,  @c_Parm14         = @c_Parm14       
+            ,  @c_Parm15         = @c_Parm15          
+            ,  @c_Parm16         = @c_Parm16          
+            ,  @c_Parm17         = @c_Parm17          
+            ,  @c_Parm18         = @c_Parm18          
+            ,  @c_Parm19         = @c_Parm19          
+            ,  @c_Parm20         = @c_Parm20          
+            ,  @b_Success        = @b_Success         OUTPUT
+            ,  @n_Err            = @n_Err             OUTPUT
+            ,  @c_ErrMsg         = @c_ErrMsg          OUTPUT
+            
+            IF @b_Success = 0 AND @b_PrintNextOnFail = 0                            --(Wan08)
             BEGIN
                SET @n_Continue = 3
                GOTO EXIT_SP
@@ -1177,13 +1254,100 @@ BEGIN
          END
          --(Wan06) - END
          
-         IF @c_PrintMethod = 'WM' OR @c_PrintType NOT IN ( 'BARTENDER', 'LOGIREPORT' )    --2020-08-24 Change WebPrint to JREport
+         --(Wan08) - START
+         IF @c_PrintType IN ('ZPL')
          BEGIN
-            IF ISNULL(@c_PrintData,'') <> ''
+            EXEC [WM].[lsp_WM_Print_ZPL_Wrapper]
+               @n_WMReportRowID  = @n_RowID 
+            ,  @c_Storerkey      = @c_Storerkey     
+            ,  @c_Facility       = @c_Facility      
+            ,  @c_UserName       = @c_UserName
+            ,  @n_Noofcopy       = @n_Noofcopy                                                   
+            ,  @c_PrinterID      = @c_Printer     
+            ,  @c_IsPaperPrinter = @c_IsPaperPrinter
+            ,  @n_Noofparms      = @n_Noofparms     
+            ,  @c_Parm1          = @c_Parm1         
+            ,  @c_Parm2          = @c_Parm2         
+            ,  @c_Parm3          = @c_Parm3         
+            ,  @c_Parm4          = @c_Parm4         
+            ,  @c_Parm5          = @c_Parm5         
+            ,  @c_Parm6          = @c_Parm6         
+            ,  @c_Parm7          = @c_Parm7         
+            ,  @c_Parm8          = @c_Parm8         
+            ,  @c_Parm9          = @c_Parm9         
+            ,  @c_Parm10         = @c_Parm10               
+            ,  @c_Parm11         = @c_Parm11        
+            ,  @c_Parm12         = @c_Parm12        
+            ,  @c_Parm13         = @c_Parm13        
+            ,  @c_Parm14         = @c_Parm14       
+            ,  @c_Parm15         = @c_Parm15          
+            ,  @c_Parm16         = @c_Parm16          
+            ,  @c_Parm17         = @c_Parm17          
+            ,  @c_Parm18         = @c_Parm18          
+            ,  @c_Parm19         = @c_Parm19          
+            ,  @c_Parm20         = @c_Parm20          
+            ,  @b_Success        = @b_Success         OUTPUT
+            ,  @n_Err            = @n_Err             OUTPUT
+            ,  @c_ErrMsg         = @c_ErrMsg          OUTPUT
+            
+            IF @b_Success = 0 AND @b_PrintNextOnFail = 0                            
             BEGIN
-               SET @c_ReportTemplate = ''
+               SET @n_Continue = 3
+               GOTO EXIT_SP
             END
-
+            GOTO NEXT_REC
+         END
+         
+         IF @c_PrintType IN ('TPPRINT')
+         BEGIN
+            EXEC [WM].[lsp_WM_Print_TPPrint_Wrapper]
+               @n_WMReportRowID  = @n_RowID 
+            ,  @c_Storerkey      = @c_Storerkey     
+            ,  @c_Facility       = @c_Facility      
+            ,  @c_UserName       = @c_UserName
+            ,  @n_Noofcopy       = @n_Noofcopy                                                   
+            ,  @c_PrinterID      = @c_Printer     
+            ,  @c_IsPaperPrinter = @c_IsPaperPrinter
+            ,  @n_Noofparms      = @n_Noofparms     
+            ,  @c_Parm1          = @c_Parm1         
+            ,  @c_Parm2          = @c_Parm2         
+            ,  @c_Parm3          = @c_Parm3         
+            ,  @c_Parm4          = @c_Parm4         
+            ,  @c_Parm5          = @c_Parm5         
+            ,  @c_Parm6          = @c_Parm6         
+            ,  @c_Parm7          = @c_Parm7         
+            ,  @c_Parm8          = @c_Parm8         
+            ,  @c_Parm9          = @c_Parm9         
+            ,  @c_Parm10         = @c_Parm10               
+            ,  @c_Parm11         = @c_Parm11        
+            ,  @c_Parm12         = @c_Parm12        
+            ,  @c_Parm13         = @c_Parm13        
+            ,  @c_Parm14         = @c_Parm14       
+            ,  @c_Parm15         = @c_Parm15          
+            ,  @c_Parm16         = @c_Parm16          
+            ,  @c_Parm17         = @c_Parm17          
+            ,  @c_Parm18         = @c_Parm18          
+            ,  @c_Parm19         = @c_Parm19          
+            ,  @c_Parm20         = @c_Parm20          
+            ,  @b_Success        = @b_Success         OUTPUT
+            ,  @n_Err            = @n_Err             OUTPUT
+            ,  @c_ErrMsg         = @c_ErrMsg          OUTPUT
+            
+            IF @b_Success = 0 AND @b_PrintNextOnFail = 0                            
+            BEGIN
+               SET @n_Continue = 3
+               GOTO EXIT_SP
+            END
+            GOTO NEXT_REC
+         END
+         --(Wan08) - END
+         
+         IF @c_PrintMethod = 'WM' OR @c_PrintType NOT IN ( 'LOGIREPORT' )    --2020-08-24 Change WebPrint to JREport
+         BEGIN
+            --IF ISNULL(@c_PrintData,'') <> ''
+            --BEGIN
+            --   SET @c_ReportTemplate = ''
+            --END
             SET @n_JobID = 0                       --(Wan03)
             BEGIN TRY
                EXEC [WM].[lsp_WM_SendPrintJobToProcessApp] 
@@ -1232,7 +1396,7 @@ BEGIN
                              + '( ' + @c_errmsg + ' )'
             END CATCH
       
-            IF @b_Success = 0 OR @n_Err <> 0
+            IF (@b_Success = 0 OR @n_Err <> 0) AND @b_PrintNextOnFail = 0                          --(Wan08)
             BEGIN
                SET @n_Continue=3 
                SET @c_errmsg = @c_errmsg
@@ -1245,7 +1409,7 @@ BEGIN
             
             GOTO NEXT_REC
          END
-         
+
          NEXT_REC:
          --WL04 S
          IF @b_ContinuePrint = 1 AND ISNULL(@c_PrintSP_STD,'') <> ''
@@ -1370,6 +1534,7 @@ BEGIN
             END     
          END
          --WL04 E
+
          --WL03 S
          IF @b_ContinuePrint = 1 AND @c_PostPrintSP <> ''
          BEGIN
@@ -1508,7 +1673,10 @@ BEGIN
                                        , @c_CriteriaMatching05
                                        , @c_PreprintSP
                                        , @c_PreGenRptData_SP                        --(Wan05)
-                                       , @c_PostPrintSP                             --WL03
+                                       , @c_PostPrintSP                             --WL03                                       
+                                       , @c_DefaultPrinterID                        --(Wan08)                                       
+                                       , @c_IsPaperPrinter                          --(Wan08)
+                                       , @b_PrintNextOnFail                         --(Wan08) 
                                        , @c_PrintSP_STD                             --WL04
       END 
       CLOSE @CUR_GROUP
@@ -1531,7 +1699,7 @@ EXIT_SP:
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0
-      IF  @@TRANCOUNT = 1 AND @@TRANCOUNT > @n_StartTCnt
+      IF @@TRANCOUNT = 1 AND @@TRANCOUNT > @n_StartTCnt
       BEGIN
          ROLLBACK TRAN
       END
@@ -1542,7 +1710,6 @@ EXIT_SP:
             COMMIT TRAN
          END
       END
-
       EXECUTE nsp_logerror @n_err, @c_ErrMsg, 'lsp_WM_Print_Report'
       --RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
    END
@@ -1555,6 +1722,10 @@ EXIT_SP:
       END
    END
    REVERT
+   WHILE @@TRANCOUNT < @n_StartTCnt
+   BEGIN
+      BEGIN TRAN
+   END
 END -- procedure
 GO
 GRANT EXECUTE ON [WM].[lsp_WM_Print_Report] TO nSQL 
