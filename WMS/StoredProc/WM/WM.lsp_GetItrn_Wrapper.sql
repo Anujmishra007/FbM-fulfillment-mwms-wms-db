@@ -13,7 +13,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.6                                                    */
+/* PVCS Version: 1.7                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -39,6 +39,8 @@ GO
 /* 2023-05-24  Wan04    1.5   LFWM-4283 - PROD - PH Alcon - SCE Inventory*/   
 /*                            Transaction Module                        */
 /* 2023-06-14  SPChin   1.6   JSM-156017 - Bug Fixed                    */
+/* 2023-03-14  Wan05    1.7   LFWM-3954 - Philippines All Customer LFSCE*/
+/*                            WM Inventory Transaction CR               */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_GetItrn_Wrapper]
    @c_WhereClause       NVARCHAR(MAX)                 --Contain WHERE for eg. WHERE ITRN.Storerkey = ''NIKEPH''
@@ -112,6 +114,7 @@ BEGIN
       ,  TranType             NVARCHAR(10)   NOT NULL
       ,  SourceKey            NVARCHAR(20)   NULL
       ,  SourceType           NVARCHAR(30)   NULL
+      ,  SourceTypeDesc       NVARCHAR(30)   NULL                                   --(Wan05)  
       ,  StorerKey            NVARCHAR(15)   NOT NULL
       ,  Sku                  NVARCHAR(20)   NOT NULL
       ,  FromLoc              NVARCHAR(10)   NOT NULL
@@ -158,6 +161,8 @@ BEGIN
       ,  Remarks              NVARCHAR(255)  NULL     DEFAULT ('')
       ,  TxnSourceType        NVARCHAR(30)   NOT NULL DEFAULT ('')
       ,  TxnKey               NVARCHAR(10)   NOT NULL DEFAULT ('')
+      ,  CaseQty              FLOAT          NOT NULL DEFAULT (0.00)                --(Wan05)
+      ,  InnerPackQty         FLOAT          NOT NULL DEFAULT (0.00)                --(Wan05)
       ,  Rowfocusindicatorcol CHAR(1)        NOT NULL DEFAULT ('')
       )
 
@@ -321,7 +326,7 @@ BEGIN
             ,ti.Color = ISNULL(s.Color,'')
             ,ti.Size = ISNULL(s.Size,'')
             ,ti.Measurement = ISNULL(s.Measurement,'')
-            ,TxnKey = CASE WHEN ti.SourceType IN ('ntrPickDetailUpdate'
+            ,ti.TxnKey = CASE WHEN ti.SourceType IN ('ntrPickDetailUpdate'
                                                 , 'ntrReceiptDetailUpdate', 'ntrReceiptDetailAdd'
                                                 , 'ntrAdjustmentDetailUpdate', 'ntrAdjustmentDetailAdd'
                                                 , 'ntrTransferDetailUpdate'
@@ -329,14 +334,14 @@ BEGIN
                                                 , 'ntrKitDetailAdd' , 'ntrKitDetailUpdate'
                                                 , ''
                                                 )
-                           THEN LEFT(ti.SourceKey, 10)
-                           WHEN SourceType LIKE 'CC Deposit%'
-                           THEN LEFT(ti.SourceKey, 10)
-                           WHEN SourceType LIKE 'CC Withdrawal%'
-                           THEN LEFT(ti.SourceKey, 10)
-                           ELSE ti.TxnKey
-                           END
-            ,TxnSourceType = CASE WHEN ti.SourceType IN ( 'ntrPickDetailUpdate'
+                              THEN LEFT(ti.SourceKey, 10)
+                              WHEN SourceType LIKE 'CC Deposit%'
+                              THEN LEFT(ti.SourceKey, 10)
+                              WHEN SourceType LIKE 'CC Withdrawal%'
+                              THEN LEFT(ti.SourceKey, 10)
+                              ELSE ti.TxnKey
+                              END
+            ,ti.TxnSourceType = CASE WHEN ti.SourceType IN ( 'ntrPickDetailUpdate'
                                                         , 'ntrReceiptDetailUpdate', 'ntrReceiptDetailAdd'
                                                         , 'ntrAdjustmentDetailUpdate', 'ntrAdjustmentDetailAdd'
                                                         , 'ntrTransferDetailUpdate'
@@ -344,19 +349,44 @@ BEGIN
                                                         , 'ntrKitDetailAdd', 'ntrKitDetailUpdate'
                                                         , ''
                                                         )
-                                    THEN ti.SourceType
-                                    WHEN SourceType LIKE 'CC Deposit%'
-                                    THEN 'CC Deposit'
-                                    WHEN SourceType LIKE 'CC Withdrawal%'
-                                    THEN 'CC Withdrawal'
-                                    ELSE ''
-                                    END
-
+                                     THEN ti.SourceType
+                                     WHEN SourceType LIKE 'CC Deposit%'
+                                     THEN 'CC Deposit'
+                                     WHEN SourceType LIKE 'CC Withdrawal%'
+                                     THEN 'CC Withdrawal'
+                                     ELSE ''
+                                     END
+            , ti.SourceTypeDesc = CASE WHEN ti.SourceType = 'ntrPickDetailUpdate'                        --(Wan05)                  
+                                       THEN 'Orders'
+                                       WHEN ti.SourceType IN ('ntrReceiptDetailUpdate', 'ntrReceiptDetailAdd')
+                                       THEN 'Receipt'
+                                       WHEN ti.SourceType IN ('ntrAdjustmentDetailUpdate', 'ntrAdjustmentDetailAdd')
+                                       THEN 'Adjustment'
+                                       WHEN ti.SourceType =  'ntrTransferDetailUpdate'
+                                       THEN 'Transfer'
+                                       WHEN ti.SourceType = 'WSPUTAWAY'
+                                       THEN 'Put-Away'
+                                       WHEN ti.SourceType = 'ntrReplenishmentUpdate'
+                                       THEN 'Replenishment'
+                                       WHEN ti.SourceType =  'ntrInventoryQCDetailUpdate'
+                                       THEN 'IQC'
+                                       WHEN ti.SourceType IN ('ntrKitDetailAdd', 'ntrKitDetailUpdate')
+                                       THEN 'Kitting'
+                                       WHEN ti.SourceType LIKE 'CC Deposit%' 
+                                       THEN 'Count'
+                                       WHEN ti.SourceType LIKE 'CC Withdrawal%' 
+                                       THEN 'Count'
+                                       WHEN TranType = 'MV'                                              
+                                       THEN 'Inventory Move'
+                                       END                
+            , ti.Caseqty = CASE WHEN p.Casecnt > 0 THEN FLOOR(ti.Qty / p.Casecnt) ELSE 0.00 END          --(Wan05)
+            , ti.InnerPackQty = CASE WHEN p.InnerPack > 0 THEN FLOOR(ti.Qty / p.InnerPack) ELSE 0.00 END --(Wan05)
       FROM #TMP_ITRN ti
       LEFT OUTER JOIN dbo.SKU AS s WITH (NOLOCK)  ON ti.Storerkey = s.StorerKey AND ti.Sku = s.Sku
       LEFT OUTER JOIN dbo.LOC AS l1 WITH (NOLOCK) ON l1.loc = ti.FromLoc
       LEFT OUTER JOIN dbo.LOC AS l2 WITH (NOLOCK) ON l2.loc = ti.ToLoc
-
+      LEFT JOIN dbo.PACK AS p WITH (NOLOCK) ON p.Packkey = s.PACKKey                                     --(Wan05)
+      
       SET @CUR_ITRN = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT ti.TxnSourceType
             ,ti.TranType
@@ -620,7 +650,7 @@ BEGIN
       SET @c_SortPreference = ISNULL(@c_SortPreference,'')
       IF @c_SortPreference = ''
       BEGIN
-         SET @c_SortPreference = N' ORDER BY RowID ASC'
+         SET @c_SortPreference = N' ORDER BY ITRN.RowID ASC'               --(Wan05)
       END
       ELSE
       BEGIN
@@ -677,11 +707,14 @@ BEGIN
                   +', ITRN.ExternReferenceType'
                   +', ITRN.Remarks'
                   +', ITRN.Rowfocusindicatorcol'
+                  +', ITRN.SourceTypeDesc'                                          --(Wan05)  
+                  +', ITRN.CaseQty'                                                 --(Wan05)
+                  +', ITRN.InnerPackQty'                                            --(Wan05)     
                   + ' FROM #TMP_ITRN AS ITRN'
-                  + ' JOIN #TMP_ITRN AS LotAttribute ON LotAttribute.RowID = ITRN.RowID'      			--(Wan04)   
-                  + ' JOIN #TMP_ITRN AS SKU ON SKU.RowID = ITRN.RowID'                        			--(Wan04)
-                  + ' JOIN dbo.LOC TOLOC WITH (NOLOCK) ON TOLOC.Loc = ITRN.ToLoc'             			--JSM-156017 --(Wan04)	
-                  + ' LEFT OUTER JOIN dbo.LOC FROMLOC WITH (NOLOCK) ON FROMLOC.Loc = ITRN.FromLoc'	--JSM-156017 --(Wan04)	
+                  + ' JOIN #TMP_ITRN AS LotAttribute ON LotAttribute.RowID = ITRN.RowID'      --(Wan04)   
+                  + ' JOIN #TMP_ITRN AS SKU ON SKU.RowID = ITRN.RowID'                        --(Wan04)
+                  + ' JOIN dbo.LOC TOLOC WITH (NOLOCK) ON TOLOC.Loc = ITRN.ToLoc'                  --JSM-156017 --(Wan04)   
+                  + ' LEFT OUTER JOIN dbo.LOC FROMLOC WITH (NOLOCK) ON FROMLOC.Loc = ITRN.FromLoc' --JSM-156017 --(Wan04)   
                   + ' ' + @c_SearchCondition             --(Wan03)
                   + @c_SortPreference
 
@@ -698,6 +731,11 @@ BEGIN
       GOTO EXIT_SP
    END CATCH
 EXIT_SP:
+   IF OBJECT_ID('tempdb..#TMP_ITRN','u') IS NOT NULL                                --(Wan05)
+   BEGIN
+      DROP TABLE #TMP_ITRN;
+   END
+   
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0
