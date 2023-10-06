@@ -13,7 +13,7 @@ GO
 /* Called By:                                                              */  
 /*                                                                         */  
 /*                                                                         */  
-/* Version: 1.8                                                            */  
+/* Version: 1.5                                                            */  
 /*                                                                         */  
 /* Data Modifications:                                                     */  
 /*                                                                         */  
@@ -31,10 +31,6 @@ GO
 /*                            DisAllowDuplicateIdsOnWSRcpt StorerCFG CR    */
 /* 2023-03-09  NJOW01   1.6   LFWM-3608 performance tuning for XML Reading */
 /* 2023-06-13  Wan06    1.7   LFWM-4249-SCE PH Copy value to all row (ASN)Bug*/
-/* 2023-08-16  Wan07    1.8   LFWM-4417 - SCE PROD SG Receipt - Disallow   */
-/*                            Duplicate Movable Unit ID Error When Save when*/
-/*                            exists Receipt Reversed Detail               */
-/*                            DevObj Combine Script                        */
 /***************************************************************************/   
 CREATE OR ALTER PROC [WM].[lsp_Validate_ReceiptDetail_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
@@ -255,10 +251,8 @@ BEGIN
          ,  @c_UniqueIDSkipDocType           NVARCHAR(30) = ''             --(Wan04)
          
          ,  @c_AllowDupWithinPLTCnt          NVARCHAR(30) = 'N'            --(Wan05)
-         ,  @n_BeforeReceivedQty             INT         = 0             --(Wan05)
-         ,  @b_ValidID                       INT         = 0             --(Wan05)  
-         
-         ,  @n_BeforeReceivedQty_Del         INT         = 0             --(Wan07)
+         ,  @n_BeforeReceivedQty             FLOAT        = 0.00           --(Wan05)
+         ,  @b_ValidID                       INT          = 0              --(Wan05)  
 
       IF EXISTS ( SELECT 1                                                          --(Wan06) - START
                  FROM tempdb.INFORMATION_SCHEMA.COLUMNS c 
@@ -302,11 +296,6 @@ BEGIN
          ,  @n_BeforeReceivedQty = RD.BeforeReceivedQty        --(Wan05)
       FROM  #VALDN RD  --NJOW01
 
-      SELECT @n_BeforeReceivedQty_Del = r.BeforeReceivedQty    --(Wan07)   - START
-      FROM dbo.RECEIPTDETAIL AS r (NOLOCK)
-      WHERE r.ReceiptKey = @c_ReceiptKey
-      AND r.ReceiptLineNumber = @c_ReceiptLineNo               --(Wan07)   - END
-      
       SELECT TOP 1 
             @c_Facility = RTRIM(R.Facility)
          ,  @c_DocType  = TRIM(R.DOCTYPE)                --(Wan04) 
@@ -474,7 +463,7 @@ BEGIN
       --(Wan01) - END
       
       --(Wan03) - START
-      IF @c_ToID <> '' AND @n_BeforeReceivedQty > 0                                 --(Wan07)
+      IF @c_ToID <> '' 
       BEGIN
          --(Wan04) - START
          SELECT @c_DisAllowDuplicateIdsOnWSRcpt = fgr.Authority
@@ -497,25 +486,18 @@ BEGIN
             
             IF @c_AllowDupWithinPLTCnt = 'N'                --(Wan05) 
             BEGIN
-               IF EXISTS ( SELECT TOP 1 1 FROM dbo.ID AS i WITH (NOLOCK) 
-                           JOIN dbo.LOTxLOCxID AS ltlci WITH (NOLOCK) ON ltlci.Id = i.Id           --(Wan07)
-                           WHERE i.ID = @c_ToID
-                           AND ltlci.Storerkey = @c_Storerkey                                      --2023-10-04
-                           AND ltlci.Qty + ltlci.PendingMoveIN > 0                                 --(Wan07)
+               IF EXISTS ( SELECT TOP 1 1 FROM dbo.ID AS i WITH (NOLOCK) WHERE ID = @c_ToID
                            UNION
                            SELECT TOP 1 1 FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK) WHERE r.Toid = @c_ToID AND r.FinalizeFlag = 'N'
                            AND r.ReceiptKey < @c_ReceiptKey
                            AND r.Storerkey = @c_Storerkey
-                           AND r.BeforeReceivedQty > 0                                             --(Wan07)
                            UNION
                            SELECT TOP 1 1 FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK) WHERE r.Toid = @c_ToID AND r.FinalizeFlag = 'N'
                            AND r.ReceiptKey = @c_ReceiptKey AND r.ReceiptLineNumber <> @c_ReceiptLineNo
-                           AND r.BeforeReceivedQty > 0                                             --(Wan07)
                            UNION
                            SELECT TOP 1 1 FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK) WHERE r.Toid = @c_ToID AND r.FinalizeFlag = 'N'
                            AND r.ReceiptKey > @c_ReceiptKey 
                            AND r.Storerkey = @c_Storerkey
-                           AND r.BeforeReceivedQty > 0                                             --(Wan07)
                          )
                BEGIN
                   SET @n_Continue = 3
@@ -531,25 +513,17 @@ BEGIN
                FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK)
                WHERE r.ReceiptKey <> @c_ReceiptKey
                AND r.ToID = @c_ToID
-               AND r.BeforeReceivedQty > 0                                                         --(Wan07)
-               AND r.Storerkey = @c_Storerkey                                                      --2023-10-04
                            
                IF @b_ValidID = 1
                BEGIN
-                  SELECT TOP 1 @b_ValidID = IIF(MIN(CASE WHEN r.Sku <> @c_Sku AND r.BeforeReceivedQty > 0 THEN 0 ELSE 1 END)=0 OR                                 --(Wan07)
-                                                SUM(r.BeforeReceivedQty) + @n_BeforeReceivedQty
-                                                    - @n_BeforeReceivedQty_Del                     --(Wan07)
-                                                > p.Pallet, 0, 1)
+                  SELECT TOP 1 @b_ValidID = IIF(r.Sku <> @c_Sku OR SUM(r.BeforeReceivedQty + @n_BeforeReceivedQty) > p.Pallet, 0, 1)
                   FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK)
                   JOIN dbo.SKU AS s WITH (NOLOCK) ON s.StorerKey = r.StorerKey AND s.Sku = r.Sku
                   JOIN dbo.PACK AS p WITH (NOLOCK) ON s.PackKey = p.PackKey
                   WHERE r.ReceiptKey = @c_ReceiptKey
                   AND r.ToID = @c_ToID
-                  GROUP BY r.ToId, p.Pallet, CASE WHEN r.Sku <> @c_Sku AND r.BeforeReceivedQty > 0 THEN 0 ELSE 1 END
-                  ORDER BY IIF(MIN(CASE WHEN r.Sku <> @c_Sku AND r.BeforeReceivedQty > 0 THEN 0 ELSE 1 END)=0 OR                    
-                                                SUM(r.BeforeReceivedQty) + @n_BeforeReceivedQty 
-                                                      - @n_BeforeReceivedQty_Del                   --(Wan07)
-                                                > p.Pallet, 0, 1)
+                  GROUP BY r.Sku, r.ToId, p.Pallet 
+                  ORDER BY IIF(r.Sku <> @c_Sku OR SUM(r.BeforeReceivedQty + @n_BeforeReceivedQty) > p.Pallet, 0, 1)
                END 
                
                IF @b_ValidID = 1
@@ -561,12 +535,10 @@ BEGIN
                   AND r.ToID = @c_ToID
                   AND EXISTS (SELECT 1 FROM dbo.LOTxLOCxID AS ltlci WITH (NOLOCK)
                               WHERE ltlci.ID = r.ToId
-                              AND ltlci.Storerkey = r.Storerkey                                    --2023-10-04
                               AND ltlci.Qty + ltlci.PendingMoveIN > 0
                               )    
                   GROUP BY r.ToId
                   HAVING MAX(r.FinalizeFlag) = 'N' 
-                  AND MIN(r.BeforeReceivedQty)+@n_BeforeReceivedQty-@n_BeforeReceivedQty_Del > 0   --(Wan07)                          
                END 
                           
                IF @b_ValidID = 0
