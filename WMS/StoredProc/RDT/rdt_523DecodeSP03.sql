@@ -12,6 +12,7 @@ GO
 /* Modifications log:                                                   */
 /* Date        Rev  Author      Purposes                                */
 /* 2023-07-26  1.0  yeekung     WMS-23078 Created                       */ 
+/* 2023-10-09  1.1  ivanyi  bug fix INC2178187(ivan01)                  */   
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_523DecodeSP03
@@ -68,6 +69,10 @@ BEGIN
             AND   SerialNo = @cTempBarcode
             ORDER BY 1
          END
+         ELSE--ivan01  	
+         BEGIN  
+            SET @cSKU=@cBarcode  
+         END  
 
       END
    END
