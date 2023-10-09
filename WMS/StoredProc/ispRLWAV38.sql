@@ -25,8 +25,9 @@ GO
 /* 2021-08-09  Wan02    1.1   Fixed.Generate RPF for empty string or NULL*/
 /*                            pickdetail.taskdetailkey                   */
 /* 2021-01-12  NJOW01   1.2   WMS-18717 Remove PK and SPK task if wave   */
-/*                            userdefine01 = ''. Create transmitlog     */
+/*                            userdefine01 = ''. Create transmitlog      */
 /* 2021-01-12  NJOW01   1.2   DEVOPS combine script                      */
+/* 2023-10-09  Michael  1.3   New DC code (ML01)                         */
 /*************************************************************************/       
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV38]          
                  @c_wavekey      NVARCHAR(10)      
@@ -528,7 +529,8 @@ BEGIN
    JOIN dbo.PICKDETAIL AS p (NOLOCK) ON o.OrderKey = p.OrderKey
    WHERE w.WaveKey = @c_Wavekey
    AND o.[Type] <> 'LULUECOM'
-   AND o.UserDefine10 NOT IN ('170146','170149')
+--(ML01)   AND o.UserDefine10 NOT IN ('170146','170149')
+   AND o.UserDefine10 NOT IN ('170146','170149','170160','170176')  --(ML01)
    AND ISNULL(@c_Userdefine01,'') = ''  --NJOW01
 
    IF @b_PTL = 1

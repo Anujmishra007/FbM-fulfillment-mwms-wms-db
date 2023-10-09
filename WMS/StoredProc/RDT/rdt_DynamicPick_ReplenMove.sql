@@ -24,13 +24,16 @@ GO
 /* 2010-07-07 1.4  TLTING   Update Replenish edit date (tlting01)       */
 /* 2013-07-09 1.5  ChewKP   SOS#281897 - TBL Enhancement (ChewKP01)     */
 /* 2014-08-05 1.6  Leong    SOS#317542 - Include Order status check.    */
-/* 2015-03-16 1.7  Ung      Preparation for L5-L16                      */  
+/* 2015-03-16 1.7  Ung      Preparation for L5-L16                      */
 /* 2015-06-03 1.8  ChewKP   SOS#343057 - Include diff Confikey for      */
 /*                          Manifest Printing (ChewKP02)                */
 /* 2018-01-16 1.9  ChewKP   WMS-3767-Call rdt.rdtPrintJob (ChewKP02)    */
 /* 2020-07-10 2.0  James    WMS-14147 Add replen customsp logic(james03)*/
 /* 2023-07-26 2.1  James    WMS-22615 Fix wrong param seq (james04)     */
 /*                          Add UCC_RowRef as new parameters            */
+/* 2023-10-05 2.2  Michael  1. Fix duplicated CARTONLBL&CTNMNFEST labels*/
+/*                             printed for MultiUCC (ML01)              */
+/*                          2. Fix wrong FromLOT get from MultiUCC(ML02)*/
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_DynamicPick_ReplenMove (
@@ -52,7 +55,7 @@ CREATE OR ALTER PROC rdt.rdt_DynamicPick_ReplenMove (
    @cFromLOT    NVARCHAR( 10) = NULL, -- Applicable for all 6 types of move
    @c_WaveKey   NVARCHAR( 10),
    @cReplenKey  NVARCHAR( 10),
-   @cLottable02 NVARCHAR( 18), 
+   @cLottable02 NVARCHAR( 18),
    @nUCC_RowRef INT = 0
 ) AS
 
@@ -84,7 +87,7 @@ CREATE OR ALTER PROC rdt.rdt_DynamicPick_ReplenMove (
       ,@n_OrdAvailQTY INT
       ,@n_UOMQTY      INT
       ,@cRetrieveDynamicPickslipNo NVARCHAR( 30)
-      ,@cPrintLabel   NVARCHAR(3)     -- (ChewKP01) (ChewKP02) 
+      ,@cPrintLabel   NVARCHAR(3)     -- (ChewKP01) (ChewKP02)
       ,@cPrinter      NVARCHAR( 10)   -- (ChewKP01)
       ,@nCartonNo     INT             -- (ChewKP01)
       ,@cPickSlipNo   NVARCHAR( 10)   -- (ChewKP01)
@@ -96,7 +99,7 @@ CREATE OR ALTER PROC rdt.rdt_DynamicPick_ReplenMove (
       ,@cLottable01   NVARCHAR( 18)
       ,@cLottable03   NVARCHAR( 18)
       ,@dLottable04   DATETIME
-      
+
    DECLARE @cSQLStatement   NVARCHAR(2000),
            @cSQLParms       NVARCHAR(2000)
 
@@ -106,7 +109,7 @@ CREATE OR ALTER PROC rdt.rdt_DynamicPick_ReplenMove (
    DECLARE @cExtendedReplenCfmSP NVARCHAR(20)
    SET @cExtendedReplenCfmSP = rdt.rdtGetConfig( @nFunc, 'ExtendedReplenCfmSP', @cStorerKey)
    IF @cExtendedReplenCfmSP = '0'
-      SET @cExtendedReplenCfmSP = ''  
+      SET @cExtendedReplenCfmSP = ''
 
    -- Extended putaway
    IF @cExtendedReplenCfmSP <> ''
@@ -115,7 +118,7 @@ CREATE OR ALTER PROC rdt.rdt_DynamicPick_ReplenMove (
       BEGIN
          SET @cSQLStatement = 'EXEC rdt.' + RTRIM( @cExtendedReplenCfmSP) +
             ' @nMobile, @nFunc, @cLangCode, @cSourceType, @cStorerKey, @cFacility, ' +
-            ' @cFromLOC, @cToLOC, @cFromID, @cToID, @cSKU, @cUCC, @nQTY, @cFromLOT, @cWaveKey, @cReplenKey, ' +  
+            ' @cFromLOC, @cToLOC, @cFromID, @cToID, @cSKU, @cUCC, @nQTY, @cFromLOT, @cWaveKey, @cReplenKey, ' +
             ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nUCC_RowRef'
          SET @cSQLParms =
             '@nMobile         INT,                  ' +
@@ -123,7 +126,7 @@ CREATE OR ALTER PROC rdt.rdt_DynamicPick_ReplenMove (
             '@cLangCode       NVARCHAR( 3),         ' +
             '@cSourceType     NVARCHAR( 30),        ' +
             '@cStorerKey      NVARCHAR( 15),        ' +
-            '@cFacility       NVARCHAR( 5),         ' + 
+            '@cFacility       NVARCHAR( 5),         ' +
             '@cFromLOC        NVARCHAR( 10),        ' +
             '@cToLOC          NVARCHAR( 10),        ' +
             '@cFromID         NVARCHAR( 18) = NULL, ' + -- NULL means not filter by ID. Blank ID is a valid ID
@@ -132,9 +135,9 @@ CREATE OR ALTER PROC rdt.rdt_DynamicPick_ReplenMove (
             '@cUCC            NVARCHAR( 20) = NULL, ' + -- Either SKU or UCC only
             '@nQTY            INT       = 0,        ' + -- For move by SKU, QTY must have value
             '@cFromLOT        NVARCHAR( 10) = NULL, ' + -- Applicable for all 6 types of move
-            '@cWaveKey        NVARCHAR( 10),        ' + 
-            '@cReplenKey      NVARCHAR( 10),        ' + 
-            '@cLottable01     NVARCHAR( 18),        ' + 
+            '@cWaveKey        NVARCHAR( 10),        ' +
+            '@cReplenKey      NVARCHAR( 10),        ' +
+            '@cLottable01     NVARCHAR( 18),        ' +
             '@cLottable02     NVARCHAR( 18),        ' +
             '@cLottable03     NVARCHAR( 18),        ' +
             '@dLottable04     DATETIME,             ' +
@@ -143,14 +146,14 @@ CREATE OR ALTER PROC rdt.rdt_DynamicPick_ReplenMove (
             '@nUCC_RowRef     INT '
 
          EXEC sp_ExecuteSQL @cSQLStatement, @cSQLParms,
-            @nMobile, @nFunc, @cLangCode, @cSourceType, @cStorerKey, @cFacility,  
-            @cFromLOC, @cToLOC, @cFromID, @cToID, @cSKU, @cUCC, @nQTY, @cFromLOT, @c_WaveKey, @cReplenKey, 
+            @nMobile, @nFunc, @cLangCode, @cSourceType, @cStorerKey, @cFacility,
+            @cFromLOC, @cToLOC, @cFromID, @cToID, @cSKU, @cUCC, @nQTY, @cFromLOT, @c_WaveKey, @cReplenKey,
             @cLottable01, @cLottable02, @cLottable03, @dLottable04, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nUCC_RowRef
 
          GOTO Quit
       END
    END
-   
+
    -- Get StorerConfig 'UCCTracking'
    SET @cStorerConfig_UCC = '0' -- Default Off
    SELECT @cStorerConfig_UCC = CASE WHEN SValue = '1' THEN '1' ELSE '0' END
@@ -456,17 +459,19 @@ END
 
       -- Get UCC SKU, LOT, LOC, ID, QTY
       SELECT
-         @cUCCSKU = SKU,
-         @cUCCLOT = LOT,
-         @cLOC = LOC,
-         @cID  = ID,
-         @nQTY = QTY
-      FROM dbo.UCC (NOLOCK)
-      WHERE StorerKey = @cStorerKey
-         AND UCCNo = @cUCC
-         AND Status = CASE WHEN @cToLoc = 'PICK' THEN '5' ELSE '6' END
+         @cUCCSKU = UCC.SKU,
+         @cUCCLOT = UCC.LOT,
+         @cLOC = UCC.LOC,
+         @cID  = UCC.ID,
+         @nQTY = UCC.QTY
+      FROM dbo.UCC UCC(NOLOCK)
+      LEFT JOIN dbo.REPLENISHMENT RP(NOLOCK) on UCC.Lot=RP.Lot and UCC.Loc=RP.FromLoc and UCC.ID=RP.ID AND UCC.UCCNo=RP.RefNo AND RP.Replenishmentkey=@cReplenKey    --(ML02)
+      WHERE UCC.StorerKey = @cStorerKey
+         AND UCC.UCCNo = @cUCC
+         AND UCC.Status = CASE WHEN @cToLoc = 'PICK' THEN '5' ELSE '6' END
 --         AND Status = '6'
 --         AND Status = '4'
+      ORDER BY CASE WHEN RP.Replenishmentkey IS NULL THEN 1 ELSE 2 END    --(ML02)
 
 
       SET @cSKU = @cUCCSKU
@@ -540,40 +545,40 @@ END
 
    IF @cToLoc <> 'PICK'
    BEGIN
-      EXECUTE dbo.nspItrnAddMove  
-         @n_ItrnSysId     = NULL,  
-         @c_StorerKey     = @cstorerkey,  
-         @c_Sku           = @csku,  
-         @c_Lot           = @cFromLOT,  
-         @c_FromLoc       = @cfromloc,  
-         @c_FromID        = @cFromID,  
-         @c_ToLoc         = @cToLOC,  
-         @c_ToID          = @cFromID,  
-         @c_Status        = 'OK',  
-         @c_lottable01    = '',  
-         @c_lottable02    = '',  
-         @c_lottable03    = '',  
-         @d_lottable04    = NULL,  
-         @d_lottable05    = NULL,  
-         @n_casecnt       = 0,  
-         @n_innerpack     = 0,  
-         @n_qty           = @nQTY,  
-         @n_pallet        = 0,  
-         @f_cube          = 0,  
-         @f_grosswgt      = 0,  
-         @f_netwgt        = 0,  
-         @f_otherunit1    = 0,  
-         @f_otherunit2    = 0,  
-         @c_SourceKey     = @cReplenKey,  
-         @c_SourceType    = @cSourceType,  
-         @c_PackKey       = '',  
-         @c_UOM           = '',  
-         @b_UOMCalc       = 1,  
-         @d_EffectiveDate = NULL,  
-         @c_itrnkey       = '',  
-         @b_Success       = @b_Success  OUTPUT,  
-         @n_err           = @n_err      OUTPUT,  
-         @c_errmsg        = @c_errmsg   OUTPUT  
+      EXECUTE dbo.nspItrnAddMove
+         @n_ItrnSysId     = NULL,
+         @c_StorerKey     = @cstorerkey,
+         @c_Sku           = @csku,
+         @c_Lot           = @cFromLOT,
+         @c_FromLoc       = @cfromloc,
+         @c_FromID        = @cFromID,
+         @c_ToLoc         = @cToLOC,
+         @c_ToID          = @cFromID,
+         @c_Status        = 'OK',
+         @c_lottable01    = '',
+         @c_lottable02    = '',
+         @c_lottable03    = '',
+         @d_lottable04    = NULL,
+         @d_lottable05    = NULL,
+         @n_casecnt       = 0,
+         @n_innerpack     = 0,
+         @n_qty           = @nQTY,
+         @n_pallet        = 0,
+         @f_cube          = 0,
+         @f_grosswgt      = 0,
+         @f_netwgt        = 0,
+         @f_otherunit1    = 0,
+         @f_otherunit2    = 0,
+         @c_SourceKey     = @cReplenKey,
+         @c_SourceType    = @cSourceType,
+         @c_PackKey       = '',
+         @c_UOM           = '',
+         @b_UOMCalc       = 1,
+         @d_EffectiveDate = NULL,
+         @c_itrnkey       = '',
+         @b_Success       = @b_Success  OUTPUT,
+         @n_err           = @n_err      OUTPUT,
+         @c_errmsg        = @c_errmsg   OUTPUT
 
       IF NOT @b_success = 1
       BEGIN
@@ -803,23 +808,24 @@ END
       END   -- End for While @nQTY > 0
    END   -- Locationtype
    ELSE -- Print Label for FCP Replenishment
+   IF @nUCC_RowRef = 0 OR @nUCC_RowRef = (SELECT MIN(UCC_RowRef) FROM dbo.UCC (NOLOCK) WHERE UCCNo=@cUCC)     -- (ML01)
    BEGIN
          -- (ChewKP01)
-         -- (ChewKP02) 
+         -- (ChewKP02)
          -- 1 = Print Carton Label and Manifest
          -- C = Print Carton Label
-         -- M = Print Manifest 
+         -- M = Print Manifest
          SET @cPrintLabel = ''
-         SET @cPrintLabel = rdt.RDTGetConfig( @nFunc, 'PrintLabel', @cStorerKey) 
-         IF @cPrintLabel = '0' 
+         SET @cPrintLabel = rdt.RDTGetConfig( @nFunc, 'PrintLabel', @cStorerKey)
+         IF @cPrintLabel = '0'
             SET @cPrintLabel = ''
-            
+
 
          SELECT @cPrinter = Printer
          FROM rdt.rdtMobrec WITH (NOLOCK)
          WHERE Mobile = @nMobile
 
-         IF CHARINDEX ('1', RTRIM(@cPrintLabel)) <> 0  OR CHARINDEX ('C', RTRIM(@cPrintLabel)) <> 0 -- (ChewKP02) 
+         IF CHARINDEX ('1', RTRIM(@cPrintLabel)) <> 0  OR CHARINDEX ('C', RTRIM(@cPrintLabel)) <> 0 -- (ChewKP02)
          BEGIN
             IF ISNULL(@cPrinter, '') <> ''
             BEGIN
@@ -859,29 +865,29 @@ END
                WHERE StorerKey = @cStorerKey
                AND   RefNo = @cUCC
 
-               -- (ChewKP02) 
+               -- (ChewKP02)
                -- Call printing spooler
                --INSERT INTO RDT.RDTPrintJob(JobName, ReportID, JobStatus, Datawindow, NoOfParms, Parm1, Parm2, Parm3, Parm4, Parm5, Printer, NoOfCopy, Mobile, TargetDB)
                --VALUES('PRINTCARTONLBL', 'CARTONLBL', '0', @cDataWindow, 5, @cPickSlipNo, @nCartonNo, @nCartonNo, @cLabelNo, @cLabelNo, @cPrinter, 1, @nMobile, @cTargetDB)
 
-               
-               EXEC RDT.rdt_BuiltPrintJob                     
-                     @nMobile,                    
-                     @cStorerKey,                    
-                     'CARTONLBL',                    
-                     'PRINTCARTONLBL',                    
-                     @cDataWindow,                    
-                     @cPrinter,                    
-                     @cTargetDB,                    
-                     @cLangCode,                    
-                     @nErrNo  OUTPUT,                     
-                     @cErrMsg OUTPUT,                    
+
+               EXEC RDT.rdt_BuiltPrintJob
+                     @nMobile,
+                     @cStorerKey,
+                     'CARTONLBL',
+                     'PRINTCARTONLBL',
+                     @cDataWindow,
+                     @cPrinter,
+                     @cTargetDB,
+                     @cLangCode,
+                     @nErrNo  OUTPUT,
+                     @cErrMsg OUTPUT,
                      @cPickSlipNo,
                      @nCartonNo,
                      @nCartonNo,
                      @cLabelNo,
                      @cLabelNo
-               
+
                IF @nErrNo <> 0
                BEGIN
                   ROLLBACK TRAN
@@ -892,11 +898,11 @@ END
                   GOTO Fail
                END
 
-            END     
+            END
          END
-         
-         IF CHARINDEX ('1', RTRIM(@cPrintLabel)) <> 0  OR CHARINDEX ('M', RTRIM(@cPrintLabel)) <> 0 -- (ChewKP02) 
-         BEGIN      
+
+         IF CHARINDEX ('1', RTRIM(@cPrintLabel)) <> 0  OR CHARINDEX ('M', RTRIM(@cPrintLabel)) <> 0 -- (ChewKP02)
+         BEGIN
             SET @cDataWindow = ''
             SET @cTargetDB = ''
             SELECT @cDataWindow = ISNULL(RTRIM(DataWindow), ''),
@@ -905,7 +911,7 @@ END
             WHERE StorerKey = @cStorerKey
                AND ReportType = 'CTNMNFEST'
 
-               
+
             IF ISNULL(@cDataWindow, '') = ''
             BEGIN
                SET @nErrNo = 64336
@@ -913,7 +919,7 @@ END
                ROLLBACK TRAN
                GOTO Fail
             END
-   
+
             IF ISNULL(@cTargetDB, '') = ''
             BEGIN
                SET @nErrNo = 64337
@@ -921,40 +927,40 @@ END
                ROLLBACK TRAN
                GOTO Fail
             END
-   
+
             -- Call printing spooler
             --INSERT INTO RDT.RDTPrintJob(JobName, ReportID, JobStatus, Datawindow, NoOfParms, Parm1, Parm2, Parm3, Parm4, Parm5, Printer, NoOfCopy, Mobile, TargetDB)
             --VALUES('PRINTCTNMNFEST', 'CTNMNFEST', '0', @cDataWindow, 3, @cPickSlipNo, @cLabelNo, @cLabelNo, '', '', @cPrinter, 1, @nMobile, @cTargetDB)
-   
-            EXEC RDT.rdt_BuiltPrintJob                    
-                     @nMobile,                    
-                     @cStorerKey,                    
-                     'CTNMNFEST',                    
-                     'PRINTCTNMNFEST',                    
-                     @cDataWindow,                    
-                     @cPrinter,                    
-                     @cTargetDB,                    
-                     @cLangCode,                    
-                     @nErrNo  OUTPUT,                     
-                     @cErrMsg OUTPUT,                    
+
+            EXEC RDT.rdt_BuiltPrintJob
+                     @nMobile,
+                     @cStorerKey,
+                     'CTNMNFEST',
+                     'PRINTCTNMNFEST',
+                     @cDataWindow,
+                     @cPrinter,
+                     @cTargetDB,
+                     @cLangCode,
+                     @nErrNo  OUTPUT,
+                     @cErrMsg OUTPUT,
                      @cPickSlipNo,
                      @cLabelNo,
                      @cLabelNo
-               
-                     
+
+
             IF @nErrNo <> 0
             BEGIN
                ROLLBACK TRAN
-   
+
                SET @nErrNo = 64335
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'InsertPRTFail'
                ROLLBACK TRAN
                GOTO Fail
             END
-         END  
+         END
 
-           
-         
+
+
          --print carton label process (end)
    END
 

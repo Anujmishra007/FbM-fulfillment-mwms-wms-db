@@ -24,6 +24,7 @@ GO
 /* 2006-07-12 1.0  UngDH    Created                                     */
 /* 2014-02-06 1.1  Ung      SOS296465 Move QTYAlloc with UCC.Status=3   */
 /* 2023-06-01 1.2  Ung      WMS-22561 Add UCCWithMultiSKU               */
+/* 2023-10-04 1.3  Michael  Fix wrong LOC get from MultiUCC (ML01)      */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtIsValidUCC] (
@@ -89,6 +90,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
    WHERE StorerKey = @cStorerKey
       AND UCCNo = @cUCC
       AND CHARINDEX( Status, @cStatus) > 0
+   ORDER BY CASE WHEN @cChkLOC IS NOT NULL AND LOC<>@cChkLOC THEN 1 ELSE 2 END    --(ML01)
 
    SET @nRowCount = @@ROWCOUNT
 
