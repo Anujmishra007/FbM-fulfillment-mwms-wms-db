@@ -47,6 +47,8 @@ BEGIN
           , @c_id             NVARCHAR(18)
           , @n_qtyavailable   INT
           , @dt_lottable04    DATETIME
+          , @c_lottable02     NVARCHAR(18)    
+          , @c_Descr          NVARCHAR(60)
 
 
    CREATE Table #TempAlloc
@@ -56,7 +58,9 @@ BEGIN
       Loc            NVARCHAR(10) NULL,
       ID             NVARCHAR(18) NULL,
       Qty            INT          NULL DEFAULT (0),
-      Lottable04     DATETIME     NULL)
+      Lottable04     DATETIME     NULL,
+      Lottable02     NVARCHAR(18) NULL,
+      Descr          NVARCHAR(60) NULL)
 
    --SELECT @c_fromsku = ''
 
@@ -146,13 +150,21 @@ BEGIN
       SELECT   KITDETAIL.StorerKey,
               KITDETAIL.SKU,
               KITDETAIL.Lot,
-             SUM(KITDETAIL.ExpectedQty) 
-       FROM KITDETAIL (NOLOCK), KIT (NOLOCK)
+             SUM(KITDETAIL.ExpectedQty),
+             KITDETAIL.LOTTABLE02,
+             SKU.DESCR
+      FROM KITDETAIL (NOLOCK), KIT (NOLOCK), SKU (NOLOCK)
       WHERE KITDETAIL.Kitkey = KIT.Kitkey
       AND   KITDETAIL.[TYPE] = 'F'
       AND   KIT.[Status]     < '9'
       AND   KIT.Kitkey     = @c_kitkey
-      GROUP BY KITDETAIL.StorerKey,KITDETAIL.Lot, KITDETAIL.SKU
+      AND   KITDETAIL.SKU = SKU.Sku
+      AND   KITDETAIL.StorerKey = SKU.StorerKey
+      GROUP BY KITDETAIL.StorerKey,
+               KITDETAIL.Lot, 
+               KITDETAIL.SKU,
+               KITDETAIL.LOTTABLE02,
+               SKU.DESCR
       ORDER BY KITDETAIL.SKU 
 
       OPEN C_GENERIC_TRF_DETAIL    
@@ -160,7 +172,9 @@ BEGIN
       FETCH NEXT FROM C_GENERIC_TRF_DETAIL INTO  @c_storerkey 
                                                 ,@c_fromsku    
                                                 ,@c_KDlot
-                                                ,@n_qty      
+                                                ,@n_qty   
+                                                ,@c_lottable02
+                                                ,@c_Descr
       WHILE (@@FETCH_STATUS <> -1)    
       BEGIN    
 
@@ -185,10 +199,10 @@ BEGIN
             AND LOTxLOCxID.Storerkey = @c_storerkey
             AND LOTxLOCxID.Sku = @c_fromsku
             AND (LOTxLOCxID.Qty - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyPicked > 0)
-            AND NOT EXISTS ( SELECT 1 FROM #TempAlloc
-                               WHERE  #TempAlloc.LOT = LOTxLOCxID.LOT
-                               AND    #TempAlloc.LOC = LOTxLOCxID.LOC
-                               AND    #TempAlloc.ID = LOTxLOCxID.ID )
+            --AND NOT EXISTS ( SELECT 1 FROM #TempAlloc
+            --                   WHERE  #TempAlloc.LOT = LOTxLOCxID.LOT
+            --                   AND    #TempAlloc.LOC = LOTxLOCxID.LOC
+            --                   AND    #TempAlloc.ID = LOTxLOCxID.ID )
             ORDER BY LOTATTRIBUTE.Lottable04, LOTxLOCxID.LOT, LOTxLOCxID.LOC, LOTxLOCxID.ID
 
             IF @n_qtyavailable > @n_qty
@@ -207,44 +221,61 @@ BEGIN
                      @c_loc,
                      @c_id,
                      @n_qtytotake,
-                     @dt_lottable04
+                     @dt_lottable04,
+                     @c_lottable02,
+                     @c_Descr
 
             SELECT @n_qty = @n_qty - @n_QtyToTake
          END
          FETCH NEXT FROM C_GENERIC_TRF_DETAIL INTO @c_storerkey 
                                                 ,@c_fromsku    
                                                 ,@c_KDlot
-                                                ,@n_qty 
+                                                ,@n_qty
+                                                ,@c_lottable02
+                                                ,@c_Descr
+         END
 
-      END    
       STEP_980_CLOSE_CUR:    
       CLOSE C_GENERIC_TRF_DETAIL    
       DEALLOCATE C_GENERIC_TRF_DETAIL    
    --(Wz01)
-   SELECT KITDETAIL.KitKey,
-          KITDETAIL.StorerKey,
-          KITDETAIL.Sku,
-          Sku.Descr,
-          #TempAlloc.Loc,
-          SUM(#TempAlloc.Qty) QtySuggested ,
-          #TempAlloc.Lottable04,
-          KITDETAIL.Lottable02      --(WZ01)
-   FROM   KITDETAIL (NOLOCK),  #TempAlloc, SKU (NOLOCK)
-   WHERE KITDETAIL.Storerkey = #TempAlloc.Storerkey
-   AND   KITDETAIL.Sku   = #TempAlloc.FromSku
-   AND   KITDETAIL.Storerkey = SKU.Storerkey
-   AND   KITDETAIL.Sku   = SKU.Sku
-   --AND   KITDETAIL.[Type] = 'F'
-   AND   KITDETAIL.[TYPE] = 'F'     --(WZ01)
-   AND   KITDETAIL.KitKey = @c_kitkey
-   GROUP BY KITDETAIL.KitKey,
-            KITDETAIL.StorerKey,
-            KITDETAIL.Sku,
-            Sku.Descr,
-            #TempAlloc.Loc,
-            #TempAlloc.Lottable04,
-            KITDETAIL.LOTTABLE02    --(WZ01)
-   ORDER BY KITDETAIL.Sku, #TempAlloc.Loc
+   --SELECT KITDETAIL.KitKey,
+   --       KITDETAIL.StorerKey,
+   --       KITDETAIL.Sku,
+   --       Sku.Descr,
+   --       #TempAlloc.Loc,
+   --       SUM(#TempAlloc.Qty) QtySuggested ,
+   --       #TempAlloc.Lottable04,
+   --       KITDETAIL.Lottable02      --(WZ01)
+   --FROM   KITDETAIL (NOLOCK),  #TempAlloc, SKU (NOLOCK)
+   --WHERE KITDETAIL.Storerkey = #TempAlloc.Storerkey
+   --AND   KITDETAIL.Sku   = #TempAlloc.FromSku
+   --AND   KITDETAIL.Storerkey = SKU.Storerkey
+   --AND   KITDETAIL.Sku   = SKU.Sku
+   ----AND   KITDETAIL.[Type] = 'F'
+   --AND   KITDETAIL.[TYPE] = 'F'     --(WZ01)
+   --AND   KITDETAIL.KitKey = @c_kitkey
+   --GROUP BY KITDETAIL.KitKey,
+   --         KITDETAIL.StorerKey,
+   --         KITDETAIL.Sku,
+   --         Sku.Descr,
+   --         #TempAlloc.Loc,
+   --         #TempAlloc.Lottable04,
+   --         KITDETAIL.LOTTABLE02    --(WZ01)
+   --ORDER BY KITDETAIL.Sku, #TempAlloc.Loc
+
+   --SELECT * FROM  #TempAlloc (NOLOCK)
+   SELECT @c_KITKey AS KitKey,
+          #TempAlloc.Storerkey AS StorerKey,
+          #TempAlloc.FromSku AS Sku,
+          #TempAlloc.Loc AS Loc,
+          #TempAlloc.Qty AS QtySuggested,
+          #TempAlloc.Lottable04 AS Lottable04,
+          #TempAlloc.Lottable02 AS Lottable02,
+          #TempAlloc.Descr AS Descr
+   FROM #TempAlloc (NOLOCK)
+   
+            
 
    IF OBJECT_ID('tempdb..#TempAlloc') IS NOT NULL
       DROP TABLE #TempAlloc
