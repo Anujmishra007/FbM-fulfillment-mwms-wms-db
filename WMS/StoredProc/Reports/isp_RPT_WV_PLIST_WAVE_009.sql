@@ -13,7 +13,7 @@ GO
 /*                                                                         */
 /* Called By: RPT_WV_PLIST_WAVE_009                                        */
 /*                                                                         */
-/* GitLab Version: 1.1                                                     */
+/* GitLab Version: 1.2                                                     */
 /*                                                                         */
 /* Version: 1.0                                                            */
 /*                                                                         */
@@ -23,6 +23,7 @@ GO
 /* Date         Author   Ver  Purposes                                     */
 /* 15-Jul-2022  WLChooi  1.0  DevOps Combine Script                        */
 /* 05-Sep-2023  WLChooi  1.1  UWP-7481 - Add Externorderkey (WL01)         */
+/* 22-Sep-2023  WLChooi  1.2  UWP-7690 & UWP-7693 - Show Pickdetail (WL02) */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_RPT_WV_PLIST_WAVE_009]
 (
@@ -122,6 +123,7 @@ BEGIN
          , @c_OrdGrp          NVARCHAR(20)  = N''
          , @c_OHUDF03         NVARCHAR(20)  = N''
          , @n_ShowExtOrdKey   INT           = 0   --WL01
+         , @n_ShowPDUOM       INT           = 0   --WL02
 
    SET @n_StartTCnt = @@TRANCOUNT
 
@@ -190,34 +192,111 @@ BEGIN
    WHILE @@TRANCOUNT > 0
    COMMIT TRAN
 
-   DECLARE pick_cur CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-   SELECT PICKDETAIL.Sku
-        , PICKDETAIL.Loc
-        , SUM(PICKDETAIL.Qty)
-        , PACK.Qty
-        , PICKDETAIL.Storerkey
-        , PICKDETAIL.OrderKey
-        , PICKDETAIL.UOM
-        , PICKDETAIL.PickMethod
-        , PICKDETAIL.Lot
-        , PICKDETAIL.UOMQty
-   FROM PICKDETAIL WITH (NOLOCK)
-   JOIN WAVEDETAIL WITH (NOLOCK) ON PICKDETAIL.OrderKey = WAVEDETAIL.OrderKey
-   JOIN PACK WITH (NOLOCK) ON PICKDETAIL.PackKey = PACK.PackKey
-   JOIN LOC WITH (NOLOCK) ON LOC.Loc = PICKDETAIL.Loc
-   JOIN ORDERS WITH (NOLOCK) ON ORDERS.OrderKey = WAVEDETAIL.OrderKey AND ORDERS.OrderKey = PICKDETAIL.OrderKey
-   JOIN SKU WITH (NOLOCK) ON SKU.StorerKey = PICKDETAIL.Storerkey AND SKU.Sku = PICKDETAIL.Sku
-   WHERE WAVEDETAIL.WaveKey = @c_Wavekey
-   GROUP BY PICKDETAIL.Sku
-          , PICKDETAIL.Loc
-          , PACK.Qty
-          , PICKDETAIL.Storerkey
-          , PICKDETAIL.OrderKey
-          , PICKDETAIL.UOM
-          , PICKDETAIL.PickMethod
-          , PICKDETAIL.Lot
-          , PICKDETAIL.UOMQty
-   ORDER BY PICKDETAIL.OrderKey
+   --WL02 S
+   SELECT TOP 1 @c_Storerkey = OH.Storerkey
+   FROM WAVEDETAIL WD (NOLOCK)
+   JOIN ORDERS OH (NOLOCK) ON OH.Orderkey = WD.Orderkey
+   WHERE WD.Wavekey = @c_Wavekey
+
+   SELECT @n_ShowExtOrdKey = ISNULL(MAX(CASE WHEN Code = 'ShowExtOrdKey' THEN 1 ELSE 0 END), 0)
+        , @n_ShowPDUOM = ISNULL(MAX(CASE WHEN Code = 'ShowPDUOM' THEN 1 ELSE 0 END), 0)
+   FROM CODELKUP WITH (NOLOCK)
+   WHERE LISTNAME = 'REPORTCFG' 
+   AND Long = 'RPT_WV_PLIST_WAVE_009' 
+   AND (Short IS NULL OR Short <> 'N')
+   AND Storerkey = @c_StorerKey
+   --WL02 E
+   
+   --WL02 S
+   IF @n_ShowPDUOM = 1
+   BEGIN
+      DECLARE pick_cur CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT PICKDETAIL.Sku
+           , PICKDETAIL.Loc
+           , SUM(PICKDETAIL.Qty)
+           , PACK.Qty
+           , PICKDETAIL.Storerkey
+           , PICKDETAIL.OrderKey
+           , PICKDETAIL.UOM
+           , PICKDETAIL.PickMethod
+           , PICKDETAIL.Lot
+           , PICKDETAIL.UOMQty
+      FROM PICKDETAIL WITH (NOLOCK)
+      JOIN WAVEDETAIL WITH (NOLOCK) ON PICKDETAIL.OrderKey = WAVEDETAIL.OrderKey
+      JOIN PACK WITH (NOLOCK) ON PICKDETAIL.PackKey = PACK.PackKey
+      JOIN LOC WITH (NOLOCK) ON LOC.Loc = PICKDETAIL.Loc
+      JOIN ORDERS WITH (NOLOCK) ON ORDERS.OrderKey = WAVEDETAIL.OrderKey AND ORDERS.OrderKey = PICKDETAIL.OrderKey
+      JOIN SKU WITH (NOLOCK) ON SKU.StorerKey = PICKDETAIL.Storerkey AND SKU.Sku = PICKDETAIL.Sku
+      WHERE WAVEDETAIL.WaveKey = @c_Wavekey AND PICKDETAIL.UOM <> '1'
+      GROUP BY PICKDETAIL.Sku
+             , PICKDETAIL.Loc
+             , PACK.Qty
+             , PICKDETAIL.Storerkey
+             , PICKDETAIL.OrderKey
+             , PICKDETAIL.UOM
+             , PICKDETAIL.PickMethod
+             , PICKDETAIL.Lot
+             , PICKDETAIL.UOMQty
+      UNION ALL
+      SELECT PICKDETAIL.Sku
+           , PICKDETAIL.Loc
+           , SUM(PICKDETAIL.Qty)
+           , PACK.Qty
+           , PICKDETAIL.Storerkey
+           , PICKDETAIL.OrderKey
+           , PICKDETAIL.UOM
+           , PICKDETAIL.PickMethod
+           , PICKDETAIL.Lot
+           , SUM(PICKDETAIL.UOMQty)
+      FROM PICKDETAIL WITH (NOLOCK)
+      JOIN WAVEDETAIL WITH (NOLOCK) ON PICKDETAIL.OrderKey = WAVEDETAIL.OrderKey
+      JOIN PACK WITH (NOLOCK) ON PICKDETAIL.PackKey = PACK.PackKey
+      JOIN LOC WITH (NOLOCK) ON LOC.Loc = PICKDETAIL.Loc
+      JOIN ORDERS WITH (NOLOCK) ON ORDERS.OrderKey = WAVEDETAIL.OrderKey AND ORDERS.OrderKey = PICKDETAIL.OrderKey
+      JOIN SKU WITH (NOLOCK) ON SKU.StorerKey = PICKDETAIL.Storerkey AND SKU.Sku = PICKDETAIL.Sku
+      WHERE WAVEDETAIL.WaveKey = @c_Wavekey AND PICKDETAIL.UOM = '1'
+      GROUP BY PICKDETAIL.Sku
+             , PICKDETAIL.Loc
+             , PACK.Qty
+             , PICKDETAIL.Storerkey
+             , PICKDETAIL.OrderKey
+             , PICKDETAIL.UOM
+             , PICKDETAIL.PickMethod
+             , PICKDETAIL.Lot
+      ORDER BY PICKDETAIL.OrderKey
+   END
+   ELSE
+   BEGIN
+      DECLARE pick_cur CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT PICKDETAIL.Sku
+           , PICKDETAIL.Loc
+           , SUM(PICKDETAIL.Qty)
+           , PACK.Qty
+           , PICKDETAIL.Storerkey
+           , PICKDETAIL.OrderKey
+           , PICKDETAIL.UOM
+           , PICKDETAIL.PickMethod
+           , PICKDETAIL.Lot
+           , PICKDETAIL.UOMQty
+      FROM PICKDETAIL WITH (NOLOCK)
+      JOIN WAVEDETAIL WITH (NOLOCK) ON PICKDETAIL.OrderKey = WAVEDETAIL.OrderKey
+      JOIN PACK WITH (NOLOCK) ON PICKDETAIL.PackKey = PACK.PackKey
+      JOIN LOC WITH (NOLOCK) ON LOC.Loc = PICKDETAIL.Loc
+      JOIN ORDERS WITH (NOLOCK) ON ORDERS.OrderKey = WAVEDETAIL.OrderKey AND ORDERS.OrderKey = PICKDETAIL.OrderKey
+      JOIN SKU WITH (NOLOCK) ON SKU.StorerKey = PICKDETAIL.Storerkey AND SKU.Sku = PICKDETAIL.Sku
+      WHERE WAVEDETAIL.WaveKey = @c_Wavekey
+      GROUP BY PICKDETAIL.Sku
+             , PICKDETAIL.Loc
+             , PACK.Qty
+             , PICKDETAIL.Storerkey
+             , PICKDETAIL.OrderKey
+             , PICKDETAIL.UOM
+             , PICKDETAIL.PickMethod
+             , PICKDETAIL.Lot
+             , PICKDETAIL.UOMQty
+      ORDER BY PICKDETAIL.OrderKey
+   END
+   --WL02 E
 
    OPEN pick_cur
 
@@ -275,7 +354,6 @@ BEGIN
                        , @c_ODNotes = ISNULL(OD.Notes, '')
             FROM dbo.ORDERDETAIL OD WITH (NOLOCK)
             WHERE OD.OrderKey = @c_orderkey AND OD.StorerKey = @c_StorerKey AND OD.Sku = @c_sku
-
          END -- IF @c_OrderKey <> ''
 
 
@@ -367,14 +445,27 @@ BEGIN
       FROM PICKDETAIL PD WITH (NOLOCK)
       WHERE PD.Storerkey = @c_StorerKey AND PD.OrderKey = @c_orderkey
 
+      --WL02 S - Move up
       --WL01 S
-      SELECT @n_ShowExtOrdKey = ISNULL(MAX(CASE WHEN Code = 'ShowExtOrdKey' THEN 1 ELSE 0 END), 0)
-      FROM CODELKUP WITH (NOLOCK)
-      WHERE LISTNAME = 'REPORTCFG' 
-      AND Long = 'RPT_WV_PLIST_WAVE_009' 
-      AND (Short IS NULL OR Short <> 'N')
-      AND Storerkey = @c_StorerKey
+      --SELECT @n_ShowExtOrdKey = ISNULL(MAX(CASE WHEN Code = 'ShowExtOrdKey' THEN 1 ELSE 0 END), 0)
+      --FROM CODELKUP WITH (NOLOCK)
+      --WHERE LISTNAME = 'REPORTCFG' 
+      --AND Long = 'RPT_WV_PLIST_WAVE_009' 
+      --AND (Short IS NULL OR Short <> 'N')
+      --AND Storerkey = @c_StorerKey
       --WL01 E
+      --WL02 E - Move up
+
+     --WL02 S
+     IF @n_ShowPDUOM = 1
+      BEGIN
+         SELECT @c_ODPackkey = PACK.PackKey
+         FROM SKU (NOLOCK)
+         JOIN PACK (NOLOCK) ON SKU.Packkey = PACK.Packkey
+         WHERE SKU.Storerkey = @c_Storerkey
+         AND SKU.SKU = @c_SKU
+      END
+      --WL02 E
 
       INSERT INTO #temp_wavepick37 (wavekey, PrnDate, PickSlipNo, Zone, printedflag, Storerkey, LOC, Lot, OHType
                                   , Loadkey, SkuDesc, Lottable04, Qty, ODUpdateSource, Susr1, Susr2, SKU, rpttitle
@@ -383,7 +474,7 @@ BEGIN
       VALUES (@c_Wavekey, CONVERT(CHAR(16), GETDATE(), 120), @c_pickheaderkey, @c_PickMethod, @c_PrintedFlag
             , @c_StorerKey, @c_loc, @c_Lot, @c_OHTYPE, @c_loadkey, @c_SkuDesc, @c_Lottable04, @n_qty, @c_ODUpdateSource
             , @c_Susr1, @c_Susr2, @c_sku, 'PickSlip by Orders', @c_orderkey, @c_OrdGrp, @c_ODNotes, @c_ODPackkey
-            , @c_ODUOM, @n_UOMQty, @n_TTLEA, @n_TTLCASES, @n_TTLQTY, @c_OHUDF03
+            , IIF(@n_ShowPDUOM = 1, @c_UOM, @c_ODUOM), @n_UOMQty, @n_TTLEA, @n_TTLCASES, @n_TTLQTY, @c_OHUDF03   --WL02
             , @n_ShowExtOrdKey, @c_Externorderkey)   --WL01
 
       SELECT @c_PrevOrderKey = @c_orderkey
