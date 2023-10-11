@@ -1,4 +1,4 @@
-IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[isp_loadlist_rpt01]') AND type in (N'P', N'PC'))
+isp_loadlist_rpt01IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[isp_loadlist_rpt01]') AND type in (N'P', N'PC'))
 DROP PROCEDURE [dbo].[isp_loadlist_rpt01]
 GO
 
@@ -26,6 +26,8 @@ GO
 /* Updates:                                                              */  
 /* Date        Author  Ver   Purposes                                    */  
 /* 05-Mar-2021 LZG     1.2   INC1445710 - Order by Loc (ZG01)            */
+/* 29-Aug-2022 WyeChun 1.3   JSM-86604 - Add LogicalLocation (WC01)      */  
+/* 04-Oct-2023 JihHaur 1.4   JSM-181688 - Add Loc.Loc (JH01)             */ 
 /*************************************************************************/  
 CREATE PROC isp_loadlist_rpt01  
          (  @c_loadkeyfrom    NVARCHAR(10) --WL01    
@@ -69,7 +71,7 @@ BEGIN
       SELECT row_number() over(order by OrdHD.LoadKey,Loc.Score , Loc.LogicalLocation, Loc.Loc, OrdHD.Orderkey, OrdHD.Route  ) as [RowNo] ,          -- ZG01 --WL01 (Added Loadkey)  
               OrdHD.LoadKey AS Loadkey, OrdHD.OrderKey AS Orderkey,  
               Sum( OrdDT.OriginalQty ) [TotalQty] , OrdHD.Route AS OHROUTE,  
-             (Row_Number() OVER (PARTITION BY OrdHD.LoadKey  ORDER BY Loc.Score , OrdHD.Route Asc)-1)/@n_NoOfLine+1 AS recgrp  
+             (Row_Number() OVER (PARTITION BY OrdHD.LoadKey  ORDER BY Loc.Score , Loc.LogicalLocation, Loc.Loc , OrdHD.Route Asc)-1)/@n_NoOfLine+1 AS recgrp   /*WC01    JH01 (Added  Loc.Loc)*/
       FROM ORDERS AS OrdHD WITH (NOLOCK)  
       JOIN ORDERDETAIL as OrdDT WITH (NOlock)  
           ON OrdHD.StorerKey = OrdDT.StorerKey  
