@@ -3,7 +3,6 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /************************************************************************/
 /* Stored Procedure: ispSKUDC10                                         */
 /* Creation Date: 29/03/2023                                            */
@@ -25,6 +24,8 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 29-MAR-2023 NJOW     1.0   DEVOPS combine scirpt                     */
 /* 03-JUL-2023 NJOW01   1.1   WMS-23012 Fix over pack serial no issue   */
+/* 26-SEP-2023 NJOW02   1.2   WMS-23778 support scan both UPC and serial*/
+/*                            when serialnocapture=1                    */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE dbo.ispSKUDC10
@@ -135,13 +136,23 @@ BEGIN
 
    IF @c_TempSku <> @c_Sku 
    BEGIN
-      SET @c_SerialNo = @c_Sku
+   	  IF NOT EXISTS(SELECT 1 
+   	                FROM UPC (NOLOCK)
+                    JOIN SKU (NOLOCK) ON SKU.StorerKey = UPC.StorerKey AND SKU.Sku = UPC.SKU
+                    WHERE UPC.UPC = @c_SKU
+                    AND UPC.StorerKey = @c_StorerKey) --NJOW02     
+      BEGIN              
+   	     SET @c_SerialNo = @c_Sku
+   	  END   
    END
    ELSE IF ISNULL(@c_UCCNo,'') = ''  --UCC Scanning will insert sku instead of serial#, so no error
    BEGIN  --user scan sku code instead of serial#
+      /*  --NJOW02 Removed
       SELECT @n_Continue = 3
       SELECT @n_Err = 83030
       SELECT @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Invalid Serial#: ' + RTRIM(ISNULL(@c_Sku,'')) + ' (ispSKUDC10)'     
+      */
+      SET @c_NewSku = @c_Sku  --NJOW02
       GOTO QUIT_SP   	  
    END   
     
