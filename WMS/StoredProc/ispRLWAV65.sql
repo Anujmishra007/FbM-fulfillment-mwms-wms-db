@@ -13,7 +13,7 @@ GO
 /*                                                                          */
 /* Called By: wave                                                          */
 /*                                                                          */
-/* PVCS Version: 1.0                                                        */
+/* PVCS Version: 1.2                                                        */
 /*                                                                          */
 /* Version: 7.0                                                             */
 /*                                                                          */
@@ -23,6 +23,7 @@ GO
 /* Date        Author   Ver  Purposes                                       */
 /* 15-Sep-2023 WLChooi  1.0  DevOps Combine Script                          */
 /* 19-Sep-2023 WLChooi  1.1  WMS-23615 - Add Validation (WL01)              */
+/* 12-Oct-2023 WLChooi  1.2  WMS-23615 - SUM Qty by Loc (WL03)              */
 /****************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV65]
@@ -336,13 +337,15 @@ BEGIN
                                   AND SL.LocationType = 'PICK' )
                AND L.Facility = @c_Facility
                AND L.PutawayZone = @c_Putawayzone
-               AND ISNULL(LLI.Qty,0) + ISNULL(LLI.PendingMoveIn,0) = 0
+               --AND ISNULL(LLI.Qty,0) + ISNULL(LLI.PendingMoveIn,0) = 0   --WL03
                AND NOT EXISTS ( SELECT 1                            --WL01
                                 FROM REPLENISHMENT RP (NOLOCK)      --WL01
                                 WHERE RP.Storerkey = @c_Storerkey   --WL01
                                 AND RP.SKU <> @c_SKU                --WL01
                                 AND RP.Confirmed = 'N'              --WL01
                                 AND RP.ToLoc = L.Loc )              --WL01
+               GROUP BY L.Loc, L.LogicalLocation   --WL03
+               HAVING SUM(ISNULL(LLI.Qty,0) + ISNULL(LLI.PendingMoveIn,0)) = 0   --WL03
                ORDER BY L.LogicalLocation
             END
          END
