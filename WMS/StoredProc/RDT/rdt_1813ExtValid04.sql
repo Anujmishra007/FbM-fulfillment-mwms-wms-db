@@ -18,10 +18,12 @@ GO
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
 /* 18-12-2018 1.0  ChewKP     WMS-7282 - Created                        */
-/* 19-09-2019 1.1  James      WMS-10688  Pallet merge enhance (james01) */
+/* 19-09-2019 1.1  James      WMS- Allow ASRS pallet to merge (james01) */
+/* 12-10-2023 1.2  Luke       JSM-181509 Add LLI.QTY > 0 to retrieve the*/ 
+/*                                       vaild qty                      */
 /************************************************************************/
 
-CREATE PROC rdt.rdt_1813ExtValid04 (
+ALTER PROC rdt.rdt_1813ExtValid04 (
    @nMobile          INT,
    @nFunc            INT, 
    @cLangCode        NVARCHAR( 3), 
@@ -86,7 +88,7 @@ AS
          WHERE LLI.StorerKey = @cStorerKey 
          AND   LLI.ID = @cFromID 
          AND   LOC.Facility = @cFacility
-         --AND   QTY > 0
+         AND   QTY > 0
          GROUP BY LOC.LocationCategory
 
          IF @cLocationCategory <> 'STAGING'
@@ -114,7 +116,7 @@ AS
             GOTO Quit
          END
          /*
-         -- Check if from pallet is ASRS pallet (with available qty)
+      -- Check if from pallet is ASRS pallet (with available qty)
          IF @nLLI_Qty > 0 AND @cLocationCategory = 'ASRS'
          BEGIN
             -- If from pallet do not have any alloc or pick qty, allow merge
@@ -238,6 +240,7 @@ AS
          WHERE LLI.StorerKey = @cStorerKey 
          AND   LLI.ID = @cFromID 
          AND   LOC.Facility = @cFacility
+		 AND   LLI.QTY > '0' --Luke
          GROUP BY LOC.LocationCategory
 
          IF @nToID_Qty > 0 AND @cLocationCategory <> 'STAGING'
