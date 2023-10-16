@@ -4,18 +4,17 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/***************************************************************************************************/
-/* Store procedure: rdt_PickPallet_GetTask                                                         */
-/* Copyright      : Maersk                                                                         */
-/*                                                                                                 */
-/* Purpose: Get next ID in same LOC                                                                */
-/*                                                                                                 */
-/* Date        Rev  Author      Purposes                                                           */
-/* 30-05-2023  1.0  Ung         WMS-22370 Created                                                  */
-/* 07-09-2023  1.1  Ung         WMS-23032 Fix GetTaskSP param                                      */
-/***************************************************************************************************/
+/*********************************************************************************/
+/* Store procedure: rdt_1864GetTask01                                            */
+/* Copyright      : Maersk                                                       */
+/*                                                                               */
+/* Purpose: Suggest pick LOC, with non full pallet, but can be picked entirely   */
+/*                                                                               */
+/* Date        Rev  Author      Purposes                                         */
+/* 13-09-2023  1.0  Ung         WMS-23032 Created                                */
+/*********************************************************************************/
 
-CREATE OR ALTER PROCEDURE rdt.rdt_PickPallet_GetTask
+CREATE OR ALTER PROCEDURE rdt.rdt_1864GetTask01
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -63,91 +62,6 @@ BEGIN
    DECLARE @cSQL      NVARCHAR( MAX)
    DECLARE @cSQLParam NVARCHAR( MAX)
 
-   -- Get RDT storer configure
-   DECLARE @cGetTaskSP NVARCHAR(20)
-   SET @cGetTaskSP = rdt.RDTGetConfig( @nFunc, 'GetTaskSP', @cStorerKey)
-   IF @cGetTaskSP = '0'
-      SET @cGetTaskSP = ''
-
-   /***********************************************************************************************
-                                             Custom get task
-   ***********************************************************************************************/
-   -- Check confirm SP blank
-   IF @cGetTaskSP <> ''
-   BEGIN
-      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cGetTaskSP AND type = 'P')
-      BEGIN
-         SET @cSQL = 'EXEC rdt.' + RTRIM( @cGetTaskSP) +
-            ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPUOM, @nLottableOnPage, @cPickSlipNo, @cPickZone, @cLOC, ' +
-            ' @cID           OUTPUT, @cSKU        OUTPUT, @nTaskQTY    OUTPUT, ' +
-            ' @cLottable01   OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT, ' +
-            ' @cLottable06   OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT, ' +
-            ' @cLottable11   OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT, ' +
-            ' @cLottableCode OUTPUT, ' +
-            ' @cSKUDescr     OUTPUT, ' +
-            ' @cMUOM_Desc    OUTPUT, ' +
-            ' @cPUOM_Desc    OUTPUT, ' +
-            ' @nPUOM_Div     OUTPUT, ' +
-            ' @nErrNo        OUTPUT, ' +
-            ' @cErrMsg       OUTPUT  '
-         SET @cSQLParam =
-            '@nMobile       INT,           ' +
-            '@nFunc         INT,           ' +
-            '@cLangCode     NVARCHAR( 3),  ' +
-            '@nStep         INT,           ' +
-            '@nInputKey     INT,           ' +
-            '@cFacility     NVARCHAR( 5),  ' +
-            '@cStorerKey    NVARCHAR( 15), ' +
-            '@cPUOM         NVARCHAR( 5),  ' +
-            '@nLottableOnPage INT,         ' +
-            '@cPickSlipNo   NVARCHAR( 10), ' +
-            '@cPickZone     NVARCHAR( 10), ' + 
-            '@cLOC          NVARCHAR( 10), ' +
-            '@cID           NVARCHAR( 18) OUTPUT, ' +
-            '@cSKU          NVARCHAR( 20) OUTPUT, ' +
-            '@nTaskQTY      INT           OUTPUT, ' +
-            '@cLottable01   NVARCHAR( 18) OUTPUT, ' +
-            '@cLottable02   NVARCHAR( 18) OUTPUT, ' +
-            '@cLottable03   NVARCHAR( 18) OUTPUT, ' +
-            '@dLottable04   DATETIME      OUTPUT, ' +
-            '@dLottable05   DATETIME      OUTPUT, ' +
-            '@cLottable06   NVARCHAR( 30) OUTPUT, ' +
-            '@cLottable07   NVARCHAR( 30) OUTPUT, ' +
-            '@cLottable08   NVARCHAR( 30) OUTPUT, ' +
-            '@cLottable09   NVARCHAR( 30) OUTPUT, ' +
-            '@cLottable10   NVARCHAR( 30) OUTPUT, ' +
-            '@cLottable11   NVARCHAR( 30) OUTPUT, ' +
-            '@cLottable12   NVARCHAR( 30) OUTPUT, ' +
-            '@dLottable13   DATETIME      OUTPUT, ' +
-            '@dLottable14   DATETIME      OUTPUT, ' +
-            '@dLottable15   DATETIME      OUTPUT, ' +
-            '@cLottableCode NVARCHAR( 30) OUTPUT, ' +
-            '@cSKUDescr     NVARCHAR( 60) OUTPUT, ' +
-            '@cMUOM_Desc    NVARCHAR( 5)  OUTPUT, ' +
-            '@cPUOM_Desc    NVARCHAR( 5)  OUTPUT, ' +
-            '@nPUOM_Div     INT           OUTPUT, ' +
-            '@nErrNo        INT           OUTPUT, ' +
-            '@cErrMsg       NVARCHAR( 20) OUTPUT  '
-         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-            @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPUOM, @nLottableOnPage, @cPickSlipNo, @cPickZone, @cLOC, 
-            @cID           OUTPUT, @cSKU        OUTPUT, @nTaskQTY    OUTPUT,
-            @cLottable01   OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT,
-            @cLottable06   OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT,
-            @cLottable11   OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT,
-            @cLottableCode OUTPUT,
-            @cSKUDescr     OUTPUT,
-            @cMUOM_Desc    OUTPUT,
-            @cPUOM_Desc    OUTPUT,
-            @nPUOM_Div     OUTPUT,
-            @nErrNo        OUTPUT,
-            @cErrMsg       OUTPUT
-      END
-      GOTO Quit
-   END
-
-   /***********************************************************************************************
-                                           Standard get task
-   ***********************************************************************************************/
    DECLARE @nRowCount   INT
    DECLARE @cOrderKey   NVARCHAR( 10)
    DECLARE @cLoadKey    NVARCHAR( 10)
@@ -215,10 +129,6 @@ BEGIN
       AND StorerKey = @cStorerKey
       AND Code2 = @cFacility
 
-   -- Default filter is UOM = 1-Pallet
-   IF @cPickFilter = ''
-      SET @cPickFilter = ' AND PD.UOM = ''1'' '
-
    -- Get PickHeader info
    SET @cOrderKey = ''
    SET @cLoadKey = ''
@@ -240,7 +150,7 @@ BEGIN
       SET @cSQL =
          ' SELECT TOP 1 ' + 
             ' @cTempID = PD.ID, ' + 
-            ' @cTempSKU = PD.SKU ' + 
+            ' @cTempSKU = MIN( PD.SKU) ' + 
          ' FROM dbo.RefKeyLookup RKL WITH (NOLOCK) ' + 
             ' JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey) ' + 
             ' JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' + 
@@ -252,7 +162,14 @@ BEGIN
             ' AND PD.Status <> ''4'' ' + 
             ' AND PD.Status < @cPickConfirmStatus ' + 
             CASE WHEN @cPickFilter = '' THEN '' ELSE @cPickFilter END + 
-         ' ORDER BY PD.SKU '
+         ' GROUP BY PD.ID ' + 
+         ' HAVING SUM( PD.QTY) = ' + 
+            ' (SELECT SUM( LLI.QTYAllocated) ' + 
+            ' FROM dbo.LOTxLOCxID LLI WITH (NOLOCK) ' + 
+            ' WHERE LLI.LOC = @cLOC ' + 
+               ' AND LLI.ID = PD.ID ' + 
+            ' HAVING SUM( LLI.QTY-LLI.QTYAllocated-LLI.QTYPicked) = 0) ' + 
+         ' ORDER BY PD.ID '
    END
 
    -- Discrete PickSlip
@@ -261,7 +178,7 @@ BEGIN
       SET @cSQL =
          ' SELECT TOP 1 ' + 
             ' @cTempID = PD.ID, ' + 
-            ' @cTempSKU = PD.SKU ' + 
+            ' @cTempSKU = MIN( PD.SKU) ' + 
          ' FROM dbo.PickDetail PD WITH (NOLOCK) ' + 
             ' JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' + 
          ' WHERE PD.OrderKey = @cOrderKey ' + 
@@ -272,7 +189,14 @@ BEGIN
             ' AND PD.Status <> ''4'' ' + 
             ' AND PD.Status < @cPickConfirmStatus ' + 
             CASE WHEN @cPickFilter = '' THEN '' ELSE @cPickFilter END + 
-         ' ORDER BY PD.SKU '
+         ' GROUP BY PD.ID ' + 
+         ' HAVING SUM( PD.QTY) = ' + 
+            ' (SELECT SUM( LLI.QTYAllocated) ' + 
+            ' FROM dbo.LOTxLOCxID LLI WITH (NOLOCK) ' + 
+            ' WHERE LLI.LOC = @cLOC ' + 
+               ' AND LLI.ID = PD.ID ' + 
+            ' HAVING SUM( LLI.QTY-LLI.QTYAllocated-LLI.QTYPicked) = 0) ' + 
+         ' ORDER BY PD.ID '
    END
 
    -- Conso PickSlip
@@ -281,7 +205,7 @@ BEGIN
       SET @cSQL =
          ' SELECT TOP 1 ' + 
             ' @cTempID = PD.ID, ' + 
-            ' @cTempSKU = PD.SKU ' + 
+            ' @cTempSKU = MIN( PD.SKU) ' + 
          ' FROM dbo.LoadPlanDetail LPD WITH (NOLOCK) ' + 
             ' JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey) ' + 
             ' JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' + 
@@ -293,7 +217,14 @@ BEGIN
             ' AND PD.Status <> ''4'' ' + 
             ' AND PD.Status < @cPickConfirmStatus ' + 
             CASE WHEN @cPickFilter = '' THEN '' ELSE @cPickFilter END + 
-         ' ORDER BY PD.SKU '
+         ' GROUP BY PD.ID ' + 
+         ' HAVING SUM( PD.QTY) = ' + 
+            ' (SELECT SUM( LLI.QTYAllocated) ' + 
+            ' FROM dbo.LOTxLOCxID LLI WITH (NOLOCK) ' + 
+            ' WHERE LLI.LOC = @cLOC ' + 
+               ' AND LLI.ID = PD.ID ' + 
+            ' HAVING SUM( LLI.QTY-LLI.QTYAllocated-LLI.QTYPicked) = 0) ' + 
+         ' ORDER BY PD.ID '
    END
 
    -- Custom PickSlip
@@ -302,7 +233,7 @@ BEGIN
       SET @cSQL =
          ' SELECT TOP 1 ' + 
             ' @cTempID = PD.ID, ' + 
-            ' @cTempSKU = PD.SKU ' + 
+            ' @cTempSKU = MIN( PD.SKU) ' + 
          ' FROM dbo.PickDetail PD WITH (NOLOCK) ' + 
             ' JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' + 
          ' WHERE PD.PickSlipNo = @cPickSlipNo ' + 
@@ -313,7 +244,14 @@ BEGIN
             ' AND PD.Status <> ''4'' ' + 
             ' AND PD.Status < @cPickConfirmStatus ' + 
             CASE WHEN @cPickFilter = '' THEN '' ELSE @cPickFilter END + 
-         ' ORDER BY PD.SKU ' 
+         ' GROUP BY PD.ID ' + 
+         ' HAVING SUM( PD.QTY) = ' + 
+            ' (SELECT SUM( LLI.QTYAllocated) ' + 
+            ' FROM dbo.LOTxLOCxID LLI WITH (NOLOCK) ' + 
+            ' WHERE LLI.LOC = @cLOC ' + 
+               ' AND LLI.ID = PD.ID ' + 
+            ' HAVING SUM( LLI.QTY-LLI.QTYAllocated-LLI.QTYPicked) = 0) ' + 
+         ' ORDER BY PD.ID ' 
    END
 
    SET @cSQL = @cSQL + 
@@ -341,7 +279,7 @@ BEGIN
 
    IF @nRowCount = 0
    BEGIN
-      SET @nErrNo = 201851
+      SET @nErrNo = 206251
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No more task
       SET @nErrNo = -1 -- No more task
       GOTO Quit
@@ -530,7 +468,7 @@ BEGIN
 
    IF @nTempQTY = 0
    BEGIN
-      SET @nErrNo = 201852
+      SET @nErrNo = 206252
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No more task
       SET @nErrNo = -1 -- No more task
       GOTO Quit
@@ -589,7 +527,7 @@ Quit:
 END
 GO
 
-GRANT EXECUTE ON rdt.rdt_PickPallet_GetTask TO NSQL
+GRANT EXECUTE ON rdt.rdt_1864GetTask01 TO NSQL
 GO
 
 SET QUOTED_IDENTIFIER OFF

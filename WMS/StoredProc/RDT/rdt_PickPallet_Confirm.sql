@@ -180,10 +180,6 @@ BEGIN
       AND StorerKey = @cStorerKey
       AND Code2 = @cFacility
 
-   -- Default filter is UOM = 1-Pallet
-   IF @cPickFilter = ''
-      SET @cPickFilter = ' AND PD.UOM = ''1'' '
-
    -- Get PickHeader info
    SELECT TOP 1
       @cOrderKey = OrderKey,

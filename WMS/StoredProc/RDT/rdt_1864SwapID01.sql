@@ -221,6 +221,28 @@ BEGIN
    -- 1. ID is not alloc
    IF NOT EXISTS( SELECT 1 FROM #tActPD)
    BEGIN
+      -- Check pallet content is exactly same by SKU, QTY
+      IF EXISTS( SELECT TOP 1 1
+         FROM
+         (
+            SELECT SKU, SUM( QTY) QTY FROM #tSuggPD GROUP BY SKU
+         ) S FULL JOIN 
+         (
+            SELECT SKU, SUM( QTY-QTYPicked) QTY 
+            FROM dbo.LOTxLOCxID WITH (NOLOCK) 
+            WHERE LOC = @cLOC
+               AND ID = @cID
+            GROUP BY SKU
+         ) A ON (S.SKU = A.SKU)
+         WHERE S.SKU IS NULL
+            OR A.SKU IS NULL
+            OR S.QTY <> A.QTY) 
+      BEGIN
+         SET @nErrNo = 204969
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- SKU QTY Diff
+         GOTO Quit
+      END
+      
       -- Suggest
       -- Unallocate
       SET @curPD = CURSOR FOR
@@ -392,7 +414,7 @@ BEGIN
             OR S.QTY <> A.QTY) 
       BEGIN
          SET @nErrNo = 204957
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ID cannot swap
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- SKU QTY Diff
          GOTO Quit
       END
 
