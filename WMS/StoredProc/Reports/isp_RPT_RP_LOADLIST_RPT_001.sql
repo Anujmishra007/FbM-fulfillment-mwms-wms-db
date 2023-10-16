@@ -21,8 +21,9 @@ GO
 /*                                                                       */
 /* Updates:                                                              */
 /* Date         Author  Ver   Purposes                                   */
-/* 09-Jan-2023  WLChooi 1.0  DevOps Combine Script                       */
-/* 14-Sep-2023  WeiZhen 1.1  Add Filter Column                           */
+/* 09-Jan-2023  WLChooi 1.0   DevOps Combine Script                      */
+/* 14-Sep-2023  WZPang  1.1   Add Filter Column (WZ01)                   */
+/* 04-Oct-2023  WZPang  1.2   Order by LOC.LogicalLocation, Loc (WZ02)   */
 /*************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_RPT_RP_LOADLIST_RPT_001]
 (
@@ -64,17 +65,15 @@ BEGIN
       INSERT INTO #TMPLOADBYORD (RowNo, Loadkey, Orderkey, TotalQty, OHROUTE, recgrp)
       SELECT ROW_NUMBER() OVER (ORDER BY OrdHD.LoadKey
                                        , LOC.Score
-                                       , LOC.LogicalLocation
-                                       , LOC.Loc
+                                       , LOC.LogicalLocation         --(WZ02)
+                                       , LOC.Loc                     --(WZ02)
                                        , OrdHD.OrderKey
                                        , OrdHD.Route) AS [RowNo]
            , OrdHD.LoadKey AS Loadkey
            , OrdHD.OrderKey AS Orderkey
            , SUM(OrdDT.OriginalQty) [TotalQty]
            , OrdHD.Route AS OHROUTE
-           , (ROW_NUMBER() OVER (PARTITION BY OrdHD.LoadKey
-                                 ORDER BY LOC.Score
-                                        , OrdHD.Route ASC) - 1) / @n_NoOfLine + 1 AS recgrp
+           , (ROW_NUMBER() OVER (PARTITION BY OrdHD.LoadKey  ORDER BY Loc.Score , LOC.LogicalLocation, LOC.Loc , OrdHD.Route Asc)-1)/@n_NoOfLine+1 AS recgrp --(WZ02)
       FROM ORDERS AS OrdHD WITH (NOLOCK)
       JOIN ORDERDETAIL AS OrdDT WITH (NOLOCK) ON OrdHD.StorerKey = OrdDT.StorerKey AND OrdHD.OrderKey = OrdDT.OrderKey
       JOIN PICKDETAIL AS PickDT WITH (NOLOCK) ON  OrdDT.StorerKey = PickDT.Storerkey
@@ -171,10 +170,13 @@ BEGIN
       END
       ELSE IF @n_recgrpsort > (@n_NoOfLine / 2) AND @n_recgrpsort <= @n_NoOfLine
       BEGIN
+      
          UPDATE #TMPSPLITLOAD
          SET Rownogrp2 = @n_recgrpsort
            , OrderkeyGrp2 = @c_orderkey
-         WHERE Loadkey = @c_loadkey AND recgrp = @n_recgrp AND Rownogrp1 = @n_recgrpsort - (@n_NoOfLine / 2)
+         WHERE Loadkey = @c_loadkey 
+         AND recgrp = @n_recgrp 
+         AND Rownogrp1 = @n_recgrpsort - (@n_NoOfLine / 2)
       END
       ELSE IF @n_recgrpsort > @n_NoOfLine
       BEGIN
@@ -200,21 +202,15 @@ BEGIN
                  , OrderkeyGrp2 = @c_orderkey
                WHERE Loadkey = @c_loadkey
                AND   recgrp = @n_recgrp
-               AND   Rownogrp1 = CASE WHEN (@n_recgrpsort % @n_NoOfLine) = 0 THEN
-                  (@n_recgrpsort - @n_NoOfLine) + (@n_NoOfLine / 2)
+               AND   Rownogrp1 = CASE WHEN (@n_recgrpsort % @n_NoOfLine) = 0 THEN (@n_recgrpsort - @n_NoOfLine) + (@n_NoOfLine / 2)
                                       WHEN @n_recgrpsort <= 200 THEN (@n_recgrpsort % @n_NoOfLine) + (@n_NoOfLine / 2)
-                                      ELSE
-                  (@n_recgrpsort % @n_NoOfLine) + ((@n_NoOfLine) * (@n_recgrp - 1) - (@n_NoOfLine / 2)) END
+                                      ELSE (@n_recgrpsort % @n_NoOfLine) + ((@n_NoOfLine) * (@n_recgrp - 1) - (@n_NoOfLine / 2)) END
             END
          END
       END
 
       FETCH NEXT FROM CUR_RESULT
-      INTO @n_rowno
-         , @c_loadkey
-         , @c_orderkey
-         , @n_recgrp
-         , @n_recgrpsort
+      INTO @n_rowno, @c_loadkey, @c_orderkey, @n_recgrp, @n_recgrpsort
    END
 
    CLOSE CUR_RESULT
@@ -227,8 +223,7 @@ BEGIN
         , CAST(Rownogrp1 AS NVARCHAR(10)) AS rownogrp1
         , OrderkeyGrp2 AS orderkeygrp2
         , recgrp AS recgrp
-        , CASE WHEN ISNULL(OrderkeyGrp2, '') <> '' THEN CAST(Rownogrp2 AS NVARCHAR(10))
-               ELSE '' END AS rownogrp2
+        , CASE WHEN ISNULL(OrderkeyGrp2, '') <> '' THEN CAST(Rownogrp2 AS NVARCHAR(10)) ELSE '' END AS rownogrp2
    FROM #TMPSPLITLOAD
 
    DROP TABLE #TMPLOADBYORD
