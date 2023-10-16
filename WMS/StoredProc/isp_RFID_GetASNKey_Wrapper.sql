@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_RFID_GetASNKey_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_RFID_GetASNKey_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,7 +12,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.3                                                    */
+/* PVCS Version: 1.4                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -32,8 +27,10 @@ GO
 /*                            (WL01)                                    */
 /* 2021-07-06  WLChooi  1.3   WMS-17404 - [CN]NIKE PHC Outlets RFID     */
 /*                            Receiving CR (WL02)                       */
+/* 2023-09-23  Wan02    1.4   WMS-23643 - [CN]NIKE_B2C_Creturn_NFC_      */
+/*                            Ehancement_Function CR                     */
 /************************************************************************/
-CREATE PROC isp_RFID_GetASNKey_Wrapper
+CREATE OR ALTER PROC isp_RFID_GetASNKey_Wrapper
            @c_Facility           NVARCHAR(5)  
          , @c_Storerkey          NVARCHAR(15) 
          , @c_RefNo              NVARCHAR(50)
@@ -41,7 +38,8 @@ CREATE PROC isp_RFID_GetASNKey_Wrapper
          , @n_TotalQtyExpected   INT = 0           OUTPUT
          , @n_TotalQtyReceived   INT = 0           OUTPUT
          , @n_SessionID          BIGINT = 0        OUTPUT   --(Wan01)
-         , @c_Remark             NVARCHAR(50) = '' OUTPUT   --WL02   
+         , @c_Remark             NVARCHAR(50) = '' OUTPUT   --WL02  
+         , @c_AdminUser          NVARCHAR(1)  = 'N'OUTPUT   --Wan02   
          , @b_Success            INT          = 1  OUTPUT
          , @n_Err                INT          = 0  OUTPUT
          , @c_ErrMsg             NVARCHAR(255)= '' OUTPUT
@@ -66,6 +64,7 @@ BEGIN
          
          , @c_SQL                NVARCHAR(1000)= ''
          , @c_SQLParms           NVARCHAR(1000)= ''  
+         , @c_UserName           NVARCHAR(128) = SUSER_SNAME()
   
    SET @n_err      = 0
    SET @c_errmsg   = ''
@@ -215,6 +214,13 @@ BEGIN
       WHERE RD.ReceiptKey = @c_Receiptkey
       GROUP BY RD.Receiptkey
    END
+   
+   SET @c_AdminUser = 'N'                                                           --(Wan02) - START
+   SELECT TOP 1 @c_AdminUser = IIF(c.UDF01 = @c_UserName OR c.UDF02 = @c_UserName,'Y','N')
+   FROM dbo.CODELKUP AS c (NOLOCK) 
+   WHERE c.ListName = 'NFCADMIN'
+   ORDER BY IIF(c.UDF01 = @c_UserName OR c.UDF02 = @c_UserName,'Y','N') DESC        --(Wan02) - END
+   
 QUIT_SP:
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN

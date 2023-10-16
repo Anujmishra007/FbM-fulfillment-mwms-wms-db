@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_RFID_Receiving_Add]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_RFID_Receiving_Add]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,15 +12,17 @@ GO
 /*                                                                       */  
 /* Called By:                                                            */  
 /*                                                                       */  
-/* Version: 1.0                                                          */  
+/* Version: 1.1                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date        Author   Ver   Purposes                                   */
 /* 02-DEC-2020 Wan      1.0   Created                                    */ 
+/* 19-SEP-2023 Wan01    1.1   WMS-23643 - [CN]NIKE_B2C_Creturn_NFC_     */
+/*                            Ehancement_Function CR                    */
 /*************************************************************************/   
-CREATE PROCEDURE [dbo].[isp_RFID_Receiving_Add] 
+CREATE OR ALTER PROCEDURE [dbo].[isp_RFID_Receiving_Add] 
    @n_SessionID         BIGINT         = 0 OUTPUT
 ,  @c_StorerKey         NVARCHAR(15)  
 ,  @c_Facility          NVARCHAR(5)  
@@ -115,17 +112,17 @@ BEGIN
                                        END
 
    SELECT
-	      @c_Lottable01Label   = ISNULL(RTRIM(Lottable01Label),'')  
+         @c_Lottable01Label   = ISNULL(RTRIM(Lottable01Label),'')  
       ,  @c_Lottable02Label   = ISNULL(RTRIM(Lottable02Label),'')
       ,  @c_Lottable03Label   = ISNULL(RTRIM(Lottable03Label),'')
       ,  @c_Lottable04Label   = ISNULL(RTRIM(Lottable04Label),'')
       ,  @c_Lottable05Label   = ISNULL(RTRIM(Lottable05Label),'')
-	   ,  @c_Lottable06Label   = ISNULL(RTRIM(Lottable06Label),'')
+      ,  @c_Lottable06Label   = ISNULL(RTRIM(Lottable06Label),'')
       ,  @c_Lottable07Label   = ISNULL(RTRIM(Lottable07Label),'')
       ,  @c_Lottable08Label   = ISNULL(RTRIM(Lottable08Label),'')
       ,  @c_Lottable09Label   = ISNULL(RTRIM(Lottable09Label),'')
       ,  @c_Lottable10Label   = ISNULL(RTRIM(Lottable10Label),'')
-	   ,  @c_Lottable11Label   = ISNULL(RTRIM(Lottable11Label),'')
+      ,  @c_Lottable11Label   = ISNULL(RTRIM(Lottable11Label),'')
       ,  @c_Lottable12Label   = ISNULL(RTRIM(Lottable12Label),'')
       ,  @c_Lottable13Label   = ISNULL(RTRIM(Lottable13Label),'')
       ,  @c_Lottable14Label   = ISNULL(RTRIM(Lottable14Label),'')
@@ -365,6 +362,7 @@ BEGIN
       AND   WIP.Sku        = @c_Sku
       AND   WIP.ToLoc      = @c_ToLoc
       AND   WIP.ToID       = @c_ToID
+      AND   WIP.RFIDNo1    = @c_RFIDNo1                                             --(Wan01)
       AND   WIP.Lottable01 = @c_Lottable01
       AND   WIP.Lottable02 = @c_Lottable02
       AND   WIP.Lottable03 = @c_Lottable03
