@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: report dw = r_dw_packing_list_by_sku33_rdt                */
 /*                                                                      */
-/* GitLab Version: 1.1                                                  */
+/* GitLab Version: 1.3                                                  */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -23,6 +23,8 @@ GO
 /* Date         Author   Ver.  Purposes                                 */
 /* 27-Apr-2023  WLChooi  1.0   DevOps Combine Script                    */
 /* 03-Aug-2023  WLChooi  1.1   WMS-23219 - Logic change (WL01)          */
+/* 05-Oct-2023  WLChooi  1.2   WMS-23219 - Address change (WL02)        */
+/* 13-Oct-2023  JiHHaur  1.3   JSM-183445 - Add MAX(AddDate) (JH01)     */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_PackListBySku33_rdt]
@@ -480,18 +482,18 @@ BEGIN
       SET B_Company  = 'LEVI''S AUSTRALIA ONLINE '
         , B_Contact1 = ''
         , B_Address1 = 'LEVI STRAUSS AUST PTY LTD '
-        , B_Address2 = 'PO BOX 321 '
-        , B_City     = 'ELIZABETH WEST'
-        , B_State    = 'SOUTH AUSTRALIA'
-        , B_Zip      = '5112'
+        , B_Address2 = '17 REID WAY '   --WL02
+        , B_City     = 'MELBOURNE AIRPORT'   --WL02
+        , B_State    = 'VICTORIA'   --WL02
+        , B_Zip      = '3045'   --WL02
         , B_Country  = 'AUSTRALIA'
-        , C_Company  = 'PO BOX 321'
+        , C_Company  = '17 REID WAY'   --WL02
         , C_Contact1 = ''
         , C_Address1 = ''
         , C_Address4 = ''
-        , C_City     = 'ELIZABETH WEST'
-        , C_State    = 'SOUTH AUSTRALIA'
-        , C_Zip      = '5112'
+        , C_City     = 'MELBOURNE AIRPORT'   --WL02
+        , C_State    = 'VICTORIA'   --WL02
+        , C_Zip      = '3045'   --WL02
         , C_Country  = 'AUSTRALIA'
       WHERE Storerkey = @c_Storerkey
 
@@ -574,18 +576,18 @@ BEGIN
       SET B_Company  = 'LEVI''S AUSTRALIA ONLINE '
         , B_Contact1 = ''
         , B_Address1 = 'LEVI STRAUSS AUST PTY LTD '
-        , B_Address2 = 'PO BOX 321 '
-        , B_City     = 'ELIZABETH WEST'
-        , B_State    = 'SOUTH AUSTRALIA'
-        , B_Zip      = '5112'
+        , B_Address2 = '17 REID WAY '   --WL02
+        , B_City     = 'MELBOURNE AIRPORT'   --WL02
+        , B_State    = 'VICTORIA'   --WL02
+        , B_Zip      = '3045'   --WL02
         , B_Country  = 'AUSTRALIA'
-        , C_Company  = 'PO BOX 321'
+        , C_Company  = '17 REID WAY '   --WL02'
         , C_Contact1 = ''
         , C_Address1 = ''
         , C_Address4 = ''
-        , C_City     = 'ELIZABETH WEST'
-        , C_State    = 'SOUTH AUSTRALIA'
-        , C_Zip      = '5112'
+        , C_City     = 'MELBOURNE AIRPORT'   --WL02
+        , C_State    = 'VICTORIA'   --WL02
+        , C_Zip      = '3045'   --WL02
         , C_Country  = 'AUSTRALIA'
       WHERE Storerkey = @c_Storerkey
 
@@ -631,12 +633,12 @@ BEGIN
    SELECT TP.LabelNo
         , TP.TTLCTN
         , TP.[Weight]
-        , TP.Adddate
+        , MAX(TP.Adddate)     /*JH01*/
    FROM #T_PD TP
    GROUP BY TP.LabelNo
           , TP.TTLCTN
           , TP.[Weight]
-          , TP.Adddate
+          /*, TP.Adddate JH01*/
    ORDER BY TP.LabelNo
 
    OPEN CUR_LOOP
