@@ -1,23 +1,22 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[RDT].[rdt_941ReplenMove01]') AND OBJECTPROPERTY(Id, N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdt_941ReplenMove01]
-GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
+
 /************************************************************************/
 /* Store procedure: rdt_941ReplenMove01                                 */
-/* Copyright      : IDS                                                 */
+/* Copyright      : Maersk                                              */
 /*                                                                      */
 /* Modifications log:                                                   */
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
 /* 2020-07-10 1.0  James    WMS-14147. Created                          */
+/* 2023-05-31 1.1  James    WMS-22615 Add UCCWithMultiSKU (james01)     */
 /************************************************************************/
 
-CREATE PROC rdt.rdt_941ReplenMove01 (
-   @nFunc       INT,
+CREATE OR ALTER PROC rdt.rdt_941ReplenMove01 (
    @nMobile     INT,
+   @nFunc       INT,
    @cLangCode   NVARCHAR( 3),
    @cSourceType NVARCHAR( 30),
    @cStorerKey  NVARCHAR( 15),
@@ -37,7 +36,8 @@ CREATE PROC rdt.rdt_941ReplenMove01 (
    @cLottable03 NVARCHAR( 18),
    @dLottable04 DATETIME,
    @nErrNo      INT           OUTPUT,
-   @cErrMsg     NVARCHAR( 20) OUTPUT  -- screen limitation, 20 char max
+   @cErrMsg     NVARCHAR( 20) OUTPUT,  -- screen limitation, 20 char max
+   @nUCC_RowRef INT
 
 ) AS
 
@@ -81,9 +81,15 @@ CREATE PROC rdt.rdt_941ReplenMove01 (
       ,@cLottable06   NVARCHAR( 30)
 
 
-   DECLARE @cSQL            NVARCHAR(2000),
-           @cSQLParms       NVARCHAR(2000)
+   DECLARE @cSQL            NVARCHAR(MAX),
+           @cSQLParms       NVARCHAR(MAX)
 
+   DECLARE @cUCCWithMultiSKU       NVARCHAR( 1)
+   DECLARE @nDebug         INT = 0
+   
+   IF @nDebug = 1
+   	SELECT @cFromLOT '@cFromLOT', @cfromloc '@cfromloc', @cFromID '@cFromID', @cToLOC '@cToLOC', 
+   	@csku '@csku', @nQTY '@nQTY', @cReplenKey '@cReplenKey'   
    SET @nErrNo = 0
 
    -- Get StorerConfig 'UCCTracking'
@@ -93,7 +99,7 @@ CREATE PROC rdt.rdt_941ReplenMove01 (
    WHERE StorerKey = @cStorerKey
       AND ConfigKey = 'UCC'
 
-
+   SET @cUCCWithMultiSKU = rdt.RDTGetConfig( @nFunc, 'UCCWithMultiSKU', @cStorerKey)
 /*-------------------------------------------------------------------------------
 
                                  Validate parameters
@@ -102,32 +108,32 @@ CREATE PROC rdt.rdt_941ReplenMove01 (
    -- Validate StorerKey (compulsory)
    IF @cStorerKey = '' OR @cStorerKey IS NULL
    BEGIN
-      SET @nErrNo = 54751
-      SET @cErrMsg = rdt.rdtgetmessage( 54751, @cLangCode, 'DSP') --'Need StorerKey'
+      SET @nErrNo = 154751
+      SET @cErrMsg = rdt.rdtgetmessage( 154751, @cLangCode, 'DSP') --'Need StorerKey'
       GOTO Fail
    END
 
    -- Validate Facility (compulsory)
    IF @cFacility = '' OR @cFacility IS NULL
    BEGIN
-      SET @nErrNo = 54752
-      SET @cErrMsg = rdt.rdtgetmessage( 54752, @cLangCode, 'DSP') --'Need Facility'
+      SET @nErrNo = 154752
+      SET @cErrMsg = rdt.rdtgetmessage( 154752, @cLangCode, 'DSP') --'Need Facility'
       GOTO Fail
    END
 
    -- Validate SourceType (compulsory)
    IF @cSourceType IS NULL
    BEGIN
-      SET @nErrNo = 54753
-      SET @cErrMsg = rdt.rdtgetmessage( 54753, @cLangCode, 'DSP') --'Bad SourceType'
+      SET @nErrNo = 154753
+      SET @cErrMsg = rdt.rdtgetmessage( 154753, @cLangCode, 'DSP') --'Bad SourceType'
       GOTO Fail
    END
 
    -- Validate FromLOC (compulsory)
    IF @cFromLOC = '' OR @cFromLOC IS NULL
    BEGIN
-      SET @nErrNo = 54754
-      SET @cErrMsg = rdt.rdtgetmessage( 54754, @cLangCode, 'DSP') --'FromLOC needed'
+      SET @nErrNo = 154754
+      SET @cErrMsg = rdt.rdtgetmessage( 154754, @cLangCode, 'DSP') --'FromLOC needed'
       GOTO Fail
    END
    ELSE
@@ -139,16 +145,16 @@ CREATE PROC rdt.rdt_941ReplenMove01 (
       -- Validate LOC
       IF @@ROWCOUNT = 0
       BEGIN
-         SET @nErrNo = 54755
-         SET @cErrMsg = rdt.rdtgetmessage( 54755, @cLangCode, 'DSP') --'Bad FromLOC'
+         SET @nErrNo = 154755
+         SET @cErrMsg = rdt.rdtgetmessage( 154755, @cLangCode, 'DSP') --'Bad FromLOC'
          GOTO Fail
       END
 
       -- Validate LOC's facility
       IF @cChkFacility <> @cFacility
       BEGIN
-         SET @nErrNo = 54756
-         SET @cErrMsg = rdt.rdtgetmessage( 54756, @cLangCode, 'DSP') --'Diff facility'
+         SET @nErrNo = 154756
+         SET @cErrMsg = rdt.rdtgetmessage( 154756, @cLangCode, 'DSP') --'Diff facility'
          GOTO Fail
       END
    END
@@ -156,8 +162,8 @@ CREATE PROC rdt.rdt_941ReplenMove01 (
    -- Validate ToLOC (compulsory)
    IF @cToLOC = '' OR @cToLOC IS NULL
    BEGIN
-      SET @nErrNo = 54757
-      SET @cErrMsg = rdt.rdtgetmessage( 54757, @cLangCode, 'DSP') --'ToLOC needed'
+      SET @nErrNo = 154757
+      SET @cErrMsg = rdt.rdtgetmessage( 154757, @cLangCode, 'DSP') --'ToLOC needed'
       GOTO Fail
    END
    ELSE
@@ -176,8 +182,8 @@ CREATE PROC rdt.rdt_941ReplenMove01 (
          IF NOT EXISTS ( SELECT 1 FROM dbo.Loc WITH (NOLOCK)
                          WHERE Loc = @cToLoc )
          BEGIN
-            SET @nErrNo = 54758
-            SET @cErrMsg = rdt.rdtgetmessage( 54758, @cLangCode, 'DSP') --'Bad ToLOC'
+            SET @nErrNo = 154758
+            SET @cErrMsg = rdt.rdtgetmessage( 154758, @cLangCode, 'DSP') --'Bad ToLOC'
             GOTO Fail
          END
       END
@@ -190,8 +196,8 @@ CREATE PROC rdt.rdt_941ReplenMove01 (
             AND SValue = '1')
          IF @cChkFacility <> @cFacility
         BEGIN
-          SET @nErrNo = 54759
-          SET @cErrMsg = rdt.rdtgetmessage( 54759, @cLangCode, 'DSP') --'Diff facility'
+          SET @nErrNo = 154759
+          SET @cErrMsg = rdt.rdtgetmessage( 154759, @cLangCode, 'DSP') --'Diff facility'
           GOTO Fail
         END
 
@@ -224,8 +230,8 @@ CREATE PROC rdt.rdt_941ReplenMove01 (
 
          IF @nFromCnt > 1
          BEGIN
-            SET @nErrNo = 54760
-            SET @cErrMsg = rdt.rdtgetmessage(54760, @cLangCode, 'DSP') -- 'LocNotCommgSKU'
+            SET @nErrNo = 154760
+            SET @cErrMsg = rdt.rdtgetmessage(154760, @cLangCode, 'DSP') -- 'LocNotCommgSKU'
             GOTO Fail
          END
 
@@ -240,8 +246,8 @@ CREATE PROC rdt.rdt_941ReplenMove01 (
 
          IF @nToCnt > 1
          BEGIN
-            SET @nErrNo = 54761
-            SET @cErrMsg = rdt.rdtgetmessage(54761, @cLangCode, 'DSP') -- 'LocNotCommgSKU'
+            SET @nErrNo = 154761
+            SET @cErrMsg = rdt.rdtgetmessage(154761, @cLangCode, 'DSP') -- 'LocNotCommgSKU'
             GOTO Fail
          END
 
@@ -271,8 +277,8 @@ CREATE PROC rdt.rdt_941ReplenMove01 (
 
             IF RTRIM(@cFromSKU) <> RTRIM(@cToSKU)
             BEGIN
-               SET @nErrNo = 54762
-               SET @cErrMsg = rdt.rdtgetmessage(54762, @cLangCode, 'DSP') -- 'LocNotCommgSKU'
+               SET @nErrNo = 154762
+               SET @cErrMsg = rdt.rdtgetmessage(154762, @cLangCode, 'DSP') -- 'LocNotCommgSKU'
                GOTO Fail
             END
        END
@@ -294,8 +300,8 @@ END
       -- Validate ID
       IF @nRowCount = 0
       BEGIN
-         SET @nErrNo = 54763
-         SET @cErrMsg = rdt.rdtgetmessage( 54763, @cLangCode, 'DSP') --'Invalid ID'
+         SET @nErrNo = 154763
+         SET @cErrMsg = rdt.rdtgetmessage( 154763, @cLangCode, 'DSP') --'Invalid ID'
          GOTO Fail
       END
 
@@ -311,10 +317,10 @@ END
    END
 
    -- Validate both SKU and UCC passed-in
-   IF @cSKU IS NOT NULL AND @cUCC IS NOT NULL
+   IF @cSKU IS NOT NULL AND @cUCC IS NOT NULL --AND @cUCCWithMultiSKU <> '1'
    BEGIN
-      SET @nErrNo = 54764
-      SET @cErrMsg = rdt.rdtgetmessage( 54764, @cLangCode, 'DSP') --'Either SKU/UCC'
+      SET @nErrNo = 154764
+      SET @cErrMsg = rdt.rdtgetmessage( 154764, @cLangCode, 'DSP') --'Either SKU/UCC'
       GOTO Fail
    END
 
@@ -326,8 +332,8 @@ END
          WHERE SKU.StorerKey = @cStorerKey
             AND SKU.SKU = @cSKU)
       BEGIN
-         SET @nErrNo = 54765
-         SET @cErrMsg = rdt.rdtgetmessage( 54765, @cLangCode, 'DSP') --'Invalid SKU'
+         SET @nErrNo = 154765
+         SET @cErrMsg = rdt.rdtgetmessage( 154765, @cLangCode, 'DSP') --'Invalid SKU'
          GOTO Fail
       END
 
@@ -340,8 +346,8 @@ END
             AND SKU = @cSKU
          IF @nRowCount > 1
          BEGIN
-            SET @nErrNo = 54766
-            SET @cErrMsg = rdt.rdtgetmessage( 54766, @cLangCode, 'DSP') --'LOCHasMultiID'
+            SET @nErrNo = 154766
+            SET @cErrMsg = rdt.rdtgetmessage( 154766, @cLangCode, 'DSP') --'LOCHasMultiID'
             GOTO Fail
          END
       END
@@ -349,8 +355,8 @@ END
       -- Validate QTY
       IF RDT.rdtIsValidQTY( @nQTY, 1) = 0
       BEGIN
-         SET @nErrNo = 54767
-         SET @cErrMsg = rdt.rdtgetmessage( 54767, @cLangCode, 'DSP') --'Invalid QTY'
+         SET @nErrNo = 154767
+         SET @cErrMsg = rdt.rdtgetmessage( 154767, @cLangCode, 'DSP') --'Invalid QTY'
          GOTO Fail
       END
    END
@@ -360,8 +366,8 @@ END
    BEGIN
       IF @cStorerConfig_UCC <> '1'
       BEGIN
-         SET @nErrNo = 54768
-         SET @cErrMsg = rdt.rdtgetmessage( 54768, @cLangCode, 'DSP') --'UCCTrackingOff'
+         SET @nErrNo = 154768
+         SET @cErrMsg = rdt.rdtgetmessage( 154768, @cLangCode, 'DSP') --'UCCTrackingOff'
          GOTO Fail
       END
 
@@ -376,19 +382,23 @@ END
          SET  @cUCCStatus = '6'
       END
 
-      EXEC RDT.rdtIsValidUCC @cLangCode, @nErrNo OUTPUT, @cErrMsg OUTPUT,
-         @cUCC,
-         @cStorerKey,
---         '6', -- Status
---       Changed from 6 to 4 coz loadplan allocation only exclude for ucc.status in ('3', '4')
-         @cUCCStatus , -- Status -- (ChewKP01)
-         @nChkQTY = 1,
-         @cChkLOC = @cFromLOC,
-         @cChkID  = @cFromID -- If @cFromID IS NULL, no checking on ID
+      -- (james01)
+      IF @cUCCWithMultiSKU <> '1'
+      BEGIN
+         EXEC RDT.rdtIsValidUCC @cLangCode, @nErrNo OUTPUT, @cErrMsg OUTPUT,
+            @cUCC,
+            @cStorerKey,
+   --         '6', -- Status
+   --       Changed from 6 to 4 coz loadplan allocation only exclude for ucc.status in ('3', '4')
+            @cUCCStatus , -- Status -- (ChewKP01)
+            @nChkQTY = 1,
+            @cChkLOC = @cFromLOC,
+            @cChkID  = @cFromID -- If @cFromID IS NULL, no checking on ID
 
-      IF @nErrNo <> 0
-         GOTO Fail
-
+         IF @nErrNo <> 0
+            GOTO Fail
+      END
+      
       -- Get UCC SKU, LOT, LOC, ID, QTY
       SELECT
          @cUCCSKU = SKU,
@@ -399,7 +409,10 @@ END
       FROM dbo.UCC (NOLOCK)
       WHERE StorerKey = @cStorerKey
          AND UCCNo = @cUCC
-         AND Status = CASE WHEN @cToLoc = 'PICK' THEN '5' ELSE '6' END
+         AND (( @cToLoc = 'PICK' AND [STATUS] = '5') OR ( @cToLoc <> 'PICK' AND [STATUS] = '6'))
+         --AND (( @cUCCWithMultiSKU = '1' AND SKU = @cSKU) OR ( @cUCCWithMultiSKU <> '1' AND SKU = SKU))  
+         AND (( @cFromLOT <> '' AND Lot = @cFromLOT) OR ( @cFromLOT = '' AND Lot = Lot)) 
+         AND ((@nUCC_RowRef <> '' AND UCC_RowRef = @nUCC_RowRef) OR (@nUCC_RowRef = '' AND UCC_RowRef = UCC_RowRef))
 
       SET @cSKU = @cUCCSKU
       SET @cFromLOT = @cUCCLOT
@@ -411,15 +424,15 @@ END
 
       IF @cFromID <> @cID
       BEGIN
-         SET @nErrNo = 54769
-         SET @cErrMsg = rdt.rdtgetmessage( 54769, @cLangCode, 'DSP') --'UCCID Unmatch'
+         SET @nErrNo = 154769
+         SET @cErrMsg = rdt.rdtgetmessage( 154769, @cLangCode, 'DSP') --'UCCID Unmatch'
          GOTO Fail
       END
 
       IF @cFromLOT IS NOT NULL AND @cFromLOT <> @cUCCLOT
       BEGIN
-         SET @nErrNo = 54770
-         SET @cErrMsg = rdt.rdtgetmessage( 54770, @cLangCode, 'DSP') --'UCCLOT Unmatch'
+         SET @nErrNo = 154770
+         SET @cErrMsg = rdt.rdtgetmessage( 154770, @cLangCode, 'DSP') --'UCCLOT Unmatch'
          GOTO Fail
       END
    END
@@ -427,16 +440,16 @@ END
    -- Validate QTY
    IF @cSKU IS NULL AND @cUCC IS NULL AND @nQTY <> 0
    BEGIN
-      SET @nErrNo = 54771
-      SET @cErrMsg = rdt.rdtgetmessage( 54771, @cLangCode, 'DSP') --'Bad QTY Param'
+      SET @nErrNo = 154771
+      SET @cErrMsg = rdt.rdtgetmessage( 154771, @cLangCode, 'DSP') --'Bad QTY Param'
       GOTO Fail
    END
 
    -- Validate LOT
    IF @cFromLOT IS NOT NULL AND @cFromLOT = ''
    BEGIN
-      SET @nErrNo = 54772
-      SET @cErrMsg = rdt.rdtgetmessage( 54772, @cLangCode, 'DSP') --'Invalid LOT'
+      SET @nErrNo = 154772
+      SET @cErrMsg = rdt.rdtgetmessage( 154772, @cLangCode, 'DSP') --'Invalid LOT'
       GOTO Fail
    END
 
@@ -459,8 +472,8 @@ END
       AND   LOT.STATUS = 'OK' AND LOC.STATUS = 'OK' AND ID.STATUS = 'OK'
       AND   (LOTxLOCxID.Qty - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyPicked) >= RP.Qty)
       BEGIN
-         SET @nErrNo = 54780
-         SET @cErrMsg = rdt.rdtgetmessage( 54780, @cLangCode, 'DSP') --'InventNotEnuf'
+         SET @nErrNo = 154780
+         SET @cErrMsg = rdt.rdtgetmessage( 154780, @cLangCode, 'DSP') --'InventNotEnuf'
          GOTO Fail
       END
    END
@@ -477,6 +490,9 @@ END
 
    IF @cToLoc <> 'PICK'
    BEGIN
+   	IF @nDebug = 1
+   	   SELECT @cFromLOT '@cFromLOT', @cfromloc '@cfromloc', @cFromID '@cFromID', @cToLOC '@cToLOC', 
+   	   @csku '@csku', @nQTY '@nQTY', @cReplenKey '@cReplenKey' 
       EXECUTE dbo.nspItrnAddMove  
          @n_ItrnSysId     = NULL,  
          @c_StorerKey     = @cstorerkey,  
@@ -514,8 +530,8 @@ END
 
       IF NOT @b_success = 1
       BEGIN
-         SET @nErrNo = 54773
-         SET @cErrMsg = rdt.rdtgetmessage( 54773, @cLangCode, 'DSP') --'ItrnMovefailed'
+         SET @nErrNo = 154773
+         SET @cErrMsg = rdt.rdtgetmessage( 154773, @cLangCode, 'DSP') --'ItrnMovefailed'
          GOTO RollBackTran
       END
 
@@ -523,23 +539,43 @@ END
 
    IF ISNULL(@cUCC, '') <> ''
    BEGIN -- update ucc
-
-      UPDATE dbo.UCC WITH (ROWLOCK) SET
-      Status = CASE WHEN @cToLoc <> 'PICK' THEN '6' ELSE Status END,
-         Loc = @ctoloc,
-         EditDate = getdate(),
-         EditWho = sUSER_sNAME()
-      WHERE uccno = @cUCC
-      AND   loc = @cfromloc
-      AND   sku = @csku
-      AND   storerkey = @cstorerkey
-
-      SELECT @n_err = @@ERROR
-      IF @n_err <> 0
+      IF @cUCCWithMultiSKU = '1'
       BEGIN
-         SET @nErrNo = 54774
-         SET @cErrMsg = rdt.rdtgetmessage( 54774, @cLangCode, 'DSP') --'UPD UCC Failed'
-         GOTO RollBackTran
+         UPDATE dbo.UCC SET
+         Status = CASE WHEN @cToLoc <> 'PICK' THEN '6' ELSE Status END,
+            Loc = @ctoloc,
+            EditDate = GETDATE(),
+            EditWho = sUSER_sNAME()
+         WHERE UCC_RowRef = @nUCC_RowRef
+
+         SELECT @n_err = @@ERROR
+         IF @n_err <> 0
+         BEGIN
+            SET @nErrNo = 154788
+            SET @cErrMsg = rdt.rdtgetmessage( 154774, @cLangCode, 'DSP') --'UPD UCC Failed'
+            GOTO RollBackTran
+         END
+      END
+      ELSE
+      BEGIN
+         UPDATE dbo.UCC WITH (ROWLOCK) SET
+         Status = CASE WHEN @cToLoc <> 'PICK' THEN '6' ELSE Status END,
+            Loc = @ctoloc,
+            EditDate = GETDATE(),
+            EditWho = sUSER_sNAME()
+         WHERE UCCNo = @cUCC
+         AND   Loc = @cFromLOC
+         AND   SKU = @cSKU
+         AND   Storerkey = @cStorerKey
+         AND   (( @cFromLOT <> '' AND Lot = @cFromLOT) OR ( @cFromLOT = '' AND Lot = Lot))
+
+         SELECT @n_err = @@ERROR
+         IF @n_err <> 0
+         BEGIN
+            SET @nErrNo = 154774
+            SET @cErrMsg = rdt.rdtgetmessage( 154774, @cLangCode, 'DSP') --'UPD UCC Failed'
+            GOTO RollBackTran
+         END
       END
    END -- update ucc
 
@@ -554,8 +590,8 @@ END
 
    IF @@ERROR <> 0
    BEGIN
-      SET @nErrNo = 54775
-      SET @cErrMsg = rdt.rdtgetmessage( 54775, @cLangCode, 'DSP') --UPD RPL Fail
+      SET @nErrNo = 154775
+      SET @cErrMsg = rdt.rdtgetmessage( 154775, @cLangCode, 'DSP') --UPD RPL Fail
       GOTO RollBackTran
    END
 
@@ -670,7 +706,7 @@ END
                   '@nOrdAvailQTY INT           OUTPUT, ' +
                   '@nUOMQTY      INT           OUTPUT, ' + 
                   '@nRowCount    INT           OUTPUT  '
-
+                  PRINT @cSQL
                EXEC sp_ExecuteSQL @cSQL, @cSQLParms, 
                   @cStorerKey  = @cStorerKey,  
                   @cSKU        = @cSKU,  
@@ -730,8 +766,8 @@ END
          BEGIN
             IF @cLocationType = 'DYNAMICPK'
             BEGIN
-               SET @nErrNo = 54781
-               SET @cErrMsg = rdt.rdtgetmessage( 54781, @cLangCode, 'DSP') --NoOrDtlOffset
+               SET @nErrNo = 154781
+               SET @cErrMsg = rdt.rdtgetmessage( 154781, @cLangCode, 'DSP') --NoOrDtlOffset
                GOTO RollBackTran
             END
             ELSE IF @cLocationType = 'CASE'
@@ -754,8 +790,8 @@ END
 
          IF @b_success <> 1
          BEGIN
-            SET @nErrNo = 54777
-            SET @cErrMsg = rdt.rdtgetmessage( 54777, @cLangCode, 'DSP') --GetPDKeyFail
+            SET @nErrNo = 154777
+            SET @cErrMsg = rdt.rdtgetmessage( 154777, @cLangCode, 'DSP') --GetPDKeyFail
             GOTO RollBackTran
          END
 
@@ -768,8 +804,8 @@ END
 
          IF @@ERROR <> 0
          BEGIN
-            SET @nErrNo = 54778
-            SET @cErrMsg = rdt.rdtgetmessage( 54777, @cLangCode, 'DSP') --CreatePKDFail
+            SET @nErrNo = 154778
+            SET @cErrMsg = rdt.rdtgetmessage( 154777, @cLangCode, 'DSP') --CreatePKDFail
             GOTO RollBackTran
          END
 
@@ -805,8 +841,8 @@ END
 
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 54778
-                  SET @cErrMsg = rdt.rdtgetmessage( 54778, @cLangCode, 'DSP') --UPD PKD Fail
+                  SET @nErrNo = 154778
+                  SET @cErrMsg = rdt.rdtgetmessage( 154778, @cLangCode, 'DSP') --UPD PKD Fail
                   GOTO RollBackTran
                END
             END
@@ -852,14 +888,14 @@ END
 
                IF ISNULL(@cDataWindow, '') = ''
                BEGIN
-                  SET @nErrNo = 54782
+                  SET @nErrNo = 154782
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DWNOTSetup
                   GOTO RollBackTran
                END
 
                IF ISNULL(@cTargetDB, '') = ''
                BEGIN
-                  SET @nErrNo = 54783
+                  SET @nErrNo = 154783
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --TgetDB Not Set
                   GOTO RollBackTran
                END
@@ -901,7 +937,7 @@ END
                
                IF @nErrNo <> 0
                BEGIN
-                  SET @nErrNo = 54784
+                  SET @nErrNo = 154784
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'InsertPRTFail'
                   GOTO RollBackTran
                END
@@ -922,14 +958,14 @@ END
                
             IF ISNULL(@cDataWindow, '') = ''
             BEGIN
-               SET @nErrNo = 54786
+               SET @nErrNo = 154786
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DWNOTSetup
                GOTO RollBackTran
             END
    
             IF ISNULL(@cTargetDB, '') = ''
             BEGIN
-               SET @nErrNo = 54787
+               SET @nErrNo = 154787
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --TgetDB Not Set
                GOTO RollBackTran       
             END
@@ -956,7 +992,7 @@ END
                      
             IF @nErrNo <> 0
             BEGIN
-               SET @nErrNo = 54785
+               SET @nErrNo = 154785
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'InsertPRTFail'
                GOTO RollBackTran
             END
@@ -977,6 +1013,7 @@ END
       WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
          COMMIT TRAN
    Fail:
+
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
