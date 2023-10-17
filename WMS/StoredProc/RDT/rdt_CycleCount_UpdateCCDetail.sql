@@ -1,10 +1,8 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[rdt].[rdt_CycleCount_UpdateCCDetail]') AND OBJECTPROPERTY(Id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdt_CycleCount_UpdateCCDetail]
-GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
+
 /************************************************************************/
 /* Store procedure: rdt_CycleCount_UpdateCCDetail                       */
 /* Copyright      : IDS                                                 */
@@ -27,9 +25,10 @@ GO
 /* 11-Aug-2016 1.2  James       SOS375049 - Update Loc.CycleCounter     */
 /*                              Add Save Tran (james01)                 */
 /* 01-Nov-2016 1.3  Leong       IN00187400 - Reset Counted_Cnt(x).      */
+/* 31-May-2023 1.4  James       WMS-22615 Add UCCWithMultiSKU (james02) */
 /************************************************************************/
 
-CREATE PROC rdt.rdt_CycleCount_UpdateCCDetail (
+CREATE OR ALTER PROC rdt.rdt_CycleCount_UpdateCCDetail (
    @cCCRefNo      NVARCHAR(10),
    @cCCSheetNo    NVARCHAR(10),
    @nCCCountNo    INT,
@@ -49,8 +48,22 @@ BEGIN
    DECLARE @nTranCount     INT,
            @cStorerKey     NVARCHAR(15),
            @cLoc           NVARCHAR(10),
-           @cFacility      NVARCHAR( 5)
+           @cFacility      NVARCHAR( 5),
+           @cUCCWithMultiSKU  NVARCHAR( 1),
+           @cUCC              NVARCHAR( 20),
+           @cSKU              NVARCHAR( 20),
+           @nFunc             INT
 
+   SELECT 
+      @nFunc = Func,
+      @cStorerKey = StorerKey,
+      @cUCC = V_UCC,
+      @cSKU = V_SKU
+   FROM RDT.RDTMOBREC WITH (NOLOCK)
+   WHERE UserName = @cUserName
+   
+   SET @cUCCWithMultiSKU = rdt.RDTGetConfig( @nFunc, 'UCCWithMultiSKU', @cStorerKey)
+   
    SET @nTranCount = @@TRANCOUNT
 
    BEGIN TRAN
@@ -129,12 +142,31 @@ BEGIN
    END -- @cLangCode = 'Y'
    ELSE
    BEGIN
-
-      SELECT @cStorerKey = StorerKey,
-             @cLoc = Loc
-      FROM dbo.CCDetail WITH (NOLOCK)
-      WHERE CCDetailKey = @cCCDetailKey
-
+   	INSERT INTO traceinfo(tracename, timein, Col1, Col2, Col3) VALUES ('6101', GETDATE(), @cUCCWithMultiSKU, @cUCC, @cSKU)
+   	IF @cUCCWithMultiSKU = '1' AND 
+         EXISTS(SELECT 1 
+                FROM dbo.UCC WITH (NOLOCK) 
+                WHERE UCCNo = @cUCC 
+                AND Storerkey = @cStorerKey 
+                GROUP BY UCCNO 
+                HAVING COUNT( SKU) > 1)
+      BEGIN
+         SELECT 
+            @cLoc = Loc,
+            @cCCDetailKey = CCDetailKey
+         FROM dbo.CCDetail WITH (NOLOCK)
+         WHERE CCKey = @cCCRefNo
+         AND   RefNo = @cUCC
+         AND   Sku = @cSKU
+         INSERT INTO traceinfo(tracename, timein, Col1, Col2, Col3, Col4, Col5) VALUES ('6102', GETDATE(), @cCCRefNo, @cUCC, @cSKU, @cLoc, @cCCDetailKey)
+      END
+      ELSE
+      BEGIN
+         SELECT @cLoc = Loc
+         FROM dbo.CCDetail WITH (NOLOCK)
+         WHERE CCDetailKey = @cCCDetailKey
+      END
+      
       IF @nCCCountNo = 1
       BEGIN
          UPDATE dbo.CCDETAIL WITH (ROWLOCK)
