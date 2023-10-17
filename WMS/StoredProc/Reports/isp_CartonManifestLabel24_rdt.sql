@@ -44,6 +44,7 @@ GO
 /* 12-Jun-2020  TLTING02 1.11  Performance tunning                      */
 /* 13-JUL-2022  CSCHONG  1.12  WMS-20223 add report config (CS08)       */
 /* 20-Oct-2022  CSCHONG  1.13  Devops Scripts Combine & WMS-20999(CS09) */
+/* 13-OCT-2023  CSCHONG  1.14  Performance Tunning (CS10)               */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_CartonManifestLabel24_rdt] (
@@ -311,22 +312,38 @@ BEGIN
    DEALLOCATE CUR_Labelno
 
       /*Cs03 Start*/
-  SET @n_cntRefno = 1
+/*CS10 S*/
+--  SET @n_cntRefno = 1
 
-  SELECT @n_cntRefno = COUNT(DISTINCT c.code)
-       --  ,@c_site = CASE WHEN ISNULL(c.code,'') <> '' THEN c.code ELSE l.pickzone end
-  FROM Orders Orders WITH (NOLOCK)
-  JOIN OrderDetail OrderDetail WITH (NOLOCK) ON Orders.OrderKey = OrderDetail.OrderKey                 --CS07
---  JOIN LoadPlanDetail LoadPlanDetail WITH (NOLOCK) ON (Orders.OrderKey = LoadplanDetail.OrderKey)
-  JOIN Packheader Packheader WITH (NOLOCK) ON (orders.LoadKey = Packheader.LoadKey)
-  JOIN Packdetail Packdetail WITH (NOLOCK) ON Packheader.Pickslipno = Packdetail.pickslipno --AND OrderDetail.SKU = PackDetail.SKU)
-  LEFT JOIN PICKDETAIL PD (NOLOCK) ON PD.orderkey = OrderDetail.OrderKey
-                                   AND PD.orderlinenumber = OrderDetail.orderlinenumber AND PD.SKU = OrderDetail.SKU        --CS07
-  JOIN LOC L WITH (NOLOCK) ON L.loc=pd.Loc
-  JOIN CODELKUP C WITH (NOLOCK) ON C.listname = N'ALLSorting' AND
-   C.Storerkey=ORDERS.StorerKey AND C.code2=L.PickZone
-   WHERE Packheader.Pickslipno = @c_PickSlipNo
-   AND   C.Storerkey = @c_StorerKey  --tlting02
+--  SELECT @n_cntRefno = COUNT(DISTINCT c.code)
+--       --  ,@c_site = CASE WHEN ISNULL(c.code,'') <> '' THEN c.code ELSE l.pickzone end
+--  FROM Orders Orders WITH (NOLOCK)
+--  JOIN OrderDetail OrderDetail WITH (NOLOCK) ON Orders.OrderKey = OrderDetail.OrderKey                 --CS07
+----  JOIN LoadPlanDetail LoadPlanDetail WITH (NOLOCK) ON (Orders.OrderKey = LoadplanDetail.OrderKey)
+--  JOIN Packheader Packheader WITH (NOLOCK) ON (orders.LoadKey = Packheader.LoadKey)
+--  JOIN Packdetail Packdetail WITH (NOLOCK) ON Packheader.Pickslipno = Packdetail.pickslipno --AND OrderDetail.SKU = PackDetail.SKU)
+--  LEFT JOIN PICKDETAIL PD (NOLOCK) ON PD.orderkey = OrderDetail.OrderKey
+--                                   AND PD.orderlinenumber = OrderDetail.orderlinenumber AND PD.SKU = OrderDetail.SKU        --CS07
+--  JOIN LOC L WITH (NOLOCK) ON L.loc=pd.Loc
+--  JOIN CODELKUP C WITH (NOLOCK) ON C.listname = N'ALLSorting' AND
+--   C.Storerkey=ORDERS.StorerKey AND C.code2=L.PickZone
+--   WHERE Packheader.Pickslipno = @c_PickSlipNo
+--   AND   C.Storerkey = @c_StorerKey  --tlting02
+
+
+   SELECT  @n_cntRefno = COUNT(DISTINCT c.code)  
+   FROM  OrderDetail OrderDetail WITH    (NOLOCK)  
+   JOIN Orders Orders WITH (NOLOCK)  ON Orders.Orderkey = OrderDetail.Orderkey
+   JOIN PICKDETAIL PD (NOLOCK) ON PD.orderkey = OrderDetail.OrderKey AND PD.orderlinenumber = OrderDetail.orderlinenumber  
+   JOIN Loadplandetail LP (NOLOCK) on ( LP.Orderkey = Orders.OrderKey ) 
+   JOIN Packheader Packheader WITH    (NOLOCK) ON (LP.LoadKey = Packheader.LoadKey) 
+   JOIN Packdetail Packdetail WITH    (NOLOCK) ON Packheader.Pickslipno = Packdetail.pickslipno AND OrderDetail.StorerKey = PackDetail.StorerKey AND   OrderDetail.SKU = PackDetail.SKU  
+   JOIN LOC L WITH    (NOLOCK) ON L.loc=pd.Loc 
+   JOIN CODELKUP C WITH    (NOLOCK) ON C.listname = N'ALLSorting' AND C.Storerkey=OrderDetail.StorerKey AND C.code2=L.PickZone 
+   WHERE Packheader.Pickslipno = @c_PickSlipNo 
+   AND Orders.Storerkey = @c_StorerKey
+
+/*CS10 E*/
 
    IF @n_cntRefno > 1
    BEGIN
