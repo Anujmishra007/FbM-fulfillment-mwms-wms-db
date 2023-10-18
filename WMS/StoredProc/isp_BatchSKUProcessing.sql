@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_BatchSKUProcessing]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_BatchSKUProcessing]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -58,8 +53,10 @@ GO
 /*                            isp_ChannelAllocGetHoldQty_Wrapper.       */           
 /*                            Pass in AllocateStrategyKey and           */
 /*                            AllocateStrategyLineNumber to pickcode    */                     
+/* 16-OCT-2023  NJOW05  3.2   WMS-23919 add sort by orderkey option to  */
+/*                            AutoAllocSort config                      */
 /************************************************************************/  
-CREATE PROC [dbo].[isp_BatchSKUProcessing]  
+CREATE OR ALTER PROC [dbo].[isp_BatchSKUProcessing]  
      @n_AllocBatchNo  BIGINT  
    , @c_Facility      NVARCHAR(10)   
    , @c_StorerKey     NVARCHAR(15)  
@@ -2565,6 +2562,7 @@ BEGIN
                    o.UOMQty = @n_OriginUOMQty  
           ORDER BY ORDERS.Priority, 
                      CASE WHEN @c_AutoAllocSort_Opt1 = 'ORDERS.OrderDate' THEN ORDERS.OrderDate ELSE '' END,  --NJOW03          
+                     CASE WHEN @c_AutoAllocSort_Opt1 = 'ORDERS.Orderkey' THEN ORDERS.Orderkey ELSE '' END,  --NJOW05      
                      CASE WHEN PACK.Pallet > 0 THEN FLOOR(o.Qty / PACK.Pallet) ELSE 0 END DESC, 
                      CASE WHEN PACK.CaseCnt > 0 THEN FLOOR(CASE WHEN PACK.Pallet > 0 THEN o.Qty % CAST(PACK.Pallet AS INT) ELSE o.Qty END   
                        / PACK.CaseCnt) ELSE 0 END DESC,  
@@ -2603,6 +2601,7 @@ BEGIN
                       OD.Lottable05 = @d_Lottable05     
                ORDER BY ORDERS.Priority, 
                         CASE WHEN @c_AutoAllocSort_Opt1 = 'ORDERS.OrderDate' THEN ORDERS.OrderDate ELSE '' END,  --NJOW03                         
+                        CASE WHEN @c_AutoAllocSort_Opt1 = 'ORDERS.Orderkey' THEN ORDERS.Orderkey ELSE '' END,  --NJOW05                              
                         CASE WHEN PACK.Pallet > 0 THEN FLOOR(o.Qty / PACK.Pallet) ELSE 0 END DESC, 
                         CASE WHEN PACK.CaseCnt > 0 THEN FLOOR(CASE WHEN PACK.Pallet > 0 THEN o.Qty % CAST(PACK.Pallet AS INT) ELSE o.Qty END   
                                                               / PACK.CaseCnt) ELSE 0 END DESC,   
@@ -2693,7 +2692,8 @@ BEGIN
                                        END  
                             )*/  
                ORDER BY ORDERS.Priority,   
-                        CASE WHEN @c_AutoAllocSort_Opt1 = 'ORDERS.OrderDate' THEN ORDERS.OrderDate ELSE '' END,  --NJOW03                         
+                        CASE WHEN @c_AutoAllocSort_Opt1 = 'ORDERS.OrderDate' THEN ORDERS.OrderDate ELSE '' END,  --NJOW03         
+                        CASE WHEN @c_AutoAllocSort_Opt1 = 'ORDERS.Orderkey' THEN ORDERS.Orderkey ELSE '' END,  --NJOW05                                                      
                         CASE WHEN PACK.Pallet > 0 THEN FLOOR(o.Qty / PACK.Pallet) ELSE 0 END DESC,  
                         CASE WHEN PACK.CaseCnt > 0 THEN FLOOR(CASE WHEN PACK.Pallet > 0 THEN o.Qty % CAST(PACK.Pallet AS INT) ELSE o.Qty END   
                                                               / PACK.CaseCnt) ELSE 0 END DESC, 
