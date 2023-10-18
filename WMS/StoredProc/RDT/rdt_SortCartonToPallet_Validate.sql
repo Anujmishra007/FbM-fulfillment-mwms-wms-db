@@ -13,6 +13,8 @@ GO
 /*                                                                         */
 /* Date         Rev  Author   Purposes                                     */
 /* 2023-07-18   1.0  Ung      WMS-22855 Created                            */
+/* 2023-10-17   1.1  Ung      WMS-23818 Fix ValidateSP param               */
+/*                            Reusable carton ID                           */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_SortCartonToPallet_Validate](
@@ -61,7 +63,7 @@ BEGIN
       BEGIN
          SET @cSQL = 'EXEC rdt.' + RTRIM( @cValidateSP) +
             ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
-            ' @cType, @cUpdateTable, @cCartonID, @cPalletID, @cSKU OUTPUT, @nQTY OUTPUT, ' +
+            ' @cType, @cUpdateTable, @cPalletID, @cCartonID, @cSKU OUTPUT, @nQTY OUTPUT, ' +
             ' @cCartonUDF01 OUTPUT, @cCartonUDF02 OUTPUT, @cCartonUDF03 OUTPUT, @cCartonUDF04 OUTPUT, @cCartonUDF05 OUTPUT, ' + 
             ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
          SET @cSQLParam =
@@ -72,22 +74,23 @@ BEGIN
             ' @nInputKey      INT,           ' + 
             ' @cFacility      NVARCHAR( 5),  ' + 
             ' @cStorerKey     NVARCHAR( 15), ' +   
-            ' @cUpdateTable   NVARCHAR( 20), ' + 
             ' @cType          NVARCHAR( 20), ' + 
             ' @cUpdateTable   NVARCHAR( 20), ' + 
-            ' @cCartonID      NVARCHAR( 20), ' + 
             ' @cPalletID      NVARCHAR( 20), ' + 
-            ' @cCartonUDF01   NVARCHAR( 30) OUTPUT, ' + 
-            ' @cCartonUDF02   NVARCHAR( 30) OUTPUT, ' + 
-            ' @cCartonUDF03   NVARCHAR( 30) OUTPUT, ' + 
-            ' @cCartonUDF04   NVARCHAR( 30) OUTPUT, ' + 
-            ' @cCartonUDF05   NVARCHAR( 30) OUTPUT, ' + 
+            ' @cCartonID      NVARCHAR( 20), ' + 
+            ' @cSKU           NVARCHAR( 20) = '''' OUTPUT, ' + 
+            ' @nQTY           INT           = 0    OUTPUT, ' + 
+            ' @cCartonUDF01   NVARCHAR( 30) = '''' OUTPUT, ' + 
+            ' @cCartonUDF02   NVARCHAR( 30) = '''' OUTPUT, ' + 
+            ' @cCartonUDF03   NVARCHAR( 30) = '''' OUTPUT, ' + 
+            ' @cCartonUDF04   NVARCHAR( 30) = '''' OUTPUT, ' + 
+            ' @cCartonUDF05   NVARCHAR( 30) = '''' OUTPUT, ' + 
             ' @nErrNo         INT           OUTPUT, ' + 
             ' @cErrMsg        NVARCHAR( 20) OUTPUT  '
             
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
             @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
-            @cType, @cUpdateTable, @cCartonID, @cPalletID, 
+            @cType, @cUpdateTable, @cPalletID, @cCartonID, @cSKU OUTPUT, @nQTY OUTPUT, 
             @cCartonUDF01 OUTPUT, @cCartonUDF02 OUTPUT, @cCartonUDF03 OUTPUT, @cCartonUDF04 OUTPUT, @cCartonUDF05 OUTPUT, 
             @nErrNo OUTPUT, @cErrMsg OUTPUT
 
@@ -118,7 +121,8 @@ BEGIN
             FROM dbo.DropID WITH (NOLOCK) 
                JOIN dbo.DropIDDetail WITH (NOLOCK) ON (DropID.DropID = DropIDDetail.DropID)
             WHERE DropIDType = CAST( @nFunc AS NVARCHAR( 4))
-               AND ChildID = @cCartonID)
+               AND ChildID = @cCartonID
+               AND DropID.Status < '9')
          BEGIN
             SET @nErrNo = 204101
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Carton scanned
