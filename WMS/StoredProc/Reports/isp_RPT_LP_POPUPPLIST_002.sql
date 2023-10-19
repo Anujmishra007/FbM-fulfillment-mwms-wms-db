@@ -3,30 +3,31 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/************************************************************************/
-/* Stored Procedure: isp_RPT_LP_POPUPPLIST_002                          */
-/* Creation Date: 19-MAY-2022                                           */
-/* Copyright: MAERSK                                                    */
-/* Written by: WZPang                                                   */
-/*                                                                      */
-/* Purpose: WMS-23271 - Convert to LogiReport-r_dw_print_pickorder52(MY)*/
-/*                                                                      */
-/* Called By: RPT_LP_POPUPPLIST_002                                     */
-/*                                                                      */
-/* PVCS Version: 1.3                                                    */
-/*                                                                      */
-/* Version: 7.0                                                         */
-/*                                                                      */
-/* Data Modifications:                                                  */
-/*                                                                      */
-/* Updates:                                                             */
-/* Date         Author   Ver  Purposes                                  */
-/* 19-May-2022  WZPang   1.0  DevOps Combine Script                     */
-/* 24-Aug-2023  WLChooi  1.1  UWP-6883 - Bug Fix (WL01)                 */
-/* 15-Sep-2023  WLChooi  1.2  WMS-23640 - Show Style & Size (WL02)      */
-/* 26-Sep-2023  WLChooi  1.3  UWP-8577 - Show ExtField04 (WL03)         */
-/************************************************************************/
-CREATE OR ALTER PROC [dbo].[isp_RPT_LP_POPUPPLIST_002]
+/*****************************************************************************/
+/* Stored Procedure: isp_RPT_LP_POPUPPLIST_002                               */
+/* Creation Date: 19-MAY-2022                                                */
+/* Copyright: MAERSK                                                         */
+/* Written by: WZPang                                                        */
+/*                                                                           */
+/* Purpose: WMS-23271 - Convert to LogiReport-r_dw_print_pickorder52(MY)     */
+/*                                                                           */
+/* Called By: RPT_LP_POPUPPLIST_002                                          */
+/*                                                                           */
+/* PVCS Version: 1.3                                                         */
+/*                                                                           */
+/* Version: 7.0                                                              */
+/*                                                                           */
+/* Data Modifications:                                                       */
+/*                                                                           */
+/* Updates:                                                                  */
+/* Date         Author   Ver  Purposes                                       */
+/* 19-May-2022  WZPang   1.0  DevOps Combine Script                          */
+/* 24-Aug-2023  WLChooi  1.1  UWP-6883 - Bug Fix (WL01)                      */
+/* 15-Sep-2023  WLChooi  1.2  WMS-23640 - Show Style & Size (WL02)           */
+/* 26-Sep-2023  WLChooi  1.3  UWP-8577 - Show ExtField04 (WL03)              */
+/* 19-Sep-2023  Calvin   1.4  INC6339467 Expand var to fit sif.ext04 (CLVN01)*/
+/*****************************************************************************/
+ALTER   PROC [dbo].[isp_RPT_LP_POPUPPLIST_002]
 (@c_Loadkey NVARCHAR(10))
 AS
 BEGIN
@@ -168,7 +169,7 @@ BEGIN
     , Susr4                 NVARCHAR(18) NULL
     , vat                   NVARCHAR(18) NULL
     , OVAS                  NVARCHAR(30) NULL
-    , SKUGROUP              NVARCHAR(10) NULL
+    , SKUGROUP              NVARCHAR(30) NULL --(CLVN01)
     , ContainerType         NVARCHAR(20) NULL
     , Pickzone              NVARCHAR(10) NULL
     , Priority              NVARCHAR(250)
