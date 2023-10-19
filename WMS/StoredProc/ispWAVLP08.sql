@@ -25,7 +25,7 @@ GO
 /*             wrapper: isp_WaveGenLoadPlan_Wrapper                     */  
 /*             storerconfig: WAVEGENLOADPLAN                            */ 
 /*                                                                      */  
-/* GitLab Version: 1.0                                                  */  
+/* GitLab Version: 1.1                                                  */  
 /*                                                                      */  
 /* Version: 7.0                                                         */  
 /*                                                                      */  
@@ -34,6 +34,7 @@ GO
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
 /* 26-Jan-2022  WLChooi  1.0  DevOps Combine Script                     */
+/* 10-Oct-2023  WLChooi  1.1  WMS-23848 - Add new logic (WL01)          */
 /************************************************************************/  
 
 CREATE OR ALTER PROC [dbo].[ispWAVLP08]   
@@ -176,8 +177,20 @@ BEGIN
    -------------------------- @c_WaveType NOT IN ('PTL','GOSMART') ------------------------------
    IF (@n_continue = 1 OR @n_continue = 2) AND @c_WaveType NOT IN ('PTL','GOSMART')
    BEGIN
-      INSERT INTO #TMP_CODELKUP(Listname, MaxOrder, SortOrder, TableColumnName)
-      SELECT @c_WaveType, 0, '', 'ORDERS.Consigneekey'
+      --WL01 S
+      --INSERT INTO #TMP_CODELKUP(Listname, MaxOrder, SortOrder, TableColumnName)
+      --SELECT @c_WaveType, 0, '', 'ORDERS.Consigneekey'
+
+      EXEC dbo.ispWAVLP02 @c_WaveKey = @c_WaveKey
+                        , @b_Success = @b_Success OUTPUT
+                        , @n_err = @n_err OUTPUT
+                        , @c_errmsg = @c_errmsg OUTPUT
+
+      IF @n_err <> 0
+         SET @n_continue = 3
+
+      GOTO RETURN_SP
+      --WL01 E
    END
 
    -------------------------- Construct Load Plan Dynamic Grouping ------------------------------    
@@ -843,5 +856,5 @@ RETURN_SP:
    END
 END
 GO
-GRANT EXECUTE ON [dbo].[ispWAVLP08] TO nSQL 
+GRANT EXECUTE ON [dbo].[ispWAVLP08] TO [nSQL] 
 GO
