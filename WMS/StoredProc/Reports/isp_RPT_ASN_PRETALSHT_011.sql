@@ -3,7 +3,6 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /***************************************************************************/
 /* Stored Procedure: isp_RPT_ASN_PRETALSHT_011                             */
 /* Creation Date: 03-May-2023                                              */
@@ -14,7 +13,7 @@ GO
 /*                                                                         */
 /* Called By: RPT_ASN_PRETALSHT_011                                        */
 /*                                                                         */
-/* GitLab Version: 1.1                                                     */
+/* GitLab Version: 1.2                                                     */
 /*                                                                         */
 /* Version: 1.0                                                            */
 /*                                                                         */
@@ -24,6 +23,7 @@ GO
 /* Date         Author  Ver   Purposes                                     */
 /* 03-May-2023  WZPang  1.0   DevOps Combine Script                        */
 /* 26-Sep-2023  WLChooi 1.1   UWP-8576 - Show ExternPOKey (WL01)           */
+/* 15-Oct-2023  WLChooi 1.2   UWP-9559 - Show Notes (WL02)                 */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_RPT_ASN_PRETALSHT_011]
@@ -91,17 +91,19 @@ BEGIN
           RECEIPT.Cube,
           RECEIPT.UserDefine01,
           RECEIPT.UserDefine03,
-          Lottable03Title = IIF(ISNULL(CL.Short, 'N') = 'Y', 'ExternPOKey', 'Lottable03')   --WL01
-    FROM RECEIPT (NOLOCK)
-    JOIN RECEIPTDETAIL (NOLOCK) ON RECEIPT.ReceiptKey = RECEIPTDETAIL.ReceiptKey
-    JOIN SKU (NOLOCK) ON SKU.StorerKey = RECEIPTDETAIL.StorerKey AND SKU.Sku = RECEIPTDETAIL.Sku
-    JOIN STORER (NOLOCK) ON RECEIPT.Storerkey = STORER.Storerkey
-    JOIN PACK (NOLOCK) ON PACK.PackKey = SKU.PackKey
-    LEFT OUTER JOIN CODELKUP (NOLOCK) ON SKU.SUSR3 = CODELKUP.CODE AND CODELKUP.LISTNAME = 'PRINCIPAL'
-    JOIN #ITEMCLASS t ON t.ReceiptKey = RECEIPT.Receiptkey
-    LEFT JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'REPORTCFG' AND CL.Long = 'RPT_ASN_PRETALSHT_011'   --WL01 
-                                  AND CL.Storerkey = RECEIPT.Storerkey AND CL.Code = 'ShowExtPOKey'   --WL01
-    
+          Lottable03Title = IIF(ISNULL(CL.Short, 'N') = 'Y', 'ExternPOKey', 'Lottable03'),   --WL01
+          SCNotes = IIF(LEN(SC.Notes) >= 22, IIF(SUBSTRING(SC.Notes, 22, 1) = 'Y', SUBSTRING(TRIM(SC.Notes), 22, 300), ''), '')   --WL02
+   FROM RECEIPT (NOLOCK)
+   JOIN RECEIPTDETAIL (NOLOCK) ON RECEIPT.ReceiptKey = RECEIPTDETAIL.ReceiptKey
+   JOIN SKU (NOLOCK) ON SKU.StorerKey = RECEIPTDETAIL.StorerKey AND SKU.Sku = RECEIPTDETAIL.Sku
+   JOIN STORER (NOLOCK) ON RECEIPT.Storerkey = STORER.Storerkey
+   JOIN PACK (NOLOCK) ON PACK.PackKey = SKU.PackKey
+   LEFT OUTER JOIN CODELKUP (NOLOCK) ON SKU.SUSR3 = CODELKUP.CODE AND CODELKUP.LISTNAME = 'PRINCIPAL'
+   JOIN #ITEMCLASS t ON t.ReceiptKey = RECEIPT.Receiptkey
+   LEFT JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'REPORTCFG' AND CL.Long = 'RPT_ASN_PRETALSHT_011'   --WL01 
+                                 AND CL.Storerkey = RECEIPT.Storerkey AND CL.Code = 'ShowExtPOKey'   --WL01
+   LEFT JOIN SKUCONFIG SC (NOLOCK) ON SC.Storerkey = SKU.Storerkey AND SC.SKU = SKU.SKU   --WL02
+                                  AND SC.ConfigType = 'PRUE-E'   --WL02
 
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
