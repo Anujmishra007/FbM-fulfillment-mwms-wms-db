@@ -11,6 +11,7 @@ GO
 /* Modifications log:                                                   */
 /* Date        Rev  Author   Purposes                                   */
 /* 2023-09-19  1.0  Ung      WMS-23518 Created                          */
+/* 2023-10-13  1.1  Ung      WMS-23903 Add scan out                     */
 /************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdt_593Print39] (
@@ -43,6 +44,8 @@ BEGIN
    DECLARE @cCartonPallet  NVARCHAR( 5)
    DECLARE @cPickSlipNo    NVARCHAR( 10)
    DECLARE @cOrderKey      NVARCHAR( 10) = ''
+   DECLARE @dScanInDate    DATETIME
+   DECLARE @dScanOutDate   DATETIME
 
    -- Param mapping
    SET @cLabelType = LEFT( @cParam1, 1)
@@ -113,6 +116,38 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Order Fail
          GOTO Quit
       END
+   END
+
+   -- Get pickslip info
+   SELECT 
+      @dScanInDate = ScanInDate,
+      @dScanOutDate = ScanOutDate 
+   FROM dbo.PickingInfo WITH (NOLOCK) 
+   WHERE PickSlipNo = @cPickSlipNo 
+   
+   -- Check scan-in
+   IF @dScanInDate IS NULL
+   BEGIN
+      SET @nErrNo = 206356
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Not Scan-in
+      GOTO Quit
+   END
+      
+   -- Scan out
+   IF @dScanOutDate IS NULL
+   BEGIN
+      SET @nErrNo = 0  
+      EXEC isp_ScanOutPickSlip  
+         @c_PickSlipNo  = @cPickSlipNo,  
+         @n_err         = @nErrNo OUTPUT,  
+         @c_errmsg      = @cErrMsg OUTPUT  
+
+      IF @nErrNo <> 0  
+      BEGIN  
+         SET @nErrNo = 206357  
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Scan Out Fail  
+         GOTO Quit  
+      END 
    END
    
    -- Print label

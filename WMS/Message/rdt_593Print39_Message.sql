@@ -6,3 +6,5 @@ execute rdt.rdtAddMsg 206352 ,10, '206352Invalid QTY   ', 'us_english', 593
 execute rdt.rdtAddMsg 206353 ,10, '206353Invalid PS    ', 'us_english', 593
 execute rdt.rdtAddMsg 206354 ,10, '206354UPD Order Fail', 'us_english', 593
 execute rdt.rdtAddMsg 206355 ,10, '206355UPD Order Fail', 'us_english', 593
+execute rdt.rdtAddMsg 206356 ,10, '206356Not Scan-in   ', 'us_english', 593
+execute rdt.rdtAddMsg 206357 ,10, '206357Scan Out Fail ', 'us_english', 593
