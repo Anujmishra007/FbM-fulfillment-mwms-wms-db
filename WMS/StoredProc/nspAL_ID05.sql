@@ -4,17 +4,17 @@ SET ANSI_NULLS OFF
 GO
 
 /*************************************************************************/            
-/* Stored Procedure: nspAL_ID03                                          */            
-/* Creation Date: 24-Aug-2022                                            */            
-/* Copyright: LFL                                                        */            
+/* Stored Procedure: nspAL_ID05                                          */            
+/* Creation Date: 06-Jul-2023                                            */            
+/* Copyright: MAERSK                                                     */            
 /* Written by: WLChooi                                                   */            
 /*                                                                       */            
-/* Purpose: WMS-20605 - ID-PUMA-Wave Allocation Strategy                 */            
-/*          For UOM 6 - Full ID                                          */
+/* Purpose: WMS-22939 - ID-CR-PUMA-Wave Allocation Strategy              */            
+/*          For UOM 6 - Full ID (Conso) - Only for B2B                   */
 /*                                                                       */            
 /* Called By:                                                            */            
 /*                                                                       */            
-/* GitLab Version: 1.1                                                   */            
+/* GitLab Version: 1.0                                                   */            
 /*                                                                       */            
 /* Version: 7.0                                                          */            
 /*                                                                       */            
@@ -22,10 +22,9 @@ GO
 /*                                                                       */            
 /* Updates:                                                              */            
 /* Date         Author  Ver.  Purposes                                   */   
-/* 24-Aug-2022  WLChooi 1.0   DevOps Combine Script                      */
-/* 03-Aug-2023  WLChooi 1.1   WMS-22939 - Bug Fix (WL01)                 */
+/* 06-Jul-2023  WLChooi 1.0   DevOps Combine Script                      */
 /*************************************************************************/            
-CREATE OR ALTER PROC [dbo].[nspAL_ID03]
+CREATE OR ALTER PROC [dbo].[nspAL_ID05]
    @c_DocNo      NVARCHAR(10),  
    @c_Facility   NVARCHAR(5),     
    @c_StorerKey  NVARCHAR(15),     
@@ -108,7 +107,7 @@ BEGIN
          SET @c_DiscreteAlloc = 'Y'
       END
 
-      IF ISNULL(@c_key2,'') = '' AND @c_key3 = 'W'   --Wave   --WL01
+      IF ISNULL(@c_key2,'') = '' AND @c_key3 = 'W'   --Wave
       BEGIN
          SET @c_DocType = ''
 
@@ -125,10 +124,10 @@ BEGIN
    CREATE TABLE #TMP_LOT (LOT NVARCHAR(10) NULL,
                           QtyAvailable INT NULL DEFAULT(0)
    )       
-
-   --Discrete for B2B, WaveConso for B2C
-   IF @c_UOM <> '6' OR (@c_DiscreteAlloc = 'Y' AND @c_DocType = 'E')
-      OR (@c_DiscreteAlloc = 'N' AND @c_DocType = 'N')
+   
+   --Only for B2B Conso
+   IF @c_UOM <> '6' OR ( @c_DocType = 'E')
+      OR (@c_DiscreteAlloc = 'Y' AND @c_DocType = 'N')
    BEGIN
       DECLARE CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR 
       SELECT TOP 0 NULL, NULL, NULL, NULL, NULL          
@@ -155,21 +154,6 @@ BEGIN
                 ' AND LOTATTRIBUTE.STORERKEY = @c_storerkey ' +
                 ' AND LOTATTRIBUTE.SKU = @c_SKU ' +
                 ' AND LOC.LocationType IN (''OTHER'') ' +
-                --CASE WHEN ISNULL(RTRIM(@c_Lottable01),'') = '' THEN '' ELSE ' AND LOTATTRIBUTE.Lottable01 = @c_Lottable01 ' END + 
-                --CASE WHEN ISNULL(RTRIM(@c_Lottable02),'') = '' THEN '' ELSE ' AND LOTATTRIBUTE.Lottable02 = @c_Lottable02 ' END + 
-                --CASE WHEN ISNULL(RTRIM(@c_Lottable03),'') = '' THEN '' ELSE ' AND LOTATTRIBUTE.Lottable03 = @c_Lottable03 ' END + 
-                --CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable04 ,112) <> '19000101' AND @d_Lottable04 IS NOT NULL THEN ' AND LOTATTRIBUTE.Lottable04 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable04, 106)) ' ELSE ' ' END + 
-                --CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable05 ,112) <> '19000101' AND @d_Lottable05 IS NOT NULL THEN ' AND LOTATTRIBUTE.Lottable05 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable05, 106)) ' ELSE ' ' END + 
-                --CASE WHEN ISNULL(RTRIM(@c_Lottable06),'') = '' THEN '' ELSE ' AND LOTATTRIBUTE.Lottable06 = @c_Lottable06 ' END +                                                                                      
-                --CASE WHEN ISNULL(RTRIM(@c_Lottable07),'') = '' THEN '' ELSE ' AND LOTATTRIBUTE.Lottable07 = @c_Lottable07 ' END +                                                                                      
-                --CASE WHEN ISNULL(RTRIM(@c_Lottable08),'') = '' THEN '' ELSE ' AND LOTATTRIBUTE.Lottable08 = @c_Lottable08 ' END +                                                                                      
-                --CASE WHEN ISNULL(RTRIM(@c_Lottable09),'') = '' THEN '' ELSE ' AND LOTATTRIBUTE.Lottable09 = @c_Lottable09 ' END +                                                                                      
-                --CASE WHEN ISNULL(RTRIM(@c_Lottable10),'') = '' THEN '' ELSE ' AND LOTATTRIBUTE.Lottable10 = @c_Lottable10 ' END +                                                                                      
-                --CASE WHEN ISNULL(RTRIM(@c_Lottable11),'') = '' THEN '' ELSE ' AND LOTATTRIBUTE.Lottable11 = @c_Lottable11 ' END +                                                                                      
-                --CASE WHEN ISNULL(RTRIM(@c_Lottable12),'') = '' THEN '' ELSE ' AND LOTATTRIBUTE.Lottable12 = @c_Lottable12 ' END +                                                                                      
-                --CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable13 ,112) <> '19000101' AND @d_Lottable13 IS NOT NULL THEN ' AND LOTATTRIBUTE.Lottable13 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable13, 106)) ' ELSE ' ' END + 
-                --CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable14 ,112) <> '19000101' AND @d_Lottable14 IS NOT NULL THEN ' AND LOTATTRIBUTE.Lottable14 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable14, 106)) ' ELSE ' ' END + 
-                --CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable15 ,112) <> '19000101' AND @d_Lottable15 IS NOT NULL THEN ' AND LOTATTRIBUTE.Lottable15 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable15, 106)) ' ELSE ' ' END + 
                 ' GROUP BY LOT.STORERKEY, LOT.SKU, LOT.LOT, LOTxLOCxID.LOC, LOTxLOCxID.ID, LOC.Loc, LOC.LogicalLocation, LOTATTRIBUTE.Lottable05, LOC.LocationType ' +
                 ' HAVING SUM(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen + LOTxLOCxID.PendingMoveIN) > 0 ' + 
                 RTRIM(ISNULL(@c_OrderBy,''))
@@ -265,5 +249,5 @@ BEGIN
    EXIT_SP:
 END
 GO
-GRANT EXECUTE ON [dbo].[nspAL_ID03] to nSQL
+GRANT EXECUTE ON [dbo].[nspAL_ID05] to nSQL
 GO
