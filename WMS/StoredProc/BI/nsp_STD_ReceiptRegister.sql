@@ -12,6 +12,7 @@ DATE				VER		CREATEDBY   PURPOSE
 13-JUL-2022          1.4     Crisnah    Migrate also to PHWMS. this is usual daily report from operations
 21-FEB-2023			1.5		CRISNAH		ADD RECEIPTDETAIL.EXTERNLINENO https://jiralfl.atlassian.net/browse/WMS-21831
 20-SEP-2023	  1.6	CRISNAH		MODIFY RECEIPT.NOTES REMOVE CHAR LIMIT
+04-OCT-2023			1.7		CRISNAH		LEFT JOIN STORER - FONTERRA ENHANCEMENT REQUEST
 ************************************************************************/
 -- Test:   EXEC BI.nsp_STD_ReceiptRegister '16380','1611','FinalizeDate','2022-06-06','2022-06-07','5,9'
 
@@ -125,6 +126,8 @@ SELECT
  ,R.SellerCompany
  ,R.SellerAddress1
  ,R.SellerAddress2
+ ,R.Sellerphone1
+ ,R.Sellerphone2
  ,R.SellerCity
  ,R.Appointment_No
  ,RD.POKey					as ''RecDetPoKey''
@@ -192,13 +195,21 @@ SELECT
  , R.ContainerKey 
  , R.TrackingNo
  , RD.Externlineno --added 2/21/2023 crisnah
+ , ST.SUSR1 [STORER_SUSR1]
+ , ST.SUSR2 [STORER_SUSR2]
+ , ST.SUSR3 [STORER_SUSR3]
+ , ST.SUSR4 [STORER_SUSR4]
+ , ST.SUSR5 [STORER_SUSR5]
+ , L.LocationRoom, PA.PalletTi, PA.PalletHi
  '
  set @Stmt = @Stmt+'
  FROM BI.V_RECEIPT R WITH (NOLOCK)
  JOIN BI.V_RECEIPTDETAIL RD WITH (NOLOCK) ON (R.ReceiptKey=RD.ReceiptKey)
  JOIN BI.V_PACK PA WITH (NOLOCK) ON (PA.PackKey=RD.PackKey)
  JOIN BI.V_SKU S WITH (NOLOCK) ON (S.Sku=RD.Sku AND S.STORERKEY='''+@Param_Generic_Storerkey+''')
- LEFT OUTER JOIN BI.V_CODELKUP CO WITH (NOLOCK) ON (S.SUSR3 = CO.CODE AND (CO.LISTNAME=''PRINCIPAL'' or CO.LISTNAME IS NULL)) 
+ LEFT OUTER JOIN BI.V_CODELKUP CO WITH (NOLOCK) ON (S.SUSR3 = CO.CODE AND (CO.LISTNAME=''PRINCIPAL'' or CO.LISTNAME IS NULL))
+ LEFT JOIN BI.V_STORER ST WITH (NOLOCK) ON (R.CARRIERKEY=ST.STORERKEY)
+ JOIN BI.V_LOC L WITH (NOLOCK) ON (RD.TOLOC=L.LOC AND R.FACILITY=L.FACILITY)
  WHERE 
 R.StorerKey= '''+@Param_Generic_Storerkey+'''
 AND R.FACILITY= '''+@PARAM_GENERIC_FACILITY+'''
@@ -221,7 +232,12 @@ AND R.STATUS IN ('+@Param_Receipt_Status+') '
 	RD.UserDefine07, RD.UserDefine08, RD.UserDefine09, RD.UserDefine10, S.STDNETWGT, S.STDGROSSWGT, S.SUSR3, R.FinalizeDate, 
 	S.itemclass, S.Price ,RD.BeforeReceivedQty ,RD.QtyExpected, rd.QtyReceived, s.STDCUBE
 	 , R.ContainerKey 
-     , R.TrackingNo , RD.Externlineno
+    , R.TrackingNo , RD.Externlineno
+    , ST.SUSR1
+	 , ST.SUSR2
+	 , ST.SUSR3
+	 , ST.SUSR4
+	 , ST.SUSR5 ,R.Sellerphone1,R.Sellerphone2, L.LocationRoom, PA.PalletTi, PA.PalletHi
 	ORDER BY  R.ReceiptKey
 	'
 	IF @nDebug = 1 
@@ -242,3 +258,20 @@ AND R.STATUS IN ('+@Param_Receipt_Status+') '
 
 END
 GO
+
+GRANT EXEC ON BI.nsp_STD_ReceiptRegister TO JReportRole --NAME OF SP
+GO --*/
+/*
+EXECUTE AS LOGIN ='JREPORTUSERPH'
+
+SELECT SUSER_SNAME(), USER_NAME()
+
+EXEC BI.nsp_STD_ReceiptRegister 'FBP','CDC2','ADDDATE','2023-05-01','2023-10-01','0,5,9'
+EXEC BI.nsp_STD_ReceiptRegister '','','','','',''
+EXEC BI.nsp_STD_ReceiptRegister NULL,NULL,NULL,NULL,NULL,NULL
+
+REVERT
+
+SELECT TOP 99 * FROM ExecutionLog ORDER BY 1 DESC
+
+*/

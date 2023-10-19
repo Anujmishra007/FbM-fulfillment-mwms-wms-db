@@ -1,4 +1,3 @@
-/****** Object:  StoredProcedure [BI].[nsp_STD_SORegister]    Script Date: 7/20/2023 2:22:38 PM ******/
 SET ANSI_NULLS OFF
 GO
 
@@ -208,6 +207,7 @@ SELECT
 ,MAX(AL4.Class)							    as ''108SKUClass''
 ,AL13.MarketSegment	   AS  ''109ConsigneeMarketSegment''
 ,AL13.Customergroupcode as ''Customergroupcode''
+, AL2.xdockPOKey,AL13.Susr5,AL13.Susr1,AL13.Susr2,AL13.Susr3
 '
 
  SET @stmt = @stmt + '
@@ -316,7 +316,7 @@ AND AL2.STATUS IN ('+@Param_Orders_Status+')
 ,AL13.Susr4							 
 -- ,AL4.Class
 ,AL13.MarketSegment	
-,AL13.Customergroupcode
+,AL13.Customergroupcode, AL2.xdockPOKey,AL13.Susr5,AL13.Susr1,AL13.Susr2,AL13.Susr3
 
 '
 
@@ -332,7 +332,7 @@ GO
 
 
 GRANT EXEC ON BI.nsp_STD_SORegister TO JReportRole --NAME OF SP
-GO
+GO --*/
 
 /*
 EXECUTE AS LOGIN ='JREPORTUSERPH'

@@ -1,4 +1,3 @@
-/****** Object:  StoredProcedure [BI].[nsp_STD_IssuanceRegister]    Script Date: 4/13/2023 3:57:16 PM ******/
 SET ANSI_NULLS OFF
 GO
 
@@ -11,7 +10,8 @@ GO
 /* Date            Author      Ver.    Purposes                                                */  
 /* 07/12/2022      JAM         1.0     Migrate also to PHWMS. this is usual daily report from operations*/ 
 /* 07/13/2022      Crisnah     1.1     Migrate also to PHWMS. this is usual daily report from operations*/ 
-/* 13/04/2023	   Crisnah	   1.6	Add On OD.ExternLineNo column condition https://jiralfl.atlassian.net/browse/WMS-22167 */
+/* 13/04/2023	   Crisnah	   1.2	Add On OD.ExternLineNo column condition https://jiralfl.atlassian.net/browse/WMS-22167 */
+/* 04/10/2023      JAM		   1.3  Added Loc.LocatioRoom - FONTERRA Enhancement Request       */
 /***********************************************************************************************/ 
 -- Test EXEC [BI].[nsp_STD_IssuanceRegister] 'YLEO', 'MERIT','2022-07-12', '2022-07-13'
 CREATE OR ALTER     PROC [BI].[nsp_STD_IssuanceRegister] 
@@ -37,7 +37,11 @@ BEGIN
 	SET @PARAM_GENERIC_Facility = TRIM(@PARAM_GENERIC_Facility)
 
    DECLARE @nRowCnt INT = 0
-         , @Proc      NVARCHAR(128) = 'nsp_STD_IssuanceRegister'
+	      , @Debug	  BIT = 0
+	      , @LogId     INT
+		   , @LinkSrv NVARCHAR(128) = ''
+         , @Schema    NVARCHAR(128) = ISNULL(OBJECT_SCHEMA_NAME(@@PROCID),'')
+         , @Proc      NVARCHAR(128) = ISNULL(OBJECT_NAME(@@PROCID),'')
          , @cParamOut NVARCHAR(4000)= ''
          , @cParamIn  NVARCHAR(4000)= '{ "PARAM_GENERIC_StorerKey":"'    +@PARAM_GENERIC_StorerKey+'"'
                                      + '"PARAM_GENERIC_Facility":"'    +@PARAM_GENERIC_Facility+'"'
@@ -46,13 +50,23 @@ BEGIN
                                      + ' }'
 
 
-   DECLARE @tVarLogId TABLE (LogId INT);
-   INSERT dbo.ExecutionLog (ClientId, SP, ParamIn) OUTPUT INSERTED.LogId INTO @tVarLogId VALUES (CASE WHEN @Param_Generic_StorerKey = NULL THEN '' ELSE @Param_Generic_StorerKey END, @Proc, @cParamIn);
-   DECLARE @Stmt     NVARCHAR(MAX) = ''
-         , @Id       INT  = FLOOR(RAND()*99999)
-         , @Success  INT  = 1
-         , @Err      INT
-         , @ErrMsg   NVARCHAR(250)
+   IF EXISTS (SELECT 1 FROM dbo.ExecutionLog WITH (NOLOCK)
+              WHERE ClientID = @PARAM_GENERIC_StorerKey
+              AND SP = @Proc
+              AND TimeEnd IS NULL
+              AND TimeStart > DATEADD(hh, -1, GETDATE())
+              HAVING COUNT(1) > 2)
+   THROW 50000, 'Multiple Execution detected, Please try later', 1
+
+										
+   	EXEC BI.dspExecInit @ClientId = @PARAM_GENERIC_StorerKey
+   , @Proc = @Proc
+   , @ParamIn = @cParamIn
+   , @LogId = @LogId OUTPUT
+   , @Debug = @Debug OUTPUT
+   , @Schema = @Schema;
+
+   DECLARE @Stmt NVARCHAR(MAX) = ''
 
       SET @Stmt ='
 SELECT 
@@ -137,8 +151,13 @@ PID.DropID								as ''78DropID''          ,
 OI.EcomOrderId							as ''79EcomOrderId''  ,
 PID.CASEID							    as ''80CaseID''  ,
 O.Deliverynote							as ''81DeliveryNote'',
-OD.ExternLineNo							as ''82ExternLineNo''
-			
+OD.ExternLineNo							as ''82ExternLineNo'',
+OD.ExternLineNo							as ''82ExternLineNo'' ,
+STO.Secondary							as ''83ConsigneeSecondary'' ,
+STO.Susr4							    as ''84ConsigneeSUSR4''	, 
+SKU.Class							    as ''85SKUClass'',
+OD.Orderlinenumber							as ''86Orderlinenumber''
+,loc.LocationRoom, PAC.PalletTi, PAC.PalletHi, STO.Susr1, STO.Susr2, STO.Susr3, STO.Susr5			
 '
 SET @stmt = @stmt + '
 
@@ -152,7 +171,7 @@ FROM
 	AND PID.OrderLineNumber=OD.OrderLineNumber 
 	JOIN BI.V_SKU SKU ON (PID.Storerkey= SKU.StorerKey AND PID.Sku=SKU.Sku) 
 	JOIN BI.V_LOC LOC	ON LOC.Loc=PID.Loc
-	JOIN BI.V_STORER STO ON (STO.StorerKey=O.ConsigneeKey) 
+	LEFT JOIN BI.V_STORER STO ON (STO.StorerKey=O.ConsigneeKey) 
 	LEFT JOIN BI.V_OrderInfo OI ON (O.OrderKey=OI.OrderKey) 
 	JOIN BI.V_LOTATTRIBUTE LOA ON (PID.Storerkey=LOA.StorerKey AND PID.Sku=LOA.Sku AND PID.Lot=LOA.Lot) 
 	JOIN BI.V_PACK PAC ON (SKU.PACKKey=PAC.PackKey) 
@@ -253,22 +272,23 @@ O.StorerKey
 ,PID.CASEID		
 ,O.DeliveryNote
 ,OD.ExternLineNo
+,STO.Secondary
+,STO.Susr4
+,SKU.Class,OD.Orderlinenumber,LOC.LocationRoom, PAC.PalletTi, PAC.PalletHi, STO.Susr1, STO.Susr2, STO.Susr3, STO.Susr5
 ORDER BY  1,  2,  4,  10
 OPTION (RECOMPILE);
 '
 --print @Stmt
-  EXEC sp_ExecuteSql @Stmt;
-   SET @nRowCnt = @@ROWCOUNT
-   SET @cParamOut = '{ "Stmt": "'+@Stmt+'" }';
-
-   
-   UPDATE dbo.ExecutionLog SET TimeEnd = GETDATE(), RowCnt = @nRowCnt, ParamOut = @cParamOut WHERE LogId = (SELECT TOP 1 LogId FROM @tVarLogId);
+ EXEC BI.dspExecStmt @Stmt = @Stmt
+   , @LinkSrv = @LinkSrv
+   , @LogId = @LogId
+   , @Debug = @Debug;
 
 END -- Procedure 
 GO
 
 GRANT EXEC ON BI.nsp_STD_IssuanceRegister TO JReportRole --NAME OF SP
-GO  
+GO --*/
 
 /*
 EXECUTE AS LOGIN ='JREPORTUSERPH'
