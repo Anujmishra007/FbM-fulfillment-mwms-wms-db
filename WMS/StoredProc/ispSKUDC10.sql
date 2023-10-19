@@ -26,6 +26,8 @@ GO
 /* 03-JUL-2023 NJOW01   1.1   WMS-23012 Fix over pack serial no issue   */
 /* 26-SEP-2023 NJOW02   1.2   WMS-23778 support scan both UPC and serial*/
 /*                            when serialnocapture=1                    */
+/* 18-OCT-2023 NJOW03   1.3   WMS-23952 Fix, not to return sku if scanned*/
+/*                            in UPC.                                   */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE dbo.ispSKUDC10
@@ -61,6 +63,7 @@ BEGIN
          , @c_SerialNoKey  NVARCHAR(10) = ''
          , @n_SkuOrdQty    INT = 0      --NJOW01
          , @n_SkuPackSerialCnt INT = 0  --NJOW01
+         , @c_IsUPC        NVARCHAR(5) = 'N'  --NJOW03
          
    SELECT @b_success = 1, @n_err = 0, @c_errmsg = ''   
    
@@ -127,20 +130,32 @@ BEGIN
       GOTO QUIT_SP
    END
    
+   --NJOW03
+   IF EXISTS(SELECT 1 
+   	         FROM UPC (NOLOCK)
+             JOIN SKU (NOLOCK) ON SKU.StorerKey = UPC.StorerKey AND SKU.Sku = UPC.SKU
+             WHERE UPC.UPC = @c_SKU
+             AND UPC.StorerKey = @c_StorerKey)
+   BEGIN
+      SET @c_IsUPC = 'Y'
+   END          
+   ELSE
+   BEGIN
+      SET @c_IsUPC = 'N'
+   END
+                       
    IF (@c_Susr4 = 'AD' AND ISNULL(@c_UCCNo,'') = '') --Will capture serial at Antidiversion, if have UCC proceed to update serialno because AD will skip for UCC scanning
       OR @c_SerialNoCapture NOT IN('1','3')  --Not require capture serial no
    BEGIN
-   	 SET @c_NewSku = @c_TempSku  
+   	 IF @c_IsUPC = 'N' --NJOW03  if UPC not to return new sku value becuase packing need the orginal value for UPC function to work.
+   	    SET @c_NewSku = @c_TempSku  
+   	 
    	 GOTO QUIT_SP
    END
 
    IF @c_TempSku <> @c_Sku 
    BEGIN
-   	  IF NOT EXISTS(SELECT 1 
-   	                FROM UPC (NOLOCK)
-                    JOIN SKU (NOLOCK) ON SKU.StorerKey = UPC.StorerKey AND SKU.Sku = UPC.SKU
-                    WHERE UPC.UPC = @c_SKU
-                    AND UPC.StorerKey = @c_StorerKey) --NJOW02     
+   	  IF @c_IsUPC = 'N' --NJOW02 NJOW03 if not UPC mean scan value is serial no
       BEGIN              
    	     SET @c_SerialNo = @c_Sku
    	  END   
@@ -351,8 +366,9 @@ BEGIN
          END
       END      
    END
-     
-   SET @c_NewSku = @c_TempSku
+   
+   IF @c_IsUPC = 'N' --NJOW03     
+      SET @c_NewSku = @c_TempSku
 
 QUIT_SP:
 
