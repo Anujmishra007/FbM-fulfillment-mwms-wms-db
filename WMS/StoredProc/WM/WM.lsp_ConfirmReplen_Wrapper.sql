@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_ConfirmReplen_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_ConfirmReplen_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -23,11 +18,13 @@ GO
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */ 
-/* 2021-02-05   mingle01 1.1  Add Big Outer Begin try/Catch             */
+/* Date        Author   Ver   Purposes                                   */ 
+/* 2021-02-05  mingle01 1.1   Add Big Outer Begin try/Catch              */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2023-10-11  Wan01    1.2   LFWM-4153 - UAT - CN  All Generating Ecom  */
+/*                            Replenishment                              */
 /*************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_ConfirmReplen_Wrapper]  
+CREATE OR ALTER PROCEDURE [WM].[lsp_ConfirmReplen_Wrapper]  
    @c_Facility             NVARCHAR(10) = ''
 ,  @c_Zone02               NVARCHAR(10) = ''
 ,  @c_Zone03               NVARCHAR(10) = ''
@@ -104,20 +101,20 @@ BEGIN
       BEGIN
          BEGIN TRY
             EXEC nsp_ConfirmReplenishment
-               @c_Zone01 = @c_Facility      
-            ,  @c_Zone02 = @c_Zone02       
-            ,  @c_Zone03 = @c_Zone03        
-            ,  @c_Zone04 = @c_Zone04        
-            ,  @c_Zone05 = @c_Zone05        
-            ,  @c_Zone06 = @c_Zone06        
-            ,  @c_Zone07 = @c_Zone07        
-            ,  @c_Zone08 = @c_Zone08        
-            ,  @c_Zone09 = @c_Zone09        
-            ,  @c_Zone10 = @c_Zone10        
-            ,  @c_Zone11 = @c_Zone11        
-            ,  @c_Zone12 = @c_Zone12 
+               @c_Facility = @c_Facility                                            --(Wan01)      
+            ,  @c_Zone02   = @c_Zone02       
+            ,  @c_Zone03   = @c_Zone03        
+            ,  @c_Zone04   = @c_Zone04        
+            ,  @c_Zone05   = @c_Zone05        
+            ,  @c_Zone06   = @c_Zone06        
+            ,  @c_Zone07   = @c_Zone07        
+            ,  @c_Zone08   = @c_Zone08        
+            ,  @c_Zone09   = @c_Zone09        
+            ,  @c_Zone10   = @c_Zone10        
+            ,  @c_Zone11   = @c_Zone11        
+            ,  @c_Zone12   = @c_Zone12 
             ,  @c_Storerkey= @c_Storerkey 
-            ,  @c_ReplGroup= @c_ReplGroup
+            ,  @c_replgrp  = @c_ReplGroup                                           --(Wan01)
             ,  @b_Success  = @b_Success   OUTPUT 
             ,  @n_Err      = @n_Err       OUTPUT
             ,  @c_Errmsg   = @c_Errmsg    OUTPUT
