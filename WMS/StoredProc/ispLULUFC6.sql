@@ -30,6 +30,8 @@ GO
 /* 2021-07-19  Wan01    1.1   Fixed. Continue Next Record               */
 /* 2021-08-12  Wan02    1.2   Performance Tune                          */
 /* 2023-09-07  Michael  1.3   Extend #TMPALLOC.ID len to 18 (ML01)      */
+/* 2023-10-13  Michael  1.4   WMS-23889 move hardcoded DC Code to       */
+/*                            CodeLkup LULUDCCODE with UDF01=4PL (ML02) */
 /************************************************************************/
 CREATE PROC dbo.ispLuLuFC6
      @c_WaveKey                     NVARCHAR(10)
@@ -216,7 +218,8 @@ BEGIN
      AND OH.[Type] NOT IN ( 'M', 'I', 'LULUECOM' )   
      AND OH.SOStatus <> 'CANC'   
      AND OH.[Status] < '9'
-     AND OH.UserDefine10 NOT IN ('170146','170149') 
+--(ML02)     AND OH.UserDefine10 NOT IN ('170146','170149') 
+     AND NOT EXISTS(SELECT TOP 1 1 FROM CODELKUP CL(NOLOCK) WHERE CL.LISTNAME='LULUDCCODE' AND CL.UDF01='4PL' AND CL.Storerkey=OH.Storerkey AND CL.Code=OH.UserDefine10)   --(ML02)
      AND OD.OpenQty - ( OD.QtyAllocated + OD.QtyPicked ) > 0 
    ORDER BY 
             OD.Storerkey   --(Wan02)

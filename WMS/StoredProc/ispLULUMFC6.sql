@@ -29,6 +29,8 @@ GO
 /* 2021-01-25  Wan      1.0   Created                                   */
 /* 2021-07-19  Wan01    1.1   Fixed. Continue Next Record               */
 /* 2023-09-07  Michael  1.2   Extend #TMPALLOC.ID len to 18 (ML01)      */
+/* 2023-10-13  Michael  1.3   WMS-23889 move hardcoded DC Code to       */
+/*                            CodeLkup LULUDCCODE with UDF01=4PL (ML02) */
 /************************************************************************/
 CREATE PROC dbo.ispLuLuMFC6
      @c_WaveKey                     NVARCHAR(10)
@@ -214,7 +216,8 @@ BEGIN
      AND OH.[Type] NOT IN ( 'M', 'I', 'LULUECOM' )   
      AND OH.SOStatus <> 'CANC'   
      AND OH.[Status] < '9'
-     AND OH.UserDefine10 IN ('170146','170149') --Mexico Order & middle east
+--(ML02)     AND OH.UserDefine10 IN ('170146','170149') --Mexico Order & middle east
+     AND EXISTS(SELECT TOP 1 1 FROM CODELKUP CL(NOLOCK) WHERE CL.LISTNAME='LULUDCCODE' AND CL.UDF01='4PL' AND CL.Storerkey=OH.Storerkey AND CL.Code=OH.UserDefine10)   --(ML02)
      AND OD.OpenQty - ( OD.QtyAllocated + OD.QtyPicked ) > 0  
    
    IF NOT EXISTS (SELECT 1 FROM #TMPOD)         --(Wan01) 

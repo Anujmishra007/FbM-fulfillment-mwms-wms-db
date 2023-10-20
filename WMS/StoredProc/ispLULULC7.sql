@@ -31,6 +31,8 @@ GO
 /* 2021-07-23  Wan02    1.1   Fixed. Middle East UOM = '2'              */
 /* 2021-08-12  Wan03    1.2   Performance Tune                          */ 
 /* 2023-09-07  Michael  1.3   Extend #TMPALLOC.ID len to 18 (ML01)      */
+/* 2023-10-13  Michael  1.4   WMS-23889 move hardcoded DC Code to       */
+/*                            CodeLkup LULUDCCODE with UDF01=4PL (ML02) */
 /************************************************************************/
 CREATE PROC dbo.ispLuLuLC7
      @c_WaveKey                     NVARCHAR(10)
@@ -231,7 +233,8 @@ BEGIN
    IF EXISTS ( SELECT TOP 1 1
                FROM #TMPOD t
                JOIN dbo.ORDERS AS o WITH (NOLOCK) ON o.OrderKey = t.Orderkey
-               WHERE o.UserDefine10 IN ('170146','170149')  --Mexico Order
+--(ML02)               WHERE o.UserDefine10 IN ('170146','170149')  --Mexico Order
+               WHERE EXISTS(SELECT TOP 1 1 FROM CODELKUP CL(NOLOCK) WHERE CL.LISTNAME='LULUDCCODE' AND CL.UDF01='4PL' AND CL.Storerkey=o.Storerkey AND CL.Code=o.UserDefine10)   --(ML02)
              )
    BEGIN
       SET @c_UOM = '2'

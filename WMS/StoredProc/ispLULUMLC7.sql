@@ -30,6 +30,8 @@ GO
 /* 2021-07-19  Wan01    1.1   Fixed. Continue Next Record               */
 /* 2023-01-16  Michael  1.2   Temporary fix Mexico Ord allocation (ML01)*/
 /* 2023-09-07  Michael  1.3   Extend #TMPALLOC.ID len to 18 (ML02)      */
+/* 2023-10-13  Michael  1.4   WMS-23889 move hardcoded DC Code to       */
+/*                            CodeLkup LULUDCCODE with UDF01=4PL (ML03) */
 /************************************************************************/
 CREATE PROC dbo.ispLuLuMLC7
      @c_WaveKey                     NVARCHAR(10)
@@ -213,7 +215,8 @@ BEGIN
      AND OH.SOStatus <> 'CANC'
      AND OH.[Status] < '9'
 -- 2023-01-16 (ML01)     AND OH.UserDefine10 IN ('170146','170149')  --Mexico Order
-     AND OH.UserDefine10 IN ('170146','170149','170160','170176')  --Mexico Order   2023-01-16 (ML01) temporary fix
+--(ML03)     AND OH.UserDefine10 IN ('170146','170149','170160','170176')  --Mexico Order   2023-01-16 (ML01) temporary fix
+     AND EXISTS(SELECT TOP 1 1 FROM CODELKUP CL(NOLOCK) WHERE CL.LISTNAME='LULUDCCODE' AND CL.UDF01='4PL' AND CL.Storerkey=OH.Storerkey AND CL.Code=OH.UserDefine10)   --(ML03)
      AND OD.OpenQty - ( OD.QtyAllocated + OD.QtyPicked ) > 0
 
    IF NOT EXISTS (SELECT 1 FROM #TMPOD)         --(Wan01)

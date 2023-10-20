@@ -28,6 +28,8 @@ GO
 /*                            userdefine01 = ''. Create transmitlog      */
 /* 2021-01-12  NJOW01   1.2   DEVOPS combine script                      */
 /* 2023-10-09  Michael  1.3   New DC code (ML01)                         */
+/* 2023-10-13  Michael  1.4   WMS-23889 move hardcoded DC Code to        */
+/*                            CodeLkup LULUDCCODE with UDF01=4PL (ML02)  */
 /*************************************************************************/       
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV38]          
                  @c_wavekey      NVARCHAR(10)      
@@ -530,7 +532,8 @@ BEGIN
    WHERE w.WaveKey = @c_Wavekey
    AND o.[Type] <> 'LULUECOM'
 --(ML01)   AND o.UserDefine10 NOT IN ('170146','170149')
-   AND o.UserDefine10 NOT IN ('170146','170149','170160','170176')  --(ML01)
+--(ML02)   AND o.UserDefine10 NOT IN ('170146','170149','170160','170176')  --(ML01)
+   AND NOT EXISTS(SELECT TOP 1 1 FROM CODELKUP CL(NOLOCK) WHERE CL.LISTNAME='LULUDCCODE' AND CL.UDF01='4PL' AND CL.Storerkey=o.Storerkey AND CL.Code=o.UserDefine10)   --(ML02)
    AND ISNULL(@c_Userdefine01,'') = ''  --NJOW01
 
    IF @b_PTL = 1

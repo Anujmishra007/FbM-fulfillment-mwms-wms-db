@@ -16,6 +16,8 @@ GO
 /* Date         Author    Ver.  Purposes                                */
 /* 2021-02-10   James     1.0   WMS-15656 Created                       */
 /* 2021-09-14   LZG       1.1   Added PickDetail.Status check (ZG01)    */
+/* 2023-10-13   Michael   1.2   WMS-23889 move hardcoded DC Code to     */
+/*                              CodeLkup LULUDCCODE with UDF01=4PL(ML01)*/
 /************************************************************************/
 
 CREATE PROCEDURE rdt.rdt_1764ExtUpd13
@@ -295,7 +297,8 @@ BEGIN
                   FROM Orders WITH (NOLOCK) 
                   WHERE OrderKey = @cOrderKey
 
-                  IF @cOrdType <> 'LULUECOM' AND @cUserDefine01 IN ('170146','170149')
+--(ML01)                  IF @cOrdType <> 'LULUECOM' AND @cUserDefine01 IN ('170146','170149')
+                  IF @cOrdType <> 'LULUECOM' AND @cUserDefine01 IN (SELECT DISTINCT Code FROM CODELKUP (NOLOCK) WHERE LISTNAME='LULUDCCODE' AND UDF01='4PL' AND Storerkey=@cStorerkey)   --(ML01)
                      SET @nNoNeedRouting = 1
                   ELSE
                      SET @nNoNeedRouting = 0
