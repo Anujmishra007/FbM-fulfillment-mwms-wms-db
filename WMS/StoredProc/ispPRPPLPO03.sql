@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispPRPPLPO03]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispPRPPLPO03]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -31,8 +26,10 @@ GO
 /*                            Userdefined09                             */
 /* 31-OCT-2021  NJOW02    1.2 WMS-17224 Back List skip stamp QC flag    */
 /* 18-NOV-2021  NJOW02    1.2 DEVOPS combine script                     */
+/* 26-SEP-2023  NJOW03    1.3 WMS-23734 add config for PH to stamp ucc  */
+/*                            userdefined06 by max qty and count        */
 /************************************************************************/
-CREATE PROC [dbo].[ispPRPPLPO03]
+CREATE OR ALTER PROC [dbo].[ispPRPPLPO03]
            @c_Receiptkey      NVARCHAR(10)
          , @c_POKeys          NVARCHAR(MAX)
          , @c_POLineNumbers   NVARCHAR(MAX) = ''
@@ -73,8 +70,13 @@ BEGIN
           ,@n_NoofArtical_HV      INT = 0
           ,@c_Style               NVARCHAR(20)
           ,@c_BlackListSkipQCFlag NVARCHAR(10) = 'N' --NJOW02
+          ,@c_UCCStampByQty       NVARCHAR(5) = 'N'  --NJOW03
+          ,@n_MaxUccQty           INT --NJOW03     
+          ,@n_UCCQtySum           INT --NJOW03       
+          ,@n_NoofUCCQtyStamp     INT --NJOW03
+          ,@n_UCCQty              INT --NJOW03
                     
-   DECLARE @c_Body                NVARCHAR(MAX),          
+   DECLARE @c_Body                NVARCHAR(MAX),         
            @c_Subject             NVARCHAR(255),          
            @c_Date                NVARCHAR(20),           
            @c_SendEmail           NVARCHAR(1),
@@ -216,6 +218,7 @@ BEGIN
 
       SELECT @c_PercentageofArticle = dbo.fnc_GetParamValueFromString('@c_PercentageofArticle', @c_option5, @c_PercentageofArticle)
       SELECT @c_BlackListSkipQCFlag = dbo.fnc_GetParamValueFromString('@c_BlackListSkipQCFlag', @c_option5, @c_BlackListSkipQCFlag) --NJOW02
+      SELECT @c_UCCStampByQty = dbo.fnc_GetParamValueFromString('@c_UCCStampByQty', @c_option5, @c_UCCStampByQty) --NJOW03
 
       IF ISNUMERIC(@c_PercentageofArticle) = 1 
       BEGIN
@@ -309,7 +312,7 @@ BEGIN
       END           
    END   
    
-   IF @n_continue IN(1,2)
+   IF @n_continue IN(1,2) AND @c_UCCStampByQty <> 'Y'  --NJOW03
    BEGIN   	
    	   DECLARE CUR_POSKU CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT PO.Storerkey, POD.Sku, ISNULL(MXU.MaxUccNo,0)      
@@ -404,6 +407,121 @@ BEGIN
       CLOSE CUR_POSKU
       DEALLOCATE CUR_POSKU                          	   
    END
+
+   --NJOW03 S
+   IF @n_continue IN(1,2) AND @c_UCCStampByQty = 'Y'  
+   BEGIN   	
+   	   DECLARE CUR_POSKU CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT PO.Storerkey, POD.Sku, ISNULL(MXU.MaxUccNo,0), ISNULL(MXU.MaxUccQty,0)
+         FROM PO (NOLOCK)
+         JOIN #TMP_PODETAIL POD (NOLOCK) ON PO.POkey = POD.POKey
+         JOIN SKU (NOLOCK) ON POD.Storerkey = SKU.Storerkey AND POD.Sku = SKU.Sku
+         JOIN V_STORERCONFIG2 SC (NOLOCK) ON PO.Storerkey = SC.Storerkey AND SC.Configkey = 'INSERTUCC' AND SC.Svalue = '1'          
+         OUTER APPLY (SELECT TOP 1 CASE WHEN ISNUMERIC(CL.Short) = 1 THEN CAST(CL.Short AS INT) ELSE 0 END AS MaxUccNo,
+                                   CASE WHEN ISNUMERIC(CL.Long) = 1 THEN CAST(CL.Long AS INT) ELSE 0 END AS MaxUccQty
+                      FROM CODELKUP CL (NOLOCK) WHERE CL.Storerkey = SKU.Storerkey AND CL.Code = SKU.Skugroup AND CL.ListName = 'MAXUCCNO') MXU              
+         WHERE PO.POKey IN(SELECT POKey FROM #PREPPL_PO)
+         AND (SKU.Length = 0 OR SKU.Width = 0 OR SKU.Height = 0)
+         AND ISNULL(MXU.MaxUccNo,0) > 0
+         GROUP BY PO.Storerkey, POD.Sku, ISNULL(MXU.MaxUccNo,0), ISNULL(MXU.MaxUccQty,0)
+                   
+      OPEN CUR_POSKU  
+      
+      FETCH NEXT FROM CUR_POSKU INTO @c_Storerkey, @c_Sku, @n_MaxUccNo, @n_MaxUccQty
+
+      WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
+      BEGIN
+      	  SET @n_UCCCount = 0
+      	  SET @n_UCCQtySum = 0   
+      	  
+      	  /*
+      	  SELECT @n_UCCCount = COUNT(1),
+      	         @n_UCCQtySum = SUM(Qty)
+          FROM UCC (NOLOCK)
+          WHERE Storerkey = @c_Storerkey          
+          AND Sku = @c_Sku
+          AND UserDefined06 = '1'
+          AND [Status] IN ('0','1')
+          */
+          
+          IF @n_MaxUccQty = 0
+             SET @n_MaxUccQty = 9999999
+          
+          IF @n_debug = 1
+          BEGIN
+             PRINT '@c_Sku:' + RTRIM(@c_Sku) + ' @n_MaxUccNo:' + RTRIM(CAST(@n_MaxUccNo AS NVARCHAR)) + ' @n_UCCCount:' + RTRIM(CAST(@n_UCCCount AS NVARCHAR)) + ' @n_MaxUccQty:' + RTRIM(CAST(@n_MaxUccQty AS NVARCHAR)) 
+          END
+         
+          IF @n_UCCCount < @n_MaxUCCNo
+             AND @n_UCCQtySum < @n_MaxUccQty
+          BEGIN
+             SET @n_NoofUCCStamp = @n_MaxUCCNo - @n_UCCCount 
+             SET @n_NoofUCCQtyStamp = @n_MaxUccQty - @n_UCCQtySum 
+             
+             IF @n_debug = 1
+             BEGIN
+                PRINT '@n_NoofUCCStamp:' + RTRIM(CAST(@n_NoofUCCStamp AS NVARCHAR))  + ' @n_NoofUCCQtyStamp:' + RTRIM(CAST(@n_NoofUCCQtyStamp AS NVARCHAR)) 
+             END
+             
+             DECLARE CUR_UCC CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+               SELECT UCCNo, SUM(Qty)
+               FROM UCC (NOLOCK) 
+               OUTER APPLY (SELECT TOP 1 POD.Userdefine01 FROM PO (NOLOCK)
+                            JOIN #TMP_PODETAIL POD (NOLOCK) ON PO.POkey = POD.POKey
+                            WHERE PO.POKey IN(SELECT POKey FROM #PREPPL_PO)
+                            AND POD.Userdefine01 = UCC.UccNo
+                            AND POD.Storerkey = UCC.Storerkey
+                            ) AS POUCC
+               WHERE UCC.Status IN('0','1')
+               AND UCC.UserDefined06 <> '1'
+               AND UCC.Storerkey = @c_Storerkey
+               AND UCC.Sku = @c_Sku
+               AND POUCC.Userdefine01 IS NOT NULL
+               GROUP BY UCC.UCCNo, POUCC.Userdefine01, UCC.Userdefined07
+               ORDER BY --CASE WHEN POUCC.Userdefine01 IS NOT NULL THEN 1 ELSE 2 END,                         
+                        2,
+                        CASE WHEN UCC.Userdefined07 = '1' THEN 1 ELSE 2 END,
+                        UCC.UCCNo
+                        
+             OPEN CUR_UCC
+             
+             FETCH NEXT FROM CUR_UCC INTO @c_UCCNo, @n_UCCQty                        
+                        
+             WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2) AND @n_NoofUCCStamp > 0 AND @n_NoofUCCQtyStamp > 0
+             BEGIN
+             	  IF @n_UCCQty > @n_NoofUCCQtyStamp
+             	     BREAK
+             	
+      	        UPDATE UCC WITH (ROWLOCK)
+      	        SET Userdefined06 = '1', 
+      	            TrafficCop = NULL
+      	        WHERE UCCNo = @c_UCCNo
+      	        AND Storerkey = @c_Storerkey
+      	        --AND Sku = @c_Sku
+      	        
+                SELECT @n_err = @@ERROR                                                                                                                                                        
+                IF @n_err <> 0                                                                                                                                                                 
+                BEGIN                                                                                                                                                                          
+                   SELECT @n_continue = 3                                                                                                                                                      
+                   SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 83020  -- Should Be Set To The SQL Errmessage but I don't know how to do so.                                     
+                   SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update UCC Table Failed. (ispPRPPLPO03)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '            
+                END                                                                                                                                                                               	     
+             	
+                SET @n_NoofUCCStamp = @n_NoofUCCStamp -  1
+                SET @n_NoofUCCQtyStamp = @n_NoofUCCQtyStamp - @n_UCCQty
+                
+                FETCH NEXT FROM CUR_UCC INTO @c_UCCNo, @n_UCCQty             	
+             END
+             CLOSE CUR_UCC
+             DEALLOCATE CUR_UCC                                                               
+          END
+          
+          FETCH NEXT FROM CUR_POSKU INTO @c_Storerkey, @c_Sku, @n_MaxUccNo, @n_MaxUccQty                                                                	       	       	     
+      END	  
+      CLOSE CUR_POSKU
+      DEALLOCATE CUR_POSKU                          	   
+   END
+   --NJOW03 E
                
    IF  @n_continue IN(1,2)
    BEGIN   	                                                            
