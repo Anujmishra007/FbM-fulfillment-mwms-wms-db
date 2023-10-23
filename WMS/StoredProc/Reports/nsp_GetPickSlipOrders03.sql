@@ -53,9 +53,10 @@ GO
 /*                               ID (WL04)                                       */    
 /* 2022-08-05 MINGLE       2.7   WMS-20323 add reportcfg to show lottable10(ML01)*/    
 /* 2023-10-03 CALVIN       2.8   JSM-181627 EXPAND INVOICENO FIELD (CLVN01)      */
+/* 2023-10-23 CALVIN       2.8   JSM-185744 EXPAND Company FIELD (CLVN02)        */
 /*********************************************************************************/    
     
-CREATE OR ALTER     PROC [dbo].[nsp_GetPickSlipOrders03] (@c_loadkey NVARCHAR(10))    
+CREATE OR ALTER PROC [dbo].[nsp_GetPickSlipOrders03] (@c_loadkey NVARCHAR(10))    
 AS    
 BEGIN    
    SET NOCOUNT ON    
@@ -78,7 +79,7 @@ DECLARE  @c_pickheaderkey        NVARCHAR(10),
          @c_storer         NVARCHAR(15),    
          @c_orderkey             NVARCHAR(10),    
          @c_ConsigneeKey         NVARCHAR(15),    
-         @c_Company              NVARCHAR(45),    
+         @c_Company              NVARCHAR(100),  --(CLVN02)
          @c_Addr1                NVARCHAR(45),    
          @c_Addr2                NVARCHAR(45),    
          @c_Addr3                NVARCHAR(45),    
@@ -156,7 +157,7 @@ BEGIN TRAN
           LoadKey   NVARCHAR(10),    
           OrderKey   NVARCHAR(10),    
           ConsigneeKey  NVARCHAR(15),    
-          Company   NVARCHAR(45),    
+          Company   NVARCHAR(100),  --(CLVN02)
           Addr1    NVARCHAR(45) NULL,    
           Addr2    NVARCHAR(45) NULL,    
           Addr3    NVARCHAR(45) NULL,    
