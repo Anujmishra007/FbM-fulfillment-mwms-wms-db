@@ -1,11 +1,6 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[isp_WM_Gen_BuildOrderSelect]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [WM].[isp_WM_Gen_BuildOrderSelect]
-GO
-
-SET QUOTED_IDENTIFIER OFF 
-GO
 SET ANSI_NULLS OFF 
+GO
+SET QUOTED_IDENTIFIER OFF 
 GO
 
 /************************************************************************/                                                                                  
@@ -18,16 +13,18 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: PowerBuidler                                              */                                                                                  
 /*                                                                      */                                                                                  
-/* PVCS Version: 1.2                                                    */                                                                                  
+/* PVCS Version: 1.1                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 5.4                                                         */                                                                                  
 /*                                                                      */                                                                                  
 /* Data Modifications:                                                  */                                                                                  
 /*                                                                      */                                                                                  
 /* Updates:                                                             */                                                                                  
-/* Date         Author  Ver.  Purposes                                  */    
+/* Date        Author   Ver.  Purposes                                  */  
+/* 2023-10-23  Wan01    1.1   LFWM-4554 - PROD - CN  Auto Allocation    */
+/*                            Backend SP enhancement                    */
 /************************************************************************/                                                                                  
-CREATE PROC [WM].[isp_WM_Gen_BuildOrderSelect]                                                                                                                       
+CREATE OR ALTER PROC [WM].[isp_WM_Gen_BuildOrderSelect]                                                                                                                       
    @cParmCode              NVARCHAR(10),                                                                                                                    
    @cFacility              NVARCHAR(5),                                                                                                                     
    @cStorerKey             NVARCHAR(15),                                                                                                                    
@@ -314,139 +311,149 @@ FETCH NEXT FROM CUR_BUILD_LOAD_COND INTO @cColumnName, @cValue, @cCondLevel, @cO
           
 WHILE @@FETCH_STATUS <> -1
 BEGIN
-    IF ISNUMERIC(@cCondLevel) = 1
-    BEGIN
-        IF @nPreCondLevel = 0
-            SET @nPreCondLevel = CAST(@cCondLevel AS INT)
+   IF ISNUMERIC(@cCondLevel) = 1
+   BEGIN
+      IF @nPreCondLevel = 0
+         SET @nPreCondLevel = CAST(@cCondLevel AS INT)
         
-        SET @nCurrCondLevel = CAST(@cCondLevel AS INT)
-    END 
+      SET @nCurrCondLevel = CAST(@cCondLevel AS INT)
+   END 
     
-    -- Get Column Type                                                                                                                                                  
-    BEGIN TRY
-       SET @cTableName = LEFT(@cColumnName, CHARINDEX('.', @cColumnName) - 1)   
-       SET @cColName = SUBSTRING(
-               @cColumnName,
-               CHARINDEX('.', @cColumnName) + 1,
-               LEN(@cColumnName) - CHARINDEX('.', @cColumnName)
-           )                                                            
+   -- Get Column Type                                                                                                                                                  
+   BEGIN TRY
+      SET @cTableName = LEFT(@cColumnName, CHARINDEX('.', @cColumnName) - 1)   
+      SET @cColName = SUBSTRING(
+            @cColumnName,
+            CHARINDEX('.', @cColumnName) + 1,
+            LEN(@cColumnName) - CHARINDEX('.', @cColumnName)
+         )                                                            
       
       
-    END TRY
-    BEGIN CATCH          
-        SELECT @cColName '@cColName', @cColumnName '@cColumnName', @cTableName '@cTableName'
-    END CATCH                                                                         
+   END TRY
+   BEGIN CATCH          
+      SELECT @cColName '@cColName', @cColumnName '@cColumnName', @cTableName '@cTableName'
+   END CATCH                                                                         
     
-    SET @cColType = ''                                                                                                                                       
-    SELECT @cColType = DATA_TYPE
-    FROM  INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_NAME          = @cTableName
-      AND COLUMN_NAME     = @cColName                                                                                                                           
+   SET @cColType = ''                                                                                                                                       
+   SELECT @cColType = DATA_TYPE
+   FROM  INFORMATION_SCHEMA.COLUMNS
+   WHERE TABLE_NAME          = @cTableName
+   AND COLUMN_NAME     = @cColName                                                                                                                           
     
-    IF ISNULL(RTRIM(@cColType), '') = ''
-    BEGIN
-        SET @bInValid = 1                                                                                                                                     
-        SET @cErrorMsg = 'Invalid Column Name: ' + @cColumnName 
-        GOTO QUIT
-    END    
+   IF ISNULL(RTRIM(@cColType), '') = ''
+   BEGIN
+      SET @bInValid = 1                                                                                                                                     
+      SET @cErrorMsg = 'Invalid Column Name: ' + @cColumnName 
+      GOTO QUIT
+   END    
     
-    IF @cColType = 'datetime'
-       AND ISDATE(@cValue) <> 1
-    BEGIN
-        -- SHONG01                                                                                                                                            
-        IF @cValue IN ('today', 'now', 'startofmonth', 'endofmonth', 
-                      'startofyear', 'endofyear')
-           OR LEFT(@cValue, 6) IN ('today+', 'today-') --NJOW06
-        BEGIN
-            SET @cValue = CASE 
-                               WHEN @cValue = 'today' THEN LEFT(CONVERT(VARCHAR(30), GETDATE(), 120), 10)
-                               WHEN LEFT(@cValue, 6) IN ('today+', 'today-') AND 
-                                    ISNUMERIC(SUBSTRING(@cValue, 7, 10)) = 1 --NJOW06
-                                     THEN LEFT(
-                                        CONVERT(
-                                            VARCHAR(30),
-                                            DATEADD(DAY, CONVERT(INT, SUBSTRING(@cValue, 6, 10)), GETDATE()),
-                                            120
-                                        ),
-                                        10
-                                    )
-                               WHEN @cValue = 'now' THEN CONVERT(VARCHAR(30), GETDATE(), 120)
-                               WHEN @cValue = 'startofmonth' THEN CAST(DATEPART(YEAR, GETDATE()) AS VARCHAR(4)) 
-                                    + '-' 
-                                    + ('0' + CAST(DATEPART(MONTH, GETDATE()) AS VARCHAR(2))) 
-                                    + ('-01')
-                               WHEN @cValue = 'endofmonth' THEN CONVERT(
-                                        VARCHAR(30),
-                                        DATEADD(s, -1, DATEADD(mm, DATEDIFF(m, 0, GETDATE()) + 1, 0)),
-                                        120
-                                    )
-                               WHEN @cValue = 'startofyear' THEN CAST(DATEPART(YEAR, GETDATE()) AS VARCHAR(4)) 
-                                    + '-01-01'
-                               WHEN @cValue = 'endofyear' THEN CAST(DATEPART(YEAR, GETDATE()) AS VARCHAR(4)) 
-                                    + '-12-31 23:59:59'
-                               ELSE LEFT(CONVERT(VARCHAR(30), GETDATE(), 120), 10) --NJOW06
-                          END
-        END
-        ELSE
-        BEGIN
-            SET @bInValid = 1                                                                                                                                  
-            SET @cErrorMsg = 'Invalid Date Format: ' + @cValue 
-            GOTO QUIT
-        END
-    END    
+   IF @cColType = 'datetime'
+      AND ISDATE(@cValue) <> 1
+   BEGIN
+      -- SHONG01                                                                                                                                            
+      IF @cValue IN ('today', 'now', 'startofmonth', 'endofmonth', 
+                     'startofyear', 'endofyear')
+         OR LEFT(@cValue, 6) IN ('today+', 'today-') --NJOW06
+      BEGIN
+         SET @cValue = CASE 
+                              WHEN @cValue = 'today' THEN LEFT(CONVERT(VARCHAR(30), GETDATE(), 120), 10)
+                              WHEN LEFT(@cValue, 6) IN ('today+', 'today-') AND 
+                                 ISNUMERIC(SUBSTRING(@cValue, 7, 10)) = 1 --NJOW06
+                                    THEN LEFT(
+                                       CONVERT(
+                                          VARCHAR(30),
+                                          DATEADD(DAY, CONVERT(INT, SUBSTRING(@cValue, 6, 10)), GETDATE()),
+                                          120
+                                       ),
+                                       10
+                                 )
+                              WHEN @cValue = 'now' THEN CONVERT(VARCHAR(30), GETDATE(), 120)
+                              WHEN @cValue = 'startofmonth' THEN CAST(DATEPART(YEAR, GETDATE()) AS VARCHAR(4)) 
+                                 + '-' 
+                                 + ('0' + CAST(DATEPART(MONTH, GETDATE()) AS VARCHAR(2))) 
+                                 + ('-01')
+                              WHEN @cValue = 'endofmonth' THEN CONVERT(
+                                       VARCHAR(30),
+                                       DATEADD(s, -1, DATEADD(mm, DATEDIFF(m, 0, GETDATE()) + 1, 0)),
+                                       120
+                                 )
+                              WHEN @cValue = 'startofyear' THEN CAST(DATEPART(YEAR, GETDATE()) AS VARCHAR(4)) 
+                                 + '-01-01'
+                              WHEN @cValue = 'endofyear' THEN CAST(DATEPART(YEAR, GETDATE()) AS VARCHAR(4)) 
+                                 + '-12-31 23:59:59'
+                              ELSE LEFT(CONVERT(VARCHAR(30), GETDATE(), 120), 10) --NJOW06
+                        END
+      END
+      ELSE
+      BEGIN
+         SET @bInValid = 1                                                                                                                                  
+         SET @cErrorMsg = 'Invalid Date Format: ' + @cValue 
+         GOTO QUIT
+      END
+   END    
     
-    IF @nPreCondLevel < @nCurrCondLevel
-    BEGIN
-        SET @c_SQLCond = @c_SQLCond + ' ' + MASTER.dbo.fnc_GetCharASCII(13) +
-            ' ' + @cOrAnd + N' ('
+   IF @nPreCondLevel < @nCurrCondLevel
+   BEGIN
+      SET @c_SQLCond = @c_SQLCond + ' ' + MASTER.dbo.fnc_GetCharASCII(13) +
+         ' ' + @cOrAnd + N' ('
         
-        SET @nPreCondLevel = @nCurrCondLevel
-    END
-    ELSE 
-    IF @nPreCondLevel > @nCurrCondLevel
-    BEGIN
-        SET @c_SQLCond = @c_SQLCond + N') ' + MASTER.dbo.fnc_GetCharASCII(13) +
-            ' ' + @cOrAnd
+      SET @nPreCondLevel = @nCurrCondLevel
+   END
+   ELSE 
+   IF @nPreCondLevel > @nCurrCondLevel
+   BEGIN
+      SET @c_SQLCond = @c_SQLCond + N') ' + MASTER.dbo.fnc_GetCharASCII(13) +
+         ' ' + @cOrAnd
         
-        SET @nPreCondLevel = @nCurrCondLevel
-    END
-    ELSE
-    BEGIN
-        SET @c_SQLCond = @c_SQLCond + ' ' + MASTER.dbo.fnc_GetCharASCII(13) +
-            ' ' + @cOrAnd
-    END    
+      SET @nPreCondLevel = @nCurrCondLevel
+   END
+   ELSE
+   BEGIN
+      SET @c_SQLCond = @c_SQLCond + ' ' + MASTER.dbo.fnc_GetCharASCII(13) +
+         ' ' + @cOrAnd
+   END  
     
-    IF @cColType IN ('char', 'nvarchar', 'varchar', 'nchar') --SWT02
-        SET @c_SQLCond = @c_SQLCond + ' ' + @cColumnName + ' ' + @cOperator +
-            CASE 
-                 WHEN @cOperator = 'IN' THEN                                                                                                      
-                      CASE 
-                           WHEN LEFT(RTRIM(LTRIM(@cValue)), 1) <> '(' THEN '('
-                           ELSE ''
-                      END +
-                      RTRIM(LTRIM(@cValue)) +
-                      CASE 
-                           WHEN RIGHT(RTRIM(LTRIM(@cValue)), 1) <> ')' THEN ') '
-                           ELSE ''
-                      END
-                 ELSE ' N' +
-                      CASE 
-                           WHEN LEFT(RTRIM(LTRIM(@cValue)), 1) <> '''' THEN ''''
-                           ELSE ''
-                      END +
-                      RTRIM(LTRIM(@cValue)) +
-                      CASE 
-                           WHEN RIGHT(RTRIM(LTRIM(@cValue)), 1) <> '''' THEN 
-                                ''' '
-                           ELSE ''
-                      END
-            END
-    ELSE 
-    IF @cColType IN ('float', 'money', 'int', 'decimal', 'numeric', 'tinyint', 
-                    'real', 'bigint')
-      --(Wan01) - START                                                       
+   IF @cOperator = 'IN SQL'                                                         --(Wan01) - START
+   BEGIN
+      SET @cOperator = 'IN'
+   END
+
+   IF @cOperator = 'NOT IN SQL'
+   BEGIN
+      SET @cOperator = 'NOT IN'
+   END                                                                              --(Wan01) - END
+    
+   IF @cColType IN ('char', 'nvarchar', 'varchar', 'nchar') --SWT02
+      SET @c_SQLCond = @c_SQLCond + ' ' + @cColumnName + ' ' + @cOperator +
+         CASE 
+               WHEN @cOperator IN ( 'IN', 'NOT IN') THEN                          --(Wan01)                                                                                                      
+                     CASE 
+                        WHEN LEFT(RTRIM(LTRIM(@cValue)), 1) <> '(' THEN '('
+                        ELSE ''
+                     END +
+                     RTRIM(LTRIM(@cValue)) +
+                     CASE 
+                        WHEN RIGHT(RTRIM(LTRIM(@cValue)), 1) <> ')' THEN ') '
+                        ELSE ''
+                     END
+               ELSE ' N' +
+                     CASE 
+                        WHEN LEFT(RTRIM(LTRIM(@cValue)), 1) <> '''' THEN ''''
+                        ELSE ''
+                     END +
+                     RTRIM(LTRIM(@cValue)) +
+                     CASE 
+                        WHEN RIGHT(RTRIM(LTRIM(@cValue)), 1) <> '''' THEN 
+                              ''' '
+                        ELSE ''
+                     END
+               END
+   ELSE 
+   IF @cColType IN ('float', 'money', 'int', 'decimal', 'numeric', 'tinyint', 
+                  'real', 'bigint')
+                                                
       SET @c_SQLCond = @c_SQLCond + ' ' + @cColumnName + ' ' + @cOperator  + 
-            CASE WHEN @cOperator = 'IN' THEN                                                                                                        
+            CASE WHEN @cOperator IN ('IN','NOT IN') THEN                            --(Wan01)                                                                                                        
                CASE WHEN LEFT(RTRIM(LTRIM(@cValue)),1) <> '(' THEN '(' ELSE '' END +                                                                        
                RTRIM(LTRIM(@cValue)) +                                                                                                                      
                CASE WHEN RIGHT(RTRIM(LTRIM(@cValue)),1) <> ')' THEN ') ' ELSE '' END    
@@ -458,13 +465,12 @@ BEGIN
             ELSE
                RTRIM(@cValue)    
             END  
-      --(Wan01) - END 
-    ELSE 
-    IF @cColType IN ('datetime')
-        SET @c_SQLCond = @c_SQLCond + ' ' + @cColumnName + ' ' + @cOperator +
-            ' ''' + @cValue + ''' '
+   ELSE 
+   IF @cColType IN ('datetime')
+      SET @c_SQLCond = @c_SQLCond + ' ' + @cColumnName + ' ' + @cOperator +
+         ' ''' + @cValue + ''' '
     
-   --(Wan01) - START
+
    IF @cTableName = 'LOC'
    BEGIN 
       SET @b_JoinPickDetail = 1
@@ -475,10 +481,9 @@ BEGIN
    BEGIN 
       SET @b_JoinPickDetail = 1
    END
-   --(Wan01) - END 
 
-    FETCH NEXT FROM CUR_BUILD_LOAD_COND INTO @cColumnName, @cValue, @cCondLevel, 
-    @cOrAnd, @cOperator
+   FETCH NEXT FROM CUR_BUILD_LOAD_COND INTO @cColumnName, @cValue, @cCondLevel, 
+   @cOrAnd, @cOperator
 END       
 CLOSE CUR_BUILD_LOAD_COND                                                                                                            
 DEALLOCATE CUR_BUILD_LOAD_COND                                                                                                                              
