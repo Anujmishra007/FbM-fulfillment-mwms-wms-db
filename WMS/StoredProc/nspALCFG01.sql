@@ -41,7 +41,7 @@ GO
 /* 29-Sep-2023 CLVN01   1.9  JSM-54130 Fix Syntax Error                    */
 /***************************************************************************/
 
-ALTER   PROC [dbo].[nspALCFG01]
+CREATE OR ALTER   PROC [dbo].[nspALCFG01]
    @c_DocumentNo NVARCHAR(10),
    @c_Facility   NVARCHAR(5),
    @c_StorerKey  NVARCHAR(15),
