@@ -13,7 +13,7 @@ GO
 /*                                                                         */
 /* Called By: RPT_ORD_DELNOTE_008                                          */
 /*                                                                         */
-/* Github Version: 1.0                                                     */
+/* Github Version: 1.1                                                     */
 /*                                                                         */
 /* Version: 1.0                                                            */
 /*                                                                         */
@@ -22,6 +22,7 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 13-Oct-2023  WLChooi 1.0   DevOps Combine Script                        */
+/* 20-Oct-2023  WLChooi 1.1   UWP-9867 - Add SealNo (WL01)                 */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_RPT_ORD_DELNOTE_008] @c_Orderkey NVARCHAR(20)
 AS
@@ -82,6 +83,7 @@ BEGIN
         , ISNULL(M.ContainerNo,'') AS ContainerNo
         , ISNULL(SKU.Tariffkey,'') AS Tariffkey
         , ISNULL(SKU.NetWgt,0.00) * (ORDERDETAIL.QtyPicked + ORDERDETAIL.ShippedQty) AS SKUNetWgt
+        , ISNULL(M.SealNo,'') AS SealNo   --WL01
    INTO #TEMP_ORD
    FROM ORDERS WITH (NOLOCK)
    JOIN ORDERDETAIL WITH (NOLOCK) ON (ORDERS.OrderKey = ORDERDETAIL.OrderKey)
@@ -152,6 +154,7 @@ BEGIN
         , TOR.SKUNetWgt
         , (SELECT SUM(T1.QtyPicked) FROM #TEMP_ORD T1 WHERE T1.Orderkey = TOR.OrderKey) AS TTLQtyPicked
         , (SELECT SUM(T1.SKUNetWgt) FROM #TEMP_ORD T1 WHERE T1.Orderkey = TOR.OrderKey) AS TTLSKUNetWgt
+        , TOR.SealNo   --WL01
    FROM #TEMP_ORD TOR
    ORDER BY CASE WHEN ISNULL(ShowBuyerPO, 'N') = 'Y' THEN odudf03 END DESC
           , CASE WHEN ISNULL(ShowBuyerPO, 'N') = 'Y' THEN OrderLineNumber END
