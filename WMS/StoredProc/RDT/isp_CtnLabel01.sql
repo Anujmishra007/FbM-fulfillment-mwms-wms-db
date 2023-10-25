@@ -68,11 +68,14 @@ AS
           ,@cParams26   NVARCHAR( 20)       --yeekung01
           ,@cParams27   NVARCHAR( 20)       --yeekung01
           ,@cParams28   NVARCHAR( 20)       --yeekung01
+          ,@cParams29   NVARCHAR( 60)       --yeekung01
           ,@cSKUSize    NVARCHAR( 20)         --yeekung01
           ,@cSKUStyle   NVARCHAR( 20)         --yeekung01
           ,@cCounter    NVARCHAR(2) ='1'
           ,@nMaxCount   INT
           ,@cExtraStorer   NVARCHAR(20)
+          ,@cBilltoKey  NVARCHAR(20)
+          ,@cFacility NVARCHAR(20)
 
    SET @cPrintData = @cPrintTemplate
 
@@ -80,10 +83,15 @@ AS
           @cParams2 = ExternOrderKey,
           @cParams3 = CASE WHEN type = 'B2C' THEN C_contact1 +' ' +C_Company ELSE C_Company END,
           @cExtraStorer = billtokey,
-          @cParams12 = buyerPo
+          @cParams12 = buyerPo,
+          @cBilltoKey=billtokey
    FROM ORDERS (NOLOCK)
    WHERE ORDERKEY = @cByRef2
       AND Storerkey = @cStorerKey
+
+   SELECT @cFacility = facility
+   FROM Rdt.Rdtmobrec (nolock)
+   WHERE Mobile = @nMobile
 
 
 
@@ -116,11 +124,41 @@ AS
    FROM PICKDetail (NOLOCK)
    Where orderkey = @cByRef2
       AND Storerkey = @cStorerkey
+      AND Status <>'4'
 
-   IF @nPickQTY = @nPackQTY AND @nMaxCount = @cByRef3
+   IF @nPickQTY = @nPackQTY 
    BEGIN
-      SET @cParams7 = 'Y'
-      SET @cParams26 ='P/L'
+      IF @nMaxCount = @cByRef3
+      BEGIN
+         SET @cParams7 = 'Y'
+      END
+      ELSE
+      BEGIN
+         SET @cParams7 = 'N'
+      END
+
+      IF EXISTS (SELECT 1
+                  FROM Packinfo PI (NOLOCK)
+                  WHERE PI.Pickslipno = @cByRef1
+                  AND cartonno IN ( SELECT pd.cartonno
+                              FROM packdetail PD(NOLOCK)
+                              WHERE PD.Pickslipno = PI.Pickslipno
+                                 AND PD.Storerkey = @cStorerKey
+                                 AND Labelno = @cByRef4)
+                  AND refno='Y')
+         AND EXISTS (SELECT 1  FROM dbo.Storer WITH (NOLOCK)   
+                     WHERE StorerKey = @cBillToKey   
+                        AND   Facility = @cFacility   
+                        AND   type = '2'   
+                        AND   SUSR4 IN ( 'C', 'E', 'Y') ) 
+
+      BEGIN
+         SET @cParams26 ='P/L'
+      END
+      ELSE
+      BEGIN
+         SET @cParams26 = ''
+      END
    END
    ELSE
    BEGIN
@@ -209,6 +247,19 @@ AS
                      AND Labelno = @cByRef4)
 
 
+   IF EXISTS (SELECT 1 FROM CODELKUP (NOLOCK)
+              WHERE LISTNAME = 'LVSBCSKIP'
+                  AND CODE = @cBilltoKey
+                  AND storerkey = @cStorerKey
+               )
+   BEGIN
+      SET @cParams29 = ''
+   END
+   ELSE
+   BEGIN
+      SET @cParams29 = '^BY3^BCN,80,N,N^FD' +@cByRef4 +'^FS'
+   END
+
    SET @cParams11 = @cByRef4
 
    SET @cPrintData = REPLACE (@cPrintData,'<Field01>',RTRIM(ISNULL(@cParams1,'')))
@@ -239,7 +290,7 @@ AS
    SET @cPrintData = REPLACE (@cPrintData,'<Field26>',RTRIM(ISNULL(@cParams26,'')))
    SET @cPrintData = REPLACE (@cPrintData,'<Field27>',RTRIM(ISNULL(@cParams27,'')))
    SET @cPrintData = REPLACE (@cPrintData,'<Field28>',RTRIM(ISNULL(@cParams28,'')))
-         
+   SET @cPrintData = REPLACE (@cPrintData,'<Field29>',RTRIM(ISNULL(@cParams29,'')))      
           
    SET @cCodePage = '850'                        
                                                  
