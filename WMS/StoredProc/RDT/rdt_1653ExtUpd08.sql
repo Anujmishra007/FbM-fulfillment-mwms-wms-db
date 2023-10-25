@@ -158,7 +158,7 @@ BEGIN
          JOIN @tWave W ON ( WD.WaveKey = W.WaveKey)  
          WHERE ISNULL( O.MBOLKey, '') = ''    
          AND   O.[Status] < '9'  
-  
+         
          -- only delete short pick line (status = 4)
          SET @curPick = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR  
          SELECT PD.PickDetailKey  
@@ -191,8 +191,10 @@ BEGIN
          SET @curDelPick = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
          SELECT PickDetailKey
          FROM dbo.PickDetail PD WITH (NOLOCK)
+         JOIN dbo.ORDERS O WITH (NOLOCK) ON ( PD.OrderKey = O.OrderKey)
          JOIN @tPDOrd PDO ON ( PD.OrderKey = PDO.OrderKey)
          WHERE PD.[Status] = '4'
+         AND   O.[Status] < '9'
          OPEN @curDelPick
          FETCH NEXT FROM @curDelPick INTO @cPickDetailKey 
          WHILE @@FETCH_STATUS = 0
@@ -216,6 +218,7 @@ BEGIN
          FROM dbo.ORDERS O WITH (NOLOCK)
          JOIN dbo.ORDERDETAIL OD WITH (NOLOCK) ON ( O.OrderKey = OD.OrderKey)
          JOIN @tWave W ON ( O.UserDefine09 = W.WaveKey)
+         WHERE O.Status < '9'
          GROUP BY O.OrderKey
          HAVING SUM( OD.QtyAllocated + OD.QtyPicked) = 0
          
