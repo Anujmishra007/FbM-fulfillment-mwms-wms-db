@@ -3,7 +3,6 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /************************************************************************/
 /* Store Procedure: isp_GetPickSlipOrders53                             */
 /* Creation Date: 16 Aug 2013                                           */
@@ -32,6 +31,7 @@ GO
 /*                              (mingle01)                              */
 /* 27-SEP-2022  MingLe    1.7   WMS-20850 - Add ReportCFg for carrierkey*/
 /*										  (ML02)												*/
+/* 25-OCT-2023  Lillian   1.8   JSM-186192-LOT02 length to 18 (LINI01) */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_GetPickSlipOrders53] (@c_loadkey NVARCHAR(10))
  AS
@@ -79,7 +79,7 @@ CREATE OR ALTER PROC [dbo].[isp_GetPickSlipOrders53] (@c_loadkey NVARCHAR(10))
          Lot              NVARCHAR(10),
          Carrierkey       NVARCHAR(60) NULL,
          VehicleNo        NVARCHAR(10) NULL,
-         Lottable02       NVARCHAR(10) NULL,
+         Lottable02       NVARCHAR(18) NULL,  --(LINI01)
          Lottable04       datetime NULL,
          Lottable05       datetime NULL,
          packpallet       int,
@@ -88,7 +88,7 @@ CREATE OR ALTER PROC [dbo].[isp_GetPickSlipOrders53] (@c_loadkey NVARCHAR(10))
          LogicalLoc       NVARCHAR(18) NULL,
          Areakey          NVARCHAR(10) NULL,     -- Added By YokeBeen on 05-Mar-2002 (Ticket # 3377)
          UOM              NVARCHAR(10) NULL,  -- Added By YokeBeen on 18-Mar-2002 (Ticket # 2539)
-   DeliveryDate   NVARCHAR(10) NULL,  -- Added by MaryVong on 29-Dec-2003 (FBR#18681)
+         DeliveryDate   NVARCHAR(10) NULL,  -- Added by MaryVong on 29-Dec-2003 (FBR#18681)
          Lottable03       NVARCHAR(18) NULL,      -- Added By SHONG On 2nd Mar 2004 (SOS#20463)
          Lottable01       NVARCHAR(18) NULL, -- NJOW01
          Altsku           NVARCHAR(20) NULL,  -- NJOW02
@@ -334,6 +334,3 @@ CREATE OR ALTER PROC [dbo].[isp_GetPickSlipOrders53] (@c_loadkey NVARCHAR(10))
 GO
 GRANT EXECUTE ON  [dbo].[isp_GetPickSlipOrders53] TO [NSQL]
 GO
-
-
-
