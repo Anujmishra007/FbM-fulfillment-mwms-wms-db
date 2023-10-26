@@ -1,11 +1,11 @@
-SET ANSI_NULLS OFF
-GO
 SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
 GO
 
 /************************************************************************/
 /* Store procedure: rdtfnc_TrackNo_SortToPallet                         */
-/* Copyright      : IDS                                                 */
+/* Copyright      : MAERSK                                              */
 /*                                                                      */
 /* Purpose: Sort trackno to pallet                                      */
 /*                                                                      */
@@ -40,6 +40,7 @@ GO
 /*                            Add confirm scan new lane screen          */
 /* 2023-03-28   2.4  James    WMS-21868 Exclude certain order type from */  
 /*                            split lane check (james11)                */
+/* 2023-08-23   2.5  James    WMS-23471 Add validate lane (james12)     */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TrackNo_SortToPallet] (
@@ -140,7 +141,8 @@ DECLARE
    @tCreateMBOLVar         VARIABLETABLE,
    @nIsChildLane           INT = 0,
    @nIsOriginalLane        INT = 0,
-
+   @tValidateLane          VARIABLETABLE,
+   
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
    @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),    @cFieldAttr03 NVARCHAR( 1),
@@ -292,6 +294,9 @@ BEGIN
    -- Initialize value
    SET @cTrackNo = ''
    SET @cOption = ''
+   SET @cLane = ''
+   SET @cMBOLKey = ''
+   SET @cPalletKey = ''
 
    EXEC rdt.rdtSetFocusField @nMobile, 1
 
@@ -575,8 +580,7 @@ BEGIN
          END
          ELSE
          BEGIN
-          SET @cPalletKey = ''
-          SET @cLane = ''
+            SET @cPalletKey = ''
             SET @nPalletValidated = 0
 
             -- Prep next screen var
@@ -586,20 +590,21 @@ BEGIN
 
             IF @cScanPalletToLane = '1'
             BEGIN
-             SELECT @cLane = UserDefine03
-             FROM dbo.PALLETDETAIL WITH (NOLOCK)
-             WHERE StorerKey = @cStorerKey
-             AND   UserDefine01 = @cOrderKey
+            	IF @cLane = ''
+                  SELECT @cLane = UserDefine03
+                  FROM dbo.PALLETDETAIL WITH (NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                  AND   UserDefine01 = @cOrderKey
 
-             IF ISNULL( @cLane, '') <> ''
-                SET @cOutField04 = @cLane
-             ELSE
-              SET @cOutField04 = '' -- Lane
+               IF ISNULL( @cLane, '') <> ''
+                  SET @cOutField04 = @cLane
+               ELSE
+                  SET @cOutField04 = '' -- Lane
 
                SET @cFieldAttr04 = ''
             END
             ELSE
-             SET @cFieldAttr04 = 'O'
+               SET @cFieldAttr04 = 'O'
 
             -- Goto scan pallet screen
             SET @nScn  = @nScn_ScanPalletID
@@ -772,7 +777,7 @@ BEGIN
             IF @cCur_ShipperKey <> @cNew_ShipperKey
             BEGIN
                SET @nErrNo = 156373
-    SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PltDiffShipper
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PltDiffShipper
                GOTO Step_ScanPalletID_Fail
             END
          END
@@ -780,9 +785,30 @@ BEGIN
 
       IF @cScanPalletToLane = '1'
       BEGIN
+         EXEC [RDT].[rdt_TrackNo_SortToPallet_ValidateLane]
+            @nMobile       = @nMobile,
+            @nFunc         = @nFunc,
+            @cLangCode     = @cLangCode,
+            @nStep         = @nStep,
+            @nInputKey     = @nInputKey,
+            @cFacility     = @cFacility,
+            @cStorerKey    = @cStorerKey,
+            @cTrackNo      = @cTrackNo,
+            @cOrderKey     = @cOrderKey,
+            @cPalletKey    = @cPalletKey,
+            @cMBOLKey      = @cMBOLKey,
+            @cLabelNo      = @cLabelNo,
+            @tValidateLane = @tValidateLane,
+            @cLane         = @cLane       OUTPUT,
+            @nErrNo        = @nErrNo      OUTPUT,
+            @cErrMsg       = @cErrMsg     OUTPUT            
+            
+         IF @nErrNo <> 0
+            GOTO Step_ScanLane_Fail   
+               
          IF ISNULL( @cLane, '') = '' AND @nPalletValidated = 0
          BEGIN
-          SET @cOutField03 = @cPalletKey
+            SET @cOutField03 = @cPalletKey
             SET @nPalletValidated = 1
             EXEC rdt.rdtSetFocusField @nMobile, 4 -- Lane
             GOTO Quit
@@ -973,7 +999,7 @@ BEGIN
          @cPalletKey    = @cPalletKey,
          @cMBOLKey      = @cMBOLKey OUTPUT,
          @cLane         = @cLane,
-        @cLabelNo      = @cLabelNo,
+         @cLabelNo      = @cLabelNo,
          @tCreateMBOLVar= @tCreateMBOLVar,
          @nErrNo        = @nErrNo      OUTPUT,
          @cErrMsg       = @cErrMsg     OUTPUT
@@ -1286,7 +1312,7 @@ BEGIN
                ' @cMBOLKey       NVARCHAR( 10), ' +
                ' @cLane          NVARCHAR( 20), ' +
                ' @tExtUpdateVar  VariableTable READONLY, ' +
-' @nErrNo         INT           OUTPUT, ' +
+               ' @nErrNo         INT           OUTPUT, ' +
                ' @cErrMsg        NVARCHAR( 20) OUTPUT  '
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
@@ -2121,8 +2147,7 @@ BEGIN
 
          IF @nErrNo = 0
          BEGIN
-            SET @nErrNo = 156390              
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Length
+            SET @nErrNo = 156390              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Length
             EXEC rdt.rdtSetFocusField @nMobile, 3
             SET @cOutField03 = ''
             GOTO QUIT
@@ -2664,11 +2689,9 @@ BEGIN
 END
 GO
 
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-
-GRANT EXECUTE ON [RDT].[rdtfnc_TrackNo_SortToPallet] TO nSQL
+GRANT EXECUTE ON RDT.rdtfnc_TrackNo_SortToPallet TO NSQL
 GO
