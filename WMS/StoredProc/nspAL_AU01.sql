@@ -24,6 +24,7 @@ GO
 /* Updates:                                                              */            
 /* Date         Author  Ver.  Purposes                                   */    
 /* 24-Sep-2021  WLChooi 1.0   DevOps Script Combine                      */
+/* 25-Oct-2023  JihHaur 1.1   JSM186089 0 qty location allocated (JH01)  */
 /*************************************************************************/            
 CREATE OR ALTER PROC [dbo].[nspAL_AU01]
    @c_DocNo      NVARCHAR(10),  
@@ -157,6 +158,8 @@ BEGIN
                       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable15 ,112) <> '19000101' AND @d_Lottable15 IS NOT NULL THEN ' AND LA.Lottable15 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable15, 106)) ' ELSE ' ' END +
                       --' GROUP BY LOTxLOCxID.STORERKEY, LOTxLOCxID.SKU, LOT.LOT, LOTxLOCxID.LOC, LOTxLOCxID.ID, LOC.Loc, LOC.LogicalLocation, LA.Lottable05 ' +   --, UCC.UCCNo ' +
                       --' HAVING SUM(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen + LOTxLOCxID.PendingMoveIN) > 0 ' + 
+                      ' GROUP BY LOTxLOCxID.STORERKEY, LOTxLOCxID.SKU, LOT.LOT, LOTxLOCxID.LOC, LOTxLOCxID.ID, LOC.Loc, LOC.LogicalLocation, LA.Lottable05, UCC.UCCNo, UCC.Qty ' +    /*JH01*/
+                      ' HAVING SUM(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen + LOTxLOCxID.PendingMoveIN) > 0 ' + /*JH01*/
                       RTRIM(ISNULL(@c_OrderBy,''))
    END    
    ELSE   --UOM 6
