@@ -1,6 +1,6 @@
-SET QUOTED_IDENTIFIER OFF
+SET QUOTED_IDENTIFIER OFF 
 GO
-SET ANSI_NULLS OFF
+SET ANSI_NULLS OFF 
 GO
 
 /************************************************************************/  
@@ -11,6 +11,7 @@ GO
 /*                                                                      */  
 /* Date        Rev  Author     Purposes                                 */  
 /* 2023-05-10  1.0  James      WMS-22084. Created                       */ 
+/* 2023-10-13  1.1  James      WMS-23401 Add update Pack Refno (james01)*/
 /************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_840ExtUpd27] (  
@@ -52,7 +53,11 @@ AS
    DECLARE @fCartonLength        FLOAT
    DECLARE @fCartonWidth         FLOAT
    DECLARE @fCartonHeight        FLOAT
-
+   DECLARE @nPickQty             INT 
+   DECLARE @nPackQty             INT
+   DECLARE @curUpdPackInf        CURSOR
+   DECLARE @nTempCartonNo        INT
+   
    SET @nTranCount = @@TRANCOUNT    
 
    BEGIN TRAN    
@@ -171,6 +176,36 @@ AS
                GOTO RollBackTran
             END
          END
+
+         SELECT @nPickQty = ISNULL( SUM( Qty), 0) 
+         FROM PickDetail WITH (NOLOCK)  
+         WHERE Orderkey = @cOrderkey  
+         AND Storerkey = @cStorerkey  
+  
+         SELECT @nPackQty = ISNULL( SUM( PD.Qty), 0) 
+         FROM dbo.PackDetail PD WITH (NOLOCK)  
+         JOIN dbo.PackHeader PH WITH (NOLOCK) ON ( PD.PickSlipNo = PH.PickSlipNo)
+         WHERE PH.PickSlipNo = @cPickSlipNo 
+         
+         IF @nPickQty = @nPackQty AND 
+         NOT EXISTS ( SELECT 1 FROM dbo.PackInfo WITH (NOLOCK)
+                      WHERE PickSlipNo = @cPickSlipNo
+                      AND   ISNULL( Refno, '') = 'Y')
+         BEGIN
+         	UPDATE dbo.PackInfo SET
+         		RefNo = 'Y', 
+         		EditWho = SUSER_SNAME(), 
+         		EditDate = GETDATE()
+         	WHERE PickSlipNo = @cPickSlipNo
+         	AND   CartonNo = @nCartonNo
+         		
+         	IF @@ERROR <> 0
+         	BEGIN
+               SET @nErrNo = 203803 
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Upd PackInf Er'
+               GOTO RollBackTran
+         	END
+         END
       END
    END  
    
@@ -183,10 +218,10 @@ AS
          COMMIT TRAN    
 GO
 
-SET QUOTED_IDENTIFIER OFF
+SET QUOTED_IDENTIFIER OFF 
 GO
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF 
 GO
 
-GRANT EXECUTE ON rdt.rdt_840ExtUpd27 TO NSQL
+GRANT EXECUTE ON rdt.rdt_840ExtUpd27 to nSQL
 GO
