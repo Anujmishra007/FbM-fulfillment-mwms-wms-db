@@ -13,6 +13,7 @@ GO
 /* 2023-03-31 1.0  James      WMS-22084. Created                        */
 /* 2023-08-25 1.1  James      WMS-23401 Add additional report retrieved */
 /*                            from CODELKUP using BillToKey (james01)   */
+/*                            Add condition skip print carton label     */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_840ExtPrint26] (
@@ -45,6 +46,7 @@ AS
    DECLARE @cCartonLbl2       NVARCHAR( 10)
    DECLARE @cBillToKey        NVARCHAR( 15)
    DECLARE @cReportType       NVARCHAR( 10)
+   DECLARE @nSkipPrintCtnLbl  INT = 0
    
    SELECT @cLabelPrinter = Printer
    FROM RDT.RDTMOBREC WITH (NOLOCK)
@@ -54,6 +56,17 @@ AS
    BEGIN
       IF @nStep = 4
       BEGIN
+         SELECT @cBillToKey = BillToKey
+         FROM dbo.ORDERS WITH (NOLOCK)
+         WHERE OrderKey = @cOrderKey
+       
+      	IF EXISTS( SELECT TOP 1 1 
+      	           FROM dbo.CODELKUP WITH (NOLOCK) 
+      	           WHERE Listname = 'LVSLBLSKIP'
+      	           AND   Code = @cBillToKey 
+      	           AND   StorerKey = @cStorerKey) 
+      	   SET @nSkipPrintCtnLbl = 1
+      	   
       	SELECT TOP 1
       	   @cLabelNo = LabelNo
       	FROM dbo.PackDetail WITH (NOLOCK)
@@ -65,7 +78,7 @@ AS
          IF @cCartonLbl = '0'
             SET @cCartonLbl = ''
 
-         IF @cCartonLbl <> ''
+         IF @cCartonLbl <> '' AND @nSkipPrintCtnLbl = 0
          BEGIN
             INSERT INTO @tCartonLbl (Variable, Value) VALUES ( '@cPickSlipNo',    @cPickSlipNo)
             INSERT INTO @tCartonLbl (Variable, Value) VALUES ( '@cOrderkey',      @cOrderkey)
@@ -81,10 +94,6 @@ AS
                @cErrMsg OUTPUT
          END
 
-         SELECT @cBillToKey = BillToKey
-         FROM dbo.ORDERS WITH (NOLOCK)
-         WHERE OrderKey = @cOrderKey
-         
          SELECT @cReportType = Long
          FROM dbo.CODELKUP WITH (NOLOCK)
          WHERE ListName = 'LVSPLTCUST'
