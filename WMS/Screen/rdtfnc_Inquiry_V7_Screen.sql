@@ -13,11 +13,11 @@ EXECUTE rdt.rdtAddScn 5140, 'ENG',
     @cLine01 = 'INQUIRY'
    ,@cLine02 = ''
    ,@cLine03 = 'LOC:'
-   ,@cLine04 = '%10i01'
+   ,@cLine04 = '%20i01' --WMS23936
    ,@cLine05 = 'OR'
    ,@cLine06 = ''
    ,@cLine07 = 'ID:'
-   ,@cLine08 = '%20i02'
+   ,@cLine08 = '%60i02'
    ,@cLine09 = 'OR'
    ,@cLine10 = ''
    ,@cLine11 = 'SKU:'

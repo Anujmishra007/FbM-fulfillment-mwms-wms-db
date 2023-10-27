@@ -25,6 +25,8 @@ GO
 /* 30-Aug-2019 1.7  James      WMS-10415 Remove Qty hold and replace    */
 /*                             with Pendingmovein (james04)             */
 /* 09-Jun-2021 1.8  YeeKung    WMS-17216 Add LOCLookUP (yeekung01)      */     
+/* 27-Sep-2023 1.9  Ung        WMS-23678 Split Decode for ID and SKU    */
+/* 26-Oct-2023 2.0  YeeKung    WMS-23936 Add LocLookUPSP (yeekung02)    */
 /************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdtfnc_Inquiry_V7] (  
@@ -86,7 +88,7 @@ DECLARE
    @nTotalRec     INT,  
    @nCurrentRec   INT,  
   
-   @cInquiry_LOC  NVARCHAR( 10),  
+   @cInquiry_LOC  NVARCHAR( 20),  
    @cInquiry_ID   NVARCHAR( 18),  
    @cInquiry_SKU  NVARCHAR( 20),  
    @nMQty_RPL     FLOAT,  
@@ -97,7 +99,6 @@ DECLARE
    @nPQty_Pick    FLOAT,  
    @cDecodeSP     NVARCHAR( 20),  
    @cBarcode      NVARCHAR( 60),  
-   @cUPC          NVARCHAR( 30),  
    @nQty          INT,  
    @cSQL          NVARCHAR( 2000),  
    @cSQLParam     NVARCHAR( 2000),  
@@ -388,31 +389,71 @@ BEGIN
   
       IF @cDecodeSP <> ''  
       BEGIN  
-         -- Only one value can key in  
+         -- Only one value can key in
          SELECT @cBarcode =   
             CASE   
                WHEN @cInquiry_LOC <> '' THEN @cInField01   
                WHEN @cInquiry_ID  <> '' THEN @cInField02   
                WHEN @cInquiry_SKU <> '' THEN @cInField03   
-            END  
-  
-         SET @cUPC = ''  
+            END
   
          -- Standard decode  
          IF @cDecodeSP = '1'  
          BEGIN  
-            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,  
-                  @cID         OUTPUT, @cUPC        OUTPUT, @nQTY        OUTPUT,  
-                  @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT,  
-                  @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT,  
-                  @cLottable11 OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT,  
-                  @nErrNo      OUTPUT, @cErrMsg     OUTPUT  
-  
-            IF ISNULL(@nErrNo, 0) <> 0  
-               GOTO Step_1_Fail  
-            ELSE  
-               SET @cInquiry_SKU = @cUPC  
-         END  
+            IF @cInquiry_ID <> ''
+            BEGIN
+               SET @cID = ''
+               EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,  
+                  @cID         = @cID         OUTPUT, 
+                  @nQTY        = @nQTY        OUTPUT, 
+                  @cLottable01 = @cLottable01 OUTPUT, 
+                  @cLottable02 = @cLottable02 OUTPUT, 
+                  @cLottable03 = @cLottable03 OUTPUT, 
+                  @dLottable04 = @dLottable04 OUTPUT, 
+                  @dLottable05 = @dLottable05 OUTPUT, 
+                  @cLottable06 = @cLottable06 OUTPUT, 
+                  @cLottable07 = @cLottable07 OUTPUT, 
+                  @cLottable08 = @cLottable08 OUTPUT, 
+                  @cLottable09 = @cLottable09 OUTPUT, 
+                  @cLottable10 = @cLottable10 OUTPUT, 
+                  @cLottable11 = @cLottable11 OUTPUT, 
+                  @cLottable12 = @cLottable12 OUTPUT, 
+                  @dLottable13 = @dLottable13 OUTPUT, 
+                  @dLottable14 = @dLottable14 OUTPUT, 
+                  @dLottable15 = @dLottable15 OUTPUT, 
+                  @cType       = 'ID'
+                  
+               IF @cID <> '' 
+                  SET @cInquiry_ID = @cID
+            END
+            
+            IF @cInquiry_SKU <> ''
+            BEGIN
+               DECLARE @cUPC NVARCHAR( 30) = ''  
+               EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,  
+                  @cUPC        = @cUPC        OUTPUT, 
+                  @nQTY        = @nQTY        OUTPUT, 
+                  @cLottable01 = @cLottable01 OUTPUT, 
+                  @cLottable02 = @cLottable02 OUTPUT, 
+                  @cLottable03 = @cLottable03 OUTPUT, 
+                  @dLottable04 = @dLottable04 OUTPUT, 
+                  @dLottable05 = @dLottable05 OUTPUT, 
+                  @cLottable06 = @cLottable06 OUTPUT, 
+                  @cLottable07 = @cLottable07 OUTPUT, 
+                  @cLottable08 = @cLottable08 OUTPUT, 
+                  @cLottable09 = @cLottable09 OUTPUT, 
+                  @cLottable10 = @cLottable10 OUTPUT, 
+                  @cLottable11 = @cLottable11 OUTPUT, 
+                  @cLottable12 = @cLottable12 OUTPUT, 
+                  @dLottable13 = @dLottable13 OUTPUT, 
+                  @dLottable14 = @dLottable14 OUTPUT, 
+                  @dLottable15 = @dLottable15 OUTPUT, 
+                  @cType       = 'UPC'
+               
+               IF @cUPC <> '' 
+                  SET @cInquiry_SKU = @cUPC
+            END
+         END
   
          -- Customize decode  
          ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')  
@@ -482,14 +523,42 @@ BEGIN
       IF @cInquiry_LOC <> '' AND @cInquiry_LOC IS NOT NULL  
       BEGIN  
          IF @cLOCLookUP <> ''       --(yeekung01) 
-         BEGIN        
-            EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,         
-               @cInquiry_LOC OUTPUT,         
-               @nErrNo     OUTPUT,         
-               @cErrMsg    OUTPUT        
+         BEGIN    
+         
+            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cLOCLookUP AND type = 'P')
+            BEGIN
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cLOCLookUP) 
+               + ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey'
+               + ' , @cFacility, @cInquiry_LOC OUTPUT,@nErrNo     OUTPUT, @cErrMsg    OUTPUT '
+               SET @cSQLParam =
+               ' @nMobile        INT,           ' +
+               ' @nFunc          INT,           ' +
+               ' @cLangCode      NVARCHAR( 3),  ' +
+               ' @nStep          INT,           ' +
+               ' @nInputKey      INT,           ' +
+               ' @cStorerKey     NVARCHAR( 15), ' +
+               ' @cFacility      NVARCHAR( 10), ' +
+               ' @cInquiry_LOC   NVARCHAR( 20) OUTPUT, ' +
+               ' @nErrNo         INT OUTPUT, ' +
+               ' @cErrMsg        NVARCHAR(MAX) OUTPUT ' 
+
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey
+                  , @cFacility, @cInquiry_LOC OUTPUT,@nErrNo     OUTPUT,@cErrMsg    OUTPUT 
+
+               IF @nErrNo <> 0        
+                  GOTO Step_1_Fail   
+            END
+            ELSE IF  @cLOCLookUP='1'
+            BEGIN
+               EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,         
+                  @cInquiry_LOC OUTPUT,         
+                  @nErrNo     OUTPUT,         
+                  @cErrMsg    OUTPUT        
   
-            IF @nErrNo <> 0        
-               GOTO Step_1_Fail        
+               IF @nErrNo <> 0        
+                  GOTO Step_1_Fail     
+            END
          END  
 
 
@@ -693,7 +762,7 @@ BEGIN
       END  
       ELSE  
       BEGIN  
-    EXECUTE [RDT].[rdt_Inquiry_V7]  
+         EXECUTE [RDT].[rdt_Inquiry_V7]  
             @nMobile,  
             @nFunc,  
             @cLangCode,  
