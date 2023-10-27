@@ -6,13 +6,14 @@ GO
 
 /******************************************************************************/
 /* Store procedure: rdt_608ExtVal04                                           */
-/* Copyright      : LF Logistics                                              */
+/* Copyright      : MAERSK                                                    */
 /*                                                                            */
 /* Purpose: Validate if all qty received. Compare by sku                      */
 /*                                                                            */
 /* Date         Author    Ver.  Purposes                                      */
 /* 05-Mar-2019  James     1.0   WMS8215. Created                              */
 /* 2022-09-08   Ung       1.1   WMS-20348 Expand RefNo to 60 chars            */   
+/* 2023-09-21   James     1.2   WMS-23653 Block user if overreceive (james01) */   
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_608ExtVal04
@@ -77,11 +78,11 @@ BEGIN
             
                EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1, @cErrMsg2
 
-               SET @nErrNo = 0
+               SET @nErrNo = 0   -- Prompt msgqueue only and allow to proceed ESC
                SET @cErrMsg = ''
                --SET @nErrNo = 135501
                --SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Not All Rcved
-               --GOTO Quit
+               GOTO Quit
             END
          END
       END
