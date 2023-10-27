@@ -51,25 +51,28 @@ SET CONCAT_NULL_YIELDS_NULL OFF
          DECLARE @cSalesman NVARCHAR(20),
                  @cTrackingNo NVARCHAR(20)
 
-         SELECT @cSalesman = salesman,
-               @cTrackingNo  = trackingno
-         FROM dbo.PICKDETAIL PD WITH (NOLOCK)          
-            INNER JOIN dbo.Orders O WITH (NOLOCK) ON O.OrderKey = PD.OrderKey          
-            INNER JOIN dbo.LoadPlanDetail LD WITH (NOLOCK) ON LD.OrderKey = O.OrderKey           
-         WHERE PD.Storerkey = @cStorerkey          
-            AND ISNULL(O.ECOM_SINGLE_Flag,'') <> ''           
-            AND PD.Qty > 0          
-            AND PD.DropID = @cDropID          
-            AND PD.CaseID = ''          
-            AND (PD.Status IN ( '3', '5' ) OR PD.ShipFlag = 'P')    
+         IF EXISTS (SELECT  1
+                  FROM dbo.PICKDETAIL PD WITH (NOLOCK)          
+                     INNER JOIN dbo.Orders O WITH (NOLOCK) ON O.OrderKey = PD.OrderKey          
+                     INNER JOIN dbo.LoadPlanDetail LD WITH (NOLOCK) ON LD.OrderKey = O.OrderKey   
+                     INNER JOIN dbo.CODELKUP CL (NOLOCK) ON CL.code =O.Salesman AND CL.Storerkey =O.StorerKey
+                  WHERE PD.Storerkey = @cStorerkey          
+                     AND ISNULL(O.ECOM_SINGLE_Flag,'') <> ''           
+                     AND PD.Qty > 0          
+                     AND PD.DropID = @cDropID          
+                     AND PD.CaseID = ''          
+                     AND (PD.Status IN ( '3', '5' ) OR PD.ShipFlag = 'P')  
+                     AND code = @cSalesman
+                     AND UDF05 ='Y'
+                     AND ISNULL(@cTrackingNo,'') ='')
 
-         IF ISNULL(@cTrackingNo,'') =''
-           AND EXISTS (SELECT 1 
-                       FROM CODELKUP (NOLOCK) 
-                       WHERE LISTNAME = 'COURIERLBL'
-                        AND Storerkey = @cStorerkey
-                        AND code = @cSalesman
-                        AND UDF05 ='Y')
+         --IF ISNULL(@cTrackingNo,'') =''
+         --  AND EXISTS (SELECT 1 
+         --              FROM CODELKUP (NOLOCK) 
+         --              WHERE LISTNAME = 'COURIERLBL'
+         --               AND Storerkey = @cStorerkey
+         --               AND code = @cSalesman
+         --               AND UDF05 ='Y')
          BEGIN
             SET @nErrNo = 207801
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --TrackigNoNULL
