@@ -13,7 +13,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.9                                                    */                                                                                  
+/* PVCS Version: 2.0                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -38,6 +38,7 @@ GO
 /* 2022-10-17  Wan06    1.8   Reverse JSM-81405 Fixed Code              */
 /* 2022-10-17  Wan07    1.9   Fixed issue result from JSM-81405 solution*/
 /*                            Refixed JSM-81405                         */ 
+/* 2023-10-16  SPChin   2.0   UWP-7487 - Bug Fixed                      */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_WaveOrderAnalysis]                                                                                                                     
       @c_Facility          NVARCHAR(5)                                                                                                                     
@@ -265,7 +266,7 @@ BEGIN
                      + ' ) t' 
 
          SET @c_SQLParms = N'@c_Facility     NVARCHAR(5)'
-                         + ',@c_Storerkey    NVARCHAR(10)'
+                         + ',@c_Storerkey    NVARCHAR(15)'	--UWP-7487
                          + ',@n_MaxOpenQty   INT'           --2020-07-10
                          + ',@n_BuildOrders  INT   OUTPUT'
  
