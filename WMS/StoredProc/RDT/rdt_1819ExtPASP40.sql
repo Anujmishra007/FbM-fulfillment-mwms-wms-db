@@ -11,6 +11,8 @@ GO
 /*                                                                      */
 /* Date        Rev  Author    Purposes                                  */
 /* 2022-05-17  1.0  yeekung WMS-19664. Created                          */  
+/* 2023-09-19  1.1  yeekung WMS-23674 Add codelkup to replace longspan  */
+/*                         (yeekung01)                                  */
 /************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1819ExtPASP40] (
@@ -39,8 +41,10 @@ BEGIN
    DECLARE @cLOT    NVARCHAR(10)
    DECLARE @cPutawayZone NVARCHAR(20)
    DECLARE @cLocAisle NVARCHAR(20)
-   DECLARE @cLocationCategory NVARCHAR(20)
+   DECLARE @cFromLocationCategory NVARCHAR(20)
+   DECLARE @cToLocationCategory NVARCHAR(20)
    DECLARE @cStyle         NVARCHAR(20)
+   DECLARE @cUDF05         NVARCHAR(20)
 
    DECLARE @cPAStrategyKey NVARCHAR(20)
    
@@ -50,7 +54,8 @@ BEGIN
    -- Get pallet SKU  
    SELECT TOP 1   
       @cSKU = SKU,   
-      @cLOT = LOT  
+      @cLOT = LOT,
+      @cFromLocationCategory = LOC.Locationcategory
    FROM LOTxLOCxID LLI WITH (NOLOCK)   
       JOIN LOC WITH (NOLOCK) ON (LLI.LOC = LOC.LOC)  
    WHERE LOC.Facility = @cFacility  
@@ -58,7 +63,19 @@ BEGIN
       AND LLI.ID = @cID   
       AND LLI.QTY > 0 
 
-   SET @cLocationCategory='LongSpan'
+   SELECT @cToLocationCategory = UDF02,
+          @cUDF05  = UDF05
+   FROM Codelkup (NOLOCK)
+   WHERE listname ='RDTExtPA'
+      AND Storerkey = @cStorerKey
+      AND UDF01 = @cFromLocationCategory
+
+   IF ISNULL(@cToLocationCategory,'') =''
+      SET @cToLocationCategory ='' 
+
+
+
+  -- SET @cLocationCategory='LongSpan' (yeekung01)
 
    SELECT @cStyle=style 
    FROM SKU (NOLOCK)
@@ -77,7 +94,8 @@ BEGIN
       AND LOC.Facility=@cFacility
       AND LOC.LOC <> @cFromLOC
    GROUP BY LOC.Putawayzone ,LOC.LocAisle
-   ORDER By SUM(LLI.QTY -LLI.QtyAllocated- LLI.QTYPicked)
+   ORDER BY CASE WHEN @cUDF05 = 1 THEN SUM(LLI.QTY -LLI.QtyAllocated- LLI.QTYPicked) END,
+            CASE WHEN @cUDF05 = 0 THEN SUM(LLI.QTY -LLI.QtyAllocated- LLI.QTYPicked) END desc
 
    SELECT TOP 1
       @cSuggLOC = LOC.LOC
@@ -87,12 +105,14 @@ BEGIN
    WHERE LOC.Facility = @cFacility
       AND LOC.LocationFlag  NOT IN ('HOLD', 'DAMAGE')
       AND LOC.LOC <> @cFromLOC
-      AND LOC.LocationCategory = @cLocationCategory
+      AND LOC.LocationCategory = @cToLocationCategory
       AND SKU.Style= @cStyle
       AND Loc.PutawayZone = @cPutawayZone
    GROUP BY LOC.LOC
    HAVING  SUM(LLI.QTY -LLI.QtyAllocated- LLI.QTYPicked)>0
-   ORDER BY SUM(LLI.QTY -LLI.QtyAllocated- LLI.QTYPicked), LOC.LOC
+   ORDER BY CASE WHEN @cUDF05 = 1 THEN SUM(LLI.QTY -LLI.QtyAllocated- LLI.QTYPicked) END,
+            CASE WHEN @cUDF05 = 0 THEN SUM(LLI.QTY -LLI.QtyAllocated- LLI.QTYPicked) END desc, 
+            LOC.LOC
 
    IF ISNULL(@cSuggLOC,'')  = ''
    BEGIN
@@ -106,7 +126,7 @@ BEGIN
       WHERE LOC.Facility = @cFacility  
       	AND LOC.LocationFlag NOT IN ('HOLD', 'DAMAGE')  
       	AND LOC.LOC <> @cFromLOC  
-      	AND LOC.LocationCategory  = @cLocationCategory
+         AND LOC.LocationCategory = @cToLocationCategory
          AND SKU.Style = @cStyle
       	AND LOC.LocAisle <> @cLocAisle
       	AND LOC.Putawayzone = @cPutawayZone
@@ -175,3 +195,4 @@ GO
 
 GRANT EXECUTE ON [rdt].[rdt_1819ExtPASP40] TO NSQL
 GO
+
