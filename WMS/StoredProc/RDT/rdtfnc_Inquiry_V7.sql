@@ -88,7 +88,7 @@ DECLARE
    @nTotalRec     INT,  
    @nCurrentRec   INT,  
   
-   @cInquiry_LOC  NVARCHAR( 20),  
+   @cInquiry_LOC  NVARCHAR( 30),  
    @cInquiry_ID   NVARCHAR( 18),  
    @cInquiry_SKU  NVARCHAR( 20),  
    @nMQty_RPL     FLOAT,  
@@ -538,7 +538,7 @@ BEGIN
                ' @nInputKey      INT,           ' +
                ' @cStorerKey     NVARCHAR( 15), ' +
                ' @cFacility      NVARCHAR( 10), ' +
-               ' @cInquiry_LOC   NVARCHAR( 20) OUTPUT, ' +
+               ' @cInquiry_LOC   NVARCHAR( 30) OUTPUT, ' +
                ' @nErrNo         INT OUTPUT, ' +
                ' @cErrMsg        NVARCHAR(MAX) OUTPUT ' 
 

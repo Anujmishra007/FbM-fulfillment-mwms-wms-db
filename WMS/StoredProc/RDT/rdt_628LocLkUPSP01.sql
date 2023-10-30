@@ -22,7 +22,7 @@ CREATE OR ALTER PROC [RDT].[rdt_628LocLkUPSP01]
    @nInputKey      INT,          
    @cStorerKey     NVARCHAR( 15),
    @cFacility      NVARCHAR( 10),
-   @cInquiry_LOC   NVARCHAR( 20) OUTPUT,
+   @cInquiry_LOC   NVARCHAR( 30) OUTPUT,
    @nErrNo         INT OUTPUT, 
    @cErrMsg        NVARCHAR(MAX) OUTPUT 
  

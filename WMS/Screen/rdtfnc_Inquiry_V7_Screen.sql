@@ -13,7 +13,7 @@ EXECUTE rdt.rdtAddScn 5140, 'ENG',
     @cLine01 = 'INQUIRY'
    ,@cLine02 = ''
    ,@cLine03 = 'LOC:'
-   ,@cLine04 = '%20i01' --WMS23936
+   ,@cLine04 = '%30i01' --WMS23936
    ,@cLine05 = 'OR'
    ,@cLine06 = ''
    ,@cLine07 = 'ID:'
