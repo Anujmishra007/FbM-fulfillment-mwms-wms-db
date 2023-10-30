@@ -1,7 +1,3 @@
-if exists (select * from sys.sysobjects where id = object_id(N'rdt.rdt_Cluster_Pick_GetPickZone') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_Cluster_Pick_GetPickZone
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -19,6 +15,8 @@ GO
 /* 06-Jul-2018 1.0  James      INC0295949 - Created                     */
 /* 06-Dec-2018 1.1  James      Bug fix                                  */
 /* 20-Jun-2019 1.2  James      Change @nMultiStorer retrieving (james01)*/
+/* 05-Oct-2023 1.3  Weikin     JSM-181012 - Change @cUserName           */
+/*                             NVARCHAR( 5) to NVARCHAR( 18) (wk01)     */
 /************************************************************************/
 
 CREATE PROC [RDT].[rdt_Cluster_Pick_GetPickZone] (
@@ -34,7 +32,7 @@ CREATE PROC [RDT].[rdt_Cluster_Pick_GetPickZone] (
    @cPickSlipNo      NVARCHAR( 10), 
    @cPutawayZone     NVARCHAR( 10),
    @cFacility        NVARCHAR( 5),
-   @cUserName        NVARCHAR( 5),
+   @cUserName        NVARCHAR( 18),                             --wk01
    @cPickZone        NVARCHAR( 10)  OUTPUT
 )
 AS
