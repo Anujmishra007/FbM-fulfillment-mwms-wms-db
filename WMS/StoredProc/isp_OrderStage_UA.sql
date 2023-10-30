@@ -1,31 +1,24 @@
-SET ANSI_NULLS OFF
-GO
-SET QUOTED_IDENTIFIER OFF
-GO
-
-
-
-/***************************************************************************/
-/* Stored Procedure: isp_OrderStage_UA                                     */
-/* hhttps://jiralfl.atlassian.net/browse/WMS-22795                         */
-/* Creation Date: 05-Jul-2023                                              */
-/* Copyright: IDS                                                          */
-/* Written by: KHLim                                                       */
-/*                                                                         */
-/* Purpose: Staging shipment Orders and store in Summary table for Under Armour      */
-/*  Cloned from isp_OrderStage                                             */
-/* Called By:                                                              */
-/*                                                                         */
-/* PVCS Version: 1.0                                                       */
-/*                                                                         */
-/* Version: 5.4                                                            */
-/*                                                                         */
-/* Data Modifications:                                                     */
-/*                                                                         */
-/* Updates:                                                                */
-/* Date         Author      Ver.  Purposes                                 */
-/* 14-July-2023  ZiWei            Clone from isp_OrderStage                */  
-/***************************************************************************/
+/******************************************************************************************/
+/* Stored Procedure: isp_OrderStage_UA                                                    */
+/* Creation Date: 05-Jul-2023                                                             */
+/* Copyright: IDS                                                                         */
+/* Written by: KHLim                                                                      */
+/* Purpose: Staging shipment Orders and store in Summary table                            */
+/*          for Under Armour                                                              */
+/*  Cloned from isp_OrderStage                                                            */
+/* Called By:                                                                             */
+/*                                                                                        */
+/* PVCS Version: 1.0                                                                      */
+/*                                                                                        */
+/* Version: 5.4                                                                           */
+/*                                                                                        */
+/* Data Modifications:                                                                    */
+/*                                                                                        */
+/* Updates:                                                                               */
+/* Date          Author    Ver.  Purposes                                                 */
+/* 14-July-2023  ZiWei01         Clone from isp_OrderStage                                */  
+/*                               WMS-22795 Exclude Orders.M_contact='EO' by Presale flag  */                          
+/******************************************************************************************/
 CREATE OR ALTER PROC  [dbo].[isp_OrderStage_UA]
    @d_StartDate datetime  = NULL -- last Cut Off time
   ,@d_Date  smalldatetime = NULL
@@ -129,7 +122,7 @@ SELECT                O.OrderKey, O.StorerKey, O.ExternOrderKey, O.DeliveryDate,
    ,O.Status, O.Type, O.OrderGroup, O.AddDate, O.EditDate
    ,O.MBOLKey, O.LoadKey, O.Facility, O.ShipperKey, O.DocType, O.TrackingNo , O.ECOM_PRESALE_FLAG
    , case 
-        when O.ECOM_PRESALE_FLAG<>'' and O.m_contact1 ='EO' then 0
+        when O.ECOM_PRESALE_FLAG<>'' and O.m_contact1 ='EO' then 0       --ZiWei01
         when O.ECOM_PRESALE_FLAG<>'' then 1 
                                      else 0 
      end, O.ECOM_SINGLE_FLAG
@@ -286,4 +279,3 @@ BEGIN
 END
 
 END
-GO
