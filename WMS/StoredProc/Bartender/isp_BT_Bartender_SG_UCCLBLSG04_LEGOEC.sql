@@ -12,6 +12,7 @@ GO
 /* Date        Rev  Author     Purposes                                         */                   
 /* 20-Jun-2023 1.0  WLChooi    Created (WMS-22647)                              */
 /* 20-Jun-2023 1.0  WLChooi    DevOps Combine Script                            */
+/* 18-OCT-2023 1.1  CHONGCS    WMS-23843 add new field (CS01)                   */
 /********************************************************************************/                  
                     
 CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_SG_UCCLBLSG04_LEGOEC]                        
@@ -199,7 +200,7 @@ BEGIN
                     + ' PD.CartonNo, ''XX'', ' + CHAR(13) --10   
                     + ' '''', CASE WHEN OH.Shipperkey = ''NinjaVan'' THEN ''Ninja Van'' ELSE ''Maersk'' END, ' + CHAR(13) --12
                     + ' CASE WHEN @c_Sparm04 = ''FALSE'' OR ISNULL(PIF.TrackingNo,'''') = '''' THEN '''' ELSE ISNULL(PIF.TrackingNo,'''') END, '   --13
-                    + ' '''', '''', '''', TRIM(ISNULL(OH.C_Contact1,'''')), TRIM(ISNULL(OH.C_Phone1,'''')), '''', '''', ' + CHAR(13)   --20
+                    + ' '''', '''', '''', TRIM(ISNULL(OH.C_Contact1,'''')), TRIM(ISNULL(OH.C_Phone1,'''')),  TRIM(ISNULL(OH.c_Country,'''')), '''', ' + CHAR(13)   --20    --CS01
                     + ' '''', '''', '''', ' + CHAR(13) --23
                     + ' '''', '''', '''', '''', '''', '''', '''', '  + CHAR(13) --30     
                     + ' '''', '''', '''', '''', '''', '''', '''', '''', '''', '''', '  + CHAR(13) --40  
