@@ -10,6 +10,8 @@ GO
 /*                                                                            */
 /* Date        Rev  Author       Purposes                                     */
 /* 28-07-2023  1.0  Ung          WMS-23002 based on rdt_838ExtSNVal           */
+/* 11-10-2023  1.1  Ung          WMS-23832 remove check SN in PickSerialNo    */
+/*                               Control by SerialNo.Status                   */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_839ExtSNVal01
@@ -128,6 +130,7 @@ BEGIN
          GOTO Quit
       END
       
+      /*
       -- Check SNO already scanned
       IF EXISTS( SELECT 1 
          FROM PickSerialNo WITH (NOLOCK)
@@ -139,6 +142,7 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SNO ady scan
          GOTO Quit
       END
+      */
    END
 
 Quit:
