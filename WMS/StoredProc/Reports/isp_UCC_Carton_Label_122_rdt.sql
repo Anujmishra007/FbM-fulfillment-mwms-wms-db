@@ -165,19 +165,30 @@ BEGIN
          ,Route         = ISNULL(RTRIM(OH.Route),'')  
          ,DischargePlace= ISNULL(RTRIM(OH.DischargePlace),'')
          ,CVRRoute      = @c_CVRRoute
-         ,RefNo         = CASE WHEN @n_ShowPackRefNo = 1 THEN ISNULL(RTRIM(PD.RefNo),'') + IIF(U.Userdefined01 = 'M', 'M', '') ELSE '' END 
+         ,RefNo         = CASE WHEN @n_ShowPackRefNo = 1 THEN ISNULL(RTRIM(PD.RefNo),'') + IIF(U1.CountSKU > 1, 'M', '') ELSE '' END 
          ,PrintDateTime = CONVERT(NVARCHAR(20), GETDATE(), 120)  
          ,BrandCode     = @c_BrandCode
          ,ShowVAS       = IIF(ISNULL(ST.SUSR1,'') = 'V', 'V', '')
-         ,LabelNo_L     = CASE WHEN LEN(PD.RefNo) > 5 THEN SUBSTRING(PD.LabelNo, 1, LEN(PD.LabelNo) - 5) ELSE PD.RefNo END
-         ,LabelNo_R     = CASE WHEN LEN(PD.RefNo) > 5 THEN RIGHT(PD.LabelNo, 5) ELSE PD.RefNo END
-         ,RefNo_L       = CASE WHEN LEN(PD.RefNo) > 5 THEN SUBSTRING(PD.RefNo, 1, LEN(PD.RefNo) - 5) ELSE PD.RefNo END
-         ,RefNo_R       = CASE WHEN LEN(PD.RefNo) > 5 THEN RIGHT(ISNULL(RTRIM(PD.RefNo),'') + IIF(U.Userdefined01 = 'M', 'M', ''), 5) ELSE PD.RefNo END
+         ,LabelNo_L     = CASE WHEN LEN(PD.LabelNo) > 5 THEN SUBSTRING(PD.LabelNo, 1, LEN(PD.LabelNo) - 5) ELSE '' END
+         ,LabelNo_R     = CASE WHEN LEN(PD.LabelNo) > 5 THEN RIGHT(PD.LabelNo, 5) ELSE PD.LabelNo END
+         ,RefNo_L       = CASE WHEN LEN(PD.RefNo) > 5 THEN SUBSTRING(PD.RefNo, 1, LEN(PD.RefNo) - 5) ELSE '' END
+         ,RefNo_R       = CASE WHEN LEN(PD.RefNo) > 5 THEN RIGHT(ISNULL(RTRIM(PD.RefNo),'') + 
+                                                           IIF(U1.CountSKU > 1, 'M', ''), 5) 
+                                                      ELSE PD.RefNo END
    FROM PACKHEADER PH WITH (NOLOCK)  
    JOIN PACKDETAIL PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)  
    JOIN ORDERS     OH WITH (NOLOCK) ON (PH.Orderkey = OH.Orderkey)  
    LEFT JOIN STORER ST WITH (NOLOCK) ON (ST.Storerkey = OH.Consigneekey AND ST.ConsigneeFor = OH.Storerkey)
    LEFT JOIN UCC U WITH (NOLOCK) ON (U.UCCNo = PD.RefNo AND U.Storerkey = PD.Storerkey)
+   OUTER APPLY ( SELECT COUNT(DISTINCT UCC.SKU) AS CountSKU
+                 FROM UCC (NOLOCK)
+                 WHERE UCC.UCCNo = U.UCCNo
+                 AND UCC.Storerkey = U.Storerkey
+                 AND UCC.ExternKey = U.ExternKey
+                 AND EXISTS ( SELECT 1 
+                              FROM REPLENISHMENT (NOLOCK)
+                              WHERE REPLENISHMENT.RefNo = UCC.UCCNo 
+                              AND REPLENISHMENT.Storerkey = UCC.Storerkey ) ) AS U1
    WHERE PH.PickSlipNo = @c_PickSlipNo  
    AND  PD.CartonNo BETWEEN @c_CartonNoStart AND @c_CartonNoEnd  
    AND  PD.LabelNo  BETWEEN @c_LabelNoStart AND @c_LabelNoEnd  
