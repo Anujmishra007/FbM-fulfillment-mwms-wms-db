@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */    
 /* Date         Author  Ver.  Purposes                                  */    
 /* 22-AUG-2023  NJOW    1.0   DEVOPS Combine Script                     */
+/* 31-OCT-2023  NJOW01  1.1   WMS-23899 remove bundle sku checking      */
 /************************************************************************/    
 CREATE OR ALTER PROC [dbo].[nspALMYNK1]        
    @c_DocumentNo NVARCHAR(10),  
@@ -177,8 +178,8 @@ BEGIN
       AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen) >= @n_UOMBase
       AND LOTxLOCxID.STORERKEY = @c_StorerKey
       AND LOTxLOCxID.SKU = @c_SKU       
-      AND LOC.LocationFlag = ''NONE'' 
-      AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen) % SKU.PackQtyIndicator = 0 ' +  
+      AND LOC.LocationFlag = ''NONE'' ' +
+      --AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen) % SKU.PackQtyIndicator = 0 ' +  --NJOW01 Removed
       CASE WHEN ISNULL(RTRIM(@c_Lottable01),'') = '' THEN '' ELSE ' AND LA.Lottable01 = @c_Lottable01 ' END +
       CASE WHEN ISNULL(RTRIM(@c_Lottable02),'') = '' THEN '' ELSE ' AND LA.Lottable02 = @c_Lottable02 ' END +
       CASE WHEN ISNULL(RTRIM(@c_Lottable03),'') = '' THEN '' ELSE ' AND LA.Lottable03 = @c_Lottable03 ' END +
