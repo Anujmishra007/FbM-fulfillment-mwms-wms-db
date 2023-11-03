@@ -3,27 +3,29 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/************************************************************************/
-/* Stored Proc: isp_GetSNFRLBL03                                        */
-/* Creation Date: 22-MAY-2023                                           */
-/* Copyright: Maersk                                                    */
-/* Written by:                                                          */
-/*                                                                      */
-/* Purpose: WMS-22631 - CN Fabrique SCAN EPC to Serial no               */
-/*        :                                                             */
-/*                                                                      */
-/* Called By:  ECOM PACK Sku. isp_GetSNFromScanLabel_Wrapper            */
-/*          :  Storerconfig - GetSNFromScanLabel                        */
-/* PVCS Version: 1.0                                                    */
-/*                                                                      */
-/* Version: 7.0                                                         */
-/*                                                                      */
-/* Data Modifications:                                                  */
-/*                                                                      */
-/* Updates:                                                             */
-/* Date        Author   Ver   Purposes                                  */
-/* 22-May-2023 NJOW01   1.0   DEVOPS Combine Script                     */
-/************************************************************************/
+/*************************************************************************/
+/* Stored Proc: isp_GetSNFRLBL03                                         */
+/* Creation Date: 22-MAY-2023                                            */
+/* Copyright: Maersk                                                     */
+/* Written by:                                                           */
+/*                                                                       */
+/* Purpose: WMS-22631 - CN Fabrique SCAN EPC to Serial no                */
+/*        :                                                              */
+/*                                                                       */
+/* Called By:  ECOM PACK Sku. isp_GetSNFromScanLabel_Wrapper             */
+/*          :  Storerconfig - GetSNFromScanLabel                         */
+/* PVCS Version: 1.0                                                     */
+/*                                                                       */
+/* Version: 7.0                                                          */
+/*                                                                       */
+/* Data Modifications:                                                   */
+/*                                                                       */
+/* Updates:                                                              */
+/* Date        Author   Ver   Purposes                                   */
+/* 22-May-2023 NJOW01   1.0   DEVOPS Combine Script                      */
+/* 03-Oct-2023 NJOW02   1.1   D11 fix (requeted by Vince) - allow re-scan*/
+/*                            return EPC                                 */
+/*************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_GetSNFRLBL03]
            @c_Storerkey       NVARCHAR(15)
          , @c_Sku             NVARCHAR(20)
@@ -92,8 +94,8 @@ BEGIN
    	            JOIN PACKHEADER PH (NOLOCK) ON PS.PickslipNo = PH.Pickslipno
    	            WHERE PS.SerialNo = @c_ScanLabel
    	            AND PS.Storerkey = @c_storerkey
-   	            AND PS.Sku = @c_Sku)
-   	            --AND PH.Status = '0')            
+   	            AND PS.Sku = @c_Sku
+   	            AND PH.Status = '0')  --NJOW02 prevent re-scan EPC exist at other packing in progress only
    	  BEGIN
          SET @n_Continue = 3
          SET @n_Err = 69040
