@@ -12,7 +12,7 @@ GO
 /*                                                                         */
 /* Called By: SCE                                                          */
 /*          :                                                              */
-/* PVCS Version: 2.3                                                       */
+/* PVCS Version: 2.6                                                       */
 /*                                                                         */
 /* Version: 8.0                                                            */
 /*                                                                         */
@@ -45,6 +45,9 @@ GO
 /*                            DisAllowDuplicateIdsOnWSRcpt StorerCFG CR    */
 /* 2022-11-24  Leong01  2.4   Add ISNULL check.                            */
 /* 2023-04-27  Wan12    2.5   LFWM-4181 - SCE ASN Finalize Alert Enhancement*/
+/* 2023-08-16  Wan14    2.6   LFWM-4417 - SCE PROD SG Receipt - Disallow   */
+/*                            Duplicate Movable Unit ID Error When Save when*/
+/*                            exists Receipt Reversed Detail               */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE [WM].[lsp_FinalizeReceipt_Wrapper]
@@ -227,14 +230,14 @@ BEGIN
          ,  @n_LogWarningNo            INT            = 0      --(Wan06)
          ,  @n_LogErrNo                INT            = ''     --(Wan06)               
          ,  @c_LogErrMsg               NVARCHAR(255)  = ''     --(Wan06)
-
+         
          , @CUR_RD                     CURSOR
-         , @CUR_ERRLIST               CURSOR                  --(Wan06)
+         , @CUR_ERRLIST                CURSOR                  --(Wan06)
          
    --(Wan06) - START
    DECLARE  @t_WMSErrorList   TABLE                                  
          (  RowID             INT            IDENTITY(1,1) 
-         ,  TableName         NVARCHAR(10)   NOT NULL DEFAULT('')
+         ,  TableName         NVARCHAR(50)   NOT NULL DEFAULT('') --(Wan14)
          ,  SourceType        NVARCHAR(50)   NOT NULL DEFAULT('')
          ,  Refkey1           NVARCHAR(20)   NOT NULL DEFAULT('')
          ,  Refkey2           NVARCHAR(20)   NOT NULL DEFAULT('')
@@ -342,7 +345,7 @@ BEGIN
             ,@n_CTNCnt10     = ISNULL(R.CTNCnt10,0)
       FROM RECEIPT AS r WITH(NOLOCK)
       WHERE r.ReceiptKey = @c_ReceiptKey
-
+      
       IF @c_ProceedWithWarning = 'N' AND @n_WarningNo < 1
       BEGIN
          IF @c_Facility = ''
@@ -2007,11 +2010,15 @@ BEGIN
             IF @c_AllowDupWithinPLTCnt = 'N'                                     --(Wan11) 
             BEGIN
                IF EXISTS ( SELECT TOP 1 1 FROM dbo.ID AS i WITH (NOLOCK) 
+                           JOIN dbo.LOTxLOCxID AS ltlci WITH (NOLOCK) ON ltlci.Id = i.Id           --(Wan14)
                            WHERE i.ID = @c_ToID
+                           AND ltlci.Qty + ltlci.PendingMoveIN > 0                                 --(Wan14)
+                           AND ltlci.Storerkey = @c_Storerkey                                      --2023-10-04
                            UNION
                            SELECT TOP 1 1 FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK) 
                            WHERE r.Storerkey = @c_Storerkey
                            AND r.ToID = @c_ToID
+                           AND r.BeforeReceivedQty > 0                                             --(Wan14)
                            AND r.FinalizeFlag = 'N'
                            GROUP BY r.ToID
                            HAVING COUNT(1) > 1
@@ -2035,10 +2042,14 @@ BEGIN
                FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK)
                WHERE r.ReceiptKey = @c_ReceiptKey
                AND r.ToID = @c_ToID
+               AND r.BeforeReceivedQty > 0                                          --(Wan14)              
                AND r.FinalizeFlag = 'N'
                AND EXISTS (SELECT 1 FROM dbo.RECEIPTDETAIL AS r2 WITH (NOLOCK)
                            WHERE r2.ReceiptKey <> @c_ReceiptKey
-                           AND   r2.ToId = r.ToId)
+                           AND   r2.ToId = r.ToId
+                           AND   r2.Storerkey = r.StorerKey                         --2023-10-04                           
+                           AND   r2.BeforeReceivedQty > 0                           --(Wan14)    
+                           )
                            
                IF @b_ValidID = 1
                BEGIN
@@ -2048,6 +2059,7 @@ BEGIN
                   JOIN dbo.PACK AS p WITH (NOLOCK) ON s.PackKey = p.PackKey
                   WHERE r.ReceiptKey = @c_ReceiptKey
                   AND r.ToID = @c_ToID
+                  AND r.BeforeReceivedQty > 0                                       --(Wan14)             
                   GROUP BY r.ToId
                   ORDER BY IIF(COUNT(DISTINCT r.Sku) > 1 OR SUM(r.BeforeReceivedQty) > MIN(p.Pallet), 0, 1)
                END 
@@ -2059,14 +2071,16 @@ BEGIN
                   FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK)
                   WHERE r.ReceiptKey = @c_ReceiptKey
                   AND r.ToID = @c_ToID
+                  AND r.BeforeReceivedQty > 0                                          --(Wan04)
                   AND EXISTS (SELECT 1 FROM dbo.LOTxLOCxID AS ltlci WITH (NOLOCK)
                               WHERE ltlci.ID = r.ToId
+                              AND ltlci.Storerkey = r.Storerkey                        --2023-10-04
                               AND ltlci.Qty + ltlci.PendingMoveIN > 0
                               )    
                   GROUP BY r.ToId
                   HAVING MAX(r.FinalizeFlag) = 'N' 
                   
-                  SELECT @b_ValidID '@b_ValidID 3'
+                  --SELECT @b_ValidID '@b_ValidID 3'                                   --(Wan14)  
                END
                           
                IF @b_ValidID = 0
