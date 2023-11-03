@@ -86,7 +86,7 @@ CREATE OR ALTER PROC [WM].[lsp_WM_Print_Report]
          , @c_PrintSource        NVARCHAR(10)   = 'WMReport' --Wan01  1: Report, 2: JReport 
          , @b_SCEPreView         INT            = 0          --(Wan03) -- 1:If call from Preview Button and not JREport
          , @c_JobIDs             NVARCHAR(50)   = '' OUTPUT  --(Wan03) -- May return multiple jobs ID.JobID seperate by '|'
---         , @c_AutoPrint          NVARCHAR(1)    = 'N'        --(Wan07)
+         , @c_AutoPrint          NVARCHAR(1)    = 'N'        --(Wan07)
 AS
 BEGIN
    SET NOCOUNT ON
