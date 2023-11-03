@@ -22,7 +22,8 @@ GO
 /* Updates:                                                             */    
 /* Date         Author  Ver.  Purposes                                  */    
 /* 22-AUG-2023  NJOW    1.0   DEVOPS Combine Script                     */
-/* 31-OCT-2023  NJOW01  1.1   WMS-23899 remove bundle sku checking      */
+/* 31-OCT-2023  NJOW01  1.1   WMS-23899 remove bundle sku checking. Add */
+/*                            lottable02 = '01PMO' as bonded            */
 /************************************************************************/    
 CREATE OR ALTER PROC [dbo].[nspALMYNK1]        
    @c_DocumentNo NVARCHAR(10),  
@@ -111,7 +112,7 @@ BEGIN
       END            
    END
    
-   IF @c_Lottable02 = '01000' --Bonded
+   IF @c_Lottable02 IN('01000','01PMO') --Bonded --NJOW01
    BEGIN
    	  IF @c_Stop IN('20')  --Footwear
    	  BEGIN
