@@ -93,6 +93,8 @@ GO
 /* 2022-08-23 6.3  YeeKung  WMS-19594 Add ExtendedValidateSP (yeekung04)*/  
 /* 2023-04-10 6.4  James    WMS-22175 Add V_Barcode to sku step for     */
 /*                          sku input (james20)                         */
+/* 2023-11-02 6.5  XiaoLun  JSM-186877 Fixed 'QTY AVL' row get wrong  	*/  
+/*       				          	value (xiaolun01)       					          */   
 /************************************************************************/  
   
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Move_SKU] (  
@@ -2897,6 +2899,7 @@ BEGIN
       SET @cOutField03 = @cSKU  
       SET @cOutField04 = SUBSTRING( @cSKUDescr, 1, 20)   -- SKU desc 1  
       SET @cOutField05 = SUBSTRING( @cSKUDescr, 21, 20)  -- SKU desc 2  
+      SET @cOutField10 = CAST( @nMQTY_Avail AS NVARCHAR( 7))  --xiaolun01  
       IF @cPUOM_Desc = ''  
       BEGIN  
          SET @cOutField06 = '' -- @cPUOM_Desc  
