@@ -1,0 +1,43 @@
+--rdt_842ExtUpdSP12
+execute rdt.rdtdropmsg 207301 , 207351
+
+execute rdt.rdtAddMsg 207301, 10, '207301NoRecToProcess',    'us_english',842
+execute rdt.rdtAddMsg 207302, 10, '207302SKuNotIntote',     'us_english',842
+execute rdt.rdtAddMsg 207303, 10, '207303QtyExceeded',      'us_english',842
+execute rdt.rdtAddMsg 207304, 10, '207304InsPickHdrFail',   'us_english',842
+execute rdt.rdtAddMsg 207305, 10, '207305UpdPickDetFail',   'us_english',842
+execute rdt.rdtAddMsg 207306, 10, '207306CreatePHdrFail',   'us_english',842
+execute rdt.rdtAddMsg 207307, 10, '207307NoLabelNoGen',  'us_english',842
+execute rdt.rdtAddMsg 207308, 10, '207308UpdOrderFail',  'us_english',842
+execute rdt.rdtAddMsg 207309, 10, '207309InsPackDetFail',   'us_english',842
+execute rdt.rdtAddMsg 207310, 10, '207310UpdPackDetFail',   'us_english',842
+execute rdt.rdtAddMsg 207311, 10, '207311UpdEcommFail',     'us_english',842
+execute rdt.rdtAddMsg 207312, 10, '207312InsPInfoFail',     'us_english',842
+execute rdt.rdtAddMsg 207313, 10, '207313UpdEcommFail',     'us_english',842
+execute rdt.rdtAddMsg 207314, 10, '207314UpdEcommFail',     'us_english',842
+execute rdt.rdtAddMsg 207315, 10, '207315UpdEcommFail',     'us_english',842
+execute rdt.rdtAddMsg 207316, 10, '207316InvDropID',     'us_english',842
+execute rdt.rdtAddMsg 207317, 10, '207317InsPickInfoFail',     'us_english',842
+execute rdt.rdtAddMsg 207318, 10, '207318UpdEcommFail',     'us_english',842
+execute rdt.rdtAddMsg 207319, 10, '207319UpdEcommFail',     'us_english',842
+execute rdt.rdtAddMsg 207320, 10, '207320InvalidOption',     'us_english',842
+execute rdt.rdtAddMsg 207321, 10, '207321PickNotDone',     'us_english',842
+execute rdt.rdtAddMsg 207322, 10, '207322UpdPackDetFail',     'us_english',842
+execute rdt.rdtAddMsg 207323, 10, '207323NoLabelNoGen',  'us_english',842
+execute rdt.rdtAddMsg 207324, 10, '207324PickNotComplete',  'us_english',842
+execute rdt.rdtAddMsg 207325, 10, '207325PickNotComplete',  'us_english',842
+execute rdt.rdtAddMsg 207326, 10, '207326UpdPickDetFail',  'us_english',842
+execute rdt.rdtAddMsg 207327, 10, '207327GetKeyFail',  'us_english',842
+execute rdt.rdtAddMsg 207328, 10, '207328InsPickDetFail',  'us_english',842
+execute rdt.rdtAddMsg 207329, 10, '207329InsPickDetFail',  'us_english',842
+execute rdt.rdtAddMsg 207330, 10, '207330InsEcommFail',  'us_english',842
+execute rdt.rdtAddMsg 207331, 10, '207331UpdDropIDFail',  'us_english',842
+execute rdt.rdtAddMsg 207332, 10, '207332UpdEcommFail',  'us_english',842
+execute rdt.rdtAddMsg 207333, 10, '207333NoPrinter842Ext',  'us_english',842
+execute rdt.rdtAddMsg 207334, 10, '207334TrackNoInUsed',  'us_english',842
+execute rdt.rdtAddMsg 207335, 10, '207335InsCartonTrackFail',  'us_english',842
+execute rdt.rdtAddMsg 207336, 10, '207336UpdPackDetFail',  'us_english',842
+execute rdt.rdtAddMsg 207337, 10, '207337LabelPrinterReq',  'us_english',842
+execute rdt.rdtAddMsg 207338, 10, '207338PaperPrinterReq',  'us_english',842
+execute rdt.rdtAddMsg 207339, 10, '207339UpdCtnTrackFail',  'us_english',842
+execute rdt.rdtAddMsg 207340, 10, '207340ShortPickFound',  'us_english',842
