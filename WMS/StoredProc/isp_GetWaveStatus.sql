@@ -19,7 +19,7 @@
 /* 17-Feb-2022 YTWan    1.1   Fix Wave.status not update to 9           */          
 /*                            After MBOL Shipped - (JSM-51565)          */             
 /************************************************************************/             
-CREATE   PROC [dbo].[isp_GetWaveStatus]          
+CREATE OR ALTER  PROC [dbo].[isp_GetWaveStatus]          
       @c_WaveKey     NVARCHAR(15)           
    ,  @b_UpdateWave  INT            = 1    --1 => yes, 0 => No          
    ,  @c_Status      NVARCHAR(10)   = '0' OUTPUT          
@@ -111,3 +111,4 @@ BEGIN
       END          
    END          
 END 
+GO

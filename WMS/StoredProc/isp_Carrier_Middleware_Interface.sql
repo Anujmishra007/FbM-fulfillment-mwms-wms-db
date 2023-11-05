@@ -25,7 +25,7 @@ GO
 /* 09-May-2023  Khor    1.1   JSM-148371 - Push TL2 Records to Qcmd     */
 /*                            Queue right after it generated.           */      
 /************************************************************************/          
-CREATE PROC [dbo].[isp_Carrier_Middleware_Interface]            
+CREATE OR ALTER PROC [dbo].[isp_Carrier_Middleware_Interface]            
      @c_OrderKey    NVARCHAR(10) = ''         
    , @c_Mbolkey     NVARCHAR(10) = ''      
    , @c_FunctionID  NVARCHAR(10) = ''          
@@ -353,27 +353,27 @@ BEGIN
         IF ISNULL(@c_TransmitlogKey,'') <> ''    
         BEGIN    
             SET @c_ExecStatements = N'EXEC ' + @c_TargetDB + '.' + @c_TargetSchema + '.isp_QCmd_WSTransmitLogInsertAlert '    
-            Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â + N'Â  @c_QCmdClass = '''' '    
-            Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â + N', @c_FrmTransmitlogKey = @c_TransmitlogKey '    
-            Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â + N', @c_ToTransmitlogKey = @c_TransmitlogKey '    
-            Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â + N', @b_Debug = @b_Debug '    
-            Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â + N', @b_Success = @b_Success OUTPUT '    
-            Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â + N', @n_Err =Â  @n_Err OUTPUT '    
-            Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â + N', @c_ErrMsg = @c_ErrMsg OUTPUT '    
+                                   + N'  @c_QCmdClass = '''' '    
+                                   + N', @c_FrmTransmitlogKey = @c_TransmitlogKey '    
+                                   + N', @c_ToTransmitlogKey = @c_TransmitlogKey '    
+                                   + N', @b_Debug = @b_Debug '    
+                                   + N', @b_Success = @b_Success OUTPUT '    
+                                   + N', @n_Err =  @n_Err OUTPUT '    
+                                   + N', @c_ErrMsg = @c_ErrMsg OUTPUT '    
                 
-            SET @c_ExecArguments = N' @c_TransmitlogKeyÂ  NVARCHAR(10)'    
-            Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â + N',@b_DebugÂ Â Â Â Â Â Â Â Â Â  INT OUTPUT'    
-            Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â + N',@b_SuccessÂ Â Â Â Â Â Â Â  INT OUTPUT'    
-            Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â + N',@n_ErrÂ Â Â Â Â Â Â Â Â Â Â Â  INT OUTPUT'    
-            Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â + N',@c_ErrMsgÂ Â Â Â Â Â Â Â Â  NVARCHAR(255) OUTPUT'    
+            SET @c_ExecArguments = N' @c_TransmitlogKey  NVARCHAR(10)'    
+                                   + N',@b_Debug           INT OUTPUT'    
+                                   + N',@b_Success         INT OUTPUT'    
+                                   + N',@n_Err             INT OUTPUT'    
+                                   + N',@c_ErrMsg          NVARCHAR(255) OUTPUT'    
                 
             EXEC sp_ExecuteSql @c_ExecStatements    
-            Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â ,@c_ExecArguments    
-            Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â ,@c_TransmitlogKeyÂ Â     
-            Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â ,@b_DebugÂ Â Â Â Â  OUTPUT    
-            Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â ,@b_SuccessÂ Â Â  OUTPUT    
-            Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â ,@n_ErrÂ Â Â Â Â Â Â  OUTPUT    
-            Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â Â ,@c_ErrMsgÂ Â Â Â  OUTPUT    
+                               ,@c_ExecArguments    
+                               ,@c_TransmitlogKey      
+                               ,@b_Debug      OUTPUT    
+                               ,@b_Success    OUTPUT    
+                               ,@n_Err        OUTPUT    
+                               ,@c_ErrMsg     OUTPUT    
         END                                                  --JSM-148371 End
                                       
          FETCH NEXT FROM CUR_TRMLOG INTO @c_TableName, @c_Key1, @c_Key2, @c_Key3      

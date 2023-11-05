@@ -1,4 +1,4 @@
-﻿IF EXISTS
+IF EXISTS
 (
     SELECT 1
     FROM sys.sysobjects
@@ -469,4 +469,5 @@ BEGIN
 /***********************************************/
 /* Std - Error Handling (End)                  */
 /***********************************************/
-END; -- End Procedure  
+END -- End Procedure  
+GO

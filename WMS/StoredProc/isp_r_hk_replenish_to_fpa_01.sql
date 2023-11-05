@@ -1,4 +1,4 @@
-﻿if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_r_hk_replenish_to_fpa_01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
+if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_r_hk_replenish_to_fpa_01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
 drop procedure [dbo].[isp_r_hk_replenish_to_fpa_01]
 GO
 SET QUOTED_IDENTIFIER OFF

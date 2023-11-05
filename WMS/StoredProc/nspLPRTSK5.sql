@@ -1,4 +1,4 @@
-﻿IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nspLPRTSK5]') 
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nspLPRTSK5]') 
 AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
 DROP PROCEDURE [dbo].[nspLPRTSK5]
 GO

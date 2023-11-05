@@ -24,7 +24,7 @@ GO
 /* 2023-06-23  LUKE     1.1   JSM-158391                                 */
 /*                            UPDATE @_batch from 0 to 1 (Luke01)        */  
 /*************************************************************************/   
-CREATE   PROCEDURE [dbo].[isp_RCM_CTR_GenMBOL]    
+CREATE OR ALTER  PROCEDURE [dbo].[isp_RCM_CTR_GenMBOL]    
    @c_ContainerKey   NVARCHAR(10)   
 ,  @b_Success        INT          = 1   OUTPUT     
 ,  @n_Err            INT          = 0   OUTPUT  
@@ -148,3 +148,4 @@ BEGIN
   
    REVERT        
 END    
+GO
