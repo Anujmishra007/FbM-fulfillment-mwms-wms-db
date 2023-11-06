@@ -19,7 +19,7 @@
 /************************************************************************/              
 --- exec nsp_Remy_AgingReport_Monthly            
             
-CREATE PROCEDURE [BI].[nsp_Remy_AgingReport_Monthly]            
+CREATE OR ALTER PROCEDURE [BI].[nsp_Remy_AgingReport_Monthly]            
  @m_storerkey NVARCHAR(10) = '18332'            
 AS            
 BEGIN            
@@ -113,4 +113,5 @@ END
 GO 
 
 GRANT EXEC ON BI.nsp_Remy_AgingReport_Monthly TO JReportRole --NAME OF SP
-GO --*/
+GO
+--*/

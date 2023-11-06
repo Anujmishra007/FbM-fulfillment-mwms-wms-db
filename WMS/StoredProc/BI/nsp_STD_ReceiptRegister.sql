@@ -260,7 +260,8 @@ END
 GO
 
 GRANT EXEC ON BI.nsp_STD_ReceiptRegister TO JReportRole --NAME OF SP
-GO --*/
+GO
+--*/
 /*
 EXECUTE AS LOGIN ='JREPORTUSERPH'
 

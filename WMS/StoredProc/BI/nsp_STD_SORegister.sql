@@ -332,7 +332,9 @@ GO
 
 
 GRANT EXEC ON BI.nsp_STD_SORegister TO JReportRole --NAME OF SP
-GO --*/
+GO
+
+--*/
 
 /*
 EXECUTE AS LOGIN ='JREPORTUSERPH'

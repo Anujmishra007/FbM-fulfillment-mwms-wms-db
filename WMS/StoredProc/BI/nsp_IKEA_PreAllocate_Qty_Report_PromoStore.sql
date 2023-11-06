@@ -18,7 +18,7 @@ GO
 /*********************************************************************************************************************/  
 
 
-CREATE   PROC [BI].[nsp_IKEA_PreAllocate_Qty_Report_PromoStore]  
+CREATE  OR ALTER PROC [BI].[nsp_IKEA_PreAllocate_Qty_Report_PromoStore]  
     @Facility NVARCHAR(10),  
     @startdate DATETIME,  
     @enddate DATETIME  ,
@@ -373,4 +373,5 @@ GO
 
 
 GRANT EXEC ON BI.nsp_IKEA_PreAllocate_Qty_Report_PromoStore TO JReportRole --NAME OF SP
-GO --*/
+GO
+ 
