@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_ReceiptPutaway_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_ReceiptPutaway_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,8 +13,10 @@ GO
 /*                               Receipt not working                    */
 /* 2021-02-09  1.2   mingle01    Add Big Outer Begin try/Catch          */
 /*                               Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2023-10-30  1.3   NJOW01      WMS-24015 Support putaway multi sku    */
+/*                               pallet id to a loc                     */
 /************************************************************************/
-CREATE PROCEDURE [WM].[lsp_ReceiptPutaway_Wrapper]
+CREATE OR ALTER PROCEDURE [WM].[lsp_ReceiptPutaway_Wrapper]
       @c_ReceiptKey NVARCHAR(10)
     , @c_ReceiptLineNumber NVARCHAR(5)=''   
     , @b_Success INT=1 OUTPUT
@@ -98,7 +95,8 @@ BEGIN
             @c_FinalizeFlag  NVARCHAR(1),
             @n_QtyExpected   INT, 
             @c_ReceiptGroup  NVARCHAR(20),
-            @c_OriginalReceiptLineNumber NVARCHAR(5)
+            @c_OriginalReceiptLineNumber NVARCHAR(5),
+            @c_ASNPutawayByID NVARCHAR(30)  --NJOW01
     
       DECLARE @c_Lottable01Label    NVARCHAR(20),
             @c_Lottable02Label     NVARCHAR(20),
@@ -283,6 +281,8 @@ BEGIN
                ': Error Executing nspGetRight - PUTAWAY_RDTSP. (lsp_ReceiptPutaway_Wrapper)'                 
          GOTO EXIT_SP  
       END CATCH    
+      
+      SELECT @c_ASNPutawayByID = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'ASNPutawayByID') --NJOW01
 
        --Data Validation
       DECLARE C_RECEIPTLINE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -318,6 +318,21 @@ BEGIN
          SET @c_SourceKey = RTRIM(@c_ReceiptKey) + @c_ReceiptLineNumber
          SET @c_SuggestedLoc = ''
          
+         --NJOW01 S         
+         IF @c_ASNPutawayByID = '1' AND ISNULL(@c_ToID,'') <> ''
+         BEGIN
+            SELECT TOP 1 @c_SuggestedLoc = RD.PutawayLoc
+            FROM RECEIPTDETAIL RD WITH (NOLOCK)                                                                                                                
+            JOIN RECEIPT R WITH (NOLOCK) ON (R.ReceiptKey = RD.ReceiptKey)                                                                                     
+            WHERE RD.QtyReceived > 0                                                                                                                  
+            AND RD.ReceiptKey = @c_ReceiptKey                                                                                                                  
+            AND RD.QtyReceived > 0                    
+            AND RD.PutawayLoc <> ''
+            AND RD.PutawayLoc IS NOT NULL                            
+            AND RD.ToID = @c_ToID                
+         END
+         --NJOW01 E
+                                    
          IF (@c_RecType = 'RGR' OR @c_RecType = 'RET') AND @c_DefaultReturnPickFace = '1' --(Wan02)
          BEGIN
             IF @c_PutawayLoc <> '' AND @c_PutawayLoc NOT IN ('UNKNOWN','SEE_SUPV') AND 
@@ -462,13 +477,101 @@ BEGIN
          BEGIN  
             GOTO FETCH_NEXT
          END
+      END
+      
+      --NJOW01 Move down from above condition @c_SuggestedLoc = '' 
+      IF @c_SuggestedLoc = 'UNKNOWN' OR @c_SuggestedLoc = 'SEE_SUPV' OR @c_SuggestedLoc = ''
+      BEGIN
+         SET @n_Continue = 3               
+         SET @n_err=554157  
+         SET @c_ErrMsg = 'Unknown Location, Please check with supervisor.'      
+                  
+         EXEC [WM].[lsp_WriteError_List] 
+            @i_iErrGroupKey = @n_ErrGroupKey output,
+            @c_TableName   = @c_TableName,
+            @c_SourceType  = @c_SourceType,
+            @c_Refkey1     = @c_ReceiptKey,
+            @c_Refkey2     = @c_ReceiptLineNumber,
+            @c_Refkey3     = '',
+            @n_err2        = @n_err,
+            @c_errmsg2     = @c_errmsg,
+            @b_Success     = @b_Success OUTPUT,
+            @n_err         = @n_err OUTPUT,
+            @c_errmsg      = @c_errmsg OUTPUT         
+      END         
+      ELSE
+      BEGIN
+         -- Do Move
+         SET @n_LLI_Qty = 0 
+         
+         SELECT @n_LLI_Qty = lli.Qty - lli.QtyAllocated - lli.QtyPicked  
+         FROM LOTxLOCxID AS lli WITH(NOLOCK)
+         WHERE lli.Lot = @c_LOT
+         AND   lli.Loc = @c_ToLOC
+         AND   lli.ID  = @c_ToID
+         
+         IF @n_LLI_Qty < @n_Qty 
+            SET @n_Qty = @n_LLI_Qty
 
-         IF @c_SuggestedLoc = 'UNKNOWN' OR @c_SuggestedLoc = 'SEE_SUPV' OR @c_SuggestedLoc = ''
+         --SELECT @c_LOT '@c_LOT', @c_ToLOC '@c_ToLOC', @c_ToID '@c_ToID', @n_Qty '@n_Qty', @n_LLI_Qty '@n_LLI_Qty', @c_SuggestedLoc '@c_SuggestedLoc'
+                  
+         IF @n_Qty > 0 AND @c_SuggestedLoc <> @c_ToLoc AND @c_SuggestedLoc <> ''
          BEGIN
-            SET @n_Continue = 3               
-            SET @n_err=554157  
-            SET @c_ErrMsg = 'Unknown Location, Please check with supervisor.'      
-                     
+            SET @n_err = 0
+            BEGIN TRY
+               EXEC dbo.nspItrnAddMove
+                   @n_itrnsysid     = NULL ,
+                   @c_storerkey     = @c_StorerKey,
+                   @c_sku           = @c_Sku,
+                   @c_lot           = @c_Lot,
+                   @c_fromid        = @c_ToID,
+                   @c_fromloc       = @c_ToLoc ,
+                   @c_toloc         = @c_SuggestedLoc,
+                   @c_toid          = @c_ToID,
+                   @c_status        = '',
+                   @c_lottable01    = '', 
+                   @c_lottable02    = '', 
+                   @c_lottable03    = '', 
+                   @d_lottable04    = NULL, 
+                   @d_lottable05    = NULL, 
+                   @c_lottable06    = '',
+                   @c_lottable07    = '',
+                   @c_lottable08    = '',
+                   @c_lottable09    = '',
+                   @c_lottable10    = '',
+                   @c_lottable11    = '',
+                   @c_lottable12    = '',
+                   @d_lottable13    = NULL,
+                   @d_lottable14    = NULL,
+                   @d_lottable15    = NULL,
+                   @n_casecnt       = 0 ,
+                   @n_innerpack     = 0 ,
+                   @n_qty           = @n_Qty ,
+                   @n_pallet        = 0 ,
+                   @f_cube          = 0 ,
+                   @f_grosswgt      = 0 ,
+                   @f_netwgt        = 0 ,
+                   @f_otherunit1    = 0 ,
+                   @f_otherunit2    = 0 ,
+                   @c_sourcetype    = @c_SourceType,
+                   @c_sourcekey     = @c_SourceKey,
+                   @c_packkey       = @c_Packkey,
+                   @c_uom           = @c_UOM,
+                   @b_uomcalc       = 1 ,
+                   @d_effectivedate = NULL,
+                   @c_itrnkey       = @c_itrnkey OUTPUT,
+                   @b_success       = @b_success OUTPUT,
+                   @n_err           = @n_err OUTPUT,
+                   @c_errmsg        = @c_errmsg OUTPUT,
+                   @c_MoveRefKey    = ''           
+            END TRY
+            BEGIN CATCH
+              SET @n_Continue = 3
+              SET @n_err = 554158
+              SET @c_ErrMsg = ERROR_MESSAGE()
+              SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing nspItrnAddMove. (lsp_ReceiptPutaway_Wrapper)'
+                             + '( ' + @c_errmsg + ' )'
+                          
             EXEC [WM].[lsp_WriteError_List] 
                @i_iErrGroupKey = @n_ErrGroupKey output,
                @c_TableName   = @c_TableName,
@@ -480,116 +583,30 @@ BEGIN
                @c_errmsg2     = @c_errmsg,
                @b_Success     = @b_Success OUTPUT,
                @n_err         = @n_err OUTPUT,
-               @c_errmsg      = @c_errmsg OUTPUT         
-         END         
-         ELSE
-         BEGIN
-            -- Do Move
-            SET @n_LLI_Qty = 0 
-            
-            SELECT @n_LLI_Qty = lli.Qty - lli.QtyAllocated - lli.QtyPicked  
-            FROM LOTxLOCxID AS lli WITH(NOLOCK)
-            WHERE lli.Lot = @c_LOT
-            AND   lli.Loc = @c_ToLOC
-            AND   lli.ID  = @c_ToID
-            
-            IF @n_LLI_Qty < @n_Qty 
-               SET @n_Qty = @n_LLI_Qty
+               @c_errmsg      = @c_errmsg OUTPUT                
+            END CATCH  
 
-            --SELECT @c_LOT '@c_LOT', @c_ToLOC '@c_ToLOC', @c_ToID '@c_ToID', @n_Qty '@n_Qty', @n_LLI_Qty '@n_LLI_Qty', @c_SuggestedLoc '@c_SuggestedLoc'
-                     
-            IF @n_Qty > 0 AND @c_SuggestedLoc <> @c_ToLoc AND @c_SuggestedLoc <> ''
+            IF @b_success = 1 AND @n_err = 0
             BEGIN
-               SET @n_err = 0
                BEGIN TRY
-                  EXEC dbo.nspItrnAddMove
-                      @n_itrnsysid     = NULL ,
-                      @c_storerkey     = @c_StorerKey,
-                      @c_sku           = @c_Sku,
-                      @c_lot           = @c_Lot,
-                      @c_fromid        = @c_ToID,
-                      @c_fromloc       = @c_ToLoc ,
-                      @c_toloc         = @c_SuggestedLoc,
-                      @c_toid          = @c_ToID,
-                      @c_status        = '',
-                      @c_lottable01    = '', 
-                      @c_lottable02    = '', 
-                      @c_lottable03    = '', 
-                      @d_lottable04    = NULL, 
-                      @d_lottable05    = NULL, 
-                      @c_lottable06    = '',
-                      @c_lottable07    = '',
-                      @c_lottable08    = '',
-                      @c_lottable09    = '',
-                      @c_lottable10    = '',
-                      @c_lottable11    = '',
-                      @c_lottable12    = '',
-                      @d_lottable13    = NULL,
-                      @d_lottable14    = NULL,
-                      @d_lottable15    = NULL,
-                      @n_casecnt       = 0 ,
-                      @n_innerpack     = 0 ,
-                      @n_qty           = @n_Qty ,
-                      @n_pallet        = 0 ,
-                      @f_cube          = 0 ,
-                      @f_grosswgt      = 0 ,
-                      @f_netwgt        = 0 ,
-                      @f_otherunit1    = 0 ,
-                      @f_otherunit2    = 0 ,
-                      @c_sourcetype    = @c_SourceType,
-                      @c_sourcekey     = @c_SourceKey,
-                      @c_packkey       = @c_Packkey,
-                      @c_uom           = @c_UOM,
-                      @b_uomcalc       = 1 ,
-                      @d_effectivedate = NULL,
-                      @c_itrnkey       = @c_itrnkey OUTPUT,
-                      @b_success       = @b_success OUTPUT,
-                      @n_err           = @n_err OUTPUT,
-                      @c_errmsg        = @c_errmsg OUTPUT,
-                      @c_MoveRefKey    = ''           
+                  UPDATE RECEIPTDETAIL 
+                  SET PutawayLoc = @c_SuggestedLoc
+                     ,EditWho = @c_UserName
+                     ,EditDate= GETDATE()
+                  WHERE ReceiptKey = @c_ReceiptKey
+                  AND ReceiptLineNumber = @c_ReceiptLineNumber
                END TRY
                BEGIN CATCH
-                 SET @n_Continue = 3
-                 SET @n_err = 554158
-                 SET @c_ErrMsg = ERROR_MESSAGE()
-                 SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing nspItrnAddMove. (lsp_ReceiptPutaway_Wrapper)'
-                                + '( ' + @c_errmsg + ' )'
-                             
-               EXEC [WM].[lsp_WriteError_List] 
-                  @i_iErrGroupKey = @n_ErrGroupKey output,
-                  @c_TableName   = @c_TableName,
-                  @c_SourceType  = @c_SourceType,
-                  @c_Refkey1     = @c_ReceiptKey,
-                  @c_Refkey2     = @c_ReceiptLineNumber,
-                  @c_Refkey3     = '',
-                  @n_err2        = @n_err,
-                  @c_errmsg2     = @c_errmsg,
-                  @b_Success     = @b_Success OUTPUT,
-                  @n_err         = @n_err OUTPUT,
-                  @c_errmsg      = @c_errmsg OUTPUT                
-               END CATCH  
-
-               IF @b_success = 1 AND @n_err = 0
-               BEGIN
-                  BEGIN TRY
-                     UPDATE RECEIPTDETAIL 
-                     SET PutawayLoc = @c_SuggestedLoc
-                        ,EditWho = @c_UserName
-                        ,EditDate= GETDATE()
-                     WHERE ReceiptKey = @c_ReceiptKey
-                     AND ReceiptLineNumber = @c_ReceiptLineNumber
-                  END TRY
-                  BEGIN CATCH
-                     SET @n_Continue = 3
-                     SET @n_err = 554159
-                     SET @c_ErrMsg = ERROR_MESSAGE()
-                     SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Update RECEIPTDETAIL Table fail. (lsp_ReceiptPutaway_Wrapper)'
-                                    + '( ' + @c_errmsg + ' )'
-                  END CATCH
-               END
-            END      
-         END          
-      END
+                  SET @n_Continue = 3
+                  SET @n_err = 554159
+                  SET @c_ErrMsg = ERROR_MESSAGE()
+                  SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Update RECEIPTDETAIL Table fail. (lsp_ReceiptPutaway_Wrapper)'
+                                 + '( ' + @c_errmsg + ' )'
+               END CATCH
+            END
+         END      
+      END          
+            
       GOTO FETCH_NEXT
    
    END TRY
