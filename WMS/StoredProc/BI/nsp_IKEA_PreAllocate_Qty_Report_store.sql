@@ -16,7 +16,7 @@ GO
 /* Version: Tyrion     1.1         Deployed IN CNWMS https://jiralfl.atlassian.net/browse/WMS-23432					 */ 
 /*********************************************************************************************************************/  
 
-CREATE    PROC [BI].[nsp_IKEA_PreAllocate_Qty_Report_store]
+CREATE  OR ALTER  PROC [BI].[nsp_IKEA_PreAllocate_Qty_Report_store]
     @Facility NVARCHAR(10),
 	@fromarea NVARCHAR(10) ,           
 	@toarea NVARCHAR(10),
@@ -478,5 +478,6 @@ END
 GO
 
 GRANT EXEC ON BI.nsp_IKEA_PreAllocate_Qty_Report_store TO JReportRole --NAME OF SP
-GO --*/
+GO
+--*/
 

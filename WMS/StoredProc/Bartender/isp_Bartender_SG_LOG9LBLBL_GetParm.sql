@@ -17,7 +17,7 @@ GO
 /* 2022-01-21 1.0  CSCHONG    Devops scripts combine - Created(WMS-18795)     */                             
 /******************************************************************************/                
                   
-CREATE PROC [dbo].[isp_Bartender_SG_LOG9LBLBL_GetParm]                      
+CREATE OR ALTER PROC [dbo].[isp_Bartender_SG_LOG9LBLBL_GetParm]                      
 (  @parm01            NVARCHAR(250),              
    @parm02            NVARCHAR(250),              
    @parm03            NVARCHAR(250),              

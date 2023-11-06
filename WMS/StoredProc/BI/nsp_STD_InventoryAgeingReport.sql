@@ -222,7 +222,8 @@ END
 GO
 
 GRANT EXEC ON BI.nsp_STD_InventoryAgeingReport TO JReportRole --NAME OF SP
-GO --*/
+GO
+--*/
 /*
    EXEC AS LOGIN = 'JReportUserPH'
    SELECT SUSER_SNAME()

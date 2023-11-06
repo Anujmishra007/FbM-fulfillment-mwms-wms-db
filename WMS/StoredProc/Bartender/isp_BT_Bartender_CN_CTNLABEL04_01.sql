@@ -14,7 +14,7 @@ GO
 /* 2022-JUN-29 1.1  CSCHONG   Devops SCripts Combien & WMS-20072 - created    */  
 /******************************************************************************/  
   
-CREATE   PROC [dbo].[isp_BT_Bartender_CN_CTNLABEL04_01]  
+CREATE OR ALTER  PROC [dbo].[isp_BT_Bartender_CN_CTNLABEL04_01]  
 (  @c_Sparm01            NVARCHAR(250),  
    @c_Sparm02            NVARCHAR(250),  
    @c_Sparm03            NVARCHAR(250),  

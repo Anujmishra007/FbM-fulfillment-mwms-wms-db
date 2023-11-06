@@ -86,7 +86,8 @@ END -- Procedure
 GO
 
 GRANT EXEC ON BI.nsp_SCH_GENERIC_AgeingReport TO JReportRole --NAME OF SP
-GO --*/
+GO 
+--*/
 /*
 EXECUTE AS LOGIN ='JREPORTUSERPH'
 

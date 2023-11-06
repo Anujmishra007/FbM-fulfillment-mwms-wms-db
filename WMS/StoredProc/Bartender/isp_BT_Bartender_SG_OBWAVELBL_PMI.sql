@@ -10,7 +10,7 @@
 /* 2022-10-11 1.0  CSCHONG    Devops Scripts Combine & Created (WMS-20890)      */     
 /********************************************************************************/                    
                       
-CREATE PROC [dbo].[isp_BT_Bartender_SG_OBWAVELBL_PMI]                          
+CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_SG_OBWAVELBL_PMI]                          
 (  @c_Sparm01            NVARCHAR(250),                  
    @c_Sparm02            NVARCHAR(250),                  
    @c_Sparm03            NVARCHAR(250),                  
