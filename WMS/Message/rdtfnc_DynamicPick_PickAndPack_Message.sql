@@ -56,3 +56,5 @@ execute rdt.rdtAddMsg 64453, 10, '64453^AdyIsNewCarton',   'us_english', 950
 execute rdt.rdtAddMsg 64454, 10, '64454^AdyIsNewCarton',   'us_english', 950
 execute rdt.rdtAddMsg 64455, 10, '64455^WAVE or LOAD',     'us_english', 950
 execute rdt.rdtAddMsg 64456, 10, '64456^Bad LoadKey',      'us_english', 950
+execute rdt.rdtAddMsg 64457, 10, '64457^DelPackDtlFail',   'us_english', 950
+execute rdt.rdtAddMsg 64458, 10, '64458^InsPackDtlFail',   'us_english', 950

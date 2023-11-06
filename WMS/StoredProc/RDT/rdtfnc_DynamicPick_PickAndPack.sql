@@ -1,7 +1,3 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[RDT].[rdtfnc_DynamicPick_PickAndPack]') AND OBJECTPROPERTY(object_id,N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdtfnc_DynamicPick_PickAndPack]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -72,17 +68,23 @@ GO
 /*                           Remove DynamicPickDefaultLabelLength             */
 /* 27-Jul-2017 3.3  Ung      IN00419503 Fix QTY field not disable             */
 /* 01-Mar-2018 3.4  James    WMS4107-Add auto match SKU in Doc (james08)      */
-/* 07-Jun-2018 3.5  Ung      INC0228346 Standardize GetNextCartonLabel param  */  
+/* 07-Jun-2018 3.5  Ung      INC0228346 Standardize GetNextCartonLabel param  */
 /* 28-Aug-2018 3.6  James    WMS6078-Add rdt_decode (james09)                 */
 /* 29-Oct-2018 3.7  TungGH   Performance                                      */
 /* 15-Jun-2020 3.8  James    WMS-13602 Add Loc.Descr (james10)                */
 /* 17-Mar-2021 3.9  LZG      INC1454205 - Extended length from 5 to 8 (ZG01)  */
+/* 03-Dec-2021 4.0  Chermain WMS-18454 Add DisableNewCtnOp config in st6      */
+/*                           Add ExtValidateSP in st6                         */
+/*                           Add DefaultConfirmOp config,ExtendedInfoSP config*/
+/*                           Add MultiOpenCarton Config, ConfirmSP Config     */
+/*                           Add ExternalUpd in st5 (cc01)                    */
+/* 11-Sep-2023 4.1  Michael  WMS-18454, WMS-22600 (ML01)                      */
 /******************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_DynamicPick_PickAndPack] (
+CREATE or ALTER PROC [RDT].[rdtfnc_DynamicPick_PickAndPack] (
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
-   @cErrMsg    NVARCHAR(1024) OUTPUT 
+   @cErrMsg    NVARCHAR(1024) OUTPUT
 ) AS
 SET NOCOUNT ON
 SET QUOTED_IDENTIFIER OFF
@@ -96,10 +98,10 @@ DECLARE
    @nTotal_PickQTY      INT,
    @cTotal_CBM          NVARCHAR(20),
    @cLabelLine          NVARCHAR(5),
-   @cOption             NVARCHAR(1), 
+   @cOption             NVARCHAR(1),
    @cSQL                NVARCHAR(MAX),
-   @cSQLParam           NVARCHAR(MAX), 
-   @nTranCount          INT, 
+   @cSQLParam           NVARCHAR(MAX),
+   @nTranCount          INT,
    @nOtherLocQtyToPick  INT,   -- Qty to pick from next location onwards within the same pickslipno
    @nTotalQtyToPick     INT    -- Qty to pick for all locations within the same pickslipno
 
@@ -138,20 +140,20 @@ DECLARE
    @nCartonNo          INT,
    @cLabelNo           NVARCHAR(20),
    @cT_PickSlipNo1     NVARCHAR(10), -- temp pickslipno
-   @cT_PickSlipNo2     NVARCHAR(10), 
-   @cT_PickSlipNo3     NVARCHAR(10), 
-   @cT_PickSlipNo4     NVARCHAR(10), 
-   @cT_PickSlipNo5     NVARCHAR(10), 
-   @cT_PickSlipNo6     NVARCHAR(10), 
-   @cT_PickSlipNo7     NVARCHAR(10), 
-   @cT_PickSlipNo8     NVARCHAR(10), 
-   @cT_PickSlipNo9     NVARCHAR(10), 
+   @cT_PickSlipNo2     NVARCHAR(10),
+   @cT_PickSlipNo3     NVARCHAR(10),
+   @cT_PickSlipNo4     NVARCHAR(10),
+   @cT_PickSlipNo5     NVARCHAR(10),
+   @cT_PickSlipNo6     NVARCHAR(10),
+   @cT_PickSlipNo7     NVARCHAR(10),
+   @cT_PickSlipNo8     NVARCHAR(10),
+   @cT_PickSlipNo9     NVARCHAR(10),
    @cPrePackIndicator  NVARCHAR(30), -- james02
    @nPackQtyIndicator  INT,      -- james02
    @cSKUValidated      NVARCHAR(2),
    @nTotal_PSNO        INT,
    @nQtyToPick         INT,   -- Qty to pick for same sku in same location
-   @cPickSlipType      NVARCHAR(1), 
+   @cPickSlipType      NVARCHAR(1),
 
    @nNewCartonNo       INT, -- james06
    @nPID_QTY           INT, -- SOS144951
@@ -173,10 +175,15 @@ DECLARE
    @cDecodeLabelNo                  NVARCHAR(20),
    @cExtendedUpdateSP               NVARCHAR(20),
    @cMultiSKUBarcode                NVARCHAR(1),
-   @cDecodeSP                       NVARCHAR( 20), 
-   @cBarcode                        NVARCHAR( 60), 
+   @cDecodeSP                       NVARCHAR( 20),
+   @cBarcode                        NVARCHAR( 60),
    @cLocDescr                       NVARCHAR( 20), -- (james10)
    @cLocShowDescr                   NVARCHAR( 1),  -- (james10)
+   @cDisableNewCtnOp                NVARCHAR( 1),  -- (cc01)
+   @cDefaultConfirmOp               NVARCHAR( 1),  -- (cc01)
+   @cExtendedInfoSP                 NVARCHAR(20),  -- (cc01)
+   @cExtendedInfo1                  NVARCHAR(20),  -- (cc01)
+   @cMultiOpenCarton                NVARCHAR( 1),  -- (cc01)
 
    @cInField01 NVARCHAR(60),   @cOutField01 NVARCHAR(60),   @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR(60),   @cOutField02 NVARCHAR(60),   @cFieldAttr02 NVARCHAR( 1),
@@ -193,7 +200,7 @@ DECLARE
    @cInField13 NVARCHAR(60),   @cOutField13 NVARCHAR(60),   @cFieldAttr13 NVARCHAR( 1),
    @cInField14 NVARCHAR(60),   @cOutField14 NVARCHAR(60),   @cFieldAttr14 NVARCHAR( 1),
    @cInField15 NVARCHAR(60),   @cOutField15 NVARCHAR(60),   @cFieldAttr15 NVARCHAR( 1)
-   
+
 -- Load RDT.RDTMobRec
 SELECT
    @nFunc       = Func,
@@ -216,7 +223,7 @@ SELECT
    @dLottable04 = V_Lottable04,
    @cFromLOC    = V_LOC,
    @cPickSlipNo = V_PickSlipNo,
-   @cLoadKey    = V_LoadKey, 
+   @cLoadKey    = V_LoadKey,
 
    @cWaveKey       = V_String1,
    @cPickZone      = V_String2,
@@ -239,15 +246,15 @@ SELECT
 
    @cPrePackIndicator  = V_String19,
    @cSKUValidated       = V_String21,
-   @cSuggestedSKU      = V_String24, 
-   @cDecodeSP          = V_String25,   
-   @cPickSlipType      = V_String26, 
-   
+   @cSuggestedSKU      = V_String24,
+   @cDecodeSP          = V_String25,
+   @cPickSlipType      = V_String26,
+
    @nActQty            = V_QTY,
    @nCartonNo          = V_Cartonno,
    @nFromScn           = V_FromScn,
 
-   @cDynamicPickPickZone            = V_String28, 
+   @cDynamicPickPickZone            = V_String28,
    @cDynamicPickDefaultQTY          = V_String29,
    @cDynamicPickAutoDefaultDPLoc    = V_String30,
    @cDynamicPickCartonLabel         = V_String31,
@@ -261,27 +268,32 @@ SELECT
    @cDecodeLabelNo                  = V_String39,
    @cExtendedUpdateSP               = V_String40,
    @cMultiSKUBarcode                = V_String43,
-   
+   @cDisableNewCtnOp                = V_String44,  --(cc01)
+   @cDefaultConfirmOp               = V_String45,  --(cc01)
+   @cExtendedInfoSP                 = V_String46,  --(cc01)
+   @cExtendedInfo1                  = V_String47,  --(cc01)
+   @cMultiOpenCarton                = V_String48,  --(cc01)
+
    @nPackQtyIndicator               = V_Integer1,
    @nTotal_PSNO                     = V_Integer2,
    @nQtyToPick                      = V_Integer3,
    @nOtherLocQtyToPick              = V_Integer4,
    @nTotalQtyToPick                 = V_Integer5,
 
-   @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01, 
-   @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02, 
-   @cInField03 = I_Field03,   @cOutField03 = O_Field03,  @cFieldAttr03 = FieldAttr03, 
-   @cInField04 = I_Field04,   @cOutField04 = O_Field04,  @cFieldAttr04 = FieldAttr04, 
-   @cInField05 = I_Field05,   @cOutField05 = O_Field05,  @cFieldAttr05 = FieldAttr05, 
-   @cInField06 = I_Field06,   @cOutField06 = O_Field06,  @cFieldAttr06 = FieldAttr06, 
-   @cInField07 = I_Field07,   @cOutField07 = O_Field07,  @cFieldAttr07 = FieldAttr07, 
-   @cInField08 = I_Field08,   @cOutField08 = O_Field08,  @cFieldAttr08 = FieldAttr08, 
-   @cInField09 = I_Field09,   @cOutField09 = O_Field09,  @cFieldAttr09 = FieldAttr09, 
-   @cInField10 = I_Field10,   @cOutField10 = O_Field10,  @cFieldAttr10 = FieldAttr10, 
-   @cInField11 = I_Field11,   @cOutField11 = O_Field11,  @cFieldAttr11 = FieldAttr11, 
-   @cInField12 = I_Field12,   @cOutField12 = O_Field12,  @cFieldAttr12 = FieldAttr12, 
-   @cInField13 = I_Field13,   @cOutField13 = O_Field13,  @cFieldAttr13 = FieldAttr13, 
-   @cInField14 = I_Field14,   @cOutField14 = O_Field14,  @cFieldAttr14 = FieldAttr14, 
+   @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
+   @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
+   @cInField03 = I_Field03,   @cOutField03 = O_Field03,  @cFieldAttr03 = FieldAttr03,
+   @cInField04 = I_Field04,   @cOutField04 = O_Field04,  @cFieldAttr04 = FieldAttr04,
+   @cInField05 = I_Field05,   @cOutField05 = O_Field05,  @cFieldAttr05 = FieldAttr05,
+   @cInField06 = I_Field06,   @cOutField06 = O_Field06,  @cFieldAttr06 = FieldAttr06,
+   @cInField07 = I_Field07,   @cOutField07 = O_Field07,  @cFieldAttr07 = FieldAttr07,
+   @cInField08 = I_Field08,   @cOutField08 = O_Field08,  @cFieldAttr08 = FieldAttr08,
+   @cInField09 = I_Field09,   @cOutField09 = O_Field09,  @cFieldAttr09 = FieldAttr09,
+   @cInField10 = I_Field10,   @cOutField10 = O_Field10,  @cFieldAttr10 = FieldAttr10,
+   @cInField11 = I_Field11,   @cOutField11 = O_Field11,  @cFieldAttr11 = FieldAttr11,
+   @cInField12 = I_Field12,   @cOutField12 = O_Field12,  @cFieldAttr12 = FieldAttr12,
+   @cInField13 = I_Field13,   @cOutField13 = O_Field13,  @cFieldAttr13 = FieldAttr13,
+   @cInField14 = I_Field14,   @cOutField14 = O_Field14,  @cFieldAttr14 = FieldAttr14,
    @cInField15 = I_Field15,   @cOutField15 = O_Field15,  @cFieldAttr15 = FieldAttr15
 
 FROM RDTMOBREC WITH (NOLOCK)
@@ -295,17 +307,17 @@ BEGIN
    IF @nStep = 2 GOTO Step_2   -- Scn = 1641. PKSLIPNO
    IF @nStep = 3 GOTO Step_3   -- Scn = 1642. TOTAL QTY, TOTAL CBM
    IF @nStep = 4 GOTO Step_4   -- Scn = 1643. LOC
-   IF @nStep = 5 GOTO Step_5   -- Scn = 1644. SKU                                                 
-   IF @nStep = 6 GOTO Step_6   -- Scn = 1645. LABEL NO                                                 
-   IF @nStep = 7 GOTO Step_7   -- Scn = 1646. OPTION                                                 
-   IF @nStep = 8 GOTO Step_8   -- Scn = 1647. Confirm Short Pick                                                 
+   IF @nStep = 5 GOTO Step_5   -- Scn = 1644. SKU
+   IF @nStep = 6 GOTO Step_6   -- Scn = 1645. LABEL NO
+   IF @nStep = 7 GOTO Step_7   -- Scn = 1646. OPTION
+   IF @nStep = 8 GOTO Step_8   -- Scn = 1647. Confirm Short Pick
    IF @nStep = 9 GOTO Step_9   -- Scn = 3570. Multi SKU Barocde
-END                                              
-                                                 
-RETURN -- Do nothing if incorrect step           
-                                                 
+END
+
+RETURN -- Do nothing if incorrect step
+
 /********************************************************************************
-Step 0. Called from menu (func = 515)            
+Step 0. Called from menu (func = 515)
 ********************************************************************************/
 Step_0:
 BEGIN
@@ -370,7 +382,16 @@ BEGIN
 
    -- (james10)
    SET @cLocShowDescr = rdt.RDTGetConfig( @nFunc, 'LocShowDescr', @cStorerkey)
-   
+
+   --(cc01)
+   SET @cDisableNewCtnOp = rdt.RDTGetConfig( @nFunc, 'DisableNewCtnOp', @cStorerkey)
+   SET @cDefaultConfirmOp = rdt.RDTGetConfig( @nFunc, 'DefaultConfirmOp', @cStorerkey)
+   SET @cMultiOpenCarton = rdt.RDTGetConfig( @nFunc, 'MultiOpenCarton', @cStorerkey)
+   SET @cExtendedInfoSP = rdt.rdtGetConfig( @nFunc, 'ExtendedInfoSP', @cStorerKey)
+   IF @cExtendedInfoSP = '0'
+      SET @cExtendedInfoSP = ''
+
+
    -- Prep next screen var
    SET @cOutField01 = ''   -- wavekey
    SET @cOutField02 = ''   -- putaway zone
@@ -398,7 +419,7 @@ GOTO Quit
 Step 1. Screen = 1640
    WAVEKEY        (field01, input)
    LOADKEY        (field07, input)
-   PWAYZONE       (field02, input)
+   PICKZONE       (field02, input)
    NO OF PICKSLIP (field03, input)
    COUNTRY        (field04, input)
    FROM LOC       (field05, input)
@@ -425,7 +446,7 @@ BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 1
          GOTO Step_1_Fail
       END
-      
+
       -- Validate blank
       IF @cWaveKey = '' AND @cLoadKey = ''
       BEGIN
@@ -447,7 +468,7 @@ BEGIN
             EXEC rdt.rdtSetFocusField @nMobile, 1
             GOTO Step_1_Fail
          END
-         
+
          -- Check replen before pick
          IF @cDynamicPickReplenB4Pick = '1'
          BEGIN
@@ -461,7 +482,7 @@ BEGIN
             END
          END
       END
-      
+
       -- Load
       IF @cLoadKey <> ''
       BEGIN
@@ -498,7 +519,7 @@ BEGIN
             GOTO Step_1_Fail
          END
       END
-            
+
       -- Check if No. of pickslip is blank
       IF @cPKSlip_Cnt = ''
       BEGIN
@@ -629,7 +650,7 @@ BEGIN
       SET @cT_PickSlipNo8 = ''
       SET @cT_PickSlipNo9 = ''
       SET @cPickSlipType = ''
-      
+
       -- Populate pick slip
       IF @cPopulatePickSlipSP <> ''
       BEGIN
@@ -637,43 +658,43 @@ BEGIN
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cPopulatePickSlipSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
-               ' @cWaveKey, @cLoadKey, @cPickZone, @cPKSLIP_Cnt, @cCountry, @cFromLOC, @cToLOC, ' + 
+               ' @cWaveKey, @cLoadKey, @cPickZone, @cPKSLIP_Cnt, @cCountry, @cFromLOC, @cToLOC, ' +
                ' @cPickSlipNo1 OUTPUT, @cPickSlipNo2 OUTPUT, @cPickSlipNo3 OUTPUT, @cPickSlipNo4 OUTPUT, @cPickSlipNo5 OUTPUT, ' +
-               ' @cPickSlipNo6 OUTPUT, @cPickSlipNo7 OUTPUT, @cPickSlipNo8 OUTPUT, @cPickSlipNo9 OUTPUT, @cPickSlipType  OUTPUT, ' + 
+               ' @cPickSlipNo6 OUTPUT, @cPickSlipNo7 OUTPUT, @cPickSlipNo8 OUTPUT, @cPickSlipNo9 OUTPUT, @cPickSlipType  OUTPUT, ' +
                ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
             SET @cSQLParam =
-               ' @nMobile       INT,                  ' + 
-               ' @nFunc         INT,                  ' + 
-               ' @cLangCode     NVARCHAR( 3),         ' + 
-               ' @nStep         INT,                  ' + 
-               ' @nInputKey     INT,                  ' + 
-               ' @cFacility     NVARCHAR( 5),         ' + 
-               ' @cStorerKey    NVARCHAR( 15),        ' + 
-            	' @cWaveKey      NVARCHAR( 10),        ' + 
-            	' @cLoadKey      NVARCHAR( 10),        ' + 
-               ' @cPickZone     NVARCHAR( 10),        ' + 
-               ' @cPKSlip_Cnt   NVARCHAR( 1),         ' + 
-               ' @cCountry      NVARCHAR( 20),        ' + 
-               ' @cFromLoc      NVARCHAR( 10),        ' + 
-               ' @cToLoc        NVARCHAR( 10),        ' + 
-               ' @cPickSlipNo1  NVARCHAR( 10) OUTPUT, ' + 
-               ' @cPickSlipNo2  NVARCHAR( 10) OUTPUT, ' + 
-               ' @cPickSlipNo3  NVARCHAR( 10) OUTPUT, ' + 
-               ' @cPickSlipNo4  NVARCHAR( 10) OUTPUT, ' + 
-               ' @cPickSlipNo5  NVARCHAR( 10) OUTPUT, ' + 
-               ' @cPickSlipNo6  NVARCHAR( 10) OUTPUT, ' + 
-               ' @cPickSlipNo7  NVARCHAR( 10) OUTPUT, ' + 
-               ' @cPickSlipNo8  NVARCHAR( 10) OUTPUT, ' + 
-               ' @cPickSlipNo9  NVARCHAR( 10) OUTPUT, ' + 
-               ' @cPickSlipType NVARCHAR( 1)  OUTPUT, ' + 
-               ' @nErrNo        INT           OUTPUT, ' + 
-               ' @cErrMsg       NVARCHAR( 20) OUTPUT  ' 
+               ' @nMobile       INT,                  ' +
+               ' @nFunc         INT,                  ' +
+               ' @cLangCode     NVARCHAR( 3),         ' +
+               ' @nStep         INT,                  ' +
+               ' @nInputKey     INT,                  ' +
+               ' @cFacility     NVARCHAR( 5),         ' +
+               ' @cStorerKey    NVARCHAR( 15),        ' +
+               ' @cWaveKey      NVARCHAR( 10),        ' +
+               ' @cLoadKey      NVARCHAR( 10),        ' +
+               ' @cPickZone     NVARCHAR( 10),        ' +
+               ' @cPKSlip_Cnt   NVARCHAR( 1),         ' +
+               ' @cCountry      NVARCHAR( 20),        ' +
+               ' @cFromLoc      NVARCHAR( 10),        ' +
+               ' @cToLoc        NVARCHAR( 10),        ' +
+               ' @cPickSlipNo1  NVARCHAR( 10) OUTPUT, ' +
+               ' @cPickSlipNo2  NVARCHAR( 10) OUTPUT, ' +
+               ' @cPickSlipNo3  NVARCHAR( 10) OUTPUT, ' +
+               ' @cPickSlipNo4  NVARCHAR( 10) OUTPUT, ' +
+               ' @cPickSlipNo5  NVARCHAR( 10) OUTPUT, ' +
+               ' @cPickSlipNo6  NVARCHAR( 10) OUTPUT, ' +
+               ' @cPickSlipNo7  NVARCHAR( 10) OUTPUT, ' +
+               ' @cPickSlipNo8  NVARCHAR( 10) OUTPUT, ' +
+               ' @cPickSlipNo9  NVARCHAR( 10) OUTPUT, ' +
+               ' @cPickSlipType NVARCHAR( 1)  OUTPUT, ' +
+               ' @nErrNo        INT           OUTPUT, ' +
+               ' @cErrMsg       NVARCHAR( 20) OUTPUT  '
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
-               @cWaveKey, @cLoadKey, @cPickZone, @cPKSLIP_Cnt, @cCountry, @cFromLOC, @cToLOC, 
-               @cT_PickSlipNo1 OUTPUT, @cT_PickSlipNo2 OUTPUT, @cT_PickSlipNo3 OUTPUT, @cT_PickSlipNo4 OUTPUT, @cT_PickSlipNo5 OUTPUT, 
-               @cT_PickSlipNo6 OUTPUT, @cT_PickSlipNo7 OUTPUT, @cT_PickSlipNo8 OUTPUT, @cT_PickSlipNo9 OUTPUT, @cPickSlipType  OUTPUT, 
-               @nErrNo OUTPUT, @cErrMsg OUTPUT 
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+               @cWaveKey, @cLoadKey, @cPickZone, @cPKSLIP_Cnt, @cCountry, @cFromLOC, @cToLOC,
+               @cT_PickSlipNo1 OUTPUT, @cT_PickSlipNo2 OUTPUT, @cT_PickSlipNo3 OUTPUT, @cT_PickSlipNo4 OUTPUT, @cT_PickSlipNo5 OUTPUT,
+               @cT_PickSlipNo6 OUTPUT, @cT_PickSlipNo7 OUTPUT, @cT_PickSlipNo8 OUTPUT, @cT_PickSlipNo9 OUTPUT, @cPickSlipType  OUTPUT,
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
          END
       END
 
@@ -810,7 +831,7 @@ BEGIN
          @cT_PickSlipNo6 <> @cInField06 OR
          @cT_PickSlipNo7 <> @cInField07 OR
          @cT_PickSlipNo8 <> @cInField08 OR
-         @cT_PickSlipNo9 <> @cInField09 
+         @cT_PickSlipNo9 <> @cInField09
 
       -- There are changes, remain in current screen
       BEGIN
@@ -820,14 +841,14 @@ BEGIN
          SET @nPSCnt = 1
          WHILE @nPSCnt <= 9
          BEGIN
-            IF @nPSCnt = 1 SELECT @cInField = @cInField01, @cPickSlipNo = @cT_PickSlipNo1 ELSE 
-            IF @nPSCnt = 2 SELECT @cInField = @cInField02, @cPickSlipNo = @cT_PickSlipNo2 ELSE 
-            IF @nPSCnt = 3 SELECT @cInField = @cInField03, @cPickSlipNo = @cT_PickSlipNo3 ELSE 
-            IF @nPSCnt = 4 SELECT @cInField = @cInField04, @cPickSlipNo = @cT_PickSlipNo4 ELSE 
-            IF @nPSCnt = 5 SELECT @cInField = @cInField05, @cPickSlipNo = @cT_PickSlipNo5 ELSE 
-            IF @nPSCnt = 6 SELECT @cInField = @cInField06, @cPickSlipNo = @cT_PickSlipNo6 ELSE 
-            IF @nPSCnt = 7 SELECT @cInField = @cInField07, @cPickSlipNo = @cT_PickSlipNo7 ELSE 
-            IF @nPSCnt = 8 SELECT @cInField = @cInField08, @cPickSlipNo = @cT_PickSlipNo8 ELSE 
+            IF @nPSCnt = 1 SELECT @cInField = @cInField01, @cPickSlipNo = @cT_PickSlipNo1 ELSE
+            IF @nPSCnt = 2 SELECT @cInField = @cInField02, @cPickSlipNo = @cT_PickSlipNo2 ELSE
+            IF @nPSCnt = 3 SELECT @cInField = @cInField03, @cPickSlipNo = @cT_PickSlipNo3 ELSE
+            IF @nPSCnt = 4 SELECT @cInField = @cInField04, @cPickSlipNo = @cT_PickSlipNo4 ELSE
+            IF @nPSCnt = 5 SELECT @cInField = @cInField05, @cPickSlipNo = @cT_PickSlipNo5 ELSE
+            IF @nPSCnt = 6 SELECT @cInField = @cInField06, @cPickSlipNo = @cT_PickSlipNo6 ELSE
+            IF @nPSCnt = 7 SELECT @cInField = @cInField07, @cPickSlipNo = @cT_PickSlipNo7 ELSE
+            IF @nPSCnt = 8 SELECT @cInField = @cInField08, @cPickSlipNo = @cT_PickSlipNo8 ELSE
             IF @nPSCnt = 9 SELECT @cInField = @cInField09, @cPickSlipNo = @cT_PickSlipNo9
 
             -- Value changed
@@ -838,9 +859,9 @@ BEGIN
                BEGIN
                   -- Validate PickSlip
                   SET @nErrNo = 0
-                  EXECUTE rdt.rdt_DynamicPick_PickAndPack_ValidatePickSlip @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+                  EXECUTE rdt.rdt_DynamicPick_PickAndPack_ValidatePickSlip @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
                      @cWaveKey,
-                     @cLoadKey, 
+                     @cLoadKey,
                      @cPickZone,
                      @cCountry,
                      @cFromLOC,
@@ -883,14 +904,14 @@ BEGIN
          END
 
          -- Position cursor on next empty field
-         IF @cInField01 = '' EXEC rdt.rdtSetFocusField @nMobile, 1 ELSE 
-         IF @cInField02 = '' EXEC rdt.rdtSetFocusField @nMobile, 2 ELSE 
-         IF @cInField03 = '' EXEC rdt.rdtSetFocusField @nMobile, 3 ELSE 
-         IF @cInField04 = '' EXEC rdt.rdtSetFocusField @nMobile, 4 ELSE 
-         IF @cInField05 = '' EXEC rdt.rdtSetFocusField @nMobile, 5 ELSE 
-         IF @cInField06 = '' EXEC rdt.rdtSetFocusField @nMobile, 6 ELSE 
-         IF @cInField07 = '' EXEC rdt.rdtSetFocusField @nMobile, 7 ELSE 
-         IF @cInField08 = '' EXEC rdt.rdtSetFocusField @nMobile, 8 ELSE 
+         IF @cInField01 = '' EXEC rdt.rdtSetFocusField @nMobile, 1 ELSE
+         IF @cInField02 = '' EXEC rdt.rdtSetFocusField @nMobile, 2 ELSE
+         IF @cInField03 = '' EXEC rdt.rdtSetFocusField @nMobile, 3 ELSE
+         IF @cInField04 = '' EXEC rdt.rdtSetFocusField @nMobile, 4 ELSE
+         IF @cInField05 = '' EXEC rdt.rdtSetFocusField @nMobile, 5 ELSE
+         IF @cInField06 = '' EXEC rdt.rdtSetFocusField @nMobile, 6 ELSE
+         IF @cInField07 = '' EXEC rdt.rdtSetFocusField @nMobile, 7 ELSE
+         IF @cInField08 = '' EXEC rdt.rdtSetFocusField @nMobile, 8 ELSE
          IF @cInField09 = '' EXEC rdt.rdtSetFocusField @nMobile, 9
 
          GOTO Quit
@@ -899,11 +920,11 @@ BEGIN
       -- Calculate TotalPickQty and TotalCBM
       SET @nTotal_PickQTY = 0
       SET @cTotal_CBM = ''
-      EXECUTE rdt.rdt_DynamicPick_PickAndPack_CalcTotalQTYAndCBM @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+      EXECUTE rdt.rdt_DynamicPick_PickAndPack_CalcTotalQTYAndCBM @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
          @cPickZone,
          @cFromLOC,
          @cToLOC,
-         @cPickSlipType, 
+         @cPickSlipType,
          @cT_PickSlipNo1,
          @cT_PickSlipNo2,
          @cT_PickSlipNo3,
@@ -952,7 +973,7 @@ BEGIN
             -- ntrRDTDynamicPickLogAdd will not rollback, parent control the rollback
             SET @nTranCount = @@TRANCOUNT
             BEGIN TRAN
-            SAVE TRAN Insert_RDTDynamicPickLog          
+            SAVE TRAN Insert_RDTDynamicPickLog
 
             INSERT INTO RDT.RDTDynamicPickLog (PickSlipNo, Zone, FromLOC, ToLOC, Facility, AddWho)
             VALUES (@cPickSlipNo, @cPickZone, @cFromLOC, @cToLOC, @cFacility, @cUserName)
@@ -963,7 +984,7 @@ BEGIN
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'LockPSNoFail'
                ROLLBACK TRAN Insert_RDTDynamicPickLog
             END
-            
+
             WHILE @@TRANCOUNT > @nTranCount
                COMMIT TRAN
 
@@ -972,9 +993,9 @@ BEGIN
          END
 
          -- Get next CartonNo, LabelNo
-         EXECUTE rdt.rdt_DynamicPick_PickAndPack_GetNextCartonLabel @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+         EXECUTE rdt.rdt_DynamicPick_PickAndPack_GetNextCartonLabel @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
             @cUserName,
-            @cPrinter, 
+            @cPrinter,
             @cDynamicPickCartonLabel,
             @cDynamicPickPrePrintedLabelNo,
             @cPickSlipNo,
@@ -1031,7 +1052,7 @@ BEGIN
 
       IF @cWaveKey <> ''
          EXEC rdt.rdtSetFocusField @nMobile, 1  -- WaveKey
-      ELSE 
+      ELSE
          EXEC rdt.rdtSetFocusField @nMobile, 7  -- LoadKey
    END
    GOTO Quit
@@ -1043,7 +1064,7 @@ GOTO Quit
 Step 3. Screen = 1642
    WAVEKEY        (field01)
    LOADKEY        (field09)
-   PWAYZONE       (field02)
+   PICKZONE       (field02)
    NO OF PICKSLIP (field03)
    COUNTRY        (field04)
    FROM LOC       (field05)
@@ -1060,19 +1081,19 @@ BEGIN
       BEGIN
          SET @nPSCnt = @nPSCnt + 1
 
-         IF @nPSCnt = 1 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo1, '') ELSE 
-         IF @nPSCnt = 2 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo2, '') ELSE 
-         IF @nPSCnt = 3 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo3, '') ELSE 
-         IF @nPSCnt = 4 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo4, '') ELSE 
-         IF @nPSCnt = 5 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo5, '') ELSE 
-         IF @nPSCnt = 6 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo6, '') ELSE 
-         IF @nPSCnt = 7 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo7, '') ELSE 
-         IF @nPSCnt = 8 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo8, '') ELSE 
-         IF @nPSCnt = 9 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo9, '') 
+         IF @nPSCnt = 1 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo1, '') ELSE
+         IF @nPSCnt = 2 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo2, '') ELSE
+         IF @nPSCnt = 3 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo3, '') ELSE
+         IF @nPSCnt = 4 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo4, '') ELSE
+         IF @nPSCnt = 5 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo5, '') ELSE
+         IF @nPSCnt = 6 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo6, '') ELSE
+         IF @nPSCnt = 7 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo7, '') ELSE
+         IF @nPSCnt = 8 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo8, '') ELSE
+         IF @nPSCnt = 9 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo9, '')
 
          -- Loop next
-         IF @cPickSlipNo = '' 
-            CONTINUE 
+         IF @cPickSlipNo = ''
+            CONTINUE
 
          -- Insert PickingInfo, if not exists
          IF NOT EXISTS (SELECT 1 FROM dbo.PickingInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo)
@@ -1088,7 +1109,7 @@ BEGIN
                ROLLBACK TRAN Start_Picking
                WHILE @@TRANCOUNT > @nTranCount
                   COMMIT TRAN
-               
+
                SET @nErrNo = 64421
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'INS PkInf fail'
                GOTO Quit
@@ -1103,11 +1124,11 @@ BEGIN
       -- Calculate TotalPickQty and TotalCBM
       SET @nTotal_PickQTY = 0
       SET @cTotal_CBM = ''
-      EXECUTE rdt.rdt_DynamicPick_PickAndPack_CalcTotalQTYAndCBM @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+      EXECUTE rdt.rdt_DynamicPick_PickAndPack_CalcTotalQTYAndCBM @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
          @cPickZone,
          @cFromLOC,
          @cToLOC,
-         @cPickSlipType, 
+         @cPickSlipType,
          @cT_PickSlipNo1,
          @cT_PickSlipNo2,
          @cT_PickSlipNo3,
@@ -1130,14 +1151,14 @@ BEGIN
             SET @nPSCnt = 1
             WHILE @nPSCnt <= 9
             BEGIN
-               IF @nPSCnt = 1 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo1, '') ELSE 
-               IF @nPSCnt = 2 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo2, '') ELSE 
-               IF @nPSCnt = 3 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo3, '') ELSE 
-               IF @nPSCnt = 4 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo4, '') ELSE 
-               IF @nPSCnt = 5 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo5, '') ELSE 
-               IF @nPSCnt = 6 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo6, '') ELSE 
-               IF @nPSCnt = 7 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo7, '') ELSE 
-               IF @nPSCnt = 8 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo8, '') ELSE 
+               IF @nPSCnt = 1 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo1, '') ELSE
+               IF @nPSCnt = 2 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo2, '') ELSE
+               IF @nPSCnt = 3 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo3, '') ELSE
+               IF @nPSCnt = 4 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo4, '') ELSE
+               IF @nPSCnt = 5 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo5, '') ELSE
+               IF @nPSCnt = 6 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo6, '') ELSE
+               IF @nPSCnt = 7 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo7, '') ELSE
+               IF @nPSCnt = 8 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo8, '') ELSE
                IF @nPSCnt = 9 SET @cPickSlipNo = ISNULL(@cT_PickSlipNo9, '')
 
                IF @cPickSlipNo <> ''
@@ -1180,11 +1201,11 @@ BEGIN
       -- Get 1st suggested pick LOC
       SET @nErrNo = 0
       SET @cS_Loc = ''
-      EXECUTE rdt.rdt_DynamicPick_PickAndPack_GetNextLOC @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+      EXECUTE rdt.rdt_DynamicPick_PickAndPack_GetNextLOC @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
          @cPickZone,
          @cFromLOC,
          @cToLOC,
-         @cPickSlipType, 
+         @cPickSlipType,
          @cT_PickSlipNo1,
          @cT_PickSlipNo2,
          @cT_PickSlipNo3,
@@ -1200,13 +1221,13 @@ BEGIN
          @cErrMsg OUTPUT
 
       -- Check if no more pick LOC
-      IF @nErrNo <> 0 
+      IF @nErrNo <> 0
          GOTO Quit
 
       SELECT @cLocDescr = SUBSTRING( Descr, 1, 20) FROM dbo.LOC WITH (NOLOCK) WHERE Facility = @cFacility AND LOC = @cS_Loc
       IF ISNULL( @cLocDescr, '') = ''
          SET @cLocDescr = @cS_Loc
-            
+
       -- Extended update
       IF @cExtendedUpdateSP <> ''
       BEGIN
@@ -1220,11 +1241,11 @@ BEGIN
                ',@cS_LOC, @cSKU, @cLottable01, @cLottable02, @cLottable03, @dLottable04 ' +
                ',@nQtyToPick, @nActQty, @nCartonNo, @cLabelNo, @cOption, @nErrNo  OUTPUT, @cErrMsg OUTPUT'
             SET @cSQLParam =
-               ' @nMobile         INT           ' +  
-               ',@nFunc           INT           ' + 
-               ',@cLangCode       NVARCHAR( 3)  ' + 
+               ' @nMobile         INT           ' +
+               ',@nFunc           INT           ' +
+               ',@cLangCode       NVARCHAR( 3)  ' +
                ',@nStep           INT           ' +
-               ',@nInputKey       INT           ' + 
+               ',@nInputKey       INT           ' +
                ',@cFacility       NVARCHAR( 5)  ' +
                ',@cStorerKey      NVARCHAR( 15) ' +
                ',@cWaveKey        NVARCHAR( 10) ' +
@@ -1258,8 +1279,8 @@ BEGIN
                ',@nErrNo          INT OUTPUT    ' +
                ',@cErrMsg         NVARCHAR( 20) OUTPUT'
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey 
-               ,@cWaveKey, @cLoadKey, @cPickZone, @cPKSLIP_Cnt, @cCountry, @cFromLOC, @cToLOC 
+                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
+               ,@cWaveKey, @cLoadKey, @cPickZone, @cPKSLIP_Cnt, @cCountry, @cFromLOC, @cToLOC
                ,@cT_PickSlipNo1, @cT_PickSlipNo2, @cT_PickSlipNo3, @cT_PickSlipNo4, @cT_PickSlipNo5
                ,@cT_PickSlipNo6, @cT_PickSlipNo7, @cT_PickSlipNo8, @cT_PickSlipNo9, @cPickSlipNo
                ,@cS_LOC, @cSKU, @cLottable01, @cLottable02, @cLottable03, @dLottable04
@@ -1318,7 +1339,7 @@ BEGIN
       SET @cT_PickSlipNo8 = ''
       SET @cT_PickSlipNo9 = ''
       SET @cPickSlipType = ''
-      
+
       -- Prep previous screen var
       SET @cOutField01    = '' --PickSlipNo1
       SET @cOutField02    = '' --PickSlipNo2
@@ -1330,6 +1351,9 @@ BEGIN
       SET @cOutField08    = '' --PickSlipNo8
       SET @cOutField09    = '' --PickSlipNo9
 
+      SET @cFieldAttr05   = '' --(ML01)
+      SET @cFieldAttr10   = '' --(ML01)
+
       EXEC rdt.rdtSetFocusField @nMobile, 01
 
       -- Go to prev screen
@@ -1340,7 +1364,7 @@ BEGIN
 
    Step_3_Fail:
    BEGIN
-   SET @cOutField01 = ''
+      SET @cOutField01 = ''
       SET @cOutField02 = ''
    END
 
@@ -1375,11 +1399,11 @@ BEGIN
       IF @cC_Loc = ''
       BEGIN
          SET @nErrNo = 0
-         EXECUTE rdt.rdt_DynamicPick_PickAndPack_GetNextLOC @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+         EXECUTE rdt.rdt_DynamicPick_PickAndPack_GetNextLOC @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
             @cPickZone,
             @cFromLOC,
             @cToLOC,
-            @cPickSlipType, 
+            @cPickSlipType,
             @cT_PickSlipNo1,
             @cT_PickSlipNo2,
             @cT_PickSlipNo3,
@@ -1400,7 +1424,7 @@ BEGIN
          SELECT @cLocDescr = SUBSTRING( Descr, 1, 20) FROM dbo.LOC WITH (NOLOCK) WHERE Facility = @cFacility AND LOC = @cS_Loc
          IF ISNULL( @cLocDescr, '') = ''
             SET @cLocDescr = @cS_Loc
-         
+
          SET @cOutField01 = CASE WHEN @cLocShowDescr = '1' THEN @cLocDescr ELSE @cS_Loc END
          SET @cOutField02 = ''
          GOTO Quit
@@ -1408,12 +1432,12 @@ BEGIN
 
       -- Get next task
       SET @nErrNo = 0
-      EXEC rdt.rdt_DynamicPick_PickAndPack_GetNextTask @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+      EXEC rdt.rdt_DynamicPick_PickAndPack_GetNextTask @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
          @cPickZone,
          @cFromLOC,
          @cToLOC,
          @cC_Loc,
-         @cPickSlipType, 
+         @cPickSlipType,
          @cT_PickSlipNo1,
          @cT_PickSlipNo2,
          @cT_PickSlipNo3,
@@ -1437,7 +1461,7 @@ BEGIN
          @nErrNo        OUTPUT,
          @cErrMsg       OUTPUT
 
-      IF @nErrNo <> 0 
+      IF @nErrNo <> 0
          GOTO Step_4_Fail
 
       -- Get SKU info
@@ -1486,11 +1510,11 @@ BEGIN
       -- Calculate TotalPickQty and TotalCBM
       SET @nTotal_PickQTY = 0
       SET @cTotal_CBM = ''
-      EXECUTE rdt.rdt_DynamicPick_PickAndPack_CalcTotalQTYAndCBM @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+      EXECUTE rdt.rdt_DynamicPick_PickAndPack_CalcTotalQTYAndCBM @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
          @cPickZone,
          @cFromLOC,
          @cToLOC,
-         @cPickSlipType, 
+         @cPickSlipType,
          @cT_PickSlipNo1,
          @cT_PickSlipNo2,
          @cT_PickSlipNo3,
@@ -1518,7 +1542,7 @@ BEGIN
       SELECT @cLocDescr = SUBSTRING( Descr, 1, 20) FROM dbo.LOC WITH (NOLOCK) WHERE Facility = @cFacility AND LOC = @cToLOC
       IF ISNULL( @cLocDescr, '') = ''
          SET @cLocDescr = @cToLOC
-         
+
       SET @cOutField06 = CASE WHEN @cLocShowDescr = '1' THEN @cLocDescr ELSE @cToLOC END
       SET @cOutField07 = @nTotal_PickQTY --total qty
       SET @cOutField08 = @cTotal_CBM     --total cbm
@@ -1591,14 +1615,14 @@ BEGIN
          -- Standard decode
          IF @cDecodeSP = '1'
          BEGIN
-            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode, 
-               @cUPC    = @cDecodeSKU        OUTPUT, 
-               @nQTY    = @nDecodeQTY        OUTPUT, 
+            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
+               @cUPC    = @cDecodeSKU        OUTPUT,
+               @nQTY    = @nDecodeQTY        OUTPUT,
                @cLottable01  = @cLottable01  OUTPUT,
                @cLottable02  = @cLottable02  OUTPUT,
                @cLottable03  = @cLottable03  OUTPUT,
                @dLottable04  = @dLottable04  OUTPUT,
-               @nErrNo  = @nErrNo  OUTPUT, 
+               @nErrNo  = @nErrNo  OUTPUT,
                @cErrMsg = @cErrMsg OUTPUT,
                @cType = 'UPC'
          END
@@ -1611,7 +1635,7 @@ BEGIN
                ' @cWaveKey,         @cLoadKey,        @cPickZone,       @cPKSLIP_Cnt,     @cCountry,     @cFromLOC,     @cToLOC, ' +
                ' @cT_PickSlipNo1,   @cT_PickSlipNo2,  @cT_PickSlipNo3,  @cT_PickSlipNo4,  @cT_PickSlipNo5, ' +
                ' @cT_PickSlipNo6,   @cT_PickSlipNo7,  @cT_PickSlipNo8,  @cT_PickSlipNo9,  @cPickSlipNo, ' +
-               ' @cS_LOC,           @nQtyToPick,      @nCartonNo,       @cLabelNo,        @cOption, ' + 
+               ' @cS_LOC,           @nQtyToPick,      @nCartonNo,       @cLabelNo,        @cOption, ' +
                ' @cSKU    OUTPUT,   @nQty    OUTPUT,  @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, ' +
                ' @nErrNo  OUTPUT,   @cErrMsg OUTPUT'
             SET @cSQLParam =
@@ -1654,12 +1678,12 @@ BEGIN
                ' @cErrMsg           NVARCHAR( 20)  OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile,          @nFunc,           @cLangCode,       @nStep,           @nInputKey,    @cStorerKey,   @cBarcode, 
-               @cWaveKey,         @cLoadKey,        @cPickZone,       @cPKSLIP_Cnt,     @cCountry,     @cFromLOC,     @cToLOC, 
-               @cT_PickSlipNo1,   @cT_PickSlipNo2,  @cT_PickSlipNo3,  @cT_PickSlipNo4,  @cT_PickSlipNo5, 
-               @cT_PickSlipNo6,   @cT_PickSlipNo7,  @cT_PickSlipNo8,  @cT_PickSlipNo9,  @cPickSlipNo, 
-               @cS_LOC,           @nQtyToPick,      @nCartonNo,       @cLabelNo,        @cOption, 
-               @cDecodeSKU OUTPUT,@nDecodeQTY OUTPUT,  @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, 
+               @nMobile,          @nFunc,           @cLangCode,       @nStep,           @nInputKey,    @cStorerKey,   @cBarcode,
+               @cWaveKey,         @cLoadKey,        @cPickZone,       @cPKSLIP_Cnt,     @cCountry,     @cFromLOC,     @cToLOC,
+               @cT_PickSlipNo1,   @cT_PickSlipNo2,  @cT_PickSlipNo3,  @cT_PickSlipNo4,  @cT_PickSlipNo5,
+               @cT_PickSlipNo6,   @cT_PickSlipNo7,  @cT_PickSlipNo8,  @cT_PickSlipNo9,  @cPickSlipNo,
+               @cS_LOC,           @nQtyToPick,      @nCartonNo,       @cLabelNo,        @cOption,
+               @cDecodeSKU OUTPUT,@nDecodeQTY OUTPUT,  @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT,
                @nErrNo     OUTPUT,@cErrMsg    OUTPUT
 
          END
@@ -1700,18 +1724,18 @@ BEGIN
                ,@bSuccess    = @b_Success     OUTPUT
                ,@nErr        = @nErrNo        OUTPUT
                ,@cErrMsg     = @cErrMsg       OUTPUT
-   
+
             -- Validate SKU/UPC
             IF @nSKUCnt = 0
             BEGIN
                -- Check if UCC scanned
-               SELECT 
-                  @cUCCSKU = SKU, 
+               SELECT
+                  @cUCCSKU = SKU,
                   @nUCCQTY = QTY
                FROM dbo.UCC WITH (NOLOCK)
                WHERE StorerKey = @cStorerKey
                   AND UCCNo = @cUCCNo
-   
+
                IF @cUCCSKU <> ''
                   SET @cActSKU = @cUCCSKU
                ELSE
@@ -1813,11 +1837,11 @@ BEGIN
                EXEC rdt.rdtSetFocusField @nMobile, 11
                GOTO Quit
             END
-            
+
             SET @cSKUValidated = '1'
          END
       END
-      
+
       IF @cActQty <> '' AND RDT.rdtIsValidQTY( @cActQty, 0) = 0 --Not check for zero QTY
       BEGIN
          SET @nErrNo = 64424
@@ -1827,7 +1851,7 @@ BEGIN
       END
 
       -- Check full short with QTY
-      IF @cSKUValidated = '99' AND (@cActQty <> '0' AND @cActQty <> '') 
+      IF @cSKUValidated = '99' AND (@cActQty <> '0' AND @cActQty <> '')
       BEGIN
          SET @nErrNo = 72302
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- FullShortNoQTY
@@ -1843,19 +1867,19 @@ BEGIN
       ELSE IF @nUCCQTY > 0
          SET @nQTY = @nQTY + @nUCCQTY
       ELSE
-         IF @cActSKU <> '' 
+         IF @cActSKU <> ''
          BEGIN
-            IF @cDynamicPickDisableQTYField = '1' 
+            IF @cDynamicPickDisableQTYField = '1'
             BEGIN
-               IF @cPrePackIndicator = '2' 
-                  SET @nQTY = @nQTY + @nPackQtyIndicator 
-               ELSE 
+               IF @cPrePackIndicator = '2'
+                  SET @nQTY = @nQTY + @nPackQtyIndicator
+               ELSE
                   SET @nQTY = @nQTY + 1
             END
             ELSE
             BEGIN
                IF @nQTY = @cActQTY AND           -- User not change QTY field
-                  @cDynamicPickDefaultQTY <> '0' -- Have default QTY 
+                  @cDynamicPickDefaultQTY <> '0' -- Have default QTY
                BEGIN
                   IF @cPrePackIndicator = '2'
                      SET @nQTY = @nActQty + (@nPackQtyIndicator * @cDynamicPickDefaultQTY)
@@ -1870,7 +1894,7 @@ BEGIN
       BEGIN
          IF @cUCCSKU <> ''
             SET @nQTY = @nActQty + @nUCCQTY
-         ELSE 
+         ELSE
          BEGIN
             IF @cActSKU <> ''
             BEGIN
@@ -1881,17 +1905,17 @@ BEGIN
             END
          END
       END
-      ELSE      
+      ELSE
       BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 11 -- SKU
-         
+
          IF @cUCCSKU <> ''
             SET @nQTY = @nActQty + @nUCCQTY
          ELSE
          BEGIN
             IF @cActSKU <> '' AND             -- SKU/UPC scanned
                @nQTY = @cActQTY AND           -- User not change QTY field
-               @cDynamicPickDefaultQTY <> '0' -- Have default QTY 
+               @cDynamicPickDefaultQTY <> '0' -- Have default QTY
             BEGIN
                IF @cPrePackIndicator = '2'
                   SET @nQTY = @nActQty + (@nPackQtyIndicator * @cDynamicPickDefaultQTY)
@@ -1914,25 +1938,215 @@ BEGIN
          GOTO Step_5_Fail
       END
       SET @nActQty = @nQTY
-      
+
       -- SKU scanned, remain in current screen
       IF @cActSKU <> ''
       BEGIN
+         -- Extended Validate --(cc01)
+         IF @cExtendedValidateSP <> ''
+         BEGIN
+            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+            BEGIN
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey ' +
+                  ',@cWaveKey, @cLoadKey, @cPickZone, @cPKSLIP_Cnt, @cCountry, @cFromLOC, @cToLOC ' +
+                  ',@cT_PickSlipNo1, @cT_PickSlipNo2, @cT_PickSlipNo3, @cT_PickSlipNo4, @cT_PickSlipNo5 ' +
+                  ',@cT_PickSlipNo6, @cT_PickSlipNo7, @cT_PickSlipNo8, @cT_PickSlipNo9, @cPickSlipNo ' +
+                  ',@cS_LOC, @cSKU, @cLottable01, @cLottable02, @cLottable03, @dLottable04 ' +
+                  ',@nQtyToPick, @nActQty, @nCartonNo, @cLabelNo, @cOption, @nErrNo  OUTPUT, @cErrMsg OUTPUT'
+               SET @cSQLParam =
+                  ' @nMobile         INT           ' +
+                  ',@nFunc           INT           ' +
+                  ',@cLangCode       NVARCHAR( 3)  ' +
+                  ',@nStep           INT           ' +
+                  ',@nInputKey       INT           ' +
+                  ',@cFacility       NVARCHAR( 5)  ' +
+                  ',@cStorerKey      NVARCHAR( 15) ' +
+                  ',@cWaveKey        NVARCHAR( 10) ' +
+                  ',@cLoadKey        NVARCHAR( 10) ' +
+                  ',@cPickZone       NVARCHAR( 10) ' +
+                  ',@cPKSLIP_Cnt     NVARCHAR( 5)  ' +
+                  ',@cCountry        NVARCHAR( 20) ' +
+                  ',@cFromLOC        NVARCHAR( 10) ' +
+                  ',@cToLOC          NVARCHAR( 10) ' +
+                  ',@cT_PickSlipNo1  NVARCHAR( 10) ' +
+                  ',@cT_PickSlipNo2  NVARCHAR( 10) ' +
+                  ',@cT_PickSlipNo3  NVARCHAR( 10) ' +
+                  ',@cT_PickSlipNo4  NVARCHAR( 10) ' +
+                  ',@cT_PickSlipNo5  NVARCHAR( 10) ' +
+                  ',@cT_PickSlipNo6  NVARCHAR( 10) ' +
+                  ',@cT_PickSlipNo7  NVARCHAR( 10) ' +
+                  ',@cT_PickSlipNo8  NVARCHAR( 10) ' +
+                  ',@cT_PickSlipNo9  NVARCHAR( 10) ' +
+                  ',@cPickSlipNo     NVARCHAR( 10) ' +
+                  ',@cS_LOC          NVARCHAR( 10) ' +
+                  ',@cSKU            NVARCHAR( 20) ' +
+                  ',@cLottable01     NVARCHAR( 18) ' +
+                  ',@cLottable02     NVARCHAR( 18) ' +
+                  ',@cLottable03     NVARCHAR( 18) ' +
+                  ',@dLottable04     DATETIME      ' +
+                  ',@nQtyToPick      INT           ' +
+                  ',@nActQty         INT           ' +
+                  ',@nCartonNo       INT           ' +
+                  ',@cLabelNo        NVARCHAR( 20) ' +
+                  ',@cOption         NVARCHAR( 1)  ' +
+                  ',@nErrNo          INT OUTPUT    ' +
+                  ',@cErrMsg         NVARCHAR( 20) OUTPUT'
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                   @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
+                  ,@cWaveKey, @cLoadKey, @cPickZone, @cPKSLIP_Cnt, @cCountry, @cFromLOC, @cToLOC
+                  ,@cT_PickSlipNo1, @cT_PickSlipNo2, @cT_PickSlipNo3, @cT_PickSlipNo4, @cT_PickSlipNo5
+                  ,@cT_PickSlipNo6, @cT_PickSlipNo7, @cT_PickSlipNo8, @cT_PickSlipNo9, @cPickSlipNo
+                  ,@cS_LOC, @cSKU, @cLottable01, @cLottable02, @cLottable03, @dLottable04
+                  ,@nQtyToPick, @nActQty, @nCartonNo, '', @cOption, @nErrNo  OUTPUT, @cErrMsg OUTPUT
+
+               IF @nErrNo <> 0
+                  GOTO Quit
+            END
+         END
+
+
+         -- Extended update   --(cc01)
+         IF @cExtendedUpdateSP <> ''
+         BEGIN
+            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+            BEGIN
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey ' +
+                  ',@cWaveKey, @cLoadKey, @cPickZone, @cPKSLIP_Cnt, @cCountry, @cFromLOC, @cToLOC ' +
+                  ',@cT_PickSlipNo1, @cT_PickSlipNo2, @cT_PickSlipNo3, @cT_PickSlipNo4, @cT_PickSlipNo5 ' +
+                  ',@cT_PickSlipNo6, @cT_PickSlipNo7, @cT_PickSlipNo8, @cT_PickSlipNo9, @cPickSlipNo ' +
+                  ',@cS_LOC, @cSKU, @cLottable01, @cLottable02, @cLottable03, @dLottable04 ' +
+                  ',@nQtyToPick, @nActQty, @nCartonNo, @cLabelNo, @cOption, @nErrNo  OUTPUT, @cErrMsg OUTPUT'
+               SET @cSQLParam =
+                  ' @nMobile         INT           ' +
+                  ',@nFunc           INT           ' +
+                  ',@cLangCode       NVARCHAR( 3)  ' +
+                  ',@nStep           INT           ' +
+                  ',@nInputKey       INT           ' +
+                  ',@cFacility       NVARCHAR( 5)  ' +
+                  ',@cStorerKey      NVARCHAR( 15) ' +
+                  ',@cWaveKey        NVARCHAR( 10) ' +
+                  ',@cLoadKey        NVARCHAR( 10) ' +
+                  ',@cPickZone       NVARCHAR( 10) ' +
+                  ',@cPKSLIP_Cnt     NVARCHAR( 5)  ' +
+                  ',@cCountry        NVARCHAR( 20) ' +
+                  ',@cFromLOC        NVARCHAR( 10) ' +
+                  ',@cToLOC          NVARCHAR( 10) ' +
+                  ',@cT_PickSlipNo1  NVARCHAR( 10) ' +
+                  ',@cT_PickSlipNo2  NVARCHAR( 10) ' +
+                  ',@cT_PickSlipNo3  NVARCHAR( 10) ' +
+                  ',@cT_PickSlipNo4  NVARCHAR( 10) ' +
+                  ',@cT_PickSlipNo5  NVARCHAR( 10) ' +
+                  ',@cT_PickSlipNo6  NVARCHAR( 10) ' +
+                  ',@cT_PickSlipNo7  NVARCHAR( 10) ' +
+                  ',@cT_PickSlipNo8  NVARCHAR( 10) ' +
+                  ',@cT_PickSlipNo9  NVARCHAR( 10) ' +
+                  ',@cPickSlipNo     NVARCHAR( 10) ' +
+                  ',@cS_LOC          NVARCHAR( 10) ' +
+                  ',@cSKU            NVARCHAR( 20) ' +
+                  ',@cLottable01     NVARCHAR( 18) ' +
+                  ',@cLottable02     NVARCHAR( 18) ' +
+                  ',@cLottable03     NVARCHAR( 18) ' +
+                  ',@dLottable04     DATETIME      ' +
+                  ',@nQtyToPick      INT           ' +
+                  ',@nActQty         INT           ' +
+                  ',@nCartonNo       INT           ' +
+                  ',@cLabelNo        NVARCHAR( 20) ' +
+                  ',@cOption         NVARCHAR( 1)  ' +
+                  ',@nErrNo          INT OUTPUT    ' +
+                  ',@cErrMsg         NVARCHAR( 20) OUTPUT'
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                   @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
+                  ,@cWaveKey, @cLoadKey, @cPickZone, @cPKSLIP_Cnt, @cCountry, @cFromLOC, @cToLOC
+                  ,@cT_PickSlipNo1, @cT_PickSlipNo2, @cT_PickSlipNo3, @cT_PickSlipNo4, @cT_PickSlipNo5
+                  ,@cT_PickSlipNo6, @cT_PickSlipNo7, @cT_PickSlipNo8, @cT_PickSlipNo9, @cPickSlipNo
+                  ,@cS_LOC, @cActSKU, @cLottable01, @cLottable02, @cLottable03, @dLottable04
+                  ,@nQtyToPick, @nActQty, @nCartonNo, @cLabelNo, @cOption, @nErrNo  OUTPUT, @cErrMsg OUTPUT
+
+               IF @nErrNo <> 0
+                  GOTO Quit
+            END
+         END
+
+         -- Get next task
+         SET @nErrNo = 0
+         EXEC rdt.rdt_DynamicPick_PickAndPack_GetNextTask @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+            @cPickZone,
+            @cFromLOC,
+            @cToLOC,
+            @cC_Loc,
+            @cPickSlipType,
+            @cT_PickSlipNo1,
+            @cT_PickSlipNo2,
+            @cT_PickSlipNo3,
+            @cT_PickSlipNo4,
+            @cT_PickSlipNo5,
+            @cT_PickSlipNo6,
+            @cT_PickSlipNo7,
+            @cT_PickSlipNo8,
+            @cT_PickSlipNo9,
+            @cPickSlipNo   OUTPUT,
+            @cSKU          OUTPUT,
+            @cSKUDescr     OUTPUT,
+            @cLottable01   OUTPUT,
+            @cLottable02   OUTPUT,
+            @cLottable03   OUTPUT,
+            @dLottable04   OUTPUT,
+            @nQtyToPick    OUTPUT,      -- Qty need to pick for same sku in same location within the same pickslipno
+            @nOtherLocQtyToPick OUTPUT, -- Qty to pick from next location onwards within the same pickslipno
+            @nTotalQtyToPick    OUTPUT, -- Qty to pick for all locations within the same pickslipno
+            'L',                        -- Indicate from LOC screen to SKU screen
+            @nErrNo        OUTPUT,
+            @cErrMsg       OUTPUT
+
+         IF @nErrNo <> 0
+            GOTO Step_4_Fail
+
+         -- Get SKU info
+         SELECT @cPrePackIndicator = PrePackIndicator,
+                @nPackQtyIndicator = PackQtyIndicator
+         FROM dbo.SKU WITH (NOLOCK)
+         WHERE StorerKey = @cStorerKey
+           AND SKU = @cSKU
+
+         --SET @nActQty = 0
+         --SET @cSKUValidated = '0'
+
+         -- Disable QTY field
+         IF @cDynamicPickDisableQTYField = '1'
+            SET @cFieldAttr10 = 'O'
+
+         -- Prep next screen var
+         SET @cOutField01 = @cPickSlipNo
+         SET @cOutField02 = @cSKU
+         SET @cOutField03 = SUBSTRING(@cSKUDescr, 1, 20)
+         SET @cOutField04 = SUBSTRING(@cSKUDescr, 21, 20)
+         SET @cOutField05 = @cLottable01
+         SET @cOutField06 = @cLottable02
+         SET @cOutField07 = @cLottable03
+         SET @cOutField08 = rdt.rdtFormatDate( @dLottable04)
+         SET @cOutField09 = @nQtyToPick
+         --SET @cOutField10 = CASE WHEN @cDynamicPickDisableQTYField = '1' THEN '0' ELSE '' END -- QTY
+         SET @cOutField11 = ''  -- SKU
+         SET @cOutField12 = RTRIM(CAST( ISNULL(@nOtherLocQtyToPick, 0) AS NVARCHAR( 8))) + '/' + CAST( ISNULL(@nTotalQtyToPick, 0) AS NVARCHAR( 8))   -- ZG01
+         SET @cOutField13 = CASE WHEN @cPrePackIndicator = '2' THEN ISNULL(@nPackQtyIndicator, '0') ELSE '' END
+
          SET @cOutField10 = @nActQty
-         SET @cOutField11 = '' -- SKU
+         --SET @cOutField11 = '' -- SKU
 
          IF @cDynamicPickDisableQTYField = '1' OR @cDynamicPickDefaultQTY <> '0'
             EXEC rdt.rdtSetFocusField @nMobile, 11 -- SKU
          ELSE
             EXEC rdt.rdtSetFocusField @nMobile, 10 -- QTY
-            
+
          GOTO Quit
       END
 
       -- Get carton no and label no
       SELECT TOP 1
          @nCartonNo = CartonNo,
-         @cLabelNo = LabelNo
+         @cLabelNo  = CASE WHEN ISNULL(@cMultiOpenCarton,'')='1' THEN '' ELSE LabelNo END   --(ML01)
       FROM rdt.rdtDynamicPickLog WITH (NOLOCK)
       WHERE PickSlipNo = @cPickSlipNo
          AND Zone = @cPickZone
@@ -1953,7 +2167,17 @@ BEGIN
 
       -- Enable / disable field
       SET @cFieldAttr10 = ''
-      
+
+      --(cc01)
+      IF @cDisableNewCtnOp = '1'
+      BEGIN
+         SET @cFieldAttr05 = 'O'
+      END
+      ELSE
+      BEGIN
+         SET @cFieldAttr05 = ''
+      END
+
       -- Go to next screen
       SET @nScn  = @nScn + 1
       SET @nStep = @nStep + 1
@@ -1970,8 +2194,9 @@ BEGIN
       SET @cOutField02 = ''
 
       -- Enable / disable field
+      SET @cFieldAttr05 = ''
       SET @cFieldAttr10 = ''
-      
+
       -- Go to prev screen
       SET @nScn  = @nScn - 1
       SET @nStep = @nStep - 1
@@ -2010,7 +2235,7 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid option
          GOTO Step_6_Fail
       END
-      
+
       -- New carton
       IF @cOption = '1'
       BEGIN
@@ -2036,17 +2261,17 @@ BEGIN
          END
 
          -- New carton
-         EXECUTE rdt.rdt_DynamicPick_PickAndPack_NewCarton @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
-            @cUserName, 
+         EXECUTE rdt.rdt_DynamicPick_PickAndPack_NewCarton @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+            @cUserName,
             @cPrinter,
             @cPickSlipType,
             @cPickSlipNo,
             @cPickZone,
             @cFromLOC,
-            @cToLOC, 
-            @cDynamicPickCartonLabel, 
-            @cDynamicPickCartonManifest, 
-            @cDynamicPickPrePrintedLabelNo, 
+            @cToLOC,
+            @cDynamicPickCartonLabel,
+            @cDynamicPickCartonManifest,
+            @cDynamicPickPrePrintedLabelNo,
             @nCartonNo OUTPUT,
             @cLabelNo  OUTPUT,
             @nErrNo    OUTPUT,
@@ -2060,7 +2285,7 @@ BEGIN
          SET @cOutField03 = @cLabelNo
          SET @cOutField04 = '' -- LabelNo
          SET @cOutField05 = '' -- Option
-         
+
          GOTO Quit
       END
 
@@ -2070,7 +2295,18 @@ BEGIN
          -- Go to option (confirm/close case) screen
          SET @nScn  = @nScn + 1
          SET @nStep = @nStep + 1
-         SET @cOutField01 = ''
+
+         --(cc01)
+         IF @cDefaultConfirmOp = '1'
+         BEGIN
+            SET @cOutField01 = '1'
+         END
+         ELSE
+         BEGIN
+            SET @cOutField01 = ''
+         END
+
+         SET @cOutField02 = ''  --(ML01)
          GOTO Quit
       END
 
@@ -2152,14 +2388,74 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LabelNo Used
             GOTO Step_6_Fail
          END
+
+         --(ML01) begin
+         IF @cMultiOpenCarton = '1'
+         BEGIN
+            SELECT TOP 1 @nCartonNo = CartonNo
+              FROM dbo.PackDetail WITH (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+              AND PickSlipNo = @cPickSlipNo
+              AND LabelNo = @cActLabelNo
+
+            IF @@ROWCOUNT = 0
+            BEGIN
+               SELECT TOP 1 @nCartonNo = CartonNo
+                 FROM dbo.PackDetail WITH (NOLOCK)
+               WHERE StorerKey = @cStorerKey
+                 AND PickSlipNo = @cPickSlipNo
+                 AND LabelNo = ''
+
+               IF @@ROWCOUNT = 0
+               BEGIN
+                  DELETE FROM dbo.PackDetail WITH (ROWLOCK)
+                  WHERE StorerKey = @cStorerKey
+                     AND PickSlipNo = @cPickSlipNo
+                     AND SKU = ''
+                  IF @@ERROR <> 0
+                  BEGIN
+                     SET @nErrNo = 64457
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'DelPackDtlFail'
+                     GOTO Step_6_Fail
+                  END
+
+                  INSERT INTO dbo.PackDetail WITH (ROWLOCK)
+                     (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate)
+                  VALUES
+                     (@cPickSlipNo, 0, @cActLabelNo, '', @cStorerKey, '', 0, 'rdt.' + sUser_sName(), GETDATE(), 'rdt.' + sUser_sName(), GETDATE())
+                  IF @@ERROR <> 0
+                  BEGIN
+                     SET @nErrNo = 64458
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'InsPackDtlFail'
+                     GOTO Step_6_Fail
+                  END
+
+                  -- Get carton no (if insert cartonno = 0, system will auto assign max cartonno)
+                  SELECT @nCartonNo = CartonNo
+                  FROM dbo.PackDetail WITH (NOLOCK)
+                  WHERE PickSlipNo = @cPickSlipNo
+                     AND LabelNo = @cActLabelNo
+               END
+            END
+
+            UPDATE rdt.rdtDynamicPickLog WITH (ROWLOCK)
+               SET CartonNo = @nCartonNo
+                 , LabelNo  = @cActLabelNo
+             WHERE PickSlipNo = @cPickSlipNo
+               AND Zone = @cPickZone
+               AND FromLOC = @cFromLOC
+               AND ToLOC = @cToLOC
+               AND AddWho = @cUserName
+         END
+         --(ML01) end
       END
 
-      -- Extended update
-      IF @cExtendedUpdateSP <> ''
+      -- Extended Validate --(cc01)
+      IF @cExtendedValidateSP <> ''
       BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
          BEGIN
-            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey ' +
                ',@cWaveKey, @cLoadKey, @cPickZone, @cPKSLIP_Cnt, @cCountry, @cFromLOC, @cToLOC ' +
                ',@cT_PickSlipNo1, @cT_PickSlipNo2, @cT_PickSlipNo3, @cT_PickSlipNo4, @cT_PickSlipNo5 ' +
@@ -2167,11 +2463,11 @@ BEGIN
                ',@cS_LOC, @cSKU, @cLottable01, @cLottable02, @cLottable03, @dLottable04 ' +
                ',@nQtyToPick, @nActQty, @nCartonNo, @cLabelNo, @cOption, @nErrNo  OUTPUT, @cErrMsg OUTPUT'
             SET @cSQLParam =
-               ' @nMobile         INT           ' +  
-               ',@nFunc           INT           ' + 
-               ',@cLangCode       NVARCHAR( 3)  ' + 
+               ' @nMobile         INT           ' +
+               ',@nFunc           INT           ' +
+               ',@cLangCode       NVARCHAR( 3)  ' +
                ',@nStep           INT           ' +
-               ',@nInputKey       INT           ' + 
+               ',@nInputKey       INT           ' +
                ',@cFacility       NVARCHAR( 5)  ' +
                ',@cStorerKey      NVARCHAR( 15) ' +
                ',@cWaveKey        NVARCHAR( 10) ' +
@@ -2205,12 +2501,75 @@ BEGIN
                ',@nErrNo          INT OUTPUT    ' +
                ',@cErrMsg         NVARCHAR( 20) OUTPUT'
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey 
-               ,@cWaveKey, @cLoadKey, @cPickZone, @cPKSLIP_Cnt, @cCountry, @cFromLOC, @cToLOC 
+                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
+               ,@cWaveKey, @cLoadKey, @cPickZone, @cPKSLIP_Cnt, @cCountry, @cFromLOC, @cToLOC
                ,@cT_PickSlipNo1, @cT_PickSlipNo2, @cT_PickSlipNo3, @cT_PickSlipNo4, @cT_PickSlipNo5
                ,@cT_PickSlipNo6, @cT_PickSlipNo7, @cT_PickSlipNo8, @cT_PickSlipNo9, @cPickSlipNo
                ,@cS_LOC, @cSKU, @cLottable01, @cLottable02, @cLottable03, @dLottable04
-               ,@nQtyToPick, @nActQty, @nCartonNo, @cLabelNo, @cOption, @nErrNo  OUTPUT, @cErrMsg OUTPUT
+               ,@nQtyToPick, @nActQty, @nCartonNo, @cActLabelNo, @cOption, @nErrNo  OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
+      END
+
+      -- Extended update
+      IF @cExtendedUpdateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey ' +
+               ',@cWaveKey, @cLoadKey, @cPickZone, @cPKSLIP_Cnt, @cCountry, @cFromLOC, @cToLOC ' +
+               ',@cT_PickSlipNo1, @cT_PickSlipNo2, @cT_PickSlipNo3, @cT_PickSlipNo4, @cT_PickSlipNo5 ' +
+               ',@cT_PickSlipNo6, @cT_PickSlipNo7, @cT_PickSlipNo8, @cT_PickSlipNo9, @cPickSlipNo ' +
+               ',@cS_LOC, @cSKU, @cLottable01, @cLottable02, @cLottable03, @dLottable04 ' +
+               ',@nQtyToPick, @nActQty, @nCartonNo, @cLabelNo, @cOption, @nErrNo  OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               ' @nMobile         INT           ' +
+               ',@nFunc           INT           ' +
+               ',@cLangCode       NVARCHAR( 3)  ' +
+               ',@nStep           INT           ' +
+               ',@nInputKey       INT           ' +
+               ',@cFacility       NVARCHAR( 5)  ' +
+               ',@cStorerKey      NVARCHAR( 15) ' +
+               ',@cWaveKey        NVARCHAR( 10) ' +
+               ',@cLoadKey        NVARCHAR( 10) ' +
+               ',@cPickZone       NVARCHAR( 10) ' +
+               ',@cPKSLIP_Cnt     NVARCHAR( 5)  ' +
+               ',@cCountry        NVARCHAR( 20) ' +
+               ',@cFromLOC        NVARCHAR( 10) ' +
+               ',@cToLOC          NVARCHAR( 10) ' +
+               ',@cT_PickSlipNo1  NVARCHAR( 10) ' +
+               ',@cT_PickSlipNo2  NVARCHAR( 10) ' +
+               ',@cT_PickSlipNo3  NVARCHAR( 10) ' +
+               ',@cT_PickSlipNo4  NVARCHAR( 10) ' +
+               ',@cT_PickSlipNo5  NVARCHAR( 10) ' +
+               ',@cT_PickSlipNo6  NVARCHAR( 10) ' +
+               ',@cT_PickSlipNo7  NVARCHAR( 10) ' +
+               ',@cT_PickSlipNo8  NVARCHAR( 10) ' +
+               ',@cT_PickSlipNo9  NVARCHAR( 10) ' +
+               ',@cPickSlipNo     NVARCHAR( 10) ' +
+               ',@cS_LOC          NVARCHAR( 10) ' +
+               ',@cSKU            NVARCHAR( 20) ' +
+               ',@cLottable01     NVARCHAR( 18) ' +
+               ',@cLottable02     NVARCHAR( 18) ' +
+               ',@cLottable03     NVARCHAR( 18) ' +
+               ',@dLottable04     DATETIME      ' +
+               ',@nQtyToPick      INT           ' +
+               ',@nActQty         INT           ' +
+               ',@nCartonNo       INT           ' +
+               ',@cLabelNo        NVARCHAR( 20) ' +
+               ',@cOption         NVARCHAR( 1)  ' +
+               ',@nErrNo          INT OUTPUT    ' +
+               ',@cErrMsg         NVARCHAR( 20) OUTPUT'
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
+               ,@cWaveKey, @cLoadKey, @cPickZone, @cPKSLIP_Cnt, @cCountry, @cFromLOC, @cToLOC
+               ,@cT_PickSlipNo1, @cT_PickSlipNo2, @cT_PickSlipNo3, @cT_PickSlipNo4, @cT_PickSlipNo5
+               ,@cT_PickSlipNo6, @cT_PickSlipNo7, @cT_PickSlipNo8, @cT_PickSlipNo9, @cPickSlipNo
+               ,@cS_LOC, @cSKU, @cLottable01, @cLottable02, @cLottable03, @dLottable04
+               ,@nQtyToPick, @nActQty, @nCartonNo, @cActLabelNo, @cOption, @nErrNo  OUTPUT, @cErrMsg OUTPUT
 
             IF @nErrNo <> 0
                GOTO Quit
@@ -2258,7 +2617,7 @@ BEGIN
                   AND Zone = @cPickZone
                   AND FromLOC = @cFromLOC
                   AND ToLOC = @cToLOC
-		            AND AddWho = @cUserName
+                  AND AddWho = @cUserName
                   AND CartonNo = @nCartonNo
 
                IF @@ERROR <> 0
@@ -2285,7 +2644,7 @@ BEGIN
             WHERE StorerKey = @cStorerKey
                AND PickSlipNo = @cPickSlipNo
                AND CartonNo = @nCartonNo
-               AND LabelNo = @cActLabelNo)
+               AND LabelNo = @cActLabelNo) AND @cMultiOpenCarton <> '1'
          BEGIN
             SET @nErrNo = 64440
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- LabelNo Exists
@@ -2296,8 +2655,8 @@ BEGIN
 
       -- Update RDTDynamicPickLog (LabelNo)
       DECLARE @nRowRef INT
-      SELECT @nRowRef = RowRef 
-      FROM RDT.RDTDynamicPickLog WITH (NOLOCK) 
+      SELECT @nRowRef = RowRef
+      FROM RDT.RDTDynamicPickLog WITH (NOLOCK)
       WHERE PickSlipNo = @cPickSlipNo
          AND Zone = @cPickZone
          AND FromLOC = @cFromLOC
@@ -2343,12 +2702,87 @@ BEGIN
 
       COMMIT TRAN
       SET @cLabelNo = @cActLabelNo
+      SET @cOutField02 = ''  --(ML01)
+
+      -- Extended Info   --(cc01)
+      IF @cExtendedInfoSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey ' +
+               ',@cWaveKey, @cLoadKey, @cPickZone, @cPKSLIP_Cnt, @cCountry, @cFromLOC, @cToLOC ' +
+               ',@cT_PickSlipNo1, @cT_PickSlipNo2, @cT_PickSlipNo3, @cT_PickSlipNo4, @cT_PickSlipNo5 ' +
+               ',@cT_PickSlipNo6, @cT_PickSlipNo7, @cT_PickSlipNo8, @cT_PickSlipNo9, @cPickSlipNo ' +
+               ',@cS_LOC, @cSKU, @cLottable01, @cLottable02, @cLottable03, @dLottable04 ' +
+               ',@nQtyToPick, @nActQty, @nCartonNo, @cLabelNo, @cOption ' +
+               ',@cExtendedInfo1 OUTPUT, @nErrNo  OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               ' @nMobile         INT           ' +
+               ',@nFunc           INT           ' +
+               ',@cLangCode       NVARCHAR( 3)  ' +
+               ',@nStep           INT           ' +
+               ',@nInputKey       INT           ' +
+               ',@cFacility       NVARCHAR( 5)  ' +
+               ',@cStorerKey      NVARCHAR( 15) ' +
+               ',@cWaveKey        NVARCHAR( 10) ' +
+               ',@cLoadKey        NVARCHAR( 10) ' +
+               ',@cPickZone       NVARCHAR( 10) ' +
+               ',@cPKSLIP_Cnt     NVARCHAR( 5)  ' +
+               ',@cCountry        NVARCHAR( 20) ' +
+               ',@cFromLOC        NVARCHAR( 10) ' +
+               ',@cToLOC          NVARCHAR( 10) ' +
+               ',@cT_PickSlipNo1  NVARCHAR( 10) ' +
+               ',@cT_PickSlipNo2  NVARCHAR( 10) ' +
+               ',@cT_PickSlipNo3  NVARCHAR( 10) ' +
+               ',@cT_PickSlipNo4  NVARCHAR( 10) ' +
+               ',@cT_PickSlipNo5  NVARCHAR( 10) ' +
+               ',@cT_PickSlipNo6  NVARCHAR( 10) ' +
+               ',@cT_PickSlipNo7  NVARCHAR( 10) ' +
+               ',@cT_PickSlipNo8  NVARCHAR( 10) ' +
+               ',@cT_PickSlipNo9  NVARCHAR( 10) ' +
+               ',@cPickSlipNo     NVARCHAR( 10) ' +
+               ',@cS_LOC          NVARCHAR( 10) ' +
+               ',@cSKU            NVARCHAR( 20) ' +
+               ',@cLottable01     NVARCHAR( 18) ' +
+               ',@cLottable02     NVARCHAR( 18) ' +
+               ',@cLottable03     NVARCHAR( 18) ' +
+               ',@dLottable04     DATETIME      ' +
+               ',@nQtyToPick      INT           ' +
+               ',@nActQty         INT           ' +
+               ',@nCartonNo       INT           ' +
+               ',@cLabelNo        NVARCHAR( 20) ' +
+               ',@cOption         NVARCHAR( 1)  ' +
+               ',@cExtendedInfo1  NVARCHAR( 20) OUTPUT' +
+               ',@nErrNo          INT OUTPUT    ' +
+               ',@cErrMsg         NVARCHAR( 20) OUTPUT'
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
+               ,@cWaveKey, @cLoadKey, @cPickZone, @cPKSLIP_Cnt, @cCountry, @cFromLOC, @cToLOC
+               ,@cT_PickSlipNo1, @cT_PickSlipNo2, @cT_PickSlipNo3, @cT_PickSlipNo4, @cT_PickSlipNo5
+               ,@cT_PickSlipNo6, @cT_PickSlipNo7, @cT_PickSlipNo8, @cT_PickSlipNo9, @cPickSlipNo
+               ,@cS_LOC, @cSKU, @cLottable01, @cLottable02, @cLottable03, @dLottable04
+               ,@nQtyToPick, @nActQty, @nCartonNo, @cLabelNo, @cOption
+               ,@cExtendedInfo1  OUTPUT, @nErrNo  OUTPUT, @cErrMsg OUTPUT
+
+            IF @cExtendedInfo1 <> ''
+               SET @cOutField02 = @cExtendedInfo1
+         END
+      END
 
       -- Go to option (confirm/close case) screen
       SET @nScn  = @nScn + 1
       SET @nStep = @nStep + 1
 
-      SET @cOutField01 = ''
+      --(cc01)
+      IF @cDefaultConfirmOp = '1'
+      BEGIN
+         SET @cOutField01 = '1'
+      END
+      ELSE
+      BEGIN
+         SET @cOutField01 = ''
+      END
       GOTO Quit
    END
 
@@ -2426,6 +2860,8 @@ BEGIN
          -- Check if short pick
          IF @nQtyToPick <> @nActQty
          BEGIN
+            SET @cOutField01 = ''   --(ML01)
+
             -- Go to short pick screen
             SET @nScn  = @nScn + 1
             SET @nStep = @nStep + 1
@@ -2455,7 +2891,7 @@ BEGIN
 
          -- Confirm PickDetail, insert/update PackDetail
          SET @nErrNo = 0
-         EXECUTE rdt.rdt_DynamicPick_PickAndPack_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+         EXECUTE rdt.rdt_DynamicPick_PickAndPack_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
             @cPickSlipType,
             @cPickSlipNo,
             @cPickZone,
@@ -2470,7 +2906,7 @@ BEGIN
             @nCartonNo,
             @cLabelNo,
             @nErrNo  OUTPUT,
-            @cErrMsg OUTPUT  
+            @cErrMsg OUTPUT
 
          IF @nErrNo <> 0
             GOTO Quit
@@ -2487,7 +2923,7 @@ BEGIN
          SET @nErrNo = 0
          BEGIN TRAN
          -- Confirm PickDetail, insert/update PackDetail
-         EXECUTE rdt.rdt_DynamicPick_PickAndPack_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+         EXECUTE rdt.rdt_DynamicPick_PickAndPack_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
             @cPickSlipType,
             @cPickSlipNo,
             @cPickZone,
@@ -2511,8 +2947,8 @@ BEGIN
          END
 
          -- Confirm PackHeader, scan out PickingInfo (if pickslip fully picked)
-         EXECUTE rdt.rdt_DynamicPick_PickAndPack_Close @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
-            @cPickSlipType, 
+         EXECUTE rdt.rdt_DynamicPick_PickAndPack_Close @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+            @cPickSlipType,
             @cPickSlipNo,
             @nErrNo  OUTPUT,
             @cErrMsg OUTPUT
@@ -2525,28 +2961,31 @@ BEGIN
          COMMIT TRAN
 
          -- New carton
-         EXECUTE rdt.rdt_DynamicPick_PickAndPack_NewCarton @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
-            @cUserName, 
+         EXECUTE rdt.rdt_DynamicPick_PickAndPack_NewCarton @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+            @cUserName,
             @cPrinter,
             @cPickSlipType,
             @cPickSlipNo,
             @cPickZone,
             @cFromLOC,
-            @cToLOC, 
-            @cDynamicPickCartonLabel, 
-            @cDynamicPickCartonManifest, 
-            @cDynamicPickPrePrintedLabelNo, 
+            @cToLOC,
+            @cDynamicPickCartonLabel,
+            @cDynamicPickCartonManifest,
+            @cDynamicPickPrePrintedLabelNo,
             @nCartonNo OUTPUT,
             @cLabelNo  OUTPUT,
             @nErrNo    OUTPUT,
             @cErrMsg   OUTPUT
       END
-      
+
       GOTO Where_To_Go
    END
 
    IF @nInputKey = 0 -- ESC
    BEGIN
+      IF @cMultiOpenCarton = '1'       --(ML01)
+         SET @cLabelNo = ''            --(ML01)
+
       -- Prepare prev screen
       SET @cOutField01 = @cPickSlipNo
       SET @cOutField02 = @nCartonNo
@@ -2602,9 +3041,9 @@ BEGIN
       BEGIN
          -- Confirm PickDetail, insert/update PackDetail
          SET @nErrNo = 0
-         EXECUTE rdt.rdt_DynamicPick_PickAndPack_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
-            @cPickSlipType, 
-            @cPickSlipNo, 
+         EXECUTE rdt.rdt_DynamicPick_PickAndPack_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+            @cPickSlipType,
+            @cPickSlipNo,
             @cPickZone,
             @cC_Loc,
             @cSKU,
@@ -2617,7 +3056,7 @@ BEGIN
             @nCartonNo,
             @cLabelNo,
             @nErrNo  OUTPUT,
-            @cErrMsg OUTPUT  
+            @cErrMsg OUTPUT
          IF @nErrNo <> 0 GOTO Quit
 
          GOTO Where_To_Go
@@ -2625,6 +3064,34 @@ BEGIN
 
       IF @cOption = '2'
       BEGIN
+         IF @cMultiOpenCarton = '1' --(cc01)
+         BEGIN
+            -- Confirm PickDetail, insert/update PackDetail
+            SET @nErrNo = 0
+            EXECUTE rdt.rdt_DynamicPick_PickAndPack_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+               @cPickSlipType,
+               @cPickSlipNo,
+               @cPickZone,
+               @cC_Loc,
+               @cSKU,
+               @cLottable01,
+               @cLottable02,
+               @cLottable03,
+               @dLottable04,
+               @nActQty,
+               'N', -- Short = Y/N
+               @nCartonNo,
+               @cLabelNo,
+               @nErrNo  OUTPUT,
+               @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Quit
+
+            GOTO Where_To_Go
+         END
+
+
          -- Prepare prev screen variable
          SET @cOption = ''
          SET @cOutField01 = '' -- Option
@@ -2659,12 +3126,12 @@ Where_To_Go:
 BEGIN
    -- Get next task
    SET @nErrNo = 0
-      EXEC rdt.rdt_DynamicPick_PickAndPack_GetNextTask @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+      EXEC rdt.rdt_DynamicPick_PickAndPack_GetNextTask @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
       @cPickZone,
       @cFromLOC,
       @cToLOC,
       @cC_Loc,
-      @cPickSlipType, 
+      @cPickSlipType,
       @cT_PickSlipNo1,
       @cT_PickSlipNo2,
       @cT_PickSlipNo3,
@@ -2707,7 +3174,7 @@ BEGIN
       SET @cOutField10 = CASE WHEN @cDynamicPickDisableQTYField = '1' THEN '0' ELSE '' END -- QTY
       SET @cOutField11 = '' -- SKU
       SET @cOutField12 = RTRIM(CAST( ISNULL(@nOtherLocQtyToPick, 0) AS NVARCHAR( 8))) + '/' + CAST( ISNULL(@nTotalQtyToPick, 0) AS NVARCHAR( 8))   -- ZG01
-      
+
       SET @nActQty = 0
       SET @cSKUValidated = '0'
 
@@ -2723,11 +3190,11 @@ BEGIN
       -- If no task at same location, check if any different loc to pick
       SET @nErrNo = 0
       SET @cS_Loc = ''
-      EXECUTE rdt.rdt_DynamicPick_PickAndPack_GetNextLOC @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+      EXECUTE rdt.rdt_DynamicPick_PickAndPack_GetNextLOC @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
          @cPickZone,
          @cFromLOC,
          @cToLOC,
-         @cPickSlipType, 
+         @cPickSlipType,
          @cT_PickSlipNo1,
          @cT_PickSlipNo2,
          @cT_PickSlipNo3,
@@ -2761,11 +3228,11 @@ BEGIN
          -- Calculate TotalPickQty and TotalCBM
          SET @nTotal_PickQTY = 0
          SET @cTotal_CBM = ''
-         EXECUTE rdt.rdt_DynamicPick_PickAndPack_CalcTotalQTYAndCBM @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+         EXECUTE rdt.rdt_DynamicPick_PickAndPack_CalcTotalQTYAndCBM @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
             @cPickZone,
             @cFromLOC,
             @cToLOC,
-            @cPickSlipType, 
+            @cPickSlipType,
             @cT_PickSlipNo1,
             @cT_PickSlipNo2,
             @cT_PickSlipNo3,
@@ -2793,9 +3260,9 @@ BEGIN
          SELECT @cLocDescr = SUBSTRING( Descr, 1, 20) FROM dbo.LOC WITH (NOLOCK) WHERE Facility = @cFacility AND LOC = @cToLOC
          IF ISNULL( @cLocDescr, '') = ''
             SET @cLocDescr = @cToLOC
-         
+
          SET @cOutField06 = CASE WHEN @cLocShowDescr = '1' THEN @cLocDescr ELSE @cToLOC END
-      
+
          SET @cOutField07 = @nTotal_PickQty
          SET @cOutField08 = @cTotal_CBM
          SET @cOutField09 = @cLoadKey
@@ -2847,7 +3314,7 @@ BEGIN
          'CHECK',
          @cMultiSKUBarcode,
          @cStorerKey,
-         @cSKU     OUTPUT,
+         @cActSKU  OUTPUT,   --(ML01)
          @nErrNo   OUTPUT,
          @cErrMsg  OUTPUT
 
@@ -2857,13 +3324,7 @@ BEGIN
             SET @nErrNo = 0
          GOTO Quit
       END
-
-      -- Get SKU info
-      SELECT @cSKUDescr = Descr FROM dbo.SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU
    END
-
-   SET @nActQty = 0
-   SET @cSKUValidated = '0'
 
    -- Disable QTY field
    IF @cDynamicPickDisableQTYField = '1'
@@ -2879,8 +3340,8 @@ BEGIN
    SET @cOutField07 = @cLottable03
    SET @cOutField08 = rdt.rdtFormatDate( @dLottable04)
    SET @cOutField09 = @nQtyToPick
-   SET @cOutField10 = CASE WHEN @cDynamicPickDisableQTYField = '1' THEN '0' ELSE '' END -- QTY
-   SET @cOutField11 = @cSKU  -- SKU
+   SET @cOutField10 = @nActQty  --(ML01)
+   SET @cOutField11 = @cActSKU  --(ML01)
    SET @cOutField12 = RTRIM(CAST( ISNULL(@nOtherLocQtyToPick, 0) AS NVARCHAR( 8))) + '/' + CAST( ISNULL(@nTotalQtyToPick, 0) AS NVARCHAR( 8))   -- ZG01
    SET @cOutField13 = CASE WHEN @cPrePackIndicator = '2' THEN ISNULL(@nPackQtyIndicator, '0') ELSE '' END
 
@@ -2897,7 +3358,7 @@ Quit. Update back to I/O table, ready to be pick up by JBOSS
 Quit:
 BEGIN
    UPDATE RDTMOBREC WITH (ROWLOCK) SET
-      EditDate = GETDATE(), 
+      EditDate = GETDATE(),
       ErrMsg   = @cErrMsg,
       Func     = @nFunc,
       Step     = @nStep,
@@ -2917,7 +3378,7 @@ BEGIN
 
       V_LOC        = @cFromLOC,
       V_PickSlipNo = @cPickSlipNo,
-      V_LoadKey    = @cLoadKey, 
+      V_LoadKey    = @cLoadKey,
 
       V_String1    = @cWaveKey,
       V_String2    = @cPickZone,
@@ -2939,34 +3400,39 @@ BEGIN
       V_String18   = @cT_PickSlipNo9,
       V_String19   = @cPrePackIndicator,
       V_String21   = @cSKUValidated,
-      V_String24   = @cSuggestedSKU, 
-      V_String25   = @cDecodeSP,   
-      V_String26   = @cPickSlipType,  
-      V_String28   = @cDynamicPickPickZone, 
+      V_String24   = @cSuggestedSKU,
+      V_String25   = @cDecodeSP,
+      V_String26   = @cPickSlipType,
+      V_String28   = @cDynamicPickPickZone,
       V_String29   = @cDynamicPickDefaultQTY,
       V_String30   = @cDynamicPickAutoDefaultDPLoc,
       V_String31   = @cDynamicPickCartonLabel,
       V_String32   = @cDynamicPickCartonManifest,
       V_String33   = @cPopulatePickSlipSP,
       V_String34   = @cDynamicPickDefaultLBLNoIf1PSNO,
-      V_String35   = @cExtendedValidateSP, 
+      V_String35   = @cExtendedValidateSP,
       V_String36   = @cDynamicPickPrePrintedLabelNo,
       V_String37   = @cDynamicPickReplenB4Pick, -- (ChewKP01)
       V_String38   = @cDynamicPickDisableQTYField,
       V_String39   = @cDecodeLabelNo,
       V_String40   = @cExtendedUpdateSP,
       V_String43   = @cMultiSKUBarcode,
+      V_String44   = @cDisableNewCtnOp,   --(cc01)
+      V_String45   = @cDefaultConfirmOp,  --(cc01)
+      V_String46   = @cExtendedInfoSP,    --(cc01)
+      V_String47   = @cExtendedInfo1,     --(cc01)
+      V_String48   = @cMultiOpenCarton,   --(cc01)
 
       V_QTY        = @nActQty,
-      V_Cartonno   = @nCartonNo, 
+      V_Cartonno   = @nCartonNo,
       V_FromScn    = @nFromScn,
-      
+
       V_Integer1   = @nPackQtyIndicator,
       V_Integer2   = @nTotal_PSNO,
       V_Integer3   = @nQtyToPick,
       V_Integer4   = @nOtherLocQtyToPick,
       V_Integer5   = @nTotalQtyToPick,
-      
+
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
       I_Field03 = @cInField03,  O_Field03 = @cOutField03,   FieldAttr03  = @cFieldAttr03,
@@ -2974,7 +3440,7 @@ BEGIN
       I_Field05 = @cInField05,  O_Field05 = @cOutField05,   FieldAttr05  = @cFieldAttr05,
       I_Field06 = @cInField06,  O_Field06 = @cOutField06,   FieldAttr06  = @cFieldAttr06,
       I_Field07 = @cInField07,  O_Field07 = @cOutField07,   FieldAttr07  = @cFieldAttr07,
-      I_Field08 = @cInField08,  O_Field08 = @cOutField08,   FieldAttr08  = @cFieldAttr08, 
+      I_Field08 = @cInField08,  O_Field08 = @cOutField08,   FieldAttr08  = @cFieldAttr08,
       I_Field09 = @cInField09,  O_Field09 = @cOutField09,   FieldAttr09  = @cFieldAttr09,
       I_Field10 = @cInField10,  O_Field10 = @cOutField10,   FieldAttr10  = @cFieldAttr10,
       I_Field11 = @cInField11,  O_Field11 = @cOutField11,   FieldAttr11  = @cFieldAttr11,
