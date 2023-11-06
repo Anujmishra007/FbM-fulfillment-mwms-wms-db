@@ -1,4 +1,4 @@
-﻿IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = object_id(N'[dbo].[isp_ecom_express_delivery_rpt]') 
+IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = object_id(N'[dbo].[isp_ecom_express_delivery_rpt]') 
               AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
 DROP PROCEDURE [dbo].[isp_ecom_express_delivery_rpt]
 GO
@@ -14,7 +14,7 @@ GO
 /* Copyright: LF Logistics                                                 */          
 /* Written by: CSCHONG                                                     */          
 /*                                                                         */          
-/* Purpose:WMS-15386-【CN】Converse_ecom_express_delivery_list_CR            */          
+/* Purpose:WMS-15386-?CN?Converse_ecom_express_delivery_list_CR            */          
 /*        :                                                                */          
 /* Called By: r_dw_ecom_express_delivery_rpt                               */          
 /*          :                                                              */          

@@ -30,7 +30,7 @@ GO
 /* 06 JUL 2022  AikLiang 1.1  Performance Tune (AL01)                   */
 /************************************************************************/      
       
-CREATE PROC [dbo].[isp_CartonManifestLabel23a_rdt_wave] (      
+CREATE OR ALTER PROC [dbo].[isp_CartonManifestLabel23a_rdt_wave] (      
          @c_wavekey NVARCHAR(10)       
 )      
 AS      

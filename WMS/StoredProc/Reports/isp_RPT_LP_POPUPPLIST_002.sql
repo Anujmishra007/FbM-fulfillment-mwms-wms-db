@@ -27,7 +27,7 @@ GO
 /* 26-Sep-2023  WLChooi  1.3  UWP-8577 - Show ExtField04 (WL03)              */
 /* 19-Sep-2023  Calvin   1.4  INC6339467 Expand var to fit sif.ext04 (CLVN01)*/
 /*****************************************************************************/
-ALTER   PROC [dbo].[isp_RPT_LP_POPUPPLIST_002]
+CREATE OR ALTER   PROC [dbo].[isp_RPT_LP_POPUPPLIST_002]
 (@c_Loadkey NVARCHAR(10))
 AS
 BEGIN

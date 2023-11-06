@@ -1,4 +1,4 @@
-﻿IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[isp_Delivery_Note35_rdt]') AND type in (N'P', N'PC'))
+IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[isp_Delivery_Note35_rdt]') AND type in (N'P', N'PC'))
 DROP PROCEDURE [dbo].[isp_Delivery_Note35_rdt]
 GO
 

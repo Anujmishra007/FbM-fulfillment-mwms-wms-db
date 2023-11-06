@@ -38,7 +38,7 @@ GO
 /* Date         Author        Purposes                                  */
 /* 19-sEP-2023  Calvin        JSM-178458 Extend Lott12 field (CLVN01)   */
 /************************************************************************/
-ALTER PROC [dbo].[isp_adjsumm_06] (
+CREATE OR ALTER PROC [dbo].[isp_adjsumm_06] (
       @c_Adjustmentkey  NVARCHAR(10)
    ,  @c_UserID         NVARCHAR(20))
  AS

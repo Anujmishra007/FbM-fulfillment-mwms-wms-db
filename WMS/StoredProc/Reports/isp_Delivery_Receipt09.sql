@@ -1,7 +1,5 @@
-USE [MYWMS]
-GO
-
-/****** Object:  StoredProcedure [dbo].[isp_Delivery_Receipt09]    Script Date: 3/25/2022 11:34:00 AM ******/
+ 
+  
 SET ANSI_NULLS OFF
 GO
 
@@ -41,7 +39,7 @@ GO
 /* 2022-03-18   CalvinK   1.7 JSM-57929 Add UserDefine03 conditions (CLVN01) */
 /* 2022-03-25   CalvinK   1.8 JSM-57929 Alter UserDefine04 (CLVN02)          */
 /*****************************************************************************/  
-ALTER PROC [dbo].[isp_Delivery_Receipt09]
+CREATE OR ALTER PROC [dbo].[isp_Delivery_Receipt09]
             @c_MBOLKey    NVARCHAR(10)
 AS  
 BEGIN  
