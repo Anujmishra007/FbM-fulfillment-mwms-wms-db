@@ -45,6 +45,8 @@ GO
 /* 2022-Aug-17  WLChooi 2.3   WMS-20472 - Delete SerialNo (WL01)        */
 /* 2023-MAR-29  NJOW06  2.4   WMS-21989 enhance delete/update serialno  */
 /*                            condition                                 */
+/* 2023-OCT-24  NJOW07  2.5   Fix - delete/update serial include carton */
+/*                            field in the condition. Perfomance tuning */
 /************************************************************************/        
 CREATE OR ALTER TRIGGER [ntrPackDetailDelete] ON [PackDetail]      
 FOR  DELETE      
@@ -77,6 +79,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
  DECLARE @c_Pickdetailkey     NVARCHAR(10)    --(Kc01)
          ,@n_ShortPackQty     INT            --(Kc01)
          ,@c_GetSkuFromSN_UPC NVARCHAR(30)=''  --NJOW06
+         ,@c_SerialNoKey      NVARCHAR(10) --NJOW07
        
    DECLARE @n_PackQRFKey      BIGINT         --(Wan01)
          , @cur_PQRF          CURSOR         --(Wan01)
@@ -402,7 +405,8 @@ END
        LEFT JOIN UPC (NOLOCK) ON SERIALNO.UserDefine02 = UPC.Upc AND SERIALNO.Storerkey = UPC.Storerkey                                                                                                --                  	                                                                   
        JOIN DELETED ON PH.PickslipNo = DELETED.PickslipNo
                       AND (SerialNo.Sku = DELETED.Sku OR UPC.Sku = DELETED.Sku)
-                      AND SerialNo.OrderLineNumber = LTRIM(CAST(DELETED.Cartonno AS NVARCHAR(5)))           
+                      AND (SerialNo.OrderLineNumber = LTRIM(CAST(DELETED.Cartonno AS NVARCHAR(5)))          
+                           OR SerialNo.CartonNo = DELETED.CartonNo)  --NJOW07
                       AND (SerialNo.LabelLine = DELETED.LabelLine OR ISNULL(SerialNo.LabelLine,'')='')   --WL01
        JOIN SKU (NOLOCK) ON DELETED.Storerkey = SKU.Storerkey AND DELETED.Sku = SKU.Sku
        LEFT JOIN STORERCONFIG SC (NOLOCK) ON PH.Storerkey = SC.Storerkey AND SC.Configkey = 'ADAllowInsertExistingSerialNo' AND SC.Option1 = 'NotAllowInsertNewSerialNo' AND SC.Svalue = '1' --NJOW05
@@ -417,7 +421,8 @@ END
                                  AND (SerialNo.Pickslipno = PH.Pickslipno OR ISNULL(Serialno.Pickslipno,'')='')   --WL01
        JOIN DELETED ON PH.PickslipNo = DELETED.PickslipNo
                       AND SerialNo.Sku = DELETED.Sku 
-                      AND SerialNo.OrderLineNumber = LTRIM(CAST(DELETED.Cartonno AS NVARCHAR(5)))           
+                      AND (SerialNo.OrderLineNumber = LTRIM(CAST(DELETED.Cartonno AS NVARCHAR(5)))           
+                           OR SerialNo.CartonNo = DELETED.CartonNo)  --NJOW07
                       AND (SerialNo.LabelLine = DELETED.LabelLine OR ISNULL(SerialNo.LabelLine,'')='')   --WL01
        JOIN SKU (NOLOCK) ON DELETED.Storerkey = SKU.Storerkey AND DELETED.Sku = SKU.Sku
        LEFT JOIN STORERCONFIG SC (NOLOCK) ON PH.Storerkey = SC.Storerkey AND SC.Configkey = 'ADAllowInsertExistingSerialNo' AND SC.Option1 = 'NotAllowInsertNewSerialNo' AND SC.Svalue = '1' --NJOW05
@@ -435,7 +440,54 @@ END
     
     IF @c_GetSkuFromSN_UPC = '1' --NJOW06
     BEGIN
+    	 --NJOW07 S
+   	   DECLARE cur_SERUPD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR       
+   	      SELECT SERIALNO.SerialNokey
+   	      FROM SERIALNO (NOLOCK)
+          JOIN PACKHEADER PH (NOLOCK) ON SerialNo.Orderkey = PH.Orderkey AND SerialNo.Storerkey = PH.Storerkey 
+                                     AND (SerialNo.Pickslipno = PH.Pickslipno OR ISNULL(Serialno.Pickslipno,'')='')   --WL01
+          LEFT JOIN UPC (NOLOCK) ON SERIALNO.UserDefine02 = UPC.Upc AND SERIALNO.Storerkey = UPC.Storerkey                 	                                                                                                     
+          JOIN DELETED ON PH.PickslipNo = DELETED.PickslipNo
+                          AND (SerialNo.Sku = DELETED.Sku OR UPC.Sku = DELETED.Sku)
+                          AND (SerialNo.OrderLineNumber = LTRIM(CAST(DELETED.Cartonno AS NVARCHAR(5))) 
+                               OR SerialNo.CartonNo = DELETED.CartonNo)  --NJOW07
+                          AND (SerialNo.LabelLine = DELETED.LabelLine OR ISNULL(SerialNo.LabelLine,'')='')   --WL01
+          JOIN SKU (NOLOCK) ON DELETED.Storerkey = SKU.Storerkey AND DELETED.Sku = SKU.Sku
+          JOIN STORERCONFIG SC (NOLOCK) ON PH.Storerkey = SC.Storerkey AND SC.Configkey = 'ADAllowInsertExistingSerialNo' AND SC.Option1 = 'NotAllowInsertNewSerialNo' AND SC.Svalue = '1' --Fix
+          WHERE (SKU.Susr4 = 'AD' OR SKU.SerialNoCapture IN('1','3')) --NJOW06   	   
+
+       OPEN cur_SERUPD  
+       
+       FETCH NEXT FROM cur_SERUPD INTO @c_SerialNoKey
+       
+       WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
+       BEGIN      	
+          UPDATE SERIALNO WITH (ROWLOCK)
+          SET SERIALNO.Orderkey = '',
+              SERIALNO.OrderLineNumber = '',
+              SERIALNO.Status = '1',        
+              SERIALNO.Trafficcop = NULL,
+              SERIALNO.Pickslipno = '',  --NJOW06
+              SERIALNO.CartonNo = 0,  --NJOW06
+              SERIALNO.LabelLine = '' --NJOW06
+          WHERE SERIALNO.SerialNokey = @c_SerialNoKey
+
+          SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+          IF @n_err <> 0
+          BEGIN
+             SELECT @n_continue = 3
+             SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 61817
+             SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update On Table SerialNo Failed. (ntrPackDetailDelete)' + ' ( ' + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '
+          END                       
+          
+          FETCH NEXT FROM cur_SERUPD INTO @c_SerialNoKey
+       END        
+       CLOSE cur_SERUPD
+       DEALLOCATE cur_SERUPD
+       --NJOW07 E
+           	
        --NJOW05
+       /*
        UPDATE SERIALNO WITH (ROWLOCK)
        SET SERIALNO.Orderkey = '',
            SERIALNO.OrderLineNumber = '',
@@ -450,15 +502,63 @@ END
        LEFT JOIN UPC (NOLOCK) ON SERIALNO.UserDefine02 = UPC.Upc AND SERIALNO.Storerkey = UPC.Storerkey                 	                                                                                                     
        JOIN DELETED ON PH.PickslipNo = DELETED.PickslipNo
                        AND (SerialNo.Sku = DELETED.Sku OR UPC.Sku = DELETED.Sku)
-                       AND SerialNo.OrderLineNumber = LTRIM(CAST(DELETED.Cartonno AS NVARCHAR(5))) 
+                       AND (SerialNo.OrderLineNumber = LTRIM(CAST(DELETED.Cartonno AS NVARCHAR(5))) 
+                            OR SerialNo.CartonNo = DELETED.CartonNo)  --NJOW07
                        AND (SerialNo.LabelLine = DELETED.LabelLine OR ISNULL(SerialNo.LabelLine,'')='')   --WL01
        JOIN SKU (NOLOCK) ON DELETED.Storerkey = SKU.Storerkey AND DELETED.Sku = SKU.Sku
        JOIN STORERCONFIG SC (NOLOCK) ON PH.Storerkey = SC.Storerkey AND SC.Configkey = 'ADAllowInsertExistingSerialNo' AND SC.Option1 = 'NotAllowInsertNewSerialNo' AND SC.Svalue = '1' --Fix
        WHERE (SKU.Susr4 = 'AD' OR SKU.SerialNoCapture IN('1','3')) --NJOW06
+       */
     END
     ELSE
     BEGIN
+    	 --NJOW07 S
+   	   DECLARE cur_SERUPD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR       
+          SELECT SERIALNO.SerialNokey   	   
+          FROM SERIALNO (NOLOCK)
+          JOIN PACKHEADER PH (NOLOCK) ON SerialNo.Orderkey = PH.Orderkey AND SerialNo.Storerkey = PH.Storerkey 
+                                     AND (SerialNo.Pickslipno = PH.Pickslipno OR ISNULL(Serialno.Pickslipno,'')='')   --WL01
+          JOIN DELETED ON PH.PickslipNo = DELETED.PickslipNo
+                          AND SerialNo.Sku = DELETED.Sku 
+                          AND (SerialNo.OrderLineNumber = LTRIM(CAST(DELETED.Cartonno AS NVARCHAR(5))) 
+                               OR SerialNo.CartonNo = DELETED.CartonNo)  --NJOW07                       
+                          AND (SerialNo.LabelLine = DELETED.LabelLine OR ISNULL(SerialNo.LabelLine,'')='')   --WL01
+          JOIN SKU (NOLOCK) ON DELETED.Storerkey = SKU.Storerkey AND DELETED.Sku = SKU.Sku
+          JOIN STORERCONFIG SC (NOLOCK) ON PH.Storerkey = SC.Storerkey AND SC.Configkey = 'ADAllowInsertExistingSerialNo' AND SC.Option1 = 'NotAllowInsertNewSerialNo' AND SC.Svalue = '1' --Fix
+          WHERE (SKU.Susr4 = 'AD' OR SKU.SerialNoCapture IN('1','3')) --NJOW06
+          
+       OPEN cur_SERUPD  
+       
+       FETCH NEXT FROM cur_SERUPD INTO @c_SerialNoKey
+       
+       WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
+       BEGIN      	
+          UPDATE SERIALNO WITH (ROWLOCK)
+          SET SERIALNO.Orderkey = '',
+              SERIALNO.OrderLineNumber = '',
+              SERIALNO.Status = '1',        
+              SERIALNO.Trafficcop = NULL,
+              SERIALNO.Pickslipno = '',  --NJOW06
+              SERIALNO.CartonNo = 0,  --NJOW06
+              SERIALNO.LabelLine = '' --NJOW06                      
+          WHERE SERIALNO.SerialNokey = @c_SerialNoKey        
+          
+          SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+          IF @n_err <> 0
+          BEGIN
+             SELECT @n_continue = 3
+             SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 61817
+             SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update On Table SerialNo Failed. (ntrPackDetailDelete)' + ' ( ' + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '
+          END                       
+       	  
+          FETCH NEXT FROM cur_SERUPD INTO @c_SerialNoKey
+       END        
+       CLOSE cur_SERUPD
+       DEALLOCATE cur_SERUPD
+       --NJOW07 E         
+    	
        --NJOW05
+       /*
        UPDATE SERIALNO WITH (ROWLOCK)
        SET SERIALNO.Orderkey = '',
            SERIALNO.OrderLineNumber = '',
@@ -472,21 +572,24 @@ END
                                   AND (SerialNo.Pickslipno = PH.Pickslipno OR ISNULL(Serialno.Pickslipno,'')='')   --WL01
        JOIN DELETED ON PH.PickslipNo = DELETED.PickslipNo
                        AND SerialNo.Sku = DELETED.Sku 
-                       AND SerialNo.OrderLineNumber = LTRIM(CAST(DELETED.Cartonno AS NVARCHAR(5))) 
+                       AND (SerialNo.OrderLineNumber = LTRIM(CAST(DELETED.Cartonno AS NVARCHAR(5))) 
+                            OR SerialNo.CartonNo = DELETED.CartonNo)  --NJOW07                       
                        AND (SerialNo.LabelLine = DELETED.LabelLine OR ISNULL(SerialNo.LabelLine,'')='')   --WL01
        JOIN SKU (NOLOCK) ON DELETED.Storerkey = SKU.Storerkey AND DELETED.Sku = SKU.Sku
        JOIN STORERCONFIG SC (NOLOCK) ON PH.Storerkey = SC.Storerkey AND SC.Configkey = 'ADAllowInsertExistingSerialNo' AND SC.Option1 = 'NotAllowInsertNewSerialNo' AND SC.Svalue = '1' --Fix
        WHERE (SKU.Susr4 = 'AD' OR SKU.SerialNoCapture IN('1','3')) --NJOW06
+       */
     END
     
-
+    /*
     SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
     IF @n_err <> 0
     BEGIN
        SELECT @n_continue = 3
        SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 61817
        SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Delete Trigger On Table PackDetail Failed. (ntrPackDetailDelete)' + ' ( ' + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '
-    END             
+    END
+    */             
  END     
   
 --(Wan02) - START
