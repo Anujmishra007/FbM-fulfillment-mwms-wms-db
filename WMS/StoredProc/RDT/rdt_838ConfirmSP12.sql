@@ -12,6 +12,7 @@ GO
 /* 11-02-2022 1.0  Ung        WMS-19000 Created                         */
 /* 02-06-2022 1.1  Ung        WMS-19000 Fix get max PackDetail.RefNo    */
 /* 13-09-2022 1.2  Ung        WMS-20521 Change custom carton no logic   */
+/* 17-08-2023 1.3  YeeKung    WMS-23312 retrigger transmitlog3 (yeekung01)*/ 
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_838ConfirmSP12 (
@@ -360,6 +361,27 @@ BEGIN
          SET @nErrNo = 183519
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdPackDtlFail
          GOTO RollBackTran
+      END
+
+      IF EXISTS (SELECT 1 
+                 FROM transmitlog3
+                 WHERE key1 = @cOrderKey
+                  AND key3 = @cStorerKey
+                  AND tablename='PICKCFMLOG'
+                  AND transmitflag = '9') --(yeekung01)
+      BEGIN
+         UPDATE transmitlog3
+         SET  transmitflag = '0'
+         WHERE key1 = @cOrderKey
+            AND key3 = @cStorerKey
+            AND tablename='PICKCFMLOG'
+
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 183519
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdPackDtlFail
+            GOTO RollBackTran
+         END
       END
    END   
 
