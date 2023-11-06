@@ -49,34 +49,42 @@ SET CONCAT_NULL_YIELDS_NULL OFF
       IF @nInputKey = 1
       BEGIN
          DECLARE @cSalesman NVARCHAR(20),
-                 @cTrackingNo NVARCHAR(20)
+                 @cTrackingNo NVARCHAR(20),
+                 @cOrderkey   NVARCHAR(20)
 
-         IF EXISTS (SELECT  1
-                  FROM dbo.PICKDETAIL PD WITH (NOLOCK)          
-                     INNER JOIN dbo.Orders O WITH (NOLOCK) ON O.OrderKey = PD.OrderKey          
-                     INNER JOIN dbo.LoadPlanDetail LD WITH (NOLOCK) ON LD.OrderKey = O.OrderKey   
-                     INNER JOIN dbo.CODELKUP CL (NOLOCK) ON CL.code =O.Salesman AND CL.Storerkey =O.StorerKey
-                  WHERE PD.Storerkey = @cStorerkey          
-                     AND ISNULL(O.ECOM_SINGLE_Flag,'') <> ''           
-                     AND PD.Qty > 0          
-                     AND PD.DropID = @cDropID          
-                     AND PD.CaseID = ''          
-                     AND (PD.Status IN ( '3', '5' ) OR PD.ShipFlag = 'P')  
-                     AND code = @cSalesman
-                     AND UDF05 ='Y'
-                     AND ISNULL(@cTrackingNo,'') ='')
+         DECLARE CUR_ORDER CURSOR for
+         SELECT   O.ORDERKEY,TRACKINGNO,SALESMAN
+         FROM dbo.PICKDETAIL PD WITH (NOLOCK)          
+            INNER JOIN dbo.Orders O WITH (NOLOCK) ON O.OrderKey = PD.OrderKey          
+            INNER JOIN dbo.LoadPlanDetail LD WITH (NOLOCK) ON LD.OrderKey = O.OrderKey   
+         WHERE PD.Storerkey = @cStorerkey          
+            AND ISNULL(O.ECOM_SINGLE_Flag,'') <> ''           
+            AND PD.Qty > 0          
+            AND PD.DropID = @cDropID          
+            AND PD.CaseID = ''          
+            AND (PD.Status IN ( '3', '5' ) OR PD.ShipFlag = 'P')  
 
-         --IF ISNULL(@cTrackingNo,'') =''
-         --  AND EXISTS (SELECT 1 
-         --              FROM CODELKUP (NOLOCK) 
-         --              WHERE LISTNAME = 'COURIERLBL'
-         --               AND Storerkey = @cStorerkey
-         --               AND code = @cSalesman
-         --               AND UDF05 ='Y')
+
+         OPEN CUR_ORDER
+         FETCH NEXT FROM CUR_ORDER INTO @cOrderkey,@cSalesman,@cTrackingNo
+         WHILE @@FETCH_STATUS = 0
          BEGIN
-            SET @nErrNo = 207801
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --TrackigNoNULL
-            GOTO QUIT
+            IF ISNULL(@cTrackingNo,'')<>''
+            BEGIN
+               IF EXISTS( SELECT 1 
+         	               FROM dbo.CODELKUP WITH (NOLOCK)
+         	               WHERE LISTNAME = 'COURIERLBL'
+         	               AND   Code = @cSalesman
+         	               AND   Storerkey = @cStorerkey
+         	               AND   UDF05 ='Y')
+               BEGIN  
+                  SET @nErrNo = 207801
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --TrackigNoNULL
+                  GOTO QUIT
+               END
+            END
+
+             FETCH NEXT FROM CUR_ORDER INTO @cOrderkey,@cSalesman,@cTrackingNo
          END
 
       END

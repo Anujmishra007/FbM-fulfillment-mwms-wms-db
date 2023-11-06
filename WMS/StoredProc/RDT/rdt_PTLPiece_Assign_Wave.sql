@@ -11,6 +11,7 @@ GO
 /* Date       Rev  Author   Purposes                                          */
 /* 22-04-2021 1.0  yeekung  WMS-16875 Created                                 */
 /* 20-07-2023 1.1  yeekung  WMS-23039 Add order by orderkey (yeekung01)       */
+/* 25-09-2023 1.2  YeeKung  WMS-23257 Add assignextupd (yeekung02)            */  
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_PTLPiece_Assign_Wave] (
@@ -63,17 +64,61 @@ BEGIN
    DECLARE @cCartonID      NVARCHAR(20)
    DECLARE @nTotalOrder    INT
    DECLARE @nTotalCarton   INT
+   DECLARE @cCurrentSP NVARCHAR( 60)
 
    SET @nTranCount = @@TRANCOUNT
 
    -- Storer configure
    SET @cDynamicSlot = rdt.RDTGetConfig( @nFunc, 'DynamicSlot', @cStorerKey)
+   DECLARE @cAssignExtUpdSP NVARCHAR( 20) --(yeekung01)
+   SET @cAssignExtUpdSP = rdt.rdt_PTLPiece_GetConfig( @nFunc, 'AssignExtUpdSP', @cStorerKey, @cMethod)
+   IF @cAssignExtUpdSP = '0'
+      SET @cAssignExtUpdSP = ''
 
    /***********************************************************************************************
                                                 POPULATE
    ***********************************************************************************************/
    IF @cType = 'POPULATE-IN'
    BEGIN
+      IF @cAssignExtUpdSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = TRIM(@cAssignExtUpdSP) AND type = 'P')
+         BEGIN
+            SET @cCurrentSP = OBJECT_NAME( @@PROCID)
+
+            INSERT INTO @tVar (Variable, Value) VALUES
+               ('@cType',@cType),
+               ('@cBatchKey',    @cWaveKey)
+
+            SET @cSQL = 'EXEC rdt.' + TRIM( @cAssignExtUpdSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+               ' @cStation, @cMethod, @cCurrentSP, @tVar, ' +
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+               ' @nMobile     INT,           ' +
+               ' @nFunc       INT,           ' +
+               ' @cLangCode   NVARCHAR( 3),  ' +
+               ' @nStep       INT,           ' +
+               ' @nInputKey   INT,           ' +
+               ' @cFacility   NVARCHAR( 5) , ' +
+               ' @cStorerKey  NVARCHAR( 10), ' +
+               ' @cStation    NVARCHAR( 10),  ' +
+               ' @cMethod     NVARCHAR( 15), ' +
+               ' @cCurrentSP  NVARCHAR( 60),  ' +
+               ' @tVar        VariableTable READONLY, ' +
+               ' @nErrNo      INT           OUTPUT, ' +
+               ' @cErrMsg     NVARCHAR(250) OUTPUT  '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+               @cStation, @cMethod, @cCurrentSP, @tVar,
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
+      END
+
       -- Get assign info
       SET @cWaveKey = ''
       SELECT @cWaveKey = WaveKey
@@ -101,8 +146,44 @@ BEGIN
    IF @cType = 'POPULATE-OUT'
    BEGIN
       SET @cFieldAttr01 = '' -- WaveKey
+      IF @cAssignExtUpdSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = TRIM(@cAssignExtUpdSP) AND type = 'P')
+         BEGIN
+            SET @cCurrentSP = OBJECT_NAME( @@PROCID)
 
-		-- Go to station screen
+            INSERT INTO @tVar (Variable, Value) VALUES
+               ('@cType',@cType),
+               ('@cBatchKey',    @cWaveKey)
+
+            SET @cSQL = 'EXEC rdt.' + TRIM( @cAssignExtUpdSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+               ' @cStation, @cMethod, @cCurrentSP, @tVar, ' +
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+               ' @nMobile     INT,           ' +
+               ' @nFunc       INT,           ' +
+               ' @cLangCode   NVARCHAR( 3),  ' +
+               ' @nStep       INT,           ' +
+               ' @nInputKey   INT,           ' +
+               ' @cFacility   NVARCHAR( 5) , ' +
+               ' @cStorerKey  NVARCHAR( 10), ' +
+               ' @cStation    NVARCHAR( 10),  ' +
+               ' @cMethod     NVARCHAR( 15), ' +
+               ' @cCurrentSP  NVARCHAR( 60),  ' +
+               ' @tVar        VariableTable READONLY, ' +
+               ' @nErrNo      INT           OUTPUT, ' +
+               ' @cErrMsg     NVARCHAR(250) OUTPUT  '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+               @cStation, @cMethod, @cCurrentSP, @tVar,
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
+      END
    END
 
    /***********************************************************************************************
@@ -154,7 +235,23 @@ BEGIN
                AND O.StorerKey <> @cStorerKey)
          BEGIN
             SET @nErrNo = 168104
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff Storerf
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff Storer
+            SET @cOutField01 = ''
+            GOTO Quit
+         END
+
+         -- Check multi wave assigned
+         DECLARE @cOtherWaveKey NVARCHAR( 10) = ''
+         SELECT TOP 1 
+            @cOtherWaveKey = WaveKey
+         FROM rdt.rdtPTLPieceLog WITH (NOLOCK)
+         WHERE Station = @cStation
+            AND WaveKey <> ''
+            AND WaveKey <> @cWaveKey
+         IF @cOtherWaveKey <> ''
+         BEGIN
+            SET @nErrNo = 168109
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MultiWaveAssgn --AssgnedWav XXX
             SET @cOutField01 = ''
             GOTO Quit
          END
@@ -185,7 +282,7 @@ BEGIN
          IF @@ERROR <> 0
          BEGIN
             SET @nErrNo = 168106
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD Log fail
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Log fail
             GOTO Quit
          END
 

@@ -8,7 +8,8 @@ GO
 /* Copyright      : LFLogistics                                               */    
 /*                                                                            */    
 /* Date       Rev  Author   Purposes                                          */    
-/* 06-04-2023 1.0  yeekung  WMS-22163 Created                                 */    
+/* 06-04-2023 1.0  yeekung  WMS-22163 Created                                 */ 
+/* 25-09-2023 1.1  yeekung  WMS-23257 Add model type (yeekung01)              */
 /******************************************************************************/    
 CREATE OR ALTER PROC rdt.rdt_803AsignExtUpd03 (    
    @nMobile     INT,               
@@ -36,6 +37,7 @@ BEGIN
            @cDevicePos nvarchar(MAX),    
            @cType NVARCHAR(20),    
            @cDeviceStatus NVARCHAR(1),
+           @c_DeviceModel NVARCHAR(20),
            @bSuccess       INT
   
    DECLARE @cLightPos nvarchar(20)    
@@ -66,11 +68,11 @@ BEGIN
   
            /*Michael */
 		   
-          /*  SELECT top 1 @cDevicePos=SUBSTRING(DevicePosition,1,1)    
+            SELECT top 1 @c_DeviceModel = devicemodel
             FROM deviceprofile WITH (NOLOCK)    
             WHERE deviceid = @cStation    
   
-            SET @cDevicePos=@cDevicePos+'XX'  */
+           /* SET @cDevicePos=@cDevicePos+'XX'  */
 
             SET @cDeviceStatus=rdt.RDTGetConfig( @nFunc, 'PTLLightLUP', @cStorerKey)  
 			

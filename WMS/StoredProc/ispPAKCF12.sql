@@ -26,7 +26,8 @@ GO
 /* 04-Nov-2022  WLChooi 1.1   Performance Tuning (WL01)                    */ 
 /* 22-Mar-2023  NJOW01  1.2   WMS-21989 CN Yonex. Update serialno.sku and  */
 /*                            UCC.Sku from UPC.Sku                         */
-/***************************************************************************/  
+/* 23-Oct-2023  NJOW02  1.3   Performance turning                          */
+/***************************************************************************/                                                                                                                    
 CREATE OR ALTER PROC [dbo].[ispPAKCF12]  
 (     @c_PickSlipNo  NVARCHAR(10)   
   ,   @c_Storerkey   NVARCHAR(15)
@@ -192,6 +193,49 @@ BEGIN
    BEGIN      	      	   	
       IF ISNULL(@c_Orderkey1sttime,'') <> ''
       BEGIN
+      	 --NJOW02 S
+      	 DECLARE cur_SERUPD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      	    SELECT SN.SerialNokey
+      	    FROM SERIALNO SN (NOLOCK)
+      	    WHERE (SN.Orderkey = @c_Orderkey
+      	           OR EXISTS(SELECT 1 FROM #TMP_DROPID
+      	             	    WHERE #TMP_DROPID.DropID = SN.Userdefine01
+      	                  ) 
+      	          )   
+      	    AND SN.Storerkey = @c_Storerkey
+      	    ORDER BY SN.SerialNokey
+
+         OPEN cur_SERUPD  
+         
+         FETCH NEXT FROM cur_SERUPD INTO @c_SerialNoKey
+         
+         WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
+         BEGIN
+         	  UPDATE SERIALNO WITH (ROWLOCK)
+         	  SET Pickslipno = ''                             
+               ,CartonNo = 0                                
+               ,LabelLine = ''                              
+               ,TrafficCop = NULL                           
+               ,EditDate = GETDATE()                
+               ,EditWho = SUSER_SNAME()            
+            WHERE SerialNokey = @c_SerialNoKey
+
+            SET @n_Err = @@ERROR
+                                
+            IF @n_Err <> 0
+            BEGIN
+                SELECT @n_Continue = 3 
+                SELECT @n_Err = 38010
+                SELECT @c_Errmsg='NSQL'+CONVERT(varchar(5),@n_Err)+': Update SERIALNO Table Failed. (ispPAKCF12)'
+            END       
+            
+            FETCH NEXT FROM cur_SERUPD INTO @c_SerialNoKey         	
+         END                                                         
+         CLOSE cur_SERUPD
+      	 DEALLOCATE cur_SERUPD
+      	 --NJOW02 E
+      	   
+      	 /*         
          UPDATE SERIALNO WITH (ROWLOCK)
       	  SET Pickslipno = ''
       	     ,CartonNo = 0
@@ -214,7 +258,8 @@ BEGIN
              SELECT @n_Continue = 3 
              SELECT @n_Err = 38010
              SELECT @c_Errmsg='NSQL'+CONVERT(varchar(5),@n_Err)+': Update SERIALNO Table Failed. (ispPAKCF12)'
-         END                      
+         END       
+         */               
          
          SET @c_Orderkey1sttime = ''                  	 
       END
