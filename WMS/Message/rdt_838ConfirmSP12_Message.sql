@@ -20,3 +20,6 @@ execute rdt.rdtAddMsg 183516, 10, '183516SNO ady scan  ', 'us_english', 838
 execute rdt.rdtAddMsg 183517, 10, '183517INS PDInfoFail', 'us_english', 838
 execute rdt.rdtAddMsg 183518, 10, '183518UPD PDInfoFail', 'us_english', 838
 execute rdt.rdtAddMsg 183519, 10, '183519UpdPackDtlFail', 'us_english', 838
+
+--WMS-23312
+execute rdt.rdtAddMsg 183520, 10, '183520UpdTLog3Fail', 'us_english', 838
