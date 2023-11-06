@@ -28,6 +28,7 @@ GO
 /*                            when serialnocapture=1                    */
 /* 18-OCT-2023 NJOW03   1.3   WMS-23952 Fix, not to return sku if scanned*/
 /*                            in UPC.                                   */
+/* 31-OCT-2023 NJOW04   1.4   Performance tuning                        */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE dbo.ispSKUDC10
@@ -205,6 +206,52 @@ BEGIN
    BEGIN
    	  IF @c_ADAllowInsertExistingSerialNo = '1' 
    	  BEGIN 
+   	  	 --NJOW04 S
+   	  	 DECLARE cur_SERUPD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+   	  	    SELECT SerialNokey
+   	  	    FROM SERIALNO (NOLOCK)
+      	    WHERE Userdefine01 = @c_UCCNo
+      	    AND Status < '6'
+      	    AND Storerkey = @c_Storerkey
+
+         OPEN cur_SERUPD  
+         
+         FETCH NEXT FROM cur_SERUPD INTO @c_SerialNoKey
+         
+         WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
+         BEGIN      	    
+      	    UPDATE SERIALNO WITH (ROWLOCK)
+      	    SET Orderkey = @c_Orderkey,
+      	        OrderLineNumber = CAST(@n_CartonNo AS NVARCHAR),
+      	        Status = '6',
+      	        Pickslipno = @c_Pickslipno,
+      	        CartonNo = @n_CartonNo,
+      	        LabelLine = '',
+      	        TrafficCop = NULL,
+      	        EditWho = SUSER_SNAME(),
+      	        EditDate = GETDATE()
+      	    WHERE SerialNokey = @c_SerialNoKey
+
+      	    SET @n_Err = @@ERROR
+      	    
+      	    IF @n_Err <> 0
+      	    BEGIN      	       	 	
+               SELECT @n_Continue = 3
+               SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 83050
+               SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update UCC table failed. (ispSKUDC10)' + ' ( ' + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '
+               CLOSE cur_SERUPD     
+               DEALLOCATE cur_SERUPD
+               GOTO QUIT_SP   	  
+      	    END   	  	
+         	
+            FETCH NEXT FROM cur_SERUPD INTO @c_SerialNoKey
+         END
+         CLOSE cur_SERUPD
+         DEALLOCATE cur_SERUPD
+         SET @c_SerialNoKey = ''
+         --NJOW04 E
+               	    
+         /*      	       	  	 
       	 UPDATE SERIALNO WITH (ROWLOCK)
       	 SET Orderkey = @c_Orderkey,
       	     OrderLineNumber = CAST(@n_CartonNo AS NVARCHAR),
@@ -228,6 +275,7 @@ BEGIN
             SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update UCC table failed. (ispSKUDC10)' + ' ( ' + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '
             GOTO QUIT_SP   	  
       	 END   	  	
+      	 */
    	  END
    END
    ELSE IF ISNULL(@c_SerialNo,'') <> ''
