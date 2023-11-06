@@ -9,6 +9,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
 /* 06-04-2023 1.0  yeekung     WMS-22163 Created                        */  
+/* 25-09-2023 1.1  yeekung     WMS-23257 Add devicemodel (yeekung01)    */
 /************************************************************************/
 
 CREATE or ALTER   PROC [RDT].[rdt_803MatrixSP12] (
@@ -85,7 +86,8 @@ BEGIN
       -- Get logical name
       SET @cLogicalName = @cPosition
       SELECT @cLogicalName = LogicalName,
-             @cIPAddress =  IPAddress
+             @cIPAddress =  IPAddress,
+             @c_DeviceModel = devicemodel
       FROM DeviceProfile WITH (NOLOCK)
       WHERE DeviceType = 'STATION'
          AND DeviceID = @cStation
@@ -178,10 +180,10 @@ BEGIN
       IF @cLight ='1'
       BEGIN
 
-         IF ISNULL(@cIPAddress,'') =''
-            SET @c_DeviceModel = 'TMS'
-         ELSE
-            SET @c_DeviceModel = 'LIGHT'
+         --IF ISNULL(@cIPAddress,'') =''
+         --   SET @c_DeviceModel = 'TMS'
+         --ELSE
+         --   SET @c_DeviceModel = 'LIGHT'
 
 
          DECLARE @cLightMode  NVARCHAR(4)
@@ -360,7 +362,7 @@ BEGIN
            ,@c_LModMode       = @cLightMode
          IF @nErrNo <> 0
             GOTO Quit
-      END
+   END
    END
 
 

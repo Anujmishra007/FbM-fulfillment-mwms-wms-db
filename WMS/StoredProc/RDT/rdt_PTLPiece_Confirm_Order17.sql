@@ -14,6 +14,7 @@ GO
 /* Date       Rev  Author      Purposes                                 */  
 /* 06-04-2023 1.0  yeekung     WMS-22163 Created                        */ 
 /* 19-05-2023 1.1  yeekung     WMS-22477 Fix error message (yeekung01)  */
+/* 25-09-2023 1.2  yeekung     WMS-23257 Add model type (yeekung02)     */
 /************************************************************************/  
   
 CREATE OR ALTER PROC rdt.rdt_PTLPiece_Confirm_Order17 (  
@@ -63,7 +64,8 @@ BEGIN
    DECLARE @cErrlightPos      NVARCHAR( 20)
    DECLARE @cDeviceStatus     NVARCHAR(20)
    DECLARE @nLightErrNo       INT
-   DECLARE @cLightErrMsg      NVARCHAR(20)
+   DECLARE @cLightErrMsg      NVARCHAR(20),
+           @c_DeviceModel NVARCHAR(20)
 
    -- Handling transaction  
    SET @nTranCount = @@TRANCOUNT  
@@ -324,7 +326,8 @@ BEGIN
    IF ISNULL(@cErrlightPos,'')<>''
    BEGIN
      /* select top 1 @cDevicePos=SUBSTRING(DevicePosition,1,1)+@cErrlightPos Michael*/
-	 select top 1 @cDevicePos= deviceid + 'YY'
+	 select top 1 @cDevicePos= deviceid + 'YY',
+            @c_DeviceModel = devicemodel
       from deviceprofile (nolock) 
       where deviceid=@cStation
       and storerkey=@cStorerKey
@@ -335,26 +338,13 @@ BEGIN
    ELSE
    BEGIn
 
-      select top 1 @cDevicePos=logicalpos
+      select top 1 @cDevicePos=logicalpos,
+            @c_DeviceModel = devicemodel
       from deviceprofile (nolock) 
       where deviceid=@cStation
       and storerkey=@cStorerKey
       order by logicalpos DESC
    END
-
-      
-
-
-   --exec [PTL].[isp_PTL_Light_TMS]
-   -- @n_Func          = @nFunc
-   --,@n_PTLKey        = 0
-   --,@b_Success       = 0
-   --,@n_Err         = @nErrNo    
-   --,@c_ErrMsg        = @cErrMsg OUTPUT
-   --,@c_DeviceID      = @cStation
-   --,@c_DevicePos     = @cDevicePos
-   --,@c_DeviceIP      = ''
-   --,@c_DeviceStatus  = @cDeviceStatus
 
    EXEC PTL.isp_PTL_LightUpLoc
       @n_Func           = @nFunc
