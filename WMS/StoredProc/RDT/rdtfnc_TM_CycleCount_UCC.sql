@@ -1,13 +1,10 @@
-IF (objectProperty(object_id('rdt.rdtfnc_TM_CycleCount_UCC'), 'IsProcedure') is not null)
-	DROP PROCEDURE [RDT].[rdtfnc_TM_CycleCount_UCC] 
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
 /******************************************************************************/ 
-/* Copyright: IDS                                                             */ 
+/* Copyright: MAERSK                                                          */ 
 /* Purpose: SkipJack CycleCount SOS#227151                                    */ 
 /*                                                                            */ 
 /* Modifications log:                                                         */ 
@@ -19,9 +16,10 @@ GO
 /* 2018-10-24 1.3  Gan        Performance tuning                              */
 /* 2020-01-06 1.4  James      WMS-16965 Add ExtendedInfoSP @ scn 4 (james02)  */
 /* 2021-07-20 1.5  Chermaine  WMS-17453 Add eventlog at scn2 (cc01)           */
+/* 2023-10-12 1.6  James      WMS-23797 Enhance UCC filtering (james03)       */
 /******************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_TM_CycleCount_UCC] (
+CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CycleCount_UCC] (
    @nMobile    int,
    @nErrNo     int  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max
@@ -109,7 +107,7 @@ DECLARE
 	@cLottable03_Code    NVARCHAR( 30),
 	@cLottable04_Code    NVARCHAR( 30),
 	@cLottable05_Code    NVARCHAR( 30),
-	@nCountLot           INT,
+	@nCountLot   INT,
 	@cListName           NVARCHAR( 20),
 	@cLottableLabel      NVARCHAR( 20),   
 	@cShort              NVARCHAR( 10),
@@ -306,7 +304,7 @@ BEGIN
 	
    SET @cDefaultOption = rdt.RDTGetConfig( @nFunc, 'DefaultOption', @cStorerkey)
    IF @cDefaultOption = '0'
-      SET @cDefaultOption = ''
+   SET @cDefaultOption = ''
 
    -- Redirect to respective screen
    IF @nStep = 1 GOTO Step_1   -- Scn = 2930. UCC
@@ -432,7 +430,10 @@ BEGIN
       INNER JOIN dbo.CCDetail CC WITH (NOLOCK) ON ( CC.SKU           = UCC.SKU 
                                                     AND CC.StorerKey = UCC.StorerKey
                                                     AND CC.Loc       = UCC.Loc
-                                                    AND CC.ID        = UCC.ID ) 
+                                                    AND CC.ID        = UCC.ID 
+                                                    AND CC.LOT       = UCC.LOT  -- (james03)
+                                                    AND CC.RefNo     = UCC.UCCNo -- (james03)
+                                                  ) 
       WHERE CC.CCKey = @cCCKey
       AND UCC.Loc    = @cLoc
       AND UCC.ID     = @cID
@@ -742,7 +743,7 @@ BEGIN
                BEGIN
                   SET @nErrNo = 74475
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UpdTaskDetFailed'
-                  GOTO Step_2_Fail
+ GOTO Step_2_Fail
                END    
 
                -- GOTO Alert Screen
@@ -1051,6 +1052,8 @@ END
 
 
 GO
+
+
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS ON 
