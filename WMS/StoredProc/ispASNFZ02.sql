@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispASNFZ02]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispASNFZ02]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -30,9 +25,11 @@ GO
 /* 10-Nov-2020  TLTING01 1.1  performance tune                             */   
 /* 04-Feb-2021  WLChooi  1.2  WMS-16315 - Add Receiptdetail.Channel into   */
 /*                            Codelkup if not exists for CN (WL01)         */
+/* 26-Oct-2023  NJOW01   1.3  WMS-23977 update UCC qty from qtyrceived     */
+/* 26-Oct-2023  NJOW01   1.3  DEVOPS Combine Script                        */
 /***************************************************************************/  
   
-CREATE PROC [dbo].[ispASNFZ02]  
+CREATE OR ALTER PROC [dbo].[ispASNFZ02]  
 (     @c_Receiptkey  NVARCHAR(10)  
   ,   @b_Success     INT           OUTPUT  
   ,   @n_Err         INT           OUTPUT  
@@ -46,9 +43,13 @@ BEGIN
    SET ANSI_NULLS OFF  
    SET CONCAT_NULL_YIELDS_NULL OFF  
   
-   DECLARE @n_Continue INT,  
-           @n_StartTranCount INT,  
-           @n_LineNo INT
+   DECLARE @n_Continue           INT,  
+           @n_StartTranCount     INT,  
+           @n_LineNo             INT,
+           @c_SKU                NVARCHAR(20),
+           @c_UCCNo              NVARCHAR(20),
+           @c_ReceiptLineNumber2 NVARCHAR(5),
+           @n_QtyReceived        INT                      
    
    --WL01 S        
    DECLARE @c_Country     NVARCHAR(10),
@@ -60,8 +61,7 @@ BEGIN
    SELECT @c_Country = N.NSQLValue
    FROM NSQLCONFIG N (NOLOCK)
    WHERE N.ConfigKey = 'Country'
-   --WL01 E
-           
+   --WL01 E           
   
    SELECT @b_Success=1, @n_Err=0, @c_ErrMsg='', @n_Continue = 1, @n_StartTranCount=@@TRANCOUNT  
   
@@ -139,6 +139,58 @@ BEGIN
       END
    END
    --WL01 E
+   
+   --NJOW01 S
+   IF @n_continue IN (1,2) AND @c_Country = 'CN'
+   BEGIN
+      DECLARE CUR_RD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT UCC.UccNo, UCC.Storerkey, UCC.Sku, RD.ReceiptLineNumber, RD.QtyReceived
+         FROM RECEIPT R WITH (NOLOCK)
+         JOIN RECEIPTDETAIL RD WITH (NOLOCK) ON R.Receiptkey = RD.Receiptkey
+         JOIN UCC (NOLOCK) ON UCC.Receiptkey = R.Receiptkey 
+                              AND UCC.ReceiptLineNumber = RD.ReceiptLineNumber
+                              AND UCC.Storerkey = RD.Storerkey
+                              AND UCC.Sku = RD.Sku
+                              AND UCC.Status = '1'
+         WHERE R.Receiptkey = @c_Receiptkey
+         AND RD.ReceiptLineNumber = CASE WHEN ISNULL(@c_ReceiptLineNumber,'') <> '' 
+                                      THEN @c_ReceiptLineNumber 
+                                      ELSE RD.ReceiptLineNumber END 
+         AND UCC.Qty <> RD.QtyReceived                      
+         AND RD.QtyReceived > 0       
+         AND RD.FinalizeFlag = 'Y'
+         AND R.DocType = 'A'
+                                            
+      OPEN CUR_RD 
+
+      FETCH NEXT FROM CUR_RD INTO @c_UccNo, @c_Storerkey, @c_SKU, @c_ReceiptLineNumber2, @n_QtyReceived
+
+      WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN(1,2)
+      BEGIN      	       	 
+      	 UPDATE UCC WITH (ROWLOCK)
+      	 SET Qty = @n_QtyReceived
+      	 WHERE UCCNo = @c_UCCNo
+      	 AND Storerkey = @c_Storerkey
+      	 AND Sku = @c_Sku
+      	 AND Receiptkey = @c_Receiptkey
+      	 AND ReceiptLineNumber = @c_ReceiptLineNumber2
+      	    
+         SET @n_err = @@ERROR
+         
+         IF @n_err <> 0
+         BEGIN
+            SELECT @n_continue = 3                     	
+            SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 63505  
+            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update UCC Failed! (ispASNFZ02)' + ' ( '  
+                             + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '              
+         END      	    
+      	 
+         FETCH NEXT FROM CUR_RD INTO @c_UccNo, @c_Storerkey, @c_SKU, @c_ReceiptLineNumber2, @n_QtyReceived     	
+      END
+   	  CLOSE CUR_RD
+   	  DEALLOCATE CUR_RD         	
+   END
+   --NJOW01 E
   
 QUIT_SP:  
    --WL01 S
