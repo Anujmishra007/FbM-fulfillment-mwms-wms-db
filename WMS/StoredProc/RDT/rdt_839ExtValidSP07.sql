@@ -1,20 +1,20 @@
 
+SET ANSI_NULLS OFF
+GO
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF
-GO  
 
 /************************************************************************/  
-/* Store procedure: rdt_839ExtValidSP07                                 */  
-/* Purpose: Validate multiple users performing on same pick task        */  
+/* Store procedure: rdt_839ExtValidSP10                                 */  
+/* Purpose: Validate option                                             */  
 /*                                                                      */  
 /* Modifications log:                                                   */  
 /*                                                                      */  
 /* Date       Rev  Author     Purposes                                  */  
-/* 2021-07-06 1.0  James      WMS-17324. Created                        */
-/* 2022-04-20 1.1  YeeKung    WMS-19311 Add Data capture (yeekung01)    */
+/* 2021-12-20 1.0  James      WMS-18004. Created                        */
+/* 2023-04-17 1.1  James      Add PackData1~3 param (james01)           */
 /************************************************************************/  
-CREATE OR ALTER PROC rdt.rdt_839ExtValidSP07 (  
+CREATE OR ALTER   PROC [RDT].[rdt_839ExtValidSP07] (  
    @nMobile      INT,           
    @nFunc        INT,           
    @cLangCode    NVARCHAR( 3),  
@@ -44,74 +44,38 @@ SET CONCAT_NULL_YIELDS_NULL OFF
   
 IF @nFunc = 839  
 BEGIN  
-   DECLARE @cUserName         NVARCHAR( 18)
-          ,@cMobUserName      NVARCHAR( 18)
-          ,@cMobPickZone      NVARCHAR( 10)
-          ,@nMobStep          INT
-
+   DECLARE @cOption           NVARCHAR( 1)
           
    SET @nErrNo          = 0
    SET @cErrMSG         = ''
 
-   SELECT @cUserName = UserName
-   FROM rdt.RDTMOBREC WITH (NOLOCK)
-   WHERE Mobile = @nMobile
-   
-   IF @nStep = 2 
+   IF @nStep = 5 
    BEGIN
       IF @nInputKey = 1 -- ENTER
       BEGIN
-         SELECT @cMobUserName = UserName,
-                @nMobStep = Step,
-                @cMobPickZone = V_Zone 
+         SELECT @cOption = I_Field01 
          FROM rdt.RDTMOBREC WITH (NOLOCK)
-         WHERE Func = @nFunc
-         AND   V_PickSlipNo = @cPickSlipNo
-         AND   UserName <> @cUserName
+         WHERE Mobile = @nMobile 
          
-         -- Not yet start picking, no need further check
-         IF @@ROWCOUNT = 0
-            GOTO QUIT
-
-         -- No pickzone key in, check whether pickslip scanin by other user before
-         IF ISNULL( @cPickZone, '') = '' AND ISNULL( @cMobPickZone, '') = ''
-         BEGIN
-            IF @cUserName <> @cMobUserName   
-            BEGIN  
-               SET @nErrNo = 170401
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'PSNo In Progress'
-               GOTO QUIT  
-            END  
-         END
-
-         -- Check if one of the user didn't key in pickzone (meaning pick all zone)
-         -- and another user key in pickzone
-         IF (( ISNULL( @cPickZone, '') = '' AND ISNULL( @cMobPickZone, '') <> '') AND @nMobStep > 2) OR
-            (( ISNULL( @cPickZone, '') <> '' AND ISNULL( @cMobPickZone, '') = '') AND @nMobStep > 2) 
-         BEGIN
-            IF @cUserName <> @cMobUserName
-            BEGIN  
-               SET @nErrNo = 170402
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'ZoneInProgress'
-               GOTO QUIT  
-            END
+         IF @cOption = '1'   
+         BEGIN  
+            SET @nErrNo = 180201
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Cannot ShtPick'
+            GOTO QUIT  
          END  
 
-         -- If both user key in same pickzone
-         IF ISNULL( @cPickZone, '') = ISNULL( @cMobPickZone, '') 
-         BEGIN
-            IF @cUserName <> @cMobUserName
-            BEGIN  
-               SET @nErrNo = 170403
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'ZoneInProgress'
-               GOTO QUIT  
-            END
+         IF @cOption = '4'   
+         BEGIN  
+            SET @nErrNo = 180202
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Cannot SkipLoc'
+            GOTO QUIT  
          END  
       END
    END
 END  
   
 QUIT:  
+
 
 GO
 

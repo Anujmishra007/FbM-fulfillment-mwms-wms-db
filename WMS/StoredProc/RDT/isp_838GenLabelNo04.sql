@@ -1,4 +1,4 @@
-﻿SET ANSI_NULLS OFF
+SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -12,7 +12,7 @@ GO
 /* 29-10-2022 1.0  Yeekung    WMS-21057 Created                         */
 /************************************************************************/
 
-CREATE OR ALTER PROC [dbo].[isp_838GenLabelNo04] (
+CREATE OR ALTER   PROC [dbo].[isp_838GenLabelNo04] (
    @cPickslipNo NVARCHAR(10),
    @nCartonNo   INT,
    @cLabelNo    NVARCHAR(20) OUTPUT
@@ -46,7 +46,7 @@ BEGIN
    WHERE ph.PickHeaderKey=@cPickslipNo
 
    /*
-      	YMMDD010000000+3Digit[0~9]
+      ?	YMMDD010000000+3Digit[0~9]
    */
 
    SET @cKeyName = SUBSTRING( @cStorerKey, 1, 10) + '-SSCCLbNo'
@@ -137,6 +137,7 @@ BEGIN
    END
 END
 QUIT:
+
 GO
 GRANT EXECUTE ON  [dbo].[isp_838GenLabelNo04] TO [NSQL]
 GO

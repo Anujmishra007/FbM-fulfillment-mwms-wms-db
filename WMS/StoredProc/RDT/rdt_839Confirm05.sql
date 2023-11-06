@@ -1,8 +1,7 @@
-
+SET ANSI_NULLS OFF
+GO
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF
-GO  
 /******************************************************************************/  
 /* Store procedure: rdt_839Confirm05                                          */  
 /* Copyright      : Maersk                                                    */  
@@ -15,7 +14,7 @@ GO
 /* 2023-07-25 1.4  Ung        WMS-23002 Add serial no                         */
 /******************************************************************************/  
   
-CREATE OR ALTER PROC rdt.rdt_839Confirm05 (  
+CREATE OR ALTER   PROC [RDT].[rdt_839Confirm05] (  
     @nMobile         INT  
    ,@nFunc           INT  
    ,@cLangCode       NVARCHAR( 3)  
@@ -78,7 +77,7 @@ BEGIN
    DECLARE @curPD          CURSOR  
    DECLARE @cWhere         NVARCHAR( MAX)  
    DECLARE @cTempID        NVARCHAR( 20)
-   DECLARE @cID            NVARCHAR( 18)
+  -- DECLARE @cID            NVARCHAR( 18)
    DECLARE @nChannel_ID    BIGINT
    DECLARE @cUpdOrdStatus  NVARCHAR( 1)
    DECLARE @cTempOrderKey  NVARCHAR( 10)
@@ -503,6 +502,7 @@ Quit:
       COMMIT TRAN  
 --INSERT INTO TraceInfo (TraceName, TimeIn, Col1, Col2, Col3, Col4, Col5) VALUES ('839', GETDATE(), @cID, @cOrderKey, @cLoc, @cSKU, @cPickConfirmStatus)
 END  
+ 
 GO
 
 SET QUOTED_IDENTIFIER OFF

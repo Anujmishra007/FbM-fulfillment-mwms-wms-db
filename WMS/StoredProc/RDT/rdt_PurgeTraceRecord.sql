@@ -9,8 +9,9 @@ GO
 
 setuser N'RDT'
 GO
+ 
 
-CREATE PROC rdt.rdt_PurgeTraceRecord 
+CREATE PROC [RDT].[rdt_PurgeTraceRecord] 
   @nNoOfDayRetain INT = 7 
 AS 
 SET NOCOUNT ON

@@ -1,6 +1,6 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
@@ -19,7 +19,7 @@ GO
 /*                             NVARCHAR( 5) to NVARCHAR( 18) (wk01)     */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdt_Cluster_Pick_GetPickZone] (
+CREATE OR ALTER   PROC [RDT].[rdt_Cluster_Pick_GetPickZone] (
    @nMobile          INT,
    @nFunc            INT, 
    @cLangCode        NVARCHAR( 3), 
@@ -164,6 +164,7 @@ AS
    END
 
 QUIT:
+
 GO
 
 SET QUOTED_IDENTIFIER OFF

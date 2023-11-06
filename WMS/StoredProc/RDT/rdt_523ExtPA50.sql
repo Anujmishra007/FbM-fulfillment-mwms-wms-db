@@ -1,7 +1,6 @@
-﻿
-SET QUOTED_IDENTIFIER OFF
+﻿SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS OFF
+SET QUOTED_IDENTIFIER OFF
 GO
     
 /************************************************************************/    
@@ -13,7 +12,7 @@ GO
 /* 2022-05-17  1.0  yeekung WMS-20109. Created                          */   
 /************************************************************************/    
     
-CREATE OR ALTER PROC [rdt].[rdt_523ExtPA50] (    
+CREATE OR ALTER   PROC [RDT].[rdt_523ExtPA50] (    
    @nMobile          INT,    
    @nFunc            INT,    
    @cLangCode        NVARCHAR( 3),    
@@ -127,6 +126,7 @@ Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started    
       COMMIT TRAN    
 END 
+
 GO
 
 SET QUOTED_IDENTIFIER OFF

@@ -1,11 +1,7 @@
-﻿ IF EXISTS (SELECT * FROM sys.objects WHERE object_id = Object_Id(N'[RDT].[rdt_606ExtInfo01]') AND OBJECTPROPERTY(object_id, N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdt_606ExtInfo01]
+﻿SET ANSI_NULLS OFF
 GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF
-GO 
 /******************************************************************************/  
 /* Store procedure: rdt_606ExtInfo01                                          */  
 /* Copyright      : LF Logistics                                              */  
@@ -16,7 +12,7 @@ GO
 /* 15-Apr-2015  Ung       1.0   SOS350413 Created                             */  
 /******************************************************************************/  
   
-CREATE PROCEDURE rdt.rdt_606ExtInfo01  
+CREATE OR ALTER PROCEDURE [RDT].[rdt_606ExtInfo01]  
    @nMobile       INT,             
    @nFunc         INT,             
    @cLangCode     NVARCHAR( 3),    
@@ -51,6 +47,7 @@ BEGIN
       END  
    END  
 END  
+
 GO
 
 SET QUOTED_IDENTIFIER OFF

@@ -1,8 +1,6 @@
-
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
@@ -15,7 +13,7 @@ GO
 /* 19-08-2022  1.0  yeekung     WMS-19671 Created                       */
 /************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_898RcvFilter05
+CREATE OR ALTER   PROCEDURE [RDT].[rdt_898RcvFilter05]
     @nMobile     INT
    ,@nFunc       INT
    ,@cLangCode   NVARCHAR(  3)
@@ -81,6 +79,7 @@ BEGIN
 
 QUIT:
 END -- End Procedure
+
 GO
 SET QUOTED_IDENTIFIER OFF
 GO

@@ -1,10 +1,6 @@
-if exists (select * from sys.objects where object_id = object_id(N'rdt.rdt_1813ExtValid04') and OBJECTPROPERTY(object_id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_1813ExtValid04
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
@@ -23,7 +19,7 @@ GO
 /*                                       vaild qty                      */
 /************************************************************************/
 
-ALTER PROC rdt.rdt_1813ExtValid04 (
+CREATE OR ALTER   PROC [RDT].[rdt_1813ExtValid04] (
    @nMobile          INT,
    @nFunc            INT, 
    @cLangCode        NVARCHAR( 3), 
@@ -313,6 +309,7 @@ AS
    END
 
 QUIT:
+
 GO
 
 SET QUOTED_IDENTIFIER OFF

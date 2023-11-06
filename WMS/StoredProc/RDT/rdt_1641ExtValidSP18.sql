@@ -1,7 +1,6 @@
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
@@ -14,7 +13,7 @@ GO
 /* 2022-02-15 1.0  yeekung    WMS-18935 Created				               */
 /************************************************************************/
 
-CREATE PROC rdt.rdt_1641ExtValidSP18 (
+CREATE OR ALTER   PROC [RDT].[rdt_1641ExtValidSP18] (
    @nMobile      INT,
    @nFunc        INT,
    @cLangCode    NVARCHAR(3),
@@ -193,6 +192,7 @@ BEGIN
 END
 
 QUIT:
+
 GO
 
 SET QUOTED_IDENTIFIER OFF

@@ -1,9 +1,7 @@
-
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
-GO  
+GO
 /***************************************************************************/      
 /* Store procedure: rdt_PTLPiece_Confirm_Order16                           */      
 /* Copyright      : LF Logistics                                           */      
@@ -14,7 +12,7 @@ GO
 /* 10-07-2021 1.0  yeekung  WMS-17495 Created                              */     
 /***************************************************************************/      
       
-CREATE PROC [RDT].[rdt_PTLPiece_Confirm_Order16] (      
+CREATE OR ALTER   PROC [RDT].[rdt_PTLPiece_Confirm_Order16] (      
     @nMobile      INT      
    ,@nFunc        INT      
    ,@cLangCode    NVARCHAR( 3)      
@@ -299,6 +297,7 @@ Quit:
       COMMIT TRAN      
 END 
   
+
 GO
 
 SET QUOTED_IDENTIFIER OFF

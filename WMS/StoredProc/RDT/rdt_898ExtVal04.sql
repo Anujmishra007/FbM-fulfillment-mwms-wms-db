@@ -1,7 +1,6 @@
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
@@ -12,7 +11,7 @@ GO
 /* 2022-07-01 1.0  yeekung WMS-19671 Created                            */
 /************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_898ExtVal04
+CREATE OR ALTER   PROCEDURE [RDT].[rdt_898ExtVal04]
     @nMobile     INT
    ,@nFunc       INT
    ,@cLangCode   NVARCHAR(  3)
@@ -74,6 +73,7 @@ BEGIN
 Quit:
 
 END
+
 GO
 
 GRANT EXECUTE ON rdt.rdt_898ExtVal04 TO NSQL

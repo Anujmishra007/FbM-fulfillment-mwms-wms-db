@@ -1,8 +1,8 @@
 
+SET ANSI_NULLS OFF
+GO
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF
-GO  
 /******************************************************************************/  
 /* Store procedure: rdt_839Confirm10                                          */  
 /* Copyright      : Maersk                                                    */  
@@ -13,7 +13,7 @@ GO
 /* 2023-07-25 1.2  Ung        WMS-23002 Add serial no                         */
 /******************************************************************************/  
   
-CREATE OR ALTER PROC rdt.rdt_839Confirm10 (  
+CREATE OR ALTER   PROC [RDT].[rdt_839Confirm10] (  
     @nMobile         INT  
    ,@nFunc           INT  
    ,@cLangCode       NVARCHAR( 3)  
@@ -76,7 +76,7 @@ BEGIN
    DECLARE @curPD          CURSOR  
    DECLARE @cWhere         NVARCHAR( MAX)  
    DECLARE @cTempID        NVARCHAR( 20)
-   DECLARE @cID            NVARCHAR( 18)
+   -- DECLARE @cID            NVARCHAR( 18)
    DECLARE @nChannel_ID    BIGINT
    DECLARE @cTempPickDetailKey NVARCHAR(20)
    DECLARE @cTempLot      NVARCHAR(20)
@@ -480,6 +480,7 @@ Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
       COMMIT TRAN  
 END  
+
 GO
 
 SET QUOTED_IDENTIFIER OFF

@@ -1,8 +1,7 @@
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
-GO 
+GO
   
 /******************************************************************************/  
 /* Store procedure: rdt_608RefNoLKUP07                                        */  
@@ -14,7 +13,7 @@ GO
 /* 27-07-2022  Ung      1.0   WMS-20251 Created                               */  
 /******************************************************************************/  
   
-CREATE PROCEDURE [RDT].[rdt_608RefNoLKUP07]  
+CREATE OR ALTER   PROCEDURE [RDT].[rdt_608RefNoLKUP07]  
    @nMobile      INT,             
    @nFunc        INT,             
    @cLangCode    NVARCHAR( 3),    
@@ -84,6 +83,7 @@ BEGIN
 Quit:
    
 END  
+ 
 GO    
 
 SET QUOTED_IDENTIFIER OFF  

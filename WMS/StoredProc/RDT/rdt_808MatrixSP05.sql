@@ -11,7 +11,7 @@ GO
 /* 22-12-2022 1.0  yeekung WMS-21239 Created                            */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdt_808MatrixSP05] (
+CREATE OR ALTER   PROC [RDT].[rdt_808MatrixSP05] (
     @nMobile         INT
    ,@nFunc           INT
    ,@cLangCode       NVARCHAR( 3)

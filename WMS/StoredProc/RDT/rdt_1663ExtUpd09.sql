@@ -1,7 +1,6 @@
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /******************************************************************************/
@@ -12,7 +11,7 @@ GO
 /* 2022-06-03 1.0  Ung      WMS-19821 Created                                 */  
 /******************************************************************************/
 
-CREATE PROC [RDT].[rdt_1663ExtUpd09](
+CREATE OR ALTER   PROC [RDT].[rdt_1663ExtUpd09](
    @nMobile       INT,
    @nFunc         INT,
    @cLangCode     NVARCHAR( 3),
@@ -70,6 +69,7 @@ BEGIN
 Quit:
 
 END
+
 GO
 
 SET QUOTED_IDENTIFIER OFF

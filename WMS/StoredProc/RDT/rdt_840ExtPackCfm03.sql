@@ -14,7 +14,7 @@ GO
 /* 2023-05-18  1.1  James      Remove stamp pickdetail.caseid (james01) */    
 /************************************************************************/    
     
-CREATE   PROC [RDT].[rdt_840ExtPackCfm03] (    
+CREATE OR ALTER    PROC [RDT].[rdt_840ExtPackCfm03] (    
    @nMobile          INT,    
    @nFunc            INT,    
    @cLangCode        NVARCHAR( 3),    
@@ -190,6 +190,7 @@ AS
    Quit:    
       WHILE @@TRANCOUNT > @nTranCount    
          COMMIT TRAN    
+		 
 		 
 GO
 GRANT EXECUTE ON  [RDT].[rdt_840ExtPackCfm03] TO [NSQL]

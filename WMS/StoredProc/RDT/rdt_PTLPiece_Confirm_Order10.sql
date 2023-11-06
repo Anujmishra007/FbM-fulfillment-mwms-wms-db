@@ -1,10 +1,5 @@
-USE [SGWMS]
-GO
-
-/****** Object:  StoredProcedure [RDT].[rdt_PTLPiece_Confirm_Order10]    Script Date: 5/18/2022 5:16:24 PM ******/
 SET ANSI_NULLS OFF
 GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 
@@ -23,7 +18,7 @@ GO
 /* 11-05-2022 1.2  Calvin     Add ChannelID to PickDetail Insertion (CLVN02) */
 /*****************************************************************************/
 
-ALTER PROC [RDT].[rdt_PTLPiece_Confirm_Order10] (
+CREATE OR ALTER   PROC [RDT].[rdt_PTLPiece_Confirm_Order10] (
     @nMobile      INT
    ,@nFunc        INT
    ,@cLangCode    NVARCHAR( 3)
@@ -543,6 +538,7 @@ Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
       COMMIT TRAN
 END
+
 GO
 
 

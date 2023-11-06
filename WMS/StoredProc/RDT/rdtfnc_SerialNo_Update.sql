@@ -1,7 +1,6 @@
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 /************************************************************************/
 /* Store procedure: rdtfnc_SerialNo_Update                              */
@@ -15,7 +14,7 @@ GO
 /* 2023-02-20   1.0  yeekung    WMS-21745 Created                      */
 /************************************************************************/
 
-CREATE OR ALTER PROC [RDT].[rdtfnc_SerialNo_Update] (
+CREATE OR ALTER   PROC [RDT].[rdtfnc_SerialNo_Update] (
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max
@@ -297,7 +296,7 @@ BEGIN
          SET @nErrNo = 196705        
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need value 
          EXEC rdt.rdtSetFocusField @nMobile, 5
-         GOTO Step1_Data_Fai        
+         GOTO Step1_Data_Fail        
       END 
 
       IF @cLblData3<>'' AND ISNULL(@cData3,'')=''
@@ -305,7 +304,7 @@ BEGIN
          SET @nErrNo = 196706        
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need value 
          EXEC rdt.rdtSetFocusField @nMobile, 7
-         GOTO Step1_Data_Fai        
+         GOTO Step1_Data_Fail        
       END 
 
       IF @cLblData4<>'' AND ISNULL(@cData4,'')=''
@@ -313,7 +312,7 @@ BEGIN
          SET @nErrNo = 196707        
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need value 
          EXEC rdt.rdtSetFocusField @nMobile, 9
-         GOTO Step1_Data_Fai        
+         GOTO Step1_Data_Fail        
       END 
 
       IF @cLblData5<>'' AND ISNULL(@cData5,'')=''
@@ -321,7 +320,7 @@ BEGIN
          SET @nErrNo = 196708        
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need value 
          EXEC rdt.rdtSetFocusField @nMobile, 11
-         GOTO Step1_Data_Fai        
+         GOTO Step1_Data_Fail        
       END 
 
       DECLARE @nTranCount  INT
@@ -487,6 +486,7 @@ BEGIN
       FieldAttr15  = @cFieldAttr15
    WHERE Mobile = @nMobile
 END
+
 GO
 
 SET QUOTED_IDENTIFIER OFF
