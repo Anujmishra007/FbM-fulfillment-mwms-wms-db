@@ -11,7 +11,7 @@ END
 DELETE rdt.RDTScn WHERE Scn = 5640 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 5640, 'ENG'
    ,@cLine01 = 'REF NO:'
-   ,@cLine02 = '%20i01'
+   ,@cLine02 = '%60i01'  --(yeekung02)
    ,@cLine03 = ''
    ,@cLine04 = 'ASN: %10i02'
    ,@cLine14 = '%e'
