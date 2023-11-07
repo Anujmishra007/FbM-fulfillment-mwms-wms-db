@@ -1,10 +1,8 @@
-IF EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[isp_RecvCheckList02_rpt]') AND type in (N'P', N'PC'))
-DROP PROCEDURE [dbo].[isp_RecvCheckList02_rpt]
-GO
+-- Stored Procedure
 
-SET QUOTED_IDENTIFIER OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF 
+SET ANSI_NULLS OFF
 GO
 
 /*************************************************************************/
@@ -25,20 +23,21 @@ GO
 /*                                                                       */
 /* Updates:                                                              */
 /* Date         Author  Ver   Purposes                                   */
+/* 20-SEP-2020  CSCHONG 1.1   WMS-13693 fix sorting isse (CS01)          */
 /*************************************************************************/
-CREATE PROC isp_RecvCheckList02_rpt
+CREATE OR ALTER PROC [dbo].[isp_RecvCheckList02_rpt]
          (  @c_storerkey           NVARCHAR(20),
             @c_receiptkey_start    NVARCHAR(10),
             @c_receiptkey_end      NVARCHAR(10)         
          )
-                 
+
 AS
 BEGIN
    SET NOCOUNT ON
    SET ANSI_DEFAULTS OFF  
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
-   
+
    DECLARE @n_NoOfLine  INT
           ,@c_getUDF01  NVARCHAR(30)
           ,@c_PrvUDF01  NVARCHAR(30)
@@ -48,10 +47,10 @@ BEGIN
           ,@c_getssm    NVARCHAR(5)
           ,@n_cntssm    INT
           ,@c_ASNType   NVARCHAR(20)
-   
+
    SET @n_CtnUDF01 = 1
    SET @c_PrvUDF01 = ''
-   
+
    CREATE TABLE #TEMPRCVCHK01LIST (
    Storerkey     NVARCHAR(20),
    RecLineNo     NVARCHAR(5),
@@ -73,18 +72,18 @@ BEGIN
    SZone         NVARCHAR(50) NULL DEFAULT(''),
    ASNType       NVARCHAR(20)
    )
-   
+
      CREATE TABLE #TEMPCHKUNQ (
-       
+
        RDUDF01       NVARCHAR(30),
        SKU           NVARCHAR(20),
      	 Storerkey     NVARCHAR(20),
      	 reckey        NVARCHAR(20),
        RecLineNo     NVARCHAR(5),
       )
-   
+
   -- SET @n_NoOfLine = 40
-  
+
  DECLARE  @c_Reckey          NVARCHAR(20),
 		  @c_reclineno         NVARCHAR(20),
 		  @c_getstorerkey      NVARCHAR(20),
@@ -94,15 +93,15 @@ BEGIN
 		  @n_Smqty             INT,
 		  @c_SSM               NVARCHAR(10),
 		  @n_qtyExp            INT
-   
+
    IF ISNULL(@c_storerkey,'') = ''
    BEGIN 
 		SELECT TOP 1 @c_storerkey = REC.Storerkey
 		FROM RECEIPT REC (NOLOCK)
 		WHERE Receiptkey = @c_receiptkey_start
    END  
-   
-   
+
+
    INSERT INTO #TEMPRCVCHK01LIST
    (  Storerkey,
    	RecLineNo,
@@ -124,7 +123,7 @@ BEGIN
       SZone,
       ASNType
    )
-   
+
     SELECT REC.storerkey,rd.ReceiptLineNumber,rd.userdefine03,'',
          rd.sku,s.descr,rd.QtyExpected,REC.receiptkey,ISNULL(REC.Signatory,''),
          0,0,0,0,ISNULL(rec.WarehouseReference,''),rd.userdefine01
@@ -140,46 +139,46 @@ BEGIN
 	WHERE REC.StorerKey = @c_storerkey
 	AND rec.receiptkey BETWEEN @c_receiptkey_start AND @c_receiptkey_end
 	AND RD.POKey <> ''
-          
+
     SET @n_ctnsct = 0
 	 SET @n_cntcntsm = 0      
-          
+
     DECLARE CUR_RESULT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
    SELECT DISTINCT t.storerkey,t.reckey,t.RecLineNo   
    FROM #TEMPRCVCHK01LIST AS t
    WHERE t.reckey BETWEEN @c_receiptkey_start AND @c_receiptkey_end
-  
+
    OPEN CUR_RESULT   
-     
+
    FETCH NEXT FROM CUR_RESULT INTO @c_getstorerkey,@c_Reckey,@c_reclineno    
-     
+
    WHILE @@FETCH_STATUS <> -1  
    BEGIN        
-   	
+
    	SET @c_SSM = '' 
    	SET @n_qtyExp = 0 
-		
+
 		--SELECT * FROM #TEMPCHKUNQ
 		SET @c_getUDF01 = ''
-		
+
 		SELECT @c_getUDF01 = userdefine01
 		FROM RECEIPTDETAIL (NOLOCK)
 		 WHERE STORERKEY = @c_getstorerkey
        and receiptkey = @c_Reckey
        AND ReceiptLineNumber = @c_reclineno
-		
-		
+
+
 		 SELECT @n_CtnUDF01 = COUNT(1) from  receiptdetail
 		 WHERE STORERKEY = @c_getstorerkey
 		 and receiptkey = @c_Reckey
 		 AND userdefine01=@c_getUDF01
 		 GROUP BY userdefine01 
-		
-		
+
+
 		SET @c_ssm = ''
-	 
-	 
-		
+
+
+
 		--IF EXISTS (SELECT 1 FROM #TEMPCHKUNQ WHERE storerkey = @c_getstorerkey AND reckey=@c_Reckey AND RecLineNo=@c_reclineno)	 
 		IF @n_CtnUDF01 = 1 --AND @n_ctnsmct > 1
 		BEGIN 
@@ -197,8 +196,8 @@ BEGIN
 			  SET @n_cntcntsm = @n_cntcntsm + 1
 			END 
 		END	
-  
-  
+
+
     SELECT @n_qtyExp = Qtyexpected
     FROM RECEIPTDETAIL WITH (NOLOCK)
     WHERE receiptkey = @c_Reckey
@@ -212,18 +211,18 @@ BEGIN
    WHERE reckey = @c_Reckey	
    AND RecLineNo = @c_reclineno
    AND storerkey = @c_getstorerkey 	
-   
+
    SET @c_PrvUDF01 = @c_getUDF01
-   
+
    FETCH NEXT FROM CUR_RESULT INTO  @c_getstorerkey,@c_Reckey,@c_reclineno    
    END   
-   
+
  --  select * FROM #TEMPRCVCHK01LIST
-  
+
    SET @n_sqty = 1
    SET @n_Smqty = 1
-   
-   
+
+
    UPDATE #TEMPRCVCHK01LIST
    SET
    	CNTSCTN = CASE WHEN ssm='S' THEN ISNULL(@n_ctnsct,0) ELSE 0 END,
@@ -252,7 +251,7 @@ BEGIN
       UPDATE  #TEMPRCVCHK01LIST
       SET ASNType = 'Mix' 
    END
-   
+
    SELECT  Storerkey,
    	RecLineNo,
 		RDUDF03,
@@ -273,12 +272,16 @@ BEGIN
       SZone,
       ASNType
    FROM #TEMPRCVCHK01LIST AS t
-   ORDER BY orderno,(SUBSTRING (Sku, 1, 7 ) + '-' + SUBSTRING ( Sku, 8, 3 )  + '-' +SUBSTRING (Sku, 11, 3 ))--t.recLineNo  --CS01
-   
+   ORDER BY reckey,orderno,RecLineNo,(SUBSTRING (Sku, 1, 7 ) + '-' + SUBSTRING ( Sku, 8, 3 )  + '-' +SUBSTRING (Sku, 11, 3 ))--t.recLineNo  --CS01
+
     QUIT_SP:
-    
+
 END
 
-GO   
-GRANT EXECUTE ON isp_RecvCheckList02_rpt TO NSQL
 GO
+-- Permissions
+
+GRANT EXECUTE ON  [dbo].[isp_RecvCheckList02_rpt] TO [NSQL]
+GO
+
+ 
