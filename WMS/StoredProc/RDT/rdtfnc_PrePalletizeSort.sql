@@ -5,7 +5,7 @@ GO
 
 /************************************************************************/    
 /* Store procedure: rdtfnc_PrePalletizeSort                             */    
-/* Copyright      : IDS                                                 */    
+/* Copyright      : MAERSK                                              */    
 /*                                                                      */    
 /* Purpose: Pre palletize sorting                                       */    
 /*                                                                      */    
@@ -27,6 +27,10 @@ GO
 /* 2022-03-03   1.6  James    Addhoc fix remove use of variable         */  
 /*                            @cNewUCCWithMultiSKU (james02)            */  
 /* 2023-02-02   1.7  James    WMS-21588 Bug fix on extendedinfo(james03)*/
+/* 2023-01-18   1.8  James    WMS-22995 Allow create new ucc with multi */
+/*                            sku (james04)                             */
+/* 2023-08-16   1.9  James    WMS-23334 Add UCC format check (james05)  */
+/* 2023-10-27   2.0  James    WMS-23878 Add packinfo entry (james06)    */
 /************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdtfnc_PrePalletizeSort] (    
@@ -155,7 +159,16 @@ DECLARE
    @cBarcode            NVARCHAR( 60),    
    @cDefaultToId        NVARCHAR( 1),    
    @cFlowThruToIDScn    NVARCHAR( 1),   
-       
+   @cAllowUCCMultiSKU   NVARCHAR( 1),
+   @tExtUCC             VARIABLETABLE,
+   @cCapturePackInfoSP  NVARCHAR( 20),
+   @cPackInfo           NVARCHAR( 10),
+   @cCartonType         NVARCHAR( 10),
+   @cCube               NVARCHAR( 10),
+   @cWeight             NVARCHAR( 10),
+   @cRefNo              NVARCHAR( 20),
+   @cDefaultCartonType  NVARCHAR( 20),
+   
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),    
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),    
    @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),    @cFieldAttr03 NVARCHAR( 1),    
@@ -257,13 +270,20 @@ SELECT
    @cNewUCCWithMultiSKU    = V_String33,        --(cc02)  
    @cClsPltCond            = V_String34,        --(cc02)  
    @cCond                  = V_String35,        --(cc02)  
-     
+   @cUCCNoLookUpSP         = V_String36,
+   @cDefaultToId           = V_String37,
+   @cFlowThruToIDScn       = V_String38,
+   @cAllowUCCMultiSKU      = V_String39,
+   @cCapturePackInfoSP     = V_String40,
+   @cPackInfo              = V_String41,
+   @cDefaultCartonType     = V_String42,
+   
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,    
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,    
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,  @cFieldAttr03 = FieldAttr03,    
    @cInField04 = I_Field04,   @cOutField04 = O_Field04,  @cFieldAttr04 = FieldAttr04,    
    @cInField05 = I_Field05,   @cOutField05 = O_Field05,  @cFieldAttr05 = FieldAttr05,    
- @cInField06 = I_Field06,   @cOutField06 = O_Field06,  @cFieldAttr06 = FieldAttr06,    
+   @cInField06 = I_Field06,   @cOutField06 = O_Field06,  @cFieldAttr06 = FieldAttr06,    
    @cInField07 = I_Field07,   @cOutField07 = O_Field07,  @cFieldAttr07 = FieldAttr07,    
    @cInField08 = I_Field08,   @cOutField08 = O_Field08,  @cFieldAttr08 = FieldAttr08,    
    @cInField09 = I_Field09,   @cOutField09 = O_Field09,  @cFieldAttr09 = FieldAttr09,    
@@ -291,7 +311,8 @@ DECLARE
    @nStep_EndSort          INT,  @nScn_EndSort        INT,    
    @nStep_Msg              INT,  @nScn_Msg            INT,    
    @nStep_VerifySKU        INT,  @nScn_VerifySKU      INT,    
-   @nStep_MultiSKU         INT,  @nScn_MultiSKU       INT           
+   @nStep_MultiSKU         INT,  @nScn_MultiSKU       INT,
+   @nStep_PackInfo         INT,  @nScn_PackInfo       INT
     
 SELECT    
    @nStep_ASNLane        = 1,    @nScn_ASNLane        = 5660,    
@@ -306,7 +327,8 @@ SELECT
    @nStep_EndSort        = 10,   @nScn_EndSort        = 5668,    
    @nStep_Msg            = 11,   @nScn_Msg            = 5669,    
    @nStep_VerifySKU      = 12,   @nScn_VerifySKU      = 3951,          
-   @nStep_MultiSKU       = 13,   @nScn_MultiSKU       = 3570    
+   @nStep_MultiSKU       = 13,   @nScn_MultiSKU       = 3570,
+   @nStep_PackInfo       = 14,   @nScn_PackInfo       = 6310
        
     
 IF @nFunc = 1841 -- Pre Palletize Sort     
@@ -324,6 +346,7 @@ BEGIN
    IF @nStep = 9 GOTO Step_OverridePallet -- Scn = 5667. Override pallet    
    IF @nStep = 10 GOTO Step_EndSort    -- Scn = 5668. End Sort    
    IF @nStep = 11 GOTO Step_Msg        -- Scn = 5669. Msg    
+   IF @nStep = 14 GOTO Step_PackInfo   -- Scn = 6310. PackInfo    
 END    
     
 RETURN -- Do nothing if incorrect step    
@@ -374,7 +397,24 @@ BEGIN
    SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerKey)      --(cc02)  
    IF @cDecodeSP = '0'        
       SET @cDecodeSP = ''   
-    
+
+   SET @cUCCNoLookUpSP = rdt.RDTGetConfig( @nFunc, 'UCCNoLookUpSP', @cStorerkey)
+   IF @cUCCNoLookUpSP IN ('0', '')
+      SET @cUCCNoLookUpSP = ''
+
+   SET @cDefaultToId = rdt.RDTGetConfig( @nFunc, 'DefaultToId', @cStorerkey)
+   SET @cFlowThruToIDScn = rdt.RDTGetConfig( @nFunc, 'FlowThruToIDScn', @cStorerkey)
+
+   SET @cAllowUCCMultiSKU = rdt.RDTGetConfig( @nFunc, 'AllowUCCMultiSKU', @cStorerkey)
+
+   SET @cCapturePackInfoSP = rdt.RDTGetConfig( @nFunc, 'CapturePackInfoSP', @cStorerKey)
+   IF @cCapturePackInfoSP = '0'
+      SET @cCapturePackInfoSP = ''
+
+   SET @cDefaultCartonType=rdt.RDTGetConfig( @nFunc, 'DefaultCartonType', @cStorerKey)
+   IF @cDefaultCartonType = '0'
+      SET @cDefaultCartonType = ''
+
    -- Prep next screen var    
    SET @cOutField01 = '' -- ASN    
    SET @cOutField02 = RTRIM( @cReceiveDefaultToLoc) -- Lane    
@@ -521,14 +561,55 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff facility    
          GOTO Step_ASNLane2_Fail    
       END    
-    
+
+      -- Extended validate
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' +
+               ' @cReceiptKey, @cLane, @cUCC, @cToID, @cSKU, @nQty, @cOption, @cPosition, @tExtValidVar, ' +
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+               ' @nMobile        INT,           ' +
+               ' @nFunc          INT,           ' +
+               ' @cLangCode      NVARCHAR( 3),  ' +
+               ' @nStep          INT,           ' +
+               ' @nAfterStep     INT,           ' +
+               ' @nInputKey      INT,           ' +
+               ' @cFacility      NVARCHAR( 5),  ' +
+               ' @cStorerKey     NVARCHAR( 15), ' +
+               ' @cReceiptKey    NVARCHAR( 10), ' +
+               ' @cLane          NVARCHAR( 10), ' +
+               ' @cUCC           NVARCHAR( 20), ' +
+               ' @cToID          NVARCHAR( 18), ' +
+               ' @cSKU           NVARCHAR( 20), ' +
+               ' @nQty           INT,           ' +
+               ' @cOption        NVARCHAR( 1),  ' +
+               ' @cPosition      NVARCHAR( 20), ' +
+               ' @tExtValidVar   VariableTable READONLY, ' +
+               ' @nErrNo         INT           OUTPUT,   ' +
+               ' @cErrMsg        NVARCHAR( 20) OUTPUT    '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey,
+               @cReceiptKey, @cLane, @cUCC, @cToID, @cSKU, @nQty, @cOption, @cPosition, @tExtValidVar,
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Step_UCC_Fail
+         END
+      END
+      
       SET @cUCC = ''    
     
       -- Prep next screen var    
       SET @cOutField01 = @cReceiptKey    
       SET @cOutField02 = @cLane    
       SET @cOutField03 = ''    
-    
+      SET @cOutField15 = ''
+
       -- Goto UCC screen    
       SET @nScn  = @nScn_UCC    
       SET @nStep = @nStep_UCC    
@@ -588,46 +669,85 @@ BEGIN
    BEGIN    
       -- Screen mapping    
       SET @cUCC = @cInField03    
-    
+      SET @cBarcode = @cInField03
+      
       IF ISNULL( @cUCC, '') = ''    
       BEGIN    
          SET @nErrNo = 147709    
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UCC required    
          GOTO Step_UCC_Fail    
       END    
-    
-      SELECT @cUCCStatus = [Status],    
-             @cSKU   = SKU    
-      FROM dbo.UCC WITH (NOLOCK)    
-      WHERE StorerKey = @cStorerKey    
-      AND   UCCNo = @cUCC    
-    
-      IF @@ROWCOUNT = 0    
-      BEGIN    
-         IF @cPalletizeAllowAddNewUCC <> '1'    
-         BEGIN    
-            SET @nErrNo = 147710    
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UCC Not Exists    
-            GOTO Step_UCC_Fail    
-         END    
-         ELSE    
-         BEGIN    
-            SET @cOutField01 = ''    
-    
-            -- Goto create new ucc screen    
-            SET @nScn  = @nScn_CreateUCC    
-            SET @nStep = @nStep_CreateUCC    
-                
-            GOTO Quit    
-         END    
-      END    
-    
-      IF @cUCCStatus <> '0'    
-      BEGIN    
-         SET @nErrNo = 147711    
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UCC Received    
-         GOTO Step_UCC_Fail    
-      END    
+
+      IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'UCC', @cUCC) = 0  
+      BEGIN  
+         SET @nErrNo = 147735  
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format  
+         GOTO Step_UCC_Fail  
+      END 
+
+      -- Lookup field is SP
+      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cUCCNoLookUpSP AND type = 'P')
+      BEGIN
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cUCCNoLookUpSP) +
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cLane, @cBarcode, ' +
+            ' @cUCCNo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+         SET @cSQLParam =
+            '@nMobile       INT,           ' +
+            '@nFunc         INT,           ' +
+            '@cLangCode     NVARCHAR( 3),  ' +
+            '@nStep         INT,           ' +
+            '@nInputKey     INT,           ' +
+            '@cFacility     NVARCHAR( 5),  ' +
+            '@cStorerKey    NVARCHAR( 15), ' +
+            '@cReceiptKey   NVARCHAR( 10), ' +
+            '@cLane         NVARCHAR( 10), ' +
+            '@cBarcode      NVARCHAR( 60), ' +
+            '@cUCCNo        NVARCHAR( 20) OUTPUT, ' +
+            '@nErrNo        INT           OUTPUT, ' +
+            '@cErrMsg       NVARCHAR( 20) OUTPUT  '
+
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cLane, @cBarcode,
+            @cUCC OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+         IF @nErrNo <> 0
+            GOTO Quit
+      END
+      ELSE
+      BEGIN
+         SELECT @cUCCStatus = [Status],
+                @cSKU   = SKU
+         FROM dbo.UCC WITH (NOLOCK)
+         WHERE StorerKey = @cStorerKey
+         AND   UCCNo = @cUCC
+
+         IF @@ROWCOUNT = 0
+         BEGIN
+            IF @cPalletizeAllowAddNewUCC <> '1'
+            BEGIN
+               SET @nErrNo = 147710
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UCC Not Exists
+               GOTO Step_UCC_Fail
+            END
+            ELSE
+            BEGIN
+               SET @cOutField01 = ''
+
+               -- Goto create new ucc screen
+               SET @nScn  = @nScn_CreateUCC
+               SET @nStep = @nStep_CreateUCC
+
+               GOTO Quit
+            END
+         END
+
+         IF @cUCCStatus <> '0'
+         BEGIN
+            SET @nErrNo = 147711
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UCC Received
+            GOTO Step_UCC_Fail
+         END
+      END
     
       -- Extended validate    
       IF @cExtendedValidateSP <> ''    
@@ -682,7 +802,7 @@ BEGIN
          @cReceiptKey   = @cReceiptKey,     
          @cLane         = @cLane,     
          @cUCC          = @cUCC,      
- @cSKU          = @cSKU,    
+         @cSKU          = @cSKU,    
          @cType         = 'GET.POS',      
          @cCreateUCC    = '0',           
          @cLottable01   = NULL,          
@@ -755,17 +875,107 @@ BEGIN
          @cUCC        = @cUCC,    
          @cReceiptKey = @cReceiptKey,    
          @cLane       = @cLane       
-             
+
+      -- Custom PackInfo field setup
+      SET @cPackInfo = ''
+      IF @cCapturePackInfoSP <> ''
+      BEGIN
+         -- Custom SP to get PackInfo setup
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cCapturePackInfoSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cCapturePackInfoSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cLane, @cUCC, @cSKU, ' +
+               ' @nErrNo      OUTPUT, ' +
+               ' @cErrMsg     OUTPUT, ' +
+               ' @cPackInfo   OUTPUT, ' +
+               ' @cWeight     OUTPUT, ' +
+               ' @cCube       OUTPUT, ' +
+               ' @cRefNo      OUTPUT, ' +
+               ' @cCartonType OUTPUT'
+            SET @cSQLParam =
+               '@nMobile     INT,           ' +
+               '@nFunc       INT,           ' +
+               '@cLangCode   NVARCHAR( 3),  ' +
+               '@nStep       INT,           ' +
+               '@nInputKey   INT,           ' +
+               '@cFacility   NVARCHAR( 5),  ' +
+               '@cStorerKey  NVARCHAR( 15), ' +
+               '@cReceiptKey NVARCHAR( 10), ' +
+               '@cLane       NVARCHAR( 10), ' +
+               '@cUCC        NVARCHAR( 20), ' +
+               '@cSKU        NVARCHAR( 20), ' +
+               '@nErrNo      INT           OUTPUT, ' +
+               '@cErrMsg     NVARCHAR( 20) OUTPUT, ' +
+               '@cPackInfo   NVARCHAR( 3)  OUTPUT, ' +
+               '@cWeight     NVARCHAR( 10) OUTPUT, ' +
+               '@cCube       NVARCHAR( 10) OUTPUT, ' +
+               '@cRefNo      NVARCHAR( 20) OUTPUT, ' +
+               '@cCartonType NVARCHAR( 10) OUTPUT  '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cLane, @cUCC, @cSKU,
+               @nErrNo      OUTPUT,
+               @cErrMsg     OUTPUT,
+               @cPackInfo   OUTPUT,
+               @cWeight     OUTPUT,
+               @cCube       OUTPUT,
+               @cRefNo      OUTPUT,
+               @cCartonType OUTPUT
+         END
+         ELSE
+            -- Setup is non SP
+            SET @cPackInfo = @cCapturePackInfoSP
+      END
+
+      -- Capture pack info
+      IF @cPackInfo <> ''
+      BEGIN
+         SET @nScn = @nScn_PackInfo
+         SET @nStep = @nStep_PackInfo
+         -- Get PackInfo
+         SET @cCartonType = ''
+         SET @cWeight = ''
+         SET @cCube = ''
+         SET @cRefNo = ''
+
+         -- Prepare LOC screen var
+         SET @cOutField01 = CASE WHEN ISNULL(@cCartonType ,'') ='' AND ISNULL(@cDefaultCartonType,'')<>''  THEN @cDefaultCartonType ELSE @cCartonType end
+         SET @cOutField02 = @cWeight
+         SET @cOutField03 = @cCube
+         SET @cOutField04 = @cRefNo
+
+         -- Enable disable field
+         SET @cFieldAttr01 = CASE WHEN CHARINDEX( 'T', @cPackInfo) = 0 THEN 'O' ELSE '' END
+         SET @cFieldAttr02 = CASE WHEN CHARINDEX( 'C', @cPackInfo) = 0 THEN 'O' ELSE '' END
+         SET @cFieldAttr03 = CASE WHEN CHARINDEX( 'W', @cPackInfo) = 0 THEN 'O' ELSE '' END
+         SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cPackInfo) = 0 THEN 'O' ELSE '' END
+ 
+         -- Position cursor
+         IF @cFieldAttr01 = '' AND @cOutField01 = ''  EXEC rdt.rdtSetFocusField @nMobile, 1 ELSE
+         IF @cFieldAttr02 = '' AND @cOutField02 = '0' EXEC rdt.rdtSetFocusField @nMobile, 2 ELSE
+         IF @cFieldAttr03 = '' AND @cOutField03 = '0' EXEC rdt.rdtSetFocusField @nMobile, 3 ELSE
+         IF @cFieldAttr04 = '' AND @cOutField04 = ''  EXEC rdt.rdtSetFocusField @nMobile, 4 ELSE 
+
+         -- Go to next screen
+         SET @nScn = @nScn_PackInfo
+         SET @nStep = @nStep_PackInfo
+
+         GOTO Quit
+      END
              
       -- Prep next screen var    
       SET @cOutField01 = @cUCC    
       SET @cOutField02 = @cPosition    
       SET @cOutField03 = @cSuggID    
+      SET @cOutField04 = CASE WHEN @cDefaultToId = '1' THEN @cSuggID ELSE '' END
       SET @cOutField15 = @cExtendedInfo    
     
       -- Goto TOID screen    
       SET @nScn  = @nScn_TOID    
       SET @nStep = @nStep_TOID    
+
+      IF @cFlowThruToIDScn = '1'
+         GOTO Step_TOID
    END    
        
    IF @nInputKey = 0 -- Esc or No    
@@ -845,7 +1055,7 @@ BEGIN
       AND   UCCNo = @cUCC    
       AND   Status = '1'    
       ORDER BY 1    
-          
+      /*
       -- Check if To id already in used in other position    
       IF ISNULL( @cPositionInUsed, '') <> '' AND ( @cUCCPosition <> @cPositionInUsed)    
       BEGIN          
@@ -853,7 +1063,7 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ToID in used          
          GOTO Step_TOID_Fail          
       END      
-          
+      */    
       IF ISNULL( @cPositionInUsed, '') <> '' AND ( @cLane <> @cLaneInUsed)    
       BEGIN          
          SET @nErrNo = 147734          
@@ -911,7 +1121,7 @@ BEGIN
             -- Prep next screen var    
             SET @cOutField01 = ''    
                 
-       SET @nScn  = @nScn_OverridePallet    
+            SET @nScn  = @nScn_OverridePallet    
             SET @nStep = @nStep_OverridePallet    
             GOTO Quit    
          END    
@@ -955,7 +1165,7 @@ BEGIN
     
       IF @nErrNo <> 0    
          GOTO Step_TOID_Fail    
-    
+
       IF @cClosePallet = '1'    
       BEGIN    
        --(cc02)  
@@ -976,6 +1186,7 @@ BEGIN
     
          SET @nScn  = @nScn_ClosePallet    
          SET @nStep = @nStep_ClosePallet    
+         SET @nAfterStep = @nStep_ClosePallet
       END    
       ELSE    
       BEGIN    
@@ -989,7 +1200,45 @@ BEGIN
          -- Goto UCC screen    
          SET @nScn  = @nScn_UCC    
          SET @nStep = @nStep_UCC                
+         SET @nAfterStep = @nStep_UCC
       END    
+
+     IF @cExtendedInfoSP <> '' AND
+         EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+      BEGIN
+         SET @cExtendedInfo = ''
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+              ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' +
+              ' @cReceiptKey, @cLane, @cUCC, @cToID, @cSKU, @nQty, @cOption, @cPosition, @tExtInfoVar, ' +
+              ' @cExtendedInfo OUTPUT '
+         SET @cSQLParam =
+            ' @nMobile        INT,           ' +
+            ' @nFunc          INT,           ' +
+            ' @cLangCode      NVARCHAR( 3),  ' +
+            ' @nStep          INT,           ' +
+            ' @nAfterStep     INT,           ' +
+            ' @nInputKey      INT,           ' +
+            ' @cFacility      NVARCHAR( 5),  ' +
+            ' @cStorerKey     NVARCHAR( 15), ' +
+            ' @cReceiptKey    NVARCHAR( 10), ' +
+            ' @cLane          NVARCHAR( 10), ' +
+            ' @cUCC           NVARCHAR( 20), ' +
+            ' @cToID          NVARCHAR( 18), ' +
+            ' @cSKU           NVARCHAR( 20), ' +
+            ' @nQty           INT,           ' +
+            ' @cOption        NVARCHAR( 1),  ' +
+            ' @cPosition      NVARCHAR( 20), ' +
+            ' @tExtInfoVar    VariableTable READONLY, ' +
+            ' @cExtendedInfo  NVARCHAR( 20) OUTPUT    '
+
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @nMobile, @nFunc, @cLangCode, @nStep_TOID, @nAfterStep, @nInputKey, @cFacility, @cStorerKey,
+            @cReceiptKey, @cLane, @cUCC, @cSuggID, @cSKU, @nQty, @cOption, @cPosition, @tExtInfoVar,
+            @cExtendedInfo OUTPUT
+
+            IF @cExtendedInfo <> ''
+               SET @cOutField15 = @cExtendedInfo
+      END
    END    
        
    IF @nInputKey = 0 -- Esc or No    
@@ -1227,7 +1476,7 @@ BEGIN
          SET @nErrNo = 147717          
          SET @cErrMsg = rdt.rdtgetmessage( 64289, @cLangCode, 'DSP') --Option Required    
          GOTO Step_CreateUCC_Fail          
-END      
+      END      
           
       -- Check invalid option          
       IF @cOption NOT IN ('1', '2')          
@@ -1302,7 +1551,7 @@ END
          GOTO Quit    
       END    
       ELSE    
-BEGIN    
+      BEGIN    
          SET @cUCC = ''    
              
          SET @cOutField01 = @cReceiptKey    
@@ -1408,8 +1657,6 @@ BEGIN
       SET @dLottable14 = @dPreLottable14    
       SET @dLottable15 = @dPreLottable15    
           
-      DELETE FROM TraceInfo WHERE TraceName = '123'    
-      INSERT INTO traceinfo (tracename, timein, Col1, Col2, Col3, Col4) VALUES ('123', GETDATE(), @cPreLottable01, @cPreLottable02, @cPreLottable10, @cPreLottable12)    
       -- Goto SKU screen    
       SET @cOutField01 = @cUCC    
       SET @cOutField02 = @cInField01    
@@ -1418,7 +1665,13 @@ BEGIN
       SET @cOutField05 = @cInField08    
       SET @cOutField06 = ''   -- SKU    
       SET @cOutField07 = ''    
-        
+      SET @cOutField08 = ''
+      SET @cOutField09 = ''
+      SET @cOutField10 = ''   -- Qty
+      SET @cOutField15 = ''
+      
+      SET @nQTY = 0
+
       SET @nAfterStep = @nStep           --(cc02)  
       SET @nScn = @nScn_SKU    
       SET @nStep = @nStep_SKU    
@@ -1681,54 +1934,67 @@ BEGIN
       WHERE SKU.StorerKey = @cStorerKey    
          AND SKU.SKU = @cActSku    
              
-      IF @cDisableQTYField = '1'    
-      BEGIN    
-       IF @cSkipQtyScn = '0' --(cc02)  
-       BEGIN  
-        SET @cOutField01 = @cUCC    
-            SET @cOutField02 = @cSKU    
-            SET @cOutField03 = SUBSTRING( @cSKUDesc,1,20)    
-            SET @cOutField04 = SUBSTRING( @cSKUDesc,21,20)    
-            SET @cOutField07 = CASE WHEN @nQty = 0 THEN '' ELSE  @nQty END  
-              
-              
-            IF @nQty > 0  
-            BEGIN  
-             -- backend flow to Step_qty to continue  
-             --SET @cNewUCCWithMultiSKU = '1'  
-             SET @cInField05 = @nQty  
-             GOTO Step_Qty  
-            END  
-              
-            --normal go to Step_qty to Key in Qty  
-            --SET @cNewUCCWithMultiSKU = '1'  
-            SET @nScn  = @nScn_Qty    
-            SET @nStep = @nStep_Qty    
-            GOTO Quit    
-       END  
-         
-         -- Check same SKU    
-         IF @cActSKU <> @cSKU AND @nQTY > 0    
-         BEGIN    
-            SET @nErrNo = 147723    
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo , @cLangCode, 'DSP') --'Different SKU'    
-            GOTO Step_SKU_Fail    
-         END    
-                
-         SET @cSKU = @cActSKU    
-                
-         -- Top up QTY    
-         SET @nQTY = @nQTY + 1    
-                
-         -- Prepare current screen var    
-         SET @cOutField02 = '' -- SKU/UPC    
-         --SET @cOutField04 = CAST( @nQTY AS NVARCHAR( 5))    
-         SET @cOutField07 = CASE WHEN @nQty = 0 THEN '' ELSE  @nQty END  
-         SET @nAfterStep = @nStep  
-                
-         -- Remain in current screen    
-         GOTO Step_SKU_Fail    
-      END    
+      IF @cDisableQTYField = '1'
+      BEGIN
+         -- Check same SKU
+         IF @cActSKU <> @cSKU AND @nQTY > 0 AND @cAllowUCCMultiSKU = 0
+         BEGIN
+            SET @nErrNo = 147723
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo , @cLangCode, 'DSP') --'Different SKU'
+            GOTO Step_SKU_Fail
+         END
+
+         EXEC [RDT].[rdt_PrePalletizeSort_UCC] 
+            @nMobile       = @nMobile,
+            @nFunc         = @nFunc,
+            @cLangCode     = @cLangCode,
+            @nStep         = @nStep,
+            @nInputKey     = @nInputKey,
+            @cFacility     = @cFacility,
+            @cStorerKey    = @cStorerKey,
+            @cReceiptKey   = @cReceiptKey,
+            @cPOKey        = @cPOKey,
+            @cLane         = @cLane,
+            @cUCC          = @cUCC,
+            @cToID         = @cToID,
+            @cSKU          = @cActSKU,
+            @nQty          = @nQty,
+            @tExtUCC       = @tExtUCC,
+            @nErrNo        = @nErrNo   OUTPUT,
+            @cErrMsg       = @cErrMsg  OUTPUT
+
+         IF @nErrNo <> 0
+            GOTO Step_SKU_Fail
+            
+         SET @cSKU = @cActSKU
+
+         -- Top up QTY
+         SET @nQTY = @nQTY + 1
+
+         -- Prepare current screen var
+         SET @cOutField06 = '' -- SKU/UPC
+         SET @cOutField07 = @cSKU
+         SET @cOutField08 = SUBSTRING( @cSKUDesc,1,20)
+         SET @cOutField09 = SUBSTRING( @cSKUDesc,21,20)
+         SET @cOutField10 = CAST( @nQTY AS NVARCHAR( 5))
+
+         -- Remain in current screen
+         --GOTO Step_SKU_Fail
+      END
+      ELSE
+      BEGIN
+         SET @cSKU = @cActSKU
+
+         -- Prep next screen var
+         SET @cOutField01 = @cUCC
+         SET @cOutField02 = @cSKU
+         SET @cOutField03 = SUBSTRING( @cSKUDesc,1,20)
+         SET @cOutField04 = SUBSTRING( @cSKUDesc,21,20)
+         SET @cOutField05 = ''   -- Qty
+
+         SET @nScn  = @nScn_Qty
+         SET @nStep = @nStep_Qty
+      END
              
       SET @cSKU = @cActSKU    
              
@@ -1745,26 +2011,124 @@ BEGIN
   
    END    
        
-   IF @nInputKey = 0 -- Esc or No    
-   BEGIN    
-      SET @cUCC = ''    
-             
-      SET @cOutField01 = @cReceiptKey    
-      SET @cOutField02 = @cLane    
-      SET @cOutField03 = ''    
-    
-      -- Goto UCC screen    
-      SET @nScn  = @nScn_UCC    
-      SET @nStep = @nStep_UCC      
-      GOTO Quit      
-   END    
-   GOTO Quit    
-    
-   Step_SKU_Fail:    
-   BEGIN    
-      SET @cActSKU = ''    
-      SET @cOutField06 = ''    
-   END    
+   IF @nInputKey = 0 -- Esc or No
+   BEGIN
+   	-- If it is piece scanning and already scanned something
+   	-- goto to id screen
+   	IF @nQty > 0 AND @cDisableQTYField = '1'
+   	BEGIN
+         SET @nErrNo = 0
+         EXEC [RDT].[rdt_PrePalletizeSort]
+            @nMobile       = @nMobile,
+            @nFunc         = @nFunc,
+            @cLangCode     = @cLangCode,
+            @nStep         = @nStep,
+            @nInputKey     = @nInputKey,
+            @cStorerKey    = @cStorerKey,
+            @cFacility     = @cFacility,
+            @cReceiptKey   = @cReceiptKey,
+            @cLane         = @cLane,
+            @cUCC          = @cUCC,
+            @cSKU          = @cSKU,
+            @cType         = 'GET.POS',
+            @cCreateUCC    = '1',
+            @cLottable01   = @cLottable01,
+            @cLottable02   = @cLottable02,
+            @cLottable03   = @cLottable03,
+            @dLottable04   = @dLottable04,
+            @dLottable05   = @dLottable05,
+            @cLottable06   = @cLottable06,
+            @cLottable07   = @cLottable07,
+            @cLottable08   = @cLottable08,
+            @cLottable09   = @cLottable09,
+            @cLottable10   = @cLottable10,
+            @cLottable11   = @cLottable11,
+            @cLottable12   = @cLottable12,
+            @dLottable13   = @dLottable13,
+            @dLottable14   = @dLottable14,
+            @dLottable15   = @dLottable15,
+            @cPosition     = @cPosition      OUTPUT,
+            @cToID         = @cSuggID        OUTPUT,
+            @cClosePallet  = @cClosePallet   OUTPUT,
+            @nErrNo        = @nErrNo         OUTPUT,
+            @cErrMsg       = @cErrMsg        OUTPUT
+
+         IF @nErrNo <> 0
+            GOTO Step_SKU_Fail
+
+         -- Prep next screen var
+         SET @cOutField01 = @cUCC
+         SET @cOutField02 = @cPosition
+         SET @cOutField03 = @cSuggID
+         SET @cOutField04 = ''
+         SET @cOutField15 = ''
+
+         --INC1250618
+         SET @nFromScn  = @nScn_SKU
+         SET @nFromStep = @nStep_SKU
+
+         -- Goto TOID screen
+         SET @nScn  = @nScn_TOID
+         SET @nStep = @nStep_TOID
+   	END
+   	ELSE
+   	BEGIN
+         SET @cUCC = ''
+
+         SET @cOutField01 = @cReceiptKey
+         SET @cOutField02 = @cLane
+         SET @cOutField03 = ''
+
+         -- Goto UCC screen
+         SET @nScn  = @nScn_UCC
+         SET @nStep = @nStep_UCC
+      END
+   END
+
+   IF @cExtendedInfoSP <> '' AND
+      EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+   BEGIN
+      SET @cExtendedInfo = ''
+      SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' +
+            ' @cReceiptKey, @cLane, @cUCC, @cToID, @cSKU, @nQty, @cOption, @cPosition, @tExtInfoVar, ' +
+            ' @cExtendedInfo OUTPUT '
+      SET @cSQLParam =
+         ' @nMobile        INT,           ' +
+         ' @nFunc          INT,           ' +
+         ' @cLangCode      NVARCHAR( 3),  ' +
+         ' @nStep          INT,           ' +
+         ' @nAfterStep     INT,           ' +
+         ' @nInputKey      INT,           ' +
+         ' @cFacility      NVARCHAR( 5),  ' +
+         ' @cStorerKey     NVARCHAR( 15), ' +
+         ' @cReceiptKey    NVARCHAR( 10), ' +
+         ' @cLane          NVARCHAR( 10), ' +
+         ' @cUCC           NVARCHAR( 20), ' +
+         ' @cToID          NVARCHAR( 18), ' +
+         ' @cSKU           NVARCHAR( 20), ' +
+         ' @nQty           INT,           ' +
+         ' @cOption        NVARCHAR( 1),  ' +
+         ' @cPosition      NVARCHAR( 20), ' +
+         ' @tExtInfoVar    VariableTable READONLY, ' +
+         ' @cExtendedInfo  NVARCHAR( 20) OUTPUT    '
+
+      EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+         @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey,
+         @cReceiptKey, @cLane, @cUCC, @cSuggID, @cSKU, @nQty, @cOption, @cPosition, @tExtInfoVar,
+         @cExtendedInfo OUTPUT
+         
+      IF @cExtendedInfo <> ''
+         SET @cOutField15 = @cExtendedInfo
+   END
+      
+   GOTO Quit
+
+   Step_SKU_Fail:
+   BEGIN
+      SET @cActSKU = ''
+      SET @cOutField06 = ''
+   END
 END    
 GOTO Quit    
     
@@ -1832,21 +2196,32 @@ BEGIN
       BEGIN TRAN  -- Begin our own transaction    
       SAVE TRAN Step_Qty_AddUCC -- For rollback or commit only our own transaction    
         
-      --IF @cNewUCCWithMultiSKU = '1'  
-      --BEGIN  
-      -- Insert UCC    
-      INSERT INTO dbo.UCC (StorerKey, UCCNo, Status, SKU, QTY, LOC, ID, ReceiptKey, ReceiptLineNumber, ExternKey)    
-      VALUES (@cStorerKey, @cUCC, '0', @cSKU, @nQTY, '', '', @cPOKey, '', '')    
-      IF @@ERROR <> 0    
-      BEGIN    
-         SET @nErrNo = 147727    
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'INS UCC fail'    
-         ROLLBACK TRAN Step_Qty_AddUCC    
-         WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started    
-            COMMIT TRAN    
-         GOTO Step_QTY_Fail    
-      END    
-      --END  
+      EXEC [RDT].[rdt_PrePalletizeSort_UCC] 
+         @nMobile       = @nMobile,
+         @nFunc         = @nFunc,
+         @cLangCode     = @cLangCode,
+         @nStep         = @nStep,
+         @nInputKey     = @nInputKey,
+         @cFacility     = @cFacility,
+         @cStorerKey    = @cStorerKey,
+         @cReceiptKey   = @cReceiptKey,
+         @cPOKey        = @cPOKey,
+         @cLane         = @cLane,
+         @cUCC          = @cUCC,
+         @cToID         = @cToID,
+         @cSKU          = @cSKU,
+         @nQty          = @nQty,
+         @tExtUCC       = @tExtUCC,
+         @nErrNo        = @nErrNo   OUTPUT,
+         @cErrMsg       = @cErrMsg  OUTPUT
+
+      IF @nErrNo <> 0
+      BEGIN
+         ROLLBACK TRAN Step_Qty_AddUCC
+         WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+            COMMIT TRAN
+         GOTO Step_QTY_Fail
+      END               
         
       -- Extended validate    
       IF @cExtendedUpdateSP <> ''    
@@ -2254,7 +2629,357 @@ BEGIN
    END    
 END    
 GOTO Quit    
+
+
+/********************************************************************************
+Scn = 6310. Capture pack info
+   Carton Type (field01, input)
+   Cube        (field02, input)
+   Weight      (field03, input)
+   RefNo       (field04, input)
+********************************************************************************/
+Step_PackInfo:
+BEGIN
+   IF @nInputKey = 1 -- ENTER
+   BEGIN
+      DECLARE @cChkCartonType NVARCHAR( 10)
+
+      -- Screen mapping
+      SET @cChkCartonType  = CASE WHEN @cFieldAttr01 = '' THEN @cInField01 ELSE @cOutField01 END
+      SET @cWeight         = CASE WHEN @cFieldAttr02 = '' THEN @cInField02 ELSE @cOutField02 END
+      SET @cCube           = CASE WHEN @cFieldAttr03 = '' THEN @cInField03 ELSE @cOutField03 END
+      SET @cRefNo          = CASE WHEN @cFieldAttr04 = '' THEN @cInField04 ELSE @cOutField04 END
+
+      -- Carton type
+      IF @cFieldAttr01 = ''
+      BEGIN
+         -- Check blank
+         IF @cChkCartonType = ''
+         BEGIN
+            SET @nErrNo = 147736
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NeedCartonType
+            EXEC rdt.rdtSetFocusField @nMobile, 1
+            GOTO Quit
+         END
+
+         -- Get default cube
+         DECLARE @nDefaultCube FLOAT
+         SELECT @nDefaultCube = [Cube]
+         FROM Cartonization WITH (NOLOCK)
+            INNER JOIN Storer WITH (NOLOCK) ON (Storer.CartonGroup = Cartonization.CartonizationGroup)
+         WHERE Storer.StorerKey = @cStorerKey
+            AND Cartonization.CartonType = @cChkCartonType
+
+         -- Check if valid
+         IF @@ROWCOUNT = 0
+         BEGIN
+            SET @nErrNo = 147737
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Bad CTN TYPE
+            EXEC rdt.rdtSetFocusField @nMobile, 1
+            GOTO Quit
+         END
+
+         -- Different carton type scanned
+         IF @cChkCartonType <> @cCartonType
+         BEGIN
+            SET @cCartonType = @cChkCartonType
+            SET @cCube = rdt.rdtFormatFloat( @nDefaultCube)
+            SET @cWeight = ''
+
+            SET @cOutField01 = @cCartonType
+            SET @cOutField02 = @cWeight
+            SET @cOutField03 = @cCube
+         END
+      END
+
+      -- Weight
+      IF @cFieldAttr02 = ''
+      BEGIN
+         -- Check blank
+         IF @cWeight = ''
+         BEGIN
+            SET @nErrNo = 147738
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need Weight
+            EXEC rdt.rdtSetFocusField @nMobile, 2
+            GOTO Quit
+         END
+
+         -- Check format
+         IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'Weight', @cWeight) = 0
+         BEGIN
+            SET @nErrNo = 147739
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format
+            EXEC rdt.rdtSetFocusField @nMobile, 2
+            GOTO Quit
+         END
+
+         -- Check weight valid
+         SET @nErrNo = rdt.rdtIsValidQty( @cWeight, 21)
+
+         IF @nErrNo = 0
+         BEGIN
+            SET @nErrNo = 147740
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid weight
+            EXEC rdt.rdtSetFocusField @nMobile, 2
+            SET @cOutField02 = ''
+            GOTO QUIT
+         END
+         SET @nErrNo = 0
+         SET @cOutField02 = @cWeight
+      END
+
+      -- Cube
+      IF @cFieldAttr03 = ''
+      BEGIN
+         -- Check blank
+         IF @cCube = ''
+         BEGIN
+            SET @nErrNo = 147741
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need Cube
+            EXEC rdt.rdtSetFocusField @nMobile, 3
+            GOTO Quit
+         END
+
+         -- Check cube valid
+         SET @nErrNo = rdt.rdtIsValidQty( @cCube, 21)
+
+         IF @nErrNo = 0
+         BEGIN
+            SET @nErrNo = 147742
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid cube
+            EXEC rdt.rdtSetFocusField @nMobile, 3
+            SET @cOutField03 = ''
+        GOTO QUIT
+         END
+         SET @nErrNo = 0
+         SET @cOutField03 = @cCube
+      END
+
+      -- RefNo    --(cc01)
+      IF @cFieldAttr04 = ''
+      BEGIN
+         -- Check blank
+         IF @cRefNo = ''
+         BEGIN
+            SET @nErrNo = 147743
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need RefNo
+            EXEC rdt.rdtSetFocusField @nMobile, 4
+            GOTO Quit
+         END
+      END
+
+      -- Extended validate
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' +
+               ' @cReceiptKey, @cLane, @cUCC, @cToID, @cSKU, @nQty, @cOption, @cPosition, @tExtValidVar, ' +
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+               ' @nMobile        INT,           ' +
+               ' @nFunc          INT,           ' +
+               ' @cLangCode      NVARCHAR( 3),  ' +
+               ' @nStep          INT,           ' +
+               ' @nAfterStep     INT,           ' +
+               ' @nInputKey      INT,           ' +
+               ' @cFacility      NVARCHAR( 5),  ' +
+               ' @cStorerKey     NVARCHAR( 15), ' +
+               ' @cReceiptKey    NVARCHAR( 10), ' +
+               ' @cLane          NVARCHAR( 10), ' +
+               ' @cUCC           NVARCHAR( 20), ' +
+               ' @cToID          NVARCHAR( 18), ' +
+               ' @cSKU           NVARCHAR( 20), ' +
+               ' @nQty           INT,           ' +
+               ' @cOption        NVARCHAR( 1),  ' +
+               ' @cPosition      NVARCHAR( 20), ' +
+               ' @tExtValidVar   VariableTable READONLY, ' +
+               ' @nErrNo         INT           OUTPUT,   ' +
+               ' @cErrMsg        NVARCHAR( 20) OUTPUT    '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey,
+               @cReceiptKey, @cLane, @cUCC, @cToID, @cSKU, @nQty, @cOption, @cPosition, @tExtValidVar,
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
+      END
+
+      SET @nTranCount = @@TRANCOUNT    
+      BEGIN TRAN    
+      SAVE TRAN rdt_PrePalletizeSort_PackInfo  
+
+      INSERT INTO @tExtUCC (Variable, Value) VALUES ('@cCartonType', @cCartonType)  
+      INSERT INTO @tExtUCC (Variable, Value) VALUES ('@cWeight',     @cWeight)
+      INSERT INTO @tExtUCC (Variable, Value) VALUES ('@cCube',       @cCube)
+      INSERT INTO @tExtUCC (Variable, Value) VALUES ('@cRefNo',      @cRefno)
+
+      EXEC [RDT].[rdt_PrePalletizeSort_UCC] 
+         @nMobile       = @nMobile,
+         @nFunc         = @nFunc,
+         @cLangCode     = @cLangCode,
+         @nStep         = @nStep,
+         @nInputKey     = @nInputKey,
+         @cFacility     = @cFacility,
+         @cStorerKey    = @cStorerKey,
+         @cReceiptKey   = @cReceiptKey,
+         @cPOKey        = @cPOKey,
+         @cLane         = @cLane,
+         @cUCC          = @cUCC,
+         @cToID         = @cToID,
+         @cSKU          = @cActSKU,
+         @nQty          = @nQty,
+         @tExtUCC       = @tExtUCC,
+         @nErrNo        = @nErrNo   OUTPUT,
+         @cErrMsg       = @cErrMsg  OUTPUT
+
+      IF @nErrNo <> 0
+         GOTO PackInfo_RollBackTran
+
+      -- Extended validate    
+      IF @cExtendedUpdateSP <> ''    
+      BEGIN    
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')    
+         BEGIN    
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +    
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' +    
+               ' @cReceiptKey, @cLane, @cUCC, @cToID, @cSKU, @nQty, @cOption, @cPosition, @tExtUpdateVar, ' +    
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '    
+            SET @cSQLParam =    
+               ' @nMobile        INT,           ' +    
+               ' @nFunc          INT,           ' +    
+               ' @cLangCode      NVARCHAR( 3),  ' +    
+               ' @nStep          INT,           ' +    
+               ' @nAfterStep     INT,           ' +    
+               ' @nInputKey      INT,           ' +    
+               ' @cFacility      NVARCHAR( 5),  ' +     
+               ' @cStorerKey     NVARCHAR( 15), ' +    
+               ' @cReceiptKey    NVARCHAR( 10), ' +    
+               ' @cLane          NVARCHAR( 10), ' +    
+               ' @cUCC           NVARCHAR( 20), ' +    
+               ' @cToID          NVARCHAR( 18), ' +    
+               ' @cSKU           NVARCHAR( 20), ' +    
+               ' @nQty           INT,           ' +    
+               ' @cOption        NVARCHAR( 1),  ' +                   
+               ' @cPosition      NVARCHAR( 20), ' +    
+               ' @tExtUpdateVar  VariableTable READONLY, ' +     
+               ' @nErrNo         INT           OUTPUT,   ' +    
+               ' @cErrMsg        NVARCHAR( 20) OUTPUT    '    
     
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
+               @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey,      
+               @cReceiptKey, @cLane, @cUCC, @cToID, @cSKU, @nQty, @cOption, @cPosition, @tExtUpdateVar,    
+               @nErrNo OUTPUT, @cErrMsg OUTPUT    
+    
+            IF @nErrNo <> 0    
+            BEGIN    
+               ROLLBACK TRAN Step_Qty_AddUCC    
+               WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started    
+                  COMMIT TRAN    
+               GOTO Step_QTY_Fail    
+            END                
+         END    
+      END    
+
+      GOTO PackInfo_Quit
+
+      PackInfo_RollBackTran:
+            ROLLBACK TRAN rdt_PrePalletizeSort_PackInfo
+      PackInfo_Quit:
+         WHILE @@TRANCOUNT > @nTranCount
+            COMMIT TRAN
+
+      
+      --Enable back field
+      SET @cFieldAttr01 = ''
+      SET @cFieldAttr02 = ''
+      SET @cFieldAttr03 = ''
+      SET @cFieldAttr04 = ''
+
+      -- Prep next screen var    
+      SET @cOutField01 = @cUCC    
+      SET @cOutField02 = @cPosition    
+      SET @cOutField03 = @cSuggID    
+      SET @cOutField04 = CASE WHEN @cDefaultToId = '1' THEN @cSuggID ELSE '' END
+      SET @cOutField15 = @cExtendedInfo    
+    
+      -- Goto TOID screen    
+      SET @nScn  = @nScn_TOID    
+      SET @nStep = @nStep_TOID    
+
+      IF @cFlowThruToIDScn = '1'
+         GOTO Step_TOID
+   END
+
+   IF @nInputKey = 0 -- ESC
+   BEGIN
+      --Enable back field
+      SET @cFieldAttr01 = ''
+      SET @cFieldAttr02 = ''
+      SET @cFieldAttr03 = ''
+      SET @cFieldAttr04 = ''
+
+      -- Prep next screen var    
+      SET @cOutField01 = @cUCC    
+      SET @cOutField02 = @cPosition    
+      SET @cOutField03 = @cSuggID    
+      SET @cOutField04 = CASE WHEN @cDefaultToId = '1' THEN @cSuggID ELSE '' END
+      SET @cOutField15 = @cExtendedInfo    
+    
+      -- Goto TOID screen    
+      SET @nScn  = @nScn_TOID    
+      SET @nStep = @nStep_TOID    
+
+      IF @cFlowThruToIDScn = '1'
+         GOTO Step_TOID
+   END
+
+   IF @cExtendedInfoSP <> '' AND
+      EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+   BEGIN
+      SET @cExtendedInfo = ''
+      SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' +
+            ' @cReceiptKey, @cLane, @cUCC, @cToID, @cSKU, @nQty, @cOption, @cPosition, @tExtInfoVar, ' +
+            ' @cExtendedInfo OUTPUT '
+      SET @cSQLParam =
+         ' @nMobile        INT,           ' +
+         ' @nFunc          INT,           ' +
+         ' @cLangCode      NVARCHAR( 3),  ' +
+         ' @nStep          INT,           ' +
+         ' @nAfterStep     INT,           ' +
+         ' @nInputKey      INT,           ' +
+         ' @cFacility      NVARCHAR( 5),  ' +
+         ' @cStorerKey     NVARCHAR( 15), ' +
+         ' @cReceiptKey    NVARCHAR( 10), ' +
+         ' @cLane          NVARCHAR( 10), ' +
+         ' @cUCC           NVARCHAR( 20), ' +
+         ' @cToID          NVARCHAR( 18), ' +
+         ' @cSKU           NVARCHAR( 20), ' +
+         ' @nQty           INT,           ' +
+         ' @cOption        NVARCHAR( 1),  ' +
+         ' @cPosition      NVARCHAR( 20), ' +
+         ' @tExtInfoVar    VariableTable READONLY, ' +
+         ' @cExtendedInfo  NVARCHAR( 20) OUTPUT    '
+
+      EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+         @nMobile, @nFunc, @cLangCode, @nStep_TOID, @nAfterStep, @nInputKey, @cFacility, @cStorerKey,
+         @cReceiptKey, @cLane, @cUCC, @cSuggID, @cSKU, @nQty, @cOption, @cPosition, @tExtInfoVar,
+         @cExtendedInfo OUTPUT
+
+         IF @cExtendedInfo <> ''
+            SET @cOutField15 = @cExtendedInfo
+   END
+   GOTO Quit
+   
+   Step_PackInfo_Quit:
+
+END
+GOTO Quit
+
 /********************************************************************************    
 Quit. Update back to I/O table, ready to be pick up by JBOSS    
 ********************************************************************************/    
@@ -2339,7 +3064,14 @@ BEGIN
       V_String33 = @cNewUCCWithMultiSKU, --(cc02)  
       V_String34 = @cClsPltCond,    --(cc02)  
       V_String35 = @cCond,          --(cc02)  
-          
+      V_String36 = @cUCCNoLookUpSP,
+      V_String37 = @cDefaultToId,
+      V_String38 = @cFlowThruToIDScn,
+      V_String39 = @cAllowUCCMultiSKU,
+      V_String40 = @cCapturePackInfoSP,
+      V_String41 = @cPackInfo,
+      V_String42 = @cDefaultCartonType,
+   
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,    
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,    
       I_Field03 = @cInField03,  O_Field03 = @cOutField03,    
