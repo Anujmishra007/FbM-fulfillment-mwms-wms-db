@@ -36,6 +36,18 @@ execute rdt.rdtAddMsg 147732, 10, '47732^Lane NotIn ASN',   'us_english', 1841
 execute rdt.rdtAddMsg 147733, 10, '47733^To ID In Used',    'us_english', 1841
 execute rdt.rdtAddMsg 147734, 10, '47733^ID Diff Lane',     'us_english', 1841
 
+--WMS-23334
+execute rdt.rdtAddMsg 147735, 10, '47735^Invalid Format',   'us_english', 1841
+
+--WMS-23878
+execute rdt.rdtAddMsg 147736, 10, '47736^NeedCartonType',   'us_english', 1841
+execute rdt.rdtAddMsg 147737, 10, '47737^Bad CTN TYPE  ',   'us_english', 1841
+execute rdt.rdtAddMsg 147738, 10, '47738^Need Weight   ',   'us_english', 1841
+execute rdt.rdtAddMsg 147739, 10, '47739^Invalid Format',   'us_english', 1841
+execute rdt.rdtAddMsg 147740, 10, '47740^Invalid weight',   'us_english', 1841
+execute rdt.rdtAddMsg 147741, 10, '47741^Need Cube     ',   'us_english', 1841
+execute rdt.rdtAddMsg 147742, 10, '47742^Invalid cube  ',   'us_english', 1841
+execute rdt.rdtAddMsg 147743, 10, '47743^Need RefNo    ',   'us_english', 1841
 
 SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE Message_ID BETWEEN 147701 AND 147750
 
