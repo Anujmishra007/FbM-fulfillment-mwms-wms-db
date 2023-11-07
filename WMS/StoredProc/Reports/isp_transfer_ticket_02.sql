@@ -35,9 +35,10 @@ GO
 /* Updates:                                                             */
 /* Date         Author     Purposes                                     */
 /* 16/11/2016   JIH HAUR   IN00199942 - JOIN WITH STORERKEY             */
-/* 16/11/2016   Wan01      WMS-778 - SHISEIDO - Transfer Ticket         */                  
+/* 16/11/2016   Wan01      WMS-778 - SHISEIDO - Transfer Ticket         */   
+/* 07/11/2023   CLVN01     JSM-189225 Expand variable CustomerRefno     */
 /************************************************************************/
-CREATE PROC dbo.isp_Transfer_Ticket_02 (@c_TransferKey NVARCHAR(10))
+CREATE PROC [dbo].[isp_Transfer_Ticket_02] (@c_TransferKey NVARCHAR(10))
  AS
 BEGIN
     SET NOCOUNT ON
@@ -98,7 +99,7 @@ BEGIN
    CREATE TABLE #TMP_TRFTICKET
       (
          Transferkey       NVARCHAR(10)   NULL
-      ,  CustomerRefNo     NVARCHAR(10)   NULL
+      ,  CustomerRefNo     NVARCHAR(20)   NULL --(CLVN01)
       ,  ReasonCode        NVARCHAR(10)   NULL
       ,  AddDate           DATETIME       NULL
       ,  FromStorerKey     NVARCHAR(15)   NULL
