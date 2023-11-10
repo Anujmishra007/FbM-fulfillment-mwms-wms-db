@@ -11,6 +11,7 @@ GO
 /*                                                                            */
 /* Date        Author    Ver.  Purposes                                       */
 /* 2022-07-26  Yeekung   1.0   WMS-20273 Created                              */
+/* 2023-03-15  yeekung   1.1   WMS-21377 Add qtyadjusted (yeekung01)          */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_600RcvCfm14 (
@@ -116,10 +117,56 @@ BEGIN
       IF @nErrNo <> 0
          GOTO RollBackTran
 
-      UPDATE RECEIPTDETAIL WITH (ROWLOCK)
-      SET userdefine08= CAST(userdefine08 AS INT) + @nSKUQTY
-      where receiptkey=@cReceiptKey
-         and receiptlinenumber=@cReceiptLineNumberOutput
+      --UPDATE receiptdetail
+      --set QtyExpected = QtyExpected - 1
+      --where receiptkey=@cReceiptKey
+      --   AND QtyExpected > BeforeReceivedQty
+
+      IF EXISTS (SELECT 1
+                 FROM receiptdetail (nolock)
+                 where receiptkey=@cReceiptKey
+                  AND receiptlinenumber=@cReceiptLineNumberOutput
+                  AND ISNULL(duplicatefrom,'') <>''
+
+                  )
+      BEGIN
+
+         DECLARE @cDuplicateFrom NVARCHAR(30)
+
+         UPDATE RECEIPTDETAIL WITH (ROWLOCK)
+         SET userdefine08= beforereceivedqty,
+           QtyExpected = beforereceivedqty--QtyExpected + 1
+         where receiptkey=@cReceiptKey
+            and receiptlinenumber=@cReceiptLineNumberOutput
+
+         SELECT @cDuplicateFrom = duplicatefrom
+         from receiptdetail (nolock)
+         where receiptkey=@cReceiptKey
+            and receiptlinenumber=@cReceiptLineNumberOutput
+
+         IF EXISTS (SELECT 1
+                 FROM receiptdetail (nolock)
+                 where receiptkey=@cReceiptKey
+                  AND receiptlinenumber=@cReceiptLineNumberOutput
+                  AND ISNULL(duplicatefrom,'') <>''
+                  AND QtyAdjusted >0)
+         BEGIN
+
+            UPDATE RECEIPTDETAIL WITH (ROWLOCK)
+               SET QTYExpected = QTYExpected - @nSKUQTY
+               where receiptkey=@cReceiptKey
+                  and receiptlinenumber=@cDuplicateFrom
+         END
+      END
+      ELSE
+      BEGIN
+         UPDATE RECEIPTDETAIL WITH (ROWLOCK)
+         SET userdefine08= CAST(userdefine08 AS INT) + @nSKUQTY
+          --  QtyExpected = QtyExpected + 1
+         where receiptkey=@cReceiptKey
+            and receiptlinenumber=@cReceiptLineNumberOutput
+      END
+            
 
       
       IF @nErrNo <> 0

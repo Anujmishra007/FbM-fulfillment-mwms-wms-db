@@ -13,6 +13,7 @@ GO
 /*                                                                            */
 /* Date         Author    Ver.  Purposes                                      */
 /* 04-Aug-2022  yeekung   1.0   WMS-20273 Created                             */
+/* 15-Mar-2023  yeekung   1.1   WMS-21377 Change step (yeekung01)             */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_600ExtUpd09 (
@@ -59,35 +60,34 @@ BEGIN
 
    IF @nFunc = 600 -- Normal receiving
    BEGIN
-      IF @nStep = 4 -- SKU
+      IF @nStep = 3 -- ID --(yeekung01)
       BEGIN
          DECLARE  @cRDSKU   NVARCHAR(20),
                   @cSKUUOM    NVARCHAR(20),
                   @cReceiptLineNumberOutput NVARCHAR(20),
                   @nRDQTY  INT,
-                  @nCounter INT 
+                  @nCounter INT,
+                  @cTOID NVARCHAR(20)
 
          IF @nInputKey = 0 -- ENTER
          BEGIN
-
-            UPDATE receiptdetail WITH (ROWLOCK) 
-            SET beforereceivedqty=0
+            UPDATE receiptdetail
+            set BeforeReceivedQty = 0 
+            FROM receiptdetail WITH (NOLOCK)    
             WHERE receiptkey=@cReceiptKey  
-
-            IF @@ERROR<>0
-            BEGIN
-               GOTO QUIT
-            END
+               AND   storerkey=@cStorerKey
 
             DECLARE C_Receiptdetail CURSOR LOCAL FAST_FORWARD READ_ONLY FOR    
-            SELECT sku,SUM(qtyexpected),UOM 
+            SELECT receiptlinenumber,sku,SUM(qtyexpected-BeforeReceivedQty),UOM,toid 
             FROM receiptdetail WITH (NOLOCK)    
             WHERE receiptkey=@cReceiptKey  
             AND   storerkey=@cStorerKey
-            group by   sku,UOM
+            group by   receiptlinenumber,sku,UOM,toid 
+            HAVING  SUM(QtyExpected) > SUM(BeforeReceivedQty)
+               
             
             OPEN C_Receiptdetail          
-            FETCH NEXT FROM C_Receiptdetail INTO  @cRDSKU ,@nRDQTY,@cSKUUOM  
+            FETCH NEXT FROM C_Receiptdetail INTO  @cReceiptLineNumberOutput,@cRDSKU ,@nRDQTY,@cSKUUOM ,@cTOID 
             WHILE (@@FETCH_STATUS <> -1)    
             BEGIN    
 
@@ -102,7 +102,7 @@ BEGIN
                   @cReceiptKey   = @cReceiptKey,
                   @cPOKey        = @cPOKey,
                   @cToLOC        = @cLOC,
-                  @cToID         = @cID,
+                  @cToID         = @cTOID,
                   @cSKUCode      = @cRDSKU,
                   @cSKUUOM       = @cSKUUOM,
                   @nSKUQTY       = @nRDQTY,
@@ -130,7 +130,8 @@ BEGIN
                   @cSubreasonCode = '',
                   @cReceiptLineNumberOutput = @cReceiptLineNumberOutput OUTPUT
 
-               FETCH NEXT FROM C_Receiptdetail INTO  @cRDSKU ,@nRDQTY,@cSKUUOM 
+
+               FETCH NEXT FROM C_Receiptdetail INTO  @cReceiptLineNumberOutput,@cRDSKU ,@nRDQTY,@cSKUUOM ,@cTOID
             END
 
          END
