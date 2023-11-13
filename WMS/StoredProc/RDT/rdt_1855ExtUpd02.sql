@@ -13,6 +13,7 @@ GO
 /*                                                                      */      
 /* Date         Author    Ver.  Purposes                                */      
 /* 2023-11-09   James     1.0   WMS-24099 Created                       */      
+/* 2023-11-10   James     1.1   Enhance upd orders status logic(james01)*/
 /************************************************************************/      
       
 CREATE OR ALTER PROCEDURE [rdt].[rdt_1855ExtUpd02]      
@@ -94,7 +95,14 @@ BEGIN
          SET @cPickConfirmStatus = rdt.RDTGetConfig( @nFunc, 'PickConfirmStatus', @cStorerKey)      
          IF @cPickConfirmStatus = '0'      
             SET @cPickConfirmStatus = '5'      
-    
+
+         IF OBJECT_ID('tempdb..#OrderKey') IS NOT NULL
+            DROP TABLE #OrderKey
+
+         CREATE TABLE #OrderKey  (
+            RowRef            BIGINT IDENTITY(1,1)  Primary Key,
+            OrderKey          NVARCHAR( 10))
+   
          SET @nErrNo = 0    
     
          SET @curUpdOrd = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR    
@@ -102,8 +110,7 @@ BEGIN
          FROM dbo.PICKDETAIL PD WITH (NOLOCK)    
          JOIN dbo.TaskDetail TD WITH (NOLOCK) ON ( PD.TaskDetailKey = TD.TaskDetailKey)    
          JOIN dbo.ORDERS O WITH (NOLOCK) ON ( PD.OrderKey = O.OrderKey)    
-         WHERE TD.TaskDetailKey = @cTaskDetailKey    
-         AND   TD.Storerkey = @cStorerKey    
+         WHERE TD.Storerkey = @cStorerKey    
          AND   TD.[Status] = '5'    
          AND   TD.Groupkey = @cGroupKey     
          AND   TD.DeviceID = @cCartID     
@@ -137,46 +144,38 @@ BEGIN
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UPD ORDHd Fail'      
                GOTO RollBackTran     
             END    
-              
-            SET @curUpdOrdDtl = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR    
-            SELECT DISTINCT PD.OrderLineNumber    
-            FROM dbo.PICKDETAIL PD WITH (NOLOCK)    
-            JOIN dbo.TaskDetail TD WITH (NOLOCK) ON ( PD.TaskDetailKey = TD.TaskDetailKey)    
-            JOIN dbo.ORDERS O WITH (NOLOCK) ON ( PD.OrderKey = O.OrderKey)    
-            WHERE TD.TaskDetailKey = @cTaskDetailKey    
-            AND   TD.Storerkey = @cStorerKey    
-            AND   TD.[Status] = '5'    
-            AND   TD.Groupkey = @cGroupKey     
-            AND   TD.DeviceID = @cCartID     
-            AND   PD.[Status] = @cPickConfirmStatus    
-            AND   O.Ecom_Single_flag = 'S'    
-            AND   O.[Status] = '3'     
-            OPEN @curUpdOrdDtl    
-            FETCH NEXT FROM @curUpdOrdDtl INTO @cOrderLineNumber    
-            WHILE @@FETCH_STATUS = 0    
-            BEGIN    
-               UPDATE dbo.ORDERDETAIL SET     
-                  [Status] = '3',     
-                  EditWho = SUSER_SNAME(),     
-                  EditDate = GETDATE()    
-               WHERE OrderKey = @cOrderKey    
-               AND   OrderLineNumber = @cOrderLineNumber    
-                 
-               IF @@ERROR <> 0    
-               BEGIN    
-                  SET @nErrNo = 177303      
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UPD ORDDt Fail'      
-                  GOTO RollBackTran     
-               END    
-    
-            FETCH NEXT FROM @curUpdOrdDtl INTO @cOrderLineNumber    
-            END    
-            CLOSE @curUpdOrdDtl    
-            DEALLOCATE @curUpdOrdDtl    
-              
+            
+            IF NOT EXISTS ( SELECT 1 FROM #OrderKey WHERE OrderKey = @cOrderKey)
+               INSERT INTO #OrderKey(OrderKey) VALUES (@cOrderKey)
+            
             FETCH NEXT FROM @curUpdOrd INTO @cOrderKey    
          END    
+
+         SET @curUpdOrdDtl = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR    
+         SELECT OD.OrderLineNumber    
+         FROM dbo.ORDERDETAIL OD WITH (NOLOCK)    
+         JOIN #OrderKey O WITH (NOLOCK) ON ( OD.OrderKey = O.OrderKey)    
+         OPEN @curUpdOrdDtl    
+         FETCH NEXT FROM @curUpdOrdDtl INTO @cOrderLineNumber    
+         WHILE @@FETCH_STATUS = 0    
+         BEGIN    
+            UPDATE dbo.ORDERDETAIL SET     
+               [Status] = '3',     
+               EditWho = SUSER_SNAME(),     
+               EditDate = GETDATE()    
+            WHERE OrderKey = @cOrderKey    
+            AND   OrderLineNumber = @cOrderLineNumber    
+                 
+            IF @@ERROR <> 0    
+            BEGIN    
+               SET @nErrNo = 177303      
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UPD ORDDt Fail'      
+               GOTO RollBackTran     
+            END    
     
+            FETCH NEXT FROM @curUpdOrdDtl INTO @cOrderLineNumber    
+         END    
+            
          COMMIT TRAN rdt_1855ExtUpd02    
     
          GOTO Commit_Tran    

@@ -172,6 +172,7 @@ GO
 /* 16-Dec-2022  SPChin    5.6   JSM-99648 - Add Validation of FinalizeFlag  */
 /* 29-Mar-2023  James     5.7   WMS-21943 Add UCCNo to SerialNo (james02)   */
 /* 03-Aug-2023  NJOW14    5.8   WMS-23298 Update lot to serialno            */
+/* 10-Nov-2023  TLTING07  5.9   Deadlock tune update UCC                    */
 /****************************************************************************/ 
  
 CREATE OR ALTER TRIGGER [dbo].[ntrReceiptDetailUpdate] 
@@ -282,6 +283,7 @@ DECLARE @c_AltSku                         NVARCHAR(20)
       , @c_ContainerKey                   NVARCHAR(18)
       , @c_ExternPoKey                    NVARCHAR(20)
       , @c_POLineNumber                   NVARCHAR(5)
+      , @n_UCC_RowRef                     bigINT
  
 SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT 
  
@@ -2185,16 +2187,48 @@ BEGIN
                               AND LOC = @c_ToLOC 
                               AND ID = @c_ToID 
                               AND Status = '1') 
+                         BEGIN
+                           -- tlting07
+                           DECLARE CUR_UCC CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+                              SELECT UCC_RowRef 
+                              FROM UCC (NOLOCK)
+                              WHERE UCCNo = @c_UCCNo                                                                                                                                                                                                               
+                                 AND StorerKey = @c_StorerKey                                                                                                                                                                                                      
+                                 AND SKU = @c_SKU                                                                                                                                                                                                                  
+                                 AND LOT = @c_LOT                                                                                                                                                                                                                  
+                                 AND LOC = @c_ToLOC                                                                                                                                                                                                                
+                                 AND ID = @c_ToID                                                                                                                                                                                                                  
+                                 AND Status = '1'   
  
-                           UPDATE UCC WITH (ROWLOCK) SET 
-                              QTY = QTY + @n_QTY 
-                           WHERE UCCNo = @c_UCCNo 
-                              AND StorerKey = @c_StorerKey 
-                              AND SKU = @c_SKU 
-                              AND LOT = @c_LOT 
-                              AND LOC = @c_ToLOC 
-                              AND ID = @c_ToID 
-                              AND Status = '1' 
+                           OPEN CUR_UCC 
+            
+                           FETCH NEXT FROM CUR_UCC INTO @n_UCC_RowRef
+ 
+                           WHILE @@FETCH_STATUS = 0 
+                           BEGIN  
+   
+                              UPDATE UCC WITH (ROWLOCK) SET                                                                                                                                                                                                                                   
+                                 QTY = QTY + @n_QTY                                                                                                                                                                                                                
+                              WHERE UCCNo = @c_UCCNo                                                                                                                                                                                                               
+                                 AND UCC_RowRef  = @n_UCC_RowRef                                                                                                                                                                                                     
+                                 AND Status = '1'    
+                                 SET @n_err = @@ERROR 
+ 
+                                 IF @n_err <> 0 
+                                 BEGIN 
+                                    SET @n_continue = 3   
+                                    SET @c_errmsg = CONVERT(CHAR(250),@n_err) 
+                                    SET @n_err = 94305 
+                                    SET @c_errmsg = 'NSQL' + CONVERT(CHAR(5) ,@n_err)  
+                                                   + ': Failed Update on table UCC. (ntrReceiptDetailUpdate) ( SQLSvr MESSAGE = '  
+                                                   + LTrim(RTrim(@c_errmsg)) + ' ) ' 
+                                 END 
+                                 FETCH NEXT FROM CUR_UCC INTO @n_UCC_RowRef
+                              END -- WHILE CUR_UCC 
+                              CLOSE CUR_UCC 
+                              DEALLOCATE CUR_UCC 
+                              -- END tlting07 
+                           END
                         ELSE 
                            INSERT INTO UCC 
                                  (UCCNo,     Storerkey, 
