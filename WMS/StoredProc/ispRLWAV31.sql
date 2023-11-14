@@ -1,10 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ispRLWAV31]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[ispRLWAV31]
+SET ANSI_NULLS OFF
 GO
-SET QUOTED_IDENTIFIER OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF 
-GO
+
 /****************************************************************************/  
 /* Stored Procedure: ispRLWAV31                                             */  
 /* Creation Date: 30-OCT-2019                                               */  
@@ -26,9 +24,10 @@ GO
 /* 01-04-2020  Wan01    1.1   Sync Exceed & SCE                             */
 /* 28-12-2020  NJOW01   1.2   WMS-15891 add logic cater for new brand       */
 /* 07-04-2021  NJOW02   1.3   Fix error control and transaction             */
+/* 10-11-2023  IVAN01   1.4   INC2195917 Bug Fix                            */  
 /****************************************************************************/   
 
-CREATE PROCEDURE [dbo].[ispRLWAV31]      
+CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV31]      
   @c_wavekey      NVARCHAR(10)  
  ,@b_Success      int        OUTPUT  
  ,@n_err          int        OUTPUT  
@@ -777,7 +776,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV31]
             	    	  CONTINUE
             	    END
             	    
-            	    IF @n_Qty >= @n_QtyCanFit
+            	    --IF @n_Qty >= @n_QtyCanFit
+                   IF @n_Qty > @n_QtyCanFit--IVAN01
             	    BEGIN
             	       SET @n_QtyPack = @n_QtyCanFit 
             	       SET @c_NewCarton = 'Y'  --Open new carton for remaining qty
@@ -949,7 +949,6 @@ RETURN_SP:
     END            
  END --sp end
 GO
-
-GRANT EXECUTE ON ispRLWAV31 TO NSQL
+GRANT EXECUTE ON  [dbo].[ispRLWAV31] TO [NSQL]
 GO
 
