@@ -14,6 +14,8 @@ GO
 /* Date         Author    Ver.  Purposes                                */      
 /* 2023-11-09   James     1.0   WMS-24099 Created                       */      
 /* 2023-11-10   James     1.1   Enhance upd orders status logic(james01)*/
+/* 2023-11-14   James     1.2   Only display extended msg when orders is*/
+/*                              PENDCANC, not rollback tran (james02)   */
 /************************************************************************/      
       
 CREATE OR ALTER PROCEDURE [rdt].[rdt_1855ExtUpd02]      
@@ -75,7 +77,9 @@ BEGIN
    DECLARE @cOrderLineNumber  NVARCHAR( 5) = ''    
    DECLARE @curUpdOrd         CURSOR    
    DECLARE @curUpdOrdDtl      CURSOR    
-       
+   DECLARE @cErrMsg1          NVARCHAR( 20) = ''
+   DECLARE @nPENDCANC         INT = 0
+   
    SET @nErrNo = 0    
        
    SELECT @cUserName = UserName    
@@ -126,12 +130,22 @@ BEGIN
          	            FROM dbo.ORDERS WITH (NOLOCK)
          	            WHERE OrderKey = @cOrderKey
          	            AND   SOStatus = 'PENDCANC')
-            BEGIN    
-               SET @nErrNo = 177301      
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UPD ORDHd Fail'      
-               GOTO RollBackTran     
+            BEGIN  
+            	IF @nPENDCANC = 0
+            	BEGIN
+                  SET @nErrNo = 0  
+                  SET @cErrMsg1 = 'ORDERS PENDCANC'  
+                  EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1  
+                  IF @nErrNo = 1  
+                  BEGIN  
+                     SET @nErrNo = 0
+                     SET @cErrMsg = ''
+                     SET @cErrMsg1 = ''  
+                     SET @nPENDCANC = 1
+                  END  
+               END
             END  
-            
+      
             UPDATE dbo.ORDERS SET     
                [Status] = '3',     
                EditWho = SUSER_SNAME(),     
