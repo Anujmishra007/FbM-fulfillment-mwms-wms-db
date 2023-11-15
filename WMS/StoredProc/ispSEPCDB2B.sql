@@ -26,6 +26,7 @@ GO
 /*                            before executing sub-sp & commit the TRAN */
 /*                            after execution complete (WL01)           */
 /* 14-NOV-2022  Wan01   1.2   Sync filter Start Point/Enhancement       */
+/* 13-Oct-2023  WLChooi 1.3   WMS-23876 - Cater for SEPB2CDPP (WL02)    */
 /************************************************************************/  
 CREATE OR ALTER PROC [dbo].[ispSEPCDB2B]
      @c_WaveKey                     NVARCHAR(10)  
@@ -90,13 +91,13 @@ BEGIN
    FROM WAVE WITH (NOLOCK)  
    WHERE Wavekey = @c_Wavekey  
   
-   IF @c_WaveType NOT IN ('SEPB2BPTS','SEPB2BNOR','SEPB2CALL')
+   IF @c_WaveType NOT IN ('SEPB2BPTS','SEPB2BNOR','SEPB2CALL','SEPB2CDPP')   --WL02
    BEGIN  
       SET @n_Err = 82010  
       SET @n_Continue = 3  
       SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0))    
                     + ': Invalid Wave Piece Pick Task Dispatch Method'  
-                    + '. Must Be SEPB2BPTS, SEPB2BNOR or SEPB2CALL (ispSEPCDB2B)'
+                    + '. Must Be SEPB2BPTS, SEPB2BNOR, SEPB2CDPP or SEPB2CALL (ispSEPCDB2B)'   --WL02
       GOTO QUIT_SP  
    END  
   
