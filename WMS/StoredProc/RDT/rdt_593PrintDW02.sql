@@ -10,6 +10,7 @@ GO
 /*                                                                         */          
 /* Date       Rev  Author   Purposes                                       */          
 /* 2023-10-27 1.0  James    WMS-23933. Modified from rdt_593PrintDW01      */        
+/* 2023-11-14 1.1  James    Adhoc fix. Group pickslip (james01)            */
 /***************************************************************************/          
           
 CREATE OR ALTER PROCEDURE [RDT].[rdt_593PrintDW02] (          
@@ -121,15 +122,16 @@ AS
 	      GOTO RollBackTran
 	      
       --print DN start
-      DECLARE CursorPrint CURSOR LOCAL FAST_FORWARD READ_ONLY FOR        
+      DECLARE CursorPrint CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT PH.pickheaderkey 
       FROM dbo.PackTask PT WITH (NOLOCK)
       JOIN dbo.PICKHEADER PH WITH (NOLOCK) ON PH.PickHeaderKey = PT.TaskBatchNo 
       WHERE PT.TaskBatchNo = @cPickSlipno_Conso
-      ORDER BY PT.LogicalName
+      GROUP BY PH.pickheaderkey 
       OPEN CursorPrint        
       FETCH NEXT FROM CursorPrint INTO @cPickSlipno        
-      WHILE @@FETCH_STATUS<>-1        
+      WHILE @@FETCH_STATUS<>-1
+            
       BEGIN        
                  
 				EXEC RDT.rdt_BuiltPrintJob
