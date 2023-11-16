@@ -26,6 +26,7 @@ GO
 /* 14-Sep-2022 WLChooi     1.2   Add more fields (WL02)                    */
 /* 15-May-2023 WLChooi     1.3   Extend size (WL03)                        */
 /* 26-Jun-2023 WLChooi     1.4   Update ReportTemplate (WL04)              */
+/* 16-Nov-2023 WLChooi     1.5   Support insert Bartender (WL05)           */
 /***************************************************************************/  
   
 CREATE OR ALTER PROC [dbo].[isp_AutoInsertWMReport] (
@@ -122,24 +123,29 @@ BEGIN
       SET @c_MessageOut = 'Storerkey is empty!'
    END
 
-   IF @c_PrintType = 'LOGIREPORT' AND @n_Continue IN (1,2)
+   IF @n_Continue IN (1,2)   --WL05
    BEGIN
       IF ISNULL(@c_ReportTitle,'') = ''
          SET @c_ReportTitle = @c_ReportType + ' - '
       
-      SELECT @c_JReportDefaultCatalog = REPLACE(ISNULL(NSQLDescrip,''),'WMS','WMGIT') 
-      FROM dbo.NSQLCONFIG N (NOLOCK) 
-      WHERE N.ConfigKey = 'JReportDefaultCatalog'
-      
-      SELECT @c_JReportDefaultReportFolder = ISNULL(NSQLDescrip,'') 
-      FROM dbo.NSQLCONFIG N (NOLOCK) 
-      WHERE N.ConfigKey = 'JReportDefaultReportFolder'
-      
-      IF ISNULL(@c_ReportCatalog,'') = ''
-         SET @c_ReportCatalog = TRIM(@c_JReportDefaultReportFolder) + TRIM(@c_JReportDefaultCatalog)
-      
-      IF RIGHT(TRIM(@c_TemplateName), 4) <> '.cls'
-         SET @c_TemplateName = TRIM(@c_TemplateName) + '.cls'
+      --WL05 S
+      IF @c_PrintType = 'LOGIREPORT'
+      BEGIN
+         SELECT @c_JReportDefaultCatalog = REPLACE(ISNULL(NSQLDescrip,''),'WMS','WMGIT') 
+         FROM dbo.NSQLCONFIG N (NOLOCK) 
+         WHERE N.ConfigKey = 'JReportDefaultCatalog'
+         
+         SELECT @c_JReportDefaultReportFolder = ISNULL(NSQLDescrip,'') 
+         FROM dbo.NSQLCONFIG N (NOLOCK) 
+         WHERE N.ConfigKey = 'JReportDefaultReportFolder'
+         
+         IF ISNULL(@c_ReportCatalog,'') = ''
+            SET @c_ReportCatalog = TRIM(@c_JReportDefaultReportFolder) + TRIM(@c_JReportDefaultCatalog)
+         
+         IF RIGHT(TRIM(@c_TemplateName), 4) <> '.cls'
+            SET @c_TemplateName = TRIM(@c_TemplateName) + '.cls'
+      END
+      --WL05 E
 
       --Main Process
       SELECT @c_ReportID = MIN(ReportId)                                
