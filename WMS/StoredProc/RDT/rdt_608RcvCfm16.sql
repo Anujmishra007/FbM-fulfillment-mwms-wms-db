@@ -4,18 +4,18 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 
-
 /***************************************************************************/
 /* Store procedure: rdt_608RcvCfm16                                        */
 /* Copyright      : LF Logistics                                           */
 /*                                                                         */
 /* Purpose:                                                                */
 /*                                                                         */
-/* Date       Rev  Author  Purposes                                        */
+/* Date       Rev  Author    Purposes                                      */
 /* 2023-08-18 1.0  yeekung   WMS-23405 Created                             */
+/* 2023-11-16 1.1  Calvin    JSM-191025 Retain SubreasonCode (CLVN01)      */
 /***************************************************************************/
 
-CREATE OR ALTER PROC [RDT].[rdt_608RcvCfm16](
+CREATE OR ALTER [RDT].[rdt_608RcvCfm16](
     @nFunc          INT,
     @nMobile        INT,
     @cLangCode      NVARCHAR( 3),
@@ -59,6 +59,17 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
+
+   --(CLVN01) START--
+   SELECT TOP 1 @cSubreasonCode = RD.SubreasonCode 
+   FROM ReceiptDetail RD (NOLOCK)
+   JOIN Receipt R (NOLOCK) ON R.receiptkey = RD.ReceiptKey
+   WHERE RD.Receiptkey = @cReceiptkey
+         AND RD.Storerkey = @cStorerkey
+         AND SKU = @cSKUCode
+         AND R.DOCTYPE = 'R'
+         AND R.RECEIPTGROUP = 'OMNI'
+   --(CLVN01) END--
 
    IF EXISTS ( SELECT 1
                FROM ReceiptDetail RD (NOLOCK)
@@ -126,7 +137,7 @@ BEGIN
       @dLottable15   = @dLottable15,
       @nNOPOFlag     = @nNOPOFlag,
       @cConditionCode = @cConditionCode,
-      @cSubreasonCode = '',
+      @cSubreasonCode = @cSubreasonCode,  --(CLVN01)
       @cReceiptLineNumberOutput = @cRDLineNo OUTPUT
 
 QUIT:
@@ -135,3 +146,5 @@ END
 GO
 GRANT EXECUTE ON  [RDT].[rdt_608RcvCfm16] TO [NSQL]
 GO
+
+
