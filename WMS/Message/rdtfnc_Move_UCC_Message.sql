@@ -11,4 +11,5 @@ execute rdt.rdtAddMsg 60607, 10, '60607^FROMLOC needed', 'us_english', 514
 execute rdt.rdtAddMsg 60608, 10, '60608^Inv FROMLOC',    'us_english', 514
 execute rdt.rdtAddMsg 60609, 10, '60609^Diff facility',  'us_english', 514
 execute rdt.rdtAddMsg 60610, 10, '60610^Invalid FromID', 'us_english', 514
-
+execute rdt.rdtAddMsg 60611, 10, '60611 UCC needed',     'us_english', 514
+execute rdt.rdtAddMsg 60612, 10, '60612 UCC DoubleScan', 'us_english', 514
