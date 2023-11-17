@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_ASNStatus_Close_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_ASNStatus_Close_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -24,11 +19,13 @@ GO
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */ 
-/* 2021-02-05   mingle01 1.1  Add Big Outer Begin try/Catch             */
+/* 2021-02-05   mingle01 1.1  Add Big Outer Begin try/Catch              */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2023-10-10   NJOW01   1.2  LFWM-4423 support close ASN by multi       */
+/*                            selection                                  */
 /*************************************************************************/  
-CREATE PROCEDURE [WM].[lsp_ASNStatus_Close_Wrapper]  
-   @c_ReceiptKey     NVARCHAR(15)
+CREATE OR ALTER PROCEDURE [WM].[lsp_ASNStatus_Close_Wrapper]  
+   @c_ReceiptKey     NVARCHAR(MAX)  --NJOW01
 ,  @b_Success        INT          = 1   OUTPUT   
 ,  @n_Err            INT          = 0   OUTPUT
 ,  @c_Errmsg         NVARCHAR(255)= ''  OUTPUT
@@ -52,7 +49,9 @@ BEGIN
          , @c_Facility        NVARCHAR(5)
          , @c_Storerkey       NVARCHAR(15)
 
-         , @c_OWITF           NVARCHAR(30)
+         , @c_OWITF           NVARCHAR(30)                   
+         , @c_ErrReceipts     NVARCHAR(255) --NJOW01                     
+         , @c_GetReceiptkey   NVARCHAR(10)  --NJOW01
 
    SET @b_Success = 1
    SET @c_ErrMsg = ''
@@ -79,21 +78,38 @@ BEGIN
    --(mingle01) - START
    BEGIN TRY
       IF ( @c_ProceedWithWarning = 'N' AND @n_WarningNo < 1 ) 
-      BEGIN
-         IF EXISTS ( SELECT 1
+      BEGIN      	 
+      	 --NJOW01 S
+         SELECT @c_ErrReceipts =  STUFF((SELECT DISTINCT ',' + RTRIM(RD.Receiptkey) 
+         FROM RECEIPTDETAIL RD WITH (NOLOCK) 
+         WHERE RD.ReceiptKey IN (SELECT Value FROM STRING_SPLIT(@c_ReceiptKey,'|'))
+         AND RD.Finalizeflag <> 'Y'
+         ORDER BY 1 FOR XML PATH('')),1,1,'' )
+         
+         IF ISNULL(@c_ErrReceipts,'') <> ''
+         BEGIN
+            SET @n_continue  = 3
+            SET @c_ErrMsg= 'Found Receipt line is not finalized. Confirm to close ASN? Alert Receipt#: ' + @c_ErrReceipts
+            SET @n_WarningNo = 1
+            GOTO EXIT_SP
+         END
+         --NJOW01 E
+      	
+         /*IF EXISTS ( SELECT 1
                      FROM RECEIPTDETAIL RD WITH (NOLOCK) 
                      WHERE RD.ReceiptKey = @c_ReceiptKey
                      AND RD.Finalizeflag <> 'Y'
-                   )
+                   )                   
          BEGIN
             SET @n_continue  = 3
             SET @c_ErrMsg= 'There is Receiptdetail not finalized. Are you sure you want to proceed to close ASN?'
             SET @n_WarningNo = 1
             GOTO EXIT_SP
          END 
+         */
       END
 
-
+      /* 
       SET @c_Facility = ''
       SET @c_Storerkey= ''
       SELECT @c_Facility = Facility
@@ -125,6 +141,7 @@ BEGIN
          SET @n_continue = 3      
          GOTO EXIT_SP
       END 
+      */
 
       --IF @c_OWITF = '1'
       --BEGIN
@@ -158,11 +175,29 @@ BEGIN
    
       IF @n_continue IN (1,2)
       BEGIN
-         BEGIN TRY
+         BEGIN TRY             
+         	  --NJOW01 S
+            DECLARE CUR_REC CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+               SELECT Receiptkey
+               FROM RECEIPT (NOLOCK)
+               WHERE Receiptkey IN (SELECT Value FROM STRING_SPLIT(@c_ReceiptKey,'|'))
+               ORDER BY Receiptkey
 
-            UPDATE RECEIPT WITH (ROWLOCK)
-               SET ASNStatus ='9'
-            WHERE ReceiptKey = @c_Receiptkey 
+            OPEN CUR_REC
+            
+            FETCH NEXT FROM CUR_REC INTO @c_GetReceiptkey
+            
+            WHILE @@FETCH_STATUS = 0 
+            BEGIN      	
+               UPDATE RECEIPT WITH (ROWLOCK)
+                  SET ASNStatus ='9'
+               WHERE ReceiptKey = @c_GetReceiptkey 
+
+               FETCH NEXT FROM CUR_REC INTO @c_GetReceiptkey
+            END
+            CLOSE CUR_REC
+            DEALLOCATE CUR_REC
+            --NJOW01 E
          END TRY
  
          BEGIN CATCH
