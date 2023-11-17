@@ -161,6 +161,8 @@ GO
 /*                                  partial received qty and status=9, prevent */
 /*                                  reverse both status to 0 due to openqty > 0*/
 /* 03-AUT-2023  NJOW04       2.5    DEVOPS Combine Script                      */
+/* 02-NOV-2023  NJOW05       2.6    WMS-24047 update receiptdate upon close    */
+/*                                  ASN by config                              */
 /*******************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrReceiptHeaderUpdate]
@@ -231,6 +233,9 @@ BEGIN
           , @c_HoldChannel       NVARCHAR(1)       = '0' --(Wan02) 
           , @c_MarkASNLockdown   Nvarchar(1)  = '0'   --TLTING04
           , @c_CloseASNStatusUpdFinalizeDate NVARCHAR(30) --NJOW02
+          , @c_CloseASNStatusUpdReceiptDate  NVARCHAR(30) --NJOW05
+          , @c_DocTypeUpdReceiptDate         NVARCHAR(20) --NJOW05
+          , @c_Option5                       NVARCHAR(MAX) --NJOW05
           , @c_ASNSkipStatusUpdate NVARCHAR(30)   --WL02
           , @c_DisallowCloseASNB4Finalize NVARCHAR(30) --NJOW03
           
@@ -2228,7 +2233,7 @@ BEGIN
                END--ISNULL(@cASNValidationRules,'') <> ''              
             END--WL01 END
             
-            --NJOW02
+            --NJOW02  
             IF @n_continue = 1 OR @n_continue = 2
             BEGIN
                SELECT @b_success = 0, @c_CloseASNStatusUpdFinalizeDate = ''
@@ -2246,7 +2251,7 @@ BEGIN
                   SELECT @n_continue = 3, @c_errmsg = 'ntrReceiptHeaderUpdate' + dbo.fnc_RTrim(@c_errmsg)
                   SELECT @n_err = 60250 
                   BREAK
-               END
+               END               
                ELSE
                BEGIN -- else BEGIN
                   IF @c_CloseASNStatusUpdFinalizeDate = '1' 
@@ -2265,6 +2270,39 @@ BEGIN
                      END                  	 
                   END
                END           	
+            END                        
+
+            --NJOW05
+            IF @n_continue = 1 OR @n_continue = 2
+            BEGIN
+               SET @c_CloseASNStatusUpdReceiptDate = ''
+               SET @c_DocTypeUpdReceiptDate = 'A,R,X'
+               SET @c_Option5 = ''
+               
+               SELECT @c_CloseASNStatusUpdReceiptDate = SC.Authority,
+                      @c_Option5 = SC.Option5
+               FROM dbo.fnc_GetRight2(@c_Facility, @c_Storerkey,'','CloseASNStatusUpdReceiptDate') AS SC
+       
+               IF @c_CloseASNStatusUpdReceiptDate = '1' 
+               BEGIN               	
+               	  SELECT @c_DocTypeUpdReceiptDate = dbo.fnc_GetParamValueFromString ('@c_DocTypeUpdReceiptDate', @c_option5, @c_DocTypeUpdReceiptDate)
+               	
+                  UPDATE RECEIPT WITH (ROWLOCK)
+                  SET  ReceiptDate = GETDATE(),
+                       TrafficCop   = NULL
+                  WHERE Receiptkey = @c_receiptkey
+                  AND DocType IN (SELECT Value
+                                  FROM STRING_SPLIT(@c_DocTypeUpdReceiptDate,','))                                  
+                  
+                  SELECT @n_err = @@ERROR
+                  IF @n_err <> 0
+                  BEGIN
+                     SELECT @n_continue = 3
+                     SELECT @c_errmsg = CONVERT(CHAR(250),@n_err) --, @n_err=63806   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+                     SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table RECEIPT. (ntrReceiptHeaderUpdate) ( SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '
+                     BREAK
+                  END                  	 
+               END
             END                        
          END -- While Loop 1
       END -- ASNStatus = '9'
