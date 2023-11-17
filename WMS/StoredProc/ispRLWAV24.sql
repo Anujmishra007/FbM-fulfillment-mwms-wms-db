@@ -28,6 +28,8 @@ GO
 /* 01-04-2020  Wan01    1.4   Sync Exceed & SCE                             */
 /* 28-03-2022  NJOW05   1.5   WMS-19303 Support loc table at mastgroup      */
 /* 28-03-2022  NJOW05   1.6   DEVOPS combine script                         */
+/* 14-11-2023  NJOW06   1.7   WMS-24191 B2C taskdetail enhancements and     */
+/*                            remove B2B ECOM_Single_flag='S' filtering     */
 /****************************************************************************/   
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV24]      
@@ -980,10 +982,10 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV24]
            ,@c_PickCondition_SQL     = @c_PickCondition_SQL   -- Additional condition to filter pickdetail. e.g. AND PICKDETAIL.UOM='2' AND LOC.LoctionType = 'OTHER'
            ,@c_LinkTaskToPick        = 'WIP'    -- N=No update taskdetailkey to pickdetail Y=Update taskdetailkey to pickdetail  WIP=Update taskdetailkey to pickdetail_wip
            ,@c_LinkTaskToPick_SQL    = @c_LinkTaskToPick_SQL   -- Additional sql condition to retrieve the pickdetail like AND PICKDETAIL.UOM = @c_UOM or Order BY
-           ,@c_ReserveQtyReplen      = 'N'    -- TASKQTY=Reserve all task qty for replenish at Lotxlocxid ROUNDUP=Reserve round up to full carton/pallet qty only (qty - systemqty)
+           ,@c_ReserveQtyReplen      = 'ROUNDUP' --NJOW06    -- TASKQTY=Reserve all task qty for replenish at Lotxlocxid ROUNDUP=Reserve round up to full carton/pallet qty only (qty - systemqty)
            ,@c_ReservePendingMoveIn  = 'N'    -- N=No update @n_qty to @n_PendingMoveIn Y=Update @n_qty to @n_PendingMoveIn           ,@c_WIP_RefNo             = @c_SourceType     -- referencekey for filtering pickdetail_wip table. optional and only apply for WIP
            ,@c_WIP_RefNo             = @c_SourceType     -- referencekey for filtering pickdetail_wip table. optional and only apply for WIP
-           ,@c_RoundUpQty            = 'N'    -- FC=Round up qty to full carton by packkey/ucc FP=Round up qty to full pallet by packkey/ucc  FL=Round up to full location qty
+           ,@c_RoundUpQty            = 'FC' --NJOW06   -- FC=Round up qty to full carton by packkey/ucc FP=Round up qty to full pallet by packkey/ucc  FL=Round up to full location qty
            ,@c_SplitTaskByCase       = 'Y'    -- N=No slip Y=Split TASK by carton. Only apply if @n_casecnt > 0. include last partial carton.
            ,@c_ZeroSystemQty         = 'N'    -- N=@n_SystemQty will copy from @n_Qty if @n_SystemQty=0 Y=@n_SystemQty force to zero.
            ,@c_SplitTaskByOrder      = 'N'    -- N=No slip by order Y=Split TASK by Order.            
@@ -1007,8 +1009,10 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV24]
     IF @n_continue = 1 OR @n_continue = 2
     BEGIN
         SET @c_Message01 = 'PACKSTATION'
-       SET @c_PickCondition_SQL = 'AND PICKDETAIL.UOM = ''2'' AND LOC.LocationCategory = ''VNA'' AND ISNULL(PICKDETAIL.Taskdetailkey,'''') = '''' AND ORDERS.DocType <> ''E'' AND ISNULL(ORDERS.ECOM_SINGLE_Flag,'''') <> ''S'''  --NJOW03       
-       SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM AND ORDERS.DocType <> ''E'' AND ISNULL(ORDERS.ECOM_SINGLE_Flag,'''') <> ''S'' ' --NJOW03
+       --SET @c_PickCondition_SQL = 'AND PICKDETAIL.UOM = ''2'' AND LOC.LocationCategory = ''VNA'' AND ISNULL(PICKDETAIL.Taskdetailkey,'''') = '''' AND ORDERS.DocType <> ''E'' AND ISNULL(ORDERS.ECOM_SINGLE_Flag,'''') <> ''S'''  --NJOW03       
+       SET @c_PickCondition_SQL = 'AND PICKDETAIL.UOM = ''2'' AND LOC.LocationCategory = ''VNA'' AND ISNULL(PICKDETAIL.Taskdetailkey,'''') = '''' AND ORDERS.DocType <> ''E'' '  --NJOW06      
+       --SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM AND ORDERS.DocType <> ''E'' AND ISNULL(ORDERS.ECOM_SINGLE_Flag,'''') <> ''S'' ' --NJOW03
+       SET @c_LinkTaskToPick_SQL = 'AND PICKDETAIL.UOM = @c_UOM AND ORDERS.DocType <> ''E'' ' --NJOW06
        SET @c_ToLoc = 'MASTPACKST'
              
        EXEC isp_CreateTaskByPick
