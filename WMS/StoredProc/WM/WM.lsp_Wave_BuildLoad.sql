@@ -37,6 +37,10 @@ GO
 /*                            BuildLoadLog Table                        */
 /* 2023-06-23  Wan07    1.8   LFWM-4176 - CN UAT  Split wave into loads */
 /*                            based on customized SP                    */
+/* 2023-10-11  Wan08    1.9   LFWM-4490 - CN UAT Add new type to wave   */
+/*                            build load                                */
+/* 2023-10-12  Wan09    2.0   LFWM-4529 - PROD-CNWAVE Release group     */
+/*                            search slow and build wave slow           */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_Wave_BuildLoad]                                                                                                                       
       @c_Wavekey        NVARCHAR(10)  
@@ -134,14 +138,6 @@ AS
          , @c_SQLGroupBy               NVARCHAR(2000) = ''                                                                                                                
 
          , @n_Num                      INT            = 0
-         , @n_SNum                     INT            = 0
-         , @n_ENum                     INT            = 0
-         --, @n_Palletcnt                INT            = 0   
-         --, @n_Casecnt                  INT            = 0  
-         --, @n_LoadPalletCnt            INT            = 0   
-         --, @n_LoadCaseCnt              INT            = 0   
-         --, @n_CustCnt                  INT            = 0  
-         --, @n_RdsCnt                   INT            = 0    
          
          , @n_BatchNo                  INT            = 0                           --(Wan06)              
                       
@@ -160,10 +156,10 @@ AS
 
          , @c_BuildLoadKey             NVARCHAR(10)   = ''
          , @c_Loadkey                  NVARCHAR(10)   = ''  
-         --, @c_LoadLineNumber           NVARCHAR(10)   = ''
+         , @c_LoadLineNumber           NVARCHAR(10)   = ''                          --(Wan08)
          , @c_WaveDetailkey            NVARCHAR(10)   = ''
          , @c_Orderkey                 NVARCHAR(10)   = '' 
-         --, @c_OrderLineNumber          NVARCHAR(5)    = '' 
+         , @c_OrderLineNumber          NVARCHAR(5)    = ''                          --(Wan08) 
          , @c_ExternOrderKey           NVARCHAR(30)   = ''
          , @c_ConsigneeKey             NVARCHAR(15)   = ''
          , @c_C_Company                NVARCHAR(45)   = ''
@@ -180,6 +176,17 @@ AS
          , @c_UserDefine08             NVARCHAR(10)   = ''
          , @c_Route                    NVARCHAR(10)   = ''
          , @c_SOStatus                 NVARCHAR(10)   = ''
+
+         , @c_Rds                      NVARCHAR(10)   = ''                          --(Wan09)
+         , @c_LoadStatus               NVARCHAR(10)   = '0'                         --(Wan09)
+
+         , @n_RNumS                    INT            = 0                           --(Wan09)
+         , @n_RNumE                    INT            = 0                           --(Wan09)
+         , @n_CustCnt                  INT            = 0                           --(Wan09)
+         , @n_LoadPalletCnt            INT            = 0                           --(Wan09)
+         , @n_LoadCaseCnt              INT            = 0                           --(Wan09)
+         , @n_PalletCnt                INT            = 0                           --(Wan09)
+         , @n_CaseCnt                  INT            = 0                           --(Wan09)         
          
          , @c_PICKTRF                  NVARCHAR(1)    = '0' 
          , @c_NoMixRoute               NVARCHAR(1)    = '0' 
@@ -568,13 +575,18 @@ AS
       SET @c_SQLCond = @c_SQLCond + N') '                                                                                                                        
       SET @n_PreCondLevel = @n_PreCondLevel - 1                                                                                                                    
    END  
+
+   IF @n_MaxOpenQty > 0                                                             --(Wan08) - START
+   BEGIN
+      SET @c_SQLCond = @c_SQLCond + ' AND ORDERS.OpenQty <= @n_MaxOpenQty'
+   END                                                                              --(Wan08) - END
    
    IF @b_debug = 1
    BEGIN
       PRINT '@c_SQLCond: ' + @c_SQLCond  
    END 
    ------------------------------------------------------  
-   -- Get Build Wave Custom SP  
+   -- Get Build Load Custom SP  
    ------------------------------------------------------  
    SET @c_SQL = ''                                                                                                                                        
    SET @CUR_BUILD_SP = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR                                                                                             
@@ -734,7 +746,6 @@ AS
                ,@b_ValidColumn = ISNULL(MIN(IIF(c.COLUMN_NAME IS NOT NULL , 1 , 0 )),0)
          FROM TC
          LEFT OUTER JOIN INFORMATION_SCHEMA.COLUMNS c WITH (NOLOCK) ON c.TABLE_NAME = TC.TableName AND c.TABLE_NAME + '.' + c.COLUMN_NAME = TC.BuildCol 
-
 
          IF @b_ValidTable = 0 SET @c_TableName = ''
          IF @b_ValidColumn = 0 SET @c_ColType = ''
@@ -998,6 +1009,21 @@ AS
    BEGIN
       PRINT '@c_SQL: ' + @c_SQL
    END
+   
+   --Storerconfig Move up                                                           --(Wan08) - START 
+   SET @c_AutoUpdSuperOrderFlag = '0'                                               
+   SELECT @c_AutoUpdSuperOrderFlag = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'AutoUpdSupOrdflag') 
+   --IF @c_AutoUpdSuperOrderFlag = '1'                                                                                                                                                                     
+   --BEGIN                                                                                                                                                         
+   --   SET @c_SuperOrderFlag = 'Y'                                                                                                                                
+   --END                                                                            
+
+   SET @c_AutoUpdLoadDfStorerStrg = '0'  
+   SELECT @c_AutoUpdLoadDfStorerStrg = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'AutoUpdLoadDefaultStorerStrg')    
+   IF @c_AutoUpdLoadDfStorerStrg = '1'                                                                                                                             
+   BEGIN                                                                                                                                                         
+      SET @c_DefaultStrategykey = 'Y'                                                                                                                                
+   END                                                                              --(Wan08) - END
 
    IF @c_SQLBuildByGroupWhere <> ''
    BEGIN
@@ -1041,17 +1067,19 @@ AS
          PRINT '@c_SQLBuildByGroup: ' + @c_SQLBuildByGroup
       END
       EXEC SP_EXECUTESQL @c_SQLBuildByGroup 
-            , N'@c_StorerKey NVARCHAR(15), @c_Facility NVARCHAR(5), @c_WaveKey NVARCHAR(10)'  
+            , N'@c_StorerKey NVARCHAR(15), @c_Facility NVARCHAR(5), @c_WaveKey NVARCHAR(10)
+              , @n_MaxOpenQty INT'                                                  --(Wan08)
             , @c_StorerKey                                                                                          
             , @c_Facility 
-            , @c_Wavekey                                                                                          
-                                                                                                                                                                                                                     
+            , @c_Wavekey 
+            , @n_MaxOpenQty                                                         --(Wan08)    
+                                                                                                                                                                                                      
       OPEN CUR_LOADGRP                                                                                                                                         
       FETCH NEXT FROM CUR_LOADGRP INTO @c_Storerkey
                                     ,  @c_Field01, @c_Field02, @c_Field03, @c_Field04, @c_Field05                                              
                                     ,  @c_Field06, @c_Field07, @c_Field08, @c_Field09, @c_Field10 
                                     ,  @c_UserDefine08, @c_Route, @c_SOStatus                                                             
-      WHILE @@FETCH_STATUS = 0                                                                                                                                 
+      WHILE @@FETCH_STATUS = 0 AND @n_Continue = 1                                  --(Wan08)                                                                                                                                
       BEGIN 
          GOTO START_BUILDLOAD                                                                                                                                
          RETURN_BUILDLOAD:                                                                                                                                   
@@ -1066,23 +1094,7 @@ AS
 
       GOTO END_BUILDLOAD                                                                                                                                       
    END
-   
-   SET @c_AutoUpdSuperOrderFlag = '0'
-   SELECT @c_AutoUpdSuperOrderFlag = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'AutoUpdSupOrdflag') 
-    
-   IF @c_AutoUpdSuperOrderFlag = '1'                                                                                                                             
-   BEGIN                                                                                                                                                         
-      SET @c_SuperOrderFlag = 'Y'                                                                                                                                
-   END 
-
-   SET @c_AutoUpdLoadDfStorerStrg = '0'  
-   SELECT @c_AutoUpdLoadDfStorerStrg = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'AutoUpdLoadDefaultStorerStrg')    
-   IF @c_AutoUpdLoadDfStorerStrg = '1'                                                                                                                             
-   BEGIN                                                                                                                                                         
-      SET @c_DefaultStrategykey = 'Y'                                                                                                                                
-   END       
-   
-START_BUILDLOAD:                                                                                                                                            
+START_BUILDLOAD:     
    TRUNCATE TABLE #tWaveOrder                                                                                                                                     
                                                                                                                                  
    IF @b_debug = 2                                                                                                                                              
@@ -1102,6 +1114,7 @@ START_BUILDLOAD:
                   +', @c_Field05 NVARCHAR(60), @c_Field06 NVARCHAR(60), @c_Field07 NVARCHAR(60), @c_Field08 NVARCHAR(60)'
                   +', @c_Field09 NVARCHAR(60), @c_Field10 NVARCHAR(60), @c_StorerKey NVARCHAR(15), @c_Facility NVARCHAR(5), @c_WaveKey NVARCHAR(10)'
                   +', @c_UserDefine08 NVARCHAR(10), @c_Route NVARCHAR(10), @c_SOStatus NVARCHAR(10)'
+                  +', @n_MaxOpenQty INT'                                            --(Wan08)                  
 
    EXEC SP_EXECUTESQL @c_SQL
                      ,@c_SQLParms
@@ -1121,7 +1134,8 @@ START_BUILDLOAD:
                      ,@c_UserDefine08
                      ,@c_Route
                      ,@c_SOStatus                                             
-                           
+                     ,@n_MaxOpenQty                                                 --(Wan08)   
+                                                
    IF @b_debug = 2                                                                                                                                              
    BEGIN                                                                                                                                                       
       SET @d_EndTime_Debug = GETDATE()                                                                                                                         
@@ -1191,35 +1205,125 @@ START_BUILDLOAD:
    END                                                                              --(Wan06) - END
                                                                                                                                                         
    SET @CUR_BUILDLOAD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-   SELECT RNum, OpenQty, OrderKey, [Weight], [Cube]
+   SELECT RNum, OpenQty, OrderKey, [Weight], [Cube], [RDS], [Status]                --(Wan09)
    FROM #tWaveOrder 
    ORDER BY RNum 
 
    OPEN @CUR_BUILDLOAD 
-   FETCH NEXT FROM @CUR_BUILDLOAD INTO  @n_Num, @n_OpenQty, @c_Orderkey, @n_Weight, @n_Cube                                                                                                                       
-   WHILE @@FETCH_STATUS <> -1 
-   BEGIN                                                                                                                                                       
+                                                                                                                    
+   WHILE 1 = 1            --@@FETCH_STATUS <> -1                                    --(Wan08) - START                            
+   BEGIN  
+      FETCH NEXT FROM @CUR_BUILDLOAD INTO  @n_Num, @n_OpenQty, @c_Orderkey, @n_Weight, @n_Cube
+                                          ,@c_rds, @c_Status                        --(Wan09)  
+       
+      IF @c_Loadkey <> ''
+      BEGIN
+         IF @b_debug = 1    PRINT @c_Loadkey + ' ' +  CAST (@n_TotalOpenQty AS NVARCHAR(10))   
+          
+         IF (@n_OrderCnt + 1 > @n_MaxOrders) OR                                           
+            (@n_TotalOpenQty + @n_OpenQty > @n_MaxOpenQty AND @n_MaxOpenQty > 0)
+         BEGIN
+            SET @c_Loadkey = ''
+         END  
+
+         IF @c_Loadkey = '' OR @@FETCH_STATUS = -1
+         BEGIN
+            SELECT @n_CustCnt = COUNT(DISTINCT two.C_Company)                       --(Wan09) - START
+            FROM #tWaveOrder AS two
+            WHERE two.RNum BETWEEN @n_RNumS AND @n_RNumE 
+            
+            UPDATE LOADPLAN WITH (ROWLOCK)
+            SET [Status] = @c_LoadStatus
+               ,[Cube]   = @n_TotalCube
+               ,[Weight] = @n_TotalWeight
+               ,OrderCnt = @n_OrderCnt
+               ,CustCnt  = @n_CustCnt
+               ,PalletCnt= @n_LoadPalletCnt
+               ,CaseCnt  = @n_LoadCaseCnt
+               ,SuperOrderFlag = @c_SuperOrderFlag
+               ,EditWho = SUSER_SNAME()
+               ,EditDate= GETDATE()
+               ,Archivecop = NULL
+            WHERE Loadkey = @c_BuildLoadKey                                         --(Wan09) - END
+            
+            INS_DETLOG:
+            IF @n_Continue = 3 AND @@TRANCOUNT > 0 ROLLBACK TRAN
+            
+            IF @c_BuildLoadKey <> ''
+            BEGIN
+               SET @d_EndTime = GETDATE()
+               INSERT INTO BUILDLOADDETAILLOG
+                  (  Loadkey
+                  ,  Storerkey
+                  ,  BatchNo
+                  ,  TotalOrderCnt
+                  ,  TotalOrderQty
+                  ,  UDF01
+                  ,  UDF02
+                  ,  UDF03
+                  ,  UDF04
+                  ,  UDF05
+                  ,  AddWho
+                  ,  AddDate
+                  ,  Duration
+                  )  
+               VALUES
+                  (
+                     @c_BuildLoadKey
+                  ,  @c_Storerkey
+                  ,  @n_BatchNo
+                  ,  @n_OrderCnt
+                  ,  @n_TotalOpenQty
+                  ,  ''
+                  ,  ''
+                  ,  ''
+                  ,  ''
+                  ,  ''
+                  ,  @c_UserName
+                  ,  @d_StartTime
+                  ,  CONVERT(CHAR(12),@d_EndTime - @d_StartTime ,114)
+                  )
+            END       
+         END                                                                     
+      END
+      
+      WHILE @@ROWCOUNT > 0 
+      BEGIN 
+         COMMIT TRAN
+      END
+      
+      IF @n_Continue IN (2,3)
+      BEGIN
+         BREAK
+      END
+      
+      IF @@FETCH_STATUS = -1  
+      BEGIN
+         BREAK
+      END                                                                           --(Wan08) - END
+                                                                                                                                                           
       IF @@TRANCOUNT = 0                                                                                                                                       
          BEGIN TRAN;                                                                                                                                           
                           
-      IF @n_OpenQty > @n_MaxOpenQty AND @n_MaxOpenQty > 0
-      BEGIN
-         IF @n_TotalOpenQty = 0 AND @c_Loadkey = ''
-         BEGIN 
-            SET @n_Continue = 3 
-            SET @n_Err     = 556007                                                                                                                             
-            SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err) 
-                           + ': No Order to Generate. (lsp_Wave_BuildLoad)'                                                                                                                                                 
-            GOTO EXIT_SP
-         END
-         BREAK
-      END 
+      --IF @n_OpenQty > @n_MaxOpenQty AND @n_MaxOpenQty > 0                         --(Wan08) - START
+      --BEGIN
+      --   IF @n_TotalOpenQty = 0 AND @c_Loadkey = ''
+      --   BEGIN 
+      --      SET @n_Continue = 3 
+      --      SET @n_Err     = 556007                                                                                                                             
+      --      SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err) 
+      --                     + ': No Order to Generate. (lsp_Wave_BuildLoad)'                                                                                                                                                 
+      --      GOTO EXIT_SP                                                          
+      --   END
+      --   BREAK
+      --END                                                                         --(Wan08) - END
 
       IF @c_Loadkey = ''
       BEGIN
          IF @n_MaxLoad > 0 AND @n_MaxLoad >= @n_LoadCnt
          BEGIN
-            GOTO END_BUILDLOAD         
+            SET @n_Continue = 2                                                     --(Wan08)
+            GOTO INS_DETLOG   --END_BUILDLOAD                                       --(Wan08)
          END
 
          SET @d_StartTime = GETDATE()  
@@ -1243,12 +1347,12 @@ START_BUILDLOAD:
          IF @b_success <> 1 OR @n_Err <> 0                                                                                                                                   
          BEGIN 
             SET @n_Continue = 3  
-            GOTO EXIT_SP
+            GOTO INS_DETLOG   --END_BUILDLOAD                                       --(Wan08) 
          END  
           
          BEGIN TRY
             INSERT INTO LoadPlan(LoadKey, Facility, UserDefine04, SuperOrderFlag, DefaultStrategykey)   
-            VALUES(@c_LoadKey, @c_Facility, @c_BuildParmKey, @c_AutoUpdSuperOrderFlag, @c_DefaultStrategykey)         
+            VALUES(@c_LoadKey, @c_Facility, @c_BuildParmKey, @c_SuperOrderFlag, @c_DefaultStrategykey)         
          END TRY                             
                                                                                                                                     
          BEGIN CATCH                                                                                                                                                
@@ -1268,79 +1372,173 @@ START_BUILDLOAD:
                   BEGIN TRAN
                END
             END                                                          
-            GOTO EXIT_SP     
+            GOTO INS_DETLOG   --END_BUILDLOAD                                       --(Wan08)      
          END CATCH  
                                                                                                                                                                             
-         SET @n_SNum          = @n_Num
+         SET @n_RNumS         = @n_Num                                              --(Wan09)
+         SET @n_RNumE         = @n_Num                                              --(Wan09)
+         SET @n_LoadPalletCnt = 0                                                   --(Wan09)
+         SET @n_LoadCaseCnt   = 0                                                   --(Wan09)
          SET @n_OrderCnt      = 0    
          SET @n_TotalOpenQty  = 0 
          SET @n_TotalWeight   = 0.00
          SET @n_TotalCube     = 0.00
          SET @n_LoadCnt       = @n_LoadCnt + 1 
-         SET @c_BuildLoadKey  = @c_Loadkey          
+         SET @c_BuildLoadKey  = @c_Loadkey  
+         SET @c_SuperOrderFlag= 'N'                                                 --(Wan09)
+         IF @c_AutoUpdSuperOrderFlag = '1' SET @c_SuperOrderFlag = 'Y'              --(Wan09)                                                                                                                                                             
+         SET @c_LoadStatus    = '0'                                                 --(Wan09)
       END
 
       IF @c_Loadkey = ''
       BEGIN 
-         GOTO EXIT_SP
+         SET @n_Continue = 2
+         GOTO INS_DETLOG   --END_BUILDLOAD                                          --(Wan08) 
       END
       
       IF @@TRANCOUNT = 0            --(Wan02)                                                                                                                                     
          BEGIN TRAN;                --(Wan02) 
-                                                                                                                                           
-      SET @d_EditDate = GETDATE()   
-      
-      --SET @b_success = 1                                                                                                                                    
-      
-      SELECT @c_Orderkey = ISNULL(T.OrderKey,'')         
-         ,   @c_ConsigneeKey= ISNULL(T.ConsigneeKey,'')     
-         ,   @c_ExternOrderKey = ISNULL(T.ExternOrderKey,'')     
-         ,   @c_C_Company=ISNULL(T.C_Company,'')                                                                                                                            
-         ,   @c_Type = ISNULL(T.[Type],'')                                                                                                                         
-         ,   @c_Priority = ISNULL(T.[Priority],'')    
-         ,   @c_Door = ISNULL(T.Door,'')                
-         ,   @c_Route = ISNULL(T.[Route],'')  
-         ,   @d_OrderDate = T.OrderDate                                                                                                                   
-         ,   @d_DeliveryDate = T.DeliveryDate  
-         ,   @c_DeliveryPlace = ISNULL(T.DeliveryPlace,'')                         
-         ,   @n_Weight = T.[Weight]         
-         ,   @n_Cube = T.[Cube]                                                                                                                       
-         ,   @n_NoOfOrdLines = T.NoOfOrdLines   
-         ,   @c_Status = T.[Status]    
-      FROM #tWaveOrder T                                                                                                                                       
-      WHERE T.RNUM = @n_Num 
+         
+      --(Wan08) - START
+      SET @n_TotalWeight  = @n_TotalWeight + @n_Weight
+      SET @n_TotalCube    = @n_TotalCube + @n_Cube
+
+      SET @n_OrderCnt     = @n_OrderCnt + 1    
+      SET @n_TotalOrderCnt= @n_TotalOrderCnt + 1 
+      SET @n_TotalOpenQty = @n_TotalOpenQty + @n_OpenQty
+
+      IF @c_Status <= '5'                                                           --(Wan09) - START                                                   
+      BEGIN
+         IF @c_Status IN (3,4) SET @c_Status = '2' 
+         SET @c_LoadStatus = CASE WHEN @c_LoadStatus = '1' THEN '1'
+                                  WHEN @c_LoadStatus = '5' AND @c_Status < '2' THEN '1' 
+                                  WHEN @c_LoadStatus = '2' AND @c_Status < '2' THEN '1'
+                                  WHEN @c_LoadStatus = '2' AND @c_Status > '2' THEN '2'
+                                  ELSE @c_Status
+                                  END                                                   
+      END
+
+      IF @c_AutoUpdSuperOrderFlag = '1'                                                                                                                                                                     
+      BEGIN 
+         IF @c_Rds = 'Y' SET @c_SuperOrderFlag = 'N'                                                                                                                                  
+      END 
+
+      SET @n_RNumE = @n_Num                                                         --(Wan09) - END                                                                                                                                            
 
       BEGIN TRY
-         EXEC isp_InsertLoadplanDetail
-               @cLoadKey          = @c_Loadkey
-            ,  @cFacility         = @c_Facility
-            ,  @cOrderKey         = @c_OrderKey
-            ,  @cConsigneeKey     = @c_ConsigneeKey 
-            ,  @cPrioriry         = @c_Priority
-            ,  @dOrderDate        = @d_OrderDate
-            ,  @dDelivery_Date    = @d_DeliveryDate
-            ,  @cOrderType        = @c_Type
-            ,  @cDoor             = @c_Door
-            ,  @cRoute            = @c_Route
-            ,  @cDeliveryPlace    = @c_DeliveryPlace
-            ,  @nStdGrossWgt      = @n_Weight
-            ,  @nStdCube          = @n_Cube
-            ,  @cExternOrderKey   = @c_ExternOrderKey
-            ,  @cCustomerName     = @c_C_Company
-            ,  @nTotOrderLines    = @n_NoOfOrdLines
-            ,  @nNoOfCartons      = 0 
-            ,  @cOrderStatus      = @c_Status 
-            ,  @b_Success         = @b_Success  OUTPUT
-            ,  @n_Err             = @n_Err      OUTPUT
-            ,  @c_ErrMsg          = @c_ErrMsg   OUTPUT
+         SET @c_LoadLineNumber = RIGHT('00000' + CONVERT(NVARCHAR(5), @n_OrderCnt),5)    
+         INSERT INTO LOADPLANDETAIL
+            (LoadKey,            LoadLineNumber
+            ,OrderKey,           ConsigneeKey
+            ,ExternOrderKey,     CustomerName
+            ,[Type],             [Priority]  
+            ,Door,               [Stop],           [Route]                     
+            ,OrderDate,          DeliveryDate,     DeliveryPlace           
+            ,[Weight],           [Cube]
+            ,NoOfOrdLines,       CaseCnt
+            ,[Status],           AddWho
+            ,TrafficCop                                                             
+            )
+         SELECT LoadKey       = @c_Loadkey
+            ,   Loadplandetail= @c_LoadLineNumber
+            ,   Orderkey      = ISNULL(T.OrderKey,'')         
+            ,   ConsigneeKey  = ISNULL(T.ConsigneeKey,'')     
+            ,   ExternOrderKey= ISNULL(T.ExternOrderKey,'')     
+            ,   C_Company     = ISNULL(T.C_Company,'')                                                                                                                            
+            ,   [Type]        = ISNULL(T.[Type],'')                                                                                                                         
+            ,   [Priority]    = ISNULL(T.[Priority],'')    
+            ,   Door          = ISNULL(T.Door,'') 
+            ,   [Stop]        = ''        
+            ,   [Route]       = ISNULL(T.[Route],'')  
+            ,   OrderDate     = T.OrderDate                                                                                                                   
+            ,   DeliveryDate  = T.DeliveryDate  
+            ,   DeliveryPlace = ISNULL(T.DeliveryPlace,'')                         
+            ,   [Weight]      = T.[Weight]         
+            ,   [Cube]        = T.[Cube]                                                                                                                       
+            ,   NoOfOrdLines  = T.NoOfOrdLines 
+            ,   CaseCnt       = 0  
+            ,   [Status]      = T.[Status] 
+            ,   addwho        = '*' + RTRIM(sUser_sName())
+            ,   '9' 
+         FROM #tWaveOrder T                                                                                                                                       
+         WHERE T.RNUM = @n_Num 
+         
+         IF EXISTS (SELECT 1 FROM dbo.ORDERS AS o (NOLOCK) WHERE o.OrderKey = @c_Orderkey
+                    AND (Loadkey = '' OR Loadkey IS NULL))
+         BEGIN
+            UPDATE ORDERS WITH (ROWLOCK)
+               SET Loadkey = @c_Loadkey
+                  ,EditWho = SUSER_SNAME()
+                  ,EditDate= GETDATE()
+                  ,ArchiveCop = NULL                                                --(Wan01)
+            WHERE Orderkey = @c_Orderkey
+         END
+         
+         SET @CUR_OD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+         SELECT o.OrderLineNumber
+               ,PalletCnt = CONVERT(INTEGER, CASE WHEN p.Pallet = 0 THEN 0    
+                                                  ELSE (o.OpenQty / p.Pallet) 
+                                                  END)     
+               ,CaseCnt = CONVERT(INTEGER, CASE WHEN p.CaseCnt = 0 THEN 0    
+                                                ELSE (o.OpenQty / p.CaseCnt) 
+                                                END)    
+         FROM dbo.ORDERDETAIL AS o WITH (NOLOCK)
+         JOIN dbo.SKU AS s (NOLOCK) ON s.StorerKey = o.StorerKey AND s.Sku = o.Sku
+         JOIN dbo.PACK AS p (NOLOCK) ON p.PackKey = s.PACKKey  
+         WHERE o.Orderkey = @c_Orderkey
+         AND  o.LoadKey IN ('', NULL)  
+  
+         OPEN @CUR_OD  
+         FETCH NEXT FROM @CUR_OD INTO @c_OrderLineNumber, @n_PalletCnt, @n_CaseCnt  
+  
+         WHILE @@FETCH_STATUS <> -1  
+         BEGIN 
+            SET @n_LoadPalletCnt = @n_LoadPalletCnt + @n_PalletCnt
+            SET @n_LoadCaseCnt = @n_LoadCaseCnt + @n_CaseCnt 
+              
+            UPDATE ORDERDETAIL WITH (ROWLOCK)
+               SET Loadkey = @c_Loadkey
+                  ,EditWho = SUSER_SNAME()
+                  ,EditDate= GETDATE()
+                  ,ArchiveCop = NULL                                                
+            WHERE Orderkey = @c_Orderkey
+            AND OrderLineNumber = @c_OrderLineNumber 
+            
+            FETCH NEXT FROM @CUR_OD INTO @c_OrderLineNumber, @n_PalletCnt, @n_CaseCnt  
+         END
+         CLOSE @CUR_OD
+         DEALLOCATE @CUR_OD
+
+         --EXEC isp_InsertLoadplanDetail
+         --      @cLoadKey          = @c_Loadkey
+         --   ,  @cFacility         = @c_Facility
+         --   ,  @cOrderKey         = @c_OrderKey
+         --   ,  @cConsigneeKey     = @c_ConsigneeKey 
+         --   ,  @cPrioriry         = @c_Priority
+         --   ,  @dOrderDate        = @d_OrderDate
+         --   ,  @dDelivery_Date    = @d_DeliveryDate
+         --   ,  @cOrderType        = @c_Type
+         --   ,  @cDoor             = @c_Door
+         --   ,  @cRoute            = @c_Route
+         --   ,  @cDeliveryPlace    = @c_DeliveryPlace
+         --   ,  @nStdGrossWgt      = @n_Weight
+         --   ,  @nStdCube          = @n_Cube
+         --   ,  @cExternOrderKey   = @c_ExternOrderKey
+         --   ,  @cCustomerName     = @c_C_Company
+         --   ,  @nTotOrderLines    = @n_NoOfOrdLines
+         --   ,  @nNoOfCartons      = 0 
+         --   ,  @cOrderStatus      = @c_Status 
+         --   ,  @b_Success         = @b_Success  OUTPUT
+         --   ,  @n_Err             = @n_Err      OUTPUT
+         --   ,  @c_ErrMsg          = @c_ErrMsg   OUTPUT
+         --   ,  @b_WaveBuildLoad   = 1                                               --(Wan10)
       END TRY                                  
-                                                                                                                                        
-      BEGIN CATCH                                                                                                                                                           
+      BEGIN CATCH
          SET @n_Continue = 3      
          SET @c_ErrMsg  = ERROR_MESSAGE()                                                                                                                               
          SET @n_Err     = 556010  
          SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err) 
-                        + ': Error Executing isp_InsertLoadplanDetail. (lsp_Wave_BuildLoad) ' 
+                        + ': Update Orders/Orderdetail Fail. (lsp_Wave_BuildLoad) '--(Wan08) 
                         + '(' + @c_ErrMsg + ') '    
                                                    
          IF (XACT_STATE()) = -1  
@@ -1352,80 +1550,75 @@ START_BUILDLOAD:
                BEGIN TRAN
             END
          END                                                          
-         GOTO EXIT_SP     
+         GOTO INS_DETLOG   --END_BUILDLOAD                                          --(Wan08)     
       END CATCH 
 
       --WHILE @@TRANCOUNT > 0                                                       --(Wan06) - START
       --BEGIN 
       --   COMMIT TRAN    
       --END                                                                         --(Wan06) - END
-
-      SET @n_TotalWeight  = @n_TotalWeight + @n_Weight
-      SET @n_TotalCube    = @n_TotalCube + @n_Cube
-
-      SET @n_OrderCnt     = @n_OrderCnt + 1    
-      SET @n_TotalOrderCnt= @n_TotalOrderCnt + 1 
-      SET @n_TotalOpenQty = @n_TotalOpenQty + @n_OpenQty
-
-      IF (@n_OrderCnt >= @n_MaxOrders) OR
-         (@n_TotalOpenQty >= @n_MaxOpenQty AND @n_MaxOpenQty > 0)
-      BEGIN
-         SET @c_Loadkey = ''
-      END
+      
+      --IF (@n_OrderCnt >= @n_MaxOrders) OR                                         --(Wan08) - START           
+      --   (@n_TotalOpenQty >= @n_MaxOpenQty AND @n_MaxOpenQty > 0)
+      --BEGIN
+      --   SET @c_Loadkey = ''
+      --END                                                                         --(Wan08) - END
 
       IF @b_debug = 1 
       BEGIN                      
          SELECT @@TRANCOUNT AS [TranCounts]  
          SELECT @c_Loadkey 'Loadkey', @n_OpenQty '@n_OpenQty',     @n_TotalOpenQty '@n_TotalOpenQty'          
       END
-
-      FETCH NEXT FROM @CUR_BUILDLOAD INTO  @n_Num, @n_OpenQty, @c_Orderkey, @n_Weight, @n_Cube
       
-      IF @c_Loadkey = '' OR @@FETCH_STATUS = -1                                     --(Wan06) - START                                                               
-      BEGIN
-         SET @d_EndTime = GETDATE()
-         INSERT INTO BUILDLOADDETAILLOG
-            (  Loadkey
-            ,  Storerkey
-            ,  BatchNo
-            ,  TotalOrderCnt
-            ,  TotalOrderQty
-            ,  UDF01
-            ,  UDF02
-            ,  UDF03
-            ,  UDF04
-            ,  UDF05
-            ,  AddWho
-            ,  AddDate
-            ,  Duration
-            )  
-         VALUES
-            (
-               @c_BuildLoadKey
-            ,  @c_Storerkey
-            ,  @n_BatchNo
-            ,  @n_OrderCnt
-            ,  @n_TotalOpenQty
-            ,  ''
-            ,  ''
-            ,  ''
-            ,  ''
-            ,  ''
-            ,  @c_UserName
-            ,  @d_StartTime
-            ,  CONVERT(CHAR(12),@d_EndTime - @d_StartTime ,114)
-            )
-      END
-      WHILE @@TRANCOUNT > 0
-      BEGIN 
-         COMMIT TRAN    
-      END                                                                           --(Wan06) - END
+      --(Wan08) - START
+      --FETCH NEXT FROM @CUR_BUILDLOAD INTO  @n_Num, @n_OpenQty, @c_Orderkey, @n_Weight, @n_Cube    
+    
+      --IF @c_Loadkey = '' OR @@FETCH_STATUS = -1                                   --(Wan06) - START                                                                                                    
+      --BEGIN
+      --   SET @d_EndTime = GETDATE()
+      --   INSERT INTO BUILDLOADDETAILLOG
+      --      (  Loadkey
+      --      ,  Storerkey
+      --      ,  BatchNo
+      --      ,  TotalOrderCnt
+      --      ,  TotalOrderQty
+      --      ,  UDF01
+      --      ,  UDF02
+      --      ,  UDF03
+      --      ,  UDF04
+      --      ,  UDF05
+      --      ,  AddWho
+      --      ,  AddDate
+      --      ,  Duration
+      --      )  
+      --   VALUES
+      --      (
+      --         @c_BuildLoadKey
+      --      ,  @c_Storerkey
+      --      ,  @n_BatchNo
+      --      ,  @n_OrderCnt
+      --      ,  @n_TotalOpenQty
+      --      ,  ''
+      --      ,  ''
+      --      ,  ''
+      --      ,  ''
+      --      ,  ''
+      --      ,  @c_UserName
+      --      ,  @d_StartTime
+      --      ,  CONVERT(CHAR(12),@d_EndTime - @d_StartTime ,114)
+      --      )
+      --END
+      --WHILE @@TRANCOUNT > 0
+      --BEGIN 
+      --   COMMIT TRAN    
+      --END                                                                         --(Wan06) - END
+      --(Wan08) - END                                                                         
 
-   END -- WHILE(@@FETCH_STATUS <> -1)                                                                                                                                           
+   END -- WHILE 1=1                                                                                                                                           
    CLOSE @CUR_BUILDLOAD
    DEALLOCATE @CUR_BUILDLOAD
    
-   IF @c_SQLBuildByGroup <> '' 
+   IF @c_SQLBuildByGroup <> ''                                 
    BEGIN                                                                                                      
       GOTO RETURN_BUILDLOAD                                                                                                                                    
    END
@@ -1433,6 +1626,76 @@ START_BUILDLOAD:
  END_BUILDLOAD:                                                                                                                                              
    IF @n_BatchNo > 0                                                                --(Wan06) - START
    BEGIN
+      ------------------------------------------------------  
+      -- Get Build Load POST Custom SP  
+      ------------------------------------------------------
+      --(Wan08) - START  
+      IF @n_Continue IN (1,2)
+      BEGIN
+         SET @c_SPName = ''                                                                                                                                        
+                                                                                              
+         SELECT TOP 1 @c_SPName = BPD.[Value]                                                                                                                                    
+         FROM   BUILDPARMDETAIL BPD WITH (NOLOCK)                                                                                                                                 
+         WHERE  BPD.BuildParmKey = @c_BuildParmKey                                                                                                                                  
+         AND    BPD.[Type] =  'POSTSPROC'                                                                                                                                  
+         ORDER BY BPD.BuildParmLineNo                                                                                                                                                 
+                                                                                                                                                              
+         IF @c_SPName <> ''                                                                                                                                      
+         BEGIN                                                                                                                                                      
+            SET @n_idx = CHARINDEX(' ',@c_SPName, 1)                                                                                                             
+            IF @n_idx > 0                                                                                                
+            BEGIN                                                                                                                                                   
+               SET @c_SPName = SUBSTRING(@c_SPName, 1, @n_idx - 1)                                                                                                
+            END     
+      
+            IF EXISTS (SELECT 1 FROM dbo.sysobjects WHERE id = OBJECT_ID(@c_SPName) AND TYPE = 'P')
+            BEGIN
+               SET @c_SQL = 'EXEC ' + @c_SPName 
+                             + '  @c_Facility= @c_Facility'
+                             + ', @c_StorerKey=@c_StorerKey'
+                             + ', @c_WaveKey = @c_WaveKey'                         
+                             + ', @n_BatchNo = @n_BatchNo'  
+                             + ', @c_ParmCode= @c_BuildParmKey'
+                             + ', @b_Success = @b_Success   OUTPUT'  
+                             + ', @n_Err     = @n_Err       OUTPUT'                               
+                             + ', @c_ErrMsg  = @c_ErrMsg    OUTPUT'
+                                                                                                        
+               SET @c_SQLParms= N'@c_Facility      NVARCHAR(5)'                                                                                                                  
+                              + ',@c_StorerKey     NVARCHAR(15)' 
+                              + ',@c_WaveKey       NVARCHAR(10)'                               
+                              + ',@n_BatchNo       INT'                       
+                              + ',@c_BuildParmKey  NVARCHAR(10)'
+                              + ',@b_Success       INT            OUTPUT'  
+                              + ',@n_Err           INT            OUTPUT'                               
+                              + ',@c_ErrMsg        NVARCHAR(255)  OUTPUT'                                                                                                                                                                    
+
+               EXEC sp_executesql @c_SQL                                                                                     
+                                 ,@c_SQLParms                                                                
+                                 ,@c_Facility                                                                                                     
+                                 ,@c_StorerKey
+                                 ,@c_WaveKey
+                                 ,@n_BatchNo 
+                                 ,@c_BuildParmKey 
+                                 ,@b_Success OUTPUT 
+                                 ,@n_Err     OUTPUT                             
+                                 ,@c_ErrMsg  OUTPUT                                 
+            
+               IF @@ERROR <> 0                                                                                                                                         
+               BEGIN                                                                                                                                                   
+                  SET @n_Continue = 3     
+                  SET @n_Err     = 556014       
+                  SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err)   
+                                 + ': ERROR Executing POSTSPROC Stored Procedure: ' + RTRIM(@c_SPName)  
+                                 + ' (lsp_Wave_BuildLoad)'   
+                                 + '|' + RTRIM(@c_SPName)                
+                  GOTO EXIT_SP                                                                                                                                            
+               END
+            END    
+         END
+      END   
+      --(Wan08) - END
+      IF @d_EndTime IS NULL SET @d_EndTime = GETDATE()                              --(Wan08)
+      
       UPDATE BuildLoadLog
       SET  Duration = CONVERT(CHAR(12), @d_EndTime - @d_StartTime, 114)    
          , TotalLoadCnt = @n_LoadCnt
@@ -1442,7 +1705,8 @@ START_BUILDLOAD:
          , EditWho  = @c_UserName
          , Trafficcop = NULL
       WHERE BatchNo = @n_BatchNo   
-   END                                                                              --(Wan06) - END                   
+   END                                                                              --(Wan06) - END 
+                                                                                                  
    IF @b_debug = 2                                                                                                                                              
    BEGIN                                                                                                                                                       
       SET @d_EndTime_Debug = GETDATE()                                                    
