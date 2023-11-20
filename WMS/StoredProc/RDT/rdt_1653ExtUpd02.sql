@@ -5,7 +5,7 @@ GO
 
 /************************************************************************************/    
 /* Store procedure: rdt_1653ExtUpd02                                                */    
-/* Copyright      : IDS                                                             */    
+/* Copyright      : MAERSK                                                          */    
 /*                                                                                  */    
 /* Called from: rdtfnc_TrackNo_SortToPallet                                         */    
 /*                                                                                  */    
@@ -20,6 +20,7 @@ GO
 /* 2022-09-15  1.3  James    WMS-20667 Add Lane (james01)                           */
 /* 2022-10-26  1.4  James    WMS-19711 Delete short pick line (james02)             */
 /* 2023-05-22  1.5  Ung      WMS-22554 Migrate to isp_Carrier_Middleware_Interface  */
+/* 2023-11-14  1.6  James    WMS-23712 Extend Lane var length (james03)             */
 /************************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdt_1653ExtUpd02] (    
@@ -34,7 +35,7 @@ CREATE OR ALTER PROC [RDT].[rdt_1653ExtUpd02] (
    @cOrderKey      NVARCHAR( 20),
    @cPalletKey     NVARCHAR( 20),
    @cMBOLKey       NVARCHAR( 10),
-   @cLane          NVARCHAR( 20),
+   @cLane          NVARCHAR( 30),
    @tExtValidVar   VariableTable READONLY,
    @nErrNo         INT           OUTPUT,
    @cErrMsg        NVARCHAR( 20) OUTPUT
