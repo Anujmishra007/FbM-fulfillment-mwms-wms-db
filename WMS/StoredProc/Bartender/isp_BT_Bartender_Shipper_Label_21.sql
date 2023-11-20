@@ -1,24 +1,21 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_BT_Bartender_Shipper_Label_21]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[isp_BT_Bartender_Shipper_Label_21]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO 
 
-/******************************************************************************/                 
-/* Copyright: LFL                                                             */                 
+/******************************************************************************/
+/* Copyright: LFL                                                             */
 /* Purpose: BarTender Filter by ShipperKey.Duplicate from                     */
-/*            isp_BT_Bartender_Shipper_Label_4 able to filter by cartonno     */                             
-/* Modifications log:                                                         */                 
-/*                                                                            */                 
-/* Date       Rev  Author     Purposes                                        */
-/* 2021-06-11 1.0  WLChooi    Created (WMS-17222)                             */     
-/******************************************************************************/                
+/*            isp_BT_Bartender_Shipper_Label_4 able to filter by cartonno     */
+/* Modifications log:                                                         */
+/*                                                                            */
+/* Date        Rev  Author     Purposes                                       */
+/* 2021-06-11  1.0  WLChooi    Created (WMS-17222)                            */
+/* 16-Nov-2023 1.1  WLChooi    WMS-24223 - Add Col60 (WL01)                   */
+/* 16-Nov-2023 1.1  WLChooi    DevOps Combine Script                          */
+/******************************************************************************/
                   
-CREATE PROC [dbo].[isp_BT_Bartender_Shipper_Label_21]                       
+CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_Shipper_Label_21]                       
 (  @c_Sparm1            NVARCHAR(250),              
    @c_Sparm2            NVARCHAR(250),              
    @c_Sparm3            NVARCHAR(250), 
@@ -236,7 +233,7 @@ BEGIN
                     +' CASE WHEN STO.Storerkey = ''ANF'' THEN ORD.DeliveryNote Else ORD.PmtTerm END ,'   --40     
                     +'ORD.InvoiceAmount,'''','''','   --43           
                     +'ORD.ShipperKey,STO.B_Company,(STO.B_Address1+STO.B_Address2+STO.B_Address3),STO.B_Contact1,STO.B_Phone1,ORD.DeliveryPlace,'''', '  --50       
-                    +' '''',ORD.M_Address1,ORD.M_Address2,ORD.M_City,'''','''',ORD.Priority,ORD.Userdefine10,PD.CartonNo,'''' '   --60        
+                    +' '''',ORD.M_Address1,ORD.M_Address2,ORD.M_City,'''','''',ORD.Priority,ORD.Userdefine10,PD.CartonNo,ORD.Userdefine03 '   --60   --WL01
                     + CHAR(13) +            
                     +'FROM ORDERS ORD WITH (NOLOCK) INNER JOIN ORDERDETAIL ORDDET WITH (NOLOCK)  ON ORD.ORDERKEY = ORDDET.ORDERKEY   '       
                     +'INNER JOIN STORER STO WITH (NOLOCK) ON STO.STORERKEY = ORD.STORERKEY '   
@@ -338,7 +335,8 @@ BEGIN
       FROM PACKHeader PH WITH (NOLOCK)  
       JOIN PACKDETAIL PAD (NOLOCK) ON PH.PickSlipNo=PAD.PickSlipNo  
       JOIN Orders ORD WITH (NOLOCK)  ON  ORD.OrderKey = PH.OrderKey  
-      JOIN PACKINFO PKI WITH (NOLOCK) ON  PKI.Pickslipno = PH.pickslipno  
+      JOIN PACKINFO PKI WITH (NOLOCK) ON  PKI.Pickslipno = PAD.Pickslipno   --WL01  
+                                      AND PKI.CartonNo = PAD.CartonNo   --WL01
       WHERE PH.OrderKey = @c_OrderKey    
       AND PAD.CartonNo = CONVERT(INT,@c_cartonNo)   
        
@@ -639,8 +637,8 @@ BEGIN
          AND    P.TTLPICKQTY > 1 AND P.PickZone=1    
          ORDER BY P.PickZone,         
                   P.picknotes,          
-                  col02,  
-                  col60    
+                  col02  
+                  --col60   --WL01
       END  
    END    
    ELSE    
@@ -676,5 +674,5 @@ EXIT_SP:
                                     
 END -- procedure   
 GO
-GRANT EXECUTE ON [dbo].[isp_BT_Bartender_Shipper_Label_21] TO nSQL 
+GRANT EXECUTE ON [dbo].[isp_BT_Bartender_Shipper_Label_21] TO [nSQL]
 GO
