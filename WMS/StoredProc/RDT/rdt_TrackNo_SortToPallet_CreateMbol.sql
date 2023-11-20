@@ -5,7 +5,7 @@ GO
 
 /************************************************************************/
 /* Store procedure: rdt_TrackNo_SortToPallet_CreateMbol                 */
-/* Copyright      : IDS                                                 */
+/* Copyright      : MAERSK                                              */
 /*                                                                      */
 /* Called from: rdtfnc_TrackNo_SortToLane                               */
 /*                                                                      */
@@ -16,6 +16,7 @@ GO
 /* 2022-09-15  1.0  James    WMS-20667. Created                         */
 /* 2023-01-09  1.1  SYCHUA   JSM-115662 Fix to reset MBOLKEY value when */
 /*                           error if MBOLKEY is generated (SY01)       */
+/* 2023-11-14  1.2  James    WMS-23712 Extend Lane var length (james01) */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_TrackNo_SortToPallet_CreateMbol] (
@@ -30,7 +31,7 @@ CREATE OR ALTER PROC [RDT].[rdt_TrackNo_SortToPallet_CreateMbol] (
    @cOrderKey      NVARCHAR( 20),
    @cPalletKey     NVARCHAR( 20),
    @cMBOLKey       NVARCHAR( 10) OUTPUT,
-   @cLane          NVARCHAR( 20),
+   @cLane          NVARCHAR( 30),
    @cLabelNo       NVARCHAR( 20),
    @tCreateMBOLVar VariableTable READONLY,
    @nErrNo         INT           OUTPUT,
@@ -74,7 +75,7 @@ BEGIN
          ' @cOrderKey      NVARCHAR( 10), ' +
          ' @cPalletKey     NVARCHAR( 20), ' +
          ' @cMBOLKey       NVARCHAR( 10) OUTPUT, ' +
-         ' @cLane          NVARCHAR( 20), ' +
+         ' @cLane          NVARCHAR( 30), ' +
          ' @cLabelNo       NVARCHAR( 20), ' +
          ' @tCreateMBOLVar VariableTable READONLY, ' +
          ' @nErrNo         INT           OUTPUT, ' +
