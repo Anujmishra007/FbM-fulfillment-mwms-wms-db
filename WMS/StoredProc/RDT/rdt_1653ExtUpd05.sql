@@ -4,7 +4,7 @@ SET ANSI_NULLS OFF
 GO
 /************************************************************************/
 /* Store procedure: rdt_1653ExtUpd05                                    */
-/* Copyright      : IDS                                                 */
+/* Copyright      : MAERSK                                              */
 /*                                                                      */
 /* Called from: rdtfnc_TrackNo_SortToPallet                             */
 /*                                                                      */
@@ -16,6 +16,7 @@ GO
 /* 2022-09-15  1.1  James    WMS-20667 Add Lane (james01)               */
 /* 2023-02-11  1.2  LZG      Skip MBOL update if triggers RR2, because  */
 /*                           RR2 response will update MBOL.Status (ZG01)*/
+/* 2023-11-14  1.3  James    WMS-23712 Extend Lane var length (james02) */
 /************************************************************************/
     
 CREATE OR ALTER PROC [RDT].[rdt_1653ExtUpd05] (
@@ -30,6 +31,7 @@ CREATE OR ALTER PROC [RDT].[rdt_1653ExtUpd05] (
    @cOrderKey      NVARCHAR( 20),
    @cPalletKey     NVARCHAR( 20),
    @cMBOLKey       NVARCHAR( 10),
+   @cLane          NVARCHAR( 30),  
    @tExtValidVar   VariableTable READONLY,
    @nErrNo         INT           OUTPUT,
    @cErrMsg        NVARCHAR( 20) OUTPUT
