@@ -5,7 +5,7 @@ GO
 
 /************************************************************************/
 /* Store procedure: rdt_1654ExtUpd02                                    */
-/* Copyright      : IDS                                                 */
+/* Copyright      : MAERSK                                              */
 /*                                                                      */
 /* Called from: rdtfnc_TrackNo_SortToPallet_CloseLane                   */
 /*                                                                      */
@@ -14,6 +14,7 @@ GO
 /* Modifications log:                                                   */
 /* Date        Rev  Author   Purposes                                   */
 /* 2023-04-26  1.0  James    WMS-22346. Created                         */
+/* 2023-11-14  1.1  James    WMS-23712 Extend Lane var length (james01) */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1654ExtUpd02] (
@@ -24,7 +25,7 @@ CREATE OR ALTER PROC [RDT].[rdt_1654ExtUpd02] (
    @nInputKey      INT,
    @cFacility      NVARCHAR( 5),
    @cStorerKey     NVARCHAR( 15),
-   @cLane          NVARCHAR( 20),
+   @cLane          NVARCHAR( 30),
    @cOption        NVARCHAR( 1),
    @tExtUpdateVar  VariableTable READONLY,
    @nErrNo         INT           OUTPUT,
