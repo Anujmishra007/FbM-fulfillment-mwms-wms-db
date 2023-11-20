@@ -1,11 +1,9 @@
-IF EXISTS (SELECT name FROM sysobjects WHERE name = 'rdt_1580ExtVal08' AND type = 'P')
-   DROP PROC rdt.rdt_1580ExtVal08
-GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
+
 /************************************************************************/
 /* Store procedure: rdt_1580ExtVal08                                    */
 /* Copyright      : LF logistics                                        */
@@ -16,9 +14,10 @@ GO
 /* Date        Rev  Author      Purposes                                */
 /* 25-07-2017  1.0  Ung         WMS-5723 Created                        */
 /* 04-03-2020  1.1  James       WMS-12231 Add pallet qty check (james01)*/
+/* 24-10-2023  1.2  Ung         WMS-23798 Add L03 check                 */
 /************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_1580ExtVal08
+CREATE OR ALTER PROCEDURE rdt.rdt_1580ExtVal08
     @nMobile      INT
    ,@nFunc        INT
    ,@nStep        INT
@@ -86,6 +85,31 @@ BEGIN
             SET @nErrNo = 127002
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --RCV>PALLET Qty
             GOTO Quit
+         END
+
+         -- Check L03
+         IF rdt.RDTGetConfig( @nFunc, 'SkipLottable03', @cStorerKey) = '0'
+         BEGIN
+            DECLARE @cSKUGroup NVARCHAR( 10)
+            SELECT @cSKUGroup = SKUGroup FROM dbo.SKU WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU
+            
+            -- Only X708 need value, the rest don't need
+            
+            -- X708 with blank value
+            IF @cSKUGroup = 'X708'  AND @cLottable03 = ''
+            BEGIN
+               SET @nErrNo = 127003
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need L03
+               GOTO Quit
+            END
+
+            -- non X708 with value
+            IF @cSKUGroup <> 'X708' AND @cLottable03 <> ''
+            BEGIN
+               SET @nErrNo = 127004
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Dont need L03
+               GOTO Quit
+            END
          END
       END
    END
