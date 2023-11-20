@@ -6,10 +6,11 @@ GO
 
 /************************************************************************/    
 /* Store procedure: rdt_1653ExtValid08                                  */    
-/* Copyright      : LF Logistics                                        */    
+/* Copyright      : MAERSK                                              */    
 /*                                                                      */    
 /* Date        Rev  Author   Purposes                                   */    
 /* 2023-04-28  1.0  James    WMS-22349 Created                          */  
+/* 2023-11-14  1.2  James    WMS-23712 Extend Lane var length (james01) */
 /************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdt_1653ExtValid08] (    
@@ -24,7 +25,7 @@ CREATE OR ALTER PROC [RDT].[rdt_1653ExtValid08] (
    @cOrderKey      NVARCHAR( 20),
    @cPalletKey     NVARCHAR( 20),
    @cMBOLKey       NVARCHAR( 10),
-   @cLane          NVARCHAR( 20),
+   @cLane          NVARCHAR( 30),
    @tExtValidVar   VariableTable READONLY,
    @nErrNo         INT           OUTPUT,
    @cErrMsg        NVARCHAR( 20) OUTPUT
