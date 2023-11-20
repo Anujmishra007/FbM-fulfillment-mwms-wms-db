@@ -5,7 +5,7 @@ GO
 
 /************************************************************************/      
 /* Store procedure: rdt_1653ExtValid07                                  */      
-/* Copyright      : LF Logistics                                        */      
+/* Copyright      : MAERSK                                              */      
 /*                                                                      */      
 /* Date        Rev  Author   Purposes                                   */      
 /* 2022-09-15  1.0  James    WMS-20667 Created                          */    
@@ -13,6 +13,7 @@ GO
 /*                           added some fixes                           */    
 /* 2023-03-23  1.2  James    WMS-21868 Add filter order type when       */
 /*                           retrieve record from codelkup (james01)    */
+/* 2023-11-14  1.2  James    WMS-23712 Extend Lane var length (james02) */
 /************************************************************************/      
       
 CREATE OR ALTER PROC [RDT].[rdt_1653ExtValid07] (      
@@ -27,7 +28,7 @@ CREATE OR ALTER PROC [RDT].[rdt_1653ExtValid07] (
    @cOrderKey      NVARCHAR( 20),  
    @cPalletKey     NVARCHAR( 20),  
    @cMBOLKey       NVARCHAR( 10),  
-   @cLane          NVARCHAR( 20),  
+   @cLane          NVARCHAR( 30),  
    @tExtValidVar   VariableTable READONLY,  
    @nErrNo         INT           OUTPUT,  
    @cErrMsg        NVARCHAR( 20) OUTPUT  
@@ -436,7 +437,7 @@ BEGIN
                          + ' AND   PD.Status = ''0'''  
   
             SET @c_ExecArguments = N'@cPalletKey               NVARCHAR(20)'  
-                                + ', @cLane                    NVARCHAR(20)'  
+                                + ', @cLane                    NVARCHAR(30)'  
                                 + ', @cStorerKey               NVARCHAR(15)'  
                                 + ', @cOrdChkField             NVARCHAR(100)'  
                                 + ', @cOrdPalletizedField      NVARCHAR(30)'  
