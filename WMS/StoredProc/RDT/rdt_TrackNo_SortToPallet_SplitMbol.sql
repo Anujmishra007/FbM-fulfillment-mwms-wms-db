@@ -5,7 +5,7 @@ GO
 
 /************************************************************************/    
 /* Store procedure: rdt_TrackNo_SortToPallet_SplitMbol                  */    
-/* Copyright      : IDS                                                 */    
+/* Copyright      : MAERSK                                              */    
 /*                                                                      */    
 /* Called from: rdtfnc_TrackNo_SortToPallet_CloseLane                   */    
 /*                                                                      */    
@@ -14,6 +14,7 @@ GO
 /* Modifications log:                                                   */    
 /* Date        Rev  Author   Purposes                                   */    
 /* 2022-09-15  1.0  James    WMS-20667. Created                         */  
+/* 2023-11-14  1.1  James    WMS-23712 Extend Lane var length (james01) */
 /************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdt_TrackNo_SortToPallet_SplitMbol] (    
@@ -24,7 +25,7 @@ CREATE OR ALTER PROC [RDT].[rdt_TrackNo_SortToPallet_SplitMbol] (
    @nInputKey      INT,
    @cFacility      NVARCHAR( 5),
    @cStorerKey     NVARCHAR( 15),
-   @cLane          NVARCHAR( 20) OUTPUT,
+   @cLane          NVARCHAR( 30) OUTPUT,
    @tSplitMBOLVar  VariableTable READONLY,
    @nErrNo         INT           OUTPUT,
    @cErrMsg        NVARCHAR( 20) OUTPUT
@@ -62,7 +63,7 @@ BEGIN
          ' @nInputKey      INT,           ' +
          ' @cFacility      NVARCHAR( 5) , ' +
          ' @cStorerKey     NVARCHAR( 15), ' +
-         ' @cLane          NVARCHAR( 20) OUTPUT, ' +
+         ' @cLane          NVARCHAR( 30) OUTPUT, ' +
          ' @tSplitMBOLVar  VariableTable READONLY, ' +
          ' @nErrNo         INT           OUTPUT, ' +
          ' @cErrMsg        NVARCHAR(250) OUTPUT  '
