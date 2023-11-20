@@ -5,7 +5,7 @@ GO
 
 /************************************************************************/      
 /* Store procedure: rdt_1654SplitMbol01                                 */      
-/* Copyright      : IDS                                                 */      
+/* Copyright      : MAERSK                                              */      
 /*                                                                      */      
 /* Called from: rdt_TrackNo_SortToPallet_SplitMbol                      */      
 /*                                                                      */      
@@ -17,6 +17,7 @@ GO
 /* 2023-03-02  1.1  James    WMS-21679 Add new externmbolkey naming rule*/  
 /*                           when split lane (james01)                  */  
 /* 2023-10-10  1.2  James    WMS-23712 New pallet count formula(james02)*/
+/* 2023-11-14  1.3  James    WMS-23712 Extend Lane var length (james03) */
 /************************************************************************/      
 CREATE OR ALTER PROC [RDT].[rdt_1654SplitMbol01] (      
    @nMobile        INT,  
@@ -26,7 +27,7 @@ CREATE OR ALTER PROC [RDT].[rdt_1654SplitMbol01] (
    @nInputKey      INT,  
    @cFacility      NVARCHAR( 5),  
    @cStorerKey     NVARCHAR( 15),  
-   @cLane          NVARCHAR( 20) OUTPUT,  
+   @cLane          NVARCHAR( 30) OUTPUT,  
    @tSplitMBOLVar  VariableTable READONLY,  
    @nErrNo         INT           OUTPUT,  
    @cErrMsg        NVARCHAR( 20) OUTPUT  
