@@ -5,10 +5,11 @@ GO
   
 /************************************************************************/        
 /* Store procedure: rdt_1653ExtValid09                                  */        
-/* Copyright      : LF Logistics                                        */        
+/* Copyright      : MAERSK                                              */        
 /*                                                                      */        
 /* Date        Rev  Author   Purposes                                   */        
-/* 2023-05-22  1.0  James    WMS-22499 Created                          */      
+/* 2023-05-22  1.0  James    WMS-22499 Created                          */  
+/* 2023-11-14  1.2  James    WMS-23712 Extend Lane var length (james01) */
 /************************************************************************/        
         
 CREATE OR ALTER PROC [RDT].[rdt_1653ExtValid09] (        
@@ -23,7 +24,7 @@ CREATE OR ALTER PROC [RDT].[rdt_1653ExtValid09] (
    @cOrderKey      NVARCHAR( 20),    
    @cPalletKey     NVARCHAR( 20),    
    @cMBOLKey       NVARCHAR( 10),    
-   @cLane          NVARCHAR( 20),    
+   @cLane          NVARCHAR( 30),    
    @tExtValidVar   VariableTable READONLY,    
    @nErrNo         INT           OUTPUT,    
    @cErrMsg        NVARCHAR( 20) OUTPUT    
@@ -433,7 +434,7 @@ BEGIN
                          + ' AND   PD.Status = ''0'''    
     
             SET @c_ExecArguments = N'@cPalletKey               NVARCHAR(20)'    
-                                + ', @cLane                    NVARCHAR(20)'    
+                                + ', @cLane                    NVARCHAR(30)'    
                                 + ', @cStorerKey               NVARCHAR(15)'    
                                 + ', @cOrdChkField             NVARCHAR(100)'    
                                 + ', @cOrdPalletizedField      NVARCHAR(30)'    
