@@ -19,6 +19,7 @@ GO
 /*                           check pallet close (james02)               */  
 /* 2022-05-24  1.3  James    WMS-18350 Filter short pick (james01)      */  
 /* 2022-09-15  1.4  James    WMS-20667 Add Lane (james03)               */
+/* 2023-11-14  1.5  James    WMS-23712 Extend Lane var length (james04) */
 /************************************************************************/        
         
 CREATE OR ALTER PROC [RDT].[rdt_1653ExtValid01] (        
@@ -33,7 +34,7 @@ CREATE OR ALTER PROC [RDT].[rdt_1653ExtValid01] (
    @cOrderKey      NVARCHAR( 20),    
    @cPalletKey     NVARCHAR( 20),    
    @cMBOLKey       NVARCHAR( 10),    
-   @cLane          NVARCHAR( 20),
+   @cLane          NVARCHAR( 30),
    @tExtValidVar   VariableTable READONLY,    
    @nErrNo         INT           OUTPUT,    
    @cErrMsg        NVARCHAR( 20) OUTPUT    
