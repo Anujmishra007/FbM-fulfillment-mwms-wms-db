@@ -14,6 +14,7 @@ GO
 /* Modifications log:                                                   */        
 /* Date        Rev  Author   Purposes                                   */        
 /* 2023-08-23  1.0  James    WMS-23471. Created                         */      
+/* 2023-11-14  1.1  James    WMS-23712 Extend Lane var length (james01) */
 /************************************************************************/        
         
 CREATE OR ALTER PROC [RDT].[rdt_TrackNo_SortToPallet_ValidateLane] (        
@@ -30,7 +31,7 @@ CREATE OR ALTER PROC [RDT].[rdt_TrackNo_SortToPallet_ValidateLane] (
    @cMBOLKey       NVARCHAR( 10),    
    @cLabelNo       NVARCHAR( 20),
    @tValidateLane  VariableTable READONLY,    
-   @cLane          NVARCHAR( 20) OUTPUT,
+   @cLane          NVARCHAR( 30) OUTPUT,
    @nErrNo         INT           OUTPUT,
    @cErrMsg        NVARCHAR( 20) OUTPUT            
 ) AS        
@@ -74,7 +75,7 @@ BEGIN
          ' @cMBOLKey       NVARCHAR( 10), ' +
          ' @cLabelNo       NVARCHAR( 20), ' +
          ' @tValidateLane  VariableTable READONLY, ' +
-         ' @cLane          NVARCHAR( 20) OUTPUT, ' +
+         ' @cLane          NVARCHAR( 30) OUTPUT, ' +
          ' @nErrNo         INT           OUTPUT, ' +
          ' @cErrMsg        NVARCHAR(250) OUTPUT  '
 
