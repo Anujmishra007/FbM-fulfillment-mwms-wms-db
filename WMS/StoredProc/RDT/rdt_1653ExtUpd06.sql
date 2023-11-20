@@ -5,7 +5,7 @@ GO
 
 /************************************************************************/    
 /* Store procedure: rdt_1653ExtUpd06                                    */    
-/* Copyright      : IDS                                                 */    
+/* Copyright      : MAERSK                                              */    
 /*                                                                      */    
 /* Called from: rdtfnc_TrackNo_SortToPallet                             */    
 /*                                                                      */    
@@ -14,6 +14,7 @@ GO
 /* Modifications log:                                                   */    
 /* Date        Rev  Author   Purposes                                   */    
 /* 2022-10-05  1.0  James    WMS-20667. Created                         */  
+/* 2023-11-14  1.2  James    WMS-23712 Extend Lane var length (james02) */
 /************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdt_1653ExtUpd06] (    
@@ -28,7 +29,7 @@ CREATE OR ALTER PROC [RDT].[rdt_1653ExtUpd06] (
    @cOrderKey      NVARCHAR( 20),
    @cPalletKey     NVARCHAR( 20),
    @cMBOLKey       NVARCHAR( 10),
-   @cLane          NVARCHAR( 20),
+   @cLane          NVARCHAR( 30),
    @tExtValidVar   VariableTable READONLY,
    @nErrNo         INT           OUTPUT,
    @cErrMsg        NVARCHAR( 20) OUTPUT
@@ -238,7 +239,7 @@ BEGIN
                                   + ' ORDER BY MIN(PD.EditDate) '
                             
          SET @c_ExecArguments = N'@cPalletKey          NVARCHAR(20)'
-                             + ', @cLane               NVARCHAR(20)'
+                             + ', @cLane               NVARCHAR(30)'
                              + ', @cStorerKey          NVARCHAR(15)'
                              + ', @cOrdChkField        NVARCHAR(100)'
    
