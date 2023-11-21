@@ -21,7 +21,7 @@ EXECUTE rdt.rdtAddScn 3431, 'ENG'
    ,@cLine04 = 'REF NO:'      -- WMS-15718
    ,@cLine05 = '%20d08'       -- WMS-15718
    ,@cLine06 = 'LABELNO/DROPID:'
-   ,@cLine07 = '%20i04'
+   ,@cLine07 = '%60i04'       -- Extend to 40 chars WMS-23887
    ,@cLine08 = '%20d05'
    ,@cLine09 = ''
    ,@cLine10 = 'SCANNED: %10d06'
