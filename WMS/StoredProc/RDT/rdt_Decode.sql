@@ -23,6 +23,7 @@ GO
 /* 29-04-2019  Ung       1.9   INC0659351 Fix UPC type should be no setup     */
 /* 24-08-2020  Ung       2.0   WMS-13505 Add UCCNo                            */
 /* 20-03-2023  Ung       2.1   WMS-21946 Add SerialNo                         */
+/* 27-09-2023  Ung       2.2   WMS-23678 Fix UPC and ID co exist at same time */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_Decode (
@@ -81,6 +82,7 @@ BEGIN
    DECLARE @cDecoded          NVARCHAR( 1)
    DECLARE @nAllowGap         INT
    DECLARE @nSequence         INT
+   DECLARE @nRowCount         INT
    
    DECLARE @cDecodeCode       NVARCHAR( 30)
    DECLARE @cDecodeLineNumber NVARCHAR( 5)
@@ -138,8 +140,8 @@ BEGIN
          SET @nFunc = 0
 
    -- UPC should not require setup. Most of the module is only UPC, so pass-in blank, don't need to modify all modules
-   IF @cType = 'UPC'
-      SET @cType = ''
+   IF @cType = ''
+      SET @cType = 'UPC'
 
    -- Loop header
    DECLARE @curDH CURSOR
@@ -196,7 +198,8 @@ BEGIN
          SELECT @nPatternLen = ISNULL( SUM( MaxLength + DATALENGTH( FieldIdentifier)/2), 0)
          FROM BarcodeConfigDetail WITH (NOLOCK) 
          WHERE DecodeCode = @cDecodeCode
-            AND (@cType = '' OR Type = @cType)
+            AND ((@cType = 'UPC' AND Type IN ( '', 'UPC')) 
+             OR Type = @cType)
 
          -- Check length
          IF @nPatternLen <> DATALENGTH( @cBarcode)/2
@@ -217,16 +220,21 @@ BEGIN
       END
       
       -- Loop detail
+      SET @nRowCount = 0
       SET @curDD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT DecodeLineNumber, FieldIdentifier, LengthType, MaxLength, TerminateChar, DataType, MapTo, FormatSP, ProcessSP
          FROM BarcodeConfigDetail WITH (NOLOCK)
          WHERE DecodeCode = @cDecodeCode
-            AND (@cType = '' OR Type = @cType)
+            AND ((@cType = 'UPC' AND Type IN ( '', 'UPC')) 
+             OR Type = @cType)
          ORDER BY DecodeLineNumber
       OPEN @curDD
       FETCH NEXT FROM @curDD INTO @cDecodeLineNumber, @cFieldIdentifier, @cLengthType, @nMaxLength, @nTerminateChar, @cDataType, @cMapTo, @cFormatSP, @cProcessSP
       WHILE @@FETCH_STATUS = 0
       BEGIN
+         IF @nRowCount = 0 
+            SET @nRowCount = 1
+
          SET @cFieldData = ''
    
          -- Find field identifier
@@ -394,7 +402,7 @@ BEGIN
          select @nErrNo '@nErrNo', @cErrMsg '@cErrMsg'
       
       -- Successful decode
-      IF @nErrNo = 0
+      IF @nErrNo = 0 AND @nRowCount > 0 
       BEGIN
          SET @cDecoded = 'Y'
          BREAK
