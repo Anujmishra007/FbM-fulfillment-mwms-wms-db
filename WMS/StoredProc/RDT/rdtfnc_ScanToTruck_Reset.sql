@@ -1,15 +1,12 @@
-IF EXISTS ( SELECT * FROM sys.objects WHERE  object_id = OBJECT_ID(N'[RDT].[rdtfnc_ScanToTruck_Reset]') AND OBJECTPROPERTY(object_id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [RDT].[rdtfnc_ScanToTruck_Reset]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
+
 /************************************************************************/
 /* Store procedure: rdtfnc_ScanToTruck_Reset                            */
-/* Copyright      : IDS                                                 */
+/* Copyright      : MAERSK                                              */
 /*                                                                      */
 /* Purpose: Reset Scan To Truck                                         */
 /*                                                                      */
@@ -20,8 +17,9 @@ GO
 /* 2016-09-30 1.1  Ung      Performance tuning                          */
 /* 2018-10-09 1.2  Gan      Performance tuning                          */
 /* 2018-11-23 1.3  ChewKP   WMS-6571 Add DropID/LabelNo Scn (ChewKP01)  */
+/* 2023-10-26 1.4  James    WMS-23890 Add standard DecodeSP (james01)   */
 /************************************************************************/
-CREATE PROC [RDT].[rdtfnc_ScanToTruck_Reset] (
+CREATE OR ALTER PROC [RDT].[rdtfnc_ScanToTruck_Reset] (
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max
@@ -33,7 +31,7 @@ SET QUOTED_IDENTIFIER OFF
 SET CONCAT_NULL_YIELDS_NULL OFF
 
 -- Misc variable
-DECLARE 
+DECLARE
    @b_Success     INT,
    @nTranCount    INT,
    @nTotalCarton  INT,
@@ -58,12 +56,15 @@ DECLARE
    @cLoadKey    NVARCHAR(10),
    @cOrderKey   NVARCHAR(10),
    @cMBOLKey    NVARCHAR( 10),
-   @cType       NVARCHAR( 1), 
+   @cType       NVARCHAR( 1),
    @cOption     NVARCHAR( 1),
    @cByPassMBOLValidation NVARCHAR(1),
    @cLabelNo    NVARCHAR(20),
    @cExtendedUpdateSP   NVARCHAR(20),
-   
+   @cDecodeSP           NVARCHAR( 20),
+   @cBarcode            NVARCHAR( MAX),
+   @cID                 NVARCHAR( 18),
+
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -106,11 +107,12 @@ SELECT
 
    @cLoadKey    = V_LoadKey,
    @cOrderKey   = V_OrderKey,
-   
+
 
    @cMBOLKey    = V_String1,
-   @cType       = V_String2, 
+   @cType       = V_String2,
    @cExtendedUpdateSP = V_String3,
+   @cDecodeSP         = V_String4,
    
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -159,10 +161,15 @@ BEGIN
    -- Set the entry point
    SET @nScn = 3650
    SET @nStep = 1
-   
+
    SET @cExtendedUpdateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorerKey)
    IF @cExtendedUpdateSP = '0'
       SET @cExtendedUpdateSP = ''
+
+   -- (james01)
+   SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerKey)
+   IF @cDecodeSP = '0'
+      SET @cDecodeSP = ''
       
    -- Logging
    EXEC RDT.rdt_STD_EventLog
@@ -255,15 +262,15 @@ BEGIN
             EXEC rdt.rdtSetFocusField @nMobile, 2 -- LoadKey
             GOTO Step_1_Fail
          END
-         
+
          -- Get MBOL info
          SET @cMBOLKey = ''
          SELECT TOP 1 @cMBOLKey = MD.MBOLKey
-         FROM dbo.LoadPlanDetail LPD WITH (NOLOCK) 
+         FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
             JOIN dbo.MBOLDetail MD WITH (NOLOCK) ON (LPD.OrderKey = MD.OrderKey)
          WHERE LPD.LoadKey = @cLoadKey
-         
-         -- Check populated to MBOL 
+
+         -- Check populated to MBOL
          IF @cMBOLKey = ''
          BEGIN
             SET @nErrNo = 82656
@@ -284,7 +291,7 @@ BEGIN
             EXEC rdt.rdtSetFocusField @nMobile, 3 -- OrderKey
             GOTO Step_1_Fail
          END
-         
+
          -- Get Load info
          SET @cLoadKey = ''
          SELECT TOP 1 @cLoadKey = LoadKey FROM dbo.LoadPlanDetail WITH (NOLOCK) WHERE OrderKey = @cOrderKey
@@ -297,12 +304,12 @@ BEGIN
             EXEC rdt.rdtSetFocusField @nMobile, 3 -- OrderKey
             GOTO Step_1_Fail
          END
-         
+
          -- Get MBOL info
          SET @cMBOLKey = ''
          SELECT TOP 1 @cMBOLKey = MBOLKey FROM dbo.MBOLDetail WITH (NOLOCK) WHERE OrderKey = @cOrderKey
-         
-         -- Check populated to MBOL 
+
+         -- Check populated to MBOL
          IF @cMBOLKey = ''
          BEGIN
             SET @nErrNo = 82659
@@ -324,19 +331,19 @@ BEGIN
       -- Get MBOL info
       SELECT @cChkMBOLStatus = [Status] FROM dbo.MBOL WITH (NOLOCK) WHERE MBOLKey = @cMBOLKey
 
-      
+
       SET @cByPassMBOLValidation = ''
       SET @cByPassMBOLValidation = rdt.RDTGetConfig( @nFunc, 'ByPassMBOLValidation', @cStorerKey) -- Parse in Function
-      
+
       IF @cByPassMBOLValidation <> '1'
-      BEGIN 
+      BEGIN
          IF @cChkMBOLStatus = '9'
-         BEGIN    
-            SET @nErrNo = 82661    
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Mbol Shipped    
-            GOTO Step_1_Fail    
+         BEGIN
+            SET @nErrNo = 82661
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Mbol Shipped
+            GOTO Step_1_Fail
          END
-      END      
+      END
 
 
       -- Prep next screen var
@@ -345,7 +352,7 @@ BEGIN
       SET @cOutField03 = CASE WHEN @cType = 'O' THEN @cOrderKey ELSE '' END
       SET @cOutField04 = ''
 
-      
+
       -- Go to next screen
       SET @nScn  = @nScn + 1
       SET @nStep = @nStep + 1
@@ -398,10 +405,61 @@ BEGIN
       -- Screen mapping
       SET @cLabelNo = @cInField04
 
+      -- Decode
+      -- Standard decode
+      IF @cDecodeSP = '1'
+      BEGIN
+      	SELECT @cLabelNo = ''
+         EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
+            @cID     = @cLabelNo    OUTPUT,
+            @nErrNo  = @nErrNo      OUTPUT,
+            @cErrMsg = @cErrMsg     OUTPUT,
+            @cType   = 'ID'
+
+         IF @nErrNo <> 0
+            GOTO Step_2_Fail
+      END
+      ELSE
+      BEGIN
+         IF @cDecodeSP <> ''
+         BEGIN
+            IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cDecodeSP AND type = 'P')
+            BEGIN
+               SELECT @cID = '',  @cLabelNo = ''
+
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cMBOLKey, @cLoadKey, @cOrderKey, @cBarcode OUTPUT, @cFieldName, ' +
+                  ' @cLabelNo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+               SET @cSQLParam =
+                  ' @nMobile      INT,             ' +
+                  ' @nFunc        INT,             ' +
+                  ' @cLangCode    NVARCHAR( 3),    ' +
+                  ' @nStep        INT,             ' +
+                  ' @nInputKey    INT,             ' +
+                  ' @cStorerKey   NVARCHAR( 15),   ' +
+                  ' @cMBOLKey     NVARCHAR( 10),   ' +
+                  ' @cLoadKey     NVARCHAR( 10),   ' +
+                  ' @cOrderKey    NVARCHAR( 10),   ' +
+                  ' @cBarcode     NVARCHAR( MAX) OUTPUT, ' +
+                  ' @cFieldName   NVARCHAR( 10),   ' +
+                  ' @cLabelNo     NVARCHAR( 20)  OUTPUT, ' +
+                  ' @nErrNo       INT            OUTPUT, ' +
+                  ' @cErrMsg      NVARCHAR( 20)  OUTPUT'
+
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cMBOLKey, @cLoadKey, @cOrderKey, @cBarcode OUTPUT, 'ID',
+                  @cLabelNo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+               IF @nErrNo <> 0
+                  GOTO Step_2_Fail
+            END
+         END
+      END
+      
       -- Check label
       IF @cLabelNo <> ''
       BEGIN
-      
+
          -- Check double scan
          DECLARE @cLabelScanned NVARCHAR(1)
          SET @cLabelScanned = ''
@@ -421,7 +479,7 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LabelNotExist
             GOTO Step_2_Fail
          END
-         
+
          IF @cExtendedUpdateSP <> ''
          BEGIN
                IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
@@ -448,13 +506,13 @@ BEGIN
                   EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                      @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cType, @cMBOLKey, @cLoadKey, @cOrderKey, @cLabelNo,
                      @cOption, @nErrNo OUTPUT, @cErrMsg OUTPUT
-                     
+
                   IF @nErrNo <> 0
                      GOTO Quit
                   ELSE
                   BEGIN
                      SET @nErrNo = 82673
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ResetCompleted 
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ResetCompleted
                   END
                END
          END
@@ -462,25 +520,25 @@ BEGIN
          BEGIN
             IF @cType = 'M'
             BEGIN
-                
-                DELETE FROM rdt.rdtScanToTruck 
+
+                DELETE FROM rdt.rdtScanToTruck
                 WHERE MBOLKey = @cMBOLKey
                 AND URNNo = @cLabelNo
-                
+
                 IF @@ERROR <> 0
                 BEGIN
                    SET @nErrNo = 82669
                    SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ResetFail
                    GOTO Step_2_Fail
                 END
-                
+
             END
             IF @cType = 'L'
             BEGIN
-                DELETE FROM rdt.rdtScanToTruck 
+                DELETE FROM rdt.rdtScanToTruck
                 WHERE LoadKey = @cLoadKey
                 AND URNNo = @cLabelNo
-                
+
                 IF @@ERROR <> 0
                 BEGIN
                    SET @nErrNo = 82670
@@ -490,10 +548,10 @@ BEGIN
             END
             IF @cType = 'O'
             BEGIN
-                DELETE FROM rdt.rdtScanToTruck 
+                DELETE FROM rdt.rdtScanToTruck
                 WHERE MBOLKey = @cOrderKey
                 AND URNNo = @cLabelNo
-                
+
                 IF @@ERROR <> 0
                 BEGIN
                    SET @nErrNo = 82671
@@ -501,12 +559,12 @@ BEGIN
                    GOTO Step_2_Fail
                 END
             END
-            
+
             SET @nErrNo = 82672
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ResetCompleted
-         END     
+         END
       END
-      ELSE  
+      ELSE
       BEGIN
          -- Prep next screen var
          SET @cOutField01 = CASE WHEN @cType = 'M' THEN @cMBOLKey  ELSE '' END
@@ -514,19 +572,19 @@ BEGIN
          SET @cOutField03 = CASE WHEN @cType = 'O' THEN @cOrderKey ELSE '' END
          SET @cOutField04 = ''
 
-         
+
          -- Go to next screen
          SET @nScn  = @nScn + 1
          SET @nStep = @nStep + 1
       END
-     
-      
-      
+
+
+
    END
 
    IF @nInputKey = 0 -- ESC
    BEGIN
-     
+
       -- Prepare prev screen var
       SET @cOutField01 = ''
       SET @cOutField02 = ''
@@ -563,7 +621,7 @@ BEGIN
    BEGIN
       -- Screen mapping
       SET @cOption = @cInField04
-      
+
       -- Check label
       IF @cOption = ''
       BEGIN
@@ -578,10 +636,10 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidOption
          GOTO Step_2_Fail
       END
-      
+
       IF @cOption = '1'
       BEGIN
-         
+
          IF @cExtendedUpdateSP <> ''
          BEGIN
                IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
@@ -608,13 +666,13 @@ BEGIN
                   EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                      @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cType, @cMBOLKey, @cLoadKey, @cOrderKey, @cLabelNo,
                      @cOption, @nErrNo OUTPUT, @cErrMsg OUTPUT
-                     
+
                   IF @nErrNo <> 0
                      GOTO Quit
                   ELSE
                   BEGIN
                      SET @nErrNo = 82674
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ResetCompleted 
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ResetCompleted
                   END
                END
          END
@@ -622,23 +680,23 @@ BEGIN
          BEGIN
            IF @cType = 'M'
            BEGIN
-               
-               DELETE FROM rdt.rdtScanToTruck 
+
+               DELETE FROM rdt.rdtScanToTruck
                WHERE MBOLKey = @cMBOLKey
-               
+
                IF @@ERROR <> 0
                BEGIN
                   SET @nErrNo = 82664
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ResetFail
                   GOTO Step_2_Fail
                END
-               
+
            END
            IF @cType = 'L'
            BEGIN
-               DELETE FROM rdt.rdtScanToTruck 
+               DELETE FROM rdt.rdtScanToTruck
                WHERE MBOLKey = @cMBOLKey
-               
+
                IF @@ERROR <> 0
                BEGIN
                   SET @nErrNo = 82665
@@ -648,9 +706,9 @@ BEGIN
            END
            IF @cType = 'O'
            BEGIN
-               DELETE FROM rdt.rdtScanToTruck 
+               DELETE FROM rdt.rdtScanToTruck
                WHERE MBOLKey = @cMBOLKey
-               
+
                IF @@ERROR <> 0
                BEGIN
                   SET @nErrNo = 82666
@@ -658,42 +716,42 @@ BEGIN
                   GOTO Step_2_Fail
                END
            END
-           
+
            SET @nErrNo = 82667
            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ResetCompleted
-         END  
+         END
            -- Prepare current screen var
            SET @cOutField01 = ''
            SET @cOutField02 = ''
            SET @cOutField03 = ''
-           
+
            -- Go to prev screen
            SET @nScn  = @nScn - 2
            SET @nStep = @nStep - 2
 
            GOTO QUIT
       END
-      
+
       -- Prepare current screen var
       SET @cOutField01 = ''
       SET @cOutField02 = ''
       SET @cOutField03 = ''
-      
+
       -- Go to prev screen
       SET @nScn  = @nScn - 1
       SET @nStep = @nStep - 1
-      
-      
+
+
    END
 
    IF @nInputKey = 0 -- ESC
    BEGIN
       -- Prepare prev screen var
-      
+
       --IF @cMBOLKey  = 'M' EXEC rdt.rdtSetFocusField @nMobile, 1
       --IF @cLoadKey  = 'L' EXEC rdt.rdtSetFocusField @nMobile, 2
       --IF @cOrderKey = 'O' EXEC rdt.rdtSetFocusField @nMobile, 3
-      
+
       -- Prep next screen var
       SET @cOutField01 = CASE WHEN @cType = 'M' THEN @cMBOLKey  ELSE '' END
       SET @cOutField02 = CASE WHEN @cType = 'L' THEN @cLoadKey  ELSE '' END
@@ -705,7 +763,7 @@ BEGIN
       SET @nStep = @nStep - 1
    END
    GOTO Quit
-   
+
    Step_3_Fail:
    BEGIN
       SET @cOption = ''
@@ -721,7 +779,7 @@ Quit. Update back to I/O table, ready to be pick up by JBOSS
 Quit:
 BEGIN
    UPDATE RDTMOBREC WITH (ROWLOCK) SET
-      EditDate = GETDATE(), 
+      EditDate = GETDATE(),
       ErrMsg = @cErrMsg,
       Func   = @nFunc,
       Step   = @nStep,
@@ -731,16 +789,16 @@ BEGIN
       Facility   = @cFacility,
       -- UserName   = @cUserName,
       Printer    = @cPrinter,
-      
+
       V_LoadKey  = @cLoadKey,
       V_OrderKey = @cOrderKey,
 
       V_String1  = @cMBOLKey,
-      V_String2  = @cType, 
-      
+      V_String2  = @cType,
+
       V_String3  = @cExtendedUpdateSP,
-      
-      
+      V_String4  = @cDecodeSP,
+
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,
@@ -770,11 +828,5 @@ BEGIN
    WHERE Mobile = @nMobile
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON [RDT].[rdtfnc_ScanToTruck_Reset] TO nSQL
+GRANT EXECUTE ON  [RDT].[rdtfnc_ScanToTruck_Reset] TO [NSQL]
 GO
