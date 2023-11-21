@@ -29,3 +29,21 @@ execute rdt.rdtAddMsg 201675, 10, '201675Need ToLOC    ', 'us_english', 1864
 execute rdt.rdtAddMsg 201676, 10, '201676Invalid LOC   ', 'us_english', 1864
 execute rdt.rdtAddMsg 201677, 10, '201677Diff facility ', 'us_english', 1864
 execute rdt.rdtAddMsg 201678, 10, '201678SameFrom/ToLOC', 'us_english', 1864
+execute rdt.rdtAddMsg 201679, 10, '201679Invalid SKU   ', 'us_english', 1864
+execute rdt.rdtAddMsg 201680, 10, '201680MultiSKUBarcod', 'us_english', 1864
+execute rdt.rdtAddMsg 201681, 10, '201681Wrong SKU     ', 'us_english', 1864
+execute rdt.rdtAddMsg 201682, 10, '201682Different L01 ', 'us_english', 1864
+execute rdt.rdtAddMsg 201683, 10, '201683Different L02 ', 'us_english', 1864
+execute rdt.rdtAddMsg 201684, 10, '201684Different L03 ', 'us_english', 1864
+execute rdt.rdtAddMsg 201685, 10, '201685Different L04 ', 'us_english', 1864
+execute rdt.rdtAddMsg 201686, 10, '201686Different L05 ', 'us_english', 1864
+execute rdt.rdtAddMsg 201687, 10, '201687Different L06 ', 'us_english', 1864
+execute rdt.rdtAddMsg 201688, 10, '201688Different L07 ', 'us_english', 1864
+execute rdt.rdtAddMsg 201689, 10, '201689Different L08 ', 'us_english', 1864
+execute rdt.rdtAddMsg 201690, 10, '201690Different L09 ', 'us_english', 1864
+execute rdt.rdtAddMsg 201691, 10, '201691Different L10 ', 'us_english', 1864
+execute rdt.rdtAddMsg 201692, 10, '201692Different L11 ', 'us_english', 1864
+execute rdt.rdtAddMsg 201693, 10, '201693Different L12 ', 'us_english', 1864
+execute rdt.rdtAddMsg 201694, 10, '201694Different L13 ', 'us_english', 1864
+execute rdt.rdtAddMsg 201695, 10, '201695Different L14 ', 'us_english', 1864
+execute rdt.rdtAddMsg 201696, 10, '201696Different L15 ', 'us_english', 1864

@@ -38,8 +38,8 @@ EXECUTE rdt.rdtAddScn 6262, 'ENG',
    @cLine09 = '%20d08',
    @cLine10 = '%08d09 %05d10 %05d11', 
    @cLine11 = 'QTY:     %05d12 %05d13', 
-   @cLine12 = 'ID%18i14',
-   @cLine13 = '%20d15',
+   @cLine12 = 'ID%60i14',
+   @cLine13 = '%60d15',
    @cLine14 = '%e',
    @nFunc = 1864
  

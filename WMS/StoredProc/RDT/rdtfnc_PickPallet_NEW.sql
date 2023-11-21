@@ -13,6 +13,7 @@ GO
 /* Date         Rev  Author     Purposes                                      */
 /* 2021-06-14   1.0  Chermaine  WMS-17140 Created (dup rdtfnc_Pick)           */
 /* 2023-05-25   1.1  Ung        WMS-22370 Clean up source                     */
+/* 2023-09-27   1.2  Ung        WMS-23706 Add DecodeSP = 1                    */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PickPallet_NEW] (
@@ -887,60 +888,96 @@ BEGIN
 
          GOTO Quit
       END 
+ 
+      DECLARE @cUPC      NVARCHAR( 30),
+         @cChkLottable01 NVARCHAR( 18), @cChkLottable02 NVARCHAR( 18), @cChkLottable03 NVARCHAR( 18), @dChkLottable04 DATETIME,      @dChkLottable05 DATETIME,
+         @cChkLottable06 NVARCHAR( 30), @cChkLottable07 NVARCHAR( 30), @cChkLottable08 NVARCHAR( 30), @cChkLottable09 NVARCHAR( 30), @cChkLottable10 NVARCHAR( 30),
+         @cChkLottable11 NVARCHAR( 30), @cChkLottable12 NVARCHAR( 30), @dChkLottable13 DATETIME,      @dChkLottable14 DATETIME,      @dChkLottable15 DATETIME
+
+      SELECT @cUPC       = '', 
+         @cChkLottable01 = '', @cChkLottable02 = '', @cChkLottable03 = '',    @dChkLottable04 = NULL,  @dChkLottable05 = NULL,
+         @cChkLottable06 = '', @cChkLottable07 = '', @cChkLottable08 = '',    @cChkLottable09 = '',    @cChkLottable10 = '',
+         @cChkLottable11 = '', @cChkLottable12 = '', @dChkLottable13 = NULL,  @dChkLottable14 = NULL,  @dChkLottable15 = NULL
 
       IF @cDecodeSP <> ''
       BEGIN
-         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cDecodeSP AND type = 'P')
+         -- Standard decode
+         IF @cDecodeSP = '1'
          BEGIN
-            SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cBarcode, @cPickSlipNo, ' +
-               ' @cLOC        OUTPUT, @cID         OUTPUT, @cSKU        OUTPUT, @nTaskQTY    OUTPUT, ' +
-               ' @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT,' +
-               ' @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT,' +
-               ' @cLottable11 OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT,' +
-               ' @nErrNo      OUTPUT, @cErrMsg     OUTPUT'
-            SET @cSQLParam =
-               '@nMobile         INT, '            +
-               '@nFunc           INT, '            +
-               '@cLangCode       NVARCHAR( 3), '   +
-               '@nStep           INT, '            +
-               '@nInputKey       INT, '            +
-               '@cFacility       NVARCHAR( 5),  '  +
-               '@cStorerKey      NVARCHAR( 15), '  +
-               '@cBarcode        NVARCHAR( 60), '  +
-               '@cPickSlipNo     NVARCHAR( 10), '  +
-               '@cLOC            NVARCHAR(10)   OUTPUT, ' +
-               '@cID             NVARCHAR(18)   OUTPUT, ' +
-               '@cSKU            NVARCHAR(20)   OUTPUT, ' +
-               '@nTaskQTY        INT            OUTPUT, ' +
-               '@cLottable01     NVARCHAR( 18)  OUTPUT, ' +
-               '@cLottable02     NVARCHAR( 18)  OUTPUT, ' +
-               '@cLottable03     NVARCHAR( 18)  OUTPUT, ' +
-               '@dLottable04     DATETIME       OUTPUT, ' +
-               '@dLottable05     DATETIME       OUTPUT, ' +
-               '@cLottable06     NVARCHAR( 30)  OUTPUT, ' +
-               '@cLottable07     NVARCHAR( 30)  OUTPUT, ' +
-               '@cLottable08     NVARCHAR( 30)  OUTPUT, ' +
-               '@cLottable09     NVARCHAR( 30)  OUTPUT, ' +
-               '@cLottable10     NVARCHAR( 30)  OUTPUT, ' +
-               '@cLottable11     NVARCHAR( 30)  OUTPUT, ' +
-               '@cLottable12     NVARCHAR( 30)  OUTPUT, ' +
-               '@dLottable13     DATETIME       OUTPUT, ' +
-               '@dLottable14     DATETIME       OUTPUT, ' +
-               '@dLottable15     DATETIME       OUTPUT, ' +
-               '@nErrNo          INT            OUTPUT, ' +
-               '@cErrMsg         NVARCHAR( 20)  OUTPUT  '
+            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
+               @cID         = @cID            OUTPUT,
+               @cUPC        = @cUPC           OUTPUT,
+               @cLottable01 = @cChkLottable01 OUTPUT,
+               @cLottable02 = @cChkLottable02 OUTPUT,
+               @cLottable03 = @cChkLottable03 OUTPUT,
+               @dLottable04 = @dChkLottable04 OUTPUT,
+               @dLottable05 = @dChkLottable05 OUTPUT,
+               @cLottable06 = @cChkLottable06 OUTPUT,
+               @cLottable07 = @cChkLottable07 OUTPUT,
+               @cLottable08 = @cChkLottable08 OUTPUT,
+               @cLottable09 = @cChkLottable09 OUTPUT,
+               @cLottable10 = @cChkLottable10 OUTPUT,
+               @cLottable11 = @cChkLottable11 OUTPUT,
+               @cLottable12 = @cChkLottable12 OUTPUT,
+               @dLottable13 = @dChkLottable13 OUTPUT,
+               @dLottable14 = @dChkLottable14 OUTPUT,
+               @dLottable15 = @dChkLottable15 OUTPUT, 
+               @cType = 'ID'
+         END
+         ELSE
+         BEGIN
+            IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cDecodeSP AND type = 'P')
+            BEGIN
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cBarcode, @cPickSlipNo, ' +
+                  ' @cLOC        OUTPUT, @cID         OUTPUT, @cUPC        OUTPUT, @nTaskQTY    OUTPUT, ' +
+                  ' @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT,' +
+                  ' @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT,' +
+                  ' @cLottable11 OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT,' +
+                  ' @nErrNo      OUTPUT, @cErrMsg     OUTPUT'
+               SET @cSQLParam =
+                  '@nMobile         INT, '            +
+                  '@nFunc           INT, '            +
+                  '@cLangCode       NVARCHAR( 3), '   +
+                  '@nStep           INT, '            +
+                  '@nInputKey       INT, '            +
+                  '@cFacility       NVARCHAR( 5),  '  +
+                  '@cStorerKey      NVARCHAR( 15), '  +
+                  '@cBarcode        NVARCHAR( 60), '  +
+                  '@cPickSlipNo     NVARCHAR( 10), '  +
+                  '@cLOC            NVARCHAR( 10)  OUTPUT, ' +
+                  '@cID             NVARCHAR( 18)  OUTPUT, ' +
+                  '@cUPC            NVARCHAR( 30)  OUTPUT, ' +
+                  '@nTaskQTY        INT            OUTPUT, ' +
+                  '@cLottable01     NVARCHAR( 18)  OUTPUT, ' +
+                  '@cLottable02     NVARCHAR( 18)  OUTPUT, ' +
+                  '@cLottable03     NVARCHAR( 18)  OUTPUT, ' +
+                  '@dLottable04     DATETIME       OUTPUT, ' +
+                  '@dLottable05     DATETIME       OUTPUT, ' +
+                  '@cLottable06     NVARCHAR( 30)  OUTPUT, ' +
+                  '@cLottable07     NVARCHAR( 30)  OUTPUT, ' +
+                  '@cLottable08     NVARCHAR( 30)  OUTPUT, ' +
+                  '@cLottable09     NVARCHAR( 30)  OUTPUT, ' +
+                  '@cLottable10     NVARCHAR( 30)  OUTPUT, ' +
+                  '@cLottable11     NVARCHAR( 30)  OUTPUT, ' +
+                  '@cLottable12     NVARCHAR( 30)  OUTPUT, ' +
+                  '@dLottable13     DATETIME       OUTPUT, ' +
+                  '@dLottable14     DATETIME       OUTPUT, ' +
+                  '@dLottable15     DATETIME       OUTPUT, ' +
+                  '@nErrNo          INT            OUTPUT, ' +
+                  '@cErrMsg         NVARCHAR( 20)  OUTPUT  '
 
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cBarcode, @cPickSlipNo,
-               @cLOC        OUTPUT, @cID         OUTPUT, @cSKU        OUTPUT, @nTaskQTY    OUTPUT, 
-               @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT,
-               @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT,
-               @cLottable11 OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT,
-               @nErrNo      OUTPUT, @cErrMsg     OUTPUT
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cBarcode, @cPickSlipNo,
+                  @cLOC           OUTPUT, @cID            OUTPUT, @cUPC           OUTPUT, @nTaskQTY       OUTPUT, 
+                  @cChkLottable01 OUTPUT, @cChkLottable02 OUTPUT, @cChkLottable03 OUTPUT, @dChkLottable04 OUTPUT, @dChkLottable05 OUTPUT,
+                  @cChkLottable06 OUTPUT, @cChkLottable07 OUTPUT, @cChkLottable08 OUTPUT, @cChkLottable09 OUTPUT, @cChkLottable10 OUTPUT,
+                  @cChkLottable11 OUTPUT, @cChkLottable12 OUTPUT, @dChkLottable13 OUTPUT, @dChkLottable14 OUTPUT, @dChkLottable15 OUTPUT,
+                  @nErrNo         OUTPUT, @cErrMsg        OUTPUT
 
-            IF @nErrNo <> 0
-               GOTO ID_Fail
+               IF @nErrNo <> 0
+                  GOTO ID_Fail
+            END
          END
       END
          
@@ -1007,6 +1044,74 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff ID
             GOTO ID_Fail
          END
+      END
+
+      -- Check decoded SKU
+      IF @cUPC <> ''
+      BEGIN
+         DECLARE @bSuccess INT
+         DECLARE @nSKUCnt INT
+         EXEC RDT.rdt_GetSKUCNT
+             @cStorerKey  = @cStorerKey
+            ,@cSKU        = @cUPC
+            ,@nSKUCnt     = @nSKUCnt   OUTPUT
+            ,@bSuccess    = @bSuccess  OUTPUT
+            ,@nErr        = @nErrNo    OUTPUT
+            ,@cErrMsg     = @cErrMsg   OUTPUT
+
+         -- Check SKU valid
+         IF @nSKUCnt = 0
+         BEGIN
+            SET @nErrNo = 201679
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid SKU
+            GOTO ID_Fail
+         END
+
+         -- Check barcode return multiple SKU
+         IF @nSKUCnt > 1
+         BEGIN
+            SET @nErrNo = 201680
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MultiSKUBarcod
+            GOTO ID_Fail
+         END
+         
+         -- Get SKU
+         EXEC rdt.rdt_GetSKU
+             @cStorerKey  = @cStorerKey
+            ,@cSKU        = @cUPC      OUTPUT
+            ,@bSuccess    = @bSuccess  OUTPUT
+            ,@nErr        = @nErrNo    OUTPUT
+            ,@cErrMsg     = @cErrMsg   OUTPUT
+
+         -- Validate SKU
+         IF @cSKU <> @cUPC
+         BEGIN
+            SET @nErrNo = 201681
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Wrong SKU
+            GOTO ID_Fail
+         END
+      END
+
+      -- Check lottables
+      IF @cLottable01 <> '' AND @cChkLottable01 <> '' AND @cLottable01 <> @cChkLottable01 SET @nErrNo = 201682 ELSE
+      IF @cLottable02 <> '' AND @cChkLottable02 <> '' AND @cLottable02 <> @cChkLottable02 SET @nErrNo = 201683 ELSE
+      IF @cLottable03 <> '' AND @cChkLottable03 <> '' AND @cLottable03 <> @cChkLottable03 SET @nErrNo = 201684 ELSE
+      IF (@dLottable04 <> 0 AND @dLottable04 IS NOT NULL) AND (@dChkLottable04 <> 0 AND @dChkLottable04 IS NOT NULL) AND @dLottable04 <> @dChkLottable04 SET @nErrNo = 201685 ELSE
+      IF (@dLottable05 <> 0 AND @dLottable05 IS NOT NULL) AND (@dChkLottable05 <> 0 AND @dChkLottable05 IS NOT NULL) AND @dLottable05 <> @dChkLottable05 SET @nErrNo = 201686 ELSE
+      IF @cLottable06 <> '' AND @cChkLottable06 <> '' AND @cLottable06 <> @cChkLottable06 SET @nErrNo = 201687 ELSE
+      IF @cLottable07 <> '' AND @cChkLottable07 <> '' AND @cLottable07 <> @cChkLottable07 SET @nErrNo = 201688 ELSE
+      IF @cLottable08 <> '' AND @cChkLottable08 <> '' AND @cLottable08 <> @cChkLottable08 SET @nErrNo = 201689 ELSE
+      IF @cLottable09 <> '' AND @cChkLottable09 <> '' AND @cLottable09 <> @cChkLottable09 SET @nErrNo = 201690 ELSE
+      IF @cLottable10 <> '' AND @cChkLottable10 <> '' AND @cLottable10 <> @cChkLottable10 SET @nErrNo = 201691 ELSE
+      IF @cLottable11 <> '' AND @cChkLottable11 <> '' AND @cLottable11 <> @cChkLottable11 SET @nErrNo = 201692 ELSE
+      IF @cLottable12 <> '' AND @cChkLottable12 <> '' AND @cLottable12 <> @cChkLottable12 SET @nErrNo = 201693 ELSE
+      IF (@dLottable13 <> 0 AND @dLottable13 IS NOT NULL) AND (@dChkLottable13 <> 0 AND @dChkLottable13 IS NOT NULL) AND @dLottable13 <> @dChkLottable13 SET @nErrNo = 201694 ELSE
+      IF (@dLottable14 <> 0 AND @dLottable14 IS NOT NULL) AND (@dChkLottable14 <> 0 AND @dChkLottable14 IS NOT NULL) AND @dLottable14 <> @dChkLottable14 SET @nErrNo = 201695 ELSE
+      IF (@dLottable15 <> 0 AND @dLottable15 IS NOT NULL) AND (@dChkLottable15 <> 0 AND @dChkLottable15 IS NOT NULL) AND @dLottable15 <> @dChkLottable15 SET @nErrNo = 201696
+      IF @nErrNo <> 0
+      BEGIN
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Different L0X
+         GOTO ID_Fail
       END
 
       -- To LOC
