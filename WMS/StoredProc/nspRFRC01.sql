@@ -6,7 +6,6 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-
 /***************************************************************************/
 /* Store Procedure:  nspRFRC01                                             */
 /* Creation Date:                                                          */
@@ -141,6 +140,7 @@ GO
 /* 08-Feb-2018  SWT01     5.4    Adding Paramater Variable to Calling SP   */
 /* 05-May-2019  LZG       5.5    INC0683477 Extend the length of @c_command*/
 /*                               to fix exception (ZG01)                   */
+/* 04-Nov-2023  CheeMun   5.6    JSM-188672-DynamicSQL add Storerkey filter*/
 /***************************************************************************/
 CREATE PROC [dbo].[nspRFRC01]
      @c_sendDelimiter    NVARCHAR(1)
@@ -175,7 +175,7 @@ CREATE PROC [dbo].[nspRFRC01]
    , @n_qty              Float    -- (Vanessa01)
    , @c_uom              NVARCHAR(10)
    , @c_packkey          NVARCHAR(10)
-   , @c_loc              NVARCHAR(10)
+  , @c_loc              NVARCHAR(10)
    , @c_id               NVARCHAR(18)
    , @c_holdflag         NVARCHAR(10)
    , @c_other1           NVARCHAR(20)
@@ -272,7 +272,7 @@ CREATE PROC [dbo].[nspRFRC01]
    /*
       SOS# 43730 Add storer config RDT_FinalizeReceiptDetail for RDT - start
 
-      Storer config 'RDT_FinalizeReceiptDetail'
+  Storer config 'RDT_FinalizeReceiptDetail'
       ON  = beheave like base receiving (receive into QTYReceived, FinalizedFlag = 'Y')
       OFF = beheave like IDS  receiving (receive into BeforeReceivedQty, FinalizeFlag = 'N')
 
@@ -488,7 +488,7 @@ BEGIN
             SELECT @n_continue=3
             SELECT @n_err=60004 -- 65414
             SELECT @c_errmsg="NSQL"+CONVERT(NVARCHAR(5),@n_err)+": Reason Code is Invalid. (nspRFRC01)"
-         END
+   END
       END
 
       IF ISNULL(RTRIM(@c_holdflag),'') = '' OR RTRIM(@c_holdflag) = '' --SOS#177773
@@ -697,7 +697,7 @@ SELECT @c_sku "@c_sku after nspGetSku"
             ELSE
             BEGIN
                IF ISNULL(@c_lottable04label,'') <> '' AND ISNULL(@d_lottable04,'') = ''
-               BEGIN
+    BEGIN
                   SELECT @n_continue=3
                   SELECT @n_err=60010 -- 65103
                   SELECT @c_errmsg="NSQL"+CONVERT(NVARCHAR(5),@n_err)+ ": " + @c_Lottable04Label + " Required (nspRFRC01)"
@@ -894,7 +894,7 @@ SELECT @c_sku "@c_sku after nspGetSku"
    BEGIN
             SELECT @n_continue=3
             SELECT @n_err=60038
-            SELECT @c_errmsg="NSQL"+CONVERT(NVARCHAR(5),@n_err)+": C4RFXDOCK fail to auto populate XDOCK / FT LOC  (nspRFRC01)"
+        SELECT @c_errmsg="NSQL"+CONVERT(NVARCHAR(5),@n_err)+": C4RFXDOCK fail to auto populate XDOCK / FT LOC  (nspRFRC01)"
    END
    -- (Rick01) - End
       END
@@ -990,7 +990,7 @@ SELECT @c_sku "@c_sku after nspGetSku"
                                       '        @c_polineno         = POLineNumber, ' +
                                       '        @c_externpokey      = ISNULL(RTRIM(ExternPOKey),'''') ' +
                                       ' FROM RECEIPTDETAIL (NOLOCK) ' +
-                                      ' WHERE  Receiptkey = N''' + RTRIM(@c_prokey) + ''' ' +
+     ' WHERE  Receiptkey = N''' + RTRIM(@c_prokey) + ''' ' +
                                       ' AND    Storerkey  = N''' + RTRIM(@c_storerkey) + ''' ' +
                                       ' AND    Sku        = N''' + RTRIM(@c_sku) + ''' '  +
                                       ' AND    BeforeReceivedQTY < QtyExpected '  --ang01
@@ -1073,7 +1073,7 @@ END
                        "PO",
                        10,
                        @c_pokey    OUTPUT,
-                       @b_success  OUTPUT,
+@b_success  OUTPUT,
                        @n_err      OUTPUT,
                        @c_errmsg   OUTPUT
             IF NOT @b_success = 1
@@ -1225,7 +1225,7 @@ END
             BEGIN
             -- IF NOT EXISTS(SELECT 1 FROM CODELKUP (NOLOCK) WHERE ListName = 'ASNREASON'
              --   AND Code = @c_holdflag) OR @c_holdflag IS NULL
-               IF ISNULL(RTrim(@c_holdflag),'') = 'OK'
+           IF ISNULL(RTrim(@c_holdflag),'') = 'OK'
                BEGIN
                      SELECT @n_continue=3
                      SELECT @n_err=60022 -- 65414
@@ -1317,7 +1317,7 @@ END
                         0,                               /* QtyExpected                  */
                         0,                               /* QtyAdjusted                  */
                         @n_toqty,                        /* QtyReceived                  */
-                        @c_loc,                          /* ToLoc                        */
+                        @c_loc,         /* ToLoc                        */
                         @c_id,                           /* ToId                         */
                         ISNULL(LTrim(RTrim(@c_holdflag)), 'OK'), /* ConditionCode        */
                         @c_lottable01,                   /* Lottable01                   */
@@ -1815,7 +1815,7 @@ END
 
                   IF @b_debug = 2
                   BEGIN
-                     SELECT ReceiptLineNumber,
+      SELECT ReceiptLineNumber,
                             CASE WHEN QtyExpected - BeforeReceivedQty > 0
                                  THEN QtyExpected - BeforeReceivedQty
                                  ELSE 0
@@ -1843,12 +1843,12 @@ END
                         '          WHERE RD.Receiptkey = RECEIPTDETAIL.Receiptkey ' +
                         '          AND   ISNULL(RD.POLineNumber, '''') = ISNULL(RECEIPTDETAIL.POLineNumber, '''') ' +
                         '          AND   ISNULL(RD.POKey, '''')        = ISNULL(RECEIPTDETAIL.POKey, '''')  ' +-- SHONG003
-                        '          AND   RD.SKU          = RECEIPTDETAIL.SKU ) AS QtyExpected, ' +
+                        '          AND   RD.SKU          = RECEIPTDETAIL.SKU AND RD.STORERKEY = RECEIPTDETAIL.STORERKEY) AS QtyExpected, ' +			/*JSM-188672*/
                         '       (SELECT SUM(RD.BeforeReceivedQty) FROM RECEIPTDETAIL RD (NOLOCK) ' +
                         '          WHERE RD.Receiptkey = RECEIPTDETAIL.Receiptkey ' +
                         '          AND   ISNULL(RD.POKey, '''')        = ISNULL(RECEIPTDETAIL.POKey, '''') ' +-- SHONG003
                         '          AND   ISNULL(RD.POLineNumber, '''') = ISNULL(RECEIPTDETAIL.POLineNumber, '''') ' +
-                        '          AND   RD.SKU          = RECEIPTDETAIL.SKU ) AS QtyReceived, ' +
+                        '          AND   RD.SKU          = RECEIPTDETAIL.SKU AND RD.STORERKEY = RECEIPTDETAIL.STORERKEY) AS QtyReceived, ' +			/*JSM-188672*/
                         '          ExternLineNo, POLineNumber, ExternReceiptkey, ExternPOKey, ' +
                         '        CASE WHEN QtyExpected - BeforeReceivedQty > 0 ' +
                         '             THEN QtyExpected - BeforeReceivedQty ELSE 0 ' +
@@ -1875,7 +1875,7 @@ END
 
                   IF @b_debug = 1
                   BEGIN
-                     SELECT @c_CursorReceiptDetail '@c_ReceiptDetailCursor'
+                SELECT @c_CursorReceiptDetail '@c_ReceiptDetailCursor'
                   END
 
                   EXEC (@c_CursorReceiptDetail)
@@ -2011,7 +2011,7 @@ END
                          Packkey,           Uom,                  TariffKey,       FinalizeFlag,
                          BeforeReceivedQty, ExternReceiptkey,     ExternLineNo,    POLineNumber,
                          ExternPOKey,       UserDefine10,       DuplicateFrom,
-                         UserDefine01, UserDefine02, UserDefine03, UserDefine04, UserDefine05, --SOS# 111949
+              UserDefine01, UserDefine02, UserDefine03, UserDefine04, UserDefine05, --SOS# 111949
                          UserDefine06, UserDefine07, UserDefine08, UserDefine09, AltSKU) --SOS# 111949
                         VALUES
                          (
@@ -2283,7 +2283,7 @@ END
 --                       SELECT @n_QtyDue = @n_QtyTotal
 --                    END
 --                END
-               -- end of SOS ticket 5581
+            -- end of SOS ticket 5581
 
                -- SOS# 43730 Add storer config RDT_FinalizeReceiptDetail for RDT - start
                IF @cRDT_NotFinalizeReceiptDetail = '1' -- IDS receiving style
@@ -2543,7 +2543,7 @@ END
                                   SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
                                   SELECT @c_errmsg="NSQL"+CONVERT(NVARCHAR(5),@n_err)+": Update Failed On RECEIPTDETAIL. (nspRFRC01)" + " ( " + " SQLSvr MESSAGE=" + LTrim(RTrim(@c_errmsg)) + " ) "
                                   GOTO QUIT
-                              END
+                        END
 
                               -- Increase QTYExpected to itself
                               UPDATE RECEIPTDETAIL WITH (ROWLOCK) SET
@@ -2630,7 +2630,7 @@ END
               BEGIN
                    SELECT @b_success = 0
                    EXECUTE nspInventoryHold
-                        ""
+        ""
                         , ""
                         , @c_id
                         , @c_holdcode
@@ -2893,7 +2893,7 @@ END
                                IF NOT @@FETCH_STATUS = 0
                                BEGIN
                          SELECT @n_continue = 3
-                                    SELECT @n_err = 60005 -- 65131
+    SELECT @n_err = 60005 -- 65131
                                     SELECT @c_errmsg="NSQL"+CONVERT(NVARCHAR(5),@n_err)+": Bad Location. (nspRFRC01)"
                                END
                           CLOSE CURSOR_TOLOC
@@ -2978,7 +2978,7 @@ END
                 BEGIN
                      SELECT @c_toloc = ""
                      /* Generate the next taskdetailkey */
-                     SELECT @b_success = 1
+      SELECT @b_success = 1
                      EXECUTE   nspg_getkey
                             "TaskDetailKey"
                           , 10
