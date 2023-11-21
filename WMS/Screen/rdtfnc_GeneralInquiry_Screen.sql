@@ -27,15 +27,15 @@ EXECUTE rdt.rdtAddScn 4711, 'ENG'
    ,@cLine01 = '%20d11'
    ,@cLine02 = ''
    ,@cLine03 = '%20d01'
-   ,@cLine04 = '%20i02'
+   ,@cLine04 = '%60i02'--(yeekung01)
    ,@cLine05 = '%20d03'
-   ,@cLine06 = '%20i04'
+   ,@cLine06 = '%60i04'--(yeekung01)
    ,@cLine07 = '%20d05'
-   ,@cLine08 = '%20i06'
+   ,@cLine08 = '%60i06'--(yeekung01)
    ,@cLine09 = '%20d07'
-   ,@cLine10 = '%20i08'
+   ,@cLine10 = '%60i08' --(yeekung01)
    ,@cLine11 = '%20d09'
-   ,@cLine12 = '%20i10'
+   ,@cLine12 = '%60i10' --(yeekung01)
    ,@cLine14 = '%e'
    ,@nFunc = 727
 

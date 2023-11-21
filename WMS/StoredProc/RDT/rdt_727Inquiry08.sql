@@ -13,6 +13,7 @@ GO
 /* Date       Rev  Author   Purposes                                       */
 /* 2021-06-30 1.0  James    WMS-17018. Created                             */
 /* 2023-09-14 1.1  James    WMS-23578 Add display system qty (james01)     */
+/* 2023-10-03 1.2  Yeekung  WMS-23791 Extended Params (yeekung01)          */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_727Inquiry08] (
@@ -22,11 +23,11 @@ CREATE OR ALTER PROC [RDT].[rdt_727Inquiry08] (
    @cLangCode  NVARCHAR( 3),
    @cStorerKey NVARCHAR( 15),
    @cOption    NVARCHAR( 1),
-   @cParam1    NVARCHAR(20),
-   @cParam2    NVARCHAR(20),
-   @cParam3    NVARCHAR(20),
-   @cParam4    NVARCHAR(20),
-   @cParam5    NVARCHAR(20),
+   @cParam1    NVARCHAR(60),
+   @cParam2    NVARCHAR(60),
+   @cParam3    NVARCHAR(60),
+   @cParam4    NVARCHAR(60),
+   @cParam5    NVARCHAR(60),
    @cOutField01  NVARCHAR(20) OUTPUT,
    @cOutField02  NVARCHAR(20) OUTPUT,
    @cOutField03  NVARCHAR(20) OUTPUT,
@@ -138,7 +139,6 @@ AS
       SET @cOutField01 = 'ID:'
       SET @cOutField02 = @cFromID
       SET @cOutField03 = 'Floor:' + CASE WHEN @cFloor <> '' THEN @cFloor ELSE @cText4Floor END + 
-                          '/' + 
                           CAST( @nSystemQty AS NVARCHAR( 4))
       SET @cOutField04 = 'Loc  :' + @cToLoc
       SET @cOutField05 = 'Task :' + @cTaskDetailKey

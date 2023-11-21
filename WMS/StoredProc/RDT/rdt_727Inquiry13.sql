@@ -11,6 +11,7 @@ GO
 /*                                                                         */
 /* Date       Rev  Author     Purposes                                     */
 /* 2022-04-05 1.0  Ung        WMS-19199 Created                            */
+/* 2023-10-03 1.1  Yeekung    WMS-23791 Extended Params (yeekung01)        */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_727Inquiry13] (
@@ -20,11 +21,11 @@ CREATE OR ALTER PROC [RDT].[rdt_727Inquiry13] (
    @cLangCode    NVARCHAR(3),  
    @cStorerKey   NVARCHAR(15),  
    @cOption      NVARCHAR(1),  
-   @cParam1      NVARCHAR(20),  
-   @cParam2      NVARCHAR(20),  
-   @cParam3      NVARCHAR(20),  
-   @cParam4      NVARCHAR(20),  
-   @cParam5      NVARCHAR(20),  
+   @cParam1      NVARCHAR(60),  
+   @cParam2      NVARCHAR(60),  
+   @cParam3      NVARCHAR(60),  
+   @cParam4      NVARCHAR(60),  
+   @cParam5      NVARCHAR(60),  
    @c_oFieled01  NVARCHAR(20) OUTPUT,  
    @c_oFieled02  NVARCHAR(20) OUTPUT,  
    @c_oFieled03  NVARCHAR(20) OUTPUT,  

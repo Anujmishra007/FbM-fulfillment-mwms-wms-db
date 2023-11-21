@@ -1,95 +1,83 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdt_727Inquiry02]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_727Inquiry02]
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF 
-GO
-/***************************************************************************/    
-/* Store procedure: rdt_727Inquiry02                                       */    
-/*                                                                         */    
-/* Modifications log:                                                      */    
-/*                                                                         */    
-/* Date       Rev  Author   Purposes                                       */    
-/* 2017-03-08 1.0  ChewKP   WMS-1280 Created                               */  
+/***************************************************************************/
+/* Store procedure: rdt_727Inquiry02                                       */
+/*                                                                         */
+/* Modifications log:                                                      */
+/*                                                                         */
+/* Date       Rev  Author   Purposes                                       */
+/* 2017-03-08 1.0  ChewKP   WMS-1280 Created                               */
 /* 2018-01-15 1.1  ChewKP   WMS-3749 (ChewKP01)                            */
-/* 2019-09-20 1.2  YeeKung  WMS-10536 Change the parameter                 */ 
-/***************************************************************************/    
-    
-CREATE PROC rdt.rdt_727Inquiry02 (    
- 	 @nMobile    		INT,               
-	 @nFunc      		INT,               
-	 @nStep      		INT,                
-	 @cLangCode  		NVARCHAR( 3),      
-	 @cStorerKey 		NVARCHAR( 15),      
-	 @cOption    		NVARCHAR( 1),      
-	 @cParam1Label    NVARCHAR(20), 
-	 @cParam2Label    NVARCHAR(20),   
-	 @cParam3Label    NVARCHAR(20),   
-	 @cParam4Label    NVARCHAR(20),  
-	 @cParam5Label    NVARCHAR(20),  
-	 @cParam1         NVARCHAR(20),   
-	 @cParam2         NVARCHAR(20),   
-	 @cParam3         NVARCHAR(20),   
-	 @cParam4         NVARCHAR(20),   
-	 @cParam5         NVARCHAR(20),          
-	 @cOutField01  	NVARCHAR(20) OUTPUT,    
-	 @cOutField02  	NVARCHAR(20) OUTPUT,    
-	 @cOutField03  	NVARCHAR(20) OUTPUT,    
-	 @cOutField04  	NVARCHAR(20) OUTPUT,    
-	 @cOutField05  	NVARCHAR(20) OUTPUT,    
-	 @cOutField06  	NVARCHAR(20) OUTPUT,    
-	 @cOutField07  	NVARCHAR(20) OUTPUT,    
-	 @cOutField08  	NVARCHAR(20) OUTPUT,    
-	 @cOutField09  	NVARCHAR(20) OUTPUT,    
-	 @cOutField10  	NVARCHAR(20) OUTPUT,
-	 @cOutField11  	NVARCHAR(20) OUTPUT,
-	 @cOutField12  	NVARCHAR(20) OUTPUT,
-	 @cFieldAttr02 	NVARCHAR( 1) OUTPUT,  
-	 @cFieldAttr04 	NVARCHAR( 1) OUTPUT,  
-	 @cFieldAttr06 	NVARCHAR( 1) OUTPUT,  
-	 @cFieldAttr08 	NVARCHAR( 1) OUTPUT,  
-	 @cFieldAttr10 	NVARCHAR( 1) OUTPUT,        
-	 @nNextPage    	INT          OUTPUT,    
-	 @nErrNo     		INT 			 OUTPUT,        
-	 @cErrMsg    		NVARCHAR( 20) OUTPUT 
-)    
-AS    
-   SET NOCOUNT ON        
-   SET ANSI_NULLS OFF        
-   SET QUOTED_IDENTIFIER OFF        
-   SET CONCAT_NULL_YIELDS_NULL OFF     
-    
-   DECLARE @cSKU        NVARCHAR(20) 
+/* 2019-09-20 1.2  YeeKung  WMS-10536 Change the parameter                 */  
+/* 2023-10-03 1.3  Yeekung  WMS-23791 Extended Params (yeekung01)          */
+/***************************************************************************/
+
+CREATE OR ALTER PROC [RDT].[rdt_727Inquiry02] (
+ @nMobile    INT,
+ @nFunc      INT,
+ @nStep      INT,
+ @cLangCode  NVARCHAR( 3),
+ @cStorerKey NVARCHAR( 15),
+ @cOption    NVARCHAR( 1),
+ @cParam1    NVARCHAR(60),
+ @cParam2    NVARCHAR(60),
+ @cParam3    NVARCHAR(60),
+ @cParam4    NVARCHAR(60),
+ @cParam5    NVARCHAR(60),
+ @c_oFieled01  NVARCHAR(20) OUTPUT,
+ @c_oFieled02  NVARCHAR(20) OUTPUT,
+ @c_oFieled03  NVARCHAR(20) OUTPUT,
+ @c_oFieled04  NVARCHAR(20) OUTPUT,
+ @c_oFieled05  NVARCHAR(20) OUTPUT,
+ @c_oFieled06  NVARCHAR(20) OUTPUT,
+ @c_oFieled07  NVARCHAR(20) OUTPUT,
+ @c_oFieled08  NVARCHAR(20) OUTPUT,
+ @c_oFieled09  NVARCHAR(20) OUTPUT,
+ @c_oFieled10  NVARCHAR(20) OUTPUT,
+ @c_oFieled11  NVARCHAR(20) OUTPUT,
+ @c_oFieled12  NVARCHAR(20) OUTPUT,
+ @nNextPage    INT          OUTPUT,
+ @nErrNo     INT OUTPUT,
+ @cErrMsg    NVARCHAR( 20) OUTPUT
+)
+AS
+   SET NOCOUNT ON
+   SET ANSI_NULLS OFF
+   SET QUOTED_IDENTIFIER OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
+
+   DECLARE @cSKU        NVARCHAR(20)
          , @nSKUCnt     INT
          , @b_Success   INT
-         , @cPAZone     NVARCHAR(10) 
+         , @cPAZone     NVARCHAR(10)
          , @cLoc        NVARCHAR(10)
-         , @cFacility   NVARCHAR(5) 
-
-   
-          
-SET @nErrNo = 0 
+         , @cFacility   NVARCHAR(5)
 
 
-IF @cOption = '1' 
-BEGIN          
 
-        IF @nStep = 2 
+SET @nErrNo = 0
+
+
+IF @cOption = '1'
+BEGIN
+
+        IF @nStep = 2
         BEGIN
-         SET @cSKU = @cParam1 
+         SET @cSKU = @cParam1
 
          IF @cSKU = ''
          BEGIN
             SET @nErrNo = 106701
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU Req 
-            GOTO QUIT 
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU Req
+            GOTO QUIT
          END
-         
+
          -- Get SKU barcode count
          SET @nSKUCnt = 0
-   
+
          EXEC rdt.rdt_GETSKUCNT
              @cStorerKey  = @cStorerKey
             ,@cSKU        = @cSKU
@@ -97,7 +85,7 @@ BEGIN
             ,@bSuccess    = @b_Success     OUTPUT
             ,@nErr        = @nErrNo        OUTPUT
             ,@cErrMsg     = @cErrMsg       OUTPUT
-   
+
          -- Check SKU/UPC
          IF @nSKUCnt = 0
          BEGIN
@@ -105,7 +93,7 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid SKU
             GOTO QUIT
          END
-   
+
          -- Check multi SKU barcode
          IF @nSKUCnt > 1
          BEGIN
@@ -113,7 +101,7 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- MultiSKUBarCod
             GOTO QUIT
          END
-   
+
          -- Get SKU code
          EXEC rdt.rdt_GETSKU
              @cStorerKey  = @cStorerKey
@@ -121,72 +109,72 @@ BEGIN
             ,@bSuccess    = @b_Success     OUTPUT
             ,@nErr        = @nErrNo        OUTPUT
             ,@cErrMsg     = @cErrMsg       OUTPUT
-            
-         
-                  
-         SELECT @cFacility = Facility 
-         FROM rdt.rdtMobRec WITH (NOLOCK) 
-         WHERE Mobile = @nMobile 
-         
-         SELECT TOP 1 @cLoc = LLI.Loc 
-         FROM dbo.LotxLocxID LLI WITH (NOLOCK) 
+
+
+
+         SELECT @cFacility = Facility
+         FROM rdt.rdtMobRec WITH (NOLOCK)
+         WHERE Mobile = @nMobile
+
+         SELECT TOP 1 @cLoc = LLI.Loc
+         FROM dbo.LotxLocxID LLI WITH (NOLOCK)
          INNER JOIN dbo.Loc Loc WITH (NOLOCK) ON  Loc.Loc = LLI.Loc
-         WHERE LLI.StorerKey = @cStorerKey 
-         AND LLI.SKU = @cSKU 
-         AND LLI.Qty > 0 
+         WHERE LLI.StorerKey = @cStorerKey
+         AND LLI.SKU = @cSKU
+         AND LLI.Qty > 0
          AND Loc.Facility = @cFacility
          AND Loc.LocationCategory = 'MEZZANINE'
          AND Loc.LocationFlag = 'NONE'
          Order By LLI.Qty
 
-         -- (ChewKP01) 
-         --SELECT @cPAZone = PutawayZone 
-         --FROM dbo.Loc WITH (NOLOCK) 
+         -- (ChewKP01)
+         --SELECT @cPAZone = PutawayZone
+         --FROM dbo.Loc WITH (NOLOCK)
          --WHERE Loc = @cLoc
-         --AND Facility = @cFacility 
-         
+         --AND Facility = @cFacility
+
          SELECT @cPAZone = PutawayZone
-         FROM dbo.SKU WITH (NOLOCK) 
+         FROM dbo.SKU WITH (NOLOCK)
          WHERE StorerKey = @cStorerKey
          AND SKU = @cSKU
 
-         IF ISNULL(@cPAZone,'')  = '' 
+         IF ISNULL(@cPAZone,'')  = ''
          BEGIN
             --SET @nErrNo = 106704
             --SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- NoSuitPAZone
-            --GOTO QUIT  
+            --GOTO QUIT
             SET @cPAZone = 'NoSuitPAZone'
          END
-         
-            
-         SET @cOutField01 = 'SKU:'
-         SET @cOutField02 = @cSKU
-         SET @cOutField03 = 'PAZone   :' + @cPAZone
-         SET @cOutField04 = ''
-         SET @cOutField05 = ''
-         SET @cOutField06 = ''
-         SET @cOutField07 = ''
-         SET @cOutField08 = ''
-         SET @cOutField09 = ''
-         SET @cOutField10 = ''
-         
-         SET @nNextPage = 0   
+
+
+         SET @c_oFieled01 = 'SKU:'
+         SET @c_oFieled02 = @cSKU
+         SET @c_oFieled03 = 'PAZone   :' + @cPAZone
+         SET @c_oFieled04 = ''
+         SET @c_oFieled05 = ''
+         SET @c_oFieled06 = ''
+         SET @c_oFieled07 = ''
+         SET @c_oFieled08 = ''
+         SET @c_oFieled09 = ''
+         SET @c_oFieled10 = ''
+
+         SET @nNextPage = 0
         END
-      
---      IF @nStep = 2 
+
+--      IF @nStep = 2
 --      BEGIN
---         SET @cSKU = @cParam1 
---      
+--         SET @cSKU = @cParam1
+--
 --         IF @cSKU = ''
 --         BEGIN
 --            SET @nErrNo = 106701
---            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU Req 
---            GOTO QUIT 
+--            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU Req
+--            GOTO QUIT
 --         END
---         
+--
 --         -- Get SKU barcode count
 --         SET @nSKUCnt = 0
---   
+--
 --         EXEC rdt.rdt_GETSKUCNT
 --             @cStorerKey  = @cStorerKey
 --            ,@cSKU        = @cSKU
@@ -194,7 +182,7 @@ BEGIN
 --            ,@bSuccess    = @b_Success     OUTPUT
 --            ,@nErr        = @nErrNo        OUTPUT
 --            ,@cErrMsg     = @cErrMsg       OUTPUT
---   
+--
 --         -- Check SKU/UPC
 --         IF @nSKUCnt = 0
 --         BEGIN
@@ -202,7 +190,7 @@ BEGIN
 --            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid SKU
 --            GOTO QUIT
 --         END
---   
+--
 --         -- Check multi SKU barcode
 --         IF @nSKUCnt > 1
 --         BEGIN
@@ -210,7 +198,7 @@ BEGIN
 --            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- MultiSKUBarCod
 --            GOTO QUIT
 --         END
---   
+--
 --         -- Get SKU code
 --         EXEC rdt.rdt_GETSKU
 --             @cStorerKey  = @cStorerKey
@@ -218,13 +206,13 @@ BEGIN
 --            ,@bSuccess    = @b_Success     OUTPUT
 --            ,@nErr        = @nErrNo        OUTPUT
 --            ,@cErrMsg     = @cErrMsg       OUTPUT
---            
---         
+--
+--
 --         SELECT @cPAZone = PutawayZone
---         FROM dbo.SKU WITH (NOLOCK) 
+--         FROM dbo.SKU WITH (NOLOCK)
 --         WHERE StorerKey = @cStorerKey
 --         AND SKU = @cSKU
---            
+--
 --         SET @c_oFieled01 = 'SKU:'
 --         SET @c_oFieled02 = @cSKU
 --         SET @c_oFieled03 = 'PAZone     :' + @cPAZone
@@ -235,19 +223,14 @@ BEGIN
 --         SET @c_oFieled08 = ''
 --         SET @c_oFieled09 = ''
 --         SET @c_oFieled10 = ''
---         
---         SET @nNextPage = 0   
+--
+--         SET @nNextPage = 0
 --      END
 
 
 END
 QUIT:
-        
-GO      
 
-SET QUOTED_IDENTIFIER OFF 
 GO
-SET ANSI_NULLS ON 
-GO
-GRANT EXECUTE ON RDT.rdt_727Inquiry02 TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_727Inquiry02] TO [NSQL]
 GO

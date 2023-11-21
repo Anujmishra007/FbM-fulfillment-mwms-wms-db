@@ -1,11 +1,8 @@
-if exists (select * from sys.objects where object_id = object_id(N'[rdt].[rdtfnc_GeneralInquiry]') and OBJECTPROPERTY(object_id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdtfnc_GeneralInquiry]
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF 
-GO
 /***************************************************************************/
 /* Store procedure: rdtfnc_GeneralInquiry                                  */
 /* Copyright      : LF Logistics                                           */
@@ -18,16 +15,17 @@ GO
 /* 2016-09-15   1.0  ChewKP   WMS-338 Created                              */
 /* 2017-03-09   1.1  ChewKP   WMS-1280 When No Next Page is set back to    */
 /*                            screen 2 (ChewKP01)                          */
-/* 2017-04-19   1.2  ChewKP   WMS-1280 Retain scan value (ChewKP02) 			*/ 
+/* 2017-04-19   1.2  ChewKP   WMS-1280 Retain scan value (ChewKP02) 			*/
 /* 2018-04-09   1.3  ChewKP   WMS-4388 Bug Fixes, Add Retain               */
 /*                            by Field (ChewKP03)                          */
 /* 2018-10-09   1.4  TungGH   Performance                                  */
 /* 2018-12-27   1.5  ChewKP   WMS-5802 Add FunctionKey Support (ChewKP04)  */
 /* 2019-06-28   1.6  James    WMS9394-Add ExtendedUpdateSP (james01)       */
 /* 2021-10-11   1.7  James    WMS-17819 Allow scan field at step 3(james02)*/
+/* 2023-10-03   1.8  YeeKung  WMS-23791 Extended param 20->60 (yeekung01)  */
 /***************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_GeneralInquiry](
+CREATE OR ALTER PROC [RDT].[rdtfnc_GeneralInquiry](
    @nMobile    int,
    @nErrNo     int  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max
@@ -40,8 +38,8 @@ SET ANSI_NULLS OFF
 SET CONCAT_NULL_YIELDS_NULL OFF
 
 -- Misc variables
-DECLARE 
-   @nCnt           INT, 
+DECLARE
+   @nCnt           INT,
    @cReport        NVARCHAR( 20),
    @cParam1        NVARCHAR( 20),
    @cParam2        NVARCHAR( 20),
@@ -63,14 +61,14 @@ DECLARE
    @cUserName      NVARCHAR( 18),
    @cFacility      NVARCHAR( 5),
    @cPrinter       NVARCHAR( 10),
-   @cPrinter_Paper NVARCHAR( 10), 
+   @cPrinter_Paper NVARCHAR( 10),
 
    @cOption        NVARCHAR( 1),
    @cSP            NVARCHAR( 20),
    @nNextPage      INT,
    @cRetain        NVARCHAR(5),
-   @cFunctionKey   NVARCHAR(3), -- (ChewKP04) 
-   @nFunctionKey   INT,         -- (ChewKP04) 
+   @cFunctionKey   NVARCHAR(3), -- (ChewKP04)
+   @nFunctionKey   INT,         -- (ChewKP04)
    @cExtendedFuncKeySP  NVARCHAR( 20), -- (ChewKP04)
    @cExtendedUpdateSP   NVARCHAR( 20),
    @nFromScn      INT,
@@ -78,21 +76,21 @@ DECLARE
 
    @tExtUpdate     VARIABLETABLE,
 
-   @cParam1Value   NVARCHAR( 20), 
-   @cParam2Value   NVARCHAR( 20), 
-   @cParam3Value   NVARCHAR( 20), 
-   @cParam4Value   NVARCHAR( 20), 
-   @cParam5Value   NVARCHAR( 20), 
-   
-   @c_oFieled01 NVARCHAR(20), @c_oFieled02 NVARCHAR(20),    
-   @c_oFieled03 NVARCHAR(20), @c_oFieled04 NVARCHAR(20),    
-   @c_oFieled05 NVARCHAR(20), @c_oFieled06 NVARCHAR(20),    
-   @c_oFieled07 NVARCHAR(20), @c_oFieled08 NVARCHAR(20),    
-   @c_oFieled09 NVARCHAR(20), @c_oFieled10 NVARCHAR(20),    
-   @c_oFieled11 NVARCHAR(20), @c_oFieled12 NVARCHAR(20),    
-            
+   @cParam1Value   NVARCHAR( 60),  -- yeekung01
+   @cParam2Value   NVARCHAR( 60),  -- yeekung01
+   @cParam3Value   NVARCHAR( 60),  -- yeekung01
+   @cParam4Value   NVARCHAR( 60),  -- yeekung01
+   @cParam5Value   NVARCHAR( 60),  -- yeekung01
 
-   
+   @c_oFieled01 NVARCHAR(20), @c_oFieled02 NVARCHAR(20),
+   @c_oFieled03 NVARCHAR(20), @c_oFieled04 NVARCHAR(20),
+   @c_oFieled05 NVARCHAR(20), @c_oFieled06 NVARCHAR(20),
+   @c_oFieled07 NVARCHAR(20), @c_oFieled08 NVARCHAR(20),
+   @c_oFieled09 NVARCHAR(20), @c_oFieled10 NVARCHAR(20),
+   @c_oFieled11 NVARCHAR(20), @c_oFieled12 NVARCHAR(20),
+
+
+
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
    @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),
@@ -131,38 +129,45 @@ SELECT
    @cFacility        = Facility,
    @cUserName        = UserName,
    @cPrinter         = Printer,
-   @cPrinter_Paper   = Printer_Paper, 
+   @cPrinter_Paper   = Printer_Paper,
 
    @cOption          = V_String1,
    @cSP              = V_String2,
 
-   @cParam1Value     = V_String3,
-   @cParam2Value     = V_String4,
-   @cParam3Value     = V_String5,
-   @cParam4Value     = V_String6,
-   @cParam5Value     = V_String7,
+   --@cParam1Value     = V_String3,
+   --@cParam2Value     = V_String4,
+   --@cParam3Value     = V_String5,
+   --@cParam4Value     = V_String6,
+   --@cParam5Value     = V_String7,
    @cReport          = V_String8,
-   
-   
 
-   @c_oFieled01 = V_STRING9 ,  
+
+
+   @c_oFieled01 = V_STRING9 ,
    @c_oFieled02 = V_STRING10,
-   @c_oFieled03 = V_STRING11, 
-   @c_oFieled04 = V_STRING12, 
-   @c_oFieled05 = V_STRING13, 
-   @c_oFieled06 = V_STRING14, 
-   @c_oFieled07 = V_STRING15, 
-   @c_oFieled08 = V_STRING16, 
-   @c_oFieled09 = V_STRING17, 
-   @c_oFieled10 = V_STRING18, 
-   @c_oFieled11 = V_STRING19, 
-   @c_oFieled12 = V_STRING20, 
+   @c_oFieled03 = V_STRING11,
+   @c_oFieled04 = V_STRING12,
+   @c_oFieled05 = V_STRING13,
+   @c_oFieled06 = V_STRING14,
+   @c_oFieled07 = V_STRING15,
+   @c_oFieled08 = V_STRING16,
+   @c_oFieled09 = V_STRING17,
+   @c_oFieled10 = V_STRING18,
+   @c_oFieled11 = V_STRING19,
+   @c_oFieled12 = V_STRING20,
 
    @cRetain     = V_STRING21,
-   
-   @cExtendedFuncKeySP = V_String23,
-   @cExtendedUpdateSP  = V_String24,
-   
+
+   @cExtendedFuncKeySP  = V_String23,
+   @cExtendedUpdateSP   = V_String24,
+
+   @cParam1Value        = V_String41,
+   @cParam2Value        = V_String42,
+   @cParam3Value        = V_String43,
+   @cParam4Value        = V_String44,
+   @cParam5Value        = V_String45,
+
+
    @nFunctionKey = V_Integer1,
    @nFromScn     = V_FromScn,
    @nFromStep    = V_FromStep,
@@ -201,8 +206,8 @@ BEGIN
    IF @nStep = 0  GOTO Step_0       -- Menu. Func = 727
    IF @nStep = 1  GOTO Step_1       -- Scn = 4710. General Inquiry. Option
    IF @nStep = 2  GOTO Step_2       -- Scn = 4711. Param1..5
-   IF @nStep = 3  GOTO Step_3       -- Scn = 4712. MSG 
-   IF @nStep = 4  GOTO Step_4       -- Scn = 4713. MSG 
+   IF @nStep = 3  GOTO Step_3       -- Scn = 4712. MSG
+   IF @nStep = 4  GOTO Step_4       -- Scn = 4713. MSG
 END
 
 RETURN -- Do nothing if incorrect step
@@ -218,41 +223,41 @@ BEGIN
       SET @cExtendedFuncKeySP = ''
 
    SET @cExtendedUpdateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorerKey)
-   IF @cExtendedUpdateSP = '0'  
+   IF @cExtendedUpdateSP = '0'
       SET @cExtendedUpdateSP = ''
 
    -- Prepare next screen var
-   SET @nFunctionKey = 0 
+   SET @nFunctionKey = 0
    SET @cOption = ''
-   SET @cOutField01 = '' 
-   SET @cOutField02 = '' 
-   SET @cOutField03 = '' 
-   SET @cOutField04 = '' 
-   SET @cOutField05 = '' 
-   SET @cOutField06 = '' 
-   SET @cOutField07 = '' 
-   SET @cOutField08 = '' 
-   SET @cOutField09 = '' 
-   SET @cOutField10 = '' 
+   SET @cOutField01 = ''
+   SET @cOutField02 = ''
+   SET @cOutField03 = ''
+   SET @cOutField04 = ''
+   SET @cOutField05 = ''
+   SET @cOutField06 = ''
+   SET @cOutField07 = ''
+   SET @cOutField08 = ''
+   SET @cOutField09 = ''
+   SET @cOutField10 = ''
 
-   SET @c_oFieled01 = '' 
-   SET @c_oFieled02 = '' 
-   SET @c_oFieled03 = '' 
-   SET @c_oFieled04 = '' 
-   SET @c_oFieled05 = '' 
-   SET @c_oFieled06 = '' 
-   SET @c_oFieled07 = '' 
-   SET @c_oFieled08 = '' 
-   SET @c_oFieled09 = '' 
-   SET @c_oFieled10 = '' 
-   SET @c_oFieled11 = '' 
-   SET @c_oFieled12 = '' 
+   SET @c_oFieled01 = ''
+   SET @c_oFieled02 = ''
+   SET @c_oFieled03 = ''
+   SET @c_oFieled04 = ''
+   SET @c_oFieled05 = ''
+   SET @c_oFieled06 = ''
+   SET @c_oFieled07 = ''
+   SET @c_oFieled08 = ''
+   SET @c_oFieled09 = ''
+   SET @c_oFieled10 = ''
+   SET @c_oFieled11 = ''
+   SET @c_oFieled12 = ''
 
    -- Populate label report
    SET @nCnt = 1
-   SET @curGeneralInquiry = CURSOR FOR 
+   SET @curGeneralInquiry = CURSOR FOR
       SELECT LEFT( RTRIM(Code) + '-' + RTRIM(Description), 20)
-      FROM dbo.CodeLKUP WITH (NOLOCK) 
+      FROM dbo.CodeLKUP WITH (NOLOCK)
       WHERE ListName = 'RDTINQUIRY'
          AND StorerKey = @cStorerKey
       ORDER BY Code
@@ -285,7 +290,7 @@ BEGIN
       @cFacility       = @cFacility,
       @cStorerKey      = @cStorerKey,
       @nStep           = @nStep
-   
+
    -- Go to next screen
    SET @nScn = 4710
    SET @nStep = 1
@@ -330,39 +335,39 @@ BEGIN
       END
 
       -- Get info
-      SELECT 
-         @cReport = LEFT( RTRIM(Description), 20),   
-         @cParam1 = UDF01, 
-         @cParam2 = UDF02, 
-         @cParam3 = UDF03, 
-         @cParam4 = UDF04, 
-         @cParam5 = UDF05, 
+      SELECT
+         @cReport = LEFT( RTRIM(Description), 20),
+         @cParam1 = UDF01,
+         @cParam2 = UDF02,
+         @cParam3 = UDF03,
+         @cParam4 = UDF04,
+         @cParam5 = UDF05,
          @cSP 		= Long,
-         --@cShort 	= Short -- (ChewKP02) 
+         --@cShort 	= Short -- (ChewKP02)
          @cFunctionKey = Code2
-      FROM dbo.CodeLKUP WITH (NOLOCK) 
-      WHERE ListName = 'RDTINQUIRY' 
+      FROM dbo.CodeLKUP WITH (NOLOCK)
+      WHERE ListName = 'RDTINQUIRY'
          AND Code = @cOption
          AND StorerKey = @cStorerKey
-      
+
       IF ISNULL(@cFunctionKey,'') NOT IN ( '1' , '0')
          SELECT @nFunctionKey = RDT.rdtGetFuncKey(@cFunctionKey)
       ELSE
-         SET @nFunctionKey = 99 
-      
-      
+         SET @nFunctionKey = 99
+
+
       -- Check report param setup
-      IF @cParam1 = '' AND 
-         @cParam2 = '' AND 
-         @cParam3 = '' AND 
-         @cParam4 = '' AND 
+      IF @cParam1 = '' AND
+         @cParam2 = '' AND
+         @cParam3 = '' AND
+         @cParam4 = '' AND
          @cParam5 = ''
       BEGIN
          SET @nErrNo = 103953
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Param NotSetup
          GOTO Step_1_Fail
       END
-      
+
       -- Check SP setup
       IF NOT EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cSP AND type = 'P')
       BEGIN
@@ -377,7 +382,7 @@ BEGIN
       SET @cFieldAttr06 = CASE WHEN @cParam3 = '' THEN 'O' ELSE '' END
       SET @cFieldAttr08 = CASE WHEN @cParam4 = '' THEN 'O' ELSE '' END
       SET @cFieldAttr10 = CASE WHEN @cParam5 = '' THEN 'O' ELSE '' END
-      
+
       -- Clear optional in field
       SET @cInField02 = ''
       SET @cInField04 = ''
@@ -402,7 +407,7 @@ BEGIN
       SET @nScn = @nScn + 1
       SET @nStep = @nStep + 1
 
-      -- Set the focus on first enabled, empty field 
+      -- Set the focus on first enabled, empty field
       IF ISNULL( @cFieldAttr02, '') = ''
       BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 2
@@ -432,7 +437,7 @@ BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 10
          GOTO Quit
       END
-                     
+
 
    END
 
@@ -447,7 +452,7 @@ BEGIN
          @cFacility   = @cFacility,
          @cStorerKey  = @cStorerkey,
          @nStep       = @nStep
-      
+
       -- Back to menu
       SET @nFunc = @nMenu
       SET @nScn  = @nMenu
@@ -455,7 +460,7 @@ BEGIN
 
       -- Reset all variables
       SET @cOption = ''
-      SET @cOutField01 = '' 
+      SET @cOutField01 = ''
 
       -- Enable field
       SET @cFieldAttr01 = ''
@@ -521,22 +526,22 @@ BEGIN
             DECLARE @cSQLParam NVARCHAR(1000)
 
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cSP) +
-               ' @nMobile, @nFunc, @nStep, @cLangCode, @cStorerKey, @cOption, @cParam1, @cParam2, @cParam3, @cParam4, @cParam5, 
-                 @c_oFieled01 OUTPUT, @c_oFieled02 OUTPUT, @c_oFieled03 OUTPUT, @c_oFieled04 OUTPUT, @c_oFieled05 OUTPUT, @c_oFieled06 OUTPUT, @c_oFieled07 OUTPUT, 
+               ' @nMobile, @nFunc, @nStep, @cLangCode, @cStorerKey, @cOption, @cParam1, @cParam2, @cParam3, @cParam4, @cParam5,
+                 @c_oFieled01 OUTPUT, @c_oFieled02 OUTPUT, @c_oFieled03 OUTPUT, @c_oFieled04 OUTPUT, @c_oFieled05 OUTPUT, @c_oFieled06 OUTPUT, @c_oFieled07 OUTPUT,
                  @c_oFieled08 OUTPUT, @c_oFieled09 OUTPUT, @c_oFieled10 OUTPUT, @c_oFieled11 OUTPUT, @c_oFieled12 OUTPUT,
                  @nNextPage OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
             SET @cSQLParam =
                '@nMobile    INT,           ' +
                '@nFunc      INT,           ' +
-               '@nStep      INT,           ' + 
+               '@nStep      INT,           ' +
                '@cLangCode  NVARCHAR( 3),  ' +
-               '@cStorerKey NVARCHAR( 15), ' + 
+               '@cStorerKey NVARCHAR( 15), ' +
                '@cOption    NVARCHAR( 1),  ' +
-               '@cParam1    NVARCHAR(20),  ' + 
-               '@cParam2    NVARCHAR(20),  ' + 
-               '@cParam3    NVARCHAR(20),  ' + 
-               '@cParam4    NVARCHAR(20),  ' + 
-               '@cParam5    NVARCHAR(20),  ' + 
+               '@cParam1    NVARCHAR(60),  ' +
+               '@cParam2    NVARCHAR(60),  ' +
+               '@cParam3    NVARCHAR(60),  ' +
+               '@cParam4    NVARCHAR(60),  ' +
+               '@cParam5    NVARCHAR(60),  ' +
                '@c_oFieled01  NVARCHAR(20) OUTPUT,' +
                '@c_oFieled02  NVARCHAR(20) OUTPUT,' +
                '@c_oFieled03  NVARCHAR(20) OUTPUT,' +
@@ -549,28 +554,28 @@ BEGIN
                '@c_oFieled10  NVARCHAR(20) OUTPUT,' +
                '@c_oFieled11  NVARCHAR(20) OUTPUT,' +
                '@c_oFieled12  NVARCHAR(20) OUTPUT,' +
-               '@nNextPage    INT          OUTPUT,' + 
+               '@nNextPage    INT          OUTPUT,' +
                '@nErrNo     INT OUTPUT,    ' +
                '@cErrMsg    NVARCHAR( 20) OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @nStep, @cLangCode, @cStorerKey, @cOption, @cParam1Value, @cParam2Value, @cParam3Value, @cParam4Value, @cParam5Value, 
-               @c_oFieled01 OUTPUT, @c_oFieled02 OUTPUT, @c_oFieled03 OUTPUT, @c_oFieled04 OUTPUT, @c_oFieled05 OUTPUT, @c_oFieled06 OUTPUT, @c_oFieled07 OUTPUT, 
+               @nMobile, @nFunc, @nStep, @cLangCode, @cStorerKey, @cOption, @cParam1Value, @cParam2Value, @cParam3Value, @cParam4Value, @cParam5Value,
+               @c_oFieled01 OUTPUT, @c_oFieled02 OUTPUT, @c_oFieled03 OUTPUT, @c_oFieled04 OUTPUT, @c_oFieled05 OUTPUT, @c_oFieled06 OUTPUT, @c_oFieled07 OUTPUT,
                @c_oFieled08 OUTPUT, @c_oFieled09 OUTPUT, @c_oFieled10 OUTPUT, @c_oFieled11 OUTPUT, @c_oFieled12 OUTPUT,
                @nNextPage OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
-            IF @nErrNo <> 0 
+            IF @nErrNo <> 0
             BEGIN
-               -- (ChewKP02) 
-               --SET @cOutField02 = '' 
-               --SET @cOutField04 = '' 
-               --SET @cOutField06 = '' 
-               --SET @cOutField08 = '' 
-               --SET @cOutField10 = '' 
-               GOTO Quit  
+               -- (ChewKP02)
+               --SET @cOutField02 = ''
+               --SET @cOutField04 = ''
+               --SET @cOutField06 = ''
+               --SET @cOutField08 = ''
+               --SET @cOutField10 = ''
+               GOTO Quit
             END
-            
-            
+
+
             -- Enable field
             SET @cFieldAttr01 = ''
             SET @cFieldAttr02 = ''
@@ -595,15 +600,15 @@ BEGIN
             SET @cOutField10 = @c_oFieled10
             SET @cOutField11 = @cReport
             SET @cOutField12 = @c_oFieled12
-            
+
             -- Get report info
---            SELECT 
+--            SELECT
 --               @cReport = LEFT( RTRIM(Description), 18)
---            FROM dbo.CodeLKUP WITH (NOLOCK) 
---            WHERE ListName = 'RDTINQUIRY' 
+--            FROM dbo.CodeLKUP WITH (NOLOCK)
+--            WHERE ListName = 'RDTINQUIRY'
 --               AND Code = @cOption
 --               AND StorerKey = @cStorerKey
-            
+
             -- EventLog
             EXEC RDT.rdt_STD_EventLog
                @cActionType   = '8', -- Master setup
@@ -612,17 +617,17 @@ BEGIN
                @nFunctionID   = @nFunc,
                @cFacility     = @cFacility,
                @cStorerKey    = @cStorerkey,
-               @cID           = @cReport, 
-               @cRefNo1       = @cParam1Value, 
-               @cRefNo2       = @cParam2Value, 
-               @cRefNo3       = @cParam3Value, 
-               @cRefNo4       = @cParam4Value, 
+               @cID           = @cReport,
+               @cRefNo1       = @cParam1Value,
+               @cRefNo2       = @cParam2Value,
+               @cRefNo3       = @cParam3Value,
+               @cRefNo4       = @cParam4Value,
                @cRefNo5       = @cParam5Value,
                @nStep         = @nStep
 
             SET @nFromScn = @nScn
             SET @nFromStep = @nStep
-                  
+
             SET @nScn = @nScn + 1
             SET @nStep = @nStep + 1
          END
@@ -631,7 +636,7 @@ BEGIN
       -- Extended validate
       IF @cExtendedUpdateSP <> ''
       BEGIN
-            INSERT INTO @tExtUpdate (Variable, Value) VALUES 
+            INSERT INTO @tExtUpdate (Variable, Value) VALUES
             ('@cOption',            @cOption),
             ('@cParam1Value',       @cParam1Value),
             ('@cParam2Value',       @cParam2Value),
@@ -652,14 +657,14 @@ BEGIN
             ' @nInputKey      INT,           ' +
             ' @cFacility      NVARCHAR( 5),  ' +
             ' @cStorerKey     NVARCHAR( 15), ' +
-            ' @tExtUpdate     VariableTable READONLY, ' + 
+            ' @tExtUpdate     VariableTable READONLY, ' +
             ' @nErrNo         INT           OUTPUT, ' +
             ' @cErrMsg        NVARCHAR( 20) OUTPUT  '
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-            @nMobile, @nFunc, @cLangCode, @nStep, @nStep, @nInputKey, @cFacility, @cStorerKey, @tExtUpdate, 
+            @nMobile, @nFunc, @cLangCode, @nStep, @nStep, @nInputKey, @cFacility, @cStorerKey, @tExtUpdate,
             @nErrNo OUTPUT, @cErrMsg OUTPUT
 
-         IF @nErrNo <> 0 
+         IF @nErrNo <> 0
          BEGIN
             -- Remain in current screen if error
             SET @nScn = @nFromScn
@@ -673,22 +678,22 @@ BEGIN
 
    IF @nInputKey = 0 -- ENTER
    BEGIN
-   -- Prepare prev screen var  
-   SET @cOutField01 = ''  
-   SET @cOutField02 = ''  
-   SET @cOutField03 = ''  
-   SET @cOutField04 = ''  
-   SET @cOutField05 = ''  
-   SET @cOutField06 = ''  
-   SET @cOutField07 = ''  
-   SET @cOutField08 = ''  
-   SET @cOutField09 = ''  
-   
+   -- Prepare prev screen var
+   SET @cOutField01 = ''
+   SET @cOutField02 = ''
+   SET @cOutField03 = ''
+   SET @cOutField04 = ''
+   SET @cOutField05 = ''
+   SET @cOutField06 = ''
+   SET @cOutField07 = ''
+   SET @cOutField08 = ''
+   SET @cOutField09 = ''
+
    -- Populate label report
    SET @nCnt = 1
-   SET @curGeneralInquiry = CURSOR FOR 
+   SET @curGeneralInquiry = CURSOR FOR
       SELECT LEFT( RTRIM(Code) + '-' + RTRIM(Description), 20)
-      FROM dbo.CodeLKUP WITH (NOLOCK) 
+      FROM dbo.CodeLKUP WITH (NOLOCK)
       WHERE ListName = 'RDTINQUIRY'
          AND StorerKey = @cStorerKey
       ORDER BY Code
@@ -711,19 +716,19 @@ BEGIN
    END
    CLOSE @curGeneralInquiry
    DEALLOCATE @curGeneralInquiry
-   
+
    -- Enable / disable field
    SET @cFieldAttr02 = ''
    SET @cFieldAttr04 = ''
    SET @cFieldAttr06 = ''
    SET @cFieldAttr08 = ''
    SET @cFieldAttr10 = ''
-   
+
    -- Go to prev screen
    SET @nScn = @nScn - 1
    SET @nStep = @nStep - 1
    END
-   GOTO QUIT 
+   GOTO QUIT
 END
 GOTO Quit
 
@@ -734,8 +739,8 @@ Scn = 4712. Parameter screen
 ***********************************************************************************/
 Step_3:
 BEGIN
-   -- (ChewKP04) 
-   IF @nInputKey = @nFunctionKey 
+   -- (ChewKP04)
+   IF @nInputKey = @nFunctionKey
    BEGIN
       IF @cExtendedFuncKeySP <> ''
       BEGIN
@@ -745,22 +750,22 @@ BEGIN
             --DECLARE @cSQLParam NVARCHAR(1000)
 
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedFuncKeySP) +
-               ' @nMobile, @nFunc, @nStep, @cLangCode, @cStorerKey, @cOption, @cParam1, @cParam2, @cParam3, @cParam4, @cParam5, 
-                 @c_oFieled01 OUTPUT, @c_oFieled02 OUTPUT, @c_oFieled03 OUTPUT, @c_oFieled04 OUTPUT, @c_oFieled05 OUTPUT, @c_oFieled06 OUTPUT, @c_oFieled07 OUTPUT, 
+               ' @nMobile, @nFunc, @nStep, @cLangCode, @cStorerKey, @cOption, @cParam1, @cParam2, @cParam3, @cParam4, @cParam5,
+                 @c_oFieled01 OUTPUT, @c_oFieled02 OUTPUT, @c_oFieled03 OUTPUT, @c_oFieled04 OUTPUT, @c_oFieled05 OUTPUT, @c_oFieled06 OUTPUT, @c_oFieled07 OUTPUT,
                  @c_oFieled08 OUTPUT, @c_oFieled09 OUTPUT, @c_oFieled10 OUTPUT, @c_oFieled11 OUTPUT, @c_oFieled12 OUTPUT,
                  @nNextPage OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
             SET @cSQLParam =
                '@nMobile    INT,           ' +
                '@nFunc      INT,           ' +
-               '@nStep      INT,           ' + 
+               '@nStep      INT,           ' +
                '@cLangCode  NVARCHAR( 3),  ' +
-               '@cStorerKey NVARCHAR( 15), ' + 
+               '@cStorerKey NVARCHAR( 15), ' +
                '@cOption    NVARCHAR( 1),  ' +
-               '@cParam1    NVARCHAR(20),  ' + 
-               '@cParam2    NVARCHAR(20),  ' + 
-               '@cParam3    NVARCHAR(20),  ' + 
-               '@cParam4    NVARCHAR(20),  ' + 
-               '@cParam5    NVARCHAR(20),  ' + 
+               '@cParam1    NVARCHAR(20),  ' +
+               '@cParam2    NVARCHAR(20),  ' +
+               '@cParam3    NVARCHAR(20),  ' +
+               '@cParam4    NVARCHAR(20),  ' +
+               '@cParam5    NVARCHAR(20),  ' +
                '@c_oFieled01  NVARCHAR(20) OUTPUT,' +
                '@c_oFieled02  NVARCHAR(20) OUTPUT,' +
                '@c_oFieled03  NVARCHAR(20) OUTPUT,' +
@@ -773,20 +778,20 @@ BEGIN
                '@c_oFieled10  NVARCHAR(20) OUTPUT,' +
                '@c_oFieled11  NVARCHAR(20) OUTPUT,' +
                '@c_oFieled12  NVARCHAR(20) OUTPUT,' +
-               '@nNextPage    INT          OUTPUT,' + 
+               '@nNextPage    INT          OUTPUT,' +
                '@nErrNo     INT OUTPUT,    ' +
                '@cErrMsg    NVARCHAR( 20) OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @nStep, @cLangCode, @cStorerKey, @cOption, @cParam1Value, @cParam2Value, @cParam3Value, @cParam4Value, @cParam5Value, 
-               @c_oFieled01 OUTPUT, @c_oFieled02 OUTPUT, @c_oFieled03 OUTPUT, @c_oFieled04 OUTPUT, @c_oFieled05 OUTPUT, @c_oFieled06 OUTPUT, @c_oFieled07 OUTPUT, 
+               @nMobile, @nFunc, @nStep, @cLangCode, @cStorerKey, @cOption, @cParam1Value, @cParam2Value, @cParam3Value, @cParam4Value, @cParam5Value,
+               @c_oFieled01 OUTPUT, @c_oFieled02 OUTPUT, @c_oFieled03 OUTPUT, @c_oFieled04 OUTPUT, @c_oFieled05 OUTPUT, @c_oFieled06 OUTPUT, @c_oFieled07 OUTPUT,
                @c_oFieled08 OUTPUT, @c_oFieled09 OUTPUT, @c_oFieled10 OUTPUT, @c_oFieled11 OUTPUT, @c_oFieled12 OUTPUT,
                @nNextPage OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
-            IF @nErrNo <> 0 
+            IF @nErrNo <> 0
                GOTO Quit
-    
-            
+
+
             SET @cOutField01 = @c_oFieled01
             SET @cOutField02 = @c_oFieled02
             SET @cOutField03 = @c_oFieled03
@@ -799,15 +804,15 @@ BEGIN
             SET @cOutField10 = @c_oFieled10
             SET @cOutField11 = @cReport
             SET @cOutField12 = @c_oFieled12
-            
+
             -- Get report info
---            SELECT 
+--            SELECT
 --               @cReport = LEFT( RTRIM(Description), 18)
---            FROM dbo.CodeLKUP WITH (NOLOCK) 
---            WHERE ListName = 'RDTINQUIRY' 
+--            FROM dbo.CodeLKUP WITH (NOLOCK)
+--            WHERE ListName = 'RDTINQUIRY'
 --               AND Code = @cOption
 --               AND StorerKey = @cStorerKey
-            
+
             -- EventLog
             EXEC RDT.rdt_STD_EventLog
                @cActionType   = '8', -- Master setup
@@ -816,18 +821,18 @@ BEGIN
                @nFunctionID   = @nFunc,
                @cFacility     = @cFacility,
                @cStorerKey    = @cStorerkey,
-               @cID           = @cReport, 
-               @cRefNo1       = @cParam1Value, 
-               @cRefNo2       = @cParam2Value, 
-               @cRefNo3       = @cParam3Value, 
-               @cRefNo4       = @cParam4Value, 
+               @cID           = @cReport,
+               @cRefNo1       = @cParam1Value,
+               @cRefNo2       = @cParam2Value,
+               @cRefNo3       = @cParam3Value,
+               @cRefNo4       = @cParam4Value,
                @cRefNo5       = @cParam5Value,
                @nStep         = @nStep
          END
       END
    END
-   
-   IF @nInputKey = 1 
+
+   IF @nInputKey = 1
    BEGIN
       -- Execute Inquiry stored procedure
       IF @cSP <> ''
@@ -838,22 +843,22 @@ BEGIN
             --DECLARE @cSQLParam NVARCHAR(1000)
 
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cSP) +
-               ' @nMobile, @nFunc, @nStep, @cLangCode, @cStorerKey, @cOption, @cParam1, @cParam2, @cParam3, @cParam4, @cParam5, 
-                 @c_oFieled01 OUTPUT, @c_oFieled02 OUTPUT, @c_oFieled03 OUTPUT, @c_oFieled04 OUTPUT, @c_oFieled05 OUTPUT, @c_oFieled06 OUTPUT, @c_oFieled07 OUTPUT, 
+               ' @nMobile, @nFunc, @nStep, @cLangCode, @cStorerKey, @cOption, @cParam1, @cParam2, @cParam3, @cParam4, @cParam5,
+                 @c_oFieled01 OUTPUT, @c_oFieled02 OUTPUT, @c_oFieled03 OUTPUT, @c_oFieled04 OUTPUT, @c_oFieled05 OUTPUT, @c_oFieled06 OUTPUT, @c_oFieled07 OUTPUT,
                  @c_oFieled08 OUTPUT, @c_oFieled09 OUTPUT, @c_oFieled10 OUTPUT, @c_oFieled11 OUTPUT, @c_oFieled12 OUTPUT,
                  @nNextPage OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
             SET @cSQLParam =
                '@nMobile    INT,           ' +
                '@nFunc      INT,           ' +
-               '@nStep      INT,           ' + 
+               '@nStep      INT,           ' +
                '@cLangCode  NVARCHAR( 3),  ' +
-               '@cStorerKey NVARCHAR( 15), ' + 
+               '@cStorerKey NVARCHAR( 15), ' +
                '@cOption    NVARCHAR( 1),  ' +
-               '@cParam1    NVARCHAR(20),  ' + 
-               '@cParam2    NVARCHAR(20),  ' + 
-               '@cParam3    NVARCHAR(20),  ' + 
-               '@cParam4    NVARCHAR(20),  ' + 
-               '@cParam5    NVARCHAR(20),  ' + 
+               '@cParam1    NVARCHAR(60),  ' +
+               '@cParam2    NVARCHAR(60),  ' +
+               '@cParam3    NVARCHAR(60),  ' +
+               '@cParam4    NVARCHAR(60),  ' +
+               '@cParam5    NVARCHAR(60),  ' +
                '@c_oFieled01  NVARCHAR(20) OUTPUT,' +
                '@c_oFieled02  NVARCHAR(20) OUTPUT,' +
                '@c_oFieled03  NVARCHAR(20) OUTPUT,' +
@@ -866,20 +871,20 @@ BEGIN
                '@c_oFieled10  NVARCHAR(20) OUTPUT,' +
                '@c_oFieled11  NVARCHAR(20) OUTPUT,' +
                '@c_oFieled12  NVARCHAR(20) OUTPUT,' +
-               '@nNextPage    INT          OUTPUT,' + 
+               '@nNextPage    INT          OUTPUT,' +
                '@nErrNo     INT OUTPUT,    ' +
                '@cErrMsg    NVARCHAR( 20) OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @nStep, @cLangCode, @cStorerKey, @cOption, @cParam1Value, @cParam2Value, @cParam3Value, @cParam4Value, @cParam5Value, 
-               @c_oFieled01 OUTPUT, @c_oFieled02 OUTPUT, @c_oFieled03 OUTPUT, @c_oFieled04 OUTPUT, @c_oFieled05 OUTPUT, @c_oFieled06 OUTPUT, @c_oFieled07 OUTPUT, 
+               @nMobile, @nFunc, @nStep, @cLangCode, @cStorerKey, @cOption, @cParam1Value, @cParam2Value, @cParam3Value, @cParam4Value, @cParam5Value,
+               @c_oFieled01 OUTPUT, @c_oFieled02 OUTPUT, @c_oFieled03 OUTPUT, @c_oFieled04 OUTPUT, @c_oFieled05 OUTPUT, @c_oFieled06 OUTPUT, @c_oFieled07 OUTPUT,
                @c_oFieled08 OUTPUT, @c_oFieled09 OUTPUT, @c_oFieled10 OUTPUT, @c_oFieled11 OUTPUT, @c_oFieled12 OUTPUT,
                @nNextPage OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
-            IF @nErrNo <> 0 
+            IF @nErrNo <> 0
                GOTO Quit
-    
-            
+
+
             SET @cOutField01 = @c_oFieled01
             SET @cOutField02 = @c_oFieled02
             SET @cOutField03 = @c_oFieled03
@@ -892,15 +897,15 @@ BEGIN
             SET @cOutField10 = @c_oFieled10
             SET @cOutField11 = @cReport
             SET @cOutField12 = @c_oFieled12
-            
+
             -- Get report info
---            SELECT 
+--            SELECT
 --               @cReport = LEFT( RTRIM(Description), 18)
---            FROM dbo.CodeLKUP WITH (NOLOCK) 
---            WHERE ListName = 'RDTINQUIRY' 
+--            FROM dbo.CodeLKUP WITH (NOLOCK)
+--            WHERE ListName = 'RDTINQUIRY'
 --               AND Code = @cOption
 --               AND StorerKey = @cStorerKey
-            
+
             -- EventLog
             EXEC RDT.rdt_STD_EventLog
                @cActionType   = '8', -- Master setup
@@ -909,23 +914,23 @@ BEGIN
                @nFunctionID   = @nFunc,
                @cFacility     = @cFacility,
                @cStorerKey    = @cStorerkey,
-               @cID           = @cReport, 
-               @cRefNo1       = @cParam1Value, 
-               @cRefNo2       = @cParam2Value, 
-               @cRefNo3       = @cParam3Value, 
-               @cRefNo4       = @cParam4Value, 
+               @cID           = @cReport,
+               @cRefNo1       = @cParam1Value,
+               @cRefNo2       = @cParam2Value,
+               @cRefNo3       = @cParam3Value,
+               @cRefNo4       = @cParam4Value,
                @cRefNo5       = @cParam5Value,
                @nStep         = @nStep
          END
       END
-      
-      IF @nNextPage = 1 
+
+      IF @nNextPage = 1
       BEGIN
           -- Go to prev screen
          SET @nScn = @nScn + 1
-         SET @nStep = @nStep + 1 
-         
-         
+         SET @nStep = @nStep + 1
+
+
       END
       ELSE
       BEGIN
@@ -935,18 +940,18 @@ BEGIN
             GOTO Quit
          ELSE
          BEGIN
-            EXEC rdt.rdtSetFocusField @nMobile, 2  -- (ChewKP02) 
+            EXEC rdt.rdtSetFocusField @nMobile, 2  -- (ChewKP02)
             GOTO ESCScreen
          END
       END
-     
+
 
    END
-   
-   IF @nInputKey = 0 
+
+   IF @nInputKey = 0
    BEGIN
-      ESCScreen: 
-      
+      ESCScreen:
+
       -- Enable field
       SET @cFieldAttr01 = ''
       SET @cFieldAttr02 = ''
@@ -960,32 +965,32 @@ BEGIN
       SET @cFieldAttr10 = ''
 
       -- Get info
-      SELECT 
-         @cReport = LEFT( RTRIM(Description), 20),   
-         @cParam1 = UDF01, 
-         @cParam2 = UDF02, 
-         @cParam3 = UDF03, 
-         @cParam4 = UDF04, 
-         @cParam5 = UDF05, 
+      SELECT
+         @cReport = LEFT( RTRIM(Description), 20),
+         @cParam1 = UDF01,
+         @cParam2 = UDF02,
+         @cParam3 = UDF03,
+         @cParam4 = UDF04,
+         @cParam5 = UDF05,
          @cSP = Long,
-         @cRetain = Short 
-      FROM dbo.CodeLKUP WITH (NOLOCK) 
-      WHERE ListName = 'RDTINQUIRY' 
+         @cRetain = Short
+      FROM dbo.CodeLKUP WITH (NOLOCK)
+      WHERE ListName = 'RDTINQUIRY'
          AND Code = @cOption
          AND StorerKey = @cStorerKey
-      
+
       -- Check report param setup
-      IF @cParam1 = '' AND 
-         @cParam2 = '' AND 
-         @cParam3 = '' AND 
-         @cParam4 = '' AND 
+      IF @cParam1 = '' AND
+         @cParam2 = '' AND
+         @cParam3 = '' AND
+         @cParam4 = '' AND
          @cParam5 = ''
       BEGIN
          SET @nErrNo = 103955
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Param NotSetup
          GOTO Step_1_Fail
       END
-      
+
       -- Check SP setup
       IF NOT EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cSP AND type = 'P')
       BEGIN
@@ -1000,7 +1005,7 @@ BEGIN
       SET @cFieldAttr06 = CASE WHEN @cParam3 = '' THEN 'O' ELSE '' END
       SET @cFieldAttr08 = CASE WHEN @cParam4 = '' THEN 'O' ELSE '' END
       SET @cFieldAttr10 = CASE WHEN @cParam5 = '' THEN 'O' ELSE '' END
-      
+
       -- Clear optional in field
       SET @cInField02 = ''
       SET @cInField04 = ''
@@ -1021,46 +1026,46 @@ BEGIN
       SET @cOutField10 = CASE WHEN CHARINDEX( '5' , @cRetain) > 0 THEN @cParam5Value ELSE '' END
       SET @cOutField11 = @cReport
 
-      -- Set the focus on first enabled, empty field 
+      -- Set the focus on first enabled, empty field
       IF ISNULL( @cFieldAttr02, '') = '' AND CHARINDEX( '1' , @cRetain) = 0
       BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 2
-         GOTO SETSCREEN 
+         GOTO SETSCREEN
       END
 
       IF ISNULL( @cFieldAttr04, '') = '' AND CHARINDEX( '2' , @cRetain) = 0
       BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 4
-         GOTO SETSCREEN 
+         GOTO SETSCREEN
       END
 
       IF ISNULL( @cFieldAttr06, '') = '' AND CHARINDEX( '3' , @cRetain) = 0
       BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 6
-         GOTO SETSCREEN 
+         GOTO SETSCREEN
       END
 
       IF ISNULL( @cFieldAttr08, '') = '' AND CHARINDEX( '4' , @cRetain) = 0
       BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 8
-         GOTO SETSCREEN 
+         GOTO SETSCREEN
       END
 
       IF ISNULL( @cFieldAttr10, '') = '' AND CHARINDEX( '5' , @cRetain) = 0
       BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 10
-         GOTO SETSCREEN 
+         GOTO SETSCREEN
       END
-      
+
       -- Go to prev screen
       SETSCREEN:
-      SET @nScn = @nScn - 1 
+      SET @nScn = @nScn - 1
       SET @nStep = @nStep - 1
 
    END
-   
-   GOTO QUIT 
-   
+
+   GOTO QUIT
+
 END
 
 /***********************************************************************************
@@ -1069,9 +1074,9 @@ Scn = 4713. Parameter screen
 ***********************************************************************************/
 Step_4:
 BEGIN
-   IF @nInputKey = 1 
+   IF @nInputKey = 1
    BEGIN
-      
+
       -- Execute Inquiry stored procedure
       IF @cSP <> ''
       BEGIN
@@ -1081,22 +1086,22 @@ BEGIN
             --DECLARE @cSQLParam NVARCHAR(1000)
 
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cSP) +
-               ' @nMobile, @nFunc, @nStep, @cLangCode, @cStorerKey, @cOption, @cParam1, @cParam2, @cParam3, @cParam4, @cParam5, 
-                 @c_oFieled01 OUTPUT, @c_oFieled02 OUTPUT, @c_oFieled03 OUTPUT, @c_oFieled04 OUTPUT, @c_oFieled05 OUTPUT, @c_oFieled06 OUTPUT, @c_oFieled07 OUTPUT, 
+               ' @nMobile, @nFunc, @nStep, @cLangCode, @cStorerKey, @cOption, @cParam1, @cParam2, @cParam3, @cParam4, @cParam5,
+                 @c_oFieled01 OUTPUT, @c_oFieled02 OUTPUT, @c_oFieled03 OUTPUT, @c_oFieled04 OUTPUT, @c_oFieled05 OUTPUT, @c_oFieled06 OUTPUT, @c_oFieled07 OUTPUT,
                  @c_oFieled08 OUTPUT, @c_oFieled09 OUTPUT, @c_oFieled10 OUTPUT, @c_oFieled11 OUTPUT, @c_oFieled12 OUTPUT,
                  @nNextPage OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
             SET @cSQLParam =
                '@nMobile    INT,           ' +
                '@nFunc      INT,           ' +
-               '@nStep      INT,           ' + 
+               '@nStep      INT,           ' +
                '@cLangCode  NVARCHAR( 3),  ' +
-               '@cStorerKey NVARCHAR( 15), ' + 
+               '@cStorerKey NVARCHAR( 15), ' +
                '@cOption    NVARCHAR( 1),  ' +
-               '@cParam1    NVARCHAR(20),  ' + 
-               '@cParam2    NVARCHAR(20),  ' + 
-               '@cParam3    NVARCHAR(20),  ' + 
-               '@cParam4    NVARCHAR(20),  ' + 
-               '@cParam5    NVARCHAR(20),  ' + 
+               '@cParam1    NVARCHAR(60),  ' +
+               '@cParam2    NVARCHAR(60),  ' +
+               '@cParam3    NVARCHAR(60),  ' +
+               '@cParam4    NVARCHAR(60),  ' +
+               '@cParam5    NVARCHAR(60),  ' +
                '@c_oFieled01  NVARCHAR(20) OUTPUT,' +
                '@c_oFieled02  NVARCHAR(20) OUTPUT,' +
                '@c_oFieled03  NVARCHAR(20) OUTPUT,' +
@@ -1109,21 +1114,21 @@ BEGIN
                '@c_oFieled10  NVARCHAR(20) OUTPUT,' +
                '@c_oFieled11  NVARCHAR(20) OUTPUT,' +
                '@c_oFieled12  NVARCHAR(20) OUTPUT,' +
-               '@nNextPage    INT          OUTPUT,' + 
+               '@nNextPage    INT          OUTPUT,' +
                '@nErrNo     INT OUTPUT,    ' +
                '@cErrMsg    NVARCHAR( 20) OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @nStep, @cLangCode, @cStorerKey, @cOption, @cParam1Value, @cParam2Value, @cParam3Value, @cParam4Value, @cParam5Value, 
-               @c_oFieled01 OUTPUT, @c_oFieled02 OUTPUT, @c_oFieled03 OUTPUT, @c_oFieled04 OUTPUT, @c_oFieled05 OUTPUT, @c_oFieled06 OUTPUT, @c_oFieled07 OUTPUT, 
+               @nMobile, @nFunc, @nStep, @cLangCode, @cStorerKey, @cOption, @cParam1Value, @cParam2Value, @cParam3Value, @cParam4Value, @cParam5Value,
+               @c_oFieled01 OUTPUT, @c_oFieled02 OUTPUT, @c_oFieled03 OUTPUT, @c_oFieled04 OUTPUT, @c_oFieled05 OUTPUT, @c_oFieled06 OUTPUT, @c_oFieled07 OUTPUT,
                @c_oFieled08 OUTPUT, @c_oFieled09 OUTPUT, @c_oFieled10 OUTPUT, @c_oFieled11 OUTPUT, @c_oFieled12 OUTPUT,
                @nNextPage OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
-            IF @nErrNo <> 0 
+            IF @nErrNo <> 0
                GOTO Quit
 
-    
-            
+
+
             SET @cOutField01 = @c_oFieled01
             SET @cOutField02 = @c_oFieled02
             SET @cOutField03 = @c_oFieled03
@@ -1136,15 +1141,15 @@ BEGIN
             SET @cOutField10 = @c_oFieled10
             SET @cOutField11 = @cReport
             SET @cOutField12 = @c_oFieled12
-            
+
             -- Get report info
---            SELECT 
+--            SELECT
 --               @cReport = LEFT( RTRIM(Description), 18)
---            FROM dbo.CodeLKUP WITH (NOLOCK) 
---            WHERE ListName = 'RDTINQUIRY' 
+--            FROM dbo.CodeLKUP WITH (NOLOCK)
+--            WHERE ListName = 'RDTINQUIRY'
 --               AND Code = @cOption
 --               AND StorerKey = @cStorerKey
-            
+
             -- EventLog
             EXEC RDT.rdt_STD_EventLog
                @cActionType   = '8', -- Master setup
@@ -1153,22 +1158,22 @@ BEGIN
                @nFunctionID   = @nFunc,
                @cFacility     = @cFacility,
                @cStorerKey    = @cStorerkey,
-               @cID           = @cReport, 
-               @cRefNo1       = @cParam1Value, 
-               @cRefNo2       = @cParam2Value, 
-               @cRefNo3       = @cParam3Value, 
-               @cRefNo4       = @cParam4Value, 
+               @cID           = @cReport,
+               @cRefNo1       = @cParam1Value,
+               @cRefNo2       = @cParam2Value,
+               @cRefNo3       = @cParam3Value,
+               @cRefNo4       = @cParam4Value,
                @cRefNo5       = @cParam5Value,
                @nStep         = @nStep
          END
       END
-      
+
       -- Go to prev screen
       SET @nScn = @nScn - 1
       SET @nStep = @nStep - 1
    END
-   
-   IF @nInputKey = 0 
+
+   IF @nInputKey = 0
    BEGIN
       -- Enable field
       SET @cFieldAttr01 = ''
@@ -1183,32 +1188,32 @@ BEGIN
       SET @cFieldAttr10 = ''
 
       -- Get info
-      SELECT 
-         @cReport = LEFT( RTRIM(Description), 20),   
-         @cParam1 = UDF01, 
-         @cParam2 = UDF02, 
-         @cParam3 = UDF03, 
-         @cParam4 = UDF04, 
-         @cParam5 = UDF05, 
+      SELECT
+         @cReport = LEFT( RTRIM(Description), 20),
+         @cParam1 = UDF01,
+         @cParam2 = UDF02,
+         @cParam3 = UDF03,
+         @cParam4 = UDF04,
+         @cParam5 = UDF05,
          @cSP = Long,
          @cRetain  = Short
-      FROM dbo.CodeLKUP WITH (NOLOCK) 
-      WHERE ListName = 'RDTINQUIRY' 
+      FROM dbo.CodeLKUP WITH (NOLOCK)
+      WHERE ListName = 'RDTINQUIRY'
          AND Code = @cOption
          AND StorerKey = @cStorerKey
-      
+
       -- Check report param setup
-      IF @cParam1 = '' AND 
-         @cParam2 = '' AND 
-         @cParam3 = '' AND 
-         @cParam4 = '' AND 
+      IF @cParam1 = '' AND
+         @cParam2 = '' AND
+         @cParam3 = '' AND
+         @cParam4 = '' AND
          @cParam5 = ''
       BEGIN
          SET @nErrNo = 103955
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Param NotSetup
          GOTO Step_1_Fail
       END
-      
+
       -- Check SP setup
       IF NOT EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cSP AND type = 'P')
       BEGIN
@@ -1223,7 +1228,7 @@ BEGIN
       SET @cFieldAttr06 = CASE WHEN @cParam3 = '' THEN 'O' ELSE '' END
       SET @cFieldAttr08 = CASE WHEN @cParam4 = '' THEN 'O' ELSE '' END
       SET @cFieldAttr10 = CASE WHEN @cParam5 = '' THEN 'O' ELSE '' END
-      
+
       -- Clear optional in field
       SET @cInField02 = ''
       SET @cInField04 = ''
@@ -1244,7 +1249,7 @@ BEGIN
       SET @cOutField10 = CASE WHEN CHARINDEX( '5' , @cRetain) > 0 THEN @cParam5Value ELSE '' END
       SET @cOutField11 = @cReport
 
-      -- Set the focus on first enabled, empty field 
+      -- Set the focus on first enabled, empty field
       IF ISNULL( @cFieldAttr02, '') = '' AND CHARINDEX( '1' , @cRetain) = 0
       BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 2
@@ -1269,13 +1274,13 @@ BEGIN
       BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 10
       END
-      
+
       -- Go to prev screen
       SET @nScn = @nScn - 2
       SET @nStep = @nStep - 2
    END
-   
-   GOTO QUIT 
+
+   GOTO QUIT
 END
 
 /********************************************************************************
@@ -1295,17 +1300,17 @@ BEGIN
       EditDate     = GetDate(),
       Printer      = @cPrinter,
       Printer_Paper= @cPrinter_Paper,
-      
+
 	   V_String1    = @cOption,
       V_String2    = @cSP,
-      V_String3    = @cParam1Value,
-      V_String4    = @cParam2Value,
-      V_String5    = @cParam3Value,
-      V_String6    = @cParam4Value,
-      V_String7    = @cParam5Value,
+      --V_String3    = @cParam1Value,
+      --V_String4    = @cParam2Value,
+      --V_String5    = @cParam3Value,
+      --V_String6    = @cParam4Value,
+      --V_String7    = @cParam5Value,
       V_String8    = @cReport,
 
-      V_STRING9  = @c_oFieled01, 
+      V_STRING9  = @c_oFieled01,
       V_STRING10 = @c_oFieled02,
       V_STRING11 = @c_oFieled03,
       V_STRING12 = @c_oFieled04,
@@ -1317,16 +1322,22 @@ BEGIN
       V_STRING18 = @c_oFieled10,
       V_STRING19 = @c_oFieled11,
       V_STRING20 = @c_oFieled12,
-      
+
       V_STRING21 = @cRetain,
-      
+
       V_String23 = @cExtendedFuncKeySP,
       V_String24 = @cExtendedUpdateSP,
-      
+
+      V_String41= @cParam1Value,
+      V_String42 = @cParam2Value,
+      V_String43 = @cParam3Value,
+      V_String44 = @cParam4Value,
+      V_String45 = @cParam5Value,
+
       V_Integer1 = @nFunctionKey,
       V_FromScn  = @nFromScn,
       V_FromStep = @nFromStep,
-         
+
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,
       I_Field03 = @cInField03,  O_Field03 = @cOutField03,
@@ -1350,15 +1361,10 @@ BEGIN
       FieldAttr09  = @cFieldAttr09,   FieldAttr10  = @cFieldAttr10,
       FieldAttr11  = @cFieldAttr11,   FieldAttr12  = @cFieldAttr12,
       FieldAttr13  = @cFieldAttr13,   FieldAttr14  = @cFieldAttr14,
-      FieldAttr15  = @cFieldAttr15 
+      FieldAttr15  = @cFieldAttr15
 
    WHERE Mobile = @nMobile
 END
-GO
-
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS ON 
 GO
 GRANT EXECUTE ON RDT.rdtfnc_GeneralInquiry TO NSQL
 GO

@@ -12,6 +12,7 @@ GO
 /*                                                                         */
 /* Date       Rev  Author     Purposes                                     */
 /* 2022-02-22 1.0  yeekung    WMS-23380 Created                            */
+/* 2023-10-03 1.1  Yeekung    WMS-23791 Extended Params (yeekung01)        */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_727Inquiry21] (
@@ -21,11 +22,11 @@ CREATE OR ALTER PROC [RDT].[rdt_727Inquiry21] (
    @cLangCode    NVARCHAR(3),  
    @cStorerKey   NVARCHAR(15),  
    @cOption      NVARCHAR(1),  
-   @cParam1      NVARCHAR(20),  
-   @cParam2      NVARCHAR(20),  
-   @cParam3      NVARCHAR(20),  
-   @cParam4      NVARCHAR(20),  
-   @cParam5      NVARCHAR(20),  
+   @cParam1      NVARCHAR(60),  
+   @cParam2      NVARCHAR(60),  
+   @cParam3      NVARCHAR(60),  
+   @cParam4      NVARCHAR(60),  
+   @cParam5      NVARCHAR(60),  
    @c_oFieled01  NVARCHAR(20) OUTPUT,  
    @c_oFieled02  NVARCHAR(20) OUTPUT,  
    @c_oFieled03  NVARCHAR(20) OUTPUT,  
@@ -165,9 +166,9 @@ BEGIN
             AND LOT.Lottable12 = CASE WHEN ISNULL(@cLottable12,'') ='' THEN LOT.Lottable12 ELSE @cLottable12 END
             AND LOC.Floor = @cFloor
          GROUP by LLI.loc,LLI.ID,LOC.MaxPallet,SKU.Height,LOT.Lottable12,SKU.Size
-         HAVING  SUM (LLI.QTY  -LLI.QtyPicked) >0
+         HAVING  SUM (LLI.QTY - LLI.qtyallocated -LLI.qtyexpected-LLI.qtyreplen) >0
             AND   SKU.Size- SUM(QTY-QtyPicked) > 0
-         ORDER BY LLI.LOC,LLI.ID
+         ORDER BY LLI.LOC
 
          OPEN @cCurLoc
          FETCH NEXT FROM @cCurLoc INTO @cLOC,@cID,@nCountID,@cNewLottable12
@@ -179,7 +180,7 @@ BEGIN
                BREAK;
             END
 
-            SELECT @nStockQTY = SUM (LLI.QTY  -LLI.QtyPicked) 
+            SELECT @nStockQTY = SUM (LLI.QTY - LLI.qtyallocated -LLI.qtyexpected-LLI.qtyreplen) 
             FROM LOTXLOCXID LLI (NOLOCK)
             JOIN lotattribute LOT (NOLOCK) ON LLI.lot=LOT.lot AND LLI.Storerkey=LOT.storerkey
             JOIN LOC LOC (NOLOCK) ON LLI.LOC =LOC.LOC 
@@ -191,7 +192,7 @@ BEGIN
                AND LOC.LOC = @cLOC
 
             
-            SELECT @nTotalQty =  SUM (LLI.QTY  -LLI.QtyPicked) 
+            SELECT @nTotalQty = SUM (LLI.QTY - LLI.qtyallocated -LLI.qtyexpected-LLI.qtyreplen) 
             FROM LOTXLOCXID LLI (NOLOCK)
             JOIN lotattribute LOT (NOLOCK) ON LLI.lot=LOT.lot AND LLI.Storerkey=LOT.storerkey
             JOIN LOC LOC (NOLOCK) ON LLI.LOC =LOC.LOC 
@@ -235,12 +236,10 @@ BEGIN
          SET @cFloor = @cParam2
          SET @cLottable12 = @cParam3
 
-         SET @cPreviousID = @c_oFieled07
          SET @cPreviousLOC = @c_oFieled06
 
-         IF ISNULL(@cPreviousID,'') =''
+         IF ISNULL(@cPreviousLOC,'') =''
          BEGIN
-            SET @cPreviousID = @c_oFieled02
             SET @cPreviousLOC = @c_oFieled01
          END
 
@@ -257,61 +256,25 @@ BEGIN
          SET @c_oFieled11  = ''
          SET @c_oFieled12  = ''
 
-         
-         IF EXISTS ( SELECT   1
-                     FROM LOTXLOCXID LLI (NOLOCK)
-                     JOIN lotattribute LOT (NOLOCK) ON LLI.lot=LOT.lot AND LLI.Storerkey=LOT.storerkey
-                     JOIN LOC LOC (NOLOCK) ON LLI.LOC =LOC.LOC 
-                     JOIN SKU SKU (NOLOCK) ON LLI.storerkey=SKU.storerkey AND LLI.SKU=SKU.SKU
-                     WHERE LLI.storerkey=@cStorerkey
-                        AND LLI.SKU=@cSKU
-                        AND LOT.Lottable12 = CASE WHEN ISNULL(@cLottable12,'') ='' THEN LOT.Lottable12 ELSE @cLottable12 END
-                        AND LOC.Floor = @cFloor
-                        AND (LLI.LOC = @cPreviousLoc AND LLI.id > @cPreviousID)  
-                     GROUP by LLI.loc,LLI.ID,LOC.MaxPallet,SKU.Height,LOT.Lottable12,SKU.Size
-                     HAVING  SUM (LLI.QTY  -LLI.QtyPicked) >0
-                        AND   SKU.Size- SUM(QTY-QtyPicked) > 0)
-         BEGIN
-            SET @cCurLoc = CURSOR FOR
-            SELECT  LLI.loc,
-                  LLI.ID
-                  ,SKU.Size- SUM(QTY-QtyPicked)
-                  ,LOT.Lottable12
-            FROM LOTXLOCXID LLI (NOLOCK)
-            JOIN lotattribute LOT (NOLOCK) ON LLI.lot=LOT.lot AND LLI.Storerkey=LOT.storerkey
-            JOIN LOC LOC (NOLOCK) ON LLI.LOC =LOC.LOC 
-            JOIN SKU SKU (NOLOCK) ON LLI.storerkey=SKU.storerkey AND LLI.SKU=SKU.SKU
-            WHERE LLI.storerkey=@cStorerkey
-               AND LLI.SKU=@cSKU
-               AND LOT.Lottable12 = CASE WHEN ISNULL(@cLottable12,'') ='' THEN LOT.Lottable12 ELSE @cLottable12 END
-               AND LOC.Floor = @cFloor
-               AND (LLI.LOC = @cPreviousLoc AND LLI.id > @cPreviousID)  
-            GROUP by LLI.loc,LLI.ID,LOC.MaxPallet,SKU.Height,LOT.Lottable12,SKU.Size
-            HAVING  SUM (LLI.QTY  -LLI.QtyPicked) >0
-               AND   SKU.Size- SUM(QTY-QtyPicked) > 0
-            ORDER BY LLI.LOC,LLI.ID
-         END
-         ELSE
-         BEGIN
-            SET @cCurLoc = CURSOR FOR
-            SELECT  LLI.loc,
-                  LLI.ID
-                  ,SKU.Size- SUM(QTY-QtyPicked)
-                  ,LOT.Lottable12
-            FROM LOTXLOCXID LLI (NOLOCK)
-            JOIN lotattribute LOT (NOLOCK) ON LLI.lot=LOT.lot AND LLI.Storerkey=LOT.storerkey
-            JOIN LOC LOC (NOLOCK) ON LLI.LOC =LOC.LOC 
-            JOIN SKU SKU (NOLOCK) ON LLI.storerkey=SKU.storerkey AND LLI.SKU=SKU.SKU
-            WHERE LLI.storerkey=@cStorerkey
-               AND LLI.SKU=@cSKU
-               AND LOT.Lottable12 = CASE WHEN ISNULL(@cLottable12,'') ='' THEN LOT.Lottable12 ELSE @cLottable12 END
-               AND LOC.Floor = @cFloor
-               AND (LLI.LOC > @cPreviousLoc )  
-            GROUP by LLI.loc,LLI.ID,LOC.MaxPallet,SKU.Height,LOT.Lottable12,SKU.Size
-            HAVING  SUM (LLI.QTY  -LLI.QtyPicked) >0
-               AND   SKU.Size- SUM(QTY-QtyPicked) > 0
-            ORDER BY LLI.LOC,LLI.ID
-         END
+
+         SET @cCurLoc = CURSOR FOR
+         SELECT  LLI.loc,
+               LLI.ID
+               ,SKU.Size- SUM(QTY-QtyPicked)
+               ,LOT.Lottable12
+         FROM LOTXLOCXID LLI (NOLOCK)
+         JOIN lotattribute LOT (NOLOCK) ON LLI.lot=LOT.lot AND LLI.Storerkey=LOT.storerkey
+         JOIN LOC LOC (NOLOCK) ON LLI.LOC =LOC.LOC 
+         JOIN SKU SKU (NOLOCK) ON LLI.storerkey=SKU.storerkey AND LLI.SKU=SKU.SKU
+         WHERE LLI.storerkey=@cStorerkey
+            AND LLI.SKU=@cSKU
+            AND LOT.Lottable12 = CASE WHEN ISNULL(@cLottable12,'') ='' THEN LOT.Lottable12 ELSE @cLottable12 END
+            AND LOC.Floor = @cFloor
+            AND LOC.LOC > @cLOC
+         GROUP by LLI.loc,LLI.ID,LOC.MaxPallet,SKU.Height,LOT.Lottable12,SKU.Size
+         HAVING  SUM (LLI.QTY - LLI.qtyallocated -LLI.qtyexpected-LLI.qtyreplen) >0
+            AND   SKU.Size- SUM(QTY-QtyPicked) > 0
+         ORDER BY LLI.LOC
 
          OPEN @cCurLoc
          FETCH NEXT FROM @cCurLoc INTO @cLOC,@cID,@nCountID,@cNewLottable12  
@@ -323,7 +286,7 @@ BEGIN
                BREAK;
             END
 
-            SELECT @nStockQTY = SUM (LLI.QTY  -LLI.QtyPicked) 
+            SELECT @nStockQTY = SUM (LLI.QTY - LLI.qtyallocated -LLI.qtyexpected-LLI.qtyreplen) 
             FROM LOTXLOCXID LLI (NOLOCK)
             JOIN lotattribute LOT (NOLOCK) ON LLI.lot=LOT.lot AND LLI.Storerkey=LOT.storerkey
             JOIN LOC LOC (NOLOCK) ON LLI.LOC =LOC.LOC 
@@ -335,7 +298,7 @@ BEGIN
                AND LOC.LOC = @cLOC
 
             
-            SELECT @nTotalQty = SUM (LLI.QTY  -LLI.QtyPicked) 
+            SELECT @nTotalQty = SUM (LLI.QTY - LLI.qtyallocated -LLI.qtyexpected-LLI.qtyreplen) 
             FROM LOTXLOCXID LLI (NOLOCK)
             JOIN lotattribute LOT (NOLOCK) ON LLI.lot=LOT.lot AND LLI.Storerkey=LOT.storerkey
             JOIN LOC LOC (NOLOCK) ON LLI.LOC =LOC.LOC 

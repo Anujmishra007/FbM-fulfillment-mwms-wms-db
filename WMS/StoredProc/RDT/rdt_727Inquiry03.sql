@@ -1,11 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdt_727Inquiry03]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_727Inquiry03]
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /***************************************************************************/
 /* Store procedure: rdt_727Inquiry03                                       */
@@ -15,45 +12,36 @@ GO
 /* Date       Rev  Author   Purposes                                       */
 /* 2018-03-05 1.0  Ung      WMS-4201 Created                               */
 /* 2019-09-20 1.1  YeeKung  WMS-10536 Change the parameter                 */  
+/* 2023-10-03 1.2  Yeekung  WMS-23791 Extended Params (yeekung01)          */
 /***************************************************************************/
 
-CREATE PROC rdt.rdt_727Inquiry03 (
- 	 @nMobile    		INT,               
-	 @nFunc      		INT,               
-	 @nStep      		INT,                
-	 @cLangCode  		NVARCHAR( 3),      
-	 @cStorerKey 		NVARCHAR( 15),      
-	 @cOption    		NVARCHAR( 1),      
-	 @cParam1Label    NVARCHAR(20), 
-	 @cParam2Label    NVARCHAR(20),   
-	 @cParam3Label    NVARCHAR(20),   
-	 @cParam4Label    NVARCHAR(20),  
-	 @cParam5Label    NVARCHAR(20),  
-	 @cParam1         NVARCHAR(20),   
-	 @cParam2         NVARCHAR(20),   
-	 @cParam3         NVARCHAR(20),   
-	 @cParam4         NVARCHAR(20),   
-	 @cParam5         NVARCHAR(20),          
-	 @cOutField01  	NVARCHAR(20) OUTPUT,    
-	 @cOutField02  	NVARCHAR(20) OUTPUT,    
-	 @cOutField03  	NVARCHAR(20) OUTPUT,    
-	 @cOutField04  	NVARCHAR(20) OUTPUT,    
-	 @cOutField05  	NVARCHAR(20) OUTPUT,    
-	 @cOutField06  	NVARCHAR(20) OUTPUT,    
-	 @cOutField07  	NVARCHAR(20) OUTPUT,    
-	 @cOutField08  	NVARCHAR(20) OUTPUT,    
-	 @cOutField09  	NVARCHAR(20) OUTPUT,    
-	 @cOutField10  	NVARCHAR(20) OUTPUT,
-	 @cOutField11  	NVARCHAR(20) OUTPUT,
-	 @cOutField12  	NVARCHAR(20) OUTPUT,
-	 @cFieldAttr02 	NVARCHAR( 1) OUTPUT,  
-	 @cFieldAttr04 	NVARCHAR( 1) OUTPUT,  
-	 @cFieldAttr06 	NVARCHAR( 1) OUTPUT,  
-	 @cFieldAttr08 	NVARCHAR( 1) OUTPUT,  
-	 @cFieldAttr10 	NVARCHAR( 1) OUTPUT,        
-	 @nNextPage    	INT          OUTPUT,    
-	 @nErrNo     		INT 			 OUTPUT,        
-	 @cErrMsg    		NVARCHAR( 20) OUTPUT 
+CREATE OR ALTER PROC [RDT].[rdt_727Inquiry03] (
+   @nMobile      INT,
+   @nFunc        INT,
+   @nStep        INT,
+   @cLangCode    NVARCHAR(3),
+   @cStorerKey   NVARCHAR(15),
+   @cOption      NVARCHAR(1),
+   @cParam1      NVARCHAR(60),
+   @cParam2      NVARCHAR(60),
+   @cParam3      NVARCHAR(60),
+   @cParam4      NVARCHAR(60),
+   @cParam5      NVARCHAR(60),
+   @c_oFieled01  NVARCHAR(20) OUTPUT,
+   @c_oFieled02  NVARCHAR(20) OUTPUT,
+   @c_oFieled03  NVARCHAR(20) OUTPUT,
+   @c_oFieled04  NVARCHAR(20) OUTPUT,
+   @c_oFieled05  NVARCHAR(20) OUTPUT,
+   @c_oFieled06  NVARCHAR(20) OUTPUT,
+   @c_oFieled07  NVARCHAR(20) OUTPUT,
+   @c_oFieled08  NVARCHAR(20) OUTPUT,
+   @c_oFieled09  NVARCHAR(20) OUTPUT,
+   @c_oFieled10  NVARCHAR(20) OUTPUT,
+   @c_oFieled11  NVARCHAR(20) OUTPUT,
+   @c_oFieled12  NVARCHAR(20) OUTPUT,
+   @nNextPage    INT          OUTPUT,
+   @nErrNo       INT          OUTPUT,
+   @cErrMsg      NVARCHAR(20) OUTPUT
 )
 AS
 BEGIN
@@ -72,12 +60,12 @@ BEGIN
          DECLARE @cPickSlipNo NVARCHAR( 10)
          DECLARE @cSKU        NVARCHAR( 20)
          DECLARE @cConsigneeKey NVARCHAR( 15)
-         
+
          DECLARE @cUDF01      NVARCHAR( 30)
          DECLARE @cUDF02      NVARCHAR( 30)
          DECLARE @cUDF03      NVARCHAR( 30)
          DECLARE @cUDF04      NVARCHAR( 30)
-         DECLARE @cUDF05      NVARCHAR( 30)
+         DECLARE @cUFD05      NVARCHAR( 30)
 
          -- Parameter mapping
          SET @cID = @cParam1
@@ -101,13 +89,13 @@ BEGIN
             EXEC rdt.rdtSetFocusField @nMobile, 2  -- ID
             GOTO QUIT
          END
-         
+
          -- ID
          IF @cID <> ''
          BEGIN
             -- Check ID valid
-            IF NOT EXISTS( SELECT 1 
-               FROM PickDetail WITH (NOLOCK) 
+            IF NOT EXISTS( SELECT 1
+               FROM PickDetail WITH (NOLOCK)
                WHERE StorerKey = @cStorerKey
                   AND DropID = @cID)
             BEGIN
@@ -117,7 +105,7 @@ BEGIN
                GOTO QUIT
             END
          END
-         
+
          -- PickSlipNo
          IF @cPickSlipNo <> ''
          BEGIN
@@ -156,7 +144,7 @@ BEGIN
                   GOTO Quit
                END
             END
-      
+
             -- Discrete PickSlip
             ELSE IF @cOrderKey <> ''
             BEGIN
@@ -165,7 +153,7 @@ BEGIN
                SELECT @cChkStorerKey = StorerKey
                FROM dbo.Orders WITH (NOLOCK)
                WHERE OrderKey = @cOrderKey
-               
+
                -- Check storer
                IF @cChkStorerKey <> @cStorerKey
                BEGIN
@@ -174,15 +162,15 @@ BEGIN
                   GOTO Quit
                END
             END
-               
+
             -- Conso PickSlip
             ELSE IF @cLoadKey <> ''
             BEGIN
                -- Check diff storer
-               IF EXISTS( SELECT TOP 1 1 
-                  FROM dbo.LoadPlanDetail LPD WITH (NOLOCK) 
-                     JOIN dbo.Orders O (NOLOCK) ON (LPD.OrderKey = O.OrderKey)    
-                  WHERE LPD.LoadKey = @cLoadKey 
+               IF EXISTS( SELECT TOP 1 1
+                  FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
+                     JOIN dbo.Orders O (NOLOCK) ON (LPD.OrderKey = O.OrderKey)
+                  WHERE LPD.LoadKey = @cLoadKey
                      AND O.StorerKey <> @cStorerKey)
                BEGIN
                   SET @nErrNo = 120457
@@ -191,7 +179,7 @@ BEGIN
                END
             END
          END
-         
+
          -- SKU
          IF @cSKU = ''
          BEGIN
@@ -200,44 +188,47 @@ BEGIN
             EXEC rdt.rdtSetFocusField @nMobile, 6  -- SKU
             GOTO QUIT
          END
-         
+
          -- Get consignee SKU info
-         SET @cConsigneeKey = ''
          IF @cID <> ''
-            SELECT TOP 1 
-               @cConsigneeKey = ConsigneeKey 
-            FROM Orders O WITH (NOLOCK) 
+         BEGIN
+            SELECT TOP 1
+               @cConsigneeKey = ConsigneeKey
+            FROM Orders O WITH (NOLOCK)
                JOIN Pickdetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
             WHERE O.StorerKey  = @cStorerKey
                AND PD.DropID = @cID
+         END
 
-         ELSE -- PickSlipNo
-            SELECT TOP 1 
+         IF @cPickSlipNo <> ''
+         BEGIN
+            SELECT TOP 1
                @cConsigneeKey = O.ConsigneeKey
-            FROM Orders O WITH (NOLOCK) 
+            FROM Orders O WITH (NOLOCK)
                JOIN PickHeader PH WITH (NOLOCK) ON (O.OrderKey = PH.OrderKey)
             WHERE O.StorerKey  = @cStorerKey
                AND PH.PickHeaderKey = @cPickSlipNo
+         END
 
          -- Check consignee
          IF @@ROWCOUNT = 0
          BEGIN
             SET @nErrNo = 120459
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No Consignee 
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No Consignee
             GOTO QUIT
          END
-         
+
          -- Get consignee SKU info
-         SELECT 
-            @cUDF01 = UDF01, 
-            @cUDF02 = UDF02, 
-            @cUDF03 = UDF03, 
-            @cUDF04 = UDF04, 
-            @cUDF05 = UDF05 
+         SELECT
+            @cUDF01 = UDF01,
+            @cUDF02 = UDF02,
+            @cUDF03 = UDF03,
+            @cUDF04 = UDF04,
+            @cUFD05 = UDF05
          FROM ConsigneeSKU WITH (NOLOCK)
          WHERE ConsigneeKey = @cConsigneeKey
             AND StorerKey = @cStorerKey
-            AND SKU = @cSKU
+            AND ConsigneeSKU = @cSKU
 
          -- Check consignee SKU
          IF @@ROWCOUNT = 0
@@ -246,19 +237,19 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NoConsigneeSKU
             GOTO QUIT
          END
-               
-         SET @cOutfield01 = '1. ' + LEFT( @cUDF01, 17)
-         SET @cOutField02 = '2. ' + LEFT( @cUDF02, 17)
-         SET @cOutField03 = '3. ' + LEFT( @cUDF03, 17)
-         SET @cOutField04 = '4. ' + LEFT( @cUDF04, 17)
-         SET @cOutField05 = '5. ' + LEFT( @cUDF05, 17)
-         SET @cOutField06 = ''
-         SET @cOutField07 = ''
-         SET @cOutField08 = ''
-         SET @cOutField09 = ''
-         SET @cOutField10 = ''
-         
-         SET @nNextPage = 0  
+
+         SET @c_oFieled01 = rdt.rdtgetmessage( 120461, @cLangCode, 'DSP') -- KA Outbound VAS
+         SET @c_oFieled02 = ''
+         SET @c_oFieled03 = '1. ' + LEFT( @cUDF01, 17)
+         SET @c_oFieled04 = '2. ' + LEFT( @cUDF01, 17)
+         SET @c_oFieled05 = '3. ' + LEFT( @cUDF01, 17)
+         SET @c_oFieled06 = '4. ' + LEFT( @cUDF01, 17)
+         SET @c_oFieled07 = '5. ' + LEFT( @cUDF01, 17)
+         SET @c_oFieled08 = ''
+         SET @c_oFieled09 = ''
+         SET @c_oFieled10 = ''
+
+         SET @nNextPage = 0
       END
    END
 
@@ -266,10 +257,5 @@ Quit:
 
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-GRANT EXECUTE ON RDT.rdt_727Inquiry03 TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_727Inquiry03] TO [NSQL]
 GO
