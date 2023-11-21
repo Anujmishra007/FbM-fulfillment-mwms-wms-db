@@ -1,40 +1,44 @@
-/***************************************************************************************/        
-/* Store Procedure:  isp_archiveDocInfo                                                */        
-/* Creation Date: 29-March-2016                                                        */        
-/* Copyright: IDS                                                                      */        
-/* Written by: JayLim                                                                  */        
-/*                                                                                     */        
-/* Purpose:  Archive records with ArchiveCop column for records that                   */      
-/*           doesnt exist anymore in the stated table name                             */        
-/*                                                                                     */        
-/* Input Parameters:  @cSourceDB     - Exceed DB                                       */        
-/*                    @cArchiveDB    - Archive DB                                      */          
-/*                                                                                     */        
-/* Usage:  Archive older records which does not exist in the TableName                 */       
-/*         stated                                                                      */       
-/*                                                                                     */        
-/* Called By:  Set under Scheduler Jobs.                                               */        
-/*                                                                                     */        
-/* PVCS Version: 1.0                                                                   */        
-/*                                                                                     */        
-/* Version: 5.4                                                                        */        
-/*                                                                                     */        
-/* Data Modifications:                                                                 */        
-/*                                                                                     */        
-/* Updates:                                                                            */        
-/* Date         Author        Purposes                                                 */        
-/* 02 May 2017  TLTING        Bug fix - if new tabename added                          */     
-/* 2023-02-28   kelvinongcy   JSM-114109 Bug of DoxInfo still archive even             */    
-/*                            Orders & OrderDetail exist in WMS. Try prevent           */     
-/*                            with add date not more than 1 hrs (kocy01)               */    
-/*2023-05-30    kelvinongcy   archive DocInfo.Tablename = RECEIPT for CN NKE (kocy02)  */ 
-/*2023-05-30    kelvinongcy   enchance fix break that stop all next process (kocy03)   */
-/***************************************************************************************/     
+/**************************************************************************************************/        
+/* Store Procedure:  isp_archiveDocInfo															  */        
+/* Creation Date: 29-March-2016																	  */        
+/* Copyright: IDS																				  */        
+/* Written by: JayLim																			  */        
+/*																								  */        
+/* Purpose:  Archive records with ArchiveCop column for records that							  */      
+/*           doesnt exist anymore in the stated table name										  */        
+/*																								  */        
+/* Input Parameters:  @cSourceDB     - Exceed DB												  */        
+/*                    @cArchiveDB    - Archive DB												  */          
+/*																								  */        
+/* Usage:  Archive older records which does not exist in the TableName							  */       
+/*         stated																				  */       
+/*																								  */        
+/* Called By:  Set under Scheduler Jobs.														  */        
+/*																								  */        
+/* PVCS Version: 1.0																			  */        
+/*																								  */        
+/* Version: 5.4																					  */        
+/*																								  */        
+/* Data Modifications:																			  */        
+/*																								  */        
+/* Updates:																						  */        
+/* Date         Author        Purposes															  */        
+/* 02 May 2017  TLTING        Bug fix - if new tabename added									  */     
+/* 2023-02-28   kelvinongcy   JSM-114109 Bug of DoxInfo still archive even						  */    
+/*                            Orders & OrderDetail exist in WMS. Try prevent					  */     
+/*                            with add date not more than 1 hrs (kocy01)						  */    
+/*2023-05-30    kelvinongcy   archive DocInfo.Tablename = RECEIPT for CN NKE (kocy02)			  */ 
+/*2023-05-30    kelvinongcy   enchance fix break that stop all next process (kocy03)			  */
+/*2023-11-15    gywong        WMS-24161 Enhance with Filter Param for new Tablename and Storerkey */
+/**************************************************************************************************/     
     
 CREATE OR ALTER  PROC [dbo].[isp_archiveDocInfo]      
 (          
-    @cSourceDB       NVARCHAR(128),      
-    @cArchiveDB      NVARCHAR(128)              
+    @cSourceDB       NVARCHAR(128)      
+   ,@cArchiveDB      NVARCHAR(128)
+   ,@cDocInfoTablekey NVARCHAR(128) = ''
+   ,@c_Condition  NVARCHAR(1000) = ''  
+
 )      
 AS        
 BEGIN        
@@ -169,6 +173,14 @@ BEGIN
                                  + ' AND ' + LTRIM(RTRIM(@cTableName))+'.AddDate < dateadd(dd, -365, getdate() ) '            -- kocy02 (e)
               
       END  
+      ELSE IF (@n_continue = 1 OR @n_continue = 2) AND (LTRIM(RTRIM(@cDocInfoTableName))  = @cDocInfoTablekey AND @cDocInfoTablekey <> '')			                        
+      BEGIN     
+         SET @cExecStatements = N'DECLARE C_ITEM CURSOR FAST_FORWARD READ_ONLY FOR '          
+                                 + 'SELECT  ' + LTRIM(RTRIM(@cTableName)) + '.'+ LTRIM(RTRIM(@cKeyName))          
+                                 + ' FROM ' + LTRIM(RTRIM(@cTableName)) +' WITH (NOLOCK) '        
+                                 + ' WHERE ' + LTRIM(RTRIM(@cTableName))+'.TableName ='''+LTRIM(RTRIM(@cDocInfoTableName))+''''  
+								 + ' AND '  + (CASE WHEN @c_Condition  <> '' THEN  @c_Condition   ELSE ''+ LTRIM(RTRIM(@cTableName)) +'.AddDate < dateadd(dd, -365, getdate())' END)    --gywong    
+      END      
       ELSE      
       BEGIN      
          SET @cExecStatements = 'SELECT ''ExecStatement not exists for DocInfo.TableName = '+LTRIM(RTRIM(@cDocInfoTableName))+''''      
