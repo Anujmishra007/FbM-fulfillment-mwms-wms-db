@@ -12,6 +12,8 @@ GO
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
 /* 2023-05-30 1.0  Ung      WMS-22370 Created                                 */
+/* 2023-10-24 1.1  Ung      WMS-23891 Add CheckPalletStatus                   */
+/*                          UpdatePickDetailDropID, UpdatePickDetailCaseID    */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_PickPallet_Confirm] (
@@ -143,12 +145,18 @@ BEGIN
    DECLARE @cPickConfirmStatus   NVARCHAR( 1)
    DECLARE @cSerialNoCapture     NVARCHAR( 1)
    DECLARE @cSerialNo            NVARCHAR( 30)
+   DECLARE @cCheckPalletStatus   NVARCHAR( 1)
+   DECLARE @cUpdatePickDetailCaseID NVARCHAR( 1)
+   DECLARE @cUpdatePickDetailDropID NVARCHAR( 1)
    DECLARE @nSerialQTY           INT
    
    -- Get storer config
    SET @cMoveQTYAlloc = rdt.rdtGetConfig( @nFunc, 'MoveQTYAlloc', @cStorerKey)
    SET @cMoveQTYPick = rdt.rdtGetConfig( @nFunc, 'MoveQTYPick', @cStorerKey)
    SET @cSerialNoCapture = rdt.RDTGetConfig( @nFunc, 'SerialNoCapture', @cStorerKey) 
+   SET @cUpdatePickDetailCaseID = rdt.RDTGetConfig( @nFunc, 'UpdatePickDetailCaseID', @cStorerKey) 
+   SET @cUpdatePickDetailDropID = rdt.RDTGetConfig( @nFunc, 'UpdatePickDetailDropID', @cStorerKey) 
+   SET @cCheckPalletStatus = rdt.RDTGetConfig( @nFunc, 'CheckPalletStatus', @cStorerKey) 
 
    SET @cPickConfirmStatus = rdt.RDTGetConfig( @nFunc, 'PickConfirmStatus', @cStorerKey)
    IF @cPickConfirmStatus = '0'
@@ -170,6 +178,21 @@ BEGIN
       SET @nErrNo = 201802
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --IncorrectSetup
       GOTO Quit
+   END
+
+   -- Check pallet status, like HOLD
+   IF @cCheckPalletStatus = '1'
+   BEGIN
+      DECLARE @cIDStatus NVARCHAR( 10)
+      SELECT @cIDStatus = Status FROM dbo.ID WITH (NOLOCK) WHERE ID = @cID 
+
+      IF @cIDStatus <> 'OK'
+      BEGIN
+         SET @nErrNo = 201808
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ID:
+         SET @cErrMsg = RTRIM( @cErrMsg) + ' ' + @cIDStatus
+         GOTO Quit
+      END
    END
 
    -- Get pick filter
@@ -287,6 +310,8 @@ BEGIN
       -- Confirm PickDetail
       UPDATE dbo.PickDetail SET
          Status = @cPickConfirmStatus,
+         CaseID = CASE WHEN @cUpdatePickDetailCaseID = '1' THEN ID ELSE CaseID END,
+         DropID = CASE WHEN @cUpdatePickDetailDropID = '1' THEN ID ELSE DropID END, 
          EditDate = GETDATE(),
          EditWho  = SUSER_SNAME()
       WHERE PickDetailKey = @cPickDetailKey
