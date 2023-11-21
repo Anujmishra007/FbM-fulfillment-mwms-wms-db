@@ -58,6 +58,7 @@ GO
 /* 2020-11-19 3.1  Chermaine WMS-15680 Add OTMITF config (cc01)         */    
 /* 2020-11-24 3.2  James    WMS-15718 - Add Refno lookup (james04)      */  
 /* 2023-08-07 3.3  Ung      WMS-23190 Add ExtendedInfoSP                */
+/* 2023-10-26 3.4  James    WMS-23887 Add standard DecodeSP (james05)   */
 /************************************************************************/  
 CREATE OR ALTER PROC [RDT].[rdtfnc_ScanToTruck_ByLabelNo] (  
    @nMobile    INT,  
@@ -125,6 +126,10 @@ DECLARE
    @cRefNum                 NVARCHAR(20),  
    @nRowCount               INT,  
    @n_Err                   INT,  
+   @cDecodeSP               NVARCHAR( 20),
+   @cBarcode                NVARCHAR( MAX),
+   @cID                     NVARCHAR( 18),
+   @cUPC                    NVARCHAR( 30),  
   
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
@@ -184,7 +189,8 @@ SELECT
    @cOTMITF                 = V_String20, --(cc01)    
    @cExtendedInfo           = V_String22,
    @cExtendedInfoSP         = V_String23,
-  
+   @cDecodeSP               = V_String24,
+   
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,  @cFieldAttr03 = FieldAttr03,
@@ -250,7 +256,12 @@ BEGIN
    SET @cAutoScanOutPS = rdt.RDTGetConfig( @nFunc, 'AutoScanOutPS', @cStorerKey)  
    IF @cAutoScanOutPS = '0'  
       SET @cAutoScanOutPS = ''  
-  
+
+   -- (james05)
+   SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerKey)
+   IF @cDecodeSP = '0'
+      SET @cDecodeSP = ''
+
     -- Storer config 'OTMITF'   --(cc01)
    EXECUTE dbo.nspGetRight  
       NULL, -- Facility  
@@ -699,7 +710,8 @@ BEGIN
    BEGIN  
       -- Screen mapping  
       SET @cLabelNo = @cInField04  
-  
+      SET @cBarcode = @cInField04
+
       -- Check label  
       IF @cLabelNo = ''  
       BEGIN  
@@ -707,7 +719,57 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need Label No  
          GOTO Step_2_Fail  
       END  
-  
+
+      -- Decode
+      -- Standard decode
+      IF @cDecodeSP = '1'
+      BEGIN
+         EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
+            @cID     = @cLabelNo    OUTPUT,
+            @nErrNo  = @nErrNo      OUTPUT,
+            @cErrMsg = @cErrMsg     OUTPUT,
+            @cType   = 'ID'
+
+         IF @nErrNo <> 0
+            GOTO Step_2_Fail
+      END
+      ELSE
+      BEGIN
+         IF @cDecodeSP <> ''
+         BEGIN
+            IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cDecodeSP AND type = 'P')
+            BEGIN
+               SELECT @cID = '',  @cLabelNo = ''
+
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cMBOLKey, @cLoadKey, @cOrderKey, @cBarcode OUTPUT, @cFieldName, ' +
+                  ' @cLabelNo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+               SET @cSQLParam =
+                  ' @nMobile      INT,             ' +
+                  ' @nFunc        INT,             ' +
+                  ' @cLangCode    NVARCHAR( 3),    ' +
+                  ' @nStep        INT,             ' +
+                  ' @nInputKey    INT,             ' +
+                  ' @cStorerKey   NVARCHAR( 15),   ' +
+                  ' @cMBOLKey     NVARCHAR( 10),   ' +
+                  ' @cLoadKey     NVARCHAR( 10),   ' +
+                  ' @cOrderKey    NVARCHAR( 10),   ' +
+                  ' @cBarcode     NVARCHAR( MAX) OUTPUT, ' +
+                  ' @cFieldName   NVARCHAR( 10),   ' +
+                  ' @cLabelNo     NVARCHAR( 20)  OUTPUT, ' +
+                  ' @nErrNo       INT            OUTPUT, ' +
+                  ' @cErrMsg      NVARCHAR( 20)  OUTPUT'
+
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cMBOLKey, @cLoadKey, @cOrderKey, @cBarcode OUTPUT, 'ID',
+                  @cLabelNo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+               IF @nErrNo <> 0
+                  GOTO Step_2_Fail
+            END
+         END
+      END
+
       -- Check double scan  
       DECLARE @cDoubleScan NVARCHAR(1)  
       SET @cDoubleScan = ''  
@@ -1676,6 +1738,7 @@ BEGIN
       V_String20 = @cOTMITF,   --(cc01) 
       V_String22 = @cExtendedInfo,
       V_String23 = @cExtendedInfoSP,
+      V_String24 = @cDecodeSP,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
