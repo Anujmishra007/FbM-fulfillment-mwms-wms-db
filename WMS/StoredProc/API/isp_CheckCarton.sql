@@ -1,90 +1,86 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[API].[isp_CheckCarton]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [API].[isp_CheckCarton]
-GO
-
-/****** Object:  StoredProcedure [API].[isp_CheckCarton]    Script Date: 6/3/2020 4:38:10 PM ******/
 SET ANSI_NULLS OFF
 GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
+  
+/******************************************************************************/
+/* Store procedure: isp_CheckCarton                                           */
+/* Copyright      : LFLogistics                                               */
+/*                                                                            */
+/* Date         Rev  Author     Purposes                                      */
+/* 2020-03-27   1.0  Chermaine  Created                                       */
+/* 2021-09-05   1.1  Chermaine  TPS-11 ErrMsg add to rdtmsg (cc01)            */
+/* 2023-02-10   1.2  yeekung    TPS-661 Add Packheaderstatus (yeekung01)      */
+/******************************************************************************/
 
-/******************************************************************************/  
-/* Store procedure: isp_CheckCarton                                           */  
-/* Copyright      : LFLogistics                                               */  
-/*                                                                            */  
-/* Date         Rev  Author     Purposes                                      */  
-/* 2020-03-27   1.0  Chermaine  Created                                       */  
-/******************************************************************************/  
-  
-CREATE PROC [API].[isp_CheckCarton] (  
-   @json       NVARCHAR( MAX),  
-   @jResult    NVARCHAR( MAX) OUTPUT,  
-   @b_Success  INT = 1  OUTPUT,  
-   @n_Err      INT = 0  OUTPUT,  
-   @c_ErrMsg   NVARCHAR( 255) = ''  OUTPUT   
-)  
-AS  
-  
-SET NOCOUNT ON  
-SET QUOTED_IDENTIFIER OFF  
-SET ANSI_NULLS OFF  
-SET CONCAT_NULL_YIELDS_NULL OFF  
-  
-DECLARE   
-   @cLangCode     NVARCHAR( 3),  
+CREATE OR ALTER  PROC [API].[isp_CheckCarton] (
+   @json       NVARCHAR( MAX),
+   @jResult    NVARCHAR( MAX) OUTPUT,
+   @b_Success  INT = 1  OUTPUT,
+   @n_Err      INT = 0  OUTPUT,
+   @c_ErrMsg   NVARCHAR( 255) = ''  OUTPUT
+)
+AS
+
+SET NOCOUNT ON
+SET QUOTED_IDENTIFIER OFF
+SET ANSI_NULLS OFF
+SET CONCAT_NULL_YIELDS_NULL OFF
+
+DECLARE
+   @cLangCode     NVARCHAR( 3),
    @cUserName      NVARCHAR( 30),
-   @cStorerKey    NVARCHAR( 15),  
-   @cFacility     NVARCHAR( 5),  
-   @nFunc         INT,  
+   @cStorerKey    NVARCHAR( 15),
+   @cFacility     NVARCHAR( 5),
+   @nFunc         INT,
    @cScanNo      NVARCHAR( 30),
    @cType         NVARCHAR( 30),
    @cPickSlipNo   NVARCHAR( 30),
-   @cDropID       NVARCHAR( 30),    
-     
-   @cOrderKey     NVARCHAR( 10),  
-   @cLoadKey      NVARCHAR( 10),  
-   @cZone         NVARCHAR( 18),  
+   @cDropID       NVARCHAR( 30),
+
+   @cOrderKey     NVARCHAR( 10),
+   @cLoadKey      NVARCHAR( 10),
+   @cZone         NVARCHAR( 18),
    @cLot          NVARCHAR( 30),
    @cStatus       NVARCHAR( 2),
    @cScanNoType   NVARCHAR( 30),
    @pickSkuDetailJson   NVARCHAR( MAX),
-     
-   @nTotalPick    INT,   
+
+   @nTotalPick    INT,
    @nTotalShort   INT
-  
-DECLARE @pickSKUDetail TABLE (  
-    SKU              NVARCHAR( 30),  
+
+DECLARE @pickSKUDetail TABLE (
+    SKU              NVARCHAR( 30),
     QtyToPack        INT,
     OrderKey         NVARCHAR( 30),
     pickslipNo       NVARCHAR( 30),
     loadKey          NVARCHAR( 30),--externalOrderKey
     pickDetailStatus NVARCHAR ( 3)
 )
-  
+
 --Decode Json Format
 SELECT @cStorerKey = StorerKey, @cFacility = Facility,  @nFunc=Func,@cScanNo=ScanNo, @cType = cType, @cUserName = UserName, @cLangCode = LangCode
-FROM OPENJSON(@json)  
-WITH (  
+FROM OPENJSON(@json)
+WITH (
 	   StorerKey   NVARCHAR ( 15),
 	   Facility    NVARCHAR ( 5),
-      Func        INT,  
+      Func        INT,
       ScanNo      NVARCHAR( 30),
       cType       NVARCHAR( 30),
       UserName    NVARCHAR( 30),
       LangCode    NVARCHAR( 3)
-)  
+)
 --SELECT @cStorerKey AS StorerKey, @cFacility AS Facility,@nFunc AS Func, @cScanNo AS ScanNo, @cType AS TYPE, @cUserName AS userName, @cLangCode AS LangCode
 
---Data Validate  - Check ScanNo blank    
-IF @cScanNo = ''  
-BEGIN  
-   SET @b_Success = 0  
-   SET @n_Err = 100300  
-   SET @c_ErrMsg = 'Please scan or enter Packing Document No to proceed. Function : isp_CheckCarton'  
+--Data Validate  - Check ScanNo blank
+IF @cScanNo = ''
+BEGIN
+   SET @b_Success = 0
+   SET @n_Err = 175607
+   SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Please scan or enter Packing Document No to proceed. Function : isp_CheckCarton'
 
-   GOTO EXIT_SP  
-END  
+   GOTO EXIT_SP
+END
 
 --check pickslipNo
 EXEC [API].[isp_GetPicklsipNo] @cStorerKey,@cFacility,@nFunc,@cLangCode,@cScanNo,@cType,@cUserName, @jResult OUTPUT,@b_Success OUTPUT,@n_Err OUTPUT,@c_ErrMsg OUTPUT,1
@@ -92,10 +88,10 @@ EXEC [API].[isp_GetPicklsipNo] @cStorerKey,@cFacility,@nFunc,@cLangCode,@cScanNo
 IF @n_Err <>0
 BEGIN
 	SET @jResult = ''
-	SET @b_Success = 0  
-   SET @n_Err = @n_Err  
+	SET @b_Success = 0
+   SET @n_Err = @n_Err
    SET @c_ErrMsg = @c_ErrMsg
-   
+
    GOTO EXIT_SP
 END
 
@@ -104,19 +100,19 @@ END
 SELECT @cScanNoType = ScanNoType, @cpickslipNo = PickslipNo, @cDropID = DropID,  @cOrderKey=OrderKey, @cLoadKey = LoadKey, @cZone = Zone--, @EcomSingle = EcomSingle
 --, @cDynamicRightName1 = DynamicRightName1, @cDynamicRightValue1 = DynamicRightValue1
 ,@pickSkuDetailJson = PickSkuDetail
-FROM OPENJSON(@jResult)  
-WITH (  
+FROM OPENJSON(@jResult)
+WITH (
 	   ScanNoType        NVARCHAR( 30),
 	   PickslipNo        NVARCHAR( 30),
       DropID            NVARCHAR( 30),
-      OrderKey          NVARCHAR( 10),  
+      OrderKey          NVARCHAR( 10),
       LoadKey           NVARCHAR( 10),
       Zone              NVARCHAR( 18),
       EcomSingle        NVARCHAR( 1),
       DynamicRightName1    NVARCHAR( 30),
       DynamicRightValue1   NVARCHAR( 30),
       PickSkuDetail     NVARCHAR( MAX) as json
-)  
+)
 --SELECT @cScanNoType as ScanNoType, @cpickslipNo as PickslipNo, @cDropID as DropID,  @cOrderKey as OrderKey, @cLoadKey as LoadKey, @cZone as Zone, @EcomSingle as EcomSingle
 --, @cDynamicRightName1 as DynamicRightName1, @cDynamicRightValue1 as DynamicRightValue1
 
@@ -130,7 +126,7 @@ WITH (
       PickslipNo        NVARCHAR( 30)  '$.PickslipNo',
       LoadKey           NVARCHAR( 10)  '$.LoadKey',
       PickDetailStatus  NVARCHAR( 1)   '$.PickDetailStatus'
-)           
+)
 
 
 --SELECT @cPickSlipNo AS pickslipNo
@@ -138,43 +134,41 @@ WITH (
 --SELECT DISTINCT pickslipNo FROM @pickSKUDetail
 
 --retun json - check carton info
-SET @b_Success = 1  
+SET @b_Success = 1
 
 --SELECT aa.* FROM (
 --SELECT PKI.cartonNo,PKI.CartonStatus,PD.Item,PKI.EditWho AS StatusBy,LEFT(CONVERT(VARCHAR,PKI.EditDate,20),16) AS StatusDateTime,PD.LabelNo AS CartonID
 --FROM packInfo PKI WITH (NOLOCK)
 --LEFT JOIN (select count(SKU) AS Item,cartonNo,pickslipNo,LabelNo FROM packDetail WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo GROUP BY cartonNo,pickslipNo,LabelNo)PD
 --ON PD.pickslipNo = PKI.PickSlipNo AND PD.cartonNo = PKI.CartonNo
---WHERE ISNULL(PKI.cartonStatus,'') <> '' 
+--WHERE ISNULL(PKI.cartonStatus,'') <> ''
 --AND PKI.PickSlipNo = @cPickSlipNo) aa
 
 
 SET @jResult =(
 SELECT aa.* FROM (
-SELECT PKI.cartonNo,PKI.CartonStatus,PD.Item,PKI.EditWho AS StatusBy,LEFT(CONVERT(VARCHAR,PKI.EditDate,20),16) AS StatusDateTime,PD.LabelNo AS CartonID,PH.OrderKey
+SELECT PKI.cartonNo,PKI.CartonStatus,PD.Item,PKI.EditWho AS StatusBy,LEFT(CONVERT(VARCHAR,PKI.EditDate,20),16) AS StatusDateTime,PD.LabelNo AS CartonID,PH.OrderKey,PH.Status AS PackStatus
 FROM  packInfo PKI WITH (NOLOCK)
-LEFT JOIN (select count(PD2.SKU) AS Item,PD2.cartonNo,PD2.pickslipNo,PD2.LabelNo 
+LEFT JOIN (select count(PD2.SKU) AS Item,PD2.cartonNo,PD2.pickslipNo,PD2.LabelNo
            FROM  packDetail PD2 WITH (NOLOCK)
-           WHERE PD2.pickslipno IN (SELECT DISTINCT pickslipNo FROM @pickSKUDetail) 
-           GROUP BY PD2.cartonNo,PD2.pickslipNo,PD2.LabelNo)PD 
+           WHERE PD2.pickslipno IN (SELECT DISTINCT pickslipNo FROM @pickSKUDetail)
+           GROUP BY PD2.cartonNo,PD2.pickslipNo,PD2.LabelNo)PD
 LEFT JOIN packHeader PH WITH (NOLOCK) ON (PH.pickslipno = PD.pickslipno)
 ON PD.pickslipNo = PKI.PickSlipNo AND PD.cartonNo = PKI.CartonNo
-WHERE ISNULL(PKI.cartonStatus,'') <> '' 
-AND PKI.PickSlipNo IN (SELECT DISTINCT pickslipNo FROM @pickSKUDetail) 
+WHERE ISNULL(PKI.cartonStatus,'') <> ''
+AND PKI.PickSlipNo IN (SELECT DISTINCT pickslipNo FROM @pickSKUDetail)
 ) aa
 FOR JSON AUTO, INCLUDE_NULL_VALUES)
 
 
 EXIT_SP:
-   REVERT  
+   REVERT
 
 
-
+GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
 GRANT EXECUTE ON api.isp_CheckCarton TO NSQL
 GO
-
-
