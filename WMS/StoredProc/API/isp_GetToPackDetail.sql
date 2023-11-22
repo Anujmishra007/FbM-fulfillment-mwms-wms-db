@@ -30,6 +30,8 @@ GO
 /*                               (yeekung04)                                     */
 /* 2023-03-14   2.9  YeeKung    TPS-681 remove UCC (yeekung05)                   */
 /* 2023-06-06   3.0  YeeKung    TPS-684 Add Loadkey (yeekung06)                  */
+/* 2023-08-16   3.1  YeeKung    TPS-779 Get KeyPad (yeekung07)                   */
+/* 2023-08-28   3.2  YeeKung    TPS-766 skipconfirm config (yeekung08)           */
 /*********************************************************************************/  
   
 CREATE  OR ALTER PROC [API].[isp_GetToPackDetail] (  
@@ -101,7 +103,9 @@ DECLARE
    @cDymCtnWgtCol       NVARCHAR( 20),  
    @cDymCtnCubeTb       NVARCHAR( 20),  
    @cDymCtnCubeCol      NVARCHAR( 20),  
-   @pickSkuDetailJson   NVARCHAR( MAX)  
+   @pickSkuDetailJson   NVARCHAR( MAX),
+   @cGetKeyPadInput     NVARCHAR( 20), --(yeekung07)
+   @cSkipPckCfmBtn      NVARCHAR( 20) --(yeekung08)
   
 SET @EcomSingle = '0'  
 SET @CalOrderSKU = 'N'  
@@ -288,8 +292,10 @@ IF @cAutoScanOutOp1 = ''
 SELECT @cCheckPickB4Pack = sValue FROM dbo.StorerConfig WITH (NOLOCK) WHERE @cStorerKey = @cStorerKey AND configKey ='CheckPickB4Pack' --(cc05)  
 SELECT @cOrderStatus = STATUS FROM Orders WITH (NOLOCK) WHERE storerKey = @cStorerKey AND orderKey = @cOrderKey --(cc05)  
 SELECT @cPickingPickslipNo = pickslipNo FROM pickingInfo WITH (NOLOCK) WHERE pickslipNo = @cPickSlipNo  
-SELECT @cPackQtyIndicatorFlag = sValue FROM dbo.StorerConfig WITH (NOLOCK) WHERE @cStorerKey = @cStorerKey AND configKey = 'TPS-PackQtyIndicator'  --(cc14)  
-  
+SELECT @cPackQtyIndicatorFlag = sValue FROM dbo.StorerConfig WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND configKey = 'TPS-PackQtyIndicator'  --(cc14)  
+SELECT @cGetKeyPadInput = sValue FROM dbo.StorerConfig WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND configKey = 'TPS-GetKeyPadInput'  --(yeekung07)  
+SELECT @cSkipPckCfmBtn = sValue FROM dbo.StorerConfig WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND configKey = 'TPS-SkipPckCfmBtn'  --(yeekung87)  
+
   
 IF EXISTS (SELECT TOP 1 1  FROM dbo.storerConfig WITH (NOLOCK) WHERE storerKey = @cStorerKey AND configKey = 'TPS-captureWeight' AND (sValue LIKE '%w%' or sValue LIKE'%c%'))  
 BEGIN  
@@ -1073,6 +1079,8 @@ SET @jResult = (SELECT MAX(PD.CartonNo) AS MaxCartonNo, (SELECT COUNT(CartonStat
 ,@cGetUCC AS GetUCC --(yeekung01)
 ,@cPackQtyIndicatorFlag AS PackQtyIndicatorFlag --(cc14)  
 ,@cLoadkey AS Loadkey --(yeekung06)
+,@cGetKeyPadInput AS GetKeyPadInput --(yeekung07)
+,@cSkipPckCfmBtn  AS SkipPackCfmBtn --(yeekung08)
 ,CASE WHEN ISNULL(@cAutoDefaultLot,'') <> '' THEN '1' ELSE '0' END AS lottableEnable --(cc08)  
 ,(SELECT Option1 AS Option1_title,Option2 AS Option2_mandatory  
 ,Option3 AS Option3_sp, Option4 AS Option4, Option5 AS Option5_regexp  
