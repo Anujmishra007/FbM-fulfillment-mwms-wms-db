@@ -1,19 +1,8 @@
-IF EXISTS
-(
-    SELECT *
-    FROM dbo.sysobjects
-    WHERE id = OBJECT_ID(N'[dbo].[isp_ImgMgr_Validate_Remy_IN]')
-          AND OBJECTPROPERTY(id, N'IsProcedure') = 1
-)
-BEGIN
-    DROP PROCEDURE [dbo].[isp_ImgMgr_Validate_Remy_IN];
-END;
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET ANSI_NULLS OFF;
-GO
-SET QUOTED_IDENTIFIER OFF;
-GO
 
 /************************************************************************/
 /* Store procedure: isp_ImgMgr_Validate_Remy_IN                         */
@@ -47,7 +36,7 @@ GO
 /* Date        Author   Purposes														*/
 /* 2021-Aug-04 GHChan   Initial                                         */
 /************************************************************************/
-CREATE PROC [dbo].[isp_ImgMgr_Validate_Remy_IN]
+CREATE OR ALTER PROC [dbo].[isp_ImgMgr_Validate_Remy_IN]
 (
     @b_Debug INT = 0,
     @x_xml XML,
@@ -210,9 +199,9 @@ BEGIN
                 col2 NVARCHAR(100) 'col2',
                 col3 NVARCHAR(100) 'col3',
                 col4 NVARCHAR(100) 'col4',
-                col5 NVARCHAR(100) 'col5',      
-                col6 NVARCHAR(100) 'col6',      
-                col7 NVARCHAR(100) 'col7',      
+                col5 NVARCHAR(100) 'col5',
+                col6 NVARCHAR(100) 'col6',
+                col7 NVARCHAR(100) 'col7',
                 col8 NVARCHAR(100) 'col8',
                 col9 NVARCHAR(100) 'col9',
                 col10 NVARCHAR(100) 'col10',
@@ -242,7 +231,7 @@ BEGIN
     END;
 
     QUIT:
-    IF @n_Continue = 3 -- Error Occured - Process And Return      
+    IF @n_Continue = 3 -- Error Occured - Process And Return
     BEGIN
         SET @b_Success = 0;
         IF @@TRANCOUNT > @n_StartCnt
@@ -268,9 +257,5 @@ BEGIN
         END;
         RETURN;
     END;
-END; -- Procedure  
-GO
-
-
-GRANT EXECUTE ON [dbo].[isp_ImgMgr_Validate_Remy_IN] TO NSQL;
+END; -- Procedure
 GO

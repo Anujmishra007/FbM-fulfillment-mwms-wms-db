@@ -1,19 +1,8 @@
-IF EXISTS
-(
-    SELECT *
-    FROM dbo.sysobjects
-    WHERE id = OBJECT_ID(N'[dbo].[isp_ImgMgr_Validate_Remy_IN_DMG]')
-          AND OBJECTPROPERTY(id, N'IsProcedure') = 1
-)
-BEGIN
-    DROP PROCEDURE [dbo].[isp_ImgMgr_Validate_Remy_IN_DMG];
-END;
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET ANSI_NULLS OFF;
-GO
-SET QUOTED_IDENTIFIER OFF;
-GO
 
 /************************************************************************/
 /* Store procedure: isp_ImgMgr_Validate_Remy_IN_DMG                     */
@@ -47,7 +36,7 @@ GO
 /* Date        Author   Purposes														*/
 /* 2021-Aug-04 GHChan   Initial                                         */
 /************************************************************************/
-CREATE PROC [dbo].[isp_ImgMgr_Validate_Remy_IN_DMG]
+CREATE OR ALTER PROC [dbo].[isp_ImgMgr_Validate_Remy_IN_DMG]
 (
     @b_Debug INT = 0,
     @x_xml XML,
@@ -275,29 +264,17 @@ BEGIN
                 IF NOT EXISTS
                 (
                     SELECT 1
-                    FROM dbo.V_CODELKUP WITH (NOLOCK)
-                    WHERE LISTNAME = 'IMGMGR'
-                          AND Code = 'SKIP_LOT_VALIDATION'
-                          AND Storerkey = @c_col1
-                          AND UDF01 = @c_col6
+                    FROM dbo.V_RECEIPTDETAIL WITH (NOLOCK)
+                    WHERE StorerKey = @c_col1
+                          AND Sku = @c_col5
+                          AND Lottable02 = @c_col6
                 )
                 BEGIN
-                    IF NOT EXISTS
-                    (
-                        SELECT 1
-                        FROM dbo.V_RECEIPTDETAIL WITH (NOLOCK)
-                        WHERE StorerKey = @c_col1
-                              AND Sku = @c_col5
-                              AND Lottable02 = @c_col6
-                    )
-                    BEGIN
-                        SET @n_Continue = 3;
-                        SET @b_Success = 0;
-                        SET @n_ErrNo = 10002;
-                        SET @c_ErrMsg += '<br/>Lottable not found!';
-                    END;
+                    SET @n_Continue = 3;
+                    SET @b_Success = 0;
+                    SET @n_ErrNo = 10002;
+                    SET @c_ErrMsg += '<br/>Lottable not found!';
                 END;
-
             END;
         END;
         IF ISNULL(RTRIM(@c_col7), '') <> ''
@@ -320,7 +297,7 @@ BEGIN
     END;
 
     QUIT:
-    IF @n_Continue = 3 -- Error Occured - Process And Return      
+    IF @n_Continue = 3 -- Error Occured - Process And Return
     BEGIN
         SET @b_Success = 0;
         IF @@TRANCOUNT > @n_StartCnt
@@ -346,9 +323,5 @@ BEGIN
         END;
         RETURN;
     END;
-END; -- Procedure  
-GO
-
-
-GRANT EXECUTE ON [dbo].[isp_ImgMgr_Validate_Remy_IN_DMG] TO NSQL;
+END; -- Procedure
 GO
