@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver. Purposes                                  */
 /* 17-APR-2023  NJOW     1.0  DEVOPS combine script                     */
+/* 06-Sep-2023  NJOW01   1.1  WMS-23595 Full Id allocation              */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[nspAL_TH12]
    @c_WaveKey    NVARCHAR(10),   
@@ -73,7 +74,8 @@ BEGIN
            @c_B2C              NCHAR(1) = 'N',
            @c_DocType          NCHAR(1) = 'N',
            @c_OrderGroup       NVARCHAR(20) = '',
-           @c_LocCategory      NVARCHAR(10) = ''
+           @c_LocCategory      NVARCHAR(10) = '',
+           @n_NoOfLot          INT = 0 --NJOW01
   
    DECLARE @c_key1        NVARCHAR(10),    
            @c_key2        NVARCHAR(5),    
@@ -132,7 +134,22 @@ BEGIN
       SET @c_B2C = 'Y'
    ELSE
       SET @c_B2C = 'N'	          
-               	                
+         
+   --NJOW01 S
+   IF @c_UOM = '1'
+   BEGIN
+      IF (ISNULL(@c_key1,'')<>'' AND ISNULL(@c_key2,'')='')  --skip conso allocation for full id
+         OR NOT EXISTS(SELECT 1 FROM CODELKUP CL (NOLOCK) WHERE ListName = 'FULLIDALLO' AND Storerkey = @c_Storerkey) --skip if not setup in codelkup FULLIDALLO
+      BEGIN      	  
+         DECLARE  CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR 
+         SELECT TOP 0 NULL, NULL, NULL, NULL, NULL
+         
+         RETURN          	
+      END
+      SET @c_FindSOHMaxLoc = 'Y' 
+   END 
+   --NJOW01 E   
+                  	                
    IF ISNULL(@c_key1,'')<>'' AND ISNULL(@c_key2,'')<>'' AND @c_FindSOHMaxLoc = 'Y' AND @c_B2C = 'Y' --skip Discrete allocation for B2C
    BEGIN
       DECLARE  CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR 
@@ -184,8 +201,8 @@ BEGIN
       AND LOT.STATUS = ''OK''
       AND LOC.Facility = @c_Facility  
       AND LOTxLOCxID.STORERKEY = @c_StorerKey  
-      AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen) >= @n_UOMBase
       AND LOTxLOCxID.SKU = @c_SKU ' + CHAR(13) +              
+      CASE WHEN @c_UOM = '1' THEN ' AND (LOTxLOCxID.QTYALLOCATED + LOTxLOCxID.QtyReplen) = 0 ' ELSE ' ' END +   --NJOW01
       CASE WHEN  @c_FilterHostWHCode = 'Y' THEN
         ' AND LOC.HostWHCode IN (SELECT Short FROM CODELKUP (NOLOCK) WHERE ListName = ''HOSTCODE'' AND Storerkey = @c_Storerkey) '   
       ELSE ' ' END +
@@ -207,7 +224,9 @@ BEGIN
       CASE WHEN ISNULL(RTRIM(@c_Lottable12),'') = '' THEN '' ELSE ' AND LA.Lottable12 = @c_Lottable12 ' + CHAR(13) END + 
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable13 ,112) <> '19000101' AND @d_Lottable13 IS NOT NULL THEN ' AND LA.Lottable13 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable13, 106)) ' ELSE ' ' END +
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable14 ,112) <> '19000101' AND @d_Lottable14 IS NOT NULL THEN ' AND LA.Lottable14 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable14, 106)) ' ELSE ' ' END +
-      CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable15 ,112) <> '19000101' AND @d_Lottable15 IS NOT NULL THEN ' AND LA.Lottable15 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable15, 106)) ' ELSE ' ' END +
+      CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable15 ,112) <> '19000101' AND @d_Lottable15 IS NOT NULL THEN ' AND LA.Lottable15 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable15, 106)) ' ELSE ' ' END +      
+      CASE WHEN @c_UOM = '1' THEN ' AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen) <= @n_QtyLeftToFulfill ' ELSE ' ' END + --NJOW01
+      CASE WHEN @c_UOM <> '1' THEN ' AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen) >= @n_UOMBase ' ELSE ' ' END + --NJOW01      
       + @c_SortBy
       
    SET @c_SQLParm =  N'@c_Facility   NVARCHAR(5),  @c_StorerKey  NVARCHAR(15), @c_SKU NVARCHAR(20), @n_QtyLeftToFulfill INT, ' +        
@@ -236,7 +255,9 @@ BEGIN
       FROM   
          (SELECT TOP 1 UDF01, UDF02, UDF03, UDF04, UDF05
           FROM CODELKUP (NOLOCK)
-          WHERE Listname = CASE WHEN @c_B2C = 'Y' THEN 'SORTSEQB2C' ELSE 'SORTSEQB2B' END
+          WHERE Listname = CASE WHEN @c_UOM = '1' THEN 'FULLIDALLO' --NJOW01
+                                WHEN @c_B2C = 'Y' THEN 'SORTSEQB2C' 
+                                ELSE 'SORTSEQB2B' END
           AND Storerkey = @c_Storerkey
           --AND Code = @c_DocType
           --AND Short = @c_OrderGroup
@@ -326,23 +347,55 @@ BEGIN
             
             IF @n_LotQtyAvailable < @n_QtyAvailable 
             BEGIN
-            	 --IF @c_UOM = '1' 
-            	 --   SET @n_QtyAvailable = 0
-            	 --ELSE
+            	 IF @c_UOM = '1' --NJOW01
+            	    SET @n_QtyAvailable = 0
+            	 ELSE
                   SET @n_QtyAvailable = @n_LotQtyAvailable
             END
-                     	                  
-            IF @n_QtyLeftToFulfill >= @n_QtyAvailable
-            BEGIN
-            		 SET @n_QtyToTake = Floor(@n_QtyAvailable / @n_UOMBase) * @n_UOMBase
-            END
+
+            --NJOW01 S
+            IF @c_UOM = '1' --Pallet
+            BEGIN     	         
+     	         SELECT @n_NoOfLot = 0
+                	  
+               SELECT @n_NoOfLot = COUNT(DISTINCT LLI.Lot)
+               FROM LOTXLOCXID LLI (NOLOCK)
+               WHERE LLI.Loc = @c_LOC
+               AND LLI.ID = @c_ID
+               AND LLI.Storerkey = @c_Storerkey
+               --AND LLI.Sku = @c_Sku 
+                      	        	
+               IF @n_QtyLeftToFulfill >= @n_QtyAvailable 
+                  AND @n_NoOfLot = 1 -- if multi lot per sku/loc/id then proceed to next strategy allocation by carton/Piece
+               BEGIN                	    
+                  SET @n_QtyToTake = @n_QtyAvailable  
+               END
+               ELSE
+               BEGIN
+               	  SET @n_QtyToTake = 0
+                  --GOTO EXIT_SP
+               END
+            END  --NOW01 E
             ELSE
-            BEGIN
-            	  SET @n_QtyToTake = Floor(@n_QtyLeftToFulfill / @n_UOMBase) * @n_UOMBase
-            END      	 
+            BEGIN          	                  
+               IF @n_QtyLeftToFulfill >= @n_QtyAvailable
+               BEGIN
+               		SET @n_QtyToTake = Floor(@n_QtyAvailable / @n_UOMBase) * @n_UOMBase
+               END
+               ELSE
+               BEGIN
+               	  SET @n_QtyToTake = Floor(@n_QtyLeftToFulfill / @n_UOMBase) * @n_UOMBase
+               END      	 
+            END
             
             IF @n_QtyToTake > 0
-            BEGIN
+            BEGIN            	
+            	 --NJOW01
+    	         IF @n_QtyToTake = @n_QtyAvailable AND @c_UOM = '1'      
+                	 SET @c_OtherValue = '@c_FULLPALLET=Y'                          
+               ELSE                                                          
+                 	 SET @c_OtherValue = '1'       	                           
+            	
          	  	 UPDATE #TMP_LOT
          	  	 SET QtyAvailable = QtyAvailable - @n_QtyToTake 
          	  	 WHERE Lot = @c_Lot
