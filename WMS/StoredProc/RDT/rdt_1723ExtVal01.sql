@@ -1,6 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdt_1723ExtVal01]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdt_1723ExtVal01]
-GO
+
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -19,9 +17,11 @@ GO
 /* 27-Dec-2017  1.1  James    WMS3665. Not allow pallet with different  */
 /*                            Lot07 to be merged (james01)              */
 /* 02-Jul-2018  1.2  James    WMS5526. Add step 6 validation (james02)  */
+/* 25-Oct-2022  1.3  YeeKung  WMS-20960 Change orderdetail.lottable07 to*/
+/*                            lotattribute.lottable07 (yeekung01)       */
 /************************************************************************/
 
-CREATE PROC [rdt].[rdt_1723ExtVal01] (
+CREATE OR ALTER PROC [rdt].[rdt_1723ExtVal01] (
    @nMobile         INT,
    @nFunc           INT,
    @cLangCode       NVARCHAR( 3),
@@ -125,20 +125,20 @@ BEGIN
                DECLARE @tLot07Value TABLE ( Lottable07    NVARCHAR( 30) NULL)
 
                INSERT INTO @tLot07Value (Lottable07)
-               SELECT DISTINCT OD.Lottable07
+               SELECT DISTINCT LOT.Lottable07
                FROM dbo.PickDetail PD WITH (NOLOCK)
-               JOIN dbo.OrderDetail OD WITH (NOLOCK) ON ( PD.OrderKey = OD.OrderKey AND PD.OrderLineNumber = OD.OrderLineNumber)
+               JOIN LotAttribute Lot  WITH (NOLOCK) ON PD.LOT =LOT.LOT AND PD.storerkey=LOT.storerkey --(yeekung01)
                WHERE PD.StorerKey = @cStorerKey
                AND   PD.ID = @cFromID
                AND   PD.Status < '9'
-               
+
                IF EXISTS ( SELECT 1
                   FROM dbo.PickDetail PD WITH (NOLOCK)
-                  JOIN dbo.OrderDetail OD WITH (NOLOCK) ON ( PD.OrderKey = OD.OrderKey AND PD.OrderLineNumber = OD.OrderLineNumber)
+                  JOIN LotAttribute Lot WITH (NOLOCK) ON PD.LOT =LOT.LOT AND PD.storerkey=LOT.storerkey --(yeekung01)
                   WHERE PD.StorerKey = @cStorerKey
                   AND   PD.ID = @cToID
                   AND   PD.Status < '9'
-                  AND   NOT EXISTS ( SELECT 1 FROM @tLot07Value LV WHERE OD.Lottable07 = LV.Lottable07))
+                  AND   NOT EXISTS ( SELECT 1 FROM @tLot07Value LV WHERE LOT.Lottable07 = LV.Lottable07))
                BEGIN
                   SET @nErrNo = 0
                   SET @cErrMsg1 = SUBSTRING( rdt.rdtgetmessage( 115207, @cLangCode, 'DSP'), 7, 14)
