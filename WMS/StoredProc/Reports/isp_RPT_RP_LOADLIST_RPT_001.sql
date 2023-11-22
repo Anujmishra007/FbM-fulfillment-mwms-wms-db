@@ -225,7 +225,7 @@ BEGIN
         , recgrp AS recgrp
         , CASE WHEN ISNULL(OrderkeyGrp2, '') <> '' THEN CAST(Rownogrp2 AS NVARCHAR(10)) ELSE '' END AS rownogrp2
    FROM #TMPSPLITLOAD
-   ORDER BY recgrp, RIGHT('0000'+ISNULL(CAST(Rownogrp1 AS NVARCHAR(10)),''),4)
+   ORDER BY Loadkey, recgrp, RIGHT('0000'+ISNULL(CAST(Rownogrp1 AS NVARCHAR(10)),''),4)
 
    DROP TABLE #TMPLOADBYORD
    DROP TABLE #TMPSPLITLOAD
