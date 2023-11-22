@@ -1,18 +1,12 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_WebAPI_PhotoRepoGetAppConfig]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-BEGIN 
-   DROP PROCEDURE [dbo].[isp_WebAPI_PhotoRepoGetAppConfig]  
-END
-GO 
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
 
-/************************************************************************/              
-/* Store procedure: isp_WebAPI_PhotoRepoGetAppConfig                    */              
+
+/************************************************************************/
+/* Store procedure: isp_WebAPI_PhotoRepoGetAppConfig                    */
 /* Creation Date: 05-JAN-2018                                           */
 /* Copyright: IDS                                                       */
 /* Written by: AlexKeoh                                                 */
@@ -42,8 +36,8 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Purposes														*/
 /* 2018-01-15  Alex     #CR WMS-5241 - v2.0 (Alex02)                    */
-/************************************************************************/    
-CREATE PROC [dbo].[isp_WebAPI_PhotoRepoGetAppConfig](
+/************************************************************************/
+CREATE OR ALTER PROC [dbo].[isp_WebAPI_PhotoRepoGetAppConfig](
      @b_Debug           INT            = 0
    , @c_Format          VARCHAR(10)    = ''
    , @c_UserID          NVARCHAR(256)  = ''
@@ -57,10 +51,10 @@ CREATE PROC [dbo].[isp_WebAPI_PhotoRepoGetAppConfig](
 AS
 BEGIN
    SET NOCOUNT ON
-   SET ANSI_DEFAULTS OFF 
+   SET ANSI_DEFAULTS OFF
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
-   
+
    DECLARE @n_Continue                    INT
          , @n_StartCnt                    INT
          , @c_ExecStatements              NVARCHAR(MAX)
@@ -70,7 +64,7 @@ BEGIN
          , @c_XMLRequestString            NVARCHAR(MAX)
 
          , @c_Request_XMLNodes            NVARCHAR(60)
-         
+
          , @c_SearchType                  NVARCHAR(10)
 
          , @c_WhereClauseCondi            NVARCHAR(500)
@@ -94,7 +88,7 @@ BEGIN
 
    IF ISNULL(RTRIM(@c_RequestString), '') = ''
    BEGIN
-      SET @n_Continue = 3 
+      SET @n_Continue = 3
       SET @n_ErrNo = 97011
       SET @c_ErrMsg = 'Content Body cannot be blank.'
       GOTO QUIT
@@ -106,19 +100,19 @@ BEGIN
    IF @n_Continue = 1
    BEGIN
       EXEC sp_xml_preparedocument @n_doc OUTPUT, @x_xml
-      
+
       --Read data from XML
-      SELECT @c_SearchType = ISNULL(RTRIM(SearchType), '')   
+      SELECT @c_SearchType = ISNULL(RTRIM(SearchType), '')
       FROM OPENXML (@n_doc, 'Request/Data', 1)
       WITH (
          SearchType        NVARCHAR(10)   'SearchType'
       )
-      
+
       EXEC sp_xml_removedocument @n_doc
 
       IF @c_SearchType NOT IN ('SKU')
       BEGIN
-         SET @n_Continue = 3 
+         SET @n_Continue = 3
          SET @n_ErrNo = 97012
          SET @c_ErrMsg = 'Invalid SearchType[' + @c_SearchType + ']..'
          GOTO QUIT
@@ -149,33 +143,32 @@ BEGIN
    END
 
    QUIT:
-   IF @n_Continue= 3  -- Error Occured - Process And Return      
-   BEGIN      
-      SET @b_Success = 0      
-      IF @@TRANCOUNT > @n_StartCnt AND @@TRANCOUNT = 1 
-      BEGIN               
-         ROLLBACK TRAN      
-      END      
-      ELSE      
-      BEGIN      
-         WHILE @@TRANCOUNT > @n_StartCnt      
-         BEGIN      
-            COMMIT TRAN      
-         END      
-      END   
-      RETURN      
-   END      
-   ELSE      
+   IF @n_Continue= 3  -- Error Occured - Process And Return
    BEGIN
-      SELECT @b_Success = 1      
-      WHILE @@TRANCOUNT > @n_StartCnt      
-      BEGIN      
-         COMMIT TRAN      
-      END      
-      RETURN      
+      SET @b_Success = 0
+      IF @@TRANCOUNT > @n_StartCnt AND @@TRANCOUNT = 1
+      BEGIN
+         ROLLBACK TRAN
+      END
+      ELSE
+      BEGIN
+         WHILE @@TRANCOUNT > @n_StartCnt
+         BEGIN
+            COMMIT TRAN
+         END
+      END
+      RETURN
    END
-END -- Procedure  
+   ELSE
+   BEGIN
+      SELECT @b_Success = 1
+      WHILE @@TRANCOUNT > @n_StartCnt
+      BEGIN
+         COMMIT TRAN
+      END
+      RETURN
+   END
+END -- Procedure
 GO
-
-GRANT EXECUTE ON [dbo].[isp_WebAPI_PhotoRepoGetAppConfig] TO NSQL  
-GO 
+GRANT EXECUTE ON  [dbo].[isp_WebAPI_PhotoRepoGetAppConfig] TO [NSQL]
+GO

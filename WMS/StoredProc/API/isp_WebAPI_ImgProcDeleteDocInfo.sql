@@ -1,19 +1,8 @@
-IF EXISTS
-(
-    SELECT *
-    FROM dbo.sysobjects
-    WHERE id = OBJECT_ID(N'[dbo].[isp_WebAPI_ImgProcDeleteDocInfo]')
-          AND OBJECTPROPERTY(id, N'IsProcedure') = 1
-)
-BEGIN
-    DROP PROCEDURE [dbo].[isp_WebAPI_ImgProcDeleteDocInfo];
-END;
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET ANSI_NULLS OFF;
-GO
-SET QUOTED_IDENTIFIER OFF;
-GO
 
 /************************************************************************/
 /* Store procedure: isp_WebAPI_ImgProcDeleteDocInfo                     */
@@ -47,7 +36,7 @@ GO
 /* Date        Author   Purposes														*/
 /* 2021-Jul-22 GHChan   Initial                                         */
 /************************************************************************/
-CREATE PROC [dbo].[isp_WebAPI_ImgProcDeleteDocInfo]
+CREATE OR ALTER PROC [dbo].[isp_WebAPI_ImgProcDeleteDocInfo]
 (
     @b_Debug INT = 0,
     @c_Format VARCHAR(10) = '',
@@ -195,7 +184,7 @@ BEGIN
             WHERE RecordID = @c_RecordID
         )
         BEGIN
-            --SET @n_Continue = 3 
+            --SET @n_Continue = 3
             SET @n_ErrNo = 97002;
             SET @c_ErrMsg = 'No records found! Unable to delete the record.';
             GOTO QUIT;
@@ -462,7 +451,7 @@ BEGIN
     END;
 
     QUIT:
-    IF @n_Continue = 3 -- Error Occured - Process And Return      
+    IF @n_Continue = 3 -- Error Occured - Process And Return
     BEGIN
         SET @b_Success = 0;
         IF @@TRANCOUNT > @n_StartCnt
@@ -488,9 +477,5 @@ BEGIN
         END;
         RETURN;
     END;
-END; -- Procedure  
-GO
-
-
-GRANT EXECUTE ON [dbo].[isp_WebAPI_ImgProcDeleteDocInfo] TO NSQL;
+END; -- Procedure
 GO
