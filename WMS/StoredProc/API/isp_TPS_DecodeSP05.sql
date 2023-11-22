@@ -34,87 +34,141 @@ BEGIN
       @cUserName    NVARCHAR( 30),
       @cLangCode    NVARCHAR( 3),
       @cSKU         NVARCHAR( 30),
-      @cUPC         NVARCHAR( 20)
+      @cUPC         NVARCHAR( 20),
+      @cPackKey     NVARCHAR( 20),
+      @cPackUOM     NVARCHAR( 20),
+      @cPickslipno  NVARCHAR( 20),
+      @cOrderkey    NVARCHAR( 20)
 
 	--Decode Json Format
-   SELECT @cStorerKey = StorerKey, @cFacility = Facility,  @nFunc = Func, @cBarcode = Barcode, @cUserName = UserName, @cLangCode = LangCode
+   SELECT @cStorerKey = StorerKey, @cFacility = Facility,  @nFunc = Func, @cPickslipno=ScanNo,@cBarcode = Barcode, @cUserName = UserName, @cLangCode = LangCode
    FROM OPENJSON(@json)
    WITH (
       StorerKey   NVARCHAR ( 15),
       Facility    NVARCHAR ( 5),
       Func        INT,
+      ScanNo      NVARCHAR( 20),
       Barcode     NVARCHAR( 60),
       UserName    NVARCHAR( 30),
       LangCode    NVARCHAR( 3)
    )
 
+   select @cOrderkey = orderkey
+   FROM Pickheader (nolock)
+   Where pickheaderkey = @cPickslipno
+
    SET @b_Success = 1
 
-   IF EXISTS (SELECT 1 FROM dbo.StorerConfig WITH (NOLOCK) 
-               WHERE StorerKey = @cStorerKey 
-               AND configKey = 'ADAllowInsertExistingSerialNo'  
-               AND SVALUE='1')
+   -- Get SKU count        
+
+   IF EXISTS (SELECT 1  from UPC (nolock) 
+               where UPC=@cBarcode
+               AND storerkey=@cStorerKey)
    BEGIN
+      SELECT @cSKU = SKU,
+             @cPackUOM = UOM,
+             @cPackKey = packkey
+      from UPC (nolock) 
+      where UPC=@cBarcode
+      AND storerkey=@cStorerKey
 
-      IF NOT EXISTS(SELECT 1 FROM SerialNo WITH (NOLOCK)
-                  WHERE SerialNo = @cBarcode
-                  AND storerKey = @cStorerKey )
-      BEGIN
-         SET @jResult = (SELECT '' AS SKU
-         FOR JSON PATH,INCLUDE_NULL_VALUES)
-      END
-      ELSE IF NOT EXISTS(SELECT 1 FROM SerialNo WITH (NOLOCK)
-                  WHERE SerialNo = @cBarcode
-                  AND storerKey = @cStorerKey 
-                  AND ISNULL(orderkey,'')=''
-                  AND status='1')
-      BEGIN
-         SET @jResult = (SELECT '' AS SKU
-         FOR JSON PATH,INCLUDE_NULL_VALUES)
-      END
-      ELSE
-      BEGIN
-         SELECT @cUPC =  UserDefine02
-         FROM SerialNo WITH (NOLOCK)
-         WHERE SerialNo = @cBarcode
-         AND storerKey = @cStorerKey
-
-   	  SET @jResult = (SELECT ISNULL(RTRIM(SKU),'') AS SKU
-         FROM UPC WITH (NOLOCK)
-         WHERE UPC = @cUPC
-         AND storerKey = @cStorerKey
-         FOR JSON AUTO, INCLUDE_NULL_VALUES)
-      END
-
-      SET @n_Err = 0
-	   SET @c_ErrMsg = ''
+      SET @jResult = ( SELECT
+                        @cSKU AS SKU,
+                        CASE @cPackUOM
+                           WHEN Pack.PackUOM1  THEN Pack.CaseCNT
+                           WHEN Pack.PackUOM2 THEN Pack.InnerPack
+                           WHEN Pack.PackUOM3 THEN Pack.QTY
+                           WHEN Pack.PackUOM4 THEN Pack.Pallet
+                           WHEN Pack.PackUOM8 THEN Pack.OtherUnit1
+                           WHEN Pack.PackUOM9 THEN Pack.OtherUnit2
+                        ELSE 1 END AS QTY
+                        FROM dbo.Pack Pack WITH (NOLOCK) 
+                        WHERE packkey= @cPackKey
+                        FOR JSON AUTO, INCLUDE_NULL_VALUES)   
    END
    ELSE
    BEGIN
-      IF NOT EXISTS(SELECT 1 FROM SerialNo WITH (NOLOCK)
-            WHERE SerialNo = @cBarcode
-            AND storerKey = @cStorerKey )
+
+      IF EXISTS (SELECT 1 FROM dbo.StorerConfig WITH (NOLOCK) 
+                  WHERE StorerKey = @cStorerKey 
+                  AND configKey = 'ADAllowInsertExistingSerialNo'  
+                  AND SVALUE='1')
       BEGIN
-         SET @jResult = (SELECT '' AS SKU
-         FOR JSON PATH,INCLUDE_NULL_VALUES)
+
+         IF NOT EXISTS(SELECT 1 FROM SerialNo WITH (NOLOCK)
+                     WHERE SerialNo = @cBarcode
+                     AND storerKey = @cStorerKey )
+         BEGIN
+            SET @jResult = (SELECT '' AS SKU
+            FOR JSON PATH,INCLUDE_NULL_VALUES)
+         END
+         ELSE IF NOT EXISTS(SELECT 1 FROM SerialNo WITH (NOLOCK)
+                     WHERE SerialNo = @cBarcode
+                     AND storerKey = @cStorerKey 
+                     AND ISNULL(orderkey,'')=''
+                     AND status='1')
+         BEGIN
+            SET @n_Err = 1000101
+	         SET @c_ErrMsg = CAST(@n_Err AS NVARCHAR(20))+'Err Insert Duplicate SerialNO'
+
+            SET @jResult = (SELECT '' AS SKU
+            FOR JSON PATH,INCLUDE_NULL_VALUES )    
+            SET @b_Success = 0
+         END
+         ELSE
+         BEGIN
+            SELECT @cUPC =  UserDefine02
+            FROM SerialNo WITH (NOLOCK)
+            WHERE SerialNo = @cBarcode
+            AND storerKey = @cStorerKey
+
+            IF ISNULL(@cUPC,'')=''
+            BEGIN
+            
+   	        SET @jResult = (SELECT ISNULL(RTRIM(SKU),'') AS SKU,@cBarcode AS Serialno
+               FROM SerialNo WITH (NOLOCK)
+               WHERE SerialNo = @cBarcode
+               AND storerKey = @cStorerKey
+               FOR JSON AUTO, INCLUDE_NULL_VALUES)
+            END
+            ELSE
+            BEGIN
+
+   	        SET @jResult = (SELECT ISNULL(RTRIM(SKU),'') AS SKU,@cBarcode AS Serialno
+               FROM UPC WITH (NOLOCK)
+               WHERE UPC = @cUPC
+               AND storerKey = @cStorerKey
+               FOR JSON AUTO, INCLUDE_NULL_VALUES)
+            END
+         END
       END
-
-      IF EXISTS (SELECT 1 FROM SerialNo WITH (NOLOCK)
-            WHERE SerialNo = @cBarcode
-            AND storerKey = @cStorerKey )
+      ELSE
       BEGIN
-         SET @n_Err = 1000101
-	      SET @c_ErrMsg = CAST(@n_Err AS NVARCHAR(20))+'Err Insert Duplicate SerialNO'
+         IF NOT EXISTS(SELECT 1 FROM SerialNo WITH (NOLOCK)
+               WHERE SerialNo = @cBarcode
+               AND storerKey = @cStorerKey )
+         BEGIN
+            SET @jResult = (SELECT '' AS SKU
+            FOR JSON PATH,INCLUDE_NULL_VALUES)
+         END
 
-         SET @jResult = (SELECT '' AS SKU
-         FOR JSON PATH,INCLUDE_NULL_VALUES )    
-         SET @b_Success = 0
+         IF EXISTS (SELECT 1 FROM SerialNo WITH (NOLOCK)
+               WHERE SerialNo = @cBarcode
+               AND storerKey = @cStorerKey )
+         BEGIN
+            SET @n_Err = 1000101
+	         SET @c_ErrMsg = CAST(@n_Err AS NVARCHAR(20))+'Err Insert Duplicate SerialNO'
+
+            SET @jResult = (SELECT '' AS SKU
+            FOR JSON PATH,INCLUDE_NULL_VALUES )    
+            SET @b_Success = 0
+         END
       END
    END
 
 
    SELECT @cStorerKey '@cStorerKey', @cBarcode '@cBarcode', @jResult '@jResult'
-
+QUIT:
 END
 
 GO
