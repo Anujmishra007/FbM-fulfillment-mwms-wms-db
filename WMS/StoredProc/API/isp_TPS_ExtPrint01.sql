@@ -1,19 +1,18 @@
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
 /******************************************************************************/
-/* Store procedure: isp_TPS_ExtPrint02                                        */
+/* Store procedure: isp_TPS_ExtPrint01                                        */
 /* Copyright      : LFLogistics                                               */
 /*                                                                            */
 /* Date         Rev  Author     Purposes                                      */
-/* 2022-07-18   1.0  YeeKung    WMS-20061 Created (yeekung01)                 */
+/* 2021-11-11   1.0  Chermaine  TPS-594 Created                               */
 /* 2023-09-12   1.1  YeeKung    TPS-773/TPS-740 New print (yeekung3)          */
 /******************************************************************************/
 
-CREATE  OR ALTER PROC [API].[isp_TPS_ExtPrint02] (
+CREATE OR ALTER PROC [API].[isp_TPS_ExtPrint01] (
 	@cStorerKey       NVARCHAR( 15),
    @cFacility        NVARCHAR( 5),
    @nFunc            INT,
@@ -111,12 +110,13 @@ DECLARE @cSQLParam      NVARCHAR ( MAX)
 DECLARE @cColumn        NVARCHAR( 60)
 DECLARE @cValue         NVARCHAR( 60)
 
+
 DECLARE   @c_ModuleID           NVARCHAR(30) ='TPPack'
-         , @c_ReportID           NVARCHAR(10) 
-         , @c_PrinterID          NVARCHAR(30)  
-         , @c_JobIDs             NVARCHAR(50)   = ''         --(Wan03) -- May return multiple jobs ID.JobID seperate by '|'
-         , @c_PrintSource        NVARCHAR(20)
-         , @c_AutoPrint          NVARCHAR(1)    = 'N'        --(Wan07)
+      , @c_ReportID           NVARCHAR(10) 
+      , @c_PrinterID          NVARCHAR(30)  
+      , @c_JobIDs             NVARCHAR(50)   = ''         --(Wan03) -- May return multiple jobs ID.JobID seperate by '|'
+      , @c_PrintSource        NVARCHAR(20)
+      , @c_AutoPrint          NVARCHAR(1)    = 'N'        --(Wan07)
   
 
 set @cLabelJobID = ''
@@ -156,38 +156,17 @@ BEGIN
          BEGIN
             SET @b_Success = 0
             SET @n_Err = 175743
-            SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Label Printer setup not done. Please setup the Label Printer. Function : isp_TPS_ExtPrint02'
+            SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Label Printer setup not done. Please setup the Label Printer. Function : isp_TPS_ExtPrint01'
             GOTO Quit
          END
          ELSE
          BEGIN
-           IF EXISTS (  select 1
-                       FROM ORDERS WIH (NOLOCK)  
-                       WHERE OrderKey = @cOrderKey
-                       AND StorerKey = @cStorerKey
-                       AND DOCTYPE='E')
-               SET @cReportType='UCCLABEL01'
-            ELSE
-               SET @cReportType='UCCLABEL02'
-
-            --EXEC API.isp_Print @cLangCode, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
-            --   @cReportType, -- Report type
-            --   @tShipLabel, -- Report params
-            --   'API.isp_TPS_ExtPrint02', --source Type
-            --   @n_Err      OUTPUT,
-            --   @c_ErrMsg   OUTPUT,
-            --   '1', --noOfCopy
-            --   '', --@cPrintCommand
-            --   @nJobID     OUTPUT,
-            --   @cUsername
-
-            
             SELECT @c_ReportID = WMR.reportid,
                      @c_PrintSource = CASE WHEN printtype='LOGIREPORT' THEN 'JReport' ELSE 'WMReport' END
             FROM WMReport WMR (NOLOCK)
             JOIN WMReportdetail WMRD (NOLOCK) ON WMR.reportid =WMRD.reportid
             WHERE Storerkey = @cStorerkey
-               AND reporttype = @cReportType
+               AND reporttype = 'TPSHIPPLBL'
                AND ModuleID ='TPPack'
 
             EXEC  [WM].[lsp_WM_Print_Report]
@@ -225,7 +204,7 @@ BEGIN
             BEGIN
                SET @b_Success = 0
                SET @n_Err = 175744
-               SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Paper Printer setup not done. Please setup the Paper Printer. Function : isp_TPS_ExtPrint02'
+               SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Paper Printer setup not done. Please setup the Paper Printer. Function : isp_TPS_ExtPrint01'
                GOTO Quit
             END
             ELSE
@@ -237,7 +216,6 @@ BEGIN
                WHERE Storerkey = @cStorerkey
                   AND reporttype = 'TPPACKLIST'
                   AND ModuleID ='TPPack'
-                  AND ISNULL(ComputerName,'') ='' OR ComputerName= @cWorkstation
 
                EXEC  [WM].[lsp_WM_Print_Report]
                   @c_ModuleID = @c_ModuleID           
@@ -269,13 +247,12 @@ BEGIN
 Quit:
 
 END
-GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-GRANT EXECUTE ON api.isp_TPS_ExtPrint02 TO NSQL
+GRANT EXECUTE ON api.isp_TPS_ExtPrint01 TO NSQL
 GO
-
 
 
