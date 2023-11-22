@@ -36,9 +36,9 @@ WITH (
    StorerKey   NVARCHAR ( 15)
 )
 
-SELECT @cExtValidSP = sValue FROM dbo.StorerConfig WITH (NOLOCK) WHERE @cStorerKey = @cStorerKey AND configKey = 'TPS-ExtValidSP'
+   SELECT @cExtValidSP = sValue FROM dbo.StorerConfig WITH (NOLOCK) WHERE StorerKey =@cStorerkey AND configKey = 'TPS-ExtValidSP'
 
-   IF @cExtValidSP <> ''
+   IF ISNULL(@cExtValidSP,'') <> ''
    BEGIN
       IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtValidSP AND type = 'P')
       BEGIN
@@ -57,8 +57,7 @@ SELECT @cExtValidSP = sValue FROM dbo.StorerConfig WITH (NOLOCK) WHERE @cStorerK
    END
    ELSE
    BEGIN
-      SET @jResult = (SELECT '' AS SKU
-      FOR JSON PATH,INCLUDE_NULL_VALUES )    
+      SET @jResult = @json
       SET @b_Success = 1
    END
 GO
