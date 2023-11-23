@@ -13,6 +13,7 @@ GO
 /* 27-Mar-2023 1.0  WLChooi    Created (WMS-21983)                            */    
 /* 27-Mar-2023 1.0  WLChooi    DevOps Combine Script                          */    
 /* 27-Jul-2023 1.1  WLChooi    WMS-23221 - Logic Change (WL01)                */
+/* 22-Nov-2023 1.2  WLChooi    WMS-24227 - Modify Col27 & add Col36, 37 (WL02)*/
 /******************************************************************************/    
     
 CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_AU_VASXDLBL01_FARMER]
@@ -163,7 +164,7 @@ BEGIN
                   + N'                                              ELSE '''' END, ' + CHAR(13)   --30
                   + N'        ''554'' + TRIM(ISNULL(OH.C_Zip, '''')), ' + CHAR(13)   --31
                   + N'        RIGHT(TRIM(PD.LottableValue), 18), OH.TrackingNo, ''036'' + TRIM(ISNULL(OH.C_Zip, '''')), RIGHT(''0000'' + TRIM(ISNULL(OH.Userdefine04,'''')), 4), ' + CHAR(13)   --WL01
-                  + N'        '''', '''', '''', '''', '''', ' + CHAR(13) --40
+                  + N'        FORMAT(OH.Userdefine07,''ddMM''), LEFT(TRIM(ISNULL(OH.C_Company,'''')), 25) , '''', '''', '''', ' + CHAR(13) --40   --WL02
                   + N'        '''', '''', '''', '''', '''', '''', '''', '''', '''', '''', ' + CHAR(13) --50
                   + N'        '''', '''', '''', '''', '''', '''', '''', '''', PD.Storerkey, PD.LabelNo  ' + CHAR(13) --60
                   + N' FROM PackDetail PD (NOLOCK) ' + CHAR(13)
@@ -207,8 +208,9 @@ BEGIN
     
    ;WITH CTE (Qty, MixedSKU) AS (
       SELECT SUM(PD.Qty)
-           , CASE WHEN COUNT(DISTINCT PD.SKU) > 1 THEN 'MIXED' ELSE MAX(PD.SKU) END
+           , CASE WHEN COUNT(DISTINCT PD.SKU) > 1 THEN 'MIXED' ELSE MAX(LEFT(ISNULL(TRIM(S.DESCR), ''), 80)) END   --WL02
       FROM PACKDETAIL PD (NOLOCK)
+      JOIN SKU S (NOLOCK) ON S.Storerkey = PD.Storerkey AND S.SKU = PD.SKU   --WL02
       WHERE PD.StorerKey = @c_Sparm1 AND PD.LabelNo = @c_Sparm2)
    UPDATE #Result
    SET Col29 = CTE.Qty
