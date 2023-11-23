@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdt_Pick_GetTaskInLOC]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_Pick_GetTaskInLOC]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -9,7 +5,7 @@ GO
     
 /************************************************************************/    
 /* Store procedure: rdt_Pick_GetTaskInLOC                               */    
-/* Copyright      : IDS                                                 */    
+/* Copyright      : Maersk                                              */    
 /*                                                                      */    
 /* Purpose: Post Pick Packing                                           */    
 /*                                                                      */    
@@ -40,9 +36,10 @@ GO
 /*                          Add lottable01 as new param                 */
 /* 2014-07-23 1.8  Ung      SOS307606 Fix Zone=7, not go to conso part  */
 /*                          Fix exclude PickDetail.QTY = 0              */
+/* 2023-06-20 1.9  James    Adhoc request. Add suggtasksp               */
 /************************************************************************/    
     
-CREATE PROCEDURE [RDT].[rdt_Pick_GetTaskInLOC] (    
+CREATE OR ALTER PROCEDURE [RDT].[rdt_Pick_GetTaskInLOC] (    
    @cStorer        NVARCHAR( 15),     
    @cPickSlipNo    NVARCHAR( 10),     
    @cLOC           NVARCHAR( 15),     
@@ -71,7 +68,94 @@ SET NOCOUNT ON
 SET QUOTED_IDENTIFIER OFF    
 SET ANSI_NULLS OFF    
 SET CONCAT_NULL_YIELDS_NULL OFF    
-    
+
+DECLARE @cSQL           NVARCHAR( MAX)
+DECLARE @cSQLParam      NVARCHAR( MAX)
+DECLARE @cMbolCreateSP  NVARCHAR( 20)
+DECLARE @nFunc          INT
+DECLARE @nMobile        INT
+DECLARE @nStep          INT
+DECLARE @nInputKey      INT
+DECLARE @cLangCode      NVARCHAR( 3)
+DECLARE @cFacility      NVARCHAR( 5)
+DECLARE @cPickGetTaskInLOCSP  NVARCHAR( 20)
+
+SELECT 
+   @nFunc = Func, 
+   @nMobile = Mobile,
+   @nStep = Step,
+   @nInputKey = InputKey,
+   @cLangCode = @cLangCode,
+   @cFacility = Facility 
+FROM RDT.RDTMOBREC WITH (NOLOCK) 
+WHERE UserName = sUser_sName()
+
+-- Get storer config
+SET @cPickGetTaskInLOCSP = rdt.RDTGetConfig( @nFunc, 'PickGetTaskInLOCSP', @cStorer)
+
+/***********************************************************************************************
+                                             Custom create 
+***********************************************************************************************/
+-- Lookup by SP
+IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cPickGetTaskInLOCSP AND type = 'P')
+BEGIN
+   SET @cSQL = 'EXEC rdt.' + RTRIM( @cPickGetTaskInLOCSP) +
+     ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+     ' @cPickSlipNo, @cLOC, @cPrefUOM, @cPickType, @cDropID, ' +
+     ' @cID        OUTPUT, @cSKU        OUTPUT, @cUOM        OUTPUT, ' +
+     ' @cLottable1 OUTPUT, @cLottable2  OUTPUT, @cLottable3  OUTPUT, @dLottable4  OUTPUT, ' +
+     ' @nTaskQTY   OUTPUT, @nTask       OUTPUT, @cSKUDescr   OUTPUT, @cUOMDesc    OUTPUT, ' +
+     ' @cPPK       OUTPUT, @nCaseCnt    OUTPUT, @cPrefUOM_Desc OUTPUT, @nPrefQTY  OUTPUT, ' +
+     ' @cMstUOM_Desc OUTPUT, @nMstQTY   OUTPUT '
+
+   SET @cSQLParam =
+      ' @nMobile        INT,           ' +
+      ' @nFunc          INT,           ' +
+      ' @cLangCode      NVARCHAR( 3),  ' +
+      ' @nStep          INT,           ' +
+      ' @nInputKey      INT,           ' +
+      ' @cFacility      NVARCHAR( 5),  ' +
+      ' @cStorerKey     NVARCHAR( 15), ' +
+      ' @cPickSlipNo    NVARCHAR( 10), ' +
+      ' @cLOC           NVARCHAR( 10), ' +
+      ' @cPrefUOM       NVARCHAR( 1),  ' +
+      ' @cPickType      NVARCHAR( 1),  ' +
+      ' @cDropID        NVARCHAR( 18), ' +
+      ' @cID            NVARCHAR( 18)  OUTPUT, ' +    
+      ' @cSKU           NVARCHAR( 20)  OUTPUT, ' +     
+      ' @cUOM           NVARCHAR( 10)  OUTPUT, ' +  
+      ' @cLottable1     NVARCHAR( 18)  OUTPUT, ' +     
+      ' @cLottable2     NVARCHAR( 18)  OUTPUT, ' +     
+      ' @cLottable3     NVARCHAR( 18)  OUTPUT, ' +     
+      ' @dLottable4     DATETIME       OUTPUT, ' +     
+      ' @nTaskQTY       INT            OUTPUT, ' +    
+      ' @nTask          INT            OUTPUT, ' +
+      ' @cSKUDescr      NVARCHAR( 60)  OUTPUT, ' +
+      ' @cUOMDesc       NVARCHAR( 5)   OUTPUT, ' +     
+      ' @cPPK           NVARCHAR( 5)   OUTPUT, ' +     
+      ' @nCaseCnt       INT            OUTPUT, ' +    
+      ' @cPrefUOM_Desc  NVARCHAR( 5)   OUTPUT, ' +
+      ' @nPrefQTY       INT            OUTPUT, ' +
+      ' @cMstUOM_Desc   NVARCHAR( 5)   OUTPUT, ' +
+      ' @nMstQTY        INT            OUTPUT '
+
+   EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+      @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorer, 
+      @cPickSlipNo, @cLOC, @cPrefUOM, @cPickType, @cDropID, 
+      @cID        OUTPUT, @cSKU        OUTPUT, @cUOM        OUTPUT, 
+      @cLottable1 OUTPUT, @cLottable2  OUTPUT, @cLottable3  OUTPUT, @dLottable4  OUTPUT,
+      @nTaskQTY   OUTPUT, @nTask       OUTPUT, @cSKUDescr   OUTPUT, @cUOMDesc    OUTPUT, 
+      @cPPK       OUTPUT, @nCaseCnt    OUTPUT, @cPrefUOM_Desc OUTPUT, @nPrefQTY  OUTPUT, 
+      @cMstUOM_Desc OUTPUT, @nMstQTY   OUTPUT
+      
+
+   GOTO Quit
+END
+   
+/***********************************************************************************************
+                             Standard GetTask SP
+***********************************************************************************************/
+   
 /*    
    Defination of a task = LOC + SKU + UOM + Lottable02..04, in PickDetail    
    Note: It does not consider the LOT no    
@@ -94,10 +178,7 @@ DECLARE @cZone    NVARCHAR(18),
 DECLARE @cCondition     NVARCHAR(MAX),    -- (james05)
         @cPH_OrderKey   NVARCHAR( 10),    -- (james04)
         @cPH_LoadKey    NVARCHAR( 10),    -- (james04)
-        @nFunc          INT,              -- (james05)
         @cSkipFilterByDropID  NVARCHAR( 1)-- (james05)
-
-SELECT @nFunc = Func FROM RDT.RDTMOBREC WITH (NOLOCK) WHERE UserName = sUser_sName()
 
 SET @cSkipFilterByDropID = rdt.RDTGetConfig( @nFunc, 'SkipFilterByDropID', @cStorer)    
 
@@ -331,6 +412,9 @@ BEGIN
       SET @nMstQTY = @nTaskQTY % @nPrefUOM_Div  -- Calc remaining QTY in master unit    
    END    
 END 
+
+Quit:
+
 GO
 
 SET QUOTED_IDENTIFIER OFF 
