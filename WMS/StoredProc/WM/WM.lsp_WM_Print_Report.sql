@@ -49,6 +49,8 @@ GO
 /* 2023-07-14  WLChooi  2.0   WMS-22860 - Add PostPrintSP (WL03)        */
 /* 2023-09-05  WLChooi  2.1   LFWM-4454 - Enhance Pre/Post Print STD SP */
 /*                            (WL04)                                    */
+/* 2023-11-17  Wan09    2.1   Fixed Matching Criteria Print SQL if print*/
+/*                            by column range                           */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_WM_Print_Report]
            @c_ModuleID           NVARCHAR(30)
@@ -164,6 +166,7 @@ BEGIN
          , @c_PrintGroup            NVARCHAR(10)      = ''
          , @c_PrintGroup_Last       NVARCHAR(10)      = ''
          , @c_ReportTemplate        NVARCHAR(4000)    = ''
+         , @c_GreaterLessEqual      NVARCHAR(5)       = ''                          --2023-11-17
          , @c_CriteriaParm1         NVARCHAR(60)      = ''
          , @c_CriteriaParm2         NVARCHAR(60)      = ''
          , @c_CriteriaParm3         NVARCHAR(60)      = ''
@@ -428,8 +431,25 @@ BEGIN
                BEGIN
                   SET @c_SQLPrint = @c_SQLPrint + ' AND '
                END
-          
-               SET @c_SQLPrint = @c_SQLPrint + @c_KeyParm + ' = @c_CriteriaParm'+ CONVERT(NVARCHAR(2), @n_NoofParms) 
+               
+               --(Wan09) - START
+               SET @c_GreaterLessEqual = ' = '
+               
+               -- @n_StopPosK: Last position on current @c_KeyParm
+               IF CHARINDEX(@c_KeyParm, @c_KeyParms, @n_StopPosK) > 0
+               BEGIN 
+                  SET @c_GreaterLessEqual = ' >= '
+               END
+               ELSE 
+               -- Find from First to Start pos of current @c_KeyParm
+               IF CHARINDEX(@c_KeyParm, @c_KeyParms, 1) < @n_StopPosK - LEN(@c_KeyParm)
+               BEGIN
+                  SET @c_GreaterLessEqual = ' <= '
+               END
+               --(Wan09) - END
+               
+               SET @c_SQLPrint = @c_SQLPrint + @c_KeyParm + @c_GreaterLessEqual                    --(Wan09)                 
+                               + '@c_CriteriaParm'+ CONVERT(NVARCHAR(2), @n_NoofParms) 
                IF @n_NoofParms = 1  SET @c_CriteriaParm1 = @c_Parm
                IF @n_NoofParms = 2  SET @c_CriteriaParm2 = @c_Parm
                IF @n_NoofParms = 3  SET @c_CriteriaParm3 = @c_Parm
@@ -455,7 +475,7 @@ BEGIN
          SET @n_ParmsCnt = @n_ParmsCnt + 1
       END
       --(MOve out From Loop) - END
-   
+
       SET @CUR_GROUP = CURSOR FAST_FORWARD READ_ONLY FOR                                  
       SELECT  RowID          = WMRD.RowID
              ,ReportLineNo   = WMRD.ReportLineNo
@@ -617,7 +637,7 @@ BEGIN
             BEGIN 
                GOTO NEXT_REC
             END
-         
+      
             --GOTO PRINT_START   --WL01
          END
          
@@ -1300,6 +1320,7 @@ BEGIN
          
          IF @c_PrintType IN ('TPPRINT')
          BEGIN
+  
             EXEC [WM].[lsp_WM_Print_TPPrint_Wrapper]
                @n_WMReportRowID  = @n_RowID 
             ,  @c_Storerkey      = @c_Storerkey     

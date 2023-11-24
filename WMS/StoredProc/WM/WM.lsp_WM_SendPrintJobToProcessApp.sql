@@ -21,12 +21,13 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author  Ver. Purposes                                   */
-/* 2023-02-15   Wan     1.0  Created & DevOps Combine Script            */ 
-/* 2023-05-15   Wan01   1.1  Insert RdtprintJob for Bartender           */
-/* 2023-07-10   Wan01   1.1  PAC-15:Ecom Packing | Print Packing Report */
+/* Date        Author   Ver.  Purposes                                  */
+/* 2023-02-15  Wan      1.0   Created & DevOps Combine Script           */ 
+/* 2023-05-15  Wan01    1.1   Insert RdtprintJob for Bartender          */
+/* 2023-07-10  Wan01    1.1   PAC-15:Ecom Packing | Print Packing Report*/
 /*                            - Backend                                 */
-/*                           Update Info for Cloud Print                */
+/*                            Update Info for Cloud Print               */
+/* 2023-10-23  Wan02    1.2   Get Print Over Internet Printing          */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_WM_SendPrintJobToProcessApp] 
    @c_ReportID       NVARCHAR(10) 
@@ -174,12 +175,16 @@ BEGIN
       END
    END 
 
-   SELECT @b_PrintOverInternet = IIF(cpc.PrintClientID IS NULL,0,1)               --(Wan01)
-         ,@c_SpoolerGroup = ISNULL(RTRIM(rp.SpoolerGroup),'')
+   --(Wan02) - START
+   SELECT --@b_PrintOverInternet = IIF(cpc.PrintClientID IS NULL,0,1)               
+          @c_SpoolerGroup = ISNULL(RTRIM(rp.SpoolerGroup),'')
          ,@c_PrinterGroup = ISNULL(RTRIM(rp.PrinterGroup),'')                     
    FROM rdt.RDTPrinter AS rp (NOLOCK) 
-   LEFT OUTER JOIN dbo.CloudPrintConfig AS cpc WITH (NOLOCK) ON cpc.PrintClientID = rp.CloudPrintClientID 
+   --LEFT OUTER JOIN dbo.CloudPrintConfig AS cpc WITH (NOLOCK) ON cpc.PrintClientID = rp.CloudPrintClientID 
    WHERE rp.PrinterID = @c_PrinterID
+   
+   SELECT @b_PrintOverInternet = dbo.fnc_GetCloudPrint ('', @c_PrintType, @c_PrinterID) 
+   --(Wan02) - END
    
    IF @b_PrintOverInternet = 1 SET @c_CloudClientPrinterID = @c_PrinterID
 

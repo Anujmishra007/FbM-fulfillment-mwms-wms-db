@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2023-02-15  Wan      1.0   Created & DevOps Combine Script           */ 
+/* 2023-10-23  Wan01    1.1   Return URL if Print from SCE module       */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_WM_Print_WebReport_Wrapper]
    @n_WMReportRowID      BIGINT 
@@ -70,6 +71,7 @@ BEGIN
          , @b_PrintOverInternet     INT               = 0
 
          , @c_SourceType            NVARCHAR(50)      = 'lsp_WM_Print_WebReport_Wrapper'
+         , @c_ModuleID              NVARCHAR(10)      = ''                          --(Wan01)
          , @c_ReportID              NVARCHAR(10)      = ''
          , @c_ReportLineNo          NVARCHAR(5)       = ''
          , @c_ReportType            NVARCHAR(30)      = ''
@@ -93,18 +95,23 @@ BEGIN
             ,@c_ReportLineNo = w.ReportLineNo
             ,@c_ReportTemplate = w.ReportTemplate           
             ,@c_PrintTemplateSP = w.PrintTemplateSP
-            ,@c_FileFolder             = w.FileFolder 
+            ,@c_FileFolder      = w.FileFolder 
+            ,@c_ModuleID        = w2.ModuleID                                       --(Wan01)
       FROM dbo.WMREPORTDETAIL AS w WITH (NOLOCK)
+      JOIN dbo.WMREPORT AS w2 WITH (NOLOCK) ON w2.ReportID = w.ReportID             --(Wan01) 
       WHERE w.RowID = @n_WMReportRowID
   
-      IF @c_PrinterID <> ''
-      BEGIN
-         SELECT @b_PrintOverInternet = IIF(cpc.PrintClientID IS NULL,0,1)               
-         FROM rdt.RDTPrinter AS rp (NOLOCK) 
-         LEFT OUTER JOIN dbo.CloudPrintConfig AS cpc WITH (NOLOCK) ON cpc.PrintClientID = rp.CloudPrintClientID 
-         WHERE rp.PrinterID = @c_PrinterID
-      END
-    
+      --(Wan01) - START
+      --IF @c_PrinterID <> ''
+      --BEGIN
+      --   SELECT @b_PrintOverInternet = IIF(cpc.PrintClientID IS NULL,0,1)               
+      --   FROM rdt.RDTPrinter AS rp (NOLOCK) 
+      --   LEFT OUTER JOIN dbo.CloudPrintConfig AS cpc WITH (NOLOCK) ON cpc.PrintClientID = rp.CloudPrintClientID 
+      --   WHERE rp.PrinterID = @c_PrinterID
+      --END
+      SELECT @b_PrintOverInternet = dbo.fnc_GetCloudPrint (@c_ModuleID, @c_PrintType, @c_PrinterID)
+      --(Wan01) - END 
+
       EXEC WM.lsp_WM_Get_WebReport_URL
             @c_ReportID          = @c_ReportID
          ,  @n_DetailRowID       = @n_WMReportRowID
