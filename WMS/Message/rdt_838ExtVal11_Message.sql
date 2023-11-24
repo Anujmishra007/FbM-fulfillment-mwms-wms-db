@@ -6,3 +6,4 @@ execute rdt.rdtAddMsg 182102, 10, '182102NeedExpiryDate', 'us_english', 838
 execute rdt.rdtAddMsg 182103, 10, '182103Invalid date  ', 'us_english', 838
 execute rdt.rdtAddMsg 182104, 10, '182104Not In PSNO   ', 'us_english', 838
 execute rdt.rdtAddMsg 182105, 10, '182105Over pack     ', 'us_english', 838
+execute rdt.rdtAddMsg 182106, 10, '182106Invalid format', 'us_english', 838
