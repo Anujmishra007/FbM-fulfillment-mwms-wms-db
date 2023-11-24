@@ -40,7 +40,10 @@ GO
 /* 20-OCT-2022  NJOW01     1.4   DEVOPS Combine Script                        */
 /* 23-Nov-2022  Wan01      1.5   LFWM-3861 - CN Loreal build Wave performance */
 /*                               enhancement and Calculate Wave Status when   */
-/*                               wave detail's orderkey change/remove         */   
+/*                               wave detail's orderkey change/remove         */ 
+/* 26-OCT-2023  Wan02      1.6   LFWM-4529 - PROD-CNWAVE Release group        */
+/*                               search slow and build wave slow              */
+/*                               - By Pass Trigger if Trafficcop = '9'        */
 /******************************************************************************/
 CREATE OR ALTER TRIGGER [dbo].[ntrWaveDetailAdd]
 ON [dbo].[WAVEDETAIL]
@@ -73,6 +76,29 @@ BEGIN
    SELECT @n_continue = 1
          ,@n_starttcnt = @@TRANCOUNT
    /* #INCLUDE <TROHA1.SQL> */
+   IF @n_continue = 1 OR @n_continue = 2                                            --(Wan02) - START                
+   BEGIN      
+      IF EXISTS (SELECT 1 FROM INSERTED WHERE TrafficCop IS NOT NULL)      
+      BEGIN 
+         UPDATE w WITH (ROWLOCK)
+            SET w.TrafficCop = NULL
+               ,w.ArchiveCop = w.ArchiveCop
+         FROM INSERTED
+         JOIN dbo.WAVEDETAIL AS w ON w.WaveDetailKey = Inserted.WaveDetailKey 
+         AND w.TrafficCop IS NOT NULL
+         
+         IF @@ERROR <> 0
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 62302
+            SET @c_ErrMsg   = 'NSQL'+CONVERT(char(5),@n_err)
+                            +': Update failed On Wavedetail. (ntrWaveDetailAdd)'      
+         END
+         ELSE     
+            SET @n_continue = 4       
+      END  
+   END                                                                              --(Wan02) - END   
+
    -- Added by Jeff - HK Customization - FBR 071 - Wave Planning
    -- reject any population of orders with status = 'shipped'
    IF @n_continue = 1
@@ -220,7 +246,7 @@ BEGIN
 
          IF @n_continue = 1                                                      --(Wan01) - START
          BEGIN
-         	IF @c_WaveKey_Prior <> @c_Wavekey                                        
+            IF @c_WaveKey_Prior <> @c_Wavekey                                        
             BEGIN
                SET @c_Status_Wav = @c_Wv_Cur_Status
             END  
@@ -232,17 +258,17 @@ BEGIN
                      ELSE 0
                      END                    
 
-         	SET @c_Status_Wav = IIF (@c_Status_ORD IN (3,4), '2', @c_Status_ORD)
+            SET @c_Status_Wav = IIF (@c_Status_ORD IN (3,4), '2', @c_Status_ORD)
   
             IF @c_Wv_Cur_Status <> @c_Status_Wav
             BEGIN
-            	UPDATE dbo.WAVE WITH (ROWLOCK)
-            	   SET [Status] = @c_Status_Wav      
+               UPDATE dbo.WAVE WITH (ROWLOCK)
+                  SET [Status] = @c_Status_Wav      
                   ,   EditWho  = SUSER_SNAME()      
                   ,   EditDate = GETDATE()      
                   ,   TrafficCop = NULL 
-            	WHERE WaveKey = @c_wavekey 
-            	AND [Status] = @c_Status_Wav         
+               WHERE WaveKey = @c_wavekey 
+               AND [Status] = @c_Status_Wav         
                
                IF @@ERROR <> 0
                BEGIN

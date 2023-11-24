@@ -40,6 +40,10 @@ GO
 /* 2020-09-08 2.7  YeeKung  WMS-15056 Add Extendedvalidatesp(yeekung01)       */
 /* 2023-05-08 2.8  Ung      WMS-22422 Add DefaultCartonTypeSP                 */
 /* 2023-07-14 2.9  James    WMS-23121 Extend TrackingNo to 40 chars (james04) */
+/* 2023-10-25 3.0  Ung      WMS-23940 Add DefaultWeightSP                     */
+/* 2023-11-01 3.1  Ung      Fix storer config mapped wrong V_String           */  
+/*                          @cSkipCheckPalletSamePresale                      */  
+/*                          @cExtendedCheckSOStatusSP                         */ 
 /******************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdtfnc_TrackNoToPallet](
@@ -111,6 +115,7 @@ DECLARE
    @cSkipCheckPalletSamePresale  NVARCHAR(20),
    @cExtendedCheckSOStatusSP     NVARCHAR(20),
    @cDefaultCartonTypeSP         NVARCHAR(20),
+   @cDefaultWeightSP             NVARCHAR(20),
 
    @cTrackNoBarcode     NVARCHAR( 60),
 
@@ -173,6 +178,7 @@ SELECT
    @cSkipCheckPalletSamePresale  = V_String34,
    @cExtendedCheckSOStatusSP     = V_String35,
    @cDefaultCartonTypeSP         = V_String36,
+   @cDefaultWeightSP             = V_String37,
    
    @cTrackNoBarcode     = V_String41,
    @cTrackNo            = V_String42,
@@ -248,6 +254,9 @@ BEGIN
    SET @cDefaultCartonTypeSP = rdt.rdtGetConfig( @nFunc, 'DefaultCartonTypeSP', @cStorerKey)
    IF @cDefaultCartonTypeSP = '0'
       SET @cDefaultCartonTypeSP = ''
+   SET @cDefaultWeightSP = rdt.rdtGetConfig( @nFunc, 'DefaultWeightSP', @cStorerKey)
+   IF @cDefaultWeightSP = '0'
+      SET @cDefaultWeightSP = ''
    SET @cExtendedCheckSOStatusSP = rdt.RDTGetConfig( @nFunc, 'ExtendedCheckSOStatusSP', @cStorerKey)
    IF @cExtendedCheckSOStatusSP = '0'
       SET @cExtendedCheckSOStatusSP = ''
@@ -1099,12 +1108,49 @@ BEGIN
       -- Track weight
       IF @cTrackOrderWeight IN ( '1', '6') -- (james02)
       BEGIN
+         DECLARE @cDefaultWeight NVARCHAR( 10) = ''
+         
+         -- Default weight
+         IF @cDefaultWeightSP <> ''
+         BEGIN
+            IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cDefaultWeightSP AND type = 'P')
+            BEGIN
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cDefaultWeightSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+                  ' @cPalletKey, @cPalletLOC, @cMBOLKey, @cTrackNo, @cOrderKey, @cShipperKey, @cCartonType, ' + 
+                  ' @cDefaultWeight OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+               SET @cSQLParam =
+                  '@nMobile         INT,           ' +
+                  '@nFunc           INT,           ' +
+                  '@cLangCode       NVARCHAR( 3),  ' +
+                  '@nStep           INT,           ' +
+                  '@nInputKey       INT,           ' +
+                  '@cFacility       NVARCHAR( 5),  ' +
+                  '@cStorerKey      NVARCHAR( 15), ' +
+                  '@cPalletKey      NVARCHAR( 20), ' +
+                  '@cPalletLOC      NVARCHAR( 10), ' +
+                  '@cMBOLKey        NVARCHAR( 10), ' +
+                  '@cTrackNo        NVARCHAR( 20), ' +
+                  '@cOrderKey       NVARCHAR( 10), ' +
+                  '@cShipperKey     NVARCHAR( 15), ' +
+                  '@cCartonType     NVARCHAR( 10), ' +
+                  '@cDefaultWeight  NVARCHAR( 10)  OUTPUT, ' +
+                  '@nErrNo          INT            OUTPUT, ' +
+                  '@cErrMsg         NVARCHAR( 20)  OUTPUT  '
+
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+                  @cPalletKey, @cPalletLOC, @cMBOLKey, @cTrackNo, @cOrderKey, @cShipperKey, @cCartonType, 
+                  @cDefaultWeight OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+            END
+         END
+         
          -- Prepare next screen var
-         SET @cOutField01 = '' -- Weight
+         SET @cOutField01 = @cDefaultWeight -- Weight
 
          -- Go to weight screen
-         SET @nScn = @nScn + 1
-         SET @nStep = @nStep + 1
+         SET @nScn = @nScn_Weight
+         SET @nStep = @nStep_Weight
 
          GOTO Quit
       END
@@ -1132,8 +1178,8 @@ BEGIN
          END
 
          -- Go to carton type screen
-         SET @nScn = @nScn + 2
-         SET @nStep = @nStep + 2
+         SET @nScn = @nScn_PostCartonType
+         SET @nStep = @nStep_PostCartonType
 
          GOTO Quit
       END
@@ -2001,9 +2047,10 @@ BEGIN
       V_String31 = @cTrackNoOnOrder,
       V_String32 = @cDecodeTrackNoSP,
       V_String33 = @cSkipCheckPalletSameShipper,
-      V_String34 = @cExtendedCheckSOStatusSP,
-      V_String35 = @cSkipCheckPalletSamePresale,
+      V_String34 = @cSkipCheckPalletSamePresale,
+      V_String35 = @cExtendedCheckSOStatusSP,
       V_String36 = @cDefaultCartonTypeSP,
+      V_String37 = @cDefaultWeightSP,
       
       V_String41 = @cTrackNoBarcode,
       V_String42 = @cTrackNo,
