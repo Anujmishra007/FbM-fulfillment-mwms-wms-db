@@ -1,0 +1,28 @@
+IF EXISTS (SELECT 1 FROM dbo.CODELKUP AS c WITH (NOLOCK) WHERE listname = 'WMRptModID'
+               AND Code = 'EPACKING')
+BEGIN
+   UPDATE CODELKUP WITH (ROWLOCK)
+   SET UDF01 = 'PrintByCPC' 
+   WHERE listname = 'WMRptModID'
+   AND Code = 'EPACKING'
+END 
+ELSE
+BEGIN
+   INSERT INTO CODELKUP (ListName, Code, Description, UDF01)
+   VALUES ('WMRptModID', 'EPACKING', 'EPACKING','PrintByCPC')
+END
+   
+IF EXISTS (SELECT 1 FROM dbo.CODELKUP AS c WITH (NOLOCK) WHERE listname = 'WMRptModID'
+               AND Code = 'TPPACK')
+BEGIN
+   UPDATE CODELKUP WITH (ROWLOCK)
+   SET UDF01 = 'PrintByCPC' 
+   WHERE listname = 'WMRptModID'
+   AND Code = 'TPPACK'
+END 
+ELSE
+BEGIN
+   INSERT INTO CODELKUP (ListName, Code, Description, UDF01)
+   VALUES ('WMRptModID', 'TPPACK', 'TPPACK','PrintByCPC')
+END
+      
