@@ -6,10 +6,11 @@ GO
 
 /************************************************************************/
 /* Store procedure: rdt_838ExtVal11                                     */
-/* Copyright      : LF Logistics                                        */
+/* Copyright      : Maersk                                              */
 /*                                                                      */
 /* Date       Rev  Author      Purposes                                 */
 /* 01-10-2019 1.0  Ung         WMS-10729 Created                        */
+/* 17-11-2023 1.1  Ung         WMS-23947 ExpDate key-in exact YYYYMMDD  */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_838ExtVal11 (
@@ -56,7 +57,7 @@ BEGIN
    DECLARE @nPackQTY    INT
    DECLARE @dLottable04 DATETIME
    DECLARE @cPickStatus NVARCHAR(1)
-   
+
    IF @nFunc = 838 -- Pack
    BEGIN
       IF @nStep = 10 -- Pack data
@@ -77,6 +78,15 @@ BEGIN
             BEGIN
                SET @nErrNo = 182102
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NeedExpiryDate
+               EXEC rdt.rdtSetFocusField @nMobile, 4  -- expiry date
+               GOTO Quit
+            END
+
+            -- Check ExpDate in exact format of YYYYMMDD
+            IF LEN( @cPackData2) <> 8
+            BEGIN
+               SET @nErrNo = 182106
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid format
                EXEC rdt.rdtSetFocusField @nMobile, 4  -- expiry date
                GOTO Quit
             END

@@ -73,6 +73,7 @@ GO
 /* 2021-12-20 23.5 CSCHONG    Devops Scripts Combine and increase username     */
 /*                            field length to NVARCHAR(256) (CS44)             */
 /* 2023-04-04 23.6 Wan01      WMS-22125 - Backend Bartender DB-MQ              */
+/* 2023-10-23 23.7 Wan02      Get Print Over Internet Printing                 */
 /*******************************************************************************/        
 --> For CN Only: @cCmdType = 'PRN'        
 CREATE OR ALTER PROC [dbo].[isp_BT_GenBartenderCommand](        
@@ -405,7 +406,8 @@ BEGIN
                     N',@c_StartRec = ' + QUOTENAME(ISNULL(@c_StartRec,''), '''') +        
                     N',@c_EndRec= ' + QUOTENAME(ISNULL(@c_EndRec,''), '''') +        
                     N',@c_FromSourceModule = ' + QUOTENAME('isp_BT_GenBartenderCommand','''') +        
-                    N',@c_QCmdSubmitFlag  = ' + QUOTENAME('0','''')        
+                    N',@c_QCmdSubmitFlag  = ' + QUOTENAME('0','''')  +
+                    N',@n_JobID = ' + CONVERT(NVARCHAR(10), @n_JobID)               --(Wan02)     
     
       --(CS43) START    
   
@@ -978,11 +980,29 @@ BEGIN
         
       GOTO QUIT        
    END 
-       
-   SELECT @n_PrintOverInternet = IIF(cpc.PrintClientID= rp.CloudPrintClientID,1,0)  --(Wan01)
-   FROM rdt.RDTPrinter AS rp WITH (NOLOCK)
-   LEFT OUTER JOIN dbo.CloudPrintConfig AS cpc WITH (NOLOCK) ON cpc.PrintClientID = rp.CloudPrintClientID 
-   WHERE rp.PrinterID = @cPrinterID 
+   
+   SET @c_JobType = ''                                                                             --(Wan02) - START
+   IF @n_JobID > 0
+   BEGIN
+      SELECT TOP 1 @c_JobType = rpj.JobType
+      FROM rdt.RDTPrintJob AS rpj WITH (NOLOCK) WHERE rpj.JobId = @n_JobID
+      
+      IF @c_JobType = ''
+      BEGIN
+         SELECT TOP 1 @c_JobType = rpjl.JobType
+         FROM rdt.RDTPrintJob_Log AS rpjl WITH (NOLOCK) WHERE rpjl.JobId = @n_JobID
+      END
+      SELECT @n_PrintOverInternet = dbo.fnc_GetCloudPrint ('', @c_JobType, @cPrinterID) 
+   END
+   
+   IF @c_JobType <> ''                                                                 --2023-11-15
+   BEGIN
+      SELECT @n_PrintOverInternet = dbo.fnc_GetCloudPrint ('', @c_JobType, @cPrinterID) 
+   END              
+   --SELECT @n_PrintOverInternet = IIF(cpc.PrintClientID= rp.CloudPrintClientID,1,0)  --(Wan01)
+   --FROM rdt.RDTPrinter AS rp WITH (NOLOCK)
+   --LEFT OUTER JOIN dbo.CloudPrintConfig AS cpc WITH (NOLOCK) ON cpc.PrintClientID = rp.CloudPrintClientID 
+   --WHERE rp.PrinterID = @cPrinterID                                                              --(Wan02) - END
         
    -----------------------------------------------------------        
    /* Assign Different Path/TCP Port base on Printer Group */        
@@ -1355,12 +1375,16 @@ BEGIN
             IF ISNULL(@c_BTPrinterID,'') <> ''        
             BEGIN        
                SELECT @c_Printername = LEFT(rp.winprinter ,CHARINDEX(',' ,rp.winprinter + ',') -1)--(Wan01)
-                     ,@n_PrintOverInternet = IIF(cpc.PrintClientID = rp.CloudPrintClientID,1,0)  
+                     --,@n_PrintOverInternet = IIF(cpc.PrintClientID = rp.CloudPrintClientID,1,0)  --(Wan02) 
                FROM rdt.RDTPrinter AS rp WITH (NOLOCK)
-               LEFT OUTER JOIN dbo.CloudPrintConfig AS cpc WITH (NOLOCK) 
-                             ON cpc.PrintClientID = rp.CloudPrintClientID        
-               WHERE rp.PrinterID = @c_BTPrinterID      
-        
+               --LEFT OUTER JOIN dbo.CloudPrintConfig AS cpc WITH (NOLOCK)                         --(Wan02) 
+               --              ON cpc.PrintClientID = rp.CloudPrintClientID                        --(Wan02) 
+               WHERE rp.PrinterID = @c_BTPrinterID  
+               
+               IF @c_JobType <> ''                                                                 --2023-11-15
+               BEGIN
+                  SELECT @n_PrintOverInternet = dbo.fnc_GetCloudPrint ('', @c_JobType, @c_BTPrinterID)--(Wan02)     
+               END
          --CS41a Start        
                SELECT TOP 1 @c_RemoteEndPoint = c.Long        
                FROM   CODELKUP c WITH (NOLOCK)        

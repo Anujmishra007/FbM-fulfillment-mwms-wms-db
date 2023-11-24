@@ -12,7 +12,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 8.0                                                         */
 /*                                                                      */
@@ -21,6 +21,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2023-02-15  Wan      1.0   Created & DevOps Combine Script           */ 
+/* 2023-10-09  Wan01    1.1   Fixed.                                    */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_WM_Print_TPPrint_Wrapper]
    @n_WMReportRowID      BIGINT 
@@ -82,11 +83,11 @@ BEGIN
          
          , @c_Shipperkey            NVARCHAR(15)      = ''
          , @c_Platform              NVARCHAR(50)      = ''         
-         , @c_UDF01                 NVARCHAR(100)     = ''
-         , @c_UDF02                 NVARCHAR(100)     = ''
-         , @c_UDF03                 NVARCHAR(100)     = ''
-         , @c_UDF04                 NVARCHAR(100)     = ''
-         , @c_UDF05                 NVARCHAR(100)     = '' 
+         , @c_UDF01                 NVARCHAR(200)     = ''                          --(Wan01) 2023-10-25
+         , @c_UDF02                 NVARCHAR(200)     = ''                          --(Wan01) 2023-10-25
+         , @c_UDF03                 NVARCHAR(4000)    = ''                          --(Wan01) 2023-10-25
+         , @c_UDF04                 NVARCHAR(4000)    = ''                          --(Wan01) 2023-10-25
+         , @c_UDF05                 NVARCHAR(4000)    = ''                          --(Wan01) 2023-10-25
          , @c_TPP_Parm1             NVARCHAR(60)      = ''
          , @c_TPP_Parm2             NVARCHAR(60)      = ''
          , @c_TPP_Parm3             NVARCHAR(60)      = ''
@@ -95,8 +96,8 @@ BEGIN
          , @c_TPP_Parm6             NVARCHAR(60)      = ''
          , @c_TPP_Parm7             NVARCHAR(60)      = ''
          , @c_TPP_Parm8             NVARCHAR(60)      = ''
-         , @c_TPP_Parm9             NVARCHAR(60)      = ''
-         , @c_TPP_Parm10            NVARCHAR(60)      = '' 
+         , @c_TPP_Parm9             NVARCHAR(500)     = ''                          --(Wan01) 2023-10-25
+         , @c_TPP_Parm10            NVARCHAR(4000)    = ''                          --(Wan01) 2023-10-25
          , @c_TPPrint_SP            NVARCHAR(30)      = '' 
 
          , @c_PrintData             NVARCHAR(MAX)     = ''     
@@ -131,7 +132,7 @@ BEGIN
                                     ELSE ru.DefaultPrinter_Paper
                                     END
          FROM rdt.RDTUser AS ru WITH (NOLOCK)
-         WHERE @c_UserName = @c_UserName
+         WHERE ru.UserName = @c_UserName                                            --(Wan01)
       END         
       
       IF @c_PrinterID = ''
@@ -172,8 +173,8 @@ BEGIN
          , [TPP_Parm6]  NVARCHAR(60)   NOT NULL DEFAULT('')
          , [TPP_Parm7]  NVARCHAR(60)   NOT NULL DEFAULT('')
          , [TPP_Parm8]  NVARCHAR(60)   NOT NULL DEFAULT('')
-         , [TPP_Parm9]  NVARCHAR(60)   NOT NULL DEFAULT('')
-         , [TPP_Parm10] NVARCHAR(60)   NOT NULL DEFAULT('')                                               
+         , [TPP_Parm9]  NVARCHAR(500)  NOT NULL DEFAULT('')                         --(Wan01) 2023-10-25
+         , [TPP_Parm10] NVARCHAR(4000) NOT NULL DEFAULT('')                         --(Wan01) 2023-10-25                      
          ) 
               
       SET @c_SQLParms= N'@c_Parm1         NVARCHAR(60)'         
@@ -184,8 +185,8 @@ BEGIN
                      + ',@c_Parm6         NVARCHAR(60)'         
                      + ',@c_Parm7         NVARCHAR(60)'         
                      + ',@c_Parm8         NVARCHAR(60)'         
-                     + ',@c_Parm9         NVARCHAR(60)' 
-                     + ',@c_Parm10        NVARCHAR(60)'                        
+                     + ',@c_Parm9         NVARCHAR(60)'                            
+                     + ',@c_Parm10        NVARCHAR(60)'                            
                      + ',@c_Parm11        NVARCHAR(60)'         
                      + ',@c_Parm12        NVARCHAR(60)'         
                      + ',@c_Parm13        NVARCHAR(60)'         

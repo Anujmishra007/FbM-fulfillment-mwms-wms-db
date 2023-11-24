@@ -13,7 +13,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.5                                                    */
+/* PVCS Version: 1.7                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -33,6 +33,7 @@ GO
 /*                            DevOps combine Script                     */
 /* 2023-07-07  Wan05    1.6   PAC-15:Ecom Packing | Print Packing Report*/
 /*                            - Backend                                 */
+/* 2023-10-23  Wan06    1.7   Get Print Over Internet Printing          */ 
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_UpdateRDTPrintJobStatus]
       @n_JobID          BIGINT
@@ -96,12 +97,15 @@ BEGIN
          
          IF @c_JobStatus = '9' AND @c_IfCloudClientPrinter <> ''
          BEGIN
-            SELECT @n_PrintOverInternet = IIF(cpc.PrintClientID IS NULL,0,1)
-                  ,@c_CloudClientPrinterName = rp.WinPrinter
+            --(Wan06) - START
+            SELECT @n_PrintOverInternet = dbo.fnc_GetCloudPrint ('', @c_JobType, @c_IfCloudClientPrinter)    
+            SELECT --@n_PrintOverInternet = IIF(cpc.PrintClientID IS NULL,0,1)   
+                   @c_CloudClientPrinterName = rp.WinPrinter
             FROM rdt.RDTPrinter AS rp WITH (NOLOCK)
-            LEFT OUTER JOIN dbo.CloudPrintConfig AS cpc WITH (NOLOCK) ON cpc.PrintClientID = rp.CloudPrintClientID 
-            WHERE rp.PrinterID = @c_IfCloudClientPrinter 
-            
+            --LEFT OUTER JOIN dbo.CloudPrintConfig AS cpc WITH (NOLOCK) ON cpc.PrintClientID = rp.CloudPrintClientID 
+            WHERE rp.PrinterID = @c_IfCloudClientPrinter
+            --(Wan06) - END
+
             IF @c_CloudClientPrinterName <> '' AND CHARINDEX(',', @c_CloudClientPrinterName,1) > 0
             BEGIN
                SET @c_CloudClientPrinterName = LEFT(@c_CloudClientPrinterName, CHARINDEX(',', @c_CloudClientPrinterName,1) - 1)
