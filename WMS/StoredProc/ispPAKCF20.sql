@@ -14,7 +14,7 @@ GO
 /*                                                                         */
 /* Called By: PostPackConfirmSP                                            */
 /*                                                                         */
-/* GitLab Version: 1.0                                                     */
+/* GitLab Version: 1.1                                                     */
 /*                                                                         */
 /* Version: 5.4                                                            */
 /*                                                                         */
@@ -23,6 +23,7 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 20-Apr-2022  WLChooi 1.0   DevOps Combine Script                        */
+/* 06-Sep-2023  WLChooi 1.1   WMS-23545 - Add new trigger point (WL01)     */
 /***************************************************************************/  
 CREATE OR ALTER PROC [dbo].[ispPAKCF20]  
 (     @c_PickSlipNo  NVARCHAR(10)   
@@ -99,6 +100,12 @@ BEGIN
          BEGIN
             SET @c_InsertTL2 = 'Y'
          END
+         --WL01 S
+         ELSE IF ISNULL(@c_ECPlatform,'') = 'DY'
+         BEGIN
+            SET @c_InsertTL2 = 'Y'
+         END
+         --WL01 E
          ELSE
          BEGIN
             SET @c_InsertTL2 = 'N'
