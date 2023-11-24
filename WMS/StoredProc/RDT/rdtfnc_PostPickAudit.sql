@@ -89,6 +89,7 @@ GO
 /* 07-02-2022 6.0 YeeKung     WMS-21562 customize refno to support      */
 /*                            trackingno  (yeekung08)                   */
 /* 30-05-2023 6.1 James       WMS-22322 Enhance Qty convertion (james13)*/
+/* 24-11-2023 6.2 YeeKung     UWP-11249Fix bug (yeekung08)		        */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PostPickAudit] (
@@ -2444,6 +2445,9 @@ BEGIN
       END
       SET @nMQTY = CAST( @cMQTY AS INT)
 
+
+	  
+
       -- Convert key-in QTY to base QTY
       IF @cConvertQTYSP <> '' AND EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cConvertQTYSP AND type = 'P')
       BEGIN
@@ -2462,6 +2466,7 @@ BEGIN
          -- Calc total QTY in master UOM
          SET @nQTY = rdt.rdtConvUOMQTY( @cStorer, @cSKU, @cPQTY, @cPUOM, 6) -- Convert to QTY in master UOM
          SET @nQTY = @nQTY + @nMQTY
+
 
          -- Multiply QTY if have prepack indicator
          IF @cPackQTYIndicator <> ''
@@ -2717,13 +2722,11 @@ BEGIN
       Step_3_Commit:
          WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
             COMMIT TRAN
-
-      IF @nPUOM_Div > 0
+		
+      IF @nPUOM_Div > 0 AND @cPUOM <> '6' 
       BEGIN
-         SET @nPQTY = rdt.rdtConvUOMQTY( @cStorer, @cSKU, @cMQTY, 6, @cPUOM)
-         
-         IF @cMQTY%@nPUOM_Div = 0
-            SET @nMQTY = 0
+         SET @nPQTY = @nPQTY/@nPUOM_Div--rdt.rdtConvUOMQTY( @cStorer, @cSKU, @cMQTY, 6, @cPUOM)
+		 SET @nMQTY = @cMQTY%@nPUOM_Div
       END
 
       -- Top up check QTY
