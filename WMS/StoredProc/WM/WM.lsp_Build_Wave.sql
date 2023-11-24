@@ -1,8 +1,7 @@
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
 GO
-
-SET QUOTED_IDENTIFIER ON
-GO
+SET QUOTED_IDENTIFIER OFF
+GO   
 /************************************************************************/                                                                                  
 /* Store Procedure: lsp_Build_Wave                                      */                                                                                  
 /* Creation Date:                                                       */                                                                                 
@@ -59,6 +58,8 @@ GO
 /* 2023-05-26  Wan15    2.7   LFWM-4297 - PROD - CN WaveParm_Sort by LOC*/
 /* 2023-05-31  Wan16    2.8   LFWM-4288 - TW UAT SCE Build Wave Parameter*/
 /* 2023-06-26  CF01     2.9   Reduce increment to only by one           */
+/* 2023-10-12  Wan17    2.9   LFWM-4529 - PROD-CNWAVE Release group     */
+/*                            search slow and build wave slow           */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_Build_Wave]                                                                                                                       
       @c_BuildParmKey      NVARCHAR(10)                                                                                                                    
@@ -94,6 +95,7 @@ AS
                                               
          , @b_DeleteTmpOrders          BIT            = 0
 
+         , @d_StartTime_Load           DATETIME       = NULL                        --(Wan14)
          , @d_StartBatchTime           DATETIME       = GETDATE() 
          , @d_StartTime                DATETIME       = GETDATE()                                                                                                                  
          , @d_EndTime                  DATETIME                                                                                                                        
@@ -204,6 +206,9 @@ AS
          , @c_WaveKey                  NVARCHAR(10)   = ''  
          , @c_WaveDetailkey            NVARCHAR(10)   = ''
          , @c_Orderkey                 NVARCHAR(10)   = '' 
+         , @c_OrderStatus              NVARCHAR(10)   = ''                          --(Wan17)
+         , @c_WaveStatus               NVARCHAR(10)   = ''                          --(Wan17)
+         , @c_PickdetailKey            NVARCHAR(10)   = ''                          --(Wan17)
          
          , @c_OWITF                    NVARCHAR(1)    = '0'  
          , @n_FetchOrderStatus         INT            = 0
@@ -212,6 +217,7 @@ AS
          , @CUR_BUILD_COND             CURSOR
          , @CUR_BUILD_SP               CURSOR
          , @CUR_BUILDWAVE              CURSOR
+         , @CUR_PD                     CURSOR                                       --(Wan17)                                    
 
    SET @b_Success = 1
    SET @n_Err     = 0
@@ -444,7 +450,7 @@ AS
                             + ' ' 
                             + CAST(@n_NoOfSKUInOrder AS NVARCHAR)
          END
-         --SET @n_idx = @n_idx + 1                                                  --(CF01)
+         --SET @n_idx = @n_idx + 1                                                     --(CF01)
 
          IF @c_Restriction Like '9_MaxSkuPerWave'                                   --(Wan16) - START
          BEGIN
@@ -1125,7 +1131,7 @@ AS
          FETCH NEXT FROM CUR_WAVEGRP INTO @c_Storerkey
                                        ,  @c_Field01, @c_Field02, @c_Field03, @c_Field04, @c_Field05                                              
                                        ,  @c_Field06, @c_Field07, @c_Field08, @c_Field09, @c_Field10                                                              
-         WHILE @@FETCH_STATUS = 0                                                                                                                                 
+         WHILE @@FETCH_STATUS = 0 AND @n_Continue = 1                               --(Wan17)                                                                                                                             
          BEGIN 
             GOTO START_BUILDWAVE                                                                                                                                
             RETURN_BUILDWAVE:                                                                                                                                   
@@ -1339,12 +1345,13 @@ AS
       SET @c_WaveKey      = '' 
                                                                                                                                                         
       SET @CUR_BUILDWAVE = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT RNUM, OpenQty, OrderKey, [Weight], [Cube]
+      SELECT RNUM, OpenQty, OrderKey, [Weight], [Cube], [Status]                    --(Wan17) 
       FROM #tOrderData 
       ORDER BY RNUM 
 
       OPEN @CUR_BUILDWAVE 
-      FETCH NEXT FROM @CUR_BUILDWAVE INTO  @n_Num, @n_OpenQty, @c_Orderkey, @n_Weight, @n_Cube  
+      FETCH NEXT FROM @CUR_BUILDWAVE INTO  @n_Num, @n_OpenQty, @c_Orderkey, @n_Weight, @n_Cube
+                                          ,@c_OrderStatus                           --(Wan17)  
       SET @n_FetchOrderStatus = @@FETCH_STATUS                                                                                                                       
       WHILE @n_FetchOrderStatus <> -1 
       BEGIN  
@@ -1372,10 +1379,12 @@ AS
          BEGIN
             IF @n_MaxWave > 0 AND @n_WaveCnt >= @n_MaxWave
             BEGIN 
-               GOTO END_BUILDWAVE
+               SET @n_Continue = 2                                                  --(Wan17)
+               GOTO INSERT_DETLOG         --END_BUILDWAVE                           --(Wan17)
             END
 
-            SET @d_StartTime = GETDATE()  
+            SET @d_StartTime = GETDATE()
+            IF @d_StartTime_Load IS NULL SET @d_StartTime_Load = @d_StartTime       --(Wan17)
             SET @b_success = 1                                                                                                                                   
             BEGIN TRY
                EXECUTE nspg_GetKey                                                                                                                                      
@@ -1396,7 +1405,7 @@ AS
             IF @b_success <> 1 OR @n_Err <> 0                                                                                                                                   
             BEGIN 
                SET @n_Continue = 3  
-               GOTO EXIT_SP
+               GOTO INSERT_DETLOG         --END_BUILDWAVE                           --(Wan17) 
             END  
           
             BEGIN TRY
@@ -1421,7 +1430,7 @@ AS
                      BEGIN TRAN
                   END
                END                                                          
-               GOTO EXIT_SP     
+               GOTO INSERT_DETLOG         --END_BUILDWAVE                           --(Wan17)     
             END CATCH                                                                                                                                                                     
 
             SET @n_OrderCnt      = 0    
@@ -1429,12 +1438,26 @@ AS
             SET @n_TotalWeight   = 0.00
             SET @n_TotalCube     = 0.00
             SET @n_WaveCnt       = @n_WaveCnt + 1 
-            SET @c_BuildWaveKey  = @c_Wavekey          
+            SET @c_BuildWaveKey  = @c_Wavekey  
+            SET @c_WaveStatus    = '0'                                              --(Wan17)   
          END
 
+         IF @c_OrderStatus <= '5'                                                   --(Wan17)
+         BEGIN
+            IF @c_OrderStatus IN (3,4) SET @c_OrderStatus = '2' 
+            
+            SET @c_WaveStatus = CASE WHEN @c_WaveStatus = '1' THEN '1'
+                                     WHEN @c_WaveStatus = '5' AND @c_OrderStatus < '2' THEN '1' 
+                                     WHEN @c_WaveStatus = '2' AND @c_OrderStatus < '2' THEN '1'
+                                     WHEN @c_WaveStatus = '2' AND @c_OrderStatus > '2' THEN '2'
+                                     ELSE @c_OrderStatus
+                                     END                                            --(Wan17)        
+         END
+         
          IF @c_WaveKey = ''
          BEGIN 
-            GOTO EXIT_SP
+            SET @n_Continue = 2                                                     --(Wan17)
+            GOTO INSERT_DETLOG         --END_BUILDWAVE                              --(Wan17) 
          END
 
          IF @n_MaxSkuInWave > 0                                                     --(Wan16) - START
@@ -1492,16 +1515,17 @@ AS
          IF @b_success <> 1 OR @n_Err <> 0                                                                                                                                   
          BEGIN 
             SET @n_Continue = 3  
-            GOTO EXIT_SP
+            GOTO INSERT_DETLOG         --END_BUILDWAVE                              --(Wan17) 
          END  
 
          BEGIN TRY                                                                                                                                                            
             INSERT INTO WAVEDETAIL                                                                                                                               
-                  (WavedetailKey, WaveKey, Orderkey, AddWho)                                                                                                    
+                  (WavedetailKey, WaveKey, Orderkey, AddWho, Trafficcop)            --(Wan17)                                                                                                  
             SELECT  @c_WavedetailKey
                   , @c_WaveKey                                             
                   , T.OrderKey                                                                                                           
-                  , T.AddWho                                                                                                             
+                  , T.AddWho
+                  , '9'                                                             --(Wan17)                                                                                                             
             FROM #tOrderData T                                                                                                                                       
             WHERE T.RNUM = @n_Num   
          END TRY                                  
@@ -1523,18 +1547,43 @@ AS
                   BEGIN TRAN
                END
             END                                                          
-            GOTO EXIT_SP     
+            GOTO INSERT_DETLOG         --END_BUILDWAVE                              --(Wan17)     
          END CATCH 
    
-         IF EXISTS(SELECT 1 FROM ORDERS WITH (NOLOCK) WHERE OrderKey= @c_Orderkey AND (UserDefine09 = '' OR UserDefine09 IS NULL))
+         IF EXISTS(SELECT 1 FROM ORDERS WITH (NOLOCK) WHERE OrderKey= @c_Orderkey AND UserDefine09 IN('',NULL))
          BEGIN
             BEGIN TRY
-               UPDATE ORDERS                                                                                                                       
+               UPDATE ORDERS  WITH (ROWLOCK)                                                                                                                     
                SET UserDefine09 = @c_WaveKey                                                                                                                              
-                  ,TrafficCop = NULL                                                                                                                                 
+                  ,ArchiveCop = NULL                                                   --(Wan17)                                                                                                                   
                   ,EditWho    = @c_UserName                                                                                                                              
                   ,EditDate   = @d_EditDate                                                                                                                             
                WHERE Orderkey = @c_Orderkey
+               
+               IF @c_OrderStatus > '0'
+               BEGIN
+                  SET @CUR_PD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR                --(Wan17)
+                  SELECT PickDetailKey FROM dbo.PICKDETAIL AS p (NOLOCK)
+                  WHERE Orderkey = @c_Orderkey
+                  AND Wavekey <> @c_WaveKey
+       
+                  OPEN @CUR_PD
+               
+                  FETCH NEXT FROM @CUR_PD INTO @c_Pickdetailkey
+               
+                  WHILE @@FETCH_STATUS <> -1
+                  BEGIN 
+                     UPDATE dbo.PICKDETAIL WITH (ROWLOCK)
+                        SET WaveKey  = @c_WaveKey
+                           ,EditWho  = @c_UserName
+                           ,EditDate = GETDATE()
+                           ,ArchiveCop = NULL   
+                     WHERE PickDetailKey = @c_Pickdetailkey
+                     FETCH NEXT FROM @CUR_PD INTO @c_Pickdetailkey
+                  END
+                  CLOSE @CUR_PD
+                  DEALLOCATE @CUR_PD                                                   
+               END                                                                  --(Wan17)
             END TRY                                  
                                                                                                                                         
             BEGIN CATCH           
@@ -1542,7 +1591,7 @@ AS
                SET @c_ErrMsg  = ERROR_MESSAGE() 
                SET @n_Err     = 555513               
                SET @c_ErrMsg  = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err) 
-                              + ': UPDATE Orders Failed. (lsp_Build_Wave) ' 
+                              + ': UPDATE Orders/Pickdetail Failed. (lsp_Build_Wave) ' 
                               + '( ' + @c_ErrMsg + ') '
 
                IF (XACT_STATE()) = -1  
@@ -1555,7 +1604,7 @@ AS
                   END
                END                                                                                                                                                                                         
                                    
-               GOTO EXIT_SP                                                                                                                                           
+               GOTO INSERT_DETLOG         --END_BUILDWAVE                           --(Wan17)                                                                                                                                            
             END CATCH   
          END  
 
@@ -1586,10 +1635,20 @@ AS
          IF @c_WaveKey = ''    
          BEGIN
             INSERT_DETLOG:
-
-            WHILE @@TRANCOUNT > 0                                                                                                                                   
-               COMMIT TRAN; 
-
+            --WHILE @@TRANCOUNT > 0                                                                                                                                                                                    
+            --   COMMIT TRAN; 
+            IF @n_Continue IN (1,2)                                                 --(Wan17)   
+            BEGIN         
+               UPDATE dbo.WAVE WITH (ROWLOCK)
+               SET [Status] = @c_WaveStatus
+                  ,EditWho  = @c_UserName
+                  ,EditDate = GETDATE()
+                  ,ArchiveCop = NULL
+               WHERE WaveKey= @c_BuildWaveKey
+            END
+            
+            IF @n_Continue = 3 AND @@TRANCOUNT > 0 ROLLBACK TRAN                    --(Wan17)
+            
             SET @d_EndTime = GetDate()  
           
             BEGIN TRY                      
@@ -1654,7 +1713,7 @@ AS
                   END
                END                                                                                                                                                                                         
                                    
-               GOTO EXIT_SP                                                                                                                                           
+               GOTO END_BUILDWAVE                                                   --(Wan17)                                                                                                                                           
             END CATCH  
    
             WHILE @@TRANCOUNT > 0 
@@ -1671,9 +1730,15 @@ AS
             BEGIN 
                GOTO END_BUILDWAVE
             END
+            
+            IF @n_Continue IN (2,3)                                                 --(Wan17)
+            BEGIN
+               GOTO END_BUILDWAVE
+            END
          END
 
          FETCH NEXT FROM @CUR_BUILDWAVE INTO  @n_Num, @n_OpenQty, @c_Orderkey, @n_Weight, @n_Cube
+                                             ,@c_OrderStatus                        --(Wan17)
 
          SET @n_FetchOrderStatus = @@FETCH_STATUS 
        
@@ -1685,7 +1750,7 @@ AS
       CLOSE @CUR_BUILDWAVE
       DEALLOCATE @CUR_BUILDWAVE
    
-      IF @c_SQLBuildByGroup <> '' 
+      IF @c_SQLBuildByGroup <> ''                               
       BEGIN                                                                                                      
          GOTO RETURN_BUILDWAVE                                                                                                                                    
       END
@@ -1701,8 +1766,7 @@ AS
       BEGIN
          IF @c_SQLCondPreWave <> ''             
          BEGIN
-         
-         IF EXISTS ( SELECT 1 FROM dbo.BUILDPREWAVE AS b WITH (NOLOCK)
+            IF EXISTS ( SELECT 1 FROM dbo.BUILDPREWAVE AS b WITH (NOLOCK)
                         WHERE BuildParmKey = @c_BuildParmkey 
                         AND [Status] = '1'
                       )
@@ -1723,19 +1787,22 @@ AS
             END
          END                                           
          
-         SET @b_Success = 1
-         EXEC WM.lsp_Build_Wave_Update
-            @n_BatchNo = @n_BatchNo
-         ,  @b_Success = @b_Success  OUTPUT  
-         ,  @n_err     = @n_err      OUTPUT                                                                                                             
-         ,  @c_ErrMsg  = @c_ErrMsg   OUTPUT 
-         ,  @b_debug   = @b_debug 
-      
-         IF @b_Success <> 1
+         IF @n_Continue IN (1,2)                                                   --(Wan17) - START
          BEGIN
-            SET @n_Continue = 3                                                                                                                                        
-            GOTO EXIT_SP
-         END                        
+            SET @b_Success = 1
+            EXEC WM.lsp_Build_Wave_Update
+               @n_BatchNo = @n_BatchNo
+            ,  @b_Success = @b_Success  OUTPUT  
+            ,  @n_err     = @n_err      OUTPUT                                                                                                             
+            ,  @c_ErrMsg  = @c_ErrMsg   OUTPUT 
+            ,  @b_debug   = @b_debug 
+      
+            IF @b_Success <> 1
+            BEGIN
+               SET @n_Continue = 3                                                                                                                                        
+               GOTO EXIT_SP
+            END 
+         END                                                                        --(Wan17) - END                    
       END
       --(Wan09) - END                                                                                                                                             
                   
@@ -1748,15 +1815,13 @@ AS
          SET @d_StartTime_Debug = GETDATE()                                                                                                                       
       END                                                                                                                                                         
 
-      SET @c_ErrMsg = ''                                                                                                                                         
-      SET @n_Continue = 0                                                                                                                                           
+      --SET @c_ErrMsg = ''                                                                                                                                         
       IF @b_debug = 2                                                                                                                                              
       BEGIN    
          SET @d_EndTime_Debug = GETDATE()                                                                                                                         
          PRINT '--Finish Insert Trace Log--'          
          PRINT 'Time Cost:' + CONVERT(CHAR(12),@d_EndTime_Debug - @d_StartTime_Debug ,114)                                                                        
       END          
-                                                                                                                                                  
    END TRY  
   
    BEGIN CATCH 
@@ -1803,18 +1868,33 @@ EXIT_SP:
          COMMIT TRAN
       END
 
+      IF @n_Continue IN (1,2) AND                                             --(Wan17)
+         @n_BuildWaveDetailLog_From > 0 AND @n_BuildWaveDetailLog_To > 0      --Wan14 - START   
+      BEGIN
+         SET @b_Success = 1                                                             
+         EXEC WM.lsp_Build_Wave_Post
+            @n_BatchNo                 = @n_BatchNo
+         ,  @n_BuildWaveDetailLog_From = @n_BuildWaveDetailLog_From  
+         ,  @n_BuildWaveDetailLog_To   = @n_BuildWaveDetailLog_To 
+         ,  @b_Success                 = @b_Success  OUTPUT  
+         ,  @n_err                     = @n_err      OUTPUT                                                                                                             
+         ,  @c_ErrMsg                  = @c_ErrMsg   OUTPUT 
+         ,  @b_debug                   = @b_debug                                    
+      END                                                                    --Wan14 - END 
+
       IF EXISTS ( SELECT 1
                   FROM BUILDWAVELOG  WITH (NOLOCK)
                   WHERE BatchNo = @n_BatchNo
                 )
       BEGIN
          SET @d_EndTime = GETDATE()
+         IF @d_StartTime_Load IS NULL SET @d_StartTime_Load = @d_EndTime                  
          BEGIN TRY
             UPDATE BUILDWAVELOG 
             SET --Duration = CONVERT(CHAR(12), @d_EndTime - @d_StartTime, 114)            --(Wan12)  
                  Duration = CONVERT(CHAR(12),                                             --(Wan12)  
                                    (CONVERT(DATETIME, Duration))                          --(Wan12)  
-                                 + (@d_EndTime - @d_StartTime), 114)                      --(Wan12)  
+                                 + (@d_EndTime - @d_StartTime_Load), 114)                 --(Wan12)  
                , TotalWaveCnt = TotalWaveCnt + @n_WaveCnt                                 --(Wan12) 
                , UDF01    = ''
                , [Status] = '9'
@@ -1842,19 +1922,6 @@ EXIT_SP:
                END
             END                                                                                                                                                                                         
          END CATCH     
-         
-         IF @n_BuildWaveDetailLog_From > 0 AND @n_BuildWaveDetailLog_To > 0         --Wan14 - START   
-         BEGIN
-            SET @b_Success = 1                                                             
-            EXEC WM.lsp_Build_Wave_Post
-               @n_BatchNo                 = @n_BatchNo
-            ,  @n_BuildWaveDetailLog_From = @n_BuildWaveDetailLog_From  
-            ,  @n_BuildWaveDetailLog_To   = @n_BuildWaveDetailLog_To 
-            ,  @b_Success                 = @b_Success  OUTPUT  
-            ,  @n_err                     = @n_err      OUTPUT                                                                                                             
-            ,  @c_ErrMsg                  = @c_ErrMsg   OUTPUT 
-            ,  @b_debug                   = @b_debug                                    
-         END                                                                        --Wan14 - END 
       END
    END                                                                                                                                                       
   
@@ -1871,6 +1938,8 @@ EXIT_SP:
       PRINT '@c_ErrMsg = ' + @c_ErrMsg                                                                                                                        
    END                                                                                                                                                         
 -- End Procedure
-
 GO
+GRANT EXECUTE ON [WM].[lsp_Build_Wave] TO nSQL 
+GO        
+
 
