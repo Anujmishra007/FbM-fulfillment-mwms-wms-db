@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 20-APR-2023 NJOW     1.0   DEVOPS Combine Script                     */
+/* 26-NOV-2023 NJOW01   1.1   Fix busr7 to PREMIUN                      */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispLPPK12]
    @cLoadKey    NVARCHAR(10),  
@@ -336,7 +337,7 @@ BEGIN
                 WHEN '2' THEN 'WET'
                 WHEN '3' THEN 'MILK'
                 WHEN '6' THEN 'SAMPLE'
-                WHEN '7' THEN 'PREMIUM'
+                WHEN '7' THEN 'PREMIUN'  --NJOW01
                 WHEN '8' THEN 'BUNDLE'
                 WHEN 'KITT SET' THEN 'BUNDLE'
                 WHEN '9' THEN 'STICKER'
@@ -360,7 +361,7 @@ BEGIN
                    WHEN '2' THEN 'WET'
                    WHEN '3' THEN 'MILK'
                    WHEN '6' THEN 'SAMPLE'
-                   WHEN '7' THEN 'PREMIUM'
+                   WHEN '7' THEN 'PREMIUN'  --NJOW01
                    WHEN '8' THEN 'BUNDLE'
                    WHEN 'KITT SET' THEN 'BUNDLE'
                    WHEN '9' THEN 'STICKER'
