@@ -1,11 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_Cluster_Pick_PrintLabel]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [RDT].[rdt_Cluster_Pick_PrintLabel]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
+
 /************************************************************************/
 /* Store procedure: rdt_Cluster_Pick_PrintLabel                         */
 /* Copyright      : IDS                                                 */
@@ -22,9 +19,10 @@ GO
 /* 24-Nov-2015 1.0  James       Created                                 */
 /* 04-Apr-2018 1.1  James       WMS4338-Add rdt_print (james01)         */
 /* 30-Oct-2020 1.2  James       Adhoc fix on fnc conversion err(james02)*/
+/* 21-Sep-2023 1.3  James       WMS-23668 Add ExtendedPrintSP (james03) */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdt_Cluster_Pick_PrintLabel] (
+CREATE OR ALTER PROC [RDT].[rdt_Cluster_Pick_PrintLabel] (
    @nMobile          INT, 
    @nFunc            INT, 
    @nStep            INT, 
@@ -48,6 +46,51 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
 
+   DECLARE @cSQLStatement     NVARCHAR( MAX)
+   DECLARE @cSQLParms         NVARCHAR( MAX)
+   DECLARE @tExtPrint         VARIABLETABLE
+   
+   -- Get extended ExtendedPltBuildCfmSP
+   DECLARE @cExtendedPrintSP NVARCHAR(20)
+   SET @cExtendedPrintSP = rdt.rdtGetConfig( @nFunc, 'ExtendedPrintSP', @cStorerKey)
+   IF @cExtendedPrintSP = '0'
+      SET @cExtendedPrintSP = ''  
+
+   -- Extended putaway
+   IF @cExtendedPrintSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedPrintSP AND type = 'P')
+      BEGIN
+         SET @cSQLStatement = 'EXEC rdt.' + RTRIM( @cExtendedPrintSP) +  
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cWaveKey, @cLoadKey, @cOrderKey, ' +       
+            ' @cLoc, @cDropID, @cSKU, @nQty, @tExtPrint, @nErrNo OUTPUT, @cErrMsg OUTPUT '          
+      
+         SET @cSQLParms =          
+            '@nMobile                   INT,           ' +      
+            '@nFunc                     INT,           ' +      
+            '@cLangCode                 NVARCHAR( 3),  ' +      
+            '@nStep                     INT,           ' +      
+            '@nInputKey                 INT,           ' +      
+            '@cStorerkey                NVARCHAR( 15), ' +      
+            '@cWaveKey                  NVARCHAR( 10), ' +      
+            '@cLoadKey                  NVARCHAR( 10), ' +      
+            '@cOrderKey                 NVARCHAR( 10), ' +      
+            '@cLoc                      NVARCHAR( 10), ' +      
+            '@cDropID                   NVARCHAR( 20), ' +      
+            '@cSKU                      NVARCHAR( 20), ' +      
+            '@nQty                      INT, '           +     
+            '@tExtPrint                 VARIABLETABLE READONLY, ' +  
+            '@nErrNo                    INT           OUTPUT,  ' +      
+            '@cErrMsg                   NVARCHAR( 20) OUTPUT   '       
+                     
+         EXEC sp_ExecuteSQL @cSQLStatement, @cSQLParms,           
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cWaveKey, @cLoadKey, @cOrderKey,        
+               @cLoc, @cDropID, @cSKU, @nQty, @tExtPrint, @nErrNo OUTPUT, @cErrMsg OUTPUT           
+
+         GOTO Quit
+      END
+   END
+   
    DECLARE  @cPaperPrinter       NVARCHAR( 10),
             @cLabelPrinter       NVARCHAR( 10),
             @cReportType         NVARCHAR( 10),
@@ -55,8 +98,6 @@ BEGIN
             @cDataWindow         NVARCHAR( 50),
             @cTargetDB           NVARCHAR( 10),
             @cSP                 NVARCHAR( 20),
-            @cSQLStatement       NVARCHAR( 4000),
-            @cSQLParms           NVARCHAR( 4000),
             @cOption             NVARCHAR( 1), 
             @cParam1             NVARCHAR( 20), 
             @cParam2             NVARCHAR( 20), 
