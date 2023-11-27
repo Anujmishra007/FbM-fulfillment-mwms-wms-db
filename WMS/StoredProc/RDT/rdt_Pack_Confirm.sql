@@ -24,6 +24,7 @@ GO
 /* 24-06-2021 1.9  LZG         JSM-5541 Added PickSlipNo & LabelNo into */
 /*                             RDTStdEventLog (ZG01)                    */
 /* 17-02-2022 2.0  Ung         WMS-18900 Add force use standard logic   */
+/* 24-11-2023 2.1  Ung         WMS-24060 Add PackByFromDropID           */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_Pack_Confirm] (
@@ -63,15 +64,9 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
    
-   DECLARE @bSuccess       INT
    DECLARE @cSQL           NVARCHAR(MAX)
    DECLARE @cSQLParam      NVARCHAR(MAX)
-   DECLARE @cLabelLine     NVARCHAR(5)
-   DECLARE @cNewLine       NVARCHAR(1)
-   DECLARE @cNewCarton     NVARCHAR(1)
-   DECLARE @cGenLabelNo_SP NVARCHAR(20)
    DECLARE @cConfirmSP     NVARCHAR(20) = ''
-   DECLARE @cPackDetailCartonID  NVARCHAR( 20)
 
    -- Get storer configure
    IF @nUseStandard = 0
@@ -137,6 +132,18 @@ BEGIN
    /***********************************************************************************************
                                              Standard confirm
    ***********************************************************************************************/
+   DECLARE @bSuccess    INT
+   DECLARE @cLabelLine  NVARCHAR( 5)
+   DECLARE @cNewLine    NVARCHAR( 1)
+   DECLARE @cNewCarton  NVARCHAR( 1)
+   DECLARE @cDropID     NVARCHAR( 20) = ''
+   DECLARE @cRefNo      NVARCHAR( 20) = ''
+   DECLARE @cRefNo2     NVARCHAR( 30) = ''
+   DECLARE @cUPC        NVARCHAR( 30) = ''    
+   
+   DECLARE @cGenLabelNo_SP       NVARCHAR( 20)
+   DECLARE @cPackDetailCartonID  NVARCHAR( 20)
+   DECLARE @cPackByFromDropID    NVARCHAR( 1)
 
    -- Handling transaction
    DECLARE @nTranCount  INT
@@ -169,20 +176,21 @@ BEGIN
       END
    END
 
-   -- (james01)
+   -- Storer configure
+   SET @cPackByFromDropID = rdt.rdtGetConfig( @nFunc, 'PackByFromDropID', @cStorerKey)
    SET @cPackDetailCartonID = rdt.RDTGetConfig( @nFunc, 'PackDetailCartonID', @cStorerKey)
    IF @cPackDetailCartonID = '0' -- DropID/LabelNo/RefNo/RefNo2/UPC/NONE
       SET @cPackDetailCartonID = 'DropID'
 
-   DECLARE @cDropID  NVARCHAR( 20) = ''
-   DECLARE @cRefNo   NVARCHAR( 20) = ''
-   DECLARE @cRefNo2  NVARCHAR( 30) = ''
-   DECLARE @cUPC     NVARCHAR( 30) = ''
-
+   -- Save decoded data to which column (initially it was carton ID only, hence the misleading PackDetailCartonID ConfigKey name)
    IF @cPackDetailCartonID = 'DropID'  SET @cDropID  = @cPackDtlDropID ELSE
-   IF @cPackDetailCartonID = 'RefNo'   SET @cRefNo   = @cPackDtlRefNo ELSE
+   IF @cPackDetailCartonID = 'RefNo'   SET @cRefNo   = @cPackDtlRefNo  ELSE
    IF @cPackDetailCartonID = 'RefNo2'  SET @cRefNo2  = @cPackDtlRefNo2 ELSE
    IF @cPackDetailCartonID = 'UPC'     SET @cUPC     = @cPackDtlUPC
+
+   -- Pack by drop ID, the drop ID must present in both PickDetail and PackDetail, otherwise it can't do over pack checking.
+   IF @cPackByFromDropID = '1'
+      SET @cDropID = @cFromDropID   
    
    SET @cNewLine = 'N'
    SET @cNewCarton = 'N'

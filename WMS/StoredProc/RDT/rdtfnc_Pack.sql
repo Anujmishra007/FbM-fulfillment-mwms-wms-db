@@ -1,6 +1,3 @@
-
-
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -81,6 +78,7 @@ GO
 /* 2023-06-14   5.4 YeeKung     WMS-22751 Add Popup Message (yeekung01)                         */
 /* 2023-06-28   5.5 Ung         WMS-22741 Remove rdt_Decode error                               */
 /* 2023-07-04   5.6 Ung         WMS-22913 Add ExtendedUpdateSP at step 2 ESC                    */
+/* 2023-11-24   5.7 Ung         WMS-24060 Add PackByFromDropID                                  */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
@@ -214,6 +212,7 @@ DECLARE
    @cAllowWidthZero     NVARCHAR( 1),  -- (james20)
    @cAllowHeightZero    NVARCHAR( 1),  -- (james20)
    @cDefaultcartontype  NVARCHAR( 20),  --(yeekung01)
+   @cPackByFromDropID   NVARCHAR( 1),
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
@@ -318,6 +317,7 @@ SELECT
    @cMultiSKUBarcode    = V_String47,
    @cDefaultQTY         = V_String48, --(cc01)
    @cDefaultcartontype  = V_String49,
+   @cPackByFromDropID   = V_String50,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
@@ -375,7 +375,9 @@ BEGIN
    SET @cDisableQTYField = rdt.rdtGetConfig( @nFunc, 'DisableQTYField', @cStorerKey)
    SET @cFlowThruScreen = rdt.RDTGetConfig( @nFunc, 'FlowThruScreen', @cStorerKey)
    SET @cMultiSKUBarcode = rdt.RDTGetConfig( @nFunc, 'MultiSKUBarcode', @cStorerKey)
+   SET @cPackByFromDropID = rdt.rdtGetConfig( @nFunc, 'PackByFromDropID', @cStorerKey)
    SET @cSerialNoCapture = rdt.RDTGetConfig( @nFunc, 'SerialNoCapture', @cStorerKey)
+   SET @cShowPickSlipNo = rdt.RDTGetConfig( @nFunc, 'ShowPickSlipNo', @cStorerKey)
 
    SET @cCapturePackInfoSP = rdt.RDTGetConfig( @nFunc, 'CapturePackInfoSP', @cStorerKey)
    IF @cCapturePackInfoSP = '0'
@@ -422,8 +424,6 @@ BEGIN
    SET @cShipLabel = rdt.RDTGetConfig( @nFunc, 'ShipLabel', @cStorerKey)
    IF @cShipLabel = '0'
       SET @cShipLabel = ''
-   SET @cShowPickSlipNo = rdt.RDTGetConfig( @nFunc, 'ShowPickSlipNo', @cStorerKey)
-
 
    -- EventLog
    EXEC RDT.rdt_STD_EventLog
@@ -440,7 +440,10 @@ BEGIN
    SET @cOutField02 = '' -- FromDropID
    SET @cOutField03 = '' -- ToDropID
 
-   EXEC rdt.rdtSetFocusField @nMobile, 1  -- PickSlipNo
+   IF @cPackByFromDropID = '1'
+      EXEC rdt.rdtSetFocusField @nMobile, 2  -- FromDropID
+   ELSE
+      EXEC rdt.rdtSetFocusField @nMobile, 1  -- PickSlipNo
 
    -- Go to PickSlipNo screen
    SET @nScn = 4650
@@ -547,6 +550,15 @@ BEGIN
          SET @nErrNo = 100201
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- PSNO required
          EXEC rdt.rdtSetFocusField @nMobile, 1  -- PickSlipNo
+         GOTO Quit
+      END
+
+      -- Check blank
+      IF @cFromDropID = '' AND @cPackByFromDropID = '1'
+      BEGIN
+         SET @nErrNo = 100247
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NeedFromDropID
+         EXEC rdt.rdtSetFocusField @nMobile, 2  -- FromDropID
          GOTO Quit
       END
 
@@ -4856,7 +4868,8 @@ BEGIN
       SET @cOutField03 = '' -- SKU
       SET @cOutField04 = @cSKU
       SET @cOutField05 = rdt.rdtFormatString( @cSKUDescr, 1, 20)
-      SET @cOutField06 = rdt.rdtFormatString( @cSKUDescr, 21, 20)        SET @cOutField07 = CAST( @nPackedQTY AS NVARCHAR( 8))  -- ZG02
+      SET @cOutField06 = rdt.rdtFormatString( @cSKUDescr, 21, 20)        
+      SET @cOutField07 = CAST( @nPackedQTY AS NVARCHAR( 8))  -- ZG02														 
       SET @cOutField08 = CASE WHEN @cDisableQTYField = '1' THEN @cQTY ELSE '' END
       SET @cOutField09 = CAST( @nCartonQTY AS NVARCHAR( 5))
       SET @cOutField10 = CASE WHEN @cPrePackIndicator = '2' THEN @cPackQtyIndicator ELSE '' END
@@ -5409,6 +5422,7 @@ BEGIN
       V_String47     = @cMultiSKUBarcode,
       V_String48     = @cDefaultQTY, --(cc01)
       V_String49     = @cDefaultcartontype,
+      V_String50     = @cPackByFromDropID,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,

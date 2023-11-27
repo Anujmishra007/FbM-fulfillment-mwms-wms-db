@@ -51,16 +51,23 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
    
-   DECLARE @bSuccess       INT
-   DECLARE @cSQL           NVARCHAR(MAX)
-   DECLARE @cSQLParam      NVARCHAR(MAX)
-   DECLARE @cLabelLine     NVARCHAR(5)
-   DECLARE @cNewLine       NVARCHAR(1)
-   DECLARE @cNewCarton     NVARCHAR(1)
-   DECLARE @cGenLabelNo_SP NVARCHAR(20)
+   DECLARE @cSQL        NVARCHAR(MAX)
+   DECLARE @cSQLParam   NVARCHAR(MAX)
+
+   DECLARE @bSuccess    INT
+   DECLARE @cLabelLine  NVARCHAR( 5)
+   DECLARE @cNewLine    NVARCHAR( 1)
+   DECLARE @cNewCarton  NVARCHAR( 1)
+   DECLARE @cDropID     NVARCHAR( 20) = ''
+   DECLARE @cRefNo      NVARCHAR( 20) = ''
+   DECLARE @cRefNo2     NVARCHAR( 30) = ''
+   DECLARE @cUPC        NVARCHAR( 30) = ''    
+   DECLARE @cLoadKey    NVARCHAR( 10) = ''
+   DECLARE @cOrderKey   NVARCHAR( 10) = ''
+   
+   DECLARE @cGenLabelNo_SP       NVARCHAR( 20)
    DECLARE @cPackDetailCartonID  NVARCHAR( 20)
-   DECLARE @cLoadKey       NVARCHAR( 10) = ''
-   DECLARE @cOrderKey      NVARCHAR( 10) = ''
+   DECLARE @cPackByFromDropID    NVARCHAR( 1)
 
    -- Get PickHeader info
    SELECT TOP 1
@@ -88,20 +95,21 @@ BEGIN
       END
    END
 
-   -- (james01)
+   -- Storer configure
+   SET @cPackByFromDropID = rdt.rdtGetConfig( @nFunc, 'PackByFromDropID', @cStorerKey)
    SET @cPackDetailCartonID = rdt.RDTGetConfig( @nFunc, 'PackDetailCartonID', @cStorerKey)
    IF @cPackDetailCartonID = '0' -- DropID/LabelNo/RefNo/RefNo2/UPC/NONE
       SET @cPackDetailCartonID = 'DropID'
 
-   DECLARE @cDropID  NVARCHAR( 20) = ''
-   DECLARE @cRefNo   NVARCHAR( 20) = ''
-   DECLARE @cRefNo2  NVARCHAR( 30) = ''
-   DECLARE @cUPC     NVARCHAR( 30) = ''
-
+   -- Save decoded data to which column (initially it was carton ID only, hence the misleading PackDetailCartonID ConfigKey name)
    IF @cPackDetailCartonID = 'DropID'  SET @cDropID  = @cPackDtlDropID ELSE
    IF @cPackDetailCartonID = 'RefNo'   SET @cRefNo   = @cPackDtlRefNo ELSE
    IF @cPackDetailCartonID = 'RefNo2'  SET @cRefNo2  = @cPackDtlRefNo2 ELSE
    IF @cPackDetailCartonID = 'UPC'     SET @cUPC     = @cPackDtlUPC
+   
+   -- Pack by drop ID, the drop ID must present in both PickDetail and PackDetail, otherwise it can't do over pack checking.
+   IF @cPackByFromDropID = '1'
+      SET @cDropID = @cFromDropID   
    
    SET @cNewLine = 'N'
    SET @cNewCarton = 'N'
@@ -505,17 +513,31 @@ BEGIN
 
    -- PickDetail
    DECLARE @curPD CURSOR
-   SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR         
-      SELECT PickDetailKey, PD.QTY
-      FROM dbo.PickDetail PD WITH (NOLOCK)
-         JOIN dbo.LOTAttribute LA WITH (NOLOCK) ON (PD.LOT = LA.LOT)
-      WHERE PD.OrderKey = @cOrderKey
-         AND PD.StorerKey = @cStorerKey
-         AND PD.SKU = @cSKU
-         AND LA.Lottable01 = @cLottable01
-         AND PD.CaseID = ''
-         AND PD.Status = '5'
-         AND PD.Status <> '4'
+   IF @cPackByFromDropID = '1'
+      SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR         
+         SELECT PickDetailKey, PD.QTY
+         FROM dbo.PickDetail PD WITH (NOLOCK)
+            JOIN dbo.LOTAttribute LA WITH (NOLOCK) ON (PD.LOT = LA.LOT)
+         WHERE PD.OrderKey = @cOrderKey
+            AND PD.StorerKey = @cStorerKey
+            AND PD.SKU = @cSKU
+            AND LA.Lottable01 = @cLottable01
+            AND PD.CaseID = ''
+            AND PD.DropID = @cFromDropID
+            AND PD.Status = '5'
+            AND PD.Status <> '4'
+   ELSE
+      SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR         
+         SELECT PickDetailKey, PD.QTY
+         FROM dbo.PickDetail PD WITH (NOLOCK)
+            JOIN dbo.LOTAttribute LA WITH (NOLOCK) ON (PD.LOT = LA.LOT)
+         WHERE PD.OrderKey = @cOrderKey
+            AND PD.StorerKey = @cStorerKey
+            AND PD.SKU = @cSKU
+            AND LA.Lottable01 = @cLottable01
+            AND PD.CaseID = ''
+            AND PD.Status = '5'
+            AND PD.Status <> '4'
    OPEN @curPD 
    FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD 
    WHILE @@FETCH_STATUS = 0

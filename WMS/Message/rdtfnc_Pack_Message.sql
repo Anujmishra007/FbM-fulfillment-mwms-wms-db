@@ -38,22 +38,15 @@ execute rdt.rdtAddMsg 100234, 10, '100234Invalid DropID', 'us_english', 838
 execute rdt.rdtAddMsg 100235, 10, '100235Need PickHdr  ', 'us_english', 838
 execute rdt.rdtAddMsg 100236, 10, '100236UPD PKInf Fail', 'us_english', 838
 execute rdt.rdtAddMsg 100237, 10, '100237Scan-In Fail  ', 'us_english', 838
-
---WMS-10570
 execute rdt.rdtAddMsg 100238, 10, '100238Invalid QTY   ', 'us_english', 838
-
---WMS-14497
 execute rdt.rdtAddMsg 100239, 10, '100239Need RefNo    ', 'us_english', 838
-
---WMS-15989
 execute rdt.rdtAddMsg 100240, 10, '100240Need Length   ', 'us_english', 838
 execute rdt.rdtAddMsg 100241, 10, '100241Invalid Length', 'us_english', 838
 execute rdt.rdtAddMsg 100242, 10, '100242Need Width    ', 'us_english', 838
 execute rdt.rdtAddMsg 100243, 10, '100243Invalid Width ', 'us_english', 838
 execute rdt.rdtAddMsg 100244, 10, '100244Need Height   ', 'us_english', 838
 execute rdt.rdtAddMsg 100245, 10, '100245Invalid Height', 'us_english', 838
-
---WMS-12426
 execute rdt.rdtAddMsg 100246, 10, '100246Invalid Format', 'us_english', 838
+execute rdt.rdtAddMsg 100247, 10, '100247NeedFromDropID', 'us_english', 838
 
 SELECT * FROM rdt.rdtmsg (NOLOCK) WHERE Message_ID BETWEEN 100201 and 100250 AND lang_code = 'ENG'
