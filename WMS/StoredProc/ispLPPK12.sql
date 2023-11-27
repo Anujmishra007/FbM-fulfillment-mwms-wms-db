@@ -23,6 +23,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 20-APR-2023 NJOW     1.0   DEVOPS Combine Script                     */
 /* 26-NOV-2023 NJOW01   1.1   Fix busr7 to PREMIUN                      */
+/* 26-NOV-2023 NJOW02   1.2   avoid split same sku into multiple carton */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispLPPK12]
    @cLoadKey    NVARCHAR(10),  
@@ -592,7 +593,21 @@ BEGIN
                          SET @nErr = 82071
                          SET @cErrmsg='NSQL'+CONVERT(NVARCHAR(5),@nErr)+': No Carton type can fit a InnerPack Sku ' + RTRIM(@c_Sku) + '.(ispLPPK12)'
                          BREAK
-         	           END      	         
+         	           END      	      
+         	           
+                     --NJOW02 S
+                     IF @n_StdGrossWgt > 0  
+                     BEGIN  
+         	              IF NOT EXISTS(SELECT 1 FROM #CARTONIZATION WHERE MaxWeight >= (@n_StdGrossWgt * @n_InnerPack) AND CartonType = @c_CurrCartonType) 
+         	                 AND @c_CurrCartonType NOT IN('DRYHEAVY','TANK')
+         	              BEGIN
+                            SET @n_continue = 3
+                            SET @nErr = 82071
+                            SET @cErrmsg='NSQL'+CONVERT(NVARCHAR(5),@nErr)+': No Carton type can fit a InnerPack Weight for Sku ' + RTRIM(@c_Sku) + '.(ispLPPK12)'
+                            select @cErrmsg
+         	              END  
+         	           END    	 
+         	           --NJOW02 E                 	              
          	        END
          	        
          	  	     --Caclulate pack qty
@@ -620,6 +635,19 @@ BEGIN
          	  	     IF @n_PackQty < @n_QtyCanPack
          	  	        SET @n_QtyCanPack = @n_PackQty
          	  	        
+         	  	     --NJOW02 S  --Avoid split a sku into multiple cartons and mix with other sku
+         	  	     IF @n_QtyCanPack > 0  
+         	  	     BEGIN
+         	  	     	  IF @n_PackQty <> @n_QtyCanPack  --Current sku cannot fully pack into the carton         	  	     	      
+         	  	     	  BEGIN
+         	  	     	     IF EXISTS(SELECT 1 FROM #CARTONDETAIL WHERE CartonNo = @n_CartonNo AND Sku <> @c_Sku) --The carton already packed with other sku
+         	  	     	     BEGIN
+         	  	     	     	  SET @n_QtyCanPack = 0  --Skip this sku and get next. this sku will pack into new carton later.
+         	  	     	     END
+         	  	     	  END
+         	  	     END
+         	  	     --NJOW02 E
+         	  	                 	  	        
          	  	     IF @n_Innerpack > 0
          	  	     BEGIN
          	  	        SET @n_QtyCanPack = FLOOR(@n_QtyCanPack / @n_Innerpack) * @n_InnerPack
