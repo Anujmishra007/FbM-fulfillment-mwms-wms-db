@@ -52,6 +52,7 @@ GO
 /* 20-Oct-2021  TLTING04  add PackDetailInfo                            */
 /* 28-May-2022  TLTING05  add PackQRF, PackdetailLabel                  */
 /* 02-Jun-2022  TLTING06  archive more for Packdeader                   */
+/* 26-Nov-2023  TLTING07  cater for Orders - Cancel, remove status check*/
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_ArchivePicknPack]
@@ -514,8 +515,8 @@ begin -- main
        INSERT INTO #temp1 (PickSlipNo)
        SELECT DISTINCT PH.PickSlipNo
        FROM   PACKHEADER PH (NOLOCK) 
-       WHERE PH.STATUS = '9'
-       AND   NOT EXISTS (SELECT TOP 1 1 FROM #temp1 L (NOLOCK) WHERE L.PickSlipNo = PH.PICKSLIPNO)
+       WHERE -- tlting07 PH.STATUS = '9'
+           NOT EXISTS (SELECT TOP 1 1 FROM #temp1 L (NOLOCK) WHERE L.PickSlipNo = PH.PICKSLIPNO)
        AND   EXISTS ( SELECT TOP 1 1
                FROM   ORDERS O WITH (NOLOCK) 
                WHERE O.OrderKey =  PH.OrderKey AND O.ArchiveCop = '9'   )    
