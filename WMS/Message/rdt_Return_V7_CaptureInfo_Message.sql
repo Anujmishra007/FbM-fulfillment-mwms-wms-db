@@ -1,5 +1,5 @@
 --rdt_Return_V7_CaptureInfo
-exec rdt.rdtDropMsg 209051 - 209100	
+exec rdt.rdtDropMsg 209051 , 209100	
 
 execute rdt.rdtAddMsg 209051, 10, '209051 Need data    ', 'us_english', 607
 execute rdt.rdtAddMsg 209052, 10, '209052Invalid format', 'us_english', 607
