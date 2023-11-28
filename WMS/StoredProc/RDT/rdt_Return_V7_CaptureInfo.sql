@@ -6,10 +6,11 @@ GO
 
 /***************************************************************************/
 /* Store procedure: rdt_Return_V7_CaptureInfo                              */
-/* Copyright      : LF Logistics                                           */
+/* Copyright      : MAERSK                                                 */
 /*                                                                         */
 /* Date       Rev  Author  Purposes                                        */
 /* 2023-07-26 1.0  James   WMS-23005. Created                              */
+/* 2023-11-28 1.1  James   Renumber error msg (james01)                    */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_Return_V7_CaptureInfo](
@@ -239,7 +240,7 @@ BEGIN
             -- Check blank
             IF CHARINDEX( 'R', @cOption) > 0 AND @cData = ''
             BEGIN
-               SET @nErrNo = 155901
+               SET @nErrNo = 209051
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need data
                EXEC rdt.rdtSetFocusField @nMobile, @nCursorPos
                GOTO Quit
@@ -250,7 +251,7 @@ BEGIN
             BEGIN
                IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'Data' + @cCode, @cData) = 0
                BEGIN
-                  SET @nErrNo = 155902
+                  SET @nErrNo = 209052
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid format
                   EXEC rdt.rdtSetFocusField @nMobile, @nCursorPos
                   GOTO Quit
@@ -267,7 +268,7 @@ BEGIN
                      AND StorerKey = @cStorerKey
                      AND Code2 = @nFunc)
                BEGIN
-                  SET @nErrNo = 155903
+                  SET @nErrNo = 209053
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid value
                   EXEC rdt.rdtSetFocusField @nMobile, @nCursorPos
                   GOTO Quit
