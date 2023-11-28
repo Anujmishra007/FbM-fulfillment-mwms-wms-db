@@ -13,7 +13,7 @@ GO
 /*        :                                                             */  
 /* Called By:                                                           */  
 /*          :                                                           */  
-/* GitLab Version: 1.2                                                  */  
+/* GitLab Version: 1.4                                                  */  
 /*                                                                      */  
 /* Version: 7.0                                                         */  
 /*                                                                      */  
@@ -27,6 +27,7 @@ GO
 /*                            after execution complete (WL01)           */
 /* 14-NOV-2022  Wan01   1.2   Sync filter Start Point/Enhancement       */
 /* 13-Oct-2023  WLChooi 1.3   WMS-23876 - Cater for SEPB2CDPP (WL02)    */
+/* 22-Nov-2023  WLChooi 1.4   WMS-23876 - Allocate SEPB2CDPP (WL03)     */
 /************************************************************************/  
 CREATE OR ALTER PROC [dbo].[ispSEPCDB2C]  
      @c_WaveKey                     NVARCHAR(10)  
@@ -99,7 +100,7 @@ BEGIN
       GOTO QUIT_SP  
    END  
   
-   IF @c_WaveType NOT IN ('SEPB2CALL')  
+   IF @c_WaveType NOT IN ('SEPB2CALL','SEPB2CDPP')   --WL03  
    BEGIN  
       GOTO QUIT_SP  
    END 
@@ -346,6 +347,11 @@ BEGIN
          END   
          
          BEGIN TRAN   --WL01
+
+         --WL03 S
+         IF @c_WaveType = 'SEPB2CDPP'
+            GOTO SEPB2CDPP_FQ7
+         --WL03 E
 
          EXEC ispSEPCDLoadFP2      --//Pallet @Pallet LOC - Single  
            @c_WaveKey          = @c_WaveKey           
@@ -669,6 +675,7 @@ BEGIN
             GOTO NEXT_INVLOT04  
          END  
 
+         SEPB2CDPP_FQ7:   --WL03
          BEGIN TRAN   --WL01
   
          EXEC ispSEPCDConsoFQ7  --//Loose Qty @DPP Loc, UOM = '7' - Conso single + Multi, Get DPP > @n_QtyLeftToFullfill
@@ -722,6 +729,11 @@ BEGIN
          BEGIN  
             GOTO NEXT_INVLOT04  
          END  
+
+         --WL03 S
+         IF @c_WaveType = 'SEPB2CDPP'
+            GOTO SEPB2CDPP_LQ7
+         --WL03 E
 
          BEGIN TRAN   --WL01
   
@@ -777,6 +789,7 @@ BEGIN
             GOTO NEXT_INVLOT04  
          END  
 
+         SEPB2CDPP_LQ7:   --WL03
          BEGIN TRAN   --WL01
 
          EXEC ispSEPCDConsoLQ7  --//Loose Qty @DPP Loc, UOM = '7' - Conso single + Multi, Get DPP >= 0     
