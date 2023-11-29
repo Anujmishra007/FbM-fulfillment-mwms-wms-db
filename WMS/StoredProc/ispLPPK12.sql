@@ -24,6 +24,7 @@ GO
 /* 20-APR-2023 NJOW     1.0   DEVOPS Combine Script                     */
 /* 26-NOV-2023 NJOW01   1.1   Fix busr7 to PREMIUN                      */
 /* 26-NOV-2023 NJOW02   1.2   avoid split same sku into multiple carton */
+/* 29-NOV-2023 NJOW03   1.3   Fix filter carton checking with orderkey  */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispLPPK12]
    @cLoadKey    NVARCHAR(10),  
@@ -640,7 +641,7 @@ BEGIN
          	  	     BEGIN
          	  	     	  IF @n_PackQty <> @n_QtyCanPack  --Current sku cannot fully pack into the carton         	  	     	      
          	  	     	  BEGIN
-         	  	     	     IF EXISTS(SELECT 1 FROM #CARTONDETAIL WHERE CartonNo = @n_CartonNo AND Sku <> @c_Sku) --The carton already packed with other sku
+         	  	     	     IF EXISTS(SELECT 1 FROM #CARTONDETAIL WHERE CartonNo = @n_CartonNo AND Orderkey = @c_Orderkey AND Sku <> @c_Sku) --The carton already packed with other sku  --NJOW03
          	  	     	     BEGIN
          	  	     	     	  SET @n_QtyCanPack = 0  --Skip this sku and get next. this sku will pack into new carton later.
          	  	     	     END
