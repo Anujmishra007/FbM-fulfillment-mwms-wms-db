@@ -26,6 +26,8 @@ GO
 /* 2022-10-03   James     1.4   WMS-20920 Add new category for getting  */
 /*                              new tracking no (james03)               */
 /* 2023-02-13   James     1.5   WMS-21691 Track# assign enhance(james04)*/
+/* 2023-09-21   James     1.6   WMS-23619 Trigger TCP asap after TL2    */
+/*                              record generated (james05)              */
 /************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_840ExtInsPack05] (
@@ -94,6 +96,18 @@ BEGIN
    DECLARE @cOrderGroup       NVARCHAR( 20) = ''
    DECLARE @cECOM_Platform    NVARCHAR( 30) = ''
    DECLARE @cTableName        NVARCHAR( 30) = ''
+   DECLARE @cCommand         NVARCHAR(1000)=''  
+         , @cTransmitlogKey  NVARCHAR(10)  =''  
+         , @cIP              VARCHAR(20)   =''  
+         , @cPort            VARCHAR(10)   =''  
+         , @nThreadPerAcct   INT           =0  
+         , @nMilisecondDelay INT           =0  
+         , @cAPP_DB_Name     VARCHAR(30)   =''      
+         , @nThreadPerStream INT           =0  
+         , @cIniFilePath     NVARCHAR(200) =''  
+         , @cDataStream      VARCHAR(10)   ='6157'
+
+   DECLARE @ndebug   INT = 0
    
    SET @nTranCount = @@TRANCOUNT    
 
@@ -261,28 +275,6 @@ BEGIN
                   
                   IF ISNULL( @cTableName, '') = ''
                      SET @cTableName = 'Other'
-
-                  IF @cTableName <> 'Other'
-                  BEGIN
-                     SET @nNewCartonNo = @nCartonNo + 1
-                     SET @bSuccess = 1    
-                     EXEC ispGenTransmitLog2    
-                         @c_TableName        = @cTableName    
-                        ,@c_Key1             = @cOrderKey    
-                        ,@c_Key2             = @nNewCartonNo    
-                        ,@c_Key3             = @cStorerkey    
-                        ,@c_TransmitBatch    = ''    
-                        ,@b_Success          = @bSuccess    OUTPUT    
-                        ,@n_err              = @nErrNo      OUTPUT    
-                        ,@c_errmsg           = @cErrMsg     OUTPUT    
-    
-                     IF @bSuccess <> 1    
-                     BEGIN
-                        SET @nErrNo = 135461  
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'InsTL2Log Err'  
-                        GOTO RollBackTran    
-                     END
-                  END
                END
 
                IF @cTableName = 'Other'
@@ -305,10 +297,24 @@ BEGIN
                   WHERE CT.LabelNo = @cOrderKey
                   AND   CT.CarrierName = @cShipperKey
                   AND   ISNULL( CT.CarrierRef2, '') = ''
-                  AND   CarrierRef1 = @cOrderKey + CAST( @nCurrentCtnNo + 1 AS NVARCHAR( 1))
+                  AND   CarrierRef1 = @cOrderKey + CAST( @nCurrentCtnNo + 1 AS NVARCHAR( 2))
                   AND   NOT EXISTS ( SELECT 1 FROM dbo.PackDetail PD WITH (NOLOCK)
                                      WHERE PD.StorerKey = @cStorerkey
                                      AND   PD.LabelNo = CT.TrackingNo)
+
+                  IF ISNULL( @cTrackNo, '') = ''
+                  BEGIN
+                     SELECT TOP 1 @cTrackNo = CT.TrackingNo
+                     FROM dbo.CartonTrack CT WITH (NOLOCK)
+                     WHERE CT.LabelNo = @cOrderKey
+                     AND   CT.CarrierName = @cShipperKey
+                     AND   ISNULL( CT.CarrierRef2, '') = ''
+                     AND   SUBSTRING( CarrierRef1, 1, 10) = @cOrderKey
+                     AND   NOT EXISTS ( SELECT 1 FROM dbo.PackDetail PD WITH (NOLOCK)
+                                        WHERE PD.StorerKey = @cStorerkey
+                                        AND   PD.LabelNo = CT.TrackingNo)
+                     ORDER BY 1
+                  END
                END
                               
                IF ISNULL( @cTrackNo, '') = ''
