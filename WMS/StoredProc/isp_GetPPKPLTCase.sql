@@ -21,7 +21,7 @@ GO
 /*                                                                      */
 /* Parameters: (Input)  Loadkey, externorderkey, consigneekey           */
 /*                                                                      */
-/* PVCS Version: 1.0	                                                   */
+/* PVCS Version: 1.0	                                                */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -32,11 +32,11 @@ GO
 /* 08-Feb-2010  SHONG     1.1  Add new Location & ID Parameter          */
 /* 18-Feb-2010  SHONG     1.2  Resolve Blocking Issues                  */
 /* 17-Mar-2010	NJOW      1.3  Calculate loose qty                      */
-/* 28-Jan-2019  TLTING_ext 1.4  enlarge externorderkey field length      */
+/* 28-Nov-2023  Calvin    1.4  JSM-194057 Variable Nullable (CLVN01)    */
 /************************************************************************/
 CREATE PROCEDURE [dbo].[isp_GetPPKPltCase]
    @c_loadkey NVARCHAR(10),
-   @c_externorderkey NVARCHAR(50)='',   --tlting_ext
+   @c_externorderkey NVARCHAR(30)='',
    @c_consigneekey NVARCHAR(15)='',
    @n_totalcarton INT=0 OUTPUT,
    @n_totalpallet INT=0 OUTPUT,
@@ -46,10 +46,10 @@ CREATE PROCEDURE [dbo].[isp_GetPPKPltCase]
    @c_Picked NVARCHAR(1)=''
 AS
 BEGIN
-   SET NOCOUNT ON 
-   SET ANSI_NULLS OFF 
-   SET QUOTED_IDENTIFIER OFF 
-   SET CONCAT_NULL_YIELDS_NULL OFF
+    SET NOCOUNT ON
+    SET ANSI_DEFAULTS OFF  
+    SET QUOTED_IDENTIFIER OFF
+    SET CONCAT_NULL_YIELDS_NULL OFF
     
     DECLARE @n_continue   INT
            ,@n_cnt        INT
@@ -67,7 +67,7 @@ BEGIN
                ,Storerkey NVARCHAR(15)
                ,Sku NVARCHAR(20)
                ,Altsku NVARCHAR(20)
-               ,CartonGroup NVARCHAR(20)
+               ,CartonGroup NVARCHAR(20) NULL --(CLVN01)
                ,Loc NVARCHAR(10)
                ,Qty INT
                ,Lottable03 NVARCHAR(18)
@@ -601,5 +601,5 @@ GO
 
 GRANT EXECUTE ON isp_GetPPKPltCase TO NSQL
 GO
- 
+
 
