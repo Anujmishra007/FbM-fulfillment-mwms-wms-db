@@ -12,6 +12,7 @@ GO
 /* Date        Rev  Author     Purposes                                         */                   
 /* 19-Oct-2023 1.0  WLChooi    Created (WMS-23908)                              */
 /* 19-Oct-2023 1.0  WLChooi    DevOps Combine Script                            */
+/* 29-Nov-2023 1.1  WLChooi    WMS-23908 - LEFT JOIN UPC Table (WL01)           */
 /********************************************************************************/                  
                     
 CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_KR_SSCCLBLASN_01]                        
@@ -136,7 +137,7 @@ BEGIN
                   + ' JOIN RECEIPTDETAIL RD WITH (NOLOCK) ON R.Receiptkey = RD.Receiptkey ' + CHAR(13)  
                   + ' JOIN SKU S WITH (NOLOCK) ON S.Storerkey = RD.Storerkey AND S.SKU = RD.SKU ' + CHAR(13)
                   + ' JOIN PACK P WITH (NOLOCK) ON P.Packkey = S.Packkey ' + CHAR(13)
-                  + ' JOIN UPC U WITH (NOLOCK) ON U.Packkey = P.Packkey AND U.UOM = P.PackUOM3 ' + CHAR(13)
+                  + ' LEFT JOIN UPC U WITH (NOLOCK) ON U.Packkey = P.Packkey AND U.UOM = P.PackUOM3 ' + CHAR(13)   --WL01
                   + ' WHERE R.Receiptkey = @c_Sparm01 '   
                   + ' GROUP BY R.Storerkey, RD.ToLot, RD.ToLoc, RD.ToID, RD.SKU, R.Receiptkey '
                   + '        , ISNULL(TRIM(S.DESCR),''''), ISNULL(TRIM(S.Notes1),''''), U.UPC '
