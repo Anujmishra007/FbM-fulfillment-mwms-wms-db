@@ -1,13 +1,8 @@
-/****** Object:  StoredProcedure [dbo].[isp_GetPPKPltCase]    Script Date: 02/18/2010 17:15:11 ******/
 SET ANSI_NULLS OFF
 GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[isp_GetPPKPltCase]') AND type in (N'P', N'PC'))
-DROP PROCEDURE [dbo].[isp_GetPPKPltCase]
-GO
 
 /************************************************************************/
 /* Stored Procedure: isp_GetPPKPltCase                                  */
@@ -17,7 +12,7 @@ GO
 /*                                                                      */
 /* Purpose:                                                             */
 /*                                                                      */
-/* Called By:                                                           */ 
+/* Called By:                                                           */
 /*                                                                      */
 /* Parameters: (Input)  Loadkey, externorderkey, consigneekey           */
 /*                                                                      */
@@ -28,15 +23,16 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author    Ver. Purposes                                 */
-/* 08-Feb-2010  SHONG     1.1  Add new Location & ID Parameter          */
-/* 18-Feb-2010  SHONG     1.2  Resolve Blocking Issues                  */
-/* 17-Mar-2010	NJOW      1.3  Calculate loose qty                      */
-/* 28-Nov-2023  Calvin    1.4  JSM-194057 Variable Nullable (CLVN01)    */
+/* Date         Author     Ver. Purposes                                */
+/* 08-Feb-2010  SHONG      1.1  Add new Location & ID Parameter         */
+/* 18-Feb-2010  SHONG      1.2  Resolve Blocking Issues                 */
+/* 17-Mar-2010	NJOW       1.3  Calculate loose qty                     */
+/* 28-Jan-2019  TLTING_ext 1.4  enlarge externorderkey field length     */
+/* 28-Nov-2023  Calvin     1.5  JSM-194057 Variable Nullable (CLVN01)   */
 /************************************************************************/
-CREATE PROCEDURE [dbo].[isp_GetPPKPltCase]
+CREATE OR ALTER PROCEDURE [dbo].[isp_GetPPKPltCase]
    @c_loadkey NVARCHAR(10),
-   @c_externorderkey NVARCHAR(30)='',
+   @c_externorderkey NVARCHAR(50)='',   --tlting_ext
    @c_consigneekey NVARCHAR(15)='',
    @n_totalcarton INT=0 OUTPUT,
    @n_totalpallet INT=0 OUTPUT,
@@ -46,11 +42,11 @@ CREATE PROCEDURE [dbo].[isp_GetPPKPltCase]
    @c_Picked NVARCHAR(1)=''
 AS
 BEGIN
-    SET NOCOUNT ON
-    SET ANSI_DEFAULTS OFF  
-    SET QUOTED_IDENTIFIER OFF
-    SET CONCAT_NULL_YIELDS_NULL OFF
-    
+   SET NOCOUNT ON
+   SET ANSI_NULLS OFF
+   SET QUOTED_IDENTIFIER OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
+
     DECLARE @n_continue   INT
            ,@n_cnt        INT
            ,@n_trancount  INT
@@ -61,7 +57,7 @@ BEGIN
            ,@c_prepack    NVARCHAR(1)
            ,@n_qty        INT
            ,@n_rowid      INT
-    
+
     CREATE TABLE #TMP_PICKDET(
                 Rowid INT IDENTITY(1 ,1)
                ,Storerkey NVARCHAR(15)
@@ -75,13 +71,13 @@ BEGIN
                ,[STATUS] NVARCHAR(10)
                ,[Id] NVARCHAR(18)
             )
-    
-    SELECT @n_continue = 1 
+
+    SELECT @n_continue = 1
     SELECT @n_trancount = @@TRANCOUNT
-    
+
     WHILE @@TRANCOUNT>0
           COMMIT TRAN
-    
+
     IF @n_continue=1 OR
        @n_continue=2
     BEGIN
@@ -89,7 +85,7 @@ BEGIN
         BEGIN
             INSERT INTO #TMP_PICKDET
               (
-                Storerkey, Sku, Altsku, CartonGroup, Loc, Qty, Lottable03, pkqty, 
+                Storerkey, Sku, Altsku, CartonGroup, Loc, Qty, Lottable03, pkqty,
                 [STATUS], Id
               )
             SELECT PD.Storerkey
@@ -123,7 +119,7 @@ BEGIN
             BEGIN
                 INSERT INTO #TMP_PICKDET
                   (
-                    Storerkey, Sku, Altsku, CartonGroup, Loc, Qty, Lottable03, 
+                    Storerkey, Sku, Altsku, CartonGroup, Loc, Qty, Lottable03,
                     pkqty, [STATUS], Id
                   )
                 SELECT PD.Storerkey
@@ -153,12 +149,12 @@ BEGIN
                            ISNULL(@c_consigneekey ,'')=''
                        )
             END
-            ELSE 
+            ELSE
             IF @c_Picked='N'
             BEGIN
                 INSERT INTO #TMP_PICKDET
                   (
-                    Storerkey, Sku, Altsku, CartonGroup, Loc, Qty, Lottable03, 
+                    Storerkey, Sku, Altsku, CartonGroup, Loc, Qty, Lottable03,
                     pkqty, [STATUS], Id
                   )
                 SELECT PD.Storerkey
@@ -192,7 +188,7 @@ BEGIN
             BEGIN
                 INSERT INTO #TMP_PICKDET
                   (
-                    Storerkey, Sku, Altsku, CartonGroup, Loc, Qty, Lottable03, 
+                    Storerkey, Sku, Altsku, CartonGroup, Loc, Qty, Lottable03,
                     pkqty, [STATUS], Id
                   )
                 SELECT PD.Storerkey
@@ -222,20 +218,20 @@ BEGIN
                        )
             END
         END
-        
-        CREATE TABLE #TMP_BOM  
+
+        CREATE TABLE #TMP_BOM
                 (
                     StorerKey    NVARCHAR(15)
                    ,SKU          NVARCHAR(20)
                    ,ComponentSku NVARCHAR(20)
                    ,Qty INT
                 )
-        
+
         INSERT INTO #TMP_BOM
         SELECT DISTINCT BM.Storerkey
               ,BM.SKU
               ,BM.ComponentSku
-              ,BM.Qty 
+              ,BM.Qty
                -- INTO #TMP_BOM
         FROM   #TMP_PICKDET TP
                JOIN BILLOFMATERIAL BM(NOLOCK)
@@ -246,8 +242,8 @@ BEGIN
                BM.Storerkey
               ,BM.SKU
               ,BM.ComponentSku
-        
-        CREATE TABLE #TMP_SORT 
+
+        CREATE TABLE #TMP_SORT
                 (
                     LOC NVARCHAR(10)
                    ,StorerKey NVARCHAR(15)
@@ -255,7 +251,7 @@ BEGIN
                    ,Lottable03 NVARCHAR(18)
                    ,Seq INT
                 )
-        
+
         INSERT INTO #TMP_SORT
         SELECT TP.Loc
               ,TP.Storerkey
@@ -275,7 +271,7 @@ BEGIN
               ,TP.Sku
               ,TP.Lottable03
               ,BM.qty
-        
+
         UPDATE #TMP_PICKDET
         SET    AltSku = ''
               ,cartongroup = 'STD'
@@ -286,10 +282,10 @@ BEGIN
                             TPD.Lottable03=BILLOFMATERIAL.Sku
                         )
         WHERE  BILLOFMATERIAL.Sku IS NULL
-        
+
         SELECT @c_storerkey = ''
               ,@c_sku = ''
-        
+
         DECLARE CUR_BOM CURSOR LOCAL  FAST_FORWARD READ_ONLY FOR
         SELECT DISTINCT Storerkey, SKU
         FROM   #TMP_BOM
@@ -299,21 +295,21 @@ BEGIN
 
         WHILE 1=1
         BEGIN
-           FETCH NEXT FROM CUR_BOM INTO @c_storerkey, @c_sku 
+           FETCH NEXT FROM CUR_BOM INTO @c_storerkey, @c_sku
 
            IF @@FETCH_STATUS <> 0
            BEGIN
-              CLOSE CUR_BOM 
-              DEALLOCATE CUR_BOM 
+              CLOSE CUR_BOM
+              DEALLOCATE CUR_BOM
               BREAK
-           END 
+           END
 
             SELECT @c_CompSku = ''
                   ,@c_prepack = 'Y'
             BEGIN TRAN
             WHILE 1=1
             BEGIN
-                SELECT TOP 1 
+                SELECT TOP 1
                        @c_storerkey = Storerkey
                       ,@c_compsku = ComponentSku
                       ,@n_compqty = qty
@@ -321,11 +317,11 @@ BEGIN
                 WHERE  Storerkey = @c_storerkey AND
                        Sku = @c_sku AND
                        ComponentSku>@c_compSku
-                ORDER BY ComponentSku		       
-                
+                ORDER BY ComponentSku
+
                 SELECT @n_cnt = @@ROWCOUNT
-               
-                
+
+
                 IF @n_cnt=0
                 BEGIN
                     SELECT @c_CompSku = ''
@@ -334,7 +330,7 @@ BEGIN
    	 	          BEGIN TRAN
    	 	          CONTINUE
                 END
-                
+
                 WHILE @n_Compqty>0
                 BEGIN
                     SELECT TOP 1 @n_rowid = TP.rowid
@@ -362,21 +358,21 @@ BEGIN
                     ORDER BY
                            TS.Seq
                           ,2 DESC
-                    
+
                     IF @@ROWCOUNT=0
                     BEGIN
                         SELECT @c_prepack = 'N'
                         BREAK
                     END
-                    
+
                     IF @n_Compqty>=@n_qty
                     BEGIN
                         UPDATE #TMP_PICKDET
                         SET    pkqty = pkqty+@n_qty
                               ,altsku = @c_sku
                               ,cartongroup = 'PREPACK'
-                        WHERE  rowid = @n_rowid	  	       	  
-                        
+                        WHERE  rowid = @n_rowid
+
                         SELECT @n_Compqty = @n_Compqty- @n_qty
                     END
                     ELSE
@@ -385,8 +381,8 @@ BEGIN
                         SET    pkqty = pkqty+@n_Compqty
                               ,altsku = @c_sku
                               ,cartongroup = 'PREPACK'
-                        WHERE  rowid = @n_rowid	  	       	  
-                        
+                        WHERE  rowid = @n_rowid
+
                         SELECT @n_Compqty = 0
                     END
                 END -- while 3
@@ -396,10 +392,10 @@ BEGIN
                     BREAK
                 END
             END -- while 2
-        END -- while 1		 
-        
-        
-        CREATE TABLE #TMP_PICKDET2  
+        END -- while 1
+
+
+        CREATE TABLE #TMP_PICKDET2
                 (
                     Storerkey NVARCHAR(15)
                    ,Sku NVARCHAR(20)
@@ -411,8 +407,8 @@ BEGIN
                    ,Id NVARCHAR(18)
                    ,Casecnt INT
                    ,Palletcnt INT
-                ) 
-        
+                )
+
         INSERT INTO #TMP_PICKDET2
         SELECT Storerkey
               ,Sku
@@ -426,7 +422,7 @@ BEGIN
               ,CONVERT(INT ,0) AS Palletcnt
         FROM   #TMP_PICKDET
         WHERE  pkqty = 0
-        
+
         INSERT INTO #TMP_PICKDET2
         SELECT Storerkey
               ,Sku
@@ -440,7 +436,7 @@ BEGIN
               ,0
         FROM   #TMP_PICKDET
         WHERE  pkqty>0
-        
+
         INSERT INTO #TMP_PICKDET2
         SELECT Storerkey
               ,Sku
@@ -455,14 +451,14 @@ BEGIN
         FROM   #TMP_PICKDET
         WHERE  pkqty>0 AND
                qty- pkqty>0
-    END -- continue  
+    END -- continue
 
-    WHILE @@TRANCOUNT < @n_trancount 
+    WHILE @@TRANCOUNT < @n_trancount
     BEGIN
         BEGIN TRAN
         SELECT @n_trancount = @n_trancount- 1
     END
-    
+
     IF @n_continue=1 OR
        @n_continue=2
     BEGIN
@@ -479,7 +475,7 @@ BEGIN
                         )
                JOIN PACK(NOLOCK)
                     ON  (UPC.Packkey=PACK.Packkey)
-        
+
         UPDATE #TMP_PICKDET2
         SET    casecnt = PACK.Casecnt
               ,palletcnt = PACK.Pallet
@@ -489,10 +485,10 @@ BEGIN
                JOIN PACK(NOLOCK)
                     ON  (SKU.Packkey=PACK.Packkey)
         WHERE  TPD2.Cartongroup NOT IN ('PREPACK' ,'PPKLOOSE')
-        
-        CREATE TABLE #TMP_BOMQTY  
+
+        CREATE TABLE #TMP_BOMQTY
                 (Storerkey NVARCHAR(15) ,Sku NVARCHAR(20) ,totqty INT)
-        
+
         INSERT INTO #TMP_BOMQTY
         SELECT BOM.Storerkey
               ,BOM.Sku
@@ -507,24 +503,24 @@ BEGIN
         GROUP BY
                BOM.Storerkey
               ,BOM.Sku
-        
+
         SELECT TP.Storerkey
               ,TP.Altsku AS sku
               ,TP.id
               ,TP.Loc
-              ,CASE 
+              ,CASE
                     WHEN TP.Casecnt>0 THEN FLOOR(SUM(TP.Qty)/(TP.Casecnt*BQ.totqty))
                     ELSE 0
                END AS totctn
-              ,CASE 
+              ,CASE
                     WHEN TP.Palletcnt>0 THEN FLOOR(SUM(TP.Qty)/(TP.Palletcnt*BQ.totqty))
-                    ELSE CASE 
-                              WHEN TP.Casecnt>0 THEN FLOOR((SUM(TP.Qty)/(TP.Casecnt*BQ.totqty)) 
+                    ELSE CASE
+                              WHEN TP.Casecnt>0 THEN FLOOR((SUM(TP.Qty)/(TP.Casecnt*BQ.totqty))
                                   /60)
                               ELSE 0
                          END
                END AS totplt
-               ,CASE 
+               ,CASE
                     WHEN TP.Casecnt > 0 THEN SUM(TP.Qty) % (TP.Casecnt*BQ.totqty)
                     ELSE SUM(TP.Qty)
                END AS totloose
@@ -541,23 +537,23 @@ BEGIN
               ,TP.Casecnt
               ,TP.Palletcnt
               ,BQ.totqty
-        
+
         SELECT TP.Storerkey
               ,TP.sku
               ,TP.id
               ,TP.Loc
-              ,CASE 
+              ,CASE
                     WHEN TP.Casecnt>0 THEN FLOOR(SUM(TP.Qty)/TP.Casecnt)
                     ELSE 0
                END AS totctn
-              ,CASE 
+              ,CASE
                     WHEN TP.Palletcnt>0 THEN FLOOR(SUM(TP.Qty)/TP.Palletcnt)
-                    ELSE CASE 
+                    ELSE CASE
                               WHEN TP.Casecnt>0 THEN FLOOR((SUM(TP.Qty)/TP.Casecnt)/60)
                               ELSE 0
                          END
                END AS totplt
-               ,CASE 
+               ,CASE
                     WHEN TP.Casecnt > 0 THEN SUM(TP.Qty) % TP.Casecnt
                     ELSE SUM(TP.Qty)
                END AS totloose
@@ -570,8 +566,8 @@ BEGIN
               ,TP.id
               ,TP.Loc
               ,TP.Casecnt
-              ,TP.Palletcnt     
-        
+              ,TP.Palletcnt
+
         SELECT @n_totalcarton = SUM(totctn)
               ,@n_totalpallet = SUM(totplt)
               ,@n_totalloose = SUM(totloose)
@@ -582,13 +578,13 @@ BEGIN
                    FROM   #TMP_RESULT_PPK(NOLOCK) UNION ALL SELECT totctn
                                                                   ,totplt
                                                                   ,totloose
-                                                            FROM   
+                                                            FROM
                                                                    #TMP_RESULT_STD(NOLOCK)
-               ) REL         
-        
+               ) REL
+
         IF @n_totalcarton IS NULL
             SET @n_totalcarton = 0
-        
+
         IF @n_totalpallet IS NULL
             SET @n_totalpallet = 0
 
@@ -597,9 +593,5 @@ BEGIN
     END
 END
 GO
-
-
-GRANT EXECUTE ON isp_GetPPKPltCase TO NSQL
+GRANT EXECUTE ON  [dbo].[isp_GetPPKPltCase] TO [NSQL]
 GO
-
-
