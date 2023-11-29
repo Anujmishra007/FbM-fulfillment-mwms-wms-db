@@ -14,7 +14,7 @@ GO
 /*                                                                         */
 /* Called By: RPT_ORD_DELNOTE_007                                          */
 /*                                                                         */
-/* GitHub Version: 1.0                                                     */
+/* GitHub Version: 1.1                                                     */
 /*                                                                         */
 /* Version: 1.0                                                            */
 /*                                                                         */
@@ -23,9 +23,9 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 26-Sep-2023  WLChooi 1.0   DevOps Combine Script                        */
+/* 06-Nov-2023  WLChooi 1.1   WMS-24094 - Update Orders DeliveryNote (WL01)*/
 /***************************************************************************/
-CREATE OR ALTER PROC [dbo].[isp_RPT_ORD_DELNOTE_007]
-      @c_Orderkey NVARCHAR(10)
+CREATE OR ALTER PROC [dbo].[isp_RPT_ORD_DELNOTE_007] @c_Orderkey NVARCHAR(10)
 AS
 BEGIN
    SET NOCOUNT ON
@@ -38,10 +38,71 @@ BEGIN
          , @c_DataWindow    NVARCHAR(60) = N'RPT_ORD_DELNOTE_007'
          , @c_RetVal        NVARCHAR(255)
 
+   --WL01 S
+   DECLARE @c_DeliveryNote NVARCHAR(50) = N''
+         , @b_Success      INT
+         , @n_Err          INT
+         , @c_ErrMsg       NVARCHAR(255)
+         , @n_StartTCnt    INT
+         , @n_Continue     INT
+
+   SELECT @n_StartTCnt = @@TRANCOUNT
+        , @n_Continue = 1
+        , @b_Success = 1
+        , @n_Err = 0
+        , @c_ErrMsg = N''
+
+   SELECT @c_DeliveryNote = OH.DeliveryNote
+        , @c_FromStorerkey = OH.StorerKey
+   FROM ORDERS OH (NOLOCK)
+   WHERE OH.OrderKey = @c_Orderkey
+
    EXEC [dbo].[isp_GetCompanyInfo] @c_Storerkey = @c_FromStorerkey
                                  , @c_Type = @c_Type
                                  , @c_DataWindow = @c_DataWindow
                                  , @c_RetVal = @c_RetVal OUTPUT
+
+   IF ISNULL(@c_DeliveryNote, '') = ''
+   BEGIN
+      EXECUTE nspg_GetKey @c_FromStorerkey
+                        , 10
+                        , @c_DeliveryNote OUTPUT
+                        , @b_Success OUTPUT
+                        , @n_Err OUTPUT
+                        , @c_ErrMsg OUTPUT
+                        , 0
+                        , 1
+
+      IF @n_Err <> 0
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_Err = 64500 -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+         SET @c_ErrMsg = N'NSQL' + CONVERT(CHAR(5), @n_Err)
+                         + N': EXEC nspg_GetKey Failed. (isp_RPT_ORD_DELNOTE_007) ( SQLSvr MESSAGE=' + @c_ErrMsg
+                         + N' ) '
+         GOTO QUIT_SP
+      END
+
+      UPDATE dbo.ORDERS
+      SET DeliveryNote = @c_DeliveryNote
+        , TrafficCop = NULL
+        , EditDate = GETDATE()
+        , EditWho = SUSER_SNAME()
+      WHERE OrderKey = @c_Orderkey 
+      AND (DeliveryNote = '' OR DeliveryNote IS NULL)
+
+      SELECT @n_Err = @@ERROR
+
+      IF @n_Err <> 0
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_Err = 64505 -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+         SET @c_ErrMsg = N'NSQL' + CONVERT(CHAR(5), @n_Err)
+                         + N': Update ORDERS Failed. (isp_RPT_ORD_DELNOTE_007) ( SQLSvr MESSAGE=' + @c_ErrMsg + N' ) '
+         GOTO QUIT_SP
+      END
+   END
+   --WL01 E
 
    SELECT ORDERS.C_Company
         , ORDERS.C_Address1
@@ -74,9 +135,9 @@ BEGIN
         , ORDERS.DeliveryDate
         , ISNULL(CL3.Short, 'N') AS 'ShowSPRemarks'
         , @c_RetVal AS 'LogoName'
-        , SumQty = ( SELECT SUM(ORDERDETAIL.QtyPicked + ORDERDETAIL.ShippedQty)
-                     FROM ORDERDETAIL (NOLOCK)
-                     WHERE Orderkey = @c_Orderkey )
+        , SumQty = (  SELECT SUM(ORDERDETAIL.QtyPicked + ORDERDETAIL.ShippedQty)
+                      FROM ORDERDETAIL (NOLOCK)
+                      WHERE OrderKey = @c_Orderkey)
    FROM ORDERS WITH (NOLOCK)
    JOIN ORDERDETAIL WITH (NOLOCK) ON (ORDERS.OrderKey = ORDERDETAIL.OrderKey)
    JOIN SKU WITH (NOLOCK) ON (SKU.Sku = ORDERDETAIL.Sku) AND (ORDERDETAIL.StorerKey = SKU.StorerKey)
@@ -108,6 +169,32 @@ BEGIN
           , CASE WHEN ISNULL(C.Short, 'N') = 'Y' THEN ORDERDETAIL.Sku END ASC
           , CASE WHEN ISNULL(C.Short, 'N') = 'N' THEN ORDERDETAIL.OrderLineNumber END ASC
           , CASE WHEN ISNULL(C.Short, 'N') = 'N' THEN ORDERDETAIL.Sku END ASC
+
+   --WL01 S
+   QUIT_SP:
+   IF @n_Continue = 3 -- Error Occured - Process And Return
+   BEGIN
+      SET @b_Success = 0
+
+      IF @@TRANCOUNT = 1 AND @@TRANCOUNT > @n_StartTCnt
+      BEGIN
+         ROLLBACK TRAN
+      END
+      EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'isp_RPT_ORD_DELNOTE_007'
+      RAISERROR(@c_ErrMsg, 16, 1) WITH SETERROR -- SQL2012
+   END
+   ELSE
+   BEGIN
+      SET @b_Success = 1
+      WHILE @@TRANCOUNT > @n_StartTCnt
+      BEGIN
+         COMMIT TRAN
+      END
+   END
+
+   WHILE @@TRANCOUNT < @n_StartTCnt
+   BEGIN TRAN
+--WL01 E
 END
 GO
 GRANT EXECUTE ON [dbo].[isp_RPT_ORD_DELNOTE_007] TO [NSQL]
