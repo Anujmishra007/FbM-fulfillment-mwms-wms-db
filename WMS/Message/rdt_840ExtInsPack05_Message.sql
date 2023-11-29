@@ -16,5 +16,7 @@ execute rdt.rdtAddMsg 135460, 10, '35460^INSPACKINF ERR',  'us_english', 840
 execute rdt.rdtAddMsg 135461, 10, '35461^InsTL2Log Err',  'us_english', 840
 execute rdt.rdtAddMsg 135462, 10, '35462^UPD CTTRK Err',  'us_english', 840
 
+--WMS-23619
+execute rdt.rdtAddMsg 135463, 10, '35463^TCP SOCKET Err',  'us_english', 840
 
 select * from rdt.rdtmsg (nolock) where message_id between 135451 and 135500
