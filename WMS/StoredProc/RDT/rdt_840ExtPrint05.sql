@@ -1,11 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'rdt.rdt_840ExtPrint05') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_840ExtPrint05
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /************************************************************************/
 /* Store procedure: rdt_840ExtPrint05                                   */
@@ -15,29 +12,31 @@ GO
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
 /* 2019-03-11 1.0  James      WMS8142. Created                          */
+/* 2023-11-14 1.1  James      WMS-23619 Skip printing if printdata      */
+/*                            from cartontrack is not ready (james01)   */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdt_840ExtPrint05] (
+CREATE OR ALTER PROC [RDT].[rdt_840ExtPrint05] (
    @nMobile     INT,
-   @nFunc       INT, 
-   @cLangCode   NVARCHAR( 3), 
-   @nStep       INT, 
-   @nInputKey   INT, 
-   @cStorerkey  NVARCHAR( 15), 
-   @cOrderKey   NVARCHAR( 10), 
-   @cPickSlipNo NVARCHAR( 10), 
-   @cTrackNo    NVARCHAR( 20), 
-   @cSKU        NVARCHAR( 20), 
+   @nFunc       INT,
+   @cLangCode   NVARCHAR( 3),
+   @nStep       INT,
+   @nInputKey   INT,
+   @cStorerkey  NVARCHAR( 15),
+   @cOrderKey   NVARCHAR( 10),
+   @cPickSlipNo NVARCHAR( 10),
+   @cTrackNo    NVARCHAR( 20),
+   @cSKU        NVARCHAR( 20),
    @nCartonNo   INT,
-   @nErrNo      INT           OUTPUT, 
+   @nErrNo      INT           OUTPUT,
    @cErrMsg     NVARCHAR( 20) OUTPUT
 )
 AS
 
-   SET NOCOUNT ON   
+   SET NOCOUNT ON
    SET ANSI_NULLS OFF
    SET QUOTED_IDENTIFIER OFF
-   SET CONCAT_NULL_YIELDS_NULL OFF  
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @cPaperPrinter     NVARCHAR( 10),
            @cLabelPrinter     NVARCHAR( 10),
@@ -50,7 +49,12 @@ AS
            @nIsMoveOrder      INT,
            @cDocType          NVARCHAR( 1),
            @cShipLabel        NVARCHAR( 10),
-           @cDelNotes         NVARCHAR( 10)
+           @cDelNotes         NVARCHAR( 10),
+           @cLabelNo          NVARCHAR( 20),
+           @nIsPrintDataExists   INT = 0,
+           @cErrMsg1          NVARCHAR( 20) = '',
+           @cECOM_Platform    NVARCHAR( 30) = ''
+           
 
    SELECT @cLabelPrinter = Printer,
           @cPaperPrinter = Printer_Paper,
@@ -64,34 +68,77 @@ AS
       IF @nStep = 4
       BEGIN
          SELECT @cLoadKey = ISNULL(RTRIM(LoadKey), ''),
-                @cShipperKey = ISNULL(RTRIM(ShipperKey), '')
+                @cShipperKey = ISNULL(RTRIM(ShipperKey), ''), 
+                @cECOM_Platform = ISNULL(RTRIM(ECOM_Platform), ''), 
+                @cDocType = ISNULL(RTRIM(DocType), '')
          FROM dbo.Orders WITH (NOLOCK)
          WHERE Storerkey = @cStorerkey
          AND   Orderkey = @cOrderkey
 
-         SET @cShipLabel = rdt.RDTGetConfig( @nFunc, 'ShipLabel', @cStorerKey)
-         IF @cShipLabel = '0'
-            SET @cShipLabel = ''
+         SELECT @cLabelNo = LabelNo
+         FROM dbo.PackDetail (NOLOCK)
+         WHERE PickSlipNo = @cPickSlipNo
+         AND   CartonNo = @nCartonNo
+         
+         IF EXISTS ( SELECT 1 
+                     FROM dbo.CartonTrack WITH (NOLOCK)
+                     WHERE TrackingNo = @cLabelNo
+                     AND   LabelNo  = @cOrderKey
+                     AND   (( @nCartonNo = 1 AND CarrierRef1 = CarrierRef1) OR 
+                            ( @nCartonNo > 1 AND CarrierRef1 = @cOrderkey + RTRIM( CAST( @nCartonNo AS NVARCHAR( 3)))))
+                     AND   CarrierRef2 = 'GET'
+                     AND   ISNULL( PrintData, '') <> '')
+            SET @nIsPrintDataExists = 1                     
 
-         IF @cShipLabel <> ''
+         IF @nIsPrintDataExists = 0
          BEGIN
-            DECLARE @tSHIPPLABEL AS VariableTable
-            INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@cPickSlipNo',     @cPickSlipNo)
-            INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@nFromCartonNo',   @nCartonNo)
-            INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@nToCartonNo',     @nCartonNo)
-
-            -- Print label
-            EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, '', 
-               @cShipLabel,  -- Report type
-               @tSHIPPLABEL, -- Report params
-               'rdt_840ExtInsPack05', 
-               @nErrNo  OUTPUT,
-               @cErrMsg OUTPUT 
-
-            IF @nErrNo <> 0
-               GOTO Quit         
+         	-- Skip prompt if short=orders.ecom_platform and storerkey=orders.storerkey='18417' and doctype='E'
+         	IF EXISTS ( SELECT 1 
+         	            FROM dbo.CODELKUP WITH (NOLOCK)
+                        WHERE LISTNAME = 'ECPLATFORM'
+                        AND   StorerKey = @cStorerkey 
+                        AND   Short = @cECOM_Platform) AND @cDocType = 'E'
+               SET @nIsPrintDataExists = 1
          END
+         
+         IF @nIsPrintDataExists = 1
+         BEGIN
+            SET @cShipLabel = rdt.RDTGetConfig( @nFunc, 'ShipLabel', @cStorerKey)
+            IF @cShipLabel = '0'
+               SET @cShipLabel = ''
 
+            IF @cShipLabel <> ''
+            BEGIN
+               DECLARE @tSHIPPLABEL AS VariableTable
+               INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@cPickSlipNo',     @cPickSlipNo)
+               INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@nFromCartonNo',   @nCartonNo)
+               INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@nToCartonNo',     @nCartonNo)
+
+               -- Print label
+               EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cLabelPrinter, '',
+                  @cShipLabel,  -- Report type
+                  @tSHIPPLABEL, -- Report params
+                  'rdt_840ExtInsPack05',
+                  @nErrNo  OUTPUT,
+                  @cErrMsg OUTPUT
+
+               IF @nErrNo <> 0
+                  GOTO Quit
+            END
+         END
+         ELSE
+         BEGIN
+            SET @nErrNo = 0  
+            SET @cErrMsg1 = 'LABEL NO PRINTDATA'  
+            EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1  
+            IF @nErrNo = 1  
+            BEGIN  
+               SET @nErrNo = 0
+               SET @cErrMsg = ''
+               SET @cErrMsg1 = ''  
+            END  
+         END
+         
          -- 1 orders 1 tracking no
          -- discrete pickslip, 1 ordes 1 pickslipno
          SET @nExpectedQty = 0
@@ -112,7 +159,7 @@ AS
             SET @cDelNotes = rdt.RDTGetConfig( @nFunc, 'DelNotes', @cStorerKey)
             IF @cDelNotes = '0'
                SET @cDelNotes = ''
-         
+
             IF @cDelNotes <> ''
             BEGIN
                DECLARE @tDELNOTES AS VariableTable
@@ -121,15 +168,15 @@ AS
                INSERT INTO @tDELNOTES (Variable, Value) VALUES ( '@cPickSlipNo',  @cPickSlipNo)
 
                -- Print label
-               EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, '', @cPaperPrinter, 
+               EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, '', @cPaperPrinter,
                   @cDelNotes, -- Report type
                   @tDELNOTES, -- Report params
-                  'rdt_840ExtInsPack05', 
+                  'rdt_840ExtInsPack05',
                   @nErrNo  OUTPUT,
-                  @cErrMsg OUTPUT 
+                  @cErrMsg OUTPUT
 
                IF @nErrNo <> 0
-                  GOTO Quit                 
+                  GOTO Quit
             END
          END
 
