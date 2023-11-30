@@ -14,6 +14,7 @@ GO
 /* 2020-05-04 1.0  Ung      WMS-12637 Created                                 */
 /* 2023-01-20 1.1  Ung      WMS-21577 Add unlimited UCC to move               */
 /* 2023-06-01 1.2  Ung      WMS-22561 Add UCCWithMultiSKU                     */
+/* 2023-11-28 1.3  Ung      WMS-24170 Standardize LocationType from SKUxLOC   */
 /******************************************************************************/
 CREATE OR ALTER PROCEDURE [RDT].[rdt_Move_UCC_Confirm] (
    @nMobile        INT, 
@@ -131,12 +132,19 @@ BEGIN
 
    -- Get ToLOC info
    IF @cUCCWithMultiSKU = '1'
+   BEGIN
       SELECT
-         @cToLocType = LocationType, 
          @cLoseID = LoseID,
          @cLoseUCC = LoseUCC
       FROM dbo.LOC (NOLOCK)
       WHERE LOC = @cToLOC
+
+      SET @cToLocType = '' -- Default as BULK (just in case SKUxLOC not yet setup) 
+      SELECT TOP 1 
+         @cToLocType = LocationType
+      FROM dbo.SKUxLOC (NOLOCK)
+      WHERE LOC = @cToLOC
+   END
 
    BEGIN TRAN
    SAVE TRAN rdt_Move_UCC_Confirm
