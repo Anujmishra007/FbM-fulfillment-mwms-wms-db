@@ -22,6 +22,8 @@ GO
 /* Updates:                                                             */  
 /* Date         Author    Ver Purposes                                  */  
 /* 2022-06168   MINGLE    1.1 Add dummy line(ml01)                      */  
+/* 2023-11-29   BeeTin    1.2 JSM-180303 Reduced @n_MaxLine variable    */
+/*                            length to avoid printing dummy record     */ 
 /************************************************************************/  
   
 CREATE OR ALTER  PROC [dbo].[isp_PackListBySku17]  
@@ -69,7 +71,8 @@ BEGIN
    SET @n_Err      = 0  
    SET @c_Errmsg   = ''  
    SET @c_Logo     = ''  
-   SET @n_MaxLine  = 11  
+  --SET @n_MaxLine  = 11       
+   SET @n_MaxLine  = 10       -- (JSM-180303)
    SET @n_CntRec   = 1  
    SET @n_LastPage = 0  
    SET @n_ReqLine  = 1  
