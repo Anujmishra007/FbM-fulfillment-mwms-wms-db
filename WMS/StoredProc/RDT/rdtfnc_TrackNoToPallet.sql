@@ -6,7 +6,7 @@ GO
 
 /******************************************************************************/
 /* Store procedure: rdtfnc_TrackNoToPallet                                    */
-/* Copyright      : LF Logistics                                              */
+/* Copyright      : MAERSK                                                    */
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
 /* 2017-06-07 1.0  Ung      WMS-2016 Migrated from TrackNoMBOL_Creation       */
@@ -43,7 +43,8 @@ GO
 /* 2023-10-25 3.0  Ung      WMS-23940 Add DefaultWeightSP                     */
 /* 2023-11-01 3.1  Ung      Fix storer config mapped wrong V_String           */  
 /*                          @cSkipCheckPalletSamePresale                      */  
-/*                          @cExtendedCheckSOStatusSP                         */ 
+/*                          @cExtendedCheckSOStatusSP                         */
+/* 2023-11-01 3.2  James    Adhoc fix Extend all TrackNo to 40 chars (james04)*/  
 /******************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdtfnc_TrackNoToPallet](
@@ -116,7 +117,7 @@ DECLARE
    @cExtendedCheckSOStatusSP     NVARCHAR(20),
    @cDefaultCartonTypeSP         NVARCHAR(20),
    @cDefaultWeightSP             NVARCHAR(20),
-
+   
    @cTrackNoBarcode     NVARCHAR( 60),
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
@@ -487,7 +488,7 @@ BEGIN
                '@cPalletKey      NVARCHAR( 20), ' +
                '@cPalletLOC      NVARCHAR( 10), ' +
                '@cMBOLKey        NVARCHAR( 10), ' +
-               '@cTrackNo        NVARCHAR( 20), ' +
+               '@cTrackNo        NVARCHAR( 40), ' +
                '@cOrderKey       NVARCHAR( 10), ' +
                '@cShipperKey     NVARCHAR( 15), ' +
                '@cCartonType     NVARCHAR( 10), ' +
@@ -529,7 +530,7 @@ BEGIN
                '@cPalletKey      NVARCHAR( 20), ' +
                '@cPalletLOC      NVARCHAR( 10), ' +
                '@cMBOLKey        NVARCHAR( 10), ' +
-               '@cTrackNo        NVARCHAR( 20), ' +
+               '@cTrackNo        NVARCHAR( 40), ' +
                '@cOrderKey       NVARCHAR( 10), ' +
                '@cShipperKey     NVARCHAR( 15), ' +
                '@cCartonType     NVARCHAR( 10), ' +
@@ -671,7 +672,7 @@ BEGIN
                '@cPalletKey      NVARCHAR( 20), ' +
                '@cPalletLOC      NVARCHAR( 10), ' +
                '@cMBOLKey        NVARCHAR( 10), ' +
-               '@cTrackNo        NVARCHAR( 20), ' +
+               '@cTrackNo        NVARCHAR( 40), ' +
                '@cOrderKey       NVARCHAR( 10), ' +
                '@cShipperKey     NVARCHAR( 15), ' +
                '@cCartonType     NVARCHAR( 10), ' +
@@ -788,7 +789,7 @@ BEGIN
                '@cPalletKey      NVARCHAR( 20), ' +
                '@cPalletLOC      NVARCHAR( 10), ' +
                '@cMBOLKey        NVARCHAR( 10), ' +
-               '@cTrackNo        NVARCHAR( 60)  OUTPUT, ' +
+               '@cTrackNo        NVARCHAR( 40)  OUTPUT, ' +
                '@cOrderKey       NVARCHAR( 10)  OUTPUT, ' +
                '@nErrNo          INT            OUTPUT, ' +
                '@cErrMsg         NVARCHAR( 20)  OUTPUT  '
@@ -886,7 +887,7 @@ BEGIN
                '@cPalletKey      NVARCHAR( 20), ' +
                '@cPalletLOC      NVARCHAR( 10), ' +
                '@cMBOLKey        NVARCHAR( 10), ' +
-               '@cTrackNo        NVARCHAR( 20), ' +
+               '@cTrackNo        NVARCHAR( 40), ' +
                '@cOrderKey       NVARCHAR( 10), ' +
                '@cShipperKey     NVARCHAR( 15), ' +
                '@cCartonType     NVARCHAR( 10), ' +
@@ -1083,7 +1084,7 @@ BEGIN
                '@cPalletKey      NVARCHAR( 20), ' +
                '@cPalletLOC      NVARCHAR( 10), ' +
                '@cMBOLKey        NVARCHAR( 10), ' +
-               '@cTrackNo        NVARCHAR( 20), ' +
+               '@cTrackNo        NVARCHAR( 40), ' +
                '@cOrderKey       NVARCHAR( 10), ' +
                '@cShipperKey     NVARCHAR( 15), ' +
                '@cCartonType     NVARCHAR( 10), ' +
@@ -1235,7 +1236,7 @@ BEGIN
                '@cPalletKey      NVARCHAR( 20), ' +
                '@cPalletLOC      NVARCHAR( 10), ' +
                '@cMBOLKey        NVARCHAR( 10), ' +
-               '@cTrackNo        NVARCHAR( 20), ' +
+               '@cTrackNo        NVARCHAR( 40), ' +
                '@cOrderKey       NVARCHAR( 10), ' +
                '@cShipperKey     NVARCHAR( 15), ' +
                '@cCartonType     NVARCHAR( 10), ' +
@@ -1364,7 +1365,7 @@ BEGIN
                '@cPalletKey      NVARCHAR( 20), ' +
                '@cPalletLOC      NVARCHAR( 10), ' +
                '@cMBOLKey        NVARCHAR( 10), ' +
-               '@cTrackNo        NVARCHAR( 20), ' +
+               '@cTrackNo        NVARCHAR( 40), ' +
                '@cOrderKey       NVARCHAR( 10), ' +
                '@cShipperKey     NVARCHAR( 15), ' +
                '@cCartonType     NVARCHAR( 10), ' +
@@ -1410,7 +1411,7 @@ BEGIN
                   '@cPalletKey      NVARCHAR( 20), ' +
                   '@cPalletLOC      NVARCHAR( 10), ' +
                   '@cMBOLKey        NVARCHAR( 10), ' +
-                  '@cTrackNo        NVARCHAR( 20), ' +
+                  '@cTrackNo        NVARCHAR( 40), ' +
                   '@cOrderKey       NVARCHAR( 10), ' +
                   '@cShipperKey     NVARCHAR( 15), ' +
                   '@cWeight         NVARCHAR( 10), ' +
@@ -1508,7 +1509,7 @@ BEGIN
                '@cPalletKey      NVARCHAR( 20), ' +
                '@cPalletLOC      NVARCHAR( 10), ' +
                '@cMBOLKey        NVARCHAR( 10), ' +
-               '@cTrackNo        NVARCHAR( 20), ' +
+               '@cTrackNo        NVARCHAR( 40), ' +
                '@cOrderKey       NVARCHAR( 10), ' +
                '@cShipperKey     NVARCHAR( 15), ' +
                '@cCartonType     NVARCHAR( 10), ' +
@@ -1660,7 +1661,7 @@ BEGIN
                '@cPalletKey      NVARCHAR( 20), ' +
                '@cPalletLOC      NVARCHAR( 10), ' +
                '@cMBOLKey        NVARCHAR( 10), ' +
-               '@cTrackNo        NVARCHAR( 20), ' +
+               '@cTrackNo        NVARCHAR( 40), ' +
                '@cOrderKey       NVARCHAR( 10), ' +
                '@cShipperKey     NVARCHAR( 15), ' +
                '@cCartonType     NVARCHAR( 10), ' +
@@ -1733,7 +1734,7 @@ BEGIN
                '@cPalletKey      NVARCHAR( 20), ' +
                '@cPalletLOC      NVARCHAR( 10), ' +
                '@cMBOLKey        NVARCHAR( 10), ' +
-               '@cTrackNo        NVARCHAR( 20), ' +
+               '@cTrackNo        NVARCHAR( 40), ' +
                '@cOrderKey       NVARCHAR( 10), ' +
                '@cShipperKey     NVARCHAR( 15), ' +
                '@cCartonType     NVARCHAR( 10), ' +
@@ -1853,7 +1854,7 @@ BEGIN
                '@cPalletKey      NVARCHAR( 20), ' +
                '@cPalletLOC      NVARCHAR( 10), ' +
                '@cMBOLKey        NVARCHAR( 10), ' +
-               '@cTrackNo        NVARCHAR( 20), ' +
+               '@cTrackNo        NVARCHAR( 40), ' +
                '@cOrderKey       NVARCHAR( 10), ' +
                '@cShipperKey     NVARCHAR( 15), ' +
                '@cCartonType     NVARCHAR( 10), ' +
@@ -1938,7 +1939,7 @@ BEGIN
                   '@cPalletKey      NVARCHAR( 20), ' +
                   '@cPalletLOC      NVARCHAR( 10), ' +
                   '@cMBOLKey        NVARCHAR( 10), ' +
-                  '@cTrackNo        NVARCHAR( 20), ' +
+                  '@cTrackNo        NVARCHAR( 40), ' +
                   '@cOrderKey       NVARCHAR( 10), ' +
                   '@cShipperKey     NVARCHAR( 15), ' +
                   '@cCartonType     NVARCHAR( 10), ' +
@@ -2047,8 +2048,8 @@ BEGIN
       V_String31 = @cTrackNoOnOrder,
       V_String32 = @cDecodeTrackNoSP,
       V_String33 = @cSkipCheckPalletSameShipper,
-      V_String34 = @cSkipCheckPalletSamePresale,
-      V_String35 = @cExtendedCheckSOStatusSP,
+      V_String34 = @cSkipCheckPalletSamePresale,  
+      V_String35 = @cExtendedCheckSOStatusSP,  
       V_String36 = @cDefaultCartonTypeSP,
       V_String37 = @cDefaultWeightSP,
       
