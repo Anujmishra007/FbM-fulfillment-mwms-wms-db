@@ -10,6 +10,7 @@ GO
 /*                                                                      */  
 /* Date       Rev  Author     Purposes                                  */  
 /* 2023-07-26 1.0  yeekung  WMS-23057. Created                          */  
+/* 2023-11-29 1.1  yeekung  WMS-24269 Add Codekup (yeekung01)           */
 /************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_855ExtUpd10] (  
@@ -55,7 +56,8 @@ BEGIN
    DECLARE @cUserName                NVARCHAR( 128)  
    DECLARE @nPDQTY         INT
    DECLARE @nPPAQTY         INT
-     
+   DECLARE @cSKUgroup      NVARCHAR(20)
+
    SELECT   
       @cFacility = Facility,   
       @cLabelPrinter = Printer,  
@@ -88,38 +90,53 @@ BEGIN
 
             IF @nPPAQTY = @nPDQTY
             BEGIN
+               SELECT TOP 1 @cSKUgroup= SKUGROUP
+               FROM pickdetail PD (nolock)
+               JOIN SKU SKU (NOLOCK) ON PD.SKU=SKU.SKU AND PD.Storerkey =SKU.StorerKey
+               where PD.dropid= @cDropID
+                  and PD.Storerkey = @cStorerKey
+                  AND PD.Status <=9
 
-               DECLARE @cCartonManifest NVARCHAR(20)
-               SET @cCartonManifest = rdt.RDTGetConfig( @nFunc, 'CartonManifest', @cStorerKey)
-               IF @cCartonManifest = '0'
-                  SET @cCartonManifest = ''
-
-               -- Carton manifest
-               IF @cCartonManifest <> ''
+               IF EXISTS (SELECT 1
+                           FROM CODELKUP
+                           WHERE LISTNAME ='LABELCFG'
+                              AND Storerkey = @cStorerKey
+                              AND Short ='Y'
+                              AND code = @cSKUgroup
+                        )
                BEGIN
+                  DECLARE @cCartonManifest NVARCHAR(20)
+                  SET @cCartonManifest = rdt.RDTGetConfig( @nFunc, 'CartonManifest', @cStorerKey)
+                  IF @cCartonManifest = '0'
+                     SET @cCartonManifest = ''
 
-                  -- Get session info
-                  SELECT
-                     @cPaperPrinter = Printer_Paper,
-                     @cLabelPrinter = Printer
-                  FROM rdt.rdtMobRec WITH (NOLOCK)
-                  WHERE Mobile = @nMobile
+                  -- Carton manifest
+                  IF @cCartonManifest <> ''
+                  BEGIN
 
-                  DECLARE @tCartonManifest AS VariableTable
-                  INSERT INTO @tCartonManifest (Variable, Value) VALUES
-                     ( '@cStorerKey',    @cStorerKey),
-                     ( '@cDropID',      @cDropID)
+                     -- Get session info
+                     SELECT
+                        @cPaperPrinter = Printer_Paper,
+                        @cLabelPrinter = Printer
+                     FROM rdt.rdtMobRec WITH (NOLOCK)
+                     WHERE Mobile = @nMobile
 
-                  -- Print Carton manifest
-                  EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
-                     @cCartonManifest, -- Report type
-                     @tCartonManifest, -- Report params
-                     'rdt_855ExtUpd10',
-                     @nErrNo  OUTPUT,
-                     @cErrMsg OUTPUT
+                     DECLARE @tCartonManifest AS VariableTable
+                     INSERT INTO @tCartonManifest (Variable, Value) VALUES
+                        ( '@cStorerKey',    @cStorerKey),
+                        ( '@cDropID',      @cDropID)
 
-                  IF @nErrNo <> 0
-                     GOTO QUIT
+                     -- Print Carton manifest
+                     EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
+                        @cCartonManifest, -- Report type
+                        @tCartonManifest, -- Report params
+                        'rdt_855ExtUpd10',
+                        @nErrNo  OUTPUT,
+                        @cErrMsg OUTPUT
+
+                     IF @nErrNo <> 0
+                        GOTO QUIT
+                  END
                END
             END
          END
