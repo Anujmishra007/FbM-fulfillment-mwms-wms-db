@@ -6,7 +6,7 @@ GO
 
 /******************************************************************************/
 /* Store procedure: rdt_TrackNoToPallet_Confirm                               */
-/* Copyright      : LF Logistics                                              */
+/* Copyright      : MAERSK                                                    */
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
 /* 2017-06-07 1.0  Ung      WMS-2016 Created                                  */
@@ -23,6 +23,9 @@ GO
 /* 2022-06-23 1.8  Ung      WMS-19666 Add recheck status                      */
 /* 2023-04-13 1.9  Ung      WMS-22284 Add MBOL accumulate weight, cube        */
 /* 2023-07-27 2.0  James    WMS-23006 Insert PackInfo if not exists (james03) */
+/* 2023-07-14 2.1  James    WMS-23121 Extend TrackingNo to 40 chars (james04) */
+/*                          PalletDetail.CaseID only take last 20 chars       */
+/*                          Stamp full trackno into PalletDetail.TrackingNo   */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_TrackNoToPallet_Confirm] (
@@ -35,7 +38,7 @@ CREATE OR ALTER PROC [RDT].[rdt_TrackNoToPallet_Confirm] (
    @cStorerKey        NVARCHAR( 15), 
    @cPalletKey        NVARCHAR( 20), 
    @cMBOLKey          NVARCHAR( 10), 
-   @cTrackNo          NVARCHAR( 20), 
+   @cTrackNo          NVARCHAR( 40), 
    @cOrderKey         NVARCHAR( 10), 
    @cShipperKey       NVARCHAR( 15), 
    @cCartonType       NVARCHAR( 10),  
@@ -110,7 +113,7 @@ BEGIN
                '@cPalletKey      NVARCHAR( 20), ' + 
                '@cPalletLOC      NVARCHAR( 10), ' + 
                '@cMBOLKey        NVARCHAR( 10), ' + 
-               '@cTrackNo        NVARCHAR( 20), ' + 
+               '@cTrackNo        NVARCHAR( 40), ' + 
                '@cOrderKey       NVARCHAR( 10), ' + 
                '@cShipperKey     NVARCHAR( 15), ' +  
                '@cCartonType     NVARCHAR( 10), ' +  
@@ -281,12 +284,12 @@ BEGIN
    SAVE TRAN rdt_TrackNoToPallet_Confirm -- For rollback or commit only our own transaction
 
    -- PalletDetail
-   IF NOT EXISTS( SELECT 1 FROM PalletDetail WITH (NOLOCK) WHERE PalletKey = @cPalletKey AND CaseID = @cTrackNo)
+   IF NOT EXISTS( SELECT 1 FROM PalletDetail WITH (NOLOCK) WHERE PalletKey = @cPalletKey AND CaseID = RIGHT( @cTrackNo, 20))
    BEGIN
       INSERT INTO PalletDetail
-         (PalletKey, PalletLineNumber, CaseID, StorerKey, SKU, LOC, QTY, Status, UserDefine01)
+         (PalletKey, PalletLineNumber, CaseID, StorerKey, SKU, LOC, QTY, Status, UserDefine01, TrackingNo)
       VALUES
-         (@cPalletKey, '0', @cTrackNo, @cStorerKey, @cSKU, @cPalletLOC, 0, '0', @cOrderKey)
+         (@cPalletKey, '0', RIGHT( @cTrackNo, 20), @cStorerKey, @cSKU, @cPalletLOC, 0, '0', @cOrderKey, @cTrackNo)
       IF @@ERROR <> 0
       BEGIN
          SET @nErrNo = 111301
