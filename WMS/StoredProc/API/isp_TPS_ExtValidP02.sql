@@ -105,101 +105,106 @@ BEGIN
    FETCH NEXT FROM PICKLottableCursor INTO @cPickSlipno,@cSku, @cBarcode,@nLottableQuatity,@cStorerKey 
    WHILE @@FETCH_STATUS = 0  
    BEGIN
-      IF @cPreviousBarcode <> @cBarcode
-          SET @nPackQTY = 0
 
-      IF EXISTS (SELECT 1
-                 FROM PACKDETAIL (NOLOCK)
-                  WHERE Pickslipno = @cPickslipno
-                     AND Storerkey = @cStorerKey
-                     AND SKU = @cSKU
-                     AND lottablevalue = @cBarcode)
+      IF ISNULL(@cBarcode,'')<>''
       BEGIN
-         SELECT @nPackQTY = SUM(qty)
-         FROM PACKDETAIL (NOLOCK)
-         WHERE Pickslipno = @cPickslipno
-            AND Storerkey = @cStorerKey
-            AND SKU = @cSKU
-            AND lottablevalue = @cBarcode
-      END
+         IF @cPreviousBarcode <> @cBarcode
+             SET @nPackQTY = 0
 
-      SET @nPackQTY = @nPackQTY + @nLottableQuatity
-
-      select @nPackQTY,@nLottableQuatity,@cBarcode
-
-      IF @cOrderKey <> ''
-      BEGIN
-         IF EXISTS(SELECT 1
-	               FROM pickDetail PD WITH (NOLOCK)
-                  JOIN LOTattribute LOT ON PD.lot=LOT.LOT AND PD.SKU = LOT.SKU
-	               WHERE PD.OrderKey = @cOrderKey
-	                  AND PD.Status <= '5'
-                     AND PD.Status NOT IN  ('4')
-                     AND LOT.lottable02 = @cBarcode
-	               GROUP BY PD.SKU,PD.OrderKey,PD.LOT
-                  HAVING SUM(PD.QTY) < @nPackQTY)
+         IF EXISTS (SELECT 1
+                    FROM PACKDETAIL (NOLOCK)
+                     WHERE Pickslipno = @cPickslipno
+                        AND Storerkey = @cStorerKey
+                        AND SKU = @cSKU
+                        AND lottablevalue = @cBarcode)
          BEGIN
-         
-            SET @n_Err = 1000151      
-            SET @c_ErrMsg =API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')
-            SET @jResult = (SELECT '' AS SKU
-            FOR JSON PATH,INCLUDE_NULL_VALUES )    
-            SET @b_Success = 0
-            GOTO QUIT
-         
+            SELECT @nPackQTY = SUM(qty)
+            FROM PACKDETAIL (NOLOCK)
+            WHERE Pickslipno = @cPickslipno
+               AND Storerkey = @cStorerKey
+               AND SKU = @cSKU
+               AND lottablevalue = @cBarcode
          END
 
-      END
+         SET @nPackQTY = @nPackQTY + @nLottableQuatity
+
+         select @nPackQTY,@nLottableQuatity,@cBarcode
+
+         IF @cOrderKey <> ''
+         BEGIN
+            IF EXISTS(SELECT 1
+	                  FROM pickDetail PD WITH (NOLOCK)
+                     JOIN LOTattribute LOT ON PD.lot=LOT.LOT AND PD.SKU = LOT.SKU
+	                  WHERE PD.OrderKey = @cOrderKey
+	                     AND PD.Status <= '5'
+                        AND PD.Status NOT IN  ('4')
+                        AND LOT.lottable02 = @cBarcode
+	                  GROUP BY PD.SKU,PD.OrderKey,PD.LOT
+                     HAVING SUM(PD.QTY) < @nPackQTY)
+            BEGIN
+         
+               SET @n_Err = 1000151      
+               SET @c_ErrMsg =API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')
+               SET @jResult = (SELECT '' AS SKU
+               FOR JSON PATH,INCLUDE_NULL_VALUES )    
+               SET @b_Success = 0
+               GOTO QUIT
+         
+            END
+
+         END
       
-      ELSE IF @cLoadKey <> ''
-      BEGIN
-         IF EXISTS(SELECT 1
-	               FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
-                     JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
-                     JOIN LOTattribute LOT ON PD.lot=LOT.LOT AND PD.SKU = LOT.SKU
-	               WHERE LPD.LoadKey = @cLoadKey
-	                  AND PD.Status <= '5'
-                     AND PD.Status NOT IN  ('4')
-                     AND LOT.lottable02 = @cBarcode
-	               GROUP BY PD.SKU,PD.OrderKey,PD.LOT
-                  HAVING SUM(PD.QTY) < @nPackQTY)
+         ELSE IF @cLoadKey <> ''
          BEGIN
+            IF EXISTS(SELECT 1
+	                  FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
+                        JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
+                        JOIN LOTattribute LOT ON PD.lot=LOT.LOT AND PD.SKU = LOT.SKU
+	                  WHERE LPD.LoadKey = @cLoadKey
+	                     AND PD.Status <= '5'
+                        AND PD.Status NOT IN  ('4')
+                        AND LOT.lottable02 = @cBarcode
+	                  GROUP BY PD.SKU,PD.OrderKey,PD.LOT
+                     HAVING SUM(PD.QTY) < @nPackQTY)
+            BEGIN
          
-            SET @n_Err = 1000152      
-            SET @c_ErrMsg =API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')   
-            SET @jResult = (SELECT '' AS SKU
-            FOR JSON PATH,INCLUDE_NULL_VALUES )    
-            SET @b_Success = 0
-            GOTO QUIT
+               SET @n_Err = 1000152      
+               SET @c_ErrMsg =API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')   
+               SET @jResult = (SELECT '' AS SKU
+               FOR JSON PATH,INCLUDE_NULL_VALUES )    
+               SET @b_Success = 0
+               GOTO QUIT
          
-         END
+            END
 
-      END
-      ELSE
-      BEGIN
-         IF EXISTS(SELECT 1
-	               FROM pickDetail PD WITH (NOLOCK)
-                     JOIN LOTattribute LOT ON PD.lot=LOT.LOT AND PD.SKU = LOT.SKU
-	               WHERE PD.PickSlipNo = @cPickSlipNo
-	                  AND PD.Status <= '5'
-                     AND PD.Status NOT IN  ('4')
-                     AND LOT.lottable02 = @cBarcode
-	               GROUP BY PD.SKU,PD.OrderKey,PD.LOT
-                  HAVING SUM(PD.QTY) < @nPackQTY)
+         END
+         ELSE
          BEGIN
+            IF EXISTS(SELECT 1
+	                  FROM pickDetail PD WITH (NOLOCK)
+                        JOIN LOTattribute LOT ON PD.lot=LOT.LOT AND PD.SKU = LOT.SKU
+	                  WHERE PD.PickSlipNo = @cPickSlipNo
+	                     AND PD.Status <= '5'
+                        AND PD.Status NOT IN  ('4')
+                        AND LOT.lottable02 = @cBarcode
+	                  GROUP BY PD.SKU,PD.OrderKey,PD.LOT
+                     HAVING SUM(PD.QTY) < @nPackQTY)
+            BEGIN
          
-            SET @n_Err = 1000153      
-            SET @c_ErrMsg =API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')   
-            SET @jResult = (SELECT '' AS SKU
-            FOR JSON PATH,INCLUDE_NULL_VALUES )    
-            SET @b_Success = 0
-            GOTO QUIT
+               SET @n_Err = 1000153      
+               SET @c_ErrMsg =API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')   
+               SET @jResult = (SELECT '' AS SKU
+               FOR JSON PATH,INCLUDE_NULL_VALUES )    
+               SET @b_Success = 0
+               GOTO QUIT
          
+            END
+
          END
-
-      END
-
+     END
+     
       SET @cPreviousBarcode = @cBarcode
+
 
       FETCH NEXT FROM PICKLottableCursor INTO @cPickSlipno,@cSku, @cBarcode,@nLottableQuatity,@cStorerKey 
    END
