@@ -10,6 +10,7 @@ GO
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */ 
 /* 2023-06-21 1.0  Ung      WMS-22424 Created                                 */
+/* 2023-07-14 1.1  James    WMS-23121 Extend TrackingNo to 40 chars (james01) */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1663DefCtnType01](  
@@ -23,7 +24,7 @@ CREATE OR ALTER PROC [RDT].[rdt_1663DefCtnType01](
    @cPalletKey          NVARCHAR( 20),   
    @cPalletLOC          NVARCHAR( 10),   
    @cMBOLKey            NVARCHAR( 10),   
-   @cTrackNo            NVARCHAR( 20),   
+   @cTrackNo            NVARCHAR( 40),   
    @cOrderKey           NVARCHAR( 10),   
    @cShipperKey         NVARCHAR( 15),    
    @cWeight             NVARCHAR( 10),   
