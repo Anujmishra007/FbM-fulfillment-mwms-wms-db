@@ -5,7 +5,7 @@ GO
 
 /******************************************************************************/
 /* Store procedure: rdt_1663DecodeTK04                                        */
-/* Copyright      : LF Logistics                                              */
+/* Copyright      : MAERSK                                                    */
 /*                                                                            */
 /* Purpose: Decode tracking no                                                */
 /*                                                                            */
@@ -13,9 +13,10 @@ GO
 /* 2020-06-11  James    1.0   WMS-13458 Created                               */
 /* 2021-11-11  Chermain 1.1   WMS-18330 Remove @nRefField checking (cc01)     */  
 /* 2023-10-10  James    1.2   JSM-185342 Add output variable TrackNo (james01)*/
+/* 2023-07-14  James    1.3   WMS-23121 Extend TrackingNo to 40 chars(james02)*/
 /******************************************************************************/
 
-alter PROCEDURE [RDT].[rdt_1663DecodeTK04]
+CREATE OR ALTER PROC [RDT].[rdt_1663DecodeTK04]
    @nMobile       INT,  
    @nFunc         INT,  
    @cLangCode     NVARCHAR( 3),  
@@ -26,7 +27,7 @@ alter PROCEDURE [RDT].[rdt_1663DecodeTK04]
    @cPalletKey    NVARCHAR( 20),   
    @cPalletLOC    NVARCHAR( 10),   
    @cMBOLKey      NVARCHAR( 10),   
-   @cTrackNo      NVARCHAR( 20) OUTPUT,   
+   @cTrackNo      NVARCHAR( 40) OUTPUT,   
    @cOrderKey     NVARCHAR( 10) OUTPUT,   
    @nErrNo        INT           OUTPUT,  
    @cErrMsg       NVARCHAR( 20) OUTPUT  
@@ -97,7 +98,7 @@ BEGIN
                   ' @cFacility    NVARCHAR(5),  ' + 
                   ' @cStorerKey   NVARCHAR(15), ' + 
                   ' @cShipperKey  NVARCHAR(15), ' +
-                  ' @cTrackNo     NVARCHAR(20), ' + 
+                  ' @cTrackNo     NVARCHAR(40), ' + 
                   ' @cOrderKey    NVARCHAR(10) OUTPUT, ' + 
                   ' @nRowCount    INT          OUTPUT, ' + 
                   ' @nErrNo       INT          OUTPUT  '
@@ -142,4 +143,11 @@ BEGIN
 END
 
 Quit:
+GO
 
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+GRANT EXECUTE ON RDT.rdt_1663DecodeTK04 TO NSQL
+GO
