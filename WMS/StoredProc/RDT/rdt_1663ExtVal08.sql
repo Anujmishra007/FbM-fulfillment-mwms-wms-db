@@ -1,23 +1,21 @@
-if exists (select * from  dbo.sysobjects where id = object_id(N'[rdt].[rdt_1663ExtVal08]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_1663ExtVal08]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
+
 /******************************************************************************/  
 /* Store procedure: rdt_1663ExtVal08                                          */  
-/* Copyright      : LF Logistics                                              */  
+/* Copyright      : MAERSK                                                    */  
 /*                                                                            */  
 /* Purpose: Prompt error if not all carton for the orders are scanned         */  
 /*                                                                            */  
 /* Date       Rev  Author   Purposes                                          */  
 /* 2019-04-24 1.0  James    WMS-8751 Created                                  */  
 /* 2020-08-28 1.1  YeeKung  WMS-14798 Add listname='CourierVal' (yeekung01)   */
+/* 2023-07-14 1.2  James    WMS-23121 Extend TrackingNo to 40 chars (james01) */
 /******************************************************************************/  
   
-CREATE PROC [RDT].[rdt_1663ExtVal08](  
+CREATE OR ALTER PROC [RDT].[rdt_1663ExtVal08](  
    @nMobile       INT,  
    @nFunc         INT,  
    @cLangCode     NVARCHAR( 3),  
@@ -28,7 +26,7 @@ CREATE PROC [RDT].[rdt_1663ExtVal08](
    @cPalletKey    NVARCHAR( 20),   
    @cPalletLOC    NVARCHAR( 10),   
    @cMBOLKey      NVARCHAR( 10),   
-   @cTrackNo      NVARCHAR( 20),   
+   @cTrackNo      NVARCHAR( 40),   
    @cOrderKey     NVARCHAR( 10),   
    @cShipperKey   NVARCHAR( 15),    
    @cCartonType   NVARCHAR( 10),    

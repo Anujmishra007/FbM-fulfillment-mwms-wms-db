@@ -5,13 +5,14 @@ SET ANSI_NULLS OFF
 GO
 /******************************************************************************/
 /* Store procedure: rdt_1663ExtVal09                                          */
-/* Copyright      : LF Logistics                                              */
+/* Copyright      : MAERSK                                                    */
 /*                                                                            */
 /* Purpose: Prompt error if diff carrier, ord type and not pick scan to pallet*/
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
 /* 2020-03-27 1.0  James    WMS-12611 Created                                 */
 /* 2023-08-02 1.1  WyeChun	Filter with Orderkey instead of TrackingNo (WC01) */
+/* 2023-07-14 1.2  James    WMS-23121 Extend TrackingNo to 40 chars (james01) */
 /******************************************************************************/
 
 CREATE OR ALTER   PROC [RDT].[rdt_1663ExtVal09](
@@ -25,7 +26,7 @@ CREATE OR ALTER   PROC [RDT].[rdt_1663ExtVal09](
    @cPalletKey    NVARCHAR( 20), 
    @cPalletLOC    NVARCHAR( 10), 
    @cMBOLKey      NVARCHAR( 10), 
-   @cTrackNo      NVARCHAR( 20), 
+   @cTrackNo      NVARCHAR( 40), 
    @cOrderKey     NVARCHAR( 10), 
    @cShipperKey   NVARCHAR( 15),  
    @cCartonType   NVARCHAR( 10),  
