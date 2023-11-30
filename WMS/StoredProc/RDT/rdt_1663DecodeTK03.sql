@@ -1,7 +1,3 @@
-if exists (select * from  dbo.sysobjects where id = object_id(N'[rdt].[rdt_1663DecodeTK03]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_1663DecodeTK03]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -16,9 +12,10 @@ GO
 /* 2019-05-21 1.1  James    WMS9133 - Remove * from Tracking No (james01)     */
 /* 2020-02-03 1.2  James    WMS-11986 - Add shipperkey pelican decode(james02)*/
 /* 2020-08-14 1.3  Chermaine WMS-14678 - remark pickslip=trackNo (cc01)       */
+/* 2023-07-14 1.4  James    WMS-23121 Extend TrackingNo to 40 chars (james03) */
 /******************************************************************************/
 
-CREATE PROC [RDT].[rdt_1663DecodeTK03](
+CREATE OR ALTER PROC [RDT].[rdt_1663DecodeTK03](
    @nMobile       INT,
    @nFunc         INT,
    @cLangCode     NVARCHAR( 3),
@@ -29,7 +26,7 @@ CREATE PROC [RDT].[rdt_1663DecodeTK03](
    @cPalletKey    NVARCHAR( 20), 
    @cPalletLOC    NVARCHAR( 10), 
    @cMBOLKey      NVARCHAR( 10), 
-   @cTrackNo      NVARCHAR( 20) OUTPUT, 
+   @cTrackNo      NVARCHAR( 40) OUTPUT, 
    @cOrderKey     NVARCHAR( 10) OUTPUT, 
    @nErrNo        INT           OUTPUT,
    @cErrMsg       NVARCHAR( 20) OUTPUT
