@@ -6,11 +6,12 @@ GO
 
 /******************************************************************************/
 /* Store procedure: rdt_1663ExtUpd08                                          */
-/* Copyright      : LF Logistics                                              */
+/* Copyright      : MAERSK                                                    */
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
 /* 2022-03-24 1.0  Ung      WMS-19221 Created (base on rdt_1663ExtUpd01)      */
 /* 2023-04-14 1.1  ZG       INC2056448 Add-On ISNULL (ZG01)                   */
+/* 2023-07-14 1.2  James    WMS-23121 Extend TrackingNo to 40 chars (james01) */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1663ExtUpd08](
@@ -24,7 +25,7 @@ CREATE OR ALTER PROC [RDT].[rdt_1663ExtUpd08](
    @cPalletKey    NVARCHAR( 20),
    @cPalletLOC    NVARCHAR( 10),
    @cMBOLKey      NVARCHAR( 10),
-   @cTrackNo      NVARCHAR( 20),
+   @cTrackNo      NVARCHAR( 40),
    @cOrderKey     NVARCHAR( 10),
    @cShipperKey   NVARCHAR( 15),
    @cCartonType   NVARCHAR( 10),

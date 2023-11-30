@@ -5,13 +5,14 @@ GO
 
 /******************************************************************************/
 /* Store procedure: rdt_1663ExtUpd12                                          */
-/* Copyright      : LF Logistics                                              */
+/* Copyright      : MAERSK                                                    */
 /*                                                                            */
 /* Purpose: Send interface RR2 when close pallet                              */
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
 /* 2023-08-09 1.0  James    WMS-19868. Created                                */
 /* 2023-02-20 1.1  James    Bug fix (james01)                                 */
+/* 2023-07-14 1.2  James    WMS-23121 Extend TrackingNo to 40 chars (james02) */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1663ExtUpd12](
@@ -25,7 +26,7 @@ CREATE OR ALTER PROC [RDT].[rdt_1663ExtUpd12](
    @cPalletKey    NVARCHAR( 20),
    @cPalletLOC    NVARCHAR( 10),
    @cMBOLKey      NVARCHAR( 10),
-   @cTrackNo      NVARCHAR( 20),
+   @cTrackNo      NVARCHAR( 40),
    @cOrderKey     NVARCHAR( 10),
    @cShipperKey   NVARCHAR( 15),
    @cCartonType   NVARCHAR( 10),

@@ -1,7 +1,3 @@
-if exists (select * from  dbo.sysobjects where id = object_id(N'[rdt].[rdt_1663ExtUpd02]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_1663ExtUpd02]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -9,7 +5,7 @@ GO
 
 /******************************************************************************/
 /* Store procedure: rdt_1663ExtUpd02                                          */
-/* Copyright      : LF Logistics                                              */
+/* Copyright      : MAERSK                                                    */
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
 /* 2017-07-31 1.0  Ung      WMS-2016 Created                                  */
@@ -17,9 +13,10 @@ GO
 /* 2017-10-16 1.2  Ung      Performance tuning (remove @tVar)                 */
 /* 2017-09-26 1.3  James    WMS-3098 Change insert transmilog2 tablename      */
 /*                          based on setup in codelkup table (james01)        */
+/* 2023-07-14 1.4  James    WMS-23121 Extend TrackingNo to 40 chars (james02) */
 /******************************************************************************/
 
-CREATE PROC [RDT].[rdt_1663ExtUpd02](
+CREATE OR ALTER PROC [RDT].[rdt_1663ExtUpd02](
    @nMobile       INT,
    @nFunc         INT,
    @cLangCode     NVARCHAR( 3),
@@ -30,7 +27,7 @@ CREATE PROC [RDT].[rdt_1663ExtUpd02](
    @cPalletKey    NVARCHAR( 20), 
    @cPalletLOC    NVARCHAR( 10), 
    @cMBOLKey      NVARCHAR( 10), 
-   @cTrackNo      NVARCHAR( 20), 
+   @cTrackNo      NVARCHAR( 40), 
    @cOrderKey     NVARCHAR( 10), 
    @cShipperKey   NVARCHAR( 15),  
    @cCartonType   NVARCHAR( 10),  

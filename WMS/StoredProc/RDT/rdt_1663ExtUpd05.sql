@@ -6,12 +6,13 @@ GO
 
 /******************************************************************************/
 /* Store procedure: rdt_1663ExtUpd05                                          */
-/* Copyright      : LF Logistics                                              */
+/* Copyright      : MAERSK                                                    */
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
 /* 2020-01-14 1.1  James    WMS-11523. Created                                */
 /* 2021-10-13 1.2  YeeKung  WMS-18033 Add key2 to 9 (yeekung01)               */ 
 /* 2023-04-14 1.3  Ung      WMS-22284 Fix TrackOrderWeight SValue             */
+/* 2023-07-14 1.4  James    WMS-23121 Extend TrackingNo to 40 chars (james01) */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1663ExtUpd05](
@@ -25,7 +26,7 @@ CREATE OR ALTER PROC [RDT].[rdt_1663ExtUpd05](
    @cPalletKey    NVARCHAR( 20), 
    @cPalletLOC    NVARCHAR( 10), 
    @cMBOLKey      NVARCHAR( 10), 
-   @cTrackNo      NVARCHAR( 20), 
+   @cTrackNo      NVARCHAR( 40), 
    @cOrderKey     NVARCHAR( 10), 
    @cShipperKey   NVARCHAR( 15),  
    @cCartonType   NVARCHAR( 10),  
@@ -61,7 +62,7 @@ BEGIN
             BEGIN
                DECLARE @nOrderTrackNo  INT
                DECLARE @nPalletTrackNo INT
-               DECLARE @cOtherTrackNo  NVARCHAR( 20)
+               DECLARE @cOtherTrackNo  NVARCHAR( 40)
                DECLARE @nRowCount INT
    
                -- Get other carton in order

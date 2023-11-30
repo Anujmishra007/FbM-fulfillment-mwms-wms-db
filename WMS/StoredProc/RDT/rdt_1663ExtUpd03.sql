@@ -6,13 +6,14 @@ GO
 
 /******************************************************************************/
 /* Store procedure: rdt_1663ExtUpd03                                          */
-/* Copyright      : LF Logistics                                              */
+/* Copyright      : MAERSK                                                    */
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
 /* 2018-08-27 1.0  Ung      WMS-6128 Created                                  */  
 /* 2018-11-08 1.1  Ung      WMS-7003 Check interface had sent (TLog2 archived)*/  
 /* 2020-09-08 1.2  YeeKung  WMS-15056 add update carrierkey(yeekung01)        */
 /* 2022-04-07 1.3  YeeKung  WMS-19318 Disable the trigger (yeekung02)         */
+/* 2023-07-14 1.4  James    WMS-23121 Extend TrackingNo to 40 chars (james01) */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1663ExtUpd03](
@@ -26,7 +27,7 @@ CREATE OR ALTER PROC [RDT].[rdt_1663ExtUpd03](
    @cPalletKey    NVARCHAR( 20), 
    @cPalletLOC    NVARCHAR( 10), 
    @cMBOLKey      NVARCHAR( 10), 
-   @cTrackNo      NVARCHAR( 20), 
+   @cTrackNo      NVARCHAR( 40), 
    @cOrderKey     NVARCHAR( 10), 
    @cShipperKey   NVARCHAR( 15),  
    @cCartonType   NVARCHAR( 10),  
