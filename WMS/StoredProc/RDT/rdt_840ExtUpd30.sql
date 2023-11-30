@@ -11,6 +11,8 @@ GO
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
 /* 2023-09-27 1.0  James      WMS-23619 - Created                       */
+/* 2023-11-30 1.1  James      Adhoc fix. Remove redundant stamping      */
+/*                            packinfo.trackingno (james01)             */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_840ExtUpd30 (
@@ -329,6 +331,8 @@ AS
             END
          END
          
+         -- (james01)
+         /*
          IF EXISTS ( SELECT 1 FROM dbo.PackHeader WITH (NOLOCK)
                      WHERE PickSlipNo = @cPickSlipNo
                      AND   [Status] = '9')
@@ -373,7 +377,7 @@ AS
          	   
             END         
          END
-         
+         */
          IF EXISTS ( SELECT 1 FROM dbo.CODELKUP WITH (NOLOCK) 
                      WHERE LISTNAME = 'FJNekoPack'
                      AND   Storerkey = @cStorerkey
