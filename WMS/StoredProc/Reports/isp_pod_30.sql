@@ -1,8 +1,4 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'isp_pod_30' AND type = 'P')
-   DROP PROC isp_pod_30
-GO
-
-SET QUOTED_IDENTIFIER OFF 
+﻿SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
@@ -11,11 +7,11 @@ GO
 /* Stored Procedure: isp_pod_30                                         */    
 /* Creation Date:                                                       */    
 /* Copyright: IDS                                                       */    
-/* Written by: mingle(copy from r_dw_pod_03)                             */    
+/* Written by: mingle(copy from r_dw_pod_03)                            */    
 /*                                                                      */    
 /* Purpose: POD                                                         */    
 /*                                                                      */    
-/* Called By: r_dw_pod_30  WMS-16816                                   */     
+/* Called By: r_dw_pod_30  WMS-16816                                    */     
 /*                                                                      */    
 /* Parameters: (Input)  @c_mbolkey   = MBOL No                          */    
 /*                      @c_exparrivaldate = Expected arrival date       */    
@@ -31,8 +27,9 @@ GO
 /* 09-DEC-2021  MINGLE    1.1  WMS-18477 Add sku size(ML01)             */   
 /* 09-DEC-2021  Mingle    1.1  DevOps Combine Script                    */ 
 /* 10-OCT-2022  MINGLE    1.2  WMS-20843 Add and update fields(ML02)    */  
+/* 23-OCT-2023  CHONGCS   1.3  WMS-23853 add new field (CS01)           */
 /************************************************************************/    
-CREATE PROCEDURE [dbo].[isp_pod_30]    
+CREATE OR ALTER PROCEDURE [dbo].[isp_pod_30]    
         @c_mbolkey NVARCHAR(10),     
         @c_exparrivaldate  NVARCHAR(30) = ''    
 AS    
@@ -71,8 +68,11 @@ BEGIN
          , @n_ReplIDSWithLFL        INT                                                                  
          , @n_ShowRecDateTimeRmk    INT                                                           
          , @c_IncFontSize           NVARCHAR(1)                                                  
-         , @n_ShowPageNo            INT                                                           
-    
+         , @n_ShowPageNo            INT  
+         , @c_ContactName           NVARCHAR(60) =''             --CS01
+         , @c_ContactPhone          NVARCHAR(60) =''             --CS01                                              
+         , @c_ContactAddress        NVARCHAR(60) =''             --CS01       
+
    SET @n_Weight              = 0.00                                                                  
    SET @n_Cube                = 0.00                                                                
    SET @n_SetMBOLAsOrd        = 0                                                                
@@ -114,14 +114,14 @@ BEGIN
 --    Fax             NVARCHAR(36)  null,    
 --    Contact         NVARCHAR(60)  null,    
     leadtime        int null,    
-    logo NVARCHAR(60) null,    
-    B_Address1 NVARCHAR(45) null,    
-    B_Contact1 NVARCHAR(30) null,    
-    B_Phone1 NVARCHAR(18) null,    
-    B_Fax1 NVARCHAR(18) null,    
-    Susr2 NVARCHAR(20) null,    
-    MbolLoadkey NVARCHAR(10) null,    
-    shipto NVARCHAR(65) null,    
+    logo            NVARCHAR(60) null,    
+    B_Address1      NVARCHAR(45) null,    
+    B_Contact1      NVARCHAR(30) null,    
+    B_Phone1        NVARCHAR(18) null,    
+    B_Fax1          NVARCHAR(18) null,    
+    Susr2           NVARCHAR(20) null,    
+    MbolLoadkey     NVARCHAR(10) null,    
+    shipto          NVARCHAR(65) null,    
     shiptoadd1 NVARCHAR(45) null,    
     shiptoadd2 NVARCHAR(45) null,    
     shiptoadd3 NVARCHAR(45) null,    
@@ -144,20 +144,23 @@ BEGIN
     Cube          FLOAT NULL,    
     TotalWeight   FLOAT NULL,    
     TotalCube     FLOAT NULL,          
-    Domain NVARCHAR(10)  NULL,    
-    ConsigneeKey   NVARCHAR(45),   
+    Domain        NVARCHAR(10)  NULL,    
+    ConsigneeKey     NVARCHAR(45),   
     OrderLineNumber NVARCHAR(10)  NULL,
-    Sku  NVARCHAR(20)  NULL,
-    Notes1  NVARCHAR(500) null,
-    Descr   NVARCHAR(30) null,
+    Sku             NVARCHAR(20)  NULL,
+    Notes1     NVARCHAR(500) null,
+    Descr      NVARCHAR(30) null,
     Lottable02 NVARCHAR(10)  NULL,  
     Lottable04 DATE  NULL, 
     Lottable13 DATE  NULL,
-    Uom  NVARCHAR(10)  NULL,
-    Shippedqty int       NULL,
-    Notes   NVARCHAR(20)  NULL,
-    Size    NVARCHAR(10)  NULL,   --ML01
-	 PDQty	INT NULL	--ML02	
+    Uom        NVARCHAR(10)  NULL,
+    Shippedqty INT       NULL,
+    Notes      NVARCHAR(20)  NULL,
+    Size       NVARCHAR(10)  NULL,   --ML01
+    PDQty      INT NULL,   --ML02
+    ContactName  NVARCHAR(60),    --CS01
+    ContactPhone NVARCHAR(60),    --Cs01  
+    ContactAdd   NVARCHAR(60)    --CS01
     )     
     
       
@@ -198,6 +201,34 @@ BEGIN
  AND   Long = 'r_dw_pod_30'    
  AND   CODE = 'IncFontSize'    
     
+
+--CS01 S
+ SELECT @c_ContactName = ISNULL(udf01,'')    
+       ,@c_ContactPhone = ISNULL(udf02,'')
+       ,@c_ContactAddress = ISNULL(udf03,'')
+ FROM CODELKUP (NOLOCK)    
+ WHERE ListName = 'REPORTCFG'    
+ AND   Storerkey= @c_Storerkey    
+ AND   Long = 'r_dw_pod_30'    
+ AND   CODE = 'SHOWCONTACT'    
+    
+
+IF @c_ContactName =''
+BEGIN
+   SET @c_ContactName='Bruce Li WB'
+END 
+
+IF @c_ContactPhone =''
+BEGIN
+    SET @c_ContactPhone='0512-36910535'
+END
+
+IF @c_ContactAddress =''
+BEGIN
+    SET @c_ContactAddress = N'江苏省昆山市花桥镇逢星路1000号B1库'
+END
+
+--CS01 E 
   
        
    IF @n_PrintAfterPacked = 1     
@@ -238,7 +269,7 @@ BEGIN
       Domain,         ConsigneeKey,       OrderLineNumber,       Sku,                                
       Notes1,         Descr,              Lottable02,            Lottable04,                       
       Lottable13,     Uom,                Shippedqty,             Notes,
-      Size,				 PDQty   --ML01	--ML02            
+      Size,           PDQty,ContactName,ContactPhone ,ContactAdd  --ML01   --ML02  --CS01            
       )        
     SELECT DISTINCT      
       a.mbolkey,     b.MbolLineNumber,    b.ExternOrderKey,    b.Orderkey,    c.type,            
@@ -382,9 +413,9 @@ BEGIN
          g.Short,      
          CASE WHEN @c_showfield='1' AND ISNULL(c.ConsigneeKey,'') <> '' THEN c.ConsigneeKey ELSE '' END,        
          --k.OrderLineNumber,
-			m.OrderLineNumber,	--ML02
+         m.OrderLineNumber,   --ML02
          --k.Sku,
-			m.Sku,	--ML02
+         m.Sku,   --ML02
          l.Notes1,
          l.Descr,
          n.Lottable02,
@@ -394,7 +425,7 @@ BEGIN
          k.Shippedqty,
          c.Notes,
          l.Size,   --ML01
-			m.qty
+         m.qty,@c_ContactName,@c_ContactPhone,@c_ContactAddress       --CS01
          
            
     FROM MBOL a (nolock) JOIN MBOLDETAIL b  WITH (nolock) ON a.mbolkey = b.mbolkey    
@@ -473,7 +504,7 @@ BEGIN
       IF @n_OrderShipAddress = 1    
       BEGIN    
              
-  SET @c_Brand = ''    
+      SET @c_Brand = ''    
          SELECT TOP 1 @c_Brand = ISNULL(RTRIM(SKU.BUSR5),'')    
          FROM ORDERDETAIL OD  WITH (NOLOCK)    
          JOIN SKU         SKU WITH (NOLOCK) ON (OD.Storerkey = SKU.Storerkey)    
@@ -617,8 +648,8 @@ BEGIN
          , Shippedqty
          , Notes
          , Size   --ML01
-			, PDQty	--ML02
-         
+         , PDQty  --ML02
+         , ContactName,ContactPhone,ContactAdd    --CS01
          
     FROM #POD
     ORDER BY orderkey,orderlinenumber    
