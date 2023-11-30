@@ -1,7 +1,3 @@
-if exists (select * from  dbo.sysobjects where id = object_id(N'[rdt].[rdt_1663ExtChkSOSt01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_1663ExtChkSOSt01]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -14,9 +10,10 @@ GO
 /* 2019-08-14 1.0  James    WMS-10127 Created                                 */
 /* 2020-09-11 1.1  YeeKung  WMS-14482 change code2=facility and short=func    */
 /*                          (yeekung01)                                       */  
+/* 2023-07-14 1.2  James    WMS-23121 Extend TrackingNo to 40 chars (james01) */
 /******************************************************************************/
 
-CREATE PROC [RDT].[rdt_1663ExtChkSOSt01](
+CREATE OR ALTER PROC [RDT].[rdt_1663ExtChkSOSt01](
    @nMobile       INT,
    @nFunc         INT,
    @cLangCode     NVARCHAR( 3),
@@ -27,7 +24,7 @@ CREATE PROC [RDT].[rdt_1663ExtChkSOSt01](
    @cPalletKey    NVARCHAR( 20), 
    @cPalletLOC    NVARCHAR( 10), 
    @cMBOLKey      NVARCHAR( 10), 
-   @cTrackNo      NVARCHAR( 20), 
+   @cTrackNo      NVARCHAR( 40), 
    @cOrderKey     NVARCHAR( 10), 
    @cShipperKey   NVARCHAR( 15),  
    @cCartonType   NVARCHAR( 10),  
