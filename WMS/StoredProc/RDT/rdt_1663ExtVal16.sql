@@ -6,7 +6,7 @@ GO
 
 /******************************************************************************/
 /* Store procedure: rdt_1663ExtVal16                                          */
-/* Copyright      : LF Logistics                                              */
+/* Copyright      : MAERSK                                                    */
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
 /* 2021-09-24 1.0  James    WMS-17778 Created base on rdt_1663ExtVal04        */
@@ -14,6 +14,7 @@ GO
 /* 2022-01-26 1.2  Ung      WMS-18622 Change pallet must be same shipper to   */
 /*                          same shipper group                                */
 /* 2022-01-25 1.3  Ung      WMS-18774 Add check MBOL field                    */
+/* 2023-07-14 1.4  James    WMS-23121 Extend TrackingNo to 40 chars (james01) */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1663ExtVal16](
@@ -27,7 +28,7 @@ CREATE OR ALTER PROC [RDT].[rdt_1663ExtVal16](
    @cPalletKey    NVARCHAR( 20),
    @cPalletLOC    NVARCHAR( 10),
    @cMBOLKey      NVARCHAR( 10),
-   @cTrackNo      NVARCHAR( 20),
+   @cTrackNo      NVARCHAR( 40),
    @cOrderKey     NVARCHAR( 10),
    @cShipperKey   NVARCHAR( 15),
    @cCartonType   NVARCHAR( 10),
@@ -291,7 +292,7 @@ BEGIN
                END
             END
 
-            DECLARE @cOtherTrackNo NVARCHAR( 20)
+            DECLARE @cOtherTrackNo NVARCHAR( 40)
             DECLARE @nRowCount INT
 
             -- Get other carton in order
@@ -353,7 +354,7 @@ BEGIN
             BEGIN
                DECLARE @nPalletTrackNo INT
                DECLARE @nOrderTrackNo INT
-               DECLARE @cTempTrackNo      NVARCHAR( 20)
+               DECLARE @cTempTrackNo      NVARCHAR( 40)
                DECLARE @cTempShipperKey   NVARCHAR( 15)
 
                -- Get pallet info

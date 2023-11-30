@@ -1,20 +1,18 @@
-if exists (select * from  dbo.sysobjects where id = object_id(N'[rdt].[rdt_1663ExtVal17]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_1663ExtVal17]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
+
 /******************************************************************************/
 /* Store procedure: rdt_1663ExtVal17                                          */
-/* Copyright      : LF Logistics                                              */
+/* Copyright      : MAERSK                                                    */
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
 /* 2021-11-01 1.0  yeekung  WMS-18301 allow SF and SF2 can pick in same pallet*/ 
+/* 2023-07-14 1.1  James    WMS-23121 Extend TrackingNo to 40 chars (james01) */
 /******************************************************************************/
 
-CREATE PROC [RDT].[rdt_1663ExtVal17](
+CREATE OR ALTER PROC [RDT].[rdt_1663ExtVal17](
    @nMobile       INT,
    @nFunc         INT,
    @cLangCode     NVARCHAR( 3),
@@ -25,7 +23,7 @@ CREATE PROC [RDT].[rdt_1663ExtVal17](
    @cPalletKey    NVARCHAR( 20), 
    @cPalletLOC    NVARCHAR( 10), 
    @cMBOLKey      NVARCHAR( 10), 
-   @cTrackNo      NVARCHAR( 20), 
+   @cTrackNo      NVARCHAR( 40), 
    @cOrderKey     NVARCHAR( 10), 
    @cShipperKey   NVARCHAR( 15),  
    @cCartonType   NVARCHAR( 10),  
@@ -52,7 +50,7 @@ BEGIN
       BEGIN
          IF @nInputKey = 1 -- ENTER
          BEGIN
-            DECLARE @cOtherTrackNo NVARCHAR( 20)
+            DECLARE @cOtherTrackNo NVARCHAR( 40)
             DECLARE @nRowCount INT
 
             DECLARE @cChkOrderKey NVARCHAR(10)    

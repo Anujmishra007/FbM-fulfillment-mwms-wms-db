@@ -5,12 +5,13 @@ SET ANSI_NULLS OFF
 GO
 /******************************************************************************/
 /* Store procedure: rdt_1663ExtVal26                                          */
-/* Copyright      : LF Logistics                                              */
+/* Copyright      : MAERSK                                                    */
 /*                                                                            */
 /* Purpose: rdt_1663ExtVal09->rdt_1663ExtVal26                                */
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
 /* 2023-09-21 1.0  yeekung    WMS-23641 Created                               */
+/* 2023-07-14 1.1  James    WMS-23121 Extend TrackingNo to 40 chars (james01) */
 /******************************************************************************/
 
 CREATE OR ALTER   PROC [RDT].[rdt_1663ExtVal26](
@@ -24,7 +25,7 @@ CREATE OR ALTER   PROC [RDT].[rdt_1663ExtVal26](
    @cPalletKey    NVARCHAR( 20), 
    @cPalletLOC    NVARCHAR( 10), 
    @cMBOLKey      NVARCHAR( 10), 
-   @cTrackNo      NVARCHAR( 20), 
+   @cTrackNo      NVARCHAR( 40), 
    @cOrderKey     NVARCHAR( 10), 
    @cShipperKey   NVARCHAR( 15),  
    @cCartonType   NVARCHAR( 10),  

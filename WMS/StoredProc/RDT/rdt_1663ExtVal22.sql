@@ -5,11 +5,12 @@ GO
 
 /******************************************************************************/
 /* Store procedure: rdt_1663ExtVal22                                          */
-/* Copyright      : LF Logistics                                              */
+/* Copyright      : MAERSK                                                    */
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
 /* 2023-01-10 1.0  yeekung  WMS-21497 Created                                 */
 /* 2023-08-29 1.1  yeekung  JSM-168168 Add left 10 character labelno          */
+/* 2023-07-14 1.2  James    WMS-23121 Extend TrackingNo to 40 chars (james01) */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1663ExtVal22](
@@ -23,7 +24,7 @@ CREATE OR ALTER PROC [RDT].[rdt_1663ExtVal22](
    @cPalletKey    NVARCHAR( 20),
    @cPalletLOC    NVARCHAR( 10),
    @cMBOLKey      NVARCHAR( 10),
-   @cTrackNo      NVARCHAR( 20),
+   @cTrackNo      NVARCHAR( 40),
    @cOrderKey     NVARCHAR( 10),
    @cShipperKey   NVARCHAR( 15),
    @cCartonType   NVARCHAR( 10),
@@ -50,7 +51,7 @@ BEGIN
       BEGIN
          IF @nInputKey = 1 -- ENTER
          BEGIN
-            DECLARE @cOtherTrackNo NVARCHAR( 20)
+            DECLARE @cOtherTrackNo NVARCHAR( 40)
             DECLARE @nRowCount INT
             DECLARE @cOtherSalesman  NVARCHAR(20)
             DECLARE @cSalesman  NVARCHAR(20)

@@ -7,12 +7,13 @@ GO
 
 /******************************************************************************/
 /* Store procedure: rdt_1663ExtVal19                                          */
-/* Copyright      : LF Logistics                                              */
+/* Copyright      : MAERSK                                                    */
 /*                                                                            */
 /* Purpose: Validate same pallet cannot mix shipperkey and c_country          */
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
 /* 2022-10-20 1.0  yeekung  WMS-21051 Created (yeekung01)                     */
+/* 2023-07-14 1.1  James    WMS-23121 Extend TrackingNo to 40 chars (james01) */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1663ExtVal19](
@@ -26,7 +27,7 @@ CREATE OR ALTER PROC [RDT].[rdt_1663ExtVal19](
    @cPalletKey    NVARCHAR( 20), 
    @cPalletLOC    NVARCHAR( 10), 
    @cMBOLKey      NVARCHAR( 10), 
-   @cTrackNo      NVARCHAR( 20), 
+   @cTrackNo      NVARCHAR( 40), 
    @cOrderKey     NVARCHAR( 10), 
    @cShipperKey   NVARCHAR( 15),  
    @cCartonType   NVARCHAR( 10),  
@@ -108,7 +109,7 @@ BEGIN
             END
 
 
-            DECLARE @cOtherTrackNo NVARCHAR( 20)
+            DECLARE @cOtherTrackNo NVARCHAR( 40)
             DECLARE @nRowCount INT
 
             -- Get other carton in order

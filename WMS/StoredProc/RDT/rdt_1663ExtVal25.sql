@@ -6,12 +6,13 @@ GO
 
 /******************************************************************************/
 /* Store procedure: rdt_1663ExtVal25                                          */
-/* Copyright      : LF Logistics                                              */
+/* Copyright      : MAERSK                                                    */
 /* Purpose: rdt_1663ExtVal06->rdt_1663ExtVal25                                */
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
 /* 2020-08-13 1.0  YeeKung  WMS-14715 Created                                 */
 /* 2021-04-16 1.1  James    WMS-16024 Standarized use of TrackingNo (james01) */
+/* 2023-07-14 1.2  James    WMS-23121 Extend TrackingNo to 40 chars (james02) */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1663ExtVal25](
@@ -25,7 +26,7 @@ CREATE OR ALTER PROC [RDT].[rdt_1663ExtVal25](
    @cPalletKey    NVARCHAR( 20), 
    @cPalletLOC    NVARCHAR( 10), 
    @cMBOLKey      NVARCHAR( 10), 
-   @cTrackNo      NVARCHAR( 20), 
+   @cTrackNo      NVARCHAR( 40), 
    @cOrderKey     NVARCHAR( 10), 
    @cShipperKey   NVARCHAR( 15),  
    @cCartonType   NVARCHAR( 10),  
@@ -47,7 +48,7 @@ BEGIN
       SUSR1      NVARCHAR( 15) NOT NULL
    )
    
-   DECLARE @cOtherTrackNo NVARCHAR( 20)
+   DECLARE @cOtherTrackNo NVARCHAR( 40)
    DECLARE @nRowCount INT
    
    DECLARE @cTemp_OrderKey    NVARCHAR( 20), 
