@@ -11,6 +11,7 @@ GO
 /*                                                                            */
 /* Date       Rev  Author     Purposes                                        */
 /* 2023-07-10 1.0  CSCHONG    DevOps Scripts Combine & Created (WMS-23028)    */
+/* 2023-11-01 1.1  CSCHONG    WMS-23993 add new field (CS02)                  */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_Bartender_CustomLabel_NIKE_RG]
@@ -180,7 +181,8 @@ BEGIN
       END
 
 
-      SET @c_GroupBy = ' GROUP BY U.Uccno,RECDET.ExternReceiptkey,Substring(RECDET.Sku,1,9),U.Qty,C.UDF01,RECDET.SKU,S.Altsku,S.Descr,SUBSTRING(ISNULL(C1.long,''''),1,80),RECDET.ToID'  
+      SET @c_GroupBy = ' GROUP BY U.Uccno,RECDET.ExternReceiptkey,Substring(RECDET.Sku,1,9),U.Qty,C.UDF01,RECDET.SKU,S.Altsku,S.Descr,SUBSTRING(ISNULL(C1.long,''''),1,80),RECDET.ToID,'  
+                       + 'CONVERT(NVARCHAR(11),RECDET.DateReceived,106),ISNULL(REC.WarehouseReference,'''')'
 
    DECLARE CUR_RESULT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    SELECT DISTINCT SKU
@@ -196,7 +198,7 @@ BEGIN
 
     SET @c_SQLJOIN = +' SELECT DISTINCT U.Uccno,RECDET.ExternReceiptkey,Substring(RECDET.Sku,1,9),U.Qty,RECDET.SKU,'+ CHAR(13) +  
              + ' S.Altsku,S.Descr,C.UDF01,SUBSTRING(ISNULL(C1.long,''''),1,80),RECDET.ToID, '      --10  
-             + ' '''','''','''','''','''','     --15
+             + ' CONVERT(NVARCHAR(11),RECDET.DateReceived,106),ISNULL(REC.WarehouseReference,''''),'''','''','''','     --15    --CS02
              + CHAR(13) +
              + ' '''','''','''','''','''','         --20
               + ' '''','''','''','''','''','''','''','''','''','''','  --30
