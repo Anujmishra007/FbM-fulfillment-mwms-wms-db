@@ -27,6 +27,7 @@ GO
 /* 2023-09-26   CSCHONG       WMS-23649 revised filter logic (CS01)     */
 /* 2023-10-26   CSCHONG       Devops Scripts Combine                    */
 /* 2023-10-16   CSCHONG       WMS-23649 add storerkey as filter (CS02)  */
+/* 2023-11-15   CSCHONG       WMS-24062 add new config (CS03)           */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_CartonManifestLabel35_RDT] (
       @c_Orderkey      NVARCHAR(10)
@@ -120,6 +121,8 @@ BEGIN
          ,  C_State     = ISNULL(RTRIM(ORDERS.C_State),'')        
          ,  SKU.STYLE   --ML02
          ,  ISNULL(CL3.SHORT,'N')   --ML02
+         ,  ISNULL(CL4.SHORT,'N') AS showcartontype  --CS03
+         ,  ISNULL(PIF.CartonType,'') AS CTNType  --CS03
    FROM  PACKDETAIL  WITH (NOLOCK)
    JOIN  PACKHEADER  WITH (NOLOCK)  ON (PACKDETAIL.PickSlipNo = PACKHEADER.PickSlipNo)
    JOIN  ORDERS      WITH (NOLOCK)  ON (PACKHEADER.Orderkey = ORDERS.Orderkey)
@@ -147,6 +150,13 @@ BEGIN
                                          AND(CL3.Code = 'SHOWSKUSTYLE')
                                          AND(CL3.Storerkey = PACKHEADER.Storerkey)
                                          AND(CL3.Long = 'r_dw_carton_manifest_label_35_rdt') --ML02
+   --CS03 S
+   LEFT JOIN PACKINFO PIF WITH (NOLOCK) ON PIF.PickSlipNo = PACKDETAIL.PickSlipNo AND PIF.CartonNo = PACKDETAIL.cartonno
+   LEFT JOIN  CODELKUP CL4 WITH (NOLOCK)  ON (CL4.ListName = 'REPORTCFG')
+                                         AND(CL4.Code = 'SHOWCARTONTYPE')
+                                         AND(CL4.Storerkey = PACKHEADER.Storerkey)
+                                         AND(CL4.Long = 'r_dw_carton_manifest_label_35_rdt')
+   --CS03 E
    WHERE PACKHEADER.Orderkey = @c_orderkey
    AND   PACKDETAIL.DropID   = CASE WHEN @c_dropid = '' THEN PACKDETAIL.DropID ELSE @c_dropid END
    AND   PACKHEADER.Status = CASE WHEN @c_BypassPackSTS ='N' THEN '9' ELSE PACKHEADER.Status END     --CS01
@@ -190,6 +200,8 @@ BEGIN
          ,  SKU.BUSR7   --ML02
          ,  SKU.STYLE   --ML02
          ,  ISNULL(CL3.SHORT,'N')   --ML02
+         ,  ISNULL(CL4.SHORT,'N')   --CS03
+         ,  ISNULL(PIF.CartonType,'') --CS03
 
    WHILE @@TRANCOUNT < @n_StartTCnt
    BEGIN
