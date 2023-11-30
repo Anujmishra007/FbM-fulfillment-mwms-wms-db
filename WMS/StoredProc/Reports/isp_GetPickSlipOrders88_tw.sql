@@ -23,6 +23,8 @@ GO
 /* Date         Author    Ver Purposes                                  */  
 /* 2022-03-17   CSCHONG   1.1 Devops Scripts Combine                    */  
 /* 2022-06-27   mingle    1.2 Add dummy lines(WMS-19325)                */
+/* 2023-11-29   BeeTin    1.3 JSM-180303 Reduced @n_MaxLine variable    */
+/*                            length to avoid printing dummy record     */ 
 /************************************************************************/  
   
 CREATE OR ALTER PROC [dbo].[isp_GetPickSlipOrders88_tw]  
@@ -83,7 +85,8 @@ BEGIN
    SET @n_Err      = 0  
    SET @c_Errmsg   = ''  
    SET @c_Logo     = ''  
-   SET @n_MaxLine  = 11  
+    -- SET @n_MaxLine  = 11    
+   SET @n_MaxLine  = 10      -- (JSM-180303)
    SET @n_CntRec   = 1  
    SET @n_LastPage = 0  
    SET @n_ReqLine  = 1  
