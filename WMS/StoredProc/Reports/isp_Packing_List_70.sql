@@ -27,6 +27,7 @@ GO
 /* 2020-10-23   WLChooi   1.3   Bug fix                                 */
 /* 2021-02-19   CSCHONG   1.3   WMS-16343 add additional parameter(CS01)*/
 /* 2023-09-18   CSCHONG   1.4   WMS-23587 add repoft config (CS02)      */
+/* 2023-11-14   CSCHONG   1.5   Performance tunning (CS03)              */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_Packing_List_70] (
@@ -132,9 +133,10 @@ BEGIN
        AND PD.Storerkey = ORDERS.StorerKey)
    FROM ORDERS WITH (NOLOCK) --ON (ORDERS.OrderKey = MBOLDETAIL.OrderKey)
    LEFT JOIN ORDERDETAIL OD (NOLOCK) ON (ORDERS.OrderKey = OD.OrderKey)
+   JOIN LoadPlan LP WITH (NOLOCK) ON LP.LoadKey = ORDERS.loadkey                       --CS03
    INNER JOIN SKU WITH (NOLOCK) ON (OD.StorerKey = SKU.StorerKey AND OD.Sku = SKU.Sku)
    INNER JOIN PACK WITH (NOLOCK) ON (SKU.Packkey = PACK.Packkey)
-   INNER JOIN PACKHEADER WITH (NOLOCK) ON ( ORDERS.Loadkey = PACKHEADER.Loadkey)
+   INNER JOIN PACKHEADER WITH (NOLOCK) ON ( LP.Loadkey = PACKHEADER.Loadkey)            --CS03
    INNER JOIN PACKDETAIL WITH (NOLOCK) ON (PACKHEADER.PickSlipNo = PACKDETAIL.PickSlipNo AND
                                            OD.Storerkey = PACKDETAIL.Storerkey AND
                                            OD.Sku = PACKDETAIL.Sku)
