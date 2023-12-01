@@ -237,7 +237,7 @@ set @Stmt = ' SELECT
 			IF @c_TMCCRLSE = 'Y'
 				BEGIN
 				SET @Stmt = @Stmt + '
-			  LEFT JOIN BI.V_TASKDETAIL TD (nolock) ON (TD.TaskType=''TMCCRLSE'' AND TD.SOURCEKEY = CCD.cckey and TD.taskdetailkey=ccd.ccsheetno) '
+			  LEFT JOIN BI.V_TASKDETAIL TD (nolock) ON (TD.SOURCEKEY = CCD.cckey and TD.taskdetailkey=ccd.ccsheetno) '
 				END
 			
 			SET @STMT = @STMT + '
