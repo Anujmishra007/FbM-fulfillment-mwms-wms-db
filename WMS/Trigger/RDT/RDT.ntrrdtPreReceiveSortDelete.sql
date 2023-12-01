@@ -5,6 +5,7 @@
 /* Modification log:                                                             */  
 /* Date         Author     Ver   Purposes                                        */  
 /* 26-08-2020   kocy       1.0    https://jiralfl.atlassian.net/browse/WMS-14833 */
+/* 1-Dec-2023   WyeChun    1.1   JSM-194827 Add Mobile and Status (WC01)         */
 /*********************************************************************************/ 
 
 CREATE OR ALTER TRIGGER [RDT].[ntrrdtPreReceiveSortDelete]  
@@ -59,8 +60,8 @@ BEGIN
       ELSE 
       IF @c_authority = '1'       
       BEGIN
-         INSERT INTO RDT.rdtPreReceiveSort_DELLOG ( [RowRefSource])
-         SELECT RowRef FROM DELETED WITH (NOLOCK)
+         INSERT INTO RDT.rdtPreReceiveSort_DELLOG ( [RowRefSource], Mobile, Status) --WC01
+         SELECT RowRef, Mobile, Status FROM DELETED WITH (NOLOCK) --WC01
 
          SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
          IF @n_err <> 0
