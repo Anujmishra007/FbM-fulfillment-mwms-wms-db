@@ -28,6 +28,10 @@ GO
 /* 2021-01-15 Wan03    1.3   Execute Login if @c_UserName<>SUSER_SNAME() */
 /* 2023-03-09 NJOW01   1.4   LFWM-3608 Performance tuning for XML Reading*/
 /* 2023-05-18 Wan04    1.5   LFWM-4116 Performance tuning                */
+/* 2023-11-17 Wan05    1.6   LFWM-4565 - Child ticket of 4355 - PROD CN  */
+/*                           ASNTradeReturn save document took very long */
+/*                           time                                        */
+/*                           Performance tune                            */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_Wrapup_Validation_Wrapper]  
       @c_Module               NVARCHAR(60) = ''
@@ -78,19 +82,19 @@ BEGIN
          , @c_TableColumns_OXML     NVARCHAR(MAX) = ''  
          , @c_SQL2                  NVARCHAR(MAX) = ''
          
-   SET @n_Err = 0 
-   IF SUSER_SNAME() <> @c_UserName       --(Wan03) - START
-   BEGIN
-      EXEC [WM].[lsp_SetUser] 
-               @c_UserName = @c_UserName  OUTPUT
-            ,  @n_Err      = @n_Err       OUTPUT
-            ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-            
-      IF @n_Err = 0   
-      BEGIN       
-         EXECUTE AS LOGIN = @c_UserName
-      END
-   END                                   --(Wan03) - END
+   --SET @n_Err = 0                                                                 --(Wan05) Move Down
+   --IF SUSER_SNAME() <> @c_UserName       --(Wan03) - START
+   --BEGIN
+   --   EXEC [WM].[lsp_SetUser] 
+   --            @c_UserName = @c_UserName  OUTPUT
+   --         ,  @n_Err      = @n_Err       OUTPUT
+   --         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+   --         
+   --   IF @n_Err = 0   
+   --   BEGIN       
+   --      EXECUTE AS LOGIN = @c_UserName
+   --   END
+   --END                                   --(Wan03) - END                          --(Wan05) Move Down
    
    DECLARE 
       @n_Continue       INT = 1
@@ -132,7 +136,10 @@ BEGIN
       
       IF @c_Module <> 'w_userdefine_extended_validation' AND @b_CallFromSP = 0      --(wan04) 
       BEGIN
-         IF @c_UpdateTable IN('TRANSFER','TRANSFERDETAIL')
+         IF @c_UpdateTable IN('TRANSFER','TRANSFERDETAIL'
+                             ,'ChannelTransfer','ChannleTransferDetail'             --(wan05)               
+                             ,'PalletMgmtDetail'                                    --(wan05)
+                              )                    
             SET @c_StorerTag = RTRIM(@c_UpdateTable)+'.FromStorerkey="'
          ELSE   
             SET @c_StorerTag = RTRIM(@c_UpdateTable)+'.Storerkey="'
@@ -143,25 +150,52 @@ BEGIN
             SELECT @n_StorerEndPos = CHARINDEX('"', LEFT(@c_XMLDataString, @n_StorerPos + 100), @n_StorerPos + LEN(@c_StorerTag))
 
          IF @n_StorerEndPos > 0
+         BEGIN                                                                      --(Wan05 - START
             SELECT @c_Storerkey = SUBSTRING(@c_XMLDataString, @n_StorerPos + LEN(@c_StorerTag), @n_StorerEndPos - @n_StorerPos - LEN(@c_StorerTag))
              
-         IF NOT EXISTS(SELECT TOP 1 1
-                        FROM CODELKUP CL (NOLOCK) 
-                        JOIN CODELIST CLS (NOLOCK) ON CL.UDF01 = CLS.LISTNAME
-                        JOIN CODELKUP CLSD (NOLOCK) ON CLS.ListName = CLSD.Listname
-                        JOIN V_Extended_Validation V ON CLS.ListGroup = V.ValidateTable AND CL.Code = V.ValidationType
-                        WHERE CL.ListName = 'VALDNCFG'
-                        AND V.ValidationType <> V.ValidateTable
-                        AND CLS.ListGroup = @c_UpdateTable
-                        AND CL.Storerkey = @c_Storerkey) 
-            AND @n_StorerEndPos > 0
+            IF NOT EXISTS(SELECT TOP 1 1
+                           FROM CODELKUP CL (NOLOCK) 
+                           JOIN CODELIST CLS (NOLOCK) ON CL.UDF01 = CLS.LISTNAME
+                           JOIN CODELKUP CLSD (NOLOCK) ON CLS.ListName = CLSD.Listname
+                           JOIN V_Extended_Validation V ON CLS.ListGroup = V.ValidateTable AND CL.Code = V.ValidationType
+                           WHERE CL.ListName = 'VALDNCFG'
+                           AND V.ValidationType <> V.ValidateTable
+                           AND CLS.ListGroup = @c_UpdateTable
+                           AND CL.Storerkey = @c_Storerkey) 
+               AND @n_StorerEndPos > 0
+            BEGIN
+               SET @c_ReqInPutExtValidate = 'N'
+            END   
+         END
+         ELSE
          BEGIN
-            SET @c_ReqInPutExtValidate = 'N'
-         END                
+            IF NOT EXISTS( SELECT TOP 1 1
+                           FROM V_Extended_Validation V 
+                           WHERE V.ValidateTable  = @c_UpdateTable
+            )
+            BEGIN
+               SET @c_ReqInPutExtValidate = 'N'
+            END   
+         END                                                                        --(Wan05) - END              
 
          IF @c_ReqInPutExtValidate = 'Y' 
               OR EXISTS (SELECT 1 FROM sys.Objects (NOLOCK) WHERE Name = @c_SPName AND type = 'P') 
-         BEGIN      
+         BEGIN  
+            
+            SET @n_Err = 0                                                                 --(Wan05) Move Down
+            IF SUSER_SNAME() <> @c_UserName        
+            BEGIN
+               EXEC [WM].[lsp_SetUser] 
+                        @c_UserName = @c_UserName  OUTPUT
+                     ,  @n_Err      = @n_Err       OUTPUT
+                     ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+                     
+               IF @n_Err = 0   
+               BEGIN       
+                  EXECUTE AS LOGIN = @c_UserName
+               END
+            END                                                                           --(Wan05) Move Down
+               
             CREATE TABLE #VALDN( Rowid  INT NOT NULL IDENTITY(1,1) PRIMARY KEY)  
             CREATE TABLE #SCHEMA (Column_Name NVARCHAR(80), Data_Type NVARCHAR(80)) 
             

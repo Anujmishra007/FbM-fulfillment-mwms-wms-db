@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_Post_Added_Receipt_STD]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_Post_Added_Receipt_STD]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -13,9 +8,14 @@ GO
 /*                                                                      */
 /* Purpose: Dynamic lottable                                            */
 /*                                                                      */
-/* Date        Rev  Author      Purposes                                */
+/* Date        Author   Rev   Purposes                                   */
+/* 2023-11-17  Wan03    1.3   LFWM-4565 - Child ticket of 4355 - PROD CN */
+/*                            ASNTradeReturn save document took very long*/
+/*                            time                                       */
+/*                            Performance tune                           */
+/*                            Stucture Std as per WM.lsp_Post_Updated_Wrapper*/
 /************************************************************************/
-CREATE PROCEDURE [WM].[lsp_Post_Added_Receipt_STD]
+CREATE OR ALTER PROCEDURE [WM].[lsp_Post_Added_Receipt_STD]
       @c_StorerKey         NVARCHAR(15)
    ,  @c_RefKey1           NVARCHAR(50)  = '' 
    ,  @c_RefKey2           NVARCHAR(50)  = '' 
@@ -28,13 +28,16 @@ CREATE PROCEDURE [WM].[lsp_Post_Added_Receipt_STD]
    ,  @c_UserName          NVARCHAR(128) = '' 
 AS
 BEGIN
-   SET ANSI_NULLS ON
-   SET ANSI_PADDING ON
-   SET ANSI_WARNINGS ON
-   SET QUOTED_IDENTIFIER ON
-   SET CONCAT_NULL_YIELDS_NULL ON
-   SET ARITHABORT ON
-
+   --SET ANSI_NULLS ON                                                                             --(Wan03)
+   --SET ANSI_PADDING ON                                                                           --(Wan03)
+   --SET ANSI_WARNINGS ON                                                                          --(Wan03)
+   --SET QUOTED_IDENTIFIER ON                                                                      --(Wan03)
+   --SET CONCAT_NULL_YIELDS_NULL ON                                                                --(Wan03)
+   --SET ARITHABORT ON                                                                             --(Wan03)
+   SET NOCOUNT ON                                                                                  --(Wan03)
+   SET ANSI_NULLS OFF                                                                              --(Wan03)
+   SET QUOTED_IDENTIFIER OFF                                                                       --(Wan03)
+   SET CONCAT_NULL_YIELDS_NULL OFF                                                                 --(Wan03)
       
 
    
