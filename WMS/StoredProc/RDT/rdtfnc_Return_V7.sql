@@ -30,6 +30,7 @@ GO
 /* 2021-10-14   2.1  YeeKung    JSM-25174 Add error =2 in multisku (yeekung02)*/
 /* 2023-07-26   2.2  James      WMS-23005 Add capture data (james03)          */
 /*                              Add ToLoc Diff screen                         */
+/* 2023-11-28   2.3  Ung        WMS-24305 Default ConditionCode = OK          */
 /******************************************************************************/
 CREATE OR ALTER PROC rdt.rdtfnc_Return_V7(
    @nMobile    int,
@@ -2466,6 +2467,10 @@ BEGIN
       DECLARE @nNOPOFlag INT
       SET @nNOPOFlag = CASE WHEN @cPOkey = 'NOPO' THEN 1 ELSE 0 END
 
+      -- Reason code
+      IF @cReasonCode = ''
+         SET @cReasonCode = 'OK'
+
       -- Handling transaction
       DECLARE @nTranCount INT
       SET @nTranCount = @@TRANCOUNT
@@ -3319,6 +3324,10 @@ BEGIN
 
          -- NOPO flag
          SET @nNOPOFlag = CASE WHEN @cPOkey = 'NOPO' THEN 1 ELSE 0 END
+
+         -- Reason code
+         IF @cReasonCode = ''
+            SET @cReasonCode = 'OK'
 
          -- Handling transaction
          SET @nTranCount = @@TRANCOUNT
