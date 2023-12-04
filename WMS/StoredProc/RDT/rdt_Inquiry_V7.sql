@@ -21,6 +21,7 @@ GO
 /*                          with Pendingmovein (james02)                */
 /* 2022-10-26 1.3  James    JSM-104500 Bug fix (james03)                */
 /* 2023-09-27-1.4  Ung      WMS-23678 Fix only show 4 lottables         */
+/* 2023-11-20 1.5  YeeKung  WMS-23981 Add new params (yeekung01)        */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_Inquiry_V7] (
@@ -73,6 +74,12 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_Inquiry_V7] (
    @dLottable14     DATETIME       OUTPUT,
    @dLottable15     DATETIME       OUTPUT,
    @cHasLottable    NVARCHAR( 1)   OUTPUT,
+   @cUserDefine01   NVARCHAR( 60)  OUTPUT,
+   @cUserDefine02   NVARCHAR( 60)  OUTPUT,
+   @cUserDefine03   NVARCHAR( 60)  OUTPUT,
+   @cUserDefine04   NVARCHAR( 60)  OUTPUT,
+   @cUserDefine05   NVARCHAR( 60)  OUTPUT,
+   @cSKUConfig      NVARCHAR( 20)  OUTPUT,
    @nErrNo          INT            OUTPUT,
    @cErrMsg         NVARCHAR( 20)  OUTPUT
 ) AS

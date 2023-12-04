@@ -1,6 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdt_628Inquiry06]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_628Inquiry06]
-GO
+
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -19,21 +17,24 @@ GO
 /*                                                                      */    
 /* Date       Rev  Author   Purposes                                    */    
 /* 2020-07-13 1.0  ChaoBing WMS-14213. Created                          */
+/* 2023-11-20 1.1  YeeKung  WMS-23981 Add new params                    */
+/*                          (yeekung03)                                 */
 /************************************************************************/    
     
-CREATE PROCEDURE [RDT].[rdt_628Inquiry06] (    
+CREATE OR ALTER PROCEDURE [RDT].[rdt_628Inquiry06] (    
    @nMobile         INT,
    @nFunc           INT,
    @cLangCode       NVARCHAR( 3),
    @nStep           INT,
    @nInputKey       INT,
    @cFacility       NVARCHAR( 5),
-   @cType           NVARCHAR( 10), 
+   @cType           NVARCHAR( 10),
    @cStorerkey      NVARCHAR( 15),
    @cPUOM           NVARCHAR( 1),
    @cInquiry_LOC    NVARCHAR( 10),
    @cInquiry_ID     NVARCHAR( 18),
    @cInquiry_SKU    NVARCHAR( 20),
+   @cLOT            NVARCHAR( 10)  OUTPUT,
    @cLOC            NVARCHAR( 10)  OUTPUT,
    @cID             NVARCHAR( 18)  OUTPUT,
    @cSKU            NVARCHAR( 20)  OUTPUT,
@@ -54,24 +55,30 @@ CREATE PROCEDURE [RDT].[rdt_628Inquiry06] (
    @cPUOM_Desc      NVARCHAR( 5)   OUTPUT,
    @cMUOM_Desc      NVARCHAR( 5)   OUTPUT,
    @cLottableCode   NVARCHAR( 30)  OUTPUT,
-   @cLottable01     NVARCHAR( 18)  OUTPUT, 
-   @cLottable02     NVARCHAR( 18)  OUTPUT, 
-   @cLottable03     NVARCHAR( 18)  OUTPUT, 
-   @dLottable04     DATETIME       OUTPUT, 
-   @dLottable05     DATETIME       OUTPUT, 
-   @cLottable06     NVARCHAR( 30)  OUTPUT, 
-   @cLottable07     NVARCHAR( 30)  OUTPUT, 
-   @cLottable08     NVARCHAR( 30)  OUTPUT, 
-   @cLottable09     NVARCHAR( 30)  OUTPUT, 
-   @cLottable10     NVARCHAR( 30)  OUTPUT, 
-   @cLottable11     NVARCHAR( 30)  OUTPUT, 
-   @cLottable12     NVARCHAR( 30)  OUTPUT, 
-   @dLottable13     DATETIME       OUTPUT, 
-   @dLottable14     DATETIME       OUTPUT, 
-   @dLottable15     DATETIME       OUTPUT, 
-   @cHasLottable    NVARCHAR( 1)   OUTPUT, 
+   @cLottable01     NVARCHAR( 18)  OUTPUT,
+   @cLottable02     NVARCHAR( 18)  OUTPUT,
+   @cLottable03     NVARCHAR( 18)  OUTPUT,
+   @dLottable04     DATETIME       OUTPUT,
+   @dLottable05     DATETIME       OUTPUT,
+   @cLottable06     NVARCHAR( 30)  OUTPUT,
+   @cLottable07     NVARCHAR( 30)  OUTPUT,
+   @cLottable08     NVARCHAR( 30)  OUTPUT,
+   @cLottable09     NVARCHAR( 30)  OUTPUT,
+   @cLottable10     NVARCHAR( 30)  OUTPUT,
+   @cLottable11     NVARCHAR( 30)  OUTPUT,
+   @cLottable12     NVARCHAR( 30)  OUTPUT,
+   @dLottable13     DATETIME       OUTPUT,
+   @dLottable14     DATETIME       OUTPUT,
+   @dLottable15     DATETIME       OUTPUT,
+   @cHasLottable    NVARCHAR( 1)   OUTPUT,
+   @cUserDefine01   NVARCHAR( 60)  OUTPUT, 
+   @cUserDefine02   NVARCHAR( 60)  OUTPUT, 
+   @cUserDefine03   NVARCHAR( 60)  OUTPUT, 
+   @cUserDefine04   NVARCHAR( 60)  OUTPUT, 
+   @cUserDefine05   NVARCHAR( 60)  OUTPUT, 
+   @cSKUConfig      NVARCHAR( 20)  OUTPUT, 
    @nErrNo          INT            OUTPUT,
-   @cErrMsg         NVARCHAR( 20)  OUTPUT 
+   @cErrMsg         NVARCHAR( 20)  OUTPUT  
 ) AS    
    SET NOCOUNT ON
    SET QUOTED_IDENTIFIER OFF
@@ -105,7 +112,6 @@ CREATE PROCEDURE [RDT].[rdt_628Inquiry06] (
    DECLARE @cTempLocationType NVARCHAR( 30)
    DECLARE @cLocationType     NVARCHAR( 30)
    DECLARE @cLogicalLocation  NVARCHAR( 30)
-   DECLARE @cLot              NVARCHAR( 20)
    DECLARE @nExist            INT 
 
    SELECT    

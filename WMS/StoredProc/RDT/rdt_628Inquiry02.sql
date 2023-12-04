@@ -1,6 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdt_628Inquiry02]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_628Inquiry02]
-GO
+
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -22,41 +20,44 @@ GO
 /* 2018-07-12 1.1  James    INC0300607-Add HasLottable variable(james01)*/
 /* 2019-08-30 1.2  James    WMS-10415 Remove Qty hold and replace       */
 /*                          with Pendingmovein (james02)                */
+/* 2023-11-20 1.3  YeeKung  WMS-23981 Add new params                    */
+/*                          (yeekung03)                                 */
 /************************************************************************/    
     
-CREATE PROCEDURE [RDT].[rdt_628Inquiry02] (    
+CREATE OR ALTER PROCEDURE [RDT].[rdt_628Inquiry02] (    
    @nMobile         INT,
    @nFunc           INT,
    @cLangCode       NVARCHAR( 3),
    @nStep           INT,
    @nInputKey       INT,
    @cFacility       NVARCHAR( 5),
-   @cType           NVARCHAR( 10), 
+   @cType           NVARCHAR( 10),
    @cStorerkey      NVARCHAR( 15),
    @cPUOM           NVARCHAR( 1),
    @cInquiry_LOC    NVARCHAR( 10),
    @cInquiry_ID     NVARCHAR( 18),
    @cInquiry_SKU    NVARCHAR( 20),
+   @cLOT            NVARCHAR( 10)  OUTPUT,
    @cLOC            NVARCHAR( 10)  OUTPUT,
    @cID             NVARCHAR( 18)  OUTPUT,
    @cSKU            NVARCHAR( 20)  OUTPUT,
    @cSKUDescr       NVARCHAR( 60)  OUTPUT,
    @nTotalRec       INT            OUTPUT,
-   @nMQTY_TTL       INT            OUTPUT, 
-   @nMQTY_PMV       INT            OUTPUT, 
-   @nMQTY_Alloc     INT            OUTPUT, 
-   @nMQTY_Pick      INT            OUTPUT, 
-   @nMQTY_RPL       INT            OUTPUT, 
-   @nMQTY_Avail     INT            OUTPUT, 
-   @nPQTY_TTL       INT            OUTPUT, 
-   @nPQTY_PMV       INT            OUTPUT, 
-   @nPQTY_Alloc     INT            OUTPUT, 
-   @nPQTY_Pick      INT            OUTPUT, 
-   @nPQTY_RPL       INT            OUTPUT, 
-   @nPQTY_Avail     INT            OUTPUT, 
+   @nMQTY_TTL       INT            OUTPUT,
+   @nMQTY_PMV       INT            OUTPUT,
+   @nMQTY_Alloc     INT            OUTPUT,
+   @nMQTY_Pick      INT            OUTPUT,
+   @nMQTY_RPL       INT            OUTPUT,
+   @nMQTY_Avail     INT            OUTPUT,
+   @nPQTY_TTL       INT            OUTPUT,
+   @nPQTY_PMV       INT            OUTPUT,
+   @nPQTY_Alloc     INT            OUTPUT,
+   @nPQTY_Pick      INT            OUTPUT,
+   @nPQTY_RPL       INT            OUTPUT,
+   @nPQTY_Avail     INT            OUTPUT,
    @cPUOM_Desc      NVARCHAR( 5)   OUTPUT,
    @cMUOM_Desc      NVARCHAR( 5)   OUTPUT,
-   @cLottableCode   NVARCHAR( 30)  OUTPUT, 
+   @cLottableCode   NVARCHAR( 30)  OUTPUT,
    @cLottable01     NVARCHAR( 18)  OUTPUT,
    @cLottable02     NVARCHAR( 18)  OUTPUT,
    @cLottable03     NVARCHAR( 18)  OUTPUT,
@@ -73,6 +74,12 @@ CREATE PROCEDURE [RDT].[rdt_628Inquiry02] (
    @dLottable14     DATETIME       OUTPUT,
    @dLottable15     DATETIME       OUTPUT,
    @cHasLottable    NVARCHAR( 1)   OUTPUT,
+   @cUserDefine01   NVARCHAR( 60)  OUTPUT, 
+   @cUserDefine02   NVARCHAR( 60)  OUTPUT, 
+   @cUserDefine03   NVARCHAR( 60)  OUTPUT, 
+   @cUserDefine04   NVARCHAR( 60)  OUTPUT, 
+   @cUserDefine05   NVARCHAR( 60)  OUTPUT, 
+   @cSKUConfig      NVARCHAR( 20)  OUTPUT, 
    @nErrNo          INT            OUTPUT,
    @cErrMsg         NVARCHAR( 20)  OUTPUT  
 ) AS    
@@ -82,7 +89,6 @@ CREATE PROCEDURE [RDT].[rdt_628Inquiry02] (
    SET CONCAT_NULL_YIELDS_NULL OFF   
     
    DECLARE @nPUOM_Div   INT,
-           @cLOT        NVARCHAR( 10),
            @cExecStatements   NVARCHAR( 2000), 
            @cExecArguments    NVARCHAR( 2000)
 

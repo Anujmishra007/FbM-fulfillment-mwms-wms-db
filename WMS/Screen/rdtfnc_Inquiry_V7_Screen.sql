@@ -24,6 +24,8 @@ EXECUTE rdt.rdtAddScn 5140, 'ENG',
    ,@cLine12 = '%30i03'
    ,@cLine13 = ''
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3","4"],"2":["7","8"],"3":["11","12"]}'
+   ,@nFunc = 628
  
 -- 5141 = Result screen
 DELETE rdt.RDTScn WHERE Scn = 5141 AND Lang_Code = 'ENG'
@@ -42,7 +44,9 @@ EXECUTE rdt.rdtAddScn 5141, 'ENG',
    ,@cLine12 = 'QTY PMV: %11d12' --WMS10415 Remove qty hold, add pending move in
    ,@cLine13 = 'QTY AVL: %11d13'
    ,@cLine14 = '%e'
- 
+   ,@cWebGroup = '{"1":["1","2","3","4"],"2":["5","6"],"3":["7","8","9","10","11","12","13"]}'
+   ,@nFunc = 628
+   
 -- 5142 = Result screen
 DELETE rdt.RDTScn WHERE Scn = 5142 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 5142, 'ENG',
@@ -58,4 +62,23 @@ EXECUTE rdt.rdtAddScn 5142, 'ENG',
    ,@cLine10 = '%20d09'
    ,@cLine11 = '%20d10'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4","5","6","7","8","9","10","11"]}'
+   ,@nFunc = 628
+
+-- 5143 = ?? screen
+DELETE rdt.RDTScn WHERE Scn = 5143 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 5143, 'ENG'
+   ,@cLine01 = N'%20d01'
+   ,@cLine02 = N'%20d02'
+   ,@cLine03 = N'%20d03'
+   ,@cLine04 = N'%20d04'
+   ,@cLine05 = N'%20d05'
+   ,@cLine06 = N'%20d06'
+   ,@cLine07 = N'%20d07'
+   ,@cLine08 = N'%20d08'
+   ,@cLine09 = N'%20d09'
+   ,@cLine10 = N'%20d10'
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4","5","6","7","8","9","10"]}'
+   ,@nFunc = 628
  

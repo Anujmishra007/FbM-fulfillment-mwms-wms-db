@@ -1,27 +1,30 @@
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /************************************************************************/
-/* Store procedure: rdt_628Inquiry07                                    */
+/* Store procedure: rdt_628Inquiry08                                    */
 /* Copyright      : IDS                                                 */
 /*                                                                      */
-/* Purpose: Inquiry V7                                                  */
+/* Purpose: Inquiry customised rule stored proc                         */
 /*                                                                      */
 /* Exceed version: 5.4                                                  */
 /*                                                                      */
 /* Modifications log:                                                   */
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
-/* 2022-01-05 1.0  James    WMS-18568. Created                          */
-/* 2023-11-20 1.1  YeeKung  WMS-23981 Add new params                    */
-/*                          (yeekung03)                                 */
+/* 2018-04-23 1.0  James    WMS4458. Created                            */
+/* 2018-07-12 1.1  James    INC0300607-Add HasLottable variable(james01)*/
+/* 2019-03-25 1.2  James    WMS8359-Bug fix on record count wrong when  */
+/*                          no lottable code setup (james02)            */
+/* 2019-08-30 1.3  James    WMS-10415 Remove Qty hold and replace       */
+/*                          with Pendingmovein (james03)                */
 /************************************************************************/
 
-CREATE OR ALTER PROCEDURE [RDT].[rdt_628Inquiry07] (
-     @nMobile         INT,
+CREATE OR ALTER PROCEDURE [RDT].[rdt_628Inquiry08] (
+   @nMobile         INT,
    @nFunc           INT,
    @cLangCode       NVARCHAR( 3),
    @nStep           INT,
@@ -77,8 +80,9 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_628Inquiry07] (
    @cUserDefine05   NVARCHAR( 60)  OUTPUT, 
    @cSKUConfig      NVARCHAR( 20)  OUTPUT, 
    @nErrNo          INT            OUTPUT,
-   @cErrMsg         NVARCHAR( 20)  OUTPUT  
+   @cErrMsg         NVARCHAR( 20)  OUTPUT                                                                                                                                 
 ) AS
+BEGIN
    SET NOCOUNT ON
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
@@ -108,7 +112,7 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_628Inquiry07] (
    DECLARE @dTempLottable15   DATETIME
    DECLARE @cTempLottableCode NVARCHAR( 30)
    DECLARE @nTempTotalRec     INT
-   DECLARE @cAltSKU           NVARCHAR( 20)
+   DECLARE @cLottableSKU      NVARCHAR( 20)
 
    SET @cTempSKU = @cSKU
    SET @cTempLOC = @cLOC
@@ -132,16 +136,10 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_628Inquiry07] (
    SET @cTempLottableCode = @cLottableCode
    SET @nTempTotalRec = @nTotalRec
 
-   SELECT TOP 1 @cAltSKU = AltSKU
-   FROM dbo.SKU WITH (NOLOCK)
-   WHERE StorerKey = @cStorerkey
-   AND   Sku = @cInquiry_SKU
-   ORDER BY 1
-
    -- Get the 1st sku
    IF ISNULL( @cTempSKU, '') = ''
    BEGIN
-      SELECT TOP 1 @cTempSKU = LLI.SKU
+      SELECT TOP 1 @cLottableSKU = LLI.SKU
       FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
       JOIN dbo.LOC LOC WITH (NOLOCK) ON (LOC.LOC = LLI.LOC)
       JOIN dbo.SKU SKU WITH (NOLOCK) ON (LLI.StorerKey = SKU.StorerKey AND LLI.SKU = SKU.SKU)
@@ -150,12 +148,12 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_628Inquiry07] (
       AND  (LLI.QTY <> 0 OR LLI.QtyAllocated <> 0 OR LLI.QtyPicked <> 0 OR LLI.QtyExpected <> 0)
       AND   ( (ISNULL( @cInquiry_LOC, '') = '') OR ( LLI.LOC = @cInquiry_LOC))
       AND   ( (ISNULL( @cInquiry_ID, '') = '') OR ( LLI.ID = @cInquiry_ID))
-      AND   ( (ISNULL( @cInquiry_SKU, '') = '') OR ( SKU.AltSKU = @cAltSKU))
+      AND   ( (ISNULL( @cInquiry_SKU, '') = '') OR ( LLI.SKU = @cInquiry_SKU))
       ORDER BY LLI.SKU
 
       IF @@ROWCOUNT = 0
       BEGIN
-         SET @nErrNo = 181001
+         SET @nErrNo = 126151
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'No record'
          GOTO Quit
       END
@@ -164,7 +162,7 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_628Inquiry07] (
       SELECT @cTempLottableCode = LottableCode
       FROM dbo.SKU WITH (NOLOCK)
       WHERE StorerKey = @cStorerKey
-      AND   SKU = @cTempSKU
+      AND   SKU = @cLottableSKU
    END
 
    /************************************** Get QTY and lottables *********************************/
@@ -176,7 +174,7 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_628Inquiry07] (
    DECLARE @cOrderBy NVARCHAR( MAX)
 
    -- Get lottable filter
-   EXEC rdt.rdt_Lottable_GetNextSQL @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 4, @cTempLottableCode, 'LA',
+   EXEC rdt.rdt_Lottable_GetNextSQL @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 10, @cTempLottableCode, 'LA',
       @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
       @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
       @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
@@ -192,17 +190,16 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_628Inquiry07] (
    BEGIN
       SET @cSQL = ''
       SET @cSQL =
-      '    SELECT @nTotalRec = COUNT( 1)  ' +
+   '    SELECT @nTotalRec = COUNT( 1)  ' +
       '    FROM dbo.LOTxLOCxID LLI WITH (NOLOCK) ' +
       '    JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = LLI.LOC) ' +
-      '    JOIN dbo.LotAttribute LA WITH (NOLOCK) ON (LA.LOT = LLI.LOT) ' +
-      '    JOIN dbo.SKU SKU WITH (NOLOCK) ON (LLI.StorerKey = SKU.StorerKey AND LLI.SKU = SKU.SKU) ' +
+      '    JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = LLI.LOT) ' +
       '    WHERE LOC.Facility = @cFacility ' +
       '    AND  (LLI.QTY <> 0 OR LLI.QtyAllocated <> 0 OR LLI.QtyPicked <> 0 OR LLI.QtyExpected <> 0) ' +
       '    AND   LLI.StorerKey = @cStorerKey ' +
       '    AND ( (ISNULL( @cInquiry_LOC, '''') = '''') OR ( LLI.LOC = @cInquiry_LOC)) ' +
       '    AND ( (ISNULL( @cInquiry_ID, '''') = '''') OR ( LLI.ID = @cInquiry_ID)) ' +
-      '    AND ( (ISNULL( @cInquiry_SKU, '''') = '''') OR ( SKU.ALTSKU = @cAltSKU)) ' +
+      '    AND ( (ISNULL( @cInquiry_SKU, '''') = '''') OR ( LLI.SKU = @cInquiry_SKU)) ' +
       CASE WHEN @cWhere1 = '' THEN '' ELSE ' AND ' + @cWhere1 END +
       CASE WHEN @cWhere2 = '' THEN '' ELSE ' > '   + @cWhere2 END
 
@@ -227,7 +224,6 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_628Inquiry07] (
          '@dLottable13  DATETIME, ' +
          '@dLottable14  DATETIME, ' +
          '@dLottable15  DATETIME, ' +
-         '@cAltSKU      NVARCHAR( 20), ' +
          '@nTotalRec    INT  OUTPUT '
 
       EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
@@ -251,13 +247,12 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_628Inquiry07] (
          @dLottable13 = @dTempLottable13,
          @dLottable14 = @dTempLottable14,
          @dLottable15 = @dTempLottable15,
-         @cAltSKU     = @cAltSKU,
          @nTotalRec   = @nTempTotalRec OUTPUT
    END
 
-   --delete from traceinfo where tracename = '628_1'
-   --insert into traceinfo (tracename, timein, col1, col2, col3, col4, col5, step1, step2, step3, step4, step5) values
-   --('628_1', getdate(), @cFacility, @cStorerKey, @cInquiry_LOC, @cInquiry_ID, @cInquiry_SKU, @cLottable08, @cLOT, @cLOC, @cID, @cSKU)
+   SET @cLOC = ''
+   SET @cID = ''
+   SET @cSKU= ''
 
    SET @cSQL = ''
    SET @cSQL =
@@ -275,14 +270,13 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_628Inquiry07] (
    CASE WHEN @cSelect = '' THEN '' ELSE ', ' + @cSelect END +
    '    FROM dbo.LOTxLOCxID LLI WITH (NOLOCK) ' +
    '    JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = LLI.LOC) ' +
-   '    JOIN dbo.LotAttribute LA WITH (NOLOCK) ON (LA.LOT = LLI.LOT) ' +
-   '    JOIN dbo.SKU SKU WITH (NOLOCK) ON (LLI.StorerKey = SKU.StorerKey AND LLI.SKU = SKU.SKU) ' +
+   '    JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = LLI.LOT) ' +
    '    WHERE LOC.Facility = @cFacility ' +
    '    AND  (LLI.QTY <> 0 OR LLI.QtyAllocated <> 0 OR LLI.QtyPicked <> 0 OR LLI.QtyExpected <> 0) ' +
    '    AND   LLI.StorerKey = @cStorerKey ' +
    '    AND ( (ISNULL( @cInquiry_LOC, '''') = '''') OR ( LLI.LOC = @cInquiry_LOC)) ' +
    '    AND ( (ISNULL( @cInquiry_ID, '''') = '''') OR ( LLI.ID = @cInquiry_ID)) ' +
-   '    AND ( (ISNULL( @cInquiry_SKU, '''') = '''') OR ( SKU.ALTSKU = @cAltSKU)) ' --+
+   '    AND ( (ISNULL( @cInquiry_SKU, '''') = '''') OR ( LLI.SKU = @cInquiry_SKU)) ' --+
    --'    AND  (LLI.SKU + LLI.LOC + LLI.ID' +
    --CASE WHEN @cWhere1 = '' THEN '' ELSE ' + ' + @cWhere1 END  + ') > ' +
    --'         (@cSKU + @cLOC + @cID' + CASE WHEN @cWhere2 = '' THEN '' ELSE + ' + ' + @cWhere2 END + ') '
@@ -345,8 +339,7 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_628Inquiry07] (
       '@cLottable12  NVARCHAR( 30)  OUTPUT, ' +
       '@dLottable13  DATETIME       OUTPUT, ' +
       '@dLottable14  DATETIME       OUTPUT, ' +
-      '@dLottable15  DATETIME       OUTPUT, ' +
-      '@cAltSKU      NVARCHAR( 20)  OUTPUT  '
+      '@dLottable15  DATETIME       OUTPUT  '
 
    EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
       @cStorerKey  = @cStorerKey,
@@ -378,21 +371,16 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_628Inquiry07] (
       @cLottable12 = @cTempLottable12  OUTPUT,
       @dLottable13 = @dTempLottable13  OUTPUT,
       @dLottable14 = @dTempLottable14  OUTPUT,
-      @dLottable15 = @dTempLottable15  OUTPUT,
-      @cAltSKU     = @cAltSKU
+      @dLottable15 = @dTempLottable15  OUTPUT
 
       -- Validate if any result
       IF @@ROWCOUNT = 0
       BEGIN
-         SET @nErrNo = 181002
+         SET @nErrNo = 126152
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'No more record'
          SET @nTotalRec = -1
          GOTO Quit
       END
-
-   --delete from traceinfo where tracename = '628_2'
-   --insert into traceinfo (tracename, timein, col1, col2, col3, col4, col5, step1, step2, step3, step4, step5) values
-   --('628_2', getdate(), @cFacility, @cStorerKey, @cInquiry_LOC, @cInquiry_ID, @cInquiry_SKU, @cLottable08, @cTempLOT, @cTempLOC, @cTempID, @cTempSKU)
 
       -- Assign to actual
       SET @cLOC        = @cTempLOC
@@ -437,7 +425,7 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_628Inquiry07] (
                WHEN '2' THEN Pack.CaseCNT
                WHEN '3' THEN Pack.InnerPack
                WHEN '6' THEN Pack.QTY
-               WHEN '1' THEN Pack.Pallet
+              WHEN '1' THEN Pack.Pallet
                WHEN '4' THEN Pack.OtherUnit1
                WHEN '5' THEN Pack.OtherUnit2
             END, 1) AS INT)
@@ -475,14 +463,43 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_628Inquiry07] (
          SET @nMQTY_Pick  = CAST(@nMQTY_Pick  as INT)  % @nPUOM_Div
       END
 
+      DECLARE @cSKUConfigData NVARCHAR(20)
+      DECLARE @cItemClass NVARCHAR(20)
+      DECLARE @cBusr3 NVARCHAR(20)
+      DECLARE @cBusr4 NVARCHAR(20)
+
+      SELECT @cSKUConfigData = data
+      FROM skuconfig (NOLOCK)
+      WHERE SKU = @cSKU
+         AND Storerkey = @cStorerkey
+
+      SELECT   @cItemClass = ItemClass,
+               @cBusr3 = Busr3,
+               @cBusr4 = Busr4
+      FROM SKU (NOLOCK)
+      WHERE SKU = @cSKU
+         AND Storerkey = @cStorerkey
+
+      SET @cSKUConfig = '1'
+
+      IF    ISNULL(@cSKUConfigData,'')='' 
+         AND ISNULL(@cItemClass,'')=''
+         AND ISNULL( @cBusr3,'')=''
+         AND ISNULL(@cBusr4,'')=''
+      BEGIN
+         SET @cSKUConfig = '0'
+      END
+      ELSE
+      BEGIN
+         SET @cUserDefine01 = @cSKUConfigData
+         SET @cUserDefine02 = @cItemClass
+         SET @cUserDefine03 = @cBusr3
+         SET @cUserDefine04 = @cBusr4
+         SET @cUserDefine05 = ''
+      END
 
    QUIT:
+END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON RDT.rdt_628Inquiry07 TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_628Inquiry08] TO [NSQL]
 GO

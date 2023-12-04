@@ -1,64 +1,64 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdt_628Inquiry01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_628Inquiry01]
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF 
-GO
-    
-/************************************************************************/    
-/* Store procedure: rdt_628Inquiry01                                    */    
-/* Copyright      : IDS                                                 */    
-/*                                                                      */    
-/* Purpose: Inquiry customised rule stored proc                         */    
-/*                                                                      */    
-/* Exceed version: 5.4                                                  */    
-/*                                                                      */    
-/* Modifications log:                                                   */    
-/*                                                                      */    
-/* Date       Rev  Author   Purposes                                    */    
+
+/************************************************************************/
+/* Store procedure: rdt_628Inquiry01                                    */
+/* Copyright      : IDS                                                 */
+/*                                                                      */
+/* Purpose: Inquiry customised rule stored proc                         */
+/*                                                                      */
+/* Exceed version: 5.4                                                  */
+/*                                                                      */
+/* Modifications log:                                                   */
+/*                                                                      */
+/* Date       Rev  Author   Purposes                                    */
 /* 2018-04-23 1.0  James    WMS4458. Created                            */
 /* 2018-07-12 1.1  James    INC0300607-Add HasLottable variable(james01)*/
 /* 2019-03-25 1.2  James    WMS8359-Bug fix on record count wrong when  */
 /*                          no lottable code setup (james02)            */
 /* 2019-08-30 1.3  James    WMS-10415 Remove Qty hold and replace       */
 /*                          with Pendingmovein (james03)                */
-/************************************************************************/    
-    
-CREATE PROCEDURE [RDT].[rdt_628Inquiry01] (    
+/* 2023-11-20 1.4  YeeKung  WMS-23981 Add new params                    */
+/*                          (yeekung03)                                 */
+/************************************************************************/
+
+CREATE OR ALTER PROCEDURE [RDT].[rdt_628Inquiry01] (
    @nMobile         INT,
    @nFunc           INT,
    @cLangCode       NVARCHAR( 3),
    @nStep           INT,
    @nInputKey       INT,
    @cFacility       NVARCHAR( 5),
-   @cType           NVARCHAR( 10), 
+   @cType           NVARCHAR( 10),
    @cStorerkey      NVARCHAR( 15),
    @cPUOM           NVARCHAR( 1),
    @cInquiry_LOC    NVARCHAR( 10),
    @cInquiry_ID     NVARCHAR( 18),
    @cInquiry_SKU    NVARCHAR( 20),
+   @cLOT            NVARCHAR( 10)  OUTPUT,
    @cLOC            NVARCHAR( 10)  OUTPUT,
    @cID             NVARCHAR( 18)  OUTPUT,
    @cSKU            NVARCHAR( 20)  OUTPUT,
    @cSKUDescr       NVARCHAR( 60)  OUTPUT,
    @nTotalRec       INT            OUTPUT,
-   @nMQTY_TTL       INT            OUTPUT, 
-   @nMQTY_PMV       INT            OUTPUT, 
-   @nMQTY_Alloc     INT            OUTPUT, 
-   @nMQTY_Pick      INT            OUTPUT, 
-   @nMQTY_RPL       INT            OUTPUT, 
-   @nMQTY_Avail     INT            OUTPUT, 
-   @nPQTY_TTL       INT            OUTPUT, 
-   @nPQTY_PMV       INT            OUTPUT, 
-   @nPQTY_Alloc     INT            OUTPUT, 
-   @nPQTY_Pick      INT            OUTPUT, 
-   @nPQTY_RPL       INT            OUTPUT, 
-   @nPQTY_Avail     INT            OUTPUT, 
+   @nMQTY_TTL       INT            OUTPUT,
+   @nMQTY_PMV       INT            OUTPUT,
+   @nMQTY_Alloc     INT            OUTPUT,
+   @nMQTY_Pick      INT            OUTPUT,
+   @nMQTY_RPL       INT            OUTPUT,
+   @nMQTY_Avail     INT            OUTPUT,
+   @nPQTY_TTL       INT            OUTPUT,
+   @nPQTY_PMV       INT            OUTPUT,
+   @nPQTY_Alloc     INT            OUTPUT,
+   @nPQTY_Pick      INT            OUTPUT,
+   @nPQTY_RPL       INT            OUTPUT,
+   @nPQTY_Avail     INT            OUTPUT,
    @cPUOM_Desc      NVARCHAR( 5)   OUTPUT,
    @cMUOM_Desc      NVARCHAR( 5)   OUTPUT,
-   @cLottableCode   NVARCHAR( 30)  OUTPUT, 
+   @cLottableCode   NVARCHAR( 30)  OUTPUT,
    @cLottable01     NVARCHAR( 18)  OUTPUT,
    @cLottable02     NVARCHAR( 18)  OUTPUT,
    @cLottable03     NVARCHAR( 18)  OUTPUT,
@@ -75,51 +75,67 @@ CREATE PROCEDURE [RDT].[rdt_628Inquiry01] (
    @dLottable14     DATETIME       OUTPUT,
    @dLottable15     DATETIME       OUTPUT,
    @cHasLottable    NVARCHAR( 1)   OUTPUT,
+   @cUserDefine01   NVARCHAR( 60)  OUTPUT, 
+   @cUserDefine02   NVARCHAR( 60)  OUTPUT, 
+   @cUserDefine03   NVARCHAR( 60)  OUTPUT, 
+   @cUserDefine04   NVARCHAR( 60)  OUTPUT, 
+   @cUserDefine05   NVARCHAR( 60)  OUTPUT, 
+   @cSKUConfig      NVARCHAR( 20)  OUTPUT, 
    @nErrNo          INT            OUTPUT,
    @cErrMsg         NVARCHAR( 20)  OUTPUT  
-) AS    
+) AS
    SET NOCOUNT ON
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
-   SET CONCAT_NULL_YIELDS_NULL OFF   
-    
+   SET CONCAT_NULL_YIELDS_NULL OFF
+
    DECLARE @nPUOM_Div   INT,
            @nQty_Hold   INT,
-           @cLot        NVARCHAR( 10),
-           @cExecStatements   NVARCHAR( 2000), 
+           @cExecStatements   NVARCHAR( 2000),
            @cExecArguments    NVARCHAR( 2000)
 
 
    -- Get total record
    SET @nTotalRec = 0
 
-   SET @cExecStatements = N'SELECT @nTotalRec = COUNT( 1) FROM ( ' + 
+   SET @cExecStatements = N'SELECT @nTotalRec = COUNT( 1) FROM ( ' +
       CASE WHEN @cInquiry_LOC <> '' THEN ' SELECT LLI.ID, LLI.SKU '
       WHEN @cInquiry_ID <> '' THEN ' SELECT LLI.LOC, LLI.SKU '
-      WHEN @cInquiry_SKU <> '' THEN ' SELECT LLI.LOC, LLI.ID ' END 
-   
-   SELECT @cExecStatements = @cExecStatements + 
-      ' FROM dbo.LOTxLOCxID LLI WITH (NOLOCK) ' + 
+      WHEN @cInquiry_SKU <> '' THEN ' SELECT LLI.LOC, LLI.ID ' END
+
+   SELECT @cExecStatements = @cExecStatements +
+      ' FROM dbo.LOTxLOCxID LLI WITH (NOLOCK) ' +
       ' JOIN dbo.LOC LOC WITH (NOLOCK) ON (LOC.LOC = LLI.LOC) ' +
-      ' WHERE LLI.StorerKey = ''' + RTRIM(@cStorerKey)  + ''' ' +
-      ' AND   LOC.Facility = ''' + @cFacility + ''' ' + 
-      ' AND ( LLI.QTY <> 0 OR LLI.QtyAllocated <> 0 OR LLI.QtyPicked <> 0 OR LLI.QtyExpected <> 0) ' 
+      ' WHERE LLI.StorerKey = RTRIM(@cStorerKey) ' +
+      ' AND   LOC.Facility = @cFacility ' +
+      ' AND ( LLI.QTY <> 0 OR LLI.QtyAllocated <> 0 OR LLI.QtyPicked <> 0 OR LLI.QtyExpected <> 0) '
 
-   SELECT @cExecStatements = @cExecStatements + 
-      CASE WHEN @cInquiry_LOC <> '' THEN ' AND LLI.LOC = ''' + @cInquiry_LOC + ''' '
-      WHEN @cInquiry_ID <> '' THEN ' AND LLI.ID = ''' + @cInquiry_ID + ''' '
-      WHEN @cInquiry_SKU <> '' THEN ' AND LLI.SKU = ''' + @cInquiry_SKU + ''' ' END 
+   SELECT @cExecStatements = @cExecStatements +
+      CASE WHEN @cInquiry_LOC <> '' THEN ' AND LLI.LOC = @cInquiry_LOC '
+      WHEN @cInquiry_ID <> '' THEN ' AND LLI.ID = @cInquiry_ID '
+      WHEN @cInquiry_SKU <> '' THEN ' AND LLI.SKU = @cInquiry_SKU ' END
 
-   SELECT @cExecStatements = @cExecStatements + 
+   SELECT @cExecStatements = @cExecStatements +
    CASE WHEN @cInquiry_LOC <> '' THEN ' GROUP BY LLI.ID, LLI.SKU) A '
    WHEN @cInquiry_ID <> '' THEN ' GROUP BY LLI.LOC, LLI.SKU) A '
-   WHEN @cInquiry_SKU <> '' THEN ' GROUP BY LLI.LOC, LLI.ID) A ' END 
+   WHEN @cInquiry_SKU <> '' THEN ' GROUP BY LLI.LOC, LLI.ID) A ' END
 
-   SET @cExecArguments = N'@nTotalRec            INT    OUTPUT ' 
+   SET @cExecArguments =
+      N'@cFacility      NVARCHAR( 5),  ' +
+       '@cStorerKey     NVARCHAR( 15), ' +
+       '@cInquiry_LOC   NVARCHAR( 10), ' +
+       '@cInquiry_ID    NVARCHAR( 18), ' +
+       '@cInquiry_SKU   NVARCHAR( 20), ' +
+       '@nTotalRec      INT    OUTPUT '
 
    EXEC sp_ExecuteSql @cExecStatements
                      , @cExecArguments
-                     , @nTotalRec          OUTPUT
+                     , @cFacility
+                     , @cStorerKey
+                     , @cInquiry_LOC
+                     , @cInquiry_ID
+                     , @cInquiry_SKU
+                     , @nTotalRec    OUTPUT
 
    IF @nTotalRec = 0
    BEGIN
@@ -130,14 +146,32 @@ CREATE PROCEDURE [RDT].[rdt_628Inquiry01] (
 
    -- (james02)
    -- Get sku lottable code
-   SELECT TOP 1 @cLottableCode = SKU.LottableCode
-   FROM dbo.SKU SKU WITH (NOLOCK)
-   JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK) ON ( LLI.StorerKey = SKU.StorerKey AND LLI.SKU = SKU.SKU)
-   WHERE SKU.StorerKey = @cStorerKey
-   AND   ( ( @cInquiry_LOC = '') OR ( LLI.LOC = @cInquiry_LOC))
-   AND   ( ( @cInquiry_ID = '') OR ( LLI.ID = @cInquiry_ID))
-   AND   ( ( @cInquiry_SKU = '') OR ( LLI.SKU = @cInquiry_SKU))
-   ORDER BY 1 DESC   -- Not blank
+   SET @cExecStatements = N'SELECT TOP 1 @cLottableCode = SKU.LottableCode ' +
+   ' FROM dbo.SKU SKU WITH (NOLOCK) ' +
+   ' JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK) ON ( LLI.StorerKey = SKU.StorerKey AND LLI.SKU = SKU.SKU) ' +
+   ' WHERE SKU.StorerKey = @cStorerKey '
+
+   SELECT @cExecStatements = @cExecStatements +
+      CASE WHEN @cInquiry_LOC <> '' THEN ' AND LLI.LOC = @cInquiry_LOC '
+      WHEN @cInquiry_ID <> '' THEN ' AND LLI.ID = @cInquiry_ID '
+      WHEN @cInquiry_SKU <> '' THEN ' AND LLI.SKU = @cInquiry_SKU ' END
+
+   SELECT @cExecStatements = @cExecStatements + ' ORDER BY 1 DESC'   -- Not blank
+
+   SET @cExecArguments =
+      N'@cStorerKey     NVARCHAR( 15), ' +
+       '@cInquiry_LOC   NVARCHAR( 10), ' +
+       '@cInquiry_ID    NVARCHAR( 18), ' +
+       '@cInquiry_SKU   NVARCHAR( 20), ' +
+       '@cLottableCode  NVARCHAR( 30)    OUTPUT '
+
+   EXEC sp_ExecuteSql @cExecStatements
+                     , @cExecArguments
+                     , @cStorerKey
+                     , @cInquiry_LOC
+                     , @cInquiry_ID
+                     , @cInquiry_SKU
+                     , @cLottableCode   OUTPUT
 
    IF NOT EXISTS ( SELECT 1 FROM rdt.rdtLottableCode WITH (NOLOCK)
                    WHERE LottableCode = @cLottableCode
@@ -151,55 +185,76 @@ CREATE PROCEDURE [RDT].[rdt_628Inquiry01] (
    IF @cInquiry_SKU <> '' SET @cSKU = @cInquiry_SKU
 
    -- If no lottablecode setup then no need get Lot to show
-   SET @cExecStatements = N' SELECT TOP 1 ' + CASE WHEN ISNULL( @cLottableCode, '') <> '' THEN '@cLOT = LLI.LOT, ' ELSE '' END
+   IF ISNULL( @cLottableCode, '') <> ''
+      SET @cExecStatements = N' SELECT TOP 1 @cLOT = LLI.LOT, '
+   ELSE
+      SET @cExecStatements = N' SELECT TOP 1'
 
-   SET @cExecStatements = @cExecStatements + 
+   SET @cExecStatements = @cExecStatements +
    CASE WHEN @cInquiry_LOC <> '' THEN ' @cID = LLI.ID, @cSKU = LLI.SKU, '
    WHEN @cInquiry_ID <> '' THEN ' @cLOC = LLI.LOC, @cSKU = LLI.SKU, '
-   WHEN @cInquiry_SKU <> '' THEN ' @cLOC = LLI.LOC, @cID = LLI.ID, ' END 
+   WHEN @cInquiry_SKU <> '' THEN ' @cLOC = LLI.LOC, @cID = LLI.ID, ' END
 
-   SET @cExecStatements = @cExecStatements + 
+   SET @cExecStatements = @cExecStatements +
    ' @nMQTY_Alloc = ISNULL( SUM( LLI.QTYAllocated), 0), ' +
    ' @nMQTY_Pick  = ISNULL( SUM( LLI.QTYPicked), 0), ' +
-   ' @nMQTY_Avail = ISNULL( SUM( LLI.QTY - LLI.QTYPicked - LLI.QTYAllocated - (CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END)), 0), ' + 
+   ' @nMQTY_Avail = ISNULL( SUM( LLI.QTY - LLI.QTYPicked - LLI.QTYAllocated - (CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END)), 0), ' +
    ' @nMQty_TTL = ISNULL( SUM( LLI.Qty), 0), ' +
-   ' @nMQty_RPL = CASE WHEN ISNULL( SUM( LLI.QtyReplen), 0) < 0 THEN 0 ELSE ISNULL( SUM( LLI.QtyReplen), 0) END, ' + 
-   ' @nMQty_PMV = ISNULL( SUM( LLI.PendingMoveIN), 0) ' + 
-   ' FROM dbo.LOTxLOCxID LLI WITH (NOLOCK) ' + 
-   ' JOIN dbo.LOC LOC WITH (NOLOCK) ON (LOC.LOC = LLI.LOC) ' + 
-   ' WHERE LLI.StorerKey = ''' + RTRIM(@cStorerKey)  + ''' ' +
-   ' AND   LOC.Facility = ''' + RTRIM(@cFacility)  + ''' ' +
+   ' @nMQty_RPL = CASE WHEN ISNULL( SUM( LLI.QtyReplen), 0) < 0 THEN 0 ELSE ISNULL( SUM( LLI.QtyReplen), 0) END, ' +
+   ' @nMQty_PMV = ISNULL( SUM( LLI.PendingMoveIN), 0) ' +
+   ' FROM dbo.LOTxLOCxID LLI WITH (NOLOCK) ' +
+   ' JOIN dbo.LOC LOC WITH (NOLOCK) ON (LOC.LOC = LLI.LOC) ' +
+   ' WHERE LLI.StorerKey = RTRIM(@cStorerKey) ' +
+   ' AND   LOC.Facility =  RTRIM(@cFacility)  ' +
    ' AND ( LLI.QTY <> 0 OR LLI.QtyAllocated <> 0 OR LLI.QtyPicked <> 0 OR LLI.QtyExpected <> 0) '
 
-   SET @cExecStatements = @cExecStatements + 
-   CASE WHEN @cInquiry_LOC <> '' THEN ' AND LLI.LOC = ''' + @cInquiry_LOC + ''' '
-   WHEN @cInquiry_ID <> '' THEN ' AND LLI.ID = ''' + @cInquiry_ID + ''' '
-   WHEN @cInquiry_SKU <> '' THEN ' AND LLI.SKU = ''' + @cInquiry_SKU + ''' ' END 
+   IF @cInquiry_LOC <> ''
+   BEGIN
+      SET @cExecStatements = @cExecStatements + ' AND LLI.LOC = @cInquiry_LOC '
+      IF @cType = 'NEXT'
+         SET @cExecStatements = @cExecStatements + ' AND LLI.ID + LLI.SKU > @cID + @cSKU '
+      SET @cExecStatements = @cExecStatements + ' GROUP BY LLI.LOT, LLI.ID, LLI.SKU ORDER BY LLI.ID + LLI.SKU '
+   END
+   ELSE IF @cInquiry_ID <> ''
+   BEGIN
+      SET @cExecStatements = @cExecStatements + ' AND LLI.ID = @cInquiry_ID '
+      IF @cType = 'NEXT'
+         SET @cExecStatements = @cExecStatements + ' AND LLI.LOC + LLI.SKU > @cLOC + @cSKU '
+      SET @cExecStatements = @cExecStatements + ' GROUP BY LLI.LOT, LLI.LOC, LLI.SKU ORDER BY LLI.LOC + LLI.SKU '
+   END
+   ELSE
+   BEGIN
+      SET @cExecStatements = @cExecStatements + ' AND LLI.SKU = @cInquiry_SKU '
+      IF @cType = 'NEXT'
+         SET @cExecStatements = @cExecStatements + ' AND LLI.LOC + LLI.ID > @cLOC + @cID '
+      SET @cExecStatements = @cExecStatements + ' GROUP BY LLI.LOT, LLI.LOC, LLI.ID ORDER BY LLI.LOC + LLI.ID '
+   END
 
-   SET @cExecStatements = @cExecStatements + 
-   CASE WHEN @cInquiry_LOC <> '' THEN ' AND (( @cType = '''') OR ( LLI.ID + LLI.SKU > ''' + @cID + ''' + ''' + '' + @cSKU + ''' ))'
-   WHEN @cInquiry_ID <> '' THEN ' AND (( @cType = '''') OR ( LLI.LOC + LLI.SKU > ''' + @cLOC + ''' + ''' + '' + @cSKU + ''' ))'
-   WHEN @cInquiry_SKU <> '' THEN ' AND (( @cType = '''') OR ( LLI.LOC + LLI.ID > ''' + @cLOC + ''' + ''' + '' + @cID + ''' ))' END
-
-   SET @cExecStatements = @cExecStatements + 
-   CASE WHEN @cInquiry_LOC <> '' THEN ' GROUP BY ' + CASE WHEN ISNULL( @cLottableCode, '') <> '' THEN 'LLI.LOT, ' ELSE '' END + 'LLI.ID, LLI.SKU ORDER BY LLI.ID + LLI.SKU '
-   WHEN @cInquiry_ID <> '' THEN ' GROUP BY ' + CASE WHEN ISNULL( @cLottableCode, '') <> '' THEN 'LLI.LOT, ' ELSE '' END + ' LLI.LOC, LLI.SKU ORDER BY LLI.LOC + LLI.SKU '
-   WHEN @cInquiry_SKU <> '' THEN ' GROUP BY ' + CASE WHEN ISNULL( @cLottableCode, '') <> '' THEN 'LLI.LOT, ' ELSE '' END + 'LLI.LOC, LLI.ID ORDER BY LLI.LOC + LLI.ID ' END 
-
-   SET @cExecArguments = N'@cLOT          NVARCHAR( 10)  OUTPUT, ' + 
-                          '@cLOC          NVARCHAR( 10)  OUTPUT, ' + 
-                          '@cID           NVARCHAR( 18)  OUTPUT, ' + 
-                          '@cSKU          NVARCHAR( 20)  OUTPUT, ' + 
-                          '@nMQTY_Alloc   INT            OUTPUT, ' +
-                          '@nMQTY_Pick    INT            OUTPUT, ' +
-                          '@nMQTY_Avail   INT            OUTPUT, ' +
-                          '@nMQTY_TTl     INT            OUTPUT, ' +
-                          '@nMQTY_RPL     INT            OUTPUT, ' +
-                          '@nMQTY_PMV     INT            OUTPUT, ' +
-                          '@cType         NVARCHAR( 10) '
+   SET @cExecArguments =
+         N'@cFacility     NVARCHAR( 5),  ' +
+          '@cStorerKey    NVARCHAR( 15), ' +
+          '@cInquiry_LOC  NVARCHAR( 10), ' +
+          '@cInquiry_ID   NVARCHAR( 18), ' +
+          '@cInquiry_SKU  NVARCHAR( 20), ' +
+          '@cLOT          NVARCHAR( 10)  OUTPUT, ' +
+          '@cLOC          NVARCHAR( 10)  OUTPUT, ' +
+          '@cID           NVARCHAR( 18)  OUTPUT, ' +
+          '@cSKU          NVARCHAR( 20)  OUTPUT, ' +
+          '@nMQTY_Alloc   INT            OUTPUT, ' +
+          '@nMQTY_Pick    INT            OUTPUT, ' +
+          '@nMQTY_Avail   INT            OUTPUT, ' +
+          '@nMQTY_TTl     INT            OUTPUT, ' +
+          '@nMQTY_RPL     INT            OUTPUT, ' +
+          '@nMQTY_PMV     INT            OUTPUT, ' +
+          '@cType         NVARCHAR( 10) '
 
    EXEC sp_ExecuteSql @cExecStatements
                      , @cExecArguments
+                     , @cFacility
+                     , @cStorerkey
+                     , @cInquiry_LOC
+                     , @cInquiry_ID
+                     , @cInquiry_SKU
                      , @cLOT           OUTPUT
                      , @cLOC           OUTPUT
                      , @cID            OUTPUT
@@ -221,7 +276,7 @@ CREATE PROCEDURE [RDT].[rdt_628Inquiry01] (
 
    SELECT
       @cSKUDescr = SKU.Descr,
-      @cLottableCode = SKU.LottableCode, 
+      @cLottableCode = SKU.LottableCode,
       @cMUOM_Desc = Pack.PackUOM3,
       @cPUOM_Desc =
          CASE @cPUOM
@@ -252,27 +307,27 @@ CREATE PROCEDURE [RDT].[rdt_628Inquiry01] (
       SET @cPUOM_Desc = ''
       SET @nPQTY_Alloc = 0
       SET @nPQTY_Avail = 0
-      SET @nPQTY_PMV = 0 
-      SET @nPQTY_TTL = 0 
-      SET @nPQTY_RPL = 0 
+      SET @nPQTY_PMV = 0
+      SET @nPQTY_TTL = 0
+      SET @nPQTY_RPL = 0
    END
    ELSE
    BEGIN
       -- Calc QTY in preferred UOM
-      SET @nPQTY_Avail = CAST(@nMQTY_Avail AS INT) / @nPUOM_Div  
-      SET @nPQTY_Alloc = CAST(@nMQTY_Alloc AS INT) / @nPUOM_Div  
-      SET @nPQTY_PMV   = CAST(@nMQTY_PMV   AS INT) / @nPUOM_Div  
-      SET @nPQTY_TTL   = CAST(@nMQTY_TTL   AS INT) / @nPUOM_Div  
-      SET @nPQTY_RPL   = CAST(@nMQTY_RPL   AS INT) / @nPUOM_Div  
-      SET @nPQTY_Pick  = CAST(@nMQTY_Pick  AS INT) / @nPUOM_Div  
+      SET @nPQTY_Avail = CAST(@nMQTY_Avail AS INT) / @nPUOM_Div
+      SET @nPQTY_Alloc = CAST(@nMQTY_Alloc AS INT) / @nPUOM_Div
+      SET @nPQTY_PMV   = CAST(@nMQTY_PMV   AS INT) / @nPUOM_Div
+      SET @nPQTY_TTL   = CAST(@nMQTY_TTL   AS INT) / @nPUOM_Div
+      SET @nPQTY_RPL   = CAST(@nMQTY_RPL   AS INT) / @nPUOM_Div
+      SET @nPQTY_Pick  = CAST(@nMQTY_Pick  AS INT) / @nPUOM_Div
 
       -- Calc the remaining in master unit
       SET @nMQTY_Avail = CAST(@nMQTY_Avail as INT)  % @nPUOM_Div
       SET @nMQTY_Alloc = CAST(@nMQTY_Alloc as INT)  % @nPUOM_Div
-      SET @nMQTY_PMV   = CAST(@nMQTY_PMV   as INT)  % @nPUOM_Div   
-      SET @nMQTY_TTL   = CAST(@nMQTY_TTL   as INT)  % @nPUOM_Div   
-      SET @nMQTY_RPL   = CAST(@nMQTY_RPL   as INT)  % @nPUOM_Div   
-      SET @nMQTY_Pick  = CAST(@nMQTY_Pick  as INT)  % @nPUOM_Div   
+      SET @nMQTY_PMV   = CAST(@nMQTY_PMV   as INT)  % @nPUOM_Div
+      SET @nMQTY_TTL   = CAST(@nMQTY_TTL   as INT)  % @nPUOM_Div
+      SET @nMQTY_RPL   = CAST(@nMQTY_RPL   as INT)  % @nPUOM_Div
+      SET @nMQTY_Pick  = CAST(@nMQTY_Pick  as INT)  % @nPUOM_Div
    END
 
    SELECT @cLottable01 = Lottable01,
@@ -295,10 +350,5 @@ CREATE PROCEDURE [RDT].[rdt_628Inquiry01] (
 
    QUIT:
 GO
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS ON 
-GO
-
-GRANT EXECUTE ON RDT.rdt_628Inquiry01 TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_628Inquiry01] TO [NSQL]
 GO
