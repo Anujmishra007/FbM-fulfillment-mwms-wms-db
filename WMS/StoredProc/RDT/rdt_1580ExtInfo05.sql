@@ -12,6 +12,7 @@ GO
 /*                                                                         */
 /* Date       Rev  Author     Purposes                                     */
 /* 2022-12-28 1.0  yeekung    WMS-21407 Created                            */
+/* 2023-11-27 1.1  yeekung    WMS-24271 Add more requirement (yeekung01)   */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE [rdt].[rdt_1580ExtInfo05] (
@@ -61,6 +62,14 @@ BEGIN
             FROM SKU (NOLOCK)
             WHERE SKU = @cSKU
                AND ProductModel='TRI'
+               AND storerkey=@cStorerKey
+         END
+         ELSE
+         BEGIN
+            SELECT @cExtendedInfo=CONCAT( SKU.ProductModel, right(sku.AltSku, 4)) 
+            FROM SKU (NOLOCK)
+            WHERE SKU = @cSKU
+               AND ProductModel<>'TRI'
                AND storerkey=@cStorerKey
          END
       END
