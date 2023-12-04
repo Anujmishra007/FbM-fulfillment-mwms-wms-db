@@ -79,6 +79,7 @@ GO
 /* 2023-06-28   5.5 Ung         WMS-22741 Remove rdt_Decode error                               */
 /* 2023-07-04   5.6 Ung         WMS-22913 Add ExtendedUpdateSP at step 2 ESC                    */
 /* 2023-11-24   5.7 Ung         WMS-24060 Add PackByFromDropID                                  */
+/* 2023-08-25   5.8 YeeKung     WMS-23946 Clear Extendedinfo SP  (yeekung02)                    */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
@@ -2757,7 +2758,7 @@ BEGIN
 
       SET @cOutField03 = '' -- SKU
       EXEC rdt.rdtSetFocusField @nMobile, 3 -- SKU
-      SET @cOutField08=''
+      SET @cOutField08=@cDefaultQTY --(moo01)
       SET @cInField08=''
    END
    GOTO Quit
@@ -3634,6 +3635,7 @@ BEGIN
          SET @cOutField07 = CAST( @nCartonSKU AS NVARCHAR(5))
          SET @cOutField08 = CAST( @nCartonQTY AS NVARCHAR(5))
          SET @cOutField09 = @cDefaultOption -- Option
+         SET @cOutField15 = ''
 
          -- Go to statistic screen
          SET @nScn = @nScn - 3
@@ -4811,7 +4813,7 @@ BEGIN
       SET @cOutField05 = rdt.rdtFormatString( @cSKUDescr, 1, 20)
       SET @cOutField06 = rdt.rdtFormatString( @cSKUDescr, 21, 20)
       SET @cOutField07 = CAST( @nPackedQTY AS NVARCHAR( 8))    -- ZG02
-      SET @cOutField08 = CASE WHEN @cDisableQTYField = '1' THEN @cQTY ELSE '' END
+      SET @cOutField08 = CASE WHEN @cDisableQTYField = '1' THEN @cQTY ELSE @cDefaultQTY END --(moo01)
       SET @cOutField09 = CAST( @nCartonQTY AS NVARCHAR( 5))
       SET @cOutField10 = CASE WHEN @cPrePackIndicator = '2' THEN @cPackQtyIndicator ELSE '' END
       SET @cOutField11 = '1:' + CASE WHEN @nPUOM_Div > 99999 THEN '*' ELSE CAST( @nPUOM_Div AS NCHAR( 5)) END
@@ -4870,7 +4872,7 @@ BEGIN
       SET @cOutField05 = rdt.rdtFormatString( @cSKUDescr, 1, 20)
       SET @cOutField06 = rdt.rdtFormatString( @cSKUDescr, 21, 20)        
       SET @cOutField07 = CAST( @nPackedQTY AS NVARCHAR( 8))  -- ZG02														 
-      SET @cOutField08 = CASE WHEN @cDisableQTYField = '1' THEN @cQTY ELSE '' END
+      SET @cOutField08 = CASE WHEN @cDisableQTYField = '1' THEN @cQTY ELSE @cDefaultQTY END --(moo01)
       SET @cOutField09 = CAST( @nCartonQTY AS NVARCHAR( 5))
       SET @cOutField10 = CASE WHEN @cPrePackIndicator = '2' THEN @cPackQtyIndicator ELSE '' END
       SET @cOutField11 = '1:' + CASE WHEN @nPUOM_Div > 99999 THEN '*' ELSE CAST( @nPUOM_Div AS NCHAR( 5)) END
