@@ -24,7 +24,7 @@ GO
 /*                          (yeekung03)                                 */
 /************************************************************************/
 
-CREATE OR ALTER PROCEDURE [RDT].[rdt_628Inquiry01] (
+CREATE OR ALTER  PROCEDURE [RDT].[rdt_628Inquiry01] (
    @nMobile         INT,
    @nFunc           INT,
    @cLangCode       NVARCHAR( 3),
@@ -212,21 +212,24 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_628Inquiry01] (
       SET @cExecStatements = @cExecStatements + ' AND LLI.LOC = @cInquiry_LOC '
       IF @cType = 'NEXT'
          SET @cExecStatements = @cExecStatements + ' AND LLI.ID + LLI.SKU > @cID + @cSKU '
-      SET @cExecStatements = @cExecStatements + ' GROUP BY '+ CASE WHEN ISNULL( @cLottableCode, '') <> '' THEN 'LLI.LOT, ' ELSE '' END + 'LLI.ID, LLI.SKU ORDER BY LLI.ID + LLI.SKU ' 
+      SET @cExecStatements = @cExecStatements + ' GROUP BY '+ CASE WHEN ISNULL( @cLottableCode, '') <> '' THEN 'LLI.LOT, ' ELSE '' END + 'LLI.ID, LLI.SKU' + ' ORDER BY'
+            +CASE WHEN ISNULL( @cLottableCode, '') <> ''  THEN ' LLI.LOT+' ELSE '' END+ ' LLI.ID + LLI.SKU ' 
    END
    ELSE IF @cInquiry_ID <> ''
    BEGIN
       SET @cExecStatements = @cExecStatements + ' AND LLI.ID = @cInquiry_ID '
       IF @cType = 'NEXT'
          SET @cExecStatements = @cExecStatements + ' AND LLI.LOC + LLI.SKU > @cLOC + @cSKU '
-      SET @cExecStatements = @cExecStatements  + ' GROUP BY '+ CASE WHEN ISNULL( @cLottableCode, '') <> '' THEN 'LLI.LOT, ' ELSE '' END + 'LLI.ID, LLI.SKU ORDER BY LLI.ID + LLI.SKU ' 
+      SET @cExecStatements = @cExecStatements  + ' GROUP BY '+ CASE WHEN ISNULL( @cLottableCode, '') <> '' THEN 'LLI.LOT, ' ELSE '' END + 'LLI.LOC, LLI.SKU' + ' ORDER BY'
+            +CASE WHEN ISNULL( @cLottableCode, '') <> ''  THEN ' LLI.LOT+' ELSE '' END+ ' LLI.LOC + LLI.SKU '
    END
    ELSE
    BEGIN
       SET @cExecStatements = @cExecStatements + ' AND LLI.SKU = @cInquiry_SKU '
       IF @cType = 'NEXT'
          SET @cExecStatements = @cExecStatements + ' AND LLI.LOC + LLI.ID > @cLOC + @cID '
-      SET @cExecStatements = @cExecStatements + ' GROUP BY '+ CASE WHEN ISNULL( @cLottableCode, '') <> '' THEN 'LLI.LOT, ' ELSE '' END + 'LLI.ID, LLI.SKU ORDER BY LLI.ID + LLI.SKU ' 
+      SET @cExecStatements = @cExecStatements + ' GROUP BY '+ CASE WHEN ISNULL( @cLottableCode, '') <> '' THEN 'LLI.LOT, ' ELSE '' END + 'LLI.LOC, LLI.ID' + ' ORDER BY'
+            +CASE WHEN ISNULL( @cLottableCode, '') <> ''  THEN ' LLI.LOT+' ELSE ''  END + ' LLI.LOC + LLI.ID ' 
    END
 
    SET @cExecArguments =
@@ -351,3 +354,4 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_628Inquiry01] (
 GO
 GRANT EXECUTE ON  [RDT].[rdt_628Inquiry01] TO [NSQL]
 GO
+
