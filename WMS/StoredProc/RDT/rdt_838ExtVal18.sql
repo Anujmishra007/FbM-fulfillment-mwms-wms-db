@@ -112,10 +112,6 @@ BEGIN
                   SET @cErrMsg1 = 'Weight reached limit'
                END
 
-               
-                  EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT,      
-                     @nTTlSKUWeight,@nMaxCtnWeight,@nSKUWeight
-
                IF ISNULL(@cErrMsg1,'')<>''
                BEGIN
                   EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT,      
