@@ -42,9 +42,10 @@ GO
 /*02-Jun-2021  Mingle      2.2   WMS-17190 - Add and sort bfax2(ML01)      */
 /*17-Jun-2021  CSCHONG     2.3   WMS-17241 -add into composite report(CS08)*/
 /*25-OCT-2023  CSCHONG     2.4   Devops Scripts Combine & WMS-23792 (CS09) */
+/*04-DEC-2023  CALVIN      2.5   JSM-194644 Sort PageNo by bfax2 (CLVN01)  */
 /***************************************************************************/
 
-CREATE OR ALTER PROC [dbo].[isp_GetPickSlipOrders96_c] (@c_loadkey NVARCHAR(10),
+ALTER   PROC [dbo].[isp_GetPickSlipOrders96_c] (@c_loadkey NVARCHAR(10),
                                                @c_Type    NVARCHAR(10) = '',  --CS08
                                                @c_caseid  NVARCHAR(20) = '')  --CS08
  AS
@@ -365,7 +366,7 @@ DECLARE @c_pickheaderkey    NVARCHAR(10),
           Pageno,TTLPage
       )
       SELECT DISTINCT wavekey,pickslipno,StorerKey,bfax2,recgrp = ROW_NUMBER() OVER(PARTITION BY Wavekey       --CS09
-                                        ORDER BY Wavekey
+                                        ORDER BY Wavekey, bfax2  --CLVN01
                                       )
        , 1
 FROM #TEMP_PICK96c
@@ -492,3 +493,5 @@ END
 GO
 GRANT EXECUTE ON  [dbo].[isp_GetPickSlipOrders96_c] TO [NSQL]
 GO
+
+
