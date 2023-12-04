@@ -3,16 +3,15 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /******************************************************************************/
-/* Store procedure: isp_TPS_ExtValidP02                                        */
+/* Store procedure: isp_TPS_ExtValidP02                                       */
 /* Copyright      : LFLogistics                                               */
 /*                                                                            */
 /* Date         Rev  Author     Purposes                                      */
 /* 2022-07-01   1.0  YeeKung  TPS-770 Created                                 */
 /******************************************************************************/
 
-CREATE  OR ALTER PROC [API].[isp_TPS_ExtValidP02] (
+CREATE OR ALTER PROC [API].[isp_TPS_ExtValidP02] (
 	@json       NVARCHAR( MAX),
    @jResult    NVARCHAR( MAX) OUTPUT,
    @b_Success  INT = 1        OUTPUT,
@@ -132,15 +131,15 @@ BEGIN
 
          IF @cOrderKey <> ''
          BEGIN
-            IF EXISTS(SELECT 1
+            IF NOT EXISTS(SELECT 1       
 	                  FROM pickDetail PD WITH (NOLOCK)
                      JOIN LOTattribute LOT ON PD.lot=LOT.LOT AND PD.SKU = LOT.SKU
 	                  WHERE PD.OrderKey = @cOrderKey
 	                     AND PD.Status <= '5'
                         AND PD.Status NOT IN  ('4')
                         AND LOT.lottable02 = @cBarcode
-	                  GROUP BY PD.SKU,PD.OrderKey,PD.LOT
-                     HAVING SUM(PD.QTY) < @nPackQTY)
+	                  GROUP BY PD.SKU,PD.OrderKey 
+                     HAVING SUM(PD.QTY) >= @nPackQTY)  
             BEGIN
          
                SET @n_Err = 1000151      
@@ -156,7 +155,7 @@ BEGIN
       
          ELSE IF @cLoadKey <> ''
          BEGIN
-            IF EXISTS(SELECT 1
+            IF NOT EXISTS(SELECT 1
 	                  FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
                         JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
                         JOIN LOTattribute LOT ON PD.lot=LOT.LOT AND PD.SKU = LOT.SKU
@@ -164,8 +163,8 @@ BEGIN
 	                     AND PD.Status <= '5'
                         AND PD.Status NOT IN  ('4')
                         AND LOT.lottable02 = @cBarcode
-	                  GROUP BY PD.SKU,PD.OrderKey,PD.LOT
-                     HAVING SUM(PD.QTY) < @nPackQTY)
+	                  GROUP BY PD.SKU,PD.OrderKey 
+                     HAVING SUM(PD.QTY) >= @nPackQTY)  
             BEGIN
          
                SET @n_Err = 1000152      
@@ -180,15 +179,15 @@ BEGIN
          END
          ELSE
          BEGIN
-            IF EXISTS(SELECT 1
+            IF NOT EXISTS(SELECT 1
 	                  FROM pickDetail PD WITH (NOLOCK)
                         JOIN LOTattribute LOT ON PD.lot=LOT.LOT AND PD.SKU = LOT.SKU
 	                  WHERE PD.PickSlipNo = @cPickSlipNo
 	                     AND PD.Status <= '5'
                         AND PD.Status NOT IN  ('4')
                         AND LOT.lottable02 = @cBarcode
-	                  GROUP BY PD.SKU,PD.OrderKey,PD.LOT
-                     HAVING SUM(PD.QTY) < @nPackQTY)
+	                  GROUP BY PD.SKU,PD.OrderKey 
+                     HAVING SUM(PD.QTY) >= @nPackQTY)  
             BEGIN
          
                SET @n_Err = 1000153      
@@ -216,4 +215,6 @@ BEGIN
 QUIT:
 
 END
+
+
 
