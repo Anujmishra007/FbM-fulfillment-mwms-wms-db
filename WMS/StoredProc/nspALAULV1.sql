@@ -11,8 +11,9 @@ GO
 /*                                                                      */
 /* Purpose: WMS-22465 AU Levis allocation                               */
 /*          UCC allocation from bulk for UOM 2 and 6                    */
-/*          UOM 2 for discrete and conso                                */
-/*          UCC Full pallet only for LVS-PAL                            */
+/*          UOM 2 for discrete(MFO,OTH,PAL) and conso (PTL)             */
+/*          UOM 6 fro conso(PTL,OTH) Skip(PAL,MFO)                      */
+/*          UCC Full pallet only for LVS-PAL                            */                  
 /*                                                                      */
 /* Called By: Wave                                                      */
 /*                                                                      */
@@ -25,6 +26,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author  Ver.  Purposes                                  */
 /* 02-May-2023  NJOW    1.0   DEVOPS Combine Script                     */
+/* 19-Oct-2023	NJOW01  1.1   WMS-23343 add new logic for LVS-MFO       */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[nspALAULV1]
    @c_DocumentNo NVARCHAR(10),
@@ -117,7 +119,7 @@ BEGIN
 
       IF ISNULL(@c_key2,'')='' AND ISNULL(@c_key3,'')='W' --call by wave conso
       BEGIN
-      	 IF EXISTS(SELECT 1 FROM WAVE (NOLOCK) WHERE Wavekey = @c_Key1 AND WaveType = 'LVS-PAL') --Not to proceed conso allocation if PAL
+      	 IF EXISTS(SELECT 1 FROM WAVE (NOLOCK) WHERE Wavekey = @c_Key1 AND WaveType IN('LVS-PAL','LVS-MFO')) --Not to proceed conso allocation if PAL,MFO  --NJOW01
       	    GOTO EXIT_SP
  
       	 IF @c_UOM = '2'
