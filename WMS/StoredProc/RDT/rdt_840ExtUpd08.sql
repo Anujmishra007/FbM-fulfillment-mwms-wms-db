@@ -2,7 +2,6 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO  
-  
 /************************************************************************/    
 /* Store procedure: rdt_840ExtUpd08                                     */    
 /* Purpose: Trigger HM related interface and misc update                */    
@@ -19,9 +18,11 @@ GO
 /* 2021-04-01 1.3 YeeKung     WMS-16717 Add serialno and serialqty      */  
 /*                            Params (yeekung01)                        */  
 /* 2022-09-15 1.4  James      WMS-20788 Add new TL2 insert (james03)    */
+/* 2023-11-06 1.5  WyeChun    JSM-188912 Conditions placement (WC01)    */
+/* 2023-11-08 1.6  WyeChun    JSM-189509 Additional validation (WC02)   */
 /************************************************************************/    
     
-CREATE OR ALTER PROC [RDT].[rdt_840ExtUpd08] (    
+CREATE  or ALTER  PROC [RDT].[rdt_840ExtUpd08] (    
    @nMobile     INT,    
    @nFunc       INT,     
    @cLangCode   NVARCHAR( 3),     
@@ -91,17 +92,20 @@ AS
          SET @nTranCount = @@TRANCOUNT      
          BEGIN TRAN  -- Begin our own transaction      
          SAVE TRAN rdt_840ExtUpd08 -- For rollback or commit only our own transaction      
-  
-         IF @cOrderType = 'COD'
-         BEGIN
-            -- Customer orders need trigger TL2 if short pack  
-            IF NOT EXISTS ( SELECT 1 FROM dbo.CODELKUP C WITH (NOLOCK)   
+     
+	     /*(WC01) Start*/
+         IF NOT EXISTS ( SELECT 1 FROM dbo.CODELKUP C WITH (NOLOCK)   
                             JOIN dbo.Orders O WITH (NOLOCK) ON (C.Code = O.OrderGroup AND C.StorerKey = O.StorerKey)  
                             WHERE C.ListName = 'HMCOSORD'  
                             AND   C.Long = 'M'  
                             AND   O.OrderKey = @cOrderkey  
-                            AND   O.StorerKey = @cStorerKey)  
-            BEGIN   
+                            AND   O.StorerKey = @cStorerKey)
+         BEGIN  
+		 /*(WC01) End*/
+            IF @cOrderType = 'COD'
+            BEGIN
+            -- Customer orders need trigger TL2 if short pack                
+               
                SET @nShortPack = 0    
     
                SELECT @nOriginalQty = ISNULL( SUM( OriginalQty), 0)    
@@ -172,7 +176,7 @@ AS
          WHERE PickSlipNo = @cPickSlipNo  
            
          IF @nExpectedQty = @nPackedQty  
-         BEGIN  
+      BEGIN  
             -- Trigger pack confirm    
             UPDATE dbo.PackHeader WITH (ROWLOCK) SET    
                STATUS = '9',    
@@ -231,117 +235,129 @@ AS
             END  
          END  
 
-         IF @nShortPack = 1 AND @cOrderType = 'COD'
+         IF @nShortPack = 1 AND @cOrderType = 'COD' AND @cUpdateSource <> '1' --JSM-167119
             GOTO CommitTrans
+			
+         /*(WC02) Start*/
+         IF NOT EXISTS ( SELECT 1 FROM dbo.CODELKUP C WITH (NOLOCK)   
+                            JOIN dbo.Orders O WITH (NOLOCK) ON (C.Code = O.OrderGroup AND C.StorerKey = O.StorerKey)  
+                            WHERE C.ListName = 'HMCOSORD'  
+                            AND   C.Long = 'M'  
+                            AND   O.OrderKey = @cOrderkey  
+                            AND   O.StorerKey = @cStorerKey)
+         BEGIN  
+         /*(WC02) End*/
             
          -- Fully pick = pack only trigger WSCRRDTMTE interface
-         IF EXISTS ( SELECT 1 FROM dbo.TransmitLog2 WITH (NOLOCK)
-                     WHERE TableName = 'WSCRRDTMTE'
-                     AND   key1 = @cOrderKey
-                     AND   key2 = @nCartonNo
-                     AND   key3 = @cStorerKey
-                     AND   transmitflag = '9')
-         BEGIN
-            DELETE FROM dbo.TransmitLog2
-            WHERE TableName = 'WSCRRDTMTE'
+            IF EXISTS ( SELECT 1 FROM dbo.TransmitLog2 WITH (NOLOCK)
+                        WHERE TableName = 'WSCRRDTMTE'
+                        AND   key1 = @cOrderKey
+                        AND   key2 = @nCartonNo
+                        AND   key3 = @cStorerKey
+                        AND   transmitflag = '9')
+            BEGIN
+               DELETE FROM dbo.TransmitLog2
+               WHERE TableName = 'WSCRRDTMTE'
+               AND   key1 = @cOrderKey
+               AND   key2 = @nCartonNo
+               AND   key3 = @cStorerKey
+               AND   transmitflag = '9'
+		    
+               IF @@ERROR <> 0
+               BEGIN    
+                  SET @nErrNo = 146156    
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'DelTLog2 Err'    
+                  GOTO RollBackTran    
+               END    
+            END
+         
+            EXEC dbo.ispGenTransmitLog2
+               @c_TableName      = 'WSCRRDTMTE',
+               @c_Key1           = @cOrderKey,
+               @c_Key2           = @nCartonNo ,
+               @c_Key3           = @cStorerKey,
+               @c_TransmitBatch  = '',
+               @b_success        = @bSuccess    OUTPUT,
+               @n_err            = @nErrNo      OUTPUT,
+               @c_errmsg         = @cErrMsg     OUTPUT
+		    
+            IF @bSuccess <> 1
+            BEGIN
+               SET @nErrNo = 146155
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'GenTLog2 Fail'
+               GOTO RollBackTran
+            END
+            
+            SELECT @cTransmitLogKey = transmitlogkey
+            FROM dbo.TRANSMITLOG2 WITH (NOLOCK)
+            WHERE tablename = 'WSCRRDTMTE'
             AND   key1 = @cOrderKey
             AND   key2 = @nCartonNo
             AND   key3 = @cStorerKey
-            AND   transmitflag = '9'
-
-            IF @@ERROR <> 0
-            BEGIN    
-               SET @nErrNo = 146156    
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'DelTLog2 Err'    
-               GOTO RollBackTran    
-            END    
-         END
-         
-         EXEC dbo.ispGenTransmitLog2
-            @c_TableName      = 'WSCRRDTMTE',
-            @c_Key1           = @cOrderKey,
-            @c_Key2           = @nCartonNo ,
-            @c_Key3           = @cStorerKey,
-            @c_TransmitBatch  = '',
-            @b_success        = @bSuccess    OUTPUT,
-            @n_err            = @nErrNo      OUTPUT,
-            @c_errmsg         = @cErrMsg     OUTPUT
-
-         IF @bSuccess <> 1
-         BEGIN
-            SET @nErrNo = 146155
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'GenTLog2 Fail'
-            GOTO RollBackTran
-         END
-         
-         SELECT @cTransmitLogKey = transmitlogkey
-         FROM dbo.TRANSMITLOG2 WITH (NOLOCK)
-         WHERE tablename = 'WSCRRDTMTE'
-         AND   key1 = @cOrderKey
-         AND   key2 = @nCartonNo
-         AND   key3 = @cStorerKey
-
-         EXEC dbo.isp_QCmd_WSTransmitLogInsertAlert   
-            @c_QCmdClass         = @c_QCmdClass,   
-            @c_FrmTransmitlogKey = @cTransmitLogKey,   
-            @c_ToTransmitlogKey  = @cTransmitLogKey,   
-            @b_Debug             = @b_Debug,   
-            @b_Success           = @bSuccess    OUTPUT,   
-            @n_Err               = @nErrNo      OUTPUT,   
-            @c_ErrMsg            = @cErrMsg     OUTPUT   
-
-         
-         /*
-            SELECT @c_APP_DB_Name = APP_DB_Name
-               , @c_DataStream = DataStream
-               , @n_ThreadPerAcct = ThreadPerAcct
-               , @n_ThreadPerStream = ThreadPerStream
-               , @n_MilisecondDelay = MilisecondDelay
-               , @c_IP = IP
-               , @c_PORT = PORT
-               , @c_IniFilePath = IniFilePath
-               , @c_CmdType = CmdType
-               , @c_TaskType = TaskType
-               , @n_Priority = ISNULL([Priority],0) 
-            FROM QCmd_TransmitlogConfig WITH (NOLOCK)
-            WHERE TableName = 'ASSIGNTRACKNO'
-            AND [App_Name] = 'WMS'
-            AND StorerKey = 'ALL'
-
-            SET @nErrNo = 0
-            SET @cCommand = N'EXEC [dbo].[isp_QCmd_WSTransmitLogInsertAlert] ' +
-               N' @c_QCmdClass = '''' ' +
-               N' , @c_FrmTransmitlogKey = ''' + @cTransmitLogKey + '''' +
-               N' , @c_ToTransmitlogKey = ''' + @cTransmitLogKey + '''' +
-               N' , @b_Debug = 0 '+
-               N' , @b_Success = 0 '+
-               N' , @n_Err = 0 '+
-               N' , @c_ErrMsg = ''''' 
-
-            EXEC isp_QCmd_SubmitTaskToQCommander
-               @cTaskType = 'O' -- D=By Datastream, T=Transmitlog, O=Others
-               , @cStorerKey = @cStorerKey
-               , @cDataStream = ''
-               , @cCmdType = 'SQL'
-               , @cCommand = @cCommand
-               , @cTransmitlogKey = @cTransmitLogKey
-               , @nThreadPerAcct = @n_ThreadPerAcct
-               , @nThreadPerStream = @n_ThreadPerStream
-               , @nMilisecondDelay = @n_MilisecondDelay
-               , @nSeq = 1
-               , @cIP = @c_IP
-               , @cPORT = @c_PORT
-               , @cIniFilePath = @c_IniFilePath
-               , @cAPPDBName = @c_APP_DB_Name
-               , @bSuccess = 1
-               , @nErr = 0
-               , @cErrMsg = ''
-               , @nPriority = @n_Priority
-                  
-            IF @nErrNo <> 0
-               GOTO RollBackTran
-         */
-         GOTO CommitTrans    
+		    
+            EXEC dbo.isp_QCmd_WSTransmitLogInsertAlert   
+               @c_QCmdClass         = @c_QCmdClass,   
+               @c_FrmTransmitlogKey = @cTransmitLogKey,   
+               @c_ToTransmitlogKey  = @cTransmitLogKey,   
+               @b_Debug             = @b_Debug,   
+               @b_Success           = @bSuccess    OUTPUT,   
+               @n_Err               = @nErrNo      OUTPUT,   
+               @c_ErrMsg            = @cErrMsg     OUTPUT   
+		    
+            
+            /*
+               SELECT @c_APP_DB_Name = APP_DB_Name
+                  , @c_DataStream = DataStream
+                  , @n_ThreadPerAcct = ThreadPerAcct
+                  , @n_ThreadPerStream = ThreadPerStream
+                  , @n_MilisecondDelay = MilisecondDelay
+                  , @c_IP = IP
+                  , @c_PORT = PORT
+                  , @c_IniFilePath = IniFilePath
+                  , @c_CmdType = CmdType
+                  , @c_TaskType = TaskType
+                  , @n_Priority = ISNULL([Priority],0) 
+               FROM QCmd_TransmitlogConfig WITH (NOLOCK)
+               WHERE TableName = 'ASSIGNTRACKNO'
+               AND [App_Name] = 'WMS'
+               AND StorerKey = 'ALL'
+		    
+               SET @nErrNo = 0
+               SET @cCommand = N'EXEC [dbo].[isp_QCmd_WSTransmitLogInsertAlert] ' +
+                  N' @c_QCmdClass = '''' ' +
+                  N' , @c_FrmTransmitlogKey = ''' + @cTransmitLogKey + '''' +
+                  N' , @c_ToTransmitlogKey = ''' + @cTransmitLogKey + '''' +
+                  N' , @b_Debug = 0 '+
+                  N' , @b_Success = 0 '+
+                  N' , @n_Err = 0 '+
+                  N' , @c_ErrMsg = ''''' 
+		    
+               EXEC isp_QCmd_SubmitTaskToQCommander
+                  @cTaskType = 'O' -- D=By Datastream, T=Transmitlog, O=Others
+                  , @cStorerKey = @cStorerKey
+                  , @cDataStream = ''
+                  , @cCmdType = 'SQL'
+                  , @cCommand = @cCommand
+                  , @cTransmitlogKey = @cTransmitLogKey
+                  , @nThreadPerAcct = @n_ThreadPerAcct
+                  , @nThreadPerStream = @n_ThreadPerStream
+                  , @nMilisecondDelay = @n_MilisecondDelay
+                  , @nSeq = 1
+                  , @cIP = @c_IP
+                  , @cPORT = @c_PORT
+                  , @cIniFilePath = @c_IniFilePath
+                  , @cAPPDBName = @c_APP_DB_Name
+                  , @bSuccess = 1
+                  , @nErr = 0
+                  , @cErrMsg = ''
+                  , @nPriority = @n_Priority
+                     
+               IF @nErrNo <> 0
+                  GOTO RollBackTran
+            */
+			END --(WC02)
+            GOTO CommitTrans
+         			
           
          RollBackTran:      
                ROLLBACK TRAN rdt_840ExtUpd08      
@@ -353,11 +369,3 @@ AS
    END    
        
    Quit:  
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-GRANT EXECUTE ON RDT.rdt_840ExtUpd08 TO NSQL
-GO
