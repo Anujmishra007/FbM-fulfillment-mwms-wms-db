@@ -17,6 +17,8 @@ GO
 /* 2020-01-06 1.4  James      WMS-16965 Add ExtendedInfoSP @ scn 4 (james02)  */
 /* 2021-07-20 1.5  Chermaine  WMS-17453 Add eventlog at scn2 (cc01)           */
 /* 2023-10-12 1.6  James      WMS-23797 Enhance UCC filtering (james03)       */
+/* 2023-11-29 1.7  James      WMS-24279 Add config check whether UCC exists in*/
+/*                            current loc (james04)                           */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CycleCount_UCC] (
@@ -149,7 +151,8 @@ DECLARE
    @dLottable13         DATETIME,
    @dLottable14         DATETIME,
    @dLottable15         DATETIME,
-
+   @cCheckUCCExistsInLoc   NVARCHAR( 1),  
+   
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
    @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),
@@ -226,6 +229,8 @@ SELECT
    @cSkipAlertScreen = V_String7,
    @cDefaultOption   = V_String8,
   -- @nUCCQty          = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String5, 5), 0) = 1 THEN LEFT( V_String5, 5) ELSE 0 END,     
+   
+   @cCheckUCCExistsInLoc = V_String9,  
    
    @cLoc             = V_String10,
   -- @nPrevStep        = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String11, 5), 0) = 1 THEN LEFT( V_String11, 5) ELSE 0 END,
@@ -306,10 +311,14 @@ BEGIN
    IF @cDefaultOption = '0'
    SET @cDefaultOption = ''
 
+   -- (james04)  
+   SET @cCheckUCCExistsInLoc = rdt.RDTGetConfig( @nFunc, 'CheckUCCExistsInLoc', @cStorerKey)  
+   
    -- Redirect to respective screen
    IF @nStep = 1 GOTO Step_1   -- Scn = 2930. UCC
 	IF @nStep = 2 GOTO Step_2   -- Scn = 2931. Options
 	IF @nStep = 3 GOTO Step_3   -- Scn = 2932. Alert Message
+   IF @nStep = 4 GOTO Step_4   -- Scn = 2933. SKU Not Exists   
 END
 
 /********************************************************************************
@@ -329,10 +338,8 @@ Step_1:
 BEGIN
    IF @nInputKey = 1 --ENTER
    BEGIN
-	   	
 		SET @cUCC = ISNULL(RTRIM(@cInField01),'')
 		
-      
       IF ISNULL(RTRIM(@cUCC), '') = ''
       BEGIN
          SET @cOutField01 = CASE WHEN @cDefaultOption <> '' THEN @cDefaultOption ELSE '' END
@@ -348,23 +355,11 @@ BEGIN
                      WHERE UCCNo = @cUCC 
                      AND Status <> '0' ) 
       BEGIN
-            SET @nErrNo = 74464
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Invalid UCC'
-            GOTO Step_1_Fail
+         SET @nErrNo = 74464
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Invalid UCC'
+         GOTO Step_1_Fail
       END                     
                      
-                     
---      IF NOT EXISTS (SELECT 1 FROM dbo.CCDetail WITH (NOLOCK)
---                     WHERE RefNo = @cUCC
---                     AND CCKey = @cCCKey       
---                     AND STatus < '9' ) 
---      BEGIN
---            SET @nErrNo = 74470
---            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Invalid UCC'
---            GOTO Step_1_Fail
---      END                                      
-                     
-      
       IF EXISTS ( SELECT 1 FROM dbo.CCDetail WITH (NOLOCK)
                   WHERE Loc = @cLoc
                   --AND ID = @cID 
@@ -373,9 +368,9 @@ BEGIN
                   AND Status > '0'
                   AND CCSheetNo = @cTaskDetailKey ) 
       BEGIN      
-            SET @nErrNo = 74463
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UCC Counted'
-            GOTO Step_1_Fail
+         SET @nErrNo = 74463
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UCC Counted'
+         GOTO Step_1_Fail
       END
       
       IF EXISTS ( SELECT 1 FROM dbo.CCDetail WITH (NOLOCK)
@@ -384,25 +379,28 @@ BEGIN
 	               AND Status >= '2'
 	               AND RefNo = '' )
       BEGIN
-            SET @nErrNo = 74472
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo , @cLangCode, 'DSP') --'MixCountTypeNotAllowed'
-            GOTO Step_1_Fail
+         SET @nErrNo = 74472
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo , @cLangCode, 'DSP') --'MixCountTypeNotAllowed'
+         GOTO Step_1_Fail
       END
       
-      -- Validate not blank
---      IF ISNULL(RTRIM(@cUCC), '') <> ''
---      BEGIN
---          
---          IF NOT EXISTS ( SELECT 1 FROM dbo.UCC WITH (NOLOCK)
---                          WHERE UCCNo = @cUCC
---                          AND Loc = @cLoc
---                          AND ID  = @cID )
---          BEGIN
---            SET @nErrNo = 74457
---            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Invalid UCC'
---            GOTO Step_3_Fail
---          END
---      END
+      IF @cCheckUCCExistsInLoc = '1'  
+      BEGIN  
+         IF NOT EXISTS ( SELECT 1 FROM dbo.CCDetail WITH (NOLOCK)  
+                         WHERE CCKey = @cCCKey  
+                         AND   Loc = @cLoc  
+                         AND   (( @cID = '') OR ( ID = @cID))  
+                         AND   RefNo = @cUCC  
+                         AND   Status  < '9'  
+                         AND   CCSheetNo = @cTaskDetailKey)     
+         BEGIN  
+            SET @cOutField01 = ''  
+            SET @nScn = @nScn + 3  
+            SET @nStep = @nStep + 3  
+              
+            GOTO Quit  
+         END  
+      END  
       
       
       SET @nUCCQty = 0 
@@ -431,8 +429,8 @@ BEGIN
                                                     AND CC.StorerKey = UCC.StorerKey
                                                     AND CC.Loc       = UCC.Loc
                                                     AND CC.ID        = UCC.ID 
-                                                    AND CC.LOT       = UCC.LOT  -- (james03)
-                                                    AND CC.RefNo     = UCC.UCCNo -- (james03)
+                                                    AND CC.LOT       = UCC.LOT  -- (TESTING)
+                                                    AND CC.RefNo     = UCC.UCCNo -- (TESTING)
                                                   ) 
       WHERE CC.CCKey = @cCCKey
       AND UCC.Loc    = @cLoc
@@ -937,6 +935,251 @@ BEGIN
 END              
 GOTO Quit   
 
+/********************************************************************************  
+Step 4. Scn = 2933.  
+   Options (Input , Field01)  
+  
+********************************************************************************/  
+Step_4:  
+BEGIN  
+   IF @nInputKey = 1 --ENTER  
+   BEGIN  
+  
+      SET @cOption = ISNULL(RTRIM(@cInField01),'')  
+  
+      IF ISNULL(@cOption, '') = ''  
+      BEGIN  
+         SET @nErrNo = 74477  
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Option needed'  
+         GOTO Step_4_Fail  
+      END  
+  
+      IF @cOption NOT IN ('1', '2')  
+      BEGIN  
+         SET @nErrNo = 74477  
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Invalid Option'  
+         GOTO Step_4_Fail  
+      END  
+  
+      IF @cOption = '1'  
+      BEGIN  
+         SET @nUCCQty = 0 
+         SET @cLottable01 = ''
+         SET @cLottable02 = ''
+         SET @cLottable03 = ''
+         SET @dLottable04 = ''
+         SET @dLottable05 = ''
+         SET @cSKU = ''
+         SET @cSKUDescr = ''
+         SET @cStorerKey = ''
+      
+         SELECT   
+                  @cStorerKey = UCC.StorerKey
+                , @cSKU = UCC.SKU
+                , @cSKUDescr = SKU.DESCR
+                , @nUCCQty = UCC.Qty
+                , @cLottable01 = CC.Lottable01
+                , @cLottable02 = CC.Lottable02
+                , @cLottable03 = CC.Lottable03
+                , @dLottable04 = rdt.rdtFormatDate( CC.Lottable04)
+                , @dLottable05 = rdt.rdtFormatDate( CC.Lottable05)
+         FROM dbo.UCC UCC WITH (NOLOCK)
+         INNER JOIN dbo.SKU SKU WITH (NOLOCK) ON (SKU.SKU = UCC.SKU AND SKU.Storerkey = UCC.StorerKey)
+         INNER JOIN dbo.CCDetail CC WITH (NOLOCK) ON ( CC.SKU           = UCC.SKU 
+                                                       AND CC.StorerKey = UCC.StorerKey
+                                                       AND CC.Loc       = UCC.Loc
+                                                       AND CC.ID        = UCC.ID 
+                                                       AND CC.LOT       = UCC.LOT  
+                                                       AND CC.RefNo     = UCC.UCCNo)
+         WHERE CC.CCKey = @cCCKey
+         AND UCC.Loc    = @cLoc
+         AND UCC.ID     = @cID
+         AND UCC.UCCNo  = @cUCC
+         AND CC.Status < '9'
+      
+      
+         IF ISNULL(@nUCCQty,'') = 0 
+         BEGIN
+            SELECT   @nUCCQty    = UCC.Qty 
+                   , @cSKU       = UCC.SKU
+                   , @cStorerKey = UCC.StorerKey
+                   , @cLottable01 = LOTATTR.Lottable01
+                   , @cLottable02 = LOTATTR.Lottable02
+                   , @cLottable03 = LOTATTR.Lottable03
+                   , @dLottable04 = LOTATTR.Lottable04
+                   , @dLottable05 = LOTATTR.Lottable05
+            FROM dbo.UCC UCC WITH (NOLOCK)
+            INNER JOIN SKU SKU WITH (NOLOCK) ON (SKU.SKU = UCC.SKU AND SKU.StorerKey = UCC.StorerKey)
+            INNER JOIN LOTATTRIBUTE LOTATTR WITH (NOLOCK) ON (LOTATTR.LOT = UCC.LOT AND LOTATTR.SKU = UCC.SKU AND LOTATTR.StorerKey = UCC.StorerKey)
+            WHERE UCC.UCCNo = @cUCC
+
+            -- If still cannot find correct UCC
+            IF ISNULL(@nUCCQty,'') = 0
+            BEGIN
+               SET @nErrNo = 74476
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Invalid UCC'
+               GOTO Step_1_Fail
+            END
+         END
+      
+         IF @cPickMethod = 'SKU' 
+         BEGIN
+            IF @cSuggSKU <> @cSKU
+            BEGIN
+               SET @nErrNo = 74479
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Invalid SKU'
+               GOTO Step_4_Fail
+            END
+         END
+
+         -- Update CCDetail --
+         EXEC [RDT].[rdt_TM_CycleCount_UCC_ConfirmTask]
+                 @nMobile           = @nMobile    
+                ,@cCCKey            = @cCCKey     
+                ,@cStorerKey        = @cStorerKey 
+                ,@cSKU              = @cSKU       
+                ,@cLOC              = @cLOC       
+                ,@cID               = @cID        
+                ,@nQty              = @nUCCQty       
+                ,@nPackValue        = '' 
+                ,@cUserName         = @cUserName  
+                ,@cLottable01       = @cLottable01
+                ,@cLottable02       = @cLottable02
+                ,@cLottable03       = @cLottable03
+                ,@dLottable04       = @dLottable04
+                ,@dLottable05       = @dLottable05
+                ,@cUCC              = @cUCC      
+                ,@cPickMethod       = @cPickMethod 
+                ,@cTaskDetailKey    = @cTaskDetailKey
+                ,@cLangCode         = @cLangCode  
+                ,@nErrNo            = @nErrNo      OUTPUT
+                ,@cErrMsg           = @cErrMsg     OUTPUT -- screen limitation, 20 char max
+      
+      
+         IF @nErrNo <> 0 
+         BEGIN
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+            GOTO Step_4_Fail
+         END
+      
+         SET @nUCCCounter = @nUCCCounter + 1
+      
+         -- EventLog - Sign In Function
+         EXEC RDT.rdt_STD_EventLog
+           @cActionType = '3', -- Sign in function
+           @cUserID     = @cUserName,
+           @nMobileNo   = @nMobile,
+           @nFunctionID = @nFunc,
+           @cFacility   = @cFacility,
+           @cStorerKey  = @cStorerkey,
+           @cUCC        = @cUCC,
+           @cSKU        = @cSKU,
+           @cLocation   = @cLOC,
+           @nQTY        = @nUCCQty,
+           @cID         = @cID,
+           @cCCKey      = @cCCKey
+      
+         SET @cOutField01 = ''
+         SET @cOutField02 = @cSKU
+         SET @cOutField03 = SUBSTRING( @cSKUDescr, 1, 20)  -- SKU desc 1
+         SET @cOutField04 = SUBSTRING( @cSKUDescr, 21, 20) -- SKU desc 2
+         SET @cOutField05 = CAST (@nUCCCounter AS NVARCHAR(2)) + '/' + CAST (@nSumUCCCount AS NVARCHAR(2))  
+         SET @cOutField06 = @cLottable01
+         SET @cOutField07 = @cLottable02
+         SET @cOutField08 = @cLottable03
+         SET @cOutField09 = rdt.rdtFormatDate( @dLottable04)
+         SET @cOutField10 = rdt.rdtFormatDate( @dLottable05)
+
+         -- Extended info
+         IF @cExtendedInfoSP <> ''
+         BEGIN
+            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+            BEGIN
+               SET @cExtendedInfo = ''
+
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cTaskDetailKey, @cCCKey, @cCCDetailKey, @cLoc, @cID, @cSKU, @nActQTY, ' +
+                  ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
+                  ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
+                  ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
+                  ' @cExtendedInfo OUTPUT '
+
+               SET @cSQLParam =
+                  '@nMobile         INT, ' +
+                  '@nFunc           INT, ' +
+                  '@cLangCode       NVARCHAR( 3), ' +
+                  '@nStep           INT, ' +
+                  '@nInputKey       INT, ' +
+                  '@cStorerKey      NVARCHAR( 15), ' +
+                  '@cTaskDetailKey  NVARCHAR( 10), ' +
+                  '@cCCKey          NVARCHAR( 10), ' +
+                  '@cCCDetailKey    NVARCHAR( 10), ' +
+                  '@cLoc            NVARCHAR( 10), ' +
+                  '@cID             NVARCHAR( 18), ' +
+                  '@cSKU            NVARCHAR( 20), ' +
+                  '@nActQTY         INT, ' +
+                  '@cLottable01     NVARCHAR( 18), ' +
+                  '@cLottable02     NVARCHAR( 18), ' +
+                  '@cLottable03     NVARCHAR( 18), ' +
+                  '@dLottable04     DATETIME, ' +
+                  '@dLottable05     DATETIME, ' +
+                  '@cLottable06     NVARCHAR( 30), ' +
+                  '@cLottable07     NVARCHAR( 30), ' +
+                  '@cLottable08     NVARCHAR( 30), ' +
+                  '@cLottable09     NVARCHAR( 30), ' +
+                  '@cLottable10     NVARCHAR( 30), ' +
+                  '@cLottable11     NVARCHAR( 30), ' +
+                  '@cLottable12     NVARCHAR( 30), ' +
+                  '@dLottable13     DATETIME, ' +
+                  '@dLottable14     DATETIME, ' +
+                  '@dLottable15     DATETIME, ' +
+                  '@cExtendedInfo   NVARCHAR( 20) OUTPUT '
+
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cTaskDetailKey, @cCCKey, @cCCDetailKey, @cLoc, @cID, @cSKU, @nActQTY,
+                  @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+                  @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+                  @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+                  @cExtendedInfo OUTPUT
+
+               SET @cOutField15 = @cExtendedInfo
+            END
+         END
+           
+         SET @nScn = @nScn - 3  
+         SET @nStep = @nStep - 3  
+         GOTO Quit  
+      END  
+      ELSE  
+      BEGIN  
+         -- Go back screen 1  
+         SET @cUCC = ''
+         SET @cOutField01 = ''
+         SET @cOutField02 = ''
+         SET @cOutField03 = ''
+         SET @cOutField04 = ''
+         SET @cOutField05 = ''
+         SET @cOutField06 = ''
+         SET @cOutField07 = ''
+         SET @cOutField08 = ''
+         SET @cOutField09 = ''
+         SET @cOutField10 = ''
+         SET @cOutField11 = ''
+         SET @cOutField15 = ''
+
+         SET @nScn = @nScn - 3  
+         SET @nStep = @nStep - 3      
+      END  
+   END  -- Inputkey = 1  
+   GOTO Quit  
+  
+   STEP_4_FAIL:  
+   BEGIN  
+      SET @cOutField01 = ''  
+   END  
+END  
+GOTO QUIT  
+
 /********************************************************************************
 Quit. Update back to I/O table, ready to be pick up by JBOSS
 ********************************************************************************/
@@ -992,6 +1235,7 @@ BEGIN
       V_String6        = @cExtendedInfo,
       V_String7        = @cSkipAlertScreen,
       V_String8        = @cDefaultOption,
+      V_String9        = @cCheckUCCExistsInLoc,
       V_String10       = @cLoc,         
       --V_String11       = @nPrevStep,
       --V_String12       = @nPrevScreen,    
