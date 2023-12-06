@@ -37,6 +37,11 @@ execute rdt.rdtAddMsg 74474 ,10, '74474^UpdTaskDetFail', 'us_english'
 execute rdt.rdtAddMsg 74475 ,10, '74475^UpdTaskDetFail', 'us_english'
 execute rdt.rdtAddMsg 74476 ,10, '74476^Invalid UCC',    'us_english'
 
+--WMS-24279
+execute rdt.rdtAddMsg 74477 ,10, '74477^Option needed',    'us_english'
+execute rdt.rdtAddMsg 74478 ,10, '74478^Invalid Option',    'us_english'
+execute rdt.rdtAddMsg 74479 ,10, '74479^Invalid SKU',    'us_english'
+
 Update rdt.rdtmsg set Func = 1767 Where Message_ID Between  74451 AND 74500
 
 
