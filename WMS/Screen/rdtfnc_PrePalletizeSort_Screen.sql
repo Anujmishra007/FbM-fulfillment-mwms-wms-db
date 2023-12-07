@@ -81,10 +81,13 @@ EXECUTE rdt.rdtAddScn 5665, 'ENG',
    ,@cLine04 = '%20d03'    -- Lottablenn 
    ,@cLine05 = '%20d04'    -- Lottablenn 
    ,@cLine06 = '%20d05'    -- Lottablenn 
-   ,@cLine07 = ''
-   ,@cLine08 = 'SKU/UPC:'
-   ,@cLine09 = '%60i06'
-   ,@cLine11 = 'QTY: %05d07'
+   ,@cLine07 = 'SKU/UPC:'
+   ,@cLine08 = '%60i06'       -- WMS-23036
+   ,@cLine09 = '%20d07'       -- WMS-23036
+   ,@cLine10 = '%20d08'       -- WMS-23036
+   ,@cLine11 = '%20d09'       -- WMS-23036
+   ,@cLine12 = 'QTY: %05d10'  -- WMS-23036
+   ,@cLine13 = '%20d15'       -- WMS-22995 Add ExtendedInfoSP
    ,@cLine14 = '%e'   
    ,@nFunc = 1841
 
