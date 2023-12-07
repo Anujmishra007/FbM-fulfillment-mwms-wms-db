@@ -14,7 +14,6 @@ GO
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
 /* 2023-08-04 1.0  James      WMS-22995 Created                         */
-/* 2023-10-27 1.1  James      WMS-23878 Add upd ctn type (james01)      */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_PrePalletizeSort_UCC] (
@@ -42,11 +41,6 @@ AS
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE
-      @cCartonType         NVARCHAR( 10),
-      @cCube               NVARCHAR( 10),
-      @cWeight             NVARCHAR( 10),
-      @cRefNo              NVARCHAR( 20)
 
    DECLARE @nTranCount     INT
 
@@ -56,31 +50,7 @@ AS
    
    IF @nStep = 7
       SET @nQty = 1  -- Only piece scanning
-
-   IF @nStep = 14
-   BEGIN
-   	SELECT @cCartonType = Value FROM @tExtUCC WHERE Variable = '@cCartonType' 
-   	SELECT @cCube = Value FROM @tExtUCC WHERE Variable = '@cCube'
-   	SELECT @cWeight = Value FROM @tExtUCC WHERE Variable = '@cWeight'
-   	SELECT @cRefNo = Value FROM @tExtUCC WHERE Variable = '@cRefNo'
-
-   	UPDATE dbo.UCC SET 
-   	   Userdefined02 = @cCartonType,
-   	   EditWho = SUSER_SNAME(),
-   	   EditDate = GETDATE()
-   	WHERE Storerkey = @cStorerKey
-   	AND   UCCNo = @cUCC
-   	
-   	IF @@ERROR <> 0
-      BEGIN
-         SET @nErrNo = 204903
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'upd CtnTyp Err'
-         GOTO RollBackTran
-      END
-      ELSE
-         GOTO Quit
-   END
-   
+      
    IF NOT EXISTS ( SELECT 1
                    FROM dbo.UCC WITH (NOLOCK)
                    WHERE Storerkey = @cStorerKey
