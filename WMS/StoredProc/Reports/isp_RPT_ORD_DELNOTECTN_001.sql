@@ -13,7 +13,7 @@ GO
 /*                                                                         */
 /* Called By: RPT_ORD_DELNOTECTN_001                                       */
 /*                                                                         */
-/* GitHub Version: 1.0                                                     */
+/* GitHub Version: 1.1                                                     */
 /*                                                                         */
 /* Version: 1.0                                                            */
 /*                                                                         */
@@ -22,6 +22,7 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 06-Nov-2023  WLChooi 1.0   DevOps Combine Script                        */
+/* 07-Dec-2023  WLChooi 1.1   WMS-24091 - Change to Maersk (WL01)          */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_RPT_ORD_DELNOTECTN_001] @c_Orderkey NVARCHAR(10)
 AS
@@ -112,7 +113,7 @@ BEGIN
         , ORDERS.Rdd
         , STORER.Logo
         , ORDERS.BuyerPO
-        , Signatory = CASE WHEN ISNULL(RTRIM(ST.Contact2), '') = '' THEN 'LF Logistics'
+        , Signatory = CASE WHEN ISNULL(RTRIM(ST.Contact2), '') = '' THEN 'Maersk'   --WL01
                            ELSE ST.Contact2 END
         , LOTT.Lottable01
         , LOTT.Lottable02
