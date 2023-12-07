@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ispPKD01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[ispPKD01]
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -22,10 +19,13 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */  
-/* Date         Author   Ver  Purposes                                  */  
+/* Date         Author   Ver  Purposes                                  */
+/* 20-NOV-2023  NJOW01   1.0  WMS-24203 only allow unallocate status 0  */
+/*                            pickdetail                                */
+/* 20-NOV-2023  NJOW01   1.0  DEVOPS Combine Script                     */  
 /************************************************************************/
 
-CREATE PROC ispPKD01   
+CREATE OR ALTER PROC ispPKD01   
    @c_Action        NVARCHAR(10),
    @c_Storerkey     NVARCHAR(15),  
    @b_Success       INT      OUTPUT,
@@ -74,6 +74,19 @@ BEGIN
       	 
 	 IF @c_Action = 'DELETE'
 	 BEGIN
+	 	  --NJOW01 S
+	 	  IF EXISTS (SELECT 1
+	 	             FROM #DELETED D
+	 	             WHERE D.Status <> '0'
+	 	             AND D.Storerkey = @c_Storerkey)
+	 	  BEGIN
+      	 SELECT @n_Continue = 3 
+	       SELECT @n_Err = 38010
+	       SELECT @c_Errmsg='NSQL'+CONVERT(varchar(5),@n_Err)+': Delete PickDetail Failed. Some pickdetail already in picking status. (ispPKD01)'
+         GOTO QUIT_SP 	 	  	
+	 	  END	 	  
+	 	  --NJOW01 E
+	 	
 	 	  IF EXISTS (SELECT 1
 	 	             FROM #DELETED D
 	 	             JOIN TASKDETAIL TD (NOLOCK) ON D.TaskdetailKey = TD.Taskdetailkey
@@ -82,7 +95,7 @@ BEGIN
 	 	             AND D.Storerkey = @c_Storerkey)
 	 	  BEGIN
       	 SELECT @n_Continue = 3 
-	       SELECT @n_Err = 38010
+	       SELECT @n_Err = 38020
 	       SELECT @c_Errmsg='NSQL'+CONVERT(varchar(5),@n_Err)+': Delete PickDetail Failed. Some Pallet Of The Order Have Been Called Out From ASRS (ispPKD01)'
           GOTO QUIT_SP 	 	  	
 	 	  END
@@ -112,7 +125,7 @@ BEGIN
       IF @n_Err <> 0
       BEGIN
       	 SELECT @n_Continue = 3 
-	       SELECT @n_Err = 38020
+	       SELECT @n_Err = 38030
 	       SELECT @c_Errmsg='NSQL'+CONVERT(varchar(5),@n_Err)+': Update ID Failed. (ispPKD01)'
          GOTO QUIT_SP 
       END   
