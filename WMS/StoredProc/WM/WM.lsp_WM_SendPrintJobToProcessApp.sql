@@ -28,6 +28,7 @@ GO
 /*                            - Backend                                 */
 /*                            Update Info for Cloud Print               */
 /* 2023-10-23  Wan02    1.2   Get Print Over Internet Printing          */
+/* 2023-12-07  yeekung  1.3   change queueid int->bigint                */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_WM_SendPrintJobToProcessApp] 
    @c_ReportID       NVARCHAR(10) 
@@ -80,7 +81,7 @@ BEGIN
    ,  @b_debug                INT            = 0    
    ,  @n_Retry                INT            = 1
    ,  @n_Mobile               INT            = 0
-   ,  @n_QueueID              INT            = 0  
+   ,  @n_QueueID              BIGINT         = 0   --(yeekung01)
    ,  @n_Function_ID          INT            = 999
    ,  @n_RowCount             INT            = 0                                    --(Wan01) 
    
