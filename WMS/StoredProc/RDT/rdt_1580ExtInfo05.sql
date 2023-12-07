@@ -69,7 +69,7 @@ BEGIN
             SELECT @cExtendedInfo=CONCAT( SKU.ProductModel, right(sku.AltSku, 4)) 
             FROM SKU (NOLOCK)
             WHERE SKU = @cSKU
-               AND ProductModel<>'TRI'
+               AND ProductModel NOT IN ('TRI','')
                AND storerkey=@cStorerKey
          END
       END
