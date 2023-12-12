@@ -12,6 +12,7 @@ GO
 /*                                                                            */
 /* Date         Author    Ver.  Purposes                                      */
 /* 2023-07-26   James     1.0   WMS-23005. Created                            */
+/* 2023-10-18   Ung       1.1   WMS-23840 Add multi ASN (RD.UserDefine05)     */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_607ExtPA11]
@@ -56,6 +57,7 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
+   DECLARE @cUDF05      NVARCHAR( 30)
    DECLARE @cUDF10      NVARCHAR( 30)
    DECLARE @cStyle      NVARCHAR( 20)
    DECLARE @cFacility   NVARCHAR( 5)
@@ -64,51 +66,69 @@ BEGIN
    BEGIN
    	SET @cSuggID = ''
    	SET @cSuggLOC = ''
-   	
-      SELECT @cUDF10 = UserDefine10
+
+      SELECT 
+         @cUDF05 = ISNULL( UserDefine05, ''), 
+         @cUDF10 = ISNULL( UserDefine10, '')
       FROM dbo.RECEIPT WITH (NOLOCK)
       WHERE ReceiptKey = @cReceiptKey
 
+      -- Find latest LOC by SKU
       IF @cUDF10 = 'SKU'
       BEGIN
-      	SELECT TOP 1 @cSuggLOC = ToLoc
-      	FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
-      	WHERE ReceiptKey = @cReceiptKey
-      	AND   Sku = @cSKU
-      	AND   UserDefine10 <> 'closed'
-      	ORDER BY EditDate DESC
+      	SELECT TOP 1 
+      	   @cSuggLOC = RD.ToLoc
+      	FROM dbo.Receipt R WITH (NOLOCK)
+      	   JOIN dbo.ReceiptDetail RD WITH (NOLOCK) ON (R.ReceiptKey = RD.ReceiptKey)
+      	WHERE R.StorerKey = @cStorerKey
+      	   AND R.UserDefine05 = @cUDF05
+         	AND RD.SKU = @cSKU
+         	AND RD.BeforeReceivedQTY > 0
+         	AND RD.UserDefine10 <> 'closed'
+      	ORDER BY RD.EditDate DESC
       END
+      
+      -- Find latest LOC by style
       ELSE IF @cUDF10 = 'ARTICLE'
       BEGIN
       	SELECT @cStyle = Style
       	FROM dbo.SKU WITH (NOLOCK)
       	WHERE StorerKey = @cStorerKey
-      	AND   Sku = @cSKU
+      	   AND SKU = @cSKU
       	
-      	SELECT TOP 1 @cSuggLOC = ToLoc
-      	FROM dbo.RECEIPTDETAIL RD WITH (NOLOCK)
-      	JOIN dbo.SKU SKU WITH (NOLOCK) ON ( RD.StorerKey = SKU.StorerKey AND RD.Sku = SKU.Sku)
-      	WHERE RD.ReceiptKey = @cReceiptKey
-      	AND   SKU.Style = @cStyle
-      	AND   RD.UserDefine10 <> 'closed'
+      	SELECT TOP 1 
+      	   @cSuggLOC = RD.ToLoc
+      	FROM dbo.Receipt R WITH (NOLOCK)
+      	   JOIN dbo.ReceiptDetail RD WITH (NOLOCK) ON (R.ReceiptKey = RD.ReceiptKey)
+      	   JOIN dbo.SKU WITH (NOLOCK) ON (RD.StorerKey = SKU.StorerKey AND RD.SKU = SKU.SKU)
+      	WHERE R.StorerKey = @cStorerKey
+      	   AND R.UserDefine05 = @cUDF05
+         	AND SKU.Style = @cStyle
+         	AND RD.BeforeReceivedQTY > 0
+         	AND RD.UserDefine10 <> 'closed'
       	ORDER BY RD.EditDate DESC
       END  	
       
+      -- Find pre-uploaded LOC not yet used
       IF @cSuggLOC = ''
       BEGIN
       	SELECT @cFacility = Facility
-      	FROM dbo.RECEIPT WITH (NOLOCK)
+      	FROM dbo.Receipt WITH (NOLOCK)
       	WHERE ReceiptKey = @cReceiptKey
       	
-      	SELECT TOP 1 @cSuggLOC = Loc
-      	FROM dbo.LOC LOC WITH (NOLOCK)
-      	WHERE LOC.HOSTWHCODE = @cReceiptKey
-      	AND   LOC.Facility = @cFacility
-      	AND   LOC.Status = 'HOLD'
-      	AND   NOT EXISTS ( SELECT 1
-      	                   FROM dbo.RECEIPTDETAIL RD WITH (NOLOCK)
-      	                   WHERE RD.ReceiptKey = @cReceiptKey
-      	                   AND   LOC.LOC = RD.ToLoc)
+      	SELECT TOP 1 
+      	   @cSuggLOC = LOC.LOC
+      	FROM dbo.LOC WITH (NOLOCK)
+      	WHERE LOC.Putawayzone = @cUDF05
+         	AND LOC.Facility = @cFacility
+         	AND LOC.Status = 'HOLD'
+         	AND NOT EXISTS( 
+         	   SELECT TOP 1 1
+            	FROM dbo.Receipt R WITH (NOLOCK)
+            	   JOIN dbo.ReceiptDetail RD WITH (NOLOCK) ON (R.ReceiptKey = RD.ReceiptKey)
+            	WHERE R.StorerKey = @cStorerKey
+            	   AND R.UserDefine05 = @cUDF05
+         	      AND LOC.LOC = RD.ToLOC)
       	ORDER BY LOC.LogicalLocation
       END
       
