@@ -34,6 +34,7 @@ GO
 /* 2023-07-05   3.0  YeeKung    TPS-735 add hold carton printing(yeekung09)       */
 /* 2023-08-09   3.1  YeeKung    TPS-727 add UPC on packdetail (yeekung10)         */  
 /* 2023-09-12   3.2  YeeKung    TPS-773/TPS-740 New print (yeekung11)             */
+/* 2023-12-11   3.3  YeeKung    TPS-826 Add params for paper (yeekung12)         */
 /*********************************************************************************/  
   
 CREATE OR ALTER PROC [API].[isp_PackConfirm] (  
@@ -1618,14 +1619,57 @@ BEGIN
   
                 --  SET @cPackingJobID = @nJobID  
 
-                  SELECT @c_ReportID = WMR.reportid,
-                         @c_PrintSource = CASE WHEN printtype='LOGIREPORT' THEN 'JReport' ELSE 'WMReport' END
+                  SELECT   @c_ReportID = WMR.reportid,
+                     @c_PrintSource = CASE WHEN printtype='LOGIREPORT' THEN 'JReport' ELSE 'WMReport' END,
+                     @cNewPaperPrinter = Defaultprinterid,
+                     @cFieldName1  = keyFieldname1,
+                     @cFieldName2  = keyFieldname2,
+                     @cFieldName3  = keyFieldname3,
+                     @cFieldName4  = keyFieldname4
                   FROM WMReport WMR (NOLOCK)
                   JOIN WMReportdetail WMRD (NOLOCK) ON WMR.reportid =WMRD.reportid
                   WHERE Storerkey = @cStorerkey
                      AND reporttype = 'TPPACKLIST'
                      AND ModuleID ='TPPack'
+                     AND ispaperprinter = 'Y'
                      and (WMRD.username = '' OR WMRD.username = @cUsername)
+                     AND (ISNULL(ComputerName,'') ='' OR ComputerName= @cWorkstation)
+
+
+                  SET @cSQL = ''
+                  SET @cSQLParam = ''
+
+                  SET  @cSQL =
+                  'SELECT  @cParams1='+ @cFieldName1  
+                           SELECT @cSQL= CASE  WHEN ISNULL(@cFieldName2,'')<>''THEN @cSQL +',@cParams2=' + @cFieldName2  ELSE  @cSQL END 
+                           SELECT @cSQL= CASE WHEN ISNULL(@cFieldName3,'')<>''THEN @cSQL +',@cParams3='  + @cFieldName3  ELSE  @cSQL END
+                           SELECT @cSQL= CASE WHEN ISNULL(@cFieldName4,'')<>''THEN @cSQL +',@cParams4='  + @cFieldName4  ELSE  @cSQL END
+                  SET @cSQL = @cSQL +' FROM Packdetail (NOLOCK)
+                     WHERE Storerkey = @cstorerkey
+                        AND Pickslipno = @cPickslipno
+                        AND CartonNO = @nCartonno
+                     '
+
+
+                  SET @cSQLParam = 
+                  ' @cFieldName1 NVARCHAR(max),
+                     @cFieldName2 NVARCHAR(max),
+                     @cFieldName3 NVARCHAR(max),
+                     @cFieldName4 NVARCHAR(max),
+                     @cParams1    NVARCHAR(max) OUTPUT,
+                     @cParams2    NVARCHAR(max) OUTPUT,
+                     @cParams3    NVARCHAR(max) OUTPUT,
+                     @cParams4    NVARCHAR(max) OUTPUT,
+                     @cstorerkey  NVARCHAR(20),
+                     @cPickslipno NVARCHAR(20),
+                     @nCartonno   INT'
+
+                  EXEC sp_ExecuteSQL @cSQL,@cSQLParam,@cFieldName1,@cFieldName2,@cFieldName3,@cFieldName4,
+                                       @cParams1 OUTPUT,@cParams2 OUTPUT,@cParams3 OUTPUT,@cParams4 OUTPUT,@cstorerkey,@cPickslipno,@nCartonno 
+
+                  IF ISNULL(@cNewPaperPrinter,'')= ''
+                     SET @cNewPaperPrinter = @cPaperPrinter
+
 
                   EXEC  [WM].[lsp_WM_Print_Report]
                      @c_ModuleID = @c_ModuleID           
@@ -1634,12 +1678,12 @@ BEGIN
                   , @c_Facility  = @cFacility        
                   , @c_UserName  = @cUsername     
                   , @c_ComputerName = ''
-                  , @c_PrinterID = @cPaperPrinter         
+                  , @c_PrinterID = @cNewPaperPrinter         
                   , @n_NoOfCopy  = '1'     
-                  , @c_KeyValue1 = @cPickSlipNo        
-                  , @c_KeyValue2 = ''     
-                  , @c_KeyValue3 = ''     
-                  , @c_KeyValue4 = ''     
+                  , @c_KeyValue1 = @cParams1        
+                  , @c_KeyValue2 = @cParams2     
+                  , @c_KeyValue3 = @cParams3 
+                  , @c_KeyValue4 = @cParams4
                   , @b_Success   = @b_Success         OUTPUT      
                   , @n_Err       = @n_Err             OUTPUT
                   , @c_ErrMsg    = @c_ErrMsg          OUTPUT
