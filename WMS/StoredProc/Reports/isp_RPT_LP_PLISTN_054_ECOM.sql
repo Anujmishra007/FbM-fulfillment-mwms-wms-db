@@ -13,7 +13,7 @@ GO
 /*        :                                                             */
 /* Called By: RPT_LP_PLISTN_054_ECOM                                    */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author    Ver Purposes                                  */
 /* 01-Aug-2023  WLChooi   1.0 DevOps Combine Script                     */
+/* 04-Dec-2023  WLChooi   1.1 WMS-23223 - Change Sorting (WL01)         */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTN_054_ECOM]
@@ -226,8 +227,12 @@ BEGIN
           , PICKDETAIL.UOM
           , PICKDETAIL.ID
           , LOC.LogicalLocation
-   ORDER BY PICKDETAIL.OrderKey
+          , LOADPLANDETAIL.LoadLineNumber   --WL01
+   --WL01 S
+   ORDER BY LOADPLANDETAIL.LoadLineNumber
+          , LOC.LogicalLocation
           , PICKDETAIL.Loc
+   --WL01 E
 
    OPEN CUR_PICK
 
@@ -486,9 +491,7 @@ BEGIN
            , RecNo = (ROW_NUMBER() OVER (PARTITION BY TRIM(OrderKey) + TRIM(ExternOrderKey) + TRIM(PickSlipNo) + TRIM([Platform])
                                                     + CONVERT(NVARCHAR(10), ISNULL(DeliveryDate, '19000101'), 101) 
                                                     + TRIM(ISNULL(C_Contact1,'')) + TRIM(ISNULL(UDF01,''))
-                                         ORDER BY rowid
-                                                , OrderKey
-                                                , Loc))
+                                         ORDER BY RowID ))   --WL01
            , OrderDate
            , QR1_DESCR = ISNULL(@c_QR1_DESCR,'')
            , QR2_DESCR = ISNULL(@c_QR2_DESCR,'')
@@ -496,9 +499,9 @@ BEGIN
            , ReminderArrSize = @n_ReminderArrSize
            , Size
       FROM #temp_pick
-      ORDER BY rowid
-             , OrderKey
-             , Loc
+      ORDER BY RowID
+             --, OrderKey   --WL01
+             --, Loc        --WL01
    END
 
    IF OBJECT_ID('tempdb..#temp_pick') IS NOT NULL

@@ -13,7 +13,7 @@ GO
 /*        :                                                             */
 /* Called By: RPT_LP_PLISTN_054                                         */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author    Ver Purposes                                  */
 /* 01-Aug-2023  WLChooi   1.0 DevOps Combine Script                     */
+/* 04-Dec-2023  WLChooi   1.1 WMS-23223 - Change Sorting (WL01)         */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTN_054]
@@ -160,9 +161,12 @@ BEGIN
           , PICKDETAIL.ID
           , LOC.LogicalLocation
           , SKU.AltSKU
-   ORDER BY PICKDETAIL.Loc
-          , PICKDETAIL.ID
-          , PICKDETAIL.Sku
+          , LOADPLANDETAIL.LoadLineNumber   --WL01
+   --WL01 S
+   ORDER BY LOADPLANDETAIL.LoadLineNumber
+          , LOC.LogicalLocation
+          , PICKDETAIL.Loc
+   --WL01 E
 
    OPEN CUR_PICK
 
@@ -538,7 +542,7 @@ BEGIN
               , ID
               , CDESCR
               , LoadOrder = Orderkey + ' / ' + @c_Loadkey
-              , PageNo = (ROW_NUMBER() OVER (PARTITION BY Orderkey ORDER BY RowID, OrderKey, LOC, ID, SKU) - 1 ) / @n_MaxPerPage + 1
+              , PageNo = (ROW_NUMBER() OVER (PARTITION BY Orderkey ORDER BY RowID) - 1 ) / @n_MaxPerPage + 1   --WL01
               , RowID
          FROM #temp_pick)
       SELECT PickSlipNo
@@ -577,10 +581,10 @@ BEGIN
            , Group1 = Orderkey + CAST(PageNo AS NVARCHAR)
       FROM CTE
       ORDER BY Rowid
-             , OrderKey
-             , LOC
-             , ID
-             , SKU
+             --, OrderKey   --WL01
+             --, LOC        --WL01
+             --, ID         --WL01
+             --, SKU        --WL01
    END
 
    IF OBJECT_ID('tempdb..#temp_pick') IS NOT NULL
