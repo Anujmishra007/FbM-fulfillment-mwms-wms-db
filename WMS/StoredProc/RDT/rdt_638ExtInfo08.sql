@@ -234,17 +234,21 @@ AS
             END
                
             SET @cTempFlag = REVERSE( STUFF( REVERSE( @cTempFlag), 1, 1, ''))
+
+            IF ISNULL(@cTempFlag,'')<>''
+            BEGIN
                
-            SET @nErrNo = 0  
-            SET @cErrMsg1 = substring(@cTempFlag,1,20)
-            SET @cErrMsg2 = substring(@cTempFlag,21,20)
-            SET @cErrMsg3 = substring(@cTempFlag,41,20)
-            SET @cErrMsg4 = substring(@cTempFlag,61,20)
-            SET @cErrMsg5 = substring(@cTempFlag,81,20)
-            EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1  ,@cErrMsg2,@cErrMsg3,@cErrMsg4,@cErrMsg5
-            IF @nErrNo = 1  
-               SET @cErrMsg1 = ''  
-            SET @nErrNo = 0 
+               SET @nErrNo = 0  
+               SET @cErrMsg1 = substring(@cTempFlag,1,20)
+               SET @cErrMsg2 = substring(@cTempFlag,21,20)
+               SET @cErrMsg3 = substring(@cTempFlag,41,20)
+               SET @cErrMsg4 = substring(@cTempFlag,61,20)
+               SET @cErrMsg5 = substring(@cTempFlag,81,20)
+               EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1  ,@cErrMsg2,@cErrMsg3,@cErrMsg4,@cErrMsg5
+               IF @nErrNo = 1  
+                  SET @cErrMsg1 = ''  
+               SET @nErrNo = 0 
+            END
 
          END
       END

@@ -23,7 +23,10 @@
 /***************************************************************************/                    
                     
 CREATE OR ALTER  PROC [dbo].[isp_RPT_WV_WAVPICKSUM_014]                               
-      @c_Wavekey        NVARCHAR(10)             
+  --    @c_Wavekey        NVARCHAR(10)    
+  --   ,@c_loadkey        NVARCHAR(20)   
+     @c_orderkey        NVARCHAR(20)      
+  --  ,@c_putawayzone     NVARCHAR(10)
                                        
 AS                                
 BEGIN                                
@@ -44,7 +47,7 @@ DECLARE  @c_pickheaderkey      NVARCHAR(10),
          @n_cases              INT,      
          @n_perpallet          INT,      
          @c_storer             NVARCHAR(15),      
-         @c_orderkey           NVARCHAR(10),      
+       --  @c_orderkey           NVARCHAR(10),      
          @c_ConsigneeKey       NVARCHAR(15),      
          @c_Company            NVARCHAR(45),      
          @c_Addr1              NVARCHAR(45),      
@@ -106,7 +109,7 @@ DECLARE @c_PrevOrderKey NVARCHAR(10),
          , @n_ctnord                 INT = 1        
          , @c_ChgGrp                 NVARCHAR(1) = 'N'      
          , @n_maxRec                 INT    
-         , @c_loadkey                NVARCHAR(20)      --CS02    
+        -- , @c_loadkey                NVARCHAR(20)      --CS02    
          , @c_PrevLoadKey            NVARCHAR(10)      --CS02      
          , @c_Putawayzone            NVARCHAR(10)      --CS02
          , @c_prevPutawayzone        NVARCHAR(10)      --CS02    
@@ -144,7 +147,8 @@ SET @n_NoOfLine = 4
      
    SELECT TOP 1 @c_GeStorerkey = Storerkey      
    FROM ORDERS (NOLOCK)         
-   WHERE Userdefine09 = @c_Wavekey      
+  -- WHERE Userdefine09 = @c_Wavekey      
+   WHERE orderkey = @c_orderkey
       
       
  IF ISNULL(@c_GeStorerkey,'') <> ''          
@@ -171,7 +175,7 @@ BEGIN
 END      
       
 --BEGIN TRAN      
-   CREATE TABLE #temp_pick      
+   CREATE TABLE #temp_pickdet      
       (     PickSlipNo     NVARCHAR(10)   NULL                                 
          ,  LoadKey        NVARCHAR(10)                                      
          ,  OrderKey       NVARCHAR(10)                                      
@@ -243,7 +247,7 @@ END
    IF EXISTS ( SELECT 1      
                FROM PickHeader (NOLOCK)      
                JOIN Orders (NOLOCK) ON PickHeader.ExternOrderKey = Orders.Loadkey AND PickHeader.Orderkey = Orders.Orderkey    
-               WHERE Orders.UserDefine09 = @c_Wavekey      
+               WHERE orders.orderkey = @c_orderkey--Orders.UserDefine09 = @c_Wavekey      
                AND Zone = '3' )      
    BEGIN      
       SELECT @c_firsttime = 'N'      
@@ -261,7 +265,7 @@ END
       
    END -- Record Not Exists      
       
-   INSERT INTO #Temp_Pick      
+   INSERT INTO #temp_pickdet     
          (  PickSlipNo      
          ,  LoadKey      
          ,  OrderKey      
@@ -310,15 +314,9 @@ END
          ,  buyerpo           
          ,  SHOWBUYERPO      
          ,  SHOWFIELD    
-         ,  wavekey , TTLPAGE,ShowPageNo,PageNo,NewPageNo                --CS01      --CS02  --CS01b
+         ,  wavekey , TTLPAGE,ShowPageNo,PageNo,NewPageNo,PickByCase                --CS01      --CS02  --CS01b
          )      
-   SELECT ( SELECT PickHeaderkey      
-            FROM PICKHEADER (NOLOCK)      
-            JOIN Orders (NOLOCK) ON PickHeader.ExternOrderKey = Orders.Loadkey AND PICKHEADER.OrderKey = Orders.Orderkey    
-            WHERE Orders.UserDefine09 = @c_Wavekey      
-            AND PICKHEADER.OrderKey = PickDetail.OrderKey      
-            AND PICKHEADER.Zone = '3'          
-          )      
+   SELECT PICKHEADER.PickHeaderkey      AS Pickslipno       
          ,ORDERS.Loadkey                              AS LoadKey       
          ,PICKDETAIL.OrderKey      
          ,ORDERS.Storerkey                            AS Storerkey      
@@ -391,10 +389,12 @@ END
                                     ORDER BY ORDERS.Loadkey,PICKDETAIL.OrderKey  ,ISNULL(RTRIM(LOC.Putawayzone),'') ,
                                     ISNULL(RTRIM(LOC.LogicalLocation), ''))) -1) /@n_NoOfLine as int)+1 AS pageno    --CS01b
          ,0                   --CS01b
+         ,ISNULL(CASE WHEN CL3.Code = 'PickByCase' THEN 1 ELSE 0 END,0)  AS PickByCase
          FROM LOADPLANDETAIL WITH (NOLOCK)      
          JOIN ORDERS        WITH (NOLOCK) ON ( ORDERS.Orderkey = LoadPlanDetail.Orderkey )      
          JOIN ORDERDETAIL OD WITH (NOLOCK) ON OD.OrderKey = ORDERS.orderkey      
-         JOIN STORER        WITH (NOLOCK) ON ( ORDERS.StorerKey = Storer.StorerKey )      
+         JOIN STORER        WITH (NOLOCK) ON ( ORDERS.StorerKey = Storer.StorerKey )   
+         JOIN PICKHEADER   WITH (NOLOCK)  ON PickHeader.ExternOrderKey = Orders.Loadkey AND PICKHEADER.OrderKey = Orders.Orderkey     
          LEFT OUTER JOIN ROUTEMASTER WITH (NOLOCK) ON ( ROUTEMASTER.Route = ORDERS.Route )      
          JOIN PICKDETAIL    WITH (NOLOCK) ON ( PICKDETAIL.OrderKey = ORDERS.Orderkey AND PICKDETAIL.OrderLineNumber = OD.OrderLineNumber)      
          JOIN LOTATTRIBUTE  WITH (NOLOCK) ON ( PICKDETAIL.Lot = LOTATTRIBUTE.Lot )      
@@ -410,10 +410,17 @@ END
          --CS02 S  
          LEFT JOIN CODELKUP CL2 WITH (NOLOCK) ON (CL2.LISTNAME = 'REPORTCFG' AND CL2.CODE = 'NOTSHOWWAVEPAGE'         
                                               AND CL2.LONG = 'RPT_WV_WAVPICKSUM_014' AND CL2.STORERKEY = ORDERS.STORERKEY )   
+         LEFT JOIN CODELKUP CL3 WITH (NOLOCK) ON ( CL3.ListName = 'REPORTCFG' )      
+                                    AND( CL3.Storerkey= ORDERS.Storerkey )      
+                                    AND( CL3.Long = 'RPT_LP_PLISTN_041')      
+                                    AND( CL3.Short <> 'N' OR  CL3.Short IS NULL )  
          --CS02 E  
          WHERE PICKDETAIL.Status >= '0'        
-         AND Orders.UserDefine09 = @c_Wavekey      
-         GROUP BY PICKDETAIL.OrderKey      
+        -- AND Orders.UserDefine09 = @c_Wavekey      
+         AND Orders.orderkey = @c_orderkey
+       --  AND Orders.loadkey = @c_loadkey 
+      -- AND LOC.Putawayzone = @c_putawayzone
+         GROUP BY PICKHEADER.PickHeaderkey,PICKDETAIL.OrderKey      
          ,ORDERS.Storerkey      
          ,ISNULL(RTRIM(ORDERS.BillToKey), '')      
          ,ISNULL(RTRIM(ORDERS.c_Company), '')      
@@ -463,371 +470,23 @@ END
          ,ORDERS.Loadkey --CCH    
          ,ORDERS.Orderkey --CCH    
          ,Orders.UserDefine09   --CS01  
-         ,ISNULL(CL2.SHORT,'N')  --CS02   
+         ,ISNULL(CL2.SHORT,'N')  --CS02  
+         ,ISNULL(CASE WHEN CL3.Code = 'PickByCase' THEN 1 ELSE 0 END,0)  
+       ORDER BY ORDERS.Loadkey,CASE WHEN ISNULL(RTRIM(ORDERS.c_Company), '')  <> '' THEN 1 ELSE 0 END,ORDERS.Orderkey,
+                ISNULL(RTRIM(LOC.Putawayzone),''),ISNULL(RTRIM(LOC.LogicalLocation), '') ,ISNULL(RTRIM(PICKDETAIL.loc), '')      
+         ,ISNULL(RTRIM(PICKDETAIL.sku), '') ,ISNULL(RTRIM(LOTATTRIBUTE.Lottable01),'') 
 
     --SELECT * FROM #temp_pick WHERE OrderKey='0006877126' AND Putawayzone='AC-RCKO-HI'
 
-   
-   IF @c_PreGenRptData = 'Y'      
-   BEGIN      
-      BEGIN TRAN      
-      -- Uses PickType as a Printed Flag       
-      UPDATE PickHeader      
-         SET PickType = '1'      
-            ,TrafficCop = NULL      
-      WHERE Zone = '3'      
-      AND PickType = '0'      
-      AND EXISTS (SELECT 1 FROM ORDERS (NOLOCK)    
-                  WHERE PickHeader.ExternOrderKey = Orders.Loadkey    
-                  AND PickHeader.Orderkey = Orders.Orderkey    
-                  AND Orders.UserDefine09 = @c_Wavekey)    
-      
-      SELECT @n_err = @@ERROR      
-      IF @n_err <> 0      
-      BEGIN      
-         SELECT @n_continue = 3      
-         IF @@TRANCOUNT >= 1      
-     BEGIN      
-            ROLLBACK TRAN      
-         END      
-      END      
-      ELSE      
-      BEGIN      
-         IF @@TRANCOUNT > 0      
-         BEGIN      
-            COMMIT TRAN      
-         END      
-         ELSE      
-         BEGIN      
-            SELECT @n_continue = 3      
-            ROLLBACK TRAN      
-         END      
-      END      
-      
-      WHILE @@TRANCOUNT > 0      
-      BEGIN      
-         COMMIT TRAN   
-      END      
-      
-   SELECT @n_pickslips_required = COUNT(DISTINCT OrderKey)      
-   FROM #TEMP_PICK      
-   WHERE ISNULL(RTRIM(PickSlipNo),'') = ''      
-      
-   IF @@ERROR <> 0      
-   BEGIN      
-      GOTO FAILURE      
-   END      
-   ELSE      
-   IF @n_pickslips_required > 0      
-   BEGIN      
-      BEGIN TRAN      
-      
-      EXECUTE nspg_GetKey 'PICKSLIP', 9, @c_pickheaderkey OUTPUT,      
-                          @b_success OUTPUT, @n_err OUTPUT, @c_errmsg OUTPUT, 0,      
-                          @n_pickslips_required      
-      
-      COMMIT TRAN      
-      
-      BEGIN TRAN      
-      INSERT INTO PICKHEADER      
-         (  PickHeaderKey      
-         ,  OrderKey      
-         ,  ExternOrderKey      
-         ,  PickType      
-         ,  Zone      
-         ,  TrafficCop      
-         )      
-      SELECT 'P' + RIGHT(REPLICATE('0', 9)      
-                 + dbo.fnc_LTrim(dbo.fnc_RTrim(STR(CAST(@c_pickheaderkey AS INT)      
-                 + ( SELECT      
-                     COUNT(DISTINCT orderkey)      
-                     FROM      
-                     #TEMP_PICK AS Rank      
-                     WHERE      
-                     Rank.OrderKey < #TEMP_PICK.OrderKey      
-                     AND ISNULL(RTRIM(Rank.PickSlipNo),'') = ''      
-                   ))-- str      
-                   ))-- dbo.fnc_RTrim      
-                 , 9),      
-               OrderKey,      
-               LoadKey,      
-               '0',      
-               '3',      
-               ''      
-      FROM #TEMP_PICK      
-      WHERE ISNULL(RTRIM(PickSlipNo),'') = ''      
-      GROUP BY LoadKey,      
-               OrderKey      
-      
-      UPDATE #TEMP_PICK      
-         SET PickSlipNo = PICKHEADER.PickHeaderKey      
-      FROM PICKHEADER (NOLOCK)      
-      WHERE PICKHEADER.ExternOrderKey = #TEMP_PICK.LoadKey      
-        AND PICKHEADER.OrderKey = #TEMP_PICK.OrderKey      
-        AND PICKHEADER.Zone = '3'      
-        AND ISNULL(RTRIM(#TEMP_PICK.PickSlipNo),'') = ''      
-      
-      UPDATE PICKDETAIL      
-         SET PickSlipNo = #TEMP_PICK.PickSlipNo,      
-             TrafficCop = NULL      
-      FROM #TEMP_PICK      
-      WHERE #TEMP_PICK.OrderKey = PICKDETAIL.OrderKey      
-        AND ISNULL(RTRIM(PICKDETAIL.PickSlipNo),'') = ''      
-      
-      WHILE @@TRANCOUNT > 0      
-      BEGIN      
-         COMMIT TRAN      
-      END      
-   END      
-      
-       GOTO SUCCESS          
-   END      
-   ELSE      
-   BEGIN      
-      GOTO SUCCESS          
-   END      
-      
-   FAILURE:      
-   DELETE FROM #TEMP_PICK      
-      
-   SUCCESS:      
-      
-   UPDATE #TEMP_PICK      
-   SET PickByCase = ISNULL(CASE WHEN CODELKUP.Code = 'PickByCase' THEN 1 ELSE 0 END,0)      
-   FROM #TEMP_PICK      
-   LEFT JOIN CODELKUP WITH (NOLOCK) ON ( CODELKUP.ListName = 'REPORTCFG' )      
-                                    AND( CODELKUP.Storerkey= #TEMP_PICK.Storerkey )      
-                                    AND( CODELKUP.Long = 'RPT_LP_PLISTN_041')      
-                                    AND( CODELKUP.Short <> 'N' OR  CODELKUP.Short IS NULL )      
-      
-   IF @c_PreGenRptData = 'Y'      
-   BEGIN      
-      -- Do Auto Scan-in when Configkey is setup.      
-      SET @c_StorerKey = ''      
-      SET @c_PickSlipNo = ''      
-      
-      SELECT DISTINCT @c_StorerKey = StorerKey      
-        FROM #TEMP_PICK (NOLOCK)      
-      
-      IF EXISTS (SELECT 1 FROM STORERCONFIG (NOLOCK) WHERE CONFIGKEY = 'AUTOSCANIN'      
-                    AND SValue = '1' AND StorerKey = @c_StorerKey)      
-      BEGIN      
-         DECLARE C_AutoScanPickSlip CURSOR LOCAL FAST_FORWARD READ_ONLY FOR      
-         SELECT DISTINCT PickSlipNo      
-           FROM #TEMP_PICK (NOLOCK)      
-      
-         OPEN C_AutoScanPickSlip      
-         FETCH NEXT FROM C_AutoScanPickSlip INTO @c_PickSlipNo      
-      
-         WHILE @@FETCH_STATUS <> -1      
-         BEGIN      
-            IF NOT EXISTS (SELECT 1 FROM PICKINGINFO (NOLOCK) Where PickSlipNo = @c_PickSlipNo)      
-            BEGIN      
-               INSERT INTO PICKINGINFO (PickSlipNo, ScanInDate, PickerID, ScanOutDate)      
-               VALUES (@c_PickSlipNo, GetDate(), sUser_sName(), NULL)      
-      
-               IF @@ERROR <> 0      
-               BEGIN      
-                  SELECT @n_continue = 3      
-                  SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 61900      
-                  SELECT @c_errmsg = 'NSQL' + CONVERT(char(5),@n_err) +      
-                                     ': Insert PickingInfo Failed. (isp_RPT_WV_WAVPICKSUM_014)' + ' ( ' +      
-                                     ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '      
-               END      
-            END -- PickSlipNo Does Not Exist      
-      
-            FETCH NEXT FROM C_AutoScanPickSlip INTO @c_PickSlipNo      
-         END      
-         CLOSE C_AutoScanPickSlip      
-         DEALLOCATE C_AutoScanPickSlip      
-      END -- Configkey is setup      
-   END      
-      
-      
-      IF @c_PreGenRptData='Y'      
-      BEGIN      
-          SET @c_PreGenRptData=''      
-      END      
-      
-  --CS01 S  
-   SELECT @c_PrevOrderKey = N''  
-   SELECT @n_PgGroup = 1    
-   SET    @n_TTLPAGE = 1  
-   SET    @c_ChgGrp  = 'N'  
-   SET    @c_UpdGrp  = 'N'    --CS02 S
-   SET    @c_UpdPage  = 'N'    
-   SET    @n_lineno   = 1      
-   SET    @c_resetline = 'N'  
-   SET    @c_resetPageGrp ='N'    
-   SET    @n_PageRecGrp = 0
-   SET    @n_TTLRec       = 0
-   SET    @c_lastRec      ='N'   --CS02 E
-
-
-
-    DECLARE Page_cur CURSOR LOCAL FAST_FORWARD READ_ONLY FOR      
-   SELECT OrderKey,RowNum  ,Putawayzone ,LoadKey,PageNo  
-   FROM #TEMP_PICK (NOLOCK)      
-   WHERE wavekey = @c_Wavekey     
-   ORDER BY loadkey,OrderKey,RowNum      
-      
-   OPEN Page_cur      
-      
-   FETCH NEXT FROM Page_cur      
-   INTO  @c_orderkey,@n_RowNum  ,@c_Putawayzone ,@c_loadkey,@n_GetPageno          --CS02
-      
-   WHILE (@@FETCH_STATUS <> -1)      
-   BEGIN      
-
-
-
-SET @n_ctnputawayzone = 0
-
-    SELECT @n_ctnputawayzone = COUNT(DISTINCT putawayzone)
-    FROM #temp_pick
-    WHERE orderkey = @c_orderkey
-
-
-   IF @n_RowNo = 1
-   BEGIN
-       SET @n_lineno = 1
-       SET @n_PgGroup = 1
-   END
-
-      IF @c_PrevOrderKey = ''  AND @n_RowNo = 1     --CS02
-      BEGIN   
-             SET @c_PrevOrderKey = @c_orderkey  
-      END   
-      --CS02 S
-      IF @c_prevPutawayzone = ''   AND @n_RowNo = 1    --CS02
-      BEGIN   
-             SET @c_prevPutawayzone = @c_Putawayzone  
-      END 
-      --CS02 E 
-      IF (@c_orderkey <> @c_PrevOrderKey)     
-      BEGIN      
-             SET  @n_PgGroup = 1   
-             SET  @n_initialflag =  1  
-             SET  @c_resetPageGrp  = 'Y'  
-             SET  @c_ChgGrp ='Y'
-      END      
   
-      SELECT @n_ctnord = COUNT(orderkey)  
-      FROM #TEMP_PICK  
-      WHERE orderkey = @c_orderkey  
-
-      SELECT @n_TTLRec =  MAX(RowNum)    
-       FROM #TEMP_PICK  
-      WHERE orderkey = @c_orderkey  
-
-    IF @n_RowNum = @n_TTLRec
-    BEGIN
-         SET @c_lastRec = 'Y'
-    END 
-
-      SET @n_ChkTTLPage = 1
-
-     --CS02 S check if previous orderkey and putawayzone if difference then reset page group and reset page group and increase page number if same orderkey 
-     IF (@c_prevPutawayzone <> @c_Putawayzone) 
-     BEGIN      
-            IF (@c_PrevOrderKey<>@c_orderkey)
-            BEGIN
-             SET  @c_UpdGrp = 'Y'
-             SET @c_UpdPage= 'Y'     
-             SET @n_lineno = 1  
-             SET  @n_PgGroup = 1 
-            END 
-            ELSE
-            BEGIN
-             SET @n_lineno = 1  
-             SET  @n_PgGroup = @n_PgGroup + 1
-             SET @c_UpdPage= 'Y'  
-            END  
-     END  
-     ELSE
-     BEGIN
-            IF (@c_PrevOrderKey<>@c_orderkey)
-            BEGIN
-             SET  @c_UpdGrp = 'Y'
-             SET @c_UpdPage= 'Y'     
-             SET @n_lineno = 1  
-             SET  @n_PgGroup = 1 
-            END 
-     END
-
-      SELECT @n_ChkTTLPage = MAX(pageno)
-      FROM #temp_pick
-      WHERE OrderKey = @c_orderkey
-
-      SET @n_TTLPage = @n_ChkTTLPage
-
-     IF @c_UpdGrp='Y' AND @c_UpdPage='Y' AND @n_RowNo>1
-     BEGIN
-       SET  @n_PgGroup = @n_PgGroup + 1
-     END
-
-     IF @n_lineno > @n_NoOfLine   --CS02 S check if the total line exceed no of line allow increase page group
-     BEGIN
-
-           SET  @n_PgGroup = @n_PgGroup + 1
-           SET @n_lineno = 1
-           SET @c_resetline = 'Y'
-     END
-     --CS02 E
-
-      UPDATE #TEMP_PICK     
-      SET pgGroup = @n_PgGroup
-          ,TTLPAGE = @n_TTLPage
-      WHERE orderkey = @c_orderkey 
-            AND RowNum = @n_RowNum  
-
-    IF @c_lastRec='Y' AND @n_PgGroup <> @n_TTLPage    
-    BEGIN
-
-         IF @c_UpdPage= 'Y'  
-         BEGIN
-            UPDATE #TEMP_PICK
-            SET TTLPAGE = @n_PgGroup
-            WHERE orderkey = @c_orderkey 
-        END
-        ELSE IF @n_GetPageno > 1
-        BEGIN
-            UPDATE #TEMP_PICK
-            SET TTLPAGE = @n_PgGroup
-            WHERE orderkey = @c_orderkey 
-        END
-
-    END
-  
-      SELECT @c_PrevOrderKey = @c_orderkey     
-      SELECT @n_initialflag = @n_initialflag + 1  
-      SELECT @c_PrevLoadKey = @c_loadkey             --CS02
-      SELECT @c_prevPutawayzone = @c_Putawayzone     --CS02     
-      SET  @c_UpdGrp = 'N'
-      SET  @c_ChgGrp = 'N'
-      SET  @c_UpdPage = 'N'
-      SET  @n_CtnCurrGrp = 0
-      SET @n_lineno =  @n_lineno + 1      --CS02 S
-      SET @c_resetline ='N'
-      SET @n_PageRecGrp = @n_PgGroup
-      SET @c_lastRec      ='N'            --CS02 E
-
-
-      FETCH NEXT FROM Page_cur      
-      INTO @c_orderkey ,@n_RowNum   ,@c_Putawayzone   ,@c_loadkey ,@n_GetPageno     --CS02
-   END      
-   CLOSE Page_cur      
-   DEALLOCATE Page_cur    
-   --CS01 E  
-
-  
-   IF ISNULL(@c_PreGenRptData,'') IN ('','0')      --CS02 S
-   BEGIN      
+   --IF ISNULL(@c_PreGenRptData,'') IN ('','0')      --CS02 S
+   --BEGIN      
 --SELECT PickSlipNo      
 --         , LoadKey      
 --         , OrderKey      
 --         , ConsigneeKey      
 --         , Company     
+--         , LOC 
 --         , Putawayzone 
 --         , PgGroup      
 --         , RowNum       
@@ -840,8 +499,7 @@ SET @n_ctnputawayzone = 0
 --         , Route_Desc      
 --         , TrfRoom      
 --         , Notes1      
---         , Notes2      
---         , LOC      
+--         , Notes2           
 --         , SKU      
 --         , SkuDesc      
 --         , CASE WHEN PickByCase = 1 AND PackCaseCnt > 0 THEN (Qty % PackCaseCnt)      
@@ -885,7 +543,7 @@ SET @n_ctnputawayzone = 0
 --           CASE WHEN len(notes1) > 100 THEN +CHAR(13)+CHAR(10) + substring(notes1,101,100) ELSE '' END +   
 --          CASE WHEN len(notes2) > 0 THEN CHAR(13)+substring(notes2,1,100)ELSE '' END +   
 --          CASE WHEN len(notes2) > 100 THEN CHAR(13)+substring(notes2,101,100) ELSE '' END AS OHNotes 
---   FROM #TEMP_PICK      
+--   FROM #temp_pickdet      
 --   ORDER BY loadkey,CASE WHEN Company <> '' THEN 1 ELSE 0 END,OrderKey,RowNum,PgGroup,Putawayzone,LogicalLoc,loc,sku,Lottable01
 ----CS02 E
    SELECT PickSlipNo      
@@ -911,9 +569,9 @@ SET @n_ctnputawayzone = 0
          , TempQty2      
          , PrintedFlag      
          , Zone      
-         , PgGroup      
-         --,ROW_NUMBER() OVER (PARTITION BY PickSlipNo  
-         --                            ORDER BY PickSlipNo,LoadKey,OrderKey)   /(@n_NoOfLine+1)+1 AS PgGroup 
+      --   , PgGroup      
+         ,ROW_NUMBER() OVER (PARTITION BY PickSlipNo  
+                                     ORDER BY PickSlipNo,LoadKey,OrderKey)   /(@n_NoOfLine+1)+1 AS PgGroup 
          , RowNum      
          , Lot      
          , Carrierkey      
@@ -938,7 +596,7 @@ SET @n_ctnputawayzone = 0
          , Qty AS qtypicked      
          , SysQty      
          , ORDGRP,LOTT12,lotlOT12,BatchNo,BatchNo2,SerialNo,SerialNo2      
-         , PackUOM1 ,PackUOM2,PackUOM3,ISNULL(PInnerPack,0),ISNULL(PUOM3Qty,0)      
+         , PackUOM1 ,PackUOM2,PackUOM3,ISNULL(PInnerPack,0) ,ISNULL(PUOM3Qty,0)     
          , buyerpo           
          , SHOWBUYERPO       
          , SHOWFIELD      
@@ -949,18 +607,15 @@ SET @n_ctnputawayzone = 0
            CASE WHEN len(notes1) > 100 THEN +CHAR(13)+CHAR(10) + substring(notes1,101,100) ELSE '' END +   
           CASE WHEN len(notes2) > 0 THEN CHAR(13)+substring(notes2,1,100)ELSE '' END +   
           CASE WHEN len(notes2) > 100 THEN CHAR(13)+substring(notes2,101,100) ELSE '' END AS OHNotes 
---,recgrp = ROW_NUMBER() OVER (PARTITION BY PickSlipNo
---                                      ORDER BY PickSlipNo,LoadKey,OrderKey)   /@n_NoOfLine+1
-   FROM #TEMP_PICK      
+,recgrp = ROW_NUMBER() OVER (PARTITION BY PickSlipNo
+                                      ORDER BY PickSlipNo,LoadKey,OrderKey)   /@n_NoOfLine+1
+   FROM #temp_pickdet    
    ORDER BY loadkey,CASE WHEN Company <> '' THEN 1 ELSE 0 END,OrderKey,RowNum,PgGroup,Putawayzone,LogicalLoc,loc,sku,Lottable01
-   END      
+   --END      
       
-   IF OBJECT_ID('tempdb..#TEMP_PICK') IS NOT NULL      
-      DROP TABLE #TEMP_PICK        
-          
-  
-   IF OBJECT_ID('tempdb..#Page_cur') IS NOT NULL      
-      DROP TABLE #Page_cur   
+   IF OBJECT_ID('tempdb..#temp_pickdet') IS NOT NULL      
+      DROP TABLE #temp_pickdet        
+           
   
    WHILE @@TRANCOUNT < @n_starttcnt          
    BEGIN          

@@ -325,6 +325,7 @@ BEGIN
    SET @cSKUDescr = ''  
    SET @cSKUBarcode = ''  
    SET @cType = ''  
+   SET @cSKUConfig = ''
   
    SET @nTotalRec = 0  
    SET @nCurrentRec = 0  

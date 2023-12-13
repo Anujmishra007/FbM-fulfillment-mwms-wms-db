@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_Batching_AssignCart]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_Batching_AssignCart]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -26,9 +21,11 @@ GO
 /* Data Modifications:                                                     */
 /*                                                                         */
 /* Updates:                                                                */
-/* Date         Author  Ver   Purposes                                     */
+/* Date         Author  Ver   Purposes                                     */                 
+/* 29-NOV-2023  NJOW01  1.0   WMS-24313 Allow configure custom SP          */ 
+/* 29-NOV-2023  NJOW01  1.0   DEVOPS Combine Script                        */
 /***************************************************************************/  
-CREATE PROC [dbo].[isp_Batching_AssignCart]  
+CREATE OR ALTER PROC [dbo].[isp_Batching_AssignCart]  
 (     @c_TaskBatchNo   NVARCHAR(10)   
   ,   @b_Success       INT           OUTPUT
   ,   @n_Err           INT           OUTPUT
@@ -47,11 +44,14 @@ BEGIN
            @c_Storerkey NVARCHAR(15),
            @c_DevicePosition NVARCHAR(10),
            @c_LogicalName NVARCHAR(10),
-           @n_ordcnt INT          
+           @n_ordcnt INT,
+           @c_Facility NVARCHAR(5), --NJOW01          
+           @c_Batching_AssignCart_SP NVARCHAR(30) --NJOW01
 
    SELECT @b_Success = 1, @n_Err = 0, @c_ErrMsg = '', @n_Continue = 1, @n_StartTranCount = @@TRANCOUNT              
 
    SELECT @c_Storerkey = MAX(O.Storerkey),
+          @c_Facility = MAX(O.Facility), --NJOW01
   	      @n_ordcnt = COUNT(DISTINCT O.orderkey)
    FROM ORDERS O (NOLOCK)
    JOIN PICKDETAIL PD (NOLOCK) ON O.Orderkey = PD.Orderkey
@@ -59,20 +59,46 @@ BEGIN
    WHERE PT.TaskBatchNo = @c_TaskBatchNo
    AND RIGHT(RTRIM(ISNULL(PD.Notes,'')),1) IN ('1','4') --1=Multi-S 4=Multi-M
    
-   SELECT DevicePosition, 0 AS Status, LogicalName
-   INTO #TMP_CartPosition
-   FROM DEVICEPROFILE (NOLOCK)
-   WHERE Devicetype = 'CART' 
-   AND Priority = 'M' 
-   AND Storerkey = @c_Storerkey
-   
-   IF (SELECT COUNT(DISTINCT DevicePosition) FROM #TMP_CartPosition) < @n_ordcnt
+   --NJOW01 S      
+   SELECT @c_Batching_AssignCart_SP = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'Batching_AssignCart_SP')  
+     
+   IF ISNULL(@c_Batching_AssignCart_SP,'') <> '' 
+      AND EXISTS (SELECT 1 FROM dbo.sysobjects WHERE name = RTRIM(@c_Batching_AssignCart_SP) AND type = 'P') 
    BEGIN
-      SET @n_continue = 3      
-      SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)    
-      SET @n_err = 81010  -- Should Be Set To The SQL Errmessage but I don't know how to do so.      
-      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insuffice Cart Device Position (isp_Batching_AssignCart)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '      
-   END   
+   	  EXEC isp_Batching_AssignCart_Wrapper
+         @c_TaskBatchNo  = @c_TaskBatchNo
+        ,@b_Success      = @b_Success   OUTPUT
+        ,@n_Err          = @n_Err       OUTPUT
+        ,@c_ErrMsg       = @c_ErrMsg    OUTPUT      	  
+        
+      IF @b_Success <> 1 
+      BEGIN
+         SELECT @n_Continue = 3
+      END  
+      ELSE
+      BEGIN
+      	 SELECT @n_Continue = 4
+      END      
+   END
+   --NJOW01 E
+      
+   IF @n_continue IN (1,2) 
+   BEGIN
+      SELECT DevicePosition, 0 AS Status, LogicalName
+      INTO #TMP_CartPosition
+      FROM DEVICEPROFILE (NOLOCK)
+      WHERE Devicetype = 'CART' 
+      AND Priority = 'M' 
+      AND Storerkey = @c_Storerkey
+   
+      IF (SELECT COUNT(DISTINCT DevicePosition) FROM #TMP_CartPosition) < @n_ordcnt
+      BEGIN
+         SET @n_continue = 3      
+         SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)    
+         SET @n_err = 81010  -- Should Be Set To The SQL Errmessage but I don't know how to do so.      
+         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insuffice Cart Device Position (isp_Batching_AssignCart)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '      
+      END   
+   END
    	     
    IF @n_continue IN (1,2)
    BEGIN   	     	     	     	  

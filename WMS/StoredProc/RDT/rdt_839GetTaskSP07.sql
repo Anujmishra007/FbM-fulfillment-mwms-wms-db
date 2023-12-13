@@ -12,6 +12,7 @@ GO
 /* 09-12-2022 1.0  Ung         WMS-21244 base on rdt_PickPiece_GetTask                             */
 /* 25-05-2023 1.1  Ung         WMS-22391 NEXTLOC no task, loop back skipped LOC, if there is any   */
 /* 28-07-2023 1.2  Ung         WMS-23002 Add serial no                                             */
+/* 09-11-2023 1.3  Ung         WMS-21244 Fix LogicalLOC size                                       */
 /***************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_839GetTaskSP07] (
@@ -202,7 +203,7 @@ BEGIN
       '@cPickConfirmStatus NVARCHAR( 1),  ' + 
       '@cPickZone          NVARCHAR( 10) = '''', ' + 
       '@cLOCAisle          NVARCHAR( 10) = '''', ' + 
-      '@cLogicalLOC        NVARCHAR( 10) = '''', ' + 
+      '@cLogicalLOC        NVARCHAR( 18) = '''', ' + 
       '@cLOC               NVARCHAR( 10) = '''', ' + 
       '@cSKU               NVARCHAR( 20) = '''', ' + 
       '@cSuggAisle         NVARCHAR( 10) = '''' OUTPUT, ' +   

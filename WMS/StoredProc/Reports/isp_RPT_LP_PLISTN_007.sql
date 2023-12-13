@@ -13,7 +13,7 @@ GO
 /*                                                                         */
 /* Called By: RPT_LP_PLISTN_007                                            */
 /*                                                                         */
-/* Github Version: 1.0                                                     */
+/* Github Version: 1.1                                                     */
 /*                                                                         */
 /* Version: 1.0                                                            */
 /*                                                                         */
@@ -22,6 +22,7 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 13-Jun-2022  WLChooi  1.0  DevOps Combine Script                        */
+/* 28-Nov-2023  WLChooi  1.1  WMS-24158 - Fix Reprint logic (WL01)         */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTN_007]
@@ -229,7 +230,8 @@ BEGIN
    -- Use Zone as a UOM Picked 1 - Pallet, 2 - Case, 6 - Each, 8 - By Order    
    IF EXISTS (  SELECT 1
                 FROM PICKHEADER (NOLOCK)
-                WHERE ExternOrderKey = @c_Loadkey AND Zone = '3')
+                WHERE ExternOrderKey = @c_Loadkey AND Zone = '3'
+                AND PickType = '1' )   --WL01
    BEGIN
       SELECT @c_firsttime = N'N'
       SELECT @c_PrintedFlag = N'Y'
@@ -282,10 +284,7 @@ BEGIN
                WHEN '3' THEN PACK.InnerPack
                ELSE 1 END AS UOMQty
         , 0 AS TempQty2
-        , ISNULL((  SELECT DISTINCT 'Y'
-                    FROM PICKHEADER (NOLOCK)
-                    WHERE ExternOrderKey = @c_Loadkey AND Zone = '3')
-               , 'N') AS PrintedFlag
+        , @c_PrintedFlag AS PrintedFlag   --WL01
         , '3' Zone
         , PICKDETAIL.Lot
         , '' CarrierKey
@@ -439,8 +438,7 @@ BEGIN
       BEGIN
          IF @@TRANCOUNT > 0
          BEGIN
-            COMMIT TRAN
-         -- SELECT @c_PrintedFlag = "Y"    
+            COMMIT TRAN 
          END
          ELSE
          BEGIN
@@ -568,7 +566,7 @@ BEGIN
            , externorderkey
            , LogicalLoc
            , DeliveryDate
-           , Uom
+           , Uom = TRIM(Uom)   --WL01
            , Susr3
            , InvoiceNo
            , Ovas

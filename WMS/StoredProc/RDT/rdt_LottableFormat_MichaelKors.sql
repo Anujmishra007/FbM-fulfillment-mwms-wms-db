@@ -12,6 +12,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
 /* 2023-09-02 1.0  Ung        WMS-23316 Created                         */
+/* 2023-12-11 1.1  Ung        Fix infinity loop in Group C logic        */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE rdt.rdt_LottableFormat_MichaelKors(
     @nMobile          INT
@@ -124,7 +125,7 @@ BEGIN
             AND Code2 = SUBSTRING( @cLottable, 4, 2)
 
          SET @nWeekOfYear = CAST( SUBSTRING( @cLottable, 6, 2) AS INT)
-         SET @nDayOfWeek = CAST( SUBSTRING( @cLottable, 1, 8) AS INT)   -- 1=Mon, 2=Tue, 3=Wed... Sun=7 
+         SET @nDayOfWeek = CAST( SUBSTRING( @cLottable, 8, 1) AS INT)   -- 1=Mon, 2=Tue, 3=Wed... Sun=7 
          
          -- Convert to 2=Mon, 3=Tue, 4=Wed... Sun=1, under @@DATEFIRST = 7
          SET @nDayOfWeek += 1                                           

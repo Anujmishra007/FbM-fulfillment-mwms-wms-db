@@ -29,6 +29,7 @@ GO
 /* 07-APR-2023 CSCHONG  1.4   WMS-22241 add new field  (CS02)              */
 /* 15-JUN-2023 Nicholas 1.5   WMS-22859 add labelno logic (NL02)           */
 /* 27-SEP-2023 Nicholas 1.6   WMS-23795 add platform, add new logic (NL03) */
+/* 01-NOV-2023 CSCHONG  1.7   WMS-23985 revised field logic (CS03)         */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_UCC_Carton_Label_102]
    @c_StorerKey     NVARCHAR(15)
@@ -301,7 +302,7 @@ BEGIN
                  , OH.ExternOrderKey
                  , CASE WHEN OH.StorerKey IN ( 'Adidas' ) THEN CONVERT(DATETIME, OH.UserDefine03)
                         ELSE OH.DeliveryDate END
-                 , OH.DeliveryDate
+                 , CASE WHEN OH.StorerKey = 'PUMA' THEN OH.userdefine06 ELSE OH.DeliveryDate END    --CS03
                  , ''
                  , ''
                  , CASE WHEN ISNUMERIC(C.Long) = 1 THEN CAST(C.Long AS INT)

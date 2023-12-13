@@ -1,7 +1,3 @@
-IF EXISTS (SELECT name FROM SysObjects WHERE name = N'isp_AssignPackLabelToOrderByLoad' AND TYPE = 'P')
-DROP PROC isp_AssignPackLabelToOrderByLoad
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -47,9 +43,11 @@ GO
 /* 08-Nov-2021 NJOW08   2.5   DEVOPS combine script                     */
 /* 02-Dec-2021 NJOW09   2.6   WMS-18514 add label parameter to          */
 /*                            @c_GetPickDetCondition                    */
+/* 22-Nov-2023 NJOW10   2.7   WMS-24253 Support assign label based on   */
+/*                            PACKDETAILINFO table by config            */
 /************************************************************************/  
   
-CREATE PROC [dbo].[isp_AssignPackLabelToOrderByLoad]  
+CREATE OR ALTER PROC [dbo].[isp_AssignPackLabelToOrderByLoad]  
 (@c_Pickslipno NVARCHAR(10),   --NJOW03  
  @b_Success      INT       OUTPUT,  
  @n_err          INT       OUTPUT,  
@@ -72,17 +70,22 @@ SELECT @c_debug = '0'
   
 SELECT @n_continue = 1, @n_starttcnt = @@TRANCOUNT, @b_success=0, @n_err=0  
   
-DECLARE @c_sku              NVARCHAR(20),  
-        @n_packqty          INT,  
-        @n_pickqty          INT,  
-        @n_splitqty         INT,  
-        @c_labelno          NVARCHAR(20),  
-        @c_pickdetailkey    NVARCHAR(10),  
-        @c_newpickdetailkey NVARCHAR(10),  
-        @c_orderkey         NVARCHAR(10), --NJOW02  
-        @c_loadkey          NVARCHAR(10),  --NJOW03  
-        @n_TotPickQty       INT,  
-        @n_TotPackQty       INT
+DECLARE @c_sku                    NVARCHAR(20),  
+        @n_packqty                INT,  
+        @n_pickqty                INT,  
+        @n_splitqty               INT,  
+        @c_labelno                NVARCHAR(20),  
+        @c_pickdetailkey          NVARCHAR(10),  
+        @c_newpickdetailkey       NVARCHAR(10),  
+        @c_orderkey               NVARCHAR(10), --NJOW02  
+        @c_loadkey                NVARCHAR(10),  --NJOW03  
+        @n_TotPickQty             INT,  
+        @n_TotPackQty             INT,
+        @c_AssignByPackDetailInfo NVARCHAR(30), --NJOW10
+        @c_UserDefine01           NVARCHAR(30), --NJOW10
+        @c_UserDefine02           NVARCHAR(30), --NJOW10
+        @c_UserDefine03           NVARCHAR(30), --NJOW10
+        @c_PackDetailInfoKey      BIGINT        --NJOW10
 
 --NJOW08
 DECLARE @c_RefNo            NVARCHAR(20), 
@@ -179,12 +182,15 @@ BEGIN
       @c_option5 OUTPUT  --used for multiple settings like @c_var1=test1 @c_var2=test2
    
    --NJOW08 S   
-   SELECT @c_GetPickdetCondition = LTRIM(RTRIM(dbo.fnc_GetParamValueFromString('@c_GetPickDetCondition', @c_option5, @c_GetPickdetCondition)))
-       
+   SELECT @c_GetPickdetCondition = LTRIM(RTRIM(dbo.fnc_GetParamValueFromString('@c_GetPickDetCondition', @c_option5, @c_GetPickdetCondition)))              
+          
    IF @c_GetPickdetCondition <> '' AND LEFT(@c_GetPickdetCondition,4) <> 'AND '
       SET @c_GetPickdetCondition = 'AND ' + @c_GetPickdetCondition
    --NJOW08 E    
-                   
+   
+   --NJOW10
+   SELECT @c_AssignByPackDetailInfo = LTRIM(RTRIM(dbo.fnc_GetParamValueFromString('@c_AssignByPackDetailInfo', @c_option5, @c_AssignByPackDetailInfo)))  
+                
    IF @b_success = 1 AND ISNULL(@c_AssignPackLabelToOrdCfg,'') =  '1' AND ISNULL(@c_Option1,'') <> ''  
    BEGIN  
       IF EXISTS(SELECT 1 FROM sys.Objects WHERE NAME = @c_Option1 AND TYPE = 'P')     
@@ -228,7 +234,7 @@ BEGIN
         WHERE PICKDETAIL.Orderkey = @c_orderkey  
    END  
   
-OPEN PickDet_cur  
+   OPEN PickDet_cur  
    FETCH NEXT FROM PickDet_cur INTO @c_pickdetailkey  
    WHILE @@FETCH_STATUS = 0 AND ( @n_continue = 1 OR @n_continue = 2 )  
    BEGIN  
@@ -252,56 +258,123 @@ OPEN PickDet_cur
    SET @c_pickdetailkey = ''  
 END  
   
-  
 IF @n_continue = 1 OR @n_continue = 2  
 BEGIN  
   IF ISNULL(@c_Option4,'') = 'SKIPSTAMPED' --NJOW06  
   BEGIN  
-      DECLARE CUR_PACKDET CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-         SELECT PACKDETAIL.Sku, PACKDETAIL.Qty, PACKDETAIL.Labelno,  
-                PACKHEADER.Orderkey, --NJOW02  
-                PACKDETAIL.RefNo, PACKDETAIL.RefNo2, PACKDETAIL.UPC, PACKDETAIL.DropId, PACKDETAIL.LottableValue  --NJOW08
-         FROM   PACKHEADER (NOLOCK) INNER JOIN PACKDETAIL (NOLOCK) ON PACKHEADER.Pickslipno = PACKDETAIL.Pickslipno  
-         WHERE  PACKHEADER.Pickslipno = @c_Pickslipno --NJOW03  
-         AND NOT EXISTS (SELECT 1 FROM PICKDETAIL PD (NOLOCK)  
-                         WHERE PD.Orderkey = PACKHEADER.Orderkey  
-                         AND PD.Sku = PACKDETAIL.Sku   
-                         AND PD.CaseID = CASE WHEN @c_Option2 = 'CaseID' THEN PACKDETAIL.LabelNo ELSE PD.CaseID END  
-                         AND PD.DropID = CASE WHEN @c_Option2 = 'CaseID' THEN PD.DropID ELSE PACKDETAIL.LabelNo END  
-                         )  
-         AND PACKHEADER.Orderkey <> ''  
-         AND PACKHEADER.Orderkey IS NOT NULL  
-         UNION ALL   --NJOW07  
-         SELECT PACKDETAIL.Sku, PACKDETAIL.Qty, PACKDETAIL.Labelno,  
-                PACKHEADER.Orderkey, --NJOW02  
-                PACKDETAIL.RefNo, PACKDETAIL.RefNo2, PACKDETAIL.UPC, PACKDETAIL.DropId, PACKDETAIL.LottableValue  --NJOW08
-         FROM   PACKHEADER (NOLOCK) INNER JOIN PACKDETAIL (NOLOCK) ON PACKHEADER.Pickslipno = PACKDETAIL.Pickslipno  
-         WHERE  PACKHEADER.Pickslipno = @c_Pickslipno --NJOW03  
-         AND NOT EXISTS (SELECT 1 FROM PICKDETAIL PD (NOLOCK)  
-                         JOIN LOADPLANDETAIL LPD (NOLOCK) ON PD.Orderkey = LPD.Orderkey  
-                         WHERE LPD.Loadkey = PACKHEADER.Loadkey  
-                         AND PD.Sku = PACKDETAIL.Sku   
-                         AND PD.CaseID = CASE WHEN @c_Option2 = 'CaseID' THEN PACKDETAIL.LabelNo ELSE PD.CaseID END  
-                         AND PD.DropID = CASE WHEN @c_Option2 = 'CaseID' THEN PD.DropID ELSE PACKDETAIL.LabelNo END  
-                         )  
-         AND (PACKHEADER.Orderkey = '' OR PACKHEADER.Orderkey IS NULL)  
-         ORDER BY 1, 3  
+  	  IF @c_AssignByPackDetailInfo = 'Y'
+  	  BEGIN
+  	  	 --NJOW10
+         DECLARE CUR_PACKDET CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+            SELECT PACKDETAIL.Sku, 
+                   CASE WHEN PACKDETAILINFO.Qty IS NOT NULL THEN PACKDETAILINFO.Qty ELSE PACKDETAIL.Qty END, 
+                   PACKDETAIL.Labelno,  
+                   PACKHEADER.Orderkey, --NJOW02  
+                   PACKDETAIL.RefNo, PACKDETAIL.RefNo2, PACKDETAIL.UPC, PACKDETAIL.DropId, PACKDETAIL.LottableValue,  --NJOW08
+                   PACKDETAILINFO.PackDetailInfoKey, PACKDETAILINFO.Userdefine01, PACKDETAILINFO.Userdefine02, PACKDETAILINFO.Userdefine03           
+            FROM   PACKHEADER (NOLOCK) INNER JOIN PACKDETAIL (NOLOCK) ON PACKHEADER.Pickslipno = PACKDETAIL.Pickslipno  
+            LEFT JOIN PACKDETAILINFO (NOLOCK) ON PACKHEADER.Pickslipno = PACKDETAILINFO.Pickslipno  AND PACKDETAIL.CartonNo = PACKDETAILINFO.CartonNo 
+                                              AND PACKDETAIL.LabelLine = PACKDETAILINFO.LabelLine            
+            WHERE  PACKHEADER.Pickslipno = @c_Pickslipno --NJOW03  
+            AND NOT EXISTS (SELECT 1 FROM PICKDETAIL PD (NOLOCK)  
+                            WHERE PD.Orderkey = PACKHEADER.Orderkey  
+                            AND PD.Sku = PACKDETAIL.Sku   
+                            AND PD.CaseID = CASE WHEN @c_Option2 = 'CaseID' THEN PACKDETAIL.LabelNo ELSE PD.CaseID END  
+                            AND PD.DropID = CASE WHEN @c_Option2 = 'CaseID' THEN PD.DropID ELSE PACKDETAIL.LabelNo END  
+                            )  
+            AND PACKHEADER.Orderkey <> ''  
+            AND PACKHEADER.Orderkey IS NOT NULL  
+            UNION ALL   --NJOW07  
+            SELECT PACKDETAIL.Sku, PACKDETAIL.Qty, PACKDETAIL.Labelno,  
+                   PACKHEADER.Orderkey, --NJOW02  
+                   PACKDETAIL.RefNo, PACKDETAIL.RefNo2, PACKDETAIL.UPC, PACKDETAIL.DropId, PACKDETAIL.LottableValue,  --NJOW08
+                   PACKDETAILINFO.PackDetailInfoKey, PACKDETAILINFO.Userdefine01, PACKDETAILINFO.Userdefine02, PACKDETAILINFO.Userdefine03             
+            FROM   PACKHEADER (NOLOCK) INNER JOIN PACKDETAIL (NOLOCK) ON PACKHEADER.Pickslipno = PACKDETAIL.Pickslipno  
+            LEFT JOIN PACKDETAILINFO (NOLOCK) ON PACKHEADER.Pickslipno = PACKDETAILINFO.Pickslipno  AND PACKDETAIL.CartonNo = PACKDETAILINFO.CartonNo 
+                                              AND PACKDETAIL.LabelLine = PACKDETAILINFO.LabelLine            
+            WHERE  PACKHEADER.Pickslipno = @c_Pickslipno --NJOW03  
+            AND NOT EXISTS (SELECT 1 FROM PICKDETAIL PD (NOLOCK)  
+                            JOIN LOADPLANDETAIL LPD (NOLOCK) ON PD.Orderkey = LPD.Orderkey  
+                            WHERE LPD.Loadkey = PACKHEADER.Loadkey  
+                            AND PD.Sku = PACKDETAIL.Sku   
+                            AND PD.CaseID = CASE WHEN @c_Option2 = 'CaseID' THEN PACKDETAIL.LabelNo ELSE PD.CaseID END  
+                            AND PD.DropID = CASE WHEN @c_Option2 = 'CaseID' THEN PD.DropID ELSE PACKDETAIL.LabelNo END  
+                            )  
+            AND (PACKHEADER.Orderkey = '' OR PACKHEADER.Orderkey IS NULL)  
+            ORDER BY 1, 3                	  	
+  	  END
+  	  ELSE
+  	  BEGIN  	
+         DECLARE CUR_PACKDET CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+            SELECT PACKDETAIL.Sku, PACKDETAIL.Qty, PACKDETAIL.Labelno,  
+                   PACKHEADER.Orderkey, --NJOW02  
+                   PACKDETAIL.RefNo, PACKDETAIL.RefNo2, PACKDETAIL.UPC, PACKDETAIL.DropId, PACKDETAIL.LottableValue,  --NJOW08
+                   NULL, NULL, NULL, NULL --NJOW10                
+            FROM   PACKHEADER (NOLOCK) INNER JOIN PACKDETAIL (NOLOCK) ON PACKHEADER.Pickslipno = PACKDETAIL.Pickslipno  
+            WHERE  PACKHEADER.Pickslipno = @c_Pickslipno --NJOW03  
+            AND NOT EXISTS (SELECT 1 FROM PICKDETAIL PD (NOLOCK)  
+                            WHERE PD.Orderkey = PACKHEADER.Orderkey  
+                            AND PD.Sku = PACKDETAIL.Sku   
+                            AND PD.CaseID = CASE WHEN @c_Option2 = 'CaseID' THEN PACKDETAIL.LabelNo ELSE PD.CaseID END  
+                            AND PD.DropID = CASE WHEN @c_Option2 = 'CaseID' THEN PD.DropID ELSE PACKDETAIL.LabelNo END  
+                            )  
+            AND PACKHEADER.Orderkey <> ''  
+            AND PACKHEADER.Orderkey IS NOT NULL  
+            UNION ALL   --NJOW07  
+            SELECT PACKDETAIL.Sku, PACKDETAIL.Qty, PACKDETAIL.Labelno,  
+                   PACKHEADER.Orderkey, --NJOW02  
+                   PACKDETAIL.RefNo, PACKDETAIL.RefNo2, PACKDETAIL.UPC, PACKDETAIL.DropId, PACKDETAIL.LottableValue,  --NJOW08
+                   NULL, NULL, NULL, NULL --NJOW10                
+            FROM   PACKHEADER (NOLOCK) INNER JOIN PACKDETAIL (NOLOCK) ON PACKHEADER.Pickslipno = PACKDETAIL.Pickslipno  
+            WHERE  PACKHEADER.Pickslipno = @c_Pickslipno --NJOW03  
+            AND NOT EXISTS (SELECT 1 FROM PICKDETAIL PD (NOLOCK)  
+                            JOIN LOADPLANDETAIL LPD (NOLOCK) ON PD.Orderkey = LPD.Orderkey  
+                            WHERE LPD.Loadkey = PACKHEADER.Loadkey  
+                            AND PD.Sku = PACKDETAIL.Sku   
+                            AND PD.CaseID = CASE WHEN @c_Option2 = 'CaseID' THEN PACKDETAIL.LabelNo ELSE PD.CaseID END  
+                            AND PD.DropID = CASE WHEN @c_Option2 = 'CaseID' THEN PD.DropID ELSE PACKDETAIL.LabelNo END  
+                            )  
+            AND (PACKHEADER.Orderkey = '' OR PACKHEADER.Orderkey IS NULL)  
+            ORDER BY 1, 3  
+      END   
   END  
   ELSE  
-  BEGIN      
-      DECLARE CUR_PACKDET CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-      SELECT PACKDETAIL.Sku, PACKDETAIL.Qty, PACKDETAIL.Labelno,  
-             PACKHEADER.Orderkey, --NJOW02  
-             PACKDETAIL.RefNo, PACKDETAIL.RefNo2, PACKDETAIL.UPC, PACKDETAIL.DropId, PACKDETAIL.LottableValue  --NJOW08
-      FROM   PACKHEADER (NOLOCK) INNER JOIN PACKDETAIL (NOLOCK) ON PACKHEADER.Pickslipno = PACKDETAIL.Pickslipno  
-      WHERE  PACKHEADER.Pickslipno = @c_Pickslipno --NJOW03  
-      ORDER BY PACKDETAIL.Sku, PACKDETAIL.Labelno  
+  BEGIN       	                      
+  	  IF @c_AssignByPackDetailInfo = 'Y' 
+  	  BEGIN
+  	  	 --NJOW10  	  	 
+         DECLARE CUR_PACKDET CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+         SELECT PACKDETAIL.Sku, 
+                CASE WHEN PACKDETAILINFO.Qty IS NOT NULL THEN PACKDETAILINFO.Qty ELSE PACKDETAIL.Qty END, 
+                PACKDETAIL.Labelno,  
+                PACKHEADER.Orderkey, --NJOW02  
+                PACKDETAIL.RefNo, PACKDETAIL.RefNo2, PACKDETAIL.UPC, PACKDETAIL.DropId, PACKDETAIL.LottableValue,  --NJOW08
+                PACKDETAILINFO.PackDetailInfoKey, PACKDETAILINFO.Userdefine01, PACKDETAILINFO.Userdefine02, PACKDETAILINFO.Userdefine03
+         FROM   PACKHEADER (NOLOCK) INNER JOIN PACKDETAIL (NOLOCK) ON PACKHEADER.Pickslipno = PACKDETAIL.Pickslipno  
+         LEFT JOIN PACKDETAILINFO (NOLOCK) ON PACKHEADER.Pickslipno = PACKDETAILINFO.Pickslipno  AND PACKDETAIL.CartonNo = PACKDETAILINFO.CartonNo 
+                                           AND PACKDETAIL.LabelLine = PACKDETAILINFO.LabelLine
+         WHERE  PACKHEADER.Pickslipno = @c_Pickslipno --NJOW03           
+         ORDER BY PACKDETAIL.Sku, PACKDETAIL.Labelno, PACKDETAIL.LabelLine                             
+  	  END
+  	  ELSE
+  	  BEGIN
+         DECLARE CUR_PACKDET CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+         SELECT PACKDETAIL.Sku, PACKDETAIL.Qty, PACKDETAIL.Labelno,  
+                PACKHEADER.Orderkey, --NJOW02  
+                PACKDETAIL.RefNo, PACKDETAIL.RefNo2, PACKDETAIL.UPC, PACKDETAIL.DropId, PACKDETAIL.LottableValue,  --NJOW08
+                NULL, NULL, NULL, NULL --NJOW10
+         FROM   PACKHEADER (NOLOCK) INNER JOIN PACKDETAIL (NOLOCK) ON PACKHEADER.Pickslipno = PACKDETAIL.Pickslipno  
+         WHERE  PACKHEADER.Pickslipno = @c_Pickslipno --NJOW03  
+         ORDER BY PACKDETAIL.Sku, PACKDETAIL.Labelno  
+      END
    END  
   
    OPEN CUR_PACKDET  
   
    FETCH NEXT FROM CUR_PACKDET INTO @c_sku, @n_packqty, @c_labelno, @c_orderkey, --NJOW02  
-                                    @c_RefNo, @c_RefNo2, @c_UPC, @c_DropID, @c_LottableValue  --NJOW08   
+                                    @c_RefNo, @c_RefNo2, @c_UPC, @c_DropID, @c_LottableValue,  --NJOW08   
+                                    @c_PackDetailInfoKey, @c_UserDefine01,  @c_UserDefine02, @c_UserDefine03  --NJOW10
+                                            
    WHILE @@FETCH_STATUS <> -1  
    BEGIN  
      SELECT @c_pickdetailkey = ''  
@@ -350,19 +423,23 @@ BEGIN
                     + @c_GetPickdetCondition  --NJOW08
                     + ' ORDER BY PICKDETAIL.Pickdetailkey'  
   
-         SET @c_SQLArgument = N'@n_cnt             INT            OUTPUT'  
-                            + ',@n_pickqty         INT            OUTPUT'  
-                            + ',@c_PickDetailKey   NVARCHAR(10)   OUTPUT'  
-                            + ',@c_loadkey         NVARCHAR(10)'  
-                            + ',@c_orderkey        NVARCHAR(10)'  
-                            + ',@c_sku             NVARCHAR(20)'  
-                            + ',@c_StorerKey       NVARCHAR(15)'  
-                            + ',@c_RefNo           NVARCHAR(20)'  --NJOW08
-                            + ',@c_RefNo2          NVARCHAR(30)'
-                            + ',@c_UPC             NVARCHAR(30)' 
-                            + ',@c_DropID          NVARCHAR(20)'
-                            + ',@c_LottableValue   NVARCHAR(60)'
-                            + ',@c_LabelNo         NVARCHAR(20)' --NJOW09
+         SET @c_SQLArgument = N'@n_cnt               INT            OUTPUT'  
+                            + ',@n_pickqty           INT            OUTPUT'  
+                            + ',@c_PickDetailKey     NVARCHAR(10)   OUTPUT'  
+                            + ',@c_loadkey           NVARCHAR(10)'  
+                            + ',@c_orderkey          NVARCHAR(10)'  
+                            + ',@c_sku               NVARCHAR(20)'  
+                            + ',@c_StorerKey         NVARCHAR(15)'  
+                            + ',@c_RefNo             NVARCHAR(20)'  --NJOW08
+                            + ',@c_RefNo2            NVARCHAR(30)'
+                            + ',@c_UPC               NVARCHAR(30)' 
+                            + ',@c_DropID            NVARCHAR(20)'
+                            + ',@c_LottableValue     NVARCHAR(60)'
+                            + ',@c_LabelNo           NVARCHAR(20)' --NJOW09
+                            + ',@c_PackDetailInfoKey BIGINT' --NJOW10
+                            + ',@c_Userdefine01      NVARCHAR(30)' --NJOW10
+                            + ',@c_Userdefine02      NVARCHAR(30)' --NJOW10
+                            + ',@c_Userdefine03      NVARCHAR(30)' --NJOW10                            
     
          EXEC sp_executesql @c_SQL  
                ,  @c_SQLArgument  
@@ -379,6 +456,11 @@ BEGIN
                ,  @c_DropID
                ,  @c_LottableValue
                ,  @c_labelno  --NJOW09
+               ,  @c_PackDetailInfoKey --NJOW10
+               ,  @c_UserDefine01 --NJOW10
+               ,  @c_UserDefine02  --NJOW10
+               ,  @c_UserDefine03  --NJOW10
+               
     
          IF @n_cnt = 0  
             BREAK  
@@ -465,11 +547,11 @@ BEGIN
          END  
       END -- While packqty > 0  
      FETCH NEXT FROM CUR_PACKDET INTO @c_sku, @n_packqty, @c_labelno, @c_orderkey, --NJOW02  
-                                      @c_RefNo, @c_RefNo2, @c_UPC, @c_DropID, @c_LottableValue  --NJOW08        
+                                      @c_RefNo, @c_RefNo2, @c_UPC, @c_DropID, @c_LottableValue,  --NJOW08        
+                                      @c_PackDetailInfoKey, @c_UserDefine01,  @c_UserDefine02, @c_UserDefine03  --NJOW10
    END -- Cursor While  
    DEALLOCATE CUR_PACKDET  
 END  
-  
 IF @n_continue = 3  -- Error Occured - Process And Return  
 BEGIN  
    SELECT @b_success = 0  

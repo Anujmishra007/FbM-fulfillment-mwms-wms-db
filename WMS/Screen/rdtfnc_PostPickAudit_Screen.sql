@@ -11,7 +11,7 @@ EXECUTE rdt.rdtAddScn 814, 'ENG',
    ,@cLine08 = '%20i06'
    ,@cLine09 = 'TASKKEY:  %10i07'   -- WMS-8002
    ,@cLine14 = '%e'
- 
+   
 -- 815 = Statistic screen
 DELETE rdt.RDTScn WHERE Scn = 815 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 815, 'ENG',
@@ -29,7 +29,7 @@ EXECUTE rdt.rdtAddScn 815, 'ENG',
    ,@cLine12 = 'QTY CKD: %11d07'
    ,@cLine13 = '%20d08'
    ,@cLine14 = '%e'
- 
+   
 -- 816 = SKU QTY screen
 DELETE rdt.RDTScn WHERE Scn = 816 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 816, 'ENG',
@@ -47,7 +47,7 @@ EXECUTE rdt.rdtAddScn 816, 'ENG',
    ,@cLine12 = 'TOTAL:  %05d13 %06d14' --WMS-20944
    ,@cLine13 = '%20d15'
    ,@cLine14 = '%e'
- 
+   
  -- 817 = Discrepency screen
 DELETE rdt.RDTScn WHERE Scn = 817 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 817, 'ENG',
@@ -61,7 +61,7 @@ EXECUTE rdt.rdtAddScn 817, 'ENG',
    ,@cLine09 = 'Reason Code' --WMS17278
    ,@cLine10 = '%20i02'      --WMS17278
    ,@cLine14 = '%e'
-
+   
  -- 818 = Print packing list
 DELETE rdt.RDTScn WHERE Scn = 818 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 818, 'ENG',
@@ -73,14 +73,14 @@ EXECUTE rdt.rdtAddScn 818, 'ENG',
    ,@cLine06 = ''
    ,@cLine07 = 'OPTION: %01i01'
    ,@cLine14 = '%e'
-
+   
 -- WMS-8002
 -- 819 Capture data
 DELETE rdt.RDTScn WHERE Scn = 819 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 819, 'ENG'
    ,@cLine01 = '%20d01'
    ,@cLine02 = '%20d02'
-   ,@cLine03 = 'CAPTURE DATA'
+   ,@cLine03 = '%20d04' -- WMS24201
    ,@cLine04 = '%60i03'
    ,@cLine05 = ''
    ,@cLine06 = ''
@@ -92,6 +92,7 @@ EXECUTE rdt.rdtAddScn 819, 'ENG'
    ,@cLine12 = ''
    ,@cLine13 = '%20d13'
    ,@cLine14 = '%e'
+   
 -- WMS-17439
 -- 5980 Capture data
 DELETE rdt.RDTScn WHERE Scn = 5980 AND Lang_Code = 'ENG'
@@ -99,6 +100,4 @@ EXECUTE rdt.rdtAddScn 5980, 'ENG'
    ,@cLine01 = 'CARTON: %10i01'
    ,@cLine02 = 'CUBE: %10i02'
    ,@cLine03 = 'WEIGHT:   %10i03'
-   ,@cLine14 = '%e'
-   
-SELECT * FROM rdt.rdtscn (NOLOCK) WHERE scn = '5980'
+   ,@cLine14 = '%e'   

@@ -24,6 +24,7 @@ GO
 /* Updates:                                                             */    
 /* Date         Author  Rev   Purposes                                  */ 
 /* 04-AUG-2023  NJOW    1.0   Devops Combine Script                     */
+/* 30-NOV-2023  NJOW01  1.1   WMS-22310 Update Loc to userdefine05      */
 /************************************************************************/    
 CREATE OR ALTER PROC [dbo].[ispPOA25]      
      @c_OrderKey    NVARCHAR(10) = ''   
@@ -52,7 +53,9 @@ BEGIN
             @c_SQL                   NVARCHAR(MAX)='',
             @n_RowRef                BIGINT,
             @c_Status                NVARCHAR(10),
-            @n_AllocatedSKU          INT
+            @n_AllocatedSKU          INT,
+            @c_LocUpdToField         NVARCHAR(30), --NJOW01
+            @c_Loc                   NVARCHAR(10)  --NJOW01
                                               
    SELECT @n_StartTCnt = @@TRANCOUNT , @n_Continue = 1, @b_Success = 1, @n_Err = 0, @c_ErrMsg = ''    
       
@@ -175,33 +178,39 @@ BEGIN
       	 --Copy from ispPOA15 E
       	
          SET @c_PickZone = ''
+         SET @c_Loc = '' --NJOW01
          SET @c_LocZoneUpdToField = 'ORDERS.UserDefine10'
+         SET @c_LocUpdToField = 'ORDERS.Userdefine05' --NJOW01
 
  	       SELECT @c_Authority = SC.Authority,
                 @c_LocZoneUpdToField_Opt5 = SC.Option5
          FROM dbo.fnc_GetRight2(@c_Facility, @c_Storerkey,'','PostAllocationSP') AS SC
       
          SELECT @c_LocZoneUpdToField = dbo.fnc_GetParamValueFromString('@c_LocZoneUpdToField', @c_LocZoneUpdToField_Opt5, @c_LocZoneUpdToField)      
+         SELECT @c_LocUpdToField = dbo.fnc_GetParamValueFromString('@c_LocUpdToField', @c_LocZoneUpdToField_Opt5, @c_LocUpdToField)  --NJOW01    
                    
-         SELECT @c_PickZone = CASE WHEN COUNT(DISTINCT LOC.PickZone) > 1 THEN 'MIXLZONE' ELSE CAST(MAX(LOC.PickZone) AS NVARCHAR) END
+         SELECT @c_PickZone = CASE WHEN COUNT(DISTINCT LOC.PickZone) > 1 THEN 'MIXLZONE' ELSE CAST(MAX(LOC.PickZone) AS NVARCHAR) END,
+                @c_Loc = MIN(PD.Loc)  --NJOW01
          FROM ORDERS O (NOLOCK)
          JOIN PICKDETAIL PD (NOLOCK) ON O.Orderkey = PD.Orderkey
          JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc
          WHERE O.Orderkey = @c_Orderkey
-         GROUP BY O.Orderkey
+         GROUP BY O.Orderkey         
                                                    
          SET @c_SQL = N'UPDATE ORDERS WITH (ROWLOCK)
-                        SET ' + ISNULL(@c_LocZoneUpdToField,'') + ' = @c_PickZone
-                          , ORDERS.TrafficCop   = NULL
+                        SET ' + ISNULL(@c_LocZoneUpdToField,'') + ' = @c_PickZone ' +
+                         ',' + ISNULL(@c_LocUpdToField,'') + ' = @c_Loc ' +  --NJOW01
+                         ', ORDERS.TrafficCop   = NULL
                           , ORDERS.EditDate     = GETDATE()
                           , ORDERS.EditWho      = SUSER_SNAME()
                         WHERE ORDERS.OrderKey   = @c_GetOrderkey'
                                           
          EXEC sp_executesql @c_SQL,
-               N'@c_PickZone NVARCHAR(10), @c_GetOrderkey NVARCHAR(10)', 
+               N'@c_PickZone NVARCHAR(10), @c_GetOrderkey NVARCHAR(10), @c_Loc NVARCHAR(10)', 
                @c_PickZone,
-               @c_GetOrderkey
-                  
+               @c_GetOrderkey,
+               @c_Loc --NJOW01
+                                 
          SELECT @n_err = @@ERROR
          
          IF @n_err <> 0                                                                                                                                                               

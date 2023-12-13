@@ -25,6 +25,7 @@
 /* 23-MAY-23    CALVIN   JSM-150842 Adjust Sorting (CLVN01)             */  
 /* 25-MAY-23    IAN      JSM-150842 Adjust Sorting (IAN01)              */  
 /* 09-JUN-23    CSCHONG  WMS-22719 add report config (CS02)             */
+/* 05-DEC-23    CIKFUN   JSM-195303 Adjust Sorting (CF01)               */
 /************************************************************************/      
       
 CREATE OR ALTER PROC [dbo].[isp_GetPickSlipWave29] (      
@@ -767,13 +768,13 @@ QUIT:
       ,  #TMP_PICK.b_City    
       ,  #TMP_PICK.b_State    
       ,  #TMP_PICK.b_Country      
-      ,  SUBSTRING(#TMP_PICK.LOC, 3, 3), SUBSTRING(#TMP_PICK.LOC, 6, 2), SUBSTRING(#TMP_PICK.LOC, 8, 3) --(CLVN01)    
+      ,  SUBSTRING(#TMP_PICK.LOC, 3, 3), CASE WHEN SUBSTRING(#TMP_PICK.LOC, 6, 2) LIKE '[0-9]%' THEN 2 ELSE 1 END, SUBSTRING(#TMP_PICK.LOC, 6, 2), SUBSTRING(#TMP_PICK.LOC, 8, 3) --(CLVN01)  --(CF01)    
       --ML02 END    
    --CS01 END    
    --ORDER BY #TMP_PICK.PickSlipNo,#TMP_PICK.LOCZone,UPPER(#TMP_PICK.LOC),  #TMP_PICK.SKU --(CLVN01)    
    --ORDER BY #TMP_PICK.PickSlipNo, UPPER(#TMP_PICK.LOC), #TMP_PICK.LOCZone, #TMP_PICK.SKU --(CLVN01)    
    --ORDER BY #TMP_PICK.PickSlipNo, SUBSTRING(#TMP_PICK.LOC, 3, 3), SUBSTRING(#TMP_PICK.LOC, 6, 2), SUBSTRING(#TMP_PICK.LOC, 8, 3), #TMP_PICK.LOCZone, #TMP_PICK.SKU --(CLVN01)    
-   ORDER BY #TMP_PICK.PickSlipNo, SUBSTRING(#TMP_PICK.LOC, 3, 3), SUBSTRING(#TMP_PICK.LOC, 6, 2), SUBSTRING(#TMP_PICK.LOC, 8, 3), #TMP_PICK.SKU --(IAN01)    
+   ORDER BY #TMP_PICK.PickSlipNo, SUBSTRING(#TMP_PICK.LOC, 3, 3), CASE WHEN SUBSTRING(#TMP_PICK.LOC, 6, 2) LIKE '[0-9]%' THEN 2 ELSE 1 END, SUBSTRING(#TMP_PICK.LOC, 6, 2), SUBSTRING(#TMP_PICK.LOC, 8, 3), #TMP_PICK.SKU --(IAN01)  --(CF01)    
              
   --SELECT '1' AS PickSlipNo    
       

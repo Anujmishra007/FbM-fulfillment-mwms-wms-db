@@ -42,7 +42,7 @@ SELECT
 ,PACKEDQTY                  = ISNULL(PA.Qty, 0) --OD.QtyToProcess
 ,LOADEDQTY                  = OD.ShippedQty
 ,SHIPPEDQTY                 = OD.ShippedQty
-,TOTAL_VOLUME               = PD.Qty * (CASE WHEN PH.TotCtnCube > 0 THEN PH.TotCtnCube WHEN OD.Capacity > 0 THEN OD.Capacity ELSE S.STDCUBE END)
+,TOTAL_VOLUME               = PD.Qty * (CASE WHEN ISNULL(PH.TotCtnCube, 0) > 0 THEN PH.TotCtnCube WHEN OD.Capacity > 0 THEN OD.Capacity WHEN O.Capacity > 0 THEN O.Capacity ELSE S.STDCUBE END)
 ,TOTAL_WEIGHT               = PD.Qty * (CASE WHEN OD.GrossWeight > 0 THEN OD.GrossWeight WHEN S.GrossWgt > 0 THEN S.GrossWgt ELSE S.STDGROSSWGT END) 
 ,PACK_WEIGHT                = P.NetWgt
 ,PARENT_CONTAINER_ID        = M.ContainerNo
@@ -88,7 +88,7 @@ OUTER APPLY (
    SELECT Qty = SUM(Qty), AddDate = MIN(AddDate), EndDate = MAX(AddDate)--EffectiveDate
    , OrderKey, OrderLineNumber
    FROM dbo.PICKDETAIL AS PD WITH (NOLOCK)
-   WHERE PD.OrderKey = OD.OrderKey AND PD.OrderLineNumber = OD.OrderLineNumber AND PD.[Status] = '9'
+   WHERE PD.OrderKey = OD.OrderKey AND PD.OrderLineNumber = OD.OrderLineNumber AND PD.Status = OD.Status
    GROUP BY OrderKey, OrderLineNumber
 ) AS PD
 WHERE EXISTS (SELECT 1 FROM dbo.SKUxLOC X WITH (NOLOCK) WHERE X.StorerKey = O.Storerkey AND X.Qty > 0)
