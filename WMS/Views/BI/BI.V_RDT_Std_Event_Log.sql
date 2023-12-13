@@ -35,6 +35,7 @@ SELECT L.EventNum
 , FunctionName = M.Message_Text
 , L.Facility
 , F.SiteID
+, L.StorerKey
 , R.Company
 , R.CustomerGroupCode
 , L.[Location]
