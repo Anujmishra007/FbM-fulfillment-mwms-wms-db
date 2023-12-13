@@ -13,7 +13,7 @@ GO
 /*                                                                       */
 /* Called By: RPT_MB_LOADMANI_002                                        */
 /*                                                                       */
-/* GitLab Version: 1.0                                                   */
+/* GitHub Version: 1.1                                                   */
 /*                                                                       */
 /* Version: 5.4                                                          */
 /*                                                                       */
@@ -22,6 +22,7 @@ GO
 /* Updates:                                                              */
 /* Date         Author  Ver   Purposes                                   */
 /* 23-Oct-2023  WLChooi  1.0  DevOps Combine Script                      */
+/* 13-Dec-2023  WLChooi  1.1  WMS-23938 - Bug Fix (WL01)                 */
 /*************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_RPT_MB_LOADMANI_002]
 (@c_Mbolkey NVARCHAR(10))
@@ -435,7 +436,7 @@ BEGIN
                                , (  SELECT SUM(m3)
                                     FROM #TMP_LOAD)) AS NVARCHAR)
         , SumPQty = IIF(Storerkey IN ( 'JDSPORTSMY', 'SPZ', 'SKECHERS' )
-                        , '(' + (SELECT CAST(pqty AS NVARCHAR)FROM #TMP_LOAD) + ')'
+                        , '(' + (SELECT CAST(SUM(pqty) AS NVARCHAR) FROM #TMP_LOAD) + ')'   --WL01
                         , '')
         , CountMBOL = (  SELECT COUNT(DISTINCT mboldesc)
                          FROM #TMP_LOAD)
