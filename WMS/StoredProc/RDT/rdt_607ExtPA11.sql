@@ -83,7 +83,7 @@ BEGIN
       	WHERE R.StorerKey = @cStorerKey
       	   AND R.UserDefine05 = @cUDF05
          	AND RD.SKU = @cSKU
-         	AND RD.BeforeReceivedQTY > 0
+         	-- AND RD.BeforeReceivedQTY > 0
          	AND RD.UserDefine10 <> 'closed'
       	ORDER BY RD.EditDate DESC
       END
@@ -104,7 +104,7 @@ BEGIN
       	WHERE R.StorerKey = @cStorerKey
       	   AND R.UserDefine05 = @cUDF05
          	AND SKU.Style = @cStyle
-         	AND RD.BeforeReceivedQTY > 0
+         	-- AND RD.BeforeReceivedQTY > 0
          	AND RD.UserDefine10 <> 'closed'
       	ORDER BY RD.EditDate DESC
       END  	
