@@ -248,7 +248,7 @@ END
                FROM PickHeader (NOLOCK)      
                JOIN Orders (NOLOCK) ON PickHeader.ExternOrderKey = Orders.Loadkey AND PickHeader.Orderkey = Orders.Orderkey    
                WHERE orders.orderkey = @c_orderkey--Orders.UserDefine09 = @c_Wavekey      
-               AND Zone = '3' )      
+               AND Zone = '3' AND DATEADD(MINUTE,1,PickHeader.adddate) < GETDATE())    --CS02a    
    BEGIN      
       SELECT @c_firsttime = 'N'      
       SELECT @c_PrintedFlag = 'Y'      
@@ -345,13 +345,14 @@ END
             ELSE 1      
           END                                         AS UOMQty      
          ,0                                           AS TempQty2      
-     
-         ,ISNULL(( SELECT DISTINCT      
-                   'Y'      
-                   FROM PickHeader (NOLOCK)      
-                   WHERE ExternOrderKey = ORDERS.Loadkey AND Orderkey = ORDERS.Orderkey    
-                   AND Zone = '3'      
-                 ), 'N')                              AS PrintedFlag      
+     --CS02a S
+         --,ISNULL(( SELECT DISTINCT      
+         --          'Y'      
+         --          FROM PickHeader (NOLOCK)      
+         --          WHERE ExternOrderKey = ORDERS.Loadkey AND Orderkey = ORDERS.Orderkey    
+         --          AND Zone = '3'      
+         --        ), 'N')                              AS PrintedFlag  
+         ,@c_PrintedFlag --CS02a E    
          ,'3'                                         AS Zone      
          ,ISNULL(RTRIM(PICKDETAIL.Lot),'')            AS Lot      
          ,''                                 AS CarrierKey      
