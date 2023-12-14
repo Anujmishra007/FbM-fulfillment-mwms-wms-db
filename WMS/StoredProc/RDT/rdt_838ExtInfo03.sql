@@ -1,11 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_838ExtInfo03]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_838ExtInfo03
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /************************************************************************/
 /* Store procedure: rdt_838ExtInfo03                                    */
@@ -13,21 +10,22 @@ GO
 /*                                                                      */
 /* Date       Rev Author      Purposes                                  */
 /* 28-03-2018 1.0 James       WMS4231 Created                           */
+/* 14-11-2023 1.1 James       WMS-24116 Extend SKU var length (james01) */
 /************************************************************************/
 
-CREATE PROC rdt.rdt_838ExtInfo03 (
-   @nMobile        INT,          
-   @nFunc          INT,          
-   @cLangCode      NVARCHAR( 3), 
-   @nStep          INT,          
-   @nAfterStep     INT,          
-   @nInputKey      INT,          
-   @cFacility      NVARCHAR( 5), 
+CREATE OR ALTER PROC [RDT].[rdt_838ExtInfo03] (
+   @nMobile        INT,
+   @nFunc          INT,
+   @cLangCode      NVARCHAR( 3),
+   @nStep          INT,
+   @nAfterStep     INT,
+   @nInputKey      INT,
+   @cFacility      NVARCHAR( 5),
    @cStorerKey     NVARCHAR( 15),
    @tVar           VariableTable READONLY,
    @cExtendedInfo  NVARCHAR( 20) OUTPUT,
    @nErrNo         INT           OUTPUT,
-   @cErrMsg        NVARCHAR( 20) OUTPUT 
+   @cErrMsg        NVARCHAR( 20) OUTPUT
 )
 AS
 BEGIN
@@ -36,7 +34,7 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @cSKU           NVARCHAR( 10),
+   DECLARE @cSKU           NVARCHAR( 20), -- (james01)
            @cPickSlipNo    NVARCHAR( 10),
            @cOrderKey      NVARCHAR( 10),
            @cLoadKey       NVARCHAR( 10),
@@ -60,10 +58,10 @@ BEGIN
             SET @cPickStatus = rdt.rdtGetConfig( @nFunc, 'PickStatus', @cStorerKey)
 
             SELECT @nTTL_Picked = ISNULL( SUM( PD.Qty), 0)
-            FROM dbo.PickHeader PH (NOLOCK)     
+            FROM dbo.PickHeader PH (NOLOCK)
             JOIN dbo.LoadPlanDetail LPD WITH (NOLOCK) ON PH.ExternOrderKey = LPD.LoadKey
-            JOIN dbo.PickDetail PD (NOLOCK) ON (LPD.OrderKey = PD.OrderKey)    
-            WHERE PH.PickHeaderKey = @cPickSlipNo    
+            JOIN dbo.PickDetail PD (NOLOCK) ON (LPD.OrderKey = PD.OrderKey)
+            WHERE PH.PickHeaderKey = @cPickSlipNo
             AND  (PD.Status = '5' OR PD.Status = @cPickStatus)
             AND   PD.SKU = @cSKU
 
@@ -72,10 +70,10 @@ BEGIN
             WHERE PickSlipNo = @cPickSlipNo
             AND   SKU = @cSKU
 
-            SET @cExtendedInfo = 'PACK/TTL:' + 
-            CAST( IsNULL( @nTTL_Packed, 0) AS NVARCHAR( 5)) + 
+            SET @cExtendedInfo = 'PACK/TTL:' +
+            CAST( IsNULL( @nTTL_Packed, 0) AS NVARCHAR( 5)) +
             '/' +
-            CAST( IsNULL( @nTTL_Picked, 0) AS NVARCHAR( 5)) 
+            CAST( IsNULL( @nTTL_Picked, 0) AS NVARCHAR( 5))
          END
       END
    END
@@ -84,11 +82,5 @@ Quit:
 
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON RDT.rdt_838ExtInfo03 TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_838ExtInfo03] TO [NSQL]
 GO
