@@ -22,6 +22,8 @@ GO
 /* 2022-10-26 1.3  James    JSM-104500 Bug fix (james03)                */
 /* 2023-09-27-1.4  Ung      WMS-23678 Fix only show 4 lottables         */
 /* 2023-11-20 1.5  YeeKung  WMS-23981 Add new params (yeekung01)        */
+/* 2023-12-13 1.6  Ung      Fix QTY not group by lottables              */
+/*                          Add PendingMoveIn                           */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_Inquiry_V7] (
@@ -145,7 +147,7 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_Inquiry_V7] (
       JOIN dbo.SKU SKU WITH (NOLOCK) ON (LLI.StorerKey = SKU.StorerKey AND LLI.SKU = SKU.SKU)
       WHERE LLI.StorerKey = @cStorerKey
       AND   LOC.Facility = @cFacility
-      AND  (LLI.QTY <> 0 OR LLI.QtyAllocated <> 0 OR LLI.QtyPicked <> 0 OR LLI.QtyExpected <> 0)
+      AND  (LLI.QTY <> 0 OR LLI.QtyAllocated <> 0 OR LLI.QtyPicked <> 0 OR LLI.QtyExpected <> 0 OR LLI.PendingMoveIn <> 0)
       AND   ( (ISNULL( @cInquiry_LOC, '') = '') OR ( LLI.LOC = @cInquiry_LOC))
       AND   ( (ISNULL( @cInquiry_ID, '') = '') OR ( LLI.ID = @cInquiry_ID))
       AND   ( (ISNULL( @cInquiry_SKU, '') = '') OR ( LLI.SKU = @cInquiry_SKU))
@@ -190,18 +192,18 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_Inquiry_V7] (
    BEGIN
       SET @cSQL = ''
       SET @cSQL =
-   '    SELECT @nTotalRec = COUNT( 1)  ' +
+      ' SELECT 1  ' +
       '    FROM dbo.LOTxLOCxID LLI WITH (NOLOCK) ' +
       '    JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = LLI.LOC) ' +
       '    JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = LLI.LOT) ' +
       '    WHERE LOC.Facility = @cFacility ' +
-      '    AND  (LLI.QTY <> 0 OR LLI.QtyAllocated <> 0 OR LLI.QtyPicked <> 0 OR LLI.QtyExpected <> 0) ' +
+      '    AND  (LLI.QTY <> 0 OR LLI.QtyAllocated <> 0 OR LLI.QtyPicked <> 0 OR LLI.QtyExpected <> 0 OR LLI.PendingMoveIN <> 0) ' +
       '    AND   LLI.StorerKey = @cStorerKey ' +
-      '    AND ( (ISNULL( @cInquiry_LOC, '''') = '''') OR ( LLI.LOC = @cInquiry_LOC)) ' +
-      '    AND ( (ISNULL( @cInquiry_ID, '''') = '''') OR ( LLI.ID = @cInquiry_ID)) ' +
-      '    AND ( (ISNULL( @cInquiry_SKU, '''') = '''') OR ( LLI.SKU = @cInquiry_SKU)) ' +
-      CASE WHEN @cWhere1 = '' THEN '' ELSE ' AND ' + @cWhere1 END +
-      CASE WHEN @cWhere2 = '' THEN '' ELSE ' > '   + @cWhere2 END
+           CASE WHEN @cInquiry_LOC = '' THEN '' ELSE ' AND LLI.LOC = @cInquiry_LOC ' END + 
+           CASE WHEN @cInquiry_ID =  '' THEN '' ELSE ' AND LLI.ID  = @cInquiry_ID  ' END + 
+           CASE WHEN @cInquiry_SKU = '' THEN '' ELSE ' AND LLI.SKU = @cInquiry_SKU ' END + 
+      CASE WHEN @cGroupBy = '' THEN ' GROUP BY LLI.LOC, LLI.ID, LLI.SKU ' ELSE ' GROUP BY ' + 'LLI.LOC, LLI.ID, LLI.SKU, ' + @cGroupBy END + 
+      ' SET @nTotalRec = @@ROWCOUNT ' 
 
       SET @cSQLParam =
          '@cStorerKey   NVARCHAR( 15) , ' +
@@ -257,7 +259,7 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_Inquiry_V7] (
    SET @cSQL = ''
    SET @cSQL =
    '    SELECT TOP 1  ' +
-   '       @cLOT = LLI.LOT, ' +
+   -- '       @cLOT = LLI.LOT, ' +
    '       @cLOC = LLI.LOC, ' +
    '       @cID = LLI.ID,   ' +
    '       @cSKU = LLI.SKU,   ' +
@@ -267,19 +269,16 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_Inquiry_V7] (
    '       @nMQty_TTL = ISNULL( SUM( LLI.Qty), 0), ' +
    '       @nMQty_RPL = ISNULL( SUM( CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END), 0), ' +
    '       @nMQty_PMV = ISNULL( SUM( LLI.PendingMoveIN), 0) ' +
-   CASE WHEN @cSelect = '' THEN '' ELSE ', ' + @cSelect END +
+           CASE WHEN @cSelect = '' THEN '' ELSE ', ' + @cSelect END +
    '    FROM dbo.LOTxLOCxID LLI WITH (NOLOCK) ' +
    '    JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = LLI.LOC) ' +
    '    JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = LLI.LOT) ' +
    '    WHERE LOC.Facility = @cFacility ' +
-   '    AND  (LLI.QTY <> 0 OR LLI.QtyAllocated <> 0 OR LLI.QtyPicked <> 0 OR LLI.QtyExpected <> 0) ' +
+   '    AND  (LLI.QTY <> 0 OR LLI.QtyAllocated <> 0 OR LLI.QtyPicked <> 0 OR LLI.QtyExpected <> 0 OR LLI.PendingMoveIN <> 0) ' +
    '    AND   LLI.StorerKey = @cStorerKey ' +
-   '    AND ( (ISNULL( @cInquiry_LOC, '''') = '''') OR ( LLI.LOC = @cInquiry_LOC)) ' +
-   '    AND ( (ISNULL( @cInquiry_ID, '''') = '''') OR ( LLI.ID = @cInquiry_ID)) ' +
-   '    AND ( (ISNULL( @cInquiry_SKU, '''') = '''') OR ( LLI.SKU = @cInquiry_SKU)) ' --+
-   --'    AND  (LLI.SKU + LLI.LOC + LLI.ID' +
-   --CASE WHEN @cWhere1 = '' THEN '' ELSE ' + ' + @cWhere1 END  + ') > ' +
-   --'         (@cSKU + @cLOC + @cID' + CASE WHEN @cWhere2 = '' THEN '' ELSE + ' + ' + @cWhere2 END + ') '
+        CASE WHEN @cInquiry_LOC = '' THEN '' ELSE ' AND LLI.LOC = @cInquiry_LOC ' END + 
+        CASE WHEN @cInquiry_ID =  '' THEN '' ELSE ' AND LLI.ID  = @cInquiry_ID  ' END + 
+        CASE WHEN @cInquiry_SKU = '' THEN '' ELSE ' AND LLI.SKU = @cInquiry_SKU ' END
 
    IF ISNULL( @cInquiry_LOC, '') <> ''
    BEGIN
@@ -287,26 +286,28 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_Inquiry_V7] (
       '    AND  (LLI.LOC + LLI.ID + LLI.SKU' +
       CASE WHEN @cWhere1 = '' THEN '' ELSE ' + ' + @cWhere1 END  + ') > ' +
       '         (@cLOC + @cID + @cSKU' + CASE WHEN @cWhere2 = '' THEN '' ELSE + ' + ' + @cWhere2 END + ') ' +
-      CASE WHEN @cGroupBy = '' THEN ' GROUP BY LLI.LOC, LLI.ID, LLI.SKU, LLI.LOT ' ELSE ' GROUP BY ' + 'LLI.LOC, LLI.ID, LLI.SKU, ' + @cGroupBy + ', LLI.LOT' END +
-      CASE WHEN @cOrderBy = '' THEN ' ORDER BY LLI.LOC, LLI.ID, LLI.SKU, LLI.LOT ' ELSE ' ORDER BY ' + 'LLI.LOC, LLI.ID, LLI.SKU, ' + @cOrderBy + ', LLI.LOT' END
+      CASE WHEN @cGroupBy = '' THEN ' GROUP BY LLI.LOC, LLI.ID, LLI.SKU ' ELSE ' GROUP BY ' + 'LLI.LOC, LLI.ID, LLI.SKU, ' + @cGroupBy END +
+      CASE WHEN @cOrderBy = '' THEN ' ORDER BY LLI.LOC, LLI.ID, LLI.SKU ' ELSE ' ORDER BY ' + 'LLI.LOC, LLI.ID, LLI.SKU, ' + @cOrderBy END
    END
+   
    ELSE IF ISNULL( @cInquiry_ID, '') <> ''
    BEGIN
       SET @cSQL = @cSQL +
       '    AND  (LLI.ID + LLI.LOC + LLI.SKU' +
       CASE WHEN @cWhere1 = '' THEN '' ELSE ' + ' + @cWhere1 END  + ') > ' +
       '         (@cID + @cLOC + @cSKU' + CASE WHEN @cWhere2 = '' THEN '' ELSE + ' + ' + @cWhere2 END + ') ' +
-      CASE WHEN @cGroupBy = '' THEN ' GROUP BY LLI.ID, LLI.LOC, LLI.SKU, LLI.LOT ' ELSE ' GROUP BY ' + 'LLI.ID, LLI.LOC, LLI.SKU, ' + @cGroupBy + ', LLI.LOT' END +
-      CASE WHEN @cOrderBy = '' THEN ' ORDER BY LLI.ID, LLI.LOC, LLI.SKU, LLI.LOT ' ELSE ' ORDER BY ' + 'LLI.ID, LLI.LOC, LLI.SKU, ' + @cOrderBy + ', LLI.LOT' END
+      CASE WHEN @cGroupBy = '' THEN ' GROUP BY LLI.ID, LLI.LOC, LLI.SKU ' ELSE ' GROUP BY ' + 'LLI.ID, LLI.LOC, LLI.SKU, ' + @cGroupBy END +
+      CASE WHEN @cOrderBy = '' THEN ' ORDER BY LLI.ID, LLI.LOC, LLI.SKU ' ELSE ' ORDER BY ' + 'LLI.ID, LLI.LOC, LLI.SKU, ' + @cOrderBy END
    END
+   
    ELSE  -- IF ISNULL( @cInquiry_SKU, '') <> ''
    BEGIN
       SET @cSQL = @cSQL +
       '    AND  (LLI.SKU + LLI.LOC + LLI.ID' +
       CASE WHEN @cWhere1 = '' THEN '' ELSE ' + ' + @cWhere1 END  + ') > ' +
       '         (@cSKU + @cLOC + @cID' + CASE WHEN @cWhere2 = '' THEN '' ELSE + ' + ' + @cWhere2 END + ') ' +
-      CASE WHEN @cGroupBy = '' THEN ' GROUP BY LLI.SKU, LLI.LOC, LLI.ID, LLI.LOT ' ELSE ' GROUP BY ' + 'LLI.SKU, LLI.LOC, LLI.ID, ' + @cGroupBy + ', LLI.LOT' END +
-      CASE WHEN @cOrderBy = '' THEN ' ORDER BY LLI.SKU, LLI.LOC, LLI.ID, LLI.LOT ' ELSE ' ORDER BY ' + 'LLI.SKU, LLI.LOC, LLI.ID, ' + @cOrderBy + ', LLI.LOT' END
+      CASE WHEN @cGroupBy = '' THEN ' GROUP BY LLI.SKU, LLI.LOC, LLI.ID ' ELSE ' GROUP BY ' + 'LLI.SKU, LLI.LOC, LLI.ID, ' + @cGroupBy END +
+      CASE WHEN @cOrderBy = '' THEN ' ORDER BY LLI.SKU, LLI.LOC, LLI.ID ' ELSE ' ORDER BY ' + 'LLI.SKU, LLI.LOC, LLI.ID, ' + @cOrderBy END
    END
 
    SET @cSQLParam =
@@ -403,6 +404,7 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_Inquiry_V7] (
       SET @dLottable14 = @dTempLottable14
       SET @dLottable15 = @dTempLottable15
       SET @cLottableCode = @cTempLottableCode
+      
       -- SQLstatement need filter lottable meaning lottable is setup to display, whether this record has value or not
       SET @cHasLottable  = CASE WHEN @cWhere2 <> '' THEN '1' ELSE '' END
       SET @nTotalRec = @nTempTotalRec
@@ -425,7 +427,7 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_Inquiry_V7] (
                WHEN '2' THEN Pack.CaseCNT
                WHEN '3' THEN Pack.InnerPack
                WHEN '6' THEN Pack.QTY
-              WHEN '1' THEN Pack.Pallet
+               WHEN '1' THEN Pack.Pallet
                WHEN '4' THEN Pack.OtherUnit1
                WHEN '5' THEN Pack.OtherUnit2
             END, 1) AS INT)
@@ -463,8 +465,8 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_Inquiry_V7] (
          SET @nMQTY_Pick  = CAST(@nMQTY_Pick  as INT)  % @nPUOM_Div
       END
 
+Quit:
 
-   QUIT:
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
