@@ -23,6 +23,8 @@ GO
 /* Date         Rev  Author   Purposes                                  */      
 /* 03-08-2022  1.0  yeekung  WMS-20464 Created                          */ 
 /* 12-08-2022  1.1  yeekung  WMS-20500 Add PDF print (yeekung01)        */
+/* 02-10-2023  1.2  yeekung  WMS-23802 change hardcode pdd to codelkup  */
+/*                            (yeekung02)                               */
 /************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdt_841BTSP09] (    
@@ -183,7 +185,12 @@ BEGIN
          INSERT INTO @tSHIPPLABEL (Variable, Value) VALUES ( '@nCartonNo',    @nCartonNo)  
          
 
-         IF @cPlatform='PDD'
+       --  IF @cPlatform='PDD'
+         IF EXISTS (SELECT 1
+                    FROM codelkup (NOLOCK)
+                    Where Storerkey = @cStorerkey
+                     AND Listname= 'ECKD100'
+                     AND code = @cPlatform) --(yeekung02)
          BEGIN
             DECLARE @cPrinter      NVARCHAR( 10)
                   ,@cPrintData        NVARCHAR( MAX)
