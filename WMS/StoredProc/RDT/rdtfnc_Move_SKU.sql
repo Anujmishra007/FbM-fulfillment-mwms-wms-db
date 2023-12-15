@@ -94,7 +94,8 @@ GO
 /* 2023-04-10 6.4  James    WMS-22175 Add V_Barcode to sku step for     */
 /*                          sku input (james20)                         */
 /* 2023-11-02 6.5  XiaoLun  JSM-186877 Fixed 'QTY AVL' row get wrong  	*/  
-/*       				          	value (xiaolun01)       					          */   
+/*       				          	value (xiaolun01)       					*/  
+/* 2023-03-12 6.6  YeeKung  WMS-24222 Skip PPK Check (yeekung05)        */
 /************************************************************************/  
   
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Move_SKU] (  
@@ -185,6 +186,7 @@ DECLARE
    @nFlowThruToIDScn       INT,           -- (james18)  
    @cDefaultSuggToLoc      NVARCHAR( 10), -- (james18)  
    @nFlowThruQtyScn        INT,           -- (james19)  
+   @cSkipChkPPKQTY         NVARCHAR( 20), -- (yeekung05)    
   
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),  
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),  
@@ -282,6 +284,7 @@ SELECT
    @cPrePackIndicator   = V_String41,  
    @cLOCLookupSP        = V_String42, --(yeekung01)  
    @cDefaultSuggToLoc   = V_String43, --(james18)  
+   @cSkipChkPPKQTY      = V_String44,
   
    @nQTY_Avail          = V_Integer1,   --SOS271541  
    @nPQTY_Avail         = V_Integer2,   --SOS271541  
@@ -405,6 +408,11 @@ BEGIN
    SET @cDefaultSuggToLoc = rdt.rdtGetConfig( @nFunc, 'DefaultSuggToLoc', @cStorerKey)  
   
    SET @nFlowThruQtyScn = rdt.rdtGetConfig( @nFunc, 'FlowThruQtyScn', @cStorerKey)  
+
+     
+   SET @cSkipChkPPKQTY = rdt.rdtGetConfig( @nFunc, 'SkipChkPPKQTY', @cStorerKey)  
+   IF @cSkipChkPPKQTY = '0'  
+      SET @cSkipChkPPKQTY = ''  
         
     -- EventLog  
     EXEC RDT.rdt_STD_EventLog  
@@ -1312,7 +1320,7 @@ BEGIN
 
       -- Calc prepack QTY
       IF @cPrePackIndicator = '2'
-         IF @nPackQtyIndicator > 1
+         IF @nPackQtyIndicator > 1 AND @cSkipChkPPKQTY <>'1'
             SET @nQTY = @nQTY * @nPackQtyIndicator
 
       -- if need convert qty (james03)  
@@ -3377,6 +3385,7 @@ BEGIN
       V_String41 = @cPrePackIndicator,  
       V_String42 = @cLOCLookupSP,   --(yeekung01)  
       V_String43 = @cDefaultSuggToLoc,  
+      V_String44 = @cSkipChkPPKQTY,
   
       V_Integer1 = @nQTY_Avail,  
       V_Integer2 = @nPQTY_Avail,  
