@@ -17,6 +17,8 @@ GO
 /* Date         Author    Ver.  Purposes                                */
 /* 2023-03-31   James     1.0   WMS-22084. Created                      */
 /* 2023-09-13   James     1.1   WMS-23401 Enhance ZPL print (james01)   */
+/* 2023-12-15   JihHaur   1.2   JSM-197652 Hit PACK IN 1 CARTON even    */
+/*                              just start first scanning   (JH01)      */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_840ExtInsPack19] (
@@ -149,7 +151,7 @@ BEGIN
                               FROM dbo.CODELKUP CLK WITH (NOLOCK)
                               WHERE CLK.LISTNAME = 'STFCART'
                               AND   CLK.Code = O.ShipperKey
-                              AND   CLK.Storerkey = O.StorerKey)) AND @nCartonNo <> 1
+                              AND   CLK.Storerkey = O.StorerKey)) AND @nCartonNo <> 1 AND @nCartonNo <> 0 /*JH01*/
    BEGIN
       SET @nErrNo = 0
       SET @cErrMsg1 = 'PACK IN 1 CARTON'
