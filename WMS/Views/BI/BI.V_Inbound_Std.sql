@@ -39,8 +39,8 @@ SELECT
 ,PUTAWAY_START_DATE_TIME   = I.AddDate
 ,PUTAWAY_END_DATE_TIME     = I.EditDate
 -- ,R.[Cube] ,RD.[Cube], S.STDCUBE -- check multiplier values
-,BOOKED_CBM                = RD.QtyExpected * S.STDCUBE
-,RECEIVED_CBM              = RD.QtyReceived * S.STDCUBE
+,BOOKED_CBM                = RD.QtyExpected * (CASE WHEN R.[Cube] > 0 THEN R.Cube/COUNT(1) over(partition by R.ReceiptKey) ELSE S.STDCUBE end)
+,RECEIVED_CBM              = RD.QtyReceived * (CASE WHEN R.[Cube] > 0 THEN R.Cube/COUNT(1) over(partition by R.ReceiptKey) ELSE S.STDCUBE end)
 ,BOOKING_QTY               = RD.QtyExpected
 ,SHORTORUNDER_RECEIPTQTY   = RD.QtyExpected - RD.QtyReceived
 ,RECEIVED_QTY              = CASE WHEN RD.ConditionCode <>'DAMAGE' THEN RD.QtyReceived ELSE 0 END
