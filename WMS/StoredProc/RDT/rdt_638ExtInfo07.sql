@@ -11,6 +11,7 @@ GO
 /*                                                                         */
 /* Date       Rev  Author     Purposes                                     */
 /* 2023-07-07 1.0  Ung        WMS-22911 Created                            */
+/* 2023-11-29 1.1  Ung        WMS-24157 Add all type of ECOM return        */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_638ExtInfo07] (
@@ -71,8 +72,8 @@ AS
                FROM dbo.Receipt WITH (NOLOCK)
                WHERE ReceiptKey = @cReceiptKey
                   AND DocType = 'R' 
-                  AND ReceiptGroup = 'ECOM' 
-                  AND UserDefine04 = N'underarmour京东自营店')
+                  AND ReceiptGroup = 'ECOM')
+                  -- AND UserDefine04 = N'underarmour京东自营店')
             BEGIN
                DECLARE @nQTYExpected INT = 0
                DECLARE @nQTYReceived INT = 0
@@ -86,7 +87,8 @@ AS
                   AND R.Status <> '9'  
                   AND R.ASNStatus <> 'CANC'  
                   AND R.ReceiptGroup = 'ECOM'  
-                  AND R.Userdefine02 = @cRefNo 
+                  -- AND R.Userdefine02 = @cRefNo 
+                  AND @cRefNo IN (R.Userdefine02, R.TrackingNo)
                   -- AND RD.SKU = @cSKU  
                   
                SET @cExtendedInfo = 'ASN SKU: ' + CAST( @nQTYReceived AS NVARCHAR(5)) + '/' + CAST( @nQTYExpected AS NVARCHAR(5))
