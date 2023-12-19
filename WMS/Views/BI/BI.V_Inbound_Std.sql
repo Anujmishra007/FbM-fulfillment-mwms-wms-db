@@ -89,6 +89,54 @@ GRANT SELECT ON  [BI].[V_Inbound_Std] TO [JReportRole]
 GO
 /*
 SELECT *
+[WAREHOUSE]
+,[WH_ID]
+,[VENDOR_CODE]
+,[VENDOR_NAME]
+,[CLIENT_NAME]
+,[RETURN_SO_NUMBER]
+,[TRUCK_NUMBER]
+,[RECEIVING_START_DATE]
+,[RECEIVING_END_DATE] -- 2. Receiving end should not be null, for received_qty > 0 or null 
+,[RECEIVED_QTY] -- 4. Receiving qty and putaway qty should not be null. 
+,[PUTAWAY_START_DATE_TIME]
+,[PUTAWAY_END_DATE_TIME] --3. Putaway end date end should not be null, for putaway_qty > 0 or null. 
+,[PUT_AWAY_QTY] --4. Receiving qty and putaway qty should not be null. 
+,[BOOKED_CBM]
+,[RECEIVED_CBM] --5.Putaway/Receiving CBM should not be null in case of putaway/receiving qty > 0 
+,[BOOKING_QTY]
+,[STATUS] --6.Status should not be null. 
+,[CONTAINER_NUMBER]
+,[VEHICLE_TYPE]
+,[ORDER_TYPE]
+,[ORIGIN_COUNTRY]
+,[ORIGIN_CITY]
+,[RECSTATUS]
+,[PO_BOOKING_RECEIVED_DATE]
+,[PO_EXPECTED_RECEIVED_DATE]
+,[PO_NUMBER]
+,[PO_LINE_NUMBER]
+,[SKU]
+,[ITEM_DESCRIPTION]
+,[ITEM_CATEGORY]
+,[SHORTORUNDER_RECEIPTQTY]
+,[DAMAGEQTY]
+,[WEIGHT_UM]
+,[DIMENSION_UM]
+,[HEIGHT]
+,[WIDTH]
+,[LENGTH]
+,[PUT_AWAY_UOM]
+,[ITEM_WEIGHT]
+,[NO_OF_PIECE]
+,[BOOKED_UOM]
+,[RECEIVED_UOM]
+,[LICENSE_PLATE_NO]
+,[CONV_FACTOR]
+,[RECEIPT_ID]
+,[SO_NUMBER]
+,[StorerKey]
+,[SiteId]
 FROM BI.V_Inbound_Std
 WHERE StorerKey = ''
 
@@ -96,4 +144,6 @@ WHERE StorerKey = ''
 SELECT DISTINCT WH_ID, CLIENT_NAME
 FROM BI.V_Inbound_Std
 ORDER BY 1, 2
+
+1.PO should not be null. 
 */
