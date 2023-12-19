@@ -91,6 +91,7 @@ GO
 /* 30-05-2023 6.1 James       WMS-22322 Enhance Qty convertion (james13)*/
 /* 14-11-2023 6.2 Ung         WMS-23972 Add SkipChkPSlipMustScanIn      */
 /* 14-11-2023 6.3 Ung         WMS-23960 Add PickConfirmStatus for pallet*/
+/* 24-11-2023 6.4 YeeKung     UWP-11249Fix bug (yeekung08)              */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PostPickAudit] (
@@ -2751,12 +2752,10 @@ BEGIN
          WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
             COMMIT TRAN
 
-      IF @nPUOM_Div > 0
+      IF @nPUOM_Div > 0 AND @cPUOM <> '6' 
       BEGIN
-         SET @nPQTY = rdt.rdtConvUOMQTY( @cStorer, @cSKU, @cMQTY, 6, @cPUOM)
-         
-         IF @cMQTY%@nPUOM_Div = 0
-            SET @nMQTY = 0
+         SET @nPQTY = @nPQTY/@nPUOM_Div--rdt.rdtConvUOMQTY( @cStorer, @cSKU, @cMQTY, 6, @cPUOM)
+         SET @nMQTY = @cMQTY%@nPUOM_Div
       END
 
       -- Top up check QTY
