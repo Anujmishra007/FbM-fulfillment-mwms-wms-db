@@ -96,11 +96,73 @@ GO
 GRANT SELECT ON  [BI].[V_Outbound_Std] TO [JReportRole]
 GO
 /*
-SELECT *
+SELECT 
+ [WAREHOUSE]
+,[WH_ID] --10. No. of SITE_ID and WH_IDs mapped. (Every site should be mapped to a particular SITE_ID)
+,[SiteId] --10. No. of SITE_ID and WH_IDs mapped. (Every site should be mapped to a particular SITE_ID)
+,[COMPANY]
+,[ORDER_TYPE]
+,[ERP_ORDER]
+,[SHIPMENT_ID] --9.Shipment_ID and erp_order_line_number not null. 
+,[ERP_ORDER_LINE_NUM] --9.Shipment_ID and erp_order_line_number not null. 
+,[STATUS]
+,[ORDRSTATUS]
+,[SHIP_TO]
+,[SHIP_TO_COUNTRY]
+,[CARRIER]
+,[PLANNED_SHIP_DATE] --5. Planned shipped date, missing-> Fulfilment sites. 
+,[PLANNED_DELIVERY_DATE_TIME]
+,[ACTUAL_DELIVERY_DATE_TIME]
+,[CUSTOMER_PO]
+,[INVOICE]
+,[ITEM]
+,[ITEM_CATEGORY]
+,[ITEM_DESCRIPTION]
+,[ITEM_LIST_PRICE]
+,[ORDERQTY]
+,[QUANTITY_UM]  --2. UOM -> Unit_of_Measured_quantity missing. 
+,[PLANNEDQTY]
+,[ALLOCATED_QTY]
+,[STOP_SEQUENCE]
+,[PICKEDQTY]
+,[PICKSTARTDATE]
+,[PICKENDDATE] --3. Pick end date missing, but picked qty available
+,[PACKEDQTY]
+,[PACKSTARTDATE]
+,[PACKENDDATE] --4.Pack end date missing, but packed qty available. 
+,[LOADEDQTY]
+,[SHIPPEDQTY] --8.Anamolies of Data like high shipped quantity needs to be checked. 
+,[SHIPPED_END_DATE] --1. Shipped end date missing, but shipped quantity available
+,[TOTAL_VOLUME]
+,[TOTAL_WEIGHT]
+,[PACK_WEIGHT]
+,[PARENT_CONTAINER_ID] --13.Parent_container_id should not be nulls, part of PK. 
+,[LCTIME]
+,[SEAL_ID]
+,[VESSEL]
+,[VOYAGE]
+,[LOADSTARTDATE]
+,[LOADENDDATE]
+,[GATEINTIME]
+,[GATEOUTTIME]
+,[CUTOFFDATE]
+,[CONV_FACTOR]
+,[StorerKey]
+
+,[OrderKey]
+,[OrderLineNumber]
+,[PickSlipNo]
+,[MbolLineNumber]
+,[MbolKey]
 FROM BI.V_Outbound_Std
 --WHERE StorerKey = ''
 
 SELECT DISTINCT WH_ID, COMPANY
 FROM BI.V_Outbound_Std
 ORDER BY 1, 2
+
+6.Work status missing. 
+7.% of picks, pack, shipped qty missing from the total date. 
+11.Customer information for each site, should not be any nulls. 
+12. CBM should not be null for Consolidation sites. 
 */

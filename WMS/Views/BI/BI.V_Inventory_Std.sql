@@ -48,11 +48,41 @@ GO
 GRANT SELECT ON  [BI].[V_Inventory_Std] TO [JReportRole]
 GO
 /*
-SELECT *
+SELECT 
+[WAREHOUSE]
+,[WH_ID]
+,[COMPANY]
+,[LOCATION]
+,[LOCATION_TYPE]
+,[LOCATION_STS]
+,[ITEM]
+,[ITEM_DESC]
+,[LOGISTICS_UNIT]
+,[LOT]
+,[ON_HAND_QTY]
+,[LOCATION_WEIGHT]
+,[LOCATION_WEIGHT_UM]
+,[LOCATION_VOLUME]
+,[LOCATION_VOLUME_UM]
+,[INVENTORY_STS]
+,[MAXIMUM_WEIGHT]
+,[RECEIVED_DATE]
+,[CONSUMED_VOLUME]
+,[CONSUMED_VOLUME_UM]
+,[CONSUMED_WEIGHT]
+,[CONSUMED_WEIGHT_UM]
+,[StorerKey]
+,[SiteId]
+,[Id]
 FROM BI.V_Inventory_Std
 --WHERE StorerKey = ''
 
 SELECT DISTINCT WH_ID, COMPANY
 FROM BI.V_Inventory_Std
 ORDER BY 1, 2
+
+1.No missing location values 
+2.Duplicate record check 
+3.LOCATION_STS null and value check 
+4.Customer info check 
 */
