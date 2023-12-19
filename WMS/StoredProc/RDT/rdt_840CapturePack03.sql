@@ -14,6 +14,7 @@ GO
 /*                                                                      */
 /* Date        Rev  Author     Purposes                                 */
 /* 2020-07-05  1.0  James      WMS-13913. Created                       */
+/* 2023-12-18  1.1  YK         JSM-198278 Fix incorrect weight capture  */
 /************************************************************************/
 
 CREATE PROC rdt.rdt_840CapturePack03 (
@@ -66,7 +67,8 @@ AS
          AND   PD.CartonNo = @nCartonNo
          
          SET @cCartonType = ''
-         SET @fCartonWeight = @fCartonWeight + @fSKUWeight
+         SET @fCartonWeight = CASE WHEN ISNULL(@fCartonWeight,0)=0 THEN 0 else @fCartonWeight END  + @fSKUWeight  --YK 1.1
+
          
          SET @cCapturePackInfo = '1'   -- Enable capture pack info screen
       END
