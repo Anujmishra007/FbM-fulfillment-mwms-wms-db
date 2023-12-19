@@ -2,9 +2,9 @@ IF EXISTS (SELECT name FROM sysobjects WHERE name = 'rdtHNMDupFrMatchVal' AND ty
    DROP PROC rdt.rdtHNMDupFrMatchVal
 GO
 
-SET QUOTED_IDENTIFIER OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF 
+SET ANSI_NULLS OFF
 GO
 /************************************************************************/
 /* Store procedure: rdtHNMDupFrMatchVal                                 */
@@ -14,9 +14,14 @@ GO
 /*                                                                      */
 /* Date        Rev  Author      Purposes                                */
 /* 16-04-2014  1.0  Ung         SOS301005 Created                       */
+/* 19-12-2023  1.1  WK          JSM-197361 CHANGE                       */
+/*                              @nBeforeReceivedQTY = 1 TO              */
+/*                              @nBeforeReceivedQTY >= 1                */
+/*                              to copy value from ReceiptDetail line   */
+/*                              when over receive qty >=1   (wk01)      */
 /************************************************************************/
 
-CREATE PROCEDURE rdt.rdtHNMDupFrMatchVal
+CREATE or alter PROCEDURE rdt.rdtHNMDupFrMatchVal
     @nMobile     INT
    ,@nFunc       INT
    ,@cLangCode   NVARCHAR(  3)
@@ -49,7 +54,7 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
    
    -- New line
-   IF ISNULL( @cReceiptLineNumber_Borrowed, '') = '' AND @nQTYExpected = 0 AND @nBeforeReceivedQTY = 1 -- Piece receiving
+   IF ISNULL( @cReceiptLineNumber_Borrowed, '') = '' AND @nQTYExpected = 0 AND @nBeforeReceivedQTY >= 1 -- Piece receiving  --wk01
       SELECT TOP 1
          @cDuplicateFromLineNo = ReceiptLineNumber
       FROM ReceiptDetail WITH (NOLOCK)
