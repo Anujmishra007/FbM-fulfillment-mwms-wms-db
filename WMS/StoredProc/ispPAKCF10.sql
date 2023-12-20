@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispPAKCF10]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispPAKCF10]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -27,8 +22,10 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
+/* 19-DEC-2023  NJOW01  1.0   WMS-24430 Check serialno from PACKSERIALNO   */
+/* 19-DEC-2023  NJOW01  1.1   DEVOPS Combine Script                        */
 /***************************************************************************/  
-CREATE PROC [dbo].[ispPAKCF10]  
+CREATE OR ALTER PROC [dbo].[ispPAKCF10]  
 (     @c_PickSlipNo  NVARCHAR(10)   
   ,   @c_Storerkey   NVARCHAR(15)
   ,   @b_Success     INT           OUTPUT
@@ -55,6 +52,7 @@ BEGIN
          , @c_SerialNoKey     NVARCHAR(10)
          , @c_SQL             NVARCHAR(MAX)
          , @c_Orderkey1sttime NVARCHAR(10)
+         , @c_PackSerNo       NVARCHAR(1) = 'N' --NJOW01
    
    SET @b_Success= 1 
    SET @n_Err    = 0  
@@ -65,22 +63,55 @@ BEGIN
   
    IF @@TRANCOUNT = 0
       BEGIN TRAN
-                           
-   DECLARE cur_ORDLINE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-   SELECT O.Orderkey, OD.OrderLineNumber, OD.Storerkey, OD.Sku, PD.Lot, PD.ID, SUM(PD.Qty) AS Qty
-   FROM PACKHEADER PH (NOLOCK)
-   JOIN ORDERS O (NOLOCK) ON PH.Orderkey = O.Orderkey
-   JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey      
-   JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku      
-   JOIN PICKDETAIL PD (NOLOCK) ON OD.Orderkey = PD.Orderkey AND OD.OrderLineNumber = PD.OrderLineNumber
-   WHERE PH.Pickslipno = @c_Pickslipno
-   AND SKU.SerialNoCapture IN ('1','3')
-   AND EXISTS(SELECT 1 FROM SERIALNO SN (NOLOCK)
-              WHERE SN.Orderkey = O.Orderkey
-              AND SN.Storerkey = SKU.Storerkey
-              AND SN.Sku = SKU.Sku)
-   GROUP BY O.Orderkey, OD.OrderLineNumber, OD.Storerkey, OD.Sku, PD.Lot, PD.ID           
-   ORDER BY OD.Sku, OD.OrderLineNumber, PD.Lot, PD.Id
+  
+   --NJOW01
+   IF EXISTS(SELECT 1 
+             FROM PACKSERIALNO PSN (NOLOCK)    
+             JOIN SERIALNO SN (NOLOCK) ON SN.SerialNo = PSN.SerialNo AND SN.Storerkey = PSN.Storerkey
+                                       AND SN.Sku = PSN.Sku
+             WHERE PSN.Pickslipno = @c_PickSlipNo             
+             )
+   BEGIN          
+   	  SET @c_PackSerNo = 'Y'
+   END
+   
+   IF @c_PackSerNo = 'Y' --NJOW01
+   BEGIN
+      DECLARE cur_ORDLINE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT O.Orderkey, OD.OrderLineNumber, OD.Storerkey, OD.Sku, PD.Lot, PD.ID, SUM(PD.Qty) AS Qty
+      FROM PACKHEADER PH (NOLOCK)
+      JOIN ORDERS O (NOLOCK) ON PH.Orderkey = O.Orderkey
+      JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey      
+      JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku      
+      JOIN PICKDETAIL PD (NOLOCK) ON OD.Orderkey = PD.Orderkey AND OD.OrderLineNumber = PD.OrderLineNumber
+      WHERE PH.Pickslipno = @c_Pickslipno
+      AND SKU.SerialNoCapture IN ('1','3')
+      AND EXISTS(SELECT 1 FROM SERIALNO SN (NOLOCK)
+                 JOIN PACKSERIALNO PSN (NOLOCK) ON SN.SerialNo = PSN.SerialNo
+                 WHERE PSN.PickslipNo = PH.Pickslipno
+                 AND SN.Storerkey = SKU.Storerkey
+                 AND SN.Sku = SKU.Sku)
+      GROUP BY O.Orderkey, OD.OrderLineNumber, OD.Storerkey, OD.Sku, PD.Lot, PD.ID           
+      ORDER BY OD.Sku, OD.OrderLineNumber, PD.Lot, PD.Id
+   END
+   ELSE
+   BEGIN
+      DECLARE cur_ORDLINE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT O.Orderkey, OD.OrderLineNumber, OD.Storerkey, OD.Sku, PD.Lot, PD.ID, SUM(PD.Qty) AS Qty
+      FROM PACKHEADER PH (NOLOCK)
+      JOIN ORDERS O (NOLOCK) ON PH.Orderkey = O.Orderkey
+      JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey      
+      JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku      
+      JOIN PICKDETAIL PD (NOLOCK) ON OD.Orderkey = PD.Orderkey AND OD.OrderLineNumber = PD.OrderLineNumber
+      WHERE PH.Pickslipno = @c_Pickslipno
+      AND SKU.SerialNoCapture IN ('1','3')
+      AND EXISTS(SELECT 1 FROM SERIALNO SN (NOLOCK)
+                 WHERE SN.Orderkey = O.Orderkey
+                 AND SN.Storerkey = SKU.Storerkey
+                 AND SN.Sku = SKU.Sku)
+      GROUP BY O.Orderkey, OD.OrderLineNumber, OD.Storerkey, OD.Sku, PD.Lot, PD.ID           
+      ORDER BY OD.Sku, OD.OrderLineNumber, PD.Lot, PD.Id
+   END
    
    OPEN cur_ORDLINE  
           
@@ -98,12 +129,26 @@ BEGIN
    WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
    BEGIN      	      	   	
       IF ISNULL(@c_Orderkey1sttime,'') <> ''
-      BEGIN
-         UPDATE SERIALNO WITH (ROWLOCK)
-      	  SET LotNo = ''
-      	     ,ID = ''
-      	  WHERE Orderkey = @c_Orderkey
-      	  AND Storerkey = @c_Storerkey
+      BEGIN      	 
+      	 IF @c_PackSerNo = 'Y' --NJOW01
+      	 BEGIN
+      	    UPDATE SERIALNO WITH (ROWLOCK)
+      	    SET SERIALNO.LotNo = '',
+      	        ID = ''
+      	    FROM SERIALNO
+            JOIN PACKSERIALNO PSN (NOLOCK) ON SERIALNO.SerialNo = PSN.SerialNo 
+            WHERE PSN.PickslipNo = @c_PickSlipNo
+            AND SERIALNO.Storerkey = @c_Storerkey
+            AND SERIALNO.Sku = @c_Sku
+         END
+         ELSE
+         BEGIN      	          
+            UPDATE SERIALNO WITH (ROWLOCK)
+      	    SET LotNo = ''
+      	       ,ID = ''
+      	    WHERE Orderkey = @c_Orderkey
+      	    AND Storerkey = @c_Storerkey
+      	 END      	 
       
          SET @n_Err = @@ERROR
                              
@@ -116,19 +161,35 @@ BEGIN
          
          SET @c_Orderkey1sttime = ''                  	 
       END
-   	
-      SET @c_SQL = ' 
-   	    DECLARE cur_SERIALNO CURSOR FAST_FORWARD READ_ONLY FOR 
-   	    SELECT TOP ' + RTRIM(CAST(@n_Qty AS NVARCHAR)) + ' SerialNokey
-   	    FROM SERIALNO (NOLOCK)
-   	    WHERE Orderkey = @c_Orderkey
-   	    AND Storerkey = @c_Storerkey
-   	    AND Sku = @c_Sku
-   	    AND LotNo = ''''
-   	    ORDER BY SerialNokey '
+   	  IF @c_PackSerNo = 'Y' --NJOW01
+   	  BEGIN
+         SET @c_SQL = ' 
+   	        DECLARE cur_SERIALNO CURSOR FAST_FORWARD READ_ONLY FOR 
+   	        SELECT TOP ' + RTRIM(CAST(@n_Qty AS NVARCHAR)) + ' SerialNokey
+   	        FROM SERIALNO (NOLOCK)
+            JOIN PACKSERIALNO PSN (NOLOCK) ON SERIALNO.SerialNo = PSN.SerialNo
+            WHERE PSN.PickslipNo = @c_PickslipNo
+            AND SERIALNO.Storerkey = @c_Storerkey
+            AND SERIALNO.Sku = @c_Sku
+            AND SERIALNO.LotNo = ''''
+   	        ORDER BY SERIALNO.SerialNokey ' 
+   	  END  
+   	  ELSE
+   	  BEGIN  
+   	     SET @c_SQL = ' 
+   	        DECLARE cur_SERIALNO CURSOR FAST_FORWARD READ_ONLY FOR 
+   	        SELECT TOP ' + RTRIM(CAST(@n_Qty AS NVARCHAR)) + ' SerialNokey
+   	        FROM SERIALNO (NOLOCK)
+   	        WHERE Orderkey = @c_Orderkey
+   	        AND Storerkey = @c_Storerkey
+   	        AND Sku = @c_Sku
+   	        AND LotNo = ''''
+   	        ORDER BY SerialNokey '
+   	  END  
 
       EXEC sp_executesql @c_SQL,
-         N'@c_Orderkey NVARCHAR(10), @c_Storerkey NVARCHAR(15), @c_Sku NVARCHAR(20)', 
+         N'@c_Pickslipno NVARCHAR(10), @c_Orderkey NVARCHAR(10), @c_Storerkey NVARCHAR(15), @c_Sku NVARCHAR(20)', 
+         @c_Pickslipno, --NJOW01
          @c_Orderkey,
          @c_Storerkey,
          @c_Sku    
@@ -148,7 +209,8 @@ BEGIN
           END
 
       	  UPDATE SERIALNO WITH (ROWLOCK)
-      	  SET OrderLineNumber = @c_OrderLineNumber
+      	  SET Orderkey = @c_Orderkey  --NJOW01
+      	     ,OrderLineNumber = @c_OrderLineNumber
       	     ,LotNo = @c_Lot
       	     ,ID = @c_ID
       	  WHERE SerialNokey = @c_SerialNokey
