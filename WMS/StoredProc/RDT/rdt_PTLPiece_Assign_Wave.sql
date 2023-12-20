@@ -12,6 +12,7 @@ GO
 /* 22-04-2021 1.0  yeekung  WMS-16875 Created                                 */
 /* 20-07-2023 1.1  yeekung  WMS-23039 Add order by orderkey (yeekung01)       */
 /* 25-09-2023 1.2  YeeKung  WMS-23257 Add assignextupd (yeekung02)            */  
+/* 19-12-2023 1.3  Ung      WMS-23754 Add DefaultCartonIDAsPosition           */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_PTLPiece_Assign_Wave] (
@@ -58,18 +59,18 @@ BEGIN
    DECLARE @cPosition      NVARCHAR(10)
    DECLARE @tVar           VariableTable
 
-   DECLARE @cDynamicSlot   NVARCHAR( 1)
    DECLARE @cWaveKey       NVARCHAR(10)
    DECLARE @cOrderKey      NVARCHAR(10)
    DECLARE @cCartonID      NVARCHAR(20)
    DECLARE @nTotalOrder    INT
    DECLARE @nTotalCarton   INT
-   DECLARE @cCurrentSP NVARCHAR( 60)
+   DECLARE @cCurrentSP     NVARCHAR( 60)
+   DECLARE @cDefaultCartonIDAsPosition  NVARCHAR( 1)
 
    SET @nTranCount = @@TRANCOUNT
 
    -- Storer configure
-   SET @cDynamicSlot = rdt.RDTGetConfig( @nFunc, 'DynamicSlot', @cStorerKey)
+   SET @cDefaultCartonIDAsPosition = rdt.RDTGetConfig( @nFunc, 'DefaultCartonIDAsPosition', @cStorerKey)
    DECLARE @cAssignExtUpdSP NVARCHAR( 20) --(yeekung01)
    SET @cAssignExtUpdSP = rdt.rdt_PTLPiece_GetConfig( @nFunc, 'AssignExtUpdSP', @cStorerKey, @cMethod)
    IF @cAssignExtUpdSP = '0'
@@ -345,7 +346,8 @@ BEGIN
                SET @cPosition = ''
                SELECT TOP 1
                   @cIPAddress = DP.IPAddress,
-                  @cPosition = DP.DevicePosition
+                  @cPosition = DP.DevicePosition, 
+                  @cCartonID = CASE WHEN @cDefaultCartonIDAsPosition = '1' THEN DP.DevicePosition ELSE '' END
                FROM dbo.DeviceProfile DP WITH (NOLOCK)
                WHERE DP.DeviceType = 'STATION'
                   AND DP.DeviceID = @cStation
@@ -356,8 +358,8 @@ BEGIN
                ORDER BY DP.LogicalPos, DP.DevicePosition
 
                -- Save assign
-               INSERT rdt.rdtPTLPieceLog (Station, IPAddress, Position, WaveKey, OrderKey)
-               VALUES (@cStation, @cIPAddress, @cPosition, @cWaveKey, @cOrderKey)
+               INSERT rdt.rdtPTLPieceLog (Station, IPAddress, Position, CartonID, WaveKey, OrderKey)
+               VALUES (@cStation, @cIPAddress, @cPosition, @cCartonID, @cWaveKey, @cOrderKey)
                IF @@ERROR <> 0
                BEGIN
                   SET @nErrNo = 168108
@@ -370,22 +372,6 @@ BEGIN
          END
 
          COMMIT TRAN rdt_PTLPiece_Assign
-
-         -- Get carton not yet assign
-         SET @cOrderKey = ''
-         SET @cPosition = ''
-         SELECT TOP 1
-            @cOrderKey = OrderKey,
-            @cPosition = Position,
-            @cCartonID = ''
-         FROM rdt.rdtPTLPieceLog WITH (NOLOCK)
-         WHERE Station = @cStation
-            AND CartonID = ''
-         ORDER BY RowRef
-
-         SET @cFieldAttr01 = '' -- BatchKey
-
-         GOTO Quit
       END
 
       -- Enable field
