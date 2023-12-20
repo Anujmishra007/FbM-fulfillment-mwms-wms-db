@@ -14,7 +14,7 @@ GO
 /*                                                                       */
 /* Called By:                                                            */
 /*                                                                       */
-/* GitHub Version: 1.0                                                   */
+/* GitHub Version: 1.1                                                   */
 /*                                                                       */
 /* Version: 7.0                                                          */
 /*                                                                       */
@@ -23,6 +23,7 @@ GO
 /* Updates:                                                              */
 /* Date         Author  Ver.  Purposes                                   */
 /* 23-Nov-2023  WLChooi 1.0   DevOps Combine Script                      */
+/* 19-Dec-2023  WLChooi 1.1   WMS-24243 - Remove SKUxLOC (WL01)          */
 /*************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispAL_CN15]
    @c_DocNo      NVARCHAR(10),  
@@ -138,7 +139,7 @@ BEGIN
                    ' FROM LOTATTRIBUTE (NOLOCK) ' +
                    ' JOIN LOT (NOLOCK) ON LOT.LOT = LOTATTRIBUTE.LOT ' +
                    ' JOIN LOTxLOCxID (NOLOCK) ON LOTXLOCXID.Lot = LOT.LOT AND LOTXLOCXID.LOT = LOTATTRIBUTE.LOT ' + 
-                   ' JOIN SKUXLOC (NOLOCK) ON SKUXLOC.Storerkey = LOTxLOCxID.Storerkey AND SKUXLOC.Sku = LOTxLOCxID.Sku AND SKUXLOC.Loc = LOTxLOCxID.Loc ' +
+                   --' JOIN SKUXLOC (NOLOCK) ON SKUXLOC.Storerkey = LOTxLOCxID.Storerkey AND SKUXLOC.Sku = LOTxLOCxID.Sku AND SKUXLOC.Loc = LOTxLOCxID.Loc ' +   --WL01
                    ' JOIN LOC (NOLOCK) ON LOTXLOCXID.LOC = LOC.LOC ' +
                    ' JOIN ID (NOLOCK) ON LOTxLOCxID.ID = ID.ID ' + 
                    ' WHERE LOT.STORERKEY = @c_StorerKey ' +
@@ -166,7 +167,7 @@ BEGIN
                    CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable13 ,112) <> '19000101' AND @d_Lottable13 IS NOT NULL THEN ' AND LOTATTRIBUTE.Lottable13 = TRIM(CONVERT( NVARCHAR(20), @d_Lottable13, 106)) ' ELSE ' ' END +  
                    CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable14 ,112) <> '19000101' AND @d_Lottable14 IS NOT NULL THEN ' AND LOTATTRIBUTE.Lottable14 = TRIM(CONVERT( NVARCHAR(20), @d_Lottable14, 106)) ' ELSE ' ' END +  
                    CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable15 ,112) <> '19000101' AND @d_Lottable15 IS NOT NULL THEN ' AND LOTATTRIBUTE.Lottable15 = TRIM(CONVERT( NVARCHAR(20), @d_Lottable15, 106)) ' ELSE ' ' END +  
-                   ' GROUP BY LOT.STORERKEY, LOT.SKU, LOT.LOT, LOTxLOCxID.LOC, LOTxLOCxID.ID, LOC.Loc, LOC.LogicalLocation, LOTATTRIBUTE.Lottable05, LOC.LocLevel, SKUxLOC.LocationType, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lot ' +
+                   ' GROUP BY LOT.STORERKEY, LOT.SKU, LOT.LOT, LOTxLOCxID.LOC, LOTxLOCxID.ID, LOC.Loc, LOC.LogicalLocation, LOTATTRIBUTE.Lottable05, LOC.LocLevel, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lot ' +   --WL01
                    ' HAVING SUM(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen + LOTxLOCxID.PendingMoveIN) > 0 ' + 
                    TRIM(ISNULL(@c_OrderBy,''))
 
