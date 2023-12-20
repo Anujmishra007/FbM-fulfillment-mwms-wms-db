@@ -42,7 +42,7 @@ SELECT
 ,PACKEDQTY                  = ISNULL(PA.Qty, 0) --OD.QtyToProcess
 ,LOADEDQTY                  = OD.ShippedQty
 ,SHIPPEDQTY                 = OD.ShippedQty
-,TOTAL_VOLUME               = PD.Qty * (CASE WHEN ISNULL(PH.TotCtnCube, 0) > 0 THEN PH.TotCtnCube WHEN OD.Capacity > 0 THEN OD.Capacity WHEN O.Capacity > 0 THEN O.Capacity ELSE S.STDCUBE END)
+,TOTAL_VOLUME               = CASE WHEN ISNULL(PH.TotCtnCube, 0) > 0 THEN PH.TotCtnCube/COUNT(1) OVER (PARTITION BY O.OrderKey) WHEN OD.Capacity > 0 THEN OD.Capacity*PD.Qty WHEN O.Capacity > 0 THEN O.Capacity/COUNT(1) OVER (PARTITION BY O.OrderKey) ELSE S.STDCUBE*PD.Qty END
 ,TOTAL_WEIGHT               = PD.Qty * (CASE WHEN OD.GrossWeight > 0 THEN OD.GrossWeight WHEN S.GrossWgt > 0 THEN S.GrossWgt ELSE S.STDGROSSWGT END) 
 ,PACK_WEIGHT                = P.NetWgt
 ,PARENT_CONTAINER_ID        = M.ContainerNo
