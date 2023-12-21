@@ -51,101 +51,101 @@ BEGIN
    [ReportCatalog] [nvarchar] (100) NOT NULL CONSTRAINT [DF_WMREPORTDETAIL_ReportCatalog] DEFAULT (''),
    [PreGenRptDataSP] [nvarchar] (50) NOT NULL CONSTRAINT [DF_WMREPORTDETAIL_PreGenRptDataSP] DEFAULT ('')
    ) ON [PRIMARY]
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'WM Report Header', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', NULL, NULL
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'The date in which the load is created', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'AddDate'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'The username/login ID added the information.', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'AddWho'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Computer Name', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'ComputerName'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Criteria Matching 1', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'CriteriaMatching01'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Criteria Matching 2', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'CriteriaMatching02'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Criteria Matching 3', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'CriteriaMatching03'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Criteria Matching 4', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'CriteriaMatching04'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Criteria Matching 5', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'CriteriaMatching05'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Date of the information edited/modified/updated. (System date)', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'EditDate'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'The username/login ID edited/modified/updated the information.', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'EditWho'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Facility', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'Facility'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Pre Generate Report Data Stored Procedure', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'PreGenRptDataSP'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Pre Print Process Stored Procedure Name ', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'PrePrintSP'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Print Group', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'PrintGroup'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Print Type; BARTENDER/DATAWINDOW/DIRECTPRN', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'PrintType'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Logi Catalog', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'ReportCatalog'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Report Format', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'ReportFormat'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Report ID', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'ReportID'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Report Description for the Report Detail Line #', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'ReportLineDesc'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Report Line #', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'ReportLineNo'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Report Parameter Name 1', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'ReportParmName1'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Report Parameter Name 10', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'ReportParmName10'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Report Parameter Name 11', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'ReportParmName11'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Report Parameter Name 12', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'ReportParmName12'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Report Parameter Name 13', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'ReportParmName13'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Report Parameter Name 14', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'ReportParmName14'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Report Parameter Name 15', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'ReportParmName15'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Report Parameter Name 16', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'ReportParmName16'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Report Parameter Name 17', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'ReportParmName17'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Report Parameter Name 18', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'ReportParmName18'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Report Parameter Name 19', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'ReportParmName19'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Report Parameter Name 2', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'ReportParmName2'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Report Parameter Name 20', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'ReportParmName20'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Report Parameter Name 3', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'ReportParmName3'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Report Parameter Name 4', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'ReportParmName4'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Report Parameter Name 5', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'ReportParmName5'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Report Parameter Name 6', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'ReportParmName6'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Report Parameter Name 7', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'ReportParmName7'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Report Parameter Name 8', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'ReportParmName8'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Report Parameter Name 9', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'ReportParmName9'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Report Template:LabelType,datawindow name,ZPL or IPL template string', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'ReportTemplate'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Report Title', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'ReportTitle'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Report Row ID', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'RowID'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'Storerkey', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'Storerkey'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'When checked, fields updated in this table will not trigger to update other tables that are linked with this table.', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'TrafficCop'
-   GO
+   ;
    EXEC sp_addextendedproperty N'MS_Description', N'User Login', 'SCHEMA', N'dbo', 'TABLE', N'WMREPORTDETAIL', 'COLUMN', N'UserName'
-   GO
+   ;
 END
 
 IF NOT EXISTS (SELECT 1 FROM syscolumns sc
