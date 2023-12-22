@@ -29,6 +29,7 @@ GO
 /* 14-OCT-2021  CSCHONG 1.2  WMS-18125 revised print cmd logic (CS02)   */
 /* 08-NOV-2021  CSCHONG 1.3  WMS-18125 revised print cmd logic (CS03)   */
 /* 22-JUL-2023  CSCHONG 1.4  WMS-23026 add filter on print job task(CS04)*/
+/* 29-Sep-2023  CSCHONG 1.5  WMS-23758 fix print bugs (CS05)            */
 /************************************************************************/ 
 
 CREATE OR ALTER PROC [dbo].[isp_TPP_TPPRN_01] (
@@ -366,7 +367,8 @@ BEGIN
 
                          IF ISNULL(@c_SqlOutput,'') <> ''
                          BEGIN
-                             SET @c_GetPrintData = REPLACE(@c_PrintData,'}','') + ','
+                             --SET @c_GetPrintData = REPLACE(@c_PrintData,'}','') + ','              --CS05
+                              SET @c_GetPrintData = LEFT(@c_PrintData,LEN(@c_PrintData)-1) + ','     --CS05
 
                               SET @c_SqlOutput03 = '"addData": ' + @c_SqlOutput + '} '
                          END
