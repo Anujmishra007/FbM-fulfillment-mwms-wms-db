@@ -28,6 +28,7 @@ GO
 /* 12-OCT-2021  CSCHONG 1.1  Fix Qcmd error (CS01)                      */
 /* 24-FEB-2023  CSCHONG 1.2  WMS-21838 add storeroconfig (CS02)         */
 /* 22-JUL-2023  CSCHONG 1.3  WMS-23026 add filter on print job task(CS03)*/
+/* 02-OCT-2023  CSCHONG 1.4  WMS-23772 revised field logic (CS04)        */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_TPP_TPPRN_04] (
@@ -79,8 +80,8 @@ BEGIN
            @c_Parm10         NVARCHAR(4000)='',
            @c_UDF01          NVARCHAR(200)='',
            @c_UDF02          NVARCHAR(200)='',
-           @c_UDF03          NVARCHAR(200)='',
-           @c_UDF04          NVARCHAR(500)='',
+           @c_UDF03          NVARCHAR(4000)='',   --CS04
+           @c_UDF04          NVARCHAR(4000)='',   --CS04
            @c_UDF05          NVARCHAR(4000)='',
            @c_SourceType     NVARCHAR(30) = '', --print from which function
            @c_Platform       NVARCHAR(30)='',
@@ -118,6 +119,8 @@ BEGIN
           ,@c_Session             NVARCHAR(250)  --CS02
           ,@c_accesstokendate     NVARCHAR(20)   --CS02         
           ,@c_JobStatus           NVARCHAR(10)   --CS03
+          ,@c_SqlOutput03         NVARCHAR(max)   = ''  --CS04
+          ,@c_SQL03               NVARCHAR(4000)        --CS04
 
 
    SELECT @n_starttcnt = @@TRANCOUNT, @n_continue = 1, @b_success = 1, @n_err = 0
@@ -219,6 +222,7 @@ BEGIN
         SET @c_Config = 'wms_waybill'
         SET @c_copy = '1'
         SET @c_Parms  = ''
+
 
 
        --CS01 END
@@ -393,6 +397,33 @@ BEGIN
 
          SET @c_CustomData = @c_SqlOutput
 
+         --CS04 S
+               SET @c_SqlOutput03 = '' 
+               SET @c_SqlOutput = '' 
+               SET @c_SQL03 = @c_UDF03
+
+                       SET @c_SQLParm =  N' @c_Orderkey     NVARCHAR(20)'
+                                       +  ',@c_TrackingNo      NVARCHAR(20)'
+                                       + ' ,@n_CartonNo        INT         '
+                                       +  ',@c_SqlOutput       NVARCHAR(MAX) OUTPUT'
+
+
+                         EXEC sp_ExecuteSQL @c_SQL03
+                                             ,@c_SQLParm
+                                            , @c_Orderkey
+                                             ,@c_TrackingNo
+                                             ,@n_CartonNo
+                                             ,@c_SqlOutput        OUTPUT 
+
+                          
+
+                         IF ISNULL(@c_SqlOutput,'') <> ''
+                         BEGIN
+                              SET @c_SqlOutput03 = ',"addData": ' + @c_SqlOutput + '} '
+                         END
+
+         --CS04 E
+
          IF @n_continue IN (1,2) AND @c_Status = 9
          BEGIN
                  SET @c_CloseContent = ''
@@ -406,7 +437,7 @@ BEGIN
                                       ', "task": {"taskID":' + '"' + @c_RequestID + '"' + ',"printer":'  + '"' + @c_printer + '"' +
                                       ',"config": '+ '"' + @c_Config + '"' + ', "documents": [ { ' + ' "documentID":' + '"' + @c_TrackingNo + '"' + ', "copy": ' + @c_copy +
                                       ', "contents": [ { ' + ' "params":' + '"' + @c_Parms  +'",'+  @c_PrintData +
-                                      ', "templateURL":"' + @c_TemplathURL +'"} '+@c_CustomData+' ] } ] } }'
+                                      ', "templateURL":"' + @c_TemplathURL  + '"' + @c_SqlOutput03  +'} '+@c_CustomData+' ] } ] } }'       --CS04
 
 
                 IF NOT EXISTS(SELECT 1 FROM dbo.TPPRINTCMDLOG WITH (NOLOCK) WHERE JobNo = @n_JobNo AND CartonNo = @n_CartonNo)
