@@ -35,6 +35,8 @@ GO
 /*                            (Populate Via Order)                      */
 /* 2023-04-14  Wan06    1.5   LFWM-4192 - SCEUATSGPopulate Carrierkey   */
 /*                            from Orders in Trade Return               */
+/* 2023-12-05  Chien    1.6   JSM-188169 - Trade Return Populate Orders */
+/*							  ExpectedQty Issue		*/
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_ASN_PopulateSOs_Wrapper]                                                                                                                     
       @c_ReceiptKey           NVARCHAR(10)         
@@ -439,10 +441,10 @@ BEGIN
          BEGIN
             SET @c_SQL = N'INSERT INTO #tPICKDETAIL  (' + @c_TableColumns + ')'
                         + ' SELECT ' + @c_TableColumns_Select 
-                        + ' FROM #tORDERDETAIL RD'
-                        + ' JOIN ' + RTRIM(@c_DBName) + 'dbo.PICKDETAIL PICKDETAIL WITH (NOLOCK)'
-                        +                               ' ON RD.Orderkey= PICKDETAIL.Orderkey'
-                        +                               ' AND RD.OrderLineNumber = PICKDETAIL.OrderLineNumber'
+                    	+ ' FROM LOTATTRIBUTE WITH (NOLOCK)'                                             --JSM-188169
+                        + ' WHERE EXISTS (SELECT 1 FROM #tPICKDETAIL PD WHERE PD.Lot= LOTATTRIBUTE.Lot)' --JSM-188169
+                        --+ ' FROM #tPICKDETAIL PD'									   --JSM-188169	
+                        --+ ' JOIN LOTATTRIBUTE WITH (NOLOCK) ON LOTATTRIBUTE.Lot= PD.Lot'		   --JSM-188169
 
             EXEC sp_ExecuteSQL @c_SQL
  
