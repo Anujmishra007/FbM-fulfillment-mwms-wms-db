@@ -21,6 +21,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 13-DEC-2023 CSCHONG  1.1   DevOps Scripts Combine & WMS-24348 (CS01) */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_Delivery_Note62_RDT]
          @c_PickSlipNo  NVARCHAR(10)
@@ -177,6 +178,7 @@ BEGIN
       JOIN LOADPLANDETAIL LPD WITH (NOLOCK) ON (LP.LoadKey = LPD.Loadkey)    
       JOIN dbo.PackTask PT WITH (NOLOCK) ON PT.Orderkey = LPD.OrderKey
       WHERE LP.Loadkey = @c_Loadkey    
+      ORDER BY PT.logicalName     --CS01
    END    
    ELSE    
    BEGIN    
@@ -396,6 +398,7 @@ BEGIN
          , ISNULL(RTRIM(OD.UserDefine03),'') + ' ' + ISNULL(OD.notes,'')    
          , RTRIM(OD.UserDefine03),RTRIM(OD.notes) --CJ  
          ,#TMP_ORDERS.Logicalname    
+        ORDER BY #TMP_ORDERS.Logicalname       --CS01
     
     
    UPDATE INV    
