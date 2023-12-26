@@ -19,9 +19,10 @@ GO
 /* 2016-03-21 1.4  Ung        SOS361967 Add DeviceType = STATION              */
 /*                            Add back update PTLTran.LightUP = 0             */
 /* 2022-03-22 1.5  yeekung    WMS-18729 add params (Yeekung01)                */
+/* 2023-11-29 1.6  Yeekung    WMS-23803 add TMS (yeeKung02)                   */
 /******************************************************************************/
 
-CREATE OR ALTER PROC [PTL].[isp_PTL_TerminateModule]
+CREATE OR ALTER  PROC [PTL].[isp_PTL_TerminateModule]
 (
    @c_StorerKey NVARCHAR(15)
   ,@n_Func      INT
@@ -48,7 +49,8 @@ BEGIN
            @n_PTLKey          BIGINT,
            @c_PTLType         NVARCHAR(10),
            @c_LightAddress    NVARCHAR(1024),
-           @n_LightLinkLogKey INT
+           @n_LightLinkLogKey INT,
+           @cLightCmd         NVARCHAR(2000)
 
    SET @c_PutawayZone = ''
 
@@ -68,11 +70,14 @@ BEGIN
       WHERE Loc = @c_DeviceID
    END
 
-   IF ISNULL(RTRIM(@c_DeviceIP), '') = ''
+   IF  @c_DeviceModel NOT IN ('TMS')  --(yeekung02)
    BEGIN
-      SET @n_Err = 85701
-      SET @c_ErrMsg = '85701 Bad DeviceID (not found in DeviceProfile)'
-      GOTO Quit
+      IF ISNULL(RTRIM(@c_DeviceIP), '') = ''
+      BEGIN
+         SET @n_Err = 85701
+         SET @c_ErrMsg = '85701 Bad DeviceID (not found in DeviceProfile)'
+         GOTO Quit
+      END
    END
 
    IF @c_TerminateType = '0'
@@ -149,18 +154,43 @@ BEGIN
 
       IF LEN(@c_LightAddress) > 500
       BEGIN
-         SET @c_LightAction ='TerminateModule'
-         SET @c_LightCommand = [PTL].fnc_PTL_GenLightCommand(@c_LightAction, '', '',@c_DeviceModel)
+         IF @c_DeviceModel IN ('TMS')
+         BEGIN
+            SELECT top 1 @c_StorerKey=storerkey
+            from deviceprofile (nolock)
+            where deviceid=@c_DeviceID
+            and storerkey<>''
 
-         INSERT INTO PTL.LFLightLinkLOG(
-               Application, LocalEndPoint,   RemoteEndPoint,
-               SourceKey,      MessageType,     Data,
-               Status,      AddDate,         DeviceIPAddress)
-         VALUES(
-               'LFLigthLink', '' , '',
-               '0', 'COMMAND', @c_LightCommand + @c_LightAddress,
-               '0', GetDate(),  @c_DeviceIP )
+            SELECT @c_LightCommand = [PTL].PTL_GenLightCommand_TMS(@c_DeviceID,@c_DevicePosition,0)
 
+            INSERT INTO PTL.LFLightLinkLOG(
+                  Application, LocalEndPoint,   RemoteEndPoint,
+                  SourceKey,      MessageType,     Data,
+                  Status,      AddDate,         DeviceIPAddress)
+            VALUES(
+                  'LFLigthLink', '' , '',
+                  '0', 'COMMAND', @c_LightCommand ,
+                  '0', GetDate(),  @c_DeviceIP )
+
+            SET @cLightCmd = @c_LightCommand
+
+         END
+         ELSE
+         BEGIN
+            SET @c_LightAction ='TerminateModule'
+            SET @c_LightCommand = [PTL].fnc_PTL_GenLightCommand(@c_LightAction, '', '',@c_DeviceModel)
+
+            INSERT INTO PTL.LFLightLinkLOG(
+                  Application, LocalEndPoint,   RemoteEndPoint,
+                  SourceKey,      MessageType,     Data,
+                  Status,      AddDate,         DeviceIPAddress)
+            VALUES(
+                  'LFLigthLink', '' , '',
+                  '0', 'COMMAND', @c_LightCommand + @c_LightAddress,
+                  '0', GetDate(),  @c_DeviceIP )
+
+         END
+        
          SET @n_LightLinkLogKey = @@identity
 
          UPDATE PTL.LFLightLinkLog WITH (ROWLOCK)
@@ -177,7 +207,10 @@ BEGIN
             @n_Err      OUTPUT,
             @c_ErrMsg   OUTPUT,
             @c_DeviceType,
-            @c_DeviceID
+            @c_DeviceID,
+            '',
+            '',
+            @cLightCmd
 
          SET @c_LightAddress = ''
       END
@@ -187,7 +220,7 @@ BEGIN
                      AND   ls.DevicePosition = @c_DevicePosition)
       BEGIN
          INSERT INTO PTL.LightStatus
-         (  IPAddress,        DevicePosition,   DeviceID,
+  (  IPAddress,        DevicePosition,   DeviceID,
             [Status],         PTLKey,           PTLType,
             StorerKey,        UserName,         DisplayValue,
             ReceiveValue,     ReceiveTime,      Remarks,  Func ,
@@ -253,17 +286,43 @@ BEGIN
 
    IF LEN(@c_LightAddress) > 0
    BEGIN
-      SET @c_LightAction ='TerminateModule'
-      SET @c_LightCommand = [PTL].fnc_PTL_GenLightCommand(@c_LightAction, '', '',@c_DeviceModel)
+      IF @c_DeviceModel IN ('TMS')
+      BEGIN
+         SELECT top 1 @c_StorerKey=storerkey
+         from deviceprofile (nolock)
+         where deviceid=@c_DeviceID
+         and storerkey<>''
 
-      INSERT INTO PTL.LFLightLinkLOG(
-             Application, LocalEndPoint,   RemoteEndPoint,
-             SourceKey,      MessageType,     Data,
-             Status,      AddDate,         DeviceIPAddress )
-      VALUES(
-             'LFLigthLink', '' , '',
-             '0', 'COMMAND', @c_LightCommand + @c_LightAddress,
-             '0', GetDate(), @c_DeviceIP  )
+         SELECT @c_LightCommand = [PTL].PTL_GenLightCommand_TMS(@c_DeviceID,@c_DevicePosition,0)
+
+        INSERT INTO PTL.LFLightLinkLOG(
+                Application, LocalEndPoint,   RemoteEndPoint,
+                SourceKey,      MessageType,     Data,
+                Status,      AddDate,         DeviceIPAddress )
+         VALUES(
+                'LFLigthLink', '' , '',
+                '0', 'COMMAND', @c_LightCommand ,
+                '0', GetDate(), @c_DeviceIP  )
+
+         SET @cLightCmd = @c_LightCommand
+
+
+      END
+      ELSE
+      BEGIN
+         SET @c_LightAction ='TerminateModule'
+         SET @c_LightCommand = [PTL].fnc_PTL_GenLightCommand(@c_LightAction, '', '',@c_DeviceModel)
+
+         INSERT INTO PTL.LFLightLinkLOG(
+                Application, LocalEndPoint,   RemoteEndPoint,
+                SourceKey,      MessageType,     Data,
+                Status,      AddDate,         DeviceIPAddress )
+         VALUES(
+                'LFLigthLink', '' , '',
+                '0', 'COMMAND', @c_LightCommand + @c_LightAddress,
+                '0', GetDate(), @c_DeviceIP  )
+
+      END
 
       SET @n_LightLinkLogKey = @@identity
 
@@ -274,11 +333,14 @@ BEGIN
       --SET @n_LightLinkLogKey = RIGHT((REPLICATE(' ', 7) + CAST(@n_LightLinkLogKey AS VARCHAR(8))), 8)
       SET @c_TCPMessage = @n_LightLinkLogKey
 
+
+
       EXEC PTL.isp_PTL_SendMsg @c_StorerKey, @c_TCPMessage, @b_success OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT, @c_DeviceType
-                              ,@c_DeviceID
+               ,@c_DeviceID,'','',@cLightCmd
 
       SET @c_LightAddress = ''
    END
+
 
    COMMIT TRAN isp_PTL_TerminateModule
    GOTO Quit

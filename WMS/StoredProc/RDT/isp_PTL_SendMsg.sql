@@ -78,8 +78,8 @@ BEGIN
                 @c_RemoteEndPoint = c.Long
          FROM CODELKUP c WITH (NOLOCK)
          WHERE ListName    = 'TCPClient'
-         AND   c.Short     = 'LIGHT'
-         AND   c.Code      = @c_DeviceID
+            AND   c.Short     = 'LIGHT'
+            AND   c.Code      = @c_DeviceID
       END
 
       -- (Chee01)

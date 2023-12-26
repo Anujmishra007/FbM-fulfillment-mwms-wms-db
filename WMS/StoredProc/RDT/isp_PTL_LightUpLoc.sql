@@ -164,7 +164,7 @@ BEGIN
    IF @c_DeviceModel ='TOWER'
    BEGIN
       SET @c_LightAction ='TowerLightT'
-      SET @c_LightCommand = [PTL]. [PTL].fnc_PTL_GenLightCommand(@c_LightAction, '', '')
+      SET @c_LightCommand = [PTL].fnc_PTL_GenLightCommand(@c_LightAction, '', '',@c_DeviceModel)
 
       --SET @c_ModeArray = RTRIM(@c_ModeArray) + 'm4' +
       --          '$' + PTL.fnc_PTL_ConvertBinaryToHex(SUBSTRING(@cModeValueBinary, 1, 4)) +
