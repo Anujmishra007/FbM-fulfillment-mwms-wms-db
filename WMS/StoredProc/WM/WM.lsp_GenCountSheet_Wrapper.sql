@@ -31,7 +31,7 @@ GO
 /*                            nested issue  --rmt01                      */
 /* 2023-12-26  Calvin   1.5   JSM-199728 Set Rowcount to EXEC (CLVN01)   */
 /*************************************************************************/     
-ALTER PROCEDURE [WM].[lsp_GenCountSheet_Wrapper]    
+CREATE OR ALTER PROCEDURE [WM].[lsp_GenCountSheet_Wrapper]    
    @c_StockTakeKey         NVARCHAR(10)  
 ,  @c_GenType              CHAR(1)      = 'N'   -- B:Blank, N:Normal, U:UCC  
 ,  @c_BlankCSheetHideLoc   CHAR(1)      = ''  
