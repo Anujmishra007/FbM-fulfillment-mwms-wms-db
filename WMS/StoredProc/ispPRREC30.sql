@@ -14,7 +14,7 @@ GO
 /*                                                                         */
 /* Called By: ispPreFinalizeReceiptWrapper                                 */
 /*                                                                         */
-/* GitLab Version: 1.0                                                     */
+/* Github Version: 1.1                                                     */
 /*                                                                         */
 /* Version: 7.0                                                            */
 /*                                                                         */
@@ -23,6 +23,8 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 08-Aug-2023  WLChooi 1.0   DevOps Combine Script                        */
+/* 10-Dec-2023  WLChooi 1.1   WMS-24359 - Do not update Lottable10 has     */
+/*                            value (WL01)                                 */
 /***************************************************************************/  
 CREATE OR ALTER PROC [dbo].[ispPRREC30]  
 (     @c_Receiptkey        NVARCHAR(10)  
@@ -116,6 +118,7 @@ BEGIN
       FROM RECEIPTDETAIL RD (NOLOCK)
       WHERE RD.ReceiptKey = @c_Receiptkey
       AND (RD.ReceiptLineNumber = @c_ReceiptLineNumber OR ISNULL(@c_ReceiptLineNumber,'') = '')
+      AND ISNULL(RD.Lottable10, '') = ''   --WL01
       GROUP BY RD.ReceiptKey, RD.ReceiptLineNumber
              , RD.SKU, RD.ExternPoKey, RD.Lottable02
              , RD.Lottable03, RD.Lottable04, RD.Lottable05, RD.Lottable07
@@ -256,7 +259,7 @@ BEGIN
                FROM dbo.NCOUNTER N (NOLOCK)
                WHERE N.keyname = 'COSTCO6LOTSEQ'
             
-               IF @c_SeqNo = 'ZZZZZZZ' OR LEN(@c_SeqNo) > 7
+               IF @c_SeqNo = 'ZZZZZZZ' OR LEN(@c_SeqNo) > 6   --WL01
                BEGIN
                   SET @c_SeqNo = 'ERR'
                END
@@ -341,7 +344,7 @@ BEGIN
                         ELSE
                         BEGIN
                            SET @c_TempSeqNo = @c_ColValue + @c_TempSeqNo
-                           SET @c_TempSeqNo = RIGHT(@c_TempSeqNo, 7)
+                           SET @c_TempSeqNo = RIGHT(@c_TempSeqNo, 6)   --WL01
                         END
                         NEXT_LOOP_B:
                         FETCH NEXT FROM CUR_LOOP_B INTO @c_ColValue
@@ -379,7 +382,7 @@ BEGIN
             
             IF @c_SeqNo <> 'ERR'
             BEGIN
-               SET @c_FinalSeqNo = @c_SiteCode + RIGHT(REPLICATE('0', 7) + @c_SeqNo, 7)
+               SET @c_FinalSeqNo = @c_SiteCode + RIGHT(REPLICATE('0', 6) + @c_SeqNo, 6)   --WL01
             END
             ELSE
             BEGIN
