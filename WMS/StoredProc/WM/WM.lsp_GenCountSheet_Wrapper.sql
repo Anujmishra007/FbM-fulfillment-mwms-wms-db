@@ -3,6 +3,7 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
+
 /*************************************************************************/    
 /* Stored Procedure: lsp_GenCountSheet_Wrapper                           */    
 /* Creation Date: 14-MAR-2018                                            */    
@@ -28,8 +29,9 @@ GO
 /* 2022-06-15  SPChin   1.3   JSM-70416 Revise logic                     */  
 /* 2023-04-07  TanWLeong1.4   JSM-121612 To overcome Insert cannot be    */
 /*                            nested issue  --rmt01                      */
+/* 2023-12-26  Calvin   1.5   JSM-199728 Set Rowcount to EXEC (CLVN01)   */
 /*************************************************************************/     
-alter PROCEDURE [WM].[lsp_GenCountSheet_Wrapper]    
+ALTER PROCEDURE [WM].[lsp_GenCountSheet_Wrapper]    
    @c_StockTakeKey         NVARCHAR(10)  
 ,  @c_GenType              CHAR(1)      = 'N'   -- B:Blank, N:Normal, U:UCC  
 ,  @c_BlankCSheetHideLoc   CHAR(1)      = ''  
@@ -106,12 +108,13 @@ BEGIN
             BEGIN TRY   
             --  TRUNCATE TABLE #TMP_CC                              --rmt01
             --   INSERT INTO #TMP_CC (DataCount)       --JSM-70416  --rmt01    
-               EXECUTE ispCheckOutstandingOrders      --JSM-70416         
+               --EXECUTE ispCheckOutstandingOrders      --JSM-70416      --(CLVN01)   
+               EXECUTE @n_rowcount = ispCheckOutstandingOrders      --(CLVN01)    
                   @c_StockTakeKey = @c_StockTakeKey           
                ,  @c_CountNo = @c_CountNo   
-                select @@rowcount                   --rmt01
-            set @n_rowcount = @@rowcount            --rmt01
-            select @n_rowcount as nfirstcount       --rmt01
+            --select @@rowcount                   --rmt01     --(CLVN01)
+            --set @n_rowcount = @@rowcount            --rmt01 --(CLVN01)
+            --select @n_rowcount as nfirstcount       --rmt01 --(CLVN01)
               
      
               -- SELECT TOP 1 @n_Count = ISNULL(DataCount, 0)       --rmt01
@@ -336,6 +339,7 @@ EXIT_SP:
   
    REVERT        
 END    
+
 GO
-GRANT EXECUTE ON [WM].[lsp_GenCountSheet_Wrapper] TO nSQL 
-GO
+
+
