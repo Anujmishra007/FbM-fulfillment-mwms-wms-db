@@ -4,7 +4,6 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 
-
 /***************************************************************************/
 /* Stored Procedure: nspALCFG01                                            */
 /* Creation Date: 18-APR-2018                                              */
@@ -1142,7 +1141,7 @@ BEGIN
                               " JOIN STORER (NOLOCK) ON (LOTxLOCxID.Storerkey =  STORER.Storerkey) " +
                               " JOIN PACK (NOLOCK) ON (SKU.Packkey = PACK.Packkey) " +
                               --" WHERE LOTxLOCxID.Storerkey = @c_Storerkey) " +	--(CLVN01)
-							  --" WHERE LOTxLOCxID.Storerkey = @c_Storerkey " +	    --(CLVN01)
+							  " WHERE LOTxLOCxID.Storerkey = @c_Storerkey " +	    --(CLVN01)
                               " AND LOTxLOCxID.Sku = @c_Sku " +
                               " AND LOC.Facility = @c_Facility " +
                               CASE WHEN @c_AllocateQtyReplenFlag = 'Y' THEN
@@ -1214,4 +1213,5 @@ END
 GO
 GRANT EXECUTE ON  [dbo].[nspALCFG01] TO [NSQL]
 GO
+
 
