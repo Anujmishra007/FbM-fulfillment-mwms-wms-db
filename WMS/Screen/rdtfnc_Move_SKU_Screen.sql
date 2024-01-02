@@ -26,6 +26,10 @@ EXECUTE rdt.rdtAddScn 1032, 'ENG',
    @cLine03 = '%18d02',
    @cLine04 = 'SKU/UPC:',
    @cLine05 = '%120iV_Barcode',   --WMS-22175
+   @cLine06 = '%20d04',
+   @cLine07 = '%20d05',
+   @cLine08 = '', 
+   @cLine09 = 'QTY: %10d06',
    @cLine14 = '%e',
    @nFunc = 513
    
