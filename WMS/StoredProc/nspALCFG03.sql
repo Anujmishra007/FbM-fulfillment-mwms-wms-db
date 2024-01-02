@@ -3,41 +3,44 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/************************************************************************/
-/* Stored Procedure: nspALCFG03                                         */
-/* Creation Date: 18-APR-2018                                           */
-/* Copyright: LF                                                        */
-/* Written by:                                                          */
-/*                                                                      */
-/* Purpose: WMS-4344 Allocation Configure by codelkup                   */
-/*          (Work with SkipPreAllocation)                               */
-/*                                                                      */
-/* Called By: nspOrderProcessing                                        */
-/*                                                                      */
-/* PVCS Version: 1.3                                                    */
-/*                                                                      */
-/* Version: 8.0                                                         */
-/*                                                                      */
-/* Data Modifications:                                                  */
-/*                                                                      */
-/* Updates:                                                             */
-/* Date        Author   Rev  Purposes                                   */
-/* 17/04/2019  NJOW01   1.0  WMS-4344 allow allocate qtyreplen          */
-/* 15/07/2019  NJOW02   1.1  Fix shelflife flag                         */
-/* 18/07/2019  NJOW03   1.2  Change dyanmic sql by param                */
-/* 11-May-2020 Wan01    1.3  Dynamic SQL review, impact SQL cache log   */
-/* 23-Jun-2021 NJOW04   1.4  WMS-17326 allow skip lottable filtering    */
-/* 18-Apr-2022 NJOW05   1.5  WMS-19509 allow set sorting by dynamic SQL */
-/* 18-Apr-2022 NJOW05   1.5  DEVOPS Combine script                      */
-/* 05-May-2022 NJOW06   1.6  WMS-19571 support get strategykey from wave*/
-/*                           loadplan.defaultstrategykey and            */
-/*                           config StorerDefaultAllocStrategy          */
-/* 05-Sep-2022 NJOW07   1.7  WMS-19993 FIFO by multi UOM                */
-/* 18-Nov-2022 NJOW08   1.8  WMS-21206 Add force allocate lottable by   */
-/*                           by config include empty lottable filterring*/
-/************************************************************************/
 
-CREATE OR ALTER PROC [dbo].[nspALCFG03]
+/***************************************************************************/
+/* Stored Procedure: nspALCFG03                                            */
+/* Creation Date: 18-APR-2018                                              */
+/* Copyright: LF                                                           */
+/* Written by:                                                             */
+/*                                                                         */
+/* Purpose: WMS-4344 Allocation Configure by codelkup                      */
+/*          (Work with SkipPreAllocation)                                  */
+/*                                                                         */
+/* Called By: nspOrderProcessing                                           */
+/*                                                                         */
+/* PVCS Version: 1.3                                                       */
+/*                                                                         */
+/* Version: 8.0                                                            */
+/*                                                                         */
+/* Data Modifications:                                                     */
+/*                                                                         */
+/* Updates:                                                                */
+/* Date        Author   Rev  Purposes                                      */
+/* 17/04/2019  NJOW01   1.0  WMS-4344 allow allocate qtyreplen             */
+/* 15/07/2019  NJOW02   1.1  Fix shelflife flag                            */
+/* 18/07/2019  NJOW03   1.2  Change dyanmic sql by param                   */
+/* 11-May-2020 Wan01    1.3  Dynamic SQL review, impact SQL cache log      */
+/* 23-Jun-2021 NJOW04   1.4  WMS-17326 allow skip lottable filtering       */
+/* 18-Apr-2022 NJOW05   1.5  WMS-19509 allow set sorting by dynamic SQL    */
+/* 18-Apr-2022 NJOW05   1.5  DEVOPS Combine script                         */
+/* 05-May-2022 NJOW06   1.6  WMS-19571 support get strategykey from wave   */
+/*                           loadplan.defaultstrategykey and               */
+/*                           config StorerDefaultAllocStrategy             */
+/* 05-Sep-2022 NJOW07   1.7  WMS-19993 FIFO by multi UOM                   */
+/* 18-Nov-2022 NJOW08   1.8  WMS-21206 Add force allocate lottable by      */
+/*                           by config include empty lottable filterring   */
+/* 29-Sep-2023 CLVN01   1.9  JSM-54130 Add AllocateStrategyKey to condition*/
+/* 29-Sep-2023 CLVN01   1.9  JSM-54130 Fix Syntax Error                    */
+/***************************************************************************/
+
+CREATE OR ALTER   PROC [dbo].[nspALCFG03]
    @c_DocumentNo NVARCHAR(10),
    @c_Facility   NVARCHAR(5),
    @c_StorerKey  NVARCHAR(15),
@@ -327,7 +330,8 @@ BEGIN
    END
 
    IF EXISTS(SELECT 1 FROM ALLOCATESTRATEGYDETAIL (NOLOCK)
-             WHERE LocationTypeOverride IN ('PICK','CASE'))
+             WHERE LocationTypeOverride IN ('PICK','CASE')
+             AND AllocateStrategyKey = @c_AllocateStrategykey)	--(CLVN01)
       SET @c_OverAllocateFlag = 'Y'
 
    INSERT INTO @TMP_CODELKUP (Listname, Code, Description, Short, Long, Notes, Notes2, Storerkey, UDF01, UDF02, UDF03, UDF04, UDF05, Code2)
@@ -1136,7 +1140,8 @@ BEGIN
                               " JOIN SKU (NOLOCK) ON (LOTxLOCxID.Storerkey =  SKU.Storerkey AND SKU.Sku =  SKUXLOC.Sku) " +
                               " JOIN STORER (NOLOCK) ON (LOTxLOCxID.Storerkey =  STORER.Storerkey) " +
                               " JOIN PACK (NOLOCK) ON (SKU.Packkey = PACK.Packkey) " +
-                              " WHERE LOTxLOCxID.Storerkey = @c_Storerkey) " +
+                              --" WHERE LOTxLOCxID.Storerkey = @c_Storerkey) " +	--(CLVN01)
+							  " WHERE LOTxLOCxID.Storerkey = @c_Storerkey " +	    --(CLVN01)
                               " AND LOTxLOCxID.Sku = @c_Sku " +
                               " AND LOC.Facility = @c_Facility " +
                               CASE WHEN @c_AllocateQtyReplenFlag = 'Y' THEN
