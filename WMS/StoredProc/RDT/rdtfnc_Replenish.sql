@@ -1,11 +1,8 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[RDT].[rdtfnc_Replenish]') AND OBJECTPROPERTY(Id, N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdtfnc_Replenish]
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /************************************************************************/
 /* Store procedure: rdtfnc_Replenish                                    */
@@ -41,14 +38,16 @@ GO
 /*                          Misc fixes                                  */
 /* 2018-06-04 2.5  James    WMS-5303 Add rdt_decode (james02)           */
 /* 2018-10-23 2.6  James    WMS-6778 Add ExtendedinfoSP @scn 4 (james03)*/
-/* 2019-04-10 2.7  James    Bug fix (james04)                           */  
+/* 2019-04-10 2.7  James    Bug fix (james04)                           */
 /* 2019-11-28 2.8  James    WMS-11213 Add ExtUpdSP @ scn 4 & 5 (james05)*/
 /*                          Allow full/partial short replen             */
 /* 2020-10-27 2.9  James    WMS-15537 Add ExtendedValidateSP to         */
 /*                          Step 5 (james06)                            */
+/* 2018-10-02 3.0  James    WMS-6003 Add ToLoc check digit (james07)    */ 
+/* 2023-12-14 3.1  YeeKung  WMS-23085 Extended ID length (yeekung01)    */
 /************************************************************************/
 
-CREATE PROC rdt.rdtfnc_Replenish (
+CREATE OR ALTER PROC [RDT].[rdtfnc_Replenish] (
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 nvarchar max
@@ -92,7 +91,7 @@ DECLARE
    @cRPLKey     NVARCHAR( 10),
    --@cLottable02 NVARCHAR( 18),
    --@cLottable03 NVARCHAR( 18),
-   --@dLottable04 DATETIME,   
+   --@dLottable04 DATETIME,
    @cActToLOC   NVARCHAR( 10),
 
    @nPUOM_Div   INT, -- UOM divider
@@ -113,8 +112,8 @@ DECLARE
    @cMoveQTYAlloc       NVARCHAR( 1),
    @cTempFromLoc        NVARCHAR( 10),
    @cTempFromID         NVARCHAR( 18),
-   @cBarcode            NVARCHAR( 60), 
-   @cDecodeSP           NVARCHAR( 20), 
+   @cBarcode            NVARCHAR( 60),
+   @cDecodeSP           NVARCHAR( 20),
    @cLottable01         NVARCHAR( 18),
    @cLottable02         NVARCHAR( 18),
    @cLottable03         NVARCHAR( 18),
@@ -140,6 +139,7 @@ DECLARE
    @cAllowFullShortReplen   NVARCHAR( 1),
    @cExtendedValidateSP NVARCHAR( 20),
    @tExtValidVar        VariableTable,
+   @cToLOCCheckDigit    NVARCHAR( 1),  
    
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
@@ -195,10 +195,11 @@ SELECT
    --@nActQty     = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String11, 5), 0) = 1 THEN LEFT( V_String11, 5) ELSE 0 END,
    @cToID       = V_String12,
    @cRPLKey     = V_String13,
-   @cDecodeSP   = V_String14,   
+   @cDecodeSP   = V_String14,
    @cExtendedInfoSP     = V_String15,
    @cExtendedUpdateSP   = V_String16,
-
+   @cToLOCCheckDigit    = V_String17,  
+   
    @cReplenBySKUQTY     = V_String20,
    @cDisplayQtyAvail    = V_String21,
    @cReplenEnableTOID   = V_String22,
@@ -210,7 +211,7 @@ SELECT
    @nActMQTY    = V_Integer1,
    @nActPQTY    = V_Integer2,
    @nActQty     = V_QTY,
-   
+
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,  @cFieldAttr03 = FieldAttr03,
@@ -285,6 +286,9 @@ BEGIN
    IF @cExtendedValidateSP = '0'
       SET @cExtendedValidateSP = ''
 
+   -- (james07)  
+   SET @cToLOCCheckDigit = rdt.rdtGetConfig( @nFunc, 'ToLOCCheckDigit', @cStorerKey)  
+   
    -- Event log
    EXEC RDT.rdt_STD_EventLog
       @cActionType = '1', -- Sign-in
@@ -318,9 +322,11 @@ Step_1:
 BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
+      DECLARE @cIDBarcode NVARCHAR(30)
       -- Screen mapping
       SET @cFromLoc = @cInField01
       SET @cFromID = @cInField02
+      SET @cIDBarcode = @cInField02
       SET @cRPLKey = @cInField03
 
       -- Check blank
@@ -331,8 +337,8 @@ BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 1
          GOTO Step_1_Fail
       END
-      
-      -- Check key-in both 
+
+      -- Check key-in both
       IF (@cFromLoc <> '' OR @cFromID <> '') AND @cRPLKey <> ''
       BEGIN
          SET @nErrNo = 63034
@@ -347,10 +353,10 @@ BEGIN
          -- Standard decode
          IF @cDecodeSP = '1'
          BEGIN
-            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode, 
-               @cID     = @cFromID OUTPUT, 
-               @cUPC    = @cSKU    OUTPUT, 
-               @nQTY    = @nQTY    OUTPUT, 
+            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cIDBarcode,
+               @cID     = @cFromID OUTPUT,
+               @cUPC    = @cSKU    OUTPUT,
+               @nQTY    = @nQTY    OUTPUT,
                @cLottable01  = @cLottable01  OUTPUT,
                @cLottable02  = @cLottable02  OUTPUT,
                @cLottable03  = @cLottable03  OUTPUT,
@@ -366,7 +372,7 @@ BEGIN
                @dLottable13  = @dLottable13  OUTPUT,
                @dLottable14  = @dLottable14  OUTPUT,
                @dLottable15  = @dLottable15  OUTPUT,
-               @nErrNo  = @nErrNo  OUTPUT, 
+               @nErrNo  = @nErrNo  OUTPUT,
                @cErrMsg = @cErrMsg OUTPUT,
                @cType = 'ID'
          END
@@ -376,7 +382,7 @@ BEGIN
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cBarcode, ' +
-               ' @cFromID     OUTPUT, @cFromLOC    OUTPUT, @cToID       OUTPUT, ' + 
+               ' @cFromID     OUTPUT, @cFromLOC    OUTPUT, @cToID       OUTPUT, ' +
                ' @cToLOC      OUTPUT, @cSKU        OUTPUT, @nQty        OUTPUT, ' +
                ' @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT, ' +
                ' @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT, ' +
@@ -415,8 +421,8 @@ BEGIN
                ' @cErrMsg      NVARCHAR( 20)  OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cBarcode,
-               @cFromID     OUTPUT, @cFromLoc     OUTPUT, @cToID       OUTPUT, 
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cIDBarcode,
+               @cFromID     OUTPUT, @cFromLoc     OUTPUT, @cToID       OUTPUT,
                @cToLOC      OUTPUT, @cSKU         OUTPUT, @nQty        OUTPUT,
                @cLottable01 OUTPUT, @cLottable02  OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT,
                @cLottable06 OUTPUT, @cLottable07  OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT,
@@ -427,22 +433,22 @@ BEGIN
          IF @nErrNo <> 0
             GOTO Step_1_Fail
       END
-            
+
       IF @cRPLKey <> ''
       BEGIN
          -- Get replen info
          DECLARE @cConfirmed NVARCHAR(1)
-         SELECT 
-            @cFromLOC = FromLOC, 
-            @cFromID = ID, 
-            @cSKU = SKU,        
-            @cLOT = LOT,        
-            @nQTY = QTY, 
-            @cToLOC = ToLOC, 
+         SELECT
+            @cFromLOC = FromLOC,
+            @cFromID = ID,
+            @cSKU = SKU,
+            @cLOT = LOT,
+            @nQTY = QTY,
+            @cToLOC = ToLOC,
             @cConfirmed = Confirmed
          FROM Replenishment WITH (NOLOCK)
          WHERE ReplenishmentKey = @cRPLKey
-         
+
          -- Check valid RPLKEY
          IF @@ROWCOUNT = 0
          BEGIN
@@ -451,7 +457,7 @@ BEGIN
             EXEC rdt.rdtSetFocusField @nMobile, 1
             GOTO Step_1_Fail
          END
-         
+
          -- Check replenish done
          IF @cConfirmed = 'Y'
          BEGIN
@@ -460,15 +466,15 @@ BEGIN
             EXEC rdt.rdtSetFocusField @nMobile, 1
             GOTO Step_1_Fail
          END
-         
+
          -- Get lottable
          SELECT
-            @cLottable02 = Lottable02, 
-            @cLottable03 = Lottable03, 
+            @cLottable02 = Lottable02,
+            @cLottable03 = Lottable03,
             @dLottable04 = Lottable04
          FROM LOTAttribute WITH (NOLOCK)
          WHERE LOT = @cLOT
-         
+
          SET @cReplenKey = @cRPLKey
          SET @nSKUCnt = 1
       END
@@ -681,7 +687,7 @@ BEGIN
             IF @nErrNo <> 0
                GOTO Quit
          END
-         
+
          -- Get Pack info
          SELECT
             @cDescr = SKU.Descr,
@@ -729,13 +735,13 @@ BEGIN
          BEGIN
             IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedInfoSP AND type = 'P')
             BEGIN
-               INSERT INTO @tVar (Variable, Value) VALUES 
-                  ('@cReplenKey',   @cReplenKey), 
-                  ('@cFromLOC',     @cFromLOC), 
-                  ('@cFromID',      @cFromID), 
-                  ('@cSKU',         @cSKU), 
-                  ('@nQTY',         CAST( @nQTY AS NVARCHAR( 10))), 
-                  ('@cToLOC',       @cToLOC), 
+               INSERT INTO @tVar (Variable, Value) VALUES
+                  ('@cReplenKey',   @cReplenKey),
+                  ('@cFromLOC',     @cFromLOC),
+                  ('@cFromID',      @cFromID),
+                  ('@cSKU',         @cSKU),
+                  ('@nQTY',         CAST( @nQTY AS NVARCHAR( 10))),
+                  ('@cToLOC',       @cToLOC),
                   ('@cToID',        @cToID)
 
                SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
@@ -748,15 +754,15 @@ BEGIN
                   ' @nStep          INT,           ' +
                   ' @nAfterStep     INT,           ' +
                   ' @nInputKey      INT,           ' +
-                  ' @cFacility      NVARCHAR( 5),  ' + 
+                  ' @cFacility      NVARCHAR( 5),  ' +
                   ' @cStorerKey     NVARCHAR( 15), ' +
-                  ' @tVar           VariableTable READONLY, ' + 
-                  ' @cExtendedInfo  NVARCHAR( 20) OUTPUT,   ' + 
+                  ' @tVar           VariableTable READONLY, ' +
+                  ' @cExtendedInfo  NVARCHAR( 20) OUTPUT,   ' +
                   ' @nErrNo         INT           OUTPUT,   ' +
                   ' @cErrMsg        NVARCHAR( 20) OUTPUT    '
 
                EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                  @nMobile, @nFunc, @cLangCode, @nStep, 3, @nInputKey, @cFacility, @cStorerKey, @tVar, 
+                  @nMobile, @nFunc, @cLangCode, @nStep, 3, @nInputKey, @cFacility, @cStorerKey, @tVar,
                   @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
                IF @nErrNo <> 0
@@ -858,10 +864,10 @@ BEGIN
          -- Standard decode
          IF @cDecodeSP = '1'
          BEGIN
-            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode, 
-               @cID     = @cFromID OUTPUT, 
-               @cUPC    = @cSKU    OUTPUT, 
-               @nQTY    = @nQTY    OUTPUT, 
+            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
+               @cID     = @cFromID OUTPUT,
+               @cUPC    = @cSKU    OUTPUT,
+               @nQTY    = @nQTY    OUTPUT,
                @cLottable01  = @cLottable01  OUTPUT,
                @cLottable02  = @cLottable02  OUTPUT,
                @cLottable03  = @cLottable03  OUTPUT,
@@ -877,7 +883,7 @@ BEGIN
                @dLottable13  = @dLottable13  OUTPUT,
                @dLottable14  = @dLottable14  OUTPUT,
                @dLottable15  = @dLottable15  OUTPUT,
-               @nErrNo  = @nErrNo  OUTPUT, 
+               @nErrNo  = @nErrNo  OUTPUT,
                @cErrMsg = @cErrMsg OUTPUT,
                @cType = 'UPC'
          END
@@ -887,7 +893,7 @@ BEGIN
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cBarcode, ' +
-               ' @cFromID     OUTPUT, @cFromLOC    OUTPUT, @cToID       OUTPUT, ' + 
+               ' @cFromID     OUTPUT, @cFromLOC    OUTPUT, @cToID       OUTPUT, ' +
                ' @cToLOC      OUTPUT, @cSKU        OUTPUT, @nQty        OUTPUT, ' +
                ' @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT, ' +
                ' @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT, ' +
@@ -926,8 +932,8 @@ BEGIN
                ' @cErrMsg      NVARCHAR( 20)  OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cBarcode, 
-               @cFromID     OUTPUT, @cFromLoc     OUTPUT, @cToID       OUTPUT, 
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cBarcode,
+               @cFromID     OUTPUT, @cFromLoc     OUTPUT, @cToID       OUTPUT,
                @cToLOC      OUTPUT, @cSKU         OUTPUT, @nQty        OUTPUT,
                @cLottable01 OUTPUT, @cLottable02  OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT,
                @cLottable06 OUTPUT, @cLottable07  OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT,
@@ -1053,13 +1059,13 @@ BEGIN
       BEGIN
          IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedInfoSP AND type = 'P')
          BEGIN
-            INSERT INTO @tVar (Variable, Value) VALUES 
-               ('@cReplenKey',   @cReplenKey), 
-               ('@cFromLOC',     @cFromLOC), 
-               ('@cFromID',      @cFromID), 
-               ('@cSKU',         @cSKU), 
-               ('@nQTY',         CAST( @nQTY AS NVARCHAR( 10))), 
-               ('@cToLOC',       @cToLOC), 
+            INSERT INTO @tVar (Variable, Value) VALUES
+               ('@cReplenKey',   @cReplenKey),
+               ('@cFromLOC',     @cFromLOC),
+               ('@cFromID',      @cFromID),
+               ('@cSKU',         @cSKU),
+               ('@nQTY',         CAST( @nQTY AS NVARCHAR( 10))),
+               ('@cToLOC',       @cToLOC),
                ('@cToID',        @cToID)
 
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
@@ -1072,15 +1078,15 @@ BEGIN
                ' @nStep          INT,           ' +
                ' @nAfterStep     INT,           ' +
                ' @nInputKey      INT,           ' +
-               ' @cFacility      NVARCHAR( 5),  ' + 
+               ' @cFacility      NVARCHAR( 5),  ' +
                ' @cStorerKey     NVARCHAR( 15), ' +
-               ' @tVar           VariableTable READONLY, ' + 
-               ' @cExtendedInfo  NVARCHAR( 20) OUTPUT,   ' + 
+               ' @tVar           VariableTable READONLY, ' +
+               ' @cExtendedInfo  NVARCHAR( 20) OUTPUT,   ' +
                ' @nErrNo         INT           OUTPUT,   ' +
                ' @cErrMsg        NVARCHAR( 20) OUTPUT    '
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, 3, @nInputKey, @cFacility, @cStorerKey, @tVar, 
+               @nMobile, @nFunc, @cLangCode, @nStep, 3, @nInputKey, @cFacility, @cStorerKey, @tVar,
                @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
             IF @nErrNo <> 0
@@ -1115,7 +1121,7 @@ BEGIN
       SET @cOutField09 = @cMUOM_Desc
       SET @cOutField11 = CAST( @nMQTY as NVARCHAR( 5))
       SET @cOutField13 = '' -- ActMQTY
-      SET @cOutField14 = @cExtendedInfo               
+      SET @cOutField14 = @cExtendedInfo
 
       -- Go to QTY screen
       SET @nScn  = @nScn + 1
@@ -1131,7 +1137,7 @@ BEGIN
       SET @cFromID = ''
       SET @cOutField01 = '' -- FromLoc
       SET @cOutField02 = '' -- FromID
-      SET @cOutField03 = '' -- RPL KEY      
+      SET @cOutField03 = '' -- RPL KEY
 
       EXEC rdt.rdtSetFocusField @nMobile, 1
    END
@@ -1277,7 +1283,7 @@ BEGIN
       SET @nActQTY = @nActQTY + @nActMQTY
 
       -- User key 0 qty to fully short replen
-      IF @cAllowFullShortReplen <> '1' 
+      IF @cAllowFullShortReplen <> '1'
       BEGIN
          -- Validate QTY
          IF @nActQTY = 0
@@ -1289,8 +1295,8 @@ BEGIN
 
          -- Get QTY Avail
          SET @nQTY_Avail = 0
-         SELECT @nQTY_Avail = ISNULL( SUM( QTY 
-            - CASE WHEN @cMoveQTYAlloc = '1' THEN 0 ELSE QTYAllocated END 
+         SELECT @nQTY_Avail = ISNULL( SUM( QTY
+            - CASE WHEN @cMoveQTYAlloc = '1' THEN 0 ELSE QTYAllocated END
             - QTYPicked), 0)
          FROM dbo.LOTxLOCxID WITH (NOLOCK)
          WHERE StorerKey = @cStorerKey
@@ -1298,7 +1304,7 @@ BEGIN
             AND LOC = @cFromLOC
             AND ID = @cFromID
             AND (@cReplenBySKUQTY = '1' OR LOT = @cLOT)
-            AND (QTY 
+            AND (QTY
                - CASE WHEN @cMoveQTYAlloc = '1' THEN 0 ELSE QTYAllocated END
                - QTYPicked) > 0
 
@@ -1365,7 +1371,7 @@ BEGIN
          SET @cOutField01 = @cFromLoc
          SET @cOutField02 = @cFromID
          SET @cOutField03 = '' -- SKU
-         
+
          SET @cFieldAttr12 = '' -- ActPQTY
 
          -- Go to prev screen
@@ -1442,6 +1448,13 @@ BEGIN
          GOTO Step_4_Fail
       END
 
+      -- (james03)  
+      IF @cToLOCCheckDigit = '1'  
+      BEGIN  
+         IF EXISTS( SELECT 1 FROM LOC WITH (NOLOCK) WHERE Facility = @cFacility AND LOC = @cToLoc AND LocCheckDigit = @cActToLOC)  
+            SET @cActToLOC = @cToLoc  
+      END  
+
       -- Get LOC info
       SELECT @cChkFacility = Facility
       FROM dbo.LOC (NOLOCK)
@@ -1479,7 +1492,7 @@ BEGIN
          SET @nTranCount = @@TRANCOUNT
          BEGIN TRAN  -- Begin our own transaction
          SAVE TRAN Step_Replenish_Confirm -- For rollback or commit only our own transaction
-            
+
          IF @cRPLKey = ''
             EXEC rdt.rdt_Replenish_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
                ,@cReplenBySKUQTY
@@ -1521,8 +1534,8 @@ BEGIN
             IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
             BEGIN
                SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
-                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' + 
-                  ' @cReplenBySKUQTY, @cMoveQTYAlloc, @cReplenKey, @cFromLOC, ' + 
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' +
+                  ' @cReplenBySKUQTY, @cMoveQTYAlloc, @cReplenKey, @cFromLOC, ' +
                   ' @cFromID, @cSKU, @nQTY, @cToLOC, @cToID, ' +
                   ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, ' +
                   ' @tExtUpdateVar, @nErrNo OUTPUT, @cErrMsg OUTPUT'
@@ -1531,9 +1544,9 @@ BEGIN
                   '@nFunc           INT,           ' +
                   '@cLangCode       NVARCHAR( 3),  ' +
                   '@nStep           INT,           ' +
-                  '@nAfterStep      INT,           ' + 
+                  '@nAfterStep      INT,           ' +
                   '@nInputKey       INT,           ' +
-                  '@cFacility       NVARCHAR( 5),  ' + 
+                  '@cFacility       NVARCHAR( 5),  ' +
                   '@cStorerKey      NVARCHAR( 15), ' +
                   '@cReplenBySKUQTY NVARCHAR( 1), ' +
                   '@cMoveQTYAlloc   NVARCHAR( 1), ' +
@@ -1553,7 +1566,7 @@ BEGIN
                   '@cErrMsg         NVARCHAR( 20) OUTPUT'
 
                EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                  @nMobile, @nFunc, @cLangCode, @nStep, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nStep, @nInputKey, @cFacility, @cStorerKey,
                   @cReplenBySKUQTY, @cMoveQTYAlloc, @cReplenKey, @cFromLOC,
                   @cFromID, @cSKU, @nActQTY, @cToLOC, @cToID,
                   @cLottable01, @cLottable02, @cLottable03, @dLottable04,
@@ -1571,8 +1584,8 @@ BEGIN
 
          COMMIT TRAN Step_Replenish_Confirm
          WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-            COMMIT TRAN   
-                  
+            COMMIT TRAN
+
          -- Go to message screen
          SET @nScn  = @nScn + 2
          SET @nStep = @nStep + 2
@@ -1590,13 +1603,13 @@ BEGIN
       BEGIN
          IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedInfoSP AND type = 'P')
          BEGIN
-            INSERT INTO @tVar (Variable, Value) VALUES 
-               ('@cReplenKey',   @cReplenKey), 
-               ('@cFromLOC',     @cFromLOC), 
-               ('@cFromID',      @cFromID), 
-               ('@cSKU',         @cSKU), 
-               ('@nQTY',         CAST( @nQTY AS NVARCHAR( 10))), 
-               ('@cToLOC',       @cToLOC), 
+            INSERT INTO @tVar (Variable, Value) VALUES
+               ('@cReplenKey',   @cReplenKey),
+               ('@cFromLOC',     @cFromLOC),
+               ('@cFromID',      @cFromID),
+               ('@cSKU',         @cSKU),
+               ('@nQTY',         CAST( @nQTY AS NVARCHAR( 10))),
+               ('@cToLOC',       @cToLOC),
                ('@cToID',        @cToID)
 
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
@@ -1609,15 +1622,15 @@ BEGIN
                ' @nStep          INT,           ' +
                ' @nAfterStep     INT,           ' +
                ' @nInputKey      INT,           ' +
-               ' @cFacility      NVARCHAR( 5),  ' + 
+               ' @cFacility      NVARCHAR( 5),  ' +
                ' @cStorerKey     NVARCHAR( 15), ' +
-               ' @tVar           VariableTable READONLY, ' + 
-               ' @cExtendedInfo  NVARCHAR( 20) OUTPUT,   ' + 
+               ' @tVar           VariableTable READONLY, ' +
+               ' @cExtendedInfo  NVARCHAR( 20) OUTPUT,   ' +
                ' @nErrNo         INT           OUTPUT,   ' +
                ' @cErrMsg        NVARCHAR( 20) OUTPUT    '
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, 3, @nInputKey, @cFacility, @cStorerKey, @tVar, 
+               @nMobile, @nFunc, @cLangCode, @nStep, 3, @nInputKey, @cFacility, @cStorerKey, @tVar,
                @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
             IF @nErrNo <> 0
@@ -1664,7 +1677,7 @@ BEGIN
    BEGIN
       SET @cOutField13 = ''
       EXEC rdt.rdtSetFocusField @nMobile, 13
-      
+
       IF @cReplenEnableTOID = '1'
          SET @cOutField15 = @cToID
    END
@@ -1708,8 +1721,8 @@ BEGIN
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' + 
-               ' @cReplenBySKUQTY, @cMoveQTYAlloc, @cReplenKey, @cFromLOC, ' + 
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' +
+               ' @cReplenBySKUQTY, @cMoveQTYAlloc, @cReplenKey, @cFromLOC, ' +
                ' @cFromID, @cSKU, @nQTY, @cToLOC, @cToID, ' +
                ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cActToLOC, @cOption, ' +
                ' @tExtValidVar, @nErrNo OUTPUT, @cErrMsg OUTPUT'
@@ -1718,9 +1731,9 @@ BEGIN
                '@nFunc           INT,           ' +
                '@cLangCode       NVARCHAR( 3),  ' +
                '@nStep           INT,           ' +
-               '@nAfterStep      INT,           ' + 
+               '@nAfterStep      INT,           ' +
                '@nInputKey       INT,           ' +
-               '@cFacility       NVARCHAR( 5),  ' + 
+               '@cFacility       NVARCHAR( 5),  ' +
                '@cStorerKey      NVARCHAR( 15), ' +
                '@cReplenBySKUQTY NVARCHAR( 1), ' +
                '@cMoveQTYAlloc   NVARCHAR( 1), ' +
@@ -1742,7 +1755,7 @@ BEGIN
                '@cErrMsg         NVARCHAR( 20) OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+               @nMobile, @nFunc, @cLangCode, @nStep, @nStep, @nInputKey, @cFacility, @cStorerKey,
                @cReplenBySKUQTY, @cMoveQTYAlloc, @cReplenKey, @cFromLOC,
                @cFromID, @cSKU, @nActQTY, @cToLOC, @cToID,
                @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cActToLOC, @cOption,
@@ -1752,7 +1765,7 @@ BEGIN
                GOTO Quit
          END
       END
-         
+
       IF @cOption = '1' -- YES
       BEGIN
          -- Handling transaction
@@ -1769,7 +1782,7 @@ BEGIN
                ,@cFromID
                ,@cSKU
                ,@nActQTY
-               ,@cActToLOC -- james04  
+               ,@cActToLOC -- james04
                ,@cToID
                ,@nErrNo  OUTPUT
                ,@cErrMsg OUTPUT
@@ -1782,11 +1795,11 @@ BEGIN
                ,@cFromID
                ,@cSKU
                ,@nActQTY
-               ,@cActToLOC -- james04  
+               ,@cActToLOC -- james04
                ,@cToID
                ,@nErrNo  OUTPUT
                ,@cErrMsg OUTPUT
-         
+
          IF @nErrNo <> 0
          BEGIN
             ROLLBACK TRAN Step_Replenish_Confirm
@@ -1801,8 +1814,8 @@ BEGIN
             IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
             BEGIN
                SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
-                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' + 
-                  ' @cReplenBySKUQTY, @cMoveQTYAlloc, @cReplenKey, @cFromLOC, ' + 
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' +
+                  ' @cReplenBySKUQTY, @cMoveQTYAlloc, @cReplenKey, @cFromLOC, ' +
                   ' @cFromID, @cSKU, @nQTY, @cToLOC, @cToID, ' +
                   ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, ' +
                   ' @tExtUpdateVar, @nErrNo OUTPUT, @cErrMsg OUTPUT'
@@ -1811,9 +1824,9 @@ BEGIN
                   '@nFunc           INT,           ' +
                   '@cLangCode       NVARCHAR( 3),  ' +
                   '@nStep           INT,           ' +
-                  '@nAfterStep      INT,           ' + 
+                  '@nAfterStep      INT,           ' +
                   '@nInputKey       INT,           ' +
-                  '@cFacility       NVARCHAR( 5),  ' + 
+                  '@cFacility       NVARCHAR( 5),  ' +
                   '@cStorerKey      NVARCHAR( 15), ' +
                   '@cReplenBySKUQTY NVARCHAR( 1), ' +
                   '@cMoveQTYAlloc   NVARCHAR( 1), ' +
@@ -1833,7 +1846,7 @@ BEGIN
                   '@cErrMsg         NVARCHAR( 20) OUTPUT'
 
                EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                  @nMobile, @nFunc, @cLangCode, @nStep, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nStep, @nInputKey, @cFacility, @cStorerKey,
                   @cReplenBySKUQTY, @cMoveQTYAlloc, @cReplenKey, @cFromLOC,
                   @cFromID, @cSKU, @nActQTY, @cActToLOC, @cToID,
                   @cLottable01, @cLottable02, @cLottable03, @dLottable04,
@@ -1851,8 +1864,8 @@ BEGIN
 
          COMMIT TRAN Step_Replenish_Confirm
          WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-            COMMIT TRAN   
-            
+            COMMIT TRAN
+
          -- Go to message screen
          SET @nScn  = @nScn + 1
          SET @nStep = @nStep + 1
@@ -1981,9 +1994,11 @@ BEGIN
       --V_String11= @nActQty,
       V_String12= @cToID,
       V_String13= @cRPLKey,
-      V_String14= @cDecodeSP,   
+      V_String14= @cDecodeSP,
       V_String15 = @cExtendedInfoSP,
       V_String16 = @cExtendedUpdateSP,
+      V_String17 = @cToLOCCheckDigit,  
+
       V_String20 = @cReplenBySKUQTY,
       V_String21 = @cDisplayQtyAvail,
       V_String22 = @cReplenEnableTOID,
@@ -1995,7 +2010,7 @@ BEGIN
       V_Integer1 = @nActMQTY,
       V_Integer2 = @nActPQTY,
       V_QTY      = @nActQty,
-   
+
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01 = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02 = @cFieldAttr02,
       I_Field03 = @cInField03,  O_Field03 = @cOutField03,   FieldAttr03 = @cFieldAttr03,
@@ -2016,9 +2031,5 @@ BEGIN
 
 END
 GO
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-GRANT EXECUTE ON RDT.rdtfnc_Replenish TO nSQL
+GRANT EXECUTE ON  [RDT].[rdtfnc_Replenish] TO [NSQL]
 GO

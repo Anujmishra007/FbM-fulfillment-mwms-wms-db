@@ -5,7 +5,7 @@ EXECUTE rdt.rdtAddScn 1226, 'ENG',
     @cLine01 = 'FROM LOC:'
    ,@cLine02 = '%10i01'
    ,@cLine03 = 'FROM ID:'
-   ,@cLine04 = '%18i02'
+   ,@cLine04 = '%30i02' --(yeekung01)
    ,@cLine05 = ''
    ,@cLine06 = 'OR'
    ,@cLine07 = ''
