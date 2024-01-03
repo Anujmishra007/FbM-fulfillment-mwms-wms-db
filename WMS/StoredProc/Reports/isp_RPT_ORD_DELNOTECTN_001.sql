@@ -113,8 +113,8 @@ BEGIN
         , ORDERS.Rdd
         , STORER.Logo
         , ORDERS.BuyerPO
-        , Signatory = CASE WHEN ISNULL(RTRIM(ST.Contact2), '') = '' THEN 'Maersk'   --WL01
-                           ELSE ST.Contact2 END
+        , Signatory = CASE WHEN ISNULL(RTRIM(STORER.Contact2), '') = '' THEN 'Maersk'   --WL01
+                           ELSE STORER.Contact2 END
         , LOTT.Lottable01
         , LOTT.Lottable02
         , MD.ContainerKey
@@ -140,7 +140,7 @@ BEGIN
    JOIN ORDERDETAIL WITH (NOLOCK) ON (ORDERS.OrderKey = ORDERDETAIL.OrderKey)
    JOIN SKU WITH (NOLOCK) ON (ORDERDETAIL.StorerKey = SKU.StorerKey) AND (ORDERDETAIL.Sku = SKU.Sku)
    JOIN PACK WITH (NOLOCK) ON (SKU.PACKKey = PACK.PackKey)
-   LEFT JOIN STORER ST WITH (NOLOCK) ON (ST.StorerKey = 'IDS')
+   --LEFT JOIN STORER ST WITH (NOLOCK) ON (ST.StorerKey = 'IDS')   --WL01
    LEFT JOIN STORER ST1 WITH (NOLOCK) ON (ORDERS.ConsigneeKey = ST1.StorerKey)
    LEFT JOIN MBOLDETAIL MD WITH (NOLOCK) ON (MD.OrderKey = ORDERS.OrderKey)
    LEFT JOIN UPC WITH (NOLOCK) ON  UPC.StorerKey = SKU.StorerKey
@@ -224,7 +224,7 @@ BEGIN
           , ORDERS.Rdd
           , STORER.Logo
           , ORDERS.BuyerPO
-          , ST.Contact2
+          , STORER.Contact2   --WL01
           , LOTT.Lottable01
           , LOTT.Lottable02
           , MD.ContainerKey
