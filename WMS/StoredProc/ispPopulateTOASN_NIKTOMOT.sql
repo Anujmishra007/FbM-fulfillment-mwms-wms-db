@@ -36,6 +36,7 @@ GO
 /* Date         Author  Ver. Purposes                                     */
 /* 07-Feb-2022  WLChooi 1.0  DevOps Combine Script                        */
 /* 01-Sep-2022  WyeChun 1.1  JSM-89774 Remove remark (WC01)               */
+/* 29-Sep-2023  WLChooi 1.2  WMS-23784 - Add new logic (WL01)             */
 /**************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[ispPopulateTOASN_NIKTOMOT]
    @c_Orderkey NVARCHAR(10)
@@ -92,7 +93,8 @@ BEGIN
             @c_UDF05              NVARCHAR(4000),
             @c_UDF01              NVARCHAR(50),
             @c_POKey              NVARCHAR(18),
-            @c_Carrierkey         NVARCHAR(15)
+            @c_Carrierkey         NVARCHAR(15),
+            @c_RHUDF01            NVARCHAR(50)   --WL01
 
    DECLARE  @n_continue           INT,
             @b_success            INT,
@@ -110,21 +112,24 @@ BEGIN
    IF @n_continue = 1 OR @n_continue = 2
    BEGIN
          SELECT TOP 1
-             @c_ExternReceiptKey    = ORDERS.MBOLKey,                   
+             @c_ExternReceiptKey    = TRIM(ORDERS.MBOLKey) + '_' + TRIM(ORDERS.Consigneekey),   --WL01                   
              @c_WarehouseReference  = ORDERS.Orderkey,
              @c_ToStorerkey         = ISNULL(CODELKUP.UDF01,''),
              @c_Storerkey           = ORDERS.Storerkey,
              @c_DocType             = 'A',   
-             @c_ToLoc               = ISNULL(CODELKUP.UDF04,''),
-             @c_Type                = ISNULL(CODELKUP.SHORT,''),
+             @c_ToLoc               = ISNULL(CL1.UDF04,''),   --WL01
+             @c_Type                = ISNULL(CL1.SHORT,''),   --WL01
              @c_UDF01               = ISNULL(ORDERS.ExternOrderKey,''),    
              @c_UDF05               = ISNULL(CODELKUP.UDF05,''),   
              @c_Carrierkey          = ORDERS.ConsigneeKey,
-             @c_CustomSQL           = ISNULL(CODELKUP.Notes,'')
+             @c_CustomSQL           = ISNULL(CODELKUP.Notes,''),
+             @c_RHUDF01             = ISNULL(CL1.UDF02,'')   --WL01
       FROM ORDERS WITH (NOLOCK)
       JOIN ORDERDETAIL (NOLOCK) ON ORDERS.ORDERKEY = ORDERDETAIL.ORDERKEY
       JOIN CODELKUP WITH (NOLOCK) ON ORDERS.[Type] = CODELKUP.Code AND CODELKUP.ListName = 'ORDTYP2ASN'
                                  AND ORDERS.StorerKey = CODELKUP.Storerkey
+      JOIN CODELKUP CL1 WITH (NOLOCK) ON CL1.Listname = 'ShipTo2ASN' AND CL1.Code = ORDERS.Consigneekey   --WL01
+                                     AND CL1.Storerkey = ORDERS.Storerkey   --WL01
       WHERE ORDERS.OrderKey = @c_Orderkey
 
       SELECT TOP 1 @c_ToFacility = ISNULL(LOC.Facility,'')
@@ -193,10 +198,10 @@ BEGIN
                BEGIN
                   INSERT INTO RECEIPT (ReceiptKey, ExternReceiptkey, Warehousereference
                                      , StorerKey, RecType, Facility, DocType, RoutingTool
-                                     , CarrierKey) 
+                                     , CarrierKey, Userdefine01)   --WL01 
                   VALUES (@c_NewReceiptKey, @c_ExternReceiptKey, @c_WarehouseReference
                         , @c_ToStorerKey, @c_Type, @c_ToFacility, @c_DocType, 'N'
-                        , @c_Carrierkey)           
+                        , @c_Carrierkey, @c_RHUDF01)   --WL01           
 
                   SET @n_err = @@ERROR
 
