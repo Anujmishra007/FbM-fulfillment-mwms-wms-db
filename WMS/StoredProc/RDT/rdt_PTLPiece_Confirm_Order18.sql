@@ -11,7 +11,7 @@ GO
 /* Purpose: Drop ID carry the station and position                      */
 /*                                                                      */
 /* Date       Rev  Author      Purposes                                 */
-/* 25-10-2023 1.0  Ung         WMS-22163 based on Confirm_Order17       */
+/* 25-10-2023 1.0  Ung         WMS-23803 based on Confirm_Order17       */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_PTLPiece_Confirm_Order18 (
@@ -63,6 +63,7 @@ BEGIN
    DECLARE @nLightErrNo       INT
    DECLARE @cLightErrMsg      NVARCHAR(20)
    DECLARE @cUserDefine01     NVARCHAR(30)
+   DECLARE @cLogicalName      NVARCHAR(10)
 
    -- Handling transaction
    SET @nTranCount = @@TRANCOUNT
@@ -118,7 +119,17 @@ BEGIN
    -- Construct drop ID
    SET @cDropID = ''
    IF @cUpdateDropID = '1'
-      SET @cDropID = @cUserDefine01 + @cPosition
+   BEGIN
+      -- Get position info
+      SELECT @cLogicalName = LogicalName
+      FROM dbo.DeviceProfile WITH (NOLOCK)
+      WHERE DeviceType = 'STATION' 
+         AND DeviceID = @cStation
+         AND DevicePosition = @cPosition
+         
+      SET @cDropID = @cUserDefine01 + @cLogicalName
+   END
+
 
    /***********************************************************************************************
 
