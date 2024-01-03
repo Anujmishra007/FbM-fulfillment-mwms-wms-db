@@ -10,6 +10,7 @@ GO
 /* Date       Rev  Author   Purposes                                    */
 /* 06-04-2023 1.0  yeekung     WMS-22163 Created                        */  
 /* 25-09-2023 1.1  yeekung     WMS-23257 Add devicemodel (yeekung01)    */
+/* 20-11-2023 1.2  Ung         WMS-23803 Use standard DevicePosition    */
 /************************************************************************/
 
 CREATE or ALTER   PROC [RDT].[rdt_803MatrixSP12] (
@@ -229,7 +230,7 @@ BEGIN
             ,@n_Err            = @nErrNo      OUTPUT
             ,@c_ErrMsg         = @cErrMsg     OUTPUT
             ,@c_DeviceID       = @cStation
-            ,@c_DevicePos      = @cLogicalName
+            ,@c_DevicePos      = @cPosition
             ,@c_DeviceIP       = @cIPAddress
             ,@c_LModMode       = @cLightMode
             ,@c_DeviceModel    = @c_DeviceModel
