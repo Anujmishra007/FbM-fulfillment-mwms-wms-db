@@ -3,6 +3,7 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
+
 /******************************************************************************/
 /* Store procedure: rdt_PTLPiece_Assign_BatchCart                             */
 /* Copyright      : Maersk                                                    */
@@ -11,7 +12,7 @@ GO
 /* 27-10-2023 1.2  Ung      WMS-23803 base on rdt_PTLPiece_Assign_Batch       */
 /******************************************************************************/
 
-CREATE OR ALTER PROC [RDT].[rdt_PTLPiece_Assign_BatchCart] (
+CREATE OR ALTER  PROC [RDT].[rdt_PTLPiece_Assign_BatchCart] (
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -49,8 +50,10 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @nTranCount  INT
+   DECLARE @cCurrentSP  NVARCHAR(60)
    DECLARE @cSQL        NVARCHAR(MAX)
    DECLARE @cSQLParam   NVARCHAR(MAX)
+   DECLARE @tVar        VariableTable
 
    DECLARE @cBatchKey   NVARCHAR(20)
    DECLARE @cCartID     NVARCHAR(10)
@@ -59,6 +62,10 @@ BEGIN
 
    SET @nTranCount = @@TRANCOUNT
 
+   DECLARE @cAssignExtUpdSP NVARCHAR( 20)
+   SET @cAssignExtUpdSP = rdt.rdt_PTLPiece_GetConfig( @nFunc, 'AssignExtUpdSP', @cStorerKey, @cMethod)  
+   IF @cAssignExtUpdSP = '0'  
+      SET @cAssignExtUpdSP = ''
 
    /***********************************************************************************************
                                                 POPULATE
@@ -85,12 +92,90 @@ BEGIN
          SET @cFieldAttr02 = 'O' -- CartID
       END
 
+      IF @cAssignExtUpdSP <> ''      
+      BEGIN      
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cAssignExtUpdSP AND type = 'P')      
+         BEGIN      
+            SET @cCurrentSP = OBJECT_NAME( @@PROCID)      
+      
+            INSERT INTO @tVar (Variable, Value) VALUES       
+               ('@cType',@cType),      
+               ('@cBatchKey',    @cBatchKey)      
+      
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cAssignExtUpdSP) +      
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +      
+               ' @cStation, @cMethod, @cCurrentSP, @tVar, ' +       
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '      
+            SET @cSQLParam =      
+               ' @nMobile     INT,           ' +       
+               ' @nFunc       INT,           ' +       
+               ' @cLangCode   NVARCHAR( 3),  ' +       
+               ' @nStep       INT,           ' +       
+               ' @nInputKey   INT,           ' +       
+               ' @cFacility   NVARCHAR( 5) , ' +       
+               ' @cStorerKey  NVARCHAR( 10), ' +       
+               ' @cStation    NVARCHAR( 10),  ' +       
+               ' @cMethod     NVARCHAR( 15), ' +       
+               ' @cCurrentSP  NVARCHAR( 60),  ' +       
+               ' @tVar        VariableTable READONLY, ' +       
+               ' @nErrNo      INT           OUTPUT, ' +       
+               ' @cErrMsg     NVARCHAR(250) OUTPUT  '       
+                     
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,      
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,       
+               @cStation, @cMethod, @cCurrentSP, @tVar,       
+               @nErrNo OUTPUT, @cErrMsg OUTPUT      
+                           
+            IF @nErrNo <> 0      
+               GOTO Quit      
+         END      
+      END 
+
 		-- Go to batch screen
 		SET @nScn = 6165
    END
 
    IF @cType = 'POPULATE-OUT'
    BEGIN
+      IF @cAssignExtUpdSP <> ''  
+      BEGIN  
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cAssignExtUpdSP AND type = 'P')  
+         BEGIN  
+            SET @cCurrentSP = OBJECT_NAME( @@PROCID)  
+  
+            INSERT INTO @tVar (Variable, Value) VALUES   
+               ('@cType',@cType),  
+               ('@cBatchKey',    @cBatchKey)  
+  
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cAssignExtUpdSP) +  
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +  
+               ' @cStation, @cMethod, @cCurrentSP, @tVar, ' +   
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '  
+            SET @cSQLParam =  
+               ' @nMobile     INT,           ' +   
+               ' @nFunc       INT,           ' +   
+               ' @cLangCode   NVARCHAR( 3),  ' +   
+               ' @nStep       INT,           ' +   
+               ' @nInputKey   INT,           ' +   
+               ' @cFacility   NVARCHAR( 5) , ' +   
+               ' @cStorerKey  NVARCHAR( 10), ' +   
+               ' @cStation    NVARCHAR( 10),  ' +   
+               ' @cMethod     NVARCHAR( 15), ' +   
+               ' @cCurrentSP  NVARCHAR( 60),  ' +   
+               ' @tVar        VariableTable READONLY, ' +   
+               ' @nErrNo      INT           OUTPUT, ' +   
+               ' @cErrMsg     NVARCHAR(250) OUTPUT  '   
+                 
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,   
+         @cStation, @cMethod, @cCurrentSP, @tVar,   
+               @nErrNo OUTPUT, @cErrMsg OUTPUT  
+                       
+            IF @nErrNo <> 0  
+               GOTO Quit  
+         END  
+      END  
+      
       SET @cFieldAttr01 = '' -- BatchKey
       SET @cFieldAttr02 = '' -- CartID
    END
@@ -295,6 +380,45 @@ BEGIN
 
             FETCH NEXT FROM @curOrder INTO @cOrderKey, @cPreassignPos
          END
+
+         IF @cAssignExtUpdSP <> ''  
+         BEGIN  
+            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cAssignExtUpdSP AND type = 'P')  
+            BEGIN  
+               SET @cCurrentSP = OBJECT_NAME( @@PROCID)  
+  
+               INSERT INTO @tVar (Variable, Value) VALUES   
+                  ('@cType',@cType),  
+                  ('@cBatchKey',    @cBatchKey)  
+  
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cAssignExtUpdSP) +  
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +  
+                  ' @cStation, @cMethod, @cCurrentSP, @tVar, ' +   
+                  ' @nErrNo OUTPUT, @cErrMsg OUTPUT '  
+               SET @cSQLParam =  
+                  ' @nMobile     INT,           ' +   
+                  ' @nFunc       INT,           ' +   
+                  ' @cLangCode   NVARCHAR( 3),  ' +   
+                  ' @nStep       INT,           ' +   
+                  ' @nInputKey   INT,           ' +   
+                  ' @cFacility   NVARCHAR( 5) , ' +   
+                  ' @cStorerKey  NVARCHAR( 10), ' +   
+                  ' @cStation    NVARCHAR( 10),  ' +   
+                  ' @cMethod     NVARCHAR( 15), ' +   
+                  ' @cCurrentSP  NVARCHAR( 60),  ' +   
+                  ' @tVar        VariableTable READONLY, ' +   
+                  ' @nErrNo      INT           OUTPUT, ' +   
+                  ' @cErrMsg     NVARCHAR(250) OUTPUT  '   
+                 
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,   
+                  @cStation, @cMethod, @cCurrentSP, @tVar,   
+                  @nErrNo OUTPUT, @cErrMsg OUTPUT  
+                       
+               IF @nErrNo <> 0  
+                  GOTO Quit  
+            END  
+         END 
 
          COMMIT TRAN rdt_PTLStation_Assign
       END
