@@ -25,7 +25,7 @@ GO
 /*                                                                        */
 /* Called By: ntrMBOLHeaderUpdate                                         */
 /*                                                                        */
-/* GitLab Version: 1.0                                                    */
+/* GitLab Version: 1.3                                                    */
 /*                                                                        */
 /* Version: 5.4                                                           */
 /*                                                                        */
@@ -37,6 +37,8 @@ GO
 /* 07-Feb-2022  WLChooi 1.0  DevOps Combine Script                        */
 /* 01-Sep-2022  WyeChun 1.1  JSM-89774 Remove remark (WC01)               */
 /* 29-Sep-2023  WLChooi 1.2  WMS-23784 - Add new logic (WL01)             */
+/* 04-Jan-2024  WLChooi 1.3  WMS-23784 - Ignore if ToStorerkey not valid  */
+/*                           (WL02)                                       */
 /**************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[ispPopulateTOASN_NIKTOMOT]
    @c_Orderkey NVARCHAR(10)
@@ -153,11 +155,13 @@ BEGIN
       --Check ToStorerkey if it exists since it is different from FromStorerkey
       IF NOT EXISTS ( SELECT 1 FROM STORER WITH (NOLOCK) WHERE Storerkey = @c_ToStorerkey )
       BEGIN
-         SET @n_continue = 3
-         SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
-         SET @n_err = 63497
-         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Invalid To Storer Key: ' + RTRIM(ISNULL(@c_ToStorerkey,'')) +
-                       ' (ispPopulateTOASN_NIKTOMOT)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(ISNULL(@c_errmsg,'')) + ' ) '
+         --WL02 S
+         --SET @n_continue = 3
+         --SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
+         --SET @n_err = 63497
+         --SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Invalid To Storer Key: ' + RTRIM(ISNULL(@c_ToStorerkey,'')) +
+         --              ' (ispPopulateTOASN_NIKTOMOT)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(ISNULL(@c_errmsg,'')) + ' ) '
+         --WL02 E
          GOTO QUIT_SP
       END
       
