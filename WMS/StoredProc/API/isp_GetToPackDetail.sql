@@ -1068,7 +1068,7 @@ DECLARE @nMAXCtnNo INT
 DECLARE @nPackedCtnQTY INT
 
 SELECT @nMAXCtnNo = MAX(PD.CartonNo)-- yeekung09
-FROM PackDetail PD 
+FROM PackDetail PD (NOLOCK)
 WHERE pickslipno = @cPickSlipNo
    AND Storerkey = @cStorerkey 
 
