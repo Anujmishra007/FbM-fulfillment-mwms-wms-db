@@ -32,6 +32,7 @@ GO
 /* 2023-06-06   3.0  YeeKung    TPS-684 Add Loadkey (yeekung06)                  */
 /* 2023-08-16   3.1  YeeKung    TPS-779 Get KeyPad (yeekung07)                   */
 /* 2023-08-28   3.2  YeeKung    TPS-766 skipconfirm config (yeekung08)           */
+/* 2023-12-20   3.3  YeeKung    TPS-833 Correct the cartonno (yeekung09)         */
 /*********************************************************************************/  
   
 CREATE  OR ALTER PROC [API].[isp_GetToPackDetail] (  
@@ -1063,14 +1064,23 @@ END
   
 SELECT * FROM @LottableDropList 
 
+DECLARE @nMAXCtnNo INT
+DECLARE @nPackedCtnQTY INT
 
+SELECT @nMAXCtnNo = MAX(PD.CartonNo)-- yeekung09
+FROM PackDetail PD 
+WHERE pickslipno = @cPickSlipNo
+   AND Storerkey = @cStorerkey 
+
+SET @nMAXCtnNo = CASE WHEN ISNULL(@nMAXCtnNo,'0')=0 THEN 0 ELSE @nMAXCtnNo END
   
+SET @nPackedCtnQTY = CASE WHEN ISNULL(@nMAXCtnNo,'0')=0 THEN 0 ELSE @nMAXCtnNo END
   
 --output Json format  
 SET @b_Success = 1  
 ----SET @jResult = (SELECT * FROM @packSKUDetail FOR JSON AUTO, INCLUDE_NULL_VALUES)  
   
-SET @jResult = (SELECT MAX(PD.CartonNo) AS MaxCartonNo, (SELECT COUNT(CartonStatus)AS HoldStatus from packInfo WITH (NOLOCK) WHERE pickslipno=@cPickSlipNo AND cartonStatus = 'Hold') AS HoldStatus ,  
+SET @jResult = (SELECT @nMAXCtnNo AS MaxCartonNo,@nPackedCtnQTY AS PackedCtnQTY, (SELECT COUNT(CartonStatus)AS HoldStatus from packInfo WITH (NOLOCK) WHERE pickslipno=@cPickSlipNo AND cartonStatus = 'Hold') AS HoldStatus ,  
 @cDynamicRightName1 AS DynamicRightName1,@cDynamicRightValue1 AS DynamicRightValue1,@skipCartonize AS skipCartonize,@navCtnScn AS navCtnScn  
 ,@hidePackedSku AS hidePackedSku,@EcomSingle AS EcomSingle, @cPrintAfterPack AS PrintAfterPack, @cDefaultCartonType AS DefaultCartonType  
 ,@cOrderKey AS OrderKey, @cCtryCode AS CtryCode, @cPickSlipNo AS PickslipNo, @cDropID AS DropID, @cWorkInstruction AS WorkInstruction--(cc06)  
