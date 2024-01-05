@@ -43,55 +43,13 @@ SELECT L.EventNum
 , S.DESCR
 , L.UOM
 , L.QTY
-, L.RefNo1
-, RefNo1Name = CASE 
-   WHEN ISNULL(M.StoredProcName,'') IN ('rdtfnc_NormalReceipt','rdtfnc_PieceReceiving','rdtfnc_UCCInboundReceive'
-      ,'rdtfnc_UCCReceive','rdtfnc_Return','rdtfnc_Return_SerialNo_Deletion') 
-      THEN 'ReceiptKey' 
-   WHEN ISNULL(M.StoredProcName,'') IN ('rdtfnc_Replenish') 
-      THEN 'ReplenishmentKey'
-   WHEN ISNULL(M.StoredProcName,'') IN ('rdtfnc_DyanmicPick_PP2DP') 
-      THEN 'WaveKey'
-   WHEN ISNULL(M.StoredProcName,'') IN ('rdtfnc_PickToDropID') 
-      THEN 'ConsigneeKey'
-   WHEN ISNULL(M.StoredProcName,'') IN ('rdtfnc_IndentOrdersPickToPalletID','rdtfnc_PickSlipNo_Tracking') 
-      THEN 'PickSlipNo'
-   WHEN ISNULL(M.StoredProcName,'') IN ('rdtfnc_Container_Arrive','rdtfnc_Driver_CheckIn','rdtfnc_Container_Unload') 
-      THEN 'Container #'
-   WHEN ISNULL(M.StoredProcName,'') IN ('rdtfnc_DyanmicPick_PickAndPack', 'rdtfnc_DyanmicPick_UCCReplenFrom') 
-      THEN 'LoadKey'
-   WHEN ISNULL(M.StoredProcName,'') IN ('rdtfnc_Cluster_Pick', 'rdtfnc_Case_Pick') 
-      THEN 'PutAwayZone'
-      ELSE 'TBC' END
-, L.RefNo2
-, RefNo2Name = CASE 
-   WHEN ISNULL(M.StoredProcName,'') IN ('rdtfnc_NormalReceipt','rdtfnc_PieceReceiving'
-      ,'rdtfnc_UCCReceive','rdtfnc_Return','rdtfnc_Return_SerialNo_Deletion') 
-      THEN 'POKey' 
-   WHEN ISNULL(M.StoredProcName,'') IN ('rdtfnc_UCCInboundReceive') 
-      THEN 'ReceiptLineNumber' 
-   WHEN ISNULL(M.StoredProcName,'') IN ('rdtfnc_Cluster_Pick') 
-      THEN 'PickZone'
-   WHEN ISNULL(M.StoredProcName,'') IN ('rdtfnc_IndentOrdersPickToPalletID') 
-      THEN 'ConsigneeKey'
-   WHEN ISNULL(M.StoredProcName,'') IN ('rdtfnc_Case_Pick') 
-      THEN 'PutAwayZone'
-   WHEN ISNULL(M.StoredProcName,'') IN ('rdtfnc_Container_Unload') 
-      THEN 'Trailer #'
-   WHEN ISNULL(M.StoredProcName,'') IN ('rdtfnc_PickToDropID') 
-      THEN 'DropID'
-      ELSE 'TBC' END
-, L.RefNo3
-, RefNo3Name = CASE 
-   WHEN ISNULL(M.StoredProcName,'') IN ('rdtfnc_UCCInboundReceive','rdtfnc_UCCReceive') 
-      THEN 'UCC' 
-   WHEN ISNULL(M.StoredProcName,'') IN ('rdtfnc_Cluster_Pick') 
-      THEN 'OrderKey'
-   WHEN ISNULL(M.StoredProcName,'') IN ('rdtfnc_Container_Unload') 
-      THEN 'Driver''s License'
-   WHEN ISNULL(M.StoredProcName,'') IN ('rdtfnc_IndentOrdersPickToPalletID') 
-      THEN 'DropID'
-      ELSE 'TBC' END
+, L.ReceiptKey
+, L.POKey
+, L.LoadKey
+, L.OrderKey
+, L.PickSlipNo
+, L.DropID
+, L.TaskDetailKey
 --, DefaultUOM = CASE ISNULL(NULLIF(L.UOM,''),U.DefaultUOM) WHEN '2' THEN 'Case' -- link sku & pack to get PackUOM?
 --         WHEN '3' THEN 'Inner pack'
 --         WHEN '6' THEN 'EA'
