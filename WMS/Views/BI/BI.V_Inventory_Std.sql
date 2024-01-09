@@ -15,7 +15,7 @@ SELECT
  WAREHOUSE          = F.Descr
 ,WH_ID              = L.Facility
 ,COMPANY            = ISNULL(T.Company, '')
-,[LOCATION]         = X.Loc
+,[LOCATION]         = L.Loc
 ,LOCATION_TYPE      = L.LocationType
 ,LOCATION_STS       = L.LocationFlag
 ,ITEM               = X.Sku
