@@ -1,0 +1,282 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+
+/******************************************************************************/
+/* Store procedure: rdt_513ExtUpdSP06                                         */
+/* Copyright      : MAERSK                                                    */
+/*                                                                            */
+/* Purpose: Create KIT record upon move sku                                   */
+/*                                                                            */
+/* Date         Author    Ver.  Purposes                                      */
+/* 2023-12-07   James     1.0   WMS-24183. Created                            */
+/******************************************************************************/
+
+CREATE OR ALTER PROCEDURE rdt.rdt_513ExtUpdSP06
+    @nMobile         INT 
+   ,@nFunc           INT 
+   ,@cLangCode       NVARCHAR( 3) 
+   ,@nStep           INT 
+   ,@nInputKey       INT
+   ,@cStorerKey      NVARCHAR( 15)
+   ,@cFacility       NVARCHAR(  5)
+   ,@cFromLOC        NVARCHAR( 10)
+   ,@cFromID         NVARCHAR( 18)
+   ,@cSKU            NVARCHAR( 20)
+   ,@nQTY            INT
+   ,@cToID           NVARCHAR( 18)
+   ,@cToLOC          NVARCHAR( 10)
+   ,@nErrNo          INT           OUTPUT 
+   ,@cErrMsg         NVARCHAR( 20) OUTPUT
+AS
+BEGIN
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
+   
+   DECLARE @bSuccess          INT
+   DECLARE @nLineCnt          INT = 0
+   DECLARE @cParentPackkey    NVARCHAR( 10)
+   DECLARE @cParentUOM        NVARCHAR( 10)
+   DECLARE @cKitKey           NVARCHAR( 10)
+   DECLARE @cKitLineNumber    NVARCHAR( 5)
+   DECLARE @cType             NVARCHAR( 10)
+   DECLARE @cToSKU            NVARCHAR( 20)
+   DECLARE @curUpd            CURSOR
+   DECLARE @curUPDKD          CURSOR
+   DECLARE @cAutoFinaliseKit  NVARCHAR( 1)
+   DECLARE @cReasonCode       NVARCHAR( 10)
+   DECLARE @cKITSKU           NVARCHAR( 20)
+   DECLARE @cLot              NVARCHAR( 10)
+   DECLARE @cID               NVARCHAR( 18)
+
+   -- Handling transaction
+   DECLARE @nTranCount INT
+   SET @nTranCount = @@TRANCOUNT
+   BEGIN TRAN  -- Begin our own transaction
+   SAVE TRAN rdt_513ExtUpdSP06 -- For rollback or commit only our own transaction
+
+   -- Move by SKU
+   IF @nFunc = 513
+   BEGIN
+      IF @nStep = 6 -- ToLOC
+      BEGIN
+      	IF @nInputKey = 1
+      	BEGIN
+            -- If meet below condition then no need proceed
+            IF EXISTS ( SELECT 1 
+                        FROM dbo.ITRN ITRN WITH (NOLOCK)
+                        WHERE EXISTS ( SELECT 1
+                                       FROM dbo.CODELKUP CLK1 WITH (NOLOCK)
+                                       WHERE CLK1.LISTNAME = 'LVSAUTOKIT'
+                                       AND   CLK1.Long = ITRN.Sku
+                                       AND   CLK1.Code = ITRN.ToLoc
+                                       AND   CLK1.Storerkey = @cStorerKey
+                                       AND   ITRN.ToLoc = @cToLOC
+                                       AND   ITRN.Sku = @cSKU))
+               GOTO Quit            	
+
+      		IF EXISTS ( SELECT 1
+      		            FROM dbo.CODELKUP WITH (NOLOCK)
+      		            WHERE LISTNAME = 'LVSAUTOKIT'
+      		            AND   Code = @cToLOC
+      		            AND   Storerkey = @cStorerKey)
+            BEGIN
+            	SELECT TOP 1 @cKitKey = K.KITKey
+            	FROM dbo.KITDETAIL KD WITH (NOLOCK)
+            	JOIN dbo.KIT K WITH (NOLOCK) ON ( KD.KITKey = K.KITKey)
+            	WHERE KD.StorerKey = @cStorerKey
+            	AND   KD.Sku = @cSKU
+            	AND   KD.Loc = @cToLOC
+            	AND   KD.TYPE = 'F'
+            	AND   K.[Status] = '0'
+            	ORDER BY 1
+
+               IF ISNULL( @cKitKey, '') <> ''
+               BEGIN
+               	SET @curUpd = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+               	SELECT KD.KITLineNumber, KD.Type, KD.Sku
+               	FROM dbo.KITDETAIL KD WITH (NOLOCK)
+            	   JOIN dbo.KIT K WITH (NOLOCK) ON ( KD.KITKey = K.KITKey)
+            	   WHERE KD.KITKey = @cKitKey
+            	   AND   KD.StorerKey = @cStorerKey
+            	   AND   KD.Loc = @cToLOC
+            	   AND   K.[Status] = '0'
+            	   OPEN @curUpd
+            	   FETCH NEXT FROM @curUpd INTO @cKitLineNumber, @cType, @cKITSKU
+            	   WHILE @@FETCH_STATUS = 0
+            	   BEGIN
+            	   	UPDATE dbo.KITDETAIL SET 
+            	   	   ExpectedQty = ExpectedQty + @nQTY,
+            	   	   Qty = Qty + @nQTY, 
+            	   	   EditWho = SUSER_SNAME(), 
+            	   	   EditDate = GETDATE()
+            	   	WHERE KITKey = @cKitKey
+            	   	AND   KITLineNumber = @cKitLineNumber
+            	   	AND   [Type] = @cType
+
+                     IF @@ERROR <> 0
+                     BEGIN
+                        SET @nErrNo = 209501
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD KitDt Err
+                        GOTO RollBackTran
+                     END
+            
+            	   	FETCH NEXT FROM @curUpd INTO @cKitLineNumber, @cType, @cKITSKU
+            	   END
+            	   
+            	   UPDATE dbo.KIT SET
+            	      OpenQty = OpenQty + @nQTY
+            	   WHERE KITKey = @cKitKey
+
+                  IF @@ERROR <> 0
+                  BEGIN
+                     SET @nErrNo = 209502
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD KitHD Err
+                     GOTO RollBackTran
+                  END
+               END
+               ELSE
+               BEGIN
+                  EXECUTE dbo.nspg_GetKey    
+                     @KeyName       = 'kitting',    
+                     @fieldlength   = 10 ,    
+                     @keystring     = @cKitKey  OUTPUT,    
+                     @b_Success     = @bSuccess OUTPUT,    
+                     @n_err         = @nErrNo   OUTPUT,    
+                     @c_errmsg      = @cErrMsg  OUTPUT    
+    
+                  IF @bSuccess <> 1    
+                  BEGIN    
+                     SET @nErrNo = 209503    
+                     SET @cErrMsg = rdt.rdtgetmessage( 66029, @cLangCode, 'DSP') -- 'GetKeyFail'    
+                     GOTO RollBackTran    
+                  END    
+
+                  SELECT TOP 1 @cReasonCode = CLK.Short 
+                  FROM dbo.CODELKUP CLK WITH (NOLOCK) 
+                  JOIN dbo.ITRN ITRN WITH (NOLOCK) ON ( CLK.Storerkey = ITRN.StorerKey AND CLK.Code = ITRN.ToLoc)
+                  JOIN dbo.SKU SKU WITH (NOLOCK) ON ( CLK.Storerkey = ITRN.StorerKey AND CLK.UDF01 = SKU.BUSR4)
+                  WHERE CLK.Listname = 'LVSAUTOKIT' 
+                  AND   CLK.Storerkey = @cStorerKey
+                  AND   SKU.Storerkey = @cStorerKey  
+                  AND   ITRN.Sku = @cSKU
+                  ORDER BY 1
+                  
+                  INSERT INTO dbo.KIT (KITKey, StorerKey, ToStorerKey, [Type], OpenQty, [Status], ReasonCode, Facility) VALUES
+                  (@cKitKey, @cStorerKey, @cStorerKey, 'KIT', @nQTY, '0', @cReasonCode, @cFacility)
+                  
+                  IF @@ERROR <> 0
+                  BEGIN
+                     SET @nErrNo = 209504
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Create KIT Err
+                     GOTO RollBackTran
+                  END
+                  
+                  SELECT 
+                     @cParentPackkey  = P.PackKey,
+                     @cParentUOM = P.PackUOM3
+                  FROM dbo.Pack P WITH (NOLOCK)
+                  JOIN dbo.SKU S WITH (NOLOCK) ON ( P.PackKey = S.PACKKey)
+                  WHERE S.StorerKey = @cStorerKey
+                  AND   S.Sku = @cSKU
+                  
+                  SET @nLineCnt = @nLineCnt + 1
+            
+                  SET @cKitLineNumber = RIGHT('00000' + RTRIM(LTRIM(CAST(@nLineCnt AS NVARCHAR))),5) 
+          
+                  SELECT TOP 1 
+                     @cLot = Lot, 
+                     @cID = ToID
+                  FROM dbo.ITRN WITH (NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                  AND   Sku = @cSKU
+                  AND   FromLoc = @cFromLOC
+                  AND   (( @cFromID = '' AND FromID = FromID) OR ( @cFromID <> '' AND FromID  = @cFromID))
+                  AND   ToLoc = @cToLOC
+                  ORDER BY ItrnKey DESC
+                  
+                  -- Type = F
+                  INSERT INTO KITDETAIL (Kitkey, KitLineNumber, Type, Storerkey, Sku, Lot, Loc, Id, ExpectedQty, Qty, Packkey, UOM,   
+                                    Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, Lottable06, Lottable07,  
+                                    Lottable08, Lottable09, Lottable10, Lottable11, LOttable12, Lottable13, Lottable14,   
+                                    Lottable15, ExternKitkey, ExternLineNo)  
+                  VALUES (@cKitkey, @cKitLineNumber, 'F', @cStorerKey, @cSKU, @cLot, @cToLOC, @cID, @nQTY, @nQTY, @cParentPackkey, @cParentUOM,  
+                        '', '', '', NULL, NULL, '', '',  
+                        '', '', '', '', '', NULL, NULL,  
+                        NULL, '', '')                          
+
+                  IF @@ERROR <> 0
+                  BEGIN
+                     SET @nErrNo = 209505
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Create KIT Err
+                     GOTO RollBackTran
+                  END
+
+                  SELECT TOP 1 @cToSKU = CLK.Long 
+                  FROM dbo.CODELKUP CLK WITH (NOLOCK) 
+                  JOIN dbo.ITRN ITRN WITH (NOLOCK) ON ( CLK.Storerkey = ITRN.StorerKey AND CLK.Code = ITRN.ToLoc)
+                  JOIN dbo.SKU SKU WITH (NOLOCK) ON ( CLK.Storerkey = ITRN.StorerKey AND CLK.UDF01 = SKU.BUSR4)
+                  WHERE CLK.Listname = 'LVSAUTOKIT' 
+                  AND   CLK.Storerkey = @cStorerKey
+                  AND   SKU.Storerkey = @cStorerKey  
+                  AND   CLK.Code = @cToLOC
+                  AND   ITRN.Sku = @cSKU
+                  ORDER BY 1
+         
+                  -- Type = T
+                  INSERT INTO KITDETAIL (Kitkey, KitLineNumber, Type, Storerkey, Sku, Lot, Loc, Id, ExpectedQty, Qty, Packkey, UOM,   
+                                    Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, Lottable06, Lottable07,  
+                                    Lottable08, Lottable09, Lottable10, Lottable11, LOttable12, Lottable13, Lottable14,   
+                                    Lottable15, ExternKitkey, ExternLineNo)  
+                  VALUES (@cKitkey, @cKitLineNumber, 'T', @cStorerKey, @cToSKU, '', @cToLOC, @cID, @nQTY, @nQTY, @cParentPackkey, @cParentUOM,  
+                        '', '', '', NULL, NULL, '', '',  
+                        '', '', '', '', '', NULL, NULL,  
+                        NULL, '', '')                          
+
+                  IF @@ERROR <> 0
+                  BEGIN
+                     SET @nErrNo = 209506
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Create KIT Err
+                     GOTO RollBackTran
+                  END
+               END
+
+               SET @cAutoFinaliseKit = rdt.RDTGetConfig( @nFunc, 'AutoFinaliseKit', @cStorerKey)
+               
+               IF @cAutoFinaliseKit = '1'
+               BEGIN
+               	UPDATE dbo.KIT SET 
+               	   STATUS = '9'
+               	WHERE KITKey = @cKitKey
+               	
+                  IF @@ERROR <> 0
+                  BEGIN
+                     SET @nErrNo = 209507
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Finalize Fail
+                     GOTO RollBackTran
+                  END
+               END
+            END
+      	END
+      END
+   END
+   GOTO Quit
+
+RollBackTran:
+   ROLLBACK TRAN rdt_513ExtUpdSP06 -- Only rollback change made here
+Quit:
+   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+      COMMIT TRAN
+END
+GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
+GRANT EXECUTE ON rdt.rdt_513ExtUpdSP06 TO NSQL
+GO
