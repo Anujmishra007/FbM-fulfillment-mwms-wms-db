@@ -50,6 +50,10 @@ SELECT L.EventNum
 , L.PickSlipNo
 , L.DropID
 , L.TaskDetailKey
+, ITEM        = L.Sku
+, WH_ID       = L.Facility
+, SHIPMENT_ID = L.OrderKey
+, RECEIPT_ID  = L.ReceiptKey
 --, DefaultUOM = CASE ISNULL(NULLIF(L.UOM,''),U.DefaultUOM) WHEN '2' THEN 'Case' -- link sku & pack to get PackUOM?
 --         WHEN '3' THEN 'Inner pack'
 --         WHEN '6' THEN 'EA'
