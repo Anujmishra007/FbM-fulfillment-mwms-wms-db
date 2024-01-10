@@ -39,6 +39,7 @@ GO
 /* 29-Sep-2023  WLChooi 1.2  WMS-23784 - Add new logic (WL01)             */
 /* 04-Jan-2024  WLChooi 1.3  WMS-23784 - Ignore if ToStorerkey not valid  */
 /*                           (WL02)                                       */
+/* 05-Jan-2024  WLChooi 1.3  WMS-23784 - Change mapping (WL03)            */
 /**************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[ispPopulateTOASN_NIKTOMOT]
    @c_Orderkey NVARCHAR(10)
@@ -58,7 +59,7 @@ BEGIN
              @c_OrderLine          NVARCHAR(5),
              @c_ToFacility         NVARCHAR(5),
              @c_ExternOrderLine    NVARCHAR(20),
-             @c_Pickheaderkey      NVARCHAR(10),
+             @c_DropID             NVARCHAR(20),   --WL03
              @c_ToLoc              NVARCHAR(10),
              @c_Type               NVARCHAR(20),
              @c_WarehouseReference NVARCHAR(18),
@@ -105,7 +106,7 @@ BEGIN
             @n_starttcnt          INT
 
    SELECT @n_continue = 1, @b_success = 1, @n_err = 0, @n_StartTCnt = @@TRANCOUNT
-   SELECT @c_Pickheaderkey = '', @c_ToLoc = '', @c_FinalizeFlag = 'N', @c_Lottable01 = '', @c_Lottable12 = ''
+   SELECT @c_DropID = '', @c_ToLoc = '', @c_FinalizeFlag = 'N', @c_Lottable01 = '', @c_Lottable12 = ''   --WL03
 
    BEGIN TRAN       
 
@@ -341,10 +342,11 @@ BEGIN
                          LOTATTRIBUTE.Lottable13,
                          LOTATTRIBUTE.Lottable14,
                          LOTATTRIBUTE.Lottable15,
-                         PICKHEADER.PickHeaderKey
+                         --PICKHEADER.PickHeaderKey   --WL01
+                         PICKDETAIL.DropID   --WL01
                   FROM PICKDETAIL   WITH (NOLOCK)
                   JOIN LotAttribute WITH (NOLOCK) ON (PickDetail.LOT = LotAttribute.LOT)
-                  JOIN PICKHEADER   WITH (NOLOCK) ON (PICKHEADER.OrderKey = PICKDETAIL.OrderKey)
+                  --JOIN PICKHEADER   WITH (NOLOCK) ON (PICKHEADER.OrderKey = PICKDETAIL.OrderKey)   --WL01
                   WHERE (PICKDETAIL.OrderKey = @c_Orderkey AND PICKDETAIL.OrderLineNumber = @c_OrderLine)
                   GROUP BY PICKDETAIL.OrderKey,
                            PICKDETAIL.OrderLineNumber,
@@ -360,13 +362,14 @@ BEGIN
                            LOTATTRIBUTE.Lottable13,
                            LOTATTRIBUTE.Lottable14,
                            LOTATTRIBUTE.Lottable15,
-                           PICKHEADER.PickHeaderKey
+                           --PICKHEADER.PickHeaderKey   --WL01
+                           PICKDETAIL.DropID   --WL01
                   
                   OPEN PICK_CUR
                   
                   FETCH NEXT FROM PICK_CUR INTO @n_ShippedQty, @c_Lottable02, @c_Lottable03, @d_Lottable04,
                                                 @c_Lottable06, @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10, @c_Lottable11,
-                                                @d_Lottable13, @d_Lottable14, @d_Lottable15, @c_Pickheaderkey 
+                                                @d_Lottable13, @d_Lottable14, @d_Lottable15, @c_DropID   --WL03
                   
                   WHILE @@FETCH_STATUS <> -1
                   BEGIN
@@ -395,16 +398,16 @@ BEGIN
                                                 Lottable11,          Lottable12,             Lottable13,
                                                 Lottable14,          Lottable15,             BeforeReceivedQty,
                                                 FinalizeFlag,        ToID,                   UserDefine01) 
-                     VALUES   (@c_NewReceiptKey,      @c_ReceiptLine,      @c_ExternReceiptkey,
-                               @c_ExternOrderLine,    @c_ToStorerKey,      @c_SKU,
+                     VALUES   (@c_NewReceiptKey,      @c_ReceiptLine,               @c_ExternReceiptkey,
+                               @c_ExternOrderLine,    @c_ToStorerKey,               @c_SKU,
                                @n_QtyExpected,        @n_QtyReceived,
-                               @c_UOM,                @c_Packkey,          @c_Toloc,
-                               @c_Lottable01,         '',                  @c_Lottable03,
-                               @d_Lottable04,         @c_Lottable06,       @c_Lottable07,
-                               @c_Lottable08,         @c_Lottable09,       @c_Lottable10,
-                               @c_Lottable11,         '',                  @d_Lottable13,
-                               @d_Lottable14,         @d_Lottable15,       @n_BeforeReceivedQty,
-                               @c_FinalizeFlag,       @c_Pickheaderkey,    @c_UDF01) 
+                               @c_UOM,                @c_Packkey,                   @c_Toloc,
+                               @c_Lottable01,         '',                           @c_Lottable03,
+                               @d_Lottable04,         @c_Lottable06,                @c_Lottable07,
+                               @c_Lottable08,         @c_Lottable09,                @c_Lottable10,
+                               @c_Lottable11,         '',                           @d_Lottable13,
+                               @d_Lottable14,         @d_Lottable15,                @n_BeforeReceivedQty,
+                               @c_FinalizeFlag,       LEFT(TRIM(@c_DropID), 18),    @c_UDF01)   --WL03 
                   
                      SELECT @n_LineNo = @n_LineNo + 1
                   
@@ -422,7 +425,7 @@ BEGIN
                   
                      FETCH NEXT FROM PICK_CUR INTO @n_ShippedQty, @c_Lottable02, @c_Lottable03, @d_Lottable04,
                                                    @c_Lottable06, @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10, @c_Lottable11,
-                                                   @d_Lottable13, @d_Lottable14, @d_Lottable15, @c_Pickheaderkey
+                                                   @d_Lottable13, @d_Lottable14, @d_Lottable15, @c_DropID   --WL03
                   END -- WHILE @@FETCH_STATUS <> -1
                   CLOSE PICK_CUR
                   DEALLOCATE PICK_CUR
