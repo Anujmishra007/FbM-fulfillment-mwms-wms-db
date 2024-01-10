@@ -67,7 +67,7 @@ SELECT
         WHEN RD.UOM=P.PackUOM7 AND P.NetWgt>0 THEN P.NetWgt
         WHEN RD.UOM=P.PackUOM8 AND P.OtherUnit1>0 THEN P.OtherUnit1
         WHEN RD.UOM=P.PackUOM9 AND P.OtherUnit2>0 THEN P.OtherUnit2 ELSE 1 END
-,RECEIPT_ID                = R.ExternReceiptKey
+,RECEIPT_ID                = R.ReceiptKey
 ,SO_NUMBER                 = R.POKey
 , R.StorerKey, F.SiteId
 FROM dbo.RECEIPT AS R WITH (NOLOCK)
