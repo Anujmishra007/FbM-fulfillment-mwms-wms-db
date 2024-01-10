@@ -12,6 +12,7 @@ GO
 /* Date        Rev  Author     Purposes                                       */
 /* 08-Aug-2023 1.0  WLChooi    Created (WMS-23233)                            */
 /* 08-Aug-2023 1.0  WLChooi    DevOps Combine Script                          */
+/* 14-Dec-2023 1.1  WLChooi    WMS-23233 - Add Col56 & Col57 (WL01)           */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_BT_Bartender_TW_ADS_Ship_Label_01]
@@ -189,13 +190,15 @@ BEGIN
                   + N'        '''', '''', '''', '''', '''', '''', '''', '''', '''', '''', ' + CHAR(13) --30
                   + N'        '''', '''', '''', '''', '''', '''', '''', '''', '''', '''', ' + CHAR(13) --40
                   + N'        '''', '''', '''', '''', '''', '''', '''', '''', '''', '''', ' + CHAR(13) --50
-                  + N'        '''', '''', '''', '''', '''', '''', '''', '''', PH.TTLCNTS, ''''  ' + CHAR(13) --60
+                  + N'        '''', '''', '''', '''', '''', ISNULL(TRIM(OH.BuyerPO),''''), ISNULL(TRIM(C1.Long),''''), '''', PH.TTLCNTS, ''''  ' + CHAR(13) --60   --WL01
                   + N' FROM PACKHEADER PH (NOLOCK) ' + CHAR(13)
                   + N' JOIN PACKDETAIL PD (NOLOCK) ON PH.Pickslipno = PD.Pickslipno ' + CHAR(13)
                   + N' JOIN ORDERS OH (NOLOCK) ON PH.Orderkey = OH.Orderkey ' + CHAR(13)
                   + N' LEFT JOIN StorerSODefault SSD (NOLOCK) ON SSD.Storerkey = OH.Consigneekey ' + CHAR(13)
                   + N' LEFT JOIN CODELKUP CL (NOLOCK) ON CL.Storerkey = OH.Storerkey ' + CHAR(13)
                   + N'                               AND CL.Listname = ''ORDERTYPE'' AND CL.Code = OH.[Type] ' + CHAR(13)
+                  + N' LEFT JOIN CODELKUP C1 (NOLOCK) ON C1.Storerkey = OH.Storerkey ' + CHAR(13)   --WL01
+                  + N'                               AND C1.Listname = ''ECDLMODE'' AND C1.Code = OH.Door ' + CHAR(13)   --WL01
                   + N' WHERE PD.Pickslipno = @c_Sparm1 ' + CHAR(13)
                   + N' AND PD.LabelNo = @c_Sparm2 '
 
@@ -313,7 +316,7 @@ BEGIN
                     , '', '', '', '', '', '', '', '', '', ''
                     , '', '', '', '', '', '', '', '', '', ''
                     , '', '', '', '', '', '', '', '', '', ''
-                    , '', '', '', '', '', '', '', '', Col59, ''
+                    , '', '', '', '', '', Col56, Col57, '', Col59, ''   --WL01
          FROM #Result
 
          SET @n_Qty01 = NULL
