@@ -177,7 +177,7 @@ BEGIN
            , @c_Param08Label = ReportParmName8
            , @c_Param09Label = ReportParmName9
            , @c_Param10Label = ReportParmName10
-      FROM rdt.RDTreportdetail
+      FROM rdt.RDTreportdetail (nolock) 
       WHERE ReportType = @c_ReportType
       AND StorerKey = @c_Storerkey
 
