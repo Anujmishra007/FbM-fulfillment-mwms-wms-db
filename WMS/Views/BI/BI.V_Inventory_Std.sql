@@ -14,15 +14,15 @@ AS
 SELECT
  WAREHOUSE          = F.Descr
 ,WH_ID              = L.Facility
-,COMPANY            = T.Company
-,[LOCATION]         = X.Loc
+,COMPANY            = ISNULL(T.Company, '')
+,[LOCATION]         = L.Loc
 ,LOCATION_TYPE      = L.LocationType
 ,LOCATION_STS       = L.LocationFlag
 ,ITEM               = X.Sku
 ,ITEM_DESC          = S.DESCR
 ,LOGISTICS_UNIT     = L.LocationCategory
 ,LOT                = X.Lot
-,ON_HAND_QTY        = X.Qty
+,ON_HAND_QTY        = ISNULL(X.Qty, 0)
 ,LOCATION_WEIGHT    = L.WeightCapacity
 ,LOCATION_WEIGHT_UM = ''
 ,LOCATION_VOLUME    = L.CubicCapacity
@@ -35,14 +35,15 @@ SELECT
 ,CONSUMED_WEIGHT    = CASE WHEN S.GrossWgt > 0 THEN S.GrossWgt WHEN S.STDGROSSWGT > 0 THEN S.STDGROSSWGT ELSE S.NetWgt END
 ,CONSUMED_WEIGHT_UM = ''
 , X.StorerKey, F.SiteId, X.Id
-FROM dbo.LOTxLOCxID AS X WITH (NOLOCK)
-JOIN dbo.LOT AS O on O.Lot = X.Lot
-JOIN dbo.LOC AS L WITH (NOLOCK) ON X.Loc = L.Loc
+FROM dbo.LOC AS L WITH (NOLOCK)
+LEFT JOIN dbo.LOTxLOCxID AS X WITH (NOLOCK) ON X.Loc = L.Loc
+LEFT JOIN dbo.LOT AS O on O.Lot = X.Lot
+--JOIN dbo.LOC AS L WITH (NOLOCK) ON X.Loc = L.Loc
 JOIN dbo.FACILITY AS F WITH (NOLOCK) ON F.Facility = L.Facility
    AND F.[Type] NOT IN ('Obsolete') AND F.SiteID NOT IN ('NA','')
-JOIN dbo.STORER AS T WITH (NOLOCK) ON T.StorerKey = X.StorerKey AND T.[type] = '1' AND ISNULL(TRIM(T.[Status]),'') NOT IN ('INACTIVE','0')
-JOIN dbo.SKU AS S WITH (NOLOCK) ON S.Sku = X.Sku AND S.StorerKey = X.StorerKey
-WHERE X.Qty > 0 -- active records only
+LEFT JOIN dbo.STORER AS T WITH (NOLOCK) ON T.StorerKey = X.StorerKey AND T.[type] = '1' AND ISNULL(TRIM(T.[Status]),'') NOT IN ('INACTIVE','0')
+LEFT JOIN dbo.SKU AS S WITH (NOLOCK) ON S.Sku = X.Sku AND S.StorerKey = X.StorerKey
+-- WHERE X.Qty > 0 -- > 0 for active records only, but GDA need inactive or unoccupied location showing in OE PowerBI reports
 -- AND  EXISTS (SELECT 1 FROM dbo.ORDERS  O WITH (NOLOCK) WHERE O.StorerKey = X.StorerKey)
 GO
 GRANT SELECT ON  [BI].[V_Inventory_Std] TO [JReportRole]
