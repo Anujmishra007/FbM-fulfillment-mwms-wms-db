@@ -54,20 +54,91 @@ SELECT L.EventNum
 , WH_ID       = L.Facility
 , SHIPMENT_ID = L.OrderKey
 , RECEIPT_ID  = L.ReceiptKey
---, DefaultUOM = CASE ISNULL(NULLIF(L.UOM,''),U.DefaultUOM) WHEN '2' THEN 'Case' -- link sku & pack to get PackUOM?
---         WHEN '3' THEN 'Inner pack'
---         WHEN '6' THEN 'EA'
---         WHEN '1' THEN 'Pallet'
---         WHEN '4' THEN 'Other unit 1'
---         WHEN '5' THEN 'Other unit 2'
---         END
---, QTYUOM = CASE 
---      WHEN L.UOM IN (3,    P.PACKUOM2) THEN P.InnerPack
---      WHEN L.UOM IN (6,    P.PACKUOM3) THEN P.QTY
---      WHEN L.UOM IN (1, 2, P.PACKUOM4) THEN P.Pallet
---      WHEN L.UOM IN (4,    P.PACKUOM8) THEN P.OtherUnit1
---      WHEN L.UOM IN (      P.PACKUOM9) THEN P.OtherUnit2
---  END
+, L.ToLocation
+, L.PutawayZone
+, L.PickZone
+, L.ID
+, L.ToID
+, L.ComponentSKU
+, L.Lot
+, L.ToLot
+, L.Lottable01
+, L.Lottable02
+, L.Lottable03
+, L.Lottable04
+, L.Lottable05
+, L.RefNo1
+, L.RefNo2
+, L.RefNo3
+, L.RefNo4
+, L.RefNo5
+, L.ArchiveCop
+, L.RowRef
+, L.Lottable06
+, L.Lottable07
+, L.Lottable08
+, L.Lottable09
+, L.Lottable10
+, L.Lottable11
+, L.Lottable12
+, L.Lottable13
+, L.Lottable14
+, L.Lottable15
+, L.WaveKey
+, L.TrackingNo
+, L.AreaKey
+, L.TTMStrategyKey
+, L.ListKey
+, L.UCC
+, L.ReplenishmentKey
+, L.DeviceID
+, L.DevicePosition
+, L.ToUCC
+, L.SourceKey
+, L.LabelNo
+, L.CCKey
+, L.SuggestedLOC
+, L.CaseID
+, L.ReasonKey
+, L.TaskType
+, L.ExpectedQty
+, L.SerialNo
+, L.PickMethod
+, L.Step
+, L.[Status]
+, L.RDTOption
+, L.PUOM_Desc
+, L.MUOM_Desc
+, L.PQTY
+, L.ConsigneeKey
+, L.CCSheetNo
+, L.SealNo
+, L.MBOLKey
+, L.ContainerNo
+, L.LicenseNo
+, L.TruckID
+, L.Remark
+, L.ToLabelNo
+, L.ExternKitKey
+, L.ChildID
+, L.Lane
+, L.SSCC
+, L.SerialNoKey
+, L.Scn
+, L.CartonType
+, L.[Weight]
+, L.ReplenishmentGroup
+, L.[Length]
+, L.Width
+, L.Height
+, L.OptionDefinition
+, L.TransType
+, L.CountNo
+, L.CartonID
+, L.Barcode
+, L.ContainerKey
+, L.CartonNo
+, L.[Cube]
 FROM RDT.rdtSTDEventLog L WITH (NOLOCK)
 LEFT JOIN RDT.RDTUser U WITH (NOLOCK) ON L.UserID = U.UserName
 LEFT JOIN dbo.SKU S WITH (NOLOCK) ON S.StorerKey = L.StorerKey and S.Sku = L.Sku
