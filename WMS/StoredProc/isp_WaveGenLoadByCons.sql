@@ -27,7 +27,7 @@ GO
 /*                                                                      */
 /* Called By:  RMC Generate Load Plan By Consignee                      */
 /*                                                                      */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.3                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -36,7 +36,8 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver  Purposes                                   */
 /* 2016-11-16  Wan01    1.1  Close Cursor                               */
-/* 28-Jan-2019  TLTING_ext 1.2  enlarge externorderkey field length      */
+/* 28-Jan-2019 TLTING_ext 1.2  enlarge externorderkey field length      */
+/* 01-Sep-2023 SPChin   1.3  JSM-169349 - Extend The Length Of C_Company*/ 
 /************************************************************************/
 
 CREATE PROC isp_WaveGenLoadByCons 
@@ -55,7 +56,7 @@ BEGIN
    DECLARE 
       @c_ConsigneeKey      NVARCHAR( 15),
       @c_Priority          NVARCHAR( 10),
-      @c_C_Company         NVARCHAR( 45),
+      @c_C_Company         NVARCHAR( 100),	--JSM-169349
       @c_OrderKey          NVARCHAR( 10),
       @c_Facility          NVARCHAR( 5),
       @c_ExternOrderKey    NVARCHAR( 50),  --tlting_ext
