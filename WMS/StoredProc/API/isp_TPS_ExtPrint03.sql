@@ -3,13 +3,14 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
+
 /******************************************************************************/
 /* Store procedure: isp_TPS_ExtPrint03                                        */
 /* Copyright      : LFLogistics                                               */
 /*                                                                            */
 /* Date         Rev  Author     Purposes                                      */
-/* 2023-04-11  1.0  yeekung    TPS-690 Created                               */
-/* 2023-09-12   1.1  YeeKung    TPS-773/TPS-740 New print (yeekung02)          */
+/* 2023-04-11   1.0  yeekung    TPS-690 Created                               */
+/* 2023-09-12   1.1  YeeKung    TPS-773/TPS-740 New print (yeekung02)         */
 /* 2023-11-15   1.2  YeeKung    TPS-792 Add computer name check (yeekung03    */
 /* 2023-12-11   1.3  YeeKung    TPS-826 Add params for paper (yeekung12)      */
 /******************************************************************************/
@@ -156,6 +157,7 @@ BEGIN
       WHERE  Storerkey = @cStorerkey
             AND ispaperprinter <> 'Y'
             AND WMR.moduleid = @c_ModuleID
+            AND (ISNULL(ComputerName,'') ='' OR ComputerName= @cWorkstation)
       ORDER BY WMR.reportid
       OPEN @cCurLabel
       FETCH NEXT FROM @cCurLabel INTO @cReportType
@@ -250,6 +252,7 @@ BEGIN
       WHERE  Storerkey = @cStorerkey
             AND ispaperprinter = 'Y'
             AND WMR.moduleid = @c_ModuleID
+            AND (ISNULL(ComputerName,'') ='' OR ComputerName= @cWorkstation)
       OPEN @cCurPaper
       FETCH NEXT FROM @cCurPaper INTO @cReportType
       WHILE @@FETCH_STATUS = 0
@@ -306,14 +309,13 @@ BEGIN
          IF ISNULL(@cNewPaperPrinter,'')= ''
             SET @cNewPaperPrinter = @cPaperPrinter
 
-
          EXEC  [WM].[lsp_WM_Print_Report]
             @c_ModuleID = @c_ModuleID           
          , @c_ReportID = @c_ReportID         
          , @c_Storerkey = @cStorerkey         
          , @c_Facility  = @cFacility        
          , @c_UserName  = @cUsername     
-         , @c_ComputerName = ''
+         , @c_ComputerName = @cWorkstation
          , @c_PrinterID = @cPaperPrinter         
          , @n_NoOfCopy  = '1'     
          , @c_KeyValue1 = @cParams1        
@@ -338,7 +340,7 @@ BEGIN
 Quit:
 
 END
-
+GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
