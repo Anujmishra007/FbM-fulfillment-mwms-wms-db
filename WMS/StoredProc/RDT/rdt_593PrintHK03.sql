@@ -20,6 +20,8 @@ GO
 /*                               Temp table #tVar                             */
 /*                            2. Add ErrLog for Try..Catch statement          */
 /* 2022-08-09 1.2  ML         Fix @cFocusField no effect issue                */
+/* 2023-09-13 1.3  ML         Fix @cJobName duplicate wording issue           */
+/* 2024-01-03 1.4  ML         WMS-24533 - Add Extended Validation Loop 2      */
 /******************************************************************************/
 
 CREATE PROC rdt.rdt_593PrintHK03 (
@@ -75,6 +77,7 @@ BEGIN
          , @cLabelWinPrinter NVARCHAR(128) = ''
          , @cPaperWinPrinter NVARCHAR(128) = ''
          , @c_StorerKey      NVARCHAR(15)  = @cStorerKey
+         , @c_StorerKey2     NVARCHAR(15)  = ''
          , @c_Facility       NVARCHAR(5)   = @cFacility
          , @c_Sku            NVARCHAR(20)  = ''
          , @cParam6Value     NVARCHAR(60)  = ''
@@ -82,7 +85,6 @@ BEGIN
          , @cParam8Value     NVARCHAR(60)  = ''
          , @cParam9Value     NVARCHAR(60)  = ''
          , @cParam10Value    NVARCHAR(60)  = ''
-         , @cParams          NVARCHAR(10)  = ''
          , @nNoOfCopy        INT           = NULL
          , @bFocusEmptyFld   INT           = 1
          , @bSuccess         INT
@@ -122,18 +124,13 @@ BEGIN
     WHERE Listname = 'RDTLBLRPT' AND Code = @cOption AND Storerkey = @c_StorerKey
     ORDER BY Code2
 
-    SET @cParams = CASE WHEN @cFieldAttr02='' THEN 'Y' ELSE 'N' END
-                 + CASE WHEN @cFieldAttr04='' THEN 'Y' ELSE 'N' END
-                 + CASE WHEN @cFieldAttr06='' THEN 'Y' ELSE 'N' END
-                 + CASE WHEN @cFieldAttr08='' THEN 'Y' ELSE 'N' END
-                 + CASE WHEN @cFieldAttr10='' THEN 'Y' ELSE 'N' END
-
    -- Check at least one parameter input
    IF NOT ((@cFieldAttr02='' AND ISNULL(@cParam1Value,'')<>'') OR
            (@cFieldAttr04='' AND ISNULL(@cParam2Value,'')<>'') OR
            (@cFieldAttr06='' AND ISNULL(@cParam3Value,'')<>'') OR
            (@cFieldAttr08='' AND ISNULL(@cParam4Value,'')<>'') OR
            (@cFieldAttr10='' AND ISNULL(@cParam5Value,'')<>'') )
+      AND CHARINDEX('X', @cShort) = 0   -- Skip checking if turn on X flag
    BEGIN
       SET @nErrNo = 172201
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Input Required
@@ -176,7 +173,7 @@ BEGIN
    BEGIN
       IF OBJECT_ID('tempdb..#tVar') IS NOT NULL
          DROP TABLE #tVar
-   
+
       CREATE TABLE #tVar (
            [Var]       NVARCHAR(50)  NOT NULL
          , [Value]     NVARCHAR(MAX) NULL
@@ -258,67 +255,171 @@ BEGIN
               , @cWarningMsg = ''
               , @cFocusField = ''
 
-         IF @cValidateAction='DECODE'
-            SET @cSQL = 'SET @bSuccess=1 BEGIN ' +CHAR(10)+ @cValidateExp +CHAR(10)+ 'END'
+         IF @cValidateAction='EXTVLD'
+         BEGIN
+            IF @c_StorerKey<>'' AND
+               EXISTS(SELECT TOP 1 1 FROM dbo.CodeLkup WITH (NOLOCK)
+                       WHERE Listname = 'RDTLBLRVL2' AND Code = @cValidateExp AND Storerkey = @c_StorerKey)
+               SET @c_StorerKey2 = @c_StorerKey
+            ELSE
+               SET @c_StorerKey2 = '*ALL'
+
+            DECLARE C_VALIDATION_2 CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT FocusField     = Short
+                 , MsgText        = ISNULL(RTRIM(Long), '')
+                 , ValidateExp    = Notes
+                 , Code2          = Code2
+                 , ValidateAction = UDF01
+              FROM dbo.CodeLkup WITH (NOLOCK)
+             WHERE Listname = 'RDTLBLRVL2' AND Code = @cValidateExp AND Storerkey = @c_StorerKey2
+               AND ISNULL(Notes,'')<>''
+             ORDER BY Code2
+
+            OPEN C_VALIDATION_2
+
+            WHILE 1=1
+            BEGIN
+               FETCH NEXT FROM C_VALIDATION_2
+               INTO @cFocusField1, @cMsgText, @cValidateExp, @cCode2, @cValidateAction
+
+               IF @@FETCH_STATUS<>0
+                  BREAK
+
+               IF @cValidateAction='DECODE'
+                  SET @cSQL = 'SET @bSuccess=1 BEGIN ' +CHAR(10)+ @cValidateExp +CHAR(10)+ 'END'
+               ELSE
+                  SET @cSQL = 'IF (' + @cValidateExp + ') SET @bSuccess=1'
+
+               BEGIN TRY
+                  EXEC sp_ExecuteSQL @cSQL, @cSQLParam
+                     , @bSuccess         OUTPUT
+                     , @cMsgText         OUTPUT
+                     , @cWarningMsg      OUTPUT
+                     , @c_StorerKey      OUTPUT
+                     , @c_Facility       OUTPUT
+                     , @c_Sku            OUTPUT
+                     , @cParam1Value     OUTPUT
+                     , @cParam2Value     OUTPUT
+                     , @cParam3Value     OUTPUT
+                     , @cParam4Value     OUTPUT
+                     , @cParam5Value     OUTPUT
+                     , @cParam6Value     OUTPUT
+                     , @cParam7Value     OUTPUT
+                     , @cParam8Value     OUTPUT
+                     , @cParam9Value     OUTPUT
+                     , @cParam10Value    OUTPUT
+                     , @nNoOfCopy        OUTPUT
+                     , @cOption
+                     , @cCode2           OUTPUT
+                     , @cValidateAction  OUTPUT
+                     , @cFocusField      OUTPUT
+                     , @cReportType1     OUTPUT
+                     , @cReportTypeExp   OUTPUT
+                     , @cPrintCmdExp     OUTPUT
+                     , @cPrintCmd        OUTPUT
+                     , @cLabelPrinter    OUTPUT
+                     , @cPaperPrinter    OUTPUT
+                     , @cLabelWinPrinter OUTPUT
+                     , @cPaperWinPrinter OUTPUT
+                     , @nMobile
+                     , @nFunc
+                     , @nStep
+                     , @cLangCode
+                     , @nInputKey
+                     , @cParam1Label     OUTPUT
+                     , @cParam2Label     OUTPUT
+                     , @cParam3Label     OUTPUT
+                     , @cParam4Label     OUTPUT
+                     , @cParam5Label     OUTPUT
+                     , @cFieldAttr02     OUTPUT
+                     , @cFieldAttr04     OUTPUT
+                     , @cFieldAttr06     OUTPUT
+                     , @cFieldAttr08     OUTPUT
+                     , @cFieldAttr10     OUTPUT
+               END TRY
+               BEGIN CATCH
+                  SELECT @nTemp = ISNULL(ERROR_NUMBER(),0)
+                       , @cTemp = ISNULL(ERROR_MESSAGE(),'')
+                  EXEC nsp_logerror @nTemp, @cTemp, 'rdt_593PrintHK03 (Validation Loop 2)'
+
+                  SET @nErrNo = 172209
+                  SET @cErrMsg = 'VALIDATION2 ERR^' + ISNULL(@cCode2,'')
+                  BREAK
+               END CATCH
+
+              IF ISNULL(@bSuccess,0)<>1
+                  BREAK
+            END
+            CLOSE C_VALIDATION_2
+            DEALLOCATE C_VALIDATION_2
+
+            IF @nErrNo<>0
+               BREAK
+         END
          ELSE
-            SET @cSQL = 'IF (' + @cValidateExp + ') SET @bSuccess=1'
+         BEGIN
+            IF @cValidateAction='DECODE'
+               SET @cSQL = 'SET @bSuccess=1 BEGIN ' +CHAR(10)+ @cValidateExp +CHAR(10)+ 'END'
+            ELSE
+               SET @cSQL = 'IF (' + @cValidateExp + ') SET @bSuccess=1'
 
-         BEGIN TRY
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam
-               , @bSuccess         OUTPUT
-               , @cMsgText         OUTPUT
-               , @cWarningMsg      OUTPUT
-               , @c_StorerKey      OUTPUT
-               , @c_Facility       OUTPUT
-               , @c_Sku            OUTPUT
-               , @cParam1Value     OUTPUT
-               , @cParam2Value     OUTPUT
-               , @cParam3Value     OUTPUT
-               , @cParam4Value     OUTPUT
-               , @cParam5Value     OUTPUT
-               , @cParam6Value     OUTPUT
-               , @cParam7Value     OUTPUT
-               , @cParam8Value     OUTPUT
-               , @cParam9Value     OUTPUT
-               , @cParam10Value    OUTPUT
-               , @nNoOfCopy        OUTPUT
-               , @cOption
-               , @cCode2           OUTPUT
-               , @cValidateAction  OUTPUT
-               , @cFocusField      OUTPUT
-               , @cReportType1     OUTPUT
-               , @cReportTypeExp   OUTPUT
-               , @cPrintCmdExp     OUTPUT
-               , @cPrintCmd        OUTPUT
-               , @cLabelPrinter    OUTPUT
-               , @cPaperPrinter    OUTPUT
-               , @cLabelWinPrinter OUTPUT
-               , @cPaperWinPrinter OUTPUT
-               , @nMobile
-               , @nFunc
-               , @nStep
-               , @cLangCode
-               , @nInputKey
-               , @cParam1Label     OUTPUT
-               , @cParam2Label     OUTPUT
-               , @cParam3Label     OUTPUT
-               , @cParam4Label     OUTPUT
-               , @cParam5Label     OUTPUT
-               , @cFieldAttr02     OUTPUT
-               , @cFieldAttr04     OUTPUT
-               , @cFieldAttr06     OUTPUT
-               , @cFieldAttr08     OUTPUT
-               , @cFieldAttr10     OUTPUT
-         END TRY
-         BEGIN CATCH
-            SELECT @nTemp = ISNULL(ERROR_NUMBER(),0)
-                 , @cTemp = ISNULL(ERROR_MESSAGE(),'')
-            EXEC nsp_logerror @nTemp, @cTemp, 'rdt_593PrintHK03 (Validation Loop)'
+            BEGIN TRY
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam
+                  , @bSuccess         OUTPUT
+                  , @cMsgText         OUTPUT
+                  , @cWarningMsg      OUTPUT
+                  , @c_StorerKey      OUTPUT
+                  , @c_Facility       OUTPUT
+                  , @c_Sku            OUTPUT
+                  , @cParam1Value     OUTPUT
+                  , @cParam2Value     OUTPUT
+                  , @cParam3Value     OUTPUT
+                  , @cParam4Value     OUTPUT
+                  , @cParam5Value     OUTPUT
+                  , @cParam6Value     OUTPUT
+                  , @cParam7Value     OUTPUT
+                  , @cParam8Value     OUTPUT
+                  , @cParam9Value     OUTPUT
+                  , @cParam10Value    OUTPUT
+                  , @nNoOfCopy        OUTPUT
+                  , @cOption
+                  , @cCode2           OUTPUT
+                  , @cValidateAction  OUTPUT
+                  , @cFocusField      OUTPUT
+                  , @cReportType1     OUTPUT
+                  , @cReportTypeExp   OUTPUT
+                  , @cPrintCmdExp     OUTPUT
+                  , @cPrintCmd        OUTPUT
+                  , @cLabelPrinter    OUTPUT
+                  , @cPaperPrinter    OUTPUT
+                  , @cLabelWinPrinter OUTPUT
+                  , @cPaperWinPrinter OUTPUT
+                  , @nMobile
+                  , @nFunc
+                  , @nStep
+                  , @cLangCode
+                  , @nInputKey
+                  , @cParam1Label     OUTPUT
+                  , @cParam2Label     OUTPUT
+                  , @cParam3Label     OUTPUT
+                  , @cParam4Label     OUTPUT
+                  , @cParam5Label     OUTPUT
+                  , @cFieldAttr02     OUTPUT
+                  , @cFieldAttr04     OUTPUT
+                  , @cFieldAttr06     OUTPUT
+                  , @cFieldAttr08     OUTPUT
+                  , @cFieldAttr10     OUTPUT
+            END TRY
+            BEGIN CATCH
+               SELECT @nTemp = ISNULL(ERROR_NUMBER(),0)
+                    , @cTemp = ISNULL(ERROR_MESSAGE(),'')
+               EXEC nsp_logerror @nTemp, @cTemp, 'rdt_593PrintHK03 (Validation Loop)'
 
-            SET @nErrNo = 172203
-            SET @cErrMsg = 'VALIDATION ERR^' + ISNULL(@cCode2,'') --VALIDATION ERR
-            BREAK
-         END CATCH
+               SET @nErrNo = 172203
+               SET @cErrMsg = 'VALIDATION ERR^' + ISNULL(@cCode2,'') --VALIDATION ERR
+               BREAK
+            END CATCH
+         END
 
          IF ISNULL(@cFocusField,'')<>''
            SET @cFocusField1 = @cFocusField
@@ -328,7 +429,7 @@ BEGIN
          IF ISNUMERIC(@cFocusField1) = 1
          BEGIN
             SET @nTemp = CONVERT(INT, CONVERT(FLOAT, @cFocusField1))
-            IF @nTemp >= 1 AND @nTemp <=10 AND SUBSTRING(@cParams,@nTemp,1) = 'Y'
+            IF @nTemp >= 1 AND @nTemp <=10
             BEGIN
                SET @nTemp = @nTemp * 2
                EXEC rdt.rdtSetFocusField @nMobile, @nTemp
@@ -344,9 +445,6 @@ BEGIN
             ELSE
             BEGIN
                SET @nErrNo = 172204
--- v1.2               SET @cErrMsg = CASE WHEN ISNULL(@cMsgText,'')<>'' THEN @cMsgText
--- v1.2                                   ELSE rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Data Not Found
--- v1.2                              END
                SET @cErrMsg = CASE WHEN @cMsgText='_' THEN '' ELSE ISNULL(@cMsgText,'') END   -- v1.2
                BREAK
             END
@@ -405,7 +503,7 @@ BEGIN
                   +',@cFieldAttr06 NVARCHAR(1)'
                   +',@cFieldAttr08 NVARCHAR(1)'
                   +',@cFieldAttr10 NVARCHAR(1)'
-                  
+
 
    BEGIN TRY
       EXEC sp_ExecuteSQL @cSQL, @cSQLParam
@@ -532,7 +630,7 @@ BEGIN
       -- Get Report Info
       SET @cJobName = 'rdt_593PrintHK03(' + LTRIM(RTRIM(ISNULL(@cOption,''))) + '): '
 
-      SELECT @cJobName = @cJobName + ISNULL(RptDesc,'')
+      SELECT TOP 1 @cJobName = @cJobName + ISNULL(RptDesc,'')   -- V1.3
       FROM rdt.rdtReport WITH (NOLOCK)
       WHERE ReportType<>''
         AND ReportType = @cReportType
