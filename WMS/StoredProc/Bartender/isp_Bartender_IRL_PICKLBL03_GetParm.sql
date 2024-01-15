@@ -12,6 +12,7 @@ GO
 /* Date        Rev  Author     Purposes                                       */
 /* 15-Nov-2023 1.0  WLChooi    Created (WMS-24164)                            */
 /* 15-Nov-2023 1.0  WLChooi    DevOps Combine Script                          */
+/* 06-Jan-2024 1.1  WLChooi    WMS-24164 - Revise logic (WL01)                */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_Bartender_IRL_PICKLBL03_GetParm]
@@ -70,14 +71,17 @@ BEGIN
       FROM ORDERS OH WITH (NOLOCK)
       WHERE OH.OrderKey = @c_Sparm1
 
-      SELECT @n_Qty = SUM(PD.Qty)
-      FROM PICKDETAIL PD WITH (NOLOCK)
-      WHERE PD.OrderKey = @c_Sparm1
-      AND PD.SKU = @c_Sparm2
-      AND PD.Storerkey = @c_Storerkey
+      --WL01 S
+      --SELECT @n_Qty = SUM(PD.Qty)
+      --FROM PICKDETAIL PD WITH (NOLOCK)
+      --WHERE PD.OrderKey = @c_Sparm1
+      --AND PD.SKU = @c_Sparm2
+      --AND PD.Storerkey = @c_Storerkey
+      --WL01 E
 
       SET @c_Orderkey = @c_Sparm1
       SET @c_SKU = @c_Sparm2
+      SET @n_Qty = 1   --WL01
    END
    ELSE IF ISNULL(@c_Sparm1,'') <> '' OR ISNULL(@c_Sparm2,'') <> ''
    BEGIN
@@ -151,7 +155,7 @@ BEGIN
    FROM @T_RESULT
 
    EXIT_SP:
-END -- procedure   
+END -- procedure     
 GO
 GRANT EXECUTE ON [dbo].[isp_Bartender_IRL_PICKLBL03_GetParm] TO [NSQL]
 GO
