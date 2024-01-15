@@ -69,9 +69,6 @@ BEGIN
    DECLARE @cAutoScanOut      NVARCHAR( 1)  
    DECLARE @cInsertDropIDSP   NVARCHAR( 20)  
    DECLARE @cDropID           NVARCHAR( 20)
-   DECLARE @cChannelInventoryMgmt   NVARCHAR( 1) = ''
-   DECLARE @cChannel                NVARCHAR( 20) = ''
-   DECLARE @nChannel_ID             BIGINT = 0
    
    SET @cDisplay = ''   
   
@@ -80,11 +77,6 @@ BEGIN
    SELECT @cWaveKey = WaveKey FROM rdt.rdtPTLPieceLog WITH (NOLOCK) WHERE Station = @cStation   
    IF @cWaveKey = ''  
       SELECT @cWaveKey = V_WaveKey FROM rdt.rdtMobRec WITH (NOLOCK) WHERE Mobile = @nMobile  
-
-   SELECT TOP 1 @cChannelInventoryMgmt = SC.Authority
-   FROM dbo.ORDERS O WITH (NOLOCK)
-   CROSS APPLY fnc_SelectGetRight (O.facility, O.StorerKey, '', 'ChannelInventoryMgmt') SC
-   WHERE O.UserDefine09 = @cWaveKey
 
    -- Storer configure  
    SET @cAutoScanOut = rdt.RDTGetConfig( @nFunc, 'AutoScanOut', @cStorerKey)  
@@ -321,7 +313,7 @@ BEGIN
          @nQTY_PD - 1, -- QTY  
          NULL, -- TrafficCop  
          '1'   -- OptimizeCop  
-         , CASE WHEN @cChannelInventoryMgmt = '1' THEN Channel_ID ELSE 0 END
+         , Channel_ID
       FROM dbo.PickDetail WITH (NOLOCK)   
       WHERE PickDetailKey = @cPickDetailKey  
                      
