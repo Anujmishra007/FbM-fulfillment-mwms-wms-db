@@ -25,15 +25,16 @@ GO
 /*                                                                      */
 /* Called By:                                                           */
 /*                                                                      */
-/* PVCS Version: 1.3                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 1.0                                                         */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author     Purposes                                     */
-/* 2023-01-26   CHONGCS   Devops Scripts Combine                        */
+/* Date         Author  Ver.  Purposes                                  */
+/* 2023-01-26   CHONGCS 1.0   Devops Scripts Combine                    */
+/* 18-Dec-2023  WLChooi 1.1   UWP-12105 - Global Timezone (GTZ01)       */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[isp_RPT_ST_CCVARIANCE_001]
 (
@@ -112,6 +113,7 @@ BEGIN
         , CCDetail.Id
         , CCDetail.RefNo AS 'uccno'
         , ISNULL(@c_RetVal, '') AS Logo
+        , [dbo].[fnc_ConvSFTimeZone](CCDetail.Storerkey, LOC.Facility, GETDATE()) AS CurrentDateTime   --GTZ01
    FROM CCDetail (NOLOCK)
    JOIN SKU (NOLOCK) ON (SKU.Sku = CCDetail.Sku AND SKU.StorerKey = CCDetail.Storerkey)
    JOIN PACK (NOLOCK) ON (PACK.PackKey = SKU.PACKKey)

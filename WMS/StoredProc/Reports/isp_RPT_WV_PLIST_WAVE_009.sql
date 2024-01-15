@@ -13,7 +13,7 @@ GO
 /*                                                                         */
 /* Called By: RPT_WV_PLIST_WAVE_009                                        */
 /*                                                                         */
-/* GitLab Version: 1.2                                                     */
+/* GitLab Version: 1.4                                                     */
 /*                                                                         */
 /* Version: 1.0                                                            */
 /*                                                                         */
@@ -25,6 +25,7 @@ GO
 /* 05-Sep-2023  WLChooi  1.1  UWP-7481 - Add Externorderkey (WL01)         */
 /* 22-Sep-2023  WLChooi  1.2  UWP-7690 & UWP-7693 - Show Pickdetail (WL02) */
 /* 09-Nov-2023  CSCHONG  1.3  WMS-23953 add new field with config (CS01)   */
+/* 18-Dec-2023  WLChooi  1.4  UWP-12105 - Global Timezone (GTZ01)          */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_RPT_WV_PLIST_WAVE_009]
 (
@@ -100,7 +101,7 @@ BEGIN
          , @c_Susr1           NVARCHAR(20)
          , @c_Susr2           NVARCHAR(20)
          , @n_StartTCnt       INT
-         , @c_facility        NVARCHAR(1)
+         , @c_Facility        NVARCHAR(5)   --GTZ01
          , @c_WavePSlipQRCode NVARCHAR(10)
          , @c_qrcode          NVARCHAR(1)
          , @c_showecomfield   NVARCHAR(1)
@@ -198,6 +199,7 @@ BEGIN
 
    --WL02 S
    SELECT TOP 1 @c_Storerkey = OH.Storerkey
+              , @c_Facility = OH.Facility   --GTZ01
    FROM WAVEDETAIL WD (NOLOCK)
    JOIN ORDERS OH (NOLOCK) ON OH.Orderkey = WD.Orderkey
    WHERE WD.Wavekey = @c_Wavekey
@@ -413,7 +415,7 @@ BEGIN
       FROM SKU (NOLOCK)
       WHERE StorerKey = @c_StorerKey AND Sku = @c_sku
 
-      SELECT @c_Lottable04 = CONVERT(NVARCHAR(10), Lottable04, 23)
+      SELECT @c_Lottable04 = CONVERT(NVARCHAR(10), [dbo].[fnc_ConvSFTimeZone](@c_StorerKey, @c_Facility, Lottable04), 23)   --GTZ01
       FROM LOTATTRIBUTE (NOLOCK)
       WHERE Lot = @c_Lot
 
@@ -478,7 +480,7 @@ BEGIN
                                   , Loadkey, SkuDesc, Lottable04, Qty, ODUpdateSource, Susr1, Susr2, SKU, rpttitle
                                   , OrderKey, OrdGrp, ODNotes, Packkey, UOM, UOMQty, TTLEA, TTLCASE, TTLQTY, OHUDF03
                                   , ShowExtOrdKey, ExternOrderkey,CCompany )   --WL01    --CS01
-      VALUES (@c_Wavekey, CONVERT(CHAR(16), GETDATE(), 120), @c_pickheaderkey, @c_PickMethod, @c_PrintedFlag
+      VALUES (@c_Wavekey, CONVERT(CHAR(16), [dbo].[fnc_ConvSFTimeZone](@c_StorerKey, @c_Facility, GETDATE()), 120), @c_pickheaderkey, @c_PickMethod, @c_PrintedFlag   --GTZ01
             , @c_StorerKey, @c_loc, @c_Lot, @c_OHTYPE, @c_loadkey, @c_SkuDesc, @c_Lottable04, @n_qty, @c_ODUpdateSource
             , @c_Susr1, @c_Susr2, @c_sku, 'PickSlip by Orders', @c_orderkey, @c_OrdGrp, @c_ODNotes, @c_ODPackkey
             , IIF(@n_ShowPDUOM = 1, @c_UOM, @c_ODUOM), @n_UOMQty, @n_TTLEA, @n_TTLCASES, @n_TTLQTY, @c_OHUDF03   --WL02
