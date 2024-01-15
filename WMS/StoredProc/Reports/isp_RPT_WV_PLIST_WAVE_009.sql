@@ -24,6 +24,7 @@ GO
 /* 15-Jul-2022  WLChooi  1.0  DevOps Combine Script                        */
 /* 05-Sep-2023  WLChooi  1.1  UWP-7481 - Add Externorderkey (WL01)         */
 /* 22-Sep-2023  WLChooi  1.2  UWP-7690 & UWP-7693 - Show Pickdetail (WL02) */
+/* 09-Nov-2023  CSCHONG  1.3  WMS-23953 add new field with config (CS01)   */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_RPT_WV_PLIST_WAVE_009]
 (
@@ -124,6 +125,8 @@ BEGIN
          , @c_OHUDF03         NVARCHAR(20)  = N''
          , @n_ShowExtOrdKey   INT           = 0   --WL01
          , @n_ShowPDUOM       INT           = 0   --WL02
+         , @n_ShowCCompany    INT           = 0   --CS01
+         , @c_CCompany        NVARCHAR(45)  = N'' --CS01
 
    SET @n_StartTCnt = @@TRANCOUNT
 
@@ -165,6 +168,7 @@ BEGIN
     , OHUDF03        NVARCHAR(20)
     , ShowExtOrdKey  INT NULL   --WL01
     , ExternOrderkey NVARCHAR(50) NULL   --WL01
+    , CCompany       NVARCHAR(45) NULL   --CS01
    )
 
    SELECT @n_continue = 1
@@ -200,6 +204,7 @@ BEGIN
 
    SELECT @n_ShowExtOrdKey = ISNULL(MAX(CASE WHEN Code = 'ShowExtOrdKey' THEN 1 ELSE 0 END), 0)
         , @n_ShowPDUOM = ISNULL(MAX(CASE WHEN Code = 'ShowPDUOM' THEN 1 ELSE 0 END), 0)
+        , @n_ShowCCompany = ISNULL(MAX(CASE WHEN Code = 'ShowCCompany' THEN 1 ELSE 0 END), 0)     --CS01
    FROM CODELKUP WITH (NOLOCK)
    WHERE LISTNAME = 'REPORTCFG' 
    AND Long = 'RPT_WV_PLIST_WAVE_009' 
@@ -335,6 +340,7 @@ BEGIN
                  , @c_ODNotes = N''
                  , @c_OrdGrp = N''
                  , @c_OHUDF03 = N''
+                 , @c_CCompany = N''    --CS01
          END --if @c_orderkey=''
          ELSE
          BEGIN --if @c_orderkey <> ''
@@ -345,6 +351,7 @@ BEGIN
                  , @c_OHTYPE = ORDERS.Type
                  , @c_OrdGrp = ORDERS.OrderGroup
                  , @c_OHUDF03 = ORDERS.UserDefine03
+                 , @c_CCompany = CASE WHEN @n_ShowCCompany = 1 THEN ORDERS.c_company ELSE '' END      --CS01
             FROM ORDERS (NOLOCK)
             WHERE ORDERS.OrderKey = @c_orderkey AND ORDERS.StorerKey = @c_StorerKey
 
@@ -470,12 +477,12 @@ BEGIN
       INSERT INTO #temp_wavepick37 (wavekey, PrnDate, PickSlipNo, Zone, printedflag, Storerkey, LOC, Lot, OHType
                                   , Loadkey, SkuDesc, Lottable04, Qty, ODUpdateSource, Susr1, Susr2, SKU, rpttitle
                                   , OrderKey, OrdGrp, ODNotes, Packkey, UOM, UOMQty, TTLEA, TTLCASE, TTLQTY, OHUDF03
-                                  , ShowExtOrdKey, ExternOrderkey )   --WL01
+                                  , ShowExtOrdKey, ExternOrderkey,CCompany )   --WL01    --CS01
       VALUES (@c_Wavekey, CONVERT(CHAR(16), GETDATE(), 120), @c_pickheaderkey, @c_PickMethod, @c_PrintedFlag
             , @c_StorerKey, @c_loc, @c_Lot, @c_OHTYPE, @c_loadkey, @c_SkuDesc, @c_Lottable04, @n_qty, @c_ODUpdateSource
             , @c_Susr1, @c_Susr2, @c_sku, 'PickSlip by Orders', @c_orderkey, @c_OrdGrp, @c_ODNotes, @c_ODPackkey
             , IIF(@n_ShowPDUOM = 1, @c_UOM, @c_ODUOM), @n_UOMQty, @n_TTLEA, @n_TTLCASES, @n_TTLQTY, @c_OHUDF03   --WL02
-            , @n_ShowExtOrdKey, @c_Externorderkey)   --WL01
+            , @n_ShowExtOrdKey, @c_Externorderkey,@c_CCompany)   --WL01        --CS01
 
       SELECT @c_PrevOrderKey = @c_orderkey
 
