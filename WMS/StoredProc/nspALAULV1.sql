@@ -27,6 +27,8 @@ GO
 /* Date         Author  Ver.  Purposes                                  */
 /* 02-May-2023  NJOW    1.0   DEVOPS Combine Script                     */
 /* 19-Oct-2023	NJOW01  1.1   WMS-23343 add new logic for LVS-MFO       */
+/* 11-Nov-2023  NJOW02  1.2   WMS-24611 Allow allocate partial UCC from */
+/*                            multiple wave                             */ 
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[nspALAULV1]
    @c_DocumentNo NVARCHAR(10),
@@ -95,8 +97,9 @@ BEGIN
                               ID  NVARCHAR(18),  
                               QtyAvailable INT,
                               UCCNo NVARCHAR(20) NULL,
-                              UCCStatus NVARCHAR(10) NULL)
-                                                            
+                              UCCStatus NVARCHAR(10) NULL,
+                              AllocatedQty INT NULL)  --NJOW02
+                                                                                          
    IF LEN(@c_OtherParms) > 0
    BEGIN
       SET @c_OrderKey = LEFT(@c_OtherParms,10)  --if call by discrete
@@ -160,13 +163,14 @@ BEGIN
       SELECT @n_StorerMinShelfLife = 0
 
    SET @c_SQL = N'
-      INSERT INTO #TMP_LLIAVAI (Lot, Loc, ID, QtyAvailable, UCCNo, UCCStatus)
+      INSERT INTO #TMP_LLIAVAI (Lot, Loc, ID, QtyAvailable, UCCNo, UCCStatus, AllocatedQty)
       SELECT LOTxLOCxID.LOT,
              LOTxLOCxID.LOC,
              LOTxLOCxID.ID,
              UCC.Qty,
              UCC.UCCNo,
-             UCC.Status
+             UCC.Status,
+             ISNULL(UCCALLO.AllocatedQty,0)             
       FROM LOTxLOCxID (NOLOCK)
       JOIN LOC (NOLOCK) ON (LOTxLOCxID.Loc = LOC.LOC)
       JOIN ID (NOLOCK) ON (LOTxLOCxID.Id = ID.ID)
@@ -175,6 +179,13 @@ BEGIN
       JOIN SKUXLOC SL (NOLOCK) ON (LOTxLOCxID.Storerkey = SL.Storerkey AND LOTxLOCxID.Sku = SL.Sku AND LOTxLOCxID.Loc = SL.Loc)
       JOIN UCC (NOLOCK) ON (UCC.StorerKey = LOTxLOCxID.StorerKey AND UCC.SKU = LOTxLOCxID.SKU AND
                                   UCC.LOT = LOTxLOCxID.LOT AND UCC.LOC = LOC.LOC AND UCC.ID = ID.ID AND UCC.Status <= ''3'')
+      OUTER APPLY (SELECT SUM(PD.Qty) AS AllocatedQty
+                   FROM PICKDETAIL PD (NOLOCK)                
+      	           WHERE PD.DropID = UCC.UCCNo 
+      	           AND PD.Lot = UCC.Lot
+      	           AND PD.Loc = UCC.Loc
+      	           AND PD.Id = UCC.Id
+      	           AND PD.Status = ''0'') UCCALLO        	                                                                    
       WHERE LOC.Status <> ''HOLD''
       AND LOT.Status <> ''HOLD''
       AND ID.Status <> ''HOLD''
@@ -305,12 +316,26 @@ BEGIN
    END
    ELSE
    BEGIN
-      DECLARE CURSOR_AVAILABLE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         SELECT Lot, Loc, ID, QtyAvailable, UCCNo
-         FROM #TMP_LLIAVAI
-         WHERE UCCStatus < 3
-         ORDER BY RowId   
-      
+   	  IF @c_UOM <> '2'
+   	  BEGIN
+   	  	 --NJOW02
+         DECLARE CURSOR_AVAILABLE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT Lot, Loc, ID, QtyAvailable - AllocatedQty, UCCNo  
+            FROM #TMP_LLIAVAI
+            WHERE UCCStatus <= '3'
+            AND ((QtyAvailable - AllocatedQty >= @n_QtyLeftToFulfill AND AllocatedQty > 0) --Status 3, partial allocated and remain qty can fulfill all
+                 OR UCCStatus < 3)
+            ORDER BY CASE WHEN AllocatedQty > 0 THEN 1 ELSE 2 END, RowId 
+      END
+      ELSE
+      BEGIN
+         DECLARE CURSOR_AVAILABLE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT Lot, Loc, ID, QtyAvailable, UCCNo  
+            FROM #TMP_LLIAVAI
+            WHERE UCCStatus < '3'
+            ORDER BY RowId 
+      END
+   	      
       OPEN CURSOR_AVAILABLE
       FETCH NEXT FROM CURSOR_AVAILABLE INTO @c_LOT, @c_LOC, @c_ID, @n_QtyAvailable, @c_OtherValue
       
