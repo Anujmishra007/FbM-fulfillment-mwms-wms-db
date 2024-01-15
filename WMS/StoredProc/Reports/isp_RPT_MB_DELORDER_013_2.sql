@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
 /* 18-Aug-2023  WLChooi  1.0  DevOps Combine Script                     */
+/* 06-DEC-2023   CSCHONG  1.1  WMS-24226 add and revised field (CS01)   */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_RPT_MB_DELORDER_013_2]
 (@c_Orderkey NVARCHAR(10))
@@ -111,8 +112,9 @@ BEGIN
         , ISNULL(@c_CZip, '') AS C_Zip
         , '' AS C_Country
         , PD.CaseID
-        , ISNULL(CL.UDF01, '') AS CLUDF01
-        , ISNULL(CL.[Description], '') AS DESCR
+       -- , ISNULL(CL.UDF01, '') AS CLUDF01     --CS01
+        , CASE WHEN ISNULL(OH.Priority,'') = ISNULL(CL.Code,'') THEN ISNULL(CL.udf01,'') ELSE '' END AS CLUDF01
+        , CASE WHEN ISNULL(OH.Priority,'') = ISNULL(CL.Code,'') THEN ISNULL(CL.[Description], '') ELSE ISNULL(CL1.[Description], '') END AS DESCR
         , MD.MbolKey
         , (  SELECT COUNT(DISTINCT PDET.CaseID)
              FROM PICKDETAIL PDET (NOLOCK)
@@ -120,8 +122,12 @@ BEGIN
         , PDT.PickSlipNo
         , CAST(SUM(PDT.Qty) / PK.OtherUnit1 AS INT) AS PackedQTYCtn
         , OH.OrderKey
-        , ISNULL(CL.UDF02, '') AS PACKCODE
-        , EAN8Barcode = IIF(LEN(TRIM(ISNULL(CL.UDF02, ''))) = 8 AND LEFT(TRIM(ISNULL(CL.UDF02, '')), 1) = '0', 'N', 'Y')
+      --  , ISNULL(CL.UDF02, '') AS PACKCODE
+        ,CASE WHEN ISNULL(OH.Priority,'') = ISNULL(CL.Code,'') THEN ISNULL(CL.udf02,'') ELSE  ISNULL(CL1.udf02,'') END AS PACKCODE
+        , EAN8Barcode = CASE WHEN ISNULL(OH.Priority,'') = ISNULL(CL.Code,'') THEN IIF(LEN(TRIM(ISNULL(CL.UDF02, ''))) = 8 AND LEFT(TRIM(ISNULL(CL.UDF02, '')), 1) = '0', 'N', 'Y')
+                        ELSE IIF(LEN(TRIM(ISNULL(CL1.UDF02, ''))) = 8 AND LEFT(TRIM(ISNULL(CL1.UDF02, '')), 1) = '0', 'N', 'Y') END    --CS01
+        , OHNotes = ISNULL(OH.Notes,'')        --CS01
+        , CLShort = ISNULL(CL.Short,'')         --CS01
    FROM MBOLDETAIL MD (NOLOCK)
    JOIN ORDERS OH (NOLOCK) ON MD.OrderKey = OH.OrderKey
    JOIN ( SELECT DISTINCT PICKDETAIL.Orderkey, PICKDETAIL.Storerkey, PICKDETAIL.SKU, PICKDETAIL.DropID, PICKDETAIL.CaseID
@@ -134,7 +140,12 @@ BEGIN
    LEFT JOIN STORER ST (NOLOCK) ON ST.StorerKey = OH.Consigneekey
    LEFT JOIN CODELKUP CL (NOLOCK) ON CL.LISTNAME = 'GROUPSKU' AND CL.code2 = OD.ALTSKU 
                                  AND CL.Storerkey = OD.StorerKey
-                                 AND CL.Code = IIF(ISNULL(ST.[Secondary],'') = '', 'PMIDN', ST.[Secondary])
+                                 --AND CL.Code = IIF(ISNULL(ST.[Secondary],'') = '', 'PMIDN', ST.[Secondary])    --CS01
+                                 AND CL.Code =OH.Priority   --CS01
+   LEFT JOIN CODELKUP CL1 (NOLOCK) ON CL1.LISTNAME = 'GROUPSKU' AND CL1.code2 = OD.ALTSKU 
+                                 AND CL1.Storerkey = OD.StorerKey
+                                 --AND CL.Code = IIF(ISNULL(ST.[Secondary],'') = '', 'PMIDN', ST.[Secondary])    --CS01
+                                 AND CL1.Code ='PMIDN'   --CS01
    LEFT JOIN POD P (NOLOCK) ON P.OrderKey = OH.OrderKey
    JOIN PackHeader PH (NOLOCK) ON PH.OrderKey = OH.OrderKey
    JOIN PackDetail PDT (NOLOCK) ON PDT.PickSlipNo = PH.PickSlipNo AND PDT.DropID = PD.DropID 
@@ -158,10 +169,17 @@ BEGIN
           , PK.OtherUnit1
           , OH.OrderKey
           , ISNULL(CL.UDF02, '')
-          , ISNULL(CL.[Description], '')
-   ORDER BY OH.ConsigneeKey
+          , ISNULL(CL.[Description], ''),ISNULL(CL1.[Description], '')    --CS01
+          , ISNULL(OH.Notes,'')          --CS01
+          , ISNULL(OH.Priority,''),ISNULL(CL.Code,'')
+          , CASE WHEN ISNULL(OH.Priority,'') = ISNULL(CL.Code,'') THEN ISNULL(CL.udf01,'') + ISNULL(CL.udf02,'') ELSE '' END  --CS01
+          , CASE WHEN ISNULL(OH.Priority,'') = ISNULL(CL.Code,'') THEN ISNULL(CL.udf02,'') ELSE  ISNULL(CL1.udf02,'') END    --CS01 
+          , ISNULL(CL.Short,'')         --CS01
+          , ISNULL(CL1.UDF02, '')       --CS01
+   ORDER BY PD.CaseID,ISNULL(CL.Short,'')         --CS01
+          , OH.ConsigneeKey
           , OH.ExternOrderKey
-          , PD.CaseID
+         -- , PD.CaseID
           , ISNULL(CL.[Description], '')
 
    IF CURSOR_STATUS('LOCAL', 'CUR_LOOP') IN (0 , 1)
