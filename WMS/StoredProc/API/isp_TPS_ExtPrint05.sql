@@ -107,7 +107,7 @@ DECLARE @cPaperPrinter  NVARCHAR ( 30)
 DECLARE @cTCPPrinter    NVARCHAR ( 30)
 DECLARE @cPrinter       NVARCHAR ( 20)
 DECLARE @cProcesstype   NVARCHAR ( 20)
-DECLARE @nJobID         INT
+DECLARE @nJobID         NVARCHAR ( 20)
 DECLARE @nRC            INT
 DECLARE @cSQL           NVARCHAR ( MAX)
 DECLARE @cSQLParam      NVARCHAR ( MAX)
@@ -118,11 +118,11 @@ DECLARE @cNewLabelPrinter NVARCHAR(20)
 
 
 DECLARE   @c_ModuleID           NVARCHAR(30) ='TPPack'
-      , @c_ReportID           NVARCHAR(10) 
-      , @c_PrinterID          NVARCHAR(30)  
-      , @c_JobIDs             NVARCHAR(50)   = ''         --(Wan03) -- May return multiple jobs ID.JobID seperate by '|'
-      , @c_PrintSource        NVARCHAR(20)
-      , @c_AutoPrint          NVARCHAR(1)    = 'N'        --(Wan07)
+         , @c_ReportID           NVARCHAR(10) 
+         , @c_PrinterID          NVARCHAR(30)  
+         , @c_JobIDs             NVARCHAR(50)   = ''      
+         , @c_PrintSource        NVARCHAR(20)
+         , @c_AutoPrint          NVARCHAR(1)    = 'N'     
 
 DECLARE @cFieldName1 NVARCHAR(max),
         @cFieldName2 NVARCHAR(max),
@@ -159,7 +159,7 @@ BEGIN
                                           AND CL.LISTNAME = 'TPSPrtLast'
                                       )
             AND WMR.moduleid = @c_ModuleID
-            AND (ISNULL(ComputerName,'') ='' OR ComputerName= @cWorkstation)
+            AND (ISNULL(ComputerName,'') ='' OR ComputerName = @cWorkstation)
       ORDER BY WMR.reportid
       OPEN @cCurLabel
       FETCH NEXT FROM @cCurLabel INTO @cReportType
@@ -167,7 +167,7 @@ BEGIN
       BEGIN
 
          SELECT   @c_ReportID = WMR.reportid,
-                  @c_PrintSource = CASE WHEN printtype='LOGIREPORT' THEN 'JReport' ELSE 'WMReport' END,
+                  @c_PrintSource = CASE WHEN printtype = 'LOGIREPORT' THEN 'JReport' ELSE 'WMReport' END,
                   @cNewLabelPrinter = Defaultprinterid,
                   @cFieldName1  = keyFieldname1,
                   @cFieldName2  = keyFieldname2,
@@ -180,14 +180,13 @@ BEGIN
             AND ModuleID ='TPPack'
             AND ispaperprinter <> 'Y'
             and (WMRD.username = '' OR WMRD.username = @cUsername)
-            AND (ISNULL(ComputerName,'') ='' OR ComputerName= @cWorkstation)
+            AND (ISNULL(ComputerName,'') ='' OR ComputerName = @cWorkstation)
 
          SET  @cSQL =
-         '
-            select  @cParams1='+ @cFieldName1  
-                SELECT @cSQL= CASE  WHEN ISNULL(@cFieldName2,'')<>''THEN @cSQL +',@cParams2=' + @cFieldName2  ELSE  @cSQL END 
-                SELECT @cSQL= CASE WHEN ISNULL(@cFieldName3,'')<>''THEN @cSQL +',@cParams3='  + @cFieldName3  ELSE  @cSQL END
-                SELECT @cSQL= CASE WHEN ISNULL(@cFieldName4,'')<>''THEN @cSQL +',@cParams4='  + @cFieldName4  ELSE  @cSQL END
+         ' SELECT  @cParams1 = '+ @cFieldName1  
+            SELECT @cSQL= CASE WHEN ISNULL(@cFieldName2,'') <> ''THEN @cSQL +',@cParams2 = ' + @cFieldName2  ELSE  @cSQL END 
+            SELECT @cSQL= CASE WHEN ISNULL(@cFieldName3,'') <> ''THEN @cSQL +',@cParams3 = '  + @cFieldName3  ELSE  @cSQL END
+            SELECT @cSQL= CASE WHEN ISNULL(@cFieldName4,'') <> ''THEN @cSQL +',@cParams4 = '  + @cFieldName4  ELSE  @cSQL END
          SET @cSQL = @cSQL +' FROM Packdetail (NOLOCK)
             WHERE Storerkey = @cstorerkey
                AND Pickslipno = @cPickslipno
@@ -207,35 +206,32 @@ BEGIN
            @nCartonno   INT'
 
 
-
          EXEC sp_ExecuteSQL @cSQL,@cSQLParam,@cFieldName1,@cFieldName2,@cFieldName3,@cFieldName4,
-                             @cParams1 OUTPUT,@cParams2 OUTPUT,@cParams3 OUTPUT,@cParams4 OUTPUT,@cstorerkey,@cPickslipno,@nCartonno 
+         @cParams1 OUTPUT,@cParams2 OUTPUT,@cParams3 OUTPUT,@cParams4 OUTPUT,@cstorerkey,@cPickslipno,@nCartonno 
 
          IF ISNULL(@cNewLabelPrinter,'')= ''
             SET @cNewLabelPrinter = @cLabelPrinter
 
          EXEC  [WM].[lsp_WM_Print_Report]
-          @c_ModuleID = @c_ModuleID           
-         , @c_ReportID = @c_ReportID         
-         , @c_Storerkey = @cStorerkey         
-         , @c_Facility  = @cFacility        
-         , @c_UserName  = @cUsername   
+          @c_ModuleID      = @c_ModuleID           
+         , @c_ReportID     = @c_ReportID         
+         , @c_Storerkey    = @cStorerkey         
+         , @c_Facility     = @cFacility        
+         , @c_UserName     = @cUsername   
          , @c_ComputerName = @cWorkstation
-         , @c_PrinterID = @cNewLabelPrinter         
-         , @n_NoOfCopy  = '1'     
-         , @c_KeyValue1 = @cParams1        
-         , @c_KeyValue2 = @cParams2        
-         , @c_KeyValue3 = @cParams3     
-         , @c_KeyValue4 = @cParams4       
-         , @b_Success   = @b_Success         OUTPUT      
-         , @n_Err       = @n_Err             OUTPUT
-         , @c_ErrMsg    = @c_ErrMsg          OUTPUT
+         , @c_PrinterID    = @cNewLabelPrinter         
+         , @n_NoOfCopy     = '1'     
+         , @c_KeyValue1    = @cParams1        
+         , @c_KeyValue2    = @cParams2        
+         , @c_KeyValue3    = @cParams3     
+         , @c_KeyValue4    = @cParams4       
+         , @b_Success      = @b_Success         OUTPUT      
+         , @n_Err          = @n_Err             OUTPUT
+         , @c_ErrMsg       = @c_ErrMsg          OUTPUT
          , @c_PrintSource  = @c_PrintSource        
          , @b_SCEPreView   = 0         
-         , @c_JobIDs      = @nJobID         OUTPUT    
-         , @c_AutoPrint  = 'N'     
-
-         select @nJobID
+         , @c_JobIDs       = @nJobID         OUTPUT    
+         , @c_AutoPrint    = 'N'     
 
          SET @cLabelJobID = @nJobID
 
@@ -254,14 +250,14 @@ BEGIN
          FROM WMReport WMR WITH (NOLOCK)
             JOIN WMReportdetail WMRD (NOLOCK) ON WMR.reportid =WMRD.reportid
          WHERE  Storerkey = @cStorerkey
-               AND ispaperprinter <> 'Y'
-               AND WMR.ReportType IN (SELECT CL.CODE
-                                          FROM CODELKUP CL(NOLOCK)
-                                          WHERE CL.Storerkey = @cStorerkey
-                                             AND CL.LISTNAME = 'TPSPrtLast'
-                                          )
-               AND WMR.moduleid = @c_ModuleID
-               AND (ISNULL(ComputerName,'') ='' OR ComputerName= @cWorkstation)
+            AND ispaperprinter <> 'Y'
+            AND WMR.ReportType IN (SELECT CL.CODE
+                                       FROM CODELKUP CL(NOLOCK)
+                                       WHERE CL.Storerkey = @cStorerkey
+                                          AND CL.LISTNAME = 'TPSPrtLast'
+                                       )
+            AND WMR.moduleid = @c_ModuleID
+            AND (ISNULL(ComputerName,'') ='' OR ComputerName= @cWorkstation)
          ORDER BY WMR.reportid
          OPEN @cCurLabel
          FETCH NEXT FROM @cCurLabel INTO @cReportType
@@ -269,7 +265,7 @@ BEGIN
          BEGIN
 
             SELECT   @c_ReportID = WMR.reportid,
-                     @c_PrintSource = CASE WHEN printtype='LOGIREPORT' THEN 'JReport' ELSE 'WMReport' END,
+                     @c_PrintSource = CASE WHEN printtype = 'LOGIREPORT' THEN 'JReport' ELSE 'WMReport' END,
                      @cNewLabelPrinter = Defaultprinterid,
                      @cFieldName1  = keyFieldname1,
                      @cFieldName2  = keyFieldname2,
@@ -282,14 +278,13 @@ BEGIN
                AND ModuleID ='TPPack'
                AND ispaperprinter <> 'Y'
                and (WMRD.username = '' OR WMRD.username = @cUsername)
-               AND (ISNULL(ComputerName,'') ='' OR ComputerName= @cWorkstation)
+               AND (ISNULL(ComputerName,'') = '' OR ComputerName = @cWorkstation)
 
             SET  @cSQL =
-            '
-               select  @cParams1='+ @cFieldName1  
-                     SELECT @cSQL= CASE  WHEN ISNULL(@cFieldName2,'')<>''THEN @cSQL +',@cParams2=' + @cFieldName2  ELSE  @cSQL END 
-                     SELECT @cSQL= CASE WHEN ISNULL(@cFieldName3,'')<>''THEN @cSQL +',@cParams3='  + @cFieldName3  ELSE  @cSQL END
-                     SELECT @cSQL= CASE WHEN ISNULL(@cFieldName4,'')<>''THEN @cSQL +',@cParams4='  + @cFieldName4  ELSE  @cSQL END
+            'select  @cParams1 ='+ @cFieldName1  
+               SELECT @cSQL= CASE WHEN ISNULL(@cFieldName2,'') <> '' THEN @cSQL +',@cParams2 = '  + @cFieldName2  ELSE  @cSQL END 
+               SELECT @cSQL= CASE WHEN ISNULL(@cFieldName3,'') <> '' THEN @cSQL +',@cParams3 = '  + @cFieldName3  ELSE  @cSQL END
+               SELECT @cSQL= CASE WHEN ISNULL(@cFieldName4,'') <> '' THEN @cSQL +',@cParams4 = '  + @cFieldName4  ELSE  @cSQL END
             SET @cSQL = @cSQL +' FROM Packdetail (NOLOCK)
                WHERE Storerkey = @cstorerkey
                   AND Pickslipno = @cPickslipno
@@ -311,33 +306,31 @@ BEGIN
 
 
             EXEC sp_ExecuteSQL @cSQL,@cSQLParam,@cFieldName1,@cFieldName2,@cFieldName3,@cFieldName4,
-                                 @cParams1 OUTPUT,@cParams2 OUTPUT,@cParams3 OUTPUT,@cParams4 OUTPUT,@cstorerkey,@cPickslipno,@nCartonno 
+               @cParams1 OUTPUT,@cParams2 OUTPUT,@cParams3 OUTPUT,@cParams4 OUTPUT,@cstorerkey,@cPickslipno,@nCartonno 
 
             IF ISNULL(@cNewLabelPrinter,'')= ''
                SET @cNewLabelPrinter = @cLabelPrinter
 
             EXEC  [WM].[lsp_WM_Print_Report]
-               @c_ModuleID = @c_ModuleID           
-            , @c_ReportID = @c_ReportID         
-            , @c_Storerkey = @cStorerkey         
-            , @c_Facility  = @cFacility        
-            , @c_UserName  = @cUsername   
+             @c_ModuleID      = @c_ModuleID           
+            , @c_ReportID     = @c_ReportID         
+            , @c_Storerkey    = @cStorerkey         
+            , @c_Facility     = @cFacility        
+            , @c_UserName     = @cUsername   
             , @c_ComputerName = @cWorkstation
-            , @c_PrinterID = @cNewLabelPrinter         
-            , @n_NoOfCopy  = '1'     
-            , @c_KeyValue1 = @cParams1        
-            , @c_KeyValue2 = @cParams2        
-            , @c_KeyValue3 = @cParams3     
-            , @c_KeyValue4 = @cParams4       
-            , @b_Success   = @b_Success         OUTPUT      
-            , @n_Err       = @n_Err             OUTPUT
-            , @c_ErrMsg    = @c_ErrMsg          OUTPUT
+            , @c_PrinterID    = @cNewLabelPrinter         
+            , @n_NoOfCopy     = '1'     
+            , @c_KeyValue1    = @cParams1        
+            , @c_KeyValue2    = @cParams2        
+            , @c_KeyValue3    = @cParams3     
+            , @c_KeyValue4    = @cParams4       
+            , @b_Success      = @b_Success         OUTPUT      
+            , @n_Err          = @n_Err             OUTPUT
+            , @c_ErrMsg       = @c_ErrMsg          OUTPUT
             , @c_PrintSource  = @c_PrintSource        
             , @b_SCEPreView   = 0         
-            , @c_JobIDs      = @nJobID         OUTPUT    
-            , @c_AutoPrint  = 'N'     
-
-            select @nJobID
+            , @c_JobIDs       = @nJobID         OUTPUT    
+            , @c_AutoPrint    = 'N'     
 
             SET @cLabelJobID = @nJobID
 
@@ -345,35 +338,34 @@ BEGIN
 
          END
 
-
          DECLARE @cCurPaper CURSOR
          SET @cCurPaper = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
          SELECT reporttype
          FROM WMReport WMR WITH (NOLOCK)
-            JOIN WMReportdetail WMRD (NOLOCK) ON WMR.reportid =WMRD.reportid
+            JOIN WMReportdetail WMRD (NOLOCK) ON WMR.reportid = WMRD.reportid
          WHERE  Storerkey = @cStorerkey
                AND ispaperprinter = 'Y'
                AND WMR.moduleid = @c_ModuleID
-               AND (ISNULL(ComputerName,'') ='' OR ComputerName= @cWorkstation)
+               AND (ISNULL(ComputerName,'') ='' OR ComputerName = @cWorkstation)
          OPEN @cCurPaper
          FETCH NEXT FROM @cCurPaper INTO @cReportType
          WHILE @@FETCH_STATUS = 0
          BEGIN
-            SELECT   @c_ReportID = WMR.reportid,
-               @c_PrintSource = CASE WHEN printtype='LOGIREPORT' THEN 'JReport' ELSE 'WMReport' END,
+            SELECT @c_ReportID   = WMR.reportid,
+               @c_PrintSource    = CASE WHEN printtype='LOGIREPORT' THEN 'JReport' ELSE 'WMReport' END,
                @cNewPaperPrinter = Defaultprinterid,
-               @cFieldName1  = keyFieldname1,
-               @cFieldName2  = keyFieldname2,
-               @cFieldName3  = keyFieldname3,
-               @cFieldName4  = keyFieldname4
+               @cFieldName1      = keyFieldname1,
+               @cFieldName2      = keyFieldname2,
+               @cFieldName3      = keyFieldname3,
+               @cFieldName4      = keyFieldname4
             FROM WMReport WMR (NOLOCK)
-            JOIN WMReportdetail WMRD (NOLOCK) ON WMR.reportid =WMRD.reportid
+            JOIN WMReportdetail WMRD (NOLOCK) ON WMR.reportid = WMRD.reportid
             WHERE Storerkey = @cStorerkey
                AND reporttype = 'TPPACKLIST'
-               AND ModuleID ='TPPack'
+               AND ModuleID = 'TPPack'
                AND ispaperprinter = 'Y'
-               and (WMRD.username = '' OR WMRD.username = @cUsername)
-               AND (ISNULL(ComputerName,'') ='' OR ComputerName= @cWorkstation)
+               AND (WMRD.username = '' OR WMRD.username = @cUsername)
+               AND (ISNULL(ComputerName,'') ='' OR ComputerName = @cWorkstation)
 
 
             SET @cSQL = ''
@@ -381,18 +373,17 @@ BEGIN
 
             SET  @cSQL =
             'SELECT  @cParams1='+ @cFieldName1  
-                     SELECT @cSQL= CASE  WHEN ISNULL(@cFieldName2,'')<>''THEN @cSQL +',@cParams2=' + @cFieldName2  ELSE  @cSQL END 
-                     SELECT @cSQL= CASE WHEN ISNULL(@cFieldName3,'')<>''THEN @cSQL +',@cParams3='  + @cFieldName3  ELSE  @cSQL END
-                     SELECT @cSQL= CASE WHEN ISNULL(@cFieldName4,'')<>''THEN @cSQL +',@cParams4='  + @cFieldName4  ELSE  @cSQL END
+               SELECT @cSQL= CASE WHEN ISNULL(@cFieldName2,'') <> '' THEN @cSQL +',@cParams2 = '  + @cFieldName2  ELSE  @cSQL END 
+               SELECT @cSQL= CASE WHEN ISNULL(@cFieldName3,'') <> '' THEN @cSQL +',@cParams3 = '  + @cFieldName3  ELSE  @cSQL END
+               SELECT @cSQL= CASE WHEN ISNULL(@cFieldName4,'') <> '' THEN @cSQL +',@cParams4 = '  + @cFieldName4  ELSE  @cSQL END
             SET @cSQL = @cSQL +' FROM Packdetail (NOLOCK)
                WHERE Storerkey = @cstorerkey
                   AND Pickslipno = @cPickslipno
                   AND CartonNO = @nCartonno
-                  '
-
+           '
 
             SET @cSQLParam = 
-            ' @cFieldName1 NVARCHAR(max),
+            '  @cFieldName1 NVARCHAR(max),
                @cFieldName2 NVARCHAR(max),
                @cFieldName3 NVARCHAR(max),
                @cFieldName4 NVARCHAR(max),
@@ -405,7 +396,7 @@ BEGIN
                @nCartonno   INT'
 
             EXEC sp_ExecuteSQL @cSQL,@cSQLParam,@cFieldName1,@cFieldName2,@cFieldName3,@cFieldName4,
-                                 @cParams1 OUTPUT,@cParams2 OUTPUT,@cParams3 OUTPUT,@cParams4 OUTPUT,@cstorerkey,@cPickslipno,@nCartonno 
+               @cParams1 OUTPUT,@cParams2 OUTPUT,@cParams3 OUTPUT,@cParams4 OUTPUT,@cstorerkey,@cPickslipno,@nCartonno 
 
             
             IF ISNULL(@cNewPaperPrinter,'')= ''
@@ -413,25 +404,25 @@ BEGIN
 
 
             EXEC  [WM].[lsp_WM_Print_Report]
-               @c_ModuleID = @c_ModuleID           
-            , @c_ReportID = @c_ReportID         
-            , @c_Storerkey = @cStorerkey         
-            , @c_Facility  = @cFacility        
-            , @c_UserName  = @cUsername     
+              @c_ModuleID     = @c_ModuleID           
+            , @c_ReportID     = @c_ReportID         
+            , @c_Storerkey    = @cStorerkey         
+            , @c_Facility     = @cFacility        
+            , @c_UserName     = @cUsername     
             , @c_ComputerName = @cWorkstation
-            , @c_PrinterID = @cPaperPrinter         
-            , @n_NoOfCopy  = '1'     
-            , @c_KeyValue1 = @cParams1        
-            , @c_KeyValue2 = @cParams2     
-            , @c_KeyValue3 = @cParams3 
-            , @c_KeyValue4 = @cParams4
-            , @b_Success   = @b_Success         OUTPUT      
-            , @n_Err       = @n_Err             OUTPUT
-            , @c_ErrMsg    = @c_ErrMsg          OUTPUT
+            , @c_PrinterID    = @cPaperPrinter         
+            , @n_NoOfCopy     = '1'     
+            , @c_KeyValue1    = @cParams1        
+            , @c_KeyValue2    = @cParams2     
+            , @c_KeyValue3    = @cParams3 
+            , @c_KeyValue4    = @cParams4
+            , @b_Success      = @b_Success         OUTPUT      
+            , @n_Err          = @n_Err             OUTPUT
+            , @c_ErrMsg       = @c_ErrMsg          OUTPUT
             , @c_PrintSource  = @c_PrintSource        
             , @b_SCEPreView   = 0         
-            , @c_JobIDs      = @cPackingJobID         OUTPUT    
-            , @c_AutoPrint  = 'N'   
+            , @c_JobIDs       = @cPackingJobID         OUTPUT    
+            , @c_AutoPrint    = 'N'   
                   
             SET @cPackingJobID = @nJobID 
 
