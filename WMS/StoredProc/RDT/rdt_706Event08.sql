@@ -167,14 +167,14 @@ AS
          JOIN ReceiptDetail (NOLOCK) RD ON R.Receiptkey = RD.Receiptkey
          WHERE R.Receiptkey = @cReceiptkey
             AND R.Storerkey = @cStorerkey
-            AND DocType ='R'
+            AND DocType = 'R'
             AND SKU = @cSKU
 
          SELECT @nTotalSKUQty = SUM(RD.QtyExpected)
          FROM Receipt (NOLOCK) R 
          JOIN ReceiptDetail (NOLOCK) RD ON R.Receiptkey = RD.Receiptkey
          WHERE R.Receiptkey = @cReceiptkey
-            AND DocType ='R'
+            AND DocType = 'R'
             AND SKU = @cSKU
 
          SELECT @nTotalSKUDataCapture= SUM(CAST (V_String3 AS INT))
@@ -279,7 +279,7 @@ AS
             JOIN ReceiptDetail (NOLOCK) RD ON R.Receiptkey = RD.Receiptkey
          WHERE R.Receiptkey = @cReceiptkey
             AND R.Storerkey = @cStorerkey
-            AND DocType ='R'
+            AND DocType = 'R'
 
          IF ( @nTotalReceipt <> @nTotalDataCapture)
          BEGIN
@@ -296,6 +296,5 @@ END
 GO
 GRANT EXECUTE ON  [RDT].[rdt_706Event08] TO [NSQL]
 GO
-
 
 
