@@ -23,6 +23,8 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 04-Mar-2022  WLChooi 1.0   DevOps Combine Script                        */
+/* 02-Jan-2023  NJOW01  1.1   WMS-24523 skip update if receiptdetail       */
+/*                            lottable10 is not blank                      */  
 /***************************************************************************/  
 CREATE OR ALTER PROC [dbo].[ispPRREC24]  
 (     @c_Receiptkey        NVARCHAR(10)  
@@ -111,10 +113,11 @@ BEGIN
            , RD.SKU, RD.ExternPoKey, RD.Lottable02
            , RD.Lottable03, RD.Lottable04, RD.Lottable05, RD.Lottable07
            , RD.Lottable08, RD.Lottable09, RD.Lottable10, RD.Lottable11
-           , RD.Lottable12, RD.Lottable13, RD.StorerKey, RD.BeforeReceivedQty
+           , RD.Lottable12, RD.Lottable13, RD.StorerKey, RD.BeforeReceivedQty 
       FROM RECEIPTDETAIL RD (NOLOCK)
       WHERE RD.ReceiptKey = @c_Receiptkey
       AND (RD.ReceiptLineNumber = @c_ReceiptLineNumber OR ISNULL(@c_ReceiptLineNumber,'') = '')
+      AND RD.Lottable10 = ''  --NJOW01
       GROUP BY RD.ReceiptKey, RD.ReceiptLineNumber
              , RD.SKU, RD.ExternPoKey, RD.Lottable02
              , RD.Lottable03, RD.Lottable04, RD.Lottable05, RD.Lottable07
@@ -129,6 +132,7 @@ BEGIN
       FROM RECEIPTDETAIL RD (NOLOCK)
       WHERE RD.ReceiptKey = @c_Receiptkey
       AND (RD.ReceiptLineNumber = @c_ReceiptLineNumber OR ISNULL(@c_ReceiptLineNumber,'') = '')
+      AND RD.Lottable10 = ''  --NJOW01
       ORDER BY RD.ReceiptLineNumber
 
       OPEN CUR_LOOP
