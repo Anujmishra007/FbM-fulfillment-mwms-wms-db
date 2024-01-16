@@ -1,0 +1,13 @@
+-- rdt_513ExtUpdSP06
+execute rdt.rdtdropmsg 209501 , 209550
+
+execute rdt.rdtAddMsg 209501, 10, '209501 Upd KITDt Err',  'us_english', 513
+execute rdt.rdtAddMsg 209502, 10, '209502 Upd KITHd Err',  'us_english', 513
+execute rdt.rdtAddMsg 209503, 10, '209503 Get Key Fail ',  'us_english', 513
+execute rdt.rdtAddMsg 209504, 10, '209504 Create KIT Er',  'us_english', 513
+execute rdt.rdtAddMsg 209505, 10, '209505 Create KIT Er',  'us_english', 513
+execute rdt.rdtAddMsg 209506, 10, '209506 Create KIT Er',  'us_english', 513
+execute rdt.rdtAddMsg 209507, 10, '209507 Finalize Fail',  'us_english', 513
+
+
+SELECT * FROM RDT.RDTMsg (NOLOCK) WHERE Message_ID BETWEEN 209501 AND 209550
