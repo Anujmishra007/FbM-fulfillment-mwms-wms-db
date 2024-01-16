@@ -10,7 +10,8 @@ GO
 /* Modifications log:                                                   */
 /*                                                                      */
 /* Date         Author    Ver.  Purposes                                */
-/* 2023-11-07   yeekung   1.0   WMS-24601 Created (dup rdt_1764ExtUpd16)*/
+/* 2023-11-07   yeekung   1.0   WMS-24061 Created (dup rdt_1764ExtUpd16)*/
+/* 2023-01-04   yeekung   1.1   WMS-24321 Add update orders (yeekung01) */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ExtUpd19]
@@ -148,6 +149,7 @@ BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
                   GOTO RollBackTran
                END
+
 
                -- Update Task
                UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
@@ -350,6 +352,28 @@ BEGIN
                         BEGIN
                            SET @nErrNo = 208408
                            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
+                           GOTO RollBackTran
+                        END
+                     END
+
+                     IF  EXISTS (SELECT 1
+                                FROM Orders (NOLOCK)
+                                WHERE Orderkey = @cOrderkey
+                                 AND Storerkey = @cStorerkey
+                                 AND Doctype='E'
+                                 AND Ecom_Single_flag='S')
+                     BEGIN
+
+                        -- Update Orders
+                        UPDATE dbo.orders WITH (ROWLOCK) SET
+                            Status = @cPickConfirmStatus -- Pick in-progress
+                           ,EditDate = GETDATE()
+                           ,EditWho = 'rdt.' + SUSER_SNAME()
+                        WHERE Orderkey = @cOrderkey
+                        IF @@ERROR <> 0
+                        BEGIN
+                           SET @nErrNo = 208412
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDODFail
                            GOTO RollBackTran
                         END
                      END

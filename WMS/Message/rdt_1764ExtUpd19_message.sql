@@ -13,4 +13,8 @@ execute rdt.rdtAddMsg 208409, 10, '208409UPDTaskDtlFail', 'us_english', 1764
 execute rdt.rdtAddMsg 208410, 10, '208410UPD PKDtl Fail', 'us_english', 1764
 execute rdt.rdtAddMsg 208411, 10, '208411UPD PKDtl Fail', 'us_english', 1764
 
+--WMS-24321
+execute rdt.rdtAddMsg 208412, 10, '208412UPD ODtl Fail ', 'us_english', 1764
+
 SELECT * FROM rdt.rdtmsg(NOLOCK) WHERE Message_ID BETWEEN 176751 and 176800
+
