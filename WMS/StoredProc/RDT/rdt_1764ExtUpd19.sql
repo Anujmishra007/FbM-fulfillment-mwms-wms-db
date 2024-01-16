@@ -369,7 +369,6 @@ BEGIN
                             Status = @cPickConfirmStatus -- Pick in-progress
                            ,EditDate = GETDATE()
                            ,EditWho = 'rdt.' + SUSER_SNAME()
-                           ,TrafficCop = NULL
                         WHERE Orderkey = @cOrderkey
                         IF @@ERROR <> 0
                         BEGIN
