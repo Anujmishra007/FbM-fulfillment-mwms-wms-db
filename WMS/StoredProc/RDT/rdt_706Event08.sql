@@ -106,7 +106,7 @@ AS
             JOIN SKU (NOLOCK) SKU ON RD.SKU = SKU.SKU AND SKU.Storerkey = SKU.Storerkey
          WHERE R.Receiptkey = @cReceiptkey
             AND R.Storerkey = @cStorerkey
-            AND DocType ='R'
+            AND DocType = 'R'
             AND SKUgroup <> N'礼品'
 
          IF @nTotalReceipt = @nCounter 
