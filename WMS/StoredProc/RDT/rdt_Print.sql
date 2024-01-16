@@ -1,6 +1,4 @@
 
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -123,8 +121,8 @@ BEGIN
 	         @cIsLandScape		NVARCHAR(1) = '',
 	         @cIsColor			NVARCHAR(1) = '',
 	         @cIsDuplex			NVARCHAR(1) = '',
-	         @cIsCollate		NVARCHAR(1) = '',
-			 @cCloudClientPrinterID	NVARCHAR(20)
+	         @cIsCollate		   NVARCHAR(1) = '',
+			   @cCloudClientPrinterID	NVARCHAR(20)
 
 	DECLARE @cAPP_DB_Name         NVARCHAR( 20) = ''  
            ,@cDataStream          VARCHAR( 10)  = ''  
@@ -135,11 +133,11 @@ BEGIN
            ,@cPORT                NVARCHAR( 5)  = ''  
            ,@cCmdType             NVARCHAR( 10) = ''  
            ,@cTaskType            NVARCHAR( 1)  = ''   
-		   ,@cPDFPreview		  NVARCHAR( 20)
+		     ,@cPDFPreview		  NVARCHAR( 20)
 
 	DECLARE @b_PrintOverInternet    BIT            = 0   
-		,  @c_PDFPreviewServer     NVARCHAR(30)   = ''
-		,  @c_CountryPDFFolder		NVARCHAR(30)
+		      ,@c_PDFPreviewServer     NVARCHAR(30)   = ''
+		      ,@c_CountryPDFFolder		NVARCHAR(30)
            
    SET @cValue = ''              
    SET @cValue01 = ''              
@@ -312,7 +310,7 @@ BEGIN
             IF @i = 6  SET @cValue06 = @cValue ELSE              
             IF @i = 7  SET @cValue07 = @cValue ELSE              
             IF @i = 8  SET @cValue08 = @cValue ELSE              
-       IF @i = 9  SET @cValue09 = @cValue ELSE              
+            IF @i = 9  SET @cValue09 = @cValue ELSE              
             IF @i = 10 SET @cValue10 = @cValue                       
          END              
               
@@ -412,7 +410,7 @@ BEGIN
       SET @i = 0              
       WHILE @i < @nNoOfCopy              
       BEGIN              
--- Insert print job                
+         -- Insert print job                
          INSERT INTO rdt.rdtPrintJob (                
             JobName, ReportID, JobStatus, Datawindow, NoOfParms, Printer, NoOfCopy, Mobile, TargetDB, PrintData, JobType, StorerKey,                 
             Parm1, Parm2, Parm3, Parm4, Parm5, Parm6, Parm7, Parm8, Parm9, Parm10, Function_ID, ExportFileName)                
@@ -531,8 +529,8 @@ BEGIN
 				@c_PDFPreviewServer  = sc.SValue
 			 ,  @c_CountryPDFFolder  = ISNULL(sc.Option1,'')          
 		  FROM dbo.StorerConfig AS sc (NOLOCK)  
-		  WHERE sc.ConfigKey='PDFPreviewServer'
-		  AND sc.Storerkey IN (@cStorerkey, 'ALL') 
+		  WHERE sc.ConfigKey = 'PDFPreviewServer'
+		      AND sc.Storerkey IN (@cStorerkey, 'ALL') 
 		  ORDER BY  CASE WHEN sc.Storerkey  = @cStorerkey THEN 1
 						 WHEN sc.Storerkey  = 'ALL'        THEN 2
 						 ELSE 9
@@ -580,12 +578,12 @@ BEGIN
       Where reporttype = @cReportType
          AND storerkey = @cStorerKey
 
-      SET  @cDCropWidth    = CASE WHEN ISNULL(@cDCropWidth , '') = '' THEN '' ELSE @cDCropWidth  END
-      SET  @cDCropHeight   = CASE WHEN ISNULL(@cDCropHeight, '') = '' THEN '' ELSE @cDCropHeight END
-      SET  @cIsLandScape   = CASE WHEN ISNULL(@cIsLandScape, '') = '' THEN '' ELSE @cIsLandScape END
-      SET  @cIsColor       = CASE WHEN ISNULL(@cIsColor    , '') = '' THEN '' ELSE @cIsColor     END
-      SET  @cIsDuplex      = CASE WHEN ISNULL(@cIsDuplex   , '') = '' THEN '' ELSE @cIsDuplex    END
-      SET  @cIsCollate     = CASE WHEN ISNULL(@cIsCollate  , '') = '' THEN '' ELSE @cIsCollate   END
+      SET   @cDCropWidth    = CASE WHEN ISNULL(@cDCropWidth , '') = '' THEN '' ELSE @cDCropWidth  END
+      SET   @cDCropHeight   = CASE WHEN ISNULL(@cDCropHeight, '') = '' THEN '' ELSE @cDCropHeight END
+      SET   @cIsLandScape   = CASE WHEN ISNULL(@cIsLandScape, '') = '' THEN '' ELSE @cIsLandScape END
+      SET   @cIsColor       = CASE WHEN ISNULL(@cIsColor    , '') = '' THEN '' ELSE @cIsColor     END
+      SET   @cIsDuplex      = CASE WHEN ISNULL(@cIsDuplex   , '') = '' THEN '' ELSE @cIsDuplex    END
+      SET   @cIsCollate     = CASE WHEN ISNULL(@cIsCollate  , '') = '' THEN '' ELSE @cIsCollate   END
       SET   @cCloudClientPrinterID = CASE WHEN ISNULL(@cCloudClientPrinterID  , '') = '' THEN '' ELSE @cCloudClientPrinterID   END
       SET   @cPDFPreview = CASE WHEN ISNULL(@cPDFPreview  , '') = '' THEN '' ELSE @cPDFPreview   END
                     
@@ -665,12 +663,12 @@ BEGIN
       Where reporttype = @cReportType
          AND Storerkey = @cStorerKey
 
-      SET  @cDCropWidth    = CASE WHEN ISNULL(@cDCropWidth , '') = '' THEN '' ELSE @cDCropWidth  END
-      SET  @cDCropHeight   = CASE WHEN ISNULL(@cDCropHeight, '') = '' THEN '' ELSE @cDCropHeight END
-      SET  @cIsLandScape   = CASE WHEN ISNULL(@cIsLandScape, '') = '' THEN '' ELSE @cIsLandScape END
-      SET  @cIsColor       = CASE WHEN ISNULL(@cIsColor    , '') = '' THEN '' ELSE @cIsColor     END
-      SET  @cIsDuplex      = CASE WHEN ISNULL(@cIsDuplex   , '') = '' THEN '' ELSE @cIsDuplex    END
-      SET  @cIsCollate     = CASE WHEN ISNULL(@cIsCollate  , '') = '' THEN '' ELSE @cIsCollate   END
+      SET   @cDCropWidth    = CASE WHEN ISNULL(@cDCropWidth , '') = '' THEN '' ELSE @cDCropWidth  END
+      SET   @cDCropHeight   = CASE WHEN ISNULL(@cDCropHeight, '') = '' THEN '' ELSE @cDCropHeight END
+      SET   @cIsLandScape   = CASE WHEN ISNULL(@cIsLandScape, '') = '' THEN '' ELSE @cIsLandScape END
+      SET   @cIsColor       = CASE WHEN ISNULL(@cIsColor    , '') = '' THEN '' ELSE @cIsColor     END
+      SET   @cIsDuplex      = CASE WHEN ISNULL(@cIsDuplex   , '') = '' THEN '' ELSE @cIsDuplex    END
+      SET   @cIsCollate     = CASE WHEN ISNULL(@cIsCollate  , '') = '' THEN '' ELSE @cIsCollate   END
       SET   @cCloudClientPrinterID = CASE WHEN ISNULL(@cCloudClientPrinterID  , '') = '' THEN '' ELSE @cCloudClientPrinterID   END
       SET   @cPDFPreview = CASE WHEN ISNULL(@cPDFPreview  , '') = '' THEN '' ELSE @cPDFPreview   END
        
@@ -704,7 +702,8 @@ BEGIN
       IF @@ERROR <> 0              
       BEGIN              
          SET @nErrNo = 110715              
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS PrnJobFail              
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS PrnJobFail  
+         GOTO Quit
       END              
                     
       -- Call bartender              
@@ -732,7 +731,7 @@ BEGIN
          @cEndRec,                                 
          @cFromSourceModule,               
          @cQCmdSubmitFlag,
-		 @nJobID
+		   @nJobID
                      
       IF @nErrNo <> 0              
       BEGIN              
@@ -741,17 +740,17 @@ BEGIN
          GOTO Quit              
       END  
 	  
-	  IF @b_PrintOverInternet = 1
-		GOTO QUIT
+	   IF @b_PrintOverInternet = 1
+		   GOTO Quit
    END                    
             
    ELSE IF @cProcessType = 'TPPrint'  --(yeekung01)            
    BEGIN            
       DECLARE @b_success INT          
           
-      SELECT @cUserName=UserName          
+      SELECT @cUserName = UserName          
       FROM rdt.RDTMOBREC (NOLOCK)          
-      WHERE mobile=@nMobile          
+      WHERE mobile = @nMobile          
           
       EXEC [dbo].[isp_TPP_PrintToTPServer]                 
             @c_Module            = 'RDT', --PACKING, EPACKING                  
@@ -764,14 +763,14 @@ BEGIN
             @c_KeyFieldName      = @cValue10,                
             @c_Parm01            = @cValue01,                
             @c_Parm02            = @cValue02,  --e.g. from carton no                  
-            @c_Parm03            ='',  --e.g. to carton no                  
-            @c_Parm04            ='',                  
-            @c_Parm05            ='',                  
-            @c_Parm06            ='',                  
-            @c_Parm07            ='',                  
-            @c_Parm08            ='',                  
-            @c_Parm09            ='',                  
-            @c_Parm10            ='',                  
+            @c_Parm03            = '',  --e.g. to carton no                  
+            @c_Parm04            = '',                  
+            @c_Parm05            = '',                  
+            @c_Parm06            = '',                  
+            @c_Parm07            = '',                  
+            @c_Parm08            = '',                  
+            @c_Parm09            = '',                  
+            @c_Parm10            = '',                  
             @c_SourceType        = @nFunc, --print from which function         
             @c_PrintMethod       = @c_PrintMethod,           
             @c_ContinueNextPrint = @c_ContinueNextPrint OUTPUT, -- Y=Continue next print N=Not continue next print mode like Bartender, Logireport, PDF and Datawindow                  
@@ -779,7 +778,7 @@ BEGIN
             @n_err               = @nErrNo OUTPUT,                  
             @c_errmsg            = @cErrMsg OUTPUT             
                       
-      GOTO quit           
+      GOTO Quit           
    END            
 
                
@@ -797,12 +796,12 @@ BEGIN
       Where reporttype = @cReportType
          AND Storerkey = @cStorerKey
 
-      SET  @cDCropWidth    = CASE WHEN ISNULL(@cDCropWidth , '') = '' THEN '' ELSE @cDCropWidth  END
-      SET  @cDCropHeight   = CASE WHEN ISNULL(@cDCropHeight, '') = '' THEN '' ELSE @cDCropHeight END
-      SET  @cIsLandScape   = CASE WHEN ISNULL(@cIsLandScape, '') = '' THEN '' ELSE @cIsLandScape END
-      SET  @cIsColor       = CASE WHEN ISNULL(@cIsColor    , '') = '' THEN '' ELSE @cIsColor     END
-      SET  @cIsDuplex      = CASE WHEN ISNULL(@cIsDuplex   , '') = '' THEN '' ELSE @cIsDuplex    END
-      SET  @cIsCollate     = CASE WHEN ISNULL(@cIsCollate  , '') = '' THEN '' ELSE @cIsCollate   END
+      SET   @cDCropWidth    = CASE WHEN ISNULL(@cDCropWidth , '') = '' THEN '' ELSE @cDCropWidth  END
+      SET   @cDCropHeight   = CASE WHEN ISNULL(@cDCropHeight, '') = '' THEN '' ELSE @cDCropHeight END
+      SET   @cIsLandScape   = CASE WHEN ISNULL(@cIsLandScape, '') = '' THEN '' ELSE @cIsLandScape END
+      SET   @cIsColor       = CASE WHEN ISNULL(@cIsColor    , '') = '' THEN '' ELSE @cIsColor     END
+      SET   @cIsDuplex      = CASE WHEN ISNULL(@cIsDuplex   , '') = '' THEN '' ELSE @cIsDuplex    END
+      SET   @cIsCollate     = CASE WHEN ISNULL(@cIsCollate  , '') = '' THEN '' ELSE @cIsCollate   END
       SET   @cCloudClientPrinterID = CASE WHEN ISNULL(@cCloudClientPrinterID  , '') = '' THEN '' ELSE @cCloudClientPrinterID   END
       SET   @cPDFPreview = CASE WHEN ISNULL(@cPDFPreview  , '') = '' THEN '' ELSE @cPDFPreview   END
 
@@ -827,25 +826,25 @@ BEGIN
       SET @cJobID = CAST( @nJobID AS NVARCHAR( 10))  
       
       EXEC [RDT].[rdt_GetJReportURL]
-         @c_Storerkey = @cStorerKey,
-         @c_ReportType = @cReportType,
-         @c_CallFrom = 'Jreport',
-         @c_Parm01  = @cValue01,
-         @c_Parm02  = @cValue02,
-         @c_Parm03  = @cValue03,
-         @c_Parm04  = @cValue04,
-         @c_Parm05  = @cValue05,
-         @c_Parm06  = @cValue06,
-         @c_Parm07  = @cValue07,
-         @c_Parm08  = @cValue08,
-         @c_Parm09  = @cValue09,
-         @c_Parm10  = @cValue10,
-         @c_PrintFormat = '2',
-         @cJobID = @cJobID,
-         @b_Success = @b_Success OUTPUT,
-         @n_Err = @nErrNo OUTPUT,
-         @c_ErrMsg = @cErrMsg OUTPUT,
-         @c_CompleteURL = @c_CompleteURL OUTPUT
+         @c_Storerkey      = @cStorerKey,
+         @c_ReportType     = @cReportType,
+         @c_CallFrom       = 'Jreport',
+         @c_Parm01         = @cValue01,
+         @c_Parm02         = @cValue02,
+         @c_Parm03         = @cValue03,
+         @c_Parm04         = @cValue04,
+         @c_Parm05         = @cValue05,
+         @c_Parm06         = @cValue06,
+         @c_Parm07         = @cValue07,
+         @c_Parm08         = @cValue08,
+         @c_Parm09         = @cValue09,
+         @c_Parm10         = @cValue10,
+         @c_PrintFormat    = '2',
+         @cJobID           = @cJobID,
+         @b_Success        = @b_Success OUTPUT,
+         @n_Err            = @nErrNo OUTPUT,
+         @c_ErrMsg         = @cErrMsg OUTPUT,
+         @c_CompleteURL    = @c_CompleteURL OUTPUT
 
         UPDATE rdt.rdtPrintJob SET              
             printdata = @c_CompleteURL,               
@@ -900,11 +899,9 @@ BEGIN
             , @cErrMsg           = @cErrMsg OUTPUT    
 
       IF @nErrNo <> 0
-         GOTO QUIT
-
-
-                      
-      GOTO quit           
+         GOTO Quit
+       
+      GOTO Quit           
    END     
 
    ELSE IF @cProcessType = 'CloudPrint'  --(yeekung01)            
@@ -949,13 +946,13 @@ BEGIN
               
    
     UPDATE rdt.rdtPrintJob SET              
-        jobstatus='9',               
+        jobstatus ='9',               
         EditDate = GETDATE(),               
-        EditWho = SUSER_SNAME()              
+        EditWho  = SUSER_SNAME()              
         WHERE JobID = @nJobID  
 
 		EXEC [dbo].[isp_UpdateRDTPrintJobStatus]              
-            @n_JobID      = @nJobID              
+         @n_JobID      = @nJobID              
         ,@c_JobStatus  = @cJobStatus              
         ,@c_JobErrMsg  = ''              
         ,@b_Success    = @bSuccess OUTPUT              
@@ -964,19 +961,19 @@ BEGIN
 
 
 		 Exec [dbo].[isp_SubmitPrintJobToCloudPrint]   
-		   @c_DataProcess   =  'ITFDOC'
-		,  @c_Storerkey     =    @cStorerKey 
-		,  @c_PrintType     =  ''
-		,  @c_PrinterName   =  @cPrinter
-		,  @c_IP            =  ''
-		,  @c_Port          =  ''
-		,  @c_DocumentType  =  ''
-		,  @c_DocumentId    =  ''
-		,  @c_JobID         =  @nJobID
-		,  @c_Data          =  @cPrintCommand
-		,  @b_Success       = @bSuccess   OUTPUT
-		,  @n_Err           = @nErrNo     OUTPUT
-		,  @c_ErrMsg        = @cErrMsg    OUTPUT
+		    @c_DataProcess   = 'ITFDOC'
+		   ,@c_Storerkey     = @cStorerKey 
+		   ,@c_PrintType     = ''
+		   ,@c_PrinterName   = @cPrinter
+		   ,@c_IP            = ''
+		   ,@c_Port          = ''
+		   ,@c_DocumentType  = ''
+		   ,@c_DocumentId    = ''
+		   ,@c_JobID         = @nJobID
+		   ,@c_Data          = @cPrintCommand
+		   ,@b_Success       = @bSuccess   OUTPUT
+		   ,@n_Err           = @nErrNo     OUTPUT
+		   ,@c_ErrMsg        = @cErrMsg    OUTPUT
 
 
                       
