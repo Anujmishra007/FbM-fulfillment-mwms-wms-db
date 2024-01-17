@@ -36,6 +36,8 @@ GO
 /* 2023-04-11  Wan08    1.8   LFWM-4179 - PROD CN  Wave Control Allocate*/
 /*                            single thread only support by storerkey,  */
 /*                            not able to split by facility             */
+/* 2024-01-15  NJOW01   1.9   WMS-24623 Fix SCE wave allocation custom  */
+/*                            mode follow exceed                        */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_WaveAllocation]                                                                                                                     
       @c_WaveKey              NVARCHAR(10)
@@ -345,22 +347,41 @@ BEGIN
          BEGIN
             SET @n_Continue = 3
          END
-
-         IF @c_WaveConsoAllocation <> '1' AND @c_LoadConsoAllocation <> '1'
-         BEGIN
-            SET @c_allocatemode = '#DC'
+         
+         --NJOW01 S
+         IF @c_AllocateType = 'WAVE'  
+         BEGIN         	  
+            IF (@c_WaveConsoAllocation  = '1' OR @c_allocatemode = '#WC') AND @c_AllocateMode NOT IN('#DC','#LC') 
+            BEGIN
+               SET @c_allocatemode = '#WC'
+            END
+            ELSE IF @c_LoadConsoAllocation = '1' AND @c_allocatemode <> '#DC'
+            BEGIN
+               SET @c_allocatemode = '#LC'
+            END
+            ELSE
+            BEGIN
+               SET @c_allocatemode = '#DC'
+            END
+         END   
+         ELSE --NJOW01 E
+         BEGIN         	  
+            IF @c_WaveConsoAllocation <> '1' AND @c_LoadConsoAllocation <> '1'
+            BEGIN
+               SET @c_allocatemode = '#DC'
+            END
+            
+            IF @c_LoadConsoAllocation = '1' AND @c_allocatemode <> '#DC'
+            BEGIN
+               SET @c_allocatemode = '#LC'
+            END
+            
+            IF @c_WaveConsoAllocation = '1' OR @c_allocatemode = '#WC'
+            BEGIN
+               SET @c_allocatemode = '#WC'
+            END
          END
-
-         IF @c_LoadConsoAllocation = '1' AND @c_allocatemode <> '#DC'
-         BEGIN
-            SET @c_allocatemode = '#LC'
-         END
-
-         IF @c_WaveConsoAllocation = '1' OR @c_allocatemode = '#WC'
-         BEGIN
-            SET @c_allocatemode = '#WC'
-         END
-
+         
          IF @c_allocatemode = '#LC' 
          BEGIN
             IF @c_ContinueAllocUnLoadSO <> '1' AND
