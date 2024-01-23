@@ -29,6 +29,7 @@ GO
 /*                            Update Info for Cloud Print               */
 /* 2023-10-23  Wan02    1.2   Get Print Over Internet Printing          */
 /* 2023-12-07  yeekung  1.3   change queueid int->bigint                */
+/* 2023-12-19  Wan      1.4   UWP-12373-MWMS Deploy MasterSP to V2      */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_WM_SendPrintJobToProcessApp] 
    @c_ReportID       NVARCHAR(10) 

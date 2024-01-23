@@ -74,6 +74,7 @@ GO
 /*                            field length to NVARCHAR(256) (CS44)             */
 /* 2023-04-04 23.6 Wan01      WMS-22125 - Backend Bartender DB-MQ              */
 /* 2023-10-23 23.7 Wan02      Get Print Over Internet Printing                 */
+/* 2023-12-19 24.8 Wan        UWP-12373-MWMS Deploy MasterSP to V2             */
 /*******************************************************************************/        
 --> For CN Only: @cCmdType = 'PRN'        
 CREATE OR ALTER PROC [dbo].[isp_BT_GenBartenderCommand](        
