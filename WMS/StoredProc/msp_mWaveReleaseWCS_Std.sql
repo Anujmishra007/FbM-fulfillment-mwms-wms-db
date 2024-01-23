@@ -61,7 +61,7 @@ CREATE OR ALTER PROCEDURE [dbo].[msp_mWaveReleaseWCS_Std]
    WHERE o.UserDefine09 = @c_Wavekey
    ORDER BY o.OrderKey DESC
 
-   SELECT @c_CfgWCS = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'WCS ')
+   SELECT @c_CfgWCS = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'WCS')
     
    IF @c_CfgWCS = '1'
    BEGIN

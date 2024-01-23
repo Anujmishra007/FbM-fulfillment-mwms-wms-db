@@ -44,7 +44,6 @@ BEGIN
          , @c_StorerKey          NVARCHAR(15)
          , @c_OrderStatus        NVARCHAR(10)
          , @c_SQL                NVARCHAR(MAX)
-         
          , @c_CfgWavRLWCSOption5 NVARCHAR(4000) = ''                                --(Wan01)
          , @c_ReleaseOpenOrder   NVARCHAR(10)   = 'N'                               --(Wan01)
 
