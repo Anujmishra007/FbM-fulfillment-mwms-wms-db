@@ -51,6 +51,9 @@ GO
 /*                            (WL04)                                    */
 /* 2023-11-17  Wan09    2.1   Fixed Matching Criteria Print SQL if print*/
 /*                            by column range                           */
+/* 2023-12-06  WLChooi  2.2   WMS-24329 - Allow calling PreGenRptDataSP */
+/*                            with custom parameter (WL05)              */
+/* 2023-12-19  Wan      2.3   UWP-12373-MWMS Deploy MasterSP to V2      */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_WM_Print_Report]
            @c_ModuleID           NVARCHAR(30)
@@ -214,7 +217,7 @@ BEGIN
          , @c_SQL                   NVARCHAR(MAX)
          , @c_SQLParms              NVARCHAR(MAX)
 
-         , @c_PreGenRptData_SP      NVARCHAR(50)      = ''  --(Wan05)
+         , @c_PreGenRptData_SP      NVARCHAR(1000)    = ''  --(Wan05)   --WL05
          , @c_PostPrintSP           NVARCHAR(50)      = ''  --WL03
          , @c_PrintSP_STD           NVARCHAR(50)      = ''  --WL04
          
@@ -222,6 +225,13 @@ BEGIN
          
          , @CUR_GROUP               CURSOR
          , @CUR_PARM                CURSOR
+
+         --WL05 S
+         , @c_SPName       NVARCHAR(4000) = N''
+         , @n_idx          INT            = 0
+         , @c_ExcludeVar   NVARCHAR(4000) = N''
+         , @c_VarList      NVARCHAR(4000) = N''
+         --WL05 E
 
    --(Wan01) - START
          , @c_ReturnURL             NVARCHAR(4000) = ''
@@ -977,20 +987,45 @@ BEGIN
          --(Wan05) - START
          IF @c_PreGenRptData_SP <> ''
          BEGIN
-            ; WITH SPP AS 
-            ( SELECT RowID = ROW_NUMBER() OVER (ORDER BY CASE WHEN p.NAME = '@c_PreGenRptData' THEN 9999 ELSE p.parameter_id END ASC)
-                   , p.[Name]
-              FROM sys.parameters AS p (NOLOCK) WHERE p.[object_id] = OBJECT_ID(@c_PreGenRptData_SP)
-            )
-            SELECT @c_SQL = STRING_AGG (SPP.[Name] + '=' + CASE WHEN SPP.[Name] = '@c_PreGenRptData' THEN '''Y''' ELSE '@c_Parm' + CONVERT(CHAR(5),SPP.RowID) END   --WL02
-                                       , ',') 
-                              WITHIN GROUP ( ORDER BY SPP.RowID ASC )
-            FROM SPP 
-            
-            IF @c_SQL <> '' AND @c_SQL IS NOT NULL AND CHARINDEX('PreGenRptData',@c_SQL,1) > 0
+            --WL05 S
+            SET @n_idx = CHARINDEX(' ', TRIM(@c_PreGenRptData_SP), 1)
+
+            IF @n_idx > 0
             BEGIN
-               SET @c_SQL = N'EXEC ' + @c_PreGenRptData_SP + ' ' + @c_SQL
-               
+               SET @c_VarList = SUBSTRING(
+                                   @c_PreGenRptData_SP
+                                 , CHARINDEX('@', @c_PreGenRptData_SP, 1)
+                                 , LEN(@c_PreGenRptData_SP) - CHARINDEX('@', @c_PreGenRptData_SP, 1) + 1)
+
+               SELECT @c_ExcludeVar = STUFF(
+                                      (  SELECT ',' + SUBSTRING('@' + TRIM(ColValue), 1, CHARINDEX('=', '@' + TRIM(ColValue)) - 1)
+                                         FROM dbo.fnc_DelimSplit('@', @c_VarList)
+                                         WHERE ColValue <> ''
+                                         FOR XML PATH(''))
+                                    , 1
+                                    , 1
+                                    , '')
+
+               SET @c_SPName = SUBSTRING(@c_PreGenRptData_SP, 1, @n_idx - 1)
+
+               ;WITH SPP AS
+               (
+                  SELECT RowID = ROW_NUMBER() OVER (ORDER BY CASE WHEN p.name = '@c_PreGenRptData' THEN 9999 ELSE p.parameter_id END ASC)
+                       , p.[name]
+                  FROM sys.parameters AS p (NOLOCK)
+                  WHERE p.[object_id] = OBJECT_ID(@c_SPName)
+                  AND   p.name NOT IN (  SELECT DISTINCT TRIM(ColValue)
+                                         FROM dbo.fnc_DelimSplit(',', @c_ExcludeVar) )
+                  AND   p.name NOT IN ( '@b_Success', '@n_Err', '@c_Errmsg' )
+               )
+               SELECT @c_SQL = STRING_AGG(SPP.[name] + '=' + CASE WHEN SPP.[name] = '@c_PreGenRptData' THEN '''Y'''
+                                                                  ELSE '@c_Parm' + CONVERT(CHAR(5), SPP.RowID) END
+                                        , ',') WITHIN GROUP(ORDER BY SPP.RowID ASC)
+               FROM SPP
+
+               SET @c_SQL = N'EXEC ' + @c_PreGenRptData_SP + CASE WHEN CHARINDEX('@', @c_PreGenRptData_SP, 1) > 0 THEN ','
+                                                                  ELSE '' END + N' ' + @c_SQL
+
                SET @c_SQLParms= N'@c_Parm1  NVARCHAR(60) '
                               + ',@c_Parm2  NVARCHAR(60) '
                               + ',@c_Parm3  NVARCHAR(60) '
@@ -1033,9 +1068,70 @@ BEGIN
                                 , @c_Parm17  
                                 , @c_Parm18  
                                 , @c_Parm19  
-                                , @c_Parm20                                
-               
+                                , @c_Parm20
             END
+            ELSE
+            BEGIN --WL05 E
+               ; WITH SPP AS 
+               ( SELECT RowID = ROW_NUMBER() OVER (ORDER BY CASE WHEN p.NAME = '@c_PreGenRptData' THEN 9999 ELSE p.parameter_id END ASC)
+                      , p.[Name]
+                 FROM sys.parameters AS p (NOLOCK) WHERE p.[object_id] = OBJECT_ID(@c_PreGenRptData_SP)
+               )
+               SELECT @c_SQL = STRING_AGG (SPP.[Name] + '=' + CASE WHEN SPP.[Name] = '@c_PreGenRptData' THEN '''Y''' ELSE '@c_Parm' + CONVERT(CHAR(5),SPP.RowID) END   --WL02
+                                          , ',') 
+                                 WITHIN GROUP ( ORDER BY SPP.RowID ASC )
+               FROM SPP 
+               
+               IF @c_SQL <> '' AND @c_SQL IS NOT NULL AND CHARINDEX('PreGenRptData',@c_SQL,1) > 0
+               BEGIN
+                  SET @c_SQL = N'EXEC ' + @c_PreGenRptData_SP + ' ' + @c_SQL
+                  
+                  SET @c_SQLParms= N'@c_Parm1  NVARCHAR(60) '
+                                 + ',@c_Parm2  NVARCHAR(60) '
+                                 + ',@c_Parm3  NVARCHAR(60) '
+                                 + ',@c_Parm4  NVARCHAR(60) '
+                                 + ',@c_Parm5  NVARCHAR(60) '
+                                 + ',@c_Parm6  NVARCHAR(60) '
+                                 + ',@c_Parm7  NVARCHAR(60) '
+                                 + ',@c_Parm8  NVARCHAR(60) '
+                                 + ',@c_Parm9  NVARCHAR(60) '
+                                 + ',@c_Parm10 NVARCHAR(60) '
+                                 + ',@c_Parm11 NVARCHAR(60) '
+                                 + ',@c_Parm12 NVARCHAR(60) '
+                                 + ',@c_Parm13 NVARCHAR(60) '
+                                 + ',@c_Parm14 NVARCHAR(60) '
+                                 + ',@c_Parm15 NVARCHAR(60) '
+                                 + ',@c_Parm16 NVARCHAR(60) '
+                                 + ',@c_Parm17 NVARCHAR(60) '
+                                 + ',@c_Parm18 NVARCHAR(60) '
+                                 + ',@c_Parm19 NVARCHAR(60) '
+                                 + ',@c_Parm20 NVARCHAR(60) '                           
+               
+                  EXEC sp_ExecuteSQL @c_SQL
+                                   , @c_SQLParms
+                                   , @c_Parm1   
+                                   , @c_Parm2   
+                                   , @c_Parm3   
+                                   , @c_Parm4   
+                                   , @c_Parm5   
+                                   , @c_Parm6   
+                                   , @c_Parm7   
+                                   , @c_Parm8   
+                                   , @c_Parm9   
+                                   , @c_Parm10  
+                                   , @c_Parm11  
+                                   , @c_Parm12  
+                                   , @c_Parm13  
+                                   , @c_Parm14  
+                                   , @c_Parm15
+                                   , @c_Parm16  
+                                   , @c_Parm17  
+                                   , @c_Parm18  
+                                   , @c_Parm19  
+                                   , @c_Parm20                                
+                  
+               END
+            END   --WL05
          END
          --(Wan05) - END
          --(Wan01) - START
