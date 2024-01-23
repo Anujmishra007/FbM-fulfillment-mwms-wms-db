@@ -14,7 +14,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.2                                                    */
+/* PVCS Version: 1.3                                                    */
 /*                                                                      */
 /* Version: 8.0                                                         */
 /*                                                                      */
@@ -28,6 +28,7 @@ GO
 /*                      1.1   Add Detail Level Logi report Catalogue    */
 /* 2023-08-01  Wan02    1.2   PAC-15:Ecom Packing | Print Packing Report*/
 /*                            - Backend                                 */
+/* 2023-12-07  WLChooi  1.3   WMS-24329 Add full path for report (WL01) */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_WM_Get_WebReport_URL]
            @c_ReportID           NVARCHAR(10)
@@ -169,7 +170,7 @@ BEGIN
       IF @b_PrintOverInternet > 0  SET @c_ReportFormat = '2'                                 --(Wan02)
 
       SET @c_ReportURL     = @c_ReportURL  + 'jinfonet/tryView.jsp?'
-      SET @c_ReportCLSFile = 'jrs.report=' + @c_ReportFolder + @c_ReportCLSFile
+      SET @c_ReportCLSFile = 'jrs.report=' + IIF(LEFT(TRIM(@c_ReportCLSFile),1) = '/', @c_ReportCLSFile, @c_ReportFolder + @c_ReportCLSFile)   --WL01
       SET @c_ReportCatalog = 'jrs.catalog='+ @c_CatalogFolder+ @c_ReportCatalog
       SET @c_ReportFormat  = 'jrs.result_type=' + @c_ReportFormat
       

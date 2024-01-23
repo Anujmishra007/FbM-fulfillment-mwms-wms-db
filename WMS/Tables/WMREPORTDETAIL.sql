@@ -459,3 +459,15 @@ BEGIN
    EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'SQL Select get report filename' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'WMREPORTDETAIL', @level2type=N'COLUMN',@level2name=N'SQL_Select'
    ;
 END 
+
+IF NOT EXISTS (SELECT 1 FROM syscolumns sc
+               JOIN sysObjects so ON so.id = sc.id
+               WHERE sc.name = 'PreGenRptDataSP'
+               AND so.name = 'WMREPORTDETAIL'
+               AND sc.length = 2000
+)
+BEGIN
+   ALTER TABLE dbo.WMREPORTDETAIL DROP CONSTRAINT [DF_WMREPORTDETAIL_PreGenRptDataSP];
+   ALTER TABLE dbo.WMREPORTDETAIL ALTER COLUMN PreGenRptDataSP NVARCHAR(1000) NOT NULL;
+   ALTER TABLE dbo.WMREPORTDETAIL ADD CONSTRAINT [DF_WMREPORTDETAIL_PreGenRptDataSP] DEFAULT ('') FOR PreGenRptDataSP;
+END
