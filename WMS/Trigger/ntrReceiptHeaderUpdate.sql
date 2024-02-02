@@ -1,14 +1,11 @@
- 
 SET QUOTED_IDENTIFIER OFF
 GO
-
 SET ANSI_NULLS OFF
 GO
-
 /*******************************************************************************/
 /* Store Procedure:  ntrReceiptHeaderUpdate                                    */
 /* Creation Date:                                                              */
-/* Copyright: IDS                                                              */
+/* Copyright: Maersk                                                           */
 /* Written by:                                                                 */
 /*                                                                             */
 /* Purpose:  ReceiptHeader Update Trigger                                      */
@@ -163,8 +160,9 @@ GO
 /* 03-AUT-2023  NJOW04       2.5    DEVOPS Combine Script                      */
 /* 02-NOV-2023  NJOW05       2.6    WMS-24047 update receiptdate upon close    */
 /*                                  ASN by config                              */
+/* 29-Jan-2024  Wan03        2.7    UWP-14379-Implement pre-save ASN standard  */
+/*                                  validation check                           */
 /*******************************************************************************/
-
 CREATE OR ALTER TRIGGER [dbo].[ntrReceiptHeaderUpdate]
 ON  [dbo].[RECEIPT]
 FOR UPDATE
@@ -238,7 +236,8 @@ BEGIN
           , @c_Option5                       NVARCHAR(MAX) --NJOW05
           , @c_ASNSkipStatusUpdate NVARCHAR(30)   --WL02
           , @c_DisallowCloseASNB4Finalize NVARCHAR(30) --NJOW03
-          
+          , @c_ASNStatus_From                NVARCHAR(10) = ''                      --(Wan03)
+          , @c_ASNStatus_To                  NVARCHAR(10) = ''                      --(Wan03)
 
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
    SET @c_StatusUpdated = 'N'                      -- (MC02)
@@ -283,25 +282,25 @@ BEGIN
 
    --NJOW01
    IF @n_continue=1 or @n_continue=2          
-   BEGIN   	  
+   BEGIN      
       IF EXISTS (SELECT 1 FROM DELETED d   ----->Put INSERTED if INSERT action
                  JOIN storerconfig s WITH (NOLOCK) ON  d.storerkey = s.storerkey    
                  JOIN sys.objects sys ON sys.type = 'P' AND sys.name = s.Svalue
                  WHERE  s.configkey = 'ReceiptTrigger_SP')   -----> Current table trigger storerconfig
-      BEGIN        	  
+      BEGIN           
          IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL
             DROP TABLE #INSERTED
    
-      	 SELECT * 
-      	 INTO #INSERTED
-      	 FROM INSERTED
+         SELECT * 
+         INTO #INSERTED
+         FROM INSERTED
           
          IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL
             DROP TABLE #DELETED
    
-      	 SELECT * 
-      	 INTO #DELETED
-      	 FROM DELETED
+         SELECT * 
+         INTO #DELETED
+         FROM DELETED
    
          EXECUTE dbo.isp_ReceiptTrigger_Wrapper ----->wrapper for current table trigger
                    'UPDATE'  -----> @c_Action can be INSERTE, UPDATE, DELETE
@@ -362,9 +361,35 @@ BEGIN
          BEGIN
             SELECT @n_continue = 3
             SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=60200 --63800   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Not allow to close asn before finalize. (ntrReceiptHeaderUpdate)'         	
+            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Not allow to close asn before finalize. (ntrReceiptHeaderUpdate)'          
          END                    
-      END      
+      END
+      
+      IF @n_Continue = 1                                                            --(Wan03) - START
+      BEGIN
+         SET @n_Cnt = 0
+         SET @c_ASNStatus_From = ''
+         SET @c_ASNStatus_To = ''
+
+         SELECT @n_Cnt = 1
+               ,@c_ASNStatus_From = d.ASNStatus
+               ,@c_ASNStatus_To = i.ASNStatus
+         FROM Inserted i
+         JOIN Deleted  d ON i.ReceiptKey = d.Receiptkey
+         OUTER APPLY dbo.fnc_GetAllowASNStatusChg(i.Facility, i.Storerkey, i.Doctype, i.Receiptkey, d.ASNStatus, i.ASNStatus) AASC
+         WHERE i.ASNStatus <> d.ASNStatus 
+         AND AASC.AllowChange = 0
+         
+         IF @n_Cnt = 1
+         BEGIN
+            SET @n_continue = 3
+            SET @c_errmsg = CONVERT(CHAR(250),@n_err)
+            SET @n_err=60261 --63800   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+            SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Disallow to change ASNStatus from ''' 
+                           + @c_ASNStatus_From + ''' to ''' + @c_ASNStatus_To + ''''
+                           +'. (ntrReceiptHeaderUpdate)'          
+         END
+      END                                                                           --(Wan03) - END
    END
 
    IF @n_continue=1 or @n_continue=2
@@ -2267,9 +2292,9 @@ BEGIN
                         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err) --, @n_err=63805   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
                         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table RECEIPT. (ntrReceiptHeaderUpdate) ( SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '
                         BREAK
-                     END                  	 
+                     END                     
                   END
-               END           	
+               END            
             END                        
 
             --NJOW05
@@ -2284,9 +2309,9 @@ BEGIN
                FROM dbo.fnc_GetRight2(@c_Facility, @c_Storerkey,'','CloseASNStatusUpdReceiptDate') AS SC
        
                IF @c_CloseASNStatusUpdReceiptDate = '1' 
-               BEGIN               	
-               	  SELECT @c_DocTypeUpdReceiptDate = dbo.fnc_GetParamValueFromString ('@c_DocTypeUpdReceiptDate', @c_option5, @c_DocTypeUpdReceiptDate)
-               	
+               BEGIN                
+                  SELECT @c_DocTypeUpdReceiptDate = dbo.fnc_GetParamValueFromString ('@c_DocTypeUpdReceiptDate', @c_option5, @c_DocTypeUpdReceiptDate)
+                
                   UPDATE RECEIPT WITH (ROWLOCK)
                   SET  ReceiptDate = GETDATE(),
                        TrafficCop   = NULL
@@ -2301,7 +2326,7 @@ BEGIN
                      SELECT @c_errmsg = CONVERT(CHAR(250),@n_err) --, @n_err=63806   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
                      SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table RECEIPT. (ntrReceiptHeaderUpdate) ( SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '
                      BREAK
-                  END                  	 
+                  END                    
                END
             END                        
          END -- While Loop 1
@@ -2599,8 +2624,8 @@ BEGIN
                AND UserDefine01  = @c_storerkey  
                AND datepart(MONTH , HolidayDate) = datepart(MONTH , getdate() )  
                AND getdate() >= userdefine04 and getdate() <= userdefine05)                  
-			AND
-			Exists ( SELECT  1
+      AND
+      Exists ( SELECT  1
                FROM RECEIPT, INSERTED, DELETED
                WHERE RECEIPT.ReceiptKey = INSERTED.ReceiptKey
                AND DELETED.ReceiptKey = INSERTED.ReceiptKey
@@ -2640,41 +2665,41 @@ END
 -- tlting03 - JR WMS-2047 event track
 IF (@n_continue = 1 OR @n_continue = 2)
 BEGIN
-	SET @b_success = 0
-	SET @c_authority = ''
-	
-   EXECUTE nspGetRight NULL,	-- facility
-          @c_storerkey, 		-- Storerkey
-          NULL,					-- Sku
-          'GVTITF',		      -- Configkey
+  SET @b_success = 0
+  SET @c_authority = ''
+  
+   EXECUTE nspGetRight NULL,  -- facility
+          @c_storerkey,     -- Storerkey
+          NULL,         -- Sku
+          'GVTITF',         -- Configkey
           @b_success output,
           @c_authority output,
           @n_err output,
           @c_errmsg output
           
-	IF @b_success <> 1
-	BEGIN
-		SELECT @n_continue = 3, @c_errmsg = 'ntrReceiptHeaderUpdate' + RTrim(@c_errmsg)
+  IF @b_success <> 1
+  BEGIN
+    SELECT @n_continue = 3, @c_errmsg = 'ntrReceiptHeaderUpdate' + RTrim(@c_errmsg)
       SELECT @n_err = 60265
-	END
-	ELSE IF @c_authority = '1'
-	BEGIN   
+  END
+  ELSE IF @c_authority = '1'
+  BEGIN   
        SELECT @c_ReceiptKey = SPACE(10)
-		 WHILE 1=1
-		 BEGIN
-		    SELECT TOP 1 @c_ReceiptKey = RECEIPT.RECEIPTKEY		     
+     WHILE 1=1
+     BEGIN
+        SELECT TOP 1 @c_ReceiptKey = RECEIPT.RECEIPTKEY        
           FROM RECEIPT WITH (NOLOCK), INSERTED, DELETED
           WHERE RECEIPT.ReceiptKey = INSERTED.ReceiptKey
           AND DELETED.ReceiptKey = INSERTED.ReceiptKey
           AND RECEIPT.Status = '9' 
           AND DELETED.Status <> RECEIPT.Status 
-		    AND RECEIPT.RECEIPTKEY > @c_ReceiptKey         
-		    Order by RECEIPT.RECEIPTKEY
-		    IF @@ROWCOUNT = 0
-		    BEGIN
-		       BREAK
-		    END
-		    SET @c_City = ''   
+        AND RECEIPT.RECEIPTKEY > @c_ReceiptKey         
+        Order by RECEIPT.RECEIPTKEY
+        IF @@ROWCOUNT = 0
+        BEGIN
+           BREAK
+        END
+        SET @c_City = ''   
           SELECT @b_success=1  
 
           IF NOT EXISTS ( SELECT 1 FROM dbo.DocStatusTrack WITH (NOLOCK) WHERE TableName = 'ASNSTS'  
@@ -2699,8 +2724,8 @@ BEGIN
                            'SQLSvr MESSAGE='+ISNULL(LTRIM(RTRIM(@c_errmsg)),'')+')'                                
             END 
          END -- not exists  
-		 END -- While
-	END	    
+     END -- While
+  END     
 END
 
 /********************************************************/  

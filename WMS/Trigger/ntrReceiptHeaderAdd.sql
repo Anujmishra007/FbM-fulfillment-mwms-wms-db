@@ -1,16 +1,10 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrReceiptHeaderAdd]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-   drop trigger [dbo].[ntrReceiptHeaderAdd]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
-
-
 /************************************************************************/
 /* Store procedure: ntrReceiptHeaderAdd                                 */
-/* Copyright      : IDS                                                 */
+/* Copyright      : Maersk                                              */
 /*                                                                      */
 /* Purpose: normal receipt                                              */
 /*                                                                      */
@@ -82,9 +76,10 @@ GO
 /* 2019-08-01 1.25 Wan01    WMS-9995 [CN] NIKESDC_Exceed_Hold ASN for   */
 /*                          Channel                                     */
 /* 2021-08-27 2.1  TLTING03 Extend ExternReceiptKey field length        */
+/* 2024-01-29 2.2  Wan02    UWP-14379-Implement pre-save ASN standard   */
+/*                          validation check                            */
 /************************************************************************/
-
-CREATE TRIGGER ntrReceiptHeaderAdd
+CREATE OR ALTER TRIGGER ntrReceiptHeaderAdd
  ON  Receipt
  FOR INSERT
  AS
@@ -115,9 +110,10 @@ CREATE TRIGGER ntrReceiptHeaderAdd
  , @cRoute              NVARCHAR(10)
  , @c_COLUMN_NAME       VARCHAR(50)       -- (MC02) 
  , @c_ColumnsUpdated    VARCHAR(1000)     -- (MC02) 
+ , @c_ASNStatus_From    NVARCHAR(10) = ''                                           --(Wan03)
+ , @c_ASNStatus_To      NVARCHAR(10) = ''                                           --(Wan03)
 
 SELECT @cReceiptKey = ''      -- (YokeBeen01)
-
 
 SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
       /* #INCLUDE <TRRHA1.SQL> */  
@@ -191,6 +187,29 @@ BEGIN
    END   
 END
 --(Wan01) - END
+
+IF @n_Continue = 1                                                                  --(Wan02) - START
+BEGIN
+   SET @n_Cnt = 0
+   SET @c_ASNStatus_From = ''
+   SET @c_ASNStatus_To = ''
+
+   SELECT @n_Cnt = 1
+         ,@c_ASNStatus_To = i.ASNStatus
+   FROM Inserted i
+   OUTER APPLY dbo.fnc_GetAllowASNStatusChg(i.Facility, i.Storerkey, i.Doctype, i.Receiptkey, '', i.ASNStatus) AASC
+   WHERE AASC.AllowChange = 0
+         
+   IF @n_Cnt = 1
+   BEGIN
+      SET @n_continue = 3
+      SET @c_errmsg = CONVERT(CHAR(250),@n_err)
+      SET @n_err=70011 --63800   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+      SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Disallow to change ASNStatus from ''' 
+                     + @c_ASNStatus_From + ''' to ''' + @c_ASNStatus_To + ''''
+                     +'. (ntrReceiptHeaderAdd)'           
+   END
+END                                                                                 --(Wan02) - END
  
 -- Added for IDSV5 by June 21.Jun.02, (extract from IDSHK) *** Start
 IF @n_continue=1 OR @n_continue=2
@@ -375,7 +394,7 @@ BEGIN
           BEGIN
              BREAK
           END
-
+          
           IF @c_StorerKey = 'FUJI'
           BEGIN
              IF @c_rectype = 'NORMAL'
