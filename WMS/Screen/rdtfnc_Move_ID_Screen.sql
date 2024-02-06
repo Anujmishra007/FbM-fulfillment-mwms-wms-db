@@ -8,7 +8,9 @@ EXECUTE rdt.rdtAddScn 1000, 'ENG',
    @cLine01 = 'FROM ID:', 
    @cLine02 = '%20i01',  -- ColStringExp Changes SOS#339806
    @cLine03 = 'FROM LOC: %10d02', 
-   @cLine14 = '%e'
+   @cLine14 = '%e',
+   @cWebGroup = '{"1":["1","2"],"2":["3"]}',
+   @nFunc = 511
 
 -- 1001 = FromLOC
 DELETE rdt.RDTScn WHERE Scn = 1001 AND Lang_Code = 'ENG'
@@ -16,7 +18,9 @@ EXECUTE rdt.rdtAddScn 1001, 'ENG',
    @cLine01 = 'FROM ID:', 
    @cLine02 = '%18d01', 
    @cLine03 = 'FROM LOC: %10i02', 
-   @cLine14 = '%e'
+   @cLine14 = '%e',
+   @cWebGroup = '{"1":["1","2"],"2":["3"]}',
+   @nFunc = 511
 
 -- 1002 = Move to
 DELETE rdt.RDTScn WHERE Scn = 1002 AND Lang_Code = 'ENG'
@@ -34,7 +38,9 @@ EXECUTE rdt.rdtAddScn 1002, 'ENG',
    @cLine11 = '', 
    @cLine12 = 'TO LOC: %10i11', 
    @cLine13 = '%20d12',    -- WMS7487
-   @cLine14 = '%e'
+   @cLine14 = '%e',
+   @cWebGroup = '{"1":["1","2"],"2":["3"],"3":["5","6","7","8"],"4":["9","10"],"5":["12"],"6":["13"]}',
+   @nFunc = 511
 
 -- 1003 = Message screen
 DELETE rdt.RDTScn WHERE Scn = 1003 AND Lang_Code = 'ENG'
@@ -44,4 +50,6 @@ EXECUTE rdt.rdtAddScn 1003, 'ENG',
    @cLine04 = 'TO LOC: %10d01',     -- (james03)
    @cLine06 = 'Press ENTER or ESC', -- (james03)
    @cLine07 = 'to continue',        -- (james03)
-   @cLine14 = '%e'
+   @cLine14 = '%e',
+   @cAutoDisappear = '1',
+   @nFunc = 511

@@ -1,13 +1,13 @@
-IF NOT EXISTS( SELECT 1 FROM rdt.rdtMsg WITH (NOLOCK) WHERE Message_ID = 831)
-   INSERT INTO rdt.rdtMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName)
+DELETE RDT.RDTMsg WHERE Message_ID = 831 AND Lang_Code = 'ENG' AND Message_Type = 'FNC'
+INSERT INTO rdt.rdtMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName)
    VALUES (831, 'ENG', 'FNC', 'Pick By CartonID', 'rdtfnc_PickByCartonID')
-GO
 
 -- WaveKey screen
 DELETE rdt.RDTScn WHERE Scn = 5350 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 5350, 'ENG'
    ,@cLine01 = 'WAVEKEY:  %10i01'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"]}'
    ,@nFunc = 831
 
 -- Putawayzone screen
@@ -16,6 +16,7 @@ EXECUTE rdt.rdtAddScn 5351, 'ENG'
    ,@cLine01 = 'WAVEKEY:  %10d01'
    ,@cLine02 = 'PWAYZONE: %10i02'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2"]}'
    ,@nFunc = 831
 
 -- Carton ID screen
@@ -32,6 +33,7 @@ EXECUTE rdt.rdtAddScn 5352, 'ENG'
    ,@cLine09 = '%20i08'
    ,@cLine10 = '%20i09'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4","5","6","7","8","9","10"]}'
    ,@nFunc = 831
  
 -- LOC screen
@@ -40,6 +42,7 @@ EXECUTE rdt.rdtAddScn 5353, 'ENG'
    ,@cLine01 = 'LOC: %10d01'
    ,@cLine02 = 'LOC: %10i02'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"]}'
    ,@nFunc = 831
 
 -- SKU, QTY screen
@@ -59,6 +62,7 @@ EXECUTE rdt.rdtAddScn 5354, 'ENG'
    ,@cLine12 = '%20i11'
    ,@cLine13 = 'TASK QTY: %11d12'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3","4","5"],"3":["6","7","8","9"],"3":["10"],"4":["11","12"],"5":["13"]}'
    ,@nFunc = 831
 
 -- Carton ID screen
@@ -72,6 +76,7 @@ EXECUTE rdt.rdtAddScn 5355, 'ENG'
    ,@cLine07 = ''
    ,@cLine08 = '%20d15'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["3","4","5"],"3":["8"]}'
    ,@nFunc = 831
 
 -- Confirm short pick screen

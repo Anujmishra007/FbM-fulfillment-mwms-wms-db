@@ -6,6 +6,7 @@ EXECUTE rdt.rdtAddScn 4590, 'ENG'
    ,@cLine02 = ''
    ,@cLine03 = 'METHOD:   %01i02'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["3"]}'
    ,@nFunc = 803
 
 -- Dynamic assign screens (4500 to 4509)
@@ -27,6 +28,7 @@ EXECUTE rdt.rdtAddScn 4592, 'ENG'
    ,@cLine12 = 'LAST POS: %05d12'
    ,@cLine13 = 'OPTION: %01i13 9=CLOSE'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4","5","6","7","8","9"],"3":["10","11"],"4":["12"],"5":["13"]}'
    ,@nFunc = 803
    
 -- Unassign station
@@ -50,5 +52,6 @@ EXECUTE rdt.rdtAddScn 4594, 'ENG'
    ,@cLine04 = 'NEW CARTON ID:'
    ,@cLine05 = '%20i02'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["4","5"]}'
    ,@nFunc = 803
    

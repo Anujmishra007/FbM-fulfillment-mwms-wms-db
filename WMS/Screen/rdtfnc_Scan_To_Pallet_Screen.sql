@@ -1,7 +1,7 @@
 -- rdtfnc_Scan_To_Pallet
 
-IF NOT EXISTS( SELECT 1 FROM RDT.RDTMsg (NOLOCK) WHERE Message_ID = 1638 AND Lang_Code = 'ENG' AND Message_Type = 'FNC')
-   INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
+DELETE RDT.RDTMsg WHERE Message_ID = 1638 AND Lang_Code = 'ENG' AND Message_Type = 'FNC'
+INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
    VALUES (1638, 'ENG', 'FNC', 'Scan To Pallet', 'rdtfnc_Scan_To_Pallet', '0')
 GO
 
@@ -13,6 +13,7 @@ EXECUTE rdt.rdtAddScn 2250, 'ENG',
    ,@cLine03 = ''
    ,@cLine04 = 'LOC: %10i02'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["4"]}'
    ,@nFunc = 1638
 
 -- 2251 = CartonType screen
@@ -23,6 +24,7 @@ EXECUTE rdt.rdtAddScn 2251, 'ENG',
    ,@cLine04 = 'Carton type:'
    ,@cLine05 = '%10i02'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["4","5"]}'
    ,@nFunc = 1638
 
 -- 2252 = CaseID screen
@@ -37,6 +39,7 @@ EXECUTE rdt.rdtAddScn 2252, 'ENG',
    ,@cLine10 = '# OF CASES: %05d04'
    ,@cLine13 = '%20d15'    -- WMS-15913
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["4","5"],"3":["7","8"],"4":["10"],"5":["13"]}'
    ,@nFunc = 1638
 
 -- 2253 = Print packing list screen
@@ -54,25 +57,27 @@ DELETE rdt.RDTScn WHERE Scn = 2254 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 2254, 'ENG',
     @cLine01 = 'PalletKey: '
    ,@cLine02 = '%30d01'
-   ,@cLine04 = 'Length      : %05i02'
-   ,@cLine05 = 'Width       : %05i03'
-   ,@cLine06 = 'Height      : %05i04'
-   ,@cLine07 = 'Gross Weight: %05i05'
+   ,@cLine04 = 'Length      : %05i02^DT:INT'
+   ,@cLine05 = 'Width       : %05i03^DT:INT'
+   ,@cLine06 = 'Height      : %05i04^DT:INT'
+   ,@cLine07 = 'Gross Weight: %05i05^DT:INT'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["4"],"3":["5"],"4":["6"],"5":["7"]}'
    ,@nFunc = 1638   
 
 -- 2255 = Pack info screen
 DELETE rdt.RDTScn WHERE Scn = 2255 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 2255, 'ENG'
-   ,@cLine01 = 'CARTON: %10i01'
+   ,@cLine01 = 'CARTON: %10i01^DT:INT'
    ,@cLine02 = ''
-   ,@cLine03 = 'WEIGHT: %10i02'
+   ,@cLine03 = 'WEIGHT: %10i02^DT:INT'
    ,@cLine04 = ''
-   ,@cLine05 = 'CUBE:   %10i03'
+   ,@cLine05 = 'CUBE:   %10i03^DT:INT'
    ,@cLine06 = ''
    ,@cLine07 = 'REF NO:'
    ,@cLine08 = '%20i04'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["3"],"3":["5"],"4":["7","8"]}'
    ,@nFunc = 1638
 
 -- WMS-15913

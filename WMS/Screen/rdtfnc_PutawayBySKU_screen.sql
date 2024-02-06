@@ -11,6 +11,7 @@ EXECUTE rdt.rdtAddScn 2880, 'ENG'
    ,@cLine08 = 'LOC:'
    ,@cLine09 = '%10i03'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["5","6"],"3":["8","9"]}'
    ,@nFunc = 523
  
 -- 2881 = SKU
@@ -30,6 +31,7 @@ EXECUTE rdt.rdtAddScn 2881, 'ENG',
    ,@cLine12 = 'QTY: %10d08'
    ,@cLine13 = '%20d15'    -- ExtendedInfo WMS-21307
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["5","6"],"4":["7","8","9","10","11"],"5":["12"],"5":["13"]}'
    ,@nFunc = 523
    
 -- 2882 = QTY
@@ -47,9 +49,10 @@ EXECUTE rdt.rdtAddScn 2882, 'ENG'
    --,@cLine10 = '%08d08 %05d09 %05d10'
    ,@cLine10 = '%20d08'    -- WMS-15820
    ,@cLine11 = N'QTY PWY: %06d11 %06d12' --(ws01)
-   ,@cLine12 = N'QTY ACT: %06i13 %06i14' --(ws01)
+   ,@cLine12 = N'QTY ACT: %06i13^DT:INT %06i14^DT:INT' --(ws01)
    ,@cLine13 = '%20d15'    -- WMS-15820
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4"],"2":["5","6","7","8","9"],"3":["10","11","12"],"4":["13"]}'
    ,@nFunc = 523
    
 -- 2883 = Suggested LOC, final LOC
@@ -67,6 +70,7 @@ EXECUTE rdt.rdtAddScn 2883, 'ENG'
    ,@cLine10 = ''
    ,@cLine11 = '%20d15'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["4","5","6"],"3":["8","9"],"4":["11"]}'
    ,@nFunc = 523
    
 -- 2884 = Message screen
@@ -79,6 +83,7 @@ EXECUTE rdt.rdtAddScn 2884, 'ENG'
    ,@cLine05 = 'Press ENTER to'
    ,@cLine06 = 'putaway next item'
    ,@cLine14 = '%e'
+   ,@cAutoDisappear = '1'
    ,@nFunc = 523
 
 DELETE rdt.RDTScn WHERE Scn = 2885 AND Lang_Code = 'ENG'

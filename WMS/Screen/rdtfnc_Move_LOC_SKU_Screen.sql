@@ -4,6 +4,7 @@ DELETE rdt.RDTScn WHERE Scn = 3210 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 3210, 'ENG'
    ,@cLine01 = 'FROM LOC: %10i01'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"]}'
    ,@nFunc = 523
 
 -- 3211 = SKU
@@ -13,6 +14,7 @@ EXECUTE rdt.rdtAddScn 3211, 'ENG'
    ,@cLine02 = 'SKU/UPC:'
    ,@cLine03 = '%60i02'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3"]}'
    ,@nFunc = 523
 
 -- 3212 = To LOC
@@ -25,6 +27,7 @@ EXECUTE rdt.rdtAddScn 3212, 'ENG'
    ,@cLine05 = '%20d04'
    ,@cLine06 = 'TO LOC: %10i05'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3","4"],"3":["6"]}'
    ,@nFunc = 523
 
 -- 3213 = Message screen
@@ -36,4 +39,5 @@ EXECUTE rdt.rdtAddScn 3213, 'ENG'
    ,@cLine05 = 'Press ENTER or ESC'
    ,@cLine06 = 'to continue'
    ,@cLine14 = '%e'
+   ,@cAutoDisappear = '1'
    ,@nFunc = 523

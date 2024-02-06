@@ -4,8 +4,9 @@ EXECUTE rdt.rdtAddScn 1300, 'ENG'
    ,@cLine01 = 'ASN: %10i01'
    ,@cLine02 = 'PO : %10i02'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"]}'
    ,@nFunc = 898
- 
+
 -- 1301 = TO LOC screen
 DELETE rdt.RDTScn WHERE Scn = 1301 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 1301, 'ENG'
@@ -13,8 +14,9 @@ EXECUTE rdt.rdtAddScn 1301, 'ENG'
    ,@cLine02 = 'PO : %10d02'
    ,@cLine04 = 'TO LOC: %10i03'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["4"]}'
    ,@nFunc = 898
- 
+
 -- 1302 = TO ID screen
 DELETE rdt.RDTScn WHERE Scn = 1302 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 1302, 'ENG'
@@ -24,6 +26,7 @@ EXECUTE rdt.rdtAddScn 1302, 'ENG'
    ,@cLine05 = 'TO ID:'
    ,@cLine06 = '%20i04'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["4"],"3":["5","6"]}'
    ,@nFunc = 898
 
 -- 1303 = Estimate screen
@@ -36,8 +39,9 @@ EXECUTE rdt.rdtAddScn 1303, 'ENG'
    ,@cLine06 = '%18d04'
    ,@cLine08 = 'ESTIMATED'
    ,@cLine09 = 'UCC ON ID: %02i05'
-    ,@cLine13 = '%20d15' --WMS20650 (yeekung04)
+   ,@cLine13 = '%20d15' --WMS20650 (yeekung04)
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["4"],"3":["5","6"],"4":["8","9"],"5":["13"]}'
    ,@nFunc = 898
 
 -- 1304 = Lottable screen
@@ -52,6 +56,7 @@ EXECUTE rdt.rdtAddScn 1304, 'ENG'
    ,@cLine07 = 'Lottable04:'
    ,@cLine08 = '%18i04'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["5","6"],"4":["7","8"]}'
    ,@nFunc = 898
 
 -- 1305 = UCC screen
@@ -71,6 +76,7 @@ EXECUTE rdt.rdtAddScn 1305, 'ENG'
    ,@cLine12 = 'QTY: %05d10'
    ,@cLine13 = '%20d15'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4","5","6"],"3":["7"],"4":["8","9","10","11"],"5":["12"],"6":["13"]}'
    ,@nFunc = 898
 
 -- 1306 = Message screen
@@ -89,9 +95,10 @@ EXECUTE rdt.rdtAddScn 1307, 'ENG'
    ,@cLine01 = 'UCC:           %07d03' -- (ChewKP02)
    ,@cLine02 = '%20d01'
    ,@cLine03 = 'SKU/UPC:'
-   ,@cLine04 = '%20i02'
+   ,@cLine04 = '%60i02'
    ,@cLine05 = 'QTY: %05d04'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["5"]}'
    ,@nFunc = 898
 
 -- 1308 = QTY screen
@@ -109,8 +116,9 @@ EXECUTE rdt.rdtAddScn 1308, 'ENG'
    ,@cLine10 = '2 %18d07'
    ,@cLine11 = '3 %18d08'
    ,@cLine12 = '4 %16d09'
-   ,@cLine13 = 'QTY: %05i10'
+   ,@cLine13 = 'QTY: %05i10^DT:INT'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4","5","6"],"3":["7"],"4":["8","9","10","11","12"],"5":["13"]}'
    ,@nFunc = 898
 
 -- 1309 = Add info screen
@@ -127,6 +135,7 @@ EXECUTE rdt.rdtAddScn 1309, 'ENG'
    ,@cLine09 = 'Extra Data 5:'
    ,@cLine10 = '%20i05'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["5","6"],"4":["7","8"],"5":["9","10"]}'
    ,@nFunc = 898
 
 

@@ -5,6 +5,7 @@ EXECUTE rdt.rdtAddScn 3390, 'ENG'
    ,@cLine01 = 'TO ID:'
    ,@cLine02 = '%18i01'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"]}'
    ,@nFunc = 534
 
 -- 3391 = FROM LOC
@@ -14,6 +15,7 @@ EXECUTE rdt.rdtAddScn 3391, 'ENG'
    ,@cLine02 = '%18d01'
    ,@cLine03 = 'FROM LOC: %10i02'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3"]}'
    ,@nFunc = 534
 
 -- 3392 = SKU, QTY
@@ -28,10 +30,11 @@ EXECUTE rdt.rdtAddScn 3392, 'ENG'
    ,@cLine07 = ''
    ,@cLine08 = '%08d12 %05d06 %05d09'
    ,@cLine09 = 'QTY AVL: %05d07 %05d10'
-   ,@cLine10 = 'QTY MV:  %05i08 %05i11'
+   ,@cLine10 = 'QTY MV:  %05i08^DT:INT %05i11^DT:INT'
    ,@cLine11 = ''
    ,@cLine12 = 'QTY ID: %05d13'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3","4","5","6"],"3":["8","9","10"],"4":["12"]}'
    ,@nFunc = 534
 
  -- 3393 = Close ToID screen
@@ -52,4 +55,5 @@ DELETE rdt.RDTScn WHERE Scn = 3394 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 3394, 'ENG'
    ,@cLine01 = 'TO LOC: %10i01'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"]}'
    ,@nFunc = 534

@@ -1,13 +1,15 @@
 -- 1010 = ?? screen
 DELETE rdt.RDTScn WHERE Scn = 1010 AND Lang_Code = 'ENG'
-EXECUTE rdt.rdtAddScn 1010, 'ENG',
-    @cLine01 = 'FROM LOC: %10i02'
+EXECUTE rdt.rdtAddScn 1010, 'ENG'
+   ,@cLine01 = 'FROM LOC: %10i02'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"]}'
+   ,@nFunc = 512
  
 -- 1011 = ?? screen
 DELETE rdt.RDTScn WHERE Scn = 1011 AND Lang_Code = 'ENG'
-EXECUTE rdt.rdtAddScn 1011, 'ENG',
-    @cLine01 = 'FROM LOC: %10d02'
+EXECUTE rdt.rdtAddScn 1011, 'ENG'
+   ,@cLine01 = 'FROM LOC: %10d02'
    ,@cLine03 = 'SKU: %10d03'
    ,@cLine04 = '%20d04'
    ,@cLine05 = '%20d05'
@@ -19,21 +21,24 @@ EXECUTE rdt.rdtAddScn 1011, 'ENG',
    ,@cLine12 = '%20i12' -- SOS#137962
    ,@cLine13 = '%20d13' -- WMS7487
    ,@cLine14 = '%e'
- 
+   ,@cWebGroup = '{"1":["1"],"2":["3","4","5","6"],"3":["7","8"],"4":["10"],"5":["11","12"],"6":["13"]}'
+   ,@nFunc = 512
+   
 -- 1012 = ?? screen
 DELETE rdt.RDTScn WHERE Scn = 1012 AND Lang_Code = 'ENG'
-EXECUTE rdt.rdtAddScn 1012, 'ENG',
-    @cLine02 = 'Stock in LOC moved'
+EXECUTE rdt.rdtAddScn 1012, 'ENG'
+   ,@cLine02 = 'Stock in LOC moved'
    ,@cLine03 = 'successfully'
    ,@cLine04 = 'TO LOC: %10d01'      -- (james03)
    ,@cLine06 = 'Press ENTER or ESC'  -- (james03)  
    ,@cLine07 = 'to continue'         -- (james03)
    ,@cLine14 = '%e'
+   ,@cAutoDisappear = '1'
 
 -- 1013 = ?? screen
 DELETE rdt.RDTScn WHERE Scn = 1013 AND Lang_Code = 'ENG'
-EXECUTE rdt.rdtAddScn 1013, 'ENG',
-    @cLine02 = 'Only move 10 records'
+EXECUTE rdt.rdtAddScn 1013, 'ENG'
+   ,@cLine02 = 'Only move 10 records'
    ,@cLine03 = 'at one time.'
    ,@cLine05 = 'Remaining Rec = %04d01'
    ,@cLine07 = 'Continue Move?'
@@ -41,4 +46,4 @@ EXECUTE rdt.rdtAddScn 1013, 'ENG',
    ,@cLine10 = '2 = NO'
    ,@cLine12 = 'Option: %01i02'
    ,@cLine14 = '%e'
- 
+   ,@nFunc = 512 

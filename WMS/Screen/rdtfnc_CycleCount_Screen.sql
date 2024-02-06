@@ -3,7 +3,9 @@
 DELETE rdt.RDTScn WHERE Scn = 660 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 660, 'ENG', 
    @cLine01 = 'CCREF : %10i01',
-   @cLine14 = '%e'
+   @cLine14 = '%e',
+   @cWebGroup = '{"1":["1"]}',
+   @nFunc = 610
 
 -- Screen 2
 -- Scn = 661. SHEET NO OR SELECTION CRITERIA
@@ -19,7 +21,9 @@ EXECUTE rdt.rdtAddScn 661, 'ENG',
    @cLine08 = '      : %10i07',
    @cLine10 = 'AISLE : %10i08',
    @cLine11 = 'LEVEL : %10i09',
-   @cLine14 = '%e'
+   @cLine14 = '%e',
+   @cWebGroup = '{"1":["1","2"],"2":["4","5","6","7","8"],"3":["10"],"4":["11"]}', 
+   @nFunc = 610
 
 -- Screen 3   
 -- Scn = 662. COUNT NO
@@ -29,8 +33,10 @@ EXECUTE rdt.rdtAddScn 662, 'ENG',
    @cLine02 = 'SHEET : %10d02',
    @cLine03 = 'CNT NO: %01i03',
    @cLine13 = '%20d15',    -- WMS-11865 Extendedinfosp
-   @cLine14 = '%e'
-   
+   @cLine14 = '%e', 
+   @cWebGroup = '{"1":["1","2"],"2":["3"],"3":["13"]}',
+   @nFunc = 610
+
 -- Screen 4   
 -- Scn = 663. LOC
 DELETE rdt.RDTScn WHERE Scn = 663 AND Lang_Code = 'ENG'
@@ -41,8 +47,10 @@ EXECUTE rdt.rdtAddScn 663, 'ENG',
    @cLine05 = 'LOC: %10d04',
    @cLine06 = 'LOC: %10i05',
    @cLine08 = 'TOTAL RECORDS: %05d06',   
-   @cLine14 = '%e'
-   
+   @cLine14 = '%e', 
+   @cWebGroup = '{"1":["1","2","3"],"2":["5","6"],"3":["8"]}', 
+   @nFunc = 610
+
 -- Screen 4a
 -- Scn = 664. LOC - Option
 DELETE rdt.RDTScn WHERE Scn = 664 AND Lang_Code = 'ENG'
@@ -94,7 +102,9 @@ EXECUTE rdt.rdtAddScn 667, 'ENG'
    ,@cLine12 = '3=SINGLE SCAN'
    ,@cLine13 = '4=ID/CARTON'
    ,@cLine14 = '%e'
-
+   ,@cWebGroup = '{"1":["1","2","3"],"2":["5","6"],"3":["7"],"4":["8","9"],"5":["10","11","12","13"]}'
+   ,@nFunc = 610
+   
 -- Screen 6
 -- 668. UCC
 DELETE rdt.RDTScn WHERE Scn = 668 AND Lang_Code = 'ENG'
@@ -112,7 +122,9 @@ EXECUTE rdt.rdtAddScn 668, 'ENG',
    @cLine11 = '4 %18d09',
    @cLine12 = '5 %18d10',   
    @cLine13 = 'OPT: %01i12        1=ADD',
-   @cLine14 = '%e'      
+   @cLine14 = '%e',
+   @cWebGroup = '{"1":["1","2"],"2":["3","4","5","6"],"3":["7","8","9","10","11","12"],"4":["13"]}', 
+   @nFunc = 610
 
 -- Screen 7
 -- 669. UCC - Add UCC
@@ -123,7 +135,9 @@ EXECUTE rdt.rdtAddScn 669, 'ENG',
    @cLine03 = '%18d02',
    @cLine05 = 'UCC:',
    @cLine06 = '%20i03',      
-   @cLine14 = '%e'         
+   @cLine14 = '%e',
+   @cWebGroup = '{"1":["1"],"2":["2","3"],"3":["5","6"]}', 
+   @nFunc = 610
 
 -- Screen 8
 -- 670. UCC - Add SKU & QTY
@@ -139,8 +153,10 @@ EXECUTE rdt.rdtAddScn 670, 'ENG',
    @cLine09 = '%20d05',
    @cLine10 = '%20d06', 
 --   ,@cLine11 = '%20i08' REMARK HERE BECAUSE DUMMY FIELD
-   @cLine14 = '%e'
-    
+   @cLine14 = '%e',
+   @cWebGroup = '{"1":["1"],"2":["2","3"],"3":["5","6"],"4":["7","8","9","10"]}', 
+   @nFunc = 610
+   
 -- Screen 9    
 -- 671. UCC - Add LOTTABLE01..05
 DELETE rdt.RDTScn WHERE Scn = 671 AND Lang_Code = 'ENG'
@@ -156,7 +172,9 @@ EXECUTE rdt.rdtAddScn 671, 'ENG',
    ,@cLine09 = '%20d09'
    ,@cLine10 = '%16i10'
    ,@cLine14 = '%e'   
-  
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["5","6"],"4":["7","8"],"5":["9","10"]}'
+   ,@nFunc = 610
+   
 -- Screen 10  
 -- 672. SKU
 DELETE rdt.RDTScn WHERE Scn = 672 AND Lang_Code = 'ENG'
@@ -174,7 +192,9 @@ EXECUTE rdt.rdtAddScn 672, 'ENG',
    @cLine11 = '4 %18d12',
    @cLine12 = '5 %18d13',
    @cLine13 = '1=ADD 2=EDT ENTR=NXT',
-   @cLine14 = '%e'
+   @cLine14 = '%e',
+   @cWebGroup = '{"1":["1","2","3","4"],"2":["5","6"],"3":["7"],"4":["8","9","10","11","12"],"5":["13"]}',
+   @nFunc = 610
 
 -- Screen 11
 -- 673. SKU - Add SKU/UPC
@@ -185,7 +205,9 @@ EXECUTE rdt.rdtAddScn 673, 'ENG',
    @cLine03 = '%18d02',
    @cLine04 = 'SKU/UPC:',
    @cLine05 = '%30i03',
-   @cLine14 = '%e'
+   @cLine14 = '%e',
+   @cWebGroup = '{"1":["1"],"2":["2","3"],"3":["4","5"]}',
+   @nFunc = 610
 
 -- Screen 12   
 -- 674. SKU - Add QTY
@@ -199,11 +221,13 @@ EXECUTE rdt.rdtAddScn 674, 'ENG',
    @cLine06 = '%20d04',
    @cLine07 = '%20d05',
    @cLine08 = 'Qty', -- (ChewKP01)
-   @cLine09 = '%10i06 %03d07',    -- For CS, QTY:99999 UOM -- (ChewKP01)
-   @cLine10 = '%10i08 %10d09',    -- For EA, QTY:99999 UOM PPK:99 -- (ChewKP01)
+   @cLine09 = '%10i06^DT:INT %03d07',    -- For CS, QTY:99999 UOM -- (ChewKP01)
+   @cLine10 = '%10i08^DT:INT %10d09',    -- For EA, QTY:99999 UOM PPK:99 -- (ChewKP01)
    @cLine13 = '%20d15', -- ExtendedInfo (WMS-11865)
-   @cLine14 = '%e'
-
+   @cLine14 = '%e',
+   @cWebGroup = '{"1":["1"],"2":["2","3"],"3":["4","5","6","7"],"4":["8","9","10"],"5":["13"]}', 
+   @nFunc = 610
+   
 -- Screen 13   
 -- 675. SKU - Add LOTTABLE01..05
 DELETE rdt.RDTScn WHERE Scn = 675 AND Lang_Code = 'ENG'
@@ -219,7 +243,9 @@ EXECUTE rdt.rdtAddScn 675, 'ENG',
    ,@cLine09 = '%20d09'
    ,@cLine10 = '%16i10'
    ,@cLine14 = '%e'   
-
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["5","6"],"4":["7","8"],"5":["9","10"]}'
+   ,@nFunc = 610
+   
 -- Screen 14  
 -- 676. SKU - Edit QTY
 DELETE rdt.RDTScn WHERE Scn = 676 AND Lang_Code = 'ENG'
@@ -228,15 +254,17 @@ EXECUTE rdt.rdtAddScn 676, 'ENG',
    @cLine02 = '%20d01',
    @cLine03 = '%20d02',
    @cLine04 = '%20d03',
-   @cLine05 = '%10i04 %10d05',    -- For CS, QTY:99999 UOM    [ ]  -- (ChewKP01)
-   @cLine06 = '%10i06 %10d07',    -- For EA, QTY:99999 UOM PPK:99  -- (ChewKP01)
+   @cLine05 = '%10i04^DT:INT %10d05',    -- For CS, QTY:99999 UOM    [ ]  -- (ChewKP01)
+   @cLine06 = '%10i06^DT:INT %10d07',    -- For EA, QTY:99999 UOM PPK:99  -- (ChewKP01)
    @cLine07 = 'LOTTABLE 1/2/3/4/5:',
    @cLine08 = '1 %18d08',
    @cLine09 = '2 %18d09',
    @cLine10 = '3 %18d10',
    @cLine11 = '4 %18d11',
    @cLine12 = '5 %18d12',
-   @cLine14 = '%e'
+   @cLine14 = '%e', 
+   @cWebGroup = '{"1":["1","2","3","4"],"2":["5","6"],"3":["7","8","9","10","11","12"]}', 
+   @nFunc = 610
    
 -- Screen 15
 -- 677. SINGLE SKU - Sku Scan
@@ -247,7 +275,9 @@ EXECUTE rdt.rdtAddScn 677, 'ENG',
    @cLine03 = '%18d02',
    @cLine05 = 'SKU/UPC:',
    @cLine06 = '%30i03',
-   @cLine14 = '%e'     
+   @cLine14 = '%e', 
+   @cWebGroup = '{"1":["1"],"2":["2","3"],"3":["5","6"]}', 
+   @nFunc = 610
    
 -- Screen 16
 -- 678. SINGLE SKU - Add LOTTABLE01..05
@@ -264,6 +294,8 @@ EXECUTE rdt.rdtAddScn 678, 'ENG',
 --   ,@cLine09 = '%20d09'  -- no need lootable05 when do cycle count
 --   ,@cLine10 = '%16i10'  -- no need lootable05 when do cycle count
    ,@cLine14 = '%e'  
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["5","6"],"4":["7","8"]}'
+   ,@nFunc = 610
    
 -- Screen 17
 -- 679. SINGLE SKU - Increase QTY
@@ -280,7 +312,9 @@ EXECUTE rdt.rdtAddScn 679, 'ENG',
    @cLine10 = '%20d06',
    @cLine12 = 'SKU QTY: %05d07 %03d08',  -- QTY:99999 UOM
    @cLine13 = 'ID  QTY: %05d09 %03d10',
-   @cLine14 = '%e'     
+   @cLine14 = '%e',
+   @cWebGroup = '{"1":["1"],"2":["2","3"],"3":["5","6"],"4":["7","8","9","10"],"5":["12","13"]}', 
+   @nFunc = 610
    
 -- Change screen no from 680 to 700
 -- because 680 crashed with UCC outbound verify (james01)
@@ -336,7 +370,9 @@ EXECUTE rdt.rdtAddScn 3261, 'ENG'
    ,@cLine10 = '%10d07 %10d08'
    ,@cLine11 = '%10d09 %10d10'
    ,@cLine14 = '%e'
-
+   ,@cWebGroup = '{"1":["1"],"2":["2","3"],"3":["4","5","7","8","9"],"5":["10","11"]}'
+   ,@nFunc = 610
+   
 -- 3262 = ?? screen
 DELETE rdt.RDTScn WHERE Scn = 3262 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 3262, 'ENG'
@@ -348,10 +384,12 @@ EXECUTE rdt.rdtAddScn 3262, 'ENG'
    ,@cLine06 = '%20d04'
    ,@cLine07 = '%20d05'
    ,@cLine08 = 'Qty'
-   ,@cLine09 = '%10i06 %03d07'
-   ,@cLine10 = '%10i08 %10d09'
+   ,@cLine09 = '%10i06^DT:INT %03d07'
+   ,@cLine10 = '%10i08^DT:INT %10d09'
    ,@cLine13 = '%20d15' -- ExtendedInfo (WMS-11865)
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3"],"3":["4","5","6","7"],"4":["8","9"],"5":["13"]}'
+   ,@nFunc = 610
 
 -- 3263 = ?? screen
 DELETE rdt.RDTScn WHERE Scn = 3263 AND Lang_Code = 'ENG'
@@ -367,7 +405,9 @@ EXECUTE rdt.rdtAddScn 3263, 'ENG'
    ,@cLine09 = '%20d09'
    ,@cLine10 = '%16i10'
    ,@cLine14 = '%e'
-
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["5","6"],"4":["7","8"],"5":["9","10"]}'
+   ,@nFunc = 610
+   
 -- 3264 = ?? screen
 DELETE rdt.RDTScn WHERE Scn = 3264 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 3264, 'ENG'
@@ -385,3 +425,5 @@ EXECUTE rdt.rdtAddScn 3264, 'ENG'
    ,@cLine12 = '4:%18d10'
    ,@cLine13 = '%20i11'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3","4"],"3":["6","7"],"4":["8","9"],"5":["10","11"],"6":["12","13"]}'
+   ,@nFunc = 610

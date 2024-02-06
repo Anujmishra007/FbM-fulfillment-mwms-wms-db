@@ -65,7 +65,9 @@ CREATE TABLE [RDT].[RDTScn]
 [Func] [int] NOT NULL CONSTRAINT [DF_RDTScn_Func] DEFAULT ((0)),
 [PrecompileSQL] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_rdtScn_PrecompileSQL] DEFAULT (''),
 [PrecompileXML] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_rdtScn_PrecompileXML] DEFAULT (''),
-[ScreenFormat] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_rdtScn_ScreenFormat] DEFAULT ('')
+[ScreenFormat] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_rdtScn_ScreenFormat] DEFAULT (''),
+[AutoDisappear] [NVARCHAR] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTScn_AutoDisappear]  DEFAULT (''),
+[WebGroup] [nvarchar] (255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTScn_WebGroup]  DEFAULT ('')
 ) ON [PRIMARY]
 GO
 ALTER TABLE [RDT].[RDTScn] ADD CONSTRAINT [PK_RDTScn] PRIMARY KEY CLUSTERED ([Scn], [Lang_Code]) WITH (FILLFACTOR=90) ON [PRIMARY]

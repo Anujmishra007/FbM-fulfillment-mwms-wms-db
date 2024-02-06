@@ -1,8 +1,6 @@
-IF NOT EXISTS ( SELECT 1 FROM RDT.RDTMSG WITH (NOLOCK) WHERE Message_ID = 896 AND Message_Type = 'FNC' AND Lang_Code = 'ENG')
-BEGIN
-   INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
+DELETE RDT.RDTMSG WHERE Message_ID = 896 AND Message_Type = 'FNC' AND Lang_Code = 'ENG'
+INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
    VALUES (896, 'ENG', 'FNC', 'REPLENISHMENT V7', 'rdtfnc_Replenish_V7', '5')
-END
 
 -- 5370 = FROM LOC,ID or RPLKEY screen
 DELETE rdt.RDTScn WHERE Scn = 5370 AND Lang_Code = 'ENG'
@@ -17,6 +15,7 @@ EXECUTE rdt.rdtAddScn 5370, 'ENG',
    ,@cLine08 = 'RPL KEY:'
    ,@cLine09 = '%10i03'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["8","9"]}'
    ,@nFunc = 896
 
 -- 5371 = SKU screen
@@ -29,6 +28,7 @@ EXECUTE rdt.rdtAddScn 5371, 'ENG',
    ,@cLine05 = 'SKU/UPC:'
    ,@cLine06 = '%20i03'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["5","6"]}'
    ,@nFunc = 896
 
 -- 5372 = QTY screen
@@ -45,9 +45,10 @@ EXECUTE rdt.rdtAddScn 5372, 'ENG',
    ,@cLine09 = '%20d08'    -- Lottablenn 
    ,@cLine10 = '%20d09'
    ,@cLine11 = 'RPL QTY: %05d10 %05d11'
-   ,@cLine12 = 'ACT QTY: %05i12 %05i13'
+   ,@cLine12 = 'ACT QTY: %05i12^DT:INT %05i13^DT:INT'
    ,@cLine13 = '%20d14'   -- WMS6778
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3","4","5"],"3":["6","7","8","9"],"4":["10","11","12"],"5":["13"]}'
    ,@nFunc = 896
 
 -- 5373 = ToLOC screen
@@ -66,6 +67,7 @@ EXECUTE rdt.rdtAddScn 5373, 'ENG',
    ,@cLine11 = 'ID%18i11'     
    ,@cLine12 = 'TO LOC: %10d12'
    ,@cLine13 = 'TO LOC: %10i13'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3"],"3":["4","5","6","7"],"4":["8","9","10"],"5":["11"],"6":["12","13"]}'
    ,@cLine14 = '%e'
 
 -- 5374 = Confirm LOC screen
@@ -92,6 +94,7 @@ EXECUTE rdt.rdtAddScn 5375, 'ENG',
    ,@cLine04 = 'Press ENTER or ESC'
    ,@cLine05 = 'to continue'
    ,@cLine14 = '%e'
+   ,@cAutoDisappear = '1'
    ,@nFunc = 896
 
 -- 5376 = UCC screen
@@ -104,4 +107,5 @@ EXECUTE rdt.rdtAddScn 5376, 'ENG',
    ,@cLine05 = 'UCC:'
    ,@cLine06 = '%20i03'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["5","6"]}'
    ,@nFunc = 896

@@ -7,6 +7,7 @@ EXECUTE rdt.rdtAddScn 4030, 'ENG'
    ,@cLine04 = 'REF NO:'
    ,@cLine05 = '%20i03'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2"],"3":["4","5"]}'
    ,@nFunc = 600
 
 -- 4031 = Loc screen
@@ -16,6 +17,7 @@ EXECUTE rdt.rdtAddScn 4031, 'ENG'
    ,@cLine02 = 'PO : %10d02'
    ,@cLine03 = 'TO LOC: %10i03'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3"]}'
    ,@nFunc = 600
 
 -- 4032 = Pallet ID screen
@@ -25,6 +27,7 @@ EXECUTE rdt.rdtAddScn 4032, 'ENG'
    ,@cLine02 = 'TO ID:'         -- ID extend from 18 to 30
    ,@cLine03 = '%30i02'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3"]}'
    ,@nFunc = 600
 
 -- 4033 = SKU screen
@@ -40,6 +43,7 @@ EXECUTE rdt.rdtAddScn 4033, 'ENG'
    ,@cLine08 = '%20d04'
    ,@cLine13 = '%20d05'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["4","5"]}'
    ,@nFunc = 600
 
 -- 4034 = Lottable screen
@@ -55,6 +59,7 @@ EXECUTE rdt.rdtAddScn 4034, 'ENG'
    ,@cLine08 = '%16i08'   -- Lottable04
    ,@cLine09 = '%20d09'   -- Lot label 05
    ,@cLine10 = '%16i10'   -- Lottable05
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["5","6"],"4":["7","8"],"5":["9","10"]}'
    ,@cLine14 = '%e'
    ,@nFunc = 600
 
@@ -69,12 +74,13 @@ EXECUTE rdt.rdtAddScn 4035, 'ENG'
    ,@cLine06 = '%20d04'
    ,@cLine07 = ''
    ,@cLine08 = '%07d05 %05d06   %05d07'
-   ,@cLine09 = 'QTY: %07i08 %07i09'
+   ,@cLine09 = 'QTY: %07i08^DT:INT %07i09^DT:INT'
    ,@cLine10 = ''
    ,@cLine11 = 'COND CODE:%10i10'
    ,@cLine12 = ''
    ,@cLine13 = '%20d15'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4"],"2":["5","6"],"3":["8","9"],"4":["11"],"5":["13"]}'
    ,@nFunc = 600   
 
 -- 4036 = Message screen
@@ -87,6 +93,7 @@ EXECUTE rdt.rdtAddScn 4036, 'ENG'
    ,@cLine05 = 'Press ENTER or ESC'
    ,@cLine06 = 'to continue'
    ,@cLine14 = '%e'
+   ,@cAutoDisappear = '1'
    ,@nFunc = 600
 
 -- 4037. Add SKU not in ASN?
@@ -132,6 +139,7 @@ EXECUTE rdt.rdtAddScn 4040, 'ENG'
    ,@cLine12 = ''
    ,@cLine13 = 'OPTION: %01i10'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3","4","5","6","7","8","9","10","11"],"2":["13"]}'
    ,@nFunc = 600
    
 -- 4041. Putaway
@@ -145,6 +153,7 @@ EXECUTE rdt.rdtAddScn 4041, 'ENG'
    ,@cLine06 = 'FINAL LOC:'
    ,@cLine07 = '%10i02'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3","4"],"2":["6","7"]}'
    ,@nFunc = 600
 
 -- 4042 Close Pallet

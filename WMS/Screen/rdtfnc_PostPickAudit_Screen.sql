@@ -11,6 +11,8 @@ EXECUTE rdt.rdtAddScn 814, 'ENG',
    ,@cLine08 = '%20i06'
    ,@cLine09 = 'TASKKEY:  %10i07'   -- WMS-8002
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2"],"3":["3"],"4":["4"],"5":["5","6"],"6":["7","8"],"7":["9"]}'
+   ,@nFunc = 850
    
 -- 815 = Statistic screen
 DELETE rdt.RDTScn WHERE Scn = 815 AND Lang_Code = 'ENG'
@@ -29,6 +31,8 @@ EXECUTE rdt.rdtAddScn 815, 'ENG',
    ,@cLine12 = 'QTY CKD: %11d07'
    ,@cLine13 = '%20d08'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2"],"3":["3"],"4":["4"],"5":["5","6"],"6":["7","8"],"7":["9"],"8":["11","12"],"9":["13"]}'
+   ,@nFunc = 850
    
 -- 816 = SKU QTY screen
 DELETE rdt.RDTScn WHERE Scn = 816 AND Lang_Code = 'ENG'
@@ -41,12 +45,14 @@ EXECUTE rdt.rdtAddScn 816, 'ENG',
    ,@cLine06 = '%20d05'
    ,@cLine07 = '%10d06     %05d07'
    ,@cLine08 = '%20d08'
-   ,@cLine09 = 'QTY:     %05i09 %05i10'
+   ,@cLine09 = 'QTY:     %05i09^DT:INT %05i10^DT:INT'
    ,@cLine10 = ''
    ,@cLine11 = 'COUNTED:%05d11 %06d12' --(WMS-20944
    ,@cLine12 = 'TOTAL:  %05d13 %06d14' --WMS-20944
    ,@cLine13 = '%20d15'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4","5"],"2":["6","7"],"3":["8","9"],"4":["11","12"],"5":["13"]}'
+   ,@nFunc = 850
    
  -- 817 = Discrepency screen
 DELETE rdt.RDTScn WHERE Scn = 817 AND Lang_Code = 'ENG'
@@ -61,6 +67,7 @@ EXECUTE rdt.rdtAddScn 817, 'ENG',
    ,@cLine09 = 'Reason Code' --WMS17278
    ,@cLine10 = '%20i02'      --WMS17278
    ,@cLine14 = '%e'
+   ,@nFunc = 850
    
  -- 818 = Print packing list
 DELETE rdt.RDTScn WHERE Scn = 818 AND Lang_Code = 'ENG'
@@ -73,6 +80,7 @@ EXECUTE rdt.rdtAddScn 818, 'ENG',
    ,@cLine06 = ''
    ,@cLine07 = 'OPTION: %01i01'
    ,@cLine14 = '%e'
+   ,@nFunc = 850
    
 -- WMS-8002
 -- 819 Capture data
@@ -80,7 +88,7 @@ DELETE rdt.RDTScn WHERE Scn = 819 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 819, 'ENG'
    ,@cLine01 = '%20d01'
    ,@cLine02 = '%20d02'
-   ,@cLine03 = '%20d04' -- WMS24201
+   ,@cLine03 = 'CAPTURE DATA'
    ,@cLine04 = '%60i03'
    ,@cLine05 = ''
    ,@cLine06 = ''
@@ -92,12 +100,17 @@ EXECUTE rdt.rdtAddScn 819, 'ENG'
    ,@cLine12 = ''
    ,@cLine13 = '%20d13'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["13"]}'
+   ,@nFunc = 850
    
 -- WMS-17439
 -- 5980 Capture data
 DELETE rdt.RDTScn WHERE Scn = 5980 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 5980, 'ENG'
    ,@cLine01 = 'CARTON: %10i01'
-   ,@cLine02 = 'CUBE: %10i02'
-   ,@cLine03 = 'WEIGHT:   %10i03'
-   ,@cLine14 = '%e'   
+   ,@cLine02 = 'CUBE: %10i02^DT:INT'
+   ,@cLine03 = 'WEIGHT:   %10i03^DT:INT'
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2"],"3":["3"]}'
+   ,@nFunc = 850
+   

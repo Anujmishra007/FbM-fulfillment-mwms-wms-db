@@ -23,7 +23,9 @@ CREATE TABLE [RDT].[RDTUser]
 [AreaKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTUSER_AreaKey] DEFAULT (''),
 [OPSPosition] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtuser_OPSPosition] DEFAULT (''),
 [AllowResumeSession] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTUser_AllowResumeSession] DEFAULT (''),
-[SCEPrinterGroup] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTUser_SCEPrinterGroup] DEFAULT ('')
+[SCEPrinterGroup] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTUser_SCEPrinterGroup] DEFAULT (''),
+[SoundLevel] NVARCHAR(10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTUser_SoundLevel] DEFAULT(''),
+[VibrationLevel] NVARCHAR(10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTUser_VibrationLevel]  DEFAULT ('')
 ) ON [PRIMARY]
 GO
 ALTER TABLE [RDT].[RDTUser] ADD CONSTRAINT [PK_RDTUser] PRIMARY KEY CLUSTERED ([UserName]) WITH (FILLFACTOR=90) ON [PRIMARY]

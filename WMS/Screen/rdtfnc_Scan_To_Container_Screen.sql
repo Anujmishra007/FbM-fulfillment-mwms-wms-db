@@ -6,6 +6,7 @@ EXECUTE rdt.rdtAddScn 2190, 'ENG',
    ,@cLine03 = 'CONTAINER NO:'
    ,@cLine04 = '%20i02'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"]}'
    ,@nFunc = 1637
 
 -- 2191 = ?? screen
@@ -22,6 +23,7 @@ EXECUTE rdt.rdtAddScn 2191, 'ENG',
    ,@cLine11 = '%05d05    %11d06'
    ,@cLine12 = '%20d07'       -- SOS246728
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["5","6"],"4":["7","8"],"5":["11","12"]}'
    ,@nFunc = 1637
 
 -- 2192 = ?? screen
@@ -38,6 +40,7 @@ EXECUTE rdt.rdtAddScn 2192, 'ENG',
    ,@cLine11 = 'Scanned: %05d05'
    ,@cLine13 = '%20d06'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["5","6"],"4":["8","9"],"5":["11"],"6":["13"]}'
    ,@nFunc = 1637
 
 -- 2193 = ?? screen
@@ -46,6 +49,7 @@ EXECUTE rdt.rdtAddScn 2193, 'ENG',
     @cLine01 = 'TRACKING NO:'
    ,@cLine02 = '%18i01'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"]}'
    ,@nFunc = 1637
 
 -- 2194 = ?? screen
@@ -95,6 +99,7 @@ EXECUTE rdt.rdtAddScn 2197, 'ENG'
    ,@cLine09 = '%20d09'
    ,@cLine10 = '%20i10'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["5","6"],"4":["7","8"],"5":["9","10"]}'
    ,@nFunc = 1637
   
 --WMS-16476 Add capture info screen
@@ -112,5 +117,6 @@ EXECUTE rdt.rdtAddScn 2198, 'ENG'
    ,@cLine09 = '%20d09'
    ,@cLine10 = '%20i10'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["5","6"],"4":["7","8"],"5":["9","10"]}'
    ,@nFunc = 1637
    

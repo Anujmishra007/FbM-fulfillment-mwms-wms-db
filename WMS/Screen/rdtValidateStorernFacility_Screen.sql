@@ -13,3 +13,5 @@ EXECUTE rdt.rdtAddScn 1, 'ENG'
    ,@cLine10 = 'Device ID:'
    ,@cLine11 = '%20i06'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["4"],"3":["6","7","8","9"],"4":["10","11"]}'
+   ,@nFunc = 1

@@ -1,3 +1,6 @@
+DELETE RDT.RDTMsg WHERE Message_ID = 1797 AND Lang_Code = 'ENG' AND Message_Type = 'FNC'
+INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
+   VALUES (1797, 'ENG', 'FNC', 'TM Putaway From', 'rdtfnc_TM_PutawayFrom', '0')
 
 -- 3440  = FromLOC screen
 DELETE rdt.RDTScn WHERE Scn = 3440 AND Lang_Code = 'ENG'
@@ -8,6 +11,7 @@ EXECUTE rdt.rdtAddScn 3440, 'ENG'
    ,@cLine04 = '%10d01'
    ,@cLine05 = '%10i02'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3","4","5"]}'
    ,@nFunc = 1797
 
 -- 3441  = ID screen
@@ -20,7 +24,8 @@ EXECUTE rdt.rdtAddScn 3441, 'ENG'
    ,@cLine05 = 'ID: '
    ,@cLine06 = '%18d02'
    ,@cLine07 = '%18i03'
-   ,@cLine14 = '%e'   
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3"],"2":["5","6","7"]}'
    ,@nFunc = 1797
 
 -- 3442  = TO LOC screen
@@ -40,8 +45,9 @@ EXECUTE rdt.rdtAddScn 3442, 'ENG',
    ,@cLine12 = '%10i03'
    ,@cLine13 = '%20d15'    -- WMS-11394 ExtendedInfoSP
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3","4"],"2":["6","7","8"],"3":["10","11","12"],"4":["13"]}'
    ,@nFunc = 1797
-   
+
 -- 3443  = Msg screen
 DELETE rdt.RDTScn WHERE Scn = 3443 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 3443, 'ENG'

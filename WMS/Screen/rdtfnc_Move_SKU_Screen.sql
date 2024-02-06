@@ -7,6 +7,7 @@ DELETE rdt.RDTScn WHERE Scn = 1030 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 1030, 'ENG',
    @cLine01 = 'FROM LOC: %10i01',
    @cLine14 = '%e',
+   @cWebGroup = '{"1":["1"]}', 
    @nFunc = 513
 
 -- 1031 = ID
@@ -15,6 +16,7 @@ EXECUTE rdt.rdtAddScn 1031, 'ENG',
    @cLine01 = 'FROM LOC: %10d01',
    @cLine02 = 'FROM ID:',
    @cLine03 = '%20i02',
+   @cWebGroup = '{"1":["1"],"2":["2","3"]}', 
    @cLine14 = '%e',
    @nFunc = 513
    
@@ -26,11 +28,8 @@ EXECUTE rdt.rdtAddScn 1032, 'ENG',
    @cLine03 = '%18d02',
    @cLine04 = 'SKU/UPC:',
    @cLine05 = '%120iV_Barcode',   --WMS-22175
-   @cLine06 = '%20d04',
-   @cLine07 = '%20d05',
-   @cLine08 = '', 
-   @cLine09 = 'QTY: %10d06',
    @cLine14 = '%e',
+   @cWebGroup = '{"1":["1"],"2":["2","3"],"3":["4","5","6","7"],"4":["9"]}', 
    @nFunc = 513
    
 -- 1033 = QTY
@@ -48,6 +47,7 @@ EXECUTE rdt.rdtAddScn 1033, 'ENG',
    @cLine10 = 'MV:  %07i08   %07i11',  -- (james10)
    @cLine13 = '%20d15',  -- (WMS9098)
    @cLine14 = '%e',
+   @cWebGroup = '{"1":["1"],"2":["2","3"],"3":["4","5","6","7"],"4":["8","9","10"],"5":["13"]}', 
    @nFunc = 513
 
 -- 1034 = To ID
@@ -66,6 +66,7 @@ EXECUTE rdt.rdtAddScn 1034, 'ENG',
    @cLine11 = 'TO ID:',
    @cLine12 = '%20i12',
    @cLine14 = '%e',
+   @cWebGroup = '{"1":["1"],"2":["2","3"],"3":["4","5","6","7"],"4":["8","9","10"],"5":["11","12"]}', 
    @nFunc = 513
    
 -- 1035 = To LOC
@@ -85,6 +86,7 @@ EXECUTE rdt.rdtAddScn 1035, 'ENG',
    @cLine12 = '%18d12',
    @cLine13 = 'TO LOC: %10i13',
    @cLine14 = '%e',
+   @cWebGroup = '{"1":["1"],"2":["2","3"],"3":["4","5","6","7"],"4":["8","9","10"],"5":["11","12"],"6":["13"]}', 
    @nFunc = 513
 
 -- 1036 = Message screen
@@ -96,6 +98,7 @@ EXECUTE rdt.rdtAddScn 1036, 'ENG',
    @cLine06 = 'Press ENTER or ESC', -- (james08)
    @cLine07 = 'to continue',        -- (james08)
    @cLine14 = '%e',
+   @cAutoDisappear = '1',
    @nFunc = 513
 
 -- 1037 = Suggest LOC screen

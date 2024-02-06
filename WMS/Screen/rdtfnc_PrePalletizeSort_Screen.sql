@@ -1,8 +1,8 @@
 --rdtfnc_PrePalletizeSort
 --5660-5669
 
-IF NOT EXISTS ( SELECT 1 FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID = 1841 AND Message_Type = 'FNC')
-   INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
+DELETE RDT.RDTMSG WHERE MESSAGE_ID = 1841 AND Lang_Code = 'ENG' AND Message_Type = 'FNC'
+INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
    VALUES (1841, 'ENG', 'FNC', 'PRE PALLETIZE SORT', 'rdtfnc_PrePalletizeSort', '9')
 
 -- 5660 = ASN, LANE screen
@@ -17,6 +17,7 @@ EXECUTE rdt.rdtAddScn 5660, 'ENG',
    ,@cLine07 = '%10i02'
    ,@cLine13 = 'END SORTING?(1=YES)%01i03'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3","4"],"2":["6","7"],"3":["13"]}'
    ,@nFunc = 1841
 
 -- 5661 = UCC screen
@@ -27,6 +28,7 @@ EXECUTE rdt.rdtAddScn 5661, 'ENG',
    ,@cLine03 = 'UCC:'
    ,@cLine04 = '%20i03'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2"],"3":["3","4"]}'
    ,@nFunc = 1841
 
 -- 5662 = TO ID screen
@@ -43,6 +45,7 @@ EXECUTE rdt.rdtAddScn 5662, 'ENG',
    ,@cLine09 = '%18i04'
    ,@cLine13 = '%20d15'
    ,@cLine14 = '%e'   
+   ,@cWebGroup = '{"1":["1","2"],"2":["4","5"],"3":["7","8","9"],"4":["13"]}'
    ,@nFunc = 1841
 
 -- 5663 = Close pallet screen
@@ -81,14 +84,12 @@ EXECUTE rdt.rdtAddScn 5665, 'ENG',
    ,@cLine04 = '%20d03'    -- Lottablenn 
    ,@cLine05 = '%20d04'    -- Lottablenn 
    ,@cLine06 = '%20d05'    -- Lottablenn 
-   ,@cLine07 = 'SKU/UPC:'
-   ,@cLine08 = '%60i06'       -- WMS-23036
-   ,@cLine09 = '%20d07'       -- WMS-23036
-   ,@cLine10 = '%20d08'       -- WMS-23036
-   ,@cLine11 = '%20d09'       -- WMS-23036
-   ,@cLine12 = 'QTY: %05d10'  -- WMS-23036
-   ,@cLine13 = '%20d15'       -- WMS-22995 Add ExtendedInfoSP
+   ,@cLine07 = ''
+   ,@cLine08 = 'SKU/UPC:'
+   ,@cLine09 = '%60i06'
+   ,@cLine11 = 'QTY: %05d07'
    ,@cLine14 = '%e'   
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4","5","6"],"3":["8","9"],"4":["11"]}'
    ,@nFunc = 1841
 
 -- 5666 = Qty screen
@@ -102,8 +103,9 @@ EXECUTE rdt.rdtAddScn 5666, 'ENG',
    ,@cLine06 = '%20d03'
    ,@cLine07 = '%20d04'
    ,@cLine08 = ''
-   ,@cLine09 = 'QTY: %05i05'
+   ,@cLine09 = 'QTY: %05i05^DT:INT'
    ,@cLine14 = '%e'   
+   ,@cWebGroup = '{"1":["1","2"],"2":["4","5","6","7"],"3":["9"]}'
    ,@nFunc = 1841
 
 -- 5667 = Override pallet screen
@@ -137,16 +139,4 @@ EXECUTE rdt.rdtAddScn 5669, 'ENG',
    ,@cLine02 = '%20d02' -- PA task created
    ,@cLine03 = 'Pallet Is Closed'
    ,@cLine14 = '%e'   
-   ,@nFunc = 1841
-
---WMS-23878
--- 6310 = Pack info screen
-DELETE rdt.RDTScn WHERE Scn = 6310 AND Lang_Code = 'ENG'
-EXECUTE rdt.rdtAddScn 6310, 'ENG'
-   ,@cLine01 = 'CARTON: %10i01'
-   ,@cLine02 = 'WEIGHT: %10i02'
-   ,@cLine03 = 'CUBE:   %10i03'
-   ,@cLine04 = 'REF NO:'
-   ,@cLine05 = '%20i04'
-   ,@cLine14 = '%e'
    ,@nFunc = 1841

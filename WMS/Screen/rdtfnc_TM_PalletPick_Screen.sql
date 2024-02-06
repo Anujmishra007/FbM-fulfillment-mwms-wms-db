@@ -10,6 +10,7 @@ EXECUTE rdt.rdtAddScn 3700, 'ENG',
    ,@cLine06 = ''
    ,@cLine07 = '%20d10'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3","4","5"],"2":["7"]}'
    ,@nFunc = 1770
 
 DELETE rdt.RDTScn WHERE Scn = 3701 AND Lang_Code = 'ENG'
@@ -28,6 +29,7 @@ EXECUTE rdt.rdtAddScn 3701, 'ENG',
    ,@cLine12 = '%20d10'
    ,@cLine13 = 'PK  QTY: %05d11 %05d12'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3"],"2":["4","5","6","7"],"3":["8","9","10","11"],"4":["12"],"5":["13"]}'
    ,@nFunc = 1770
 
 DELETE rdt.RDTScn WHERE Scn = 3702 AND Lang_Code = 'ENG'
@@ -44,8 +46,9 @@ EXECUTE rdt.rdtAddScn 3702, 'ENG',
    ,@cLine10 = '%32i08'
    ,@cLine11 = '%20d11'
    ,@cLine12 = 'PK  QTY: %05d12 %05d13'
-   ,@cLine13 = 'ACT QTY: %05i14 %05i15'
+   ,@cLine13 = 'ACT QTY: %05i14^DT:INT %05i15^DT:INT'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4"],"2":["5","6","7","8"],"3":["9","10"],"4":["11","12","13"]}'
    ,@nFunc = 1770
 
 DELETE rdt.RDTScn WHERE Scn = 3703 AND Lang_Code = 'ENG'
@@ -64,6 +67,7 @@ EXECUTE rdt.rdtAddScn 3703, 'ENG',
    ,@cLine12 = ''
    ,@cLine13 = '%20d10'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3","4"],"2":["6","7","8"],"3":["10","11"],"4":["13"]}'
    ,@nFunc = 1770
 
 DELETE rdt.RDTScn WHERE Scn = 3704 AND Lang_Code = 'ENG'

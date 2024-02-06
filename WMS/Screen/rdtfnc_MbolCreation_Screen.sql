@@ -1,11 +1,9 @@
 --rdtfnc_MbolCreation
 --5930-5939
 
-IF NOT EXISTS ( SELECT 1 FROM RDT.RDTMsg (NOLOCK) WHERE Message_ID = 1856)
-BEGIN
-   INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
+DELETE RDT.RDTMsg WHERE Message_ID = 1856 AND Lang_Code = 'ENG' AND Message_Type = 'FNC'
+INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
    VALUES (1856, 'ENG', 'FNC', 'MBOL CREATION', 'rdtfnc_MbolCreation', '9')
-END
 
 -- 5930 = Facility screen
 DELETE rdt.RDTScn WHERE Scn = 5930 AND Lang_Code = 'ENG'
@@ -13,6 +11,7 @@ EXECUTE rdt.rdtAddScn 5930, 'ENG'
    ,@cLine01 = 'MBOL CREATION'
    ,@cLine03 = 'FACILITY: %05i01'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3"]}'
    ,@nFunc = 1856
  
 -- 5931 = CART MATRIX screen
@@ -31,6 +30,7 @@ EXECUTE rdt.rdtAddScn 5931, 'ENG'
    ,@cLine12 = '%20i10'          -- Refno 3 input
    ,@cLine13 = 'ORDER #: %03d15'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3"],"2":["4","5","6"],"3":["7","8"],"4":["9","10"],"5":["11","12"],"6":["13"]}'
    ,@nFunc = 1856
 
 -- 5932 = Close MBOL screen
@@ -60,4 +60,5 @@ EXECUTE rdt.rdtAddScn 5933, 'ENG'
    ,@cLine09 = '%20d09'
    ,@cLine10 = '%20i10'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["5","6"],"4":["7","8"],"5":["9","10"]}'
    ,@nFunc = 1856   

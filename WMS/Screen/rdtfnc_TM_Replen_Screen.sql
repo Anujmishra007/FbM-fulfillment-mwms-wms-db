@@ -12,6 +12,7 @@ EXECUTE rdt.rdtAddScn 2680, 'ENG',
    ,@cLine07 = ''
    ,@cLine08 = '%20d10'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["5","6"],"2":["8"]}'
    ,@nFunc = 1764
 
 -- From LOC
@@ -29,6 +30,7 @@ EXECUTE rdt.rdtAddScn 2681, 'ENG',
    ,@cLine10 = ''
    ,@cLine11 = '%20d10'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["4","5"],"2":["7","8"],"3":["11"]}'
    ,@nFunc = 1764
 
 -- From ID
@@ -48,6 +50,7 @@ EXECUTE rdt.rdtAddScn 2682, 'ENG',
    ,@cLine12 = '%40i05'    --WMS6145 Extend to 40 chars
    ,@cLine13 = '%20d10'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["4","5"],"2":["7","8"],"3":["10","11","12"],"4":["13"]}'
    ,@nFunc = 1764
 
 -- SKU, QTY
@@ -65,8 +68,9 @@ EXECUTE rdt.rdtAddScn 2683, 'ENG',
    ,@cLine10 = '%32i08'
    ,@cLine11 = '%20d11'
    ,@cLine12 = 'RPL QTY: %05d12 %05d13'
-   ,@cLine13 = 'ACT QTY: %05i14 %05i15'
+   ,@cLine13 = 'ACT QTY: %05i14^DT:INT %05i15^DT:INT'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["4","5"],"2":["7","8"],"3":["10","11","12"],"4":["13"]}'
    ,@nFunc = 1764
 
 -- Next task
@@ -100,6 +104,7 @@ EXECUTE rdt.rdtAddScn 2685, 'ENG',
    ,@cLine09 = ''
    ,@cLine10 = '%20d10'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3","4"],"2":["6","7","8"],"4":["10"]}'
    ,@nFunc = 1764
 
 -- Exit

@@ -6,6 +6,8 @@ EXECUTE rdt.rdtAddScn 4250, 'ENG'
    ,@cLine03 = 'REFNO:'
    ,@cLine04 = '%20i02'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["3","4"]}'
+   ,@nFunc = 605
  
 -- 4251 = ID screen
 DELETE rdt.RDTScn WHERE Scn = 4251 AND Lang_Code = 'ENG'
@@ -17,6 +19,8 @@ EXECUTE rdt.rdtAddScn 4251, 'ENG'
    ,@cLine05 = 'ID:'
    ,@cLine06 = '%60i03'   --WMS5536 Extend to 60 chars
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3"],"3":["5","6"]}'
+   ,@nFunc = 605
  
 -- 4252 = ID detail screen
 DELETE rdt.RDTScn WHERE Scn = 4252 AND Lang_Code = 'ENG'
@@ -35,4 +39,6 @@ EXECUTE rdt.rdtAddScn 4252, 'ENG'
    ,@cLine12 = '%20d12'
    ,@cLine13 = '1=RCVPL 2=NEXT %01i14'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3","4","5"],"3":["6","7"],"4":["8","9","10","11","12"],"5":["13"]}'
+   ,@nFunc = 605
  

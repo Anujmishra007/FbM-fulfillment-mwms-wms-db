@@ -11,7 +11,9 @@ EXECUTE rdt.rdtAddScn 1640, 'ENG',
    ,@cLine08 = 'FROM LOC: %10i05'
    ,@cLine09 = 'TO LOC:   %10i06'
    ,@cLine14 = '%e'
-
+   ,@cWebGroup = '{"1":["1"],"2":["2"],"3":["3"],"4":["4"],"5":["5","6"],"6":["8","9"]}'
+   ,@nFunc = 950
+   
 -- 1641 = PKSLIPNO screen
 DELETE rdt.RDTScn WHERE Scn = 1641 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 1641, 'ENG',
@@ -26,6 +28,8 @@ EXECUTE rdt.rdtAddScn 1641, 'ENG',
    ,@cLine09 = '8. %10i08'
    ,@cLine10 = '9. %10i09'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4","5","6","7","8","9"]}'
+   ,@nFunc = 950
     
 -- 1642 = WAVEKEY screen
 DELETE rdt.RDTScn WHERE Scn = 1642 AND Lang_Code = 'ENG'
@@ -43,6 +47,8 @@ EXECUTE rdt.rdtAddScn 1642, 'ENG',
    ,@cLine11 = 'TOTAL QTY: %09d07'
    ,@cLine12 = 'TOTAL CBM: %09d08'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2"],"3":["3"],"4":["4"],"5":["5","6"],"6":["8","9"],"7":["11","12"]}'
+   ,@nFunc = 950
  
 -- 1643 = LOC screen
 DELETE rdt.RDTScn WHERE Scn = 1643 AND Lang_Code = 'ENG'
@@ -50,7 +56,9 @@ EXECUTE rdt.rdtAddScn 1643, 'ENG',
     @cLine01 = 'LOC: %10d01'
    ,@cLine02 = 'LOC: %10i02'
    ,@cLine14 = '%e'
- 
+   ,@cWebGroup = '{"1":["1","2"]}'
+   ,@nFunc = 950
+   
 -- 1644 = QTY screen
 DELETE rdt.RDTScn WHERE Scn = 1644 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 1644, 'ENG',
@@ -68,6 +76,8 @@ EXECUTE rdt.rdtAddScn 1644, 'ENG',
    ,@cLine12 = '%20i11'
    ,@cLine13 = 'BAL QTY: %11d12'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3","4","5"],"3":["6","7","8","9"],"4":["10"],"5":["11","12"],"6":["13"]}'
+   ,@nFunc = 950
  
 -- 1645 = LABEL NO screen
 DELETE rdt.RDTScn WHERE Scn = 1645 AND Lang_Code = 'ENG'
@@ -79,6 +89,8 @@ EXECUTE rdt.rdtAddScn 1645, 'ENG',
    ,@cLine05 = '%20i04'
    ,@cLine12 = 'OPT:%01i05 (1=NEW CARTON)'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2"],"3":["3","4","5"],"4":["12"]}'
+   ,@nFunc = 950
 
 -- 1646 = OPTION screen
 DELETE rdt.RDTScn WHERE Scn = 1646 AND Lang_Code = 'ENG'

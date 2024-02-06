@@ -2,8 +2,9 @@
 DELETE rdt.RDTScn WHERE Scn = 4110 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4110, 'ENG'
    ,@cLine01 = 'FROM ID:'
-   ,@cLine02 = '%20i01'
+   ,@cLine02 = '%20i01' --wms23335
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"]}'
    ,@nFunc = 1819
 
 -- 4111 = Final LOC screen
@@ -20,6 +21,7 @@ EXECUTE rdt.rdtAddScn 4111, 'ENG'
    ,@cLine09 = ''
    ,@cLine10 = '%20d15'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["4","5"],"3":["7","8"],"4":["10"]}'
    ,@nFunc = 1819
 
 -- 4112 = Message screen
@@ -32,6 +34,7 @@ EXECUTE rdt.rdtAddScn 4112, 'ENG'
    ,@cLine05 = 'Press ENTER to'
    ,@cLine06 = 'putaway next ID'
    ,@cLine14 = '%e'
+   ,@cAutoDisappear = '1'
    ,@nFunc = 1819
 
 -- (WMS-7793)
@@ -49,6 +52,7 @@ EXECUTE rdt.rdtAddScn 4113, 'ENG'
    ,@cLine09 = '%20d09'
    ,@cLine10 = '%20i10'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["5","6"],"4":["7","8"],"5":["9","10"]}'
    ,@nFunc = 1819
 
 -- (WMS-10120)
