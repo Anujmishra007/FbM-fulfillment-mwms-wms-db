@@ -1,17 +1,12 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrPalletDetailDelete]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrPalletDetailDelete]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
 
-
 /***************************************************************************/
 /* Trigger:  ntrPalletDetailDelete                                         */
 /* Creation Date:                                                          */
-/* Copyright: IDS                                                          */
+/* Copyright: Maersk                                                       */
 /* Written by:                                                             */
 /*                                                                         */
 /* Purpose:  Trigger point upon any Delete on the Container                */
@@ -24,7 +19,7 @@ GO
 /*                                                                         */
 /* Called By: When records Deleted                                         */
 /*                                                                         */
-/* PVCS Version: 1.2                                                       */
+/* PVCS Version: 1.3                                                       */
 /*                                                                         */
 /* Version: 5.4                                                            */
 /*                                                                         */
@@ -35,9 +30,10 @@ GO
 /* 09-Oct-2012  KHLim     1.0   Insert Delete log (KH01)                   */
 /* 12-Dec-2018  NJOW01    1.1   WMS-7187 allow supervisor delete carton    */
 /* 15-Jun-2020  TLTING01  1.2   bug fix archive skip check                 */
+/* 07-Feb-2024  Wan01     1.3   UWP-14785-UNABLE TO DELETE PALLET MANIFEST */
 /***************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrPalletDetailDelete]
+CREATE OR ALTER TRIGGER [dbo].[ntrPalletDetailDelete]
  ON [dbo].[PALLETDETAIL]
  FOR DELETE
  AS
@@ -59,7 +55,7 @@ CREATE TRIGGER [dbo].[ntrPalletDetailDelete]
  @n_cnt              INT,       -- Holds the number of rows affected by the DELETE statement that fired this trigger.
  @c_authority        nvarchar(1),  -- KH01
  @c_issupervisor NVARCHAR(10), --NJOW01
- @c_Username NVARCHAR(18) --NJOW01
+ @c_Username NVARCHAR(128) --NJOW01                                                 --(Wan01)
 
  SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
  if (select count(*) from DELETED) =
@@ -82,7 +78,7 @@ CREATE TRIGGER [dbo].[ntrPalletDetailDelete]
           ,@c_ErrMsg   = @c_errmsg       OUTPUT
          
       IF @n_continue=1 or @n_continue=2
-      BEGIN	        	
+      BEGIN           
         IF EXISTS (SELECT * FROM PALLET, DELETED
                    WHERE PALLET.PalletKey = DELETED.PalletKey
                    AND PALLET.Status = "9")
