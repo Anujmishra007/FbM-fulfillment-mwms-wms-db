@@ -5,15 +5,14 @@ GO
 /***************************************************************************/  
 /* Stored Procedure: lsp_Validate_Receipt_Std                              */  
 /* Creation Date: 24-Nov-2017                                              */  
-/* Copyright: LFL                                                          */  
+/* Copyright: Maersk                                                       */  
 /* Written by:                                                             */  
 /*                                                                         */  
 /* Purpose:                                                                */  
 /*                                                                         */  
 /* Called By:                                                              */  
 /*                                                                         */  
-/*                                                                         */  
-/* Version: 1.6                                                            */  
+/* Version: 1.7                                                            */  
 /*                                                                         */  
 /* Data Modifications:                                                     */  
 /*                                                                         */  
@@ -30,6 +29,8 @@ GO
 /* 2023-08-16  Wan04    1.6   LFWM-4417 - SCE PROD SG Receipt - Disallow   */
 /*                            Duplicate Movable Unit ID Error When Save when*/
 /*                            exists Receipt Reversed Detail               */
+/* 2024-01-29  Wan05    1.7   UWP-14379-Implement pre-save ASN standard    */
+/*                            validation check                             */
 /***************************************************************************/   
 CREATE OR ALTER PROC [WM].[lsp_Validate_Receipt_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
@@ -207,8 +208,9 @@ BEGIN
             @c_ASNReason            NVARCHAR(10) = '',
             @c_CarrierKey           NVARCHAR(15) = '',
             @b_ValidID              INT          = 0                       --(Wan03)
-               
-
+         ,  @c_ASNStatus_From       NVARCHAR(10) = ''                      --(Wan05)
+         ,  @n_Cnt                  INT          = 0                       --(Wan05)
+ 
       -- StorerConfig 
       DECLARE 
             @c_RCPTRQD                       NVARCHAR(1) = '0'
@@ -241,7 +243,27 @@ BEGIN
             GOTO EXIT_SP         
          END
       END 
-                           
+ 
+      IF @n_Continue IN (1,2)                                                       --(Wan05)-START
+      BEGIN
+         SELECT @c_ASNStatus_From = r.ASNStatus
+         FROM dbo.Receipt r(NOLOCK)
+         WHERE r.ReceiptKey = @c_Receiptkey
+
+         IF @c_ASNStatus_From <> @c_ASNStatus
+         BEGIN
+            IF EXISTS (SELECT 1 FROM dbo.fnc_GetAllowASNStatusChg(@c_Facility, @c_Storerkey, @c_Doctype, @c_Receiptkey, @c_ASNStatus_From, @c_ASNStatus) AASC
+                       WHERE AASC.AllowChange = 0
+                     )
+            BEGIN
+               SET @n_Continue = 3
+               SET @n_err= 551909
+               SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Disallow to change ASNStatus from ''' 
+                              + @c_ASNStatus_From + ''' to ''' + @c_ASNStatus + ''''
+                              +'. (lsp_Validate_Receipt_Std) |' + @c_ASNStatus_From + '|' + @c_ASNStatus        
+            END  
+         END      
+      END                                                                           --(Wan05)-END
       --IF @n_Continue IN (1,2)
       --BEGIN
       --   EXEC nspGetRight
