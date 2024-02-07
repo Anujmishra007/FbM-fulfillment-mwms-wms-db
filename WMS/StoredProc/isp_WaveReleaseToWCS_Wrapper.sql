@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[isp_WaveReleaseToWCS_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[isp_WaveReleaseToWCS_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -19,16 +14,18 @@ GO
 /*                                                                      */  
 /* Called By: Wave (Call ispWAVRL01)                                    */  
 /*                                                                      */  
-/* PVCS Version: 1.0                                                    */  
+/* PVCS Version: 1.1                                                    */  
 /*                                                                      */  
 /* Version: 5.4                                                         */  
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author   Ver  Purposes                                  */  
+/* Date         Author  Ver   Purposes                                  */  
+/* 2024-01-19   Wan01   1.1   UWP-13590-WMS to send the Order Include   */
+/*                            message to WCS upon Wave release          */
 /************************************************************************/   
-CREATE PROCEDURE [dbo].[isp_WaveReleaseToWCS_Wrapper]  
+CREATE OR ALTER PROCEDURE [dbo].[isp_WaveReleaseToWCS_Wrapper]  
    @c_WaveKey    NVARCHAR(10),    
    @b_Success    INT      OUTPUT,
    @n_Err        INT      OUTPUT, 
@@ -40,12 +37,15 @@ BEGIN
    SET ANSI_NULLS OFF   
    SET CONCAT_NULL_YIELDS_NULL OFF  
    
-   DECLARE @n_continue      INT
-         , @n_Count         INT
-         , @c_SPCode        NVARCHAR(10)
-         , @c_StorerKey     NVARCHAR(15)
-         , @c_OrderStatus   NVARCHAR(10)
-         , @c_SQL           NVARCHAR(MAX)
+   DECLARE @n_continue           INT
+         , @n_Count              INT
+         , @c_SPCode             NVARCHAR(30)                                       --(Wan01)
+         , @c_Facility           NVARCHAR(5)    = ''                                --(Wan01)
+         , @c_StorerKey          NVARCHAR(15)
+         , @c_OrderStatus        NVARCHAR(10)
+         , @c_SQL                NVARCHAR(MAX)
+         , @c_CfgWavRLWCSOption5 NVARCHAR(4000) = ''                                --(Wan01)
+         , @c_ReleaseOpenOrder   NVARCHAR(10)   = 'N'                               --(Wan01)
 
    SET @n_err        = 0
    SET @b_success    = 1
@@ -58,11 +58,21 @@ BEGIN
    SET @c_OrderStatus= ''
    SET @c_SQL        = ''
    
-   SELECT @n_Count = COUNT(1)
-         ,@c_OrderStatus = ISNULL(MAX(RTRIM(ORDERS.Status)),'0')
-   FROM WAVEDETAIL WITH (NOLOCK)
-   JOIN ORDERS WITH (NOLOCK) ON (WAVEDETAIL.Orderkey = ORDERS.Orderkey)
-   WHERE WAVEDETAIL.Wavekey = @c_WaveKey  
+   SELECT TOP 1                                                                     --(Wan01) - START
+           @c_Facility  = o.Facility
+         , @c_Storerkey = o.StorerKey
+         , @n_Count = 1
+         , @c_OrderStatus = o.[Status]
+   FROM dbo.WAVEDETAIL AS w (NOLOCK)
+   JOIN dbo.ORDERS AS o (NOLOCK) ON o.OrderKey = w.OrderKey
+   WHERE w.Wavekey = @c_Wavekey
+   ORDER BY o.[Status] DESC
+   
+   --SELECT @n_Count = COUNT(1)
+   --      ,@c_OrderStatus = ISNULL(MAX(RTRIM(ORDERS.Status)),'0')
+   --FROM WAVEDETAIL WITH (NOLOCK)
+   --JOIN ORDERS WITH (NOLOCK) ON (WAVEDETAIL.Orderkey = ORDERS.Orderkey)
+   --WHERE WAVEDETAIL.Wavekey = @c_WaveKey  
 
    IF @n_Count = 0 
    BEGIN
@@ -73,34 +83,49 @@ BEGIN
        GOTO QUIT_SP
    END
 
-   IF @c_OrderStatus = 'CANC'   
-   BEGIN
-       SET @n_continue = 3  
-       SET @n_Err = 31212 -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-       SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) 
-                     + ': Orders in Wave: ' + RTRIM(@c_WaveKey) + ' has been cancelled. (isp_WaveReleaseToWCS_Wrapper)'  
-       GOTO QUIT_SP
-   END
-
-   IF @c_OrderStatus < '1'   
-   BEGIN
-       SET @n_continue = 3  
-       SET @n_Err = 31212 -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-       SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) 
-                     + ': Wave: ' + RTRIM(@c_WaveKey) + ' has not allocated yet. (isp_WaveReleaseToWCS_Wrapper)'  
-       GOTO QUIT_SP
-   END
-
-   SELECT @c_Storerkey = MAX(ORDERS.Storerkey)
-   FROM WAVEDETAIL WITH (NOLOCK)
-   JOIN ORDERS WITH (NOLOCK) ON (WAVEDETAIL.Orderkey = ORDERS.Orderkey)
-   WHERE WAVEDETAIL.Wavekey = @c_WaveKey    
+   SELECT @c_SPCode = fsgr.Authority
+         ,@c_CfgWavRLWCSOption5  = fsgr.ConfigOption5
+   FROM dbo.fnc_SelectGetRight(@c_Facility, @c_Storerkey, '', 'WaveReleaseToWCS_SP') AS fsgr
    
-   SELECT @c_SPCode = sVALUE 
-   FROM   StorerConfig WITH (NOLOCK) 
-   WHERE  StorerKey = @c_StorerKey
-   AND    ConfigKey = 'WaveReleaseToWCS_SP'  
+   IF @c_SPCode = '0' SET @c_SPCode = ''
+   IF @c_SPCode NOT IN ('')
+   BEGIN
+      IF @c_CfgWavRLWCSOption5 <> ''
+      BEGIN
+         SELECT @c_ReleaseOpenOrder = dbo.fnc_GetParamValueFromString('@c_ReleaseOpenOrder',@c_CfgWavRLWCSOption5,@c_ReleaseOpenOrder)
+      END   
+   
+      IF @c_ReleaseOpenOrder = 'N'
+      BEGIN
+         IF @c_OrderStatus = 'CANC'   
+         BEGIN
+             SET @n_continue = 3  
+             SET @n_Err = 31212 -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+             SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) 
+                           + ': Orders in Wave: ' + RTRIM(@c_WaveKey) + ' has been cancelled. (isp_WaveReleaseToWCS_Wrapper)'  
+             GOTO QUIT_SP
+         END
 
+         IF @c_OrderStatus < '1'   
+         BEGIN
+             SET @n_continue = 3  
+             SET @n_Err = 31212 -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+             SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) 
+                           + ': Wave: ' + RTRIM(@c_WaveKey) + ' has not allocated yet. (isp_WaveReleaseToWCS_Wrapper)'  
+             GOTO QUIT_SP
+         END
+      END
+      --SELECT @c_Storerkey = MAX(ORDERS.Storerkey)
+      --FROM WAVEDETAIL WITH (NOLOCK)
+      --JOIN ORDERS WITH (NOLOCK) ON (WAVEDETAIL.Orderkey = ORDERS.Orderkey)
+      --WHERE WAVEDETAIL.Wavekey = @c_WaveKey    
+   
+      --SELECT @c_SPCode = sVALUE 
+      --FROM   StorerConfig WITH (NOLOCK) 
+      --WHERE  StorerKey = @c_StorerKey
+      --AND    ConfigKey = 'WaveReleaseToWCS_SP'                                       
+   END                                                                              --(Wan01) - END                                                                   
+   
    IF ISNULL(RTRIM(@c_SPCode),'') = ''
    BEGIN       
        SET @n_continue = 3  
