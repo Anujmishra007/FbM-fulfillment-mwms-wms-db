@@ -1,6 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdtConvertDateFormat]') and xtype in (N'FN', N'IF', N'TF'))
-   drop function [RDT].[rdtConvertDateFormat]
+SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /************************************************************************/
 /* Stored Procedure: rdtConvertDateFormat    					            */
@@ -22,14 +24,15 @@ GO
 /* Date         Author        Purposes                                  */
 /* 2011-03-17   ChewKP        Created                                   */
 /* 2016-11-01   ChewKP        Replace IsDate() (ChewKP01)               */
+/* 2023-12-23   YeeKung       Change add date (yeekung01)               */ 
 /************************************************************************/
 
-CREATE FUNCTION RDT.rdtConvertDateFormat (
-   @cDate NVARCHAR( 10),
+CREATE OR ALTER FUNCTION [RDT].[rdtConvertDateFormat] (
+   @cDate NVARCHAR( 20),
    @cFormat NVARCHAR(10)
 ) RETURNS DATETIME AS
 BEGIN
-   
+
    DECLARE @cDD         NVARCHAR( 2)
    DECLARE @cMM         NVARCHAR( 2)
    DECLARE @cYYYY       NVARCHAR( 4)
@@ -37,10 +40,16 @@ BEGIN
    DECLARE @cDelimeter2 NVARCHAR( 1),
            @dNewDateTime DATETIME,
            @cNewDateTime NVARCHAR(10),
-           @nLastDayOfMonth INT, 
-           @cLFDate     NVARCHAR(10) 
-   
-  
+           @nLastDayOfMonth INT,
+           @cLFDate     NVARCHAR(10)
+   DECLARE @cStorerkey   NVARCHAR(20)
+   DECLARE @cFacility   NVARCHAR(20)
+
+   SELECT @cStorerkey = storerkey,
+          @cFacility = facility
+   FROM RDT.RDTMobrec (NOLOCK)
+   where username = SYSTEM_USER
+
    -- Get the date part according to the dateformat
    IF @cFormat = 'yyyymmdd'
    BEGIN
@@ -54,8 +63,8 @@ BEGIN
    BEGIN
       GOTO Fail
    END
-   
-   
+
+
    -- Check day
    DECLARE @nDD INT
    IF RDT.rdtIsInteger( @cDD) = 0
@@ -84,25 +93,25 @@ BEGIN
    -- Convert to New Format
    SET @cNewDateTime =  @cDD + '/' + @cMM + '/' +  @cYYYY
 
-   
+
    -- Date is formated correct. Use IsDate() to check the rest
    -- like last day of month, leap year... etc
 --   IF IsDate(@cNewDateTime)= 0
 --      GOTO Fail
 
-  -- (ChewKP01) 
-   IF @nMM IN ( 1 , 3 , 5 , 7 , 9 , 11 ) 
+  -- (ChewKP01)
+   IF @nMM IN ( 1 , 3 , 5 , 7 , 9 , 11 )
    BEGIN
          SET @nLastDayOfMonth = 30
-   END  
-   ELSE IF @nMM IN ( 4, 6, 8, 10, 12 ) 
+   END
+   ELSE IF @nMM IN ( 4, 6, 8, 10, 12 )
    BEGIN
       SET @nLastDayOfMonth = 31
    END
-   ELSE IF @nMM = 2 
+   ELSE IF @nMM = 2
    BEGIN
-      
-      IF (@nYYYY % 4 = 0 AND @nYYYY % 100 <> 0) OR ( @nYYYY % 400 = 0 ) 
+
+      IF (@nYYYY % 4 = 0 AND @nYYYY % 100 <> 0) OR ( @nYYYY % 400 = 0 )
       BEGIN
          SET @nLastDayOfMonth = 29
       END
@@ -111,17 +120,17 @@ BEGIN
          SET @nLastDayOfMonth = 28
       END
    END
-   
+
    IF @nDD > @nLastDayOfMonth
-      GOTO Fail  
-      
-   SET @dNewDateTime = CONVERT (DATETIME, @cNewDateTime, 103) 
+      GOTO Fail
+
+
+   SET @dNewDateTime = CONVERT (DATETIME, @cNewDateTime, 103)
 
    RETURN @dNewDateTime
 Fail:
    RETURN NULL
 END
 GO
-GRANT EXECUTE ON RDT.rdtConvertDateFormat TO NSQL
+GRANT EXECUTE ON  [RDT].[rdtConvertDateFormat] TO [NSQL]
 GO
-

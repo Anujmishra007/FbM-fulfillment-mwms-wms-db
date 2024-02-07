@@ -1,3 +1,10 @@
+if not exists(select 1 from rdt.RDTMsg where Message_ID = 1770 and Message_Type = 'FNC' and Lang_Code = 'ENG')
+   insert into rdt.RDTMsg(Message_ID,Lang_Code,Message_Type,Message_Text,StoredProcName,EventType)
+   values(1770,'ENG','FNC','Reserve for TM','rdtfnc_TM_PalletPick',0)
+IF EXISTS(select 1 from rdt.RDTMsg where Message_ID = 1770 and Message_Type = 'FNC' and Lang_Code = 'ENG' AND StoredProcName = '')
+   UPDATE rdt.RDTMsg SET StoredProcName = 'rdtfnc_TM_PalletPick' where Message_ID = 1770 and Message_Type = 'FNC' and Lang_Code = 'ENG'
+GO
+
 --Screen Range 3700 - 3709
 
 DELETE rdt.RDTScn WHERE Scn = 3700 AND Lang_Code = 'ENG'

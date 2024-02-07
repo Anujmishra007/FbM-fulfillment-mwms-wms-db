@@ -1,12 +1,16 @@
+if not exists(select 1 from rdt.RDTMsg where Message_ID = 1663 AND Lang_Code = 'ENG' AND Message_Type = 'FNC')
+insert into rdt.RDTMsg(Message_ID,Lang_Code,Message_Type,Message_Text,StoredProcName,EventType)
+values(1663,'ENG','FNC','Track no to pallet','rdtfnc_TrackNoToPallet',0)
+GO
 -- 4930 = Pallet ID screen
 DELETE rdt.RDTScn WHERE Scn = 4930 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4930, 'ENG',
-    @cLine01 = 'PALLET KEY:' 
+    @cLine01 = 'PALLET KEY:'
    ,@cLine02 = '%20i01'
    ,@cLine03 = ''
    ,@cLine04 = 'LOC:'
    ,@cLine05 = '%10i02'
-   ,@cLine14 = '%e'      
+   ,@cLine14 = '%e'
    ,@cWebGroup = '{"1":["1","2"],"2":["4","5"]}'
    ,@nFunc = 1663
 
@@ -18,7 +22,7 @@ EXECUTE rdt.rdtAddScn 4931, 'ENG',
    ,@cLine03 = ''
    ,@cLine04 = 'CARTON TYPE:'
    ,@cLine05 = '%30i02'
-   ,@cLine14 = '%e'   
+   ,@cLine14 = '%e'
    ,@cWebGroup = '{"1":["1","2"],"2":["4","5"]}'
    ,@nFunc = 1663
 
@@ -60,10 +64,10 @@ EXECUTE rdt.rdtAddScn 4934, 'ENG',
    ,@cLine05 = 'ACT CTN: %01i02'
    ,@cLine06 = ''
    ,@cLine07 = 'SCANNED: %03d03'
-   ,@cLine14 = '%e'   
+   ,@cLine14 = '%e'
    ,@cWebGroup = '{"1":["2","3"],"2":["5"],"3":["7"]}'
    ,@nFunc = 1663
-   
+
 -- 4935 = Close pallet screen
 DELETE rdt.RDTScn WHERE Scn = 4935 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4935, 'ENG',
@@ -74,5 +78,5 @@ EXECUTE rdt.rdtAddScn 4935, 'ENG',
    ,@cLine05 = '2 = NO'
    ,@cLine06 = ''
    ,@cLine07 = 'OPTION: %01i01'
-   ,@cLine14 = '%e'   
+   ,@cLine14 = '%e'
    ,@nFunc = 1663

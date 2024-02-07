@@ -56,7 +56,7 @@ EXECUTE rdt.rdtAddScn 4652, 'ENG'
 -- 4653 = Pack info screen
 DELETE rdt.RDTScn WHERE Scn = 4653 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4653, 'ENG'
-   ,@cLine01 = 'CARTON: %10i01^DT:INT'
+   ,@cLine01 = 'CARTON: %10i01'
    ,@cLine02 = 'WEIGHT: %10i02^DT:INT'
    ,@cLine03 = 'CUBE:   %10i03^DT:INT'
    ,@cLine04 = 'REF NO:'

@@ -1,10 +1,13 @@
+IF NOT EXISTS( SELECT 1 FROM RDT.RDTMsg (NOLOCK) WHERE Message_ID = 957 AND Lang_Code = 'ENG' AND Message_Type = 'FNC')
+   INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
+   VALUES ('957', 'ENG', 'FNC', 'Pick Case', 'rdtfnc_PickCase', '0')
 
---5290-5299
 -- 5290 = PickSlipNo screen
 DELETE rdt.RDTScn WHERE Scn = 5290 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 5290, 'ENG'
    ,@cLine01 = 'PSNO: %10i01'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"]}'
    ,@nFunc = 957
 
 -- 5291 = Pick zone screen
@@ -17,6 +20,7 @@ EXECUTE rdt.rdtAddScn 5291, 'ENG'
    ,@cLine05 = 'DROPID:'
    ,@cLine06 = '%20i03'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["3"],"3":["5","6"]}'
    ,@nFunc = 957
 
 -- 5292 = SKU QTY screen
@@ -35,6 +39,7 @@ EXECUTE rdt.rdtAddScn 5292, 'ENG'
    ,@cLine11 = 'TOTAL CASE: %05d06'
    ,@cLine12 = 'TOTAL SCAN: %05d07'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3"],"3":["4","5","6","7"]", 3":["8","9","10"],"4":["11","12"]}'
    ,@nFunc = 957
 
 -- 5293 = Message screen
@@ -46,6 +51,7 @@ EXECUTE rdt.rdtAddScn 5293, 'ENG'
    ,@cLine05 = 'Press ENTER or ESC'
    ,@cLine06 = 'to continue'
    ,@cLine14 = '%e'
+   ,@cAutoDisappear = '1'
    ,@nFunc = 957
 
 -- 5294 = Short pick screen
@@ -80,6 +86,7 @@ EXECUTE rdt.rdtAddScn 5296, 'ENG'
    ,@cLine01 = 'LOC: %10d01'
    ,@cLine02 = 'LOC: %10i02'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"]}'
    ,@nFunc = 957
 
 
