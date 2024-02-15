@@ -8,13 +8,13 @@ GO
 /************************************************************************/  
 /* Stored Procedure: isp_CheckSupervisorRole                            */  
 /* Creation Date: 15-Dec-2015                                           */  
-/* Copyright: LF Logistics                                              */  
+/* Copyright: Maersk                                                    */  
 /* Written by:                                                          */  
 /*                                                                      */  
 /* Purpose: Check IDS_SUPERVISOR role                                   */  
 /*        : SOS#357827                                                  */  
 /* Called By: Pickdetail delete trigger                                 */  
-/* PVCS Version: 1.2                                                    */  
+/* PVCS Version: 1.3                                                    */  
 /*                                                                      */  
 /* Version: 7.0                                                         */  
 /*                                                                      */  
@@ -27,6 +27,7 @@ GO
 /*                             while other countries use link_local     */  
 /* 2022-Sep-20  Wan01     1.2 JSM-95588 - Cannot Delete Picked Status   */
 /*                            DevOps Combine Script                     */
+/* 2024-Feb-15  Wan02     1.3 UWP-14785-UNABLE TO DELETE PALLET MANIFEST*/
 /************************************************************************/  
 CREATE OR ALTER PROCEDURE [dbo].[isp_CheckSupervisorRole]   
      @c_username    NVARCHAR(128)                  --(Wan01)  
@@ -40,7 +41,6 @@ BEGIN
   SET ANSI_NULLS ON  
   SET ANSI_WARNINGS ON  
   SET QUOTED_IDENTIFIER OFF  
-    
     
   Declare @c_tsecurename      NVARCHAR(50)  
        ,  @c_SQL              NVARCHAR(MAX)    
@@ -57,7 +57,12 @@ BEGIN
    --(Wan01) - START
    IF ISNULL(@c_username,'') = ''         -- Move Up 
       SET @c_username = SUSER_SNAME()  
-    
+   
+   --(Wan02) - START 
+   SET @c_Flag = 'Y'          --V2 uses 1 DB Connection-WMCONNECT, Always Return As Supervisor
+   GOTO QUIT_SP                                                            
+   --(Wan02) - END
+
    IF EXISTS ( SELECT 1
                FROM WM.WMS_USER_CREATION_STATUS AS wucs WITH (NOLOCK)
                WHERE CHARINDEX(wucs.[USER_NAME], @c_username,  1) > 0
