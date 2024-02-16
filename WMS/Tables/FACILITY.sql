@@ -1,60 +1,77 @@
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'FACILITY' AND type = 'U')
+BEGIN
 CREATE TABLE [dbo].[FACILITY]
 (
-[Facility] [nvarchar] (5) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Descr] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[UserDefine01] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine01] DEFAULT (' '),
-[UserDefine02] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine02] DEFAULT (' '),
-[UserDefine03] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine03] DEFAULT (' '),
-[UserDefine04] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine04] DEFAULT (' '),
-[UserDefine05] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine05] DEFAULT (' '),
-[UserDefine06] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine06] DEFAULT (' '),
-[UserDefine07] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine07] DEFAULT (' '),
-[UserDefine08] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine08] DEFAULT (' '),
-[UserDefine09] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine09] DEFAULT (' '),
-[UserDefine10] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine10] DEFAULT (' '),
-[UserDefine11] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine11] DEFAULT (' '),
-[UserDefine12] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine12] DEFAULT (' '),
-[UserDefine13] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine13] DEFAULT (' '),
-[UserDefine14] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine14] DEFAULT (' '),
-[UserDefine15] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine15] DEFAULT (' '),
-[UserDefine16] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine16] DEFAULT (' '),
-[UserDefine17] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine17] DEFAULT (' '),
-[UserDefine18] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine18] DEFAULT (' '),
-[UserDefine19] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine19] DEFAULT (' '),
-[UserDefine20] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine20] DEFAULT (' '),
-[Addwho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_FACILITY_Addwho] DEFAULT (suser_sname()),
-[AddDate] [datetime] NOT NULL CONSTRAINT [DF_FACILITY_AddDate] DEFAULT (getdate()),
-[EditWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_FACILITY_EditWho] DEFAULT (suser_sname()),
-[EditDate] [datetime] NOT NULL CONSTRAINT [DF_FACILITY_EditDate] DEFAULT (getdate()),
-[TMS_Interface] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_Facility_TMS_Interface] DEFAULT (' '),
-[Address1] [nvarchar] (45) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Address2] [nvarchar] (45) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Address3] [nvarchar] (45) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Address4] [nvarchar] (45) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[City] [nvarchar] (45) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[State] [nvarchar] (45) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Zip] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Country] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ISOCntryCode] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Contact1] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Contact2] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Phone1] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Phone2] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Fax1] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Fax2] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Email1] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Email2] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[TimeZone] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Type] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_FACILITY_Type] DEFAULT (' '),
-[SqFeet] [int] NOT NULL CONSTRAINT [DF_FACILITY_SqFeet] DEFAULT ((0)),
-[Longitude] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_Longitude] DEFAULT (' '),
-[Latitude] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_Latitude] DEFAULT (' '),
-[NoOfDoors] [int] NULL CONSTRAINT [DF_Facility_NoOfDoors] DEFAULT ('0'),
-[LeaseType] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[OperationHours] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[FacilityFor] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_FacilityFor] DEFAULT ('')
-) ON [PRIMARY]
-GO
+    [Facility] [nvarchar] (5) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [Descr] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    [UserDefine01] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine01] DEFAULT (' '),
+    [UserDefine02] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine02] DEFAULT (' '),
+    [UserDefine03] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine03] DEFAULT (' '),
+    [UserDefine04] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine04] DEFAULT (' '),
+    [UserDefine05] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine05] DEFAULT (' '),
+    [UserDefine06] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine06] DEFAULT (' '),
+    [UserDefine07] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine07] DEFAULT (' '),
+    [UserDefine08] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine08] DEFAULT (' '),
+    [UserDefine09] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine09] DEFAULT (' '),
+    [UserDefine10] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine10] DEFAULT (' '),
+    [UserDefine11] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine11] DEFAULT (' '),
+    [UserDefine12] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine12] DEFAULT (' '),
+    [UserDefine13] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine13] DEFAULT (' '),
+    [UserDefine14] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine14] DEFAULT (' '),
+    [UserDefine15] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine15] DEFAULT (' '),
+    [UserDefine16] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine16] DEFAULT (' '),
+    [UserDefine17] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine17] DEFAULT (' '),
+    [UserDefine18] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine18] DEFAULT (' '),
+    [UserDefine19] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine19] DEFAULT (' '),
+    [UserDefine20] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_UserDefine20] DEFAULT (' '),
+    [Addwho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_FACILITY_Addwho] DEFAULT (suser_sname()),
+    [AddDate] [datetime] NOT NULL CONSTRAINT [DF_FACILITY_AddDate] DEFAULT (getdate()),
+    [EditWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_FACILITY_EditWho] DEFAULT (suser_sname()),
+    [EditDate] [datetime] NOT NULL CONSTRAINT [DF_FACILITY_EditDate] DEFAULT (getdate()),
+    [TMS_Interface] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_Facility_TMS_Interface] DEFAULT (' '),
+    [Address1] [nvarchar] (45) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [Address2] [nvarchar] (45) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [Address3] [nvarchar] (45) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [Address4] [nvarchar] (45) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [City] [nvarchar] (45) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [State] [nvarchar] (45) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [Zip] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [Country] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [ISOCntryCode] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [Contact1] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [Contact2] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [Phone1] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [Phone2] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [Fax1] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [Fax2] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [Email1] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [Email2] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [TimeZone] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [Type] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_FACILITY_Type] DEFAULT (' '),
+    [SqFeet] [int] NOT NULL CONSTRAINT [DF_FACILITY_SqFeet] DEFAULT ((0)),
+    [Longitude] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_Longitude] DEFAULT (' '),
+    [Latitude] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_Latitude] DEFAULT (' '),
+    [NoOfDoors] [int] NULL CONSTRAINT [DF_Facility_NoOfDoors] DEFAULT ('0'),
+    [LeaseType] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [OperationHours] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    [FacilityFor] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_FACILITY_FacilityFor] DEFAULT (''),
+    [SiteID] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_FACILITY_SiteId] DEFAULT (''),
+    [BondedFacility] [nvarchar] (5) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_FACILITY_BondedFacility] DEFAULT (' ')
+    ) ON [PRIMARY]
+END
+ELSE
+BEGIN
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = 'SiteID' AND Object_ID = Object_ID('FACILITY'))
+BEGIN
+ALTER TABLE FACILITY ADD SiteID NVARCHAR(20);
+END
+
+    IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = 'BondedFacility' AND Object_ID = Object_ID('FACILITY'))
+BEGIN
+ALTER TABLE FACILITY ADD BondedFacility NVARCHAR(5);
+END
+END
+
 
 ALTER TABLE [dbo].[FACILITY] ADD CONSTRAINT [PK_FACILITY] PRIMARY KEY CLUSTERED ([Facility]) WITH (FILLFACTOR=90) ON [PRIMARY]
 GO
