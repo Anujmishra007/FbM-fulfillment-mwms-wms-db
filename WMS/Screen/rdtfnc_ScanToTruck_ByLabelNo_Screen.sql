@@ -10,6 +10,7 @@ EXECUTE rdt.rdtAddScn 3430, 'ENG'
    ,@cLine07 = 'REF NO:'      -- WMS-15718
    ,@cLine08 = '%20i04'       -- WMS-15718
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["3"],"3":["5"],"4":["7","8"]}'
    ,@nFunc = 922
 
 -- 3431 = ?? screen
@@ -21,12 +22,13 @@ EXECUTE rdt.rdtAddScn 3431, 'ENG'
    ,@cLine04 = 'REF NO:'      -- WMS-15718
    ,@cLine05 = '%20d08'       -- WMS-15718
    ,@cLine06 = 'LABELNO/DROPID:'
-   ,@cLine07 = '%60i04'       -- Extend to 40 chars WMS-23887
+   ,@cLine07 = '%20i04'
    ,@cLine08 = '%20d05'
    ,@cLine09 = ''
    ,@cLine10 = 'SCANNED: %10d06'
    ,@cLine11 = 'TOTAL:   %10d07'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4","5"],"2":["6","7","8"],"3":["10","11"]}'
    ,@nFunc = 922
 
 -- 3432 = ?? screen
@@ -35,12 +37,13 @@ EXECUTE rdt.rdtAddScn 3432, 'ENG'
    ,@cLine01 = 'LABELNO/DROPID:'
    ,@cLine02 = '%20d01'
    ,@cLine03 = ''
-   ,@cLine04 = 'WEIGHT: %10i02'
+   ,@cLine04 = 'WEIGHT: %10i02^DT:INT'
    ,@cLine05 = ''
-   ,@cLine06 = 'CUBE:   %10i03'
+   ,@cLine06 = 'CUBE:   %10i03^DT:INT'
    ,@cLine07 = ''
    ,@cLine08 = 'CARTON: %10i04'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["4"],"3":["6"],"4":["8"]}'
    ,@nFunc = 922
 
 -- 3433 = ?? screen
@@ -54,4 +57,5 @@ EXECUTE rdt.rdtAddScn 3433, 'ENG'
    ,@cLine06 = ''
    ,@cLine07 = '%20d15'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["3","4"],"3":["7"]}'
    ,@nFunc = 922

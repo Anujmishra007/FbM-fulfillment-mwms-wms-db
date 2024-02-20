@@ -10,6 +10,8 @@ EXECUTE rdt.rdtAddScn 820, 'ENG',
    ,@cLine07 = 'LOC:'
    ,@cLine08 = '%10i02'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3","4"],"2":["7","8"]}'
+   ,@nFunc = 556
 
 -- 821 = ?? screen
 DELETE rdt.RDTScn WHERE Scn = 821 AND Lang_Code = 'ENG'
@@ -28,3 +30,5 @@ EXECUTE rdt.rdtAddScn 821, 'ENG',
    ,@cLine12 = 'Next:'
    ,@cLine13 = '%60i12*'   -- SOS375234
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4"],"2":["5","6"],"3":["7","8"],"4":["9"],"5":["10","11"],"6":["12","13"]}'
+   ,@nFunc = 556

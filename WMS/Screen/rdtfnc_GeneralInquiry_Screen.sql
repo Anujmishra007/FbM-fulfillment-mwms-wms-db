@@ -1,6 +1,7 @@
 --rdtfnc_GeneralInquiry
 -- 4710 - 4719
 
+DELETE RDT.RDTMsg WHERE Message_ID = 727 AND Lang_Code = 'ENG' AND Message_Type = 'FNC'
 INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
 VALUES ('727', 'ENG', 'FNC', 'General Inquiry', 'rdtfnc_GeneralInquiry', '0')
 
@@ -19,6 +20,7 @@ EXECUTE rdt.rdtAddScn 4710, 'ENG'
    ,@cLine11 = '%20d09'
    ,@cLine13 = 'OPTIONS: %01i10'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3","4","5","6","7","8","9","10","11"]"2":["13]"}'
    ,@nFunc = 727
  
 -- 4711 = Param screen
@@ -27,16 +29,17 @@ EXECUTE rdt.rdtAddScn 4711, 'ENG'
    ,@cLine01 = '%20d11'
    ,@cLine02 = ''
    ,@cLine03 = '%20d01'
-   ,@cLine04 = '%60i02'--(yeekung01)
+   ,@cLine04 = '%20i02'
    ,@cLine05 = '%20d03'
-   ,@cLine06 = '%60i04'--(yeekung01)
+   ,@cLine06 = '%20i04'
    ,@cLine07 = '%20d05'
-   ,@cLine08 = '%60i06'--(yeekung01)
+   ,@cLine08 = '%20i06'
    ,@cLine09 = '%20d07'
-   ,@cLine10 = '%60i08' --(yeekung01)
+   ,@cLine10 = '%20i08'
    ,@cLine11 = '%20d09'
-   ,@cLine12 = '%60i10' --(yeekung01)
+   ,@cLine12 = '%20i10'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["3","4"],"3":["5","6"],"4":["7","8"],"5":["9","10"],"6":["11","12"]}'
    ,@nFunc = 727
 
 -- 4712 = Param screen
@@ -56,6 +59,7 @@ EXECUTE rdt.rdtAddScn 4712, 'ENG'
    ,@cLine12 = '%20d10'
    ,@cLine13 = '%20i12' -- WMS-17819
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["3","4","5","6","7","8","9","10","11","12],"3":["13"]}'
    ,@nFunc = 727
 
 -- 4713 = Param screen
@@ -74,4 +78,5 @@ EXECUTE rdt.rdtAddScn 4713, 'ENG'
    ,@cLine11 = '%20d09'
    ,@cLine12 = '%20d10'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["3","4","5","6","7","8","9","10","11","12]}'
    ,@nFunc = 727

@@ -4,6 +4,7 @@ EXECUTE rdt.rdtAddScn 4230, 'ENG'
    ,@cLine01 = 'REF NO:'
    ,@cLine02 = '%20i01'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"]}'
    ,@nFunc = 598
 
 -- 4231 = Loc screen
@@ -14,6 +15,7 @@ EXECUTE rdt.rdtAddScn 4231, 'ENG'
    ,@cLine03 = ''
    ,@cLine04 = 'TO LOC: %10i02'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["4"]}'
    ,@nFunc = 598
 
 -- 4232 = Pallet ID screen
@@ -23,6 +25,7 @@ EXECUTE rdt.rdtAddScn 4232, 'ENG'
    ,@cLine02 = 'TO ID:'         -- ID extend from 18 to 30
    ,@cLine03 = '%30i02'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3"]}'
    ,@nFunc = 598
 
 -- 4233 = SKU screen
@@ -37,6 +40,7 @@ EXECUTE rdt.rdtAddScn 4233, 'ENG'
    ,@cLine07 = '%20d04'
    ,@cLine13 = '%20d15' --WMS9426-Add ext info
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["4","5","6","7"],"3":["13"]}'
    ,@nFunc = 598
 
 --WMS-17244 
@@ -50,6 +54,7 @@ EXECUTE rdt.rdtAddScn 4234, 'ENG'
    ,@cLine05 = 'TO ID:'         
    ,@cLine06 = '%30i03'
    ,@cLine13 = '%20d15'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["5","6"],"4":["13"]}'
    ,@cLine14 = '%e'
    ,@nFunc = 598
 ---- 4234 = Lottable screen
@@ -79,12 +84,13 @@ EXECUTE rdt.rdtAddScn 4235, 'ENG'
    ,@cLine06 = '%20d04'
    ,@cLine07 = ''
    ,@cLine08 = '%07d05 %05d06  %05d07'
-   ,@cLine09 = 'QTY: %07i08 %07i09'
+   ,@cLine09 = 'QTY: %07i08^DT:INT %07i09^DT:INT'
    ,@cLine10 = ''
    ,@cLine11 = 'COND CODE:%10i10'
    ,@cLine12 = 'SUBREASON:%10i11'
    ,@cLine13 = '%20d15'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4"],"2":["5","6"],"3":["8","9"],"4":["11"],"5":["12"],"6":["13"]}'
    ,@nFunc = 598   
 
 -- 4236 = Message screen
@@ -97,6 +103,7 @@ EXECUTE rdt.rdtAddScn 4236, 'ENG'
    ,@cLine05 = 'Press ENTER or ESC'
    ,@cLine06 = 'to continue'
    ,@cLine14 = '%e'
+   ,@cAutoDisappear = '1'
    ,@nFunc = 598
 
 -- 4237. Add SKU not in ASN?

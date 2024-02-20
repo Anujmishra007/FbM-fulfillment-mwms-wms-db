@@ -3,7 +3,9 @@
 DELETE rdt.RDTScn WHERE Scn = 2580 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 2580, 'ENG', 
    @cLine01 = 'CCREF : %10i01',
-   @cLine14 = '%e'
+   @cLine14 = '%e', 
+   @cWebGroup = '{"1":["1"]}', 
+   @nFunc = 611
 
 -- Screen 2
 -- Scn = 2581. SHEET NO OR SELECTION CRITERIA
@@ -19,7 +21,9 @@ EXECUTE rdt.rdtAddScn 2581, 'ENG',
    @cLine08 = '      : %10i07',
    @cLine10 = 'AISLE : %10i08',
    @cLine11 = 'LEVEL : %10i09',
-   @cLine14 = '%e'
+   @cLine14 = '%e', 
+   @cWebGroup = '{"1":["1"],"2":["2"],"3":["4","5","6","7","8"],"3":["10"],"4":["11"]}', 
+   @nFunc = 611
 
 -- Screen 3   
 -- Scn = 2582. COUNT NO
@@ -28,7 +32,9 @@ EXECUTE rdt.rdtAddScn 2582, 'ENG',
    @cLine01 = 'CCREF : %10d01',
    @cLine02 = 'SHEET : %10d02',
    @cLine03 = 'CNT NO: %01i03',
-   @cLine14 = '%e'
+   @cLine14 = '%e', 
+   @cWebGroup = '{"1":["1","2"],"2":["3"]}', 
+   @nFunc = 611
    
 -- Screen 4   
 -- Scn = 2583. LOC
@@ -40,7 +46,9 @@ EXECUTE rdt.rdtAddScn 2583, 'ENG',
    @cLine05 = 'LOC: %10d04',
    @cLine06 = 'LOC: %10i05',
    @cLine08 = 'TOTAL RECORDS: %05d06',   
-   @cLine14 = '%e'
+   @cLine14 = '%e', 
+   @cWebGroup = '{"1":["1","2","3"],"2":["5","6"],"3":["8"]}', 
+   @nFunc = 611
    
 -- Screen 4a
 -- Scn = 2584. LOC - Option
@@ -87,7 +95,9 @@ EXECUTE rdt.rdtAddScn 2587, 'ENG',
    @cLine05 = 'LOC: %10d05',   
    @cLine07 = 'ID:',
    @cLine08 = '%18i06',  
-   @cLine14 = '%e'
+   @cLine14 = '%e', 
+   @cWebGroup = '{"1":["1","2","3"],"2":["4","5"],"3":["7","8"]}', 
+   @nFunc = 611
 
 -- Screen 6
 -- 2588. SINGLE SKU/UPC - Increase QTY
@@ -106,7 +116,9 @@ EXECUTE rdt.rdtAddScn 2588, 'ENG',
    ,@cLine11 = '%18i11'              --lottable03
    ,@cLine12 = '%20d12'              --lottable04label
    ,@cLine13 = '%16i13'              --lottable04
-   ,@cLine14 = '%e'       
+   ,@cLine14 = '%e' 
+   ,@cWebGroup = '{"1":["1"],"2":["2","3","4","5"],"3":["6","7"],"4":["8","9"],"5":["10","11"],"6":["12","13"]}' 
+   ,@nFunc = 611 
 
 -- Screen 7
 -- Scn = 2589. Diff SKU
@@ -118,5 +130,7 @@ EXECUTE rdt.rdtAddScn 2589, 'ENG',
    @cLine06 = 'Old SKU: ',
    @cLine07 = '%20d02',
    @cLine09 = 'Press ESC to Continue',
-   @cLine14 = '%e'
+   @cLine14 = '%e', 
+   @cWebGroup = '{"1":["4","5"],"2":["6","7"]}', 
+   @nFunc = 611
 

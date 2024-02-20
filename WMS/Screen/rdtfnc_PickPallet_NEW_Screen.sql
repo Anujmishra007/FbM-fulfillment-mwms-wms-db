@@ -1,15 +1,15 @@
 
-IF NOT EXISTS ( SELECT 1 FROM RDT.RDTMsg (NOLOCK) WHERE Message_ID = 1864 AND Lang_Code = 'ENG' AND Message_Type = 'FNC')
-BEGIN
-   INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
+DELETE RDT.RDTMsg WHERE Message_ID = 1864 AND Lang_Code = 'ENG' AND Message_Type = 'FNC'
+INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
    VALUES (1864, 'ENG', 'FNC', 'Pick pallet (NEW)', 'rdtfnc_PickPallet_NEW', '4')
-END
 
 -- 6260 = PickSlipNo
 DELETE rdt.RDTScn WHERE Scn = 6260 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 6260, 'ENG',
    @cLine01 = 'PSNO: %10i01',
-   @cLine14 = '%e'
+   @cLine14 = '%e', 
+   @cWebGroup = '{"1":["1"]}', 
+   @nFunc = 1864
 
 -- 6261 = LOC
 DELETE rdt.RDTScn WHERE Scn = 6261 AND Lang_Code = 'ENG'
@@ -22,6 +22,7 @@ EXECUTE rdt.rdtAddScn 6261, 'ENG',
    @cLine06 = 'LOC: %10i04',
    @cLine07 = '', 
    @cLine14 = '%e',
+   @cWebGroup = '{"1":["1"],"2":["3"],"3":["5","6"]}', 
    @nFunc = 1864
    
 -- 6262 = ID
@@ -38,9 +39,10 @@ EXECUTE rdt.rdtAddScn 6262, 'ENG',
    @cLine09 = '%20d08',
    @cLine10 = '%08d09 %05d10 %05d11', 
    @cLine11 = 'QTY:     %05d12 %05d13', 
-   @cLine12 = 'ID%60i14',
-   @cLine13 = '%60d15',
+   @cLine12 = 'ID%18i14',
+   @cLine13 = '%20d15',
    @cLine14 = '%e',
+   @cWebGroup = '{"1":["1"],"2":["2","3","4","5"],"3":["6","7","8","9"],"4":["10","11"],"5":["12"],"6":["13"]}', 
    @nFunc = 1864
  
 -- 6263 = SkipTask
@@ -64,4 +66,5 @@ EXECUTE rdt.rdtAddScn 6264, 'ENG',
    @cLine02 = 'TO LOC:',
    @cLine03 = '%10i01',
    @cLine14 = '%e',
+   @cWebGroup = '{"1":["1","2"]}', 
    @nFunc = 1864

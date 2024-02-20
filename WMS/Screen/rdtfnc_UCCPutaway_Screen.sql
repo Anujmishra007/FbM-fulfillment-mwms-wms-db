@@ -6,6 +6,8 @@ EXECUTE rdt.rdtAddScn 926, 'ENG',
     @cLine01 = 'UCC:'
    ,@cLine02 = '%20i01'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"]}'
+   ,@nFunc = 521
 
 -- 927 = ?? screen
 DELETE rdt.RDTScn WHERE Scn = 927 AND Lang_Code = 'ENG'
@@ -21,7 +23,9 @@ EXECUTE rdt.rdtAddScn 927, 'ENG',
    ,@cLine12 = '%20d05' -- SOS373949 (james03)/WMS-17795
    ,@cLine13 = '%20d06' -- SOS373949 (james03)
    ,@cLine14 = '%e'
-
+   ,@cWebGroup = '{"1":["1","2"],"2":["4","5"],"3":["7","8"],"4":["10","11"],"5":["12"],"6":["13"]}'
+   ,@nFunc = 521
+   
 -- 928 = ?? screen
 DELETE rdt.RDTScn WHERE Scn = 928 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 928, 'ENG',
@@ -31,7 +35,9 @@ EXECUTE rdt.rdtAddScn 928, 'ENG',
    ,@cLine05 = 'Press ENTER to'
    ,@cLine06 = 'putaway next item'
    ,@cLine14 = '%e'
-
+   ,@cAutoDisappear = '1'
+   ,@nFunc = 521
+   
 -- 929 = ?? screen
 DELETE rdt.RDTScn WHERE Scn = 929 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 929, 'ENG',
@@ -41,16 +47,18 @@ EXECUTE rdt.rdtAddScn 929, 'ENG',
    ,@cLine05 = 'Option: %01i01'
    ,@cLine06 = '1 = YES; 2 = NO'
    ,@cLine14 = '%e'
-
+   ,@nFunc = 521
+   
 -- 930 = ?? screen -- WMS-16559 (cc02)
 DELETE rdt.RDTScn WHERE Scn = 930 AND Lang_Code = 'ENG'
-EXECUTE rdt.rdtAddScn 930, 'ENG', 
-   @cLine01 = '',
-   @cLine02 = 'LOC NOT MATCH.',
-   @cLine03 = 'PROCEED?',
-   @cLine04 = '',
-   @cLine05 = '1 = YES',
-   @cLine06 = '2 = NO',
-   @cLine07 = '',
-   @cLine08 = 'OPTION: %01i01',
-   @cLine14 = '%e'
+EXECUTE rdt.rdtAddScn 930, 'ENG'
+   ,@cLine01 = ''
+   ,@cLine02 = 'LOC NOT MATCH.'
+   ,@cLine03 = 'PROCEED?'
+   ,@cLine04 = ''
+   ,@cLine05 = '1 = YES'
+   ,@cLine06 = '2 = NO'
+   ,@cLine07 = ''
+   ,@cLine08 = 'OPTION: %01i01'
+   ,@cLine14 = '%e'
+   ,@nFunc = 521

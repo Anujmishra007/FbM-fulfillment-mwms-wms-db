@@ -11,6 +11,7 @@ EXECUTE rdt.rdtAddScn 4480, 'ENG'
    ,@cLine07 = ''
    ,@cLine08 = 'METHOD:   %01i06'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4","5","6"],"2":["8"]}'
    ,@nFunc = 805
 
 -- Dynamic assign screens (4490 to 4499)
@@ -27,10 +28,11 @@ EXECUTE rdt.rdtAddScn 4482, 'ENG'
    ,@cLine07 = '%20d04'
    ,@cLine08 = '%20d05'
    ,@cLine09 = ''
-   ,@cLine10 = 'QTY: %05i06'
+   ,@cLine10 = 'QTY: %05i06^DT:INT'
    ,@cLine11 = ''
    ,@cLine12 = '%20d07'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["4","5","6","7","8"],"3":["10"],"4":["12"]}'
    ,@nFunc = 805
 
 -- Matrix
@@ -50,6 +52,7 @@ EXECUTE rdt.rdtAddScn 4483, 'ENG'
    ,@cLine12 = 'OPTION: %01i11' 
    ,@cLine13 = '1-CLOSE 9-SHORT' 
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4","5","6","7","8","9","10"],"3":["11"],"4":["12","13"]}'
    ,@nFunc = 805
 
 -- Confirm
@@ -76,8 +79,9 @@ EXECUTE rdt.rdtAddScn 4485, 'ENG'
    ,@cLine06 = 'LOC: %10i02'
    ,@cLine07 = ''
    ,@cLine08 = ''
-   ,@cLine09 = 'QTY: %05i03'
+   ,@cLine09 = 'QTY: %05i03^DT:INT'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["6"],"3":["9"]}'
    ,@nFunc = 805
    
 -- New carton
@@ -86,6 +90,7 @@ EXECUTE rdt.rdtAddScn 4486, 'ENG'
    ,@cLine01 = 'NEW CARTON ID:'
    ,@cLine02 = '%20i01' 
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"]'
    ,@nFunc = 805
    
 -- Unassign station

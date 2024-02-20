@@ -7,7 +7,9 @@ EXECUTE rdt.rdtAddScn 1750, 'ENG',
    ,@cLine04 = 'REF NO:'
    ,@cLine05 = '%20i03'
    ,@cLine14 = '%e'
-
+   ,@cWebGroup = '{"1":["1","2"],"2":["4","5"]}'
+   ,@nFunc = 1580
+ 
 -- 1751 = LOC screen
 DELETE rdt.RDTScn WHERE Scn = 1751 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 1751, 'ENG',
@@ -18,6 +20,8 @@ EXECUTE rdt.rdtAddScn 1751, 'ENG',
    ,@cLine05 = ''
    ,@cLine06 = 'TO LOC: %10i04'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"2":["6"]}'
+   ,@nFunc = 1580
  
 -- 1752 = ID screen
 DELETE rdt.RDTScn WHERE Scn = 1752 AND Lang_Code = 'ENG'
@@ -28,7 +32,8 @@ EXECUTE rdt.rdtAddScn 1752, 'ENG',
    ,@cLine05 = 'TO ID:'
    ,@cLine06 = '%60i04'       -- WMS5313 extend to 60 chars
    ,@cLine14 = '%e'
-
+   ,@cWebGroup = '{"1":["1","2"],"2":["4"],"3":["5","6"]}'
+   ,@nFunc = 1580
  
 -- 1753 = Lottable screen
 DELETE rdt.RDTScn WHERE Scn = 1753 AND Lang_Code = 'ENG'
@@ -42,6 +47,8 @@ EXECUTE rdt.rdtAddScn 1753, 'ENG',
    ,@cLine07 = 'LotLabel04:'
    ,@cLine08 = '%10i04'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["5","6"],"4":["7","8"]}'
+   ,@nFunc = 1580
  
 -- 1754 = SKU, QTY screen
 DELETE rdt.RDTScn WHERE Scn = 1754 AND Lang_Code = 'ENG'
@@ -55,10 +62,12 @@ EXECUTE rdt.rdtAddScn 1754, 'ENG',
    ,@cLine07 = '%20d04'
    ,@cLine08 = ''
    ,@cLine10 = 'REC: %15d06' 
-   ,@cLine11 = 'QTY: %10i05 %05d12' 
+   ,@cLine11 = 'QTY: %10i05^DT:INT %05d12' 
    ,@cLine12 = 'TOID QTY: %10d10'
    ,@cLine13 = '%20d15'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4","5","6","7"],"3":["10","11"],"4":["12"],"5":["13"]}'
+   ,@nFunc = 1580
  
 -- 1755 = Print pallet label screen
 DELETE rdt.RDTScn WHERE Scn = 1755 AND Lang_Code = 'ENG'
@@ -71,6 +80,7 @@ EXECUTE rdt.rdtAddScn 1755, 'ENG',
    ,@cLine06 = ''
    ,@cLine07 = 'OPTION: %01i01'
    ,@cLine14 = '%e'
+   ,@nFunc = 1580
 
 -- 1756 = Verif SKU screen
 DELETE rdt.RDTScn WHERE Scn = 1756 AND Lang_Code = 'ENG'
@@ -80,15 +90,17 @@ EXECUTE rdt.rdtAddScn 1756, 'ENG',
    ,@cLine03 = '%20d02' 	
    ,@cLine04 = '%20d03' 	
    ,@cLine05 = 'QTY: %05d12'  -- SOS315958
-   ,@cLine06 = 'WEIGHT: %10i04'
-   ,@cLine07 = 'CUBE  : %10i05'
-   ,@cLine08 = 'L     : %10i06'
-   ,@cLine09 = 'W     : %10i07'
-   ,@cLine10 = 'H     : %10i08'
-   ,@cLine11 = 'INNER : %10i09'
-   ,@cLine12 = 'CASE  : %10i10'
-   ,@cLine13 = 'PALLET: %10i11'
+   ,@cLine06 = 'WEIGHT: %10i04^DT:INT'
+   ,@cLine07 = 'CUBE  : %10i05^DT:INT'
+   ,@cLine08 = 'L     : %10i06^DT:INT'
+   ,@cLine09 = 'W     : %10i07^DT:INT'
+   ,@cLine10 = 'H     : %10i08^DT:INT'
+   ,@cLine11 = 'INNER : %10i09^DT:INT'
+   ,@cLine12 = 'CASE  : %10i10^DT:INT'
+   ,@cLine13 = 'PALLET: %10i11^DT:INT'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4"],"2":[,"5"],"3":[,"6","7","8","9","10","11","12","13"]}'
+   ,@nFunc = 1580
 
 -- 1759 = Close pallet screen
 DELETE rdt.RDTScn WHERE Scn = 1759 AND Lang_Code = 'ENG'
@@ -101,3 +113,4 @@ EXECUTE rdt.rdtAddScn 1759, 'ENG',
    ,@cLine06 = ''
    ,@cLine07 = 'OPTION: %01i01'
    ,@cLine14 = '%e'
+   ,@nFunc = 1580

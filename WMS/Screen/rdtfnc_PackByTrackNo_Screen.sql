@@ -1,11 +1,9 @@
 --rdtfnc_PackByTrackNo
 -- 3120 - 3129
 
-IF NOT EXISTS ( SELECT 1 FROM RDT.RDTMsg (NOLOCK) WHERE Message_ID = 840)
-BEGIN
-   INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
+DELETE RDT.RDTMsg WHERE Message_ID = 840 AND Lang_Code = 'ENG' AND Message_Type = 'FNC'
+INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
    VALUES ('840', 'ENG', 'FNC', 'Pack By TrackNo', 'rdtfnc_PackByTrackNo', '9')
-END
 
 -- 3120 = ?? screen
 DELETE rdt.RDTScn WHERE Scn = 3120 AND Lang_Code = 'ENG'
@@ -18,6 +16,7 @@ EXECUTE rdt.rdtAddScn 3120, 'ENG',
    ,@cLine09 = 'REF NO:'   -- WMS-15906
    ,@cLine10 = '%40i03'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3","4"],"2":["6","7"],"3":["9","10"]}'
    ,@nFunc = 840
  
 -- 3121 = ?? screen
@@ -29,6 +28,7 @@ EXECUTE rdt.rdtAddScn 3121, 'ENG',
    ,@cLine05 = 'TRACK NO:'
    ,@cLine06 = '%18i02'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3","4"],"2":["6","7"]}'
    ,@nFunc = 840
    
 -- 3122 = ?? screen
@@ -48,6 +48,7 @@ EXECUTE rdt.rdtAddScn 3122, 'ENG',
    ,@cLine12 = ''
    ,@cLine13 = '%20d15'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3"],"3":["4"],"4":["6","7"],"5":["9","10"],"6":["11"],"7":["13"]}'
    ,@nFunc = 840
    
 /* -- For CN only SOS320585
@@ -69,6 +70,7 @@ EXECUTE rdt.rdtAddScn 3123, 'ENG',
    ,@cLine12 = '%10i05    KG'
    ,@cLine13 = '%20d15' -- WMS-13913
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3","4"],"2":["5","6"],"3":["7"],"4":["9","10"],"5":["11","12"],"6":["13"]}'
    ,@nFunc = 840
    
 -- 3124 = ?? screen
@@ -97,6 +99,7 @@ EXECUTE rdt.rdtAddScn 3126, 'ENG',
    ,@cLine05 = '2 = NO'
    ,@cLine07 = 'OPTION: %01i01'
    ,@cLine14 = '%e'   
+   ,@cWebGroup = '{"1":["3","4"],"2":["6","7"],"3":["9","10"],"4":["12","13"]}'
    ,@nFunc = 840
    
 --WMS-22084 - Capture Info
@@ -113,6 +116,7 @@ EXECUTE rdt.rdtAddScn 3127, 'ENG'
    ,@cLine09 = '%20d09'
    ,@cLine10 = '%20i10'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["5","6"],"4":["7","8"],"5":["9","10"]}'
    ,@nFunc = 840
    
 -- update rdt.rdtscn with function id   

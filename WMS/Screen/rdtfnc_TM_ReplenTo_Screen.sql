@@ -1,18 +1,22 @@
 --scn 2780 --- 2789
 
-
+DELETE RDT.RDTMsg WHERE Message_ID = 1765 AND Lang_Code = 'ENG' AND Message_Type = 'FNC'
 INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
 VALUES ('1765', 'ENG', 'FNC', 'TM Move', 'rdtfnc_TM_ReplenTo', '0')
 
+DELETE RDT.rdttaskmanagerconfig WHERE TaskType = 'RPT' AND Function_ID = 1765
 Insert Into rdt.rdttaskmanagerconfig ( TaskType, TaskDesc, Function_ID, Step)
 Values ( 'RPT', 'Replenishment To', 1765, '0' )
 
+DELETE CODELKUP WHERE ListName = 'TTMST' AND Code = 'nspTTMRT01'
 INSERT INTO CODELKUP ( ListName , Code)
 VALUES ( 'TTMST' , 'nspTTMRT01')
 
+DELETE CODELKUP WHERE ListName = 'PERMTYPE' AND Code = 'RPT'
 INSERT INTO Codelkup (ListName , Code , Description , Short , Long ) 
 Values ( 'PERMTYPE' , 'RPT', 'Replenisment To' , 'RPT' , 'Replenishment To' ) 
 
+DELETE CODELKUP WHERE ListName = 'TASKTYPE' AND Code = 'RPT'
 INSERT INTO Codelkup (ListName , Code , Description , Short , Long ) 
 Values ( 'TASKTYPE ' , 'RPT', 'Replenisment To' , 'RPT' , 'Replenishment To' ) 
 
@@ -24,7 +28,9 @@ EXECUTE rdt.rdtAddScn 2780, 'ENG',
    ,@cLine04 = '%10d01'
    ,@cLine05 = '%10i02'
    ,@cLine14 = '%e'
-
+   ,@cWebGroup = '{"1":["3","4","5"]}'
+   ,@nFunc = 1765
+   
 -- 2781  = ID screen
 DELETE rdt.RDTScn WHERE Scn = 2781 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 2781, 'ENG'
@@ -35,8 +41,8 @@ EXECUTE rdt.rdtAddScn 2781, 'ENG'
    ,@cLine06 = '%18d02'
    ,@cLine07 = '%40i03'
    ,@cLine14 = '%e'  
-
-
+   ,@cWebGroup = '{"1":["3","4"],"2":["5","6","7"]}'
+   ,@nFunc = 1765
 
 -- 2782  = TO LOC screen
 DELETE rdt.RDTScn WHERE Scn = 2782 AND Lang_Code = 'ENG'
@@ -53,8 +59,8 @@ EXECUTE rdt.rdtAddScn 2782, 'ENG',
    ,@cLine11 = '%10d03'
    ,@cLine12 = '%10i04'
    ,@cLine14 = '%e'
-      
-
+   ,@cWebGroup = '{"1":["3","4"],"2":["5","6"],"3":["7","8","9"],"4":["10","11","12"]}'
+   ,@nFunc = 1765
 
 -- 2783  = SKU screen
 --DELETE rdt.RDTScn WHERE Scn = 2783 AND Lang_Code = 'ENG'
@@ -87,9 +93,10 @@ EXECUTE rdt.rdtAddScn 2783, 'ENG',
    ,@cLine10 = '%20i10'
    ,@cLine11 = '%20d11'
    ,@cLine12 = 'QTY: %05d12 %05d13'
-   ,@cLine13 = 'QTY: %05i14 %05i15'
+   ,@cLine13 = 'QTY: %05i14^DT:INT %05i15^DT:INT'
    ,@cLine14 = '%e'   
-
+   ,@cWebGroup = '{"1":["1"],"2":["2","3","4"],"3":["5","6","7","8"],"4":["9","10"],"4":["11","12","13"]}'
+   ,@nFunc = 1765
 
 -- 2785  = Msg screen
 DELETE rdt.RDTScn WHERE Scn = 2784 AND Lang_Code = 'ENG'

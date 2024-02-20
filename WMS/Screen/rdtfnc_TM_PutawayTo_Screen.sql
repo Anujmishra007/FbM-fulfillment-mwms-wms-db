@@ -8,6 +8,7 @@ EXECUTE rdt.rdtAddScn 3420, 'ENG'
    ,@cLine04 = '%10d01'
    ,@cLine05 = '%10i02'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3","4","5"]}'
    ,@nFunc = 1796
 
 -- 3421  = ID screen
@@ -20,7 +21,8 @@ EXECUTE rdt.rdtAddScn 3421, 'ENG'
    ,@cLine05 = 'FROM ID: '
    ,@cLine06 = '%18d02'
    ,@cLine07 = '%18i03'
-   ,@cLine14 = '%e'   
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3","4"],"2":["5","6","7"]}'
    ,@nFunc = 1796
 
 -- 3422  = UCC screen
@@ -31,6 +33,7 @@ EXECUTE rdt.rdtAddScn 3422, 'ENG'
    ,@cLine03 = 'UCC:'
    ,@cLine04 = '%20i01'
    ,@cLine14 = '%e'   
+   ,@cWebGroup = '{"1":["3","4"]}'
    ,@nFunc = 1796
 
 -- 3423  = TO LOC screen
@@ -49,6 +52,7 @@ EXECUTE rdt.rdtAddScn 3423, 'ENG',
    ,@cLine11 = '%10d06'
    ,@cLine12 = '%10i07'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3","4"],"2":["5","6","7","8"],"3":["9"],"4":["10","11","12"]}'
    ,@nFunc = 1796
    
 -- 3424  = Msg screen
@@ -72,4 +76,5 @@ EXECUTE rdt.rdtAddScn 3425, 'ENG'
    ,@cLine04 = '%10d01'
    ,@cLine05 = '%10i02'
    ,@cLine14 = '%e'   
+   ,@cWebGroup = '{"1":["3","4","5"]}'
    ,@nFunc = 1796

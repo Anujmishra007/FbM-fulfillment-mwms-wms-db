@@ -1,11 +1,9 @@
 --rdtfnc_Return_V7
 --4270-4279
 
-IF NOT EXISTS ( SELECT 1 FROM RDT.RDTMsg (NOLOCK) WHERE Message_ID = 607 AND Lang_Code = 'ENG' AND Message_Type = 'FNC')
-BEGIN
-   INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
+DELETE RDT.RDTMsg WHERE Message_ID = 607 AND Lang_Code = 'ENG' AND Message_Type = 'FNC'
+INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
    VALUES (607, 'ENG', 'FNC', 'RETURN V7', 'rdtfnc_Return_V7', '2')
-END
 
 -- Scn = 4270. ASN, PO
 DELETE rdt.RDTScn WHERE Scn = 4270 AND Lang_Code = 'ENG'
@@ -16,6 +14,7 @@ EXECUTE rdt.rdtAddScn 4270, 'ENG'
    ,@cLine04 = 'REF NO:'
    ,@cLine05 = '%20i03'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["4","5"]}'
    ,@nFunc = 607
    
 -- Scn = 4271. SKU
@@ -32,6 +31,7 @@ EXECUTE rdt.rdtAddScn 4271, 'ENG'
    ,@cLine09 = 'ASN QTY: %10d06'
    ,@cLine10 = 'RCV QTY: %10d07'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["4","5","6","7"],"3":["9","10"]}'
    ,@nFunc = 607
    
 -- Scn = 4272. QTY
@@ -45,12 +45,13 @@ EXECUTE rdt.rdtAddScn 4272, 'ENG'
    ,@cLine06 = '%20d04'
    ,@cLine07 = ''
    ,@cLine08 = '%08d05 %05d06 %05d07'
-   ,@cLine09 = 'QTY RTN: %05i08 %05i09'
+   ,@cLine09 = 'QTY RTN: %05i08^DT:INT %05i09^DT:INT'
    ,@cLine10 = ''
    ,@cLine11 = 'COND. CODE: %10i10'
    ,@cLine12 = ''
    ,@cLine13 = '%20d15'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4"],"2":["5","6"],"3":["8","9"],"4":["11"],"5":["13"]}'
    ,@nFunc = 607
    
 -- Scn = 4273. Lottables
@@ -84,6 +85,7 @@ EXECUTE rdt.rdtAddScn 4274, 'ENG'
    ,@cLine12 = ''
    ,@cLine13 = '%20d15'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3"],"2":["6","7","8"],"3":["13"]}'
    ,@nFunc = 607
 
 --WMS-23005
@@ -101,6 +103,7 @@ EXECUTE rdt.rdtAddScn 4275, 'ENG'
    ,@cLine09 = '%20d09'
    ,@cLine10 = '%20i10'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["5","6"],"4":["7","8"],"5":["9","10"]}'
    ,@nFunc = 607
    
 -- 4276 = ToLoc Diff screen
@@ -112,6 +115,6 @@ EXECUTE rdt.rdtAddScn 4276, 'ENG'
    ,@cLine04 = '1 = YES'
    ,@cLine05 = '2 = NO'
    ,@cLine06 = ''
-   ,@cLine07 = 'OPTION: %01i01'
+   ,@cLine07 = 'OPTION: %01d01'
    ,@cLine14 = '%e'
    ,@nFunc = 607   

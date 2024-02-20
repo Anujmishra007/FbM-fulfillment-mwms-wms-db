@@ -2,7 +2,9 @@
 DELETE rdt.RDTScn WHERE Scn = 4690 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4690, 'ENG',
    @cLine01 = 'PSNO: %10i01',
-   @cLine14 = '%e'
+   @cLine14 = '%e',
+   @cWebGroup = '{"1":["1"]}', 
+   @nFunc = 830
 
 -- 4691 = LOC, Option
 DELETE rdt.RDTScn WHERE Scn = 4691 AND Lang_Code = 'ENG'
@@ -19,7 +21,9 @@ EXECUTE rdt.rdtAddScn 4691, 'ENG',
    @cLine10 = '', 
    @cLine11 = '', 
    @cLine12 = '%20d20', 
-   @cLine14 = '%e'
+   @cLine14 = '%e',
+   @cWebGroup = '{"1":["1"],"2":["3"],"3":["5","6"],"4":["8","9"],"5":["12"]}', 
+   @nFunc = 830
 
 -- 4692 = SKU/UPC
 DELETE rdt.RDTScn WHERE Scn = 4692 AND Lang_Code = 'ENG'
@@ -37,7 +41,9 @@ EXECUTE rdt.rdtAddScn 4692, 'ENG',
    @cLine11 = '%20d09',
    @cLine12 = '%20d10',
    @cLine13 = '%20d20',  
-   @cLine14 = '%e'
+   @cLine14 = '%e',
+   @cWebGroup = '{"1":["1","2"],"2":["3","4","5","6","7"],"3":["8","9","10","11","12","13"]}', 
+   @nFunc = 830
 
 -- 4693 = QTY
 DELETE rdt.RDTScn WHERE Scn = 4693 AND Lang_Code = 'ENG'
@@ -53,17 +59,21 @@ EXECUTE rdt.rdtAddScn 4693, 'ENG',
    @cLine09 = '%20d08',
    @cLine10 = '%08d09 %05d10 %05d11', 
    @cLine11 = 'PK  QTY: %05d12 %05d13', 
-   @cLine12 = 'ACT QTY: %05i14 %05i15', 
+   @cLine12 = 'ACT QTY: %05i14^DT:INT %05i15^DT:INT', 
    @cLine13 = '%20d20', 
-   @cLine14 = '%e'
+   @cLine14 = '%e',
+   @cWebGroup = '{"1":["1","2","3","4"],"2":["5","6","7","8","9"],"3":["10","11","12"],"4":["10"]}', 
+   @nFunc = 830
 
 -- 4694 = TO LOC
 DELETE rdt.RDTScn WHERE Scn = 4694 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4694, 'ENG',
    @cLine01 = 'TOLOC:',
    @cLine02 = '%10i01',
-   @cLine14 = '%e'
-   
+   @cLine14 = '%e',
+   @cWebGroup = '{"1":["1","2"]}', 
+   @nFunc = 830
+
 -- 4695 = skip task screen
 DELETE rdt.RDTScn WHERE Scn = 4695 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4695, 'ENG',
@@ -97,4 +107,6 @@ EXECUTE rdt.rdtAddScn 4697, 'ENG',
    @cLine03 = 'ID:',
    @cLine04 = '%18d02',
    @cLine05 = '%18i03',
-   @cLine14 = '%e'
+   @cLine14 = '%e',
+   @cWebGroup = '{"1":["1"],"2":["3","4","5"]}', 
+   @nFunc = 830

@@ -13,4 +13,6 @@ EXECUTE rdt.rdtAddScn 3990, 'ENG'
    ,@cLine09 = '%20d09'
    ,@cLine10 = '%60i10' -- Lottable no 5
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["5","6"],"4":["7","8"],"5":["9","10"]}'
+   
 

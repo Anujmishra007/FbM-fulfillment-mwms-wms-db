@@ -1,10 +1,8 @@
 --scn 3910 --- 3919
 
-IF NOT EXISTS (SELECT 1 FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID=841)
-BEGIN
-   INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
+DELETE RDT.RDTMSG WHERE MESSAGE_ID = 841 AND Lang_Code = 'ENG' AND Message_Type = 'FNC'
+INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
    VALUES ('841', 'ENG', 'FNC', 'DTC Dispatch', 'rdtfnc_DTC_Dispatch', '0')
-END
 
 -- 2400 = ?? screen
 DELETE rdt.RDTScn WHERE Scn = 3910 AND Lang_Code = 'ENG'
@@ -22,6 +20,7 @@ EXECUTE rdt.rdtAddScn 3910, 'ENG',
    ,@cLine12 = 'REFNO:'       --WMS17077
    ,@cLine13 = '%20i04'       --WMS17077
    ,@cLine14 = '%e'           
+   ,@cWebGroup = '{"1":["3","4"],"2":["6","7"],"3":["9","10"],"4":["12","13"]}'
    ,@nFunc = 841
 
 -- 2401 = ?? screen
@@ -39,6 +38,7 @@ EXECUTE rdt.rdtAddScn 3911, 'ENG',
    ,@cLine11 = 'TTL SCAN: %05d06'
    ,@cLine13 = '%20d07'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["4","5"],"3":["6","7"],"4":["8","9"],"5":["10","11"]}'
    ,@nFunc = 841
 
 -- 2402 = ?? screen
@@ -61,6 +61,7 @@ EXECUTE rdt.rdtAddScn 3912, 'ENG',
    ,@cLine03 = 'Reason Code:'
    ,@cLine04 = '%10i01'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3","4"]}'
    ,@nFunc = 841
 
 -- 2404 = ?? screen
@@ -79,6 +80,7 @@ EXECUTE rdt.rdtAddScn 3913, 'ENG',
    ,@cLine12 = 'OPTION: %01i07'
    ,@cLine13 = '%20d07' --(yeekung01)
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["2","3","5","6","7","8","9","10"],"2":["11","12"],"3":["13"]}'
    ,@nFunc = 841
 
 -- 2405 = ?? screen
@@ -98,6 +100,7 @@ EXECUTE rdt.rdtAddScn 3915, 'ENG',
    ,@cLine06 = '%20i02'
    ,@cLine08 = '%20d03'  --WMS-17410 extInfo
    ,@cLine14 = '%e'
+   ,@cAutoDisappear = '1'
    ,@nFunc = 841
 
 ----WMS-13131 (yeekung01)
@@ -112,12 +115,13 @@ EXECUTE rdt.rdtAddScn 3915, 'ENG',
 DELETE rdt.RDTScn WHERE Scn = 3916 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 3916, 'ENG',
     @cLine01 = 'CARTON: %10i07'
-   ,@cLine03 = 'CUBE: %10i02'
-   ,@cLine05 = 'WEIGHT: %10i03'
+   ,@cLine03 = 'CUBE: %10i02^DT:INT'
+   ,@cLine05 = 'WEIGHT: %10i03^DT:INT'
    ,@cLine07 = 'REF NO:'
    ,@cLine08 = '%20i04'
    ,@cLine13 = '%20d08' --WMS-22041
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["3"],"3":["5"],"4":["7","8"],"5":["13"]}'
    ,@nFunc = 841
 
-select * from rdt.rdtscn with (nolock) where scn between 3910 and 3919 
+--select * from rdt.rdtscn with (nolock) where scn between 3910 and 3919 

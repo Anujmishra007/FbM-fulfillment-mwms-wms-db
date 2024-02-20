@@ -4,6 +4,7 @@ EXECUTE rdt.rdtAddScn 3690, 'ENG',
     @cLine01 = 'MOVE TO UCC'
    ,@cLine03 = 'TO LOC: %10i01'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3"]}'
    ,@nFunc = 1804
 
 -- 3691 =  Scan TO ID screen
@@ -13,6 +14,7 @@ EXECUTE rdt.rdtAddScn 3691, 'ENG',
    ,@cLine02 = 'TO ID:'
    ,@cLine03 = '%18i02'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3"]}'
    ,@nFunc = 1804
 
 -- 3692 =  Scan FROM LOC screen
@@ -23,6 +25,7 @@ EXECUTE rdt.rdtAddScn 3692, 'ENG',
    ,@cLine03 = '%18d02'
    ,@cLine05 = 'FROM LOC: %10i03'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3"],"3":["5"]}'
    ,@nFunc = 1804
 
 -- 3693 =  Scan FROM ID screen
@@ -35,6 +38,7 @@ EXECUTE rdt.rdtAddScn 3693, 'ENG',
    ,@cLine06 = 'FROM ID:'
    ,@cLine07 = '%18i04'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3"],"3":["5"],"4":["6","7"]}'
    ,@nFunc = 1804
 
 -- 3694 =  Scan SKU screen
@@ -46,6 +50,7 @@ EXECUTE rdt.rdtAddScn 3694, 'ENG',
    ,@cLine04 = 'SKU/UPC:'
    ,@cLine05 = '%20i03'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3"],"3":["4","5"]}'
    ,@nFunc = 1804
 
 -- 3695 =  Enter QTY MOVE screen
@@ -62,9 +67,10 @@ EXECUTE rdt.rdtAddScn 3695, 'ENG',
    ,@cLine09 = '4:%16d07'
    ,@cLine10 = '1:%18d09' -- (ChewKP03) 
    ,@cLine11 = 'QTY AVL: %05d12 %05d13'
-   ,@cLine12 = 'QTY MV:  %05i14 %05i15'
+   ,@cLine12 = 'QTY MV:  %05i14^DT:INT %05i15^DT:INT'
    ,@cLine13 = '%20d10'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4","5"],"2":["6","7","8","9","10"],"3":["11","12"],"4":["13"]}'
    ,@nFunc = 1804
 	
 -- 3696 =  Scan TO UCC screen
@@ -75,6 +81,7 @@ EXECUTE rdt.rdtAddScn 3696, 'ENG',
    ,@cLine03 = ''
    ,@cLine12 = '%20d15'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["12"]}'
    ,@nFunc = 1804
 
 -- 3697 =  Close Pallet screen

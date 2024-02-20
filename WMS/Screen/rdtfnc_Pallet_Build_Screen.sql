@@ -5,6 +5,7 @@ EXECUTE rdt.rdtAddScn 2320, 'ENG',
    ,@cLine03 = 'DROP ID:'
    ,@cLine04 = '%20i01'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3","4"]}'
    ,@nFunc = 1641
 
 -- 2321 = LOC screen
@@ -16,6 +17,7 @@ EXECUTE rdt.rdtAddScn 2321, 'ENG',
    ,@cLine05 = 'LOC:'
    ,@cLine06 = '%10i02'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3","4"],"2":["5","6"]}'
    ,@nFunc = 1641
     
 -- 2322 = UCC NO screen
@@ -32,6 +34,7 @@ EXECUTE rdt.rdtAddScn 2322, 'ENG',
    ,@cLine11 = '%05d04'             -- (ChewKP01)
    ,@cLine13 = '%20d05'             -- SOS370791
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3","4"],"2":["5","6"],"3":["7","8"],"4":["10","11"],"5":["13"]}'
    ,@nFunc = 1641
    
 -- 2323 = Close Pallet Option screen
@@ -61,6 +64,7 @@ EXECUTE rdt.rdtAddScn 2324, 'ENG'
    ,@cLine11 = '%20d09'
    ,@cLine12 = '%20i10'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3","4"],"2":["5","6"],"3":["7","8"],"4":["9","10"],"5":["11","12"]}'
    ,@nFunc = 1641
    
 -- 2325 = Close Pallet Option screen -- (ChewKP02) 
@@ -100,4 +104,5 @@ EXECUTE rdt.rdtAddScn 2327, 'ENG'
    ,@cLine09 = '%20d09'
    ,@cLine10 = '%20i10'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["5","6"],"4":["7","8"],"5":["9","10"]}'
    ,@nFunc = 1641   

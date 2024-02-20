@@ -16,6 +16,8 @@ DELETE rdt.RDTScn WHERE Scn = 1870 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 1870, 'ENG',
     @cLine01 = 'WAVEKEY: %10i01'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"]}'
+   ,@nFunc = 1620
  
 -- 1871 = LOADKEY screen
 DELETE rdt.RDTScn WHERE Scn = 1871 AND Lang_Code = 'ENG'
@@ -23,7 +25,9 @@ EXECUTE rdt.rdtAddScn 1871, 'ENG',
     @cLine01 = 'WAVEKEY: %10d01'
    ,@cLine02 = 'LOADKEY: %10i02'
    ,@cLine14 = '%e'
- 
+   ,@cWebGroup = '{"1":["1"],"2":["2"]}'
+   ,@nFunc = 1620
+   
 -- 1872 = OREDRKEY screen
 DELETE rdt.RDTScn WHERE Scn = 1872 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 1872, 'ENG',
@@ -36,7 +40,9 @@ EXECUTE rdt.rdtAddScn 1872, 'ENG',
    ,@cLine10 = 'ORDERKEY COUNT:'
    ,@cLine11 = '%05d05'
    ,@cLine14 = '%e'
- 
+   ,@cWebGroup = '{"1":["1","2"],"2":["4","5"],"3":["7","8"],"4":["10","11"]}'
+   ,@nFunc = 1620
+   
 -- 1873 = PUTAWAY screen
 DELETE rdt.RDTScn WHERE Scn = 1873 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 1873, 'ENG',
@@ -50,6 +56,8 @@ EXECUTE rdt.rdtAddScn 1873, 'ENG',
    ,@cLine10 = '1 = Select Zone'
    ,@cLine11 = 'ENTER = Next Record'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3","5","6","7","8","9"],"4":["10","11"]}'
+   ,@nFunc = 1620
  
 -- 1874 = PICKZONE screen
 DELETE rdt.RDTScn WHERE Scn = 1874 AND Lang_Code = 'ENG'
@@ -58,7 +66,9 @@ EXECUTE rdt.rdtAddScn 1874, 'ENG',
    ,@cLine02 = '%10i01'
    ,@cLine04 = 'BLANK = System Assign'
    ,@cLine14 = '%e'
- 
+   ,@cWebGroup = '{"1":["1","2"]}'
+   ,@nFunc = 1620
+   
 -- 1875 = PICK screen
 DELETE rdt.RDTScn WHERE Scn = 1875 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 1875, 'ENG',
@@ -75,7 +85,9 @@ EXECUTE rdt.rdtAddScn 1875, 'ENG',
    ,@cLine12 = 'TTL ALLOC QTY: %05d08'
    ,@cLine13 = '%20d09'
    ,@cLine14 = '%e'
- 
+   ,@cWebGroup = '{"1":["1","3"],"2":["4","5","6","7","8","9","10","11","12"],"3":["13"]}'
+   ,@nFunc = 1620
+   
 -- 1876 = LOC screen
 DELETE rdt.RDTScn WHERE Scn = 1876 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 1876, 'ENG',
@@ -93,7 +105,9 @@ EXECUTE rdt.rdtAddScn 1876, 'ENG',
    ,@cLine12 = '%60i09'       -- WMS-15548 change to 60 chars
    ,@cLine13 = '%09d10 %10i11'
    ,@cLine14 = '%e'
- 
+   ,@cWebGroup = '{"1":["1"],"2":["2","3"],"3":["4"],"4":{"5","6","7","8","9"],"5":["10","11","12"],"6":["13"]}'
+   ,@nFunc = 1620
+   
 -- 1877 = LOC screen
 DELETE rdt.RDTScn WHERE Scn = 1877 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 1877, 'ENG',
@@ -110,8 +124,10 @@ EXECUTE rdt.rdtAddScn 1877, 'ENG',
    ,@cLine10 = '%20d10'
    ,@cLine11 = 'CUST: %14d11'
    ,@cLine12 = 'QTY: %11d12'
-   ,@cLine13 = 'QTY TO PICK: %05i13'
+   ,@cLine13 = 'QTY TO PICK: %05i13^DT:INT'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2"],"3":["3","4","5","6","7"],"4":["8"],"5":["9","10"],"5":["11"],"6":["12","13"]}'
+   ,@nFunc = 1620
  
 -- 1878 = CONFIRM SHORT PICK screen
 DELETE rdt.RDTScn WHERE Scn = 1878 AND Lang_Code = 'ENG'
@@ -130,7 +146,9 @@ EXECUTE rdt.rdtAddScn 1878, 'ENG',
    ,@cLine12 = '%20d11'
    ,@cLine13 = '%20d12'
    ,@cLine14 = '%e'
- 
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4","5","6","7","8","9","10","11","12","13"]}'
+   ,@nFunc = 1620
+    
 -- 1879 = PICK COMPLETED screen
 DELETE rdt.RDTScn WHERE Scn = 1879 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 1879, 'ENG',
@@ -145,7 +163,9 @@ EXECUTE rdt.rdtAddScn 1879, 'ENG',
    ,@cLine10 = 'PICKED QTY: %05d06'
    ,@cLine13 = '%20d07'    -- (james36)
    ,@cLine14 = '%e'
- 
+   ,@cWebGroup = '{"1":["1"],"2":["3","4","5","6","7","8","9","10"],"3":["13"]}'
+   ,@nFunc = 1620
+   
 -- 1880 = EXIT PICK screen
 DELETE rdt.RDTScn WHERE Scn = 1880 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 1880, 'ENG',
@@ -161,6 +181,8 @@ EXECUTE rdt.rdtAddScn 1880, 'ENG',
    ,@cLine12 = 'QTY: %11d07'
    ,@cLine13 = '%20d08'    -- (james36)
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","3"],"2":["5","6","7","8","9","10","11","12"],"3":["13"]}'
+   ,@nFunc = 1620
  
 -- 1881 = CANCEL PICK screen
 DELETE rdt.RDTScn WHERE Scn = 1881 AND Lang_Code = 'ENG'
@@ -174,6 +196,8 @@ EXECUTE rdt.rdtAddScn 1881, 'ENG',
    ,@cLine09 = 'To Original Loc'
    ,@cLine11 = '%20i02'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["3","4","5","7","8","9"],"3":["11"]}'
+   ,@nFunc = 1620
    
 -- 1882 = DROP ID screen
 DELETE rdt.RDTScn WHERE Scn = 1882 AND Lang_Code = 'ENG'
@@ -192,6 +216,8 @@ EXECUTE rdt.rdtAddScn 1882, 'ENG',
    ,@cLine12 = '%20i10'        -- SOS304353 change to 20 chars
    ,@cLine13 = '%09d11 %10i12'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3"],"3":["4"],"4":["5","6","7","8"],"5:["9","10"],"6":["11","12"],"7":["13"]}'
+   ,@nFunc = 1620
 
 -- 1883 = LOC screen
 DELETE rdt.RDTScn WHERE Scn = 1883 AND Lang_Code = 'ENG'
@@ -210,6 +236,8 @@ EXECUTE rdt.rdtAddScn 1883, 'ENG',
    ,@cLine12 = 'QTY: %11d12'
    ,@cLine13 = '%05i15 %05i13 %09d14' -- SOS291607
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3","4","5"],"3":["6","7"],"4":["8"],"5":["9","10"],"6:["11"],"7":["13"]}'
+   ,@nFunc = 1620
  
 -- 1884 = CONFIRM SHORT PICK screen
 DELETE rdt.RDTScn WHERE Scn = 1884 AND Lang_Code = 'ENG'
@@ -227,21 +255,27 @@ EXECUTE rdt.rdtAddScn 1884, 'ENG',
    ,@cLine11 = 'L2 %20d10'
    ,@cLine12 = 'L4 %20d11'
    ,@cLine14 = '%e'
- 
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4","5","6","7","8","9","10","11","12"]}'
+   ,@nFunc = 1620
+
 -- 1885 = PRINT LABEL
 DELETE rdt.RDTScn WHERE Scn = 1885 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 1885, 'ENG',
     @cLine01 = 'PRINT LABEL? %01i01'
    ,@cLine02 = '1 = YES 2 = NO'
    ,@cLine14 = '%e'
- 
+   ,@cWebGroup = '{"1":["1","2"]}'
+   ,@nFunc = 1620
+   
 -- 1886 = CLOSE CASE
 DELETE rdt.RDTScn WHERE Scn = 1886 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 1886, 'ENG',
     @cLine01 = 'CLOSE CASE? %01i01' -- (FOR AEO james01)
    ,@cLine02 = '1 = YES 2 = NO'
    ,@cLine14 = '%e'
- 
+   ,@cWebGroup = '{"1":["1","2"]}'
+   ,@nFunc = 1620
+
 -- SOS170848 - Add new screen for conso pock
 -- 1887 = DROP ID screen
 DELETE rdt.RDTScn WHERE Scn = 1887 AND Lang_Code = 'ENG'
@@ -259,7 +293,10 @@ EXECUTE rdt.rdtAddScn 1887, 'ENG',
    ,@cLine12 = '%20i10'    -- SOS304353 change to 20 chars
    ,@cLine13 = '%09d11 %10i12'
    ,@cLine14 = '%e'
- 
+   ,@cWebGroup = '{"1":["1"],"2":["2"],"3":["4","5","6","7"],"3":["8","9"],"4":["10","11","12"],"5":["13"]}'
+   ,@nFunc = 1620
+
+   
 -- 1888 = LOC screen
 DELETE rdt.RDTScn WHERE Scn = 1888 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 1888, 'ENG',
@@ -277,6 +314,8 @@ EXECUTE rdt.rdtAddScn 1888, 'ENG',
    ,@cLine12 = 'QTY: %11d12'
    ,@cLine13 = '%05i15 %05i13 %09d14' -- SOS291607
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3","4","5","6"],"3":["7","8"],"4":["9"],"5":["10"],"6":["11"],"7":["12"],"8":["13"]}'
+   ,@nFunc = 1620
  
 -- 1889 = CONFIRM SHORT PICK screen
 DELETE rdt.RDTScn WHERE Scn = 1889 AND Lang_Code = 'ENG'
@@ -295,7 +334,9 @@ EXECUTE rdt.rdtAddScn 1889, 'ENG',
    ,@cLine12 = '%20d11'
    ,@cLine13 = '%20d12'
    ,@cLine14 = '%e'
- 
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4","5","6","7","8","9","10","11","12","13"]}'
+   ,@nFunc = 1620
+   
 -- 1890 = NEW DROPID screen
 DELETE rdt.RDTScn WHERE Scn = 1890 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 1890, 'ENG',
@@ -303,7 +344,8 @@ EXECUTE rdt.rdtAddScn 1890, 'ENG',
    ,@cLine02 = '1 = YES 2 = NO'
    ,@cLine04 = 'Option: %01i01'
    ,@cLine14 = '%e'
- 
+   ,@nFunc = 1620
+   
 -- 1891 = SCAN ADCODE screen
 DELETE rdt.RDTScn WHERE Scn = 1891 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 1891, 'ENG',
@@ -317,7 +359,9 @@ EXECUTE rdt.rdtAddScn 1891, 'ENG',
    ,@cLine08 = '%18i05'
    ,@cLine10 = 'SCAN: %11d06'
    ,@cLine14 = '%e'
- 
+   ,@cWebGroup = '{"1":["1","2","3","4","5","6"],"2":["7","8"],"3":["10"]}'
+   ,@nFunc = 1620
+   
 -- SOS263803
 -- 1892 = Confirm LOC screen
 DELETE rdt.RDTScn WHERE Scn = 1892 AND Lang_Code = 'ENG'
@@ -326,3 +370,6 @@ EXECUTE rdt.rdtAddScn 1892, 'ENG',
    ,@cLine02 = 'CONFIRM LOC:'
    ,@cLine03 = '%10i02'
    ,@cLine14 = '%e' 
+   ,@cWebGroup = '{"1":["1"],"2":["2","3"]}'
+   ,@nFunc = 1620
+   

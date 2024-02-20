@@ -1,8 +1,7 @@
-IF NOT EXISTS ( SELECT 1 FROM RDT.RDTMsg (NOLOCK) WHERE Message_ID = 1812 AND Lang_Code = 'ENG' AND Message_Type = 'FNC')
-BEGIN
-   INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
+DELETE RDT.RDTMsg WHERE Message_ID = 1812 AND Lang_Code = 'ENG' AND Message_Type = 'FNC'
+INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
    VALUES (1812, 'ENG', 'FNC', 'TM Case Pick', 'rdtfnc_TM_CasePick', '4')
-END
+
 
 -- Drop ID
 DELETE rdt.RDTScn WHERE Scn = 4020 AND Lang_Code = 'ENG'
@@ -14,6 +13,7 @@ EXECUTE rdt.rdtAddScn 4020, 'ENG',
    ,@cLine05 = 'DROPID:'
    ,@cLine06 = '%20i01'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["5","6"]}'
    ,@nFunc = 1812
 
 -- From LOC
@@ -33,6 +33,7 @@ EXECUTE rdt.rdtAddScn 4021, 'ENG',
    ,@cLine12 = ''
    ,@cLine13 = '%20d10'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["4","5"],"1":["7","8","9"],"3":["13"]}'
    ,@nFunc = 1812
 
 -- From ID
@@ -52,6 +53,7 @@ EXECUTE rdt.rdtAddScn 4022, 'ENG',
    ,@cLine12 = '%18i05'
    ,@cLine13 = '%20d10'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["4","5"],"1":["7","8"],"3":["10","11","12"],"4":["13]"}'
    ,@nFunc = 1812
 
 -- SKU
@@ -69,8 +71,9 @@ EXECUTE rdt.rdtAddScn 4023, 'ENG',
    ,@cLine10 = '%200iV_Barcode'
    ,@cLine11 = '%20d11'
    ,@cLine12 = 'PK  QTY: %05d12 %05d13'
-   ,@cLine13 = 'ACT QTY: %05i14 %05i15'
+   ,@cLine13 = 'ACT QTY: %05i14^DT:INT %05i15^DT:INT'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4"],"1":["5","6","7","8"],"3":["9","10"],"4":["11","12","13]"}'
    ,@nFunc = 1812
 
 -- Close pallet
@@ -100,6 +103,7 @@ EXECUTE rdt.rdtAddScn 4025, 'ENG',
    ,@cLine09 = ''
    ,@cLine10 = '%20d10'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3","4"],"1":["6","7","8"],"3":["10"]"}'
    ,@nFunc = 1812
 
 -- Exit TM

@@ -11,3 +11,5 @@ EXECUTE rdt.rdtAddScn 0, 'ENG',
    ,@cLine08 = '%today'
    ,@cLine09 = ''
    ,@cLine10 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3"],"2":["5","6"]}'
+   ,@nFunc = 0

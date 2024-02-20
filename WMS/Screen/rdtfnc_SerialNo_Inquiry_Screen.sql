@@ -4,6 +4,7 @@ EXECUTE rdt.rdtAddScn 5090, 'ENG',
      @cLine01 = 'SERIALNO:'
 	 ,@cLine02 = '%30i01'
     ,@cLine14 = '%e'
+    ,@cWebGroup = '{"1":["1","2"]}'
 	 ,@nfunc   = 627
 
 
@@ -24,5 +25,6 @@ EXECUTE rdt.rdtAddScn 5091, 'ENG',
     ,@cLine12 = '%20d10'
     ,@cLine13 = '%20d11'
     ,@cLine14 = '%e'
+    ,@cWebGroup = '{"1":["1","2"],"2":["3","4","5","6"],"3":["7"],"4":["8"],"5":["9","10","11","12","13"]}'
 	 ,@nfunc   = 627
  

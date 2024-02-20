@@ -4,6 +4,7 @@ EXECUTE rdt.rdtAddScn 4640, 'ENG'
    ,@cLine01 = 'PSNO: %10i01'
    ,@cLine13 = '%20d12'    -- WMS-22439
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["13"]}'
    ,@nFunc = 839
 
 -- 4641 = Pick zone screen
@@ -17,6 +18,7 @@ EXECUTE rdt.rdtAddScn 4641, 'ENG'
    ,@cLine06 = '%20i03'
    ,@cLine13 = '%20d15' --WMS-18004 ExtendedInfo
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["3"],"3":["5","6"],"3":["13"]}'
    ,@nFunc = 839
 
 -- 4642 = SKU QTY screen
@@ -36,6 +38,7 @@ EXECUTE rdt.rdtAddScn 4642, 'ENG'
    ,@cLine12 = 'BAL QTY: %12d13'    -- WMS10357(yeekung01)
    ,@cLine13 = '%20d12'    -- WMS10357
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3","4"],"3":["5","6"],"4":["7","8","9","10"],"5":["11","12"],"6":["13"]}'
    ,@nFunc = 839
 
 -- 4643 = Message screen
@@ -81,6 +84,7 @@ EXECUTE rdt.rdtAddScn 4646, 'ENG'
    ,@cLine01 = 'LOC: %10d01'
    ,@cLine02 = 'LOC: %10i02'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"]}'
    ,@nFunc = 839
 
 -- 4647 = Abort LOC screen
@@ -97,7 +101,7 @@ EXECUTE rdt.rdtAddScn 4647, 'ENG'
    ,@cLine14 = '%e'
    ,@nFunc = 839
 
--- 4648 CartonID screen
+-- 4648 Carton ID screen
 DELETE rdt.RDTScn WHERE Scn = 4648 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4648, 'ENG'
    ,@cLine01 = 'LOC: %10d01'
@@ -106,9 +110,10 @@ EXECUTE rdt.rdtAddScn 4648, 'ENG'
    ,@cLine04 = '%20i05'
    ,@cLine13 = '%20d12' 
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3","4"],"3":["13"]}'
    ,@nFunc = 839
 
--- 4648 CartonID screen
+-- 4649 Data Capture screen
 DELETE rdt.RDTScn WHERE Scn = 4649 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4649, 'ENG'
    ,@cLine01 = N'%20d01'
@@ -118,4 +123,5 @@ EXECUTE rdt.rdtAddScn 4649, 'ENG'
    ,@cLine05 = N'%20d05'
    ,@cLine06 = N'%20i06'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["5","6"]}'
    ,@nFunc = 839

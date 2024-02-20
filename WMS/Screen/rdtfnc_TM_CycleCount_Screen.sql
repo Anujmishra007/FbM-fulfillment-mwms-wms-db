@@ -1,21 +1,27 @@
 --rdtfnc_TM_CycleCount
 -- 2870 - 2979
 
+DELETE RDT.RDTMsg WHERE Message_ID = 1766 AND Lang_Code = 'ENG' AND Message_Type = 'FNC'
 INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
 VALUES ('1766', 'ENG', 'FNC', 'TM CycleCount', 'rdtfnc_TM_CycleCount', '8')
 
+DELETE RDT.RDTMsg WHERE Message_ID = 1794 AND Lang_Code = 'ENG' AND Message_Type = 'FNC'
 INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
 VALUES ('1794', 'ENG', 'FNC', 'TM CycleCount SV', 'rdtfnc_TM_CycleCount', '8')
 
+DELETE RDT.RDTMsg WHERE Message_ID = 1795 AND Lang_Code = 'ENG' AND Message_Type = 'FNC'
 INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
 VALUES ('1795', 'ENG', 'FNC', 'TM CycleCount SUP ', 'rdtfnc_TM_CycleCount', '8')
 
+DELETE RDT.rdtTaskManagerconfig WHERE TaskType = 'CC' AND Function_ID = 1766
 Insert Into rdt.rdtTaskManagerconfig (TaskType , TaskDesc, Function_ID)
 Values ( 'CC', 'CycleCount' , 1766 )
 
+DELETE RDT.rdtTaskManagerconfig WHERE TaskType = 'CCSV' AND Function_ID = 1794
 Insert into rdt.rdtTaskManagerConfig ( TaskType , TaskDesc, Function_ID)
 Values ( 'CCSV', 'CycleCount SV', 1794 )
 
+DELETE RDT.rdtTaskManagerconfig WHERE TaskType = 'CCSUP' AND Function_ID = 1795
 Insert into rdt.rdtTaskManagerConfig ( TaskType , TaskDesc, Function_ID)
 Values ( 'CCSUP', 'CycleCount SUP', 1795)
 
@@ -29,7 +35,9 @@ EXECUTE rdt.rdtAddScn 2870, 'ENG',
    @cLine03 = 'LOC:',
    @cLine04 = '%10d10     %05d11',
    @cLine05 = '%10i02',
-   @cLine14 = '%e'
+   @cLine14 = '%e',
+   @cWebGroup = '{"1":["3","4","5"]}',
+   @nFunc = 1766
 
 -- Screen 2
 DELETE rdt.RDTScn WHERE Scn = 2871 AND Lang_Code = 'ENG'
@@ -39,7 +47,9 @@ EXECUTE rdt.rdtAddScn 2871, 'ENG',
    @cLine04 = '%10d01',
    @cLine05 = 'ID:',
    @cLine06 = '%18i02',
-   @cLine14 = '%e'
+   @cLine14 = '%e',
+   @cWebGroup = '{"1":["3","4"],"2":["5","6"]}',
+   @nFunc = 1766
 
 -- Screen 3
 DELETE rdt.RDTScn WHERE Scn = 2872 AND Lang_Code = 'ENG'
@@ -53,7 +63,9 @@ EXECUTE rdt.rdtAddScn 2872, 'ENG',
    @cLine09 = '2 = SKU',
    --@cLine10 = '3 = SINGLE SCAN',
    @cLine11 = 'Option: %01i03',
-   @cLine14 = '%e'  
+   @cLine14 = '%e'  ,
+   @cWebGroup = '{"1":["3","4"],"2":["5","6"],"3":["8","9","11"]}',
+   @nFunc = 1766
 
 DELETE rdt.RDTScn WHERE Scn = 2873 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 2873, 'ENG', 

@@ -15,6 +15,7 @@ EXECUTE rdt.rdtAddScn 4130, 'ENG'
    ,@cLine11 = 'ROW: %02i06'
    ,@cLine12 = ''
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["3"],"3":["5"],"4":["7"],"4":["9","11"]}'
    ,@nFunc = 808
 
 -- Dynamic assign screens (4180 to 4189)
@@ -36,6 +37,7 @@ EXECUTE rdt.rdtAddScn 4132, 'ENG'
    ,@cLine12 = 'TOTAL QTY: %05d07'
    ,@cLine13 = '%20d15'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3","4","5","6"],"3":["7","8","9","10"],"4":["11","12"],"4":["13"]}'
    ,@nFunc = 808
 
 -- Matrix
@@ -55,6 +57,7 @@ EXECUTE rdt.rdtAddScn 4133, 'ENG'
    ,@cLine12 = 'OPTION: %01i11' 
    ,@cLine13 = '1-CLOSE 9-SHORT' 
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4","5","6","7","8","9","10"],"3":["11","12"]}'
    ,@nFunc = 808
 
 -- Old tote
@@ -63,8 +66,9 @@ EXECUTE rdt.rdtAddScn 4134, 'ENG'
    ,@cLine01 = 'TOTE ID:'
    ,@cLine02 = '%20i01' 
    ,@cLine03 = ''
-   ,@cLine04 = 'QTY: %05i02'
+   ,@cLine04 = 'QTY: %05i02^DT:INT'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["4"]}'
    ,@nFunc = 808
    
 -- New tote
@@ -73,6 +77,7 @@ EXECUTE rdt.rdtAddScn 4135, 'ENG'
    ,@cLine01 = 'NEW TOTE ID:'
    ,@cLine02 = '%20i01' 
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"]}'
    ,@nFunc = 808
    
 -- Unassign cart
@@ -94,4 +99,5 @@ EXECUTE rdt.rdtAddScn 4137, 'ENG',
    @cLine02 = '%15d01',
    @cLine03 = '%10i02',
    @cLine14 = '%e', 
+   @cWebGroup = '{"1":["1","2","3"]}', 
    @nFunc = 808

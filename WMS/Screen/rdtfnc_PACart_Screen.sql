@@ -9,6 +9,7 @@ EXECUTE rdt.rdtAddScn 4290, 'ENG'
    ,@cLine05 = 'ROW: %02i03'
    ,@cLine06 = ''
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["3"],"3":["5"]}'
    ,@nFunc = 807
 
 -- Assign
@@ -24,6 +25,7 @@ EXECUTE rdt.rdtAddScn 4291, 'ENG'
    ,@cLine08 = '%18i06'
    ,@cLine09 = ''
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4","5"],"2":["7","8"]}'
    ,@nFunc = 807
 
 -- LOC
@@ -33,6 +35,7 @@ EXECUTE rdt.rdtAddScn 4292, 'ENG'
    ,@cLine02 = 'LOC: %10i02' 
    ,@cLine03 = '' 
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"]}'
    ,@nFunc = 807
 
 -- SKU Matrix
@@ -49,7 +52,8 @@ EXECUTE rdt.rdtAddScn 4293, 'ENG'
    ,@cLine09 = '%20d07'
    ,@cLine10 = '%20d08'
    ,@cLine11 = 'EXP QTY: %05d09' 
-   ,@cLine12 = 'ACT QTY: %05i10' 
+   ,@cLine12 = 'ACT QTY: %05i10^DT:INT' 
    ,@cLine13 = '%20d12'       -- Add ExtendedInfo (WMS5639)
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4","5"],"2":["6","7","8","9","10"],"3":["11","12"],"4":["13"]}'
    ,@nFunc = 807

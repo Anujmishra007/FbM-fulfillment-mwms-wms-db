@@ -11,6 +11,7 @@ EXECUTE rdt.rdtAddScn 5500, 'ENG'
    ,@cLine07 = ''
    ,@cLine08 = 'METHOD: %01i06'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4","5"],"2":["8"]}'
    ,@nFunc = 801
 
 -- Dynamic assign screens (5510 to 5519)
@@ -32,6 +33,7 @@ EXECUTE rdt.rdtAddScn 5502, 'ENG'
    ,@cLine12 = 'OPTION: %01i11' 
    ,@cLine13 = '1-CLOSE' 
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4","5","6","7","8","9","10"],"2":["11"],"3":["12","13"]}'
    ,@nFunc = 801
    
 -- New drop ID
@@ -40,5 +42,6 @@ EXECUTE rdt.rdtAddScn 5503, 'ENG'
    ,@cLine01 = 'NEW DROP ID:'
    ,@cLine02 = '%20i01' 
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"]}'
    ,@nFunc = 801
    

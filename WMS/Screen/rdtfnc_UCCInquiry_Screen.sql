@@ -15,8 +15,10 @@ EXECUTE rdt.rdtAddScn 825, 'ENG',
    @cLine12 = '5 %18d12',           -- LOTTABLE5 
    --@cLine13 = 'ENTER = next page',          -- (ChewKP01) 
    @cLine13 = '%20d13',          -- (ChewKP01) 
-   @cLine14 = '%e'
-
+   @cLine14 = '%e',
+   @cWebGroup = '{"1":["2","3","4","5"],"2":["6"],"3":["7"],"4":["8","9","10","11","12"],"5":["13"]}', 
+   @nFunc = 557
+   
 -- 826 = STORER, FACILITY, LOC, ID 
 DELETE rdt.RDTScn WHERE Scn = 826 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 826, 'ENG', 
@@ -26,7 +28,9 @@ EXECUTE rdt.rdtAddScn 826, 'ENG',
    @cLine04 = 'LOC: %10d03', 
    @cLine05 = 'ID:', 
    @cLine06 = '%18d04',   
-   @cLine08 = '%e'
+   @cLine08 = '%e',
+   @cWebGroup = '{"1":["1","2"],"2":["3"],"3":["4"],"4":["5","6"]}', 
+   @nFunc = 557
 
 -- SOS#131462
 -- 827 = UCC, SKU, DESCR, QTY, UOM, PPK, STATUS, LOC, LOT
@@ -43,7 +47,9 @@ EXECUTE rdt.rdtAddScn 827, 'ENG',
    @cLine09 = 'LOC: %10d09',        -- LOC
    @cLine10 = 'LOT: %10d10',        -- LOT 
    @cLine13 = 'ENTER = next page',          
-   @cLine14 = '%e'
+   @cLine14 = '%e',
+   @cWebGroup = '{"1":["1","2","3","4","5"],"2":["6"],"3":["7"],"4":["8"],"5":["9"],"6":["10"]}', 
+   @nFunc = 557
 
 -- 828 = STORER, FACILITY, ID, LOTTABLE1, LOTTABLE2,..., LOTTABLE5
 DELETE rdt.RDTScn WHERE Scn = 828 AND Lang_Code = 'ENG'
@@ -58,5 +64,7 @@ EXECUTE rdt.rdtAddScn 828, 'ENG',
    @cLine09 = '3 %18d10',           -- LOTTABLE3   
    @cLine10 = '4 %18d11',           -- LOTTABLE4
    @cLine11 = '5 %18d12',           -- LOTTABLE5 
-   @cLine14 = '%e'
+   @cLine14 = '%e',
+   @cWebGroup = '{"1":["1","2"],"2":["3"],"3":["4","5"],"4":["7","8","9","10","11"]}', 
+   @nFunc = 557
 
