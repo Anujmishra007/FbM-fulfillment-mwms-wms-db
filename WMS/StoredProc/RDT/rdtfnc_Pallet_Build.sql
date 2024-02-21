@@ -31,6 +31,8 @@ GO
 /* 2023-02-19 2.3  YeeKung  WMS-21738 Extended UCCNo length (yeekung03)       */
 /* 2023-02-14 2.4  James    WMS-21690 Add cfg no mix orders pallet (james04)  */
 /* 2023-05-05 2.5  YeeKung  WMS-22419 Add decodeSP and V_max (yeekung04)      */
+/* 2023-11-22 2.6  YeeKung  UWP-11213 Fix Bug   (yeekung05)                   */
+/* 2023-12-03 2.7  YeeKung  UWP-11635 Fix Bug   (yeekung06)                   */
 /******************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdtfnc_Pallet_Build](
@@ -665,7 +667,7 @@ BEGIN
 
       SET @cOutField01 = @cDropID
       SET @cOutField02 = @cDropLOC
-      SET @cOutField03 = ''
+      SET @cMax = ''
 
       IF @cPltBuildNotInsDropID = '0'
       BEGIN
@@ -1092,6 +1094,7 @@ BEGIN
       SET @cOutField01 = @cDropID
       SET @cOutField02 = @cDropLOC
       SET @cOutField03 = ''
+      SET @cMax        = ''  
 
       IF @cPltBuildNotInsDropID = '0'
       BEGIN
@@ -1120,6 +1123,7 @@ BEGIN
       SET @cOutField02 = ''
       SET @cOutField03 = ''
       SET @cOutField04 = ''
+      SET @cMax = ''
 
       SET @cOption = ''
       SET @cInField01 = @cDefaultClosePalletOption

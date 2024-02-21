@@ -89,9 +89,7 @@ GO
 /* 07-02-2022 6.0 YeeKung     WMS-21562 customize refno to support      */
 /*                            trackingno  (yeekung08)                   */
 /* 30-05-2023 6.1 James       WMS-22322 Enhance Qty convertion (james13)*/
-/* 14-11-2023 6.2 Ung         WMS-23972 Add SkipChkPSlipMustScanIn      */
-/* 14-11-2023 6.3 Ung         WMS-23960 Add PickConfirmStatus for pallet*/
-/* 24-11-2023 6.4 YeeKung     UWP-11249Fix bug (yeekung08)              */
+/* 24-11-2023 6.2 YeeKung     UWP-11249Fix bug (yeekung08)		        */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PostPickAudit] (
@@ -196,7 +194,6 @@ DECLARE
    @cPPAPromptDiscrepancy           NVARCHAR( 1),
    @cExtendedValidateSP             NVARCHAR( 20), -- (ChewKP01)
    @cDisableQTYField                NVARCHAR( 1),  -- (james05)
-   @cSkipChkPSlipMustScanIn         NVARCHAR( 1),
    @cSkipChkPSlipMustScanOut        NVARCHAR( 1),  -- (james05)
    @cPPABlindCount                  NVARCHAR( 1),
    @cPPAPrintPackListSP             NVARCHAR( 20),
@@ -299,7 +296,7 @@ SELECT
    @cPPACartonIDByPackDetailDropID  = V_String12,
    @cPPAAllowSKUNotInPickList       = V_String13,
    @cPPADefaultQTY                  = V_String14,
-   @cSkipChkPSlipMustScanIn         = V_String15,
+   -- @nTol                            = CASE WHEN rdt.rdtIsInteger(LEFT( V_String15, 5)) = 1 THEN LEFT(V_String15, 5) ELSE 0 END, -- SOS# 233768. Use rdtIsInteger to allow negative value
    @cPPAAllowQTYExceedTolerance     = V_String16,
    @cConvertQTYSP                   = V_String17,
    @cExtendedInfoSP                 = V_String18,
@@ -431,7 +428,6 @@ BEGIN
    SET @cPPACartonIDByPickDetailCaseID = rdt.rdtGetConfig( @nFunc, 'PPACartonIDByPickDetailCaseID', @cStorer)
    SET @cPPAPromptDiscrepancy = rdt.rdtGetConfig( @nFunc, 'PPAPromptDiscrepancy', @cStorer)
    SET @cPreCartonization = rdt.rdtGetConfig( @nFunc, 'PreCartonization', @cStorer)
-   SET @cSkipChkPSlipMustScanIn = rdt.rdtGetConfig( @nFunc, 'SkipChkPSlipMustScanIn', @cStorer)
    SET @cSkipChkPSlipMustScanOut = rdt.rdtGetConfig( @nFunc, 'SkipChkPSlipMustScanOut', @cStorer)
    SET @nTol = rdt.rdtGetConfig( @nFunc, 'PPACheckTolerance', @cStorer) -- Get tolerance % setting
 
@@ -757,21 +753,18 @@ BEGIN
                GOTO Step_1_Fail
             END
 
-            IF @cSkipChkPSlipMustScanIn <> '1'
+            -- Validate all pickslip already scan in
+            IF EXISTS( SELECT 1
+               FROM dbo.LoadPlan LP WITH (NOLOCK)
+                  INNER JOIN dbo.PickHeader PH WITH (NOLOCK) ON PH.ExternOrderKey = LP.LoadKey
+                  LEFT OUTER JOIN dbo.PickingInfo [PI] WITH (NOLOCK) ON [PI].PickSlipNo = PH.PickHeaderKey
+               WHERE LP.UserDefine10 = @cRefNo
+                  AND [PI].ScanInDate IS NULL)
             BEGIN
-               -- Validate all pickslip already scan in
-               IF EXISTS( SELECT 1
-                  FROM dbo.LoadPlan LP WITH (NOLOCK)
-                     INNER JOIN dbo.PickHeader PH WITH (NOLOCK) ON PH.ExternOrderKey = LP.LoadKey
-                     LEFT OUTER JOIN dbo.PickingInfo [PI] WITH (NOLOCK) ON [PI].PickSlipNo = PH.PickHeaderKey
-                  WHERE LP.UserDefine10 = @cRefNo
-                     AND [PI].ScanInDate IS NULL)
-               BEGIN
-                  SET @nErrNo = 60859
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Not Scan-in
-                  EXEC rdt.rdtSetFocusField @nMobile, 1
-                  GOTO Step_1_Fail
-               END
+               SET @nErrNo = 60859
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Not Scan-in
+               EXEC rdt.rdtSetFocusField @nMobile, 1
+               GOTO Step_1_Fail
             END
 
             -- (james05)
@@ -827,16 +820,13 @@ BEGIN
             FROM dbo.PickingInfo WITH (NOLOCK)
             WHERE PickSlipNo = @cPickSlipNo
 
-            IF @cSkipChkPSlipMustScanIn <> '1'
+            -- Validate pickslip not scan in
+            IF @dScanInDate IS NULL
             BEGIN
-               -- Validate pickslip not scan in
-               IF @dScanInDate IS NULL
-               BEGIN
-                  SET @nErrNo = 60862
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Not scan-in
-                  EXEC rdt.rdtSetFocusField @nMobile, 2
-                  GOTO Step_1_Fail
-               END
+               SET @nErrNo = 60862
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Not scan-in
+               EXEC rdt.rdtSetFocusField @nMobile, 2
+               GOTO Step_1_Fail
             END
 
             -- (james05)
@@ -868,21 +858,18 @@ BEGIN
                GOTO Step_1_Fail
             END
 
-            IF @cSkipChkPSlipMustScanIn <> '1'
+            -- Validate all pickslip already scan in
+            IF EXISTS( SELECT 1
+               FROM dbo.LoadPlan LP WITH (NOLOCK)
+                  INNER JOIN dbo.PickHeader PH WITH (NOLOCK) ON PH.ExternOrderKey = LP.LoadKey
+                  LEFT OUTER JOIN dbo.PickingInfo [PI] WITH (NOLOCK) ON [PI].PickSlipNo = PH.PickHeaderKey
+               WHERE LP.LoadKey = @cLoadKey
+                  AND [PI].ScanInDate IS NULL)
             BEGIN
-               -- Validate all pickslip already scan in
-               IF EXISTS( SELECT 1
-                  FROM dbo.LoadPlan LP WITH (NOLOCK)
-                     INNER JOIN dbo.PickHeader PH WITH (NOLOCK) ON PH.ExternOrderKey = LP.LoadKey
-                     LEFT OUTER JOIN dbo.PickingInfo [PI] WITH (NOLOCK) ON [PI].PickSlipNo = PH.PickHeaderKey
-                  WHERE LP.LoadKey = @cLoadKey
-                     AND [PI].ScanInDate IS NULL)
-               BEGIN
-                  SET @nErrNo = 60865
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Not Scan-in
-                  EXEC rdt.rdtSetFocusField @nMobile, 3
-                  GOTO Step_1_Fail
-               END
+               SET @nErrNo = 60865
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Not Scan-in
+               EXEC rdt.rdtSetFocusField @nMobile, 3
+               GOTO Step_1_Fail
             END
 
             -- (james05)
@@ -918,19 +905,16 @@ BEGIN
                GOTO Step_1_Fail
             END
 
-            IF @cSkipChkPSlipMustScanIn <> '1'
+            -- Validate pickslip already scan in
+            IF EXISTS( SELECT 1
+               FROM dbo.PickHeader PH WITH (NOLOCK)
+                  LEFT OUTER JOIN dbo.PickingInfo [PI] WITH (NOLOCK) ON [PI].PickSlipNo = PH.PickHeaderKey
+               WHERE PH.OrderKey = @cOrderKey
+                  AND [PI].ScanInDate IS NULL)
             BEGIN
-               -- Validate pickslip already scan in
-               IF EXISTS( SELECT 1
-                  FROM dbo.PickHeader PH WITH (NOLOCK)
-                     LEFT OUTER JOIN dbo.PickingInfo [PI] WITH (NOLOCK) ON [PI].PickSlipNo = PH.PickHeaderKey
-                  WHERE PH.OrderKey = @cOrderKey
-                     AND [PI].ScanInDate IS NULL)
-               BEGIN
-                  SET @nErrNo = 60868
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Not Scan-in
-                  GOTO Step_1_Fail
-               END
+               SET @nErrNo = 60868
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Not Scan-in
+               GOTO Step_1_Fail
             END
 
             -- (james05)
@@ -2235,30 +2219,13 @@ BEGIN
             -- Get pick QTY
             IF @nRowRef IS NULL
             BEGIN
-               IF @cPickConfirmStatus = '5'
-                  SELECT @nQTY_PPA = SUM( QTYPicked)
-                  FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-                     JOIN dbo.LOC WITH (NOLOCK) ON (LLI.LOC = LOC.LOC)
-                  WHERE LOC.Facility = @cFacility
-                     AND ID = @cID
-                     AND StorerKey = @cStorer
-                     AND SKU = @cSKU
-               ELSE IF @cPickConfirmStatus = '3'
-                  SELECT @nQTY_PPA = SUM( QTYAllocated + QTYPicked)
-                  FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-                     JOIN dbo.LOC WITH (NOLOCK) ON (LLI.LOC = LOC.LOC)
-                  WHERE LOC.Facility = @cFacility
-                     AND ID = @cID
-                     AND StorerKey = @cStorer
-                     AND SKU = @cSKU
-               ELSE
-                  SELECT @nQTY_PPA = SUM( QTY)
-                  FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-                     JOIN dbo.LOC WITH (NOLOCK) ON (LLI.LOC = LOC.LOC)
-                  WHERE LOC.Facility = @cFacility
-                     AND ID = @cID
-                     AND StorerKey = @cStorer
-                     AND SKU = @cSKU
+               SELECT @nQTY_PPA = SUM( QTY)
+               FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
+                  JOIN dbo.LOC WITH (NOLOCK) ON (LLI.LOC = LOC.LOC)
+               WHERE LOC.Facility = @cFacility
+                  AND ID = @cID
+                  AND StorerKey = @cStorer
+                  AND SKU = @cSKU
             END
          END
 
@@ -2478,6 +2445,9 @@ BEGIN
       END
       SET @nMQTY = CAST( @cMQTY AS INT)
 
+
+	  
+
       -- Convert key-in QTY to base QTY
       IF @cConvertQTYSP <> '' AND EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cConvertQTYSP AND type = 'P')
       BEGIN
@@ -2496,6 +2466,7 @@ BEGIN
          -- Calc total QTY in master UOM
          SET @nQTY = rdt.rdtConvUOMQTY( @cStorer, @cSKU, @cPQTY, @cPUOM, 6) -- Convert to QTY in master UOM
          SET @nQTY = @nQTY + @nMQTY
+
 
          -- Multiply QTY if have prepack indicator
          IF @cPackQTYIndicator <> ''
@@ -2751,11 +2722,11 @@ BEGIN
       Step_3_Commit:
          WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
             COMMIT TRAN
-
+		
       IF @nPUOM_Div > 0 AND @cPUOM <> '6' 
       BEGIN
          SET @nPQTY = @nPQTY/@nPUOM_Div--rdt.rdtConvUOMQTY( @cStorer, @cSKU, @cMQTY, 6, @cPUOM)
-         SET @nMQTY = @cMQTY%@nPUOM_Div
+		 SET @nMQTY = @cMQTY%@nPUOM_Div
       END
 
       -- Top up check QTY
@@ -4509,7 +4480,7 @@ BEGIN
       V_String12 = @cPPACartonIDByPackDetailDropID,
       V_String13 = @cPPAAllowSKUNotInPickList,
       V_String14 = @cPPADefaultQTY,
-      V_String15 = @cSkipChkPSlipMustScanIn,
+      -- V_String15 = @nTol,
       V_String16 = @cPPAAllowQTYExceedTolerance,
       V_String17 = @cConvertQTYSP,
       V_String18 = @cExtendedInfoSP,

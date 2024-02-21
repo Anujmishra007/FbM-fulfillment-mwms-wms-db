@@ -4,7 +4,6 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 
-
 /***************************************************************************/
 /* Store procedure: rdtfnc_UCCReceive                                      */
 /* Copyright      : IDS                                                    */
@@ -54,8 +53,9 @@ GO
 /* 2021-12-06 3.6  YeeKung WMS-18390 Add Multi UCC status (yeekung01)      */
 /* 2021-10-15 3.7  yeekung  WMS-19671 Add eventlog refno2(yeekung02)       */
 /* 2022-09-08 3.8  yeekung  WMS-20650 Add extendeinfo instep3(yeekung03)   */
-/* 2020-05-04 3.9  YeeKung WMS-11867 Add verifySKU (yeekung01)             */
+/* 2020-05-04 3.9  YeeKung  WMS-11867 Add verifySKU (yeekung01)             */
 /* 2022-04-12 4.0  James   WMS-22928 Add RDTFormat for UCC Qty (james03)   */
+/* 2023-12-04 4.1  Ung     WMS-24276 Add DecodeSP                          */
 /***************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_UCCReceive](
    @nMobile    INT,
@@ -141,7 +141,7 @@ DECLARE
    @cDisableQTYField     NVARCHAR( 1),
    @cExtendedInfoSP      NVARCHAR( 20),
    @cExtendedInfo        NVARCHAR( 20),
-   @cVerifySKU           NVARCHAR( 1), 
+   @cVerifySKU           NVARCHAR( 1),
    @cMultiUCC            NVARCHAR(  1),
    @cDecodeSP            NVARCHAR( 20), --(yeekung01)
    @cDecodeQty           NVARCHAR(1) ,--(yeekung01)
@@ -352,7 +352,7 @@ BEGIN
       SET @cOutField02 = @cPOKeyDefaultValue
 
    SET @cMultiUCC = rdt.RDTGetConfig( @nFunc, 'multiUCC', @cStorerKey)
-   
+
    SET @cSkipEstUCCOnID = rdt.RDTGetConfig( @nFunc, 'SkipEstUCCOnID', @cStorerKey)
    SET @cSkipLottable01 = rdt.RDTGetConfig( @nFunc, 'SkipLottable01', @cStorerKey)
    SET @cSkipLottable02 = rdt.RDTGetConfig( @nFunc, 'SkipLottable02', @cStorerKey)
@@ -379,10 +379,10 @@ BEGIN
    SET @cUCCLabel = rdt.rdtGetConfig( @nFunc, 'UCCLabel', @cStorerKey)
    IF @cUCCLabel = '0'
       SET @cUCCLabel = ''
-	
-	SET @cVerifySKU = rdt.RDTGetConfig( @nFunc, 'VerifySKU', @cStorerKey)  
-      
-   
+
+	SET @cVerifySKU = rdt.RDTGetConfig( @nFunc, 'VerifySKU', @cStorerKey)
+
+
    SET @cDecodeSP  = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerKey) --(yeekung01)
    IF @cDecodeSP = '0'
       SET @cDecodeSP = ''
@@ -1606,13 +1606,13 @@ BEGIN
          GOTO Step_6_Fail
       END
 
-      -- Check barcode format  
-      IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'UCC', @cUCC) = 0  
-      BEGIN  
-         SET @nErrNo = 63173  
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format  
-         GOTO Step_6_Fail  
-      END  
+      -- Check barcode format
+      IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'UCC', @cUCC) = 0
+      BEGIN
+         SET @nErrNo = 63173
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format
+         GOTO Step_6_Fail
+      END
 
       IF rdt.rdtIsValidDate(@cTempLottable04) = 1 --valid date
         SET @dTempLottable04 = rdt.rdtConvertToDate( @cTempLottable04)
@@ -1650,7 +1650,7 @@ BEGIN
                GOTO Step_6_Fail
          END
       END
-      
+
 		SET @nQTY = 0
 
       -- Decode
@@ -1699,7 +1699,7 @@ BEGIN
                ' @cErrMsg      NVARCHAR( 20)  OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, 
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC,
                @cUCC        OUTPUT, @nUCCQTY     OUTPUT,
                @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT,
                @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT,
@@ -1810,7 +1810,7 @@ BEGIN
 		      WHERE StorerKey = @cStorerKey
 		         AND UCCNo = @cUCC
          END
-         
+
 		   --Compare case count with UCC Qty
          SET @cUCCWithDynamicCaseCnt = ''
          SELECT @cUCCWithDynamicCaseCnt = SValue
@@ -2214,7 +2214,7 @@ BEGIN
                   SET @cDesc = ''
                   SET @cPPK = ''
                   SET @cPQIndicator = ''
-                  
+
                   IF @cDecodeQTY='1'
                      SET @nQTY = @nUCCQTY
                   ELSE
@@ -2599,13 +2599,16 @@ Step_8:
 BEGIN
    IF @nInputKey = 1      -- Yes OR Send
    BEGIN
-      DECLARE @cActSKU NVARCHAR( 20)
+      DECLARE @cSKUBarcode NVARCHAR( 60)
+      DECLARE @cUPC NVARCHAR(30)
 
       --screen mapping
-      SET @cActSku = @cInField02
+      -- SET @cActSku = @cInField02
+      SET @cUPC = LEFT( @cInField02, 30)
+      SET @cSKUBarcode = @cInField02
 
       --check if sku is null
-      IF @cActSku = ''
+      IF @cUPC = ''
       BEGIN
          IF @cDisableQTYField = '0' OR (@cDisableQTYField = '1' AND @nQTY = 0)
          BEGIN
@@ -2616,39 +2619,20 @@ BEGIN
       END
       ELSE
       BEGIN
-      	-- Verify SKU  
-         IF @cVerifySKU = '1'  
-         BEGIN  
-            EXEC rdt.rdt_VerifySKU_V7 @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cActSku, '', 'CHECK',  
-               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,      
-               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,      
-               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,      
-               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,      
-               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,      
-               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,     
-               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,     
-               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,     
-               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,     
-               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,     
-               @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,    
-               @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,    
-               @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,    
-               @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,    
-               @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,    
-               @nErrNo     OUTPUT,  
-               @cErrMsg    OUTPUT  
-  
-            IF @nErrNo <> 0  
-            BEGIN  
-               -- Go to verify SKU screen  
-               SET @nFromScn = @nScn  
-               SET @nScn = 3951  
-               SET @nStep = @nStep + 5  
-  
-               GOTO Quit  
-            END  
-         END 
+         -- Decode
+         -- Standard decode
+         IF @cDecodeSP = '1'
+         BEGIN
+            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cSKUBarcode,
+               @cUPC    = @cUPC OUTPUT,
+               @nQTY    = @nQTY OUTPUT,
+               -- @nErrNo  = @nErrNo  OUTPUT,
+               -- @cErrMsg = @cErrMsg OUTPUT,
+               @cType   = 'UPC'
+         END
+
          -- Get SKU/UPC
+         /*
          SELECT
             @nSKUCnt = COUNT( DISTINCT A.SKU),
             @cActSku = MIN( A.SKU) -- Just to bypass SQL aggregrate checking
@@ -2664,6 +2648,17 @@ BEGIN
             UNION ALL
             SELECT StorerKey, SKU FROM dbo.UPC UPC WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND UPC.UPC = @cActSku
          ) A
+         */
+
+         -- Check SKU
+         EXEC RDT.rdt_GetSKUCNT
+             @cStorerKey  = @cStorerKey
+            ,@cSKU        = @cUPC
+            ,@nSKUCnt     = @nSKUCnt   OUTPUT
+            ,@bSuccess    = @b_Success OUTPUT
+            ,@nErr        = @nErrNo    OUTPUT
+            ,@cErrMsg     = @cErrMsg   OUTPUT
+            ,@cSKUStatus  = 'ACTIVE'
 
          -- Validate SKU/UPC
          IF @nSKUCnt = 0
@@ -2681,18 +2676,65 @@ BEGIN
             GOTO Step_8_Fail
          END
 
+         -- Get SKU
+         EXEC [RDT].[rdt_GETSKU]
+             @cStorerKey  = @cStorerKey
+            ,@cSKU        = @cUPC          OUTPUT
+            ,@bSuccess    = @b_Success     OUTPUT
+            ,@nErr        = @nErrNo        OUTPUT
+            ,@cErrMsg     = @cErrMsg       OUTPUT
+            ,@cSKUStatus  = 'ACTIVE'
+
+         -- Piece scan
          IF @cDisableQTYField = '1'
          BEGIN
             -- Check same SKU
-            IF @cActSKU <> @cSKU AND @nQTY > 0
+            IF @cUPC <> @cSKU AND @nQTY > 0
             BEGIN
                SET @nErrNo = 63169
                SET @cErrMsg = rdt.rdtgetmessage( 63169 , @cLangCode, 'DSP') --'Different SKU'
                GOTO Step_8_Fail
             END
+         END
 
-            SET @cSKU = @cActSKU
+         SET @cSKU = @cUPC
 
+      	-- Verify SKU
+         IF @cVerifySKU = '1'
+         BEGIN
+            EXEC rdt.rdt_VerifySKU_V7 @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cSKU, '', 'CHECK',
+               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,
+               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,
+               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,
+               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,
+               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,
+               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,
+               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,
+               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,
+               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,
+               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,
+               @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,
+               @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,
+               @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,
+               @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,
+               @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,
+               @nErrNo     OUTPUT,
+               @cErrMsg    OUTPUT
+
+            IF @nErrNo <> 0
+            BEGIN
+               -- Go to verify SKU screen
+               SET @nFromScn = @nScn
+               SET @nScn = 3951
+               SET @nStep = @nStep + 5
+
+               GOTO Quit
+            END
+         END
+
+         -- Piece scan
+         IF @cDisableQTYField = '1'
+         BEGIN
             -- Top up QTY
             SET @nQTY = @nQTY + 1
 
@@ -2703,8 +2745,6 @@ BEGIN
             -- Remain in current screen
             GOTO Step_8_Quit
          END
-
-         SET @cSKU = @cActSKU
       END
 
       --get some value to be use in below part
@@ -2867,7 +2907,7 @@ BEGIN
       SET @cOutField05 = CASE WHEN IsNULL(@cPPK, '') = '' THEN '0' ELSE  @cPPK END +
 	                      '/' +
 	                      CASE WHEN IsNULL(@cPQIndicator, '') = '' THEN '0' ELSE @cPQIndicator END
-      SET @cOutField10 = ''--qty
+      SET @cOutField10 = CASE WHEN @nQTY > 0 THEN CAST( @nQTY AS NVARCHAR( 5)) ELSE '' END --qty
       SET @cOutField11 = RTRIM(CAST( @cCartonCnt AS NVARCHAR( 4))) + CASE WHEN @cSkipEstUCCOnID = '1' THEN '' ELSE '/' + CAST( @cTotalCarton AS NVARCHAR( 4)) END -- (ChewKP02)
 
       --if lottable01 has been setup but blank value, prompt erro msg
@@ -3041,13 +3081,13 @@ BEGIN
          GOTO Step_9_Fail
       END
 
-      -- Check barcode format  
-      IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'QTY', @cQty) = 0  
-      BEGIN  
-         SET @nErrNo = 63174  
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Qty  
-         GOTO Step_9_Fail  
-      END  
+      -- Check barcode format
+      IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'QTY', @cQty) = 0
+      BEGIN
+         SET @nErrNo = 63174
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Qty
+         GOTO Step_9_Fail
+      END
 
       SET @nQTY = CAST( @cQTY AS INT)
 
@@ -3344,6 +3384,7 @@ BEGIN
       SET @cOutField11 = RTRIM(CAST( @cCartonCnt AS NVARCHAR( 4))) + CASE WHEN @cSkipEstUCCOnID = '1' THEN '' ELSE '/' + CAST( @cTotalCarton AS NVARCHAR( 4)) END -- (ChewKP02)
 
       --go to UCC screen
+      SET @cOutField10 = ''
       SET @nScn = @nScn - 4
       SET @nStep = @nStep - 4
 
@@ -3792,93 +3833,93 @@ BEGIN
    END
 END
 GOTO Quit
-/********************************************************************************  
-Step 10. Screen = 3950. Verify SKU  
-   SKU            (Field01)  
-   SKUDesc1       (Field02)  
-   SKUDesc2       (Field03)  
-   Field label 1  (Field04)  
-   Field value 1  (Field05, input)  
-   Field label 2  (Field06)  
-   Field value 2  (Field07, input)  
-   Field label 3  (Field08)  
-   Field value 3  (Field09, input)  
-   Field label 4  (Field10)  
-   Field value 4  (Field11, input)  
-   Field label 5  (Field12)  
-   Field value 5  (Field13, input)  
-********************************************************************************/  
-Step_13:  
-BEGIN  
-   IF @nInputKey = 1 -- ENTER  
-   BEGIN  
-      -- Update SKU setting  
-      EXEC rdt.rdt_VerifySKU_V7 @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cActSKU, '', 'UPDATE',  
-         @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,      
-         @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,      
-         @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,      
-         @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,      
-         @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,      
-         @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,     
-         @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,     
-         @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,     
-         @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,     
-         @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,     
-         @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,    
-         @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,    
-         @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,    
-         @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,    
-         @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,    
-         @nErrNo     OUTPUT,  
-         @cErrMsg    OUTPUT  
-  
-      IF @nErrNo <> 0  
-         GOTO Quit  
-  
-      -- Enable field  
-      SET @cFieldAttr04 = '' -- Dynamic verify SKU 1..5  
-      SET @cFieldAttr06 = '' --  
-      SET @cFieldAttr08 = '' --  
-      SET @cFieldAttr10 = '' --  
-      SET @cFieldAttr12 = '' --  
-        
-      -- Prepare prev screen var  
-      SET @cOutField01 = @cUCC    
-  
-      -- Go back to SKU screen  
-      SET @nScn = @nFromScn  
-      SET @nStep = @nStep - 5  
-   END  
-  
-   IF @nInputKey = 0 -- ESC  
-   BEGIN  
-      -- Enable field  
-      SET @cFieldAttr04 = '' -- Dynamic verify SKU 1..5  
-      SET @cFieldAttr06 = '' --  
-      SET @cFieldAttr08 = '' --  
-      SET @cFieldAttr10 = '' --  
-      SET @cFieldAttr12 = '' --  
-  
-      -- Prepare prev screen var  
-      SET @cOutField01 = @cUCC  
-  
-      -- Go back to SKU screen  
-      SET @nScn = @nFromScn  
-      SET @nStep = @nStep - 5 
-   END  
-  
-   -- Enable field  
-   SELECT @cFieldAttr04 = ''  
-   SELECT @cFieldAttr05 = ''  
-   SELECT @cFieldAttr06 = ''  
-   SELECT @cFieldAttr07 = ''  
-   SELECT @cFieldAttr08 = ''  
-   SELECT @cFieldAttr09 = ''  
-   SELECT @cFieldAttr10 = ''  
-   SELECT @cFieldAttr11 = ''  
-   SELECT @cFieldAttr12 = ''  
-END  
-GOTO Quit  
+/********************************************************************************
+Step 10. Screen = 3950. Verify SKU
+   SKU            (Field01)
+   SKUDesc1       (Field02)
+   SKUDesc2       (Field03)
+   Field label 1  (Field04)
+   Field value 1  (Field05, input)
+   Field label 2  (Field06)
+   Field value 2  (Field07, input)
+   Field label 3  (Field08)
+   Field value 3  (Field09, input)
+   Field label 4  (Field10)
+   Field value 4  (Field11, input)
+   Field label 5  (Field12)
+   Field value 5  (Field13, input)
+********************************************************************************/
+Step_13:
+BEGIN
+   IF @nInputKey = 1 -- ENTER
+   BEGIN
+      -- Update SKU setting
+      EXEC rdt.rdt_VerifySKU_V7 @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cSKU, '', 'UPDATE',
+         @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,
+         @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,
+         @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,
+         @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,
+         @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,
+         @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,
+         @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,
+         @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,
+         @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,
+         @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,
+         @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,
+         @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,
+         @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,
+         @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,
+         @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,
+         @nErrNo     OUTPUT,
+         @cErrMsg    OUTPUT
+
+      IF @nErrNo <> 0
+         GOTO Quit
+
+      -- Enable field
+      SET @cFieldAttr04 = '' -- Dynamic verify SKU 1..5
+      SET @cFieldAttr06 = '' --
+      SET @cFieldAttr08 = '' --
+      SET @cFieldAttr10 = '' --
+      SET @cFieldAttr12 = '' --
+
+      -- Prepare prev screen var
+      SET @cOutField01 = @cUCC
+
+      -- Go back to SKU screen
+      SET @nScn = @nFromScn
+      SET @nStep = @nStep - 5
+   END
+
+   IF @nInputKey = 0 -- ESC
+   BEGIN
+      -- Enable field
+      SET @cFieldAttr04 = '' -- Dynamic verify SKU 1..5
+      SET @cFieldAttr06 = '' --
+      SET @cFieldAttr08 = '' --
+      SET @cFieldAttr10 = '' --
+      SET @cFieldAttr12 = '' --
+
+      -- Prepare prev screen var
+      SET @cOutField01 = @cUCC
+
+      -- Go back to SKU screen
+      SET @nScn = @nFromScn
+      SET @nStep = @nStep - 5
+   END
+
+   -- Enable field
+   SELECT @cFieldAttr04 = ''
+   SELECT @cFieldAttr05 = ''
+   SELECT @cFieldAttr06 = ''
+   SELECT @cFieldAttr07 = ''
+   SELECT @cFieldAttr08 = ''
+   SELECT @cFieldAttr09 = ''
+   SELECT @cFieldAttr10 = ''
+   SELECT @cFieldAttr11 = ''
+   SELECT @cFieldAttr12 = ''
+END
+GOTO Quit
 
 
 /********************************************************************************

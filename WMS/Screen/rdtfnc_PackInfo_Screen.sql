@@ -16,8 +16,9 @@ EXECUTE rdt.rdtAddScn 3030, 'ENG',
    @cLine09 = 'OR',
    @cLine10 = '', 
    @cLine11 = 'ORDERKEY: %10i03',
-   @cLine12 = 'CARTONNO: %05i04',    
+   @cLine12 = 'CARTONNO: %05i04^DT:INT',    
    @cLine14 = '%e', 
+   @cWebGroup = '{"1":["1","2"],"2":["6","7"],"3":["11","12"]}',
    @nFunc = 921
 
 -- 3031 = Capture info screen
@@ -30,13 +31,14 @@ EXECUTE rdt.rdtAddScn 3031, 'ENG',
    @cLine05 = 'SCAN/TOTAL: %10d05',
    @cLine06 = '',
    @cLine07 = 'CTN TYPE: %10i06', 
-   @cLine08 = 'CUBE:     %10i07', 
-   @cLine09 = 'WEIGHT:   %10i08', 
-   @cLine10 = 'L:        %10i09', 
-   @cLine11 = 'W:        %10i10', 
-   @cLine12 = 'H:        %10i11', 
+   @cLine08 = 'CUBE:     %10i07^DT:INT', 
+   @cLine09 = 'WEIGHT:   %10i08^DT:INT', 
+   @cLine10 = 'L:        %10i09^DT:INT', 
+   @cLine11 = 'W:        %10i10^DT:INT', 
+   @cLine12 = 'H:        %10i11^DT:INT', 
    @cLine13 = '%20i12', 
    @cLine14 = '%e', 
+   @cWebGroup = '{"1":["1","2","3","4","5"],"2":["7","8","9","10","11","12","13"]}',
    @nFunc = 921
 
 -- 3032 = Print label screen
