@@ -23,6 +23,7 @@ GO
 /*                            message to WCS upon Wave release           */ 
 /*                            UWP-13591-WMS to send the PTWWaveCheck     */
 /*                            message to WCS upon Wave release           */ 
+/* 2024-02-22   Wan02   1.2   UWP-12854-Fixed issue                      */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [dbo].[msp_mWaveReleaseWCS_Std]      
   @c_Wavekey      NVARCHAR(10)  
@@ -79,9 +80,10 @@ CREATE OR ALTER PROCEDURE [dbo].[msp_mWaveReleaseWCS_Std]
       
       WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
       BEGIN
-         SET @c_TableName = 'WSSOCFM'
+         SET @c_TableName = 'WSORDCFM'                                              --(Wan02)
          SET @c_Key1 = @c_OrderKey
          SET @c_Key2 = @c_Wavekey
+         SET @c_Key3 = @c_Storerkey                                                 --(wan02)
          
          EXEC dbo.ispGenTransmitLog2
                @c_TableName   = @c_TableName
@@ -105,7 +107,7 @@ CREATE OR ALTER PROCEDURE [dbo].[msp_mWaveReleaseWCS_Std]
       
       IF @n_Continue = 1 
       BEGIN
-         SET @c_TableName = 'PTWWaveCheck'
+         SET @c_TableName = 'WSWVCHKPTW'                                            --(wan02)
          SET @c_Key1 = @c_Wavekey
          SET @c_Key2 = ''
          EXEC dbo.ispGenTransmitLog2
