@@ -92,7 +92,9 @@ IF NOT EXISTS (SELECT *
             [SiteID]         [nvarchar](20) COLLATE SQL_Latin1_General_CP1_CI_AS  NOT NULL
                 CONSTRAINT [DF_FACILITY_SiteId] DEFAULT (''),
             [BondedFacility] [nvarchar](5) COLLATE SQL_Latin1_General_CP1_CI_AS   NOT NULL
-                CONSTRAINT [DF_FACILITY_BondedFacility] DEFAULT (' ')
+                CONSTRAINT [DF_FACILITY_BondedFacility] DEFAULT (' '),
+            [PalletTypeInUse][nvarchar](10) COLLATE SQL_Latin1_General_CP1_CI_AS  NOT NULL
+                CONSTRAINT [DF_FACILITY_PalletTypeInUse] DEFAULT ('No'),
         ) ON [PRIMARY]
 
         ALTER TABLE [dbo].[FACILITY]
@@ -290,7 +292,8 @@ IF NOT EXISTS (SELECT *
              N'FACILITY', 'COLUMN', N'SiteID'
         EXEC sp_addextendedproperty N'MS_Description', 'BondedFacility', 'SCHEMA', N'dbo', 'TABLE',
              N'FACILITY', 'COLUMN', N'BondedFacility'
-
+        EXEC sp_addextendedproperty N'MS_Description', 'PalletTypeInUse', 'SCHEMA', N'dbo', 'TABLE',
+             N'FACILITY', 'COLUMN', N'PalletTypeInUse'
     END
 ELSE
     BEGIN
@@ -315,6 +318,19 @@ ELSE
                 EXEC sp_addextendedproperty N'MS_Description', 'BondedFacility', 'SCHEMA', N'dbo',
                      'TABLE', N'FACILITY', 'COLUMN', N'BondedFacility'
             END
+
+        IF NOT EXISTS (SELECT *
+                       FROM sys.columns
+                       WHERE Name = 'PalletTypeInUse'
+                         AND Object_ID = Object_ID('FACILITY'))
+            BEGIN
+                ALTER TABLE FACILITY
+                    ADD PalletTypeInUse NVARCHAR(10)
+                        COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL
+                        CONSTRAINT [DF_FACILITY_PalletTypeInUse] DEFAULT ('No');
+                EXEC sp_addextendedproperty N'MS_Description', 'PalletTypeInUse', 'SCHEMA', N'dbo',
+                     'TABLE', N'FACILITY', 'COLUMN', N'PalletTypeInUse'
+            END
     END
 
 GRANT SELECT ON [dbo].[FACILITY] TO [JReportRole]
@@ -327,4 +343,3 @@ GRANT SELECT ON [dbo].[FACILITY] TO [NSQL]
 GO
 GRANT UPDATE ON [dbo].[FACILITY] TO [NSQL]
 GO
-
