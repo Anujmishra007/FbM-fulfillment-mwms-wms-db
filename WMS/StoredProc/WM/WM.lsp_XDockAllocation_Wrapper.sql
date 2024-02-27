@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_XDockAllocation_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_XDockAllocation_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 
@@ -31,8 +26,10 @@ GO
 /* 2020-12-29  SWT01    1.1   Missing Execute Login As                  */
 /* 15-Jan-2021 Wan02    1.2   Add Big Outer Begin try/Catch             */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 26-Feb-2024 NJOW01  1.3    UWP-14044 ASN support XDOCK allocation by */
+/*                            multiple externpokey per ASN              */
 /************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_XDockAllocation_Wrapper]  
+CREATE OR ALTER PROCEDURE [WM].[lsp_XDockAllocation_Wrapper]  
    @c_ReceiptKey NVARCHAR(10),    
    @b_Success    INT           OUTPUT,
    @n_Err        INT           OUTPUT, 
@@ -54,7 +51,8 @@ BEGIN
            @n_POCnt                        INT,
            @c_ExternPOKey                  NVARCHAR(20),
            @c_ExternStatus                 NVARCHAR(10),
-           @c_POType                       NVARCHAR(10)
+           @c_POType                       NVARCHAR(10),
+           @CUR_ALC                        CURSOR  --NJOW01
                                                       
    SELECT @n_starttcnt=@@TRANCOUNT, @n_err=0, @b_success=1, @c_errmsg='', @n_continue=1
    
@@ -120,17 +118,66 @@ BEGIN
          LEFT JOIN PO (NOLOCK) ON RD.ExternPOkey = PO.ExternPokey AND PO.Storerkey = RD.Storerkey 
          WHERE RD.Receiptkey = @c_Receiptkey     
       
-         IF @n_pocnt > 1 
-         BEGIN
-            SELECT @n_continue = 3  
-            SELECT @n_Err = 553902
-            SELECT @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + 
-                   ': More than 1 PO found in the Detail. (lsp_XDockAllocation_Wrapper)'             
-         END
-         ELSE IF ISNULL(@c_ExternPOKey,'') <> ''
+         --IF @n_pocnt > 1   --NJOW01 Removed
+         --BEGIN
+         --   SELECT @n_continue = 3  
+         --   SELECT @n_Err = 553902
+         --   SELECT @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + 
+         --          ': More than 1 PO found in the Detail. (lsp_XDockAllocation_Wrapper)'             
+         --END
+         
+         IF ISNULL(@c_ExternPOKey,'') <> ''
          BEGIN
             IF @c_ExternStatus = '9' 
-            BEGIN
+            BEGIN            	
+            	 --NJOW01 S
+               SET @CUR_ALC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR               
+               SELECT RD.ExternPOKey
+               FROM RECEIPTDETAIL RD WITH (NOLOCK) 
+               JOIN PO p WITH (NOLOCK) ON rd.pokey = p.pokey
+               WHERE RD.ReceiptKey = @c_ReceiptKey 
+               GROUP BY RD.ExternPOKey
+               ORDER BY RD.ExternPOKey               
+               
+               OPEN @CUR_ALC
+               
+               FETCH NEXT FROM @CUR_ALC INTO @c_externpokey
+               
+               WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
+               BEGIN            	
+                  BEGIN TRY              
+                        EXEC nsp_xdockorderprocessing 
+                           @c_Externpokey = @c_Externpokey,
+                           @c_Storerkey = @c_Storerkey, 
+                           @c_docarton = 'Y',
+                           @c_doroute = 'N',
+                           @c_facility = @c_Facility 
+                  END TRY
+                  BEGIN CATCH                  	 
+                     IF (XACT_STATE()) = -1  
+                     BEGIN
+                        ROLLBACK TRAN
+                     END
+                     
+                     WHILE @@TRANCOUNT < @n_starttcnt
+                     BEGIN
+                        BEGIN TRAN
+                     END 
+                                       	
+                     SET @n_Continue = 3
+                     SET @n_Err    = 553903
+                     SET @c_ErrMsg = ERROR_MESSAGE()   
+                     SET @c_ErrMsg = 'Error Executing nsp_xdockorderprocessing.'  
+                                   + ' << ' + @c_ErrMsg + ' >>'                                                                                              
+                  END CATCH
+
+                  FETCH NEXT FROM @CUR_ALC INTO @c_externpokey
+               END   
+               CLOSE @CUR_ALC     
+               DEALLOCATE @CUR_ALC
+               --NJOW01 E
+               
+               /*
                --(Wan01) - Start Try..Catch
                BEGIN TRY              
                      EXEC nsp_xdockorderprocessing 
@@ -140,14 +187,15 @@ BEGIN
                         @c_doroute = 'N',
                         @c_facility = @c_Facility 
                END TRY
-               BEGIN CATCH
+               BEGIN CATCH                  	                	
                   SET @n_Continue = 3
                   SET @n_Err    = 553903
                   SET @c_ErrMsg = ERROR_MESSAGE()   
                   SET @c_ErrMsg = 'Error Executing nsp_xdockorderprocessing.'  
-                                + ' << ' + @c_ErrMsg + ' >>'   
+                                + ' << ' + @c_ErrMsg + ' >>'                        
                END CATCH
-               --(Wan01) - END Try..Catch
+               --(Wan01) - END Try..Catch                                 
+               */
             END
             ELSE
             BEGIN
@@ -157,6 +205,54 @@ BEGIN
                         WHERE STORER.StorerKey = @c_Storerkey
                         AND XD.Type = '02')
                BEGIN
+            	    --NJOW01 S
+                  SET @CUR_ALC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR               
+                  SELECT RD.ExternPOKey
+                  FROM RECEIPTDETAIL RD WITH (NOLOCK) 
+                  JOIN PO p WITH (NOLOCK) ON rd.pokey = p.pokey
+                  WHERE RD.ReceiptKey = @c_ReceiptKey 
+                  GROUP BY RD.ExternPOKey
+                  ORDER BY RD.ExternPOKey               
+                  
+                  OPEN @CUR_ALC
+                  
+                  FETCH NEXT FROM @CUR_ALC INTO @c_externpokey
+                  
+                  WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
+                  BEGIN            	
+                     BEGIN TRY              
+                           EXEC nsp_xdockorderprocessing 
+                              @c_Externpokey = @c_Externpokey,
+                              @c_Storerkey = @c_Storerkey, 
+                              @c_docarton = 'Y',
+                              @c_doroute = 'N',
+                              @c_facility = @c_Facility 
+                     END TRY
+                     BEGIN CATCH                  	 
+                        IF (XACT_STATE()) = -1  
+                        BEGIN
+                           ROLLBACK TRAN
+                        END
+                        
+                        WHILE @@TRANCOUNT < @n_starttcnt
+                        BEGIN
+                           BEGIN TRAN
+                        END 
+                     	
+                        SET @n_Continue = 3
+                        SET @n_Err    = 553904
+                        SET @c_ErrMsg = ERROR_MESSAGE()   
+                        SET @c_ErrMsg = 'Error Executing nsp_xdockorderprocessing.'  
+                                      + ' << ' + @c_ErrMsg + ' >>'                        
+                     END CATCH
+
+                     FETCH NEXT FROM @CUR_ALC INTO @c_externpokey
+                  END   
+                  CLOSE @CUR_ALC     
+                  DEALLOCATE @CUR_ALC
+                  --NJOW01 E               	               	
+               	
+               	  /*               	 
                   --(Wan01) - Start Try..Catch
                   BEGIN TRY         
                      EXEC nsp_xdockorderprocessing 
@@ -174,6 +270,7 @@ BEGIN
                                    + ' << ' + @c_ErrMsg + ' >>'   
                   END CATCH
                   --(Wan01) - END Try..Catch
+                  */
                END
                ELSE
                BEGIN
@@ -216,6 +313,11 @@ BEGIN
    END CATCH                              --(Wan01) - END  
                           
    EXIT_SP:
+
+   IF (XACT_STATE()) = -1  --NJOW01
+   BEGIN                                     
+      ROLLBACK TRAN                          
+   END                                          
    
    IF @n_continue=3  -- Error Occured - Process And Return  
    BEGIN  
