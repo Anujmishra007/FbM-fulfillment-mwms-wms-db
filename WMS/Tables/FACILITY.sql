@@ -95,6 +95,9 @@ IF NOT EXISTS (SELECT *
                 CONSTRAINT [DF_FACILITY_BondedFacility] DEFAULT (' '),
             [PalletTypeInUse][nvarchar](10) COLLATE SQL_Latin1_General_CP1_CI_AS  NOT NULL
                 CONSTRAINT [DF_FACILITY_PalletTypeInUse] DEFAULT ('No'),
+            [CheckDigitLengthForLocation]
+                             [nvarchar](2) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL
+                CONSTRAINT [DF_FACILITY_CheckDigitLengthForLocation] DEFAULT (''),
         ) ON [PRIMARY]
 
         ALTER TABLE [dbo].[FACILITY]
@@ -294,6 +297,8 @@ IF NOT EXISTS (SELECT *
              N'FACILITY', 'COLUMN', N'BondedFacility'
         EXEC sp_addextendedproperty N'MS_Description', 'PalletTypeInUse', 'SCHEMA', N'dbo', 'TABLE',
              N'FACILITY', 'COLUMN', N'PalletTypeInUse'
+        EXEC sp_addextendedproperty N'MS_Description', 'CheckDigitLengthForLocation', 'SCHEMA', N'dbo', 'TABLE',
+             N'FACILITY', 'COLUMN', N'CheckDigitLengthForLocation'
     END
 ELSE
     BEGIN
@@ -330,6 +335,19 @@ ELSE
                         CONSTRAINT [DF_FACILITY_PalletTypeInUse] DEFAULT ('No');
                 EXEC sp_addextendedproperty N'MS_Description', 'PalletTypeInUse', 'SCHEMA', N'dbo',
                      'TABLE', N'FACILITY', 'COLUMN', N'PalletTypeInUse'
+            END
+
+        IF NOT EXISTS (SELECT *
+                       FROM sys.columns
+                       WHERE Name = 'CheckDigitLengthForLocation'
+                         AND Object_ID = Object_ID('FACILITY'))
+            BEGIN
+                ALTER TABLE FACILITY
+                    ADD CheckDigitLengthForLocation NVARCHAR(2)
+                        COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL
+                        CONSTRAINT [DF_FACILITY_CheckDigitLengthForLocation] DEFAULT ('');
+                EXEC sp_addextendedproperty N'MS_Description', 'CheckDigitLengthForLocation', 'SCHEMA', N'dbo',
+                     'TABLE', N'FACILITY', 'COLUMN', N'CheckDigitLengthForLocation'
             END
     END
 
