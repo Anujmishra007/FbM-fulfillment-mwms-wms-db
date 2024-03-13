@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: RPT_LP_POPUPPLIST_007_1                                   */
 /*                                                                      */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -23,6 +23,7 @@ GO
 /* Date         Author  Ver   Purposes                                  */
 /* 03-MAY-2023  CSCHONG  1.0  DevOps Combine Script                     */
 /* 31-MAY-2023  CSCHONG  1.1  WMS-22467 add new field (CS01)            */
+/* 31-Oct-2023  WLChooi  1.2  UWP-10213 - Global Timezone (GTZ01)       */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_RPT_LP_POPUPPLIST_007]
 (
@@ -123,7 +124,7 @@ DECLARE @n_Continue        INT
             IF NOT EXISTS (SELECT 1 FROM RefKeyLookup WITH (NOLOCK) WHERE PickDetailKey = @c_PickDetailKey) AND @c_PreGenRptData='Y'  
             BEGIN   
                INSERT INTO RefKeyLookup (PickDetailkey, Pickslipno, OrderKey, OrderLineNumber, Loadkey)  
-               VALUES (@c_PickDetailKey, @c_PickHeaderKey, @c_OrderKey, @c_OrdLineNo, @c_Loadkey)
+               VALUES (@c_PickDetailKey, @c_PickHeaderKey, @c_OrderKey, @c_OrdLineNo, @c_LoadKey)
          
                SELECT @n_err = @@ERROR  
                IF @n_err <> 0   
@@ -193,74 +194,77 @@ DECLARE @n_Continue        INT
 
    IF (@n_continue = 1 OR @n_continue = 2) AND ISNULL(@c_PreGenRptData,'') = ''
    BEGIN
-       SELECT PickSlipNo = PICKHEADER.PickHeaderKey
-      ,  PrintedFlag= @c_PrintedFlag
-      ,  LOADPLAN.LoadKey
-      ,  CarrierKey = ISNULL(RTRIM(LoadPlan.CarrierKey), '')
-      ,  Route      = ISNULL(RTRIM(LoadPlan.Route), '')
-      ,  LOADPLAN.AddDate
-      ,  PICKDETAIL.Loc
-      ,  PICKDETAIL.ID
-      ,  PICKDETAIL.Sku
-      ,  SKU_DESCR  = ISNULL(RTRIM(SKU.DESCR), '')
-      ,  LOTATTRIBUTE.Lottable01
-      ,  LOTATTRIBUTE.Lottable02
-      ,  LOTATTRIBUTE.Lottable03
-      ,  CASE WHEN LOTATTRIBUTE.Lottable04 = '19000101' THEN NULL ELSE LOTATTRIBUTE.Lottable04 END
-      ,  CASE WHEN LOTATTRIBUTE.Lottable05 = '19000101' THEN NULL ELSE LOTATTRIBUTE.Lottable05 END
-      ,  LOC.LogicalLocation
-      ,  Qty = SUM(PICKDETAIL.Qty)
-      ,  QtyCS      = FLOOR (CASE WHEN PACK.CaseCnt > 0 THEN SUM(PICKDETAIL.Qty)/(PACK.CaseCnt * 1.00) ELSE 0 END)
-      ,  QtyIN      = FLOOR (CASE WHEN PACK.InnerPack > 0 THEN (SUM(PICKDETAIL.Qty)-
-                                       (FLOOR (CASE WHEN PACK.CaseCnt > 0 THEN SUM(PICKDETAIL.Qty)/(PACK.CaseCnt * 1.00) ELSE 0 END) * PACK.CaseCnt))
-                                       /(PACK.InnerPack * 1.00)
-                                  ELSE 0 END)
-      ,  QtyEA      = SUM(PICKDETAIL.Qty)
-                    - (FLOOR (CASE WHEN PACK.CaseCnt > 0 THEN SUM(PICKDETAIL.Qty)/(PACK.CaseCnt * 1.00) ELSE 0 END)*PACK.CaseCnt)
-                    - (FLOOR (CASE WHEN PACK.InnerPack > 0 THEN (SUM(PICKDETAIL.Qty)-
-                                       (FLOOR (CASE WHEN PACK.CaseCnt > 0 THEN SUM(PICKDETAIL.Qty)/(PACK.CaseCnt * 1.00) ELSE 0 END)* PACK.CaseCnt))
-                                        /(PACK.InnerPack * 1.00)
-                                   ELSE 0 END)*PACK.InnerPack)
-      ,SpecailHandling  = @c_SpecialHandling
-      ,WaveID           = LOADPLAN.userdefine09    --CS01
-   FROM LOADPLAN       WITH (NOLOCK)
-   JOIN PICKHEADER     WITH (NOLOCK) ON (LOADPLAN.Loadkey = PICKHEADER.ExternOrderKey )
-                                     AND(PICKHEADER.Zone = '7' )
-   JOIN LOADPLANDETAIL WITH (NOLOCK) ON (LOADPLAN.Loadkey = LOADPLANDETAIL.Loadkey)
-   JOIN PICKDETAIL     WITH (NOLOCK) ON (LOADPLANDETAIL.OrderKey = PICKDETAIL.OrderKey)
-   JOIN LOTATTRIBUTE   WITH (NOLOCK) ON (PICKDETAIL.Lot = LOTATTRIBUTE.Lot)
-   JOIN LOC            WITH (NOLOCK) ON (PICKDETAIL.LOC = LOC.Loc)
-   JOIN SKU            WITH (NOLOCK) ON (PICKDETAIL.StorerKey = SKU.Storerkey)
-                                     AND(PICKDETAIL.Sku = SKU.Sku)
-   JOIN PACK           WITH (NOLOCK) ON (SKU.PackKey = PACK.PACKKey )
-   WHERE ( LOADPLAN.LoadKey = @c_LoadKey )
-   GROUP BY LOADPLAN.LoadKey
-         ,  PICKHEADER.PickHeaderKey
-         ,  ISNULL(RTRIM(LoadPlan.CarrierKey), '')
-         ,  ISNULL(RTRIM(LoadPlan.Route), '')
-         ,  LOADPLAN.AddDate
-         ,  PICKDETAIL.Loc
-         ,  PICKDETAIL.ID
-         ,  PICKDETAIL.Sku
-         ,  ISNULL(RTRIM(SKU.DESCR), '')
-         ,  PACK.CaseCnt
-         ,  PACK.InnerPack
-         ,  LOTATTRIBUTE.Lottable01
-         ,  LOTATTRIBUTE.Lottable02
-         ,  LOTATTRIBUTE.Lottable03
-         ,  CASE WHEN LOTATTRIBUTE.Lottable04 = '19000101' THEN NULL ELSE LOTATTRIBUTE.Lottable04 END
-         ,  CASE WHEN LOTATTRIBUTE.Lottable05 = '19000101' THEN NULL ELSE LOTATTRIBUTE.Lottable05 END
-         ,  LOC.LogicalLocation
-         ,  LOADPLAN.userdefine09    --CS01
-     ORDER BY LOADPLAN.LoadKey
-         ,  LOC.LogicalLocation
-         ,  PICKDETAIL.Loc
-         ,  PICKDETAIL.Sku
-         ,  LOTATTRIBUTE.Lottable01
-         ,  LOTATTRIBUTE.Lottable02
-         ,  LOTATTRIBUTE.Lottable03
-         ,  CASE WHEN LOTATTRIBUTE.Lottable04 = '19000101' THEN NULL ELSE LOTATTRIBUTE.Lottable04 END
-         ,  CASE WHEN LOTATTRIBUTE.Lottable05 = '19000101' THEN NULL ELSE LOTATTRIBUTE.Lottable05 END
+      SELECT PickSlipNo = PICKHEADER.PickHeaderKey
+          ,  PrintedFlag= @c_PrintedFlag
+          ,  LOADPLAN.LoadKey
+          ,  CarrierKey = ISNULL(RTRIM(LoadPlan.CarrierKey), '')
+          ,  Route      = ISNULL(RTRIM(LoadPlan.Route), '')
+          ,  [dbo].[fnc_ConvSFTimeZone](PICKDETAIL.Storerkey, LOADPLAN.Facility, LOADPLAN.AddDate) AS AddDate   --GTZ01
+          ,  PICKDETAIL.Loc
+          ,  PICKDETAIL.ID
+          ,  PICKDETAIL.Sku
+          ,  SKU_DESCR  = ISNULL(RTRIM(SKU.DESCR), '')
+          ,  LOTATTRIBUTE.Lottable01
+          ,  LOTATTRIBUTE.Lottable02
+          ,  LOTATTRIBUTE.Lottable03
+          ,  [dbo].[fnc_ConvSFTimeZone](PICKDETAIL.Storerkey, LOADPLAN.Facility, CASE WHEN LOTATTRIBUTE.Lottable04 = '19000101' THEN NULL ELSE LOTATTRIBUTE.Lottable04 END)   --GTZ01
+          ,  [dbo].[fnc_ConvSFTimeZone](PICKDETAIL.Storerkey, LOADPLAN.Facility, CASE WHEN LOTATTRIBUTE.Lottable05 = '19000101' THEN NULL ELSE LOTATTRIBUTE.Lottable05 END)   --GTZ01
+          ,  LOC.LogicalLocation
+          ,  Qty = SUM(PICKDETAIL.Qty)
+          ,  QtyCS      = FLOOR (CASE WHEN PACK.CaseCnt > 0 THEN SUM(PICKDETAIL.Qty)/(PACK.CaseCnt * 1.00) ELSE 0 END)
+          ,  QtyIN      = FLOOR (CASE WHEN PACK.InnerPack > 0 THEN (SUM(PICKDETAIL.Qty)-
+                                           (FLOOR (CASE WHEN PACK.CaseCnt > 0 THEN SUM(PICKDETAIL.Qty)/(PACK.CaseCnt * 1.00) ELSE 0 END) * PACK.CaseCnt))
+                                           /(PACK.InnerPack * 1.00)
+                                      ELSE 0 END)
+          ,  QtyEA      = SUM(PICKDETAIL.Qty)
+                        - (FLOOR (CASE WHEN PACK.CaseCnt > 0 THEN SUM(PICKDETAIL.Qty)/(PACK.CaseCnt * 1.00) ELSE 0 END)*PACK.CaseCnt)
+                        - (FLOOR (CASE WHEN PACK.InnerPack > 0 THEN (SUM(PICKDETAIL.Qty)-
+                                           (FLOOR (CASE WHEN PACK.CaseCnt > 0 THEN SUM(PICKDETAIL.Qty)/(PACK.CaseCnt * 1.00) ELSE 0 END)* PACK.CaseCnt))
+                                            /(PACK.InnerPack * 1.00)
+                                       ELSE 0 END)*PACK.InnerPack)
+          ,SpecailHandling  = @c_SpecialHandling
+          ,WaveID           = LOADPLAN.userdefine09    --CS01
+          , [dbo].[fnc_ConvSFTimeZone](PICKDETAIL.Storerkey, LOADPLAN.Facility, GETDATE()) AS CurrentDateTime   --GTZ01
+      FROM LOADPLAN       WITH (NOLOCK)
+      JOIN PICKHEADER     WITH (NOLOCK) ON (LOADPLAN.Loadkey = PICKHEADER.ExternOrderKey )
+                                        AND(PICKHEADER.Zone = '7' )
+      JOIN LOADPLANDETAIL WITH (NOLOCK) ON (LOADPLAN.Loadkey = LOADPLANDETAIL.Loadkey)
+      JOIN PICKDETAIL     WITH (NOLOCK) ON (LOADPLANDETAIL.OrderKey = PICKDETAIL.OrderKey)
+      JOIN LOTATTRIBUTE   WITH (NOLOCK) ON (PICKDETAIL.Lot = LOTATTRIBUTE.Lot)
+      JOIN LOC            WITH (NOLOCK) ON (PICKDETAIL.LOC = LOC.Loc)
+      JOIN SKU            WITH (NOLOCK) ON (PICKDETAIL.StorerKey = SKU.Storerkey)
+                                        AND(PICKDETAIL.Sku = SKU.Sku)
+      JOIN PACK           WITH (NOLOCK) ON (SKU.PackKey = PACK.PACKKey )
+      WHERE ( LOADPLAN.LoadKey = @c_LoadKey )
+      GROUP BY LOADPLAN.LoadKey
+            ,  PICKHEADER.PickHeaderKey
+            ,  ISNULL(RTRIM(LoadPlan.CarrierKey), '')
+            ,  ISNULL(RTRIM(LoadPlan.Route), '')
+            ,  LOADPLAN.AddDate
+            ,  PICKDETAIL.Loc
+            ,  PICKDETAIL.ID
+            ,  PICKDETAIL.Sku
+            ,  ISNULL(RTRIM(SKU.DESCR), '')
+            ,  PACK.CaseCnt
+            ,  PACK.InnerPack
+            ,  LOTATTRIBUTE.Lottable01
+            ,  LOTATTRIBUTE.Lottable02
+            ,  LOTATTRIBUTE.Lottable03
+            ,  CASE WHEN LOTATTRIBUTE.Lottable04 = '19000101' THEN NULL ELSE LOTATTRIBUTE.Lottable04 END
+            ,  CASE WHEN LOTATTRIBUTE.Lottable05 = '19000101' THEN NULL ELSE LOTATTRIBUTE.Lottable05 END
+            ,  LOC.LogicalLocation
+            ,  LOADPLAN.userdefine09    --CS01
+            ,  PICKDETAIL.Storerkey   --GTZ01
+            ,  LOADPLAN.Facility   --GTZ01
+      ORDER BY LOADPLAN.LoadKey
+            ,  LOC.LogicalLocation
+            ,  PICKDETAIL.Loc
+            ,  PICKDETAIL.Sku
+            ,  LOTATTRIBUTE.Lottable01
+            ,  LOTATTRIBUTE.Lottable02
+            ,  LOTATTRIBUTE.Lottable03
+            ,  CASE WHEN LOTATTRIBUTE.Lottable04 = '19000101' THEN NULL ELSE LOTATTRIBUTE.Lottable04 END
+            ,  CASE WHEN LOTATTRIBUTE.Lottable05 = '19000101' THEN NULL ELSE LOTATTRIBUTE.Lottable05 END
    END
 
    EXIT_SP:
@@ -293,8 +297,3 @@ DECLARE @n_Continue        INT
       RETURN
    END
 END
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_LP_POPUPPLIST_007] TO NSQL
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_LP_POPUPPLIST_007] TO LogiReportRoleWM 
-GO

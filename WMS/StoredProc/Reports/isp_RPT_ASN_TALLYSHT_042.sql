@@ -5,6 +5,7 @@ GO
 
 /************************************************************************/
 /* Stored Proc: isp_RPT_ASN_TALLYSHT_042                                */
+/* Platform: V2                                                         */
 /* Creation Date: 05-Jan-2023                                           */
 /* Copyright: MAERSK                                                    */
 /* Written by: Sean Deng                                                */
@@ -261,8 +262,3 @@ BEGIN
    WHERE (RECEIPT.ReceiptKey = @c_Receiptkey)
 
 END
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_ASN_TALLYSHT_042] TO [NSQL]
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_ASN_TALLYSHT_042] TO [LogiReportRoleWM]
-GO

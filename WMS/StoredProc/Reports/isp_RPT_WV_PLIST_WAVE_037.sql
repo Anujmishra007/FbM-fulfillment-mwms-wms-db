@@ -4,7 +4,8 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /***************************************************************************/
-/* Stored Procedure: isp_RPT_WV_PLIST_WAVE_037                             */
+/* Stored Procedure: isp_RPT_WV_PLIST_WAVE_037                             */   
+/* Platform: V2                                                            */
 /* Creation Date: 27-DEC-2023                                              */
 /* Copyright: MAERSK                                                       */
 /* Written by: Alex Yejing Dong                                            */
@@ -18,8 +19,11 @@ GO
 /* Data Modifications:                                                     */
 /*                                                                         */
 /* Updates:                                                                */
-/* Date         Author  Ver   Purposes                                     */
+/* Date           Author            Ver            Purposes                */
+/* 22-JAN-2024    AlexYejingDong    1.0            Add TTLUOM;             */
+/*                                                 Timezone Localization   */
 /***************************************************************************/
+
 CREATE OR ALTER PROC [dbo].[isp_RPT_WV_PLIST_WAVE_037]
 (
    @c_Wavekey       NVARCHAR(10)
@@ -108,6 +112,7 @@ BEGIN
          , @n_TTLEA           INT           = 0
          , @n_TTLCASES        INT           = 0
          , @n_TTLQTY          INT           = 0
+         , @n_TTLUOM          INT           = 0
          , @c_Priority        NVARCHAR(10)  = N''
          , @c_loadkey         NVARCHAR(20)  = N''
          , @c_OHTYPE          NVARCHAR(10)  = N''
@@ -158,6 +163,7 @@ BEGIN
     , TTLEA          INT
     , TTLCASE        INT
     , TTLQTY         INT
+    , TTLUOM		 INT
     , OHUDF03        NVARCHAR(20)
     , ShowExtOrdKey  INT NULL
     , ExternOrderkey NVARCHAR(50) NULL
@@ -411,6 +417,7 @@ BEGIN
       SET @n_TTLEA = 0
       SET @n_TTLCASES = 0
       SET @n_TTLQTY = 0
+      SET @n_TTLUOM = 0
 
       IF @c_ODUOM = 'EA'
       BEGIN
@@ -437,6 +444,15 @@ BEGIN
       SELECT @n_TTLQTY = SUM(PD.Qty)
       FROM PICKDETAIL PD WITH (NOLOCK)
       WHERE PD.Storerkey = @c_StorerKey AND PD.OrderKey = @c_orderkey
+      
+      SELECT @n_TTLUOM = SUM(PD.UOMQty)
+      FROM PICKDETAIL PD WITH (NOLOCK)
+      JOIN dbo.ORDERDETAIL OD WITH (NOLOCK) 
+      ON OD.OrderKey = PD.OrderKey
+      AND OD.StorerKey = PD.Storerkey
+      AND OD.Sku = PD.Sku
+      AND OD.OrderLineNumber = PD.OrderLineNumber
+      WHERE PD.Storerkey = @c_StorerKey AND PD.OrderKey = @c_orderkey
 
      IF @n_ShowPDUOM = 1
       BEGIN
@@ -449,12 +465,13 @@ BEGIN
 
       INSERT INTO #temp_isp_RPT_WV_PLIST_WAVE_037 (wavekey, PrnDate, PickSlipNo, Zone, printedflag, Storerkey, LOC, Lot, OHType
                                   , Loadkey, SkuDesc, Lottable02, Lottable04, Qty, ODUpdateSource, Susr1, Susr2, SKU, rpttitle
-                                  , OrderKey, OrdGrp, ODNotes, Packkey, UOM, UOMQty, TTLEA, TTLCASE, TTLQTY, OHUDF03
+                                  , OrderKey, OrdGrp, ODNotes, Packkey, UOM, UOMQty, TTLEA, TTLCASE, TTLQTY, TTLUOM, OHUDF03
                                   , ShowExtOrdKey, ExternOrderkey )   --WL01
-      VALUES (@c_Wavekey, CONVERT(CHAR(16), GETDATE(), 120), @c_pickheaderkey, @c_PickMethod, @c_PrintedFlag
+      VALUES (@c_Wavekey, CONVERT(CHAR(16), [dbo].[fnc_ConvSFTimeZone](@c_StorerKey, @c_Facility, GETDATE()), 120)
+            , @c_pickheaderkey, @c_PickMethod, @c_PrintedFlag
             , @c_StorerKey, @c_loc, @c_Lot, @c_OHTYPE, @c_loadkey, @c_SkuDesc, @c_Lottable02, @c_Lottable04, @n_qty, @c_ODUpdateSource
             , @c_Susr1, @c_Susr2, @c_sku, 'PickSlip by Orders', @c_orderkey, @c_OrdGrp, @c_ODNotes, @c_ODPackkey
-            , IIF(@n_ShowPDUOM = 1, @c_UOM, @c_ODUOM), @n_UOMQty, @n_TTLEA, @n_TTLCASES, @n_TTLQTY, @c_OHUDF03
+            , IIF(@n_ShowPDUOM = 1, @c_UOM, @c_ODUOM), @n_UOMQty, @n_TTLEA, @n_TTLCASES, @n_TTLQTY, @n_TTLUOM, @c_OHUDF03
             , @n_ShowExtOrdKey, @c_Externorderkey)
 
       SELECT @c_PrevOrderKey = @c_orderkey
@@ -523,9 +540,3 @@ BEGIN
       RETURN
    END
 END
-
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_WV_PLIST_WAVE_037] TO [NSQL]
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_WV_PLIST_WAVE_037] TO [LogiReportRoleWM]
-GO

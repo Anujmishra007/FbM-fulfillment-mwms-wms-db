@@ -22,6 +22,7 @@ GO
 /* Date         Author  Ver   Purposes                                     */
 /* 21-Aug-2023  WLChooi 1.0   DevOps Combine Script                        */
 /* 14-Sep-2023  WLChooi 1.1   UWP-8179 - LEFT JOIN SerialNo table (WL01)   */
+/* 28-Feb-2024  SeanDeng 1.2  UWP-15938 - Global Timezone (SD01)           */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_RPT_ASN_TALLYSHT_033]
 (
@@ -198,10 +199,13 @@ BEGIN
         , ISNULL(RECEIPTDETAIL.Lottable01, '') AS Lottable01
         , ISNULL(RECEIPTDETAIL.Lottable02, '') AS receiptdetail_lottable02
         , RECEIPTDETAIL.Lottable03
-        , CONVERT(NVARCHAR(10), ISNULL(RECEIPTDETAIL.Lottable04,'1900-01-01'), 103) AS LOTT04
-        , RECEIPTDETAIL.Lottable05
+        , CONVERT(
+             NVARCHAR(10)
+           , ISNULL([dbo].[fnc_ConvSFTimeZone](RECEIPT.StorerKey, RECEIPT.Facility, RECEIPTDETAIL.Lottable04), '1900-01-01')   --SD01
+           , 103) AS LOTT04
+        , [dbo].[fnc_ConvSFTimeZone](RECEIPT.StorerKey, RECEIPT.Facility, RECEIPTDETAIL.Lottable05) AS Lottable05   --SD01
         , STORER.Company
-        , RECEIPT.ReceiptDate
+        , [dbo].[fnc_ConvSFTimeZone](RECEIPT.StorerKey, RECEIPT.Facility, RECEIPT.ReceiptDate) AS ReceiptDate   --SD01
         , RECEIPTDETAIL.PackKey
         , SKU.SUSR3
         , RECEIPTDETAIL.QtyExpected
@@ -231,6 +235,7 @@ BEGIN
              WHERE StorerKey = RECEIPT.StorerKey AND Sku = RECEIPTDETAIL.Sku) AS SKUGroup
         , SN.SerialNo AS SerialNoKey
         , SN.Lot
+        , [dbo].[fnc_ConvSFTimeZone](RECEIPT.StorerKey, RECEIPT.Facility, GETDATE()) AS CurrentDateTime   --SD01
    FROM RECEIPT WITH (NOLOCK)
    JOIN RECEIPTDETAIL WITH (NOLOCK) ON (RECEIPT.ReceiptKey = RECEIPTDETAIL.ReceiptKey)
    JOIN #TEMP_SKU2 SKU WITH (NOLOCK) ON (SKU.Storerkey = RECEIPTDETAIL.StorerKey AND SKU.SKU = RECEIPTDETAIL.Sku)
@@ -259,8 +264,3 @@ BEGIN
    WHERE (RECEIPT.ReceiptKey = @c_Receiptkey)
 
 END
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_ASN_TALLYSHT_033] TO [NSQL]
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_ASN_TALLYSHT_033] TO [LogiReportRoleWM]
-GO

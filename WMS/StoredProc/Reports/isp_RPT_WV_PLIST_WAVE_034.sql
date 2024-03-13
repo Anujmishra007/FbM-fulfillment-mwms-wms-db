@@ -23,6 +23,7 @@ GO
 /* Updates:                                                                */
 /* Date         Author   Ver  Purposes                                     */
 /* 03-Nov-2023  WLChooi  1.0  DevOps Combine Script                        */
+/* 27-Feb-2024  SeanDeng 1.1  UWP-15685 - Global Timezone (SD01)           */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_RPT_WV_PLIST_WAVE_034]
 (
@@ -52,6 +53,7 @@ BEGIN
          , @n_UOM3            INT
          , @c_Lot             NVARCHAR(10)
          , @c_StorerKey       NVARCHAR(15)
+         , @c_Facility        NVARCHAR(5)   --SD01
          , @n_RowNo           INT
          , @c_firstorderkey   NVARCHAR(10)
          , @c_firsttime       NVARCHAR(1)
@@ -132,6 +134,13 @@ BEGIN
 
    WHILE @@TRANCOUNT > 0
    COMMIT TRAN
+
+   --SD01
+   SELECT TOP 1 @c_Storerkey = OH.Storerkey
+              , @c_Facility = OH.Facility   
+   FROM WAVEDETAIL WD (NOLOCK)
+   JOIN ORDERS OH (NOLOCK) ON OH.Orderkey = WD.Orderkey
+   WHERE WD.Wavekey = @c_Wavekey
 
    DECLARE pick_cur CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    SELECT PICKDETAIL.Sku
@@ -335,7 +344,7 @@ BEGIN
                                   , OrderKey, Packkey, UOM, UOMQty, TTLEA, TTLCASE, TTLQTY
                                   , ExternOrderkey, C_Company, C_Address1
                                   , ID, IDQty, Loadkey, Consigneekey)
-      VALUES (@c_Wavekey, CONVERT(CHAR(16), GETDATE(), 120), @c_pickheaderkey, '3', @c_Printedflag
+      VALUES (@c_Wavekey, CONVERT(CHAR(16), [dbo].[fnc_ConvSFTimeZone](@c_StorerKey, @c_Facility, GETDATE()), 120), @c_pickheaderkey, '3', @c_Printedflag --SD01 
             , @c_StorerKey, @c_loc, @c_Lot, @c_SkuDesc, @n_qty, @c_sku, 'PickSlip by Orders'
             , @c_Orderkey, @c_Packkey, @c_UOM
             , @n_UOMQty, @n_TTLEA, @n_TTLCASES, @n_TTLQTY
@@ -435,8 +444,3 @@ BEGIN
       RETURN
    END
 END
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_WV_PLIST_WAVE_034] TO [NSQL]
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_WV_PLIST_WAVE_034] TO [LogiReportRoleWM]
-GO

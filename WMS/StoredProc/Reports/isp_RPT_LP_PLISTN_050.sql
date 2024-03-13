@@ -12,7 +12,7 @@ GO
 /*                                                                      */        
 /* Called By: RPT_LP_PLISTN_050            									   */        
 /*                                                                      */        
-/* PVCS VersiON: 1.0                                                    */        
+/* PVCS VersiON: 1.2                                                    */        
 /*                                                                      */        
 /* VersiON: 7.0                                                         */        
 /*                                                                      */        
@@ -22,6 +22,7 @@ GO
 /* Date         Author   Ver  Purposes                                  */
 /* 16-JUN-2023  WZPang   1.0  DevOps Combine Script                     */
 /* 27-SEP-2023  WZPang   1.1  Edit Columns (WZ01)                       */
+/* 31-Oct-2023  WLChooi  1.2  UWP-10213 - Global Timezone (GTZ01)       */
 /************************************************************************/        
 CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTN_050] (
       @c_Loadkey NVARCHAR(10)    
@@ -45,6 +46,7 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTN_050] (
          , @n_ShowCustOrderBarCode INT  
          , @c_Storerkey            NVARCHAR(15)   
          , @n_starttcnt            INT   
+         , @c_Facility             NVARCHAR(5)   --GTZ01
   
    SELECT @n_starttcnt = @@TRANCOUNT     
    SELECT @n_pickslips_required = 0      
@@ -166,7 +168,7 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTN_050] (
          Orders.ExternOrderKey AS ExternOrderKey,  
          ISNULL(LOC.LogicalLocation, '') AS LogicalLocation,  
          ISNULL(AreaDetail.AreaKey, '00') AS Areakey,               
-         ISNULL (CONVERT(NVARCHAR(10), Orders.DeliveryDate, 103), ''),  
+         ISNULL(CONVERT(NVARCHAR(10), [dbo].[fnc_ConvSFTimeZone](Orders.StorerKey, Orders.Facility, Orders.DeliveryDate), 103), ''),   --GTZ01  
          SUBSTRING(LotAttribute.Lottable03, 1, 18), 
          --SUBSTRING(LotAttribute.Lottable01, 1, 18),               --WZ01 
          '' AS Lottable01,                                          --WZ01
@@ -222,7 +224,7 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTN_050] (
             Orders.ExternOrderKey,  
             ISNULL(LOC.LogicalLocation, ''),  
             ISNULL(AreaDetail.AreaKey, '00'),      
-            ISNULL(CONVERT(NVARCHAR(10), Orders.DeliveryDate, 103), ''),      
+            ISNULL(CONVERT(NVARCHAR(10), [dbo].[fnc_ConvSFTimeZone](Orders.StorerKey, Orders.Facility, Orders.DeliveryDate), 103), ''),   --GTZ01    
             SUBSTRING(LotAttribute.Lottable03, 1, 18), 
             --ISNULL(LotAttribute.Lottable01, ''),          --WZ01
             CASE WHEN ISNULL(SC.Svalue,'0') = '1' THEN 
@@ -321,6 +323,7 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTN_050] (
    SUCCESS:  
       SET @c_Storerkey = ''  
       SELECT TOP 1 @c_Storerkey = Orders.Storerkey  
+                 , @c_Facility = Orders.Facility   --GTZ01
       FROM LoadPlanDetail WITH (NOLOCK)  
       JOIN Orders WITH (NOLOCK) ON (LoadPlanDetail.Orderkey = Orders.Orderkey)  
       WHERE LoadPlanDetail.Loadkey = @c_LoadKey  
@@ -351,7 +354,7 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTN_050] (
            , LOC  
            , SKU  
            , SkuDesc  
-           , SUM(Qty)      --WZ01
+           , SUM(Qty) AS Qty      --WZ01
            , TempQty1  
            , TempQty2  
            , PrintedFlag  
@@ -362,21 +365,22 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTN_050] (
            , Carrierkey  
            , VehicleNo  
            , Lottable02  
-           , Lottable04  
-           , Lottable05  
+           , [dbo].[fnc_ConvSFTimeZone](@c_Storerkey, @c_Facility, Lottable04) AS Lottable04   --GTZ01
+           , [dbo].[fnc_ConvSFTimeZone](@c_Storerkey, @c_Facility, Lottable05) AS Lottable05   --GTZ01  
            , packpallet  
            , packcasecnt  
            , externorderkey  
            , LogicalLoc  
            , Areakey  
            , UOM  
-           , DeliveryDate  
+           , DeliveryDate
            , Lottable03  
            , Lottable01  
            , Altsku  
            , CASE WHEN @n_ShowCustOrderBarCode = 1 THEN ExternOrderkey ELSE '' END   AS ExternOrderkey_bc
            , StdCube
            , SKUWeight
+           , [dbo].[fnc_ConvSFTimeZone](@c_Storerkey, @c_Facility, GETDATE()) AS CurrentDateTime   --GTZ01
       FROM #TEMP_PICK 
       --(WZ01) Start
       GROUP BY PickSlipNo     
@@ -436,10 +440,4 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTN_050] (
    DROP Table #TEMP_PICK   
    
 
-END -- procedure    
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_LP_PLISTN_050] TO [NSQL] 
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_LP_PLISTN_050] TO [LogiReportRoleWM]
-GO
-
+END -- procedure

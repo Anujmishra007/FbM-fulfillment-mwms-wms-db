@@ -78,8 +78,3 @@ BEGIN
    WHERE (RECEIPT.ReceiptKey = @c_Receiptkey)
 
 END
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_ASN_TALLYSHT_039] TO [NSQL]
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_ASN_TALLYSHT_039] TO [LogiReportRoleWM]
-GO

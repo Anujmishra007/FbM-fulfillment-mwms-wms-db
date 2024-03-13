@@ -12,7 +12,7 @@ GO
 /*                                                                       */
 /* Called By: RPT_WV_WAVPLISTC_006                                       */
 /*                                                                       */
-/* GitLab Version: 1.0                                                   */
+/* GitLab Version: 1.2                                                   */
 /*                                                                       */
 /* Version: 5.4                                                          */
 /*                                                                       */
@@ -22,6 +22,7 @@ GO
 /* Date        Author  Ver   Purposes                                    */
 /* 02-Mar-2023 WLChooi 1.0   DevOps Combine Script                       */
 /* 10-Jul-2023 WLChooi 1.1   UWP-2584 - Bug Fix (WL01)                   */
+/* 31-Oct-2023 WLChooi 1.2   UWP-10213 - Global Timezone (GTZ01)         */
 /*************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_RPT_WV_WAVPLISTC_006]
@@ -76,16 +77,24 @@ BEGIN
          , @n_PageNo          INT
          , @c_TotalPage       INT
          , @c_TrfRoom         NVARCHAR(10)
+         , @c_Facility        NVARCHAR(5)   --GTZ01
 
    --WL01 S
    --IF ISNULL(@c_PreGenRptData,'') IN ('0','')
-      --SET @c_PreGenRptData = ''
-   SET @c_PreGenRptData = IIF(@c_PreGenRptData = 'Y','Y','')
+   --SET @c_PreGenRptData = ''
+   SET @c_PreGenRptData = IIF(@c_PreGenRptData = 'Y', 'Y', '')
    --WL01 E
-   
+
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_continue = 1
    SET @b_debug = 0
+
+   --GTZ01 S
+   SELECT TOP 1 @c_Facility = OH.Facility
+   FROM WAVEDETAIL WD (NOLOCK)
+   JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = WD.OrderKey
+   WHERE WD.WaveKey = @c_Wavekey
+   --GTZ01 E
 
    DECLARE @t_Result TABLE
    (
@@ -612,14 +621,14 @@ BEGIN
          SET @c_Lottable02label = N'Batch No'
 
       IF ISNULL(@c_Lottable04Label, '') = ''
-         SET @c_Lottable04Label = 'Exp Date'
+         SET @c_Lottable04Label = N'Exp Date'
 
-      IF ISNULL(@c_PreGenRptData,'') = ''
+      IF ISNULL(@c_PreGenRptData, '') = ''
       BEGIN
          SELECT Loadkey
               , Pickslipno
               , PickType
-              , LoadingDate
+              , [dbo].[fnc_ConvSFTimeZone](StorerKey, @c_Facility, LoadingDate) AS LoadingDate   --GTZ01
               , PickZone
               , Loc
               , Logicalloc
@@ -630,7 +639,7 @@ BEGIN
               , TotalCarton
               , ID
               , Lottable02
-              , Lottable04
+              , [dbo].[fnc_ConvSFTimeZone](StorerKey, @c_Facility, Lottable04) AS Lottable04   --GTZ01
               , ReprintFlag
               , PageNo
               , TotalPage
@@ -641,6 +650,7 @@ BEGIN
               , C_Company
               , EA
               , TrfRoom
+              , [dbo].[fnc_ConvSFTimeZone](StorerKey, @c_Facility, GETDATE()) AS CurrentDateTime   --GTZ01
          FROM @t_Result
          ORDER BY Pickslipno
                 , PageNo
@@ -699,8 +709,3 @@ BEGIN
       END
    END
 END
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_WV_WAVPLISTC_006] TO [NSQL]
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_WV_WAVPLISTC_006] TO [LogiReportRoleWM]
-GO

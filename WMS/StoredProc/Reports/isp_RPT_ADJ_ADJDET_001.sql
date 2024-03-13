@@ -3,7 +3,6 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /***************************************************************************/
 /* Stored Procedure: isp_RPT_ADJ_ADJDET_001                                */
 /* Creation Date: 21-JAN-2022                                              */
@@ -14,7 +13,7 @@ GO
 /*                                                                         */
 /* Called By: RPT_ADJ_ADJDET_001                                           */
 /*                                                                         */
-/* GitLab Version: 1.0                                                     */
+/* GitLab Version: 1.1                                                     */
 /*                                                                         */
 /* Version: 1.0                                                            */
 /*                                                                         */
@@ -23,6 +22,7 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 21-Jan-2022  WLChooi 1.0   DevOps Combine Script                        */
+/* 31-Oct-2023  WLChooi 1.1   UWP-10213 - Global Timezone (GTZ01)          */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_RPT_ADJ_ADJDET_001] (
       @c_Adjustmentkey  NVARCHAR(10)
@@ -204,18 +204,19 @@ BEGIN
       ,  @c_RetVal     = @c_RetVal           OUTPUT
 
    SELECT Adjustmentkey
-      ,  StorerKey
-      ,  EffectiveDate
-      ,  Sku
-      ,  Loc
-      ,  ID
-      ,  ReasonCode
-      ,  Qty
-      ,  Facility
-      ,  Remarks
-      ,  ADJReason_Descr
-      ,  UserID
-      ,  ISNULL(@c_Retval,'') AS Logo
+        , StorerKey
+        , [dbo].[fnc_ConvSFTimeZone](StorerKey, Facility, EffectiveDate) AS EffectiveDate   --GTZ01
+        , Sku
+        , Loc
+        , Id
+        , ReasonCode
+        , Qty
+        , Facility
+        , Remarks
+        , ADJReason_Descr
+        , UserID
+        , ISNULL(@c_RetVal, '') AS Logo
+        , [dbo].[fnc_ConvSFTimeZone](StorerKey, Facility, GETDATE()) AS CurrentDateTime   --GTZ01
    FROM #TMP_ADJ
 
    WHILE @@TRANCOUNT < @n_StartTCnt
@@ -250,8 +251,3 @@ BEGIN
    END
 
 END
-GO
-GRANT EXECUTE ON  [dbo].[isp_RPT_ADJ_ADJDET_001] TO [LogiReportRoleWM]
-GO
-GRANT EXECUTE ON  [dbo].[isp_RPT_ADJ_ADJDET_001] TO [NSQL]
-GO
