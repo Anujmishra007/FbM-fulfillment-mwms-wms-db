@@ -2,7 +2,6 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-
 /************************************************************************/
 /* Stored Proc: lsp_WM_Get_WebReport_URL                                */
 /* Creation Date: 2020-08-13                                            */
@@ -29,6 +28,7 @@ GO
 /* 2023-08-01  Wan02    1.2   PAC-15:Ecom Packing | Print Packing Report*/
 /*                            - Backend                                 */
 /* 2023-12-07  WLChooi  1.3   WMS-24329 Add full path for report (WL01) */
+/* 2024-01-31  CalvinK  1.4   Fix LogiReport Path for nonstd (CLVN01)   */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_WM_Get_WebReport_URL]
            @c_ReportID           NVARCHAR(10)
@@ -57,56 +57,51 @@ CREATE OR ALTER PROC [WM].[lsp_WM_Get_WebReport_URL]
          , @b_Success            INT = 1              OUTPUT
          , @n_err                INT = 0              OUTPUT
          , @c_ErrMsg             NVARCHAR(255) = ''   OUTPUT
-         , @b_PrintOverInternet  INT = 0                                            --(Wan02)
+         , @b_PrintOverInternet  INT = 0              --(Wan02)
 AS
 BEGIN
    SET NOCOUNT ON
    SET ANSI_NULLS OFF
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
-
    DECLARE
            @n_StartTCnt          INT   = @@TRANCOUNT
          , @n_Continue           INT   = 1
-
-         , @c_ReportURL          NVARCHAR(120)  = ''
-         , @c_ReportFolder       NVARCHAR(120)  = ''
-         , @c_CatalogFolder      NVARCHAR(120)  = ''
-         , @c_ReportCatalog      NVARCHAR(120)  = ''
-         , @c_ReportCLSFile      NVARCHAR(120)  = ''
-         , @c_ReportFormat       NVARCHAR(20)   = '2'
-         , @c_ReportFileName     NVARCHAR(50)   = ''
-         , @c_NewID              NVARCHAR(50)   = ''
-         , @c_ServerLoginAuth    NVARCHAR(120)  = ''
-
-         , @c_Delim              NVARCHAR(1) = '&'
+         , @c_ReportURL          NVARCHAR(120) = ''
+         , @c_ReportFolder       NVARCHAR(120) = ''
+         , @c_CatalogFolder      NVARCHAR(120) = ''
+         , @c_ReportCatalog      NVARCHAR(120) = ''
+         , @c_ReportCLSFile      NVARCHAR(120) = ''
+         , @c_ReportFormat       NVARCHAR(20)  = '2'
+         , @c_ReportFileName     NVARCHAR(50)  = ''
+         , @c_NewID              NVARCHAR(50)  = ''
+         , @c_ServerLoginAuth    NVARCHAR(120) = ''
+         , @c_Delim              NVARCHAR(1)   = '&'
          , @c_ReportParm         NVARCHAR(4000)= ''
-
-         , @c_ReportParmName1   NVARCHAR(100) = ''
-         , @c_ReportParmName2   NVARCHAR(100) = ''
-         , @c_ReportParmName3   NVARCHAR(100) = ''
-         , @c_ReportParmName4   NVARCHAR(100) = ''
-         , @c_ReportParmName5   NVARCHAR(100) = ''
-         , @c_ReportParmName6   NVARCHAR(100) = ''
-         , @c_ReportParmName7   NVARCHAR(100) = ''
-         , @c_ReportParmName8   NVARCHAR(100) = ''
-         , @c_ReportParmName9   NVARCHAR(100) = ''
-         , @c_ReportParmName10  NVARCHAR(100) = ''
-         , @c_ReportParmName11  NVARCHAR(100) = ''
-         , @c_ReportParmName12  NVARCHAR(100) = ''
-         , @c_ReportParmName13  NVARCHAR(100) = ''
-         , @c_ReportParmName14  NVARCHAR(100) = ''
-         , @c_ReportParmName15  NVARCHAR(100) = ''
-         , @c_ReportParmName16  NVARCHAR(100) = ''
-         , @c_ReportParmName17  NVARCHAR(100) = ''
-         , @c_ReportParmName18  NVARCHAR(100) = ''
-         , @c_ReportParmName19  NVARCHAR(100) = ''
-         , @c_ReportParmName20  NVARCHAR(100) = ''
+         , @c_ReportParmName1    NVARCHAR(100) = ''
+         , @c_ReportParmName2    NVARCHAR(100) = ''
+         , @c_ReportParmName3    NVARCHAR(100) = ''
+         , @c_ReportParmName4    NVARCHAR(100) = ''
+         , @c_ReportParmName5    NVARCHAR(100) = ''
+         , @c_ReportParmName6    NVARCHAR(100) = ''
+         , @c_ReportParmName7    NVARCHAR(100) = ''
+         , @c_ReportParmName8    NVARCHAR(100) = ''
+         , @c_ReportParmName9    NVARCHAR(100) = ''
+         , @c_ReportParmName10   NVARCHAR(100) = ''
+         , @c_ReportParmName11   NVARCHAR(100) = ''
+         , @c_ReportParmName12   NVARCHAR(100) = ''
+         , @c_ReportParmName13   NVARCHAR(100) = ''
+         , @c_ReportParmName14   NVARCHAR(100) = ''
+         , @c_ReportParmName15   NVARCHAR(100) = ''
+         , @c_ReportParmName16   NVARCHAR(100) = ''
+         , @c_ReportParmName17   NVARCHAR(100) = ''
+         , @c_ReportParmName18   NVARCHAR(100) = ''
+         , @c_ReportParmName19   NVARCHAR(100) = ''
+         , @c_ReportParmName20   NVARCHAR(100) = ''
 
    SET @b_Success = 1
    SET @n_err     = 0
    SET @c_ErrMsg  = ''
-
    SET @c_ReturnURL = ''
 
    BEGIN TRY
@@ -164,7 +159,7 @@ BEGIN
       IF RIGHT(@c_ReportFolder,1)  <> '/' SET @c_ReportFolder  = @c_ReportFolder  + '/'
       IF RIGHT(@c_CatalogFolder,1) <> '/' AND @c_CatalogFolder <> '' SET @c_CatalogFolder = @c_CatalogFolder + '/'         --(Wan01)
 
-      IF LEFT(@c_ReportCLSFile,1) = '/' AND LEN(@c_ReportCLSFile) > 1 SET @c_ReportCLSFile = RIGHT(@c_ReportCLSFile, LEN(@c_ReportCLSFile) - 1)
+      /*IF LEFT(@c_ReportCLSFile,1) = '/' AND LEN(@c_ReportCLSFile) > 1 SET @c_ReportCLSFile = RIGHT(@c_ReportCLSFile, LEN(@c_ReportCLSFile) - 1) --(CLVN01)*/
 
       IF @c_ReportFormat   = '' SET @c_ReportFormat = '2'                                    --(Wan02)
       IF @b_PrintOverInternet > 0  SET @c_ReportFormat = '2'                                 --(Wan02)
@@ -173,12 +168,11 @@ BEGIN
       SET @c_ReportCLSFile = 'jrs.report=' + IIF(LEFT(TRIM(@c_ReportCLSFile),1) = '/', @c_ReportCLSFile, @c_ReportFolder + @c_ReportCLSFile)   --WL01
       SET @c_ReportCatalog = 'jrs.catalog='+ @c_CatalogFolder+ @c_ReportCatalog
       SET @c_ReportFormat  = 'jrs.result_type=' + @c_ReportFormat
-      
-      SET @c_ServerLoginAuth = IIF(@b_PrintOverInternet=0,'','jrs.authorization=' + @c_ServerLoginAuth)              --(Wan02) 
+      SET @c_ServerLoginAuth = IIF(@b_PrintOverInternet=0,'','jrs.authorization=' + @c_ServerLoginAuth)              --(Wan02)
       SET @c_NewID = CONVERT(NVARCHAR(50),NEWID())
-      SET @c_ReportFileName  = IIF(@b_PrintOverInternet=0,'','jrs.result_file_name=' + RIGHT(@c_NewID,12)) + '.PDF'  --(Wan02)                                                                        --(Wan02) 
-    
+      SET @c_ReportFileName  = IIF(@b_PrintOverInternet=0,'','jrs.result_file_name=' + RIGHT(@c_NewID,12)) + '.PDF'  --(Wan02)                                                                        --(Wan02)
       SET @c_ReportParm = ''
+
       IF @c_ReportParmName1  <> '' SET @c_ReportParm = @c_ReportParm + 'jrs.param' + '$' + @c_ReportParmName1  + '=' + @c_Parm1  + @c_Delim
       IF @c_ReportParmName2  <> '' SET @c_ReportParm = @c_ReportParm + 'jrs.param' + '$' + @c_ReportParmName2  + '=' + @c_Parm2  + @c_Delim
       IF @c_ReportParmName3  <> '' SET @c_ReportParm = @c_ReportParm + 'jrs.param' + '$' + @c_ReportParmName3  + '=' + @c_Parm3  + @c_Delim
@@ -209,18 +203,17 @@ BEGIN
                        + @c_ServerLoginAuth + IIF(@c_ServerLoginAuth='','',@c_Delim)             --(Wan02)
                        + @c_ReportFileName  + IIF(@c_ReportFileName='','',@c_Delim)              --(Wan02)
                        + @c_ReportParm
-
       SET @c_ReturnURL = REPLACE(@c_ReturnURL,SPACE(1),'%20')
-
    END TRY
+
    BEGIN CATCH
       SET @n_Continue = 3
       SET @c_ErrMsg = ERROR_MESSAGE()
       GOTO EXIT_SP
    END CATCH
-   EXIT_SP:
 
-   IF @n_Continue=3  -- Error Occured - Process And Return
+   EXIT_SP:
+   IF @n_Continue = 3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0
       IF  @@TRANCOUNT = 1 AND @@TRANCOUNT > @n_StartTCnt
@@ -234,7 +227,6 @@ BEGIN
             COMMIT TRAN
          END
       END
-
       EXECUTE nsp_logerror @n_err, @c_ErrMsg, 'lsp_WM_Get_WebReport_URL'
       --RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
    END
@@ -248,5 +240,5 @@ BEGIN
    END
 END -- procedure
 GO
-GRANT EXECUTE ON  [WM].[lsp_WM_Get_WebReport_URL] TO [NSQL]
+GRANT EXECUTE ON [WM].[lsp_WM_Get_WebReport_URL] TO [NSQL]
 GO
