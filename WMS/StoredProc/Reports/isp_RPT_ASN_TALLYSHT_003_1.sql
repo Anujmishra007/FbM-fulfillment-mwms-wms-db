@@ -93,8 +93,3 @@ BEGIN
           , ISNULL(RECEIPTDETAIL.POKey, '')
           , RECEIPT.Facility
 END
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_ASN_TALLYSHT_003_1] TO [NSQL]
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_ASN_TALLYSHT_003_1] TO [LogiReportRoleWM]
-GO

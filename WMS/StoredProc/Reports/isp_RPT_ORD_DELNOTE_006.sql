@@ -47,7 +47,7 @@ BEGIN
         , ORDERS.C_Address4
         , ORDERS.Notes
         , STORER.Company
-        , ORDERS.AddDate
+        , [dbo].[fnc_ConvSFTimeZone](ORDERS.StorerKey, ORDERS.Facility, ORDERS.AddDate) AS AddDate
         , ORDERS.ExternOrderKey
         , ORDERS.OrderKey
         , ORDERS.Door
@@ -69,11 +69,12 @@ BEGIN
         , ISNULL(ORDERDETAIL.UserDefine03, '') AS 'odudf03'
         , ISNULL(CL1.Short, 'N') AS 'ShowBarcode'
         , ISNULL(CL2.Short, 'N') AS 'ShowDeliveryDate'
-        , ORDERS.DeliveryDate
+        , [dbo].[fnc_ConvSFTimeZone](ORDERS.StorerKey, ORDERS.Facility, ORDERS.DeliveryDate) AS DeliveryDate
         , ISNULL(CL3.Short, 'N') AS 'ShowSPRemarks'
         , @c_RetVal AS 'LogoName'
         , SN.SerialNo AS SerialNoKey
         , SN.Lot
+        , [dbo].[fnc_ConvSFTimeZone](ORDERS.StorerKey, ORDERS.Facility, GETDATE()) AS CurrentDateTime
    FROM ORDERS WITH (NOLOCK)
    JOIN ORDERDETAIL WITH (NOLOCK) ON (ORDERS.OrderKey = ORDERDETAIL.OrderKey)
    JOIN SKU WITH (NOLOCK) ON (SKU.Sku = ORDERDETAIL.Sku) AND (ORDERDETAIL.StorerKey = SKU.StorerKey)
@@ -111,8 +112,3 @@ BEGIN
           , CASE WHEN ISNULL(C.Short, 'N') = 'N' THEN ORDERDETAIL.OrderLineNumber END ASC
           , CASE WHEN ISNULL(C.Short, 'N') = 'N' THEN ORDERDETAIL.Sku END ASC
 END
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_ORD_DELNOTE_006] TO [NSQL]
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_ORD_DELNOTE_006] TO LogiReportRoleWM
-GO

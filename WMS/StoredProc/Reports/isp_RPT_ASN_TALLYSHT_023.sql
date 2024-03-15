@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: RPT_ASN_TALLYSHT_023                                      */
 /*                                                                      */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 14-Dec-2022 WLChooi  1.0   DevOps Combine Script                     */
+/* 31-Oct-2023 WLChooi  1.1   UWP-10213 - Global Timezone (GTZ01)       */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_RPT_ASN_TALLYSHT_023]
@@ -200,10 +201,13 @@ BEGIN
         , ISNULL(RECEIPTDETAIL.Lottable01, '') AS Lottable01
         , ISNULL(RECEIPTDETAIL.Lottable02, '') AS receiptdetail_lottable02
         , RECEIPTDETAIL.Lottable03
-        , CONVERT(NVARCHAR(10), ISNULL(RECEIPTDETAIL.Lottable04,'1900-01-01'), 103) AS LOTT04
-        , RECEIPTDETAIL.Lottable05
+        , CONVERT(
+             NVARCHAR(10)
+           , ISNULL([dbo].[fnc_ConvSFTimeZone](RECEIPT.StorerKey, RECEIPT.Facility, RECEIPTDETAIL.Lottable04), '1900-01-01')   --GTZ01
+           , 103) AS LOTT04
+        , [dbo].[fnc_ConvSFTimeZone](RECEIPT.StorerKey, RECEIPT.Facility, RECEIPTDETAIL.Lottable05) AS Lottable05   --GTZ01
         , STORER.Company
-        , RECEIPT.ReceiptDate
+        , [dbo].[fnc_ConvSFTimeZone](RECEIPT.StorerKey, RECEIPT.Facility, RECEIPT.ReceiptDate) AS ReceiptDate   --GTZ01
         , RECEIPTDETAIL.PackKey
         , SKU.SUSR3
         , RECEIPTDETAIL.QtyExpected
@@ -231,6 +235,7 @@ BEGIN
         , (  SELECT MAX(SKUGROUP)
              FROM SKU (NOLOCK)
              WHERE StorerKey = RECEIPT.StorerKey AND Sku = RECEIPTDETAIL.Sku) AS SKUGroup
+        , [dbo].[fnc_ConvSFTimeZone](RECEIPT.StorerKey, RECEIPT.Facility, GETDATE()) AS CurrentDateTime   --GTZ01
    FROM RECEIPT WITH (NOLOCK)
    JOIN RECEIPTDETAIL WITH (NOLOCK) ON (RECEIPT.ReceiptKey = RECEIPTDETAIL.ReceiptKey)
    JOIN #TEMP_SKU2 SKU WITH (NOLOCK) ON (SKU.Storerkey = RECEIPTDETAIL.StorerKey AND SKU.SKU = RECEIPTDETAIL.Sku)
@@ -255,8 +260,3 @@ BEGIN
    WHERE (RECEIPT.ReceiptKey = @c_Receiptkey)
 
 END
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_ASN_TALLYSHT_023] TO [NSQL]
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_ASN_TALLYSHT_023] TO [LogiReportRoleWM]
-GO

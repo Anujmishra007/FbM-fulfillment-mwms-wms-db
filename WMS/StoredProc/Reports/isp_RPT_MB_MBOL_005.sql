@@ -21,6 +21,7 @@ GO
 /* Updates:                                                             */        
 /* Date         Author   Ver  Purposes                                  */
 /* 13-JUN-2023  WZPang   1.0  DevOps Combine Script                     */
+/* 21-Feb-2024  SeanDeng 1.1  UWP-15533 - Global Timezone (SD01)        */
 /************************************************************************/        
 CREATE OR ALTER PROC [dbo].[isp_RPT_MB_MBOL_005] (
       @c_Mbolkey NVARCHAR(10)    
@@ -39,7 +40,7 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_MB_MBOL_005] (
          , MBOL.Vessel
          , MBOL.PlaceOfLoadingQualifier
          , MBOL.PlaceOfDischarge
-         , MBOL.ArrivalDateFinalDestination
+         , [dbo].[fnc_ConvSFTimeZone](ORDERS.StorerKey, ORDERS.Facility, MBOL.ArrivalDateFinalDestination) AS ArrivalDateFinalDestination --SD01 
          , MBOL.CarrierKey
          , MBOL.VoyageNumber
          , MBOL.ContainerNo
@@ -57,6 +58,7 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_MB_MBOL_005] (
          --   INNER JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON O.OrderKey = PD.OrderKey
          --   LEFT OUTER JOIN RDT.RDTSCANTOTRUCK STT (NOLOCK) ON STT.MBOLKey = O.MBOLKey AND STT.RefNo = PD.ID
          --   WHERE O.MBOLKey = @c_MBOLKey) AS Scanned      
+         , [dbo].[fnc_ConvSFTimeZone](ORDERS.StorerKey, ORDERS.Facility, GETDATE()) AS CurrentDateTime --SD01 
    FROM MBOL (NOLOCK)
    JOIN MBOLDETAIL (NOLOCK) ON MBOL.MbolKey = MBOLDETAIL.MbolKey
    JOIN ORDERS (NOLOCK) ON MBOLDETAIL.OrderKey = ORDERS.OrderKey
@@ -70,12 +72,14 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_MB_MBOL_005] (
          , MBOL.Vessel
          , MBOL.PlaceOfLoadingQualifier
          , MBOL.PlaceOfDischarge
-         , MBOL.ArrivalDateFinalDestination
+         , ArrivalDateFinalDestination --SD01
          , MBOL.CarrierKey
          , MBOL.VoyageNumber
          , MBOL.ContainerNo
          , MBOL.Equipment
          , MBOL.PlaceOfLoading
+         , ORDERS.StorerKey --SD01
+         , ORDERS.Facility --SD01
          , ORDERS.ExternOrderKey
          , ORDERDETAIL.Lottable03
          , ORDERS.UserDefine09
@@ -86,9 +90,4 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_MB_MBOL_005] (
    
 
 END -- procedure    
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_MB_MBOL_005] TO [NSQL] 
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_MB_MBOL_005] TO [LogiReportRoleWM]
-GO
 

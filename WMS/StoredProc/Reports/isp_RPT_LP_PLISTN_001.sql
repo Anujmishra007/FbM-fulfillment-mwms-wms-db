@@ -24,7 +24,7 @@ GO
 /*                                                                         */
 /* Called By:                                                              */
 /*                                                                         */
-/* GitLab Version: 1.1                                                     */
+/* GitLab Version: 1.2                                                     */
 /*                                                                         */
 /* Version: 5.4                                                            */
 /*                                                                         */
@@ -34,6 +34,7 @@ GO
 /* Date         Author      Ver. Purposes                                  */
 /* 06-Jan-2022  WLChooi     1.0  DevOps Combine Script                     */
 /* 22-Feb-2022  WLChooi     1.1  WMS-19760 - Show or hide field (WL01)     */
+/* 31-Oct-2023  WLChooi     1.2  UWP-10213 - Global Timezone (GTZ01)       */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_RPT_LP_PLISTN_001]
@@ -68,7 +69,7 @@ BEGIN
          , @c_PostCode          NVARCHAR(15)
          , @c_Route             NVARCHAR(10)
          , @c_Route_Desc        NVARCHAR(60) -- RouteMaster.Desc
-         , @c_TrfRoom           NVARCHAR(5)  -- LoadPlan.TrfRoom
+         , @c_TrfRoom           NVARCHAR(5) -- LoadPlan.TrfRoom
          , @c_Notes1            NVARCHAR(60)
          , @c_Notes2            NVARCHAR(60)
          , @c_SkuDesc           NVARCHAR(60)
@@ -140,6 +141,8 @@ BEGIN
    SET @c_Measurement = N''
    SET @c_SkuPattern = N''
 
+   SET @c_PreGenRptData = IIF(@c_PreGenRptData = 'Y', 'Y', '')   --GTZ01
+
    CREATE TABLE #temp_pick
    (
       PickSlipNo        NVARCHAR(10) NULL
@@ -153,7 +156,7 @@ BEGIN
     , PostCode          NVARCHAR(15)
     , Route             NVARCHAR(10)
     , Route_Desc        NVARCHAR(60) -- RouteMaster.Desc
-    , TrfRoom           NVARCHAR(5)  -- LoadPlan.TrfRoom
+    , TrfRoom           NVARCHAR(5) -- LoadPlan.TrfRoom
     , Notes1            NVARCHAR(60)
     , Notes2            NVARCHAR(60)
     , LOC               NVARCHAR(10)
@@ -189,6 +192,7 @@ BEGIN
     , CustCol03_Text    NVARCHAR(60)
     , ShowCustomFormula NVARCHAR(10)
     , LogicalLoc        NVARCHAR(20)
+    , Storerkey         NVARCHAR(15)   --GTZ01
    )
 
    SELECT @n_continue = 1
@@ -198,8 +202,7 @@ BEGIN
    -- Use Zone as a UOM Picked 1 - Pallet, 2 - Case, 6 - Each, 8 - By Order
    IF EXISTS (  SELECT 1
                 FROM PICKHEADER (NOLOCK)
-                WHERE ExternOrderKey = @c_loadkey
-                AND   Zone = '3')
+                WHERE ExternOrderKey = @c_loadkey AND Zone = '3')
    BEGIN
       SELECT @c_firsttime = N'N'
       SELECT @c_PrintedFlag = N'Y'
@@ -215,9 +218,7 @@ BEGIN
       DECLARE CUR_UPDATE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT DISTINCT PH.PickHeaderKey
       FROM PICKHEADER PH (NOLOCK)
-      WHERE PH.ExternOrderKey = @c_loadkey
-      AND   [Zone] = '3'
-      AND   PickType = '0'
+      WHERE PH.ExternOrderKey = @c_loadkey AND [Zone] = '3' AND PickType = '0'
 
       OPEN CUR_UPDATE
 
@@ -231,10 +232,7 @@ BEGIN
          UPDATE PICKHEADER
          SET PickType = '1'
            , TrafficCop = NULL
-         WHERE ExternOrderKey = @c_loadkey
-         AND   Zone = '3'
-         AND   PickType = '0'
-         AND   PickHeaderKey = @c_UpdPickHKey
+         WHERE ExternOrderKey = @c_loadkey AND Zone = '3' AND PickType = '0' AND PickHeaderKey = @c_UpdPickHKey
 
          SELECT @n_err = @@ERROR
          IF @n_err <> 0
@@ -283,9 +281,7 @@ BEGIN
       , LOC (NOLOCK)
    WHERE PICKDETAIL.OrderKey = LoadPlanDetail.OrderKey
    --AND    PickDetail.Status < '5'
-   AND   PICKDETAIL.PackKey = PACK.PackKey
-   AND   LOC.Loc = PICKDETAIL.Loc
-   AND   LoadPlanDetail.LoadKey = @c_loadkey
+   AND   PICKDETAIL.PackKey = PACK.PackKey AND LOC.Loc = PICKDETAIL.Loc AND LoadPlanDetail.LoadKey = @c_loadkey
    GROUP BY PICKDETAIL.Sku
           , PICKDETAIL.Loc
           , PACK.Qty
@@ -407,8 +403,7 @@ BEGIN
            , @c_Measurement = ISNULL(RTRIM(Measurement), '')
            , @c_AltSku = ISNULL(RTRIM(ALTSKU), '')
       FROM SKU (NOLOCK)
-      WHERE StorerKey = @c_StorerKey
-      AND   Sku = @c_sku
+      WHERE StorerKey = @c_StorerKey AND Sku = @c_sku
 
       SET @c_SQL = N'SELECT' + N' @c_Lottable01 = ' + CASE WHEN @n_CustCol01 = 0 THEN 'Lottable01'
                                                            ELSE @c_CustCol01_Field END + N',@c_Lottable02 = '
@@ -483,22 +478,17 @@ BEGIN
            , @n_InnerPack = PACK.InnerPack
       FROM PACK (NOLOCK)
          , SKU (NOLOCK)
-      WHERE SKU.Sku = @c_sku
-      AND   PACK.PackKey = SKU.PACKKey
-      AND   SKU.StorerKey = @c_StorerKey
+      WHERE SKU.Sku = @c_sku AND PACK.PackKey = SKU.PACKKey AND SKU.StorerKey = @c_StorerKey
 
       SELECT @c_pickheaderkey = NULL
 
       SELECT @c_pickheaderkey = ISNULL(PickHeaderKey, '')
       FROM PICKHEADER (NOLOCK)
-      WHERE ExternOrderKey = @c_loadkey
-      AND   Zone = '3'
-      AND   OrderKey = @c_orderkey
+      WHERE ExternOrderKey = @c_loadkey AND Zone = '3' AND OrderKey = @c_orderkey
 
       SELECT @c_SkuPattern = ISNULL(RTRIM(SValue), '')
       FROM StorerConfig WITH (NOLOCK)
-      WHERE StorerKey = @c_StorerKey
-      AND   ConfigKey = 'PickSlip06_SkuPattern'
+      WHERE StorerKey = @c_StorerKey AND ConfigKey = 'PickSlip06_SkuPattern'
 
       IF @c_SkuPattern = '2'
       BEGIN
@@ -516,10 +506,9 @@ BEGIN
          END
       END
 
-      IF  @c_SkuPattern IN ( '1', '2' )
-      AND LEN(@c_Style + @c_Color + @c_Size + @c_Measurement) > 0
+      IF @c_SkuPattern IN ( '1', '2' ) AND LEN(@c_Style + @c_Color + @c_Size + @c_Measurement) > 0
       BEGIN
-         SET @c_sku = @c_Style + '-' + @c_Color + '-' + @c_Size + '-' + @c_Measurement
+         SET @c_sku = @c_Style + N'-' + @c_Color + N'-' + @c_Size + N'-' + @c_Measurement
       END
 
       SET @n_WrapSkuDesc = 0
@@ -552,17 +541,17 @@ BEGIN
                             , TempQty1, TempQty2, PrintedFlag, Zone, Lot, Carrierkey, VehicleNo, Lottable01, Lottable04
                             , LabelPrice, ExternOrderKey, Facility, Lottable02, DeliveryNote, DeliveryDate, SKU2
                             , Consigneekey2, WrapSkuDesc, ShowAltSku, CustCol01, CustCol01_Text, CustCol02
-                            , CustCol02_Text, CustCol03, CustCol03_Text, ShowCustomFormula, LogicalLoc)
+                            , CustCol02_Text, CustCol03, CustCol03_Text, ShowCustomFormula, LogicalLoc, Storerkey)   --GTZ01
       VALUES (@c_pickheaderkey, @c_loadkey, @c_orderkey, @c_ConsigneeKey, @c_Company, @c_Addr1, @c_Addr2, 0, @c_Addr3
             , @c_PostCode, @c_Route, @c_Route_Desc, @c_TrfRoom, @c_Notes1, @n_RowNo, @c_Notes2, @c_loc, @c_sku
             -- @c_SKUDesc,         @n_Qty,           CAST(@c_UOM as INT),
-            -- @n_UOMQty,          @c_PrintedFlag,   '3',
+         -- @n_UOMQty,          @c_PrintedFlag,   '3',
             , @c_SkuDesc, @n_qty, @n_CaseCnt, @n_InnerPack, @c_PrintedFlag, '3', @c_Lot, @c_Carrierkey, @c_VehicleNo
             , @c_Lottable01, @d_Lottable04, @c_labelPrice, @c_externorderkey, @c_Facility, @c_Lottable02
             , @c_DeliveryNote, @d_DeliveryDate, @c_Sku2, @c_Consigneekey2, @n_WrapSkuDesc, @n_ShowAltSku, @n_CustCol01
             , @c_CustCol01_Text, @n_CustCol02, @c_CustCol02_Text, @n_CustCol03, @c_CustCol03_Text, @c_ShowCustomFormula
             , CASE WHEN @c_SortByLogicalLoc = 'Y' THEN @c_logicalloc
-                   ELSE '' END)
+                   ELSE '' END, @c_StorerKey)   --GTZ01
 
       SELECT @c_PrevOrderKey = @c_orderkey
 
@@ -588,8 +577,7 @@ BEGIN
    BEGIN
       SELECT @n_pickslips_required = COUNT(DISTINCT OrderKey)
       FROM #temp_pick
-      WHERE dbo.fnc_RTRIM(PickSlipNo) IS NULL
-      OR    dbo.fnc_RTRIM(PickSlipNo) = ''
+      WHERE dbo.fnc_RTRIM(PickSlipNo) IS NULL OR dbo.fnc_RTRIM(PickSlipNo) = ''
       IF @@ERROR <> 0
       BEGIN
          GOTO FAILURE
@@ -608,16 +596,14 @@ BEGIN
             GOTO FAILURE
 
 
-         SELECT @c_orderkey = ''
+         SELECT @c_orderkey = N''
          WHILE 1 = 1
          BEGIN
             SELECT @c_orderkey = MIN(OrderKey)
             FROM #temp_pick
-            WHERE OrderKey > @c_orderkey
-            AND   PickSlipNo IS NULL
+            WHERE OrderKey > @c_orderkey AND PickSlipNo IS NULL
 
-            IF dbo.fnc_RTRIM(@c_orderkey) IS NULL
-            OR dbo.fnc_RTRIM(@c_orderkey) = ''
+            IF dbo.fnc_RTRIM(@c_orderkey) IS NULL OR dbo.fnc_RTRIM(@c_orderkey) = ''
                BREAK
 
             IF NOT EXISTS (  SELECT 1
@@ -678,8 +664,7 @@ BEGIN
       IF (  SELECT COUNT(DISTINCT StorerKey)
             FROM ORDERS (NOLOCK)
                , LoadPlanDetail (NOLOCK)
-            WHERE LoadPlanDetail.OrderKey = ORDERS.OrderKey
-            AND   LoadPlanDetail.LoadKey = @c_loadkey) = 1
+            WHERE LoadPlanDetail.OrderKey = ORDERS.OrderKey AND LoadPlanDetail.LoadKey = @c_loadkey) = 1
       BEGIN
          -- Only 1 storer found
          SELECT @cStorerKey = N''
@@ -691,9 +676,7 @@ BEGIN
 
          IF EXISTS (  SELECT 1
                       FROM StorerConfig (NOLOCK)
-                      WHERE ConfigKey = 'AUTOSCANIN'
-                      AND   SValue = '1'
-                      AND   StorerKey = @cStorerKey)
+                      WHERE ConfigKey = 'AUTOSCANIN' AND SValue = '1' AND StorerKey = @cStorerKey)
          BEGIN
             -- Configkey is setup
             DECLARE @cPickSlipNo NVARCHAR(10)
@@ -705,8 +688,7 @@ BEGIN
                FROM #temp_pick
                WHERE PickSlipNo > @cPickSlipNo
 
-               IF dbo.fnc_RTRIM(@cPickSlipNo) IS NULL
-               OR dbo.fnc_RTRIM(@cPickSlipNo) = ''
+               IF dbo.fnc_RTRIM(@cPickSlipNo) IS NULL OR dbo.fnc_RTRIM(@cPickSlipNo) = ''
                   BREAK
 
                IF NOT EXISTS (  SELECT 1
@@ -724,71 +706,72 @@ BEGIN
    IF @c_PreGenRptData = ''
    BEGIN
       --WL01 S
-      ;WITH CTE AS (
-         SELECT PickSlipNo
-              , LoadKey
-              , OrderKey
-              , ConsigneeKey
-              , Company
-              , Addr1
-              , Addr2
-              , Addr3
-              , PostCode
-              , Route
-              , Route_Desc
-              , TrfRoom
-              , Notes1
-              , Notes2
-              , LOC
-              , SKU
-              , SkuDesc
-              , Qty
-              , TempQty1
-              , TempQty2
-              , PrintedFlag
-              , Zone
-              , PgGroup
-              , RowNum
-              , Lot
-              , Carrierkey
-              , VehicleNo
-              , Lottable01
-              , Lottable04
-              , LabelPrice
-              , ExternOrderKey
-              , Facility
-              , Lottable02
-              , DeliveryNote
-              , DeliveryDate
-              , SKU2
-              , Consigneekey2
-              , WrapSkuDesc
-              , ShowAltSku
-              , CustCol01
-              , CustCol01_Text
-              , CustCol02
-              , CustCol02_Text
-              , CustCol03
-              , CustCol03_Text
-              , CASE WHEN TempQty1 > 0
-                     AND  ShowCustomFormula = 'Y' THEN FLOOR(Qty / TempQty1)
-                     ELSE 0 END AS CS
-              , CASE WHEN TempQty2 > 0
-                     AND  ShowCustomFormula = 'Y' THEN
-                        FLOOR((Qty - (CASE WHEN TempQty1 > 0 THEN FLOOR(Qty / TempQty1) * TempQty1
-                                           ELSE 0 END)) / TempQty2)
-                     ELSE 0 END AS InnerP
-              , CASE WHEN ShowCustomFormula = 'Y' THEN
-                        Qty - (CASE WHEN TempQty1 > 0 THEN FLOOR(Qty / TempQty1) * TempQty1
-                                    ELSE 0 END)
-                        - (CASE WHEN TempQty2 > 0 THEN
-                                   FLOOR((Qty - (CASE WHEN TempQty1 > 0 THEN FLOOR(Qty / TempQty1) * TempQty1
-                                                      ELSE 0 END)) / TempQty2)
-                                ELSE 0 END * TempQty2)
-                     ELSE 0 END AS EA
-              , ShowCustomFormula
-              , LogicalLoc
-         FROM #temp_pick)
+      ;WITH CTE AS
+       (
+          SELECT PickSlipNo
+               , LoadKey
+               , OrderKey
+               , ConsigneeKey
+               , Company
+               , Addr1
+               , Addr2
+               , Addr3
+               , PostCode
+               , Route
+               , Route_Desc
+               , TrfRoom
+               , Notes1
+               , Notes2
+               , LOC
+               , SKU
+               , SkuDesc
+               , Qty
+               , TempQty1
+               , TempQty2
+               , PrintedFlag
+               , Zone
+               , PgGroup
+               , RowNum
+               , Lot
+               , Carrierkey
+               , VehicleNo
+               , Lottable01
+               , Lottable04
+               , LabelPrice
+               , ExternOrderKey
+               , Facility
+               , Lottable02
+               , DeliveryNote
+               , DeliveryDate
+               , SKU2
+               , Consigneekey2
+               , WrapSkuDesc
+               , ShowAltSku
+               , CustCol01
+               , CustCol01_Text
+               , CustCol02
+               , CustCol02_Text
+               , CustCol03
+               , CustCol03_Text
+               , CASE WHEN TempQty1 > 0 AND ShowCustomFormula = 'Y' THEN FLOOR(Qty / TempQty1)
+                      ELSE 0 END AS CS
+               , CASE WHEN TempQty2 > 0 AND ShowCustomFormula = 'Y' THEN
+                         FLOOR((Qty - (CASE WHEN TempQty1 > 0 THEN FLOOR(Qty / TempQty1) * TempQty1
+                                            ELSE 0 END)) / TempQty2)
+                      ELSE 0 END AS InnerP
+               , CASE WHEN ShowCustomFormula = 'Y' THEN
+                         Qty - (CASE WHEN TempQty1 > 0 THEN FLOOR(Qty / TempQty1) * TempQty1
+                                     ELSE 0 END)
+                         - (CASE WHEN TempQty2 > 0 THEN
+                                    FLOOR((Qty - (CASE WHEN TempQty1 > 0 THEN FLOOR(Qty / TempQty1) * TempQty1
+                                                       ELSE 0 END)) / TempQty2)
+                                 ELSE 0 END * TempQty2)
+                      ELSE 0 END AS EA
+               , ShowCustomFormula
+               , LogicalLoc
+               , Storerkey   --GTZ01
+          FROM #temp_pick
+       )
       SELECT PickSlipNo
            , LoadKey
            , OrderKey
@@ -817,13 +800,13 @@ BEGIN
            , Carrierkey
            , VehicleNo
            , Lottable01
-           , Lottable04
+           , [dbo].[fnc_ConvSFTimeZone](StorerKey, Facility, Lottable04) AS Lottable04   --GTZ01
            , LabelPrice
            , ExternOrderKey
            , Facility
            , Lottable02
            , DeliveryNote
-           , DeliveryDate
+           , [dbo].[fnc_ConvSFTimeZone](StorerKey, Facility, DeliveryDate) AS DeliveryDate   --GTZ01
            , SKU2
            , Consigneekey2
            , WrapSkuDesc
@@ -834,14 +817,21 @@ BEGIN
            , CustCol02_Text
            , CustCol03
            , CustCol03_Text
-           , CASE WHEN ShowCustomFormula = 'Y' THEN CASE WHEN ISNULL(CS,0) = 0 THEN NULL ELSE CS END ELSE NULL END AS CS
-           , CASE WHEN ShowCustomFormula = 'Y' THEN CASE WHEN ISNULL(InnerP,0) = 0 THEN NULL ELSE InnerP END ELSE NULL END AS InnerP
-           , CASE WHEN ShowCustomFormula = 'Y' THEN CASE WHEN ISNULL(EA,0) = 0 THEN NULL ELSE EA END ELSE NULL END EA
+           , CASE WHEN ShowCustomFormula = 'Y' THEN CASE WHEN ISNULL(CS, 0) = 0 THEN NULL
+                                                         ELSE CS END
+                  ELSE NULL END AS CS
+           , CASE WHEN ShowCustomFormula = 'Y' THEN CASE WHEN ISNULL(InnerP, 0) = 0 THEN NULL
+                                                         ELSE InnerP END
+                  ELSE NULL END AS InnerP
+           , CASE WHEN ShowCustomFormula = 'Y' THEN CASE WHEN ISNULL(EA, 0) = 0 THEN NULL
+                                                         ELSE EA END
+                  ELSE NULL END EA
            , ShowCustomFormula
            , LogicalLoc
+           , [dbo].[fnc_ConvSFTimeZone](StorerKey, Facility, GETDATE()) AS CurrentDateTime   --GTZ01
       FROM CTE
       ORDER BY RowNum
-      --WL01 E
+   --WL01 E
       --ORDER BY CASE WHEN ISNULL(OrderKey, '') = '' THEN 2
       --              ELSE 1 END
       --       , LogicalLoc
@@ -859,8 +849,3 @@ BEGIN
       DROP TABLE #temp_pick
 
 END
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_LP_PLISTN_001] TO [NSQL]
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_LP_PLISTN_001] TO LogiReportRoleWM
-GO

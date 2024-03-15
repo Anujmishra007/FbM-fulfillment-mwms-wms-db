@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: RPT_MB_MANSUM_006                                         */
 /*                                                                      */
-/* GitLab Version: 1.0                                                  */
+/* GitLab Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 14-Dec-2022 WLChooi  1.0   DevOps Combine Script                     */
+/* 31-Oct-2023 WLChooi  1.1   UWP-10213 - Global Timezone (GTZ01)       */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_RPT_MB_MANSUM_006]
@@ -87,11 +88,11 @@ BEGIN
         , MBOLDETAIL.OrderKey
         , MBOLDETAIL.ExternOrderKey
         , MBOLDETAIL.Description
-        , MBOLDETAIL.DeliveryDate
+        , [dbo].[fnc_ConvSFTimeZone](ORDERS.StorerKey, ORDERS.Facility, MBOLDETAIL.DeliveryDate) AS DeliveryDate   --GTZ01
         , totalqty = 0
         , totalorders = 0
         , totalcust = 0
-        , MBOL.DepartureDate
+        , [dbo].[fnc_ConvSFTimeZone](ORDERS.StorerKey, ORDERS.Facility, MBOL.DepartureDate) AS DepartureDate   --GTZ01
         , totalwgt = 99999999.99
         , totalcarton = 0
         , totaleach = 0
@@ -114,6 +115,7 @@ BEGIN
         , @c_FacilityPhone AS FacilityPhone
         , @c_FacilityFax AS FacilityFax
         , @c_Company AS Company
+        , [dbo].[fnc_ConvSFTimeZone](ORDERS.StorerKey, ORDERS.Facility, GETDATE()) AS CurrentDateTime   --GTZ01
    INTO #RESULT
    FROM MBOL WITH (NOLOCK)
    INNER JOIN MBOLDETAIL WITH (NOLOCK) ON MBOL.MbolKey = MBOLDETAIL.MbolKey
@@ -208,8 +210,3 @@ BEGIN
    IF OBJECT_ID('tempdb..#TEMPTOTAL') IS NOT NULL
       DROP TABLE #TEMPTOTAL
 END
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_MB_MANSUM_006] TO [NSQL]
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_MB_MANSUM_006] TO [LogiReportRoleWM]
-GO

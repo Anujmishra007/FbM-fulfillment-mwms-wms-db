@@ -3,7 +3,6 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /*************************************************************************/
 /* Stored Procedure: isp_RPT_ST_CCSHEET_001                              */
 /* Creation Date: 31-05-2021                                             */
@@ -14,13 +13,14 @@ GO
 /*                                                                       */
 /* Called By:                                                            */
 /*                                                                       */
-/* GitLab Version: 1.0                                                   */
+/* GitLab Version: 1.1                                                   */
 /*                                                                       */
 /* Data Modifications:                                                   */
 /*                                                                       */
 /* Updates:                                                              */
 /* Date        Author   Ver   Purposes                                   */
 /* 31-05-2021  EnTong   1.0   DevOps Combine Script                      */
+/* 31-Oct-2023 WLChooi  1.1   UWP-10213 - Global Timezone (GTZ01)        */
 /*************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_RPT_ST_CCSHEET_001]
@@ -100,12 +100,12 @@ BEGIN
             END
          END As Lottable03,
          CASE CCDetail.FinalizeFlag
-            WHEN 'N' THEN CCDetail.Lottable04
+            WHEN 'N' THEN [dbo].[fnc_ConvSFTimeZone](CCDetail.Storerkey, LOC.Facility, CCDetail.Lottable04)   --GTZ01
             WHEN 'Y' THEN
             CASE @c_CountNo
-               WHEN '1' THEN CCDetail.Lottable04
-               WHEN '2' THEN CCDetail.Lottable04_Cnt2
-               WHEN '3' THEN CCDetail.Lottable04_Cnt3
+               WHEN '1' THEN [dbo].[fnc_ConvSFTimeZone](CCDetail.Storerkey, LOC.Facility, CCDetail.Lottable04)        --GTZ01
+               WHEN '2' THEN [dbo].[fnc_ConvSFTimeZone](CCDetail.Storerkey, LOC.Facility, CCDetail.Lottable04_Cnt2)   --GTZ01
+               WHEN '3' THEN [dbo].[fnc_ConvSFTimeZone](CCDetail.Storerkey, LOC.Facility, CCDetail.Lottable04_Cnt3)   --GTZ01
             END
          END As Lottable04,
          PACK.PackKey,
@@ -113,7 +113,7 @@ BEGIN
          PACK.InnerPack,
          SKU.DESCR,
          CCDetail.CCDetailKey,
-         CCDetail.Lottable05,
+         [dbo].[fnc_ConvSFTimeZone](CCDetail.Storerkey, LOC.Facility, CCDetail.Lottable05) AS Lottable05,   --GTZ01
          CCDetail.FinalizeFlag,
          LOC.Facility,
          LOC.PutawayZone,
@@ -126,7 +126,8 @@ BEGIN
          CASE CCDetail.FinalizeFlag
             WHEN 'N' THEN '1'
             WHEN 'Y' THEN @c_CountNo
-         END AS CountNo
+         END AS CountNo,
+         [dbo].[fnc_ConvSFTimeZone](CCDetail.Storerkey, LOC.Facility, GETDATE()) AS CurrentDateTime   --GTZ01
    FROM CCDetail (NOLOCK)
    LEFT OUTER JOIN SKU (NOLOCK) ON ( CCDetail.Storerkey = SKU.StorerKey and CCDetail.Sku = SKU.Sku )
    LEFT OUTER JOIN PACK (NOLOCK) ON ( SKU.PACKKey = PACK.PackKey )
@@ -194,11 +195,11 @@ BEGIN
                            END
          END As Lottable03,
          CASE CCDetail.FinalizeFlag
-            WHEN 'N' THEN CCDetail.Lottable04
+            WHEN 'N' THEN [dbo].[fnc_ConvSFTimeZone](CCDetail.Storerkey, LOC.Facility, CCDetail.Lottable04)   --GTZ01
             WHEN 'Y' THEN CASE @c_CountNo
-                              WHEN '1' THEN CCDetail.Lottable04
-                              WHEN '2' THEN CCDetail.Lottable04_Cnt2
-                              WHEN '3' THEN CCDetail.Lottable04_Cnt3
+                              WHEN '1' THEN [dbo].[fnc_ConvSFTimeZone](CCDetail.Storerkey, LOC.Facility, CCDetail.Lottable04)        --GTZ01
+                              WHEN '2' THEN [dbo].[fnc_ConvSFTimeZone](CCDetail.Storerkey, LOC.Facility, CCDetail.Lottable04_Cnt2)   --GTZ01
+                              WHEN '3' THEN [dbo].[fnc_ConvSFTimeZone](CCDetail.Storerkey, LOC.Facility, CCDetail.Lottable04_Cnt3)   --GTZ01
                            END
          END As Lottable04,
          '' As Packkey,
@@ -206,7 +207,7 @@ BEGIN
          '' As InnerPack,
          SKU.DESCR As DESCR,
          CCDetail.CCDetailKey,
-         CCDetail.Lottable05,
+         [dbo].[fnc_ConvSFTimeZone](CCDetail.Storerkey, LOC.Facility, CCDetail.Lottable05) AS Lottable05,   --GTZ01
          CCDetail.FinalizeFlag,
          LOC.Facility,
          LOC.PutawayZone,
@@ -219,7 +220,8 @@ BEGIN
          CASE CCDetail.FinalizeFlag
             WHEN 'N' THEN '1'
             WHEN 'Y' THEN @c_CountNo
-         END AS CountNo
+         END AS CountNo,
+         [dbo].[fnc_ConvSFTimeZone](CCDetail.Storerkey, LOC.Facility, GETDATE()) AS CurrentDateTime   --GTZ01
    FROM CCDetail (NOLOCK)
    LEFT OUTER JOIN SKU (NOLOCK) ON ( CCDetail.Storerkey = SKU.StorerKey and CCDetail.Sku = SKU.Sku )
    JOIN LOC (NOLOCK) ON ( CCDetail.Loc = LOC.Loc )
@@ -237,8 +239,3 @@ BEGIN
    ORDER BY LOC.Loc, CCDetail.CCSheetNo
 
 END
-GO
-GRANT EXECUTE ON  [dbo].[isp_RPT_ST_CCSHEET_001] TO [NSQL]
-GO
-GRANT EXECUTE ON  [dbo].[isp_RPT_ST_CCSHEET_001] TO [LogiReportRoleWM]
-GO

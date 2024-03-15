@@ -13,7 +13,7 @@ GO
 /*                                                                         */
 /* Called By: RPT_ORD_DELNOTE_001                                          */
 /*                                                                         */
-/* GitLab Version: 1.1                                                     */
+/* GitLab Version: 1.2                                                     */
 /*                                                                         */
 /* Version: 1.0                                                            */
 /*                                                                         */
@@ -23,6 +23,7 @@ GO
 /* Date         Author  Ver   Purposes                                     */
 /* 14-Jan-2022  WZPang  1.0   DevOps Combine Script                        */
 /* 17-Nov-2023  WLChooi 1.1   UWP-10938 - Add Orderdetail.UDF01 (WL01)     */
+/* 31-Oct-2023  WLChooi 1.2   UWP-10213 - Global Timezone (GTZ01)          */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_RPT_ORD_DELNOTE_001] @c_Orderkey NVARCHAR(20)
 AS
@@ -49,7 +50,7 @@ BEGIN
         , ORDERS.C_Address4
         , ORDERS.Notes
         , STORER.Company
-        , ORDERS.AddDate
+        , [dbo].[fnc_ConvSFTimeZone](ORDERS.StorerKey, ORDERS.Facility, ORDERS.AddDate) AS AddDate   --GTZ01
         , ORDERS.ExternOrderKey
         , ORDERS.OrderKey
         , ORDERS.Door
@@ -70,10 +71,10 @@ BEGIN
         , ISNULL(ORDERDETAIL.UserDefine03, '') AS 'odudf03'
         , ISNULL(CL1.Short, 'N') AS 'ShowBarcode'
         , ISNULL(CL2.Short, 'N') AS 'ShowDeliveryDate'
-        , ORDERS.DeliveryDate
+        , [dbo].[fnc_ConvSFTimeZone](ORDERS.StorerKey, ORDERS.Facility, ORDERS.DeliveryDate) AS DeliveryDate   --GTZ01
         , ISNULL(CL3.Short, 'N') AS 'ShowSPRemarks'
         , @c_RetVal AS 'LogoName'
-        , GETDATE() AS CurrentDateTime   --WL01
+        , [dbo].[fnc_ConvSFTimeZone](ORDERS.StorerKey, ORDERS.Facility, GETDATE()) AS CurrentDateTime   --WL01   --GTZ01
         , IIF(ISNULL(CL4.Short,'N') = 'Y', 'HEADER REF: ' + TRIM(ISNULL(ORDERDETAIL.UserDefine01, '')), '') AS SHOWODUDF01   --WL01
    FROM ORDERS WITH (NOLOCK)
    JOIN ORDERDETAIL WITH (NOLOCK) ON (ORDERS.OrderKey = ORDERDETAIL.OrderKey)
@@ -111,8 +112,3 @@ BEGIN
           , CASE WHEN ISNULL(C.Short, 'N') = 'N' THEN ORDERDETAIL.OrderLineNumber END ASC
           , CASE WHEN ISNULL(C.Short, 'N') = 'N' THEN ORDERDETAIL.Sku END ASC
 END
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_ORD_DELNOTE_001] TO [NSQL]
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_ORD_DELNOTE_001] TO [LogiReportRoleWM]
-GO

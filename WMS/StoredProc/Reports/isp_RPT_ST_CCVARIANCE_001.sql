@@ -140,8 +140,3 @@ BEGIN
           , CCDetail.Loc
 
 END -- End Procedure
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_ST_CCVARIANCE_001] TO [NSQL]
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_ST_CCVARIANCE_001] TO [LogiReportRoleWM]
-GO

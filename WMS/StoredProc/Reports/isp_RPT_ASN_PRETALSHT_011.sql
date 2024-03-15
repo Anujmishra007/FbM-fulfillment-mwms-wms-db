@@ -13,7 +13,7 @@ GO
 /*                                                                         */
 /* Called By: RPT_ASN_PRETALSHT_011                                        */
 /*                                                                         */
-/* GitLab Version: 1.2                                                     */
+/* GitLab Version: 1.3                                                     */
 /*                                                                         */
 /* Version: 1.0                                                            */
 /*                                                                         */
@@ -24,6 +24,7 @@ GO
 /* 03-May-2023  WZPang  1.0   DevOps Combine Script                        */
 /* 26-Sep-2023  WLChooi 1.1   UWP-8576 - Show ExternPOKey (WL01)           */
 /* 15-Oct-2023  WLChooi 1.2   UWP-9559 - Show Notes (WL02)                 */
+/* 31-Oct-2023  WLChooi 1.3   UWP-10213 - Global Timezone (GTZ01)          */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_RPT_ASN_PRETALSHT_011]
@@ -54,12 +55,12 @@ BEGIN
    GROUP BY RECEIPT.RECEIPTKEY
 
    SELECT RECEIPT.ReceiptKey,
-          RECEIPT.ReceiptDate,
+          [dbo].[fnc_ConvSFTimeZone](RECEIPT.StorerKey, RECEIPT.Facility, RECEIPT.ReceiptDate) AS ReceiptDate,   --GTZ01
           RECEIPT.WarehouseReference,
           RECEIPT.ExternReceiptkey,
           RECEIPT.Facility,           
           RECEIPT.StorerKey,          
-          RECEIPT.AddDate,            
+          [dbo].[fnc_ConvSFTimeZone](RECEIPT.StorerKey, RECEIPT.Facility, RECEIPT.AddDate) AS AddDate,   --GTZ01            
           RECEIPT.AddWho,             
           RECEIPT.SellerName,         
           RECEIPTDETAIL.ExternPOKey,
@@ -71,7 +72,7 @@ BEGIN
           RECEIPTDETAIL.Lottable01,
           RECEIPTDETAIL.Lottable02,
           Lottable03 = IIF(ISNULL(CL.Short, 'N') = 'Y', RECEIPTDETAIL.ExternPOKey, RECEIPTDETAIL.Lottable03),   --WL01
-          RECEIPTDETAIL.Lottable04,
+          [dbo].[fnc_ConvSFTimeZone](RECEIPT.StorerKey, RECEIPT.Facility, RECEIPTDETAIL.Lottable04) AS Lottable04,   --GTZ01
           RECEIPTDETAIL.QtyReceived,   
           PRINCIPAL = SKU.SUSR3,
           PRINDESC = CODELKUP.DESCRIPTION,
@@ -92,7 +93,8 @@ BEGIN
           RECEIPT.UserDefine01,
           RECEIPT.UserDefine03,
           Lottable03Title = IIF(ISNULL(CL.Short, 'N') = 'Y', 'ExternPOKey', 'Lottable03'),   --WL01
-          SCNotes = IIF(LEN(SC.Notes) >= 22, IIF(SUBSTRING(SC.Notes, 22, 1) = 'Y', SUBSTRING(TRIM(SC.Notes), 22, 300), ''), '')   --WL02
+          SCNotes = IIF(LEN(SC.Notes) >= 22, IIF(SUBSTRING(SC.Notes, 22, 1) = 'Y', SUBSTRING(TRIM(SC.Notes), 22, 300), ''), ''),   --WL02
+          [dbo].[fnc_ConvSFTimeZone](RECEIPT.StorerKey, RECEIPT.Facility, GETDATE()) AS CurrentDateTime   --GTZ01
    FROM RECEIPT (NOLOCK)
    JOIN RECEIPTDETAIL (NOLOCK) ON RECEIPT.ReceiptKey = RECEIPTDETAIL.ReceiptKey
    JOIN SKU (NOLOCK) ON SKU.StorerKey = RECEIPTDETAIL.StorerKey AND SKU.Sku = RECEIPTDETAIL.Sku
@@ -136,8 +138,3 @@ BEGIN
       BEGIN TRAN;
 
 END
-GO
-GRANT EXECUTE ON  [dbo].[isp_RPT_ASN_PRETALSHT_011] TO [NSQL]
-GO
-GRANT EXECUTE ON  [dbo].[isp_RPT_ASN_PRETALSHT_011] TO [LogiReportRoleWM]
-GO
