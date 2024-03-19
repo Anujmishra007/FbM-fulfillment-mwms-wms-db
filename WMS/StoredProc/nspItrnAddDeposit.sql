@@ -1,7 +1,3 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = N'nspItrnAddDeposit' AND type = 'P')
-   DROP PROCEDURE nspItrnAddDeposit
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -9,14 +5,14 @@ GO
 /************************************************************************/
 /* Stored Procedure: nspItrnAddDeposit                                  */
 /* Creation Date:                                                       */
-/* Copyright: IDS                                                       */
+/* Copyright: Maersk                                                    */
 /* Written by:                                                          */
 /*                                                                      */
 /* Purpose:                                                             */
 /*                                                                      */
 /* Called By:                                                           */
 /*                                                                      */
-/* PVCS Version: 1.4                                                    */
+/* PVCS Version: 1.5                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -33,9 +29,11 @@ GO
 /* 22-MAR-2017  JayLim        SQL2012 compatibility modification (Jay01)*/
 /* 27-Jul-2017  TLTING   1.1  SET Option                                */
 /* 07-Feb-2016  SWT02         Channel Management                        */
+/* 15-Mar-2024  Wan01    1.5  UWP-16968-Post PalletType to Inventory When*/
+/*                            Finalize                                  */
 /************************************************************************/
 
-CREATE PROC    [dbo].[nspItrnAddDeposit]
+CREATE OR ALTER PROC [dbo].[nspItrnAddDeposit]
                @n_ItrnSysId    int
 ,              @c_StorerKey    NVARCHAR(15)
 ,              @c_Sku          NVARCHAR(20)
@@ -78,7 +76,8 @@ CREATE PROC    [dbo].[nspItrnAddDeposit]
 ,              @n_err          int        OUTPUT
 ,              @c_errmsg       NVARCHAR(250)  OUTPUT
 ,              @c_Channel      NVARCHAR(20)   = '' -- SWT02
-,              @n_Channel_ID   BIGINT         = 0  OUTPUT -- SWT02   
+,              @n_Channel_ID   BIGINT         = 0  OUTPUT -- SWT02 
+,              @c_PalletType   NVARCHAR(10)   = ''                                  -- (Wan01) 
 AS
 BEGIN
    SET NOCOUNT ON
@@ -229,7 +228,8 @@ BEGIN
       ,         UOMQty
       ,         EffectiveDate
       ,         Channel  -- SWT02 
-      ,         Channel_ID -- SWT02                    
+      ,         Channel_ID -- SWT02
+      ,         PalletType                                                          --(Wan01)
       )
       VALUES (
                 @c_ItrnKey
@@ -275,7 +275,8 @@ BEGIN
       ,         @n_UOMQty
       ,         @d_EffectiveDate
       ,         @c_Channel -- SWT02
-      ,         @n_Channel_ID -- SWT02       
+      ,         @n_Channel_ID -- SWT02 
+      ,         @c_PalletType                                                       --(Wan01)      
       )
       SELECT @n_err = @@ERROR
       IF NOT @n_err = 0
