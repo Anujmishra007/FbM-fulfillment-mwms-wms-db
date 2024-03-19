@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[nspItrnAddDepositCheck]') AND OBJECTPROPERTY(Id, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[nspItrnAddDepositCheck]
-GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -8,7 +5,7 @@ GO
 /************************************************************************/
 /* Stored Procedure: nspItrnAddDepositCheck                             */
 /* Creation Date:                                                       */
-/* Copyright: IDS                                                       */
+/* Copyright: Maersk                                                    */
 /* Written by:                                                          */
 /*                                                                      */
 /* Purpose:                                                             */
@@ -41,9 +38,10 @@ GO
 /*                            Inventory Ignore QtyOnHold - CR           */
 /* 26-SEP-2019  Wan02     1.7 WMS-9995 [CN] NIKESDC_Exceed_Hold ASN for */
 /*                            Channel                                   */
+/* 15-Mar-2024  Wan03     1.8 UWP-16968-Post PalletType to Inventory When*/
+/*                            Finalize                                  */
 /************************************************************************/
-
-CREATE PROC [dbo].[nspItrnAddDepositCheck]
+CREATE OR ALTER PROC [dbo].[nspItrnAddDepositCheck]
      @c_itrnkey      NVARCHAR(10)
    , @c_StorerKey    NVARCHAR(15)
    , @c_Sku          NVARCHAR(20)
@@ -82,7 +80,8 @@ CREATE PROC [dbo].[nspItrnAddDepositCheck]
    , @n_err          int        OUTPUT
    , @c_ErrMsg       NVARCHAR(250)  OUTPUT
    , @c_Channel      NVARCHAR(20) = '' --(SWT02)
-   , @n_Channel_ID   BIGINT = 0 OUTPUT --(SWT02)  
+   , @n_Channel_ID   BIGINT = 0 OUTPUT --(SWT02)
+   , @c_PalletType   NVARCHAR(10)   = ''                                            -- (Wan03) 
 AS
 BEGIN
    SET NOCOUNT ON
@@ -459,11 +458,13 @@ BEGIN
 
             IF @c_allowidqtyupdate = '1'
             BEGIN
-               INSERT INTO ID (ID, QTY, STATUS,PACKKEY) VALUES (@c_toid, @n_Qty, @c_status,@c_packkey)
+               INSERT INTO ID (ID, QTY, STATUS, PACKKEY, PalletType)                --(Wan03)
+               VALUES (@c_toid, @n_Qty, @c_status, @c_packkey, @c_PalletType)       --(Wan03)
             END
             ELSE
             BEGIN
-               INSERT INTO ID (ID, QTY, STATUS,PACKKEY) VALUES (@c_toid, 0, @c_status,@c_packkey)
+               INSERT INTO ID (ID, QTY, STATUS, PACKKEY, PalletType)                --(Wan03)
+               VALUES (@c_toid, 0, @c_status,@c_packkey, @c_PalletType)             --(Wan03)
             END
 
             SELECT @n_err = @@ERROR
@@ -490,7 +491,10 @@ BEGIN
 
             IF @c_allowidqtyupdate = '1'
             BEGIN
-               UPDATE ID with (ROWLOCK) SET QTY = QTY + @n_Qty, Status = @c_Status, Packkey = @c_packkey WHERE ID = @c_toid
+               UPDATE ID with (ROWLOCK) 
+               SET QTY = QTY + @n_Qty, Status = @c_Status, Packkey = @c_packkey
+                 , PalletType = @c_PalletType                                       --(Wan03)               
+               WHERE ID = @c_toid
             END
             ELSE
             BEGIN
@@ -500,7 +504,9 @@ BEGIN
                --tlting01
                IF EXISTS ( SELECT 1 FROM  ID with (NOLOCK) WHERE ID = @c_toid AND ( [Status] <> @c_Status OR Packkey = @c_packkey ) )
                BEGIN
-                  UPDATE ID with (ROWLOCK) SET Status = @c_Status, Packkey = @c_packkey WHERE ID = @c_toid    --tlting01
+                  UPDATE ID with (ROWLOCK) SET Status = @c_Status, Packkey = @c_packkey 
+                  , PalletType = @c_PalletType                                      --(Wan03)
+                  WHERE ID = @c_toid    --tlting01
                END
             END
 
