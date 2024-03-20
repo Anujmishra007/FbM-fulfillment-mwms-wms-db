@@ -35,6 +35,9 @@ GO
 /*                            Duplicate Movable Unit ID Error When Save when*/
 /*                            exists Receipt Reversed Detail               */
 /*                            DevObj Combine Script                        */
+/* 2023-03-18  Wan09    1.9   UWP-16925 - Add PalletType to Receiptdetail  */
+/*                            Validate Pallettype is Mandatory is Facility */
+/*                            is setup pallettypeinuse = 'Y'               */
 /***************************************************************************/   
 CREATE OR ALTER PROC [WM].[lsp_Validate_ReceiptDetail_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
@@ -259,8 +262,9 @@ BEGIN
          ,  @b_ValidID                       INT         = 0             --(Wan05)  
          
          ,  @n_BeforeReceivedQty_Del         INT         = 0             --(Wan07)
+         ,  @c_PalletType                    NVARCHAR(10)= ''                       --(Wan08)
 
-      IF EXISTS ( SELECT 1                                                          --(Wan06) - START
+      IF EXISTS ( SELECT 1                                                          --(Wan08) - START
                  FROM tempdb.INFORMATION_SCHEMA.COLUMNS c 
                  JOIN tempdb.dbo.SysObjects AS s ON s.[name] = c.TABLE_NAME 
                  WHERE s.id = OBJECT_ID('tempdb..#VALDN')                     
@@ -276,7 +280,8 @@ BEGIN
          BEGIN
             GOTO EXIT_SP
          END
-      END                                                                           --(Wan06) - END
+      END                                                                           --(Wan08) - END
+
       SELECT TOP 1 
             @c_ReceiptKey   = RD.ReceiptKey
          ,  @c_ReceiptLineNo= RD.ReceiptLineNumber
@@ -300,6 +305,7 @@ BEGIN
          ,  @dt_Lottable15  = RD.Lottable15     --(Wan01)
          ,  @c_ToID          = ISNULL(RD.ToID,'')              --(Wan03)
          ,  @n_BeforeReceivedQty = RD.BeforeReceivedQty        --(Wan05)
+         ,  @c_PalletType   = RD.PalletType                    --(Wan09)
       FROM  #VALDN RD  --NJOW01
 
       SELECT @n_BeforeReceivedQty_Del = r.BeforeReceivedQty    --(Wan07)   - START
@@ -329,7 +335,6 @@ BEGIN
             GOTO EXIT_SP
          END
 
-
          IF @c_Facility_LOC <> @c_Facility AND @c_Facility <> ''
          BEGIN
             SET @n_Continue = 3
@@ -339,6 +344,20 @@ BEGIN
             GOTO EXIT_SP
          END
       END
+
+      --(Wan09) - START
+      IF EXISTS ( SELECT 1 FROM FACILITY f(NOLOCK) WHERE f.Facility = @c_Facility
+                  AND f.PalletTypeInUse = 'Yes')
+      BEGIN
+         IF @c_PalletType = '' OR @c_ToID = ''
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 555258
+            SET @c_errmsg =  'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Pallet Type and ToID are required. (lsp_Validate_ReceiptDetail_Std)'
+            GOTO EXIT_SP
+         END
+      END
+      --(Wan09) - END
 
       --(Wan01) - START
       SELECT @c_Lottable01Label = ISNULL(RTRIM(Lottable01Label),'')
