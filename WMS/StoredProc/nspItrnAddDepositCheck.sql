@@ -40,6 +40,8 @@ GO
 /*                            Channel                                   */
 /* 15-Mar-2024  Wan03     1.8 UWP-16968-Post PalletType to Inventory When*/
 /*                            Finalize                                  */
+/* 21-Mar-2024  Wan04     1.9 UWP-17363-Fix QtyonHold not increase if   */
+/*                            loc.stats<>'OK' And Hold ID               */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[nspItrnAddDepositCheck]
      @c_itrnkey      NVARCHAR(10)
@@ -845,28 +847,29 @@ BEGIN
       
       IF @n_continue = 1 OR @n_continue = 2
       BEGIN
+         --(Wan04) - Move Down - START
          /* IF the status of the new stuff is not OK (ie: its on hold             */
          /* AND we are using IDs AND ID is new then we must call nspInventoryHold */
-         IF @n_continue = 1 OR @n_continue = 2
-         BEGIN
-            IF @b_addid = 1 AND @c_status <> 'OK'
-            BEGIN
-               EXECUTE nspInventoryHold
-                          ''
-                        , ''
-                        , @c_toid
-                        , @c_status
-                        , '1'
-                        , @b_Success OUTPUT
-                        , @n_err     OUTPUT
-                        , @c_ErrMsg  OUTPUT
-               IF @b_success <> 1
-               BEGIN
-                  SELECT @n_continue = 3
-               END
-            END
-            ELSE
-            BEGIN
+         --IF @n_continue = 1 OR @n_continue = 2
+         --BEGIN
+            --IF @b_addid = 1 AND @c_status <> 'OK'
+            --BEGIN
+            --   EXECUTE nspInventoryHold
+            --              ''
+            --            , ''
+            --            , @c_toid
+            --            , @c_status
+            --            , '1'
+            --            , @b_Success OUTPUT
+            --            , @n_err     OUTPUT
+            --            , @c_ErrMsg  OUTPUT
+            --   IF @b_success <> 1
+            --   BEGIN
+            --      SELECT @n_continue = 3
+            --   END
+            --END
+            --ELSE
+            --BEGIN
                IF EXISTS( SELECT 1 FROM ID WITH (NOLOCK) WHERE Id = @c_toid AND Status <> 'OK')
                           OR EXISTS (SELECT 1 FROM LOC WITH (NOLOCK) WHERE Loc = @c_toloc AND
                                     (Status <> 'OK' OR Locationflag = 'HOLD' OR Locationflag = 'DAMAGE'))
@@ -883,9 +886,35 @@ BEGIN
                      SELECT @c_ErrMsg='NSQL '+CONVERT(char(5),@n_err) + ': Update Failed On Table LOT. (nspItrnAddDepositCheck)' + '(' + 'SQLSvr MESSAGE=' + LTRIM(RTRIM(@c_ErrMsg)) + ')'
                   END
                END
+            --END
+         --END
+         --(Wan04) - Move Down - END
+      END
+
+      --(Wan04) - Move Down - START
+      -- Fixed QtyOnHold not increase if loc.status = 'HOLD' and hold ID
+      /* IF the status of the new stuff is not OK (ie: its on hold             */
+      /* AND we are using IDs AND ID is new then we must call nspInventoryHold */
+      IF @n_continue = 1 OR @n_continue = 2
+      BEGIN
+         IF @b_addid = 1 AND @c_status <> 'OK'
+         BEGIN
+            EXECUTE nspInventoryHold
+                       ''
+                     , ''
+                     , @c_toid
+                     , @c_status
+                     , '1'
+                     , @b_Success OUTPUT
+                     , @n_err     OUTPUT
+                     , @c_ErrMsg  OUTPUT
+            IF @b_success <> 1
+            BEGIN
+               SELECT @n_continue = 3
             END
          END
       END
+      --(Wan04) - Move Down - END
 
       IF @n_continue = 1 OR @n_continue = 2
       BEGIN
