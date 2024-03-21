@@ -64,7 +64,7 @@ DECLARE @n_StorerMinShelfLife int
       , @c_Condition          NVARCHAR(4000) --(Wan01)
       , @c_SQLStatement       NVARCHAR(4000) --(Wan01)
       , @n_ConMinShelfLife    INT --NJOW01
-      , @c_Orderkey           NVARCHAR(20) --INT --NJOW01
+      , @c_Orderkey           NVARCHAR(20) --USH022 --INT --NJOW01
       , @c_Strategykey        NVARCHAR(10) --NJOW01
       , @n_SkuOGShelfLife       INT --NJOW03
 
