@@ -30,6 +30,7 @@ GO
 /* 28-May-2020 NJOW05   1.6   WMS-13544 Change FIFO to use lottable04   */
 /* 15-Dec-2021 NJOW06   1.7   WMS-18573 Lottable07 filtring condition   */
 /* 15-Dec-2021 NJOW06   1.7   DEVOPS combine script                     */
+/* 21-Mar-2024 USH022   1.7   ORDERKey datatype changed                 */
 /************************************************************************/  
 
 CREATE OR ALTER PROC  nspPRstdB1  -- Rename from IDSSG:nspPRstd01
@@ -63,7 +64,7 @@ DECLARE @n_StorerMinShelfLife int
       , @c_Condition          NVARCHAR(4000) --(Wan01)
       , @c_SQLStatement       NVARCHAR(4000) --(Wan01)
       , @n_ConMinShelfLife    INT --NJOW01
-      , @c_Orderkey           INT --NJOW01
+      , @c_Orderkey           NVARCHAR(20) --USH022 --INT --NJOW01
       , @c_Strategykey        NVARCHAR(10) --NJOW01
       , @n_SkuOGShelfLife       INT --NJOW03
 
