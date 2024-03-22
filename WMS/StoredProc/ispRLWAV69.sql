@@ -101,7 +101,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
       IF EXISTS (SELECT 1 FROM TASKDETAIL TD (NOLOCK)   
                  WHERE TD.Wavekey = @c_Wavekey  
                  AND TD.Sourcetype = @c_SourceType
-                 AND TD.Tasktype IN ('RPT','FCP'))   
+                 AND TD.Tasktype IN ( 'VNAOUT', 'FCP' ))   
       BEGIN  
          SELECT @n_continue = 3    
          SELECT @n_err = 67805    
