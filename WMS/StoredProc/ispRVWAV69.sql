@@ -9,7 +9,7 @@ GO
 /* Copyright: MAERSK                                                     */
 /* Written by: WLChooi                                                   */
 /*                                                                       */
-/* Purpose: UWP-16612 - Wave Release – create VNAOUT tasks during wave   */
+/* Purpose: UWP-16612 - Wave Release - create VNAOUT tasks during wave   */
 /*                      release for Picking (Reverse)                    */
 /*                                                                       */
 /* Called By:                                                            */
