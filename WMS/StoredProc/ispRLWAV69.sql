@@ -374,7 +374,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
                         ,@cType = 'LOCK'
                         ,@cFromLoc = @c_FromLoc
                         ,@cFromID = @c_ID
-                        ,@cSuggestedLOC = @c_ToLoc
+                        ,@cSuggestedLOC = @c_FinalLoc
                         ,@cStorerKey = @c_Storerkey
                         ,@nErrNo = @n_Err OUTPUT
                         ,@cErrMsg = @c_Errmsg OUTPUT
