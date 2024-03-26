@@ -53,7 +53,6 @@ BEGIN
          , @c_ToLoc              NVARCHAR(10)
          , @c_LogicalPNDLoc      NVARCHAR(10)
          , @c_Facility           NVARCHAR(5)
-         , @c_Wavekey            NVARCHAR(10)
          , @c_LocAisle           NVARCHAR(10)
          , @c_DeviceID           NVARCHAR(20)
          , @c_Status             NVARCHAR(10)
@@ -62,6 +61,7 @@ BEGIN
          , @n_PendingMoveIn      INT
          , @c_PNDLoc             NVARCHAR(10)
          , @c_SourceType         NVARCHAR(10)
+         , @c_DeviceProfileKey   NVARCHAR(10)
 
    SET @c_UOM = N'1'
    SET @c_Status = N'Q'
@@ -73,44 +73,37 @@ BEGIN
    IF @n_Continue = 1 OR @n_Continue = 2
    BEGIN
       DECLARE CUR_PA CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT TD.WaveKey
-           , TD.TaskDetailKey
+      SELECT TD.TaskDetailKey
            , TD.ToLoc
            , L.LocAisle
+           , L.Facility
       FROM TaskDetail TD WITH (NOLOCK)
       JOIN LOC L WITH (NOLOCK) ON L.Loc = TD.ToLoc
       WHERE TD.TaskType = @c_PATaskType 
       AND TD.Storerkey = @c_Storerkey 
       AND TD.[Status] = @c_Status 
-      AND TD.UOM = @c_UOM
-      AND TD.SourceType = @c_SourceType
-      GROUP BY TD.WaveKey
-             , TD.TaskDetailKey
+      GROUP BY TD.TaskDetailKey
              , TD.ToLoc
              , L.LocAisle
-      ORDER BY TD.WaveKey
-             , TD.TaskDetailKey
+             , L.Facility
+      ORDER BY TD.TaskDetailKey
              , TD.ToLoc
 
       OPEN CUR_PA
 
       FETCH NEXT FROM CUR_PA
-      INTO @c_Wavekey
-         , @c_Taskdetailkey
+      INTO @c_Taskdetailkey
          , @c_ToLoc
          , @c_LocAisle
+         , @c_Facility
 
       WHILE @@FETCH_STATUS <> -1
       BEGIN
-         SET @c_Facility = N''
          SET @c_DeviceID = N''
-
-         SELECT TOP 1 @c_Facility = OH.Facility
-         FROM WAVEDETAIL WD WITH (NOLOCK)
-         JOIN ORDERS OH WITH (NOLOCK) ON WD.OrderKey = OH.OrderKey
-         WHERE WD.WaveKey = @c_Wavekey
+         SET @c_DeviceProfileKey = N''
 
          SELECT TOP 1 @c_DeviceID = DP.DeviceID
+                    , @c_DeviceProfileKey = DP.DeviceProfileKey
          FROM DeviceProfile DP WITH (NOLOCK)
          JOIN LOC L WITH (NOLOCK) ON DP.Loc = L.Loc
          WHERE DP.DeviceType = 'VNATRUCK'
@@ -128,10 +121,31 @@ BEGIN
          END
          ELSE
          BEGIN
+            --Trigger will reset Userkey if updating status to 0
             UPDATE TaskDetail
             SET [Status] = '0'
-              , UserKey = LEFT(@c_DeviceID, 18)
             WHERE TaskDetailKey = @c_Taskdetailkey
+
+            IF @@ERROR <> 0
+            BEGIN
+               SET @n_Continue = 3
+            END
+
+            UPDATE TaskDetail
+            SET UserKey = LEFT(@c_DeviceID, 18)
+              , TrafficCop = NULL
+              , EditWho = SUSER_SNAME()
+              , EditDate = GETDATE()
+            WHERE TaskDetailKey = @c_Taskdetailkey
+
+            IF @@ERROR <> 0
+            BEGIN
+               SET @n_Continue = 3
+            END
+
+            UPDATE DeviceProfile
+            SET [Status] = 'BUSY'
+            WHERE DeviceProfileKey = @c_DeviceProfileKey
 
             IF @@ERROR <> 0
             BEGIN
@@ -155,10 +169,10 @@ BEGIN
          END
 
          FETCH NEXT FROM CUR_PA
-         INTO @c_Wavekey
-            , @c_Taskdetailkey
+         INTO @c_Taskdetailkey
             , @c_ToLoc
             , @c_LocAisle
+            , @c_Facility
       END
       CLOSE CUR_PA
       DEALLOCATE CUR_PA
@@ -170,23 +184,26 @@ BEGIN
    IF @n_Continue = 1 OR @n_Continue = 2
    BEGIN
       DECLARE CUR_REPLEN_PICK CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT TD.WaveKey
-           , TD.TaskDetailKey
+      SELECT TD.TaskDetailKey
            , TD.ToLoc
            , L.LocAisle
+           , L.Facility
       FROM TaskDetail TD WITH (NOLOCK)
-      JOIN LOC L WITH (NOLOCK) ON L.Loc = TD.ToLoc
+      JOIN LOC L WITH (NOLOCK) ON L.Loc = TD.FromLoc
       WHERE TD.TaskType = @c_ReplenPickTaskType
       AND   TD.Storerkey = @c_Storerkey
       AND   TD.[Status] = @c_Status
       AND   TD.UOM = @c_UOM
-      AND TD.SourceType = @c_SourceType
+      AND   TD.SourceType = @c_SourceType
       GROUP BY TD.WaveKey
              , TD.TaskDetailKey
              , TD.ToLoc
              , L.LocAisle
              , TD.[Priority]
+             , L.Facility
+             , TD.Message03
       ORDER BY TD.[Priority]
+             , CASE WHEN TD.Message03 = 'RPF' THEN 10 ELSE 20 END
              , TD.WaveKey
              , TD.TaskDetailKey
              , TD.ToLoc
@@ -194,24 +211,20 @@ BEGIN
       OPEN CUR_REPLEN_PICK
 
       FETCH NEXT FROM CUR_REPLEN_PICK
-      INTO @c_Wavekey
-         , @c_Taskdetailkey
+      INTO @c_Taskdetailkey
          , @c_ToLoc
          , @c_LocAisle
+         , @c_Facility
 
       WHILE @@FETCH_STATUS <> -1
       BEGIN
-         SET @c_Facility = N''
          SET @c_DeviceID = N''
          SET @c_LogicalPNDLoc = N''
          SET @n_PendingMoveIn = 0
-
-         SELECT TOP 1 @c_Facility = OH.Facility
-         FROM WAVEDETAIL WD WITH (NOLOCK)
-         JOIN ORDERS OH WITH (NOLOCK) ON WD.OrderKey = OH.OrderKey
-         WHERE WD.WaveKey = @c_Wavekey
+         SET @c_DeviceProfileKey = N''
 
          SELECT TOP 1 @c_DeviceID = DP.DeviceID
+                    , @c_DeviceProfileKey = DP.DeviceProfileKey
          FROM DeviceProfile DP WITH (NOLOCK)
          JOIN LOC L WITH (NOLOCK) ON DP.Loc = L.Loc
          WHERE DP.DeviceType = 'VNATRUCK'
@@ -236,24 +249,53 @@ BEGIN
             SELECT @n_Continue = 3
             SELECT @n_err = 83035
             SELECT @c_errmsg = N'NSQL' + CONVERT(NVARCHAR(5), @n_err)
-                               + N': Cannot find available VNA Device for REPLEN Task. (isp_VNABackendUpdateTask)'
+                               + N': Cannot find available VNA Device for task ' + @c_Taskdetailkey + '. (isp_VNABackendUpdateTask)'
          END
          ELSE IF ISNULL(@c_PNDLoc, '') = ''
          BEGIN
             SELECT @n_Continue = 3
             SELECT @n_err = 83040
             SELECT @c_errmsg = N'NSQL' + CONVERT(NVARCHAR(5), @n_err)
-                               + N': Cannot find available PND Loc for REPLEN Task. (isp_VNABackendUpdateTask)'
+                               + N': Cannot find available PND Loc for task ' + @c_Taskdetailkey + '. (isp_VNABackendUpdateTask)'
          END
          ELSE
          BEGIN
+            --Trigger will reset Userkey if updating status to 0
             UPDATE TaskDetail
             SET [Status] = '0'
-              , UserKey = LEFT(@c_DeviceID, 18)
-              , ToLoc = @c_PNDLoc
+            WHERE TaskDetailKey = @c_Taskdetailkey
+
+            IF @@ERROR <> 0
+            BEGIN
+               SET @n_Continue = 3
+            END
+
+            UPDATE TaskDetail
+            SET UserKey = LEFT(@c_DeviceID, 18)
+              , TrafficCop = NULL
+              , EditWho = SUSER_SNAME()
+              , EditDate = GETDATE()
+            WHERE TaskDetailKey = @c_Taskdetailkey
+
+            IF @@ERROR <> 0
+            BEGIN
+               SET @n_Continue = 3
+            END
+
+            UPDATE TaskDetail
+            SET ToLoc = @c_PNDLoc
               , LogicalToLoc = @c_LogicalPNDLoc
               , PendingMoveIn = @n_PendingMoveIn
             WHERE TaskDetailKey = @c_Taskdetailkey
+
+            IF @@ERROR <> 0
+            BEGIN
+               SET @n_Continue = 3
+            END
+
+            UPDATE DeviceProfile
+            SET [Status] = 'BUSY'
+            WHERE DeviceProfileKey = @c_DeviceProfileKey
 
             IF @@ERROR <> 0
             BEGIN
@@ -277,10 +319,10 @@ BEGIN
          END
 
          FETCH NEXT FROM CUR_REPLEN_PICK
-         INTO @c_Wavekey
-            , @c_Taskdetailkey
+         INTO @c_Taskdetailkey
             , @c_ToLoc
             , @c_LocAisle
+            , @c_Facility
       END
       CLOSE CUR_REPLEN_PICK
       DEALLOCATE CUR_REPLEN_PICK
@@ -292,10 +334,10 @@ BEGIN
       DEALLOCATE CUR_PA
    END
 
-   IF CURSOR_STATUS('LOCAL', 'CUR_REPLEN_PICK_PICK') IN ( 0, 1 )
+   IF CURSOR_STATUS('LOCAL', 'CUR_REPLEN_PICK') IN ( 0, 1 )
    BEGIN
-      CLOSE CUR_REPLEN_PICK_PICK
-      DEALLOCATE CUR_REPLEN_PICK_PICK
+      CLOSE CUR_REPLEN_PICK
+      DEALLOCATE CUR_REPLEN_PICK
    END
 
    IF @n_Continue = 3 -- Error Occured - Process And Return    
