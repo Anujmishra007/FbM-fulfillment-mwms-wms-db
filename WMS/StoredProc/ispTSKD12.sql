@@ -107,7 +107,7 @@ BEGIN
             SELECT @c_Transmitlogkey = Transmitlogkey
             FROM TransmitLog2 (NOLOCK) 
             WHERE TableName = @c_TableName 
-				AND Key1 = @c_Taskdetailkey AND Key2 = @c_Userkey AND Key3 = @c_Storerkey
+            AND Key1 = @c_Taskdetailkey AND Key2 = @c_Userkey AND Key3 = @c_Storerkey
 
             IF ISNULL(@c_Transmitlogkey, '') <> ''
             BEGIN
