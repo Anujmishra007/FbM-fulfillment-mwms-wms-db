@@ -58,10 +58,14 @@ BEGIN
          , @c_Status             NVARCHAR(10)
          , @c_PATaskType         NVARCHAR(10)
          , @c_ReplenPickTaskType NVARCHAR(10)
-         , @n_PendingMoveIn      INT
          , @c_PNDLoc             NVARCHAR(10)
          , @c_SourceType         NVARCHAR(10)
          , @c_DeviceProfileKey   NVARCHAR(10)
+         , @n_PendingMoveIn      INT
+         , @c_Lot                NVARCHAR(10)
+         , @c_FromLoc            NVARCHAR(10)
+         , @c_ID                 NVARCHAR(18)
+         , @c_Sku                NVARCHAR(20)
 
    SET @c_UOM = N'1'
    SET @c_Status = N'Q'
@@ -121,9 +125,12 @@ BEGIN
          END
          ELSE
          BEGIN
-            --Trigger will reset Userkey if updating status to 0
             UPDATE TaskDetail
-            SET [Status] = '0'
+            SET UserKey = LEFT(@c_DeviceID, 18)
+              , Listkey = @c_Taskdetailkey
+              , TrafficCop = NULL
+              , EditWho = SUSER_SNAME()
+              , EditDate = GETDATE()
             WHERE TaskDetailKey = @c_Taskdetailkey
 
             IF @@ERROR <> 0
@@ -131,11 +138,9 @@ BEGIN
                SET @n_Continue = 3
             END
 
+            --Trigger will reset Userkey if updating status to 0
             UPDATE TaskDetail
-            SET UserKey = LEFT(@c_DeviceID, 18)
-              , TrafficCop = NULL
-              , EditWho = SUSER_SNAME()
-              , EditDate = GETDATE()
+            SET [Status] = '0'
             WHERE TaskDetailKey = @c_Taskdetailkey
 
             IF @@ERROR <> 0
@@ -185,9 +190,14 @@ BEGIN
    BEGIN
       DECLARE CUR_REPLEN_PICK CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT TD.TaskDetailKey
+           , TD.Lot
+           , TD.FromLoc
+           , TD.FromID
            , TD.ToLoc
+           , TD.SKU
            , L.LocAisle
            , L.Facility
+           , TD.Qty
       FROM TaskDetail TD WITH (NOLOCK)
       JOIN LOC L WITH (NOLOCK) ON L.Loc = TD.FromLoc
       WHERE TD.TaskType = @c_ReplenPickTaskType
@@ -195,32 +205,36 @@ BEGIN
       AND   TD.[Status] = @c_Status
       AND   TD.UOM = @c_UOM
       AND   TD.SourceType = @c_SourceType
-      GROUP BY TD.WaveKey
-             , TD.TaskDetailKey
+      GROUP BY TD.TaskDetailKey
+             , TD.Lot
+             , TD.FromLoc
+             , TD.FromID
              , TD.ToLoc
+             , TD.SKU
              , L.LocAisle
-             , TD.[Priority]
              , L.Facility
-             , TD.Message03
+             , TD.Qty
+             , TD.[Priority]
       ORDER BY TD.[Priority]
-             , CASE WHEN TD.Message03 = 'RPF' THEN 10 ELSE 20 END
-             , TD.WaveKey
              , TD.TaskDetailKey
-             , TD.ToLoc
 
       OPEN CUR_REPLEN_PICK
 
       FETCH NEXT FROM CUR_REPLEN_PICK
       INTO @c_Taskdetailkey
+         , @c_Lot
+         , @c_FromLoc
+         , @c_ID
          , @c_ToLoc
+         , @c_Sku
          , @c_LocAisle
          , @c_Facility
+         , @n_PendingMoveIn
 
       WHILE @@FETCH_STATUS <> -1
       BEGIN
          SET @c_DeviceID = N''
          SET @c_LogicalPNDLoc = N''
-         SET @n_PendingMoveIn = 0
          SET @c_DeviceProfileKey = N''
 
          SELECT TOP 1 @c_DeviceID = DP.DeviceID
@@ -260,18 +274,9 @@ BEGIN
          END
          ELSE
          BEGIN
-            --Trigger will reset Userkey if updating status to 0
-            UPDATE TaskDetail
-            SET [Status] = '0'
-            WHERE TaskDetailKey = @c_Taskdetailkey
-
-            IF @@ERROR <> 0
-            BEGIN
-               SET @n_Continue = 3
-            END
-
             UPDATE TaskDetail
             SET UserKey = LEFT(@c_DeviceID, 18)
+              , Listkey = @c_Taskdetailkey
               , TrafficCop = NULL
               , EditWho = SUSER_SNAME()
               , EditDate = GETDATE()
@@ -285,7 +290,38 @@ BEGIN
             UPDATE TaskDetail
             SET ToLoc = @c_PNDLoc
               , LogicalToLoc = @c_LogicalPNDLoc
-              , PendingMoveIn = @n_PendingMoveIn
+              , TransitLOC = @c_PNDLoc
+            WHERE TaskDetailKey = @c_Taskdetailkey
+
+            IF @@ERROR <> 0
+            BEGIN
+               SET @n_Continue = 3
+            END
+
+            --To Lock PendingMoveIn in PND Loc
+            EXEC rdt.rdt_Putaway_PendingMoveIn 
+                         @cUserName = ''
+                        ,@cType = 'LOCK'
+                        ,@cFromLoc = @c_FromLoc
+                        ,@cFromID = @c_ID
+                        ,@cSuggestedLOC = @c_PNDLoc
+                        ,@cStorerKey = @c_Storerkey
+                        ,@nErrNo = @n_Err OUTPUT
+                        ,@cErrMsg = @c_Errmsg OUTPUT
+                        ,@cSKU = @c_Sku
+                        ,@nPutawayQTY    = @n_PendingMoveIn
+                        ,@cFromLOT       = @c_Lot
+                        ,@cTaskDetailKey = @c_TaskdetailKey
+                        ,@nFunc = 0
+                        ,@nPABookingKey = 0
+                        ,@cMoveQTYAlloc = '1' 
+
+            --Trigger will reset Userkey if updating status to 0
+            UPDATE TaskDetail
+            SET [Status] = '0'
+              , TrafficCop = NULL
+              , EditWho = SUSER_SNAME()
+              , EditDate = GETDATE()
             WHERE TaskDetailKey = @c_Taskdetailkey
 
             IF @@ERROR <> 0
@@ -311,7 +347,6 @@ BEGIN
                                       , @b_Success = @b_Success OUTPUT
                                       , @n_err = @n_err OUTPUT
                                       , @c_errmsg = @c_errmsg OUTPUT
-
             IF @n_err <> 0
             BEGIN
                SET @n_Continue = 3
@@ -320,9 +355,14 @@ BEGIN
 
          FETCH NEXT FROM CUR_REPLEN_PICK
          INTO @c_Taskdetailkey
+            , @c_Lot
+            , @c_FromLoc
+            , @c_ID
             , @c_ToLoc
+            , @c_Sku
             , @c_LocAisle
             , @c_Facility
+            , @n_PendingMoveIn
       END
       CLOSE CUR_REPLEN_PICK
       DEALLOCATE CUR_REPLEN_PICK

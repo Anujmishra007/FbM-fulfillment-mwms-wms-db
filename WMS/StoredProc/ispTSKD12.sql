@@ -42,6 +42,7 @@ BEGIN
          , @c_Taskdetailkey      NVARCHAR(10)
          , @c_Tasktype           NVARCHAR(10)
          , @c_ToLoc              NVARCHAR(10)
+         , @c_ToLoc_Del          NVARCHAR(10)
          , @c_Userkey            NVARCHAR(18)
          , @c_Userkey_Del        NVARCHAR(18)
          , @c_Status             NVARCHAR(10)
@@ -68,7 +69,7 @@ BEGIN
    BEGIN
       --Any status <> X OR 9 --> X OR 9
       DECLARE Cur_Task CURSOR FAST_FORWARD READ_ONLY FOR
-         SELECT I.Taskdetailkey, I.Tasktype, I.ToLoc, I.Userkey, D.Userkey
+         SELECT I.Taskdetailkey, I.Tasktype, I.ToLoc, D.ToLoc, I.Userkey, D.Userkey
               , I.[Status], D.[Status], I.Message03
          FROM #INSERTED I 
          JOIN #DELETED D ON I.Taskdetailkey = D.Taskdetailkey
@@ -80,7 +81,7 @@ BEGIN
                                   
       OPEN Cur_Task
        
-      FETCH NEXT FROM Cur_Task INTO @c_Taskdetailkey, @c_Tasktype, @c_ToLoc, @c_Userkey, @c_Userkey_Del
+      FETCH NEXT FROM Cur_Task INTO @c_Taskdetailkey, @c_Tasktype, @c_ToLoc, @c_ToLoc_Del, @c_Userkey, @c_Userkey_Del
                                   , @c_Status, @c_Status_Del, @c_Message03
             
       WHILE @@FETCH_STATUS <> -1 AND (@n_continue = 1 or @n_continue = 2)
@@ -93,7 +94,7 @@ BEGIN
          IF @c_Status_Del = 'Q' AND @c_Status = '0'
             GOTO NEXT
 
-         IF @c_Status_Del = 'F' AND @c_Status = 'Q'
+         IF @c_Status_Del IN ('0', 'F') AND @c_Status = 'Q'
             SET @n_Fail2Queue = 1
          ELSE IF @c_Status_Del = 'F' AND @c_Status = '0'
             SET @n_Fail2Open = 1
@@ -150,6 +151,8 @@ BEGIN
             --Cancel Task need update VNA Device to IDEL for VNAOUT and VNAIN
             IF @c_Status = 'X'
             BEGIN
+               SET @c_DeviceProfileKey = N''
+
                SELECT TOP 1 @c_DeviceProfileKey = DP.DeviceProfileKey
                FROM DeviceProfile DP WITH (NOLOCK)
                WHERE DP.DeviceID = @c_Userkey_Del
@@ -173,9 +176,9 @@ BEGIN
             IF @c_Tasktype = 'VNAOUT'
             BEGIN
                --Unlock PND PendingMoveIn
-               --FOR PICKING - No need to clear FinalLoc pendingmovein if changing F --> Q ELSE clear PND and FinalLoc
+               --FOR PICKING - No need to clear FinalLoc pendingmovein if changing F/0 --> Q ELSE clear PND and FinalLoc
                IF @n_Fail2Queue = 1 AND @c_Message03 = 'FPK'
-                  SET @c_SuggestedLoc = @c_ToLoc
+                  SET @c_SuggestedLoc = IIF(ISNULL(@c_ToLoc, '') = '', @c_ToLoc_Del, @c_ToLoc)
                ELSE
                   SET @c_SuggestedLoc = N''
 
@@ -203,20 +206,6 @@ BEGIN
                   SELECT @n_Err = 66015
                   SELECT @c_Errmsg = 'NSQL' + CONVERT(varchar(5),@n_Err)+': ' + @c_Errmsg + '. (ispTSKD12)'
                END
-
-               UPDATE TASKDETAIL
-               SET PendingMoveIn = 0
-                 , Trafficcop = NULL
-                 , EditDate = GETDATE()
-                 , EditWho = SUSER_SNAME()
-               WHERE Taskdetailkey = @c_Taskdetailkey
-
-               IF @n_Err <> 0
-               BEGIN
-                  SELECT @n_Continue = 3 
-                  SELECT @n_Err = 66030
-                  SELECT @c_Errmsg = 'NSQL' + CONVERT(varchar(5),@n_Err)+': Update TASKDETAIL Failed. (ispTSKD12)'
-               END
                
                --F --> Q
                --Clear userkey, backend job will update Userkey again
@@ -240,7 +229,7 @@ BEGIN
          END
          
          NEXT:
-         FETCH NEXT FROM Cur_Task INTO @c_Taskdetailkey, @c_Tasktype, @c_ToLoc, @c_Userkey, @c_Userkey_Del
+         FETCH NEXT FROM Cur_Task INTO @c_Taskdetailkey, @c_Tasktype, @c_ToLoc, @c_ToLoc_Del, @c_Userkey, @c_Userkey_Del
                                      , @c_Status, @c_Status_Del, @c_Message03
       END
       CLOSE Cur_Task
