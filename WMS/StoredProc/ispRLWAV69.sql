@@ -368,7 +368,6 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
             
             UPDATE TASKDETAIL
             SET Groupkey = @c_Taskdetailkey
-              , PendingMoveIn = @n_Qty
             WHERE TaskDetailKey = @c_Taskdetailkey
             
             --Manual Lock Qty for FinalLoc
