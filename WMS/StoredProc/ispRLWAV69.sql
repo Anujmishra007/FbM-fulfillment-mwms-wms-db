@@ -299,7 +299,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
          SET @c_TaskType = N'VNAOUT'
          SET @c_Message03 = N'FPK'
          SET @c_SourcePriority = '9'
-         SET @c_Priority = '9'
+         SET @c_Priority = '4'
 
          SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM '
 
