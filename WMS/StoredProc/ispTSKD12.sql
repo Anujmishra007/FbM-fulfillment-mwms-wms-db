@@ -142,6 +142,11 @@ BEGIN
          END
          ELSE   --Not updating Status F to 0
          BEGIN
+            --Scenario:
+            --Status -> X
+            --Status -> 9
+            --F --> Q (Picking no need clear pendingmovein for FinalLoc)
+
             --Cancel Task need update VNA Device to IDEL for VNAOUT and VNAIN
             IF @c_Status = 'X'
             BEGIN
@@ -197,6 +202,20 @@ BEGIN
                   SELECT @n_Continue = 3 
                   SELECT @n_Err = 66015
                   SELECT @c_Errmsg = 'NSQL' + CONVERT(varchar(5),@n_Err)+': ' + @c_Errmsg + '. (ispTSKD12)'
+               END
+
+               UPDATE TASKDETAIL
+               SET PendingMoveIn = 0
+                 , Trafficcop = NULL
+                 , EditDate = GETDATE()
+                 , EditWho = SUSER_SNAME()
+               WHERE Taskdetailkey = @c_Taskdetailkey
+
+               IF @n_Err <> 0
+               BEGIN
+                  SELECT @n_Continue = 3 
+                  SELECT @n_Err = 66030
+                  SELECT @c_Errmsg = 'NSQL' + CONVERT(varchar(5),@n_Err)+': Update TASKDETAIL Failed. (ispTSKD12)'
                END
                
                --F --> Q
