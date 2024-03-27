@@ -68,6 +68,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
          , @c_Loadkey                 NVARCHAR(10)
          , @c_Taskdetailkey           NVARCHAR(10)
          , @c_FinalLoc                NVARCHAR(10)
+         , @c_Orderkey                NVARCHAR(10)
 
    SET @c_SourceType = 'ispRLWAV69'
              
@@ -271,6 +272,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
             , SUM(PICKDETAIL.UOMQty) AS UOMQty 
             , SUM(PICKDETAIL.Qty) AS Qty 
             , ORDERS.LoadKey
+            , ORDERS.OrderKey
        FROM WAVEDETAIL (NOLOCK) 
        JOIN WAVE (NOLOCK) ON WAVEDETAIL.WaveKey = WAVE.WaveKey 
        JOIN ORDERS (NOLOCK) ON WAVEDETAIL.OrderKey = ORDERS.OrderKey 
@@ -286,10 +288,11 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
             , PICKDETAIL.Loc 
             , PICKDETAIL.ID 
             , ORDERS.LoadKey
+            , ORDERS.OrderKey
 
       OPEN CUR_PICK_VNAOUT
 
-      FETCH NEXT FROM CUR_PICK_VNAOUT INTO @c_Storerkey, @c_SKU, @c_Lot, @c_FromLoc, @c_ID, @c_UOM, @n_UOMQty, @n_Qty, @c_Loadkey
+      FETCH NEXT FROM CUR_PICK_VNAOUT INTO @c_Storerkey, @c_SKU, @c_Lot, @c_FromLoc, @c_ID, @c_UOM, @n_UOMQty, @n_Qty, @c_Loadkey, @c_Orderkey
 
       WHILE @@FETCH_STATUS <> -1
       BEGIN
@@ -304,9 +307,8 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
          SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM '
 
          SELECT @c_FinalLoc = ISNULL(ORDERS.Door, '')
-         FROM LOADPLANDETAIL WITH (NOLOCK)
-         JOIN ORDERS WITH (NOLOCK) ON LOADPLANDETAIL.OrderKey = ORDERS.OrderKey
-         WHERE LOADPLANDETAIL.LoadKey = @c_Loadkey
+         FROM ORDERS WITH (NOLOCK)
+         WHERE ORDERS.OrderKey = @c_Orderkey
 
          IF ISNULL(@c_FinalLoc,'') = ''
          BEGIN
@@ -332,8 +334,8 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
                                     , @c_FromLoc = @c_FromLoc
                                     , @c_LogicalFromLoc = '?'
                                     , @c_FromID = @c_ID
-                                    , @c_ToLoc = @c_ToLoc
-                                    , @c_LogicalToLoc = @c_ToLoc
+                                    , @c_ToLoc = @c_FinalLoc
+                                    , @c_LogicalToLoc = '?'
                                     , @c_ToID = @c_ID
                                     , @c_FinalID = @c_ID
                                     , @c_PickMethod = @c_PickMethod
@@ -343,6 +345,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
                                     , @c_SourceKey = @c_Wavekey
                                     , @c_WaveKey = @c_Wavekey
                                     , @c_Loadkey = @c_Loadkey
+                                    , @c_OrderKey = @c_Orderkey
                                     , @c_Message03 = @c_Message03
                                     , @n_SystemQty = @n_Qty
                                     , @c_FinalLoc = @c_FinalLoc
@@ -369,25 +372,25 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
             WHERE TaskDetailKey = @c_Taskdetailkey
             
             --Manual Lock Qty for FinalLoc
-            EXEC rdt.rdt_Putaway_PendingMoveIn 
-                         @cUserName = ''
-                        ,@cType = 'LOCK'
-                        ,@cFromLoc = @c_FromLoc
-                        ,@cFromID = @c_ID
-                        ,@cSuggestedLOC = @c_FinalLoc
-                        ,@cStorerKey = @c_Storerkey
-                        ,@nErrNo = @n_Err OUTPUT
-                        ,@cErrMsg = @c_Errmsg OUTPUT
-                        ,@cSKU = @c_Sku
-                        ,@nPutawayQTY    = @n_Qty
-                        ,@cFromLOT       = @c_Lot
-                        ,@cTaskDetailKey = @c_TaskdetailKey
-                        ,@nFunc = 0
-                        ,@nPABookingKey = 0
-                        ,@cMoveQTYAlloc = '1' 
+            --EXEC rdt.rdt_Putaway_PendingMoveIn 
+            --             @cUserName = ''
+            --            ,@cType = 'LOCK'
+            --            ,@cFromLoc = @c_FromLoc
+            --            ,@cFromID = @c_ID
+            --            ,@cSuggestedLOC = @c_FinalLoc
+            --            ,@cStorerKey = @c_Storerkey
+            --            ,@nErrNo = @n_Err OUTPUT
+            --            ,@cErrMsg = @c_Errmsg OUTPUT
+            --            ,@cSKU = @c_Sku
+            --            ,@nPutawayQTY    = @n_Qty
+            --            ,@cFromLOT       = @c_Lot
+            --            ,@cTaskDetailKey = @c_TaskdetailKey
+            --            ,@nFunc = 0
+            --            ,@nPABookingKey = 0
+            --            ,@cMoveQTYAlloc = '1' 
          END
 
-         FETCH NEXT FROM CUR_PICK_VNAOUT INTO @c_Storerkey, @c_SKU, @c_Lot, @c_FromLoc, @c_ID, @c_UOM, @n_UOMQty, @n_Qty, @c_Loadkey
+         FETCH NEXT FROM CUR_PICK_VNAOUT INTO @c_Storerkey, @c_SKU, @c_Lot, @c_FromLoc, @c_ID, @c_UOM, @n_UOMQty, @n_Qty, @c_Loadkey, @c_Orderkey
       END
       CLOSE CUR_PICK_VNAOUT
       DEALLOCATE CUR_PICK_VNAOUT
@@ -406,6 +409,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
             , SUM(PICKDETAIL.UOMQty) AS UOMQty 
             , SUM(PICKDETAIL.Qty) AS Qty 
             , ORDERS.LoadKey
+            , ORDERS.OrderKey
        FROM WAVEDETAIL (NOLOCK) 
        JOIN WAVE (NOLOCK) ON WAVEDETAIL.WaveKey = WAVE.WaveKey 
        JOIN ORDERS (NOLOCK) ON WAVEDETAIL.OrderKey = ORDERS.OrderKey 
@@ -421,10 +425,11 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
             , PICKDETAIL.Loc 
             , PICKDETAIL.ID 
             , ORDERS.LoadKey
+            , ORDERS.OrderKey
 
       OPEN CUR_PICK_FCP
 
-      FETCH NEXT FROM CUR_PICK_FCP INTO @c_Storerkey, @c_SKU, @c_Lot, @c_FromLoc, @c_ID, @c_UOM, @n_UOMQty, @n_Qty, @c_Loadkey
+      FETCH NEXT FROM CUR_PICK_FCP INTO @c_Storerkey, @c_SKU, @c_Lot, @c_FromLoc, @c_ID, @c_UOM, @n_UOMQty, @n_Qty, @c_Loadkey, @c_Orderkey
 
       WHILE @@FETCH_STATUS <> -1
       BEGIN
@@ -438,9 +443,8 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
          SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM '
 
          SELECT @c_ToLoc = ISNULL(ORDERS.Door, '')
-         FROM LOADPLANDETAIL WITH (NOLOCK)
-         JOIN ORDERS WITH (NOLOCK) ON LOADPLANDETAIL.OrderKey = ORDERS.OrderKey
-         WHERE LOADPLANDETAIL.LoadKey = @c_Loadkey
+         FROM ORDERS WITH (NOLOCK)
+         WHERE ORDERS.OrderKey = @c_Orderkey
 
          IF ISNULL(@c_ToLoc,'') = ''
          BEGIN
@@ -477,6 +481,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
                                     , @c_SourceKey = @c_Wavekey
                                     , @c_WaveKey = @c_Wavekey
                                     , @c_Loadkey = @c_Loadkey
+                                    , @c_OrderKey = @c_Orderkey
                                     , @c_Message03 = @c_Message03
                                     , @n_SystemQty = @n_Qty
                                     , @c_Status = 'Q'
@@ -502,7 +507,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
             WHERE TaskDetailKey = @c_Taskdetailkey
          END
 
-         FETCH NEXT FROM CUR_PICK_FCP INTO @c_Storerkey, @c_SKU, @c_Lot, @c_FromLoc, @c_ID, @c_UOM, @n_UOMQty, @n_Qty, @c_Loadkey
+         FETCH NEXT FROM CUR_PICK_FCP INTO @c_Storerkey, @c_SKU, @c_Lot, @c_FromLoc, @c_ID, @c_UOM, @n_UOMQty, @n_Qty, @c_Loadkey, @c_Orderkey
       END
       CLOSE CUR_PICK_FCP
       DEALLOCATE CUR_PICK_FCP

@@ -82,7 +82,7 @@ BEGIN
                    FROM TaskDetail TD (NOLOCK)
                    WHERE TD.WaveKey = @c_Wavekey
                    AND   TD.SourceType IN ( 'ispRLWAV69' )
-                   AND   TD.[Status] NOT IN ( 'Q', 'X' )
+                   AND   TD.[Status] NOT IN ( 'Q', 'X', '0' )
                    AND   TD.TaskType IN ( 'VNAOUT', 'FCP' ))
       BEGIN
          SELECT @n_continue = 3
@@ -130,7 +130,7 @@ BEGIN
       WHERE TaskDetail.WaveKey = @c_Wavekey
       AND   TaskDetail.SourceType IN ( 'ispRLWAV69' )
       AND   TaskDetail.TaskType IN ( 'VNAOUT', 'FCP' )
-      AND   TaskDetail.[Status] = 'Q'
+      AND   TaskDetail.[Status] IN ('Q', '0')
 
       SELECT @n_err = @@ERROR
       IF @n_err <> 0
