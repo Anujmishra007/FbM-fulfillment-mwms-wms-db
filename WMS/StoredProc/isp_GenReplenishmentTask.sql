@@ -1,11 +1,8 @@
-IF EXISTS ( SELECT Name FROM dbo.sysobjects WHERE Name = N'isp_GenReplenishmentTask' AND Type = 'P' )
-   DROP PROCEDURE isp_GenReplenishmentTask
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /***************************************************************************/
 /* Stored Procedure: isp_GenReplenishmentTask                              */
 /* Creation Date: 25-Mar-2024                                              */
@@ -27,7 +24,7 @@ GO
 /* Date         Author     Ver   Purposes                                  */
 /* 09-JUL-2010  Shong      1.3   Revised Replenishment Calculation         */
 /***************************************************************************/
-CREATE PROC [dbo].[isp_GenReplenishmentTask]
+CREATE OR ALTER PROC [dbo].[isp_GenReplenishmentTask]
    @c_Zone01     NVARCHAR(10),
    @c_Zone02     NVARCHAR(10),
    @c_Zone03     NVARCHAR(10),
@@ -339,5 +336,5 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-GRANT EXECUTE ON isp_GenReplenishmentTask TO NSQL
+GRANT EXECUTE ON [dbo].[isp_GenReplenishmentTask] TO [NSQL]
 GO
