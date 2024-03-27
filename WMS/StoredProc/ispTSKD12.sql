@@ -53,7 +53,9 @@ BEGIN
          , @c_Transmitlogkey     NVARCHAR(10)
          , @c_TableName          NVARCHAR(10)
          , @c_SuggestedLoc       NVARCHAR(10)
-         , @c_Message03          NVARCHAR(10)
+         , @c_ToID               NVARCHAR(18)
+         , @c_ReservedID         NVARCHAR(18)
+         , @c_Lot                NVARCHAR(10)
                                          
    SELECT @n_Continue = 1, @n_StartTCnt = @@TRANCOUNT, @n_Err = 0, @c_ErrMsg = '', @b_Success = 1
     
@@ -69,8 +71,8 @@ BEGIN
    BEGIN
       --Any status <> X OR 9 --> X OR 9
       DECLARE Cur_Task CURSOR FAST_FORWARD READ_ONLY FOR
-         SELECT I.Taskdetailkey, I.Tasktype, I.ToLoc, D.ToLoc, I.Userkey, D.Userkey
-              , I.[Status], D.[Status], I.Message03
+         SELECT I.Taskdetailkey, I.Tasktype, I.Lot, I.ToLoc, D.ToLoc, I.Userkey, D.Userkey
+              , I.[Status], D.[Status]
          FROM #INSERTED I 
          JOIN #DELETED D ON I.Taskdetailkey = D.Taskdetailkey
          WHERE I.Storerkey = @c_Storerkey
@@ -81,8 +83,8 @@ BEGIN
                                   
       OPEN Cur_Task
        
-      FETCH NEXT FROM Cur_Task INTO @c_Taskdetailkey, @c_Tasktype, @c_ToLoc, @c_ToLoc_Del, @c_Userkey, @c_Userkey_Del
-                                  , @c_Status, @c_Status_Del, @c_Message03
+      FETCH NEXT FROM Cur_Task INTO @c_Taskdetailkey, @c_Tasktype, @c_Lot, @c_ToLoc, @c_ToLoc_Del, @c_Userkey, @c_Userkey_Del
+                                  , @c_Status, @c_Status_Del
             
       WHILE @@FETCH_STATUS <> -1 AND (@n_continue = 1 or @n_continue = 2)
       BEGIN
@@ -146,7 +148,7 @@ BEGIN
             --Scenario:
             --Status -> X
             --Status -> 9
-            --F --> Q (Picking no need clear pendingmovein for FinalLoc)
+            --F --> Q
 
             --Cancel Task need update VNA Device to IDEL for VNAOUT and VNAIN
             IF @c_Status = 'X'
@@ -176,35 +178,43 @@ BEGIN
             IF @c_Tasktype = 'VNAOUT'
             BEGIN
                --Unlock PND PendingMoveIn
-               --FOR PICKING - No need to clear FinalLoc pendingmovein if changing F/0 --> Q ELSE clear PND and FinalLoc
-               IF @n_Fail2Queue = 1 AND @c_Message03 = 'FPK'
-                  SET @c_SuggestedLoc = IIF(ISNULL(@c_ToLoc, '') = '', @c_ToLoc_Del, @c_ToLoc)
-               ELSE
-                  SET @c_SuggestedLoc = N''
-
                SET @n_Err = 0
+               SET @c_ReservedID = N''
 
-               EXEC rdt.rdt_Putaway_PendingMoveIn 
-                   @cUserName = ''
-                  ,@cType = 'UNLOCK'
-                  ,@cFromLoc = ''
-                  ,@cFromID = ''
-                  ,@cSuggestedLOC = @c_SuggestedLoc
-                  ,@cStorerKey = @c_Storerkey
-                  ,@nErrNo = @n_Err OUTPUT
-                  ,@cErrMsg = @c_Errmsg OUTPUT
-                  ,@cSKU = ''
-                  ,@nPutawayQTY    = 0
-                  ,@cFromLOT       = ''
-                  ,@cTaskDetailKey = @c_TaskdetailKey
-                  ,@nFunc = 0
-                  ,@nPABookingKey = 0
-            
-               IF @n_Err <> 0
+               SELECT @c_ReservedID = ID
+               FROM dbo.RFPutaway (NOLOCK)
+               WHERE Taskdetailkey = @c_TaskdetailKey
+               
+               IF ISNULL(@c_ReservedID, '') = ''
+                  SET @c_ReservedID = @c_ToID
+
+               IF EXISTS( SELECT 1 FROM LOTXLOCXID (NOLOCK)
+                          WHERE Lot = @c_Lot
+                          AND Loc = @c_ToLoc
+                          AND ID = @c_ReservedID )
                BEGIN
-                  SELECT @n_Continue = 3 
-                  SELECT @n_Err = 66015
-                  SELECT @c_Errmsg = 'NSQL' + CONVERT(varchar(5),@n_Err)+': ' + @c_Errmsg + '. (ispTSKD12)'
+                  EXEC rdt.rdt_Putaway_PendingMoveIn 
+                      @cUserName = ''
+                     ,@cType = 'UNLOCK'
+                     ,@cFromLoc = ''
+                     ,@cFromID = ''
+                     ,@cSuggestedLOC = ''
+                     ,@cStorerKey = @c_Storerkey
+                     ,@nErrNo = @n_Err OUTPUT
+                     ,@cErrMsg = @c_Errmsg OUTPUT
+                     ,@cSKU = ''
+                     ,@nPutawayQTY    = 0
+                     ,@cFromLOT       = ''
+                     ,@cTaskDetailKey = @c_TaskdetailKey
+                     ,@nFunc = 0
+                     ,@nPABookingKey = 0
+            
+                  IF @n_Err <> 0
+                  BEGIN
+                     SELECT @n_Continue = 3 
+                     SELECT @n_Err = 66015
+                     SELECT @c_Errmsg = 'NSQL' + CONVERT(varchar(5),@n_Err)+': ' + @c_Errmsg + '. (ispTSKD12)'
+                  END
                END
                
                --F --> Q
@@ -229,8 +239,8 @@ BEGIN
          END
          
          NEXT:
-         FETCH NEXT FROM Cur_Task INTO @c_Taskdetailkey, @c_Tasktype, @c_ToLoc, @c_ToLoc_Del, @c_Userkey, @c_Userkey_Del
-                                     , @c_Status, @c_Status_Del, @c_Message03
+         FETCH NEXT FROM Cur_Task INTO @c_Taskdetailkey, @c_Tasktype, @c_Lot, @c_ToLoc, @c_ToLoc_Del, @c_Userkey, @c_Userkey_Del
+                                     , @c_Status, @c_Status_Del
       END
       CLOSE Cur_Task
       DEALLOCATE Cur_Task
@@ -238,7 +248,7 @@ BEGIN
    ELSE IF @c_Action = 'DELETE' 
    BEGIN
       DECLARE Cur_Task_DEL CURSOR FAST_FORWARD READ_ONLY FOR
-         SELECT D.Taskdetailkey
+         SELECT D.Taskdetailkey, D.Lot, D.ToLoc, D.ToID
          FROM #DELETED D 
          WHERE D.Storerkey = @c_Storerkey
          AND D.Tasktype IN ('VNAOUT')
@@ -247,36 +257,50 @@ BEGIN
                                   
       OPEN Cur_Task_DEL
        
-      FETCH NEXT FROM Cur_Task_DEL INTO @c_Taskdetailkey
+      FETCH NEXT FROM Cur_Task_DEL INTO @c_Taskdetailkey, @c_Lot, @c_ToLoc, @c_ToID
             
-      WHILE @@FETCH_STATUS <> -1 AND (@n_continue = 1 or @n_continue = 2)
+      WHILE @@FETCH_STATUS <> -1 AND (@n_continue = 1 OR @n_continue = 2)
       BEGIN
          SET @n_Err = 0 
-         
-         EXEC rdt.rdt_Putaway_PendingMoveIn   
-                @cUserName = ''
-               ,@cType = 'UNLOCK'
-               ,@cFromLoc = ''
-               ,@cFromID = ''
-               ,@cSuggestedLOC = ''
-               ,@cStorerKey = @c_Storerkey
-               ,@nErrNo = @n_Err OUTPUT
-               ,@cErrMsg = @c_Errmsg OUTPUT
-               ,@cSKU = ''
-               ,@nPutawayQTY    = 0
-               ,@cFromLOT       = ''
-               ,@cTaskDetailKey = @c_TaskdetailKey
-               ,@nFunc = 0
-               ,@nPABookingKey = 0
+         SET @c_ReservedID = N''
 
-         IF @n_Err <> 0
+         SELECT @c_ReservedID = ID
+         FROM dbo.RFPutaway (NOLOCK)
+         WHERE Taskdetailkey = @c_TaskdetailKey
+
+         IF ISNULL(@c_ReservedID, '') = ''
+            SET @c_ReservedID = @c_ToID
+         
+         IF EXISTS( SELECT 1 FROM LOTXLOCXID (NOLOCK)
+                    WHERE Lot = @c_Lot
+                    AND Loc = @c_ToLoc
+                    AND ID = @c_ReservedID )
          BEGIN
-            SELECT @n_Continue = 3 
-            SELECT @n_Err = 66025
-            SELECT @c_Errmsg = 'NSQL' + CONVERT(varchar(5),@n_Err)+': ' + @c_Errmsg + '. (ispTSKD12)'
+            EXEC rdt.rdt_Putaway_PendingMoveIn   
+                   @cUserName = ''
+                  ,@cType = 'UNLOCK'
+                  ,@cFromLoc = ''
+                  ,@cFromID = ''
+                  ,@cSuggestedLOC = ''
+                  ,@cStorerKey = @c_Storerkey
+                  ,@nErrNo = @n_Err OUTPUT
+                  ,@cErrMsg = @c_Errmsg OUTPUT
+                  ,@cSKU = ''
+                  ,@nPutawayQTY    = 0
+                  ,@cFromLOT       = ''
+                  ,@cTaskDetailKey = @c_TaskdetailKey
+                  ,@nFunc = 0
+                  ,@nPABookingKey = 0
+
+            IF @n_Err <> 0
+            BEGIN
+               SELECT @n_Continue = 3 
+               SELECT @n_Err = 66025
+               SELECT @c_Errmsg = 'NSQL' + CONVERT(varchar(5),@n_Err)+': ' + @c_Errmsg + '. (ispTSKD12)'
+            END
          END
          
-         FETCH NEXT FROM Cur_Task_DEL INTO @c_Taskdetailkey
+         FETCH NEXT FROM Cur_Task_DEL INTO @c_Taskdetailkey, @c_Lot, @c_ToLoc, @c_ToID
       END
       CLOSE Cur_Task_DEL
       DEALLOCATE Cur_Task_DEL

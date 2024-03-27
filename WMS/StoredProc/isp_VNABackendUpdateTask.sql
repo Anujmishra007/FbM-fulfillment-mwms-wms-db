@@ -112,7 +112,6 @@ BEGIN
          JOIN LOC L WITH (NOLOCK) ON DP.Loc = L.Loc
          WHERE DP.DeviceType = 'VNATRUCK'
          AND   DP.[Status] = 'IDEL'
-         AND   L.LocationType = 'VNAFORK'
          AND   L.LocAisle = @c_LocAisle
          AND   L.Facility = @c_Facility
 
@@ -141,6 +140,9 @@ BEGIN
             --Trigger will reset Userkey if updating status to 0
             UPDATE TaskDetail
             SET [Status] = '0'
+              , TrafficCop = NULL
+              , EditWho = SUSER_SNAME()
+              , EditDate = GETDATE()
             WHERE TaskDetailKey = @c_Taskdetailkey
 
             IF @@ERROR <> 0
@@ -243,7 +245,6 @@ BEGIN
          JOIN LOC L WITH (NOLOCK) ON DP.Loc = L.Loc
          WHERE DP.DeviceType = 'VNATRUCK'
          AND   DP.[Status] = 'IDEL'
-         AND   L.LocationType = 'VNAFORK'
          AND   L.LocAisle = @c_LocAisle
          AND   L.Facility = @c_Facility
 
