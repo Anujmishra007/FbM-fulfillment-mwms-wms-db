@@ -292,30 +292,13 @@ BEGIN
             SET ToLoc = @c_PNDLoc
               , LogicalToLoc = @c_LogicalPNDLoc
               , TransitLOC = @c_PNDLoc
+              , PendingMoveIn = @n_PendingMoveIn
             WHERE TaskDetailKey = @c_Taskdetailkey
 
             IF @@ERROR <> 0
             BEGIN
                SET @n_Continue = 3
             END
-
-            --To Lock PendingMoveIn in PND Loc
-            EXEC rdt.rdt_Putaway_PendingMoveIn 
-                         @cUserName = ''
-                        ,@cType = 'LOCK'
-                        ,@cFromLoc = @c_FromLoc
-                        ,@cFromID = @c_ID
-                        ,@cSuggestedLOC = @c_PNDLoc
-                        ,@cStorerKey = @c_Storerkey
-                        ,@nErrNo = @n_Err OUTPUT
-                        ,@cErrMsg = @c_Errmsg OUTPUT
-                        ,@cSKU = @c_Sku
-                        ,@nPutawayQTY    = @n_PendingMoveIn
-                        ,@cFromLOT       = @c_Lot
-                        ,@cTaskDetailKey = @c_TaskdetailKey
-                        ,@nFunc = 0
-                        ,@nPABookingKey = 0
-                        ,@cMoveQTYAlloc = '1' 
 
             --Trigger will reset Userkey if updating status to 0
             UPDATE TaskDetail
