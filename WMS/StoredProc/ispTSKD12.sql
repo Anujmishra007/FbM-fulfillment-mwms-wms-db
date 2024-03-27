@@ -150,7 +150,7 @@ BEGIN
             --Status -> 9
             --F --> Q
 
-            --Cancel Task need update VNA Device to IDEL for VNAOUT and VNAIN
+            --Cancel Task need update VNA Device to IDLE for VNAOUT and VNAIN
             IF @c_Status = 'X'
             BEGIN
                SET @c_DeviceProfileKey = N''
@@ -162,7 +162,7 @@ BEGIN
                IF ISNULL(@c_DeviceProfileKey, '') <> ''
                BEGIN
                   UPDATE dbo.DeviceProfile
-                  SET [Status] = 'IDEL'
+                  SET [Status] = 'IDLE'
                   WHERE DeviceProfileKey = @c_DeviceProfileKey
                   AND [Status] = 'BUSY'
 

@@ -111,7 +111,7 @@ BEGIN
          FROM DeviceProfile DP WITH (NOLOCK)
          JOIN LOC L WITH (NOLOCK) ON DP.Loc = L.Loc
          WHERE DP.DeviceType = 'VNATRUCK'
-         AND   DP.[Status] = 'IDEL'
+         AND   DP.[Status] = 'IDLE'
          AND   L.LocAisle = @c_LocAisle
          AND   L.Facility = @c_Facility
 
@@ -244,7 +244,7 @@ BEGIN
          FROM DeviceProfile DP WITH (NOLOCK)
          JOIN LOC L WITH (NOLOCK) ON DP.Loc = L.Loc
          WHERE DP.DeviceType = 'VNATRUCK'
-         AND   DP.[Status] = 'IDEL'
+         AND   DP.[Status] = 'IDLE'
          AND   L.LocAisle = @c_LocAisle
          AND   L.Facility = @c_Facility
 
