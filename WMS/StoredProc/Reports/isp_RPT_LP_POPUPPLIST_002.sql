@@ -1,10 +1,8 @@
-USE [GBRWMS]
-GO
-/****** Object:  StoredProcedure [dbo].[isp_RPT_LP_POPUPPLIST_002]    Script Date: 3/27/2024 10:04:15 AM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /*****************************************************************************/
 /* Stored Procedure: isp_RPT_LP_POPUPPLIST_002                               */
 /* Creation Date: 19-MAY-2022                                                */
@@ -30,7 +28,7 @@ GO
 /* 19-Sep-2023  Calvin   1.4  INC6339467 Expand var to fit sif.ext04 (CLVN01)*/
 /* 27-Mar-2024  Alex     1.5  V2 Global Timezone Support  					     */
 /*****************************************************************************/
-ALTER      PROC [dbo].[isp_RPT_LP_POPUPPLIST_002]
+CREATE OR ALTER   PROC [dbo].[isp_RPT_LP_POPUPPLIST_002]
 (@c_Loadkey NVARCHAR(10))
 AS
 BEGIN
@@ -83,7 +81,7 @@ BEGIN
          , @c_VehicleNo          NVARCHAR(10)
          , @c_firstorderkey      NVARCHAR(10)
          , @c_superorderflag     NVARCHAR(1)
-        , @c_firsttime          NVARCHAR(1)
+         , @c_firsttime          NVARCHAR(1)
          , @c_logicalloc         NVARCHAR(18)
          , @c_Lottable02         NVARCHAR(10)
          , @d_Lottable04         DATETIME
@@ -164,7 +162,7 @@ BEGIN
     , inner_cal             INT
     , Each_cal              INT
     , Total_cal             INT
-    , DeliveryDate          DATETIME	 NULL
+    , DeliveryDate          NVARCHAR(10) NULL
     , RetailSku             NVARCHAR(20) NULL
     , BuyerPO               NVARCHAR(20) NULL
     , InvoiceNo             NVARCHAR(10) NULL
@@ -180,9 +178,7 @@ BEGIN
     , Logo                  NVARCHAR(50)
     , SKUTitle              NVARCHAR(50)   --WL02
     , SKUGroupTitle         NVARCHAR(50)   --WL03
-    , Storerkey				NVARCHAR(20) NULL
-    , Facility				NVARCHAR(20) NULL
- )
+   )
 
    INSERT INTO #TEMP_PICK (PickSlipNo, LoadKey, OrderKey, ConsigneeKey, Company, Addr1, Addr2, PgGroup, Addr3, PostCode
                          , Route, Route_Desc, TrfRoom, Notes1, RowNum, Notes2, LOC, ID, SKU, SkuDesc, Qty, TempQty1
@@ -190,7 +186,7 @@ BEGIN
                          , packcasecnt, packinner, packeaches, externorderkey, LogicalLoc, Areakey, UOM, Pallet_cal
                          , Cartons_cal, inner_cal, Each_cal, Total_cal, DeliveryDate, RetailSku, BuyerPO, InvoiceNo
                          , OrderDate, Susr4, vat, OVAS, SKUGROUP, ContainerType, Pickzone, Priority
-                         , ExtendRouteDescLength, Logo, SKUTitle, SKUGroupTitle, Storerkey, Facility)   --WL02   --WL03
+                         , ExtendRouteDescLength, Logo, SKUTitle, SKUGroupTitle)   --WL02   --WL03
    SELECT RefKeyLookup.Pickslipno
         , @c_Loadkey AS LoadKey
         , PICKDETAIL.OrderKey
@@ -224,7 +220,7 @@ BEGIN
         , '' CarrierKey
         , '' AS VehicleNo
         , LOTATTRIBUTE.Lottable02
-        , LOTATTRIBUTE.Lottable04
+        , ISNULL([dbo].[fnc_ConvSFTimeZone](PICKDETAIL.StorerKey, ORDERS.Facility, LOTATTRIBUTE.Lottable04), '19000101') Lottable04	 --AYD01
         , PACK.Pallet
         , PACK.CaseCnt
         , PACK.InnerPack
@@ -240,12 +236,17 @@ BEGIN
         , inner_cal = 0
         , Each_cal = 0
         , Total_cal = SUM(PICKDETAIL.Qty)
-        , ORDERS.DeliveryDate 
+        , CONVERT(
+             NVARCHAR(10)
+           , CASE WHEN ORDERS.DocType = 'E' OR ISNULL(ORDERS.UserDefine03, '') = '' THEN
+                     ISNULL([dbo].[fnc_ConvSFTimeZone](PICKDETAIL.StorerKey, ORDERS.Facility, ORDERS.DeliveryDate), '19000101')  --AYD01
+                  ELSE IIF(ISDATE(ORDERS.UserDefine03) = 1, CAST(ORDERS.UserDefine03 AS DATETIME), '19000101') END   --WL01
+           , 103)       
         , CASE WHEN ISNULL(SKU.RETAILSKU, '') = '' THEN ISNULL(SKU.ALTSKU, '')
                ELSE SKU.RETAILSKU END AS RetailSku
         , ISNULL(ORDERS.BuyerPO, '') BuyerPO
         , ISNULL(ORDERS.InvoiceNo, '') InvoiceNo
-        , ORDERS.OrderDate
+        , ISNULL([dbo].[fnc_ConvSFTimeZone](PICKDETAIL.StorerKey, ORDERS.Facility, ORDERS.OrderDate), '19000101') OrderDate	  --AYD01
         , SKU.SUSR4
         , st.VAT
         , SKU.OVAS
@@ -258,8 +259,6 @@ BEGIN
         , ISNULL(@c_RetVal, '') AS Logo
         , IIF(ISNULL(CL2.Short, 'N') = 'Y', 'Style - Size', 'Sku') AS SKUTitle   --WL02
         , IIF(ISNULL(CL3.Short, 'N') = 'Y', 'ExtendedField04', 'SKU Group') AS SKUGroupTitle   --WL03
-        , PICKDETAIL.Storerkey
-        , ORDERS.Facility
    FROM PICKDETAIL (NOLOCK)
    JOIN ORDERS (NOLOCK) ON PICKDETAIL.OrderKey = ORDERS.OrderKey
    JOIN LOTATTRIBUTE (NOLOCK) ON PICKDETAIL.Lot = LOTATTRIBUTE.Lot
@@ -308,7 +307,7 @@ BEGIN
           , ISNULL(SKU.DESCR, '')
           , PICKDETAIL.Lot
           , LOTATTRIBUTE.Lottable02
-          , LOTATTRIBUTE.Lottable04
+          , ISNULL([dbo].[fnc_ConvSFTimeZone](PICKDETAIL.StorerKey, ORDERS.Facility, LOTATTRIBUTE.Lottable04), '19000101')	--AYD01
           , PACK.Pallet
           , PACK.CaseCnt
           , PACK.InnerPack
@@ -317,12 +316,17 @@ BEGIN
           , ISNULL(LOC.LogicalLocation, '')
           , ISNULL(AreaDetail.AreaKey, '00')
           , ISNULL(ORDERDETAIL.UOM, '')
-          , ORDERS.DeliveryDate
+          , CONVERT(
+               NVARCHAR(10)
+             , CASE WHEN ORDERS.DocType = 'E' OR ISNULL(ORDERS.UserDefine03, '') = '' THEN
+                       ISNULL([dbo].[fnc_ConvSFTimeZone](PICKDETAIL.StorerKey, ORDERS.Facility, ORDERS.DeliveryDate), '19000101')	--AYD01
+                    ELSE IIF(ISDATE(ORDERS.UserDefine03) = 1, CAST(ORDERS.UserDefine03 AS DATETIME), '19000101') END   --WL01
+             , 103) 
           , CASE WHEN ISNULL(SKU.RETAILSKU, '') = '' THEN ISNULL(SKU.ALTSKU, '')
                  ELSE SKU.RETAILSKU END
           , ISNULL(ORDERS.BuyerPO, '')
           , ISNULL(ORDERS.InvoiceNo, '')
-          , ORDERS.OrderDate
+          , ISNULL([dbo].[fnc_ConvSFTimeZone](PICKDETAIL.StorerKey, ORDERS.Facility, ORDERS.OrderDate), '19000101')   --AYD01
           , SKU.SUSR4
           , st.VAT
           , SKU.OVAS
@@ -334,9 +338,8 @@ BEGIN
           , ISNULL(CL1.Short, 'N')
           , IIF(ISNULL(CL2.Short, 'N') = 'Y', 'Style - Size', 'Sku')   --WL02
           , IIF(ISNULL(CL3.Short, 'N') = 'Y', 'ExtendedField04', 'SKU Group')   --WL03
-          , PICKDETAIL.Storerkey
-          , ORDERS.Facility
-		  , ORDERS.DeliveryDate
+		  , PICKDETAIL.Storerkey	--AYD01
+		  , ORDERS.Facility		--AYD01
 
    UPDATE #TEMP_PICK
    SET Cartons_cal = CASE packcasecnt
@@ -456,7 +459,7 @@ BEGIN
                   SELECT @n_continue = 3
                   SELECT @n_err = 63501
                   SELECT @c_errmsg = N'NSQL' + CONVERT(NVARCHAR(5), @n_err)
-                              + N': Insert into PICKHEADER Failed. (isp_RPT_LP_POPUPLIST_002)'
+                                     + N': Insert into PICKHEADER Failed. (isp_RPT_LP_POPUPLIST_002)'
                   GOTO FAILURE
                END
             END -- @b_success = 1        
@@ -565,7 +568,7 @@ BEGIN
          , ID                   
          , SKU                  
          , SkuDesc              
-         , Qty          
+         , Qty                  
          , TempQty1             
          , TempQty2             
          , PrintedFlag          
@@ -576,7 +579,7 @@ BEGIN
          , Carrierkey           
          , VehicleNo            
          , Lottable02           
-         , ISNULL([dbo].[fnc_ConvSFTimeZone](StorerKey, Facility, Lottable04), '19000101') AS Lottable04
+         , Lottable04           
          , packpallet           
          , packcasecnt          
          , packinner            
@@ -590,11 +593,11 @@ BEGIN
          , inner_cal            
          , Each_cal             
          , Total_cal            
-         , CONVERT(varchar(100), ISNULL([dbo].[fnc_ConvSFTimeZone](StorerKey, Facility, DeliveryDate), '19000101'), 103) AS DeliveryDate
+         , DeliveryDate         
          , RetailSku            
          , BuyerPO              
          , InvoiceNo            
-         , ISNULL([dbo].[fnc_ConvSFTimeZone](StorerKey, Facility, OrderDate), '19000101') AS OrderDate
+         , OrderDate            
          , Susr4                
          , vat                  
          , OVAS                 
@@ -626,3 +629,8 @@ BEGIN
       DROP TABLE #TEMP_PICK
 
 END -- procedure     
+GO
+GRANT EXECUTE ON [dbo].[isp_RPT_LP_POPUPPLIST_002] TO [NSQL]
+GO
+GRANT EXECUTE ON [dbo].[isp_RPT_LP_POPUPPLIST_002] TO [LogiReportRoleWM]
+GO
