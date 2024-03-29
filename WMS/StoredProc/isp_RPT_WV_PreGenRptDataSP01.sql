@@ -22,6 +22,7 @@ GO
 /* Updates:                                                              */
 /* Date        Author  Ver   Purposes                                    */
 /* 06-Dec-2023 WLChooi 1.0   DevOps Combine Script                       */
+/* 27-MAR-2024 CSCHONG 1.1   UWP-17313 limit 15 line per pickslipno(CS01)*/
 /*************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_RPT_WV_PreGenRptDataSP01]
@@ -31,7 +32,7 @@ CREATE OR ALTER PROC [dbo].[isp_RPT_WV_PreGenRptDataSP01]
  , @c_Refkeylookup          NVARCHAR(5)   = 'Y'   --Y=Create refkeylookup records  N=Not create
  , @c_LinkPickSlipToPick    NVARCHAR(5)   = 'N'   --Y=Update pickslipno to pickdetail.pickslipno  N=Not update to pickdetail
  , @c_AutoScanIn            NVARCHAR(5)   = 'N'   --Y=Auto scan in the pickslip N=Not auto scan in  
- , @c_GroupMethod           NVARCHAR(500) = 'Loadkey,UOM,Pickzone'   --Pickslip Group method, for example, Wavekey, Loadkey, UOM, Pickzone
+ , @c_GroupMethod           NVARCHAR(500) = 'Loadkey,UOM,Pickzone,@n_maxline = 15'   --Pickslip Group method, for example, Wavekey, Loadkey, UOM, Pickzone,maxline per pickslipno
  , @b_Success               INT  = 1            OUTPUT
  , @n_Err                   INT  = 0            OUTPUT
  , @c_ErrMsg                NVARCHAR(250) = ''  OUTPUT
@@ -62,17 +63,29 @@ BEGIN
          , @c_CursorVar          NVARCHAR(50)
          , @c_CursorVarList      NVARCHAR(4000) = ''
          , @n_RowID              INT
-         , @c_PH_Wavekey         NVARCHAR(10)
+         , @c_PH_Wavekey         NVARCHAR(20)   --CS01
          , @c_PickDetailKey      NVARCHAR(10)
          , @c_PH_ConsoOrderkey   NVARCHAR(50)
          , @b_Debug              INT = 0
          , @c_GetWavekey         NVARCHAR(10) = ''
+         , @n_Linecount          INT   --CS01
+         , @n_MaxLine            INT   --CS01
+         , @n_RecGrp             INT   --CS01 
 
    DECLARE @CUR_PickDetail CURSOR 
 
    SET @b_Debug = @n_Err
 
    SELECT @n_Continue = 1, @n_StartTCnt = @@TRANCOUNT, @n_Err = 0, @c_ErrMsg = '', @b_Success = 1
+
+   
+   SELECT @n_MaxLine = dbo.fnc_GetParamValueFromString('@n_maxline', @c_GroupMethod, '') --CS01 S
+
+   IF @n_MaxLine = 0
+   BEGIN
+      SET @n_MaxLine = 1
+   END
+   --CS01 E
 
    CREATE TABLE #TMP_DICT ( 
       RowID       INT NOT NULL IDENTITY(1,1)
@@ -82,11 +95,13 @@ BEGIN
    )
 
    CREATE TABLE #TMP_DATA ( 
-      Wavekey  NVARCHAR(100) NULL
-    , Loadkey  NVARCHAR(100) NULL
-    , Orderkey NVARCHAR(100) NULL
-    , UOM      NVARCHAR(100) NULL
-    , Pickzone NVARCHAR(100) NULL
+      Wavekey          NVARCHAR(100) NULL
+    , Loadkey          NVARCHAR(100) NULL
+    , Orderkey         NVARCHAR(100) NULL
+    , UOM              NVARCHAR(100) NULL
+    , Pickzone         NVARCHAR(100) NULL
+    , RecGrp           INT    
+  , PickDetailKey    NVARCHAR(20) NULL
    )
 
    INSERT INTO #TMP_DICT (DictKey, DictValue, DictVar)
@@ -155,8 +170,9 @@ BEGIN
    CLOSE CUR_DELIM
    DEALLOCATE CUR_DELIM
 
-   SET @c_CursorVarList = N'INSERT INTO #TMP_DATA ( ' + @c_CursorVarList + ')'
-   SET @c_SelectCols = 'SELECT ' + @c_Cols
+   SET @c_CursorVarList = N'INSERT INTO #TMP_DATA ( ' + @c_CursorVarList + ',RecGrp,PickDetailKey' +')'
+   SET @c_SelectCols = 'SELECT ' + @c_Cols + ',(ROW_NUMBER() OVER (PARTITION BY ' + @c_Cols +   
+                                      ' ORDER BY '  + @c_Cols + ')-1)   /@n_MaxLine + 1,PICKDETAIL.PickDetailKey '
    SET @c_GroupCols = 'GROUP BY ' + @c_Cols
 
    SELECT @c_SQL = @c_CursorVarList + CHAR(13)
@@ -169,14 +185,15 @@ BEGIN
                  + N'JOIN LOC WITH (NOLOCK) ON (PICKDETAIL.Loc = LOC.Loc) ' + CHAR(13)
                  + N'WHERE WAVEDETAIL.Wavekey = @c_Wavekey ' + CHAR(13)
                  + N'AND PICKDETAIL.Status < ''5'' ' + CHAR(13)
-                 + @c_GroupCols
+               --  + @c_GroupCols
 
    SET @c_ExecArguments = N'   @c_Wavekey         NVARCHAR(10) '
                         + N' , @c_Orderkey        NVARCHAR(10) '
                         + N' , @c_Loadkey         NVARCHAR(10) '
                         + N' , @c_UOM             NVARCHAR(10) '
                         + N' , @c_Pickzone        NVARCHAR(50) '
-
+                        + N' , @n_MaxLine         INT'
+        
    EXEC sp_ExecuteSql @c_SQL       
                     , @c_ExecArguments 
                     , @c_Wavekey
@@ -184,15 +201,17 @@ BEGIN
                     , @c_Loadkey 
                     , @c_UOM     
                     , @c_Pickzone
+                    , @n_MaxLine
 
    DECLARE CUR_GENPS CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-   SELECT ISNULL(Wavekey, ''), ISNULL(Loadkey, ''), ISNULL(Orderkey, ''), ISNULL(UOM, ''), ISNULL(Pickzone, '')
+   SELECT distinct ISNULL(Wavekey, ''), ISNULL(Loadkey, ''), ISNULL(Orderkey, ''), ISNULL(UOM, ''), ISNULL(Pickzone, ''),RecGrp   --CS01
    FROM #TMP_DATA
-   GROUP BY ISNULL(Wavekey, ''), ISNULL(Loadkey, ''), ISNULL(Orderkey, ''), ISNULL(UOM, ''), ISNULL(Pickzone, '')
+   GROUP BY ISNULL(Wavekey, ''), ISNULL(Loadkey, ''), ISNULL(Orderkey, ''), ISNULL(UOM, ''), ISNULL(Pickzone, ''),RecGrp  --CS01
+   Order by ISNULL(Wavekey, ''), ISNULL(Loadkey, ''), ISNULL(Orderkey, ''), ISNULL(UOM, ''), ISNULL(Pickzone, ''),RecGrp  --CS01
 
    OPEN CUR_GENPS
 
-   FETCH NEXT FROM CUR_GENPS INTO @c_GetWavekey, @c_Loadkey, @c_Orderkey, @c_UOM, @c_Pickzone
+   FETCH NEXT FROM CUR_GENPS INTO @c_GetWavekey, @c_Loadkey, @c_Orderkey, @c_UOM, @c_Pickzone,@n_RecGrp                --CS01
 
    WHILE @@FETCH_STATUS <> -1
    BEGIN
@@ -211,24 +230,24 @@ BEGIN
       BEGIN
          IF @c_UOM = '1'
          BEGIN
-            SET @c_PH_Wavekey = TRIM(@c_PickZone) + '_P'
+            SET @c_PH_Wavekey = TRIM(@c_PickZone) + CAST(@n_RecGrp as nvarchar(2)) + '_P'   --CS01
          END
          ELSE IF @c_UOM = '2'
          BEGIN
-            SET @c_PH_Wavekey = TRIM(@c_PickZone) + '_C'
+            SET @c_PH_Wavekey = TRIM(@c_PickZone) + CAST(@n_RecGrp as nvarchar(2)) + '_C'   --CS01
          END
          ELSE IF @c_UOM = '7'
          BEGIN
-            SET @c_PH_Wavekey = TRIM(@c_PickZone) + '_7'
+            SET @c_PH_Wavekey = TRIM(@c_PickZone) + CAST(@n_RecGrp as nvarchar(2)) + '_7'   --CS01
          END
          ELSE
          BEGIN
-            SET @c_PH_Wavekey = TRIM(@c_PickZone)
+            SET @c_PH_Wavekey = TRIM(@c_PickZone) + CAST(@n_RecGrp as nvarchar(2))          --CS01
          END
       END
       ELSE IF @c_Pickzone <> '' AND @c_UOM = ''   --If split by Pickzone
       BEGIN
-         SET @c_PH_Wavekey = TRIM(@c_PickZone)
+         SET @c_PH_Wavekey = TRIM(@c_PickZone) + CAST(@n_RecGrp as nvarchar(2))     --CS01
       END
 
       IF @c_Orderkey <> '' --create discrete pickslip
@@ -274,10 +293,12 @@ BEGIN
          FROM PICKDETAIL (NOLOCK)  
          JOIN Wavedetail (NOLOCK) ON PICKDETAIL.Orderkey = Wavedetail.Orderkey  
          JOIN LOC (NOLOCK) ON LOC.LOC = PICKDETAIL.Loc
+         JOIN #TMP_DATA TD ON TD.pickdetailkey = PICKDETAIL.PickDetailKey    --CS01
          WHERE Wavedetail.WaveKey = @c_GetWavekey  
          AND PICKDETAIL.Pickslipno <> @c_Pickslipno 
          AND PICKDETAIL.UOM = CASE WHEN @c_UOM = '' THEN PICKDETAIL.UOM ELSE @c_UOM END
          AND LOC.PickZone = CASE WHEN @c_Pickzone = '' THEN LOC.PickZone ELSE @c_Pickzone END
+         AND TD.Recgrp = @n_Recgrp
 
          SET @c_PH_ConsoOrderkey = @c_PH_Wavekey
          SET @c_PH_Wavekey = @c_GetWavekey
@@ -360,10 +381,12 @@ BEGIN
             FROM PICKDETAIL (NOLOCK)  
             JOIN Wavedetail (NOLOCK) ON PICKDETAIL.Orderkey = Wavedetail.Orderkey  
             JOIN LOC (NOLOCK) ON LOC.LOC = PICKDETAIL.Loc
+            JOIN #TMP_DATA TD ON TD.pickdetailkey = PICKDETAIL.PickDetailKey                 --CS01
             WHERE Wavedetail.WaveKey = @c_GetWavekey  
             AND PICKDETAIL.Pickslipno <> @c_Pickslipno 
             AND PICKDETAIL.UOM = CASE WHEN @c_UOM = '' THEN PICKDETAIL.UOM ELSE @c_UOM END
             AND LOC.PickZone = CASE WHEN @c_Pickzone = '' THEN LOC.PickZone ELSE @c_Pickzone END
+            AND TD.RecGrp = @n_RecGrp                                                        --CS01
             ORDER BY PICKDETAIL.PickDetailKey
          END
 
@@ -413,6 +436,7 @@ BEGIN
             FROM PICKDETAIL PD (NOLOCK)
             JOIN LOC L (NOLOCK) ON L.LOC = PD.Loc
             LEFT JOIN RefKeyLookup RKL (NOLOCK) ON PD.PickDetailKey = RKL.PickDetailkey
+
             WHERE PD.OrderKey = @c_Orderkey AND RKL.PickDetailkey IS NULL
             AND PD.UOM = CASE WHEN @c_UOM = '' THEN PD.UOM ELSE @c_UOM END
             AND L.PickZone = CASE WHEN @c_Pickzone = '' THEN L.PickZone ELSE @c_Pickzone END
@@ -437,6 +461,7 @@ BEGIN
             WHERE PD.OrderKey = @c_Orderkey AND RefKeyLookup.Pickslipno <> @c_PickslipNo
             AND PD.UOM = CASE WHEN @c_UOM = '' THEN PD.UOM ELSE @c_UOM END
             AND L.PickZone = CASE WHEN @c_Pickzone = '' THEN L.PickZone ELSE @c_Pickzone END
+
 
             SELECT @n_Err = @@ERROR
             IF @n_Err <> 0
@@ -501,7 +526,8 @@ BEGIN
             END
          END
          ELSE IF @c_GetWavekey <> ''
-         BEGIN
+         BEGIN   
+
             INSERT INTO RefKeyLookup (PickDetailkey, Pickslipno, OrderKey, OrderLineNumber)
             SELECT PD.PickDetailKey
                  , @c_PickslipNo
@@ -511,9 +537,11 @@ BEGIN
             JOIN PICKDETAIL PD (NOLOCK) ON WD.OrderKey = PD.OrderKey
             JOIN LOC L (NOLOCK) ON L.LOC = PD.Loc
             LEFT JOIN RefKeyLookup RKL (NOLOCK) ON PD.PickDetailKey = RKL.PickDetailkey
+            JOIN #TMP_DATA TD ON TD.pickdetailkey = PD.PickDetailKey                 --CS01
             WHERE WD.WaveKey = @c_GetWavekey AND RKL.PickDetailkey IS NULL
             AND PD.UOM = CASE WHEN @c_UOM = '' THEN PD.UOM ELSE @c_UOM END
             AND L.PickZone = CASE WHEN @c_Pickzone = '' THEN L.PickZone ELSE @c_Pickzone END
+            AND TD.RecGrp = @n_RecGrp                                                        --CS01
 
             SELECT @n_Err = @@ERROR
             IF @n_Err <> 0
@@ -533,9 +561,11 @@ BEGIN
             JOIN PICKDETAIL PD (NOLOCK) ON WD.OrderKey = PD.OrderKey
             JOIN LOC L (NOLOCK) ON L.LOC = PD.Loc
             JOIN RefKeyLookup ON PD.PickDetailKey = RefKeyLookup.PickDetailkey
+            JOIN #TMP_DATA TD ON TD.pickdetailkey = PD.PickDetailKey                 --CS01
             WHERE WD.WaveKey = @c_GetWavekey AND RefKeyLookup.Pickslipno <> @c_PickslipNo
             AND PD.UOM = CASE WHEN @c_UOM = '' THEN PD.UOM ELSE @c_UOM END
             AND L.PickZone = CASE WHEN @c_Pickzone = '' THEN L.PickZone ELSE @c_Pickzone END
+            AND TD.RecGrp = @n_RecGrp                                                        --CS01
 
             SELECT @n_Err = @@ERROR
             IF @n_Err <> 0
@@ -574,7 +604,7 @@ BEGIN
          END
       END
 
-      FETCH NEXT FROM CUR_GENPS INTO @c_GetWavekey, @c_Loadkey, @c_Orderkey, @c_UOM, @c_Pickzone
+      FETCH NEXT FROM CUR_GENPS INTO @c_GetWavekey, @c_Loadkey, @c_Orderkey, @c_UOM, @c_Pickzone ,@n_RecGrp                --CS01
    END
    CLOSE CUR_GENPS
    DEALLOCATE CUR_GENPS
