@@ -5,16 +5,16 @@ GO
 
 /***************************************************************************/
 /* Stored Procedure: isp_ODMRPL01                                          */
-/* Creation Date:  27-AUG-2017                                             */
-/* Copyright: LFL                                                          */
-/* Written by:Wan                                                          */
+/* Creation Date:  27-Mar-2024                                             */
+/* Copyright: Maersk                                                       */
+/* Written by:Shong                                                        */
 /*                                                                         */
 /* Purpose: This Stored procedure include Replenishment logic and          */
 /*        : Task creation as well as Replenishment record generation       */
 /*                                                                         */
 /* Called By: RDT and SCE Generate Report Stored Procedure                 */
 /*                                                                         */
-/* PVCS Version: 1.0                                                       */
+/* PVCS Version: 1.1                                                       */
 /*                                                                         */
 /* Version: MWMS V2                                                        */
 /*                                                                         */
@@ -22,7 +22,8 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
-/* 31-Aug-2019  SHONG   1.0   Create UWP-14725                             */
+/* 24-Mar-2024  SHONG   1.0   Create UWP-14725                             */
+/* 27-Mar-2024  Wan01   1.1   Change Task Priority                         */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_ODMRPL01]
@@ -36,7 +37,6 @@ CREATE OR ALTER PROC [dbo].[isp_ODMRPL01]
     @n_Err        INT OUTPUT,
     @c_ErrMsg     NVARCHAR(255) OUTPUT,
     @b_Debug      INT = 0
-
 AS
 BEGIN
     SET NOCOUNT ON
@@ -49,10 +49,10 @@ BEGIN
 
          , @c_Wavekey               NVARCHAR(10)   = ''
          
-         
          , @c_ReplenishmentKey      NVARCHAR(10)   = ''
          
          , @c_Priority              NVARCHAR(5)    = ''
+         , @c_TaskPriority          NVARCHAR(10)   = '5'                            --(Wan01)    
 
          , @n_InvCnt                INT
          , @c_CurrentStorer         NVARCHAR(15)   = ''
@@ -105,6 +105,7 @@ BEGIN
          , @c_FromAreaKey           NVARCHAR(10)   = ''  
          , @c_ToLogicalLoc          NVARCHAR(10)   = '' 
          , @c_ToAreaKey             NVARCHAR(10)   = '' 
+         , @n_IsRDT                 INT            = 0                              --(Wan01)  
 
     WHILE @@TRANCOUNT > 0
     BEGIN
@@ -112,7 +113,12 @@ BEGIN
     END
 
     BEGIN TRAN
+    EXECUTE RDT.rdtIsRDT @n_IsRDT OUTPUT                                            --(Wan01) - START
 
+    IF @n_IsRDT = 1                                                                 
+    BEGIN
+      SET @c_TaskPriority = '3'
+    END                                                                             --(Wan01) - END
  
     IF ISNULL(RTRIM(@c_LOC), '') = ''
     BEGIN
@@ -1005,7 +1011,7 @@ BEGIN
                ,'FP' -- PickMethod
                ,'Q' -- Status
                , '' -- StatusMsg
-               ,'9' -- Priority
+               , @c_TaskPriority -- Priority                                        --(Wan01)
                ,'' -- Source Priority
                ,'' -- Hold Key
                ,'' -- UserKey
