@@ -26,7 +26,7 @@ GO
 /* 15-Sep-2023  WLChooi  1.2  WMS-23640 - Show Style & Size (WL02)           */
 /* 26-Sep-2023  WLChooi  1.3  UWP-8577 - Show ExtField04 (WL03)              */
 /* 19-Sep-2023  Calvin   1.4  INC6339467 Expand var to fit sif.ext04 (CLVN01)*/
-/* 27-Mar-2024  Alex     1.5  V2 Global Timezone Support  					     */
+/* 27-Mar-2024  Alex     1.5  V2 Global Timezone Support                     */
 /*****************************************************************************/
 CREATE OR ALTER   PROC [dbo].[isp_RPT_LP_POPUPPLIST_002]
 (@c_Loadkey NVARCHAR(10))
@@ -220,7 +220,7 @@ BEGIN
         , '' CarrierKey
         , '' AS VehicleNo
         , LOTATTRIBUTE.Lottable02
-        , ISNULL([dbo].[fnc_ConvSFTimeZone](PICKDETAIL.StorerKey, ORDERS.Facility, LOTATTRIBUTE.Lottable04), '19000101') Lottable04	 --AYD01
+        , ISNULL([dbo].[fnc_ConvSFTimeZone](PICKDETAIL.StorerKey, ORDERS.Facility, LOTATTRIBUTE.Lottable04), '19000101') Lottable04    --AYD01
         , PACK.Pallet
         , PACK.CaseCnt
         , PACK.InnerPack
@@ -246,7 +246,7 @@ BEGIN
                ELSE SKU.RETAILSKU END AS RetailSku
         , ISNULL(ORDERS.BuyerPO, '') BuyerPO
         , ISNULL(ORDERS.InvoiceNo, '') InvoiceNo
-        , ISNULL([dbo].[fnc_ConvSFTimeZone](PICKDETAIL.StorerKey, ORDERS.Facility, ORDERS.OrderDate), '19000101') OrderDate	  --AYD01
+        , ISNULL([dbo].[fnc_ConvSFTimeZone](PICKDETAIL.StorerKey, ORDERS.Facility, ORDERS.OrderDate), '19000101') OrderDate     --AYD01
         , SKU.SUSR4
         , st.VAT
         , SKU.OVAS
@@ -307,7 +307,7 @@ BEGIN
           , ISNULL(SKU.DESCR, '')
           , PICKDETAIL.Lot
           , LOTATTRIBUTE.Lottable02
-          , ISNULL([dbo].[fnc_ConvSFTimeZone](PICKDETAIL.StorerKey, ORDERS.Facility, LOTATTRIBUTE.Lottable04), '19000101')	--AYD01
+          , ISNULL([dbo].[fnc_ConvSFTimeZone](PICKDETAIL.StorerKey, ORDERS.Facility, LOTATTRIBUTE.Lottable04), '19000101')   --AYD01
           , PACK.Pallet
           , PACK.CaseCnt
           , PACK.InnerPack
@@ -319,7 +319,7 @@ BEGIN
           , CONVERT(
                NVARCHAR(10)
              , CASE WHEN ORDERS.DocType = 'E' OR ISNULL(ORDERS.UserDefine03, '') = '' THEN
-                       ISNULL([dbo].[fnc_ConvSFTimeZone](PICKDETAIL.StorerKey, ORDERS.Facility, ORDERS.DeliveryDate), '19000101')	--AYD01
+                       ISNULL([dbo].[fnc_ConvSFTimeZone](PICKDETAIL.StorerKey, ORDERS.Facility, ORDERS.DeliveryDate), '19000101')   --AYD01
                     ELSE IIF(ISDATE(ORDERS.UserDefine03) = 1, CAST(ORDERS.UserDefine03 AS DATETIME), '19000101') END   --WL01
              , 103) 
           , CASE WHEN ISNULL(SKU.RETAILSKU, '') = '' THEN ISNULL(SKU.ALTSKU, '')
@@ -338,8 +338,8 @@ BEGIN
           , ISNULL(CL1.Short, 'N')
           , IIF(ISNULL(CL2.Short, 'N') = 'Y', 'Style - Size', 'Sku')   --WL02
           , IIF(ISNULL(CL3.Short, 'N') = 'Y', 'ExtendedField04', 'SKU Group')   --WL03
-		  , PICKDETAIL.Storerkey	--AYD01
-		  , ORDERS.Facility		--AYD01
+          , PICKDETAIL.Storerkey   --AYD01
+          , ORDERS.Facility      --AYD01
 
    UPDATE #TEMP_PICK
    SET Cartons_cal = CASE packcasecnt
