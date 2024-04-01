@@ -206,7 +206,6 @@ BEGIN
       AND   TD.Storerkey = @c_Storerkey
       AND   TD.[Status] = @c_Status
       AND   TD.UOM = @c_UOM
-      AND   TD.SourceType = @c_SourceType
       GROUP BY TD.TaskDetailKey
              , TD.Lot
              , TD.FromLoc
