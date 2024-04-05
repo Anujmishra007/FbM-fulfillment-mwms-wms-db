@@ -42,6 +42,9 @@ GO
 /*                            Finalize                                  */
 /* 21-Mar-2024  Wan04     1.9 UWP-17363-Fix QtyonHold not increase if   */
 /*                            loc.stats<>'OK' And Hold ID               */
+/* 05-APR-2024  Wan05     2.0 UWP-17363-Fix Increase QtyOnHold if Loc   */
+/*                            Status not 'ok' or locationflag is 'damage'*/
+/*                            or 'hold'                                 */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[nspItrnAddDepositCheck]
      @c_itrnkey      NVARCHAR(10)
@@ -870,9 +873,10 @@ BEGIN
             --END
             --ELSE
             --BEGIN
-               IF EXISTS( SELECT 1 FROM ID WITH (NOLOCK) WHERE Id = @c_toid AND Status <> 'OK')
-                          OR EXISTS (SELECT 1 FROM LOC WITH (NOLOCK) WHERE Loc = @c_toloc AND
-                                    (Status <> 'OK' OR Locationflag = 'HOLD' OR Locationflag = 'DAMAGE'))
+               --IF EXISTS( SELECT 1 FROM ID WITH (NOLOCK) WHERE Id = @c_toid AND Status <> 'OK')  --(Wan05)
+               --           OR EXISTS (SELECT 1 FROM LOC WITH (NOLOCK) WHERE Loc = @c_toloc AND    --(Wan05)
+               IF EXISTS (SELECT 1 FROM LOC WITH (NOLOCK) WHERE Loc = @c_toloc AND                 --(Wan05)
+                          (Status <> 'OK' OR Locationflag = 'HOLD' OR Locationflag = 'DAMAGE'))
                BEGIN
                   UPDATE LOT SET Qtyonhold = Qtyonhold + @n_Qty
                   WHERE LOT = @c_Lot
