@@ -123,7 +123,7 @@ CREATE OR ALTER PROCEDURE [dbo].[msp_mWaveReleaseWCS_Std]
 
       SET @cur_OPENORD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT o.Orderkey
-      FROM #tORDER o
+      FROM #tORDERS o
       ORDER BY o.RowID                                                              --(Wan03) - END
          
       OPEN @cur_OPENORD
