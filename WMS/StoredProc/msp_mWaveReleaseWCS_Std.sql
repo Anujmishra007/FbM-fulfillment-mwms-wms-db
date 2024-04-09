@@ -5,7 +5,7 @@ GO
 /*************************************************************************/  
 /* Stored Procedure: msp_mWaveReleaseWCS_Std                             */  
 /* Creation Date: 2024-01-14                                             */  
-/* Copyright: mWMS                                                       */  
+/* Copyright: Maersk                                                     */  
 /* Written by: Wan                                                       */  
 /*                                                                       */  
 /* Purpose: Release to WCS                                               */  
@@ -24,6 +24,7 @@ GO
 /*                            UWP-13591-WMS to send the PTWWaveCheck     */
 /*                            message to WCS upon Wave release           */ 
 /* 2024-02-22   Wan02   1.2   UWP-13590-Fixed issue                      */
+/* 2024-04-09   Wan03   1.3   UWP-12854-Order Include-ChilePuma          */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [dbo].[msp_mWaveReleaseWCS_Std]      
   @c_Wavekey      NVARCHAR(10)  
@@ -37,23 +38,41 @@ CREATE OR ALTER PROCEDURE [dbo].[msp_mWaveReleaseWCS_Std]
     SET ANSI_NULLS OFF   
     SET CONCAT_NULL_YIELDS_NULL OFF  
     
-    DECLARE @n_Continue       INT          = 1    
-          , @n_StartTCnt      INT          = @@TRANCOUNT       -- Holds the current transaction count  
-          , @n_Debug          INT          = 0
+    DECLARE @n_Continue          INT          = 1    
+          , @n_StartTCnt         INT          = @@TRANCOUNT       -- Holds the current transaction count  
+          , @n_Debug             INT          = 0
           
-          , @c_Facility       NVARCHAR(5)  = ''          
-          , @c_Storerkey      NVARCHAR(15) = ''
-          , @c_OrderKey       NVARCHAR(10) = ''
+          , @c_Facility          NVARCHAR(5)  = ''          
+          , @c_Storerkey         NVARCHAR(15) = ''
+          , @c_OrderKey          NVARCHAR(10) = ''
+          , @c_OrderStatus       NVARCHAR(10) = '2'                                 --(Wan03)
+          , @b_RelWSWVCHKPTW     BIT          = 0                                   --(Wan03)
           
-          , @c_TableName      NVARCHAR(30) = ''
-          , @c_Key1           NVARCHAR(10) = ''
-          , @c_Key2           NVARCHAR(30) = ''
-          , @c_Key3           NVARCHAR(20) = ''
-          , @c_TransmitBatch  NVARCHAR(30) = ''
+          , @c_TableName         NVARCHAR(30) = ''
+          , @c_Key1              NVARCHAR(10) = ''
+          , @c_Key2              NVARCHAR(30) = ''
+          , @c_Key3              NVARCHAR(20) = ''
+          , @c_TransmitBatch     NVARCHAR(30) = ''
       
-          , @c_CfgWCS         NVARCHAR(10) = ''
+          , @c_CfgWCS            NVARCHAR(10) = ''
+          , @c_SPCode            NVARCHAR(30) = ''                                  --(Wan03)
+          , @c_CfgWavRLWCSOpt5   NVARCHAR(4000)= ''                                 --(Wan03)
+          , @c_RelOpenOrder      NVARCHAR(10)  = 'N'                                --(Wan03)
+          , @c_SQL               NVARCHAR(1000)= ''                                 --(Wan03)
+          , @c_SQLParms          NVARCHAR(1000)= ''                                 --(Wan03)
+          , @c_ConditionQuery    NVARCHAR(1000)= ''                                 --(Wan03)
           
-          , @cur_OPENORD      CURSOR
+          , @cur_OPENORD         CURSOR
+
+   IF OBJECT_ID('tempdb..#tORDERS') IS NOT NULL                                     --(Wan03) - START                             
+   BEGIN
+      DROP TABLE #tORDERS;
+   END
+
+   CREATE TABLE #tORDERS
+      (  RowID          INT            NOT NULL IDENTITY(1,1)  PRIMARY KEY
+      ,  Orderkey       NVARCHAR(10)   NOT NULL DEFAULT('')
+      )                                                                             --(Wan03) - END   
 
    SELECT TOP 1 
            @c_Facility  = o.Facility
@@ -63,17 +82,50 @@ CREATE OR ALTER PROCEDURE [dbo].[msp_mWaveReleaseWCS_Std]
    ORDER BY o.OrderKey DESC
 
    SELECT @c_CfgWCS = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'WCS')
+
+   SELECT @c_SPCode = fsgr.Authority                                                --(Wan03) - START
+         ,@c_CfgWavRLWCSOpt5  = fsgr.ConfigOption5
+   FROM dbo.fnc_SelectGetRight(@c_Facility, @c_Storerkey, '', 'WaveReleaseToWCS_SP') AS fsgr
+   
+   IF @c_SPCode = '0' SET @c_SPCode = ''
+   IF @c_SPCode NOT IN ('')
+   BEGIN
+      IF @c_CfgWavRLWCSOpt5 <> ''
+      BEGIN
+         SELECT @c_RelOpenOrder = dbo.fnc_GetParamValueFromString('@c_ReleaseOpenOrder',@c_CfgWavRLWCSOpt5,@c_RelOpenOrder)
+         SELECT @c_ConditionQuery = dbo.fnc_GetParamValueFromString('@c_ConditionQuery',@c_CfgWavRLWCSOpt5,@c_ConditionQuery)
+      END  
+
+      IF @c_RelOpenOrder = 'Y'
+      BEGIN
+         SET @c_OrderStatus = '0'
+      END
+   END
     
    IF @c_CfgWCS = '1'
    BEGIN
+      SET @c_SQL = N'SELECT ORDERS.OrderKey'
+                 + ' FROM dbo.WAVEDETAIL (NOLOCK)'
+                 + ' JOIN ORDERS (NOLOCK) ON ORDERS.OrderKey = WAVEDETAIL.OrderKey'
+                 + ' WHERE WAVEDETAIL.WaveKey = @c_Wavekey'
+                 + ' AND ORDERS.[Status] = @c_OrderStatus'
+
+      SET @c_SQL= @c_SQL + ' ' + @c_ConditionQuery + ' ORDER BY WAVEDETAIL.WaveDetailKey'
+
+      SET @c_SQLParms = N'@c_Wavekey      NVARCHAR(10)'
+                      + ',@c_OrderStatus  NVARCHAR(10)'
+
+      INSERT INTO #tORDERS ( Orderkey ) 
+      EXEC sp_ExecuteSQL @c_SQL
+                     ,@c_SQLParms
+                     ,@c_Wavekey
+                     ,@c_OrderStatus
+
       SET @cur_OPENORD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT w.OrderKey
-      FROM dbo.WAVEDETAIL AS w (NOLOCK)
-      JOIN ORDERS AS o (NOLOCK) ON o.OrderKey = w.OrderKey
-      WHERE w.WaveKey = @c_Wavekey
-      AND o.[Status] = '0'
-      ORDER BY w.WaveDetailKey
-      
+      SELECT o.Orderkey
+      FROM #tORDER o
+      ORDER BY o.RowID                                                              --(Wan03) - END
+         
       OPEN @cur_OPENORD
       
       FETCH NEXT FROM @cur_OPENORD INTO @c_OrderKey
@@ -99,13 +151,13 @@ CREATE OR ALTER PROCEDURE [dbo].[msp_mWaveReleaseWCS_Std]
          BEGIN
             SET @n_Continue = 3
          END
-         
+         SET @b_RelWSWVCHKPTW = 1                                                   --(Wan03) 
          FETCH NEXT FROM @cur_OPENORD INTO @c_OrderKey   
       END
       CLOSE @cur_OPENORD
       DEALLOCATE @cur_OPENORD
       
-      IF @n_Continue = 1 
+      IF @b_RelWSWVCHKPTW = 1 AND @n_Continue = 1                                   --(Wan03) 
       BEGIN
          SET @c_TableName = 'WSWVCHKPTW'                                            --(wan02)
          SET @c_Key1 = @c_Wavekey
@@ -129,6 +181,11 @@ CREATE OR ALTER PROCEDURE [dbo].[msp_mWaveReleaseWCS_Std]
       END
    END    
 EXIT_SP:
+   IF OBJECT_ID('tempdb..#tORDERS') IS NOT NULL                                     --(Wan03) - START                             
+   BEGIN
+      DROP TABLE #tORDERS;
+   END                                                                              --(Wan03) - END 
+
    IF @n_Continue=3  -- Error Occured - Process And Return  
    BEGIN  
       SET @b_Success = 0  
