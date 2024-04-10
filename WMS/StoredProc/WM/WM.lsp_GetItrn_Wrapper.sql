@@ -164,6 +164,7 @@ BEGIN
       ,  CaseQty              FLOAT          NOT NULL DEFAULT (0.00)                --(Wan05)
       ,  InnerPackQty         FLOAT          NOT NULL DEFAULT (0.00)                --(Wan05)
       ,  Rowfocusindicatorcol CHAR(1)        NOT NULL DEFAULT ('')
+      ,  PalletType           NVARCHAR(30)   NOT NULL
       )
 
       CREATE INDEX IDX_TRNX ON #TMP_ITRN (TxnSourceType, TxnKey)
@@ -245,6 +246,7 @@ BEGIN
                     +', ITRN.UOM'
                     +', ITRN.Channel'
                     +', ITRN.Channel_ID'
+                    +', ITRN.PalletType'
                     + ' FROM ' + IIF(@b_GetArchiveDB = 0, '', @c_DBName) + 'dbo.ITRN WITH (NOLOCK)'         --(Wan02)
                     + ' JOIN dbo.LotAttribute WITH (NOLOCK) ON LotAttribute.Lot = ITRN.Lot'                           --(Wan04)--(ZG01)
                     + ' JOIN dbo.SKU SKU WITH (NOLOCK) ON SKU.Storerkey = ITRN.Storerkey AND SKU.Sku = ITRN.Sku'
@@ -296,6 +298,7 @@ BEGIN
             ,  UOM
             ,  Channel
             ,  Channel_ID
+            , PalletType
             )
          EXEC sp_ExecuteSQL @c_SQL
                            ,@c_SQLParms
@@ -710,6 +713,7 @@ BEGIN
                   +', ITRN.SourceTypeDesc'                                          --(Wan05)  
                   +', ITRN.CaseQty'                                                 --(Wan05)
                   +', ITRN.InnerPackQty'                                            --(Wan05)     
+                  +', ITRN.PalletType'
                   + ' FROM #TMP_ITRN AS ITRN'
                   + ' JOIN #TMP_ITRN AS LotAttribute ON LotAttribute.RowID = ITRN.RowID'      --(Wan04)   
                   + ' JOIN #TMP_ITRN AS SKU ON SKU.RowID = ITRN.RowID'                        --(Wan04)
