@@ -591,8 +591,7 @@ BEGIN
     IF UPDATE(LOC)
         BEGIN
             UPDATE LOC
-            SET LocCheckDigit  = dbo.fnc_GetLocCheckDigit2Digit(INSERTED.LOC),
-                --LocCheckDigit = dbo.fnc_GetLocCheckDigit(INSERTED.LOC),
+            SET --LocCheckDigit = dbo.fnc_GetLocCheckDigit(INSERTED.LOC),
                 LOC.TrafficCop = NULL,
                 EditDate       = GETDATE(),
                 EditWho        = SUSER_SNAME()

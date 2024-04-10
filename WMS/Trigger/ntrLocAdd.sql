@@ -104,7 +104,6 @@ BEGIN
                 -- Added by SHONG on 26-Jun-2010
                 -- SOS#179299
                 --LOC.LocCheckDigit = dbo.fnc_GetLocCheckDigit(INSERTED.LOC),
-                LOC.LocCheckDigit = dbo.fnc_GetLocCheckDigit2Digit(INSERTED.LOC),
                 trafficcop        = NULL
             FROM LOC,
                  INSERTED
