@@ -14,6 +14,7 @@ GO
 /* 2021-06-14   1.0  Chermaine  WMS-17140 Created (dup rdtfnc_Pick)           */
 /* 2023-05-25   1.1  Ung        WMS-22370 Clean up source                     */
 /* 2023-09-27   1.2  Ung        WMS-23706 Add DecodeSP = 1                    */
+/* 2024-02-09   1.3  YeeKung    UWP-14600 Fix the variable problem (yeekung01)*/
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PickPallet_NEW] (
@@ -94,6 +95,9 @@ DECLARE
    @cMoveQTYAlloc       NVARCHAR( 1), 
    @cMoveQTYPick        NVARCHAR( 1), 
    @cVerifyPickZone     NVARCHAR( 1),
+   @cZone               NVARCHAR( 18),
+   @cOrderKey           NVARCHAR( 10),
+   @cLoadKey            NVARCHAR( 10),
    
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
@@ -124,6 +128,8 @@ SELECT
    @cFacility        = Facility,
 
    @cPickSlipNo      = V_PickSlipNo,
+   @cLoadKey         = V_LoadKey,
+   @cOrderKey        = V_OrderKey,
    @cPickZone        = V_Zone,
    @cLOC             = V_LOC,
    @cID              = V_ID,
@@ -156,6 +162,7 @@ SELECT
    @cPUOM_Desc       = V_String4,
    @cMUOM_Desc       = V_String5,
    @cToLOC           = V_String6,
+   @cZone            = V_String7,
    
    @cExtendedInfo       = V_String21,
    @cExtendedInfoSP     = V_String22,
@@ -294,9 +301,6 @@ BEGIN
       END
 
       DECLARE @cChkStorerKey  NVARCHAR( 15)
-      DECLARE @cZone          NVARCHAR( 18)
-      DECLARE @cOrderKey      NVARCHAR( 10)
-      DECLARE @cLoadKey       NVARCHAR( 10)
       DECLARE @dScanInDate    DATETIME
       DECLARE @dScanOutDate   DATETIME
 
@@ -618,6 +622,7 @@ BEGIN
                @nErrNo <> -1
                GOTO Quit
 
+            EXEC rdt.rdtSetFocusField @nMobile, 4 -- LOC
             -- Remain in current screen
             SET @cOutField03 = @cSuggLOC
             GOTO Quit
@@ -1628,6 +1633,8 @@ BEGIN
       StorerKey      = @cStorerKey,
       Facility       = @cFacility,
 
+      V_LoadKey      = @cLoadKey,
+      V_OrderKey     = @cOrderKey,
       V_PickSlipNo   = @cPickSlipNo,
       V_Zone         = @cPickZone,
       V_LOC          = @cLOC,
@@ -1661,6 +1668,7 @@ BEGIN
       V_String4      = @cPUOM_Desc,
       V_String5      = @cMUOM_Desc,
       V_String6      = @cToLOC,
+      V_String7      = @cZone,
 
       V_String21     = @cExtendedInfo,
       V_String22     = @cExtendedInfoSP,

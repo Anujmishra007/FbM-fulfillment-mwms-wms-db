@@ -43,7 +43,7 @@ CREATE PROCEDURE [RDT].[rdt_1819ExtInfo01] (
       IF @nInputKey = 1 -- ENTER
       BEGIN
          IF @cPickAndDropLOC <> ''
-            SET @cExtendedInfo = 'FINAL LOC: ' + @cSuggLOC
+            SET @cExtendedInfo = 'FINALLOC: ' + @cSuggLOC
       END
    END
 GO

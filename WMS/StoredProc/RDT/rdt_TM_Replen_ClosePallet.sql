@@ -30,7 +30,10 @@ GO
 /* 02-Aug-2019 1.9  James     WMS-9942 Add sku, qty to eventlog (james01)  */
 /* 21-Aug-2020 2.0  James     WMS-14152 Cancel TransitLoc booking(james02) */
 /* 21-Apr-2021 2.1  James     WMS-15656 Add ClosePalletSP (james03)        */
+/* 23-Jan-2024 2.2  James     WMS-24300 Cancel booking even there is no    */
+/*                            booking (james04)                            */
 /***************************************************************************/
+
 
 CREATE PROC [RDT].[rdt_TM_Replen_ClosePallet] (
    @nMobile        INT,
@@ -73,7 +76,7 @@ BEGIN
    DECLARE @cClosePalletSP NVARCHAR( 20)
    DECLARE @cSQL           NVARCHAR( MAX)
    DECLARE @cSQLParam      NVARCHAR( MAX)
-   
+
    -- Init var
    SET @nErrNo = 0
    SET @cErrMsg = ''
@@ -81,11 +84,11 @@ BEGIN
    SELECT @cStorerKey = StorerKey
    FROM rdt.RDTMOBREC WITH (NOLOCK)
    WHERE Mobile = @nMobile
-   
+
    -- Get storer config
    SET @cClosePalletSP = rdt.rdtGetConfig( @nFunc, 'ClosePalletSP', @cStorerKey)
    IF @cClosePalletSP = '0'
-      SET @cClosePalletSP = ''  
+      SET @cClosePalletSP = ''
 
    /***********************************************************************************************
                                      Custom Close Pallet
@@ -111,11 +114,11 @@ BEGIN
          GOTO Quit
       END
    END
-   
+
    /***********************************************************************************************
                                      Standard Close Pallet
    ***********************************************************************************************/
-   
+
    -- Handling transaction
    DECLARE @nTranCount INT
    SET @nTranCount = @@TRANCOUNT
@@ -236,7 +239,7 @@ BEGIN
             WHILE @@FETCH_STATUS = 0
             BEGIN
                -- Single sku ucc
-               IF EXISTS ( SELECT 1 FROM dbo.UCC WITH (NOLOCK) 
+               IF EXISTS ( SELECT 1 FROM dbo.UCC WITH (NOLOCK)
                            WHERE Storerkey = @cStorerKey
                            AND   UCCNo = @cUCCNo
                            GROUP BY UCCNo
@@ -265,7 +268,7 @@ BEGIN
                   END
                   ELSE
                      SET @nQTYReplen = 0
-                  
+
                   -- Move by UCC
                   EXECUTE rdt.rdt_Move
                      @nMobile     = @nMobile,
@@ -305,10 +308,10 @@ BEGIN
                ELSE  -- Multi sku ucc
                BEGIN
                   DECLARE @nPD_Qty     INT = 0
-                  SELECT @nPD_Qty = ISNULL( SUM( Qty), 0) 
+                  SELECT @nPD_Qty = ISNULL( SUM( Qty), 0)
                   FROM dbo.PICKDETAIL WITH (NOLOCK)
                   WHERE TaskDetailKey = @cTaskDetailKey
-                           
+
                   DECLARE @cUCC_SKU    NVARCHAR (20)
                   DECLARE @curMultiSKUUCC CURSOR
                   SET @curMultiSKUUCC = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
@@ -328,7 +331,7 @@ BEGIN
                         IF @nUCCQTY < @nSystemQTY -- Short replen
                         BEGIN
                            SET @nQTYAlloc = @nUCCQTY
-                           
+
                            IF @nPD_Qty > 0
                            BEGIN
                               IF @nPD_Qty < @nQTYAlloc
@@ -398,7 +401,7 @@ BEGIN
                         @cLoseUCC = LoseUCC
                      FROM dbo.LOC (NOLOCK)
                      WHERE LOC = @cToLOC
-   
+
                      -- Update UCC (rdt_move not support move ucc with multisku ucc)
                      UPDATE dbo.UCC WITH (ROWLOCK) SET
                         LOC = @cToLOC,
@@ -409,16 +412,16 @@ BEGIN
                               END,
                         -- Lose UCC. Status 5=Picked/Repl
                         Status = CASE WHEN (@cToLocType = 'PICK' OR @cToLocType = 'CASE')  THEN '5'
-                                      WHEN @cLoseUCC = '1' THEN '6' 
+                                      WHEN @cLoseUCC = '1' THEN '6'
                                       ELSE Status
                                  END,
                         EditWho = SUSER_SNAME(),
                         EditDate = GETDATE(),
                         TrafficCop = NULL
                      WHERE StorerKey = @cStorerKey
-                     AND   LOT = @cLOT 
-                     AND   LOC = @cFromLOC 
-                     AND   ID  = @cFromID  
+                     AND   LOT = @cLOT
+                     AND   LOC = @cFromLOC
+                     AND   ID  = @cFromID
                      AND   UCCNo = @cUCCNo
                      AND   SKU = @cUCC_SKU
                      AND   Status IN ('1', '3') -- Received, , Allocated
@@ -447,7 +450,7 @@ BEGIN
                         @cLOT           = @cLOT,
                         @cRefNo5        = @cListKey,
                         @cTaskDetailKey = @cTaskDetailKey
-                        
+
                      FETCH NEXT FROM @curMultiSKUUCC INTO @cUCC_SKU, @cLOT, @nUCCQTY
                   END
                END
@@ -490,23 +493,6 @@ BEGIN
             ELSE
                SET @nQTYReplen = 0
 
-
---if suser_sname() = 'wmsgt'
---   select @nQTY '@nQTY', @nSystemQTY '@nSystemQTY', @nQTYAlloc '@nQTYAlloc', @nQTYReplen '@nQTYReplen'
-/*
-            -- Reduce QTYReplen
-            UPDATE dbo.LOTxLOCxID WITH (ROWLOCK) SET
-               QTYReplen = CASE WHEN (QTYReplen - @nSystemQTY) >= 0 THEN (QTYReplen - @nSystemQTY) ELSE 0 END
-            WHERE LOT = @cLOT
-               AND LOC = @cFromLOC
-               AND ID = @cFromID
-            IF @@ERROR <> 0
-            BEGIN
-               SET @nErrNo = 78502
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdTaskdetFail
-               GOTO RollBackTran
-            END
-*/
             -- Move by SKU
             IF @nQTY > 0
             BEGIN
@@ -553,19 +539,20 @@ BEGIN
          END
       END
 
-      IF EXISTS ( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE TaskDetailKey = @cTaskDetailKey AND ISNULL( TransitLOC, '') <> '')
-      BEGIN
-         -- Unlock  suggested location
-         EXEC rdt.rdt_Putaway_PendingMoveIn '', 'UNLOCK'
-            ,''      --@cFromLOC
-            ,@cFromID--@cFromID
-            ,@cToLOC --@cSuggestedLOC
-            ,''      --@cStorerKey
-            ,@nErrNo  OUTPUT
-            ,@cErrMsg OUTPUT
-         IF @nErrNo <> 0
-            GOTO Quit
-      END
+      -- Commented by (james04)
+      --IF EXISTS ( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE TaskDetailKey = @cTaskDetailKey AND ISNULL( TransitLOC, '') <> '')
+      --BEGIN
+      -- Unlock  suggested location
+      EXEC rdt.rdt_Putaway_PendingMoveIn '', 'UNLOCK'
+         ,''      --@cFromLOC
+         ,@cFromID--@cFromID
+         ,@cToLOC --@cSuggestedLOC
+         ,''      --@cStorerKey
+         ,@nErrNo  OUTPUT
+         ,@cErrMsg OUTPUT
+      IF @nErrNo <> 0
+         GOTO Quit
+      --END
 
       -- Update Task
       UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
@@ -619,7 +606,6 @@ Quit:
       COMMIT TRAN
 END
 GO
-
 
 SET QUOTED_IDENTIFIER OFF
 GO

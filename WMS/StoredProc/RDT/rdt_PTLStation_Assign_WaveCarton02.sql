@@ -6,11 +6,12 @@ GO
 
 /******************************************************************************/
 /* Store procedure: rdt_PTLStation_Assign_WaveCarton02                        */
-/* Copyright      : LFLogistics                                               */
+/* Copyright      : Maersk                                                    */
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
 /* 25-04-2018 1.0  ChewKP   WMS-4538 Created                                  */
 /* 06-12-2023 1.1  Ung      WMS-24310 Many minor bugs fix. Clean up source    */
+/* 03-04-2024 1.2  YeeKung  UWP-16963 Add AssignExtValSP (yeekung01)          */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_PTLStation_Assign_WaveCarton02 (
@@ -195,7 +196,7 @@ BEGIN
          END
 
          -- Check wave assigned (in other station)
-         IF EXISTS( SELECT 1 
+         IF EXISTS( SELECT 1
             FROM rdt.rdtPTLstationLog WITH (NOLOCK)
             WHERE Station IN (@cStation1, @cStation2, @cStation3, @cStation4, @cStation5)
                AND WaveKey <> @cWaveKey)
@@ -231,11 +232,11 @@ BEGIN
 
          -- Get total positions
          DECLARE @nTotalLOC INT
-         SELECT @nTotalLOC = COUNT(1) 
+         SELECT @nTotalLOC = COUNT(1)
          FROM dbo.DeviceProfile WITH (NOLOCK)
          WHERE DeviceType = 'STATION'
             AND DeviceID IN (@cStation1, @cStation2, @cStation3, @cStation4, @cStation5)
-         
+
          -- Check enough positions
          IF @nTotalOrder > @nTotalLOC
          BEGIN
@@ -245,16 +246,16 @@ BEGIN
             SET @cOutField01 = ''
             GOTO Quit
          END
-         
-         -- Temporary assign as 
-         SELECT @cStation = 
+
+         -- Temporary assign as
+         SELECT @cStation =
             CASE WHEN @cStation1 <> '' THEN @cStation1
                  WHEN @cStation2 <> '' THEN @cStation2
                  WHEN @cStation3 <> '' THEN @cStation3
                  WHEN @cStation4 <> '' THEN @cStation4
                  WHEN @cStation5 <> '' THEN @cStation5
             END
-         
+
          -- Loop orders in wave
          SET @curPTLAssign = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
             SELECT WD.OrderKey
@@ -328,7 +329,7 @@ BEGIN
          WHERE DeviceType = 'STATION'
             AND DeviceID IN (@cStation1, @cStation2, @cStation3, @cStation4, @cStation5)
             AND LOC = @cLOC
-               
+
          -- Check LOC valid
          IF @@ROWCOUNT = 0
          BEGIN
@@ -340,7 +341,7 @@ BEGIN
          END
 
          -- Check LOC assigned
-         IF EXISTS( SELECT 1 
+         IF EXISTS( SELECT 1
             FROM rdt.rdtPTLStationLog WITH (NOLOCK)
             WHERE Station IN (@cStation1, @cStation2, @cStation3, @cStation4, @cStation5)
                AND WaveKey = @cWaveKey
@@ -394,8 +395,59 @@ BEGIN
             GOTO Quit
          END
 
+         DECLARE @cSQL NVARCHAR(MAX)
+         DECLARE @cSQLParam NVARCHAR(MAX)
+         DECLARE @tVar           VariableTable
+         DECLARE @cAssignExtValSP NVARCHAR( 20)
+         SET @cAssignExtValSP = rdt.RDTGetConfig( @nFunc, 'AssignExtValSP', @cStorerKey)
+         IF @cAssignExtValSP = '0'
+            SET @cAssignExtValSP = ''
+
+         IF @cAssignExtValSP <> ''
+         BEGIN
+            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cAssignExtValSP AND type = 'P')
+            BEGIN
+               DECLARE @cCurrentSP NVARCHAR( 60)
+               SET @cCurrentSP = OBJECT_NAME( @@PROCID)
+
+               INSERT INTO @tVar (Variable, Value) VALUES
+                  ('@cWaveKey',     @cWaveKey),
+                  ('@cPosition',    @cPosition),
+                  ('@cCartonID',    @cCartonID)
+
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cAssignExtValSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+                  ' @cStation, @cMethod, @cCurrentSP, @tVar, ' +
+                  ' @nErrNo OUTPUT, @cErrMsg OUTPUT,@cType '
+               SET @cSQLParam =
+                  ' @nMobile     INT,           ' +
+                  ' @nFunc       INT,           ' +
+                  ' @cLangCode   NVARCHAR( 3),  ' +
+                  ' @nStep       INT,           ' +
+                  ' @nInputKey   INT,           ' +
+                  ' @cFacility   NVARCHAR( 5) , ' +
+                  ' @cStorerKey  NVARCHAR( 10), ' +
+                  ' @cStation    NVARCHAR( 1),  ' +
+                  ' @cMethod     NVARCHAR( 15), ' +
+                  ' @cCurrentSP  NVARCHAR( 60),  ' +
+                  ' @tVar        VariableTable READONLY, ' +
+                  ' @nErrNo      INT           OUTPUT, ' +
+                  ' @cErrMsg     NVARCHAR(250) OUTPUT, ' +
+                  ' @cType       NVARCHAR(15)           '
+
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+                  @cStation, @cMethod, @cCurrentSP, @tVar,
+                  @nErrNo OUTPUT, @cErrMsg OUTPUT,@cType
+
+               IF @nErrNo <> 0
+                  GOTO Quit
+            END
+         END
+
+
          -- Get any order not yet assign (LOC, carton ID)
-         SELECT TOP 1 
+         SELECT TOP 1
             @cOrderKey = OrderKey
          FROM rdt.rdtPTLStationLog WITH (NOLOCK)
          WHERE StorerKey = @cStorerKey
@@ -404,8 +456,8 @@ BEGIN
          ORDER BY RowRef
 
          -- Get LOC info
-         SELECT TOP 1 
-            @cIPAddress = IPAddress, 
+         SELECT TOP 1
+            @cIPAddress = IPAddress,
             @cPosition = DevicePosition
          FROM DeviceProfile WITH (NOLOCK)
          WHERE StorerKey = @cStorerKey

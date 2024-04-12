@@ -97,6 +97,11 @@ DECLARE
    @cLottable02       NVARCHAR( 18),
    @cLottable03       NVARCHAR( 18),
    @dLottable04       DATETIME,
+   @cExtendedScreenSP NVARCHAR( 20),
+   @nAction           INT,
+   @nAfterScn         INT,
+   @nAfterStep        INT,
+   @cLocNeedCheck     NVARCHAR( 20),
 
    @cID         NVARCHAR( 18), -- Actual moved ID
    @cPUOM       NVARCHAR( 1),  -- Pref UOM
@@ -357,6 +362,7 @@ BEGIN
    BEGIN
       -- Screen mapping
       SET @cFromLOC = @cInField01
+      SET @cLocNeedCheck = @cInField01
 
       -- Validate blank
       IF @cFromLOC = '' OR @cFromLOC IS NULL
@@ -364,6 +370,42 @@ BEGIN
          SET @nErrNo = 62876
          SET @cErrMsg = rdt.rdtgetmessage( 62876, @cLangCode, 'DSP') --'LOC needed'
          GOTO Step_1_Fail
+      END
+
+      SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '515ExtendedScreenSP', @cStorerKey), '')
+      SET @nAction = 1
+      IF @cExtendedScreenSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+         BEGIN
+            EXECUTE [RDT].[rdt_515ExtScnEntry] 
+               @cExtendedScreenSP,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @cLocNeedCheck OUTPUT,
+               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  
+               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  
+               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT, 
+               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT, 
+               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  
+               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  
+               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  
+               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  
+               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  
+               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  
+               @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  
+               @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, 
+               @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  
+               @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, 
+               @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, 
+               @nAction, 
+               @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
+               @nErrNo   OUTPUT, 
+               @cErrMsg  OUTPUT
+            
+            IF @nErrNo <> 0
+               GOTO Step_1_Fail
+            
+            SET @cFromLOC = @cLocNeedCheck
+         END
       END
 
       -- Get LOC info
@@ -1635,6 +1677,7 @@ BEGIN
    BEGIN
       -- Screen mapping
       SET @cToLOC = @cInField11
+      SET @cLocNeedCheck = @cInField11
 
       SET @cFieldAttr01 = ''
       SET @cFieldAttr02 = ''
@@ -1658,6 +1701,42 @@ BEGIN
          SET @nErrNo = 62891
          SET @cErrMsg = rdt.rdtgetmessage( 62891, @cLangCode, 'DSP') --'ToLOC needed'
          GOTO Step_7_Fail
+      END
+
+      SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '515ExtendedScreenSP', @cStorerKey), '')
+      SET @nAction = 1
+      IF @cExtendedScreenSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+         BEGIN
+            EXECUTE [RDT].[rdt_515ExtScnEntry] 
+               @cExtendedScreenSP,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @cLocNeedCheck OUTPUT,
+               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  
+               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  
+               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT, 
+               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT, 
+               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  
+               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  
+               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  
+               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  
+               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  
+               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  
+               @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  
+               @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, 
+               @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  
+               @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, 
+               @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, 
+               @nAction, 
+               @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
+               @nErrNo   OUTPUT, 
+               @cErrMsg  OUTPUT
+            
+            IF @nErrNo <> 0
+               GOTO Step_7_Fail
+            
+            SET @cToLOC = @cLocNeedCheck
+         END
       END
 
       -- Get LOC info

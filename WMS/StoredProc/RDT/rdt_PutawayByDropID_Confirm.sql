@@ -12,6 +12,7 @@ GO
 /*                                                                      */
 /* Date        Rev  Author   Purposes                                   */
 /* 2023-10-13  1.0  Ung      WMS-23390 Created                          */
+/* 2024-01-22  1.1  Ung      WMS-24657 Fix dbo.sys.objects              */
 /************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_PutawayByDropID_Confirm] (
@@ -54,7 +55,7 @@ BEGIN
    ***********************************************************************************************/
    IF @cConfirmSP <> ''
    BEGIN
-      IF EXISTS( SELECT 1 FROM dbo.sys.objects WHERE name = @cConfirmSP AND type = 'P')
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cConfirmSP AND type = 'P')
       BEGIN
          SET @cSQL = 'EXEC rdt.' + RTRIM( @cConfirmSP) +
             ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, ' + 

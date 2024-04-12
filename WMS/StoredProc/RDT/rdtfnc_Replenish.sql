@@ -45,6 +45,7 @@ GO
 /*                          Step 5 (james06)                            */
 /* 2018-10-02 3.0  James    WMS-6003 Add ToLoc check digit (james07)    */ 
 /* 2023-12-14 3.1  YeeKung  WMS-23085 Extended ID length (yeekung01)    */
+/* 2024-04-08 3.2  Dennis   UWP-16906 Check Digit                       */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Replenish] (
@@ -140,6 +141,11 @@ DECLARE
    @cExtendedValidateSP NVARCHAR( 20),
    @tExtValidVar        VariableTable,
    @cToLOCCheckDigit    NVARCHAR( 1),  
+   @cExtendedScreenSP      NVARCHAR( 20),
+   @nAction                INT,
+   @nAfterScn              INT,
+   @nAfterStep             INT,
+   @cLocNeedCheck          NVARCHAR( 20),
    
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
@@ -328,6 +334,7 @@ BEGIN
       SET @cFromID = @cInField02
       SET @cIDBarcode = @cInField02
       SET @cRPLKey = @cInField03
+      SET @cLocNeedCheck = @cInField01
 
       -- Check blank
       IF @cFromLoc = '' AND @cFromID = '' AND @cRPLKey = ''
@@ -345,6 +352,42 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( 63034, @cLangCode, 'DSP') --LOC/ID OR RPLKEY
          EXEC rdt.rdtSetFocusField @nMobile, 1
          GOTO Step_1_Fail
+      END
+      
+      SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '510ExtendedScreenSP', @cStorerKey), '')
+      SET @nAction = 1
+      IF @cExtendedScreenSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+         BEGIN
+            EXECUTE [RDT].[rdt_510ExtScnEntry] 
+               @cExtendedScreenSP,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @cLocNeedCheck OUTPUT,
+               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  
+               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  
+               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT, 
+               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT, 
+               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  
+               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  
+               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  
+               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  
+               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  
+               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  
+               @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  
+               @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, 
+               @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  
+               @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, 
+               @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, 
+               @nAction, 
+               @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
+               @nErrNo   OUTPUT, 
+               @cErrMsg  OUTPUT
+            
+            IF @nErrNo <> 0
+               GOTO Step_1_Fail
+            
+            SET @cFromLOC = @cLocNeedCheck
+         END
       END
 
       -- Decode
@@ -1426,6 +1469,7 @@ BEGIN
       -- Screen mapping
       SET @cActToLOC = @cInField13
       SET @cToID = @cInField15
+      SET @cLocNeedCheck = @cInField13
 
       IF @cReplenEnableTOID = '1'
       BEGIN
@@ -1446,6 +1490,42 @@ BEGIN
          SET @nErrNo = 63040
          SET @cErrMsg = rdt.rdtgetmessage( 63040, @cLangCode, 'DSP') --TO LOC needed
          GOTO Step_4_Fail
+      END
+
+      SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '510ExtendedScreenSP', @cStorerKey), '')
+      SET @nAction = 1
+      IF @cExtendedScreenSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+         BEGIN
+            EXECUTE [RDT].[rdt_510ExtScnEntry] 
+               @cExtendedScreenSP,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @cLocNeedCheck OUTPUT,
+               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  
+               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  
+               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT, 
+               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT, 
+               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  
+               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  
+               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  
+               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  
+               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  
+               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  
+               @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  
+               @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, 
+               @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  
+               @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, 
+               @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, 
+               @nAction, 
+               @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
+               @nErrNo   OUTPUT, 
+               @cErrMsg  OUTPUT
+            
+            IF @nErrNo <> 0
+               GOTO Step_4_Fail
+            
+            SET @cActToLOC = @cLocNeedCheck
+         END
       END
 
       -- (james03)  

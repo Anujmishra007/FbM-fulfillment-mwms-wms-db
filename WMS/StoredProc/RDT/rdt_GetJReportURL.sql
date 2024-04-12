@@ -1,5 +1,4 @@
-
-
+/****** Object:  StoredProcedure [RDT].[rdt_GetJReportURL]    Script Date: 4/1/2024 9:24:57 AM ******/
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -25,26 +24,26 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 07-07-2023  YeeKung  1.0   Support Cloud Print                       */
 /************************************************************************/
-CREATE OR ALTER PROCEDURE [RDT].[rdt_GetJReportURL]
-      @c_Storerkey      NVARCHAR(15) = ''
-   , @c_ReportType     NVARCHAR(10) = ''    --WL02 - For RCM = RCMReportType, For View JReport = JReport_ID
-   , @c_CallFrom       NVARCHAR(50)         --For RCM = MBOL,WAVE,etc..., For View JReport = 'ViewJReport'
-   , @c_Parm01         NVARCHAR(100) = ''   --WL02 - Cater for View JReport from EXceed, no need provide parameters
-   , @c_Parm02         NVARCHAR(100) = ''   --WL02
-   , @c_Parm03         NVARCHAR(100) = ''   --WL02
-   , @c_Parm04         NVARCHAR(100) = ''   --WL02
-   , @c_Parm05         NVARCHAR(100) = ''   --WL02
-   , @c_Parm06         NVARCHAR(100) = ''   --WL02
-   , @c_Parm07         NVARCHAR(100) = ''   --WL02
-   , @c_Parm08         NVARCHAR(100) = ''   --WL02
-   , @c_Parm09         NVARCHAR(100) = ''   --WL02
-   , @c_Parm10         NVARCHAR(100) = ''   --WL02
-   , @c_PrintFormat    NVARCHAR(100) = '2' 
-   , @cJobID           NVARCHAR(20)  = ''
-   , @b_Success        INT            OUTPUT
-   , @n_Err            INT            OUTPUT
-   , @c_ErrMsg         NVARCHAR(255)  OUTPUT
-   , @c_CompleteURL    NVARCHAR(MAX)  OUTPUT
+CREATE OR ALTER   PROCEDURE [RDT].[rdt_GetJReportURL]
+           @c_Storerkey      NVARCHAR(15) = ''
+         , @c_ReportType     NVARCHAR(10) = ''    --WL02 - For RCM = RCMReportType, For View JReport = JReport_ID
+         , @c_CallFrom       NVARCHAR(50)         --For RCM = MBOL,WAVE,etc..., For View JReport = 'ViewJReport'
+         , @c_Parm01         NVARCHAR(100) = ''   --WL02 - Cater for View JReport from EXceed, no need provide parameters
+         , @c_Parm02         NVARCHAR(100) = ''   --WL02
+         , @c_Parm03         NVARCHAR(100) = ''   --WL02
+         , @c_Parm04         NVARCHAR(100) = ''   --WL02
+         , @c_Parm05         NVARCHAR(100) = ''   --WL02
+         , @c_Parm06         NVARCHAR(100) = ''   --WL02
+         , @c_Parm07         NVARCHAR(100) = ''   --WL02
+         , @c_Parm08         NVARCHAR(100) = ''   --WL02
+         , @c_Parm09         NVARCHAR(100) = ''   --WL02
+         , @c_Parm10         NVARCHAR(100) = ''   --WL02
+         , @c_PrintFormat    NVARCHAR(100) = '2' 
+         , @cJobID           NVARCHAR(20)  = ''
+         , @b_Success        INT            OUTPUT
+         , @n_Err            INT            OUTPUT
+         , @c_ErrMsg         NVARCHAR(255)  OUTPUT
+         , @c_CompleteURL    NVARCHAR(MAX)  OUTPUT
 AS
 BEGIN
    SET NOCOUNT ON
@@ -52,62 +51,63 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @n_StartTCnt                     INT
-      , @n_Continue                      INT
-      , @c_SQL                           NVARCHAR(4000)
-      , @c_SQLArgument                   NVARCHAR(4000)
+   DECLARE
+           @n_StartTCnt                     INT
+         , @n_Continue                      INT
+         , @c_SQL                           NVARCHAR(4000)
+         , @c_SQLArgument                   NVARCHAR(4000)
 
-      , @c_Orderkey                      NVARCHAR(10)
-      , @c_Loadkey                       NVARCHAR(10)
+         , @c_Orderkey                      NVARCHAR(10)
+         , @c_Loadkey                       NVARCHAR(10)
 
-      , @c_Facility                      NVARCHAR(5)
+         , @c_Facility                      NVARCHAR(5)
 
-      , @c_GetAuthority                  NVARCHAR(50)
+         , @c_GetAuthority                  NVARCHAR(50)
 
-      , @n_IsConso                       INT = 0
-      , @c_Configkey                     NVARCHAR(50)
+         , @n_IsConso                       INT = 0
+         , @c_Configkey                     NVARCHAR(50)
 
-      , @c_JReportURL                    NVARCHAR(4000)
-      , @c_JReportCatName                NVARCHAR(255)
-      , @c_CountryName                   NVARCHAR(255)
-      , @c_Delimiter                     NVARCHAR(5) = '&'
-      , @c_jrs_report                    NVARCHAR(4000) = 'jrs.report='
-      , @c_jrs_catalog                   NVARCHAR(4000) = 'jrs.catalog='
-      , @c_jrs_result_type               NVARCHAR(4000) = 'jrs.result_type='
-      , @c_jrs_authorization             NVARCHAR(4000) = 'jrs.authorization='
-      , @c_jrs_resultfilename            NVARCHAR(4000) = 'jrs.result_file_name='
-      , @c_jrs_param                     NVARCHAR(4000) = ''
-      , @c_jrs_paramDelim                NVARCHAR(4000) = 'jrs.param'
+         , @c_JReportURL                    NVARCHAR(4000)
+         , @c_JReportCatName                NVARCHAR(255)
+         , @c_CountryName                   NVARCHAR(255)
+         , @c_Delimiter                     NVARCHAR(5) = '&'
+         , @c_jrs_report                    NVARCHAR(4000) = 'jrs.report='
+         , @c_jrs_catalog                   NVARCHAR(4000) = 'jrs.catalog='
+         , @c_jrs_result_type               NVARCHAR(4000) = 'jrs.result_type='
+         , @c_jrs_authorization             NVARCHAR(4000) = 'jrs.authorization='
+         , @c_jrs_resultfilename            NVARCHAR(4000) = 'jrs.result_file_name='
+         , @c_jrs_param                     NVARCHAR(4000) = ''
+         , @c_jrs_paramDelim                NVARCHAR(4000) = 'jrs.param'
 
-      , @c_JReportCatalog                NVARCHAR(60)
-      , @c_JReportFilename               NVARCHAR(4000)
-      , @c_JReportFlag                   NVARCHAR(60)
-      , @c_JReportDefaultReportFolder    NVARCHAR(60)
-      , @c_JReportDefaultCatalogFolder   NVARCHAR(60)
+         , @c_JReportCatalog                NVARCHAR(60)
+         , @c_JReportFilename               NVARCHAR(4000)
+         , @c_JReportFlag                   NVARCHAR(60)
+         , @c_JReportDefaultReportFolder    NVARCHAR(60)
+         , @c_JReportDefaultCatalogFolder   NVARCHAR(60)
 
-      , @c_Param01Label                  NVARCHAR(250)
-      , @c_Param01Type                   NVARCHAR(250)
-      , @c_Param02Label                  NVARCHAR(250)
-      , @c_Param02Type                   NVARCHAR(250)
-      , @c_Param03Label                  NVARCHAR(250)
-      , @c_Param03Type                   NVARCHAR(250)
-      , @c_Param04Label                  NVARCHAR(250)
-      , @c_Param04Type                   NVARCHAR(250)
-      , @c_Param05Label                  NVARCHAR(250)
-      , @c_Param05Type                   NVARCHAR(250)
-      , @c_Param06Label                  NVARCHAR(250)
-      , @c_Param06Type                   NVARCHAR(250)
-      , @c_Param07Label                  NVARCHAR(250)
-      , @c_Param07Type                   NVARCHAR(250)
-      , @c_Param08Label                  NVARCHAR(250)
-      , @c_Param08Type                   NVARCHAR(250)
-      , @c_Param09Label                  NVARCHAR(250)
-      , @c_Param09Type                   NVARCHAR(250)
-      , @c_Param10Label                  NVARCHAR(250)
-      , @c_Param10Type                   NVARCHAR(250)
+         , @c_Param01Label                  NVARCHAR(250)
+         , @c_Param01Type                   NVARCHAR(250)
+         , @c_Param02Label                  NVARCHAR(250)
+         , @c_Param02Type                   NVARCHAR(250)
+         , @c_Param03Label                  NVARCHAR(250)
+         , @c_Param03Type                   NVARCHAR(250)
+         , @c_Param04Label                  NVARCHAR(250)
+         , @c_Param04Type                   NVARCHAR(250)
+         , @c_Param05Label                  NVARCHAR(250)
+         , @c_Param05Type                   NVARCHAR(250)
+         , @c_Param06Label                  NVARCHAR(250)
+         , @c_Param06Type                   NVARCHAR(250)
+         , @c_Param07Label                  NVARCHAR(250)
+         , @c_Param07Type                   NVARCHAR(250)
+         , @c_Param08Label                  NVARCHAR(250)
+         , @c_Param08Type                   NVARCHAR(250)
+         , @c_Param09Label                  NVARCHAR(250)
+         , @c_Param09Type                   NVARCHAR(250)
+         , @c_Param10Label                  NVARCHAR(250)
+         , @c_Param10Type                   NVARCHAR(250)
 
-      , @c_AuthorizationString           NVARCHAR(4000)
-	   , @cJSpoolerFolder					NVARCHAR(4000)
+         , @c_AuthorizationString           NVARCHAR(4000)
+		 , @cJSpoolerFolder					NVARCHAR(4000)
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
@@ -138,19 +138,20 @@ BEGIN
    WHERE ConfigKey = 'JReportDefaultCatalogFolder'
    --WL02 Move Up - END
 
-   --JReport Username & Password
+
+      --JReport Username & Password
    SELECT   @cJSpoolerFolder  = NSQLDescrip
    FROM dbo.NSQLCONFIG (NOLOCK)
    WHERE ConfigKey = 'JSpoolerFolder'
 
-   IF @c_CallFrom <> 'ViewJReport'      
-   BEGIN                                
+   IF @c_CallFrom <> 'ViewJReport'      --WL02
+   BEGIN                                --WL02
       SELECT   @c_JReportCatalog   = JReportCatalog
-               , @c_JReportFilename  = JReportFilename
-               , @c_JReportFlag      = JReportFlag
+             , @c_JReportFilename  = JReportFilename
+             , @c_JReportFlag      = JReportFlag
       FROM rdt.RDTreportdetail (NOLOCK)
       WHERE ReportType = @c_ReportType
-         AND StorerKey = @c_Storerkey
+      AND StorerKey = @c_Storerkey
 
       IF ISNULL(@c_JReportCatalog,'') = ''
       BEGIN
@@ -175,11 +176,11 @@ BEGIN
            , @c_Param08Label = ReportParmName8
            , @c_Param09Label = ReportParmName9
            , @c_Param10Label = ReportParmName10
-      FROM rdt.RDTreportdetail (NOLOCK)
+      FROM rdt.RDTreportdetail
       WHERE ReportType = @c_ReportType
-         AND StorerKey = @c_Storerkey
+      AND StorerKey = @c_Storerkey
 
-   END 
+   END   --WL02 - START
 
    IF RIGHT(RTRIM(@c_JReportDefaultReportFolder),1) <> '/'
    BEGIN
@@ -210,8 +211,8 @@ BEGIN
    BEGIN
       SET @n_Continue = 3
       SET @n_err      = 80000   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-      SET @c_ErrMsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_Err)+
-                     ': NSQLConfig: JReportAuthorization is not setup (rdt_GetJReportURL)'
+      SET @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+
+                    ': NSQLConfig: JReportAuthorization is not setup (rdt_GetJReportURL)'
       GOTO QUIT_SP
    END
 
@@ -223,6 +224,8 @@ BEGIN
    BEGIN
       SET @c_JReportURL = @c_JReportURL + '/jinfonet/tryView.jsp?'
    END
+
+
 
    --jrs.report
    SET @c_jrs_report = @c_jrs_report + @c_JReportFilename
@@ -239,6 +242,7 @@ BEGIN
    SET @c_jrs_resultfilename = @c_jrs_resultfilename + @cJobID +'.pdf'
 
    --jrs.param
+   --WL04 S
    IF ISNULL(@c_Parm01, '') <> '' OR @c_Param01Label = 'PARAM_WMS_c_Username'
       SET @c_jrs_param =  @c_jrs_param + @c_jrs_paramDelim + N'$' + @c_Param01Label + N'='
                          + CASE WHEN @c_Param01Label = 'PARAM_WMS_c_Username' THEN CASE WHEN ISNULL(@c_Parm01,'') = '' THEN SUSER_SNAME() ELSE @c_Parm01 END
@@ -288,6 +292,7 @@ BEGIN
       SET @c_jrs_param = @c_jrs_param + @c_Delimiter + @c_jrs_paramDelim + N'$' + @c_Param10Label + N'='
                          + CASE WHEN @c_Param10Label = 'PARAM_WMS_c_Username' THEN CASE WHEN ISNULL(@c_Parm10,'') = '' THEN SUSER_SNAME() ELSE @c_Parm10 END
                                 ELSE @c_Parm10 END
+   --WL04 E
 
    SET @c_CompleteURL = @c_JReportURL + @c_jrs_report + @c_Delimiter + @c_jrs_catalog + @c_Delimiter +
                         @c_jrs_result_type + @c_Delimiter + @c_jrs_authorization + @c_Delimiter +@c_jrs_resultfilename+ @c_Delimiter+ @c_jrs_param
@@ -335,6 +340,7 @@ QUIT_SP:
       END
 
       EXECUTE nsp_logerror @n_err, @c_ErrMsg, 'rdt_GetJReportURL'
+      --RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012   --WL01
    END
    ELSE
    BEGIN
@@ -349,6 +355,3 @@ QUIT_SP:
       BEGIN TRAN;
 
 END -- procedure
-GO
-GRANT EXECUTE ON  [RDT].[rdt_GetJReportURL] TO [NSQL]
-GO

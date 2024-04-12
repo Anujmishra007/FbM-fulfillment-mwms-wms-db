@@ -13,6 +13,7 @@ EXECUTE rdt.rdtAddScn 3580, 'ENG'
    ,@cLine11 = '%20d09'
    ,@cLine13 = 'LABEL/REPORT: %02i10'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3","4","5","6","7","8","9","10","11"],"2":["13"]}'
    ,@nFunc = 593
  
 -- 3581 = Param screen
@@ -31,6 +32,7 @@ EXECUTE rdt.rdtAddScn 3581, 'ENG'
    ,@cLine11 = '%20d09'
    ,@cLine12 = '%60i10'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3","4"],"2":["5","6"],"3":["7","8"],"4":["9","10"],"5":["11","12"]}'
    ,@nFunc = 593
 
 -- 3582 = Msg screen
@@ -42,4 +44,5 @@ EXECUTE rdt.rdtAddScn 3582, 'ENG'
    ,@cLine04 = 'PRESS ENTER OR ESC'
    ,@cLine05 = 'TO CONTINUE.'
    ,@cLine14 = '%e'
+   ,@cAutoDisappear = '1'
    ,@nFunc = 593

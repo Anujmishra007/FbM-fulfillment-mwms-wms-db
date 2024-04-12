@@ -153,6 +153,7 @@ GO
 /* 2023-06-03 9.9  James      Bug fix on V_Barcode input (james28)       */
 /* 2023-06-13 10.0 James      WMS-22739 Fix Lottable04 conversion issue  */
 /*                            when run DecodeSP (james29)                */
+/* 2024-03-13 10.1 Dennis     UWP-15504 Pallet Type Scn                  */
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_PieceReceiving] (
    @nMobile    INT,
@@ -225,7 +226,7 @@ DECLARE
 
    @cReceiptKey         NVARCHAR(10),
    @cPOKey              NVARCHAR(10),
-   @cLOC                NVARCHAR(10),
+   @cLOC                NVARCHAR(20),
    @cTOID               NVARCHAR(18),
    @cSKU                NVARCHAR(30), --(ung01)
    @cSKUDesc            NVARCHAR( 60),
@@ -261,6 +262,12 @@ DECLARE
    @cTempLottable03     NVARCHAR(20),
    @cTempLottable04     NVARCHAR(16),
    @cTempLottable06     NVARCHAR(30),
+   @cPalletType         NVARCHAR(10),
+   @cExtendedScreenSP   NVARCHAR( 20),
+   @cSuggLOC            NVARCHAR( 20),
+   @nAction             INT,
+   @nAfterScn           INT,
+   @nAfterStep          INT,
 
    @cLottableLabel01    NVARCHAR(20),
    @cLottableLabel02    NVARCHAR(20),
@@ -448,6 +455,7 @@ BEGIN
    IF @nStep =  8 GOTO Step_8   -- Scn = 3570. Multi SKU Barocde
    IF @nStep =  9 GOTO Step_9   -- Scn = 4831. Serial no
    IF @nStep = 10 GOTO Step_10  -- Scn = 1759. Close pallet?
+   IF @nStep = 99 GOTO Step_99  -- Scn = 6382. Pallet Type
 END
 RETURN -- Do nothing if incorrect step
 
@@ -1104,13 +1112,11 @@ BEGIN
          IF @cSuggestedLoc <> ''
             SET @cLOC = @cSuggestedLoc
       END
-
       --prepare next screen variable
       SET @cOutField01 = @cReceiptkey
       SET @cOutField02 = @cPOKey
       SET @cOutField03 = @cRefNo
       SET @cOutField04 = @cLOC
-
       -- Go to next screen
       SET @nScn = @nScn + 1
       SET @nStep = @nStep + 1
@@ -1173,6 +1179,76 @@ BEGIN
 
          --EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, '64262 ', 'LOC required'
          GOTO Step_2_Fail
+      END
+
+      SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '1580ExtendedScreenSP', @cStorer), '')
+      SET @nAction = 1
+      IF @cExtendedScreenSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+         BEGIN
+            EXECUTE [RDT].[rdt_1580ExtScnEntry] 
+               @cExtendedScreenSP,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorer, @cSuggestedLoc OUTPUT ,@cLOC OUTPUT, @cTOID OUTPUT, @cSKU OUTPUT,
+               @cReceiptKey,@cPoKey,'',@cReceiptLineNumber,@cPalletType,
+               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,  
+               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,  
+               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,  
+               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,  
+               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  
+               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  
+               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  
+               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  
+               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  
+               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  
+               @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  
+               @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, 
+               @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  
+               @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, 
+               @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, 
+               @nAction, 
+               @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
+               @nErrNo   OUTPUT, 
+               @cErrMsg  OUTPUT
+            
+            IF @nErrNo <> 0
+               GOTO Step_2_Fail
+            
+            IF @nAfterStep = 3
+            BEGIN
+               SET @cTOID = ''
+               SET @cAutoID = ''
+               -- Auto generate ID
+               IF @cAutoGenID <> ''
+               BEGIN
+                  EXEC rdt.rdt_PieceReceiving_AutoGenID @nMobile, @nFunc, @nStep, @cLangCode
+                     ,@cAutoGenID
+                     ,@cReceiptKey
+                     ,@cPOKey
+                     ,@cLOC
+                     ,@cToID
+                     ,@cOption
+                     ,@cAutoID  OUTPUT
+                     ,@nErrNo   OUTPUT
+                     ,@cErrMsg  OUTPUT
+                  IF @nErrNo <> 0
+                     GOTO Step_2_Fail
+
+                  SET @cToID = @cAutoID
+               END
+
+               -- Prepare next screen variable
+               SET @cOutField01 = @cReceiptkey
+               SET @cOutField02 = @cPOKey
+               SET @cOutField03 = @cLOC
+               SET @cOutField04 = @cTOID
+
+               -- Go to next screen
+               SET @nScn = @nScn + 1
+               SET @nStep = @nStep + 1
+               GOTO Quit
+            END
+         END
       END
 
       -- add loc prefix (yeekung01)
@@ -1660,6 +1736,33 @@ BEGIN
       AND    toloc = @cLOC
       AND    toid = @cTOID
       AND    Storerkey = @cStorer
+
+      IF(ISNULL(rdt.RDTGetConfig( @nFunc, 'ValidatePalletType', @cStorer),'0'))!='0' -- Capture pallet type
+      BEGIN
+         SELECT 
+            @cPalletType = PalletType
+         FROM dbo.PalletTypeMaster WITH (NOLOCK)
+         WHERE StorerKey = @cStorer
+         AND Facility = @cFacility
+         AND PalletTypeInUse = 'Y'
+
+         SET @nRowCount = @@ROWCOUNT
+         IF @nRowCount > 1
+         BEGIN
+            SET @cFieldAttr01='1'
+            SET @cOutField01 = ''
+            -- Go to next screen
+            SET @nScn = 6382
+            SET @nStep = 99
+            GOTO Quit
+         END
+         ELSE IF @nRowCount=1
+         BEGIN
+            UPDATE RDT.RDTMOBREC SET
+            C_String1 = @cPalletType
+            WHERE Mobile = @nMobile
+         END
+      END
 
       -- Prep next screen var
       SET @cLottable01 = IsNULL( @cLottable01, '')
@@ -2164,7 +2267,60 @@ BEGIN
             SET @nStep = @nStep + 6  
          END  
       END  
+      ELSE IF(ISNULL(rdt.RDTGetConfig( @nFunc, 'ValidatePalletType', @cStorer),'0'))!='0' -- Capture pallet type
+      BEGIN
+         SELECT 
+            @cPalletType = PalletType
+         FROM dbo.PalletTypeMaster WITH (NOLOCK)
+         WHERE StorerKey = @cStorer
+         AND Facility = @cFacility
+         AND PalletTypeInUse = 'Y'
 
+         IF @@ROWCOUNT > 1
+         BEGIN
+            SET @cFieldAttr01='1'
+            SET @cOutField01 = ''
+            SET @nScn = 6382
+            SET @nStep = 99
+            GOTO Quit
+         END
+         ELSE
+         BEGIN
+            -- Auto generate ID
+            IF @cAutoGenID <> ''
+            BEGIN
+               EXEC rdt.rdt_PieceReceiving_AutoGenID @nMobile, @nFunc, @nStep, @cLangCode
+                  ,@cAutoGenID
+                  ,@cReceiptKey
+                  ,@cPOKey
+                  ,@cLOC
+                  ,@cToID
+                  ,@cOption
+                  ,@cAutoID  OUTPUT
+                  ,@nErrNo   OUTPUT
+                  ,@cErrMsg  OUTPUT
+               IF @nErrNo <> 0
+                  GOTO Step_4_Fail
+
+               SET @cToID = @cAutoID
+            END
+            ELSE
+            BEGIN
+               SET @cToID = ''
+               SET @cAutoID = ''
+            END
+
+            -- Prepare prev screen var
+            SET @cOutField01 = @cReceiptKey
+            SET @cOutField02 = @cPOKey
+            SET @cOutField03 = @cLOC
+            SET @cOutField04 = @cToID
+
+            -- Go to previous screen
+            SET @nScn = @nScn - 1
+            SET @nStep = @nStep - 1
+         END
+      END
       ELSE
       BEGIN
          -- Auto generate ID
@@ -3182,6 +3338,21 @@ BEGIN
       END
       ELSE
          SET @cSKUValidated = '0'
+      
+      IF(ISNULL(rdt.RDTGetConfig( @nFunc, 'ValidatePalletType', @cStorer),'0'))!='0' -- Capture pallet type
+      BEGIN
+         SELECT
+         @cPalletType = C_String1
+         FROM RDT.RDTMOBREC (NOLOCK)
+         WHERE  Mobile = @nMobile
+
+         IF ISNULL(@cPalletType,'')!=''
+         BEGIN
+            UPDATE RECEIPTDETAIL SET PalletType = @cPalletType
+            WHERE ReceiptKey = @cReceiptKey
+            AND ReceiptLineNumber = @cReceiptLineNumber
+         END
+      END
 
       -- (james04)
       IF @cExtendedUpdateSP <> ''
@@ -3667,6 +3838,61 @@ BEGIN
   
             GOTO Quit  
          END  
+      END
+
+      IF(ISNULL(rdt.RDTGetConfig( @nFunc, 'ValidatePalletType', @cStorer),'0'))!='0' -- Capture pallet type
+      BEGIN
+         SELECT 
+            @cPalletType = PalletType
+         FROM dbo.PalletTypeMaster WITH (NOLOCK)
+         WHERE StorerKey = @cStorer
+         AND Facility = @cFacility
+         AND PalletTypeInUse = 'Y'
+
+         IF @@ROWCOUNT > 1
+         BEGIN
+            SET @cFieldAttr01='1'
+            SET @cOutField01 = ''
+            SET @nScn = 6382
+            SET @nStep = 99
+            GOTO Quit
+         END
+         ELSE
+         BEGIN
+            -- Auto generate ID
+            IF @cAutoGenID <> ''
+            BEGIN
+               EXEC rdt.rdt_PieceReceiving_AutoGenID @nMobile, @nFunc, @nStep, @cLangCode
+                  ,@cAutoGenID
+                  ,@cReceiptKey
+                  ,@cPOKey
+                  ,@cLOC
+                  ,@cToID
+                  ,@cOption
+                  ,@cAutoID  OUTPUT
+                  ,@nErrNo   OUTPUT
+                  ,@cErrMsg  OUTPUT
+               IF @nErrNo <> 0
+                  GOTO Step_4_Fail
+
+               SET @cToID = @cAutoID
+            END
+            ELSE
+            BEGIN
+               SET @cToID = ''
+               SET @cAutoID = ''
+            END
+
+            -- Prepare prev screen var
+            SET @cOutField01 = @cReceiptKey
+            SET @cOutField02 = @cPOKey
+            SET @cOutField03 = @cLOC
+            SET @cOutField04 = @cToID
+
+            -- Go to previous screen
+            SET @nScn = @nScn - 1
+            SET @nStep = @nStep - 1
+         END
       END
 
       -- Auto generate ID
@@ -4427,6 +4653,61 @@ BEGIN
          END
       END
 
+      IF(ISNULL(rdt.RDTGetConfig( @nFunc, 'ValidatePalletType', @cStorer),'0'))!='0' -- Capture pallet type
+      BEGIN
+         SELECT 
+            @cPalletType = PalletType
+         FROM dbo.PalletTypeMaster WITH (NOLOCK)
+         WHERE StorerKey = @cStorer
+         AND Facility = @cFacility
+         AND PalletTypeInUse = 'Y'
+
+         IF @@ROWCOUNT > 1
+         BEGIN
+            SET @cFieldAttr01='1'
+            SET @cOutField01 = ''
+            SET @nScn = 6382
+            SET @nStep = 99
+            GOTO Quit
+         END
+         ELSE
+         BEGIN
+            -- Auto generate ID
+            IF @cAutoGenID <> ''
+            BEGIN
+               EXEC rdt.rdt_PieceReceiving_AutoGenID @nMobile, @nFunc, @nStep, @cLangCode
+                  ,@cAutoGenID
+                  ,@cReceiptKey
+                  ,@cPOKey
+                  ,@cLOC
+                  ,@cToID
+                  ,@cOption
+                  ,@cAutoID  OUTPUT
+                  ,@nErrNo   OUTPUT
+                  ,@cErrMsg  OUTPUT
+               IF @nErrNo <> 0
+                  GOTO Step_4_Fail
+
+               SET @cToID = @cAutoID
+            END
+            ELSE
+            BEGIN
+               SET @cToID = ''
+               SET @cAutoID = ''
+            END
+
+            -- Prepare prev screen var
+            SET @cOutField01 = @cReceiptKey
+            SET @cOutField02 = @cPOKey
+            SET @cOutField03 = @cLOC
+            SET @cOutField04 = @cToID
+
+            -- Go to previous screen
+            SET @nScn = @nScn - 1
+            SET @nStep = @nStep - 1
+         END
+      END
+
       -- Auto generate ID
       IF @cAutoGenID <> ''
       BEGIN
@@ -4466,6 +4747,62 @@ BEGIN
    BEGIN
       IF @cSkipLottable = '1'
       BEGIN
+      
+         IF(ISNULL(rdt.RDTGetConfig( @nFunc, 'ValidatePalletType', @cStorer),'0'))!='0' -- Capture pallet type
+         BEGIN
+            SELECT 
+               @cPalletType = PalletType
+            FROM dbo.PalletTypeMaster WITH (NOLOCK)
+            WHERE StorerKey = @cStorer
+            AND Facility = @cFacility
+            AND PalletTypeInUse = 'Y'
+
+            IF @@ROWCOUNT > 1
+            BEGIN
+               SET @cFieldAttr01='1'
+               SET @cOutField01 = ''
+               SET @nScn = 6382
+               SET @nStep = 99
+               GOTO Quit
+            END
+            ELSE
+            BEGIN
+               -- Auto generate ID
+               IF @cAutoGenID <> ''
+               BEGIN
+                  EXEC rdt.rdt_PieceReceiving_AutoGenID @nMobile, @nFunc, @nStep, @cLangCode
+                     ,@cAutoGenID
+                     ,@cReceiptKey
+                     ,@cPOKey
+                     ,@cLOC
+                     ,@cToID
+                     ,@cOption
+                     ,@cAutoID  OUTPUT
+                     ,@nErrNo   OUTPUT
+                     ,@cErrMsg  OUTPUT
+                  IF @nErrNo <> 0
+                     GOTO Step_4_Fail
+
+                  SET @cToID = @cAutoID
+               END
+               ELSE
+               BEGIN
+                  SET @cToID = ''
+                  SET @cAutoID = ''
+               END
+
+               -- Prepare prev screen var
+               SET @cOutField01 = @cReceiptKey
+               SET @cOutField02 = @cPOKey
+               SET @cOutField03 = @cLOC
+               SET @cOutField04 = @cToID
+
+               -- Go to previous screen
+               SET @nScn = @nScn - 1
+               SET @nStep = @nStep - 1
+            END
+         END
+         
          -- Auto generate ID
          IF @cAutoGenID <> ''
          BEGIN
@@ -4522,6 +4859,134 @@ BEGIN
 END
 GOTO Quit
 
+/********************************************************************************
+Step 99. Screen = 6382. Pallet Type
+ Pallet Type    (field01, input)
+********************************************************************************/
+Step_99:
+BEGIN
+   IF @nInputKey = 1 -- ENTER
+   BEGIN
+      -- Screen mapping
+      SET @cPalletType = @cInField01
+
+      SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '1580ExtendedScreenSP', @cStorer), '')
+      SET @nAction = 1
+      IF @cExtendedScreenSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+         BEGIN
+            EXECUTE [RDT].[rdt_1580ExtScnEntry] 
+               @cExtendedScreenSP,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorer, @cSuggestedLoc OUTPUT ,@cLOC OUTPUT, @cTOID OUTPUT, @cSKU OUTPUT,
+               @cReceiptKey,@cPoKey,'',@cReceiptLineNumber,@cPalletType,
+               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,  
+               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,  
+               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,  
+               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,  
+               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  
+               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  
+               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  
+               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  
+               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  
+               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  
+               @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  
+               @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, 
+               @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  
+               @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, 
+               @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, 
+               @nAction, 
+               @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
+               @nErrNo   OUTPUT, 
+               @cErrMsg  OUTPUT
+            
+            IF @nErrNo <> 0
+               GOTO Step_99_Fail
+         END
+      END
+      -- Disable lottable
+      IF @cSkipLottable01 = '1' SELECT @cFieldAttr01 = 'O', @cInField01 = ''
+      IF @cSkipLottable02 = '1' SELECT @cFieldAttr02 = 'O', @cInField02 = ''
+      IF @cSkipLottable03 = '1' SELECT @cFieldAttr03 = 'O', @cInField03 = ''
+      IF @cSkipLottable04 = '1' SELECT @cFieldAttr04 = 'O', @cInField04 = ''
+      
+      -- Prep next screen var
+      SET @cLottable01 = IsNULL( @cLottable01, '')
+      SET @cLottable02 = IsNULL( @cLottable02, '')
+      SET @cLottable03 = IsNULL( @cLottable03, '')
+      --SET @dLottable04 = IsNULL( @dLottable04, 0)
+      SET @cSKU = ''
+      SET @cUOM = ''
+
+      SET @cOutField01 = @cLottable01
+      SET @cOutField02 = @cLottable02
+      SET @cOutField03 = @cLottable03
+      -- SET @cOutField04 = CASE WHEN @dLottable04 IS NULL THEN rdt.rdtFormatDate( @dLottable04) END
+      SET @cOutField04 = rdt.rdtFormatDate( @dLottable04)
+
+      EXEC rdt.rdtSetFocusField @nMobile, 1 --Lottable01
+
+      -- Go to next screen
+      SET @nScn = 1753
+      SET @nStep = 4
+
+      -- (james13)
+      IF @cSkipLottable = '1'
+         GOTO Step_4
+
+   END
+
+   IF @nInputKey = 0 -- ESC
+   BEGIN
+      -- Auto generate ID
+      IF @cAutoGenID <> ''
+      BEGIN
+         EXEC rdt.rdt_PieceReceiving_AutoGenID @nMobile, @nFunc, @nStep, @cLangCode
+            ,@cAutoGenID
+            ,@cReceiptKey
+            ,@cPOKey
+            ,@cLOC
+            ,@cToID
+            ,@cOption
+            ,@cAutoID  OUTPUT
+            ,@nErrNo   OUTPUT
+            ,@cErrMsg  OUTPUT
+         IF @nErrNo <> 0
+            GOTO Step_4_Fail
+      SET @cToID = @cAutoID
+
+      END
+      ELSE
+      BEGIN
+         SET @cToID = ''
+         SET @cAutoID = ''
+      END
+
+      -- Prepare prev screen var
+      SET @cOutField01 = @cReceiptKey
+      SET @cOutField02 = @cPOKey
+      SET @cOutField03 = @cLOC
+      SET @cOutField04 = @cToID
+
+      -- Go to previous screen
+      SET @nScn = 1752
+      SET @nStep = 3
+
+      -- Enable field
+      SET @cFieldAttr01 = ''
+      SET @cFieldAttr02 = ''
+      SET @cFieldAttr03 = ''
+      SET @cFieldAttr04 = ''
+
+   END
+   GOTO Quit
+
+   Step_99_Fail:
+   BEGIN
+      SET @cPalletType = ''
+   END
+END
+GOTO Quit
 
 /********************************************************************************
 Quit. Update back to I/O table, ready to be pick up by JBOSS

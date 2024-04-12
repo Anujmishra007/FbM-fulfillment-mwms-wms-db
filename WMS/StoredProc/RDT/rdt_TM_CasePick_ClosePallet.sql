@@ -21,9 +21,10 @@ GO
 /*                            Add ClosePalletSP                         */
 /* 03-Jan-2019 1.2  Ung       WMS-3273 Fix full short                   */
 /* 07-Mar-2019 1.3  Ung       WMS-8058 Fix move UCC                     */
+/* 01-Apr-2024 1.4  CYU027    UWP-17449 Create Replen task              */
 /************************************************************************/
 
-CREATE PROC [rdt].[rdt_TM_CasePick_ClosePallet] (
+CREATE OR ALTER PROC [rdt].[rdt_TM_CasePick_ClosePallet] (
    @nMobile        INT,
    @nFunc          INT,
    @cLangCode      NVARCHAR(3),
@@ -41,9 +42,14 @@ BEGIN
    DECLARE @nTranCount     INT
    DECLARE @cSQL           NVARCHAR(MAX)
    DECLARE @cSQLParam      NVARCHAR(MAX)
-   
+
    DECLARE @cClosePalletSP NVARCHAR(20)
+   DECLARE @cReplenFlag    NVARCHAR(20)
    DECLARE @cStorerKey     NVARCHAR( 15)
+   DECLARE @cSKU           NVARCHAR( 20)
+   DECLARE @cFromLOC       NVARCHAR( 10)
+   DECLARE @cFacility      NVARCHAR( 5)
+   DECLARE @b_Success      INT
 
    -- Get storer
    SELECT TOP 1 
@@ -58,6 +64,11 @@ BEGIN
    SET @cClosePalletSP = rdt.rdtGetConfig( @nFunc, 'ClosePalletSP', @cStorerKey)
    IF @cClosePalletSP = '0'
       SET @cClosePalletSP = ''
+
+   -- Get storer config
+   SET @cReplenFlag = rdt.rdtGetConfig( @nFunc, 'ReplenFlag', @cStorerKey)
+   IF @cReplenFlag = '0'
+      SET @cReplenFlag = ''
 
    SET @nTranCount = @@TRANCOUNT
    
@@ -82,7 +93,7 @@ BEGIN
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
             @nMobile, @nFunc, @cLangCode, @cUserName, @cListKey, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
-         GOTO Quit
+         GOTO REPLEN_TASK
       END
    END
 
@@ -91,13 +102,10 @@ BEGIN
    ***********************************************************************************************/
    DECLARE @cTaskDetailKey NVARCHAR( 10)
    DECLARE @cPickMethod    NVARCHAR( 10)
-   DECLARE @cFacility      NVARCHAR( 5)
    DECLARE @cWaveKey       NVARCHAR( 10)
-   DECLARE @cFromLOC       NVARCHAR( 10)
-   DECLARE @cFromID        NVARCHAR( 18)
    DECLARE @cToLOC         NVARCHAR( 10)
+   DECLARE @cFromID        NVARCHAR( 18)
    DECLARE @cToID          NVARCHAR( 18)
-   DECLARE @cSKU           NVARCHAR( 20)
    DECLARE @cLOT           NVARCHAR( 10)
    DECLARE @cUCCNo         NVARCHAR( 20)
    DECLARE @cPickConfirmStatus NVARCHAR( 1)
@@ -108,7 +116,7 @@ BEGIN
    DECLARE @nQTY           INT
    DECLARE @nSystemQTY     INT
    DECLARE @nUCCQTY        INT
-   
+
    -- Init var
    SET @nErrNo = 0
    SET @cErrMsg = ''
@@ -332,7 +340,7 @@ BEGIN
          ,@nErrNo  OUTPUT
          ,@cErrMsg OUTPUT
       IF @nErrNo <> 0
-         GOTO Quit
+         GOTO REPLEN_TASK
 
       -- Update Task
       UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
@@ -362,14 +370,62 @@ BEGIN
       GOTO RollBackTran
 
    COMMIT TRAN rdt_TM_CasePick_ClosePallet -- Only commit change made here
-   GOTO Quit
+
+   GOTO REPLEN_TASK
 
 RollBackTran:
    ROLLBACK TRAN rdt_TM_CasePick_ClosePallet -- Only rollback change made here
 Fail:
+
+REPLEN_TASK:
+   IF @cReplenFlag = '1'
+   BEGIN
+
+      -- Get storer
+      SELECT TOP 1
+            @cStorerKey = StorerKey,
+            @cSKU       = Sku,
+            @cFromLOC     = FromLoc
+      FROM dbo.TaskDetail WITH (NOLOCK)
+      WHERE ListKey = @cListKey
+        AND UserKey = @cUserName
+      ORDER BY TaskDetailKey
+
+      SELECT @cFacility = Facility FROM LOC WITH (NOLOCK) WHERE LOC = @cFromLOC
+
+      --qty hits min threshold
+      IF EXISTS(
+         SELECT 1 FROM SKUXLOC SL(NOLOCK)
+                          JOIN LOTxLOCxID LLI WITH (NOLOCK) ON SL.StorerKey = LLI.StorerKey AND SL.SKU = LLI.SKU AND SL.LOC = LLI.LOC
+         WHERE SL.StorerKey = @cStorerKey
+           AND SL.SKU = @cSKU
+           AND SL.LOC = @cFromLOC
+           AND SL.LocationType IN ( 'CASE','PALLET','PICK')
+         GROUP BY
+            SL.StorerKey,
+            SL.SKU,
+            SL.LOC,
+            SL.QtyLocationMinimum
+         HAVING (SUM(LLI.Qty) - SUM(LLI.QtyPicked) + SUM(LLI.PendingMoveIn)) <= SL.QtyLocationMinimum
+      )
+         BEGIN
+            EXEC isp_ODMRPL01
+                 @c_Facility = @cFacility,
+                 @c_Storerkey = @cStorerKey,
+                 @c_SKU = @cSKU,
+                 @c_LOC = @cFromLOC,
+                 @c_ReplenType = N'T',
+                 @b_Success = @b_Success OUTPUT,
+                 @n_Err = @nErrNo OUTPUT,
+                 @c_ErrMsg = @cErrMsg OUTPUT,
+                 @b_Debug = 0
+         END
+   END
+   GOTO Quit
+
 Quit:
-   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-      COMMIT TRAN
+WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+   COMMIT TRAN
 END
 GO
 

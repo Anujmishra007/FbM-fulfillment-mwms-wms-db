@@ -5,6 +5,7 @@ EXECUTE rdt.rdtAddScn 4200, 'ENG',
    ,@cLine03 = 'PALLET ID:'
    ,@cLine04 = '%18i01'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3","4"]}'
    ,@nFunc = 1650
  
 -- 4201 = TO DOOR screen
@@ -17,6 +18,7 @@ EXECUTE rdt.rdtAddScn 4201, 'ENG',
    ,@cLine06 = '%20d02'
    ,@cLine07 = '%20i03'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3","4"],"2":["5","6","7"]}'
    ,@nFunc = 1650
    
 -- 4202 = Close truck screen

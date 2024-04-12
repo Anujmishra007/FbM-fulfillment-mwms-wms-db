@@ -15,6 +15,7 @@ GO
 /*                                                                            */
 /* Date         Author    Ver.  Purposes                                      */
 /* 2023-12-01   Tony      1.0   WMS-24315 Created                             */
+/* 2024-04-11   NLT013    2.0   UWP-18212 Need trigger EDI while short pick   */
 /******************************************************************************/
 
 CREATE OR ALTER     PROCEDURE [RDT].[rdt_839ExtUpd06]
@@ -160,9 +161,9 @@ BEGIN
       END
 
     
-      IF @nStep = 5 -- Close DropID
+      IF @nStep = 5 -- Close DropID or Short pick
       BEGIN
-         IF @nInputKey = 1 AND @cOption ='3' -- ENTER and close drop ID
+         IF @nInputKey = 1 AND @cOption IN ('1', '3') -- ENTER and close drop ID --NLT013 option = 1 is short pick, need trigger msg to WCS
          BEGIN
             -- Using drop ID, send tote to WCS
             IF @cDropID <> ''

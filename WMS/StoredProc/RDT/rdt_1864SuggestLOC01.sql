@@ -12,6 +12,7 @@ GO
 /*                                                                               */
 /* Date        Rev  Author      Purposes                                         */
 /* 13-09-2023  1.0  Ung         WMS-23032 Created                                */
+/* 09-02-2024  1.1  YeeKung     UWP-14600 Fix PD.loc->LOC.loc (yeekung01)        */
 /*********************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1864SuggestLOC01
@@ -86,7 +87,7 @@ BEGIN
             ' JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey) ' + 
             ' JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' + 
          ' WHERE RKL.PickSlipNo = @cPickSlipNo ' + 
-            CASE WHEN @cPickZone = '' THEN '' ELSE ' AND PD.PickZone = @cPickZone ' END + 
+            CASE WHEN @cPickZone = '' THEN '' ELSE ' AND LOC.PickZone = @cPickZone ' END + 
             CASE WHEN @cPickFilter = '' THEN '' ELSE @cPickFilter END + 
             ' AND PD.ID <> '''' ' + 
             ' AND PD.QTY > 0 ' + 
@@ -113,7 +114,7 @@ BEGIN
          ' FROM dbo.PickDetail PD WITH (NOLOCK) ' +
             ' JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
          ' WHERE PD.OrderKey = @cOrderKey ' +
-            CASE WHEN @cPickZone = '' THEN '' ELSE ' AND PD.PickZone = @cPickZone ' END + 
+            CASE WHEN @cPickZone = '' THEN '' ELSE ' AND LOC.PickZone = @cPickZone ' END + 
             CASE WHEN @cPickFilter = '' THEN '' ELSE @cPickFilter END + 
             ' AND PD.ID <> '''' ' + 
             ' AND PD.QTY > 0 ' +
@@ -141,7 +142,7 @@ BEGIN
             ' JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey) ' +
             ' JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
          ' WHERE LPD.LoadKey = @cLoadKey ' +
-            CASE WHEN @cPickZone = '' THEN '' ELSE ' AND PD.PickZone = @cPickZone ' END + 
+            CASE WHEN @cPickZone = '' THEN '' ELSE ' AND LOC.PickZone = @cPickZone ' END + 
             CASE WHEN @cPickFilter = '' THEN '' ELSE @cPickFilter END + 
             ' AND PD.ID <> '''' ' + 
             ' AND PD.QTY > 0 ' +
@@ -168,7 +169,7 @@ BEGIN
          ' FROM dbo.PickDetail PD WITH (NOLOCK) ' +
             ' JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
          ' WHERE PD.PickSlipNo = @cPickSlipNo ' +
-            CASE WHEN @cPickZone = '' THEN '' ELSE ' AND PD.PickZone = @cPickZone ' END + 
+            CASE WHEN @cPickZone = '' THEN '' ELSE ' AND LOC.PickZone = @cPickZone ' END + 
             CASE WHEN @cPickFilter = '' THEN '' ELSE @cPickFilter END + 
             ' AND PD.ID <> '''' ' + 
             ' AND PD.QTY > 0 ' +

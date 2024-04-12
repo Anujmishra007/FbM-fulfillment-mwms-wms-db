@@ -37,6 +37,7 @@ CREATE OR ALTER PROC [dbo].[isp_ODMRPL01]
     @n_Err        INT OUTPUT,
     @c_ErrMsg     NVARCHAR(255) OUTPUT,
     @b_Debug      INT = 0
+
 AS
 BEGIN
     SET NOCOUNT ON
@@ -50,9 +51,9 @@ BEGIN
          , @c_Wavekey               NVARCHAR(10)   = ''
          
          , @c_ReplenishmentKey      NVARCHAR(10)   = ''
-         
+
          , @c_Priority              NVARCHAR(5)    = ''
-         , @c_TaskPriority          NVARCHAR(10)   = '5'                            --(Wan01)    
+         , @c_TaskPriority          NVARCHAR(10)   = '5'                            --(Wan01)
 
          , @n_InvCnt                INT
          , @c_CurrentStorer         NVARCHAR(15)   = ''
@@ -105,7 +106,7 @@ BEGIN
          , @c_FromAreaKey           NVARCHAR(10)   = ''  
          , @c_ToLogicalLoc          NVARCHAR(10)   = '' 
          , @c_ToAreaKey             NVARCHAR(10)   = '' 
-         , @n_IsRDT                 INT            = 0                              --(Wan01)  
+         , @n_IsRDT                 INT            = 0                              --(Wan01)
 
     WHILE @@TRANCOUNT > 0
     BEGIN
@@ -115,7 +116,7 @@ BEGIN
     BEGIN TRAN
     EXECUTE RDT.rdtIsRDT @n_IsRDT OUTPUT                                            --(Wan01) - START
 
-    IF @n_IsRDT = 1                                                                 
+    IF @n_IsRDT = 1
     BEGIN
       SET @c_TaskPriority = '3'
     END                                                                             --(Wan01) - END

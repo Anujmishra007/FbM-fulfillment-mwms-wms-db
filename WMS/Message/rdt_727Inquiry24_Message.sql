@@ -8,3 +8,6 @@ execute rdt.rdtAddMsg 209204, 10, 'TOTE NO:            ', 'us_english', 727
 execute rdt.rdtAddMsg 209205, 10, 'SORTING RAMP:       ', 'us_english', 727
 execute rdt.rdtAddMsg 209206, 10, 'PTL STATION:        ', 'us_english', 727
 execute rdt.rdtAddMsg 209207, 10, 'WAVEKEY:            ', 'us_english', 727
+execute rdt.rdtAddMsg 209208, 10, 'EditWho: ', 'us_english', 727
+execute rdt.rdtAddMsg 209209, 10, 'SKU:                ', 'us_english', 727
+execute rdt.rdtAddMsg 209210, 10, 'QTY: ', 'us_english', 727

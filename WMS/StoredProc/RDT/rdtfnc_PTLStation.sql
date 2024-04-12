@@ -36,6 +36,7 @@ GO
 /* 15-11-2022 2.8  Ung        WMS-21024 Adjust ExtendedInfoSP at SKU screen   */
 /*                            Clear QTY field when ESC to SKU screen          */
 /* 16-06-2023 2.9  Ung        WMS-22703 Add MatrixSP Method param             */
+/* 28-03-2024 2.9  NLT013     UWP-17015 Sorting on the QC location            */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PTLStation] (
@@ -61,7 +62,8 @@ DECLARE
    @nRowCount     INT, 
    @nActQTY       INT, 
    @cNewCartonID  NVARCHAR( 20), 
-   @cShort        NVARCHAR(10), 
+   @cShort        NVARCHAR( 10), 
+   @cCode2        NVARCHAR( 30),
 
    @cResult01     NVARCHAR( 20),
    @cResult02     NVARCHAR( 20),
@@ -681,14 +683,16 @@ BEGIN
 
       -- Get method info
       SET @cShort = ''
-      SELECT @cShort = Short
+      SET @cCode2 = ''
+      SELECT @cShort = Short,
+         @cCode2 = ISNULL(code2, '')
       FROM CodeLKUP WITH (NOLOCK) 
       WHERE ListName = 'PTLMethod' 
          AND Code = @cMethod 
          AND StorerKey = @cStorerKey
          
       -- Prepare next screen var
-      SET @cOutField01 = '' --@cScanID
+      SET @cOutField01 = CASE WHEN ISNULL(@cCode2, '') = 'C' THEN @cOutField01 ELSE '' END --@cScanID
       SET @cOutField02 = '' --@cSuggSKU
       SET @cOutField03 = '' --@cSKU
       SET @cOutField04 = '' --@cSKUDescr
@@ -1687,14 +1691,15 @@ BEGIN
 
       -- Get method info
       SET @cShort = ''
-      SELECT @cShort = Short
+      SELECT @cShort = Short,
+         @cCode2 = ISNULL(code2, '')
       FROM CodeLKUP WITH (NOLOCK) 
       WHERE ListName = 'PTLMethod' 
          AND Code = @cMethod 
          AND StorerKey = @cStorerKey
 
       -- Prepare next screen var
-      SET @cOutField01 = '' --@cScanID
+      SET @cOutField01 = CASE WHEN ISNULL(@cCode2, '') = 'C' THEN @cScanID ELSE '' END --@cScanID --@cScanID
       SET @cOutField02 = @cSKU
       SET @cOutField03 = '' -- @cSKU
       SET @cOutField04 = SUBSTRING( @cSKUDescr, 1, 20)
@@ -1871,8 +1876,15 @@ BEGIN
                END
                ELSE 
                BEGIN
+                  SET @cCode2 = ''
+                  SELECT @cCode2 = ISNULL(code2, '')
+                  FROM CodeLKUP WITH (NOLOCK) 
+                  WHERE ListName = 'PTLMethod' 
+                     AND Code = @cMethod 
+                     AND StorerKey = @cStorerKey
+
                   -- Prepare next screen var
-                  SET @cOutField01 = '' -- @cScanID -- (ChewKP02) 
+                  SET @cOutField01 = CASE WHEN ISNULL(@cCode2, '') = 'C' THEN @cScanID ELSE '' END -- @cScanID -- (ChewKP02) 
                   SET @cOutField02 = '' -- @cSKU
                   SET @cOutField03 = '' -- @cSKU
                   SET @cOutField04 = '' -- @cSKUDescr
@@ -1884,22 +1896,23 @@ BEGIN
             END
             ELSE
             BEGIN
+               SET @cCode2 = ''
+               SELECT @cCode2 = ISNULL(code2, '')
+               FROM CodeLKUP WITH (NOLOCK) 
+               WHERE ListName = 'PTLMethod' 
+                  AND Code = @cMethod 
+                  AND StorerKey = @cStorerKey
                
                -- Prepare next screen var
-               SET @cOutField01 = '' -- @cScanID -- (ChewKP02) 
+               SET @cOutField01 = CASE WHEN ISNULL(@cCode2, '') = 'C' THEN @cScanID ELSE '' END -- @cScanID -- (ChewKP02) 
                SET @cOutField02 = '' -- @cSKU
                SET @cOutField03 = '' -- @cSKU
                SET @cOutField04 = '' -- @cSKUDescr
                SET @cOutField05 = '' -- @cSKUDescr
                SET @cOutField06 = '' -- @nQTY 
                SET @cOutField07 = '' -- @cExtendedInfo
-               
             END
-            
-           
-      
-            
-            
+
             -- Go to UCC/ID screen
             SET @nScn = @nScn - 2
             SET @nStep = @nStep - 2

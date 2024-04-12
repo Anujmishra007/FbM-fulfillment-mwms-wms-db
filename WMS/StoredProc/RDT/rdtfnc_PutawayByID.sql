@@ -27,6 +27,7 @@ GO
 /* 2019-07-17 1.6  James    WMS9858 Add loc prefix (james04)            */   
 /* 2019-08-07 1.7  James    WMS10120 Add screen confirm overwrite       */
 /*                          suggested loc (james05)                     */
+/* 2023-03-20 1.8  Dennis   UWP-14536 Check Digit                       */
 /************************************************************************/
 
 CREATE PROC [RDT].[rdtfnc_PutawayByID] (
@@ -66,7 +67,7 @@ DECLARE
    
    @cSuggLOC            NVARCHAR( 10), 
    @cPickAndDropLOC     NVARCHAR( 10), 
-   @cToLOC              NVARCHAR( 10), 
+   @cToLOC              NVARCHAR( 20), 
    @cExtendedValidateSP NVARCHAR( 20),
    @cExtendedUpdateSP   NVARCHAR( 20),
    @cExtendedInfoSP     NVARCHAR( 20),
@@ -91,6 +92,10 @@ DECLARE
    @cLOCLookupSP        NVARCHAR( 20),
    @cPAMatchSuggestLOC  NVARCHAR( 1), 
    @cOption             NVARCHAR( 1),
+   @cExtendedScreenSP   NVARCHAR( 20),
+   @nAction             INT,
+   @nAfterScn           INT,
+   @nAfterStep          INT,
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -574,7 +579,7 @@ BEGIN
 
       WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
          COMMIT TRAN
-
+      
       -- Prepare next screen var
       SET @cOutField01 = @cFromID
       SET @cOutField02 = CASE WHEN @cPickAndDropLOC = '' THEN @cSuggLOC ELSE @cPickAndDropLOC END
@@ -668,6 +673,40 @@ BEGIN
          GOTO Step_2_Fail
       END
 
+      SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '1819ExtendedScreenSP', @cStorerKey), '')
+      SET @nAction = 1
+      IF @cExtendedScreenSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+         BEGIN
+            EXECUTE [RDT].[rdt_1819ExtScnEntry] 
+               @cExtendedScreenSP,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @cSuggLOC OUTPUT ,@cToLOC OUTPUT,@cPickAndDropLOC OUTPUT,
+               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  
+               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  
+               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT, 
+               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT, 
+               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  
+               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  
+               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  
+               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  
+               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  
+               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  
+               @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  
+               @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, 
+               @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  
+               @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, 
+               @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, 
+               @nAction, 
+               @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
+               @nErrNo   OUTPUT, 
+               @cErrMsg  OUTPUT
+            
+            IF @nErrNo <> 0
+               GOTO Step_2_Fail
+         END
+      END
+      
 		-- (james04)        
 		IF @cLOCLookupSP = 1              
 		BEGIN              

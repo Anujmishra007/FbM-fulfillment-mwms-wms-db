@@ -23,11 +23,12 @@ GO
 /*                            Fix PQTY not shown if DisableQTYField           */
 /* 2020-02-21 1.7  YeeKung    WMS-12082 Add ExtendedValidate(yeekung01)       */
 /* 2019-05-14 1.8  James      WMS-9920 Add MultiSKUBarcode (james01)          */
-/* 2022-09-09 1.9  YeeKung    WMS-20712 Add overwritetoloc (Yeekung02)        */   
+/* 2022-09-09 1.9  YeeKung    WMS-20712 Add overwritetoloc (Yeekung02)        */
 /* 2023-03-24 2.0  Ung        WMS-22020 Add dynamic lottable                  */
 /* 2023-05-16 2.1  Ung        WMS-22435 Add DecodeSP                          */
 /*                            Expand SKU field to max                         */
 /* 2023-06-20 2.2  Ung        WMS-22834 Add DispStyleColorSize                */
+/* 2024-03-12 2.3  CYU027     UWP-15734 Add Extended Print SP				      */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CasePick](
@@ -130,12 +131,13 @@ DECLARE
    @cDefaultFromID      NVARCHAR( 1),
    @cExtendedInfoSP     NVARCHAR(20),
    @cExtendedInfo1      NVARCHAR(20),
+   @cExtendedPrintSP    NVARCHAR(20),
    @cGetNextTaskSP      NVARCHAR(20),
    @cDisableQTYFieldSP  NVARCHAR(20),
    @cExtendedValidateSP NVARCHAR(20),
    @cSwapUCCSP          NVARCHAR(20),
    @cLOCLookupSP        NVARCHAR(20),
-   @cDecodeSP           NVARCHAR(20), 
+   @cDecodeSP           NVARCHAR(20),
    @cDispStyleColorSize NVARCHAR( 1),
 
    @cAreaKey            NVARCHAR(10),
@@ -240,6 +242,7 @@ SELECT
    @cGetNextTaskSP     = V_String29,
    @cDisableQTYFieldSP = V_String30,
    @cExtendedValidateSP= V_String31,
+   @cExtendedPrintSP   = V_String41,
 
    @cAreakey           = V_String32,
    @cTTMStrategykey    = V_String33,
@@ -249,7 +252,7 @@ SELECT
    @cRefKey03          = V_String37,
    @cRefKey04          = V_String38,
    @cRefKey05          = V_String39,
-   @cOverwriteToLOC    = V_String40, 
+   @cOverwriteToLOC    = V_String40,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01  = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02  = FieldAttr02,
@@ -347,6 +350,9 @@ BEGIN
    SET @cExtendedInfoSP = rdt.RDTGetConfig( @nFunc, 'ExtendedInfoSP', @cStorerKey)
    IF @cExtendedInfoSP = '0'
       SET @cExtendedInfoSP = ''
+   SET @cExtendedPrintSP = rdt.RDTGetConfig( @nFunc, 'ExtendedPrintSP', @cStorerKey)
+   IF @cExtendedPrintSP = '0'
+      SET @cExtendedPrintSP = ''
    SET @cGetNextTaskSP = rdt.RDTGetConfig( @nFunc, 'GetNextTaskSP', @cStorerKey)
    IF @cGetNextTaskSP = '0'
       SET @cGetNextTaskSP = ''
@@ -2284,32 +2290,70 @@ BEGIN
       IF @nErrNo <> 0
          GOTO Quit
 
+
       -- Extended update
       IF @cExtendedUpdateSP <> ''
       BEGIN
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cDropID, @nQTY, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep '
+                        ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cDropID, @nQTY, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep '
             SET @cSQLParam =
-               '@nMobile         INT,           ' +
-               '@nFunc           INT,           ' +
-               '@cLangCode       NVARCHAR( 3),  ' +
-               '@nStep           INT,           ' +
-               '@nInputKey       INT,           ' +
-               '@cTaskdetailKey  NVARCHAR( 10), ' +
-               '@cDropID         NVARCHAR( 20), ' +
-               '@nQTY            INT,           ' +
-               '@cToLOC          NVARCHAR( 10), ' +
-               '@nErrNo          INT OUTPUT,    ' +
-               '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
-               '@nAfterStep      INT            '
+                       '@nMobile         INT,           ' +
+                       '@nFunc           INT,           ' +
+                       '@cLangCode       NVARCHAR( 3),  ' +
+                       '@nStep           INT,           ' +
+                       '@nInputKey       INT,           ' +
+                       '@cTaskdetailKey  NVARCHAR( 10), ' +
+                       '@cDropID         NVARCHAR( 20), ' +
+                       '@nQTY            INT,           ' +
+                       '@cToLOC          NVARCHAR( 10), ' +
+                       '@nErrNo          INT OUTPUT,    ' +
+                       '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
+                       '@nAfterStep      INT            '
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cDropID, @nQTY, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
+                 @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cDropID, @nQTY, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
 
             IF @nErrNo <> 0
                GOTO Quit
+         END
+      END
+
+      -- Extende print, only 'Partiel Pick'
+      IF @cExtendedPrintSP <> '' AND @cPickMethod = 'PP'
+      BEGIN
+         IF @cExtendedPrintSP NOT IN ('0', '') AND
+         EXISTS( SELECT 1 FROM sys.sysobjects WHERE name = @cExtendedPrintSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedPrintSP) +
+                        ' @nMobile, @nFunc, @nStep, @cLangCode, @cStorerKey, @cOption, @cParam1, @cParam2, @cParam3, @cParam4, @cParam5,' +
+                        ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+
+            SET @cSQLParam =
+                       '@nMobile                   INT,                   '   +
+                       '@nFunc                     INT,                   '   +
+                       '@nStep                     INT,                   '   +
+                       '@cLangCode                 NVARCHAR( 3),          '   +
+                       '@cStorerKey                NVARCHAR( 15),         '   +
+                       '@cOption                   NVARCHAR( 1),          '   +
+                       '@cParam1                   NVARCHAR( 20),         '   +        -- Label No
+                       '@cParam2                   NVARCHAR( 20),         '   +
+                       '@cParam3                   NVARCHAR( 20),         '   +
+                       '@cParam4                   NVARCHAR( 20),         '   +
+                       '@cParam5                   NVARCHAR( 20),         '   +
+                       '@nErrNo                    INT           OUTPUT,  '   +
+                       '@cErrMsg                   NVARCHAR( 20) OUTPUT   '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                 @nMobile, @nFunc, @nStep, @cLangCode, @cStorerkey, @cOption, @cDropID, '', '', '', '',
+                 @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               BEGIN
+                  EXEC rdt.rdtSetFocusField @nMobile, 4
+                  GOTO Quit
+               END
          END
       END
 
@@ -3071,7 +3115,7 @@ BEGIN
       V_PUOM_Div   = @nPUOM_Div,
       V_FromScn    = @nFromScn,
       V_FromStep   = @nFromStep,
-      V_Barcode    = @cBarcode, 
+      V_Barcode    = @cBarcode,
 
       V_String1    = @cAreaKey,
       V_String2    = @cTaskStorer,
@@ -3102,6 +3146,7 @@ BEGIN
       V_String29   = @cGetNextTaskSP,
       V_String30   = @cDisableQTYFieldSP,
       V_String31   = @cExtendedValidateSP,
+      V_String41   = @cExtendedPrintSP,
 
       V_String32   = @cAreakey,
       V_String33   = @cTTMStrategykey,

@@ -180,6 +180,9 @@ GO
 /* 17-Jun-2022  2.3 yeekung     WMS-18523 Add defaultloadplan (yeekung01)*/
 /* 28-Jul-2022  2.4 LZG         JSM-84937 - Disallowed option if config */
 /*                              is disabled (ZG02)                      */
+/* 26-Feb-2024  2.5 James        UWP-15502 - Invalid Drop ID Error      */
+/* 03-Mar-2024  2.51 James       UWP-15502 - Invalid Drop ID Error, fix */
+/*                               multiple orders in one drop id error   */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Cluster_Pick](
@@ -14660,27 +14663,40 @@ BEGIN
             -- Close the dropid if picked = packed (james30)
             IF rdt.RDTGetConfig( @nFunc, 'ClusterPickPromtOpenDropID', @cStorerKey) = '1'
             BEGIN
-               SET @cTDropID = ''
-               SELECT TOP 1 @cTDropID = DropID
-               FROM DROPID WITH (NOLOCK)
-               WHERE PickSlipNo = @cPickSlipNo
-               AND   Status = '0'
+               --UWP-15502 - Invalid Drop ID Error (jackc)
+               SELECT @cPOrderKey = OrderKey
+               FROM dbo.PICKHEADER WITH (NOLOCK)
+               WHERE PickHeaderKey = @cPickSlipNo
 
-               EXECUTE rdt.rdt_Cluster_Pick_DropID
-                  @nMobile,
-                  @nFunc,
-                  @cStorerKey,
-                  @cUserName,
-                  @cFacility,
-                  @cLoadKey,
-                  @cPickSlipNo,
-                  @cOrderKey,
-                  @cTDropID      OUTPUT,
-                  @cSKU,
-                  'U',      -- U = Update
-                  @cLangCode,
-                  @nErrNo        OUTPUT,
-                  @cErrMsg       OUTPUT   -- screen limitation, 20 NVARCHAR max
+               DECLARE @cTDropStatus NVARCHAR( 10) = ''
+               SET @cTDropID = ''
+               SET @cTDropStatus = ''
+
+               SELECT TOP 1 @cTDropID = D.DropID, @cTDropStatus = D.[Status]
+               FROM dbo.DROPID D (NOLOCK)
+               JOIN dbo.DROPIDDETAIL DD (NOLOCK) ON D.DROPID = DD.DROPID
+               JOIN dbo.PickDetail PD WITH (NOLOCK) ON DD.ChildID = PD.OrderKey
+               WHERE PD.OrderKey = @cPOrderKey
+               ORDER BY 2 DESC
+
+               IF @cTDropID <> ''   --UWP-15502 mulitple orders in one dropid (jackc)
+               BEGIN
+                  EXECUTE rdt.rdt_Cluster_Pick_DropID
+                     @nMobile,
+                     @nFunc,
+                     @cStorerKey,
+                     @cUserName,
+                     @cFacility,
+                     @cLoadKey,
+                     @cPickSlipNo,
+                     @cOrderKey,
+                     @cTDropID      OUTPUT,
+                     @cSKU,
+                     'U',      -- U = Update
+                     @cLangCode,
+                     @nErrNo        OUTPUT,
+                     @cErrMsg       OUTPUT   -- screen limitation, 20 NVARCHAR max
+               END
             END
          END
          FETCH NEXT FROM curPickingInfo INTO @cPickSlipNo, @cPSFlag -- (Vicky07)

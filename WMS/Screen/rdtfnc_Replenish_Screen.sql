@@ -12,6 +12,8 @@ EXECUTE rdt.rdtAddScn 1226, 'ENG',
    ,@cLine08 = 'RPL KEY:'
    ,@cLine09 = '%10i03'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4"],"3":["8","9"]}'
+   ,@nFunc = 510
     
 -- 1227 = SKU screen
 DELETE rdt.RDTScn WHERE Scn = 1227 AND Lang_Code = 'ENG'
@@ -23,6 +25,9 @@ EXECUTE rdt.rdtAddScn 1227, 'ENG',
    ,@cLine05 = 'SKU/UPC:'
    ,@cLine06 = '%20i03'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4"],"2":["5","6"]}'
+   ,@nFunc = 510
+
  
 -- 1228 = QTY screen
 DELETE rdt.RDTScn WHERE Scn = 1228 AND Lang_Code = 'ENG'
@@ -38,10 +43,12 @@ EXECUTE rdt.rdtAddScn 1228, 'ENG',
    ,@cLine09 = '4 %16d07'
    ,@cLine10 = '%08d14 %05d08 %05d09'
    ,@cLine11 = 'RPL QTY: %05d10 %05d11'
-   ,@cLine12 = 'ACT QTY: %05i12 %05i13'
+   ,@cLine12 = 'ACT QTY: %05i12^DT:INT %05i13^DT:INT'
    ,@cLine13 = '%20d14'   -- WMS6778
    ,@cLine14 = '%e'
- 
+   ,@cWebGroup = '{"1":["1","2","3","4","5"],"3":["6","7","8","9"],"4":["10","11","12"]}'
+   ,@nFunc = 510
+
 -- 1229 = ToLOC screen
 DELETE rdt.RDTScn WHERE Scn = 1229 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 1229, 'ENG',
@@ -59,6 +66,8 @@ EXECUTE rdt.rdtAddScn 1229, 'ENG',
    ,@cLine12 = 'TO LOC: %10d12'
    ,@cLine13 = 'TO LOC: %10i13'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4","5","6","7","8","9","10"],"2":["11"],"3":["12","13"]}'
+   ,@nFunc = 510
 
 -- 1230 = Dialog screen
 DELETE rdt.RDTScn WHERE Scn = 1230 AND Lang_Code = 'ENG'
@@ -70,6 +79,7 @@ EXECUTE rdt.rdtAddScn 1230, 'ENG',
    ,@cLine07 = '2 = NO'
    ,@cLine09 = 'OPTION: %01i01'
    ,@cLine14 = '%e'
+   ,@nFunc = 510
 
 -- 1231 = Message screen
 DELETE rdt.RDTScn WHERE Scn = 1231 AND Lang_Code = 'ENG'
@@ -79,4 +89,6 @@ EXECUTE rdt.rdtAddScn 1231, 'ENG',
    ,@cLine04 = 'Press ENTER or ESC'
    ,@cLine05 = 'to continue'
    ,@cLine14 = '%e'
- 
+   ,@cAutoDisappear = '1'
+   ,@nFunc = 510
+

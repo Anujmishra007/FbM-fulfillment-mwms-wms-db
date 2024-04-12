@@ -2,141 +2,146 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/*******************************************************************************/
-/* Store Procedure:  nspRDTPASTD                                               */
-/* Creation Date: 28-Oct-2009                                                  */
-/* Copyright: IDS                                                              */
-/* Written by:                                                                 */
-/*                                                                             */
-/* Purpose:  Stored Procedure for PUTAWAY FROM ASN                             */
-/*                                                                             */
-/* Called FROM RDT Pallet Putaway                                              */
-/*                                                                             */
-/* Input Parameters:  @c_userid,          - User Id                            */
-/*                    @c_storerkey,       - Storerkey                          */
-/*                    @c_LOT,             - Lot                                */
-/*                    @c_SKU,             - Sku                                */
-/*                    @c_ID,              - Id                                 */
-/*                    @c_FromLoc,         - FROM Location                      */
-/*                    @n_Qty,             - Putaway Qty                        */
-/*                    @c_uom,             - UOM unit                           */
-/*                    @c_PackKey,         - Packkey for sku                    */
-/*                    @n_PutawayCapacity  - Putaway Capacity                   */
-/*                                                                             */
-/* Output Parameters: @c_Final_ToLoc      - Final ToLocation                   */
-/*                                                                             */
-/* Return Status:  None                                                        */
-/*                                                                             */
-/* Usage:                                                                      */
-/*                                                                             */
-/* Local Variables:                                                            */
-/*                                                                             */
-/* Called By:                                                                  */
-/*                                                                             */
-/* PVCS Version: 1.5                                                           */
-/*                                                                             */
-/* Version: 5.4                                                                */
-/*                                                                             */
-/* Data Modifications:                                                         */
-/*                                                                             */
-/* Updates:                                                                    */
-/* Date         Author        Ver   Purposes                                   */
-/* 28-Oct-2009  Shong               Created (Modified FROM nspASNPASTD)        */
-/* 05-Jan-2010  Shong         1.1   Titan Project                              */
-/* 23-FEb-2010  Vicky         1.1   NextPnDLocation search should include      */
-/*                                  PutawayZone (Vicky01)                      */
-/* 24-Feb-2010  Shong         1.1   Force to loop if no location found in      */
-/*                                  Aisle                                      */
-/* 25-Feb-2010  Vicky         1.1   Fixes on Loop stopped when                 */
-/*                                  NextAisle = StartAisle and did NOT         */
-/*                                  to loop the next step in strategy          */
-/*                                  (Vicky02)                                  */
-/* 26-Feb-2010  Shong         1.1   Fixing Pnd Outer/Centre Seq Issues         */
-/* 27-Feb-2010  Vicky         1.1   Fixing Pnd Outer/Centre Seq (Vicky03)      */
-/* 03-Mar-2010  ChewKP        1.1   Fixing QTYHand need to - QTYPicked         */
-/*                                   (ChewKP01)                                */
-/* 26-May-2010  Vicky         1.2   Should NOT look at PutawayZone = ''        */
-/*                                  to eliminate Performance issue (Vicky04)   */
-/* 24-Jun-2010  ChewKP        1.3   Diana Project PA by BOM SKU Std Cube       */
-/*                                  (ChewKP02)                                 */
-/* 05-Aug-2010  ChewKP        1.3   Bug Fixes on STDCUBE & STDGROSSWEIGHT      */
-/*                                  Calculation for BOMSKU (ChewKP03)          */
-/* 24-Aug-2010  Shong         1.3   Add new Strategy 03 - Put to Pick Loc If   */
-/*                                  FROM Specified Location                    */
-/* 03-Jan-2011  Shong         1.3   Cater Single SKU Putaway if SKU value pass */
-/*                                  in as Parameter                            */
-/* 05-Jan-2011  ChewKP        1.4   Cater Putaway if SKU value pass in as      */
-/*                                  Parameter (ChewKP04)                       */
-/* 23-Mar-2011  Leong         1.5   SOS# 209838 - Add ISNULL check and display */
-/*                                                error in handheld            */
-/* 14-Arp-2011  Audrey        1.5   SOS# 206770 - comment SET @b_MultiLotID    */
-/*                                                = @n_IdCnt (ang01)           */
-/* 28-Sep-2011  Shong         1.6   SOS#224116 - US LCI Project (Shong001)     */
-/* 07-Dec-2011  ChewKP        1.7   Failed Putaway when FromLoc = ToLoc        */
-/*                                  (ChewKP05)                                 */
-/* 06-Feb-2012  Shong         1.8   Include Restriction By UCC Carton Size     */
-/* 21-Feb-2012  ChewKP        1.9   Calculating PackSize by Location           */
-/*                                  (ChewKP06)                                 */
-/* 04-Apr-2012  Ung           2.0   Move check upfront for PAType = 28, 29 on  */
-/*                                  LocationFlag and LocationStateRestriction  */
-/*                                  2-Do not Mix Skus, 3-Do not Mix Lots       */
-/* 09-Apr-2012  Ung           2.1   Fix PAType = 26-29, infinite loop (ung01)  */
-/* 04-Jun-2012  ChewKP        2.2   SOS#245272 - Bug Fix (ChewKP05)            */
-/* 13-Jun-2012  Ung           2.3   SOS240955 Add dimention restriction        */
-/*                                  17-Fit by UCC cube                         */
-/* 20-Jul-2012  Ung           2.4   SOS251060 Further fix on SOS240955 (ung02) */
-/* 19-Jul-2012  Ung           2.5   SOS250731 PAType=61 Find PnD loc using     */
-/*                                  LOC.MaxPallet (ung03)                      */
-/* 13-Aug-2012  Ung           2.6   SOS252964 Add location state restriction   */
-/*                                  12-ABC Descending, 13-ABC EXC              */
-/* 14-Mar-2013  Ung           2.7   SOS272442 (ung04)                          */
-/*                                  Fix PND not reset when chg PAType          */
-/*                                  Fix PAType 61 fail not run next strategln  */
-/*                                  PAType 61 PND consider MaxPallet           */
-/*                                  PAType 61 search next aisle by zone, aisle */
-/* 13-Aug-2012  Ung           2.8   SOS251326 Add NoMixLottable01..04 (ung05)  */
-/* 28-Jun-2012  Ung           2.9   SOS246200 Extra param and PutCode (ung06)  */
-/*                                  SOS257227                                  */
-/*                                  Add Fit by aisle (ung07)                   */
-/*                                  Add PND_IN, PND_OUT (ung08)                */
-/*                                  Add PAType 05 From Zone then ToLoc (ung09) */
-/* 15-Aug-2013  Shong         3.0   Performance Tuning VF-CDC                  */
-/* 21-Aug-2013  Shong         3.1   Order By Putaway Logical Location, Change  */
-/*                                  Single Select into Cursor Loop             */
-/* 04-Feb-2014  ChewKP        3.2   SOS#292706 - Add Another PA Type '62'      */
-/*                                  Search Empty Loc Consider PendingMoveIn    */
-/*                                  (ChewKP07)                                 */
-/* 06-Feb-2014  James         3.3   Bug fix (james01)                          */
-/* 05-May-2014  ChewKP        3.4   Include Multiple PutawayZone Search in     */
-/*                                  PAType = '19', '21' (ChewKP08)             */
-/* 02-Dec-2013  Ung           3.5   SOS257227 Fix PAType 61 infinite loop      */
-/* 30-May-2014  Ung           3.2   SOS322241 Add custom putaway strategy key  */
-/*                                  Fix SUM without ISNULL                     */
-/* 02-Nov-2014  James         3.3   Change '62' to include multizone (james02) */
-/* 28-May-2015  ChewKP        3.4   SOS#342117 Add NoMixLottable5-15(ChewKP09) */
-/* 03-Jun-2015  ChewKP        3.5   SOS#341733 - Cater NoMixLottable with      */
-/*                                  CommingleSKU Flag on Loc setup             */
-/*                                  Fix SQL Statement (ChewKP10)               */
-/* 23-Sep-2015  James         3.6   SOS337104 - Add PAType 23 (james03)        */
-/* 26-Nov-2015  Ung           3.7   SOS357411 Change PREPACKBYBOM              */
-/* 03-Feb-2016  Ung           3.8   SOS360340 Add PABookingKey                 */
-/* 06-Jun-2016  Ung           3.9   IN00057923 Cater UCC.Status=3              */
-/* 11-Aug-2016  TLTING        4.0   (nolock) and remove SetROWCOUNT            */
-/* 25-Oct-2016  Ung           4.1   Performance tuning                         */
-/* 11-Aug-2017  JHTAN         4.2   IN00433406 PAType = 07 did not suggest go  */
-/*                                  to CASE location (JHTAN01)                 */
-/* 05-Jun-2017  ChewKP        4.3   WMS-1956 - Add Fit by Aisle Multi Case     */
-/*                                  Count (ChewKP11)                           */
-/* 19-Dec-2017  Leong         4.4   INC0075406 - Revise PAType 07 checking.    */
-/* 15-May-2020  Shong         4.5   Replace Constant with Variable in Dynamic  */
-/*                                  SQL Statement                              */  
-/* 08-Jul-2020  Shong         4.6   Bug Fixing                                 */
-/* 15-Dec-2020  NJOW01        4.7   WMS-15776 TH Michelin PA                   */
-/* 12-Jan-2021  NJOW02        4.8   WMS-16023 type 07 cater for pendingmovein  */
-/* 10-Feb-2023  NJOW03        4.9   WMS-21722 Allow check nomixlottable for all*/
-/*                                  commingle sku in a loc.                    */
-/* 10-Feb-2023  NJOW03        4.9   DEVOPS Combine Script                      */
-/*******************************************************************************/
+/**************************************************************************************/
+/* Store Procedure:  nspRDTPASTD                                                      */
+/* Creation Date: 28-Oct-2009                                                         */
+/* Copyright: IDS                                                                     */
+/* Written by:                                                                        */
+/*                                                                                    */
+/* Purpose:  Stored Procedure for PUTAWAY FROM ASN                                    */
+/*                                                                                    */
+/* Called FROM RDT Pallet Putaway                                                     */
+/*                                                                                    */
+/* Input Parameters:  @c_userid,          - User Id                                   */
+/*                    @c_storerkey,       - Storerkey                                 */
+/*                    @c_LOT,             - Lot                                       */
+/*                    @c_SKU,             - Sku                                       */
+/*                    @c_ID,              - Id                                        */
+/*                    @c_FromLoc,         - FROM Location                             */
+/*                    @n_Qty,             - Putaway Qty                               */
+/*                    @c_uom,             - UOM unit                                  */
+/*                    @c_PackKey,         - Packkey for sku                           */
+/*                    @n_PutawayCapacity  - Putaway Capacity                          */
+/*                                                                                    */
+/* Output Parameters: @c_Final_ToLoc      - Final ToLocation                          */
+/*                                                                                    */
+/* Return Status:  None                                                               */
+/*                                                                                    */
+/* Usage:                                                                             */
+/*                                                                                    */
+/* Local Variables:                                                                   */
+/*                                                                                    */
+/* Called By:                                                                         */
+/*                                                                                    */
+/* PVCS Version: 1.5                                                                  */
+/*                                                                                    */
+/* Version: 5.4                                                                       */
+/*                                                                                    */
+/* Data Modifications:                                                                */
+/*                                                                                    */
+/* Updates:                                                                           */
+/* Date         Author        Ver   Purposes                                          */
+/* 28-Oct-2009  Shong               Created (Modified FROM nspASNPASTD)               */
+/* 05-Jan-2010  Shong         1.1   Titan Project                                     */
+/* 23-FEb-2010  Vicky         1.1   NextPnDLocation search should include             */
+/*                                  PutawayZone (Vicky01)                             */
+/* 24-Feb-2010  Shong         1.1   Force to loop if no location found in             */
+/*                                  Aisle                                             */
+/* 25-Feb-2010  Vicky         1.1   Fixes on Loop stopped when                        */
+/*                                  NextAisle = StartAisle and did NOT                */
+/*                                  to loop the next step in strategy                 */
+/*                                  (Vicky02)                                         */
+/* 26-Feb-2010  Shong         1.1   Fixing Pnd Outer/Centre Seq Issues                */
+/* 27-Feb-2010  Vicky         1.1   Fixing Pnd Outer/Centre Seq (Vicky03)             */
+/* 03-Mar-2010  ChewKP        1.1   Fixing QTYHand need to - QTYPicked                */
+/*                                   (ChewKP01)                                       */
+/* 26-May-2010  Vicky         1.2   Should NOT look at PutawayZone = ''               */
+/*                                  to eliminate Performance issue (Vicky04)          */
+/* 24-Jun-2010  ChewKP        1.3   Diana Project PA by BOM SKU Std Cube              */
+/*                                  (ChewKP02)                                        */
+/* 05-Aug-2010  ChewKP        1.3   Bug Fixes on STDCUBE & STDGROSSWEIGHT             */
+/*                                  Calculation for BOMSKU (ChewKP03)                 */
+/* 24-Aug-2010  Shong         1.3   Add new Strategy 03 - Put to Pick Loc If          */
+/*                                  FROM Specified Location                           */
+/* 03-Jan-2011  Shong         1.3   Cater Single SKU Putaway if SKU value pass        */
+/*                                  in as Parameter                                   */
+/* 05-Jan-2011  ChewKP        1.4   Cater Putaway if SKU value pass in as             */
+/*                                  Parameter (ChewKP04)                              */
+/* 23-Mar-2011  Leong         1.5   SOS# 209838 - Add ISNULL check and display        */
+/*                                                error in handheld                   */
+/* 14-Arp-2011  Audrey        1.5   SOS# 206770 - comment SET @b_MultiLotID           */
+/*                                                = @n_IdCnt (ang01)                  */
+/* 28-Sep-2011  Shong         1.6   SOS#224116 - US LCI Project (Shong001)            */
+/* 07-Dec-2011  ChewKP        1.7   Failed Putaway when FromLoc = ToLoc               */
+/*                                  (ChewKP05)                                        */
+/* 06-Feb-2012  Shong         1.8   Include Restriction By UCC Carton Size            */
+/* 21-Feb-2012  ChewKP        1.9   Calculating PackSize by Location                  */
+/*                                  (ChewKP06)                                        */
+/* 04-Apr-2012  Ung           2.0   Move check upfront for PAType = 28, 29 on         */
+/*                                  LocationFlag and LocationStateRestriction         */
+/*                                  2-Do not Mix Skus, 3-Do not Mix Lots              */
+/* 09-Apr-2012  Ung           2.1   Fix PAType = 26-29, infinite loop (ung01)         */
+/* 04-Jun-2012  ChewKP        2.2   SOS#245272 - Bug Fix (ChewKP05)                   */
+/* 13-Jun-2012  Ung           2.3   SOS240955 Add dimention restriction               */
+/*                                  17-Fit by UCC cube                                */
+/* 20-Jul-2012  Ung           2.4   SOS251060 Further fix on SOS240955 (ung02)        */
+/* 19-Jul-2012  Ung           2.5   SOS250731 PAType=61 Find PnD loc using            */
+/*                                  LOC.MaxPallet (ung03)                             */
+/* 13-Aug-2012  Ung           2.6   SOS252964 Add location state restriction          */
+/*                                  12-ABC Descending, 13-ABC EXC                     */
+/* 14-Mar-2013  Ung           2.7   SOS272442 (ung04)                                 */
+/*                                  Fix PND not reset when chg PAType                 */
+/*                                  Fix PAType 61 fail not run next strategln         */
+/*                                  PAType 61 PND consider MaxPallet                  */
+/*                                  PAType 61 search next aisle by zone, aisle        */
+/* 13-Aug-2012  Ung           2.8   SOS251326 Add NoMixLottable01..04 (ung05)         */
+/* 28-Jun-2012  Ung           2.9   SOS246200 Extra param and PutCode (ung06)         */
+/*                                  SOS257227                                         */
+/*                                  Add Fit by aisle (ung07)                          */
+/*                                  Add PND_IN, PND_OUT (ung08)                       */
+/*                                  Add PAType 05 From Zone then ToLoc (ung09)        */
+/* 15-Aug-2013  Shong         3.0   Performance Tuning VF-CDC                         */
+/* 21-Aug-2013  Shong         3.1   Order By Putaway Logical Location, Change         */
+/*                                  Single Select into Cursor Loop                    */
+/* 04-Feb-2014  ChewKP        3.2   SOS#292706 - Add Another PA Type '62'             */
+/*                                  Search Empty Loc Consider PendingMoveIn           */
+/*                                  (ChewKP07)                                        */
+/* 06-Feb-2014  James         3.3   Bug fix (james01)                                 */
+/* 05-May-2014  ChewKP        3.4   Include Multiple PutawayZone Search in            */
+/*                                  PAType = '19', '21' (ChewKP08)                    */
+/* 02-Dec-2013  Ung           3.5   SOS257227 Fix PAType 61 infinite loop             */
+/* 30-May-2014  Ung           3.2   SOS322241 Add custom putaway strategy key         */
+/*                                  Fix SUM without ISNULL                            */
+/* 02-Nov-2014  James         3.3   Change '62' to include multizone (james02)        */
+/* 28-May-2015  ChewKP        3.4   SOS#342117 Add NoMixLottable5-15(ChewKP09)        */
+/* 03-Jun-2015  ChewKP        3.5   SOS#341733 - Cater NoMixLottable with             */
+/*                                  CommingleSKU Flag on Loc setup                    */
+/*                                  Fix SQL Statement (ChewKP10)                      */
+/* 23-Sep-2015  James         3.6   SOS337104 - Add PAType 23 (james03)               */
+/* 26-Nov-2015  Ung           3.7   SOS357411 Change PREPACKBYBOM                     */
+/* 03-Feb-2016  Ung           3.8   SOS360340 Add PABookingKey                        */
+/* 06-Jun-2016  Ung           3.9   IN00057923 Cater UCC.Status=3                     */
+/* 11-Aug-2016  TLTING        4.0   (nolock) and remove SetROWCOUNT                   */
+/* 25-Oct-2016  Ung           4.1   Performance tuning                                */
+/* 11-Aug-2017  JHTAN         4.2   IN00433406 PAType = 07 did not suggest go         */
+/*                                  to CASE location (JHTAN01)                        */
+/* 05-Jun-2017  ChewKP        4.3   WMS-1956 - Add Fit by Aisle Multi Case            */
+/*                                  Count (ChewKP11)                                  */
+/* 19-Dec-2017  Leong         4.4   INC0075406 - Revise PAType 07 checking.           */
+/* 15-May-2020  Shong         4.5   Replace Constant with Variable in Dynamic         */
+/*                                  SQL Statement                                     */
+/* 08-Jul-2020  Shong         4.6   Bug Fixing                                        */
+/* 15-Dec-2020  NJOW01        4.7   WMS-15776 TH Michelin PA                          */
+/* 12-Jan-2021  NJOW02        4.8   WMS-16023 type 07 cater for pendingmovein         */
+/* 10-Feb-2023  NJOW03        4.9   WMS-21722 Allow check nomixlottable for all       */
+/*                                  commingle sku in a loc.                           */
+/* 10-Feb-2023  NJOW03        4.9   DEVOPS Combine Script                             */
+/* 13-Feb-2024  Ung           5.0   WMS-24727 Add MaxSKU, MaxQTY, MaxCarton           */
+/* 14-Feb-2023  SHONG01       5.1   WMS-12676 Mattel PA Strategy                      */
+/* 15-Feb-2023  SHONG02       5.2   Fixing PA 52 to cater if Lottable04 is NULL       */
+/* 13-Mar-2024  kelvinongcy   5.3   Performance tuning remove harcoded index (kocy01) */
+/* 20-Mar-2024  CYU027        5.4   Use Pallet Height for Location                    */
+/**************************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[nspRDTPASTD]
      @c_userid          NVARCHAR(18)
    , @c_StorerKey       NVARCHAR(15)
@@ -218,7 +223,8 @@ BEGIN
            @c_MultiPutawayZone NVARCHAR(100), -- (ChewKP08)
            @nPutawayZoneCount  INT, -- (ChewKP08)
            @c_ChkLocByCommingleSkuFlag  NVARCHAR(10),      --(ChewKP10)
-           @c_ChkNoMixLottableForAllSku NVARCHAR(30) = ''  --NJOW03      
+           @c_ChkNoMixLottableForAllSku NVARCHAR(30) = '',  --NJOW03      
+           @c_UCC                       NVARCHAR(1) = ''
 
    /* -- US LCI Project (Shong001) --*/
    DECLARE @c_PalletType NVARCHAR(30) -- 1_Lot_CartonSize, 1_Lot_2CartonSize, Mixed_Lot_CartonSize
@@ -260,10 +266,18 @@ BEGIN
    SELECT @c_PTraceType = 'nspRDTPASTD'
    SELECT @c_SKU_ABC = ''
 
+   -- UWP - 15394
+   DECLARE @f_totalHeight        DECIMAL(15,5),
+           @b_config_PALDIMCALC  NVARCHAR( 10)
+
+   SELECT @b_config_PALDIMCALC = ISNULL(SVALUE,'') FROM dbo.STORERCONFIG (NOLOCK)
+   WHERE Storerkey = @c_StorerKey
+     AND CONFIGKEY = 'PALDIMCALC'
+
     --(ChewKP10) - START
    SET @c_ChkLocByCommingleSkuFlag = 0
    SET @b_success = 0
-   Execute nspGetRight
+   EXECUTE nspGetRight
            @c_facility
          , @c_StorerKey               -- Storer
          , @c_Sku       -- Sku
@@ -299,6 +313,23 @@ BEGIN
    END
    --NJOW03 E
 
+   SET @b_success = 0
+   Execute nspGetRight
+           @c_facility
+         , @c_StorerKey -- Storer
+         , @c_Sku       -- Sku
+         , 'UCC'        -- ConfigKey
+         , @b_success   OUTPUT
+         , @c_UCC       OUTPUT
+         , @n_err       OUTPUT
+         , @c_errmsg    OUTPUT
+
+   IF @b_success <> 1
+   BEGIN
+      SET @c_ToLoc = ''
+      GOTO LOCATION_ERROR
+   END
+
    IF OBJECT_ID('tempdb..#t_PutawayZone') IS NOT NULL
       DROP TABLE #t_PutawayZone
    
@@ -308,6 +339,11 @@ BEGIN
       DROP TABLE #t_LocationFlagInclude
    
    CREATE TABLE #t_LocationFlagInclude (LocationFlagInclude NVARCHAR(10))
+
+   IF OBJECT_ID('tempdb..#t_LocStateRestriction') IS NOT NULL
+      DROP TABLE #t_LocStateRestriction
+
+   CREATE TABLE #t_LocStateRestriction (LocationStateRestriction NVARCHAR(10))
       
    DECLARE @t_SKUList TABLE (StorerKey NVARCHAR(15), SKU NVARCHAR(20))
  
@@ -411,7 +447,7 @@ BEGIN
          SET @c_SKU = ''
       END
    END -- ID NOT Blank
-ELSE
+   ELSE
    BEGIN
       IF ISNULL(RTRIM(@c_LOT), '') <> ''
       BEGIN
@@ -1001,6 +1037,7 @@ ELSE
    DECLARE @n_loc_level                    INT,
            @c_loc_aisle                    NVARCHAR(10),
            @c_loc_ABC                      NVARCHAR(5),
+           @c_LOC_HostWHCode               NVARCHAR(10) = '', --(SHONG01)
            @c_loc_NoMixLottable01          NVARCHAR(1),
            @c_loc_NoMixLottable02          NVARCHAR(1),
            @c_loc_NoMixLottable03          NVARCHAR(1),
@@ -1014,7 +1051,10 @@ ELSE
            @c_loc_NoMixLottable12          NVARCHAR(1), -- (ChewKP09)
            @c_loc_NoMixLottable13          NVARCHAR(1), -- (ChewKP09)
            @c_loc_NoMixLottable14          NVARCHAR(1), -- (ChewKP09)
-           @c_loc_NoMixLottable15          NVARCHAR(1)  -- (ChewKP09)
+           @c_loc_NoMixLottable15          NVARCHAR(1), -- (ChewKP09)
+           @n_loc_MaxSKU                   INT,
+           @n_loc_MaxQTY                   INT,
+           @n_loc_MaxCarton                INT
 
    DECLARE @c_SQL_LocationTypeExclude      NVARCHAR(1000) = N'',
            @c_SQL_LocationCategoryInclude  NVARCHAR(1000) = N'',
@@ -1027,7 +1067,8 @@ ELSE
            @c_SQL_LocLevelExclude          NVARCHAR(1000) = N'',
            @c_SQL_LocAisleInclude          NVARCHAR(1000) = N'',
            @c_SQL_LocAisleExclude          NVARCHAR(1000) = N'', 
-           @c_SQL_LocTypeRestriction       NVARCHAR(1000) = N'' 
+           @c_SQL_LocTypeRestriction       NVARCHAR(1000) = N'',
+           @c_SQL_LocStateRestriction      NVARCHAR(1000) = N''
            
    
    SELECT @c_PutawayStrategyLineNumber = SPACE(5),
@@ -1430,7 +1471,15 @@ ELSE
             SET @c_SQL_LocTypeRestriction = ' AND LOC.LocationType = ' + @c_SQL_LocTypeRestriction 
          END           
       END
-                 
+      
+      -- (SHONG01)
+      IF ISNULL(RTRIM(@cpa_LocationStateRestriction1),'') <> ''
+         INSERT INTO #t_LocStateRestriction( LocationStateRestriction ) VALUES (@cpa_LocationStateRestriction1)
+      IF ISNULL(RTRIM(@cpa_LocationStateRestriction2),'') <> ''
+         INSERT INTO #t_LocStateRestriction( LocationStateRestriction ) VALUES (@cpa_LocationStateRestriction2)
+      IF ISNULL(RTRIM(@cpa_LocationStateRestriction3),'') <> ''
+         INSERT INTO #t_LocStateRestriction( LocationStateRestriction ) VALUES (@cpa_LocationStateRestriction3)
+      
       -- PutCode (ung06)
       IF @cpa_PutCode <> ''
       BEGIN
@@ -1518,6 +1567,8 @@ ELSE
          PRINT '> @c_PutawayStrategyKey: ' + @c_PutawayStrategyKey  +  ', @c_PutawayStrategyLineNumber: ' + @c_PutawayStrategyLineNumber 
          PRINT '> CHANGE of Putaway Type to '+ @cpa_PAType
       END
+
+
 -----------------------------------------------------------
       IF @cpa_PAType='01' -- If Source=FROMLOCATION, Putaway to TOLOCATION
       BEGIN
@@ -1893,6 +1944,7 @@ ELSE
             @cpa_PAType = '32' OR
             @cpa_PAType = '42' OR
             @cpa_PAType = '52' OR -- (CheWKP07)
+            @cpa_PAType = '59' OR -- (SHONG01)
             @cpa_PAType = '62'    -- (ChewKP07)
 
          BEGIN
@@ -1962,6 +2014,7 @@ ELSE
                IF @cpa_PAType = '02' OR -- IF source is FROMLOC then move to a location within the specified zone
                   @cpa_PAType = '04' OR -- Search ZONE specified on this strategy record
                   @cpa_PAType = '12' OR
+                  @cpa_PAType = '59' OR -- SHONG01
                   @cpa_PAType = '61'    -- SOS157089 TITAN Project - Search Specified Zone with Empty Pick & Drop Location
                BEGIN
                   DECLARE @n_StdCube                float
@@ -2083,6 +2136,41 @@ ELSE
                         PRINT '>>> @c_DimRestSQL: ' + @c_DimRestSQL
                   END
 
+                  -- (SHONG01)
+                  SET @c_SQL_LocStateRestriction = N''
+                  IF EXISTS(SELECT 1 FROM #t_LocStateRestriction)
+                  BEGIN
+                      DECLARE @c_LocStateRestriction NVARCHAR(10)
+
+                      DECLARE CUR_LocStateRestriction CURSOR FAST_FORWARD READ_ONLY FOR 
+                      SELECT LocationStateRestriction
+                      FROM #t_LocStateRestriction
+
+                      OPEN CUR_LocStateRestriction
+                      
+                      FETCH NEXT FROM CUR_LocStateRestriction INTO @c_LocStateRestriction
+                      
+                      WHILE @@FETCH_STATUS = 0
+                      BEGIN
+                          IF @c_LocStateRestriction='13'
+                          BEGIN
+                             IF ISNULL(RTRIM(@c_SKU_ABC),'') <> '' 
+                                SELECT @c_SQL_LocStateRestriction = @c_SQL_LocStateRestriction + N' AND LOC.ABC = ' + QUOTENAME(TRIM(@c_SKU_ABC), '''')
+                          END
+
+                          IF @c_LocStateRestriction='17'
+                          BEGIN
+                             IF ISNULL(RTRIM(@c_Lottable02),'') <> ''
+                                SELECT @c_SQL_LocStateRestriction = @c_SQL_LocStateRestriction + N' AND LOC.HOSTWHCODE = ' + QUOTENAME(TRIM(@c_Lottable02), '''')
+                          END
+                      
+                          FETCH NEXT FROM CUR_LocStateRestriction INTO @c_LocStateRestriction
+                      END -- While
+                      
+                      CLOSE CUR_LocStateRestriction
+                      DEALLOCATE CUR_LocStateRestriction
+                  END
+
                   IF '1' IN (@cpa_LocationStateRestriction1,@cpa_LocationStateRestriction2,@cpa_LocationStateRestriction3)
                   BEGIN -- loc must be empty
                   
@@ -2109,6 +2197,7 @@ ELSE
                   ISNULL( RTRIM(@c_SQL_LocAisleInclude    ), '') +
                   ISNULL( RTRIM(@c_SQL_LocAisleExclude    ), '') +
                   ISNULL( RTRIM(@c_SQL_LocTypeRestriction ), '') +
+                  ISNULL( RTRIM(@c_SQL_LocStateRestriction ), '') + -- (SHONG01) 
                   ISNULL( RTRIM(@c_DimRestSQL), '') +  --(ung07)
                   ISNULL( RTRIM(@cpa_PutCodeSQL),'') + --(ung06)
                   ' GROUP BY LOC.PALogicalLoc, LOC.LOC ' +
@@ -2221,6 +2310,7 @@ ELSE
                            ISNULL( RTRIM(@c_SQL_LocAisleInclude    ), '') +
                            ISNULL( RTRIM(@c_SQL_LocAisleExclude    ), '') +
                            ISNULL( RTRIM(@c_SQL_LocTypeRestriction ), '') +
+                           ISNULL( RTRIM(@c_SQL_LocStateRestriction ), '') + -- (SHONG01) 
                            ISNULL( RTRIM(@c_DimRestSQL), '') +  --(ung07)
                            ISNULL( RTRIM(@cpa_PutCodeSQL),'') + --(ung06)
                   CASE WHEN @cpa_PAType = '61' THEN ' AND LOC.LocAisle = @c_NextPnDAisle' ELSE '' END +
@@ -2342,6 +2432,7 @@ ELSE
                            ISNULL( RTRIM(@c_SQL_LocAisleInclude    ), '') +
                            ISNULL( RTRIM(@c_SQL_LocAisleExclude    ), '') +
                            ISNULL( RTRIM(@c_SQL_LocTypeRestriction ), '') +
+                           ISNULL( RTRIM(@c_SQL_LocStateRestriction ), '') + -- (SHONG01) 
                            ISNULL( RTRIM(@c_DimRestSQL), '') +  --(ung07)
                            ISNULL( RTRIM(@cpa_PutCodeSQL),'') + --(ung06)
                         CASE WHEN @cpa_PAType = '61' THEN ' AND LOC.LocAisle = @c_NextPnDAisle' ELSE '' END +
@@ -2458,6 +2549,7 @@ ELSE
                                           ISNULL( RTRIM(@c_SQL_LocAisleInclude    ), '') +
                                           ISNULL( RTRIM(@c_SQL_LocAisleExclude    ), '') +
                                           ISNULL( RTRIM(@c_SQL_LocTypeRestriction ), '') +
+                                          ISNULL( RTRIM(@c_SQL_LocStateRestriction ), '') + -- (SHONG01) 
                                           ISNULL( RTRIM(@c_DimRestSQL), '') +  --(ung07)
                                           ISNULL( RTRIM(@cpa_PutCodeSQL),'') + --(ung06)
                                        CASE WHEN @cpa_PAType = '61' THEN ' AND LOC.LocAisle = @c_NextPnDAisle' ELSE '' END +
@@ -3026,7 +3118,7 @@ ELSE
 
                END -- END of PAType = 02, 04, 12, 61
                ELSE IF @cpa_PAType IN ('16', '17', '18', '19', '21', '22', '23', '24', '30', '32', '34', '42', '44', '52', '54',
-                                       '55', '56', '57', '58','62','63') -- (ChewKP07) --NJOW01
+                                       '55', '56', '57', '58', '59','62','63') -- (ChewKP07) --NJOW01 -- SHONG01
                BEGIN
                   SELECT @cpa_ToLoc = SPACE(10)
                   SELECT @n_RowCount = 0
@@ -3055,8 +3147,8 @@ ELSE
                                        @c_SQL_LocationCategoryExclude + 
                                        @c_SQL_LocationCategoryInclude + 
                                        @c_SQL_LocationFlagInclude     + 
-                                  @c_SQL_LocationFlagExclude     +
-                                  @c_SQL_LocationTypeExclude     +
+                                       @c_SQL_LocationFlagExclude     +
+                                       @c_SQL_LocationTypeExclude     +
                                        ISNULL( RTRIM(@c_SQL_LocTypeRestriction ), '') +   
                                        CASE WHEN 'DRIVEIN' IN (@cpa_LocationCategoryInclude01, @cpa_LocationCategoryInclude02,
                                                                @cpa_LocationCategoryInclude03)
@@ -3194,7 +3286,8 @@ ELSE
                         ' AND LOC.Facility = @c_Facility' +
                         ISNULL( RTRIM(@c_SQL_LocationCategoryExclude ), '') + 
                         ISNULL( RTRIM(@c_SQL_LocationCategoryInclude ), '') + 
-   ISNULL( RTRIM(@c_SQL_LocationFlagInclude ), '')     + 
+
+                        ISNULL( RTRIM(@c_SQL_LocationFlagInclude ), '')     + 
                         ISNULL( RTRIM(@c_SQL_LocationFlagExclude ), '')     +
                         ISNULL( RTRIM(@c_SQL_LocationTypeExclude ), '')     +
                         ISNULL( RTRIM(@c_SQL_LocTypeRestriction ), '') +
@@ -3305,7 +3398,8 @@ ELSE
                      END                                  
                            
                      SELECT @c_SelectSQL = @c_SelectSQL +                         
-                        ' LEFT OUTER JOIN LOTxLOCxID WITH (NOLOCK, INDEX=IDX_LOTxLOCxID_LOC) ON (LotxLocxID.Loc = Loc.Loc) ' +
+                        --' LEFT OUTER JOIN LOTxLOCxID WITH (NOLOCK, INDEX=IDX_LOTxLOCxID_LOC) ON (LotxLocxID.Loc = Loc.Loc) ' +    --kocy01
+                        ' LEFT OUTER JOIN LOTxLOCxID WITH (NOLOCK) ON (LotxLocxID.Loc = Loc.Loc) ' +
                         ' WHERE LOC.LOC > @cpa_ToLoc ' +
                         ' AND   LOC.Facility = @c_Facility' +
                         CASE WHEN @cpa_PutCodeSQL <> '' THEN RTRIM( @cpa_PutCodeSQL) END + --(ung06)
@@ -3348,7 +3442,8 @@ ELSE
                                                  AND CODELKUP.SHORT = 'S')
                      WHERE
                      LOC.PutawayZone = @c_SearchZone
-              AND LOC.Facility = @c_Facility -- CDC Migration
+
+                     AND LOC.Facility = @c_Facility -- CDC Migration
                      GROUP BY LOC.PALogicalLoc, LOC.LOC
                      HAVING SUM(SKUxLOC.Qty) = 0 OR SUM(SKUxLOC.Qty) IS NULL
                      ORDER BY LOC.PALogicalLoc, LOC.LOC
@@ -3401,24 +3496,150 @@ ELSE
 
                   IF @cpa_PAType = '52' OR @cpa_PAType = '54'
                   BEGIN
-                     DECLARE CUR_PUTAWAYLOCATION CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-                     SELECT LOC.LOC, '' AS HostWhCode
-                     FROM LOTxLOCxID WITH (NOLOCK)
-                     JOIN SKUxLOC WITH (NOLOCK) ON (SKUxLOC.StorerKey = LOTxLOCxID.StorerKey
-                                                AND SKUxLOC.sku = LOTxLOCxID. sku
-                                                AND SKUxLOC.StorerKey = @c_StorerKey
-                                                AND SKUxLOC.sku = @c_SKU
-                                                AND SKUxLOC.loc = LOTxLOCxID.loc)
-                     JOIN LotAttribute WITH (NOLOCK) ON (LOTxLOCxID.Lot = LotAttribute.lot)
-                     JOIN (SELECT Lottable02, Lottable04 FROM LotAttribute WITH (NOLOCK)
-                  JOIN LOTxLOCxID WITH (NOLOCK) ON (LOTxLOCxID.LOT = LotAttribute.LOT)
-   WHERE LOTxLOCxID.Qty > 0) AS L
-                       ON (L.Lottable02 = LotAttribute.Lottable02 AND L.Lottable04 = LotAttribute.Lottable04)
-                     JOIN LOC WITH (NOLOCK) ON (LOTxLOCxID.Loc = LOC.Loc
-                                            AND LOC.PutawayZone = @c_SearchZone
-                                            AND LOC.Facility = @c_Facility )-- CDC Migration
-                     GROUP BY LOC.PALogicalLoc, LOC.LOC
-                     ORDER BY LOC.PALogicalLoc, LOC.LOC
+                     -- (Shong02) Comment this section, replace with Dynamic SQL and Performance Tuning
+                     --DECLARE CUR_PUTAWAYLOCATION CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+                     --SELECT LOC.LOC, '' AS HostWhCode
+                     --FROM LOTxLOCxID WITH (NOLOCK)
+                     --JOIN SKUxLOC WITH (NOLOCK) ON (SKUxLOC.StorerKey = LOTxLOCxID.StorerKey
+                     --                           AND SKUxLOC.sku = LOTxLOCxID. sku
+                     --                           AND SKUxLOC.StorerKey = @c_StorerKey
+                     --                           AND SKUxLOC.sku = @c_SKU
+                     --                           AND SKUxLOC.loc = LOTxLOCxID.loc)
+                     --JOIN LotAttribute WITH (NOLOCK) ON (LOTxLOCxID.Lot = LotAttribute.lot)
+                     --JOIN (SELECT Lottable02, Lottable04 FROM LotAttribute WITH (NOLOCK)
+                     --      JOIN LOTxLOCxID WITH (NOLOCK) ON (LOTxLOCxID.LOT = LotAttribute.LOT)
+                     --      WHERE LOTxLOCxID.Qty > 0) AS L
+                     --            ON (L.Lottable02 = LotAttribute.Lottable02 AND L.Lottable04 = LotAttribute.Lottable04)
+                     --JOIN LOC WITH (NOLOCK) ON (LOTxLOCxID.Loc = LOC.Loc
+                     --                       AND LOC.PutawayZone = @c_SearchZone
+                     --                       AND LOC.Facility = @c_Facility )-- CDC Migration
+                     --GROUP BY LOC.PALogicalLoc, LOC.LOC
+                     --ORDER BY LOC.PALogicalLoc, LOC.LOC
+
+                     SELECT @c_SelectSQL = N' DECLARE CUR_PUTAWAYLOCATION CURSOR FAST_FORWARD READ_ONLY FOR ' +
+                                          ' SELECT LOC.loc, '''' AS HostWhCode    ' +
+                                          ' FROM LOTxLOCxID (NOLOCK) ' +
+                                          ' JOIN LOC (NOLOCK) on LOTxLOCxID.loc = LOC.loc ' 
+
+                     IF EXISTS (SELECT 1 FROM #t_PutawayZone)
+                     BEGIN
+                        SELECT @c_SelectSQL = @c_SelectSQL + ' JOIN #t_PutawayZone PZ ON LOC.PutawayZone = PZ.PutawayZone ' 
+                     END                                  
+                           
+                     SELECT @c_SelectSQL = @c_SelectSQL +                         
+                                       ' JOIN LotAttribute (NOLOCK) ON LotAttribute.LOT = LOTxLOCxID.LOT ' + 
+                                       ' WHERE LOTxLOCxID.Qty > 0 ' +
+                                       ' AND LOTxLOCxID.sku = @c_SKU ' +
+                                       ' AND LOTxLOCxID.StorerKey = @c_StorerKey' +
+                                       ' AND LOC.Facility = @c_Facility' +
+                                       ' AND LotAttribute.Lottable02 = @c_Lottable02 ' +
+                                       CASE WHEN @d_Lottable04 IS NULL THEN
+                                          ' AND LotAttribute.Lottable04 IS NULL '
+                                          ELSE 
+                                          ' AND LotAttribute.Lottable04 = @d_Lottable04 '
+                                       END +
+                                       @c_SQL_LocationCategoryExclude + 
+                                       @c_SQL_LocationCategoryInclude + 
+                                       @c_SQL_LocationFlagInclude     + 
+                                       @c_SQL_LocationFlagExclude     +
+                                       @c_SQL_LocationTypeExclude     +
+                                       ISNULL( RTRIM(@c_SQL_LocTypeRestriction ), '') +   
+                                       CASE WHEN @cpa_PutCodeSQL <> '' THEN RTRIM( @cpa_PutCodeSQL) ELSE '' --(ung06)
+                                       END +
+                                       ' GROUP BY LOC.PALogicalLoc, LOC.LOC, LOC.MaxPallet ' +
+                                       CASE WHEN '4' IN (@cpa_LocationStateRestriction1,
+                                                         @cpa_LocationStateRestriction2,
+                                                         @cpa_LocationStateRestriction3)
+                                        THEN ' HAVING COUNT(DISTINCT LOTxLOCxID.ID) < LOC.MaxPallet '
+                                          ELSE ''
+                                       END +
+                                       ' ORDER BY LOC.PALogicalLoc, LOC.LOC '
+
+                     SET @c_SQLParms = RTRIM(@c_SQLParms) + 
+                                        ', @c_Lottable01 NVARCHAR(18)' +
+                                        ', @c_Lottable02 NVARCHAR(18)' +
+                                        ', @d_Lottable04 DATETIME '
+
+                     IF @b_Debug = 2
+                     BEGIN
+                        PRINT 'PA Type: ' + @cpa_PAType 
+                        PRINT '>> SQL: ' + @c_SelectSQL
+                        PRINT '>> Parm: ' + @c_SQLParms 
+                     END
+                                                          
+                     EXEC sp_ExecuteSql @c_SelectSQL
+                     , @c_SQLParms
+                     , @c_StorerKey 
+                     , @c_Facility
+                     , @c_SKU       
+                     , @c_LOT       
+                     , @c_FromLoc   
+                     , @c_ID        
+                     , @n_Qty       
+                     , @n_StdGrossWgt
+                     , @cpa_LocationTypeExclude01  
+                     , @cpa_LocationTypeExclude02  
+                     , @cpa_LocationTypeExclude03  
+                     , @cpa_LocationTypeExclude04  
+                     , @cpa_LocationTypeExclude05  
+                     , @cpa_LocationCategoryExclude01 
+                     , @cpa_LocationCategoryExclude02 
+                     , @cpa_LocationCategoryExclude03 
+                     , @cpa_LocationCategoryInclude01 
+                     , @cpa_LocationCategoryInclude02 
+                     , @cpa_LocationCategoryInclude03 
+                     , @cpa_LocationHandlingInclude01 
+                     , @cpa_LocationHandlingInclude02 
+                     , @cpa_LocationHandlingInclude03 
+                     , @cpa_LocationHandlingExclude01  
+                     , @cpa_LocationHandlingExclude02  
+                     , @cpa_LocationHandlingExclude03  
+                     , @cpa_LocationFlagInclude01     
+                     , @cpa_LocationFlagInclude02     
+                     , @cpa_LocationFlagInclude03     
+                     , @cpa_LocationFlagExclude01
+                     , @cpa_LocationFlagExclude02
+                     , @cpa_LocationFlagExclude03   
+                     , @npa_LocLevelInclude01   
+                     , @npa_LocLevelInclude02   
+                     , @npa_LocLevelInclude03   
+                     , @npa_LocLevelInclude04   
+                     , @npa_LocLevelInclude05   
+                     , @npa_LocLevelInclude06   
+                     , @npa_LocLevelExclude01   
+                     , @npa_LocLevelExclude02   
+                     , @npa_LocLevelExclude03   
+                     , @npa_LocLevelExclude04   
+                     , @npa_LocLevelExclude05   
+                     , @npa_LocLevelExclude06   
+                     , @cpa_LocAisleInclude01  
+                     , @cpa_LocAisleInclude02  
+                     , @cpa_LocAisleInclude03  
+                     , @cpa_LocAisleInclude04  
+                     , @cpa_LocAisleInclude05  
+                     , @cpa_LocAisleInclude06  
+                     , @cpa_LocAisleExclude01  
+                     , @cpa_LocAisleExclude02  
+                     , @cpa_LocAisleExclude03  
+                     , @cpa_LocAisleExclude04  
+                     , @cpa_LocAisleExclude05  
+                     , @cpa_LocAisleExclude06  
+                     , @npa_TotalCube 
+                     , @npa_TotalWeight 
+                     , @cpa_LocationTypeRestriction01
+                     , @cpa_LocationTypeRestriction02
+                     , @cpa_LocationTypeRestriction03
+                     , @c_Lottable01 
+                     , @c_Lottable02 
+                     , @d_Lottable04  
+
+                     -- Chekcing
+                     IF @b_Debug = 2
+                     BEGIN
+                        PRINT '>> Storerkey is ' + @c_Storerkey + ', Sku is ' + @c_SKU + ', Facility is ' + @c_Facility
+                        PRINT '>> PAType is ' + @cpa_PAType + ', ToLoc is ' + @cpa_ToLoc
+                        PRINT '>> PutCodeSQL: ' + @cpa_PutCodeSQL
+                     END
 
                      --SELECT @n_Rowcount = @@ROWCOUNT
                   END -- @cpa_PAType = '52' OR @cpa_PAType = '54'
@@ -4188,7 +4409,7 @@ ELSE
                   IF ( SELECT ISNULL( SUM(qty-qtypicked), 0)
                         FROM SKUxLOC WITH (NOLOCK)
                         JOIN LOC WITH (NOLOCK) ON (SKUxLOC.loc = LOC.loc)
-                        WHERE sku = @c_SKU
+                        WHERE sku = @c_SKU/**************************************************************************************/
                         AND StorerKey = @c_StorerKey
                         AND LOC.Facility = @c_Facility      -- wally 23.oct.2002
                         AND LocationFlag = 'NONE') > 0
@@ -4939,6 +5160,7 @@ ELSE
           @n_loc_level = LOC.LocLevel,
           @c_loc_aisle = LOC.LocAisle,
           @c_loc_ABC = LOC.ABC,
+          @c_LOC_HostWHCode = ISNULL(LOC.HOSTWHCODE, ''), --(SHONG01)
           @c_loc_NoMixLottable01 = LOC.NoMixLottable01, --(ung05)
           @c_loc_NoMixLottable02 = LOC.NoMixLottable02, --(ung05)
           @c_loc_NoMixLottable03 = LOC.NoMixLottable03, --(ung05)
@@ -4952,7 +5174,11 @@ ELSE
           @c_loc_NoMixLottable12 = LOC.NoMixLottable12, -- (ChewKP09)
           @c_loc_NoMixLottable13 = LOC.NoMixLottable13, -- (ChewKP09)
           @c_loc_NoMixLottable14 = LOC.NoMixLottable14, -- (ChewKP09)
-          @c_loc_NoMixLottable15 = LOC.NoMixLottable15  -- (ChewKP09)
+
+          @c_loc_NoMixLottable15 = LOC.NoMixLottable15, -- (ChewKP09)
+          @n_loc_MaxSKU = LOC.MaxSKU, 
+          @n_loc_MaxQTY = LOC.MaxQTY, 
+          @n_loc_MaxCarton = LOC.MaxCarton 
    FROM LOC WITH (NOLOCK)
    WHERE LOC = @c_ToLoc
    SELECT @c_movableunittype = @c_movableunittype
@@ -6170,7 +6396,205 @@ ELSE
       END
    END
 
-   -- SOS#133381 Location Alsie Restriction
+   -- MaxSKU
+   IF '14' IN (@cpa_LocationStateRestriction1,@cpa_LocationStateRestriction2,@cpa_LocationStateRestriction3)
+   BEGIN
+      IF @n_loc_MaxSKU > 0
+      BEGIN
+         DECLARE @n_MaxSKU INT = 0
+         
+         SET @cSQL = 
+            ' SELECT @n_MaxSKU = COUNT( DISTINCT A.SKU) ' + 
+            ' FROM ' + 
+            ' (' +  
+               ' SELECT SKU ' + 
+               ' FROM dbo.LOTxLOCxID WITH (NOLOCK) ' + 
+               ' WHERE LOC = @c_ToLoc ' + 
+                  ' AND ( (Qty - QtyPicked) > 0 OR PendingMoveIn > 0 ) ' + 
+               ' UNION ' + 
+               ' SELECT SKU ' + 
+               ' FROM dbo.LOTxLOCxID WITH (NOLOCK) ' + 
+               ' WHERE LOC = @c_FromLoc ' + 
+                  CASE WHEN @c_ID  = '' THEN '' ELSE ' AND ID  = @c_ID  ' END + 
+                  CASE WHEN @c_SKU = '' THEN '' ELSE ' AND SKU = @c_SKU ' END + 
+                  CASE WHEN @c_LOT = '' THEN '' ELSE ' AND LOT = @c_LOT ' END + 
+                  ' AND QTY - QTYAllocated - QTYPicked > 0 ' + 
+            ' ) A ' 
+               
+         SET @cSQLParam = 
+            ' @c_FromLoc   NVARCHAR( 10), ' + 
+            ' @c_ID        NVARCHAR( 18), ' + 
+            ' @c_SKU       NVARCHAR( 20), ' + 
+            ' @c_LOT       NVARCHAR( 10), ' + 
+            ' @c_ToLoc     NVARCHAR( 10), ' + 
+            ' @n_MaxSKU    INT OUTPUT     '  
+         
+         EXEC sp_ExecuteSql @cSQL, @cSQLParam, 
+            @c_FromLoc  = @c_FromLoc, 
+            @c_ID       = @c_ID,
+            @c_SKU      = @c_SKU,
+            @c_LOT      = @c_LOT, 
+            @c_ToLoc    = @c_ToLoc, 
+            @n_MaxSKU   = @n_MaxSKU OUTPUT
+            
+         IF @n_MaxSKU > @n_loc_MaxSKU
+         BEGIN
+            IF @b_Debug = 1
+            BEGIN
+               SELECT @c_Reason = 'FAILED - Fit By Max SKU, LOC.MAXSKU: ' + CAST( @n_loc_MaxSKU as NVARCHAR(10)) +
+                                  ' After putaway SKU: ' +  CAST( @n_MaxSKU as NVARCHAR(10))
+               EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
+                           @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
+                           @c_ToLoc, @c_Reason
+            END
+            SELECT @b_RestrictionsPassed = 0
+            GOTO RESTRICTIONCHECKDONE
+         END
+         ELSE
+         BEGIN
+            IF @b_Debug = 1
+            BEGIN
+               SELECT @c_Reason = 'PASSED - Fit By Max SKU, LOC.MAXSKU: ' + CAST( @n_loc_MaxSKU as NVARCHAR(10)) +
+                                  ' After putaway SKU: ' +  CAST( @n_MaxSKU as NVARCHAR(10))
+               EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
+                           @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
+                           @c_ToLoc, @c_Reason
+            END
+         END
+      END
+   END
+
+   -- MaxQTY
+   IF '15' IN (@cpa_LocationStateRestriction1,@cpa_LocationStateRestriction2,@cpa_LocationStateRestriction3)
+   BEGIN
+      IF @n_loc_MaxQTY > 0
+      BEGIN
+         DECLARE @n_MaxQTY INT = 0
+         
+         -- From LOC
+         IF @n_QTY > 0
+            SET @n_MaxQTY = @n_QTY
+         ELSE
+         BEGIN
+            SET @cSQL = 
+               ' SELECT @n_MaxQTY = ISNULL( SUM( QTY), 0) ' + 
+               ' FROM dbo.LOTxLOCxID WITH (NOLOCK) ' + 
+               ' WHERE LOC = @c_FromLoc ' + 
+                  CASE WHEN @c_ID  = '' THEN '' ELSE ' AND ID  = @c_ID  ' END + 
+                  CASE WHEN @c_SKU = '' THEN '' ELSE ' AND SKU = @c_SKU ' END + 
+                  CASE WHEN @c_LOT = '' THEN '' ELSE ' AND LOT = @c_LOT ' END + 
+                  ' AND QTY - QTYAllocated - QTYPicked > 0 '
+                  
+            SET @cSQLParam = 
+               ' @c_FromLoc   NVARCHAR( 10), ' + 
+               ' @c_ID        NVARCHAR( 18), ' + 
+               ' @c_SKU       NVARCHAR( 20), ' + 
+               ' @c_LOT       NVARCHAR( 10), ' + 
+               ' @n_MaxQTY    INT OUTPUT     '  
+            
+            EXEC sp_ExecuteSql @cSQL, @cSQLParam, 
+               @c_FromLoc  = @c_FromLoc, 
+               @c_ID       = @c_ID,
+               @c_SKU      = @c_SKU,
+               @c_LOT      = @c_LOT, 
+               @n_MaxQTY   = @n_MaxQTY OUTPUT
+         END   
+      END 
+   END
+   -- MaxCarton
+   IF '16' IN (@cpa_LocationStateRestriction1,@cpa_LocationStateRestriction2,@cpa_LocationStateRestriction3)
+   BEGIN
+      IF @n_loc_MaxCarton > 0 AND @c_UCC = '1'
+      BEGIN
+         DECLARE @n_MaxCarton INT = 0
+
+         -- From LOC
+         IF @n_QTY > 0
+            SET @n_MaxCarton = 1
+         ELSE
+         BEGIN
+            SET @cSQL = 
+               ' SELECT @n_MaxCarton = COUNT( DISTINCT UCCNo), 0) ' + 
+               ' FROM dbo.UCC WITH (NOLOCK) ' + 
+               ' WHERE LOC = @c_FromLoc ' + 
+                  CASE WHEN @c_ID  = '' THEN '' ELSE ' AND ID  = @c_ID  ' END + 
+                  CASE WHEN @c_SKU = '' THEN '' ELSE ' AND SKU = @c_SKU ' END + 
+                  CASE WHEN @c_LOT = '' THEN '' ELSE ' AND LOT = @c_LOT ' END + 
+                  ' AND Status IN (''1'', ''3'', ''4'') '
+
+            SET @cSQLParam = 
+               ' @c_FromLoc   NVARCHAR( 10), ' + 
+               ' @c_ID        NVARCHAR( 18), ' + 
+               ' @c_SKU       NVARCHAR( 20), ' + 
+               ' @c_LOT       NVARCHAR( 10), ' + 
+               ' @n_MaxCarton INT OUTPUT     '  
+
+            EXEC sp_ExecuteSql @cSQL, @cSQLParam, 
+               @c_FromLoc     = @c_FromLoc, 
+               @c_ID          = @c_ID,
+               @c_SKU         = @c_SKU,
+               @c_LOT         = @c_LOT, 
+               @n_MaxCarton   = @n_MaxCarton OUTPUT
+         END
+
+         -- To LOC
+         SELECT @n_MaxCarton = @n_MaxCarton + COUNT( DISTINCT UCCNo)
+         FROM dbo.UCC WITH (NOLOCK)
+         WHERE StorerKey = @c_StorerKey
+            AND LOC = @c_ToLoc
+            AND Status IN ('1', '3', '4') -- 1=Received, 3=Alloc, 4=Replen
+
+         IF @n_MaxCarton > @n_loc_MaxCarton
+         BEGIN
+            IF @b_Debug = 1
+            BEGIN
+               SELECT @c_Reason = 'FAILED - Fit By Max Carton, LOC.MAXCarton: ' + CAST( @n_loc_MaxCarton as NVARCHAR(10)) +
+                                  ' After putaway carton: ' +  CAST( @n_MaxCarton as NVARCHAR(10))
+               EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
+                           @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
+                           @c_ToLoc, @c_Reason
+            END
+            SELECT @b_RestrictionsPassed = 0
+            GOTO RESTRICTIONCHECKDONE
+         END
+         ELSE
+         BEGIN
+            IF @b_Debug = 1
+            BEGIN
+               SELECT @c_Reason = 'PASSED - Fit By Max Carton, LOC.MAXCarton: ' + CAST( @n_loc_MaxCarton as NVARCHAR(10)) +
+                                  ' After putaway carton: ' +  CAST( @n_MaxCarton as NVARCHAR(10))
+               EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
+                           @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
+                           @c_ToLoc, @c_Reason
+            END
+         END
+      END
+   END
+   -- (SHONG01) 
+   IF '17' IN (@cpa_LocationStateRestriction1,@cpa_LocationStateRestriction2,@cpa_LocationStateRestriction3) AND
+         ISNULL(RTRIM(@c_Lottable02),'') <> ''
+   BEGIN
+      IF @c_LOC_HostWHCode <> @c_Lottable02
+      BEGIN
+         IF @b_Debug = 1
+         BEGIN
+            SELECT @c_Reason = 'FAILED HostWHCode <> Lottable02. LOC HostWHCode = ' + RTRIM( @c_LOC_HostWHCode) + '. Lottable02 = ' + RTRIM( @c_Lottable02)
+            EXEC nspPTD 'nspRDTPASTD', @n_ptraceheadkey, @c_PutawayStrategyKey,
+                        @c_putawaystrategylinenumber, @n_PtraceDetailKey, @c_ToLoc, @c_Reason
+         END
+         SELECT @b_restrictionspassed = 0
+         GOTO RESTRICTIONCHECKDONE
+      END
+      ELSE
+      BEGIN
+         IF @b_Debug = 1
+         BEGIN
+            SELECT @c_Reason = 'PASSED HostWHCode = Lottable02. LOC HostWHCode = ' + RTRIM( @c_LOC_HostWHCode) + '. Lottable02 = ' + RTRIM( @c_Lottable02)
+            EXEC nspPTD 'nspRDTPASTD', @n_ptraceheadkey, @c_PutawayStrategyKey, @c_putawaystrategylinenumber, @n_PtraceDetailKey,
+                        @c_ToLoc, @c_Reason
+         END
+      END
+   END   -- SOS#133381 Location Alsie Restriction
    IF ISNULL(RTRIM(@cpa_LocAisleInclude01),'') <> '' OR
       ISNULL(RTRIM(@cpa_LocAisleInclude02),'') <> '' OR
       ISNULL(RTRIM(@cpa_LocAisleInclude03),'') <> '' OR
@@ -6454,7 +6878,7 @@ ELSE
               @c_Loc_Type NOT IN ('PICK','CASE') AND
               @n_CurrLocMultiLot = 0
    BEGIN
-      IF @n_PutawayTI IS NULL OR @n_PutawayTI = 0
+      IF (@n_PutawayTI IS NULL OR @n_PutawayTI = 0) AND (@b_config_PALDIMCALC <> '1' )
       BEGIN
          SELECT @c_Reason = 'FAILED LxWxH Fit: Commodity PutawayTi = 0 OR is NULL'
          EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
@@ -6473,51 +6897,99 @@ ELSE
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                         @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                         @c_ToLoc, @c_Reason
-    END
+         END
          SELECT @b_RestrictionsPassed = 0
          GOTO RESTRICTIONCHECKDONE
       END
       ELSE
       BEGIN
          IF @b_Debug = 1
-      BEGIN
+         BEGIN
             SELECT @c_Reason = 'PASSED LxWxH Fit: Wood/LocWidth=' + CONVERT(char(4),@n_PalletWoodWidth) + ' / ' + CONVERT(char(4),@n_Loc_Width) + '  Wood/locLength=' + CONVERT(char(4),@n_PalletWoodLength) + ' / ' + CONVERT(char(4),@n_Loc_Length)
             EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
                         @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
                         @c_ToLoc, @c_Reason
          END
       END
-      SELECT @n_ExistingQuantity = ISNULL( SUM(LOTxLOCxID.Qty - LOTxLOCxID.QtyPicked + LOTxLOCxID.PendingMoveIn), 0)
-      FROM LOTxLOCxID WITH (NOLOCK)
-      WHERE LOTxLOCxID.StorerKey = @c_StorerKey
-      AND LOTxLOCxID.Sku = @c_SKU
-      AND LOTxLOCxID.Loc = @c_ToLoc
-      AND (LOTxLOCxID.Qty > 0 OR LOTxLOCxID.PendingMoveIn > 0)
-
-      IF @n_ExistingQuantity IS NULL
+      ---UWP-15394 Calculate Height&Weight, config = PALDIMCALC
+      IF (@b_config_PALDIMCALC = '1' )
       BEGIN
-         SELECT @n_ExistingQuantity = 0
-         SELECT @n_ExistingHeight = @n_PalletWoodHeight
+         --LOT AND SKU must be same
+         SET @n_IdCnt = 0;
+         SELECT @n_IdCnt = COUNT(DISTINCT ID)
+         FROM   LOTxLOCxID WITH (NOLOCK)
+         WHERE  StorerKey = @c_StorerKey
+            AND Loc = @c_ToLoc
+            AND (Qty > 0 OR PendingMoveIn > 0)
+         SET  @n_IdCnt = @n_IdCnt+1
+         IF (@n_PalletWoodWidth * @n_IdCnt > @n_Loc_Width OR @n_PalletWoodLength > @n_Loc_Length) AND (@n_PalletWoodLength * @n_IdCnt > @n_Loc_Length OR @n_PalletWoodWidth > @n_Loc_Width)
+            BEGIN
+               IF @b_Debug = 1
+                  BEGIN
+                     SELECT @c_Reason = 'FAILED LxWxN Fit: Pallet=(' + CONVERT(char(4),@n_PalletWoodWidth) + ' * ' + CONVERT(char(4),@n_PalletWoodLength) + ') * ' + CONVERT(char(4),@n_IdCnt) + ' , Loc:' + CONVERT(char(4),@n_Loc_Width) +' * ' + CONVERT(char(4),@n_Loc_Length)
+                     EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
+                          @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
+                          @c_ToLoc, @c_Reason
+                  END
+               SELECT @b_RestrictionsPassed = 0
+               GOTO RESTRICTIONCHECKDONE
+            END
+         ELSE
+            BEGIN
+               IF @b_Debug = 1
+                  BEGIN
+                     SELECT @c_Reason = 'PASSED LxWxN Fit: Pallet=(' + CONVERT(char(4),@n_PalletWoodWidth) + ' * ' + CONVERT(char(4),@n_PalletWoodLength) + ') * ' + CONVERT(char(4),@n_IdCnt) + ' , Loc:' + CONVERT(char(4),@n_Loc_Width) +' * ' + CONVERT(char(4),@n_Loc_Length)
+                     EXEC nspPTD 'nspRDTPASTD', @n_pTraceHeadKey, @c_PutawayStrategyKey,
+                          @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
+                          @c_ToLoc, @c_Reason
+                  END
+            END
+      --end width&length check, config = PALDIMCALC
+      END
+
+
+      ---UWP-15394 Calculate Height From HeightUOM4
+      IF (@b_config_PALDIMCALC = '1' ) -- STORERCFG
+      BEGIN
+         SET @n_ExistingHeight =  @n_PalletWoodHeight
+
+         SELECT @n_PalletHeight = PACK.HeightUOM4
+         FROM PACK (NOLOCK)
+         WHERE PACK.Packkey = @c_PackKey
       END
       ELSE
       BEGIN
-         SELECT @n_ExistingLayers = @n_ExistingQuantity / (@n_PutawayTI * @n_PackCaseCount)
-         SELECT @n_ExtraLayer = @n_ExistingQuantity % (@n_PutawayTI * @n_PackCaseCount)
+         SELECT @n_ExistingQuantity = ISNULL( SUM(LOTxLOCxID.Qty - LOTxLOCxID.QtyPicked + LOTxLOCxID.PendingMoveIn), 0)
+         FROM LOTxLOCxID WITH (NOLOCK)
+         WHERE LOTxLOCxID.StorerKey = @c_StorerKey
+         AND LOTxLOCxID.Sku = @c_SKU
+         AND LOTxLOCxID.Loc = @c_ToLoc
+         AND (LOTxLOCxID.Qty > 0 OR LOTxLOCxID.PendingMoveIn > 0)
+
+         IF @n_ExistingQuantity IS NULL
+         BEGIN
+            SELECT @n_ExistingQuantity = 0
+            SELECT @n_ExistingHeight = @n_PalletWoodHeight
+         END
+         ELSE
+         BEGIN
+            SELECT @n_ExistingLayers = @n_ExistingQuantity / (@n_PutawayTI * @n_PackCaseCount)
+            SELECT @n_ExtraLayer = @n_ExistingQuantity % (@n_PutawayTI * @n_PackCaseCount)
+            IF @n_ExtraLayer > 0
+            BEGIN
+               SELECT @n_ExistingLayers = @n_ExistingLayers + 1
+            END
+            SELECT @n_ExistingHeight = (@n_ExistingLayers * @n_CaseHeight) + @n_PalletWoodHeight
+         END
+         SELECT @n_ExistingLayers = @n_Qty / (@n_PutawayTI * @n_PackCaseCount)
+         SELECT @n_ExtraLayer = @n_Qty % (@n_PutawayTI * @n_PackCaseCount)
+
          IF @n_ExtraLayer > 0
          BEGIN
             SELECT @n_ExistingLayers = @n_ExistingLayers + 1
          END
-         SELECT @n_ExistingHeight = (@n_ExistingLayers * @n_CaseHeight) + @n_PalletWoodHeight
+         SELECT @n_PalletHeight = @n_CaseHeight * @n_ExistingLayers
       END
-      SELECT @n_ExistingLayers = @n_Qty / (@n_PutawayTI * @n_PackCaseCount)
-      SELECT @n_ExtraLayer = @n_Qty % (@n_PutawayTI * @n_PackCaseCount)
-
-      IF @n_ExtraLayer > 0
-      BEGIN
-         SELECT @n_ExistingLayers = @n_ExistingLayers + 1
-      END
-
-      SELECT @n_PalletHeight = @n_CaseHeight * @n_ExistingLayers
 
       IF @n_ExistingHeight + @n_PalletHeight > @n_Loc_Height
       BEGIN
@@ -6667,12 +7139,27 @@ ELSE
               @cpa_DimensionRestriction05,
               @cpa_DimensionRestriction06)
    BEGIN
-      IF ((@n_CaseHeight * @n_PutawayHI) + @n_PalletWoodHeight) > @n_Loc_Height
+      SET @f_totalHeight = 0
+      --Compare height with HeightUOM4,
+      IF @b_config_PALDIMCALC = '1'
+      BEGIN
+         SELECT @n_CaseHeight = PACK.HeightUOM4
+         FROM PACK (NOLOCK)
+         WHERE PACK.Packkey = @c_PackKey
+
+         SET @f_totalHeight = @n_CaseHeight
+      END
+      ELSE
+      BEGIN
+         SET @f_totalHeight = @n_CaseHeight * @n_PutawayHI
+      END
+
+      IF (@f_totalHeight + @n_PalletWoodHeight) > @n_Loc_Height
       BEGIN
          IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'FAILED Height Restriction: Loc Height = ' + RTRIM(CONVERT(char(20), @n_Loc_Height)) + '. Pallet Build Height = ' +
-            RTRIM(CONVERT(char(20), ((@n_CaseHeight * @n_PutawayHI) + @n_PalletWoodHeight)))
+            RTRIM(CONVERT(char(20), ((@f_totalHeight) + @n_PalletWoodHeight)))
             EXEC nspPTD 'nspRDTPASTD'-- SOS# 143046
                , @n_pTraceHeadKey, @c_PutawayStrategyKey,
                  @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
@@ -6686,7 +7173,7 @@ ELSE
          IF @b_Debug = 1
          BEGIN
             SELECT @c_Reason = 'PASSED Height Restriction: Loc Height = ' + RTRIM(CONVERT(char(20), @n_Loc_Height)) + '. Pallet Build Height = ' +
-            RTRIM(CONVERT(char(20), ((@n_CaseHeight * @n_PutawayHI) + @n_PalletWoodHeight)))
+            RTRIM(CONVERT(char(20), ((@f_totalHeight) + @n_PalletWoodHeight)))
             EXEC nspPTD 'nspRDTPASTD' -- SOS# 143046
                , @n_pTraceHeadKey, @c_PutawayStrategyKey,
                  @c_PutawayStrategyLineNumber, @n_PtraceDetailKey,
@@ -7485,6 +7972,7 @@ ELSE
       GOTO PATYPE05
    IF @cpa_PAType = '02' OR
       @cpa_PAType = '04' OR
+      @cpa_PAType = '59' OR -- (SHONG01)
       @cpa_PAType = '12' OR -- SOS133180
       @cpa_PAType = '61'
    BEGIN

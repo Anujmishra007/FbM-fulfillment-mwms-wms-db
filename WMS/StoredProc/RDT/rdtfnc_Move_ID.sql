@@ -47,6 +47,7 @@ GO
 /* 2019-10-18 3.6  James    WMS-10922 Add ExtValid in step 1 (james11)  */
 /* 2022-01-23 3.7  Ung      WMS-18784 Fix DefaultFromLOC                */
 /* 2022-07-05 3.8  Calvin	Fixed Cursor variable (CLVN01)              */
+/* 2024-03-06 3.9  CYU027   UWP-15739 Created, for Unilever            */
 /************************************************************************/
 
 CREATE OR ALTER   PROCEDURE [RDT].[rdtfnc_Move_ID] (
@@ -128,6 +129,7 @@ DECLARE
    @dLottable15         DATETIME,
    @cExtendedInfo       NVARCHAR( 20),    -- (james09)
    @cExtendedInfoSP     NVARCHAR( 20),    -- (james09)
+   @cSuggestLocSP       NVARCHAR( 20),    -- (CYU027)
    @cLOCLookupSP        NVARCHAR( 20),    -- (yeekung01)
    @cDefaultFromLOC     NVARCHAR( 1),
 
@@ -176,7 +178,8 @@ SELECT
    @cMoveQTYAlloc       = V_String10,-- (ChewKP04)
    @cDecodeSP           = V_String11,
    @cLOCLookupSP        = V_String12, --(yeekung01)
-   @cDefaultFromLOC     = V_String13, 
+   @cDefaultFromLOC     = V_String13,
+   @cSuggestLocSP       = V_String14, --(CYU027)
 
    @nTotalRec           = V_Integer1,
    @nCurrentRec         = V_Integer2,
@@ -256,6 +259,9 @@ BEGIN
    SET @cExtendedUpdateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorerKey)
    IF @cExtendedUpdateSP = '0'
       SET @cExtendedUpdateSP = ''
+   SET @cSuggestLocSP = rdt.rdtGetConfig( @nFunc, 'SuggestLocSP', @cStorerKey)
+   IF @cSuggestLocSP = '0'
+       SET @cSuggestLocSP = ''
 
    SET @nMultiStorer = 0
    IF EXISTS (SELECT 1 FROM dbo.StorerGroup WITH (NOLOCK) WHERE StorerGroup = @cStorerKey)
@@ -518,7 +524,7 @@ BEGIN
       IF @cFromLOC <> ''
       BEGIN
          SET @cInField02 = @cFromLOC
-         
+
          GOTO Step_2
       END
    END
@@ -879,6 +885,61 @@ BEGIN
          END
       END
 
+      SET @cOutField11 = '' -- ToLOC
+      IF @cSuggestLocSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cSuggestLocSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cSuggestLocSP) +
+                        ' @nMobile, @nFunc, @cLangCode, @cStorerKey, @cFacility, @cFromLOC, @cFromID, @cSKU, @nQTY, @cToID, @cToLOC, @cType, ' +
+                        ' @cOutField01 OUTPUT, @cOutField02 OUTPUT, @cOutField03 OUTPUT, @cOutField04 OUTPUT, @cOutField05 OUTPUT, ' +
+                        ' @cOutField06 OUTPUT, @cOutField07 OUTPUT, @cOutField08 OUTPUT, @cOutField09 OUTPUT, @cOutField10 OUTPUT, ' +
+                        ' @cOutField11 OUTPUT, @cOutField12 OUTPUT, @cOutField13 OUTPUT, @cOutField14 OUTPUT, @cOutField15 OUTPUT, ' +
+                        ' @nErrNo      OUTPUT, @cErrMsg     OUTPUT'
+            SET @cSQLParam =
+                          ' @nMobile         INT,                  ' +
+                          ' @nFunc  INT,                  ' +
+                          ' @cLangCode       NVARCHAR( 3),         ' +
+                          ' @cStorerKey      NVARCHAR( 15),        ' +
+                          ' @cFacility       NVARCHAR(  5),        ' +
+                          ' @cFromLOC        NVARCHAR( 10),        ' +
+                          ' @cFromID         NVARCHAR( 18),        ' +
+                          ' @cSKU            NVARCHAR( 20),        ' +
+                          ' @nQTY            INT,                  ' +
+                          ' @cToID           NVARCHAR( 18),        ' +
+                          ' @cToLOC          NVARCHAR( 10),        ' +
+                          ' @cType           NVARCHAR( 10),        ' +
+                          ' @cOutField01     NVARCHAR( 20) OUTPUT, ' +
+                          ' @cOutField02     NVARCHAR( 20) OUTPUT, ' +
+                          ' @cOutField03     NVARCHAR( 20) OUTPUT, ' +
+                          ' @cOutField04     NVARCHAR( 20) OUTPUT, ' +
+                          ' @cOutField05     NVARCHAR( 20) OUTPUT, ' +
+                          ' @cOutField06     NVARCHAR( 20) OUTPUT, ' +
+                          ' @cOutField07     NVARCHAR( 20) OUTPUT, ' +
+                          ' @cOutField08     NVARCHAR( 20) OUTPUT, ' +
+                          ' @cOutField09     NVARCHAR( 20) OUTPUT, ' +
+                          ' @cOutField10     NVARCHAR( 20) OUTPUT, ' +
+                          ' @cOutField11     NVARCHAR( 20) OUTPUT, ' +
+                          ' @cOutField12     NVARCHAR( 20) OUTPUT, ' +
+                          ' @cOutField13     NVARCHAR( 20) OUTPUT, ' +
+                          ' @cOutField14     NVARCHAR( 20) OUTPUT, ' +
+                          ' @cOutField15     NVARCHAR( 20) OUTPUT, ' +
+                          ' @nErrNo          INT           OUTPUT, ' +
+                          ' @cErrMsg         NVARCHAR( 20) OUTPUT  '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @cStorerKey, @cFacility, @cFromLOC, @cFromID, @cSKU, @nQTY, @cFromID, @cToLOC, 'VAS',
+                  @cOutField01 OUTPUT, @cOutField02 OUTPUT, @cOutField03 OUTPUT, @cOutField04 OUTPUT, @cOutField05 OUTPUT,
+                  @cOutField06 OUTPUT, @cOutField07 OUTPUT, @cOutField08 OUTPUT, @cOutField09 OUTPUT, @cOutField10 OUTPUT,
+                  @cOutField11 OUTPUT, @cOutField12 OUTPUT, @cOutField13 OUTPUT, @cOutField14 OUTPUT, @cOutField15 OUTPUT,
+                  @nErrNo      OUTPUT, @cErrMsg     OUTPUT
+
+            IF @nErrNo <> 0 AND
+               @nErrNo <> -1
+                GOTO Quit
+         END
+      END
+
       -- Prep next screen var
       SET @nCurrentRec = 1
       SET @cToLOC = ''
@@ -892,7 +953,6 @@ BEGIN
       SET @cOutField08 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 5)) END
       SET @cOutField09 = @cMUOM_Desc
       SET @cOutField10 = CAST( @nMQTY AS NVARCHAR( 7)) --(JH01)  NVARCHAR( 5)
-      SET @cOutField11 = '' -- ToLOC
 
       -- Go to next screen
       SET @nScn = @nScn + 1
@@ -1424,7 +1484,8 @@ BEGIN
       V_String10  = @cMoveQTYAlloc, -- (ChewKP04)
       V_String11  = @cDecodeSP,
       V_String12  = @cLOCLookupSP, -- (yeekung01)
-      V_String13  = @cDefaultFromLOC, 
+      V_String13  = @cDefaultFromLOC,
+      V_String14 =  @cSuggestLocSP,-- (CYU027)
 
       V_Integer1  = @nTotalRec,
       V_Integer2  = @nCurrentRec,

@@ -59,6 +59,8 @@ GO
 /* 2020-11-24 3.2  James    WMS-15718 - Add Refno lookup (james04)      */  
 /* 2023-08-07 3.3  Ung      WMS-23190 Add ExtendedInfoSP                */
 /* 2023-10-26 3.4  James    WMS-23887 Add standard DecodeSP (james05)   */
+/* 2023-11-14 3.5  YeeKung  WMS-24119 Add ExtendedInfoSP  in step 2     */
+/* 2024-02-28 3.6  Ung      WMS-24945 RefNoLookupColumn add param       */
 /************************************************************************/  
 CREATE OR ALTER PROC [RDT].[rdtfnc_ScanToTruck_ByLabelNo] (  
    @nMobile    INT,  
@@ -502,19 +504,27 @@ BEGIN
             IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cColumnName AND type = 'P')  
             BEGIN  
                SET @cSQL = 'EXEC rdt.' + RTRIM( @cColumnName) +  
-                  ' @nMobile, @nFunc, @cLangCode, @cFacility, @cRefNum, @cMbolKey OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'  
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cRefNum, ' + 
+                  ' @cMBOLKey OUTPUT, @cLoadKey OUTPUT, @cOrderKey OUTPUT, @cType OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '  
                SET @cSQLParam =  
-                  '@nMobile       INT,           ' +  
-                  '@nFunc         INT,           ' +  
-                  '@cLangCode     NVARCHAR( 3),  ' +  
-                  '@cFacility     NVARCHAR( 5),  ' +  
-                  '@cRefNum       NVARCHAR( 30), ' +  
-                  '@cMbolKey      NVARCHAR( 10) OUTPUT, ' +  
-                  '@nErrNo        INT           OUTPUT, ' +  
-                  '@cErrMsg       NVARCHAR( 20) OUTPUT  '  
+                  '@nMobile      INT,           ' +  
+                  '@nFunc        INT,           ' +  
+                  '@cLangCode    NVARCHAR( 3),  ' +  
+                  '@nStep        INT,           ' +  
+                  '@nInputKey    INT,           ' +  
+                  '@cFacility    NVARCHAR( 5),  ' +  
+                  '@cStorerKey   NVARCHAR( 15), ' +  
+                  '@cRefNum      NVARCHAR( 30), ' +  
+                  '@cMbolKey     NVARCHAR( 10) OUTPUT, ' +  
+                  '@cLoadKey     NVARCHAR( 10) OUTPUT, ' +  
+                  '@cOrderKey    NVARCHAR( 10) OUTPUT, ' +  
+                  '@cType        NVARCHAR( 1)  OUTPUT, ' +  
+                  '@nErrNo       INT           OUTPUT, ' +  
+                  '@cErrMsg      NVARCHAR( 20) OUTPUT  '  
      
                EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
-                  @nMobile, @nFunc, @cLangCode, @cFacility, @cRefNum, @cMbolKey OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT  
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cRefNum,  
+                  @cMBOLKey OUTPUT, @cLoadKey OUTPUT, @cOrderKey OUTPUT, @cType OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT 
      
                IF @nErrNo <> 0  
                   GOTO Quit  
@@ -673,7 +683,7 @@ BEGIN
             @cPackInfo, @cWeight, @cCube, @cCartonType, @cDoor, @cRefNo, 
             @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT  
 
-         IF @nStep = 4
+         IF @nStep IN (2)
             SET @cOutField15 = @cExtendedInfo
       END  
    END  
@@ -1112,7 +1122,8 @@ BEGIN
   
       -- Insert rdtScanToTruck  
       INSERT INTO rdt.rdtScanToTruck  
-         (MBOLKey, LoadKey, OrderKey, URNNo, Status, Door, RefNo, AddWho, AddDate, EditWho, EditDate)        VALUES  
+         (MBOLKey, LoadKey, OrderKey, URNNo, Status, Door, RefNo, AddWho, AddDate, EditWho, EditDate)
+      VALUES  
          (@cMBOLKey, @cLoadKey, @cOrderKey, @cLabelNo, '9', @cDoor, @cRefNo, @cUserName, GETDATE(), @cUserName, GETDATE())  
       IF @@ERROR <> 0  
       BEGIN  
@@ -1280,6 +1291,48 @@ BEGIN
             END     
          END  
       END   
+        
+      IF @cExtendedInfoSP <> ''  
+      BEGIN  
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedInfoSP AND type = 'P')  
+         BEGIN
+            SET @cExtendedInfo = ''
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +  
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, @cType, @cMBOLKey, @cLoadKey, @cOrderKey, @cLabelNo, ' +  
+               ' @cPackInfo, @cWeight, @cCube, @cCartonType, @cDoor, @cRefNo, ' + 
+               ' @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '  
+            SET @cSQLParam =  
+               '@nMobile         INT,           ' +  
+               '@nFunc           INT,           ' +  
+               '@cLangCode       NVARCHAR( 3),  ' +  
+               '@nStep           INT,           ' +  
+               '@nAfterStep      INT,           ' +  
+               '@nInputKey       INT,           ' +  
+               '@cFacility       NVARCHAR( 5),  ' +  
+               '@cStorerKey      NVARCHAR( 15), ' +  
+               '@cType           NVARCHAR( 1),  ' +  
+               '@cMBOLKey        NVARCHAR( 10), ' +  
+               '@cLoadKey        NVARCHAR( 10), ' +  
+               '@cOrderKey       NVARCHAR( 10), ' +  
+               '@cLabelNo        NVARCHAR( 20), ' +  
+               '@cPackInfo       NVARCHAR( 3),  ' +  
+               '@cWeight         NVARCHAR( 10), ' +  
+               '@cCube           NVARCHAR( 10), ' +  
+               '@cCartonType     NVARCHAR( 10), ' +  
+               '@cDoor           NVARCHAR( 10), ' +  
+               '@cRefNo          NVARCHAR( 40), ' +  
+               '@cExtendedInfo   NVARCHAR( 20) OUTPUT, ' +  
+               '@nErrNo          INT           OUTPUT, ' +  
+               '@cErrMsg         NVARCHAR( 20) OUTPUT  '  
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
+               @nMobile, @nFunc, @cLangCode, 1, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType, @cMBOLKey, @cLoadKey, @cOrderKey, @cLabelNo,  
+               @cPackInfo, @cWeight, @cCube, @cCartonType, @cDoor, @cRefNo, 
+               @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT  
+
+            SET @cOutField15 = @cExtendedInfo
+         END  
+      END  
         
       -- EventLog  
       EXEC RDT.rdt_STD_EventLog  

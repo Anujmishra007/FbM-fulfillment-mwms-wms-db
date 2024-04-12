@@ -40,6 +40,7 @@ GO
 /* 10-Oct-2013 1.7  Chee     User Locking Bug Fix (chee01)              */
 /* 20-Apr-2017 1.8  James    Remove ANSI_WARNINGS (james03)             */
 /* 02-Nov-2018 1.9  James    WMS6809 Add custom fetch task (james04)    */
+/* 21-Mar-2024 2.0  NLT013   UWP-17125 Correct the sorting sequence     */
 /************************************************************************/    
     
 CREATE PROC [RDT].[rdt_CycleCount_GetNextLOC] (    
@@ -201,11 +202,12 @@ BEGIN
             -- Added just in case CCDetail having same loc for diff id    
             -- Commented - always go back to the Uncounted Location (not allow skip any location)    
             -- AND LOC.LOC <> @cSuggestLOC    
-            AND LOC.CCLogicalLOC > @cCurrSuggestLogiLOC      -- uncomment (james02)                            
+            AND LOC.CCLogicalLOC >= @cCurrSuggestLogiLOC      -- uncomment (james02)                            
             AND LOC.LocAisle = CASE WHEN ISNULL(@cAisle,'') = '' OR RTRIM(@cAisle) = 'ALL' THEN LOC.LocAisle ELSE @cAisle END    
-            AND LOC.LocLevel = CASE WHEN ISNULL(@cLevel,'') = '' OR RTRIM(@cLevel) = 'ALL' THEN LOC.LocLevel ELSE @cLevel END                                     
+            AND LOC.LocLevel = CASE WHEN ISNULL(@cLevel,'') = '' OR RTRIM(@cLevel) = 'ALL' THEN LOC.LocLevel ELSE @cLevel END
             -- Uncounted locations - to avoid looping Counted locations    
-            -- AND CCD.Status = '0'                                       
+			-- Uncommit it, to loop all locations with same CCLogicalLOC
+            AND CCD.Status = '0'                                       
             AND 1 =  CASE     
                         WHEN @nCCCountNo = 1 AND Counted_Cnt1 = 1 THEN 0    
                         WHEN @nCCCountNo = 2 AND Counted_Cnt2 = 1 THEN 0    
@@ -220,7 +222,7 @@ BEGIN
                   AND CCD.LOC = CCL.LOC    
                   AND CCL.ADDWHO <> @cUserName    
                   AND Status = '0')    
-         ORDER BY LOC.LocAisle, LOC.LocLevel, LOC.CCLogicalLOC, LOC.LOC      
+         ORDER BY LOC.CCLogicalLOC, LOC.LocAisle, LOC.LocLevel, LOC.LOC      
       ELSE    
          -- Get first suggested loc    
          SELECT TOP 1    
@@ -247,7 +249,7 @@ BEGIN
                   AND CCD.LOC = CCL.LOC    
                   AND CCL.ADDWHO <> @cUserName    
                   AND Status = '0')    
-          ORDER BY LOC.LocAisle, LOC.LocLevel, LOC.CCLogicalLOC, LOC.LOC      
+          ORDER BY LOC.CCLogicalLOC, LOC.LocAisle, LOC.LocLevel, LOC.LOC      
    END    
        
    IF @@ROWCOUNT = 0    

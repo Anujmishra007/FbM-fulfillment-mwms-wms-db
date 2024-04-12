@@ -491,17 +491,17 @@ BEGIN
          GOTO Step_2_Fail
       END
 
-		-- LOC lookup     
-		IF @cLOCLookupSP = 1              
-		BEGIN              
-			EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,               
-			   @cToLOC     OUTPUT,               
-			   @nErrNo     OUTPUT,               
-			   @cErrMsg    OUTPUT              
+      -- LOC lookup     
+      IF @cLOCLookupSP = 1              
+      BEGIN              
+         EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,               
+            @cToLOC     OUTPUT,               
+            @nErrNo     OUTPUT,               
+            @cErrMsg    OUTPUT              
 
-			IF @nErrNo <> 0              
-				GOTO Step_2_Fail              
-		END 
+         IF @nErrNo <> 0              
+            GOTO Step_2_Fail              
+      END 
 
       -- Check TO LOC valid
       IF NOT EXISTS( SELECT 1 FROM LOC WITH (NOLOCK) WHERE LOC = @cToLOC)
