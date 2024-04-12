@@ -282,6 +282,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
        AND PICKDETAIL.[Status] = '0'  
        AND PICKDETAIL.WIP_Refno = @c_SourceType 
        AND PICKDETAIL.UOM = '1'
+       AND LOC.LocationType = 'VNA'
        GROUP BY PICKDETAIL.Storerkey 
             , PICKDETAIL.Sku 
             , PICKDETAIL.Lot
@@ -304,7 +305,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
          SET @c_SourcePriority = '9'
          SET @c_Priority = '4'
 
-         SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM '
+         SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND LOC.LocationType = ''VNA'' '
 
          SELECT @c_FinalLoc = ISNULL(ORDERS.Door, '')
          FROM ORDERS WITH (NOLOCK)
@@ -418,6 +419,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
        AND PICKDETAIL.[Status] = '0'  
        AND PICKDETAIL.WIP_Refno = @c_SourceType 
        AND PICKDETAIL.UOM IN ('2','3')
+       AND LOC.LocationType = 'VNA'
        GROUP BY PICKDETAIL.Storerkey 
             , PICKDETAIL.Sku 
             , PICKDETAIL.Lot
@@ -439,7 +441,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
          SET @c_Message03 = N'FPK'
          SET @c_SourcePriority = '9'
          SET @c_Priority = '9'
-         SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM '
+         SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND LOC.LocationType = ''VNA'' '
 
          SELECT @c_ToLoc = ISNULL(ORDERS.Door, '')
          FROM ORDERS WITH (NOLOCK)
@@ -511,6 +513,126 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
       CLOSE CUR_PICK_FCP
       DEALLOCATE CUR_PICK_FCP
    END
+
+   --NONVNA
+   IF @n_continue = 1 OR @n_continue = 2
+   BEGIN
+      DECLARE CUR_PICK_NONVNA CURSOR FAST_FORWARD READ_ONLY FOR 
+       SELECT PICKDETAIL.Storerkey 
+            , PICKDETAIL.Sku 
+            , PICKDETAIL.Lot
+            , PICKDETAIL.Loc 
+            , PICKDETAIL.ID 
+            , MAX(PICKDETAIL.UOM) 
+            , SUM(PICKDETAIL.UOMQty) AS UOMQty 
+            , SUM(PICKDETAIL.Qty) AS Qty 
+            , ORDERS.LoadKey
+            , ORDERS.OrderKey
+       FROM WAVEDETAIL (NOLOCK) 
+       JOIN WAVE (NOLOCK) ON WAVEDETAIL.WaveKey = WAVE.WaveKey 
+       JOIN ORDERS (NOLOCK) ON WAVEDETAIL.OrderKey = ORDERS.OrderKey 
+       JOIN #PickDetail_WIP PICKDETAIL (NOLOCK) ON ORDERS.OrderKey = PICKDETAIL.OrderKey 
+       JOIN LOC (NOLOCK) ON LOC.LOC = PICKDETAIL.LOC
+       WHERE WAVEDETAIL.WaveKey = @c_Wavekey  
+       AND PICKDETAIL.[Status] = '0'  
+       AND PICKDETAIL.WIP_Refno = @c_SourceType 
+       AND LOC.LocationType <> 'VNA'
+       GROUP BY PICKDETAIL.Storerkey 
+              , PICKDETAIL.Sku 
+              , PICKDETAIL.Lot
+              , PICKDETAIL.Loc 
+              , PICKDETAIL.ID 
+              , ORDERS.LoadKey
+              , ORDERS.OrderKey
+              , PICKDETAIL.UOM
+       ORDER BY PICKDETAIL.UOM, PICKDETAIL.Sku, PICKDETAIL.Lot, PICKDETAIL.Loc, PICKDETAIL.ID
+
+      OPEN CUR_PICK_NONVNA
+
+      FETCH NEXT FROM CUR_PICK_NONVNA INTO @c_Storerkey, @c_SKU, @c_Lot, @c_FromLoc, @c_ID, @c_UOM, @n_UOMQty, @n_Qty, @c_Loadkey, @c_Orderkey
+
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+         SET @c_ToLoc = N''
+         SET @c_FinalLoc = N''
+         SET @c_PickMethod = IIF(@c_UOM = '1', N'FP', N'PP')
+         SET @c_TaskType = IIF(@c_UOM = '1', N'FPK', N'FCP')
+         SET @c_Message03 = N'FPK'
+         SET @c_SourcePriority = '9'
+         SET @c_Priority = '9'
+
+         SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND LOC.LocationType <> ''VNA'' '
+
+         SELECT @c_ToLoc = ISNULL(ORDERS.Door, '')
+         FROM ORDERS WITH (NOLOCK)
+         WHERE ORDERS.OrderKey = @c_Orderkey
+
+         IF ISNULL(@c_ToLoc,'') = ''
+         BEGIN
+            SELECT @n_continue = 3  
+            SELECT @n_err = 67845    
+            SELECT @c_errmsg = 'NSQL' + CONVERT(NVARCHAR(5),@n_err)+': Invalid Outbound Staging Loc from ORDERS.Door. (ispRLWAV69)'              
+         END
+         ELSE IF NOT EXISTS (SELECT 1 FROM LOC (NOLOCK) WHERE LOC = @c_ToLoc)
+         BEGIN
+            SELECT @n_continue = 3  
+            SELECT @n_err = 67850    
+            SELECT @c_errmsg = 'NSQL' + CONVERT(NVARCHAR(5),@n_err)+': Loc not found in Loc table. (ispRLWAV69)'         
+         END 
+         ELSE
+         BEGIN
+            EXEC isp_InsertTaskDetail @c_TaskType = @c_TaskType
+                                    , @c_Storerkey = @c_Storerkey
+                                    , @c_Sku = @c_Sku
+                                    , @c_Lot = @c_Lot
+                                    , @c_UOM = @c_UOM
+                                    , @n_UOMQty = @n_UOMQty
+                                    , @n_Qty = @n_Qty
+                                    , @c_FromLoc = @c_FromLoc
+                                    , @c_LogicalFromLoc = '?'
+                                    , @c_FromID = @c_ID
+                                    , @c_ToLoc = @c_ToLoc
+                                    , @c_LogicalToLoc = '?'
+                                    , @c_ToID = @c_ID
+                                    , @c_FinalID = @c_ID
+                                    , @c_PickMethod = @c_PickMethod
+                                    , @c_Priority = @c_Priority
+                                    , @c_SourcePriority = @c_SourcePriority
+                                    , @c_SourceType = @c_SourceType
+                                    , @c_SourceKey = @c_Wavekey
+                                    , @c_WaveKey = @c_Wavekey
+                                    , @c_Loadkey = @c_Loadkey
+                                    , @c_OrderKey = @c_Orderkey
+                                    , @c_Message03 = @c_Message03
+                                    , @n_SystemQty = @n_Qty
+                                    , @c_Status = '0'
+                                    , @c_AreaKey = '?F' -- ?F=Get from location areakey  
+                                    , @c_UserPosition = '1'
+                                    , @c_CallSource = 'WAVE'
+                                    , @c_LinkTaskToPick = 'WIP' -- WIP=Update taskdetailkey to pickdetail_wip  
+                                    , @c_LinkTaskToPick_SQL = @c_LinkTaskToPick_SQL
+                                    , @c_WIP_RefNo = @c_SourceType
+                                    , @b_Success = @b_Success OUTPUT
+                                    , @n_Err = @n_err OUTPUT
+                                    , @c_ErrMsg = @c_errmsg OUTPUT
+                                    , @c_Taskdetailkey = @c_Taskdetailkey OUTPUT
+            
+            IF @b_Success <> 1
+            BEGIN
+               SELECT @n_continue = 3
+            END
+            
+            UPDATE TASKDETAIL
+            SET Groupkey = @c_Taskdetailkey
+            WHERE TaskDetailKey = @c_Taskdetailkey
+         END
+
+         FETCH NEXT FROM CUR_PICK_NONVNA INTO @c_Storerkey, @c_SKU, @c_Lot, @c_FromLoc, @c_ID, @c_UOM, @n_UOMQty, @n_Qty, @c_Loadkey, @c_Orderkey
+      END
+      CLOSE CUR_PICK_NONVNA
+      DEALLOCATE CUR_PICK_NONVNA
+   END
+
 
    -----Update pickdetail_WIP work in progress staging table back to pickdetail 
    IF @n_continue = 1 or @n_continue = 2
@@ -599,6 +721,24 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
    BEGIN
       CLOSE Orders_Pickdet_cur
       DEALLOCATE Orders_Pickdet_cur   
+   END
+
+   IF CURSOR_STATUS('LOCAL', 'CUR_PICK_VNAOUT') IN (0 , 1)
+   BEGIN
+      CLOSE CUR_PICK_VNAOUT
+      DEALLOCATE CUR_PICK_VNAOUT   
+   END
+
+   IF CURSOR_STATUS('LOCAL', 'CUR_PICK_FCP') IN (0 , 1)
+   BEGIN
+      CLOSE CUR_PICK_FCP
+      DEALLOCATE CUR_PICK_FCP   
+   END
+
+   IF CURSOR_STATUS('LOCAL', 'CUR_PICK_NONVNA') IN (0 , 1)
+   BEGIN
+      CLOSE CUR_PICK_NONVNA
+      DEALLOCATE CUR_PICK_NONVNA   
    END
 
    IF @n_continue=3  -- Error Occured - Process And Return    
