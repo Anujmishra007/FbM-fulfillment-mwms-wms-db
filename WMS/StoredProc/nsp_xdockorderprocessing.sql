@@ -239,7 +239,7 @@ INSERT INTO #TEMPSKU
             SELECT LLI.Storerkey, LLI.Sku, LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked AS Qty,
                    LLI.Lot, LLI.Loc, LLI.ID, LA.Lottable03, LA.Lottable05, Loc.Facility
       --        INTO #Inventory
-              FROM Lotxlocxid LLI (NOLOCK), Lotattribute LA (NOLOCK), Loc (NOLOCK), LOT (NOLOCK), ID (NOLOCK)   --(ADMUSH022 -01) - START-UWP-18028
+              FROM Lotxlocxid LLI (NOLOCK), Lotattribute LA (NOLOCK), Loc (NOLOCK), LOT (NOLOCK), ID (NOLOCK)   --(USH022 -01) - START-UWP-18028
              WHERE LA.Storerkey = @c_StorerKey
             AND LA.SKU IN (SELECT SKU FROM #TEMPSKU)
                AND LA.Lottable03 = @c_ExternPOKey
@@ -247,12 +247,12 @@ INSERT INTO #TEMPSKU
                AND LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked > 0
                AND LLI.Lot = LA.Lot
                AND LLI.Loc = Loc.Loc
-               AND LOT.status  = 'OK'                                     --(ADMUSH022 -01) - START-UWP-18028
+               AND LOT.status  = 'OK'                                     --(USH022 -01) - START-UWP-18028
                AND LOC.Status = 'OK'
                AND ID.Status = 'OK'
                AND Loc.LOCationFlag NOT IN ('DAMAGE', 'HOLD')
                AND LLI.Lot = LOT.Lot
-               AND LLI.ID = ID.ID                                         --(ADMUSH022-01) - END-UWP-18028
+               AND LLI.ID = ID.ID                                         --(USH022-01) - END-UWP-18028
 
       IF (SELECT COUNT(*) FROM #Inventory) = 0 
       BEGIN 
