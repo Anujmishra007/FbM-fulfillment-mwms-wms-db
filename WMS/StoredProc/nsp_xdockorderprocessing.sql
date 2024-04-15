@@ -56,7 +56,7 @@ GO
 /*                              enough (JHTAN01)                             */
 /* 07-Mar-2024  Wan01           UWP-16306 - Moorebank Australia - Picking    */
 /*                              issue while order processing for XDock       */
-/* 015-Apr-2024 USH022           Ticket - UWP-18028 XDoc Allocation Issue    */
+/* 08-Apr-2024 USH022           Ticket - UWP-18028                           */
 /*****************************************************************************/
 CREATE OR ALTER PROCEDURE nsp_XDockOrderProcessing
    @c_ExternPOKey NVARCHAR(20) ,
@@ -65,23 +65,23 @@ CREATE OR ALTER PROCEDURE nsp_XDockOrderProcessing
    @c_doroute     NCHAR (1),
    @c_facility    NVARCHAR (5)
 AS
-BEGIN
+BEGIN 
    SET NOCOUNT ON
    SET ANSI_WARNINGS OFF
    SET QUOTED_IDENTIFIER OFF
-   SET CONCAT_NULL_YIELDS_NULL OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF  
 
    DECLARE @i_success integer,
            @i_Error   integer,
            @c_ErrMsg  NVARCHAR(255),
-           @n_Continue int,
-           @n_starttcnt int,
+           @n_Continue int, 
+           @n_starttcnt int, 
            @c_SQLStmt NVarChar(1000),
            @c_OrderByStmt NVarChar(255),
-           @b_debug NVARCHAR(1), @c_orderlinetbl NVARCHAR(13)
+           @b_debug NVARCHAR(1), @c_orderlinetbl NVARCHAR(13)  
 
-   DECLARE @c_XDStrategykey NVARCHAR(10), @c_Type NVARCHAR(10), @c_OverAlloc NVARCHAR(1),
-           @c_UsrDefine01 NVARCHAR(30), @c_sort01 NVARCHAR(4),
+   DECLARE @c_XDStrategykey NVARCHAR(10), @c_Type NVARCHAR(10), @c_OverAlloc NVARCHAR(1), 
+           @c_UsrDefine01 NVARCHAR(30), @c_sort01 NVARCHAR(4), 
            @c_UsrDefine02 NVARCHAR(30), @c_sort02 NVARCHAR(4),
            @c_UsrDefine03 NVARCHAR(30), @c_sort03 NVARCHAR(4),
            @c_UsrDefine04 NVARCHAR(30), @c_sort04 NVARCHAR(4),
@@ -90,27 +90,27 @@ BEGIN
         @c_UOM1 NVARCHAR(10), @c_UOM2 NVARCHAR(10), @c_UOM3 NVARCHAR(10), @c_UOM4 NVARCHAR(10)
 
   -- SOS30495
-   DECLARE @c_UOMAlloc NVARCHAR(1), @c_GetPack NVARCHAR(1), @c_NextFlag NVARCHAR(1),
+   DECLARE @c_UOMAlloc NVARCHAR(1), @c_GetPack NVARCHAR(1), @c_NextFlag NVARCHAR(1),  
         @n_PackPallet int, @n_PackCaseCnt int, @n_PackInner int,
         @c_PDUOM NVARCHAR(10), @n_UOMQty int
 
    -- SOS45047
    DECLARE @c_CaseID NVARCHAR(10)
 
-   DECLARE @c_SKU NVARCHAR(20), @n_TotOrdQty int, @n_POOrdQty FLOAT, @n_PORcvQty FLOAT, @n_Percent float,
-           @c_orderkey NVARCHAR(10), @c_orderline NVARCHAR(5), @c_Packkey NVARCHAR(10), @c_UOM NVARCHAR(10),
-           @c_Lottable03 NVARCHAR(18), @c_pickdetkey NVARCHAR(18), @c_pickhdkey NVARCHAR(18),
-           @b_success NVARCHAR(1), @n_lastrow int, @n_cnt int, @n_RowCount int
-
-   DECLARE @n_OpenQty int, @n_ShippedQty int, @n_AllocateQty int, @n_PickQty int,
-           @n_CalOrdQty int, @n_RowNo int, @n_RowNo1 int, @n_err  int, @n_RemainQty int,
+   DECLARE @c_SKU NVARCHAR(20), @n_TotOrdQty int, @n_POOrdQty FLOAT, @n_PORcvQty FLOAT, @n_Percent float, 
+           @c_orderkey NVARCHAR(10), @c_orderline NVARCHAR(5), @c_Packkey NVARCHAR(10), @c_UOM NVARCHAR(10), 
+           @c_Lottable03 NVARCHAR(18), @c_pickdetkey NVARCHAR(18), @c_pickhdkey NVARCHAR(18), 
+           @b_success NVARCHAR(1), @n_lastrow int, @n_cnt int, @n_RowCount int  
+   
+   DECLARE @n_OpenQty int, @n_ShippedQty int, @n_AllocateQty int, @n_PickQty int, 
+           @n_CalOrdQty int, @n_RowNo int, @n_RowNo1 int, @n_err  int, @n_RemainQty int, 
            @n_InvQty int, @c_lot NVARCHAR(18), @c_loc NVARCHAR(10), @c_Id NVARCHAR(18), @n_PDAllocQty int
 
-   DECLARE @d_LoadingDate datetime, @c_Sellername NVARCHAR(45), @c_SellerTerm NVARCHAR(10), @n_CalcPORcvQty float,
-           @d_StartDT datetime, @d_EndDT datetime, @n_CaseCnt float, @c_ConsigneeKey NVARCHAR(15),
+   DECLARE @d_LoadingDate datetime, @c_Sellername NVARCHAR(45), @c_SellerTerm NVARCHAR(10), @n_CalcPORcvQty float, 
+           @d_StartDT datetime, @d_EndDT datetime, @n_CaseCnt float, @c_ConsigneeKey NVARCHAR(15), 
            @n_RemainOrdQty float, @n_PercentRemain float, @n_RemainCaseQty float, @n_CalcQty float
 
-   SELECT @i_success = 0, @i_Error = 0, @n_Continue = 1, @n_starttcnt=@@TRANCOUNT
+   SELECT @i_success = 0, @i_Error = 0, @n_Continue = 1, @n_starttcnt=@@TRANCOUNT 
    SELECT @n_err=0, @n_cnt = 0, @b_debug = '0'
    SELECT @c_orderlinetbl = 'orderline' + convert(NVARCHAR(4),@@spid)
   -- SOS30495
@@ -203,62 +203,58 @@ INSERT INTO #TEMPSKU
     WHERE ExternPOKey = @c_ExternPOKey
       AND STORERKEY = @c_StorerKey
 
-   SELECT @c_XDStrategykey = XS.XDockStrategyKey,
-          @c_Type          = XS.Type            ,
-          @c_OverAlloc     = XS.Overalloc       ,
-          @c_UsrDefine01   = XS.USERDEFINE01    ,
-          @c_sort01        = XS.SORT01          ,
-          @c_UsrDefine02   = XS.USERDEFINE02    ,
-          @c_sort02        = XS.SORT02          ,
-          @c_UsrDefine03   = XS.USERDEFINE03    ,
-          @c_sort03        = XS.SORT03          ,
-          @c_UsrDefine04   = XS.USERDEFINE04    ,
-          @c_sort04        = XS.SORT04          ,
-          @c_UsrDefine05   = XS.USERDEFINE05    ,
+   SELECT @c_XDStrategykey = XS.XDockStrategyKey, 
+          @c_Type          = XS.Type            , 
+          @c_OverAlloc     = XS.Overalloc       , 
+          @c_UsrDefine01   = XS.USERDEFINE01    , 
+          @c_sort01        = XS.SORT01          , 
+          @c_UsrDefine02   = XS.USERDEFINE02    , 
+          @c_sort02        = XS.SORT02          , 
+          @c_UsrDefine03   = XS.USERDEFINE03    , 
+          @c_sort03        = XS.SORT03          , 
+          @c_UsrDefine04   = XS.USERDEFINE04    , 
+          @c_sort04        = XS.SORT04          , 
+          @c_UsrDefine05   = XS.USERDEFINE05    , 
           @c_sort05        = XS.SORT05          ,
        -- SOS30495
           @c_UOM1         = XS.UOM1           ,
           @c_UOM2         = XS.UOM2           ,
           @c_UOM3         = XS.UOM3           ,
-          @c_UOM4         = XS.UOM4
-     FROM STORER ST (NOLOCK), XDOCKStrategy XS (NOLOCK)
-    WHERE ST.XDockStrategykey = XS.XDockStrategyKey
-      AND ST.StorerKey = @c_StorerKey
+          @c_UOM4         = XS.UOM4          
+     FROM STORER ST (NOLOCK), XDOCKStrategy XS (NOLOCK) 
+    WHERE ST.XDockStrategykey = XS.XDockStrategyKey 
+      AND ST.StorerKey = @c_StorerKey 
 
-   IF @@Rowcount = 0
-   BEGIN
+   IF @@Rowcount = 0 
+   BEGIN 
       SELECT @n_Continue = 3
       SELECT @i_Error = 15010
-      SELECT @c_ErrMsg = 'nsp_XDockOrderProcessing - CrossDock Strategy Not Found'
+      SELECT @c_ErrMsg = 'nsp_XDockOrderProcessing - CrossDock Strategy Not Found'      
    END
 
   -- Part 1
-   IF (@n_Continue = 1 OR @n_Continue =2)
+   IF (@n_Continue = 1 OR @n_Continue =2) 
    BEGIN
       INSERT INTO #Inventory (Storerkey, Sku, Qty, Lot, Loc, ID, ExternPOKey, Lottable05, Facility)
-      SELECT LLI.Storerkey, LLI.Sku, LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked AS Qty,
-             LLI.Lot, LLI.Loc, LLI.ID, LA.Lottable03, LA.Lottable05, Loc.Facility
---        INTO #Inventory
+      SELECT LLI.Storerkey, LLI.Sku, LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked AS Qty, 
+             LLI.Lot, LLI.Loc, LLI.ID, LA.Lottable03, LA.Lottable05, Loc.Facility 
+--        INTO #Inventory 
         FROM Lotxlocxid LLI (NOLOCK), Lotattribute LA (NOLOCK), Loc (NOLOCK), LOT (NOLOCK), ID (NOLOCK)
-       WHERE LA.Storerkey = @c_StorerKey
-      AND LA.SKU IN (SELECT SKU FROM #TEMPSKU)
+       WHERE LA.Storerkey = @c_StorerKey  
+      AND LA.SKU IN (SELECT SKU FROM #TEMPSKU) 
          AND LA.Lottable03 = @c_ExternPOKey
-         AND Loc.Facility = @c_facility
+         AND Loc.Facility = @c_facility 
          AND Loc.Locationflag <> 'DAMAGE'
-         AND LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked > 0
+         AND LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked > 0 
          AND LLI.Lot = LA.Lot
          AND LLI.Loc = Loc.Loc
-          --ADMUSH022 15 APR 2024 -> ADDED INNER JOIN FOR TABLE LLI, LOT AND ID
-        --ADDED CONDITION FOR LOT.status, LOC.Status, ID.Status, Loc.LOCationFlag NOT IN ('DAMAGE', 'HOLD')
          AND LOT.status  = 'OK'
          AND LOC.Status = 'OK'
          AND ID.Status = 'OK'
          AND Loc.LOCationFlag NOT IN ('DAMAGE', 'HOLD')
-         AND LLI.Lot = LOT.Lot
-         AND LLI.ID = ID.ID
 
-      IF (SELECT COUNT(*) FROM #Inventory) = 0
-      BEGIN
+      IF (SELECT COUNT(*) FROM #Inventory) = 0 
+      BEGIN 
          SELECT @n_Continue = 3
          SELECT @i_Error = 15040
          SELECT @c_ErrMsg = 'nsp_XDockOrderProcessing - No Inventory to process'
@@ -266,7 +262,7 @@ INSERT INTO #TEMPSKU
    END
 
   -- Part 2
-   IF (@n_Continue = 1 OR @n_Continue =2)
+   IF (@n_Continue = 1 OR @n_Continue =2) 
    BEGIN
       IF @c_Type = '01'
       BEGIN
@@ -278,100 +274,100 @@ INSERT INTO #TEMPSKU
                              "Facility, CalOrdQty) " +
                              "SELECT OD.Orderkey, OD.Orderlinenumber, OD.Storerkey, OD.Sku, "   +
                              "OD.OriginalQty, OD.OpenQty, OD.ShippedQty, OD.AdjustedQty, "      +
-                             "OD.Qtypreallocated, OD.QtyAllocated, OD.Qtypicked, OD.Packkey, "  +
-                             "OD.UOM, OD.Lottable03, OD.Lottable05, OD.ExternPOKey, "           +
+                             "OD.Qtypreallocated, OD.QtyAllocated, OD.Qtypicked, OD.Packkey, "  +       
+                             "OD.UOM, OD.Lottable03, OD.Lottable05, OD.ExternPOKey, "           + 
                              "OH.Facility, (OD.OpenQty - OD.QtyAllocated - OD.Qtypicked) AS CalOrdQty " +
                              "FROM ORDERDETAIL OD (NOLOCK), ORDERS OH (NOLOCK) "                +
-                             "WHERE OH.Orderkey = OD.Orderkey "                                 +
-                             "AND OH.facility = N'" + dbo.fnc_RTrim(@c_facility) + "' "                  +
-                             "AND OH.status < '" + "2" + "' "                                   +
-                             "AND OD.Storerkey = N'" + dbo.fnc_RTrim(@c_StorerKey) + "' "                +
-                             "AND OD.ExternPOKey = N'" + dbo.fnc_RTrim(@c_ExternPOKey) + "' "            +
+                             "WHERE OH.Orderkey = OD.Orderkey "                                 + 
+                             "AND OH.facility = N'" + dbo.fnc_RTrim(@c_facility) + "' "                  + 
+                             "AND OH.status < '" + "2" + "' "                                   + 
+                             "AND OD.Storerkey = N'" + dbo.fnc_RTrim(@c_StorerKey) + "' "                + 
+                             "AND OD.ExternPOKey = N'" + dbo.fnc_RTrim(@c_ExternPOKey) + "' "            + 
                              "AND OD.OpenQty - OD.QtyAllocated - OD.Qtypicked > 0 "             +
                              "AND OD.SKU IN (SELECT SKU FROM #TEMPSKU) "                        +
                              "ORDER BY OD.Orderkey, OD.SKU "
          EXEC (@c_SQLStmt)
-
-         IF (SELECT COUNT(*) FROM #Ordlines) = 0
-         BEGIN
+         
+         IF (SELECT COUNT(*) FROM #Ordlines) = 0 
+         BEGIN 
             SELECT @n_Continue = 3
             SELECT @i_Error = 15020
             SELECT @c_ErrMsg = 'nsp_XDockOrderProcessing - No OrderLines to process'
          END
-      END
+      END 
       ELSE
       BEGIN
          IF dbo.fnc_RTrim(dbo.fnc_LTrim(@c_UsrDefine01)) <> '' OR dbo.fnc_RTrim(dbo.fnc_LTrim(@c_UsrDefine01)) IS NOT NULL
          BEGIN
-            SELECT @c_OrderByStmt = dbo.fnc_RTrim(dbo.fnc_LTrim(@c_UsrDefine01)) + " " + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_sort01))
+            SELECT @c_OrderByStmt = dbo.fnc_RTrim(dbo.fnc_LTrim(@c_UsrDefine01)) + " " + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_sort01)) 
          END
-         IF LEN(dbo.fnc_RTrim(dbo.fnc_LTrim(@c_OrderByStmt))) > 0
-         BEGIN
+         IF LEN(dbo.fnc_RTrim(dbo.fnc_LTrim(@c_OrderByStmt))) > 0 
+         BEGIN 
             IF (dbo.fnc_RTrim(dbo.fnc_LTrim(@c_UsrDefine02)) <> '' OR dbo.fnc_RTrim(dbo.fnc_LTrim(@c_UsrDefine02)) IS NOT NULL)
-            BEGIN
+            BEGIN 
                SELECT @c_OrderByStmt = @c_OrderByStmt + ", " + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_UsrDefine02)) + " " + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_sort02))
             END
          END
-         ELSE
+         ELSE  
          BEGIN
             IF (dbo.fnc_RTrim(dbo.fnc_LTrim(@c_UsrDefine02)) <> '' OR dbo.fnc_RTrim(dbo.fnc_LTrim(@c_UsrDefine02)) IS NOT NULL)
-            BEGIN
+            BEGIN 
                SELECT @c_OrderByStmt = dbo.fnc_RTrim(dbo.fnc_LTrim(@c_UsrDefine02)) + " " + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_sort02))
             END
          END
 
 
-         IF LEN(dbo.fnc_RTrim(dbo.fnc_LTrim(@c_OrderByStmt))) > 0
-         BEGIN
+         IF LEN(dbo.fnc_RTrim(dbo.fnc_LTrim(@c_OrderByStmt))) > 0 
+         BEGIN 
             IF (dbo.fnc_RTrim(dbo.fnc_LTrim(@c_UsrDefine03)) <> '' OR dbo.fnc_RTrim(dbo.fnc_LTrim(@c_UsrDefine03)) IS NOT NULL)
-            BEGIN
+            BEGIN 
                SELECT @c_OrderByStmt = @c_OrderByStmt + ", " + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_UsrDefine03)) + " " + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_sort03))
             END
          END
-         ELSE
+         ELSE  
          BEGIN
             IF (dbo.fnc_RTrim(dbo.fnc_LTrim(@c_UsrDefine03)) <> '' OR dbo.fnc_RTrim(dbo.fnc_LTrim(@c_UsrDefine03)) IS NOT NULL)
-            BEGIN
+            BEGIN 
                SELECT @c_OrderByStmt = dbo.fnc_RTrim(dbo.fnc_LTrim(@c_UsrDefine03)) + " " + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_sort03))
             END
          END
 
-         IF LEN(dbo.fnc_RTrim(dbo.fnc_LTrim(@c_OrderByStmt))) > 0
-         BEGIN
+         IF LEN(dbo.fnc_RTrim(dbo.fnc_LTrim(@c_OrderByStmt))) > 0 
+         BEGIN 
             IF (dbo.fnc_RTrim(dbo.fnc_LTrim(@c_UsrDefine04)) <> '' OR dbo.fnc_RTrim(dbo.fnc_LTrim(@c_UsrDefine04)) IS NOT NULL)
-            BEGIN
+            BEGIN 
                SELECT @c_OrderByStmt = @c_OrderByStmt + ", " + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_UsrDefine04)) + " " + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_sort04))
             END
          END
-         ELSE
+         ELSE  
          BEGIN
             IF (dbo.fnc_RTrim(dbo.fnc_LTrim(@c_UsrDefine04)) <> '' OR dbo.fnc_RTrim(dbo.fnc_LTrim(@c_UsrDefine04)) IS NOT NULL)
-            BEGIN
+            BEGIN 
                SELECT @c_OrderByStmt = dbo.fnc_RTrim(dbo.fnc_LTrim(@c_UsrDefine04)) + " " + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_sort04))
             END
          END
 
-         IF LEN(dbo.fnc_RTrim(dbo.fnc_LTrim(@c_OrderByStmt))) > 0
-         BEGIN
+         IF LEN(dbo.fnc_RTrim(dbo.fnc_LTrim(@c_OrderByStmt))) > 0 
+         BEGIN 
             IF (dbo.fnc_RTrim(dbo.fnc_LTrim(@c_UsrDefine05)) <> '' OR dbo.fnc_RTrim(dbo.fnc_LTrim(@c_UsrDefine05)) IS NOT NULL)
-            BEGIN
+            BEGIN 
                SELECT @c_OrderByStmt = @c_OrderByStmt + ", " + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_UsrDefine05)) + " " + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_sort05))
             END
          END
-         ELSE
+         ELSE  
          BEGIN
             IF (dbo.fnc_RTrim(dbo.fnc_LTrim(@c_UsrDefine05)) <> '' OR dbo.fnc_RTrim(dbo.fnc_LTrim(@c_UsrDefine05)) IS NOT NULL)
-            BEGIN
+            BEGIN 
                SELECT @c_OrderByStmt = dbo.fnc_RTrim(dbo.fnc_LTrim(@c_UsrDefine05)) + " " + dbo.fnc_RTrim(dbo.fnc_LTrim(@c_sort05))
             END
          END
 
-         IF LEN(dbo.fnc_RTrim(dbo.fnc_LTrim(@c_OrderByStmt))) > 0
+         IF LEN(dbo.fnc_RTrim(dbo.fnc_LTrim(@c_OrderByStmt))) > 0  
          BEGIN
-            SELECT @c_OrderByStmt = @c_OrderByStmt + ", OD.SKU "
+            SELECT @c_OrderByStmt = @c_OrderByStmt + ", OD.SKU " 
          END
 
-         SELECT @c_SQLStmt = "INSERT INTO #Ordlines " +
+         SELECT @c_SQLStmt = "INSERT INTO #Ordlines " + 
                              "(Orderkey, Orderlinenumber, Storerkey, Sku, " +
                              "OriginalQty, OpenQty, ShippedQty, AdjustedQty, " +
                              "Qtypreallocated, QtyAllocated, Qtypicked, Packkey, " +
@@ -379,75 +375,75 @@ INSERT INTO #TEMPSKU
                              "Facility, CalOrdQty) " +
                              "SELECT OD.Orderkey, OD.Orderlinenumber, OD.Storerkey, OD.Sku, "   +
                              "OD.OriginalQty, OD.OpenQty, OD.ShippedQty, OD.AdjustedQty, "      +
-                             "OD.Qtypreallocated, OD.QtyAllocated, OD.Qtypicked, OD.Packkey, "  +
-                             "OD.UOM, OD.Lottable03, OD.Lottable05, OD.ExternPOKey, "           +
-                             "OH.Facility, (OD.OpenQty - OD.QtyAllocated - OD.Qtypicked) AS CalOrdQty  " +
+                             "OD.Qtypreallocated, OD.QtyAllocated, OD.Qtypicked, OD.Packkey, "  +       
+                             "OD.UOM, OD.Lottable03, OD.Lottable05, OD.ExternPOKey, "           + 
+                             "OH.Facility, (OD.OpenQty - OD.QtyAllocated - OD.Qtypicked) AS CalOrdQty  " + 
                              "FROM ORDERDETAIL OD (NOLOCK), ORDERS OH (NOLOCK) "                +
-                             "WHERE OD.ExternPOKey = N'" + dbo.fnc_RTrim(@c_ExternPOKey) + "' "          +
-                             "AND OH.Storerkey = N'" + dbo.fnc_RTrim(@c_StorerKey) + "' "                +
+                             "WHERE OD.ExternPOKey = N'" + dbo.fnc_RTrim(@c_ExternPOKey) + "' "          + 
+                             "AND OH.Storerkey = N'" + dbo.fnc_RTrim(@c_StorerKey) + "' "                + 
                              "AND OD.SKU IN (SELECT SKU FROM #TEMPSKU) "                        +
-                             "AND OH.facility = N'" + dbo.fnc_RTrim(@c_facility) + "' "                  +
-                             "AND OH.status < '" + "2" + "' "                                   +
+                             "AND OH.facility = N'" + dbo.fnc_RTrim(@c_facility) + "' "                  + 
+                             "AND OH.status < '" + "2" + "' "                                   + 
                              "AND OD.OpenQty - OD.QtyAllocated - OD.Qtypicked > 0 "             +
-                             "AND OH.Orderkey = OD.Orderkey "
+                             "AND OH.Orderkey = OD.Orderkey "                            
 
 
 
-         IF len(dbo.fnc_RTrim(dbo.fnc_LTrim(@c_OrderByStmt))) > 0
+         IF len(dbo.fnc_RTrim(dbo.fnc_LTrim(@c_OrderByStmt))) > 0 
          BEGIN
             SELECT @c_SQLStmt = @c_SQLStmt + " ORDER BY " + @c_OrderByStmt
          END
-         ELSE
-         BEGIN
+         ELSE 
+         BEGIN 
           SELECT @c_SQLStmt = @c_SQLStmt + " ORDER BY OD.Orderkey, OD.SKU "
          END
 
-         IF @b_debug = '1'
-         BEGIN
-            select @c_SQLStmt
+         IF @b_debug = '1' 
+         BEGIN  
+            select @c_SQLStmt 
          END
 
-         EXEC (@c_SQLStmt)
-
-         IF @b_debug = '1'
-         BEGIN
-            select count(*) from #Ordlines
+         EXEC (@c_SQLStmt)          
+      
+         IF @b_debug = '1' 
+         BEGIN  
+            select count(*) from #Ordlines 
          END
-
-         IF (SELECT COUNT(*) FROM #Ordlines) = 0
-         BEGIN
+         
+         IF (SELECT COUNT(*) FROM #Ordlines) = 0 
+         BEGIN 
             SELECT @n_Continue = 3
             SELECT @i_Error = 15030
             SELECT @c_ErrMsg = 'nsp_XDockOrderProcessing - No OrderLines to process'
          END
-      END
+      END      
    END
 
    -- Part 3
-   IF (@n_Continue = 1 OR @n_Continue =2)
+   IF (@n_Continue = 1 OR @n_Continue =2) 
    BEGIN
       IF @c_Type = '01' OR @c_Type = '03'  -- Percentage Calculation
-      BEGIN
-         DECLARE CalPercent_Cursor CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         SELECT Sku, SUM(OpenQty) AS TotOrdQty
-           FROM #Ordlines
-         GROUP BY SKU
+      BEGIN    
+         DECLARE CalPercent_Cursor CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
+         SELECT Sku, SUM(OpenQty) AS TotOrdQty 
+           FROM #Ordlines 
+         GROUP BY SKU 
 
-         OPEN CalPercent_Cursor
+         OPEN CalPercent_Cursor 
          FETCH NEXT FROM CalPercent_Cursor INTO @c_SKU, @n_TotOrdQty
 
          WHILE @@FETCH_STATUS = 0
-         BEGIN
+         BEGIN 
             SELECT @n_POOrdQty = SUM(QtyOrdered), @n_PORcvQty = SUM(QtyReceived)
-              FROM PODETAIL (NOLOCK)
-             WHERE PODETAIL.ExternPOKey = @c_ExternPOKey
-               AND PODETAIL.STORERKEY = @c_StorerKey
-               AND PODETAIL.SKU = @c_SKU
+              FROM PODETAIL (NOLOCK) 
+             WHERE PODETAIL.ExternPOKey = @c_ExternPOKey 
+               AND PODETAIL.STORERKEY = @c_StorerKey  
+               AND PODETAIL.SKU = @c_SKU 
 
-            SELECT @n_Percent = @n_PORcvQty /@n_POOrdQty
+            SELECT @n_Percent = @n_PORcvQty /@n_POOrdQty 
 
-            IF @b_debug = '1'
-            BEGIN
+            IF @b_debug = '1' 
+            BEGIN  
                Print '% allocation'
                select @c_SKU 'Sku' , @n_TotOrdQty 'TotQty',  @n_POOrdQty 'poordqty', @n_PORcvQty 'porecvqty', @n_Percent 'percent'
                Select * from #Ordlines
@@ -455,132 +451,132 @@ INSERT INTO #TEMPSKU
 
             IF @c_OverAlloc = 'N'
             BEGIN
-               IF @n_Percent > 1
-               BEGIN
-                  SELECT @n_Percent = 1
+               IF @n_Percent > 1 
+               BEGIN 
+                  SELECT @n_Percent = 1 
                END
             END
+   
+            UPDATE #Ordlines 
+               SET CalOrdQty = FLOOR(@n_Percent * (OpenQty - QtyAllocated - Qtypicked)) 
+             WHERE ExternPOKey = @c_ExternPOKey 
+               AND SKU = @c_SKU 
 
-            UPDATE #Ordlines
-               SET CalOrdQty = FLOOR(@n_Percent * (OpenQty - QtyAllocated - Qtypicked))
-             WHERE ExternPOKey = @c_ExternPOKey
-               AND SKU = @c_SKU
-
-            IF @b_debug = '1'
-            BEGIN
+            IF @b_debug = '1' 
+            BEGIN   
                Print '% allocation'
                Select * from #Ordlines
             END
 
             IF (@n_PORcvQty / @n_POOrdQty) <> 1
-            BEGIN
+            BEGIN 
                IF @c_OverAlloc = 'Y'
                BEGIN
-                  SELECT @n_RemainQty = @n_PORcvQty - SUM(CalOrdQty)
-                    FROM #Ordlines
+                  SELECT @n_RemainQty = @n_PORcvQty - SUM(CalOrdQty) 
+                    FROM #Ordlines 
                    WHERE Sku = @c_SKU
 
-                  IF @b_debug = '1'
-                  BEGIN
+                  IF @b_debug = '1' 
+                  BEGIN   
                      Print '% allocation'
                      Select @n_PORcvQty 'PORCV_QTY', @n_RemainQty 'RemainQty'
                   END
 
 
-                  SELECT @n_lastrow = MAX(rowno)
-                    FROM #Ordlines
-                   WHERE SKU = @c_SKU
-
-                  UPDATE #Ordlines
-                     SET CalOrdQty = CalOrdQty + @n_RemainQty
-                   WHERE SKU = @c_SKU
-                     AND rowno = @n_lastrow
+                  SELECT @n_lastrow = MAX(rowno)  
+                    FROM #Ordlines 
+                   WHERE SKU = @c_SKU 
+   
+                  UPDATE #Ordlines 
+                     SET CalOrdQty = CalOrdQty + @n_RemainQty 
+                   WHERE SKU = @c_SKU 
+                     AND rowno = @n_lastrow              
                END
                ELSE
-               BEGIN
+               BEGIN 
                   IF @c_OverAlloc = 'N' and (@n_PORcvQty /@n_POOrdQty) < 1
                   BEGIN
-                     SELECT @n_RemainQty = @n_PORcvQty - SUM(CalOrdQty)
-                       FROM #Ordlines
+                     SELECT @n_RemainQty = @n_PORcvQty - SUM(CalOrdQty) 
+                       FROM #Ordlines 
                       WHERE Sku = @c_SKU
 
                      SELECT @n_RowNo = 0
 
                      WHILE (@n_RemainQty > 0)
-                     BEGIN
-                        IF @b_debug = '1'
-                        BEGIN
-                           print 'b4 selecting'
+                     BEGIN    
+                        IF @b_debug = '1' 
+                        BEGIN  
+                           print 'b4 selecting'                         
                            select @n_RowCount, @n_RemainQty, @n_RowNo, @c_SKU, OpenQty - QtyAllocated - Qtypicked, * from #ordlines
                         END
 
                         SET ROWCOUNT 1
 
-                        SELECT @n_RowNo = rowno, @n_CalOrdQty = CalOrdQty,
-                               @n_OpenQty = OpenQty - QtyAllocated - Qtypicked - CalOrdQty
-                      FROM #Ordlines
-                         WHERE Rowno > @n_RowNo
-                           AND Sku = @c_SKU
-                           AND OpenQty - QtyAllocated - Qtypicked - CalOrdQty > 0
-                        ORDER BY Rowno
+                        SELECT @n_RowNo = rowno, @n_CalOrdQty = CalOrdQty, 
+                               @n_OpenQty = OpenQty - QtyAllocated - Qtypicked - CalOrdQty  
+                      FROM #Ordlines 
+                         WHERE Rowno > @n_RowNo 
+                           AND Sku = @c_SKU 
+                           AND OpenQty - QtyAllocated - Qtypicked - CalOrdQty > 0 
+                        ORDER BY Rowno 
 
                         SELECT @n_RowCount = @@ROWCOUNT
 
-                        IF @b_debug = '1'
-                        BEGIN
-                           print 'after selecting'
-                           select @n_RemainQty, @n_RowNo, @n_RowCount, @n_OpenQty
+                        IF @b_debug = '1' 
+                        BEGIN  
+                           print 'after selecting'                         
+                           select @n_RemainQty, @n_RowNo, @n_RowCount, @n_OpenQty 
                         END
 
-
-                        IF @n_RemainQty > 0 and @n_RowCount = 0 AND @n_OpenQty > 0
-                        BEGIN
-                           SELECT @n_RowNo = 0, @n_OpenQty = 0
+         
+                        IF @n_RemainQty > 0 and @n_RowCount = 0 AND @n_OpenQty > 0 
+                        BEGIN 
+                           SELECT @n_RowNo = 0, @n_OpenQty = 0 
                         END
-                        ELSE
-                        BEGIN
-                           IF @n_RowCount = 0
-                           BEGIN
+                        ELSE 
+                        BEGIN 
+                           IF @n_RowCount = 0 
+                           BEGIN 
                               SET ROWCOUNT 0
                               BREAK
                            END
                         END
 
                         SET ROWCOUNT 0
-
-                        IF @n_RowNo > 0
-                        BEGIN
-                           UPDATE #Ordlines
-                              SET CalOrdQty = CalOrdQty + 1
-                            WHERE SKU = @c_SKU and Rowno = @n_RowNo
-
-                           SELECT @n_RemainQty  = @n_RemainQty  - 1
+                           
+                        IF @n_RowNo > 0 
+                        BEGIN 
+                           UPDATE #Ordlines 
+                              SET CalOrdQty = CalOrdQty + 1 
+                            WHERE SKU = @c_SKU and Rowno = @n_RowNo                                
+   
+                           SELECT @n_RemainQty  = @n_RemainQty  - 1  
                         END
                      END -- While
                   END
                END
-            END
-
+            END                  
+            
             FETCH NEXT FROM CalPercent_Cursor INTO @c_SKU, @n_TotOrdQty
          END
-
+         
          CLOSE CalPercent_Cursor
          DEALLOCATE CalPercent_Cursor
-      END -- Type = 01 or 03 --> Percentage Calculation
-      ELSE
+      END -- Type = 01 or 03 --> Percentage Calculation 
+      ELSE  
       BEGIN
          IF @c_Type = '02'  --> Sorting Calculation
-         BEGIN
-            DECLARE Sort_Cursor CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-            SELECT Sku, SUM(OpenQty) AS TotOrdQty
-              FROM #Ordlines
-            GROUP BY SKU
-
-            OPEN Sort_Cursor
+         BEGIN    
+            DECLARE Sort_Cursor CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
+            SELECT Sku, SUM(OpenQty) AS TotOrdQty 
+              FROM #Ordlines 
+            GROUP BY SKU 
+   
+            OPEN Sort_Cursor 
             FETCH NEXT FROM Sort_Cursor INTO @c_SKU, @n_TotOrdQty
-
-            IF @b_debug = '1'
-            BEGIN
+   
+            IF @b_debug = '1' 
+            BEGIN  
                print 'Type 2 BEGIN'
                select @c_SKU 'Sku' , @n_TotOrdQty 'TotQty'
             END
@@ -588,87 +584,78 @@ INSERT INTO #TEMPSKU
             WHILE @@FETCH_STATUS = 0
             BEGIN
                SELECT @n_POOrdQty = SUM(QtyOrdered), @n_PORcvQty = SUM(QtyReceived)
-                 FROM PODETAIL (NOLOCK)
-                WHERE PODETAIL.ExternPOKey = @c_ExternPOKey
-                  AND PODETAIL.STORERKEY = @c_StorerKey
-                  AND PODETAIL.SKU = @c_SKU
+                 FROM PODETAIL (NOLOCK) 
+                WHERE PODETAIL.ExternPOKey = @c_ExternPOKey 
+                  AND PODETAIL.STORERKEY = @c_StorerKey  
+                  AND PODETAIL.SKU = @c_SKU 
 
-               IF @b_debug = '1'
-               BEGIN
+               IF @b_debug = '1' 
+               BEGIN  
                   print 'Type 2 checking poqty'
                   select @n_PORcvQty 'porecqty', @n_POOrdQty 'poordqty'
                END
-
-               IF @n_PORcvQty > @n_POOrdQty
+   
+               IF @n_PORcvQty > @n_POOrdQty  
                BEGIN
                   IF @c_OverAlloc = 'Y'
                   BEGIN
                      SELECT @n_Percent = @n_PORcvQty/@n_POOrdQty
-
-                     UPDATE #Ordlines
-                        SET CalOrdQty = FLOOR(@n_Percent * (OpenQty - QtyAllocated - Qtypicked))
-                      WHERE ExternPOKey = @c_ExternPOKey
+                     
+                     UPDATE #Ordlines 
+                        SET CalOrdQty = FLOOR(@n_Percent * (OpenQty - QtyAllocated - Qtypicked)) 
+                      WHERE ExternPOKey = @c_ExternPOKey 
                         AND SKU = @c_SKU
                   END
-               END
-
+               END               
+               
                FETCH NEXT FROM Sort_Cursor INTO @c_SKU, @n_TotOrdQty
             END
-
+            
             CLOSE Sort_Cursor
             DEALLOCATE Sort_Cursor
-         END
-      END -- Type = 02 --> Sorting Calculation
+         END 
+      END -- Type = 02 --> Sorting Calculation 
       IF @c_Type = '10' OR @c_Type = '11' --NJOW01 --> Allocate 1 case to each Order, Remaining Qty use Percentage Calculation
-      BEGIN
-         DECLARE Sort01_Cursor CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         SELECT Sku, SUM(OpenQty) AS TotOrdQty
-           FROM #Ordlines
-         GROUP BY SKU
-
-         OPEN Sort01_Cursor
+      BEGIN 
+         DECLARE Sort01_Cursor CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
+         SELECT Sku, SUM(OpenQty) AS TotOrdQty 
+           FROM #Ordlines 
+         GROUP BY SKU 
+   
+         OPEN Sort01_Cursor 
          FETCH NEXT FROM Sort01_Cursor INTO @c_SKU, @n_TotOrdQty
-
+   
          WHILE @@FETCH_STATUS = 0
-         BEGIN
+         BEGIN 
         /* 25 March 2005 YTWAN - sos#32784 - System hangs during allocation*/
             SELECT @n_POOrdQty = SUM(QtyOrdered)--, @n_PORcvQty = SUM(QtyReceived)
-              FROM PODETAIL (NOLOCK)
-             WHERE PODETAIL.ExternPOKey = @c_ExternPOKey
-               AND PODETAIL.STORERKEY = @c_StorerKey
-               AND PODETAIL.SKU = @c_SKU
+              FROM PODETAIL (NOLOCK) 
+             WHERE PODETAIL.ExternPOKey = @c_ExternPOKey 
+               AND PODETAIL.STORERKEY = @c_StorerKey  
+               AND PODETAIL.SKU = @c_SKU 
 
         /*SELECT @n_PORcvQty = SUM(Qty - QtyAllocated - Qtypicked)
-        FROM LOTxLOCxID LLI(NOLOCK)
+        FROM LOTxLOCxID LLI(NOLOCK) 
         INNER JOIN LOTATTRIBUTE LA (NOLOCK) ON (LA.Lot = LLI.Lot) AND
                                   (LA.Storerkey = LLI.Storerkey) AND
-                                  (LA.Sku = LLI.Sku)
+                                  (LA.Sku = LLI.Sku)    
         WHERE LA.Lottable03 = @c_ExternPOKey
         AND  LA.Storerkey = @c_StorerKey
         AND  LA.Sku     = @c_SKU*/
 
         --NJOW01 Exclude damage loc and other facility
-        --ADMUSH022 15 APR 2024 -> ADDED INNER JOIN FOR TABLE LLI, LOT AND ID
-        --ADDED CONDITION FOR LOT.status, LOC.Status, ID.Status, Loc.LOCationFlag NOT IN ('DAMAGE', 'HOLD')
-        SELECT @n_PORcvQty = SUM(LLI.Qty - LLI.QtyAllocated - LLI.Qtypicked)
-        FROM LOTxLOCxID LLI(NOLOCK)
+        SELECT @n_PORcvQty = SUM(Qty - QtyAllocated - Qtypicked)
+        FROM LOTxLOCxID LLI(NOLOCK) 
         INNER JOIN LOTATTRIBUTE LA (NOLOCK) ON (LA.Lot = LLI.Lot) AND
                                   (LA.Storerkey = LLI.Storerkey) AND
                                   (LA.Sku = LLI.Sku)
-        INNER JOIN LOC (NOLOCK) ON (LLI.Loc = LOC.Loc)
-        INNER JOIN LOT (NOLOCK)  ON (LOT.lot = LLI.lot)
-        INNER JOIN ID (NOLOCK) ON (ID.ID = LLI.ID)
+        INNER JOIN LOC (NOLOCK) ON (LLI.Loc = LOC.Loc)    
         WHERE LA.Lottable03 = @c_ExternPOKey
         AND  LA.Storerkey = @c_StorerKey
         AND  LA.Sku     = @c_SKU
+        AND  LOC.Locationflag <> 'DAMAGE'
         AND  LOC.Facility = @c_facility
-        AND LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked > 0
-        AND LLI.Lot = LA.Lot
-        AND LLI.Loc = Loc.Loc
-        AND LOT.status  = 'OK'
-        AND LOC.Status = 'OK'
-        AND ID.Status = 'OK'
-        AND Loc.LOCationFlag NOT IN ('DAMAGE', 'HOLD')
+        
         
         /* 25 March 2005 YTWAN - System hangs during allocation */
    
@@ -747,7 +734,7 @@ INSERT INTO #TEMPSKU
 
                   IF (@n_Continue = 1 OR @n_Continue =2) 
                   BEGIN
-                     BEGIN TRAN
+                     BEGIN TRAN 
                      UPDATE #Ordlines 
                         SET CalOrdQty = 0 
                       WHERE ExternPOKey = @c_ExternPOKey 
