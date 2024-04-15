@@ -239,9 +239,7 @@ INSERT INTO #TEMPSKU
             SELECT LLI.Storerkey, LLI.Sku, LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked AS Qty,
                    LLI.Lot, LLI.Loc, LLI.ID, LA.Lottable03, LA.Lottable05, Loc.Facility
       --        INTO #Inventory
-      --ADMUSH022 15 APR 2024 -> ADDED INNER JOIN FOR TABLE LLI, LOT AND ID
-      --ADDED CONDITION FOR LOT.status, LOC.Status, ID.Status, Loc.LOCationFlag NOT IN ('DAMAGE', 'HOLD')
-              FROM Lotxlocxid LLI (NOLOCK), Lotattribute LA (NOLOCK), Loc (NOLOCK), LOT (NOLOCK), ID (NOLOCK)
+              FROM Lotxlocxid LLI (NOLOCK), Lotattribute LA (NOLOCK), Loc (NOLOCK), LOT (NOLOCK), ID (NOLOCK)   --(ADMUSH022 -01) - START-UWP-18028
              WHERE LA.Storerkey = @c_StorerKey
             AND LA.SKU IN (SELECT SKU FROM #TEMPSKU)
                AND LA.Lottable03 = @c_ExternPOKey
@@ -249,12 +247,12 @@ INSERT INTO #TEMPSKU
                AND LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked > 0
                AND LLI.Lot = LA.Lot
                AND LLI.Loc = Loc.Loc
-               AND LOT.status  = 'OK'
+               AND LOT.status  = 'OK'                                     --(ADMUSH022 -01) - START-UWP-18028
                AND LOC.Status = 'OK'
                AND ID.Status = 'OK'
                AND Loc.LOCationFlag NOT IN ('DAMAGE', 'HOLD')
                AND LLI.Lot = LOT.Lot
-               AND LLI.ID = ID.ID
+               AND LLI.ID = ID.ID                                         --(ADMUSH022-01) - END-UWP-18028
 
       IF (SELECT COUNT(*) FROM #Inventory) = 0 
       BEGIN 
@@ -647,27 +645,25 @@ INSERT INTO #TEMPSKU
         AND  LA.Sku     = @c_SKU*/
 
         --NJOW01 Exclude damage loc and other facility
-        --ADMUSH022 15 APR 2024 -> ADDED INNER JOIN FOR TABLE LLI, LOT AND ID
-        --ADDED CONDITION FOR LOT.status, LOC.Status, ID.Status, Loc.LOCationFlag NOT IN ('DAMAGE', 'HOLD')
         SELECT @n_PORcvQty = SUM(LLI.Qty - LLI.QtyAllocated - LLI.Qtypicked)
                 FROM LOTxLOCxID LLI(NOLOCK)
                 INNER JOIN LOTATTRIBUTE LA (NOLOCK) ON (LA.Lot = LLI.Lot) AND
                                           (LA.Storerkey = LLI.Storerkey) AND
                                           (LA.Sku = LLI.Sku)
-                INNER JOIN LOC (NOLOCK) ON (LLI.Loc = LOC.Loc)
+                INNER JOIN LOC (NOLOCK) ON (LLI.Loc = LOC.Loc)          --(USH022-01) - START-UWP-18028
                 INNER JOIN LOT (NOLOCK)  ON (LOT.lot = LLI.lot)
-                INNER JOIN ID (NOLOCK) ON (ID.ID = LLI.ID)
+                INNER JOIN ID (NOLOCK) ON (ID.ID = LLI.ID)              --(USH022-01) - END-UWP-18028
                 WHERE LA.Lottable03 = @c_ExternPOKey
                 AND  LA.Storerkey = @c_StorerKey
                 AND  LA.Sku     = @c_SKU
                 AND  LOC.Facility = @c_facility
-                AND LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked > 0
+                AND LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked > 0      --(USH022-01)-UWP-18028
                 AND LLI.Lot = LA.Lot
                 AND LLI.Loc = Loc.Loc
-                AND LOT.status  = 'OK'
+                AND LOT.status  = 'OK'                                  --(USH022-01) - START-UWP-18028
                 AND LOC.Status = 'OK'
                 AND ID.Status = 'OK'
-                AND Loc.LOCationFlag NOT IN ('DAMAGE', 'HOLD')
+                AND Loc.LOCationFlag NOT IN ('DAMAGE', 'HOLD')          --(USH022-01) - END-UWP-18028
         
         
         /* 25 March 2005 YTWAN - System hangs during allocation */
