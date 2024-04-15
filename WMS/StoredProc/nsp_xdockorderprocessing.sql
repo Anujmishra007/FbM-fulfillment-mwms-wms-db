@@ -56,7 +56,7 @@ GO
 /*                              enough (JHTAN01)                             */
 /* 07-Mar-2024  Wan01           UWP-16306 - Moorebank Australia - Picking    */
 /*                              issue while order processing for XDock       */
-/* 15-Apr-2024 USH022           Ticket - UWP-18028- XDock Allocation Issue   */
+/* 15-Apr-2024 USH022-01        Ticket - UWP-18028- XDock Allocation Issue   */
 /*****************************************************************************/
 CREATE OR ALTER PROCEDURE nsp_XDockOrderProcessing
    @c_ExternPOKey NVARCHAR(20) ,
