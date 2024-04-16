@@ -66,7 +66,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
          , @n_UOMQty                  INT
          , @n_Qty                     INT
          , @c_Loadkey                 NVARCHAR(10)
-         , @c_Taskdetailkey           NVARCHAR(10)
+         , @c_Taskdetailkey           NVARCHAR(10) = ''
          , @c_FinalLoc                NVARCHAR(10)
          , @c_Orderkey                NVARCHAR(10)
 
@@ -325,6 +325,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
          END 
          ELSE
          BEGIN
+            SET @c_Taskdetailkey = ''
             EXEC isp_InsertTaskDetail @c_TaskType = @c_TaskType
                                     , @c_Storerkey = @c_Storerkey
                                     , @c_Sku = @c_Sku
@@ -461,6 +462,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
          END 
          ELSE
          BEGIN
+            SET @c_Taskdetailkey = ''
             EXEC isp_InsertTaskDetail @c_TaskType = @c_TaskType
                                     , @c_Storerkey = @c_Storerkey
                                     , @c_Sku = @c_Sku
@@ -581,6 +583,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
          END 
          ELSE
          BEGIN
+            SET @c_Taskdetailkey = ''
             EXEC isp_InsertTaskDetail @c_TaskType = @c_TaskType
                                     , @c_Storerkey = @c_Storerkey
                                     , @c_Sku = @c_Sku
