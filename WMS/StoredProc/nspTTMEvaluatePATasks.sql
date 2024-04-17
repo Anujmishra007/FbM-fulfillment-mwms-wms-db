@@ -30,7 +30,7 @@ GO
 /*                               (Shong01)                              */
 /* 10-03-2010   1.4   Shong      Make sure task records updated status  */
 /*                               to 3 (Shong02)                         */
-/* 17-04-2024                    UWP-18215 Add TRY CATCH                */
+/* 17-04-2024   1.5   NLT013     UWP-18215 Add TRY CATCH                */
 /*                               around OPEN CURSOR                     */
 /************************************************************************/
 
