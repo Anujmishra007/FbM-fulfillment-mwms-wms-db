@@ -27,9 +27,11 @@ GO
 /* 28-09-2009   1.1   Vicky      Add Parameter                          */
 /*                               RDT Compatible Error Message (Vicky01) */
 /* 09-03-2010   1.2   Shong      Avoid same user getting same task      */
-/*                               (Shong01)                              */   
+/*                               (Shong01)                              */
 /* 10-03-2010   1.4   Shong      Make sure task records updated status  */
-/*                               to 3 (Shong02)                         */   
+/*                               to 3 (Shong02)                         */
+/* 17-04-2024                    UWP-18215 Add TRY CATCH                */
+/*                               around OPEN CURSOR                     */
 /************************************************************************/
 
 CREATE PROC    [dbo].[nspTTMEvaluatePATasks]
