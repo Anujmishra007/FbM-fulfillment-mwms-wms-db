@@ -84,6 +84,8 @@ GO
 /*                               dispatch all same task type within     */
 /*                               current area before move to next task  */
 /*                               task (james06)                         */
+/* 17-04-2024                    UWP-18215 Catch SQL Server exception   */
+/*                               for PA tasks                           */
 /************************************************************************/
 CREATE  PROC    [dbo].[nspTMTM01]
                @c_sendDelimiter    NVARCHAR(1)
