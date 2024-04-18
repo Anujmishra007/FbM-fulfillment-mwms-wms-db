@@ -79,6 +79,7 @@ GO
 /* 2021-10-20 5.0  YeeKung    JSM-26589 extended exterenreceiptkey 20->100    */  
 /*                            (yeekung02)                                     */
 /* 2023-05-10 5.1  WinSern    JSM-142212 add 'Order By RowRef' (ws01)         */
+/* 2024-04-17 5.2  Ung        UWP-18071 Add ByPassTolerance RDT supersede WMS */
 /******************************************************************************/  
   
 CREATE OR ALTER PROCEDURE [RDT].[rdt_Receive_V7] (  
@@ -860,24 +861,36 @@ BEGIN
    SET @cErrMsg = rdt.rdtgetmessage( 60301, @cLangCode, 'DSP') --'nspGetRight'  
    GOTO Fail  
 END  
-  
--- Storer config 'ByPassTolerance'  
-EXECUTE dbo.nspGetRight  
-   NULL, -- Facility  
-   @cStorerKey,  
-   NULL,  
-   'ByPassTolerance',  
-   @b_success           OUTPUT,  
-   @cByPassTolerance    OUTPUT,  
-   @nErrNo              OUTPUT,  
-   @cErrMsg             OUTPUT  
-IF @b_success <> 1  
-BEGIN  
-   SET @nErrNo = 60302  
-   SET @cErrMsg = rdt.rdtgetmessage( 60302, @cLangCode, 'DSP') --'nspGetRight'  
-   GOTO Fail  
-END  
-  
+
+-- RDT ByPassTolerance will supersede WMS
+IF EXISTS( SELECT TOP 1 1 
+   FROM rdt.StorerConfig WITH (NOLOCK) 
+   WHERE ConfigKey = 'ByPassTolerance'
+      AND StorerKey = @cStorerKey
+      AND Facility IN ('', @cFacility)
+      AND Function_ID IN (0, @nFunc))
+BEGIN
+   SET @cUCCWithDynamicCaseCnt = rdt.RDTGetConfig( @nFunc, 'ByPassTolerance', @cStorerKey)  
+END
+ELSE
+BEGIN
+   -- Storer config 'ByPassTolerance'  
+   EXECUTE dbo.nspGetRight  
+      NULL, -- Facility  
+      @cStorerKey,  
+      NULL,  
+      'ByPassTolerance',  
+      @b_success           OUTPUT,  
+      @cByPassTolerance    OUTPUT,  
+      @nErrNo              OUTPUT,  
+      @cErrMsg             OUTPUT  
+   IF @b_success <> 1  
+   BEGIN  
+      SET @nErrNo = 60302  
+      SET @cErrMsg = rdt.rdtgetmessage( 60302, @cLangCode, 'DSP') --'nspGetRight'  
+      GOTO Fail  
+   END  
+END
   
 /*-------------------------------------------------------------------------------  
   
