@@ -84,6 +84,8 @@ GO
 /*                               dispatch all same task type within     */
 /*                               current area before move to next task  */
 /*                               task (james06)                         */
+/* 17-04-2024   4.4   NLT013     UWP-18215 Catch SQL Server exception   */
+/*                               for PA tasks                           */
 /************************************************************************/
 CREATE  PROC    [dbo].[nspTMTM01]
                @c_sendDelimiter    NVARCHAR(1)
@@ -1090,6 +1092,8 @@ BEGIN
                 IF @b_success<>1
                 BEGIN
                     SELECT @n_continue = 3
+                    IF @n_err = 63061
+                       BREAK;
                 END
             END
 
@@ -2281,7 +2285,13 @@ END
 
             -- Raise error with severity = 10, instead of the default severity 16.
             -- RDT cannot handle error with severity > 10, which stop the processing after executed this trigger
-            RAISERROR (@n_err ,10 ,1) WITH SETERROR
+            IF @n_err = 63061
+            BEGIN
+                SET @c_ErrMsg = CONCAT_WS('-',  @c_TTMTaskType, @c_ErrMsg)
+                RETURN
+            END
+            ELSE 
+                RAISERROR (@n_err ,10 ,1) WITH SETERROR
 
             -- The RAISERROR has to be last line, to ensure @@ERROR is not getting overwritten
         END
