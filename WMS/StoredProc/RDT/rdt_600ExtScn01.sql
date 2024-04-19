@@ -16,7 +16,7 @@ GO
 /*                                                                      */
 /************************************************************************/
 
-ALTER   PROC [RDT].[rdt_600ExtScn01] (
+CREATE OR ALTER  PROC [RDT].[rdt_600ExtScn01] (
 	@nMobile      INT,           
 	@nFunc        INT,           
 	@cLangCode    NVARCHAR( 3),  

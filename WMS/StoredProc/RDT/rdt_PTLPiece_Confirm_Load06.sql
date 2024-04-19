@@ -15,7 +15,7 @@ GO
 /* 2023-02-10 1.0  James       Addhoc. Created                          */  
 /************************************************************************/  
   
-CREATE   PROC [RDT].[rdt_PTLPiece_Confirm_Load06] (  
+CREATE OR ALTER  PROC [RDT].[rdt_PTLPiece_Confirm_Load06] (  
     @nMobile      INT  
    ,@nFunc        INT  
    ,@cLangCode    NVARCHAR( 3)  
