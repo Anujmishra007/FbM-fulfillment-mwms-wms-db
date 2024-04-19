@@ -28,6 +28,7 @@ GO
 /* 2019-08-07 1.7  James    WMS10120 Add screen confirm overwrite       */
 /*                          suggested loc (james05)                     */
 /* 2023-03-20 1.8  Dennis   UWP-14536 Check Digit                       */
+/* 2024-04-18 1.9  Calvin   UWP-18503 Map full input values (CLVN01)    */
 /************************************************************************/
 
 CREATE PROC [RDT].[rdtfnc_PutawayByID] (
@@ -91,7 +92,7 @@ DECLARE
    @cParamLabel5        NVARCHAR( 20),
    @cLOCLookupSP        NVARCHAR( 20),
    @cPAMatchSuggestLOC  NVARCHAR( 1), 
-   @cOption             NVARCHAR( 1),
+   @cOption             NVARCHAR( 10), --(CLVN01)
    @cExtendedScreenSP   NVARCHAR( 20),
    @nAction             INT,
    @nAfterScn           INT,
