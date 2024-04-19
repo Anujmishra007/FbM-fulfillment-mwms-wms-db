@@ -1,18 +1,15 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[RDT].[rdt_GetTransitLoc05]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [RDT].[rdt_GetTransitLoc05]
+IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[RDT].[rdt_GetTransitLoc06]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
+   DROP PROCEDURE [RDT].[rdt_GetTransitLoc06]
 GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
 /************************************************************************/
-/* Store procedure: rdt_GetTransitLoc05                                 */
-/* Copyright      : IDS                                                 */
+/* Store procedure: rdt_GetTransitLoc06                                 */
+/* Copyright      : Maersk WMS                                          */
 /*                                                                      */
-/* Purpose: Get transit LOC by 3 hierarchy levels                       */
-/*          1. P&D                                                      */
-/*          2. PutawayZone                                              */
-/*          3. StorerConfig InTransitLOC                                */
+/* Purpose: Get transit LOC                                             */
 /*                                                                      */
 /* Called from:                                                         */
 /*                                                                      */
@@ -23,7 +20,7 @@ GO
 /*                                                                      */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdt_GetTransitLoc05] (
+CREATE PROC [RDT].[rdt_GetTransitLoc06] (
    @cUserName   NVARCHAR( 10),
    @cStorerKey  NVARCHAR( 15),
    @cSKU        NVARCHAR( 20),
@@ -31,7 +28,7 @@ CREATE PROC [RDT].[rdt_GetTransitLoc05] (
    @cFromLOC    NVARCHAR(10),
    @cFromID     NVARCHAR(18),
    @cToLOC      NVARCHAR(10),
-   @nLockLOC    INT = 0,    -- Lock PND transit LOC. 1=Yes, 0=No
+   @nLockLOC    INT = 0,    -- Lock MoveTo transit LOC. 1=Yes, 0=No
    @cTransitLOC NVARCHAR(10)  OUTPUT,
    @nErrNo      INT           OUTPUT,
    @cErrMsg     NVARCHAR(20)  OUTPUT,
@@ -44,24 +41,26 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @b_success       INT
-   DECLARE @cGITLOC         NVARCHAR( 10)
-   DECLARE @cFacility       NVARCHAR( 5)
+   DECLARE @b_success            INT
+   DECLARE @cGITLOC              NVARCHAR( 10)
+   DECLARE @cFacility            NVARCHAR( 5)
 
-   DECLARE @cFromLOCAisle   NVARCHAR( 10)
-   DECLARE @cFromLOCCat     NVARCHAR( 10)
-   DECLARE @cFromLOCInVNA   INT
-   DECLARE @cFromPAZone     NVARCHAR( 10)
-   DECLARE @cFromPAOutLOC   NVARCHAR( 10)
-   DECLARE @cFromTransitLOC NVARCHAR( 10)
+   DECLARE @cFromLOCAisle        NVARCHAR( 10)
+   DECLARE @cFromLOCCat          NVARCHAR( 10)
+   DECLARE @cFromLOCInCASEPICK        INT
+   DECLARE @cFromPAZone          NVARCHAR( 10)
+   DECLARE @cFromPAOutLOC        NVARCHAR( 10)
+   DECLARE @cFromTransitLOC      NVARCHAR( 10)
 
-   DECLARE @cToLOCAisle     NVARCHAR( 10)
-   DECLARE @cToLOCCat       NVARCHAR( 10)
-   DECLARE @cToLOCInVNA     INT
-   DECLARE @cToPAZone       NVARCHAR( 10)
-   DECLARE @cToPAInLOC      NVARCHAR( 10)
-   DECLARE @cToTransitLOC   NVARCHAR( 10)
-   DECLARE @cMoveToCategory   NVARCHAR( 10)
+   DECLARE @cToLOCAisle          NVARCHAR( 10)
+   DECLARE @cToLOCCat            NVARCHAR( 10)
+   DECLARE @cToLOCInCASEPICK          INT
+   DECLARE @cToPAZone            NVARCHAR( 10)
+   DECLARE @cToPAInLOC           NVARCHAR( 10)
+   DECLARE @cToTransitLOC        NVARCHAR( 10)
+   DECLARE @cMoveToCategory      NVARCHAR( 10)
+   DECLARE @cAllowFCPMoveToLoc   NVARCHAR( 30)
+   DECLARE @cLangCode            NVARCHAR( 3)
 
 
    -- Init var
@@ -71,6 +70,16 @@ BEGIN
    SET @cToTransitLOC = ''
    SET @cTransitLOC = ''
    SET @cMoveToCategory = 'MoveTo'
+   SET @cFromLOCInCASEPICK = 0
+
+   -- Get session info
+   SELECT
+      @cLangCode = Lang_Code
+   FROM rdt.rdtMobRec WITH (NOLOCK) 
+   WHERE UserName = SUSER_SNAME()
+
+   IF @cLangCode IS NULL OR TRIM(@cLangCode) = ''
+      SET @cLangCode = 'ENG'
 
    -- Get FromLOC info
    SELECT
@@ -81,289 +90,99 @@ BEGIN
    FROM LOC WITH (NOLOCK)
    WHERE LOC = @cFromLOC
 
-   -- Check if FromLOC in VNA (i.e. the aisle had PND location setup)
-   IF EXISTS(  SELECT 1 FROM LOC WITH (NOLOCK)
-               WHERE Facility = @cFacility
-               -- AND PutawayZone = @cFromPAZone
-               AND LOCAisle = @cFromLOCAisle
-               AND LocationCategory IN ('PND', 'PND_IN', 'PND_OUT') )
-         AND @cFromLOCAisle <> '' -- and LocAisle is setup
-         AND @cFromLOCCat NOT IN ('PND', 'PND_IN', 'PND_OUT') -- and itself is not PND
-      SET @cFromLOCInVNA = 1 --Yes
-   ELSE
-      SET @cFromLOCInVNA = 0 --No
-
-   -- Get ToLOC info
-   SELECT
-      @cToPAZone = PutawayZone,
-      @cToLOCAisle  = LocAisle,
-      @cToLOCCat = LocationCategory
-   FROM LOC WITH (NOLOCK)
-   WHERE LOC = @cToLOC
-
-   IF @cToLOCAisle <> @cMoveToCategory
+   IF @cFromLOCAisle IS NULL OR TRIM(@cFromLOCAisle) = ''
    BEGIN
-      SET @nErrNo = 74201
-      SET @cErrMsg = '74201 No PDN LOC'
+      SET @nErrNo = 214102
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --214102^NoAisle
       GOTO Fail
    END
 
-   -- Check if ToLOC is a MoveTo location
-   IF NOT EXISTS( SELECT 1 
-                  FROM LOC WITH (NOLOCK)
-                  WHERE Facility = @cFacility
-                  AND @cToLOCAisle <> ''
-                  AND LOCAisle = @cToLOCAisle
-                  AND @cFromLOCAisle = @cToLOCAisle
-                  AND LocationCategory = 'MoveTo'
-                  AND @cToLOCCat NOT IN ('PND', 'PND_IN', 'PND_OUT') )
-      SET @cToLOCInVNA = 1 --Yes
-   ELSE
-      SET @cToLOCInVNA = 0 --No
-
-   -- Get FromPAZone info
-   SELECT @cFromPAOutLOC = OutLOC FROM PutawayZone WITH (NOLOCK) WHERE PutawayZone = @cFromPAZone
-
-   -- Get ToPAZone info
-   SELECT @cToPAInLOC = InLOC FROM PutawayZone WITH (NOLOCK) WHERE PutawayZone = @cToPAZone
-
-   -- Get GIT LOC
-   SET @cGITLOC = rdt.RDTGetConfig( 0, 'InTransitLOC', @cStorerKey)
-
-   IF @cGITLOC = '0'
-      SET @cGITLOC = ''
-
-   -- In same zone
-   IF @cFromPAZone = @cToPAZone
+   IF @cFromLOCCat IS NULL OR TRIM(@cFromLOCCat) = ''
    BEGIN
-      -- From To is VNA, in same aisle, no transit required
-      IF @cFromLOCInVNA = 1 AND @cToLOCInVNA = 1 AND
-         @cFromLOCAisle = @cToLOCAisle
-      BEGIN
-         SET @cTransitLOC = @cToLOC
-         GOTO Quit
-      END
-
-      -- From To is non-VNA, no transit required
-      IF @cFromLOCInVNA = 0 AND @cToLOCInVNA = 0
-      BEGIN
-         -- (ChewKP01) 
-         IF @cFromLocAisle = @cToLocAisle 
-         BEGIN
-            SET @cTransitLOC = @cToLOC
-            GOTO Quit
-         END
-      END
+      SET @nErrNo = 214103
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --214103^NoCategory
+      GOTO Fail
    END
 
-   /*-------------------------------------------------------------------------------
-
-                                       FromLOC section
-
-   -------------------------------------------------------------------------------*/
-   -- Check if FromLOC already a PND LOC / zone out LOC / GITLOC
-   IF @cFromLOCCat = 'PND' OR
-      @cFromLOC = @cFromPAOutLOC OR
-      @cFromLOC = @cGITLOC
-      GOTO ToLOC
-
-   -- 1. VNA level
-   IF @cFromLOCinVNA = 1 --Yes
+   IF @cFromLOCCat NOT IN ('CASE', 'PICK')
    BEGIN
-      -- Find an empty PND location for execute task
-      IF @nLockLOC = 1 --Yes
-      BEGIN
-         -- Get an empty PND LOC
---         SELECT TOP 1
---             @cFromTransitLOC = LOC.LOC
---         FROM LOC WITH (NOLOCK)
---            LEFT OUTER JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LLI.LOC = LOC.LOC AND (LLI.QTY > 0 OR LLI.PendingMoveIN > 0))
---         WHERE Facility = @cFacility
---            -- AND PutawayZone = @cFromPAZone
---            AND LOCAisle = @cFromLOCAisle
---            AND LocationCategory IN ('PND', 'PND_OUT')
---         GROUP BY LOC.LogicalLocation, LOC.LOC, LOC.MaxPallet
---         HAVING COUNT( DISTINCT LLI.ID) < LOC.MaxPallet
---         ORDER BY LOC.LogicalLocation, LOC.LOC
-
-         SELECT TOP 1
-             @cFromTransitLOC = LOC.LOC
-         FROM LOC WITH (NOLOCK)
-         WHERE Facility = @cFacility
-            AND LOCAisle = @cFromLOCAisle
-            AND LocationCategory IN ('PND', 'PND_OUT')
-            AND  NOT EXISTS( SELECT 1
-                             FROM LOC L2 WITH (NOLOCK)
-                             JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LLI.LOC = L2.LOC
-                                    AND (LLI.LOC = L2.LOC AND (LLI.QTY > 0 OR LLI.PendingMoveIN > 0)))
-                             WHERE LOC.LOC = L2.LOC
-                             AND   L2.Facility = @cFacility
-                             AND   L2.LOCAisle = @cFromLOCAisle
-                             AND LocationCategory IN ('PND', 'PND_OUT')
-                             GROUP BY L2.LOC, L2.MaxPallet
-                             HAVING COUNT(DISTINCT LLI.ID) >= L2.MaxPallet )
-         ORDER BY LOC.LogicalLocation, LOC.LOC
-
-
-         IF @cFromTransitLOC = ''
-         BEGIN
-            SET @nErrNo = 74201
-            SET @cErrMsg = '74201 No PDN LOC'
-            GOTO Fail
-         END
-      END
-
-      -- Find any PND location. Don't need to be empty
-      IF @nLockLOC <> 1 --No
-      BEGIN
-         -- Get a PND LOC
-         SELECT TOP 1
-             @cFromTransitLOC = LOC.LOC
-         FROM LOC WITH (NOLOCK)
-            LEFT OUTER JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LLI.LOC = LOC.LOC)
-         WHERE Facility = @cFacility
-            -- AND PutawayZone = @cFromPAZone
-            AND LOCAisle = @cFromLOCAisle
-            AND LocationCategory IN ('PND', 'PND_OUT')
-         GROUP BY LOC.LogicalLocation, LOC.LOC
-         ORDER BY LOC.LogicalLocation, LOC.LOC
-
-         IF @cFromTransitLOC = ''
-         BEGIN
-            SET @nErrNo = 74202
-            SET @cErrMsg = '74202 No PDN LOC'
-            GOTO Fail
-         END
-      END
-      --GOTO ToLOC
-      GOTO Quit
+      SET @nErrNo = 214104
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --214104^WrongLocCat
+      GOTO Fail
    END
 
-   -- 2. PutawayZone level
-   IF @cFromTransitLOC = '' AND @cFromPAOutLOC <> ''
-      SET @cFromTransitLOC = @cFromPAOutLOC
+   EXECUTE nspGetRight 
+      @cFacility,
+      @cStorerKey,
+      NULL,
+      'AllowFCPMoveToLoc',
+      @b_success              output,
+      @cAllowFCPMoveToLoc     output,
+      @nErrNo                 output,
+      @cErrMsg                output
 
-   -- 3. Storer config level
-   IF @cFromTransitLOC = '' AND @cGITLOC <> ''
-      SET @cFromTransitLOC = @cGITLOC
-
-   -- If found, exit
-   IF @cFromTransitLOC <> ''
-      GOTO Quit
-
-   /*-------------------------------------------------------------------------------
-
-                                       ToLOC section
-
-   -------------------------------------------------------------------------------*/
-   ToLOC:
-   -- Check if ToLOC already a PND LOC / zone in LOC / GITLOC
-   IF @cToLOCCat = 'PND' OR
-      @cToLOC = @cToPAInLOC OR
-      @cToLOC = @cGITLOC
-      GOTO Quit
-
-   -- 1. VNA level
-   IF @cToLOCInVNA = 1 --Yes
+   IF @b_Success <> 1
    BEGIN
-      -- FromLOC is ToLOC's in transit LOC
-      IF @cFromLOCCat = 'PND' AND
-         @cFromLOCAisle = @cToLOCAisle
-         GOTO Quit
+      SET @nErrNo = 214101
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GetRightFail
+      GOTO Fail
+   END
 
-      -- Find an empty PND location for execute task
-      IF @nLockLOC = 1 --Yes
-      BEGIN
-         -- Get an empty PND LOC
---         SELECT TOP 1
---             @cToTransitLOC = LOC.LOC
---         FROM LOC WITH (NOLOCK)
---            LEFT OUTER JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LLI.LOC = LOC.LOC AND (LLI.QTY > 0 OR LLI.PendingMoveIN > 0))
---         WHERE Facility = @cFacility
---            -- AND PutawayZone = @cToPAZone
---            AND LOCAisle = @cToLOCAisle
---            AND LocationCategory IN ('PND', 'PND_IN')
---         GROUP BY LOC.LogicalLocation, LOC.LOC, LOC.MaxPallet
---         HAVING COUNT( DISTINCT LLI.ID) < LOC.MaxPallet
---         ORDER BY LOC.LogicalLocation, LOC.LOC
+   IF @cAllowFCPMoveToLoc IS NULL OR TRIM(@cAllowFCPMoveToLoc) = ''
+      SET @cAllowFCPMoveToLoc = '0'
 
-         SELECT TOP 1
-             @cToTransitLOC = LOC.LOC
-         FROM LOC WITH (NOLOCK)
-         WHERE Facility = @cFacility
-            AND LOCAisle = @cToLOCAisle
-            AND LocationCategory IN ('PND', 'PND_IN')
-            AND  NOT EXISTS( SELECT 1
-                             FROM LOC L2 WITH (NOLOCK)
-                             JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LLI.LOC = L2.LOC
+   IF @cAllowFCPMoveToLoc <> '1'
+       RETURN
+
+   IF @nLockLOC = 1 --Yes
+   BEGIN
+      SELECT TOP 1
+            @cFromTransitLOC = LOC.LOC
+      FROM LOC WITH (NOLOCK)
+      WHERE Facility = @cFacility
+         AND LOCAisle = @cFromLOCAisle
+         AND LocationCategory = 'MoveTo'
+         AND  NOT EXISTS( SELECT 1
+                           FROM LOC L2 WITH (NOLOCK)
+                           JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LLI.LOC = L2.LOC
                                  AND (LLI.LOC = L2.LOC AND (LLI.QTY > 0 OR LLI.PendingMoveIN > 0)))
-                             WHERE LOC.LOC = L2.LOC
-                             AND   L2.Facility = @cFacility
-                             AND   L2.LOCAisle = @cToLOCAisle
-                             AND LocationCategory IN ('PND', 'PND_IN')
-                             GROUP BY L2.LOC, L2.MaxPallet
-                             HAVING COUNT(DISTINCT LLI.ID) >= L2.MaxPallet )
-         ORDER BY LOC.LogicalLocation, LOC.LOC
+                           WHERE LOC.LOC = L2.LOC
+                           AND   L2.Facility = @cFacility
+                           AND   L2.LOCAisle = @cFromLOCAisle
+                           AND LocationCategory = 'MoveTo'
+                           GROUP BY L2.LOC, L2.MaxPallet
+                           HAVING COUNT(DISTINCT LLI.ID) >= L2.MaxPallet )
+      ORDER BY LOC.LogicalLocation, LOC.LOC
 
-
-         IF @cToTransitLOC = ''
-         BEGIN
-            SET @nErrNo = 74203
-            SET @cErrMsg = '74203 No PDN LOC'
-            GOTO Fail
-         END
-      END
-
-      -- Find any PND location. Don't need to be empty
-      IF @nLockLOC <> 1 --No
+      IF @cFromTransitLOC = ''
       BEGIN
-         -- Get a PND LOC
-         SELECT TOP 1
-             @cToTransitLOC = LOC.LOC
-         FROM LOC WITH (NOLOCK)
-            LEFT OUTER JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LLI.LOC = LOC.LOC)
-         WHERE Facility = @cFacility
-            -- AND PutawayZone = @cToPAZone
-            AND LOCAisle = @cToLOCAisle
-            AND LocationCategory IN ('PND', 'PND_IN')
-         GROUP BY LOC.LogicalLocation, LOC.LOC
-         ORDER BY LOC.LogicalLocation, LOC.LOC
-
-         IF @cToTransitLOC = ''
-         BEGIN
-            SET @nErrNo = 74204
-            SET @cErrMsg = '74204 No PDN LOC'
-            GOTO Fail
-         END
+         SET @nErrNo = 214105
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --214105^NoMoveToLoc
+         GOTO Fail
       END
+   END
+   ELSE  -- Find any MoveTo location. Don't need to be empty
+   BEGIN
+      -- Get a MoveTo LOC
+      SELECT TOP 1
+         @cFromTransitLOC = LOC.LOC
+      FROM LOC WITH (NOLOCK)
+      LEFT OUTER JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LLI.LOC = LOC.LOC)
+      WHERE Facility = @cFacility
+         AND LOCAisle = @cFromLOCAisle
+         AND LocationCategory = 'MoveTo'
+      GROUP BY LOC.LogicalLocation, LOC.LOC
+      ORDER BY LOC.LogicalLocation, LOC.LOC
 
-      GOTO Quit
+      IF @cFromTransitLOC = ''
+      BEGIN
+         SET @nErrNo = 214106
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --214106^NoMoveToLoc
+         GOTO Fail
+      END
    END
 
-   -- FromLOC is ToLOC's in transit LOC
-   IF @cFromLOC IN (@cToPAInLOC, @cGITLOC)
-      GOTO Quit
-
-   -- 2. PutawayZone level
-   IF @cToTransitLOC = '' AND @cToPAInLOC <> ''
-      SET @cToTransitLOC = @cToPAInLOC
-
-   -- 3. Storer config level
-   IF @cToTransitLOC = '' AND @cGITLOC <> ''
-      SET @cToTransitLOC = @cGITLOC
-
-   Quit:
-   -- Decide transit LOC
-   IF @cFromTransitLOC <> ''
-      SET @cTransitLOC = ISNULL(RTRIM(@cFromTransitLOC),'') -- SOS# 316284
-   ELSE
-      IF @cToTransitLOC <> ''
-         SET @cTransitLOC = ISNULL(RTRIM(@cToTransitLOC),'') -- SOS# 316284
-      ELSE
-         SET @cTransitLOC = ISNULL(RTRIM(@cToLOC),'') -- SOS# 316284
-
-   -- Lock PND LOC
-   IF @nLockLOC = 1 AND (SELECT LocationCategory FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @cTransitLOC) IN ('PND', 'PND_IN', 'PND_OUT')
+   IF @nLockLOC = 1
    BEGIN
       EXEC rdt.rdt_Putaway_PendingMoveIn @cUserName, 'LOCK'
          ,@cFromLOC
@@ -377,33 +196,18 @@ BEGIN
          ,@nFunc       = @nFunc
 
       IF @nErrNo <> 0
+      BEGIN
+         SET @nErrNo = 214107
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --214107^LockLocFail
          GOTO Fail
-/*
-      SET @b_success = 1
-      EXEC dbo.nspPendingMoveInUpdate
-          @c_storerkey = @cStorerKey
-         ,@c_sku       = ''
-         ,@c_lot       = ''
-         ,@c_Loc       = @cToTransitLOC
-         ,@c_ID        = ''
-         ,@c_FromLOC   = @cFromLOC
-         ,@c_fromid    = @cFromID
-         ,@n_qty       = 0
-         ,@c_action    = ''
-         ,@b_Success   = @b_success OUTPUT
-         ,@n_Err       = @nErrNo    OUTPUT
-         ,@c_ErrMsg    = @cErrMsg   OUTPUT
-         ,@c_tasktype  = 'RP'
-      IF @b_success = 0
-         GOTO Fail
-*/
+      END
    END
 
--- select @cFromTransitLOC '@cFromTransitLOC', @cToTransitLOC '@cToTransitLOC', @cToLOC '@cToLOC'
+   SET @cTransitLOC = @cFromTransitLOC
 
 Fail:
 
 END
 GO
-GRANT EXECUTE ON [RDT].[rdt_GetTransitLoc05] TO nSQL
+GRANT EXECUTE ON [RDT].[rdt_GetTransitLoc06] TO nSQL
 GO
