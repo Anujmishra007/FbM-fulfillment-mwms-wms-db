@@ -182,6 +182,8 @@ BEGIN
       END
    END
 
+   SET @cTransitLOC = @cFromTransitLOC
+
    IF @nLockLOC = 1
    BEGIN
       EXEC rdt.rdt_Putaway_PendingMoveIn @cUserName, 'LOCK'
@@ -202,9 +204,7 @@ BEGIN
          GOTO Fail
       END
    END
-
-   SET @cTransitLOC = @cFromTransitLOC
-
+   
 Fail:
 
 END
