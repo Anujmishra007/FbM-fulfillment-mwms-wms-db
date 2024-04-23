@@ -235,6 +235,7 @@ BEGIN
       WHILE @@FETCH_STATUS <> -1
       BEGIN
          SET @c_DeviceID = N''
+         SET @c_PNDLoc = N''
          SET @c_LogicalPNDLoc = N''
          SET @c_DeviceProfileKey = N''
 
@@ -250,7 +251,7 @@ BEGIN
          SELECT TOP 1 @c_PNDLoc = L.Loc
                     , @c_LogicalPNDLoc = L.LogicalLocation
          FROM LOC L WITH (NOLOCK)
-         JOIN LOTxLOCxID LLI WITH (NOLOCK) ON LLI.Loc = L.Loc
+         LEFT JOIN LOTxLOCxID LLI WITH (NOLOCK) ON LLI.Loc = L.Loc
          WHERE L.LocationType = 'PND' 
          AND L.LocAisle = @c_LocAisle 
          AND L.Facility = @c_Facility
