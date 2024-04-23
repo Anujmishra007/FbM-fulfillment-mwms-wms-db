@@ -5,7 +5,7 @@ GO
 /*************************************************************************/  
 /* Stored Procedure: lsp_Start_Replenishment_Wrapper                     */  
 /* Creation Date: 28-FEB-2018                                            */  
-/* Copyright: LFL                                                        */  
+/* Copyright: Maersk                                                     */  
 /* Written by:                                                           */  
 /*                                                                       */  
 /* Purpose:                                                              */  
@@ -13,7 +13,7 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.3                                                          */  
+/* Version: 1.4                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
@@ -27,6 +27,7 @@ GO
 /* 2022-08-11  Wan02    1.3   LFWM-3641 - [CN] DYSON Voice Picking       */
 /*                            replenishment trigger button New           */
 /* 2022-08-11  Wan02    1.3   DevOps Combine Script                      */
+/* 2024-04-23  Wan03    1.4   UWP-17448 Fixed infity commit tran loop    */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_Start_Replenishment_Wrapper]  
    @c_Storerkey            NVARCHAR(15) = ''
@@ -473,7 +474,7 @@ BEGIN
          SET @n_err = 551609
          SET @c_ErrMsg = ERROR_MESSAGE()
          SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing Replenish Code: ' + RTRIM(@c_ReplenSPName) + '. (lsp_Start_Replenishment_Wrapper)'
-                       + ' |' + RTRIM(@c_ReplenSPName)
+                       + '( ' + @c_errmsg + ' ) |' + RTRIM(@c_ReplenSPName)         --(wan03)       
          GOTO EXIT_SP    
       END CATCH
    END TRY
@@ -485,7 +486,12 @@ BEGIN
    END CATCH
    --(mingle01) - END
    EXIT_SP:
-   
+   IF (XACT_STATE()) = -1                                                           --(Wan03) - START  
+   BEGIN
+      SET @n_continue = 3
+      ROLLBACK TRAN
+   END                                                                              --(Wan03) - END
+
    IF @n_Continue = 3   
    BEGIN
       SET @b_Success = 0
