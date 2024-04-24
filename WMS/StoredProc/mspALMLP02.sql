@@ -14,7 +14,7 @@ GO
 /*                                                                         */
 /* Called By: nspOrderProcessing                                           */
 /*                                                                         */
-/* PVCS Version: 1.0                                                       */
+/* PVCS Version: 1.1                                                       */
 /*                                                                         */
 /* Version: 8.0                                                            */
 /*                                                                         */
@@ -22,6 +22,8 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date        Author   Rev  Purposes                                      */
+/* 2024-04-24  Wan01    1.1  UWP-15060 Fixed Get Multiple lot not filter by*/
+/*                           Qty                                           */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspALMLP02]
    @c_DocumentNo        NVARCHAR(10)
@@ -192,17 +194,17 @@ BEGIN
       SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable12 = RTRIM(@c_Lottable12)'             
    END
 
-   IF CONVERT(char(10), @d_Lottable13, 103) <> '01/01/1900' 
+   IF CONVERT(char(10), @d_Lottable13, 103) <> '01/01/1900' AND @d_Lottable13 IS NOT NULL          --(Wan01) 
    BEGIN
       SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable13 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable13, 106))'  
    END                                                                                                                            
                                                                                                                                   
-   IF CONVERT(char(10), @d_Lottable14, 103) <> '01/01/1900'                                                                       
+   IF CONVERT(char(10), @d_Lottable14, 103) <> '01/01/1900' AND @d_Lottable14 IS NOT NULL          --(Wan01)                                                                      
    BEGIN                                                                                                                          
       SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable14 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable14, 106))'  
    END                                                                                                                            
                                                                                                                                   
-   IF CONVERT(char(10), @d_Lottable15, 103) <> '01/01/1900'                                                                       
+   IF CONVERT(char(10), @d_Lottable15, 103) <> '01/01/1900' AND @d_Lottable15 IS NOT NULL          --(Wan01)                                                                      
    BEGIN                                                                                                                          
       SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable15 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable15, 106))'  
    END
@@ -451,7 +453,9 @@ BEGIN
            AND   ID.Status = 'OK'
            AND   LOC.Status = 'OK'
            AND   LOC.LocationFlag NOT IN ('HOLD', 'DAMAGE')
-           AND   LOC.Facility = @c_Facility       
+           AND   LOC.Facility = @c_Facility
+           AND   LOTXLOCXID.Qty - LOTXLOCXID.QtyAllocated                           --(Wan01)
+               - LOTXLOCXID.QtyPicked - LOTXLOCXID.QtyReplen > 0                    --(Wan01)
            GROUP BY LOTXLOCXID.Lot      
          END
          
@@ -479,6 +483,7 @@ BEGIN
             AND LLI.ID = @c_ID
             AND LLI.Storerkey = @c_Storerkey
             AND LLI.Sku = @c_Sku
+            AND LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked - LLI.QtyReplen > 0      --(Wan01)
 
             IF @n_QtyLeftToFulfill >= @n_QtyAvailable
                AND @n_NoOfLot = 1 -- if multi lot per sku/loc/id then proceed to next strategy allocation by carton
