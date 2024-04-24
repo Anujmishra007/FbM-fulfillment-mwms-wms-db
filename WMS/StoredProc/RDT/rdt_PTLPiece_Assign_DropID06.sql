@@ -13,7 +13,7 @@ GO
 /* 2023-02-10 1.0  James    Addhoc. Created                                   */      
 /******************************************************************************/      
       
-CREATE   PROC [RDT].[rdt_PTLPiece_Assign_DropID06] (      
+CREATE OR ALTER PROC [RDT].[rdt_PTLPiece_Assign_DropID06] (      
    @nMobile          INT,       
    @nFunc            INT,       
    @cLangCode        NVARCHAR( 3),       

@@ -16,7 +16,7 @@ GO
 /* 02-01-2018 1.0  NLT013   UWP-17015 Created                                 */
 /******************************************************************************/
 
-CREATE PROC rdt.rdt_PTLStation_Assign_DropCarton (
+CREATE OR ALTER PROC rdt.rdt_PTLStation_Assign_DropCarton (
    @nMobile          INT, 
    @nFunc            INT, 
    @cLangCode        NVARCHAR( 3), 

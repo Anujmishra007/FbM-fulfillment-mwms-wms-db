@@ -1,6 +1,3 @@
-if exists (select * from sys.objects where object_id = object_id(N'[rdt].[rdtfnc_Staging_Door_Move]') and OBJECTPROPERTY(object_id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdtfnc_Staging_Door_Move]
-GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -44,9 +41,10 @@ GO
 /*                          StorerConfig (ChewKP02)                          */  
 /* 2016-09-30 2.5  Ung      Performance tuning                               */
 /* 2018-11-14 2.6  TungGH   Performance                                      */   
+/* 2018-11-14 2.7  Dennis   UWP-16907 Check Digit                            */   
 /*****************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_Staging_Door_Move](
+CREATE OR ALTER PROC [RDT].[rdtfnc_Staging_Door_Move](
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max
@@ -98,6 +96,11 @@ DECLARE
    @cPrintLabelSP       NVARCHAR( 20), 
    @cSQLStatement       NVARCHAR(1000), 
    @cSQLParms           NVARCHAR(1000), 
+   @cExtendedScreenSP   NVARCHAR( 20),
+   @nAction             INT,
+   @nAfterScn           INT,
+   @nAfterStep          INT,
+   @cLocNeedCheck       NVARCHAR( 20),
 
    @cStageMovePalletStatus    NVARCHAR(1),  -- (james01)
    @cMBOLKey                  NVARCHAR(10), -- (james01)
@@ -534,7 +537,8 @@ BEGIN
    BEGIN
       -- Screen mapping
       SET @cActStagingLane = @cInField03
-      
+      SET @cLocNeedCheck = @cInField03
+
       --When Staging is blank
       IF @cActStagingLane = ''
       BEGIN
@@ -543,6 +547,42 @@ BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 3
          GOTO Step_2_Fail  
       END 
+
+      SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '1751ExtendedScreenSP', @cStorerKey), '')
+      SET @nAction = 1
+      IF @cExtendedScreenSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+         BEGIN
+            EXECUTE [RDT].[rdt_1751ExtScnEntry] 
+               @cExtendedScreenSP,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @cLocNeedCheck OUTPUT,
+               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  
+               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  
+               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT, 
+               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT, 
+               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  
+               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  
+               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  
+               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  
+               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  
+               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  
+               @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  
+               @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, 
+               @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  
+               @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, 
+               @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, 
+               @nAction, 
+               @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
+               @nErrNo   OUTPUT, 
+               @cErrMsg  OUTPUT
+            
+            IF @nErrNo <> 0
+               GOTO Step_2_Fail
+            
+            SET @cActStagingLane = @cLocNeedCheck
+         END
+      END
 
       IF @cActStagingLane <> @cStagingLane
       BEGIN
@@ -741,7 +781,7 @@ BEGIN
    BEGIN
       -- Screen mapping
       SET @cDoorCheckDigit = @cInField02 -- (ChewKP01)
-
+      SET @cLocNeedCheck = @cInField02
       
       --When Door is blank
       IF @cDoorCheckDigit = '' -- (ChewKP01)
@@ -751,7 +791,43 @@ BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 2 
          GOTO Step_4_Fail  
       END 
-      
+
+      SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '1751ExtendedScreenSP', @cStorerKey), '')
+      SET @nAction = 1
+      IF @cExtendedScreenSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+         BEGIN
+            EXECUTE [RDT].[rdt_1751ExtScnEntry] 
+               @cExtendedScreenSP,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @cLocNeedCheck OUTPUT,
+               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  
+               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  
+               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT, 
+               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT, 
+               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  
+               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  
+               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  
+               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  
+               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  
+               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  
+               @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  
+               @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, 
+               @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  
+               @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, 
+               @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, 
+               @nAction, 
+               @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
+               @nErrNo   OUTPUT, 
+               @cErrMsg  OUTPUT
+            
+            IF @nErrNo <> 0
+               GOTO Step_4_Fail
+            
+            SET @cDoor = @cLocNeedCheck
+         END
+      END
+
       -- Start (ChewKP01)   
       
       SELECT DISTINCT @cStorerkey = Storerkey FROM dbo.DropID DropID WITH (NOLOCK)
@@ -929,7 +1005,8 @@ BEGIN
    BEGIN
       -- Screen mapping
       SET @cFromStage = @cInField02
-      
+      SET @cLocNeedCheck = @cInField02
+
       --When Staging is blank
       IF @cFromStage = ''
       BEGIN
@@ -938,6 +1015,42 @@ BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 2
          GOTO Step_6_Fail  
       END 
+
+      SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '1751ExtendedScreenSP', @cStorerKey), '')
+      SET @nAction = 1
+      IF @cExtendedScreenSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+         BEGIN
+            EXECUTE [RDT].[rdt_1751ExtScnEntry] 
+               @cExtendedScreenSP,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @cLocNeedCheck OUTPUT,
+               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  
+               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  
+               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT, 
+               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT, 
+               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  
+               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  
+               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  
+               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  
+               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  
+               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  
+               @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  
+               @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, 
+               @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  
+               @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, 
+               @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, 
+               @nAction, 
+               @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
+               @nErrNo   OUTPUT, 
+               @cErrMsg  OUTPUT
+            
+            IF @nErrNo <> 0
+               GOTO Step_6_Fail
+            
+            SET @cFromStage = @cLocNeedCheck
+         END
+      END
 
       IF NOT EXISTS (SELECT 1 FROM dbo.DROPID WITH (NOLOCK)
                      WHERE DropID = @cPalletID 
@@ -1011,7 +1124,8 @@ BEGIN
    BEGIN
       -- Screen mapping
       SET @cToStage = @cInField03
-      
+      SET @cLocNeedCheck = @cInField03
+
       --When Staging is blank
       IF @cToStage = ''
       BEGIN
@@ -1020,6 +1134,42 @@ BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 3
          GOTO Step_7_Fail  
       END 
+
+      SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '1751ExtendedScreenSP', @cStorerKey), '')
+      SET @nAction = 1
+      IF @cExtendedScreenSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+         BEGIN
+            EXECUTE [RDT].[rdt_1751ExtScnEntry] 
+               @cExtendedScreenSP,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @cLocNeedCheck OUTPUT,
+               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  
+               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  
+               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT, 
+               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT, 
+               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  
+               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  
+               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  
+               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  
+               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  
+               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  
+               @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  
+               @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, 
+               @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  
+               @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, 
+               @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, 
+               @nAction, 
+               @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
+               @nErrNo   OUTPUT, 
+               @cErrMsg  OUTPUT
+            
+            IF @nErrNo <> 0
+               GOTO Step_7_Fail
+            
+            SET @cToStage = @cLocNeedCheck
+         END
+      END
 
       IF NOT EXISTS (SELECT 1 FROM dbo.LOC WITH (NOLOCK)
                      WHERE Facility = @cFacility 

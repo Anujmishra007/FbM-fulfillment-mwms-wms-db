@@ -1362,6 +1362,13 @@ BEGIN
             C_String2 = @cPalletType
             WHERE Mobile = @nMobile
          END
+         ELSE
+         BEGIN
+            SET @cPalletType =''
+            UPDATE RDT.RDTMOBREC SET
+            C_String2 = ''
+            WHERE Mobile = @nMobile
+         END
       END
 
       -- Init next screen var
@@ -2310,6 +2317,14 @@ BEGIN
             SET @nStep = 99
             GOTO Quit
          END
+         ELSE IF @nRowCount = 0
+         BEGIN 
+            SET @cPalletType =''
+            UPDATE RDT.RDTMOBREC SET
+            C_String2 = ''
+            WHERE Mobile = @nMobile
+         END
+
          -- Prepare next screen var
          SET @cOutField01 = @cLOC
          SET @cOutField02 = '' -- @cID
@@ -3871,6 +3886,13 @@ BEGIN
                SET @nScn = 6382
                SET @nStep = 99
                GOTO Quit
+            END
+            ELSE IF @nRowCount = 0
+            BEGIN 
+               SET @cPalletType =''
+               UPDATE RDT.RDTMOBREC SET
+               C_String2 = ''
+               WHERE Mobile = @nMobile
             END
          END
          IF @cAutoGenID = '1'

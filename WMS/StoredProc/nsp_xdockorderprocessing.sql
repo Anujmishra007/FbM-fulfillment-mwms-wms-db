@@ -56,6 +56,7 @@ GO
 /*                              enough (JHTAN01)                             */
 /* 07-Mar-2024  Wan01           UWP-16306 - Moorebank Australia - Picking    */
 /*                              issue while order processing for XDock       */
+/* 15-Apr-2024 USH022-01        Ticket - UWP-18028- XDock Allocation Issue   */
 /*****************************************************************************/
 CREATE OR ALTER PROCEDURE nsp_XDockOrderProcessing
    @c_ExternPOKey NVARCHAR(20) ,
@@ -235,18 +236,23 @@ INSERT INTO #TEMPSKU
    IF (@n_Continue = 1 OR @n_Continue =2) 
    BEGIN
       INSERT INTO #Inventory (Storerkey, Sku, Qty, Lot, Loc, ID, ExternPOKey, Lottable05, Facility)
-      SELECT LLI.Storerkey, LLI.Sku, LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked AS Qty, 
-             LLI.Lot, LLI.Loc, LLI.ID, LA.Lottable03, LA.Lottable05, Loc.Facility 
---        INTO #Inventory 
-        FROM Lotxlocxid LLI (NOLOCK), Lotattribute LA (NOLOCK), Loc (NOLOCK) 
-       WHERE LA.Storerkey = @c_StorerKey  
-      AND LA.SKU IN (SELECT SKU FROM #TEMPSKU) 
-         AND LA.Lottable03 = @c_ExternPOKey
-         AND Loc.Facility = @c_facility 
-         AND Loc.Locationflag <> 'DAMAGE'
-         AND LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked > 0 
-      AND LLI.Lot = LA.Lot
-         AND LLI.Loc = Loc.Loc  
+            SELECT LLI.Storerkey, LLI.Sku, LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked AS Qty,
+                   LLI.Lot, LLI.Loc, LLI.ID, LA.Lottable03, LA.Lottable05, Loc.Facility
+      --        INTO #Inventory
+              FROM Lotxlocxid LLI (NOLOCK), Lotattribute LA (NOLOCK), Loc (NOLOCK), LOT (NOLOCK), ID (NOLOCK)   --(USH022 -01) - START-UWP-18028
+             WHERE LA.Storerkey = @c_StorerKey
+            AND LA.SKU IN (SELECT SKU FROM #TEMPSKU)
+               AND LA.Lottable03 = @c_ExternPOKey
+               AND Loc.Facility = @c_facility
+               AND LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked > 0
+               AND LLI.Lot = LA.Lot
+               AND LLI.Loc = Loc.Loc
+               AND LOT.status  = 'OK'                                     --(USH022 -01) - START-UWP-18028
+               AND LOC.Status = 'OK'
+               AND ID.Status = 'OK'
+               AND Loc.LOCationFlag NOT IN ('DAMAGE', 'HOLD')
+               AND LLI.Lot = LOT.Lot
+               AND LLI.ID = ID.ID                                         --(USH022-01) - END-UWP-18028
 
       IF (SELECT COUNT(*) FROM #Inventory) = 0 
       BEGIN 
@@ -639,17 +645,25 @@ INSERT INTO #TEMPSKU
         AND  LA.Sku     = @c_SKU*/
 
         --NJOW01 Exclude damage loc and other facility
-        SELECT @n_PORcvQty = SUM(Qty - QtyAllocated - Qtypicked)
-        FROM LOTxLOCxID LLI(NOLOCK) 
-        INNER JOIN LOTATTRIBUTE LA (NOLOCK) ON (LA.Lot = LLI.Lot) AND
-                                  (LA.Storerkey = LLI.Storerkey) AND
-                                  (LA.Sku = LLI.Sku)
-        INNER JOIN LOC (NOLOCK) ON (LLI.Loc = LOC.Loc)    
-        WHERE LA.Lottable03 = @c_ExternPOKey
-        AND  LA.Storerkey = @c_StorerKey
-        AND  LA.Sku     = @c_SKU
-        AND  LOC.Locationflag <> 'DAMAGE'
-        AND  LOC.Facility = @c_facility
+        SELECT @n_PORcvQty = SUM(LLI.Qty - LLI.QtyAllocated - LLI.Qtypicked)
+                FROM LOTxLOCxID LLI(NOLOCK)
+                INNER JOIN LOTATTRIBUTE LA (NOLOCK) ON (LA.Lot = LLI.Lot) AND
+                                          (LA.Storerkey = LLI.Storerkey) AND
+                                          (LA.Sku = LLI.Sku)
+                INNER JOIN LOC (NOLOCK) ON (LLI.Loc = LOC.Loc)          --(USH022-01) - START-UWP-18028
+                INNER JOIN LOT (NOLOCK)  ON (LOT.lot = LLI.lot)
+                INNER JOIN ID (NOLOCK) ON (ID.ID = LLI.ID)              --(USH022-01) - END-UWP-18028
+                WHERE LA.Lottable03 = @c_ExternPOKey
+                AND  LA.Storerkey = @c_StorerKey
+                AND  LA.Sku     = @c_SKU
+                AND  LOC.Facility = @c_facility
+                AND LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked > 0      --(USH022-01)-UWP-18028
+                AND LLI.Lot = LA.Lot
+                AND LLI.Loc = Loc.Loc
+                AND LOT.status  = 'OK'                                  --(USH022-01) - START-UWP-18028
+                AND LOC.Status = 'OK'
+                AND ID.Status = 'OK'
+                AND Loc.LOCationFlag NOT IN ('DAMAGE', 'HOLD')          --(USH022-01) - END-UWP-18028
         
         
         /* 25 March 2005 YTWAN - System hangs during allocation */
