@@ -72,3 +72,6 @@ execute rdt.rdtAddMsg 94216, 10, '94216 UPD RCPT Fail ', 'us_english'
 
 --WMS-11215
 execute rdt.rdtAddMsg 94217, 10, '94217 GetRight Fail ', 'us_english'
+
+--UWP-18031 by JCH507
+execute rdt.rdtAddMsg 94218, 10, '94218 ToID/Type Req ', 'us_english'
