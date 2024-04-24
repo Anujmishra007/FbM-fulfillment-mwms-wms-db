@@ -111,22 +111,7 @@ BEGIN
       GOTO Fail
    END
 
-   EXECUTE nspGetRight 
-      @cFacility,
-      @cStorerKey,
-      NULL,
-      'AllowFCPMoveToLoc',
-      @b_success              output,
-      @cAllowFCPMoveToLoc     output,
-      @nErrNo                 output,
-      @cErrMsg                output
-
-   IF @b_Success <> 1
-   BEGIN
-      SET @nErrNo = 214101
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GetRightFail
-      GOTO Fail
-   END
+   SET @cAllowFCPMoveToLoc = rdt.RDTGetConfig( @nFunc, 'AllowFCPPutMoveToLoc', @cStorerKey)
 
    IF @cAllowFCPMoveToLoc IS NULL OR TRIM(@cAllowFCPMoveToLoc) = ''
       SET @cAllowFCPMoveToLoc = '0'

@@ -62,16 +62,18 @@ BEGIN
       ,@cFacility     NVARCHAR(5)
       ,@cLangCode     NVARCHAR(3)
       ,@cAllowFCPMoveToLoc    NVARCHAR(30)
+      ,@FunID        INT
 
    SELECT 
        @b_debug = 0
       ,@n_starttcnt = @@TRANCOUNT
       ,@n_continue = 1
       ,@b_success = 0
-      ,@n_err = 0
-      ,@c_errmsg = ''
+      ,@n_Err = 0
+      ,@c_ErrMsg = ''
       ,@c_TaskDetailkey = ''
       ,@c_LastLOCAisle = ''
+      ,@FunID = 1812
 
    -- Get session info
    SELECT
@@ -81,22 +83,7 @@ BEGIN
    FROM rdt.rdtMobRec WITH (NOLOCK) 
    WHERE UserName = SUSER_SNAME()
 
-   EXECUTE nspGetRight 
-      @cFacility,
-      @c_StorerKey,     
-      NULL,       
-      'AllowFCPMoveToLoc',    
-      @b_success              output,
-      @cAllowFCPMoveToLoc     output,
-      @n_err                  output,
-      @c_errmsg               output
-
-   IF @b_Success <> 1
-   BEGIN
-      SET @n_Err = 214052
-      SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP') --UpdTaskDtlFail
-      GOTO Fail
-   END
+   SET @cAllowFCPMoveToLoc = rdt.RDTGetConfig( @FunID, 'AllowFCPPutMoveToLoc', @c_StorerKey)
 
    IF @cAllowFCPMoveToLoc IS NULL OR TRIM(@cAllowFCPMoveToLoc) = ''
       SET @cAllowFCPMoveToLoc = '0'
@@ -210,8 +197,8 @@ BEGIN
          , ''
          , @b_SkipTheTask  OUTPUT
          , @b_Success      OUTPUT
-         , @n_err          OUTPUT
-         , @c_errmsg       OUTPUT
+         , @n_Err          OUTPUT
+         , @c_ErrMsg       OUTPUT
       IF @b_success <> 1
          GOTO Fail
       IF @b_SkipTheTask = 1
@@ -234,8 +221,8 @@ BEGIN
          , @c_toID         = ''--@c_toid
          , @n_QTY          = @n_QTY
          , @b_Success      = @b_success OUTPUT
-         , @n_err          = @n_err     OUTPUT
-         , @c_errmsg       = @c_errmsg  OUTPUT
+         , @n_Err          = @n_Err     OUTPUT
+         , @c_ErrMsg       = @c_ErrMsg  OUTPUT
       IF @b_success = 0
       BEGIN
          FETCH NEXT FROM Cursor_FPKTaskCandidates INTO @c_TaskDetailKey
@@ -289,7 +276,7 @@ BEGIN
       -- Get transit LOC
       IF @cTransitLOC = ''
       BEGIN
-         SET @n_err = 0
+         SET @n_Err = 0
 
          IF @cAllowFCPMoveToLoc = '1' AND UPPER(@c_LOCCategory) IN ('CASE', 'PICK')
          BEGIN
@@ -303,10 +290,10 @@ BEGIN
                , @c_ToLOC
                , 1             -- Lock MoveTo transit LOC. 1=Yes, 0=No
                , @cTransitLOC OUTPUT 
-               , @n_err       OUTPUT
-               , @c_errmsg    OUTPUT
-               , @nFunc = 1812
-            IF @n_err <> 0
+               , @n_Err       OUTPUT
+               , @c_ErrMsg    OUTPUT
+               , @nFunc = @FunID
+            IF @n_Err <> 0
             BEGIN
                FETCH NEXT FROM Cursor_RPFTaskCandidates INTO @c_TaskDetailKey
                CONTINUE
@@ -324,10 +311,10 @@ BEGIN
                , @c_ToLOC
                , 1             -- Lock PND transit LOC. 1=Yes, 0=No
                , @cTransitLOC OUTPUT 
-               , @n_err       OUTPUT
-               , @c_errmsg    OUTPUT
-               , @nFunc = 1812
-            IF @n_err <> 0
+               , @n_Err       OUTPUT
+               , @c_ErrMsg    OUTPUT
+               , @nFunc = @FunID
+            IF @n_Err <> 0
             BEGIN
                FETCH NEXT FROM Cursor_RPFTaskCandidates INTO @c_TaskDetailKey
                CONTINUE
