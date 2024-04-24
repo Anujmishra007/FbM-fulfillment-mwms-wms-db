@@ -27,9 +27,11 @@ GO
 /* 28-09-2009   1.1   Vicky      Add Parameter                          */
 /*                               RDT Compatible Error Message (Vicky01) */
 /* 09-03-2010   1.2   Shong      Avoid same user getting same task      */
-/*                               (Shong01)                              */   
+/*                               (Shong01)                              */
 /* 10-03-2010   1.4   Shong      Make sure task records updated status  */
-/*                               to 3 (Shong02)                         */   
+/*                               to 3 (Shong02)                         */
+/* 17-04-2024   1.5   NLT013     UWP-18215 Add TRY CATCH                */
+/*                               around OPEN CURSOR                     */
 /************************************************************************/
 
 CREATE PROC    [dbo].[nspTTMEvaluatePATasks]
@@ -136,18 +138,35 @@ BEGIN
          GOTO DECLARECURSOR_PATASKCANDIDATES
       END
 
-      OPEN CURSOR_PATASKCANDIDATES
-      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
-      IF @n_err = 16905
-      BEGIN
-         CLOSE CURSOR_PATASKCANDIDATES
-         DEALLOCATE CURSOR_PATASKCANDIDATES
-         GOTO DECLARECURSOR_PATASKCANDIDATES
-      END
+      BEGIN TRY
+         OPEN CURSOR_PATASKCANDIDATES
+      END TRY
+      BEGIN CATCH
+         SELECT @n_err = @@ERROR
+         IF @n_err = 16905
+         BEGIN
+            CLOSE CURSOR_PATASKCANDIDATES
+            DEALLOCATE CURSOR_PATASKCANDIDATES
+            GOTO DECLARECURSOR_PATASKCANDIDATES
+         END
+         ELSE
+         BEGIN
+            IF @@TRANCOUNT = 1 and @@TRANCOUNT > @n_starttcnt
+            BEGIN
+               ROLLBACK TRAN
+            END
+
+            SET @b_success = 0
+            SELECT @n_err = 63061 --set error number to get message
+            RETURN
+         END
+      END CATCH
+
       IF @n_err = 0
       BEGIN
          SELECT @b_cursor_open = 1
       END
+      
    END
 
    IF (@n_continue = 1 or @n_continue = 2) and @b_cursor_open = 1
@@ -164,7 +183,7 @@ BEGIN
          ELSE 
          IF ISNULL(RTRIM(@c_TaskDetailKey),'') <> '' -- (Shong01)
          BEGIN
-				SET @c_userkeyoverride=''
+            SET @c_userkeyoverride=''
             SELECT @c_storerkey = taskdetail.storerkey,
                    @c_sku = taskdetail.sku,
                    @c_fromloc = taskdetail.fromloc ,
