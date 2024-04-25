@@ -17,6 +17,7 @@ GO
 /* 2018-06-28 1.5  Ung      WMS-5564 Capture L05                              */
 /* 2018-10-28 1.6  Gan      Performance tuning                                */
 /* 2023-08-07 1.7  Ung      WMS-23117 Add DataCapture                         */
+/* 2024-04-19 1.8  Dennis   UWP-18504 Condition Code Enhancements             */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_LineReceiving] (
@@ -1214,8 +1215,24 @@ BEGIN
          GOTO Quit
       END
 
+      IF ISNULL(rdt.RDTGetConfig( @nFunc, 'CONDCODECHECKSTORER', @cStorerKey),'0') = '1'
+      AND @cReasonCode <> '' AND @cReasonCode IS NOT NULL
+      BEGIN
+         IF NOT EXISTS( SELECT Code
+            FROM dbo.CodeLKUP WITH (NOLOCK)
+            WHERE ListName = 'ASNREASON'
+               AND Storerkey = @cStorerkey
+               AND Code = @cReasonCode)
+         BEGIN
+            SET @nErrNo = 50877
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Bad ReasonCode
+            SET @cReasonCode = ''
+            EXEC rdt.rdtSetFocusField @nMobile, 10
+            GOTO Quit
+         END
+      END
       -- Validate reason code exists
-      IF @cReasonCode <> '' AND @cReasonCode IS NOT NULL
+      ELSE IF @cReasonCode <> '' AND @cReasonCode IS NOT NULL
          IF NOT EXISTS( SELECT Code
             FROM dbo.CodeLKUP WITH (NOLOCK)
             WHERE ListName = 'ASNREASON'
