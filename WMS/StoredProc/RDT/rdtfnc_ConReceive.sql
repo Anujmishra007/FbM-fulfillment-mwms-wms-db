@@ -29,6 +29,7 @@ GO
 /*                          Add UCCID step_13 (cc02)                             */
 /* 2022-07-19 2.0  Ung      WMS-20246 Add standard Decode                        */
 /* 2023-03-28 2.1  James    JSM-138949 - Bug fix on MultiSKUBarcode (james05)    */
+/* 2024-04-19 2.2  Dennis   UWP-18504 Condition Code Enhancements                */
 /*********************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_ConReceive] (
@@ -2111,15 +2112,31 @@ BEGIN
       SET @nQTY = rdt.rdtConvUOMQTY( @cStorerKey, @cSKU, @cPQTY, @cPUOM, 6) -- Convert to QTY in master UOM
       SET @nQTY = @nQTY + @nMQTY
 
+      IF ISNULL(rdt.RDTGetConfig( @nFunc, 'CONDCODECHECKSTORER', @cStorerKey),'0') = '1'
+      AND @cReasonCode <> '' AND @cReasonCode IS NOT NULL
+      BEGIN
+         IF NOT EXISTS( SELECT Code
+            FROM dbo.CodeLKUP WITH (NOLOCK)
+            WHERE ListName = 'ASNREASON'
+               AND Storerkey = @cStorerkey
+               AND Code = @cReasonCode)
+         BEGIN
+            SET @nErrNo = 59429
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Bad ReasonCode
+            SET @cReasonCode = ''
+            EXEC rdt.rdtSetFocusField @nMobile, 10
+            GOTO Step_6_Fail
+         END
+      END
       -- Validate reason code exists
-      IF @cReasonCode <> '' AND @cReasonCode IS NOT NULL
+      ELSE IF @cReasonCode <> '' AND @cReasonCode IS NOT NULL
       BEGIN
          IF NOT EXISTS( SELECT Code
             FROM dbo.CodeLKUP WITH (NOLOCK)
             WHERE ListName = 'ASNREASON'
                AND Code = @cReasonCode)
          BEGIN
-            SET @nErrNo = 55919
+            SET @nErrNo = 59429
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Bad Cond Code
             SET @cReasonCode = ''
             EXEC rdt.rdtSetFocusField @nMobile, 10
@@ -2132,7 +2149,7 @@ BEGIN
       BEGIN
          IF NOT EXISTS( SELECT 1 FROM dbo.CodeLKUP WITH (NOLOCK) WHERE ListName = 'ASNSUBRSN' AND Code = @cSubreasonCode AND StorerKey = @cStorerKey)
          BEGIN
-            SET @nErrNo = 55931
+            SET @nErrNo = 59429
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Bad ReasonCode
             SET @cSubreasonCode = ''
             EXEC rdt.rdtSetFocusField @nMobile, 11

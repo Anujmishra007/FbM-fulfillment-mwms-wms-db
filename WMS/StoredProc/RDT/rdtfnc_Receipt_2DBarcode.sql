@@ -16,6 +16,7 @@ GO
 /* Date       Rev  Author   Purposes                                             */
 /* 2016-09-13 1.0  James    WMS288 Created                                       */
 /* 2018-10-22 1.1  Gan      Performance tuning                                   */
+/* 2024-04-19 1.2  Dennis   UWP-18504 Condition Code Enhancements                */
 /*********************************************************************************/
 
 CREATE PROCEDURE [RDT].[rdtfnc_Receipt_2DBarcode] (
@@ -1318,8 +1319,24 @@ BEGIN
       SET @nQTY = rdt.rdtConvUOMQTY( @cStorerKey, @cSKU, @cPQTY, @cPUOM, 6) -- Convert to QTY in master UOM
       SET @nQTY = @nQTY + @nMQTY
 
+      IF ISNULL(rdt.RDTGetConfig( @nFunc, 'CONDCODECHECKSTORER', @cStorerKey),'0') = '1'
+      AND @cReasonCode <> '' AND @cReasonCode IS NOT NULL
+      BEGIN
+         IF NOT EXISTS( SELECT Code
+            FROM dbo.CodeLKUP WITH (NOLOCK)
+            WHERE ListName = 'ASNREASON'
+               AND Storerkey = @cStorerkey
+               AND Code = @cReasonCode)
+         BEGIN
+            SET @nErrNo = 103823
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Bad ReasonCode
+            SET @cReasonCode = ''
+            EXEC rdt.rdtSetFocusField @nMobile, 10
+            GOTO Step_3_Fail
+         END
+      END
       -- Validate reason code exists
-      IF @cReasonCode <> '' AND @cReasonCode IS NOT NULL
+      ELSE IF @cReasonCode <> '' AND @cReasonCode IS NOT NULL
          IF NOT EXISTS( SELECT Code
             FROM dbo.CodeLKUP WITH (NOLOCK)
             WHERE ListName = 'ASNREASON'
@@ -1589,12 +1606,9 @@ BEGIN
          @cSKU          = @cSKU,
          @cUOM          = @cUOM,
          @nQTY          = @nQTY,
-         @cReceiptKey   = @cReceiptKey,
-         @cPOKey        = @cPOKey,
          --@cRefNo1       = @cReceiptKey, -- Retain for backward compatible
          --@cRefNo2       = @cPOKey,      -- Retain for backward compatible
          @cRefNo3       = @cRefNo, 
-         @cReasonCode   = @cReasonCode, 
          @cLottable01   = @cLottable01,
          @cLottable02   = @cLottable02, 
          @cLottable03   = @cLottable03, 

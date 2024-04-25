@@ -49,6 +49,7 @@ GO
 /* 2024-02-28 4.3  Dennis   UWP-14799 Receiving VAS activities                   */
 /* 2024-04-08 4.4  Dennis   UWP-11406 Shelf life check & lot6 & lot12            */
 /* 2024-04-08 4.5  Dennis   UWP-18209 Check Digit & Capture Pallet Type          */
+/* 2024-04-19 4.6  Dennis   UWP-18504 Condition Code Enhancements                */
 /*********************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_NormalReceipt_V7] (
@@ -2802,8 +2803,24 @@ BEGIN
       SET @nQTY = rdt.rdtConvUOMQTY( @cStorerKey, @cSKU, @cPQTY, @cPUOM, 6) -- Convert to QTY in master UOM
       SET @nQTY = @nQTY + @nMQTY
 
+      IF ISNULL(rdt.RDTGetConfig( @nFunc, 'CONDCODECHECKSTORER', @cStorerKey),'0') = '1'
+      AND @cReasonCode <> '' AND @cReasonCode IS NOT NULL
+      BEGIN
+         IF NOT EXISTS( SELECT Code
+            FROM dbo.CodeLKUP WITH (NOLOCK)
+            WHERE ListName = 'ASNREASON'
+               AND Storerkey = @cStorerkey
+               AND Code = @cReasonCode)
+         BEGIN
+            SET @nErrNo = 59429
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Bad ReasonCode
+            SET @cReasonCode = ''
+            EXEC rdt.rdtSetFocusField @nMobile, 10
+            GOTO Step_6_Fail
+         END
+      END
       -- Validate reason code exists
-      IF @cReasonCode <> '' AND @cReasonCode IS NOT NULL
+      ELSE IF @cReasonCode <> '' AND @cReasonCode IS NOT NULL
          IF NOT EXISTS( SELECT Code
             FROM dbo.CodeLKUP WITH (NOLOCK)
             WHERE ListName = 'ASNREASON'
