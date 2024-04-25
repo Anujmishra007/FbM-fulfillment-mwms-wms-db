@@ -30,8 +30,8 @@ CREATE PROCEDURE [rdt].[rdt_CreateVASWorkOrder] (
    @cReceiptLineNo       NVARCHAR( 5),
    @cOrderKey            NVARCHAR( 10),
    @cOrderLineNo         NVARCHAR( 5),
-   @cFromID              NVARCHAR( 10), 
-   @cPalletID            NVARCHAR( 10),  --pallet id for inbound or outbound
+   @cFromID              NVARCHAR( 18), 
+   @cPalletID            NVARCHAR( 18),  --pallet id for inbound or outbound
    @cGenerateCharges     NVARCHAR( 3),   -- Yes/No
    @cServiceType         NVARCHAR( 20),  --Service Type, e.g. LABEL PLT, RPLT IB PL
    @cSKU                 NVARCHAR( 20),  --SKU

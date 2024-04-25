@@ -26,7 +26,7 @@ CREATE PROCEDURE [rdt].[rdt_FinalizeVASWorkOrder] (
    @cStorerKey           NVARCHAR( 15),
    @cFacility            NVARCHAR( 5),
 
-   @cPalletID            NVARCHAR( 10),  --pallet id for inbound or outbound
+   @cPalletID            NVARCHAR( 18),  --pallet id for inbound or outbound
 
    @nErrNo               INT                   OUTPUT,
    @cErrMsg              NVARCHAR( 20)         OUTPUT
