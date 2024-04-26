@@ -14,7 +14,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave Release                                               */    
 /*                                                                       */    
-/* PVCS Version: 1.0                                                     */    
+/* PVCS Version: 1.1                                                     */    
 /*                                                                       */    
 /* Version: 7.0                                                          */    
 /*                                                                       */    
@@ -22,7 +22,8 @@ GO
 /*                                                                       */    
 /* Updates:                                                              */    
 /* Date        Author   Ver   Purposes                                   */    
-/* 2024-04-17  Wan      1.0   UWP-18534-Mettel-Add consolidated picking  */                                         
+/* 2024-04-17  Wan      1.0   UWP-18534-Mettel-Add consolidated picking  */  
+/* 2024-04-26  Wan01    1.1   UWP-18534-conso picking by wave & for uom2 */ 
 /*************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]        
   @c_wavekey      NVARCHAR(10)    
@@ -122,94 +123,94 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
       END        
    END  
          
-    --Create pickdetail Work in progress temporary table  
-    IF @n_continue = 1 OR @n_continue = 2  
-    BEGIN 
-       IF OBJECT_ID('tempdb..#PICKDETAIL_WIP') IS NOT NULL  
-          DROP TABLE #PICKDETAIL_WIP   
+   --Create pickdetail Work in progress temporary table  
+   IF @n_continue = 1 OR @n_continue = 2  
+   BEGIN 
+      IF OBJECT_ID('tempdb..#PICKDETAIL_WIP') IS NOT NULL  
+         DROP TABLE #PICKDETAIL_WIP   
 
-       CREATE TABLE #PickDetail_WIP(  
-          [PickDetailKey] [nvarchar](18) NOT NULL PRIMARY KEY,  
-          [CaseID] [nvarchar](20) NOT NULL DEFAULT (' '),  
-          [PickHeaderKey] [nvarchar](18) NOT NULL,  
-          [OrderKey] [nvarchar](10) NOT NULL,  
-          [OrderLineNumber] [nvarchar](5) NOT NULL,  
-          [Lot] [nvarchar](10) NOT NULL,  
-          [Storerkey] [nvarchar](15) NOT NULL,  
-          [Sku] [nvarchar](20) NOT NULL,  
-          [AltSku] [nvarchar](20) NOT NULL DEFAULT (' '),  
-          [UOM] [nvarchar](10) NOT NULL DEFAULT (' '),  
-          [UOMQty] [int] NOT NULL DEFAULT ((0)),  
-          [Qty] [int] NOT NULL DEFAULT ((0)),  
-          [QtyMoved] [int] NOT NULL DEFAULT ((0)),  
-          [Status] [nvarchar](10) NOT NULL DEFAULT ('0'),  
-          [DropID] [nvarchar](20) NOT NULL DEFAULT (''),  
-          [Loc] [nvarchar](10) NOT NULL DEFAULT ('UNKNOWN'),  
-          [ID] [nvarchar](18) NOT NULL DEFAULT (' '),  
-          [PackKey] [nvarchar](10) NULL DEFAULT (' '),  
-          [UpdateSource] [nvarchar](10) NULL DEFAULT ('0'),  
-          [CartonGroup] [nvarchar](10) NULL,  
-          [CartonType] [nvarchar](10) NULL,  
-          [ToLoc] [nvarchar](10) NULL  DEFAULT (' '),  
-          [DoReplenish] [nvarchar](1) NULL DEFAULT ('N'),  
-          [ReplenishZone] [nvarchar](10) NULL DEFAULT (' '),  
-          [DoCartonize] [nvarchar](1) NULL DEFAULT ('N'),  
-          [PickMethod] [nvarchar](1) NOT NULL DEFAULT (' '),  
-          [WaveKey] [nvarchar](10) NOT NULL DEFAULT (' '),  
-          [EffectiveDate] [datetime] NOT NULL DEFAULT (getdate()),  
-          [AddDate] [datetime] NOT NULL DEFAULT (getdate()),  
-          [AddWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),  
-          [EditDate] [datetime] NOT NULL DEFAULT (getdate()),  
-          [EditWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),  
-          [TrafficCop] [nvarchar](1) NULL,  
-          [ArchiveCop] [nvarchar](1) NULL,  
-          [OptimizeCop] [nvarchar](1) NULL,  
-          [ShipFlag] [nvarchar](1) NULL DEFAULT ('0'),  
-          [PickSlipNo] [nvarchar](10) NULL,  
-          [TaskDetailKey] [nvarchar](10) NULL,  
-          [TaskManagerReasonKey] [nvarchar](10) NULL,  
-          [Notes] [nvarchar](4000) NULL,  
-          [MoveRefKey] [nvarchar](10) NULL DEFAULT (''),  
-          [WIP_Refno] [nvarchar](30) NULL DEFAULT (''),  
-          [Channel_ID] [bigint] NULL DEFAULT ((0)))        
-    END  
+      CREATE TABLE #PickDetail_WIP(  
+         [PickDetailKey] [nvarchar](18) NOT NULL PRIMARY KEY,  
+         [CaseID] [nvarchar](20) NOT NULL DEFAULT (' '),  
+         [PickHeaderKey] [nvarchar](18) NOT NULL,  
+         [OrderKey] [nvarchar](10) NOT NULL,  
+         [OrderLineNumber] [nvarchar](5) NOT NULL,  
+         [Lot] [nvarchar](10) NOT NULL,  
+         [Storerkey] [nvarchar](15) NOT NULL,  
+         [Sku] [nvarchar](20) NOT NULL,  
+         [AltSku] [nvarchar](20) NOT NULL DEFAULT (' '),  
+         [UOM] [nvarchar](10) NOT NULL DEFAULT (' '),  
+         [UOMQty] [int] NOT NULL DEFAULT ((0)),  
+         [Qty] [int] NOT NULL DEFAULT ((0)),  
+         [QtyMoved] [int] NOT NULL DEFAULT ((0)),  
+         [Status] [nvarchar](10) NOT NULL DEFAULT ('0'),  
+         [DropID] [nvarchar](20) NOT NULL DEFAULT (''),  
+         [Loc] [nvarchar](10) NOT NULL DEFAULT ('UNKNOWN'),  
+         [ID] [nvarchar](18) NOT NULL DEFAULT (' '),  
+         [PackKey] [nvarchar](10) NULL DEFAULT (' '),  
+         [UpdateSource] [nvarchar](10) NULL DEFAULT ('0'),  
+         [CartonGroup] [nvarchar](10) NULL,  
+         [CartonType] [nvarchar](10) NULL,  
+         [ToLoc] [nvarchar](10) NULL  DEFAULT (' '),  
+         [DoReplenish] [nvarchar](1) NULL DEFAULT ('N'),  
+         [ReplenishZone] [nvarchar](10) NULL DEFAULT (' '),  
+         [DoCartonize] [nvarchar](1) NULL DEFAULT ('N'),  
+         [PickMethod] [nvarchar](1) NOT NULL DEFAULT (' '),  
+         [WaveKey] [nvarchar](10) NOT NULL DEFAULT (' '),  
+         [EffectiveDate] [datetime] NOT NULL DEFAULT (getdate()),  
+         [AddDate] [datetime] NOT NULL DEFAULT (getdate()),  
+         [AddWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),  
+         [EditDate] [datetime] NOT NULL DEFAULT (getdate()),  
+         [EditWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),  
+         [TrafficCop] [nvarchar](1) NULL,  
+         [ArchiveCop] [nvarchar](1) NULL,  
+         [OptimizeCop] [nvarchar](1) NULL,  
+         [ShipFlag] [nvarchar](1) NULL DEFAULT ('0'),  
+         [PickSlipNo] [nvarchar](10) NULL,  
+         [TaskDetailKey] [nvarchar](10) NULL,  
+         [TaskManagerReasonKey] [nvarchar](10) NULL,  
+         [Notes] [nvarchar](4000) NULL,  
+         [MoveRefKey] [nvarchar](10) NULL DEFAULT (''),  
+         [WIP_Refno] [nvarchar](30) NULL DEFAULT (''),  
+         [Channel_ID] [bigint] NULL DEFAULT ((0)))        
+   END  
             
-    IF @@TRANCOUNT = 0  
-       BEGIN TRAN  
+   IF @@TRANCOUNT = 0  
+      BEGIN TRAN  
           
-    --Initialize Pickdetail work in progress staging table  
-    IF @n_continue = 1 OR @n_continue = 2  
-    BEGIN  
-       EXEC isp_CreatePickdetail_WIP  
-            @c_Loadkey               = @c_Loadkey  
-           ,@c_Wavekey               = @c_wavekey    
-           ,@c_WIP_RefNo             = @c_SourceType   
-           ,@c_PickCondition_SQL     = ''  
-           ,@c_Action                = 'I'    --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records  
-           ,@c_RemoveTaskdetailkey   = 'N'    --N=No remove Y=Remove taskdetailkey from pickdetail record when initialization  
-           ,@b_Success               = @b_Success OUTPUT  
-           ,@n_Err                   = @n_Err     OUTPUT   
-           ,@c_ErrMsg                = @c_ErrMsg  OUTPUT  
+   --Initialize Pickdetail work in progress staging table  
+   IF @n_continue = 1 OR @n_continue = 2  
+   BEGIN  
+      EXEC isp_CreatePickdetail_WIP  
+          @c_Loadkey               = @c_Loadkey  
+         ,@c_Wavekey               = @c_wavekey    
+         ,@c_WIP_RefNo             = @c_SourceType   
+         ,@c_PickCondition_SQL     = ''  
+         ,@c_Action                = 'I'    --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records  
+         ,@c_RemoveTaskdetailkey   = 'N'    --N=No remove Y=Remove taskdetailkey from pickdetail record when initialization  
+         ,@b_Success               = @b_Success OUTPUT  
+         ,@n_Err                   = @n_Err     OUTPUT   
+         ,@c_ErrMsg                = @c_ErrMsg  OUTPUT  
              
-        IF @b_Success <> 1  
-        BEGIN  
-           SET @n_continue = 3  
-        END            
-        ELSE
-        BEGIN
-           UPDATE #PICKDETAIL_WIP  
-           SET #PICKDETAIL_WIP.Taskdetailkey = ''  
-           FROM #PICKDETAIL_WIP  
-           LEFT JOIN TASKDETAIL TD (NOLOCK) ON  TD.Taskdetailkey = #PICKDETAIL_WIP.Taskdetailkey 
-                                            AND TD.Sourcetype = @c_SourceType 
-                                            AND TD.Tasktype IN ('PK','FCP','FPP') 
-                                            AND TD.Status <> 'X'   
-           WHERE TD.Taskdetailkey IS NULL 
-        END   
-    END  
+      IF @b_Success <> 1  
+      BEGIN  
+         SET @n_continue = 3  
+      END            
+      ELSE
+      BEGIN
+         UPDATE #PICKDETAIL_WIP  
+         SET #PICKDETAIL_WIP.Taskdetailkey = ''  
+         FROM #PICKDETAIL_WIP  
+         LEFT JOIN TASKDETAIL TD (NOLOCK) ON  TD.Taskdetailkey = #PICKDETAIL_WIP.Taskdetailkey 
+                                          AND TD.Sourcetype = @c_SourceType 
+                                          AND TD.Tasktype IN ('PK','FCP','FPP') 
+                                          AND TD.Status <> 'X'   
+         WHERE TD.Taskdetailkey IS NULL 
+      END   
+   END  
       
-    IF @n_continue IN(1,2)   
-    BEGIN  
+   IF @n_continue IN(1,2)   
+   BEGIN  
       SELECT @c_DefaultLoc = CL.Long  
       FROM CODELKUP CL (NOLOCK)  
       JOIN LOC (NOLOCK) ON CL.Long = LOC.Loc  
@@ -220,19 +221,19 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
       SET @c_SQL = N'  
           DECLARE cur_pick CURSOR FAST_FORWARD READ_ONLY FOR    
           SELECT PD.Storerkey, PD.Sku
-                ,CASE WHEN PD.UOM = ''1'' OR @c_DispatchCasePickMethod =''1'' 
+                ,CASE WHEN @c_DispatchCasePickMethod =''1''                         --(Wan01)
                       THEN PD.Lot ELSE '''' END AS Lot
                 ,PD.Loc, PD.ID, SUM(PD.Qty) AS Qty     
-                ,PD.UOM, SUM(PD.UOMQty) AS UOMQty   
+                ,PD.UOM, SUM(PD.UOMQty) AS UOMQty                                    
                 ,O.Route   
-                ,CASE WHEN PD.UOM = ''1'' OR @c_DispatchCasePickMethod =''1''
+                ,CASE WHEN @c_DispatchCasePickMethod =''1''                         --(Wan01)
                       THEN O.Orderkey ELSE '''' END AS Orderkey    
                 ,TOLOC.Loc AS ToLoc   
                 ,ISNULL(CL.Code,''9'') AS Priority   
                 ,CONVERT(NVARCHAR(8), O.DeliveryDate, 112) AS DeliveryDate  
-                ,O.Loadkey
+                ,'''' AS Loadkey                                                    --(Wan01)   
           FROM WAVEDETAIL WD (NOLOCK)  
-          JOIN WAVE W (NOLOCK) ON WD.Wavekey = W.Wavekey  
+          JOIN WAVE W (NOLOCK) ON WD.Wavekey = W.Wavekey                            
           JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey  
           JOIN #PICKDETAIL_WIP PD (NOLOCK) ON O.Orderkey = PD.Orderkey    
           JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc  
@@ -248,19 +249,19 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
           AND PD.WIP_RefNo = @c_SourceType  
           AND TD.Taskdetailkey IS NULL              
           GROUP BY PD.Storerkey, PD.Sku
-                  , CASE WHEN PD.UOM = ''1'' OR @c_DispatchCasePickMethod =''1'' 
+                  , CASE WHEN @c_DispatchCasePickMethod =''1''                      --(Wan01)  
                          THEN PD.Lot ELSE '''' END
                   , PD.Loc, PD.ID, PD.UOM, O.Route, O.Consigneekey
-                  ,CASE WHEN PD.UOM = ''1'' OR @c_DispatchCasePickMethod =''1'' 
+                  ,CASE WHEN @c_DispatchCasePickMethod =''1''                       --(Wan01)
                         THEN O.Orderkey ELSE '''' END
-                  ,O.loadkey
+                  --,O.loadkey                                                      --(Wan01)
                   ,CONVERT(NVARCHAR(8), O.DeliveryDate, 112) 
                   ,LOC.LogicalLocation
                   ,TOLOC.Loc, ISNULL(CL.Code,''9'')                    
           ORDER BY O.Route, O.Consigneekey
-                  ,CASE WHEN PD.UOM = ''1'' OR @c_DispatchCasePickMethod =''1''
+                  ,CASE WHEN @c_DispatchCasePickMethod =''1''                       --(Wan01)
                         THEN O.Orderkey ELSE '''' END
-                  ,O.loadkey   
+                  --,O.loadkey                                                      --(Wan01)
                   ,Loc.LogicalLocation, PD.Loc '         
   
       EXEC sp_executesql @c_SQL   
@@ -292,17 +293,25 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
             SET @n_err = 83030  -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
             SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Invalid To Loc setup at ROUTE. (mspRLWAV01)' 
          END                 
-  
+
          IF @c_UOM = '1' AND @n_continue IN (1,2)
          BEGIN   
             SET @c_Taskdetailkey = ''  
             SET @c_TaskType   = 'FPK'  
             SET @c_PickMethod = 'FP'  
-            SET @c_GroupKey = @c_Orderkey          
-            SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND ORDERS.Orderkey = @c_Orderkey'  
+            IF @c_DispatchCasePickMethod = '1'                                      --(Wan01) - START
+            BEGIN
+               SET @c_GroupKey = @c_Orderkey
+               SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND ORDERS.Orderkey = @c_Orderkey'
+            END
+            ELSE
+            BEGIN
+               SET @c_GroupKey = @c_Wavekey
+               SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND ORDERS.Userdefine09 = @c_Wavekey'    
+            END                                                                     --(Wan01) - END
                 
             EXEC isp_InsertTaskDetail     
-               @c_Taskdetailkey         = @c_Taskdetailkey OUTPUT  
+                @c_Taskdetailkey         = @c_Taskdetailkey OUTPUT  
                ,@c_TaskType              = @c_TaskType               
                ,@c_Storerkey             = @c_Storerkey  
                ,@c_Sku                   = @c_Sku  
@@ -356,12 +365,12 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
             END
             ELSE
             BEGIN
-               SET @c_GroupKey = @c_Loadkey
-               SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND ORDERS.Loadkey = @c_Loadkey'  
+               SET @c_GroupKey = @c_Wavekey                                                                 --(Wan01) 
+               SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND ORDERS.Userdefine09 = @c_Wavekey'   --(Wan01) 
             END
                 
             EXEC isp_InsertTaskDetail     
-               @c_TaskType              = @c_TaskType               
+                @c_TaskType              = @c_TaskType               
                ,@c_Storerkey             = @c_Storerkey  
                ,@c_Sku                   = @c_Sku  
                ,@c_Lot                   = @c_Lot   
@@ -409,8 +418,8 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
             END
             ELSE
             BEGIN
-               SET @c_GroupKey = @c_Loadkey
-               SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND ORDERS.Loadkey = @c_Loadkey'  
+               SET @c_GroupKey = @c_Wavekey                                                                 --(Wan01) 
+               SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND ORDERS.UserDefine09 = @c_Wavekey'   --(Wan01)  
             END
                 
             EXEC isp_InsertTaskDetail     
