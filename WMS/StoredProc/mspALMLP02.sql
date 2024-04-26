@@ -24,6 +24,7 @@ GO
 /* Date        Author   Rev  Purposes                                      */
 /* 2024-04-24  Wan01    1.1  UWP-15060 Fixed Get Multiple lot not filter by*/
 /*                           Qty                                           */
+/* 2024-04-24 SSA91301  1.2  UWP-18454 allow skip lottable filtering       */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspALMLP02]
    @c_DocumentNo        NVARCHAR(10)
@@ -79,6 +80,11 @@ BEGIN
          , @c_Loadkey                        NVARCHAR(10)   =''
          , @c_key3                           NVARCHAR(10)   =''
          , @c_LocationCategory               NVARCHAR(10)   ='STAGE'
+         , @c_SkipLottableFilter  NVARCHAR(60)   --SSA91301
+         , @c_CLKCondition NVARCHAR(MAX)         --SSA91301
+         , @c_CLKConditionFlag NCHAR(1)          --SSA91301
+         , @c_AllocateStrategyKey NVARCHAR(10)   --SSA91301
+         , @n_Cnt                  INT   --SSA91301
            
    SET @c_Condition = ''
    SET @n_SkuOutGoingMinShelfLife = 0
@@ -87,6 +93,8 @@ BEGIN
    SET @n_ConsigneeSkuMinShelfLife = 0
    SET @n_ConsigneeSkuGroupMinShelfLife = 0
    SET @c_ContinueChkShelfLife = 'N'
+   SET @c_CLKCondition = ''     --SSA91301
+   SET @c_SkipLottableFilter = ''     --SSA91301
 
    EXEC isp_Init_Allocate_Candidates          
 
@@ -134,80 +142,158 @@ BEGIN
    CREATE TABLE #TMP_LOT (LOT NVARCHAR(10) NULL,
                           QtyAvailable INT NULL DEFAULT(0))                                     
    
-   IF ISNULL(@c_Lottable01,'') <> '' 
+   ----------SkipLottablefilter logic start(SSA91301)-------------
+
+   DECLARE  @TMP_CODELKUP TABLE (
+       [LISTNAME] [nvarchar](10) NULL,
+       [Code] [nvarchar](30) NULL,
+       [Description] [nvarchar](250) NULL,
+       [Short] [nvarchar](10) NULL,
+       [Long] [nvarchar](250) NULL,
+       [Notes] [nvarchar](4000) NULL,
+       [Notes2] [nvarchar](4000) NULL,
+       [Storerkey] [nvarchar](50) NULL,
+       [UDF01] [nvarchar](60) NULL,
+       [UDF02] [nvarchar](60) NULL,
+       [UDF03] [nvarchar](60) NULL,
+       [UDF04] [nvarchar](60) NULL,
+       [UDF05] [nvarchar](60) NULL,
+       [code2] [nvarchar](30) NULL
+       )
+
+  --Get strategy from sku
+   SELECT @c_AllocateStrategykey = STRATEGY.AllocateStrategykey
+      FROM SKU (NOLOCK)
+      JOIN STRATEGY (NOLOCK) ON SKU.Strategykey = STRATEGY.Strategykey
+      WHERE SKU.Storerkey = @c_Storerkey
+      AND SKU.Sku = @c_Sku
+
+   INSERT INTO @TMP_CODELKUP (Listname, Code, Description, Short, Long, Notes, Notes2, Storerkey, UDF01, UDF02, UDF03, UDF04, UDF05, Code2)
+   SELECT CODELKUP.Listname,
+          CODELKUP.Code,
+          CODELKUP.Description,
+          CODELKUP.Short,
+          CODELKUP.Long,
+          CODELKUP.Notes,
+          CODELKUP.Notes2,
+          CODELKUP.Storerkey,
+          CODELKUP.UDF01,
+          CODELKUP.UDF02,
+          CODELKUP.UDF03,
+          CODELKUP.UDF04,
+          CODELKUP.UDF05,
+          CODELKUP.Code2
+   FROM CODELKUP (NOLOCK)
+   WHERE CODELKUP.Listname = 'mspALMLP02'
+   AND CODELKUP.Storerkey = CASE WHEN CODELKUP.Short = @c_AllocateStrategykey AND CODELKUP.Storerkey = '' THEN CODELKUP.Storerkey ELSE @c_Storerkey END --if setup short and no setup storer ignore storer otherwise by storer.
+   AND CODELKUP.Short IN ( CASE WHEN CODELKUP.Short NOT IN (NULL,'') THEN @c_AllocateStrategykey ELSE CODELKUP.Short END ) --if short setup must match Allocate strategykey
+   AND Code2 IN (@c_UOM,'')
+
+   --Retrieve codelkup condition
+   SELECT TOP 1 @c_CLKCondition = Notes
+   FROM @TMP_CODELKUP
+   WHERE Code = 'CONDITION'  --retrieve addition conditions
+   AND Code2 IN (@c_UOM,'')--if defined uom in code2 only apply for the specific strategy uom
+   ORDER BY CASE WHEN Code2 = @c_UOM THEN 0 ELSE 1 END --consider matched uom first
+
+   SET @n_Cnt = @@ROWCOUNT
+
+   IF @n_Cnt > 0
    BEGIN
-      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND LOTTABLE01 = RTRIM(@c_Lottable01)'  
+      IF ISNULL(@c_CLKCondition,'') <> ''
+      BEGIN
+         SET @c_CLKConditionFlag = 'Y'
+      END
    END
 
-   IF ISNULL(@c_Lottable02,'') <> '' 
+   SELECT TOP 1 @c_SkipLottableFilter = ISNULL(UDF01,'')
+   FROM @TMP_CODELKUP
+   WHERE Code = 'SKIPLOTTABLEFILTER' --Skip lottable filtering.
+   AND Code2 IN (@c_UOM,'')
+   ORDER BY CASE WHEN Code2 = @c_UOM THEN 0 ELSE 1 END
+
+   IF (ISNULL(@c_Lottable01,'') <> '' AND CHARINDEX('01',@c_SkipLottableFilter,1) = 0)
    BEGIN
-      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND LOTTABLE02 = RTRIM(@c_Lottable02)'         
+      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND LOTTABLE01 = RTRIM(@c_Lottable01)'
    END
 
-   IF ISNULL(@c_Lottable03,'') <> ''  
+   IF (ISNULL(@c_Lottable02,'') <> '' AND CHARINDEX('02',@c_SkipLottableFilter,1) = 0)
    BEGIN
-      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND LOTTABLE03 = RTRIM(@c_Lottable03)'          
+      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND LOTTABLE02 = RTRIM(@c_Lottable02)'
    END
 
-   IF CONVERT(char(10), @d_Lottable04, 103) <> '01/01/1900' AND @d_Lottable04 IS NOT NULL 
+   IF (ISNULL(@c_Lottable03,'') <> '' AND CHARINDEX('03',@c_SkipLottableFilter,1) = 0)
    BEGIN
-      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND LOTTABLE04 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable04, 106))'  
-   END                                                                                                                            
-                                                                                                                                  
-   IF CONVERT(char(10), @d_Lottable05, 103) <> '01/01/1900' AND @d_Lottable05 IS NOT NULL                                         
-   BEGIN                                                                                                                          
-      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND LOTTABLE05 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable05, 106))'  
+      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND LOTTABLE03 = RTRIM(@c_Lottable03)'
    END
 
-   IF ISNULL(@c_Lottable06,'') <> '' 
+   IF (CONVERT(char(10), @d_Lottable04, 103) <> '01/01/1900' AND @d_Lottable04 IS NOT NULL AND CHARINDEX('04',@c_SkipLottableFilter,1) = 0)
    BEGIN
-      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'')+ ' AND Lottable06 = RTRIM(@c_Lottable06) '              
-   END                                                                                                          
-                                                                                                                
-   IF ISNULL(@c_Lottable07,'') <> ''                                                                            
-   BEGIN                                                                                                        
-      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable07 = RTRIM(@c_Lottable07)'             
-   END                                                                                                          
-                                                                                                                
-   IF ISNULL(@c_Lottable08,'') <> ''                                                                            
-   BEGIN                                                                                                        
-      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable08 = RTRIM(@c_Lottable08)'             
-   END                                                                                                          
-                                                                                                                
-   IF ISNULL(@c_Lottable09,'') <> ''                                                                            
-   BEGIN                                                                                                        
-      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable09 = RTRIM(@c_Lottable09)'             
+      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND LOTTABLE04 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable04, 106))'
    END
 
-   IF ISNULL(@c_Lottable10,'') <> ''  
+   IF (CONVERT(char(10), @d_Lottable05, 103) <> '01/01/1900' AND @d_Lottable05 IS NOT NULL AND CHARINDEX('05',@c_SkipLottableFilter,1) = 0)
    BEGIN
-      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable10 = RTRIM(@c_Lottable10)'             
-   END                                                                                                          
-                                                                                                                
-   IF ISNULL(@c_Lottable11,'') <> ''                                                                            
-   BEGIN                                                                                                        
-      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable11 = RTRIM(@c_Lottable11)'             
-   END                                                                                                          
-                                                                                                                
-   IF ISNULL(@c_Lottable12,'') <> ''                                                                            
-   BEGIN                                                                                                        
-      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable12 = RTRIM(@c_Lottable12)'             
+      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND LOTTABLE05 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable05, 106))'
    END
 
-   IF CONVERT(char(10), @d_Lottable13, 103) <> '01/01/1900' AND @d_Lottable13 IS NOT NULL          --(Wan01) 
+   IF (ISNULL(@c_Lottable06,'') <> '' AND CHARINDEX('06',@c_SkipLottableFilter,1) = 0)
    BEGIN
-      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable13 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable13, 106))'  
-   END                                                                                                                            
-                                                                                                                                  
-   IF CONVERT(char(10), @d_Lottable14, 103) <> '01/01/1900' AND @d_Lottable14 IS NOT NULL          --(Wan01)                                                                      
-   BEGIN                                                                                                                          
-      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable14 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable14, 106))'  
-   END                                                                                                                            
-                                                                                                                                  
-   IF CONVERT(char(10), @d_Lottable15, 103) <> '01/01/1900' AND @d_Lottable15 IS NOT NULL          --(Wan01)                                                                      
-   BEGIN                                                                                                                          
-      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable15 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable15, 106))'  
+      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'')+ ' AND Lottable06 = RTRIM(@c_Lottable06) '
    END
+
+   IF (ISNULL(@c_Lottable07,'') <> '' AND CHARINDEX('07',@c_SkipLottableFilter,1) = 0)
+   BEGIN
+      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable07 = RTRIM(@c_Lottable07) '
+   END
+
+   IF (ISNULL(@c_Lottable08,'') <> '' AND CHARINDEX('08',@c_SkipLottableFilter,1) = 0)
+   BEGIN
+      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable08 = RTRIM(@c_Lottable08) '
+   END
+
+   IF (ISNULL(@c_Lottable09,'') <> '' AND CHARINDEX('09',@c_SkipLottableFilter,1) = 0)
+   BEGIN
+      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable09 = RTRIM(@c_Lottable09) '
+   END
+
+   IF (ISNULL(@c_Lottable10,'') <> '' AND CHARINDEX('10',@c_SkipLottableFilter,1) = 0)
+   BEGIN
+      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable10 = RTRIM(@c_Lottable10) '
+   END
+
+   IF (ISNULL(@c_Lottable11,'') <> '' AND CHARINDEX('11',@c_SkipLottableFilter,1) = 0)
+   BEGIN
+      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable11 = RTRIM(@c_Lottable11) '
+   END
+
+   IF (ISNULL(@c_Lottable12,'') <> '' AND CHARINDEX('12',@c_SkipLottableFilter,1) = 0)
+   BEGIN
+      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable12 = RTRIM(@c_Lottable12) '
+   END
+
+   IF (CONVERT(char(10), @d_Lottable13, 103) <> '01/01/1900' AND @d_Lottable13 IS NOT NULL AND CHARINDEX('13',@c_SkipLottableFilter,1) = 0)         --(Wan01) --(SSA91301)
+   BEGIN
+      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable13 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable13, 106)) '
+   END
+
+   IF (CONVERT(char(10), @d_Lottable14, 103) <> '01/01/1900' AND @d_Lottable14 IS NOT NULL AND CHARINDEX('14',@c_SkipLottableFilter,1) = 0)         --(Wan01) --(SSA91301)
+   BEGIN
+      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable14 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable14, 106)) '
+   END
+
+   IF (CONVERT(char(10), @d_Lottable15, 103) <> '01/01/1900' AND @d_Lottable15 IS NOT NULL AND CHARINDEX('15',@c_SkipLottableFilter,1) = 0)         --(Wan01) --(SSA91301)
+   BEGIN
+      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND Lottable15 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable15, 106)) '
+   END
+
+   IF @c_CLKConditionFlag = 'Y'
+   BEGIN
+       IF LEFT(LTRIM(@c_CLKCondition),3) <> 'AND'
+          SET @c_CLKCondition = ' AND ' + RTRIM(LTRIM(@c_CLKCondition))
+   END
+
+   ----------SkipLottablefilter logic end(SSA91301)-------------
 
    ------Order shelflife (orderdetail.Minshelflife)
    IF ISNULL(@n_OrderMinShelfLife,0) > 0 AND ISNULL(@c_OrderKey,'') <> '' AND @c_ContinueChkShelfLife = 'Y'
@@ -385,7 +471,8 @@ BEGIN
                  + ' AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QTYREPLEN) > 0'
                  + ' AND LOT.STATUS = ''OK'' AND LOC.STATUS = ''OK'' AND ID.STATUS = ''OK'''
                  + ' AND LOC.LocationFlag NOT IN (''HOLD'',''DAMAGE'')'
-                 + ' ' +  ISNULL(RTRIM(@c_Condition),'') 
+                 + ' ' +  ISNULL(RTRIM(@c_Condition),'')
+                 + ' ' + ISNULL(RTRIM(@c_CLKCondition),'')   --SSA91301
                  + ' ' + @c_SortBy
 
       SET @c_SQLParms = N'@c_Facility NVARCHAR(5), @c_StorerKey NVARCHAR(15), @c_SKU  NVARCHAR(20), @c_UOM NVARCHAR(10), @c_HostWHCode NVARCHAR(10)'
@@ -564,7 +651,8 @@ BEGIN
                  + ' AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QTYREPLEN) > 0'
                  + ' AND LOT.STATUS = ''OK'' AND LOC.STATUS = ''OK'' AND ID.STATUS = ''OK'''
                  + ' AND LOC.LocationFlag NOT IN (''HOLD'',''DAMAGE'')'
-                 + ' ' + ISNULL(RTRIM(@c_Condition),'') 
+                 + ' ' + ISNULL(RTRIM(@c_Condition),'')
+                 + ' ' + ISNULL(RTRIM(@c_CLKCondition),'')   --SSA91301
                  + ' ' + @c_SortBy
 
       SET @c_SQLParms = N'@c_Facility NVARCHAR(5), @c_StorerKey NVARCHAR(15), @c_SKU  NVARCHAR(20), @c_UOM NVARCHAR(10), @c_HostWHCode NVARCHAR(10)'
