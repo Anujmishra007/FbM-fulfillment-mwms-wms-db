@@ -36,7 +36,10 @@ GO
 /* 2021-04-26 2.5  James    WMS-16634 Direct Go screen 2 TMCC SKU (james11)  */
 /* 2021-05-07 2.6  James    WMS-16965 Add empty loc default opt (james12)    */
 /* 2021-06-02 2.7  James    WMS-16634 Add update loc.lastcyclecount (james13)*/
-/* 2023-11-17 2.8  James    WMS-23429 Sort task by logicalloc, loc (james14) */
+/* 2023-09-09 2.8  James    WMS-23249 Add ID count (james14)                 */
+/*                          Add BypassScanIDSP config                        */
+/* 2023-11-17 2.9  James    WMS-23429 Sort task by logicalloc, loc (james14) */
+/* 2024-04-19 3.0  James    WMS-25276 Skip scn 3 based on Loc setup(james16) */
 /*****************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CycleCount](
@@ -74,9 +77,9 @@ DECLARE
    @cSuggFromLoc        NVARCHAR(10),
    @cSuggID             NVARCHAR(18),
    @cSuggSKU            NVARCHAR(20),
-   @cUCC               NVARCHAR(20),
+   @cUCC                NVARCHAR(20),
    @cCommodity          NVARCHAR(20),
-   @c_outstring         NVARCHAR(255),
+ @c_outstring         NVARCHAR(255),
    @cContinueProcess    NVARCHAR(10),
    @cReasonStatus       NVARCHAR(10),
    @cAreakey            NVARCHAR(10),
@@ -164,6 +167,10 @@ DECLARE
    @cTMCCSKUSkipScreen1     NVARCHAR( 1),
    @cEmptyLocDefaultOption  NVARCHAR( 1),
    @cDefaultCCOptionSP      NVARCHAR( 20),
+   @cBypassScanIDSP         NVARCHAR( 20),
+   @nBypassScanID           INT,
+   @tBypassScanID           VariableTable,
+   @cFlowThruScreen         NVARCHAR( 10),
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -230,6 +237,8 @@ SELECT
    @cTMCCSKUSkipScreen1 = V_String5,
    @cUserPosition    = V_String6,
    @cDefaultCCOptionSP = V_String7,
+   @cFlowThruScreen    = V_String8,
+
    @cLoc             = V_String10,
    @cSuggSKU         = V_String13,
    @cPickMethod      = V_String14,
@@ -274,7 +283,7 @@ SELECT
    @cInField11 = I_Field11,   @cOutField11 = O_Field11,
    @cInField12 = I_Field12,   @cOutField12 = O_Field12,
    @cInField13 = I_Field13,   @cOutField13 = O_Field13,
-   @cInField14 = I_Field14,   @cOutField14 = O_Field14,
+  @cInField14 = I_Field14,   @cOutField14 = O_Field14,
    @cInField15 = I_Field15,   @cOutField15 = O_Field15,
 
    @cFieldAttr01  = FieldAttr01,    @cFieldAttr02   = FieldAttr02,
@@ -323,7 +332,6 @@ BEGIN
 
    IF @nInputKey = 1 -- ENTER
    BEGIN
-
       -- Screen mapping
       SET @cLoc   = ISNULL(RTRIM(@cInField02),'')
       SET @cID = ''  -- (james02)
@@ -345,22 +353,20 @@ BEGIN
       SET @cOverrideLOC = ''
       SET @cOverrideLOC = rdt.RDTGetConfig( @nFunc, 'OverrideLOC', @cStorerkey)
 
-
-
       IF @cLoc <> @cSuggFromLoc
       BEGIN
-            SET @nErrNo = 74402
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Loc
-            GOTO Step_1_Fail
-
+         SET @nErrNo = 74402
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Loc
+         GOTO Step_1_Fail
       END
 
-      SELECT @cTaskStorer  = Storerkey,
-        @cSuggID      = FromID,
-             @cSuggFromLoc = FromLOC,
-             @cSuggSKU     = SKU,
-             @cPickMethod  = PickMethod,
-             @cSourceKey   = SourceKey
+      SELECT
+         @cTaskStorer  = Storerkey,
+         @cSuggID      = FromID,
+         @cSuggFromLoc = FromLOC,
+         @cSuggSKU     = SKU,
+         @cPickMethod  = PickMethod,
+         @cSourceKey   = SourceKey
       FROM dbo.TaskDetail WITH (NOLOCK)
       WHERE TaskDetailKey = @cTaskdetailkey
 
@@ -385,6 +391,11 @@ BEGIN
       IF @cDefaultCCOptionSP = '0'
          SET @cDefaultCCOptionSP = ''
 
+      SET @cBypassScanIDSP = rdt.RDTGetConfig( @nFunc, 'BypassScanIDSP', @cStorerKey)
+      IF @cBypassScanIDSP = '0'
+         SET @cBypassScanIDSP = ''
+
+      SET @cFlowThruScreen = rdt.RDTGetConfig( @nFunc, 'FlowThruScreen', @cStorerKey)
 
       -- (james04)
       -- If TM CC task is generated from daily PI task then pickmethod
@@ -418,58 +429,11 @@ BEGIN
          GOTO Step_1_Fail
       END
 
-
       SELECT @cPUOM = IsNULL( DefaultUOM, '6') -- If not defined, default as EA
       FROM RDT.rdtMobRec M (NOLOCK)
       INNER JOIN RDT.rdtUser U (NOLOCK) ON (M.UserName = U.UserName)
       WHERE M.Mobile = @nMobile
 
-
-      -- Create Task IN CC Detail by PickMethod --
---      IF @cPickMethod = 'LOC'
---      BEGIN
---
---
---          EXEC rdt.rdt_TM_CycleCount_InsertCCDetail
---            @nMobile          = @nMobile
---           ,@c_TaskDetailKey  = @cTaskdetailkey
---           ,@nErrNo           = @nErrNo
---           ,@cErrMsg          = @cErrMsg
---           ,@cLangCode        = @cLangCode
---           ,@c_StorerKey      = @cStorerKey
---           ,@c_Loc            = @cSuggFromLoc
---           ,@c_Facility       = @cFacility
---
---
---           IF @nErrNo <> 0
---           BEGIN
---               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
---               GOTO Step_1_Fail
---    END
---
---      END
---      ELSE IF @cPickMethod = 'SKU'
---      BEGIN
---
---         EXEC rdt.rdt_TM_CycleCount_InsertCCDetail
---            @nMobile          = @nMobile
---           ,@c_TaskDetailKey  = @cTaskdetailkey
---           ,@nErrNo           = @nErrNo
---           ,@cErrMsg          = @cErrMsg
---           ,@cLangCode        = @cLangCode
---           ,@c_StorerKey      = @cStorerKey
---           ,@c_Loc            = @cSuggFromLoc
---           ,@c_Facility       = @cFacility
---           ,@c_SKU            = @cSuggSKU
---
---           IF @nErrNo <> 0
---           BEGIN
---               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
---               GOTO Step_1_Fail
---           END
---      END
-
-      --SET @cCCKey = @cTaskdetailkey
       SET @cCCKey = @cSourceKey
 
       SELECT @nQtyOnLoc = ISNULL( SUM(QTY - QTYPICKED), 0)
@@ -491,7 +455,6 @@ BEGIN
          SET @nStep = @nStep + 3
 
          GOTO QUIT
-
       END
 
       EXEC RDT.rdt_STD_EventLog
@@ -507,8 +470,46 @@ BEGIN
        prepare next screen variable
       ****************************/
 
+      -- (james14)
+      -- BypassScanIDSP
+      IF @cBypassScanIDSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cBypassScanIDSP AND type = 'P')
+         BEGIN
+            SET @nBypassScanID = 0
+            SET @cSQL = 'EXEC rdt.' + RTRIM(@cBypassScanIDSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cTaskdetailkey, @cFromLoc, @cID, @cPickMethod, ' +
+               ' @tBypassScanID, @nBypassScanID OUTPUT '
+            SET @cSQLParam =
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,           ' +
+               '@nInputKey       INT,           ' +
+               '@cFacility       NVARCHAR( 15), ' +
+               '@cStorerKey      NVARCHAR( 15), ' +
+               '@cTaskdetailkey  NVARCHAR( 20),  ' +
+               '@cFromLoc        NVARCHAR( 20),  ' +
+               '@cID             NVARCHAR( 20),  ' +
+               '@cPickMethod     NVARCHAR( 20),  ' +
+               '@tBypassScanID   VariableTable READONLY, ' +
+               '@nBypassScanID   INT OUTPUT  '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cTaskdetailkey, @cSuggFromLoc, @cID, @cPickMethod,
+                  @tBypassScanID, @nBypassScanID OUTPUT
+
+            SET @cOutField15 = @cExtendedInfo
+         END
+      END
+
       -- If loc.loseid = 1 then no need scan pallet id. Skip the screen (james02)
-      IF EXISTS (SELECT 1 FROM LOC WITH (NOLOCK) WHERE LOC = @cLoc AND LoseId = '1')
+      -- If BypassScanID = 1 also no need scan pallet id. Skip the screen (james14)
+      IF EXISTS (SELECT 1
+                 FROM LOC WITH (NOLOCK)
+                 WHERE LOC = @cLoc
+                 AND   LoseId = '1') OR
+                 @nBypassScanID = 1
       BEGIN
          -- If turn on UCC config then goto option screen to let user choose
          -- whether they want count by UCC or SKU. Else by default is SKU
@@ -591,7 +592,7 @@ BEGIN
             SET @cOutField02 = @cID
             SET @cOutField03 = ''
 
-            SET @cOutField04 = ''
+      SET @cOutField04 = ''
             SET @cOutField05 = ''
 
             SET @cFieldAttr04 = 'O'
@@ -941,30 +942,39 @@ BEGIN
                      SET @cFieldAttr14 = ''
                      SET @cFieldAttr15 = ''
 
-                     --SET @cOutField01 = ''
-                     /*
-                     SELECT
-                        @cLotLabel01 = IsNULL(( SELECT C.[Description] FROM dbo.CodeLKUP C WITH (NOLOCK) WHERE C.Code = S.Lottable01Label AND C.ListName = 'LOTTABLE01' AND C.Code <> ''), ''),
-                        @cLotLabel02 = IsNULL(( SELECT C.[Description] FROM dbo.CodeLKUP C WITH (NOLOCK) WHERE C.Code = S.Lottable02Label AND C.ListName = 'LOTTABLE02' AND C.Code <> ''), ''),
-                        @cLotLabel03 = IsNULL(( SELECT C.[Description] FROM dbo.CodeLKUP C WITH (NOLOCK) WHERE C.Code = S.Lottable03Label AND C.ListName = 'LOTTABLE03' AND C.Code <> ''), ''),
-                        @cLotLabel04 = IsNULL(( SELECT C.[Description] FROM dbo.CodeLKUP C WITH (NOLOCK) WHERE C.Code = S.Lottable04Label AND C.ListName = 'LOTTABLE04' AND C.Code <> ''), ''),
-                        @cLotLabel05 = IsNULL(( SELECT C.[Description] FROM dbo.CodeLKUP C WITH (NOLOCK) WHERE C.Code = S.Lottable05Label AND C.ListName = 'LOTTABLE05' AND C.Code <> ''), ''),
-                        @cLottable05_Code = IsNULL(S.Lottable05Label, ''),
-                        @cLottable01_Code = IsNULL(S.Lottable01Label, ''),
-                        @cLottable02_Code = IsNULL(S.Lottable02Label, ''),
-                        @cLottable03_Code = IsNULL(S.Lottable03Label, ''),
-                        @cLottable04_Code = IsNULL(S.Lottable04Label, '')
-                     FROM dbo.SKU S WITH (NOLOCK)
-                     WHERE StorerKey = @cStorerKey
-                     AND SKU = @cSKU
-                     */
                      -- (james02)
                      SELECT
-                        @cLotLabel01 = IsNULL(( SELECT TOP 1 C.[Description] FROM dbo.CodeLKUP C WITH (NOLOCK) WHERE C.Code = S.Lottable01Label AND C.ListName = 'LOTTABLE01' AND C.Code <> '' AND (C.StorerKey = @cStorerKey OR C.Storerkey = '') ORDER By C.StorerKey DESC), ''),
-                        @cLotLabel02 = IsNULL(( SELECT TOP 1 C.[Description] FROM dbo.CodeLKUP C WITH (NOLOCK) WHERE C.Code = S.Lottable02Label AND C.ListName = 'LOTTABLE02' AND C.Code <> '' AND (C.StorerKey = @cStorerKey OR C.Storerkey = '') ORDER By C.StorerKey DESC), ''),
-                        @cLotLabel03 = IsNULL(( SELECT TOP 1 C.[Description] FROM dbo.CodeLKUP C WITH (NOLOCK) WHERE C.Code = S.Lottable03Label AND C.ListName = 'LOTTABLE03' AND C.Code <> '' AND (C.StorerKey = @cStorerKey OR C.Storerkey = '') ORDER By C.StorerKey DESC), ''),
-                        @cLotLabel04 = IsNULL(( SELECT TOP 1 C.[Description] FROM dbo.CodeLKUP C WITH (NOLOCK) WHERE C.Code = S.Lottable04Label AND C.ListName = 'LOTTABLE04' AND C.Code <> '' AND (C.StorerKey = @cStorerKey OR C.Storerkey = '') ORDER By C.StorerKey DESC), ''),
-                        @cLotLabel05 = IsNULL(( SELECT TOP 1 C.[Description] FROM dbo.CodeLKUP C WITH (NOLOCK) WHERE C.Code = S.Lottable05Label AND C.ListName = 'LOTTABLE05' AND C.Code <> '' AND (C.StorerKey = @cStorerKey OR C.Storerkey = '') ORDER By C.StorerKey DESC), ''),
+                        @cLotLabel01 = IsNULL(( SELECT TOP 1 C.[Description]
+                                                FROM dbo.CodeLKUP C WITH (NOLOCK)
+                                                WHERE C.Code = S.Lottable01Label
+                                                AND C.ListName = 'LOTTABLE01'
+                                                AND C.Code <> ''
+                                                AND (C.StorerKey = @cStorerKey OR C.Storerkey = '')
+                                                ORDER By C.StorerKey DESC), ''),
+                        @cLotLabel02 = IsNULL(( SELECT TOP 1 C.[Description]
+                                                FROM dbo.CodeLKUP C WITH (NOLOCK)
+                                                WHERE C.Code = S.Lottable02Label
+                                                AND C.ListName = 'LOTTABLE02' AND C.Code <> ''
+                                                AND (C.StorerKey = @cStorerKey OR C.Storerkey = '')
+                                                ORDER By C.StorerKey DESC), ''),
+                        @cLotLabel03 = IsNULL(( SELECT TOP 1 C.[Description]
+                                                FROM dbo.CodeLKUP C WITH (NOLOCK)
+                                                WHERE C.Code = S.Lottable03Label
+                                                AND C.ListName = 'LOTTABLE03' AND C.Code <> ''
+                                                AND (C.StorerKey = @cStorerKey OR C.Storerkey = '')
+                                                ORDER By C.StorerKey DESC), ''),
+                        @cLotLabel04 = IsNULL(( SELECT TOP 1 C.[Description]
+                                                FROM dbo.CodeLKUP C WITH (NOLOCK)
+                                                WHERE C.Code = S.Lottable04Label
+                                                AND C.ListName = 'LOTTABLE04' AND C.Code <> ''
+                                                AND (C.StorerKey = @cStorerKey OR C.Storerkey = '')
+                                                ORDER By C.StorerKey DESC), ''),
+                        @cLotLabel05 = IsNULL(( SELECT TOP 1 C.[Description]
+                                                FROM dbo.CodeLKUP C WITH (NOLOCK)
+                                                WHERE C.Code = S.Lottable05Label
+                                                AND C.ListName = 'LOTTABLE05' AND C.Code <> ''
+                                                AND (C.StorerKey = @cStorerKey OR C.Storerkey = '')
+                                                ORDER By C.StorerKey DESC), ''),
                         @cLottable05_Code = IsNULL( S.Lottable05Label, ''),
                         @cLottable01_Code = IsNULL(S.Lottable01Label, ''),
                         @cLottable02_Code = IsNULL(S.Lottable02Label, ''),
@@ -1017,7 +1027,7 @@ BEGIN
                            END
                            ELSE
                            IF @nCountLot = 3
-                           BEGIN
+   BEGIN
                               SET @cListName = 'Lottable03'
                               SET @cLottableLabel = @cLottable03_Code
                            END
@@ -1165,7 +1175,7 @@ BEGIN
                            SET @cFieldAttr10 = 'O'
                            SET @cOutField10 = ''
                         END
-                        ELSE
+                    ELSE
                         BEGIN
                            SELECT @cOutField10 = ISNULL(@cLottable03, '')
                         END
@@ -1280,13 +1290,13 @@ BEGIN
 
                GOTO QUIT
             END
-            ELSE
-            BEGIN
-               -- Set the entry point
-               SET @nFunc = @nToFunc
-               SET @nScn = 2940
-               SET @nStep = 1
-            END
+            --ELSE
+            --BEGIN
+            --   -- Set the entry point
+            --   SET @nFunc = @nToFunc
+            --   SET @nScn = 2940
+            --   SET @nStep = 1
+            --END
          END
 
          IF @cDefaultCCOptionSP <> ''
@@ -1309,6 +1319,27 @@ BEGIN
 
                EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                   @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cTaskdetailkey, @cDefaultCCOption OUTPUT
+            END
+         END
+         ELSE
+         BEGIN
+            IF EXISTS( SELECT 1 FROM STRING_SPLIT( @cFlowThruScreen, ',') WHERE TRIM( value) = '3') -- Statistic screen
+            BEGIN
+            	IF EXISTS ( SELECT 1
+            	            FROM dbo.LOC WITH (NOLOCK)
+            	            WHERE Facility = @cFacility
+            	            AND   Loc = @cLoc
+            	            AND   LoseUCC = '0')
+                  SET @cInField03 = '1' -- UCC
+               ELSE
+               	SET @cInField03 = '2' -- SKU
+
+               SET @cOutField01 = @cLoc
+               SET @cOutField02 = ''
+
+               SET @nScn = @nScn + 2
+               SET @nStep = @nStep + 2
+               GOTO Step_3
             END
          END
 
@@ -1447,7 +1478,7 @@ BEGIN
          BEGIN
             SET @nErrNo = 74450
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LOC X LOSEUCC
-            SET @cOutField02 = ''
+       SET @cOutField02 = ''
             GOTO Quit
          END
 
@@ -1542,24 +1573,79 @@ BEGIN
       /****************************
        prepare next screen variable
       ****************************/
-      SET @cDefaultCCOption = ''
-      SET @cDefaultCCOption = rdt.RDTGetConfig( @nFunc, 'DefaultCCOption', @cStorerkey)
-
-      IF @cDefaultCCOption <> ''  AND @cDefaultCCOption <> '0'
+      IF @cDefaultCCOptionSP <> ''
       BEGIN
-         SET @cOutField03 = @cDefaultCCOption
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDefaultCCOptionSP AND type = 'P')
+         BEGIN
+            SET @cDefaultCCOption = ''
+            SET @cSQL = 'EXEC rdt.' + RTRIM(@cDefaultCCOptionSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cTaskdetailkey, @cDefaultCCOption OUTPUT '
+            SET @cSQLParam =
+               '@nMobile            INT,           ' +
+               '@nFunc              INT,           ' +
+               '@cLangCode          NVARCHAR( 3),  ' +
+               '@nStep              INT,           ' +
+               '@nInputKey          INT,           ' +
+               '@cFacility          NVARCHAR( 15), ' +
+               '@cStorerKey         NVARCHAR( 15), ' +
+               '@cTaskdetailkey     NVARCHAR( 20),  ' +
+               '@cDefaultCCOption   NVARCHAR( 20)  OUTPUT  '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cTaskdetailkey, @cDefaultCCOption OUTPUT
+         END
       END
       ELSE
       BEGIN
-         SET @cOutField03 = ''
+         IF EXISTS( SELECT 1 FROM STRING_SPLIT( @cFlowThruScreen, ',') WHERE TRIM( value) = '3') -- Statistic screen
+         BEGIN
+            IF EXISTS ( SELECT 1
+            	         FROM dbo.LOC WITH (NOLOCK)
+            	         WHERE Facility = @cFacility
+            	         AND   Loc = @cLoc
+            	         AND   LoseUCC = '0')
+               SET @cInField03 = '1' -- UCC
+            ELSE
+               SET @cInField03 = '2' -- SKU
+
+            SET @cOutField01 = @cLoc
+            SET @cOutField02 = @cID
+
+            SET @nScn = @nScn + 1
+            SET @nStep = @nStep + 1
+            GOTO Step_3
+         END
       END
 
+      -- prepare next screen variable
       SET @cOutField01 = @cLoc
       SET @cOutField02 = @cID
+      SET @cOutField03 = CASE WHEN @cDefaultCCOption = '' OR @cDefaultCCOption = '0' THEN '' ELSE @cDefaultCCOption END
 
-      -- Go to SKU / UPC Screen
+      -- Go to CC option Screen
       SET @nScn = @nScn + 1
       SET @nStep = @nStep + 1
+
+      GOTO Quit
+
+      --SET @cDefaultCCOption = ''
+      --SET @cDefaultCCOption = rdt.RDTGetConfig( @nFunc, 'DefaultCCOption', @cStorerkey)
+
+      --IF @cDefaultCCOption <> ''  AND @cDefaultCCOption <> '0'
+      --BEGIN
+      --   SET @cOutField03 = @cDefaultCCOption
+      --END
+      --ELSE
+      --BEGIN
+      --   SET @cOutField03 = ''
+      --END
+
+      --SET @cOutField01 = @cLoc
+      --SET @cOutField02 = @cID
+
+      ---- Go to SKU / UPC Screen
+      --SET @nScn = @nScn + 1
+      --SET @nStep = @nStep + 1
    END
 
    IF @nInputKey = 0 -- ESC
@@ -1610,7 +1696,7 @@ BEGIN
          GOTO Step_3_Fail
       END
 
-      IF @cOptions NOT IN ('1', '2')
+      IF @cOptions NOT IN ('1', '2', '3')
       BEGIN
          SET @nErrNo = 74417
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Inv Option
@@ -1665,6 +1751,8 @@ BEGIN
          SET @cOutField10 = ''
          SET @cOutField11 = ''
          SET @cOutField15 = ''
+
+         EXEC rdt.rdtSetFocusField @nMobile, 1
 
          SET @nPrevStep = 0
          SET @nPrevScreen = 0
@@ -2046,23 +2134,6 @@ BEGIN
                   SET @cFieldAttr14 = ''
                   SET @cFieldAttr15 = ''
 
-                  --SET @cOutField01 = ''
-                  /*
-                  SELECT
-                     @cLotLabel01 = IsNULL(( SELECT C.[Description] FROM dbo.CodeLKUP C WITH (NOLOCK) WHERE C.Code = S.Lottable01Label AND C.ListName = 'LOTTABLE01' AND C.Code <> ''), ''),
-                     @cLotLabel02 = IsNULL(( SELECT C.[Description] FROM dbo.CodeLKUP C WITH (NOLOCK) WHERE C.Code = S.Lottable02Label AND C.ListName = 'LOTTABLE02' AND C.Code <> ''), ''),
-                     @cLotLabel03 = IsNULL(( SELECT C.[Description] FROM dbo.CodeLKUP C WITH (NOLOCK) WHERE C.Code = S.Lottable03Label AND C.ListName = 'LOTTABLE03' AND C.Code <> ''), ''),
-                     @cLotLabel04 = IsNULL(( SELECT C.[Description] FROM dbo.CodeLKUP C WITH (NOLOCK) WHERE C.Code = S.Lottable04Label AND C.ListName = 'LOTTABLE04' AND C.Code <> ''), ''),
-                     @cLotLabel05 = IsNULL(( SELECT C.[Description] FROM dbo.CodeLKUP C WITH (NOLOCK) WHERE C.Code = S.Lottable05Label AND C.ListName = 'LOTTABLE05' AND C.Code <> ''), ''),
-                     @cLottable05_Code = IsNULL(S.Lottable05Label, ''),
-                     @cLottable01_Code = IsNULL(S.Lottable01Label, ''),
-                     @cLottable02_Code = IsNULL(S.Lottable02Label, ''),
-                     @cLottable03_Code = IsNULL(S.Lottable03Label, ''),
-                     @cLottable04_Code = IsNULL(S.Lottable04Label, '')
-                  FROM dbo.SKU S WITH (NOLOCK)
-                  WHERE StorerKey = @cStorerKey
-                  AND SKU = @cSKU
-                  */
                   -- (james02)
                   SELECT
                      @cLotLabel01 = IsNULL(( SELECT TOP 1 C.[Description] FROM dbo.CodeLKUP C WITH (NOLOCK) WHERE C.Code = S.Lottable01Label AND C.ListName = 'LOTTABLE01' AND C.Code <> '' AND (C.StorerKey = @cStorerKey OR C.Storerkey = '') ORDER By C.StorerKey DESC), ''),
@@ -2070,7 +2141,7 @@ BEGIN
                      @cLotLabel03 = IsNULL(( SELECT TOP 1 C.[Description] FROM dbo.CodeLKUP C WITH (NOLOCK) WHERE C.Code = S.Lottable03Label AND C.ListName = 'LOTTABLE03' AND C.Code <> '' AND (C.StorerKey = @cStorerKey OR C.Storerkey = '') ORDER By C.StorerKey DESC), ''),
                      @cLotLabel04 = IsNULL(( SELECT TOP 1 C.[Description] FROM dbo.CodeLKUP C WITH (NOLOCK) WHERE C.Code = S.Lottable04Label AND C.ListName = 'LOTTABLE04' AND C.Code <> '' AND (C.StorerKey = @cStorerKey OR C.Storerkey = '') ORDER By C.StorerKey DESC), ''),
                      @cLotLabel05 = IsNULL(( SELECT TOP 1 C.[Description] FROM dbo.CodeLKUP C WITH (NOLOCK) WHERE C.Code = S.Lottable05Label AND C.ListName = 'LOTTABLE05' AND C.Code <> '' AND (C.StorerKey = @cStorerKey OR C.Storerkey = '') ORDER By C.StorerKey DESC), ''),
-                     @cLottable05_Code = IsNULL( S.Lottable05Label, ''),
+                     @cLottable05_Code = IsNULL(S.Lottable05Label, ''),
                      @cLottable01_Code = IsNULL(S.Lottable01Label, ''),
                      @cLottable02_Code = IsNULL(S.Lottable02Label, ''),
                      @cLottable03_Code = IsNULL(S.Lottable03Label, ''),
@@ -2215,7 +2286,7 @@ BEGIN
                   END -- Lottable <> ''
 
                   /********************************************************************************************************************/
-                  /* - End                                                                                                            */
+                  /* - End                                        */
                   /* Generic Lottables Computation (PRE): To compute Lottables before going to Lottable Screen                        */
                   /********************************************************************************************************************/
 
@@ -2301,7 +2372,7 @@ BEGIN
             END
 
             -- Extended info
-            IF @cExtendedInfoSP <> ''
+    IF @cExtendedInfoSP <> ''
             BEGIN
                IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
                BEGIN
@@ -2382,7 +2453,7 @@ BEGIN
             -- Set the entry point
             SET @nFunc = @nToFunc
             SET @nScn = 2941
-            SET @nStep = 2
+SET @nStep = 2
          END
          ELSE
          BEGIN
@@ -2392,46 +2463,59 @@ BEGIN
             SET @nStep = 1
          END
       END
-      IF @cOptions = '3'
+      ELSE IF @cOptions = '3'
       BEGIN
-  -- (james01)
+         -- Count by ID must only count Loc with have LoseID set to value other than '1'
          IF EXISTS (SELECT 1 FROM dbo.LOC WITH (NOLOCK)
-                    WHERE Facility = @cFacility
-                    AND   LOC = @cSuggFromLoc
-                    AND   LoseUCC = '0')
+                    WHERE LOC = @cLOC
+                    AND   Facility = @cFacility
+                    AND   LoseID = '1')
          BEGIN
-            SET @nErrNo = 74446
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LOC X LOSEUCC
+            SET @nErrNo = 57954
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 'LOC LOSEID'
             GOTO Step_3_Fail
          END
 
-         SET @nToFunc = 1769
-         SET @nToStep = 1
+         EXEC rdt.rdt_TM_CycleCount_InsertCCDetail
+            @nMobile          = @nMobile
+           ,@c_TaskDetailKey  = @cTaskdetailkey
+           ,@nErrNo           = @nErrNo
+           ,@cErrMsg          = @cErrMsg
+           ,@cLangCode        = @cLangCode
+           ,@c_StorerKey      = @cStorerKey
+           ,@c_Loc            = @cSuggFromLoc
+           ,@c_Facility       = @cFacility
+           ,@c_PickMethod     = @cPickMethod
+           ,@c_CCOptions      = '1'
+           ,@c_SourceKey      = @cCCKey
 
-         SET @cOutField01 = @cLoc
-         SET @cOutField02 = @cID
+         IF @nErrNo <> 0
+         BEGIN
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+            GOTO Step_3_Fail
+         END
+
+         SET @cOutField01 = ''
+         SET @cOutField02 = ''
          SET @cOutField03 = ''
-
          SET @cOutField04 = ''
          SET @cOutField05 = ''
+         SET @cOutField06 = ''
+         SET @cOutField07 = ''
+         SET @cOutField08 = ''
+         SET @cOutField09 = ''
+         SET @cOutField10 = ''
+         SET @cOutField11 = ''
+         SET @cOutField15 = ''
 
-         SET @cFieldAttr04 = 'O'
-         SET @cFieldAttr05 = 'O'
-
-         IF @cPickMethod = 'SKU'
-         BEGIN
-            SET @cOutField06 =  ISNULL(@cSuggSKU,'')
-         END
-         ELSE
-         BEGIN
-            SET @cOutField06 = ''
-         END
-
-         --SET @cOutField07 = @cPickMethod
+         -- Prepare next screen var
+         SET @cOutField01 = @cID
+         SET @cOutField02 = ''
 
          SET @nPrevStep = 0
          SET @nPrevScreen = 0
 
+         SET @nToFunc = 1769
 
          -- Set the entry point
          SET @nFunc = @nToFunc
@@ -2512,79 +2596,77 @@ BEGIN
 
       IF @cOptions = '1'
       BEGIN
-            -- NO , Get Next Task
-            -- Update TaskDetail Status = '9'
-            Update dbo.TaskDetail
-            SET Status = '9'
-                ,EditDate = GetDate()
-                ,EditWho  = @cUserName
-                ,TrafficCop = NULL
-            WHERE TaskDetailKey = @cTaskDetailKey
+         -- NO , Get Next Task
+         -- Update TaskDetail Status = '9'
+         Update dbo.TaskDetail
+         SET Status = '9'
+               ,EditDate = GetDate()
+               ,EditWho  = @cUserName
+               ,TrafficCop = NULL
+         WHERE TaskDetailKey = @cTaskDetailKey
 
-            IF @@Error <> 0
+         IF @@Error <> 0
+         BEGIN
+            SET @nErrNo = 74415
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDTaskDetFail
+            GOTO Step_4_Fail
+         END
+
+         -- (james13)
+         UPDATE dbo.Loc WITH (ROWLOCK) SET
+            LastCycleCount = GETDATE(),
+            EditWho = @cUserName,
+            EditDate = GETDATE()
+         WHERE Loc = @cLoc
+
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 57953
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  -- Upd LastCC Err
+            GOTO Step_4_Fail
+         END
+
+         -- (JAMES07)
+         -- Extended update
+         IF @cExtendedUpdateSP <> ''
+         BEGIN
+            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
             BEGIN
-               SET @nErrNo = 74415
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDTaskDetFail
-               GOTO Step_4_Fail
+               SET @cSQL = 'EXEC rdt.' + RTRIM(@cExtendedUpdateSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cTaskdetailkey, @cFromLoc, @cID, @cPickMethod, ' +
+                  ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+               SET @cSQLParam =
+                  '@nMobile         INT,           ' +
+                  '@nFunc           INT,           ' +
+                  '@cLangCode       NVARCHAR( 3),  ' +
+                  '@nStep           INT,           ' +
+                  '@nInputKey       INT,           ' +
+                  '@cFacility       NVARCHAR( 15), ' +
+                  '@cStorerKey      NVARCHAR( 15), ' +
+                  '@cTaskdetailkey  NVARCHAR( 20),  ' +
+                  '@cFromLoc        NVARCHAR( 20),  ' +
+                  '@cID             NVARCHAR( 20),  ' +
+                  '@cPickMethod     NVARCHAR( 20),  ' +
+                  '@nErrNo          INT           OUTPUT, ' +
+                  '@cErrMsg         NVARCHAR( 20) OUTPUT  '
+
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cTaskdetailkey, @cSuggFromLoc, @cID, @cPickMethod,
+                  @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+               IF @nErrNo <> 0
+                  GOTO Quit
             END
+         END
 
-            -- (james13)
-            UPDATE dbo.Loc WITH (ROWLOCK) SET
-               LastCycleCount = GETDATE(),
-               EditWho = @cUserName,
-               EditDate = GETDATE()
-            WHERE Loc = @cLoc
+         SET @nPrevStep = 0
+         SET @nPrevScreen  = 0
 
-            IF @@ERROR <> 0
-            BEGIN
-               SET @nErrNo = 57953
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  -- Upd LastCC Err
-               GOTO Step_4_Fail
-            END
+         -- Go to ENTER / EXIT TM Task Screen
+         SET @nScn = @nScn + 2
+         SET @nStep = @nStep + 2
 
-            -- (JAMES07)
-            -- Extended update
-            IF @cExtendedUpdateSP <> ''
-            BEGIN
-               IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
-               BEGIN
-                  SET @cSQL = 'EXEC rdt.' + RTRIM(@cExtendedUpdateSP) +
-                     ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cTaskdetailkey, @cFromLoc, @cID, @cPickMethod, ' +
-                     ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
-                  SET @cSQLParam =
-                     '@nMobile         INT,           ' +
-                     '@nFunc           INT,           ' +
-                     '@cLangCode       NVARCHAR( 3),  ' +
-                     '@nStep           INT,           ' +
-                     '@nInputKey       INT,           ' +
-                     '@cFacility       NVARCHAR( 15), ' +
-                     '@cStorerKey      NVARCHAR( 15), ' +
-                     '@cTaskdetailkey  NVARCHAR( 20),  ' +
-                     '@cFromLoc        NVARCHAR( 20),  ' +
-                     '@cID             NVARCHAR( 20),  ' +
-                     '@cPickMethod     NVARCHAR( 20),  ' +
-                     '@nErrNo          INT           OUTPUT, ' +
-                     '@cErrMsg         NVARCHAR( 20) OUTPUT  '
-
-              EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                     @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cTaskdetailkey, @cSuggFromLoc, @cID, @cPickMethod,
-                     @nErrNo OUTPUT, @cErrMsg OUTPUT
-
-                  IF @nErrNo <> 0
-                     GOTO Quit
-               END
-            END
-
-            SET @nPrevStep = 0
-            SET @nPrevScreen  = 0
-
-            -- Go to ENTER / EXIT TM Task Screen
-            SET @nScn = @nScn + 2
-            SET @nStep = @nStep + 2
-
-            GOTO QUIT
-
-
+         GOTO QUIT
       END
 
       IF @cOptions = '2'
@@ -2595,22 +2677,56 @@ BEGIN
          -- If loc.loseid = 1 then no need scan pallet id. Skip the screen (james02)
          IF EXISTS (SELECT 1 FROM LOC WITH (NOLOCK) WHERE LOC = @cLoc AND LoseId = '1')
          BEGIN
-            SET @cDefaultCCOption = ''
-            SET @cDefaultCCOption = rdt.RDTGetConfig( @nFunc, 'DefaultCCOption', @cStorerkey)
-
-            IF @cDefaultCCOption <> ''  AND @cDefaultCCOption <> '0'
+            IF @cDefaultCCOptionSP <> ''
             BEGIN
-               SET @cOutField03 = @cDefaultCCOption
+               IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDefaultCCOptionSP AND type = 'P')
+               BEGIN
+                  SET @cDefaultCCOption = ''
+                  SET @cSQL = 'EXEC rdt.' + RTRIM(@cDefaultCCOptionSP) +
+                     ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cTaskdetailkey, @cDefaultCCOption OUTPUT '
+                  SET @cSQLParam =
+                     '@nMobile            INT,           ' +
+                     '@nFunc              INT,           ' +
+                     '@cLangCode          NVARCHAR( 3),  ' +
+                     '@nStep              INT,           ' +
+                     '@nInputKey          INT,           ' +
+                     '@cFacility          NVARCHAR( 15), ' +
+                     '@cStorerKey         NVARCHAR( 15), ' +
+                     '@cTaskdetailkey     NVARCHAR( 20),  ' +
+                     '@cDefaultCCOption   NVARCHAR( 20)  OUTPUT  '
+
+                  EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                     @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cTaskdetailkey, @cDefaultCCOption OUTPUT
+               END
             END
             ELSE
             BEGIN
-               SET @cOutField03 = ''
+               IF EXISTS( SELECT 1 FROM STRING_SPLIT( @cFlowThruScreen, ',') WHERE TRIM( value) = '3') -- Statistic screen
+               BEGIN
+            	   IF EXISTS ( SELECT 1
+            	               FROM dbo.LOC WITH (NOLOCK)
+            	               WHERE Facility = @cFacility
+            	               AND   Loc = @cLoc
+            	               AND   LoseUCC = '0')
+                     SET @cInField03 = '1' -- UCC
+                  ELSE
+               	   SET @cInField03 = '2' -- SKU
+
+                  SET @cOutField01 = @cLoc
+                  SET @cOutField02 = ''
+
+                  SET @nScn = @nScn - 1
+                  SET @nStep = @nStep - 1
+                  GOTO Step_3
+               END
             END
 
+            -- prepare next screen variable
             SET @cOutField01 = @cLoc
             SET @cOutField02 = ''
+            SET @cOutField03 = CASE WHEN @cDefaultCCOption = '' OR @cDefaultCCOption = '0' THEN '' ELSE @cDefaultCCOption END
 
-            -- Go to Option Screen     (james03)
+            -- Go to CC option Screen
             SET @nScn = @nScn - 1
             SET @nStep = @nStep - 1
 
@@ -3083,7 +3199,7 @@ BEGIN
                ROLLBACK TRAN
                SET @nErrNo = 74407
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdTaskdetFail
-GOTO Step_7_Fail
+               GOTO Step_7_Fail
             END
          END
 
@@ -3391,9 +3507,6 @@ GOTO Step_7_Fail
 END
 GOTO Quit
 
-
-
-
 /********************************************************************************
 Quit. Update back to I/O table, ready to be pick up by JBOSS
 ********************************************************************************/
@@ -3436,6 +3549,7 @@ BEGIN
       V_String5 = @cTMCCSKUSkipScreen1,
       V_String6 = @cUserPosition,
       V_String7 = @cDefaultCCOptionSP,
+      V_String8 = @cFlowThruScreen,
 
       V_FromStep = @nPrevStep,
       V_FromScn  = @nPrevScreen,
@@ -3464,10 +3578,6 @@ BEGIN
       V_String37 = @cRefKey03,
       V_String38 = @cRefKey04,
       V_String39 = @cRefKey05,
-
-
-
-
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,
