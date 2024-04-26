@@ -69,7 +69,7 @@ BEGIN
    SET @cFromTransitLOC = ''
    SET @cToTransitLOC = ''
    SET @cTransitLOC = ''
-   SET @cMoveToCategory = 'MoveTo'
+   SET @cMoveToCategory = 'MOVETO'
    SET @cFromLOCInCASEPICK = 0
 
    -- Get session info
@@ -126,7 +126,7 @@ BEGIN
       FROM LOC WITH (NOLOCK)
       WHERE Facility = @cFacility
          AND LOCAisle = @cFromLOCAisle
-         AND LocationCategory = 'MoveTo'
+         AND LocationCategory = @cMoveToCategory
          AND  NOT EXISTS( SELECT 1
                            FROM LOC L2 WITH (NOLOCK)
                            JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LLI.LOC = L2.LOC
@@ -134,7 +134,7 @@ BEGIN
                            WHERE LOC.LOC = L2.LOC
                            AND   L2.Facility = @cFacility
                            AND   L2.LOCAisle = @cFromLOCAisle
-                           AND LocationCategory = 'MoveTo'
+                           AND LocationCategory = @cMoveToCategory
                            GROUP BY L2.LOC, L2.MaxPallet
                            HAVING COUNT(DISTINCT LLI.ID) >= L2.MaxPallet )
       ORDER BY LOC.LogicalLocation, LOC.LOC
@@ -155,7 +155,7 @@ BEGIN
       LEFT OUTER JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LLI.LOC = LOC.LOC)
       WHERE Facility = @cFacility
          AND LOCAisle = @cFromLOCAisle
-         AND LocationCategory = 'MoveTo'
+         AND LocationCategory = @cMoveToCategory
       GROUP BY LOC.LogicalLocation, LOC.LOC
       ORDER BY LOC.LogicalLocation, LOC.LOC
 
