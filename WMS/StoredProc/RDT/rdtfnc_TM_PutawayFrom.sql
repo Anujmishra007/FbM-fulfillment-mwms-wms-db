@@ -28,6 +28,7 @@ GO
 /*                            turn on                                          */
 /*                            Add ExtendedInfo @ screen 3 (james03)            */
 /* 17-02-2020  1.7   Chermaine WMS-12080 Add sku & Desc display in step3 (cc01)*/
+/* 18-04-2024  1.8   Dennis    Check Digit                                     */
 /*******************************************************************************/
 CREATE  PROC [RDT].[rdtfnc_TM_PutawayFrom](
    @nMobile    INT,
@@ -90,6 +91,11 @@ DECLARE
    @cExtendedValidateSP NVARCHAR( 20),
    @tExtInfo            VariableTable, 
    @cDIsplaySKU         NVARCHAR( 1),  -- (cc01)
+   @cExtendedScreenSP   NVARCHAR( 20),
+   @nAction             INT,
+   @nAfterScn           INT,
+   @nAfterStep          INT,
+   @cLocNeedCheck       NVARCHAR( 20),
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -366,7 +372,43 @@ BEGIN
    BEGIN
       -- Screen mapping
       SET @cFromLOC = @cInField02 -- FromLOC
+      SET @cLocNeedCheck = @cInField02
 
+      SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '1797ExtendedScreenSP', @cStorerKey), '')
+      SET @nAction = 1
+      IF @cExtendedScreenSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+         BEGIN
+            EXECUTE [RDT].[rdt_1797ExtScnEntry] 
+               @cExtendedScreenSP,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @cLocNeedCheck OUTPUT,
+               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  
+               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  
+               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT, 
+               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT, 
+               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  
+               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  
+               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  
+               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  
+               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  
+               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  
+               @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  
+               @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, 
+               @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  
+               @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, 
+               @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, 
+               @nAction, 
+               @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
+               @nErrNo   OUTPUT, 
+               @cErrMsg  OUTPUT
+            
+            IF @nErrNo <> 0
+               GOTO Step_1_Fail
+            
+            SET @cFromLOC = @cLocNeedCheck
+         END
+      END
       -- Check FromLOC match
       IF @cFromLoc <> @cSuggFromLOC
       BEGIN
@@ -626,7 +668,44 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need ToLOC
          GOTO Step_3_Fail            
       END
+      
+      SET @cLocNeedCheck = @cInField03
 
+      SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '1797ExtendedScreenSP', @cStorerKey), '')
+      SET @nAction = 1
+      IF @cExtendedScreenSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+         BEGIN
+            EXECUTE [RDT].[rdt_1797ExtScnEntry] 
+               @cExtendedScreenSP,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @cLocNeedCheck OUTPUT,
+               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  
+               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  
+               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT, 
+               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT, 
+               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  
+               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  
+               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  
+               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  
+               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  
+               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  
+               @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  
+               @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, 
+               @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  
+               @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, 
+               @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, 
+               @nAction, 
+               @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
+               @nErrNo   OUTPUT, 
+               @cErrMsg  OUTPUT
+            
+            IF @nErrNo <> 0
+               GOTO Step_3_Fail
+            
+            SET @cToLoc = @cLocNeedCheck
+         END
+      END
       -- Check different ToLOC
       IF @cToLoc <> @cSuggToLoc
       BEGIN
