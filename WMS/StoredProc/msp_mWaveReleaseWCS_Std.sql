@@ -25,6 +25,8 @@ GO
 /*                            message to WCS upon Wave release           */ 
 /* 2024-02-22   Wan02   1.2   UWP-13590-Fixed issue                      */
 /* 2024-04-09   Wan03   1.3   UWP-12854-Order Include-ChilePuma          */
+/* 2024-04-26   SSA01   1.4   UWP-12854-Partial Allocate Order Include - */
+/*                                     ChilePuma                         */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [dbo].[msp_mWaveReleaseWCS_Std]      
   @c_Wavekey      NVARCHAR(10)  
@@ -46,6 +48,7 @@ CREATE OR ALTER PROCEDURE [dbo].[msp_mWaveReleaseWCS_Std]
           , @c_Storerkey         NVARCHAR(15) = ''
           , @c_OrderKey          NVARCHAR(10) = ''
           , @c_OrderStatus       NVARCHAR(10) = '2'                                 --(Wan03)
+          , @c_PartialOrderStatus       NVARCHAR(10) = '1'                          --(SSA01)
           , @b_RelWSWVCHKPTW     BIT          = 0                                   --(Wan03)
           
           , @c_TableName         NVARCHAR(30) = ''
@@ -99,6 +102,7 @@ CREATE OR ALTER PROCEDURE [dbo].[msp_mWaveReleaseWCS_Std]
       IF @c_RelOpenOrder = 'Y'
       BEGIN
          SET @c_OrderStatus = '0'
+         SET @c_PartialOrderStatus = '0'       --(SSA01)
       END
    END
     
@@ -108,18 +112,20 @@ CREATE OR ALTER PROCEDURE [dbo].[msp_mWaveReleaseWCS_Std]
                  + ' FROM dbo.WAVEDETAIL (NOLOCK)'
                  + ' JOIN ORDERS (NOLOCK) ON ORDERS.OrderKey = WAVEDETAIL.OrderKey'
                  + ' WHERE WAVEDETAIL.WaveKey = @c_Wavekey'
-                 + ' AND ORDERS.[Status] = @c_OrderStatus'
+                 + ' AND ORDERS.[Status] IN (@c_OrderStatus,@c_PartialOrderStatus)'     --(SSA01)
 
       SET @c_SQL= @c_SQL + ' ' + @c_ConditionQuery + ' ORDER BY WAVEDETAIL.WaveDetailKey'
 
       SET @c_SQLParms = N'@c_Wavekey      NVARCHAR(10)'
                       + ',@c_OrderStatus  NVARCHAR(10)'
+                      + ',@c_PartialOrderStatus  NVARCHAR(10)'         --(SSA01)
 
       INSERT INTO #tORDERS ( Orderkey ) 
       EXEC sp_ExecuteSQL @c_SQL
                      ,@c_SQLParms
                      ,@c_Wavekey
                      ,@c_OrderStatus
+                     ,@c_PartialOrderStatus                        --(SSA01)
 
       SET @cur_OPENORD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT o.Orderkey
