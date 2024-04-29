@@ -61,7 +61,7 @@ BEGIN
       ,@cTransitLOC   NVARCHAR(10)
       ,@cFacility     NVARCHAR(5)
       ,@cLangCode     NVARCHAR(3)
-      ,@cAllowFCPMoveToLoc    NVARCHAR(30)
+      ,@cSkipPnDLocation    NVARCHAR(30)
       ,@FunID        INT
 
    SELECT 
@@ -83,10 +83,10 @@ BEGIN
    FROM rdt.rdtMobRec WITH (NOLOCK) 
    WHERE UserName = SUSER_SNAME()
 
-   SET @cAllowFCPMoveToLoc = rdt.RDTGetConfig( @FunID, 'AllowFCPPutMoveToLoc', @c_StorerKey)
+   SET @cSkipPnDLocation = rdt.RDTGetConfig( @FunID, 'SkipPnDLocation', @c_StorerKey)
 
-   IF @cAllowFCPMoveToLoc IS NULL OR TRIM(@cAllowFCPMoveToLoc) = ''
-      SET @cAllowFCPMoveToLoc = '0'
+   IF @cSkipPnDLocation IS NULL OR TRIM(@cSkipPnDLocation) = ''
+      SET @cSkipPnDLocation = '0'
 
    -- Handling transaction
    DECLARE @nTranCount INT
@@ -236,7 +236,23 @@ BEGIN
          @c_Facility = Facility
       FROM dbo.LOC WITH (NOLOCK) 
       WHERE LOC = @c_FromLoc
-      
+
+      IF @cSkipPnDLocation <> '0' AND @cSkipPnDLocation <> 'PnD' AND EXISTS(SELECT 1 FROM CODELKUP where LISTNAME = 'LOCCATEGRY' AND Code = @cSkipPnDLocation)
+      BEGIN
+         IF EXISTS( SELECT 1 
+            FROM dbo.TaskDetail TD WITH (NOLOCK) 
+               JOIN dbo.LOC L1 WITH (NOLOCK) ON (TD.FromLOC = L1.LOC)
+               LEFT JOIN dbo.LOC L2 WITH (NOLOCK) ON (TD.ToLOC = L2.LOC)
+            WHERE TD.Status > '0' AND TD.Status < '9'
+               AND @c_Facility IN (L1.Facility, L2.Facility)
+               AND @c_LOCAisle IN (L1.LOCAisle, L2.LOCAisle)
+               AND UserKey <> @c_userid)
+         BEGIN
+            FETCH NEXT FROM Cursor_FPKTaskCandidates INTO @c_TaskDetailKey
+            CONTINUE
+         END
+      END
+
       -- Check from aisle in used
       IF @c_LOCCategory IN ('VNA')
       BEGIN
@@ -256,29 +272,12 @@ BEGIN
          END
       END
 
-      --Check if the source location is CASE or PICK
-      IF UPPER(@c_LOCCategory) IN ('CASE', 'PICK')
-      BEGIN
-         IF EXISTS( SELECT 1 
-            FROM dbo.TaskDetail TD WITH (NOLOCK) 
-               JOIN dbo.LOC L1 WITH (NOLOCK) ON (TD.FromLOC = L1.LOC)
-               LEFT JOIN dbo.LOC L2 WITH (NOLOCK) ON (TD.ToLOC = L2.LOC)
-            WHERE TD.Status > '0' AND TD.Status < '9'
-               AND @c_Facility IN (L1.Facility, L2.Facility)
-               AND @c_LOCAisle IN (L1.LOCAisle, L2.LOCAisle)
-               AND UserKey <> @c_userid)
-         BEGIN
-            FETCH NEXT FROM Cursor_FPKTaskCandidates INTO @c_TaskDetailKey
-            CONTINUE
-         END
-      END
-
       -- Get transit LOC
       IF @cTransitLOC = ''
       BEGIN
          SET @n_Err = 0
 
-         IF @cAllowFCPMoveToLoc = '1' AND UPPER(@c_LOCCategory) IN ('CASE', 'PICK')
+         IF @cSkipPnDLocation <> '0' AND @cSkipPnDLocation <> 'PnD' AND EXISTS(SELECT 1 FROM CODELKUP WITH(NOLOCK) WHERE LISTNAME = 'LOCCATEGRY' AND Code = @cSkipPnDLocation)
          BEGIN
             EXECUTE rdt.rdt_GetTransitLOC06
                @c_UserID

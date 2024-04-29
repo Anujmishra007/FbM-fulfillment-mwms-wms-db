@@ -58,8 +58,7 @@ BEGIN
    DECLARE @cToPAZone            NVARCHAR( 10)
    DECLARE @cToPAInLOC           NVARCHAR( 10)
    DECLARE @cToTransitLOC        NVARCHAR( 10)
-   DECLARE @cMoveToCategory      NVARCHAR( 10)
-   DECLARE @cAllowFCPMoveToLoc   NVARCHAR( 30)
+   DECLARE @cSkipPnDLocation   NVARCHAR( 30)
    DECLARE @cLangCode            NVARCHAR( 3)
 
 
@@ -69,7 +68,6 @@ BEGIN
    SET @cFromTransitLOC = ''
    SET @cToTransitLOC = ''
    SET @cTransitLOC = ''
-   SET @cMoveToCategory = 'MOVETO'
    SET @cFromLOCInCASEPICK = 0
 
    -- Get session info
@@ -104,19 +102,12 @@ BEGIN
       GOTO Fail
    END
 
-   IF @cFromLOCCat NOT IN ('CASE', 'PICK')
-   BEGIN
-      SET @nErrNo = 214104
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --214104^WrongLocCat
-      GOTO Fail
-   END
+   SET @cSkipPnDLocation = rdt.RDTGetConfig( @nFunc, 'SkipPnDLocation', @cStorerKey)
 
-   SET @cAllowFCPMoveToLoc = rdt.RDTGetConfig( @nFunc, 'AllowFCPPutMoveToLoc', @cStorerKey)
+   IF @cSkipPnDLocation IS NULL OR TRIM(@cSkipPnDLocation) = ''
+      SET @cSkipPnDLocation = '0'
 
-   IF @cAllowFCPMoveToLoc IS NULL OR TRIM(@cAllowFCPMoveToLoc) = ''
-      SET @cAllowFCPMoveToLoc = '0'
-
-   IF @cAllowFCPMoveToLoc <> '1'
+   IF @cSkipPnDLocation = '0' OR @cSkipPnDLocation = 'PnD' OR NOT EXISTS(SELECT 1 FROM CODELKUP where LISTNAME = 'LOCCATEGRY' AND Code = @cSkipPnDLocation)
        RETURN
 
    IF @nLockLOC = 1 --Yes
@@ -126,7 +117,7 @@ BEGIN
       FROM LOC WITH (NOLOCK)
       WHERE Facility = @cFacility
          AND LOCAisle = @cFromLOCAisle
-         AND LocationCategory = @cMoveToCategory
+         AND LocationCategory = @cSkipPnDLocation
          AND  NOT EXISTS( SELECT 1
                            FROM LOC L2 WITH (NOLOCK)
                            JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LLI.LOC = L2.LOC
@@ -134,7 +125,7 @@ BEGIN
                            WHERE LOC.LOC = L2.LOC
                            AND   L2.Facility = @cFacility
                            AND   L2.LOCAisle = @cFromLOCAisle
-                           AND LocationCategory = @cMoveToCategory
+                           AND LocationCategory = @cSkipPnDLocation
                            GROUP BY L2.LOC, L2.MaxPallet
                            HAVING COUNT(DISTINCT LLI.ID) >= L2.MaxPallet )
       ORDER BY LOC.LogicalLocation, LOC.LOC
@@ -155,7 +146,7 @@ BEGIN
       LEFT OUTER JOIN LOTxLOCxID LLI WITH (NOLOCK) ON (LLI.LOC = LOC.LOC)
       WHERE Facility = @cFacility
          AND LOCAisle = @cFromLOCAisle
-         AND LocationCategory = @cMoveToCategory
+         AND LocationCategory = @cSkipPnDLocation
       GROUP BY LOC.LogicalLocation, LOC.LOC
       ORDER BY LOC.LogicalLocation, LOC.LOC
 
