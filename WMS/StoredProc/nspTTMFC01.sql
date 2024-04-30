@@ -81,7 +81,7 @@ BEGIN
       @cFacility = Facility,
       @c_StorerKey = StorerKey
    FROM rdt.rdtMobRec WITH (NOLOCK) 
-   WHERE UserName = SUSER_SNAME()
+   WHERE UserName = @c_UserID
 
    SET @cSkipPnDLocation = rdt.RDTGetConfig( @FunID, 'SkipPnDLocation', @c_StorerKey)
 
