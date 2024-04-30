@@ -17,7 +17,7 @@ GO
 /* Copyright      : Maersk WMS                                          */
 /*                                                                      */
 /* Date        Rev  Author    Purposes                                  */
-/* 2024-03-08  1.0  NLT013    Created                                   */
+/* 2024-03-08  1.0  NLT013    UWP-16452 Created                         */
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_VNAPalletPickConfirm] (
