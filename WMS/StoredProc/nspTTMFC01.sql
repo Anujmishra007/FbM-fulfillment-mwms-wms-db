@@ -237,7 +237,7 @@ BEGIN
       FROM dbo.LOC WITH (NOLOCK) 
       WHERE LOC = @c_FromLoc
 
-      IF @cSkipPnDLocation <> '0' AND @cSkipPnDLocation <> 'PnD' AND EXISTS(SELECT 1 FROM CODELKUP where LISTNAME = 'LOCCATEGRY' AND Code = @cSkipPnDLocation)
+      IF @c_LOCCategory <> 'VNA' AND @cSkipPnDLocation <> '0' AND @cSkipPnDLocation <> 'PnD' AND EXISTS(SELECT 1 FROM CODELKUP where LISTNAME = 'LOCCATEGRY' AND Code = @cSkipPnDLocation)
       BEGIN
          IF EXISTS( SELECT 1 
             FROM dbo.TaskDetail TD WITH (NOLOCK) 
@@ -277,7 +277,7 @@ BEGIN
       BEGIN
          SET @n_Err = 0
 
-         IF @cSkipPnDLocation <> '0' AND @cSkipPnDLocation <> 'PnD' AND EXISTS(SELECT 1 FROM CODELKUP WITH(NOLOCK) WHERE LISTNAME = 'LOCCATEGRY' AND Code = @cSkipPnDLocation)
+         IF @c_LOCCategory <> 'VNA' AND @cSkipPnDLocation <> '0' AND @cSkipPnDLocation <> 'PnD' AND EXISTS(SELECT 1 FROM CODELKUP WITH(NOLOCK) WHERE LISTNAME = 'LOCCATEGRY' AND Code = @cSkipPnDLocation)
          BEGIN
             EXECUTE rdt.rdt_GetTransitLOC06
                @c_UserID
