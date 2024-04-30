@@ -294,7 +294,7 @@ BEGIN
                , @nFunc = @FunID
             IF @n_Err <> 0
             BEGIN
-               FETCH NEXT FROM Cursor_RPFTaskCandidates INTO @c_TaskDetailKey
+               FETCH NEXT FROM Cursor_FPKTaskCandidates INTO @c_TaskDetailKey
                CONTINUE
             END
          END
@@ -315,7 +315,7 @@ BEGIN
                , @nFunc = @FunID
             IF @n_Err <> 0
             BEGIN
-               FETCH NEXT FROM Cursor_RPFTaskCandidates INTO @c_TaskDetailKey
+               FETCH NEXT FROM Cursor_FPKTaskCandidates INTO @c_TaskDetailKey
                CONTINUE
             END
          END
@@ -347,7 +347,7 @@ BEGIN
                   AND NOT L2.LocationCategory IN ('PND_IN', 'PND')  -- Exclude task coming in into PND_IN
                   AND UserKey <> @c_userid)
             BEGIN
-               FETCH NEXT FROM Cursor_RPFTaskCandidates INTO @c_TaskDetailKey
+               FETCH NEXT FROM Cursor_FPKTaskCandidates INTO @c_TaskDetailKey
                CONTINUE
             END
          END
