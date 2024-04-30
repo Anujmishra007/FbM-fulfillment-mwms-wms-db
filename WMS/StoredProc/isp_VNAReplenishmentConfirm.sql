@@ -17,7 +17,8 @@ GO
 /* Copyright      : Maersk WMS                                          */
 /*                                                                      */
 /* Date        Rev  Author    Purposes                                  */
-/* 2024-03-08  1.0  NLT013    Created                                   */
+/* 2024-03-08  1.0  NLT013    UWP-16452 Created                         */
+/* 2024-04-30  2.0  NLT013    UWP-16455 Cannot find the sencond task    */
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_VNAReplenishmentConfirm] (
@@ -268,7 +269,8 @@ BEGIN
       AND FromID           = @cID
       AND Status           = '0'
       AND FromLoc          = @cTaskToLoc
-      AND ToLoc            = @cTaskFinalLoc
+      AND ListKey          = @cListKey
+      --AND ToLoc            = @cTaskFinalLoc
 
    IF @cNewTaskDetailKey IS NULL OR TRIM(@cNewTaskDetailKey) = ''
    BEGIN

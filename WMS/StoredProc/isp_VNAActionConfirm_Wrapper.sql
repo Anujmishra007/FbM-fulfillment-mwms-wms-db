@@ -37,7 +37,7 @@ GO
 /*                                                                                     */
 /* Updates:                                                                            */
 /* Date         Author        Purposes                                                 */
-/* 2002-03-07   NLT013        VNA confirm                                              */
+/* 2002-03-07   NLT013        UWP-16452 VNA confirm                                    */
 /***************************************************************************************/
 
 CREATE PROC dbo.isp_VNAActionConfirm_Wrapper(

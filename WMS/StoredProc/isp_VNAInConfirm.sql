@@ -35,7 +35,7 @@ GO
 /*                                                                                     */
 /* Updates:                                                                            */
 /* Date         Author        Purposes                                                 */
-/* 2002-03-08   NLT013        Getting from Taiwan Live                                 */
+/* 2002-03-08   NLT013        UWP-16452 Create Initial Version                         */
 /***************************************************************************************/
 
 CREATE PROC dbo.isp_VNAInConfirm(
