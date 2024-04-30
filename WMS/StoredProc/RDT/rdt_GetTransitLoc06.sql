@@ -107,7 +107,7 @@ BEGIN
    IF @cSkipPnDLocation IS NULL OR TRIM(@cSkipPnDLocation) = ''
       SET @cSkipPnDLocation = '0'
 
-   IF @cFromLOCCat = 'VNA' OR @cSkipPnDLocation = '0' OR @cSkipPnDLocation = 'PnD' OR NOT EXISTS(SELECT 1 FROM CODELKUP where LISTNAME = 'LOCCATEGRY' AND Code = @cSkipPnDLocation)
+   IF @cFromLOCCat = 'VNA' OR @cSkipPnDLocation = '0' OR NOT EXISTS(SELECT 1 FROM CODELKUP where LISTNAME = 'LOCCATEGRY' AND Code = @cSkipPnDLocation)
        RETURN
 
    IF @nLockLOC = 1 --Yes
