@@ -23,7 +23,7 @@ GO
 /* Updates:                                                              */    
 /* Date        Author   Ver   Purposes                                   */    
 /* 2024-04-17  Wan      1.0   UWP-18534-Mettel-Add consolidated picking  */  
-/* 2024-04-26  Wan01    1.1   UWP-18534-conso picking by wave & for uom2 */ 
+/* 2024-04-26  Wan01    1.1   UWP-18534-conso picking by wave & for uom1 */ 
 /*************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]        
   @c_wavekey      NVARCHAR(10)    
@@ -182,7 +182,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
    IF @n_continue = 1 OR @n_continue = 2  
    BEGIN  
       EXEC isp_CreatePickdetail_WIP  
-          @c_Loadkey               = @c_Loadkey  
+          @c_Loadkey               = '' --@c_Loadkey                                --(Wan01)    
          ,@c_Wavekey               = @c_wavekey    
          ,@c_WIP_RefNo             = @c_SourceType   
          ,@c_PickCondition_SQL     = ''  
@@ -251,18 +251,22 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
           GROUP BY PD.Storerkey, PD.Sku
                   , CASE WHEN @c_DispatchCasePickMethod =''1''                      --(Wan01)  
                          THEN PD.Lot ELSE '''' END
-                  , PD.Loc, PD.ID, PD.UOM, O.Route, O.Consigneekey
-                  ,CASE WHEN @c_DispatchCasePickMethod =''1''                       --(Wan01)
+                  , PD.Loc, PD.ID, PD.UOM, O.Route                                  --(Wan01)
+              , CASE WHEN @c_DispatchCasePickMethod =''1''                          --(Wan01)
+                     THEN O.Consigneekey ELSE '''' END
+                  , CASE WHEN @c_DispatchCasePickMethod =''1''                      --(Wan01)
                         THEN O.Orderkey ELSE '''' END
                   --,O.loadkey                                                      --(Wan01)
                   ,CONVERT(NVARCHAR(8), O.DeliveryDate, 112) 
                   ,LOC.LogicalLocation
                   ,TOLOC.Loc, ISNULL(CL.Code,''9'')                    
-          ORDER BY O.Route, O.Consigneekey
+          ORDER BY O.Route                                                          --(Wan01)  
+              , CASE WHEN @c_DispatchCasePickMethod =''1''                          --(Wan01)
+                     THEN O.Consigneekey ELSE '''' END                                       
                   ,CASE WHEN @c_DispatchCasePickMethod =''1''                       --(Wan01)
                         THEN O.Orderkey ELSE '''' END
                   --,O.loadkey                                                      --(Wan01)
-                  ,Loc.LogicalLocation, PD.Loc '         
+                  ,Loc.LogicalLocation, PD.Loc '           
   
       EXEC sp_executesql @c_SQL   
          , N'@c_Wavekey    NVARCHAR(10)
