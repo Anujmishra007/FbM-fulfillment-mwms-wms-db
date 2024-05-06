@@ -18,6 +18,7 @@ GO
 /*                                                                                                 */
 /* Date       Rev  Author     Purposes                                                             */
 /* 07-12-2023 1.0  Ung        WMS-24353 base on rdt_957Confirm02, 03                               */
+/* 06-05-2023 1.1  Ung        FCR-133   Trigger only uom =7                                        */
 /***************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_957Confirm04] (
@@ -1403,23 +1404,53 @@ END
 BEGIN
    IF dbo.fnc_GetRight( @cFacility, @cStorerKey, '', 'WCS') = '1'
    BEGIN
-         DECLARE @cKey NVARCHAR( 20)
-      SELECT @ckey = RIGHT( @cActUCCNo,6)
-
-      EXEC dbo.ispGenTransmitLog2
-         @c_TableName      = 'WSRDTTOTECFM',
-         @c_Key1           = @cPickSlipNo,
-         @c_Key2           = @ckey,
-         @c_Key3           = @cStorerKey,
-         @c_TransmitBatch  = '',
-         @b_success        = @bSuccess    OUTPUT,
-         @n_err            = @nErrNo      OUTPUT,
-         @c_errmsg         = @cErrMsg     OUTPUT
-      IF @bSuccess <> 1
+      DECLARE @cPickUOM NVARCHAR( 1)
+      SELECT TOP 1
+      @cPickUOM =
+         CASE WHEN UOM = '7' THEN '7' -- Conso carton
+              ELSE '0'
+         END
+      FROM #tTaskPD
+      IF @cPickUOM = '7'
       BEGIN
-         SET @nErrNo = 209784
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS TLog2 Fail
-         GOTO Quit
+         DECLARE @cKey NVARCHAR( 20)
+         SELECT @cKey = RIGHT( @cActUCCNo,6)
+
+         EXEC dbo.ispGenTransmitLog2
+            @c_TableName      = 'WSRDTTOTECFM',
+            @c_Key1           = @cPickSlipNo,
+            @c_Key2           = @cKey,
+            @c_Key3           = @cStorerKey,
+            @c_TransmitBatch  = '',
+            @b_success        = @bSuccess    OUTPUT,
+            @n_err            = @nErrNo      OUTPUT,
+            @c_errmsg         = @cErrMsg     OUTPUT
+         IF @bSuccess <> 1
+         BEGIN
+            SET @nErrNo = 209784
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS TLog2 Fail
+            GOTO Quit
+         END
+         IF ISNULL(@cTaskUCCNo,'')!=''
+         BEGIN
+            SELECT @cKey = RIGHT( @cTaskUCCNo,6)
+
+            EXEC dbo.ispGenTransmitLog2
+               @c_TableName      = 'WSRDTTOTECFM',
+               @c_Key1           = @cPickSlipNo,
+               @c_Key2           = @cKey,
+               @c_Key3           = @cStorerKey,
+               @c_TransmitBatch  = '',
+               @b_success        = @bSuccess    OUTPUT,
+               @n_err            = @nErrNo      OUTPUT,
+               @c_errmsg         = @cErrMsg     OUTPUT
+            IF @bSuccess <> 1
+            BEGIN
+               SET @nErrNo = 209784
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS TLog2 Fail
+               GOTO Quit
+            END
+         END
       END
    END
 END
