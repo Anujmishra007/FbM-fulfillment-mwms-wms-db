@@ -70,6 +70,7 @@ GO
 /* 2023-10-23   5.3  Ung         WMS-23569 Fix VerifyID screen ESC            */
 /*                               Allow blank if no suggest ID                 */
 /* 2023-12-07   5.4  Tony        WMS-24315 Trigger msg to WCS                 */
+/* 2024-04-28   5.5  Dennis      UWP-18232 Dropid Restriction                 */
 /******************************************************************************/
 
 CREATE OR ALTER   PROC [RDT].[rdtfnc_PickPiece] (
@@ -127,6 +128,10 @@ DECLARE
    @nActQTY        INT,
    @cDropID        NVARCHAR( 20),
    @cFromStep      NVARCHAR( 1),
+   @cExtendedScreenSP   NVARCHAR( 20),
+   @nAction     INT,
+   @nAfterScn   INT,
+   @nAfterStep  INT,
 
    @cExtendedValidateSP NVARCHAR( 20),
    @cExtendedUpdateSP   NVARCHAR( 20),
@@ -1006,6 +1011,28 @@ BEGIN
                GOTO Step_2_Fail
          END
       END
+
+      SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '839ExtendedScreenSP', @cStorerKey), '')
+      SET @nAction = 1
+      IF @cExtendedScreenSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+         BEGIN
+            EXECUTE [RDT].[rdt_839ExtScnEntry] 
+                  @cExtendedScreenSP,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+                  @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggID, @cSuggSKU, @nSuggQTY, @cOption, @cLottableCode, 
+                  @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+                  @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+                  @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,    
+                  @nAction, 
+                  @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
+                  @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+               IF @nErrNo <> 0
+                GOTO Step_2_Fail
+         END
+      END   
 
       SELECT @cLottable01 = '', @cLottable02 = '', @cLottable03 = '',    @dLottable04 = NULL,  @dLottable05 = NULL,
              @cLottable06 = '', @cLottable07 = '', @cLottable08 = '',    @cLottable09 = '',    @cLottable10 = '',

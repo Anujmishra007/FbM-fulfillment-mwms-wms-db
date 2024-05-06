@@ -58,11 +58,12 @@ EXECUTE rdt.rdtAddScn 5293, 'ENG'
 DELETE rdt.RDTScn WHERE Scn = 5294 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 5294, 'ENG'
    ,@cLine01 = ''
-   ,@cLine02 = 'CONFIRM SHORT PICK?'
+   ,@cLine02 = 'Short the Pick by%05d02Cases?'
+--    ,@cLine02 = 'CONFIRM SHORT PICK?'
    ,@cLine03 = ''
    ,@cLine04 = '1 = YES'
-   ,@cLine05 = '2 = NO'
-   ,@cLine06 = '3 = CLOSE DROPID' -- (ChewKP01) 
+   ,@cLine05 = '0 = NO'
+--    ,@cLine06 = '3 = CLOSE DROPID' -- (ChewKP01)
    ,@cLine08 = 'OPTION: %01i01'
    ,@cLine14 = '%e'
    ,@nFunc = 957

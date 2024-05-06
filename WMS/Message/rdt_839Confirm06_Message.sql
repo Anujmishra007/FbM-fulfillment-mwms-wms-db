@@ -13,6 +13,7 @@ execute rdt.rdtAddMsg 153857, 10, '153857UPDPKDtlFail', 'us_english', 839
 execute rdt.rdtAddMsg 153858, 10, '153858UPDPKDtlFail', 'us_english', 839
 execute rdt.rdtAddMsg 153859, 10, '153859UPDPKDtlFail', 'us_english', 839
 execute rdt.rdtAddMsg 153860, 10, '153860UPDODDtlFail', 'us_english', 839
+execute rdt.rdtAddMsg 153861, 10, '153861ClosedDropID', 'us_english', 839
 
 
 

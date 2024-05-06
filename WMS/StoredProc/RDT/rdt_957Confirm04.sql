@@ -18,7 +18,7 @@ GO
 /*                                                                                                 */
 /* Date       Rev  Author     Purposes                                                             */
 /* 07-12-2023 1.0  Ung        WMS-24353 base on rdt_957Confirm02, 03                               */
-/* 06-05-2023 1.1  Ung        FCR-133   Trigger only uom =7                                        */
+/* 06-05-2024 1.1  Dennis     FCR-133   Trigger only uom =7                                        */
 /***************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_957Confirm04] (

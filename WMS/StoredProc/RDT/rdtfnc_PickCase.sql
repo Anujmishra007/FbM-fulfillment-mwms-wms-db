@@ -14,7 +14,8 @@ GO
 /* 2022-12-09   1.2  Ung         WMS-21275 Fix AllowSkipLOC                   */
 /* 2023-08-16   1.3  Ung         WMS-23142 Enable suggest SKU, descr          */
 /* 2023-12-08   1.4  Ung         WMS-24353 Add ExtendedUpdteSP at screen 1    */
-/* 2023-12-08   1.5  Dennis      FCR-133   Carton pick  trigger Automation    */
+/* 2024-04-29   1.5  CYU027      UWP-18306 Short Pick                         */
+/* 2024-05-06   1.6  Dennis      FCR-133   Carton pick  trigger Automation    */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PickCase] (
@@ -803,9 +804,30 @@ BEGIN
       BEGIN
          IF @cBarcode = '99' -- Fully short
          BEGIN
-            SET @cSKUValidated = '99'
-            SET @cQTY = '0'
-            --SET @cOutField07 = '0'
+
+            EXEC rdt.rdt_PickCase_GetTask @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'NEXTUCC'
+               ,@cPickSlipNo
+               ,@cPickZone
+               ,@cSuggLOC         OUTPUT
+               ,@cSuggSKU         OUTPUT
+               ,@cSKUDescr        OUTPUT
+               ,@nSuggQTY         OUTPUT
+               ,@cSuggID          OUTPUT
+               ,@cBarcode
+               ,@nTotalQty        OUTPUT
+               ,@nErrNo           OUTPUT
+               ,@cErrMsg          OUTPUT
+
+            SET @cOutField01 = 1
+            SET @cOutField02 = CAST ((@nSuggQTY -@nTotalQty) AS NVARCHAR(5))
+
+            SET @nStep = 5
+            SET @nScn = 5294
+
+
+            GOTO QUIT
+
+
          END
          ELSE
          BEGIN
@@ -1300,7 +1322,7 @@ GOTO Quit
 
 
 /********************************************************************************
-Scn = 5294. Confirm Short Pick?    
+Scn = 5294. Short the Pick by XY Cases?
    Option (field01)
 ********************************************************************************/
 Step_5:
@@ -1319,7 +1341,8 @@ BEGIN
       END
 
       -- Validate option
-      IF @cOption <> '1' AND @cOption <> '2' AND @cOption <> '3' -- (ChewKP01)
+--       IF @cOption <> '1' AND @cOption <> '2' AND @cOption <> '3' -- (ChewKP01)
+      IF @cOption <> '1' AND @cOption <> '0'
       BEGIN
          SET @nErrNo = 130576
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Option
@@ -1329,7 +1352,7 @@ BEGIN
       IF @cOption = '1'  -- Yes    
       BEGIN
          -- Confirm    
-         EXEC RDT.rdt_PickCase_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'CONFIRM'
+         EXEC RDT.rdt_PickCase_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'SHORT'
             ,@cPickSlipNo
             ,@cPickZone
             ,@cDropID
@@ -1348,21 +1371,21 @@ BEGIN
          BEGIN
             IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
             BEGIN
-               EXECUTE [RDT].[rdt_957ExtScnEntry] 
+               EXECUTE [RDT].[rdt_957ExtScnEntry]
                   @cExtendedScreenSP,
                   @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
-                  @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggID, @cSuggSKU, @nSuggQTY, @cOption, @cLottableCode, 
+                  @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggID, @cSuggSKU, @nSuggQTY, @cOption, @cLottableCode,
                   @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
                   @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
-                  @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,    
-                  @nAction, 
+                  @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+                  @nAction,
                   @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
                   @nErrNo OUTPUT, @cErrMsg OUTPUT
 
                   IF @nErrNo <> 0
                      GOTO Step_7_Fail
             END
-         END   
+         END
          SET @nTotalQty = @nTotalQty + 1 
 
         -- Get task in current LOC
@@ -1411,60 +1434,61 @@ BEGIN
          GOTO Quit
       END
 
-      ELSE IF @cOption = '3' -- (ChewKP01)     
-      BEGIN
-         -- Confirm    
-         EXEC RDT.rdt_PickCase_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'CONFIRM'
-            ,@cPickSlipNo
-            ,@cPickZone
-            ,@cDropID
-            ,@cSuggLOC
-            ,@cSuggID 
-            ,@cBarcode
-            ,@cSuggSKU
-            ,@nActQTY
-            ,@nErrNo       OUTPUT
-            ,@cErrMsg      OUTPUT 
-         IF @nErrNo <> 0    
-            GOTO Quit    
-         
-         SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '957ExtendedScreenSP', @cStorerKey), '')
-         SET @nAction = 1
-         IF @cExtendedScreenSP <> ''
-         BEGIN
-            IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
-            BEGIN
-               EXECUTE [RDT].[rdt_957ExtScnEntry] 
-                  @cExtendedScreenSP,
-                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
-                  @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggID, @cSuggSKU, @nSuggQTY, @cOption, @cLottableCode, 
-                  @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
-                  @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
-                  @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,    
-                  @nAction, 
-                  @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
-                  @nErrNo OUTPUT, @cErrMsg OUTPUT
-
-                  IF @nErrNo <> 0
-                     GOTO Step_5_Fail
-            END
-         END
-         -- Get task in current LOC
-         SET @cSKUValidated = '0'
-         SET @nTotalQty = @nTotalQty + 1 
-         SET @nActQTY = 0
-
-         -- Goto PickZone Screen
-         SET @cOutField01 = @cPickSlipNo
-         SET @cOutField02 = ''
-         SET @cOutField03 = ''
-
-         SET @nScn = @nScn - 3
-         SET @nStep = @nStep - 3
-
-         EXEC rdt.rdtSetFocusField @nMobile, 3 -- DropID
-         GOTO Quit
-      END
+-- CYU027 UWP-18306
+--       ELSE IF @cOption = '3' -- (ChewKP01)
+--       BEGIN
+--          -- Confirm
+--          EXEC RDT.rdt_PickCase_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'CONFIRM'
+--             ,@cPickSlipNo
+--             ,@cPickZone
+--             ,@cDropID
+--             ,@cSuggLOC
+--             ,@cSuggID
+--             ,@cBarcode
+--             ,@cSuggSKU
+--             ,@nActQTY
+--             ,@nErrNo       OUTPUT
+--             ,@cErrMsg      OUTPUT
+--          IF @nErrNo <> 0
+--             GOTO Quit
+--
+--          SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '957ExtendedScreenSP', @cStorerKey), '')
+--          SET @nAction = 1
+--          IF @cExtendedScreenSP <> ''
+--          BEGIN
+--             IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+--             BEGIN
+--                EXECUTE [RDT].[rdt_957ExtScnEntry]
+--                   @cExtendedScreenSP,
+--                   @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+--                   @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggID, @cSuggSKU, @nSuggQTY, @cOption, @cLottableCode,
+--                   @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+--                   @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+--                   @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+--                   @nAction,
+--                   @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
+--                   @nErrNo OUTPUT, @cErrMsg OUTPUT
+--
+--                   IF @nErrNo <> 0
+--                      GOTO Step_5_Fail
+--             END
+--          END
+--          -- Get task in current LOC
+--          SET @cSKUValidated = '0'
+--          SET @nTotalQty = @nTotalQty + 1
+--          SET @nActQTY = 0
+--
+--          -- Goto PickZone Screen
+--          SET @cOutField01 = @cPickSlipNo
+--          SET @cOutField02 = ''
+--          SET @cOutField03 = ''
+--
+--          SET @nScn = @nScn - 3
+--          SET @nStep = @nStep - 3
+--
+--          EXEC rdt.rdtSetFocusField @nMobile, 3 -- DropID
+--          GOTO Quit
+--       END
    END
 
    -- Prepare SKU QTY screen var
@@ -1712,21 +1736,21 @@ BEGIN
       BEGIN
          IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
          BEGIN
-            EXECUTE [RDT].[rdt_957ExtScnEntry] 
+            EXECUTE [RDT].[rdt_957ExtScnEntry]
                @cExtendedScreenSP,
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
-               @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggID, @cSuggSKU, @nSuggQTY, @cOption, @cLottableCode, 
+               @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggID, @cSuggSKU, @nSuggQTY, @cOption, @cLottableCode,
                @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
                @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
-               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,    
-               @nAction, 
+               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+               @nAction,
                @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
                @nErrNo OUTPUT, @cErrMsg OUTPUT
 
                IF @nErrNo <> 0
                   GOTO Step_7_Fail
          END
-      END   
+      END
 
       -- Prepare LOC screen var
       SET @cOutField01 = @cPickSlipNo
