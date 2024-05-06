@@ -11,6 +11,7 @@ execute rdt.rdtAddMsg 53807, 10, '53807^CLOSE LANE ERR',  'us_english', 1650
 
 -- (james03)
 execute rdt.rdtAddMsg 53808, 10, '53808^UNHOLD ID FAIL',  'us_english', 1650
+execute rdt.rdtAddMsg 53809, 10, '53809^AUTO SHIP FAIL',  'us_english', 1650
 
 
 select * from rdt.rdtmsg (nolock) where message_id between 53801 and 53850

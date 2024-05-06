@@ -58,12 +58,21 @@ SET ANSI_NULLS OFF
            @cMBOL4PltID       NVARCHAR( 10), 
            @nQty              INT, 
            @bSuccess          INT, 
-           @cPickDetailKey    NVARCHAR( 10)     -- (james02)
+           @cPickDetailKey    NVARCHAR( 10),     -- (james02),
+           @cAutoShipMBOL     NVARCHAR( 10),
+           @nKeyCount         INT = 0,
+           @nWarningNo        INT = 0,
+           @cUserName         NVARCHAR( 128)
 
 
-   SELECT @cFacility = Facility 
+   SELECT @cFacility = Facility,
+      @cUserName = UserName
    FROM RDT.RDTMOBREC WITH (NOLOCK) 
    WHERE Mobile = @nMobile
+
+   SET @cAutoShipMBOL = rdt.rdtGetConfig(@nFunc, 'AUTOSHIPMBOL', @cStorerKey)
+   IF @cAutoShipMBOL = '0'
+      SET @cAutoShipMBOL = ''
 
    SET @nStartTCnt = @@TRANCOUNT  
    BEGIN TRAN  
@@ -316,6 +325,32 @@ SET ANSI_NULLS OFF
                END
                CLOSE CUR_LOOP
                DEALLOCATE CUR_LOOP
+            END
+
+            IF @cAutoShipMBOL = '1'
+            BEGIN
+               SET @nKeyCount        = 0
+               SET @nWarningNo       = 0
+
+               BEGIN TRY
+                  EXEC [WM].[lsp_WaveShip] 
+                     @c_WaveKey              = '',
+                     @c_MBOLkey              = @cMbolKey,
+                     @c_ShipMode             = 'MBOL',
+                     @n_TotalSelectedKeys    = 1,
+                     @c_ProceedWithWarning   = 'N',
+                     @c_UserName             = @cUserName,
+                     @n_KeyCount             = @nKeyCount            OUTPUT,
+                     @b_Success              = @bSuccess             OUTPUT,
+                     @n_err                  = @nErrNo               OUTPUT,
+                     @c_ErrMsg               = @cErrMsg              OUTPUT,
+                     @n_WarningNo            = @nWarningNo           OUTPUT
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 53809
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --AUTO SHIP FAIL
+                  GOTO Quit
+               END CATCH
             END
          END
       END
