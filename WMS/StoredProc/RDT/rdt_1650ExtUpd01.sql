@@ -348,7 +348,7 @@ SET ANSI_NULLS OFF
                END TRY
                BEGIN CATCH
                   SET @nErrNo = 53809
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PltMultiMbol
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --AUTO SHIP FAIL
                   GOTO Quit
                END CATCH
             END
