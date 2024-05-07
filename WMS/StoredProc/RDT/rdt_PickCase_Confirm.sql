@@ -13,7 +13,6 @@ GO
 /*                                                                            */
 /* Date       Rev  Author     Purposes                                        */
 /* 05-11-2018 1.0  ChewKP     WMS-6666 Created                                */
-/* 2024-04-29 1.1  CYU027     UWP-18306 Short Pick                            */
 /******************************************************************************/
 
 CREATE PROC rdt.rdt_PickCase_Confirm (
@@ -57,8 +56,7 @@ BEGIN
                                               Custom confirm
    ***********************************************************************************************/
    -- Check confirm SP blank
-   -- UWP-18306 CYU027
-   IF @cConfirmSP <> '' AND @cType <> 'SHORT'
+   IF @cConfirmSP <> ''
    BEGIN
       -- Confirm SP
       SET @cSQL = 'EXEC rdt.' + RTRIM( @cConfirmSP) +

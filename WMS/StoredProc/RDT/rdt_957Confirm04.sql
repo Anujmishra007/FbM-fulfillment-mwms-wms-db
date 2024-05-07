@@ -18,7 +18,8 @@ GO
 /*                                                                                                 */
 /* Date       Rev  Author     Purposes                                                             */
 /* 07-12-2023 1.0  Ung        WMS-24353 base on rdt_957Confirm02, 03                               */
-/* 06-05-2024 1.1  Dennis     FCR-133   Trigger only uom =7                                        */
+/* 04-29-2024 1.1  CYU027     UWP-18306 Short Pick                                                 */
+/* 06-05-2024 1.2  Dennis     FCR-133   Trigger only uom =7                                        */
 /***************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_957Confirm04] (
@@ -93,7 +94,8 @@ BEGIN
    )
 
    SET @nTranCount = @@TRANCOUNT
-
+   IF @cType = 'SHORT'
+      GOTO BUILD_SQL
    -- Get UCC info
    SELECT
       @cActUCCNo = @cBarcode,
@@ -157,6 +159,7 @@ BEGIN
 /*--------------------------------------------------------------------------------------------------
                                             Build common SQL
 --------------------------------------------------------------------------------------------------*/
+BUILD_SQL:
 BEGIN
    DECLARE @cOrderKey NVARCHAR( 10) = ''
    DECLARE @cLoadKey  NVARCHAR( 10) = ''
@@ -251,6 +254,51 @@ BEGIN
    DECLARE @nQTY_PD           INT
    DECLARE @curPD             CURSOR
    DECLARE @cLOT              NVARCHAR( 10)
+
+   --UWP-18306 CYU027
+   IF @cType = 'SHORT'
+   BEGIN
+      SET @cSQLCustom =
+              'INSERT INTO #tTaskPD (PickDetailKey, LOT, QTY, UOM) ' +
+              'SELECT PD.PickDetailKey, PD.LOT, PD.QTY, PD.UOM ' +
+              @cSQLCommon +
+              ' AND PD.Status = ''0'' '
+      SET @cSQLCustomParam = @cSQLCommonParam
+      EXEC sp_executeSQL @cSQLCustom, @cSQLCustomParam
+         ,@cPickSlipNo = @cPickSlipNo
+         ,@cOrderKey   = @cOrderKey
+         ,@cLoadKey    = @cLoadKey
+         ,@cLOC        = @cLOC
+         ,@cID         = @cID
+         ,@cSKU        = @cSKU
+
+      SET @curPD = CURSOR FOR
+         SELECT PickDetailKey FROM #tTaskPD ORDER BY PickDetailKey
+      OPEN @curPD
+      FETCH NEXT FROM @curPD INTO @cPickDetailKey
+      WHILE @@FETCH_STATUS = 0
+         BEGIN
+            BEGIN TRAN
+            SAVE TRAN rdt_957Confirm04
+            -- Update PickDetail
+            UPDATE dbo.PickDetail WITH (ROWLOCK) SET
+                                                    Status = '4',
+                                                    EditDate = GETDATE(),
+                                                    EditWho  = SUSER_SNAME(),
+                                                    TrafficCop = NULL
+            WHERE PickDetailKey = @cPickDetailKey
+            IF @@ERROR <> 0
+            BEGIN
+               SET @nErrNo = 209758
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
+               GOTO RollBackTran
+            END
+
+            FETCH NEXT FROM @curPD INTO @cPickDetailKey
+         END
+
+      GOTO SHORT_PICK_QUIT
+   END
 
    -- Check SKU on pick slip
    SET @nRowCount = 0
@@ -1455,6 +1503,7 @@ BEGIN
    END
 END
 
+SHORT_PICK_QUIT:
    -- Event log
    EXEC RDT.rdt_STD_EventLog
       @cActionType   = '3', -- Picking
