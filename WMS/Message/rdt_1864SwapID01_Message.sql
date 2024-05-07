@@ -20,3 +20,5 @@ execute rdt.rdtAddMsg 204966, 10, '204966INS RefKeyFail', 'us_english', 1864
 execute rdt.rdtAddMsg 204967, 10, '204967INS PKDtl Fail', 'us_english', 1864
 execute rdt.rdtAddMsg 204968, 10, '204968ID part alloc ', 'us_english', 1864
 execute rdt.rdtAddMsg 204969, 10, '204969SKU QTY Diff  ', 'us_english', 1864
+execute rdt.rdtAddMsg 204970, 10, '204970SKUQTYLOT Diff', 'us_english', 1864
+execute rdt.rdtAddMsg 204971, 10, '204971SKUQTYLOT Diff', 'us_english', 1864
