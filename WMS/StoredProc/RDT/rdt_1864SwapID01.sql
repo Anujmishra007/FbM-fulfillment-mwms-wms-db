@@ -12,6 +12,7 @@ GO
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
 /* 2023-08-07 1.0  Ung      WMS-23032 Created                                 */
+/* 2024-05-03 1.1  Ung      WMS-23592 Add lottable                            */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1864SwapID01] (
@@ -53,10 +54,14 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
    
+   DECLARE @cSQL                 NVARCHAR( MAX)
+   DECLARE @cSQLParam            NVARCHAR( MAX)      
    DECLARE @nTranCount           INT
    DECLARE @nRowCount            INT
    DECLARE @bSuccess             INT
-   
+   DECLARE @cLottableField       NVARCHAR( MAX) = ''
+   DECLARE @cLottableCompare     NVARCHAR( MAX) = ''
+  
    DECLARE @cOrderKey            NVARCHAR( 10)
    DECLARE @cLoadKey             NVARCHAR( 10)
    DECLARE @cZone                NVARCHAR( 18)
@@ -81,7 +86,22 @@ BEGIN
    (
       PickDetailKey  NVARCHAR( 10) NOT NULL, 
       SKU            NVARCHAR( 20) NOT NULL, 
-      QTY            INT           NOT NULL
+      QTY            INT           NOT NULL, 
+      Lottable01     NVARCHAR( 18) NOT NULL,
+      Lottable02     NVARCHAR( 18) NOT NULL,
+      Lottable03     NVARCHAR( 18) NOT NULL,
+      Lottable04     DATETIME      NULL,
+      Lottable05     DATETIME      NULL,
+      Lottable06     NVARCHAR( 30) NOT NULL,
+      Lottable07     NVARCHAR( 30) NOT NULL,
+      Lottable08     NVARCHAR( 30) NOT NULL,
+      Lottable09     NVARCHAR( 30) NOT NULL,
+      Lottable10     NVARCHAR( 30) NOT NULL,
+      Lottable11     NVARCHAR( 30) NOT NULL,
+      Lottable12     NVARCHAR( 30) NOT NULL,
+      Lottable13     DATETIME      NULL,
+      Lottable14     DATETIME      NULL,
+      Lottable15     DATETIME      NULL,
       PRIMARY KEY CLUSTERED (PickDetailKey)
    )
    
@@ -90,7 +110,22 @@ BEGIN
    (
       PickDetailKey  NVARCHAR( 10) NOT NULL, 
       SKU            NVARCHAR( 20) NOT NULL, 
-      QTY            INT           NOT NULL
+      QTY            INT           NOT NULL, 
+      Lottable01     NVARCHAR( 18) NOT NULL,
+      Lottable02     NVARCHAR( 18) NOT NULL,
+      Lottable03     NVARCHAR( 18) NOT NULL,
+      Lottable04     DATETIME      NULL,
+      Lottable05     DATETIME      NULL,
+      Lottable06     NVARCHAR( 30) NOT NULL,
+      Lottable07     NVARCHAR( 30) NOT NULL,
+      Lottable08     NVARCHAR( 30) NOT NULL,
+      Lottable09     NVARCHAR( 30) NOT NULL,
+      Lottable10     NVARCHAR( 30) NOT NULL,
+      Lottable11     NVARCHAR( 30) NOT NULL,
+      Lottable12     NVARCHAR( 30) NOT NULL,
+      Lottable13     DATETIME      NULL,
+      Lottable14     DATETIME      NULL,
+      Lottable15     DATETIME      NULL,
       PRIMARY KEY CLUSTERED (PickDetailKey)
    )
    
@@ -142,11 +177,18 @@ BEGIN
    BEGIN      
       -- Cross dock PickSlip
       IF @cZone IN ('XD', 'LB', 'LP')
-         INSERT INTO #tSuggPD (PickDetailKey, SKU, QTY)
-         SELECT PD.PickDetailKey, PD.SKU, PD.QTY 
+         INSERT INTO #tSuggPD (PickDetailKey, SKU, QTY, 
+            Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, 
+            Lottable06, Lottable07, Lottable08, Lottable09, Lottable10, 
+            Lottable11, Lottable12, Lottable13, Lottable14, Lottable15)
+         SELECT PD.PickDetailKey, PD.SKU, PD.QTY, 
+            LA.Lottable01, LA.Lottable02, LA.Lottable03, LA.Lottable04, LA.Lottable05, 
+            LA.Lottable06, LA.Lottable07, LA.Lottable08, LA.Lottable09, LA.Lottable10, 
+            LA.Lottable11, LA.Lottable12, LA.Lottable13, LA.Lottable14, LA.Lottable15
          FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
             JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey) 
-            JOIN dbo.Loc LOC WITH (NOLOCK) ON (PD.LOC = PD.LOC) 
+            JOIN dbo.LOC WITH (NOLOCK) ON (PD.LOC = PD.LOC) 
+            JOIN dbo.LOTAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) 
          WHERE RKL.PickSlipNo = @cPickSlipNo 
             AND PD.LOC = @cLOC 
             AND PD.ID = @cSuggID 
@@ -156,10 +198,17 @@ BEGIN
 
       -- Discrete PickSlip
       ELSE IF @cOrderKey <> ''
-         INSERT INTO #tSuggPD (PickDetailKey, SKU, QTY)
-         SELECT PD.PickDetailKey, PD.SKU, PD.QTY 
+         INSERT INTO #tSuggPD (PickDetailKey, SKU, QTY, 
+            Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, 
+            Lottable06, Lottable07, Lottable08, Lottable09, Lottable10, 
+            Lottable11, Lottable12, Lottable13, Lottable14, Lottable15)
+         SELECT PD.PickDetailKey, PD.SKU, PD.QTY, 
+            LA.Lottable01, LA.Lottable02, LA.Lottable03, LA.Lottable04, LA.Lottable05, 
+            LA.Lottable06, LA.Lottable07, LA.Lottable08, LA.Lottable09, LA.Lottable10, 
+            LA.Lottable11, LA.Lottable12, LA.Lottable13, LA.Lottable14, LA.Lottable15
          FROM dbo.PickDetail PD WITH (NOLOCK) 
-            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) 
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) 
          WHERE PD.OrderKey = @cOrderKey 
             AND PD.LOC = @cLOC 
             AND PD.ID = @cSuggID 
@@ -169,11 +218,18 @@ BEGIN
 
       -- Conso PickSlip
       ELSE IF @cLoadKey <> ''
-         INSERT INTO #tSuggPD (PickDetailKey, SKU, QTY)
-         SELECT PD.PickDetailKey, PD.SKU, PD.QTY 
+         INSERT INTO #tSuggPD (PickDetailKey, SKU, QTY, 
+            Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, 
+            Lottable06, Lottable07, Lottable08, Lottable09, Lottable10, 
+            Lottable11, Lottable12, Lottable13, Lottable14, Lottable15)
+         SELECT PD.PickDetailKey, PD.SKU, PD.QTY, 
+            LA.Lottable01, LA.Lottable02, LA.Lottable03, LA.Lottable04, LA.Lottable05, 
+            LA.Lottable06, LA.Lottable07, LA.Lottable08, LA.Lottable09, LA.Lottable10, 
+            LA.Lottable11, LA.Lottable12, LA.Lottable13, LA.Lottable14, LA.Lottable15
          FROM dbo.LoadPlanDetail LPD WITH (NOLOCK) 
             JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey) 
             JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) 
+            JOIN dbo.LOTAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) 
          WHERE LPD.LoadKey = @cLoadKey 
             AND PD.LOC = @cLOC 
             AND PD.ID = @cSuggID 
@@ -183,10 +239,17 @@ BEGIN
 
       -- Custom PickSlip
       ELSE
-         INSERT INTO #tSuggPD (PickDetailKey, SKU, QTY)
-         SELECT PD.PickDetailKey, PD.SKU, PD.QTY 
+         INSERT INTO #tSuggPD (PickDetailKey, SKU, QTY, 
+            Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, 
+            Lottable06, Lottable07, Lottable08, Lottable09, Lottable10, 
+            Lottable11, Lottable12, Lottable13, Lottable14, Lottable15)
+         SELECT PD.PickDetailKey, PD.SKU, PD.QTY, 
+            LA.Lottable01, LA.Lottable02, LA.Lottable03, LA.Lottable04, LA.Lottable05, 
+            LA.Lottable06, LA.Lottable07, LA.Lottable08, LA.Lottable09, LA.Lottable10, 
+            LA.Lottable11, LA.Lottable12, LA.Lottable13, LA.Lottable14, LA.Lottable15
          FROM dbo.PickDetail PD WITH (NOLOCK) 
             JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) 
+            JOIN dbo.LOTAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) 
          WHERE PD.PickSlipNo = @cPickSlipNo 
             AND PD.LOC = @cLOC 
             AND PD.ID = @cSuggID 
@@ -196,14 +259,69 @@ BEGIN
    END
 
    -- Get actual PickDetail
-   INSERT INTO #tActPD (PickDetailKey, SKU, QTY)
-   SELECT PD.PickDetailKey, PD.SKU, PD.QTY 
+   INSERT INTO #tActPD (PickDetailKey, SKU, QTY, 
+      Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, 
+      Lottable06, Lottable07, Lottable08, Lottable09, Lottable10, 
+      Lottable11, Lottable12, Lottable13, Lottable14, Lottable15)
+   SELECT PD.PickDetailKey, PD.SKU, PD.QTY, 
+      LA.Lottable01, LA.Lottable02, LA.Lottable03, LA.Lottable04, LA.Lottable05, 
+      LA.Lottable06, LA.Lottable07, LA.Lottable08, LA.Lottable09, LA.Lottable10, 
+      LA.Lottable11, LA.Lottable12, LA.Lottable13, LA.Lottable14, LA.Lottable15
    FROM dbo.PickDetail PD WITH (NOLOCK) 
+      JOIN dbo.LOTAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) 
    WHERE PD.LOC = @cLOC 
       AND PD.ID = @cID 
       AND PD.QTY > 0
       AND PD.Status <> '4'
       AND PD.Status < @cPickConfirmStatus
+
+   DECLARE
+      @cChkL01 NVARCHAR(1) = '0', @cChkL02 NVARCHAR(1) = '0', @cChkL03 NVARCHAR(1) = '0', @cChkL04 NVARCHAR(1) = '0', @cChkL05 NVARCHAR(1) = '0', 
+      @cChkL06 NVARCHAR(1) = '0', @cChkL07 NVARCHAR(1) = '0', @cChkL08 NVARCHAR(1) = '0', @cChkL09 NVARCHAR(1) = '0', @cChkL10 NVARCHAR(1) = '0', 
+      @cChkL11 NVARCHAR(1) = '0', @cChkL12 NVARCHAR(1) = '0', @cChkL13 NVARCHAR(1) = '0', @cChkL14 NVARCHAR(1) = '0', @cChkL15 NVARCHAR(1) = '0'
+
+   -- Get check lottable setting
+   SELECT
+      @cChkL01 = CASE WHEN Code = 'Lottable01' THEN '1' ELSE @cChkL01 END,
+      @cChkL02 = CASE WHEN Code = 'Lottable02' THEN '1' ELSE @cChkL02 END,
+      @cChkL03 = CASE WHEN Code = 'Lottable03' THEN '1' ELSE @cChkL03 END,
+      @cChkL04 = CASE WHEN Code = 'Lottable04' THEN '1' ELSE @cChkL04 END,
+      @cChkL05 = CASE WHEN Code = 'Lottable05' THEN '1' ELSE @cChkL05 END,
+      @cChkL06 = CASE WHEN Code = 'Lottable06' THEN '1' ELSE @cChkL06 END,
+      @cChkL07 = CASE WHEN Code = 'Lottable07' THEN '1' ELSE @cChkL07 END,
+      @cChkL08 = CASE WHEN Code = 'Lottable08' THEN '1' ELSE @cChkL08 END,
+      @cChkL09 = CASE WHEN Code = 'Lottable09' THEN '1' ELSE @cChkL09 END,
+      @cChkL10 = CASE WHEN Code = 'Lottable10' THEN '1' ELSE @cChkL10 END,
+      @cChkL11 = CASE WHEN Code = 'Lottable11' THEN '1' ELSE @cChkL11 END,
+      @cChkL12 = CASE WHEN Code = 'Lottable12' THEN '1' ELSE @cChkL12 END,
+      @cChkL13 = CASE WHEN Code = 'Lottable13' THEN '1' ELSE @cChkL13 END,
+      @cChkL14 = CASE WHEN Code = 'Lottable14' THEN '1' ELSE @cChkL14 END,
+      @cChkL15 = CASE WHEN Code = 'Lottable15' THEN '1' ELSE @cChkL15 END
+   FROM dbo.CodeLKUP WITH (NOLOCK)
+   WHERE ListName = 'SwapID'
+      AND StorerKey = @cStorerKey
+      AND Code2 = @cFacility
+
+   IF '1' IN (@cChkL01, @cChkL02, @cChkL03, @cChkL04, @cChkL05, 
+              @cChkL06, @cChkL07, @cChkL08, @cChkL09, @cChkL10, 
+              @cChkL11, @cChkL12, @cChkL13, @cChkL14, @cChkL15)
+   BEGIN
+      IF @cChkL01 = '1' SELECT @cLottableField += ', Lottable01', @cLottableCompare += ' AND S.Lottable01 = A.Lottable01'
+      IF @cChkL02 = '1' SELECT @cLottableField += ', Lottable02', @cLottableCompare += ' AND S.Lottable02 = A.Lottable02'
+      IF @cChkL03 = '1' SELECT @cLottableField += ', Lottable03', @cLottableCompare += ' AND S.Lottable03 = A.Lottable03'
+      IF @cChkL04 = '1' SELECT @cLottableField += ', Lottable04', @cLottableCompare += ' AND S.Lottable04 = A.Lottable04'
+      IF @cChkL05 = '1' SELECT @cLottableField += ', Lottable05', @cLottableCompare += ' AND S.Lottable05 = A.Lottable05'
+      IF @cChkL06 = '1' SELECT @cLottableField += ', Lottable06', @cLottableCompare += ' AND S.Lottable06 = A.Lottable06'
+      IF @cChkL07 = '1' SELECT @cLottableField += ', Lottable07', @cLottableCompare += ' AND S.Lottable07 = A.Lottable07'
+      IF @cChkL08 = '1' SELECT @cLottableField += ', Lottable08', @cLottableCompare += ' AND S.Lottable08 = A.Lottable08'
+      IF @cChkL09 = '1' SELECT @cLottableField += ', Lottable09', @cLottableCompare += ' AND S.Lottable09 = A.Lottable09'
+      IF @cChkL10 = '1' SELECT @cLottableField += ', Lottable10', @cLottableCompare += ' AND S.Lottable10 = A.Lottable10'
+      IF @cChkL11 = '1' SELECT @cLottableField += ', Lottable11', @cLottableCompare += ' AND S.Lottable11 = A.Lottable11'
+      IF @cChkL12 = '1' SELECT @cLottableField += ', Lottable12', @cLottableCompare += ' AND S.Lottable12 = A.Lottable12'
+      IF @cChkL13 = '1' SELECT @cLottableField += ', Lottable13', @cLottableCompare += ' AND S.Lottable13 = A.Lottable13'
+      IF @cChkL14 = '1' SELECT @cLottableField += ', Lottable14', @cLottableCompare += ' AND S.Lottable14 = A.Lottable14'
+      IF @cChkL15 = '1' SELECT @cLottableField += ', Lottable15', @cLottableCompare += ' AND S.Lottable15 = A.Lottable15'
+   END
 
 /*--------------------------------------------------------------------------------------------------
                                                 Swap UCC
@@ -221,26 +339,69 @@ BEGIN
    -- 1. ID is not alloc
    IF NOT EXISTS( SELECT 1 FROM #tActPD)
    BEGIN
-      -- Check pallet content is exactly same by SKU, QTY
-      IF EXISTS( SELECT TOP 1 1
-         FROM
-         (
-            SELECT SKU, SUM( QTY) QTY FROM #tSuggPD GROUP BY SKU
-         ) S FULL JOIN 
-         (
-            SELECT SKU, SUM( QTY-QTYPicked) QTY 
-            FROM dbo.LOTxLOCxID WITH (NOLOCK) 
-            WHERE LOC = @cLOC
-               AND ID = @cID
-            GROUP BY SKU
-         ) A ON (S.SKU = A.SKU)
-         WHERE S.SKU IS NULL
-            OR A.SKU IS NULL
-            OR S.QTY <> A.QTY) 
+      -- Check pallet content is exactly same by SKU, QTY, Lottable
+      IF @cLottableField <> ''
       BEGIN
-         SET @nErrNo = 204969
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- SKU QTY Diff
-         GOTO Quit
+         SET @cSQL = 
+            ' SET @nRowCount = 0 ' + 
+            ' SELECT @nRowCount = 1 ' + 
+            ' FROM ' + 
+            ' ( ' + 
+               ' SELECT SKU, SUM( QTY) QTY' + @cLottableField + 
+               ' FROM #tSuggPD ' +  
+               ' GROUP BY SKU' + @cLottableField + 
+            ' ) S FULL JOIN ' + 
+            ' ( ' + 
+               ' SELECT LLI.SKU, SUM( LLI.QTY-LLI.QTYPicked) QTY' + @cLottableField + 
+               ' FROM dbo.LOTxLOCxID LLI WITH (NOLOCK) ' + 
+                  ' JOIN dbo.LOTAttribute LA WITH (NOLOCK) ON (LA.LOT = LLI.LOT) ' + 
+               ' WHERE LLI.LOC = @cLOC ' + 
+                  ' AND LLI.ID = @cID ' + 
+               ' GROUP BY LA.SKU' + @cLottableField + 
+            ' ) A ON (S.SKU = A.SKU' + @cLottableCompare + ') ' + 
+            ' WHERE S.SKU IS NULL ' + 
+               ' OR A.SKU IS NULL ' + 
+               ' OR S.QTY <> A.QTY ' 
+         SET @cSQLParam =
+            ' @cLOC      NVARCHAR( 10), ' +
+            ' @cID       NVARCHAR( 18), ' + 
+            ' @nRowCount INT OUTPUT     '
+
+         EXEC sp_executeSQL @cSQL, @cSQLParam, 
+            @cLOC, 
+            @cID, 
+            @nRowCount OUTPUT
+         
+         IF @nRowCount = 1
+         BEGIN
+            SET @nErrNo = 204970
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- SKUQTYLOT Diff
+            GOTO Quit
+         END
+      END
+      ELSE
+      BEGIN
+         -- Check pallet content is exactly same by SKU, QTY
+         IF EXISTS( SELECT TOP 1 1
+            FROM
+            (
+               SELECT SKU, SUM( QTY) QTY FROM #tSuggPD GROUP BY SKU
+            ) S FULL JOIN 
+            (
+               SELECT SKU, SUM( QTY-QTYPicked) QTY 
+               FROM dbo.LOTxLOCxID WITH (NOLOCK) 
+               WHERE LOC = @cLOC
+                  AND ID = @cID
+               GROUP BY SKU
+            ) A ON (S.SKU = A.SKU)
+            WHERE S.SKU IS NULL
+               OR A.SKU IS NULL
+               OR S.QTY <> A.QTY) 
+         BEGIN
+            SET @nErrNo = 204969
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- SKU QTY Diff
+            GOTO Quit
+         END
       END
       
       -- Suggest
@@ -400,24 +561,64 @@ BEGIN
    -- 2. ID on other PickDetail
    ELSE
    BEGIN
-      -- Check pallet content is exactly same by SKU, QTY
-      IF EXISTS( SELECT TOP 1 1
-         FROM
-         (
-            SELECT SKU, SUM( QTY) QTY FROM #tSuggPD GROUP BY SKU
-         ) S FULL JOIN 
-         (
-            SELECT SKU, SUM( QTY) QTY FROM #tActPD GROUP BY SKU
-         ) A ON (S.SKU = A.SKU)
-         WHERE S.SKU IS NULL
-            OR A.SKU IS NULL
-            OR S.QTY <> A.QTY) 
+      -- Check pallet content is exactly same by SKU, QTY, Lottable
+      IF @cLottableField <> ''
       BEGIN
-         SET @nErrNo = 204957
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- SKU QTY Diff
-         GOTO Quit
-      END
+         SET @cSQL = 
+            ' SET @nRowCount = 0 ' + 
+            ' SELECT @nRowCount = 1 ' + 
+            ' FROM ' + 
+            ' ( ' + 
+               ' SELECT SKU, SUM( QTY) QTY' + @cLottableField + 
+               ' FROM #tSuggPD ' +  
+               ' GROUP BY SKU' + @cLottableField + 
+            ' ) S FULL JOIN ' + 
+            ' ( ' + 
+               ' SELECT SKU, SUM( QTY) QTY' + @cLottableField + 
+               ' FROM #tActPD ' +  
+               ' GROUP BY SKU' + @cLottableField + 
+            ' ) A ON (S.SKU = A.SKU' + @cLottableCompare + ') ' + 
+            ' WHERE S.SKU IS NULL ' + 
+               ' OR A.SKU IS NULL ' + 
+               ' OR S.QTY <> A.QTY ' 
+         SET @cSQLParam =
+            ' @cLOC      NVARCHAR( 10), ' +
+            ' @cID       NVARCHAR( 18), ' + 
+            ' @nRowCount INT OUTPUT     '
 
+         EXEC sp_executeSQL @cSQL, @cSQLParam, 
+            @cLOC, 
+            @cID, 
+            @nRowCount OUTPUT
+         
+         IF @nRowCount = 1
+         BEGIN
+            SET @nErrNo = 204971
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- SKUQTYLOT Diff
+            GOTO Quit
+         END
+      END
+      ELSE
+      BEGIN
+         -- Check pallet content is exactly same by SKU, QTY
+         IF EXISTS( SELECT TOP 1 1
+            FROM
+            (
+               SELECT SKU, SUM( QTY) QTY FROM #tSuggPD GROUP BY SKU
+            ) S FULL JOIN 
+            (
+               SELECT SKU, SUM( QTY) QTY FROM #tActPD GROUP BY SKU
+            ) A ON (S.SKU = A.SKU)
+            WHERE S.SKU IS NULL
+               OR A.SKU IS NULL
+               OR S.QTY <> A.QTY) 
+         BEGIN
+            SET @nErrNo = 204957
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- SKU QTY Diff
+            GOTO Quit
+         END
+      END
+      
       /*
          2a. Loop sugg ID, unalloc
          2b. Loop act ID, unalloc
