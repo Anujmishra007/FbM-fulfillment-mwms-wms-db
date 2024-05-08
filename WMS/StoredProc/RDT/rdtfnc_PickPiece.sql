@@ -128,6 +128,10 @@ DECLARE
    @nActQTY        INT,
    @cDropID        NVARCHAR( 20),
    @cFromStep      NVARCHAR( 1),
+   @cExtendedScreenSP   NVARCHAR( 20),
+   @nAction     INT,
+   @nAfterScn   INT,
+   @nAfterStep  INT,
 
    @cExtendedValidateSP NVARCHAR( 20),
    @cExtendedUpdateSP   NVARCHAR( 20),
