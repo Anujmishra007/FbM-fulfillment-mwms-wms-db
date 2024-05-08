@@ -2733,7 +2733,8 @@ BEGIN
       SET @cMax = '' -- @cSKU
       SET @cOutField03 = rdt.rdtFormatString( @cSKUDesc, 1, 20)  -- SKU desc 1
       SET @cOutField04 = rdt.rdtFormatString( @cSKUDesc, 21, 20) -- SKU desc 2
-
+      SET @cOutField05 = ''
+      
       -- Go back to prev screen
       SET @nScn = @nFromScn
       SET @nStep = @nStep - 1
@@ -3390,7 +3391,7 @@ BEGIN
             @cErrMsg  OUTPUT
 
          IF @nErrNo <> 0
-            GOTO Step_4_Fail
+            GOTO Step_7_Fail
       END
    END
    
@@ -3585,6 +3586,9 @@ BEGIN
       @cLottable01 = '', @cLottable02 = '', @cLottable03 = '',    @dLottable04 = NULL, @dLottable05 = NULL,
       @cLottable06 = '', @cLottable07 = '', @cLottable08 = '',    @cLottable09 = '',   @cLottable10 = '',
       @cLottable11 = '', @cLottable12 = '', @dLottable13 = NULL,  @dLottable14 = NULL, @dLottable15 = NULL
+   
+   Step_7_Fail:
+      GOTO Quit
 
 END
 GOTO Quit
@@ -3881,7 +3885,7 @@ BEGIN
                   @cErrMsg  OUTPUT
 
                IF @nErrNo <> 0
-                  GOTO Step_4_Fail
+                  GOTO Step_9_Fail
             END
          END
          SET @cID = ''

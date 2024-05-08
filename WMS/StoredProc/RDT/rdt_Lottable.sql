@@ -21,6 +21,7 @@ GO
 /* 08-12-2020  1.6  Ung         WMS-14691 Fix hidden field not clear          */
 /*                              Fix validation fail cursor on next field      */
 /* 08/02-2017  1.7  Ung         WMS-1000 Add VERIFY                           */
+/* 08-05-2024  1.8  Dennis      UWP-19017 Add VERIFY                          */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_Lottable
@@ -103,6 +104,10 @@ BEGIN
    DECLARE @nFirstSeq   INT  
    DECLARE @nLastSeq    INT
    DECLARE @nRemainInCurrentScreen INT
+   DECLARE @cStorerConfig        NVARCHAR( 50),
+           @dLotDate             DATETIME,
+           @nLotNum              INT,
+           @cLotValue            NVARCHAR( 30)
 
 
    -- Temp table for lottable
@@ -804,6 +809,46 @@ BEGIN
                   IF @nLottableNo = 13 SET @dLottable13 = rdt.rdtConvertToDate( @cLottable) ELSE 
                   IF @nLottableNo = 14 SET @dLottable14 = rdt.rdtConvertToDate( @cLottable) ELSE 
                   IF @nLottableNo = 15 SET @dLottable15 = rdt.rdtConvertToDate( @cLottable)
+                  SET @cStorerConfig = ISNULL(rdt.RDTGetConfig( @nFunc, 'NoFutureDateLottable', @cStorerKey),'')
+                  IF @cStorerConfig != ''
+                  BEGIN
+                     DECLARE LIST CURSOR FOR 
+                     SELECT TRY_CAST(value AS INT) FROM STRING_SPLIT(@cStorerConfig, ',')
+                     OPEN LIST
+                     FETCH NEXT FROM LIST INTO @nLotNum
+                     WHILE @@FETCH_STATUS = 0
+                     BEGIN
+                        IF @nLotNum = @nLottableNo
+                        BEGIN
+                           SET @dLotDate = CASE
+                                    WHEN @nLotNum = 4  THEN @dLottable04  WHEN @nLotNum = 5 THEN @dLottable05
+                                    WHEN @nLotNum = 13 THEN @dLottable13 WHEN @nLotNum = 14 THEN @dLottable14
+                                    WHEN @nLotNum = 15 THEN @dLottable15
+                                    END 
+                           SET @cLotValue = rdt.rdtFormatDate(@dLotDate)
+                           IF ISNULL(@cLotValue,'') = '' OR (@cLotValue <> '' AND rdt.rdtIsValidDate( @cLotValue) = 0)
+                           BEGIN
+                              GOTO CLOSELIST
+                           END
+                           IF @dLotDate >= DATEADD(DAY, 0, DATEDIFF(DAY, -1, GETDATE()))
+                           BEGIN
+                              SET @nErrNo = 212607
+                              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --212607DateRequiredToBeBeforeThanToday
+                              SET @nCursorPos = @nCount * 2
+                              EXEC rdt.rdtSetFocusField @nMobile, @nCursorPos
+                              SET @nMorePage = 0
+                              CLOSE LIST
+                              DEALLOCATE LIST
+                              GOTO CAPTURE_Quit
+                           END
+                        END
+                        FETCH NEXT FROM LIST INTO @nLotNum
+                     END
+                     GOTO CLOSELIST
+                     CLOSELIST:
+                        CLOSE LIST
+                        DEALLOCATE LIST
+                  END
                END
                
                SET @nCount = @nCount + 1

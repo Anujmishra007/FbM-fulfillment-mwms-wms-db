@@ -17,6 +17,7 @@ GO
 /*                                                                            */
 /* Date       Rev  Author      Purposes                                       */
 /* 2024-02-28 1.0  NLT013       Created First Version (UWP-15257)             */
+/* 2024-02-28 1.1  Dennis       VAS Modification (UWP-18854)                  */
 /******************************************************************************/
 
 CREATE PROCEDURE [rdt].[rdt_CreateVASWorkOrder] (
@@ -205,7 +206,8 @@ DECLARE
                Status,
 
                Type,
-               Reason
+               Reason,
+               WkOrdUdef1 -- Pallet ID
             )
          VALUES
             (
@@ -217,7 +219,8 @@ DECLARE
                0,
                
                '',
-               ''
+               '',
+               @cPalletID
             )
       END
       ELSE 

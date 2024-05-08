@@ -6,3 +6,4 @@ execute rdt.rdtAddMsg 212603, 10, '212603Unique Location Not Identified', 'us_en
 execute rdt.rdtAddMsg 212604, 10, '212604Loc Not Found', 'us_english', 1580
 execute rdt.rdtAddMsg 212605, 10, '212605List Not Maintained', 'us_english'
 execute rdt.rdtAddMsg 212606, 10, '212606Invalid Value', 'us_english'
+execute rdt.rdtAddMsg 212607, 10, '212607Date Required To Be Before Than Today', 'us_english'

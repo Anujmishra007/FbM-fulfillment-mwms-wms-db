@@ -79,11 +79,13 @@ BEGIN
    @cActLoc              NVARCHAR( 20),
    @cPalletTypeInUse     NVARCHAR( 5),
    @cPalletTypeSave      NVARCHAR( 10),
-   @cLott10              NVARCHAR( 30)
+   @cLott10              NVARCHAR( 30),
+   @cSKUReceived         NVARCHAR( 20)
 
    SELECT
    @cLott10 = C_String1,
-   @cPalletTypeSave = C_String2
+   @cPalletTypeSave = C_String2,
+   @cSKUReceived = C_String3
    FROM RDT.RDTMOBREC WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
@@ -261,7 +263,7 @@ BEGIN
                      ,@cID
                      ,'YES'
                      ,'LABEL PLT'
-                     ,@cSKU
+                     ,@cSKUReceived
                      ,'VASWOCODE'
                      ,1
                      ,@nErrNo OUTPUT
@@ -450,7 +452,8 @@ Exception:
 Quit:
 UPDATE RDT.RDTMOBREC SET
    C_String1 = @cLott10,
-   C_String2 = @cPalletTypeSave
+   C_String2 = @cPalletTypeSave,
+   C_String3 = CASE WHEN ISNULL(@cSKU,'')='' THEN @cSKUReceived ELSE @cSKU END 
    WHERE Mobile = @nMobile
 
 END; 
