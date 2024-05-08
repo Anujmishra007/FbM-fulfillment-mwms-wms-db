@@ -1462,7 +1462,7 @@ BEGIN
       IF @cPickUOM = '7'
       BEGIN
          DECLARE @cKey NVARCHAR( 20)
-         SELECT @cKey = RIGHT( @cActUCCNo,6)
+         SET @cKey =  @cActUCCNo
 
          EXEC dbo.ispGenTransmitLog2
             @c_TableName      = 'WSRDTTOTECFM',
@@ -1481,7 +1481,7 @@ BEGIN
          END
          IF ISNULL(@cTaskUCCNo,'')!=''
          BEGIN
-            SELECT @cKey = RIGHT( @cTaskUCCNo,6)
+            SET @cKey = @cTaskUCCNo
 
             EXEC dbo.ispGenTransmitLog2
                @c_TableName      = 'WSRDTTOTECFM',
