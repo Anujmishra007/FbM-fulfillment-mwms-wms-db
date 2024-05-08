@@ -128,10 +128,6 @@ DECLARE
    @nActQTY        INT,
    @cDropID        NVARCHAR( 20),
    @cFromStep      NVARCHAR( 1),
-   @cExtendedScreenSP   NVARCHAR( 20),
-   @nAction     INT,
-   @nAfterScn   INT,
-   @nAfterStep  INT,
 
    @cExtendedValidateSP NVARCHAR( 20),
    @cExtendedUpdateSP   NVARCHAR( 20),
@@ -1018,21 +1014,22 @@ BEGIN
       BEGIN
          IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
          BEGIN
-            EXECUTE [RDT].[rdt_839ExtScnEntry] 
+            EXECUTE [RDT].[rdt_839ExtScnEntry]
                   @cExtendedScreenSP,
                   @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
-                  @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggID, @cSuggSKU, @nSuggQTY, @cOption, @cLottableCode, 
+                  @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggID, @cSuggSKU, @nSuggQTY, @cOption, @cLottableCode,
                   @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
                   @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
-                  @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,    
-                  @nAction, 
+                  @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+                  @cBarcode,
+                  @nAction,
                   @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
                   @nErrNo OUTPUT, @cErrMsg OUTPUT
 
-               IF @nErrNo <> 0
-                GOTO Step_2_Fail
+            IF @nErrNo <> 0
+               GOTO Step_2_Fail
          END
-      END   
+      END
 
       SELECT @cLottable01 = '', @cLottable02 = '', @cLottable03 = '',    @dLottable04 = NULL,  @dLottable05 = NULL,
              @cLottable06 = '', @cLottable07 = '', @cLottable08 = '',    @cLottable09 = '',    @cLottable10 = '',
