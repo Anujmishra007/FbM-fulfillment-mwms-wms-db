@@ -162,6 +162,22 @@ BEGIN
                      SET @cLottable11 = @cResultCode
                   END
                END
+               IF (ISNULL( rdt.RDTGetConfig( @nFunc, 'ULLottable06', @cStorerKey),'0') != '0')
+               BEGIN
+                  SELECT 
+                        @cUserDefine08 = UserDefine08
+                     FROM dbo.ReceiptDetail RD WITH (NOLOCK)
+                     WHERE RD.ReceiptKey = @cReceiptKey
+                     AND RD.ReceiptLineNumber = @cReceiptLineNumber
+                  IF (@cUserDefine08 != '' AND ISNULL(@cUserDefine08,N'OK') != N'OK') OR ISNULL(@cLottable11,'')!='' OR ISNULL(@cLottable12,'')!=''
+                  BEGIN    
+                     SET @cLottable06 = '1'
+                  END
+                  ELSE
+                  BEGIN
+                     SET @cLottable06 = ''
+                  END
+               END
             END
          END
 
@@ -416,21 +432,6 @@ BEGIN
             END
             IF( @nStep = 6 )
             BEGIN
-               IF (ISNULL( rdt.RDTGetConfig( @nFunc, 'ULLottable06', @cStorerKey),'0') != '0')
-               BEGIN
-                  SELECT 
-                        @cUserDefine08 = UserDefine08
-                     FROM dbo.ReceiptDetail RD WITH (NOLOCK)
-                     WHERE RD.ReceiptKey = @cReceiptKey
-                     AND RD.ReceiptLineNumber = @cReceiptLineNumber
-                  IF (@cUserDefine08 != '' AND ISNULL(@cUserDefine08,N'OK') != N'OK') OR ISNULL(@cLottable11,'')!='' OR ISNULL(@cLottable12,'')!=''
-                  BEGIN    
-                     UPDATE dbo.ReceiptDetail
-                     SET Lottable06 = '1'
-                     WHERE ReceiptKey = @cReceiptKey
-                     AND ReceiptLineNumber = @cReceiptLineNumber
-                  END
-               END
                IF(ISNULL(rdt.RDTGetConfig( @nFunc, 'ValidatePalletType', @cStorerKey),'0'))!='0' -- Capture pallet type
                BEGIN
                   IF ISNULL(@cPalletTypeSave,'')!=''
