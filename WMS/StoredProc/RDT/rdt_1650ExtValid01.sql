@@ -21,6 +21,8 @@ GO
 /* Date       Rev  Author     Purposes                                  */
 /* 2015-02-09 1.0  James      SOS316783 - Created                       */
 /* 2016-02-05 1.1  James      Check pallet must PA to stage (james01)   */
+/* 2024-05-07 1.2  NLT013     FCR-117 Ability to config stag loc type,  */
+/*                            display un-scanned pallet qty             */
 /************************************************************************/
 
 CREATE PROC rdt.rdt_1650ExtValid01 (
@@ -54,7 +56,10 @@ SET ANSI_NULLS OFF
            @cErrMsg5                   NVARCHAR( 20), 
            @cFacility                  NVARCHAR( 5), 
            @cID                        NVARCHAR( 18), 
-           @cMBOL4Pallet               NVARCHAR( 10) 
+           @cMBOL4Pallet               NVARCHAR( 10),
+           @cStageLocCategory          NVARCHAR( 10),
+           @cDisplayPalletQty          NVARCHAR( 1),
+           @nUnloadedPalletQty         INT
 
 
    SET @nErrNo = 0
@@ -77,6 +82,14 @@ SET ANSI_NULLS OFF
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No Order Found
          GOTO Quit
       END
+
+      SET @cStageLocCategory = rdt.RDTGetConfig( @nFunc, 'StageLocCategory', @cStorerkey)
+      IF @cStageLocCategory IS NULL OR TRIM(@cStageLocCategory) = '' OR @cStageLocCategory = '0'
+          SET @cStageLocCategory = 'STAGING'
+
+      SET @cDisplayPalletQty = rdt.RDTGetConfig( @nFunc, 'DisplayPalletQty', @cStorerkey)
+      IF @cDisplayPalletQty IS NULL OR TRIM(@cStageLocCategory) = ''
+          SET @cDisplayPalletQty = '0'
 
       -- Get the mbolkey for this particular dropid
       SELECT @cMBOL4Pallet = MbolKey 
@@ -145,7 +158,7 @@ SET ANSI_NULLS OFF
                         JOIN dbo.LOC LOC WITH (NOLOCK) ON ( PD.LOC = LOC.LOC)
                         WHERE PD.StorerKey = @cStorerKey
                         AND   PD.Status < '9'
-                        AND   LOC.LocationCategory <> 'STAGING')
+                        AND   LOC.LocationCategory <> @cStageLocCategory )
             BEGIN
                SET @nErrNo = 92904   
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PLT NOT ALL PA
@@ -158,7 +171,7 @@ SET ANSI_NULLS OFF
                      WHERE PD.StorerKey = @cStorerKey
                      AND   PD.Status < '9'
                      AND   PD.ID = @cPalletID
-                     AND   LOC.LocationCategory <> 'STAGING')
+                     AND   LOC.LocationCategory <> @cStageLocCategory)
          BEGIN
             SET @nErrNo = 92912   
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PLT NOT AT STG
@@ -201,6 +214,17 @@ SET ANSI_NULLS OFF
 
          SET @nCloseTruck = 1
 
+         --Check if no pallet was scanned
+         IF NOT EXISTS(SELECT 1 FROM dbo.PickDetail PD WITH (NOLOCK) 
+                        INNER JOIN dbo.MBOLDetail MD WITH (NOLOCK) ON ( PD.OrderKey = MD.OrderKey)
+                        WHERE PD.StorerKey = @cStorerKey
+                           AND ISNULL( PD.ID, '') = ''
+                           AND MD.MBOLKey = @cMbolKey)
+            AND NOT EXISTS(SELECT 1 FROM rdt.rdtScanToTruck ST WITH (NOLOCK)
+                        WHERE MBOLKey = @cMbolKey
+                           AND ST.CartonType = 'SCNPT2DOOR')
+            SET @nCloseTruck = 0
+
          -- Check if any pallet in the mbol not yet scanned to door
          IF EXISTS ( SELECT 1 
                      FROM dbo.PickDetail PD WITH (NOLOCK) 
@@ -211,9 +235,15 @@ SET ANSI_NULLS OFF
                      AND   EXISTS ( SELECT 1 FROM rdt.rdtScanToTruck ST WITH (NOLOCK) 
                                     WHERE MD.MBOLKey = ST.MBOLKey 
                                     AND   ST.CartonType = 'SCNPT2DOOR'))
-         BEGIN
             SET @nCloseTruck = 0
-         END
+
+         IF @nCloseTruck = 0
+            SELECT @nUnloadedPalletQty = COUNT(1) 
+            FROM dbo.PickDetail PD WITH (NOLOCK) 
+            JOIN dbo.MBOLDetail MD WITH (NOLOCK) ON ( PD.OrderKey = MD.OrderKey)
+            WHERE PD.StorerKey = @cStorerKey
+            AND   ISNULL( PD.ID, '') <> ''
+            AND   MD.MBOLKey = @cMbolKey
 
          IF @nCloseTruck = 0
          BEGIN
@@ -222,7 +252,13 @@ SET ANSI_NULLS OFF
             SET @cErrMsg1 = SUBSTRING( rdt.rdtgetmessage( 92906, @cLangCode, 'DSP'), 7, 20) -- There are pallets
             SET @cErrMsg2 = SUBSTRING( rdt.rdtgetmessage( 92907, @cLangCode, 'DSP'), 7, 20) -- not scan to doors.
             SET @cErrMsg3 = SUBSTRING( rdt.rdtgetmessage( 92908, @cLangCode, 'DSP'), 7, 20) -- Cannot close.
-            EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1, @cErrMsg2, @cErrMsg3
+            IF @cDisplayPalletQty = '1' AND @nUnloadedPalletQty > 0
+            BEGIN
+               SET @cErrMsg4 = SUBSTRING( rdt.rdtgetmessage( 92913, @cLangCode, 'DSP'), 7, 20) + CAST(@nUnloadedPalletQty AS NVARCHAR(5)) -- REMAINING PALLET:xx
+               EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1, @cErrMsg2, @cErrMsg3, @cErrMsg4
+            END
+            ELSE
+               EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1, @cErrMsg2, @cErrMsg3
             GOTO Quit
          END
 

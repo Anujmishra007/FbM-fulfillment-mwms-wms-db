@@ -20,6 +20,7 @@ GO
 /* 2015-12-04 1.2  James      SOS316783 - Unhold pallet (james02)       */
 /* 2015-12-18 1.3  James      Deadlock tuning (james03)                 */
 /* 2017-04-07 1.4  James      Deadlock tuning (james04)                 */
+/* 2024-05-09 1.5  NLT013     FCR-117 Auto ship on RDT                  */
 /************************************************************************/
 
 CREATE PROC [RDT].[rdt_1650ExtUpd01] (

@@ -13,8 +13,7 @@ execute rdt.rdtAddMsg 92909, 10, '92909^Invalid Door',        'us_english', 1650
 execute rdt.rdtAddMsg 92910, 10, '92910^CANNOTSCAN2TRK',      'us_english', 1650
 execute rdt.rdtAddMsg 92911, 10, '92911^PLT SCN 2 DOOR',      'us_english', 1650
 execute rdt.rdtAddMsg 92912, 10, '92912^PLT NOT AT STG',      'us_english', 1650
-
-
+execute rdt.rdtAddMsg 92913, 10, '92913^REMAINING PALLET:',   'us_english', 1650
 
 select * from rdt.rdtmsg (nolock) where message_id between 92901 and 92950
 
