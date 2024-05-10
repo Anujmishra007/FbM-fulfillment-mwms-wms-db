@@ -357,7 +357,7 @@ BEGIN
                   ' JOIN dbo.LOTAttribute LA WITH (NOLOCK) ON (LA.LOT = LLI.LOT) ' + 
                ' WHERE LLI.LOC = @cLOC ' + 
                   ' AND LLI.ID = @cID ' + 
-               ' GROUP BY LA.SKU' + @cLottableField + 
+               ' GROUP BY LLI.SKU' + @cLottableField + 
             ' ) A ON (S.SKU = A.SKU' + @cLottableCompare + ') ' + 
             ' WHERE S.SKU IS NULL ' + 
                ' OR A.SKU IS NULL ' + 
@@ -485,7 +485,7 @@ BEGIN
             INSERT INTO dbo.PickDetail (
                CaseID, PickHeaderKey, OrderKey, OrderLineNumber, LOT, StorerKey, SKU, AltSKU, UOM,
                UOMQTY, QTYMoved, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, CartonType,
-               ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,
+               ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey, Channel_ID, 
                EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes,
                PickDetailKey,
                Status, 
@@ -494,8 +494,8 @@ BEGIN
                OptimizeCop)
             SELECT
                CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot, StorerKey, SKU, AltSku, UOM,
-               UOMQTY, QTYMoved, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup,
-               CartonType, ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,
+               UOMQTY, QTYMoved, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, CartonType, 
+               ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey, Channel_ID, 
                EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes,
                @cNewPickDetailKey,
                Status, 
@@ -528,8 +528,14 @@ BEGIN
             END
    
             -- Create new a PickDetail to hold the balance
-            INSERT INTO #tSuggPD (PickDetailKey, SKU, QTY)
-            VALUES (@cNewPickDetailKey, @cSuggSKU, @nQTY_Bal)
+            INSERT INTO #tSuggPD (PickDetailKey, SKU, QTY, 
+               Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, 
+               Lottable06, Lottable07, Lottable08, Lottable09, Lottable10, 
+               Lottable11, Lottable12, Lottable13, Lottable14, Lottable15)
+            VALUES (@cNewPickDetailKey, @cSuggSKU, @nQTY_Bal, 
+               '',   '',  '',    NULL, NULL, 
+               '',   '',  '',    '',   '', 
+               '',   '',  NULL,  NULL, NULL)
             IF @@ERROR <> 0
             BEGIN
                SET @nErrNo = 204956
@@ -735,7 +741,7 @@ BEGIN
             INSERT INTO dbo.PickDetail (
                CaseID, PickHeaderKey, OrderKey, OrderLineNumber, LOT, StorerKey, SKU, AltSKU, UOM,
                UOMQTY, QTYMoved, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, CartonType,
-               ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,
+               ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey, Channel_ID, 
                EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes,
                PickDetailKey,
                Status, 
@@ -744,8 +750,8 @@ BEGIN
                OptimizeCop)
             SELECT
                CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot, StorerKey, SKU, AltSku, UOM,
-               UOMQTY, QTYMoved, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup,
-               CartonType, ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,
+               UOMQTY, QTYMoved, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, CartonType, 
+               ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey, Channel_ID, 
                EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes,
                @cNewPickDetailKey,
                Status, 
@@ -778,8 +784,14 @@ BEGIN
             END
    
             -- Create new a PickDetail to hold the balance
-            INSERT INTO #tSuggPD (PickDetailKey, SKU, QTY)
-            VALUES (@cNewPickDetailKey, @cSuggSKU, @nQTY_Bal)
+            INSERT INTO #tSuggPD (PickDetailKey, SKU, QTY, 
+               Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, 
+               Lottable06, Lottable07, Lottable08, Lottable09, Lottable10, 
+               Lottable11, Lottable12, Lottable13, Lottable14, Lottable15)
+            VALUES (@cNewPickDetailKey, @cSuggSKU, @nQTY_Bal, 
+               '',   '',  '',    NULL, NULL, 
+               '',   '',  '',    '',   '', 
+               '',   '',  NULL,  NULL, NULL)
             IF @@ERROR <> 0
             BEGIN
                SET @nErrNo = 204962
@@ -865,7 +877,7 @@ BEGIN
             INSERT INTO dbo.PickDetail (
                CaseID, PickHeaderKey, OrderKey, OrderLineNumber, LOT, StorerKey, SKU, AltSKU, UOM,
                UOMQTY, QTYMoved, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, CartonType,
-               ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,
+               ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey, Channel_ID, 
                EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes,
                PickDetailKey,
                Status, 
@@ -874,8 +886,8 @@ BEGIN
                OptimizeCop)
             SELECT
                CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot, StorerKey, SKU, AltSku, UOM,
-               UOMQTY, QTYMoved, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup,
-               CartonType, ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,
+               UOMQTY, QTYMoved, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, CartonType, 
+               ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey, Channel_ID, 
                EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes,
                @cNewPickDetailKey,
                Status, 
@@ -908,8 +920,14 @@ BEGIN
             END
    
             -- Create new a PickDetail to hold the balance
-            INSERT INTO #tActPD (PickDetailKey, SKU, QTY)
-            VALUES (@cNewPickDetailKey, @cActSKU, @nQTY_Bal)
+            INSERT INTO #tActPD (PickDetailKey, SKU, QTY, 
+               Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, 
+               Lottable06, Lottable07, Lottable08, Lottable09, Lottable10, 
+               Lottable11, Lottable12, Lottable13, Lottable14, Lottable15)
+            VALUES (@cNewPickDetailKey, @cActSKU, @nQTY_Bal, 
+               '',   '',  '',    NULL, NULL, 
+               '',   '',  '',    '',   '', 
+               '',   '',  NULL,  NULL, NULL)
             IF @@ERROR <> 0
             BEGIN
                SET @nErrNo = 204967
