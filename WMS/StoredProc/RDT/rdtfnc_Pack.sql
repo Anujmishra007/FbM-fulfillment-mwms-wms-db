@@ -80,6 +80,7 @@ GO
 /* 2023-07-04   5.6 Ung         WMS-22913 Add ExtendedUpdateSP at step 2 ESC                    */
 /* 2023-11-24   5.7 Ung         WMS-24060 Add PackByFromDropID                                  */
 /* 2023-08-25   5.8 YeeKung     WMS-23946 Clear Extendedinfo SP  (yeekung02)                    */
+/* 2024-05-09   5.9 CYU027      FCR-185   Capture Tagloop                                       */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
@@ -2609,6 +2610,28 @@ BEGIN
             ELSE
                -- Setup is non SP
                SET @cPackInfo = @cCapturePackInfoSP
+               --FCR-185 START
+               DECLARE @cDisablePackRef   NVARCHAR(20)
+               DECLARE @cUserDefine03     NVARCHAR(20)
+               DECLARE @cUserDefine04     NVARCHAR(20)
+               SET @cDisablePackRef = rdt.RDTGetConfig( @nFunc, 'DisablePackRef', @cStorerkey)
+
+               IF (rdt.RDTGetConfig( @nFunc, 'DisablePackRef', @cStorerkey) <> '')
+               BEGIN
+                  SELECT TOP 1
+                     @cUserDefine03 = OD.UserDefine03,
+                     @cUserDefine04 = OD.UserDefine04
+                  FROM PICKHEADER PH WITH (NOLOCK)
+                          INNER JOIN ORDERDETAIL OD WITH (NOLOCK)
+                                     ON PH.OrderKey = OD.OrderKey AND PH.StorerKey = OD.StorerKey
+                  WHERE PH.PickHeaderKey = @cPickSlipNo AND PH.StorerKey = @cStorerKey
+
+                  IF (@cUserDefine03 <> 'TagLoopID') OR ( @cUserDefine04 <> 'Y')
+                     SET @cPackInfo = REPLACE(@cCapturePackInfoSP, @cDisablePackRef, '')
+
+               END
+               --FCR-185 END
+
          END
 
          -- Capture pack info
