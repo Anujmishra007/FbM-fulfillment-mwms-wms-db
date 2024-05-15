@@ -56,7 +56,7 @@ BEGIN
    DECLARE @cPriority         NVARCHAR( 10)
    DECLARE @cSourcePriority   NVARCHAR( 10)
    DECLARE @cSourceType       NVARCHAR( 30)
-   DECLARE @cDTransitTaskPriority   NVARCHAR( 10)
+   DECLARE @cPnDTransitTaskPriority NVARCHAR( 10)
    DECLARE @cLocCategory            NVARCHAR( 10)
    DECLARE @tTask TABLE
    (
@@ -105,9 +105,9 @@ BEGIN
    ORDER BY TransitCount DESC
    
    --Get PnDTransitTaskPriority
-   SET @cDTransitTaskPriority = rdt.RDTGetConfig( @nFunc, 'PnDTransitTaskPriority', @cStorerKey)
-   IF @cDTransitTaskPriority IS NULL OR TRY_CAST(@cDTransitTaskPriority) IS NULL 
-      SET @cDTransitTaskPriority = '0'
+   SET @cPnDTransitTaskPriority = rdt.RDTGetConfig( @nFunc, 'PnDTransitTaskPriority', @cStorerKey)
+   IF @cPnDTransitTaskPriority IS NULL OR TRY_CAST(@cPnDTransitTaskPriority) IS NULL 
+      SET @cPnDTransitTaskPriority = '0'
 
    -- Get storer configure
    DECLARE @cCreateNextTaskSPSP NVARCHAR(20)
@@ -306,7 +306,7 @@ BEGIN
             PickMethod, StorerKey, SKU, LOT, ListKey, TransitCount, SourceType, WaveKey, LoadKey, Priority, SourcePriority, TrafficCop)
          VALUES (
             @cNewTaskDetailKey, 'FPK1', '0', '', @cToLOC, @cToID, @cFinalLOC, @cFinalID, 0, @cToLOCAreaKey, 
-            'FP', @cStorerKey, '', '', @cListKey, @nTransitCount, @cSourceType, @cWaveKey, @cLoadKey, CASE WHEN @cLocCategory IN ('PND_IN', 'PND_OUT', 'PND') AND @cDTransitTaskPriority BETWEEN 2 AND 9 THEN @cDTransitTaskPriority ELSE @cPriority END, @cSourcePriority, NULL)
+            'FP', @cStorerKey, '', '', @cListKey, @nTransitCount, @cSourceType, @cWaveKey, @cLoadKey, CASE WHEN @cLocCategory IN ('PND_IN', 'PND_OUT', 'PND') AND @cPnDTransitTaskPriority BETWEEN 2 AND 9 THEN @cPnDTransitTaskPriority ELSE @cPriority END, @cSourcePriority, NULL)
          IF @@ERROR <> 0
          BEGIN
             SET @nErrNo = 116704
@@ -323,7 +323,7 @@ BEGIN
          PickMethod, Storerkey, SKU, LOT, ListKey, TransitCount, SourceType, WaveKey, LoadKey, Priority, SourcePriority, TrafficCop)
       VALUES (
          @cNewTaskDetailKey, 'FPK1', '0', '', @cToLOC, @cToID, @cTransitLOC, @cToID, 0, @cToLOCAreaKey, 
-         'FP', @cStorerkey, '', '', @cListKey, @nTransitCount, @cSourceType, @cWaveKey, @cLoadKey, CASE WHEN @cLocCategory IN ('PND_IN', 'PND_OUT', 'PND') AND @cDTransitTaskPriority BETWEEN 2 AND 9 THEN @cDTransitTaskPriority ELSE @cPriority END, @cSourcePriority, NULL)
+         'FP', @cStorerkey, '', '', @cListKey, @nTransitCount, @cSourceType, @cWaveKey, @cLoadKey, CASE WHEN @cLocCategory IN ('PND_IN', 'PND_OUT', 'PND') AND @cPnDTransitTaskPriority BETWEEN 2 AND 9 THEN @cPnDTransitTaskPriority ELSE @cPriority END, @cSourcePriority, NULL)
       IF @@ERROR <> 0
       BEGIN
          SET @nErrNo = 116705
