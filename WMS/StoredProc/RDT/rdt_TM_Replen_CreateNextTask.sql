@@ -27,7 +27,7 @@ GO
 /* 23-Feb-2018 1.4  Ung       WMS-3179 Add TaskDetail.AreaKey           */
 /* 30-Mar-2018 1.5  ChewKP    WMS-4471 - Add UOMQty for RPT (CheWKP02)  */
 /* 03-Aug-2018 1.6  ChewKP    WMS-5178 - Add CreateNextTaskSP (ChewKP03)*/
-/* 15-May-2024 1.7  NLT013    UWP-19519 Ability to config the new task's*/
+/* 15-May-2024 1.7  NLT013    UWP-19518 Ability to config the new task's*/
 /*                            prioprity if the source location is PND   */
 /************************************************************************/
 
@@ -372,7 +372,7 @@ BEGIN
                PickMethod, StorerKey, SKU, LOT, ListKey, TransitCount, SourceType, WaveKey, Priority, SourcePriority, TrafficCop)
             VALUES (
                @cNewTaskDetailKey, 'RP1', '0', '', @cToLOC, @cToID, @cFinalLOC, @cToID, 0, @cToLOCAreaKey, 
-               'FP', @cStorerKey, '', '', @cListKey, @nTransitCount, @cSourceType, @cWaveKey, CASE WHEN @cLocCategory IN ('PND_IN', 'PND_OUT', 'PND') AND @cPnDTransitTaskPriority BETWEEN 2 AND 9 THEN @cPnDTransitTaskPriority ELSE @cPriority END, @cSourcePriority, NULL)
+               'FP', @cStorerKey, '', '', @cListKey, @nTransitCount, @cSourceType, @cWaveKey, CASE WHEN @cLocCategory IN ('PND_IN', 'PND_OUT', 'PND') AND @cPnDTransitTaskPriority BETWEEN 1 AND 9 THEN @cPnDTransitTaskPriority ELSE @cPriority END, @cSourcePriority, NULL)
             IF @@ERROR <> 0
             BEGIN
                SET @nErrNo = 74304
@@ -390,7 +390,7 @@ BEGIN
          PickMethod, Storerkey, SKU, LOT, ListKey, TransitCount, SourceType, WaveKey, Priority, SourcePriority, TrafficCop)
       VALUES (
          @cNewTaskDetailKey, 'RP1', '0', '', @cToLOC, @cToID, @cTransitLOC, @cToID, 0, @cToLOCAreaKey, 
-         'FP', @cStorerkey, '', '', @cListKey, @nTransitCount, @cSourceType, @cWaveKey, CASE WHEN @cLocCategory IN ('PND_IN', 'PND_OUT', 'PND') AND @cPnDTransitTaskPriority BETWEEN 2 AND 9 THEN @cPnDTransitTaskPriority ELSE @cPriority END, @cSourcePriority, NULL)
+         'FP', @cStorerkey, '', '', @cListKey, @nTransitCount, @cSourceType, @cWaveKey, CASE WHEN @cLocCategory IN ('PND_IN', 'PND_OUT', 'PND') AND @cPnDTransitTaskPriority BETWEEN 1 AND 9 THEN @cPnDTransitTaskPriority ELSE @cPriority END, @cSourcePriority, NULL)
       IF @@ERROR <> 0
       BEGIN
          SET @nErrNo = 74305

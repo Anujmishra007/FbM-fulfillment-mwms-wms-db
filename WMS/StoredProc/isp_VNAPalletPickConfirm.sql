@@ -18,6 +18,7 @@ GO
 /*                                                                      */
 /* Date        Rev  Author    Purposes                                  */
 /* 2024-03-08  1.0  NLT013    UWP-16452 Created                         */
+/* 2024-05-16  1.1  NLT013    UWP-19518 Ability to config task priority */
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_VNAPalletPickConfirm] (
@@ -434,7 +435,6 @@ BEGIN
 
    UPDATE dbo.TaskDetail WITH (ROWLOCK) SET 
       RefTaskKey        = @cTaskDetailKey,
-      Priority          = 2,
       UserKey           = '',
       UOM               = @cUOM,
       UOMQty            = @nUOMQty,

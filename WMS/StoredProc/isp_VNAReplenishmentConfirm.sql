@@ -281,7 +281,6 @@ BEGIN
 
    UPDATE dbo.TaskDetail WITH (ROWLOCK) SET 
       RefTaskKey        = @cTaskDetailKey,
-      Priority          = 2,
       TransitCount      = 1
    WHERE TaskDetailKey = @cNewTaskDetailKey
 
