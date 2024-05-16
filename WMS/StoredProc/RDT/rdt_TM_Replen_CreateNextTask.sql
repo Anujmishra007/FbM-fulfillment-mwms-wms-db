@@ -112,11 +112,11 @@ BEGIN
    WHERE td.ListKey = @cListKey
       AND loc1.Loc = @cToLOC
    ORDER BY TransitCount DESC,
-      CASE WHEN Status = '9' THEN 1 ELSE 2 END
+      CASE WHEN td.Status = '9' THEN 1 ELSE 2 END
    
    --Get PnDTransitTaskPriority
    SET @cPnDTransitTaskPriority = rdt.RDTGetConfig( @nFunc, 'PnDTransitTaskPriority', @cStorerKey)
-   IF @cPnDTransitTaskPriority IS NULL OR TRY_CAST(@cPnDTransitTaskPriority) IS NULL 
+   IF @cPnDTransitTaskPriority IS NULL OR TRY_CAST(@cPnDTransitTaskPriority AS INT) IS NULL 
       SET @cPnDTransitTaskPriority = '0'
 
    /***********************************************************************************************

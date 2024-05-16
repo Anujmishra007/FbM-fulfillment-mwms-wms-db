@@ -92,23 +92,6 @@ BEGIN
    WHERE ListKey = @cListKey
    ORDER BY TransitCount DESC
 
-   --Get ToLoc category from latest transit task
-   SELECT @cLocCategory = loc1.LocationCategory
-   FROM dbo.TaskDetail td WITH(NOLOCK)
-   INNER JOIN dbo.Loc loc WITH(NOLOCK)
-      ON td.FromLoc = loc.Loc
-   INNER JOIN dbo.Loc loc1 WITH(NOLOCK)
-      ON td.ToLoc = loc1.Loc
-      AND loc.Facility = loc1.Facility
-   WHERE td.ListKey = @cListKey
-      AND loc1.Loc = @cToLOC
-   ORDER BY TransitCount DESC
-   
-   --Get PnDTransitTaskPriority
-   SET @cPnDTransitTaskPriority = rdt.RDTGetConfig( @nFunc, 'PnDTransitTaskPriority', @cStorerKey)
-   IF @cPnDTransitTaskPriority IS NULL OR TRY_CAST(@cPnDTransitTaskPriority) IS NULL 
-      SET @cPnDTransitTaskPriority = '0'
-
    -- Get storer configure
    DECLARE @cCreateNextTaskSPSP NVARCHAR(20)
    SET @cCreateNextTaskSPSP = rdt.RDTGetConfig( @nFunc, 'CreateNextTaskSP', @cStorerKey)
@@ -149,6 +132,23 @@ BEGIN
    -- Task not completed/SKIP/CANCEL
    IF @cStatus <> '9'
       RETURN
+
+   --Get ToLoc category from latest transit task
+   SELECT @cLocCategory = loc1.LocationCategory
+   FROM dbo.TaskDetail td WITH(NOLOCK)
+   INNER JOIN dbo.Loc loc WITH(NOLOCK)
+      ON td.FromLoc = loc.Loc
+   INNER JOIN dbo.Loc loc1 WITH(NOLOCK)
+      ON td.ToLoc = loc1.Loc
+      AND loc.Facility = loc1.Facility
+   WHERE td.ListKey = @cListKey
+      AND loc1.Loc = @cToLOC
+   ORDER BY TransitCount DESC
+   
+   --Get PnDTransitTaskPriority
+   SET @cPnDTransitTaskPriority = rdt.RDTGetConfig( @nFunc, 'PnDTransitTaskPriority', @cStorerKey)
+   IF @cPnDTransitTaskPriority IS NULL OR TRY_CAST(@cPnDTransitTaskPriority AS INT) IS NULL 
+      SET @cPnDTransitTaskPriority = '0'
 
    -- Get initial task info
    INSERT INTO @tTask (TaskDetailKey, StorerKey, SKU, QTY, ToLOC, ToID, FinalLOC, FinalID)
