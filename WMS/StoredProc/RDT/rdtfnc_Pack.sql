@@ -2623,8 +2623,9 @@ BEGIN
                      @cUserDefine04 = OD.UserDefine04
                   FROM PICKHEADER PH WITH (NOLOCK)
                           INNER JOIN ORDERDETAIL OD WITH (NOLOCK)
-                                     ON PH.OrderKey = OD.OrderKey AND PH.StorerKey = OD.StorerKey
-                  WHERE PH.PickHeaderKey = @cPickSlipNo AND PH.StorerKey = @cStorerKey
+                                     ON PH.OrderKey = OD.OrderKey
+                  WHERE PH.PickHeaderKey = @cPickSlipNo
+                     AND OD.Sku = @cSKU
 
                   IF (@cUserDefine03 <> 'TagLoopID') OR ( @cUserDefine04 <> 'Y')
                      SET @cPackInfo = REPLACE(@cCapturePackInfoSP, @cDisablePackRef, '')
