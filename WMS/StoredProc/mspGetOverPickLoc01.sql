@@ -9,7 +9,7 @@ GO
 /* Copyright: Maersk                                                    */  
 /* Written by:                                                          */  
 /*                                                                      */  
-/* Purpose: Mattel                                                      */    
+/* Purpose: UWP-19537-Mattel Overallocation                             */    
 /*                                                                      */  
 /* Called By: Over Allocation                                           */  
 /*                                                                      */  
@@ -18,8 +18,9 @@ GO
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */    
-/* Date         Author   Ver  Purposes                                  */ 
+/* Date        Author   Ver   Purposes                                  */ 
 /* 2024-05-20  Wan      1.0   Created.                                  */
+/* 2024-05-20  Wan01    1.1   UWP-19537-Fixed to add SKUxLOC for DPP    */   
 /************************************************************************/  
 CREATE OR ALTER PROC mspGetOverPickLoc01     
    @c_Storerkey                  NVARCHAR(15)   
@@ -55,6 +56,8 @@ BEGIN
          
          , @n_PackQty      FLOAT = 0.00
          , @c_Lottable02   NVARCHAR(18) = ''  
+
+         , @c_DPPLoc       NVARCHAR(10) = ''                                        --(Wan01)
     
    SET @b_Success = 1    
    SET @n_Err = 0
@@ -134,6 +137,22 @@ BEGIN
          ORDER BY l.ABC
                ,  l.LogicalLocation
                ,  l.Loc
+
+         IF @@ROWCOUNT > 0                                                          --(Wan01) - START
+         BEGIN
+            SELECT @c_DPPLoc = LOC
+            FROM #PICKLOCTYPE pl
+
+            IF NOT EXISTS (SELECT 1 FROM SKUxLOC sl (NOLOCK)
+                           WHERE sl.Storerkey = @c_Storerkey
+                           AND   sl.Sku = @c_Sku
+                           AND   sl.Loc = @c_DPPLoc
+                           )
+            BEGIN
+               INSERT INTO SKUxLOC (Storerkey, Sku, Loc, LocationType)
+               VALUES (@c_Storerkey, @c_sku, @c_DPPLoc, '')
+            END
+         END                                                                        --(Wan01) - END
       END
   END  
   
