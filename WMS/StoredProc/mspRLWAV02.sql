@@ -88,7 +88,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
       JOIN WAVEDETAIL WD(NOLOCK) ON W.Wavekey = WD.Wavekey  
       JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
       LEFT OUTER JOIN LOADPLANDETAIL lpd (NOLOCK) ON lpd.Orderkey = O.Orderkey
-      AND W.Wavekey = @c_Wavekey
+      WHERE W.Wavekey = @c_Wavekey
       ORDER BY ISNULL(lpd.Loadkey,'')
         
       IF @c_Loadkey = ''
@@ -267,57 +267,60 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
          BEGIN           
             SET @n_continue = 3    
             SET @n_err = 83030  -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
-            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Invalid To Loc setup at ROUTE. (mspRLWAV02)' 
+            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Replenishment To Loc not found. (mspRLWAV02)'
          END                 
 
-         SET @c_Taskdetailkey = ''  
-         SET @c_PickMethod = 'FP'  
-         SET @c_GroupKey = @c_Orderkey
-         SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND ORDERS.Orderkey = @c_Orderkey'
-                                            
-         EXEC isp_InsertTaskDetail     
-             @c_Taskdetailkey         = @c_Taskdetailkey OUTPUT  
-            ,@c_TaskType              = @c_TaskType               
-            ,@c_Storerkey             = @c_Storerkey  
-            ,@c_Sku                   = @c_Sku  
-            ,@c_Lot                   = @c_Lot   
-            ,@c_UOM                   = '1'              
-            ,@n_UOMQty                = @n_Qty       
-            ,@n_Qty                   = @n_Qty        
-            ,@c_FromLoc               = @c_Fromloc        
-            ,@c_LogicalFromLoc        = @c_FromLoc   
-            ,@c_FromID                = @c_FromID       
-            ,@c_ToLoc                 = @c_ToLoc         
-            ,@c_LogicalToLoc          = @c_ToLoc   
-            ,@c_ToID                  = @c_ToID         
-            ,@c_PickMethod            = @c_PickMethod  
-            ,@c_Priority              = @c_Priority       
-            ,@c_SourcePriority        = '9'        
-            ,@c_SourceType            = @c_SourceType        
-            ,@c_SourceKey             = @c_Wavekey        
-            ,@c_OrderKey              = @c_Orderkey        
-            ,@c_Groupkey              = @c_Groupkey  
-            ,@c_WaveKey               = @c_Wavekey        
-            ,@c_AreaKey               = '?F'  -- ?F=Get from location areakey   
-            ,@c_Message03             = ''  
-            ,@c_LinkTaskToPick        = 'WIP' -- WIP=Update taskdetailkey to pickdetail_wip  
-            ,@c_LinkTaskToPick_SQL    = @c_LinkTaskToPick_SQL    
-            ,@c_WIP_RefNo             = @c_SourceType  
-            ,@b_Success               = @b_Success OUTPUT  
-            ,@n_Err                   = @n_err OUTPUT   
-            ,@c_ErrMsg                = @c_errmsg OUTPUT          
-                
-         IF @b_Success <> 1   
-         BEGIN  
-            SET @n_continue = 3    
-         END               
-                 
-         FETCH NEXT FROM @cur_WaveReplto INTO @c_Orderkey
-                                             ,@c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_FromID
-                                             ,@c_UOM, @n_Qty
-      END  
-      CLOSE @cur_WaveReplto  
-      DEALLOCATE @cur_WaveReplto         
+         IF @n_continue IN(1,2)
+         BEGIN
+           SET @c_Taskdetailkey = ''
+           SET @c_PickMethod = 'FP'
+           SET @c_GroupKey = @c_Orderkey
+           SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND ORDERS.Orderkey = @c_Orderkey'
+
+           EXEC isp_InsertTaskDetail
+               @c_Taskdetailkey         = @c_Taskdetailkey OUTPUT
+              ,@c_TaskType              = @c_TaskType
+              ,@c_Storerkey             = @c_Storerkey
+              ,@c_Sku                   = @c_Sku
+              ,@c_Lot                   = @c_Lot
+              ,@c_UOM                   = '1'
+              ,@n_UOMQty                = @n_Qty
+              ,@n_Qty                   = @n_Qty
+              ,@c_FromLoc               = @c_Fromloc
+              ,@c_LogicalFromLoc        = @c_FromLoc
+              ,@c_FromID                = @c_FromID
+              ,@c_ToLoc                 = @c_ToLoc
+              ,@c_LogicalToLoc          = @c_ToLoc
+              ,@c_ToID                  = @c_ToID
+              ,@c_PickMethod            = @c_PickMethod
+              ,@c_Priority              = @c_Priority
+              ,@c_SourcePriority        = '9'
+              ,@c_SourceType            = @c_SourceType
+              ,@c_SourceKey             = @c_Wavekey
+              ,@c_OrderKey              = @c_Orderkey
+              ,@c_Groupkey              = @c_Groupkey
+              ,@c_WaveKey               = @c_Wavekey
+              ,@c_AreaKey               = '?F'  -- ?F=Get from location areakey
+              ,@c_Message03             = ''
+              ,@c_LinkTaskToPick        = 'WIP' -- WIP=Update taskdetailkey to pickdetail_wip
+              ,@c_LinkTaskToPick_SQL    = @c_LinkTaskToPick_SQL
+              ,@c_WIP_RefNo             = @c_SourceType
+              ,@b_Success               = @b_Success OUTPUT
+              ,@n_Err                   = @n_err OUTPUT
+              ,@c_ErrMsg                = @c_errmsg OUTPUT
+
+           IF @b_Success <> 1
+           BEGIN
+              SET @n_continue = 3
+           END
+
+           FETCH NEXT FROM @cur_WaveReplto INTO @c_Orderkey
+                                               ,@c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_FromID
+                                               ,@c_UOM, @n_Qty
+         END
+         CLOSE @cur_WaveReplto
+         DEALLOCATE @cur_WaveReplto
+      END
    END  
                        
    -----Update pickdetail_WIP work in progress staging table back to pickdetail   
