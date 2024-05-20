@@ -6,7 +6,7 @@ GO
 /************************************************************************/  
 /* Stored Procedure: nspOrderProcessing                                 */  
 /* Creation Date:                                                       */  
-/* Copyright: IDS                                                       */  
+/* Copyright: Maersk                                                    */  
 /* Written by:                                                          */  
 /*                                                                      */  
 /* Purpose:                                                             */  
@@ -114,9 +114,10 @@ GO
 /*                            Othervalue(loctype) enhancements.         */
 /*                            Add custom sp config to update OPORDERLINES*/
 /* 27-SEP-2022  NJOW21   4.3  WMS-20812 Pass in additional parameters to*/
-/*                            isp_ChannelAllocGetHoldQty_Wrapper        */                                
+/*                            isp_ChannelAllocGetHoldQty_Wrapper        */ 
+/* 16-May-2024  Wan09    4.4  UWP-19537-Mattel Overallocation           */
 /************************************************************************/  
-  
+
 CREATE OR ALTER PROC [dbo].[nspOrderProcessing]  
      @c_OrderKey     NVARCHAR(10)  
    , @c_oskey        NVARCHAR(10)  
@@ -331,7 +332,7 @@ BEGIN
 
    IF NOT EXISTS (SELECT 1 FROM dbo.sysobjects WHERE name = RTRIM(@c_OverAllocPickLoc_SP) AND type = 'P')       
    BEGIN
-   	  SET @c_OverAllocPickLoc_SP = ''
+        SET @c_OverAllocPickLoc_SP = ''
    END 
    ELSE
    BEGIN
@@ -1821,8 +1822,8 @@ BEGIN
                          WHERE object_id = OBJECT_ID(@c_sAllocatePickCode)    
                          AND   P.name = N'@c_AllocateStrategyKey')    
                BEGIN    
-                  SELECT @c_EndString = RTRIM(@c_EndString) + ',@c_AllocateStrategyKey = N''' +RTRIM(@c_aStrategyKey) + ''''                     	
-               END	                  
+                  SELECT @c_EndString = RTRIM(@c_EndString) + ',@c_AllocateStrategyKey = N''' +RTRIM(@c_aStrategyKey) + ''''                       
+               END                     
                
                IF EXISTS(SELECT 1    
                          FROM sys.parameters AS p    
@@ -1830,8 +1831,8 @@ BEGIN
                          WHERE object_id = OBJECT_ID(@c_sAllocatePickCode)    
                          AND   P.name = N'@c_AllocateStrategyLineNumber')    
                BEGIN    
-                  SELECT @c_EndString = RTRIM(@c_EndString) + ',@c_AllocateStrategyLineNumber = N''' +RTRIM(@c_sCurrentLineNumber) + ''''                     	
-               END	     
+                  SELECT @c_EndString = RTRIM(@c_EndString) + ',@c_AllocateStrategyLineNumber = N''' +RTRIM(@c_sCurrentLineNumber) + ''''                      
+               END        
                --NJOW20 E
                            
                IF ISNULL(@c_SkipPreAllocationFlag,'0') = '1' --NJOW05  
@@ -2000,7 +2001,7 @@ BEGIN
                             WHERE object_id = OBJECT_ID(@c_sAllocatePickCode)  
                   AND   P.name = N'@c_LOT')  
                   BEGIN  
-                  	 print 'lot not found'
+                      print 'lot not found'
                      DECLARE  CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY  
                      FOR SELECT LOC = '', ID='', QTYAVAILABLE = 0, '1'  
                      FROM LOTxLOCxID (NOLOCK)  
@@ -2226,25 +2227,25 @@ BEGIN
                      END  
                      IF @n_fetch_status = 0  
                      BEGIN  
-                     	  --NJOW20 S
-                 	      IF CHARINDEX('@', @c_LocType, 1) > 0  
-                 	      BEGIN
-                 	         SET @c_FullPallet = dbo.fnc_GetParamValueFromString('@c_FULLPALLET', @c_LocType, 'N') 
-                 	         SET @c_DYNUOMQty =  dbo.fnc_GetParamValueFromString('@c_DYNUOMQTY', @c_LocType, '') 
-                 	      END
-                 	      ELSE
-                 	      BEGIN
-                 	      	 IF ISNULL(@c_SkipPreAllocationFlag,'0') = '1'  
-                 	      	 BEGIN                 	      	 
-                 	      	    IF @c_LocType = 'FULLPALLET'
-                 	      	       SET @c_FullPallet = 'Y'
-                 	      	 
-                    	      	IF LEFT(@c_LocType,4) = 'UOM=' 
-                    	      	   SET @c_DYNUOMQty = SUBSTRING(@c_LocType,5,10)
-                 	      	 END   
-                 	      END
-                 	      --NJOW20 E
-                     	
+                          --NJOW20 S
+                        IF CHARINDEX('@', @c_LocType, 1) > 0  
+                        BEGIN
+                           SET @c_FullPallet = dbo.fnc_GetParamValueFromString('@c_FULLPALLET', @c_LocType, 'N') 
+                           SET @c_DYNUOMQty =  dbo.fnc_GetParamValueFromString('@c_DYNUOMQTY', @c_LocType, '') 
+                        END
+                        ELSE
+                        BEGIN
+                            IF ISNULL(@c_SkipPreAllocationFlag,'0') = '1'  
+                            BEGIN                            
+                               IF @c_LocType = 'FULLPALLET'
+                                  SET @c_FullPallet = 'Y'
+                            
+                              IF LEFT(@c_LocType,4) = 'UOM=' 
+                                 SET @c_DYNUOMQty = SUBSTRING(@c_LocType,5,10)
+                            END   
+                        END
+                        --NJOW20 E
+                        
                         --(Wan03) - START  
                         IF ISNULL(@c_SkipPreAllocationFlag,'0') = '1'    
                         BEGIN  
@@ -2355,9 +2356,9 @@ BEGIN
                                     WHERE ci.Channel_ID = @n_Channel_ID  
                                     IF @n_Channel_Qty_Available < @n_cQtyAvailable  
                                     BEGIN   
-                                 	     IF @c_UCCAllocation = '1' AND ISNULL(@c_UCCNo,'') <> '' AND @c_aUOM = '2' --NJOW19  not to take partial UCC 
-                                 	        SET @n_cQtyAvailable = 0 
-                                 	     ELSE                                       	
+                                         IF @c_UCCAllocation = '1' AND ISNULL(@c_UCCNo,'') <> '' AND @c_aUOM = '2' --NJOW19  not to take partial UCC 
+                                            SET @n_cQtyAvailable = 0 
+                                         ELSE                                          
                                           SET @n_cQtyAvailable = @n_Channel_Qty_Available     
                                     END                 
                                  END   
@@ -2407,7 +2408,7 @@ BEGIN
                         IF ISNUMERIC(@c_DYNUOMQty) = 1 AND ISNULL(@c_SkipPreAllocationFlag,'0') = '1'  --NJOW20
                         BEGIN  
                            IF ISNUMERIC(SUBSTRING(@c_LocType,5,10)) = 1  
-                           BEGIN                           	  
+                           BEGIN                              
                               --SET @n_dynUOMQty = CAST(SUBSTRING(@c_LocType,5,10) AS INT)  
                               SET @n_dynUOMQty = CAST(@c_DYNUOMQty AS INT)  --NJOW20
                                 
@@ -2543,7 +2544,9 @@ BEGIN
             END -- (@c_sLocationTypeOverride IS NULL) OR (@c_AllowOverAllocations = '0')  
             ELSE  
             BEGIN  
-                OVERALLOCATE_01:  --NJOW05  
+               SET @n_QtyToTake = 0                                                 --(Wan09)
+
+               OVERALLOCATE_01:  --NJOW05  
                SELECT @b_overcontinue = 1  
                IF @b_overcontinue = 1  
                BEGIN 
@@ -2573,12 +2576,18 @@ BEGIN
                   TRUNCATE TABLE #OP_OVERPICKLOCS  
                   TRUNCATE TABLE #OP_PICKLOCTYPE  
                   -- END  
-
+                  
                   --NJOW15 S
                   IF ISNULL(@c_OverAllocPickLoc_SP,'') <> ''
                   BEGIN
-                  	 SET @n_OverAlQtyLeftToFulfill = @n_NextQtyLeftToFulfill + @n_QtyToTake
-                  	 
+                      IF ISNULL(@c_SkipPreAllocationFlag,'0') = '0'                     --(Wan09) - START  
+                      BEGIN
+                        SET @n_OverAlQtyLeftToFulfill = @n_aQtyLeftToFulfill
+                        SET @n_QtyToTake = @n_aQtyLeftToFulfill
+                      END
+                      ELSE                                                              --(Wan09) - END
+                        SET @n_OverAlQtyLeftToFulfill = @n_NextQtyLeftToFulfill + @n_QtyToTake
+                      
                      SET @c_SQL = N'
                      INSERT INTO #OP_PICKLOCTYPE        
                      EXEC ' + RTRIM(@c_overAllocPickLoc_sp) + ' @c_Storerkey=@c_aStorerkey, @c_Sku=@c_aSku, @c_AllocateStrategykey=@c_aAllocateStrategykey, @c_AllocateStrategyLineNumber=@c_aAllocateStrategyLineNumber,   
@@ -2824,11 +2833,9 @@ BEGIN
                                  AND SKU = @c_aSKU  
                                  AND LocationType = @c_sLocationTypeOverride  
                              
-  
                               SELECT TOP 1 @c_pickloc = LOC  
                               FROM #OP_PickLocType  
                               ORDER BY LOC  
-                             
                            END  
                              
                            INSERT #OP_PICKLOCS (StorerKey, Sku, Loc, LocationType)  
@@ -2903,7 +2910,7 @@ BEGIN
                         END  
                         IF @n_aQtyLeftToFulfill < @n_QtyToTake  
                         BEGIN  
-                       SELECT @n_QtyToTake = @n_aQtyLeftToFulfill  
+                           SELECT @n_QtyToTake = @n_aQtyLeftToFulfill  
                         END  
                         SELECT @n_UOMQty = @n_QtyToTake / @n_cPackQty  
   
