@@ -25,7 +25,9 @@ GO
 /* 24-Mar-2024  SHONG   1.0   Create UWP-14725                             */
 /* 27-Mar-2024  Wan01   1.1   Change Task Priority                         */
 /* 18-Apr-2024  Wan02   1.2   Fix 1)Repl for 1st setup empty loc           */
-/*                            2)Exclude Repl from STAGING                  */ 
+/*                            2)Exclude Repl from STAGING                  */
+/* 13-May-2024  PPA371	1.3   UWP-19048: Added condition to Exclude        */
+/*                            lottable06=1 from the inventory              */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_ODMRPL01]
     @c_Facility   NVARCHAR(5)    = '',
@@ -108,6 +110,9 @@ BEGIN
          , @c_ToLogicalLoc          NVARCHAR(10)   = '' 
          , @c_ToAreaKey             NVARCHAR(10)   = '' 
          , @n_IsRDT                 INT            = 0                              --(Wan01)
+         , @c_condition             NVARCHAR(MAX)  =''                              --(ppa371)
+         , @SQL_QUERY               NVARCHAR(MAX)  =''                              --(ppa371)
+         , @SQL_Parms               NVARCHAR(MAX)  =''                              --(ppa371)
 
     WHILE @@TRANCOUNT > 0
     BEGIN
@@ -428,37 +433,48 @@ BEGIN
                PRINT '>>> CaseToPick: ' + @c_CaseToPick + ' ToLocationType: ' + @c_ToLocationType
             END
 
-            DECLARE CUR_REPL CURSOR FAST_FORWARD READ_ONLY FOR
-            SELECT LOTxLOCxID.LOT
-               , LOTxLOCxID.Loc
-               , LOTxLOCxID.ID
-               , LOTxLOCxID.Qty - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyReplen
-               , LOTxLOCxID.QtyAllocated
-               , LOTxLOCxID.QtyPicked
-               , LOTATTRIBUTE.Lottable02
-            FROM LOT          WITH (NOLOCK)
-               JOIN LOTATTRIBUTE WITH (NOLOCK) ON (LOT.Lot        = LOTATTRIBUTE.LOT)
-               JOIN LOTxLOCxID   WITH (NOLOCK) ON (LOT.Lot        = LOTxLOCxID.Lot)
-               JOIN LOC          WITH (NOLOCK) ON (LOTxLOCxID.Loc = LOC.Loc)
-            WHERE LOTxLOCxID.LOC <> @c_CurrentLoc
-               AND LOTxLOCxID.StorerKey = @c_CurrentStorer
-               AND LOTxLOCxID.SKU = @c_CurrentSku
-               AND LOTxLOCxID.qty - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyReplen >= 1
-               AND LOTxLOCxID.QtyExpected = 0
-               AND LOC.LocationFlag NOT IN ('DAMAGE', 'HOLD')
-               AND LOC.LocationType NOT IN ('CASE','PICK','PALLET','STAGING')       --(Wan02)
-               AND LOC.Facility= @c_Facility
-               AND LOC.Status  <>'HOLD'
-               AND LOT.Status  = 'OK'
-            ORDER BY 
-               LOTATTRIBUTE.Lottable04, 
-               LOTATTRIBUTE.Lottable05, 
+            IF @c_condition=''                                                                     		--(ppa371)--start
+            BEGIN
+              Select @c_condition = Codelkup.Notes from CODELKUP (NOLOCK) where Codelkup.Code = 'CONDITION' and Codelkup.Code2 = 'isp_ODMRPL01' and Codelkup.ListName = 'REPLENCFG'
+            END
+            IF CHARINDEX('AND',upper(@c_condition)) = 0
+            BEGIN
+               SET @c_condition= ' AND '+ @c_condition
+            END
+
+            SET @SQL_QUERY=N'DECLARE CUR_REPL CURSOR FAST_FORWARD READ_ONLY FOR'
+               + ' SELECT LOTxLOCxID.LOT'
+               + ' , LOTxLOCxID.Loc'
+               + ' , LOTxLOCxID.ID'
+               + ' , LOTxLOCxID.Qty - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyReplen'
+               + ' , LOTxLOCxID.QtyAllocated'
+               + ' , LOTxLOCxID.QtyPicked'
+               + ' , LOTATTRIBUTE.Lottable02'
+               + ' FROM LOT          WITH (NOLOCK) '
+               + ' JOIN LOTATTRIBUTE WITH (NOLOCK) ON (LOT.Lot        = LOTATTRIBUTE.LOT)'
+               + ' JOIN LOTxLOCxID   WITH (NOLOCK) ON (LOT.Lot        = LOTxLOCxID.Lot)'
+               + ' JOIN LOC          WITH (NOLOCK) ON (LOTxLOCxID.Loc = LOC.Loc)'
+               + ' WHERE LOTxLOCxID.LOC <>  @c_CurrentLoc'
+               + ' AND LOTxLOCxID.StorerKey = @c_CurrentStorer'
+               + ' AND LOTxLOCxID.SKU = @c_CurrentSku'
+               + ' AND LOTxLOCxID.qty - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyReplen >= 1'
+               + ' AND LOTxLOCxID.QtyExpected = 0'
+               + ' AND LOC.LocationFlag NOT IN (''DAMAGE'', ''HOLD'')'
+               + ' AND LOC.LocationType NOT IN (''CASE'',''PICK'',''PALLET'',''STAGING'')    '
+               + ' AND LOC.Facility= @c_Facility'
+               + ' AND LOC.Status  = ''OK'' AND LOT.Status  = ''OK'' '
+               + @c_condition +'
+                ORDER BY
+               LOTATTRIBUTE.Lottable04,
+               LOTATTRIBUTE.Lottable05,
                CASE WHEN (LOTxLOCxID.Qty - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyReplen) < @n_Pallet
                         THEN 1
                         ELSE 2
                END
                ,  (LOTxLOCxID.Qty - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyPicked)
-               ,  LOTATTRIBUTE.Lottable02
+               ,  LOTATTRIBUTE.Lottable02'
+               set @SQL_Parms = N'@c_CurrentLoc NVARCHAR(10), @c_CurrentStorer NVARCHAR(15), @c_CurrentSku NVARCHAR(20) , @c_Facility NVARCHAR(5), @n_Pallet FLOAT'
+               Execute SP_ExecuteSQL @SQL_QUERY, @SQL_Parms, @c_CurrentLoc , @c_CurrentStorer, @c_CurrentSku , @c_Facility, @n_Pallet   		--(ppa371)--end
 
          OPEN CUR_REPL
 
