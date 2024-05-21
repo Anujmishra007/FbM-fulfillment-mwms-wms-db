@@ -56,8 +56,7 @@ BEGIN
    DECLARE @cPriority         NVARCHAR( 10)
    DECLARE @cSourcePriority   NVARCHAR( 10)
    DECLARE @cSourceType       NVARCHAR( 30)
-   DECLARE @cPnDTransitTaskPriority NVARCHAR( 10)
-   DECLARE @cLocCategory            NVARCHAR( 10)
+
    DECLARE @tTask TABLE
    (
       TaskDetailKey NVARCHAR(10), 
@@ -132,23 +131,6 @@ BEGIN
    -- Task not completed/SKIP/CANCEL
    IF @cStatus <> '9'
       RETURN
-
-   --Get ToLoc category from latest transit task
-   SELECT @cLocCategory = loc1.LocationCategory
-   FROM dbo.TaskDetail td WITH(NOLOCK)
-   INNER JOIN dbo.Loc loc WITH(NOLOCK)
-      ON td.FromLoc = loc.Loc
-   INNER JOIN dbo.Loc loc1 WITH(NOLOCK)
-      ON td.ToLoc = loc1.Loc
-      AND loc.Facility = loc1.Facility
-   WHERE td.ListKey = @cListKey
-      AND loc1.Loc = @cToLOC
-   ORDER BY TransitCount DESC
-   
-   --Get PnDTransitTaskPriority
-   SET @cPnDTransitTaskPriority = rdt.RDTGetConfig( @nFunc, 'PnDTransitTaskPriority', @cStorerKey)
-   IF @cPnDTransitTaskPriority IS NULL OR TRY_CAST(@cPnDTransitTaskPriority AS INT) IS NULL 
-      SET @cPnDTransitTaskPriority = '0'
 
    -- Get initial task info
    INSERT INTO @tTask (TaskDetailKey, StorerKey, SKU, QTY, ToLOC, ToID, FinalLOC, FinalID)
@@ -306,7 +288,7 @@ BEGIN
             PickMethod, StorerKey, SKU, LOT, ListKey, TransitCount, SourceType, WaveKey, LoadKey, Priority, SourcePriority, TrafficCop)
          VALUES (
             @cNewTaskDetailKey, 'FPK1', '0', '', @cToLOC, @cToID, @cFinalLOC, @cFinalID, 0, @cToLOCAreaKey, 
-            'FP', @cStorerKey, '', '', @cListKey, @nTransitCount, @cSourceType, @cWaveKey, @cLoadKey, CASE WHEN @cLocCategory IN ('PND_IN', 'PND_OUT', 'PND') AND @cPnDTransitTaskPriority BETWEEN 1 AND 9 THEN @cPnDTransitTaskPriority ELSE @cPriority END, @cSourcePriority, NULL)
+            'FP', @cStorerKey, '', '', @cListKey, @nTransitCount, @cSourceType, @cWaveKey, @cLoadKey, @cPriority, @cSourcePriority, NULL)
          IF @@ERROR <> 0
          BEGIN
             SET @nErrNo = 116704
@@ -323,7 +305,7 @@ BEGIN
          PickMethod, Storerkey, SKU, LOT, ListKey, TransitCount, SourceType, WaveKey, LoadKey, Priority, SourcePriority, TrafficCop)
       VALUES (
          @cNewTaskDetailKey, 'FPK1', '0', '', @cToLOC, @cToID, @cTransitLOC, @cToID, 0, @cToLOCAreaKey, 
-         'FP', @cStorerkey, '', '', @cListKey, @nTransitCount, @cSourceType, @cWaveKey, @cLoadKey, CASE WHEN @cLocCategory IN ('PND_IN', 'PND_OUT', 'PND') AND @cPnDTransitTaskPriority BETWEEN 1 AND 9 THEN @cPnDTransitTaskPriority ELSE @cPriority END, @cSourcePriority, NULL)
+         'FP', @cStorerkey, '', '', @cListKey, @nTransitCount, @cSourceType, @cWaveKey, @cLoadKey, @cPriority, @cSourcePriority, NULL)
       IF @@ERROR <> 0
       BEGIN
          SET @nErrNo = 116705

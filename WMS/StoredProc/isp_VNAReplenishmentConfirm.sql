@@ -78,7 +78,9 @@ BEGIN
       @cRPF                         NVARCHAR( 10) = 'RPF',
       @cRP1                         NVARCHAR( 10) = 'RP1',
       @cUserName                    NVARCHAR( 18),
-      @cNewTaskDetailKey            NVARCHAR( 10)
+      @cNewTaskDetailKey            NVARCHAR( 10),
+      @cPnDTransitTaskPriority      NVARCHAR( 10),
+      @cLocCategory                 NVARCHAR( 10)
 
 
    -- Init var
@@ -263,7 +265,8 @@ BEGIN
       GOTO RollBackTran
    END
 
-   SELECT @cNewTaskDetailKey = TaskDetailKey
+   SELECT @cNewTaskDetailKey = TaskDetailKey,
+      @cFromLoc = FromLoc
    FROM dbo.TaskDetail td WITH(NOLOCK)
    WHERE StorerKey         = @cStorerKey
       AND TaskType         = @cRP1
@@ -280,9 +283,21 @@ BEGIN
       GOTO RollBackTran
    END
 
+   --Get ToLoc category from latest transit task
+   SELECT @cLocCategory = LocationCategory
+   FROM dbo.Loc WITH(NOLOCK)
+   WHERE Facility = @cFacility
+      AND Loc = @cFromLoc
+   
+   --Get PnDTransitTaskPriority
+   SET @cPnDTransitTaskPriority = rdt.RDTGetConfig( @nFunc, 'PnDTransitTaskPriority', @cStorerKey)
+   IF @cPnDTransitTaskPriority IS NULL OR TRY_CAST(@cPnDTransitTaskPriority AS INT) IS NULL 
+      SET @cPnDTransitTaskPriority = '0'
+
    UPDATE dbo.TaskDetail WITH (ROWLOCK) SET 
       RefTaskKey        = @cTaskDetailKey,
-      TransitCount      = 1
+      TransitCount      = 1,
+      Priority = CASE WHEN @cLocCategory IN ('PND_IN', 'PND_OUT', 'PND') AND @cPnDTransitTaskPriority BETWEEN 1 AND 9 THEN @cPnDTransitTaskPriority ELSE Priority END
    WHERE TaskDetailKey = @cNewTaskDetailKey
 
    IF @@ERROR <> 0
