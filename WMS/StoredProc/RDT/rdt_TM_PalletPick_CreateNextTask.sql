@@ -15,8 +15,6 @@ GO
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
 /* 08-11-2014 1.0  Ung        WMS-3007 Created                          */
-/* 05-15-2024 1.1  NLT013     UWP-19518 Ability to config the new task's*/
-/*                            prioprity if the source location is PND   */
 /************************************************************************/
 
 CREATE PROC [rdt].[rdt_TM_PalletPick_CreateNextTask] (

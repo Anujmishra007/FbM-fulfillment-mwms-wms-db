@@ -27,8 +27,6 @@ GO
 /* 23-Feb-2018 1.4  Ung       WMS-3179 Add TaskDetail.AreaKey           */
 /* 30-Mar-2018 1.5  ChewKP    WMS-4471 - Add UOMQty for RPT (CheWKP02)  */
 /* 03-Aug-2018 1.6  ChewKP    WMS-5178 - Add CreateNextTaskSP (ChewKP03)*/
-/* 15-May-2024 1.7  NLT013    UWP-19518 Ability to config the new task's*/
-/*                            prioprity if the source location is PND   */
 /************************************************************************/
 
 CREATE PROC [rdt].[rdt_TM_Replen_CreateNextTask] (
