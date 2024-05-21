@@ -544,21 +544,6 @@ BEGIN
                LLI.Qty > 0
    END
 
-   --FCR-186 Check if the pallet is damage or expired
-   DECLARE @cDamage NVARCHAR(1) = 'N'
-   DECLARE @cExpired NVARCHAR(1) = 'N'
-
-   IF EXISTS (SELECT 1 FROM RECEIPTDETAIL RD WITH (NOLOCK)
-            INNER JOIN CODELKUP CLK WITH (NOLOCK)
-            ON RD.lottable12=CLK.CODE AND INVD.Storerkey=CLK.STORERKEY
-               AND CLK.LISTNAME  = 'ASNREASON'
-            WHERE RD.ID          = @c_ID 
-               AND RD.Storerkey  = @c_StorerKey
-               AND RD.LOTTABLE12 LIKE '%DMG' 
-               AND RD.LOTTABLE06 =1)
-      SET @cDamage = 'Y'
-      
-
    /* -- CALCULATE BY BOMSKU Start (ChewKP02)--*/
    DECLARE @c_CalculateByBOM         NVARCHAR(1),
            @c_BOMSKU                 NVARCHAR(20),
