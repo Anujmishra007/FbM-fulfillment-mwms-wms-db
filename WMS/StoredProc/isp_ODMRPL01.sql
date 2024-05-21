@@ -435,7 +435,7 @@ BEGIN
 
             IF @c_condition=''                                                                     		--(ppa371)--start
             BEGIN
-              SET @c_condition= (select Codelkup.Notes from CODELKUP (NOLOCK) where Codelkup.Code = 'CONDITION' and Codelkup.Code2 = 'isp_ODMRPL01' and Codelkup.ListName = 'REPLENCFG')
+              Select @c_condition = Codelkup.Notes from CODELKUP (NOLOCK) where Codelkup.Code = 'CONDITION' and Codelkup.Code2 = 'isp_ODMRPL01' and Codelkup.ListName = 'REPLENCFG'
             END
             IF CHARINDEX('AND',upper(@c_condition)) = 0
             BEGIN
