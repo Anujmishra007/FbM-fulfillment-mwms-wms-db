@@ -18,6 +18,8 @@ GO
 /* 2014-12-16  Ung       1.0  SOS327467 FPK task                        */
 /* 2015-03-19  Ung       1.1  SOS338354 Support UserKeyOverRide         */
 /* 2017-11-08  Ung       1.2  WMS-3007 Add in transit LOC               */
+/* 2024-05-13  NLT013    1.3  UWP-19333 Unlock destination location     */
+/*                            Correct function id 1764 as 1770          */
 /************************************************************************/
 CREATE PROC [dbo].[nspTTMFPK2]
     @c_UserID        NVARCHAR(18)
@@ -258,7 +260,7 @@ BEGIN
             , @cTransitLOC OUTPUT 
             , @n_err       OUTPUT
             , @c_errmsg    OUTPUT
-            , @nFunc = 1764
+            , @nFunc = 1770
          IF @n_err <> 0
          BEGIN
             FETCH NEXT FROM Cursor_FPKTaskCandidates INTO @c_TaskDetailKey, @cUserKeyOverRide

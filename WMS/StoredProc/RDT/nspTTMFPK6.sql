@@ -14,6 +14,8 @@ GO
 /* Modifications log:                                                   */
 /* Date        Author    Ver  Purposes                                  */
 /* 2022-09-01  yeekung   1.0  WMS-20588 remove booking_out              */
+/* 2024-05-13  NLT013    1.1  UWP-19333 Unlock destination location     */
+/*                            Correct function id 1764 as 1770          */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[nspTTMFPK6]
     @c_UserID        NVARCHAR(18)
@@ -273,7 +275,7 @@ BEGIN
             , @cTransitLOC OUTPUT
             , @n_err       OUTPUT
             , @c_errmsg    OUTPUT
-            , @nFunc = 1764
+            , @nFunc = 1770
          IF @n_err <> 0
          BEGIN
             FETCH NEXT FROM @cCursor_FPKTaskCandidates INTO @c_TaskDetailKey, @cUserKeyOverRide

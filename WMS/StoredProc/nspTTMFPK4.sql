@@ -14,6 +14,8 @@ GO
 /* Date        Author    Ver  Purposes                                  */
 /* 2018-05-03  Ung       1.0  WMS-3007 Separate PND for pick            */
 /* 2023-01-30  Ung       1.1  WMS-21599 Migrate to SCE                  */
+/* 2024-05-13  NLT013    1.2  UWP-19333 Unlock destination location     */
+/*                            Correct function id 1764 as 1770          */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[nspTTMFPK4]
     @c_UserID        NVARCHAR(18)
@@ -256,7 +258,7 @@ BEGIN
             , @cTransitLOC OUTPUT 
             , @n_err       OUTPUT
             , @c_errmsg    OUTPUT
-            , @nFunc = 1764
+            , @nFunc = 1770
          IF @n_err <> 0
          BEGIN
             FETCH NEXT FROM Cursor_FPKTaskCandidates INTO @c_TaskDetailKey, @cUserKeyOverRide

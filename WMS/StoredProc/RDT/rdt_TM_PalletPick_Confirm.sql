@@ -19,6 +19,7 @@ GO
 /*                            Add ConfirmSP                             */
 /* 02-08-2019  1.4  James     WMS-9942 Add eventlog (james01)           */
 /* 21-10-2021  1.5  Ung       WMS-18177 Add PickMethod                  */
+/* 13-05-2024  1.6  NLT013    UWP-19333 Unlock destination location     */
 /************************************************************************/
 
 CREATE PROC [rdt].[rdt_TM_PalletPick_Confirm] (
@@ -492,6 +493,17 @@ BEGIN
          GOTO RollBackTran
       END
    END
+
+   -- Unlock suggested location
+   EXEC rdt.rdt_Putaway_PendingMoveIn '', 'UNLOCK'
+      ,''      --@cFromLOC
+      ,@cFromID--@cFromID
+      ,@cFinalLOC --@cSuggestedLOC
+      ,''      --@cStorerKey
+      ,@nErrNo  OUTPUT
+      ,@cErrMsg OUTPUT
+   IF @nErrNo <> 0
+      GOTO RollBackTran
 
    EXEC RDT.rdt_STD_EventLog
       @cActionType    = '3', -- Picking

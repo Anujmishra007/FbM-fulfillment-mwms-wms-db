@@ -17,6 +17,8 @@ GO
 /* Date        Author    Ver  Purposes                                  */
 /* 2021-09-15  James     1.0  WMS-17951 Skip check booking table if WMS */
 /*                            config turn off (james01)                 */
+/* 2024-05-13  NLT013    1.1  UWP-19333 Unlock destination location     */
+/*                            Correct function id 1764 as 1770          */
 /************************************************************************/
 CREATE PROC [dbo].[nspTTMFPK5]
     @c_UserID        NVARCHAR(18)
@@ -337,7 +339,7 @@ BEGIN
             , @cTransitLOC OUTPUT 
             , @n_err       OUTPUT
             , @c_errmsg    OUTPUT
-            , @nFunc = 1764
+            , @nFunc = 1770
          IF @n_err <> 0
          BEGIN
             FETCH NEXT FROM Cursor_FPKTaskCandidates INTO @c_TaskDetailKey, @cUserKeyOverRide
