@@ -54,6 +54,7 @@ BEGIN
    DECLARE @cPriority         NVARCHAR( 10)
    DECLARE @cSourcePriority   NVARCHAR( 10)
    DECLARE @cSourceType       NVARCHAR( 30)
+
    DECLARE @tTask TABLE
    (
       TaskDetailKey NVARCHAR(10), 
