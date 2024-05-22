@@ -437,7 +437,7 @@ BEGIN
             BEGIN
               Select @c_condition = Codelkup.Notes from CODELKUP (NOLOCK) where Codelkup.Code = 'CONDITION' and Codelkup.Code2 = 'isp_ODMRPL01' and Codelkup.ListName = 'REPLENCFG'
             END
-            IF CHARINDEX('AND',upper(@c_condition)) = 0
+            IF @c_condition <> '' AND CHARINDEX('AND',upper(@c_condition)) = 0
             BEGIN
                SET @c_condition= ' AND '+ @c_condition
             END
