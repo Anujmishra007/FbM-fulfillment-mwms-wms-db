@@ -28,6 +28,7 @@ GO
 /* 2024-05-22  Wan03    1.2   UWP-18535-Fix Change logic overalloated loc*/ 
 /*                            & Lot to replen as overallocate program has*/ 
 /*                            strategy to find DPP & Pick face Location  */
+/*                            UWP-18535-Fix FCP not hold                 */ 
 /*************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]        
   @c_wavekey      NVARCHAR(10)    
@@ -475,7 +476,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
                         AND   td.TaskType= 'RPF'
                         AND   td.Lot   = @c_Lot
                         AND   td.ToLoc = @c_FromLoc
-                        AND   td.ToID  = @c_ID
+                        --AND   td.ToID  = @c_ID                                    --(Wan03)
                         AND   td.SourceType = @c_SourceType
                         AND   td.[Status] BETWEEN '0' AND '8'
                         )
@@ -486,9 +487,9 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
                WHERE td.Storerkey = @c_Storerkey
                AND   td.Sku     = @c_Sku
                AND   td.TaskType='FCP'
-               AND   td.Lot   = @c_Lot
-               AND   td.ToLoc = @c_FromLoc
-               AND   td.ToID  = @c_ID
+               AND   td.Lot     = @c_Lot
+               AND   td.FromLoc = @c_FromLoc                                        --(Wan03)
+               AND   td.ToID    = @c_ID
                AND   td.SourceType = @c_SourceType
                AND   td.[Status] BETWEEN '0' AND '8'
                
