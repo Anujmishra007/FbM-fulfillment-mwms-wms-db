@@ -13,7 +13,7 @@ GO
 /*                                                                      */  
 /* Called By: Over Allocation                                           */  
 /*                                                                      */  
-/* Version: 1.0                                                         */  
+/* Version: 1.2                                                         */  
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /*                                                                      */  
@@ -21,6 +21,8 @@ GO
 /* Date        Author   Ver   Purposes                                  */ 
 /* 2024-05-20  Wan      1.0   Created.                                  */
 /* 2024-05-20  Wan01    1.1   UWP-19537-Fixed to add SKUxLOC for DPP    */   
+/* 2024-05-20  Wan02    1.2   UWP-19537-Fixed to find friend for same   */   
+/*                            lot & empty DPP to include qtyexpected    */  
 /************************************************************************/  
 CREATE OR ALTER PROC mspGetOverPickLoc01     
    @c_Storerkey                  NVARCHAR(15)   
@@ -54,7 +56,7 @@ BEGIN
    DECLARE @n_Continue     INT = 1 
          , @n_StartTCnt    INT = @@TRANCOUNT
          
-         , @n_PackQty      FLOAT = 0.00
+         , @n_PalletQty    FLOAT = 0.00                                             --(Wan02)              
          , @c_Lottable02   NVARCHAR(18) = ''  
 
          , @c_DPPLoc       NVARCHAR(10) = ''                                        --(Wan01)
@@ -86,7 +88,7 @@ BEGIN
       
       IF @@ROWCOUNT = 0
       BEGIN
-         SELECT @n_PackQty = p.Pallet
+         SELECT @n_PalletQty = p.Pallet                                             --(Wan02)
          FROM dbo.SKU s(NOLOCK) 
          JOIN dbo.PACK p (NOLOCK) ON s.Packkey = p.Packkey
          WHERE s.Storerkey = @c_Storerkey
@@ -99,6 +101,7 @@ BEGIN
          JOIN LOTxLOCxID lli (NOLOCK) ON  lli.Storerkey = @c_StorerKey 
                                       AND lli.SKU = @c_Sku 
                                       AND lli.loc = l.loc
+                                      AND lli.Lot = @c_Lot                          --(Wan02)
          WHERE l.LocationType = 'DYNPPICK'     
          AND l.Facility   = @c_Facility  
          AND l.HostWHCode = @c_Lottable02
@@ -109,9 +112,9 @@ BEGIN
                ,  l.ABC        
                ,  l.LogicalLocation
                ,  l.MaxPallet
-         HAVING   SUM(lli.Qty) > 0
+         HAVING ( SUM(lli.Qty) > 0 OR SUM(lli.QtyExpected) > 0)                     --(Wan02)
             AND ((SUM(lli.PendingMoveIn) = 0 AND 
-                  CEILING(SUM(lli.QtyExpected + @n_QtyLeftToFulfill)/@n_PackQty) <= l.MaxPallet) OR
+                  CEILING(SUM(lli.QtyExpected + @n_QtyLeftToFulfill)/@n_PalletQty) <= l.MaxPallet) OR --(Wan02)  
                   SUM(lli.QtyExpected) + @n_QtyLeftToFulfill <= SUM(lli.PendingMoveIn))
          ORDER BY SUM(lli.Qty)
                ,  l.ABC
@@ -130,10 +133,12 @@ BEGIN
          AND l.LocLevel = 0
          AND l.[Status] = 'OK'
          AND l.LocationFlag NOT IN ('HOLD','DAMAGE')
+         AND l.MaxPallet > 0                                                        --(Wan03)
          GROUP BY l.loc
                ,  l.ABC          
                ,  l.LogicalLocation
-         HAVING SUM(ISNULL(lli.PendingMoveIn,0) + ISNULL(lli.Qty,0)) = 0
+         HAVING SUM(ISNULL(lli.PendingMoveIn,0) + ISNULL(lli.Qty,0) 
+                  + ISNULL(lli.QtyExpected,0)) = 0                                  --(Wan02)
          ORDER BY l.ABC
                ,  l.LogicalLocation
                ,  l.Loc

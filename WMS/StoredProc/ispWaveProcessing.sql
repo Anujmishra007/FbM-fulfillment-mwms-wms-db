@@ -12,7 +12,7 @@ GO
 /*                                                                      */      
 /* Called By:                                                           */      
 /*                                                                      */      
-/* PVCS Version: 4.2                                                    */      
+/* PVCS Version: 7.0                                                    */      
 /*                                                                      */      
 /* Version: 1.0                                                         */      
 /*                                                                      */      
@@ -104,6 +104,7 @@ GO
 /* 27-SEP-2022  NJOW29  5.0   WMS-20812 Pass in additional parameters to*/
 /*                            isp_ChannelAllocGetHoldQty_Wrapper        */ 
 /* 16-May-2024  Wan06   6.0   UWP-19537-Mattel Overallocation           */
+/* 23-May-2024  Wan07   7.0   UWP-19537-Bug fixing Insert NULL          */
 /************************************************************************/      
 
 CREATE OR ALTER PROC [dbo].[ispWaveProcessing]        
@@ -3278,7 +3279,7 @@ BEGIN
                       'U',  
                       @c_aPickMethod,   
                       @c_WaveKey,  
-                      @c_UCCNo,    --NJOW13    
+                      ISNULL(@c_UCCNo,''),                                          --Wan07--NJOW13    
                       @n_Channel_ID   
                     )  
   
