@@ -14,7 +14,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave Release                                               */    
 /*                                                                       */    
-/* PVCS Version: 1.1                                                     */    
+/* PVCS Version: 1.2                                                     */    
 /*                                                                       */    
 /* Version: 7.0                                                          */    
 /*                                                                       */    
@@ -25,6 +25,9 @@ GO
 /* 2024-04-17  Wan      1.0   UWP-18534-Mettel-Add consolidated picking  */  
 /* 2024-04-26  Wan01    1.1   UWP-18534-conso picking by wave & for uom1 */ 
 /* 2024-05-02  Wan02    1.1   UWP-18535-Mattel-Add OverAlloc Replenishment*/ 
+/* 2024-05-22  Wan03    1.2   UWP-18535-Fix Change logic overalloated loc*/ 
+/*                            & Lot to replen as overallocate program has*/ 
+/*                            strategy to find DPP & Pick face Location  */
 /*************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]        
   @c_wavekey      NVARCHAR(10)    
@@ -223,8 +226,8 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
    IF @n_continue = 1 OR @n_continue = 2  
    BEGIN  
       SET @cur_WaveReplto = CURSOR FAST_FORWARD READ_ONLY FOR 
-      SELECT PD.Storerkey, PD.Sku, PD.Loc 
-         , QtyNeed = SUM(lli.QtyExpected - lli.PendingMoveIn) 
+      SELECT PD.Storerkey, PD.Sku, PD.Loc, PD.Lot                                   --(Wan03)
+         , QtyNeed = SUM(lli.QtyExpected - lli.PendingMoveIn)                     
       FROM #PICKDETAIL_WIP PD (NOLOCK)
       JOIN LOTATTRIBUTE la  (NOLOCK) ON pd.Lot = la.Lot
       JOIN LOTxLOCxID   lli (NOLOCK) ON pd.Lot = lli.Lot 
@@ -240,130 +243,133 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
       WHERE PD.UOM IN ('2','6')
       AND PD.[Status] = '0'
       AND td.Taskdetailkey IS NULL
-      GROUP BY PD.Storerkey, PD.Sku, PD.Loc 
+      GROUP BY PD.Storerkey, PD.Sku, PD.Loc, PD.Lot                                 --(Wan03) 
       HAVING SUM(lli.QtyExpected - lli.PendingMoveIn) > 0 
+      ORDER BY PD.Loc, PD.Lot                                                       --(Wan03) 
  
       OPEN @cur_WaveReplto    
          
-      FETCH NEXT FROM @cur_WaveReplto INTO  @c_Storerkey, @c_Sku, @c_ToLoc 
-                                          , @n_QtyNeed 
+      FETCH NEXT FROM @cur_WaveReplto INTO @c_Storerkey, @c_Sku, @c_ToLoc, @c_Lot   --(Wan03) 
+                                        ,  @n_QtyNeed                            
          
       WHILE @@FETCH_STATUS = 0 AND @n_continue IN (1,2)  
       BEGIN
-         SET @cur_WaveReplLot = CURSOR FAST_FORWARD READ_ONLY FOR 
-         SELECT PD.Lot
-               ,DynPickFace = ISNULL(sl.loc, 'DPP')
-         FROM #PICKDETAIL_WIP PD (NOLOCK)
-         LEFT OUTER JOIN SKUxLOC sl (NOLOCK) ON  sl.Storerkey = pd.Storerkey
-                                             AND sl.Sku = pd.Sku
-                                             AND sl.Loc = pd.loc
-                                             AND sl.LocationType IN ('PICK', 'CASE') 
-         WHERE PD.Storerkey = @c_Storerkey
-         AND   PD.Sku = @c_Sku
-         AND   PD.Loc = @c_ToLoc
-         AND   PD.UOM IN ('2','6')
-         GROUP BY PD.Lot, PD.Loc, ISNULL(sl.loc, 'DPP')
-         ORDER BY PD.Loc
+         --SET @cur_WaveReplLot = CURSOR FAST_FORWARD READ_ONLY FOR                 --(Wan03) - START
+         --SELECT PD.Lot
+         --      ,QtyNeed = SUM(lli.QtyExpected - lli.PendingMoveIn)                  
+         --      ,DynPickFace = ISNULL(sl.loc, 'DPP')
+         --FROM #PICKDETAIL_WIP PD (NOLOCK)
+         --LEFT OUTER JOIN SKUxLOC sl (NOLOCK) ON  sl.Storerkey = pd.Storerkey
+         --                                    AND sl.Sku = pd.Sku
+         --                                    AND sl.Loc = pd.loc
+         --                                    AND sl.LocationType IN ('PICK', 'CASE') 
+         --WHERE PD.Storerkey = @c_Storerkey
+         --AND   PD.Sku = @c_Sku
+         --AND   PD.Loc = @c_ToLoc
+         --AND   PD.UOM IN ('2','6')
+         --GROUP BY PD.Lot, PD.Loc, ISNULL(sl.loc, 'DPP')
+         --ORDER BY PD.Loc                                                                                                 
 
-         OPEN @cur_WaveReplLot    
+         --OPEN @cur_WaveReplLot    
          
-         FETCH NEXT FROM @cur_WaveReplLot INTO @c_Lot, @c_DynPickFace
+         --FETCH NEXT FROM @cur_WaveReplLot INTO @c_Lot, @c_DynPickFace
          
-         WHILE @@FETCH_STATUS = 0 AND @n_continue IN (1,2) AND @n_QtyNeed > 0
+         --WHILE @@FETCH_STATUS = 0 AND @n_continue IN (1,2) AND @n_QtyNeed > 0
+         --BEGIN                                                                    
+         SET @cur_WaveReplfr = CURSOR FAST_FORWARD READ_ONLY FOR 
+         SELECT TOP 1
+                 FromLoc = lli.Loc
+               , FromID  = lli.ID
+               , QtyToReplen = lli.qty - lli.QtyPicked - lli.QtyAllocated - lli.QtyReplen
+         FROM LOTxLOCxID lli (NOLOCK) 
+         JOIN LOT (NOLOCK) ON LOT.Lot = lli.Lot
+         JOIN ID  (NOLOCK) ON ID.id = lli.id
+         JOIN LOTATTRIBUTE la (NOLOCK) ON la.Lot = lli.Lot
+         JOIN LOC (NOLOCK) ON LOC.loc = lli.loc 
+         JOIN SKUxLOC sl (NOLOCK) ON  lli.Storerkey = sl.Storerkey 
+                                  AND lli.Sku = sl.Sku
+                                  AND lli.Loc = sl.Loc
+         WHERE lli.Storerkey = @c_Storerkey
+         AND   lli.Sku = @c_Sku
+         AND   lli.Lot = @c_Lot      
+         AND   lli.Loc <> @c_ToLoc
+         AND   lli.qty - lli.QtyPicked - lli.QtyAllocated - lli.QtyReplen > 0
+         AND   sl.LocationType NOT IN ('PICK','CASE')
+         AND   LOT.[Status] = 'OK'
+         AND   ID.[Status]  = 'OK'
+         AND   LOC.[Status] = 'OK'
+         AND   LOC.LocationFlag NOT IN ('DAMAGE','HOLD')
+         AND   LOC.Facility = @c_Facility
+         AND   LOC.LocLevel > 0
+
+         OPEN @cur_WaveReplfr
+
+         FETCH NEXT FROM @cur_WaveReplfr INTO  @c_FromLoc, @c_FromID, @n_QtyToReplen
+
+         WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1,2) AND @n_QtyNeed > 0
          BEGIN
-            SET @cur_WaveReplfr = CURSOR FAST_FORWARD READ_ONLY FOR 
-            SELECT TOP 1
-                    FromLoc = lli.Loc
-                  , FromID  = lli.ID
-                  , QtyToReplen = lli.qty - lli.QtyPicked - lli.QtyAllocated - lli.QtyReplen
-            FROM LOTxLOCxID lli (NOLOCK) 
-            JOIN LOT (NOLOCK) ON LOT.Lot = lli.Lot
-            JOIN ID  (NOLOCK) ON ID.id = lli.id
-            JOIN LOTATTRIBUTE la (NOLOCK) ON la.Lot = lli.Lot
-            JOIN LOC (NOLOCK) ON LOC.loc = lli.loc 
-            JOIN SKUxLOC sl (NOLOCK) ON  lli.Storerkey = sl.Storerkey 
-                                     AND lli.Sku = sl.Sku
-                                     AND lli.Loc = sl.Loc
-            WHERE lli.Storerkey = @c_Storerkey
-            AND   lli.Sku = @c_Sku
-            AND   lli.Lot = @c_Lot      
-            AND   lli.Loc <> @c_ToLoc
-            AND   lli.qty - lli.QtyPicked - lli.QtyAllocated - lli.QtyReplen > 0
-            AND   sl.LocationType NOT IN ('PICK','CASE')
-            AND   LOT.[Status] = 'OK'
-            AND   ID.[Status]  = 'OK'
-            AND   LOC.[Status] = 'OK'
-            AND   LOC.LocationFlag NOT IN ('DAMAGE','HOLD')
-            AND   LOC.Facility = @c_Facility
-            AND   LOC.LocLevel > 0
+            SET @c_Taskdetailkey = '' 
+            SET @n_Qty     = @n_QtyToReplen
+            SET @n_QtyNeed = @n_QtyNeed - @n_Qty
 
-            OPEN @cur_WaveReplfr
+            --IF @c_DynPickFace = 'DPP'                                             --(Wan03)
+            --BEGIN                                                                 --(Wan03)
+            --   SET @n_QtyNeed = 0                                                 --(Wan03)
+            --END                                                                   --(Wan03)
+            
+            SET @c_ID      = @c_FromID
+
+            EXEC isp_InsertTaskDetail     
+                @c_Taskdetailkey         = @c_Taskdetailkey OUTPUT  
+               ,@c_TaskType              = 'RPF'               
+               ,@c_Storerkey             = @c_Storerkey  
+               ,@c_Sku                   = @c_Sku  
+               ,@c_Lot                   = @c_Lot   
+               ,@c_UOM                   = '1'        
+               ,@n_UOMQty                = @n_Qty       
+               ,@n_Qty                   = @n_Qty        
+               ,@c_FromLoc               = @c_Fromloc        
+               ,@c_LogicalFromLoc        = @c_FromLoc   
+               ,@c_FromID                = @c_FromID       
+               ,@c_ToLoc                 = @c_ToLoc         
+               ,@c_LogicalToLoc          = @c_ToLoc   
+               ,@c_ToID                  = @c_ID         
+               ,@c_PickMethod            = 'FP'  
+               ,@c_Priority              = '5'       
+               ,@c_SourcePriority        = '5'        
+               ,@c_SourceType            = @c_SourceType        
+               ,@c_SourceKey             = @c_Wavekey        
+               ,@c_OrderKey              = ''        
+               ,@c_Groupkey              = ''  
+               ,@n_PendingMoveIn         = @n_Qty
+               ,@n_QtyReplen             = @n_Qty
+               ,@c_WaveKey               = @c_Wavekey        
+               ,@c_AreaKey               = '?F'  -- ?F=Get from location areakey   
+               ,@c_Message03             = ''  
+               ,@c_LinkTaskToPick        = '' -- WIP=Update taskdetailkey to pickdetail_wip  
+               ,@c_LinkTaskToPick_SQL    = @c_LinkTaskToPick_SQL    
+               ,@c_WIP_RefNo             = @c_SourceType  
+               ,@b_Success               = @b_Success OUTPUT  
+               ,@n_Err                   = @n_err OUTPUT   
+               ,@c_ErrMsg                = @c_errmsg OUTPUT  
+                
+            IF @b_Success <> 1   
+            BEGIN  
+               SET @n_continue = 3    
+            END 
 
             FETCH NEXT FROM @cur_WaveReplfr INTO  @c_FromLoc, @c_FromID, @n_QtyToReplen
-
-            WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1,2) AND @n_QtyNeed > 0
-            BEGIN
-               SET @c_Taskdetailkey = '' 
-               SET @n_Qty     = @n_QtyToReplen
-               SET @n_QtyNeed = @n_QtyNeed - @n_Qty
-               IF @c_DynPickFace = 'DPP'  
-               BEGIN
-                  SET @n_QtyNeed = 0
-               END
-            
-               SET @c_ID      = @c_FromID
-
-               EXEC isp_InsertTaskDetail     
-                   @c_Taskdetailkey         = @c_Taskdetailkey OUTPUT  
-                  ,@c_TaskType              = 'RPF'               
-                  ,@c_Storerkey             = @c_Storerkey  
-                  ,@c_Sku                   = @c_Sku  
-                  ,@c_Lot                   = @c_Lot   
-                  ,@c_UOM                   = '1'        
-                  ,@n_UOMQty                = @n_Qty       
-                  ,@n_Qty                   = @n_Qty        
-                  ,@c_FromLoc               = @c_Fromloc        
-                  ,@c_LogicalFromLoc        = @c_FromLoc   
-                  ,@c_FromID                = @c_FromID       
-                  ,@c_ToLoc                 = @c_ToLoc         
-                  ,@c_LogicalToLoc          = @c_ToLoc   
-                  ,@c_ToID                  = @c_ID         
-                  ,@c_PickMethod            = 'FP'  
-                  ,@c_Priority              = '5'       
-                  ,@c_SourcePriority        = '5'        
-                  ,@c_SourceType            = @c_SourceType        
-                  ,@c_SourceKey             = @c_Wavekey        
-                  ,@c_OrderKey              = ''        
-                  ,@c_Groupkey              = ''  
-                  ,@n_PendingMoveIn         = @n_Qty
-                  ,@n_QtyReplen             = @n_Qty
-                  ,@c_WaveKey               = @c_Wavekey        
-                  ,@c_AreaKey               = '?F'  -- ?F=Get from location areakey   
-                  ,@c_Message03             = ''  
-                  ,@c_LinkTaskToPick        = '' -- WIP=Update taskdetailkey to pickdetail_wip  
-                  ,@c_LinkTaskToPick_SQL    = @c_LinkTaskToPick_SQL    
-                  ,@c_WIP_RefNo             = @c_SourceType  
-                  ,@b_Success               = @b_Success OUTPUT  
-                  ,@n_Err                   = @n_err OUTPUT   
-                  ,@c_ErrMsg                = @c_errmsg OUTPUT  
-                
-               IF @b_Success <> 1   
-               BEGIN  
-                  SET @n_continue = 3    
-               END 
-
-               FETCH NEXT FROM @cur_WaveReplfr INTO  @c_FromLoc, @c_FromID, @n_QtyToReplen
-            END
-            CLOSE @cur_WaveReplfr
-            DEALLOCATE @cur_WaveReplfr
-
-            FETCH NEXT FROM @cur_WaveReplLot INTO  @c_Lot, @c_DynPickFace
          END
-         CLOSE @cur_WaveReplLot
-         DEALLOCATE @cur_WaveReplLot
+         CLOSE @cur_WaveReplfr
+         DEALLOCATE @cur_WaveReplfr
 
-         FETCH NEXT FROM @cur_WaveReplto INTO  @c_Storerkey, @c_Sku, @c_ToLoc 
-                                             , @n_QtyNeed
+         --   FETCH NEXT FROM @cur_WaveReplLot INTO @c_Lot, @c_DynPickFace         
+         --END                                                                     
+         --CLOSE @cur_WaveReplLot                                                  
+         --DEALLOCATE @cur_WaveReplLot                                              --(wan03) - END
+
+         FETCH NEXT FROM @cur_WaveReplto INTO @c_Storerkey, @c_Sku, @c_ToLoc, @c_Lot--(Wan03) 
+                                            , @n_QtyNeed                         
       END
       CLOSE @cur_WaveReplto
       DEALLOCATE @cur_WaveReplto
