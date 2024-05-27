@@ -8,6 +8,8 @@ GO
 /* Store procedure: rdt_898UCCExtVal09                                     */
 /* Copyright      : LF Logistics                                           */
 /*                                                                         */
+/* Purpose: UCC extended validation for USLevis                            */
+/*                                                                         */
 /* Date        Rev   Author   Purposes                                     */
 /* 2024-5-24   1.0   JackC    FCR-236. Created                             */
 /***************************************************************************/
@@ -102,6 +104,13 @@ BEGIN
             ,@cUCCUDF09 = ISNULL(Userdefined09,'')
       FROM UCC WITH (NOLOCK) 
       WHERE UCCNo = @cUCC
+      AND ReceiptKey = @cReceiptKey
+
+      IF @@ROWCOUNT < 0
+      BEGIN
+         SET @nErrNo = 215312
+         SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, 'DSP') -- UCC Not Exist
+      END
 
       --GET SKU
       SELECT @cSKUSUSR1 = SUSR1 
