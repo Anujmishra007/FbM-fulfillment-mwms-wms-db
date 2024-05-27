@@ -249,18 +249,13 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
                @c_ToLoc = SL.Loc
          FROM SKUxLOC SL (NOLOCK) 
          JOIN #PICKDETAIL_WIP PD (NOLOCK) ON PD.Storerkey = SL.Storerkey
-         JOIN LOTxLOCxID lli (NOLOCK) ON  lli.StorerKey = SL.StorerKey
-                                      AND lli.Sku = SL.Sku
-                                      AND lli.Loc = SL.Loc
-         WHERE SL.Storerkey = PD.Storerkey 
-         AND SL.Sku = PD.Sku  
-         AND SL.Loc = PD.Loc  
+         WHERE SL.Storerkey = PD.Storerkey
+         AND SL.Sku = PD.Sku
          AND SL.LocationType IN ('CASE','PICK')  
          GROUP BY SL.StorerKey
                ,  SL.Sku
                ,  SL.Loc
                ,  SL.QtyLocationLimit
-         HAVING SL.QtyLocationLimit <= SUM(LLI.PendingMoveIN + LLI.Qty)
          ORDER BY SL.Loc
                                  
          IF ISNULL(@c_Toloc,'') = ''  
