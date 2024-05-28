@@ -29,6 +29,7 @@ GO
 /*                            & Lot to replen as overallocate program has*/ 
 /*                            strategy to find DPP & Pick face Location  */
 /*                            UWP-18535-Fix FCP not hold                 */ 
+/* 2024-05-28  Wan04    1.3   UWP-18535-Hold FCP when FromLoc has RPF task*/ 
 /*************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]        
   @c_wavekey      NVARCHAR(10)    
@@ -474,34 +475,34 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
                         WHERE td.Storerkey = @c_Storerkey
                         AND   td.Sku     = @c_Sku
                         AND   td.TaskType= 'RPF'
-                        AND   td.Lot   = @c_Lot
+                        --AND   td.Lot   = @c_Lot                                   --(Wan04)
                         AND   td.ToLoc = @c_FromLoc
                         --AND   td.ToID  = @c_ID                                    --(Wan03)
                         AND   td.SourceType = @c_SourceType
                         AND   td.[Status] BETWEEN '0' AND '8'
                         )
             BEGIN
-               SET @n_QtyRelease2Pick = 0
-               SELECT @n_QtyRelease2Pick = ISNULL(SUM(td.Qty),0)
-               FROM dbo.TaskDetail td (NOLOCK) 
-               WHERE td.Storerkey = @c_Storerkey
-               AND   td.Sku     = @c_Sku
-               AND   td.TaskType='FCP'
-               AND   td.Lot     = @c_Lot
-               AND   td.FromLoc = @c_FromLoc                                        --(Wan03)
-               AND   td.ToID    = @c_ID
-               AND   td.SourceType = @c_SourceType
-               AND   td.[Status] BETWEEN '0' AND '8'
+               --SET @n_QtyRelease2Pick = 0                                         --(Wan04) - START
+               --SELECT @n_QtyRelease2Pick = ISNULL(SUM(td.Qty),0)
+               --FROM dbo.TaskDetail td (NOLOCK) 
+               --WHERE td.Storerkey = @c_Storerkey
+               --AND   td.Sku     = @c_Sku
+               --AND   td.TaskType='FCP'
+               --AND   td.Lot     = @c_Lot
+               --AND   td.FromLoc = @c_FromLoc                                        --(Wan03)
+               --AND   td.ToID    = @c_ID
+               --AND   td.SourceType = @c_SourceType
+               --AND   td.[Status] BETWEEN '0' AND '8'
                
-               IF EXISTS ( SELECT 1 FROM dbo.LotxLocxID lli (NOLOCK)
-                           WHERE lli.Lot   = @c_Lot
-                           AND   lli.Loc = @c_FromLoc
-                           AND   lli.ID  = @c_ID
-                           AND   lli.Qty < @n_QtyRelease2Pick + @n_Qty 
-                         )
-               BEGIN
+               --IF EXISTS ( SELECT 1 FROM dbo.LotxLocxID lli (NOLOCK)
+               --            WHERE lli.Lot   = @c_Lot
+               --            AND   lli.Loc = @c_FromLoc
+               --            AND   lli.ID  = @c_ID
+               --            AND   lli.Qty < @n_QtyRelease2Pick + @n_Qty 
+               --          )
+               --BEGIN
                   SET @c_TaskStatus = 'H'
-               END
+               --END                                                                --(Wan04) - END
             END
          END                                                                        --(Wan02) - END     
 
