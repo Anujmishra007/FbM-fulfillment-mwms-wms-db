@@ -10,7 +10,7 @@ GO
 /* Creation Date: 20-May-2024                                       */
 
 CREATE PROC [dbo].[ispTransferAllocationForFinalize](
-   @b_Success        INT          = 1   OUTPUT
+    @b_Success        INT          = 1   OUTPUT
 ,  @n_Err            INT          = 0   OUTPUT
 ,  @c_ErrMsg         NVARCHAR(250)= ''  OUTPUT
 )
@@ -99,27 +99,59 @@ BEGIN
 SELECT TransferKey = TF.TransferKey,
         TransferLineNumber = TD.TransferLineNumber,
         FromStorerKey = TF.FromStorerKey
+     , ToStorerKey = TD.ToStorerkey
      , FromSku   = TD.FromSku
+     , ToSku   = TD.ToSku
      , FromQty    = TD.FromQty
      ,Facility      = TF.Facility
      , FromLottable02 = ISNULL(RTRIM(TD.Lottable02),'')
+     , ToLottable02 = ISNULL(RTRIM(TD.ToLottable02),'')
 FROM TRANSFERDETAIL TD WITH (NOLOCK)
-                 JOIN TRANSFER     TF  WITH (NOLOCK) ON (TD.TransferKey = TF.TransferKey)
+                 JOIN TRANSFER TF  WITH (NOLOCK) ON (TD.TransferKey = TF.TransferKey)
 WHERE TF.Status = 'P' AND TF.UserDefine02 = 'QA'
 
     OPEN CUR_ANFTRAN
     FETCH NEXT FROM CUR_ANFTRAN INTO @c_TransferKey
     ,  @c_TransferLineNumber
     ,  @c_FromStorerkey
+    , @c_ToStorerkey
     ,  @c_FromSku
+    ,  @c_ToSku
     ,  @n_FromQty
     ,  @c_FromFacility
     ,  @c_FromLottable02
+    ,  @c_ToLottable02
     WHILE @@FETCH_STATUS <> -1
 
 BEGIN
-        SET @n_QtyRequired = @n_FromQty
-        -- Populate info based on any information from the LotAttribute and LotxLocxId tables
+FETCH NEXT FROM CUR_ANFTRAN INTO @c_TransferKey
+    ,  @c_TransferLineNumber
+    ,  @c_FromStorerkey
+    , @c_ToStorerkey
+    ,  @c_FromSku
+    ,  @c_ToSku
+    ,  @n_FromQty
+    ,  @c_FromFacility
+    ,  @c_FromLottable02
+    ,  @c_ToLottable02
+    SET @n_QtyRequired = @n_FromQty
+
+SELECT @c_FromPackkey = PACK.Packkey
+     ,@c_FromUOM     = PACK.PackUOM3
+FROM SKU  WITH (NOLOCK)
+                     JOIN PACK WITH (NOLOCK) ON (SKU.Packkey = PACK.Packkey)
+WHERE SKU.Storerkey = @c_FromStorerkey
+  AND   SKU.Sku       = @c_FromSku
+
+SELECT @c_ToPackkey = PACK.Packkey
+     ,@c_ToUOM     = PACK.PackUOM3
+     ,@c_PrepackIndicator = ISNULL(RTRIM(SKU.PrepackIndicator),'')
+FROM SKU WITH (NOLOCK)
+                     JOIN PACK WITH (NOLOCK) ON (SKU.Packkey = PACK.Packkey)
+WHERE SKU.Storerkey = @c_ToStorerkey
+  AND   SKU.Sku       = @c_ToSku
+
+-- Populate info based on any information from the LotAttribute and LotxLocxId tables
 SELECT TOP 1
                     @c_FromLot = LLI.Lot
                        ,@c_FromLoc = LLI.Loc
@@ -164,7 +196,7 @@ FROM LOT LOT WITH (NOLOCK)
     JOIN LOC           WITH (NOLOCK)  ON (LOTxLOCxID.Loc = LOC.Loc)
     WHERE LOTATTRIBUTE.Storerkey = @c_FromStorerkey
     AND   LOTATTRIBUTE.Sku       = @c_FromSku
-    AND   LOTATTRIBUTE.Lottable02= @c_FromLottable02
+    --AND   LOTATTRIBUTE.Lottable02= @c_FromLottable02
     AND   LOC.Facility           = @c_FromFacility
     GROUP BY LOTATTRIBUTE.Storerkey
     , LOTATTRIBUTE.Sku
@@ -194,24 +226,25 @@ ORDER BY
     WHEN ISNULL(RTRIM(UCC.Status),'') = 1 AND UCC.Qty < @n_FromQty
     THEN UCC.Qty * -1
     ELSE (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked) END
-                             ,  ISNULL(UCC.Qty, LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked)
+                   ,  ISNULL(UCC.Qty, LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked)
             -- Do not allocate from partial allocated UCC - (END)
 
 
-    IF @n_QtyRequired >= @n_QtyAvail
+            IF @n_QtyRequired >= @n_QtyAvail
 BEGIN
-            SET @n_QtyToTake = @n_QtyAvail
+                    SET @n_QtyToTake = @n_QtyAvail
 END
 ELSE
 BEGIN
-            SET @n_QtyToTake = @n_QtyRequired
+                    SET @n_QtyToTake = @n_QtyRequired
 END
 
-    --- Update/Insert into TRANSFERDETAIL --
+            SET @n_QtyRequired = @n_QtyRequired - @n_QtyToTake
+            --- Update/Insert into TRANSFERDETAIL --
 
-
-        SET  @c_TransferStatus = '0'
-
+            SET  @c_TransferStatus = '0'
+            IF @n_QtyRequired <= 0
+BEGIN
 UPDATE TRANSFERDETAIL WITH (ROWLOCK)
 SET Status = @c_TransferStatus
         ,FromLot  = @c_FromLot
@@ -222,7 +255,7 @@ SET Status = @c_TransferStatus
         ,Lottable03 = @c_Lottable03
         ,Lottable04 = @dt_Lottable04
         ,Lottable05 = @dt_Lottable05
-        ,Lottable06 = @c_Lottable06      -- (CS01)
+        ,Lottable06 = @c_Lottable06
         ,Lottable07 = @c_Lottable07      -- (CS01)
         ,Lottable08 = @c_Lottable08      -- (CS01)
         ,Lottable09 = @c_Lottable09      -- (CS01)
@@ -239,7 +272,7 @@ SET Status = @c_TransferStatus
         ,ToLottable03 = @c_Lottable03
         ,ToLottable04 = @dt_Lottable04
         ,ToLottable05 = @dt_Lottable05
-        ,ToLottable06 = @c_Lottable06    -- (CS01)
+        ,ToLottable06 = @c_Lottable06
         ,ToLottable07 = @c_Lottable07    -- (CS01)
         ,ToLottable08 = @c_Lottable08    -- (CS01)
         ,ToLottable09 = @c_Lottable09    -- (CS01)
@@ -258,15 +291,135 @@ SET @n_err = @@ERROR
 
     IF @n_err <> 0
 BEGIN
-                SET @n_continue = 3
-                SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
-                SET @n_err = 81005
-                SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': UPDATE TRANSFERDETAIL Failed. (ispTransferAllocationForFinalize)'
-                    + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
-               -- GOTO NEXT_TRF
+                    SET @n_continue = 3
+                    SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
+                    SET @n_err = 81005
+                    SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': UPDATE TRANSFERDETAIL Failed. (ispTransferAllocationForFinalize)'
+                        + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+                     GOTO NEXT_TRF
 END
-        --SET @c_NewTransferLineNo = @c_TransferLineNumber
+            --SET @c_NewTransferLineNo = @c_TransferLineNumber
+END
+ELSE
+BEGIN
+SELECT @c_NewTransferLineNo = RIGHT('00000' + CONVERT(VARCHAR(5), MAX(CONVERT(INT, TransferLineNumber)) + 1),5)
+FROM TRANSFERDETAIL WITH (NOLOCK)
+WHERE Transferkey = @c_Transferkey
 
+INSERT INTO TRANSFERDETAIL
+(  TransferKey
+    ,  TransferLineNumber
+    ,  FromStorerkey
+    ,  FromSku
+    ,  FromLot
+    ,  FromLoc
+    ,  FromID
+    ,  FromPackkey
+    ,  FromUOM
+    ,  Lottable01
+    ,  Lottable02
+    ,  Lottable03
+    ,  Lottable04
+    ,  Lottable05
+    ,  Lottable06         -- (CS01)
+    ,  Lottable07         -- (CS01)
+    ,  Lottable08         -- (CS01)
+    ,  Lottable09         -- (CS01)
+    ,  Lottable10         -- (CS01)
+    ,  Lottable11         -- (CS01)
+    ,  Lottable12         -- (CS01)
+    ,  Lottable13         -- (CS01)
+    ,  Lottable14         -- (CS01)
+    ,  Lottable15         -- (CS01)
+    ,  FromQty
+    ,  ToStorerkey
+    ,  ToSku
+    ,  ToLoc
+    ,  ToID
+    ,  ToPackkey
+    ,  ToUOM
+    ,  ToLottable01
+    ,  ToLottable02
+    ,  ToLottable03
+    ,  ToLottable04
+    ,  ToLottable05
+    ,  ToLottable06      -- (CS01)
+    ,  ToLottable07      -- (CS01)
+    ,  ToLottable08      -- (CS01)
+    ,  ToLottable09      -- (CS01)
+    ,  ToLottable10      -- (CS01)
+    ,  ToLottable11      -- (CS01)
+    ,  ToLottable12      -- (CS01)
+    ,  ToLottable13      -- (CS01)
+    ,  ToLottable14      -- (CS01)
+    ,  ToLottable15      -- (CS01)
+    ,  ToQty
+    ,  [Status]
+    ,  UserDefine01
+)
+VALUES
+    (  @c_TransferKey
+        ,  @c_NewTransferLineNo
+        ,  @c_FromStorerkey
+        ,  @c_FromSku
+        ,  @c_FromLot
+        ,  @c_FromLoc
+        ,  @c_FromID
+        ,  @c_FromPackkey
+        ,  @c_FromUOM
+        ,  @c_Lottable01
+        ,  @c_FromLottable02
+        ,  @c_Lottable03
+        ,  @dt_Lottable04
+        ,  @dt_Lottable05
+        ,  @c_Lottable06      -- (CS01)
+        ,  @c_Lottable07      -- (CS01)
+        ,  @c_Lottable08      -- (CS01)
+        ,  @c_Lottable09      -- (CS01)
+        ,  @c_Lottable10      -- (CS01)
+        ,  @c_Lottable11      -- (CS01)
+        ,  @c_Lottable12      -- (CS01)
+        ,  @dt_Lottable13     -- (CS01)
+        ,  @dt_Lottable14     -- (CS01)
+        ,  @dt_Lottable15     -- (CS01)
+        ,  @n_QtyToTake   --@n_QtyAvail
+        ,  @c_ToStorerkey
+        ,  @c_ToSku
+        ,  @c_FromLoc
+        ,  @c_FromID
+        ,  @c_ToPackkey
+        ,  @c_ToUOM
+        ,  @c_Lottable01
+        ,  @c_ToLottable02
+        ,  @c_Lottable03
+        ,  @dt_Lottable04
+        ,  @dt_Lottable05
+        ,  @c_Lottable06      -- (CS01)
+        ,  @c_Lottable07      -- (CS01)
+        ,  @c_Lottable08      -- (CS01)
+        ,  @c_Lottable09      -- (CS01)
+        ,  @c_Lottable10      -- (CS01)
+        ,  @c_Lottable11      -- (CS01)
+        ,  @c_Lottable12      -- (CS01)
+        ,  @dt_Lottable13     -- (CS01)
+        ,  @dt_Lottable14     -- (CS01)
+        ,  @dt_Lottable15     -- (CS01)
+        ,  @n_QtyToTake   --@n_QtyAvail
+        ,  @c_TransferStatus
+        ,  @c_UCCNo
+    )
+SET @n_err = @@ERROR
+
+    IF @n_err <> 0
+BEGIN
+                        SET @n_continue = 3
+                        SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
+                        SET @n_err = 81010   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+                        SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': INSERT TRANSFERDETAIL Failed. (ispTransferAllocation)'
+                            + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+                        GOTO NEXT_TRF
+END
+END
 END
 CLOSE CUR_ANFTRAN
     DEALLOCATE CUR_ANFTRAN
@@ -279,22 +432,27 @@ WHERE Status = '0' AND Lottable06 = '0'
   AND ToLottable06 = '1' AND UserDefine02 = 'QA'
 
     OPEN CUR_FINTRAN
-        FETCH NEXT FROM CUR_FINTRAN INTO @c_TransferKeyForFinalization
+    FETCH NEXT FROM CUR_FINTRAN INTO @c_TransferKeyForFinalization
     WHILE @@FETCH_STATUS <> -1
+BEGIN
+FETCH NEXT FROM CUR_FINTRAN INTO @c_TransferKeyForFinalization
     EXEC [WM].lsp_FinalizeTransfer_Wrapper @c_TransferKeyForFinalization,
-    @b_Success OUTPUT
-    , @n_Err OUTPUT
-    , @c_ErrMsg OUTPUT
+                 @b_Success OUTPUT
+                , @n_Err OUTPUT
+                , @c_ErrMsg OUTPUT
 
     IF @n_err <> 0
 BEGIN
-                SET @n_continue = 3
-                SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
-                SET @n_err = 81180   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-                SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': UPDATE TRANSFER Failed. (ispTransferAllocation02)'
-                    + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
-                GOTO NEXT_TRF
+            SET @n_continue = 3
+            SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
+            SET @n_err = 81180   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': UPDATE TRANSFER Failed. (ispTransferAllocationForFinalize)'
+                + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+            GOTO NEXT_TRF
 END
+END
+CLOSE CUR_FINTRAN
+    DEALLOCATE CUR_FINTRAN
 
 
     QUIT_SP:
@@ -302,6 +460,11 @@ END
 BEGIN
 CLOSE CUR_ANFTRAN
     DEALLOCATE CUR_ANFTRAN
+END
+    IF CURSOR_STATUS('LOCAL' , 'CUR_FINTRAN') in (0 , 1)
+BEGIN
+CLOSE CUR_FINTRAN
+    DEALLOCATE CUR_FINTRAN
 END
 
     NEXT_TRF:
