@@ -80,6 +80,7 @@ GO
 /* 2023-07-04   5.6 Ung         WMS-22913 Add ExtendedUpdateSP at step 2 ESC                    */
 /* 2023-11-24   5.7 Ung         WMS-24060 Add PackByFromDropID                                  */
 /* 2023-08-25   5.8 YeeKung     WMS-23946 Clear Extendedinfo SP  (yeekung02)                    */
+/* 2024-05-27   5.9 NLT013      FCR-388 Merge code to V2 branch, original owner is Wojciech     */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
@@ -3504,25 +3505,82 @@ BEGIN
          -- Ship label
          IF @cShipLabel <> ''
          BEGIN
-            -- Common params
-            DECLARE @tShipLabel AS VariableTable
-            INSERT INTO @tShipLabel (Variable, Value) VALUES
-               ( '@cStorerKey',     @cStorerKey),
-               ( '@cPickSlipNo',    @cPickSlipNo),
-               ( '@cFromDropID',    @cFromDropID),
-               ( '@cPackDtlDropID', @cPackDtlDropID),
-               ( '@cLabelNo',       @cLabelNo),
-               ( '@nCartonNo',      CAST( @nCartonNo AS NVARCHAR(10)))
+            IF @cShipLabel = 'CstLabelSP'
+            BEGIN
+               DECLARE @cCstLabelSP NVARCHAR(30)
+               SET @cCstLabelSP = rdt.RDTGetConfig( @nFunc, 'CstLabelSP', @cStorerKey)
+               IF @cCstLabelSP = '0'
+                  SET @cCstLabelSP = ''
+               IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cCstLabelSP AND type = 'P')  --Customize Print Label
+               BEGIN
+                  SET @cSQL = 'EXEC rdt.' + RTRIM( @cCstLabelSP) +
+                     ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID, ' +
+                     ' @nCartonNo, @cLabelNo, @cSKU, @nQTY, @cUCCNo, @cCartonType, @cCube, @cWeight, @cRefNo, @cSerialNo, @nSerialQTY, @cOption, ' +
+                     ' @cPackDtlRefNo, @cPackDtlRefNo2, @cPackDtlUPC, @cPackDtlDropID, @cPackData1, @cPackData2, @cPackData3, ' +
+                     ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+                  SET @cSQLParam =
+                     '@nMobile         INT,           ' +
+                     '@nFunc           INT,           ' +
+                     '@cLangCode       NVARCHAR( 3),  ' +
+                     '@nStep           INT,           ' +
+                     '@nInputKey       INT,           ' +
+                     '@cFacility       NVARCHAR( 5),  ' +
+                     '@cStorerKey      NVARCHAR( 15), ' +
+                     '@cPickSlipNo     NVARCHAR( 10), ' +
+                     '@cFromDropID     NVARCHAR( 20), ' +
+                     '@nCartonNo       INT,           ' +
+                     '@cLabelNo        NVARCHAR( 20), ' +
+                     '@cSKU            NVARCHAR( 20), ' +
+                     '@nQTY            INT,           ' +
+                     '@cUCCNo          NVARCHAR( 20), ' +
+                     '@cCartonType     NVARCHAR( 10), ' +
+                     '@cCube           NVARCHAR( 10), ' +
+                     '@cWeight         NVARCHAR( 10), ' +
+                     '@cRefNo          NVARCHAR( 20), ' +
+                     '@cSerialNo       NVARCHAR( 30), ' +
+                     '@nSerialQTY      INT,           ' +
+                     '@cOption         NVARCHAR( 1),  ' +
+                     '@cPackDtlRefNo   NVARCHAR( 20), ' +
+                     '@cPackDtlRefNo2  NVARCHAR( 20), ' +
+                     '@cPackDtlUPC     NVARCHAR( 30), ' +
+                     '@cPackDtlDropID  NVARCHAR( 20), ' +
+                     '@cPackData1      NVARCHAR( 30), ' +
+                     '@cPackData2      NVARCHAR( 30), ' +
+                     '@cPackData3      NVARCHAR( 30), ' +
+                     '@nErrNo          INT            OUTPUT, ' +
+                     '@cErrMsg         NVARCHAR( 20)  OUTPUT'
 
-            -- Print label
-            EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
-               @cShipLabel, -- Report type
-               @tShipLabel, -- Report params
-               'rdtfnc_Pack',
-               @nErrNo  OUTPUT,
-               @cErrMsg OUTPUT
-            IF @nErrNo <> 0
-               GOTO Quit
+                  EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                     @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID,
+                     @nCartonNo, @cLabelNo, @cSKU, @nQTY, @cUCCNo, @cCartonType, @cCube, @cWeight, @cRefNo, @cSerialNo, @nSerialQTY, @cOption,
+                     @cPackDtlRefNo, @cPackDtlRefNo2, @cPackDtlUPC, @cPackDtlDropID, @cPackData1, @cPackData2, @cPackData3,
+                     @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+                  IF @nErrNo <> 0
+                     GOTO Quit
+               END
+            END
+            ELSE BEGIN  --Standard Print
+               -- Common params
+               DECLARE @tShipLabel AS VariableTable
+               INSERT INTO @tShipLabel (Variable, Value) VALUES
+                  ( '@cStorerKey',     @cStorerKey),
+                  ( '@cPickSlipNo',    @cPickSlipNo),
+                  ( '@cFromDropID',    @cFromDropID),
+                  ( '@cPackDtlDropID', @cPackDtlDropID),
+                  ( '@cLabelNo',       @cLabelNo),
+                  ( '@nCartonNo',      CAST( @nCartonNo AS NVARCHAR(10)))
+
+               -- Print label
+               EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
+                  @cShipLabel, -- Report type
+                  @tShipLabel, -- Report params
+                  'rdtfnc_Pack',
+                  @nErrNo  OUTPUT,
+                  @cErrMsg OUTPUT
+               IF @nErrNo <> 0
+                  GOTO Quit
+            END
          END
 
          -- Carton manifest
