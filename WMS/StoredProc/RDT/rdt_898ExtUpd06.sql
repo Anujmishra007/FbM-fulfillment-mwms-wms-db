@@ -92,6 +92,8 @@ BEGIN
             
                   IF @b_Success <> 1 
                      SET @cErrFlag = 1
+
+                  FETCH NEXT FROM @curReceiptDetail INTO @cExternPOKey, @cReceiptLineNumber
                END -- End cursor
 
                IF @cErrFlag <> 0

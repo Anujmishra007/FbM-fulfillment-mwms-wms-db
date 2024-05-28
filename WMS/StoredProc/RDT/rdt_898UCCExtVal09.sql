@@ -83,15 +83,16 @@ BEGIN
       END
 
       --Verify lentgh of prefix > lentgh of ID
-      IF CONVERT(INT, @cPrefixLength) <= LEN(@cToID)
+      IF CONVERT(INT, @cPrefixLength) >= LEN(@cToID) OR CONVERT(INT, @cPrefixLength) < 1
       BEGIN
          SET @nErrNo = 215302
          SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, 'DSP') -- Invalid Prefix Length
+         GOTO Quit
       END
       
 
       -- Verify listname exits in codelkup
-      IF NOT EXISTS (SELECT 1 FROM CodeLKUP WITH (NOLOCK) WHERE LISTNAME = @cUSUCCValidation AND Storerkey = @cStorerKey )
+      IF NOT EXISTS (SELECT 1 FROM CodeLKUP WITH (NOLOCK) WHERE LISTNAME = @cListName AND Storerkey = @cStorerKey )
       BEGIN
          SET @nErrNo = 215303
          SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, 'DSP') -- Setup CodeLkup
@@ -106,10 +107,11 @@ BEGIN
       WHERE UCCNo = @cUCC
       AND ReceiptKey = @cReceiptKey
 
-      IF @@ROWCOUNT < 0
+      IF @@ROWCOUNT < 1
       BEGIN
          SET @nErrNo = 215312
          SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, 'DSP') -- UCC Not Exist
+         GOTO Quit
       END
 
       --GET SKU
@@ -118,10 +120,11 @@ BEGIN
       WHERE StorerKey = @cStorerKey
       AND SKU = @cSKU
 
-      IF @@ROWCOUNT < 0
+      IF @@ROWCOUNT < 1
       BEGIN
          SET @nErrNo = 215304
          SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, 'DSP') -- SKU NOT EXISTS
+         GOTO Quit
       END
 
       ------------------------------------------------------------------------------------------------------------------------------
@@ -212,5 +215,11 @@ Quit:
 
 END
 GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
 GRANT EXECUTE ON  [RDT].[rdt_898UCCExtVal09] TO [NSQL]
 GO
