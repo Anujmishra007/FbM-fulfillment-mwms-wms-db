@@ -278,7 +278,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
               ,@c_Storerkey             = @c_Storerkey
               ,@c_Sku                   = @c_Sku
               ,@c_Lot                   = @c_Lot
-              ,@c_UOM                   = '1'
+              ,@c_UOM                   = @c_UOM
               ,@n_UOMQty                = @n_Qty
               ,@n_Qty                   = @n_Qty
               ,@c_FromLoc               = @c_Fromloc
