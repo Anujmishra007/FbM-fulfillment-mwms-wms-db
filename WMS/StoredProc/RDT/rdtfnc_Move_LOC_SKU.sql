@@ -18,6 +18,7 @@ GO
 /* 2016-05-27 1.1  Ung      SOS370943 Add DecodeSP                      */
 /* 2016-09-30 1.2  Ung      Performance tuning                          */
 /* 2017-11-17 1.3  Ung      WMS-3429 Add custom DecodeSP                */
+/* 2024-05-21 1.4  Dennis   FCR-336 Check Digit                         */
 /************************************************************************/
 
 CREATE  PROCEDURE rdt.rdtfnc_Move_LOC_SKU (
@@ -61,6 +62,8 @@ DECLARE
    @cToLOC      NVARCHAR( 10),
    
    @cDecodeSP   NVARCHAR( 20),
+   @cLOCCheckDigitSP  NVARCHAR( 20),
+   @cCheckDigitLOC    NVARCHAR( 20),
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -213,6 +216,19 @@ BEGIN
          SET @nErrNo = 77201
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'LOC needed'
          GOTO Step_1_Fail
+      END
+
+      SET @cCheckDigitLOC = @cInField01
+      SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)
+      IF @cLOCCheckDigitSP = 1
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+            @cCheckDigitLOC    OUTPUT,
+            @nErrNo      OUTPUT,
+            @cErrMsg     OUTPUT
+         IF @nErrNo <> 0
+            GOTO Step_1_Fail
+         SET @cFromLOC = @cCheckDigitLOC
       END
 
       -- Get LOC info
@@ -479,6 +495,19 @@ BEGIN
          SET @nErrNo = 77208
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'ToLOC needed'
          GOTO Step_3_Fail
+      END
+
+      SET @cCheckDigitLOC = @cInField05
+      SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)
+      IF @cLOCCheckDigitSP = 1
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+            @cCheckDigitLOC    OUTPUT,
+            @nErrNo      OUTPUT,
+            @cErrMsg     OUTPUT
+         IF @nErrNo <> 0
+            GOTO Step_3_Fail
+         SET @cToLOC = @cCheckDigitLOC
       END
 
       -- Get LOC info

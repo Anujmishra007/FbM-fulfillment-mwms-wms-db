@@ -5,7 +5,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /******************************************************************************/
-/* Store procedure: rdtfnc_PickPallet_NEW                                         */
+/* Store procedure: rdtfnc_PickPallet_NEW                                     */
 /* Copyright      : Maersk                                                    */
 /*                                                                            */
 /* Modifications log:                                                         */
@@ -15,6 +15,7 @@ GO
 /* 2023-05-25   1.1  Ung        WMS-22370 Clean up source                     */
 /* 2023-09-27   1.2  Ung        WMS-23706 Add DecodeSP = 1                    */
 /* 2024-02-09   1.3  YeeKung    UWP-14600 Fix the variable problem (yeekung01)*/
+/* 2024-05-21   1.4  Dennis     FCR-336 Check Digit                           */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PickPallet_NEW] (
@@ -82,6 +83,8 @@ DECLARE
    @cPUOM_Desc    NVARCHAR( 5),
    @cMUOM_Desc    NVARCHAR( 5),
    @cToLOC        NVARCHAR( 10),
+   @cLOCCheckDigitSP  NVARCHAR( 20),
+   @cCheckDigitLOC    NVARCHAR( 20),
 
    @cExtendedInfo       NVARCHAR( 20),
    @cExtendedInfoSP     NVARCHAR( 20),
@@ -533,6 +536,7 @@ BEGIN
       -- Screen mapping
       SET @cPickZone = @cInField02 -- PickZone
       SET @cLOC = @cInField04 -- LOC
+      SET @cCheckDigitLOC = @cInField04 -- LOC
 
       -- Check PickZone
       IF @cPickZone <> ''
@@ -633,6 +637,18 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LOC needed
             GOTO LOC_Fail
          END
+      END
+
+      SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)
+      IF @cLOCCheckDigitSP = 1
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+            @cCheckDigitLOC    OUTPUT,
+            @nErrNo      OUTPUT,
+            @cErrMsg     OUTPUT
+         IF @nErrNo <> 0
+            GOTO LOC_Fail
+         SET @cLOC = @cCheckDigitLOC
       END
 
       -- Get LOC info
@@ -1431,6 +1447,7 @@ BEGIN
    BEGIN
       -- Screen mapping
       SET @cToLOC = @cInField01 -- LOC
+      SET @cCheckDigitLOC = @cInField01
 
       -- Check blank
       IF @cToLOC = ''
@@ -1438,6 +1455,18 @@ BEGIN
          SET @nErrNo = 201675
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need ToLOC
          GOTO Quit
+      END
+
+      SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)
+      IF @cLOCCheckDigitSP = 1
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+            @cCheckDigitLOC    OUTPUT,
+            @nErrNo      OUTPUT,
+            @cErrMsg     OUTPUT
+         IF @nErrNo <> 0
+            GOTO Quit
+         SET @cToLOC = @cCheckDigitLOC
       END
 
       -- Get LOC info

@@ -48,6 +48,7 @@ GO
 /* 2022-01-23 3.7  Ung      WMS-18784 Fix DefaultFromLOC                */
 /* 2022-07-05 3.8  Calvin	Fixed Cursor variable (CLVN01)              */
 /* 2024-03-06 3.9  CYU027   UWP-15739 Created, for Unilever            */
+/* 2024-05-21 4.0  Dennis   FCR-336 Check Digit                         */
 /************************************************************************/
 
 CREATE OR ALTER   PROCEDURE [RDT].[rdtfnc_Move_ID] (
@@ -93,7 +94,8 @@ DECLARE
    @cSKU          NVARCHAR( 20),
    @cSKUDescr     NVARCHAR( 60),
    @cPUOM         NVARCHAR( 1), -- Prefer UOM
-
+   @cLOCCheckDigitSP    NVARCHAR( 20),
+   @cCheckDigitLOC      NVARCHAR( 20),
    @cFromLOC            NVARCHAR( 10),
    @cFromID             NVARCHAR( 18),
    @cToLOC              NVARCHAR( 10),
@@ -576,6 +578,18 @@ BEGIN
          SET @nErrNo = 62353
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'LOC needed'
          GOTO Step_2_Fail
+      END
+      SET @cCheckDigitLOC = @cInField02
+      SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)
+      IF @cLOCCheckDigitSP = 1
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+            @cCheckDigitLOC    OUTPUT,
+            @nErrNo      OUTPUT,
+            @cErrMsg     OUTPUT
+         IF @nErrNo <> 0
+            GOTO Step_2_Fail
+         SET @cFromLOC = @cCheckDigitLOC
       END
 
       -- add loc prefix (yeekung01)
@@ -1177,6 +1191,19 @@ BEGIN
          SET @cOutField11 = '' -- ToLOC
 
          GOTO Quit
+      END
+
+      SET @cCheckDigitLOC = @cInField11
+      SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)
+      IF @cLOCCheckDigitSP = 1
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+            @cCheckDigitLOC    OUTPUT,
+            @nErrNo      OUTPUT,
+            @cErrMsg     OUTPUT
+         IF @nErrNo <> 0
+            GOTO Step_3_Fail
+         SET @cToLOC = @cCheckDigitLOC
       END
 
       SET @cToLOCLookupSP = rdt.RDTGetConfig( @nFunc, 'MoveByIDToLOCLookup', @cStorerkey) --(ung01)

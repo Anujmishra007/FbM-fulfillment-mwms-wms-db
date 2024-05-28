@@ -21,6 +21,7 @@ GO
 /* 2016-02-01 1.1  James    SOS316783-Enhancement on MBOL retrieval (james01)*/
 /* 2016-09-30 1.2  Ung      Performance tuning                               */
 /* 2018-10-25 1.3  TungGH   Performance                                      */
+/* 2024-05-21 1.4  Dennis   FCR-336 Check Digit                              */
 /*****************************************************************************/
 
 CREATE PROC [RDT].[rdtfnc_Scan_Pallet_To_Door](
@@ -64,6 +65,7 @@ DECLARE
    @cSQLParam              NVARCHAR( 1000), 
    @nCBOLKey               INT,
    @nStorer_Cnt            INT,
+   @cLOCCheckDigitSP       NVARCHAR( 20),
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -444,6 +446,17 @@ BEGIN
          SET @nErrNo = 54508
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Door req
          GOTO Step_2_Fail
+      END
+
+      SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)
+      IF @cLOCCheckDigitSP = 1
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+            @cActDoor    OUTPUT,
+            @nErrNo      OUTPUT,
+            @cErrMsg     OUTPUT
+         IF @nErrNo <> 0
+            GOTO Step_2_Fail
       END
 
       IF @cActDoor <> @cDoor
