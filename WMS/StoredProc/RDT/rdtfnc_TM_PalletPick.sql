@@ -25,6 +25,8 @@ GO
 /* 2021-02-11 1.8  LZG        INC1427876 - Reset @cSKUDesc variable (ZG01)    */   
 /* 2021-03-08 1.9  Chermaine  WMS-16385 - Add storerConfig to lookup SKU(cc01)*/
 /* 2024-04-10 2.0  Deenis     UWP-16910 - Check Digit                         */
+/* 2024-05-27 2.0  NLT03      FCR-229 - Increase the max length of            */
+/*                            qty text box to 7 digit                         */
 /******************************************************************************/    
     
 CREATE PROC [RDT].[rdtfnc_TM_PalletPick](    
@@ -49,8 +51,8 @@ DECLARE
    @cReasonCode         NVARCHAR(10),    
    @cUCC                NVARCHAR(20),    
    @cSKU                NVARCHAR(20),    
-   @cPQTY               NVARCHAR(5),    
-   @cMQTY               NVARCHAR(5),    
+   @cPQTY               NVARCHAR(7),    
+   @cMQTY               NVARCHAR(7),    
    @cSQL                NVARCHAR(1000),    
    @cSQLParam           NVARCHAR(1000),    
    @cExtendedScreenSP   NVARCHAR( 20),
@@ -639,9 +641,9 @@ BEGIN
       SET @cOutField07 = @cLottable02    
       SET @cOutField08 = @cLottable03    
       SET @cOutField09 = rdt.rdtFormatDate( @dLottable04)    
-      SET @cOutField10 = '1:' + CAST( @nPUOM_Div AS NCHAR( 6)) + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc    
-      SET @cOutField11 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY_PK AS NVARCHAR( 5)) END    
-      SET @cOutField12 = CAST( @nMQTY_PK AS NVARCHAR( 5))    
+      SET @cOutField10 = '1:' + CAST( @nPUOM_Div AS NCHAR( 7)) + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc    
+      SET @cOutField11 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY_PK AS NVARCHAR( 7)) END    
+      SET @cOutField12 = CAST( @nMQTY_PK AS NVARCHAR( 7))
     
       SET @nScn = @nScn + 1    
       SET @nStep = @nStep + 1    
@@ -916,11 +918,11 @@ BEGIN
          SET @cOutField08 = '' -- SKU    
          SET @cOutField09 = ''    
          SET @cOutField10 = '' -- ExtendedInfo    
-         SET @cOutField11 = '1:' + CAST( @nPUOM_Div AS NCHAR( 6)) + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc    
-         SET @cOutField12 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY_PK AS NVARCHAR( 5)) END    
-         SET @cOutField13 = CAST( @nMQTY_PK AS NVARCHAR( 5))    
-         SET @cOutField14 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 5)) END -- PQTY    
-         SET @cOutField15 = CAST( @nMQTY AS NVARCHAR( 5)) -- MQTY    
+         SET @cOutField11 = '1:' + CAST( @nPUOM_Div AS NCHAR( 7)) + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc    
+         SET @cOutField12 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY_PK AS NVARCHAR( 7)) END    
+         SET @cOutField13 = CAST( @nMQTY_PK AS NVARCHAR( 7))    
+         SET @cOutField14 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 7)) END -- PQTY    
+         SET @cOutField15 = CAST( @nMQTY AS NVARCHAR( 7)) -- MQTY    
     
          -- Cursor position    
          IF @cFieldAttr08 = '' EXEC rdt.rdtSetFocusField @nMobile, 8 -- SKU    
@@ -1253,8 +1255,8 @@ BEGIN
                SET @nMQTY = @nMQTY + 1    
          END    
       END    
-      SET @cOutField14 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 5)) END -- PQTY    
-      SET @cOutField15 = CAST( @nMQTY AS NVARCHAR( 5)) -- MQTY    
+      SET @cOutField14 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 7)) END -- PQTY    
+      SET @cOutField15 = CAST( @nMQTY AS NVARCHAR( 7)) -- MQTY    
     
       -- SKU scanned, PK QTY is default and QTY field disable, remain in current screen    
       IF @cLabelNo <> '' AND NOT (@cDefaultQTY = '1' AND CHARINDEX( 'Q', @cEnableField) = 0)    
@@ -1344,9 +1346,9 @@ BEGIN
       SET @cOutField07 = @cLottable02    
       SET @cOutField08 = @cLottable03    
       SET @cOutField09 = rdt.rdtFormatDate( @dLottable04)    
-      SET @cOutField10 = '1:' + CAST( @nPUOM_Div AS NCHAR( 6)) + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc    
-      SET @cOutField11 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY_PK AS NVARCHAR( 5)) END    
-      SET @cOutField12 = CAST( @nMQTY_PK AS NVARCHAR( 5))    
+      SET @cOutField10 = '1:' + CAST( @nPUOM_Div AS NCHAR( 7)) + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc    
+      SET @cOutField11 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY_PK AS NVARCHAR( 7)) END    
+      SET @cOutField12 = CAST( @nMQTY_PK AS NVARCHAR( 7))
     
       -- Go to FromID screen    
       SET @nScn = @nScn - 1    
@@ -1572,11 +1574,11 @@ BEGIN
          SET @cOutField08 = '' -- SKU    
          SET @cOutField09 = ''    
          SET @cOutField10 = @cExtendedInfo1    
-         SET @cOutField11 = '1:' + CAST( @nPUOM_Div AS NCHAR( 6)) + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc    
-         SET @cOutField12 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY_PK AS NVARCHAR( 5)) END    
-         SET @cOutField13 = CAST( @nMQTY_PK AS NVARCHAR( 5))    
-         SET @cOutField14 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 5)) END    
-         SET @cOutField15 = CAST( @nMQTY AS NVARCHAR( 5))    
+         SET @cOutField11 = '1:' + CAST( @nPUOM_Div AS NCHAR( 7)) + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc    
+         SET @cOutField12 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY_PK AS NVARCHAR( 7)) END    
+         SET @cOutField13 = CAST( @nMQTY_PK AS NVARCHAR( 7))
+         SET @cOutField14 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 7)) END    
+         SET @cOutField15 = CAST( @nMQTY AS NVARCHAR( 7))
     
          -- Cursor position    
          IF @cFieldAttr08 = '' EXEC rdt.rdtSetFocusField @nMobile, 8 -- SKU    
@@ -1600,9 +1602,9 @@ BEGIN
          SET @cOutField07 = @cLottable02    
          SET @cOutField08 = @cLottable03    
          SET @cOutField09 = rdt.rdtFormatDate( @dLottable04)    
-         SET @cOutField10 = '1:' + CAST( @nPUOM_Div AS NCHAR( 6)) + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc    
-         SET @cOutField11 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY_PK AS NVARCHAR( 5)) END    
-         SET @cOutField12 = CAST( @nMQTY_PK AS NVARCHAR( 5))    
+         SET @cOutField10 = '1:' + CAST( @nPUOM_Div AS NCHAR( 7)) + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc    
+         SET @cOutField11 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY_PK AS NVARCHAR( 7)) END    
+         SET @cOutField12 = CAST( @nMQTY_PK AS NVARCHAR( 7))
     
          SET @nScn = @nScn - 2    
          SET @nStep = @nStep - 2    
@@ -2032,11 +2034,11 @@ BEGIN
          SET @cOutField08 = '' -- SKU    
          SET @cOutField09 = ''    
          SET @cOutField10 = @cExtendedInfo1    
-         SET @cOutField11 = '1:' + CAST( @nPUOM_Div AS NCHAR( 6)) + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc    
-         SET @cOutField12 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY_PK AS NVARCHAR( 5)) END    
-         SET @cOutField13 = CAST( @nMQTY_PK AS NVARCHAR( 5))    
-         SET @cOutField14 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 5)) END    
-         SET @cOutField15 = CAST( @nMQTY AS NVARCHAR( 5))    
+         SET @cOutField11 = '1:' + CAST( @nPUOM_Div AS NCHAR( 7)) + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc
+         SET @cOutField12 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY_PK AS NVARCHAR( 7)) END
+         SET @cOutField13 = CAST( @nMQTY_PK AS NVARCHAR( 7))
+         SET @cOutField14 = CASE WHEN @cPUOM_Desc = '' THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 7)) END
+         SET @cOutField15 = CAST( @nMQTY AS NVARCHAR( 7))
     
          -- Cursor position    
          IF @cFieldAttr08 = '' EXEC rdt.rdtSetFocusField @nMobile, 8 -- SKU    

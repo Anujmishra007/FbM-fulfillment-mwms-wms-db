@@ -34,7 +34,7 @@ EXECUTE rdt.rdtAddScn 3701, 'ENG',
    ,@cLine10 = '3 %18d08'
    ,@cLine11 = '4 %10d09'
    ,@cLine12 = '%20d10'
-   ,@cLine13 = 'PK  QTY: %05d11 %05d12'
+   ,@cLine13 = 'PKQTY%07d11 %07d12'
    ,@cLine14 = '%e'
    ,@cWebGroup = '{"1":["1","2","3"],"2":["4","5","6","7"],"3":["8","9","10","11"],"4":["12"],"5":["13"]}'
    ,@nFunc = 1770
@@ -52,8 +52,8 @@ EXECUTE rdt.rdtAddScn 3702, 'ENG',
    ,@cLine09 = '%20d10'
    ,@cLine10 = '%32i08'
    ,@cLine11 = '%20d11'
-   ,@cLine12 = 'PK  QTY: %05d12 %05d13'
-   ,@cLine13 = 'ACT QTY: %05i14^DT:INT %05i15^DT:INT'
+   ,@cLine12 = 'PKQTY%07d12 %07d13'
+   ,@cLine13 = 'QTY%07i14^DT:INT %07i15^DT:INT'
    ,@cLine14 = '%e'
    ,@cWebGroup = '{"1":["1","2","3","4"],"2":["5","6","7","8"],"3":["9","10"],"4":["11","12","13"]}'
    ,@nFunc = 1770

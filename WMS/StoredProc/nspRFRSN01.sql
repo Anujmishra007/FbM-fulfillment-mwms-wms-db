@@ -40,6 +40,9 @@ GO
 /*                               Generation (ChewKP04)                  */
 /* 25-07-2012   1.4   ChewKP     Module Name for CCSV Task (ChewKP05)   */
 /* 25-03-2013   1.5   Ung        SOS256104 Add ContProcNotUpdTaskStatus */
+/* 28-05-2024   1.6   NLT013     FCR-229 - Increase the max length of   */
+/*                               qty text box to 7 digit, and handle    */
+/*                               the exception                          */
 /************************************************************************/
 
 CREATE PROC    [dbo].[nspRFRSN01]
@@ -356,7 +359,7 @@ SET @c_NewLineChar =  master.dbo.fnc_GetCharASCII(13) + master.dbo.fnc_GetCharAS
            SET @c_AlertMessage = RTRIM(@c_AlertMessage) + ' LoadKey: ' + @c_Loadkey  + @c_NewLineChar -- (ChewKP01)
          END
 
-         SET @c_AlertMessage = RTRIM(@c_AlertMessage) + ' QTY: ' + CAST(@n_qty AS NVARCHAR( 5))  + @c_NewLineChar -- (ChewKP01)
+         SET @c_AlertMessage = RTRIM(@c_AlertMessage) + ' QTY: ' + CAST(@n_qty AS NVARCHAR( 7))  + @c_NewLineChar -- (ChewKP01)
          SET @c_AlertMessage = RTRIM(@c_AlertMessage) + ' DateTime: ' + CONVERT(NVARCHAR,GETDATE(), 121)  + @c_NewLineChar -- (ChewKP01)      
 
          SELECT @c_ModuleName = CASE WHEN @c_TaskType = 'PA' THEN 'TMPA'
@@ -385,7 +388,7 @@ SET @c_NewLineChar =  master.dbo.fnc_GetCharASCII(13) + master.dbo.fnc_GetCharAS
             , @c_AlertMessage     = @c_AlertMessage
             , @n_Severity         = '5'
             , @b_success          = @b_success     OUTPUT
-            , @n_err              = @n_Err         OUTPUT
+            , @n_err              = @n_Err         --OUTPUT Commented by NLT013, it overrides the old error no, if the error was not 0, but no error happens while executing this SP, error no will be updated as 0
             , @c_errmsg           = @c_Errmsg      OUTPUT
             , @c_Activity	       = 'ReasonScn'
             , @c_Storerkey	       = @c_StorerKey
@@ -402,6 +405,8 @@ SET @c_NewLineChar =  master.dbo.fnc_GetCharASCII(13) + master.dbo.fnc_GetCharAS
          IF NOT @b_Success = 1
          BEGIN
             SELECT @n_continue = 3
+            SELECT @n_err = 68685 
+            SELECT @c_errmsg= CONVERT(NVARCHAR(5),@n_err)+ ' Log alter failed(nspRFRSN01)'
          END
          -- (Vicky02) - End
 
@@ -420,12 +425,14 @@ SET @c_NewLineChar =  master.dbo.fnc_GetCharASCII(13) + master.dbo.fnc_GetCharAS
                   , 10
                   , @c_TaskDetailKeyCC OUTPUT
                   , @b_success OUTPUT
-                  , @n_Err OUTPUT
+                  , @n_Err     --OUTPUT Commented by NLT013, it overrides the old error no, if the error was not 0, but no error happens while executing this SP, error no will be updated as 0
                   , @c_Errmsg OUTPUT
 
                   IF NOT @b_success = 1
                   BEGIN
                      SELECT @n_continue = 3
+                     SELECT @n_err = 68686
+                     SELECT @c_errmsg= CONVERT(NVARCHAR(5),@n_err)+ ' GetKeyFailed(nspRFRSN01)'
                   END
 
                   EXECUTE nspg_getkey
@@ -433,12 +440,14 @@ SET @c_NewLineChar =  master.dbo.fnc_GetCharASCII(13) + master.dbo.fnc_GetCharAS
       	         , 10
       	         , @c_CCKey OUTPUT
       	         , @b_success OUTPUT
-      	         , @n_Err OUTPUT
+      	         , @n_Err    --OUTPUT Commented by NLT013, it overrides the old error no, if the error was not 0, but no error happens while executing this SP, error no will be updated as 0
       	         , @c_Errmsg OUTPUT
 
                   IF NOT @b_success = 1
                   BEGIN
                      SELECT @n_continue = 3
+                     SELECT @n_err = 68687
+                     SELECT @c_errmsg= CONVERT(NVARCHAR(5),@n_err)+ ' GetKeyFailed(nspRFRSN01)'
                   END
 
                   --BEGIN TRAN
