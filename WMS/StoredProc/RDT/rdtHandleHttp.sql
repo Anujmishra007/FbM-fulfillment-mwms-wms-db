@@ -15,6 +15,7 @@ GO
 /* Date        Rev  Author   Purposes                                   */
 /* 20-Sep-2023 1.0  JLC042   Created base on rdtHandle ver 1.28         */
 /* 07-Nov-2023 1.1  JLC042   Fix Message Screen issue UWP-10463         */
+/* 24-May-2024 1.2  NLT013   Add session id to get unique mobile        */
 /************************************************************************/
 CREATE OR ALTER PROC  [RDT].[rdtHandleHttp]
   @InMobile      INT ,
@@ -46,7 +47,8 @@ BEGIN
       @nMsgQStatus NVARCHAR(1), -- SOS90411
       @cStoredProcName NVARCHAR( 1024),
       @cClientIP   NVARCHAR( 15),
-      @cUserName   NVARCHAR(18)
+      @cUserName   NVARCHAR(18),
+      @cSessionID  NVARCHAR(60)
 
    SET @dStartTime = GETDATE()
    SET @nTimeTaken1 = 0
@@ -74,7 +76,8 @@ BEGIN
       @nStep       OUTPUT,
       @nMsgQueueNo OUTPUT, -- SOS90411
       @nErrNo      OUTPUT,
-      @cErrMsg     OUTPUT
+      @cErrMsg     OUTPUT,
+      @cSessionID  OUTPUT
 
    -- Remember the in coming function, screen, step. Use in keep track of performance later
    SET @nStartFunc = @nFunction
@@ -106,7 +109,7 @@ BEGIN
          BEGIN
             IF @nFunction = 0  -- login screen
             BEGIN
-               EXEC RDT.rdtLogin @InMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nFunction OUTPUT, @cClientIP
+               EXEC RDT.rdtLogin @InMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nFunction OUTPUT, @cClientIP, @cSessionID
                SET @nErrNo = @@ERROR
                IF @nErrNo <> 0
                   GOTO EXIT_PROCESS_MENU
@@ -120,7 +123,7 @@ BEGIN
             END
             ELSE IF @nFunction = 2  -- Continue Screen (yeekung01)
             BEGIN
-               EXEC rdt.RDTResumeSession @InMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nFunction OUTPUT, @cClientIP
+               EXEC rdt.RDTResumeSession @InMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nFunction OUTPUT, @cClientIP, @cSessionID
                SET @nErrNo = @@ERROR
                IF @nErrNo <> 0
                   GOTO EXIT_PROCESS_MENU
@@ -162,8 +165,8 @@ BEGIN
 
                   -- Insert logout data
                   SELECT @cUserName = UserName FROM rdt.rdtMobRec WITH (NOLOCK) WHERE Mobile = @InMobile
-                  INSERT INTO RDT.rdtLoginLog (UserName, Mobile, ClientIP, Remarks)
-                  VALUES (@cUsername, @InMobile, @cClientIP, 'Logout')
+                  INSERT INTO RDT.rdtLoginLog (UserName, Mobile, ClientIP, Remarks, SessionID)
+                  VALUES (@cUsername, @InMobile, @cClientIP, 'Logout', @cSessionID)
                   IF @@ERROR <> 0
                      GOTO EXIT_PROCESS_MENU
                END
@@ -189,8 +192,8 @@ BEGIN
 
                   -- Insert logout data
                   SELECT @cUserName = UserName FROM rdt.rdtMobRec WHERE Mobile = @InMobile
-                  INSERT INTO RDT.rdtLoginLog (UserName, Mobile, ClientIP, Remarks)
-                  VALUES (@cUsername, @InMobile, @cClientIP, 'Logout')
+                  INSERT INTO RDT.rdtLoginLog (UserName, Mobile, ClientIP, Remarks, SessionID)
+                  VALUES (@cUsername, @InMobile, @cClientIP, 'Logout', @cSessionID)
                   IF @@ERROR <> 0
                      GOTO EXIT_PROCESS_MENU
                END

@@ -45,6 +45,7 @@ GO
 /* 2018-02-05   James   2.5   WMS3893-Add DefaultDeviceID (james02)     */
 /* 2019-04-18   YeeKung 2.6   Fix handheld incorrect logout(yeekung01)  */
 /* 2021-01-21   James   2.7   WMS-15781 Add AllowResumeSession (james03)*/
+/* 2024-05-24   NLT013  2.8   Add session id to get unique mobile       */
 /************************************************************************/
 
 CREATE PROC [RDT].[rdtLogin] (
@@ -52,7 +53,8 @@ CREATE PROC [RDT].[rdtLogin] (
    @nErrNo     int  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT,
    @nFunction  int OUTPUT,
-   @cClientIP  NVARCHAR( 15)
+   @cClientIP  NVARCHAR( 15),
+   @cSessionID NVARCHAR(60) = ''
 )
 AS
    SET NOCOUNT ON
@@ -205,8 +207,8 @@ AS
       WHERE Username =  @cUsrname
 
       -- Insert login record
-      INSERT INTO RDT.rdtLoginLog (UserName, Mobile, ClientIP, Remarks)
-      VALUES (@cUsrname, @nMobile, @cClientIP, 'Login')
+      INSERT INTO RDT.rdtLoginLog (UserName, Mobile, ClientIP, Remarks, SessionID)
+      VALUES (@cUsrname, @nMobile, @cClientIP, 'Login', @cSessionID)
 
       COMMIT TRAN
    END

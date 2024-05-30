@@ -28,6 +28,7 @@ GO
 /* 22-Nov-2007 1.3  Shong    SOS90411 Display error in another screen   */  
 /* 07-Dec-2011 1.4  TLTING   Reset Mobile# after 9000                   */  
 /* 02-Oct-2015 1.5  Ung      Performance tuning for CN Nov 11           */
+/* 24-May-2024 1.6  NLT013   Add session id to get unique mobile        */
 /************************************************************************/  
   
 CREATE PROC [RDT].[rdtSetMobile] (  
@@ -38,7 +39,8 @@ CREATE PROC [RDT].[rdtSetMobile] (
    @nStep       int  OUTPUT,  
    @nMsgQueueNo int  OUTPUT,   
    @nErrNo      int  OUTPUT,  
-   @cErrMsg     NVARCHAR(1024) OUTPUT  
+   @cErrMsg     NVARCHAR(1024) OUTPUT,
+   @cSessionID  NVARCHAR(60) = '' OUTPUT
 )  
 AS  
    SET NOCOUNT ON   -- SQL 2005 Standard  
@@ -50,9 +52,58 @@ AS
            @cLang     NVARCHAR(3),  
            @nMenu     int,  
            @CheckMobile int,  
-           @nTMobile    INT  
+           @nTMobile    INT,
+           @nStartIndex INT,
+           @nLength     INT,
+           @nLoginRemarks   NVARCHAR(40),
+           @cLastSessionID    NVARCHAR(60),
+           @dLoginDate        DATETIME,
+           @cClientIP         NVARCHAR( 15)
+
+   SET @nStartIndex = CHARINDEX('deviceID="', @cInMessage)
+   IF @nStartIndex > 0
+   BEGIN
+      SET @nStartIndex = @nStartIndex + LEN('deviceID="')
+      SET @nLength = CHARINDEX('"', SUBSTRING(@cInMessage, @nStartIndex, LEN(@cInMessage)))
+      SET @cSessionID = SUBSTRING(@cInMessage, @nStartIndex, ABS(@nLength - 1))
+   END
+
+   SET @cClientIP = ''  
+   SET @nStartIndex = CHARINDEX( 'clientIP="', @cInMessage)  
+   IF @nStartIndex > 0  
+   BEGIN  
+      SET @nStartIndex = @nStartIndex + LEN( 'clientIP="')  
+      SET @nLength = CHARINDEX( '"', SUBSTRING( @cInMessage, @nStartIndex, LEN( @cInMessage)))  
+      SET @cClientIP = SUBSTRING( @cInMessage, @nStartIndex, ABS( @nLength - 1))  
+   END  
   
    SET @CheckMobile = 0  
+
+   IF @cSessionID IS NOT NULL AND TRIM(@cSessionID) <> ''
+   BEGIN
+      SELECT TOP 1
+         @nLoginRemarks = ISNULL(Remarks, ''),
+         @cLastSessionID = ISNULL(SessionID, ''),
+         @dLoginDate = AddDate
+      FROM RDT.RDTLoginLog WITH(NOLOCK )
+      WHERE Mobile = @nMobile
+         AND ISNULL(Remarks, '') NOT LIKE 'Fail to Login%'
+      ORDER BY AddDate DESC
+
+      --the mobile is in use and used by different device, and the device kept in live less than 24 hours
+      IF @nLoginRemarks LIKE 'Login%' AND @cLastSessionID <> '' AND @cLastSessionID <> @cSessionID AND DATEDIFF(HH, @dLoginDate, GETDATE()) <= 24
+      BEGIN
+         DECLARE @cUserName NVARCHAR(18)
+         SELECT @cUserName = UserName
+         FROM RDT.RDTMOBREC WITH(NOLOCK)
+         WHERE Mobile = @nMobile
+
+         INSERT INTO RDT.rdtLoginLog (UserName, Mobile, ClientIP, Remarks, SessionID)
+         VALUES ('Mobile used by ' + ISNULL(@cUserName, '') + ' - ' + @cLastSessionID, @nMobile, ISNULL(@cClientIP, ''), 'Fail to Login', @cSessionID)
+
+         SET @nMobile = 0
+      END
+   END
   
    SELECT @nMobile = ISNULL(Mobile, 0),  
           @nFunction = Func,  

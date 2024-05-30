@@ -19,13 +19,15 @@ GO
 /*                                                                            */                    
 /* Date       Rev  Author   Purposes                                          */                    
 /* 2019-02-15 1.0  YeeKung  Created                                           */                    
+/* 2024-05-24 1.1  NLT013   Add session id to get unique mobile               */                    
 /******************************************************************************/                    
 CREATE PROC [RDT].[RDTResumeSession] (                   
    @nMobile    INT,                    
    @nErrNo     INT  OUTPUT,                    
    @cErrMsg    NVARCHAR(20) OUTPUT, -- screen limitation, 20 char max             
    @nFunction  INT     OUTPUT,
-   @cClientIP  NVARCHAR( 15)           
+   @cClientIP  NVARCHAR( 15),
+   @cSessionID NVARCHAR(60) = ''
 ) AS          
         
    SET NOCOUNT ON          
@@ -80,8 +82,8 @@ CREATE PROC [RDT].[RDTResumeSession] (
       SET @cRemarks = 'Logout-UserRecover (MobNo:'+CAST(@cMobile02 AS nvarchar(40))+')'
 
       -- Insert login record  
-      INSERT INTO RDT.rdtLoginLog (UserName, Mobile, ClientIP, Remarks)  
-      VALUES (@cUsrname, @cMobile01, @cClientIP,@cRemarks)         
+      INSERT INTO RDT.rdtLoginLog (UserName, Mobile, ClientIP, Remarks, SessionID)  
+      VALUES (@cUsrname, @cMobile01, @cClientIP,@cRemarks, @cSessionID)
           
       UPDATE RDT.RDTMOBREC WITH (ROWLOCK)       
       SET mobile = (CASE WHEN mobile = @cMobile01 THEN @cMobile02 ELSE @cMobile01 END),        
@@ -106,8 +108,8 @@ CREATE PROC [RDT].[RDTResumeSession] (
       SET @cRemarks = 'Logout-UserReset (MobNo:'+CAST(@cMobile02 AS nvarchar(40))+')'
 
       -- Insert login record  
-      INSERT INTO RDT.rdtLoginLog (UserName, Mobile, ClientIP, Remarks)  
-      VALUES (@cUsrname, @cMobile01, @cClientIP, @cRemarks)            
+      INSERT INTO RDT.rdtLoginLog (UserName, Mobile, ClientIP, Remarks, SessionID)  
+      VALUES (@cUsrname, @cMobile01, @cClientIP, @cRemarks, @cSessionID)            
           
       UPDATE RDT.RDTMOBREC WITH (ROWLOCK)       
       SET mobile = (CASE WHEN mobile = @cMobile01 THEN @cMobile02 ELSE @cMobile01 END),        
