@@ -2,7 +2,6 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-
 /************************************************************************/
 /* Store procedure: rdt_TM_CycleCount_UCC_ConfirmTask                   */
 /* Copyright      : Maersk                                              */
@@ -21,6 +20,8 @@ GO
 /* 09-02-2020 1.3  YeeKung  Fix dateformat (yeekung01)                  */
 /* 04-08-2023 1.4  James    WMS-23177 Stamp EditWho & EditDate when     */
 /*                          confirm ucc count (james03)                 */
+/* 09-11-2023 1.5  James    WMS-23249 Add CCDetailto withdraw when ucc  */
+/*                          found in another loc (jamess04)             */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_TM_CycleCount_UCC_ConfirmTask] (
@@ -44,8 +45,6 @@ CREATE OR ALTER PROC [RDT].[rdt_TM_CycleCount_UCC_ConfirmTask] (
     ,@cLangCode        NVARCHAR(3)
     ,@nErrNo           INT         OUTPUT
     ,@cErrMsg          NVARCHAR(20) OUTPUT -- screen limitation, 20 char max
-
-
  )
 AS
 BEGIN
@@ -63,6 +62,14 @@ BEGIN
           , @cCCDetailKEy          NVARCHAR(10)
           , @cCCSheetNo            NVARCHAR(10)
           , @cNewCCDetailKey       NVARCHAR(10)
+          , @cWdLottable01         NVARCHAR( 18)
+          , @cWdLottable02         NVARCHAR( 18)
+          , @cWdLottable03         NVARCHAR( 18)
+          , @dWdLottable04         DATETIME
+          , @dWdLottable05         DATETIME
+          , @cWdLoc                NVARCHAR( 10)
+          , @cWdId                 NVARCHAR( 18)
+          , @cWdLot                NVARCHAR( 10)
 
     SET @bDebug = 0
 
@@ -94,7 +101,6 @@ BEGIN
        SET @dLottable04 = rdt.rdtconverttodate(@dLottable04)--CONVERT( DATETIME, CONVERT( NVARCHAR( 10), @dLottable04, 120), 120)  (yeekung01)
     IF @dLottable05 IS NOT NULL
        SET @dLottable05 = rdt.rdtconverttodate(@dLottable05)--CONVERT( DATETIME, CONVERT( NVARCHAR( 10), @dLottable05, 120), 120)  (yeekung01)
-
 
     IF EXISTS (SELECT 1 FROM dbo.CCDetail WITH (NOLOCK)
                 WHERE CCKey      = @cCCKey
@@ -131,13 +137,10 @@ BEGIN
        AND CCSheetNo = @cTaskDetailKey
 
        OPEN CursorConfirmCC
-
        FETCH NEXT FROM CursorConfirmCC INTO @cCCDetailKey, @cCCSheetNo, @nSystemQty
 
        WHILE @@FETCH_STATUS <> -1
        BEGIN
-
-
          -- FOR UCC Split CCDetail When Receive Different UCC
          IF @nSystemQty = @nQty
          BEGIN
@@ -267,8 +270,8 @@ BEGIN
     BEGIN
 
        UPDATE dbo.SKU
-       SET LastCycleCount = GETDATE(), 
-           EditWho = @cUserName, 
+       SET LastCycleCount = GETDATE(),
+           EditWho = @cUserName,
            EditDate = GETDATE()
        WHERE StorerKey = @cStorerKey
        AND SKU = @cSKU
@@ -279,14 +282,12 @@ BEGIN
              SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') --'UpdSKUFail'
              GOTO RollBackTran
        END
-
-
     END
     ELSE IF @cPickMethod = 'LOC'
     BEGIN
        UPDATE dbo.LOC
-       SET LastCycleCount = GETDATE(), 
-           EditWho = @cUserName, 
+       SET LastCycleCount = GETDATE(),
+           EditWho = @cUserName,
            EditDate = GETDATE()
        WHERE Loc = @cLoc
 
@@ -299,8 +300,8 @@ BEGIN
 
        -- count by loc update sku.lastcyclecount too (james02)
        UPDATE dbo.SKU
-       SET LastCycleCount = GETDATE(), 
-           EditWho = @cUserName, 
+       SET LastCycleCount = GETDATE(),
+           EditWho = @cUserName,
            EditDate = GETDATE()
        WHERE StorerKey = @cStorerKey
        AND SKU = @cSKU
@@ -313,6 +314,54 @@ BEGIN
        END
     END
     GOTO Quit
+
+    -- (james04)
+    -- If ucc exists in another loc then create a ccdetail with 0 qty
+    -- to let system withdraw it from the that loc
+    IF EXISTS ( SELECT 1
+                FROM dbo.UCC WITH (NOLOCK)
+                WHERE Storerkey = @cStorerKey
+                AND   UCCNo = @cUCC
+                AND   Loc <> @cLOC)
+    BEGIN
+       SELECT
+         @cWdLot = Lot,
+         @cWdLoc = Loc,
+         @cWdId = Id
+       FROM dbo.UCC WITH (NOLOCK)
+       WHERE Storerkey = @cStorerKey
+       AND   UCCNo = @cUCC
+
+       SELECT
+         @cWdLottable01 = Lottable01,
+         @cWdLottable02 = Lottable02,
+         @cWdLottable03 = Lottable03,
+         @dWdLottable04 = Lottable04,
+         @dWdLottable05 = Lottable05
+       FROM dbo.LOTATTRIBUTE WITH (NOLOCK)
+       WHERE Lot = @cWdLot
+
+       EXECUTE nspg_getkey
+       'CCDetailKey'
+       , 10
+       , @cNewCCDetailKey OUTPUT
+       , @b_success OUTPUT
+       , @nErrNo OUTPUT
+       , @cErrMsg OUTPUT
+
+       INSERT INTO dbo.CCDetail (
+               cckey, ccdetailkey, ccsheetno, StorerKey, sku, lot, loc, id, SystemQty, qty, Status, RefNo,
+               Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, AddWho, AddDate)
+       VALUES (@cCCKey, @cNewCCDetailKey, @cTaskDetailKey, @cStorerKey, @cSKU, @cWdLot, @cWdLoc, @cWdId, 0, 0 , '4', @cUCC,
+               @cWdLottable01, @cWdLottable02, @cWdLottable03, @dWdLottable04, @dWdLottable05, @cUserName, GETDATE())
+
+       IF @@ERROR <> 0
+       BEGIN
+         SET @nErrNo = 74859
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') --'InsCCDetFail'
+         GOTO RollBackTran
+       END
+    END
 
     RollBackTran:
     ROLLBACK TRAN TM_CC_UCC_ConfirmTask
