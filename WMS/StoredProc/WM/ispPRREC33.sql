@@ -33,6 +33,13 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
+   DECLARE
+      @c_Lottable12Value      NVARCHAR(30),
+      @c_Storerkey            NVARCHAR(30),
+      @dt_ExpirationDate      NVARCHAR(30),
+      @c_DamagedCode          NVARCHAR(30),
+      @c_ExpiredCode          NVARCHAR(30)
+
 SELECT @c_Lottable12Value = Lottable12, @c_Storerkey = StorerKey, @dt_ExpirationDate = Lottable04
                     FROM RECEIPTDETAIL WITH (NOLOCK)
                     WHERE ReceiptKey = c_Receiptkey AND
