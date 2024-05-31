@@ -27,3 +27,4 @@ execute rdt.rdtAddMsg 90773, 10, '90773^UpdTaskdetFail', 'us_english', 1770
 execute rdt.rdtAddMsg 90774, 10, '90774^UpdTaskdetFail', 'us_english', 1770
 execute rdt.rdtAddMsg 90775, 10, '90775^DelFPKLogFail ', 'us_english', 1770
 execute rdt.rdtAddMsg 90776, 10, '90776^Invalid LOC   ', 'us_english', 1770
+execute rdt.rdtAddMsg 90777, 10, '90777^nspRFRSN01Fail', 'us_english', 1770

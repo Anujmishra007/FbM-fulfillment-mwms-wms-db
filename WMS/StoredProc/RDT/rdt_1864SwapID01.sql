@@ -10,9 +10,10 @@ GO
 /*                                                                            */
 /* Modifications log:                                                         */
 /*                                                                            */
-/* Date       Rev  Author   Purposes                                          */
-/* 2023-08-07 1.0  Ung      WMS-23032 Created                                 */
-/* 2024-05-03 1.1  Ung      WMS-23592 Add lottable                            */
+/* Date       Rev    Author   Purposes                                        */
+/* 2023-08-07 1.0    Ung      WMS-23032 Created                               */
+/* 2024-05-03 1.1    Ung      WMS-23592 Add lottable                          */
+/* 2024-05-13 1.1.1  JCH507   UWP-19424 Error when SWAP ID enaabled           */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1864SwapID01] (
@@ -187,7 +188,7 @@ BEGIN
             LA.Lottable11, LA.Lottable12, LA.Lottable13, LA.Lottable14, LA.Lottable15
          FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
             JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey) 
-            JOIN dbo.LOC WITH (NOLOCK) ON (PD.LOC = PD.LOC) 
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) 
             JOIN dbo.LOTAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) 
          WHERE RKL.PickSlipNo = @cPickSlipNo 
             AND PD.LOC = @cLOC 

@@ -187,6 +187,8 @@ SELECT
    @nCurrentRec         = V_Integer2,
    @nMultiStorer        = V_Integer3,   -- (james25)
 
+   @cLOCCheckDigitSP    = C_String1,
+
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,
@@ -264,6 +266,7 @@ BEGIN
    SET @cSuggestLocSP = rdt.rdtGetConfig( @nFunc, 'SuggestLocSP', @cStorerKey)
    IF @cSuggestLocSP = '0'
        SET @cSuggestLocSP = ''
+   SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)
 
    SET @nMultiStorer = 0
    IF EXISTS (SELECT 1 FROM dbo.StorerGroup WITH (NOLOCK) WHERE StorerGroup = @cStorerKey)
@@ -580,8 +583,7 @@ BEGIN
          GOTO Step_2_Fail
       END
       SET @cCheckDigitLOC = @cInField02
-      SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)
-      IF @cLOCCheckDigitSP = 1
+      IF @cLOCCheckDigitSP = '1'
       BEGIN
          EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
             @cCheckDigitLOC    OUTPUT,
@@ -1194,8 +1196,7 @@ BEGIN
       END
 
       SET @cCheckDigitLOC = @cInField11
-      SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)
-      IF @cLOCCheckDigitSP = 1
+      IF @cLOCCheckDigitSP = '1'
       BEGIN
          EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
             @cCheckDigitLOC    OUTPUT,
@@ -1517,6 +1518,8 @@ BEGIN
       V_Integer1  = @nTotalRec,
       V_Integer2  = @nCurrentRec,
       V_Integer3  = @nMultiStorer,   -- (james25)
+
+      C_String1   = @cLOCCheckDigitSP,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,

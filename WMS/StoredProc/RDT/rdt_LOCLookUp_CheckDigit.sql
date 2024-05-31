@@ -38,18 +38,26 @@ AS
    @cPalletTypeInUse     NVARCHAR( 5),
    @nCheckDigit          INT,
    @cActLoc              NVARCHAR( 20),
-   @cPalletTypeSave      NVARCHAR( 10)
+   @cPalletTypeSave      NVARCHAR( 10),
+   @cCheckDigitLOC       NVARCHAR( 10),
+   @cOriginalLOC         NVARCHAR( 10)
 
    SELECT
       @nCheckDigit = CheckDigitLengthForLocation
    FROM dbo.FACILITY WITH (NOLOCK)
    WHERE facility = @cFacility
 
+   SET @cCheckDigitLOC =  RIGHT(RTRIM(@cLOC), @nCheckDigit)
+   SET @cOriginalLOC = LEFT(RTRIM(@cLOC), CASE WHEN LEN(@cLOC)-@nCheckDigit > 0 THEN LEN(@cLOC)-@nCheckDigit ELSE 1 END)
+
    IF @nCheckDigit > 0 
    BEGIN
       SELECT @cActLoc = loc 
       FROM dbo.LOC WITH (NOLOCK)
-      WHERE Facility = @cFacility AND CONCAT(LOC,LOCCHECKDIGIT) = @cLOC
+      WHERE Facility = @cFacility 
+      AND LOC = @cOriginalLOC 
+      AND LOCCHECKDIGIT = @cCheckDigitLOC
+
       SET @nRowCount = @@ROWCOUNT
       IF @nRowCount > 1
       BEGIN

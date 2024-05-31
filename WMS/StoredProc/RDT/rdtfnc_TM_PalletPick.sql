@@ -25,8 +25,9 @@ GO
 /* 2021-02-11 1.8  LZG        INC1427876 - Reset @cSKUDesc variable (ZG01)    */   
 /* 2021-03-08 1.9  Chermaine  WMS-16385 - Add storerConfig to lookup SKU(cc01)*/
 /* 2024-04-10 2.0  Deenis     UWP-16910 - Check Digit                         */
-/* 2024-05-27 2.0  NLT03      FCR-229 - Increase the max length of            */
+/* 2024-05-27 2.1  NLT03      FCR-229 - Increase the max length of            */
 /*                            qty text box to 7 digit                         */
+/* 2024-05-30 2.2 NLT03       UWP-20091 Exception happens while shor pick     */
 /******************************************************************************/    
     
 CREATE PROC [RDT].[rdtfnc_TM_PalletPick](    
@@ -1861,8 +1862,19 @@ BEGIN
          ,@n_err           = @nErrNo         OUTPUT    
          ,@c_errmsg        = @cErrMsg        OUTPUT    
          ,@c_userposition  = '1' -- 1=at from LOC    
-      IF @b_Success = 0 OR @nErrNo <> 0    
-         GOTO Step_6_Fail    
+      IF @@ERROR <> 0 OR @b_Success = 0 OR @nErrNo <> 0
+      BEGIN
+         IF @nErrNo <> 0
+         BEGIN
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP' )
+         END
+         ELSE
+         BEGIN
+            SET @nErrNo = 90777
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP' )
+         END
+         GOTO Step_6_Fail
+      END
     
       -- Get task reason info    
       DECLARE @cContinueProcess         NVARCHAR(10)    

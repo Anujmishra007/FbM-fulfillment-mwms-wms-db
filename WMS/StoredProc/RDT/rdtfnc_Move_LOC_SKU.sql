@@ -111,6 +111,7 @@ SELECT
    @nQTY        = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String3, 5), 0) = 1 THEN LEFT( V_String3, 5) ELSE 0 END,
    
    @cDecodeSP   = V_String10,
+   @cLOCCheckDigitSP    = C_String1,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -166,6 +167,7 @@ BEGIN
    -- Set the entry point
    SET @nScn = 3210
    SET @nStep = 1
+   SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)
 
     -- Event log
     EXEC RDT.rdt_STD_EventLog
@@ -219,8 +221,7 @@ BEGIN
       END
 
       SET @cCheckDigitLOC = @cInField01
-      SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)
-      IF @cLOCCheckDigitSP = 1
+      IF @cLOCCheckDigitSP = '1'
       BEGIN
          EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
             @cCheckDigitLOC    OUTPUT,
@@ -498,8 +499,7 @@ BEGIN
       END
 
       SET @cCheckDigitLOC = @cInField05
-      SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)
-      IF @cLOCCheckDigitSP = 1
+      IF @cLOCCheckDigitSP = '1'
       BEGIN
          EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
             @cCheckDigitLOC    OUTPUT,
@@ -658,6 +658,7 @@ BEGIN
       V_String3  = @nQTY,
       
       V_String10 = @cDecodeSP,
+      C_String1  = @cLOCCheckDigitSP,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,
