@@ -181,6 +181,7 @@ SELECT
    @cVerifyPickZone     = V_string32,
    
    @cBarcode            = V_String41,
+   @cLOCCheckDigitSP    = C_String1,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01  = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02  = FieldAttr02,
@@ -265,6 +266,7 @@ BEGIN
    SET @cSwapIDSP = rdt.rdtGetConfig( @nFunc, 'SwapIDSP', @cStorerKey)
    IF @cSwapIDSP = '0'
       SET @cSwapIDSP = ''
+   SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)
 
    -- EventLog
    EXEC RDT.rdt_STD_EventLog
@@ -639,8 +641,7 @@ BEGIN
          END
       END
 
-      SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)
-      IF @cLOCCheckDigitSP = 1
+      IF @cLOCCheckDigitSP = '1'
       BEGIN
          EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
             @cCheckDigitLOC    OUTPUT,
@@ -1457,8 +1458,7 @@ BEGIN
          GOTO Quit
       END
 
-      SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)
-      IF @cLOCCheckDigitSP = 1
+      IF @cLOCCheckDigitSP = '1'
       BEGIN
          EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
             @cCheckDigitLOC    OUTPUT,
@@ -1713,7 +1713,7 @@ BEGIN
       V_String32     = @cVerifyPickZone,
    
       V_String41     = @cBarcode,
-
+      C_String1      = @cLOCCheckDigitSP,
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
       I_Field03 = @cInField03,  O_Field03 = @cOutField03,   FieldAttr03  = @cFieldAttr03,

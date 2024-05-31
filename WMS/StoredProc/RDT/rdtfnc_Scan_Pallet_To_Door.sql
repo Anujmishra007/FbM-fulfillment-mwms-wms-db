@@ -114,6 +114,7 @@ SELECT
    @cMBOLkey         = V_String2,
    
    @nCBOLKey         = V_Integer1,
+   @cLOCCheckDigitSP = C_String1,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -162,6 +163,7 @@ BEGIN
    -- Set the entry point
    SET @nScn  = 4200
    SET @nStep = 1
+   SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)
 
    -- EventLog - Sign In Function
    EXEC RDT.rdt_STD_EventLog
@@ -448,8 +450,7 @@ BEGIN
          GOTO Step_2_Fail
       END
 
-      SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)
-      IF @cLOCCheckDigitSP = 1
+      IF @cLOCCheckDigitSP = '1'
       BEGIN
          EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
             @cActDoor    OUTPUT,
@@ -749,6 +750,7 @@ BEGIN
        V_String2     = @cMBOLKey,
        
        V_Integer1    = @nCBOLKey,
+       C_String1     = @cLOCCheckDigitSP,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,
