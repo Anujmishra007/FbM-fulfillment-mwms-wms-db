@@ -4,18 +4,18 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
-/* Trigger:  ispPRREC33                                    */
+/* Trigger:  ispPRREC33                                                 */
 /* Creation Date: 29-May-2024                                           */
-/* Copyright: Maersk                                                       */
+/* Copyright: Maersk                                                    */
 /* Written by: Shreekanth                                               */
 /*                                                                      */
 /* Purpose:  Calculate Shelf life to update Lottable06 & Lottable07     */
 /*        for Damaged and Expired                                       */
 /*                                                                      */
 /*                                                                      */
-/* PVCS Version: 1.1                                                    */
+/* GitLab Version: 1.0                                                  */
 /*                                                                      */
-/* Version: 5.4                                                         */
+/* Version: 7.0                                                         */
 /*                                                                      */
 /************************************************************************/
 
