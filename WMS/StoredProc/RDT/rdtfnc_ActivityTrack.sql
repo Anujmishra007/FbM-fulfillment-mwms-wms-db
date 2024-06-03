@@ -12,7 +12,8 @@ GO
 /* Modifications log:                                                   */
 /*                                                                      */
 /* Date         Rev  Author     Purposes                                */
-/* 2022-03-25   1.0  yeekung    WMS-18920 Created                      */
+/* 2022-03-25   1.0  yeekung    WMS-18920 Created                       */
+/* 2024-05-27   1.1  Cuize      FCR-242                                 */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_ActivityTrack] (
@@ -483,6 +484,80 @@ BEGIN
       END
 
       SET @cActivityStatus=@cOption
+
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM(@cExtendedValidateSP) +
+                        ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, ' +
+                        ' @cContainerNo, @cAppointmentNo, @cMenuOption, @cActionType, @cRefNo1, @cDefaultOption, @cDefaultCursor, @cActivityStatus, ' +
+                        ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+                    '@nMobile             INT,                    ' +
+                    '@nFunc               INT,                    ' +
+                    '@cLangCode           NVARCHAR( 3),           ' +
+                    '@nStep               INT,                    ' +
+                    '@nInputKey           INT,                    ' +
+                    '@cStorerKey          NVARCHAR( 15),          ' +
+                    '@cFacility           NVARCHAR( 5),           ' +
+                    '@cContainerNo        NVARCHAR( 20),          ' +
+                    '@cAppointmentNo      NVARCHAR( 20),          ' +
+                    '@cMenuOption         NVARCHAR( 10),          ' +
+                    '@cActionType         NVARCHAR( 10),          ' +
+                    '@cRefNo1             NVARCHAR( 10),          ' +
+                    '@cDefaultOption      NVARCHAR( 10),          ' +
+                    '@cDefaultCursor      NVARCHAR( 10),          ' +
+                    '@cActivityStatus     NVARCHAR( 20),          ' +
+                    '@nErrNo              INT           OUTPUT,   ' +
+                    '@cErrMsg             NVARCHAR( 20) OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                 @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility,
+                 @cContainerNo, @cAppointmentNo, @cMenuOption, @cActionType, @cRefNo1, @cDefaultOption, @cDefaultCursor, @cActivityStatus,
+                 @nErrNo OUTPUT, @cErrMsg OUTPUT
+            IF @nErrNo <> 0
+               GOTO QUIT
+         END
+      END
+
+      -- Extended update
+      IF @cExtendedUpdateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM(@cExtendedUpdateSP) +
+                        ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, ' +
+                        ' @cContainerNo, @cAppointmentNo, @cMenuOption, @cActionType, @cRefNo1, @cDefaultOption, @cDefaultCursor, @cActivityStatus, ' +
+                        ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+                    '@nMobile             INT,           ' +
+                    '@nFunc               INT,           ' +
+                    '@cLangCode           NVARCHAR( 3),  ' +
+                    '@nStep               INT,           ' +
+                    '@nInputKey           INT,           ' +
+                    '@cStorerKey          NVARCHAR( 15), ' +
+                    '@cFacility           NVARCHAR( 5),  ' +
+                    '@cContainerNo        NVARCHAR( 20), ' +
+                    '@cAppointmentNo      NVARCHAR( 20), ' +
+                    '@cMenuOption         NVARCHAR( 10), ' +
+                    '@cActionType         NVARCHAR( 10), ' +
+                    '@cRefNo1             NVARCHAR( 10), ' +
+                    '@cDefaultOption      NVARCHAR( 10), ' +
+                    '@cDefaultCursor      NVARCHAR( 10), ' +
+                    '@cActivityStatus     NVARCHAR( 20), ' +
+                    '@nErrNo              INT           OUTPUT, ' +
+                    '@cErrMsg             NVARCHAR( 20) OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                 @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility,
+                 @cContainerNo, @cAppointmentNo, @cMenuOption, @cActionType, @cRefNo1, @cDefaultOption, @cDefaultCursor, @cActivityStatus,
+                 @nErrNo OUTPUT, @cErrMsg OUTPUT
+            IF @nErrNo <> 0
+               GOTO QUIT
+         END
+      END
+
      
       -- Execute label/report stored procedure        
       IF @cSP <> ''        
@@ -1014,4 +1089,3 @@ GO
 
 GRANT EXECUTE ON RDT.rdtfnc_ActivityTrack TO NSQL
 GO
-  

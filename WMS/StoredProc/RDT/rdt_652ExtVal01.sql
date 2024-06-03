@@ -1,0 +1,163 @@
+IF EXISTS (SELECT name FROM sysobjects WHERE name = 'rdt_652ExtVal01' AND type = 'P')
+   DROP PROC rdt.rdt_652ExtVal01
+GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+
+/***************************************************************************/
+/* Store procedure: rdt_652ExtVal01                                        */
+/* Copyright      : Maersk                                                 */
+/*                                                                         */
+/* Date        Rev  Author       Purposes                                  */
+/* 2024-05-27  1.0  Cuize        FCR-242 Created                           */
+/***************************************************************************/
+
+CREATE OR ALTER PROCEDURE rdt.rdt_652ExtVal01(
+   @nMobile             INT,
+   @nFunc               INT,
+   @cLangCode           NVARCHAR( 3),
+   @nStep               INT,
+   @nInputKey           INT,
+   @cStorerKey          NVARCHAR( 15),
+   @cFacility           NVARCHAR( 5),
+   @cContainerNo        NVARCHAR( 20),
+   @cAppointmentNo      NVARCHAR( 20),
+   @cMenuOption         NVARCHAR( 10),
+   @cActionType         NVARCHAR( 10),
+   @cRefNo1             NVARCHAR( 10),
+   @cDefaultOption      NVARCHAR( 10),
+   @cDefaultCursor      NVARCHAR( 10),
+   @cActivityStatus     NVARCHAR( 20),
+   @nErrNo              INT           OUTPUT,
+   @cErrMsg             NVARCHAR( 20) OUTPUT
+)
+AS
+
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
+
+   IF @nFunc = 652
+   BEGIN
+
+      IF @nStep = 2
+      BEGIN
+
+         IF @nInputKey = 1
+         BEGIN
+            DECLARE @t_SplitValue   TABLE
+              (  RowID    INT            IDENTITY(1,1)  PRIMARY KEY
+                 ,Value  NVARCHAR(255)  NOT NULL DEFAULT('')
+              )
+
+            DECLARE @cUSContainerValidation  NVARCHAR( 20)
+            DECLARE @cTableName              NVARCHAR( 20)
+            DECLARE @cColumnName             NVARCHAR( 20)
+            DECLARE @cSQLCustom              NVARCHAR( MAX)
+            DECLARE @cSQLCustomParam         NVARCHAR( MAX)
+            DECLARE @nRowCount               INT
+
+
+            --Example: PO.userdefine05
+            SET @cUSContainerValidation = rdt.RDTGetConfig( @nFunc, 'USContainerValidation', @cStorerKey)
+            IF @cUSContainerValidation = ''
+            BEGIN
+               GOTO Quit
+            END
+
+            INSERT INTO @t_SplitValue (Value)
+            SELECT SplitValues = s.[Value]
+            FROM STRING_SPLIT(@cUSContainerValidation, '.') AS s
+
+
+            SELECT @cTableName = ISNULL(Value,'') FROM @t_SplitValue WHERE RowID = 1
+            SELECT @cColumnName = ISNULL(Value,'') FROM @t_SplitValue WHERE RowID = 2
+
+
+            --SValue Column configuration error”
+            IF ( (@cTableName <> 'PO' AND @cTableName <> 'RECEIPT') OR @cColumnName = '' OR COL_LENGTH(@cTableName,@cColumnName) IS NULL)
+            BEGIN
+               SET @nErrNo = 215551
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+               GOTO Quit
+            END
+
+            SET @cSQLCustom = ' SELECT TOP 1 @nRowCount = 1 ' +
+                              ' FROM '+ @cTableName + ' WITH (NOLOCK) ' +
+                              ' WHERE ' + @cColumnName +' = @cContainerNo ' +
+                              ' AND StorerKey = @cStorerKey '
+
+            SET @cSQLCustomParam = ' @cContainerNo    NVARCHAR( 20) ' +
+                                   ',@cStorerKey      NVARCHAR( 15) ' +
+                                   ',@nRowCount       INT OUTPUT '
+
+
+            EXEC sp_executeSQL @cSQLCustom, @cSQLCustomParam
+               ,@cContainerNo = @cContainerNo
+               ,@cStorerKey = @cStorerKey
+               ,@nRowCount   = @nRowCount OUTPUT
+
+            IF ISNULL(@nRowCount,0) = 0
+            BEGIN
+               SET @nErrNo = 215552
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid Container Number
+               GOTO Quit
+            END
+            ELSE
+            BEGIN
+               SET @nRowCount = 0
+               --Closed
+               IF @cTableName = 'PO'
+                  SET @cSQLCustom = @cSQLCustom + ' AND ExternStatus = 9'
+                                                + ' ORDER BY POKey DESC'
+
+               IF @cTableName = 'RECEIPT'
+                  SET @cSQLCustom = @cSQLCustom + ' AND Status = 9'
+                                                + ' ORDER BY ReceiptKey DESC'
+
+               EXEC sp_executeSQL @cSQLCustom, @cSQLCustomParam
+                  ,@cContainerNo = @cContainerNo
+                  ,@cStorerKey = @cStorerKey
+                  ,@nRowCount   = @nRowCount OUTPUT
+
+               IF ISNULL(@nRowCount,0) <> 0
+               BEGIN
+                  SET @nErrNo = 215553
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Container has been Closed
+                  GOTO Quit
+               END
+               -- Container No already checked in
+               IF EXISTS(SELECT 1 FROM TransmitLog2 WITH(NOLOCK)
+                         WHERE TableName = 'WSONLOTLOG'
+                           AND Key1 = @cContainerNo
+                           AND (Key2 = '' or Key2 = null)
+                           AND Key3 = @cStorerKey)
+               BEGIN
+                  SET @nErrNo = 215554
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Container has been Closed
+                  GOTO Quit
+               END
+            END
+
+         END
+
+      END
+
+   END
+
+Quit:
+
+
+GO
+
+GRANT EXECUTE ON rdt.rdt_652ExtVal01 TO NSQL
+GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
