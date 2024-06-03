@@ -13,6 +13,7 @@ GO
 /* Date        Rev  Author      Purposes                                                           */
 /* 30-05-2023  1.0  Ung         WMS-22370 Created                                                  */
 /* 07-09-2023  1.1  Ung         WMS-23032 Fix GetTaskSP param                                      */
+/* 28-05-2024  1.2  Ung         UWP-19459 Fix suggested ID sequence                                */
 /***************************************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_PickPallet_GetTask
@@ -28,7 +29,8 @@ CREATE OR ALTER PROCEDURE rdt.rdt_PickPallet_GetTask
    @cPickSlipNo      NVARCHAR( 10),
    @cPickZone        NVARCHAR( 10),
    @cLOC             NVARCHAR( 10),
-   @cID              NVARCHAR( 18) OUTPUT,
+   @cID              NVARCHAR( 18),
+   @cSuggID          NVARCHAR( 18) OUTPUT,
    @cSKU             NVARCHAR( 20) OUTPUT,
    @nTaskQTY         INT           OUTPUT,
    @cLottable01      NVARCHAR( 18) OUTPUT,
@@ -78,8 +80,8 @@ BEGIN
       IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cGetTaskSP AND type = 'P')
       BEGIN
          SET @cSQL = 'EXEC rdt.' + RTRIM( @cGetTaskSP) +
-            ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPUOM, @nLottableOnPage, @cPickSlipNo, @cPickZone, @cLOC, ' +
-            ' @cID           OUTPUT, @cSKU        OUTPUT, @nTaskQTY    OUTPUT, ' +
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPUOM, @nLottableOnPage, @cPickSlipNo, @cPickZone, @cLOC, @cID, ' +
+            ' @cSuggID       OUTPUT, @cSKU        OUTPUT, @nTaskQTY    OUTPUT, ' +
             ' @cLottable01   OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT, ' +
             ' @cLottable06   OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT, ' +
             ' @cLottable11   OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT, ' +
@@ -103,7 +105,8 @@ BEGIN
             '@cPickSlipNo   NVARCHAR( 10), ' +
             '@cPickZone     NVARCHAR( 10), ' + 
             '@cLOC          NVARCHAR( 10), ' +
-            '@cID           NVARCHAR( 18) OUTPUT, ' +
+            '@cID           NVARCHAR( 18), ' +
+            '@cSuggID       NVARCHAR( 18) OUTPUT, ' +
             '@cSKU          NVARCHAR( 20) OUTPUT, ' +
             '@nTaskQTY      INT           OUTPUT, ' +
             '@cLottable01   NVARCHAR( 18) OUTPUT, ' +
@@ -129,8 +132,8 @@ BEGIN
             '@nErrNo        INT           OUTPUT, ' +
             '@cErrMsg       NVARCHAR( 20) OUTPUT  '
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-            @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPUOM, @nLottableOnPage, @cPickSlipNo, @cPickZone, @cLOC, 
-            @cID           OUTPUT, @cSKU        OUTPUT, @nTaskQTY    OUTPUT,
+            @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPUOM, @nLottableOnPage, @cPickSlipNo, @cPickZone, @cLOC, @cID, 
+            @cSuggID       OUTPUT, @cSKU        OUTPUT, @nTaskQTY    OUTPUT,
             @cLottable01   OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT,
             @cLottable06   OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT,
             @cLottable11   OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT,
@@ -148,12 +151,14 @@ BEGIN
    /***********************************************************************************************
                                            Standard get task
    ***********************************************************************************************/
-   DECLARE @nRowCount   INT
-   DECLARE @cOrderKey   NVARCHAR( 10)
-   DECLARE @cLoadKey    NVARCHAR( 10)
-   DECLARE @cZone       NVARCHAR( 18)
-   DECLARE @cGetNextID  NVARCHAR( 1)
-   DECLARE @cPickFilter NVARCHAR( MAX) = ''
+   DECLARE @nRowCount       INT
+   DECLARE @cOrderKey       NVARCHAR( 10)
+   DECLARE @cLoadKey        NVARCHAR( 10)
+   DECLARE @cZone           NVARCHAR( 18)
+   DECLARE @cSwapIDSP       NVARCHAR( 20)
+   DECLARE @cGetNextID      NVARCHAR( 1)
+   DECLARE @cPickFilter     NVARCHAR( MAX) = ''
+   DECLARE @cNextIDCriteria NVARCHAR( MAX)
    DECLARE @cPickConfirmStatus NVARCHAR( 1)
 
    DECLARE @cTempID         NCHAR( 18)
@@ -176,8 +181,13 @@ BEGIN
    DECLARE @dTempLottable15 DATETIME
    DECLARE @cTempLottableCode NVARCHAR( 30)
 
+   -- Get storer configure
+   SET @cSwapIDSP = rdt.rdtGetConfig( @nFunc, 'SwapIDSP', @cStorerKey)
+   IF @cSwapIDSP = '0'
+      SET @cSwapIDSP = ''
+
    -- Assign to temp
-   SET @cTempID = @cID
+   SET @cTempID = @cSuggID
    SET @cTempSKU = @cSKU
    SET @nTempQTY = 0
    SET @cTempLottable01 = @cLottable01
@@ -219,6 +229,15 @@ BEGIN
    IF @cPickFilter = ''
       SET @cPickFilter = ' AND PD.UOM = ''1'' '
 
+   -- Swapped ID, need to resuggest the same ID
+   IF @cSwapIDSP <> '' AND -- SwapID is on
+      @cSuggID <> '' AND   -- Suggested ID
+      @cID <> '' AND       -- Scanned actual ID
+      @cSuggID <> @cID     -- Suggest different from actual
+      SET @cNextIDCriteria = ' AND PD.ID >= @cTempID '
+   ELSE
+      SET @cNextIDCriteria = ' AND PD.ID > @cTempID '
+
    -- Get PickHeader info
    SET @cOrderKey = ''
    SET @cLoadKey = ''
@@ -247,12 +266,12 @@ BEGIN
          ' WHERE RKL.PickSlipNo = @cPickSlipNo ' + 
             ' AND LOC.LOC = @cLOC ' + 
             ' AND PD.ID <> '''' ' + 
-            ' AND PD.ID > @cTempID ' + 
+            @cNextIDCriteria + 
             ' AND PD.QTY > 0 ' + 
             ' AND PD.Status <> ''4'' ' + 
             ' AND PD.Status < @cPickConfirmStatus ' + 
             CASE WHEN @cPickFilter = '' THEN '' ELSE @cPickFilter END + 
-         ' ORDER BY PD.SKU '
+         ' ORDER BY PD.ID '
    END
 
    -- Discrete PickSlip
@@ -267,12 +286,12 @@ BEGIN
          ' WHERE PD.OrderKey = @cOrderKey ' + 
             ' AND LOC.LOC = @cLOC ' + 
             ' AND PD.ID <> '''' ' + 
-            ' AND PD.ID > @cTempID ' + 
+            @cNextIDCriteria + 
             ' AND PD.QTY > 0 ' + 
             ' AND PD.Status <> ''4'' ' + 
             ' AND PD.Status < @cPickConfirmStatus ' + 
             CASE WHEN @cPickFilter = '' THEN '' ELSE @cPickFilter END + 
-         ' ORDER BY PD.SKU '
+         ' ORDER BY PD.ID '
    END
 
    -- Conso PickSlip
@@ -288,12 +307,12 @@ BEGIN
          ' WHERE LPD.LoadKey = @cLoadKey ' + 
             ' AND LOC.LOC = @cLOC ' + 
             ' AND PD.ID <> '''' ' + 
-            ' AND PD.ID > @cTempID ' + 
+            @cNextIDCriteria + 
             ' AND PD.QTY > 0 ' + 
             ' AND PD.Status <> ''4'' ' + 
             ' AND PD.Status < @cPickConfirmStatus ' + 
             CASE WHEN @cPickFilter = '' THEN '' ELSE @cPickFilter END + 
-         ' ORDER BY PD.SKU '
+         ' ORDER BY PD.ID '
    END
 
    -- Custom PickSlip
@@ -308,12 +327,12 @@ BEGIN
          ' WHERE PD.PickSlipNo = @cPickSlipNo ' + 
             ' AND LOC.LOC = @cLOC ' + 
             ' AND PD.ID <> '''' ' + 
-            ' AND PD.ID > @cTempID ' + 
+            @cNextIDCriteria + 
             ' AND PD.QTY > 0 ' + 
             ' AND PD.Status <> ''4'' ' + 
             ' AND PD.Status < @cPickConfirmStatus ' + 
             CASE WHEN @cPickFilter = '' THEN '' ELSE @cPickFilter END + 
-         ' ORDER BY PD.SKU ' 
+         ' ORDER BY PD.ID ' 
    END
 
    SET @cSQL = @cSQL + 
@@ -353,7 +372,6 @@ BEGIN
    FROM dbo.SKU WITH (NOLOCK)
    WHERE StorerKey = @cStorerKey
       AND SKU = @cTempSKU
-
 
    /***********************************************************************************************
                                            Get QTY and lottables
@@ -538,7 +556,7 @@ BEGIN
 
    -- Assign to actual
    SET @cSKU = @cTempSKU
-   SET @cID = @cTempID
+   SET @cSuggID = @cTempID
    SET @nTaskQTY = @nTempQTY
    SET @cLottable01 = @cTempLottable01
    SET @cLottable02 = @cTempLottable02

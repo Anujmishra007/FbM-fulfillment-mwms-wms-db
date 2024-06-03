@@ -12,6 +12,7 @@ GO
 /*                                                                               */
 /* Date        Rev  Author      Purposes                                         */
 /* 13-09-2023  1.0  Ung         WMS-23032 Created                                */
+/* 28-05-2024  1.1  Ung         UWP-19459 Add SuggID param                       */ 
 /*********************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1864GetTask01
@@ -27,7 +28,8 @@ CREATE OR ALTER PROCEDURE rdt.rdt_1864GetTask01
    @cPickSlipNo      NVARCHAR( 10),
    @cPickZone        NVARCHAR( 10),
    @cLOC             NVARCHAR( 10),
-   @cID              NVARCHAR( 18) OUTPUT,
+   @cID              NVARCHAR( 18),
+   @cSuggID          NVARCHAR( 18) OUTPUT,
    @cSKU             NVARCHAR( 20) OUTPUT,
    @nTaskQTY         INT           OUTPUT,
    @cLottable01      NVARCHAR( 18) OUTPUT,

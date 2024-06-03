@@ -12,6 +12,7 @@ GO
 /*                                                                      */
 /* Date        Rev  Author      Purposes                                */
 /* 30-05-2023  1.0  Ung         WMS-22370 Created                       */
+/* 28-05-2024  1.1  Ung         UWP-19459 Fix suggested ID sequence     */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_PickPallet_GoToNextScreen
@@ -83,7 +84,7 @@ BEGIN
       @nStep_ToLOC            = 5,  @nScn_ToLOC          = 6264
    
    -- Get task in same LOC
-   EXEC rdt.rdt_PickPallet_GetTask @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPUOM, 4, @cPickSlipNo, @cPickZone, @cLOC, 
+   EXEC rdt.rdt_PickPallet_GetTask @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPUOM, 4, @cPickSlipNo, @cPickZone, @cLOC, @cID, 
       @cSuggID      OUTPUT, @cSKU         OUTPUT, @nTaskQTY     OUTPUT,
       @cLottable01  OUTPUT, @cLottable02  OUTPUT, @cLottable03  OUTPUT, @dLottable04  OUTPUT, @dLottable05  OUTPUT,
       @cLottable06  OUTPUT, @cLottable07  OUTPUT, @cLottable08  OUTPUT, @cLottable09  OUTPUT, @cLottable10  OUTPUT,

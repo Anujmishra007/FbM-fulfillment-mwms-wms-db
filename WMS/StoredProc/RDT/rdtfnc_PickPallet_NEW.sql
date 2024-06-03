@@ -15,7 +15,9 @@ GO
 /* 2023-05-25   1.1  Ung        WMS-22370 Clean up source                     */
 /* 2023-09-27   1.2  Ung        WMS-23706 Add DecodeSP = 1                    */
 /* 2024-02-09   1.3  YeeKung    UWP-14600 Fix the variable problem (yeekung01)*/
-/* 2024-05-21   1.4  Dennis     FCR-336 Check Digit                           */
+/* 2024-04-11   1.4  Ung        WMS-25227 Add SuggestToLOCSP, OverrideToLOC   */
+/* 2024-05-21   1.5  Dennis     FCR-336 Check Digit                           */
+/* 2024-05-28   1.6  Ung        UWP-19459 Fix suggested ID sequence           */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PickPallet_NEW] (
@@ -51,6 +53,8 @@ DECLARE
    @cFacility     NVARCHAR( 5),
 
    @cPickSlipNo   NVARCHAR( 10),
+   @cOrderKey     NVARCHAR( 10),
+   @cLoadKey      NVARCHAR( 10),
    @cPickZone     NVARCHAR( 10),
    @cLOC          NVARCHAR( 10),
    @cID           NVARCHAR( 18),
@@ -83,8 +87,9 @@ DECLARE
    @cPUOM_Desc    NVARCHAR( 5),
    @cMUOM_Desc    NVARCHAR( 5),
    @cToLOC        NVARCHAR( 10),
-   @cLOCCheckDigitSP  NVARCHAR( 20),
-   @cCheckDigitLOC    NVARCHAR( 20),
+   @cZone         NVARCHAR( 18),
+   @cSuggToLOC    NVARCHAR( 10), 
+   @cCheckDigitLOC NVARCHAR( 20),
 
    @cExtendedInfo       NVARCHAR( 20),
    @cExtendedInfoSP     NVARCHAR( 20),
@@ -98,9 +103,9 @@ DECLARE
    @cMoveQTYAlloc       NVARCHAR( 1), 
    @cMoveQTYPick        NVARCHAR( 1), 
    @cVerifyPickZone     NVARCHAR( 1),
-   @cZone               NVARCHAR( 18),
-   @cOrderKey           NVARCHAR( 10),
-   @cLoadKey            NVARCHAR( 10),
+   @cSuggestToLOCSP     NVARCHAR( 20),
+   @cOverrideToLOC      NVARCHAR( 20),
+   @cLOCCheckDigitSP    NVARCHAR( 20),
    
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
@@ -166,6 +171,7 @@ SELECT
    @cMUOM_Desc       = V_String5,
    @cToLOC           = V_String6,
    @cZone            = V_String7,
+   @cSuggToLOC       = V_String8,
    
    @cExtendedInfo       = V_String21,
    @cExtendedInfoSP     = V_String22,
@@ -179,9 +185,11 @@ SELECT
    @cMoveQTYAlloc       = V_String30,
    @cMoveQTYPick        = V_String31,
    @cVerifyPickZone     = V_string32,
+   @cSuggestToLOCSP     = V_string33,
+   @cOverrideToLOC      = V_string34,
+   @cLOCCheckDigitSP    = V_string35,
    
    @cBarcode            = V_String41,
-   @cLOCCheckDigitSP    = C_String1,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01  = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02  = FieldAttr02,
@@ -243,11 +251,13 @@ BEGIN
 
    -- Storer configure
    SET @cAutoScanIn = rdt.rdtGetConfig( @nFunc, 'AutoScanIn', @cStorerKey)
+   SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)
    SET @cMoveQTYAlloc = rdt.rdtGetConfig( @nFunc, 'MoveQTYAlloc', @cStorerKey)
    SET @cMoveQTYPick = rdt.rdtGetConfig( @nFunc, 'MoveQTYPick', @cStorerKey)
+   SET @cOverrideToLOC = rdt.RDTGetConfig( @nFunc, 'OverrideToLOC', @cStorerKey)
    SET @cSuggestLOC = rdt.RDTGetConfig( @nFunc, 'SuggestLOC', @cStorerKey)
    SET @cVerifyPickZone = rdt.RDTGetConfig( @nFunc, 'verifypickzone', @cStorerKey)
-
+      
    SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerKey)
    IF @cDecodeSP = '0'
       SET @cDecodeSP = ''
@@ -263,10 +273,12 @@ BEGIN
    SET @cExtendedUpdateSP = rdt.rdtGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorerKey)
    IF @cExtendedUpdateSP = '0'
       SET @cExtendedUpdateSP = ''
+   SET @cSuggestToLOCSP = rdt.rdtGetConfig( @nFunc, 'SuggestToLOCSP', @cStorerKey)
+   IF @cSuggestToLOCSP = '0'
+      SET @cSuggestToLOCSP = ''
    SET @cSwapIDSP = rdt.rdtGetConfig( @nFunc, 'SwapIDSP', @cStorerKey)
    IF @cSwapIDSP = '0'
       SET @cSwapIDSP = ''
-   SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)
 
    -- EventLog
    EXEC RDT.rdt_STD_EventLog
@@ -641,6 +653,7 @@ BEGIN
          END
       END
 
+      -- Check LOC check digit
       IF @cLOCCheckDigitSP = '1'
       BEGIN
          EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
@@ -649,9 +662,10 @@ BEGIN
             @cErrMsg     OUTPUT
          IF @nErrNo <> 0
             GOTO LOC_Fail
+            
          SET @cLOC = @cCheckDigitLOC
       END
-
+      
       -- Get LOC info
       DECLARE @cChkFacility NVARCHAR( 5)
       DECLARE @cChkPickZone NVARCHAR( 10)
@@ -697,13 +711,13 @@ BEGIN
       END
 
       -- Get 1st task in current LOC
-      SELECT  @cSuggID = '', @cSKU = '', @nTaskQTY = 0, 
+      SELECT @cID = '', @cSuggID = '', @cSKU = '', @nTaskQTY = 0, 
          @cLottable01 = '', @cLottable02 = '', @cLottable03 = '',    @dLottable04 = NULL,  @dLottable05 = NULL,    
          @cLottable06 = '', @cLottable07 = '', @cLottable08 = '',    @cLottable09 = '',    @cLottable10 = '',    
          @cLottable11 = '', @cLottable12 = '', @dLottable13 = NULL,  @dLottable14 = NULL,  @dLottable15 = NULL   
 
       -- Get task
-      EXEC rdt.rdt_PickPallet_GetTask @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPUOM, 4, @cPickSlipNo, @cPickZone, @cLOC, 
+      EXEC rdt.rdt_PickPallet_GetTask @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPUOM, 4, @cPickSlipNo, @cPickZone, @cLOC, @cID, 
          @cSuggID      OUTPUT, @cSKU         OUTPUT, @nTaskQTY     OUTPUT,
          @cLottable01  OUTPUT, @cLottable02  OUTPUT, @cLottable03  OUTPUT, @dLottable04  OUTPUT, @dLottable05  OUTPUT,
          @cLottable06  OUTPUT, @cLottable07  OUTPUT, @cLottable08  OUTPUT, @cLottable09  OUTPUT, @cLottable10  OUTPUT,
@@ -1136,6 +1150,65 @@ BEGIN
          GOTO ID_Fail
       END
 
+      -- Suggest TO LOC
+      SET @cSuggToLOC = ''
+      IF @cSuggestToLOCSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cSuggestToLOCSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cSuggestToLOCSP) + 
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+               ' @cPickSlipNo, @cPickZone, @cLOC, @cID, @cSKU, @nTaskQTY, ' +
+               ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' + 
+               ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' + 
+               ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' + 
+               ' @cSuggToLOC OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam = 
+               ' @nMobile       INT,           ' + 
+               ' @nFunc         INT,           ' + 
+               ' @cLangCode     NVARCHAR( 3),  ' + 
+               ' @nStep         INT,           ' + 
+               ' @nInputKey     INT,           ' + 
+               ' @cFacility     NVARCHAR( 5),  ' + 
+               ' @cStorerKey    NVARCHAR( 15), ' + 
+               ' @cPickSlipNo   NVARCHAR( 10), ' + 
+               ' @cPickZone     NVARCHAR( 10), ' + 
+               ' @cLOC          NVARCHAR( 10), ' + 
+               ' @cID           NVARCHAR( 18), ' + 
+               ' @cSKU          NVARCHAR( 20), ' + 
+               ' @nTaskQTY      INT,           ' + 
+               ' @cLottable01   NVARCHAR( 18), ' + 
+               ' @cLottable02   NVARCHAR( 18), ' + 
+               ' @cLottable03   NVARCHAR( 18), ' + 
+               ' @dLottable04   DATETIME,      ' + 
+               ' @dLottable05   DATETIME,      ' + 
+               ' @cLottable06   NVARCHAR( 30), ' + 
+               ' @cLottable07   NVARCHAR( 30), ' + 
+               ' @cLottable08   NVARCHAR( 30), ' + 
+               ' @cLottable09   NVARCHAR( 30), ' + 
+               ' @cLottable10   NVARCHAR( 30), ' + 
+               ' @cLottable11   NVARCHAR( 30), ' + 
+               ' @cLottable12   NVARCHAR( 30), ' + 
+               ' @dLottable13   DATETIME,      ' + 
+               ' @dLottable14   DATETIME,      ' + 
+               ' @dLottable15   DATETIME,      ' + 
+               ' @cSuggToLOC    NVARCHAR( 10) OUTPUT, ' + 
+               ' @nErrNo        INT           OUTPUT, ' + 
+               ' @cErrMsg       NVARCHAR( 20) OUTPUT  ' 
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam, 
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+               @cPickSlipNo, @cPickZone, @cLOC, @cID, @cSKU, @nTaskQTY, 
+               @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, 
+               @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, 
+               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, 
+               @cSuggToLOC OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT 
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
+         ELSE
+            SET @cSuggToLOC = @cSuggestToLOCSP
+      END
+
       -- To LOC
       IF @cMoveQTYAlloc = '1' OR @cMoveQTYPick = '1'
       BEGIN
@@ -1143,7 +1216,8 @@ BEGIN
          SET @nScn = @nScn_ToLOC
          SET @nStep = @nStep_ToLOC
 
-         SET @cOutField01 = @cDefaultToLOC -- TO LOC
+         SET @cOutField01 = @cSuggToLOC 
+         SET @cOutField02 = @cDefaultToLOC -- TO LOC
          GOTO Quit
       END
 
@@ -1447,8 +1521,8 @@ BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
       -- Screen mapping
-      SET @cToLOC = @cInField01 -- LOC
-      SET @cCheckDigitLOC = @cInField01
+      SET @cToLOC = @cInField02 -- TO LOC
+      SET @cCheckDigitLOC = @cInField02
 
       -- Check blank
       IF @cToLOC = ''
@@ -1458,6 +1532,7 @@ BEGIN
          GOTO Quit
       END
 
+      -- Check LOC check digit
       IF @cLOCCheckDigitSP = '1'
       BEGIN
          EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
@@ -1466,7 +1541,20 @@ BEGIN
             @cErrMsg     OUTPUT
          IF @nErrNo <> 0
             GOTO Quit
+            
          SET @cToLOC = @cCheckDigitLOC
+      END
+
+      -- Suggested to LOC
+      IF @cSuggToLOC <> '' AND @cSuggToLOC <> @cToLOC
+      BEGIN
+         -- Override To LOC
+         IF @cOverrideToLOC <> '1'
+         BEGIN
+            SET @nErrNo = 201697
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LOC not match
+            GOTO Quit
+         END
       END
 
       -- Get LOC info
@@ -1673,8 +1761,8 @@ BEGIN
       V_UOM          = @cPUOM,
       V_PUOM_Div     = @nPUOM_Div, 
       V_TaskQTY      = @nTaskQTY,
-      V_MTaskQTY     = @nPTaskQTY,
-      V_PTaskQTY     = @nMTaskQTY,
+      V_MTaskQTY     = @nMTaskQTY,
+      V_PTaskQTY     = @nPTaskQTY,
       V_Lottable01   = @cLottable01,    
       V_Lottable02   = @cLottable02,    
       V_Lottable03   = @cLottable03,    
@@ -1698,6 +1786,7 @@ BEGIN
       V_String5      = @cMUOM_Desc,
       V_String6      = @cToLOC,
       V_String7      = @cZone,
+      V_String8      = @cSuggToLOC,
 
       V_String21     = @cExtendedInfo,
       V_String22     = @cExtendedInfoSP,
@@ -1711,9 +1800,12 @@ BEGIN
       V_String30     = @cMoveQTYAlloc,
       V_String31     = @cMoveQTYPick,
       V_String32     = @cVerifyPickZone,
+      V_string33     = @cSuggestToLOCSP,
+      V_string34     = @cOverrideToLOC,
+      V_string35     = @cLOCCheckDigitSP,
    
       V_String41     = @cBarcode,
-      C_String1      = @cLOCCheckDigitSP,
+
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
       I_Field03 = @cInField03,  O_Field03 = @cOutField03,   FieldAttr03  = @cFieldAttr03,
