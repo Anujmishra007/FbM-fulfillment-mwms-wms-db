@@ -5,7 +5,7 @@ GO
 /**************************************************************************************/
 /* Store Procedure:  nspRDTPASTD                                                      */
 /* Creation Date: 28-Oct-2009                                                         */
-/* Copyright: IDS                                                                     */
+/* Copyright: Maersk WMS                                                              */
 /* Written by:                                                                        */
 /*                                                                                    */
 /* Purpose:  Stored Procedure for PUTAWAY FROM ASN                                    */
@@ -141,7 +141,9 @@ GO
 /* 15-Feb-2023  SHONG02       5.2   Fixing PA 52 to cater if Lottable04 is NULL       */
 /* 13-Mar-2024  kelvinongcy   5.3   Performance tuning remove harcoded index (kocy01) */
 /* 20-Mar-2024  CYU027        5.4   Use Pallet Height for Location                    */
-/*15-Apr-2024   SPChin        5.6   UWP-14640 Bug Fixed                               */
+/* 15-Apr-2024  SPChin        5.5   UWP-14640 Bug Fixed                               */
+/* 31-May-2024  NLT013        5.6   UWP-20191 Skip PAType02 if fromLocation <>        */
+/*                                  pa_FromLoc                                        */
 /**************************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[nspRDTPASTD]
      @c_userid          NVARCHAR(18)
@@ -1181,6 +1183,7 @@ BEGIN
       -- Construct MultiPutawayZone SQL for later use (ChewKP08)
       SET @nPutawayZoneCount = 0
       SET @c_MultiPutawayZone = ''
+      SET @c_SearchZone = ''
       
       TRUNCATE TABLE #t_PutawayZone
       
@@ -1908,6 +1911,26 @@ BEGIN
             @cpa_PAType = '57' OR -- SOS69388 KFP - Cross facility - search suitable location within specified zone (mix with diff sku)
             @cpa_PAType = '58'    -- SOS69388 KFP - Cross facility - search suitable location within specified zone (do NOT mix sku)
          BEGIN
+            IF @cpa_PAType = '02' --If PA_FromLoc does not equal to current location, need go to next strategy
+            BEGIN
+               IF ISNULL(@cpa_FromLoc, '') <> @c_FromLoc
+               BEGIN
+                  IF @b_Debug = 1
+                  BEGIN
+                     SELECT @c_Reason = 'FAILED PAType=02: FROM location '
+                                    + RTRIM(@c_FromLoc) + ' <> ' + RTRIM(@cpa_FromLoc)
+                     EXEC nspPTD 'nspRDTPASTD',
+                                 @n_pTraceHeadKey,
+                                 @c_PutawayStrategyKey,
+                                 @c_PutawayStrategyLineNumber,
+                                 @n_PtraceDetailKey,
+                                 @c_ToLoc,
+                                 @c_Reason
+                  END
+                  CONTINUE;
+               END
+            END
+
             IF @c_FromLoc = @cpa_FromLoc
             BEGIN
                SELECT @c_SearchZone = @cpa_Zone
@@ -1917,7 +1940,6 @@ BEGIN
                   IF NOT EXISTS (SELECT 1 FROM #t_PutawayZone AS tpz WHERE tpz.PutawayZone = @cpa_Zone)
                      INSERT INTO #t_PutawayZone( PutawayZone ) VALUES (@cpa_Zone)
                END
-                  
             END
          END
          IF @cpa_PAType = '04' OR
