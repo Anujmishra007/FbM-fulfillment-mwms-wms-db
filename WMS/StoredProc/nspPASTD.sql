@@ -6,10 +6,10 @@ GO
 SET ANSI_NULLS OFF 
 GO
 /************************************************************************/
-/* Store Procedure:  nspPASTD                        		               */
-/* Creation Date: 05-Aug-2002                  						         */
-/* Copyright: IDS                                                       */
-/* Written by:                                     					      */
+/* Store Procedure:  nspPASTD                                           */
+/* Creation Date: 05-Aug-2002                                           */
+/* Copyright: Maersk WMS                                                */
+/* Written by:                                                          */
 /*                                                                      */
 /* Purpose:  Stored Procedure for RF PUTAWAY                            */
 /*                                                                      */
@@ -28,11 +28,11 @@ GO
 /*                                                                      */
 /* Return Status:  None                                                 */
 /*                                                                      */
-/* Usage:                                                      			*/
+/* Usage:                                                               */
 /*                                                                      */
 /* Local Variables:                                                     */
 /*                                                                      */
-/* Called By:                                       							*/
+/* Called By:                                                            */
 /*                                                                      */
 /* PVCS Version: 1.6                                                    */
 /*                                                                      */
@@ -53,12 +53,14 @@ GO
 /* 20-Jul-2005  MaryVong      Change RF Putaway same logic as Work      */
 /*                            station (ASN) Putaway:                    */
 /*                            SOS36712 KCPI PutawayStrategy - Add in    */
-/*                            new patype '17','18' and '19'					*/
+/*                            new patype '17','18' and '19'             */
 /*                            Note: Changes applied to nspASNPASTD      */
-/* 31-Mar-2007  MaryVong		SOS69388 KFP PutawayStrategy - Add in 		*/
-/*										'55','56','57' and '58'                   */
+/* 31-Mar-2007  MaryVong      SOS69388 KFP PutawayStrategy - Add in     */
+/*                              '55','56','57' and '58'                 */
 /*                            Add LocationStateRestriction '6' and '7'  */
 /*                            Note: Changes applied to nspASNPASTD      */
+/* 31-May-2024  NLT013        UWP-20191 Skip PAType02 if fromLocation <>*/
+/*                            pa_FromLoc                                */
 /************************************************************************/
 
 CREATE PROCEDURE   nspPASTD
@@ -102,7 +104,7 @@ BEGIN
    @n_PalletQty int,
    @n_StackFactor int,           -- SOS36712 KCPI
    @n_MaxPalletStackFactor int,  -- SOS36712 KCPI
-   @c_ToHostWhCode NVARCHAR(10)		-- SOS69388 KFP
+   @c_ToHostWhCode NVARCHAR(10)      -- SOS69388 KFP
       
    SELECT @c_toloc = SPACE(10),
    @n_idcnt = 0,
@@ -400,6 +402,8 @@ BEGIN
          SET ROWCOUNT 0
          BREAK
       END
+
+      SET @c_searchzone = ''
       SET ROWCOUNT 0
       IF @b_debug = 1
       BEGIN
@@ -412,7 +416,7 @@ BEGIN
 
       IF @b_debug = 2
       BEGIN
-			SELECT 'putawaystrategykey is ' + @c_putawaystrategykey
+         SELECT 'putawaystrategykey is ' + @c_putawaystrategykey
       END
 
       IF @cpa_PAType = '01'
@@ -484,19 +488,36 @@ BEGIN
          @cpa_PAType = '44' or -- Search ZONE specified in this strategy for empty Multi Pallet location
          @cpa_PAType = '52' or -- Search Zone specified in SKU table for matching Lottable02 and Lottable04
          @cpa_PAType = '54' or
-			@cpa_PAType = '55' or -- SOS69388 KFP - Cross facility - search location within specified zone 
-   							 		 --  					 with matching Lottable02 and Lottable04 (do not mix sku)
-   		@cpa_PAType = '56' or -- SOS69388 KFP - Cross facility - search Empty Location base on HostWhCode inventory = 0
-   		@cpa_PAType = '57' or -- SOS69388 KFP - Cross facility - search suitable location within specified zone (mix with diff sku)
-   		@cpa_PAType = '58'    -- SOS69388 KFP - Cross facility - search suitable location within specified zone (do not mix sku)
+         @cpa_PAType = '55' or -- SOS69388 KFP - Cross facility - search location within specified zone 
+                                --                  with matching Lottable02 and Lottable04 (do not mix sku)
+         @cpa_PAType = '56' or -- SOS69388 KFP - Cross facility - search Empty Location base on HostWhCode inventory = 0
+         @cpa_PAType = '57' or -- SOS69388 KFP - Cross facility - search suitable location within specified zone (mix with diff sku)
+         @cpa_PAType = '58'    -- SOS69388 KFP - Cross facility - search suitable location within specified zone (do not mix sku)
       BEGIN
          IF @cpa_PAType = '02' or
-			   @cpa_PAType = '55' or -- SOS69388 KFP - Cross facility - search location within specified zone 
-   							 		    --  					 with matching Lottable02 and Lottable04 (do not mix sku)
-   		   @cpa_PAType = '56' or -- SOS69388 KFP - Cross facility - search Empty Location base on HostWhCode inventory = 0
-   		   @cpa_PAType = '57' or -- SOS69388 KFP - Cross facility - search suitable location within specified zone (mix with diff sku)
-   		   @cpa_PAType = '58'    -- SOS69388 KFP - Cross facility - search suitable location within specified zone (do not mix sku)
+            @cpa_PAType = '55' or -- SOS69388 KFP - Cross facility - search location within specified zone 
+                                   --                  with matching Lottable02 and Lottable04 (do not mix sku)
+            @cpa_PAType = '56' or -- SOS69388 KFP - Cross facility - search Empty Location base on HostWhCode inventory = 0
+            @cpa_PAType = '57' or -- SOS69388 KFP - Cross facility - search suitable location within specified zone (mix with diff sku)
+            @cpa_PAType = '58'    -- SOS69388 KFP - Cross facility - search suitable location within specified zone (do not mix sku)
          BEGIN
+            IF @cpa_PAType = '02' --If PA_FromLoc does not equal to current location, need go to next strategy
+            BEGIN
+               IF ISNULL(@cpa_fromloc, '') <> @c_fromloc
+               BEGIN
+                  IF @b_Debug = 1
+                  BEGIN
+                     SELECT @c_reason = 'FAILED PAType=' + dbo.fnc_RTrim(@cpa_PAType) + ': ' 
+                                    + 'FROM location '
+                                    + RTRIM(@c_FromLoc) + ' <> ' + RTRIM(@cpa_FromLoc)
+                     EXEC nspPTD 'nspPASTD', @n_ptraceheadkey, @c_putawaystrategykey,
+                     @c_putawaystrategylinenumber, @n_ptracedetailkey,
+                     @c_toloc, @c_reason
+                  END
+                  CONTINUE;
+               END
+            END
+
             IF @c_fromloc = @cpa_fromloc
             BEGIN
                SELECT @c_searchzone = @cpa_zone
@@ -541,11 +562,11 @@ BEGIN
             END
          END
 
-			-- Chekcing
-	      IF @b_debug = 2
-	      BEGIN
-				SELECT 'PAType is ' + @cpa_PAType + ', SearchZone is ' + @c_searchzone
-			END
+         -- Chekcing
+         IF @b_debug = 2
+         BEGIN
+            SELECT 'PAType is ' + @cpa_PAType + ', SearchZone is ' + @c_searchzone
+         END
 
          IF dbo.fnc_LTrim(@c_searchzone) IS NOT NULL
          BEGIN
@@ -689,7 +710,7 @@ BEGIN
                      dbo.fnc_RTrim(@c_LocFlagRestriction) +
                      ' AND  LOC.Facility = N''' + dbo.fnc_RTrim(@c_Facility) + ''' ' + 
                      ' AND (LOTxLOCxID.LOT = N''' + dbo.fnc_RTrim(@c_lot) + ''''  + 
-							' OR LOTxLOCxID.Lot IS NULL) ' + 
+                     ' OR LOTxLOCxID.Lot IS NULL) ' + 
                      ' GROUP BY LOC.LOC ' 
          
                      -- Fit by Cube
@@ -703,7 +724,7 @@ BEGIN
                         SELECT @c_DimRestSQL = dbo.fnc_RTrim(@c_DimRestSQL) + ' AND '
          
                         -- SELECT @c_DimRestSQL = dbo.fnc_RTrim(@c_DimRestSQL) + ' MAX(LOC.Cube) - ' +
-								SELECT @c_DimRestSQL = dbo.fnc_RTrim(@c_DimRestSQL) + ' MAX(LOC.CubicCapacity) - ' +
+                        SELECT @c_DimRestSQL = dbo.fnc_RTrim(@c_DimRestSQL) + ' MAX(LOC.CubicCapacity) - ' +
                         '( ( SUM(ISNULL(LOTxLOCxID.Qty, 0)) - SUM(ISNULL(LOTxLOCxID.QtyPicked,0)) + SUM(ISNULL(LOTxLOCxID.PendingMoveIn,0))) ' +
                         '* ' + dbo.fnc_RTrim(CAST(@n_StdCube as NVARCHAR(20))) + ') >= (' + dbo.fnc_RTrim(CAST(@n_StdCube as NVARCHAR(20))) + ' * ' + dbo.fnc_RTrim(CAST(@n_Qty as NVARCHAR(10))) + ')'
                      END
@@ -929,7 +950,7 @@ BEGIN
                         SELECT @b_gotloc = 1
                         BREAK
                      END
-  						END -- WHILE (1=1)
+                    END -- WHILE (1=1)
 
                   IF @b_gotloc = 1
                   BEGIN
@@ -1073,12 +1094,12 @@ BEGIN
                              N'@cpa_toloc NVARCHAR(10) output, @c_toloc NVARCHAR(10) output, @n_RowCount int output', 
                              @cpa_toloc output, @c_toloc output, @n_RowCount Output 
 
-								-- Chekcing
-						      IF @b_debug = 2
-						      BEGIN
-									SELECT 'Storerkey is ' + @c_Storerkey + ', Sku is ' + @c_Sku + ', Facility is ' + @c_Facility
-									SELECT 'PAType is ' + @cpa_PAType + ', ToLoc is ' + @cpa_toloc
-								END
+                        -- Chekcing
+                        IF @b_debug = 2
+                        BEGIN
+                           SELECT 'Storerkey is ' + @c_Storerkey + ', Sku is ' + @c_Sku + ', Facility is ' + @c_Facility
+                           SELECT 'PAType is ' + @cpa_PAType + ', ToLoc is ' + @cpa_toloc
+                        END
 
                      END -- End of @cpa_PAType = '16' or @cpa_PAType = '18'
 
@@ -1086,7 +1107,7 @@ BEGIN
                      -- Empty location
                      IF @cpa_PAType = '17' or @cpa_PAType = '19'
                      BEGIN
-								SET ROWCOUNT 1
+                        SET ROWCOUNT 1
                         SELECT @cpa_toloc = LOC.LOC,
                            @c_toloc = LOC.LOC
                         FROM LOC (NOLOCK)
@@ -1099,20 +1120,20 @@ BEGIN
                         ORDER BY LOC.LOC
                         SELECT @n_RowCount = @@ROWCOUNT
 
-								-- Chekcing
-						      IF @b_debug = 2
-						      BEGIN
-									SELECT 'SearchZone is ' + @c_searchzone + ', Facility is ' + @c_Facility
-									SELECT 'PAType is ' + @cpa_PAType + ', ToLoc is ' + @cpa_toloc
-								END
+                        -- Chekcing
+                        IF @b_debug = 2
+                        BEGIN
+                           SELECT 'SearchZone is ' + @c_searchzone + ', Facility is ' + @c_Facility
+                           SELECT 'PAType is ' + @cpa_PAType + ', ToLoc is ' + @cpa_toloc
+                        END
                      END -- End of @cpa_PAType = '17' or @cpa_PAType = '19' 
-							-- Added by MaryVong on 16-Jun-2005 (SOS36712 KCPI) -End(1)                                       
+                     -- Added by MaryVong on 16-Jun-2005 (SOS36712 KCPI) -End(1)                                       
                      
                      IF @cpa_PAType = '22' or @cpa_PAType = '24'
                      BEGIN
                         SELECT @cpa_toloc = LOC.LOC,
                            @c_toloc = LOC.LOC
-     							FROM LOC (NOLOCK)
+                          FROM LOC (NOLOCK)
                         LEFT OUTER JOIN SKUxLOC WITH (NOLOCK) ON (LOC.LOC = SKUxLOC.LOC)
                         JOIN CODELKUP WITH (NOLOCK) ON ( LOC.LocationCategory = CODELKUP.CODE
                                                          AND CODELKUP.LISTNAME = 'LOCCATEGRY'
@@ -1185,12 +1206,12 @@ BEGIN
                         ORDER BY LOTxLOCxID.Loc
                         SELECT @n_Rowcount = @@ROWCOUNT
                      END
-							-- Added by MaryVong on 1-Apr-2007 (SOS69388 KFP) -Start(1)					
-							-- Cross facility, search location within specified zone base on HostWhCode,
+                     -- Added by MaryVong on 1-Apr-2007 (SOS69388 KFP) -Start(1)               
+                     -- Cross facility, search location within specified zone base on HostWhCode,
                      -- with matching Lottable02 and Lottable04 (do not mix sku)
                      IF @cpa_PAType = '55'
                      BEGIN               
-                     	SET ROWCOUNT 1
+                        SET ROWCOUNT 1
                         SELECT @cpa_toloc = LOC.LOC,
                            @c_toloc = LOC.LOC,
                            @c_ToHostWhCode = LOC.HostWhCode
@@ -1206,7 +1227,7 @@ BEGIN
                                                        AND LOTxLOCxID.SKU = Lotattribute.SKU)
                         JOIN (SELECT Lottable02, Lottable04
                               FROM LotAttribute (NOLOCK)
-                        		JOIN LOTxLOCxID (NOLOCK) ON (LOTxLOCxID.LOT = Lotattribute.LOT
+                              JOIN LOTxLOCxID (NOLOCK) ON (LOTxLOCxID.LOT = Lotattribute.LOT
                                                            AND LOTxLOCxID.StorerKey = Lotattribute.StorerKey
                                                            AND LOTxLOCxID.SKU = Lotattribute.SKU
                                                            AND LOTxLOCxID.StorerKey = @c_storerkey
@@ -1225,10 +1246,10 @@ BEGIN
                      -- Cross facility, search Empty Location base on HostWhCode inventory = 0             
                      IF @cpa_PAType = '56'
                      BEGIN
-								SET ROWCOUNT 1
+                        SET ROWCOUNT 1
                         SELECT @cpa_toloc = LOC.LOC,
                            @c_toloc = LOC.LOC,
-                     		@c_ToHostWhCode = LOC.HostWhCode
+                           @c_ToHostWhCode = LOC.HostWhCode
                         FROM LOC (NOLOCK)
                         JOIN (SELECT LOC.HostWhCode
                               FROM LOC (NOLOCK)
@@ -1247,7 +1268,7 @@ BEGIN
                      -- Cross facility, search suitable location within specified zone (mix with diff sku)
                      IF @cpa_PAType = '57'
                      BEGIN
-								SET ROWCOUNT 1
+                        SET ROWCOUNT 1
                         SELECT @cpa_toloc = LOC.LOC,
                            @c_toloc = LOC.LOC,
                            @c_ToHostWhCode = MIXED_SKU.HostWhCode
@@ -1264,10 +1285,10 @@ BEGIN
                         SELECT @n_RowCount = @@ROWCOUNT
                      END -- End of @cpa_PAType = '57'
                      
-    						-- SOS69388 KFP - Cross facility, search suitable location within specified zone (do not mix sku)         
+                      -- SOS69388 KFP - Cross facility, search suitable location within specified zone (do not mix sku)         
                      IF @cpa_PAType = '58'
                      BEGIN
-								SET ROWCOUNT 1
+                        SET ROWCOUNT 1
                         SELECT @cpa_toloc = LOC.LOC,
                            @c_toloc = LOC.LOC,
                            @c_ToHostWhCode = SINGLE_SKU.HostWhCode
@@ -1283,15 +1304,15 @@ BEGIN
                         WHERE LOC.LOC > @cpa_toloc
                         AND   LOC.Putawayzone = @c_searchzone
                         ORDER BY LOC.HostWhCode, LOC.LOC
-                        SELECT @n_RowCount = @@ROWCOUNT								
+                        SELECT @n_RowCount = @@ROWCOUNT                        
                      END -- End of @cpa_PAType = '58'                     
-							-- Added by MaryVong on 1-Apr-2007 (SOS69388) -End(1)
+                     -- Added by MaryVong on 1-Apr-2007 (SOS69388) -End(1)
 
-					      IF @b_debug = 2
-					      BEGIN
-								SELECT 'PAType= ' + @cpa_PAType + ', SearchZone= ' + @c_searchzone + 
-										', ToHostWhCode= ' + @c_ToHostWhCode + ', ToLoc= ' + @cpa_toloc + ', @c_lot= ' + @c_lot
-							END 
+                     IF @b_debug = 2
+                     BEGIN
+                        SELECT 'PAType= ' + @cpa_PAType + ', SearchZone= ' + @c_searchzone + 
+                              ', ToHostWhCode= ' + @c_ToHostWhCode + ', ToLoc= ' + @cpa_toloc + ', @c_lot= ' + @c_lot
+                     END 
 
                      IF @n_RowCount = 0
                      BEGIN
@@ -1533,7 +1554,7 @@ BEGIN
                         BREAK
                      END
                   END
-               	ELSE
+                  ELSE
                   BEGIN
                      SELECT @b_gotloc = 1
                      BREAK
@@ -1674,7 +1695,7 @@ BEGIN
             END
          END -- IF @b_MultiProductID = 0
          CONTINUE
-		END -- IF @cpa_PAType = '20'
+      END -- IF @cpa_PAType = '20'
       /* END Add by DLIM for FBR22 20010620 */
 
       IF @cpa_PAType = '15' -- Use Case Pick Location Specified For Product
@@ -2375,11 +2396,11 @@ BEGIN
    SELECT @n_StackFactor = (CASE StackFactor WHEN NULL THEN 0 ELSE StackFactor END) FROM SKU (NOLOCK) WHERE Storerkey = @c_StorerKey AND Sku = @c_Sku
    SELECT @n_MaxPalletStackFactor = @n_MaxPallet * @n_StackFactor
 
-	IF @b_debug = 2
-	BEGIN
-		SELECT 'MaxPallet is ' + CONVERT(CHAR(3),@n_MaxPallet) + 'StackFactor is ' + CONVERT(CHAR(3),@n_StackFactor)
-		SELECT 'MaxPallet * StackFactor is ' + CONVERT(CHAR(3),@n_MaxPalletStackFactor)
-	END
+   IF @b_debug = 2
+   BEGIN
+      SELECT 'MaxPallet is ' + CONVERT(CHAR(3),@n_MaxPallet) + 'StackFactor is ' + CONVERT(CHAR(3),@n_StackFactor)
+      SELECT 'MaxPallet * StackFactor is ' + CONVERT(CHAR(3),@n_MaxPalletStackFactor)
+   END
 
    IF @n_MaxPalletStackFactor > 0 
    BEGIN
@@ -2409,7 +2430,7 @@ BEGIN
       BEGIN
          IF @b_debug = 1
          BEGIN
-   			SELECT @c_reason = 'PASSED - Fit By Max Pallet (Stack Factor), Max Pallet: ' + dbo.fnc_RTrim(CAST(@n_MaxPallet as NVARCHAR(10))) +
+            SELECT @c_reason = 'PASSED - Fit By Max Pallet (Stack Factor), Max Pallet: ' + dbo.fnc_RTrim(CAST(@n_MaxPallet as NVARCHAR(10))) +
                                ' Pallet Required: ' +  dbo.fnc_RTrim( CAST((@n_PalletQty + 1) as NVARCHAR(10)))
 
             EXEC nspPTD 'nspASNPASTD', @n_ptraceheadkey, @c_putawaystrategykey,
@@ -2423,11 +2444,11 @@ END
 
 -- Added by MaryVong on 31-Mar-2007 (SOS69388 KFP) -Start(2)
 -- '6' & '7' - Check with MaxPallet for HostWhCode instead of Loc
--- KFP LOC Setup: Facility 	Loc    HostWhCode
---				  		Good		   LOC1	 LOC1	
---				  		Good 		   LOC2   LOC2
---				  		Quarantine  LOC1Q  LOC1
---				  		Quarantine  LOC2Q  LOC2
+-- KFP LOC Setup: Facility    Loc    HostWhCode
+--                    Good         LOC1    LOC1   
+--                    Good          LOC2   LOC2
+--                    Quarantine  LOC1Q  LOC1
+--                    Quarantine  LOC2Q  LOC2
 IF '6' IN (@cpa_LocationStateRestriction1,@cpa_LocationStateRestriction2,@cpa_LocationStateRestriction3)
 BEGIN
    -- Get the pallet setup
@@ -2439,7 +2460,7 @@ BEGIN
 
       SELECT @n_PalletQty = ISNULL( COUNT(DISTINCT ID), 0) 
       FROM   LOTxLOCxID (NOLOCK)
-		WHERE  LOC IN (SELECT LOC FROM LOC (NOLOCK) WHERE HostWhCode = @c_ToHostWhCode)
+      WHERE  LOC IN (SELECT LOC FROM LOC (NOLOCK) WHERE HostWhCode = @c_ToHostWhCode)
       AND    (Qty > 0 OR PendingMoveIn > 0 )
 
       IF @n_PalletQty >= @n_MaxPallet
@@ -2479,11 +2500,11 @@ BEGIN
    SELECT @n_StackFactor = (CASE StackFactor WHEN NULL THEN 0 ELSE StackFactor END) FROM SKU (NOLOCK) WHERE Storerkey = @c_StorerKey AND Sku = @c_Sku
    SELECT @n_MaxPalletStackFactor = @n_MaxPallet * @n_StackFactor
 
-	IF @b_debug = 2
-	BEGIN
-		SELECT '7 - MaxPallet is ' + CONVERT(CHAR(3),@n_MaxPallet) + 'StackFactor is ' + CONVERT(CHAR(3),@n_StackFactor)
-		SELECT '7 - MaxPallet * StackFactor is ' + CONVERT(CHAR(3),@n_MaxPalletStackFactor)
-	END
+   IF @b_debug = 2
+   BEGIN
+      SELECT '7 - MaxPallet is ' + CONVERT(CHAR(3),@n_MaxPallet) + 'StackFactor is ' + CONVERT(CHAR(3),@n_StackFactor)
+      SELECT '7 - MaxPallet * StackFactor is ' + CONVERT(CHAR(3),@n_MaxPalletStackFactor)
+   END
 
    IF @n_MaxPalletStackFactor > 0 
    BEGIN
@@ -2492,7 +2513,7 @@ BEGIN
       SELECT @n_PalletQty = ISNULL( COUNT(DISTINCT ID), 0) 
       FROM   LOTxLOCxID (NOLOCK)
       -- WHERE  LOC = @c_toloc
-		WHERE  LOC IN (SELECT LOC FROM LOC (NOLOCK) WHERE HostWhCode = @c_ToHostWhCode)
+      WHERE  LOC IN (SELECT LOC FROM LOC (NOLOCK) WHERE HostWhCode = @c_ToHostWhCode)
       AND    (Qty > 0 OR PendingMoveIn > 0 )
 
       IF @n_PalletQty >= @n_MaxPalletStackFactor
@@ -2514,7 +2535,7 @@ BEGIN
       BEGIN
          IF @b_debug = 1
          BEGIN
-   			SELECT @c_reason = 'PASSED - 7 - Fit By Max Pallet (Stack Factor), Max Pallet: ' + dbo.fnc_RTrim(CAST(@n_MaxPallet as NVARCHAR(10))) +
+            SELECT @c_reason = 'PASSED - 7 - Fit By Max Pallet (Stack Factor), Max Pallet: ' + dbo.fnc_RTrim(CAST(@n_MaxPallet as NVARCHAR(10))) +
                                ' Pallet Required: ' +  dbo.fnc_RTrim( CAST((@n_PalletQty + 1) as NVARCHAR(10)))
 
             EXEC nspPTD 'nspASNPASTD', @n_ptraceheadkey, @c_putawaystrategykey,
@@ -2934,7 +2955,7 @@ IF @cpa_PAType = '04' or
    @cpa_PAType = '52' or -- Search Zone specified in SKU table for matching Lottable02 and Lottable04
    @cpa_PAType = '54' or
    @cpa_PAType = '55' or -- SOS69388 KFP - Cross facility - search location within specified zone 
-   							 --  					 with matching Lottable02 and Lottable04 (do not mix sku)
+                         --                  with matching Lottable02 and Lottable04 (do not mix sku)
    @cpa_PAType = '56' or -- SOS69388 KFP - Cross facility - search Empty Location base on HostWhCode inventory = 0
    @cpa_PAType = '57' or -- SOS69388 KFP - Cross facility - search suitable location within specified zone (mix with diff sku)
    @cpa_PAType = '58'    -- SOS69388 KFP - Cross facility - search suitable location within specified zone (do not mix sku)
