@@ -22,6 +22,7 @@ GO
 /* 2016-09-30 1.2  Ung      Performance tuning                               */
 /* 2018-10-25 1.3  TungGH   Performance                                      */
 /* 2024-05-21 1.4  Dennis   FCR-336 Check Digit                              */
+/* 2024-05-31 1.5  Cuize    UWP-20116 Add storerKey in WHERE condition       */
 /*****************************************************************************/
 
 CREATE PROC [RDT].[rdtfnc_Scan_Pallet_To_Door](
@@ -280,6 +281,7 @@ BEGIN
                   JOIN dbo.PickDetail PD WITH (NOLOCK) ON ( PD.OrderKey = MD.OrderKey)
                   WHERE M.Status <> '9'
                   AND   PD.ID = @cPalletID
+                  AND   PD.storerKey = @cStorerKey
                   GROUP BY PD.ID
                   HAVING COUNT( DISTINCT M.MBOLKEY) > 1)
       BEGIN
@@ -316,6 +318,8 @@ BEGIN
       WHERE M.Status <> '9'
       AND   MD.Loadkey = @cLoadkey
       AND   PD.ID = @cPalletID
+      AND   PD.storerKey = @cStorerKey
+
 
       IF ISNULL( @cMBOLKey, '') = ''
       BEGIN
