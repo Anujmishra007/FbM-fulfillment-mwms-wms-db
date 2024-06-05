@@ -1,6 +1,5 @@
-USE [GLOWMS]
-GO
-/****** Object:  StoredProcedure [RDT].[rdt_840ExtPrint01]    Script Date: 3/1/2024 4:16:52 PM ******/
+
+/****** Object:  StoredProcedure [RDT].[rdt_1812ExtPrint01]    Script Date: 3/1/2024 4:16:52 PM ******/
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -60,22 +59,29 @@ BEGIN
                 SET @cPackList = ''
 
             IF @cPackList <> ''
-                BEGIN
-                    DECLARE @tPackList AS VariableTable
-                    INSERT INTO @tPackList (Variable, Value) VALUES ( '@cLoadKey',     @cLoadKey)
-                    INSERT INTO @tPackList (Variable, Value) VALUES ( '@cOrderKey',    @cOrderKey)
-                    INSERT INTO @tPackList (Variable, Value) VALUES ( '@cPickSlipNo',  @cPickSlipNo)
+            BEGIN
+               DECLARE @tPackList AS VariableTable
+               INSERT INTO @tPackList (Variable, Value) VALUES ( '@cLoadKey',     @cLoadKey)
+               INSERT INTO @tPackList (Variable, Value) VALUES ( '@cOrderKey',    @cOrderKey)
+               INSERT INTO @tPackList (Variable, Value) VALUES ( '@cPickSlipNo',  @cPickSlipNo)
 
-                    -- Print label
-            EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, '', @cPaperPrinter,
-                 @cPackList, -- Report type
-                 @tPackList, -- Report params
-                 'rdt_840ExtPrint25',
-                 @nErrNo  OUTPUT,
-                 @cErrMsg OUTPUT
+               -- Print label
+               EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, '', @cPaperPrinter,
+                   @cPackList, -- Report type
+                   @tPackList, -- Report params
+                   'rdt_1812ExtPrint01',
+                   @nErrNo  OUTPUT,
+                   @cErrMsg OUTPUT
+            END -- Packlist <> ''
+        END -- step 6
+    END -- inputkey = 1
 
+END -- sp end
 
-        END
-    END
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
 
-END
+GRANT EXECUTE ON [RDT].[rdt_1812ExtPrint01] TO NSQL
+GO

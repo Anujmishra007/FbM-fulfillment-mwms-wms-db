@@ -15,7 +15,7 @@ GO
 /* 2023-11-16 1.1  Calvin    JSM-191025 Retain SubreasonCode (CLVN01)      */
 /***************************************************************************/
 
-CREATE OR ALTER [RDT].[rdt_608RcvCfm16](
+CREATE OR ALTER PROC [RDT].[rdt_608RcvCfm16](
     @nFunc          INT,
     @nMobile        INT,
     @cLangCode      NVARCHAR( 3),
