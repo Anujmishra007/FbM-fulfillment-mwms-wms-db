@@ -84,7 +84,8 @@ BEGIN
                     BEGIN
                         BEGIN TRY
                             UPDATE RECEIPTDETAIL WITH (ROWLOCK)
-                            SET [LOTTABLE07] = @c_DamagedCode, [LOTTABLE06] = '1'
+                            SET [LOTTABLE07] = @c_DamagedCode, [LOTTABLE06] = '1',
+                                Trafficcop = NULL
                             WHERE ReceiptKey = @c_Receiptkey AND
                                 StorerKey = @c_Storerkey AND
                                 ReceiptLineNumber = @c_Receiptlinenumber;
@@ -117,7 +118,8 @@ BEGIN
         BEGIN
             BEGIN TRY
                 UPDATE RECEIPTDETAIL WITH (ROWLOCK)
-                SET [LOTTABLE07] = @c_ExpiredCode, [LOTTABLE06] = '1'
+                SET [LOTTABLE07] = @c_ExpiredCode, [LOTTABLE06] = '1',
+                Trafficcop = NULL
                 WHERE ReceiptKey = @c_Receiptkey AND
                     StorerKey = @c_Storerkey AND
                     ReceiptLineNumber = @c_Receiptlinenumber;
