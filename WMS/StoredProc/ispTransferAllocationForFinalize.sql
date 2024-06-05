@@ -94,6 +94,7 @@ BEGIN
 		  WHERE TF.Status = '0'
 		  AND TF.UserDefine02 = 'AUTOREL'
 		  AND TD.FromLot = ''
+		ORDER BY TD.TransferKey, TD.TransferLineNumber
 
 	OPEN CUR_ANFTRAN
 	FETCH NEXT FROM CUR_ANFTRAN INTO @c_TransferKey
@@ -173,12 +174,14 @@ BEGIN
 					  AND LOT.Sku       = @c_FromSku
 					  AND LOC.Facility  = @c_FromFacility
 					  AND LA.Lottable02 = @c_FromLottable02
+					  AND LA.Lottable06 = '1'
 					  AND LOT.Qty - LOT.QtyAllocated - LOT.QtyPicked - LOT.QtyPreAllocated > 0
 					  AND LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked > 0
 					  AND LOT.Status = 'OK'
 					  AND LOC.Status = 'OK'
 					  AND LOC.LocationFlag NOT IN ( 'HOLD', 'DAMAGE' )
 					  AND ID.Status  = 'OK'
+					  AND DATEDIFF(DAY, LA.Lottable04, GETDATE()) > 0
 					ORDER BY
 						(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked)
 
@@ -216,7 +219,7 @@ BEGIN
 									  ,FromLot  = @c_FromLot
 									  ,FromLoc  = @c_FromLoc
 									  ,FromID   = @c_FromID
-									  ,FromQty  = @n_QtyToTake     --@n_FromQty
+									  ,FromQty  = @n_QtyAvail
 									  ,Lottable01 = @c_Lottable01
 									  ,Lottable03 = @c_Lottable03
 									  ,Lottable04 = @dt_Lottable04
@@ -233,7 +236,7 @@ BEGIN
 									  ,Lottable15 = @dt_Lottable15
 									  ,ToLoc      = @c_FromLoc
 									  ,ToID       = @c_FromID
-									  ,ToQty      = @n_QtyToTake
+									  ,ToQty      = @n_QtyAvail
 									  ,ToLottable01 = @c_Lottable01
 									  ,ToLottable03 = @c_Lottable03
 									  ,ToLottable04 = @dt_Lottable04
@@ -383,7 +386,7 @@ BEGIN
 											, @dt_Lottable13
 											, @dt_Lottable14
 											, @dt_Lottable15
-											, @n_QtyToTake
+											, @n_QtyAvail
 											, @c_ToStorerkey
 											, @c_ToSku
 											, @c_FromLoc
@@ -405,7 +408,7 @@ BEGIN
 											, @dt_Lottable13
 											, @dt_Lottable14
 											, @dt_Lottable15
-											, @n_QtyToTake
+											, @n_QtyAvail
 											, @c_TransferStatus
 											, @c_UserDefined02
 											)
@@ -512,10 +515,15 @@ BEGIN
 	---- SELECT Records FOR Finalization, loop over and call : lsp_FinalizeTransfer_Wrapper -> ispFinalizeTransfer ----
 	BEGIN
 	  DECLARE CUR_FINTRAN CURSOR LOCAL FORWARD_ONLY STATIC FOR
-		SELECT TransferKey = TD.TransferKey
-		FROM TRANSFERDETAIL TD WITH (NOLOCK)
-		WHERE TD.Status = '0' AND TD.Lottable06 = '1' AND TD.ToLottable06 = '0'
-	    AND TD.UserDefine02 = 'DONE'
+		  SELECT  T.TransferKey
+		  FROM dbo.TRANSFER T WITH (NOLOCK)
+		  WHERE T.UserDefine02 = 'DONE'
+			AND NOT EXISTS(SELECT 1
+			               FROM TRANSFERDETAIL TD WITH (NOLOCK)
+			               WHERE TD.TransferKey = T.TransferKey
+				             AND TD.Status = '0'
+				             AND TD.FromLot = ''
+				             AND TD.ToLottable06 = '1')
 
 	SET @c_UserNameInContext = SUSER_SNAME()
 
@@ -548,7 +556,7 @@ BEGIN
 					BEGIN
 						SET @any_Errors = 1
 						--- Error Handling ----
-						SET @c_AlertMessage = 'There is error on Transfer allocation via Auto Release Process. TransferKey : ' + @c_TransferKey +
+						SET @c_AlertMessage = 'There is error on Finalize TRANSFER via Auto Inventory Release Process. TransferKey : ' + @c_TransferKey +
 						                      ' - ' + @c_ErrMsg
 						BEGIN TRAN
 
