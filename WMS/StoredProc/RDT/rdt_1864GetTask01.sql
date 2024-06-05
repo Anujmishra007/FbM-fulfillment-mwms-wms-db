@@ -478,7 +478,7 @@ BEGIN
 
    -- Assign to actual
    SET @cSKU = @cTempSKU
-   SET @cID = @cTempID
+   SET @cSuggID = @cTempID
    SET @nTaskQTY = @nTempQTY
    SET @cLottable01 = @cTempLottable01
    SET @cLottable02 = @cTempLottable02
