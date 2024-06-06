@@ -4,7 +4,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
-/* Trigger:  ispPRREC33                                                 */
+/* Trigger:  mspPRREC01                                                 */
 /* Creation Date: 29-May-2024                                           */
 /* Copyright: Maersk                                                    */
 /* Written by: Shreekanth                                               */
@@ -22,10 +22,10 @@ GO
 /* Updates:                                                             */
 /* Date          Author     Ver   Purposes                              */
 /* 06-June-2024  Shreekanth 1.0   UWP-15059 : Shelf life calc &         */
-/*               update ReceiptDetail - Lottable06 & Lottable07         */                                                             */
+/*               update ReceiptDetail - Lottable06 & Lottable07         */
 /************************************************************************/
 
-CREATE OR ALTER PROC [dbo].[ispPRREC33]
+CREATE OR ALTER PROC [dbo].[mspPRREC01]
 (     @c_Receiptkey  NVARCHAR(10)
   ,   @c_ReceiptLineNumber  NVARCHAR(5)
   ,   @b_Success     INT           OUTPUT
@@ -99,7 +99,7 @@ BEGIN
                             END TRY
                             BEGIN CATCH
                                 SET @n_Err = 63532
-                                SET @c_ErrMsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update RECEIPTDETAIL Table Failed. (ispPRREC33)'
+                                SET @c_ErrMsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update RECEIPTDETAIL Table Failed. (mspPRREC01)'
                                            + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_ErrMsg),'') + ' ) '
                                 SET @b_Success = 0;
                             END CATCH
@@ -135,7 +135,7 @@ BEGIN
                             END TRY
                             BEGIN CATCH
                                 SET @n_Err = 63532
-                                            SET @c_ErrMsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update RECEIPTDETAIL Table Failed. (ispPRREC33)'
+                                            SET @c_ErrMsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update RECEIPTDETAIL Table Failed. (mspPRREC01)'
                                                          + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_ErrMsg),'') + ' ) '
                                             SET @b_Success = 0;
                             END CATCH
@@ -159,7 +159,7 @@ BEGIN
 END -- End Procedure
 
 GO
-GRANT EXECUTE ON  ispPRREC33 TO NSQL
+GRANT EXECUTE ON  mspPRREC01 TO NSQL
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
