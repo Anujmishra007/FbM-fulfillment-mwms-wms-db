@@ -17,6 +17,12 @@ GO
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date          Author     Ver   Purposes                              */
+/* 06-June-2024  Shreekanth 1.0   UWP-15059 : Shelf life calc &         */
+/*               update ReceiptDetail - Lottable06 & Lottable07         */                                                             */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispPRREC33]
