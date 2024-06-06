@@ -74,7 +74,8 @@ BEGIN
 		, @c_AlertMessage       NVARCHAR(255) = ''
 		, @c_UserNameInContext  NVARCHAR(128) = ''
 		, @c_UserDefined02      NVARCHAR(20) = ''
-		, @any_Errors INT= 0
+		, @canBeAllocated INT =1
+		, @b_SuccessLog INT= 1
 
 	------- Retrieve records from TRANSFER UserDefine02='AUTOREL'
 	BEGIN
@@ -206,6 +207,8 @@ BEGIN
 					,  @dt_Lottable14
 					,  @dt_Lottable15
 					,  @c_LogicalLoc
+				IF (SELECT CURSOR_STATUS('LOCAL','CUR_RELINV')) = 0
+					SET @canBeAllocated = 0 -- If this cursor returns no result, then transfer header is not updated.
 				WHILE @@FETCH_STATUS <> -1
 						BEGIN
 							--- Update/Insert into TRANSFERDETAIL -- Split New Transfer Line--
@@ -444,7 +447,7 @@ BEGIN
 										     @c_modulename       = 'ispTransferAllocationForFinalize'
 											, @c_AlertMessage     = @c_AlertMessage
 											, @n_Severity         = '5'
-											, @b_success          = @b_success    OUTPUT
+											, @b_success          = @b_SuccessLog   OUTPUT
 											, @n_err              = @n_Err        OUTPUT
 											, @c_errmsg           = @c_ErrMsg     OUTPUT
 											, @c_Activity         = 'Finalize Transfer in Batch mode'
@@ -490,10 +493,10 @@ BEGIN
 				SET @n_IsFirstRecord = 1
 			END
 			-- Update UserDefine02 to 'DONE' in TRANSFER post allocation --
+			IF (@canBeAllocated = 1) -- Flag to track transfer header update based on CUR_RELINV result . If no allocation is done, we aren't updating transfer header
 				BEGIN
-					SET @c_UserDefined02 = 'DONE'
+					SET @c_UserDefined02 = 'ALLOCATION_DONE' -- Indicator for the allocation status
 						UPDATE TRANSFER WITH (ROWLOCK)
-							--SET Status = '0'
 						SET UserDefine02 = @c_UserDefined02
 						WHERE Transferkey = @c_Transferkey
 				END
@@ -507,6 +510,7 @@ BEGIN
 				,  @c_FromFacility
 				,  @c_FromLottable02
 				,  @c_ToLottable02
+		SET @canBeAllocated = 1 --setting to default value
 		END
 	 CLOSE CUR_ANFTRAN
 	 DEALLOCATE CUR_ANFTRAN
@@ -516,14 +520,15 @@ BEGIN
 	BEGIN
 	  DECLARE CUR_FINTRAN CURSOR LOCAL FORWARD_ONLY STATIC FOR
 		  SELECT  T.TransferKey
-		  FROM dbo.TRANSFER T WITH (NOLOCK)
-		  WHERE T.UserDefine02 = 'DONE'
+		  FROM TRANSFER T WITH (NOLOCK)
+		  WHERE T.UserDefine02 = 'ALLOCATION_DONE'
+			AND T.Status <> '9'
 			AND NOT EXISTS(SELECT 1
 			               FROM TRANSFERDETAIL TD WITH (NOLOCK)
 			               WHERE TD.TransferKey = T.TransferKey
-				             AND TD.Status = '0'
-				             AND TD.FromLot = ''
-				             AND TD.ToLottable06 = '1')
+				           AND TD.Status = '0'
+				           AND TD.FromLot = ''
+				           AND TD.ToLottable06 = '1')
 
 	SET @c_UserNameInContext = SUSER_SNAME()
 
@@ -531,40 +536,34 @@ BEGIN
 	FETCH NEXT FROM CUR_FINTRAN INTO @c_TransferKeyForFinalization
 	WHILE @@FETCH_STATUS <> -1
 	    BEGIN
-		 BEGIN TRY
 			EXEC [WM].lsp_FinalizeTransfer_Wrapper @c_TransferKeyForFinalization,
 			     @b_Success OUTPUT
 				, @n_Err OUTPUT
 				, @c_ErrMsg OUTPUT
 				,  @c_username = @c_UserNameInContext
-			SET @b_success = 1
-		 END TRY
-		 BEGIN CATCH
 			IF @n_err <> 0
 					BEGIN
 						SET @n_continue = 3
 						SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
 						SET @n_err = 81180
-						SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Finalize TRANSFER Failed. (ispTransferAllocationForFinalize)'
+						SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Finalize TRANSFER Failed. (ispTransferAllocationForFinalize->lsp_FinalizeTransfer_Wrapper)'
 							+ ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
-						GOTO NEXT_HANDLE
+						GOTO ERROR_HANDLE
 					END
 
-			NEXT_HANDLE:
+			ERROR_HANDLE:
 
 			IF @n_continue = 3  -- Error Occured
 					BEGIN
-						SET @any_Errors = 1
 						--- Error Handling ----
 						SET @c_AlertMessage = 'There is error on Finalize TRANSFER via Auto Inventory Release Process. TransferKey : ' + @c_TransferKey +
 						                      ' - ' + @c_ErrMsg
 						BEGIN TRAN
-
 							EXEC nspLogAlert
-							     @c_modulename       = 'ispTransferAllocationForFinalize'
+							      @c_modulename       = 'ispTransferAllocationForFinalize'
 								, @c_AlertMessage     = @c_AlertMessage
 								, @n_Severity         = '5'
-								, @b_success          = @b_success    OUTPUT
+								, @b_success          = @b_SuccessLog    OUTPUT
 								, @n_err              = @n_Err        OUTPUT
 								, @c_errmsg           = @c_ErrMsg     OUTPUT
 								, @c_Activity         = 'Finalize Transfer in Batch mode'
@@ -583,16 +582,18 @@ BEGIN
 									COMMIT TRAN
 								END
 					END
-		 END CATCH
+		 IF @b_Success = 1
+				 BEGIN
+					 SET @c_UserDefined02 = 'DONE'
+					 UPDATE TRANSFER WITH (ROWLOCK)
+					 SET UserDefine02 = @c_UserDefined02
+					 WHERE Transferkey = @c_TransferKeyForFinalization
+				 END
+
 	     FETCH NEXT FROM CUR_FINTRAN INTO @c_TransferKeyForFinalization
 		END
 		CLOSE CUR_FINTRAN
 		DEALLOCATE CUR_FINTRAN
-
-	  IF @any_Errors = 1
-	    BEGIN
-		    SET @b_Success = 0
-	    END
 	 END
 
 QUIT_SP:
