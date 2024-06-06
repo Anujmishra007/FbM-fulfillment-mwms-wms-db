@@ -23,7 +23,7 @@ CREATE OR ALTER PROCEDURE rdt.rdt_652ExtUpd01(
    @nInputKey           INT,
    @cStorerKey          NVARCHAR( 15),
    @cFacility           NVARCHAR( 5),
-   @cContainerNo        NVARCHAR( 20),
+   @cContainerNo        NVARCHAR( 20), -- rdtSTDEventLog only accept 20 max
    @cAppointmentNo      NVARCHAR( 20),
    @cMenuOption         NVARCHAR( 10),
    @cActionType         NVARCHAR( 10),
@@ -44,17 +44,62 @@ BEGIN
    IF @nFunc = 652
    BEGIN
 
-      IF @nStep = 2
-      BEGIN
-
          IF @nInputKey = 1
          BEGIN
 
-            DECLARE @b_success   INT
-            DECLARE @n_err       INT
-            DECLARE @c_errmsg    NVARCHAR(250)
+            DECLARE @b_success               INT
+            DECLARE @n_err                   INT
+            DECLARE @c_errmsg                NVARCHAR(250)
+            DECLARE @cPOKey                  NVARCHAR( 10)
+            DECLARE @cUSContainerValidation  NVARCHAR( 20)
+            DECLARE @cTableName              NVARCHAR( 20)
+            DECLARE @cColumnName             NVARCHAR( 20)
+            DECLARE @cSQLCustom              NVARCHAR( MAX)
+            DECLARE @cSQLCustomParam         NVARCHAR( MAX)
+            DECLARE @cUserName               NVARCHAR(18)
 
-            EXEC dbo.ispGenTransmitLog2 'WSONLOTLOG', @cContainerNo, '', @cStorerKey, ''
+            DECLARE @t_SplitValue   TABLE
+               (  RowID    INT            IDENTITY(1,1)  PRIMARY KEY
+                  ,Value  NVARCHAR(255)  NOT NULL DEFAULT('')
+               )
+
+            SET @cUSContainerValidation = rdt.RDTGetConfig( @nFunc, 'USContainerValidation', @cStorerKey)
+            IF @cUSContainerValidation = ''
+            BEGIN
+               GOTO Quit
+            END
+
+            INSERT INTO @t_SplitValue (Value)
+            SELECT SplitValues = s.[Value]
+            FROM STRING_SPLIT(@cUSContainerValidation, '.') AS s
+
+
+            SELECT @cTableName = ISNULL(Value,'') FROM @t_SplitValue WHERE RowID = 1
+            SELECT @cColumnName = ISNULL(Value,'') FROM @t_SplitValue WHERE RowID = 2
+
+            SET @cSQLCustom = ' SELECT TOP 1 @cPOKey = POKey ' +
+                              ' FROM '+ @cTableName + ' WITH (NOLOCK) ' +
+                              ' WHERE ' + @cColumnName +' = @cContainerNo ' +
+                              ' AND StorerKey = @cStorerKey '
+
+            SET @cSQLCustomParam = ' @cContainerNo    NVARCHAR( 20) ' +
+                                   ',@cStorerKey      NVARCHAR( 15) ' +
+                                   ',@cPOKey          NVARCHAR( 10) OUTPUT '
+
+            EXEC sp_executeSQL @cSQLCustom, @cSQLCustomParam
+               ,@cContainerNo = @cContainerNo
+               ,@cStorerKey   = @cStorerKey
+               ,@cPOKey       = @cPOKey OUTPUT
+
+            IF ISNULL(@cPOKey, '') = ''
+            BEGIN
+               SET @nErrNo = 215501
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSERT TransLog Fail
+               GOTO Quit
+            END
+
+
+            EXEC dbo.ispGenTransmitLog2 'WSONLOTLOG', @cPOKey, @cContainerNo, @cStorerKey, ''
                , @b_success OUTPUT
                , @n_err OUTPUT
                , @c_errmsg OUTPUT
@@ -66,9 +111,26 @@ BEGIN
                GOTO Quit
             END
 
-         END
+            SELECT @cUserName = UserName
+            FROM rdt.rdtMobRec WITH (NOLOCK)
+            WHERE Mobile = @nMobile
 
-      END
+            UPDATE RDT.rdtSTDEventLog SET ContainerNo = @cContainerNo
+            WHERE ActionType   = '3'      AND
+               userID       = @cUserName  AND
+               MobileNo     = @nMobile    AND
+               FunctionID   = @nFunc      AND
+               Facility     = @cFacility  AND
+               StorerKey    = @cStorerKey
+
+            IF @@ROWCOUNT = 0
+            BEGIN
+               SET @nErrNo = 215503
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSERT eventlog Fail
+               GOTO Quit
+            END
+
+         END
 
    END
 

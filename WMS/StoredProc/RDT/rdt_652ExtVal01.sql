@@ -57,9 +57,9 @@ AS
             DECLARE @cUSContainerValidation  NVARCHAR( 20)
             DECLARE @cTableName              NVARCHAR( 20)
             DECLARE @cColumnName             NVARCHAR( 20)
+            DECLARE @cPOKey                  NVARCHAR( 10)
             DECLARE @cSQLCustom              NVARCHAR( MAX)
             DECLARE @cSQLCustomParam         NVARCHAR( MAX)
-            DECLARE @nRowCount               INT
 
 
             --Example: PO.userdefine05
@@ -86,22 +86,22 @@ AS
                GOTO Quit
             END
 
-            SET @cSQLCustom = ' SELECT TOP 1 @nRowCount = 1 ' +
+            SET @cSQLCustom = ' SELECT TOP 1 @cPOKey = ISNULL(POKey,'''') ' +
                               ' FROM '+ @cTableName + ' WITH (NOLOCK) ' +
                               ' WHERE ' + @cColumnName +' = @cContainerNo ' +
                               ' AND StorerKey = @cStorerKey '
 
             SET @cSQLCustomParam = ' @cContainerNo    NVARCHAR( 20) ' +
                                    ',@cStorerKey      NVARCHAR( 15) ' +
-                                   ',@nRowCount       INT OUTPUT '
+                                   ',@cPOKey          NVARCHAR( 10) OUTPUT '
 
 
             EXEC sp_executeSQL @cSQLCustom, @cSQLCustomParam
                ,@cContainerNo = @cContainerNo
                ,@cStorerKey = @cStorerKey
-               ,@nRowCount   = @nRowCount OUTPUT
+               ,@cPOKey       = @cPOKey OUTPUT
 
-            IF ISNULL(@nRowCount,0) = 0
+            IF @cPOKey = ''
             BEGIN
                SET @nErrNo = 215552
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid Container Number
@@ -109,7 +109,6 @@ AS
             END
             ELSE
             BEGIN
-               SET @nRowCount = 0
                --Closed
                IF @cTableName = 'PO'
                   SET @cSQLCustom = @cSQLCustom + ' AND ExternStatus = 9'
@@ -122,9 +121,9 @@ AS
                EXEC sp_executeSQL @cSQLCustom, @cSQLCustomParam
                   ,@cContainerNo = @cContainerNo
                   ,@cStorerKey = @cStorerKey
-                  ,@nRowCount   = @nRowCount OUTPUT
+                  ,@cPOKey       = @cPOKey OUTPUT
 
-               IF ISNULL(@nRowCount,0) <> 0
+               IF @@rowcount>0
                BEGIN
                   SET @nErrNo = 215553
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Container has been Closed
@@ -133,12 +132,12 @@ AS
                -- Container No already checked in
                IF EXISTS(SELECT 1 FROM TransmitLog2 WITH(NOLOCK)
                          WHERE TableName = 'WSONLOTLOG'
-                           AND Key1 = @cContainerNo
-                           AND (Key2 = '' or Key2 = null)
+                           AND Key1 = @cPOKey
+                           AND Key2 = @cContainerNo
                            AND Key3 = @cStorerKey)
                BEGIN
                   SET @nErrNo = 215554
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Container has been Closed
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
                   GOTO Quit
                END
             END

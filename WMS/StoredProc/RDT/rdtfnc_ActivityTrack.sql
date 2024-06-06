@@ -254,7 +254,7 @@ BEGIN
      @nMobileNo     = @nMobile,
      @nFunctionID   = @nFunc,
      @cFacility     = @cFacility,
-     @cStorerKey    = '',
+     @cStorerKey    = @cStorerKey,
      @cRefNo4       = @cMenuOption,
      @nStep         = @nStep
 
@@ -415,7 +415,7 @@ BEGIN
         
    IF @nInputKey = 0 -- ESC        
    BEGIN        
-      EXEC RDT.rdt_STD_EventLog        
+      EXEC RDT.rdt_STD_EventLog
          @cActionType   = '9', -- Sign Out Function        
          @nMobileNo     = @nMobile,        
          @nFunctionID   = @nFunc,        
@@ -521,44 +521,6 @@ BEGIN
          END
       END
 
-      -- Extended update
-      IF @cExtendedUpdateSP <> ''
-      BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
-         BEGIN
-            SET @cSQL = 'EXEC rdt.' + RTRIM(@cExtendedUpdateSP) +
-                        ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, ' +
-                        ' @cContainerNo, @cAppointmentNo, @cMenuOption, @cActionType, @cRefNo1, @cDefaultOption, @cDefaultCursor, @cActivityStatus, ' +
-                        ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
-            SET @cSQLParam =
-                    '@nMobile             INT,           ' +
-                    '@nFunc               INT,           ' +
-                    '@cLangCode           NVARCHAR( 3),  ' +
-                    '@nStep               INT,           ' +
-                    '@nInputKey           INT,           ' +
-                    '@cStorerKey          NVARCHAR( 15), ' +
-                    '@cFacility           NVARCHAR( 5),  ' +
-                    '@cContainerNo        NVARCHAR( 20), ' +
-                    '@cAppointmentNo      NVARCHAR( 20), ' +
-                    '@cMenuOption         NVARCHAR( 10), ' +
-                    '@cActionType         NVARCHAR( 10), ' +
-                    '@cRefNo1             NVARCHAR( 10), ' +
-                    '@cDefaultOption      NVARCHAR( 10), ' +
-                    '@cDefaultCursor      NVARCHAR( 10), ' +
-                    '@cActivityStatus     NVARCHAR( 20), ' +
-                    '@nErrNo              INT           OUTPUT, ' +
-                    '@cErrMsg             NVARCHAR( 20) OUTPUT'
-
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                 @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility,
-                 @cContainerNo, @cAppointmentNo, @cMenuOption, @cActionType, @cRefNo1, @cDefaultOption, @cDefaultCursor, @cActivityStatus,
-                 @nErrNo OUTPUT, @cErrMsg OUTPUT
-            IF @nErrNo <> 0
-               GOTO QUIT
-         END
-      END
-
-     
       -- Execute label/report stored procedure        
       IF @cSP <> ''        
       BEGIN        
@@ -613,7 +575,45 @@ BEGIN
             GOTO Quit        
       
          SET @cOption = ''      
-      END           
+      END
+
+      -- Extended update
+      IF @cExtendedUpdateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM(@cExtendedUpdateSP) +
+                              ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, ' +
+                              ' @cContainerNo, @cAppointmentNo, @cMenuOption, @cActionType, @cRefNo1, @cDefaultOption, @cDefaultCursor, @cActivityStatus, ' +
+                              ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+                          '@nMobile             INT,           ' +
+                          '@nFunc               INT,           ' +
+                          '@cLangCode           NVARCHAR( 3),  ' +
+                          '@nStep               INT,           ' +
+                          '@nInputKey           INT,           ' +
+                          '@cStorerKey          NVARCHAR( 15), ' +
+                          '@cFacility           NVARCHAR( 5),  ' +
+                          '@cContainerNo        NVARCHAR( 20), ' +
+                          '@cAppointmentNo      NVARCHAR( 20), ' +
+                          '@cMenuOption         NVARCHAR( 10), ' +
+                          '@cActionType         NVARCHAR( 10), ' +
+                          '@cRefNo1             NVARCHAR( 10), ' +
+                          '@cDefaultOption      NVARCHAR( 10), ' +
+                          '@cDefaultCursor      NVARCHAR( 10), ' +
+                          '@cActivityStatus     NVARCHAR( 20), ' +
+                          '@nErrNo              INT           OUTPUT, ' +
+                          '@cErrMsg             NVARCHAR( 20) OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                       @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility,
+                       @cContainerNo, @cAppointmentNo, @cMenuOption, @cActionType, @cRefNo1, @cDefaultOption, @cDefaultCursor, @cActivityStatus,
+                       @nErrNo OUTPUT, @cErrMsg OUTPUT
+            IF @nErrNo <> 0
+               GOTO QUIT
+         END
+      END
+
    END
 
    IF @nInputKey = 0 -- ESC
