@@ -20,6 +20,7 @@ GO
 /* 18-08-2020  1.5  Ung          WMS-14788 Add force 1D barcode screen  */
 /* 24-04-2020  1.6  YeeKung      WMS-12885 Add ExtUpdSerialNo(yeekung01)*/
 /* 29-07-2023  1.7  Ung          WNS-23002 Add Scan param               */
+/* 05-06-2024  1.8  CYU027       FCR-340 add Custom SP                  */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_SerialNo]
