@@ -74,8 +74,8 @@ BEGIN
 		, @c_AlertMessage       NVARCHAR(255) = ''
 		, @c_UserNameInContext  NVARCHAR(128) = ''
 		, @c_UserDefined02      NVARCHAR(20) = ''
-		, @canBeAllocated INT =1
-		, @b_SuccessLog INT= 1
+		, @canBeAllocated       INT =1
+		, @b_SuccessLog         INT= 1
 
 	------- Retrieve records from TRANSFER UserDefine02='AUTOREL'
 	BEGIN
@@ -213,7 +213,7 @@ BEGIN
 						BEGIN
 							--- Update/Insert into TRANSFERDETAIL -- Split New Transfer Line--
 							SET @c_TransferStatus = '0'
-							SET @c_UserDefined02 = 'DONE'
+							SET @c_UserDefined02 = 'ALLOCATION_DONE'
 							IF(@n_IsFirstRecord = 1)
 							BEGIN TRY
 								BEGIN
@@ -389,7 +389,7 @@ BEGIN
 											, @dt_Lottable13
 											, @dt_Lottable14
 											, @dt_Lottable15
-											, @n_QtyAvail
+											, @n_QtyToTake
 											, @c_ToStorerkey
 											, @c_ToSku
 											, @c_FromLoc
@@ -411,7 +411,7 @@ BEGIN
 											, @dt_Lottable13
 											, @dt_Lottable14
 											, @dt_Lottable15
-											, @n_QtyAvail
+											, @n_QtyToTake
 											, @c_TransferStatus
 											, @c_UserDefined02
 											)
@@ -492,7 +492,7 @@ BEGIN
 
 				SET @n_IsFirstRecord = 1
 			END
-			-- Update UserDefine02 to 'DONE' in TRANSFER post allocation --
+			-- Update UserDefined02 to 'ALLOCATION_DONE' in TRANSFER post allocation --
 			IF (@canBeAllocated = 1) -- Flag to track transfer header update based on CUR_RELINV result . If no allocation is done, we aren't updating transfer header
 				BEGIN
 					SET @c_UserDefined02 = 'ALLOCATION_DONE' -- Indicator for the allocation status
@@ -522,13 +522,14 @@ BEGIN
 		  SELECT  T.TransferKey
 		  FROM TRANSFER T WITH (NOLOCK)
 		  WHERE T.UserDefine02 = 'ALLOCATION_DONE'
-			AND T.Status <> '9'
-			AND NOT EXISTS(SELECT 1
+		  AND T.Status <> '9'
+		  AND NOT EXISTS(SELECT 1
 			               FROM TRANSFERDETAIL TD WITH (NOLOCK)
 			               WHERE TD.TransferKey = T.TransferKey
 				           AND TD.Status = '0'
 				           AND TD.FromLot = ''
-				           AND TD.ToLottable06 = '1')
+				           AND TD.ToLottable06 = '1'
+			               AND TD.UserDefine02 <> 'ALLOCATION_DONE')
 
 	SET @c_UserNameInContext = SUSER_SNAME()
 
@@ -537,8 +538,8 @@ BEGIN
 	WHILE @@FETCH_STATUS <> -1
 	    BEGIN
 			EXEC [WM].lsp_FinalizeTransfer_Wrapper @c_TransferKeyForFinalization,
-			     @b_Success OUTPUT
-				, @n_Err OUTPUT
+		@b_Success OUTPUT
+			    , @n_Err OUTPUT
 				, @c_ErrMsg OUTPUT
 				,  @c_username = @c_UserNameInContext
 			IF @n_err <> 0
@@ -556,14 +557,14 @@ BEGIN
 			IF @n_continue = 3  -- Error Occured
 					BEGIN
 						--- Error Handling ----
-						SET @c_AlertMessage = 'There is error on Finalize TRANSFER via Auto Inventory Release Process. TransferKey : ' + @c_TransferKey +
+						SET @c_AlertMessage = 'There is an error on Finalize TRANSFER via Auto Inventory Release Process. TransferKey : ' + @c_TransferKey +
 						                      ' - ' + @c_ErrMsg
 						BEGIN TRAN
 							EXEC nspLogAlert
 							      @c_modulename       = 'ispTransferAllocationForFinalize'
 								, @c_AlertMessage     = @c_AlertMessage
 								, @n_Severity         = '5'
-								, @b_success          = @b_SuccessLog    OUTPUT
+								, @b_success          = @b_SuccessLog OUTPUT
 								, @n_err              = @n_Err        OUTPUT
 								, @c_errmsg           = @c_ErrMsg     OUTPUT
 								, @c_Activity         = 'Finalize Transfer in Batch mode'
