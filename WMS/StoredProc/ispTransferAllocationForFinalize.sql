@@ -561,7 +561,7 @@ BEGIN
 						                      ' - ' + @c_ErrMsg
 						BEGIN TRAN
 							EXEC nspLogAlert
-							      @c_modulename       = 'ispTransferAllocationForFinalize'
+							      @c_modulename       = 'ispTransferAllocationForFin'
 								, @c_AlertMessage     = @c_AlertMessage
 								, @n_Severity         = '5'
 								, @b_success          = @b_SuccessLog OUTPUT
