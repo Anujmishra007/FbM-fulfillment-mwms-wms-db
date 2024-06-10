@@ -444,13 +444,13 @@ BEGIN
 									BEGIN TRAN
 
 										EXEC nspLogAlert
-										     @c_modulename       = 'ispTransferAllocationForFinalize'
+										     @c_modulename       = 'ispTransferAllocationForFin'
 											, @c_AlertMessage     = @c_AlertMessage
 											, @n_Severity         = '5'
 											, @b_success          = @b_SuccessLog   OUTPUT
 											, @n_err              = @n_Err        OUTPUT
 											, @c_errmsg           = @c_ErrMsg     OUTPUT
-											, @c_Activity         = 'Finalize Transfer in Batch mode'
+											, @c_Activity         = 'Batch process mode'
 											, @c_Storerkey        = @c_FromStorerkey
 											, @c_SKU              = ''
 											, @c_UOM              = ''
