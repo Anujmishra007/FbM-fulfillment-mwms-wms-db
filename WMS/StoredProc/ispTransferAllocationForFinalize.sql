@@ -13,7 +13,7 @@ GO
 /* Copyright: Maersk                                            */
 /* Written by: ASB120                                          */
 /* Purpose: Transfer Allocation with Auto Finalize            */
-/* Called By: Java Scheduler
+/* Called By: Scheduler
 /***************************************************************************/
  */
 
