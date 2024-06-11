@@ -1,8 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrOrderDetailUpdate]') 
-              and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
-drop trigger [dbo].[ntrOrderDetailUpdate]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -54,8 +49,10 @@ GO
 /* 28-Jul-2017  TLTING03 Performance tune                               */  
 /* 16-Oct-2017  SHONG    Performance Tuning (SWT01)                     */
 /* 26-Oct-2017  SHONG    Performance Tuning (SWT02)                     */
+/* 07-May-2024  NJOW01   UWP-18748  Allow config to call custom sp      */
 /************************************************************************/        
-CREATE TRIGGER [dbo].[ntrOrderDetailUpdate]        
+
+CREATE OR ALTER TRIGGER [dbo].[ntrOrderDetailUpdate]        
 ON [dbo].[ORDERDETAIL]        
 FOR Update        
 AS        
@@ -132,6 +129,48 @@ BEGIN
    /* Execute Preprocess */        
    /* #INCLUDE <TRODU1.SQL> */        
    /* End Execute Preprocess */        
+
+   --NJOW01
+   IF @n_continue=1 or @n_continue=2          
+   BEGIN   	  
+      IF EXISTS (SELECT 1 FROM DELETED d   ----->Put INSERTED if INSERT action
+                 JOIN storerconfig s WITH (NOLOCK) ON  d.storerkey = s.storerkey    
+                 JOIN sys.objects sys ON sys.type = 'P' AND sys.name = s.Svalue
+                 WHERE  s.configkey = 'OrderDetailTrigger_SP')   -----> Current table trigger storerconfig
+      BEGIN        	  
+         IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL
+            DROP TABLE #INSERTED
+
+      	 SELECT * 
+      	 INTO #INSERTED
+      	 FROM INSERTED
+          
+         IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL
+            DROP TABLE #DELETED
+
+      	 SELECT * 
+      	 INTO #DELETED
+      	 FROM DELETED
+
+         EXECUTE dbo.isp_OrdertDetailTrigger_Wrapper ----->wrapper for current table trigger
+                   'UPDATE'  -----> @c_Action can be INSERT, UPDATE, DELETE
+                 , @b_Success  OUTPUT  
+                 , @n_Err      OUTPUT   
+                 , @c_ErrMsg   OUTPUT  
+
+         IF @b_success <> 1  
+         BEGIN  
+            SELECT @n_continue = 3  
+                  ,@c_errmsg = 'ntrOrderDetailUpdate ' + RTRIM(LTRIM(ISNULL(@c_errmsg,'')))  -----> Put current trigger name
+         END  
+         
+         IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL
+            DROP TABLE #INSERTED
+
+         IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL
+            DROP TABLE #DELETED
+      END
+   END         
     
 -- start tlting sos143271          
    -- To trigger Order Status              
