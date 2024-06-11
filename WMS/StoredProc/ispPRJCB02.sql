@@ -12,6 +12,7 @@ GO
 /* Purpose:  UWP-18748 UK Demeter - JCB  Allocation                     */
 /*           Allocate full case from pick by top up order qty if case   */
 /*           qty more than order qty. UOM 2.                            */
+/*           or loose qty from pick if not full case                    */
 /*           Order type = '1' consigment order                          */
 /*                                                                      */
 /*           set the sp to storerconfig PreAllocationSP                 */
@@ -235,7 +236,7 @@ BEGIN
       	 
          SET @c_SQL = ' DECLARE CUR_INV CURSOR FAST_FORWARD READ_ONLY FOR  	 
             SELECT LLI.Lot, LLI.Loc, LLI.ID, 
-                  (LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen)
+                  (LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen - ISNULL(REPLEN.ReplenQty,0))
             FROM LOTxLOCxID LLI (NOLOCK)
             JOIN LOC (NOLOCK) ON (LLI.Loc = LOC.LOC)
             JOIN ID (NOLOCK) ON (LLI.Id = ID.ID)
@@ -243,12 +244,20 @@ BEGIN
             JOIN LOTATTRIBUTE LA (NOLOCK) ON LOT.LOT = LA.LOT
             JOIN SKUXLOC SL (NOLOCK) ON (LLI.Storerkey = SL.Storerkey AND LLI.Sku = SL.Sku AND LLI.Loc = SL.Loc)
             JOIN SKU (NOLOCK) ON (LLI.Storerkey = Sku.Storerkey AND LLI.Sku = Sku.Sku)
+            OUTER APPLY (SELECT SUM(PD.Qty) AS RePlenQty
+                         FROM PICKDETAIL PD (NOLOCK)
+                         WHERE PD.Storerkey = LLI.Storerkey
+                         AND PD.Sku = LLI.Sku
+                         AND PD.Lot = LLI.Lot
+                         AND PD.ToLoc = LLI.Loc
+                         AND PD.CaseID = LLI.Id
+                         AND PD.Status = ''0'') AS REPLEN            
             WHERE LOC.LocationFlag = ''NONE''
             AND LOC.Status = ''OK''
             AND LOT.Status = ''OK''
             AND ID.Status = ''OK''
             AND LOC.Facility = @c_Facility
-            AND (LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen) > 0
+            AND (LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen - ISNULL(REPLEN.ReplenQty,0)) > 0
             AND LLI.STORERKEY = @c_StorerKey
             AND LLI.SKU = @c_SKU ' +
             RTRIM(@c_Conditions) + ' ' +
@@ -293,6 +302,8 @@ BEGIN
    		      SET @n_PickQty = 0
    		      SET @n_CaseCnt = 0
    		      SET @n_ExtraQty = 0
+   		      SET @n_CaseAvai = 0
+   		      SET @n_CaseReq = 0
    		      
    		      SELECT @n_CaseCnt = CASE WHEN ISNUMERIC(Lottable06) = 1 THEN
    		                               CAST(Lottable06 AS INT) ELSE 0 END
@@ -301,24 +312,66 @@ BEGIN
    		         		         		         		      		      
    		      IF @n_CaseCnt = 0
    		         GOTO NEXT_LLI
-   		         
-   		      SELECT @n_CaseAvai = FLOOR(@n_QtyAvai / @n_CaseCnt) 
-   		      SELECT @n_CaseReq = CEILING(@n_QtyLeftToFulFill / (@n_CaseCnt * 1.00)) 
-   		      
-   		      IF @n_CaseAvai >= @n_CaseReq
+   		            		         		      
+   		      IF @n_QtyLeftToFulFill >= @n_QtyAvai
    		      BEGIN
-   		      	 SET @n_PickQty = @n_CaseReq * @n_CaseCnt
+   		      	 SET @n_PickQty = @n_QtyAvai
    		      END
-   		      ELSE 
-   		      BEGIN   		      	 
-   		      	 SET @n_PickQty = @n_CaseAvai * @n_CaseCnt
-   		      END
+   		      ELSE
+   		      BEGIN
+      		     SELECT @n_CaseAvai = FLOOR(@n_QtyAvai / @n_CaseCnt) 
+   		         SELECT @n_CaseReq = CEILING(@n_QtyLeftToFulFill / (@n_CaseCnt * 1.00)) 
 
- 		      	SET @n_ExtraQty = @n_PickQty - @n_QtyLeftToFulFill
+   		         IF @n_CaseAvai >= @n_CaseReq  
+   		         BEGIN
+   		         	 SET @n_PickQty = @n_CaseReq * @n_CaseCnt  --get full case with possible extra
+   		      	   SET @n_ExtraQty = @n_PickQty - @n_QtyLeftToFulFill
+   		         END
+   		         ELSE 
+   		         BEGIN   		      	 
+   		         	 SET @n_PickQty = @n_CaseAvai * @n_CaseCnt  --try get full case
+   		         	 
+   		         	 IF @n_QtyAvai - @n_PickQty > 0 --still have loose qty available
+   		         	    AND @n_QtyLeftToFulFill - @n_PickQty > 0  --still unfulfill loose qty
+   		         	 BEGIN
+   		         	 	  IF (@n_QtyAvai - @n_PickQty) >= (@n_QtyLeftToFulFill - @n_PickQty)
+   		         	 	  BEGIN
+   		         	 	  	 SET @n_PickQty = @n_PickQty + (@n_QtyLeftToFulFill - @n_PickQty)
+   		         	 	  END
+   		         	 	  ELSE
+   		         	 	  BEGIN
+   		         	 	  	 SET @n_PickQty = @n_PickQty + (@n_QtyAvai - @n_PickQty)
+   		         	 	  END
+   		         	 END      		         	    		         	 
+   		         END                   		      	
+   		      END
+   		         	   		        	         		      
+   		      /*IF @n_CaseAvai = 0  --less than case in pick
+   		      BEGIN
+   		         IF @n_QtyAvai >= @n_QtyLeftToFulFill
+   		            SET @n_PickQty = @n_QtyLeftToFulFill
+   		         ELSE
+   		            SET @n_PickQty = @n_QtyAvai
+   		            
+   		         SET @n_ExtraQty = 0
+   		      END
+   		      ELSE
+   		      BEGIN   		      
+   		         IF @n_CaseAvai >= @n_CaseReq
+   		         BEGIN
+   		         	 SET @n_PickQty = @n_CaseReq * @n_CaseCnt
+   		         END
+   		         ELSE 
+   		         BEGIN   		      	 
+   		         	 SET @n_PickQty = @n_CaseAvai * @n_CaseCnt
+   		         END
+               
+ 		      	   SET @n_ExtraQty = @n_PickQty - @n_QtyLeftToFulFill
+ 		        END*/
  		      	
 	          IF @b_debug = 1
       	 	  BEGIN
-      	 	     SELECT @n_CaseAvai as caseavai, @n_CaseReq as casereq, @n_Casecnt as casecnt, @n_ExtraQty as extraqty, @n_PickQty as pickqty
+      	 	     SELECT @n_QtyAvai as Qtyavai, @n_CaseAvai as caseavai, @n_CaseReq as casereq, @n_Casecnt as casecnt, @n_ExtraQty as extraqty, @n_PickQty as pickqty, @n_QtyLeftToFulFill as QtyLeftToFulFill
       	 	  END 		      	
    		      
             IF  @n_ExtraQty > 0

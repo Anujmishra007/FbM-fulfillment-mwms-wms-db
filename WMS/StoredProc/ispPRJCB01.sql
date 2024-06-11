@@ -94,7 +94,10 @@ BEGIN
                                         AND L.Sku = LLI.Sku AND L.Id = LLI.Id AND L.Loc = LLI.Loc
                                         AND (L.QtyAllocated + L.QtyPicked + L.QtyReplen) > 0) 
                          AND NOT EXISTS(SELECT 1 FROM LOTXLOCXID L (NOLOCK) WHERE L.Storerkey = LLI.Storerkey
-                                        AND L.Sku <> LLI.Sku AND L.Id = LLI.Id AND L.Loc = LLI.Loc AND L.Qty > 0) '   
+                                        AND L.Sku <> LLI.Sku AND L.Id = LLI.Id AND L.Loc = LLI.Loc AND L.Qty > 0) 
+                         AND NOT EXISTS(SELECT 1 FROM PICKDETAIL PD (NOLOCK) WHERE PD.Storerkey = LLI.Storerkey
+                                        AND PD.Sku = LLI.Sku AND PD.Lot = LLI.Lot AND PD.ToLoc = LLI.Loc
+                                        AND PD.CaseID = LLI.Id AND PD.Status = ''0'') '   
    SET @c_Type = '0'                                     
                                              
    IF @n_continue IN(1,2)

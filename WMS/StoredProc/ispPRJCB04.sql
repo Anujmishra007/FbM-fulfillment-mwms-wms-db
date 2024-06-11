@@ -10,8 +10,8 @@ GO
 /* Written by:                                                          */
 /*                                                                      */
 /* Purpose:  UWP-18748 UK Demeter - JCB Allocation                      */
-/*           Allocate full case from bulk by top up order qty if case   */
-/*           qty more than order qty. UOM 7                             */
+/*           find full case from bulk and over allocate at pick by      */
+ /*          top up order qty if case qty more than order qty. UOM 7    */
 /*           Order type = '1' consigment order                          */
 /*                                                                      */
 /*           set the sp to storerconfig PreAllocationSP                 */
@@ -72,6 +72,7 @@ BEGIN
           ,@c_Lottable15             NVARCHAR(30)
           ,@c_Lot                    NVARCHAR(10)
           ,@c_Loc                    NVARCHAR(10)
+          ,@c_PickLoc                NVARCHAR(10)
           ,@c_ID                     NVARCHAR(18)
           ,@c_Facility               NVARCHAR(5)
           ,@c_PackKey                NVARCHAR(10)
@@ -204,16 +205,42 @@ BEGIN
       WHILE @@FETCH_STATUS = 0 AND @n_Continue IN(1,2)
       BEGIN
       	 SET @n_QtyLeftToFulfill = @n_OpenQty
+
+      	 SET @c_PickLoc = ''    
+      	 SELECT TOP 1 @c_PickLoc = SL.Loc
+      	 FROM SKUXLOC SL (NOLOCK)
+      	 JOIN LOC (NOLOCK) ON SL.Loc = LOC.Loc
+      	 OUTER APPLY (SELECT TOP 1 PD.LOC 
+      	              FROM PICKDETAIL PD (NOLOCK)
+      	              WHERE PD.Loc = SL.Loc
+      	              AND PD.Storerkey = SL.Storerkey
+      	              AND PD.Sku = SL.Sku
+      	              AND PD.Orderkey = @c_Orderkey) OP
+      	 WHERE LOC.Facility = @c_Facility
+      	 AND SL.Storerkey = @c_Storerkey
+      	 AND SL.Sku = @c_Sku
+      	 AND LOC.LocationType = 'PICK'
+      	 AND SL.LocationType IN ('PICK','CASE')
+      	 ORDER BY CASE WHEN OP.Loc IS NOT NULL THEN 1 ELSE 2 END, SL.Qty, LOC.LogicalLocation, LOC.Loc      	 	        	 	       	 
+
+         IF ISNULL(@c_PickLoc,'') = ''
+         BEGIN
+            SET @n_continue = 3
+            SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
+            SET @n_err = 81010  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Pick Loc not found for Sku: ' + RTRIM(@c_Sku) + '. (ispPRJCB04)'
+                        + '( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '                                                            
+         END   		      	    		      	    		      	    		      	                      	          	          	 
       	 
       	 IF @b_debug = 1
       	 BEGIN
-      	    SELECT @c_OrderKey as orderkey, @c_OrderLineNumber as orderlinenumber, @c_SKU as sku, @n_OpenQty as openqty
+      	    SELECT @c_OrderKey as orderkey, @c_OrderLineNumber as orderlinenumber, @c_SKU as sku, @n_OpenQty as openqty, @c_PickLoc AS PickLoc
       	 END          	 
       	 
       	 IF NOT EXISTS(SELECT 1 FROM ORDERDETAIL (NOLOCK)
       	               WHERE Orderkey = @c_Orderkey
       	               AND OrderLineNumber = @c_OrderLineNumber
-      	               AND ISNUMERIC(UserDefine01) = 1)
+      	               AND ISNUMERIC(UserDefine01) = 1) AND @n_Continue IN(1,2) 
       	 BEGIN
       	    UPDATE ORDERDETAIL WITH (ROWLOCK)
       	    SET Userdefine01 = CAST(OpenQty AS NVARCHAR)
@@ -227,7 +254,7 @@ BEGIN
             BEGIN
                SET @n_continue = 3
                SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
-               SET @n_err = 81010  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+               SET @n_err = 81020  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
                SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Orderdetail Failed. (ispPRJCB04)'
                            + '( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '                                                            
             END   		      	    		      	    		      	    		      	                      	          	    
@@ -235,7 +262,7 @@ BEGIN
       	 
          SET @c_SQL = ' DECLARE CUR_INV CURSOR FAST_FORWARD READ_ONLY FOR  	 
             SELECT LLI.Lot, LLI.Loc, LLI.ID, 
-                  (LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen)
+                  (LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen - ISNULL(REPLEN.ReplenQty,0))
             FROM LOTxLOCxID LLI (NOLOCK)
             JOIN LOC (NOLOCK) ON (LLI.Loc = LOC.LOC)
             JOIN ID (NOLOCK) ON (LLI.Id = ID.ID)
@@ -243,12 +270,20 @@ BEGIN
             JOIN LOTATTRIBUTE LA (NOLOCK) ON LOT.LOT = LA.LOT
             JOIN SKUXLOC SL (NOLOCK) ON (LLI.Storerkey = SL.Storerkey AND LLI.Sku = SL.Sku AND LLI.Loc = SL.Loc)
             JOIN SKU (NOLOCK) ON (LLI.Storerkey = Sku.Storerkey AND LLI.Sku = Sku.Sku)
+            OUTER APPLY (SELECT SUM(PD.Qty) AS RePlenQty
+                         FROM PICKDETAIL PD (NOLOCK)
+                         WHERE PD.Storerkey = LLI.Storerkey
+                         AND PD.Sku = LLI.Sku
+                         AND PD.Lot = LLI.Lot
+                         AND PD.ToLoc = LLI.Loc
+                         AND PD.CaseID = LLI.Id
+                         AND PD.Status = ''0'') AS REPLEN
             WHERE LOC.LocationFlag = ''NONE''
             AND LOC.Status = ''OK''
             AND LOT.Status = ''OK''
             AND ID.Status = ''OK''
             AND LOC.Facility = @c_Facility
-            AND (LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen) > 0
+            AND (LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen - ISNULL(REPLEN.ReplenQty,0)) > 0
             AND LLI.STORERKEY = @c_StorerKey
             AND LLI.SKU = @c_SKU ' +
             RTRIM(@c_Conditions) + ' ' +
@@ -284,7 +319,7 @@ BEGIN
          FETCH FROM CUR_INV INTO @c_Lot, @c_Loc, @c_ID, @n_QtyAvai
                                        
          WHILE @@FETCH_STATUS = 0 AND @n_Continue IN(1,2) AND @n_QtyLeftToFulFill > 0 
-      	 BEGIN       
+      	 BEGIN         	 	        	 	        	 	      	 	      	 	  
       	 	  IF @b_debug = 1
       	 	  BEGIN
       	 	  	SELECT @c_Loc as loc, @c_ID as id, @n_QtyAvai as qtyavai, @n_QtyLeftToFulFill as qtylefttofulfill
@@ -334,7 +369,7 @@ BEGIN
                BEGIN
                   SET @n_continue = 3
                   SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
-                  SET @n_err = 81020  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+                  SET @n_err = 81030  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
                   SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Orderdetail Failed. (ispPRJCB04)'
                               + '( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '                                                            
                END   		      	    		      	    		      	    		      	                
@@ -343,7 +378,42 @@ BEGIN
       	    IF @n_PickQty > 0
       	    BEGIN                                   	 	
       	       SET @b_Success = 0
-   		         SET @c_PickDetailKey = ''
+   		         SET @c_PickDetailKey = ''   		         
+
+               IF NOT EXISTS(SELECT 1 FROM LOTXLOCXID (NOLOCK) WHERE lot = @c_Lot AND loc = @c_PickLoc AND Id = '')
+               BEGIN
+                 INSERT INTO LOTXLOCXID (Storerkey, Sku, Lot, Loc, Id, Qty)
+                 VALUES (@c_Storerkey, @c_Sku, @c_Lot, @c_PickLoc, ''  , 0)
+
+                   SELECT @n_err = @@ERROR
+
+                   IF @n_err <> 0
+                   BEGIN
+                      SET @n_continue = 3
+                      SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
+                      SET @n_err = 81040  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+                      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Lotxlocxid Table Failed. (ispPRJCB04)'
+                              + '( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '                                                            
+                  END
+               END
+
+               IF NOT EXISTS(SELECT 1 FROM SKUXLOC (NOLOCK) WHERE Storerkey = @c_Storerkey AND Sku = @c_Sku AND loc = @c_PickLoc)
+               BEGIN
+                  INSERT INTO SKUXLOC (Storerkey, Sku, Loc, Qty)
+                  VALUES (@c_Storerkey, @c_Sku, @c_PickLoc, 0)
+
+                  SELECT @n_err = @@ERROR
+
+                  IF @n_err <> 0
+                  BEGIN
+                     SET @n_continue = 3
+                     SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
+                     SET @n_err = 81050  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+                     SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert SkuxLoc Table Failed. (ispPRJCB04)'
+                             + '( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '                                                            
+                  END
+               END
+   		         
    		         
    		         EXEC nspg_GetKey
    		            @KeyName = 'PickdetailKey',
@@ -355,7 +425,7 @@ BEGIN
    		            @b_resultset = 1,
    		            @n_batch = 1
                
-               IF @b_Success = 1
+               IF @b_Success = 1 AND @n_Continue IN(1,2) 
                BEGIN
               	  INSERT INTO PICKDETAIL
               	  (
@@ -372,29 +442,29 @@ BEGIN
               	  	TaskManagerReasonKey,   Notes,            	 MoveRefKey, 	
               	  	Trafficcop)
               	  VALUES 
-              	   (@c_PickDetailKey,       '',            		   '',
+              	   (@c_PickDetailKey,       @c_ID,            	 '',        --caseid as id from bulk
               	  	@c_OrderKey,            @c_OrderLineNumber,  @c_LOT,
               	  	@c_StorerKey,           @c_SKU,            	 '',
-              	  	@c_UOM,             	  @n_PickQty,              @n_PickQty,
+              	  	@c_UOM,             	  @n_PickQty,          @n_PickQty,
               	  	0,            		      '0',            		 '',
-              	  	@c_LOC,                 @c_ID,            	 @c_PackKey,
-              	  	'0',            		    'STD',            	 '',
-              	  	'',            		      'N',            		 '',
+              	  	@c_PickLoc,             '',               	 @c_PackKey, --loose ID for pick loc
+              	  	'0',            		    'STD',            	 '',      
+              	  	@c_Loc,            		      'N',            		 '',     --toloc as loc from bulk
               	  	'N',            		    '',            		   '',
               	  	'N',            		    '',            		   '',
               	  	'',            		      '',            		   '',
               	  	'U')
               	  	
-                 SET @n_err = @@ERROR
-                 
-                 IF @n_err <> 0
-                 BEGIN
-                    SET @n_continue = 3
-                    SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
-                    SET @n_err = 81030  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-                    SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Pickdetail Failed. (ispPRJCB04)'
-                                + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
-                 END
+                  SET @n_err = @@ERROR
+                  
+                  IF @n_err <> 0
+                  BEGIN
+                     SET @n_continue = 3
+                     SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
+                     SET @n_err = 81060  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+                     SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Pickdetail Failed. (ispPRJCB04)'
+                                 + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+                  END
                END  
               
                SET @n_QtyLeftToFulFill = @n_QtyLeftToFulFill - @n_PickQty 
