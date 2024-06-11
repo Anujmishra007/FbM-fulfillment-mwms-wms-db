@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nsp_orderprocessing_wrapper]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[nsp_orderprocessing_wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -54,13 +50,17 @@ GO
 /*                             Checking flag turn on                       */
 /* 19-Jul-2018  NJOW06    2.8  WMS-5745 Standard Pre/Post allocation process*/
 /* 08-Jan-2020  NJOW07    2.9  WMS-10420 add strategykey parameter         */
+/* 15-May-2024  NJOW08    3.0  WMS-25272 if PreRunStrategykey skip execute */
+/*                             pre/post                                    */
+/* 24-May-2024  NJOW09    3.1  UWP-18748 UK Demeter enable configure allocate*/
+/*                             strategy to PreAllocationSP                 */ 
 /***************************************************************************/    
-CREATE PROCEDURE [dbo].[nsp_OrderProcessing_Wrapper]  
+CREATE OR ALTER PROCEDURE [dbo].[nsp_OrderProcessing_Wrapper]  
                   @c_OrderKey NVARCHAR(10) ,  
                   @c_oskey NVARCHAR(10) ,  
-                  @c_docarton char (1),  
-                  @c_doroute  char (1),  
-                  @c_tblprefix char (3),
+                  @c_docarton CHAR (1),  
+                  @c_doroute  CHAR (1),  
+                  @c_tblprefix CHAR (3),
                   @c_extendparms NVARCHAR(250) = '',   --(Wan01)  
                   @c_StrategykeyParm NVARCHAR(10) = '' --NJOW07
 AS  
@@ -70,12 +70,12 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF   
    SET CONCAT_NULL_YIELDS_NULL OFF  
 
-   DECLARE @i_Success       integer,  
-           @i_error         integer,  
+   DECLARE @i_Success       INTEGER,  
+           @i_error         INTEGER,  
            @c_errmsg        NVARCHAR(255),   
-           @b_AllowAllocate int,
+           @b_AllowAllocate INT,
            @c_SuperOrderFlag NVARCHAR(1),
-           @n_ConsoCaseAlloc int,
+           @n_ConsoCaseAlloc INT,
            @c_Facility NVARCHAR(5),
            @c_LoadPlanDynamicAllocByUCC NVARCHAR(1), -- CN NIKE Bridge
            @n_LoadConsoAllocation INT,           
@@ -86,6 +86,7 @@ BEGIN
            @c_LoadKey          NVARCHAR(10),   --SHONG01
            @c_SQL              NVARCHAR(2000), --NJOW04
            @c_AllocateValidationRules  NVARCHAR(30), --NJOW04
+           @c_PreRunStrategykey        NVARCHAR(10) = '', --NJOW08
            @b_debug            INT
            
    SELECT @b_AllowAllocate  = 1  
@@ -180,7 +181,7 @@ BEGIN
    	BEGIN
    		IF NOT EXISTS(SELECT 1 FROM StorerConfig AS sc WITH (NOLOCK)
    		              WHERE sc.StorerKey = @c_StorerKey  
-   		                AND sc.ConfigKey like 'SkipPreAllocation' 
+   		                AND sc.ConfigKey LIKE 'SkipPreAllocation' 
    		                AND sc.SValue='1')
    		BEGIN
             SELECT @i_Success = 0, @i_error = '60525', @c_errmsg = 'Skip PreAllocation is Must Turn On for storer: ' + @c_StorerKey
@@ -325,8 +326,8 @@ BEGIN
    --  SHONG01 SOS#349953 (End)                    
            
    /* IDSV5 - Leo */  
-   Declare @c_authority NVARCHAR(1)  
-   Select @i_Success = 0  
+   DECLARE @c_authority NVARCHAR(1)  
+   SELECT @i_Success = 0  
 
    /* REMOVE THIS IF 'CheckManualAlloc' DEPLOYED TO ALL COUNTRY */
    IF EXISTS(SELECT 1 FROM NSQLCONFIG WITH (NOLOCK) WHERE Configkey = 'ALLOW ALLOCATION') 
@@ -355,6 +356,20 @@ BEGIN
       END
    END
    /* REMOVE THIS IF 'CheckManualAlloc' DEPLOYED TO ALL COUNTRY */
+   
+   --NJOW08 S
+   SET @c_PreRunStrategykey = ''  
+                                 
+   EXEC nspGetRight    
+        @c_Facility  = @c_Facility,   
+        @c_StorerKey = @c_StorerKey,    
+        @c_sku       = NULL,    
+        @c_ConfigKey = 'PreRunStrategy',     
+        @b_Success   = @I_Success                  OUTPUT,    
+        @c_authority = @c_PreRunStrategykey        OUTPUT,     
+        @n_err       = @i_error                    OUTPUT,     
+        @c_errmsg    = @c_errmsg                   OUTPUT    
+   --NJOW08 E     
 
    Execute nspGetRight 
             @c_Facility,  --NJOW05  
@@ -527,7 +542,9 @@ BEGIN
                  @n_err       = @i_error                    OUTPUT,   
                  @c_errmsg    = @c_errmsg                   OUTPUT  
             
-            IF EXISTS(SELECT 1 FROM sys.Objects WHERE NAME = @c_PreAllocationSP AND TYPE = 'P')   
+            IF (EXISTS(SELECT 1 FROM sys.Objects WHERE NAME = @c_PreAllocationSP AND TYPE = 'P')   
+                OR EXISTS(SELECT 1 FROM AllocateStrategy (NOLOCK) WHERE AllocateStrategyKey = @c_PreAllocationSP)) --NJOW09           
+               AND (ISNULL(@c_PreRunStrategykey,'') <> @c_StrategykeyParm OR ISNULL(@c_PreRunStrategykey,'')='') --NJOW08
             BEGIN  
                SET @i_Success = 0  
                
@@ -597,8 +614,9 @@ BEGIN
                  @n_err       = @i_error                    OUTPUT,   
                  @c_errmsg    = @c_errmsg                   OUTPUT  
             
-            IF EXISTS(SELECT 1 FROM sys.Objects WHERE NAME = @c_PostAllocationSP AND TYPE = 'P')            
-               OR EXISTS(SELECT 1 FROM AllocateStrategy (NOLOCK) WHERE AllocateStrategyKey = @c_PostAllocationSP)  --NJOW02
+            IF (EXISTS(SELECT 1 FROM sys.Objects WHERE NAME = @c_PostAllocationSP AND TYPE = 'P')            
+                OR EXISTS(SELECT 1 FROM AllocateStrategy (NOLOCK) WHERE AllocateStrategyKey = @c_PostAllocationSP))  --NJOW02
+               AND (ISNULL(@c_PreRunStrategykey,'') <> @c_StrategykeyParm OR ISNULL(@c_PreRunStrategykey,'')='') --NJOW08
             BEGIN  
                SET @i_Success = 0  
                SET @c_Trace_Col4 = @c_PostAllocationSP 
@@ -678,7 +696,9 @@ BEGIN
               @n_err       = @i_error                    OUTPUT,   
               @c_errmsg    = @c_errmsg                   OUTPUT  
    
-         IF EXISTS(SELECT 1 FROM sys.Objects WHERE NAME = @c_PreAllocationSP AND TYPE = 'P')   
+         IF (EXISTS(SELECT 1 FROM sys.Objects WHERE NAME = @c_PreAllocationSP AND TYPE = 'P')   
+             OR EXISTS(SELECT 1 FROM AllocateStrategy (NOLOCK) WHERE AllocateStrategyKey = @c_PreAllocationSP)) --NJOW09                    
+            AND (ISNULL(@c_PreRunStrategykey,'') <> @c_StrategykeyParm OR ISNULL(@c_PreRunStrategykey,'')='') --NJOW08
          BEGIN  
             SET @i_Success = 0  
             
@@ -914,8 +934,9 @@ BEGIN
               @n_err       = @i_error                    OUTPUT,   
               @c_errmsg    = @c_errmsg                   OUTPUT  
         
-         IF EXISTS(SELECT 1 FROM sys.Objects WHERE NAME = @c_PostAllocationSP AND TYPE = 'P')            
-            OR EXISTS(SELECT 1 FROM AllocateStrategy (NOLOCK) WHERE AllocateStrategyKey = @c_PostAllocationSP)  --NJOW02
+         IF (EXISTS(SELECT 1 FROM sys.Objects WHERE NAME = @c_PostAllocationSP AND TYPE = 'P')            
+            OR EXISTS(SELECT 1 FROM AllocateStrategy (NOLOCK) WHERE AllocateStrategyKey = @c_PostAllocationSP))  --NJOW02
+            AND (ISNULL(@c_PreRunStrategykey,'') <> @c_StrategykeyParm OR ISNULL(@c_PreRunStrategykey,'')='') --NJOW08
          BEGIN  
             SET @i_Success = 0  
             SET @c_Trace_Col4 = @c_PostAllocationSP 
