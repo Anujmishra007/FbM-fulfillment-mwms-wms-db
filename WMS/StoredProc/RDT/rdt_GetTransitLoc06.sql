@@ -16,7 +16,7 @@ GO
 /* Modifications log:                                                   */
 /*                                                                      */
 /* Date        Rev  Author    Purposes                                  */
-/* 17-14-2024  1.0  NLT013    USP-17667 - Allow move CASE to MoveTo Loc */
+/* 17-14-2024  1.0  NLT013    UWP-17667 - Allow move CASE to MoveTo Loc */
 /*                                                                      */
 /************************************************************************/
 
