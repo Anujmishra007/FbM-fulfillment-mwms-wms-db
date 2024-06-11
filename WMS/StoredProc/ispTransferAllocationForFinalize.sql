@@ -13,7 +13,7 @@ GO
 /* Copyright: Maersk                                            */
 /* Written by: ASB120                                          */
 /* Purpose: Transfer Allocation with Auto Finalize            */
-/* Called By: Scheduler
+/* Called By: Java Scheduler
 /***************************************************************************/
  */
 
@@ -182,7 +182,7 @@ BEGIN
 					  AND LOC.Status = 'OK'
 					  AND LOC.LocationFlag NOT IN ( 'HOLD', 'DAMAGE' )
 					  AND ID.Status  = 'OK'
-					  AND DATEDIFF(DAY, LA.Lottable04, GETDATE()) > 0
+					  AND DATEDIFF(DAY, GETDATE(), LA.Lottable04) > 0
 					ORDER BY
 						(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked)
 
