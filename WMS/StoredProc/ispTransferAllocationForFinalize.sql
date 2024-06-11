@@ -557,7 +557,7 @@ BEGIN
 			IF @n_continue = 3  -- Error Occured
 					BEGIN
 						--- Error Handling ----
-						SET @c_AlertMessage = 'There is an error on Finalize TRANSFER via Auto Inventory Release Process. TransferKey : ' + @c_TransferKey +
+						SET @c_AlertMessage = 'There is an error on Finalize TRANSFER via Auto Inventory Release Process. TransferKey : ' + @c_TransferKeyForFinalization +
 						                      ' - ' + @c_ErrMsg
 						BEGIN TRAN
 							EXEC nspLogAlert
