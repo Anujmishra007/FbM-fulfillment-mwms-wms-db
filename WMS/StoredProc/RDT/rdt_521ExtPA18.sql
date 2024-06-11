@@ -38,20 +38,30 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @nTranCount  INT
+   DECLARE  @nTranCount INT,
+            @bDebugFlag BIT = 0 
 
    SET @cSuggestedLOC = ''
 
    -- Get book loc info
    SELECT @cSuggestedLOC = SuggestedLoc
+         ,@nPABookingKey = 0  -- Make 521 main do not delete pre-book data when press ESC on Step2
    FROM RFPUTAWAY WITH (NOLOCK)
    WHERE StorerKey = @cStorerKey
+      AND FromLoc = @cLoc
       AND FromID = @cID
       AND CaseID = @cUCC
+
+   IF @bDebugFlag = 1
+      SELECT 'Get booking data', @cSuggestedLOC as SuggtLoc, @nPABookingKey as PABookingKey
 
    -- No booked loc found, then run the standard PA logic
    IF ISNULL(@cSuggestedLOC,'') = ''
    BEGIN
+
+      IF @bDebugFlag = 1
+         SELECT 'Execute standard PA logic'
+
       -- Suggest LOC
       EXEC @nErrNo = [dbo].[nspRDTPASTD]    
            @c_userid        = 'RDT'          -- NVARCHAR(10)    
@@ -67,9 +77,16 @@ BEGIN
          , @c_final_toloc     = @cSuggestedLOC     OUTPUT    
          , @c_PickAndDropLoc  = @cPickAndDropLoc   OUTPUT     
 
+      IF @bDebugFlag = 1
+         SELECT 'Standard PA result', @cSuggestedLOC AS SuggtLoc, @cPickAndDropLoc AS SuggtPnDLoc
+
       -- Check suggest loc
       IF @cSuggestedLOC = ''
       BEGIN
+
+         IF @bDebugFlag = 1
+            SELECT 'No SuggtLoc Found, return -1'
+
          SET @nErrNo = -1
          GOTO Quit
       END
