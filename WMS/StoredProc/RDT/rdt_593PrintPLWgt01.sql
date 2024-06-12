@@ -178,6 +178,7 @@ BEGIN
 Quit:
 
 END -- END SP
+GO
 
 GRANT EXECUTE ON  [RDT].[rdt_593PrintPLWgt01] TO [NSQL]
 GO
