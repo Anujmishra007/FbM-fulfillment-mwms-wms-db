@@ -16,6 +16,7 @@ GO
 /* 2023-12-08   1.4  Ung         WMS-24353 Add ExtendedUpdteSP at screen 1    */
 /* 2024-04-29   1.5  CYU027      UWP-18306 Short Pick                         */
 /* 2024-05-06   1.6  Dennis      FCR-133   Carton pick  trigger Automation    */
+/* 2024-06-11   1.7  Dennis      UWP-16958 Bug Fix                            */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PickCase] (
@@ -1378,7 +1379,7 @@ BEGIN
                   @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
                   @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
                   @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
-                  @nAction,
+                  @cBarcode,@nAction,
                   @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
                   @nErrNo OUTPUT, @cErrMsg OUTPUT
 
@@ -1743,7 +1744,7 @@ BEGIN
                @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
                @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
                @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
-               @nAction,
+               @cBarcode,@nAction,
                @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
                @nErrNo OUTPUT, @cErrMsg OUTPUT
 
