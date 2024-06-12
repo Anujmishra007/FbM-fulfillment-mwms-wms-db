@@ -18,14 +18,15 @@ GO
 /*                                                                      */
 /* Called By:                                                           */
 /*                                                                      */
-/* Github Version: 1.0                                                  */
+/* Github Version: 1.1                                                  */
 /*                                                                      */
 /* Version: V2                                                          */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author  Rev   Purposes                                  */
+/* Date        Author   Rev   Purposes                                  */
+/* 2024-06-12  Wan01    1.1   UWP-18392-JCB-MixSkuAllocation for Normal */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispPRJCB04] (
      @c_OrderKey        NVARCHAR(10)
@@ -81,9 +82,9 @@ BEGIN
           ,@c_SQLParm                NVARCHAR(MAX) = ''
           ,@c_Conditions             NVARCHAR(MAX) = ''
           ,@n_OpenQty                INT = 0
-   	      ,@n_PickQty                INT = 0
-   	      ,@n_QtyAvai                INT = 0
-   	      ,@n_ExtraQty               INT = 0
+          ,@n_PickQty                INT = 0
+          ,@n_QtyAvai                INT = 0
+          ,@n_ExtraQty               INT = 0
           ,@n_CaseCnt                INT = 0
           ,@n_CaseReq                INT = 0
           ,@n_CaseAvai               INT = 0
@@ -93,6 +94,10 @@ BEGIN
 
    SET @c_UOM = '7'   
    SET @c_Conditions = ' AND LOC.LocationType = ''BULK'' '
+                     --(Wan01) - START
+                     + ' AND NOT EXISTS(SELECT 1 FROM LOTXLOCXID L (NOLOCK) WHERE L.Storerkey = LLI.Storerkey      
+                         AND L.Sku <> LLI.Sku AND L.Loc = LLI.Loc AND L.Id = LLI.Id AND L.Qty > 0) ' 
+                     --(Wan01) - END
    SET @c_Type = '1'
                                              
    IF @n_continue IN(1,2)
@@ -204,24 +209,24 @@ BEGIN
                                    
       WHILE @@FETCH_STATUS = 0 AND @n_Continue IN(1,2)
       BEGIN
-      	 SET @n_QtyLeftToFulfill = @n_OpenQty
+          SET @n_QtyLeftToFulfill = @n_OpenQty
 
-      	 SET @c_PickLoc = ''    
-      	 SELECT TOP 1 @c_PickLoc = SL.Loc
-      	 FROM SKUXLOC SL (NOLOCK)
-      	 JOIN LOC (NOLOCK) ON SL.Loc = LOC.Loc
-      	 OUTER APPLY (SELECT TOP 1 PD.LOC 
-      	              FROM PICKDETAIL PD (NOLOCK)
-      	              WHERE PD.Loc = SL.Loc
-      	              AND PD.Storerkey = SL.Storerkey
-      	              AND PD.Sku = SL.Sku
-      	              AND PD.Orderkey = @c_Orderkey) OP
-      	 WHERE LOC.Facility = @c_Facility
-      	 AND SL.Storerkey = @c_Storerkey
-      	 AND SL.Sku = @c_Sku
-      	 AND LOC.LocationType = 'PICK'
-      	 AND SL.LocationType IN ('PICK','CASE')
-      	 ORDER BY CASE WHEN OP.Loc IS NOT NULL THEN 1 ELSE 2 END, SL.Qty, LOC.LogicalLocation, LOC.Loc      	 	        	 	       	 
+          SET @c_PickLoc = ''    
+          SELECT TOP 1 @c_PickLoc = SL.Loc
+          FROM SKUXLOC SL (NOLOCK)
+          JOIN LOC (NOLOCK) ON SL.Loc = LOC.Loc
+          OUTER APPLY (SELECT TOP 1 PD.LOC 
+                       FROM PICKDETAIL PD (NOLOCK)
+                       WHERE PD.Loc = SL.Loc
+                       AND PD.Storerkey = SL.Storerkey
+                       AND PD.Sku = SL.Sku
+                       AND PD.Orderkey = @c_Orderkey) OP
+          WHERE LOC.Facility = @c_Facility
+          AND SL.Storerkey = @c_Storerkey
+          AND SL.Sku = @c_Sku
+          AND LOC.LocationType = 'PICK'
+          AND SL.LocationType IN ('PICK','CASE')
+          ORDER BY CASE WHEN OP.Loc IS NOT NULL THEN 1 ELSE 2 END, SL.Qty, LOC.LogicalLocation, LOC.Loc                                 
 
          IF ISNULL(@c_PickLoc,'') = ''
          BEGIN
@@ -230,26 +235,26 @@ BEGIN
             SET @n_err = 81010  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
             SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Pick Loc not found for Sku: ' + RTRIM(@c_Sku) + '. (ispPRJCB04)'
                         + '( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '                                                            
-         END   		      	    		      	    		      	    		      	                      	          	          	 
-      	 
-      	 IF @b_debug = 1
-      	 BEGIN
-      	    SELECT @c_OrderKey as orderkey, @c_OrderLineNumber as orderlinenumber, @c_SKU as sku, @n_OpenQty as openqty, @c_PickLoc AS PickLoc
-      	 END          	 
-      	 
-      	 IF NOT EXISTS(SELECT 1 FROM ORDERDETAIL (NOLOCK)
-      	               WHERE Orderkey = @c_Orderkey
-      	               AND OrderLineNumber = @c_OrderLineNumber
-      	               AND ISNUMERIC(UserDefine01) = 1) AND @n_Continue IN(1,2) 
-      	 BEGIN
-      	    UPDATE ORDERDETAIL WITH (ROWLOCK)
-      	    SET Userdefine01 = CAST(OpenQty AS NVARCHAR)
-      	       ,Trafficcop = NULL
-      	    WHERE Orderkey = @c_Orderkey
-      	    AND OrderLineNumber = @c_OrderLineNumber
+         END                                                                                                                         
+          
+          IF @b_debug = 1
+          BEGIN
+             SELECT @c_OrderKey as orderkey, @c_OrderLineNumber as orderlinenumber, @c_SKU as sku, @n_OpenQty as openqty, @c_PickLoc AS PickLoc
+          END            
+          
+          IF NOT EXISTS(SELECT 1 FROM ORDERDETAIL (NOLOCK)
+                        WHERE Orderkey = @c_Orderkey
+                        AND OrderLineNumber = @c_OrderLineNumber
+                        AND ISNUMERIC(UserDefine01) = 1) AND @n_Continue IN(1,2) 
+          BEGIN
+             UPDATE ORDERDETAIL WITH (ROWLOCK)
+             SET Userdefine01 = CAST(OpenQty AS NVARCHAR)
+                ,Trafficcop = NULL
+             WHERE Orderkey = @c_Orderkey
+             AND OrderLineNumber = @c_OrderLineNumber
 
-   		      SET @n_err = @@ERROR
-   		      
+               SET @n_err = @@ERROR
+               
             IF @n_err <> 0
             BEGIN
                SET @n_continue = 3
@@ -257,10 +262,10 @@ BEGIN
                SET @n_err = 81020  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
                SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Orderdetail Failed. (ispPRJCB04)'
                            + '( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '                                                            
-            END   		      	    		      	    		      	    		      	                      	          	    
-      	 END              
-      	 
-         SET @c_SQL = ' DECLARE CUR_INV CURSOR FAST_FORWARD READ_ONLY FOR  	 
+            END                                                                                                                
+          END              
+          
+         SET @c_SQL = ' DECLARE CUR_INV CURSOR FAST_FORWARD READ_ONLY FOR      
             SELECT LLI.Lot, LLI.Loc, LLI.ID, 
                   (LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen - ISNULL(REPLEN.ReplenQty,0))
             FROM LOTxLOCxID LLI (NOLOCK)
@@ -319,52 +324,52 @@ BEGIN
          FETCH FROM CUR_INV INTO @c_Lot, @c_Loc, @c_ID, @n_QtyAvai
                                        
          WHILE @@FETCH_STATUS = 0 AND @n_Continue IN(1,2) AND @n_QtyLeftToFulFill > 0 
-      	 BEGIN         	 	        	 	        	 	      	 	      	 	  
-      	 	  IF @b_debug = 1
-      	 	  BEGIN
-      	 	  	SELECT @c_Loc as loc, @c_ID as id, @n_QtyAvai as qtyavai, @n_QtyLeftToFulFill as qtylefttofulfill
-      	 	  END
-      	 	        	 	
-   		      SET @n_PickQty = 0
-   		      SET @n_CaseCnt = 0
-   		      SET @n_ExtraQty = 0
-   		      
-   		      SELECT @n_CaseCnt = CASE WHEN ISNUMERIC(Lottable06) = 1 THEN
-   		                               CAST(Lottable06 AS INT) ELSE 0 END
-   		      FROM LOTATTRIBUTE (NOLOCK)
-   		      WHERE Lot = @c_Lot
-   		         		         		         		      		      
-   		      IF @n_CaseCnt = 0
-   		         GOTO NEXT_LLI
-   		         
-   		      SELECT @n_CaseAvai = FLOOR(@n_QtyAvai / @n_CaseCnt) 
-   		      SELECT @n_CaseReq = CEILING(@n_QtyLeftToFulFill / (@n_CaseCnt * 1.00)) 
-   		      
-   		      IF @n_CaseAvai >= @n_CaseReq
-   		      BEGIN
-   		      	 SET @n_PickQty = @n_CaseReq * @n_CaseCnt
-   		      END
-   		      ELSE 
-   		      BEGIN   		      	 
-   		      	 SET @n_PickQty = @n_CaseAvai * @n_CaseCnt
-   		      END
+          BEGIN                                                                 
+              IF @b_debug = 1
+              BEGIN
+               SELECT @c_Loc as loc, @c_ID as id, @n_QtyAvai as qtyavai, @n_QtyLeftToFulFill as qtylefttofulfill
+              END
+                        
+               SET @n_PickQty = 0
+               SET @n_CaseCnt = 0
+               SET @n_ExtraQty = 0
+               
+               SELECT @n_CaseCnt = CASE WHEN ISNUMERIC(Lottable06) = 1 THEN
+                                        CAST(Lottable06 AS INT) ELSE 0 END
+               FROM LOTATTRIBUTE (NOLOCK)
+               WHERE Lot = @c_Lot
+                                                                        
+               IF @n_CaseCnt = 0
+                  GOTO NEXT_LLI
+                  
+               SELECT @n_CaseAvai = FLOOR(@n_QtyAvai / @n_CaseCnt) 
+               SELECT @n_CaseReq = CEILING(@n_QtyLeftToFulFill / (@n_CaseCnt * 1.00)) 
+               
+               IF @n_CaseAvai >= @n_CaseReq
+               BEGIN
+                   SET @n_PickQty = @n_CaseReq * @n_CaseCnt
+               END
+               ELSE 
+               BEGIN                 
+                   SET @n_PickQty = @n_CaseAvai * @n_CaseCnt
+               END
 
- 		      	SET @n_ExtraQty = @n_PickQty - @n_QtyLeftToFulFill
- 		      	
-	          IF @b_debug = 1
-      	 	  BEGIN
-      	 	     SELECT @n_CaseAvai as caseavai, @n_CaseReq as casereq, @n_Casecnt as casecnt, @n_ExtraQty as extraqty, @n_PickQty as pickqty
-      	 	  END 		 		      	
-   		      
+               SET @n_ExtraQty = @n_PickQty - @n_QtyLeftToFulFill
+               
+             IF @b_debug = 1
+              BEGIN
+                 SELECT @n_CaseAvai as caseavai, @n_CaseReq as casereq, @n_Casecnt as casecnt, @n_ExtraQty as extraqty, @n_PickQty as pickqty
+              END                      
+               
             IF  @n_ExtraQty > 0
-            BEGIN   		      	  
-   		      	 UPDATE ORDERDETAIL WITH (ROWLOCK)
-   		      	 SET OpenQty = OpenQty + @n_ExtraQty
-   		      	 WHERE Orderkey = @c_Orderkey
-   		      	 AND OrderLineNumber = @c_OrderLineNumber
-   		      	 
-   		      	 SET @n_err = @@ERROR
-   		      	 
+            BEGIN                  
+                   UPDATE ORDERDETAIL WITH (ROWLOCK)
+                   SET OpenQty = OpenQty + @n_ExtraQty
+                   WHERE Orderkey = @c_Orderkey
+                   AND OrderLineNumber = @c_OrderLineNumber
+                   
+                   SET @n_err = @@ERROR
+                   
                IF @n_err <> 0
                BEGIN
                   SET @n_continue = 3
@@ -372,13 +377,13 @@ BEGIN
                   SET @n_err = 81030  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
                   SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Orderdetail Failed. (ispPRJCB04)'
                               + '( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '                                                            
-               END   		      	    		      	    		      	    		      	                
-   		      END
-      	      
-      	    IF @n_PickQty > 0
-      	    BEGIN                                   	 	
-      	       SET @b_Success = 0
-   		         SET @c_PickDetailKey = ''   		         
+               END                                                                                        
+               END
+               
+             IF @n_PickQty > 0
+             BEGIN                                       
+                SET @b_Success = 0
+                  SET @c_PickDetailKey = ''                 
 
                IF NOT EXISTS(SELECT 1 FROM LOTXLOCXID (NOLOCK) WHERE lot = @c_Lot AND loc = @c_PickLoc AND Id = '')
                BEGIN
@@ -413,48 +418,48 @@ BEGIN
                              + '( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '                                                            
                   END
                END
-   		         
-   		         
-   		         EXEC nspg_GetKey
-   		            @KeyName = 'PickdetailKey',
-   		            @fieldlength = 10,
-   		            @keystring = @c_PickDetailKey OUTPUT,
-   		            @b_Success = @b_Success OUTPUT,
-   		            @n_err = @n_Err OUTPUT,
-   		            @c_errmsg = @c_ErrMsg OUTPUT,
-   		            @b_resultset = 1,
-   		            @n_batch = 1
+                  
+                  
+                  EXEC nspg_GetKey
+                     @KeyName = 'PickdetailKey',
+                     @fieldlength = 10,
+                     @keystring = @c_PickDetailKey OUTPUT,
+                     @b_Success = @b_Success OUTPUT,
+                     @n_err = @n_Err OUTPUT,
+                     @c_errmsg = @c_ErrMsg OUTPUT,
+                     @b_resultset = 1,
+                     @n_batch = 1
                
                IF @b_Success = 1 AND @n_Continue IN(1,2) 
                BEGIN
-              	  INSERT INTO PICKDETAIL
-              	  (
-              	  	PickDetailKey,          CaseID,            	 PickHeaderKey,
-              	  	OrderKey,               OrderLineNumber,     Lot,
-              	  	Storerkey,              Sku,            	 	 AltSku,
-              	  	UOM,           		      UOMQty,            	 Qty,
-              	  	QtyMoved,               [Status],            DropID,
-              	  	Loc,            		    ID,            	     PackKey,
-              	  	UpdateSource,           CartonGroup,         CartonType,
-              	  	ToLoc,            	    DoReplenish,         ReplenishZone,
-              	  	DoCartonize,            PickMethod,          WaveKey,
-              	  	ShipFlag,               PickSlipNo,          TaskDetailKey,
-              	  	TaskManagerReasonKey,   Notes,            	 MoveRefKey, 	
-              	  	Trafficcop)
-              	  VALUES 
-              	   (@c_PickDetailKey,       @c_ID,            	 '',        --caseid as id from bulk
-              	  	@c_OrderKey,            @c_OrderLineNumber,  @c_LOT,
-              	  	@c_StorerKey,           @c_SKU,            	 '',
-              	  	@c_UOM,             	  @n_PickQty,          @n_PickQty,
-              	  	0,            		      '0',            		 '',
-              	  	@c_PickLoc,             '',               	 @c_PackKey, --loose ID for pick loc
-              	  	'0',            		    'STD',            	 '',      
-              	  	@c_Loc,            		      'N',            		 '',     --toloc as loc from bulk
-              	  	'N',            		    '',            		   '',
-              	  	'N',            		    '',            		   '',
-              	  	'',            		      '',            		   '',
-              	  	'U')
-              	  	
+                 INSERT INTO PICKDETAIL
+                 (
+                  PickDetailKey,          CaseID,               PickHeaderKey,
+                  OrderKey,               OrderLineNumber,     Lot,
+                  Storerkey,              Sku,                  AltSku,
+                  UOM,                       UOMQty,               Qty,
+                  QtyMoved,               [Status],            DropID,
+                  Loc,                     ID,                   PackKey,
+                  UpdateSource,           CartonGroup,         CartonType,
+                  ToLoc,                   DoReplenish,         ReplenishZone,
+                  DoCartonize,            PickMethod,          WaveKey,
+                  ShipFlag,               PickSlipNo,          TaskDetailKey,
+                  TaskManagerReasonKey,   Notes,                MoveRefKey,   
+                  Trafficcop)
+                 VALUES 
+                  (@c_PickDetailKey,       @c_ID,               '',        --caseid as id from bulk
+                  @c_OrderKey,            @c_OrderLineNumber,  @c_LOT,
+                  @c_StorerKey,           @c_SKU,               '',
+                  @c_UOM,                @n_PickQty,          @n_PickQty,
+                  0,                      '0',                  '',
+                  @c_PickLoc,             '',                   @c_PackKey, --loose ID for pick loc
+                  '0',                     'STD',               '',      
+                  @c_Loc,                       'N',                  '',     --toloc as loc from bulk
+                  'N',                     '',                    '',
+                  'N',                     '',                    '',
+                  '',                        '',                     '',
+                  'U')
+                  
                   SET @n_err = @@ERROR
                   
                   IF @n_err <> 0
@@ -476,7 +481,7 @@ BEGIN
          END
          CLOSE CUR_INV
          DEALLOCATE CUR_INV
-      	  
+           
          FETCH FROM CUR_ORDER_LINES INTO @c_StorerKey, @c_OrderKey, @c_OrderLineNumber, @c_SKU, @n_OpenQty, @c_Packkey, 
                                          @c_Lottable01, @c_Lottable02, @c_Lottable03, @d_Lottable04, @d_Lottable05, @c_Lottable06, @c_Lottable07, @c_Lottable08,
                                          @c_Lottable09, @c_Lottable10, @c_Lottable11, @c_Lottable12, @d_Lottable13, @d_Lottable14, @d_Lottable15, @c_Facility
