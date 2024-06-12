@@ -491,7 +491,6 @@ BEGIN
 				END
 			FETCH NEXT FROM CUR_ANFTRAN INTO @c_TransferKey
 				,  @c_TransferLineNumber
-				,  @c_FromStorerkey
 				,  @c_ToStorerkey
 				,  @c_FromSku
 				,  @c_ToSku
