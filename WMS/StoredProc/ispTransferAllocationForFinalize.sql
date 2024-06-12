@@ -11,13 +11,15 @@ GO
 /* Stored Procedure: ispTransferAllocationForFinalize             */
 /* Creation Date: 20-May-2024                                    */
 /* Copyright: Maersk                                            */
-/* Written by: ASB120                                          */
+/* Purpose: UWP-18603                                           */
+/* Written by: Ansuman                                          */
 /* Purpose: Transfer Allocation with Auto Finalize            */
 /* Called By: Java Scheduler
 /***************************************************************************/
  */
 
 CREATE PROC [dbo].[ispTransferAllocationForFinalize](
+	@c_FromStorerkey  NVARCHAR(10) = '',
 	@b_Success INT= 1 OUTPUT,
 	@n_Err INT= 0 OUTPUT,
 	@c_ErrMsg NVARCHAR(250)= '' OUTPUT
@@ -36,7 +38,6 @@ BEGIN
 		, @c_NewTransferLineNo  NVARCHAR(5) = ''
 		, @c_TransferKey        NVARCHAR(10) = ''
 		, @c_TransferKeyForFinalization        NVARCHAR(10) = ''
-		, @c_FromStorerkey      NVARCHAR(10) = ''
 		, @c_FromFacility       NVARCHAR(5) = ''
 		, @c_FromSku            NVARCHAR(15) = ''
 		, @c_FromLot            NVARCHAR(10) = ''
@@ -66,9 +67,7 @@ BEGIN
 		, @dt_Lottable15        DATETIME
 		, @n_FromQty            INT = 0
 		, @n_IsFirstRecord      INT = 1
-		, @n_QtyRequired        INT = 0
 		, @n_QtyAvail           INT = 0
-		, @n_QtyToTake          INT = 0
 		, @c_PrepackIndicator   NVARCHAR(30) = ''
 		, @c_LogicalLoc         NVARCHAR(10) = ''
 		, @c_AlertMessage       NVARCHAR(255) = ''
@@ -82,7 +81,6 @@ BEGIN
 	  DECLARE CUR_ANFTRAN CURSOR LOCAL FORWARD_ONLY STATIC FOR
 		SELECT TransferKey = TF.TransferKey
 			 , TransferLineNumber = TD.TransferLineNumber
-			 , FromStorerKey = TF.FromStorerKey
 			 , ToStorerKey = TD.ToStorerkey
 			 , FromSku   = TD.FromSku
 			 , ToSku   = TD.ToSku
@@ -94,13 +92,13 @@ BEGIN
 			     JOIN TRANSFER TF  WITH (NOLOCK) ON (TD.TransferKey = TF.TransferKey)
 		  WHERE TF.Status = '0'
 		  AND TF.UserDefine02 = 'AUTOREL'
+          AND TF.FromStorerKey = @c_FromStorerkey
 		  AND TD.FromLot = ''
 		ORDER BY TD.TransferKey, TD.TransferLineNumber
 
 	OPEN CUR_ANFTRAN
 	FETCH NEXT FROM CUR_ANFTRAN INTO @c_TransferKey
 		,  @c_TransferLineNumber
-		,  @c_FromStorerkey
 		,  @c_ToStorerkey
 		,  @c_FromSku
 		,  @c_ToSku
@@ -110,7 +108,6 @@ BEGIN
 		,  @c_ToLottable02
 	WHILE @@FETCH_STATUS <> -1
 		BEGIN
-			SET @n_QtyRequired = @n_FromQty
 
 			SELECT @c_FromPackkey = PACK.Packkey
 				 , @c_FromUOM     = PACK.PackUOM3
@@ -299,14 +296,6 @@ BEGIN
 							        CONTINUE
 							    END
 
-							IF @n_QtyRequired >= @n_QtyAvail
-								BEGIN
-									SET @n_QtyToTake = @n_QtyAvail
-								END
-							ELSE
-								BEGIN
-									SET @n_QtyToTake = @n_QtyRequired
-								END
 							    BEGIN TRY
 									BEGIN
 										SELECT @c_NewTransferLineNo = RIGHT('00000' + CONVERT(VARCHAR(5), MAX(CONVERT(INT, TransferLineNumber)) + 1),5)
@@ -389,7 +378,7 @@ BEGIN
 											, @dt_Lottable13
 											, @dt_Lottable14
 											, @dt_Lottable15
-											, @n_QtyToTake
+											, @n_QtyAvail
 											, @c_ToStorerkey
 											, @c_ToSku
 											, @c_FromLoc
@@ -411,7 +400,7 @@ BEGIN
 											, @dt_Lottable13
 											, @dt_Lottable14
 											, @dt_Lottable15
-											, @n_QtyToTake
+											, @n_QtyAvail
 											, @c_TransferStatus
 											, @c_UserDefined02
 											)
