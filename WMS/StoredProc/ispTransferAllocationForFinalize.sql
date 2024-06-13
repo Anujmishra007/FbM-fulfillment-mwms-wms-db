@@ -1,24 +1,14 @@
-IF EXISTS ( SELECT *
-            FROM dbo.sysobjects
-            WHERE Id = OBJECT_ID(N'[dbo].[ispTransferAllocationForFinalize]') AND OBJECTPROPERTY(Id ,N'IsProcedure') = 1 )
-		DROP PROCEDURE [dbo].[ispTransferAllocationForFinalize]
-GO
-SET ANSI_NULLS OFF
-GO
-SET QUOTED_IDENTIFIER OFF
-GO
 /***************************************************************************/
 /* Stored Procedure: ispTransferAllocationForFinalize             */
 /* Creation Date: 20-May-2024                                    */
 /* Copyright: Maersk                                            */
 /* Purpose: UWP-18603                                           */
 /* Written by: Ansuman                                          */
-/* Purpose: Transfer Allocation with Auto Finalize            */
-/* Called By: Java Scheduler
+/* Purpose: Transfer Allocation with Auto Finalize              */
+/* Called By: Java Scheduler                                    */
 /***************************************************************************/
- */
 
-CREATE PROC [dbo].[ispTransferAllocationForFinalize](
+CREATE OR ALTER PROC [dbo].[ispTransferAllocationForFinalize](
 	@c_FromStorerkey  NVARCHAR(10) = '',
 	@b_Success INT= 1 OUTPUT,
 	@n_Err INT= 0 OUTPUT,
@@ -590,5 +580,4 @@ QUIT_SP:
 END
 GO
 GRANT EXECUTE ON [dbo].[ispTransferAllocationForFinalize] TO nSQL
-GRANT EXECUTE ON [WM].[lsp_FinalizeTransfer_Wrapper] TO nSQL
 GO
