@@ -108,7 +108,7 @@ BEGIN
                      @n_err            = @nErrNo      OUTPUT,
                      @c_errmsg         = @cErrMsg     OUTPUT               
 
-               IF @b_Success <> 0
+               IF @b_Success <> 1
                BEGIN
                   SET @nErrNo = 215351
                   SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, 'DSP') -- Add TransmitLog2 Fail
