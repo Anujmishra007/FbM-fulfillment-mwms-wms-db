@@ -80,7 +80,9 @@ BEGIN
    @cPalletTypeInUse     NVARCHAR( 5),
    @cPalletTypeSave      NVARCHAR( 10),
    @cLott10              NVARCHAR( 30),
-   @cSKUReceived         NVARCHAR( 20)
+   @cSKUReceived         NVARCHAR( 20),
+   @cDamagedCode         NVARCHAR(30),
+   @cExpiredCode         NVARCHAR(30)
 
    SELECT
    @cLott10 = C_String1,
@@ -164,18 +166,64 @@ BEGIN
                END
                IF (ISNULL( rdt.RDTGetConfig( @nFunc, 'ULLottable06', @cStorerKey),'0') != '0')
                BEGIN
-                  SELECT 
-                        @cUserDefine08 = UserDefine08
-                     FROM dbo.ReceiptDetail RD WITH (NOLOCK)
-                     WHERE RD.ReceiptKey = @cReceiptKey
-                     AND RD.ReceiptLineNumber = @cReceiptLineNumber
+                  SET @cLottable06 = ''
+                  SELECT TOP 1 @cUserDefine08 = ISNULL(RD.UserDefine08,'')
+                  FROM dbo.Receipt R WITH (NOLOCK)
+                     INNER JOIN dbo.ReceiptDetail RD WITH (NOLOCK) ON R.ReceiptKey  = RD.ReceiptKey
+                  WHERE R.Facility = @cFacility AND R.StorerKey = @cStorerKey
+                     AND R.ReceiptKey = @cReceiptKey AND (@cPOKey='NOPO' or RD.POKey = @cPOKey)
+                     AND RD.Sku = @cSKU
+                  ORDER BY RD.ReceiptLineNumber
                   IF (@cUserDefine08 != '' AND ISNULL(@cUserDefine08,N'OK') != N'OK') OR ISNULL(@cLottable11,'')!='' OR ISNULL(@cLottable12,'')!=''
                   BEGIN    
                      SET @cLottable06 = '1'
                   END
-                  ELSE
+                  IF ISNULL(@cLottable12,'') <> '' AND 
+                  EXISTS (SELECT 1 FROM CODELKUP WITH (NOLOCK) 
+                              WHERE LISTNAME = 'ASNREASON'
+                              AND Code = @cLottable12
+                              AND StorerKey = @cStorerkey)
                   BEGIN
-                     SET @cLottable06 = ''
+                     SET @cDamagedCode = ''
+                     SELECT @cDamagedCode = ISNULL(Code,'')
+                     FROM CODELKUP WITH (NOLOCK)
+                     WHERE storerkey = @cStorerkey
+                     AND UDF01 = 'RMPM_Damaged'
+                     AND LISTNAME = 'SLCode'
+
+                     IF ISNULL(@cDamagedCode,'') <> ''
+                     BEGIN
+                           SET @cLottable06 = '1'
+                           SET @cLottable07 = @cDamagedCode
+                     END
+                     ELSE 
+                     BEGIN
+                        SET @nErrNo = 63533;
+                        SET @cErrMsg = 'Damaged Code is not configured for this Storer key' +@cStorerkey;
+                        GOTO QUIT
+                     END 
+                  END
+                  IF ISNULL(@dLottable04,'') <> '' AND DATEDIFF(DAY, GETDATE(), @dLottable04) <= 0
+                  BEGIN
+                     SET @cExpiredCode = ''
+
+                     SELECT @cExpiredCode = ISNULL(Code,'')
+                     FROM CODELKUP WITH (NOLOCK)
+                     WHERE storerkey = @cStorerkey
+                        AND UDF01 = 'RMPM_Expired' 
+                        AND LISTNAME = 'SLCode'         
+                              
+                     IF ISNULL(@cExpiredCode,'') = ''
+                     BEGIN
+                        SET @nErrNo = 63533;
+                        SET @cErrMsg = 'Expired Code is not configured for this Storer key' +@cStorerkey;
+                        GOTO Quit
+                     END
+                     ELSE
+                     BEGIN
+                        SET @cLottable07 = @cExpiredCode
+                        SET @cLottable06 = '1'
+                     END
                   END
                END
             END
