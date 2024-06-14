@@ -12,6 +12,7 @@ GO
 /*                                                                      */
 /* Date        Rev  Author      Purposes                                */
 /* 27-05-2024  1.0  JACKC       FCR-236 Created                         */
+/* 14-06-2024  1.1  JACKC       FCR-236 transmitlog2 requirement change */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_898ExtUpd06
@@ -62,13 +63,13 @@ BEGIN
             IF @cOption IN ('2','3')
             BEGIN
                DECLARE  @b_Success           INT
-                        ,@cReceiptLineNumber NVARCHAR(5)
-                        ,@cExternPOKey       NVARCHAR(20)
-                        ,@cKey2              NVARCHAR(30)
-                        ,@cErrFlag           NVARCHAR(1)
+                        --,@cReceiptLineNumber NVARCHAR(5)
+                        --,@cExternPOKey       NVARCHAR(20)
+                        --,@cKey2              NVARCHAR(30)
+                        --,@cErrFlag           NVARCHAR(1)
 
                -- Send receiptdetail info to interface
-               SET @cErrFlag = 0
+               /*SET @cErrFlag = 0
                DECLARE @curReceiptDetail CURSOR
                SET @curReceiptDetail = CURSOR FAST_FORWARD FOR
                   SELECT ExternPoKey, ReceiptLineNumber FROM RECEIPTDETAIL WITH (NOLOCK) WHERE ReceiptKey = @cReceiptKey AND ToId = @cToID
@@ -94,9 +95,20 @@ BEGIN
                      SET @cErrFlag = 1
 
                   FETCH NEXT FROM @curReceiptDetail INTO @cExternPOKey, @cReceiptLineNumber
-               END -- End cursor
+               END -- End cursor */ -- Removed per FCR-236 FBR v1.4 change
 
-               IF @cErrFlag <> 0
+               -- Send new transmitlog2 per FCR-236 v1.4
+               EXEC ispGenTransmitLog2 
+                     @c_TableName      = 'WSRCTPDETLOG', 
+                     @c_Key1           = @cReceiptkey,
+                     @c_Key2           = @cToID, 
+                     @c_Key3           = @cStorerkey, 
+                     @c_TransmitBatch  = '', 
+                     @b_Success        = @b_Success   OUTPUT,
+                     @n_err            = @nErrNo      OUTPUT,
+                     @c_errmsg         = @cErrMsg     OUTPUT               
+
+               IF @b_Success <> 0
                BEGIN
                   SET @nErrNo = 215351
                   SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, 'DSP') -- Add TransmitLog2 Fail
