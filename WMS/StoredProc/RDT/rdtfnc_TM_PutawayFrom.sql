@@ -29,6 +29,8 @@ GO
 /*                            Add ExtendedInfo @ screen 3 (james03)            */
 /* 17-02-2020  1.7   Chermaine WMS-12080 Add sku & Desc display in step3 (cc01)*/
 /* 18-04-2024  1.8   Dennis    Check Digit                                     */
+/* 22-04-2024  1.8   NLT013    UWP-13706 UWP-18596 add DB Schedule rdt for     */
+/*                             ExtendedUpdateSP                                */
 /*******************************************************************************/
 CREATE  PROC [RDT].[rdtfnc_TM_PutawayFrom](
    @nMobile    INT,
@@ -91,6 +93,7 @@ DECLARE
    @cExtendedValidateSP NVARCHAR( 20),
    @tExtInfo            VariableTable, 
    @cDIsplaySKU         NVARCHAR( 1),  -- (cc01)
+   @cReloadToLoc        NVARCHAR( 1),  --NLT013
    @cExtendedScreenSP   NVARCHAR( 20),
    @nAction             INT,
    @nAfterScn           INT,
@@ -325,7 +328,7 @@ BEGIN
    BEGIN
       IF EXISTS( SELECT 1 FROM dbo.sysobjects WITH (NOLOCK) WHERE name = @cExtendedUpdateSP AND type = 'P')
       BEGIN
-         SET @cSQL = 'EXEC ' + RTRIM( @cExtendedUpdateSP) +
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
             ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT'
          SET @cSQLParam =
             '@nMobile         INT,        ' +
@@ -422,7 +425,7 @@ BEGIN
       BEGIN
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WITH (NOLOCK) WHERE name = @cExtendedUpdateSP AND type = 'P')
          BEGIN
-            SET @cSQL = 'EXEC ' + RTRIM( @cExtendedUpdateSP) +
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT'
             SET @cSQLParam =
                '@nMobile         INT,        ' +
@@ -550,7 +553,7 @@ BEGIN
       BEGIN
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WITH (NOLOCK) WHERE name = @cExtendedUpdateSP AND type = 'P')
          BEGIN
-            SET @cSQL = 'EXEC ' + RTRIM( @cExtendedUpdateSP) +
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT'
             SET @cSQLParam =
                '@nMobile         INT,        ' +
@@ -614,6 +617,18 @@ BEGIN
       	   SET @cOutField05 = LEFT (@cSKUDescr, 20)
       	   SET @cOutField06 = SUBSTRING(@cSKUDescr, 21, 20)
          END
+      END
+
+         --NLT013
+      SET @cReloadToLoc = rdt.rdtGetConfig( @nFunc, 'ReloadToLoc', @cStorerKey)
+      IF @cReloadToLoc = '0'
+         SET @cReloadToLoc = ''
+      IF @cReloadToLoc = '1'
+      BEGIN
+         SELECT
+            @cSuggToLOC = ToLOC
+         FROM dbo.TaskDetail WITH (NOLOCK)
+         WHERE TaskDetailKey = @cTaskdetailKey
       END
       
       -- Prepare next screen var
@@ -819,7 +834,7 @@ BEGIN
       BEGIN
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WITH (NOLOCK) WHERE name = @cExtendedUpdateSP AND type = 'P')
          BEGIN
-            SET @cSQL = 'EXEC ' + RTRIM( @cExtendedUpdateSP) +
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT'
             SET @cSQLParam =
                '@nMobile         INT,        ' +
@@ -1288,7 +1303,7 @@ BEGIN
             BEGIN
                IF EXISTS( SELECT 1 FROM dbo.sysobjects WITH (NOLOCK) WHERE name = @cExtendedUpdateSP AND type = 'P')
                BEGIN
-                  SET @cSQL = 'EXEC ' + RTRIM( @cExtendedUpdateSP) +
+                  SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
                      ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT'
                   SET @cSQLParam =
                      '@nMobile         INT,        ' +
