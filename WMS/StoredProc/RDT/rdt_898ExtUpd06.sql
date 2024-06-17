@@ -6,7 +6,7 @@ SET ANSI_NULLS OFF
 GO
 /************************************************************************/
 /* Store procedure: rdt_898ExtUpd06                                    */
-/* Copyright      : IDS                                                 */
+/* Copyright      : Maersk                                              */
 /*                                                                      */
 /* Purpose: Extended Upd for USLevis                                    */
 /*                                                                      */
