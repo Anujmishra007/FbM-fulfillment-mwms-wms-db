@@ -55,6 +55,7 @@ GO
 /*                            Add decode base on UPC.UOM                      */
 /*                            Fix full short stuck at SKU screen              */
 /* 2023-04-05 4.0  Ung        WMS-22053 Revise ExtendedInfo                   */
+/* 2024-06-14 4.1  Dennis     UWP-20813 Check Digit                           */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Replen](
@@ -156,6 +157,7 @@ DECLARE
    @cRefKey04           NVARCHAR(20),
    @cRefKey05           NVARCHAR(20),
    @cSystemQTY          NVARCHAR(10),
+   @cCheckDigitLOC      NVARCHAR( 20),
 
    @cSwapTaskSP         NVARCHAR( 20),
    @cDecodeSP           NVARCHAR( 20),
@@ -175,6 +177,7 @@ DECLARE
    @cAutoGenDropID      NVARCHAR( 1),  --(cc01)
    @bSuccess            INT,
    @cExtendedWCSSP      NVARCHAR( 20),
+   @cLOCCheckDigitSP    NVARCHAR( 20),
    
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
@@ -276,7 +279,8 @@ SELECT
    @cDecodeSP          = V_String42,
    @cSwapUCCSP         = V_String43,
    @cExtendedWCSSP     = V_String44,
-   
+   @cLOCCheckDigitSP   = V_string45,
+
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01  = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02  = FieldAttr02,
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,  @cFieldAttr03  = FieldAttr03,
@@ -377,6 +381,7 @@ BEGIN
    SELECT @cPUOM = DefaultUOM FROM rdt.rdtUser WITH (NOLOCK) WHERE UserName = @cUserName
 
    -- Get storer configure
+   SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)
    SET @cMoveQTYAlloc = rdt.RDTGetConfig( @nFunc, 'MoveQTYAlloc', @cStorerKey)
    SET @cMoveQTYReplen = rdt.RDTGetConfig( @nFunc, 'MoveQTYReplen', @cStorerKey)
    SET @cDefaultFromID = rdt.rdtGetConfig( @nFunc, 'DefaultFromID', @cStorerKey)
@@ -843,6 +848,7 @@ BEGIN
    BEGIN
       -- Screen mapping
       SET @cFromLOC = @cInField04
+      SET @cCheckDigitLOC = @cInField04
 
       -- Check blank FromLOC
       IF @cFromLOC = ''
@@ -862,7 +868,20 @@ BEGIN
 
          IF @nErrNo <> 0              
             GOTO Step_FromLOC_Fail              
-      END 
+      END
+
+      -- Check LOC check digit
+      IF @cLOCCheckDigitSP = '1'
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+            @cCheckDigitLOC    OUTPUT,
+            @nErrNo      OUTPUT,
+            @cErrMsg     OUTPUT
+         IF @nErrNo <> 0
+            GOTO Step_FromLOC_Fail
+            
+         SET @cFromLOC = @cCheckDigitLOC
+      END
 
       -- Check if FromLOC match
       IF @cFromLOC <> @cSuggFromLOC
@@ -2506,6 +2525,7 @@ BEGIN
    BEGIN
       -- Screen mapping
       SET @cToLOC = @cInField03
+      SET @cCheckDigitLOC = @cInField03
 
       -- Check blank FromLOC
       IF @cToLOC = ''
@@ -2526,6 +2546,19 @@ BEGIN
          IF @nErrNo <> 0              
             GOTO Step_ToLOC_Fail              
       END 
+
+      -- Check LOC check digit
+      IF @cLOCCheckDigitSP = '1'
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+            @cCheckDigitLOC    OUTPUT,
+            @nErrNo      OUTPUT,
+            @cErrMsg     OUTPUT
+         IF @nErrNo <> 0
+            GOTO Step_ToLOC_Fail
+            
+         SET @cToLOC = @cCheckDigitLOC
+      END
 
       SET @nIsToLOCDiff = 0
       -- Check if FromLOC match
@@ -3509,6 +3542,7 @@ BEGIN
       V_String42   = @cDecodeSP,
       V_String43   = @cSwapUCCSP,
       V_String44   = @cExtendedWCSSP,
+      V_string45   = @cLOCCheckDigitSP,
 
       V_Integer1   = @nQTY_RPL,
       V_Integer2   = @nPQTY_RPL,
