@@ -119,6 +119,13 @@ AS
       GOTO Quit
    END
 
+   IF(LEN(@cPrefix)>3)
+   BEGIN
+      SET @nErrNo = 216406
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --216406 Prefix Too Long
+      GOTO Quit
+   END
+
    /*-------------------------------------------------------------------------------
 
                                       Print pallet label
