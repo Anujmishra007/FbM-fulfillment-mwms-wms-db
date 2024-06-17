@@ -121,7 +121,8 @@ BEGIN
                MobileNo     = @nMobile    AND
                FunctionID   = @nFunc      AND
                Facility     = @cFacility  AND
-               StorerKey    = @cStorerKey
+               StorerKey    = @cStorerKey AND
+               refno2       = @cContainerNo
 
             IF @@ROWCOUNT = 0
             BEGIN
