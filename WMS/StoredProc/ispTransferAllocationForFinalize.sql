@@ -445,6 +445,7 @@ BEGIN
 												COMMIT TRAN
 											END
 								END
+						SET @n_continue = 1 --resetting error flag
 						FETCH NEXT FROM CUR_RELINV INTO
 							   @c_FromLot
 							,  @c_FromLoc
@@ -568,7 +569,7 @@ BEGIN
 					 SET UserDefine02 = @c_UserDefined02
 					 WHERE Transferkey = @c_TransferKeyForFinalization
 				 END
-
+         SET @n_continue = 1 --resetting error flag
 	     FETCH NEXT FROM CUR_FINTRAN INTO @c_TransferKeyForFinalization
 		END
 		CLOSE CUR_FINTRAN
