@@ -13,6 +13,7 @@ GO
 /*                                                                         */
 /* Date        Rev  Author       Purposes                                  */
 /* 2024-05-27  1.0  Cuize        FCR-242 Created                           */
+/* 2024-06-13  1.2  NLT013       FCR-242 Correct the commented message     */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_652ExtUpd01(
@@ -94,7 +95,7 @@ BEGIN
             IF ISNULL(@cPOKey, '') = ''
             BEGIN
                SET @nErrNo = 215501
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSERT TransLog Fail
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GetPOKEYFail
                GOTO Quit
             END
 
@@ -107,7 +108,7 @@ BEGIN
             IF @n_err <> 0
             BEGIN
                SET @nErrNo = 215502
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSERT TransLog Fail
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSTransLogFail
                GOTO Quit
             END
 
@@ -127,7 +128,7 @@ BEGIN
             IF @@ROWCOUNT = 0
             BEGIN
                SET @nErrNo = 215503
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSERT eventlog Fail
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSEvelogFail
                GOTO Quit
             END
 
