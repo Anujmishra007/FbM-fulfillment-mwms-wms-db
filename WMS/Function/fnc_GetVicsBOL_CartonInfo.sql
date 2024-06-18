@@ -1,11 +1,8 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[fnc_GetVicsBOL_CartonInfo]')  AND type in (N'FN', N'IF', N'TF', N'FS', N'FT')) 
-DROP FUNCTION [dbo].[fnc_GetVicsBOL_CartonInfo]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER ON
 GO
+
 /************************************************************************/  
 /* Store procedure: fnc_GetVicsBOL_CartonInfo                           */  
 /* Copyright      : IDS                                                 */  
@@ -16,7 +13,7 @@ GO
 /* 29-Aug-2012  1.1  Shong01  Performance Tuning                        */  
 /************************************************************************/  
 
-CREATE FUNCTION [dbo].[fnc_GetVicsBOL_CartonInfo] (@cMBOLKey NVARCHAR(10), @cConsigneeKey NVARCHAR(15))  
+CREATE OR ALTER FUNCTION [dbo].[fnc_GetVicsBOL_CartonInfo] (@cMBOLKey NVARCHAR(10), @cConsigneeKey NVARCHAR(15))  
 RETURNS @tVicsBOLCtnInfo TABLE   
 (  
     MBOLKey          NVARCHAR(10)  NOT NULL,  
@@ -117,4 +114,6 @@ BEGIN
 END
 GO
 GRANT SELECT ON [dbo].[fnc_GetVicsBOL_CartonInfo] TO nSQL 
+GO
+GRANT SELECT ON [dbo].[fnc_GetVicsBOL_CartonInfo] TO LogiReportRoleWM 
 GO
