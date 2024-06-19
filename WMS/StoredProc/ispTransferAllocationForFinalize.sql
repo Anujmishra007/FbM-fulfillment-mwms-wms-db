@@ -5,7 +5,7 @@
 /* Purpose: UWP-18603                                           */
 /* Written by: Ansuman                                          */
 /* Purpose: Transfer Allocation with Auto Finalize              */
-/* Called By: Java Scheduler                                    */
+/* Called By: DB Scheduler                                    */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispTransferAllocationForFinalize](
