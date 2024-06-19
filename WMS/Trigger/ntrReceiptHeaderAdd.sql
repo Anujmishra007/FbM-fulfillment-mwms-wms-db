@@ -2,6 +2,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
+
 /************************************************************************/
 /* Store procedure: ntrReceiptHeaderAdd                                 */
 /* Copyright      : Maersk                                              */
@@ -76,9 +77,10 @@ GO
 /* 2019-08-01 1.25 Wan01    WMS-9995 [CN] NIKESDC_Exceed_Hold ASN for   */
 /*                          Channel                                     */
 /* 2021-08-27 2.1  TLTING03 Extend ExternReceiptKey field length        */
-/* 2024-01-29 2.2  Wan02    UWP-14379-Implement pre-save ASN standard   */
-/*                          validation check                            */
+/* 2023-01-05 2.2  Wan02    LFWM-3900 - ASN Insert into Transport Order */
+/*                          DevOps Combine Script                       */
 /************************************************************************/
+
 CREATE OR ALTER TRIGGER ntrReceiptHeaderAdd
  ON  Receipt
  FOR INSERT
@@ -110,10 +112,11 @@ CREATE OR ALTER TRIGGER ntrReceiptHeaderAdd
  , @cRoute              NVARCHAR(10)
  , @c_COLUMN_NAME       VARCHAR(50)       -- (MC02) 
  , @c_ColumnsUpdated    VARCHAR(1000)     -- (MC02) 
- , @c_ASNStatus_From    NVARCHAR(10) = ''                                           --(Wan03)
- , @c_ASNStatus_To      NVARCHAR(10) = ''                                           --(Wan03)
+ 
+ , @cur_ASN             CURSOR            --(Wan02)
 
 SELECT @cReceiptKey = ''      -- (YokeBeen01)
+
 
 SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
       /* #INCLUDE <TRRHA1.SQL> */  
@@ -188,29 +191,6 @@ BEGIN
 END
 --(Wan01) - END
 
-IF @n_Continue = 1                                                                  --(Wan02) - START
-BEGIN
-   SET @n_Cnt = 0
-   SET @c_ASNStatus_From = ''
-   SET @c_ASNStatus_To = ''
-
-   SELECT @n_Cnt = 1
-         ,@c_ASNStatus_To = i.ASNStatus
-   FROM Inserted i
-   OUTER APPLY dbo.fnc_GetAllowASNStatusChg(i.Facility, i.Storerkey, i.Doctype, i.Receiptkey, '', i.ASNStatus) AASC
-   WHERE AASC.AllowChange = 0
-         
-   IF @n_Cnt = 1
-   BEGIN
-      SET @n_continue = 3
-      SET @c_errmsg = CONVERT(CHAR(250),@n_err)
-      SET @n_err=70011 --63800   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-      SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Disallow to change ASNStatus from ''' 
-                     + @c_ASNStatus_From + ''' to ''' + @c_ASNStatus_To + ''''
-                     +'. (ntrReceiptHeaderAdd)'           
-   END
-END                                                                                 --(Wan02) - END
- 
 -- Added for IDSV5 by June 21.Jun.02, (extract from IDSHK) *** Start
 IF @n_continue=1 OR @n_continue=2
 BEGIN    
@@ -394,7 +374,7 @@ BEGIN
           BEGIN
              BREAK
           END
-          
+
           IF @c_StorerKey = 'FUJI'
           BEGIN
              IF @c_rectype = 'NORMAL'
@@ -733,6 +713,36 @@ BEGIN
     WHERE RECEIPT.RECEIPTKEY = INSERTED.RECEIPTKEY 
       AND (dbo.fnc_RTrim(INSERTED.DOCTYPE) = '' OR INSERTED.DOCTYPE IS NULL) 
 END
+
+--(Wan02) - START
+SET @cur_ASN = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+SELECT INSERTED.ReceiptKey
+FROM  INSERTED WITH (NOLOCK)
+CROSS APPLY dbo.fnc_SelectGetRight(INSERTED.Facility, INSERTED.Storerkey, '', 'AutoASNToTransportOrder') CFG
+WHERE CFG.Authority = '1'
+
+OPEN @cur_ASN
+
+FETCH NEXT FROM @cur_ASN INTO @c_ReceiptKey
+
+WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)
+BEGIN
+   EXEC WM.lsp_ASNToTransportOrder
+     @c_Receiptkey = @c_ReceiptKey
+   , @b_Success    = @b_Success  OUTPUT
+   , @n_Err        = @n_Err      OUTPUT
+   , @c_ErrMsg     = @c_ErrMsg   OUTPUT
+   , @c_UserName   = ''
+   
+   IF @b_Success = 0
+   BEGIN 
+      SET @n_Continue = 3
+   END 
+   FETCH NEXT FROM @cur_ASN INTO @c_ReceiptKey
+END
+CLOSE @cur_ASN
+DEALLOCATE @cur_ASN
+--(Wan02) - END
 
 -- Added by James on 04/10/2007 (SOS80707) Start
 -- If storerconfig 'DefaultRoutingTool' setup (Svalue = '1'), default Receipt.RoutingTool = 'Y' (TMSHK)
