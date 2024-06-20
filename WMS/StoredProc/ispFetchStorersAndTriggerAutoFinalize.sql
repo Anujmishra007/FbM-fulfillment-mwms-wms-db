@@ -30,7 +30,7 @@ BEGIN
 
 		BEGIN
 			DECLARE CUR_TEMP CURSOR LOCAL FORWARD_ONLY STATIC FOR
-				SELECT StorerKey FROM [dbo].[StorerConfig] WITH (NOLOCK) WHERE ConfigKey = 'Auto Transfer Finalize' AND SValue = '1'
+				SELECT StorerKey FROM [dbo].[StorerConfig] WITH (NOLOCK) WHERE ConfigKey = 'AutoTransferFinalize' AND SValue = '1'
 
 			OPEN CUR_TEMP
 			FETCH NEXT FROM CUR_TEMP INTO @c_StorerKey
