@@ -81,6 +81,7 @@ GO
 /* 2023-11-24   5.7 Ung         WMS-24060 Add PackByFromDropID                                  */
 /* 2023-08-25   5.8 YeeKung     WMS-23946 Clear Extendedinfo SP  (yeekung02)                    */
 /* 2024-05-27   5.9 NLT013      FCR-388 Merge code to V2 branch, original owner is Wojciech     */
+/* 2024-06-14   6.0 JHU151      FCR-352 ZA_DEFY - Fn838 -Default Pick Quantity                  */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
@@ -157,6 +158,7 @@ DECLARE
    @nTotalPack       INT,
    @nTotalShort      INT,
    @nPackedQTY       INT,
+   @nPickedQTY		   INT, --(JHU151)
    @nEnter           INT, --(cc01)  
 
    @cDefaultPrintLabelOption     NVARCHAR( 1),
@@ -214,6 +216,8 @@ DECLARE
    @cAllowWidthZero     NVARCHAR( 1),  -- (james20)
    @cAllowHeightZero    NVARCHAR( 1),  -- (james20)
    @cDefaultcartontype  NVARCHAR( 20),  --(yeekung01)
+   @cExtendedScreenSP   NVARCHAR( 20), --(JHU151)
+   @tExtScnData			VariableTable, --(JHU151)
    @cPackByFromDropID   NVARCHAR( 1),
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
@@ -380,6 +384,10 @@ BEGIN
    SET @cPackByFromDropID = rdt.rdtGetConfig( @nFunc, 'PackByFromDropID', @cStorerKey)
    SET @cSerialNoCapture = rdt.RDTGetConfig( @nFunc, 'SerialNoCapture', @cStorerKey)
    SET @cShowPickSlipNo = rdt.RDTGetConfig( @nFunc, 'ShowPickSlipNo', @cStorerKey)
+   --(JHU151)
+   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey)
+   IF @cExtendedScreenSP = '0'
+      SET @cExtendedScreenSP = ''
 
    SET @cCapturePackInfoSP = rdt.RDTGetConfig( @nFunc, 'CapturePackInfoSP', @cStorerKey)
    IF @cCapturePackInfoSP = '0'
@@ -1170,6 +1178,54 @@ BEGIN
          -- Go to SKU QTY screen
          SET @nScn = @nScn + 1
          SET @nStep = @nStep + 1
+
+--JHU151
+Step_2_ExtScn:
+         BEGIN
+            SET @nAction = 3 --Prepare output fields
+            SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey)
+            IF @cExtendedScreenSP = '0'
+            BEGIN
+               SET @cExtendedScreenSP = ''
+            END
+            IF @cExtendedScreenSP <> ''
+            BEGIN
+               IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+               BEGIN
+                  DELETE FROM @tExtScnData
+                  INSERT INTO @tExtScnData (Variable, Value) VALUES 	
+                  ('@cPickSlipNo',     @cPickSlipNo),
+                  ('@cSKU',            @cSKU)
+
+                  EXECUTE [RDT].[rdt_ExtScnEntry] 
+                  @cExtendedScreenSP, 
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
+                  @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,  
+                  @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,  
+                  @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,  
+                  @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,  
+                  @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,  
+                  @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT, 
+                  @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT, 
+                  @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT, 
+                  @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT, 
+                  @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT, 
+                  @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
+                  @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
+                  @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
+                  @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
+                  @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
+                  @nAction, 
+                  @nScn OUTPUT,  @nStep OUTPUT,
+                  @nErrNo   OUTPUT, 
+                  @cErrMsg  OUTPUT
+               
+                  IF @nErrNo <> 0
+                     GOTO Quit
+               END
+            END
+            
+         END
       END
 
       -- Repack carton
@@ -1720,6 +1776,7 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid SKU
             GOTO Step_3_Fail
          END
+
 
          -- Check barcode return multi SKU
          IF @nSKUCnt > 1
@@ -4561,7 +4618,6 @@ BEGIN
                @nCartonNo, @cLabelNo, @cSKU, @nQTY, @cUCCNo, @cCartonType, @cCube, @cWeight, @cRefNo, @cSerialNo, @nSerialQTY, @cOption,
                @cPackDtlRefNo, @cPackDtlRefNo2, @cPackDtlUPC, @cPackDtlDropID, @cPackData1, @cPackData2, @cPackData3,
                @nErrNo OUTPUT, @cErrMsg OUTPUT
-
             IF @nErrNo <> 0
             BEGIN
                ROLLBACK TRAN rdtfnc_Pack

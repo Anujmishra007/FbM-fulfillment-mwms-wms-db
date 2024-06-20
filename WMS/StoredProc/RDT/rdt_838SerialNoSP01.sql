@@ -11,6 +11,7 @@ GO
 /*                                                                      */
 /* Date        Rev  Author       Purposes                               */
 /* 2024-06-05  1.0  CYU027       FCR-340 Created                        */
+/* 2024-06-14  1.1  JHU151       FCR-352 Serial exsts check             */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_838SerialNoSP01]
@@ -305,6 +306,18 @@ BEGIN
             SET @nErrNo = 108955
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid SNO
             GOTO Quit
+         END
+
+         --JHU151
+         -- Exist Check in serial table
+         IF rdt.RDTGetConfig( @nFunc, 'ValidateSerialNo', @cStorerkey) = '1'
+         BEGIN
+            IF NOT EXISTS(SELECT 1 FROM SerialNo WHERE StorerKey = @cStorerKey AND SKU = @cSKU AND SerialNo = @cSerialNo)
+            BEGIN
+               SET @nErrNo = 216901
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- serial does not exists
+               GOTO Quit
+            END
          END
 
          -- Extended update
