@@ -314,7 +314,7 @@ BEGIN
          BEGIN
             IF NOT EXISTS(SELECT 1 FROM SerialNo WHERE StorerKey = @cStorerKey AND SKU = @cSKU AND SerialNo = @cSerialNo)
             BEGIN
-               SET @nErrNo = 216901
+               SET @nErrNo = 217201
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- serial does not exists
                GOTO Quit
             END

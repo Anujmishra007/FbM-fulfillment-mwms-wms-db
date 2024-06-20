@@ -1,9 +1,6 @@
-USE [GBRWMS]
-GO
-/****** Object:  StoredProcedure [RDT].[rdt_838ExtScn01]    Script Date: 6/19/2024 8:43:15 PM ******/
-SET ANSI_NULLS OFF
-GO
 SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
 GO
 
 /************************************************************************/  
@@ -16,16 +13,16 @@ GO
 /************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_838ExtScn01] (
-   @nMobile      INT,           
-   @nFunc        INT,           
-   @cLangCode    NVARCHAR( 3),  
-   @nStep INT,           
-   @nScn  INT,           
-   @nInputKey    INT,           
-   @cFacility    NVARCHAR( 5),  
-   @cStorerKey   NVARCHAR( 15), 
+   @nMobile          INT,           
+   @nFunc            INT,           
+   @cLangCode        NVARCHAR( 3),  
+   @nStep            INT,           
+   @nScn             INT,           
+   @nInputKey        INT,           
+   @cFacility        NVARCHAR( 5),  
+   @cStorerKey       NVARCHAR( 15), 
 
-   @tExtScnData   VariableTable READONLY,
+   @tExtScnData      VariableTable READONLY,
 
    @cInField01       NVARCHAR( 60) OUTPUT,  @cOutField01 NVARCHAR( 60) OUTPUT,  @cFieldAttr01 NVARCHAR( 1) OUTPUT,  @cLottable01 NVARCHAR( 18) OUTPUT,  
    @cInField02       NVARCHAR( 60) OUTPUT,  @cOutField02 NVARCHAR( 60) OUTPUT,  @cFieldAttr02 NVARCHAR( 1) OUTPUT,  @cLottable02 NVARCHAR( 18) OUTPUT,  
@@ -42,10 +39,10 @@ CREATE OR ALTER PROC [RDT].[rdt_838ExtScn01] (
    @cInField13       NVARCHAR( 60) OUTPUT,  @cOutField13 NVARCHAR( 60) OUTPUT,  @cFieldAttr13 NVARCHAR( 1) OUTPUT,  @dLottable13 DATETIME      OUTPUT,
    @cInField14       NVARCHAR( 60) OUTPUT,  @cOutField14 NVARCHAR( 60) OUTPUT,  @cFieldAttr14 NVARCHAR( 1) OUTPUT,  @dLottable14 DATETIME      OUTPUT,
    @cInField15       NVARCHAR( 60) OUTPUT,  @cOutField15 NVARCHAR( 60) OUTPUT,  @cFieldAttr15 NVARCHAR( 1) OUTPUT,  @dLottable15 DATETIME      OUTPUT,
-   @nAction      INT, --0 Jump Screen, 1 Validation(pass through all input fields), 2 Update, 3 Prepare output fields .....
-   @nAfterScn    INT OUTPUT, @nAfterStep    INT OUTPUT, 
-   @nErrNo             INT            OUTPUT, 
-   @cErrMsg            NVARCHAR( 20)  OUTPUT
+   @nAction          INT, --0 Jump Screen, 1 Validation(pass through all input fields), 2 Update, 3 Prepare output fields .....
+   @nAfterScn        INT OUTPUT, @nAfterStep    INT OUTPUT, 
+   @nErrNo           INT            OUTPUT, 
+   @cErrMsg          NVARCHAR( 20)  OUTPUT
 )
 AS
 BEGIN
@@ -55,15 +52,15 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE
-	    @cPickSlipNo            NVARCHAR( 10),
-		@cSKU                   NVARCHAR( 20),
-		@cOrdKey				NVARCHAR( 10),
-		@cExtOrderKey			NVARCHAR( 50),
-		@nPickedQTY				INT
+      @cPickSlipNo            NVARCHAR( 10),
+      @cSKU                   NVARCHAR( 20),
+		@cOrdKey				      NVARCHAR( 10),
+		@cExtOrderKey			   NVARCHAR( 50),
+		@nPickedQTY				   INT
 
 
-    SET @nErrNo = 0
-    SET @cErrMsg = ''
+   SET @nErrNo = 0
+   SET @cErrMsg = ''
 
    SELECT @cPickSlipNo = Value FROM @tExtScnData WHERE Variable = '@cPickSlipNo'
    SELECT @cSKU = Value FROM @tExtScnData WHERE Variable = '@cSKU'
@@ -78,53 +75,48 @@ BEGIN
             IF @nInputKey = 1
             BEGIN
                
-				IF rdt.RDTGetConfig( @nFunc, 'DefaultPSSKUQty', @cStorerkey) = '1'
-				BEGIN
-					SELECT @cOrdKey = OrderKey, @cExtOrderKey = ExternOrderKey     
-					  FROM dbo.PickHeader WITH (NOLOCK)     
-					  WHERE PickHeaderKey = @cPickSlipNo
+               IF rdt.RDTGetConfig( @nFunc, 'DefaultPSSKUQty', @cStorerkey) = '1'
+               BEGIN
+                  SELECT @cOrdKey = OrderKey, @cExtOrderKey = ExternOrderKey     
+                  FROM dbo.PickHeader WITH (NOLOCK)     
+                  WHERE PickHeaderKey = @cPickSlipNo
 
-					IF ISNULL(@cOrdKey, '') <> ''
-					BEGIN
-						SELECT @npickedQty = SUM(Qty) 
-						FROM dbo.PickHeader PH (NOLOCK)     
-						JOIN dbo.PickDetail PD (NOLOCK) ON (PH.OrderKey = PD.OrderKey)    
-						WHERE PH.PickHeaderKey = @cPickSlipNo    
-						AND	  PD.Status = N'5'
-						AND   PD.StorerKey  = @cStorerKey
-						AND   PD.SKU = @cSKU
-					END
-					ELSE
-					BEGIN
-						SELECT @nPickedQTY = SUM(Qty)
-						 FROM dbo.PickHeader PH (NOLOCK)     
-						 JOIN dbo.LoadPlanDetail LPD WITH (NOLOCK) ON PH.ExternOrderKey = LPD.LoadKey
-						 JOIN dbo.PickDetail PD (NOLOCK) ON (LPD.OrderKey = PD.OrderKey)    
-						 WHERE PH.PickHeaderKey = @cPickSlipNo    
-						 AND   PD.Status = N'5'
-						 AND   PD.StorerKey  = @cStorerKey
-						 AND   PD.SKU = @cSKU
-						 GROUP BY PD.SKU
-					END
-				END
-				ELSE
-				BEGIN
-					SET @nPickedQTY = 0
-				END
+                  IF ISNULL(@cOrdKey, '') <> ''
+                  BEGIN
+                     SELECT @npickedQty = SUM(Qty) 
+                     FROM dbo.PickHeader PH (NOLOCK)     
+                     JOIN dbo.PickDetail PD (NOLOCK) ON (PH.OrderKey = PD.OrderKey)    
+                     WHERE PH.PickHeaderKey = @cPickSlipNo    
+                     AND	  PD.Status = N'5'
+                     AND   PD.StorerKey  = @cStorerKey
+                     AND   PD.SKU = @cSKU
+                  END
+                  ELSE
+                  BEGIN
+                     SELECT @nPickedQTY = SUM(Qty)
+                     FROM dbo.PickHeader PH (NOLOCK)     
+                     JOIN dbo.LoadPlanDetail LPD WITH (NOLOCK) ON PH.ExternOrderKey = LPD.LoadKey
+                     JOIN dbo.PickDetail PD (NOLOCK) ON (LPD.OrderKey = PD.OrderKey)    
+                     WHERE PH.PickHeaderKey = @cPickSlipNo    
+                     AND   PD.Status = N'5'
+                     AND   PD.StorerKey  = @cStorerKey
+                     AND   PD.SKU = @cSKU
+                     GROUP BY PD.SKU
+                  END
+               END
+               ELSE
+               BEGIN
+                  SET @nPickedQTY = 0
+               END
 
-				IF @nPickedQTY = 0
-				BEGIN
-					SET @cOutField08 = ''
-				END
-				ELSE
-				BEGIN
-					SET @cOutField08 = @nPickedQTY
-				END
-               --IF ISNULL(@cVASLevel, '') = @cConstantUCCCarton
-               --BEGIN
-               --   SET @nAfterScn = 818
-               --   SET @nAfterStep = 5
-               --END 
+               IF @nPickedQTY = 0
+               BEGIN
+                  SET @cOutField08 = ''
+               END
+               ELSE
+               BEGIN
+                  SET @cOutField08 = @nPickedQTY
+               END
             END
          END
 		
@@ -134,7 +126,4 @@ BEGIN
    GOTO Quit
 
 Quit:
-   --UPDATE RDT.RDTMOBREC SET
-   --   C_String1 = @cLastLineNumber
-   --WHERE Mobile = @nMobile
 END

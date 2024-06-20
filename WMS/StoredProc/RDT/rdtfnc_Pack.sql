@@ -157,8 +157,7 @@ DECLARE
    @nTotalPick       INT,
    @nTotalPack       INT,
    @nTotalShort      INT,
-   @nPackedQTY       INT,
-   @nPickedQTY		   INT, --(JHU151)
+   @nPackedQTY       INT,   
    @nEnter           INT, --(cc01)  
 
    @cDefaultPrintLabelOption     NVARCHAR( 1),
@@ -383,11 +382,7 @@ BEGIN
    SET @cMultiSKUBarcode = rdt.RDTGetConfig( @nFunc, 'MultiSKUBarcode', @cStorerKey)
    SET @cPackByFromDropID = rdt.rdtGetConfig( @nFunc, 'PackByFromDropID', @cStorerKey)
    SET @cSerialNoCapture = rdt.RDTGetConfig( @nFunc, 'SerialNoCapture', @cStorerKey)
-   SET @cShowPickSlipNo = rdt.RDTGetConfig( @nFunc, 'ShowPickSlipNo', @cStorerKey)
-   --(JHU151)
-   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey)
-   IF @cExtendedScreenSP = '0'
-      SET @cExtendedScreenSP = ''
+   SET @cShowPickSlipNo = rdt.RDTGetConfig( @nFunc, 'ShowPickSlipNo', @cStorerKey)   
 
    SET @cCapturePackInfoSP = rdt.RDTGetConfig( @nFunc, 'CapturePackInfoSP', @cStorerKey)
    IF @cCapturePackInfoSP = '0'

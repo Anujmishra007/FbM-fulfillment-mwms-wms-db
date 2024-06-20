@@ -1,9 +1,6 @@
-USE [GBRWMS]
-GO
-/****** Object:  StoredProcedure [RDT].[rdt_838ExtVal17]    Script Date: 6/19/2024 8:46:54 PM ******/
-SET ANSI_NULLS OFF
-GO
 SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
 GO
 
 /************************************************************************/
@@ -53,7 +50,7 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
    DECLARE
-		@cOrdKey				NVARCHAR( 10), 
+		@cOrdKey				   NVARCHAR( 10), 
 		@cExtOrderKey			NVARCHAR( 50)
    
    IF @nFunc = 838 -- Pack
@@ -82,7 +79,7 @@ BEGIN
 						AND PD.Status = '5'
 						)
 				BEGIN
-					SET @nErrNo = 216902
+					SET @nErrNo = 216901
 					SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- SKU Not yet picked 
 					GOTO Quit
 				END
