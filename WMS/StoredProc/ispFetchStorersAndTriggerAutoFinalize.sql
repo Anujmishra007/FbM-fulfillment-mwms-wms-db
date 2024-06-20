@@ -30,7 +30,7 @@ BEGIN
 
 		BEGIN
 			DECLARE CUR_TEMP CURSOR LOCAL FORWARD_ONLY STATIC FOR
-				SELECT StorerKey FROM [dbo].[SPPARAMS]
+				SELECT StorerKey FROM [dbo].[StorerConfig] WHERE ConfigKey = 'Auto Transfer Finalize' AND SValue = '1'
 
 			OPEN CUR_TEMP
 			FETCH NEXT FROM CUR_TEMP INTO @c_StorerKey
@@ -39,6 +39,8 @@ BEGIN
 				BEGIN
 					EXEC [dbo].[ispTransferAllocationForFinalize] @c_StorerKey,
 					     @b_Success OUTPUT
+					    ,@n_Err OUTPUT
+					    ,@c_ErrMsg OUTPUT
 					IF @n_err <> 0
 							BEGIN
 								SET @n_continue = 3
