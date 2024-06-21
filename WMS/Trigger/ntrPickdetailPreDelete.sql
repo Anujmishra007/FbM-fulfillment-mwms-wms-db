@@ -23,15 +23,16 @@ GO
 /*                                                                      */
 /* Called By: When records INSERTED                                     */
 /*                                                                      */
-/* GITHUB Version: 1.0                                                  */
+/* GITHUB Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 2                                                           */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date        Author   ver  Purposes                                   */
+/* Date        Author   ver   Purposes                                  */
 /* 2024-06-04  Wan      1.0   Created.                                  */
+/* 2024-06-21  Wan01    1.1   UWP-18393 - Fixed                         */
 /************************************************************************/
 CREATE OR ALTER TRIGGER [dbo].[ntrPickDetailPreDelete]
 ON  [dbo].[PICKDETAIL]
@@ -86,7 +87,7 @@ BEGIN
                                AND sl.Sku = d.Sku
                                AND sl.Loc = d.Loc
       JOIN LOC l (NOLOCK) ON l.loc = d.loc
-      CROSS APPLY dbo.fnc_SelectGetRight (l.loc, d.storerkey, '', 'StockOnLockedID') sc
+      CROSS APPLY dbo.fnc_SelectGetRight (l.Facility, d.storerkey, '', 'StockOnLockedID') sc --(Wan01)
       WHERE d.[Status] < '9'
       AND sl.LocationType NOT IN ('CASE', 'PICK')
       AND l.Loc NOT IN ('DYNPPICK','DYNPICKP','DYNPICKR')
