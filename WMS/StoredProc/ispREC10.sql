@@ -24,6 +24,8 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
 /* 12-DEC-2023  NJOW     1.0  DevOps Combine Script                     */
+/* 21-JUN-2024  SSA01    1.1  Updated to handle return items            */
+/*                            as part of UWP-20525                      */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[ispREC10]
    @c_Action    NVARCHAR(10)
@@ -53,7 +55,12 @@ BEGIN
          , @c_Transferkey        NVARCHAR(10)
          , @c_TransferLineNumber NVARCHAR(5)
          , @c_Itrnkey            NVARCHAR(10)
-                  
+         , @c_CfgRecTriggerOpt5  NVARCHAR(100)                   --(SSA01)
+         , @c_ASNAutoTRFType     NVARCHAR(100)                   --(SSA01)
+         , @c_Type               NVARCHAR(20)                    --(SSA01)
+         , @c_Condition          NVARCHAR(MAX)                   --(SSA01)
+         , @c_SQL                NVARCHAR(MAX)                   --(SSA01)
+
    SELECT @n_Continue = 1
         , @n_StartTCnt = @@TRANCOUNT
         , @n_Err = 0
@@ -72,42 +79,64 @@ BEGIN
    BEGIN
    	  IF @@TRANCOUNT = 0
    	     BEGIN TRAN
-   	 
-      --Close ASN     
-      IF @n_continue IN(1,2)
-      BEGIN          	
+   	 ----(SSA01) start ----
+
          DECLARE CUR_REC CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-            SELECT DISTINCT I.Receiptkey
+            SELECT DISTINCT I.Receiptkey,I.Rectype, I.Facility, I.Storerkey
             FROM #INSERTED I
             JOIN #DELETED D (NOLOCK) ON I.Receiptkey = D.Receiptkey
             JOIN RECEIPTDETAIL RD (NOLOCK) ON I.Receiptkey = RD.Receiptkey
             WHERE I.Storerkey = @c_Storerkey
-            AND I.ASNStatus = '9' 
+            AND I.ASNStatus = '9'
             AND D.ASNStatus <> '9'
-            --AND I.Status = '9'
-            AND RD.Lottable02 = 'DAMAGE'
             AND RD.FinalizeFlag = 'Y'
             AND RD.QtyReceived > 0
             ORDER BY I.Receiptkey
-                     
+
          OPEN CUR_REC
          
-         FETCH NEXT FROM CUR_REC INTO @c_Receiptkey
+         FETCH NEXT FROM CUR_REC INTO @c_Receiptkey, @c_type, @c_Facility, @c_Storerkey
          
          WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)
          BEGIN         	  
          	  SET @c_Transferkey = ''
-         	  
-            DECLARE CUR_TRF CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-               SELECT R.Facility, R.Storerkey, RD.Sku, I.Lot, SUM(RD.QtyReceived) AS Qty, RD.UOM, RD.ToLoc, RD.ToID, R.ExternReceiptkey, I.Itrnkey
-               FROM RECEIPT R (NOLOCK)
-               JOIN RECEIPTDETAIL RD (NOLOCK) ON R.Receiptkey = RD.Receiptkey
-               JOIN ITRN I (NOLOCK) ON RD.Storerkey = I.Storerkey AND RD.Sku = I.Sku AND I.TranType = 'DP'
-                                       AND I.SourceKey = R.Receiptkey + RD.ReceiptLineNumber AND LEFT(I.SourceType,10) = 'ntrReceipt'
-               WHERE R.Receiptkey = @c_Receiptkey
-               AND RD.Lottable02 = 'DAMAGE'
-               GROUP BY R.Facility, R.Storerkey, RD.Sku, I.Lot, RD.UOM, RD.ToLoc, RD.ToID, R.ExternReceiptkey, I.Itrnkey
-            
+            ----(SSA01) start ----
+
+            SELECT @c_CfgRecTriggerOpt5  = fsgr.ConfigOption5
+              FROM dbo.fnc_SelectGetRight(@c_Facility, @c_Storerkey, '', 'ReceiptTrigger_SP') AS fsgr
+               ----(SSA02) start ----
+               SET @c_ASNAutoTRFType = 'NORMAL';
+               SELECT @c_ASNAutoTRFType = dbo.fnc_GetParamValueFromString('@c_ASNAutoTRFType', @c_CfgRecTriggerOpt5, @c_ASNAutoTRFType)
+
+               IF(CHARINDEX(@c_Type, LTRIM(@c_ASNAutoTRFType)) <= 0)
+               BEGIN
+                  GOTO NEXT_ASN
+               END
+
+               SET @c_Condition = ''
+               IF(@c_Type = 'NORMAL')
+               BEGIN
+                  SET @c_Condition = ' AND RD.Lottable02 = ''DAMAGE'''
+               END
+
+            SELECT @c_SQL = 'DECLARE CUR_TRF CURSOR FAST_FORWARD READ_ONLY FOR'
+               +' SELECT R.Facility,R.Storerkey, RD.Sku, I.Lot, SUM(RD.QtyReceived) AS Qty,'
+               +' RD.UOM, RD.ToLoc, RD.ToID, R.ExternReceiptkey, I.Itrnkey'
+               +' FROM RECEIPT R (NOLOCK)'
+               +' JOIN RECEIPTDETAIL RD (NOLOCK) ON R.Receiptkey = RD.Receiptkey'
+               +' JOIN ITRN I (NOLOCK) ON RD.Storerkey = I.Storerkey AND RD.Sku = I.Sku AND I.TranType = ''DP'''
+               +' AND I.SourceKey = R.Receiptkey + RD.ReceiptLineNumber AND LEFT(I.SourceType,10) = ''ntrReceipt'''
+               +' WHERE R.Receiptkey = @c_Receiptkey'+ @c_Condition
+               +' AND RD.FinalizeFlag = ''Y'''
+               +' AND RD.QtyReceived > 0'
+               +' GROUP BY R.Facility, R.Storerkey, RD.Sku, I.Lot, RD.UOM, RD.ToLoc, RD.ToID, R.ExternReceiptkey, I.Itrnkey'
+
+            EXEC sp_executesql @c_SQL
+            , N'@c_Receiptkey     NVARCHAR(15)'
+            , @c_Receiptkey
+
+            SET @c_SQL = ''
+            ----(SSA01) end----
             OPEN CUR_TRF
             
             FETCH NEXT FROM CUR_TRF INTO @c_Facility, @c_Storerkey, @c_Sku, @c_Lot, @n_QtyReceived, @c_UOM, @c_Loc, @c_ID, @c_ExternReceiptkey, @c_Itrnkey
@@ -227,25 +256,37 @@ BEGIN
                FETCH NEXT FROM CUR_TRFDET INTO @c_TransferLineNumber
                
                WHILE @@FETCH_STATUS <> -1  AND @n_continue IN(1,2)
-               BEGIN      	                       	        	             
-            	    UPDATE TRANSFERDETAIL WITH (ROWLOCK)
-            	    SET Lottable01 = 'A',
-            	        Lottable02 = 'GOOD',
-            	        Status = '9',
-            	        Userdefine01 = CASE WHEN RDET.ReceiptLineNumber IS NOT NULL THEN RDET.ReceiptLineNumber ELSE Userdefine01 END
-            	        --TrafficCop = NULL
-            	    FROM TRANSFERDETAIL
-            	    OUTER APPLY (SELECT TOP 1 RD.ReceiptLineNumber 
-            	                 FROM RECEIPTDETAIL RD (NOLOCK) 
-            	                 WHERE RD.Receiptkey = @c_Receiptkey
-            	                 AND RD.Sku = TRANSFERDETAIL.FromSku
-            	                 --AND RD.ToLoc = TRANSFERDETAIL.FromLoc
-            	                 AND RD.ToID = TRANSFERDETAIL.FromID
-            	                 AND RD.Lottable02 = 'DAMAGE'
-            	                 ORDER BY RD.ReceiptLineNumber) RDET
-            	    WHERE TRANSFERDETAIL.Transferkey = @c_Transferkey
-            	    AND TRANSFERDETAIL.TransferLineNumber = @c_TransferLineNumber
-                  
+               BEGIN
+                  ----(SSA01) start---
+                  BEGIN
+
+                  SELECT @c_SQL = 'UPDATE TRANSFERDETAIL WITH (ROWLOCK)'
+                            +' SET Lottable01 = ''A'''
+                            +',Lottable02 = IIF(@c_Type = ''NORMAL'',''GOOD'',''RETURN'')'
+                            +',Status = ''9'''
+                            +' Userdefine01 = CASE WHEN RDET.ReceiptLineNumber IS NOT NULL THEN RDET.ReceiptLineNumber ELSE Userdefine01 END'
+                            +' FROM TRANSFERDETAIL'
+                            +' OUTER APPLY (SELECT TOP 1 RD.ReceiptLineNumber'
+                            +' FROM RECEIPTDETAIL RD (NOLOCK)'
+                            +' WHERE RD.Receiptkey = @c_Receiptkey'
+                            +' AND RD.Sku = TRANSFERDETAIL.FromSku'
+                            +' AND RD.ToID = TRANSFERDETAIL.FromID'
+                            + @c_Condition
+                            +' ORDER BY RD.ReceiptLineNumber) RDET'
+                            +' WHERE TRANSFERDETAIL.Transferkey = @c_Transferkey'
+                            +' AND TRANSFERDETAIL.TransferLineNumber = @c_TransferLineNumber'
+
+            EXEC sp_executesql @c_SQL
+            , N'@c_Receiptkey      NVARCHAR(10)'
+            , N'@c_Transferkey     NVARCHAR(10)'
+            , N'@c_TransferLineNumber     NVARCHAR(5)'
+            , @c_Receiptkey
+            , @c_Transferkey
+            , @c_TransferLineNumber
+
+             SET @c_SQL = ''
+
+                  ----(SSA01) end---
                   SET @n_err = @@ERROR
                   
                   IF @n_err <> 0
@@ -273,8 +314,8 @@ BEGIN
                END
                */
             END        
-
-            FETCH NEXT FROM CUR_REC INTO @c_Receiptkey
+            NEXT_ASN:
+            FETCH NEXT FROM CUR_REC INTO @c_Receiptkey, @c_type, @c_Facility, @c_Storerkey
          END   
          CLOSE CUR_REC
          DEALLOCATE CUR_REC          
