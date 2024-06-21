@@ -348,7 +348,7 @@ BEGIN
 				   		 		   @n_UnitPrice,0, 		@c_SerialNo,	     @c_Lottable01)	
 																							 
 																							 
-						EXEC lsp_FinalizeReceipt_Wrapper
+						EXEC wm.lsp_FinalizeReceipt_Wrapper
 								@c_NewReceiptKey
 								, @c_ReceiptLine
 								,@b_success OUTPUT
