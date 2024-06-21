@@ -12,6 +12,7 @@ GO
 /*                                                                         */
 /* Date        Rev   Author   Purposes                                     */
 /* 2024-5-24   1.0   JackC    FCR-236. Created                             */
+/* 2024-6-21   1.1   JackC    FCR-236.Upd retrieve UCC logic               */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_898UCCExtVal09]
@@ -105,7 +106,7 @@ BEGIN
             ,@cUCCUDF09 = ISNULL(Userdefined09,'')
       FROM UCC WITH (NOLOCK) 
       WHERE UCCNo = @cUCC
-      AND ReceiptKey = @cReceiptKey
+      --AND ReceiptKey = @cReceiptKey -- remove since no receipt key before receiving
 
       IF @@ROWCOUNT < 1
       BEGIN
