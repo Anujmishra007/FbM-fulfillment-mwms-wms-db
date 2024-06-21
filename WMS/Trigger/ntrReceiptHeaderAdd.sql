@@ -79,6 +79,8 @@ GO
 /* 2021-08-27 2.1  TLTING03 Extend ExternReceiptKey field length        */
 /* 2023-01-05 2.2  Wan02    LFWM-3900 - ASN Insert into Transport Order */
 /*                          DevOps Combine Script                       */
+/* 2024-01-29 2.2  Wan02    UWP-14379-Implement pre-save ASN standard   */
+/*                          validation check                            */
 /************************************************************************/
 
 CREATE OR ALTER TRIGGER ntrReceiptHeaderAdd
@@ -112,7 +114,8 @@ CREATE OR ALTER TRIGGER ntrReceiptHeaderAdd
  , @cRoute              NVARCHAR(10)
  , @c_COLUMN_NAME       VARCHAR(50)       -- (MC02) 
  , @c_ColumnsUpdated    VARCHAR(1000)     -- (MC02) 
- 
+ , @c_ASNStatus_From    NVARCHAR(10) = ''                                           --(Wan03)
+ , @c_ASNStatus_To      NVARCHAR(10) = ''
  , @cur_ASN             CURSOR            --(Wan02)
 
 SELECT @cReceiptKey = ''      -- (YokeBeen01)
@@ -190,6 +193,29 @@ BEGIN
    END   
 END
 --(Wan01) - END
+
+IF @n_Continue = 1                                                                  --(Wan02) - START
+BEGIN
+   SET @n_Cnt = 0
+   SET @c_ASNStatus_From = ''
+   SET @c_ASNStatus_To = ''
+
+   SELECT @n_Cnt = 1
+         ,@c_ASNStatus_To = i.ASNStatus
+   FROM Inserted i
+   OUTER APPLY dbo.fnc_GetAllowASNStatusChg(i.Facility, i.Storerkey, i.Doctype, i.Receiptkey, '', i.ASNStatus) AASC
+   WHERE AASC.AllowChange = 0
+
+   IF @n_Cnt = 1
+   BEGIN
+      SET @n_continue = 3
+      SET @c_errmsg = CONVERT(CHAR(250),@n_err)
+      SET @n_err=70011 --63800   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+      SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Disallow to change ASNStatus from '''
+                     + @c_ASNStatus_From + ''' to ''' + @c_ASNStatus_To + ''''
+                     +'. (ntrReceiptHeaderAdd)'
+   END
+END                                                                                 --(Wan02) - END
 
 -- Added for IDSV5 by June 21.Jun.02, (extract from IDSHK) *** Start
 IF @n_continue=1 OR @n_continue=2
