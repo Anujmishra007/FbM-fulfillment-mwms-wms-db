@@ -1175,52 +1175,52 @@ BEGIN
          SET @nStep = @nStep + 1
 
 --JHU151
-Step_2_ExtScn:
-         BEGIN
-            SET @nAction = 3 --Prepare output fields
-            SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey)
-            IF @cExtendedScreenSP = '0'
-            BEGIN
-               SET @cExtendedScreenSP = ''
-            END
-            IF @cExtendedScreenSP <> ''
-            BEGIN
-               IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
-               BEGIN
-                  DELETE FROM @tExtScnData
-                  INSERT INTO @tExtScnData (Variable, Value) VALUES 	
-                  ('@cPickSlipNo',     @cPickSlipNo),
-                  ('@cSKU',            @cSKU)
+--Step_2_ExtScn:
+--		BEGIN
+--			SET @nAction = 3 --Prepare output fields
+--			SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey)
+--			IF @cExtendedScreenSP = '0'
+--			BEGIN
+--				SET @cExtendedScreenSP = ''
+--			END
+--			IF @cExtendedScreenSP <> ''
+--			BEGIN
+--				IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+--				BEGIN
+--					DELETE FROM @tExtScnData
+--					INSERT INTO @tExtScnData (Variable, Value) VALUES 	
+--					('@cPickSlipNo',     @cPickSlipNo),
+--					('@cSKU',            @cSKU)
 
-                  EXECUTE [RDT].[rdt_ExtScnEntry] 
-                  @cExtendedScreenSP, 
-                  @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
-                  @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,  
-                  @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,  
-                  @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,  
-                  @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,  
-                  @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,  
-                  @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT, 
-                  @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT, 
-                  @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT, 
-                  @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT, 
-                  @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT, 
-                  @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
-                  @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
-                  @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
-                  @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
-                  @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
-                  @nAction, 
-                  @nScn OUTPUT,  @nStep OUTPUT,
-                  @nErrNo   OUTPUT, 
-                  @cErrMsg  OUTPUT
-               
-                  IF @nErrNo <> 0
-                     GOTO Quit
-               END
-            END
-            
-         END
+--					EXECUTE [RDT].[rdt_ExtScnEntry] 
+--					@cExtendedScreenSP, 
+--					@nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
+--					@cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,  
+--					@cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,  
+--					@cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,  
+--					@cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,  
+--					@cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,  
+--					@cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT, 
+--					@cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT, 
+--					@cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT, 
+--					@cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT, 
+--					@cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT, 
+--					@cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
+--					@cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
+--					@cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
+--					@cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
+--					@cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
+--					@nAction, 
+--					@nScn OUTPUT,  @nStep OUTPUT,
+--					@nErrNo   OUTPUT, 
+--					@cErrMsg  OUTPUT
+				 
+--					IF @nErrNo <> 0
+--						GOTO Quit
+--				END
+--			END
+			
+--		END
       END
 
       -- Repack carton
@@ -2034,6 +2034,63 @@ BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 8
       END
 
+      
+--JHU151
+Step_3_ExtScn:
+      BEGIN
+         SET @nAction = 3 --Prepare output fields
+         SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey)
+         IF @cExtendedScreenSP = '0'
+         BEGIN
+            SET @cExtendedScreenSP = ''
+         END
+         IF @cExtendedScreenSP <> ''
+         BEGIN
+            IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+               AND @nEnter = 0
+            BEGIN
+               DELETE FROM @tExtScnData
+               INSERT INTO @tExtScnData (Variable, Value) VALUES 	
+               ('@cPickSlipNo',     @cPickSlipNo),
+               ('@cSKU',            @cUPC)
+
+               EXECUTE [RDT].[rdt_ExtScnEntry] 
+               @cExtendedScreenSP, 
+               @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
+               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,  
+               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,  
+               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,  
+               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,  
+               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,  
+               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT, 
+               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT, 
+               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT, 
+               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT, 
+               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT, 
+               @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
+               @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
+               @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
+               @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
+               @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
+               @nAction, 
+               @nScn OUTPUT,  @nStep OUTPUT,
+               @nErrNo   OUTPUT, 
+               @cErrMsg  OUTPUT
+               
+               IF @nErrNo <> 0
+               BEGIN
+                  GOTO  Step_3_Fail
+               END 
+               
+               SET @nEnter = 1  
+               EXEC rdt.rdtSetFocusField @nMobile, 8
+
+               GOTO Quit
+            END
+         END
+            
+      END
+
       --(cc01)  
       IF @cDefaultQTY >0 AND @nEnter = 0  
       BEGIN
@@ -2716,6 +2773,7 @@ BEGIN
             IF @cFieldAttr06 = '' AND @cOutField06 = '0' EXEC rdt.rdtSetFocusField @nMobile, 6 ELSE
             IF @cFieldAttr07 = '' AND @cOutField07 = '0' EXEC rdt.rdtSetFocusField @nMobile, 7 
 
+
             -- Go to next screen
             SET @nScn = @nScn + 1
             SET @nStep = @nStep + 1
@@ -2738,7 +2796,7 @@ BEGIN
 
             -- Enable field
             SET @cFieldAttr08 = '' -- QTY
-
+            
             -- Go to next screen
             SET @nScn = @nScn + 2
             SET @nStep = @nStep + 2
