@@ -111,14 +111,14 @@ BEGIN
 
          IF @@ROWCOUNT = 0
          BEGIN
-            SET @nErrNo = 217202
+            SET @nErrNo = 217102
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Order Not Found
             GOTO Quit
          END
 
          IF @cOrderType <> 'B2C'
          BEGIN
-            SET @nErrNo = 217203
+            SET @nErrNo = 217103
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Invalid Order Type
             GOTO Quit
          END
@@ -132,7 +132,7 @@ BEGIN
          
          IF @cReportType = ''
          BEGIN
-            SET @nErrNo = 217204
+            SET @nErrNo = 217104
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- MissReportInCODE
             GOTO Quit
          END*/
@@ -145,7 +145,7 @@ BEGIN
 
          IF ISNULL(@cWebRequestURL, '') = ''
          BEGIN
-            SET @nErrNo = 217208
+            SET @nErrNo = 217108
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- MissWebSrvc
             GOTO Quit
          END
@@ -178,7 +178,7 @@ BEGIN
 
          IF @nMaxRow = 0
          BEGIN
-            SET @nErrNo = 217212
+            SET @nErrNo = 217112
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NoReportPrint
             GOTO Quit
          END
@@ -215,7 +215,7 @@ BEGIN
 
             IF @@ROWCOUNT = 0
             BEGIN
-               SET @nErrNo = 217205
+               SET @nErrNo = 217105
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Report Not Found
                GOTO Quit
             END
@@ -232,14 +232,14 @@ BEGIN
 
             IF @@ROWCOUNT = 0
             BEGIN
-               SET @nErrNo = 217206
+               SET @nErrNo = 217106
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- PrinterNotExists
                GOTO Quit
             END
 
             IF ISNULL(@cCloudClientPrinterID, '') = ''
             BEGIN
-               SET @nErrNo = 217207
+               SET @nErrNo = 217107
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- MissCldPrntID
                GOTO Quit
             END
@@ -259,7 +259,7 @@ BEGIN
 
             IF ISNULL(@cPrintData, '') = ''
             BEGIN
-               SET @nErrNo = 217209
+               SET @nErrNo = 217109
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- GetFilePathFail
                GOTO Quit
             END
@@ -309,7 +309,7 @@ BEGIN
 
             IF @nErrNo <> 0
             BEGIN
-               SET @nErrNo = 2172010
+               SET @nErrNo = 2171010
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS PrnJobFail
                GOTO Quit
             END
@@ -329,7 +329,7 @@ BEGIN
 
             IF @b_Success <> 1
             BEGIN
-               SET @nErrNo = 217211
+               SET @nErrNo = 217111
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SubCldPrtFail
                GOTO Quit
             END
