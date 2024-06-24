@@ -26,6 +26,8 @@ GO
 /* 12-DEC-2023  NJOW     1.0  DevOps Combine Script                     */
 /* 21-JUN-2024  SSA01    1.1  Updated to handle return items            */
 /*                            as part of UWP-20525                      */
+/* 24-JUN-2024  SSA02    1.2  Added missing variable while executing    */
+/*                            update transfer detail query              */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[ispREC10]
    @c_Action    NVARCHAR(10)
@@ -95,7 +97,7 @@ BEGIN
 
          OPEN CUR_REC
          
-         FETCH NEXT FROM CUR_REC INTO @c_Receiptkey, @c_type, @c_Facility, @c_Storerkey
+         FETCH NEXT FROM CUR_REC INTO @c_Receiptkey, @c_Type, @c_Facility, @c_Storerkey      --(SSA02)
          
          WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)
          BEGIN         	  
@@ -277,9 +279,11 @@ BEGIN
                             +' AND TRANSFERDETAIL.TransferLineNumber = @c_TransferLineNumber'
 
             EXEC sp_executesql @c_SQL
+            , N'@c_Type            NVARCHAR(20)'                       --(SSA02)
             , N'@c_Receiptkey      NVARCHAR(10)'
             , N'@c_Transferkey     NVARCHAR(10)'
             , N'@c_TransferLineNumber     NVARCHAR(5)'
+            , @c_Type                                                  --(SSA02)
             , @c_Receiptkey
             , @c_Transferkey
             , @c_TransferLineNumber
