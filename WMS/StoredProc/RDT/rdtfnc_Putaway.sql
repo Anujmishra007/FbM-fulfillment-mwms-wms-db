@@ -113,7 +113,8 @@ DECLARE
    @cSuggestedLOC   NVARCHAR( 10),
    @cFinalLOC       NVARCHAR( 10),
    @cExtendedValidateSP NVARCHAR( 20),
-
+   @tExtScnData			VariableTable, --(JHU151)
+   @nAction         INT, --(JHU151)
    @cInField01 NVARCHAR( 60),  @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),  @cOutField02 NVARCHAR( 60),
    @cInField03 NVARCHAR( 60),  @cOutField03 NVARCHAR( 60),
@@ -217,6 +218,7 @@ BEGIN
    IF @nStep = 2 GOTO Step_2   -- Scn  = 921. QTY
    IF @nStep = 3 GOTO Step_3   -- Scn  = 922. Suggested LOC, ToLOC
    IF @nStep = 4 GOTO Step_4   -- Scn  = 923. Msg
+   IF @nStep = 99 GOTO Step_99 -- Ext Screen
 END
 RETURN -- Do nothing if incorrect step
 
@@ -274,6 +276,20 @@ BEGIN
    -- Set the entry point
    SET @nScn = 920
    SET @nStep = 1
+
+   --JHU151
+   IF(ISNULL(rdt.RDTGetConfig( @nFunc, 'LoseIDputaway', @cStorerKey),'0')) !='0'
+   BEGIN
+      DELETE FROM @tExtScnData
+      INSERT INTO @tExtScnData (Variable, Value) VALUES 	
+      ('@nMenu',     @nMenu)
+      
+      SET @nAction = 0
+      SET @nStep = 99
+      SET @nScn = ? -- new screen id
+      GOTO Step_99
+   END
+
 END
 GOTO Quit
 
@@ -287,6 +303,8 @@ Step 1. Scn = 920. ID/SKU/FromLOC screen
 ********************************************************************************/
 Step_1:
 BEGIN
+
+
    IF @nInputKey = 1 -- ENTER
    BEGIN
       DECLARE @cLabelNo NVARCHAR( 32)
@@ -947,6 +965,52 @@ BEGIN
 END
 GOTO Quit
 
+--JHU151
+Step_99:
+BEGIN
+   SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey), '')
+   IF @cExtendedScreenSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+      BEGIN
+         
+
+         EXECUTE [RDT].[rdt_ExtScnEntry] 
+         @cExtendedScreenSP, 
+         @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
+         @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,  
+         @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,  
+         @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,  
+         @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,  
+         @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,  
+         @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT, 
+         @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT, 
+         @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT, 
+         @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT, 
+         @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT, 
+         @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
+         @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
+         @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
+         @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
+         @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
+         @nAction, 
+         @nScn    OUTPUT,  @nStep OUTPUT,
+         @nErrNo   OUTPUT, 
+         @cErrMsg  OUTPUT
+         
+         IF @nErrNo <> 0
+            GOTO Step_99_Fail
+      END
+   END
+
+   GOTO Quit
+
+Step_99_Fail:
+   BEGIN
+      GOTO Quit
+   END
+END
+GOTO Quit
 
 /********************************************************************************
 Quit. Update back to I/O table, ready to be pick up by JBOSS
