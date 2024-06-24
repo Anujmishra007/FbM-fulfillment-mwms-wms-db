@@ -1,8 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_WaveGenLoadByCons]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_WaveGenLoadByCons]
-GO
-
-SET QUOTED_IDENTIFIER OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
@@ -40,7 +36,7 @@ GO
 /* 01-Sep-2023 SPChin   1.3  JSM-169349 - Extend The Length Of C_Company*/ 
 /************************************************************************/
 
-CREATE PROC isp_WaveGenLoadByCons 
+CREATE OR ALTER PROCEDURE isp_WaveGenLoadByCons
    @c_WaveKey NVARCHAR(10),
    @b_Success int OUTPUT, 
    @n_err     int OUTPUT, 
@@ -89,7 +85,7 @@ BEGIN
    IF @n_continue = 1 OR @n_continue = 2
    BEGIN 	
       DECLARE cur_LPGroup CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT O.ConsigneeKey, O.C_Company, O.Storerkey
+      SELECT O.ConsigneeKey, ISNULL(O.C_Company, ''), O.Storerkey
       FROM Orders O WITH (NOLOCK)
       JOIN WaveDetail WD WITH (NOLOCK) ON (O.OrderKey = WD.OrderKey)
       WHERE WD.WaveKey = @c_WaveKey
