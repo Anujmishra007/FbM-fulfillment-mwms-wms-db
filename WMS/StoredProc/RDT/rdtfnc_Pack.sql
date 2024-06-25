@@ -235,7 +235,18 @@ DECLARE
    @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),   @cFieldAttr12 NVARCHAR( 1), @cLottable12  NVARCHAR( 30),
    @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60),   @cFieldAttr13 NVARCHAR( 1), @dLottable13  DATETIME,
    @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),   @cFieldAttr14 NVARCHAR( 1), @dLottable14  DATETIME,
-   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),   @cFieldAttr15 NVARCHAR( 1), @dLottable15  DATETIME
+   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),   @cFieldAttr15 NVARCHAR( 1), @dLottable15  DATETIME,
+
+   @cUDF01  NVARCHAR( 250), @cUDF02 NVARCHAR( 250), @cUDF03 NVARCHAR( 250),
+   @cUDF04  NVARCHAR( 250), @cUDF05 NVARCHAR( 250), @cUDF06 NVARCHAR( 250),
+   @cUDF07  NVARCHAR( 250), @cUDF08 NVARCHAR( 250), @cUDF09 NVARCHAR( 250),
+   @cUDF10  NVARCHAR( 250), @cUDF11 NVARCHAR( 250), @cUDF12 NVARCHAR( 250),
+   @cUDF13  NVARCHAR( 250), @cUDF14 NVARCHAR( 250), @cUDF15 NVARCHAR( 250),
+   @cUDF16  NVARCHAR( 250), @cUDF17 NVARCHAR( 250), @cUDF18 NVARCHAR( 250),
+   @cUDF19  NVARCHAR( 250), @cUDF20 NVARCHAR( 250), @cUDF21 NVARCHAR( 250),
+   @cUDF22  NVARCHAR( 250), @cUDF23 NVARCHAR( 250), @cUDF24 NVARCHAR( 250),
+   @cUDF25  NVARCHAR( 250), @cUDF26 NVARCHAR( 250), @cUDF27 NVARCHAR( 250),
+   @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( 250)
 
 -- Getting Mobile information
 SELECT
@@ -2034,7 +2045,17 @@ Step_3_ExtScn:
                @nAction, 
                @nScn OUTPUT,  @nStep OUTPUT,
                @nErrNo   OUTPUT, 
-               @cErrMsg  OUTPUT
+               @cErrMsg  OUTPUT,
+               @cUDF01   OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
+               @cUDF04   OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
+               @cUDF07   OUTPUT, @cUDF08 OUTPUT, @cUDF09 OUTPUT,
+               @cUDF10   OUTPUT, @cUDF11 OUTPUT, @cUDF12 OUTPUT,
+               @cUDF13   OUTPUT, @cUDF14 OUTPUT, @cUDF15 OUTPUT,
+               @cUDF16   OUTPUT, @cUDF17 OUTPUT, @cUDF18 OUTPUT,
+               @cUDF19   OUTPUT, @cUDF20 OUTPUT, @cUDF21 OUTPUT,
+               @cUDF22   OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
+               @cUDF25   OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
+               @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
                
                IF @nErrNo <> 0
                BEGIN
@@ -4972,6 +4993,8 @@ BEGIN
 
       EXEC rdt.rdtSetFocusField @nMobile, 3 -- SKU
 
+      SET @nenter = 0 --(JHU151)
+
       -- Go to SKU QTY screen
       SET @nScn = 4652
       SET @nStep = @nStep - 6
@@ -5296,6 +5319,8 @@ BEGIN
    BEGIN
       SET @cFieldAttr14 = '' -- @nPQTY
    END
+
+   SET @nenter = 0 --(JHU151)
 
    EXEC rdt.rdtSetFocusField @nMobile, 3 -- SKU
 

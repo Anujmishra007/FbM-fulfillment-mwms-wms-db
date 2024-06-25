@@ -4,7 +4,7 @@ SET ANSI_NULLS OFF
 GO
 
 /************************************************************************/  
-/* Store procedure: rdt_855ExtScn01                                     */  
+/* Store procedure: rdt_838ExtScn01                                     */  
 /*                                                                      */  
 /* Modifications log:                                                   */  
 /*                                                                      */  
@@ -42,7 +42,17 @@ CREATE OR ALTER PROC [RDT].[rdt_838ExtScn01] (
    @nAction          INT, --0 Jump Screen, 1 Validation(pass through all input fields), 2 Update, 3 Prepare output fields .....
    @nAfterScn        INT OUTPUT, @nAfterStep    INT OUTPUT, 
    @nErrNo           INT            OUTPUT, 
-   @cErrMsg          NVARCHAR( 20)  OUTPUT
+   @cErrMsg          NVARCHAR( 20)  OUTPUT,
+   @cUDF01  NVARCHAR( 250) OUTPUT, @cUDF02 NVARCHAR( 250) OUTPUT, @cUDF03 NVARCHAR( 250) OUTPUT,
+   @cUDF04  NVARCHAR( 250) OUTPUT, @cUDF05 NVARCHAR( 250) OUTPUT, @cUDF06 NVARCHAR( 250) OUTPUT,
+   @cUDF07  NVARCHAR( 250) OUTPUT, @cUDF08 NVARCHAR( 250) OUTPUT, @cUDF09 NVARCHAR( 250) OUTPUT,
+   @cUDF10  NVARCHAR( 250) OUTPUT, @cUDF11 NVARCHAR( 250) OUTPUT, @cUDF12 NVARCHAR( 250) OUTPUT,
+   @cUDF13  NVARCHAR( 250) OUTPUT, @cUDF14 NVARCHAR( 250) OUTPUT, @cUDF15 NVARCHAR( 250) OUTPUT,
+   @cUDF16  NVARCHAR( 250) OUTPUT, @cUDF17 NVARCHAR( 250) OUTPUT, @cUDF18 NVARCHAR( 250) OUTPUT,
+   @cUDF19  NVARCHAR( 250) OUTPUT, @cUDF20 NVARCHAR( 250) OUTPUT, @cUDF21 NVARCHAR( 250) OUTPUT,
+   @cUDF22  NVARCHAR( 250) OUTPUT, @cUDF23 NVARCHAR( 250) OUTPUT, @cUDF24 NVARCHAR( 250) OUTPUT,
+   @cUDF25  NVARCHAR( 250) OUTPUT, @cUDF26 NVARCHAR( 250) OUTPUT, @cUDF27 NVARCHAR( 250) OUTPUT,
+   @cUDF28  NVARCHAR( 250) OUTPUT, @cUDF29 NVARCHAR( 250) OUTPUT, @cUDF30 NVARCHAR( 250) OUTPUT
 )
 AS
 BEGIN
@@ -56,7 +66,8 @@ BEGIN
       @cSKU                   NVARCHAR( 20),
 		@cOrdKey				      NVARCHAR( 10),
 		@cExtOrderKey			   NVARCHAR( 50),
-		@nPickedQTY				   INT
+		@nPickedQTY				   INT,
+		@nPackedQTY				   INT
 
 
    SET @nErrNo = 0
@@ -83,32 +94,57 @@ BEGIN
 
                   IF ISNULL(@cOrdKey, '') <> ''
                   BEGIN
-                     SELECT @npickedQty = SUM(Qty) 
+                     SELECT @npickedQty = SUM(Qty),
+                        @nPackedQTY = MAX(pack.packedqty)
                      FROM dbo.PickHeader PH (NOLOCK)     
-                     JOIN dbo.PickDetail PD (NOLOCK) ON (PH.OrderKey = PD.OrderKey)    
+                     JOIN dbo.PickDetail PD (NOLOCK) ON (PH.OrderKey = PD.OrderKey)
+                     LEFT OUTER JOIN
+                     (SELECT SUM(qty) AS packedqty,PAD.PickSlipNo,PAD.StorerKey,PAD.SKU
+                        FROM dbo.PackDetail PAD WITH(NOLOCK)
+                        WHERE PAD.PickSlipNo = @cPickSlipNo
+                        AND PAD.StorerKey = @cStorerKey
+                        AND PAD.sku = @cSku
+                     GROUP BY PAD.PickSlipNo,PAD.StorerKey,PAD.SKU) pack
+                        ON PD.Storerkey = pack.StorerKey
+                        AND PD.Sku = pack.SKU
                      WHERE PH.PickHeaderKey = @cPickSlipNo    
                      AND	  PD.Status = N'5'
                      AND   PD.StorerKey  = @cStorerKey
                      AND   PD.SKU = @cSKU
+                     GROUP BY PD.SKU
                   END
                   ELSE
                   BEGIN
-                     SELECT @nPickedQTY = SUM(Qty)
+                     SELECT @nPickedQTY = SUM(Qty),
+                     @nPackedQTY = MAX(pack.packedqty)
                      FROM dbo.PickHeader PH (NOLOCK)     
                      JOIN dbo.LoadPlanDetail LPD WITH (NOLOCK) ON PH.ExternOrderKey = LPD.LoadKey
-                     JOIN dbo.PickDetail PD (NOLOCK) ON (LPD.OrderKey = PD.OrderKey)    
+                     JOIN dbo.PickDetail PD (NOLOCK) ON (LPD.OrderKey = PD.OrderKey) 
+                     LEFT OUTER JOIN
+                     (SELECT SUM(qty) AS packedqty,PAD.PickSlipNo,PAD.StorerKey,PAD.SKU
+                        FROM dbo.PackDetail PAD WITH(NOLOCK)
+                        WHERE PAD.PickSlipNo = @cPickSlipNo
+                        AND PAD.StorerKey = @cStorerKey
+                        AND PAD.sku = @cSku
+                     GROUP BY PAD.PickSlipNo,PAD.StorerKey,PAD.SKU) pack
+                        ON PD.Storerkey = pack.StorerKey
+                        AND PD.Sku = pack.SKU
                      WHERE PH.PickHeaderKey = @cPickSlipNo    
                      AND   PD.Status = N'5'
                      AND   PD.StorerKey  = @cStorerKey
                      AND   PD.SKU = @cSKU
                      GROUP BY PD.SKU
                   END
-
+                  
                   IF ISNULL(@nPickedQTY,0) = 0
                   BEGIN
                      SET @nErrNo = 216902
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- SKU Not yet picked 
                      GOTO Quit
+                  END
+                  ELSE
+                  BEGIN
+                     SET @nPickedQTY = @nPickedQTY - ISNULL(@nPackedQty,0)
                   END
 
                END
