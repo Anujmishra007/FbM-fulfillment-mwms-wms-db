@@ -59,6 +59,7 @@ GO
 /* 2015-05-12 3.2  James    SOS341660 - Allow 7 digit on V_Qty (james08)*/
 /* 2016-09-30 3.3  Ung      Performance tuning                          */  
 /* 2018-10-04 3.4  Gan      Performance tuning                          */
+/* 2024-06-25 3.5  JHU51    FCR-349 add SCN 924 for DEFY                */
 /************************************************************************/
 
 CREATE PROCEDURE [RDT].[rdtfnc_Putaway] (
@@ -113,8 +114,9 @@ DECLARE
    @cSuggestedLOC   NVARCHAR( 10),
    @cFinalLOC       NVARCHAR( 10),
    @cExtendedValidateSP NVARCHAR( 20),
+   @cExtendedScreenSP   NVARCHAR( 20), --(JHU151)
    @tExtScnData			VariableTable, --(JHU151)
-   @nAction         INT, --(JHU151)
+   @nAction             INT, --(JHU151)
    @cInField01 NVARCHAR( 60),  @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),  @cOutField02 NVARCHAR( 60),
    @cInField03 NVARCHAR( 60),  @cOutField03 NVARCHAR( 60),
@@ -138,7 +140,25 @@ DECLARE
    @cFieldAttr09 NVARCHAR( 1), @cFieldAttr10 NVARCHAR( 1),
    @cFieldAttr11 NVARCHAR( 1), @cFieldAttr12 NVARCHAR( 1),
    @cFieldAttr13 NVARCHAR( 1), @cFieldAttr14 NVARCHAR( 1),
-   @cFieldAttr15 NVARCHAR( 1)
+   @cFieldAttr15 NVARCHAR( 1),
+
+   @cLottable01  NVARCHAR( 18), @cLottable02  NVARCHAR( 18), @cLottable03  NVARCHAR( 18),
+   @dLottable04  DATETIME, @dLottable05  DATETIME,
+   @cLottable06  NVARCHAR( 30), @cLottable07  NVARCHAR( 30), @cLottable08  NVARCHAR( 30),
+   @cLottable09  NVARCHAR( 30), @cLottable10  NVARCHAR( 30), @cLottable11  NVARCHAR( 30),
+   @cLottable12  NVARCHAR( 30),
+   @dLottable13  DATETIME, @dLottable14  DATETIME, @dLottable15  DATETIME,
+
+   @cUDF01  NVARCHAR( 250), @cUDF02 NVARCHAR( 250), @cUDF03 NVARCHAR( 250),
+   @cUDF04  NVARCHAR( 250), @cUDF05 NVARCHAR( 250), @cUDF06 NVARCHAR( 250),
+   @cUDF07  NVARCHAR( 250), @cUDF08 NVARCHAR( 250), @cUDF09 NVARCHAR( 250),
+   @cUDF10  NVARCHAR( 250), @cUDF11 NVARCHAR( 250), @cUDF12 NVARCHAR( 250),
+   @cUDF13  NVARCHAR( 250), @cUDF14 NVARCHAR( 250), @cUDF15 NVARCHAR( 250),
+   @cUDF16  NVARCHAR( 250), @cUDF17 NVARCHAR( 250), @cUDF18 NVARCHAR( 250),
+   @cUDF19  NVARCHAR( 250), @cUDF20 NVARCHAR( 250), @cUDF21 NVARCHAR( 250),
+   @cUDF22  NVARCHAR( 250), @cUDF23 NVARCHAR( 250), @cUDF24 NVARCHAR( 250),
+   @cUDF25  NVARCHAR( 250), @cUDF26 NVARCHAR( 250), @cUDF27 NVARCHAR( 250),
+   @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( 250)
 
 -- Getting Mobile information
 SELECT
@@ -218,7 +238,7 @@ BEGIN
    IF @nStep = 2 GOTO Step_2   -- Scn  = 921. QTY
    IF @nStep = 3 GOTO Step_3   -- Scn  = 922. Suggested LOC, ToLOC
    IF @nStep = 4 GOTO Step_4   -- Scn  = 923. Msg
-   IF @nStep = 99 GOTO Step_99 -- Ext Screen
+   IF @nStep = 99 GOTO Step_99 -- Ext Screen (924)
 END
 RETURN -- Do nothing if incorrect step
 
@@ -278,16 +298,22 @@ BEGIN
    SET @nStep = 1
 
    --JHU151
-   IF(ISNULL(rdt.RDTGetConfig( @nFunc, 'LoseIDputaway', @cStorerKey),'0')) !='0'
+   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey)
+   IF @cExtendedScreenSP = '0'
    BEGIN
-      DELETE FROM @tExtScnData
-      INSERT INTO @tExtScnData (Variable, Value) VALUES 	
-      ('@nMenu',     @nMenu)
+      SET @cExtendedScreenSP = ''
+   END
+   IF @cExtendedScreenSP <> ''
+   BEGIN
+      --DELETE FROM @tExtScnData
+      --INSERT INTO @tExtScnData (Variable, Value) VALUES 	
+      --('@nMenu',     @nMenu)
       
-      SET @nAction = 0
+      --SET @nAction = 0
+      SET @cOutField02 = ''
       SET @nStep = 99
-      SET @nScn = ? -- new screen id
-      GOTO Step_99
+      SET @nScn = 924
+      --GOTO Step_99
    END
 
 END
@@ -800,6 +826,18 @@ BEGIN
       SET @nScn  = @nScn - 1
       SET @nStep = @nStep - 1
    END
+
+   --JHU151
+   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey)
+   IF @cExtendedScreenSP = '0'
+   BEGIN
+      SET @cExtendedScreenSP = ''
+   END
+   IF @cExtendedScreenSP <> ''
+   BEGIN
+      SET @nAction = 0
+      GOTO Step_99
+   END
 END
 GOTO Quit
 
@@ -962,8 +1000,21 @@ BEGIN
    -- Go to ID/SKU/FromLOC screen
    SET @nScn  = @nScn - 3
    SET @nStep = @nStep - 3
+
+   --JHU151
+   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey)
+   IF @cExtendedScreenSP = '0'
+   BEGIN
+      SET @cExtendedScreenSP = ''
+   END
+   IF @cExtendedScreenSP <> ''
+   BEGIN
+      SET @nAction = 0
+      GOTO Step_99
+   END
 END
 GOTO Quit
+
 
 --JHU151
 Step_99:
@@ -973,7 +1024,10 @@ BEGIN
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
       BEGIN
-         
+         DELETE FROM @tExtScnData
+		   INSERT INTO @tExtScnData (Variable, Value) VALUES 	
+         ('@nMenu',     @nMenu),
+         ('@cUserName', @cUserName)
 
          EXECUTE [RDT].[rdt_ExtScnEntry] 
          @cExtendedScreenSP, 
@@ -994,10 +1048,22 @@ BEGIN
          @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
          @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
          @nAction, 
-         @nScn    OUTPUT,  @nStep OUTPUT,
+         @nScn     OUTPUT,  @nStep OUTPUT,
          @nErrNo   OUTPUT, 
-         @cErrMsg  OUTPUT
-         
+         @cErrMsg  OUTPUT,
+         @cUDF01   OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
+		   @cUDF04   OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
+		   @cUDF07   OUTPUT, @cUDF08 OUTPUT, @cUDF09 OUTPUT,
+		   @cUDF10   OUTPUT, @cUDF11 OUTPUT, @cUDF12 OUTPUT,
+		   @cUDF13   OUTPUT, @cUDF14 OUTPUT, @cUDF15 OUTPUT,
+		   @cUDF16   OUTPUT, @cUDF17 OUTPUT, @cUDF18 OUTPUT,
+		   @cUDF19   OUTPUT, @cUDF20 OUTPUT, @cUDF21 OUTPUT,
+		   @cUDF22   OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
+		   @cUDF25   OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
+		   @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
+		   
+         SET @nFunc = @cUDF01
+
          IF @nErrNo <> 0
             GOTO Step_99_Fail
       END
