@@ -28,6 +28,7 @@ GO
 /*                            as part of UWP-20525                      */
 /* 24-JUN-2024  SSA02    1.2  Added missing variable while executing    */
 /*                            update transfer detail query              */
+/* 25-JUN-2024  SSA03    1.3  Syntax error fix                          */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[ispREC10]
    @c_Action    NVARCHAR(10)
@@ -97,7 +98,7 @@ BEGIN
 
          OPEN CUR_REC
          
-         FETCH NEXT FROM CUR_REC INTO @c_Receiptkey, @c_Type, @c_Facility, @c_Storerkey      --(SSA02)
+         FETCH NEXT FROM CUR_REC INTO @c_Receiptkey, @c_Type, @c_Facility, @c_Storerkey
          
          WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)
          BEGIN         	  
@@ -106,7 +107,7 @@ BEGIN
 
             SELECT @c_CfgRecTriggerOpt5  = fsgr.ConfigOption5
               FROM dbo.fnc_SelectGetRight(@c_Facility, @c_Storerkey, '', 'ReceiptTrigger_SP') AS fsgr
-               ----(SSA02) start ----
+
                SET @c_ASNAutoTRFType = 'NORMAL';
                SELECT @c_ASNAutoTRFType = dbo.fnc_GetParamValueFromString('@c_ASNAutoTRFType', @c_CfgRecTriggerOpt5, @c_ASNAutoTRFType)
 
@@ -266,7 +267,7 @@ BEGIN
                             +' SET Lottable01 = ''A'''
                             +',Lottable02 = IIF(@c_Type = ''NORMAL'',''GOOD'',''RETURN'')'
                             +',Status = ''9'''
-                            +' Userdefine01 = CASE WHEN RDET.ReceiptLineNumber IS NOT NULL THEN RDET.ReceiptLineNumber ELSE Userdefine01 END'
+                            +',Userdefine01 = CASE WHEN RDET.ReceiptLineNumber IS NOT NULL THEN RDET.ReceiptLineNumber ELSE Userdefine01 END'      --(SSA03)
                             +' FROM TRANSFERDETAIL'
                             +' OUTER APPLY (SELECT TOP 1 RD.ReceiptLineNumber'
                             +' FROM RECEIPTDETAIL RD (NOLOCK)'
