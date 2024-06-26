@@ -192,7 +192,7 @@ SELECT
    @cSuggestedLOC  = V_String10,
    @cFinalLOC      = V_String11,
    @cExtendedValidateSP = V_String12,
-   
+   @cExtendedScreenSP = V_String13,--(JHU151)
    @nQTY       = V_Integer1,
    @nPQTY_PWY  = V_Integer2,
    @nMQTY_PWY  = V_Integer3,
@@ -270,6 +270,12 @@ BEGIN
    IF @cExtendedValidateSP = '0'
       SET @cExtendedValidateSP = ''
 
+   --JHU151
+   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+   IF @cExtendedScreenSP = '0'
+   BEGIN
+      SET @cExtendedScreenSP = ''
+
    --Initialize Outfield Values
    SET @cOutField01 = '' --ID
    SET @cOutField02 = @cStorerKey
@@ -297,12 +303,7 @@ BEGIN
    SET @nScn = 920
    SET @nStep = 1
 
-   --JHU151
-   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey)
-   IF @cExtendedScreenSP = '0'
-   BEGIN
-      SET @cExtendedScreenSP = ''
-   END
+   --JHU151   
    IF @cExtendedScreenSP <> ''
    BEGIN
       SET @cOutField02 = ''
@@ -823,8 +824,7 @@ BEGIN
    END
 
    --JHU151
-   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey)
-   IF @cExtendedScreenSP = '0'
+  IF @cExtendedScreenSP = '0'
    BEGIN
       SET @cExtendedScreenSP = ''
    END
@@ -997,7 +997,6 @@ BEGIN
    SET @nStep = @nStep - 3
 
    --JHU151
-   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey)
    IF @cExtendedScreenSP = '0'
    BEGIN
       SET @cExtendedScreenSP = ''
@@ -1014,7 +1013,6 @@ GOTO Quit
 --JHU151
 Step_99:
 BEGIN
-   SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey), '')
    IF @cExtendedScreenSP <> ''
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
@@ -1108,7 +1106,7 @@ BEGIN
       V_String10 = @cSuggestedLOC,
       V_String11 = @cFinalLOC,
       V_String12 = @cExtendedValidateSP,
-      
+      V_String13 = @cExtendedScreenSP,--(JHU151)
       V_Integer1  = @nQTY,
       V_Integer2  = @nPQTY_PWY,
       V_Integer3  = @nMQTY_PWY,
