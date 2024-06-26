@@ -150,7 +150,7 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --212604Loc Not Found
                      GOTO Quit
                   END
-                  SET @nAfterStep = 3
+                  --SET @nAfterStep = 3
                   SET @cLOC = @cActLoc
                   GOTO QUIT
                END
