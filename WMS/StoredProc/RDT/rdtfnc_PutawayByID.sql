@@ -29,6 +29,7 @@ GO
 /*                          suggested loc (james05)                     */
 /* 2023-03-20 1.8  Dennis   UWP-14536 Check Digit                       */
 /* 2024-04-18 1.9  Calvin   UWP-18503 Map full input values (CLVN01)    */
+/* 2024-06-11 2.0  NLT013    FCR-267 Unlock locations for all UCC       */
 /************************************************************************/
 
 CREATE PROC [RDT].[rdtfnc_PutawayByID] (
@@ -233,6 +234,7 @@ BEGIN
 
    -- (james05)
    SET @cPAMatchSuggestLOC = rdt.RDTGetConfig( @nFunc, 'PutawayMatchSuggestLOC', @cStorerKey)
+
 
    -- EventLog
    EXEC RDT.rdt_STD_EventLog
@@ -868,7 +870,6 @@ BEGIN
 
    IF @nInputKey = 0 -- ESC
    BEGIN
-      -- Unlock current session suggested LOC
       IF @nPABookingKey <> 0
       BEGIN
          EXEC rdt.rdt_Putaway_PendingMoveIn '', 'UNLOCK'
@@ -881,9 +882,40 @@ BEGIN
             ,@nPABookingKey = @nPABookingKey OUTPUT
          IF @nErrNo <> 0  
             GOTO Step_2_Fail
-         
+
          SET @nPABookingKey = 0
       END
+
+      -- Extended update
+      IF @cExtendedUpdateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFromID, @cSuggLOC, @cPickAndDropLOC, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,           ' +
+               '@nInputKey       INT,           ' + 
+               '@cFromID         NVARCHAR( 18), ' +
+               '@cSuggLOC        NVARCHAR( 10), ' +
+               '@cPickAndDropLOC NVARCHAR( 10), ' +
+               '@cToLOC          NVARCHAR( 10), ' +
+               '@nErrNo          INT           OUTPUT, ' +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT  '
+   
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFromID, @cSuggLOC, @cPickAndDropLOC, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+            BEGIN
+               GOTO Step_2_Fail
+            END
+         END
+      END
+
 
       -- Prepare next screen var
       SET @cOutField01 = '' --FromID
