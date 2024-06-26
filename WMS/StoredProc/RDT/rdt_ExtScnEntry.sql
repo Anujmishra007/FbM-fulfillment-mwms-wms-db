@@ -13,13 +13,13 @@ GO
 /* 2024-06-13 1.0  NLT013   FCR386 Create                               */
 /************************************************************************/
 
-ALTER   PROC [RDT].[rdt_ExtScnEntry] (
+CREATE OR ALTER PROC [RDT].[rdt_ExtScnEntry] (
    @cExtendedScreenSP     NVARCHAR( 20),
    @nMobile      INT,           
    @nFunc        INT,           
    @cLangCode    NVARCHAR( 3),  
-   @nStep INT,           
-   @nScn  INT,           
+   @nStep        INT,           
+   @nScn         INT,           
    @nInputKey    INT,           
    @cFacility    NVARCHAR( 5),  
    @cStorerKey   NVARCHAR( 15), 
@@ -41,8 +41,8 @@ ALTER   PROC [RDT].[rdt_ExtScnEntry] (
    @cInField13       NVARCHAR( 60) OUTPUT,  @cOutField13 NVARCHAR( 60) OUTPUT,  @cFieldAttr13 NVARCHAR( 1) OUTPUT,  @dLottable13 DATETIME      OUTPUT,
    @cInField14       NVARCHAR( 60) OUTPUT,  @cOutField14 NVARCHAR( 60) OUTPUT,  @cFieldAttr14 NVARCHAR( 1) OUTPUT,  @dLottable14 DATETIME      OUTPUT,
    @cInField15       NVARCHAR( 60) OUTPUT,  @cOutField15 NVARCHAR( 60) OUTPUT,  @cFieldAttr15 NVARCHAR( 1) OUTPUT,  @dLottable15 DATETIME      OUTPUT,
-   @nAction      INT, --0 Jump Screen, 1 Validation(pass through all input fields), 2 Update, 3 Prepare output fields .....
-   @nAfterScn    INT OUTPUT, @nAfterStep    INT OUTPUT, 
+   @nAction          INT, --0 Jump Screen, 1 Validation(pass through all input fields), 2 Update, 3 Prepare output fields .....
+   @nAfterScn        INT OUTPUT, @nAfterStep    INT OUTPUT, 
    @nErrNo             INT            OUTPUT, 
    @cErrMsg            NVARCHAR( 20)  OUTPUT,
    @cUDF01  NVARCHAR( 250) OUTPUT, @cUDF02 NVARCHAR( 250) OUTPUT, @cUDF03 NVARCHAR( 250) OUTPUT,
@@ -175,10 +175,11 @@ BEGIN
       @cUDF28 OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
 END
 
-SET QUOTED_IDENTIFIER OFF 
+
+SET QUOTED_IDENTIFIER OFF
 GO
-
-
+SET ANSI_NULLS ON
+GO
 
 GRANT EXECUTE ON RDT.rdt_ExtScnEntry TO NSQL
 GO
