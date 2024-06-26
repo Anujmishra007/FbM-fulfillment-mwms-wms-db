@@ -3,27 +3,26 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-
 /************************************************************************/
 /* Store procedure: rdt_ExtScnEntry                                     */
-/* Copyright      : Maersk WMS                                          */
+/* Copyright      : LF Logistics                                        */
 /*                                                                      */
-/* Purpose:                                                             */
+/* Purpose:       For Unilever                                          */
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
 /* 2024-06-13 1.0  NLT013   FCR386 Create                               */
 /************************************************************************/
 
-CREATE OR ALTER PROC [RDT].[rdt_ExtScnEntry] (
-   @cExtendedScreenSP      NVARCHAR( 20),
-   @nMobile                INT,           
-   @nFunc                  INT,           
-   @cLangCode              NVARCHAR( 3),  
-   @nStep                  INT,           
-   @nScn                   INT,           
-   @nInputKey              INT,           
-   @cFacility              NVARCHAR( 5),  
-   @cStorerKey             NVARCHAR( 15), 
+ALTER   PROC [RDT].[rdt_ExtScnEntry] (
+   @cExtendedScreenSP     NVARCHAR( 20),
+   @nMobile      INT,           
+   @nFunc        INT,           
+   @cLangCode    NVARCHAR( 3),  
+   @nStep INT,           
+   @nScn  INT,           
+   @nInputKey    INT,           
+   @cFacility    NVARCHAR( 5),  
+   @cStorerKey   NVARCHAR( 15), 
 
    @tExtScnData   VariableTable READONLY,
 
@@ -42,10 +41,20 @@ CREATE OR ALTER PROC [RDT].[rdt_ExtScnEntry] (
    @cInField13       NVARCHAR( 60) OUTPUT,  @cOutField13 NVARCHAR( 60) OUTPUT,  @cFieldAttr13 NVARCHAR( 1) OUTPUT,  @dLottable13 DATETIME      OUTPUT,
    @cInField14       NVARCHAR( 60) OUTPUT,  @cOutField14 NVARCHAR( 60) OUTPUT,  @cFieldAttr14 NVARCHAR( 1) OUTPUT,  @dLottable14 DATETIME      OUTPUT,
    @cInField15       NVARCHAR( 60) OUTPUT,  @cOutField15 NVARCHAR( 60) OUTPUT,  @cFieldAttr15 NVARCHAR( 1) OUTPUT,  @dLottable15 DATETIME      OUTPUT,
-   @nAction          INT, --0 Jump Screen, 1 Validation(pass through all input fields), 2 Update, 3 Prepare output fields .....
-   @nAfterScn        INT OUTPUT, @nAfterStep    INT OUTPUT, 
-   @nErrNo           INT            OUTPUT, 
-   @cErrMsg          NVARCHAR( 20)  OUTPUT
+   @nAction      INT, --0 Jump Screen, 1 Validation(pass through all input fields), 2 Update, 3 Prepare output fields .....
+   @nAfterScn    INT OUTPUT, @nAfterStep    INT OUTPUT, 
+   @nErrNo             INT            OUTPUT, 
+   @cErrMsg            NVARCHAR( 20)  OUTPUT,
+   @cUDF01  NVARCHAR( 250) OUTPUT, @cUDF02 NVARCHAR( 250) OUTPUT, @cUDF03 NVARCHAR( 250) OUTPUT,
+   @cUDF04  NVARCHAR( 250) OUTPUT, @cUDF05 NVARCHAR( 250) OUTPUT, @cUDF06 NVARCHAR( 250) OUTPUT,
+   @cUDF07  NVARCHAR( 250) OUTPUT, @cUDF08 NVARCHAR( 250) OUTPUT, @cUDF09 NVARCHAR( 250) OUTPUT,
+   @cUDF10  NVARCHAR( 250) OUTPUT, @cUDF11 NVARCHAR( 250) OUTPUT, @cUDF12 NVARCHAR( 250) OUTPUT,
+   @cUDF13  NVARCHAR( 250) OUTPUT, @cUDF14 NVARCHAR( 250) OUTPUT, @cUDF15 NVARCHAR( 250) OUTPUT,
+   @cUDF16  NVARCHAR( 250) OUTPUT, @cUDF17 NVARCHAR( 250) OUTPUT, @cUDF18 NVARCHAR( 250) OUTPUT,
+   @cUDF19  NVARCHAR( 250) OUTPUT, @cUDF20 NVARCHAR( 250) OUTPUT, @cUDF21 NVARCHAR( 250) OUTPUT,
+   @cUDF22  NVARCHAR( 250) OUTPUT, @cUDF23 NVARCHAR( 250) OUTPUT, @cUDF24 NVARCHAR( 250) OUTPUT,
+   @cUDF25  NVARCHAR( 250) OUTPUT, @cUDF26 NVARCHAR( 250) OUTPUT, @cUDF27 NVARCHAR( 250) OUTPUT,
+   @cUDF28  NVARCHAR( 250) OUTPUT, @cUDF29 NVARCHAR( 250) OUTPUT, @cUDF30 NVARCHAR( 250) OUTPUT
 )
 AS
 BEGIN
@@ -78,7 +87,17 @@ BEGIN
       @nAction, 
       @nAfterScn OUTPUT, @nAfterStep OUTPUT, 
       @nErrNo   OUTPUT, 
-      @cErrMsg  OUTPUT'
+      @cErrMsg  OUTPUT,
+      @cUDF01 OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
+      @cUDF04 OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
+      @cUDF07 OUTPUT, @cUDF08 OUTPUT, @cUDF09 OUTPUT,
+      @cUDF10 OUTPUT, @cUDF11 OUTPUT, @cUDF12 OUTPUT,
+      @cUDF13 OUTPUT, @cUDF14 OUTPUT, @cUDF15 OUTPUT,
+      @cUDF16 OUTPUT, @cUDF17 OUTPUT, @cUDF18 OUTPUT,
+      @cUDF19 OUTPUT, @cUDF20 OUTPUT, @cUDF21 OUTPUT,
+      @cUDF22 OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
+      @cUDF25 OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
+      @cUDF28 OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT'
 
    SET @cSQLParam =
       '	@nMobile      INT,           
@@ -110,7 +129,17 @@ BEGIN
          @nAction      INT,
          @nAfterScn    INT OUTPUT, @nAfterStep    INT OUTPUT, 
          @nErrNo             INT            OUTPUT, 
-         @cErrMsg            NVARCHAR( 20)  OUTPUT'
+         @cErrMsg            NVARCHAR( 20)  OUTPUT,
+         @cUDF01  NVARCHAR( 250) OUTPUT, @cUDF02 NVARCHAR( 250) OUTPUT, @cUDF03 NVARCHAR( 250) OUTPUT,
+         @cUDF04  NVARCHAR( 250) OUTPUT, @cUDF05 NVARCHAR( 250) OUTPUT, @cUDF06 NVARCHAR( 250) OUTPUT,
+         @cUDF07  NVARCHAR( 250) OUTPUT, @cUDF08 NVARCHAR( 250) OUTPUT, @cUDF09 NVARCHAR( 250) OUTPUT,
+         @cUDF10  NVARCHAR( 250) OUTPUT, @cUDF11 NVARCHAR( 250) OUTPUT, @cUDF12 NVARCHAR( 250) OUTPUT,
+         @cUDF13  NVARCHAR( 250) OUTPUT, @cUDF14 NVARCHAR( 250) OUTPUT, @cUDF15 NVARCHAR( 250) OUTPUT,
+         @cUDF16  NVARCHAR( 250) OUTPUT, @cUDF17 NVARCHAR( 250) OUTPUT, @cUDF18 NVARCHAR( 250) OUTPUT,
+         @cUDF19  NVARCHAR( 250) OUTPUT, @cUDF20 NVARCHAR( 250) OUTPUT, @cUDF21 NVARCHAR( 250) OUTPUT,
+         @cUDF22  NVARCHAR( 250) OUTPUT, @cUDF23 NVARCHAR( 250) OUTPUT, @cUDF24 NVARCHAR( 250) OUTPUT,
+         @cUDF25  NVARCHAR( 250) OUTPUT, @cUDF26 NVARCHAR( 250) OUTPUT, @cUDF27 NVARCHAR( 250) OUTPUT,
+         @cUDF28  NVARCHAR( 250) OUTPUT, @cUDF29 NVARCHAR( 250) OUTPUT, @cUDF30 NVARCHAR( 250) OUTPUT'
 
    EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
       @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey,
@@ -133,8 +162,17 @@ BEGIN
       @nAction, 
       @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
       @nErrNo   OUTPUT, 
-      @cErrMsg  OUTPUT
-
+      @cErrMsg  OUTPUT,
+      @cUDF01 OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
+      @cUDF04 OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
+      @cUDF07 OUTPUT, @cUDF08 OUTPUT, @cUDF09 OUTPUT,
+      @cUDF10 OUTPUT, @cUDF11 OUTPUT, @cUDF12 OUTPUT,
+      @cUDF13 OUTPUT, @cUDF14 OUTPUT, @cUDF15 OUTPUT,
+      @cUDF16 OUTPUT, @cUDF17 OUTPUT, @cUDF18 OUTPUT,
+      @cUDF19 OUTPUT, @cUDF20 OUTPUT, @cUDF21 OUTPUT,
+      @cUDF22 OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
+      @cUDF25 OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
+      @cUDF28 OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
 END
 
 SET QUOTED_IDENTIFIER OFF 
