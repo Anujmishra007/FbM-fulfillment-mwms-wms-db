@@ -112,9 +112,11 @@ BEGIN
             ********************************************************************************/
             DECLARE @nMenu    INT
 
+            
             SELECT @nMenu = Value FROM @tExtScnData WHERE Variable = '@nMenu'
             SELECT @cUserName = Value FROM @tExtScnData WHERE Variable = '@cUserName'
-
+            SELECT @cPUOM = DefaultUOM FROM rdt.rdtUser WITH (NOLOCK) WHERE UserName = @cUserName
+            
             IF @nScn = 924
             BEGIN
                IF @nInputKey = 1 -- ENTER
@@ -161,7 +163,7 @@ BEGIN
                      SET @nErrNo = 63801
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- NeedID/SKU/LOC
                      EXEC rdt.rdtSetFocusField @nMobile, 2
-                     SET @cOutField01 = '' --ID
+                     SET @cOutField02 = '' --SKU
                      GOTO Quit
                   END
 
@@ -181,7 +183,7 @@ BEGIN
                      SET @nErrNo = 63803
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid SKU
                      EXEC rdt.rdtSetFocusField @nMobile, 2 --SKU
-                     SET @cOutField03 = ''
+                     SET @cOutField02 = ''
                      GOTO Quit
                   END
 
@@ -205,7 +207,7 @@ BEGIN
                   -- Check SKU Not available at location
                   IF @nSKUCount = 0
                   BEGIN
-                     SET @nErrNo = 63802
+                     SET @nErrNo = 217551
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- SKU Not available at location
                      EXEC rdt.rdtSetFocusField @nMobile, 2
                      SET @cOutField02 = '' --SKU

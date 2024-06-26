@@ -305,15 +305,10 @@ BEGIN
    END
    IF @cExtendedScreenSP <> ''
    BEGIN
-      --DELETE FROM @tExtScnData
-      --INSERT INTO @tExtScnData (Variable, Value) VALUES 	
-      --('@nMenu',     @nMenu)
-      
-      --SET @nAction = 0
       SET @cOutField02 = ''
       SET @nStep = 99
       SET @nScn = 924
-      --GOTO Step_99
+      
    END
 
 END
