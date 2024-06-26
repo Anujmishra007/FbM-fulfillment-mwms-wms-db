@@ -11,7 +11,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
 /* 2024-03-13 1.0  Dennis   Draft                                       */
-/*                                                                      */
+/* 2024-06-26 1.1  Dennis   Draft                                       */
 /************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1580ExtScn01] (
