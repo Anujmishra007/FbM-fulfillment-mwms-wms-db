@@ -29,6 +29,8 @@ GO
 /* 24-JUN-2024  SSA02    1.2  Added missing variable while executing    */
 /*                            update transfer detail query              */
 /* 25-JUN-2024  SSA03    1.3  Syntax error fix                          */
+/* 26-JUN-2024  SSA04    1.4  Updated transfer detail update dynamic    */
+/*                            query                                     */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[ispREC10]
    @c_Action    NVARCHAR(10)
@@ -271,23 +273,17 @@ BEGIN
                             +' FROM TRANSFERDETAIL'
                             +' OUTER APPLY (SELECT TOP 1 RD.ReceiptLineNumber'
                             +' FROM RECEIPTDETAIL RD (NOLOCK)'
-                            +' WHERE RD.Receiptkey = @c_Receiptkey'
+                            +' WHERE RD.Receiptkey = '+ @c_Receiptkey               --(SSA04)
                             +' AND RD.Sku = TRANSFERDETAIL.FromSku'
                             +' AND RD.ToID = TRANSFERDETAIL.FromID'
                             + @c_Condition
                             +' ORDER BY RD.ReceiptLineNumber) RDET'
-                            +' WHERE TRANSFERDETAIL.Transferkey = @c_Transferkey'
-                            +' AND TRANSFERDETAIL.TransferLineNumber = @c_TransferLineNumber'
+                            +' WHERE TRANSFERDETAIL.Transferkey = '+@c_Transferkey                  --(SSA04)
+                            +' AND TRANSFERDETAIL.TransferLineNumber = '+@c_TransferLineNumber      --(SSA04)
 
             EXEC sp_executesql @c_SQL
             , N'@c_Type            NVARCHAR(20)'                       --(SSA02)
-            , N'@c_Receiptkey      NVARCHAR(10)'
-            , N'@c_Transferkey     NVARCHAR(10)'
-            , N'@c_TransferLineNumber     NVARCHAR(5)'
             , @c_Type                                                  --(SSA02)
-            , @c_Receiptkey
-            , @c_Transferkey
-            , @c_TransferLineNumber
 
              SET @c_SQL = ''
 
