@@ -2009,7 +2009,7 @@ BEGIN
 Step_3_ExtScn:
       BEGIN
          SET @nAction = 3 --Prepare output fields
-         SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey)
+         SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
          IF @cExtendedScreenSP = '0'
          BEGIN
             SET @cExtendedScreenSP = ''
