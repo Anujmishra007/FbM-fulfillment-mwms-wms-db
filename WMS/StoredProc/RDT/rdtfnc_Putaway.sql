@@ -1020,7 +1020,7 @@ BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
       BEGIN
          DELETE FROM @tExtScnData
-		   INSERT INTO @tExtScnData (Variable, Value) VALUES 	
+         INSERT INTO @tExtScnData (Variable, Value) VALUES 	
          ('@nMenu',     @nMenu),
          ('@cUserName', @cUserName)
 
