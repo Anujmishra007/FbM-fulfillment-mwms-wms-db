@@ -81,6 +81,8 @@ GO
 /* 2023-11-24   5.7 Ung         WMS-24060 Add PackByFromDropID                                  */
 /* 2023-08-25   5.8 YeeKung     WMS-23946 Clear Extendedinfo SP  (yeekung02)                    */
 /* 2024-05-27   5.9 NLT013      FCR-388 Merge code to V2 branch, original owner is Wojciech     */
+/* 2024-06-14   6.0 JHU151      FCR-352 ZA_DEFY - Fn838 -Default Pick Quantity                  */
+/* 2024-06-24   6.1 JHU151      Fixed Rest @cEnter Flag issue                                   */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
@@ -157,6 +159,7 @@ DECLARE
    @nTotalPack       INT,
    @nTotalShort      INT,
    @nPackedQTY       INT,
+   @nAction          INT, --(JHU151)   
    @nEnter           INT, --(cc01)  
 
    @cDefaultPrintLabelOption     NVARCHAR( 1),
@@ -214,23 +217,36 @@ DECLARE
    @cAllowWidthZero     NVARCHAR( 1),  -- (james20)
    @cAllowHeightZero    NVARCHAR( 1),  -- (james20)
    @cDefaultcartontype  NVARCHAR( 20),  --(yeekung01)
+   @cExtendedScreenSP   NVARCHAR( 20), --(JHU151)
+   @tExtScnData			VariableTable, --(JHU151)
    @cPackByFromDropID   NVARCHAR( 1),
 
-   @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
-   @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
-   @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),    @cFieldAttr03 NVARCHAR( 1),
-   @cInField04 NVARCHAR( 60),   @cOutField04 NVARCHAR( 60),    @cFieldAttr04 NVARCHAR( 1),
-   @cInField05 NVARCHAR( 60),   @cOutField05 NVARCHAR( 60),    @cFieldAttr05 NVARCHAR( 1),
-   @cInField06 NVARCHAR( 60),   @cOutField06 NVARCHAR( 60),    @cFieldAttr06 NVARCHAR( 1),
-   @cInField07 NVARCHAR( 60),   @cOutField07 NVARCHAR( 60),    @cFieldAttr07 NVARCHAR( 1),
-   @cInField08 NVARCHAR( 60),   @cOutField08 NVARCHAR( 60),    @cFieldAttr08 NVARCHAR( 1),
-   @cInField09 NVARCHAR( 60),   @cOutField09 NVARCHAR( 60),    @cFieldAttr09 NVARCHAR( 1),
-   @cInField10 NVARCHAR( 60),   @cOutField10 NVARCHAR( 60),    @cFieldAttr10 NVARCHAR( 1),
-   @cInField11 NVARCHAR( 60),   @cOutField11 NVARCHAR( 60),    @cFieldAttr11 NVARCHAR( 1),
-   @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),    @cFieldAttr12 NVARCHAR( 1),
-   @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60),    @cFieldAttr13 NVARCHAR( 1),
-   @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),    @cFieldAttr14 NVARCHAR( 1),
-   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),    @cFieldAttr15 NVARCHAR( 1)
+   @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),   @cFieldAttr01 NVARCHAR( 1), @cLottable01  NVARCHAR( 18),
+   @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),   @cFieldAttr02 NVARCHAR( 1), @cLottable02  NVARCHAR( 18),
+   @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),   @cFieldAttr03 NVARCHAR( 1), @cLottable03  NVARCHAR( 18),
+   @cInField04 NVARCHAR( 60),   @cOutField04 NVARCHAR( 60),   @cFieldAttr04 NVARCHAR( 1), @dLottable04  DATETIME,
+   @cInField05 NVARCHAR( 60),   @cOutField05 NVARCHAR( 60),   @cFieldAttr05 NVARCHAR( 1), @dLottable05  DATETIME,
+   @cInField06 NVARCHAR( 60),   @cOutField06 NVARCHAR( 60),   @cFieldAttr06 NVARCHAR( 1), @cLottable06  NVARCHAR( 30),
+   @cInField07 NVARCHAR( 60),   @cOutField07 NVARCHAR( 60),   @cFieldAttr07 NVARCHAR( 1), @cLottable07  NVARCHAR( 30),
+   @cInField08 NVARCHAR( 60),   @cOutField08 NVARCHAR( 60),   @cFieldAttr08 NVARCHAR( 1), @cLottable08  NVARCHAR( 30),
+   @cInField09 NVARCHAR( 60),   @cOutField09 NVARCHAR( 60),   @cFieldAttr09 NVARCHAR( 1), @cLottable09  NVARCHAR( 30),
+   @cInField10 NVARCHAR( 60),   @cOutField10 NVARCHAR( 60),   @cFieldAttr10 NVARCHAR( 1), @cLottable10  NVARCHAR( 30),
+   @cInField11 NVARCHAR( 60),   @cOutField11 NVARCHAR( 60),   @cFieldAttr11 NVARCHAR( 1), @cLottable11  NVARCHAR( 30),
+   @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),   @cFieldAttr12 NVARCHAR( 1), @cLottable12  NVARCHAR( 30),
+   @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60),   @cFieldAttr13 NVARCHAR( 1), @dLottable13  DATETIME,
+   @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),   @cFieldAttr14 NVARCHAR( 1), @dLottable14  DATETIME,
+   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),   @cFieldAttr15 NVARCHAR( 1), @dLottable15  DATETIME,
+
+   @cUDF01  NVARCHAR( 250), @cUDF02 NVARCHAR( 250), @cUDF03 NVARCHAR( 250),
+   @cUDF04  NVARCHAR( 250), @cUDF05 NVARCHAR( 250), @cUDF06 NVARCHAR( 250),
+   @cUDF07  NVARCHAR( 250), @cUDF08 NVARCHAR( 250), @cUDF09 NVARCHAR( 250),
+   @cUDF10  NVARCHAR( 250), @cUDF11 NVARCHAR( 250), @cUDF12 NVARCHAR( 250),
+   @cUDF13  NVARCHAR( 250), @cUDF14 NVARCHAR( 250), @cUDF15 NVARCHAR( 250),
+   @cUDF16  NVARCHAR( 250), @cUDF17 NVARCHAR( 250), @cUDF18 NVARCHAR( 250),
+   @cUDF19  NVARCHAR( 250), @cUDF20 NVARCHAR( 250), @cUDF21 NVARCHAR( 250),
+   @cUDF22  NVARCHAR( 250), @cUDF23 NVARCHAR( 250), @cUDF24 NVARCHAR( 250),
+   @cUDF25  NVARCHAR( 250), @cUDF26 NVARCHAR( 250), @cUDF27 NVARCHAR( 250),
+   @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( 250)
 
 -- Getting Mobile information
 SELECT
@@ -379,7 +395,7 @@ BEGIN
    SET @cMultiSKUBarcode = rdt.RDTGetConfig( @nFunc, 'MultiSKUBarcode', @cStorerKey)
    SET @cPackByFromDropID = rdt.rdtGetConfig( @nFunc, 'PackByFromDropID', @cStorerKey)
    SET @cSerialNoCapture = rdt.RDTGetConfig( @nFunc, 'SerialNoCapture', @cStorerKey)
-   SET @cShowPickSlipNo = rdt.RDTGetConfig( @nFunc, 'ShowPickSlipNo', @cStorerKey)
+   SET @cShowPickSlipNo = rdt.RDTGetConfig( @nFunc, 'ShowPickSlipNo', @cStorerKey)   
 
    SET @cCapturePackInfoSP = rdt.RDTGetConfig( @nFunc, 'CapturePackInfoSP', @cStorerKey)
    IF @cCapturePackInfoSP = '0'
@@ -1162,6 +1178,8 @@ BEGIN
             SET @cFieldAttr14 = '' -- @nPQTY
          END
 
+         SET @nEnter = 0 --(JHU151)  
+
          -- Enable field
          SET @cFieldAttr08 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END
 
@@ -1170,6 +1188,7 @@ BEGIN
          -- Go to SKU QTY screen
          SET @nScn = @nScn + 1
          SET @nStep = @nStep + 1
+
       END
 
       -- Repack carton
@@ -1178,6 +1197,8 @@ BEGIN
          -- Prepare next screen var
          SET @cOutField01 = RTRIM( @cCustomNo)
          SET @cOutField02 = '' -- Option
+
+         SET @nEnter = 0 --(JHU151)  
 
          -- Go to repack screen
          SET @nScn = @nScn + 5
@@ -1721,6 +1742,7 @@ BEGIN
             GOTO Step_3_Fail
          END
 
+
          -- Check barcode return multi SKU
          IF @nSKUCnt > 1
          BEGIN
@@ -1980,6 +2002,73 @@ BEGIN
          END
 
          EXEC rdt.rdtSetFocusField @nMobile, 8
+      END
+
+      
+--JHU151
+Step_3_ExtScn:
+      BEGIN
+         SET @nAction = 3 --Prepare output fields
+         SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+         IF @cExtendedScreenSP = '0'
+         BEGIN
+            SET @cExtendedScreenSP = ''
+         END
+         IF @cExtendedScreenSP <> ''
+         BEGIN
+            IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+               AND @nEnter = 0
+            BEGIN
+               DELETE FROM @tExtScnData
+               INSERT INTO @tExtScnData (Variable, Value) VALUES 	
+               ('@cPickSlipNo',     @cPickSlipNo),
+               ('@cSKU',            @cUPC)
+
+               EXECUTE [RDT].[rdt_ExtScnEntry] 
+               @cExtendedScreenSP, 
+               @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
+               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,  
+               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,  
+               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,  
+               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,  
+               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,  
+               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT, 
+               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT, 
+               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT, 
+               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT, 
+               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT, 
+               @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
+               @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
+               @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
+               @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
+               @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
+               @nAction, 
+               @nScn OUTPUT,  @nStep OUTPUT,
+               @nErrNo   OUTPUT, 
+               @cErrMsg  OUTPUT,
+               @cUDF01   OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
+               @cUDF04   OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
+               @cUDF07   OUTPUT, @cUDF08 OUTPUT, @cUDF09 OUTPUT,
+               @cUDF10   OUTPUT, @cUDF11 OUTPUT, @cUDF12 OUTPUT,
+               @cUDF13   OUTPUT, @cUDF14 OUTPUT, @cUDF15 OUTPUT,
+               @cUDF16   OUTPUT, @cUDF17 OUTPUT, @cUDF18 OUTPUT,
+               @cUDF19   OUTPUT, @cUDF20 OUTPUT, @cUDF21 OUTPUT,
+               @cUDF22   OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
+               @cUDF25   OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
+               @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
+               
+               IF @nErrNo <> 0
+               BEGIN
+                  GOTO  Step_3_Fail
+               END 
+               
+               SET @nEnter = 1  
+               EXEC rdt.rdtSetFocusField @nMobile, 8
+
+               GOTO Quit
+            END
+         END
+            
       END
 
       --(cc01)  
@@ -2664,6 +2753,9 @@ BEGIN
             IF @cFieldAttr06 = '' AND @cOutField06 = '0' EXEC rdt.rdtSetFocusField @nMobile, 6 ELSE
             IF @cFieldAttr07 = '' AND @cOutField07 = '0' EXEC rdt.rdtSetFocusField @nMobile, 7 
 
+            --Reset 
+            SET @nEnter = 0 --(JHU151)  
+
             -- Go to next screen
             SET @nScn = @nScn + 1
             SET @nStep = @nStep + 1
@@ -2686,6 +2778,9 @@ BEGIN
 
             -- Enable field
             SET @cFieldAttr08 = '' -- QTY
+            
+            --Reset 
+            SET @nEnter = 0 --(JHU151) 
 
             -- Go to next screen
             SET @nScn = @nScn + 2
@@ -2743,6 +2838,9 @@ BEGIN
       SET @cFieldAttr08 = '' -- QTY
 
       SET @cOutField15 = ''
+
+      --Reset 
+      SET @nEnter = 0 --(JHU151) 
 
       -- Go to statistic screen
       SET @nScn = @nScn - 1
@@ -4561,7 +4659,6 @@ BEGIN
                @nCartonNo, @cLabelNo, @cSKU, @nQTY, @cUCCNo, @cCartonType, @cCube, @cWeight, @cRefNo, @cSerialNo, @nSerialQTY, @cOption,
                @cPackDtlRefNo, @cPackDtlRefNo2, @cPackDtlUPC, @cPackDtlDropID, @cPackData1, @cPackData2, @cPackData3,
                @nErrNo OUTPUT, @cErrMsg OUTPUT
-
             IF @nErrNo <> 0
             BEGIN
                ROLLBACK TRAN rdtfnc_Pack
@@ -4896,6 +4993,8 @@ BEGIN
 
       EXEC rdt.rdtSetFocusField @nMobile, 3 -- SKU
 
+      SET @nenter = 0 --(JHU151)
+
       -- Go to SKU QTY screen
       SET @nScn = 4652
       SET @nStep = @nStep - 6
@@ -5220,6 +5319,8 @@ BEGIN
    BEGIN
       SET @cFieldAttr14 = '' -- @nPQTY
    END
+
+   SET @nenter = 0 --(JHU151)
 
    EXEC rdt.rdtSetFocusField @nMobile, 3 -- SKU
 

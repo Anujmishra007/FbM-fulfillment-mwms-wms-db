@@ -4,16 +4,16 @@ SET ANSI_NULLS OFF
 GO
 
 /************************************************************************/
-/* Store procedure: rdt_838SerialNoSP01                                 */
+/* Store procedure: rdt_838SerialNoSP02                                 */
 /* Copyright      : Maersk WMS                                          */
 /*                                                                      */
 /* Purpose: Custom SerialNo SP for In Forever                           */
 /*                                                                      */
 /* Date        Rev  Author       Purposes                               */
-/* 2024-06-05  1.0  CYU027       FCR-340 Created                        */
+/* 2024-06-14  1.0  JHU151       FCR-352 Created						*/
 /************************************************************************/
 
-CREATE OR ALTER PROCEDURE [RDT].[rdt_838SerialNoSP01]
+CREATE OR ALTER PROCEDURE [RDT].[rdt_838SerialNoSP02]
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -65,29 +65,49 @@ BEGIN
 
    SET @nTotal = @nQTY -- Simplified
 
+       
+   DECLARE @cRetailSKU        NVARCHAR( 20)
+   DECLARE @cAltSKU           NVARCHAR( 20)
+   DECLARE @cManufacturerSKU  NVARCHAR( 20)
+   DECLARE @cSerialNoCapture  NVARCHAR( 1)
+
+   -- Get SKU info
+   SELECT 
+      @cSerialNoCapture = SerialNoCapture, 
+      @cAltSKU = AltSKU, 
+      @cRetailSKU = RetailSKU, 
+      @cManufacturerSKU = ManufacturerSKU
+   FROM dbo.SKU WITH (NOLOCK)
+   WHERE StorerKey = @cStorerKey
+      AND SKU = @cSKU
+
+   -- (james02)
+   -- In main SP, not all sku need to scan serialno even config turn on
+   -- Main SP decide whether need capture serialno and whether inbound or outbound type
+   -- If both capture type match then proceed
+   IF @cSerialNoCapture IN ('2', '3')  -- 1 in or out also need capture
+   BEGIN
+      -- Exclude move which do not have value in SerialCaptureType
+      IF @cSerialCaptureType <> '' AND @cSerialCaptureType <> @cSerialNoCapture
+         GOTO Quit
+   END
+
+   SET @nTotal = @nQTY -- Simplified
+
    -- Check serial no tally QTY
    IF @cType = 'CHECK'
    BEGIN
+      -- Check need serial no capture
+      IF @cSerialNoCapture NOT IN ('1', '2', '3')
+         GOTO Quit
 
-      SELECT TOP 1
-         @cUserDefine03 = OD.UserDefine03,
-         @cUserDefine04 = OD.UserDefine04
-      FROM PICKHEADER PH WITH (NOLOCK)
-         INNER JOIN ORDERDETAIL OD WITH (NOLOCK)
-         ON PH.OrderKey = OD.OrderKey
-      WHERE PH.PickHeaderKey = @cDocNo
-        AND OD.Sku = @cSKU
-
-      IF (@cUserDefine03 <> 'IsTagLoopRequired') OR ( @cUserDefine04 <> 'Y')
-         GOTO QUIT
-
-      -- Prepare next screen var
-      SET @cOutField01 = @cSKU
+		-- Prepare next screen var
+		SET @cOutField01 = @cSKU
       SET @cOutField02 = rdt.rdtFormatString( @cSKUDesc, 1, 20)  -- SKU desc 1
       SET @cOutField03 = rdt.rdtFormatString( @cSKUDesc, 21, 20) -- SKU desc 2
       SET @cOutField04 = '' -- SerialNo
-      SET @cOutField05 = CAST( @nScan AS NVARCHAR(5)) + '/' + CAST( @nTotal AS NVARCHAR(5))
-
+      SET @cOutField05 = CAST( @nScan AS NVARCHAR(5)) + '/' + CAST( @nTotal AS NVARCHAR(5)) 
+      
       EXEC rdt.rdtSetFocusField @nMobile, 3 -- SerialNo
 
       SET @cOutField15 = CAST( @nScan AS NVARCHAR(5)) -- Save scan to hidden field
@@ -99,20 +119,8 @@ BEGIN
    IF @cType = 'UPDATE'
    BEGIN
       DECLARE @cDecodeSerialNoSP NVARCHAR( 20)
-      DECLARE @cExtSNOValSP      NVARCHAR(20)
-      DECLARE @cExtSNOUpdSP      NVARCHAR(20)
-      DECLARE @cRetailSKU        NVARCHAR( 20)
-      DECLARE @cAltSKU           NVARCHAR( 20)
-      DECLARE @cManufacturerSKU  NVARCHAR( 20)
-
-      -- Get SKU info
-      SELECT
-         @cAltSKU = AltSKU,
-         @cRetailSKU = RetailSKU,
-         @cManufacturerSKU = ManufacturerSKU
-      FROM dbo.SKU WITH (NOLOCK)
-      WHERE StorerKey = @cStorerKey
-        AND SKU = @cSKU
+      DECLARE @cExtSNOValSP NVARCHAR(20)
+      DECLARE @cExtSNOUpdSP NVARCHAR(20)
 
       -- Get storer configure
       SET @cDecodeSerialNoSP = rdt.RDTGetConfig( @nFunc, 'DecodeSerialNoSP', @cStorerKey)
@@ -122,8 +130,8 @@ BEGIN
       IF @cExtSNOValSP = '0'
          SET @cExtSNOValSP = ''
       SET @cExtSNOUpdSP = rdt.RDTGetConfig( @nFunc, 'ExtendedSerialNoUpdateSP', @cStorerKey)   --(yeekung01)
-      IF @cExtSNOUpdSP = '0'
-         SET @cExtSNOUpdSP = ''
+      IF @cExtSNOUpdSP = '0'  
+         SET @cExtSNOUpdSP = '' 
 
       -- Screen mapping
       IF @nScn = 0 OR @nScn = 4830 -- For normal serial no screen
@@ -135,10 +143,10 @@ BEGIN
       BEGIN
          -- For long serial no, 2D barcode
          UPDATE rdt.rdtMobRec SET
-                                 @cSerialNo = LEFT( V_Max, 30),
-                                 @cBarcode = V_Max,               -- Read the 2D barcode
-                                 V_Max = '',                      -- Clear the field at same time
-                                 EditDate = GETDATE()
+            @cSerialNo = LEFT( V_Max, 30),   
+            @cBarcode = V_Max,               -- Read the 2D barcode
+            V_Max = '',                      -- Clear the field at same time
+            EditDate = GETDATE()
          WHERE Mobile = @nMobile
       END
       SET @nScan = CAST( @cOutField15 AS INT)
@@ -149,27 +157,27 @@ BEGIN
          IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cDecodeSerialNoSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSerialNoSP) +
-                        ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cSKU, @cBarcode, ' +
-                        ' @cSerialNo OUTPUT, @nSerialQTY OUTPUT, @nBulkSNO OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cSKU, @cBarcode, ' + 
+               ' @cSerialNo OUTPUT, @nSerialQTY OUTPUT, @nBulkSNO OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '
             SET @cSQLParam =
-                    ' @nMobile     INT,            ' +
-                    ' @nFunc       INT,            ' +
-                    ' @cLangCode   NVARCHAR( 3),   ' +
-                    ' @nStep       INT,            ' +
-                    ' @nInputKey   INT,            ' +
-                    ' @cStorerKey  NVARCHAR( 15),  ' +
-                    ' @cFacility   NVARCHAR( 5),   ' +
-                    ' @cSKU        NVARCHAR( 20),  ' +
-                    ' @cBarcode    NVARCHAR( MAX), ' +
-                    ' @cSerialNo   NVARCHAR( 30)  OUTPUT, ' +
-                    ' @nSerialQTY  INT            OUTPUT, ' +
-                    ' @nBulkSNO    INT            OUTPUT, ' +
-                    ' @nErrNo      INT            OUTPUT, ' +
-                    ' @cErrMsg     NVARCHAR( 20)  OUTPUT  '
+               ' @nMobile     INT,            ' +
+               ' @nFunc       INT,            ' +
+               ' @cLangCode   NVARCHAR( 3),   ' +
+               ' @nStep       INT,            ' +
+               ' @nInputKey   INT,            ' +
+               ' @cStorerKey  NVARCHAR( 15),  ' +
+               ' @cFacility   NVARCHAR( 5),   ' +
+               ' @cSKU        NVARCHAR( 20),  ' + 
+               ' @cBarcode    NVARCHAR( MAX), ' +
+               ' @cSerialNo   NVARCHAR( 30)  OUTPUT, ' +
+               ' @nSerialQTY  INT            OUTPUT, ' +
+               ' @nBulkSNO    INT            OUTPUT, ' +
+               ' @nErrNo      INT            OUTPUT, ' +
+               ' @cErrMsg     NVARCHAR( 20)  OUTPUT  '
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                 @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cSKU, @cBarcode,
-                 @cSerialNo OUTPUT, @nSerialQTY OUTPUT, @nBulkSNO OUTPUT, @nErrNo  OUTPUT, @cErrMsg  OUTPUT
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cSKU, @cBarcode, 
+               @cSerialNo OUTPUT, @nSerialQTY OUTPUT, @nBulkSNO OUTPUT, @nErrNo  OUTPUT, @cErrMsg  OUTPUT
 
             IF @nErrNo <> 0
                GOTO Quit
@@ -190,42 +198,42 @@ BEGIN
             SELECT SerialNo, QTY
             FROM rdt.rdtReceiveSerialNoLog WITH (NOLOCK)
             WHERE Mobile = @nMobile
-              AND Func = @nFunc
+               AND Func = @nFunc
          OPEN @curSNO
          FETCH NEXT FROM @curSNO INTO @cSNO, @nSNO_QTY
          WHILE @@FETCH_STATUS = 0
          BEGIN
-
-            -- Extended update
-            IF @cExtSNOUpdSP <> ''
-            BEGIN
-               SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtSNOUpdSP) +
-                           ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, ' +
-                           ' @cSKU, @nQTY, @cSerialNo, @cType, @cDocType, @cDocNo, @nErrNo OUTPUT, @cErrMsg OUTPUT '
-
-               SET @cSQLParam =
-                       '@nMobile      INT,           ' +
-                       '@nFunc        INT,           ' +
-                       '@cLangCode    NVARCHAR( 3),  ' +
-                       '@nStep        INT,           ' +
-                       '@nInputKey    INT,           ' +
-                       '@cFacility    NVARCHAR( 5),  ' +
-                       '@cStorerkey   NVARCHAR( 15), ' +
-                       '@cSKU         NVARCHAR( 20), ' +
-                       '@nQTY         INT,           ' +
-                       '@cSerialNo    NVARCHAR( 30), ' +
-                       '@cType        NVARCHAR( 15), ' +
-                       '@cDocType     NVARCHAR( 10), ' +
-                       '@cDocNo       NVARCHAR( 20), ' +
-                       '@nErrNo       INT           OUTPUT, ' +
-                       '@cErrMsg      NVARCHAR( 20) OUTPUT  '
-
-               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                    @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
-                    @cSKU, @nSNO_QTY, @cSNO, @cType, @cDocType, @cDocNo, @nErrNo OUTPUT, @cErrMsg OUTPUT
-
-               IF @nErrNo <> 0
-                  GOTO Quit
+            
+            -- Extended update  
+            IF @cExtSNOUpdSP <> ''  
+            BEGIN  
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtSNOUpdSP) +  
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, ' +  
+                  ' @cSKU, @nQTY, @cSerialNo, @cType, @cDocType, @cDocNo, @nErrNo OUTPUT, @cErrMsg OUTPUT '  
+  
+               SET @cSQLParam =  
+                  '@nMobile      INT,           ' +  
+                  '@nFunc        INT,           ' +  
+                  '@cLangCode    NVARCHAR( 3),  ' +  
+                  '@nStep        INT,           ' +  
+                  '@nInputKey    INT,           ' +  
+                  '@cFacility    NVARCHAR( 5),  ' +  
+                  '@cStorerkey   NVARCHAR( 15), ' +  
+                  '@cSKU         NVARCHAR( 20), ' +  
+                  '@nQTY         INT,           ' +  
+                  '@cSerialNo    NVARCHAR( 30), ' +   
+                  '@cType        NVARCHAR( 15), ' +   
+                  '@cDocType     NVARCHAR( 10), ' +   
+                  '@cDocNo       NVARCHAR( 20), ' +   
+                  '@nErrNo       INT           OUTPUT, ' +  
+                  '@cErrMsg      NVARCHAR( 20) OUTPUT  '  
+  
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
+                    @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,   
+                    @cSKU, @nSNO_QTY, @cSNO, @cType, @cDocType, @cDocNo, @nErrNo OUTPUT, @cErrMsg OUTPUT  
+  
+               IF @nErrNo <> 0  
+                  GOTO Quit  
             END
 
 
@@ -233,45 +241,45 @@ BEGIN
             IF @cExtSNOValSP <> ''
             BEGIN
                SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtSNOValSP) +
-                           ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, ' +
-                           ' @cSKU, @nQTY, @cSerialNo, @cType, @cDocType, @cDocNo, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, ' +
+                  ' @cSKU, @nQTY, @cSerialNo, @cType, @cDocType, @cDocNo, @nErrNo OUTPUT, @cErrMsg OUTPUT '
 
                SET @cSQLParam =
-                       '@nMobile      INT,           ' +
-                       '@nFunc        INT,           ' +
-                       '@cLangCode    NVARCHAR( 3),  ' +
-                       '@nStep        INT,           ' +
-                       '@nInputKey    INT,           ' +
-                       '@cFacility    NVARCHAR( 5),  ' +
-                       '@cStorerkey   NVARCHAR( 15), ' +
-                       '@cSKU         NVARCHAR( 20), ' +
-                       '@nQTY         INT,           ' +
-                       '@cSerialNo    NVARCHAR( 30), ' +
-                       '@cType        NVARCHAR( 15), ' +
-                       '@cDocType     NVARCHAR( 10), ' +
-                       '@cDocNo       NVARCHAR( 20), ' +
-                       '@nErrNo       INT           OUTPUT, ' +
-                       '@cErrMsg      NVARCHAR( 20) OUTPUT  '
+                  '@nMobile      INT,           ' +
+                  '@nFunc        INT,           ' +
+                  '@cLangCode    NVARCHAR( 3),  ' +
+                  '@nStep        INT,           ' +
+                  '@nInputKey    INT,           ' +
+                  '@cFacility    NVARCHAR( 5),  ' +
+                  '@cStorerkey   NVARCHAR( 15), ' +
+                  '@cSKU         NVARCHAR( 20), ' +
+                  '@nQTY         INT,           ' +
+                  '@cSerialNo    NVARCHAR( 30), ' + 
+                  '@cType        NVARCHAR( 15), ' + 
+                  '@cDocType     NVARCHAR( 10), ' + 
+                  '@cDocNo       NVARCHAR( 20), ' + 
+                  '@nErrNo       INT           OUTPUT, ' +
+                  '@cErrMsg      NVARCHAR( 20) OUTPUT  '
 
                EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                    @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+                    @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
                     @cSKU, @nSNO_QTY, @cSNO, @cType, @cDocType, @cDocNo, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
                IF @nErrNo <> 0
                   GOTO Quit
             END
-
+         
             -- Calc scanned (simplified)
             SET @nScan = @nScan + 1
             SET @nBulkSNOQTY = @nBulkSNOQTY + @nSNO_QTY
-
+            
             FETCH NEXT FROM @curSNO INTO @cSNO, @nSNO_QTY
          END
       END
-
-         -- Single serial no
+      
+      -- Single serial no
       ELSE
-      BEGIN
+      BEGIN      
          -- Check blank
          IF @cSerialNo = ''
          BEGIN
@@ -287,7 +295,7 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format
             GOTO Quit
          END
-
+         
          -- Check serial no is SKU barcode
          IF @cSKU = @cSerialNo OR
             @cAltSKU = @cSerialNo OR
@@ -298,7 +306,7 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid SNO
             GOTO Quit
          END
-
+         
          -- Check serial no is UPC barcode
          IF EXISTS( SELECT TOP 1 1 FROM UPC WHERE StorerKey = @cStorerKey AND SKU = @cSKU AND UPC = @cSerialNo)
          BEGIN
@@ -307,87 +315,96 @@ BEGIN
             GOTO Quit
          END
 
-         
-
-         -- Extended update
-         IF @cExtSNOUpdSP <> ''
+         -- Exist Check in serial table
+         IF rdt.RDTGetConfig( @nFunc, 'ValidateSerialNo', @cStorerkey) = '1'
          BEGIN
-            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtSNOUpdSP) +
-                        ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, ' +
-                        ' @cSKU, @nQTY, @cSerialNo, @cType, @cDocType, @cDocNo, @nErrNo OUTPUT, @cErrMsg OUTPUT '
-
-            SET @cSQLParam =
-                    '@nMobile      INT,           ' +
-                    '@nFunc        INT,           ' +
-                    '@cLangCode    NVARCHAR( 3),  ' +
-                    '@nStep        INT,           ' +
-                    '@nInputKey    INT,           ' +
-                    '@cFacility    NVARCHAR( 5),  ' +
-                    '@cStorerkey   NVARCHAR( 15), ' +
-                    '@cSKU         NVARCHAR( 20), ' +
-                    '@nQTY         INT,           ' +
-                    '@cSerialNo    NVARCHAR( 30), ' +
-                    '@cType        NVARCHAR( 15), ' +
-                    '@cDocType     NVARCHAR( 10), ' +
-                    '@cDocNo       NVARCHAR( 20), ' +
-                    '@nErrNo       INT           OUTPUT, ' +
-                    '@cErrMsg      NVARCHAR( 20) OUTPUT  '
-
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                 @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
-                 @cSKU, @nSerialQTY, @cSerialNo, @cType, @cDocType, @cDocNo, @nErrNo OUTPUT, @cErrMsg OUTPUT
-
-            IF @nErrNo <> 0
+            IF NOT EXISTS(SELECT 1 FROM SerialNo WHERE StorerKey = @cStorerKey AND SKU = @cSKU AND SerialNo = @cSerialNo)
+            BEGIN
+               SET @nErrNo = 217210
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid SNO
                GOTO Quit
+            END
          END
+
+         -- Extended update  
+         IF @cExtSNOUpdSP <> ''  
+         BEGIN  
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtSNOUpdSP) +  
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, ' +  
+               ' @cSKU, @nQTY, @cSerialNo, @cType, @cDocType, @cDocNo, @nErrNo OUTPUT, @cErrMsg OUTPUT '  
+  
+            SET @cSQLParam =  
+               '@nMobile      INT,           ' +  
+               '@nFunc        INT,           ' +  
+               '@cLangCode    NVARCHAR( 3),  ' +  
+               '@nStep        INT,           ' +  
+               '@nInputKey    INT,           ' +  
+               '@cFacility    NVARCHAR( 5),  ' +  
+               '@cStorerkey   NVARCHAR( 15), ' +  
+               '@cSKU         NVARCHAR( 20), ' +  
+               '@nQTY         INT,           ' +  
+               '@cSerialNo    NVARCHAR( 30), ' +   
+               '@cType        NVARCHAR( 15), ' +   
+               '@cDocType     NVARCHAR( 10), ' +   
+               '@cDocNo       NVARCHAR( 20), ' +   
+               '@nErrNo       INT           OUTPUT, ' +  
+               '@cErrMsg      NVARCHAR( 20) OUTPUT  '  
+  
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,   
+                  @cSKU, @nSerialQTY, @cSerialNo, @cType, @cDocType, @cDocNo, @nErrNo OUTPUT, @cErrMsg OUTPUT  
+  
+            IF @nErrNo <> 0  
+               GOTO Quit  
+         END  
 
          -- Extended validate
          IF @cExtSNOValSP <> ''
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtSNOValSP) +
-                        ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, ' +
-                        ' @cSKU, @nQTY, @cSerialNo, @cType, @cDocType, @cDocNo, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, ' +
+               ' @cSKU, @nQTY, @cSerialNo, @cType, @cDocType, @cDocNo, @nErrNo OUTPUT, @cErrMsg OUTPUT '
 
             SET @cSQLParam =
-                    '@nMobile      INT,           ' +
-                    '@nFunc        INT,           ' +
-                    '@cLangCode    NVARCHAR( 3),  ' +
-                    '@nStep        INT,           ' +
-                    '@nInputKey    INT,           ' +
-                    '@cFacility    NVARCHAR( 5),  ' +
-                    '@cStorerkey   NVARCHAR( 15), ' +
-                    '@cSKU         NVARCHAR( 20), ' +
-                    '@nQTY         INT,           ' +
-                    '@cSerialNo    NVARCHAR( 30), ' +
-                    '@cType        NVARCHAR( 15), ' +
-                    '@cDocType     NVARCHAR( 10), ' +
-                    '@cDocNo       NVARCHAR( 20), ' +
-                    '@nErrNo       INT           OUTPUT, ' +
-                    '@cErrMsg      NVARCHAR( 20) OUTPUT  '
+               '@nMobile      INT,           ' +
+               '@nFunc        INT,           ' +
+               '@cLangCode    NVARCHAR( 3),  ' +
+               '@nStep        INT,           ' +
+               '@nInputKey    INT,           ' +
+               '@cFacility    NVARCHAR( 5),  ' +
+               '@cStorerkey   NVARCHAR( 15), ' +
+               '@cSKU         NVARCHAR( 20), ' +
+               '@nQTY         INT,           ' +
+               '@cSerialNo    NVARCHAR( 30), ' + 
+               '@cType        NVARCHAR( 15), ' + 
+               '@cDocType     NVARCHAR( 10), ' + 
+               '@cDocNo       NVARCHAR( 20), ' + 
+               '@nErrNo       INT           OUTPUT, ' +
+               '@cErrMsg      NVARCHAR( 20) OUTPUT  '
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                 @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+                 @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
                  @cSKU, @nQTY, @cSerialNo, @cType, @cDocType, @cDocNo, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
             IF @nErrNo <> 0
                GOTO Quit
          END
-
+         
          -- Calc scanned (simplified)
          SET @nScan = @nScan + 1
          SET @nSerialQTY = 1
       END
-
+      
       -- Check need serial no
       IF @nScan <> @nTotal AND @nTotal <> 0
       BEGIN
-         -- Prepare next screen var
-         SET @cOutField01 = @cSKU
+   		-- Prepare next screen var
+   		SET @cOutField01 = @cSKU
          SET @cOutField02 = rdt.rdtFormatString( @cSKUDesc, 1, 20)  -- SKU desc 1
          SET @cOutField03 = rdt.rdtFormatString( @cSKUDesc, 21, 20) -- SKU desc 2
          SET @cOutField04 = '' -- SerialNo
-         SET @cOutField05 = CAST( @nScan AS NVARCHAR(5)) + '/' + CAST( @nTotal AS NVARCHAR(5))
-
+         SET @cOutField05 = CAST( @nScan AS NVARCHAR(5)) + '/' + CAST( @nTotal AS NVARCHAR(5)) 
+         
          EXEC rdt.rdtSetFocusField @nMobile, 3 -- SerialNo
 
          SET @cOutField15 = CAST( @nScan AS NVARCHAR(5)) -- Save scan to hidden field
@@ -395,6 +412,7 @@ BEGIN
       END
       ELSE
          SET @nMoreSNO = 0 -- Don't need serial no
+      
 
    END
 
@@ -405,7 +423,7 @@ BEGIN
 END
 GO
 
-GRANT EXECUTE ON rdt.rdt_838SerialNoSP01 TO NSQL
+GRANT EXECUTE ON rdt.rdt_838SerialNoSP02 TO NSQL
 GO
 
 SET QUOTED_IDENTIFIER OFF
