@@ -10,8 +10,8 @@ GO
 /* Purpose:       For Unilever                                          */
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
-/* 2024-03-13 1.0  Dennis   Draft                                       */
-/* 2024-06-26 1.1  Dennis   Draft                                       */
+/* 2024-03-13 1.0  Dennis   Check Digit                                 */
+/* 2024-06-26 1.1  Dennis   Capture Pallet Type                         */
 /************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1580ExtScn01] (
