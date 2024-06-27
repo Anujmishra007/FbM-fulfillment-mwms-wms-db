@@ -31,6 +31,7 @@ GO
 /* 25-JUN-2024  SSA03    1.3  Syntax error fix                          */
 /* 26-JUN-2024  SSA04    1.4  Updated transfer detail update dynamic    */
 /*                            query                                     */
+/* 27-JUN-2024  SSA05    1.5  Updated to address cursor fix             */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[ispREC10]
    @c_Action    NVARCHAR(10)
@@ -263,7 +264,6 @@ BEGIN
                WHILE @@FETCH_STATUS <> -1  AND @n_continue IN(1,2)
                BEGIN
                   ----(SSA01) start---
-                  BEGIN
 
                   SELECT @c_SQL = 'UPDATE TRANSFERDETAIL WITH (ROWLOCK)'
                             +' SET Lottable01 = ''A'''
@@ -281,11 +281,11 @@ BEGIN
                             +' WHERE TRANSFERDETAIL.Transferkey = '+@c_Transferkey                  --(SSA04)
                             +' AND TRANSFERDETAIL.TransferLineNumber = '+@c_TransferLineNumber      --(SSA04)
 
-            EXEC sp_executesql @c_SQL
-            , N'@c_Type            NVARCHAR(20)'                       --(SSA02)
-            , @c_Type                                                  --(SSA02)
+                EXEC sp_executesql @c_SQL
+                , N'@c_Type            NVARCHAR(20)'                       --(SSA02)
+                , @c_Type                                                  --(SSA02)
 
-             SET @c_SQL = ''
+                SET @c_SQL = ''
 
                   ----(SSA01) end---
                   SET @n_err = @@ERROR
@@ -302,7 +302,7 @@ BEGIN
                END   
                CLOSE CUR_TRFDET
                DEALLOCATE CUR_TRFDET
-            	   	
+            END
                /*
                EXEC ispFinalizeTransfer @c_Transferkey, @b_Success OUTPUT, @n_err OUTPUT, @c_errmsg OUTPUT
             
@@ -314,13 +314,11 @@ BEGIN
                                          + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
                END
                */
-            END        
             NEXT_ASN:
             FETCH NEXT FROM CUR_REC INTO @c_Receiptkey, @c_type, @c_Facility, @c_Storerkey
          END   
          CLOSE CUR_REC
-         DEALLOCATE CUR_REC          
-      END           	         
+         DEALLOCATE CUR_REC
    END
             
    QUIT_SP:
