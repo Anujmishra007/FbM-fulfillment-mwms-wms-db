@@ -336,6 +336,19 @@ BEGIN
                                     CAST( @nMQTY_PWY AS NVARCHAR( 6)) END
                   SET @cOutField13 = @cFromLOC
 
+                  SET @cUDF01 = @nFunc
+                  SET @cUDF02 = @cSKU
+                  SET @cUDF03 = @cFromLOC
+                  SET @cUDF04 = @cSKUDesc
+                  SET @cUDF05 = @cPUOM
+                  SET @cUDF06 = @nPQTY_PWY
+                  SET @cUDF07 = @nMQTY_PWY
+                  SET @cUDF08 = @nQTY_PWY
+                  SET @cUDF09 = @nPUOM_Div
+                  SET @cUDF10 = @nPQTY
+                  SET @cUDF11 = @nMQTY
+                  SET @cUDF12 = @cID
+
                   -- Go to next screen
                   SET @nAfterScn = 921
                   SET @nAfterStep = 2

@@ -273,7 +273,6 @@ BEGIN
    --JHU151
    SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
    IF @cExtendedScreenSP = '0'
-   BEGIN
       SET @cExtendedScreenSP = ''
 
    --Initialize Outfield Values
@@ -1019,7 +1018,7 @@ BEGIN
       BEGIN
          DELETE FROM @tExtScnData
          INSERT INTO @tExtScnData (Variable, Value) VALUES 	
-         ('@nMenu',     @nMenu),
+         ('@nMenu',     CONVERT(Nvarchar(20),@nMenu)),
          ('@cUserName', @cUserName)
 
          EXECUTE [RDT].[rdt_ExtScnEntry] 
@@ -1056,6 +1055,21 @@ BEGIN
          @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
 
          SET @nFunc = @cUDF01
+         
+         IF @nScn = 921
+         BEGIN
+            SET @cSKU = @cUDF02
+            SET @cFromLOC = @cUDF03
+            SET @cSKUDesc = @cUDF04
+            SET @cPUOM = @cUDF05
+            SET @nPQTY_PWY = @cUDF06
+            SET @nMQTY_PWY = @cUDF07
+            SET @nQTY_PWY = @cUDF08
+            SET @nPUOM_Div = @cUDF09
+            SET @nPQTY = @cUDF10
+            SET @nMQTY = @cUDF11
+            SET @cID = @cUDF12
+         END
 
          IF @nErrNo <> 0
             GOTO Step_99_Fail
