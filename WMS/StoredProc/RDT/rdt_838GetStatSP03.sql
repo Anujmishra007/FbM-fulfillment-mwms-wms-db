@@ -119,15 +119,12 @@ BEGIN
    SET @cSQL = 
       ' SELECT @nTotalCarton = COUNT( DISTINCT PD.LabelNo) ' + 
       ' FROM dbo.PackDetail PD WITH (NOLOCK) ' + 
-      ' WHERE PD.PickSlipNo = @cPickSlipNo ' + 
-      ' AND LabelNo = @cLabelNo '
+      ' WHERE PD.PickSlipNo = @cPickSlipNo '
    SET @cSQLParam = 
       ' @cPickSlipNo    NVARCHAR( 10), ' +
-      ' @cLabelNo       NVARCHAR( 20), ' +  
       ' @nTotalCarton   INT OUTPUT '
    EXEC sp_executeSQL @cSQL, @cSQLParam
       ,@cPickSlipNo  = @cPickSlipNo
-      ,@cLabelNo     = @cLabelNo
       ,@nTotalCarton = @nTotalCarton OUTPUT
    
    IF @cType = 'CURRENT'
@@ -195,7 +192,7 @@ BEGIN
             ' @cRefNo = RefNo, ' + 
             ' @cRefNo2 = RefNo2 ' + 
          ' FROM dbo.PackDetail PD WITH (NOLOCK) ' + 
-         ' WHERE PD.LabelNo = @cLabelNo ' + --change from PSNo to LabelNo to always show current carton
+         ' WHERE PD.PickSlipNo = @cPickSlipNo ' + 
             ' AND CartonNo > @nCartonNo ' + 
               --CASE WHEN @cPackFilter <> '' THEN @cPackFilter ELSE '' END + 
          ' ORDER BY CartonNo ' + 
@@ -240,7 +237,7 @@ BEGIN
                ' @cRefNo = RefNo, ' + 
                ' @cRefNo2 = RefNo2 ' + 
             ' FROM dbo.PackDetail PD WITH (NOLOCK) ' + 
-            ' WHERE PD.LabelNo = @cLabelNo ' +  --change from PSNo to LabelNo to always show current carton
+            ' WHERE PD.PickSlipNo = @cPickSlipNo ' + 
                  --CASE WHEN @cPackFilter <> '' THEN @cPackFilter ELSE '' END + 
             ' ORDER BY CartonNo ' + 
             ' SET @nRowCount = @@ROWCOUNT '
