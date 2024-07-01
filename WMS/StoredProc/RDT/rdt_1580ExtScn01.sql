@@ -11,7 +11,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
 /* 2024-03-13 1.0  Dennis   Check Digit                                 */
-/* 2024-06-26 1.1  Dennis   Capture Pallet Type                         */
+/* 2024-06-26 1.1  Dennis   Capture Pallet Type                         */
 /************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1580ExtScn01] (
@@ -313,7 +313,7 @@ BEGIN
                      SET @cLottable01 = IsNULL( @cLottable01, '')
                      SET @cLottable02 = IsNULL( @cLottable02, '')
                      SET @cLottable03 = IsNULL( @cLottable03, '')
-
+				         SET @dLottable04 = 0
                      SET @cOutField01 = @cLottable01
                      SET @cOutField02 = @cLottable02
                      SET @cOutField03 = @cLottable03
@@ -321,7 +321,11 @@ BEGIN
                      SET @cOutField04 = rdt.rdtFormatDate( @dLottable04)
 
                      EXEC rdt.rdtSetFocusField @nMobile, 1 --Lottable01
-
+                     SET @cInField01 =''
+                     SET @cInField02 =''
+                     SET @cInField03 =''
+                     SET @cInField04 =''
+                  
                      -- Go to next screen
                      SET @nAfterScn = @nScn + 2
                      SET @nAfterStep = @nStep + 2
