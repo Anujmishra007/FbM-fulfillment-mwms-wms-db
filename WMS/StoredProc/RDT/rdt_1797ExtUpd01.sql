@@ -74,9 +74,7 @@ BEGIN
             INNER JOIN LOC LOC1 WITH(NOLOCK) ON LOTxLOCxID.Loc = LOC1.LOC AND LOC1.Facility = @cFacility
             INNER JOIN RECEIPTDETAIL WITH (NOLOCK) ON (LOTxLOCxID.Id = RECEIPTDETAIL.ToId)
             INNER JOIN PutawayZone WITH (NOLOCK) ON PutawayZone.Pallet_type = RECEIPTDETAIL.PalletType AND PutawayZone.Facility = LOC1.Facility
-			--Change V 1.2
             INNER JOIN LOC WITH (NOLOCK) ON PutawayZone.PutawayZone = LOC.PutawayZone AND PutawayZone.Facility = LOC.Facility AND LOC.LocationFlag NOT IN ('INACTIVE') AND LOC.LocationType IN('PND','BULK') 
-			--End of change V 1.2
             INNER JOIN SKU WITH (NOLOCK) ON SKU.Sku = LOTxLOCxID.Sku AND SKU.StorerKey = LOTxLOCxID.StorerKey AND SKU.ABC = LOC.ABC
             INNER JOIN PALLET WITH (NOLOCK) ON PALLET.PalletKey = LOTxLOCxID.Id AND PALLET.GrossWgt < LOC.WeightCapacity
                AND NOT EXISTS (
@@ -90,20 +88,16 @@ BEGIN
                               WHERE LOC.Loc = TaskDetail2.ToLoc AND TaskDetail2.Status < '9'
                               )
                AND TaskDetail.TaskDetailKey = @cTaskDetailKey
-			   --Change V1.1 part 1
 			   AND LOC.LocLevel BETWEEN 1 AND CASE WHEN Pallet.GrossWgt < 1000 THEN 99 ELSE 1 END
             ORDER BY (CASE LOC.ABC WHEN 'A' THEN Loc.LocLevel END ) ASC, (CASE WHEN LOC.ABC<>'A' THEN Loc.LocLevel END ) DESC, Loc.WeightCapacity ASC
-			--End of change V1.1 part 1
             IF @PAPath = 'VNA'
             BEGIN
                IF (SELECT COUNT(DISTINCT PALLET.PalletKey) FROM PALLET WITH (NOLOCK) WHERE PalletKey = (SELECT TOP 1 FromID FROM TaskDetail WHERE TaskDetailKey = @cTaskdetailKey)) > 0
                BEGIN
                   UPDATE dbo.TaskDetail
                   SET ToLOC = @ToLOC,
-                     FinalLOC = @FinalLOC,
-					 --Change V1.1 part 2
-					 Message03 = 'UPDATE VNA',
-					 --End of change V1.1 part 2
+                     FinalLOC = @FinalLOC,					
+					 Message03 = 'UPDATE VNA',					
                      TransitCount = 1                                             -- Indicates that this is the first putaway hop
                   WHERE TaskDetailKey = @cTaskdetailKey
                      AND TaskDetail.TransitCount = '0'
@@ -124,12 +118,10 @@ BEGIN
                         , @nErrNo            OUTPUT
                         , @cErrMsg           OUTPUT
                      -- Insert the second putaway task to VNA location
-					 --Change change V1.1 part 3
 					INSERT INTO TaskDetail (TaskDetailKey, TaskType, Storerkey,FromLoc,LogicalFromLoc,FromID,ToLoc,PickMethod,Status,Priority,SourcePriority,UserPosition
 					,StartTime,EndTime,SourceType,SourceKey,AddDate,AddWho,EditDate,EditWho,SystemQty,AreaKey,TransitCount,PendingMoveIn,QtyReplen,Message03)
 					SELECT @cNewTaskDetailKey, TaskType, Storerkey,ToLoc,ToLoc,FromID,FinalLOC,PickMethod,'0',Priority,SourcePriority,UserPosition
 					,StartTime,EndTime,SourceType,SourceKey,AddDate,AddWho,EditDate,EditWho,SystemQty,AreaKey,'2',PendingMoveIn,QtyReplen,'2ND STEP VNA'
-					--End of change V1.1 part 3
                      FROM TaskDetail WITH(NOLOCK)
                      WHERE TaskDetail.TaskDetailKey = @cTaskdetailKey
                   END
@@ -146,9 +138,7 @@ BEGIN
                BEGIN
                   UPDATE dbo.TaskDetail
                   SET ToLOC = @FinalLOC,
-				  --Change change V1.1 part 4
 				  Message03 = 'UPDATE WA',
-				  --End of change V1.1 part 4
                      TransitCount = 1                                             -- Indicates that this is the first putaway hop
                   WHERE TaskDetailKey = @cTaskdetailKey
                   --AND TaskDetail.TransitCount = '0'
