@@ -17,10 +17,10 @@ GO
 /* 2024-04-19   NLT03     1.0   UWP-13706 Created                       */
 /*                              Shinto Changing logic to putaway        */
 /*                              by pallet type and ABC                  */
-/* 2024-06-25	TPT001	  1.1	Update putaway logic based on LocLevel	*/
-/*																		*/
-/* 2024-07-01	TPT001	  1.2	Adding filtering out the Inactive and 	*/
-/*								non BULK/PND loc						*/
+/* 2024-06-25   TPT001    1.1   Update putaway logic based on LocLevel  */
+/*                                                                      */
+/* 2024-07-01   TPT001    1.2   Adding filtering out the Inactive and   */
+/*                              non BULK/PND loc                        */
 /************************************************************************/
 CREATE PROCEDURE [RDT].[rdt_1797ExtUpd01]
     @nMobile         INT 
@@ -63,7 +63,7 @@ BEGIN
          BEGIN
             SELECT TOP 1 @PAPath =
                CASE
-				  WHEN RECEIPTDETAIL.PalletType='D' THEN 'WA'
+              WHEN RECEIPTDETAIL.PalletType='D' THEN 'WA'
                   WHEN LEN(LOC.LocationRoom) = 0 OR LOC.LocationRoom IS NULL THEN 'WA' 
                   WHEN LOC.LocationRoom IS NOT NULL THEN 'VNA' 
                END
@@ -88,7 +88,7 @@ BEGIN
                               WHERE LOC.Loc = TaskDetail2.ToLoc AND TaskDetail2.Status < '9'
                               )
                AND TaskDetail.TaskDetailKey = @cTaskDetailKey
-			   AND LOC.LocLevel BETWEEN 1 AND CASE WHEN Pallet.GrossWgt < 1000 THEN 99 ELSE 1 END
+               AND LOC.LocLevel BETWEEN 1 AND CASE WHEN Pallet.GrossWgt < 1000 THEN 99 ELSE 1 END
             ORDER BY (CASE LOC.ABC WHEN 'A' THEN Loc.LocLevel END ) ASC, (CASE WHEN LOC.ABC<>'A' THEN Loc.LocLevel END ) DESC, Loc.WeightCapacity ASC
             IF @PAPath = 'VNA'
             BEGIN
@@ -96,8 +96,8 @@ BEGIN
                BEGIN
                   UPDATE dbo.TaskDetail
                   SET ToLOC = @ToLOC,
-                     FinalLOC = @FinalLOC,					
-					 Message03 = 'UPDATE VNA',					
+                     FinalLOC = @FinalLOC,               
+                     Message03 = 'UPDATE VNA',               
                      TransitCount = 1                                             -- Indicates that this is the first putaway hop
                   WHERE TaskDetailKey = @cTaskdetailKey
                      AND TaskDetail.TransitCount = '0'
@@ -118,10 +118,10 @@ BEGIN
                         , @nErrNo            OUTPUT
                         , @cErrMsg           OUTPUT
                      -- Insert the second putaway task to VNA location
-					INSERT INTO TaskDetail (TaskDetailKey, TaskType, Storerkey,FromLoc,LogicalFromLoc,FromID,ToLoc,PickMethod,Status,Priority,SourcePriority,UserPosition
-					,StartTime,EndTime,SourceType,SourceKey,AddDate,AddWho,EditDate,EditWho,SystemQty,AreaKey,TransitCount,PendingMoveIn,QtyReplen,Message03)
-					SELECT @cNewTaskDetailKey, TaskType, Storerkey,ToLoc,ToLoc,FromID,FinalLOC,PickMethod,'0',Priority,SourcePriority,UserPosition
-					,StartTime,EndTime,SourceType,SourceKey,AddDate,AddWho,EditDate,EditWho,SystemQty,AreaKey,'2',PendingMoveIn,QtyReplen,'2ND STEP VNA'
+                     INSERT INTO TaskDetail (TaskDetailKey, TaskType, Storerkey,FromLoc,LogicalFromLoc,FromID,ToLoc,PickMethod,Status,Priority,SourcePriority,UserPosition
+                     ,StartTime,EndTime,SourceType,SourceKey,AddDate,AddWho,EditDate,EditWho,SystemQty,AreaKey,TransitCount,PendingMoveIn,QtyReplen,Message03)
+                     SELECT @cNewTaskDetailKey, TaskType, Storerkey,ToLoc,ToLoc,FromID,FinalLOC,PickMethod,'0',Priority,SourcePriority,UserPosition
+                     ,StartTime,EndTime,SourceType,SourceKey,AddDate,AddWho,EditDate,EditWho,SystemQty,AreaKey,'2',PendingMoveIn,QtyReplen,'2ND STEP VNA'
                      FROM TaskDetail WITH(NOLOCK)
                      WHERE TaskDetail.TaskDetailKey = @cTaskdetailKey
                   END
@@ -138,7 +138,7 @@ BEGIN
                BEGIN
                   UPDATE dbo.TaskDetail
                   SET ToLOC = @FinalLOC,
-				  Message03 = 'UPDATE WA',
+                     Message03 = 'UPDATE WA',
                      TransitCount = 1                                             -- Indicates that this is the first putaway hop
                   WHERE TaskDetailKey = @cTaskdetailKey
                   --AND TaskDetail.TransitCount = '0'
