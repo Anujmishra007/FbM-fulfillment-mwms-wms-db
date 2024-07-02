@@ -269,8 +269,14 @@ BEGIN
                      WHERE Facility = @cFacility AND LOC = @cLOC
                   IF @cLoseID = '1'
                   BEGIN
-                     EXEC rdt.rdt_PieceReceiving_AutoGenID @nMobile, @nFunc, @nStep, @cLangCode
-                        ,'1'           --@cAutoGenID
+                     DECLARE @cAutoGenID NVARCHAR(20)
+                     SET @cAutoGenID = rdt.RDTGetConfig( @nFunc, 'AutoGenID', @cStorerKey)
+                     IF @cAutoGenID = '0'
+                        SET @cAutoGenID = ''
+                     IF @cAutoGenID <> ''
+                     BEGIN
+                        EXEC rdt.rdt_PieceReceiving_AutoGenID @nMobile, @nFunc, @nStep, @cLangCode
+                        ,@cAutoGenID          --@cAutoGenID
                         ,@cReceiptKey
                         ,@cPOKey
                         ,@cLOC
@@ -279,10 +285,11 @@ BEGIN
                         ,@cAutoID  OUTPUT
                         ,@nErrNo   OUTPUT
                         ,@cErrMsg  OUTPUT
-                     IF @nErrNo <> 0
-                        GOTO Quit
-
-                     SET @cID = @cAutoID
+                        IF @nErrNo <> 0
+                           GOTO Quit
+                        
+                        SET @cID = @cAutoID
+                     END
 
                      IF(ISNULL(rdt.RDTGetConfig( @nFunc, 'ValidatePalletType', @cStorerKey),'0'))!='0' -- Capture pallet type
                      BEGIN
