@@ -1381,6 +1381,11 @@ BEGIN
                SET @cUOM = ''
                IF @cSkipLottable = '1' AND @nStep = 4
                   GOTO Step_4
+               -- Skip lottable
+               IF @cSkipLottable01 = '1' SELECT @cFieldAttr01 = 'O', @cInField01 = '', @cLottable01 = ''
+               IF @cSkipLottable02 = '1' SELECT @cFieldAttr02 = 'O', @cInField02 = '', @cLottable02 = ''
+               IF @cSkipLottable03 = '1' SELECT @cFieldAttr03 = 'O', @cInField03 = '', @cLottable03 = ''
+               IF @cSkipLottable04 = '1' SELECT @cFieldAttr04 = 'O', @cInField04 = '', @dLottable04 = 0
                GOTO Quit
             END
          
