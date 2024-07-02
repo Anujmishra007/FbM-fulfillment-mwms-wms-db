@@ -15,7 +15,7 @@ GO
 /*    3. From others stored procedures OR triggers                      */
 /*    4. From interface program. DX, DTS                                */
 /*                                                                      */
-/* PVCS Version: 1.25                                                   */
+/* PVCS Version: 2.3                                                   */
 /*                                                                      */
 /* Exceed version: 5.4                                                  */
 /*                                                                      */
@@ -81,6 +81,7 @@ GO
 /*                          DevOps Combine Script                       */
 /* 2024-01-29 2.2  Wan02    UWP-14379-Implement pre-save ASN standard   */
 /*                          validation check                            */
+/* 2024-07-02 2.3  Inv Team UWP-17135 - Migrate Inbound Door booking    */
 /************************************************************************/
 
 CREATE OR ALTER TRIGGER ntrReceiptHeaderAdd

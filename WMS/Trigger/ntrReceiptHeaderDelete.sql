@@ -22,7 +22,7 @@ GO
 /*                                                                      */
 /* Called By: When Udpate Order Header Record                           */
 /*                                                                      */
-/* PVCS Version: 1.30                                                   */
+/* PVCS Version: 1.6                                                   */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -39,6 +39,7 @@ GO
 /* 14-Oct-2021 KSChin   1.4   add tracker to DEL_Receipt table          */
 /* 21-Feb-2023 Wan02    1.5   LFWM-3900 - ASN Insert into Transport     */
 /*                            Order. DevOps Combine Script              */
+/* 02-Jul-2024 Inv Team 1.6   UWP-17135 - Migrate Inbound Door booking  */
 /************************************************************************/
 CREATE OR ALTER TRIGGER [dbo].[ntrReceiptHeaderDelete]
  ON [dbo].[RECEIPT]

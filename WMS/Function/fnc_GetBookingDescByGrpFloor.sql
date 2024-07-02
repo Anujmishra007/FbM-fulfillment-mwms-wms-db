@@ -14,7 +14,7 @@ GO
 /*                                                                      */
 /* Called By:  Booking Module                                           */
 /*                                                                      */
-/* PVCS Version: 1.2                                                    */
+/* PVCS Version: 1.3                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -27,6 +27,7 @@ GO
 /*                            Doorbooking EndTime                       */
 /* 2023-03-20  Wan02    1.2   LFWM-4065 - SCE RG  Inbound Door booking  */
 /*                            -- SP Backend                             */
+/* 2024-07-02  Inv Team 1.3   UWP-17135 - Migrate Inbound Door booking  */
 /************************************************************************/
 
 CREATE OR ALTER FUNCTION [dbo].[fnc_GetBookingDescByGrpFloor] ( 

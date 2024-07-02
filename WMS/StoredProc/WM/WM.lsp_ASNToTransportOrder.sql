@@ -12,7 +12,7 @@ GO
 /*        :                                                             */
 /* Called By: ANS Insert Trigger and SCE ASN button                     */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -21,6 +21,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2021-12-13  Wan      1.0   Created & DevOps Combine Script.          */
+/* 2024-07-02  Inv Team 1.1   UWP-17135 - Migrate Inbound Door booking  */
 /************************************************************************/
 CREATE OR ALTER PROC WM.lsp_ASNToTransportOrder
   @c_Receiptkey         NVARCHAR(10) = ''
