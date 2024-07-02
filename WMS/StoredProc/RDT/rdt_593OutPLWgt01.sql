@@ -134,9 +134,10 @@ BEGIN
    WHERE MbolKey = @cMbolKey AND MbolLineNumber = '00001'
 
 
-Quit:
+   Quit:
 
 END -- END SP
+GO
 
 GRANT EXECUTE ON  [RDT].[rdt_593OutPLWgt01] TO [NSQL]
 GO
