@@ -1,7 +1,10 @@
+
 SET ANSI_NULLS OFF
 GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
+
   
 /************************************************************************/  
 /* Store Procedure:  ispPopulateStkTakeCount                            */  
@@ -28,7 +31,10 @@ GO
 /*                        count 3                                       */
 /* 19/10/2022   NJOW03    WMS-20991 TH Finalize stocktake by count sheet*/
 /* 19/10/2022   NJOW03    DEVOPS Combine script                         */
-/************************************************************************/  
+/* 08/06/2023   JIHHAUR01 JSM-155038 3rd Cycle Count not exclude Variance*/  
+/* 08-JUN-2024  CLVN01    INC6952977 Update Qty_Cnt2 & Qty_Cnt3 = 0 if   */  
+/*                        SystemQty <> PreviousCount                     */  
+/*************************************************************************/    
   
 CREATE OR ALTER PROCEDURE [dbo].[ispPopulateStkTakeCount]  
       @c_StockTakeKey NVARCHAR(10),   
@@ -48,7 +54,8 @@ AS
            @c_ErrMsg    NVARCHAR(215),
            @c_StockTakeFinalizeByCountSheet NVARCHAR(30), --NJOW03
            @c_AllCSheetPopulated NVARCHAR(5), --NJOW03            
-           @c_CCSheetNo NVARCHAR(10) --NJOW03
+           @c_CCSheetNo NVARCHAR(10), --NJOW03  
+           @c_ResetCntQtyIfVariance NVARCHAR(1) --CLVN01  
                                            
    SET @c_AllCSheetPopulated = 'Y'  --NJOW03
 
@@ -61,8 +68,13 @@ AS
    IF OBJECT_ID('tempdb..#RECNT_LOC') IS NOT NULL  
       DROP TABLE #RECNT_LOC  
    
-   CREATE TABLE #RECNT_LOC (LOC NVARCHAR(10))  
-  
+   CREATE TABLE #RECNT_LOC (LOC NVARCHAR(10))    
+     
+   IF OBJECT_ID('tempdb..#RECNT_LINE') IS NOT NULL  --CLVN01  
+   DROP TABLE #RECNT_LINE                           --CLVN01  
+     
+   CREATE TABLE #RECNT_LINE (LOC NVARCHAR(10))      --CLVN01  
+    
    SELECT TOP 1     
       @c_StorerKey = CCDETAIL.StorerKey,   
       @c_Facility  = LOC.Facility     
@@ -94,7 +106,19 @@ AS
          @c_authority  = @c_StockTakeFinalizeByCountSheet  OUTPUT,     
          @n_err        = @n_ErrNo   OUTPUT,    
          @c_errmsg     = @c_ErrMsg  OUTPUT    
-  
+       
+    --CLVN01  
+    SET @c_ResetCntQtyIfVariance = ''  
+    EXEC nspGetRight      
+         @c_Facility   = @c_Facility ,       
+         @c_StorerKey  = @c_StorerKey,       
+         @c_sku        = '',       
+         @c_ConfigKey  = 'ResetCntQtyIfVariance',       
+         @b_Success    = @b_Success OUTPUT,       
+         @c_authority  = @c_ResetCntQtyIfVariance  OUTPUT,       
+         @n_err        = @n_ErrNo   OUTPUT,      
+         @c_errmsg     = @c_ErrMsg  OUTPUT    
+
    IF @n_CountNo = 2  
    BEGIN  
    	  IF @c_StockTakeFinalizeByCountSheet = '1'  --NJOW03
@@ -172,7 +196,24 @@ AS
             AND NOT EXISTS(SELECT 1 FROM #RECNT_LOC SLOC WHERE SLOC.LOC = CC.LOC)     
          AND (CC.CCSheetNo IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_CountSheets))  --NJOW03
            OR @c_StockTakeFinalizeByCountSheet <> '1')
-                
+       
+         --CLVN01 START--  
+         IF @c_ResetCntQtyIfVariance = '1'  
+         BEGIN  
+     	 
+           INSERT INTO #RECNT_LINE          
+           SELECT DISTINCT LOC     
+           FROM CCDetail WITH (NOLOCK)     
+           WHERE CCKEY = @c_StockTakeKey     
+           AND SYSTEMQTY <> QTY  
+     	 
+           UPDATE CCDETAIL SET QTY_CNT2 = '0'  
+           WHERE CCKEY = @c_StockTakeKey  
+           AND LOC IN (SELECT LOC FROM #RECNT_LINE)  
+		   
+         END       
+         --CLVN01 END--  
+                     
        IF @@ERROR <> 0  
        BEGIN  
           SELECT @n_continue = 3  
@@ -261,14 +302,14 @@ AS
                   c.Lottable01, c.Lottable02, c.Lottable03,  c.Lottable04,
                   c.Lottable06, c.Lottable07, c.Lottable08, c.Lottable09, c.Lottable10, 
                   c.Lottable11, c.Lottable12, c.Lottable13, c.Lottable14, c.Lottable15
-         HAVING SUM(c.Qty - C.Qty_Cnt2) = 0   
-         UNION  --NJOW02
-         SELECT DISTINCT c.LOC   
-         FROM CCDetail c WITH (NOLOCK)   
-         WHERE CCKEY = @c_StockTakeKey           
-         AND (CCSheetNo IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_CountSheets))  --NJOW03
-              OR @c_StockTakeFinalizeByCountSheet <> '1')                
-         AND c.EditWho_Cnt2 = 'IC_SKIP'           
+         HAVING SUM(c.SystemQty - C.Qty_Cnt2) <> 0     /*JIHHAUR01*/  
+         /*UNION  --NJOW02  --JIHHAUR01  
+         SELECT DISTINCT c.LOC       
+         FROM CCDetail c WITH (NOLOCK)       
+         WHERE CCKEY = @c_StockTakeKey               
+         AND (CCSheetNo IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_CountSheets))  --NJOW03    
+              OR @c_StockTakeFinalizeByCountSheet <> '1')                    
+         AND c.EditWho_Cnt2 = 'IC_SKIP'     */        /*JIHHAUR01*/        
 
          BEGIN TRAN                  
          UPDATE CC   
@@ -280,6 +321,22 @@ AS
          AND (CC.CCSheetNo IN (SELECT ColValue FROM dbo.fnc_DelimSplit(',',@c_CountSheets))  --NJOW03
               OR @c_StockTakeFinalizeByCountSheet <> '1')
                
+         --CLVN01 START--  
+         IF @c_ResetCntQtyIfVariance = '1'  
+         BEGIN  
+     
+           INSERT INTO #RECNT_LINE          
+           SELECT DISTINCT LOC     
+           FROM CCDetail WITH (NOLOCK)     
+           WHERE CCKEY = @c_StockTakeKey     
+           AND SYSTEMQTY <> QTY_CNT2  
+     
+           UPDATE CCDETAIL SET QTY_CNT3 = '0'  
+           WHERE CCKEY = @c_StockTakeKey  
+           AND LOC IN (SELECT LOC FROM #RECNT_LINE) 
+		   
+         END      
+         --CLVN01 END--  
          
          IF @@ERROR <> 0  
          BEGIN  
