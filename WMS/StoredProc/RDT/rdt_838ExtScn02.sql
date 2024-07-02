@@ -240,6 +240,7 @@ BEGIN
                -- Screen mapping
                SET @cLabelNo = ''
                SET @cPickSlipNo = ''
+               SET @nCartonNo = 0
 
                SET @cLabelNo = @cInField01
                
@@ -275,6 +276,19 @@ BEGIN
                   END -- end not in CartonTrack
                   ELSE
                      SET @cLabelNo = @cCartTrkLabelNo -- retrieve label 
+               END
+
+               --Get and Validate Carton No
+               SELECT @nCartonNo = CartonNo
+               FROM PackDetail WITH (NOLOCK)
+               WHERE StorerKey = @cStorerKey
+                  AND LabelNo = @cLabelNo
+
+               IF @nCartonNo = 0
+               BEGIN
+                  SET @nErrNo = 217758
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --CartNotIs0
+                  GOTO Quit
                END
 
                -- Get Labele info
@@ -389,7 +403,8 @@ BEGIN
                   END
                END
 
-               SET @nCartonNo    = 0
+               --Pass LabelNo, CartonNo to screen 2
+               --SET @nCartonNo    = 0
                --SET @cLabelNo     = ''
                SET @cCustomNo    = ''
                SET @cCustomID    = ''
@@ -401,7 +416,7 @@ BEGIN
                SET @nTotalShort  = 0
 
                -- Get task
-               EXEC rdt.rdt_Pack_GetStat @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'NEXT'
+               EXEC rdt.rdt_Pack_GetStat @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'CURRENT'
                   ,@cPickSlipNo
                   ,@cFromDropID
                   ,@cPackDtlDropID
