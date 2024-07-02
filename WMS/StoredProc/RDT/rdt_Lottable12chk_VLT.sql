@@ -91,6 +91,7 @@ BEGIN
         BEGIN
             SET @nErrNo = 217950
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --BatchIDNeeded
+            SET @nErrNo = -1  -- Make it display value on screen. next ENTER will proceed next screen
         END
        
     END -- END IF 01

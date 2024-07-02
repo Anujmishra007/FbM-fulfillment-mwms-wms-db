@@ -291,6 +291,7 @@ BEGIN
 
             SET @nErrNo = 217913
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NoMoreTaskInZone
+            SET @nErrNo = -1
             BREAK
          END
 
@@ -313,6 +314,7 @@ BEGIN
             BEGIN
                SET @nErrNo = 217914
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NoMoreTask
+               SET @nErrNo = -1
                BREAK
             END
          END

@@ -120,12 +120,14 @@ BEGIN
       BEGIN
          SET @nErrNo = 217947
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ValueNeeded
+         SET @nErrNo = -1  -- Make it display value on screen. next ENTER will proceed next screen
       END
      
       ELSE
       BEGIN
          SET @nErrNo = 217948
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidType
+         SET @nErrNo = -1  -- Make it display value on screen. next ENTER will proceed next screen
       END
    END
 
