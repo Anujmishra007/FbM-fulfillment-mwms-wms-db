@@ -23,7 +23,7 @@ GO
 /*                                                                      */
 /* Called By:  RMC Generate Load Plan By Consignee                      */
 /*                                                                      */
-/* PVCS Version: 1.3                                                    */
+/* PVCS Version: 1.5                                                    */
 /*                                                                      */
 /* Version: V2                                                          */
 /*                                                                      */
@@ -36,6 +36,8 @@ GO
 /* 01-Sep-2023 SPChin   1.3  JSM-169349 - Extend The Length Of C_Company*/ 
 /* 02-JUL-2024 Wan02    1.4  EUR PROD - NLD - Cannot Gen Loadplan due to*/ 
 /*                           C_Company NULL Value                       */
+/* 02-JUL-2024 Wan03    1.5  EUR PROD - NLD - Cannot Gen Loadplan due to*/ 
+/*                           C_Company NULL Value - fix2                */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE isp_WaveGenLoadByCons
@@ -93,8 +95,8 @@ BEGIN
       WHERE WD.WaveKey = @c_WaveKey
       AND ISNULL(O.Loadkey,'') = ''
       AND O.Status NOT IN ('0','9','CANC')
-      GROUP BY O.Storerkey, O.ConsigneeKey, O.C_Company
-      ORDER BY O.Storerkey, O.ConsigneeKey, O.C_Company
+      GROUP BY O.Storerkey, O.ConsigneeKey, ISNULL(O.C_Company, '')                 --(Wan03)
+      ORDER BY O.Storerkey, O.ConsigneeKey, ISNULL(O.C_Company, '')                 --(Wan03)
 
       OPEN cur_LPGroup
       FETCH NEXT FROM cur_LPGroup INTO @c_ConsigneeKey, @c_C_Company, @c_Storerkey
@@ -115,14 +117,15 @@ BEGIN
             GOTO RETURN_SP
          END
 
-         SELECT @c_Facility = MAX(Facility)
+         SELECT TOP 1 @c_Facility = Facility                                      --(Wan03)
          FROM Orders WITH (NOLOCK) 
          WHERE  ConsigneeKey = @c_Consigneekey
-            AND C_Company = @c_C_Company
+            AND ISNULL(C_Company, '') = @c_C_Company                              --(Wan03)
             AND Userdefine09 = @c_WaveKey
             AND Storerkey = @c_StorerKey
             AND Status NOT IN ('0','9','CANC')
             AND ISNULL(Loadkey,'') = ''
+         ORDER BY Orderkey                                                       --(Wan03)
 
          -- Create loadplan        
          INSERT INTO LoadPlan (LoadKey, Facility)
