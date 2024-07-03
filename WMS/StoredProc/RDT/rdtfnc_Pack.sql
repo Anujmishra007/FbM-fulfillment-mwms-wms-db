@@ -4959,7 +4959,7 @@ BEGIN
 
       -- Go to statistic screen
       SET @nScn = @nScn - 6
-      SET @nStep = @nStep - 
+      SET @nStep = @nStep - 6
             
    END
 
