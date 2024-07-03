@@ -71,6 +71,7 @@ execute rdt.rdtAddMsg 217965, 10, '217965INS RDSNo Fail',      'us_english'
 execute rdt.rdtAddMsg 217966, 10, '217966SNO ady scan  ',      'us_english'
 execute rdt.rdtAddMsg 217967, 10, '217967INS PDInfoFail',      'us_english'
 execute rdt.rdtAddMsg 217968, 10, '217968UPD PDInfoFail',      'us_english'
+execute rdt.rdtAddMsg 217969, 10, '217969OrderIsLoaded',       'us_english'
 
 
 SELECT * FROM rdt.rdtMsg WHERE Message_ID BETWEEN 217901 AND 218400
