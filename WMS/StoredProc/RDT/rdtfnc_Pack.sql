@@ -218,6 +218,7 @@ DECLARE
    @cAllowHeightZero    NVARCHAR( 1),  -- (james20)
    @cDefaultcartontype  NVARCHAR( 20),  --(yeekung01)
    @cExtendedScreenSP   NVARCHAR( 20), --(JHU151)
+   @cJumpType           NVARCHAR( 10), --(JHU151) Forward/Back
    @tExtScnData			VariableTable, --(JHU151)
    @cPackByFromDropID   NVARCHAR( 1),
 
@@ -817,6 +818,7 @@ BEGIN
       -- Go to statistic screen
       SET @nScn = @nScn + 1
       SET @nStep = @nStep + 1
+      
    END
 
    IF @nInputKey = 0 -- ESC
@@ -836,6 +838,23 @@ BEGIN
       SET @nScn  = @nMenu
       SET @nStep = 0
       SET @cOutField01 = '' -- Option
+   END
+   
+   --(JHU151)      
+   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+   IF @cExtendedScreenSP = '0'
+   BEGIN
+      SET @cExtendedScreenSP = ''
+   END
+   IF @cExtendedScreenSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+      BEGIN
+         SET @nAction = 0 --Jump
+         SET @cJumpType = 'Forward' --Jump
+         
+         GOTO Step_99
+      END
    END
 END
 GOTO Quit
@@ -2062,13 +2081,14 @@ Step_3_ExtScn:
                   GOTO  Step_3_Fail
                END 
                
-               SET @nEnter = 1  
-               EXEC rdt.rdtSetFocusField @nMobile, 8
-
-               GOTO Quit
+               IF @cUDF30 = 'Y'
+               BEGIN
+                  SET @nEnter = 1  
+                  EXEC rdt.rdtSetFocusField @nMobile, 8
+                  GOTO Quit
+               END
             END
-         END
-            
+         END       
       END
 
       --(cc01)  
@@ -2845,7 +2865,25 @@ Step_3_ExtScn:
       -- Go to statistic screen
       SET @nScn = @nScn - 1
       SET @nStep = @nStep - 1
+
    END
+   
+   --(JHU151)      
+   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+   IF @cExtendedScreenSP = '0'
+   BEGIN
+      SET @cExtendedScreenSP = ''
+   END
+   IF @cExtendedScreenSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+      BEGIN
+         SET @nAction = 0 --Jump
+         SET @cJumpType = 'Back' --Jump
+         GOTO Step_99
+      END
+   END
+   
    GOTO Quit
    
    Step_3_Fail:
@@ -3358,7 +3396,7 @@ BEGIN
 
             -- Go to statistic screen
             SET @nScn = @nScn - 2
-            SET @nStep = @nStep - 2
+            SET @nStep = @nStep - 2            
          END
          ELSE
          BEGIN
@@ -3438,6 +3476,23 @@ BEGIN
          -- Go to UCC screen
          SET @nScn = @nScn + 4
          SET @nStep = @nStep + 4
+      END
+   END
+
+   
+   --(JHU151)
+   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+   IF @cExtendedScreenSP = '0'
+   BEGIN
+      SET @cExtendedScreenSP = ''
+   END
+   IF @cExtendedScreenSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+      BEGIN
+         SET @nAction = 0 --Jump
+         SET @cJumpType = 'Back' --Jump
+         GOTO Step_99
       END
    END
 
@@ -3796,6 +3851,7 @@ BEGIN
          -- Go to statistic screen
          SET @nScn = @nScn - 3
          SET @nStep = @nStep - 3
+
       END
       ELSE
       BEGIN
@@ -3904,6 +3960,22 @@ BEGIN
             SET @nScn = @nScn + 3
             SET @nStep = @nStep + 3
          END
+      END
+   END
+
+   --(JHU151)
+   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+   IF @cExtendedScreenSP = '0'
+   BEGIN
+      SET @cExtendedScreenSP = ''
+   END
+   IF @cExtendedScreenSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+      BEGIN
+         SET @nAction = 0 --Jump
+         SET @cJumpType = 'Back' --Jump
+         GOTO Step_99
       END
    END
 END
@@ -4119,6 +4191,23 @@ BEGIN
       -- Go to statistic screen
       SET @nScn = @nScn - 4
       SET @nStep = @nStep - 4
+      
+   END
+
+   --(JHU151)
+   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+   IF @cExtendedScreenSP = '0'
+   BEGIN
+      SET @cExtendedScreenSP = ''
+   END
+   IF @cExtendedScreenSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+      BEGIN
+         SET @nAction = 0 --Jump
+         SET @cJumpType = 'Back' --Jump for rdt_838ExtScn01
+         GOTO Step_99
+      END
    END
 END
 GOTO Quit
@@ -4290,6 +4379,23 @@ BEGIN
    -- Go to statistic screen
    SET @nScn = @nScn - 5
    SET @nStep = @nStep - 5
+
+   --(JHU151)
+   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+   IF @cExtendedScreenSP = '0'
+   BEGIN
+      SET @cExtendedScreenSP = ''
+   END
+   IF @cExtendedScreenSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+      BEGIN
+         SET @nAction = 0 --Jump
+         SET @cJumpType = 'Back' --Jump
+         GOTO Step_99
+      END
+   END
+
 
 Step_7_Quit:
    -- Extended info
@@ -4853,7 +4959,24 @@ BEGIN
 
       -- Go to statistic screen
       SET @nScn = @nScn - 6
-      SET @nStep = @nStep - 6
+      SET @nStep = @nStep - 
+            
+   END
+
+   --(JHU151)
+   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+   IF @cExtendedScreenSP = '0'
+   BEGIN
+      SET @cExtendedScreenSP = ''
+   END
+   IF @cExtendedScreenSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+      BEGIN
+         SET @nAction = 0 --Jump
+         SET @cJumpType = 'Back' --Jump
+         GOTO Step_99
+      END
    END
 END
 GOTO Quit
@@ -5492,6 +5615,86 @@ BEGIN
 END
 GOTO Quit
 
+
+--JHU151
+Step_99:
+BEGIN
+   IF @cExtendedScreenSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+      BEGIN
+         DELETE FROM @tExtScnData
+         INSERT INTO @tExtScnData (Variable, Value) VALUES 	
+         ('@cPickSlipNo',     @cPickSlipNo),
+         ('@cSKU',            @cUPC),
+         ('@cJumpType',       @cJumpType)
+
+         EXECUTE [RDT].[rdt_ExtScnEntry] 
+         @cExtendedScreenSP, 
+         @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
+         @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,  
+         @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,  
+         @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,  
+         @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,  
+         @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,  
+         @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT, 
+         @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT, 
+         @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT, 
+         @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT, 
+         @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT, 
+         @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
+         @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
+         @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
+         @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
+         @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
+         @nAction, 
+         @nScn     OUTPUT,  @nStep OUTPUT,
+         @nErrNo   OUTPUT, 
+         @cErrMsg  OUTPUT,
+         @cUDF01   OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
+         @cUDF04   OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
+         @cUDF07   OUTPUT, @cUDF08 OUTPUT, @cUDF09 OUTPUT,
+         @cUDF10   OUTPUT, @cUDF11 OUTPUT, @cUDF12 OUTPUT,
+         @cUDF13   OUTPUT, @cUDF14 OUTPUT, @cUDF15 OUTPUT,
+         @cUDF16   OUTPUT, @cUDF17 OUTPUT, @cUDF18 OUTPUT,
+         @cUDF19   OUTPUT, @cUDF20 OUTPUT, @cUDF21 OUTPUT,
+         @cUDF22   OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
+         @cUDF25   OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
+         @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
+         
+         IF @nErrNo <> 0
+            GOTO Step_99_Fail
+
+         IF @cExtendedScreenSP = 'rdt_838ExtScn01'
+         BEGIN
+            IF @nScn = 4652
+            BEGIN						
+               SET @nCartonNo = 0
+               SET @cLabelNo = ''
+               SET @cSKU = ''
+               SET @nPackedQTY = 0
+               SET @nCartonSKU = 0
+               SET @nCartonQTY = 0
+               SET @nenter = 0
+
+            END
+            ELSE IF @nScn = 4650
+            BEGIN
+               EXEC rdt.rdtSetFocusField @nMobile, 1  -- PickSlipNo
+            END
+         END         
+
+      END
+   END
+
+   GOTO Quit
+
+Step_99_Fail:
+   BEGIN
+      GOTO Quit
+   END
+END
+GOTO Quit
 
 /********************************************************************************
 Quit. Update back to I/O table, ready to be pick up by JBOSS

@@ -64,10 +64,15 @@ BEGIN
    DECLARE
       @cPickSlipNo            NVARCHAR( 10),
       @cSKU                   NVARCHAR( 20),
-		@cOrdKey				      NVARCHAR( 10),
-		@cExtOrderKey			   NVARCHAR( 50),
-		@nPickedQTY				   INT,
-		@nPackedQTY				   INT
+      @cOrdKey                NVARCHAR( 10),
+      @cExtOrderKey           NVARCHAR( 50),
+      @cJumpType              NVARCHAR( 10),
+      @cPackDtlDropID         NVARCHAR( 20),
+      @cFromDropID            NVARCHAR( 20),
+      @cPrintPackList         NVARCHAR( 1),
+      @cDisableQTYField       NVARCHAR( 1),
+      @nPickedQTY             INT,
+      @nPackedQTY             INT
 
 
    SET @nErrNo = 0
@@ -75,8 +80,16 @@ BEGIN
 
    SELECT @cPickSlipNo = Value FROM @tExtScnData WHERE Variable = '@cPickSlipNo'
    SELECT @cSKU = Value FROM @tExtScnData WHERE Variable = '@cSKU'
+   SELECT @cJumpType = Value FROM @tExtScnData WHERE Variable = '@cJumpType'
+   
+   SELECT
+	   @cPackDtlDropID      = V_String9,
+	   @cDisableQTYField    = V_String26,
+	   @cFromDropID         = V_String20
+	FROM rdt.rdtMobRec WITH (NOLOCK)
+	WHERE Mobile = @nMobile
 
-
+   --Forward/Back
    IF @nFunc = 838
    BEGIN
       IF @nStep = 3
@@ -146,7 +159,7 @@ BEGIN
                   BEGIN
                      SET @nPickedQTY = @nPickedQTY - ISNULL(@nPackedQty,0)
                   END
-
+                  SET @cUDF30 = 'Y'
                END
                ELSE
                BEGIN
@@ -165,7 +178,65 @@ BEGIN
          END
 		
       END
-	  
+      ELSE IF @nStep = 2
+      BEGIN
+         IF @nAction = 0
+         BEGIN
+            IF @nScn = 4651
+            BEGIN
+               IF @cJumpType = 'Forward'
+               BEGIN
+                  SET @nAfterScn = 4652
+                  SET @nAfterStep = 3
+
+                  -- Prepare next screen var
+                  SET @cOutField01 = 'NEW'
+                  SET @cOutField02 = '0/0'
+                  SET @cOutField03 = ''  -- SKU
+                  SET @cOutField04 = ''  -- SKU
+                  SET @cOutField05 = ''  -- Desc 1
+                  SET @cOutField06 = ''  -- Desc 2
+                  SET @cOutField07 = '0' -- Packed
+                  SET @cOutField08 = ''  -- QTY
+                  SET @cOutField09 = '0' -- CartonQTY
+                  SET @cOutField11 = '' -- UOM
+                  SET @cOutField12 = '' -- PUOM
+                  SET @cOutField13 = '' -- MUOM
+                  SET @cOutField14 = '' -- PQTY
+                  SET @cOutField15 = '' -- ExtendedInfo
+
+                  SET @cFieldAttr08 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END
+                  SET @cFieldAttr14 = 'O'
+               END
+               ELSE
+               BEGIN
+
+                  IF EXISTS( SELECT 1 FROM PackHeader WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND Status <> '9')
+                  BEGIN
+                     -- Pack confirm
+                     SET @cPrintPackList = ''
+                     EXEC rdt.rdt_Pack_PackConfirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
+                        ,@cPickSlipNo
+                        ,@cFromDropID
+                        ,@cPackDtlDropID
+                        ,@cPrintPackList OUTPUT
+                        ,@nErrNo         OUTPUT
+                        ,@cErrMsg        OUTPUT
+                        
+                  END
+                  
+                  
+                  SET @nAfterScn = 4650
+                  SET @nAfterStep = 1
+
+                  -- Prepare prev screen var
+                  SET @cOutField01 = ''
+                  SET @cOutField02 = '' -- FromDropID
+                  SET @cOutField03 = '' -- ToDropID
+               END
+            END
+         END
+      END
    END 
    GOTO Quit
 
