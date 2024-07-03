@@ -2081,7 +2081,7 @@ Step_3_ExtScn:
                   GOTO  Step_3_Fail
                END 
                
-               IF @cUDF30 = 'Y'
+               IF @cExtendedScreenSP = 'rdt_838ExtScn01' AND @cUDF30 = 'Y'
                BEGIN
                   SET @nEnter = 1  
                   EXEC rdt.rdtSetFocusField @nMobile, 8
