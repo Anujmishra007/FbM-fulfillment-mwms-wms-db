@@ -154,6 +154,7 @@ GO
 /* 2023-06-13 10.0 James      WMS-22739 Fix Lottable04 conversion issue  */
 /*                            when run DecodeSP (james29)                */
 /* 2024-03-13 10.1 Dennis     UWP-15504 Pallet Type Scn                  */
+/* 2024-06-18 10.2 Dennis     FCR-350 Skip ID screen                     */
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_PieceReceiving] (
    @nMobile    INT,
@@ -290,7 +291,8 @@ DECLARE
    @cClosePalletOut     NVARCHAR(20), --(cc03)  
    @cBUSR1              NVARCHAR( 30), -- (james23)
    @cAfterReceiveGoBackToId   NVARCHAR( 1),
-   
+   @cLoseIDlocSkipID    NVARCHAR( 1),
+
    @cInField01 NVARCHAR( 60),  @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),  @cOutField02 NVARCHAR( 60),
    @cInField03 NVARCHAR( 60),  @cOutField03 NVARCHAR( 60),
@@ -412,7 +414,7 @@ SELECT
    @cDecodeLottableSP       = V_String41, --(cc02)
    @cSuggestedLocSP         = V_String42, --(cc03)
    @cClosePalletSP          = V_String43, --(cc03)  
-   
+
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,
@@ -1338,6 +1340,57 @@ BEGIN
 
       SET @cTOID = ''
       SET @cAutoID = ''
+
+      SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '1580ExtendedScreenSP', @cStorer), '')
+      SET @nAction = 3
+      IF @cExtendedScreenSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+         BEGIN
+            EXECUTE [RDT].[rdt_1580ExtScnEntry] 
+               @cExtendedScreenSP,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorer, @cSuggestedLoc OUTPUT ,@cLOC OUTPUT, @cTOID OUTPUT, @cSKU OUTPUT,
+               @cReceiptKey,@cPoKey,'',@cReceiptLineNumber,@cPalletType,
+               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,  
+               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,  
+               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,  
+               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,  
+               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  
+               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  
+               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  
+               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  
+               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  
+               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  
+               @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  
+               @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, 
+               @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  
+               @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, 
+               @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, 
+               @nAction, 
+               @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
+               @nErrNo   OUTPUT, 
+               @cErrMsg  OUTPUT
+            
+            IF @nErrNo <> 0
+               GOTO Step_2_Fail
+            IF @nAfterStep <> 0
+            BEGIN
+               SET @nScn = @nAfterScn
+               SET @nStep = @nAfterStep
+               SET @cSKU = ''
+               SET @cUOM = ''
+               IF @cSkipLottable = '1' AND @nStep = 4
+                  GOTO Step_4
+               -- Skip lottable
+               IF @cSkipLottable01 = '1' SELECT @cFieldAttr01 = 'O', @cInField01 = '', @cLottable01 = ''
+               IF @cSkipLottable02 = '1' SELECT @cFieldAttr02 = 'O', @cInField02 = '', @cLottable02 = ''
+               IF @cSkipLottable03 = '1' SELECT @cFieldAttr03 = 'O', @cInField03 = '', @cLottable03 = ''
+               IF @cSkipLottable04 = '1' SELECT @cFieldAttr04 = 'O', @cInField04 = '', @dLottable04 = 0
+               GOTO Quit
+            END
+         
+         END
+      END
 
       -- Auto generate ID
       IF @cAutoGenID <> ''
@@ -2286,6 +2339,47 @@ BEGIN
          END
          ELSE
          BEGIN
+            --Skip ID Screen
+            SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '1580ExtendedScreenSP', @cStorer), '')
+            SET @nAction = 3
+            IF @cExtendedScreenSP <> ''
+            BEGIN
+               IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+               BEGIN
+                  EXECUTE [RDT].[rdt_1580ExtScnEntry] 
+                     @cExtendedScreenSP,
+                     @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorer, @cSuggestedLoc OUTPUT ,@cLOC OUTPUT, @cTOID OUTPUT, @cSKU OUTPUT,
+                     @cReceiptKey,@cPoKey,'',@cReceiptLineNumber,@cPalletType,
+                     @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,  
+                     @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,  
+                     @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,  
+                     @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,  
+                     @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  
+                     @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  
+                     @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  
+                     @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  
+                     @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  
+                     @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  
+                     @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  
+                     @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, 
+                     @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  
+                     @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, 
+                     @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, 
+                     @nAction, 
+                     @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
+                     @nErrNo   OUTPUT, 
+                     @cErrMsg  OUTPUT
+                  
+                  IF @nErrNo <> 0
+                     GOTO Quit
+                  IF @nAfterStep <> 0
+                  BEGIN
+                     SET @nScn = @nAfterScn
+                     SET @nStep = @nAfterStep
+                     GOTO Quit
+                  END
+               END
+            END
             -- Auto generate ID
             IF @cAutoGenID <> ''
             BEGIN
@@ -2323,6 +2417,47 @@ BEGIN
       END
       ELSE
       BEGIN
+         --Skip ID Screen
+         SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '1580ExtendedScreenSP', @cStorer), '')
+         SET @nAction = 3
+         IF @cExtendedScreenSP <> ''
+         BEGIN
+            IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+            BEGIN
+               EXECUTE [RDT].[rdt_1580ExtScnEntry] 
+                  @cExtendedScreenSP,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorer, @cSuggestedLoc OUTPUT ,@cLOC OUTPUT, @cTOID OUTPUT, @cSKU OUTPUT,
+                  @cReceiptKey,@cPoKey,'',@cReceiptLineNumber,@cPalletType,
+                  @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,  
+                  @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,  
+                  @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,  
+                  @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,  
+                  @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  
+                  @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  
+                  @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  
+                  @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  
+                  @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  
+                  @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  
+                  @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  
+                  @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, 
+                  @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  
+                  @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, 
+                  @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, 
+                  @nAction, 
+                  @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
+                  @nErrNo   OUTPUT, 
+                  @cErrMsg  OUTPUT
+               
+               IF @nErrNo <> 0
+                  GOTO Quit
+               IF @nAfterStep <> 0
+               BEGIN
+                  SET @nScn = @nAfterScn
+                  SET @nStep = @nAfterStep
+                  GOTO Quit
+               END
+            END
+         END
          -- Auto generate ID
          IF @cAutoGenID <> ''
          BEGIN
@@ -3859,6 +3994,47 @@ BEGIN
          END
          ELSE
          BEGIN
+            --Skip ID Screen
+            SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '1580ExtendedScreenSP', @cStorer), '')
+            SET @nAction = 3
+            IF @cExtendedScreenSP <> ''
+            BEGIN
+               IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+               BEGIN
+                  EXECUTE [RDT].[rdt_1580ExtScnEntry] 
+                     @cExtendedScreenSP,
+                     @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorer, @cSuggestedLoc OUTPUT ,@cLOC OUTPUT, @cTOID OUTPUT, @cSKU OUTPUT,
+                     @cReceiptKey,@cPoKey,'',@cReceiptLineNumber,@cPalletType,
+                     @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,  
+                     @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,  
+                     @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,  
+                     @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,  
+                     @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  
+                     @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  
+                     @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  
+                     @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  
+                     @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  
+                     @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  
+                     @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  
+                     @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, 
+                     @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  
+                     @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, 
+                     @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, 
+                     @nAction, 
+                     @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
+                     @nErrNo   OUTPUT, 
+                     @cErrMsg  OUTPUT
+                  
+                  IF @nErrNo <> 0
+                     GOTO Quit
+                  IF @nAfterStep <> 0
+                  BEGIN
+                     SET @nScn = @nAfterScn
+                     SET @nStep = @nAfterStep
+                     GOTO Quit
+                  END
+               END
+            END
             -- Auto generate ID
             IF @cAutoGenID <> ''
             BEGIN
@@ -3873,7 +4049,7 @@ BEGIN
                   ,@nErrNo   OUTPUT
                   ,@cErrMsg  OUTPUT
                IF @nErrNo <> 0
-                  GOTO Step_4_Fail
+                  GOTO Step_6_Fail
 
                SET @cToID = @cAutoID
             END
@@ -3890,11 +4066,52 @@ BEGIN
             SET @cOutField04 = @cToID
 
             -- Go to previous screen
-            SET @nScn = @nScn - 1
-            SET @nStep = @nStep - 1
+            SET @nScn = @nScn - 3
+            SET @nStep = @nStep - 3
+            GOTO Quit
          END
       END
-
+      --Skip ID Screen
+      SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '1580ExtendedScreenSP', @cStorer), '')
+      SET @nAction = 3
+      IF @cExtendedScreenSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+         BEGIN
+            EXECUTE [RDT].[rdt_1580ExtScnEntry] 
+               @cExtendedScreenSP,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorer, @cSuggestedLoc OUTPUT ,@cLOC OUTPUT, @cTOID OUTPUT, @cSKU OUTPUT,
+               @cReceiptKey,@cPoKey,'',@cReceiptLineNumber,@cPalletType,
+               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,  
+               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,  
+               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,  
+               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,  
+               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  
+               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  
+               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  
+               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  
+               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  
+               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  
+               @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  
+               @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, 
+               @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  
+               @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, 
+               @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, 
+               @nAction, 
+               @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
+               @nErrNo   OUTPUT, 
+               @cErrMsg  OUTPUT
+            
+            IF @nErrNo <> 0
+               GOTO Quit
+            IF @nAfterStep <> 0
+            BEGIN
+               SET @nScn = @nAfterScn
+               SET @nStep = @nAfterStep
+               GOTO Quit
+            END
+         END
+      END
       -- Auto generate ID
       IF @cAutoGenID <> ''
       BEGIN
@@ -3909,7 +4126,7 @@ BEGIN
             ,@nErrNo   OUTPUT
             ,@cErrMsg  OUTPUT
          IF @nErrNo <> 0
-       GOTO Step_4_Fail
+            GOTO Step_6_Fail
 
          SET @cToID = @cAutoID
       END
@@ -3934,6 +4151,47 @@ BEGIN
    BEGIN
       IF @cSkipLottable = '1'
       BEGIN
+         --Skip ID Screen
+         SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '1580ExtendedScreenSP', @cStorer), '')
+         SET @nAction = 3
+         IF @cExtendedScreenSP <> ''
+         BEGIN
+            IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+            BEGIN
+               EXECUTE [RDT].[rdt_1580ExtScnEntry] 
+                  @cExtendedScreenSP,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorer, @cSuggestedLoc OUTPUT ,@cLOC OUTPUT, @cTOID OUTPUT, @cSKU OUTPUT,
+                  @cReceiptKey,@cPoKey,'',@cReceiptLineNumber,@cPalletType,
+                  @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,  
+                  @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,  
+                  @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,  
+                  @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,  
+                  @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  
+                  @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  
+                  @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  
+                  @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  
+                  @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  
+                  @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  
+                  @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  
+                  @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, 
+                  @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  
+                  @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, 
+                  @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, 
+                  @nAction, 
+                  @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
+                  @nErrNo   OUTPUT, 
+                  @cErrMsg  OUTPUT
+               
+               IF @nErrNo <> 0
+                  GOTO Quit
+               IF @nAfterStep <> 0
+               BEGIN
+                  SET @nScn = @nAfterScn
+                  SET @nStep = @nAfterStep
+                  GOTO Quit
+               END
+            END
+         END
          -- Auto generate ID
          IF @cAutoGenID <> ''
          BEGIN
@@ -4672,6 +4930,46 @@ BEGIN
          END
          ELSE
          BEGIN
+            SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '1580ExtendedScreenSP', @cStorer), '')
+            SET @nAction = 3
+            IF @cExtendedScreenSP <> ''
+            BEGIN
+               IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+               BEGIN
+                  EXECUTE [RDT].[rdt_1580ExtScnEntry] 
+                     @cExtendedScreenSP,
+                     @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorer, @cSuggestedLoc OUTPUT ,@cLOC OUTPUT, @cTOID OUTPUT, @cSKU OUTPUT,
+                     @cReceiptKey,@cPoKey,'',@cReceiptLineNumber,@cPalletType,
+                     @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,  
+                     @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,  
+                     @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,  
+                     @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,  
+                     @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  
+                     @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  
+                     @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  
+                     @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  
+                     @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  
+                     @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  
+                     @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  
+                     @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, 
+                     @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  
+                     @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, 
+                     @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, 
+                     @nAction, 
+                     @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
+                     @nErrNo   OUTPUT, 
+                     @cErrMsg  OUTPUT
+                  
+                  IF @nErrNo <> 0
+                     GOTO Quit
+                  IF @nAfterStep <> 0
+                  BEGIN
+                     SET @nScn = @nAfterScn
+                     SET @nStep = @nAfterStep
+                     GOTO Quit
+                  END
+               END
+            END
             -- Auto generate ID
             IF @cAutoGenID <> ''
             BEGIN
@@ -4686,7 +4984,7 @@ BEGIN
                   ,@nErrNo   OUTPUT
                   ,@cErrMsg  OUTPUT
                IF @nErrNo <> 0
-                  GOTO Step_4_Fail
+                  GOTO Quit
 
                SET @cToID = @cAutoID
             END
@@ -4703,11 +5001,51 @@ BEGIN
             SET @cOutField04 = @cToID
 
             -- Go to previous screen
-            SET @nScn = @nScn - 1
-            SET @nStep = @nStep - 1
+            SET @nScn = @nScn - 7
+            SET @nStep = @nStep - 7
          END
       END
-
+      --Skip ID Screen
+      SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '1580ExtendedScreenSP', @cStorer), '')
+      SET @nAction = 3
+      IF @cExtendedScreenSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+         BEGIN
+            EXECUTE [RDT].[rdt_1580ExtScnEntry] 
+               @cExtendedScreenSP,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorer, @cSuggestedLoc OUTPUT ,@cLOC OUTPUT, @cTOID OUTPUT, @cSKU OUTPUT,
+               @cReceiptKey,@cPoKey,'',@cReceiptLineNumber,@cPalletType,
+               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,  
+               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,  
+               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,  
+               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,  
+               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  
+               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  
+               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  
+               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  
+               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  
+               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  
+               @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  
+               @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, 
+               @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  
+               @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, 
+               @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, 
+               @nAction, 
+               @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
+               @nErrNo   OUTPUT, 
+               @cErrMsg  OUTPUT
+            
+            IF @nErrNo <> 0
+               GOTO Quit
+            IF @nAfterStep <> 0
+            BEGIN
+               SET @nScn = @nAfterScn
+               SET @nStep = @nAfterStep
+               GOTO Quit
+            END
+         END
+      END
       -- Auto generate ID
       IF @cAutoGenID <> ''
       BEGIN
@@ -4747,7 +5085,6 @@ BEGIN
    BEGIN
       IF @cSkipLottable = '1'
       BEGIN
-      
          IF(ISNULL(rdt.RDTGetConfig( @nFunc, 'ValidatePalletType', @cStorer),'0'))!='0' -- Capture pallet type
          BEGIN
             SELECT 
@@ -4767,6 +5104,46 @@ BEGIN
             END
             ELSE
             BEGIN
+               SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '1580ExtendedScreenSP', @cStorer), '')
+               SET @nAction = 3
+               IF @cExtendedScreenSP <> ''
+               BEGIN
+                  IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+                  BEGIN
+                     EXECUTE [RDT].[rdt_1580ExtScnEntry] 
+                        @cExtendedScreenSP,
+                        @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorer, @cSuggestedLoc OUTPUT ,@cLOC OUTPUT, @cTOID OUTPUT, @cSKU OUTPUT,
+                        @cReceiptKey,@cPoKey,'',@cReceiptLineNumber,@cPalletType,
+                        @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,  
+                        @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,  
+                        @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,  
+                        @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,  
+                        @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  
+                        @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  
+                        @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  
+                        @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  
+                        @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  
+                        @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  
+                        @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  
+                        @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, 
+                        @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  
+                        @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, 
+                        @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, 
+                        @nAction, 
+                        @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
+                        @nErrNo   OUTPUT, 
+                        @cErrMsg  OUTPUT
+                     
+                     IF @nErrNo <> 0
+                        GOTO Quit
+                     IF @nAfterStep <> 0
+                     BEGIN
+                        SET @nScn = @nAfterScn
+                        SET @nStep = @nAfterStep
+                        GOTO Quit
+                     END
+                  END
+               END
                -- Auto generate ID
                IF @cAutoGenID <> ''
                BEGIN
@@ -4798,8 +5175,49 @@ BEGIN
                SET @cOutField04 = @cToID
 
                -- Go to previous screen
-               SET @nScn = @nScn - 1
-               SET @nStep = @nStep - 1
+               SET @nScn = @nScn - 7
+               SET @nStep = @nStep - 7
+            END
+         END
+
+         SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '1580ExtendedScreenSP', @cStorer), '')
+         SET @nAction = 3
+         IF @cExtendedScreenSP <> ''
+         BEGIN
+            IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+            BEGIN
+               EXECUTE [RDT].[rdt_1580ExtScnEntry] 
+                  @cExtendedScreenSP,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorer, @cSuggestedLoc OUTPUT ,@cLOC OUTPUT, @cTOID OUTPUT, @cSKU OUTPUT,
+                  @cReceiptKey,@cPoKey,'',@cReceiptLineNumber,@cPalletType,
+                  @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,  
+                  @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,  
+                  @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,  
+                  @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,  
+                  @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  
+                  @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  
+                  @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  
+                  @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  
+                  @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  
+                  @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  
+                  @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  
+                  @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, 
+                  @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  
+                  @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, 
+                  @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, 
+                  @nAction, 
+                  @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
+                  @nErrNo   OUTPUT, 
+                  @cErrMsg  OUTPUT
+               
+               IF @nErrNo <> 0
+                  GOTO Quit
+               IF @nAfterStep <> 0
+               BEGIN
+                  SET @nScn = @nAfterScn
+                  SET @nStep = @nAfterStep
+                  GOTO Quit
+               END
             END
          END
          
@@ -4938,6 +5356,46 @@ BEGIN
 
    IF @nInputKey = 0 -- ESC
    BEGIN
+      SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '1580ExtendedScreenSP', @cStorer), '')
+      SET @nAction = 3
+      IF @cExtendedScreenSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+         BEGIN
+            EXECUTE [RDT].[rdt_1580ExtScnEntry] 
+               @cExtendedScreenSP,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorer, @cSuggestedLoc OUTPUT ,@cLOC OUTPUT, @cTOID OUTPUT, @cSKU OUTPUT,
+               @cReceiptKey,@cPoKey,'',@cReceiptLineNumber,@cPalletType,
+               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,  
+               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,  
+               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,  
+               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,  
+               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  
+               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  
+               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  
+               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  
+               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  
+               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  
+               @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  
+               @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, 
+               @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  
+               @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, 
+               @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, 
+               @nAction, 
+               @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
+               @nErrNo   OUTPUT, 
+               @cErrMsg  OUTPUT
+            
+            IF @nErrNo <> 0
+               GOTO Step_99_Fail
+            IF @nAfterStep <> 0
+            BEGIN
+               SET @nScn = @nAfterScn
+               SET @nStep = @nAfterStep
+               GOTO Quit
+            END
+         END
+      END
       -- Auto generate ID
       IF @cAutoGenID <> ''
       BEGIN

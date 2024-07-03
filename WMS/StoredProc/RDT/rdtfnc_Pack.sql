@@ -2088,7 +2088,7 @@ Step_3_ExtScn:
                   GOTO Quit
                END
             END
-         END            
+         END       
       END
 
       --(cc01)  

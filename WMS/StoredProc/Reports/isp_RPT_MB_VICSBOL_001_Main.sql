@@ -1,0 +1,107 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
+/************************************************************************/
+/* SP: isp_RPT_MB_VICSBOL_001_Main                                      */
+/* Creation Date: 18-Jun-2024                                           */
+/* Copyright: Maersk                                                    */
+/* Written by: WLChooi                                                  */
+/*                                                                      */
+/* Purpose: UWP-20706 - Granite | MWMS | BOL Report                     */
+/*        :                                                             */
+/* Called By: RPT_MB_VICSBOL_001_Main                                   */
+/*          :                                                           */
+/* Github Version: 1.0                                                  */
+/*                                                                      */
+/* Version: 7.0                                                         */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date        Author   Ver   Purposes                                  */
+/* 18-Jun-2024 WLChooi  1.0   DevOps Combine Script                     */
+/************************************************************************/
+CREATE OR ALTER PROCEDURE [dbo].[isp_RPT_MB_VICSBOL_001_Main]
+(
+   @c_Mbolkey      NVARCHAR(10)
+ , @c_ConsigneeKey NVARCHAR(15)
+)
+AS
+BEGIN
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
+   SET ANSI_NULLS OFF
+
+   DECLARE @n_continue  INT = 1
+         , @n_StartTCnt INT = @@TRANCOUNT
+         , @c_Vics_MBOL NVARCHAR(50) = ''
+
+   EXEC [dbo].[isp_GetVicsMbol] @c_Mbolkey = @c_Mbolkey
+                              , @c_Vics_MBOL = @c_Vics_MBOL OUTPUT
+
+   IF ISNULL(@c_Vics_MBOL, '') <> ''
+   BEGIN
+      UPDATE MBOL WITH (ROWLOCK)
+      SET ExternMBOLKey = IIF(ExternMBOLKey = @c_Vics_MBOL, ExternMBOLKey, @c_Vics_MBOL)
+        , TrafficCop = NULL
+      WHERE MBOLkey = @c_Mbolkey
+   END
+
+   IF ISNULL(@c_ConsigneeKey, '') = ''
+      SET @c_ConsigneeKey = ''
+
+   SELECT DISTINCT MBOL.MbolKey
+                 , MBOL.ExternMbolKey
+                 , MBOL.VoyageNumber
+                 , MBOL.Carrieragent
+                 , MBOL.DRIVERName
+                 , MBOL.VesselQualifier
+                 , MBOL.BookingReference
+                 , Remarks = CONVERT(NVARCHAR(2000), MBOL.Remarks)
+                 , ORDERS.UserDefine02
+                 , ORDERS.ConsigneeKey
+                 , ShipCompany = ISNULL(TRIM(STORER.Company), '') + ' ' + ISNULL(RTRIM(FACILITY.UserDefine10), '')
+                 , ShipAddress = ISNULL(TRIM(FACILITY.Descr), '')
+                 , ShipAddress2 = CONCAT(TRIM(FACILITY.UserDefine01), ', ' + TRIM(FACILITY.UserDefine03), ', ' + TRIM(FACILITY.UserDefine04))
+                 , C_Company = ISNULL(TRIM(Storer2.Company), TRIM(ORDERS.C_Company))
+                 , C_Address = CONCAT(TRIM(ORDERS.C_Address1), TRIM(ORDERS.C_Address2), TRIM(ORDERS.C_Address3), TRIM(ORDERS.C_Address4))
+                 , C_Address2 = CONCAT(TRIM(ORDERS.C_City), ', ' + TRIM(ORDERS.C_State), ', ' + TRIM(ORDERS.C_Zip))
+                 , TPCompany = ISNULL(TRIM(Storer3.Company), '')
+                 , TPAddress = CONCAT(TRIM(Storer3.Address1), TRIM(Storer3.Address2), TRIM(Storer3.Address3), TRIM(Storer3.Address4))
+                 , TPAddress2 = CONCAT(TRIM(Storer3.City), ', ' + TRIM(Storer3.[State]), ', ' + TRIM(Storer3.Zip))
+                 , (  SELECT COUNT(DISTINCT ORD2.ExternOrderKey)
+                      FROM MBOLDETAIL MD2 WITH (NOLOCK)
+                      JOIN ORDERS ORD2 WITH (NOLOCK) ON (MD2.OrderKey = ORD2.OrderKey)
+                      WHERE MD2.MbolKey = MBOL.MbolKey) AS DetailCnt
+                 , MBOL.OtherReference
+                 , MBOL.UserDefine01 AS m_userdefine01
+                 , MBOL.UserDefine02 AS m_userdefine02
+                 , MBOL.UserDefine03 AS m_userdefine03
+                 , MBOL.UserDefine04 AS m_userdefine04
+                 , MBOL.UserDefine05 AS m_userdefine05
+                 , MBOL.TransMethod
+                 , Storer4.Company AS carrier_company
+                 , MBOL.CarrierKey
+                 , MBOL.ContainerNo
+                 , MBOL.SealNo
+   FROM MBOL WITH (NOLOCK)
+   JOIN FACILITY WITH (NOLOCK) ON (MBOL.Facility = FACILITY.Facility)
+   JOIN MBOLDETAIL WITH (NOLOCK) ON (MBOL.MbolKey = MBOLDETAIL.MbolKey)
+   JOIN ORDERS WITH (NOLOCK) ON (MBOLDETAIL.OrderKey = ORDERS.OrderKey)
+   LEFT OUTER JOIN STORER WITH (NOLOCK) ON (ORDERS.StorerKey = STORER.StorerKey)
+   LEFT OUTER JOIN STORER Storer2 WITH (NOLOCK) ON (ORDERS.ConsigneeKey = Storer2.StorerKey)
+   LEFT OUTER JOIN STORER Storer3 WITH (NOLOCK) ON (MBOL.OtherReference = Storer3.StorerKey)
+   LEFT OUTER JOIN STORER Storer4 WITH (NOLOCK) ON (MBOL.CarrierKey = Storer4.StorerKey)
+   LEFT OUTER JOIN CODELKUP CLK WITH (NOLOCK) ON (MBOL.TransMethod = CLK.Code AND CLK.LISTNAME = 'TRANSMETH')
+   WHERE MBOL.MbolKey = @c_Mbolkey 
+   AND ORDERS.ConsigneeKey = @c_ConsigneeKey
+   AND ORDERS.[Status] >= '5'
+END -- procedure
+GO
+GRANT EXECUTE ON [dbo].[isp_RPT_MB_VICSBOL_001_Main] TO [NSQL]
+GO
+GRANT EXECUTE ON [dbo].[isp_RPT_MB_VICSBOL_001_Main] TO [LogiReportRoleWM]
+GO

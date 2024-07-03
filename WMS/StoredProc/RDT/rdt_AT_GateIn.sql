@@ -5,15 +5,16 @@ GO
 SET ANSI_NULLS OFF
 GO    
                           
-/***************************************************************************/              
-/* Store procedure: rdt_AT_GateIn                                          */              
-/*                                                                         */              
-/* Modifications log:                                                      */              
-/*                                                                         */              
-/* Date       Rev  Author   Purposes                                       */              
-/* 2022-03-25 1.0  yeekung  wms-18959 Created                              */     
-/* 2023-04-25 1.1  yeekung  WMS-22395 Add storerconfig altref (yeekung01)  */
-/***************************************************************************/              
+/***************************************************************************************/
+/* Store procedure: rdt_AT_GateIn                                                      */
+/*                                                                                     */
+/* Modifications log:                                                                  */
+/*                                                                                     */
+/* Date       Rev  Author   Purposes                                                   */
+/* 2022-03-25 1.0  yeekung  wms-18959 Created                                          */
+/* 2023-04-25 1.1  yeekung  WMS-22395 Add storerconfig altref (yeekung01)              */
+/* 2024-06-13 1.2  NLT013   FCR-242 Reset output fields before go back to first screen */
+/***************************************************************************************/
               
 CREATE OR ALTER PROC rdt.rdt_AT_GateIn (              
    @nMobile       INT,                  
@@ -190,7 +191,16 @@ AS
             SELECT @cGroup=OpsPosition
             FROM rdt.rdtuser (NOLOCK)
             WHERE USERNAME=@cusername
-   
+
+            SET  @cOutField01    = ''
+            SET  @cOutField02    = ''
+            SET  @cOutField03    = ''
+            SET  @cOutField04    = ''
+            SET  @cOutField05    = ''
+            SET  @cOutField06    = ''
+            SET  @cOutField07    = ''
+            SET  @cOutField08    = ''
+            SET  @cOutField09    = ''
             -- Prepare next screen var        
             SELECT @cOutField01='1-'+Description FROM dbo.CodeLkup WITH (NOLOCK) WHERE StorerKey = @cStorerKey  AND ListName = 'RDTAcTrack' AND code='1'  AND CHARINDEX(@cGroup,short)<>'0'     
             SELECT @cOutField02='2-'+Description FROM dbo.CodeLkup WITH (NOLOCK) WHERE StorerKey = @cStorerKey  AND ListName = 'RDTAcTrack' AND code='2'  AND CHARINDEX(@cGroup,short)<>'0'     
@@ -440,4 +450,3 @@ GO
 
 GRANT EXECUTE ON RDT.rdt_AT_GateIn TO NSQL
 GO
-  

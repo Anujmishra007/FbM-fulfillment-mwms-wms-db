@@ -159,7 +159,6 @@ BEGIN
                   BEGIN
                      SET @nPickedQTY = @nPickedQTY - ISNULL(@nPackedQty,0)
                   END
-
                   SET @cUDF30 = 'Y'
                END
                ELSE
@@ -238,7 +237,6 @@ BEGIN
             END
          END
       END
-
    END 
    GOTO Quit
 

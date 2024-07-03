@@ -1,8 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_WaveGenLoadByCons]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_WaveGenLoadByCons]
-GO
-
-SET QUOTED_IDENTIFIER OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
@@ -27,9 +23,9 @@ GO
 /*                                                                      */
 /* Called By:  RMC Generate Load Plan By Consignee                      */
 /*                                                                      */
-/* PVCS Version: 1.3                                                    */
+/* PVCS Version: 1.5                                                    */
 /*                                                                      */
-/* Version: 5.4                                                         */
+/* Version: V2                                                          */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
@@ -38,9 +34,13 @@ GO
 /* 2016-11-16  Wan01    1.1  Close Cursor                               */
 /* 28-Jan-2019 TLTING_ext 1.2  enlarge externorderkey field length      */
 /* 01-Sep-2023 SPChin   1.3  JSM-169349 - Extend The Length Of C_Company*/ 
+/* 02-JUL-2024 Wan02    1.4  EUR PROD - NLD - Cannot Gen Loadplan due to*/ 
+/*                           C_Company NULL Value                       */
+/* 02-JUL-2024 Wan03    1.5  EUR PROD - NLD - Cannot Gen Loadplan due to*/ 
+/*                           C_Company NULL Value - fix2                */
 /************************************************************************/
 
-CREATE PROC isp_WaveGenLoadByCons 
+CREATE OR ALTER PROCEDURE isp_WaveGenLoadByCons
    @c_WaveKey NVARCHAR(10),
    @b_Success int OUTPUT, 
    @n_err     int OUTPUT, 
@@ -48,15 +48,15 @@ CREATE PROC isp_WaveGenLoadByCons
 AS
 BEGIN
 
-   SET NOCOUNT ON			-- SQL 2005 Standard
-   SET QUOTED_IDENTIFIER OFF	
+   SET NOCOUNT ON       -- SQL 2005 Standard
+   SET QUOTED_IDENTIFIER OFF  
    SET ANSI_NULLS OFF   
    SET CONCAT_NULL_YIELDS_NULL OFF    
 
    DECLARE 
       @c_ConsigneeKey      NVARCHAR( 15),
       @c_Priority          NVARCHAR( 10),
-      @c_C_Company         NVARCHAR( 100),	--JSM-169349
+      @c_C_Company         NVARCHAR( 100),   --JSM-169349
       @c_OrderKey          NVARCHAR( 10),
       @c_Facility          NVARCHAR( 5),
       @c_ExternOrderKey    NVARCHAR( 50),  --tlting_ext
@@ -64,8 +64,8 @@ BEGIN
       @c_Route             NVARCHAR( 10),
       @c_debug             NVARCHAR( 1),
       @c_loadkey           NVARCHAR( 10),
-		@n_continue          INT,
-		@n_StartTranCnt      INT,
+      @n_continue          INT,
+      @n_StartTranCnt      INT,
       @d_OrderDate         DATETIME,
       @d_Delivery_Date     DATETIME, 
       @c_OrderType         NVARCHAR( 10),
@@ -74,29 +74,29 @@ BEGIN
       @c_OrderStatus       NVARCHAR( 10),
       @n_loadcount         INT
 
-	SELECT @n_StartTranCnt=@@TRANCOUNT, @n_continue = 1, @n_loadcount = 0
+   SELECT @n_StartTranCnt=@@TRANCOUNT, @n_continue = 1, @n_loadcount = 0
 
    IF NOT EXISTS(SELECT 1 FROM WaveDetail WITH (NOLOCK) 
                  WHERE WaveKey = @c_WaveKey)
-	BEGIN
-		SELECT @n_continue = 3
-		SELECT @n_err = 63501
-		SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": No Orders being populated into WaveDetail. (isp_WaveGenLoadByCons)"
-	END
-	
-	BEGIN TRAN
-		
+   BEGIN
+      SELECT @n_continue = 3
+      SELECT @n_err = 63501
+      SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": No Orders being populated into WaveDetail. (isp_WaveGenLoadByCons)"
+   END
+   
+   BEGIN TRAN
+      
    IF @n_continue = 1 OR @n_continue = 2
-   BEGIN 	
+   BEGIN    
       DECLARE cur_LPGroup CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT O.ConsigneeKey, O.C_Company, O.Storerkey
+      SELECT O.ConsigneeKey, ISNULL(O.C_Company, ''), O.Storerkey
       FROM Orders O WITH (NOLOCK)
       JOIN WaveDetail WD WITH (NOLOCK) ON (O.OrderKey = WD.OrderKey)
       WHERE WD.WaveKey = @c_WaveKey
       AND ISNULL(O.Loadkey,'') = ''
       AND O.Status NOT IN ('0','9','CANC')
-      GROUP BY O.Storerkey, O.ConsigneeKey, O.C_Company
-      ORDER BY O.Storerkey, O.ConsigneeKey, O.C_Company
+      GROUP BY O.Storerkey, O.ConsigneeKey, ISNULL(O.C_Company, '')                 --(Wan03)
+      ORDER BY O.Storerkey, O.ConsigneeKey, ISNULL(O.C_Company, '')                 --(Wan03)
 
       OPEN cur_LPGroup
       FETCH NEXT FROM cur_LPGroup INTO @c_ConsigneeKey, @c_C_Company, @c_Storerkey
@@ -111,36 +111,37 @@ BEGIN
             @n_err         OUTPUT,
             @c_errmsg      OUTPUT
 
-		   IF @b_success <> 1
-		   BEGIN
-			   SELECT @n_continue = 3
+         IF @b_success <> 1
+         BEGIN
+            SELECT @n_continue = 3
             GOTO RETURN_SP
-		   END
+         END
 
-         SELECT @c_Facility = MAX(Facility)
+         SELECT TOP 1 @c_Facility = Facility                                      --(Wan03)
          FROM Orders WITH (NOLOCK) 
          WHERE  ConsigneeKey = @c_Consigneekey
-            AND C_Company = @c_C_Company
+            AND ISNULL(C_Company, '') = @c_C_Company                              --(Wan03)
             AND Userdefine09 = @c_WaveKey
             AND Storerkey = @c_StorerKey
             AND Status NOT IN ('0','9','CANC')
             AND ISNULL(Loadkey,'') = ''
+         ORDER BY Orderkey                                                       --(Wan03)
 
          -- Create loadplan        
          INSERT INTO LoadPlan (LoadKey, Facility)
          VALUES (@c_loadkey, @c_Facility)
 
-		   SELECT @n_err = @@ERROR
+         SELECT @n_err = @@ERROR
 
-		   IF @n_err <> 0 
-		   BEGIN
-			   SELECT @n_continue = 3
-			   SELECT @n_err = 63502
-			   SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Insert Into LOADPLAN Failed. (isp_WaveGenLoadByCons)"
+         IF @n_err <> 0 
+         BEGIN
+            SELECT @n_continue = 3
+            SELECT @n_err = 63502
+            SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Insert Into LOADPLAN Failed. (isp_WaveGenLoadByCons)"
             GOTO RETURN_SP
-		   END
-		   
-		   SELECT @n_loadcount = @n_loadcount + 1
+         END
+         
+         SELECT @n_loadcount = @n_loadcount + 1
 
          -- Create loadplan detail
          DECLARE cur_loadpland CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -148,7 +149,7 @@ BEGIN
          FROM Orders O WITH (NOLOCK) 
          JOIN WaveDetail WD WITH (NOLOCK) ON (O.OrderKey = WD.OrderKey)
          WHERE  O.ConsigneeKey = @c_Consigneekey
-            AND O.C_Company = @c_C_Company
+            AND ISNULL(O.C_Company,'') = @c_C_Company                               --Wan02
             AND O.StorerKey = @c_StorerKey
             AND WD.WaveKey = @c_WaveKey
             AND O.Status NOT IN ('0','9','CANC')
@@ -161,7 +162,7 @@ BEGIN
          BEGIN
             IF (SELECT COUNT(1) FROM LoadPlanDetail WITH (NOLOCK) WHERE OrderKey = @c_OrderKey) = 0
             BEGIN
-		         SELECT @d_OrderDate = OrderDate, 
+               SELECT @d_OrderDate = OrderDate, 
                       @d_Delivery_Date = DeliveryDate, 
                       @c_OrderType = Type,
                       @c_Door = Door,
@@ -246,30 +247,30 @@ END
 
 IF @n_continue=3  -- Error Occured - Process And Return
 BEGIN
-	SELECT @b_success = 0
-	IF @@TRANCOUNT = 1 and @@TRANCOUNT > @n_StartTranCnt
-	BEGIN
-		ROLLBACK TRAN
-	END
-	ELSE
-	BEGIN
-		WHILE @@TRANCOUNT > @n_StartTranCnt
-		BEGIN
-			COMMIT TRAN
-		END
-	END
-	execute nsp_logerror @n_err, @c_errmsg, 'isp_WaveGenLoadByCons'
-	RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
-	RETURN
+   SELECT @b_success = 0
+   IF @@TRANCOUNT = 1 and @@TRANCOUNT > @n_StartTranCnt
+   BEGIN
+      ROLLBACK TRAN
+   END
+   ELSE
+   BEGIN
+      WHILE @@TRANCOUNT > @n_StartTranCnt
+      BEGIN
+         COMMIT TRAN
+      END
+   END
+   execute nsp_logerror @n_err, @c_errmsg, 'isp_WaveGenLoadByCons'
+   RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
+   RETURN
 END
 ELSE
 BEGIN
-	SELECT @b_success = 1
-	WHILE @@TRANCOUNT > @n_StartTranCnt
-	BEGIN
-		COMMIT TRAN
-	END
-	RETURN
+   SELECT @b_success = 1
+   WHILE @@TRANCOUNT > @n_StartTranCnt
+   BEGIN
+      COMMIT TRAN
+   END
+   RETURN
 END
 GO
 

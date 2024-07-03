@@ -53,3 +53,11 @@ execute rdt.rdtAddMsg 101997, 10, '01997 Diff ID       ', 'us_english', 830
 execute rdt.rdtAddMsg 101998, 10, '01998 Scan-In Fail  ', 'us_english', 830
 execute rdt.rdtAddMsg 101999, 10, '01999 Scan-In Fail  ', 'us_english', 830
 
+--WMS-15995
+
+execute rdt.rdtDropMsg 147251 , 147300
+execute rdt.rdtAddMsg 147251, 10, '147251ZoneNotInPSNO', 'us_english', 830
+execute rdt.rdtAddMsg 147252, 10, '147252ZoneNotInPSNO', 'us_english', 830
+execute rdt.rdtAddMsg 147253, 10, '147253ZoneNotInPSNO', 'us_english', 830
+execute rdt.rdtAddMsg 147254, 10, '147254ZoneNotInPSNO', 'us_english', 830
+

@@ -56,6 +56,7 @@ GO
 /* 2020-05-04 3.9  YeeKung  WMS-11867 Add verifySKU (yeekung01)             */
 /* 2022-04-12 4.0  James   WMS-22928 Add RDTFormat for UCC Qty (james03)   */
 /* 2023-12-04 4.1  Ung     WMS-24276 Add DecodeSP                          */
+/* 2024-06-18 4.2  CYU027  UWP-20900 bugfix for NOPO check                 */
 /***************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_UCCReceive](
    @nMobile    INT,
@@ -1729,7 +1730,7 @@ BEGIN
        -- Added by Vicky for SOS#105011 (Start - Vicky01)
       DECLARE @cActPOKey NVARCHAR(10), @cErrMsg1 NVARCHAR(20), @cErrMsg2 NVARCHAR(20), @cErrMsg3 NVARCHAR(20)
 
-      IF @cCheckPOUCC = '1' AND @nCnt > 0 AND (UPPER(@cPOKey) <> 'NOPO' OR @cPOKey <> '')
+      IF @cCheckPOUCC = '1' AND @nCnt > 0 AND UPPER(@cPOKey) <> 'NOPO' AND @cPOKey <> ''
       BEGIN
         SELECT @cActPOKey = ISNULL(SUBSTRING(RTRIM(Sourcekey), 1,10), '')
         FROM dbo.UCC WITH (NOLOCK)
