@@ -71,7 +71,10 @@ BEGIN
 
    --FCR 392
    DECLARE  @nCartonPackQty      INT = 0,
-            @bDebugFlag           BINARY = 0       
+            @bDebugFlag          BINARY = 0,
+            @nBalQty             INT = 0,
+            @nNewCartonNo        INT = 0
+
 
 
    --FCR-392 Get original packed qty on Carton Level
@@ -81,35 +84,25 @@ BEGIN
       WHERE PD.PickSlipNo = @cPickSlipNo
          AND PD.StorerKey = @cStorerKey
          AND PD.SKU = @cSKU
-         AND PD.labelNo = @cLabelNo 
+         AND PD.labelNo = @cLabelNo
+
+   SET @nBalQty = @nQTY - @nCartonPackQty
+
+   IF @bDebugFlag = 1
+      SELECT 'Start Tran', @nQTY AS InputQty, @nCartonPackQty AS OldQty, @nBalQty AS BalQty, @nCartonNo AS CartonNo
 
    -- Handling transaction
    DECLARE @nTranCount  INT
    SET @nTranCount = @@TRANCOUNT
    BEGIN TRAN  -- Begin our own transaction
-   SAVE TRAN rdt_Pack_Confirm -- For rollback or commit only our own transaction
+   SAVE TRAN rdt_Pack_Confirm20 -- For rollback or commit only our own transaction
    
-   -- PackHeader
-   IF NOT EXISTS( SELECT 1 FROM dbo.PackHeader WITH (NOLOCK) WHERE PickslipNo = @cPickslipNo)
+   IF @nBalQty = 0 -- No change applied
    BEGIN
-      SET @cOrderKey = ''
-      SET @cLoadKey = ''
+      IF @bDebugFlag = 1
+         SELECT 'No Change in Carton', @nQTY, @nCartonPackQty
 
-      -- Get PickHeader info
-      SELECT TOP 1
-         @cOrderKey = OrderKey,
-         @cLoadKey = ExternOrderKey
-      FROM dbo.PickHeader WITH (NOLOCK)
-      WHERE PickHeaderKey = @cPickSlipNo
-      
-      INSERT INTO dbo.PackHeader (PickSlipNo, StorerKey, OrderKey, LoadKey)
-      VALUES (@cPickSlipNo, @cStorerKey, @cOrderKey, @cLoadKey)
-      IF @@ERROR <> 0
-      BEGIN
-         SET @nErrNo = 100401
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsPHdrFail
-         GOTO RollBackTran
-      END
+      GOTO EVENTLOG
    END
 
    -- Storer configure
@@ -134,6 +127,10 @@ BEGIN
    -- New carton, generate labelNo
    IF @nCartonNo = 0 -- 
    BEGIN
+      IF @bDebugFlag = 1
+         SELECT 'Generate CartonNo'
+
+
       SET @cLabelNo = ''
       
       IF @cUCCNo <> ''
@@ -190,12 +187,18 @@ BEGIN
          GOTO RollBackTran
       END
 
+      IF @bDebugFlag = 1
+         SELECT 'Label No Generated', @cLabelNo AS NewLabelNo
+
       SET @cLabelLine = ''   
       SET @cNewLine = 'Y'
       SET @cNewCarton = 'Y'
-   END
+   END -- Generate Label No
    ELSE
    BEGIN
+      IF @bDebugFlag = 1
+         SELECT 'Get Label Line'
+
       -- Get LabelLine
       SET @cLabelLine = ''
       SELECT @cLabelLine = LabelLine
@@ -223,7 +226,11 @@ BEGIN
 
          SET @cNewLine = 'Y'
       END
-   END
+
+      IF @bDebugFlag = 1
+         SELECT 'Lable Line', @cLabelLine AS LabelLine
+
+   END--Get label line
    
    IF @cNewLine = 'Y'
    BEGIN
@@ -269,24 +276,26 @@ BEGIN
    BEGIN
       -- If insert cartonno = 0, system will auto assign max cartonno
       SELECT TOP 1 
-         @nCartonNo = CartonNo, 
-         @cLabelNo = LabelNo, 
-         @cLabelLine = LabelLine
+         @nNewCartonNo  = CartonNo, 
+         @cLabelNo      = LabelNo, 
+         @cLabelLine    = LabelLine
       FROM PackDetail WITH (NOLOCK)
       WHERE PickSlipNo = @cPickSlipNo
          AND SKU = @cSKU
          AND AddWho = 'rdt.' + SUSER_SNAME()
       ORDER BY CartonNo DESC -- max cartonno
-   END   
+   END
 
-   -- Insert PackInfo
-   IF @cUCCNo <> ''
+   -- FCR-392 update pack info
+   IF @nCartonNo = 0
    BEGIN
-      -- PackInfo
+      IF @bDebugFlag = 1
+         SELECT 'Insert new pack info', @cPickSlipNo AS PSNo, @nCartonNo AS CartonNo, @nQTY AS Qty
+
       IF NOT EXISTS (SELECT 1 FROM dbo.PackInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo)
       BEGIN
          INSERT INTO dbo.PackInfo (PickslipNo, CartonNo, UCCNo, QTY)
-         VALUES (@cPickSlipNo, @nCartonNo, @cUCCNo, @nQTY)
+         VALUES (@cPickSlipNo, @nNewCartonNo, '', @nQTY)
          IF @@ERROR <> 0
          BEGIN
             SET @nErrNo = 100406
@@ -296,172 +305,34 @@ BEGIN
       END
       ELSE
       BEGIN
-         UPDATE dbo.PackInfo SET
-            UCCNo = @cUCCNo, 
+         SET @nErrNo = '218405'
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DuplicatePackInfo
+         GOTO RollBackTran
+      END
+   END -- Insert new pack info
+   ELSE
+   BEGIN
+      IF @bDebugFlag = 1
+         SELECT 'Upd pack info', @cPickSlipNo AS PSNo, @nCartonNo AS CartonNo, @nQTY AS Qty
+
+      UPDATE dbo.PackInfo SET
+            Qty = @nQTY, 
             EditDate = GETDATE(), 
             EditWho = SUSER_SNAME(), 
             TrafficCop = NULL
-         WHERE PickSlipNo = @cPickSlipNo
-            AND CartonNo = @nCartonNo
-         IF @@ERROR <> 0
-         BEGIN
-            SET @nErrNo = 100407
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDPackInfFail
-            GOTO RollBackTran
-         END
-      END
-
-      -- Mark UCC packed
-      IF EXISTS( SELECT 1 FROM UCC WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND UCCNo = @cUCCNo AND Status < '5')
-      BEGIN
-         UPDATE UCC SET
-            Status = '6', 
-            EditWho = SUSER_SNAME(), 
-            EditDate = GETDATE(), 
-            TrafficCop = NULL
-         WHERE StorerKey = @cStorerKey 
-            AND UCCNo = @cUCCNo
-         IF @@ERROR <> 0
-         BEGIN
-            SET @nErrNo = 100408
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD UCC Fail
-            GOTO RollBackTran
-         END
-      END
-   END
-
-   -- Many serial no
-   IF @nBulkSNO = 1
-   BEGIN
-      DECLARE @nReceiveSerialNoLogKey INT
-      DECLARE @nQTY_Bal INT
-      
-      -- Check SNO QTY
-      IF (SELECT ISNULL( SUM( QTY), 0) 
-         FROM rdt.rdtReceiveSerialNoLog WITH (NOLOCK)
-         WHERE Mobile = @nMobile
-            AND Func = @nFunc) <> @nBulkSNOQTY
-      BEGIN
-         SET @nErrNo = 100409
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SN QTYNotTally
-         GOTO RollBackTran
-      END 
-      
-      SET @nQTY_Bal = @nQTY
-      
-      -- Loop serial no      
-      WHILE (1=1)
-      BEGIN
-         SELECT TOP 1 
-            @nReceiveSerialNoLogKey = ReceiveSerialNoLogKey, 
-            @cSerialNo = SerialNo, 
-            @nSerialQTY = QTY
-         FROM rdt.rdtReceiveSerialNoLog WITH (NOLOCK)
-         WHERE Mobile = @nMobile
-            AND Func = @nFunc
-         
-         IF @@ROWCOUNT = 0
-            BREAK
-
-         -- Check serial no scanned
-         IF NOT EXISTS( SELECT 1
-            FROM PackSerialNo WITH (NOLOCK)
-            WHERE PickSlipNo = @cPickSlipNo
-               AND StorerKey = @cStorerKey
-               AND SKU = @cSKU
-               AND SerialNo = @cSerialNo)
-         BEGIN
-            -- Insert PackSerialNo 
-            INSERT INTO PackSerialNo (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, SerialNo, QTY)
-            VALUES (@cPickSlipNo, @nCartonNo, @cLabelNo, @cLabelLine, @cStorerKey, @cSKU, @cSerialNo, @nSerialQTY)
-            IF @@ERROR <> 0
-            BEGIN
-               SET @nErrNo = 100410
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSPackSNOFail
-               GOTO RollBackTran
-            END
-         END
-         ELSE
-         BEGIN
-            SET @nErrNo = 100411
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SNO ady scan
-            GOTO RollBackTran
-         END
-
-         DELETE rdt.rdtReceiveSerialNoLog 
-         WHERE ReceiveSerialNoLogKey = @nReceiveSerialNoLogKey
-         IF @@ERROR <> 0
-         BEGIN
-            SET @nErrNo = 100412
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DEL TmpSN Fail
-            GOTO RollBackTran
-         END 
-
-         SET @nQTY_Bal = @nQTY_Bal - @nSerialQTY
-      END
-         
-      -- Check fully offset
-      IF @nQTY_Bal <> 0
-      BEGIN
-         SET @nErrNo = 100413
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Offset error 
-         GOTO RollBackTran
-      END 
-
-      -- Check balance
-      IF EXISTS( SELECT 1
-         FROM rdt.rdtReceiveSerialNoLog WITH (NOLOCK)
-         WHERE Mobile = @nMobile
-            AND Func = @nFunc)
-      BEGIN
-         SET @nErrNo = 100414
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Offset error 
-         GOTO RollBackTran
-      END
-   END
-
-   -- Serial no
-   ELSE IF @cSerialNo <> ''
-   BEGIN
-      -- Get serial no info
-      DECLARE @nRowCount INT
-      DECLARE @nPackSerialNoKey  INT
-      DECLARE @cChkSerialSKU NVARCHAR( 20)
-      DECLARE @nChkSerialQTY INT
-      
-      SELECT 
-         @nPackSerialNoKey = PackSerialNoKey, 
-         @cChkSerialSKU = SKU, 
-         @nChkSerialQTY = QTY
-      FROM PackSerialNo WITH (NOLOCK)
       WHERE PickSlipNo = @cPickSlipNo
-         AND StorerKey = @cStorerKey
-         AND SKU = @cSKU
-         AND SerialNo = @cSerialNo
-      SET @nRowCount = @@ROWCOUNT
-      
-      -- New serial no
-      IF @nRowCount = 0
+         AND CartonNo = @nCartonNo
+      IF @@ERROR <> 0
       BEGIN
-         -- Insert PackSerialNo 
-         INSERT INTO PackSerialNo (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, SerialNo, QTY)
-         VALUES (@cPickSlipNo, @nCartonNo, @cLabelNo, @cLabelLine, @cStorerKey, @cSKU, @cSerialNo, @nSerialQTY)
-         IF @@ERROR <> 0
-         BEGIN
-            SET @nErrNo = 100415
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS RDSNo Fail
-            GOTO RollBackTran
-         END
-      END
-      
-      -- Check serial no scanned
-      ELSE
-      BEGIN
-         SET @nErrNo = 100416
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SNO ady scan
+         SET @nErrNo = 100407
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDPackInfFail
          GOTO RollBackTran
       END
    END
+
+
+   --  Skip Original UCC packinfo logic 347-395
+   --  Skip SN logic 397-528
    
    -- Pack data
    IF @cPackData1 <> '' OR
@@ -502,7 +373,7 @@ BEGIN
       BEGIN
          -- Update PackDetailInfo
          UPDATE dbo.PackDetailInfo SET   
-            QTY = QTY + @nQTY, 
+            QTY = @nQTY, -- fcr-392 update qty to the input qty 
             EditWho = 'rdt.' + SUSER_SNAME(), 
             EditDate = GETDATE(), 
             ArchiveCop = NULL
@@ -541,18 +412,28 @@ BEGIN
       PRIMARY KEY CLUSTERED (PickDetailKey)
    )
 
-   DECLARE  @nBalQty             INT = 0,
-            @cPickDetailKey      NVARCHAR( 10),
-            @cNewPickDetailKey   NVARCHAR( 10),
-            @nPkdQty             INT = 0
+   DECLARE  
+      @cPickDetailKey         NVARCHAR( 10),
+      @cNewPickDetailKey      NVARCHAR( 10),
+      @cPKDCaseID             NVARCHAR( 20),
+      @cPKDOrderKey           NVARCHAR( 10),
+      @cPKDOrderLineNumber    NVARCHAR( 5),
+      @cPKDLot                NVARCHAR( 10),
+      @cPKDDropID             NVARCHAR( 20),
+      @cPKDLoc                NVARCHAR( 10),
+      @cPKDID                 NVARCHAR( 18),
+      @nPkdQty                INT = 0,
+      @nNewAdjustQty          INT = 0,
+      @cNewFlag               NVARCHAR( 1) = 'N'
 
    INSERT INTO @tPKD (PickDetailKey, CaseID, OrderKey, OrderLineNumber, SKU, Qty, AdjustQty,Lot, UOM,
 						 UOMQty, DropID, Loc, ID, PackKey, CartonGroup, PickMethod)
    SELECT	PickDetailKey, CaseID, OrderKey, OrderLineNumber, SKU, Qty, 0, Lot, UOM,
 			UOMQty, DropID, Loc, ID, PackKey, CartonGroup, PickMethod
    FROM PICKDETAIL with(nolock)
-   where Storerkey = @cStorerKey
-	AND CaseID = @cLabelNo
+   WHERE Storerkey = @cStorerKey
+	   AND CaseID = @cLabelNo
+      AND SKU = @cSKU
 
    IF @@ERROR <> 0
    BEGIN
@@ -561,14 +442,11 @@ BEGIN
       GOTO RollBackTran
    END
 
-   SET @nBalQty = @nQTY - @nCartonPackQty
 
    IF @bDebugFlag = 1
    BEGIN
          SELECT 'Start handling PKD', @nQTY AS Qty, @nCartonPackQty AS CartonPackedQty, @nBalQty AS BalQty
-         SELECT * 
-         FROM @tPKD
-         ORDER BY Qty DESC
+         SELECT * FROM @tPKD ORDER BY Qty DESC
    END
 
    IF @nBalQty < 0 -- Move out SKU from carton
@@ -579,17 +457,31 @@ BEGIN
       
       WHILE @nBalQty < 0
       BEGIN
-         SET @cPickDetailKey = ''
-         SET @nPkdQty = 0
+         SET @cPickDetailKey        = ''
+         SET @cNewPickDetailKey     = ''
+         SET @cPKDOrderKey          = ''          
+         SET @cPKDOrderLineNumber   = ''    
+         SET @cPKDLot               = ''                
+         SET @cPKDDropID            = ''       
+         SET @cPKDLoc               = ''
+         SET @cPKDID                = ''
+         SET @nPkdQty               = 0
+         SET @cNewFlag              = 'N'
 
          SELECT TOP 1 
-            @cPickDetailKey = PickDetailKey,
-            @nPkdQTY = Qty
+            @cPickDetailKey      = PickDetailKey,
+            @cPKDOrderKey        = OrderKey,          
+            @cPKDOrderLineNumber = OrderLineNumber,    
+            @cPKDLot             = Lot,                
+            @cPKDDropID          = DropID,       
+            @cPKDLoc             = Loc,
+            @cPKDID              = ID,
+            @nPkdQTY             = Qty
          FROM @tPKD
          WHERE (Qty - AdjustQty) >0
             AND New <> 'Y'
             AND CaseID <> ''
-         ORDER BY QTY DESC
+         ORDER BY QTY DESC, OrderKey, OrderLineNumber, LOT, LOC, ID, DropID
 
          IF @cPickDetailKey = ''
          BEGIN
@@ -603,88 +495,163 @@ BEGIN
 
          IF ABS(@nBalQty) < @nPkdQty -- Split original pkd
          BEGIN
+            IF @bDebugFlag = 1
+               SELECT 'Splist old PKD'
+
             --Adjust PKD qty
-            UPDATE @tPKD SET AdjustQty = @nBalQty
+            UPDATE @tPKD SET AdjustQty = AdjustQty + @nBalQty
             WHERE PickDetailKey = @cPickDetailKey
 
-            -- Generate new pkd
-            EXECUTE dbo.nspg_GetKey
-               'PICKDETAILKEY',
-               10 ,
-               @cNewPickDetailKey OUTPUT,
-               @bSuccess          OUTPUT,
-               @nErrNo            OUTPUT,
-               @cErrMsg           OUTPUT
-            IF @bSuccess <> 1
-            BEGIN
-               SET @nErrNo = 218403
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GetKey Fail
-               GOTO RollBackTran
-            END
+            --IF exists a pkd without case id but has all same attributes, then add qty to that one
+            SELECT @cNewPickDetailKey = PickDetailKey FROM PICKDETAIL WITH (NOLOCK) 
+            WHERE Storerkey = @cStorerKey AND CaseID = '' AND OrderKey = @cPKDOrderKey AND OrderLineNumber = @cPKDOrderLineNumber
+               AND Lot = @cPKDLot AND SKU = @cSKU AND Status = '5' AND DropID = @cPKDDropID AND Loc = @cPKDLoc
+               AND ID = @cPKDID
 
-            INSERT INTO @tPKD (PickDetailKey, CaseID, OrderKey, OrderLineNumber, SKU, Qty, AdjustQty,Lot, UOM,
-						 UOMQty, DropID, Loc, ID, PackKey, CartonGroup, PickMethod,New)
-               SELECT	@cNewPickDetailKey, '', OrderKey, OrderLineNumber, SKU, ABS(@nBalQty), 0, Lot, '6',
-                     ABS(@nBalQty), DropID, Loc, ID, PackKey, CartonGroup, PickMethod, 'Y'
-               FROM @tPKD
-               where PickDetailKey = @cPickDetailKey
-
-            IF @@ERROR <> 0
+            IF @cNewPickDetailKey <> ''
             BEGIN
-               SET @nErrNo = 218404
-               SET @cErrMsg = rdt.rdtgetmessage( 60338, @cLangCode, 'DSP') --'GenNewPkdFail'
-               GOTO RollBackTran
-            END
+               IF @bDebugFlag = 1
+                  SELECT 'Found PKD with all same attributes, increas qty', @cNewPickDetailKey AS PKDKey
+
+               -- insert PKD to @tPKD to increas qty same as the qty take out from the carton
+               INSERT INTO @tPKD (PickDetailKey, CaseID, OrderKey, OrderLineNumber, SKU, Qty, AdjustQty,Lot, UOM,
+                     UOMQty, DropID, Loc, ID, PackKey, CartonGroup, PickMethod)
+                  SELECT	PickDetailKey, CaseID, OrderKey, OrderLineNumber, SKU, QTY, ABS(@nBalQty), Lot, UOM,
+                        UOMQty, DropID, Loc, ID, PackKey, CartonGroup, PickMethod
+                  FROM PickDetail WITH (NOLOCK)
+                  WHERE PickDetailKey = @cNewPickDetailKey
+               
+               IF @@ERROR <> 0
+               BEGIN
+                  SET @nErrNo = 218406
+                  SET @cErrMsg = rdt.rdtgetmessage( 60338, @cLangCode, 'DSP') --'InsExtPkdFail'
+                  GOTO RollBackTran
+               END
+
+            END -- newPKDKey <> ''
+            ELSE 
+            BEGIN
+               -- Generate new pkd
+               EXECUTE dbo.nspg_GetKey
+                  'PICKDETAILKEY',
+                  10 ,
+                  @cNewPickDetailKey OUTPUT,
+                  @bSuccess          OUTPUT,
+                  @nErrNo            OUTPUT,
+                  @cErrMsg           OUTPUT
+               IF @bSuccess <> 1
+               BEGIN
+                  SET @nErrNo = 218403
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GetKey Fail
+                  GOTO RollBackTran
+               END
+
+               INSERT INTO @tPKD (PickDetailKey, CaseID, OrderKey, OrderLineNumber, SKU, Qty, AdjustQty,Lot, UOM,
+                     UOMQty, DropID, Loc, ID, PackKey, CartonGroup, PickMethod,New)
+                  SELECT	@cNewPickDetailKey, '', OrderKey, OrderLineNumber, SKU, ABS(@nBalQty), 0, Lot, '6',
+                        ABS(@nBalQty), DropID, Loc, ID, PackKey, CartonGroup, PickMethod, 'Y'
+                  FROM @tPKD
+                  WHERE PickDetailKey = @cPickDetailKey
+
+               IF @@ERROR <> 0
+               BEGIN
+                  SET @nErrNo = 218404
+                  SET @cErrMsg = rdt.rdtgetmessage( 60338, @cLangCode, 'DSP') --'InsNewPkdFail'
+                  GOTO RollBackTran
+               END
+            END -- Generate new pkd
          END -- Split original pkd
          ELSE -- ABS(@nBalQty) >= @nPkdQty
          BEGIN
-            -- Set case id to empty
-            UPDATE @tPKD SET  
-               AdjustQty   = - QTY,
-               CaseID      = ''  
-            WHERE PickDetailKey = @cPickDetailKey
+            --IF exists a pkd without case id but has all same attributes, then add qty to that one
+            SELECT @cNewPickDetailKey = PickDetailKey FROM PICKDETAIL WITH (NOLOCK) 
+            WHERE Storerkey = @cStorerKey AND CaseID = '' AND OrderKey = @cPKDOrderKey AND OrderLineNumber = @cPKDOrderLineNumber
+               AND Lot = @cPKDLot AND SKU = @cSKU AND Status = '5' AND DropID = @cPKDDropID AND Loc = @cPKDLoc
+               AND ID = @cPKDID
+            IF @cNewPickDetailKey <> ''
+            BEGIN
+               IF @bDebugFlag = 1
+                  SELECT 'Found PKD with all same attributes, increas qty, delete original one', @cNewPickDetailKey AS PKDKey
+
+               -- insert PKD to @tPKD to increas qty same as the qty take out from the carton
+               INSERT INTO @tPKD (PickDetailKey, CaseID, OrderKey, OrderLineNumber, SKU, Qty, AdjustQty,Lot, UOM,
+                     UOMQty, DropID, Loc, ID, PackKey, CartonGroup, PickMethod)
+                  SELECT	PickDetailKey, CaseID, OrderKey, OrderLineNumber, SKU, QTY, ABS(@nBalQty), Lot, UOM,
+                        UOMQty, DropID, Loc, ID, PackKey, CartonGroup, PickMethod
+                  FROM PickDetail WITH (NOLOCK)
+                  WHERE PickDetailKey = @cNewPickDetailKey
+               
+               IF @@ERROR <> 0
+               BEGIN
+                  SET @nErrNo = 218406
+                  SET @cErrMsg = rdt.rdtgetmessage( 60338, @cLangCode, 'DSP') --'InsExtPkdFail'
+                  GOTO RollBackTran
+               END
+
+               --Delete original pkd
+               DELETE @tPKD WHERE PickDetailKey = @cPickDetailKey
+
+            END -- newPKDKey <> ''
+            ELSE
+            BEGIN
+               -- Set case id to empty
+               UPDATE @tPKD SET  CaseID = ''  WHERE PickDetailKey = @cPickDetailKey
+            END
          END
 
          SET @nBalQty = @nBalQty + @nPkdQTY
 
-      END -- end @nBalQty < 0 While
-   END -- @BalQty < 0
+      END --  @nBalQty < 0 While
+   END -- @nBalQty < 0
    ELSE IF @nBalQty > 0 -- Add item to existing carton
    BEGIN
 
       IF @bDebugFlag = 1
          SELECT 'Add SKU to Carton', @nQTY, @nCartonPackQty
 
-      SET @nErrNo = 218405
-      SET @cErrMsg = rdt.rdtgetmessage( 60338, @cLangCode, 'DSP') --'AddSKUNotAllow'
-      GOTO RollBackTran
-
 
    END -- @nBalQty >0
-   ELSE -- No change in Carton
+
+   --Update back to PickDetail
+   MERGE PickDetail AS pkd
+   USING @tPKD AS t
+   ON (pkd.PickDetailKey = t.PickDetailKey)
+   WHEN MATCHED
+      THEN UPDATE SET 
+                     pkd.CaseID  = t.CaseID,
+                     pkd.Qty     = t.Qty + t.AdjustQty,
+                     pkd.UOM     = '6',
+                     pkd.UOMQty  = t.Qty + t.AdjustQty
+   WHEN NOT MATCHED THEN
+      INSERT (PickDetailKey, CaseID, OrderKey, OrderLineNumber, SKU, Qty,Lot, UOM,
+               UOMQty, DropID, Loc, ID, PackKey, CartonGroup, PickMethod)
+         VALUES (t.PickdetailKey, t.CaseID, t.OrderKey, t.OrderLineNumber, t.SKU, t.Qty, t.lot, t.UOM,
+                  t.UOMQty, t.DropID, t.Loc, t.ID, t.PackKey, t.CartonGroup, t.PickMethod);
+
+   IF @@ERROR <> 0
    BEGIN
-      IF @bDebugFlag = 1
-         SELECT 'No Change in Carton', @nQTY, @nCartonPackQty
-   END 
+      SET @nErrNo = 218407
+      SET @cErrMsg = rdt.rdtgetmessage( 60338, @cLangCode, 'DSP') --'UpdPKDFail'
+      GOTO RollBackTran
+   END
 
+   EVENTLOG:
+      --YeeKung      
+      EXEC RDT.rdt_STD_EventLog           
+      @cActionType         = '3',              
+      @nMobileNo           = @nMobile,        
+      @nFunctionID         = @nFunc,        
+      @cFacility           = @cFacility,        
+      @cStorerKey          = @cStorerkey,       
+      @nQTY                = @nQTY,          
+      @cUCC                = @cUCCNo,    
+      @cOrderKey           = @cOrderKey,    
+      @cSKU                = @cSKU,  
+      @cRefNo1             = @nCartonNo,
+      @cPickSlipNo         = @cPickSlipNo,   -- ZG01
+      @cLabelNo            = @cLabelNo       -- ZG01
 
-
-   --YeeKung      
-   EXEC RDT.rdt_STD_EventLog           
-   @cActionType         = '3',              
-   @nMobileNo           = @nMobile,        
-   @nFunctionID         = @nFunc,        
-   @cFacility           = @cFacility,        
-   @cStorerKey          = @cStorerkey,       
-   @nQTY                = @nQTY,          
-   @cUCC                = @cUCCNo,    
-   @cOrderKey           = @cOrderKey,    
-   @cSKU                = @cSKU,  
-   @cRefNo1             = @nCartonNo,
-   @cPickSlipNo         = @cPickSlipNo,   -- ZG01
-   @cLabelNo            = @cLabelNo       -- ZG01
-
-   COMMIT TRAN rdt_Pack_Confirm
+   COMMIT TRAN rdt_Pack_Confirm20
    GOTO Quit
 
    RollBackTran:
@@ -695,7 +662,11 @@ BEGIN
          SET @nCartonNo = 0
          SET @cLabelNo = ''
       END
-   END
+
+      IF @bDebugFlag = 1
+         SELECT @nErrNo AS ErrNo, @cErrMsg AS ErrMsg
+
+   END --rollback
 
    Quit:
       WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
