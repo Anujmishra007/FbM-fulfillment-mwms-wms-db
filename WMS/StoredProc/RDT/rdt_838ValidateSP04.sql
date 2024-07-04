@@ -56,7 +56,9 @@ BEGIN
    DECLARE @nPackCartonQTY    INT
    DECLARE @cPackByFromDropID NVARCHAR( 1)
 
-   DECLARE @bDebugFlag        BINARY = 0 --jackc
+   --FCR-392
+   DECLARE  @bDebugFlag    BINARY = 0, --jackc
+            @nBalQty       INT = 0  
 
    SET @cOrderKey = ''
    SET @cLoadKey = ''
@@ -108,14 +110,7 @@ BEGIN
 
       -- Calc pack QTY
       SET @nPackQTY = 0
-      /*
-      SELECT @nPackQTY = ISNULL( SUM( QTY), 0) 
-      FROM PackDetail WITH (NOLOCK) 
-      WHERE PickSlipNo = @cPickSlipNo
-         AND StorerKey = @cStorerKey
-         AND SKU = @cSKU
-         AND (@cFromDropID = '' OR DropID = @cFromDropID)
-      */
+
       SET @cSQL = 
          ' SELECT @nPackQTY = ISNULL( SUM( PD.QTY), 0) ' + 
          ' FROM PackDetail PD WITH (NOLOCK) ' + 
@@ -153,14 +148,15 @@ BEGIN
             AND PD.CartonNo = @nCartonNo
       END -- Edit Carton
 
-      SET @nQTY = @nQTY - @nPackCartonQTY
-
-      IF @bDebugFlag = 1
-         SELECT 'Pack Qty in Carton', @nPackCartonQTY, 'Balance Qty', @nQTY
-      -- FCR-392 END
+      SET @nBalQTY = @nQTY - @nPackCartonQTY
 
       -- Add QTY
-      SET @nPackQTY = @nPackQTY + @nQTY
+      SET @nPackQTY = @nPackQTY + @nBalQTY
+
+      IF @bDebugFlag = 1
+         SELECT  @nPackCartonQTY AS 'Packed in Carton', @nBalQTY AS 'Balance Qty', @nQTY AS 'Input Qty', @nPackQTY AS TotalPackQty
+      -- FCR-392 END
+
    END
 
    -- Cross dock PickSlip
