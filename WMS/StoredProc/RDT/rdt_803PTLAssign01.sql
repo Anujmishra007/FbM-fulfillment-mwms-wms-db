@@ -65,6 +65,7 @@ BEGIN
                SET DropID = ''
                WHERE Storerkey = @cStorerKey
                AND DropID LIKE RTRIM(@cStation) + '%' 
+			      AND ISNULL(RTRIM(@cStation),'') <> ''
             END         
          END
       END
