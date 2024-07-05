@@ -1,7 +1,3 @@
-IF EXISTS (SELECT 1 FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[ntrReceiptHeaderDelete]')
-              AND OBJECTPROPERTY(id, N'IsTrigger') = 1)
-DROP trigger [dbo].[ntrReceiptHeaderDelete]
-
 SET ANSI_NULLS OFF
 GO
 
