@@ -13,7 +13,7 @@ GO
 /*                                                                      */  
 /* Called By: Over Allocation                                           */  
 /*                                                                      */  
-/* Version: 1.2                                                         */  
+/* Version: 1.3                                                         */  
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /*                                                                      */  
@@ -22,7 +22,17 @@ GO
 /* 2024-05-20  Wan      1.0   Created.                                  */
 /* 2024-05-20  Wan01    1.1   UWP-19537-Fixed to add SKUxLOC for DPP    */   
 /* 2024-05-20  Wan02    1.2   UWP-19537-Fixed to find friend for same   */   
-/*                            lot & empty DPP to include qtyexpected    */  
+/*                            lot & empty DPP to include qtyexpected    */ 
+/* 2024-06-28  Wan03    1.3   UWP-21429-Mattel Overallocation Enhancement*/
+/*                            -Match LOC.HostWHCode at Preallocate & BULK*/ 
+/*                             Allocate                                 */
+/*                            -Finding Empty location logic             */
+/*                            -Allocate QtyAvailable Stock then only find*/
+/*                             Overallocate friend                      */  
+/* 2024-07-05  Wan04    1.4   UWP-21429-Mattel Overallocation Enhancement*/
+/*                            -Remove qtyallocated + qtylefttofullfil <=*/
+/*                            PendingMoveIn                             */
+/*                            -Use @n_Rowcount instead                  */
 /************************************************************************/  
 CREATE OR ALTER PROC mspGetOverPickLoc01     
    @c_Storerkey                  NVARCHAR(15)   
@@ -60,7 +70,7 @@ BEGIN
          , @c_Lottable02   NVARCHAR(18) = ''  
 
          , @c_DPPLoc       NVARCHAR(10) = ''                                        --(Wan01)
-    
+         , @n_RowCount     INT          = 0                                         --(Wan04)
    SET @b_Success = 1    
    SET @n_Err = 0
    SET @c_ErrMsg = ''  
@@ -86,7 +96,8 @@ BEGIN
       AND l.LocationFlag NOT IN ('HOLD','DAMAGE')
       ORDER BY l.LogicalLocation, l.Loc  
       
-      IF @@ROWCOUNT = 0
+      SET @n_RowCount = @@ROWCOUNT                                                  --(Wan04)
+      IF @n_RowCount = 0                                                            --(Wan04)
       BEGIN
          SELECT @n_PalletQty = p.Pallet                                             --(Wan02)
          FROM dbo.SKU s(NOLOCK) 
@@ -94,7 +105,9 @@ BEGIN
          WHERE s.Storerkey = @c_Storerkey
          AND s.Sku = @c_Sku
 
-         -- Find same friend 1) which has stock and able to fit for 1 pallet                             
+         -- 1) find Loc with available inventory => SUM(lli.Qty-lli.QtyAllocated-lli.Qtypicked) > 0
+         -- 2) Find same friend that which has stock and able to fit for 1 pallet 
+         --    => SUM(lli.QtyAllocated) > 0
          INSERT INTO #PICKLOCTYPE
          SELECT TOP 1 l.LOC     
          FROM LOC l (NOLOCK)   
@@ -112,17 +125,28 @@ BEGIN
                ,  l.ABC        
                ,  l.LogicalLocation
                ,  l.MaxPallet
-         HAVING ( SUM(lli.Qty) > 0 OR SUM(lli.QtyExpected) > 0)                     --(Wan02)
-            AND ((SUM(lli.PendingMoveIn) = 0 AND 
-                  CEILING(SUM(lli.QtyExpected + @n_QtyLeftToFulfill)/@n_PalletQty) <= l.MaxPallet) OR --(Wan02)  
-                  SUM(lli.QtyExpected) + @n_QtyLeftToFulfill <= SUM(lli.PendingMoveIn))
-         ORDER BY SUM(lli.Qty)
+         --HAVING ( SUM(lli.Qty) > 0 OR SUM(lli.QtyExpected) > 0)                   --(Wan03) START --(Wan02)
+         --   AND ((SUM(lli.PendingMoveIn) = 0 AND 
+         --         CEILING(SUM(lli.QtyExpected + @n_QtyLeftToFulfill)/@n_PalletQty) <= l.MaxPallet) OR --(Wan02)  
+         --         SUM(lli.QtyExpected) + @n_QtyLeftToFulfill <= SUM(lli.PendingMoveIn))
+         HAVING (SUM(lli.Qty-lli.QtyAllocated-lli.Qtypicked) > 0 OR                                 
+                 ((SUM(lli.Qty) = 0 AND SUM(lli.QtyAllocated) > 0) AND                      
+                  (--(SUM(lli.PendingMoveIn) = 0 AND                                         --(Wan04)      
+                    CEILING(SUM(lli.QtyAllocated + @n_QtyLeftToFulfill)/@n_PalletQty) <= l.MaxPallet
+                   --) OR                                                                    --(Wan04)
+                   -- SUM(lli.QtyAllocated) + @n_QtyLeftToFulfill <= SUM(lli.PendingMoveIn)  --(Wan04)
+                  )
+                 )
+                )
+         ORDER BY CASE WHEN SUM(lli.Qty-lli.QtyAllocated-lli.Qtypicked) > 0 
+                       THEN 1 ELSE 5 END                                            --(Wan03) END
                ,  l.ABC
                ,  l.LogicalLocation
+         SET @n_RowCount = @@ROWCOUNT                                               --(Wan04)
       END
 
-      IF @@ROWCOUNT = 0
-      BEGIN
+      IF @n_RowCount = 0                                                            --(Wan04)
+      BEGIN          
          INSERT INTO #PICKLOCTYPE
          SELECT TOP 1 l.LOC     
          FROM LOC l (NOLOCK)   
@@ -133,12 +157,12 @@ BEGIN
          AND l.LocLevel = 0
          AND l.[Status] = 'OK'
          AND l.LocationFlag NOT IN ('HOLD','DAMAGE')
-         AND l.MaxPallet > 0                                                        --(Wan03)
+         AND l.MaxPallet > 0                                                        --(Wan02)
          GROUP BY l.loc
                ,  l.ABC          
                ,  l.LogicalLocation
          HAVING SUM(ISNULL(lli.PendingMoveIn,0) + ISNULL(lli.Qty,0) 
-                  + ISNULL(lli.QtyExpected,0)) = 0                                  --(Wan02)
+                  - ISNULL(lli.QtyPicked,0) + ISNULL(lli.QtyAllocated,0)) = 0    --(Wan03)--(Wan02)
          ORDER BY l.ABC
                ,  l.LogicalLocation
                ,  l.Loc
@@ -157,7 +181,7 @@ BEGIN
                INSERT INTO SKUxLOC (Storerkey, Sku, Loc, LocationType)
                VALUES (@c_Storerkey, @c_sku, @c_DPPLoc, '')
             END
-         END                                                                        --(Wan01) - END
+         END                                                                     --(Wan01) - END
       END
   END  
   
