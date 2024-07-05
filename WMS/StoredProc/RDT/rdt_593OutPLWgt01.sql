@@ -60,21 +60,21 @@ BEGIN
    -- Check blank
    IF @cPalletWeight = ''
    BEGIN
-      SET @nErrNo = 60896
+      SET @nErrNo = 218751
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') 
       GOTO Quit
    END
 
    IF @cPalletQty = '' OR TRY_CAST(@cPalletQty as INT) IS NULL OR @cPalletQty = 0
    BEGIN
-      SET @nErrNo = 107701
+      SET @nErrNo = 218752
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') 
       GOTO Quit
    END
 
    IF @cMbolKey = ''
    BEGIN
-      SET @nErrNo = 54505
+      SET @nErrNo = 218753
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') 
       GOTO Quit
    END
@@ -86,14 +86,14 @@ BEGIN
 
    IF @@ROWCOUNT = 0
    BEGIN
-      SET @nErrNo = 141302
+      SET @nErrNo = 218754
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Mbol Not Exists
       GOTO Quit
    END
 
    IF @cStatus = '9'
    BEGIN
-      SET @nErrNo = 141303
+      SET @nErrNo = 218755
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Mbol Shipped
       GOTO Quit
    END
@@ -105,7 +105,7 @@ BEGIN
 
    IF @cPalletQty <> @cMbolDetailNo
    BEGIN
-      SET @nErrNo = 68795
+      SET @nErrNo = 218756
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP')   ---- Bad Pallet Qty
       GOTO Quit
    END
