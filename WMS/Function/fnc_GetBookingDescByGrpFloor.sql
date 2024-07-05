@@ -25,7 +25,7 @@ GO
 /* 2022-02-28  Wan      1.0   Created & DevOps Combine Script           */
 /* 2022-11-16  Wan01    1.1   WMS-21173-[PH] - Colgate-Palmolive Inbound*/
 /*                            Doorbooking EndTime                       */
-/* 2023-03-20  Wan02    1.2   LFWM-4065 - SCE RG  Inbound Door booking  */
+/* 2023-03-20  Wan02-v0 1.2   LFWM-4065 - SCE RG  Inbound Door booking  */
 /*                            -- SP Backend                             */
 /* 2024-07-02  Inv Team 1.3   UWP-17135 - Migrate Inbound Door booking  */
 /************************************************************************/
@@ -51,8 +51,8 @@ BEGIN
    DECLARE @n_TotalLoc              INT = 0
           ,@n_interval              FLOAT        = 30.00                               --CR 2.0
           ,@c_BayInOut              NVARCHAR(10) = 'BAYIN'
-          ,@c_Bay1                  NVARCHAR(10) = 'BAYIN'                             --(Wan02)
-          ,@c_Bay2                  NVARCHAR(10) = 'BAYOUT'                            --(Wan02)
+          ,@c_Bay1                  NVARCHAR(10) = 'BAYIN'                             --(Wan02-v0)
+          ,@c_Bay2                  NVARCHAR(10) = 'BAYOUT'                            --(Wan02-v0)
           
    DECLARE @t_Loc TABLE 
          ( Loc                      NVARCHAR(10)   PRIMARY KEY
@@ -75,10 +75,10 @@ BEGIN
    IF @c_InOut = 'O'
    BEGIN
       SET @c_BayInOut = 'BAYOUT'
-      SET @c_Bay1 = 'BAYOUT'                                                           --(Wan02)
+      SET @c_Bay1 = 'BAYOUT'                                                           --(Wan02-v0)
    END 
    
-   IF @c_InOut = 'I'                                                                   --(Wan02)
+   IF @c_InOut = 'I'                                                                   --(Wan02-v0)
    BEGIN
       SET @c_Bay2 = 'BAYIN'
    END 
@@ -132,7 +132,7 @@ BEGIN
    
    SELECT @n_TotalLoc = COUNT(1)
    FROM @t_Loc AS tl
-   WHERE tl.LocationCategory IN('BAY', @c_Bay1, @c_Bay2)                               --(Wan02)
+   WHERE tl.LocationCategory IN('BAY', @c_Bay1, @c_Bay2)                               --(Wan02-v0)
    
    SET @c_Bay1 = 'BAYOUT'
    IF @c_InOut IN ('I') 
@@ -141,14 +141,14 @@ BEGIN
       SET @c_Bay2 = 'BAY'
    END
    
-   IF @c_InOut IN ( 'I', 'A' )                                                         --(Wan02)
+   IF @c_InOut IN ( 'I', 'A' )                                                         --(Wan02-v0)
    BEGIN
       ;WITH B AS
       (
          SELECT [Count] = COUNT(1)
                ,DurationMin = SUM( CEILING(DATEDIFF(mi,'1900-01-01', BI.duration)/@n_interval) * @n_interval )             --CR 2.0 (END)
-               ,Count_ShareBay = 0                                                     --(Wan02)
-               ,DurationMin_ShareBay = 0                                               --(Wan02)
+               ,Count_ShareBay = 0                                                     --(Wan02-v0)
+               ,DurationMin_ShareBay = 0                                               --(Wan02-v0)
                ,[Date] = CASE WHEN BI.BookingDate BETWEEN @d_Fromdate AND @d_ToDate    --(Wan01) 
                               THEN CONVERT(CHAR(10), BI.BookingDate, 121)              --(Wan01) 
                               ELSE CONVERT(CHAR(10), BI.EndTime, 121)                  --(Wan01) 
@@ -165,7 +165,7 @@ BEGIN
                               THEN CONVERT(CHAR(10), BI.BookingDate, 121)              --(Wan01) 
                               ELSE CONVERT(CHAR(10), BI.EndTime, 121)                  --(Wan01) 
                               END 
-      --)                                                                              --(Wan02) - START
+      --)                                                                              --(Wan02-v0) - START
       --, SB AS
       --(
          UNION
@@ -185,7 +185,7 @@ BEGIN
          AND BO.[Status] NOT IN ( '9' )
          AND ( BO.BookingDate BETWEEN @d_Fromdate AND @d_ToDate OR
                BO.EndTime     BETWEEN @d_Fromdate AND @d_ToDate )      
-         AND l.LocationCategory IN ( 'BAY', @c_Bay1 , @c_Bay2 )                        --(Wan02)
+         AND l.LocationCategory IN ( 'BAY', @c_Bay1 , @c_Bay2 )                        --(Wan02-v0)
          GROUP BY CASE WHEN BO.BookingDate BETWEEN @d_Fromdate AND @d_ToDate 
                        THEN CONVERT(CHAR(10), BO.BookingDate, 121) 
                        ELSE CONVERT(CHAR(10), BO.EndTime, 121) END
@@ -224,7 +224,7 @@ BEGIN
                                    END 
             , NoOfReserved = gb.NoOfReserved --+ ISNULL(SB.NoOfReserved,0)       
       FROM gb
-      --LEFT OUTER JOIN SB ON SB.[Date] = B.[Date]                                     --(Wan02) - END
+      --LEFT OUTER JOIN SB ON SB.[Date] = B.[Date]                                     --(Wan02-v0) - END
    END
    ELSE
    BEGIN
@@ -232,8 +232,8 @@ BEGIN
       (
          SELECT [Count] = COUNT(1)
                ,DurationMin = SUM( CEILING(DATEDIFF(mi,'1900-01-01', BO.duration)/@n_interval) * @n_interval )             --CR 2.0 (END)
-               ,Count_ShareBay = 0                                                     --(Wan02)
-               ,DurationMin_ShareBay = 0                                               --(Wan02)
+               ,Count_ShareBay = 0                                                     --(Wan02-v0)
+               ,DurationMin_ShareBay = 0                                               --(Wan02-v0)
                ,[Date] = CASE WHEN BO.BookingDate BETWEEN @d_Fromdate AND @d_ToDate 
                               THEN CONVERT(CHAR(10), BO.BookingDate, 121) 
                               ELSE CONVERT(CHAR(10), BO.EndTime, 121) 
@@ -250,7 +250,7 @@ BEGIN
                        THEN CONVERT(CHAR(10), BO.BookingDate, 121) 
                        ELSE CONVERT(CHAR(10), BO.EndTime, 121) 
                        END      
-      --)                                                                              --(Wan02) - START
+      --)                                                                              --(Wan02-v0) - START
       --, SB AS
       --(
          UNION
@@ -311,7 +311,7 @@ BEGIN
                                   END 
             ,NoOfReserved = gb.NoOfReserved --+ ISNULL(SB.NoOfReserved,0)                            
       FROM gb
-      --LEFT OUTER JOIN SB ON SB.[Date] = B.[Date]                                     --(Wan02) - END
+      --LEFT OUTER JOIN SB ON SB.[Date] = B.[Date]                                     --(Wan02-v0) - END
    END
    RETURN
 END

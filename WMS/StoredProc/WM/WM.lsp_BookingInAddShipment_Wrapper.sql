@@ -20,8 +20,8 @@ GO
 /*                                                                      */                                                                                  
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */ 
-/* 2023-12-19  Wan01    1.0   Created.                                  */
-/* 2023-12-19  Wan01    1.0   DevOps Combine Script.                    */
+/* 2023-12-19  Wan01-v0 1.0   Created.                                  */
+/* 2023-12-19  Wan01-v0 1.0   DevOps Combine Script.                    */
 /* 2024-07-02  Inv Team 1.1   UWP-17135 - Migrate Inbound Door booking  */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_BookingInAddShipment_Wrapper]                                                                                                                     

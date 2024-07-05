@@ -20,7 +20,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
-/* 2021-12-13  Wan      1.0   Created & DevOps Combine Script.          */
+/* 2021-12-13  Wan-v0   1.0   Created & DevOps Combine Script.          */
 /* 2024-07-02  Inv Team 1.1   UWP-17135 - Migrate Inbound Door booking  */
 /************************************************************************/
 CREATE OR ALTER PROC WM.lsp_ASNToTransportOrder
@@ -39,7 +39,7 @@ BEGIN
    DECLARE  
            @n_StartTCnt       INT
          , @n_Continue        INT 
-         , @b_Revert          BIT = 0                                               --(Wan)
+         , @b_Revert          BIT = 0                                               --(Wan-v0)
       
    DECLARE @t_ShipmentKey     TABLE (  ShipmentGID    NVARCHAR(50)   NOT NULL DEFAULT ('')
                                     ,  ReceiptKey     NVARCHAR(10)   NOT NULL DEFAULT ('') 
@@ -64,7 +64,7 @@ BEGIN
          END
     
          EXECUTE AS LOGIN = @c_UserName
-         SET @b_Revert = 1                                                          --(Wan)
+         SET @b_Revert = 1                                                          --(Wan-v0)
       END
       
       IF EXISTS ( SELECT 1 FROM dbo.RECEIPT AS r WITH (NOLOCK)
@@ -237,7 +237,7 @@ EXIT_SP:
          COMMIT TRAN
       END
    END
-   IF @b_Revert = 1  REVERT                                                         --(Wan)
+   IF @b_Revert = 1  REVERT                                                         --(Wan-v0)
 END -- procedure
 GO
 GRANT EXECUTE ON [WM].[lsp_ASNToTransportOrder] TO nSQL 

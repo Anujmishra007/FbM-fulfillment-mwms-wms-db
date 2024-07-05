@@ -64,14 +64,14 @@ CREATE OR ALTER TRIGGER [dbo].[ntrReceiptHeaderDelete]
  @n_cnt              int        -- Holds the number of rows affected by the DELETE statement that fired this trigger.
 ,@c_authority        NVARCHAR(1) -- KHLim02
 
-,@n_RowRef_TO        INT = 0              --(Wan02)
-,@n_RowRef_Link      INT = 0              --(Wan02)
-,@n_RowRef_Shp       INT = 0              --(Wan02)
-,@c_ProvShipmentID   NVARCHAR(100) = ''   --(Wan02)
-,@c_ShipmentGID      NVARCHAR(100) = ''   --(Wan02)
-,@c_ReceiptKey       NVARCHAR(10)  = ''   --(Wan02)
+,@n_RowRef_TO        INT = 0              --(Wan02-v0)
+,@n_RowRef_Link      INT = 0              --(Wan02-v0)
+,@n_RowRef_Shp       INT = 0              --(Wan02-v0)
+,@c_ProvShipmentID   NVARCHAR(100) = ''   --(Wan02-v0)
+,@c_ShipmentGID      NVARCHAR(100) = ''   --(Wan02-v0)
+,@c_ReceiptKey       NVARCHAR(10)  = ''   --(Wan02-v0)
 
-,@cur_ASN            CURSOR               --(Wan02)
+,@cur_ASN            CURSOR               --(Wan02-v0)
  SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
  
       /* #INCLUDE <TRRHD1.SQL> */    
@@ -178,7 +178,7 @@ BEGIN
 END
 --(Wan01) - END
 
---(Wan02) - START
+--(Wan02-v0) - START
 SET @cur_ASN = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
 SELECT Deleted.ReceiptKey
 FROM  Deleted WITH (NOLOCK)
@@ -250,7 +250,7 @@ BEGIN
 END
 CLOSE @cur_ASN
 DEALLOCATE @cur_ASN
---(Wan02) - END
+--(Wan02-v0) - END
 
 --added by KS Chin
   IF @n_continue = 1 or @n_continue=2  

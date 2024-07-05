@@ -117,7 +117,7 @@ CREATE OR ALTER TRIGGER ntrReceiptHeaderAdd
  , @c_ColumnsUpdated    VARCHAR(1000)     -- (MC02) 
  , @c_ASNStatus_From    NVARCHAR(10) = ''                                           --(Wan03)
  , @c_ASNStatus_To      NVARCHAR(10) = ''
- , @cur_ASN             CURSOR            --(Wan02)
+ , @cur_ASN             CURSOR            --(Wan02-v0)
 
 SELECT @cReceiptKey = ''      -- (YokeBeen01)
 
@@ -741,7 +741,7 @@ BEGIN
       AND (dbo.fnc_RTrim(INSERTED.DOCTYPE) = '' OR INSERTED.DOCTYPE IS NULL) 
 END
 
---(Wan02) - START
+--(Wan02-v0) - START
 SET @cur_ASN = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
 SELECT INSERTED.ReceiptKey
 FROM  INSERTED WITH (NOLOCK)
@@ -769,7 +769,7 @@ BEGIN
 END
 CLOSE @cur_ASN
 DEALLOCATE @cur_ASN
---(Wan02) - END
+--(Wan02-v0) - END
 
 -- Added by James on 04/10/2007 (SOS80707) Start
 -- If storerconfig 'DefaultRoutingTool' setup (Svalue = '1'), default Receipt.RoutingTool = 'Y' (TMSHK)
