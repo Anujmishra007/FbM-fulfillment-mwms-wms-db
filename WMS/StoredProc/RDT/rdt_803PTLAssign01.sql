@@ -10,7 +10,7 @@ GO
 
 /******************************************************************************/
 /* Store procedure: rdt_803PTLAssign01                                        */
-/* Copyright      : LFLogistics                                               */
+/* Copyright      : Maersk                                               */
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
 /* 02-07-2024 1.0  JHU151      FCR-477 Created                                */
