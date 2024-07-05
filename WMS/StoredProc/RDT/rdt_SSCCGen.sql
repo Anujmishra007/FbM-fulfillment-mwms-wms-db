@@ -110,7 +110,7 @@ BEGIN
 --    IF keycount is smaller than dMinSequence, Reset key
       ELSE IF EXISTS ( SELECT 1 FROM nCounter (NOLOCK)
                   WHERE KeyName = @nCounterKey
-                    AND (KeyCount < @dMinSequence OR KeyCount > @dMaxSequence)
+                    AND (KeyCount < @dMinSequence OR KeyCount >= @dMaxSequence)
       )
       BEGIN
 
