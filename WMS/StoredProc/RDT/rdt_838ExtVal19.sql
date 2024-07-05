@@ -55,7 +55,14 @@ BEGIN
 
    DECLARE  @nTotalPick       INT,
             @nTotalPack       INT,
-            @cCartTrkLabelNo NVARCHAR( 20)
+            @nCartonPick      INT,
+            @nCartonPack      INT,
+            @cOrderKey        NVARCHAR( 10),
+            @cLoadKey         NVARCHAR( 10),
+            @cZone            NVARCHAR( 18),
+            @cCartTrkLabelNo  NVARCHAR( 20),
+
+            @bDebugFlag       BINARY
 
    IF @nFunc = 838 -- Pack
    BEGIN
@@ -66,31 +73,93 @@ BEGIN
             -- Get total pick and total pack from RDTMOBREC
             --V_Integer4     = @nTotalPick,
             --V_Integer5     = @nTotalPack,
-            SELECT @nTotalPick = ISNULL(V_Integer4,0)
-                  ,@nTotalPack = ISNULL(V_Integer5,0)
+            SELECT @nCartonPick = ISNULL(V_Integer4,0)
+                  ,@nCartonPack = ISNULL(V_Integer5,0)
             FROM RDT.RDTMOBREC WITH (NOLOCK)
             WHERE Mobile = @nMobile
 
-            IF @nTotalPick = 0
+            IF @bDebugFlag = 1
+               SELECT @nCartonPack AS CartonPack, @nCartonPick AS CartonPick
+
+            IF @nCartonPick = 0
             BEGIN
                SET @nErrNo = 217501
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Nothing Picked
                GOTO Quit
             END
 
-            IF @nTotalPick < @nTotalPack
+            IF @nCartonPick < @nCartonPack
             BEGIN
                SET @nErrNo = 217502
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PickedMoreThanPacked
                GOTO Quit
             END
 
-            IF @nTotalPick = @nTotalPack AND @cOption = '1'
+            IF @cOption = '1'
             BEGIN
-               SET @nErrNo = 217503
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Option
-               GOTO Quit
-            END
+               SELECT TOP 1
+                  @cOrderKey = OrderKey,
+                  @cLoadKey = ExternOrderKey,
+                  @cZone = Zone
+               FROM dbo.PickHeader WITH (NOLOCK)
+               WHERE PickHeaderKey = @cPickSlipNo
+
+               -- Get total pick and total pack
+               SELECT @nTotalPack = ISNULL( SUM( PD.QTY), 0)
+               FROM dbo.PackDetail PD WITH (NOLOCK)
+               WHERE PD.PickSlipNo = @cPickSlipNo
+
+               IF @cZone IN ('XD', 'LB', 'LP')
+               BEGIN
+                  SELECT @nTotalPick = ISNULL( SUM( PD.QTY), 0)
+                  FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
+                     JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
+                  WHERE RKL.PickSlipNo = @cPickSlipNo
+                     AND PD.Status <= '5'
+                     AND PD.Status <> '4'  
+               END -- zone
+
+               -- Discrete PickSlip
+               ELSE IF @cOrderKey <> ''
+               BEGIN
+                  SELECT @nTotalPick = ISNULL( SUM( PD.QTY), 0)
+                  FROM dbo.PickDetail PD WITH (NOLOCK)
+                  WHERE PD.OrderKey = @cOrderKey
+                     AND PD.Status <= '5'
+                     AND PD.Status <> '4'
+               END -- discrete
+                           
+               -- Conso PickSlip
+               ELSE IF @cLoadKey <> ''
+               BEGIN
+                  SELECT @nTotalPick = ISNULL( SUM( PD.QTY), 0)
+                  FROM dbo.LoadPlanDetail LPD WITH (NOLOCK) 
+                     JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
+                  WHERE LPD.LoadKey = @cLoadKey  
+                     AND PD.Status <= '5'
+                     AND PD.Status <> '4'
+               END -- load
+               
+               -- Custom PickSlip
+               ELSE
+               BEGIN
+                  SELECT @nTotalPick = ISNULL( SUM( PD.QTY), 0)
+                  FROM dbo.PickDetail PD WITH (NOLOCK)
+                  WHERE PD.PickSlipNo = @cPickSlipNo
+                     AND PD.Status <= '5'
+                     AND PD.Status <> '4'
+               END -- Custom
+
+               IF @bDebugFlag = 1
+                  SELECT @nTotalPack AS TotalPack, @nTotalPick AS TotalPick, @cZone AS Zone, @cOrderKey AS OrderKey, @cLoadKey AS LoadKey
+
+               IF @nTotalPick = @nTotalPack
+               BEGIN
+                  SET @nErrNo = 217503
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Option
+                  GOTO Quit
+               END
+            END -- Option 1
 
          END
       END -- step2

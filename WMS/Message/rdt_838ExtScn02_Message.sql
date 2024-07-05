@@ -10,5 +10,6 @@ execute rdt.rdtAddMsg 217755, 10, '217755ScanInFail', 'us_english', 838
 execute rdt.rdtAddMsg 217756, 10, '217756ScanInFail', 'us_english', 838
 execute rdt.rdtAddMsg 217757, 10, '217757NotScanIn', 'us_english', 838
 execute rdt.rdtAddMsg 217758, 10, '217758CartNoIs0', 'us_english', 838
+execute rdt.rdtAddMsg 217759, 10, '217759UpdPackHDFail', 'us_english', 838
 
 select * from rdt.rdtmsg (nolock) where message_id between 217751 AND 217800

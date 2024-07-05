@@ -354,10 +354,20 @@ BEGIN
                IF @nErrNo <> 0
                BEGIN
                   EXEC rdt.rdtSetFocusField @nMobile, 1  -- PickSlipNo
-                  SET @cOutField01 = ''
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NoPSNo
                   GOTO Quit
                END
                SET @cOutField01 = @cPickSlipNo
+
+               --Since PickHeader is closed before packing, needs to reopen PackHeader
+               UPDATE PackHeader SET Status = 0 WHERE PickSlipNo = @cPickSlipNo
+               IF @nErrNo <> 0
+               BEGIN
+                  SET @nErrNo = 211759
+                  EXEC rdt.rdtSetFocusField @nMobile, 1  -- PickSlipNo
+                  SET @cOutField01 = ''
+                  GOTO Quit
+               END
 
                -- Get PickingInfo info
                DECLARE @dScanInDate DATETIME
