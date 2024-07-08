@@ -83,6 +83,7 @@ GO
 /* 2024-05-27   5.9 NLT013      FCR-388 Merge code to V2 branch, original owner is Wojciech     */
 /* 2024-06-14   6.0 JHU151      FCR-352 ZA_DEFY - Fn838 -Default Pick Quantity                  */
 /* 2024-06-24   6.1 JHU151      Fixed Rest @cEnter Flag issue                                   */
+/* 2024-07-08   6.2 Jackc       FCR-392 Add ext scn entry and codes                             */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
