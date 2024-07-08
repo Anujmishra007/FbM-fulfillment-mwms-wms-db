@@ -59,6 +59,7 @@ GO
 /* 2015-05-12 3.2  James    SOS341660 - Allow 7 digit on V_Qty (james08)*/
 /* 2016-09-30 3.3  Ung      Performance tuning                          */  
 /* 2018-10-04 3.4  Gan      Performance tuning                          */
+/* 2024-06-25 3.5  JHU51    FCR-349 add SCN 924 for DEFY                */
 /************************************************************************/
 
 CREATE PROCEDURE [RDT].[rdtfnc_Putaway] (
@@ -113,7 +114,9 @@ DECLARE
    @cSuggestedLOC   NVARCHAR( 10),
    @cFinalLOC       NVARCHAR( 10),
    @cExtendedValidateSP NVARCHAR( 20),
-
+   @cExtendedScreenSP   NVARCHAR( 20), --(JHU151)
+   @tExtScnData			VariableTable, --(JHU151)
+   @nAction             INT, --(JHU151)
    @cInField01 NVARCHAR( 60),  @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),  @cOutField02 NVARCHAR( 60),
    @cInField03 NVARCHAR( 60),  @cOutField03 NVARCHAR( 60),
@@ -137,7 +140,25 @@ DECLARE
    @cFieldAttr09 NVARCHAR( 1), @cFieldAttr10 NVARCHAR( 1),
    @cFieldAttr11 NVARCHAR( 1), @cFieldAttr12 NVARCHAR( 1),
    @cFieldAttr13 NVARCHAR( 1), @cFieldAttr14 NVARCHAR( 1),
-   @cFieldAttr15 NVARCHAR( 1)
+   @cFieldAttr15 NVARCHAR( 1),
+
+   @cLottable01  NVARCHAR( 18), @cLottable02  NVARCHAR( 18), @cLottable03  NVARCHAR( 18),
+   @dLottable04  DATETIME, @dLottable05  DATETIME,
+   @cLottable06  NVARCHAR( 30), @cLottable07  NVARCHAR( 30), @cLottable08  NVARCHAR( 30),
+   @cLottable09  NVARCHAR( 30), @cLottable10  NVARCHAR( 30), @cLottable11  NVARCHAR( 30),
+   @cLottable12  NVARCHAR( 30),
+   @dLottable13  DATETIME, @dLottable14  DATETIME, @dLottable15  DATETIME,
+
+   @cUDF01  NVARCHAR( 250), @cUDF02 NVARCHAR( 250), @cUDF03 NVARCHAR( 250),
+   @cUDF04  NVARCHAR( 250), @cUDF05 NVARCHAR( 250), @cUDF06 NVARCHAR( 250),
+   @cUDF07  NVARCHAR( 250), @cUDF08 NVARCHAR( 250), @cUDF09 NVARCHAR( 250),
+   @cUDF10  NVARCHAR( 250), @cUDF11 NVARCHAR( 250), @cUDF12 NVARCHAR( 250),
+   @cUDF13  NVARCHAR( 250), @cUDF14 NVARCHAR( 250), @cUDF15 NVARCHAR( 250),
+   @cUDF16  NVARCHAR( 250), @cUDF17 NVARCHAR( 250), @cUDF18 NVARCHAR( 250),
+   @cUDF19  NVARCHAR( 250), @cUDF20 NVARCHAR( 250), @cUDF21 NVARCHAR( 250),
+   @cUDF22  NVARCHAR( 250), @cUDF23 NVARCHAR( 250), @cUDF24 NVARCHAR( 250),
+   @cUDF25  NVARCHAR( 250), @cUDF26 NVARCHAR( 250), @cUDF27 NVARCHAR( 250),
+   @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( 250)
 
 -- Getting Mobile information
 SELECT
@@ -171,7 +192,7 @@ SELECT
    @cSuggestedLOC  = V_String10,
    @cFinalLOC      = V_String11,
    @cExtendedValidateSP = V_String12,
-   
+   @cExtendedScreenSP = V_String13,--(JHU151)
    @nQTY       = V_Integer1,
    @nPQTY_PWY  = V_Integer2,
    @nMQTY_PWY  = V_Integer3,
@@ -217,6 +238,7 @@ BEGIN
    IF @nStep = 2 GOTO Step_2   -- Scn  = 921. QTY
    IF @nStep = 3 GOTO Step_3   -- Scn  = 922. Suggested LOC, ToLOC
    IF @nStep = 4 GOTO Step_4   -- Scn  = 923. Msg
+   IF @nStep = 99 GOTO Step_99 -- Ext Screen (924)
 END
 RETURN -- Do nothing if incorrect step
 
@@ -248,6 +270,11 @@ BEGIN
    IF @cExtendedValidateSP = '0'
       SET @cExtendedValidateSP = ''
 
+   --JHU151
+   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+   IF @cExtendedScreenSP = '0'
+      SET @cExtendedScreenSP = ''
+
    --Initialize Outfield Values
    SET @cOutField01 = '' --ID
    SET @cOutField02 = @cStorerKey
@@ -274,6 +301,16 @@ BEGIN
    -- Set the entry point
    SET @nScn = 920
    SET @nStep = 1
+
+   --JHU151   
+   IF @cExtendedScreenSP <> ''
+   BEGIN
+      SET @cOutField02 = ''
+      SET @nStep = 99
+      SET @nScn = 924
+      
+   END
+
 END
 GOTO Quit
 
@@ -287,6 +324,8 @@ Step 1. Scn = 920. ID/SKU/FromLOC screen
 ********************************************************************************/
 Step_1:
 BEGIN
+
+
    IF @nInputKey = 1 -- ENTER
    BEGIN
       DECLARE @cLabelNo NVARCHAR( 32)
@@ -782,6 +821,17 @@ BEGIN
       SET @nScn  = @nScn - 1
       SET @nStep = @nStep - 1
    END
+
+   --JHU151
+  IF @cExtendedScreenSP = '0'
+   BEGIN
+      SET @cExtendedScreenSP = ''
+   END
+   IF @cExtendedScreenSP <> ''
+   BEGIN
+      SET @nAction = 0
+      GOTO Step_99
+   END
 END
 GOTO Quit
 
@@ -944,9 +994,96 @@ BEGIN
    -- Go to ID/SKU/FromLOC screen
    SET @nScn  = @nScn - 3
    SET @nStep = @nStep - 3
+
+   --JHU151
+   IF @cExtendedScreenSP = '0'
+   BEGIN
+      SET @cExtendedScreenSP = ''
+   END
+   IF @cExtendedScreenSP <> ''
+   BEGIN
+      SET @nAction = 0
+      GOTO Step_99
+   END
 END
 GOTO Quit
 
+
+--JHU151
+Step_99:
+BEGIN
+   IF @cExtendedScreenSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+      BEGIN
+         DELETE FROM @tExtScnData
+         INSERT INTO @tExtScnData (Variable, Value) VALUES 	
+         ('@nMenu',     CONVERT(Nvarchar(20),@nMenu)),
+         ('@cUserName', @cUserName)
+
+         EXECUTE [RDT].[rdt_ExtScnEntry] 
+         @cExtendedScreenSP, 
+         @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
+         @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,  
+         @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,  
+         @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,  
+         @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,  
+         @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,  
+         @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT, 
+         @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT, 
+         @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT, 
+         @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT, 
+         @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT, 
+         @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
+         @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
+         @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
+         @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
+         @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
+         @nAction, 
+         @nScn     OUTPUT,  @nStep OUTPUT,
+         @nErrNo   OUTPUT, 
+         @cErrMsg  OUTPUT,
+         @cUDF01   OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
+         @cUDF04   OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
+         @cUDF07   OUTPUT, @cUDF08 OUTPUT, @cUDF09 OUTPUT,
+         @cUDF10   OUTPUT, @cUDF11 OUTPUT, @cUDF12 OUTPUT,
+         @cUDF13   OUTPUT, @cUDF14 OUTPUT, @cUDF15 OUTPUT,
+         @cUDF16   OUTPUT, @cUDF17 OUTPUT, @cUDF18 OUTPUT,
+         @cUDF19   OUTPUT, @cUDF20 OUTPUT, @cUDF21 OUTPUT,
+         @cUDF22   OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
+         @cUDF25   OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
+         @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
+
+         SET @nFunc = @cUDF01
+         
+         IF @nScn = 921
+         BEGIN
+            SET @cSKU = @cUDF02
+            SET @cFromLOC = @cUDF03
+            SET @cSKUDesc = @cUDF04
+            SET @cPUOM = @cUDF05
+            SET @nPQTY_PWY = @cUDF06
+            SET @nMQTY_PWY = @cUDF07
+            SET @nQTY_PWY = @cUDF08
+            SET @nPUOM_Div = @cUDF09
+            SET @nPQTY = @cUDF10
+            SET @nMQTY = @cUDF11
+            SET @cID = @cUDF12
+         END
+
+         IF @nErrNo <> 0
+            GOTO Step_99_Fail
+      END
+   END
+
+   GOTO Quit
+
+Step_99_Fail:
+   BEGIN
+      GOTO Quit
+   END
+END
+GOTO Quit
 
 /********************************************************************************
 Quit. Update back to I/O table, ready to be pick up by JBOSS
@@ -983,7 +1120,7 @@ BEGIN
       V_String10 = @cSuggestedLOC,
       V_String11 = @cFinalLOC,
       V_String12 = @cExtendedValidateSP,
-      
+      V_String13 = @cExtendedScreenSP,--(JHU151)
       V_Integer1  = @nQTY,
       V_Integer2  = @nPQTY_PWY,
       V_Integer3  = @nMQTY_PWY,

@@ -32,6 +32,7 @@ GO
 /* 2022-11-24   2.5  Ung        WMS-21032 Fix ExtendedInfoSP at LOC screen       */
 /*                              Add DefaultQTY                                   */
 /* 2023-03-15   2.6  YeeKung    WMS-21872 Fix Bug (yeekung05)                    */
+/* 2024-07-04   2.7  JHU151     FCR-537 @cDefaultQTY to NVARCHAR(10)             */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdtfnc_PickSKU (
@@ -109,7 +110,7 @@ DECLARE
    @cLoadKey       NVARCHAR( 10)  ,
    @cZone          NVARCHAR( 18)  ,
 
-   @cDefaultQTY         NVARCHAR( 1),
+   @cDefaultQTY         NVARCHAR( 10),
    @cExtendedValidateSP NVARCHAR( 20),
    @cExtendedUpdateSP   NVARCHAR( 20),
    @cExtendedInfoSP     NVARCHAR( 20),

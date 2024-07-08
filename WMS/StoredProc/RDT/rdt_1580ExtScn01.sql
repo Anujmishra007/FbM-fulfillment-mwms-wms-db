@@ -11,7 +11,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
 /* 2024-03-13 1.0  Dennis   Check Digit                                 */
-/* 2024-06-26 1.1  Dennis   Capture Pallet Type                         */
+/* 2024-06-26 1.1  Dennis   Capture Pallet Type                         */
 /************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1580ExtScn01] (
@@ -269,8 +269,14 @@ BEGIN
                      WHERE Facility = @cFacility AND LOC = @cLOC
                   IF @cLoseID = '1'
                   BEGIN
-                     EXEC rdt.rdt_PieceReceiving_AutoGenID @nMobile, @nFunc, @nStep, @cLangCode
-                        ,'1'           --@cAutoGenID
+                     DECLARE @cAutoGenID NVARCHAR(20)
+                     SET @cAutoGenID = rdt.RDTGetConfig( @nFunc, 'AutoGenID', @cStorerKey)
+                     IF @cAutoGenID = '0'
+                        SET @cAutoGenID = ''
+                     IF @cAutoGenID <> ''
+                     BEGIN
+                        EXEC rdt.rdt_PieceReceiving_AutoGenID @nMobile, @nFunc, @nStep, @cLangCode
+                        ,@cAutoGenID          --@cAutoGenID
                         ,@cReceiptKey
                         ,@cPOKey
                         ,@cLOC
@@ -279,10 +285,11 @@ BEGIN
                         ,@cAutoID  OUTPUT
                         ,@nErrNo   OUTPUT
                         ,@cErrMsg  OUTPUT
-                     IF @nErrNo <> 0
-                        GOTO Quit
-
-                     SET @cID = @cAutoID
+                        IF @nErrNo <> 0
+                           GOTO Quit
+                        
+                        SET @cID = @cAutoID
+                     END
 
                      IF(ISNULL(rdt.RDTGetConfig( @nFunc, 'ValidatePalletType', @cStorerKey),'0'))!='0' -- Capture pallet type
                      BEGIN
@@ -313,7 +320,7 @@ BEGIN
                      SET @cLottable01 = IsNULL( @cLottable01, '')
                      SET @cLottable02 = IsNULL( @cLottable02, '')
                      SET @cLottable03 = IsNULL( @cLottable03, '')
-
+				         SET @dLottable04 = 0
                      SET @cOutField01 = @cLottable01
                      SET @cOutField02 = @cLottable02
                      SET @cOutField03 = @cLottable03
@@ -321,7 +328,11 @@ BEGIN
                      SET @cOutField04 = rdt.rdtFormatDate( @dLottable04)
 
                      EXEC rdt.rdtSetFocusField @nMobile, 1 --Lottable01
-
+                     SET @cInField01 =''
+                     SET @cInField02 =''
+                     SET @cInField03 =''
+                     SET @cInField04 =''
+                  
                      -- Go to next screen
                      SET @nAfterScn = @nScn + 2
                      SET @nAfterStep = @nStep + 2

@@ -83,7 +83,7 @@ BEGIN
 		  WHERE TF.Status = '0'
 		  AND TF.UserDefine02 = 'AUTOREL'
           AND TF.FromStorerKey = @c_FromStorerkey
-		  AND TD.FromLot = ''
+		 -- AND TD.FromLot = ''
 		ORDER BY TD.TransferKey, TD.TransferLineNumber
 
 	OPEN CUR_ANFTRAN
@@ -500,7 +500,8 @@ BEGIN
 	  DECLARE CUR_FINTRAN CURSOR LOCAL FORWARD_ONLY STATIC FOR
 		  SELECT  T.TransferKey
 		  FROM TRANSFER T WITH (NOLOCK)
-		  WHERE T.UserDefine02 = 'ALLOCATION_DONE'
+		  WHERE T.UserDefine02 IN ('ALLOCATION_DONE', 'AUTOREL')
+          AND T.FromStorerKey = @c_FromStorerkey
 		  AND T.Status <> '9'
 		  AND NOT EXISTS(SELECT 1
 			               FROM TRANSFERDETAIL TD WITH (NOLOCK)
@@ -566,7 +567,7 @@ BEGIN
 				 BEGIN
 					 SET @c_UserDefined02 = 'DONE'
 					 UPDATE TRANSFER WITH (ROWLOCK)
-					 SET UserDefine02 = @c_UserDefined02
+					 SET UserDefine02 = @c_UserDefined02, TrafficCop=NULL
 					 WHERE Transferkey = @c_TransferKeyForFinalization
 				 END
          SET @n_continue = 1 --resetting error flag
