@@ -5,14 +5,14 @@ SET ANSI_NULLS OFF
 GO
 
 /******************************************************************************/
-/* Store procedure: rdt_838PntShipLbl03                                       */
+/* Store procedure: rdt_838PntShipLbl04                                       */
 /* Copyright      : Maersk                                                    */
 /*                                                                            */
 /* Date       Rev  Author     Purposes                                        */
 /* 2024-07-05 1.0  JACKC      FCR-392 Print VAS labels                        */
 /******************************************************************************/
 
-CREATE OR ALTER PROC rdt.rdt_838PntShipLbl03 (
+CREATE OR ALTER PROC rdt.rdt_838PntShipLbl04 (
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -151,5 +151,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON RDT.rdt_838PntShipLbl03 TO NSQL
+GRANT EXECUTE ON RDT.rdt_838PntShipLbl04 TO NSQL
 GO
