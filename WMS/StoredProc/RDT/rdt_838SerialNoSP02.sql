@@ -324,6 +324,18 @@ BEGIN
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid SNO
                GOTO Quit
             END
+
+            IF EXISTS(SELECT 1 FROM SerialNo 
+                           WHERE StorerKey = @cStorerKey 
+                           AND SKU = @cSKU 
+                           AND SerialNo = @cSerialNo
+                           AND status <> '1')
+            BEGIN
+               SET @nErrNo = 217211
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid State
+               GOTO Quit
+            END
+
          END
 
          -- Extended update  
