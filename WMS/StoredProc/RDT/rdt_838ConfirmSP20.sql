@@ -72,7 +72,7 @@ BEGIN
    --FCR 392
    DECLARE  @nCartonPackQty      INT = 0,
             @nBalQty             INT = 0,
-            @cOption             NVARCHAR( 1),
+            @cOption             NVARCHAR( 1) ='0',
             @cZone               NVARCHAR( 18),
             @nTotalNoPackQty     INT = 0,
             @bDebugFlag          BINARY = 0
@@ -257,12 +257,13 @@ BEGIN
          SKU = @cSKU, 
          QTY = @nQTY, 
          EditWho = 'rdt.' + SUSER_SNAME(), 
-         EditDate = GETDATE(), 
-         ArchiveCop = NULL
+         EditDate = GETDATE() 
+         --ArchiveCop = NULL
       WHERE PickSlipNo = @cPickSlipNo
          AND CartonNo = @nCartonNo
          AND LabelNo = @cLabelNo
          AND LabelLine = @cLabelLine
+         AND SKU = @cSKU
       IF @@ERROR <> 0
       BEGIN
          SET @nErrNo = 100405
@@ -288,6 +289,7 @@ BEGIN
    END
 
    -- FCR-392 update pack info
+
    IF @cOption = 1
    BEGIN
       IF @bDebugFlag = 1
@@ -311,13 +313,15 @@ BEGIN
          GOTO RollBackTran
       END
    END -- Insert new pack info
+   -- Remove UPDATE logic. The packdetail trigger help maintan pack info
+   /*
    ELSE
    BEGIN
       IF @bDebugFlag = 1
          SELECT 'Upd pack info', @cPickSlipNo AS PSNo, @nCartonNo AS CartonNo, @nQTY AS Qty
 
       UPDATE dbo.PackInfo SET
-            Qty = @nQTY, 
+            Qty = QTY + @nBalQTY, 
             EditDate = GETDATE(), 
             EditWho = SUSER_SNAME(), 
             TrafficCop = NULL
@@ -329,7 +333,7 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDPackInfFail
          GOTO RollBackTran
       END
-   END
+   END */
 
 
    --  Skip Original UCC packinfo logic 347-395
