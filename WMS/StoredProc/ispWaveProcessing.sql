@@ -105,6 +105,8 @@ GO
 /*                            isp_ChannelAllocGetHoldQty_Wrapper        */ 
 /* 16-May-2024  Wan06   6.0   UWP-19537-Mattel Overallocation           */
 /* 23-May-2024  Wan07   7.0   UWP-19537-Bug fixing Insert NULL          */
+/* 08-Jul-2024  Wan08   7.1   UWP-19537-Mattel Overallocation           */
+/*                            Get OverPickLoc from Sub SP               */
 /************************************************************************/      
 
 CREATE OR ALTER PROC [dbo].[ispWaveProcessing]        
@@ -211,7 +213,9 @@ BEGIN
          @c_ParameterName NVARCHAR(200),          @n_OrdinalPosition INT   
         
    DECLARE  @c_PHeaderKey NVARCHAR(18),        
-            @c_CaseId     NVARCHAR(10)        
+            @c_CaseId     NVARCHAR(10) 
+            
+   DECLARE @c_OverPickLoc              NVARCHAR(10)                                 --(Wan08)       
         
    SELECT @n_StartTCnt=@@TRANCOUNT , @n_Continue=1, @b_Success=0, @n_Err=0,@n_cnt = 0        
    SELECT @c_ErrMsg='',@n_Err2=0        
@@ -2247,6 +2251,8 @@ BEGIN
                   TRUNCATE TABLE #OP_PICKLOCTYPE        
                   -- End  
                   
+                  SET @c_OverPickLoc = ''                                           --(Wan08) 
+                  
                   --NJOW25 S  
                   IF ISNULL(@c_OverAllocPickLoc_SP,'') <> ''  
                   BEGIN  
@@ -2265,9 +2271,19 @@ BEGIN
                                                        @c_Orderkey=@c_aOrderkey,  @c_Loadkey=@c_aLoadkey, @c_Wavekey=@c_aWavekey, @c_Lot=@c_aLot, @c_Loc=@c_aLoc, @c_ID=@c_aID, @c_UOM=@c_aUOM, @n_QtyToTake=@n_aQtyToTake,    
                                                        @n_QtyLeftToFulfill=@n_aQtyLeftToFulfill, @c_CallSource=@c_aCallSource, @b_success=@b_asuccess OUTPUT, @n_err=@n_aerr OUTPUT, @c_errmsg=@c_aerrmsg OUTPUT '  
                        
+                     IF EXISTS(SELECT 1                                             --(Wan08) - START
+                               FROM sys.parameters AS p    
+                               JOIN sys.types AS t ON t.user_type_id = p.user_type_id    
+                               WHERE object_id = OBJECT_ID(@c_overAllocPickLoc_sp)    
+                               AND   P.name = N'@c_OverPickLoc')                    --(Wan08) - END       
+                     BEGIN 
+                        SET @c_SQL = @c_SQL + N', @c_OverPickLoc=@c_OverPickLoc OUTPUT'
+                     END
+                     
                      EXEC SP_EXECUTESQL @c_SQL, N'@c_aStorerkey NVARCHAR(15), @c_aSku NVARCHAR(20), @c_aAllocateStrategykey NVARCHAR(10), @c_aAllocateStrategyLineNumber NVARCHAR(5), @c_aLocationTypeOverride NVARCHAR(10),   
                      @c_aLocationTypeOverridestripe NVARCHAR(10), @c_aFacility NVARCHAR(5), @c_aHostWHCode NVARCHAR(10), @c_aOrderkey NVARCHAR(10), @c_aLoadkey NVARCHAR(10), @c_aWavekey NVARCHAR(10), @c_aLot NVARCHAR(10),    
-                     @c_aLoc NVARCHAR(10), @c_aID NVARCHAR(18), @c_aUOM NVARCHAR(10), @n_aQtyToTake INT, @n_aQtyLeftToFulfill INT, @c_aCallSource NVARCHAR(20), @b_asuccess INT OUTPUT, @n_aerr INT OUTPUT, @c_aErrMsg NVARCHAR(250) OUTPUT',  
+                     @c_aLoc NVARCHAR(10), @c_aID NVARCHAR(18), @c_aUOM NVARCHAR(10), @n_aQtyToTake INT, @n_aQtyLeftToFulfill INT, @c_aCallSource NVARCHAR(20), @b_asuccess INT OUTPUT, @n_aerr INT OUTPUT, @c_aErrMsg NVARCHAR(250) OUTPUT
+                    ,@c_OverPickLoc NVARCHAR(10) OUTPUT',                           --(Wan08)  
                      @c_aStorerkey,  
                      @c_aSku,   
                      @c_aStrategykey,  
@@ -2288,7 +2304,8 @@ BEGIN
                      'WAVECONSO',            
                      @b_success OUTPUT,        
                      @n_err     OUTPUT,        
-                     @c_errmsg  OUTPUT         
+                     @c_errmsg  OUTPUT
+                 ,   @c_OverPickLoc OUTPUT                                          --(Wan08)                              
                        
                      SELECT @n_cnt = COUNT(1) FROM #OP_PICKLOCTYPE  
                   END --NJOW25 E        
@@ -2466,7 +2483,12 @@ BEGIN
                      BEGIN        
                         SELECT TOP 1 @c_PickLoc = LOC        
                           FROM #OP_PickLocType        
-                        ORDER BY LOC        
+                        ORDER BY LOC  
+                        
+                        IF @c_OverPickLoc <> ''                                     --(Wan08) - START
+                        BEGIN
+                           SET @c_pickloc = @c_OverPickLoc
+                        END                                                         --(Wan08) - END                                 
                      END        
                   END        
         
