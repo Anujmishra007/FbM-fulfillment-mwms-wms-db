@@ -116,6 +116,8 @@ GO
 /* 27-SEP-2022  NJOW21   4.3  WMS-20812 Pass in additional parameters to*/
 /*                            isp_ChannelAllocGetHoldQty_Wrapper        */ 
 /* 16-May-2024  Wan09    4.4  UWP-19537-Mattel Overallocation           */
+/* 07-Jul-2024  Wan10    4.5  UWP-19537-Mattel Overallocation           */
+/*                            Get OverPickLoc from Sub SP               */
 /************************************************************************/  
 
 CREATE OR ALTER PROC [dbo].[nspOrderProcessing]  
@@ -213,6 +215,8 @@ BEGIN
    DECLARE  @c_PHeaderKey NVARCHAR(18),  
             @c_CaseId   NVARCHAR(10)  
            ,@n_AllocatedHoldQty INT = 0   
+
+   DECLARE @c_OverPickLoc              NVARCHAR(10)                                 --(Wan10)
   
    SELECT @n_starttcnt=@@TRANCOUNT , @n_continue=1, @b_success=0, @n_err=0,@n_cnt = 0  
    SELECT @c_errmsg="",@n_err2=0  
@@ -2577,6 +2581,7 @@ BEGIN
                   TRUNCATE TABLE #OP_PICKLOCTYPE  
                   -- END  
                   
+                  SET @c_OverPickLoc = ''                                           --(Wan10) 
                   --NJOW15 S
                   IF ISNULL(@c_OverAllocPickLoc_SP,'') <> ''
                   BEGIN
@@ -2587,17 +2592,27 @@ BEGIN
                       END
                       ELSE                                                              --(Wan09) - END
                         SET @n_OverAlQtyLeftToFulfill = @n_NextQtyLeftToFulfill + @n_QtyToTake
-                      
+ 
                      SET @c_SQL = N'
                      INSERT INTO #OP_PICKLOCTYPE        
                      EXEC ' + RTRIM(@c_overAllocPickLoc_sp) + ' @c_Storerkey=@c_aStorerkey, @c_Sku=@c_aSku, @c_AllocateStrategykey=@c_aAllocateStrategykey, @c_AllocateStrategyLineNumber=@c_aAllocateStrategyLineNumber,   
                                                        @c_LocationTypeOverride=@c_aLocationTypeOverride, @c_LocationTypeOverridestripe=@c_aLocationTypeOverridestripe, @c_Facility=@c_aFacility, @c_HostWHCode=@c_aHostWHCode,   
                                                        @c_Orderkey=@c_aOrderkey,  @c_Loadkey=@c_aLoadkey, @c_Wavekey=@c_aWavekey, @c_Lot=@c_aLot, @c_Loc=@c_aLoc, @c_ID=@c_aID, @c_UOM=@c_aUOM, @n_QtyToTake=@n_aQtyToTake,  
                                                        @n_QtyLeftToFulfill=@n_aQtyLeftToFulfill, @c_CallSource=@c_aCallSource, @b_success=@b_asuccess OUTPUT, @n_err=@n_aerr OUTPUT, @c_errmsg=@c_aerrmsg OUTPUT '
-                     
+     
+                     IF EXISTS(SELECT 1                                             --(Wan10) - START
+                               FROM sys.parameters AS p    
+                               JOIN sys.types AS t ON t.user_type_id = p.user_type_id    
+                               WHERE object_id = OBJECT_ID(@c_overAllocPickLoc_sp)    
+                               AND   P.name = N'@c_OverPickLoc')                    --(Wan10) - END       
+                     BEGIN 
+                        SET @c_SQL = @c_SQL + N', @c_OverPickLoc=@c_OverPickLoc OUTPUT'
+                     END
+
                      EXEC SP_EXECUTESQL @c_SQL, N'@c_aStorerkey NVARCHAR(15), @c_aSku NVARCHAR(20), @c_aAllocateStrategykey NVARCHAR(10), @c_aAllocateStrategyLineNumber NVARCHAR(5), @c_aLocationTypeOverride NVARCHAR(10), 
                      @c_aLocationTypeOverridestripe NVARCHAR(10), @c_aFacility NVARCHAR(5), @c_aHostWHCode NVARCHAR(10), @c_aOrderkey NVARCHAR(10), @c_aLoadkey NVARCHAR(10), @c_aWavekey NVARCHAR(10), @c_aLot NVARCHAR(10),  
-                     @c_aLoc NVARCHAR(10), @c_aID NVARCHAR(18), @c_aUOM NVARCHAR(10), @n_aQtyToTake INT, @n_aQtyLeftToFulfill INT, @c_aCallSource NVARCHAR(20), @b_asuccess INT OUTPUT, @n_aerr INT OUTPUT, @c_aErrMsg NVARCHAR(250) OUTPUT',
+                     @c_aLoc NVARCHAR(10), @c_aID NVARCHAR(18), @c_aUOM NVARCHAR(10), @n_aQtyToTake INT, @n_aQtyLeftToFulfill INT, @c_aCallSource NVARCHAR(20), @b_asuccess INT OUTPUT, @n_aerr INT OUTPUT, @c_aErrMsg NVARCHAR(250) OUTPUT
+                    ,@c_OverPickLoc NVARCHAR(10) OUTPUT',                           --(Wan10)
                      @c_aStorerkey,
                      @c_aSku, 
                      @c_aStrategykey,
@@ -2618,7 +2633,8 @@ BEGIN
                      @c_CallSource,  --WAVEORDER, LOADORDER, ORDER          
                      @b_success OUTPUT,      
                      @n_err     OUTPUT,      
-                     @c_errmsg  OUTPUT       
+                     @c_errmsg  OUTPUT
+                  ,  @c_OverPickLoc OUTPUT                                          --(Wan10)
                      
                      SELECT @n_cnt = COUNT(1) FROM #OP_PICKLOCTYPE
                   END --NJOW15 E  
@@ -2648,6 +2664,8 @@ BEGIN
                         AND SKUxLOC.LOCATIONTYPE = @c_sLocationTypeOverride  
                         AND LOC.facility = @c_AFacility     -- SOS 10104 - wally - 5mar03 - to consider facility 
                         AND LOC.HostWHCode = @c_HostWHCode 
+
+                     SELECT @n_cnt = @@ROWCOUNT, @n_err = @@ERROR                    --(Wan10)
                   END
                   ELSE
                   BEGIN
@@ -2659,10 +2677,11 @@ BEGIN
                         AND SKUxLOC.SKU = @c_aSKU  
                         AND SKUxLOC.LOCATIONTYPE = @c_sLocationTypeOverride  
                         AND LOC.facility = @c_AFacility     -- SOS 10104 - wally - 5mar03 - to consider facility 
+                     SELECT @n_cnt = @@ROWCOUNT, @n_err = @@ERROR                    --(Wan10)
                   END
                   --(Wan08) - Fixed - 2020-05-21 By Wan - END
                   
-                  SELECT @n_cnt = @@ROWCOUNT, @n_err = @@ERROR  
+                  --SELECT @n_cnt = @@ROWCOUNT, @n_err = @@ERROR                    --(Wan10)
 
                   IF @n_cnt = 0 or @n_err <> 0  
                   BEGIN  
@@ -2843,11 +2862,15 @@ BEGIN
                         END  
                      END  
                      ELSE  
-                     BEGIN  
-  
+                     BEGIN
                         SELECT TOP 1 @c_pickloc = LOC  
-                          FROM #OP_PickLocType  
+                           FROM #OP_PickLocType  
                         ORDER BY LOC  
+
+                        IF @c_OverPickLoc <> ''                                     --(Wan10) - START
+                        BEGIN
+                           SET @c_pickloc = @c_OverPickLoc
+                        END                                                         --(Wan10) - END    
                      END   
                   END  
   
@@ -2862,7 +2885,7 @@ BEGIN
                      AND ( Floor((LOTXLOCXID.Qty - LOTXLOCXID.QtyAllocated - LOTXLOCXID.QtyPicked)/@n_cPackQty) > 0  
                      OR  LOTXLOCXID.Loc = @c_pickloc )  
                   ORDER BY CASE when PLT.Loc = @c_pickloc  
-                                 then 1 ELSE 2 END, 1, 2  
+                                then 1 ELSE 2 END, 1, 2  
   
                   IF @@ROWCOUNT = 0  
                   BEGIN  
@@ -2890,7 +2913,6 @@ BEGIN
                      SELECT @n_rownum = 0  
                      WHILE @n_aQtyLeftToFulfill > 0  
                      BEGIN  
-  
                         SELECT TOP 1 @n_rownum = RowNum, @c_cloc = LOC, @c_cid = Id,  
                               @n_QtyToTake = CASE when QtyAvailable > 0  
                                                    then QtyAvailable ELSE 0 END  
