@@ -14,7 +14,7 @@ GO
 /*                                                                         */
 /* Called By: nspOrderProcessing                                           */
 /*                                                                         */
-/* PVCS Version: 1.3                                                       */
+/* PVCS Version: 1.4                                                       */
 /*                                                                         */
 /* Version: V2                                                             */
 /*                                                                         */
@@ -25,7 +25,9 @@ GO
 /* 2024-04-24  Wan01    1.1  UWP-15060 Fixed Get Multiple lot not filter by*/
 /*                           Qty                                           */
 /* 2024-04-24 SSA91301  1.2  UWP-18454 allow skip lottable filtering       */
-/* 2024-06-25  Wan02    1.3  UWP-21046 shelf-life by % for consignee       */                                           
+/* 2024-06-25  Wan02    1.3  UWP-21046 shelf-life by % for consignee       */
+/* 2024-07-09  Wan03    1.4  UWP-21046 shelf-life by % for consignee       */ 
+/*                           % need to be as float for calculation         */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspALMLP01]
    @c_DocumentNo        NVARCHAR(10)
@@ -375,7 +377,7 @@ BEGIN
             SET @c_ShelfLifeSQL = '@n_ConsigneeSkuGroupMinShelfLife'                --(Wan02) - START 
             IF @c_ConsigneeSkuGroupPCTG = 'PERCENTAGE'
             BEGIN
-               SET @c_ShelfLifeSQL = 'DATEDIFF(Day, Lottable13, Lottable04)*(@n_ConsigneeSkuGroupMinShelfLife/100)' 
+               SET @c_ShelfLifeSQL = 'DATEDIFF(Day, Lottable13, Lottable04)*(@n_ConsigneeSkuGroupMinShelfLife/100.00)'--(Wan03) 
             END
 
             IF @c_ShelfLifeFlag = 'E'
