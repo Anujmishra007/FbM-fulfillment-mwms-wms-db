@@ -61,11 +61,11 @@ BEGIN
          BEGIN
             IF @nInputKey = 1
             BEGIN
-               UPDATE dbo.PICKDETAIL
+               UPDATE dbo.PICKDETAIL WITH(ROWLOCK)
                SET DropID = ''
                WHERE Storerkey = @cStorerKey
                AND DropID LIKE RTRIM(@cStation) + '%' 
-			      AND ISNULL(RTRIM(@cStation),'') <> ''
+               AND ISNULL(RTRIM(@cStation),'') <> ''
             END         
          END
       END
