@@ -58,8 +58,7 @@ BEGIN
       @ClientID         NVARCHAR (30),
       @LabelCode        NVARCHAR (30),
       @SkuLimit         INT,
-      @SKU              NVARCHAR (30),
-      @SKU1             NVARCHAR (30)
+      @SkuCheck01       NVARCHAR (30)
 
    SELECT TOP 1 @NeedSerial = SerialNoCapture FROM SKU (NOLOCK) WHERE sku = @cSKU
    SELECT TOP 1 @OrderKey = OrderKey FROM PICKDETAIL (NOLOCK) WHERE DropID = @cFromDropID
@@ -78,8 +77,7 @@ BEGIN
       AND Code = @ClientID
 
    -- get SKU for Client Pack Matrix
-   SELECT @SKU = sku  FROM PicKDetail (NOLOCK) WHERE  DropID = @cFromDropID
-   SELECT @SKU1= sku FROM PackDetail (NOLOCK) WHERE CartonNo = @nCartonNo AND DropID = @cPackDtlDropID
+   SELECT @SkuCheck01 = isnull(COUNT(DISTINCT(sku)),0) FROM PackDetail (NOLOCK) WHERE CartonNo = @nCartonNo AND DropID = @cPackDtlDropID AND PickSlipNo = @cPickSlipNo
 
    -- WS_20062024 END
 
@@ -128,13 +126,13 @@ BEGIN
       END
 
       -- WS_20062024 Client Pack Validation Matrix
-      IF @nStep = 1 AND @LabelCode = 'SINGLE' AND @SKU <> @SKU1 AND @SkuLimit <= (SELECT isnull(COUNT(DISTINCT(sku)),0) FROM PackDetail (NOLOCK) WHERE CartonNo = @nCartonNo AND DropID = @cPackDtlDropID AND PickSlipNo = @cPickSlipNo)
+      IF @nStep = 1 AND @LabelCode = 'SINGLE'  AND @SkuLimit < @SkuCheck01 
       BEGIN
          SET @nErrNo = 217942
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SingleSKULimit
       END
 
-      IF @nStep = 1 AND @LabelCode = 'MULTI' AND @SkuLimit <= (SELECT isnull(COUNT(DISTINCT(sku)),0) FROM PackDetail (NOLOCK) WHERE CartonNo = @nCartonNo AND DropID = @cPackDtlDropID AND PickSlipNo = @cPickSlipNo)
+      IF @nStep = 1 AND @LabelCode = 'MULTI' AND @SkuLimit < @SkuCheck01
       BEGIN
          SET @nErrNo = 217943
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MultSKULimit
@@ -153,6 +151,23 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvCon/DropID
       END
 
+      -- WS_03072024 Client Pack Validation Matrix -> SKU screen check
+      IF @nStep = 3 AND @LabelCode = 'SINGLE'
+         AND @cSKU not in (select distinct(isnull(sku,'')) FROM PackDetail (NOLOCK) WHERE CartonNo = @nCartonNo AND DropID = @cPackDtlDropID AND PickSlipNo = @cPickSlipNo)
+         AND @SkuLimit <= @SkuCheck01
+      BEGIN
+         SET @nErrNo = 217942
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SingleSKULimit
+      END
+
+      IF @nStep = 3 AND @LabelCode = 'MULTI' 
+         AND @cSKU not in (select distinct(isnull(sku,'')) FROM PackDetail (NOLOCK) WHERE CartonNo = @nCartonNo AND DropID = @cPackDtlDropID AND PickSlipNo = @cPickSlipNo)
+         AND @SkuLimit <= @SkuCheck01
+      BEGIN
+         SET @nErrNo = 217943
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MultSKULimit
+      END
+      -- WS_03072024  END
       IF @nStep = 2 AND @cOption = 1 AND EXISTS (SELECT 1 FROM PackDetail (NOLOCK) WHERE CartonNo = @nCartonNo AND DropID = @cPackDtlDropID AND PickSlipNo = @cPickSlipNo)
       BEGIN
          SET @nErrNo = 217946

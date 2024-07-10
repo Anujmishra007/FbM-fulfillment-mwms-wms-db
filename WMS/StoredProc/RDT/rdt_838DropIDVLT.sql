@@ -8,10 +8,10 @@ GO
 /*                                                                      */
 /*                                                                      */
 /* Date         Author   Purposes                                       */
-/* 5/17/2024    PPA374   Inserts DROPID in the DropID table             */
+/* 17/05/2024   PPA374   Inserts DROPID in the DropID table             */
 /************************************************************************/
 
-CREATE OR ALTER PROCEDURE [RDT].[rdt_838DropIDVLT] (
+CREATE OR ALTER PROC [RDT].[rdt_838DropIDVLT] (
    @nMobile         INT,            
    @nFunc           INT,            
    @cLangCode       NVARCHAR( 3),   
@@ -53,28 +53,43 @@ BEGIN
    @LOADKEY nvarchar(20),
    @PICKSLIP nvarchar(20)
 
-   SELECT @LOADKEY = LoadKey FROM ORDERS (NOLOCK) WHERE orderkey = (SELECT TOP 1 OrderKey FROM PICKDETAIL (NOLOCK) WHERE DropID = @cFromDropID)
-   SELECT @PICKSLIP = PickHeaderKey FROM PICKHEADER (NOLOCK) WHERE orderkey = (SELECT TOP 1 OrderKey FROM PICKDETAIL (NOLOCK) WHERE DropID = @cFromDropID)
+   --Finding load key AND pickslip number
+   SELECT TOP 1 @LOADKEY = LoadKey FROM ORDERS (NOLOCK) WHERE orderkey = (SELECT TOP 1 OrderKey FROM PICKDETAIL (NOLOCK) WHERE DropID = @cFromDropID)
+   SELECT TOP 1 @PICKSLIP = PickHeaderKey FROM PICKHEADER (NOLOCK) WHERE orderkey = (SELECT TOP 1 OrderKey FROM PICKDETAIL (NOLOCK) WHERE DropID = @cFromDropID)
    
    IF @nFunc = 838
    BEGIN
-      IF @nStep = 5 and @cOption = 2 and not exists (SELECT 1 FROM dropid WHERE dropid = @cPackDtlDropID)
+      --If operator is NOT printing the label for DROPID AND drop id record does NOT exist in the DropID table
+      IF @nStep = 5 -- Print Label
+         AND @cOption = 2 -- no
+         AND NOT EXISTS (SELECT 1 FROM dropid WHERE dropid = @cPackDtlDropID)
       BEGIN
          INSERT INTO Dropid(Dropid,Droploc,AdditionalLoc,DropIDType,LabelPrinted,ManifestPrinted,Status,AddDate,AddWho,EditDate,EditWho,TrafficCop,ArchiveCop,Loadkey,PickSlipNo,UDF01,UDF02,UDF03,UDF04,UDF05)
          VALUES(@cPackDtlDropID,'','',0,'N',0,5,GETDATE(),SUSER_NAME(),GETDATE(),SUSER_NAME(),null,null,@LOADKEY,@PICKSLIP,'','','','','')
       END
-      ELSE IF @nStep = 5 and @cOption = 1 and not exists (SELECT 1 FROM dropid WHERE dropid = @cPackDtlDropID)
+
+      --If operator is printing the label for DROPID AND drop id record does NOT exist in the DropID table
+      ELSE IF @nStep = 5 --Print Label
+     AND @cOption = 1 -- Yes
+     AND NOT EXISTS (SELECT 1 FROM dropid WHERE dropid = @cPackDtlDropID)
       BEGIN
          INSERT INTO Dropid(Dropid,Droploc,AdditionalLoc,DropIDType,LabelPrinted,ManifestPrinted,Status,AddDate,AddWho,EditDate,EditWho,TrafficCop,ArchiveCop,Loadkey,PickSlipNo,UDF01,UDF02,UDF03,UDF04,UDF05)
          VALUES(@cPackDtlDropID,'','',0,'Y',0,5,GETDATE(),SUSER_NAME(),GETDATE(),SUSER_NAME(),null,null,@LOADKEY,@PICKSLIP,'','','','','')
       END
-      ELSE IF @nStep = 5 and @cOption = 1 and exists (SELECT 1 FROM dropid WHERE dropid = @cPackDtlDropID and LabelPrinted = 'N')
+
+      --If operator is printing the label for DROPID AND drop id record already exist in the DropID table
+      ELSE IF @nStep = 5 -- Print Label
+     AND @cOption = 1 -- Yes
+     AND EXISTS (SELECT 1 FROM dropid WHERE dropid = @cPackDtlDropID AND LabelPrinted = 'N')
       BEGIN
          UPDATE dropid
          SET LabelPrinted = 'Y'
          WHERE dropid = @cPackDtlDropID
       END
-      IF @nStep = 3 and not exists (SELECT 1 FROM dropid WHERE dropid = @cPackDtlDropID)
+
+     --Inserting DropID into the DropID table at SKU QTY step. Required in scenarios when label will NOT be printed.
+      IF @nStep = 3 -- SKU QTY
+     AND NOT EXISTS (SELECT 1 FROM dropid WHERE dropid = @cPackDtlDropID)
       BEGIN
          INSERT INTO Dropid(Dropid,Droploc,AdditionalLoc,DropIDType,LabelPrinted,ManifestPrinted,Status,AddDate,AddWho,EditDate,EditWho,TrafficCop,ArchiveCop,Loadkey,PickSlipNo,UDF01,UDF02,UDF03,UDF04,UDF05)
          VALUES(@cPackDtlDropID,'','',0,'N',0,5,GETDATE(),SUSER_NAME(),GETDATE(),SUSER_NAME(),null,null,@LOADKEY,@PICKSLIP,'','','','','')
@@ -82,12 +97,9 @@ BEGIN
    END
 END
 GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON [rdt].[rdt_838DropIDVLT] TO NSQL
-GO  
-
+GRANT EXECUTE ON [RDT].[rdt_838DropIDVLT] TO [NSQL]
