@@ -10,7 +10,8 @@ GO
 /* Copyright      : LFLogistics                                               */      
 /*                                                                            */      
 /* Date       Rev  Author   Purposes                                          */      
-/* 2023-02-10 1.0  James    Addhoc. Created                                   */      
+/* 2023-02-10 1.0  James    Addhoc. Created                                   */ 
+/* 2023-07-02 1.1  JHU151      FCR-477                                        */
 /******************************************************************************/      
       
 CREATE OR ALTER PROC [RDT].[rdt_PTLPiece_Assign_DropID06] (      
@@ -90,7 +91,25 @@ BEGIN
   -- Go to station screen      
    END      
 */      
-         
+   IF @cType = N'POPULATE-OUT'
+   BEGIN
+      DECLARE @cUnAssign      NVARCHAR( 1)
+      SET @cUnAssign = rdt.rdtGetConfig( @nFunc, 'UNASSIGNPTLDROPID', @cStorerKey)    
+      IF @cUnAssign = '1'    
+      BEGIN
+         IF @nStep = 4
+         BEGIN
+            IF @nInputKey = 1
+            BEGIN
+               UPDATE dbo.PICKDETAIL
+               SET DropID = ''
+               WHERE Storerkey = @cStorerKey
+               AND DropID LIKE RTRIM(@cStation) + '%' 
+               AND ISNULL(RTRIM(@cStation),'') <> ''
+            END         
+         END
+      END
+   END 
    /***********************************************************************************************      
                                                  CHECK      
    ***********************************************************************************************/      
