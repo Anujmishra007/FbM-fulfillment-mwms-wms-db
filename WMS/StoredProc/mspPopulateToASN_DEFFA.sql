@@ -1,12 +1,13 @@
 USE [GLOWMS]
 GO
 
-/****** Object:  StoredProcedure [dbo].[mspPopulateToASN_DEFFA]    Script Date: 7/9/2024 11:41:49 AM ******/
+/****** Object:  StoredProcedure [dbo].[mspPopulateToASN_DEFFA]    Script Date: 7/10/2024 10:00:55 AM ******/
 SET ANSI_NULLS OFF
 GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
+
 
 
 /**************************************************************************/
@@ -41,7 +42,7 @@ GO
 /*Date         Author  Ver. Purposes                                      */
 /**************************************************************************/
 
- CREATE OR ALTER PROCEDURE [dbo].[mspPopulateToASN_DEFFA]
+ CREATE OR ALTER   PROCEDURE [dbo].[mspPopulateToASN_DEFFA]
 @c_OrderKey NVARCHAR(10)
 AS
 BEGIN
@@ -268,7 +269,6 @@ IF @n_continue = 1 OR @n_continue = 2
                   IF @@ROWCOUNT = 0
                      BREAK
 
-
                   IF @n_continue = 1 OR @n_continue = 2 --Based on Pickdetail
                      BEGIN
                         IF ISNULL(RTRIM(@c_OrderKey),'') <> '' AND
@@ -293,25 +293,23 @@ IF @n_continue = 1 OR @n_continue = 2
 
                               WHILE @@FETCH_STATUS <> -1
                                  BEGIN
-
-
                                     SELECT @n_QtyExpected = 1
                                     SELECT @n_BeforeReceivedQty = 0
                                     SELECT @n_QtyReceived = 0
 
+									                  set @n_Counter=0;
                                     WHILE @n_Counter < @n_ShippedQty
                                        BEGIN
 									   SELECT @c_ReceiptLine = RIGHT( '0000' + RTRIM(CAST(@n_LineNo AS NVARCHAR(5))), 5)
 
-                                          select  @c_SerialNo= serialno from packheader ph (NOLOCK)
+                                          select top 1 @c_SerialNo= serialno from packheader ph (NOLOCK)
 	                                          join packserialno ps (NOLOCK) on ps.pickslipno = ph.pickslipno
 	                                          where ph.orderkey = @c_OrderKey
 	                                          and ps.storerkey = @c_StorerKey
-	                                          and SKU= @c_SKU order by SerialNo
-	                                          OFFSET @n_Counter ROWS FETCH NEXT 1 ROWS ONLY;
-
-                                          if exists(select 1 from RECEIPTDETAIL  where ReceiptKey=@c_NewReceiptKey and StorerKey=@c_StorerKey and SKU =@c_SKU and  UserDefine01 =@c_SerialNo )
-										  continue
+	                                          and SKU= @c_SKU
+											  and SerialNo not in (select UserDefine01 from RECEIPTDETAIL  where ReceiptKey=@c_NewReceiptKey and StorerKey=@c_StorerKey and SKU =@c_SKU and  UserDefine01 =ps.SerialNo)
+											  order by SerialNo
+	                                          --OFFSET @n_Counter ROWS FETCH NEXT 1 ROWS ONLY;
 
                                           BEGIN TRY
 
@@ -323,13 +321,12 @@ IF @n_continue = 1 OR @n_continue = 2
                                              BeforeReceivedQty,FinalizeFlag,ToID,UnitPrice,
                                              status, UserDefine01, Lottable01)
                                           VALUES (@c_NewReceiptKey, 	  	@c_ReceiptLine,      @c_ExternReceiptkeyDet,
-                                             @c_ExternOrderLine,	 	@c_ToStorerKey,      @c_SKU,
+                                             @c_ReceiptLine,	 	@c_ToStorerKey,      @c_SKU,
                                              @n_QtyExpected,      	@n_QtyReceived,
                                              @c_UOM,            		@c_Packkey,          @c_Toloc,
                                              @c_Lottable02,       	@c_Lottable08,	     @c_Lottable11,
                                              @n_BeforeReceivedQty,	@c_ToFinalizeFlag,     @c_ID,
                                              @n_UnitPrice,	@c_Status, 		@c_SerialNo,	     @c_Lottable01)
-
 
                                           END TRY
 
@@ -343,7 +340,7 @@ IF @n_continue = 1 OR @n_continue = 2
                                           END CATCH
 
                                           SET @n_Counter = @n_Counter + 1;
-										  SELECT @n_LineNo = @n_LineNo + 1
+										                     SELECT @n_LineNo = @n_LineNo + 1
                                        END ;	--end while
 
 
@@ -383,8 +380,6 @@ IF @n_continue = 1 OR @n_continue = 2
          END
       SET ROWCOUNT 0
 
-
-
       QUIT_SP:
 
       IF @n_continue = 3  -- Error Occured - Process And Return
@@ -410,7 +405,6 @@ IF @n_continue = 1 OR @n_continue = 2
          END
    END -- if continue = 1 or 2 001
 END
-
 
 GO
 
