@@ -345,7 +345,7 @@ BEGIN
                            AND SKU = @cSKU
                            AND SerialNo = @cSerialNo)
             BEGIN
-               SET @nErrNo = 100416
+               SET @nErrNo = 217212
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SNO ady scan
                GOTO Quit
             END
