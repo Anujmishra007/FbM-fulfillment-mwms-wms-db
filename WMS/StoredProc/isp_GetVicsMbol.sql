@@ -49,9 +49,11 @@ BEGIN
          , @c_Endnumber               NVARCHAR(50)
          , @c_Keyname                 NVARCHAR(50)
          , @c_Keystring               NVARCHAR(50)
+         , @c_PartialSSCC             NVARCHAR(17)
          , @n_Startnumber             INT          = 0
          , @n_Endnumber               INT          = 0
          , @n_Runnolen                INT          = 0
+         , @n_SumAll                  INT          = 0
 
    DECLARE @b_Success   INT
          , @c_authority NVARCHAR(30) = N''
@@ -92,6 +94,7 @@ BEGIN
       END
 
       SET @c_Vics_MBOL = TRIM(@c_UCC) + @c_Mbolkey
+      SET @c_PartialSSCC = RIGHT(@c_Vics_MBOL, 17)
 
       --EXEC dbo.nspGetRight @c_Facility = @c_Facility
       --                   , @c_StorerKey = @c_Storerkey
@@ -138,7 +141,7 @@ BEGIN
       --   END
       --END
 
-      SET @n_length = LEN(@c_Vics_MBOL)
+      SET @n_length = LEN(@c_PartialSSCC)
 
       IF @n_length > 0
       BEGIN
@@ -147,18 +150,17 @@ BEGIN
          WHILE (@n_count <= @n_length)
          BEGIN
             IF @n_count % 2 > 0
-               SET @n_odd = @n_odd + CAST(SUBSTRING(@c_Vics_MBOL, @n_count, 1) AS INT) --ADD all digit in Odd Placement
+               SET @n_odd = @n_odd + CAST(SUBSTRING(@c_PartialSSCC, @n_count, 1) AS INT) --ADD all digit in Odd Placement
             ELSE
-               SET @n_even = @n_even + CAST(SUBSTRING(@c_Vics_MBOL, @n_count, 1) AS INT) --ADD all digit in Even Placement
+               SET @n_even = @n_even + CAST(SUBSTRING(@c_PartialSSCC, @n_count, 1) AS INT) --ADD all digit in Even Placement
 
             SET @n_count = @n_count + 1
          END
       END
 
-      SET @n_check_digit = 10 - ((@n_odd + (@n_even * 3)) % 10)
+      SET @n_SumAll = (@n_odd * 3) + @n_even
 
-      IF @n_check_digit = 10
-         SET @n_check_digit = 0
+      SET @n_check_digit = CONVERT(NVARCHAR(1),(1000 - @n_SumAll) % 10)
 
       SET @c_Vics_MBOL = @c_Vics_MBOL + CAST(@n_check_digit AS NVARCHAR)
    END
