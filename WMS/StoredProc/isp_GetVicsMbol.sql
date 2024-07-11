@@ -26,14 +26,14 @@ GO
 CREATE OR ALTER PROCEDURE [dbo].[isp_GetVicsMbol]
 (
    @c_Mbolkey NVARCHAR(10)
- , @c_Vics_MBOL NVARCHAR(50) OUTPUT
+ , @c_Vics_MBOL NVARCHAR(60) OUTPUT
 )
 AS
 BEGIN
    SET ANSI_NULLS OFF
    SET QUOTED_IDENTIFIER OFF
 
-   DECLARE @c_ExternMBOLKey NVARCHAR(50)
+   DECLARE @c_ExternMBOLKey NVARCHAR(60)
          , @c_UCC           NVARCHAR(50)
          , @n_length        INT = 0
          , @n_count         INT = 0
