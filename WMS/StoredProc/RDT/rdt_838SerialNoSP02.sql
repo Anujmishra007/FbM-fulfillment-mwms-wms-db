@@ -318,14 +318,14 @@ BEGIN
          -- Exist Check in serial table
          IF rdt.RDTGetConfig( @nFunc, 'ValidateSerialNo', @cStorerkey) = '1'
          BEGIN
-            IF NOT EXISTS(SELECT 1 FROM SerialNo WHERE StorerKey = @cStorerKey AND SKU = @cSKU AND SerialNo = @cSerialNo)
+            IF NOT EXISTS(SELECT 1 FROM SerialNo WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU AND SerialNo = @cSerialNo)
             BEGIN
                SET @nErrNo = 217210
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid SNO
                GOTO Quit
             END
 
-            IF EXISTS(SELECT 1 FROM SerialNo 
+            IF EXISTS(SELECT 1 FROM SerialNo WITH (NOLOCK)
                            WHERE StorerKey = @cStorerKey 
                            AND SKU = @cSKU 
                            AND SerialNo = @cSerialNo
@@ -336,6 +336,20 @@ BEGIN
                GOTO Quit
             END
 
+            IF EXISTS(SELECT 
+                           1
+                        FROM PackSerialNo psn WITH (NOLOCK)
+                        INNER JOIN PackHeader ph WITH(NOLOCK) ON psn.PickSlipNo = ph.PickSlipNo AND ph.StorerKey = psn.StorerKey
+                        WHERE status = N'0'
+                           AND psn.StorerKey = @cStorerKey
+                           AND SKU = @cSKU
+                           AND SerialNo = @cSerialNo)
+            BEGIN
+               SET @nErrNo = 217212
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SNO ady scan
+               GOTO Quit
+            END
+               
          END
 
          -- Extended update  
