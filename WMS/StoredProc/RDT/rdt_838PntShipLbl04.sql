@@ -80,39 +80,6 @@ BEGIN
             BEGIN TRAN  
             SAVE TRAN rdt_838PntShipLbl04  
 
-            -- Insert transmitlog2 here
-            EXECUTE ispGenTransmitLog2 
-               @c_TableName      = 'WSSOECL', 
-               @c_Key1           = @cLabelNo, 
-               @c_Key2           = @cLabelNo, 
-               @c_Key3           = @cStorerkey, 
-               @c_TransmitBatch  = '', 
-               @b_Success        = @bSuccess   OUTPUT,    
-               @n_err            = @nErrNo     OUTPUT,    
-               @c_errmsg         = @cErrMsg    OUTPUT   
-            
-            IF @bSuccess <> 1    
-               GOTO RollBackTran
-
-            SELECT @cTransmitLogKey = transmitlogkey
-            FROM dbo.TRANSMITLOG2 WITH (NOLOCK)
-            WHERE tablename = 'WSSOECL'
-            AND   key1 = @cLabelNo
-            AND   key2 = @cLabelNo
-            AND   key3 = @cStorerkey
-
-            EXEC dbo.isp_QCmd_WSTransmitLogInsertAlert 
-               @c_QCmdClass         = @c_QCmdClass, 
-               @c_FrmTransmitlogKey = @cTransmitLogKey, 
-               @c_ToTransmitlogKey  = @cTransmitLogKey, 
-               @b_Debug             = @b_Debug, 
-               @b_Success           = @bSuccess    OUTPUT, 
-               @n_Err               = @nErrNo      OUTPUT, 
-               @c_ErrMsg            = @cErrMsg     OUTPUT 
-
-            IF @bSuccess <> 1    
-               GOTO RollBackTran
-
             SET @curLabel = Cursor LOCAL READ_ONLY FAST_FORWARD FOR
                SELECT UDF01   
                FROM CODELKUP CL WITH (NOLOCK)  
