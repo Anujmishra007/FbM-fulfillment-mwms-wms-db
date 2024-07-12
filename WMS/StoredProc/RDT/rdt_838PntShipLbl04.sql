@@ -60,88 +60,130 @@ BEGIN
             DECLARE  @curLabel         CURSOR,
                      @cLabelName       NVARCHAR( 10),
                      @cLblSKU          NVARCHAR( 20),
-                     @cLblVASCode      NVARCHAR( 12)  
+                     @cLblVASCode      NVARCHAR( 12),
+                     @bSuccess         INT,
+                     @cTransmitLogKey  NVARCHAR( 10),
+                     @c_QCmdClass      NVARCHAR( 10)   = '',
+                     @b_Debug          INT = 0,
+                     @cShipLabel       NVARCHAR( 20),
+                     @cOrderKey        NVARCHAR( 10)
+            DECLARE @cLabelPrinter     NVARCHAR( 10)
+            DECLARE @cPrinterGroup     NVARCHAR( 10)
+            DECLARE @tMultiLbl AS VariableTable
 
-            SELECT 'Print Label'     
-            /*
+            -- Get session info
+            SELECT 
+               @cPrinterGroup = Printer
+            FROM rdt.rdtMobRec WITH (NOLOCK)
+            WHERE Mobile = @nMobile 
+
+            BEGIN TRAN  
+            SAVE TRAN rdt_838PntShipLbl04  
+
+            -- Insert transmitlog2 here
+            EXECUTE ispGenTransmitLog2 
+               @c_TableName      = 'WSSOECL', 
+               @c_Key1           = @cLabelNo, 
+               @c_Key2           = @cLabelNo, 
+               @c_Key3           = @cStorerkey, 
+               @c_TransmitBatch  = '', 
+               @b_Success        = @bSuccess   OUTPUT,    
+               @n_err            = @nErrNo     OUTPUT,    
+               @c_errmsg         = @cErrMsg    OUTPUT   
+            
+            IF @bSuccess <> 1    
+               GOTO RollBackTran
+
+            SELECT @cTransmitLogKey = transmitlogkey
+            FROM dbo.TRANSMITLOG2 WITH (NOLOCK)
+            WHERE tablename = 'WSSOECL'
+            AND   key1 = @cLabelNo
+            AND   key2 = @cLabelNo
+            AND   key3 = @cStorerkey
+
+            EXEC dbo.isp_QCmd_WSTransmitLogInsertAlert 
+               @c_QCmdClass         = @c_QCmdClass, 
+               @c_FrmTransmitlogKey = @cTransmitLogKey, 
+               @c_ToTransmitlogKey  = @cTransmitLogKey, 
+               @b_Debug             = @b_Debug, 
+               @b_Success           = @bSuccess    OUTPUT, 
+               @n_Err               = @nErrNo      OUTPUT, 
+               @c_ErrMsg            = @cErrMsg     OUTPUT 
+
+            IF @bSuccess <> 1    
+               GOTO RollBackTran
+
             SET @curLabel = Cursor LOCAL READ_ONLY FAST_FORWARD FOR
+               SELECT UDF01   
+               FROM CODELKUP CL WITH (NOLOCK)  
+               WHERE CL.ListName = 'LVSCARTLBL'
+               AND   CL.Storerkey= @cStorerKey
+               ORDER BY code
+
+            OPEN @curLabel 
+            FETCH NEXT FROM @curLabel INTO @cShipLabel
+            WHILE @@FETCH_STATUS = 0
+            BEGIN
+               SELECT @cLabelPrinter = PrinterID 
+               FROM rdt.rdtReportToPrinter WITH (NOLOCK)
+               WHERE Function_ID = @nFunc AND StorerKey = @cStorerKey
+               AND PrinterGroup = @cPrinterGroup AND ReportType = @cShipLabel
+
                SELECT 
                   --pkd.CaseID, 
-                  --pkd.OrderKey, 
+                  @cOrderKey = pkd.OrderKey, 
                   --pkd.OrderLineNumber, 
                   pkd.Sku, 
                   wod.Type
                FROM PickDetail pkd WITH (NOLOCK) 
-                  INNER JOIN PackDetail pad WITH (NOLOCK)
+               INNER JOIN PackDetail pad WITH (NOLOCK)
                      ON pkd.Storerkey = pad.StorerKey AND pkd.CaseID = pad.LabelNo
-                  INNER JOIN WorkOrderDetail wod WITH (NOLOCK)
+               INNER JOIN WorkOrderDetail wod WITH (NOLOCK)
                      ON pkd.Storerkey = wod.Storerkey AND pkd.OrderKey = wod.ExternWorkOrderKey AND pkd.OrderLineNumber = wod.ExternLineNO
                WHERE pkd.Storerkey = @cStorerKey AND pkd.CaseID = @cLabelNo
-
-               OPEN @curLabel
-               FETCH NEXT FROM @curLabel INTO @cLblSKU, @cLblVASCode
-               WHILE @@FETCH_STATUS = 0
-               BEGIN
-                  SELECT 'Print Label', @cLblSKU, @cLblVASCode
-                  break
-                  DECLARE @tVasLabel AS VariableTable
-                  
-                  INSERT INTO @tVasLabel (Variable, Value) VALUES
-                  ( '@cStorerKey',     @cStorerKey),
-                  ( '@cPickSlipNo',    @cPickSlipNo),
-                  ( '@cFromDropID',    @cFromDropID),
-                  ( '@cPackDtlDropID', @cPackDtlDropID),
-                  ( '@cLabelNo',       @cLabelNo),
-                  ( '@nCartonNo',      CAST( @nCartonNo AS NVARCHAR(10)))
-
-
-                  
-                  IF @nErrNo <> 0
-                  BEGIN
-                     SET @nErrNo = 201807
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD UCC fail
-                     GOTO RollBackTran
-                  END
-               END
-
-
-
-
-
-            -- Common params
-            INSERT INTO @tMultiLbl (Variable, Value) VALUES
+               
+               -- Common params
+               INSERT INTO @tMultiLbl (Variable, Value) VALUES
                ( '@cStorerKey',     @cStorerKey),
                ( '@cPickSlipNo',    @cPickSlipNo),
-               ( '@cFromDropID',    @cFromDropID), -->
-               ( '@cPackDtlDropID', @cPackDtlDropID),
-               ( '@cLabelNo',       @cLabelNo),
-               ( '@nCartonNo',      CAST( @nCartonNo AS NVARCHAR(10)))
+               ( '@cOrderKey',      @cOrderKey),
+               ( '@cLabelNo',       @cLabelNo)
 
-            -- Print label
-            EXEC RDT.rdt_Print 
-               @nMobile, 
-               @nFunc, 
-               @cLangCode, 
-               @nStep, 
-               @nInputKey, 
-               @cFacility, 
-               @cStorerKey, 
-               @cLabelPrinter, 
-               @cPaperPrinter,
-               @cShipLabel, -- Report type
-               @tMultiLbl, -- Report params
-               'rdtfnc_Pack',
-               @nErrNo  OUTPUT,
-               @cErrMsg OUTPUT
+               -- Print label
+               EXEC RDT.rdt_Print 
+                  @nMobile, 
+                  @nFunc, 
+                  @cLangCode, 
+                  @nStep, 
+                  @nInputKey, 
+                  @cFacility, 
+                  @cStorerKey, 
+                  @cLabelPrinter, 
+                  @cPaperPrinter,
+                  @cShipLabel, -- Report type
+                  @tMultiLbl, -- Report params
+                  'rdtfnc_Pack',
+                  @nErrNo  OUTPUT,
+                  @cErrMsg OUTPUT
 
-            IF @nErrNo <> 0
-               GOTO Quit
-            */
+               IF @nErrNo <> 0
+                  GOTO RollBackTran
+
+               DELETE FROM  @tPalletLabel
+            END
+            COMMIT TRAN rdt_838PntShipLbl04
          END
       END
    END
 
-Quit:
+GOTO Quit  
+  
+RollBackTran:  
+      ROLLBACK TRAN rdt_838PntShipLbl04  
+Quit:  
+   WHILE @@TRANCOUNT > @nTranCount  
+      COMMIT TRAN  
+Fail:  
 
 END
 GO
