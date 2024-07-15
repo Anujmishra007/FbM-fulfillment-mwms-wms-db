@@ -52,6 +52,7 @@ BEGIN
    DECLARE @cSuggestAisle   NVARCHAR(10)
    DECLARE @cLoopUCCNo      NVARCHAR(18)
    DECLARE @cLoopUCCQty     NVARCHAR(18)
+   DECLARE @cLoopUCCLot     NVARCHAR(10)
    DECLARE @nSuitAisleLocQty INT
    DECLARE @nSuitAislePltQty INT
    DECLARE @bDebug           BIT
@@ -73,7 +74,8 @@ BEGIN
    (
       id INT IDENTITY(1,1),
       UCCNo          NVARCHAR(20),
-      Qty            INT
+      Qty            INT,
+      LOT            NVARCHAR(10)
    )
 
     DECLARE @tLocData1 TABLE
@@ -317,8 +319,8 @@ BEGIN
          PRINT @cDebugMsg
       END
 
-      INSERT INTO @tUCCData( UCCNo, Qty )
-      SELECT UCCNo, qty FROM dbo.UCC WITH(NOLOCK) WHERE Id = @cID AND StorerKey = @cStorerKey
+      INSERT INTO @tUCCData( UCCNo, Qty, LOT )
+      SELECT UCCNo, qty, LOT FROM dbo.UCC WITH(NOLOCK) WHERE Id = @cID AND StorerKey = @cStorerKey
 
       SELECT @nRowCount = @@ROWCOUNT
       IF @nRowCount = 0
@@ -399,7 +401,8 @@ BEGIN
          BEGIN
             SELECT TOP 1 
                @cLoopUCCNo = UCCNo,
-               @cLoopUCCQty = Qty
+               @cLoopUCCQty = Qty,
+               @cLoopUCCLot = LOT
             FROM @tUCCData
             ORDER BY id
 
@@ -422,6 +425,7 @@ BEGIN
                ,@cFromID = @cID
                ,@cSuggestedLOC = @cLoopLoc
                ,@cStorerKey = @cStorerKey
+               ,@cFromLOT = @cLoopUCCLot
                ,@nErrNo = @nErrNo  OUTPUT
                ,@cErrMsg = @cErrMsg OUTPUT
                ,@nPABookingKey = @nPABookingKey OUTPUT
