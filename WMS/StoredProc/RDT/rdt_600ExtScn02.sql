@@ -191,6 +191,12 @@ BEGIN
       SET @nAfterScn = 4035 -- QTY Screen
       SET @nAfterStep = 6
    END
+   ELSE 
+   BEGIN
+      SET @nErrNo = 64284
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- INV SKUDEFUOM
+      GOTO Fail_Exit
+   END
    GOTO Quit
 END
 Fail_Exit:

@@ -14,6 +14,7 @@ GO
 /*                                                                            */
 /* Date        Rev  Author   Purposes                                         */
 /* 27-03-2020  1.0  Ung      WMS-12634 Created                                */
+/* 02-07-2020  1.1  Jackc    Correct the wrong tran savepoint  name            */
 /******************************************************************************/
 
 CREATE PROC [rdt].[rdt_UCCPutaway_Confirm] (
@@ -109,7 +110,7 @@ BEGIN
 
    -- Handling transaction
    BEGIN TRAN  -- Begin our own transaction
-   SAVE TRAN rdtfnc_UCCPutaway -- For rollback or commit only our own transaction 
+   SAVE TRAN rdt_UCCPutaway_Confirm -- For rollback or commit only our own transaction 
 
    -- Single SKU UCC
    IF @nSKUCnt = 1

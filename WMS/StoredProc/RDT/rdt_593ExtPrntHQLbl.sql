@@ -1,5 +1,6 @@
 SET ANSI_NULLS OFF
 GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
 
@@ -31,7 +32,7 @@ CREATE OR ALTER   PROC [RDT].[rdt_593ExtPrntHQLbl] (
    @cErrMsg    NVARCHAR( 20) OUTPUT
 )
 AS
-BEGIN
+BEGIN 
    SET NOCOUNT ON
    SET ANSI_NULLS OFF
    SET QUOTED_IDENTIFIER OFF
@@ -52,11 +53,13 @@ BEGIN
            @tMultiLbl AS VariableTable,
            @OrderInfo         NVARCHAR( 20),  --WSE016
            @SKUCount          INT,            --WSE016
+           @LOADKEY           NVARCHAR( 10),  --AGA399
+           @PICKSLIP          NVARCHAR( 10),  --AGA399
            @dOrderDate        DATETIME,
            @nExpectedQty      INT = 0,
            @nPackedQty        INT = 0,
-           @nTempCartonNo     INT, 
-           @nInputKey         INT = 1 -- Temp Fix
+           @nTempCartonNo     INT
+         , @nInputKey         INT = 1 -- Temp Fix
 
    DECLARE @tSSCCList VariableTable
 
@@ -69,35 +72,35 @@ BEGIN
    WHERE Mobile = @nMobile
 
    -- Insert test
-   INSERT INTO [dbo].[TraceInfo]
-      ([TraceName]
-      ,[TimeIn]
-      ,[TimeOut]
-      ,[TotalTime]
-      ,[Step1]
-      ,[Step2]
-      ,[Step3]
-      ,[Step4]
-      ,[Step5]
-      ,[Col1]
-      ,[Col2]
-      ,[Col3]
-      ,[Col4]
-      ,[Col5])
-   Select N'rdt_593ExtPrntHQLbl'
-      ,NULL
-      ,NULL
-      ,NULL
-      ,@nStep
-      ,@nMobile
-      ,@nFunc
-      ,@cLabelPrinter
-      ,@cPaperPrinter
-      ,@cFacility
-      ,@cStorerkey
-      ,NULL
-      ,NULL
-      ,NULL
+INSERT INTO [dbo].[TraceInfo]
+           ([TraceName]
+           ,[TimeIn]
+           ,[TimeOut]
+           ,[TotalTime]
+           ,[Step1]
+           ,[Step2]
+           ,[Step3]
+           ,[Step4]
+           ,[Step5]
+           ,[Col1]
+           ,[Col2]
+           ,[Col3]
+           ,[Col4]
+           ,[Col5])
+     Select N'rdt_593ExtPrntHQLbl'
+           ,NULL
+           ,NULL
+           ,NULL
+           ,@nStep
+           ,@nMobile
+           ,@nFunc
+           ,@cLabelPrinter
+           ,@cPaperPrinter
+           ,@cFacility
+           ,@cStorerkey
+           ,NULL
+           ,NULL
+           ,NULL
 
    IF @nInputKey = 1
    BEGIN
@@ -127,11 +130,12 @@ BEGIN
             WHERE storerkey = @cStorerKey
                AND OM.orderKey = @cOrderKey
          /*    WS - get info for  Wickes and Screwfix label   */
-            SELECT @SKUCount = count(pd.sku) from PackDetail pd WITH(NOLOCK)
+            SELECT @SKUCount = count(distinct pd.sku) from PackDetail pd WITH(NOLOCK)
             INNER JOIN PackHeader ph WITH(NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo
             INNER JOIN ORDERS OM WITH(NOLOCK) ON OM.StorerKey = PH.StorerKey and OM.OrderKey = PH.OrderKey
             WHERE ph.StorerKey = @cStorerKey
                AND ph.OrderKey =  @cOrderKey
+            AND pd.DropID = @cParam1 --To filter for DropID in case in same SO there are pack DropID multi and LPn monoref
                AND (OM.ConsigneeKey ='H25800830' OR OM.ConsigneeKey ='H25800856' OR OM.ConsigneeKey ='H25800615') --WSE016: this is Wickes and Screwfix ConsigneeKey
                GROUP BY pd.DropID   
          /*
@@ -235,7 +239,7 @@ BEGIN
             ( '@cSSCC',       @cParam1)
 
             -- Print label
-            IF @OrderInfo  in ('DC','RCC')
+         IF @OrderInfo  in ('DC','RCC')
             BEGIN
                --first printout
                EXEC RDT.rdt_Print 
@@ -310,7 +314,7 @@ BEGIN
                IF @nErrNo <> 0
                   GOTO Quit
             END
-            -- WSE016: Other Labels   
+          -- WSE016: Other Labels   
             IF @OrderInfo not  in ('DC','RCC')
             BEGIN
                EXEC RDT.rdt_Print 
@@ -331,16 +335,33 @@ BEGIN
                IF @nErrNo <> 0
                   GOTO Quit
             END
-
-            IF @nErrNo = 0
+         /*DropID update section*/
+         
+         IF @nErrNo = 0
+         BEGIN
+            SET @LOADKEY = (SELECT TOP 1 LoadKey FROM ORDERS (NOLOCK) WHERE orderkey = (SELECT TOP 1 OrderKey FROM PICKDETAIL (NOLOCK) WHERE DropID = @cParam1))
+            
+            SET @PICKSLIP = (SELECT TOP 1 PickSlipNo FROM PackDetail (NOLOCK) WHERE DropID = @cParam1)
+            
+            IF NOT EXISTS (SELECT 1 FROM dropid (NOLOCK) WHERE dropid = @cParam1)
             BEGIN
-               UPDATE Dropid
-               set LabelPrinted = 'Y'
-               where Dropid = @cParam1
+               INSERT INTO Dropid(Dropid,Droploc,AdditionalLoc,DropIDType,LabelPrinted,ManifestPrinted,Status,AddDate,AddWho,EditDate,EditWho,TrafficCop,ArchiveCop,Loadkey,PickSlipNo,UDF01,UDF02,UDF03,UDF04,UDF05)
+               VALUES(@cParam1,'','',0,'Y',0,5,GETDATE(),SUSER_NAME(),GETDATE(),SUSER_NAME(),null,null,@LOADKEY,@PICKSLIP,'','','','','')
+            END
+            ELSE IF EXISTS (SELECT 1 FROM dropid (NOLOCK) WHERE dropid = @cParam1)
+            BEGIN
+               UPDATE dropid
+               SET LabelPrinted = 'Y'
+               WHERE dropid = @cParam1
             END
          END
+         ELSE
+         BEGIN
+            GOTO Quit
+         END
+         END
       END   -- IF @nStep = 1
-   END
+  END
 Quit:
 END
 GO

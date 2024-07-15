@@ -108,7 +108,7 @@ AS
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --216404Qty Entered More Than Max Allowed
       GOTO Quit
    END
-   IF LEN(@cPrefix) > 3
+   IF LEN(@cPrefix) > 5
    BEGIN
       SET @nErrNo = 216406
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --216406 Prefix Too Long

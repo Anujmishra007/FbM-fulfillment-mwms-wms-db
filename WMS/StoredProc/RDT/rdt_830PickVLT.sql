@@ -1,3 +1,4 @@
+
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -9,7 +10,8 @@ GO
 /*                                                                      */
 /*                                                                      */
 /* Date         Author     Purposes                                     */
-/* 2024-03-21   PPA374     Checks that "TO LOC" is as expected          */
+/* 21/03/2024   PPA374     Checks that "TO LOC" is as expected          */
+/* 11/07/2024   PPA374     Captures the location that pick is done from */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_830PickVLT] (
@@ -305,6 +307,7 @@ BEGIN
             
             SET @nQTY_Move = @nQTY_PD
             SET @nQTY_Bal = 0 -- Reduce balance
+
          END
 
          -- PickDetail have less
@@ -327,6 +330,7 @@ BEGIN
             
             SET @nQTY_Move = @nQTY_PD
             SET @nQTY_Bal = @nQTY_Bal - @nQTY_PD -- Reduce balance
+
          END
 
          -- PickDetail have more
@@ -349,6 +353,7 @@ BEGIN
                   GOTO RollBackTran
                END
                SET @nQTY_Move = 0
+
             END
             ELSE
             BEGIN -- Have balance, need to split
@@ -385,7 +390,8 @@ BEGIN
                , OrderKey, OrderLineNumber, Lot, StorerKey, SKU, AltSku, UOM,
                   UOMQTY, QTYMoved, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup,
                   CartonType, ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,
-                  EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes,
+                  EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, 
+                  CASE WHEN DropID = '' THEN Notes ELSE @cLOC END,--Notes,
                   @cNewPickDetailKey,
                   Status, 
                   @nQTY_PD - @nQTY_Bal, -- QTY
@@ -399,11 +405,6 @@ BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- INSPKDtlFail
                   GOTO RollBackTran
                END
-
-               UPDATE PICKDETAIL
-               SET PickHeaderKey = @cPickSlipNo
-               WHERE OrderKey = @cOrderKey
-                  AND PickHeaderKey = ''
 
                -- Split RefKeyLookup
                IF EXISTS( SELECT 1 FROM RefKeyLookup WITH (NOLOCK) WHERE PickDetailKey = @cPickDetailKey)
@@ -452,6 +453,7 @@ BEGIN
       
                SET @nQTY_Move = @nQTY_Bal
                SET @nQTY_Bal = 0 -- Reduce balance
+
             END
          END
 
@@ -531,6 +533,12 @@ BEGIN
       CLOSE @curPD  --(yeekung02)
       DEALLOCATE @curPD
       
+     UPDATE dbo.PickDetail WITH (ROWLOCK) SET
+     Notes = @cLOC,
+     Pickheaderkey = @cPickSlipNo
+      WHERE DropID = @cDropID and DropID <> ''
+     and ISNULL(notes,'')=''
+
       /***********************************************************************************************
                                                 PackDetail
       ***********************************************************************************************/
@@ -680,6 +688,7 @@ BEGIN
          COMMIT TRAN
    END
 END
+
 GO
 
 SET QUOTED_IDENTIFIER OFF
@@ -689,3 +698,5 @@ GO
 
 GRANT EXECUTE ON [rdt].[rdt_830PickVLT] TO NSQL
 GO  
+
+
