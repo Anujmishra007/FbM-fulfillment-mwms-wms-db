@@ -9,7 +9,7 @@ GO
 /* Copyright      : Maersk                                                    */
 /*                                                                            */
 /* Date       Rev  Author     Purposes                                        */
-/* 2024-07-05 1.0  JACKC      FCR-392 Print VAS labels                        */
+/* 2024-07-05 1.0  JACKC      FCR-392 Print Carton labels                        */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_838PntShipLbl04 (
@@ -65,20 +65,32 @@ BEGIN
                      @cTransmitLogKey  NVARCHAR( 10),
                      @c_QCmdClass      NVARCHAR( 10)   = '',
                      @b_Debug          INT = 0,
-                     @cShipLabel       NVARCHAR( 20),
+                     @cCartonLabel     NVARCHAR( 20),
                      @cOrderKey        NVARCHAR( 10)
             DECLARE @cLabelPrinter     NVARCHAR( 10)
+            DECLARE @cPaperPrinter     NVARCHAR( 10)
             DECLARE @cPrinterGroup     NVARCHAR( 10)
+            --DECLARE @nTranCount        INT
             DECLARE @tMultiLbl AS VariableTable
 
             -- Get session info
             SELECT 
                @cPrinterGroup = Printer
             FROM rdt.rdtMobRec WITH (NOLOCK)
-            WHERE Mobile = @nMobile 
+            WHERE Mobile = @nMobile
 
-            BEGIN TRAN  
-            SAVE TRAN rdt_838PntShipLbl04  
+            -- Get Order key
+            SELECT 
+               @cOrderKey = pkd.OrderKey
+            FROM PickDetail pkd WITH (NOLOCK) 
+            WHERE pkd.Storerkey = @cStorerKey AND pkd.CaseID = @cLabelNo
+
+            -- Common params
+            INSERT INTO @tMultiLbl (Variable, Value) VALUES
+            ( '@cStorerKey',     @cStorerKey),
+            ( '@cPickSlipNo',    @cPickSlipNo),
+            ( '@cOrderKey',      @cOrderKey),
+            ( '@cLabelNo',       @cLabelNo)
 
             SET @curLabel = Cursor LOCAL READ_ONLY FAST_FORWARD FOR
                SELECT UDF01   
@@ -88,33 +100,13 @@ BEGIN
                ORDER BY code
 
             OPEN @curLabel 
-            FETCH NEXT FROM @curLabel INTO @cShipLabel
+            FETCH NEXT FROM @curLabel INTO @cCartonLabel
             WHILE @@FETCH_STATUS = 0
             BEGIN
                SELECT @cLabelPrinter = PrinterID 
                FROM rdt.rdtReportToPrinter WITH (NOLOCK)
                WHERE Function_ID = @nFunc AND StorerKey = @cStorerKey
-               AND PrinterGroup = @cPrinterGroup AND ReportType = @cShipLabel
-
-               SELECT 
-                  --pkd.CaseID, 
-                  @cOrderKey = pkd.OrderKey, 
-                  --pkd.OrderLineNumber, 
-                  pkd.Sku, 
-                  wod.Type
-               FROM PickDetail pkd WITH (NOLOCK) 
-               INNER JOIN PackDetail pad WITH (NOLOCK)
-                     ON pkd.Storerkey = pad.StorerKey AND pkd.CaseID = pad.LabelNo
-               INNER JOIN WorkOrderDetail wod WITH (NOLOCK)
-                     ON pkd.Storerkey = wod.Storerkey AND pkd.OrderKey = wod.ExternWorkOrderKey AND pkd.OrderLineNumber = wod.ExternLineNO
-               WHERE pkd.Storerkey = @cStorerKey AND pkd.CaseID = @cLabelNo
-               
-               -- Common params
-               INSERT INTO @tMultiLbl (Variable, Value) VALUES
-               ( '@cStorerKey',     @cStorerKey),
-               ( '@cPickSlipNo',    @cPickSlipNo),
-               ( '@cOrderKey',      @cOrderKey),
-               ( '@cLabelNo',       @cLabelNo)
+               AND PrinterGroup = @cPrinterGroup AND ReportType = @cCartonLabel
 
                -- Print label
                EXEC RDT.rdt_Print 
@@ -127,31 +119,25 @@ BEGIN
                   @cStorerKey, 
                   @cLabelPrinter, 
                   @cPaperPrinter,
-                  @cShipLabel, -- Report type
+                  @cCartonLabel, -- Report type
                   @tMultiLbl, -- Report params
-                  'rdtfnc_Pack',
+                  'rdt_838PntShipLbl04',
                   @nErrNo  OUTPUT,
                   @cErrMsg OUTPUT
 
                IF @nErrNo <> 0
-                  GOTO RollBackTran
+                  GOTO Quit
 
-               DELETE FROM  @tPalletLabel
-            END
-            COMMIT TRAN rdt_838PntShipLbl04
-         END
-      END
+               FETCH NEXT FROM @curLabel INTO @cCartonLabel
+            END -- End Cursor
+         END -- option 1
+      END -- input key 1
    END
 
 GOTO Quit  
-  
-RollBackTran:  
-      ROLLBACK TRAN rdt_838PntShipLbl04  
+   
 Quit:  
-   WHILE @@TRANCOUNT > @nTranCount  
-      COMMIT TRAN  
-Fail:  
-
+ 
 END
 GO
 
