@@ -70,12 +70,13 @@ BEGIN
             DECLARE @cLabelPrinter     NVARCHAR( 10)
             DECLARE @cPaperPrinter     NVARCHAR( 10)
             DECLARE @cPrinterGroup     NVARCHAR( 10)
-            --DECLARE @nTranCount        INT
+            DECLARE @bDebugFlag        BINARY = 0
             DECLARE @tMultiLbl AS VariableTable
 
             -- Get session info
             SELECT 
-               @cPrinterGroup = Printer
+               @cLabelPrinter = Printer,
+               @cPaperPrinter = Printer_Paper
             FROM rdt.rdtMobRec WITH (NOLOCK)
             WHERE Mobile = @nMobile
 
@@ -92,6 +93,13 @@ BEGIN
             ( '@cOrderKey',      @cOrderKey),
             ( '@cLabelNo',       @cLabelNo)
 
+            IF @bDebugFlag = 1
+            BEGIN
+               SELECT 'PrtinerGroup', @cPrinterGroup
+               SELECT 'Params Table'
+               SELECT * FROM @tMultiLbl
+            END
+
             SET @curLabel = Cursor LOCAL READ_ONLY FAST_FORWARD FOR
                SELECT UDF01   
                FROM CODELKUP CL WITH (NOLOCK)  
@@ -103,10 +111,8 @@ BEGIN
             FETCH NEXT FROM @curLabel INTO @cCartonLabel
             WHILE @@FETCH_STATUS = 0
             BEGIN
-               SELECT @cLabelPrinter = PrinterID 
-               FROM rdt.rdtReportToPrinter WITH (NOLOCK)
-               WHERE Function_ID = @nFunc AND StorerKey = @cStorerKey
-               AND PrinterGroup = @cPrinterGroup AND ReportType = @cCartonLabel
+               IF @bDebugFlag = 1
+                  SELECT 'Print Label:', @cCartonLabel
 
                -- Print label
                EXEC RDT.rdt_Print 
@@ -134,10 +140,10 @@ BEGIN
       END -- input key 1
    END
 
-GOTO Quit  
-   
-Quit:  
+   GOTO Quit 
  
+   
+   Quit:  
 END
 GO
 

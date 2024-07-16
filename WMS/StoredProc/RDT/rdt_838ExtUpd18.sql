@@ -105,6 +105,8 @@ BEGIN
                IF @nErrNo <> 0 OR @bSuccess <> 1
                   GOTO RollbackTran
 
+               COMMIT TRAN rdt_838ExtUpd18
+
                GOTO Quit
 
             END -- option=1
