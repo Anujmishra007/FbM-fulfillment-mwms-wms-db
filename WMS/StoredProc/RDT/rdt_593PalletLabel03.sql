@@ -65,7 +65,7 @@ AS
    WHERE Mobile = @nMobile
 
    -- Check Receipt Key
-   SELECT @cDoor = R.WAREHOUSEREFERENCE,@cTrailerID = R.UserDefine05
+   SELECT @cDoor = R.WAREHOUSEREFERENCE,@cTrailerID = R.ContainerKey
    FROM dbo.Receipt R WITH (NOLOCK)
    INNER JOIN dbo.ReceiptDetail RD WITH (NOLOCK) ON R.ReceiptKey  = RD.ReceiptKey
    WHERE RD.ReceiptKey = @cReceiptKey AND R.Facility = @cFacility AND R.StorerKey = @cStorerKey
