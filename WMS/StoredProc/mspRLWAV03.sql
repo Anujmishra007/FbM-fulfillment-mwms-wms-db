@@ -346,16 +346,20 @@ BEGIN
                 @c_ErrMsg = @c_ErrMsg OUTPUT,
                 @b_debug = @b_debug
 
-            --IF @b_debug=3
-            --   SET @n_MPOCFlag = '1'
+			IF @b_debug>0
+			BEGIN
+				PRINT 'OrderKey: ' + @c_OrderKey + ' MPOC Flag: ' + CAST(@n_MPOCFlag as VARCHAR(5))
+			END
 
              -- None MPOC Order, Pack by OrderKey
+			IF @n_MPOCFlag = 1
+			BEGIN
              UPDATE #OrderGroup
-               SET MPOCFlag = CAST(@n_MPOCFlag AS CHAR(1)),
-                   OrderGroup = CASE WHEN @n_MPOCFlag = 0 THEN OrderKey ELSE '' END
+               SET MPOCFlag = CAST(@n_MPOCFlag AS CHAR(1))
              WHERE OrderKey = @c_Orderkey
+			END
 
-             FETCH NEXT FROM CUR_MPOCFLAG INTO @c_Orderkey
+            FETCH NEXT FROM CUR_MPOCFLAG INTO @c_Orderkey
          END
          CLOSE CUR_MPOCFLAG
          DEALLOCATE CUR_MPOCFLAG
@@ -520,8 +524,9 @@ BEGIN
       DEALLOCATE CUR_ORDER_SKU
 
 
-       IF @b_debug = 1
+       IF @b_debug > 0
          SELECT * FROM #ORDERSKU
+
    END  -- IF @n_continue IN(1,2)
 
    --------------------------------------------------
@@ -568,12 +573,12 @@ BEGIN
          	   AND ISNULL(PD.DropID,'') <> ''
          	   ORDER BY OS.RowID
 
-            OPEN CUR_UCC
+             OPEN CUR_UCC
 
-   	      FETCH NEXT FROM CUR_UCC INTO @n_RowID, @c_Sku, @n_PackQty, @c_UCCNo, @n_StdCube
+   	         FETCH NEXT FROM CUR_UCC INTO @n_RowID, @c_Sku, @n_PackQty, @c_UCCNo, @n_StdCube
 
         	   WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)
-   	      BEGIN
+   	           BEGIN
    	        	SET @n_CartonNo = @n_CartonNo + 1
 
          	   INSERT INTO #CARTON (Orderkey, CartonNo, LabelNo, CartonGroup, CartonType, MaxCube, MaxWeight, MaxCount, MaxSku, CartonLength, CartonWidth, CartonHeight, UCCNo, OrderGroup)
@@ -592,6 +597,13 @@ BEGIN
    	      CLOSE CUR_UCC
    	      DEALLOCATE CUR_UCC
          END
+
+		 IF @b_debug=2
+		 BEGIN
+			SELECT 'Full Carton: ', *
+			FROM  #CARTONDETAIL
+			Where Orderkey = @c_Orderkey
+		 END
 
          --pack loose carton
          SET @c_NewCarton = 'Y'
@@ -660,7 +672,7 @@ BEGIN
          	WHILE 1=1 AND @n_continue IN(1,2) AND @n_OrderQty > 0
          	BEGIN
          	  	-- SELECT @c_SKU = '', @n_StdCube = 0
-         	  	SELECT @n_QtyCanPackByCube = 0, @n_QtyCanPackByCount = 0, @n_QtyCanPack = 0
+         	   SELECT @n_QtyCanPackByCube = 0, @n_QtyCanPackByCount = 0, @n_QtyCanPack = 0
                SELECT @n_OrderCube = @n_OrderQty * @n_StdCube
 
                IF @b_debug=2
@@ -670,10 +682,8 @@ BEGIN
                END
          	  	IF @c_NewCarton = 'Y' --new carton
          	  	BEGIN
-         	  	  	SELECT @n_CartonMaxCube = 0, @n_CartonMaxCount = 0, @n_CartonMaxWeight = 0, @c_NewCarton = 'N', @n_CartonNo = 0, @c_CartonType = ''
-         	  	  	SELECT @n_CartonLength = 0, @n_CartonWidth = 0, @n_CartonHeight = 0
-
-
+         	  	  SELECT @n_CartonMaxCube = 0, @n_CartonMaxCount = 0, @n_CartonMaxWeight = 0, @c_NewCarton = 'N', @n_CartonNo = 0, @c_CartonType = ''
+         	  	  SELECT @n_CartonLength = 0, @n_CartonWidth = 0, @n_CartonHeight = 0
 
                   SELECT @n_CartonNo = MAX(CartonNo)
                   FROM #CARTON
@@ -681,7 +691,7 @@ BEGIN
 
                   SET @n_CartonNo = ISNULL(@n_CartonNo,0)
 
-         	  	  	SET @n_CartonNo = @n_CartonNo + 1
+         	  	  SET @n_CartonNo = @n_CartonNo + 1
 
                   -- Getting Right Carton Type by LWH and Cube
                   IF @c_VAS_CartonType <> ''
@@ -802,7 +812,12 @@ BEGIN
          	  	BEGIN
            	  	   SET @n_RowID = 0
 
-      	  	      IF EXISTS(SELECT 1 FROM #CARTONDETAIL WHERE CartonNo = @n_CartonNo AND Orderkey = @c_Orderkey)
+                  IF @b_debug=2
+                  BEGIN
+                      PRINT 'SKU: ' + @c_Sku + ' StdCube: ' + CAST(@n_StdCube AS VARCHAR(20))
+                  END
+
+      	  	       IF EXISTS(SELECT 1 FROM #CARTONDETAIL WHERE CartonNo = @n_CartonNo AND Orderkey = @c_Orderkey)
          	  	   BEGIN
          	  	      --Get the sku can fully best fit in the existing carton
          	  	      SELECT TOP 1 @n_RowID = OS.RowID,
@@ -854,10 +869,6 @@ BEGIN
          	  	      BREAK
          	  	   END
 
-                  IF @b_debug=2
-                  BEGIN
-                      PRINT 'SKU: ' + @c_Sku + ' StdCube: ' + CAST(@n_StdCube AS VARCHAR(20))
-                  END
 
          	  	   INSERT INTO #ROWTRACK(RowID) VALUES (@n_RowID)
 
@@ -941,10 +952,11 @@ BEGIN
       BEGIN
           PRINT '*** Process Cartonization for MPOC Orders ***'
       END
-   	DECLARE CUR_MPOC_ORD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+
+   	  DECLARE CUR_MPOC_ORD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    	   SELECT DISTINCT OG.OrderGroup
    	   FROM #ORDERSKU OG
-         WHERE OG.OrderGroup > ''
+        WHERE OG.OrderGroup > ''
    	   ORDER BY OG.OrderGroup
 
    	  OPEN CUR_MPOC_ORD
@@ -975,10 +987,10 @@ BEGIN
 
             OPEN CUR_UCC
 
-   	      FETCH NEXT FROM CUR_UCC INTO @n_RowID, @c_Sku, @n_PackQty, @c_UCCNo, @n_StdCube, @c_Orderkey
+   			FETCH NEXT FROM CUR_UCC INTO @n_RowID, @c_Sku, @n_PackQty, @c_UCCNo, @n_StdCube, @c_Orderkey
 
-        	   WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)
-   	      BEGIN
+        	WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)
+   			BEGIN
    	        	SET @n_CartonNo = @n_CartonNo + 1
 
          	   INSERT INTO #CARTON (Orderkey, CartonNo, LabelNo, CartonGroup, CartonType, MaxCube, MaxWeight, MaxCount, MaxSku, CartonLength, CartonWidth, CartonHeight, UCCNo, OrderGroup)
@@ -1251,7 +1263,7 @@ BEGIN
          SET @n_Continue = 3
    END
 
-   IF @b_debug = 3
+   IF @b_debug > 0
    BEGIN
       SELECT * FROM #CARTON
       SELECT * FROM #CARTONDETAIL
@@ -1261,8 +1273,9 @@ BEGIN
    IF @n_continue IN(1,2)
    BEGIN
      IF @b_debug <> 0
+	 BEGIN
         PRINT '*** Create packing records  ***'
-
+	 END
      SET @c_OrderGroup = ''
      SET @c_PreOrderGroup = ''
 
@@ -1321,14 +1334,15 @@ BEGIN
          WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)  --get Carton
          BEGIN
             IF @b_debug <> 0
-            PRINT  '@n_CartonNo: ' + CAST(@n_CartonNo AS VARCHAR(5)) + ' @c_CartonType: ' + @c_CartonType + ' @c_PreOrderGroup: ' + @c_PreOrderGroup
+              PRINT  '@n_CartonNo: ' + CAST(@n_CartonNo AS VARCHAR(5)) + ' @c_CartonType: ' + @c_CartonType + ' @c_PreOrderGroup: ' + @c_PreOrderGroup
 
-         	IF ISNULL(@c_UCCNo,'') <> ''
-         	BEGIN
-         	  	SET @c_LabelNo = @c_UCCNo
-         	END
-         	ELSE
-         	BEGIN
+			-- Relabel All Carton Even with UCC
+         	--IF ISNULL(@c_UCCNo,'') <> ''
+         	--BEGIN
+         	--  	SET @c_LabelNo = @c_UCCNo
+         	--END
+         	--ELSE
+         	--BEGIN
                IF @c_OrderGroup <> @c_PreOrderGroup OR @c_OrderGroup = ''
                BEGIN
          	      EXEC dbo.isp_GenUCCLabelNo_Std
@@ -1344,7 +1358,7 @@ BEGIN
 
                   SET @c_PreOrderGroup = @c_OrderGroup
                END
-            END
+            --END
 
             --Update labelno to #CARTON
             IF @c_OrderGroup = ''
@@ -1386,9 +1400,9 @@ BEGIN
             --Create packinfo
             IF EXISTS (SELECT 1 FROM dbo.PackInfo (NOLOCK) WHERE Pickslipno = @c_PickslipNo
    	                       AND CartonNo = @n_CartonNo)
-   	      BEGIN
+   	        BEGIN
    	        	DELETE FROM dbo.PackInfo WHERE Pickslipno = @c_PickslipNo AND CartonNo = @n_CartonNo
-   	      END
+   	        END
 
    	      INSERT INTO dbo.PackInfo (Pickslipno, CartonNo, CartonType, Cube, Weight, Qty, Length, Width, Height, UCCNo)
    	      VALUES (@c_PickslipNo, @n_CartonNo, @c_CartonType, @n_TotCartonCube,
@@ -1700,7 +1714,7 @@ BEGIN
 
    QUIT_SP:
 
-   IF @n_Continue = 3 -- Error Occured - Process AND Return  
+   IF @n_Continue = 3 -- Error Occured - Process AND Return
    BEGIN
       SELECT @b_Success = 0
       IF @@TRANCOUNT = 1 AND @@TRANCOUNT > @n_StartTCnt
@@ -1715,8 +1729,8 @@ BEGIN
          END
       END
       EXECUTE dbo.nsp_logerror @n_Err, @c_ErrMsg, 'mspRLWAV03'
-      RAISERROR(@c_ErrMsg, 16, 1) WITH SETERROR -- SQL2012  
-      --RAISERROR @nErr @cErrmsg  
+      RAISERROR(@c_ErrMsg, 16, 1) WITH SETERROR -- SQL2012
+      --RAISERROR @nErr @cErrmsg
       RETURN
    END
    ELSE
