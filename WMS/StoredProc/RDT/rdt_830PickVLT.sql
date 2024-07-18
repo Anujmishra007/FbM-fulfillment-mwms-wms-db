@@ -1,4 +1,3 @@
-
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -59,23 +58,23 @@ BEGIN
    BEGIN
 
          IF EXISTS 
-         (SELECT TOP 1 loc FROM loc (NOLOCK) WHERE facility = 'UK001' 
+         (SELECT TOP 1 loc FROM loc (NOLOCK) WHERE facility = @cFacility
          AND PutawayZone in 
-         (SELECT code FROM CODELKUP (NOLOCK) WHERE LISTNAME = 'VNAZONHUSQ') 
+         (SELECT code FROM CODELKUP (NOLOCK) WHERE LISTNAME = 'VNAZONHUSQ' and Storerkey = @cStorerKey) 
          AND LocationType = 'OTHER' AND loc = @cLOC)
-         AND @cToLOC <> (SELECT TOP 1 loc FROM loc (NOLOCK) WHERE facility = 'UK001' AND LocAisle = (SELECT TOP 1 LocAisle FROM loc (NOLOCK) WHERE loc = @cLOC) AND loc like 'B_999%' AND PutawayZone = 'OUTHUSQ')
+         AND @cToLOC <> (SELECT TOP 1 loc FROM loc (NOLOCK) WHERE facility = @cFacility AND LocAisle = (SELECT TOP 1 LocAisle FROM loc (NOLOCK) WHERE loc = @cLOC and Facility = @cFacility) AND loc like 'B_999%' AND PutawayZone = 'OUTHUSQ')
          BEGIN
             SET @nErrNo = -1
-            SET @cErrMsg = 'Pick to '+reverse(substring(REVERSE((SELECT TOP 1 loc FROM loc (NOLOCK) WHERE facility = 'UK001' AND LocAisle = (SELECT TOP 1 LocAisle FROM loc (NOLOCK) WHERE loc = @cLOC) AND loc like 'B_999%' AND PutawayZone = 'OUTHUSQ')),4,10))
+            SET @cErrMsg = 'Pick to '+reverse(substring(REVERSE((SELECT TOP 1 loc FROM loc (NOLOCK) WHERE facility = @cFacility AND LocAisle = (SELECT TOP 1 LocAisle FROM loc (NOLOCK) WHERE loc = @cLOC and Facility = @cFacility) AND loc like 'B_999%' AND PutawayZone = 'OUTHUSQ')),4,10))
             GOTO QUIT
          END
          ELSE IF NOT EXISTS
-         (SELECT TOP 1 loc FROM loc (NOLOCK) WHERE facility = 'UK001' AND PutawayZone in 
-         (SELECT code FROM CODELKUP (NOLOCK) WHERE LISTNAME = 'VNAZONHUSQ') AND LocationType = 'OTHER' AND loc = @cLOC)
-         AND @cToLOC <> (SELECT TOP 1 OtherReference FROM mbol (NOLOCK) WHERE mbolkey = (SELECT TOP 1 mbolkey FROM ORDERS (NOLOCK) WHERE orderkey = (SELECT TOP 1 orderkey FROM PICKHEADER (NOLOCK) WHERE PickHeaderKey = @cPickSlipNo)))
+         (SELECT TOP 1 loc FROM loc (NOLOCK) WHERE facility = @cFacility AND PutawayZone in 
+         (SELECT code FROM CODELKUP (NOLOCK) WHERE LISTNAME = 'VNAZONHUSQ' and Storerkey = @cStorerKey) AND LocationType = 'OTHER' AND loc = @cLOC)
+         AND @cToLOC <> (SELECT TOP 1 OtherReference FROM mbol (NOLOCK) WHERE facility = @cFacility and mbolkey = (SELECT TOP 1 mbolkey FROM ORDERS (NOLOCK) WHERE StorerKey = @cStorerKey and orderkey = (SELECT TOP 1 orderkey FROM PICKHEADER (NOLOCK) WHERE PickHeaderKey = @cPickSlipNo)))
          BEGIN
             SET @nErrNo = -1
-            SET @cErrMsg = 'Pick to '+reverse(substring(REVERSE((SELECT TOP 1 OtherReference FROM mbol (NOLOCK) WHERE mbolkey = (SELECT TOP 1 mbolkey FROM ORDERS (NOLOCK) WHERE orderkey = (SELECT TOP 1 orderkey FROM PICKHEADER (NOLOCK) WHERE PickHeaderKey = @cPickSlipNo)))),4,10))
+            SET @cErrMsg = 'Pick to '+reverse(substring(REVERSE((SELECT TOP 1 OtherReference FROM mbol (NOLOCK) WHERE Facility = @cFacility and mbolkey = (SELECT TOP 1 mbolkey FROM ORDERS (NOLOCK) WHERE StorerKey = @cStorerKey and orderkey = (SELECT TOP 1 orderkey FROM PICKHEADER (NOLOCK) WHERE PickHeaderKey = @cPickSlipNo)))),4,10))
             GOTO QUIT
          END
             
@@ -298,6 +297,7 @@ BEGIN
                EditDate = GETDATE(),
                EditWho  = SUSER_SNAME()
             WHERE PickDetailKey = @cPickDetailKey
+			and Storerkey = @cStorerKey
             IF @@ERROR <> 0
             BEGIN
                SET @nErrNo = 217919
@@ -321,6 +321,7 @@ BEGIN
                EditDate = GETDATE(),
                EditWho  = SUSER_SNAME()
             WHERE PickDetailKey = @cPickDetailKey
+			and Storerkey = @cStorerKey
             IF @@ERROR <> 0
             BEGIN
                SET @nErrNo = 217920
@@ -346,6 +347,7 @@ BEGIN
                   EditWho  = SUSER_SNAME(),
                   TrafficCop = NULL
                WHERE PickDetailKey = @cPickDetailKey
+			   AND Storerkey = @cStorerKey
                IF @@ERROR <> 0
                BEGIN
                   SET @nErrNo = 217921
@@ -536,7 +538,8 @@ BEGIN
      UPDATE dbo.PickDetail WITH (ROWLOCK) SET
      Notes = @cLOC,
      Pickheaderkey = @cPickSlipNo
-      WHERE DropID = @cDropID and DropID <> ''
+     WHERE DropID = @cDropID and DropID <> ''
+	 and Storerkey = @cStorerKey
      and ISNULL(notes,'')=''
 
       /***********************************************************************************************
@@ -553,7 +556,7 @@ BEGIN
          BEGIN
             DECLARE @cConsigneeKey NVARCHAR( 15) = ''
             IF @cOrderKey <> ''
-               SELECT @cConsigneeKey = ConsigneeKey FROM dbo.Orders WITH (NOLOCK) WHERE OrderKey = @cOrderKey
+               SELECT @cConsigneeKey = ConsigneeKey FROM dbo.Orders WITH (NOLOCK) WHERE OrderKey = @cOrderKey and StorerKey = @cStorerKey
 
             INSERT INTO dbo.PackHeader (PickSlipNo, StorerKey, OrderKey, ConsigneeKey, LoadKey)
             VALUES (@cPickSlipNo, @cStorerKey, @cOrderKey, @cConsigneeKey, @cLoadKey)
@@ -574,6 +577,7 @@ BEGIN
             WHERE PickSlipNo = @cPickSlipNo 
                AND LabelNo = @cDropID
                AND SKU = @cSKU
+			   AND StorerKey = @cStorerKey
             
             IF @cLabelLine = ''
             BEGIN
@@ -581,6 +585,7 @@ BEGIN
                FROM dbo.PackDetail WITH (NOLOCK) 
                WHERE PickSlipNo = @cPickSlipNo 
                   AND LabelNo = @cDropID 
+				  AND StorerKey = @cStorerKey
             
                IF @nCartonNo = 0
                   SET @cLabelLine = '00000'
@@ -589,6 +594,7 @@ BEGIN
                   FROM dbo.PackDetail (NOLOCK)
                   WHERE Pickslipno = @cPickSlipNo
                      AND LabelNo = @cDropID
+					 AND StorerKey = @cStorerKey
 
                SET @cNewLine = 'Y'
             END
@@ -624,6 +630,7 @@ BEGIN
                AND CartonNo = @nCartonNo
                AND LabelNo = @cDropID
                AND LabelLine = @cLabelLine
+			   AND StorerKey = @cStorerKey
             IF @@ERROR <> 0
             BEGIN
                SET @nErrNo = 217929
@@ -688,7 +695,6 @@ BEGIN
          COMMIT TRAN
    END
 END
-
 GO
 
 SET QUOTED_IDENTIFIER OFF
@@ -696,7 +702,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON [rdt].[rdt_830PickVLT] TO NSQL
-GO  
-
+GRANT EXECUTE ON [RDT].[rdt_830PickVLT] TO [NSQL]
 
