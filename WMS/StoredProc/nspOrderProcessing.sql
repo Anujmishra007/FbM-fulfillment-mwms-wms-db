@@ -118,6 +118,9 @@ GO
 /* 16-May-2024  Wan09    4.4  UWP-19537-Mattel Overallocation           */
 /* 07-Jul-2024  Wan10    4.5  UWP-19537-Mattel Overallocation           */
 /*                            Get OverPickLoc from Sub SP               */
+/* 18-Jul-2024  Wan11    4.6  UWP-22202-Mattel Overallocation           */
+/*                            Get OverQtyLeftToFulfill from Sub SP      */
+/*                            Do Not Overallocate to partial fulfill DPP*/
 /************************************************************************/  
 
 CREATE OR ALTER PROC [dbo].[nspOrderProcessing]  
@@ -217,6 +220,7 @@ BEGIN
            ,@n_AllocatedHoldQty INT = 0   
 
    DECLARE @c_OverPickLoc              NVARCHAR(10)                                 --(Wan10)
+   DECLARE @CUR_AddSQL                 CURSOR                                       --(Wan11)
   
    SELECT @n_starttcnt=@@TRANCOUNT , @n_continue=1, @b_success=0, @n_err=0,@n_cnt = 0  
    SELECT @c_errmsg="",@n_err2=0  
@@ -2600,19 +2604,31 @@ BEGIN
                                                        @c_Orderkey=@c_aOrderkey,  @c_Loadkey=@c_aLoadkey, @c_Wavekey=@c_aWavekey, @c_Lot=@c_aLot, @c_Loc=@c_aLoc, @c_ID=@c_aID, @c_UOM=@c_aUOM, @n_QtyToTake=@n_aQtyToTake,  
                                                        @n_QtyLeftToFulfill=@n_aQtyLeftToFulfill, @c_CallSource=@c_aCallSource, @b_success=@b_asuccess OUTPUT, @n_err=@n_aerr OUTPUT, @c_errmsg=@c_aerrmsg OUTPUT '
      
-                     IF EXISTS(SELECT 1                                             --(Wan10) - START
-                               FROM sys.parameters AS p    
-                               JOIN sys.types AS t ON t.user_type_id = p.user_type_id    
-                               WHERE object_id = OBJECT_ID(@c_overAllocPickLoc_sp)    
-                               AND   P.name = N'@c_OverPickLoc')                    --(Wan10) - END       
+                     SET @CUR_AddSQL = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR      --(Wan11) - START
+                     SELECT P.name                                                  --(Wan10) - START
+                     FROM sys.parameters AS p    
+                     JOIN sys.types AS t ON t.user_type_id = p.user_type_id    
+                     WHERE object_id = OBJECT_ID(@c_overAllocPickLoc_sp)    
+                     AND   P.name IN ('@c_OverPickLoc', '@n_OverQtyLeftToFulfill')  --(Wan10) - END
+                     ORDER BY P.parameter_id
+                     OPEN @CUR_AddSQL
+                     FETCH NEXT FROM @CUR_AddSQL INTO @c_ParameterName
+                     WHILE @@FETCH_STATUS = 0 
                      BEGIN 
-                        SET @c_SQL = @c_SQL + N', @c_OverPickLoc=@c_OverPickLoc OUTPUT'
+                        IF @c_ParameterName = '@c_OverPickLoc'
+                           SET @c_SQL = @c_SQL + N', @c_OverPickLoc=@c_OverPickLoc OUTPUT'
+                        IF @c_ParameterName = '@n_OverQtyLeftToFulfill'
+                           SET @c_SQL = @c_SQL + N', @n_OverQtyLeftToFulfill=@n_OverAlQtyLeftToFulfill OUTPUT'
+
+                        FETCH NEXT FROM @CUR_AddSQL INTO @c_ParameterName
                      END
+                     CLOSE @CUR_AddSQL
+                     DEALLOCATE @CUR_AddSQL                                          --(Wan11) - END
 
                      EXEC SP_EXECUTESQL @c_SQL, N'@c_aStorerkey NVARCHAR(15), @c_aSku NVARCHAR(20), @c_aAllocateStrategykey NVARCHAR(10), @c_aAllocateStrategyLineNumber NVARCHAR(5), @c_aLocationTypeOverride NVARCHAR(10), 
                      @c_aLocationTypeOverridestripe NVARCHAR(10), @c_aFacility NVARCHAR(5), @c_aHostWHCode NVARCHAR(10), @c_aOrderkey NVARCHAR(10), @c_aLoadkey NVARCHAR(10), @c_aWavekey NVARCHAR(10), @c_aLot NVARCHAR(10),  
                      @c_aLoc NVARCHAR(10), @c_aID NVARCHAR(18), @c_aUOM NVARCHAR(10), @n_aQtyToTake INT, @n_aQtyLeftToFulfill INT, @c_aCallSource NVARCHAR(20), @b_asuccess INT OUTPUT, @n_aerr INT OUTPUT, @c_aErrMsg NVARCHAR(250) OUTPUT
-                    ,@c_OverPickLoc NVARCHAR(10) OUTPUT',                           --(Wan10)
+                    ,@c_OverPickLoc NVARCHAR(10) OUTPUT, @n_OverAlQtyLeftToFulfill INT OUTPUT',      --(Wan10)--(Wan11)
                      @c_aStorerkey,
                      @c_aSku, 
                      @c_aStrategykey,
@@ -2634,9 +2650,15 @@ BEGIN
                      @b_success OUTPUT,      
                      @n_err     OUTPUT,      
                      @c_errmsg  OUTPUT
-                  ,  @c_OverPickLoc OUTPUT                                          --(Wan10)
-                     
+                  ,  @c_OverPickLoc OUTPUT                                          --(Wan10
+                  ,  @n_OverAlQtyLeftToFulfill OUTPUT                               --(Wan11)
+
+                     IF @n_OverAlQtyLeftToFulfill < @n_aQtyLeftToFulfill            --(Wan11)-START
+                     BEGIN                                           
+                        SET @n_aQtyLeftToFulfill = @n_OverAlQtyLeftToFulfill           
+                     END                                                            --(Wan11)-END
                      SELECT @n_cnt = COUNT(1) FROM #OP_PICKLOCTYPE
+                    
                   END --NJOW15 E  
                   --(Wan08) - Fixed - 2020-05-21 By Wan - START                   
                   --ELSE
