@@ -36,6 +36,8 @@ GO
 /* 2024-07-08  Wan05    1.5   UWP-21429-Mattel Overallocation Enhancement*/
 /*                            -If overallocate + lefttofullfiee>1 pallet*/
 /*                             ,find empty DPP                          */
+/* 2024-07-18  Wan06    1.5   UWP-22202-Mattel Overallocation           */
+/*                            Do Not Overallocate to partial fulfill DPP*/
 /************************************************************************/  
 CREATE OR ALTER PROC mspGetOverPickLoc01     
    @c_Storerkey                  NVARCHAR(15)   
@@ -58,8 +60,9 @@ CREATE OR ALTER PROC mspGetOverPickLoc01
 ,  @c_CallSource                 NVARCHAR(20) ----ORDER LOADORDER LOADCONSO WAVEORDER WAVECONSO  
 ,  @b_success                    INT OUTPUT   
 ,  @n_err                        INT OUTPUT   
-,  @c_ErrMsg                     NVARCHAR(250) OUTPUT 
+,  @c_ErrMsg                     NVARCHAR(250)     OUTPUT 
 ,  @c_OverPickLoc                NVARCHAR(10) = '' OUTPUT                           --(Wan05)
+,  @n_OverQtyLeftToFulfill       INT = 0           OUTPUT                           --(Wan06)
 AS     
 BEGIN    
    SET NOCOUNT ON    
@@ -155,9 +158,10 @@ BEGIN
          --   AND ((SUM(lli.PendingMoveIn) = 0 AND 
          --         CEILING(SUM(lli.QtyExpected + @n_QtyLeftToFulfill)/@n_PalletQty) <= l.MaxPallet) OR --(Wan02)  
          --         SUM(lli.QtyExpected) + @n_QtyLeftToFulfill <= SUM(lli.PendingMoveIn))
-         HAVING (SUM(lli.Qty - lli.QtyAllocated - lli.Qtypicked) > 0 OR 
-                 SUM(lli.QtyAllocated - (lli.Qty - lli.Qtypicked)) > 0
-                )
+         HAVING SUM(lli.Qty - lli.QtyAllocated - lli.Qtypicked) <> 0               --(Wan06)      
+                --OR                                                                --(Wan06)
+                -- SUM(lli.QtyAllocated - (lli.Qty - lli.Qtypicked)) > 0            --(Wan06)
+                --)                                                                 --(Wan06)
                  --((SUM(lli.Qty) = 0 AND SUM(lli.QtyAllocated) > 0) AND                      
                  -- (--(SUM(lli.PendingMoveIn) = 0 AND                                         --(Wan04)      
                  --   CEILING(SUM(lli.QtyAllocated + @n_QtyLeftToFulfill)/@n_PalletQty) <= l.MaxPallet
@@ -180,7 +184,7 @@ BEGIN
 
          WHILE @@FETCH_STATUS = 0 AND @n_QtyLeftToFulfill > 0
          BEGIN
-            IF @n_QtyAllocated - (@n_Qty - @n_QtyPicked) > 0 AND     --Overallcated 
+            IF (@n_Qty - @n_QtyPicked) - @n_QtyAllocated < 0 AND     --Overallcated --(Wan05) 
                (@n_MaxPallet*@n_PalletQty) < @n_QtyAllocated-(@n_Qty-@n_QtyPicked) + @n_QtyLeftToFulfill
             BEGIN
                BREAK
@@ -235,6 +239,11 @@ BEGIN
                ,  l.Loc
 
          SET @n_RowCount = @@ROWCOUNT                                               --(Wan05)
+         IF @n_RowCount = 0                                                         --(Wan06) - START
+         BEGIN
+            SET @n_OverQtyLeftToFulfill = @n_OverQtyLeftToFulfill - @n_QtyLeftToFulfill
+         END                                                                        --(Wan06) - END          
+         
          IF @n_RowCount > 0                                                         --(Wan05)(Wan01) - START
          BEGIN
             SELECT @c_DPPLoc = LOC
@@ -252,8 +261,8 @@ BEGIN
          END                                                                        --(Wan01) - END
       END                                                                           
   END                                                                               
-                                                                                    
-  SELECT TOP 1 @c_OverPickLoc= Loc                                                    --(Wan05) - START
+                                                                          
+  SELECT TOP 1 @c_OverPickLoc= Loc                                                  --(Wan05) - START
   FROM #PICKLOCTYPE                                                                 
   ORDER BY RowID DESC                                                               --(Wan05) - END
 

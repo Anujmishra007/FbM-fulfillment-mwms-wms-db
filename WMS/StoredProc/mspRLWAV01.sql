@@ -33,6 +33,8 @@ GO
 /* 2024-07-09  Wan05    1.4   UWP-19537-Mattel Overallocation           */
 /*                            -EmptyLoc= Qty-QtyPicked. New Formula for */
 /*                            qtyexpected                               */
+/* 2024-07-18  Wan06    1.5   UWP-22202-Mattel DPP with commingleSku    */
+/*                            Prompt Error if DPP different Sku         */
 /*************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]        
   @c_wavekey      NVARCHAR(10)    
@@ -260,6 +262,21 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
          
       WHILE @@FETCH_STATUS = 0 AND @n_continue IN (1,2)  
       BEGIN
+         IF EXISTS (SELECT 1                                                        --(Wan06)-START
+                    FROM dbo.LOTxLOCxID l1 (NOLOCK) 
+                    WHERE l1.Storerkey = @c_Storerkey
+                    AND   l1.loc = @c_ToLoc
+                    AND   l1.Sku <> @c_Sku
+                    AND   (l1.Qty-l1.QtyPicked)+l1.QtyAllocated+PendingMoveIn > 0
+                    )
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 83040
+            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)
+                         +': Different Sku found in DPP location: ' + @c_ToLoc
+                         +'. (mspRLWAV01)' 
+            GOTO RETURN_SP
+         END                                                                        --(Wan06)-END
          --SET @cur_WaveReplLot = CURSOR FAST_FORWARD READ_ONLY FOR                 --(Wan03) - START
          --SELECT PD.Lot
          --      ,QtyNeed = SUM(lli.QtyExpected - lli.PendingMoveIn)                  
