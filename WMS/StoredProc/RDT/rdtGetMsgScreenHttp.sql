@@ -27,6 +27,7 @@
 /* Updates:                                                                  */
 /* Date         Rev    Author    Purposes                                    */
 /* 07-Nov-2023  1.0    JLC042    Copy from rdtGetMsgScreen                   */
+/* 17-07-2024   1.1    JACKC     UWP-21829 Error msg not visible             */
 /*****************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdtGetMsgScreenHttp] (
@@ -97,6 +98,29 @@ AS
    FROM RDT.rdtMsgQueue WITH (NOLOCK)
    WHERE MsgQueueNo = @nMsgQueueNo
    AND   Status < '9'
+
+   --1.1 JACKC
+   IF @cLine01 <> ''
+      SET @cLine01 = rdt.rdtReplaceSpecialCharInXMLData(@cLine01)
+   IF @cLine02 <> ''
+      SET @cLine02 = rdt.rdtReplaceSpecialCharInXMLData(@cLine02)
+   IF @cLine03 <> ''
+      SET @cLine03 = rdt.rdtReplaceSpecialCharInXMLData(@cLine03)
+   IF @cLine04 <> ''
+      SET @cLine04 = rdt.rdtReplaceSpecialCharInXMLData(@cLine04)
+   IF @cLine05 <> ''
+      SET @cLine05 = rdt.rdtReplaceSpecialCharInXMLData(@cLine05)
+   IF @cLine06 <> ''
+      SET @cLine06 = rdt.rdtReplaceSpecialCharInXMLData(@cLine06)
+   IF @cLine07 <> ''
+      SET @cLine07 = rdt.rdtReplaceSpecialCharInXMLData(@cLine07)
+   IF @cLine08 <> ''
+      SET @cLine08 = rdt.rdtReplaceSpecialCharInXMLData(@cLine08)
+   IF @cLine09 <> ''
+      SET @cLine09 = rdt.rdtReplaceSpecialCharInXMLData(@cLine09)
+   IF @cLine10 <> ''
+      SET @cLine10 = rdt.rdtReplaceSpecialCharInXMLData(@cLine10)
+   --1.1 JACKC END
 
   -- SELECT @cErrMsg = rdt.rdtgetmessage(54, @cLang_Code, 'DSP')
 
