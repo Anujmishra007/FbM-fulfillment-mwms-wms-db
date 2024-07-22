@@ -210,13 +210,15 @@ BEGIN
 
       INSERT INTO @tLocData (Aisle, Loc, AvailableSpace)
       SELECT loc.LocAisle, loc.Loc, 
-         IIF(loc.MaxCarton = 0, 9999, loc.MaxCarton) - COUNT(DISTINCT UCCSTO.UCCNo) - COUNT(rp.RowRef)
+         IIF(loc.MaxCarton = 0, 9999, loc.MaxCarton) - COUNT(DISTINCT UCCSTO.UCCNo) - COUNT(DISTINCT rp.RowRef)
       FROM dbo.LOC loc WITH(NOLOCK) 
-      LEFT JOIN ( SELECT LLI.Loc, UCC.UCCNo 
+      LEFT JOIN ( SELECT DISTINCT LLI.Loc, UCC.UCCNo 
                   FROM dbo.LOTxLOCxID LLI WITH (NOLOCK) 
-                  INNER JOIN dbo.UCC WITH (NOLOCK) ON LLI.StorerKey = UCC.StorerKey AND LLI.LOT = UCC.LOT AND LLI.LOC = UCC.LOC 
+                  INNER JOIN dbo.LOC loc1 WITH (NOLOCK) ON loc1.Facility = @cFacility AND LLI.Loc = loc1.Loc  
+                  INNER JOIN dbo.UCC WITH (NOLOCK) ON LLI.StorerKey = UCC.StorerKey AND LLI.Sku = UCC.Sku AND LLI.LOT = UCC.LOT AND LLI.LOC = UCC.LOC 
                   WHERE LLI.StorerKey = @cStorerKey
-                     AND LLI.QTY - LLI.QTYPicked > 0 ) AS UCCSTO
+                     AND LLI.QTY - LLI.QTYPicked > 0 
+                     AND EXISTS (SELECT 1 FROM @tPNDAisle AS al WHERE loc1.LocAisle = al.Aisle)) AS UCCSTO
          ON loc.Loc = UCCSTO.Loc
       LEFT JOIN dbo.RFPUTAWAY rp WITH(NOLOCK)
          ON loc.Loc = rp.SuggestedLoc
@@ -228,8 +230,8 @@ BEGIN
          AND ISNULL(loc.LocAisle, '') <> ''
          AND EXISTS (SELECT 1 FROM @tPNDAisle AS al WHERE loc.LocAisle = al.Aisle)
       GROUP BY loc.LocAisle, loc.Loc, IIF(loc.MaxCarton = 0, 9999, MaxCarton)
-      HAVING IIF(loc.MaxCarton = 0, 9999, loc.MaxCarton) - COUNT(DISTINCT UCCSTO.UCCNo) - COUNT(rp.RowRef) > 0
-      ORDER BY loc.LocAisle, IIF(loc.MaxCarton = 0, 9999, MaxCarton) - COUNT(DISTINCT UCCSTO.UCCNo) - COUNT(rp.RowRef) DESC, loc.Loc
+      HAVING IIF(loc.MaxCarton = 0, 9999, loc.MaxCarton) - COUNT(DISTINCT UCCSTO.UCCNo) - COUNT(DISTINCT rp.RowRef) > 0
+      ORDER BY loc.LocAisle, IIF(loc.MaxCarton = 0, 9999, MaxCarton) - COUNT(DISTINCT UCCSTO.UCCNo) - COUNT(DISTINCT rp.RowRef) DESC, loc.Loc
 
       SELECT @nRowCount = @@ROWCOUNT
       IF @nRowCount = 0
