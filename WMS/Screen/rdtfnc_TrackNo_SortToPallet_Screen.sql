@@ -60,7 +60,7 @@ EXECUTE rdt.rdtAddScn 5802, 'ENG',
    ,@cLine12 = '%20d05' -- WMS-20667
    ,@cLine13 = '%20d15'
    ,@cLine14 = '%e'
-   ,@nFunc = 1653   
+   ,@nFunc = 1653
 
 -- 5803 = Close Pallet ID screen
 DELETE rdt.RDTScn WHERE Scn = 5803 AND Lang_Code = 'ENG'
@@ -79,7 +79,7 @@ EXECUTE rdt.rdtAddScn 5803, 'ENG',
    ,@cLine12 = ''
    ,@cLine13 = '%20d15' -- WMS-20667
    ,@cLine14 = '%e'
-   ,@nFunc = 1653   
+   ,@nFunc = 1653
 
 -- WMS-19218
 -- 5804 = Confirm Scan To Different Pallet ID screen
@@ -99,7 +99,7 @@ EXECUTE rdt.rdtAddScn 5804, 'ENG',
    ,@cLine12 = ''
    ,@cLine13 = ''
    ,@cLine14 = '%e'
-   ,@nFunc = 1653   
+   ,@nFunc = 1653
 
 -- 5805 = Pack info screen
 DELETE rdt.RDTScn WHERE Scn = 5805 AND Lang_Code = 'ENG'
@@ -108,9 +108,9 @@ EXECUTE rdt.rdtAddScn 5805, 'ENG'
    ,@cLine02 = '%20d01'
    ,@cLine03 = ''
    ,@cLine04 = 'WEIGHT: %10i02'
-   ,@cLine06 = 'LENGTH: %10i03'  
-   ,@cLine07 = 'WIDTH:  %10i04'  
-   ,@cLine08 = 'HEIGHT: %10i05'  
+   ,@cLine06 = 'LENGTH: %10i03'
+   ,@cLine07 = 'WIDTH:  %10i04'
+   ,@cLine08 = 'HEIGHT: %10i05'
    ,@cLine13 = '%20d15' -- WMS-20667 Add ExtendedInfoSP
    ,@cLine14 = '%e'
    ,@nFunc = 1653
@@ -119,7 +119,7 @@ EXECUTE rdt.rdtAddScn 5805, 'ENG'
 -- 5806 = Confirm Scan new Lane screen
 DELETE rdt.RDTScn WHERE Scn = 5806 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 5806, 'ENG',
-    @cLine01 = 'PALLETKEY:'
+        @cLine01 = 'PALLETKEY:'
    ,@cLine02 = '%20d01'
    ,@cLine03 = ''
    ,@cLine04 = 'NEW LANE:'
@@ -133,4 +133,24 @@ EXECUTE rdt.rdtAddScn 5806, 'ENG',
    ,@cLine12 = ''
    ,@cLine13 = ''
    ,@cLine14 = '%e'
-   ,@nFunc = 1653   
+   ,@nFunc = 1653
+
+-- FCR-539
+-- 5807 = SCAN TO LOC/LANE
+DELETE rdt.RDTScn WHERE Scn = 5807 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 5807, 'ENG',
+    @cLine01 = 'TRACKNO SORTTOPALLET'
+   ,@cLine02 = ''
+   ,@cLine03 = 'TRACK NO:'
+   ,@cLine04 = '%40d01'
+   ,@cLine05 = 'ORDERKEY: %10d02'
+   ,@cLine06 = 'SCAN PALLET: %20d03'
+   ,@cLine07 = ''
+   ,@cLine08 = 'SCAN TO PALLET:'
+   ,@cLine09 = '%20i04'
+   ,@cLine10 = ''
+   ,@cLine11 = 'LOC/LANE:'  -- WMS-20667
+   ,@cLine12 = '%20i05' -- WMS-20667
+   ,@cLine13 = '%20d15'
+   ,@cLine14 = '%e'
+   ,@nFunc = 1653
