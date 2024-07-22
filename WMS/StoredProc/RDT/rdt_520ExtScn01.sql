@@ -97,6 +97,9 @@ BEGIN
          BEGIN
             SET @nAfterScn = 924
             SET @nAfterStep = 99
+            SET @cOutField01 = ''
+            SET @cOutField02 = ''
+            EXEC rdt.rdtSetFocusField @nMobile, 1
             GOTO Quit
          END
          
@@ -160,8 +163,8 @@ BEGIN
                   -- Check SKU blank
                   IF @cSKU = ''
                   BEGIN
-                     SET @nErrNo = 63801
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- NeedID/SKU/LOC
+                     SET @nErrNo = 63820
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Need SKU
                      EXEC rdt.rdtSetFocusField @nMobile, 2
                      SET @cOutField02 = '' --SKU
                      GOTO Quit
@@ -250,14 +253,6 @@ BEGIN
                         SET @nErrNo = 63808
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- No Rec Found
                      END
-                     GOTO Quit
-                  END
-
-                  -- Check multi LLI to putaway
-                  IF @nRecCnt > 1
-                  BEGIN
-                     SET @nErrNo = 63809
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- MultiRec Found
                      GOTO Quit
                   END
 
