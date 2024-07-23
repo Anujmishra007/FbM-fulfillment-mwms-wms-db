@@ -4,6 +4,8 @@ EXECUTE rdt.rdtAddScn 4200, 'ENG',
     @cLine01 = 'SCAN TO DOOR'
    ,@cLine03 = 'PALLET ID:'
    ,@cLine04 = '%18i01'
+   ,@cLine05 = ''
+   ,@cLine06 = '%20d06'
    ,@cLine14 = '%e'
    ,@cWebGroup = '{"1":["3","4"]}'
    ,@nFunc = 1650
