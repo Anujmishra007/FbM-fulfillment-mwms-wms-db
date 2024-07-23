@@ -95,7 +95,7 @@ BEGIN
       VALUES (@cPickSlipNo, @cStorerKey, @cOrderKey, @cLoadKey)
       IF @@ERROR <> 0
       BEGIN
-         SET @nErrNo = 100401
+         SET @nErrNo = 219651
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsPHdrFail
          GOTO RollBackTran
       END
@@ -167,7 +167,7 @@ BEGIN
                @cErrMsg       OUTPUT
             IF @nErrNo <> 0
             BEGIN
-               SET @nErrNo = 100402
+               SET @nErrNo = 219652
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GenLabelNoFail
                GOTO RollBackTran
             END
@@ -176,7 +176,7 @@ BEGIN
 
       IF @cLabelNo = ''
       BEGIN
-         SET @nErrNo = 100403
+         SET @nErrNo = 219653
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GenLabelNoFail
          GOTO RollBackTran
       END
@@ -229,7 +229,7 @@ BEGIN
          'rdt.' + SUSER_SNAME(), GETDATE(), 'rdt.' + SUSER_SNAME(), GETDATE())
       IF @@ERROR <> 0
       BEGIN
-         SET @nErrNo = 100404
+         SET @nErrNo = 219654
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsPackDtlFail
          GOTO RollBackTran
       END
@@ -249,7 +249,7 @@ BEGIN
          AND LabelLine = @cLabelLine
       IF @@ERROR <> 0
       BEGIN
-         SET @nErrNo = 100405
+         SET @nErrNo = 219655
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdPackDtlFail
          GOTO RollBackTran
       END
@@ -280,7 +280,7 @@ BEGIN
          VALUES (@cPickSlipNo, @nCartonNo, @cUCCNo, @nQTY)
          IF @@ERROR <> 0
          BEGIN
-            SET @nErrNo = 100406
+            SET @nErrNo = 219656
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSPackInfFail
             GOTO RollBackTran
          END
@@ -296,7 +296,7 @@ BEGIN
             AND CartonNo = @nCartonNo
          IF @@ERROR <> 0
          BEGIN
-            SET @nErrNo = 100407
+            SET @nErrNo = 219657
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDPackInfFail
             GOTO RollBackTran
          END
@@ -314,7 +314,7 @@ BEGIN
             AND UCCNo = @cUCCNo
          IF @@ERROR <> 0
          BEGIN
-            SET @nErrNo = 100408
+            SET @nErrNo = 219658
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD UCC Fail
             GOTO RollBackTran
          END
@@ -333,7 +333,7 @@ BEGIN
          WHERE Mobile = @nMobile
             AND Func = @nFunc) <> @nBulkSNOQTY
       BEGIN
-         SET @nErrNo = 100409
+         SET @nErrNo = 219659
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SN QTYNotTally
          GOTO RollBackTran
       END 
@@ -416,14 +416,14 @@ BEGIN
             VALUES (@cPickSlipNo, @nCartonNo, @cLabelNo, @cLabelLine, @cStorerKey, @cSKU, @cSerialNo, @nSerialQTY, @cPickDetailKey)
             IF @@ERROR <> 0
             BEGIN
-               SET @nErrNo = 100410
+               SET @nErrNo = 219660
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSPackSNOFail
                GOTO RollBackTran
             END
          END
          ELSE
          BEGIN
-            SET @nErrNo = 100411
+            SET @nErrNo = 219661
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SNO ady scan
             GOTO RollBackTran
          END
@@ -432,7 +432,7 @@ BEGIN
          WHERE ReceiveSerialNoLogKey = @nReceiveSerialNoLogKey
          IF @@ERROR <> 0
          BEGIN
-            SET @nErrNo = 100412
+            SET @nErrNo = 219662
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DEL TmpSN Fail
             GOTO RollBackTran
          END 
@@ -443,7 +443,7 @@ BEGIN
       -- Check fully offset
       IF @nQTY_Bal <> 0
       BEGIN
-         SET @nErrNo = 100413
+         SET @nErrNo = 219663
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Offset error 
          GOTO RollBackTran
       END 
@@ -454,7 +454,7 @@ BEGIN
          WHERE Mobile = @nMobile
             AND Func = @nFunc)
       BEGIN
-         SET @nErrNo = 100414
+         SET @nErrNo = 219664
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Offset error 
          GOTO RollBackTran
       END
@@ -538,7 +538,7 @@ BEGIN
          VALUES (@cPickSlipNo, @nCartonNo, @cLabelNo, @cLabelLine, @cStorerKey, @cSKU, @cSerialNo, @nSerialQTY, @cPickDetailKey)
          IF @@ERROR <> 0
          BEGIN
-            SET @nErrNo = 100415
+            SET @nErrNo = 219665
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS RDSNo Fail
             GOTO RollBackTran
          END
@@ -547,7 +547,7 @@ BEGIN
       -- Check serial no scanned
       ELSE
       BEGIN
-         SET @nErrNo = 100416
+         SET @nErrNo = 219666
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SNO ady scan
          GOTO RollBackTran
       END
@@ -583,7 +583,7 @@ BEGIN
             'rdt.' + SUSER_SNAME(), GETDATE(), 'rdt.' + SUSER_SNAME(), GETDATE())
          IF @@ERROR <> 0
          BEGIN
-            SET @nErrNo = 100417
+            SET @nErrNo = 219667
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS PDInfoFail
             GOTO RollBackTran
          END
@@ -599,7 +599,7 @@ BEGIN
          WHERE PackDetailInfoKey = @nPackDetailInfoKey
          IF @@ERROR <> 0
          BEGIN
-            SET @nErrNo = 100418
+            SET @nErrNo = 219668
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PDInfoFail
             GOTO RollBackTran
          END
