@@ -14,9 +14,10 @@ GO
 /* Date        Rev  Author       Purposes                                  */
 /* 2024-05-27  1.0  Cuize        FCR-242 Created                           */
 /* 2024-06-13  1.2  NLT013       FCR-242 Correct the commented message     */
+/* 2024-07-23  1.3  CLVN01       FCR-628 Stamp TL2 Datetime to RecUdf06    */
 /***************************************************************************/
 
-CREATE OR ALTER PROCEDURE rdt.rdt_652ExtUpd01(
+CREATE OR ALTER PROCEDURE [RDT].[rdt_652ExtUpd01](
    @nMobile             INT,
    @nFunc               INT,
    @cLangCode           NVARCHAR( 3),
@@ -125,6 +126,22 @@ BEGIN
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSTransLogFail
                GOTO Quit
             END
+
+			--(CLVN01) START--
+			IF EXISTS (SELECT 1 FROM RECEIPT RH WITH (NOLOCK)
+			           JOIN TRANSMITLOG2 TL2 WITH (NOLOCK) ON (RH.RECEIPTKEY = TL2.KEY1 AND TL2.TABLENAME = 'WSONLOTLOG')
+			           WHERE RH.RECEIPTKEY = @cKeyValue)
+			BEGIN
+				UPDATE RECEIPT SET USERDEFINE06 = GETDATE() WHERE RECEIPTKEY = @cKeyValue
+			END
+
+			IF @@ROWCOUNT = 0
+            BEGIN
+               SET @nErrNo = 215502
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSTransLogFail
+               GOTO Quit
+            END
+			--(CLVN01) END--
 
             SELECT @cUserName = UserName
             FROM rdt.rdtMobRec WITH (NOLOCK)
