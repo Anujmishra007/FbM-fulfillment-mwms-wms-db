@@ -485,45 +485,59 @@ BEGIN
 
       SET @c_MbolLineNumber = ''
 
-      SELECT @c_MbolLineNumber = ISNULL(MAX(MbolLineNumber),'')
+      SELECT TOP 1 @c_MbolLineNumber = MbolLineNumber 
       FROM MBOLDETAIL WITH (NOLOCK)
       WHERE MbolKey = @cMBOLKey
+      AND ContainerKey = '' AND PalletKey = ''
 
       IF ISNULL(RTRIM(@c_MbolLineNumber),'') = ''
       BEGIN
-         SET @c_MbolLineNumber = '00001'
+         SELECT @c_MbolLineNumber = ISNULL(MAX(MbolLineNumber),'')
+         FROM MBOLDETAIL WITH (NOLOCK)
+         WHERE MbolKey = @cMBOLKey
+         
+         IF ISNULL(RTRIM(@c_MbolLineNumber),'') = ''
+         BEGIN
+            SET @c_MbolLineNumber = '00001'
+         END
+         ELSE
+         BEGIN
+            SET @c_MbolLineNumber = RIGHT('0000' + CONVERT(NVARCHAR(5), CAST(@c_MbolLineNumber AS INT) + 1), 5)
+         END
+         INSERT INTO MBOLDETAIL
+         (
+         MbolKey,          MbolLineNumber,      ContainerKey,        OrderKey,
+         PalletKey,        [Description],       GrossWeight,         Capacity,
+         InvoiceNo,        UPSINum,             PCMNum,              ExternReason,
+         InvoiceStatus,    InvoiceAmount,       OfficialReceipt,
+         ITS,              LoadKey,             [Weight],            [Cube],
+         OrderDate,        ExternOrderKey,      DeliveryDate,        DeliveryStatus,
+         TotalCartons,     UserDefine01,        UserDefine02,        UserDefine03,
+         UserDefine04,     UserDefine05,        UserDefine06,        UserDefine07,
+         UserDefine08,     UserDefine09,        UserDefine10,        CtnCnt1,
+         CtnCnt2,          CtnCnt3,             CtnCnt4,             CtnCnt5,
+         TrafficCop) 
+         SELECT
+         @cMBOLKey,        @c_MbolLineNumber,   @cTruckID,           @cOrderKey,
+         @cPallet,         '',                  0,                   0,
+         '',               '',                  '',                  '0',
+         '0',              0,                   '',
+         '',               Loadkey,             0,                    0,
+         OrderDate,        ExternOrderKey,      DeliveryDate,        '',
+         @nTotalCarton,    '',                  '',                  '',
+         '',               '',                  '',                  '',
+         '',               '',                  '',                  0,
+         0,                0,                   0,                   0,
+         '1'
+         FROM ORDERS O WITH (NOLOCK)
+         WHERE OrderKey = @cOrderKey AND StorerKey = @cStorerKey
       END
-      ELSE
+      ELSE 
       BEGIN
-         SET @c_MbolLineNumber = RIGHT('0000' + CONVERT(NVARCHAR(5), CAST(@c_MbolLineNumber AS INT) + 1), 5)
+         UPDATE MBOLDETAIL SET 
+         ContainerKey = @cTruckID,OrderKey = @cOrderKey,PalletKey = @cPallet
+         WHERE MbolKey = @cMBOLKey AND MbolLineNumber = @c_MbolLineNumber
       END
-      INSERT INTO MBOLDETAIL
-      (
-       MbolKey,          MbolLineNumber,      ContainerKey,        OrderKey,
-       PalletKey,        [Description],       GrossWeight,         Capacity,
-       InvoiceNo,        UPSINum,             PCMNum,              ExternReason,
-       InvoiceStatus,    InvoiceAmount,       OfficialReceipt,
-       ITS,              LoadKey,             [Weight],            [Cube],
-       OrderDate,        ExternOrderKey,      DeliveryDate,        DeliveryStatus,
-       TotalCartons,     UserDefine01,        UserDefine02,        UserDefine03,
-       UserDefine04,     UserDefine05,        UserDefine06,        UserDefine07,
-       UserDefine08,     UserDefine09,        UserDefine10,        CtnCnt1,
-       CtnCnt2,          CtnCnt3,             CtnCnt4,             CtnCnt5,
-       TrafficCop) 
-       SELECT
-       @cMBOLKey,        @c_MbolLineNumber,   @cTruckID,           @cOrderKey,
-       @cPallet,         '',                  0,                   0,
-       '',               '',                  '',                  '0',
-       '0',              0,                   '',
-       '',               Loadkey,             0,                    0,
-       OrderDate,        ExternOrderKey,      DeliveryDate,        '',
-       @nTotalCarton,    '',                  '',                  '',
-       '',               '',                  '',                  '',
-       '',               '',                  '',                  0,
-       0,                0,                   0,                   0,
-       '1'
-      FROM ORDERS O WITH (NOLOCK)
-      WHERE OrderKey = @cOrderKey AND StorerKey = @cStorerKey
 
       COMMIT TRAN rdtfnc_ScanToTruck_Barry
 
