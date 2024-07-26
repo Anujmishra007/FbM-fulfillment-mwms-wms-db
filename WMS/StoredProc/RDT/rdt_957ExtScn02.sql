@@ -656,6 +656,7 @@ BEGIN
                   INNER JOIN dbo.UCC ucc WITH(NOLOCK) ON ucc.StorerKey = pkd.StorerKey AND ucc.UCCNo = pkd.DropID AND ucc.Sku = pkd.Sku
                   WHERE pkh.StorerKey = @cStorerKey
                      AND pkh.PickHeaderKey = @cPickSlipNo
+                     AND pkd.Status = @cPickConfirmStatus
                      --AND pkd.ID = @cDropID
 
                   OPEN C_UCC
@@ -687,7 +688,8 @@ BEGIN
                      UPDATE dbo.UCC WITH(ROWLOCK)
                      SET Status = '5',
                         Userdefined08 = '',
-                        Loc = @cToLoc
+                        Loc = @cToLoc,
+                        ID = @cDropID
                      WHERE StorerKey = @cStorerKey
                         AND UCCNo = @cUCCNo
 

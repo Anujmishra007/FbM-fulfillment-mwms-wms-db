@@ -9,7 +9,7 @@ GO
 /* Copyright: Maersk                                                    */
 /* Written by: WLChooi                                                  */
 /*                                                                      */
-/* Purpose: UWP-20706 - Granite | MWMS | BOL Report                     */
+/* Purpose: UWP-20706 - Granite | MWMS | BOL Report (FCR-234)           */
 /*        :                                                             */
 /* Called By: Ported from PB function - f_get_vics_mbol                 */
 /*          :                                                           */
@@ -54,6 +54,7 @@ BEGIN
          , @n_Endnumber               INT          = 0
          , @n_Runnolen                INT          = 0
          , @n_SumAll                  INT          = 0
+         , @c_ExistUCC                NVARCHAR(50) = ''
 
    DECLARE @b_Success   INT
          , @c_authority NVARCHAR(30) = N''
@@ -84,7 +85,13 @@ BEGIN
       END
       ELSE
       BEGIN
-         SET @c_UCC = RIGHT(REPLICATE('0', 9) + TRIM(@c_UCC), 9)
+         SET @c_ExistUCC = @c_UCC
+         SET @c_UCC = SUBSTRING(@c_UCC, PATINDEX('%[^0]%', @c_UCC), LEN(@c_UCC))   --Remove leading zero
+
+         IF ISNULL(@c_UCC, '') = ''
+         BEGIN
+            SET @c_UCC = @c_ExistUCC
+         END
       END
 
       IF ISNUMERIC(@c_UCC) = 0
@@ -93,54 +100,8 @@ BEGIN
          GOTO QUIT_SP
       END
 
-      SET @c_Vics_MBOL = TRIM(@c_UCC) + @c_Mbolkey
-      SET @c_PartialSSCC = RIGHT(@c_Vics_MBOL, 17)
-
-      --EXEC dbo.nspGetRight @c_Facility = @c_Facility
-      --                   , @c_StorerKey = @c_Storerkey
-      --                   , @c_sku = N''
-      --                   , @c_ConfigKey = N'VicBillNumber'
-      --                   , @b_Success = @b_Success OUTPUT
-      --                   , @c_authority = @c_vicbillnumber_authority OUTPUT
-      --                   , @n_err = @n_err OUTPUT
-      --                   , @c_errmsg = @c_errmsg OUTPUT
-
-      --IF @c_vicbillnumber_authority = '0'
-      --   SET @c_vicbillnumber_authority = N''
-
-      --IF ISNULL(TRIM(@c_vicbillnumber_authority), '') <> ''
-      --BEGIN
-      --   SELECT TOP 1 @c_Keyname = Code
-      --              , @c_Startnumber = ISNULL(UDF01, '0')
-      --              , @c_Endnumber = ISNULL(UDF02, '0')
-      --   FROM CODELKUP (NOLOCK)
-      --   WHERE LISTNAME = @c_vicbillnumber_authority
-
-      --   IF ISNULL(TRIM(@c_Keyname), '') <> ''
-      --   BEGIN
-      --      IF ISNUMERIC(@c_Startnumber) = 1
-      --         SET @n_Startnumber = CAST(@c_Startnumber AS INT)
-
-      --      IF ISNUMERIC(@c_Endnumber) = 1
-      --         SET @n_Endnumber = CAST(@c_Endnumber AS INT)
-
-      --      EXEC dbo.nspg_GetKeyMinMax @keyname = @c_Keyname
-      --                               , @fieldlength = 17
-      --                               , @Min = @n_Startnumber
-      --                               , @Max = @n_Endnumber
-      --                               , @keystring = @c_Keystring OUTPUT
-      --                               , @b_Success = @b_Success OUTPUT
-      --                               , @n_err = @n_err OUTPUT
-      --                               , @c_errmsg = @c_errmsg OUTPUT
-
-      --      IF @b_Success = 1 AND ISNULL(TRIM(@c_Keystring), '') <> ''
-      --      BEGIN
-      --         SET @n_Runnolen = 17 - LEN(TRIM(@c_UCC)) - 1
-      --         SET @c_Vics_MBOL = TRIM(@c_UCC) + RIGHT(TRIM(@c_Keystring), @n_Runnolen)
-      --      END
-      --   END
-      --END
-
+      SET @c_Vics_MBOL = TRIM(@c_UCC) + RIGHT(TRIM(@c_Mbolkey), 8)
+      SET @c_PartialSSCC = @c_Vics_MBOL
       SET @n_length = LEN(@c_PartialSSCC)
 
       IF @n_length > 0
