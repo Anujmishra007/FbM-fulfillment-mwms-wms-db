@@ -96,6 +96,32 @@ BEGIN
             END
          END
       END
+      ELSE IF @nstep = 9
+      BEGIN
+         IF @nInputKey = 1
+         BEGIN
+            DECLARE @cSerialNo           NVARCHAR(50)
+
+            SET @cAddRCPTValidtn = rdt.RDTGetConfig( @nFunc, 'AddSerialValidtn', @cStorerKey)
+
+            IF @cAddRCPTValidtn = '1'
+            BEGIN
+               SELECT
+                  @cSku = V_SKU,
+                  @cSerialNo = V_MAX
+               FROM   RDTMOBREC (NOLOCK)
+               WHERE  Mobile = @nMobile
+
+               IF CHARINDEX(@cSku,@cSerialNo,1) <> 1
+                  OR LEN(@cSerialNo) <= LEN(@cSku)
+               BEGIN               
+                  SET @nErrNo = -1
+                  SET @cErrMsg = ''
+                  GOTO Quit
+               END
+            END
+         END
+      END   
    END
 Quit:
 END
