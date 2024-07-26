@@ -13,7 +13,7 @@ GO
 /*                                                                      */  
 /* Called By: Over Allocation                                           */  
 /*                                                                      */  
-/* Version: 1.5                                                         */  
+/* Version: 1.6                                                         */  
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /*                                                                      */  
@@ -34,12 +34,12 @@ GO
 /*                            PendingMoveIn                             */
 /*                            -Use @n_Rowcount instead                  */
 /* 2024-07-08  Wan05    1.5   UWP-21429-Mattel Overallocation Enhancement*/
-/*                            -If overallocate + lefttofullfiee>1 pallet*/
+/*                            -If overallocate + lefttofulfill>1 pallet */
 /*                             ,find empty DPP                          */
-/* 2024-07-18  Wan06    1.5   UWP-22202-Mattel Overallocation           */
+/* 2024-07-18  Wan06    1.6   UWP-22202-Mattel Overallocation           */
 /*                            Do Not Overallocate to partial fulfill DPP*/
 /************************************************************************/  
-CREATE OR ALTER PROC mspGetOverPickLoc01     
+CREATE OR ALTER PROC mspGetOverPickLoc01  
    @c_Storerkey                  NVARCHAR(15)   
 ,  @c_Sku                        NVARCHAR(20)   
 ,  @c_AllocateStrategykey        NVARCHAR(10)  
@@ -85,6 +85,8 @@ BEGIN
          , @n_QtyAllocated INT          = 0                                         --(Wan05)
          , @n_QtyPicked    INT          = 0                                         --(Wan05)
          , @c_PickLoc      NVARCHAR(10) = ''                                        --(Wan05)
+         , @n_MaxPalletQty INT          = 0                                         --(Wan06)
+         , @n_QtyExpected  INT          = 0                                         --(Wan06)   
 
          , @CUR_FindLOC    CURSOR                                                   --(Wan05)
 
@@ -158,10 +160,7 @@ BEGIN
          --   AND ((SUM(lli.PendingMoveIn) = 0 AND 
          --         CEILING(SUM(lli.QtyExpected + @n_QtyLeftToFulfill)/@n_PalletQty) <= l.MaxPallet) OR --(Wan02)  
          --         SUM(lli.QtyExpected) + @n_QtyLeftToFulfill <= SUM(lli.PendingMoveIn))
-         HAVING SUM(lli.Qty - lli.QtyAllocated - lli.Qtypicked) <> 0               --(Wan06)      
-                --OR                                                                --(Wan06)
-                -- SUM(lli.QtyAllocated - (lli.Qty - lli.Qtypicked)) > 0            --(Wan06)
-                --)                                                                 --(Wan06)
+         HAVING SUM(lli.Qty-lli.QtyAllocated-lli.Qtypicked) <> 0                    --(Wan06) 
                  --((SUM(lli.Qty) = 0 AND SUM(lli.QtyAllocated) > 0) AND                      
                  -- (--(SUM(lli.PendingMoveIn) = 0 AND                                         --(Wan04)      
                  --   CEILING(SUM(lli.QtyAllocated + @n_QtyLeftToFulfill)/@n_PalletQty) <= l.MaxPallet
@@ -172,7 +171,11 @@ BEGIN
                        THEN 1 
                        WHEN SUM(lli.Qty-lli.QtyAllocated-lli.Qtypicked) > 0 
                        THEN 3
-                       ELSE 5 END                                                   --(Wan03) END
+                       WHEN SUM(lli.Qty-lli.Qtypicked) = 0                          --(Wan06)-START
+                       THEN 5
+                       WHEN SUM(lli.Qty-lli.Qtypicked) > 0 
+                       THEN 6
+                       ELSE 7 END                                                   --(Wan06)-END--(Wan03) END
                ,  l.ABC
                ,  l.LogicalLocation                                                 --(Wan04)
          OPEN @CUR_FindLOC
@@ -184,12 +187,25 @@ BEGIN
 
          WHILE @@FETCH_STATUS = 0 AND @n_QtyLeftToFulfill > 0
          BEGIN
-            IF (@n_Qty - @n_QtyPicked) - @n_QtyAllocated < 0 AND     --Overallcated --(Wan05) 
-               (@n_MaxPallet*@n_PalletQty) < @n_QtyAllocated-(@n_Qty-@n_QtyPicked) + @n_QtyLeftToFulfill
+            IF (@n_Qty - @n_QtyPicked) - @n_QtyAllocated < 0       --Overallocated  --(Wan05) 
             BEGIN
-               BREAK
+               IF @n_Qty - @n_QtyPicked = 0 OR @n_Qty = 0                           --(Wan06)-START
+               BEGIN
+                  SET @n_MaxPalletQty = @n_MaxPallet * @n_PalletQty
+               END
+               ELSE
+               BEGIN
+                  SET @n_MaxPalletQty = (@n_MaxPallet - CEILING((@n_Qty)/@n_PalletQty))*@n_PalletQty
+               END
+
+               SET @n_QtyExpected = @n_QtyAllocated + (@n_QtyPicked - @n_Qty)
+
+               IF @n_MaxPalletQty < @n_QtyExpected + @n_QtyLeftToFulfill
+               BEGIN
+                  BREAK
+               END                                                                  --(Wan06) - END
             END
- 
+
             IF @n_Qty - @n_QtyAllocated - @n_QtyPicked > 0           --QtyAvailable inv
             BEGIN
                SET @n_QtyLeftToFulfill = @n_QtyLeftToFulfill - 
@@ -199,7 +215,7 @@ BEGIN
             BEGIN
                SET @n_QtyLeftToFulfill = 0
             END
-            
+   
             INSERT INTO #PICKLOCTYPE
             VALUES ( @c_PickLoc )
 
@@ -210,12 +226,13 @@ BEGIN
                                              ,@n_QtyPicked
          END
          SET @n_RowCount = 1 
+ 
          IF @n_QtyLeftToFulfill > 0
          BEGIN
             SET @n_RowCount = 0  
          END                                                                        --(Wan05) - END
       END
-
+ 
       IF @n_RowCount = 0                                                            --(Wan04)
       BEGIN    
          INSERT INTO #PICKLOCTYPE
@@ -232,8 +249,8 @@ BEGIN
          GROUP BY l.loc
                ,  l.ABC          
                ,  l.LogicalLocation
-         HAVING SUM(ISNULL(lli.PendingMoveIn,0) + ISNULL(lli.Qty,0) 
-                  - ISNULL(lli.QtyPicked,0) + ISNULL(lli.QtyAllocated,0)) = 0       --(Wan03)--(Wan02)
+         HAVING SUM(ISNULL(lli.PendingMoveIn,0) + ISNULL(lli.QtyAllocated,0)) = 0   --(Wan06)  
+            AND SUM(ISNULL(lli.Qty,0) - ISNULL(lli.QtyPicked,0)) = 0                --(Wan06)--(Wan03)--(Wan02)
          ORDER BY l.ABC
                ,  l.LogicalLocation
                ,  l.Loc
@@ -265,7 +282,7 @@ BEGIN
   SELECT TOP 1 @c_OverPickLoc= Loc                                                  --(Wan05) - START
   FROM #PICKLOCTYPE                                                                 
   ORDER BY RowID DESC                                                               --(Wan05) - END
-
+ 
   SELECT Loc FROM #PICKLOCTYPE
      
 QUIT_SP:  

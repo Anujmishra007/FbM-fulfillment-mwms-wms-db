@@ -234,7 +234,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
    BEGIN  
       SET @cur_WaveReplto = CURSOR FAST_FORWARD READ_ONLY FOR 
       SELECT PD.Storerkey, PD.Sku, PD.Loc, PD.Lot                                   --(Wan03)
-         , QtyNeed = lli.QtyAllocated-(lli.Qty-lli.QtyPicked)-lli.PendingMoveIn     --(Wan05)                  
+         , QtyNeed = lli.QtyAllocated+(lli.QtyPicked-lli.Qty)-lli.PendingMoveIn     --(Wan05)                  
       FROM #PICKDETAIL_WIP PD (NOLOCK)
       JOIN LOTATTRIBUTE la  (NOLOCK) ON pd.Lot = la.Lot
       JOIN LOTxLOCxID   lli (NOLOCK) ON pd.Lot = lli.Lot 
@@ -267,7 +267,9 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
                     WHERE l1.Storerkey = @c_Storerkey
                     AND   l1.loc = @c_ToLoc
                     AND   l1.Sku <> @c_Sku
-                    AND   (l1.Qty-l1.QtyPicked)+l1.QtyAllocated+PendingMoveIn > 0
+                    AND   (l1.QtyAllocated+(l1.QtyPicked-l1.Qty)>0 
+                    OR     li.PendingMoveIn > 0
+                          )
                     )
          BEGIN
             SET @n_Continue = 3
