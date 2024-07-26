@@ -68,8 +68,9 @@ GO
 /*                             ReceiptLineNumber output (ZG01)                */
 /* 2021-04-02 4.2  James       Change variable used (fix bug) (james05)       */
 /* 2022-01-26 4.3  YeeKung     JSM-48687 extend externreceiptkey					*/
-/*                             20->100		(yeekung01)									*/  
+/*                             20->100		(yeekung01)									*/
 /* 2021-12-06 4.4  YeeKung     WMS-18390 Fixed POKEY (yeekung01)              */
+/* 2024-07-01 4.5  CYU027      Fix blank lottable issue                       */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_Receive] (
@@ -1309,7 +1310,7 @@ BEGIN
          (Lottable01 = '' AND
           Lottable02 = '' AND
           Lottable03 = '' AND
-          Lottable04 IS NULL)
+          ISNULL(Lottable04, '1900-01-01 00:00:00.000')  ='1900-01-01 00:00:00.000')
          OR
          -- Exact match lottables
          (Lottable01 = @cLottable01 AND
@@ -1317,9 +1318,9 @@ BEGIN
           Lottable03 = @cLottable03 AND
           IsNULL( Lottable04, 0) = IsNULL( @dLottable04, 0))
       )
-      AND QtyExpected > @nQTY_Bal -- (ChewKP01)
+      AND QtyExpected >= @nQTY_Bal -- (CYU027)
       -- AND ReceiptLineNumber > @cReceiptLineNumber
-      AND RowRef = @nRowRef
+      AND RowRef > @nRowRef
    ORDER BY RowRef -- ReceiptLineNumber
 
    -- Exit loop
