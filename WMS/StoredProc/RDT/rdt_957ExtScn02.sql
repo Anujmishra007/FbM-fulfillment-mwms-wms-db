@@ -688,7 +688,8 @@ BEGIN
                      UPDATE dbo.UCC WITH(ROWLOCK)
                      SET Status = '5',
                         Userdefined08 = '',
-                        Loc = @cToLoc
+                        Loc = @cToLoc,
+                        ID = @cDropID
                      WHERE StorerKey = @cStorerKey
                         AND UCCNo = @cUCCNo
 
