@@ -5,9 +5,9 @@ GO
 
 /************************************************************************/
 /* Store procedure: rdt_ExtScnEntry                                     */
-/* Copyright      : LF Logistics                                        */
+/* Copyright      : Maersk WMS                                          */
 /*                                                                      */
-/* Purpose:       For Unilever                                          */
+/* Purpose:                                                             */
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
 /* 2024-06-13 1.0  NLT013   FCR386 Create                               */

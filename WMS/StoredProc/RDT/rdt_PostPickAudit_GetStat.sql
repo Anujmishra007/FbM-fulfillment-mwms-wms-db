@@ -111,6 +111,8 @@ BEGIN
    IF @cConvertQTYSP = '0'
       SET @cConvertQTYSP = ''
    SET @cExtendedRefNoSP = rdt.rdtGetConfig( @nFunc, 'ExtendedRefNoSP', @cStorer)
+   IF @cExtendedRefNoSP = '0'
+      SET @cExtendedRefNoSP = ''
 
 -- Note: do not merge the count distinct SKU and sum QTY, into one SQL statements
 --       if merged it will create temp table for distinct count
