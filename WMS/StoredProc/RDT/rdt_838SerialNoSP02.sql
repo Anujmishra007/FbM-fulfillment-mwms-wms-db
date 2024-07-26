@@ -349,7 +349,35 @@ BEGIN
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SNO ady scan
                GOTO Quit
             END
-               
+
+         END
+
+         IF rdt.RDTGetConfig( @nFunc, 'ValidateSerialNo4Nec', @cStorerkey) = '1'
+         BEGIN
+            IF EXISTS(SELECT 1 FROM SerialNo WITH (NOLOCK)
+                           WHERE StorerKey = @cStorerKey 
+                           AND SKU = @cSKU 
+                           AND SerialNo = @cSerialNo
+                           AND status <> '1')
+            BEGIN
+               SET @nErrNo = 217211
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid State
+               GOTO Quit
+            END
+
+            IF EXISTS(SELECT 
+                           1
+                        FROM PackSerialNo psn WITH (NOLOCK)
+                        INNER JOIN PackHeader ph WITH(NOLOCK) ON psn.PickSlipNo = ph.PickSlipNo AND ph.StorerKey = psn.StorerKey
+                        WHERE status = N'0'
+                           AND psn.StorerKey = @cStorerKey
+                           AND SKU = @cSKU
+                           AND SerialNo = @cSerialNo)
+            BEGIN
+               SET @nErrNo = 217212
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SNO ady scan
+               GOTO Quit
+            END               
          END
 
          -- Extended update  
