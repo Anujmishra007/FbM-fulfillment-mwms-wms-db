@@ -19,7 +19,8 @@ GO
 /*                                                                            */                    
 /* Date       Rev  Author   Purposes                                          */                    
 /* 2019-02-15 1.0  YeeKung  Created                                           */                    
-/* 2024-05-24 1.1  NLT013   Add session id to get unique mobile               */                    
+/* 2024-05-24 1.1  NLT013   Add session id to get unique mobile               */ 
+/* 2024-07-26 1.2  Jackc    UWP-21905 Encrypt password                        */                    
 /******************************************************************************/                    
 CREATE PROC [RDT].[RDTResumeSession] (                   
    @nMobile    INT,                    
@@ -45,7 +46,7 @@ CREATE PROC [RDT].[RDTResumeSession] (
             @cLangCode        NVARCHAR(3),            
             @iMenu            int,            
             @cMultiLogin      NVARCHAR(1),            
-            @cUsrPasswd       NVARCHAR(15),            
+            @cUsrPasswd       NVARCHAR(32),--V1.2 Jackc Extend length from 15 to 32            
             @cDefaultUOM      NVARCHAR(10),            
             @bSuccess         int,            
             @cPrinter         NVARCHAR(10), -- Added on 10-Aug-2007            

@@ -10,7 +10,7 @@ GO
 /************************************************************************/
 /* Stored Procedure: rdtLogin                                           */
 /* Creation Date:                                                       */
-/* Copyright: IDS                                                       */
+/* Copyright: Maersk                                                       */
 /* Written by:                                                          */
 /*                                                                      */
 /* Purpose:                                                             */
@@ -46,6 +46,7 @@ GO
 /* 2019-04-18   YeeKung 2.6   Fix handheld incorrect logout(yeekung01)  */
 /* 2021-01-21   James   2.7   WMS-15781 Add AllowResumeSession (james03)*/
 /* 2024-05-24   NLT013  2.8   Add session id to get unique mobile       */
+/* 2024-07-26   JACKC   2.9   UWP-19305 Encrypt rdt password            */
 /************************************************************************/
 
 CREATE PROC [RDT].[rdtLogin] (
@@ -61,24 +62,25 @@ AS
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
 
-   DECLARE @nFunc      int,
-          @nScn        int,
-          @nStep       int,
-          @cUsrName    NVARCHAR(18),
-          @cPassword   NVARCHAR(15),
-          @cStorer     NVARCHAR(15),
-          @cFacility   NVARCHAR(5),
-          @cLangCode   NVARCHAR(3),
-          @iMenu       int,
-          @cMultiLogin NVARCHAR(1),
-          @cUsrPasswd  NVARCHAR(15),
-          @cDefaultUOM NVARCHAR(10),
-          @bSuccess    int,
-          @cPrinter    NVARCHAR(10), -- Added on 10-Aug-2007
-          @cPrinter_Paper NVARCHAR(10), -- (Vicky03)
-          @cDeviceID   NVARCHAR(20),
-          @cActive     NVARCHAR(1),
-          @cLightMode  NVARCHAR(10), -- (ChewKP01)
+   DECLARE @nFunc                int,
+          @nScn                  int,
+          @nStep                 int,
+          @cUsrName              NVARCHAR(18),
+          @cPassword             NVARCHAR(15),
+          @cEncryptPwd           NVARCHAR(32), --（jackc)
+          @cStorer               NVARCHAR(15),
+          @cFacility             NVARCHAR(5),
+          @cLangCode             NVARCHAR(3),
+          @iMenu                 int,
+          @cMultiLogin           NVARCHAR(1),
+          @cUsrPasswd            NVARCHAR(32),
+          @cDefaultUOM           NVARCHAR(10),
+          @bSuccess              int,
+          @cPrinter              NVARCHAR(10), -- Added on 10-Aug-2007
+          @cPrinter_Paper        NVARCHAR(10), -- (Vicky03)
+          @cDeviceID             NVARCHAR(20),
+          @cActive               NVARCHAR(1),
+          @cLightMode            NVARCHAR(10), -- (ChewKP01)
           @cAllowResumeSession   NVARCHAR( 1)   -- (james03)
 
    SELECT @nFunc     = Func,
@@ -96,6 +98,11 @@ AS
       GOTO RETURN_SP
    END
 
+   --V2.9 Jackc
+   SET @cEncryptPwd = rdt.rdt_RDTUserEncryption(@cUsrName, @cPassword)
+   --V2.9 Jackc End
+
+
    SELECT @cStorer     = ISNULL(DefaultStorer, ''),
           @cFacility   = ISNULL(DefaultFacility, ''),
           @cLangCode   = DefaultLangCode, --ISNULL(DefaultLangCode, ''),
@@ -112,7 +119,7 @@ AS
    FROM RDT.rdtUser WITH (NOLOCK)
    WHERE Username =  @cUsrname
 
-   IF @@ROWCOUNT = 0 OR (@cUsrPasswd IS NULL) OR (@cUsrPasswd <> @cPassword)
+   IF @@ROWCOUNT = 0 OR (@cUsrPasswd IS NULL) OR (@cUsrPasswd <> @cEncryptPwd)
    BEGIN
       SELECT @nErrNo = -1,
          @nStep = 0,
