@@ -47,6 +47,7 @@ BEGIN
 		, @dt_Lottable05        DATETIME
 		, @c_Lottable06         NVARCHAR(30) = ''
 		, @c_Lottable07         NVARCHAR(30) = ''
+		, @c_ToLottable07       NVARCHAR(30) = ''
 		, @c_Lottable08         NVARCHAR(30) = ''
 		, @c_Lottable09         NVARCHAR(30) = ''
 		, @c_Lottable10         NVARCHAR(30) = ''
@@ -65,6 +66,8 @@ BEGIN
 		, @c_UserDefined02      NVARCHAR(20) = ''
 		, @canBeAllocated       INT =1
 		, @b_SuccessLog         INT= 1
+		, @c_UpdateSLOnLottable06Change  NVARCHAR(1) = 'N'
+		, @n_ErrNo              INT = 0
 
 	------- Retrieve records from TRANSFER UserDefine02='AUTOREL'
 	BEGIN
@@ -78,8 +81,11 @@ BEGIN
 			 , Facility = TF.Facility
 			 , FromLottable02 = ISNULL(RTRIM(TD.Lottable02),'')
 			 , ToLottable02 = ISNULL(RTRIM(TD.ToLottable02),'')
+			 , ToLottable04 = ISNULL(RTRIM(TD.ToLottable04),'')
+			 , SValue = ISNULL(RTRIM(SC.SValue),'0')
 		FROM TRANSFERDETAIL TD WITH (NOLOCK)
 			     JOIN TRANSFER TF  WITH (NOLOCK) ON (TD.TransferKey = TF.TransferKey)
+			     LEFT JOIN (SELECT SValue, StorerKey, Facility from StorerConfig where ConfigKey = 'UpdateSLOnLottable06Change') SC on (TF.Facility=SC.Facility and TD.ToStorerKey = SC.StorerKey)
 		  WHERE TF.Status = '0'
 		  AND TF.UserDefine02 = 'AUTOREL'
           AND TF.FromStorerKey = @c_FromStorerkey
@@ -96,9 +102,15 @@ BEGIN
 		,  @c_FromFacility
 		,  @c_FromLottable02
 		,  @c_ToLottable02
+		,  @dt_Lottable04
+		,  @c_UpdateSLOnLottable06Change
 	WHILE @@FETCH_STATUS <> -1
 		BEGIN
-
+			IF @c_UpdateSLOnLottable06Change = '1'
+				SET @c_UpdateSLOnLottable06Change = 'Y'
+			ELSE
+				SET @c_UpdateSLOnLottable06Change = 'N'
+			
 			SELECT @c_FromPackkey = PACK.Packkey
 				 , @c_FromUOM     = PACK.PackUOM3
 			FROM SKU  WITH (NOLOCK)
@@ -201,6 +213,10 @@ BEGIN
 							--- Update/Insert into TRANSFERDETAIL -- Split New Transfer Line--
 							SET @c_TransferStatus = '0'
 							SET @c_UserDefined02 = 'ALLOCATION_DONE'
+							IF @c_UpdateSLOnLottable06Change='Y'
+								SELECT @c_ToLottable07 =  dbo.fnc_CalcShelfLife01(@c_ToStorerkey, @c_ToSku, @dt_Lottable04)
+							ELSE
+								SET @c_ToLottable07 = @c_Lottable07
 							IF(@n_IsFirstRecord = 1)
 							BEGIN TRY
 								BEGIN
@@ -232,7 +248,7 @@ BEGIN
 									  ,ToLottable04 = @dt_Lottable04
 									  ,ToLottable05 = @dt_Lottable05
 									  ,ToLottable06 = '0' --inventory release
-									  ,ToLottable07 = @c_Lottable07
+									  ,ToLottable07 = @c_ToLottable07
 									  ,ToLottable08 = @c_Lottable08
 									  ,ToLottable09 = @c_Lottable09
 									  ,ToLottable10 = @c_Lottable10
@@ -381,7 +397,7 @@ BEGIN
 											, @dt_Lottable04
 											, @dt_Lottable05
 											, '0'
-											, @c_Lottable07
+											, @c_ToLottable07
 											, @c_Lottable08
 											, @c_Lottable09
 											, @c_Lottable10
@@ -489,6 +505,8 @@ BEGIN
 				,  @c_FromFacility
 				,  @c_FromLottable02
 				,  @c_ToLottable02
+				,  @dt_Lottable04
+				,  @c_UpdateSLOnLottable06Change
 		SET @canBeAllocated = 1 --setting to default value
 		END
 	 CLOSE CUR_ANFTRAN
