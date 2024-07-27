@@ -267,8 +267,8 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
                     WHERE l1.Storerkey = @c_Storerkey
                     AND   l1.loc = @c_ToLoc
                     AND   l1.Sku <> @c_Sku
-                    AND   (l1.QtyAllocated+(l1.QtyPicked-l1.Qty)>0 
-                    OR     li.PendingMoveIn > 0
+                    AND   (l1.QtyAllocated + (l1.QtyPicked-l1.Qty) > 0 
+                    OR     l1.PendingMoveIn > 0
                           )
                     )
          BEGIN
