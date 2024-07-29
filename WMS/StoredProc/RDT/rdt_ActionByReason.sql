@@ -1,0 +1,180 @@
+ SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+
+/************************************************************************/  
+/* Store procedure: rdt_ActionByReason                                     */  
+/*                                                                      */  
+/* Purpose: Puma                                                        */  
+/*                                                                      */  
+/* Date       Rev  Author     Purposes                                  */  
+/* 2024-07-14 1.0  JHU151     FCR-428. Created                          */  
+/************************************************************************/  
+  
+CREATE OR ALTER PROC [RDT].[rdt_ActionByReason] (
+   @nMobile          INT,           
+   @nFunc            INT,
+   @cStorerKey       NVARCHAR(15), 
+   @cSKU             NVARCHAR(20),
+   @cLoc             NVARCHAR(10),
+   @cLot             NVARCHAR(10),
+   @cID              NVARCHAR(20),
+   @cReasonCode      NVARCHAR(20),
+   @nErrNo           INT            OUTPUT, 
+   @cErrMsg          NVARCHAR(20)   OUTPUT
+)
+AS
+BEGIN
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
+
+   DECLARE
+      @b_Success         INT,
+      @n_err             INT,
+      @n_continue        INT,
+      @c_errmsg          NVARCHAR(250)
+      
+   IF @cReasonCode = N'Short'
+   BEGIN
+      DECLARE
+         @cTaskDetailKeyCC  NVARCHAR(10),
+         @cCCKey            NVARCHAR(10),
+         @cCCTaskType       NVARCHAR(60),
+         @cHoldCheckFlg     NVARCHAR(60),
+         @cHoldType         NVARCHAR(60)
+         
+      SELECT 
+         @cCCTaskType = UDF01,-- CC task type
+         @cHoldType = UDF02, -- Hold type
+         @cHoldCheckFlg = CASE WHEN ISNULL(UDF03,'') = 'X' THEN '1' ELSE '0' END
+      FROM codelkup 
+      WHERE listname = 'RDTREASON'
+      AND code = @nFunc
+      AND storerkey = @cStorerKey
+
+      -- Generate CC task
+      IF ISNULL(@cCCTaskType,'') <> ''
+      BEGIN
+         IF (ISNULL(RTRIM(@cCCTaskType),'') IN ( 'CC' , 'CCSV', 'CCSUP'))
+         BEGIN
+            INSERT INTO TRACEINFO (Tracename , TimeIn, Step1 , Col1 )
+            Values ( 'TMRSN', GETDATE(), 'TsKTYPE' , @cCCTaskType )
+
+
+            EXECUTE dbo.nspg_getkey
+            'TaskDetailKey'
+            , 10
+            , @cTaskDetailKeyCC OUTPUT
+            , @b_success OUTPUT
+            , @n_Err     
+            , @c_Errmsg OUTPUT
+
+            IF NOT @b_success = 1
+            BEGIN
+               SELECT @n_continue = 3
+               SELECT @n_err = 219552
+               SELECT @c_errmsg= CONVERT(NVARCHAR(5),@n_err)+ ' GetKeyFailed(rdt_ActionByReason)'
+            END
+
+            EXECUTE nspg_getkey
+            'CCKey'
+            , 10
+            , @cCCKey OUTPUT
+            , @b_success OUTPUT
+            , @n_Err    --OUTPUT Commented by NLT013, it overrides the old error no, if the error was not 0, but no error happens while executing this SP, error no will be updated as 0
+            , @c_Errmsg OUTPUT
+
+            IF NOT @b_success = 1
+            BEGIN
+               SELECT @n_continue = 3
+               SELECT @n_err = 219553
+               SELECT @c_errmsg= CONVERT(NVARCHAR(5),@n_err)+ ' GetKeyFailed(rdt_ActionByReason)'
+            END
+
+            INSERT INTO dbo.TaskDetail
+            (TaskDetailKey,TaskType,Storerkey,Sku,Lot,UOM,UOMQty,Qty,FromLoc,LogicalFromLoc,FromID,ToLoc,LogicalToLoc
+            ,ToID,Caseid,PickMethod,Status,StatusMsg,Priority,SourcePriority,Holdkey,UserKey,UserPosition,UserKeyOverRide
+            ,StartTime,EndTime,SourceType,SourceKey,PickDetailKey,OrderKey,OrderLineNumber,ListKey,WaveKey,ReasonKey
+            ,Message01,Message02,Message03,RefTaskKey,LoadKey,AreaKey,DropID, SystemQty)
+            SELECT 
+            @cTaskDetailKeyCC,@cCCTaskType,@cStorerKey,@cSKU,'','',0,0,@cLoc,'','','',''
+            ,'','','SKU','0','','1','1','','','',''
+            ,GetDATE(),GetDATE(),'rdt_ActionByReason',@cCCKey,'','','','','',''
+            ,'','','','','','', '', 0
+            
+
+            IF @@ERROR <> 0
+            BEGIN
+               SELECT @n_continue = 3
+               SELECT @n_err = 219551   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+               SELECT @c_errmsg= CONVERT(NVARCHAR(5),@n_err)+ 'InsTaskFailed'
+            END
+                  
+         END
+      END
+
+      -- Hold Type(LOC/ID/LOT)
+      IF ISNULL(@cHoldType,'') IN ('LOC','LOT','ID')
+      BEGIN
+         IF @cHoldType = 'LOC'
+         BEGIN
+            SET @cLot = ''
+            SET @cID = ''
+         END
+         ELSE IF @cHoldType = 'ID'
+         BEGIN
+            SET @cLoc = ''
+            SET @cLot = ''
+         END
+         ELSE IF @cHoldType = 'LOT'
+         BEGIN
+            SET @cLoc = ''
+            SET @cID = ''
+         END
+
+         EXEC dbo.nspInventoryHoldWrapper    
+                @c_lot = @cLot   
+               ,@c_Loc = @cLoc
+               ,@c_ID  = @cID     
+               ,@c_StorerKey    = @cStorerKey    
+               ,@c_SKU          = ''    
+               ,@c_Lottable01   = ''    
+               ,@c_Lottable02   = ''    
+               ,@c_Lottable03   = ''    
+               ,@dt_Lottable04  = NULL    
+               ,@dt_Lottable05  = NULL    
+               ,@c_Lottable06   = ''    
+               ,@c_Lottable07   = ''    
+               ,@c_Lottable08   = ''    
+               ,@c_Lottable09   = ''    
+               ,@c_Lottable10   = ''    
+               ,@c_Lottable11   = ''    
+               ,@c_Lottable12   = ''    
+               ,@dt_Lottable13  = NULL    
+               ,@dt_Lottable14  = NULL    
+               ,@dt_Lottable15  = NULL    
+               ,@c_Status = 'SHORT'    
+               ,@c_Hold = @cHoldCheckFlg   
+               ,@b_success = @b_Success OUTPUT    
+               ,@n_Err = @n_Err OUTPUT    
+               ,@c_Errmsg = @c_ErrMsg OUTPUT    
+               ,@c_Remark  = ''
+      END
+
+      
+   END
+
+Quit:
+END
+
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
+GRANT EXECUTE ON RDT.rdt_ActionByReason TO NSQL
+GO
