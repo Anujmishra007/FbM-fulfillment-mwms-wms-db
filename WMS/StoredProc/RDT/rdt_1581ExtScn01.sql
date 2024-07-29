@@ -143,7 +143,7 @@ BEGIN
 
                   IF CHARINDEX(@cSku,@cSerialNo,1) <> 1
                      OR LEN(@cSerialNo) <= LEN(@cSku)
-                     --OR LEN(@cSku) NOT IN (6,10)
+                     OR LEN(@cSku) NOT IN (6,10)
                   BEGIN
                      SET @nAfterScn = 6413
                      SET @nAfterStep = 98
@@ -423,19 +423,37 @@ BEGIN
 
 
 Quit:
-   SET @cUDF01 = @cBarcode
-   SET @cUDF02 = @cPrevBarcode
-   SET @cUDF03 = @cSKUValidated
-   SET @cUDF04 = @nBeforeReceivedQty
-   SET @cUDF05 = @nQtyExpected
-   SET @cUDF06 = @nToIDQTY
+   IF @nStep = 99
+   BEGIN
+      IF @nScn = 6413
+      BEGIN
+         IF @nInputKey = 1
+         BEGIN
+            SET @cUDF01 = @cBarcode
+            SET @cUDF02 = @cPrevBarcode
+            SET @cUDF03 = @cSKUValidated
+            SET @cUDF04 = @nBeforeReceivedQty
+            SET @cUDF05 = @nQtyExpected
+            SET @cUDF06 = @nToIDQTY
+         END
+      END 
+   END
+   IF @nAfterScn = 4831
+   BEGIN
+      UPDATE rdt.RDTMOBREC WITH (ROWLOCK)
+      SET V_MAX = ''
+      WHERE  Mobile = @nMobile
+   END
 END
 
-
-GRANT EXECUTE ON rdt.rdt_1581ExtScn01 TO NSQL
 GO
-
+ 
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
+ 
+GRANT EXECUTE ON rdt.rdt_1581ExtScn01 TO NSQL
+GO
+ 
+  

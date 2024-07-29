@@ -4707,7 +4707,7 @@ BEGIN
          BEGIN
             SET @nScn = 6413
             SET @nStep = 98
-            SET @cOutField01 = @cInField04
+            SET @cOutField01 = (SELECT TOP 1 V_MAX FROM rdt.RDTMOBREC WHERE username = @cUserName)
             SET @cOutField02 = ''
             GOTO Step_9_fail
          END
