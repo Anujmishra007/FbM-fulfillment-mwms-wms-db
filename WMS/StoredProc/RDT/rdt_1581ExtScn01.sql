@@ -1,5 +1,4 @@
-USE [GBRWMS]
-GO
+
 /****** Object:  StoredProcedure [RDT].[rdt_1581ExtScn01]    Script Date: 7/26/2024 6:55:00 PM ******/
 SET ANSI_NULLS OFF
 GO
@@ -15,7 +14,7 @@ GO
 /* 2024-07-24 1.0  JHU151     FCR-549. Created                          */  
 /************************************************************************/  
   
-ALTER   PROC [RDT].[rdt_1581ExtScn01] (
+CREATE OR ALTER PROC  [RDT].[rdt_1581ExtScn01] (
    @nMobile          INT,           
    @nFunc            INT,           
    @cLangCode        NVARCHAR( 3),  
@@ -433,4 +432,10 @@ Quit:
 END
 
 
+GRANT EXECUTE ON rdt.rdt_1581ExtScn01 TO NSQL
+GO
+
 SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
