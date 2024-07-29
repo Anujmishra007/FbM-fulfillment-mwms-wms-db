@@ -162,6 +162,7 @@ GO
 /* 2024-06-25 10.6 James      UWP-19305 Fix total serial no scanned must */
 /*                            match qty entered only can receive(james31)*/
 /* 2024-06-27 10.7 Jackc      Remove ext scn entry from LF in step5      */
+/* 2024-07-24 10.8 JHU151     FCR-549 Defy                               */
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_PieceReceiving] (
    @nMobile    INT,
@@ -277,6 +278,8 @@ DECLARE
    @cTempLottable04     NVARCHAR(16),
    @cTempLottable06     NVARCHAR(30),
 
+   @cExtScnSP           NVARCHAR( 20),
+
    @cLottableLabel01    NVARCHAR(20),
    @cLottableLabel02    NVARCHAR(20),
    @cLottableLabel03    NVARCHAR(20),
@@ -295,11 +298,12 @@ DECLARE
    @cSuggestedLocSP     NVARCHAR(20), --(cc03)
    @cSuggestedLoc       NVARCHAR(10), --(cc03)
    @cClosePalletSP      NVARCHAR(20), --(cc03)  
-   @cClosePalletOut     NVARCHAR(20), --(cc03)  
+   @cClosePalletOut     NVARCHAR(20), --(cc03)
    @cBUSR1              NVARCHAR( 30), -- (james23)
    @cAfterReceiveGoBackToId   NVARCHAR( 1),
    @cLoseIDlocSkipID    NVARCHAR( 1),
-
+   @tExtScnData			VariableTable,
+   
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
    @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),    @cFieldAttr03 NVARCHAR( 1),
@@ -314,7 +318,29 @@ DECLARE
    @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),    @cFieldAttr12 NVARCHAR( 1),
    @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60),    @cFieldAttr13 NVARCHAR( 1),
    @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),    @cFieldAttr14 NVARCHAR( 1),
-   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),    @cFieldAttr15 NVARCHAR( 1)
+   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),    @cFieldAttr15 NVARCHAR( 1),
+
+
+   @cLottable07  NVARCHAR( 30),
+   @cLottable08  NVARCHAR( 30),
+   @cLottable09  NVARCHAR( 30),
+   @cLottable10  NVARCHAR( 30),
+   @cLottable11  NVARCHAR( 30),
+   @cLottable12  NVARCHAR( 30),
+   @dLottable13  DATETIME,
+   @dLottable14  DATETIME,
+   @dLottable15  DATETIME,
+   
+   @cUDF01  NVARCHAR( 250), @cUDF02 NVARCHAR( 250), @cUDF03 NVARCHAR( 250),
+   @cUDF04  NVARCHAR( 250), @cUDF05 NVARCHAR( 250), @cUDF06 NVARCHAR( 250),
+   @cUDF07  NVARCHAR( 250), @cUDF08 NVARCHAR( 250), @cUDF09 NVARCHAR( 250),
+   @cUDF10  NVARCHAR( 250), @cUDF11 NVARCHAR( 250), @cUDF12 NVARCHAR( 250),
+   @cUDF13  NVARCHAR( 250), @cUDF14 NVARCHAR( 250), @cUDF15 NVARCHAR( 250),
+   @cUDF16  NVARCHAR( 250), @cUDF17 NVARCHAR( 250), @cUDF18 NVARCHAR( 250),
+   @cUDF19  NVARCHAR( 250), @cUDF20 NVARCHAR( 250), @cUDF21 NVARCHAR( 250),
+   @cUDF22  NVARCHAR( 250), @cUDF23 NVARCHAR( 250), @cUDF24 NVARCHAR( 250),
+   @cUDF25  NVARCHAR( 250), @cUDF26 NVARCHAR( 250), @cUDF27 NVARCHAR( 250),
+   @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( 250)
 
  DECLARE
     @c_oFieled01 NVARCHAR(20), @c_oFieled02 NVARCHAR(20),
@@ -411,7 +437,8 @@ SELECT
    @cAutoGotoLotScn         = V_String40, --(cc01)
    @cDecodeLottableSP       = V_String41, --(cc02)
    @cSuggestedLocSP         = V_String42, --(cc03)
-   @cClosePalletSP          = V_String43, --(cc03)  
+   @cClosePalletSP          = V_String43, --(cc03)
+   @cExtScnSP               = V_String44,  
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01  = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02  = FieldAttr02,
@@ -446,7 +473,8 @@ BEGIN
    IF @nStep =  8 GOTO Step_8   -- Scn = 3570. Multi SKU Barocde
    IF @nStep =  9 GOTO Step_9   -- Scn = 4831. Serial no
    IF @nStep = 10 GOTO Step_10  -- Scn = 1759. Close pallet?
-   IF @nStep = 99 GOTO Step_99  -- Scn = Customizate screen
+   IF @nStep = 98 GOTO Step_98  -- Extended Screen
+   IF @nStep = 99 GOTO Step_99  -- Scn = 6382. Pallet Type
 END
 RETURN -- Do nothing if incorrect step
 
@@ -520,6 +548,12 @@ BEGIN
    
    -- (james27)
    SET @cAfterReceiveGoBackToId = rdt.RDTGetConfig( @nFunc, 'AfterReceiveGoBackToId', @cStorer)
+
+   SET @cExtScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorer)
+   IF @cExtScnSP = '0'
+   BEGIN
+      SET @cExtScnSP = ''
+   END
 
    -- Code lookup
    IF EXISTS( SELECT 1
@@ -2570,6 +2604,65 @@ BEGIN
       SET @cFieldAttr03 = ''
       SET @cFieldAttr04 = ''
    END
+
+
+   
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         DELETE FROM @tExtScnData
+
+         IF @cExtScnSP = 'rdt_1581ExtScn01'
+         BEGIN
+            INSERT INTO @tExtScnData (Variable, Value) VALUES 	
+            ('@cTempLottable02',     @cTempLottable02)
+
+            SET @nAction = 3
+         END
+         
+         EXECUTE [RDT].[rdt_ExtScnEntry] 
+            @cExtScnSP, 
+            @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorer, @tExtScnData,
+            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT, @cLottable01 OUTPUT,
+            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT, @cLottable02 OUTPUT,
+            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT, @cLottable03 OUTPUT,
+            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT, @dLottable04 OUTPUT,
+            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT, @dLottable05 OUTPUT,
+            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT, @cLottable06 OUTPUT,
+            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT, @cLottable07 OUTPUT,
+            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT, @cLottable08 OUTPUT,
+            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT, @cLottable09 OUTPUT,
+            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT, @cLottable10 OUTPUT,
+            @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT, @cLottable11 OUTPUT,
+            @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, @cLottable12 OUTPUT,
+            @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT, @dLottable13 OUTPUT,
+            @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, @dLottable14 OUTPUT,
+            @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, @dLottable15 OUTPUT,
+            @nAction, 
+            @nScn OUTPUT,  @nStep OUTPUT,
+            @nErrNo   OUTPUT, 
+            @cErrMsg  OUTPUT,
+            @cUDF01 OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
+            @cUDF04 OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
+            @cUDF07 OUTPUT, @cUDF08 OUTPUT, @cUDF09 OUTPUT,
+            @cUDF10 OUTPUT, @cUDF11 OUTPUT, @cUDF12 OUTPUT,
+            @cUDF13 OUTPUT, @cUDF14 OUTPUT, @cUDF15 OUTPUT,
+            @cUDF16 OUTPUT, @cUDF17 OUTPUT, @cUDF18 OUTPUT,
+            @cUDF19 OUTPUT, @cUDF20 OUTPUT, @cUDF21 OUTPUT,
+            @cUDF22 OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
+            @cUDF25 OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
+            @cUDF28 OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
+
+         IF @nErrNo <> 0
+            GOTO Step_4_Fail
+         
+         IF @cExtScnSP = 'rdt_1581ExtScn01'
+         BEGIN
+            SET @cTempLottable01 = @cUDF01
+         END
+      END
+   End
    GOTO Quit
 
    Step_4_Fail:
@@ -4576,6 +4669,53 @@ Step_9:
 BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
+      -- Extended validate (yeekung05)
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+            ' @nMobile, @nFunc, @nStep, @nInputKey, @cLangCode, @cStorerkey, @cReceiptKey, @cPOKey, @cExtASN, @cToLOC, @cToID, ' +
+            ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cSKU, @nQTY, ' +
+            ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+
+         SET @cSQLParam =
+            '@nMobile      INT,           ' +
+            '@nFunc        INT,           ' +
+            '@nStep        INT,           ' +
+            '@nInputKey    INT,           ' +
+            '@cLangCode    NVARCHAR( 3),  ' +
+            '@cStorerkey   NVARCHAR( 15), ' +
+            '@cReceiptKey  NVARCHAR( 10), ' +
+            '@cPOKey       NVARCHAR( 10), ' +
+            '@cExtASN      NVARCHAR( 20), ' +
+            '@cToLOC       NVARCHAR( 10), ' +
+            '@cToID        NVARCHAR( 18), ' +
+            '@cLottable01  NVARCHAR( 18), ' +
+            '@cLottable02  NVARCHAR( 18), ' +
+            '@cLottable03  NVARCHAR( 18), ' +
+            '@dLottable04  DATETIME,      ' +
+            '@cSKU         NVARCHAR( 20), ' +
+            '@nQTY         INT,           ' +
+            '@nErrNo       INT           OUTPUT, ' +
+            '@cErrMsg      NVARCHAR( 20) OUTPUT  '
+
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+              @nMobile, @nFunc, @nStep, @nInputKey, @cLangCode, @cStorer, @cReceiptKey, @cPOKey, @cRefNo, @cLOC, @cToID,
+              @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cSKU, 0,
+              @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+         IF @nErrno = -1
+         BEGIN
+            SET @nScn = 6413
+            SET @nStep = 98
+            SET @cOutField01 = @cInField04
+            SET @cOutField02 = ''
+            GOTO Step_9_fail
+         END
+
+         IF @nErrNo <> 0 OR ISNULL( @cErrMsg, '') <> ''
+            GOTO Step_9_Quit
+      END
+
       -- Update SKU setting
       EXEC rdt.rdt_SerialNo @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorer, @cSKU, @cSKUDesc, @nQTY, 'UPDATE', 'ASN', @cReceiptKey,
          @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,
@@ -4889,6 +5029,9 @@ Step_9_Quit:
          END
       END
    END
+   GOTO Quit
+Step_9_fail:
+
 END
 GOTO Quit
 
@@ -5315,6 +5458,76 @@ END
 GOTO Quit
 
 
+Step_98:
+BEGIN
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+
+         DECLARE  @nPreSCn       INT,
+                  @nPreInputKey  INT
+
+         SET @nPreSCn = @nScn
+         SET @nPreInputKey = @nInputKey
+         
+         EXECUTE [RDT].[rdt_ExtScnEntry] 
+            @cExtScnSP, 
+            @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorer, @tExtScnData,
+            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT, @cLottable01 OUTPUT,
+            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT, @cLottable02 OUTPUT,
+            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT, @cLottable03 OUTPUT,
+            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT, @dLottable04 OUTPUT,
+            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT, @dLottable05 OUTPUT,
+            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT, @cLottable06 OUTPUT,
+            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT, @cLottable07 OUTPUT,
+            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT, @cLottable08 OUTPUT,
+            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT, @cLottable09 OUTPUT,
+            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT, @cLottable10 OUTPUT,
+            @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT, @cLottable11 OUTPUT,
+            @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, @cLottable12 OUTPUT,
+            @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT, @dLottable13 OUTPUT,
+            @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, @dLottable14 OUTPUT,
+            @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, @dLottable15 OUTPUT,
+            @nAction, 
+            @nScn OUTPUT,  @nStep OUTPUT,
+            @nErrNo   OUTPUT, 
+            @cErrMsg  OUTPUT,
+            @cUDF01 OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
+            @cUDF04 OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
+            @cUDF07 OUTPUT, @cUDF08 OUTPUT, @cUDF09 OUTPUT,
+            @cUDF10 OUTPUT, @cUDF11 OUTPUT, @cUDF12 OUTPUT,
+            @cUDF13 OUTPUT, @cUDF14 OUTPUT, @cUDF15 OUTPUT,
+            @cUDF16 OUTPUT, @cUDF17 OUTPUT, @cUDF18 OUTPUT,
+            @cUDF19 OUTPUT, @cUDF20 OUTPUT, @cUDF21 OUTPUT,
+            @cUDF22 OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
+            @cUDF25 OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
+            @cUDF28 OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
+
+         IF @nErrNo <> 0
+            GOTO Step_98_Fail
+
+         IF @cExtScnSP = 'rdt_1581ExtScn01'
+         BEGIN
+            IF @nPreSCn = 6413
+            BEGIN
+               SET @cBarcode = @cUDF01
+               SET @cPrevBarcode = @cUDF02
+               SET @cSKUValidated = @cUDF03
+               SET @nBeforeReceivedQty = @cUDF04
+               SET @nQtyExpected = @cUDF05
+               SET @nToIDQTY = @cUDF06
+            END
+         END
+         
+         GOTO Quit
+      END
+   END -- Ext scn sp <> ''
+
+   Step_98_Fail:
+      GOTO Quit
+END -- End step98
+
 /********************************************************************************
 Step 99. Scn = Customize
 ********************************************************************************/
@@ -5568,6 +5781,7 @@ BEGIN
       V_String41   = @cDecodeLottableSP, --(cc02)
       V_String42   = @cSuggestedLocSP, --(cc03)
       V_String43   = @cClosePalletSP,  --(cc03)  
+      V_String44   = @cExtScnSP,
       
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
