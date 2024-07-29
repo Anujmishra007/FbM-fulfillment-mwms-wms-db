@@ -1,7 +1,9 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /************************************************************************/
 /* Store Procedure:  isp_DynamicReplenishment_Granite                   */
 /* Creation Date:  25-June-2024                                         */
@@ -94,10 +96,10 @@ BEGIN
     END;
 
     -- Begin Transaction
-    BEGIN TRAN;
     SET @n_StartTranCnt = @@TRANCOUNT;
 	SET @n_continue = 1;
 	SET @c_successFlag = 'N';
+	BEGIN TRAN;
     SELECT TOP 1 @c_StorerKey = o.StorerKey, @c_Facility = o.Facility FROM ORDERS o (NOLOCK) WHERE o.OrderKey IN (
     select wd.OrderKey from WAVEdetail wd (nolock) where wavekey in (@c_WaveKey))
 
