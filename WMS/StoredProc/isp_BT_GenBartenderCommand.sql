@@ -864,7 +864,7 @@ BEGIN
             ,DefaultPrinter_Paper  ,sqluseradddate        
             )        
          VALUES        
-            (@c_userID          ,rdt.rdt_RDTUserEncryption(@c_GetUserID,'EXceedUser')    ,@c_userID        
+            (@c_userID          ,rdt.rdt_RDTUserEncryption(UPPER(@c_userID),'EXceedUser')    ,@c_userID        
             ,''                 ,''              ,'ENG'        
             ,5                  ,'6'             ,''        
             ,''                 ,GETDATE() )        
@@ -912,7 +912,7 @@ BEGIN
             ,DefaultPrinter_Paper ,sqluseradddate      )        
          VALUES        
            (        
-             @c_GetUserID   ,rdt.rdt_RDTUserEncryption(@c_GetUserID,'EXceedUser')     ,@c_GetUserID        
+             @c_GetUserID   ,rdt.rdt_RDTUserEncryption(UPPER(@c_GetUserID),'EXceedUser')     ,@c_GetUserID        
             ,''             ,''              ,'ENG'        
             ,5              ,'6'           ,''        
             ,''             ,GETDATE()           )        

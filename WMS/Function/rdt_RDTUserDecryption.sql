@@ -23,7 +23,7 @@ CREATE FUNCTION rdt.rdt_RDTUserDecryption
    @cUsrName            NVARCHAR(18),
    @cEncryptPassword    NVARCHAR(32)
 )
-RETURNS VARCHAR(15)
+RETURNS NVARCHAR(15)
 BEGIN
 
    DECLARE
