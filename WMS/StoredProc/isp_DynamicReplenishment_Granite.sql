@@ -3,7 +3,6 @@ GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
-
 /************************************************************************/
 /* Store Procedure:  isp_DynamicReplenishment_Granite                   */
 /* Creation Date:  25-June-2024                                         */
@@ -56,7 +55,7 @@ BEGIN
     SET CONCAT_NULL_YIELDS_NULL OFF
 
     DECLARE
-    @c_StorerKey     NVARCHAR(10),
+    @c_StorerKey        NVARCHAR(10),
     @c_Facility          NVARCHAR(20),
     @c_LocationType      NVARCHAR(10),
     @c_PickMethod        NVARCHAR(10),
@@ -78,14 +77,14 @@ BEGIN
     @c_Loc              NVARCHAR(10),
     @c_PutawayZone      NVARCHAR(10),
     @c_UOM              NVARCHAR(10),
+    @c_PackKey			NVARCHAR(10),
     @c_OrderKey         NVARCHAR(10),
     @n_UCCQty           INT,
     @c_FromLoc          NVARCHAR(50),
     @c_ToLoc            NVARCHAR(50),
     @n_UCC_RowRef       INT,
     @n_qtytoReplen      INT ,
-	@c_successFlag		NVARCHAR(1)
-
+	  @c_successFlag		NVARCHAR(1)
     -- Error check for WaveKey existence
     IF NOT EXISTS(SELECT 1 FROM WaveDetail WITH (NOLOCK) WHERE WaveKey = @c_WaveKey)
     BEGIN
@@ -94,12 +93,12 @@ BEGIN
         SELECT @c_errmsg='NSQL' + CONVERT(char(5), @n_err) + ': No Orders being populated into WaveDetail. (isp_DynamicReplenishment)';
         GOTO RETURN_SP;
     END;
-
     -- Begin Transaction
-    SET @n_StartTranCnt = @@TRANCOUNT;
-	SET @n_continue = 1;
+  SET @n_continue = 1;
 	SET @c_successFlag = 'N';
+
 	BEGIN TRAN;
+	SELECT @n_StartTranCnt = @@TRANCOUNT;
     SELECT TOP 1 @c_StorerKey = o.StorerKey, @c_Facility = o.Facility FROM ORDERS o (NOLOCK) WHERE o.OrderKey IN (
     select wd.OrderKey from WAVEdetail wd (nolock) where wavekey in (@c_WaveKey))
 
@@ -123,7 +122,8 @@ BEGIN
     BEGIN
 
         DECLARE cur_repleinshment CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-        SELECT PD.StorerKey, PD.Sku, PD.Lot, PD.ID,  PD.DropID,  PD.Loc ,  loc.PutawayZone FROM PickDetail PD (NOLOCK)
+        SELECT PD.StorerKey, PD.Sku, PD.Lot, PD.ID,  PD.DropID,  PD.Loc , PD.UOM, PD.PackKey,
+        loc.PutawayZone  FROM PickDetail PD (NOLOCK)
             JOIN LOC loc WITH (NOLOCK) ON (PD.loc = loc.loc)
         WHERE
         PD.WaveKey = @c_WaveKey
@@ -136,10 +136,10 @@ BEGIN
                         AND  r.Confirmed = 'N'
                         AND  r.Wavekey = @c_Wavekey
                         )
-        GROUP BY PD.StorerKey, PD.Sku, PD.Lot, PD.ID,  PD.DropID,  PD.Loc, loc.PutawayZone
+        GROUP BY PD.StorerKey, PD.Sku, PD.Lot, PD.ID,  PD.DropID,  PD.Loc, PD.UOM, PD.PackKey, loc.PutawayZone
         ORDER BY PD.StorerKey, PD.Sku, PD.Loc
         OPEN cur_repleinshment
-        FETCH NEXT FROM cur_repleinshment INTO @c_StorerKey, @c_Sku, @c_Lot, @c_Id, @c_DropId, @c_FromLoc, @c_PutawayZone
+        FETCH NEXT FROM cur_repleinshment INTO @c_StorerKey, @c_Sku, @c_Lot, @c_Id, @c_DropId, @c_FromLoc, @c_UOM, @c_PackKey, @c_PutawayZone
         WHILE @@FETCH_STATUS = 0
         BEGIN
             DECLARE @n_ReplenQty INT;
@@ -162,7 +162,7 @@ BEGIN
             AND sl.LocationType = 'PICK'
             AND loc.Facility = @c_Facility
             GROUP BY loc.Loc, loc.LogicalLocation, sl.QtyLocationLimit
---HAVING SUM(lli.Qty - lli.QtyPicked + lli.QtyAllocated + lli.PendingMoveIn) + @n_UCCQty <= sl.QtyLocationLimit
+          --HAVING SUM(lli.Qty - lli.QtyPicked + lli.QtyAllocated + lli.PendingMoveIn) + @n_UCCQty <= sl.QtyLocationLimit
             HAVING SUM(lli.Qty - lli.QtyPicked + lli.PendingMoveIn) + @n_UCCQty <= sl.QtyLocationLimit
             ORDER BY loc.LogicalLocation
             -- Find Same Friend in DP loc can fit in
@@ -219,9 +219,9 @@ BEGIN
             ,@c_errmsg      = @c_errmsg           OUTPUT
 
             INSERT INTO Replenishment
-            (ReplenishmentKey, ReplenishmentGroup, StorerKey, Sku, Lot, FromLoc, toloc, Id, Qty, UOM, DropId, Wavekey, MoveRefkey, QtyReplen, pendingmovein)
+            (ReplenishmentKey, ReplenishmentGroup, StorerKey, Sku, Lot, FromLoc, toloc, Id, Qty, UOM, PackKey, DropId, Wavekey, MoveRefkey, QtyReplen, pendingmovein)
             VALUES
-            (@c_ReplenishmentKey, @c_PutawayZone, @c_StorerKey, @c_Sku, @c_Lot, @c_FromLoc, @c_Toloc, @c_Id, @n_ReplenQty, @c_UOM, @c_DropId, @c_Wavekey, @c_MoveRefkey,@n_ReplenQty,@n_ReplenQty);
+            (@c_ReplenishmentKey, @c_PutawayZone, @c_StorerKey, @c_Sku, @c_Lot, @c_FromLoc, @c_Toloc, @c_Id, @n_ReplenQty, @c_UOM, @c_PackKey, @c_DropId, @c_Wavekey, @c_MoveRefkey,@n_ReplenQty,@n_ReplenQty);
 
             IF @@ERROR <> 0
             BEGIN
@@ -247,7 +247,7 @@ BEGIN
             CLOSE updateMoveRefKeyCursor;
             DEALLOCATE updateMoveRefKeyCursor;
 			SELECT @c_successFlag = 'Y';
-        FETCH NEXT FROM cur_repleinshment INTO @c_StorerKey, @c_Sku, @c_Lot, @c_Id, @c_DropId, @c_FromLoc, @c_PutawayZone
+        FETCH NEXT FROM cur_repleinshment INTO @c_StorerKey, @c_Sku, @c_Lot, @c_Id, @c_DropId, @c_FromLoc, @c_UOM, @c_PackKey, @c_PutawayZone
         END
         CLOSE cur_repleinshment;
         DEALLOCATE cur_repleinshment;
@@ -317,9 +317,9 @@ BEGIN
                     ,@c_errmsg      = @c_errmsg           OUTPUT
 
                     INSERT INTO Replenishment
-                    (ReplenishmentKey, ReplenishmentGroup, StorerKey, Sku, Lot, Id, Qty, UOM, DropId, Wavekey, MoveRefkey)
+                    (ReplenishmentKey, ReplenishmentGroup, StorerKey, Sku, Lot, Id, Qty, UOM, DropId, Wavekey, MoveRefkey, RefNo)
                     VALUES
-                    (@c_ReplenishmentKey, @c_PutawayZone, @c_StorerKey, @c_Sku, @c_Lot, @c_Id, @n_ReplenQty, @c_UOM, @c_DropId, @c_Wavekey, @c_MoveRefkey);
+                    (@c_ReplenishmentKey, @c_PutawayZone, @c_StorerKey, @c_Sku, @c_Lot, @c_Id, @n_ReplenQty, @c_UOM, @c_DropId, @c_Wavekey, @c_MoveRefkey, @c_UCCNo);
 
                     IF @@ERROR <> 0
                     BEGIN
@@ -364,17 +364,14 @@ BEGIN
         END
     END
 
-    IF @n_continue = 1 OR @n_continue = 2
+    IF (@n_continue = 1 OR @n_continue = 2) AND @c_successFlag = 'Y'
     BEGIN
-		IF @c_successFlag = 'Y'
-		BEGIN
-			SELECT @c_errmsg = 'Replenishment Done'
-		END;
+        SELECT @c_errmsg = 'Replenishment Done'
     END
-	ELSE
-	BEGIN
-		SELECT @c_errmsg = 'Replenishment not done, Something went wrong in current transaction'
-	END
+    ELSE
+    BEGIN
+        SELECT @c_errmsg = 'Replenishment not done, Something went wrong in current transaction'
+    END
 
     -- Error handling and commit/rollback
 RETURN_SP:
