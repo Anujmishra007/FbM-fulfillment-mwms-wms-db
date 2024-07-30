@@ -77,6 +77,7 @@ DECLARE
    @cRefNo1             NVARCHAR(20),   -- (ChewKP01)
    @cDefaultOption      NVARCHAR(1),    -- (ChewKP01)
    @cDefaultCursor      NVARCHAR(1),    -- (ChewKP01)
+   @cFocusStep2      NVARCHAR(1),    -- (ChewKP01)
    @cExtendedValidateSP NVARCHAR(30),   -- (cc01)
    @cMBOLKey            NVARCHAR( 10),  -- (cc02)
    @cSP                 NVARCHAR(40),
@@ -136,6 +137,7 @@ SELECT
    @cSP               = V_String12,  --(cc02)
    @cExtendedinfo     = V_String13,
    @cActivityStatus   = V_String14,
+   @cFocusStep2       = V_String15,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -208,6 +210,13 @@ BEGIN
    IF @cDefaultOption = '0'
    BEGIN
       SET @cDefaultOption = ''
+   END
+
+   SET @cFocusStep2= ''
+   SET @cFocusStep2 = rdt.RDTGetConfig( @nFunc, 'FocusStep2', @cStorerKey)
+   IF @cFocusStep2 = '0'
+   BEGIN
+      SET @cFocusStep2 = ''
    END
    
    -- (cc01)
@@ -405,8 +414,12 @@ BEGIN
       
          SET @cOption = ''      
       END 
-      
-       EXEC rdt.rdtSetFocusField @nMobile, 3
+
+      --CYU027
+      IF @cFocusStep2 = '' OR @cFocusStep2 = '0'
+         SET @cFocusStep2 = 3
+
+       EXEC rdt.rdtSetFocusField @nMobile, @cFocusStep2
    
       -- Go to next screen        
       SET @nScn = @nScn+1        
@@ -1053,6 +1066,7 @@ BEGIN
       V_String12     = @cSP,  --(cc02)
       V_String13     = @cExtendedinfo,
       V_String14     = @cActivityStatus,
+      V_String15     = @cFocusStep2,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,
