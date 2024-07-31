@@ -366,6 +366,15 @@ BEGIN
                WHERE StorerKey = @cStorerKey
                   AND DropID = @cDropID
 
+               DECLARE @cOrderGroup NVARCHAR(20) = ''
+
+               SELECT TOP 1 @cOrderGroup = orm.OrderGroup
+               FROM dbo.PICKDETAIL pkd WITH(NOLOCK)
+               INNER JOIN dbo.ORDERS orm WITH(NOLOCK) ON pkd.StorerKey = orm.StorerKey AND pkd.OrderKey = orm.OrderKey
+               WHERE pkd.StorerKey = @cStorerKey
+                  AND ISNULL(pkd.CaseID, '') = @cDropID
+               ORDER BY orm.OrderKey
+
                SET @nTranCount = @@TRANCOUNT  
                IF @nTranCount = 0
                   BEGIN TRANSACTION
@@ -402,45 +411,48 @@ BEGIN
                         WHERE PickSlipNo = @cPickSlipNo
                      END
 
-                     -- Insert transmitlog2 here
-                     EXECUTE ispGenTransmitLog2
-                        @c_TableName      = 'WSSOECL',
-                        @c_Key1           = @cDropID,
-                        @c_Key2           = @cDropID,
-                        @c_Key3           = @cStorerkey,
-                        @c_TransmitBatch  = '',
-                        @b_Success        = @bSuccess   OUTPUT,
-                        @n_err            = @nErrNo     OUTPUT,
-                        @c_errmsg         = @cErrMsg    OUTPUT
-
-                     IF @bSuccess <> 1
+                     IF ISNULL(@cOrderGroup, '') = '30'
                      BEGIN
-                        SET @nErrNo = 217801
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GenTranLogFail
-                        ;THROW @nErrNo, @cErrMsg, 1
-                     END
+                        -- Insert transmitlog2 here
+                        EXECUTE ispGenTransmitLog2
+                           @c_TableName      = 'WSSOECL',
+                           @c_Key1           = @cDropID,
+                           @c_Key2           = @cDropID,
+                           @c_Key3           = @cStorerkey,
+                           @c_TransmitBatch  = '',
+                           @b_Success        = @bSuccess   OUTPUT,
+                           @n_err            = @nErrNo     OUTPUT,
+                           @c_errmsg         = @cErrMsg    OUTPUT
 
-                     SELECT @cTransmitLogKey = transmitlogkey
-                     FROM dbo.TRANSMITLOG2 WITH (NOLOCK)
-                     WHERE tablename = 'WSSOECL'
-                     AND   key1 = @cDropID
-                     AND   key2 = @cDropID
-                     AND   key3 = @cStorerkey
-                     
-                     EXEC dbo.isp_QCmd_WSTransmitLogInsertAlert 
-                        @c_QCmdClass         = @c_QCmdClass, 
-                        @c_FrmTransmitlogKey = @cTransmitLogKey, 
-                        @c_ToTransmitlogKey  = @cTransmitLogKey, 
-                        @b_Debug             = @b_Debug, 
-                        @b_Success           = @bSuccess    OUTPUT, 
-                        @n_Err               = @nErrNo      OUTPUT, 
-                        @c_ErrMsg            = @cErrMsg     OUTPUT 
+                        IF @bSuccess <> 1
+                        BEGIN
+                           SET @nErrNo = 217801
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GenTranLogFail
+                           ;THROW @nErrNo, @cErrMsg, 1
+                        END
 
-                     IF @bSuccess <> 1
-                     BEGIN
-                        SET @nErrNo = 217802
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --QCmdFail
-                        ;THROW @nErrNo, @cErrMsg, 1
+                        SELECT @cTransmitLogKey = transmitlogkey
+                        FROM dbo.TRANSMITLOG2 WITH (NOLOCK)
+                        WHERE tablename = 'WSSOECL'
+                        AND   key1 = @cDropID
+                        AND   key2 = @cDropID
+                        AND   key3 = @cStorerkey
+                        
+                        EXEC dbo.isp_QCmd_WSTransmitLogInsertAlert 
+                           @c_QCmdClass         = @c_QCmdClass, 
+                           @c_FrmTransmitlogKey = @cTransmitLogKey, 
+                           @c_ToTransmitlogKey  = @cTransmitLogKey, 
+                           @b_Debug             = @b_Debug, 
+                           @b_Success           = @bSuccess    OUTPUT, 
+                           @n_Err               = @nErrNo      OUTPUT, 
+                           @c_ErrMsg            = @cErrMsg     OUTPUT 
+
+                        IF @bSuccess <> 1
+                        BEGIN
+                           SET @nErrNo = 217802
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --QCmdFail
+                           ;THROW @nErrNo, @cErrMsg, 1
+                        END
                      END
                   END
 
