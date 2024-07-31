@@ -712,11 +712,20 @@ DECLARE @cSkipLottable01 NVARCHAR( 1)
 DECLARE @cSkipLottable02 NVARCHAR( 1)
 DECLARE @cSkipLottable03 NVARCHAR( 1)
 DECLARE @cSkipLottable04 NVARCHAR( 1)
+DECLARE @cAddRCPTValidtn NVARCHAR( 1)
+
 
 SET @cSkipLottable01 = rdt.RDTGetConfig( @nFunc, 'SkipLottable01', @cStorerKey)
 SET @cSkipLottable02 = rdt.RDTGetConfig( @nFunc, 'SkipLottable02', @cStorerKey)
 SET @cSkipLottable03 = rdt.RDTGetConfig( @nFunc, 'SkipLottable03', @cStorerKey)
 SET @cSkipLottable04 = rdt.RDTGetConfig( @nFunc, 'SkipLottable04', @cStorerKey)
+
+-- For Fcr-549
+IF @cAddRCPTValidtn = '1'
+BEGIN
+   SET @cSkipLottable01 = '0'
+END
+-- end
 
 IF @cSkipLottable01 = '1' SELECT @cLottable01Required = '0', @cLottable01 = ''
 IF @cSkipLottable02 = '1' SELECT @cLottable02Required = '0', @cLottable02 = ''
