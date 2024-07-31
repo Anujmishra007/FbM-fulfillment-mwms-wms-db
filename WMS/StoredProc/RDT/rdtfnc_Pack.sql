@@ -84,6 +84,7 @@ GO
 /* 2024-06-14   6.0 JHU151      FCR-352 ZA_DEFY - Fn838 -Default Pick Quantity                  */
 /* 2024-06-24   6.1 JHU151      Fixed Rest @cEnter Flag issue                                   */
 /* 2024-07-08   6.2 Jackc       FCR-392 Add ext scn entry and codes                             */
+/* 2024-07-08   6.3 JHU151      FCR-330 SSCC code generator                                     */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
@@ -1469,7 +1470,7 @@ BEGIN
    BEGIN
       SET @cExtendedScreenSP = ''
    END
-
+   
    IF @cExtendedScreenSP <> ''
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
@@ -1518,6 +1519,7 @@ BEGIN
       END
    END -- ExtendedScreenSP <> ''
 END -- step 2
+
 GOTO Quit
 
 

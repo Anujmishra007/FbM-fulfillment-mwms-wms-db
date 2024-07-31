@@ -33,7 +33,7 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   IF @nFunc = 600
+   IF @nFunc IN (600,830,838,1770,1812)
    BEGIN
       DECLARE   @cStorerKey        NVARCHAR(15)
                ,@nCounterKey       NVARCHAR(18)
